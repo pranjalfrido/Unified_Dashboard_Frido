@@ -17,11 +17,11 @@ function ChartTooltip({ active, payload, label }) {
   )
 }
 
-export function KPICard({ label, icon, value, sub, accent }) {
+export function KPICard({ label, icon, value, sub, accent, center }) {
   return (
-    <div className="kpi-card flex flex-col gap-1">
-      <span className="text-xs font-bold uppercase tracking-wider flex items-center gap-1" style={{ color: C.t3 }}>{icon && <span style={{ fontSize: 13 }}>{icon}</span>}{label}</span>
-      <span className="text-xl font-bold leading-tight" style={{ color: accent || C.t1 }}>{value}</span>
+    <div className="kpi-card flex flex-col gap-1" style={center ? { alignItems: 'center', justifyContent: 'center', textAlign: 'center' } : {}}>
+      <span className="text-xs font-bold uppercase tracking-wider flex items-center gap-1" style={{ color: C.t3, justifyContent: center ? 'center' : undefined }}>{icon && <span style={{ fontSize: 13 }}>{icon}</span>}{label}</span>
+      <span style={{ fontSize: center ? 28 : 21, fontWeight: 700, letterSpacing: '-.02em', lineHeight: 1.1, color: accent || C.t1 }}>{value}</span>
       {sub && <span className="text-xs" style={{ color: C.t3 }}>{sub}</span>}
     </div>
   )
