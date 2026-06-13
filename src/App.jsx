@@ -14,8 +14,11 @@ function Sidebar({ page, setPage }) {
   ]
   return (
     <nav className="sidebar">
-      <div style={{ width: 36, height: 36, borderRadius: 10, background: C.acc, display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 14, boxShadow: '0 3px 12px rgba(255,214,0,.4)' }}>
-        <span style={{ fontSize: 13, fontWeight: 700, color: '#13121A' }}>Fr</span>
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', marginBottom: 14, gap: 2 }}>
+        <div style={{ width: 36, height: 36, borderRadius: 10, background: C.acc, display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 3px 12px rgba(255,214,0,.4)' }}>
+          <span style={{ fontSize: 13, fontWeight: 700, color: '#13121A' }}>Fr</span>
+        </div>
+        <span style={{ fontSize: 7.5, fontWeight: 600, color: C.t3, letterSpacing: '.04em', textTransform: 'uppercase', lineHeight: 1, textAlign: 'center' }}>Analytics</span>
       </div>
       {items.map(item => (
         <div key={item.id} onClick={() => setPage(item.id)}
@@ -79,6 +82,14 @@ function Topnav({ page, alerts, onRefresh, loading, filters, setFilters, rawRows
   ]
   return (
     <div className="topnav">
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 1, flexShrink: 0 }}>
+        <div style={{ display: 'flex', alignItems: 'baseline', gap: 6 }}>
+          <span style={{ fontSize: 15, fontWeight: 800, color: C.t1, letterSpacing: '-.01em' }}>frido</span>
+          <span style={{ fontSize: 11, fontWeight: 500, color: C.t3, letterSpacing: '.01em' }}>Analytics Dashboard</span>
+        </div>
+        <span style={{ fontSize: 9.5, color: C.acc, fontWeight: 700, letterSpacing: '.06em', textTransform: 'uppercase', lineHeight: 1, background: '#13121A', padding: '1px 5px', borderRadius: 3, width: 'fit-content' }}>Freedom to do more</span>
+      </div>
+      <div className="tnav-sep" />
       <span className="tnav-title">{titles[page]}</span>
       <div className="tnav-sep" />
       <span className="tnav-sub">{filters.start} → {filters.end}</span>
