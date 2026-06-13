@@ -14,8 +14,8 @@ function Sidebar({ page, setPage }) {
   ]
   return (
     <nav className="sidebar">
-      <div style={{ width: 36, height: 36, borderRadius: 10, background: C.acc, display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 14, boxShadow: '0 3px 12px rgba(72,67,178,.35)' }}>
-        <span style={{ fontSize: 13, fontWeight: 700, color: '#fff' }}>Fr</span>
+      <div style={{ width: 36, height: 36, borderRadius: 10, background: C.acc, display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 14, boxShadow: '0 3px 12px rgba(255,214,0,.4)' }}>
+        <span style={{ fontSize: 13, fontWeight: 700, color: '#13121A' }}>Fr</span>
       </div>
       {items.map(item => (
         <div key={item.id} onClick={() => setPage(item.id)}
@@ -93,7 +93,7 @@ function Topnav({ page, alerts, onRefresh, loading, filters, setFilters, rawRows
         <button onClick={onRefresh} className="tnav-btn">
           <span style={{ display: 'inline-block', animation: loading ? 'spin 1s linear infinite' : 'none', fontSize: 14 }}>↻</span> Refresh
         </button>
-        <button onClick={() => exportCSV(rawRows)} className="tnav-btn tnav-btn-primary">↓ Export</button>
+        <button onClick={() => exportCSV(rawRows)} className="tnav-btn tnav-btn-primary" style={{ color: '#13121A' }}>↓ Export</button>
       </div>
     </div>
   )
@@ -125,14 +125,14 @@ function OverviewPage({ data, alerts }) {
       <div className="g-hero">
         <div className="hero-grad" style={{ borderRadius: 16, padding: '24px 26px', position: 'relative', overflow: 'hidden', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
           <div>
-            <div style={{ fontSize: 10.5, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.08em', color: 'rgba(255,255,255,.5)', marginBottom: 8 }}>Gross Revenue · Inc. GST</div>
-            <div className="hero-val" style={{ fontSize: 42, fontWeight: 700, color: '#fff', letterSpacing: '-.04em', lineHeight: 1, marginBottom: 6 }}>{totalRev >= 1e7 ? `₹${(totalRev / 1e7).toFixed(2)} Cr` : `₹${(totalRev / 1e5).toFixed(1)} L`}</div>
-            <div style={{ fontSize: 12.5, color: 'rgba(255,255,255,.6)', lineHeight: 1.7 }}>Net {fmt(totalExcRev)} · GST {fmt(gstCollected)}<br />{nDays}d · {Object.keys(chMap).length} channels · {fmtN(nOrders)} orders</div>
+            <div style={{ fontSize: 10.5, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.08em', color: 'rgba(0,0,0,.5)', marginBottom: 8 }}>Gross Revenue · Inc. GST</div>
+            <div className="hero-val" style={{ fontSize: 42, fontWeight: 700, color: '#13121A', letterSpacing: '-.04em', lineHeight: 1, marginBottom: 6 }}>{totalRev >= 1e7 ? `₹${(totalRev / 1e7).toFixed(2)} Cr` : `₹${(totalRev / 1e5).toFixed(1)} L`}</div>
+            <div style={{ fontSize: 12.5, color: 'rgba(0,0,0,.55)', lineHeight: 1.7 }}>Net {fmt(totalExcRev)} · GST {fmt(gstCollected)}<br />{nDays}d · {Object.keys(chMap).length} channels · {fmtN(nOrders)} orders</div>
           </div>
-          <div style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 11, fontWeight: 600, padding: '3px 9px', borderRadius: 5, background: 'rgba(255,255,255,.13)', color: 'rgba(255,255,255,.85)', marginTop: 10, width: 'fit-content' }}>
+          <div style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 11, fontWeight: 600, padding: '3px 9px', borderRadius: 5, background: 'rgba(0,0,0,.1)', color: '#13121A', marginTop: 10, width: 'fit-content' }}>
             Daily avg {fmt(totalRev / nDays)}
           </div>
-          <div style={{ position: 'absolute', right: -10, bottom: -20, fontSize: 100, color: 'rgba(255,255,255,.04)', pointerEvents: 'none' }}>₹</div>
+          <div style={{ position: 'absolute', right: -10, bottom: -20, fontSize: 100, color: 'rgba(0,0,0,.04)', pointerEvents: 'none' }}>₹</div>
         </div>
         <KPICard label="Orders / Units" value={fmtN(nOrders)} sub={`${fmtN(totalQty)} units · ${(totalQty / (nOrders || 1)).toFixed(1)}/order`} />
         <KPICard label="Blended AOV" value={`₹${Math.round(blendedAOV).toLocaleString('en-IN')}`} sub={`Best: ${bestAOV.ch} ₹${Math.round(bestAOV.aov).toLocaleString('en-IN')}`} />
@@ -304,7 +304,7 @@ function AllTab({ data }) {
           </table>
         </div>
         <div className="ins-box" style={{ marginTop: 10 }}>
-          <div style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.07em', color: C.acc, marginBottom: 5 }}>⚡ Gap analysis</div>
+          <div style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.07em', color: '#7A6000', marginBottom: 5 }}>⚡ Gap analysis</div>
           <div style={{ fontSize: 12, color: C.t2, lineHeight: 1.7 }}>Red cells (—) = zero revenue. Look for high-performing categories with missing channel presence to find growth opportunities.</div>
         </div>
       </Card>
@@ -601,7 +601,7 @@ function IntelCard({ color, label, number, sub, insight, bars, table, warning })
       )}
       {insight && (
         <div style={{ background: C.acl, border: `1px solid ${C.acm}`, borderRadius: 8, padding: '9px 11px' }}>
-          <div style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.06em', color: C.acc, marginBottom: 4 }}>◈ Insight</div>
+          <div style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.06em', color: '#7A6000', marginBottom: 4 }}>◈ Insight</div>
           <div style={{ fontSize: 11.5, color: C.t2, lineHeight: 1.65 }} dangerouslySetInnerHTML={{ __html: insight }} />
         </div>
       )}
@@ -779,7 +779,7 @@ function IntelPage({ data }) {
 
       <div style={{ background: C.acl, border: `1px solid ${C.acm}`, borderRadius: 13, padding: '16px 18px', display: 'flex', gap: 20, alignItems: 'center', flexWrap: 'wrap' }}>
         <div>
-          <div style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.07em', color: C.acc, marginBottom: 6 }}>◈ Period Trend Signal</div>
+          <div style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.07em', color: '#7A6000', marginBottom: 6 }}>◈ Period Trend Signal</div>
           <div style={{ fontSize: 28, fontWeight: 700, color: trendPct >= 0 ? C.green.tx : C.red.tx, marginBottom: 4 }}>{trendPct > 0 ? '+' : ''}{trendPct.toFixed(1)}%</div>
           <div style={{ fontSize: 12, color: C.t2 }}>Revenue change: first half {fmt(fhRev)} → second half {fmt(lhRev)}</div>
         </div>
@@ -868,7 +868,7 @@ export default function App() {
               <div style={{ textAlign: 'center' }}>
                 <div style={{ fontWeight: 600, fontSize: 14, color: C.t1, marginBottom: 4 }}>Frido Intelligence Suite</div>
                 <div style={{ fontSize: 12, color: C.t3, marginBottom: 16 }}>Select a date range to load data</div>
-                <button onClick={() => fetchData(filters.start, filters.end)} style={{ fontSize: 13, padding: '10px 22px', borderRadius: 10, background: C.acc, color: '#fff', border: 'none', cursor: 'pointer', fontFamily: 'var(--font)', fontWeight: 600 }}>
+                <button onClick={() => fetchData(filters.start, filters.end)} style={{ fontSize: 13, padding: '10px 22px', borderRadius: 10, background: C.acc, color: '#13121A', border: 'none', cursor: 'pointer', fontFamily: 'var(--font)', fontWeight: 600 }}>
                   Load {filters.start} → {filters.end}
                 </button>
               </div>

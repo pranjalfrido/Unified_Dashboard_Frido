@@ -1,6 +1,6 @@
 export const C = {
-  acc: '#4843B2', acl: '#EDECFB', acm: '#AAA6E6',
-  bg: '#F2F1EF', card: '#fff', border: '#E5E4ED', border2: '#CCC9E5',
+  acc: '#FFD600', acl: '#FFF9CC', acm: '#E6C200',
+  bg: '#F2F1EF', card: '#fff', border: '#E8E6DC', border2: '#D6D0B0',
   t1: '#13121A', t2: '#504F68', t3: '#94939F',
   green: { bg: '#E6F4E0', tx: '#286010', bd: '#9DD470' },
   red:   { bg: '#FDE8E8', tx: '#7A1A1A', bd: '#F09898' },
