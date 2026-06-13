@@ -7,38 +7,47 @@ function Sidebar({ page, setPage }) {
   const items = [
     { id: 'overview', icon: '⊞', label: 'Overview' },
     { id: 'sales', icon: '▦', label: 'Sales' },
-    { id: 'intelligence', icon: '◈', label: 'Intelligence' },
+    { id: 'intelligence', icon: '◈', label: 'Intel' },
   ]
-  const dims = ['P&L — soon', 'Inventory — soon', 'Courier — soon', 'Marketing — soon']
+  const dims = [
+    { label: 'P&L' }, { label: 'Inventory' }, { label: 'Courier' }, { label: 'Marketing' }
+  ]
   return (
-    <nav style={{ width: 58, background: C.card, borderRight: `1px solid ${C.border}`, display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '12px 0', flexShrink: 0, zIndex: 40, gap: 2 }}>
-      <div style={{ width: 34, height: 34, borderRadius: 10, background: C.acc, display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 16, boxShadow: '0 3px 12px rgba(72,67,178,.35)' }}>
-        <span style={{ fontSize: 12, fontWeight: 700, color: '#fff' }}>Fr</span>
+    <nav style={{ width: 72, background: C.card, borderRight: `1px solid ${C.border}`, display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '12px 0', flexShrink: 0, zIndex: 40, gap: 2 }}>
+      {/* Logo */}
+      <div style={{ width: 36, height: 36, borderRadius: 10, background: C.acc, display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 14, boxShadow: '0 3px 12px rgba(72,67,178,.35)' }}>
+        <span style={{ fontSize: 13, fontWeight: 700, color: '#fff' }}>Fr</span>
       </div>
+      {/* Active nav items */}
       {items.map(item => (
-        <div key={item.id} className="group relative" style={{ width: 38, height: 38, borderRadius: 10, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', background: page === item.id ? C.acl : 'transparent', color: page === item.id ? C.acc : C.t3, transition: 'all .13s' }}
-          onClick={() => setPage(item.id)}
+        <div key={item.id} onClick={() => setPage(item.id)}
+          style={{ width: 60, borderRadius: 10, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', padding: '7px 4px 6px', gap: 3, background: page === item.id ? C.acl : 'transparent', color: page === item.id ? C.acc : C.t3, transition: 'all .13s' }}
           onMouseEnter={e => { if (page !== item.id) { e.currentTarget.style.background = '#F0EFF9'; e.currentTarget.style.color = C.acc } }}
           onMouseLeave={e => { if (page !== item.id) { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = C.t3 } }}>
-          <span style={{ fontSize: 19 }}>{item.icon}</span>
-          <div style={{ position: 'absolute', left: 50, top: '50%', transform: 'translateY(-50%)', background: C.t1, color: '#fff', borderRadius: 7, padding: '5px 10px', fontSize: 11.5, whiteSpace: 'nowrap', pointerEvents: 'none', opacity: 0, zIndex: 999, boxShadow: '0 4px 16px rgba(0,0,0,.15)', transition: 'opacity .12s' }} className="tip">{item.label}</div>
+          <span style={{ fontSize: 18, lineHeight: 1 }}>{item.icon}</span>
+          <span style={{ fontSize: 9.5, fontWeight: page === item.id ? 700 : 500, letterSpacing: '.02em', lineHeight: 1 }}>{item.label}</span>
         </div>
       ))}
-      <div style={{ width: 28, height: 1, background: C.border, margin: '4px 0' }} />
+      <div style={{ width: 36, height: 1, background: C.border, margin: '5px 0' }} />
+      {/* Dimmed coming-soon items */}
       {dims.map(d => (
-        <div key={d} style={{ width: 38, height: 38, borderRadius: 10, display: 'flex', alignItems: 'center', justifyContent: 'center', opacity: 0.18 }}>
-          <span style={{ fontSize: 17 }}>○</span>
+        <div key={d.label} style={{ width: 60, borderRadius: 10, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '7px 4px 6px', gap: 3, opacity: 0.3, cursor: 'default' }}>
+          <span style={{ fontSize: 16, lineHeight: 1 }}>○</span>
+          <span style={{ fontSize: 9.5, fontWeight: 500, color: C.t3, lineHeight: 1 }}>{d.label}</span>
         </div>
       ))}
+      {/* Bottom icons */}
       <div style={{ marginTop: 'auto', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
-        <div style={{ width: 28, height: 1, background: C.border, margin: '4px 0' }} />
-        {['⚙', '👤'].map(ic => (
-          <div key={ic} style={{ width: 38, height: 38, borderRadius: 10, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: C.t3 }}>
-            <span style={{ fontSize: 17 }}>{ic}</span>
+        <div style={{ width: 36, height: 1, background: C.border, margin: '5px 0' }} />
+        {[{ ic: '⚙', label: 'Settings' }, { ic: '👤', label: 'Profile' }].map(b => (
+          <div key={b.label} style={{ width: 60, borderRadius: 10, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '7px 4px 6px', gap: 3, cursor: 'pointer', color: C.t3 }}
+            onMouseEnter={e => { e.currentTarget.style.background = '#F0EFF9'; e.currentTarget.style.color = C.acc }}
+            onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = C.t3 }}>
+            <span style={{ fontSize: 16, lineHeight: 1 }}>{b.ic}</span>
+            <span style={{ fontSize: 9.5, fontWeight: 500, lineHeight: 1 }}>{b.label}</span>
           </div>
         ))}
       </div>
-      <style>{`.group:hover .tip{opacity:1!important}`}</style>
     </nav>
   )
 }
@@ -851,7 +860,7 @@ export default function App() {
   return (
     <div style={{ display: 'flex', height: '100vh', overflow: 'hidden', background: C.bg }}>
       <Sidebar page={page} setPage={setPage} />
-      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0, overflow: 'hidden' }}>
+      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0, overflow: 'hidden', borderLeft: `1px solid ${C.border}` }}>
         <Topnav page={page} alerts={alerts} onRefresh={() => fetchData(filters.start, filters.end)} loading={loading} filters={filters} setFilters={setFilters} rawRows={rawRows} />
         {/* Progress bar */}
         {loading && (
