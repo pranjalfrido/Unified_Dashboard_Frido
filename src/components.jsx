@@ -43,12 +43,12 @@ export function AlertCard({ type, title, body }) {
 
 export function HBar({ dot, label, width, value, pctVal }) {
   return (
-    <div className="flex items-center gap-2 py-1 border-b last:border-0" style={{ borderColor: C.border }}>
-      <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: dot }} />
-      <span className="text-xs flex-shrink-0" style={{ color: C.t2, width: 66 }}>{label}</span>
-      <div className="hb-track"><div className="hb-fill" style={{ width: `${width}%`, background: dot }} /></div>
-      <span className="text-xs font-semibold text-right flex-shrink-0" style={{ color: C.t1, fontFamily: 'var(--mono)', minWidth: 54 }}>{value}</span>
-      <span className="text-xs text-right flex-shrink-0" style={{ color: C.t3, minWidth: 30 }}>{pctVal}</span>
+    <div style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '6px 0', borderBottom: `1px solid ${C.border}` }} className="hbar-row">
+      <span style={{ width: 8, height: 8, borderRadius: '50%', background: dot, flexShrink: 0 }} />
+      <span style={{ fontSize: 12, color: C.t2, flexShrink: 0, width: 62 }}>{label}</span>
+      <div className="hb-track" style={{ flex: 1 }}><div className="hb-fill" style={{ width: `${width}%`, background: dot }} /></div>
+      <span style={{ fontSize: 12, fontWeight: 700, color: C.t1, fontFamily: 'var(--mono)', flexShrink: 0, minWidth: 62, textAlign: 'right' }}>{value}</span>
+      <span style={{ fontSize: 11, color: C.t3, flexShrink: 0, width: 36, textAlign: 'right' }}>{pctVal}</span>
     </div>
   )
 }
