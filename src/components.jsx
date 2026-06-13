@@ -54,6 +54,7 @@ export function HBar({ dot, label, width, value, pctVal }) {
 }
 
 export function DataTable({ columns, rows, maxRows = 50 }) {
+  const visible = rows.slice(0, maxRows)
   return (
     <div className="overflow-x-auto">
       <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
@@ -65,10 +66,10 @@ export function DataTable({ columns, rows, maxRows = 50 }) {
           </tr>
         </thead>
         <tbody>
-          {rows.slice(0, maxRows).map((r, i) => (
-            <tr key={i} style={{ borderBottom: `1px solid ${C.border}` }} onMouseEnter={e => e.currentTarget.style.background = '#FFFBE6'} onMouseLeave={e => e.currentTarget.style.background = ''}>
+          {visible.map((r, i) => (
+            <tr key={i} style={{ borderBottom: i < visible.length - 1 ? `1px solid ${C.border}` : 'none' }} onMouseEnter={e => e.currentTarget.style.background = '#FFFBE6'} onMouseLeave={e => e.currentTarget.style.background = ''}>
               {columns.map(c => (
-                <td key={c.key + c.label} style={{ padding: '5.5px 5px', color: c.align === 'right' ? C.t1 : C.t2, textAlign: c.align === 'right' ? 'right' : 'left', fontFamily: c.mono ? 'var(--mono)' : 'inherit', fontSize: c.mono ? 11.5 : 12, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                <td key={c.key + c.label} style={{ padding: i < visible.length - 1 ? '5.5px 5px' : '5.5px 5px 14px', color: c.align === 'right' ? C.t1 : C.t2, textAlign: c.align === 'right' ? 'right' : 'left', fontFamily: c.mono ? 'var(--mono)' : 'inherit', fontSize: c.mono ? 11.5 : 12, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                   {c.render ? c.render(r[c.key], r) : r[c.key]}
                 </td>
               ))}
@@ -76,14 +77,14 @@ export function DataTable({ columns, rows, maxRows = 50 }) {
           ))}
         </tbody>
       </table>
-      {rows.length > maxRows && <div className="text-xs text-center py-2" style={{ color: C.t3 }}>Showing {maxRows} of {rows.length}</div>}
+      {rows.length > maxRows && <div className="text-xs text-center py-2" style={{ color: C.t3, paddingBottom: 14 }}>Showing {maxRows} of {rows.length}</div>}
     </div>
   )
 }
 
 export function Card({ title, note, children, style }) {
   return (
-    <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 13, padding: '16px 18px', ...style }}>
+    <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 13, padding: '16px 18px 0 18px', ...style }}>
       {(title || note) && (
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 11 }}>
           {title && <span style={{ fontSize: 13, fontWeight: 600, color: C.t1 }}>{title}</span>}
