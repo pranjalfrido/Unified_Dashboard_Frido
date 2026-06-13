@@ -94,8 +94,8 @@ html,body{height:100%;background:var(--bg);font-family:var(--font);color:var(--t
 .g-kpi4{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}
 .g-kpi3{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
 .g-kpi7{display:grid;grid-template-columns:repeat(7,1fr);gap:10px}
-.g-21{display:grid;grid-template-columns:2.1fr 1fr;gap:12px}
-.g-3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px}
+.g-21{display:grid;grid-template-columns:2.1fr 1fr;gap:12px;align-items:start}
+.g-3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;align-items:start}
 .g-2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
 .g-intel{display:grid;grid-template-columns:repeat(6,1fr);gap:10px}
 

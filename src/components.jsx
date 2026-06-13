@@ -84,7 +84,7 @@ export function DataTable({ columns, rows, maxRows = 50 }) {
 
 export function Card({ title, note, children, style }) {
   return (
-    <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 13, padding: '16px 18px 0 18px', ...style }}>
+    <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 13, padding: '16px 18px', ...style }}>
       {(title || note) && (
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 11 }}>
           {title && <span style={{ fontSize: 13, fontWeight: 600, color: C.t1 }}>{title}</span>}
