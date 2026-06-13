@@ -1,6 +1,22 @@
 import { C, fmt, fmtN, pct } from './utils.js'
 import { BarChart, Bar, LineChart, Line, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts'
 
+function ChartTooltip({ active, payload, label }) {
+  if (!active || !payload?.length) return null
+  return (
+    <div style={{ background: '#fff', border: `1px solid ${C.border}`, borderRadius: 9, padding: '8px 12px', fontSize: 11, boxShadow: '0 4px 16px rgba(0,0,0,.10)' }}>
+      <div style={{ fontWeight: 700, color: C.t2, marginBottom: 5 }}>{label}</div>
+      {payload.map((p, i) => (
+        <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 2 }}>
+          <span style={{ width: 8, height: 8, borderRadius: '50%', background: p.color, display: 'inline-block', flexShrink: 0, border: p.color === '#FFD600' ? '1px solid #E6C200' : 'none' }} />
+          <span style={{ color: C.t2 }}>{p.name}</span>
+          <span style={{ fontWeight: 700, color: C.t1, marginLeft: 'auto', paddingLeft: 12, fontFamily: 'var(--mono)' }}>{fmt(p.value)}</span>
+        </div>
+      ))}
+    </div>
+  )
+}
+
 export function KPICard({ label, icon, value, sub, accent }) {
   return (
     <div className="kpi-card flex flex-col gap-1">
@@ -50,7 +66,7 @@ export function DataTable({ columns, rows, maxRows = 50 }) {
         </thead>
         <tbody>
           {rows.slice(0, maxRows).map((r, i) => (
-            <tr key={i} style={{ borderBottom: `1px solid ${C.border}` }} onMouseEnter={e => e.currentTarget.style.background = C.hov || '#F0EFF9'} onMouseLeave={e => e.currentTarget.style.background = ''}>
+            <tr key={i} style={{ borderBottom: `1px solid ${C.border}` }} onMouseEnter={e => e.currentTarget.style.background = '#FFFBE6'} onMouseLeave={e => e.currentTarget.style.background = ''}>
               {columns.map(c => (
                 <td key={c.key + c.label} style={{ padding: '5.5px 5px', color: c.align === 'right' ? C.t1 : C.t2, textAlign: c.align === 'right' ? 'right' : 'left', fontFamily: c.mono ? 'var(--mono)' : 'inherit', fontSize: c.mono ? 11.5 : 12, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                   {c.render ? c.render(r[c.key], r) : r[c.key]}
@@ -91,7 +107,7 @@ export function RevTrendChart({ dailyArr, channels }) {
         <CartesianGrid strokeDasharray="3 3" stroke={C.border} vertical={false} />
         <XAxis dataKey="date" tick={{ fontSize: 10, fill: C.t3 }} tickFormatter={d => d?.slice(5)} />
         <YAxis tick={{ fontSize: 10, fill: C.t3 }} tickFormatter={v => v >= 1e5 ? `${(v / 1e5).toFixed(0)}L` : v} width={40} />
-        <Tooltip formatter={(v, n) => [fmt(v), n]} />
+        <Tooltip content={<ChartTooltip />} />
         {channels.map(ch => <Bar key={ch} dataKey={ch} stackId="a" fill={C.ch[ch] || C.acc} />)}
       </BarChart>
     </ResponsiveContainer>
@@ -105,7 +121,7 @@ export function AreaTrendChart({ data, dataKey = 'rev', color }) {
         <CartesianGrid strokeDasharray="3 3" stroke={C.border} vertical={false} />
         <XAxis dataKey="date" tick={{ fontSize: 10, fill: C.t3 }} tickFormatter={d => d?.slice(5)} />
         <YAxis tick={{ fontSize: 10, fill: C.t3 }} tickFormatter={v => v >= 1e5 ? `${(v / 1e5).toFixed(0)}L` : v} width={40} />
-        <Tooltip formatter={v => [fmt(v), 'Revenue']} />
+        <Tooltip content={<ChartTooltip />} />
         <Area type="monotone" dataKey={dataKey} fill={C.acl} stroke={color || C.acc} strokeWidth={2} />
       </AreaChart>
     </ResponsiveContainer>
@@ -119,7 +135,7 @@ export function MultiLineChart({ dailyArr, channels }) {
         <CartesianGrid strokeDasharray="3 3" stroke={C.border} vertical={false} />
         <XAxis dataKey="date" tick={{ fontSize: 10, fill: C.t3 }} tickFormatter={d => d?.slice(5)} />
         <YAxis tick={{ fontSize: 10, fill: C.t3 }} tickFormatter={v => v >= 1e5 ? `${(v / 1e5).toFixed(0)}L` : v} width={40} />
-        <Tooltip formatter={(v, n) => [fmt(v), n]} />
+        <Tooltip content={<ChartTooltip />} />
         <Legend iconSize={8} wrapperStyle={{ fontSize: 10 }} />
         {channels.map(ch => <Line key={ch} type="monotone" dataKey={ch} stroke={C.ch[ch]} strokeWidth={2} dot={false} />)}
       </LineChart>
