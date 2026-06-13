@@ -199,7 +199,7 @@ const TABS = [
 ]
 
 function AllTab({ data }) {
-  const { totalRev, totalExcRev, nOrders, totalQty, blendedAOV, nDays, dailyArr, chMap, catMap, subCatMap, stateMap, buckets, bucketRev, rows } = data
+  const { totalRev, totalExcRev, nOrders, totalQty, blendedAOV, nDays, dailyArr, chMap, catMap, subCatMap, stateMap, buckets, bucketRev, rows, orders } = data
   const channels = Object.keys(C.ch).filter(ch => chMap[ch])
   const sortedCh = Object.entries(chMap).sort((a, b) => b[1].rev - a[1].rev)
   const maxChRev = sortedCh[0]?.[1].rev || 1
@@ -215,14 +215,37 @@ function AllTab({ data }) {
   })
   const maxHeat = Math.max(...heatData.flatMap(r => channels.map(ch => r[ch] || 0)), 1)
 
+  // 5 new KPIs
+  const grossMarginPct = totalRev > 0 ? ((totalRev - totalExcRev) / totalRev * 100) : 0
+  const revPerUnit = totalQty > 0 ? totalRev / totalQty : 0
+  const shopifyOrders = orders.filter(o => o.channel === 'Shopify')
+  const rtoRev = shopifyOrders.filter(o => o.isRTO).reduce((s, o) => s + o.rev, 0)
+  const cancelRev = shopifyOrders.filter(o => o.isCancelled).reduce((s, o) => s + o.rev, 0)
+  const atRiskRev = rtoRev + cancelRev
+  const deliveredCount = orders.filter(o => o.orderStatus === 'Delivered').length
+  const rtoCount = orders.filter(o => o.orderStatus === 'RTO' || o.isRTO).length
+  const cancelCount = orders.filter(o => o.orderStatus === 'Cancelled' || o.isCancelled).length
+  const fulfilmentBase = deliveredCount + rtoCount + cancelCount
+  const fulfilmentRate = fulfilmentBase > 0 ? (deliveredCount / fulfilmentBase * 100) : 0
+  const unitsPerOrder = nOrders > 0 ? totalQty / nOrders : 0
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+      {/* Original 5 KPIs */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5,1fr)', gap: 10 }}>
         <KPICard label="Gross Revenue" value={fmt(totalRev)} sub={`${nDays} days`} />
         <KPICard label="Net (Exc GST)" value={fmt(totalExcRev)} />
         <KPICard label="Orders / Units" value={fmtN(nOrders)} sub={`${fmtN(totalQty)} units`} />
         <KPICard label="Blended AOV" value={`₹${Math.round(blendedAOV).toLocaleString('en-IN')}`} />
         <KPICard label="Daily Avg" value={fmt(totalRev / nDays)} />
+      </div>
+      {/* 5 new KPIs */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5,1fr)', gap: 10 }}>
+        <KPICard label="Gross Margin %" value={`${grossMarginPct.toFixed(1)}%`} sub={`GST ${fmt(totalRev - totalExcRev)} of revenue`} accent={grossMarginPct < 15 ? '#7A1A1A' : undefined} />
+        <KPICard label="Revenue per Unit" value={`₹${Math.round(revPerUnit).toLocaleString('en-IN')}`} sub={`Avg selling price per SKU sold`} />
+        <KPICard label="Revenue at Risk" value={fmt(atRiskRev)} sub={`RTO + Cancelled (Shopify)`} accent={atRiskRev > 0 ? '#7A4000' : undefined} />
+        <KPICard label="Fulfilment Rate" value={fulfilmentBase > 0 ? `${fulfilmentRate.toFixed(1)}%` : 'N/A'} sub={`${fmtN(deliveredCount)} delivered of ${fmtN(fulfilmentBase)}`} accent={fulfilmentRate < 80 && fulfilmentBase > 0 ? '#7A1A1A' : fulfilmentRate >= 90 ? '#286010' : undefined} />
+        <KPICard label="Units per Order" value={unitsPerOrder.toFixed(2)} sub={`Avg basket size`} />
       </div>
       <div style={{ display: 'grid', gridTemplateColumns: '2fr 1.4fr', gap: 12 }}>
         <Card title="Daily Revenue by Channel">
@@ -309,6 +332,17 @@ function ChannelTab({ data, channel }) {
   const statusCounts = {}
   chOrders.forEach(o => { const s = o.orderStatus || 'Unknown'; statusCounts[s] = (statusCounts[s] || 0) + 1 })
 
+  const chExcRev = chRows.reduce((s, r) => s + parseFloat(r.SellingPrice_Exc_GST || 0), 0)
+  const grossMarginPct = rev > 0 ? ((rev - chExcRev) / rev * 100) : 0
+  const revPerUnit = qty > 0 ? rev / qty : 0
+  const chRTORev = channel === 'Shopify' ? chOrders.filter(o => o.isRTO).reduce((s, o) => s + o.rev, 0) + chOrders.filter(o => o.isCancelled).reduce((s, o) => s + o.rev, 0) : 0
+  const deliveredCh = chOrders.filter(o => o.orderStatus === 'Delivered').length
+  const rtoCh = chOrders.filter(o => o.orderStatus === 'RTO' || o.isRTO).length
+  const cancelCh = chOrders.filter(o => o.orderStatus === 'Cancelled' || o.isCancelled).length
+  const fulfilBase = deliveredCh + rtoCh + cancelCh
+  const fulfilRate = fulfilBase > 0 ? (deliveredCh / fulfilBase * 100) : 0
+  const upo = nOrders > 0 ? qty / nOrders : 0
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5,1fr)', gap: 10 }}>
@@ -317,6 +351,13 @@ function ChannelTab({ data, channel }) {
         <KPICard label="AOV" value={`₹${Math.round(aov).toLocaleString('en-IN')}`} />
         <KPICard label="Units" value={fmtN(qty)} />
         <KPICard label="Daily Avg" value={fmt(rev / (data.nDays || 1))} />
+      </div>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5,1fr)', gap: 10 }}>
+        <KPICard label="Gross Margin %" value={`${grossMarginPct.toFixed(1)}%`} sub="GST as % of revenue" accent={grossMarginPct < 15 ? '#7A1A1A' : undefined} />
+        <KPICard label="Revenue per Unit" value={`₹${Math.round(revPerUnit).toLocaleString('en-IN')}`} sub="Avg price per SKU" />
+        <KPICard label="Revenue at Risk" value={channel === 'Shopify' ? fmt(chRTORev) : 'N/A'} sub="RTO + Cancelled" accent={chRTORev > 0 ? '#7A4000' : undefined} />
+        <KPICard label="Fulfilment Rate" value={fulfilBase > 0 ? `${fulfilRate.toFixed(1)}%` : 'N/A'} sub={fulfilBase > 0 ? `${fmtN(deliveredCh)} of ${fmtN(fulfilBase)}` : 'No status data'} accent={fulfilRate < 80 && fulfilBase > 0 ? '#7A1A1A' : fulfilRate >= 90 ? '#286010' : undefined} />
+        <KPICard label="Units per Order" value={upo.toFixed(2)} sub="Avg basket size" />
       </div>
       {channel === 'Blinkit' && <AlertCard type="red" title="Blinkit GST pipeline broken" body="SellingPrice_Exc_GST unreliable — implied GST 800%+. Use Inc_GST only." />}
       {channel === 'CRED' && <AlertCard type="amber" title="CRED batch anomaly" body="Spikes may represent delayed batch processing, not organic demand." />}
