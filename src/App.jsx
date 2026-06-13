@@ -168,15 +168,16 @@ function OverviewPage({ data, alerts }) {
         <Card title="Revenue trend · daily" note="₹ stacked by channel">
           <RevTrendChart dailyArr={dailyArr} channels={channels} />
           <div style={{ marginTop: 12 }}>
-            <div style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.07em', color: C.t3, marginBottom: 7 }}>D2C vs Marketplace</div>
+            <div style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.07em', color: C.t3, marginBottom: 7 }}>D2C vs Q-Commerce vs Marketplace</div>
             <div className="spbar">
-              <div style={{ width: `${d2cPct}%`, background: C.acc, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 700, color: '#fff', minWidth: 50 }}>{d2cPct}% D2C</div>
-              <div style={{ flex: 1, background: '#B0ADB8', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 700, color: '#fff' }}>{mktPct}% Mkt</div>
+              <div style={{ width: `${d2cPct}%`, background: C.acc, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 700, color: '#13121A', minWidth: 50 }}>{d2cPct}% D2C</div>
+              <div style={{ width: `${pct(qcRev, totalRev)}`, background: '#0D9E68', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 700, color: '#fff', minWidth: 40 }}>{parseFloat(pct(qcRev, totalRev)).toFixed(1)}% QC</div>
+              <div style={{ flex: 1, background: '#B0ADB8', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 700, color: '#13121A' }}>{(100 - parseFloat(d2cPct) - parseFloat(pct(qcRev, totalRev))).toFixed(1)}% Mkt</div>
             </div>
             <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap', marginTop: 8 }}>
-              {sortedCh.slice(0, 4).map(([ch, v]) => (
+              {sortedCh.slice(0, 6).map(([ch, v]) => (
                 <div key={ch} style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 11.5, color: C.t2 }}>
-                  <span style={{ width: 8, height: 8, borderRadius: '50%', background: C.ch[ch] || C.acc, display: 'inline-block' }} />
+                  <span style={{ width: 8, height: 8, borderRadius: '50%', background: C.ch[ch] || C.acc, display: 'inline-block', border: C.ch[ch] === '#FFD600' ? '1px solid #E6C200' : 'none' }} />
                   {ch} {fmt(v.rev)}
                 </div>
               ))}
