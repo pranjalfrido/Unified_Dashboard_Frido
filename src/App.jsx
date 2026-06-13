@@ -562,16 +562,18 @@ export default function App() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
 
+  const API = import.meta.env.VITE_API_URL || ''
+
   const fetchData = useCallback(async (start, end) => {
     setLoading(true); setError(null)
     try {
-      const res = await fetch('/api/bq', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ start, end }) })
+      const res = await fetch(`${API}/api/bq`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ start, end }) })
       if (!res.ok) throw new Error(`API error ${res.status}: ${await res.text()}`)
       const json = await res.json()
       setRawRows(json.rows || [])
     } catch (e) { setError(e.message) }
     finally { setLoading(false) }
-  }, [])
+  }, [API])
 
   const debounceRef = useRef(null)
   useEffect(() => {
