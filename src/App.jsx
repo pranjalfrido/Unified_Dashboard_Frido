@@ -13,38 +13,51 @@ function Sidebar({ page, setPage }) {
     { label: 'P&L' }, { label: 'Inventory' }, { label: 'Courier' }, { label: 'Marketing' }
   ]
   return (
-    <nav style={{ width: 72, background: C.card, borderRight: `1px solid ${C.border}`, display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '12px 0', flexShrink: 0, zIndex: 40, gap: 2 }}>
-      {/* Logo */}
+    <nav className="sidebar">
       <div style={{ width: 36, height: 36, borderRadius: 10, background: C.acc, display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 14, boxShadow: '0 3px 12px rgba(72,67,178,.35)' }}>
         <span style={{ fontSize: 13, fontWeight: 700, color: '#fff' }}>Fr</span>
       </div>
-      {/* Active nav items */}
       {items.map(item => (
         <div key={item.id} onClick={() => setPage(item.id)}
-          style={{ width: 60, borderRadius: 10, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', padding: '7px 4px 6px', gap: 3, background: page === item.id ? C.acl : 'transparent', color: page === item.id ? C.acc : C.t3, transition: 'all .13s' }}
-          onMouseEnter={e => { if (page !== item.id) { e.currentTarget.style.background = '#F0EFF9'; e.currentTarget.style.color = C.acc } }}
-          onMouseLeave={e => { if (page !== item.id) { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = C.t3 } }}>
-          <span style={{ fontSize: 18, lineHeight: 1 }}>{item.icon}</span>
-          <span style={{ fontSize: 9.5, fontWeight: page === item.id ? 700 : 500, letterSpacing: '.02em', lineHeight: 1 }}>{item.label}</span>
+          className={`sb-item${page === item.id ? ' active' : ''}`}>
+          <span className="sb-icon">{item.icon}</span>
+          <span className="sb-label">{item.label}</span>
         </div>
       ))}
-      <div style={{ width: 36, height: 1, background: C.border, margin: '5px 0' }} />
-      {/* Dimmed coming-soon items */}
+      <div className="sb-div" />
       {dims.map(d => (
-        <div key={d.label} style={{ width: 60, borderRadius: 10, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '7px 4px 6px', gap: 3, opacity: 0.3, cursor: 'default' }}>
-          <span style={{ fontSize: 16, lineHeight: 1 }}>○</span>
-          <span style={{ fontSize: 9.5, fontWeight: 500, color: C.t3, lineHeight: 1 }}>{d.label}</span>
+        <div key={d.label} className="sb-item dim">
+          <span className="sb-icon" style={{ fontSize: 16 }}>○</span>
+          <span className="sb-label">{d.label}</span>
         </div>
       ))}
-      {/* Bottom icons */}
       <div style={{ marginTop: 'auto', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
-        <div style={{ width: 36, height: 1, background: C.border, margin: '5px 0' }} />
+        <div className="sb-div" />
         {[{ ic: '⚙', label: 'Settings' }, { ic: '👤', label: 'Profile' }].map(b => (
-          <div key={b.label} style={{ width: 60, borderRadius: 10, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '7px 4px 6px', gap: 3, cursor: 'pointer', color: C.t3 }}
-            onMouseEnter={e => { e.currentTarget.style.background = '#F0EFF9'; e.currentTarget.style.color = C.acc }}
-            onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = C.t3 }}>
-            <span style={{ fontSize: 16, lineHeight: 1 }}>{b.ic}</span>
-            <span style={{ fontSize: 9.5, fontWeight: 500, lineHeight: 1 }}>{b.label}</span>
+          <div key={b.label} className="sb-item">
+            <span className="sb-icon" style={{ fontSize: 16 }}>{b.ic}</span>
+            <span className="sb-label">{b.label}</span>
+          </div>
+        ))}
+      </div>
+    </nav>
+  )
+}
+
+// ── Bottom Nav (mobile) ───────────────────────────────────────
+function BottomNav({ page, setPage }) {
+  const items = [
+    { id: 'overview', icon: '⊞', label: 'Overview' },
+    { id: 'sales', icon: '▦', label: 'Sales' },
+    { id: 'intelligence', icon: '◈', label: 'Intel' },
+  ]
+  return (
+    <nav className="bottom-nav">
+      <div className="bottom-nav-inner">
+        {items.map(item => (
+          <div key={item.id} onClick={() => setPage(item.id)} className={`bn-item${page === item.id ? ' active' : ''}`}>
+            <span className="bn-icon">{item.icon}</span>
+            <span className="bn-label">{item.label}</span>
           </div>
         ))}
       </div>
@@ -65,27 +78,23 @@ function Topnav({ page, alerts, onRefresh, loading, filters, setFilters, rawRows
     { label: 'MTD', fn: () => { const s = new Date(today.getFullYear(), today.getMonth(), 1); setFilters(f => ({ ...f, start: fmt0(s), end: fmt0(today) })) } },
   ]
   return (
-    <div style={{ height: 52, background: C.card, borderBottom: `1px solid ${C.border}`, display: 'flex', alignItems: 'center', padding: '0 20px', gap: 10, flexShrink: 0 }}>
-      <span style={{ fontSize: 14, fontWeight: 600, color: C.t1 }}>{titles[page]}</span>
-      <div style={{ width: 1, height: 15, background: C.border }} />
-      <span style={{ fontSize: 11.5, color: C.t3 }}>{filters.start} → {filters.end}</span>
-      <div style={{ flex: 1 }} />
-      <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+    <div className="topnav">
+      <span className="tnav-title">{titles[page]}</span>
+      <div className="tnav-sep" />
+      <span className="tnav-sub">{filters.start} → {filters.end}</span>
+      <div className="tnav-right">
         {presets.map(p => (
-          <button key={p.label} onClick={p.fn} style={{ fontSize: 11.5, padding: '5px 10px', borderRadius: 7, border: `1px solid ${C.border}`, background: C.card, color: C.t2, cursor: 'pointer', fontFamily: 'var(--font)' }}>{p.label}</button>
+          <button key={p.label} onClick={p.fn} className="tnav-preset">{p.label}</button>
         ))}
-        <input type="date" value={filters.start} onChange={e => setFilters(f => ({ ...f, start: e.target.value }))} style={{ fontSize: 11.5, padding: '5px 9px', borderRadius: 7, border: `1px solid ${C.border2}`, background: C.card, color: C.t1, outline: 'none', width: 112, fontFamily: 'var(--font)' }} />
+        <input type="date" value={filters.start} onChange={e => setFilters(f => ({ ...f, start: e.target.value }))} className="tnav-date" />
         <span style={{ fontSize: 12, color: C.t3 }}>→</span>
-        <input type="date" value={filters.end} onChange={e => setFilters(f => ({ ...f, end: e.target.value }))} style={{ fontSize: 11.5, padding: '5px 9px', borderRadius: 7, border: `1px solid ${C.border2}`, background: C.card, color: C.t1, outline: 'none', width: 112, fontFamily: 'var(--font)' }} />
+        <input type="date" value={filters.end} onChange={e => setFilters(f => ({ ...f, end: e.target.value }))} className="tnav-date" />
         {critical > 0 && <span style={{ fontSize: 11, fontWeight: 600, padding: '3px 9px', borderRadius: 20, background: C.red.bg, color: C.red.tx, border: `1px solid ${C.red.bd}`, display: 'inline-flex', alignItems: 'center', gap: 4 }}>⚠ {critical} critical</span>}
-        <button onClick={onRefresh} style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '6px 11px', borderRadius: 8, border: `1px solid ${C.border2}`, fontSize: 12, fontWeight: 500, color: C.t2, background: C.card, cursor: 'pointer', fontFamily: 'var(--font)' }}>
+        <button onClick={onRefresh} className="tnav-btn">
           <span style={{ display: 'inline-block', animation: loading ? 'spin 1s linear infinite' : 'none', fontSize: 14 }}>↻</span> Refresh
         </button>
-        <button onClick={() => exportCSV(rawRows)} style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '6px 11px', borderRadius: 8, border: 'none', fontSize: 12, fontWeight: 500, color: '#fff', background: C.acc, cursor: 'pointer', fontFamily: 'var(--font)' }}>
-          ↓ Export
-        </button>
+        <button onClick={() => exportCSV(rawRows)} className="tnav-btn tnav-btn-primary">↓ Export</button>
       </div>
-      <style>{`@keyframes spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}`}</style>
     </div>
   )
 }
@@ -113,11 +122,11 @@ function OverviewPage({ data, alerts }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
       {/* Hero row */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1.6fr 1fr 1fr 1fr', gap: 12 }}>
+      <div className="g-hero">
         <div className="hero-grad" style={{ borderRadius: 16, padding: '24px 26px', position: 'relative', overflow: 'hidden', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
           <div>
             <div style={{ fontSize: 10.5, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.08em', color: 'rgba(255,255,255,.5)', marginBottom: 8 }}>Gross Revenue · Inc. GST</div>
-            <div style={{ fontSize: 42, fontWeight: 700, color: '#fff', letterSpacing: '-.04em', lineHeight: 1, marginBottom: 6 }}>{totalRev >= 1e7 ? `₹${(totalRev / 1e7).toFixed(2)} Cr` : `₹${(totalRev / 1e5).toFixed(1)} L`}</div>
+            <div className="hero-val" style={{ fontSize: 42, fontWeight: 700, color: '#fff', letterSpacing: '-.04em', lineHeight: 1, marginBottom: 6 }}>{totalRev >= 1e7 ? `₹${(totalRev / 1e7).toFixed(2)} Cr` : `₹${(totalRev / 1e5).toFixed(1)} L`}</div>
             <div style={{ fontSize: 12.5, color: 'rgba(255,255,255,.6)', lineHeight: 1.7 }}>Net {fmt(totalExcRev)} · GST {fmt(gstCollected)}<br />{nDays}d · {Object.keys(chMap).length} channels · {fmtN(nOrders)} orders</div>
           </div>
           <div style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 11, fontWeight: 600, padding: '3px 9px', borderRadius: 5, background: 'rgba(255,255,255,.13)', color: 'rgba(255,255,255,.85)', marginTop: 10, width: 'fit-content' }}>
@@ -131,7 +140,7 @@ function OverviewPage({ data, alerts }) {
       </div>
 
       {/* 7 KPIs */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7,1fr)', gap: 10 }}>
+      <div className="g-kpi7">
         <KPICard label="Daily avg revenue" value={fmt(totalRev / nDays)} sub={`${nDays} days`} />
         <KPICard label="D2C Share" value={`${d2cPct}%`} sub={`Shopify ${fmt(shopifyRev)}`} />
         <KPICard label="Repeat rate" value={`${repeatRate}%`} sub={`${fmtN(repeatCusts)} of ${fmtN(nCusts)} cust.`} />
@@ -142,10 +151,9 @@ function OverviewPage({ data, alerts }) {
       </div>
 
       {/* Trend + Channels */}
-      <div style={{ display: 'grid', gridTemplateColumns: '2.1fr 1fr', gap: 12 }}>
+      <div className="g-21">
         <Card title="Revenue trend · daily" note="₹ stacked by channel">
           <RevTrendChart dailyArr={dailyArr} channels={channels} />
-          {/* D2C vs Mkt split bar */}
           <div style={{ marginTop: 12 }}>
             <div style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.07em', color: C.t3, marginBottom: 7 }}>D2C vs Marketplace</div>
             <div className="spbar">
@@ -168,7 +176,7 @@ function OverviewPage({ data, alerts }) {
       </div>
 
       {/* Alerts + Scorecard + Top Performers */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
+      <div className="g-3">
         <Card title="Management alerts" note={`${alerts.filter(a => a.type === 'red').length} critical · ${alerts.filter(a => a.type === 'amber').length} watch`}>
           {alerts.length === 0 && <div style={{ fontSize: 12, color: C.t3 }}>No alerts for this period.</div>}
           {alerts.map((a, i) => <AlertCard key={i} {...a} />)}
@@ -224,7 +232,6 @@ function AllTab({ data }) {
   })
   const maxHeat = Math.max(...heatData.flatMap(r => channels.map(ch => r[ch] || 0)), 1)
 
-  // 5 new KPIs
   const grossMarginPct = totalRev > 0 ? ((totalRev - totalExcRev) / totalRev * 100) : 0
   const revPerUnit = totalQty > 0 ? totalRev / totalQty : 0
   const shopifyOrders = orders.filter(o => o.channel === 'Shopify')
@@ -240,23 +247,21 @@ function AllTab({ data }) {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-      {/* Original 5 KPIs */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5,1fr)', gap: 10 }}>
+      <div className="g-kpi5">
         <KPICard label="Gross Revenue" value={fmt(totalRev)} sub={`${nDays} days`} />
         <KPICard label="Net (Exc GST)" value={fmt(totalExcRev)} />
         <KPICard label="Orders / Units" value={fmtN(nOrders)} sub={`${fmtN(totalQty)} units`} />
         <KPICard label="Blended AOV" value={`₹${Math.round(blendedAOV).toLocaleString('en-IN')}`} />
         <KPICard label="Daily Avg" value={fmt(totalRev / nDays)} />
       </div>
-      {/* 5 new KPIs */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5,1fr)', gap: 10 }}>
+      <div className="g-kpi5">
         <KPICard label="Gross Margin %" value={`${grossMarginPct.toFixed(1)}%`} sub={`GST ${fmt(totalRev - totalExcRev)} of revenue`} accent={grossMarginPct < 15 ? '#7A1A1A' : undefined} />
         <KPICard label="Revenue per Unit" value={`₹${Math.round(revPerUnit).toLocaleString('en-IN')}`} sub={`Avg selling price per SKU sold`} />
         <KPICard label="Revenue at Risk" value={fmt(atRiskRev)} sub={`RTO + Cancelled (Shopify)`} accent={atRiskRev > 0 ? '#7A4000' : undefined} />
         <KPICard label="Fulfilment Rate" value={fulfilmentBase > 0 ? `${fulfilmentRate.toFixed(1)}%` : 'N/A'} sub={`${fmtN(deliveredCount)} delivered of ${fmtN(fulfilmentBase)}`} accent={fulfilmentRate < 80 && fulfilmentBase > 0 ? '#7A1A1A' : fulfilmentRate >= 90 ? '#286010' : undefined} />
         <KPICard label="Units per Order" value={unitsPerOrder.toFixed(2)} sub={`Avg basket size`} />
       </div>
-      <div style={{ display: 'grid', gridTemplateColumns: '2fr 1.4fr', gap: 12 }}>
+      <div className="g-21">
         <Card title="Daily Revenue by Channel">
           <MultiLineChart dailyArr={dailyArr} channels={channels} />
         </Card>
@@ -265,11 +270,13 @@ function AllTab({ data }) {
         </Card>
       </div>
       <Card title="Daily Orders by Channel">
-        <DataTable columns={[{ key: 'date', label: 'Date' }, ...channels.map(ch => ({ key: ch + '_o', label: ch, align: 'right', render: v => fmtN(v || 0) })), { key: 'total', label: 'Total', align: 'right', render: v => fmtN(v) }]}
-          rows={dailyArr.map(d => ({ ...d, total: channels.reduce((s, ch) => s + (d[ch + '_o'] || 0), 0) }))} />
+        <div className="tbl-wrap">
+          <DataTable columns={[{ key: 'date', label: 'Date' }, ...channels.map(ch => ({ key: ch + '_o', label: ch, align: 'right', render: v => fmtN(v || 0) })), { key: 'total', label: 'Total', align: 'right', render: v => fmtN(v) }]}
+            rows={dailyArr.map(d => ({ ...d, total: channels.reduce((s, ch) => s + (d[ch + '_o'] || 0), 0) }))} />
+        </div>
       </Card>
       <Card title="Category × Channel Revenue Matrix" note="₹ shading = intensity">
-        <div style={{ overflowX: 'auto' }}>
+        <div className="tbl-wrap">
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11, minWidth: 700 }}>
             <thead>
               <tr>
@@ -301,7 +308,7 @@ function AllTab({ data }) {
           <div style={{ fontSize: 12, color: C.t2, lineHeight: 1.7 }}>Red cells (—) = zero revenue. Look for high-performing categories with missing channel presence to find growth opportunities.</div>
         </div>
       </Card>
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+      <div className="g-2">
         <Card title="Category Revenue">
           <DataTable columns={[{ key: 'name', label: 'Category' }, { key: 'rev', label: 'Revenue', align: 'right', mono: true, render: v => fmt(v) }, { key: 'excRev', label: 'Exc GST', align: 'right', render: v => fmt(v) }, { key: 'orders', label: 'Orders', align: 'right', render: v => fmtN(v) }, { key: 'aov', label: 'AOV', align: 'right', render: v => `₹${Math.round(v).toLocaleString('en-IN')}` }]} rows={catRows} />
         </Card>
@@ -309,7 +316,7 @@ function AllTab({ data }) {
           <DataTable columns={[{ key: 'name', label: 'Sub-category' }, { key: 'rev', label: 'Revenue', align: 'right', mono: true, render: v => fmt(v) }, { key: 'orders', label: 'Orders', align: 'right', render: v => fmtN(v) }, { key: 'aov', label: 'AOV', align: 'right', render: v => `₹${Math.round(v).toLocaleString('en-IN')}` }]} rows={subCatRows} />
         </Card>
       </div>
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+      <div className="g-2">
         <Card title="Top States">
           <DataTable columns={[{ key: 'state', label: 'State' }, { key: 'rev', label: 'Revenue', align: 'right', mono: true, render: v => fmt(v) }, { key: 'orders', label: 'Orders', align: 'right', render: v => fmtN(v) }, { key: 'aov', label: 'AOV', align: 'right', render: v => `₹${Math.round(v).toLocaleString('en-IN')}` }, { key: 'cities', label: 'Cities' }]} rows={stateRows} />
         </Card>
@@ -354,14 +361,14 @@ function ChannelTab({ data, channel }) {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5,1fr)', gap: 10 }}>
+      <div className="g-kpi5">
         <KPICard label="Revenue" value={fmt(rev)} />
         <KPICard label="Orders" value={fmtN(nOrders)} />
         <KPICard label="AOV" value={`₹${Math.round(aov).toLocaleString('en-IN')}`} />
         <KPICard label="Units" value={fmtN(qty)} />
         <KPICard label="Daily Avg" value={fmt(rev / (data.nDays || 1))} />
       </div>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5,1fr)', gap: 10 }}>
+      <div className="g-kpi5">
         <KPICard label="Gross Margin %" value={`${grossMarginPct.toFixed(1)}%`} sub="GST as % of revenue" accent={grossMarginPct < 15 ? '#7A1A1A' : undefined} />
         <KPICard label="Revenue per Unit" value={`₹${Math.round(revPerUnit).toLocaleString('en-IN')}`} sub="Avg price per SKU" />
         <KPICard label="Revenue at Risk" value={channel === 'Shopify' ? fmt(chRTORev) : 'N/A'} sub="RTO + Cancelled" accent={chRTORev > 0 ? '#7A4000' : undefined} />
@@ -370,7 +377,7 @@ function ChannelTab({ data, channel }) {
       </div>
       {channel === 'Blinkit' && <AlertCard type="red" title="Blinkit GST pipeline broken" body="SellingPrice_Exc_GST unreliable — implied GST 800%+. Use Inc_GST only." />}
       {channel === 'CRED' && <AlertCard type="amber" title="CRED batch anomaly" body="Spikes may represent delayed batch processing, not organic demand." />}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+      <div className="g-2">
         <Card title={`${channel} Daily Revenue`}>
           <AreaTrendChart data={dailyArr} color={C.ch[channel] || C.acc} />
         </Card>
@@ -407,14 +414,14 @@ function QCTab({ data }) {
   const best = qcChs.reduce((b, ch) => { const r = data.chMap[ch]?.rev || 0; return r > b.rev ? { ch, rev: r } : b }, { ch: '', rev: 0 })
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5,1fr)', gap: 10 }}>
+      <div className="g-kpi5">
         <KPICard label="QC Revenue" value={fmt(qcRev)} />
         <KPICard label="Orders" value={fmtN(nOrds)} />
         <KPICard label="Blended AOV" value={`₹${Math.round(aov).toLocaleString('en-IN')}`} />
         <KPICard label="Best Platform" value={best.ch} sub={fmt(best.rev)} />
         <KPICard label="QC Rev Share" value={pct(qcRev, data.totalRev)} />
       </div>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 12 }}>
+      <div className="g-3">
         {qcChs.map(ch => {
           const chRows = data.rows.filter(r => r.Channel === ch)
           const chOrd = data.chMap[ch] || { rev: 0, orders: 0 }
@@ -440,14 +447,14 @@ function OpsTab({ data }) {
   const tatBuckets = [{ label: 'Same day', min: 0, max: 0 }, { label: '1-2 days', min: 1, max: 2 }, { label: '3-5 days', min: 3, max: 5 }, { label: '6-7 days', min: 6, max: 7 }, { label: '8-14 days', min: 8, max: 14 }, { label: '15+ days', min: 15, max: Infinity }].map(b => ({ ...b, count: tatArr.filter(d => d >= b.min && d <= b.max).length }))
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5,1fr)', gap: 10 }}>
+      <div className="g-kpi5">
         <KPICard label="Avg Delivery TAT" value={`${avgTAT.toFixed(1)}d`} />
         <KPICard label="Orders Tracked" value={fmtN(tatArr.length)} />
         <KPICard label="Delayed >7d" value={fmtN(delayed)} sub={tatArr.length ? pct(delayed, tatArr.length) : '—'} />
         <KPICard label="Total Orders" value={fmtN(data.nOrders)} />
         <KPICard label="Cities Covered" value={fmtN([...new Set(data.orders.map(o => o.city).filter(Boolean))].length)} />
       </div>
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+      <div className="g-2">
         <Card title="Order Status">
           {Object.entries(statusCounts).sort((a, b) => b[1] - a[1]).map(([s, count]) => {
             const clr = { Delivered: C.green.tx, Dispatched: C.blue.tx, RTO: C.amber.tx, Cancelled: C.red.tx }[s] || C.acm
@@ -477,7 +484,7 @@ function CXTab({ data }) {
   const voucherOrders = orders.filter(o => o.voucher).length
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5,1fr)', gap: 10 }}>
+      <div className="g-kpi5">
         <KPICard label="Unique Customers" value={fmtN(nCusts)} />
         <KPICard label="Repeat Rate" value={`${repeatRate}%`} />
         <KPICard label="2× Buyers" value={fmtN(buyers2x)} />
@@ -512,32 +519,32 @@ function SalesPage({ data, filters, setFilters }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
       {/* Tab bar */}
-      <div style={{ height: 44, background: C.card, borderBottom: `1px solid ${C.border}`, display: 'flex', alignItems: 'center', padding: '0 20px', flexShrink: 0, overflowX: 'auto' }}>
+      <div className="sales-tabs">
         {TABS.map(tab => (
-          <button key={tab.id} onClick={() => setActiveTab(tab.id)} style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '0 13px', height: 44, fontSize: 12.5, fontWeight: activeTab === tab.id ? 600 : 500, color: activeTab === tab.id ? C.acc : C.t3, cursor: 'pointer', borderBottom: `2.5px solid ${activeTab === tab.id ? C.acc : 'transparent'}`, whiteSpace: 'nowrap', flexShrink: 0, background: 'none', border: 'none', borderBottom: `2.5px solid ${activeTab === tab.id ? C.acc : 'transparent'}`, fontFamily: 'var(--font)' }}>
+          <button key={tab.id} onClick={() => setActiveTab(tab.id)} className={`stab${activeTab === tab.id ? ' active' : ''}`}>
             {tab.ch && <span style={{ width: 7, height: 7, borderRadius: '50%', background: C.ch[tab.ch], display: 'inline-block', flexShrink: 0 }} />}
             {tab.label}
           </button>
         ))}
       </div>
       {/* Filter bar */}
-      <div style={{ background: '#ECEAE8', borderBottom: `1px solid ${C.border}`, padding: '0 20px', display: 'flex', alignItems: 'center', flexShrink: 0 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6, overflowX: 'auto', padding: '7px 0', flex: 1 }}>
-          <select style={{ fontSize: 11.5, padding: '5px 9px', borderRadius: 7, border: `1px solid ${C.border2}`, background: C.card, color: C.t1, outline: 'none', fontFamily: 'var(--font)' }} value={filters.category} onChange={e => setFilters(f => ({ ...f, category: e.target.value }))}>
+      <div className="fbar">
+        <div className="fbar-inner">
+          <select className="fsel" value={filters.category} onChange={e => setFilters(f => ({ ...f, category: e.target.value }))}>
             <option value="">All Categories</option>{cats.map(c => <option key={c} value={c}>{c}</option>)}
           </select>
-          <select style={{ fontSize: 11.5, padding: '5px 9px', borderRadius: 7, border: `1px solid ${C.border2}`, background: C.card, color: C.t1, outline: 'none', fontFamily: 'var(--font)' }} value={filters.orderStatus} onChange={e => setFilters(f => ({ ...f, orderStatus: e.target.value }))}>
+          <select className="fsel" value={filters.orderStatus} onChange={e => setFilters(f => ({ ...f, orderStatus: e.target.value }))}>
             <option value="">All Statuses</option><option>Delivered</option><option>Dispatched</option><option>RTO</option><option>Cancelled</option>
           </select>
-          <select style={{ fontSize: 11.5, padding: '5px 9px', borderRadius: 7, border: `1px solid ${C.border2}`, background: C.card, color: C.t1, outline: 'none', fontFamily: 'var(--font)' }} value={filters.state} onChange={e => setFilters(f => ({ ...f, state: e.target.value }))}>
+          <select className="fsel" value={filters.state} onChange={e => setFilters(f => ({ ...f, state: e.target.value }))}>
             <option value="">All States</option>{states.map(s => <option key={s} value={s}>{s}</option>)}
           </select>
-          <input type="text" placeholder="Search SKU…" value={filters.sku} onChange={e => setFilters(f => ({ ...f, sku: e.target.value }))} style={{ fontSize: 11.5, padding: '5px 9px', borderRadius: 7, border: `1px solid ${C.border2}`, background: C.card, color: C.t1, outline: 'none', width: 148, fontFamily: 'var(--font)' }} />
-          <button onClick={() => setFilters(f => ({ ...f, category: '', orderStatus: '', state: '', sku: '' }))} style={{ fontSize: 11.5, fontWeight: 500, color: C.t3, cursor: 'pointer', padding: 4, border: 'none', background: 'none', fontFamily: 'var(--font)' }}>✕ Clear</button>
+          <input type="text" placeholder="Search SKU…" value={filters.sku} onChange={e => setFilters(f => ({ ...f, sku: e.target.value }))} className="fsrch" />
+          <button onClick={() => setFilters(f => ({ ...f, category: '', orderStatus: '', state: '', sku: '' }))} className="fclr">✕ Clear</button>
         </div>
       </div>
       {/* Content */}
-      <div style={{ flex: 1, overflowY: 'auto', padding: '18px 20px' }}>
+      <div className="page-scroll">
         {activeTab === 'all' && <AllTab data={filteredData} />}
         {activeTab === 'shopify' && <ChannelTab data={filteredData} channel="Shopify" />}
         {activeTab === 'amazon' && <ChannelTab data={filteredData} channel="Amazon" />}
@@ -584,7 +591,7 @@ function IntelCard({ color, label, number, sub, insight, bars, table, warning })
             <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '4px 0', borderBottom: `1px solid ${C.border}` }}>
               <span style={{ fontSize: 11, color: C.t2, width: 90, flexShrink: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{b.label}</span>
               <div style={{ flex: 1, height: 5, background: C.bg, borderRadius: 3 }}>
-                <div style={{ height: '100%', borderRadius: 3, background: gradients[color].split(',')[1]?.trim().replace(')', '').trim() || C.acc, width: `${b.pct}%`, background: cc.tx }} />
+                <div style={{ height: '100%', borderRadius: 3, background: cc.tx, width: `${b.pct}%` }} />
               </div>
               <span style={{ fontSize: 11, fontWeight: 600, color: C.t1, fontFamily: 'var(--mono)', minWidth: 52, textAlign: 'right' }}>{b.value}</span>
               <span style={{ fontSize: 10, color: C.t3, minWidth: 30, textAlign: 'right' }}>{b.pct.toFixed(0)}%</span>
@@ -613,14 +620,12 @@ function IntelPage({ data }) {
 
   const { orders, rows, nOrders, nCusts, repeatCusts, totalRev, totalExcRev, chMap, catMap, stateMap, voucherMap, dailyArr, nDays, uniqueDates } = data
 
-  // Repeat & CRM
   const repeatRate = nCusts ? (repeatCusts / nCusts * 100) : 0
   const freqMap = orders.reduce((acc, o) => { if (o.customerId) acc[o.customerId] = (acc[o.customerId] || 0) + 1; return acc }, {})
   const buyers2x = Object.values(freqMap).filter(n => n >= 2).length
   const buyers3x = Object.values(freqMap).filter(n => n >= 3).length
   const lostRevIfRepeat10 = nCusts > 0 ? ((0.10 - repeatRate / 100) * nCusts * (totalRev / nOrders)) : 0
 
-  // Q-commerce
   const qcChs = ['Blinkit', 'Instamart', 'Zepto']
   const qcRev = qcChs.reduce((s, c) => s + (chMap[c]?.rev || 0), 0)
   const qcOrds = qcChs.reduce((s, c) => s + (chMap[c]?.orders || 0), 0)
@@ -628,7 +633,6 @@ function IntelPage({ data }) {
   const blendedAOV = nOrders ? totalRev / nOrders : 0
   const qcBars = qcChs.filter(c => chMap[c]).map(c => ({ label: c, value: fmt(chMap[c].rev), pct: qcRev ? chMap[c].rev / qcRev * 100 : 0 }))
 
-  // Voucher drag
   const voucherOrders = orders.filter(o => o.voucher)
   const voucherRev = voucherOrders.reduce((s, o) => s + o.rev, 0)
   const noVoucherRev = orders.filter(o => !o.voucher).reduce((s, o) => s + o.rev, 0)
@@ -638,7 +642,6 @@ function IntelPage({ data }) {
   const aovDrag = noVoucherAOV - voucherAOV
   const voucherBars = Object.entries(voucherMap).sort((a, b) => b[1].rev - a[1].rev).slice(0, 5).map(([k, v]) => ({ label: k, value: fmt(v.rev), pct: totalRev ? v.rev / totalRev * 100 : 0 }))
 
-  // RTO & returns (Shopify only)
   const shopifyOrders = orders.filter(o => o.channel === 'Shopify')
   const rtoOrders = shopifyOrders.filter(o => o.isRTO)
   const cirOrders = shopifyOrders.filter(o => o.isCIR)
@@ -651,7 +654,6 @@ function IntelPage({ data }) {
     { label: 'Cancelled', value: fmtN(cancelOrders.length), pct: shopifyOrders.length ? cancelOrders.length / shopifyOrders.length * 100 : 0 },
   ]
 
-  // Revenue concentration (Pareto)
   const sortedByRev = [...orders].sort((a, b) => b.rev - a.rev)
   const top1pct = Math.ceil(nOrders * 0.01)
   const top10pct = Math.ceil(nOrders * 0.10)
@@ -663,7 +665,6 @@ function IntelPage({ data }) {
     { label: 'Bottom 50%', value: fmt(sortedByRev.slice(Math.ceil(nOrders * 0.5)).reduce((s, o) => s + o.rev, 0)), pct: totalRev ? sortedByRev.slice(Math.ceil(nOrders * 0.5)).reduce((s, o) => s + o.rev, 0) / totalRev * 100 : 0 },
   ]
 
-  // Category gaps across channels
   const topCats = Object.entries(catMap).sort((a, b) => b[1].rev - a[1].rev).slice(0, 5)
   const catGaps = topCats.map(([cat, v]) => {
     const catRows = rows.filter(r => r.Category === cat)
@@ -672,7 +673,6 @@ function IntelPage({ data }) {
     return { cat, rev: v.rev, missing: missingQC }
   }).filter(g => g.missing.length > 0)
 
-  // Revenue trend — first vs last half
   const mid = Math.floor(uniqueDates.length / 2)
   const fhDates = new Set(uniqueDates.slice(0, mid))
   const lhDates = new Set(uniqueDates.slice(mid))
@@ -680,22 +680,17 @@ function IntelPage({ data }) {
   const lhRev = orders.filter(o => lhDates.has(o.date)).reduce((s, o) => s + o.rev, 0)
   const trendPct = fhRev > 0 ? ((lhRev - fhRev) / fhRev * 100) : 0
 
-  // GST collected
   const gstCollected = totalRev - totalExcRev
-
-  // Top states
   const topStates = Object.entries(stateMap).sort((a, b) => b[1].rev - a[1].rev).slice(0, 5).map(([k, v]) => ({ label: k, value: fmt(v.rev), pct: totalRev ? v.rev / totalRev * 100 : 0 }))
 
-  // Multi-item orders
   const multiItem = orders.filter(o => o.items > 1)
   const multiItemAOV = multiItem.length ? multiItem.reduce((s, o) => s + o.rev, 0) / multiItem.length : 0
   const singleItemAOV = orders.filter(o => o.items === 1).length ? orders.filter(o => o.items === 1).reduce((s, o) => s + o.rev, 0) / orders.filter(o => o.items === 1).length : 0
 
   return (
-    <div style={{ flex: 1, overflowY: 'auto', padding: '18px 20px', display: 'flex', flexDirection: 'column', gap: 14 }}>
-
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
       {/* Summary strip */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6,1fr)', gap: 10 }}>
+      <div className="g-intel">
         {[
           { label: 'Gross Revenue', val: fmt(totalRev) },
           { label: 'GST Collected', val: fmt(gstCollected) },
@@ -711,8 +706,7 @@ function IntelPage({ data }) {
         ))}
       </div>
 
-      {/* Row 1 */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+      <div className="g-2">
         <IntelCard color="red" label="Customer Retention Crisis"
           number={`${repeatRate.toFixed(1)}%`}
           sub={`${fmtN(repeatCusts)} of ${fmtN(nCusts)} customers ever reordered · ${fmtN(buyers2x)} bought 2×, ${fmtN(buyers3x)} bought 3×+`}
@@ -732,8 +726,7 @@ function IntelPage({ data }) {
         />
       </div>
 
-      {/* Row 2 */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+      <div className="g-2">
         <IntelCard color="amber" label="Voucher & Discount Drag"
           number={pct(voucherOrders.length, nOrders)}
           sub={`${fmtN(voucherOrders.length)} orders used vouchers · AOV with voucher ₹${Math.round(voucherAOV).toLocaleString('en-IN')} vs ₹${Math.round(noVoucherAOV).toLocaleString('en-IN')} without`}
@@ -749,8 +742,7 @@ function IntelPage({ data }) {
         />
       </div>
 
-      {/* Row 3 */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+      <div className="g-2">
         <IntelCard color="pink" label="Returns & RTO — Shopify Only"
           number={`${rtoRate.toFixed(1)}%`}
           sub={`RTO rate on ${fmtN(shopifyOrders.length)} Shopify orders · CIR ${cirRate.toFixed(1)}% · Marketplace return data unavailable`}
@@ -765,17 +757,16 @@ function IntelPage({ data }) {
         />
       </div>
 
-      {/* Channel gap matrix */}
       {catGaps.length > 0 && (
         <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 13, padding: '16px 18px' }}>
           <div style={{ fontSize: 13, fontWeight: 600, color: C.t1, marginBottom: 4 }}>Category × Channel Gap Analysis</div>
           <div style={{ fontSize: 11.5, color: C.t3, marginBottom: 12 }}>High-revenue categories with zero Q-commerce presence</div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
             {catGaps.map((g, i) => (
-              <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '8px 0', borderBottom: `1px solid ${C.border}` }}>
-                <span style={{ fontSize: 12, fontWeight: 600, color: C.t1, width: 120 }}>{g.cat}</span>
-                <span style={{ fontSize: 12, fontFamily: 'var(--mono)', color: C.t2, width: 70 }}>{fmt(g.rev)}</span>
-                <span style={{ fontSize: 11, color: C.t3, flex: 1 }}>Missing on:</span>
+              <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '8px 0', borderBottom: `1px solid ${C.border}`, flexWrap: 'wrap' }}>
+                <span style={{ fontSize: 12, fontWeight: 600, color: C.t1, minWidth: 100 }}>{g.cat}</span>
+                <span style={{ fontSize: 12, fontFamily: 'var(--mono)', color: C.t2, minWidth: 70 }}>{fmt(g.rev)}</span>
+                <span style={{ fontSize: 11, color: C.t3 }}>Missing on:</span>
                 {g.missing.map(m => (
                   <span key={m} style={{ fontSize: 11, fontWeight: 600, padding: '2px 8px', borderRadius: 5, background: '#FDE8E8', color: '#7A1A1A' }}>{m}</span>
                 ))}
@@ -786,14 +777,13 @@ function IntelPage({ data }) {
         </div>
       )}
 
-      {/* Revenue trend insight */}
-      <div style={{ background: C.acl, border: `1px solid ${C.acm}`, borderRadius: 13, padding: '16px 18px', display: 'flex', gap: 20, alignItems: 'center' }}>
+      <div style={{ background: C.acl, border: `1px solid ${C.acm}`, borderRadius: 13, padding: '16px 18px', display: 'flex', gap: 20, alignItems: 'center', flexWrap: 'wrap' }}>
         <div>
           <div style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.07em', color: C.acc, marginBottom: 6 }}>◈ Period Trend Signal</div>
           <div style={{ fontSize: 28, fontWeight: 700, color: trendPct >= 0 ? C.green.tx : C.red.tx, marginBottom: 4 }}>{trendPct > 0 ? '+' : ''}{trendPct.toFixed(1)}%</div>
           <div style={{ fontSize: 12, color: C.t2 }}>Revenue change: first half {fmt(fhRev)} → second half {fmt(lhRev)}</div>
         </div>
-        <div style={{ flex: 1, fontSize: 12, color: C.t2, lineHeight: 1.7, borderLeft: `1px solid ${C.acm}`, paddingLeft: 20 }}>
+        <div style={{ flex: 1, minWidth: 200, fontSize: 12, color: C.t2, lineHeight: 1.7, borderLeft: `1px solid ${C.acm}`, paddingLeft: 20 }}>
           {trendPct < -10
             ? `⚠ Revenue declined ${Math.abs(trendPct).toFixed(1)}% in the second half of this period. Check for demand drop, channel issues, or data gaps (CRED batch, feed delays).`
             : trendPct > 10
@@ -802,7 +792,6 @@ function IntelPage({ data }) {
           }
         </div>
       </div>
-
     </div>
   )
 }
@@ -811,14 +800,13 @@ function IntelPage({ data }) {
 function Skeleton() {
   return (
     <div style={{ padding: '18px 20px', display: 'flex', flexDirection: 'column', gap: 14 }}>
-      <div style={{ display: 'grid', gridTemplateColumns: '1.6fr 1fr 1fr 1fr', gap: 12 }}>
+      <div className="g-hero">
         {[1, 2, 3, 4].map(i => <div key={i} style={{ height: 130, borderRadius: 13, background: C.border, animation: 'pulse 1.5s infinite' }} />)}
       </div>
       <div style={{ height: 240, borderRadius: 13, background: C.border, animation: 'pulse 1.5s infinite' }} />
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
+      <div className="g-3">
         {[1, 2, 3].map(i => <div key={i} style={{ height: 200, borderRadius: 13, background: C.border, animation: 'pulse 1.5s infinite' }} />)}
       </div>
-      <style>{`@keyframes pulse{0%,100%{opacity:1}50%{opacity:.5}}`}</style>
     </div>
   )
 }
@@ -858,26 +846,22 @@ export default function App() {
   const alerts = useMemo(() => data ? detectAlerts(data) : [], [data])
 
   return (
-    <div style={{ display: 'flex', height: '100vh', overflow: 'hidden', background: C.bg }}>
+    <div className="app-shell">
       <Sidebar page={page} setPage={setPage} />
-      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0, overflow: 'hidden', borderLeft: `1px solid ${C.border}` }}>
+      <div className="app-main">
         <Topnav page={page} alerts={alerts} onRefresh={() => fetchData(filters.start, filters.end)} loading={loading} filters={filters} setFilters={setFilters} rawRows={rawRows} />
-        {/* Progress bar */}
         {loading && (
           <div style={{ height: 2, background: C.border, flexShrink: 0 }}>
             <div className="progress-bar" style={{ height: '100%', background: C.acc }} />
           </div>
         )}
-        {/* Error */}
         {error && (
-          <div style={{ margin: '12px 20px 0', padding: '10px 13px', borderRadius: 9, background: C.red.bg, border: `1px solid ${C.red.bd}`, color: C.red.tx, fontSize: 12, display: 'flex', alignItems: 'center', gap: 8 }}>
+          <div style={{ margin: '12px 16px 0', padding: '10px 13px', borderRadius: 9, background: C.red.bg, border: `1px solid ${C.red.bd}`, color: C.red.tx, fontSize: 12, display: 'flex', alignItems: 'center', gap: 8 }}>
             <span>⚠ {error}</span>
             <button onClick={() => fetchData(filters.start, filters.end)} style={{ marginLeft: 'auto', fontSize: 11, padding: '3px 8px', borderRadius: 5, border: `1px solid ${C.red.bd}`, background: 'transparent', color: C.red.tx, cursor: 'pointer', fontFamily: 'var(--font)' }}>Retry</button>
           </div>
         )}
-        {/* Pages */}
         <div style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
-          {/* Empty state */}
           {!data && !loading && !error && (
             <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 16 }}>
               <div style={{ width: 64, height: 64, borderRadius: 18, background: C.acl, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 28 }}>📊</div>
@@ -891,18 +875,20 @@ export default function App() {
             </div>
           )}
           {loading && !data && <Skeleton />}
-          {/* Overview */}
           {page === 'overview' && data && (
-            <div style={{ flex: 1, overflowY: 'auto', padding: '18px 20px' }}>
+            <div className="page-scroll">
               <OverviewPage data={data} alerts={alerts} />
             </div>
           )}
-          {/* Sales */}
           {page === 'sales' && data && <SalesPage data={data} filters={filters} setFilters={setFilters} />}
-          {/* Intelligence */}
-          {page === 'intelligence' && <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column' }}><IntelPage data={data} /></div>}
+          {page === 'intelligence' && (
+            <div className="page-scroll">
+              <IntelPage data={data} />
+            </div>
+          )}
         </div>
       </div>
+      <BottomNav page={page} setPage={setPage} />
     </div>
   )
 }
