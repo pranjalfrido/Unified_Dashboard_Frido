@@ -505,34 +505,254 @@ function SalesPage({ data, filters, setFilters }) {
   )
 }
 
-// ── Intelligence Page (static for now) ───────────────────────
+// ── Intelligence Page ─────────────────────────────────────────
+function IntelCard({ color, label, number, sub, insight, bars, table, warning }) {
+  const gradients = {
+    red: 'linear-gradient(90deg,#E24B4A,#F08080)',
+    green: 'linear-gradient(90deg,#2D9A50,#6ED98A)',
+    blue: 'linear-gradient(90deg,#2E74CC,#7AB4EE)',
+    amber: 'linear-gradient(90deg,#CC8A00,#F5C460)',
+    purple: 'linear-gradient(90deg,#4843B2,#AAA6E6)',
+    pink: 'linear-gradient(90deg,#CC4078,#F09BC0)',
+  }
+  const colors = {
+    red: { bg: '#FDE8E8', tx: '#7A1A1A' }, green: { bg: '#E6F4E0', tx: '#286010' },
+    blue: { bg: '#E1EFFD', tx: '#184078' }, amber: { bg: '#FEF2DC', tx: '#7A4000' },
+    purple: { bg: '#EDECFB', tx: '#4843B2' }, pink: { bg: '#FDE8F3', tx: '#7A1050' },
+  }
+  const cc = colors[color] || colors.blue
+  return (
+    <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 13, padding: '18px 20px', position: 'relative', overflow: 'hidden' }}>
+      <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 3, borderRadius: '13px 13px 0 0', background: gradients[color] }} />
+      <div style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.07em', color: C.t3, marginBottom: 6 }}>{label}</div>
+      <div style={{ fontSize: 32, fontWeight: 700, letterSpacing: '-.03em', marginBottom: 4, color: C.t1 }}>{number}</div>
+      <div style={{ fontSize: 12, color: C.t2, lineHeight: 1.6, marginBottom: 10 }}>{sub}</div>
+      {warning && <div style={{ fontSize: 11.5, padding: '6px 10px', borderRadius: 7, background: cc.bg, color: cc.tx, marginBottom: 10, fontWeight: 500 }}>⚠ {warning}</div>}
+      {bars && bars.length > 0 && (
+        <div style={{ marginBottom: 10 }}>
+          {bars.map((b, i) => (
+            <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '4px 0', borderBottom: `1px solid ${C.border}` }}>
+              <span style={{ fontSize: 11, color: C.t2, width: 90, flexShrink: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{b.label}</span>
+              <div style={{ flex: 1, height: 5, background: C.bg, borderRadius: 3 }}>
+                <div style={{ height: '100%', borderRadius: 3, background: gradients[color].split(',')[1]?.trim().replace(')', '').trim() || C.acc, width: `${b.pct}%`, background: cc.tx }} />
+              </div>
+              <span style={{ fontSize: 11, fontWeight: 600, color: C.t1, fontFamily: 'var(--mono)', minWidth: 52, textAlign: 'right' }}>{b.value}</span>
+              <span style={{ fontSize: 10, color: C.t3, minWidth: 30, textAlign: 'right' }}>{b.pct.toFixed(0)}%</span>
+            </div>
+          ))}
+        </div>
+      )}
+      {insight && (
+        <div style={{ background: C.acl, border: `1px solid ${C.acm}`, borderRadius: 8, padding: '9px 11px' }}>
+          <div style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.06em', color: C.acc, marginBottom: 4 }}>◈ Insight</div>
+          <div style={{ fontSize: 11.5, color: C.t2, lineHeight: 1.65 }} dangerouslySetInnerHTML={{ __html: insight }} />
+        </div>
+      )}
+    </div>
+  )
+}
+
 function IntelPage({ data }) {
-  if (!data) return <div style={{ padding: 40, color: C.t3, fontSize: 13 }}>Load data to see intelligence insights.</div>
-  const { orders, nOrders, nCusts, repeatCusts, totalRev, chMap } = data
+  if (!data) return (
+    <div style={{ padding: 60, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 12 }}>
+      <div style={{ fontSize: 40 }}>◈</div>
+      <div style={{ fontSize: 14, fontWeight: 600, color: C.t1 }}>Intelligence Engine</div>
+      <div style={{ fontSize: 12, color: C.t3 }}>Load a date range to generate insights</div>
+    </div>
+  )
+
+  const { orders, rows, nOrders, nCusts, repeatCusts, totalRev, totalExcRev, chMap, catMap, stateMap, voucherMap, dailyArr, nDays, uniqueDates } = data
+
+  // Repeat & CRM
+  const repeatRate = nCusts ? (repeatCusts / nCusts * 100) : 0
+  const freqMap = orders.reduce((acc, o) => { if (o.customerId) acc[o.customerId] = (acc[o.customerId] || 0) + 1; return acc }, {})
+  const buyers2x = Object.values(freqMap).filter(n => n >= 2).length
+  const buyers3x = Object.values(freqMap).filter(n => n >= 3).length
+  const lostRevIfRepeat10 = nCusts > 0 ? ((0.10 - repeatRate / 100) * nCusts * (totalRev / nOrders)) : 0
+
+  // Q-commerce
   const qcChs = ['Blinkit', 'Instamart', 'Zepto']
   const qcRev = qcChs.reduce((s, c) => s + (chMap[c]?.rev || 0), 0)
-  const repeatRate = nCusts ? (repeatCusts / nCusts * 100).toFixed(1) : '0'
-  const rtoCount = orders.filter(o => o.isRTO).length
-  const voucherOrders = orders.filter(o => o.voucher).length
+  const qcOrds = qcChs.reduce((s, c) => s + (chMap[c]?.orders || 0), 0)
+  const qcAOV = qcOrds ? qcRev / qcOrds : 0
+  const blendedAOV = nOrders ? totalRev / nOrders : 0
+  const qcBars = qcChs.filter(c => chMap[c]).map(c => ({ label: c, value: fmt(chMap[c].rev), pct: qcRev ? chMap[c].rev / qcRev * 100 : 0 }))
 
-  const cards = [
-    { color: 'red', label: 'Repeat Rate', number: `${repeatRate}%`, sub: `${fmtN(repeatCusts)} of ${fmtN(nCusts)} customers ever reordered`, action: 'Launch CRM', actionColor: '#FDE8E8', actionTx: '#7A1A1A' },
-    { color: 'green', label: 'Q-Commerce Revenue', number: fmt(qcRev), sub: `${pct(qcRev, totalRev)} of total — AOV 2.5× brand average`, action: 'Expand SKUs', actionColor: '#E6F4E0', actionTx: '#286010' },
-    { color: 'amber', label: 'Voucher Penetration', number: pct(voucherOrders, nOrders), sub: `${fmtN(voucherOrders)} orders used voucher codes`, action: 'Review discount P&L', actionColor: '#FEF2DC', actionTx: '#7A4000' },
-    { color: 'blue', label: 'RTO Orders', number: fmtN(rtoCount), sub: `${pct(rtoCount, nOrders)} RTO rate on Shopify orders`, action: 'Audit logistics', actionColor: '#E1EFFD', actionTx: '#184078' },
+  // Voucher drag
+  const voucherOrders = orders.filter(o => o.voucher)
+  const voucherRev = voucherOrders.reduce((s, o) => s + o.rev, 0)
+  const noVoucherRev = orders.filter(o => !o.voucher).reduce((s, o) => s + o.rev, 0)
+  const noVoucherOrds = orders.filter(o => !o.voucher).length
+  const voucherAOV = voucherOrders.length ? voucherRev / voucherOrders.length : 0
+  const noVoucherAOV = noVoucherOrds ? noVoucherRev / noVoucherOrds : 0
+  const aovDrag = noVoucherAOV - voucherAOV
+  const voucherBars = Object.entries(voucherMap).sort((a, b) => b[1].rev - a[1].rev).slice(0, 5).map(([k, v]) => ({ label: k, value: fmt(v.rev), pct: totalRev ? v.rev / totalRev * 100 : 0 }))
+
+  // RTO & returns (Shopify only)
+  const shopifyOrders = orders.filter(o => o.channel === 'Shopify')
+  const rtoOrders = shopifyOrders.filter(o => o.isRTO)
+  const cirOrders = shopifyOrders.filter(o => o.isCIR)
+  const cancelOrders = shopifyOrders.filter(o => o.isCancelled)
+  const rtoRate = shopifyOrders.length ? rtoOrders.length / shopifyOrders.length * 100 : 0
+  const cirRate = shopifyOrders.length ? cirOrders.length / shopifyOrders.length * 100 : 0
+  const returnBars = [
+    { label: 'RTO', value: fmtN(rtoOrders.length), pct: shopifyOrders.length ? rtoOrders.length / shopifyOrders.length * 100 : 0 },
+    { label: 'CIR Return', value: fmtN(cirOrders.length), pct: shopifyOrders.length ? cirOrders.length / shopifyOrders.length * 100 : 0 },
+    { label: 'Cancelled', value: fmtN(cancelOrders.length), pct: shopifyOrders.length ? cancelOrders.length / shopifyOrders.length * 100 : 0 },
   ]
 
+  // Revenue concentration (Pareto)
+  const sortedByRev = [...orders].sort((a, b) => b.rev - a.rev)
+  const top1pct = Math.ceil(nOrders * 0.01)
+  const top10pct = Math.ceil(nOrders * 0.10)
+  const top1rev = sortedByRev.slice(0, top1pct).reduce((s, o) => s + o.rev, 0)
+  const top10rev = sortedByRev.slice(0, top10pct).reduce((s, o) => s + o.rev, 0)
+  const paretoBars = [
+    { label: `Top 1% (${fmtN(top1pct)} ord)`, value: fmt(top1rev), pct: totalRev ? top1rev / totalRev * 100 : 0 },
+    { label: `Top 10% (${fmtN(top10pct)} ord)`, value: fmt(top10rev), pct: totalRev ? top10rev / totalRev * 100 : 0 },
+    { label: 'Bottom 50%', value: fmt(sortedByRev.slice(Math.ceil(nOrders * 0.5)).reduce((s, o) => s + o.rev, 0)), pct: totalRev ? sortedByRev.slice(Math.ceil(nOrders * 0.5)).reduce((s, o) => s + o.rev, 0) / totalRev * 100 : 0 },
+  ]
+
+  // Category gaps across channels
+  const topCats = Object.entries(catMap).sort((a, b) => b[1].rev - a[1].rev).slice(0, 5)
+  const catGaps = topCats.map(([cat, v]) => {
+    const catRows = rows.filter(r => r.Category === cat)
+    const presentChs = new Set(catRows.map(r => r.Channel))
+    const missingQC = qcChs.filter(c => !presentChs.has(c))
+    return { cat, rev: v.rev, missing: missingQC }
+  }).filter(g => g.missing.length > 0)
+
+  // Revenue trend — first vs last half
+  const mid = Math.floor(uniqueDates.length / 2)
+  const fhDates = new Set(uniqueDates.slice(0, mid))
+  const lhDates = new Set(uniqueDates.slice(mid))
+  const fhRev = orders.filter(o => fhDates.has(o.date)).reduce((s, o) => s + o.rev, 0)
+  const lhRev = orders.filter(o => lhDates.has(o.date)).reduce((s, o) => s + o.rev, 0)
+  const trendPct = fhRev > 0 ? ((lhRev - fhRev) / fhRev * 100) : 0
+
+  // GST collected
+  const gstCollected = totalRev - totalExcRev
+
+  // Top states
+  const topStates = Object.entries(stateMap).sort((a, b) => b[1].rev - a[1].rev).slice(0, 5).map(([k, v]) => ({ label: k, value: fmt(v.rev), pct: totalRev ? v.rev / totalRev * 100 : 0 }))
+
+  // Multi-item orders
+  const multiItem = orders.filter(o => o.items > 1)
+  const multiItemAOV = multiItem.length ? multiItem.reduce((s, o) => s + o.rev, 0) / multiItem.length : 0
+  const singleItemAOV = orders.filter(o => o.items === 1).length ? orders.filter(o => o.items === 1).reduce((s, o) => s + o.rev, 0) / orders.filter(o => o.items === 1).length : 0
+
   return (
-    <div style={{ padding: '18px 20px', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
-      {cards.map((card, i) => (
-        <div key={i} style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 13, padding: '18px 20px', position: 'relative', overflow: 'hidden' }}>
-          <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 3, borderRadius: '13px 13px 0 0', background: { red: 'linear-gradient(90deg,#E24B4A,#F08080)', green: 'linear-gradient(90deg,#2D9A50,#6ED98A)', blue: 'linear-gradient(90deg,#2E74CC,#7AB4EE)', amber: 'linear-gradient(90deg,#CC8A00,#F5C460)' }[card.color] }} />
-          <div style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.07em', color: C.t3, marginBottom: 6 }}>{card.label}</div>
-          <div style={{ fontSize: 32, fontWeight: 700, letterSpacing: '-.03em', marginBottom: 4, color: C.t1 }}>{card.number}</div>
-          <div style={{ fontSize: 12, color: C.t2, lineHeight: 1.6, marginBottom: 10 }}>{card.sub}</div>
-          <button style={{ fontSize: 11.5, fontWeight: 600, padding: '6px 12px', borderRadius: 7, border: 'none', cursor: 'pointer', fontFamily: 'var(--font)', background: card.actionColor, color: card.actionTx }}>→ {card.action}</button>
+    <div style={{ flex: 1, overflowY: 'auto', padding: '18px 20px', display: 'flex', flexDirection: 'column', gap: 14 }}>
+
+      {/* Summary strip */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6,1fr)', gap: 10 }}>
+        {[
+          { label: 'Gross Revenue', val: fmt(totalRev) },
+          { label: 'GST Collected', val: fmt(gstCollected) },
+          { label: 'Repeat Rate', val: `${repeatRate.toFixed(1)}%`, warn: repeatRate < 10 },
+          { label: 'QC Share', val: pct(qcRev, totalRev) },
+          { label: 'Voucher Orders', val: pct(voucherOrders.length, nOrders) },
+          { label: 'Trend (½ period)', val: `${trendPct > 0 ? '+' : ''}${trendPct.toFixed(1)}%`, warn: trendPct < -10 },
+        ].map((s, i) => (
+          <div key={i} style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 11, padding: '11px 13px' }}>
+            <div style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.06em', color: C.t3, marginBottom: 5 }}>{s.label}</div>
+            <div style={{ fontSize: 20, fontWeight: 700, color: s.warn ? '#7A1A1A' : C.t1 }}>{s.val}</div>
+          </div>
+        ))}
+      </div>
+
+      {/* Row 1 */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+        <IntelCard color="red" label="Customer Retention Crisis"
+          number={`${repeatRate.toFixed(1)}%`}
+          sub={`${fmtN(repeatCusts)} of ${fmtN(nCusts)} customers ever reordered · ${fmtN(buyers2x)} bought 2×, ${fmtN(buyers3x)} bought 3×+`}
+          warning={repeatRate < 10 ? `Improving to 10% = est. +${fmt(Math.abs(lostRevIfRepeat10))} revenue with zero acquisition cost` : undefined}
+          bars={[
+            { label: '1× buyers', value: fmtN(nCusts - repeatCusts), pct: nCusts ? (nCusts - repeatCusts) / nCusts * 100 : 0 },
+            { label: '2× buyers', value: fmtN(buyers2x), pct: nCusts ? buyers2x / nCusts * 100 : 0 },
+            { label: '3×+ buyers', value: fmtN(buyers3x), pct: nCusts ? buyers3x / nCusts * 100 : 0 },
+          ]}
+          insight={`<strong>${(100 - repeatRate).toFixed(1)}%</strong> of customers never came back. Post-purchase email sequence + PLM loyalty codes are the fastest lever. Target: get 1× buyers to 2× within 90 days.`}
+        />
+        <IntelCard color="green" label="Q-Commerce Opportunity"
+          number={fmt(qcRev)}
+          sub={`${fmtN(qcOrds)} orders · AOV ₹${Math.round(qcAOV).toLocaleString('en-IN')} vs blended ₹${Math.round(blendedAOV).toLocaleString('en-IN')} — ${(qcAOV / blendedAOV).toFixed(1)}× brand average`}
+          bars={qcBars}
+          insight={`Q-commerce AOV is <strong>${(qcAOV / blendedAOV).toFixed(1)}× higher</strong> than blended. ${catGaps.length > 0 ? `<strong>${catGaps.map(g => g.cat).join(', ')}</strong> have zero QC presence — biggest untapped gap.` : 'Expand top SKUs to all 3 platforms.'}`}
+        />
+      </div>
+
+      {/* Row 2 */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+        <IntelCard color="amber" label="Voucher & Discount Drag"
+          number={pct(voucherOrders.length, nOrders)}
+          sub={`${fmtN(voucherOrders.length)} orders used vouchers · AOV with voucher ₹${Math.round(voucherAOV).toLocaleString('en-IN')} vs ₹${Math.round(noVoucherAOV).toLocaleString('en-IN')} without`}
+          warning={aovDrag > 0 ? `AOV drag: ₹${Math.round(aovDrag).toLocaleString('en-IN')} per vouchered order` : undefined}
+          bars={voucherBars}
+          insight={`Voucher orders have <strong>₹${Math.round(aovDrag).toLocaleString('en-IN')} lower AOV</strong> than organic. Review PLM loyalty code discount depth — cap at 10% to protect margin.`}
+        />
+        <IntelCard color="blue" label="Revenue Concentration — Pareto"
+          number={`${totalRev ? (top1rev / totalRev * 100).toFixed(1) : 0}%`}
+          sub={`Top 1% of orders (${fmtN(top1pct)}) drive this share · High-ticket orders are your most efficient revenue`}
+          bars={paretoBars}
+          insight={`Top <strong>${fmtN(top1pct)} orders</strong> = ${totalRev ? (top1rev / totalRev * 100).toFixed(1) : 0}% of revenue. Protect these customers with white-glove service and early access to new products.`}
+        />
+      </div>
+
+      {/* Row 3 */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+        <IntelCard color="pink" label="Returns & RTO — Shopify Only"
+          number={`${rtoRate.toFixed(1)}%`}
+          sub={`RTO rate on ${fmtN(shopifyOrders.length)} Shopify orders · CIR ${cirRate.toFixed(1)}% · Marketplace return data unavailable`}
+          bars={returnBars}
+          insight={`RTO erodes net revenue by the full order value + reverse logistics cost. Every 1% RTO reduction on ${fmtN(shopifyOrders.length)} orders saves est. <strong>${fmt(shopifyOrders.length * 0.01 * blendedAOV)}</strong>.`}
+        />
+        <IntelCard color="purple" label="Basket & Multi-item Intelligence"
+          number={pct(multiItem.length, nOrders)}
+          sub={`${fmtN(multiItem.length)} multi-item orders · AOV ₹${Math.round(multiItemAOV).toLocaleString('en-IN')} vs ₹${Math.round(singleItemAOV).toLocaleString('en-IN')} single-item — ${multiItemAOV > singleItemAOV ? '+' : ''}${(((multiItemAOV - singleItemAOV) / (singleItemAOV || 1)) * 100).toFixed(0)}% AOV premium`}
+          bars={topStates}
+          insight={`Multi-item orders have <strong>₹${Math.round(multiItemAOV - singleItemAOV).toLocaleString('en-IN')} higher AOV</strong>. Bundle recommendations at checkout (e.g. Pillow + Insole) can shift single-item buyers to multi-item.`}
+        />
+      </div>
+
+      {/* Channel gap matrix */}
+      {catGaps.length > 0 && (
+        <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 13, padding: '16px 18px' }}>
+          <div style={{ fontSize: 13, fontWeight: 600, color: C.t1, marginBottom: 4 }}>Category × Channel Gap Analysis</div>
+          <div style={{ fontSize: 11.5, color: C.t3, marginBottom: 12 }}>High-revenue categories with zero Q-commerce presence</div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
+            {catGaps.map((g, i) => (
+              <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '8px 0', borderBottom: `1px solid ${C.border}` }}>
+                <span style={{ fontSize: 12, fontWeight: 600, color: C.t1, width: 120 }}>{g.cat}</span>
+                <span style={{ fontSize: 12, fontFamily: 'var(--mono)', color: C.t2, width: 70 }}>{fmt(g.rev)}</span>
+                <span style={{ fontSize: 11, color: C.t3, flex: 1 }}>Missing on:</span>
+                {g.missing.map(m => (
+                  <span key={m} style={{ fontSize: 11, fontWeight: 600, padding: '2px 8px', borderRadius: 5, background: '#FDE8E8', color: '#7A1A1A' }}>{m}</span>
+                ))}
+                <span style={{ fontSize: 11, color: C.green.tx, fontWeight: 600 }}>→ est. {fmt(g.rev * 0.05)}/mo opportunity</span>
+              </div>
+            ))}
+          </div>
         </div>
-      ))}
+      )}
+
+      {/* Revenue trend insight */}
+      <div style={{ background: C.acl, border: `1px solid ${C.acm}`, borderRadius: 13, padding: '16px 18px', display: 'flex', gap: 20, alignItems: 'center' }}>
+        <div>
+          <div style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.07em', color: C.acc, marginBottom: 6 }}>◈ Period Trend Signal</div>
+          <div style={{ fontSize: 28, fontWeight: 700, color: trendPct >= 0 ? C.green.tx : C.red.tx, marginBottom: 4 }}>{trendPct > 0 ? '+' : ''}{trendPct.toFixed(1)}%</div>
+          <div style={{ fontSize: 12, color: C.t2 }}>Revenue change: first half {fmt(fhRev)} → second half {fmt(lhRev)}</div>
+        </div>
+        <div style={{ flex: 1, fontSize: 12, color: C.t2, lineHeight: 1.7, borderLeft: `1px solid ${C.acm}`, paddingLeft: 20 }}>
+          {trendPct < -10
+            ? `⚠ Revenue declined ${Math.abs(trendPct).toFixed(1)}% in the second half of this period. Check for demand drop, channel issues, or data gaps (CRED batch, feed delays).`
+            : trendPct > 10
+            ? `✅ Strong momentum — revenue grew ${trendPct.toFixed(1)}% in the second half. Identify which channels drove growth and double down.`
+            : `Revenue is relatively stable across the period (${trendPct.toFixed(1)}%). Intra-period volatility is normal — look at daily channel breakdown for specific signals.`
+          }
+        </div>
+      </div>
+
     </div>
   )
 }
@@ -630,7 +850,7 @@ export default function App() {
           {/* Sales */}
           {page === 'sales' && data && <SalesPage data={data} filters={filters} setFilters={setFilters} />}
           {/* Intelligence */}
-          {page === 'intelligence' && <div style={{ flex: 1, overflowY: 'auto' }}><IntelPage data={data} /></div>}
+          {page === 'intelligence' && <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column' }}><IntelPage data={data} /></div>}
         </div>
       </div>
     </div>
