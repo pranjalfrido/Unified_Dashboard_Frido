@@ -150,10 +150,12 @@ function OverviewPage({ data, alerts }) {
         <KPICard label="Unique Customers" value={fmtN(nCusts)} sub={`${repeatRate}% repeat`} />
       </div>
 
-      {/* 7 KPIs */}
-      <div className="g-kpi7">
+      {/* 9 KPIs */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(9,1fr)', gap: 10 }}>
         <KPICard label="Daily avg revenue" value={fmt(totalRev / nDays)} sub={`${nDays} days`} />
         <KPICard label="D2C Share" value={`${d2cPct}%`} sub={`Shopify ${fmt(shopifyRev)}`} />
+        <KPICard label="Q-commerce Share" value={pct(qcRev, totalRev)} sub={`${fmt(qcRev)} · Blinkit+Instamart+Zepto`} />
+        <KPICard label="Marketplace Share" value={`${(100 - parseFloat(d2cPct) - parseFloat(pct(qcRev, totalRev))).toFixed(1)}%`} sub={`Amazon+Flipkart+others ${fmt(totalRev - shopifyRev - qcRev)}`} />
         <KPICard label="Repeat rate" value={`${repeatRate}%`} sub={`${fmtN(repeatCusts)} of ${fmtN(nCusts)} cust.`} />
         <KPICard label="Multi-item rate" value={pct(orders.filter(o => o.items > 1).length, nOrders)} sub="+AOV premium" />
         <KPICard label="Q-commerce AOV" value={`₹${qcAOV.toLocaleString('en-IN')}`} sub="Blinkit+Instamart+Zepto" />

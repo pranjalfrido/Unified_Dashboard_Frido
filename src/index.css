@@ -188,6 +188,7 @@ html,body{height:100%;background:var(--bg);font-family:var(--font);color:var(--t
   .g-kpi4{ grid-template-columns:1fr 1fr !important }
   .g-kpi3{ grid-template-columns:1fr 1fr !important }
   .g-kpi7{ grid-template-columns:1fr 1fr !important }
+  [style*="repeat(9,1fr)"]{grid-template-columns:1fr 1fr !important}
   .g-21{ grid-template-columns:1fr !important }
   .g-3{ grid-template-columns:1fr !important }
   .g-2{ grid-template-columns:1fr !important }
