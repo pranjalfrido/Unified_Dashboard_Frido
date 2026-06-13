@@ -1,0 +1,81 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+
+:root{
+  --bg:#F2F1EF;--card:#fff;--hov:#F0EFF9;
+  --b1:#E5E4ED;--b2:#CCC9E5;
+  --t1:#13121A;--t2:#504F68;--t3:#94939F;
+  --acc:#4843B2;--acl:#EDECFB;--acm:#AAA6E6;
+  --G:#E6F4E0;--Gt:#286010;--Gb:#9DD470;
+  --R:#FDE8E8;--Rt:#7A1A1A;--Rb:#F09898;
+  --A:#FEF2DC;--At:#7A4000;--Ab:#F5C460;
+  --B:#E1EFFD;--Bt:#184078;--Bb:#7AB4EE;
+  --P:#F3E8FD;--Pt:#5B1685;--Pb:#C480F0;
+  --ch1:#4843B2;--ch2:#E8930A;--ch3:#2E74CC;--ch4:#0D9E68;
+  --ch5:#CC4078;--ch6:#4AB89A;--ch7:#858380;--ch8:#E87858;--ch9:#9B56B6;
+  --font:'Inter',sans-serif;--mono:'JetBrains Mono',monospace;
+}
+
+html,body{height:100%;background:var(--bg);font-family:var(--font);color:var(--t1);font-size:13px;line-height:1.5;-webkit-font-smoothing:antialiased}
+#root{width:100%;height:100%}
+
+::-webkit-scrollbar{width:4px;height:4px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:var(--b2);border-radius:2px}
+
+/* Pill/badge helpers */
+.bdg{display:inline-flex;align-items:center;gap:3px;font-size:10.5px;font-weight:600;padding:2px 7px;border-radius:5px}
+.bdg-G{background:var(--G);color:var(--Gt)}
+.bdg-R{background:var(--R);color:var(--Rt)}
+.bdg-A{background:var(--A);color:var(--At)}
+.bdg-B{background:var(--B);color:var(--Bt)}
+.bdg-N{background:var(--bg);color:var(--t3);border:1px solid var(--b1)}
+
+/* Alert styles */
+.al-R{background:var(--R);border-color:var(--Rb);color:var(--Rt)}
+.al-A{background:var(--A);border-color:var(--Ab);color:var(--At)}
+.al-G{background:var(--G);border-color:var(--Gb);color:var(--Gt)}
+.al-B{background:var(--B);border-color:var(--Bb);color:var(--Bt)}
+
+/* Insight box */
+.ins-box{background:var(--acl);border:1px solid var(--acm);border-radius:10px;padding:12px 14px}
+
+/* Horizontal bar track */
+.hb-track{flex:1;height:5px;background:var(--bg);border-radius:3px;overflow:hidden}
+.hb-fill{height:100%;border-radius:3px;transition:width .5s}
+
+/* KPI card hover */
+.kpi-card{background:var(--card);border:1px solid var(--b1);border-top:3px solid transparent;border-radius:12px;padding:13px 15px;transition:border-top-color .15s,box-shadow .15s;cursor:default}
+.kpi-card:hover{border-top-color:var(--acc);box-shadow:0 4px 16px rgba(72,67,178,.08)}
+
+/* Heat cells */
+.h0{background:#fff;color:var(--t3)}
+.h1{background:#EEF2FF;color:#3730A3}
+.h2{background:#C7D2FE;color:#312E81}
+.h3{background:#818CF8;color:#fff}
+.h4{background:#4F46E5;color:#fff;font-weight:700}
+
+/* Mono font helper */
+.mono{font-family:var(--mono);font-size:11px}
+
+/* Split bar */
+.spbar{height:22px;border-radius:8px;overflow:hidden;display:flex}
+
+/* Tab active underline */
+.stab-on{color:var(--acc)!important;border-bottom-color:var(--acc)!important;font-weight:600!important}
+
+/* Dropdown panel */
+.ddp{position:absolute;top:calc(100% + 7px);left:0;background:var(--card);border:1px solid var(--b2);border-radius:12px;padding:11px;z-index:300;min-width:200px;display:none;flex-wrap:wrap;gap:5px;box-shadow:0 10px 32px rgba(0,0,0,.12)}
+.ddp.open{display:flex}
+
+/* Hero gradient */
+.hero-grad{background:linear-gradient(135deg,#4843B2 0%,#6A5FD8 55%,#3A32A0 100%)}
+
+/* Progress bar animation */
+@keyframes progress{from{width:0}to{width:85%}}
+.progress-bar{animation:progress 1.8s ease-out forwards}
