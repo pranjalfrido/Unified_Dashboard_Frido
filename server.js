@@ -4,15 +4,17 @@ import { BigQuery } from '@google-cloud/bigquery'
 import pkg from 'pg'
 import { join, dirname } from 'path'
 import { fileURLToPath } from 'url'
+import { config } from 'dotenv'
+
+config()
 
 const { Pool } = pkg
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const KEY_PATH = join(__dirname, '..', 'sa_key.json')
 const bq = new BigQuery({ keyFilename: KEY_PATH, projectId: 'frido-429506' })
 
-// New Supabase account — fresh storage
 const pool = new Pool({
-  connectionString: 'postgresql://postgres.fklthrhpgxuyocwreusr:Qwert%407217209666@aws-1-ap-southeast-1.pooler.supabase.com:5432/postgres',
+  connectionString: process.env.SUPABASE_URL,
   ssl: { rejectUnauthorized: false },
   max: 5
 })

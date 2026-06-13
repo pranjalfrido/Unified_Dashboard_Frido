@@ -17,6 +17,7 @@ sa_key.json
 *.json.key
 .env
 .env.*
+!.env.example
 
 # Editor directories and files
 .vscode/*
