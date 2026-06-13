@@ -84,10 +84,10 @@ function Topnav({ page, alerts, onRefresh, loading, filters, setFilters, rawRows
     <div className="topnav">
       <div style={{ display: 'flex', flexDirection: 'column', gap: 1, flexShrink: 0 }}>
         <div style={{ display: 'flex', alignItems: 'baseline', gap: 6 }}>
-          <span style={{ fontSize: 15, fontWeight: 800, color: C.t1, letterSpacing: '-.01em' }}>frido</span>
-          <span style={{ fontSize: 11, fontWeight: 500, color: C.t3, letterSpacing: '.01em' }}>Analytics Dashboard</span>
+          <span style={{ fontSize: 17, fontWeight: 800, color: C.t1, letterSpacing: '-.01em' }}>frido</span>
+          <span style={{ fontSize: 12, fontWeight: 500, color: C.t3, letterSpacing: '.01em' }}>Analytics Dashboard</span>
         </div>
-        <span style={{ fontSize: 9.5, color: C.acc, fontWeight: 700, letterSpacing: '.06em', textTransform: 'uppercase', lineHeight: 1, background: '#13121A', padding: '1px 5px', borderRadius: 3, width: 'fit-content' }}>Freedom to do more</span>
+        <span style={{ fontSize: 9.5, color: C.t3, fontWeight: 600, letterSpacing: '.04em', fontStyle: 'italic', lineHeight: 1 }}>Freedom to do more</span>
       </div>
       <div className="tnav-sep" />
       <span className="tnav-title">{titles[page]}</span>
