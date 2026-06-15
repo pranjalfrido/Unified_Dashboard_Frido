@@ -15,6 +15,10 @@ const __dirname = dirname(fileURLToPath(import.meta.url))
 let bq
 if (process.env.GCP_SA_KEY) {
   const credentials = JSON.parse(process.env.GCP_SA_KEY)
+  // Fix private_key newlines if Render escaped them as literal \n strings
+  if (credentials.private_key && !credentials.private_key.includes('\n')) {
+    credentials.private_key = credentials.private_key.replace(/\\n/g, '\n')
+  }
   bq = new BigQuery({ credentials, projectId: 'frido-429506' })
 } else {
   const KEY_PATH = join(__dirname, '..', 'sa_key.json')
