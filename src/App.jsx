@@ -145,7 +145,7 @@ function OverviewPage({ data, alerts }) {
           </div>
           <div style={{ position: 'absolute', right: -10, bottom: -20, fontSize: 100, color: 'rgba(0,0,0,.04)', pointerEvents: 'none' }}>₹</div>
         </div>
-        <KPICard center label="Orders / Units" value={fmtN(nOrders)} sub={`${fmtN(totalQty)} units · ${(totalQty / (nOrders || 1)).toFixed(1)}/order`} />
+        <KPICard center label="Orders" value={fmtN(nOrders)} sub={`${fmtN(totalQty)} units · ${(totalQty / (nOrders || 1)).toFixed(1)}/order`} />
         <KPICard center label="Blended AOV" value={`₹${Math.round(blendedAOV).toLocaleString('en-IN')}`} sub={`Best: ${bestAOV.ch} ₹${Math.round(bestAOV.aov).toLocaleString('en-IN')}`} />
         <KPICard center label="Unique Customers" value={fmtN(nCusts)} sub={`${repeatRate}% repeat`} />
       </div>
@@ -842,7 +842,7 @@ export default function App() {
       const res = await fetch(`${API}/api/bq`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ start, end }) })
       if (!res.ok) throw new Error(`API error ${res.status}: ${await res.text()}`)
       const json = await res.json()
-      setRawRows(json.rows || [])
+      setRawRows(json.source === 'postgres-aggregated' ? json : (json.rows || []))
     } catch (e) { setError(e.message) }
     finally { setLoading(false) }
   }, [API])
@@ -856,7 +856,7 @@ export default function App() {
     return () => clearTimeout(debounceRef.current)
   }, [filters.start, filters.end, fetchData])
 
-  const data = useMemo(() => rawRows ? processData(rawRows) : null, [rawRows])
+  const data = useMemo(() => { if (!rawRows) return null; if (rawRows.source === 'postgres-aggregated') return rawRows; return processData(rawRows) }, [rawRows])
   const alerts = useMemo(() => data ? detectAlerts(data) : [], [data])
 
   return (
