@@ -10,8 +10,16 @@ config()
 
 const { Pool } = pkg
 const __dirname = dirname(fileURLToPath(import.meta.url))
-const KEY_PATH = join(__dirname, '..', 'sa_key.json')
-const bq = new BigQuery({ keyFilename: KEY_PATH, projectId: 'frido-429506' })
+
+// Support both file-based key (local dev) and env variable (Render)
+let bq
+if (process.env.GCP_SA_KEY) {
+  const credentials = JSON.parse(process.env.GCP_SA_KEY)
+  bq = new BigQuery({ credentials, projectId: 'frido-429506' })
+} else {
+  const KEY_PATH = join(__dirname, '..', 'sa_key.json')
+  bq = new BigQuery({ keyFilename: KEY_PATH, projectId: 'frido-429506' })
+}
 
 const pool = new Pool({
   connectionString: process.env.SUPABASE_URL,
