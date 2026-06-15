@@ -11,28 +11,14 @@ config()
 const { Pool } = pkg
 const __dirname = dirname(fileURLToPath(import.meta.url))
 
-// Key lookup order: GCP_SA_KEY env → /etc/secrets/sa_key.json (Render secret file) → ../sa_key.json (local)
-let bq
+// Key lookup: /etc/secrets/sa_key.json (Render secret file) → ../sa_key.json (local)
+import { existsSync } from 'fs'
+
 const RENDER_SECRET_PATH = '/etc/secrets/sa_key.json'
 const LOCAL_KEY_PATH = join(__dirname, '..', 'sa_key.json')
+const KEY_PATH = existsSync(RENDER_SECRET_PATH) ? RENDER_SECRET_PATH : LOCAL_KEY_PATH
 
-if (process.env.GCP_SA_KEY) {
-  let credentials
-  try {
-    credentials = JSON.parse(process.env.GCP_SA_KEY)
-  } catch (e) {
-    // Render sometimes stores with real newlines — stringify back to escape them
-    const fixed = process.env.GCP_SA_KEY
-      .replace(/-----BEGIN PRIVATE KEY-----[\s\S]*?-----END PRIVATE KEY-----/g, m => m.replace(/\n/g, '\\n'))
-    credentials = JSON.parse(fixed)
-  }
-  bq = new BigQuery({ credentials, projectId: 'frido-429506' })
-} else {
-  // Use Render secret file if available, otherwise local file
-  const { existsSync } = await import('fs')
-  const keyPath = existsSync(RENDER_SECRET_PATH) ? RENDER_SECRET_PATH : LOCAL_KEY_PATH
-  bq = new BigQuery({ keyFilename: keyPath, projectId: 'frido-429506' })
-}
+const bq = new BigQuery({ keyFilename: KEY_PATH, projectId: 'frido-429506' })
 
 const pool = new Pool({
   connectionString: process.env.SUPABASE_URL,
