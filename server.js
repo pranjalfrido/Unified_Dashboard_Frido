@@ -5,6 +5,7 @@ import pkg from 'pg'
 import { join, dirname } from 'path'
 import { fileURLToPath } from 'url'
 import { config } from 'dotenv'
+import { createGzip } from 'zlib'
 
 config()
 
@@ -271,33 +272,37 @@ const mapRow = r => ({
   Delivered_Date:       r.delivered_date,
 })
 
-// ── Stream Postgres rows directly to response (cursor-based, low RAM) ──
+// ── Stream gzip-compressed rows from Postgres ──────────────────
 async function streamPostgres(start, end, res) {
   const client = new Client({ connectionString: process.env.SUPABASE_URL, ssl: { rejectUnauthorized: false } })
   await client.connect()
   try {
     res.setHeader('Content-Type', 'application/json')
-    res.write('{"source":"postgres","rows":[')
+    res.setHeader('Content-Encoding', 'gzip')
+    const gz = createGzip()
+    gz.pipe(res)
+
+    gz.write('{"source":"postgres","rows":[')
     let first = true
     let count = 0
-    // Use cursor to avoid loading all rows into memory
+
     await client.query('BEGIN')
     await client.query(`DECLARE cur CURSOR FOR SELECT * FROM orders WHERE order_date BETWEEN $1 AND $2 ORDER BY order_date DESC`, [start, end])
     while (true) {
-      const { rows } = await client.query('FETCH 500 FROM cur')
+      const { rows } = await client.query('FETCH 1000 FROM cur')
       if (rows.length === 0) break
       for (const row of rows) {
-        if (!first) res.write(',')
-        res.write(JSON.stringify(mapRow(row)))
+        if (!first) gz.write(',')
+        gz.write(JSON.stringify(mapRow(row)))
         first = false
         count++
       }
     }
     await client.query('CLOSE cur')
     await client.query('COMMIT')
-    res.write(']}')
-    res.end()
-    console.log(`[pg] streamed ${count} rows`)
+    gz.write(']}')
+    gz.end()
+    console.log(`[pg] gzip-streamed ${count} rows`)
   } catch (err) {
     await client.query('ROLLBACK').catch(() => {})
     throw err
