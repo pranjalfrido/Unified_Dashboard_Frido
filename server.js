@@ -8,7 +8,7 @@ import { config } from 'dotenv'
 
 config()
 
-const { Pool } = pkg
+const { Pool, Client, Query } = pkg
 const __dirname = dirname(fileURLToPath(import.meta.url))
 
 // Key lookup: /etc/secrets/sa_key.json (Render secret file) → ../sa_key.json (local)
@@ -237,47 +237,66 @@ async function hasDataInPG(start, end) {
   return syncedDays >= expectedDays - 2
 }
 
-// ── Query Postgres ────────────────────────────────────────────
-async function queryPostgres(start, end) {
-  const t0 = Date.now()
-  const { rows } = await pool.query(
-    `SELECT * FROM orders WHERE order_date BETWEEN $1 AND $2 ORDER BY order_date DESC`,
-    [start, end]
-  )
-  console.log(`[pg] ${start}→${end}: ${rows.length} rows in ${Date.now()-t0}ms`)
-  return rows.map(r => ({
-    OrderId:              r.order_id,
-    OrderDate:            r.order_date instanceof Date ? r.order_date.toISOString().slice(0,10) : String(r.order_date),
-    Channel:              r.channel,
-    SubChannel:           r.sub_channel,
-    ChannelAccount:       r.channel_account,
-    Country:              r.country,
-    State:                r.state,
-    City:                 r.city,
-    Pincode:              r.pincode,
-    ProductId:            r.product_id,
-    ChannelSKUCode:       r.sku_code,
-    MasterSKU:            r.master_sku,
-    Category:             r.category,
-    SubCategory:          r.sub_category,
-    ItemQty:              r.item_qty,
-    SellingPrice_Inc_GST: r.revenue_inc_gst,
-    SellingPrice_Exc_GST: r.revenue_exc_gst,
-    Tax:                  r.tax,
-    GST_Tax_Type_Code:    r.gst_rate,
-    PaymentMode:          r.payment_mode,
-    CustomerId:           r.customer_id,
-    voucher_code:         r.voucher_code,
-    FulfilmentStatus:     r.fulfilment_status,
-    FinancialStatus:      r.financial_status,
-    Order_Status:         r.order_status,
-    is_rto:               r.is_rto,
-    is_cancelled:         r.is_cancelled,
-    is_CIR_return:        r.is_cir_return,
-    is_exchange:          r.is_exchange,
-    Dispatch_Date:        r.dispatch_date,
-    Delivered_Date:       r.delivered_date,
-  }))
+const mapRow = r => ({
+  OrderId:              r.order_id,
+  OrderDate:            r.order_date instanceof Date ? r.order_date.toISOString().slice(0,10) : String(r.order_date),
+  Channel:              r.channel,
+  SubChannel:           r.sub_channel,
+  ChannelAccount:       r.channel_account,
+  Country:              r.country,
+  State:                r.state,
+  City:                 r.city,
+  Pincode:              r.pincode,
+  ProductId:            r.product_id,
+  ChannelSKUCode:       r.sku_code,
+  MasterSKU:            r.master_sku,
+  Category:             r.category,
+  SubCategory:          r.sub_category,
+  ItemQty:              r.item_qty,
+  SellingPrice_Inc_GST: r.revenue_inc_gst,
+  SellingPrice_Exc_GST: r.revenue_exc_gst,
+  Tax:                  r.tax,
+  GST_Tax_Type_Code:    r.gst_rate,
+  PaymentMode:          r.payment_mode,
+  CustomerId:           r.customer_id,
+  voucher_code:         r.voucher_code,
+  FulfilmentStatus:     r.fulfilment_status,
+  FinancialStatus:      r.financial_status,
+  Order_Status:         r.order_status,
+  is_rto:               r.is_rto,
+  is_cancelled:         r.is_cancelled,
+  is_CIR_return:        r.is_cir_return,
+  is_exchange:          r.is_exchange,
+  Dispatch_Date:        r.dispatch_date,
+  Delivered_Date:       r.delivered_date,
+})
+
+// ── Stream Postgres rows directly to response (no RAM buffering) ──
+function streamPostgres(start, end, res) {
+  return new Promise((resolve, reject) => {
+    const client = new Client({ connectionString: process.env.SUPABASE_URL, ssl: { rejectUnauthorized: false } })
+    client.connect()
+    const query = new Query(`SELECT * FROM orders WHERE order_date BETWEEN $1 AND $2 ORDER BY order_date DESC`, [start, end])
+    let count = 0
+    res.setHeader('Content-Type', 'application/json')
+    res.write('{"source":"postgres","rows":[')
+    let first = true
+    query.on('row', row => {
+      if (!first) res.write(',')
+      res.write(JSON.stringify(mapRow(row)))
+      first = false
+      count++
+    })
+    query.on('end', () => {
+      res.write(']}')
+      res.end()
+      console.log(`[pg] streamed ${count} rows`)
+      client.end()
+      resolve(count)
+    })
+    query.on('error', err => { client.end(); reject(err) })
+    client.query(query)
+  })
 }
 
 // ── API: main data endpoint ───────────────────────────────────
@@ -287,16 +306,15 @@ app.post('/api/bq', async (req, res) => {
   try {
     const inPG = await hasDataInPG(start, end)
     if (inPG) {
-      const rows = await queryPostgres(start, end)
-      return res.json({ rows, source: 'postgres' })
+      return streamPostgres(start, end, res)
     }
+    // Not in cache — sync from BQ first (happens for very old or future dates)
     console.log(`[api] ${start}→${end} not in cache, fetching from BQ...`)
     await syncRange(start, end)
-    const rows = await queryPostgres(start, end)
-    res.json({ rows, source: 'bq-synced' })
+    return streamPostgres(start, end, res)
   } catch (err) {
     console.error('[api] Error:', err.message)
-    res.status(500).json({ error: err.message })
+    if (!res.headersSent) res.status(500).json({ error: err.message })
   }
 })
 
@@ -396,9 +414,7 @@ function scheduleDailySync() {
 async function start() {
   await initDB().catch(e => console.warn('[db] init skipped (read-only):', e.message))
   app.listen(3001, () => console.log('[server] BQ proxy running on http://localhost:3001'))
-  // Skip startup sync on free tier — data is already in Supabase, sync on request
-  // setInterval hourly sync disabled to stay within 512MB free tier RAM
-  scheduleDailySync()
+  // No background syncs — all data is in Supabase, streamed on demand to stay within 512MB
 }
 
 start()
