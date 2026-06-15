@@ -11,29 +11,27 @@ config()
 const { Pool } = pkg
 const __dirname = dirname(fileURLToPath(import.meta.url))
 
-// Support both file-based key (local dev) and env variable (Render)
+// Key lookup order: GCP_SA_KEY env → /etc/secrets/sa_key.json (Render secret file) → ../sa_key.json (local)
 let bq
+const RENDER_SECRET_PATH = '/etc/secrets/sa_key.json'
+const LOCAL_KEY_PATH = join(__dirname, '..', 'sa_key.json')
+
 if (process.env.GCP_SA_KEY) {
-  // Render may store multi-line JSON — collapse real newlines inside the key value
-  // but preserve \n sequences inside the private_key string itself
-  let raw = process.env.GCP_SA_KEY
-  // If it's pretty-printed with real newlines, JSON.parse handles it fine
-  // But if private_key has literal newlines (not \n), fix them
   let credentials
   try {
-    credentials = JSON.parse(raw)
+    credentials = JSON.parse(process.env.GCP_SA_KEY)
   } catch (e) {
-    // Fallback: remove real newlines outside of string values
-    raw = raw.replace(/\r?\n/g, '\\n')
-    credentials = JSON.parse(raw)
-  }
-  if (credentials.private_key) {
-    credentials.private_key = credentials.private_key.replace(/\\n/g, '\n')
+    // Render sometimes stores with real newlines — stringify back to escape them
+    const fixed = process.env.GCP_SA_KEY
+      .replace(/-----BEGIN PRIVATE KEY-----[\s\S]*?-----END PRIVATE KEY-----/g, m => m.replace(/\n/g, '\\n'))
+    credentials = JSON.parse(fixed)
   }
   bq = new BigQuery({ credentials, projectId: 'frido-429506' })
 } else {
-  const KEY_PATH = join(__dirname, '..', 'sa_key.json')
-  bq = new BigQuery({ keyFilename: KEY_PATH, projectId: 'frido-429506' })
+  // Use Render secret file if available, otherwise local file
+  const { existsSync } = await import('fs')
+  const keyPath = existsSync(RENDER_SECRET_PATH) ? RENDER_SECRET_PATH : LOCAL_KEY_PATH
+  bq = new BigQuery({ keyFilename: keyPath, projectId: 'frido-429506' })
 }
 
 const pool = new Pool({
