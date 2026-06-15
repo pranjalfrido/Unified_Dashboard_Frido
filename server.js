@@ -154,7 +154,7 @@ const unwrap = v => {
 async function syncRange(start, end) {
   const t0 = Date.now()
   console.log(`[BQ] Fetching ${start} → ${end}`)
-  const [bqRows] = await bq.query({ query: buildQuery(start, end) })
+  const [bqRows] = await bq.query({ query: buildQuery(start, end), maximumBytesBilled: '10000000000' })
   console.log(`[BQ] Got ${bqRows.length} rows in ${((Date.now()-t0)/1000).toFixed(1)}s — inserting into Supabase...`)
 
   await pool.query(`DELETE FROM orders WHERE order_date BETWEEN $1 AND $2`, [start, end])
@@ -396,8 +396,8 @@ function scheduleDailySync() {
 async function start() {
   await initDB().catch(e => console.warn('[db] init skipped (read-only):', e.message))
   app.listen(3001, () => console.log('[server] BQ proxy running on http://localhost:3001'))
-  syncRecentDays(7).catch(e => console.error('[startup sync]', e.message))
-  setInterval(() => syncRecentDays(2).catch(e => console.error('[hourly sync]', e.message)), 60 * 60 * 1000)
+  // Skip startup sync on free tier — data is already in Supabase, sync on request
+  // setInterval hourly sync disabled to stay within 512MB free tier RAM
   scheduleDailySync()
 }
 
