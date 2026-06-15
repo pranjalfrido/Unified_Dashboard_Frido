@@ -253,7 +253,9 @@ app.post('/api/bq', async (req, res) => {
       byOrderStatus,
       customerStats,
       tatData,
-      topOrders
+      topOrders,
+      highTicket,
+      multiItemStats
     ] = await Promise.all([
       // 1. Overall totals
       pool.query(`
@@ -401,6 +403,26 @@ app.post('/api/bq', async (req, res) => {
         FROM orders WHERE order_date BETWEEN $1 AND $2
         GROUP BY order_id, order_date, channel, state, city
         ORDER BY rev DESC LIMIT 20`, [start, end]),
+
+      // 12. High-ticket orders (≥₹10K) — full count, not just top 20
+      pool.query(`
+        SELECT COUNT(*) AS ht_count, COALESCE(SUM(rev),0) AS ht_rev
+        FROM (
+          SELECT order_id, SUM(revenue_inc_gst) AS rev
+          FROM orders WHERE order_date BETWEEN $1 AND $2
+          GROUP BY order_id
+          HAVING SUM(revenue_inc_gst) >= 10000
+        ) t`, [start, end]),
+
+      // 13. Multi-item rate — orders with qty > 1
+      pool.query(`
+        SELECT
+          COUNT(CASE WHEN total_qty > 1 THEN 1 END) AS multi_item_orders
+        FROM (
+          SELECT order_id, SUM(item_qty) AS total_qty
+          FROM orders WHERE order_date BETWEEN $1 AND $2
+          GROUP BY order_id
+        ) t`, [start, end]),
     ])
 
     // Build daily trend array
@@ -476,11 +498,16 @@ app.post('/api/bq', async (req, res) => {
     const nCusts = parseInt(customerStats.rows[0]?.n_custs) || 0
     const repeatCusts = parseInt(customerStats.rows[0]?.repeat_custs) || 0
 
+    const htCount = parseInt(highTicket.rows[0]?.ht_count) || 0
+    const htRevAgg = parseFloat(highTicket.rows[0]?.ht_rev) || 0
+    const multiItemOrders = parseInt(multiItemStats.rows[0]?.multi_item_orders) || 0
+
     // Build orders array for top performers table (top 20 only)
     const orders = topOrders.rows.map(r => ({
       orderId: r.order_id,
       rev: parseFloat(r.rev) || 0,
       qty: parseInt(r.qty) || 0,
+      items: parseInt(r.qty) || 0,
       channel: r.channel,
       date: r.order_date,
       state: r.state,
@@ -500,6 +527,7 @@ app.post('/api/bq', async (req, res) => {
       uniqueDates: dateSet,
       dailyArr, chMap, catMap, stateMap,
       buckets, bucketRev, voucherMap, tatOrders,
+      htCount, htRev: htRevAgg, multiItemOrders,
       orders,
       rows: [],
     })

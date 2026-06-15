@@ -112,7 +112,7 @@ function Topnav({ page, alerts, onRefresh, loading, filters, setFilters, rawRows
 
 // ── Overview Page ─────────────────────────────────────────────
 function OverviewPage({ data, alerts }) {
-  const { totalRev, totalExcRev, gstCollected, nOrders, totalQty, blendedAOV, nDays, chMap, catMap, stateMap, nCusts, repeatCusts, dailyArr, orders } = data
+  const { totalRev, totalExcRev, gstCollected, nOrders, totalQty, blendedAOV, nDays, chMap, catMap, stateMap, nCusts, repeatCusts, dailyArr, orders, htCount, htRev, multiItemOrders } = data
   const shopifyRev = chMap['Shopify']?.rev || 0
   const d2cPct = totalRev ? (shopifyRev / totalRev * 100).toFixed(1) : '0'
   const mktPct = (100 - parseFloat(d2cPct)).toFixed(1)
@@ -151,16 +151,15 @@ function OverviewPage({ data, alerts }) {
       </div>
 
       {/* 9 KPIs */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(9,1fr)', gap: 10 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(8,1fr)', gap: 10 }}>
         <KPICard label="Daily avg revenue" value={fmt(totalRev / nDays)} sub={`${nDays} days`} />
         <KPICard label="D2C Share" value={`${d2cPct}%`} sub={`Shopify ${fmt(shopifyRev)}`} />
         <KPICard label="Q-commerce Share" value={pct(qcRev, totalRev)} sub={`${fmt(qcRev)} · Blinkit+Instamart+Zepto`} />
         <KPICard label="Marketplace Share" value={`${(100 - parseFloat(d2cPct) - parseFloat(pct(qcRev, totalRev))).toFixed(1)}%`} sub={`Amazon+Flipkart+others ${fmt(totalRev - shopifyRev - qcRev)}`} />
-        <KPICard label="Repeat rate" value={`${repeatRate}%`} sub={`${fmtN(repeatCusts)} of ${fmtN(nCusts)} cust.`} />
-        <KPICard label="Multi-item rate" value={pct(orders.filter(o => o.items > 1).length, nOrders)} sub="+AOV premium" />
+        <KPICard label="Multi-item rate" value={pct(multiItemOrders, nOrders)} sub="+AOV premium" />
         <KPICard label="Q-commerce AOV" value={`₹${qcAOV.toLocaleString('en-IN')}`} sub="Blinkit+Instamart+Zepto" />
         <KPICard label="Voucher penetration" value={pct(voucherOrders, nOrders)} sub={`${fmtN(voucherOrders)} orders`} />
-        <KPICard label="High-ticket ≥₹10K" value={fmtN(htOrders.length)} sub={fmt(htRev)} />
+        <KPICard label="High-ticket ≥₹10K" value={fmtN(htCount)} sub={fmt(htRev)} />
       </div>
 
       {/* Trend + Channels */}
