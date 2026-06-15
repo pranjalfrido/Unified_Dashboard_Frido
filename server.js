@@ -350,15 +350,24 @@ app.post('/api/bq', async (req, res) => {
         GROUP BY order_status`, [start, end]),
 
       // 9. Customer repeat stats
+      // n_custs = unique customers in selected range
+      // repeat_custs = those who also had ANY order BEFORE the selected start (true returning customers)
       pool.query(`
         SELECT
           COUNT(DISTINCT customer_id) AS n_custs,
-          COUNT(DISTINCT CASE WHEN freq >= 2 THEN customer_id END) AS repeat_custs
+          COUNT(DISTINCT CASE WHEN had_prior_order THEN customer_id END) AS repeat_custs
         FROM (
-          SELECT customer_id, COUNT(DISTINCT order_id) AS freq
-          FROM orders
-          WHERE order_date BETWEEN $1 AND $2 AND customer_id IS NOT NULL
-          GROUP BY customer_id
+          SELECT
+            o.customer_id,
+            EXISTS (
+              SELECT 1 FROM orders p
+              WHERE p.customer_id = o.customer_id
+                AND p.order_date < $1
+                AND p.customer_id IS NOT NULL
+            ) AS had_prior_order
+          FROM orders o
+          WHERE o.order_date BETWEEN $1 AND $2 AND o.customer_id IS NOT NULL
+          GROUP BY o.customer_id
         ) t`, [start, end]),
 
       // 10. TAT distribution
