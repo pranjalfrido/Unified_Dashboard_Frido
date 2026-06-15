@@ -375,13 +375,13 @@ app.post('/api/bq', async (req, res) => {
           COUNT(*) AS cnt,
           AVG(tat) AS avg_tat
         FROM (
-          SELECT EXTRACT(DAY FROM (delivered_date::date - order_date::date))::int AS tat
+          SELECT (NULLIF(delivered_date,'')::date - order_date)::int AS tat
           FROM orders
           WHERE order_date BETWEEN $1 AND $2
             AND delivered_date IS NOT NULL
             AND delivered_date != ''
             AND order_date IS NOT NULL
-            AND EXTRACT(DAY FROM (delivered_date::date - order_date::date)) BETWEEN 0 AND 60
+            AND (NULLIF(delivered_date,'')::date - order_date) BETWEEN 0 AND 60
         ) t GROUP BY 1`, [start, end]),
 
       // 11. Top 20 orders by revenue
