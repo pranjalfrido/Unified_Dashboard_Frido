@@ -5,11 +5,10 @@ import pkg from 'pg'
 import { join, dirname } from 'path'
 import { fileURLToPath } from 'url'
 import { config } from 'dotenv'
-import { createGzip } from 'zlib'
 
 config()
 
-const { Pool, Client, Query } = pkg
+const { Pool } = pkg
 const __dirname = dirname(fileURLToPath(import.meta.url))
 
 // Key lookup: /etc/secrets/sa_key.json (Render secret file) → ../sa_key.json (local)
@@ -238,95 +237,267 @@ async function hasDataInPG(start, end) {
   return syncedDays >= expectedDays - 2
 }
 
-const mapRow = r => ({
-  OrderId:              r.order_id,
-  OrderDate:            r.order_date instanceof Date ? r.order_date.toISOString().slice(0,10) : String(r.order_date),
-  Channel:              r.channel,
-  SubChannel:           r.sub_channel,
-  ChannelAccount:       r.channel_account,
-  Country:              r.country,
-  State:                r.state,
-  City:                 r.city,
-  Pincode:              r.pincode,
-  ProductId:            r.product_id,
-  ChannelSKUCode:       r.sku_code,
-  MasterSKU:            r.master_sku,
-  Category:             r.category,
-  SubCategory:          r.sub_category,
-  ItemQty:              r.item_qty,
-  SellingPrice_Inc_GST: r.revenue_inc_gst,
-  SellingPrice_Exc_GST: r.revenue_exc_gst,
-  Tax:                  r.tax,
-  GST_Tax_Type_Code:    r.gst_rate,
-  PaymentMode:          r.payment_mode,
-  CustomerId:           r.customer_id,
-  voucher_code:         r.voucher_code,
-  FulfilmentStatus:     r.fulfilment_status,
-  FinancialStatus:      r.financial_status,
-  Order_Status:         r.order_status,
-  is_rto:               r.is_rto,
-  is_cancelled:         r.is_cancelled,
-  is_CIR_return:        r.is_cir_return,
-  is_exchange:          r.is_exchange,
-  Dispatch_Date:        r.dispatch_date,
-  Delivered_Date:       r.delivered_date,
-})
-
-// ── Stream gzip-compressed rows from Postgres ──────────────────
-async function streamPostgres(start, end, res) {
-  const client = new Client({ connectionString: process.env.SUPABASE_URL, ssl: { rejectUnauthorized: false } })
-  await client.connect()
-  try {
-    res.setHeader('Content-Type', 'application/json')
-    res.setHeader('Content-Encoding', 'gzip')
-    const gz = createGzip()
-    gz.pipe(res)
-
-    gz.write('{"source":"postgres","rows":[')
-    let first = true
-    let count = 0
-
-    await client.query('BEGIN')
-    await client.query(`DECLARE cur CURSOR FOR SELECT * FROM orders WHERE order_date BETWEEN $1 AND $2 ORDER BY order_date DESC`, [start, end])
-    while (true) {
-      const { rows } = await client.query('FETCH 1000 FROM cur')
-      if (rows.length === 0) break
-      for (const row of rows) {
-        if (!first) gz.write(',')
-        gz.write(JSON.stringify(mapRow(row)))
-        first = false
-        count++
-      }
-    }
-    await client.query('CLOSE cur')
-    await client.query('COMMIT')
-    gz.write(']}')
-    gz.end()
-    console.log(`[pg] gzip-streamed ${count} rows`)
-  } catch (err) {
-    await client.query('ROLLBACK').catch(() => {})
-    throw err
-  } finally {
-    client.end()
-  }
-}
-
-// ── API: main data endpoint ───────────────────────────────────
+// ── API: main data endpoint (server-side aggregation) ────────
 app.post('/api/bq', async (req, res) => {
   const { start, end } = req.body
   if (!start || !end) return res.status(400).json({ error: 'Missing start or end date' })
   try {
-    const inPG = await hasDataInPG(start, end)
-    if (inPG) {
-      return streamPostgres(start, end, res)
-    }
-    // Not in cache — sync from BQ first (happens for very old or future dates)
-    console.log(`[api] ${start}→${end} not in cache, fetching from BQ...`)
-    await syncRange(start, end)
-    return streamPostgres(start, end, res)
+    const [
+      totals,
+      byChannel,
+      byDate,
+      byCategory,
+      byState,
+      byOrderValue,
+      byVoucher,
+      byOrderStatus,
+      customerStats,
+      tatData,
+      topOrders
+    ] = await Promise.all([
+      // 1. Overall totals
+      pool.query(`
+        SELECT
+          COUNT(DISTINCT order_id) AS n_orders,
+          SUM(revenue_inc_gst) AS total_rev,
+          SUM(revenue_exc_gst) AS total_exc_rev,
+          SUM(item_qty) AS total_qty,
+          COUNT(DISTINCT order_date) AS n_days,
+          COUNT(DISTINCT CASE WHEN channel IS NOT NULL THEN channel END) AS n_channels
+        FROM orders WHERE order_date BETWEEN $1 AND $2`, [start, end]),
+
+      // 2. By channel
+      pool.query(`
+        SELECT channel,
+          COUNT(DISTINCT order_id) AS orders,
+          SUM(revenue_inc_gst) AS rev,
+          SUM(revenue_exc_gst) AS exc_rev,
+          SUM(item_qty) AS qty
+        FROM orders WHERE order_date BETWEEN $1 AND $2
+        GROUP BY channel ORDER BY rev DESC`, [start, end]),
+
+      // 3. By date + channel (for trend chart)
+      pool.query(`
+        SELECT order_date::text AS date, channel,
+          SUM(revenue_inc_gst) AS rev,
+          COUNT(DISTINCT order_id) AS orders
+        FROM orders WHERE order_date BETWEEN $1 AND $2
+        GROUP BY order_date, channel ORDER BY order_date`, [start, end]),
+
+      // 4. By category
+      pool.query(`
+        SELECT category,
+          COUNT(DISTINCT order_id) AS orders,
+          SUM(revenue_inc_gst) AS rev,
+          SUM(revenue_exc_gst) AS exc_rev,
+          SUM(item_qty) AS units
+        FROM orders WHERE order_date BETWEEN $1 AND $2
+        GROUP BY category ORDER BY rev DESC`, [start, end]),
+
+      // 5. By state
+      pool.query(`
+        SELECT UPPER(TRIM(state)) AS state,
+          COUNT(DISTINCT order_id) AS orders,
+          SUM(revenue_inc_gst) AS rev,
+          COUNT(DISTINCT city) AS cities
+        FROM orders
+        WHERE order_date BETWEEN $1 AND $2 AND state IS NOT NULL
+        GROUP BY UPPER(TRIM(state)) ORDER BY rev DESC LIMIT 30`, [start, end]),
+
+      // 6. Order value buckets (aggregate per order first)
+      pool.query(`
+        WITH order_totals AS (
+          SELECT order_id, SUM(revenue_inc_gst) AS order_rev
+          FROM orders WHERE order_date BETWEEN $1 AND $2
+          GROUP BY order_id
+        )
+        SELECT
+          CASE
+            WHEN order_rev < 500 THEN '<₹500'
+            WHEN order_rev < 1000 THEN '₹500-1K'
+            WHEN order_rev < 2500 THEN '₹1K-2.5K'
+            WHEN order_rev < 5000 THEN '₹2.5K-5K'
+            WHEN order_rev < 10000 THEN '₹5K-10K'
+            WHEN order_rev < 25000 THEN '₹10K-25K'
+            ELSE '₹25K+'
+          END AS bucket,
+          COUNT(*) AS cnt,
+          SUM(order_rev) AS rev
+        FROM order_totals GROUP BY 1`, [start, end]),
+
+      // 7. By voucher type
+      pool.query(`
+        SELECT
+          CASE
+            WHEN voucher_code IS NULL OR TRIM(voucher_code) = '' THEN 'No voucher'
+            WHEN UPPER(voucher_code) LIKE '%PREPAID%' THEN 'PREPAID-DISCOUNT'
+            WHEN UPPER(voucher_code) LIKE '%PLM%' THEN 'Loyalty (PLM)'
+            WHEN UPPER(voucher_code) LIKE '%FRV%' THEN 'Repeat (FRV)'
+            ELSE 'Other/custom'
+          END AS voucher_type,
+          COUNT(DISTINCT order_id) AS orders,
+          SUM(revenue_inc_gst) AS rev
+        FROM orders WHERE order_date BETWEEN $1 AND $2
+        GROUP BY 1`, [start, end]),
+
+      // 8. Order status counts
+      pool.query(`
+        SELECT
+          order_status,
+          COUNT(DISTINCT order_id) AS cnt,
+          SUM(revenue_inc_gst) AS rev
+        FROM orders WHERE order_date BETWEEN $1 AND $2
+        GROUP BY order_status`, [start, end]),
+
+      // 9. Customer repeat stats
+      pool.query(`
+        SELECT
+          COUNT(DISTINCT customer_id) AS n_custs,
+          COUNT(DISTINCT CASE WHEN freq >= 2 THEN customer_id END) AS repeat_custs
+        FROM (
+          SELECT customer_id, COUNT(DISTINCT order_id) AS freq
+          FROM orders
+          WHERE order_date BETWEEN $1 AND $2 AND customer_id IS NOT NULL
+          GROUP BY customer_id
+        ) t`, [start, end]),
+
+      // 10. TAT distribution
+      pool.query(`
+        SELECT
+          CASE
+            WHEN tat = 0 THEN 'Same day'
+            WHEN tat <= 2 THEN '1-2 days'
+            WHEN tat <= 5 THEN '3-5 days'
+            WHEN tat <= 7 THEN '6-7 days'
+            WHEN tat <= 14 THEN '8-14 days'
+            ELSE '15+ days'
+          END AS bucket,
+          COUNT(*) AS cnt,
+          AVG(tat) AS avg_tat
+        FROM (
+          SELECT EXTRACT(DAY FROM (delivered_date::date - order_date::date))::int AS tat
+          FROM orders
+          WHERE order_date BETWEEN $1 AND $2
+            AND delivered_date IS NOT NULL
+            AND delivered_date != ''
+            AND order_date IS NOT NULL
+            AND EXTRACT(DAY FROM (delivered_date::date - order_date::date)) BETWEEN 0 AND 60
+        ) t GROUP BY 1`, [start, end]),
+
+      // 11. Top 20 orders by revenue
+      pool.query(`
+        SELECT order_id, order_date::text, channel, state, city,
+          SUM(revenue_inc_gst) AS rev, SUM(item_qty) AS qty,
+          MAX(order_status) AS order_status, MAX(customer_id) AS customer_id,
+          MAX(voucher_code) AS voucher_code
+        FROM orders WHERE order_date BETWEEN $1 AND $2
+        GROUP BY order_id, order_date, channel, state, city
+        ORDER BY rev DESC LIMIT 20`, [start, end]),
+    ])
+
+    // Build daily trend array
+    const dateSet = [...new Set(byDate.rows.map(r => r.date))].sort()
+    const dailyArr = dateSet.map(date => {
+      const entry = { date }
+      byDate.rows.filter(r => r.date === date).forEach(r => {
+        entry[r.channel] = parseFloat(r.rev) || 0
+        entry[r.channel + '_o'] = parseInt(r.orders) || 0
+      })
+      return entry
+    })
+
+    // Build category map
+    const catMap = {}
+    byCategory.rows.forEach(r => {
+      catMap[r.category || 'Unknown'] = {
+        rev: parseFloat(r.rev) || 0,
+        excRev: parseFloat(r.exc_rev) || 0,
+        orders: { size: parseInt(r.orders) },
+        units: parseInt(r.units) || 0
+      }
+    })
+
+    // Build state map
+    const stateMap = {}
+    byState.rows.forEach(r => {
+      if (!r.state) return
+      stateMap[r.state] = {
+        rev: parseFloat(r.rev) || 0,
+        orders: parseInt(r.orders) || 0,
+        cities: { size: parseInt(r.cities) }
+      }
+    })
+
+    // Build channel map
+    const chMap = {}
+    byChannel.rows.forEach(r => {
+      chMap[r.channel] = {
+        rev: parseFloat(r.rev) || 0,
+        orders: parseInt(r.orders) || 0,
+        qty: parseInt(r.qty) || 0
+      }
+    })
+
+    // Build buckets
+    const bucketOrder = ['<₹500','₹500-1K','₹1K-2.5K','₹2.5K-5K','₹5K-10K','₹10K-25K','₹25K+']
+    const buckets = Object.fromEntries(bucketOrder.map(k => [k, 0]))
+    const bucketRev = Object.fromEntries(bucketOrder.map(k => [k, 0]))
+    byOrderValue.rows.forEach(r => {
+      buckets[r.bucket] = parseInt(r.cnt) || 0
+      bucketRev[r.bucket] = parseFloat(r.rev) || 0
+    })
+
+    // Build voucher map
+    const voucherMap = {}
+    byVoucher.rows.forEach(r => {
+      voucherMap[r.voucher_type] = { orders: parseInt(r.orders) || 0, rev: parseFloat(r.rev) || 0 }
+    })
+
+    // TAT data
+    const tatOrders = []
+    tatData.rows.forEach(r => {
+      for (let i = 0; i < parseInt(r.cnt); i++) tatOrders.push(Math.round(parseFloat(r.avg_tat)))
+    })
+
+    const t = totals.rows[0]
+    const totalRev = parseFloat(t.total_rev) || 0
+    const totalExcRev = parseFloat(t.total_exc_rev) || 0
+    const nOrders = parseInt(t.n_orders) || 0
+    const totalQty = parseInt(t.total_qty) || 0
+    const nDays = parseInt(t.n_days) || 1
+    const nCusts = parseInt(customerStats.rows[0]?.n_custs) || 0
+    const repeatCusts = parseInt(customerStats.rows[0]?.repeat_custs) || 0
+
+    // Build orders array for top performers table (top 20 only)
+    const orders = topOrders.rows.map(r => ({
+      orderId: r.order_id,
+      rev: parseFloat(r.rev) || 0,
+      qty: parseInt(r.qty) || 0,
+      channel: r.channel,
+      date: r.order_date,
+      state: r.state,
+      city: r.city,
+      orderStatus: r.order_status,
+      customerId: r.customer_id,
+      voucher: r.voucher_code,
+      isRTO: false, isCIR: false, isCancelled: false, isExchange: false
+    }))
+
+    res.json({
+      source: 'postgres-aggregated',
+      totalRev, totalExcRev, totalQty, nOrders, nDays,
+      blendedAOV: nOrders ? totalRev / nOrders : 0,
+      gstCollected: totalRev - totalExcRev,
+      nCusts, repeatCusts,
+      uniqueDates: dateSet,
+      dailyArr, chMap, catMap, stateMap,
+      buckets, bucketRev, voucherMap, tatOrders,
+      orders,
+      rows: [],
+    })
   } catch (err) {
-    console.error('[api] Error:', err.message)
-    if (!res.headersSent) res.status(500).json({ error: err.message })
+    console.error('[api/bq] Error:', err.message)
+    res.status(500).json({ error: err.message })
   }
 })
 
@@ -425,7 +596,8 @@ function scheduleDailySync() {
 // ── Startup ───────────────────────────────────────────────────
 async function start() {
   await initDB().catch(e => console.warn('[db] init skipped (read-only):', e.message))
-  app.listen(3001, () => console.log('[server] BQ proxy running on http://localhost:3001'))
+  const PORT = process.env.PORT || 3001
+  app.listen(PORT, () => console.log(`[server] BQ proxy running on port ${PORT}`))
   // No background syncs — all data is in Supabase, streamed on demand to stay within 512MB
 }
 
