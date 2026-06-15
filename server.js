@@ -14,9 +14,20 @@ const __dirname = dirname(fileURLToPath(import.meta.url))
 // Support both file-based key (local dev) and env variable (Render)
 let bq
 if (process.env.GCP_SA_KEY) {
-  const credentials = JSON.parse(process.env.GCP_SA_KEY)
-  // Fix private_key newlines if Render escaped them as literal \n strings
-  if (credentials.private_key && !credentials.private_key.includes('\n')) {
+  // Render may store multi-line JSON — collapse real newlines inside the key value
+  // but preserve \n sequences inside the private_key string itself
+  let raw = process.env.GCP_SA_KEY
+  // If it's pretty-printed with real newlines, JSON.parse handles it fine
+  // But if private_key has literal newlines (not \n), fix them
+  let credentials
+  try {
+    credentials = JSON.parse(raw)
+  } catch (e) {
+    // Fallback: remove real newlines outside of string values
+    raw = raw.replace(/\r?\n/g, '\\n')
+    credentials = JSON.parse(raw)
+  }
+  if (credentials.private_key) {
     credentials.private_key = credentials.private_key.replace(/\\n/g, '\n')
   }
   bq = new BigQuery({ credentials, projectId: 'frido-429506' })
