@@ -271,32 +271,39 @@ const mapRow = r => ({
   Delivered_Date:       r.delivered_date,
 })
 
-// ── Stream Postgres rows directly to response (no RAM buffering) ──
-function streamPostgres(start, end, res) {
-  return new Promise((resolve, reject) => {
-    const client = new Client({ connectionString: process.env.SUPABASE_URL, ssl: { rejectUnauthorized: false } })
-    client.connect()
-    const query = new Query(`SELECT * FROM orders WHERE order_date BETWEEN $1 AND $2 ORDER BY order_date DESC`, [start, end])
-    let count = 0
+// ── Stream Postgres rows directly to response (cursor-based, low RAM) ──
+async function streamPostgres(start, end, res) {
+  const client = new Client({ connectionString: process.env.SUPABASE_URL, ssl: { rejectUnauthorized: false } })
+  await client.connect()
+  try {
     res.setHeader('Content-Type', 'application/json')
     res.write('{"source":"postgres","rows":[')
     let first = true
-    query.on('row', row => {
-      if (!first) res.write(',')
-      res.write(JSON.stringify(mapRow(row)))
-      first = false
-      count++
-    })
-    query.on('end', () => {
-      res.write(']}')
-      res.end()
-      console.log(`[pg] streamed ${count} rows`)
-      client.end()
-      resolve(count)
-    })
-    query.on('error', err => { client.end(); reject(err) })
-    client.query(query)
-  })
+    let count = 0
+    // Use cursor to avoid loading all rows into memory
+    await client.query('BEGIN')
+    await client.query(`DECLARE cur CURSOR FOR SELECT * FROM orders WHERE order_date BETWEEN $1 AND $2 ORDER BY order_date DESC`, [start, end])
+    while (true) {
+      const { rows } = await client.query('FETCH 500 FROM cur')
+      if (rows.length === 0) break
+      for (const row of rows) {
+        if (!first) res.write(',')
+        res.write(JSON.stringify(mapRow(row)))
+        first = false
+        count++
+      }
+    }
+    await client.query('CLOSE cur')
+    await client.query('COMMIT')
+    res.write(']}')
+    res.end()
+    console.log(`[pg] streamed ${count} rows`)
+  } catch (err) {
+    await client.query('ROLLBACK').catch(() => {})
+    throw err
+  } finally {
+    client.end()
+  }
 }
 
 // ── API: main data endpoint ───────────────────────────────────
