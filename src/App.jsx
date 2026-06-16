@@ -127,8 +127,6 @@ function OverviewPage({ data, alerts }) {
   const topCats = Object.entries(catMap).map(([k, v]) => ({ name: k, rev: v.rev, orders: v.orders.size, aov: v.orders.size ? v.rev / v.orders.size : 0 })).sort((a, b) => b.rev - a.rev).slice(0, 5)
   const channels = Object.keys(C.ch).filter(ch => chMap[ch])
   const voucherOrders = orders.filter(o => o.voucher).length
-  const htOrders = orders.filter(o => o.rev >= 10000)
-  const htRev = htOrders.reduce((s, o) => s + o.rev, 0)
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
