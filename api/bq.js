@@ -33,7 +33,7 @@ export default async function handler(req, res) {
   try {
     const results = await Promise.all(
       Object.entries(queries).map(([key, sql]) =>
-        bq.query({ query: sql, location: 'US' }).then(([rows]) => ({ key, rows }))
+        bq.query({ query: sql }).then(([rows]) => ({ key, rows }))
       )
     )
     const r = Object.fromEntries(results.map(({ key, rows }) => [key, rows]))
