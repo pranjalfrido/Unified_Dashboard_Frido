@@ -155,7 +155,6 @@ function OverviewPage({ data, alerts }) {
         <KPICard label="Q-commerce Share" value={pct(qcRev, totalRev)} sub={`${fmt(qcRev)} · Blinkit+Instamart+Zepto`} />
         <KPICard label="Marketplace Share" value={`${(100 - parseFloat(d2cPct) - parseFloat(pct(qcRev, totalRev))).toFixed(1)}%`} sub={`Amazon+Flipkart+others ${fmt(totalRev - shopifyRev - qcRev)}`} />
         <KPICard label="Multi-item rate" value={pct(multiItemOrders, nOrders)} sub="+AOV premium" />
-        <KPICard label="Q-commerce AOV" value={`₹${qcAOV.toLocaleString('en-IN')}`} sub="Blinkit+Instamart+Zepto" />
         <KPICard label="Voucher penetration" value={pct(voucherOrders, nOrders)} sub={`${fmtN(voucherOrders)} orders`} />
         <KPICard label="High-ticket ≥₹10K" value={fmtN(htCount)} sub={fmt(htRev)} />
       </div>
@@ -199,7 +198,7 @@ function OverviewPage({ data, alerts }) {
             { key: 'orders', label: 'Orders', align: 'right', render: v => fmtN(v) },
             { key: 'aov', label: 'AOV', align: 'right', mono: true, render: v => `₹${Math.round(v).toLocaleString('en-IN')}` },
             { key: 'health', label: 'Health', render: v => <Badge type={v === 'Healthy' ? 'green' : v === 'GST flag' ? 'amber' : 'red'}>{v}</Badge> },
-          ]} rows={sortedCh.map(([ch, v]) => ({ ch, rev: v.rev, orders: v.orders, aov: v.orders ? v.rev / v.orders : 0, health: ch === 'Blinkit' ? 'GST flag' : ch === 'CRED' ? 'Feed gap' : 'Healthy' }))} />
+          ]} rows={Object.keys(C.ch).map(ch => { const v = chMap[ch] || { rev: 0, orders: 0 }; return { ch, rev: v.rev, orders: v.orders, aov: v.orders ? v.rev / v.orders : 0, health: ch === 'Blinkit' ? 'GST flag' : ch === 'CRED' ? 'Feed gap' : 'Healthy' } })} />
         </Card>
         <Card title="Top performers">
           <div style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.07em', color: C.t3, marginBottom: 7 }}>Categories</div>
