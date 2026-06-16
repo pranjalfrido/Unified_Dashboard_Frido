@@ -255,7 +255,8 @@ app.post('/api/bq', async (req, res) => {
       tatData,
       topOrders,
       highTicket,
-      multiItemStats
+      multiItemStats,
+      bySubCategory
     ] = await Promise.all([
       // 1. Overall totals
       pool.query(`
@@ -423,6 +424,14 @@ app.post('/api/bq', async (req, res) => {
           FROM orders WHERE order_date BETWEEN $1 AND $2
           GROUP BY order_id
         ) t`, [start, end]),
+
+      // 14. By sub-category
+      pool.query(`
+        SELECT sub_category,
+          COUNT(DISTINCT order_id) AS orders,
+          SUM(revenue_inc_gst) AS rev
+        FROM orders WHERE order_date BETWEEN $1 AND $2
+        GROUP BY sub_category ORDER BY rev DESC LIMIT 50`, [start, end]),
     ])
 
     // Build daily trend array
@@ -468,6 +477,12 @@ app.post('/api/bq', async (req, res) => {
       }
     })
 
+    // Build order status map
+    const orderStatusMap = {}
+    byOrderStatus.rows.forEach(r => {
+      orderStatusMap[r.order_status || 'Unknown'] = parseInt(r.cnt) || 0
+    })
+
     // Build buckets
     const bucketOrder = ['<₹500','₹500-1K','₹1K-2.5K','₹2.5K-5K','₹5K-10K','₹10K-25K','₹25K+']
     const buckets = Object.fromEntries(bucketOrder.map(k => [k, 0]))
@@ -498,6 +513,15 @@ app.post('/api/bq', async (req, res) => {
     const nCusts = parseInt(customerStats.rows[0]?.n_custs) || 0
     const repeatCusts = parseInt(customerStats.rows[0]?.repeat_custs) || 0
 
+    // Build sub-category map
+    const subCatMap = {}
+    bySubCategory.rows.forEach(r => {
+      subCatMap[r.sub_category || 'Unknown'] = {
+        rev: parseFloat(r.rev) || 0,
+        orders: { size: parseInt(r.orders) || 0 }
+      }
+    })
+
     const htCount = parseInt(highTicket.rows[0]?.ht_count) || 0
     const htRevAgg = parseFloat(highTicket.rows[0]?.ht_rev) || 0
     const multiItemOrders = parseInt(multiItemStats.rows[0]?.multi_item_orders) || 0
@@ -525,7 +549,7 @@ app.post('/api/bq', async (req, res) => {
       gstCollected: totalRev - totalExcRev,
       nCusts, repeatCusts,
       uniqueDates: dateSet,
-      dailyArr, chMap, catMap, stateMap,
+      dailyArr, chMap, catMap, subCatMap, stateMap, orderStatusMap,
       buckets, bucketRev, voucherMap, tatOrders,
       htCount, htRev: htRevAgg, multiItemOrders,
       orders,

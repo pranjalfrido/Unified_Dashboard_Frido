@@ -455,8 +455,7 @@ function OpsTab({ data }) {
   const tatArr = data.tatOrders
   const avgTAT = tatArr.length ? tatArr.reduce((a, b) => a + b, 0) / tatArr.length : 0
   const delayed = tatArr.filter(d => d > 7).length
-  const statusCounts = {}
-  data.orders.forEach(o => { const s = o.orderStatus || 'Unknown'; statusCounts[s] = (statusCounts[s] || 0) + 1 })
+  const statusCounts = data.orderStatusMap || {}
   const tatBuckets = [{ label: 'Same day', min: 0, max: 0 }, { label: '1-2 days', min: 1, max: 2 }, { label: '3-5 days', min: 3, max: 5 }, { label: '6-7 days', min: 6, max: 7 }, { label: '8-14 days', min: 8, max: 14 }, { label: '15+ days', min: 15, max: Infinity }].map(b => ({ ...b, count: tatArr.filter(d => d >= b.min && d <= b.max).length }))
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
@@ -465,7 +464,7 @@ function OpsTab({ data }) {
         <KPICard label="Orders Tracked" value={fmtN(tatArr.length)} />
         <KPICard label="Delayed >7d" value={fmtN(delayed)} sub={tatArr.length ? pct(delayed, tatArr.length) : '—'} />
         <KPICard label="Total Orders" value={fmtN(data.nOrders)} />
-        <KPICard label="Cities Covered" value={fmtN([...new Set(data.orders.map(o => o.city).filter(Boolean))].length)} />
+        <KPICard label="Cities Covered" value={fmtN(Object.values(data.stateMap || {}).reduce((s, v) => s + (v.cities?.size || 0), 0))} />
       </div>
       <div className="g-2">
         <Card title="Order Status">
@@ -525,8 +524,8 @@ function SalesPage({ data, filters, setFilters }) {
     return processData(rows)
   }, [data, filters.category, filters.state, filters.sku])
 
-  const cats = useMemo(() => [...new Set((data?.rows || []).map(r => r.Category).filter(Boolean))].sort(), [data])
-  const states = useMemo(() => [...new Set((data?.rows || []).map(r => r.State).filter(Boolean))].sort(), [data])
+  const cats = useMemo(() => Object.keys(data?.catMap || {}).filter(Boolean).sort(), [data])
+  const states = useMemo(() => Object.keys(data?.stateMap || {}).filter(Boolean).sort(), [data])
 
   if (!filteredData) return null
   return (
