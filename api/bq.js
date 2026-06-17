@@ -19,7 +19,8 @@ export default async function handler(req, res) {
   if (subCategory) filterClauses.push(`SubCategory = '${subCategory.replace(/'/g, "''")}'`)
   if (state) filterClauses.push(`UPPER(TRIM(State)) = '${state.toUpperCase().replace(/'/g, "''")}'`)
   // Strip trailing ORDER BY before wrapping (BQ disallows ORDER BY in subquery CTEs)
-  const baseNoOrder = rawBase.replace(/\s+ORDER BY\s+u\.OrderDate\s+DESC\s*$/i, '')
+  const orderByIdx = rawBase.lastIndexOf('ORDER BY')
+  const baseNoOrder = orderByIdx !== -1 ? rawBase.slice(0, orderByIdx).trimEnd() : rawBase
   const base = filterClauses.length ? `SELECT * FROM (${baseNoOrder}) WHERE ${filterClauses.join(' AND ')}` : rawBase
 
   const queries = {
