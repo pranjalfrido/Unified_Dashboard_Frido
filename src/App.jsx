@@ -233,9 +233,50 @@ const DAILY_METRICS = [
   { id: 'asp', label: 'ASP' },
 ]
 
+const GROUP_OPTS = [
+  { id: 'daily', label: 'Daily' },
+  { id: 'weekly', label: 'Weekly' },
+  { id: 'monthly', label: 'Monthly' },
+  { id: 'quarterly', label: 'Quarterly' },
+]
+
+function getGroupKey(date, groupBy) {
+  if (!date) return '—'
+  if (groupBy === 'daily') return date
+  if (groupBy === 'weekly') {
+    const d = new Date(date), day = d.getDay(), diff = d.getDate() - day + (day === 0 ? -6 : 1)
+    const mon = new Date(d.setDate(diff))
+    return `W/c ${mon.toISOString().slice(0, 10)}`
+  }
+  if (groupBy === 'monthly') return date.slice(0, 7)
+  if (groupBy === 'quarterly') {
+    const [y, m] = date.split('-')
+    const q = Math.ceil(parseInt(m) / 3)
+    return `${y} Q${q}`
+  }
+  return date
+}
+
+function groupDailyArr(dailyArr, channels, groupBy) {
+  if (groupBy === 'daily') return dailyArr
+  const map = {}
+  dailyArr.forEach(d => {
+    const key = getGroupKey(d.date, groupBy)
+    if (!map[key]) { map[key] = { date: key }; channels.forEach(ch => { map[key][ch] = 0; map[key][ch + '_o'] = 0; map[key][ch + '_u'] = 0 }) }
+    channels.forEach(ch => {
+      map[key][ch] = (map[key][ch] || 0) + (d[ch] || 0)
+      map[key][ch + '_o'] = (map[key][ch + '_o'] || 0) + (d[ch + '_o'] || 0)
+      map[key][ch + '_u'] = (map[key][ch + '_u'] || 0) + (d[ch + '_u'] || 0)
+    })
+  })
+  return Object.values(map)
+}
+
 function DailyChannelTable({ dailyArr, channels }) {
   const [metric, setMetric] = useState('rev')
+  const [groupBy, setGroupBy] = useState('daily')
   const m = DAILY_METRICS.find(x => x.id === metric)
+  const grouped = groupDailyArr(dailyArr, channels, groupBy)
 
   const getVal = (d, ch) => {
     if (metric === 'rev') return d[ch] || 0
@@ -254,31 +295,38 @@ function DailyChannelTable({ dailyArr, channels }) {
     if (metric === 'rev') return channels.reduce((s, ch) => s + (d[ch] || 0), 0)
     if (metric === 'orders') return channels.reduce((s, ch) => s + (d[ch + '_o'] || 0), 0)
     if (metric === 'units') return channels.reduce((s, ch) => s + (d[ch + '_u'] || 0), 0)
-    if (metric === 'aov') { const totalO = channels.reduce((s, ch) => s + (d[ch + '_o'] || 0), 0); const totalR = channels.reduce((s, ch) => s + (d[ch] || 0), 0); return totalO ? totalR / totalO : 0 }
-    if (metric === 'asp') { const totalU = channels.reduce((s, ch) => s + (d[ch + '_u'] || 0), 0); const totalR = channels.reduce((s, ch) => s + (d[ch] || 0), 0); return totalU ? totalR / totalU : 0 }
+    if (metric === 'aov') { const o = channels.reduce((s, ch) => s + (d[ch + '_o'] || 0), 0); const r = channels.reduce((s, ch) => s + (d[ch] || 0), 0); return o ? r / o : 0 }
+    if (metric === 'asp') { const u = channels.reduce((s, ch) => s + (d[ch + '_u'] || 0), 0); const r = channels.reduce((s, ch) => s + (d[ch] || 0), 0); return u ? r / u : 0 }
     return 0
   }
+
+  const selStyle = { fontSize: 11.5, padding: '4px 8px', borderRadius: 7, border: `1px solid ${C.border2}`, background: C.card, color: C.t1, outline: 'none', fontFamily: 'var(--font)', cursor: 'pointer' }
 
   return (
     <Card>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 11 }}>
-        <span style={{ fontSize: 13, fontWeight: 600, color: C.t1 }}>Daily {m.label} by Channel</span>
-        <select value={metric} onChange={e => setMetric(e.target.value)} style={{ fontSize: 11.5, padding: '4px 8px', borderRadius: 7, border: `1px solid ${C.border2}`, background: C.card, color: C.t1, outline: 'none', fontFamily: 'var(--font)', cursor: 'pointer' }}>
-          {DAILY_METRICS.map(x => <option key={x.id} value={x.id}>{x.label}</option>)}
-        </select>
+        <span style={{ fontSize: 13, fontWeight: 600, color: C.t1 }}>{GROUP_OPTS.find(x => x.id === groupBy).label} {m.label} by Channel</span>
+        <div style={{ display: 'flex', gap: 6 }}>
+          <select value={groupBy} onChange={e => setGroupBy(e.target.value)} style={selStyle}>
+            {GROUP_OPTS.map(x => <option key={x.id} value={x.id}>{x.label}</option>)}
+          </select>
+          <select value={metric} onChange={e => setMetric(e.target.value)} style={selStyle}>
+            {DAILY_METRICS.map(x => <option key={x.id} value={x.id}>{x.label}</option>)}
+          </select>
+        </div>
       </div>
       <div className="tbl-wrap">
         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
           <thead>
             <tr>
-              <th style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.05em', color: C.t3, textAlign: 'left', padding: '3px 5px 7px', borderBottom: `1px solid ${C.border}` }}>Date</th>
+              <th style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.05em', color: C.t3, textAlign: 'left', padding: '3px 5px 7px', borderBottom: `1px solid ${C.border}` }}>Period</th>
               {channels.map(ch => <th key={ch} style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.05em', color: C.t3, textAlign: 'right', padding: '3px 5px 7px', borderBottom: `1px solid ${C.border}` }}>{ch}</th>)}
               <th style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.05em', color: C.t3, textAlign: 'right', padding: '3px 5px 7px', borderBottom: `1px solid ${C.border}` }}>Total</th>
             </tr>
           </thead>
           <tbody>
-            {dailyArr.map((d, i) => (
-              <tr key={i} style={{ borderBottom: i < dailyArr.length - 1 ? `1px solid ${C.border}` : 'none' }} onMouseEnter={e => e.currentTarget.style.background = '#FFFBE6'} onMouseLeave={e => e.currentTarget.style.background = ''}>
+            {grouped.map((d, i) => (
+              <tr key={i} style={{ borderBottom: i < grouped.length - 1 ? `1px solid ${C.border}` : 'none' }} onMouseEnter={e => e.currentTarget.style.background = '#FFFBE6'} onMouseLeave={e => e.currentTarget.style.background = ''}>
                 <td style={{ padding: '5.5px 5px', color: C.t2 }}>{d.date}</td>
                 {channels.map(ch => <td key={ch} style={{ padding: '5.5px 5px', textAlign: 'right', color: C.t1, fontFamily: 'var(--mono)', fontSize: 11.5 }}>{fmtVal(getVal(d, ch))}</td>)}
                 <td style={{ padding: '5.5px 5px', textAlign: 'right', fontWeight: 700, color: C.t1, fontFamily: 'var(--mono)', fontSize: 11.5 }}>{fmtVal(getTotalVal(d))}</td>
