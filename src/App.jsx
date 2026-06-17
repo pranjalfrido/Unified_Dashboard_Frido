@@ -254,6 +254,9 @@ function AllTab({ data }) {
   const unitsPerOrder = nOrders > 0 ? totalQty / nOrders : 0
   const rtoOrders = orderStatusMap['RTO'] || 0
   const returnPct = nOrders > 0 ? (rtoOrders / nOrders * 100) : 0
+  const asp = totalQty > 0 ? totalRev / totalQty : 0
+  const deliveredOrders = orderStatusMap['Delivered'] || 0
+  const fulfilmentPct = nOrders > 0 ? (deliveredOrders / nOrders * 100) : 0
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
@@ -265,9 +268,11 @@ function AllTab({ data }) {
         <KPICard label="Blended AOV" value={`₹${Math.round(blendedAOV).toLocaleString('en-IN')}`} />
         <KPICard label="Daily Avg" value={fmt(totalRev / nDays)} />
       </div>
-      <div className="g-kpi3">
+      <div style={{display:'grid',gridTemplateColumns:'repeat(5,1fr)',gap:10}}>
+        <KPICard label="ASP" value={`₹${Math.round(asp).toLocaleString('en-IN')}`} sub={`Revenue per unit sold`} />
+        <KPICard label="Fulfilment %" value={`${fulfilmentPct.toFixed(1)}%`} sub={`${fmtN(deliveredOrders)} delivered`} accent={fulfilmentPct < 80 ? '#7A1A1A' : fulfilmentPct >= 90 ? '#286010' : undefined} />
         <KPICard label="Revenue per Unit" value={`₹${Math.round(revPerUnit).toLocaleString('en-IN')}`} sub={`Avg selling price per SKU sold`} />
-        <KPICard label="Revenue at Risk" value={fmt(atRiskRev)} sub={`RTO + Cancelled (Shopify)`} accent={atRiskRev > 0 ? '#7A4000' : undefined} />
+        <KPICard label="Revenue at Risk" value={fmt(atRiskRev)} sub={`RTO + Cancelled`} accent={atRiskRev > 0 ? '#7A4000' : undefined} />
         <KPICard label="Units per Order" value={unitsPerOrder.toFixed(2)} sub={`Avg basket size`} />
       </div>
       <div className="g-21">
