@@ -260,7 +260,7 @@ function AllTab({ data }) {
       <div className="g-kpi5">
         <KPICard label="Gross Revenue" value={fmt(totalRev)} sub={`${nDays} days`} />
         <KPICard label="Net (Exc GST)" value={fmt(totalExcRev)} />
-        <KPICard label="Orders / Units" value={fmtN(nOrders)} sub={`${fmtN(totalQty)} units`} />
+        <KPICard label="Orders" value={fmtN(nOrders)} sub={`${fmtN(totalQty)} units`} />
         <KPICard label="Blended AOV" value={`₹${Math.round(blendedAOV).toLocaleString('en-IN')}`} />
         <KPICard label="Daily Avg" value={fmt(totalRev / nDays)} />
       </div>
