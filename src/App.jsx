@@ -739,15 +739,7 @@ function CXTab({ data }) {
 
 function SalesPage({ data, filters, setFilters }) {
   const [activeTab, setActiveTab] = useState('all')
-  const filteredData = useMemo(() => {
-    if (!data) return data
-    let rows = data.rows
-    if (filters.category) rows = rows.filter(r => r.Category === filters.category)
-    if (filters.state) rows = rows.filter(r => (r.State || '').toUpperCase() === filters.state.toUpperCase())
-    if (filters.sku) rows = rows.filter(r => (r.ProductId || '').toLowerCase().includes(filters.sku.toLowerCase()))
-    if (rows === data.rows) return data
-    return processData(rows)
-  }, [data, filters.category, filters.state, filters.sku])
+  const filteredData = data
 
   const cats = useMemo(() => Object.keys(data?.catMap || {}).filter(Boolean).sort(), [data])
   const states = useMemo(() => Object.keys(data?.stateMap || {}).filter(Boolean).sort(), [data])
