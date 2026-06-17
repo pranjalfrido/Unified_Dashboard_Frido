@@ -47,7 +47,7 @@ export function HBar({ dot, label, width, value, pctVal }) {
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '6px 0', borderBottom: `1px solid ${C.border}` }} className="hbar-row">
       <span style={{ width: 8, height: 8, borderRadius: '50%', background: dot, flexShrink: 0 }} />
-      <span style={{ fontSize: 12, color: C.t2, flexShrink: 0, width: 62 }}>{label}</span>
+      <span style={{ fontSize: 12, color: C.t2, flexShrink: 0, width: 110 }}>{label}</span>
       <div className="hb-track" style={{ flex: 1 }}><div className="hb-fill" style={{ width: `${width}%`, background: dot }} /></div>
       <span style={{ fontSize: 12, fontWeight: 700, color: C.t1, fontFamily: 'var(--mono)', flexShrink: 0, minWidth: 62, textAlign: 'right' }}>{value}</span>
       <span style={{ fontSize: 11, color: C.t3, flexShrink: 0, width: 36, textAlign: 'right' }}>{pctVal}</span>

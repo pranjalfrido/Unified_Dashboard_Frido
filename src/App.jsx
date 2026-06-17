@@ -593,6 +593,7 @@ function ShopifyTab({ data }) {
 
   const subChKeys = Object.keys(subChannelMap)
   const maxSubChRev = Math.max(...Object.values(subChannelMap).map(v => v.rev), 1)
+  const totalVoucherOrders = Object.values(voucherMap).reduce((s, v) => s + v.orders, 0) || 1
   const maxVoucherOrders = Math.max(...Object.values(voucherMap).map(v => v.orders), 1)
   const maxPaymentOrders = Math.max(...Object.values(paymentModeMap).map(v => v.orders), 1)
 
@@ -633,7 +634,7 @@ function ShopifyTab({ data }) {
           {subChKeys.map((k, i) => { const dots = ['#FFD600','#0D9E68','#2E74CC','#CC4078','#9B59B6']; return <HBar key={k} dot={dots[i % dots.length]} label={k} width={(subChannelMap[k].rev / maxSubChRev) * 100} value={fmt(subChannelMap[k].rev)} pctVal={rev ? pct(subChannelMap[k].rev, rev) : '—'} /> })}
         </Card>
         <Card title="Voucher Breakdown">
-          {Object.entries(voucherMap).sort((a, b) => b[1].orders - a[1].orders).map(([k, v], i) => { const dots = ['#B0ADB8','#0D9E68','#2E74CC','#CC8A00','#CC4078']; return <HBar key={k} dot={dots[i % dots.length]} label={k} width={(v.orders / maxVoucherOrders) * 100} value={fmtN(v.orders)} pctVal={shopifyOrders ? pct(v.orders, shopifyOrders) : '—'} /> })}
+          {Object.entries(voucherMap).sort((a, b) => b[1].orders - a[1].orders).map(([k, v], i) => { const dots = ['#B0ADB8','#0D9E68','#2E74CC','#CC8A00','#CC4078']; return <HBar key={k} dot={dots[i % dots.length]} label={k} width={(v.orders / maxVoucherOrders) * 100} value={fmtN(v.orders)} pctVal={pct(v.orders, totalVoucherOrders)} /> })}
         </Card>
         <Card title="Payment Mode">
           {Object.entries(paymentModeMap).sort((a, b) => b[1].orders - a[1].orders).map(([k, v], i) => { const dots = ['#2E74CC','#CC8A00','#B0ADB8']; return <HBar key={k} dot={dots[i % dots.length]} label={k} width={(v.orders / maxPaymentOrders) * 100} value={fmtN(v.orders)} pctVal={shopifyOrders ? pct(v.orders, shopifyOrders) : '—'} /> })}
