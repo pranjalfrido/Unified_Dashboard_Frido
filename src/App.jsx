@@ -227,6 +227,7 @@ const TABS = [
 
 function PaginatedCard({ title, rows, columns, pageSize = 10 }) {
   const [page, setPage] = useState(0)
+  useEffect(() => { setPage(0) }, [rows])
   const totalPages = Math.ceil(rows.length / pageSize)
   const visible = rows.slice(page * pageSize, (page + 1) * pageSize)
   return (
