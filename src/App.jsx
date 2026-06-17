@@ -1063,31 +1063,38 @@ export default function App() {
   const [error, setError] = useState(null)
 
   const API = import.meta.env.VITE_API_URL || ''
+  const reqIdRef = useRef(0)
 
   const fetchData = useCallback(async (start, end, extraFilters = {}) => {
+    const reqId = ++reqIdRef.current
     setLoading(true); setError(null)
     try {
       const res = await fetch(`${API}/api/bq`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ start, end, ...extraFilters }) })
       if (!res.ok) throw new Error(`API error ${res.status}: ${await res.text()}`)
       const json = await res.json()
+      if (reqId !== reqIdRef.current) return // stale response, ignore
       setRawRows(json.source === 'postgres-aggregated' ? json : (json.rows || []))
-    } catch (e) { setError(e.message) }
-    finally { setLoading(false) }
+    } catch (e) { if (reqId === reqIdRef.current) setError(e.message) }
+    finally { if (reqId === reqIdRef.current) setLoading(false) }
   }, [API])
 
   const debounceRef = useRef(null)
   const prevDateRef = useRef({ start: null, end: null })
+  const filtersRef = useRef(filters)
+  filtersRef.current = filters
   useEffect(() => {
     if (!filters.start || !filters.end) return
     clearTimeout(debounceRef.current)
-    const { start, end, category, subCategory, state } = filters
-    const dateChanged = start !== prevDateRef.current.start || end !== prevDateRef.current.end
-    if (dateChanged) { prevDateRef.current = { start, end }; setRawRows(null) }
-    const extra = {}
-    if (category) extra.category = category
-    if (subCategory) extra.subCategory = subCategory
-    if (state) extra.state = state
-    debounceRef.current = setTimeout(() => fetchData(start, end, extra), 400)
+    const dateChanged = filters.start !== prevDateRef.current.start || filters.end !== prevDateRef.current.end
+    if (dateChanged) { prevDateRef.current = { start: filters.start, end: filters.end }; setRawRows(null) }
+    debounceRef.current = setTimeout(() => {
+      const { start, end, category, subCategory, state } = filtersRef.current
+      const extra = {}
+      if (category) extra.category = category
+      if (subCategory) extra.subCategory = subCategory
+      if (state) extra.state = state
+      fetchData(start, end, extra)
+    }, 600)
     return () => clearTimeout(debounceRef.current)
   }, [filters.start, filters.end, filters.category, filters.subCategory, filters.state, fetchData])
 

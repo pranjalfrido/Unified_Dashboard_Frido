@@ -1,7 +1,8 @@
 import { BigQuery } from '@google-cloud/bigquery'
 import { writeFileSync } from 'fs'
-import { join } from 'path'
+import { join, dirname } from 'path'
 import { tmpdir } from 'os'
+import { fileURLToPath } from 'url'
 
 let bq
 export function getBQ() {
@@ -11,8 +12,8 @@ export function getBQ() {
       writeFileSync(keyPath, process.env.GCP_SA_KEY)
       bq = new BigQuery({ keyFilename: keyPath, projectId: 'frido-429506' })
     } else {
-      // local dev — sa_key.json sits two levels up from api/
-      bq = new BigQuery({ keyFilename: new URL('../sa_key.json', import.meta.url).pathname, projectId: 'frido-429506' })
+      // local dev — sa_key.json sits at project root (one level up from api/)
+      bq = new BigQuery({ keyFilename: join(dirname(fileURLToPath(import.meta.url)), '..', 'sa_key.json'), projectId: 'frido-429506' })
     }
   }
   return bq
