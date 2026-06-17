@@ -75,7 +75,7 @@ export default async function handler(req, res) {
     const skuRows = (r.bySKU || []).map(x => ({ sku: x.sku, category: x.category || '', subCategory: x.subcategory || '', channel: x.channel || '', units: parseInt(x.units) || 0, orders: parseInt(x.orders) || 0, rev: parseFloat(x.rev) || 0 }))
 
     const chMap = {}
-    r.byChannel.forEach(x => { chMap[x.Channel] = { rev: parseFloat(x.rev) || 0, orders: parseInt(x.orders) || 0, qty: parseInt(x.qty) || 0 } })
+    r.byChannel.forEach(x => { chMap[x.Channel] = { rev: parseFloat(x.rev) || 0, excRev: parseFloat(x.exc_rev) || 0, orders: parseInt(x.orders) || 0, qty: parseInt(x.qty) || 0 } })
 
     const orderStatusMap = {}
     const orderStatusRevMap = {}
