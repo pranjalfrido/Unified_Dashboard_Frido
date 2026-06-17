@@ -30,6 +30,7 @@ export default async function handler(req, res) {
     bySubCategory: `WITH q AS (${base}) SELECT Category, SubCategory, COUNT(DISTINCT OrderId) AS orders, SUM(SellingPrice_Inc_GST) AS rev FROM q GROUP BY Category, SubCategory ORDER BY rev DESC LIMIT 200`,
     byCategoryChannel: `WITH q AS (${base}) SELECT Category, Channel, SUM(SellingPrice_Inc_GST) AS rev FROM q GROUP BY Category, Channel`,
     byCity: `WITH q AS (${base}) SELECT TRIM(City) AS city, UPPER(TRIM(State)) AS state, COUNT(DISTINCT OrderId) AS orders, SUM(SellingPrice_Inc_GST) AS rev FROM q WHERE City IS NOT NULL AND TRIM(City) != '' GROUP BY TRIM(City), UPPER(TRIM(State)) ORDER BY rev DESC LIMIT 50`,
+    bySKU: `WITH q AS (${base}) SELECT ChannelSKUCode AS sku, Category, SubCategory, Channel, SUM(ItemQty) AS units, COUNT(DISTINCT OrderId) AS orders, SUM(SellingPrice_Inc_GST) AS rev FROM q WHERE ChannelSKUCode IS NOT NULL AND TRIM(ChannelSKUCode) != '' GROUP BY ChannelSKUCode, Category, SubCategory, Channel ORDER BY rev DESC LIMIT 500`,
     topOrders: `WITH q AS (${base}), ot AS (SELECT OrderId, CAST(OrderDate AS STRING) AS order_date, Channel, State, City, SUM(SellingPrice_Inc_GST) AS rev, SUM(ItemQty) AS qty, MAX(FulfilmentStatus) AS order_status, MAX(CustomerId) AS customer_id, MAX(voucher_code) AS voucher_code FROM q GROUP BY OrderId, OrderDate, Channel, State, City) SELECT * FROM ot ORDER BY rev DESC LIMIT 20`,
   }
 
@@ -69,6 +70,7 @@ export default async function handler(req, res) {
     r.byState.forEach(x => { if (!x.state) return; stateMap[x.state] = { rev: parseFloat(x.rev) || 0, orders: parseInt(x.orders) || 0, cities: { size: parseInt(x.cities) } } })
 
     const cityRows = (r.byCity || []).map(x => ({ city: x.city, state: x.state, orders: parseInt(x.orders) || 0, rev: parseFloat(x.rev) || 0 }))
+    const skuRows = (r.bySKU || []).map(x => ({ sku: x.sku, category: x.Category || '', subCategory: x.SubCategory || '', channel: x.Channel || '', units: parseInt(x.units) || 0, orders: parseInt(x.orders) || 0, rev: parseFloat(x.rev) || 0 }))
 
     const chMap = {}
     r.byChannel.forEach(x => { chMap[x.Channel] = { rev: parseFloat(x.rev) || 0, orders: parseInt(x.orders) || 0, qty: parseInt(x.qty) || 0 } })
@@ -114,7 +116,7 @@ export default async function handler(req, res) {
       dailyArr, chMap, catMap, subCatMap, stateMap, cityRows, catChannelMap, orderStatusMap, orderStatusRevMap,
       buckets, bucketRev, voucherMap, tatOrders: [],
       htCount, htRev: htRevAgg, multiItemOrders,
-      orders, rows: [],
+      orders, skuRows, rows: [],
     })
   } catch (err) {
     console.error('[api/bq]', err.message)
