@@ -226,7 +226,7 @@ const TABS = [
 ]
 
 function AllTab({ data }) {
-  const { totalRev, totalExcRev, nOrders, totalQty, blendedAOV, nDays, dailyArr, chMap, catMap, subCatMap, stateMap, buckets, bucketRev, rows, orders, orderStatusRevMap = {} } = data
+  const { totalRev, totalExcRev, nOrders, totalQty, blendedAOV, nDays, dailyArr, chMap, catMap, subCatMap, stateMap, buckets, bucketRev, rows, orders, orderStatusRevMap = {}, orderStatusMap = {} } = data
   const channels = Object.keys(C.ch).filter(ch => chMap[ch])
   const sortedCh = Object.entries(chMap).sort((a, b) => b[1].rev - a[1].rev)
   const maxChRev = sortedCh[0]?.[1].rev || 1
@@ -252,13 +252,15 @@ function AllTab({ data }) {
   const fulfilmentBase = deliveredCount + rtoCount + cancelCount
   const fulfilmentRate = fulfilmentBase > 0 ? (deliveredCount / fulfilmentBase * 100) : 0
   const unitsPerOrder = nOrders > 0 ? totalQty / nOrders : 0
+  const rtoOrders = orderStatusMap['RTO'] || 0
+  const returnPct = nOrders > 0 ? (rtoOrders / nOrders * 100) : 0
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
       <div className="g-kpi5">
         <KPICard label="Gross Revenue" value={fmt(totalRev)} sub={`${nDays} days`} />
         <KPICard label="Net (Exc GST)" value={fmt(totalExcRev)} />
-        <KPICard label="Orders" value={fmtN(nOrders)} sub={`${fmtN(totalQty)} units`} />
+        <KPICard label="Orders" value={fmtN(nOrders)} sub={`${fmtN(totalQty)} units · Return ${returnPct.toFixed(1)}%`} accent={returnPct > 10 ? '#7A1A1A' : undefined} />
         <KPICard label="Blended AOV" value={`₹${Math.round(blendedAOV).toLocaleString('en-IN')}`} />
         <KPICard label="Daily Avg" value={fmt(totalRev / nDays)} />
       </div>
