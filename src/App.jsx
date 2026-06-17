@@ -276,8 +276,7 @@ function DailyChannelTable({ dailyArr, channels, nDays = 7 }) {
   const autoGroup = nDays <= 14 ? 'daily' : nDays <= 90 ? 'weekly' : 'monthly'
   const [metric, setMetric] = useState('rev')
   const [groupBy, setGroupBy] = useState(autoGroup)
-  const prevNDays = useRef(nDays)
-  if (prevNDays.current !== nDays) { prevNDays.current = nDays; setGroupBy(autoGroup) }
+  useEffect(() => { setGroupBy(autoGroup) }, [nDays])
   const m = DAILY_METRICS.find(x => x.id === metric)
   const grouped = groupDailyArr(dailyArr, channels, groupBy)
 
