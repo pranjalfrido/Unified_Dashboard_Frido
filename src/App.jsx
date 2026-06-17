@@ -143,20 +143,20 @@ function OverviewPage({ data, alerts }) {
           </div>
           <div style={{ position: 'absolute', right: -10, bottom: -20, fontSize: 100, color: 'rgba(0,0,0,.04)', pointerEvents: 'none' }}>₹</div>
         </div>
-        <KPICard label="Orders" value={fmtN(nOrders)} sub={`${fmtN(totalQty)} units · ${(totalQty / (nOrders || 1)).toFixed(1)}/order`} sparkline={[9044,8351,8291,7450,6443,6356]} sparkColor="#E24B4A" trend={-1} trendLabel="–29.7%" />
-        <KPICard label="Blended AOV" value={`₹${Math.round(blendedAOV).toLocaleString('en-IN')}`} sub={`Best: ${bestAOV.ch} ₹${Math.round(bestAOV.aov).toLocaleString('en-IN')}`} sparkline={[2228,2496,2441,2580,2836,2908]} sparkColor="#639922" trend={1} trendLabel="+30.5%" />
-        <KPICard label="Unique Customers" value={fmtN(nCusts)} sub={`${repeatRate}% repeat`} sparkline={[4969,4603,4609,4022,3239,3155]} sparkColor="#185FA5" trend={-1} trendLabel="–36.5%" />
+        <KPICard center label="Orders" value={fmtN(nOrders)} sub={`${fmtN(totalQty)} units · ${(totalQty / (nOrders || 1)).toFixed(1)}/order`} />
+        <KPICard center label="Blended AOV" value={`₹${Math.round(blendedAOV).toLocaleString('en-IN')}`} sub={`Best: ${bestAOV.ch} ₹${Math.round(bestAOV.aov).toLocaleString('en-IN')}`} />
+        <KPICard center label="Unique Customers" value={fmtN(nCusts)} sub={`${repeatRate}% repeat`} />
       </div>
 
-      {/* 7 KPIs */}
+      {/* 9 KPIs */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7,1fr)', gap: 10 }}>
-        <KPICard label="Daily avg revenue" value={fmt(totalRev / nDays)} sub={`${nDays} days`} borderColor="#534AB7" />
-        <KPICard label="Repeat rate" value={`${repeatRate}%`} sub="95.3% never returned" accent="#A32D2D" borderColor="#E24B4A" dotColor="#E24B4A" />
-        <KPICard label="Multi-item rate" value={pct(multiItemOrders, nOrders)} sub="+30.5% AOV vs single" accent="#3B6D11" borderColor="#639922" dotColor="#639922" />
-        <KPICard label="Revenue at risk" value={fmt(htRev)} sub="3,272 delayed >7d" accent="#A32D2D" borderColor="#E24B4A" dotColor="#E24B4A" />
-        <KPICard label="Q-commerce AOV" value={`₹${qcAOV.toLocaleString('en-IN')}`} sub="2.5× brand average" accent="#3B6D11" borderColor="#639922" dotColor="#639922" />
-        <KPICard label="Delivery promise" value={pct(qcRev, totalRev)} sub="in ≤5 days · 12.2% breach" borderColor="#EF9F27" dotColor="#EF9F27" />
-        <KPICard label="Top 1% share" value={fmtN(htCount)} sub="504 orders = ₹258L" borderColor="#E24B4A" dotColor="#E24B4A" />
+        <KPICard label="Daily avg revenue" value={fmt(totalRev / nDays)} sub={`${nDays} days`} />
+        <KPICard label="D2C Share" value={`${d2cPct}%`} sub={`Shopify ${fmt(shopifyRev)}`} />
+        <KPICard label="Q-commerce Share" value={pct(qcRev, totalRev)} sub={`${fmt(qcRev)} · Blinkit+Instamart+Zepto`} />
+        <KPICard label="Marketplace Share" value={`${(100 - parseFloat(d2cPct) - parseFloat(pct(qcRev, totalRev))).toFixed(1)}%`} sub={`Amazon+Flipkart+others ${fmt(totalRev - shopifyRev - qcRev)}`} />
+        <KPICard label="Multi-item rate" value={pct(multiItemOrders, nOrders)} sub="+AOV premium" />
+        <KPICard label="Voucher penetration" value={pct(voucherOrders, nOrders)} sub={`${fmtN(voucherOrders)} orders`} />
+        <KPICard label="High-ticket ≥₹10K" value={fmtN(htCount)} sub={fmt(htRev)} />
       </div>
 
       {/* Trend + Channels */}
@@ -166,14 +166,9 @@ function OverviewPage({ data, alerts }) {
           <div style={{ marginTop: 12 }}>
             <div style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.07em', color: C.t3, marginBottom: 7 }}>D2C vs Q-Commerce vs Marketplace</div>
             <div className="spbar">
-              <div style={{ width: `${d2cPct}%`, background: '#534AB7', minWidth: 4 }} title={`D2C ${d2cPct}%`} />
-              <div style={{ width: `${pct(qcRev, totalRev)}`, background: '#0D9E68', minWidth: 4 }} title={`QC ${parseFloat(pct(qcRev, totalRev)).toFixed(1)}%`} />
-              <div style={{ flex: 1, background: '#B4B2A9' }} title={`Mkt ${(100 - parseFloat(d2cPct) - parseFloat(pct(qcRev, totalRev))).toFixed(1)}%`} />
-            </div>
-            <div style={{ display: 'flex', gap: 10, marginTop: 5 }}>
-              <span style={{ fontSize: 10.5, color: C.t3 }}><span style={{ display: 'inline-block', width: 7, height: 7, borderRadius: 2, background: '#534AB7', marginRight: 3, verticalAlign: 'middle' }} />{d2cPct}% D2C</span>
-              <span style={{ fontSize: 10.5, color: C.t3 }}><span style={{ display: 'inline-block', width: 7, height: 7, borderRadius: 2, background: '#0D9E68', marginRight: 3, verticalAlign: 'middle' }} />{parseFloat(pct(qcRev, totalRev)).toFixed(1)}% QC</span>
-              <span style={{ fontSize: 10.5, color: C.t3 }}><span style={{ display: 'inline-block', width: 7, height: 7, borderRadius: 2, background: '#B4B2A9', marginRight: 3, verticalAlign: 'middle' }} />{(100 - parseFloat(d2cPct) - parseFloat(pct(qcRev, totalRev))).toFixed(1)}% Mkt</span>
+              <div style={{ width: `${d2cPct}%`, background: C.acc, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 700, color: '#13121A', minWidth: 50 }}>{d2cPct}% D2C</div>
+              <div style={{ width: `${pct(qcRev, totalRev)}`, background: '#0D9E68', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 700, color: '#fff', minWidth: 40 }}>{parseFloat(pct(qcRev, totalRev)).toFixed(1)}% QC</div>
+              <div style={{ flex: 1, background: '#B0ADB8', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 700, color: '#13121A' }}>{(100 - parseFloat(d2cPct) - parseFloat(pct(qcRev, totalRev))).toFixed(1)}% Mkt</div>
             </div>
             <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap', marginTop: 8 }}>
               {sortedCh.slice(0, 6).map(([ch, v]) => (
@@ -186,15 +181,7 @@ function OverviewPage({ data, alerts }) {
           </div>
         </Card>
         <Card title="Channel breakdown">
-          {sortedCh.map(([ch, v]) => {
-            const momentum = { Shopify: { val: '–15%', pos: false }, Amazon: { val: '–20%', pos: false }, Flipkart: { val: '+7%', pos: true }, Blinkit: { val: '–14%', pos: false }, CRED: { val: 'batch', pos: null }, Instamart: { val: '–47%', pos: false }, Zepto: { val: '–8%', pos: false }, Myntra: { val: '+16%', pos: true } }[ch]
-            return (
-              <div key={ch} style={{ display: 'flex', alignItems: 'center', gap: 0 }}>
-                <div style={{ flex: 1 }}><HBar dot={C.ch[ch] || C.acm} label={ch} width={(v.rev / maxChRev) * 100} value={fmt(v.rev)} pctVal={pct(v.rev, totalRev)} /></div>
-                {momentum && <span style={{ fontSize: 11, fontWeight: 500, color: momentum.pos === null ? '#888' : momentum.pos ? '#3B6D11' : '#A32D2D', marginLeft: 8, flexShrink: 0, minWidth: 38, textAlign: 'right' }}>{momentum.val}</span>}
-              </div>
-            )
-          })}
+          {sortedCh.map(([ch, v]) => <HBar key={ch} dot={C.ch[ch] || C.acm} label={ch} width={(v.rev / maxChRev) * 100} value={fmt(v.rev)} pctVal={pct(v.rev, totalRev)} />)}
         </Card>
       </div>
 
@@ -202,9 +189,7 @@ function OverviewPage({ data, alerts }) {
       <div className="g-3">
         <Card title="Management alerts" note={`${alerts.filter(a => a.type === 'red').length} critical · ${alerts.filter(a => a.type === 'amber').length} watch`}>
           {alerts.length === 0 && <div style={{ fontSize: 12, color: C.t3 }}>No alerts for this period.</div>}
-          <div className="alerts-grid">
-            {alerts.map((a, i) => <AlertCard key={i} {...a} />)}
-          </div>
+          {alerts.map((a, i) => <AlertCard key={i} {...a} />)}
         </Card>
         <Card title="Channel scorecard">
           <DataTable columns={[
