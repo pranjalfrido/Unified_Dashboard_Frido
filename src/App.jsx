@@ -305,9 +305,12 @@ function getGroupKey(date, groupBy) {
   if (!date) return '—'
   if (groupBy === 'daily') return date
   if (groupBy === 'weekly') {
-    const d = new Date(date), day = d.getDay(), diff = d.getDate() - day + (day === 0 ? -6 : 1)
-    const mon = new Date(d.setDate(diff))
-    return `W/c ${mon.toISOString().slice(0, 10)}`
+    const d = new Date(date)
+    const jan1 = new Date(d.getFullYear(), 0, 1)
+    const weekNum = Math.ceil(((d - jan1) / 86400000 + jan1.getDay() + 1) / 7)
+    const mon = d.toLocaleString('en-IN', { month: 'short' })
+    const yr = String(d.getFullYear()).slice(2)
+    return `${mon}-${yr} W${weekNum}`
   }
   if (groupBy === 'monthly') return date.slice(0, 7)
   if (groupBy === 'quarterly') {
