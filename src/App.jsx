@@ -648,6 +648,7 @@ function ShopifyTab({ data, filters, setFilters }) {
           </div>
         </Card>
       </div>
+      <div className="g-2" style={{ alignItems: 'stretch' }}>
       <Card title="Daily Revenue Trend · Shopify">
         <AreaTrendChart data={dailyArr} dataKey="Shopify" color={C.ch['Shopify']} />
       </Card>
@@ -662,6 +663,7 @@ function ShopifyTab({ data, filters, setFilters }) {
           </BarChart>
         </ResponsiveContainer>
       </Card>
+      </div>
       <div className="g-2">
         <Card title="Financial Status">
           <ResponsiveContainer width="100%" height={200}>
@@ -728,7 +730,7 @@ function ShopifyTab({ data, filters, setFilters }) {
         <PaginatedCard title="Top Cities" rows={cityRows} columns={[{ key: 'city', label: 'City', render: v => v ? v.charAt(0).toUpperCase() + v.slice(1).toLowerCase() : v }, { key: 'rev', label: 'Revenue', align: 'right', mono: true, render: v => fmt(v) }, { key: 'orders', label: 'Orders', align: 'right', render: v => fmtN(v) }, { key: 'aov', label: 'AOV', align: 'right', render: (_, r) => `₹${r.orders ? Math.round(r.rev / r.orders).toLocaleString('en-IN') : 0}` }]} pageSize={15} />
       </div>
       <Card title="Top Shopify Orders">
-        <DataTable columns={[{ key: 'orderId', label: 'Order ID' }, { key: 'date', label: 'Date' }, { key: 'rev', label: 'Revenue', align: 'right', mono: true, render: v => fmt(v) }, { key: 'qty', label: 'Qty', align: 'right', render: v => fmtN(v) }, { key: 'orderStatus', label: 'Status' }, { key: 'state', label: 'State' }, { key: 'city', label: 'City' }, { key: 'voucher', label: 'Voucher' }]} rows={shopifyOrderRows} maxRows={20} />
+        <DataTable columns={[{ key: 'orderId', label: 'Order ID' }, { key: 'date', label: 'Date' }, { key: 'rev', label: 'Revenue', align: 'right', mono: true, render: v => fmt(v) }, { key: 'qty', label: 'Qty', align: 'right', render: v => fmtN(v) }, { key: 'orderStatus', label: 'Status' }, { key: 'state', label: 'State' }, { key: 'city', label: 'City' }, { key: 'skus', label: 'SKUs' }, { key: 'voucher', label: 'Voucher' }]} rows={shopifyOrderRows} maxRows={20} />
       </Card>
     </div>
   )
