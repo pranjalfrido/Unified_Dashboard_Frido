@@ -13,15 +13,7 @@ export default async function handler(req, res) {
   const bq = getBQ()
 
   // Run all aggregation queries in parallel directly on BigQuery
-  const rawBase = buildQuery(start, end)
-  const filterClauses = []
-  if (category) filterClauses.push(`\`Category\` = '${category.replace(/'/g, "''")}'`)
-  if (subCategory) filterClauses.push(`\`SubCategory\` = '${subCategory.replace(/'/g, "''")}'`)
-  if (state) filterClauses.push(`UPPER(TRIM(\`State\`)) = '${state.toUpperCase().replace(/'/g, "''")}'`)
-  // Strip trailing ORDER BY before wrapping (BQ disallows ORDER BY in subquery CTEs)
-  const orderByIdx = rawBase.lastIndexOf('ORDER BY')
-  const baseNoOrder = orderByIdx !== -1 ? rawBase.slice(0, orderByIdx).trimEnd() : rawBase
-  const base = filterClauses.length ? `SELECT * FROM (${baseNoOrder}) WHERE ${filterClauses.join(' AND ')}` : rawBase
+  const base = buildQuery(start, end, { category, subCategory, state })
 
   const queries = {
     totals: `WITH q AS (${base}) SELECT COUNT(DISTINCT OrderId) AS n_orders, SUM(SellingPrice_Inc_GST) AS total_rev, SUM(SellingPrice_Exc_GST) AS total_exc_rev, SUM(ItemQty) AS total_qty, COUNT(DISTINCT OrderDate) AS n_days, COUNT(DISTINCT CustomerId) AS n_custs FROM q`,

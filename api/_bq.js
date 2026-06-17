@@ -18,7 +18,13 @@ export function getBQ() {
   return bq
 }
 
-export function buildQuery(s, e) {
+export function buildQuery(s, e, filters = {}) {
+  const { category, subCategory, state } = filters
+  const whereClauses = []
+  if (category) whereClauses.push(`COALESCE(im.Category, 'Frido') = '${category.replace(/'/g, "''")}'`)
+  if (subCategory) whereClauses.push(`COALESCE(im.SubCategory, 'Frido') = '${subCategory.replace(/'/g, "''")}'`)
+  if (state) whereClauses.push(`UPPER(TRIM(u.State)) = '${state.toUpperCase().replace(/'/g, "''")}'`)
+  const whereClause = whereClauses.length ? `WHERE ${whereClauses.join(' AND ')} ` : ''
   return `WITH
 sku_mapping AS (SELECT DISTINCT TRIM(productid) AS productid, TRIM(masterskucode) AS masterskucode FROM \`frido-429506.sharepoint_to_gcp.Frido_Item_Master__productid_sku_mapping\` WHERE TRIM(masterskucode) NOT IN ('', 'not found')),
 price_amazon AS (SELECT DISTINCT TRIM(productid) AS productid, SAFE_CAST(TRIM(REGEXP_REPLACE(Selling_Price, r'[^\\x20-\\x7E]', '')) AS FLOAT64) AS selling_price FROM \`frido-429506.sharepoint_to_gcp.Frido_Item_Master__productid_sku_mapping\` WHERE TRIM(channelname) = 'Amazon'),
@@ -69,7 +75,7 @@ LEFT JOIN rto_shipments rto ON TRIM(u.OrderId) = rto.order_id
 LEFT JOIN cancelled_orders co ON TRIM(u.OrderId) = co.order_id
 LEFT JOIN unicommerce_status_map us ON TRIM(u.OrderId) = us.order_id
 LEFT JOIN clickpost_status_map cs ON TRIM(u.OrderId) = cs.order_id
-ORDER BY u.OrderDate DESC`
+${whereClause}ORDER BY u.OrderDate DESC`
 }
 
 const unwrap = v => {
