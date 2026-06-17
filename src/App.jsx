@@ -532,7 +532,7 @@ function AllTab({ data }) {
         <Card title="Category Revenue" style={{ display: 'flex', flexDirection: 'column' }}>
           <DataTable columns={[{ key: 'name', label: 'Category' }, { key: 'rev', label: 'Revenue', align: 'right', mono: true, render: v => fmt(v) }, { key: 'excRev', label: 'Exc GST', align: 'right', render: v => fmt(v) }, { key: 'orders', label: 'Orders', align: 'right', render: v => fmtN(v) }, { key: 'aov', label: 'AOV', align: 'right', render: v => `₹${Math.round(v).toLocaleString('en-IN')}` }]} rows={catRows} />
         </Card>
-        <PaginatedCard title="Sub-categories" rows={subCatRows} columns={[{ key: 'name', label: 'Sub-category' }, { key: 'rev', label: 'Revenue', align: 'right', mono: true, render: v => fmt(v) }, { key: 'orders', label: 'Orders', align: 'right', render: v => fmtN(v) }, { key: 'aov', label: 'AOV', align: 'right', render: v => `₹${Math.round(v).toLocaleString('en-IN')}` }]} pageSize={10} />
+        <PaginatedCard title="Sub-categories" rows={subCatRows} columns={[{ key: 'name', label: 'Sub-category' }, { key: 'rev', label: 'Revenue', align: 'right', mono: true, render: v => fmt(v) }, { key: 'orders', label: 'Orders', align: 'right', render: v => fmtN(v) }, { key: 'aov', label: 'AOV', align: 'right', render: v => `₹${Math.round(v).toLocaleString('en-IN')}` }]} pageSize={catRows.length} />
       </div>
       <div className="g-2">
         <Card title="Top States">
