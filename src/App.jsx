@@ -238,7 +238,7 @@ const CHART_TYPES = [
 
 function ChannelTrendCard({ dailyArr, channels }) {
   const [metric, setMetric] = useState('rev')
-  const [chartType, setChartType] = useState('line')
+  const chartType = 'line'
   const m = CHART_METRICS.find(x => x.id === metric)
   const dataKey = m.key
   const fmtTick = v => v >= 1e5 ? `${(v / 1e5).toFixed(0)}L` : v >= 1e3 ? `${(v / 1e3).toFixed(0)}K` : v
@@ -260,14 +260,9 @@ function ChannelTrendCard({ dailyArr, channels }) {
     <Card>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 11 }}>
         <span style={{ fontSize: 13, fontWeight: 600, color: C.t1 }}>Daily {m.label} by Channel</span>
-        <div style={{ display: 'flex', gap: 6 }}>
-          <select value={chartType} onChange={e => setChartType(e.target.value)} style={selStyle}>
-            {CHART_TYPES.map(x => <option key={x.id} value={x.id}>{x.label}</option>)}
-          </select>
-          <select value={metric} onChange={e => setMetric(e.target.value)} style={selStyle}>
-            {CHART_METRICS.map(x => <option key={x.id} value={x.id}>{x.label}</option>)}
-          </select>
-        </div>
+        <select value={metric} onChange={e => setMetric(e.target.value)} style={selStyle}>
+          {CHART_METRICS.map(x => <option key={x.id} value={x.id}>{x.label}</option>)}
+        </select>
       </div>
       <ResponsiveContainer width="100%" height={220}>
         {chartType === 'bar' ? (
