@@ -18,7 +18,9 @@ export default async function handler(req, res) {
   if (category) filterClauses.push(`Category = '${category.replace(/'/g, "''")}'`)
   if (subCategory) filterClauses.push(`SubCategory = '${subCategory.replace(/'/g, "''")}'`)
   if (state) filterClauses.push(`UPPER(TRIM(State)) = '${state.toUpperCase().replace(/'/g, "''")}'`)
-  const base = filterClauses.length ? `SELECT * FROM (${rawBase}) WHERE ${filterClauses.join(' AND ')}` : rawBase
+  // Strip trailing ORDER BY before wrapping (BQ disallows ORDER BY in subquery CTEs)
+  const baseNoOrder = rawBase.replace(/\s+ORDER BY\s+u\.OrderDate\s+DESC\s*$/i, '')
+  const base = filterClauses.length ? `SELECT * FROM (${baseNoOrder}) WHERE ${filterClauses.join(' AND ')}` : rawBase
 
   const queries = {
     totals: `WITH q AS (${base}) SELECT COUNT(DISTINCT OrderId) AS n_orders, SUM(SellingPrice_Inc_GST) AS total_rev, SUM(SellingPrice_Exc_GST) AS total_exc_rev, SUM(ItemQty) AS total_qty, COUNT(DISTINCT OrderDate) AS n_days, COUNT(DISTINCT CustomerId) AS n_custs FROM q`,
