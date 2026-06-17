@@ -225,6 +225,26 @@ const TABS = [
   { id: 'cx', label: '👥 Customers' },
 ]
 
+function PaginatedCard({ title, rows, columns, pageSize = 10 }) {
+  const [page, setPage] = useState(0)
+  const totalPages = Math.ceil(rows.length / pageSize)
+  const visible = rows.slice(page * pageSize, (page + 1) * pageSize)
+  return (
+    <Card title={title} style={{ display: 'flex', flexDirection: 'column' }}>
+      <DataTable columns={columns} rows={visible} />
+      {totalPages > 1 && (
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 10, paddingTop: 8, borderTop: `1px solid ${C.border}` }}>
+          <span style={{ fontSize: 11, color: C.t3 }}>{page * pageSize + 1}–{Math.min((page + 1) * pageSize, rows.length)} of {rows.length}</span>
+          <div style={{ display: 'flex', gap: 4 }}>
+            <button onClick={() => setPage(p => Math.max(0, p - 1))} disabled={page === 0} style={{ fontSize: 11, padding: '3px 10px', borderRadius: 6, border: `1px solid ${C.border2}`, background: page === 0 ? C.bg : C.card, color: page === 0 ? C.t3 : C.t1, cursor: page === 0 ? 'default' : 'pointer', fontFamily: 'var(--font)' }}>← Prev</button>
+            <button onClick={() => setPage(p => Math.min(totalPages - 1, p + 1))} disabled={page === totalPages - 1} style={{ fontSize: 11, padding: '3px 10px', borderRadius: 6, border: `1px solid ${C.border2}`, background: page === totalPages - 1 ? C.bg : C.card, color: page === totalPages - 1 ? C.t3 : C.t1, cursor: page === totalPages - 1 ? 'default' : 'pointer', fontFamily: 'var(--font)' }}>Next →</button>
+          </div>
+        </div>
+      )}
+    </Card>
+  )
+}
+
 const CHART_METRICS = [
   { id: 'rev', label: 'Revenue', key: ch => ch },
   { id: 'orders', label: 'Orders', key: ch => ch + '_o' },
@@ -455,7 +475,7 @@ function AllTab({ data }) {
   const sortedCh = Object.entries(chMap).sort((a, b) => b[1].rev - a[1].rev)
   const maxChRev = sortedCh[0]?.[1].rev || 1
   const catRows = Object.entries(catMap).map(([k, v]) => ({ name: k, rev: v.rev, excRev: v.excRev, orders: v.orders.size, units: v.units, aov: v.orders.size ? v.rev / v.orders.size : 0 })).sort((a, b) => b.rev - a.rev)
-  const subCatRows = Object.entries(subCatMap).map(([k, v]) => ({ name: k, rev: v.rev, orders: v.orders.size, aov: v.orders.size ? v.rev / v.orders.size : 0 })).sort((a, b) => b.rev - a.rev).slice(0, 25)
+  const subCatRows = Object.entries(subCatMap).map(([k, v]) => ({ name: k, rev: v.rev, orders: v.orders.size, aov: v.orders.size ? v.rev / v.orders.size : 0 })).sort((a, b) => b.rev - a.rev)
   const stateRows = Object.entries(stateMap).map(([k, v]) => ({ state: k, rev: v.rev, orders: v.orders, aov: v.orders ? v.rev / v.orders : 0, cities: v.cities.size })).sort((a, b) => b.rev - a.rev).slice(0, 15)
   const bucketData = Object.entries(buckets).map(([k, v]) => ({ name: k, orders: v, rev: bucketRev[k] }))
   const allCats = catRows.slice(0, 8).map(r => r.name)
@@ -508,13 +528,11 @@ function AllTab({ data }) {
       </div>
       <DailyChannelTable dailyArr={dailyArr} channels={channels} nDays={nDays} />
       <CategoryChannelMatrix heatData={heatData} channels={channels} maxHeat={maxHeat} />
-      <div className="g-2">
-        <Card title="Category Revenue">
+      <div className="g-2" style={{ alignItems: 'stretch' }}>
+        <Card title="Category Revenue" style={{ display: 'flex', flexDirection: 'column' }}>
           <DataTable columns={[{ key: 'name', label: 'Category' }, { key: 'rev', label: 'Revenue', align: 'right', mono: true, render: v => fmt(v) }, { key: 'excRev', label: 'Exc GST', align: 'right', render: v => fmt(v) }, { key: 'orders', label: 'Orders', align: 'right', render: v => fmtN(v) }, { key: 'aov', label: 'AOV', align: 'right', render: v => `₹${Math.round(v).toLocaleString('en-IN')}` }]} rows={catRows} />
         </Card>
-        <Card title="Top Sub-categories">
-          <DataTable columns={[{ key: 'name', label: 'Sub-category' }, { key: 'rev', label: 'Revenue', align: 'right', mono: true, render: v => fmt(v) }, { key: 'orders', label: 'Orders', align: 'right', render: v => fmtN(v) }, { key: 'aov', label: 'AOV', align: 'right', render: v => `₹${Math.round(v).toLocaleString('en-IN')}` }]} rows={subCatRows} />
-        </Card>
+        <PaginatedCard title="Sub-categories" rows={subCatRows} columns={[{ key: 'name', label: 'Sub-category' }, { key: 'rev', label: 'Revenue', align: 'right', mono: true, render: v => fmt(v) }, { key: 'orders', label: 'Orders', align: 'right', render: v => fmtN(v) }, { key: 'aov', label: 'AOV', align: 'right', render: v => `₹${Math.round(v).toLocaleString('en-IN')}` }]} pageSize={10} />
       </div>
       <div className="g-2">
         <Card title="Top States">
