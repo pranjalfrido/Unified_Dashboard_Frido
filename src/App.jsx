@@ -225,6 +225,72 @@ const TABS = [
   { id: 'cx', label: '👥 Customers' },
 ]
 
+const DAILY_METRICS = [
+  { id: 'rev', label: 'Revenue' },
+  { id: 'orders', label: 'Orders' },
+  { id: 'units', label: 'Units' },
+  { id: 'aov', label: 'AOV' },
+  { id: 'asp', label: 'ASP' },
+]
+
+function DailyChannelTable({ dailyArr, channels }) {
+  const [metric, setMetric] = React.useState('rev')
+  const m = DAILY_METRICS.find(x => x.id === metric)
+
+  const getVal = (d, ch) => {
+    if (metric === 'rev') return d[ch] || 0
+    if (metric === 'orders') return d[ch + '_o'] || 0
+    if (metric === 'units') return d[ch + '_u'] || 0
+    if (metric === 'aov') { const o = d[ch + '_o'] || 0; return o ? (d[ch] || 0) / o : 0 }
+    if (metric === 'asp') { const u = d[ch + '_u'] || 0; return u ? (d[ch] || 0) / u : 0 }
+    return 0
+  }
+  const fmtVal = v => {
+    if (metric === 'rev') return fmt(v)
+    if (metric === 'aov' || metric === 'asp') return v > 0 ? `₹${Math.round(v).toLocaleString('en-IN')}` : '—'
+    return fmtN(v)
+  }
+  const getTotalVal = d => {
+    if (metric === 'rev') return channels.reduce((s, ch) => s + (d[ch] || 0), 0)
+    if (metric === 'orders') return channels.reduce((s, ch) => s + (d[ch + '_o'] || 0), 0)
+    if (metric === 'units') return channels.reduce((s, ch) => s + (d[ch + '_u'] || 0), 0)
+    if (metric === 'aov') { const totalO = channels.reduce((s, ch) => s + (d[ch + '_o'] || 0), 0); const totalR = channels.reduce((s, ch) => s + (d[ch] || 0), 0); return totalO ? totalR / totalO : 0 }
+    if (metric === 'asp') { const totalU = channels.reduce((s, ch) => s + (d[ch + '_u'] || 0), 0); const totalR = channels.reduce((s, ch) => s + (d[ch] || 0), 0); return totalU ? totalR / totalU : 0 }
+    return 0
+  }
+
+  return (
+    <Card>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 11 }}>
+        <span style={{ fontSize: 13, fontWeight: 600, color: C.t1 }}>Daily {m.label} by Channel</span>
+        <select value={metric} onChange={e => setMetric(e.target.value)} style={{ fontSize: 11.5, padding: '4px 8px', borderRadius: 7, border: `1px solid ${C.border2}`, background: C.card, color: C.t1, outline: 'none', fontFamily: 'var(--font)', cursor: 'pointer' }}>
+          {DAILY_METRICS.map(x => <option key={x.id} value={x.id}>{x.label}</option>)}
+        </select>
+      </div>
+      <div className="tbl-wrap">
+        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+          <thead>
+            <tr>
+              <th style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.05em', color: C.t3, textAlign: 'left', padding: '3px 5px 7px', borderBottom: `1px solid ${C.border}` }}>Date</th>
+              {channels.map(ch => <th key={ch} style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.05em', color: C.t3, textAlign: 'right', padding: '3px 5px 7px', borderBottom: `1px solid ${C.border}` }}>{ch}</th>)}
+              <th style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.05em', color: C.t3, textAlign: 'right', padding: '3px 5px 7px', borderBottom: `1px solid ${C.border}` }}>Total</th>
+            </tr>
+          </thead>
+          <tbody>
+            {dailyArr.map((d, i) => (
+              <tr key={i} style={{ borderBottom: i < dailyArr.length - 1 ? `1px solid ${C.border}` : 'none' }} onMouseEnter={e => e.currentTarget.style.background = '#FFFBE6'} onMouseLeave={e => e.currentTarget.style.background = ''}>
+                <td style={{ padding: '5.5px 5px', color: C.t2 }}>{d.date}</td>
+                {channels.map(ch => <td key={ch} style={{ padding: '5.5px 5px', textAlign: 'right', color: C.t1, fontFamily: 'var(--mono)', fontSize: 11.5 }}>{fmtVal(getVal(d, ch))}</td>)}
+                <td style={{ padding: '5.5px 5px', textAlign: 'right', fontWeight: 700, color: C.t1, fontFamily: 'var(--mono)', fontSize: 11.5 }}>{fmtVal(getTotalVal(d))}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </Card>
+  )
+}
+
 function AllTab({ data }) {
   const { totalRev, totalExcRev, gstCollected, nOrders, totalQty, blendedAOV, nDays, dailyArr, chMap, catMap, subCatMap, stateMap, buckets, bucketRev, rows, orders, orderStatusRevMap = {}, orderStatusMap = {} } = data
   const channels = Object.keys(C.ch).filter(ch => chMap[ch])
@@ -284,12 +350,7 @@ function AllTab({ data }) {
           {sortedCh.map(([ch, v]) => <HBar key={ch} dot={C.ch[ch] || C.acm} label={ch} width={(v.rev / maxChRev) * 100} value={fmt(v.rev)} pctVal={pct(v.rev, totalRev)} />)}
         </Card>
       </div>
-      <Card title="Daily Orders by Channel">
-        <div className="tbl-wrap">
-          <DataTable columns={[{ key: 'date', label: 'Date' }, ...channels.map(ch => ({ key: ch + '_o', label: ch, align: 'right', render: v => fmtN(v || 0) })), { key: 'total', label: 'Total', align: 'right', render: v => fmtN(v) }]}
-            rows={dailyArr.map(d => ({ ...d, total: channels.reduce((s, ch) => s + (d[ch + '_o'] || 0), 0) }))} />
-        </div>
-      </Card>
+      <DailyChannelTable dailyArr={dailyArr} channels={channels} />
       <Card title="Category × Channel Revenue Matrix" note="₹ shading = intensity">
         <div className="tbl-wrap">
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11, minWidth: 700 }}>
