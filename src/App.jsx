@@ -316,7 +316,7 @@ function CategoryChannelMatrix({ heatData, channels, maxHeat }) {
                     const pctShare = rowTotal > 0 && v > 0 ? `${(v / rowTotal * 100).toFixed(1)}%` : null
                     return (
                       <td key={ch} className={cls} style={{ padding: '5px', textAlign: 'right', fontFamily: 'var(--mono)', fontSize: 11 }}>
-                        {v > 0 ? <>{fmt(v)}<br /><span style={{ fontSize: 9.5, color: 'rgba(0,0,0,.4)', fontWeight: 400 }}>{pctShare}</span></> : '—'}
+                        {v > 0 ? <span style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'flex-end', gap: 4 }}>{fmt(v)}<span style={{ fontSize: 9.5, color: 'rgba(0,0,0,.4)', fontWeight: 400 }}>{pctShare}</span></span> : '—'}
                       </td>
                     )
                   })}
