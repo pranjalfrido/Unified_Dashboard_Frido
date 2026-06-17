@@ -292,7 +292,7 @@ function DailyChannelTable({ dailyArr, channels }) {
 }
 
 function AllTab({ data }) {
-  const { totalRev, totalExcRev, gstCollected, nOrders, totalQty, blendedAOV, nDays, dailyArr, chMap, catMap, subCatMap, stateMap, buckets, bucketRev, rows, orders, orderStatusRevMap = {}, orderStatusMap = {} } = data
+  const { totalRev, totalExcRev, gstCollected, nOrders, totalQty, blendedAOV, nDays, dailyArr, chMap, catMap, subCatMap, stateMap, buckets, bucketRev, rows, orders, orderStatusRevMap = {}, orderStatusMap = {}, catChannelMap = {} } = data
   const channels = Object.keys(C.ch).filter(ch => chMap[ch])
   const sortedCh = Object.entries(chMap).sort((a, b) => b[1].rev - a[1].rev)
   const maxChRev = sortedCh[0]?.[1].rev || 1
@@ -303,7 +303,7 @@ function AllTab({ data }) {
   const allCats = catRows.slice(0, 8).map(r => r.name)
   const heatData = allCats.map(cat => {
     const row = { cat }
-    channels.forEach(ch => { row[ch] = rows.filter(r => r.Category === cat && r.Channel === ch).reduce((s, r) => s + parseFloat(r.SellingPrice_Inc_GST || 0), 0) })
+    channels.forEach(ch => { row[ch] = catChannelMap[cat]?.[ch] || 0 })
     return row
   })
   const maxHeat = Math.max(...heatData.flatMap(r => channels.map(ch => r[ch] || 0)), 1)

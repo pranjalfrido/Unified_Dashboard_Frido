@@ -28,6 +28,7 @@ export default async function handler(req, res) {
     multiItem: `WITH q AS (${base}), ot AS (SELECT OrderId, SUM(ItemQty) AS total_qty FROM q GROUP BY OrderId) SELECT COUNT(CASE WHEN total_qty > 1 THEN 1 END) AS multi_item_orders FROM ot`,
     repeatRate: `WITH in_range AS (SELECT DISTINCT customer_id FROM \`frido-429506.production.fact_shopify_myfrido_mobility_all_orders\` WHERE order_date_ist BETWEEN '${start}' AND '${end}' AND customer_id IS NOT NULL), prior AS (SELECT DISTINCT customer_id FROM \`frido-429506.production.fact_shopify_myfrido_mobility_all_orders\` WHERE order_date_ist < '${start}' AND customer_id IS NOT NULL) SELECT COUNT(*) AS n_custs, COUNTIF(p.customer_id IS NOT NULL) AS repeat_custs FROM in_range ir LEFT JOIN prior p USING (customer_id)`,
     bySubCategory: `WITH q AS (${base}) SELECT SubCategory, COUNT(DISTINCT OrderId) AS orders, SUM(SellingPrice_Inc_GST) AS rev FROM q GROUP BY SubCategory ORDER BY rev DESC LIMIT 50`,
+    byCategoryChannel: `WITH q AS (${base}) SELECT Category, Channel, SUM(SellingPrice_Inc_GST) AS rev FROM q GROUP BY Category, Channel`,
     topOrders: `WITH q AS (${base}), ot AS (SELECT OrderId, CAST(OrderDate AS STRING) AS order_date, Channel, State, City, SUM(SellingPrice_Inc_GST) AS rev, SUM(ItemQty) AS qty, MAX(FulfilmentStatus) AS order_status, MAX(CustomerId) AS customer_id, MAX(voucher_code) AS voucher_code FROM q GROUP BY OrderId, OrderDate, Channel, State, City) SELECT * FROM ot ORDER BY rev DESC LIMIT 20`,
   }
 
@@ -55,6 +56,13 @@ export default async function handler(req, res) {
 
     const subCatMap = {}
     r.bySubCategory.forEach(x => { subCatMap[x.SubCategory || 'Unknown'] = { rev: parseFloat(x.rev) || 0, orders: { size: parseInt(x.orders) || 0 } } })
+
+    const catChannelMap = {}
+    r.byCategoryChannel.forEach(x => {
+      const cat = x.Category || 'Unknown'
+      if (!catChannelMap[cat]) catChannelMap[cat] = {}
+      catChannelMap[cat][x.Channel] = parseFloat(x.rev) || 0
+    })
 
     const stateMap = {}
     r.byState.forEach(x => { if (!x.state) return; stateMap[x.state] = { rev: parseFloat(x.rev) || 0, orders: parseInt(x.orders) || 0, cities: { size: parseInt(x.cities) } } })
@@ -100,7 +108,7 @@ export default async function handler(req, res) {
       gstCollected: totalRev - totalExcRev,
       nCusts, repeatCusts,
       uniqueDates: dateSet,
-      dailyArr, chMap, catMap, subCatMap, stateMap, orderStatusMap, orderStatusRevMap,
+      dailyArr, chMap, catMap, subCatMap, stateMap, catChannelMap, orderStatusMap, orderStatusRevMap,
       buckets, bucketRev, voucherMap, tatOrders: [],
       htCount, htRev: htRevAgg, multiItemOrders,
       orders, rows: [],
