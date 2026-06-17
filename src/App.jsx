@@ -291,17 +291,9 @@ function DailyChannelTable({ dailyArr, channels }) {
   )
 }
 
-function CategoryChannelMatrix({ heatData, channels, maxHeat, totalRev }) {
-  const [showPct, setShowPct] = useState(false)
+function CategoryChannelMatrix({ heatData, channels, maxHeat }) {
   return (
-    <Card>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 11 }}>
-        <span style={{ fontSize: 13, fontWeight: 600, color: C.t1 }}>Category × Channel Revenue Matrix</span>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 4, background: C.bg, borderRadius: 8, padding: 3 }}>
-          <button onClick={() => setShowPct(false)} style={{ fontSize: 11, fontWeight: 600, padding: '3px 10px', borderRadius: 6, border: 'none', cursor: 'pointer', background: !showPct ? C.card : 'transparent', color: !showPct ? C.t1 : C.t3, boxShadow: !showPct ? '0 1px 3px rgba(0,0,0,.1)' : 'none' }}>₹ Rev</button>
-          <button onClick={() => setShowPct(true)} style={{ fontSize: 11, fontWeight: 600, padding: '3px 10px', borderRadius: 6, border: 'none', cursor: 'pointer', background: showPct ? C.card : 'transparent', color: showPct ? C.t1 : C.t3, boxShadow: showPct ? '0 1px 3px rgba(0,0,0,.1)' : 'none' }}>% Share</button>
-        </div>
-      </div>
+    <Card title="Category × Channel Revenue Matrix" note="₹ shading = intensity">
       <div className="tbl-wrap">
         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11, minWidth: 700 }}>
           <thead>
@@ -321,10 +313,14 @@ function CategoryChannelMatrix({ heatData, channels, maxHeat, totalRev }) {
                     const v = row[ch] || 0
                     const intensity = v / maxHeat
                     const cls = intensity === 0 ? 'h0' : intensity < 0.2 ? 'h1' : intensity < 0.5 ? 'h2' : intensity < 0.8 ? 'h3' : 'h4'
-                    const display = showPct ? (rowTotal > 0 && v > 0 ? `${(v / rowTotal * 100).toFixed(1)}%` : '—') : (v > 0 ? fmt(v) : '—')
-                    return <td key={ch} className={cls} style={{ padding: '5px', textAlign: 'right', fontFamily: 'var(--mono)', fontSize: 11 }}>{display}</td>
+                    const pctShare = rowTotal > 0 && v > 0 ? `${(v / rowTotal * 100).toFixed(1)}%` : null
+                    return (
+                      <td key={ch} className={cls} style={{ padding: '5px', textAlign: 'right', fontFamily: 'var(--mono)', fontSize: 11 }}>
+                        {v > 0 ? <>{fmt(v)}<br /><span style={{ fontSize: 9.5, color: 'rgba(0,0,0,.4)', fontWeight: 400 }}>{pctShare}</span></> : '—'}
+                      </td>
+                    )
                   })}
-                  <td style={{ padding: '5px', textAlign: 'right', fontWeight: 700, color: C.t1, fontFamily: 'var(--mono)', fontSize: 11 }}>{showPct ? '100%' : fmt(rowTotal)}</td>
+                  <td style={{ padding: '5px', textAlign: 'right', fontWeight: 700, color: C.t1, fontFamily: 'var(--mono)', fontSize: 11 }}>{fmt(rowTotal)}</td>
                 </tr>
               )
             })}
@@ -399,7 +395,7 @@ function AllTab({ data }) {
         </Card>
       </div>
       <DailyChannelTable dailyArr={dailyArr} channels={channels} />
-      <CategoryChannelMatrix heatData={heatData} channels={channels} maxHeat={maxHeat} totalRev={totalRev} />
+      <CategoryChannelMatrix heatData={heatData} channels={channels} maxHeat={maxHeat} />
       <div className="g-2">
         <Card title="Category Revenue">
           <DataTable columns={[{ key: 'name', label: 'Category' }, { key: 'rev', label: 'Revenue', align: 'right', mono: true, render: v => fmt(v) }, { key: 'excRev', label: 'Exc GST', align: 'right', render: v => fmt(v) }, { key: 'orders', label: 'Orders', align: 'right', render: v => fmtN(v) }, { key: 'aov', label: 'AOV', align: 'right', render: v => `₹${Math.round(v).toLocaleString('en-IN')}` }]} rows={catRows} />
