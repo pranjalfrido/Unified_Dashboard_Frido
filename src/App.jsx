@@ -1059,10 +1059,10 @@ export default function App() {
 
   const API = import.meta.env.VITE_API_URL || ''
 
-  const fetchData = useCallback(async (start, end) => {
+  const fetchData = useCallback(async (start, end, extraFilters = {}) => {
     setLoading(true); setError(null)
     try {
-      const res = await fetch(`${API}/api/bq`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ start, end }) })
+      const res = await fetch(`${API}/api/bq`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ start, end, ...extraFilters }) })
       if (!res.ok) throw new Error(`API error ${res.status}: ${await res.text()}`)
       const json = await res.json()
       setRawRows(json.source === 'postgres-aggregated' ? json : (json.rows || []))
@@ -1075,9 +1075,14 @@ export default function App() {
     if (!filters.start || !filters.end) return
     setRawRows(null)
     clearTimeout(debounceRef.current)
-    debounceRef.current = setTimeout(() => fetchData(filters.start, filters.end), 600)
+    const { start, end, category, state, orderStatus } = filters
+    const extra = {}
+    if (category) extra.category = category
+    if (state) extra.state = state
+    if (orderStatus) extra.orderStatus = orderStatus
+    debounceRef.current = setTimeout(() => fetchData(start, end, extra), 600)
     return () => clearTimeout(debounceRef.current)
-  }, [filters.start, filters.end, fetchData])
+  }, [filters.start, filters.end, filters.category, filters.state, filters.orderStatus, fetchData])
 
   const data = useMemo(() => { if (!rawRows) return null; if (rawRows.source === 'postgres-aggregated') return rawRows; return processData(rawRows) }, [rawRows])
   const alerts = useMemo(() => data ? detectAlerts(data) : [], [data])
@@ -1086,7 +1091,7 @@ export default function App() {
     <div className="app-shell">
       <Sidebar page={page} setPage={setPage} />
       <div className="app-main">
-        <Topnav page={page} alerts={alerts} onRefresh={() => fetchData(filters.start, filters.end)} loading={loading} filters={filters} setFilters={setFilters} rawRows={rawRows} />
+        <Topnav page={page} alerts={alerts} onRefresh={() => { const { start, end, category, state, orderStatus } = filters; const e = {}; if (category) e.category = category; if (state) e.state = state; if (orderStatus) e.orderStatus = orderStatus; fetchData(start, end, e) }} loading={loading} filters={filters} setFilters={setFilters} rawRows={rawRows} />
         {loading && (
           <div style={{ height: 2, background: C.border, flexShrink: 0 }}>
             <div className="progress-bar" style={{ height: '100%', background: C.acc }} />
