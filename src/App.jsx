@@ -568,17 +568,19 @@ function AllTab({ data }) {
   )
 }
 
-function ShopifyTab({ data }) {
+function ShopifyTab({ data, filters, setFilters }) {
   const subChannelMap = data.subChannelMap || {}
   const paymentModeMap = data.paymentModeMap || {}
   const { chMap, orderStatusMap = {}, orderStatusRevMap = {}, nOrders, nCusts, repeatCusts, dailyArr, catMap, subCatMap, stateMap, cityRows = [], voucherMap = {}, orders, financialStatusMap = {}, fulfilmentStatusMap = {}, refundTrend = [] } = data
-  const [sel, setSel] = useState('')
+  const sel = filters.subChannel || ''
 
-  const base = sel ? (subChannelMap[sel] || {}) : (chMap['Shopify'] || {})
-  const rev = base.rev || 0
-  const excRev = base.excRev || (sel ? 0 : (chMap['Shopify']?.excRev || 0))
-  const qty = base.qty || 0
-  const shopifyOrders = sel ? (base.orders || 0) : (chMap['Shopify']?.orders || 0)
+  const totalRev = data.totalRev || 0
+  const totalExcRev = data.totalExcRev || 0
+  const totalQty = data.totalQty || 0
+  const rev = totalRev
+  const excRev = totalExcRev
+  const qty = totalQty
+  const shopifyOrders = data.nOrders || 0
   const gst = rev - excRev
   const nDays = data.nDays || 1
   const dailyAvg = nDays ? rev / nDays : 0
@@ -610,7 +612,7 @@ function ShopifyTab({ data }) {
     <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
         <span style={{ fontSize: 12, fontWeight: 600, color: C.t2 }}>Sub-channel:</span>
-        <select value={sel} onChange={e => setSel(e.target.value)} style={selStyle}>
+        <select value={sel} onChange={e => setFilters(f => ({ ...f, subChannel: e.target.value }))} style={selStyle}>
           <option value="">All</option>
           {subChKeys.map(k => <option key={k} value={k}>{k}</option>)}
         </select>
@@ -732,8 +734,8 @@ function ShopifyTab({ data }) {
   )
 }
 
-function ChannelTab({ data, channel }) {
-  if (channel === 'Shopify') return <ShopifyTab data={data} />
+function ChannelTab({ data, channel, filters, setFilters }) {
+  if (channel === 'Shopify') return <ShopifyTab data={data} filters={filters} setFilters={setFilters} />
   const chOrders = data.orders.filter(o => o.channel === channel)
   const chRows = data.rows.filter(r => r.Channel === channel)
   const rev = chOrders.reduce((s, o) => s + o.rev, 0)
@@ -939,13 +941,13 @@ function SalesPage({ data, filters, setFilters }) {
             <option value="">All States</option>{states.map(s => <option key={s} value={s}>{s}</option>)}
           </select>
           <input type="text" placeholder="Search SKU…" value={filters.sku} onChange={e => setFilters(f => ({ ...f, sku: e.target.value }))} className="fsrch" />
-          <button onClick={() => setFilters(f => ({ ...f, category: '', subCategory: '', state: '', sku: '' }))} className="fclr">✕ Clear</button>
+          <button onClick={() => setFilters(f => ({ ...f, category: '', subCategory: '', state: '', sku: '', subChannel: '' }))} className="fclr">✕ Clear</button>
         </div>
       </div>
       {/* Content */}
       <div className="page-scroll">
         {activeTab === 'all' && <AllTab data={filteredData} />}
-        {activeTab === 'shopify' && <ChannelTab data={filteredData} channel="Shopify" />}
+        {activeTab === 'shopify' && <ChannelTab data={filteredData} channel="Shopify" filters={filters} setFilters={setFilters} />}
         {activeTab === 'amazon' && <ChannelTab data={filteredData} channel="Amazon" />}
         {activeTab === 'flipkart' && <ChannelTab data={filteredData} channel="Flipkart" />}
         {activeTab === 'blinkit' && <ChannelTab data={filteredData} channel="Blinkit" />}
@@ -1214,7 +1216,7 @@ function Skeleton() {
 export default function App() {
   const [page, setPage] = useState('overview')
   const def = getDefaultDates()
-  const [filters, setFilters] = useState({ start: def.start, end: def.end, category: '', subCategory: '', state: '', sku: '' })
+  const [filters, setFilters] = useState({ start: def.start, end: def.end, category: '', subCategory: '', state: '', sku: '', subChannel: '' })
   const [rawRows, setRawRows] = useState(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
@@ -1245,16 +1247,17 @@ export default function App() {
     const dateChanged = filters.start !== prevDateRef.current.start || filters.end !== prevDateRef.current.end
     if (dateChanged) { prevDateRef.current = { start: filters.start, end: filters.end }; setRawRows(null) }
     debounceRef.current = setTimeout(() => {
-      const { start, end, category, subCategory, state, sku } = filtersRef.current
+      const { start, end, category, subCategory, state, sku, subChannel } = filtersRef.current
       const extra = {}
       if (category) extra.category = category
       if (subCategory) extra.subCategory = subCategory
       if (state) extra.state = state
       if (sku) extra.sku = sku
+      if (subChannel) extra.subChannel = subChannel
       fetchData(start, end, extra)
     }, 600)
     return () => clearTimeout(debounceRef.current)
-  }, [filters.start, filters.end, filters.category, filters.subCategory, filters.state, filters.sku, fetchData])
+  }, [filters.start, filters.end, filters.category, filters.subCategory, filters.state, filters.sku, filters.subChannel, fetchData])
 
   const data = useMemo(() => { if (!rawRows) return null; if (rawRows.source === 'postgres-aggregated') return rawRows; return processData(rawRows) }, [rawRows])
   const alerts = useMemo(() => data ? detectAlerts(data) : [], [data])
