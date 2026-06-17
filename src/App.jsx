@@ -1076,30 +1076,20 @@ export default function App() {
   }, [API])
 
   const debounceRef = useRef(null)
-  useEffect(() => {
-    if (!filters.start || !filters.end) return
-    setRawRows(null)
-    clearTimeout(debounceRef.current)
-    const { start, end, category, subCategory, state } = filters
-    const extra = {}
-    if (category) extra.category = category
-    if (subCategory) extra.subCategory = subCategory
-    if (state) extra.state = state
-    debounceRef.current = setTimeout(() => fetchData(start, end, extra), 600)
-    return () => clearTimeout(debounceRef.current)
-  }, [filters.start, filters.end, fetchData])
-
+  const prevDateRef = useRef({ start: null, end: null })
   useEffect(() => {
     if (!filters.start || !filters.end) return
     clearTimeout(debounceRef.current)
     const { start, end, category, subCategory, state } = filters
+    const dateChanged = start !== prevDateRef.current.start || end !== prevDateRef.current.end
+    if (dateChanged) { prevDateRef.current = { start, end }; setRawRows(null) }
     const extra = {}
     if (category) extra.category = category
     if (subCategory) extra.subCategory = subCategory
     if (state) extra.state = state
-    debounceRef.current = setTimeout(() => fetchData(start, end, extra), 600)
+    debounceRef.current = setTimeout(() => fetchData(start, end, extra), 400)
     return () => clearTimeout(debounceRef.current)
-  }, [filters.category, filters.subCategory, filters.state, fetchData])
+  }, [filters.start, filters.end, filters.category, filters.subCategory, filters.state, fetchData])
 
   const data = useMemo(() => { if (!rawRows) return null; if (rawRows.source === 'postgres-aggregated') return rawRows; return processData(rawRows) }, [rawRows])
   const alerts = useMemo(() => data ? detectAlerts(data) : [], [data])
