@@ -7,13 +7,13 @@ export default async function handler(req, res) {
   if (req.method === 'OPTIONS') return res.status(200).end()
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' })
 
-  const { start, end, category, subCategory, state } = req.body
+  const { start, end, category, subCategory, state, sku } = req.body
   if (!start || !end) return res.status(400).json({ error: 'Missing start or end date' })
 
   const bq = getBQ()
 
   // Run all aggregation queries in parallel directly on BigQuery
-  const base = buildQuery(start, end, { category, subCategory, state })
+  const base = buildQuery(start, end, { category, subCategory, state, sku })
 
   const queries = {
     totals: `WITH q AS (${base}) SELECT COUNT(DISTINCT OrderId) AS n_orders, SUM(SellingPrice_Inc_GST) AS total_rev, SUM(SellingPrice_Exc_GST) AS total_exc_rev, SUM(ItemQty) AS total_qty, COUNT(DISTINCT OrderDate) AS n_days, COUNT(DISTINCT CustomerId) AS n_custs FROM q`,

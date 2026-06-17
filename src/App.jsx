@@ -469,8 +469,8 @@ function CategoryChannelMatrix({ heatData, channels, maxHeat }) {
   )
 }
 
-function AllTab({ data, skuSearch = '' }) {
-  const { totalRev, totalExcRev, gstCollected, nOrders, totalQty, blendedAOV, nDays, dailyArr, chMap, catMap, subCatMap, stateMap, cityRows = [], skuRows = [], buckets, bucketRev, rows, orders, orderStatusRevMap = {}, orderStatusMap = {}, catChannelMap = {} } = data
+function AllTab({ data }) {
+  const { totalRev, totalExcRev, gstCollected, nOrders, totalQty, blendedAOV, nDays, dailyArr, chMap, catMap, subCatMap, stateMap, cityRows = [], buckets, bucketRev, rows, orders, orderStatusRevMap = {}, orderStatusMap = {}, catChannelMap = {} } = data
   const channels = Object.keys(C.ch).filter(ch => chMap[ch])
   const sortedCh = Object.entries(chMap).sort((a, b) => b[1].rev - a[1].rev)
   const maxChRev = sortedCh[0]?.[1].rev || 1
@@ -564,25 +564,6 @@ function AllTab({ data, skuSearch = '' }) {
         <PaginatedCard title="Top States" rows={stateRows} columns={[{ key: 'state', label: 'State' }, { key: 'rev', label: 'Revenue', align: 'right', mono: true, render: v => fmt(v) }, { key: 'orders', label: 'Orders', align: 'right', render: v => fmtN(v) }, { key: 'aov', label: 'AOV', align: 'right', render: v => `₹${Math.round(v).toLocaleString('en-IN')}` }, { key: 'cities', label: 'Cities' }]} pageSize={15} />
         <PaginatedCard title="Top Cities" rows={cityRows} columns={[{ key: 'city', label: 'City', render: v => v ? v.charAt(0).toUpperCase() + v.slice(1).toLowerCase() : v }, { key: 'rev', label: 'Revenue', align: 'right', mono: true, render: v => fmt(v) }, { key: 'orders', label: 'Orders', align: 'right', render: v => fmtN(v) }, { key: 'aov', label: 'AOV', align: 'right', render: (_, r) => `₹${r.orders ? Math.round(r.rev / r.orders).toLocaleString('en-IN') : 0}` }]} pageSize={15} />
       </div>
-      {skuSearch && (() => {
-        const filtered = skuRows.filter(r => r.sku.toLowerCase().includes(skuSearch.toLowerCase()))
-        return (
-          <Card title={`SKU Search · "${skuSearch}"`} note={filtered.length ? `${filtered.length} result${filtered.length > 1 ? 's' : ''}` : ''}>
-            {filtered.length === 0
-              ? <div style={{ fontSize: 13, color: C.t3, padding: '18px 0', textAlign: 'center' }}>No product sold for this SKU in the selected date range.</div>
-              : <DataTable columns={[
-                  { key: 'sku', label: 'Channel SKU Code' },
-                  { key: 'category', label: 'Category' },
-                  { key: 'subCategory', label: 'Sub-category' },
-                  { key: 'channel', label: 'Channel' },
-                  { key: 'units', label: 'Units', align: 'right', render: v => fmtN(v) },
-                  { key: 'orders', label: 'Orders', align: 'right', render: v => fmtN(v) },
-                  { key: 'rev', label: 'Revenue', align: 'right', mono: true, render: v => fmt(v) },
-                ]} rows={filtered} maxRows={100} />
-            }
-          </Card>
-        )
-      })()}
     </div>
   )
 }
@@ -798,7 +779,7 @@ function SalesPage({ data, filters, setFilters }) {
       </div>
       {/* Content */}
       <div className="page-scroll">
-        {activeTab === 'all' && <AllTab data={filteredData} skuSearch={filters.sku} />}
+        {activeTab === 'all' && <AllTab data={filteredData} />}
         {activeTab === 'shopify' && <ChannelTab data={filteredData} channel="Shopify" />}
         {activeTab === 'amazon' && <ChannelTab data={filteredData} channel="Amazon" />}
         {activeTab === 'flipkart' && <ChannelTab data={filteredData} channel="Flipkart" />}
@@ -1099,15 +1080,16 @@ export default function App() {
     const dateChanged = filters.start !== prevDateRef.current.start || filters.end !== prevDateRef.current.end
     if (dateChanged) { prevDateRef.current = { start: filters.start, end: filters.end }; setRawRows(null) }
     debounceRef.current = setTimeout(() => {
-      const { start, end, category, subCategory, state } = filtersRef.current
+      const { start, end, category, subCategory, state, sku } = filtersRef.current
       const extra = {}
       if (category) extra.category = category
       if (subCategory) extra.subCategory = subCategory
       if (state) extra.state = state
+      if (sku) extra.sku = sku
       fetchData(start, end, extra)
     }, 600)
     return () => clearTimeout(debounceRef.current)
-  }, [filters.start, filters.end, filters.category, filters.subCategory, filters.state, fetchData])
+  }, [filters.start, filters.end, filters.category, filters.subCategory, filters.state, filters.sku, fetchData])
 
   const data = useMemo(() => { if (!rawRows) return null; if (rawRows.source === 'postgres-aggregated') return rawRows; return processData(rawRows) }, [rawRows])
   const alerts = useMemo(() => data ? detectAlerts(data) : [], [data])

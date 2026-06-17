@@ -20,11 +20,12 @@ export function getBQ() {
 }
 
 export function buildQuery(s, e, filters = {}) {
-  const { category, subCategory, state } = filters
+  const { category, subCategory, state, sku } = filters
   const whereClauses = []
   if (category) whereClauses.push(`COALESCE(im.Category, 'Frido') = '${category.replace(/'/g, "''")}'`)
   if (subCategory) whereClauses.push(`COALESCE(im.SubCategory, 'Frido') = '${subCategory.replace(/'/g, "''")}'`)
   if (state) whereClauses.push(`UPPER(TRIM(u.State)) = '${state.toUpperCase().replace(/'/g, "''")}'`)
+  if (sku) whereClauses.push(`UPPER(TRIM(u.ChannelSKUCode)) LIKE '%${sku.toUpperCase().replace(/'/g, "''").replace(/%/g, '\\%')}%'`)
   const whereClause = whereClauses.length ? `WHERE ${whereClauses.join(' AND ')} ` : ''
   return `WITH
 sku_mapping AS (SELECT DISTINCT TRIM(productid) AS productid, TRIM(masterskucode) AS masterskucode FROM \`frido-429506.sharepoint_to_gcp.Frido_Item_Master__productid_sku_mapping\` WHERE TRIM(masterskucode) NOT IN ('', 'not found')),
