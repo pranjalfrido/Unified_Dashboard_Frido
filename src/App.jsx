@@ -568,7 +568,97 @@ function AllTab({ data }) {
   )
 }
 
+function ShopifyTab({ data }) {
+  const subChannelMap = data.subChannelMap || {}
+  const paymentModeMap = data.paymentModeMap || {}
+  const { chMap, orderStatusMap = {}, orderStatusRevMap = {}, nOrders, nCusts, repeatCusts, dailyArr, catMap, subCatMap, stateMap, cityRows = [], voucherMap = {}, orders } = data
+  const [sel, setSel] = useState('')
+
+  const base = sel ? (subChannelMap[sel] || {}) : (chMap['Shopify'] || {})
+  const rev = base.rev || 0
+  const excRev = base.excRev || (sel ? 0 : (chMap['Shopify']?.excRev || 0))
+  const qty = base.qty || 0
+  const shopifyOrders = sel ? (base.orders || 0) : (chMap['Shopify']?.orders || 0)
+  const gst = rev - excRev
+  const nDays = data.nDays || 1
+  const dailyAvg = nDays ? rev / nDays : 0
+  const aov = shopifyOrders ? rev / shopifyOrders : 0
+  const asp = qty ? rev / qty : 0
+  const deliveredOrders = orderStatusMap['Delivered'] || 0
+  const rtoOrders = orderStatusMap['RTO'] || 0
+  const fulfilmentPct = nOrders ? (deliveredOrders / nOrders * 100) : 0
+  const rtoPct = nOrders ? (rtoOrders / nOrders * 100) : 0
+  const atRiskRev = (orderStatusRevMap['RTO'] || 0) + (orderStatusRevMap['Cancelled'] || 0)
+  const repeatRate = nCusts ? (repeatCusts / nCusts * 100).toFixed(1) : '0'
+
+  const subChKeys = Object.keys(subChannelMap)
+  const maxSubChRev = Math.max(...Object.values(subChannelMap).map(v => v.rev), 1)
+  const maxVoucherOrders = Math.max(...Object.values(voucherMap).map(v => v.orders), 1)
+  const maxPaymentOrders = Math.max(...Object.values(paymentModeMap).map(v => v.orders), 1)
+
+  const catRows = Object.entries(catMap).map(([k, v]) => ({ name: k, rev: v.rev, excRev: v.excRev, orders: v.orders.size, units: v.units, aov: v.orders.size ? v.rev / v.orders.size : 0 })).sort((a, b) => b.rev - a.rev)
+  const subCatRows = Object.entries(subCatMap).map(([k, v]) => ({ name: k, rev: v.rev, orders: v.orders.size, aov: v.orders.size ? v.rev / v.orders.size : 0, category: v.category })).sort((a, b) => b.rev - a.rev)
+  const stateRows = Object.entries(stateMap).map(([k, v]) => ({ state: k, rev: v.rev, orders: v.orders, aov: v.orders ? v.rev / v.orders : 0, cities: v.cities.size })).sort((a, b) => b.rev - a.rev)
+  const shopifyOrderRows = orders.filter(o => o.channel === 'Shopify')
+
+  const selStyle = { fontSize: 11.5, padding: '4px 10px', borderRadius: 7, border: `1px solid ${C.border2}`, background: C.card, color: C.t1, outline: 'none', fontFamily: 'var(--font)', cursor: 'pointer' }
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+        <span style={{ fontSize: 12, fontWeight: 600, color: C.t2 }}>Sub-channel:</span>
+        <select value={sel} onChange={e => setSel(e.target.value)} style={selStyle}>
+          <option value="">All</option>
+          {subChKeys.map(k => <option key={k} value={k}>{k}</option>)}
+        </select>
+      </div>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6,1fr)', gap: 10 }}>
+        <KPICard label="Gross Revenue" value={fmt(rev)} sub={`${nDays} days`} />
+        <KPICard label="Net (Exc GST)" value={fmt(excRev)} />
+        <KPICard label="GST Collected" value={fmt(gst)} sub={rev > 0 ? `${((gst / rev) * 100).toFixed(1)}% of gross` : '—'} />
+        <KPICard label="Orders" value={fmtN(shopifyOrders)} />
+        <KPICard label="Units" value={fmtN(qty)} />
+        <KPICard label="Daily Avg" value={fmt(dailyAvg)} />
+      </div>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6,1fr)', gap: 10 }}>
+        <KPICard label="AOV" value={`₹${Math.round(aov).toLocaleString('en-IN')}`} />
+        <KPICard label="ASP" value={`₹${Math.round(asp).toLocaleString('en-IN')}`} sub="Revenue per unit" />
+        <KPICard label="Fulfilment %" value={`${fulfilmentPct.toFixed(1)}%`} sub={`${fmtN(deliveredOrders)} delivered`} accent={fulfilmentPct < 80 ? '#7A1A1A' : fulfilmentPct >= 90 ? '#286010' : undefined} />
+        <KPICard label="RTO %" value={`${rtoPct.toFixed(1)}%`} sub={`${fmtN(rtoOrders)} RTO orders`} accent={rtoPct > 10 ? '#7A1A1A' : undefined} />
+        <KPICard label="Revenue at Risk" value={fmt(atRiskRev)} sub="RTO + Cancelled" accent={atRiskRev > 0 ? '#7A4000' : undefined} />
+        <KPICard label="Repeat Rate" value={`${repeatRate}%`} sub={`${fmtN(repeatCusts)} of ${fmtN(nCusts)} custs`} />
+      </div>
+      <div className="g-3">
+        <Card title="Sub-channel Breakdown">
+          {subChKeys.map((k, i) => { const dots = ['#FFD600','#0D9E68','#2E74CC','#CC4078','#9B59B6']; return <HBar key={k} dot={dots[i % dots.length]} label={k} width={(subChannelMap[k].rev / maxSubChRev) * 100} value={fmt(subChannelMap[k].rev)} pctVal={rev ? pct(subChannelMap[k].rev, rev) : '—'} /> })}
+        </Card>
+        <Card title="Voucher Breakdown">
+          {Object.entries(voucherMap).sort((a, b) => b[1].orders - a[1].orders).map(([k, v], i) => { const dots = ['#B0ADB8','#0D9E68','#2E74CC','#CC8A00','#CC4078']; return <HBar key={k} dot={dots[i % dots.length]} label={k} width={(v.orders / maxVoucherOrders) * 100} value={fmtN(v.orders)} pctVal={shopifyOrders ? pct(v.orders, shopifyOrders) : '—'} /> })}
+        </Card>
+        <Card title="Payment Mode">
+          {Object.entries(paymentModeMap).sort((a, b) => b[1].orders - a[1].orders).map(([k, v], i) => { const dots = ['#2E74CC','#CC8A00','#B0ADB8']; return <HBar key={k} dot={dots[i % dots.length]} label={k} width={(v.orders / maxPaymentOrders) * 100} value={fmtN(v.orders)} pctVal={shopifyOrders ? pct(v.orders, shopifyOrders) : '—'} /> })}
+        </Card>
+      </div>
+      <Card title="Daily Revenue Trend · Shopify">
+        <AreaTrendChart data={dailyArr} dataKey="Shopify" color={C.ch['Shopify']} />
+      </Card>
+      <div className="g-2" style={{ alignItems: 'stretch' }}>
+        <PaginatedCard title="Category" rows={catRows} columns={[{ key: 'name', label: 'Category' }, { key: 'rev', label: 'Revenue', align: 'right', mono: true, render: v => fmt(v) }, { key: 'orders', label: 'Orders', align: 'right', render: v => fmtN(v) }, { key: 'aov', label: 'AOV', align: 'right', render: v => `₹${Math.round(v).toLocaleString('en-IN')}` }]} pageSize={10} />
+        <PaginatedCard title="Sub-category" rows={subCatRows} columns={[{ key: 'name', label: 'Sub-category' }, { key: 'rev', label: 'Revenue', align: 'right', mono: true, render: v => fmt(v) }, { key: 'orders', label: 'Orders', align: 'right', render: v => fmtN(v) }, { key: 'aov', label: 'AOV', align: 'right', render: v => `₹${Math.round(v).toLocaleString('en-IN')}` }]} pageSize={10} />
+      </div>
+      <div className="g-2" style={{ alignItems: 'stretch' }}>
+        <PaginatedCard title="Top States" rows={stateRows} columns={[{ key: 'state', label: 'State', render: v => v ? v.charAt(0).toUpperCase() + v.slice(1).toLowerCase() : v }, { key: 'rev', label: 'Revenue', align: 'right', mono: true, render: v => fmt(v) }, { key: 'orders', label: 'Orders', align: 'right', render: v => fmtN(v) }, { key: 'aov', label: 'AOV', align: 'right', render: v => `₹${Math.round(v).toLocaleString('en-IN')}` }, { key: 'cities', label: 'Cities' }]} pageSize={15} />
+        <PaginatedCard title="Top Cities" rows={cityRows} columns={[{ key: 'city', label: 'City', render: v => v ? v.charAt(0).toUpperCase() + v.slice(1).toLowerCase() : v }, { key: 'rev', label: 'Revenue', align: 'right', mono: true, render: v => fmt(v) }, { key: 'orders', label: 'Orders', align: 'right', render: v => fmtN(v) }, { key: 'aov', label: 'AOV', align: 'right', render: (_, r) => `₹${r.orders ? Math.round(r.rev / r.orders).toLocaleString('en-IN') : 0}` }]} pageSize={15} />
+      </div>
+      <Card title="Top Shopify Orders">
+        <DataTable columns={[{ key: 'orderId', label: 'Order ID' }, { key: 'date', label: 'Date' }, { key: 'rev', label: 'Revenue', align: 'right', mono: true, render: v => fmt(v) }, { key: 'qty', label: 'Qty', align: 'right', render: v => fmtN(v) }, { key: 'orderStatus', label: 'Status' }, { key: 'state', label: 'State' }, { key: 'city', label: 'City' }, { key: 'voucher', label: 'Voucher' }]} rows={shopifyOrderRows} maxRows={20} />
+      </Card>
+    </div>
+  )
+}
+
 function ChannelTab({ data, channel }) {
+  if (channel === 'Shopify') return <ShopifyTab data={data} />
   const chOrders = data.orders.filter(o => o.channel === channel)
   const chRows = data.rows.filter(r => r.Channel === channel)
   const rev = chOrders.reduce((s, o) => s + o.rev, 0)
