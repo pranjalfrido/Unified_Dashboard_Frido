@@ -272,9 +272,12 @@ function groupDailyArr(dailyArr, channels, groupBy) {
   return Object.values(map)
 }
 
-function DailyChannelTable({ dailyArr, channels }) {
+function DailyChannelTable({ dailyArr, channels, nDays = 7 }) {
+  const autoGroup = nDays <= 14 ? 'daily' : nDays <= 90 ? 'weekly' : 'monthly'
   const [metric, setMetric] = useState('rev')
-  const [groupBy, setGroupBy] = useState('daily')
+  const [groupBy, setGroupBy] = useState(autoGroup)
+  const prevNDays = useRef(nDays)
+  if (prevNDays.current !== nDays) { prevNDays.current = nDays; setGroupBy(autoGroup) }
   const m = DAILY_METRICS.find(x => x.id === metric)
   const grouped = groupDailyArr(dailyArr, channels, groupBy)
 
@@ -442,7 +445,7 @@ function AllTab({ data }) {
           {sortedCh.map(([ch, v]) => <HBar key={ch} dot={C.ch[ch] || C.acm} label={ch} width={(v.rev / maxChRev) * 100} value={fmt(v.rev)} pctVal={pct(v.rev, totalRev)} />)}
         </Card>
       </div>
-      <DailyChannelTable dailyArr={dailyArr} channels={channels} />
+      <DailyChannelTable dailyArr={dailyArr} channels={channels} nDays={nDays} />
       <CategoryChannelMatrix heatData={heatData} channels={channels} maxHeat={maxHeat} />
       <div className="g-2">
         <Card title="Category Revenue">
