@@ -264,8 +264,7 @@ function AllTab({ data }) {
         <KPICard label="Blended AOV" value={`₹${Math.round(blendedAOV).toLocaleString('en-IN')}`} />
         <KPICard label="Daily Avg" value={fmt(totalRev / nDays)} />
       </div>
-      <div className="g-kpi5">
-        <KPICard label="Gross Margin %" value={`${grossMarginPct.toFixed(1)}%`} sub={`GST ${fmt(totalRev - totalExcRev)} of revenue`} accent={grossMarginPct < 15 ? '#7A1A1A' : undefined} />
+      <div className="g-kpi4">
         <KPICard label="Revenue per Unit" value={`₹${Math.round(revPerUnit).toLocaleString('en-IN')}`} sub={`Avg selling price per SKU sold`} />
         <KPICard label="Revenue at Risk" value={fmt(atRiskRev)} sub={`RTO + Cancelled (Shopify)`} accent={atRiskRev > 0 ? '#7A4000' : undefined} />
         <KPICard label="Fulfilment Rate" value={fulfilmentBase > 0 ? `${fulfilmentRate.toFixed(1)}%` : 'N/A'} sub={`${fmtN(deliveredCount)} delivered of ${fmtN(fulfilmentBase)} · Shopify`} accent={fulfilmentRate < 80 && fulfilmentBase > 0 ? '#7A1A1A' : fulfilmentRate >= 90 ? '#286010' : undefined} />
@@ -378,8 +377,7 @@ function ChannelTab({ data, channel }) {
         <KPICard label="Units" value={fmtN(qty)} />
         <KPICard label="Daily Avg" value={fmt(rev / (data.nDays || 1))} />
       </div>
-      <div className="g-kpi5">
-        <KPICard label="Gross Margin %" value={`${grossMarginPct.toFixed(1)}%`} sub="GST as % of revenue" accent={grossMarginPct < 15 ? '#7A1A1A' : undefined} />
+      <div className="g-kpi4">
         <KPICard label="Revenue per Unit" value={`₹${Math.round(revPerUnit).toLocaleString('en-IN')}`} sub="Avg price per SKU" />
         <KPICard label="Revenue at Risk" value={channel === 'Shopify' ? fmt(chRTORev) : 'N/A'} sub="RTO + Cancelled" accent={chRTORev > 0 ? '#7A4000' : undefined} />
         <KPICard label="Fulfilment Rate" value={fulfilBase > 0 ? `${fulfilRate.toFixed(1)}%` : 'N/A'} sub={fulfilBase > 0 ? `${fmtN(deliveredCh)} of ${fmtN(fulfilBase)} · Shopify` : 'No status data'} accent={fulfilRate < 80 && fulfilBase > 0 ? '#7A1A1A' : fulfilRate >= 90 ? '#286010' : undefined} />
