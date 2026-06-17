@@ -7,7 +7,7 @@ export default async function handler(req, res) {
   if (req.method === 'OPTIONS') return res.status(200).end()
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' })
 
-  const { start, end, category, state, orderStatus } = req.body
+  const { start, end, category, subCategory, state } = req.body
   if (!start || !end) return res.status(400).json({ error: 'Missing start or end date' })
 
   const bq = getBQ()
@@ -16,8 +16,8 @@ export default async function handler(req, res) {
   const rawBase = buildQuery(start, end)
   const filterClauses = []
   if (category) filterClauses.push(`Category = '${category.replace(/'/g, "''")}'`)
+  if (subCategory) filterClauses.push(`SubCategory = '${subCategory.replace(/'/g, "''")}'`)
   if (state) filterClauses.push(`UPPER(TRIM(State)) = '${state.toUpperCase().replace(/'/g, "''")}'`)
-  if (orderStatus) filterClauses.push(`Order_Status = '${orderStatus.replace(/'/g, "''")}'`)
   const base = filterClauses.length ? `SELECT * FROM (${rawBase}) WHERE ${filterClauses.join(' AND ')}` : rawBase
 
   const queries = {

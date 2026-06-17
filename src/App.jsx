@@ -751,6 +751,11 @@ function SalesPage({ data, filters, setFilters }) {
 
   const cats = useMemo(() => Object.keys(data?.catMap || {}).filter(Boolean).sort(), [data])
   const states = useMemo(() => Object.keys(data?.stateMap || {}).filter(Boolean).sort(), [data])
+  const subCats = useMemo(() => {
+    const all = Object.entries(data?.subCatMap || {})
+    const filtered = filters.category ? all.filter(([, v]) => v.category === filters.category) : all
+    return filtered.map(([k]) => k).filter(Boolean).sort()
+  }, [data, filters.category])
 
   if (!filteredData) return null
   return (
@@ -767,17 +772,17 @@ function SalesPage({ data, filters, setFilters }) {
       {/* Filter bar */}
       <div className="fbar">
         <div className="fbar-inner">
-          <select className="fsel" value={filters.category} onChange={e => setFilters(f => ({ ...f, category: e.target.value }))}>
+          <select className="fsel" value={filters.category} onChange={e => setFilters(f => ({ ...f, category: e.target.value, subCategory: '' }))}>
             <option value="">All Categories</option>{cats.map(c => <option key={c} value={c}>{c}</option>)}
           </select>
-          <select className="fsel" value={filters.orderStatus} onChange={e => setFilters(f => ({ ...f, orderStatus: e.target.value }))}>
-            <option value="">All Statuses</option><option>Delivered</option><option>Dispatched</option><option>RTO</option><option>Cancelled</option>
+          <select className="fsel" value={filters.subCategory || ''} onChange={e => setFilters(f => ({ ...f, subCategory: e.target.value }))}>
+            <option value="">All Sub-categories</option>{subCats.map(s => <option key={s} value={s}>{s}</option>)}
           </select>
           <select className="fsel" value={filters.state} onChange={e => setFilters(f => ({ ...f, state: e.target.value }))}>
             <option value="">All States</option>{states.map(s => <option key={s} value={s}>{s}</option>)}
           </select>
           <input type="text" placeholder="Search SKU…" value={filters.sku} onChange={e => setFilters(f => ({ ...f, sku: e.target.value }))} className="fsrch" />
-          <button onClick={() => setFilters(f => ({ ...f, category: '', orderStatus: '', state: '', sku: '' }))} className="fclr">✕ Clear</button>
+          <button onClick={() => setFilters(f => ({ ...f, category: '', subCategory: '', state: '', sku: '' }))} className="fclr">✕ Clear</button>
         </div>
       </div>
       {/* Content */}
@@ -1052,7 +1057,7 @@ function Skeleton() {
 export default function App() {
   const [page, setPage] = useState('overview')
   const def = getDefaultDates()
-  const [filters, setFilters] = useState({ start: def.start, end: def.end, category: '', orderStatus: '', state: '', sku: '' })
+  const [filters, setFilters] = useState({ start: def.start, end: def.end, category: '', subCategory: '', state: '', sku: '' })
   const [rawRows, setRawRows] = useState(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
@@ -1075,14 +1080,14 @@ export default function App() {
     if (!filters.start || !filters.end) return
     setRawRows(null)
     clearTimeout(debounceRef.current)
-    const { start, end, category, state, orderStatus } = filters
+    const { start, end, category, subCategory, state } = filters
     const extra = {}
     if (category) extra.category = category
+    if (subCategory) extra.subCategory = subCategory
     if (state) extra.state = state
-    if (orderStatus) extra.orderStatus = orderStatus
     debounceRef.current = setTimeout(() => fetchData(start, end, extra), 600)
     return () => clearTimeout(debounceRef.current)
-  }, [filters.start, filters.end, filters.category, filters.state, filters.orderStatus, fetchData])
+  }, [filters.start, filters.end, filters.category, filters.subCategory, filters.state, fetchData])
 
   const data = useMemo(() => { if (!rawRows) return null; if (rawRows.source === 'postgres-aggregated') return rawRows; return processData(rawRows) }, [rawRows])
   const alerts = useMemo(() => data ? detectAlerts(data) : [], [data])
