@@ -1,4 +1,5 @@
 import { C, fmt, fmtN, pct } from './utils.js'
+import { useEffect, useRef } from 'react'
 import { BarChart, Bar, LineChart, Line, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts'
 
 export { BarChart, Bar, LineChart, Line, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer }
@@ -19,12 +20,54 @@ export function ChartTooltip({ active, payload, label }) {
   )
 }
 
-export function KPICard({ label, icon, value, sub, accent, center }) {
+function Sparkline({ id, data, color }) {
+  const ref = useRef(null)
+  useEffect(() => {
+    const canvas = ref.current
+    if (!canvas || !data?.length) return
+    const ctx = canvas.getContext('2d')
+    canvas.width = 72; canvas.height = 32
+    const min = Math.min(...data), max = Math.max(...data)
+    const range = max - min || 1
+    const w = 72, h = 32, pad = 3
+    const pts = data.map((v, i) => [
+      pad + (i / (data.length - 1)) * (w - pad * 2),
+      h - pad - ((v - min) / range) * (h - pad * 2)
+    ])
+    ctx.beginPath()
+    ctx.moveTo(pts[0][0], pts[0][1])
+    pts.slice(1).forEach(([x, y]) => ctx.lineTo(x, y))
+    ctx.strokeStyle = color; ctx.lineWidth = 1.5; ctx.stroke()
+    ctx.lineTo(pts[pts.length - 1][0], h); ctx.lineTo(pts[0][0], h); ctx.closePath()
+    ctx.fillStyle = color + '22'; ctx.fill()
+  }, [data, color])
+  return <canvas ref={ref} style={{ width: 72, height: 32, flexShrink: 0 }} />
+}
+
+export function KPICard({ label, icon, value, sub, accent, center, sparkline, sparkColor, trend, trendLabel, borderColor, dotColor }) {
+  if (sparkline) {
+    const isUp = trend > 0
+    return (
+      <div className="hero-kpi">
+        <div className="hero-kpi-top">
+          <div className="hero-kpi-body">
+            <div className="kpi-label">{label}</div>
+            <div style={{ fontSize: 22, fontWeight: 500, letterSpacing: '-.02em', lineHeight: 1.1, color: accent || C.t1, marginTop: 2 }}>{value}</div>
+          </div>
+          <Sparkline data={sparkline} color={sparkColor || C.acc} />
+        </div>
+        <div className="hero-kpi-foot">
+          <span style={{ fontSize: 10.5, color: C.t3 }}>vs prior 3 days</span>
+          <span className={`trend ${isUp ? 'up' : 'dn'}`}>{isUp ? '↑' : '↓'} {trendLabel}</span>
+        </div>
+      </div>
+    )
+  }
   return (
-    <div className="kpi-card flex flex-col gap-1" style={center ? { alignItems: 'center', justifyContent: 'center', textAlign: 'center' } : {}}>
-      <span className="text-xs font-bold uppercase tracking-wider flex items-center gap-1" style={{ color: C.t3, justifyContent: center ? 'center' : undefined }}>{icon && <span style={{ fontSize: 13 }}>{icon}</span>}{label}</span>
-      <span style={{ fontSize: center ? 28 : 21, fontWeight: 700, letterSpacing: '-.02em', lineHeight: 1.1, color: accent || C.t1 }}>{value}</span>
-      {sub && <span className="text-xs" style={{ color: C.t3 }}>{sub}</span>}
+    <div className="kpi-card flex flex-col gap-1" style={{ ...(center ? { alignItems: 'center', justifyContent: 'center', textAlign: 'center' } : {}), ...(borderColor ? { borderTopColor: borderColor, borderTopWidth: 2 } : {}) }}>
+      <span className="kpi-label flex items-center gap-1" style={{ justifyContent: center ? 'center' : undefined }}>{icon && <span style={{ fontSize: 13 }}>{icon}</span>}{label}</span>
+      <span style={{ fontSize: center ? 26 : 22, fontWeight: 500, letterSpacing: '-.02em', lineHeight: 1.1, color: accent || C.t1 }}>{value}</span>
+      {sub && <span className="kpi-sub">{dotColor && <span style={{ width: 5, height: 5, borderRadius: '50%', background: dotColor, display: 'inline-block', marginRight: 4, verticalAlign: 'middle', flexShrink: 0 }} />}{sub}</span>}
     </div>
   )
 }
@@ -33,11 +76,11 @@ export function AlertCard({ type, title, body }) {
   const s = { red: 'al-R', amber: 'al-A', green: 'al-G', blue: 'al-B' }[type] || 'al-B'
   const icon = type === 'green' ? '★' : type === 'blue' ? 'ℹ' : '⚠'
   return (
-    <div className={`flex items-start gap-2 p-3 rounded-xl border ${s}`} style={{ marginBottom: 6 }}>
+    <div className={`flex items-start gap-2 ${s}`}>
       <span style={{ fontSize: 14, flexShrink: 0, marginTop: 1 }}>{icon}</span>
       <div>
-        <div className="text-xs font-bold" style={{ display: 'block', marginBottom: 2 }}>{title}</div>
-        <div className="text-xs" style={{ opacity: 0.85, lineHeight: 1.55 }}>{body}</div>
+        <div style={{ fontSize: 12, fontWeight: 500, display: 'block', marginBottom: 2 }}>{title}</div>
+        <div style={{ fontSize: 11.5, opacity: 0.75, lineHeight: 1.55 }}>{body}</div>
       </div>
     </div>
   )
@@ -86,7 +129,7 @@ export function DataTable({ columns, rows, maxRows = 50 }) {
 
 export function Card({ title, note, children, style }) {
   return (
-    <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 13, padding: '16px 18px', height: '100%', boxSizing: 'border-box', ...style }}>
+    <div style={{ background: C.card, border: `0.5px solid ${C.border}`, borderRadius: 13, padding: '16px 18px', height: '100%', boxSizing: 'border-box', ...style }}>
       {(title || note) && (
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 11 }}>
           {title && <span style={{ fontSize: 13, fontWeight: 600, color: C.t1 }}>{title}</span>}
