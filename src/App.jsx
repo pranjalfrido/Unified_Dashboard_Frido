@@ -445,12 +445,11 @@ function CategoryChannelMatrix({ heatData, channels, maxHeat }) {
                   <td style={{ padding: '5px', fontWeight: 600, color: C.t1 }}>{row.cat}</td>
                   {channels.map(ch => {
                     const v = row[ch] || 0
-                    const intensity = v / maxHeat
-                    const cls = intensity === 0 ? 'h0' : intensity < 0.2 ? 'h1' : intensity < 0.5 ? 'h2' : intensity < 0.8 ? 'h3' : 'h4'
-                    const pctShare = rowTotal > 0 && v > 0 ? `${(v / rowTotal * 100).toFixed(1)}%` : null
+                    const intensity = v / rowTotal
+                    const cls = intensity === 0 ? 'h0' : intensity < 0.1 ? 'h1' : intensity < 0.3 ? 'h2' : intensity < 0.6 ? 'h3' : 'h4'
                     return (
                       <td key={ch} className={cls} style={{ padding: '5px', textAlign: 'right', fontFamily: 'var(--mono)', fontSize: 11 }}>
-                        {v > 0 ? <span style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'flex-end', gap: 4 }}>{fmt(v)}<span style={{ fontSize: 9.5, color: 'rgba(0,0,0,.4)', fontWeight: 400 }}>{pctShare}</span></span> : '—'}
+                        {v > 0 ? fmt(v) : '—'}
                       </td>
                     )
                   })}
@@ -565,7 +564,7 @@ function AllTab({ data }) {
           <DataTable columns={[{ key: 'state', label: 'State' }, { key: 'rev', label: 'Revenue', align: 'right', mono: true, render: v => fmt(v) }, { key: 'orders', label: 'Orders', align: 'right', render: v => fmtN(v) }, { key: 'aov', label: 'AOV', align: 'right', render: v => `₹${Math.round(v).toLocaleString('en-IN')}` }, { key: 'cities', label: 'Cities' }]} rows={stateRows} />
         </Card>
         <Card title="Top Cities">
-          <DataTable columns={[{ key: 'city', label: 'City' }, { key: 'state', label: 'State' }, { key: 'rev', label: 'Revenue', align: 'right', mono: true, render: v => fmt(v) }, { key: 'orders', label: 'Orders', align: 'right', render: v => fmtN(v) }, { key: 'aov', label: 'AOV', align: 'right', render: (_, r) => `₹${r.orders ? Math.round(r.rev / r.orders).toLocaleString('en-IN') : 0}` }]} rows={cityRows} />
+          <DataTable columns={[{ key: 'city', label: 'City', render: v => v ? v.charAt(0).toUpperCase() + v.slice(1).toLowerCase() : v }, { key: 'rev', label: 'Revenue', align: 'right', mono: true, render: v => fmt(v) }, { key: 'orders', label: 'Orders', align: 'right', render: v => fmtN(v) }, { key: 'aov', label: 'AOV', align: 'right', render: (_, r) => `₹${r.orders ? Math.round(r.rev / r.orders).toLocaleString('en-IN') : 0}` }]} rows={cityRows} />
         </Card>
       </div>
     </div>
