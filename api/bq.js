@@ -15,9 +15,9 @@ export default async function handler(req, res) {
   // Run all aggregation queries in parallel directly on BigQuery
   const rawBase = buildQuery(start, end)
   const filterClauses = []
-  if (category) filterClauses.push(`Category = '${category.replace(/'/g, "''")}'`)
-  if (subCategory) filterClauses.push(`SubCategory = '${subCategory.replace(/'/g, "''")}'`)
-  if (state) filterClauses.push(`UPPER(TRIM(State)) = '${state.toUpperCase().replace(/'/g, "''")}'`)
+  if (category) filterClauses.push(`\`Category\` = '${category.replace(/'/g, "''")}'`)
+  if (subCategory) filterClauses.push(`\`SubCategory\` = '${subCategory.replace(/'/g, "''")}'`)
+  if (state) filterClauses.push(`UPPER(TRIM(\`State\`)) = '${state.toUpperCase().replace(/'/g, "''")}'`)
   // Strip trailing ORDER BY before wrapping (BQ disallows ORDER BY in subquery CTEs)
   const orderByIdx = rawBase.lastIndexOf('ORDER BY')
   const baseNoOrder = orderByIdx !== -1 ? rawBase.slice(0, orderByIdx).trimEnd() : rawBase
