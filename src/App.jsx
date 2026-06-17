@@ -226,7 +226,7 @@ const TABS = [
 ]
 
 function AllTab({ data }) {
-  const { totalRev, totalExcRev, nOrders, totalQty, blendedAOV, nDays, dailyArr, chMap, catMap, subCatMap, stateMap, buckets, bucketRev, rows, orders } = data
+  const { totalRev, totalExcRev, nOrders, totalQty, blendedAOV, nDays, dailyArr, chMap, catMap, subCatMap, stateMap, buckets, bucketRev, rows, orders, orderStatusRevMap = {} } = data
   const channels = Object.keys(C.ch).filter(ch => chMap[ch])
   const sortedCh = Object.entries(chMap).sort((a, b) => b[1].rev - a[1].rev)
   const maxChRev = sortedCh[0]?.[1].rev || 1
@@ -245,9 +245,7 @@ function AllTab({ data }) {
   const grossMarginPct = totalRev > 0 ? ((totalRev - totalExcRev) / totalRev * 100) : 0
   const revPerUnit = totalQty > 0 ? totalRev / totalQty : 0
   const shopifyOrders = orders.filter(o => o.channel === 'Shopify')
-  const rtoRev = shopifyOrders.filter(o => o.isRTO).reduce((s, o) => s + o.rev, 0)
-  const cancelRev = shopifyOrders.filter(o => o.isCancelled).reduce((s, o) => s + o.rev, 0)
-  const atRiskRev = rtoRev + cancelRev
+  const atRiskRev = (orderStatusRevMap['RTO'] || 0) + (orderStatusRevMap['Cancelled'] || 0)
   const deliveredCount = orders.filter(o => o.orderStatus === 'Delivered').length
   const rtoCount = orders.filter(o => o.orderStatus === 'RTO' || o.isRTO).length
   const cancelCount = orders.filter(o => o.orderStatus === 'Cancelled' || o.isCancelled).length

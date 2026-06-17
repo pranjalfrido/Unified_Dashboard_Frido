@@ -62,7 +62,8 @@ export default async function handler(req, res) {
     r.byChannel.forEach(x => { chMap[x.Channel] = { rev: parseFloat(x.rev) || 0, orders: parseInt(x.orders) || 0, qty: parseInt(x.qty) || 0 } })
 
     const orderStatusMap = {}
-    r.byOrderStatus.forEach(x => { orderStatusMap[x.order_status || 'Unknown'] = parseInt(x.cnt) || 0 })
+    const orderStatusRevMap = {}
+    r.byOrderStatus.forEach(x => { orderStatusMap[x.order_status || 'Unknown'] = parseInt(x.cnt) || 0; orderStatusRevMap[x.order_status || 'Unknown'] = parseFloat(x.rev) || 0 })
 
     const bucketOrder = ['<₹500','₹500-1K','₹1K-2.5K','₹2.5K-5K','₹5K-10K','₹10K-25K','₹25K+']
     const buckets = Object.fromEntries(bucketOrder.map(k => [k, 0]))
@@ -98,7 +99,7 @@ export default async function handler(req, res) {
       gstCollected: totalRev - totalExcRev,
       nCusts, repeatCusts,
       uniqueDates: dateSet,
-      dailyArr, chMap, catMap, subCatMap, stateMap, orderStatusMap,
+      dailyArr, chMap, catMap, subCatMap, stateMap, orderStatusMap, orderStatusRevMap,
       buckets, bucketRev, voucherMap, tatOrders: [],
       htCount, htRev: htRevAgg, multiItemOrders,
       orders, rows: [],
