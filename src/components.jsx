@@ -1,7 +1,9 @@
 import { C, fmt, fmtN, pct } from './utils.js'
 import { BarChart, Bar, LineChart, Line, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts'
 
-function ChartTooltip({ active, payload, label }) {
+export { BarChart, Bar, LineChart, Line, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer }
+
+export function ChartTooltip({ active, payload, label }) {
   if (!active || !payload?.length) return null
   return (
     <div style={{ background: '#fff', border: `1px solid ${C.border}`, borderRadius: 9, padding: '8px 12px', fontSize: 11, boxShadow: '0 4px 16px rgba(0,0,0,.10)' }}>

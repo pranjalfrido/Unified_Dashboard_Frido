@@ -1,6 +1,6 @@
 import { useState, useMemo, useCallback, useEffect, useRef } from 'react'
 import { C, fmt, fmtN, pct, processData, detectAlerts, exportCSV, getDefaultDates } from './utils.js'
-import { KPICard, AlertCard, HBar, DataTable, Card, Badge, RevTrendChart, AreaTrendChart, MultiLineChart } from './components.jsx'
+import { KPICard, AlertCard, HBar, DataTable, Card, Badge, RevTrendChart, AreaTrendChart, MultiLineChart, ChartTooltip, BarChart, Bar, LineChart, Line, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from './components.jsx'
 
 // ── Sidebar ───────────────────────────────────────────────────
 function Sidebar({ page, setPage }) {
@@ -225,6 +225,72 @@ const TABS = [
   { id: 'cx', label: '👥 Customers' },
 ]
 
+const CHART_METRICS = [
+  { id: 'rev', label: 'Revenue', key: ch => ch },
+  { id: 'orders', label: 'Orders', key: ch => ch + '_o' },
+  { id: 'units', label: 'Units', key: ch => ch + '_u' },
+]
+const CHART_TYPES = [
+  { id: 'line', label: 'Line' },
+  { id: 'bar', label: 'Bar' },
+  { id: 'area', label: 'Area' },
+]
+
+function ChannelTrendCard({ dailyArr, channels }) {
+  const [metric, setMetric] = useState('rev')
+  const [chartType, setChartType] = useState('line')
+  const m = CHART_METRICS.find(x => x.id === metric)
+  const dataKey = m.key
+  const fmtTick = v => v >= 1e5 ? `${(v / 1e5).toFixed(0)}L` : v >= 1e3 ? `${(v / 1e3).toFixed(0)}K` : v
+  const selStyle = { fontSize: 11.5, padding: '4px 8px', borderRadius: 7, border: `1px solid ${C.border2}`, background: C.card, color: C.t1, outline: 'none', fontFamily: 'var(--font)', cursor: 'pointer' }
+
+  const chartProps = {
+    data: dailyArr,
+    margin: { top: 0, right: 0, bottom: 0, left: 0 },
+  }
+  const axisProps = {
+    xAxis: <XAxis dataKey="date" tick={{ fontSize: 10, fill: C.t3 }} tickFormatter={d => d?.slice(5)} />,
+    yAxis: <YAxis tick={{ fontSize: 10, fill: C.t3 }} tickFormatter={fmtTick} width={40} />,
+    grid: <CartesianGrid strokeDasharray="3 3" stroke={C.border} vertical={false} />,
+    tooltip: <Tooltip content={<ChartTooltip />} />,
+    legend: <Legend iconSize={8} wrapperStyle={{ fontSize: 10 }} />,
+  }
+
+  return (
+    <Card>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 11 }}>
+        <span style={{ fontSize: 13, fontWeight: 600, color: C.t1 }}>Daily {m.label} by Channel</span>
+        <div style={{ display: 'flex', gap: 6 }}>
+          <select value={chartType} onChange={e => setChartType(e.target.value)} style={selStyle}>
+            {CHART_TYPES.map(x => <option key={x.id} value={x.id}>{x.label}</option>)}
+          </select>
+          <select value={metric} onChange={e => setMetric(e.target.value)} style={selStyle}>
+            {CHART_METRICS.map(x => <option key={x.id} value={x.id}>{x.label}</option>)}
+          </select>
+        </div>
+      </div>
+      <ResponsiveContainer width="100%" height={220}>
+        {chartType === 'bar' ? (
+          <BarChart {...chartProps}>
+            {axisProps.grid}{axisProps.xAxis}{axisProps.yAxis}{axisProps.tooltip}{axisProps.legend}
+            {channels.map(ch => <Bar key={ch} dataKey={dataKey(ch)} name={ch} stackId="a" fill={C.ch[ch] || C.acc} />)}
+          </BarChart>
+        ) : chartType === 'area' ? (
+          <AreaChart {...chartProps}>
+            {axisProps.grid}{axisProps.xAxis}{axisProps.yAxis}{axisProps.tooltip}{axisProps.legend}
+            {channels.map(ch => <Area key={ch} type="monotone" dataKey={dataKey(ch)} name={ch} stroke={C.ch[ch] || C.acc} fill={C.ch[ch] || C.acc} fillOpacity={0.15} strokeWidth={2} dot={false} />)}
+          </AreaChart>
+        ) : (
+          <LineChart {...chartProps}>
+            {axisProps.grid}{axisProps.xAxis}{axisProps.yAxis}{axisProps.tooltip}{axisProps.legend}
+            {channels.map(ch => <Line key={ch} type="monotone" dataKey={dataKey(ch)} name={ch} stroke={C.ch[ch] || C.acc} strokeWidth={2} dot={false} />)}
+          </LineChart>
+        )}
+      </ResponsiveContainer>
+    </Card>
+  )
+}
+
 const DAILY_METRICS = [
   { id: 'rev', label: 'Revenue' },
   { id: 'orders', label: 'Orders' },
@@ -437,9 +503,7 @@ function AllTab({ data }) {
         <KPICard label="Units per Order" value={unitsPerOrder.toFixed(2)} sub={`Avg basket size`} />
       </div>
       <div className="g-21">
-        <Card title="Daily Revenue by Channel">
-          <MultiLineChart dailyArr={dailyArr} channels={channels} />
-        </Card>
+        <ChannelTrendCard dailyArr={dailyArr} channels={channels} />
         <Card title="Channel Share">
           {sortedCh.map(([ch, v]) => <HBar key={ch} dot={C.ch[ch] || C.acm} label={ch} width={(v.rev / maxChRev) * 100} value={fmt(v.rev)} pctVal={pct(v.rev, totalRev)} />)}
         </Card>
