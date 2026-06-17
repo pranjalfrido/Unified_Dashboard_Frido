@@ -257,10 +257,11 @@ function AllTab({ data }) {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-      <div className="g-kpi5">
+      <div style={{display:'grid',gridTemplateColumns:'repeat(6,1fr)',gap:10}}>
         <KPICard label="Gross Revenue" value={fmt(totalRev)} sub={`${nDays} days`} />
         <KPICard label="Net (Exc GST)" value={fmt(totalExcRev)} />
-        <KPICard label="Orders" value={fmtN(nOrders)} sub={`${fmtN(totalQty)} units · Return ${returnPct.toFixed(1)}%`} accent={returnPct > 10 ? '#7A1A1A' : undefined} />
+        <KPICard label="Orders" value={fmtN(nOrders)} sub={`${fmtN(totalQty)} units`} />
+        <KPICard label="Return %" value={`${returnPct.toFixed(1)}%`} sub={`${fmtN(rtoOrders)} RTO orders`} accent={returnPct > 10 ? '#7A1A1A' : undefined} />
         <KPICard label="Blended AOV" value={`₹${Math.round(blendedAOV).toLocaleString('en-IN')}`} />
         <KPICard label="Daily Avg" value={fmt(totalRev / nDays)} />
       </div>
