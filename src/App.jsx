@@ -383,9 +383,9 @@ function DailyChannelTable({ dailyArr, channels, nDays = 7 }) {
           </select>
         </div>
       </div>
-      <div className="tbl-wrap">
+      <div style={{ maxHeight: 260, overflowY: 'auto', overflowX: 'auto' }}>
         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
-          <thead>
+          <thead style={{ position: 'sticky', top: 0, background: C.card, zIndex: 1 }}>
             <tr>
               <th style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.05em', color: C.t3, textAlign: 'left', padding: '3px 5px 7px', borderBottom: `1px solid ${C.border}` }}>Period</th>
               {channels.map(ch => <th key={ch} style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.05em', color: C.t3, textAlign: 'right', padding: '3px 5px 7px', borderBottom: `1px solid ${C.border}` }}>{ch}</th>)}
