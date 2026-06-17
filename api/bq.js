@@ -33,6 +33,9 @@ export default async function handler(req, res) {
     byCategoryChannel: `WITH q AS (${base}) SELECT Category, Channel, SUM(SellingPrice_Inc_GST) AS rev FROM q GROUP BY Category, Channel`,
     byCity: `WITH q AS (${base}) SELECT TRIM(City) AS city, UPPER(TRIM(State)) AS state, COUNT(DISTINCT OrderId) AS orders, SUM(SellingPrice_Inc_GST) AS rev FROM q WHERE City IS NOT NULL AND TRIM(City) != '' GROUP BY TRIM(City), UPPER(TRIM(State)) ORDER BY rev DESC LIMIT 50`,
     bySKU: `WITH q AS (${base}) SELECT ChannelSKUCode AS sku, Category AS category, SubCategory AS subcategory, Channel AS channel, SUM(ItemQty) AS units, COUNT(DISTINCT OrderId) AS orders, SUM(SellingPrice_Inc_GST) AS rev FROM q WHERE ChannelSKUCode IS NOT NULL AND TRIM(ChannelSKUCode) != '' GROUP BY ChannelSKUCode, Category, SubCategory, Channel ORDER BY rev DESC LIMIT 500`,
+    byFinancialStatus: `WITH q AS (${base}) SELECT FinancialStatus AS financial_status, COUNT(DISTINCT OrderId) AS orders, SUM(SellingPrice_Inc_GST) AS rev FROM q WHERE Channel = 'Shopify' AND FinancialStatus IS NOT NULL GROUP BY FinancialStatus ORDER BY orders DESC`,
+    byFulfilmentStatus: `WITH q AS (${base}) SELECT FulfilmentStatus AS fulfil_status, COUNT(DISTINCT OrderId) AS orders FROM q WHERE Channel = 'Shopify' AND FulfilmentStatus IS NOT NULL GROUP BY FulfilmentStatus ORDER BY orders DESC`,
+    byRefundTrend: `WITH q AS (${base}) SELECT CAST(OrderDate AS STRING) AS date, COUNT(DISTINCT OrderId) AS total_orders, COUNTIF(RefundStatus = 'true') AS refund_lines FROM q WHERE Channel = 'Shopify' GROUP BY date ORDER BY date`,
     topOrders: `WITH q AS (${base}), ot AS (SELECT OrderId, CAST(OrderDate AS STRING) AS order_date, Channel, State, City, SUM(SellingPrice_Inc_GST) AS rev, SUM(ItemQty) AS qty, MAX(FulfilmentStatus) AS order_status, MAX(CustomerId) AS customer_id, MAX(voucher_code) AS voucher_code FROM q GROUP BY OrderId, OrderDate, Channel, State, City) SELECT * FROM ot ORDER BY rev DESC LIMIT 20`,
   }
 
@@ -73,6 +76,14 @@ export default async function handler(req, res) {
 
     const cityRows = (r.byCity || []).map(x => ({ city: x.city, state: x.state, orders: parseInt(x.orders) || 0, rev: parseFloat(x.rev) || 0 }))
     const skuRows = (r.bySKU || []).map(x => ({ sku: x.sku, category: x.category || '', subCategory: x.subcategory || '', channel: x.channel || '', units: parseInt(x.units) || 0, orders: parseInt(x.orders) || 0, rev: parseFloat(x.rev) || 0 }))
+
+    const financialStatusMap = {}
+    r.byFinancialStatus.forEach(x => { financialStatusMap[x.financial_status || 'Unknown'] = { orders: parseInt(x.orders) || 0, rev: parseFloat(x.rev) || 0 } })
+
+    const fulfilmentStatusMap = {}
+    r.byFulfilmentStatus.forEach(x => { fulfilmentStatusMap[x.fulfil_status || 'Unknown'] = parseInt(x.orders) || 0 })
+
+    const refundTrend = (r.byRefundTrend || []).map(x => ({ date: x.date, total: parseInt(x.total_orders) || 0, refunds: parseInt(x.refund_lines) || 0, rate: x.total_orders ? (parseInt(x.refund_lines) / parseInt(x.total_orders) * 100) : 0 }))
 
     const chMap = {}
     r.byChannel.forEach(x => { chMap[x.Channel] = { rev: parseFloat(x.rev) || 0, excRev: parseFloat(x.exc_rev) || 0, orders: parseInt(x.orders) || 0, qty: parseInt(x.qty) || 0 } })
@@ -122,6 +133,7 @@ export default async function handler(req, res) {
       dailyArr, chMap, catMap, subCatMap, stateMap, cityRows, catChannelMap, orderStatusMap, orderStatusRevMap,
       buckets, bucketRev, voucherMap, subChannelMap, paymentModeMap, tatOrders: [],
       htCount, htRev: htRevAgg, multiItemOrders,
+      financialStatusMap, fulfilmentStatusMap, refundTrend,
       orders, skuRows, rows: [],
     })
   } catch (err) {
