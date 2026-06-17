@@ -234,7 +234,7 @@ const DAILY_METRICS = [
 ]
 
 function DailyChannelTable({ dailyArr, channels }) {
-  const [metric, setMetric] = React.useState('rev')
+  const [metric, setMetric] = useState('rev')
   const m = DAILY_METRICS.find(x => x.id === metric)
 
   const getVal = (d, ch) => {
