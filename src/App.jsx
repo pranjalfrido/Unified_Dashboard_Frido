@@ -636,8 +636,12 @@ function ShopifyTab({ data }) {
         <Card title="Voucher Breakdown">
           {Object.entries(voucherMap).sort((a, b) => b[1].orders - a[1].orders).map(([k, v], i) => { const dots = ['#B0ADB8','#0D9E68','#2E74CC','#CC8A00','#CC4078']; return <HBar key={k} dot={dots[i % dots.length]} label={k} width={(v.orders / maxVoucherOrders) * 100} value={fmtN(v.orders)} pctVal={pct(v.orders, totalVoucherOrders)} /> })}
         </Card>
-        <Card title="Payment Mode">
-          {Object.entries(paymentModeMap).sort((a, b) => b[1].orders - a[1].orders).map(([k, v], i) => { const dots = ['#2E74CC','#CC8A00','#B0ADB8']; return <HBar key={k} dot={dots[i % dots.length]} label={k} width={(v.orders / maxPaymentOrders) * 100} value={fmtN(v.orders)} pctVal={shopifyOrders ? pct(v.orders, shopifyOrders) : '—'} /> })}
+        <Card title="High-ticket Orders ≥₹10K">
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10, paddingTop: 4 }}>
+            <KPICard label="High-ticket Orders" value={fmtN(data.htCount || 0)} sub={`≥ ₹10,000 per order`} />
+            <KPICard label="High-ticket Revenue" value={fmt(data.htRev || 0)} sub={data.totalRev ? `${((data.htRev / data.totalRev) * 100).toFixed(1)}% of total rev` : '—'} />
+            <KPICard label="Multi-item Orders" value={fmtN(data.multiItemOrders || 0)} sub={shopifyOrders ? `${((data.multiItemOrders / shopifyOrders) * 100).toFixed(1)}% of orders` : '—'} />
+          </div>
         </Card>
       </div>
       <Card title="Daily Revenue Trend · Shopify">
