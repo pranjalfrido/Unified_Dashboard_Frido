@@ -894,7 +894,8 @@ function AmazonTab({ data }) {
   const scAOV = scTotalOrders ? scTotalRev / scTotalOrders : 0
   const scTotalUnits = scFBA.units + scMFN.units
   const scCancelOrders = amzSC.status?.find(s => s.status === 'Cancelled')?.orders || 0
-  const scCancelRate = scTotalOrders ? (scCancelOrders / scTotalOrders * 100) : 0
+  const scStatusTotal = (amzSC.status || []).reduce((s, x) => s + x.orders, 0)
+  const scCancelRate = scStatusTotal ? (scCancelOrders / scStatusTotal * 100) : 0
   const scPending = amzSC.status?.find(s => s.status === 'Pending')?.orders || 0
   // Daily SC - pivot FBA/MFN into single daily array
   const scDailyMap = {}
