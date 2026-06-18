@@ -965,20 +965,21 @@ function AmazonTab({ data }) {
             <KPICard label="FBA Share" value={`${scTotalRev ? (scFBA.rev / scTotalRev * 100).toFixed(1) : 0}%`} sub={`₹${Math.round(scFBA.rev/1e5).toLocaleString('en-IN')}L revenue`} />
             <KPICard label="MFN Share" value={`${scTotalRev ? (scMFN.rev / scTotalRev * 100).toFixed(1) : 0}%`} sub={`₹${Math.round(scMFN.rev/1e5).toLocaleString('en-IN')}L revenue`} />
           </div>
-          {/* Daily revenue chart — SC FBA+MFN stacked */}
-          <Card title="Daily Revenue · India (Seller Central FBA + MFN)">
-            <ResponsiveContainer width="100%" height={200}>
-              <BarChart data={scDailyArr} margin={{ top: 0, right: 0, bottom: 0, left: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke={C.border} vertical={false} />
-                <XAxis dataKey="date" tick={{ fontSize: 10, fill: C.t3 }} tickFormatter={d => d?.slice(5)} />
-                <YAxis tick={{ fontSize: 10, fill: C.t3 }} tickFormatter={v => v >= 1e5 ? `${(v/1e5).toFixed(0)}L` : v} width={40} />
-                <Tooltip content={<ChartTooltip />} />
-                <Legend iconSize={8} wrapperStyle={{ fontSize: 10 }} />
-                <Bar dataKey="FBA" stackId="a" fill="#E8930A" />
-                <Bar dataKey="MFN" stackId="a" fill="#2E74CC" />
-              </BarChart>
-            </ResponsiveContainer>
-          </Card>
+          {/* Daily revenue chart + Order Status Breakdown side by side */}
+          <div style={{ display: 'grid', gridTemplateColumns: '3fr 2fr', gap: 14, alignItems: 'stretch' }}>
+            <Card title="Daily Revenue · India (Seller Central FBA + MFN)">
+              <ResponsiveContainer width="100%" height={200}>
+                <BarChart data={scDailyArr} margin={{ top: 0, right: 0, bottom: 0, left: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke={C.border} vertical={false} />
+                  <XAxis dataKey="date" tick={{ fontSize: 10, fill: C.t3 }} tickFormatter={d => d?.slice(5)} />
+                  <YAxis tick={{ fontSize: 10, fill: C.t3 }} tickFormatter={v => v >= 1e5 ? `${(v/1e5).toFixed(0)}L` : v} width={40} />
+                  <Tooltip content={<ChartTooltip />} />
+                  <Legend iconSize={8} wrapperStyle={{ fontSize: 10 }} />
+                  <Bar dataKey="FBA" stackId="a" fill="#E8930A" />
+                  <Bar dataKey="MFN" stackId="a" fill="#2E74CC" />
+                </BarChart>
+              </ResponsiveContainer>
+            </Card>
           {/* Row: FBA vs MFN + Order Status Pie */}
           <div className="g-2" style={{ alignItems: 'stretch' }}>
             <Card title="FBA vs MFN · Seller Central">
@@ -1046,28 +1047,29 @@ function AmazonTab({ data }) {
               </Card>
             </div>
           </div>
-          {/* Cancellation summary — full width */}
-          <Card title="Order Status Breakdown · Seller Central">
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap' }}>
-              <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
-                {(amzSC.status || []).map(s => {
-                  const clr = { Shipped: '#2E74CC', Pending: '#E8930A', Cancelled: '#E24B4A', Shipping: '#9B59B6' }[s.status] || C.t3
-                  return (
-                    <div key={s.status} style={{ textAlign: 'center', padding: '10px 24px', borderRadius: 10, background: C.bg, border: `1px solid ${C.border}` }}>
-                      <div style={{ fontSize: 20, fontWeight: 700, color: clr, fontFamily: 'var(--mono)' }}>{fmtN(s.orders)}</div>
-                      <div style={{ fontSize: 11, color: C.t2, marginTop: 3, fontWeight: 500 }}>{s.status}</div>
-                      <div style={{ fontSize: 11, color: C.t3 }}>{scStatusTotal ? (s.orders / scStatusTotal * 100).toFixed(1) : 0}%</div>
-                    </div>
-                  )
-                })}
+            {/* Order Status Breakdown */}
+            <Card title="Order Status Breakdown · Seller Central">
+              <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: 10, height: '100%' }}>
+                <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', justifyContent: 'center' }}>
+                  {(amzSC.status || []).map(s => {
+                    const clr = { Shipped: '#2E74CC', Pending: '#E8930A', Cancelled: '#E24B4A', Shipping: '#9B59B6' }[s.status] || C.t3
+                    return (
+                      <div key={s.status} style={{ textAlign: 'center', padding: '10px 18px', borderRadius: 10, background: C.bg, border: `1px solid ${C.border}` }}>
+                        <div style={{ fontSize: 20, fontWeight: 700, color: clr, fontFamily: 'var(--mono)' }}>{fmtN(s.orders)}</div>
+                        <div style={{ fontSize: 11, color: C.t2, marginTop: 3, fontWeight: 500 }}>{s.status}</div>
+                        <div style={{ fontSize: 11, color: C.t3 }}>{scStatusTotal ? (s.orders / scStatusTotal * 100).toFixed(1) : 0}%</div>
+                      </div>
+                    )
+                  })}
+                </div>
+                <div style={{ textAlign: 'center', paddingTop: 4 }}>
+                  <div style={{ fontSize: 11, color: C.t3 }}>Total Orders</div>
+                  <div style={{ fontSize: 22, fontWeight: 700, color: C.t1, fontFamily: 'var(--mono)' }}>{fmtN(scStatusTotal)}</div>
+                  <div style={{ fontSize: 11, color: C.red.tx, marginTop: 4 }}>Cancel Rate: <strong>{scCancelRate.toFixed(1)}%</strong></div>
+                </div>
               </div>
-              <div style={{ textAlign: 'right' }}>
-                <div style={{ fontSize: 11, color: C.t3 }}>Total Orders</div>
-                <div style={{ fontSize: 22, fontWeight: 700, color: C.t1, fontFamily: 'var(--mono)' }}>{fmtN(scStatusTotal)}</div>
-                <div style={{ fontSize: 11, color: C.red.tx, marginTop: 4 }}>Cancel Rate: <strong>{scCancelRate.toFixed(1)}%</strong></div>
-              </div>
-            </div>
-          </Card>
+            </Card>
+          </div>
         </div>
       )}
 
