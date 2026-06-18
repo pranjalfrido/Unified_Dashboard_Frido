@@ -878,7 +878,7 @@ function ShopifyTab({ data, filters, setFilters }) {
 
 function AmazonTab({ data }) {
   const [region, setRegion] = useState('india') // 'india' | 'intl'
-  const [subView, setSubView] = useState('india') // 'india' | 'sc' | 'vc'
+  const [subView, setSubView] = useState('overview') // 'overview' | 'sc' | 'vc'
   const amzSC = data.amzSC || {}
   const amzVC = data.amzVC || {}
   const amzIntl = data.amzIntl || {}
@@ -929,7 +929,7 @@ function AmazonTab({ data }) {
         {/* Pill toggle: India / International */}
         <div style={{ display: 'flex', background: C.bg, borderRadius: 9, padding: 3, border: `1px solid ${C.border}`, gap: 0 }}>
           {[{ id: 'india', label: '🇮🇳 India' }, { id: 'intl', label: '🌍 International' }].map(opt => (
-            <button key={opt.id} onClick={() => setRegion(opt.id)} style={{ fontSize: 12, fontWeight: region === opt.id ? 700 : 500, padding: '5px 16px', borderRadius: 7, border: 'none', background: region === opt.id ? C.acc : 'transparent', color: C.t1, cursor: 'pointer', fontFamily: 'var(--font)', transition: 'all .15s', boxShadow: region === opt.id ? '0 1px 4px rgba(0,0,0,.10)' : 'none' }}>{opt.label}</button>
+            <button key={opt.id} onClick={() => { setRegion(opt.id); setSubView('overview') }} style={{ fontSize: 12, fontWeight: region === opt.id ? 700 : 500, padding: '5px 16px', borderRadius: 7, border: 'none', background: region === opt.id ? C.acc : 'transparent', color: C.t1, cursor: 'pointer', fontFamily: 'var(--font)', transition: 'all .15s', boxShadow: region === opt.id ? '0 1px 4px rgba(0,0,0,.10)' : 'none' }}>{opt.label}</button>
           ))}
         </div>
         {/* Divider */}
@@ -937,7 +937,7 @@ function AmazonTab({ data }) {
         {/* Sub-toggle: India Overview / SC / VC — India only */}
         {region === 'india' && (
           <div style={{ display: 'flex', background: C.bg, borderRadius: 9, padding: 3, border: `1px solid ${C.border}`, gap: 0 }}>
-            {[{ id: 'india', label: 'India Overview' }, { id: 'sc', label: 'Seller Central' }, { id: 'vc', label: 'Vendor Central' }].map(opt => (
+            {[{ id: 'sc', label: 'Seller Central' }, { id: 'vc', label: 'Vendor Central' }].map(opt => (
               <button key={opt.id} onClick={() => setSubView(opt.id)} style={{ fontSize: 12, fontWeight: subView === opt.id ? 700 : 500, padding: '5px 16px', borderRadius: 7, border: 'none', background: subView === opt.id ? C.card : 'transparent', color: subView === opt.id ? C.t1 : C.t2, cursor: 'pointer', fontFamily: 'var(--font)', transition: 'all .15s', boxShadow: subView === opt.id ? '0 1px 4px rgba(0,0,0,.08)' : 'none' }}>{opt.label}</button>
             ))}
           </div>
@@ -945,7 +945,7 @@ function AmazonTab({ data }) {
       </div>
 
       {/* ── INDIA · OVERVIEW (SC + VC combined) ── */}
-      {region === 'india' && subView === 'india' && (
+      {region === 'india' && subView === 'overview' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
           {/* KPI row 1 — combined */}
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6,1fr)', gap: 10 }}>
@@ -1165,7 +1165,7 @@ function AmazonTab({ data }) {
       )}
 
       {/* ── INTERNATIONAL · SELLER CENTRAL ── */}
-      {region === 'intl' && (
+      {region === 'intl' && (subView === 'overview' || subView === 'sc') && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
           {(() => {
             const intlTotalUnits = (amzIntl.countries || []).reduce((s, c) => s + (c.units || 0), 0)
