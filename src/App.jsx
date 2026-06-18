@@ -1010,7 +1010,7 @@ function AmazonTab({ data }) {
                   <span style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.05em', color: C.t3, minWidth: 62, textAlign: 'right' }}>Revenue</span>
                   <span style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.05em', color: C.t3, width: 50, textAlign: 'right' }}>Orders</span>
                 </div>
-                <div style={{ overflowY: 'auto', maxHeight: 520 }}>
+                <div style={{ overflowY: 'auto', maxHeight: 360 }}>
                   {(amzSC.states || []).map((s, i) => (
                     <HBar key={s.state} dot={['#E8930A','#2E74CC','#0D9E68','#CC4078','#9B59B6','#534AB7','#CC8A00','#E24B4A'][i % 8]} label={s.state?.charAt(0) + s.state?.slice(1).toLowerCase()} width={(s.rev / maxStateRev) * 100} value={fmt(s.rev)} pctVal={fmtN(s.orders)} />
                   ))}
@@ -1043,19 +1043,19 @@ function AmazonTab({ data }) {
           <div className="g-2" style={{ alignItems: 'stretch' }}>
             <Card title="FBA vs MFN Breakdown">
               {[{ label: 'FBA (Fulfilled by Amazon)', ...scFBA }, { label: 'MFN (Merchant Fulfilled)', ...scMFN }].map((r, i) => (
-                <div key={r.label} style={{ padding: '10px 0', borderBottom: i === 0 ? `1px solid ${C.border}` : 'none' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
-                    <span style={{ fontSize: 12, fontWeight: 600, color: C.t1 }}>{r.label}</span>
-                    <span style={{ fontSize: 12, fontWeight: 700, color: C.t1, fontFamily: 'var(--mono)' }}>{fmt(r.rev)}</span>
+                <div key={r.label} style={{ padding: '20px 0', borderBottom: i === 0 ? `1px solid ${C.border}` : 'none' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 10 }}>
+                    <span style={{ fontSize: 13, fontWeight: 600, color: C.t1 }}>{r.label}</span>
+                    <span style={{ fontSize: 13, fontWeight: 700, color: C.t1, fontFamily: 'var(--mono)' }}>{fmt(r.rev)}</span>
                   </div>
-                  <div style={{ display: 'flex', gap: 16 }}>
-                    <span style={{ fontSize: 11, color: C.t3 }}>Orders: <strong style={{ color: C.t1 }}>{fmtN(r.orders)}</strong></span>
-                    <span style={{ fontSize: 11, color: C.t3 }}>Units: <strong style={{ color: C.t1 }}>{fmtN(r.units)}</strong></span>
-                    <span style={{ fontSize: 11, color: C.t3 }}>AOV: <strong style={{ color: C.t1 }}>₹{r.orders ? Math.round(r.rev / r.orders).toLocaleString('en-IN') : 0}</strong></span>
-                    <span style={{ fontSize: 11, color: C.t3 }}>Share: <strong style={{ color: C.t1 }}>{scTotalRev ? (r.rev / scTotalRev * 100).toFixed(1) : 0}%</strong></span>
+                  <div style={{ display: 'flex', gap: 20, marginBottom: 10 }}>
+                    <span style={{ fontSize: 12, color: C.t3 }}>Orders: <strong style={{ color: C.t1 }}>{fmtN(r.orders)}</strong></span>
+                    <span style={{ fontSize: 12, color: C.t3 }}>Units: <strong style={{ color: C.t1 }}>{fmtN(r.units)}</strong></span>
+                    <span style={{ fontSize: 12, color: C.t3 }}>AOV: <strong style={{ color: C.t1 }}>₹{r.orders ? Math.round(r.rev / r.orders).toLocaleString('en-IN') : 0}</strong></span>
+                    <span style={{ fontSize: 12, color: C.t3 }}>Share: <strong style={{ color: C.t1 }}>{scTotalRev ? (r.rev / scTotalRev * 100).toFixed(1) : 0}%</strong></span>
                   </div>
-                  <div style={{ marginTop: 7, height: 6, background: C.bg, borderRadius: 3 }}>
-                    <div style={{ height: '100%', borderRadius: 3, background: i === 0 ? '#E8930A' : '#2E74CC', width: `${scTotalRev ? (r.rev / scTotalRev * 100) : 0}%`, transition: 'width .5s' }} />
+                  <div style={{ marginTop: 4, height: 8, background: C.bg, borderRadius: 4 }}>
+                    <div style={{ height: '100%', borderRadius: 4, background: i === 0 ? '#E8930A' : '#2E74CC', width: `${scTotalRev ? (r.rev / scTotalRev * 100) : 0}%`, transition: 'width .5s' }} />
                   </div>
                 </div>
               ))}
