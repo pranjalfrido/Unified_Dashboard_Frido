@@ -1,6 +1,6 @@
 import { useState, useMemo, useCallback, useEffect, useRef } from 'react'
 import { C, fmt, fmtN, pct, processData, detectAlerts, exportCSV, getDefaultDates } from './utils.js'
-import { KPICard, AlertCard, HBar, DataTable, Card, Badge, RevTrendChart, AreaTrendChart, MultiLineChart, ChartTooltip, BarChart, Bar, LineChart, Line, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from './components.jsx'
+import { KPICard, AlertCard, HBar, DataTable, Card, Badge, RevTrendChart, AreaTrendChart, MultiLineChart, ChartTooltip, BarChart, Bar, LineChart, Line, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell } from './components.jsx'
 
 // ── Sidebar ───────────────────────────────────────────────────
 function Sidebar({ page, setPage }) {
@@ -628,6 +628,50 @@ function AllTab({ data }) {
   )
 }
 
+const PIE_COLORS = ['#534AB7','#0D9E68','#2E74CC','#CC8A00','#CC4078','#E24B4A','#9B59B6']
+const BUCKET_ORDER = ['<₹500','₹500-1K','₹1K-2.5K','₹2.5K-5K','₹5K-10K','₹10K-25K','₹25K+']
+
+function OrderValuePieCard({ buckets, bucketRev }) {
+  const [metric, setMetric] = useState('orders')
+  const data = BUCKET_ORDER.filter(k => buckets[k] !== undefined).map((k, i) => ({
+    name: k,
+    value: metric === 'orders' ? (buckets[k] || 0) : (bucketRev[k] || 0),
+    color: PIE_COLORS[i % PIE_COLORS.length]
+  })).filter(d => d.value > 0)
+  const total = data.reduce((s, d) => s + d.value, 0)
+  const selStyle = { fontSize: 11.5, padding: '3px 8px', borderRadius: 7, border: `1px solid ${C.border2}`, background: C.card, color: C.t1, outline: 'none', fontFamily: 'var(--font)', cursor: 'pointer' }
+  return (
+    <Card title="Order Value Distribution" style={{ display: 'flex', flexDirection: 'column' }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', marginBottom: 8, marginTop: -4 }}>
+        <select style={selStyle} value={metric} onChange={e => setMetric(e.target.value)}>
+          <option value="orders">By Orders</option>
+          <option value="revenue">By Revenue</option>
+        </select>
+      </div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+        <ResponsiveContainer width={180} height={180}>
+          <PieChart>
+            <Pie data={data} dataKey="value" cx="50%" cy="50%" innerRadius={50} outerRadius={80} paddingAngle={2}>
+              {data.map((d, i) => <Cell key={d.name} fill={d.color} />)}
+            </Pie>
+            <Tooltip formatter={(v) => metric === 'orders' ? fmtN(v) : fmt(v)} />
+          </PieChart>
+        </ResponsiveContainer>
+        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 5 }}>
+          {data.map(d => (
+            <div key={d.name} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11.5 }}>
+              <span style={{ width: 8, height: 8, borderRadius: '50%', background: d.color, flexShrink: 0 }} />
+              <span style={{ flex: 1, color: C.t2 }}>{d.name}</span>
+              <span style={{ fontFamily: 'var(--mono)', color: C.t1, fontSize: 11 }}>{metric === 'orders' ? fmtN(d.value) : fmt(d.value)}</span>
+              <span style={{ color: C.t3, fontSize: 10, minWidth: 34, textAlign: 'right' }}>{total ? ((d.value / total) * 100).toFixed(1) : 0}%</span>
+            </div>
+          ))}
+        </div>
+      </div>
+    </Card>
+  )
+}
+
 function ShopifyTab({ data, filters, setFilters }) {
   const subChannelMap = data.subChannelMap || {}
   const paymentModeMap = data.paymentModeMap || {}
@@ -712,17 +756,7 @@ function ShopifyTab({ data, filters, setFilters }) {
       <Card title="Daily Revenue Trend · Shopify">
         <AreaTrendChart data={dailyArr} dataKey="Shopify" color={C.ch['Shopify']} />
       </Card>
-      <Card title="Order Value Distribution">
-        <ResponsiveContainer width="100%" height={200}>
-          <BarChart data={Object.entries(data.buckets || {}).map(([k,v]) => ({ name: k, orders: v, rev: (data.bucketRev||{})[k] || 0 }))} margin={{top:0,right:0,bottom:0,left:0}}>
-            <CartesianGrid strokeDasharray="3 3" stroke={C.border} vertical={false} />
-            <XAxis dataKey="name" tick={{ fontSize: 9, fill: C.t3 }} />
-            <YAxis tick={{ fontSize: 10, fill: C.t3 }} width={35} />
-            <Tooltip content={<ChartTooltip />} />
-            <Bar dataKey="orders" fill={C.ch['Shopify']} radius={[4,4,0,0]} />
-          </BarChart>
-        </ResponsiveContainer>
-      </Card>
+      <OrderValuePieCard buckets={data.buckets || {}} bucketRev={data.bucketRev || {}} />
       </div>
       <div className="g-2">
         <Card title="Financial Status">
@@ -789,9 +823,6 @@ function ShopifyTab({ data, filters, setFilters }) {
         <PaginatedCard title="Top States" rows={stateRows} columns={[{ key: 'state', label: 'State', render: v => v ? v.charAt(0).toUpperCase() + v.slice(1).toLowerCase() : v }, { key: 'rev', label: 'Revenue', align: 'right', mono: true, render: v => fmt(v) }, { key: 'orders', label: 'Orders', align: 'right', render: v => fmtN(v) }, { key: 'aov', label: 'AOV', align: 'right', render: v => `₹${Math.round(v).toLocaleString('en-IN')}` }, { key: 'cities', label: 'Cities' }]} pageSize={15} />
         <PaginatedCard title="Top Cities" rows={cityRows} columns={[{ key: 'city', label: 'City', render: v => v ? v.charAt(0).toUpperCase() + v.slice(1).toLowerCase() : v }, { key: 'rev', label: 'Revenue', align: 'right', mono: true, render: v => fmt(v) }, { key: 'orders', label: 'Orders', align: 'right', render: v => fmtN(v) }, { key: 'aov', label: 'AOV', align: 'right', render: (_, r) => `₹${r.orders ? Math.round(r.rev / r.orders).toLocaleString('en-IN') : 0}` }]} pageSize={15} />
       </div>
-      <Card title="Top Shopify Orders">
-        <DataTable columns={[{ key: 'orderId', label: 'Order ID' }, { key: 'date', label: 'Date' }, { key: 'rev', label: 'Revenue', align: 'right', mono: true, render: v => fmt(v) }, { key: 'qty', label: 'Qty', align: 'right', render: v => fmtN(v) }, { key: 'orderStatus', label: 'Status', render: v => { if (!v) return null; const s = v.toLowerCase(); const cfg = s.includes('fulfil') ? { bg: '#D1FAE5', color: '#065F46' } : s.includes('cancel') ? { bg: '#FEE2E2', color: '#991B1B' } : s.includes('rto') ? { bg: '#FEE2E2', color: '#991B1B' } : s.includes('restock') ? { bg: '#FEF3C7', color: '#92400E' } : s.includes('pending') ? { bg: '#DBEAFE', color: '#1E40AF' } : s.includes('return') ? { bg: '#EDE9FE', color: '#5B21B6' } : { bg: '#F3F4F6', color: '#374151' }; return <span style={{ background: cfg.bg, color: cfg.color, borderRadius: 5, padding: '2px 7px', fontSize: 11, fontWeight: 600 }}>{v}</span> } }, { key: 'state', label: 'State' }, { key: 'city', label: 'City' }, { key: 'skus', label: 'SKUs' }, { key: 'voucher', label: 'Voucher' }]} rows={shopifyOrderRows} maxRows={20} />
-      </Card>
     </div>
   )
 }
