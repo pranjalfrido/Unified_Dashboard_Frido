@@ -1317,11 +1317,12 @@ function FlipkartTab({ data }) {
   const allRev = fbfT.rev + nfbfT.rev
 
   // Daily chart
+  const [chartMetric, setChartMetric] = useState('rev')
   const dailyMap = {}
   ;(fk.daily || []).forEach(x => {
-    if (!dailyMap[x.date]) dailyMap[x.date] = { date: x.date, FBF: 0, NonFBF: 0 }
-    if (x.sub === 'FBF') dailyMap[x.date].FBF = x.rev
-    else dailyMap[x.date].NonFBF = x.rev
+    if (!dailyMap[x.date]) dailyMap[x.date] = { date: x.date, FBF: 0, NonFBF: 0, FBF_orders: 0, NonFBF_orders: 0 }
+    if (x.sub === 'FBF') { dailyMap[x.date].FBF = x.rev; dailyMap[x.date].FBF_orders = x.orders }
+    else { dailyMap[x.date].NonFBF = x.rev; dailyMap[x.date].NonFBF_orders = x.orders }
   })
   const dailyArr = Object.values(dailyMap).sort((a, b) => a.date?.localeCompare(b.date))
   const subDailyArr = filterSub(fk.daily || []).map(x => ({ date: x.date, rev: x.rev, orders: x.orders }))
@@ -1398,17 +1399,18 @@ function FlipkartTab({ data }) {
 
       {/* Row 1: Daily chart + FBF vs Non-FBF breakdown */}
       <div style={{ display: 'grid', gridTemplateColumns: '3fr 2fr', gap: 14, alignItems: 'stretch' }}>
-        <Card title={subView === 'overview' ? 'Daily Revenue · FBF vs Non-FBF' : `Daily Revenue · ${subView === 'fbf' ? 'FBF' : 'Non-FBF'}`}>
+        <Card title={subView === 'overview' ? `Daily ${chartMetric === 'rev' ? 'Revenue' : 'Orders'} · FBF vs Non-FBF` : `Daily ${chartMetric === 'rev' ? 'Revenue' : 'Orders'} · ${subView === 'fbf' ? 'FBF' : 'Non-FBF'}`}
+          action={<div style={{ display: 'flex', gap: 4 }}>{[{ v: 'rev', label: 'Revenue' }, { v: 'orders', label: 'Orders' }].map(opt => <button key={opt.v} onClick={() => setChartMetric(opt.v)} style={{ fontSize: 11, fontWeight: 600, padding: '3px 10px', borderRadius: 5, border: `1.5px solid ${chartMetric === opt.v ? C.t1 : C.border}`, background: chartMetric === opt.v ? C.t1 : 'transparent', color: chartMetric === opt.v ? '#fff' : C.t2, cursor: 'pointer', fontFamily: 'var(--font)' }}>{opt.label}</button>)}</div>}>
           {subView === 'overview' ? (
             <ResponsiveContainer width="100%" height={200}>
               <BarChart data={dailyArr} margin={{ top: 0, right: 0, bottom: 0, left: 0 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke={C.border} vertical={false} />
                 <XAxis dataKey="date" tick={{ fontSize: 10, fill: C.t3 }} tickFormatter={d => d?.slice(5)} />
-                <YAxis tick={{ fontSize: 10, fill: C.t3 }} tickFormatter={v => v >= 1e5 ? `${(v/1e5).toFixed(0)}L` : v} width={40} />
+                <YAxis tick={{ fontSize: 10, fill: C.t3 }} tickFormatter={v => chartMetric === 'rev' ? (v >= 1e5 ? `${(v/1e5).toFixed(0)}L` : v) : fmtN(v)} width={40} />
                 <Tooltip content={<ChartTooltip />} />
                 <Legend iconSize={8} wrapperStyle={{ fontSize: 10 }} />
-                <Bar dataKey="FBF" stackId="a" fill="#E8930A" />
-                <Bar dataKey="NonFBF" stackId="a" fill="#2E74CC" name="Non-FBF" />
+                <Bar dataKey={chartMetric === 'rev' ? 'FBF' : 'FBF_orders'} stackId="a" fill="#E8930A" name="FBF" />
+                <Bar dataKey={chartMetric === 'rev' ? 'NonFBF' : 'NonFBF_orders'} stackId="a" fill="#2E74CC" name="Non-FBF" />
               </BarChart>
             </ResponsiveContainer>
           ) : (
