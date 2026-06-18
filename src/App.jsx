@@ -1293,9 +1293,231 @@ function AmazonTab({ data }) {
   )
 }
 
+function FlipkartTab({ data }) {
+  const [subView, setSubView] = useState('overview') // 'overview' | 'fbf' | 'nonfbf'
+  const subToggleStyle = active => ({ fontSize: 12, fontWeight: 700, padding: '5px 16px', borderRadius: 7, border: `1.5px solid ${active ? C.t1 : C.border}`, background: active ? C.t1 : C.card, color: active ? '#fff' : C.t1, cursor: 'pointer', fontFamily: 'var(--font)', transition: 'all .15s', boxShadow: active ? '0 2px 6px rgba(0,0,0,.15)' : 'none' })
+
+  const allRows = (data.rows || []).filter(r => r.Channel === 'Flipkart')
+  const allOrders = (data.orders || []).filter(o => o.channel === 'Flipkart')
+
+  const fbfRows = allRows.filter(r => r.SubChannel === 'Flipkart FBF')
+  const fbfOrders = allOrders.filter(o => o.subChannel === 'Flipkart FBF')
+  const nfbfRows = allRows.filter(r => r.SubChannel === 'Flipkart NON-FBF')
+  const nfbfOrders = allOrders.filter(o => o.subChannel === 'Flipkart NON-FBF')
+
+  const rows = subView === 'fbf' ? fbfRows : subView === 'nonfbf' ? nfbfRows : allRows
+  const orders = subView === 'fbf' ? fbfOrders : subView === 'nonfbf' ? nfbfOrders : allOrders
+
+  const rev = orders.reduce((s, o) => s + o.rev, 0)
+  const nOrders = orders.length
+  const aov = nOrders ? rev / nOrders : 0
+  const qty = orders.reduce((s, o) => s + o.qty, 0)
+  const asp = qty ? rev / qty : 0
+  const excRev = rows.reduce((s, r) => s + parseFloat(r.SellingPrice_Exc_GST || 0), 0)
+  const nDays = data.nDays || 1
+
+  // FBF vs Non-FBF split for overview
+  const fbfRev = fbfOrders.reduce((s, o) => s + o.rev, 0)
+  const nfbfRev = nfbfOrders.reduce((s, o) => s + o.rev, 0)
+  const fbfOrderCount = fbfOrders.length
+  const nfbfOrderCount = nfbfOrders.length
+
+  // Daily trend — split by FBF/NonFBF
+  const dailyMap = {}
+  allOrders.forEach(o => {
+    if (!dailyMap[o.date]) dailyMap[o.date] = { date: o.date, FBF: 0, NonFBF: 0, FBF_o: 0, NonFBF_o: 0 }
+    if (o.subChannel === 'Flipkart FBF') { dailyMap[o.date].FBF += o.rev; dailyMap[o.date].FBF_o += 1 }
+    else { dailyMap[o.date].NonFBF += o.rev; dailyMap[o.date].NonFBF_o += 1 }
+  })
+  const dailyArr = Object.values(dailyMap).sort((a, b) => a.date?.localeCompare(b.date))
+
+  // Daily for selected sub-view
+  const subDailyMap = {}
+  orders.forEach(o => { if (!subDailyMap[o.date]) subDailyMap[o.date] = { date: o.date, rev: 0, orders: 0 }; subDailyMap[o.date].rev += o.rev; subDailyMap[o.date].orders += 1 })
+  const subDailyArr = Object.values(subDailyMap).sort((a, b) => a.date?.localeCompare(b.date))
+
+  // Status breakdown
+  const statusMap = {}
+  orders.forEach(o => { const s = o.orderStatus || o.fulfilmentStatus || 'Unknown'; statusMap[s] = (statusMap[s] || 0) + 1 })
+  const statusTotal = Object.values(statusMap).reduce((s, v) => s + v, 0)
+
+  // Category breakdown
+  const catMap = {}
+  rows.forEach(r => {
+    const cat = r.Category || 'Unknown'
+    if (!catMap[cat]) catMap[cat] = { rev: 0, orders: new Set(), units: 0 }
+    catMap[cat].rev += parseFloat(r.SellingPrice_Inc_GST || 0)
+    catMap[cat].orders.add(r.OrderId)
+    catMap[cat].units += parseInt(r.ItemQty || 0)
+  })
+  const catRows = Object.entries(catMap).map(([k, v]) => ({ name: k, rev: v.rev, orders: v.orders.size, units: v.units, aov: v.orders.size ? v.rev / v.orders.size : 0 })).sort((a, b) => b.rev - a.rev)
+
+  // SKU breakdown
+  const skuMap = {}
+  rows.forEach(r => {
+    const sku = r.ChannelSKUCode || r.ProductId || 'Unknown'
+    if (!skuMap[sku]) skuMap[sku] = { sku, rev: 0, orders: new Set(), units: 0, subChannel: r.SubChannel }
+    skuMap[sku].rev += parseFloat(r.SellingPrice_Inc_GST || 0)
+    skuMap[sku].orders.add(r.OrderId)
+    skuMap[sku].units += parseInt(r.ItemQty || 0)
+  })
+  const skuRows = Object.values(skuMap).map(v => ({ ...v, orders: v.orders.size, aov: v.orders.size ? v.rev / v.orders.size : 0 })).sort((a, b) => b.rev - a.rev).slice(0, 20)
+
+  // States
+  const stateMap = {}
+  orders.forEach(o => {
+    const st = o.state || 'Unknown'
+    if (!stateMap[st]) stateMap[st] = { state: st, rev: 0, orders: 0 }
+    stateMap[st].rev += o.rev; stateMap[st].orders += 1
+  })
+  const stateRows = Object.values(stateMap).sort((a, b) => b.rev - a.rev)
+  const maxStateRev = Math.max(...stateRows.map(s => s.rev), 1)
+
+  const statusColors = { Delivered: C.green.tx, Dispatched: C.blue.tx, RTO: C.amber.tx, Cancelled: C.red.tx, Shipped: '#2E74CC', Pending: '#E8930A', Return: '#9B59B6' }
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+      {/* Toggle */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+        <div style={{ display: 'flex', background: C.bg, borderRadius: 9, padding: 3, border: `1px solid ${C.border}` }}>
+          <button onClick={() => setSubView('overview')} style={{ fontSize: 12, fontWeight: subView === 'overview' ? 700 : 500, padding: '5px 16px', borderRadius: 7, border: 'none', background: subView === 'overview' ? C.acc : 'transparent', color: C.t1, cursor: 'pointer', fontFamily: 'var(--font)', transition: 'all .15s' }}>📦 Overview</button>
+        </div>
+        <span style={{ color: C.border2, fontSize: 18 }}>│</span>
+        <div style={{ display: 'flex', gap: 8 }}>
+          {[{ id: 'fbf', label: 'FBF' }, { id: 'nonfbf', label: 'Non-FBF' }].map(opt => (
+            <button key={opt.id} onClick={() => setSubView(opt.id)} style={subToggleStyle(subView === opt.id)}>{opt.label}</button>
+          ))}
+        </div>
+      </div>
+
+      {/* KPI Row 1 */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6,1fr)', gap: 10 }}>
+        <KPICard label="Total Revenue" value={fmt(rev)} sub={`${nDays} days`} />
+        <KPICard label="Orders" value={fmtN(nOrders)} sub={subView === 'overview' ? 'FBF + Non-FBF' : subView === 'fbf' ? 'FBF only' : 'Non-FBF only'} />
+        <KPICard label="AOV" value={`₹${Math.round(aov).toLocaleString('en-IN')}`} sub="Avg order value" />
+        <KPICard label="ASP" value={`₹${Math.round(asp).toLocaleString('en-IN')}`} sub="Avg selling price" />
+        <KPICard label="Total Units" value={fmtN(qty)} />
+        <KPICard label="Daily Avg Revenue" value={fmt(rev / nDays)} sub="Per day" />
+      </div>
+
+      {/* KPI Row 2 — FBF vs Non-FBF split (overview only) or sub-view stats */}
+      {subView === 'overview' ? (
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 10 }}>
+          <KPICard label="FBF Revenue" value={fmt(fbfRev)} sub={`${fmtN(fbfOrderCount)} orders`} />
+          <KPICard label="Non-FBF Revenue" value={fmt(nfbfRev)} sub={`${fmtN(nfbfOrderCount)} orders`} />
+          <KPICard label="FBF Share" value={`${rev ? (fbfRev / rev * 100).toFixed(1) : 0}%`} sub="of total revenue" />
+          <KPICard label="Non-FBF Share" value={`${rev ? (nfbfRev / rev * 100).toFixed(1) : 0}%`} sub="of total revenue" />
+        </div>
+      ) : (
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 10 }}>
+          <KPICard label="Units per Order" value={nOrders ? (qty / nOrders).toFixed(2) : '0'} sub="Avg basket size" />
+          <KPICard label="Revenue per Unit" value={`₹${Math.round(asp).toLocaleString('en-IN')}`} sub="ASP" />
+          <KPICard label="GST Collected" value={fmt(rev - excRev)} sub="Inc GST − Exc GST" />
+        </div>
+      )}
+
+      {/* Row 1 charts: Daily Revenue + FBF vs Non-FBF breakdown */}
+      <div style={{ display: 'grid', gridTemplateColumns: '3fr 2fr', gap: 14, alignItems: 'stretch' }}>
+        <Card title={subView === 'overview' ? 'Daily Revenue · FBF vs Non-FBF' : `Daily Revenue · ${subView === 'fbf' ? 'FBF' : 'Non-FBF'}`}>
+          {subView === 'overview' ? (
+            <ResponsiveContainer width="100%" height={200}>
+              <BarChart data={dailyArr} margin={{ top: 0, right: 0, bottom: 0, left: 0 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke={C.border} vertical={false} />
+                <XAxis dataKey="date" tick={{ fontSize: 10, fill: C.t3 }} tickFormatter={d => d?.slice(5)} />
+                <YAxis tick={{ fontSize: 10, fill: C.t3 }} tickFormatter={v => v >= 1e5 ? `${(v/1e5).toFixed(0)}L` : v} width={40} />
+                <Tooltip content={<ChartTooltip />} />
+                <Legend iconSize={8} wrapperStyle={{ fontSize: 10 }} />
+                <Bar dataKey="FBF" stackId="a" fill="#E8930A" />
+                <Bar dataKey="NonFBF" stackId="a" fill="#2E74CC" name="Non-FBF" />
+              </BarChart>
+            </ResponsiveContainer>
+          ) : (
+            <AreaTrendChart data={subDailyArr} color={subView === 'fbf' ? '#E8930A' : '#2E74CC'} />
+          )}
+        </Card>
+        {/* FBF vs Non-FBF card */}
+        <Card title="FBF vs Non-FBF Breakdown">
+          {[{ label: 'FBF (Fulfilled by Flipkart)', rev: fbfRev, orders: fbfOrderCount }, { label: 'Non-FBF (Seller Fulfilled)', rev: nfbfRev, orders: nfbfOrderCount }].map((r, i) => (
+            <div key={r.label} style={{ padding: '10px 0', borderBottom: i === 0 ? `1px solid ${C.border}` : 'none' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
+                <span style={{ fontSize: 12, fontWeight: 600, color: C.t1 }}>{r.label}</span>
+                <span style={{ fontSize: 12, fontWeight: 700, color: C.t1, fontFamily: 'var(--mono)' }}>{fmt(r.rev)}</span>
+              </div>
+              <div style={{ display: 'flex', gap: 16, marginBottom: 7 }}>
+                <span style={{ fontSize: 11, color: C.t3 }}>Orders: <strong style={{ color: C.t1 }}>{fmtN(r.orders)}</strong></span>
+                <span style={{ fontSize: 11, color: C.t3 }}>AOV: <strong style={{ color: C.t1 }}>₹{r.orders ? Math.round(r.rev / r.orders).toLocaleString('en-IN') : 0}</strong></span>
+                <span style={{ fontSize: 11, color: C.t3 }}>Share: <strong style={{ color: C.t1 }}>{rev ? (r.rev / rev * 100).toFixed(1) : 0}%</strong></span>
+              </div>
+              <div style={{ height: 6, background: C.bg, borderRadius: 3 }}>
+                <div style={{ height: '100%', borderRadius: 3, background: i === 0 ? '#E8930A' : '#2E74CC', width: `${rev ? (r.rev / rev * 100) : 0}%`, transition: 'width .5s' }} />
+              </div>
+            </div>
+          ))}
+        </Card>
+      </div>
+
+      {/* Row 2: Order Status + Top States */}
+      <div className="g-2" style={{ alignItems: 'stretch' }}>
+        <Card title="Order Status Breakdown">
+          {Object.entries(statusMap).sort((a, b) => b[1] - a[1]).map(([s, count]) => {
+            const clr = statusColors[s] || C.t3
+            return (
+              <div key={s} style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '5px 0', borderBottom: `1px solid ${C.border}` }}>
+                <span style={{ fontSize: 11.5, color: C.t2, width: 100 }}>{s}</span>
+                <div style={{ flex: 1, height: 5, background: C.bg, borderRadius: 3 }}><div style={{ height: '100%', borderRadius: 3, background: clr, width: `${statusTotal ? (count / statusTotal * 100) : 0}%` }} /></div>
+                <span style={{ fontSize: 11.5, fontWeight: 600, color: C.t1, minWidth: 45, textAlign: 'right' }}>{fmtN(count)}</span>
+                <span style={{ fontSize: 11, color: C.t3, minWidth: 38, textAlign: 'right' }}>{statusTotal ? (count / statusTotal * 100).toFixed(1) : 0}%</span>
+              </div>
+            )
+          })}
+        </Card>
+        <div style={{ alignSelf: 'flex-start' }}>
+          <Card title="Top States">
+            <div style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '0 0 6px', borderBottom: `1px solid ${C.border}`, marginBottom: 2 }}>
+              <span style={{ width: 8, flexShrink: 0 }} />
+              <span style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.05em', color: C.t3, width: 110, flexShrink: 0 }}>State</span>
+              <span style={{ flex: 1 }} />
+              <span style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.05em', color: C.t3, minWidth: 62, textAlign: 'right' }}>Revenue</span>
+              <span style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.05em', color: C.t3, width: 50, textAlign: 'right' }}>Orders</span>
+            </div>
+            <div style={{ overflowY: 'auto', maxHeight: 320 }}>
+              {stateRows.map((s, i) => (
+                <HBar key={s.state} dot={['#E8930A','#2E74CC','#0D9E68','#CC4078','#9B59B6','#534AB7','#CC8A00','#E24B4A'][i % 8]} label={s.state?.charAt(0) + s.state?.slice(1).toLowerCase()} width={(s.rev / maxStateRev) * 100} value={fmt(s.rev)} pctVal={fmtN(s.orders)} />
+              ))}
+            </div>
+          </Card>
+        </div>
+      </div>
+
+      {/* Category + SKU tables */}
+      <div className="g-2">
+        <Card title="Category Breakdown">
+          <DataTable columns={[
+            { key: 'name', label: 'Category' },
+            { key: 'rev', label: 'Revenue', align: 'right', mono: true, render: v => fmt(v) },
+            { key: 'orders', label: 'Orders', align: 'right', render: v => fmtN(v) },
+            { key: 'units', label: 'Units', align: 'right', render: v => fmtN(v) },
+            { key: 'aov', label: 'AOV', align: 'right', render: v => `₹${Math.round(v).toLocaleString('en-IN')}` },
+          ]} rows={catRows} />
+        </Card>
+        <Card title="Top SKUs">
+          <DataTable columns={[
+            { key: 'sku', label: 'SKU' },
+            { key: 'subChannel', label: 'Type', render: v => v === 'Flipkart FBF' ? 'FBF' : 'Non-FBF' },
+            { key: 'rev', label: 'Revenue', align: 'right', mono: true, render: v => fmt(v) },
+            { key: 'orders', label: 'Orders', align: 'right', render: v => fmtN(v) },
+            { key: 'units', label: 'Units', align: 'right', render: v => fmtN(v) },
+          ]} rows={skuRows} />
+        </Card>
+      </div>
+    </div>
+  )
+}
+
 function ChannelTab({ data, channel, filters, setFilters }) {
   if (channel === 'Shopify') return <ShopifyTab data={data} filters={filters} setFilters={setFilters} />
   if (channel === 'Amazon') return <AmazonTab data={data} />
+  if (channel === 'Flipkart') return <FlipkartTab data={data} />
   const chOrders = data.orders.filter(o => o.channel === channel)
   const chRows = data.rows.filter(r => r.Channel === channel)
   const rev = chOrders.reduce((s, o) => s + o.rev, 0)
