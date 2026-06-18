@@ -715,170 +715,74 @@ function OrderValuePieCard({ buckets, bucketRev }) {
 }
 
 function ShopifyTab({ data, filters, setFilters }) {
-  const [region, setRegion] = useState('india') // 'india' | 'international'
+  // region toggle drives subChannel filter via API — all aggregated data is correct
+  const isIntl = filters.subChannel === 'International'
+
   const subChannelMap = data.subChannelMap || {}
   const paymentModeMap = data.paymentModeMap || {}
-  const { chMap, orderStatusMap = {}, orderStatusRevMap = {}, nOrders, nCusts, repeatCusts, dailyArr, catMap, subCatMap, stateMap, cityRows = [], voucherMap = {}, orders, financialStatusMap = {}, fulfilmentStatusMap = {}, refundTrend = [] } = data
+  const { orderStatusMap = {}, orderStatusRevMap = {}, nOrders, nCusts, repeatCusts, dailyArr, catMap, subCatMap, stateMap, cityRows = [], voucherMap = {}, financialStatusMap = {}, fulfilmentStatusMap = {}, refundTrend = [] } = data
 
-  // Split orders by region
-  const allOrders = orders || []
-  const indiaOrders = allOrders.filter(o => o.subChannel !== 'International')
-  const intlOrders = allOrders.filter(o => o.subChannel === 'International')
-  const regionOrders = region === 'india' ? indiaOrders : intlOrders
-
-  const rev = regionOrders.reduce((s, o) => s + o.rev, 0)
-  const excRev = regionOrders.reduce((s, o) => s + o.excRev, 0)
-  const qty = regionOrders.reduce((s, o) => s + o.qty, 0)
-  const shopifyOrders = regionOrders.length
-  const gst = rev - excRev
+  const totalRev = data.totalRev || 0
+  const totalExcRev = data.totalExcRev || 0
+  const totalQty = data.totalQty || 0
+  const gst = totalRev - totalExcRev
   const nDays = data.nDays || 1
-  const dailyAvg = nDays ? rev / nDays : 0
-  const aov = shopifyOrders ? rev / shopifyOrders : 0
-  const asp = qty ? rev / qty : 0
+  const dailyAvg = nDays ? totalRev / nDays : 0
+  const aov = nOrders ? totalRev / nOrders : 0
+  const asp = totalQty ? totalRev / totalQty : 0
+  const deliveredOrders = orderStatusMap['Delivered'] || 0
+  const rtoOrders = orderStatusMap['RTO'] || 0
+  const fulfilmentPct = nOrders ? (deliveredOrders / nOrders * 100) : 0
+  const rtoPct = nOrders ? (rtoOrders / nOrders * 100) : 0
+  const atRiskRev = (orderStatusRevMap['RTO'] || 0) + (orderStatusRevMap['Cancelled'] || 0)
+  const repeatRate = nCusts ? (repeatCusts / nCusts * 100).toFixed(1) : '0'
 
-  const regionOrderStatusMap = {}
-  regionOrders.forEach(o => { if (o.orderStatus) regionOrderStatusMap[o.orderStatus] = (regionOrderStatusMap[o.orderStatus] || 0) + 1 })
-  const deliveredOrders = regionOrderStatusMap['Delivered'] || 0
-  const rtoOrders = regionOrderStatusMap['RTO'] || 0
-  const fulfilmentPct = shopifyOrders ? (deliveredOrders / shopifyOrders * 100) : 0
-  const rtoPct = shopifyOrders ? (rtoOrders / shopifyOrders * 100) : 0
-  const atRiskRev = regionOrders.filter(o => o.orderStatus === 'RTO' || o.orderStatus === 'Cancelled').reduce((s, o) => s + o.rev, 0)
-  const regionNCusts = new Set(regionOrders.map(o => o.customerId).filter(Boolean)).size
-  const regionRepeatCusts = Object.values(regionOrders.reduce((m, o) => { if (o.customerId) m[o.customerId] = (m[o.customerId] || 0) + 1; return m }, {})).filter(n => n >= 2).length
-  const repeatRate = regionNCusts ? (regionRepeatCusts / regionNCusts * 100).toFixed(1) : '0'
+  // Sub-channel breakdown — India excludes International, Intl shows only International
+  const indiaSubChMap = Object.fromEntries(Object.entries(subChannelMap).filter(([k]) => k !== 'International'))
+  const intlSubChMap = subChannelMap['International'] ? { International: subChannelMap['International'] } : {}
+  const activeSubChMap = isIntl ? intlSubChMap : indiaSubChMap
+  const activeSubChKeys = Object.keys(activeSubChMap).sort((a, b) => activeSubChMap[b].rev - activeSubChMap[a].rev)
+  const maxSubChRev = Math.max(...Object.values(activeSubChMap).map(v => v.rev), 1)
 
-  // India: sub-channel breakdown (excl International)
-  const indiaSubChMap = {}
-  indiaOrders.forEach(o => {
-    const k = o.subChannel || 'Other'
-    if (k === 'International') return
-    if (!indiaSubChMap[k]) indiaSubChMap[k] = { rev: 0, orders: 0 }
-    indiaSubChMap[k].rev += o.rev; indiaSubChMap[k].orders += 1
-  })
-  const indiaSubChKeys = Object.keys(indiaSubChMap).sort((a, b) => indiaSubChMap[b].rev - indiaSubChMap[a].rev)
-  const maxIndiaSubChRev = Math.max(...Object.values(indiaSubChMap).map(v => v.rev), 1)
+  // India sub-channel keys for dropdown (excl International)
+  const indiaSubChKeys = Object.keys(indiaSubChMap)
 
-  // International: breakdown by ChannelAccount (UAE/UK/US)
-  const intlAccountMap = {}
-  intlOrders.forEach(o => {
-    const k = o.channelAccount || 'Other'
-    if (!intlAccountMap[k]) intlAccountMap[k] = { rev: 0, orders: 0 }
-    intlAccountMap[k].rev += o.rev; intlAccountMap[k].orders += 1
-  })
-  const intlKeys = Object.keys(intlAccountMap).sort((a, b) => intlAccountMap[b].rev - intlAccountMap[a].rev)
-  const maxIntlRev = Math.max(...Object.values(intlAccountMap).map(v => v.rev), 1)
-  const intlDots = { UAE: '#E8930A', UK: '#2E74CC', US: '#0D9E68' }
-
-  const maxPaymentOrders = Math.max(...Object.values(paymentModeMap).map(v => v.orders), 1)
-
-  // All charts/tables derived from regionOrders
   const [selectedCat, setSelectedCat] = useState(null)
-
-  const regionRows = (data.rows || []).filter(r => region === 'india' ? r.SubChannel !== 'International' : r.SubChannel === 'International')
-
-  const regionCatMap = {}
-  regionRows.forEach(r => {
-    const cat = r.Category || 'Unknown'
-    if (!regionCatMap[cat]) regionCatMap[cat] = { rev: 0, excRev: 0, orders: new Set(), units: 0 }
-    regionCatMap[cat].rev += parseFloat(r.SellingPrice_Inc_GST || 0)
-    regionCatMap[cat].excRev += parseFloat(r.SellingPrice_Exc_GST || 0)
-    regionCatMap[cat].orders.add(r.OrderId)
-    regionCatMap[cat].units += parseInt(r.ItemQty || 0)
-  })
-  const catRows = Object.entries(regionCatMap).map(([k, v]) => ({ name: k, rev: v.rev, excRev: v.excRev, orders: v.orders.size, units: v.units, aov: v.orders.size ? v.rev / v.orders.size : 0 })).sort((a, b) => b.rev - a.rev)
-
-  const regionSubCatMap = {}
-  regionRows.forEach(r => {
-    const sc = r.SubCategory || 'Unknown'
-    if (!regionSubCatMap[sc]) regionSubCatMap[sc] = { rev: 0, orders: new Set(), category: r.Category }
-    regionSubCatMap[sc].rev += parseFloat(r.SellingPrice_Inc_GST || 0)
-    regionSubCatMap[sc].orders.add(r.OrderId)
-  })
-  const allSubCatRows = Object.entries(regionSubCatMap).map(([k, v]) => ({ name: k, rev: v.rev, orders: v.orders.size, aov: v.orders.size ? v.rev / v.orders.size : 0, category: v.category })).sort((a, b) => b.rev - a.rev)
+  const catRows = Object.entries(catMap).map(([k, v]) => ({ name: k, rev: v.rev, excRev: v.excRev, orders: v.orders.size, units: v.units, aov: v.orders.size ? v.rev / v.orders.size : 0 })).sort((a, b) => b.rev - a.rev)
+  const allSubCatRows = Object.entries(subCatMap).map(([k, v]) => ({ name: k, rev: v.rev, orders: v.orders.size, aov: v.orders.size ? v.rev / v.orders.size : 0, category: v.category })).sort((a, b) => b.rev - a.rev)
   const subCatRows = selectedCat ? allSubCatRows.filter(r => r.category === selectedCat) : allSubCatRows
-
-  const regionStateMap = {}
-  regionOrders.forEach(o => {
-    const s = (o.state || 'Unknown').toUpperCase().trim()
-    if (!regionStateMap[s]) regionStateMap[s] = { rev: 0, orders: 0, cities: new Set() }
-    regionStateMap[s].rev += o.rev; regionStateMap[s].orders += 1
-    if (o.city) regionStateMap[s].cities.add(o.city.toUpperCase().trim())
-  })
-  const stateRows = Object.entries(regionStateMap).map(([k, v]) => ({ state: k, rev: v.rev, orders: v.orders, aov: v.orders ? v.rev / v.orders : 0, cities: v.cities.size })).sort((a, b) => b.rev - a.rev)
-
-  const regionCityMap = {}
-  regionOrders.forEach(o => {
-    if (!o.city) return
-    const c = o.city.toLowerCase().trim()
-    if (!regionCityMap[c]) regionCityMap[c] = { rev: 0, orders: 0 }
-    regionCityMap[c].rev += o.rev; regionCityMap[c].orders += 1
-  })
-  const regionCityRows = Object.entries(regionCityMap).map(([k, v]) => ({ city: k, rev: v.rev, orders: v.orders })).sort((a, b) => b.rev - a.rev)
-
-  // Daily trend for region
-  const regionDailyMap = {}
-  regionOrders.forEach(o => {
-    if (!o.date) return
-    if (!regionDailyMap[o.date]) regionDailyMap[o.date] = { date: o.date, Shopify: 0 }
-    regionDailyMap[o.date].Shopify += o.rev
-  })
-  const regionDailyArr = Object.values(regionDailyMap).sort((a, b) => a.date.localeCompare(b.date))
-
-  // Financial / fulfilment status for region
-  const regionFinancialMap = {}
-  regionOrders.forEach(o => {
-    const k = o.financialStatus || 'Unknown'
-    if (!regionFinancialMap[k]) regionFinancialMap[k] = { orders: 0, rev: 0 }
-    regionFinancialMap[k].orders += 1; regionFinancialMap[k].rev += o.rev
-  })
-  const regionFulfilmentMap = {}
-  regionOrders.forEach(o => {
-    const k = o.fulfilmentStatus || 'Unknown'
-    if (!regionFulfilmentMap[k]) regionFulfilmentMap[k] = 0
-    regionFulfilmentMap[k] += 1
-  })
-
-  // Refund trend for region
-  const regionRefundDailyMap = {}
-  regionOrders.forEach(o => {
-    if (!o.date) return
-    if (!regionRefundDailyMap[o.date]) regionRefundDailyMap[o.date] = { total: 0, refunded: 0 }
-    regionRefundDailyMap[o.date].total += 1
-    if (o.isCIR || o.isRTO) regionRefundDailyMap[o.date].refunded += 1
-  })
-  const regionRefundTrend = Object.entries(regionRefundDailyMap).sort((a, b) => a[0].localeCompare(b[0])).map(([date, v]) => ({ date, rate: v.total ? (v.refunded / v.total * 100) : 0 }))
-
-  // Order value buckets for region
-  const bucketKeys = ['<₹500','₹500-1K','₹1K-2.5K','₹2.5K-5K','₹5K-10K','₹10K-25K','₹25K+']
-  const regionBuckets = Object.fromEntries(bucketKeys.map(k => [k, 0]))
-  const regionBucketRev = Object.fromEntries(bucketKeys.map(k => [k, 0]))
-  regionOrders.forEach(o => {
-    const v = o.rev
-    const k = v < 500 ? '<₹500' : v < 1000 ? '₹500-1K' : v < 2500 ? '₹1K-2.5K' : v < 5000 ? '₹2.5K-5K' : v < 10000 ? '₹5K-10K' : v < 25000 ? '₹10K-25K' : '₹25K+'
-    regionBuckets[k]++; regionBucketRev[k] += v
-  })
+  const stateRows = Object.entries(stateMap).map(([k, v]) => ({ state: k, rev: v.rev, orders: v.orders, aov: v.orders ? v.rev / v.orders : 0, cities: v.cities?.size || v.cities || 0 })).sort((a, b) => b.rev - a.rev)
 
   const toggleStyle = active => ({ fontSize: 12, fontWeight: active ? 700 : 500, padding: '5px 18px', borderRadius: 7, border: `1.5px solid ${active ? C.acm : C.border2}`, background: active ? C.acc : C.card, color: C.t1, cursor: 'pointer', fontFamily: 'var(--font)', transition: 'all .12s' })
+  const selStyle = { fontSize: 11.5, padding: '4px 10px', borderRadius: 7, border: `1px solid ${C.border2}`, background: C.card, color: C.t1, outline: 'none', fontFamily: 'var(--font)', cursor: 'pointer' }
+
+  const switchRegion = toIntl => {
+    setFilters(f => ({ ...f, subChannel: toIntl ? 'International' : '', voucher: '' }))
+  }
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
       {/* India / International toggle */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-        <button style={toggleStyle(region === 'india')} onClick={() => setRegion('india')}>🇮🇳 India</button>
-        <button style={toggleStyle(region === 'international')} onClick={() => setRegion('international')}>🌍 International</button>
-        {region === 'india' && (
-          <span style={{ fontSize: 11, color: C.t3, marginLeft: 4 }}>MyFrido · Mobility · Retail Store · Shopify B2B</span>
+        <button style={toggleStyle(!isIntl)} onClick={() => switchRegion(false)}>🇮🇳 India</button>
+        <button style={toggleStyle(isIntl)} onClick={() => switchRegion(true)}>🌍 International</button>
+        {!isIntl && indiaSubChKeys.length > 0 && (
+          <>
+            <span style={{ fontSize: 12, fontWeight: 600, color: C.t2, marginLeft: 8 }}>Sub-channel:</span>
+            <select value={filters.subChannel || ''} onChange={e => setFilters(f => ({ ...f, subChannel: e.target.value }))} style={selStyle}>
+              <option value="">All</option>
+              {indiaSubChKeys.map(k => <option key={k} value={k}>{k}</option>)}
+            </select>
+          </>
         )}
-        {region === 'international' && (
-          <span style={{ fontSize: 11, color: C.t3, marginLeft: 4 }}>UAE · UK · US</span>
-        )}
+        {isIntl && <span style={{ fontSize: 11, color: C.t3, marginLeft: 4 }}>UAE · UK · US</span>}
       </div>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6,1fr)', gap: 10 }}>
-        <KPICard label="Gross Revenue" value={fmt(rev)} sub={`${nDays} days`} />
-        <KPICard label="Net (Exc GST)" value={fmt(excRev)} />
-        <KPICard label="GST Collected" value={fmt(gst)} sub={rev > 0 ? `${((gst / rev) * 100).toFixed(1)}% of gross` : '—'} />
-        <KPICard label="Orders" value={fmtN(shopifyOrders)} />
-        <KPICard label="Units" value={fmtN(qty)} />
+        <KPICard label="Gross Revenue" value={fmt(totalRev)} sub={`${nDays} days`} />
+        <KPICard label="Net (Exc GST)" value={fmt(totalExcRev)} />
+        <KPICard label="GST Collected" value={fmt(gst)} sub={totalRev > 0 ? `${((gst / totalRev) * 100).toFixed(1)}% of gross` : '—'} />
+        <KPICard label="Orders" value={fmtN(nOrders)} />
+        <KPICard label="Units" value={fmtN(totalQty)} />
         <KPICard label="Daily Avg" value={fmt(dailyAvg)} />
       </div>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6,1fr)', gap: 10 }}>
@@ -887,27 +791,24 @@ function ShopifyTab({ data, filters, setFilters }) {
         <KPICard label="Fulfilment %" value={`${fulfilmentPct.toFixed(1)}%`} sub={`${fmtN(deliveredOrders)} delivered`} accent={fulfilmentPct < 80 ? '#7A1A1A' : fulfilmentPct >= 90 ? '#286010' : undefined} />
         <KPICard label="RTO %" value={`${rtoPct.toFixed(1)}%`} sub={`${fmtN(rtoOrders)} RTO orders`} accent={rtoPct > 10 ? '#7A1A1A' : undefined} />
         <KPICard label="Revenue at Risk" value={fmt(atRiskRev)} sub="RTO + Cancelled" accent={atRiskRev > 0 ? '#7A4000' : undefined} />
-        <KPICard label="Repeat Rate" value={`${repeatRate}%`} sub={`${fmtN(regionRepeatCusts)} of ${fmtN(regionNCusts)} custs`} />
+        <KPICard label="Repeat Rate" value={`${repeatRate}%`} sub={`${fmtN(repeatCusts)} of ${fmtN(nCusts)} custs`} />
       </div>
       <div className="g-3">
-        <Card title={region === 'india' ? 'Sub-channel Breakdown' : 'International Breakdown'}>
-          {region === 'india'
-            ? indiaSubChKeys.map((k, i) => { const dots = ['#FFD600','#0D9E68','#2E74CC','#CC4078','#9B59B6']; return <HBar key={k} dot={dots[i % dots.length]} label={k} width={(indiaSubChMap[k].rev / maxIndiaSubChRev) * 100} value={fmt(indiaSubChMap[k].rev)} pctVal={rev ? pct(indiaSubChMap[k].rev, rev) : '—'} /> })
-            : intlKeys.map((k, i) => { const dots = ['#E8930A','#2E74CC','#0D9E68','#9B59B6']; return <HBar key={k} dot={intlDots[k] || dots[i % dots.length]} label={k} width={(intlAccountMap[k].rev / maxIntlRev) * 100} value={fmt(intlAccountMap[k].rev)} pctVal={rev ? pct(intlAccountMap[k].rev, rev) : '—'} /> })
-          }
+        <Card title={isIntl ? 'International Breakdown' : 'Sub-channel Breakdown'}>
+          {activeSubChKeys.map((k, i) => { const dots = ['#FFD600','#0D9E68','#2E74CC','#CC4078','#9B59B6']; return <HBar key={k} dot={dots[i % dots.length]} label={k} width={(activeSubChMap[k].rev / maxSubChRev) * 100} value={fmt(activeSubChMap[k].rev)} pctVal={totalRev ? pct(activeSubChMap[k].rev, totalRev) : '—'} /> })}
         </Card>
         <Card title="Category Revenue">
-          {catRows.slice(0, 8).map((r, i) => { const dots = ['#534AB7','#0D9E68','#2E74CC','#CC8A00','#CC4078','#E24B4A','#9B59B6','#FF6B35']; return <HBar key={r.name} dot={dots[i % dots.length]} label={r.name} width={(r.rev / (catRows[0]?.rev || 1)) * 100} value={fmt(r.rev)} pctVal={rev ? pct(r.rev, rev) : '—'} /> })}
+          {catRows.slice(0, 8).map((r, i) => { const dots = ['#534AB7','#0D9E68','#2E74CC','#CC8A00','#CC4078','#E24B4A','#9B59B6','#FF6B35']; return <HBar key={r.name} dot={dots[i % dots.length]} label={r.name} width={(r.rev / (catRows[0]?.rev || 1)) * 100} value={fmt(r.rev)} pctVal={totalRev ? pct(r.rev, totalRev) : '—'} /> })}
         </Card>
-        <OrderValuePieCard buckets={regionBuckets} bucketRev={regionBucketRev} />
+        <OrderValuePieCard buckets={data.buckets || {}} bucketRev={data.bucketRev || {}} />
       </div>
       <div className="g-2" style={{ alignItems: 'stretch' }}>
-        <Card title={`Daily Revenue Trend · Shopify ${region === 'india' ? 'India' : 'International'}`}>
-          <AreaTrendChart data={regionDailyArr} dataKey="Shopify" color={C.ch['Shopify']} />
+        <Card title={`Daily Revenue Trend · Shopify ${isIntl ? 'International' : 'India'}`}>
+          <AreaTrendChart data={dailyArr} dataKey="Shopify" color={C.ch['Shopify']} />
         </Card>
         <Card title="Daily Refund Rate %">
           <ResponsiveContainer width="100%" height={180}>
-            <LineChart data={regionRefundTrend} margin={{top:0,right:0,bottom:0,left:0}}>
+            <LineChart data={refundTrend} margin={{top:0,right:0,bottom:0,left:0}}>
               <CartesianGrid strokeDasharray="3 3" stroke={C.border} vertical={false} />
               <XAxis dataKey="date" tick={{ fontSize: 10, fill: C.t3 }} tickFormatter={d => d?.slice(5)} />
               <YAxis tick={{ fontSize: 10, fill: C.t3 }} tickFormatter={v => `${v.toFixed(1)}%`} width={40} />
@@ -920,7 +821,7 @@ function ShopifyTab({ data, filters, setFilters }) {
       <div className="g-2">
         <Card title="Financial Status">
           <ResponsiveContainer width="100%" height={200}>
-            <BarChart data={Object.entries(regionFinancialMap).map(([k,v]) => ({ name: k, orders: v.orders, rev: v.rev }))} layout="vertical" margin={{top:0,right:10,bottom:0,left:0}}>
+            <BarChart data={Object.entries(financialStatusMap).map(([k,v]) => ({ name: k, orders: v.orders, rev: v.rev }))} layout="vertical" margin={{top:0,right:10,bottom:0,left:0}}>
               <CartesianGrid strokeDasharray="3 3" stroke={C.border} horizontal={false} />
               <XAxis type="number" tick={{ fontSize: 10, fill: C.t3 }} />
               <YAxis type="category" dataKey="name" tick={{ fontSize: 10, fill: C.t3 }} width={90} />
@@ -931,7 +832,7 @@ function ShopifyTab({ data, filters, setFilters }) {
         </Card>
         <Card title="Fulfilment Status">
           <ResponsiveContainer width="100%" height={200}>
-            <BarChart data={Object.entries(regionFulfilmentMap).map(([k,v]) => ({ name: k, orders: v }))} layout="vertical" margin={{top:0,right:10,bottom:0,left:0}}>
+            <BarChart data={Object.entries(fulfilmentStatusMap).map(([k,v]) => ({ name: k, orders: v }))} layout="vertical" margin={{top:0,right:10,bottom:0,left:0}}>
               <CartesianGrid strokeDasharray="3 3" stroke={C.border} horizontal={false} />
               <XAxis type="number" tick={{ fontSize: 10, fill: C.t3 }} />
               <YAxis type="category" dataKey="name" tick={{ fontSize: 10, fill: C.t3 }} width={90} />
@@ -969,7 +870,7 @@ function ShopifyTab({ data, filters, setFilters }) {
       </div>
       <div className="g-2" style={{ alignItems: 'stretch' }}>
         <PaginatedCard title="Top States" rows={stateRows} columns={[{ key: 'state', label: 'State', render: v => v ? v.charAt(0).toUpperCase() + v.slice(1).toLowerCase() : v }, { key: 'rev', label: 'Revenue', align: 'right', mono: true, render: v => fmt(v) }, { key: 'orders', label: 'Orders', align: 'right', render: v => fmtN(v) }, { key: 'aov', label: 'AOV', align: 'right', render: v => `₹${Math.round(v).toLocaleString('en-IN')}` }, { key: 'cities', label: 'Cities' }]} pageSize={15} />
-        <PaginatedCard title="Top Cities" rows={regionCityRows} columns={[{ key: 'city', label: 'City', render: v => v ? v.charAt(0).toUpperCase() + v.slice(1).toLowerCase() : v }, { key: 'rev', label: 'Revenue', align: 'right', mono: true, render: v => fmt(v) }, { key: 'orders', label: 'Orders', align: 'right', render: v => fmtN(v) }, { key: 'aov', label: 'AOV', align: 'right', render: (_, r) => `₹${r.orders ? Math.round(r.rev / r.orders).toLocaleString('en-IN') : 0}` }]} pageSize={15} />
+        <PaginatedCard title="Top Cities" rows={cityRows} columns={[{ key: 'city', label: 'City', render: v => v ? v.charAt(0).toUpperCase() + v.slice(1).toLowerCase() : v }, { key: 'rev', label: 'Revenue', align: 'right', mono: true, render: v => fmt(v) }, { key: 'orders', label: 'Orders', align: 'right', render: v => fmtN(v) }, { key: 'aov', label: 'AOV', align: 'right', render: (_, r) => `₹${r.orders ? Math.round(r.rev / r.orders).toLocaleString('en-IN') : 0}` }]} pageSize={15} />
       </div>
     </div>
   )
