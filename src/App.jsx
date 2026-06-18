@@ -1008,7 +1008,7 @@ function AmazonTab({ data }) {
                 <span style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.05em', color: C.t3, minWidth: 62, textAlign: 'right' }}>Revenue</span>
                 <span style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.05em', color: C.t3, width: 50, textAlign: 'right' }}>Orders</span>
               </div>
-              <div style={{ overflowY: 'auto', maxHeight: 320 }}>
+              <div style={{ overflowY: 'auto', maxHeight: 520 }}>
                 {(amzSC.states || []).map((s, i) => (
                   <HBar key={s.state} dot={['#E8930A','#2E74CC','#0D9E68','#CC4078','#9B59B6','#534AB7','#CC8A00','#E24B4A'][i % 8]} label={s.state?.charAt(0) + s.state?.slice(1).toLowerCase()} width={(s.rev / maxStateRev) * 100} value={fmt(s.rev)} pctVal={fmtN(s.orders)} />
                 ))}
@@ -1097,7 +1097,7 @@ function AmazonTab({ data }) {
                 <span style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.05em', color: C.t3, minWidth: 62, textAlign: 'right' }}>Revenue</span>
                 <span style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.05em', color: C.t3, width: 50, textAlign: 'right' }}>Orders</span>
               </div>
-              <div style={{ overflowY: 'auto', maxHeight: 320 }}>
+              <div style={{ overflowY: 'auto', maxHeight: 520 }}>
                 {(amzSC.states || []).map((s, i) => (
                   <HBar key={s.state} dot={['#E8930A','#2E74CC','#0D9E68','#CC4078','#9B59B6','#534AB7','#CC8A00','#E24B4A','#FF6B35','#4AB89A'][i % 10]} label={s.state?.charAt(0) + s.state?.slice(1).toLowerCase()} width={(s.rev / maxStateRev) * 100} value={fmt(s.rev)} pctVal={fmtN(s.orders)} />
                 ))}
