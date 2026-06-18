@@ -213,6 +213,7 @@ function OverviewPage({ data, alerts }) {
 const TABS = [
   { id: 'all', label: 'All Channels' },
   { id: 'shopify', label: 'Shopify', ch: 'Shopify' },
+  { id: 'shopify_intl', label: 'Shopify Intl', ch: 'Shopify International' },
   { id: 'amazon', label: 'Amazon', ch: 'Amazon' },
   { id: 'flipkart', label: 'Flipkart', ch: 'Flipkart' },
   { id: 'blinkit', label: 'Blinkit', ch: 'Blinkit' },
@@ -1073,6 +1074,7 @@ function SalesPage({ data, filters, setFilters }) {
       <div className="page-scroll">
         {activeTab === 'all' && <AllTab data={filteredData} />}
         {activeTab === 'shopify' && <ChannelTab data={filteredData} channel="Shopify" filters={filters} setFilters={setFilters} />}
+        {activeTab === 'shopify_intl' && <ChannelTab data={filteredData} channel="Shopify International" />}
         {activeTab === 'amazon' && <ChannelTab data={filteredData} channel="Amazon" />}
         {activeTab === 'flipkart' && <ChannelTab data={filteredData} channel="Flipkart" />}
         {activeTab === 'blinkit' && <ChannelTab data={filteredData} channel="Blinkit" />}

@@ -7,7 +7,7 @@ export const C = {
   amber: { bg: '#FEF2DC', tx: '#7A4000', bd: '#F5C460' },
   blue:  { bg: '#E1EFFD', tx: '#184078', bd: '#7AB4EE' },
   ch: {
-    Shopify: '#FFD600', Amazon: '#E8930A', Flipkart: '#2E74CC',
+    Shopify: '#FFD600', 'Shopify International': '#B8A000', Amazon: '#E8930A', Flipkart: '#2E74CC',
     Blinkit: '#0D9E68', CRED: '#CC4078', Instamart: '#4AB89A',
     Zepto: '#858380', Myntra: '#E87858', Firstcry: '#9B56B6', Pharmeasy: '#2ECC71'
   }
