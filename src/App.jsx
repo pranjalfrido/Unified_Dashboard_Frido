@@ -277,7 +277,7 @@ function VoucherDropdown({ voucherList, selected, onChange }) {
       {open && (
         <div style={{ position: 'absolute', top: '110%', left: 0, zIndex: 200, background: C.card, border: `1px solid ${C.border2}`, borderRadius: 9, boxShadow: '0 8px 28px rgba(0,0,0,.14)', width: 240 }}>
           <div style={{ padding: '7px 8px', borderBottom: `1px solid ${C.border}` }}>
-            <input autoFocus value={search} onChange={e => setSearch(e.target.value)} placeholder="Search voucher…" style={{ width: '100%', fontSize: 11.5, padding: '4px 8px', border: `1px solid ${C.border2}`, borderRadius: 6, outline: 'none', fontFamily: 'var(--font)', background: C.bg }} />
+            <input autoFocus value={search} onChange={e => setSearch(e.target.value)} onMouseDown={e => e.stopPropagation()} placeholder="Search voucher…" style={{ width: '100%', fontSize: 11.5, padding: '4px 8px', border: `1px solid ${C.border2}`, borderRadius: 6, outline: 'none', fontFamily: 'var(--font)', background: C.bg }} />
           </div>
           <div style={{ maxHeight: 260, overflowY: 'auto' }}>
             <div onClick={() => { onChange(''); setSearch(''); setOpen(false) }} style={{ padding: '6px 10px', fontSize: 12, cursor: 'pointer', color: selectedArr.length === 0 ? C.t1 : C.t2, fontWeight: selectedArr.length === 0 ? 600 : 400, background: selectedArr.length === 0 ? C.acl : undefined }}>All Vouchers</div>
