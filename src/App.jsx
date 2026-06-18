@@ -247,10 +247,10 @@ function PaginatedCard({ title, rows, columns, pageSize = 10 }) {
 }
 
 // ── Multi-select Voucher Dropdown ────────────────────────────
-function VoucherDropdown({ voucherMap, selected, onChange }) {
+function VoucherDropdown({ voucherList, selected, onChange }) {
   const [open, setOpen] = useState(false)
   const ref = useRef(null)
-  const options = Object.keys(voucherMap || {}).sort()
+  const options = (voucherList || [])
   const selectedArr = selected ? selected.split(',').map(s => s.trim()).filter(Boolean) : []
 
   useEffect(() => {
@@ -276,10 +276,11 @@ function VoucherDropdown({ voucherMap, selected, onChange }) {
         <div style={{ position: 'absolute', top: '110%', left: 0, zIndex: 100, background: C.card, border: `1px solid ${C.border2}`, borderRadius: 9, boxShadow: '0 6px 24px rgba(0,0,0,.12)', minWidth: 210, maxHeight: 280, overflowY: 'auto', padding: '5px 0' }}>
           <div onClick={() => { onChange(''); setOpen(false) }} style={{ padding: '6px 12px', fontSize: 12, color: selectedArr.length === 0 ? C.t1 : C.t2, fontWeight: selectedArr.length === 0 ? 600 : 400, cursor: 'pointer', background: selectedArr.length === 0 ? C.acl : undefined }}>All Vouchers</div>
           <div style={{ height: 1, background: C.border, margin: '4px 0' }} />
-          {options.map(opt => (
-            <div key={opt} onClick={() => toggle(opt)} style={{ padding: '6px 12px', fontSize: 12, color: C.t1, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8, background: selectedArr.includes(opt) ? C.acl : undefined }}>
-              <span style={{ width: 14, height: 14, borderRadius: 3, border: `1.5px solid ${selectedArr.includes(opt) ? C.acm : C.border2}`, background: selectedArr.includes(opt) ? C.acc : '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, fontSize: 9 }}>{selectedArr.includes(opt) ? '✓' : ''}</span>
-              {opt}
+          {options.map(({ code, orders }) => (
+            <div key={code} onClick={() => toggle(code)} style={{ padding: '6px 12px', fontSize: 12, color: C.t1, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8, background: selectedArr.includes(code) ? C.acl : undefined }}>
+              <span style={{ width: 14, height: 14, borderRadius: 3, border: `1.5px solid ${selectedArr.includes(code) ? C.acm : C.border2}`, background: selectedArr.includes(code) ? C.acc : '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, fontSize: 9 }}>{selectedArr.includes(code) ? '✓' : ''}</span>
+              <span style={{ flex: 1 }}>{code}</span>
+              <span style={{ fontSize: 10, color: C.t3, flexShrink: 0 }}>{orders}</span>
             </div>
           ))}
         </div>
@@ -985,7 +986,7 @@ function SalesPage({ data, filters, setFilters }) {
             <option value="">All States</option>{states.map(s => <option key={s} value={s}>{s}</option>)}
           </select>
           <input type="text" placeholder="Search SKU…" value={filters.sku} onChange={e => setFilters(f => ({ ...f, sku: e.target.value }))} className="fsrch" />
-          <VoucherDropdown voucherMap={data?.voucherMap || {}} selected={filters.voucher} onChange={v => setFilters(f => ({ ...f, voucher: v }))} />
+          <VoucherDropdown voucherList={data?.voucherList || []} selected={filters.voucher} onChange={v => setFilters(f => ({ ...f, voucher: v }))} />
           <button onClick={() => setFilters(f => ({ ...f, category: '', subCategory: '', state: '', sku: '', subChannel: '', voucher: '' }))} className="fclr">✕ Clear</button>
         </div>
       </div>
