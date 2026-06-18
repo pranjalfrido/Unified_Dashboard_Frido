@@ -1378,34 +1378,23 @@ function FlipkartTab({ data }) {
       </div>
 
       {/* KPI Row 1 */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 10 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6,1fr)', gap: 10 }}>
         <KPICard label="Gross Revenue (Inc. GST)" value={fmt(rev)} sub={`${nDays} days`} />
         <KPICard label="Net Revenue (Exc. GST)" value={fmt(excRev)} sub={`GST: ${fmt(rev - excRev)}`} />
         <KPICard label="Orders" value={fmtN(nOrders)} sub={subView === 'overview' ? 'FBF + Non-FBF' : subView === 'fbf' ? 'FBF only' : 'Non-FBF only'} />
         <KPICard label="Daily Avg Revenue" value={fmt(rev / nDays)} sub="Per day" />
-      </div>
-      {/* KPI Row 1b */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 10 }}>
         <KPICard label="AOV" value={`₹${Math.round(aov).toLocaleString('en-IN')}`} sub="Avg order value" />
-        <KPICard label="ASP" value={`₹${Math.round(asp).toLocaleString('en-IN')}`} sub="Avg selling price" />
-        <KPICard label="Total Units" value={fmtN(qty)} />
+        <KPICard label="Total Units" value={fmtN(qty)} sub={`ASP ₹${Math.round(asp).toLocaleString('en-IN')}`} />
       </div>
-
       {/* KPI Row 2 */}
-      {subView === 'overview' ? (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 10 }}>
-          <KPICard label="FBF Revenue" value={fmt(fbfT.rev)} sub={`${fmtN(fbfT.orders)} orders`} />
-          <KPICard label="Non-FBF Revenue" value={fmt(nfbfT.rev)} sub={`${fmtN(nfbfT.orders)} orders`} />
-          <KPICard label="FBF Share" value={`${allRev ? (fbfT.rev / allRev * 100).toFixed(1) : 0}%`} sub="of total revenue" />
-          <KPICard label="Non-FBF Share" value={`${allRev ? (nfbfT.rev / allRev * 100).toFixed(1) : 0}%`} sub="of total revenue" />
-        </div>
-      ) : (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 10 }}>
-          <KPICard label="Units per Order" value={nOrders ? (qty / nOrders).toFixed(2) : '0'} sub="Avg basket size" />
-          <KPICard label="Revenue per Unit" value={`₹${Math.round(asp).toLocaleString('en-IN')}`} sub="ASP" />
-          <KPICard label="GST Collected" value={fmt(rev - excRev)} sub="Inc GST − Exc GST" />
-        </div>
-      )}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6,1fr)', gap: 10 }}>
+        <KPICard label="FBF Revenue" value={fmt(fbfT.rev)} sub={`${fmtN(fbfT.orders)} orders`} />
+        <KPICard label="Non-FBF Revenue" value={fmt(nfbfT.rev)} sub={`${fmtN(nfbfT.orders)} orders`} />
+        <KPICard label="FBF Share" value={`${allRev ? (fbfT.rev / allRev * 100).toFixed(1) : 0}%`} sub="of total revenue" />
+        <KPICard label="Non-FBF Share" value={`${allRev ? (nfbfT.rev / allRev * 100).toFixed(1) : 0}%`} sub="of total revenue" />
+        <KPICard label="GST Collected" value={fmt(rev - excRev)} sub="Inc GST − Exc GST" />
+        <KPICard label="Units per Order" value={nOrders ? (qty / nOrders).toFixed(2) : '0'} sub="Avg basket size" />
+      </div>
 
       {/* Row 1: Daily chart + FBF vs Non-FBF breakdown */}
       <div style={{ display: 'grid', gridTemplateColumns: '3fr 2fr', gap: 14, alignItems: 'stretch' }}>
