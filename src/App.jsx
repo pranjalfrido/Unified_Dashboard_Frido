@@ -744,19 +744,12 @@ function ShopifyTab({ data, filters, setFilters }) {
         <Card title="Category Revenue">
           {catRows.slice(0, 8).map((r, i) => { const dots = ['#534AB7','#0D9E68','#2E74CC','#CC8A00','#CC4078','#E24B4A','#9B59B6','#FF6B35']; return <HBar key={r.name} dot={dots[i % dots.length]} label={r.name} width={(r.rev / (catRows[0]?.rev || 1)) * 100} value={fmt(r.rev)} pctVal={totalRev ? pct(r.rev, totalRev) : '—'} /> })}
         </Card>
-        <Card title="High-ticket Orders ≥₹10K">
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 10, paddingTop: 4 }}>
-            <KPICard label="High-ticket Orders" value={fmtN(data.htCount || 0)} sub={`≥ ₹10,000 per order`} />
-            <KPICard label="High-ticket Revenue" value={fmt(data.htRev || 0)} sub={data.totalRev ? `${((data.htRev / data.totalRev) * 100).toFixed(1)}% of total rev` : '—'} />
-            <KPICard label="Multi-item Orders" value={fmtN(data.multiItemOrders || 0)} sub={shopifyOrders ? `${((data.multiItemOrders / shopifyOrders) * 100).toFixed(1)}% of orders` : '—'} />
-          </div>
-        </Card>
+        <OrderValuePieCard buckets={data.buckets || {}} bucketRev={data.bucketRev || {}} />
       </div>
       <div className="g-2" style={{ alignItems: 'stretch' }}>
       <Card title="Daily Revenue Trend · Shopify">
         <AreaTrendChart data={dailyArr} dataKey="Shopify" color={C.ch['Shopify']} />
       </Card>
-      <OrderValuePieCard buckets={data.buckets || {}} bucketRev={data.bucketRev || {}} />
       </div>
       <div className="g-2">
         <Card title="Financial Status">
