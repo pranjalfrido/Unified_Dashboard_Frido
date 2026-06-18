@@ -884,7 +884,7 @@ function AmazonTab({ data }) {
   const amzIntl = data.amzIntl || {}
 
   const toggleStyle = active => ({ fontSize: 12, fontWeight: active ? 700 : 500, padding: '5px 18px', borderRadius: 7, border: `1.5px solid ${active ? C.acm : C.border2}`, background: active ? C.acc : C.card, color: C.t1, cursor: 'pointer', fontFamily: 'var(--font)', transition: 'all .12s' })
-  const subToggleStyle = active => ({ fontSize: 11.5, fontWeight: active ? 700 : 500, padding: '4px 14px', borderRadius: 6, border: `1px solid ${active ? C.acm : C.border}`, background: active ? C.acl : C.bg, color: active ? C.t1 : C.t2, cursor: 'pointer', fontFamily: 'var(--font)', transition: 'all .12s' })
+  const subToggleStyle = active => ({ fontSize: 12, fontWeight: active ? 700 : 500, padding: '5px 16px', borderRadius: 7, border: 'none', background: active ? C.card : 'transparent', color: active ? C.t1 : C.t2, cursor: 'pointer', fontFamily: 'var(--font)', transition: 'all .15s', boxShadow: active ? '0 1px 4px rgba(0,0,0,.08)' : 'none' })
 
   // ── Seller Central calcs ──
   const scFBA = amzSC.fulfillment?.find(f => f.type === 'FBA') || { orders: 0, rev: 0, units: 0 }
