@@ -247,6 +247,65 @@ function PaginatedCard({ title, rows, columns, pageSize = 10 }) {
 }
 
 
+// ── Multi-select Voucher Dropdown ────────────────────────────
+function VoucherDropdown({ voucherList, selected, onChange }) {
+  const [open, setOpen] = useState(false)
+  const [search, setSearch] = useState('')
+  const ref = useRef(null)
+  const selectedArr = selected ? selected.split(',').map(s => s.trim()).filter(Boolean) : []
+  const filtered = (voucherList || []).filter(({ code }) => code.toLowerCase().includes(search.toLowerCase()))
+
+  useEffect(() => {
+    const handler = e => { if (ref.current && !ref.current.contains(e.target)) setOpen(false) }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [])
+
+  const toggle = code => {
+    const next = selectedArr.includes(code) ? selectedArr.filter(v => v !== code) : [...selectedArr, code]
+    onChange(next.join(','))
+  }
+
+  const label = selectedArr.length === 0 ? 'All Vouchers' : selectedArr.length === 1 ? selectedArr[0] : `${selectedArr.length} vouchers selected`
+
+  return (
+    <div ref={ref} style={{ position: 'relative', flexShrink: 0 }}>
+      <div onClick={() => setOpen(o => !o)} className="fsel" style={{ display: 'flex', alignItems: 'center', gap: 5, cursor: 'pointer', minWidth: 160, maxWidth: 200, background: selectedArr.length ? '#FFF9CC' : undefined, borderColor: selectedArr.length ? C.acm : undefined }}>
+        <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: 11.5 }}>{label}</span>
+        <span style={{ fontSize: 8, color: C.t3, flexShrink: 0 }}>▼</span>
+      </div>
+      {open && (
+        <div style={{ position: 'absolute', top: '110%', left: 0, zIndex: 200, background: C.card, border: `1px solid ${C.border2}`, borderRadius: 9, boxShadow: '0 8px 28px rgba(0,0,0,.14)', width: 240 }}>
+          <div style={{ padding: '7px 8px', borderBottom: `1px solid ${C.border}` }}>
+            <input autoFocus value={search} onChange={e => setSearch(e.target.value)} placeholder="Search voucher…" style={{ width: '100%', fontSize: 11.5, padding: '4px 8px', border: `1px solid ${C.border2}`, borderRadius: 6, outline: 'none', fontFamily: 'var(--font)', background: C.bg }} />
+          </div>
+          <div style={{ maxHeight: 260, overflowY: 'auto' }}>
+            <div onClick={() => { onChange(''); setSearch(''); setOpen(false) }} style={{ padding: '6px 10px', fontSize: 12, cursor: 'pointer', color: selectedArr.length === 0 ? C.t1 : C.t2, fontWeight: selectedArr.length === 0 ? 600 : 400, background: selectedArr.length === 0 ? C.acl : undefined }}>All Vouchers</div>
+            <div style={{ height: 1, background: C.border }} />
+            {filtered.map(({ code, orders }) => {
+              const checked = selectedArr.includes(code)
+              return (
+                <div key={code} onClick={() => toggle(code)} style={{ padding: '5px 10px', fontSize: 11.5, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 7, background: checked ? C.acl : undefined }}>
+                  <span style={{ width: 13, height: 13, borderRadius: 3, border: `1.5px solid ${checked ? C.acm : C.border2}`, background: checked ? C.acc : '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, fontSize: 8, fontWeight: 700 }}>{checked ? '✓' : ''}</span>
+                  <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{code}</span>
+                  <span style={{ fontSize: 10, color: C.t3, flexShrink: 0 }}>{orders}</span>
+                </div>
+              )
+            })}
+            {filtered.length === 0 && <div style={{ padding: '10px', fontSize: 11.5, color: C.t3, textAlign: 'center' }}>No results</div>}
+          </div>
+          {selectedArr.length > 0 && (
+            <div style={{ padding: '6px 10px', borderTop: `1px solid ${C.border}`, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <span style={{ fontSize: 11, color: C.t3 }}>{selectedArr.length} selected</span>
+              <span onClick={() => onChange('')} style={{ fontSize: 11, color: '#A32D2D', cursor: 'pointer', fontWeight: 500 }}>Clear</span>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
 const CHART_METRICS = [
   { id: 'rev', label: 'Revenue', key: ch => ch },
   { id: 'orders', label: 'Orders', key: ch => ch + '_o' },
@@ -944,10 +1003,7 @@ function SalesPage({ data, filters, setFilters }) {
             <option value="">All States</option>{states.map(s => <option key={s} value={s}>{s}</option>)}
           </select>
           <input type="text" placeholder="Search SKU…" value={filters.sku} onChange={e => setFilters(f => ({ ...f, sku: e.target.value }))} className="fsrch" />
-          <select className="fsel" style={{ maxWidth: 200 }} value={filters.voucher} onChange={e => setFilters(f => ({ ...f, voucher: e.target.value }))}>
-            <option value="">All Vouchers</option>
-            {(data?.voucherList || []).map(({ code, orders }) => <option key={code} value={code}>{code} ({orders})</option>)}
-          </select>
+          <VoucherDropdown voucherList={data?.voucherList || []} selected={filters.voucher} onChange={v => setFilters(f => ({ ...f, voucher: v }))} />
           <button onClick={() => setFilters(f => ({ ...f, category: '', subCategory: '', state: '', sku: '', subChannel: '', voucher: '' }))} className="fclr">✕ Clear</button>
         </div>
       </div>
