@@ -273,7 +273,7 @@ function VoucherDropdown({ voucherList, selected, onChange }) {
         <span style={{ fontSize: 9, color: C.t3 }}>{open ? '▲' : '▼'}</span>
       </button>
       {open && (
-        <div style={{ position: 'absolute', top: '110%', left: 0, zIndex: 100, background: C.card, border: `1px solid ${C.border2}`, borderRadius: 9, boxShadow: '0 6px 24px rgba(0,0,0,.12)', minWidth: 210, maxHeight: 280, overflowY: 'auto', padding: '5px 0' }}>
+        <div style={{ position: 'absolute', bottom: '110%', left: 0, zIndex: 100, background: C.card, border: `1px solid ${C.border2}`, borderRadius: 9, boxShadow: '0 -4px 24px rgba(0,0,0,.12)', minWidth: 210, maxHeight: 280, overflowY: 'auto', padding: '5px 0' }}>
           <div onClick={() => { onChange(''); setOpen(false) }} style={{ padding: '6px 12px', fontSize: 12, color: selectedArr.length === 0 ? C.t1 : C.t2, fontWeight: selectedArr.length === 0 ? 600 : 400, cursor: 'pointer', background: selectedArr.length === 0 ? C.acl : undefined }}>All Vouchers</div>
           <div style={{ height: 1, background: C.border, margin: '4px 0' }} />
           {options.map(({ code, orders }) => (
