@@ -1177,6 +1177,7 @@ function AmazonTab({ data }) {
           <Card title="Top ASINs · Vendor Central">
             <DataTable columns={[
               { key: 'asin', label: 'ASIN' },
+              { key: 'sku', label: 'SKU' },
               { key: 'orderedUnits', label: 'Ordered', align: 'right', render: v => fmtN(v) },
               { key: 'orderedRev', label: 'Ordered Rev', align: 'right', mono: true, render: v => fmt(v) },
               { key: 'shippedUnits', label: 'Shipped', align: 'right', render: v => fmtN(v) },
