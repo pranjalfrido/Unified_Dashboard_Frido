@@ -876,8 +876,234 @@ function ShopifyTab({ data, filters, setFilters }) {
   )
 }
 
+function AmazonTab({ data }) {
+  const [view, setView] = useState('sc') // 'sc' | 'vc' | 'intl'
+  const amzSC = data.amzSC || {}
+  const amzVC = data.amzVC || {}
+  const amzIntl = data.amzIntl || {}
+
+  const toggleStyle = active => ({ fontSize: 12, fontWeight: active ? 700 : 500, padding: '5px 18px', borderRadius: 7, border: `1.5px solid ${active ? C.acm : C.border2}`, background: active ? C.acc : C.card, color: C.t1, cursor: 'pointer', fontFamily: 'var(--font)', transition: 'all .12s' })
+
+  // ── Seller Central calcs ──
+  const scFBA = amzSC.fulfillment?.find(f => f.type === 'FBA') || { orders: 0, rev: 0, units: 0 }
+  const scMFN = amzSC.fulfillment?.find(f => f.type === 'MFN') || { orders: 0, rev: 0, units: 0 }
+  const scTotalRev = scFBA.rev + scMFN.rev
+  const scTotalOrders = scFBA.orders + scMFN.orders
+  const scAOV = scTotalOrders ? scTotalRev / scTotalOrders : 0
+  const scTotalUnits = scFBA.units + scMFN.units
+  const scCancelOrders = amzSC.status?.find(s => s.status === 'Cancelled')?.orders || 0
+  const scCancelRate = scTotalOrders ? (scCancelOrders / scTotalOrders * 100) : 0
+  const scPending = amzSC.status?.find(s => s.status === 'Pending')?.orders || 0
+  // Daily SC - pivot FBA/MFN into single daily array
+  const scDailyMap = {}
+  ;(amzSC.daily || []).forEach(d => {
+    if (!scDailyMap[d.date]) scDailyMap[d.date] = { date: d.date, FBA: 0, MFN: 0 }
+    scDailyMap[d.date][d.type] = d.rev
+  })
+  const scDailyArr = Object.values(scDailyMap).sort((a, b) => a.date.localeCompare(b.date))
+  const maxStateRev = Math.max(...(amzSC.states || []).map(s => s.rev), 1)
+
+  // ── Vendor Central calcs ──
+  const vcTotalOrdered = amzVC.accounts?.reduce((s, a) => s + a.orderedRev, 0) || 0
+  const vcTotalShipped = amzVC.accounts?.reduce((s, a) => s + a.shippedRev, 0) || 0
+  const vcTotalOrderedUnits = amzVC.accounts?.reduce((s, a) => s + a.orderedUnits, 0) || 0
+  const vcTotalShippedUnits = amzVC.accounts?.reduce((s, a) => s + a.shippedUnits, 0) || 0
+  const vcTotalReturns = amzVC.accounts?.reduce((s, a) => s + a.returns, 0) || 0
+  const vcFillRate = vcTotalOrderedUnits ? (vcTotalShippedUnits / vcTotalOrderedUnits * 100) : 0
+  const vcReturnRate = vcTotalShippedUnits ? (vcTotalReturns / vcTotalShippedUnits * 100) : 0
+  const vcMaxRev = Math.max(...(amzVC.accounts || []).map(a => a.orderedRev), 1)
+
+  // ── International calcs ──
+  const intlTotalRev = amzIntl.countries?.reduce((s, c) => s + c.rev, 0) || 0
+  const intlTotalOrders = amzIntl.countries?.reduce((s, c) => s + c.orders, 0) || 0
+  const intlAOV = intlTotalOrders ? intlTotalRev / intlTotalOrders : 0
+  const intlDots = { UAE: '#E8930A', UK: '#2E74CC', US: '#0D9E68', Unknown: C.t3 }
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+      {/* Toggle */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        <button style={toggleStyle(view === 'sc')} onClick={() => setView('sc')}>Seller Central</button>
+        <button style={toggleStyle(view === 'vc')} onClick={() => setView('vc')}>Vendor Central</button>
+        <button style={toggleStyle(view === 'intl')} onClick={() => setView('intl')}>🌍 International</button>
+      </div>
+
+      {/* ── SELLER CENTRAL ── */}
+      {view === 'sc' && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+          {/* KPIs */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6,1fr)', gap: 10 }}>
+            <KPICard label="Total Revenue" value={fmt(scTotalRev)} sub={`${data.nDays || 7} days`} />
+            <KPICard label="Total Orders" value={fmtN(scTotalOrders)} />
+            <KPICard label="AOV" value={`₹${Math.round(scAOV).toLocaleString('en-IN')}`} />
+            <KPICard label="Total Units" value={fmtN(scTotalUnits)} />
+            <KPICard label="Cancel Rate" value={`${scCancelRate.toFixed(1)}%`} sub={`${fmtN(scCancelOrders)} cancelled`} accent={scCancelRate > 10 ? '#7A1A1A' : undefined} />
+            <KPICard label="Pending Orders" value={fmtN(scPending)} accent={scPending > 500 ? '#7A4000' : undefined} />
+          </div>
+          {/* FBA vs MFN */}
+          <div className="g-2">
+            <Card title="FBA vs MFN Breakdown">
+              {[{ label: 'FBA (Fulfilled by Amazon)', ...scFBA }, { label: 'MFN (Merchant Fulfilled)', ...scMFN }].map((r, i) => (
+                <div key={r.label} style={{ padding: '10px 0', borderBottom: i === 0 ? `1px solid ${C.border}` : 'none' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
+                    <span style={{ fontSize: 12, fontWeight: 600, color: C.t1 }}>{r.label}</span>
+                    <span style={{ fontSize: 12, fontWeight: 700, color: C.t1, fontFamily: 'var(--mono)' }}>{fmt(r.rev)}</span>
+                  </div>
+                  <div style={{ display: 'flex', gap: 16 }}>
+                    <span style={{ fontSize: 11, color: C.t3 }}>Orders: <strong style={{ color: C.t1 }}>{fmtN(r.orders)}</strong></span>
+                    <span style={{ fontSize: 11, color: C.t3 }}>Units: <strong style={{ color: C.t1 }}>{fmtN(r.units)}</strong></span>
+                    <span style={{ fontSize: 11, color: C.t3 }}>AOV: <strong style={{ color: C.t1 }}>₹{r.orders ? Math.round(r.rev / r.orders).toLocaleString('en-IN') : 0}</strong></span>
+                    <span style={{ fontSize: 11, color: C.t3 }}>Share: <strong style={{ color: C.t1 }}>{scTotalRev ? (r.rev / scTotalRev * 100).toFixed(1) : 0}%</strong></span>
+                  </div>
+                  <div style={{ marginTop: 7, height: 6, background: C.bg, borderRadius: 3 }}>
+                    <div style={{ height: '100%', borderRadius: 3, background: i === 0 ? '#E8930A' : '#2E74CC', width: `${scTotalRev ? (r.rev / scTotalRev * 100) : 0}%`, transition: 'width .5s' }} />
+                  </div>
+                </div>
+              ))}
+            </Card>
+            <Card title="Order Status">
+              {(amzSC.status || []).map((s, i) => {
+                const clr = { Shipped: C.green.tx, Pending: C.amber.tx, Cancelled: C.red.tx, Shipping: C.blue.tx }[s.status] || C.t3
+                const total = amzSC.status.reduce((sum, x) => sum + x.orders, 0)
+                return (
+                  <div key={s.status} style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '5px 0', borderBottom: i < (amzSC.status.length - 1) ? `1px solid ${C.border}` : 'none' }}>
+                    <span style={{ fontSize: 11.5, color: C.t2, width: 80 }}>{s.status}</span>
+                    <div style={{ flex: 1, height: 5, background: C.bg, borderRadius: 3 }}><div style={{ height: '100%', borderRadius: 3, background: clr, width: `${total ? (s.orders / total * 100) : 0}%` }} /></div>
+                    <span style={{ fontSize: 11.5, fontWeight: 600, color: C.t1, minWidth: 50, textAlign: 'right' }}>{fmtN(s.orders)}</span>
+                    <span style={{ fontSize: 11, color: C.t3, minWidth: 36, textAlign: 'right' }}>{total ? (s.orders / total * 100).toFixed(1) : 0}%</span>
+                  </div>
+                )
+              })}
+            </Card>
+          </div>
+          {/* Daily trend FBA vs MFN */}
+          <Card title="Daily Revenue · FBA vs MFN">
+            <ResponsiveContainer width="100%" height={200}>
+              <BarChart data={scDailyArr} margin={{ top: 0, right: 0, bottom: 0, left: 0 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke={C.border} vertical={false} />
+                <XAxis dataKey="date" tick={{ fontSize: 10, fill: C.t3 }} tickFormatter={d => d?.slice(5)} />
+                <YAxis tick={{ fontSize: 10, fill: C.t3 }} tickFormatter={v => v >= 1e5 ? `${(v/1e5).toFixed(0)}L` : v} width={40} />
+                <Tooltip content={<ChartTooltip />} />
+                <Legend iconSize={8} wrapperStyle={{ fontSize: 10 }} />
+                <Bar dataKey="FBA" stackId="a" fill="#E8930A" />
+                <Bar dataKey="MFN" stackId="a" fill="#2E74CC" />
+              </BarChart>
+            </ResponsiveContainer>
+          </Card>
+          <div className="g-2" style={{ alignItems: 'stretch' }}>
+            {/* Top States */}
+            <Card title="Top States">
+              {(amzSC.states || []).slice(0, 10).map((s, i) => (
+                <HBar key={s.state} dot={['#E8930A','#2E74CC','#0D9E68','#CC4078','#9B59B6','#534AB7','#CC8A00','#E24B4A','#FF6B35','#4AB89A'][i % 10]} label={s.state?.charAt(0) + s.state?.slice(1).toLowerCase()} width={(s.rev / maxStateRev) * 100} value={fmt(s.rev)} pctVal={fmtN(s.orders) + ' ord'} />
+              ))}
+            </Card>
+            {/* Top SKUs */}
+            <Card title="Top SKUs · Seller Central">
+              <DataTable columns={[
+                { key: 'sku', label: 'SKU' },
+                { key: 'orders', label: 'Orders', align: 'right', render: v => fmtN(v) },
+                { key: 'units', label: 'Units', align: 'right', render: v => fmtN(v) },
+                { key: 'rev', label: 'Revenue', align: 'right', mono: true, render: v => fmt(v) },
+              ]} rows={amzSC.skus || []} maxRows={15} />
+            </Card>
+          </div>
+        </div>
+      )}
+
+      {/* ── VENDOR CENTRAL ── */}
+      {view === 'vc' && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6,1fr)', gap: 10 }}>
+            <KPICard label="Ordered Revenue" value={fmt(vcTotalOrdered)} sub="Gross ordered value" />
+            <KPICard label="Ordered Units" value={fmtN(vcTotalOrderedUnits)} />
+            <KPICard label="Shipped Units" value={fmtN(vcTotalShippedUnits)} />
+            <KPICard label="Fill Rate" value={`${vcFillRate.toFixed(1)}%`} sub="Shipped / Ordered" accent={vcFillRate < 80 ? '#7A1A1A' : vcFillRate >= 95 ? '#286010' : undefined} />
+            <KPICard label="Customer Returns" value={fmtN(vcTotalReturns)} accent={vcTotalReturns > 100 ? '#7A4000' : undefined} />
+            <KPICard label="Return Rate" value={`${vcReturnRate.toFixed(1)}%`} sub="Returns / Shipped" accent={vcReturnRate > 5 ? '#7A1A1A' : undefined} />
+          </div>
+          <div className="g-2" style={{ alignItems: 'stretch' }}>
+            <Card title="Vendor Account Breakdown">
+              {(amzVC.accounts || []).map((a, i) => {
+                const dots = ['#E8930A','#2E74CC','#0D9E68']
+                return (
+                  <div key={a.account} style={{ padding: '10px 0', borderBottom: i < (amzVC.accounts.length - 1) ? `1px solid ${C.border}` : 'none' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 5 }}>
+                      <span style={{ fontSize: 12, fontWeight: 600, color: C.t1 }}>{a.account}</span>
+                      <span style={{ fontSize: 12, fontWeight: 700, color: C.t1, fontFamily: 'var(--mono)' }}>{fmt(a.orderedRev)}</span>
+                    </div>
+                    <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap' }}>
+                      <span style={{ fontSize: 11, color: C.t3 }}>Ordered: <strong style={{ color: C.t1 }}>{fmtN(a.orderedUnits)} units</strong></span>
+                      <span style={{ fontSize: 11, color: C.t3 }}>Shipped: <strong style={{ color: C.t1 }}>{fmtN(a.shippedUnits)} units</strong></span>
+                      <span style={{ fontSize: 11, color: C.t3 }}>Fill: <strong style={{ color: a.orderedUnits ? (a.shippedUnits/a.orderedUnits >= 0.95 ? '#286010' : '#7A4000') : C.t1 }}>{a.orderedUnits ? (a.shippedUnits/a.orderedUnits*100).toFixed(1) : 0}%</strong></span>
+                      <span style={{ fontSize: 11, color: C.t3 }}>Returns: <strong style={{ color: a.returns > 0 ? '#7A1A1A' : C.t1 }}>{fmtN(a.returns)}</strong></span>
+                    </div>
+                    <div style={{ marginTop: 6, height: 5, background: C.bg, borderRadius: 3 }}>
+                      <div style={{ height: '100%', borderRadius: 3, background: dots[i % 3], width: `${vcMaxRev ? (a.orderedRev / vcMaxRev * 100) : 0}%` }} />
+                    </div>
+                  </div>
+                )
+              })}
+            </Card>
+            <Card title="Daily Ordered vs Shipped Units">
+              <ResponsiveContainer width="100%" height={220}>
+                <LineChart data={amzVC.daily || []} margin={{ top: 0, right: 0, bottom: 0, left: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke={C.border} vertical={false} />
+                  <XAxis dataKey="date" tick={{ fontSize: 10, fill: C.t3 }} tickFormatter={d => d?.slice(5)} />
+                  <YAxis tick={{ fontSize: 10, fill: C.t3 }} width={40} />
+                  <Tooltip content={<ChartTooltip />} />
+                  <Legend iconSize={8} wrapperStyle={{ fontSize: 10 }} />
+                  <Line type="monotone" dataKey="orderedUnits" stroke="#E8930A" strokeWidth={2} dot={false} name="Ordered Units" />
+                  <Line type="monotone" dataKey="shippedUnits" stroke="#0D9E68" strokeWidth={2} dot={false} name="Shipped Units" />
+                </LineChart>
+              </ResponsiveContainer>
+            </Card>
+          </div>
+          <Card title="Top ASINs · Vendor Central">
+            <DataTable columns={[
+              { key: 'asin', label: 'ASIN' },
+              { key: 'orderedUnits', label: 'Ordered', align: 'right', render: v => fmtN(v) },
+              { key: 'orderedRev', label: 'Ordered Rev', align: 'right', mono: true, render: v => fmt(v) },
+              { key: 'shippedUnits', label: 'Shipped', align: 'right', render: v => fmtN(v) },
+              { key: 'returns', label: 'Returns', align: 'right', render: v => fmtN(v) },
+            ]} rows={amzVC.asins || []} maxRows={20} />
+          </Card>
+        </div>
+      )}
+
+      {/* ── INTERNATIONAL ── */}
+      {view === 'intl' && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 10 }}>
+            <KPICard label="Total Revenue" value={fmt(intlTotalRev)} />
+            <KPICard label="Total Orders" value={fmtN(intlTotalOrders)} />
+            <KPICard label="AOV" value={`₹${Math.round(intlAOV).toLocaleString('en-IN')}`} />
+            <KPICard label="Markets" value={fmtN(amzIntl.countries?.length || 0)} sub="Active countries" />
+          </div>
+          <div className="g-2" style={{ alignItems: 'stretch' }}>
+            <Card title="Country Breakdown">
+              {(amzIntl.countries || []).map((c, i) => (
+                <HBar key={c.country} dot={intlDots[c.country] || C.t3} label={c.country} width={intlTotalRev ? (c.rev / intlTotalRev * 100) : 0} value={fmt(c.rev)} pctVal={fmtN(c.orders) + ' ord'} />
+              ))}
+              {(!amzIntl.countries || amzIntl.countries.length === 0) && <div style={{ fontSize: 12, color: C.t3, padding: '20px 0', textAlign: 'center' }}>No international orders in this period</div>}
+            </Card>
+            <Card title="Top SKUs · International">
+              <DataTable columns={[
+                { key: 'sku', label: 'SKU' },
+                { key: 'country', label: 'Country' },
+                { key: 'orders', label: 'Orders', align: 'right', render: v => fmtN(v) },
+                { key: 'rev', label: 'Revenue', align: 'right', mono: true, render: v => fmt(v) },
+              ]} rows={amzIntl.skus || []} maxRows={20} />
+            </Card>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
 function ChannelTab({ data, channel, filters, setFilters }) {
   if (channel === 'Shopify') return <ShopifyTab data={data} filters={filters} setFilters={setFilters} />
+  if (channel === 'Amazon') return <AmazonTab data={data} />
   const chOrders = data.orders.filter(o => o.channel === channel)
   const chRows = data.rows.filter(r => r.Channel === channel)
   const rev = chOrders.reduce((s, o) => s + o.rev, 0)

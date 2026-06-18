@@ -40,6 +40,17 @@ export default async function handler(req, res) {
     byRefundTrend: `WITH q AS (${base}) SELECT CAST(OrderDate AS STRING) AS date, COUNT(DISTINCT OrderId) AS total_orders, COUNTIF(RefundStatus = 'true') AS refund_lines FROM q WHERE Channel = 'Shopify' GROUP BY date ORDER BY date`,
     topOrders: `WITH q AS (${base}), ot AS (SELECT OrderId, CAST(OrderDate AS STRING) AS order_date, Channel, State, City, SUM(SellingPrice_Inc_GST) AS rev, SUM(ItemQty) AS qty, MAX(FulfilmentStatus) AS order_status, MAX(CustomerId) AS customer_id, MAX(voucher_code) AS voucher_code, STRING_AGG(DISTINCT ChannelSKUCode, ', ' ORDER BY ChannelSKUCode LIMIT 5) AS skus FROM q GROUP BY OrderId, OrderDate, Channel, State, City) SELECT * FROM ot ORDER BY rev DESC LIMIT 20`,
     byVoucherRaw: `WITH q AS (${base}) SELECT TRIM(voucher_code) AS voucher_code, COUNT(DISTINCT OrderId) AS orders FROM q WHERE Channel = 'Shopify' AND voucher_code IS NOT NULL AND TRIM(voucher_code) != '' GROUP BY TRIM(voucher_code) ORDER BY orders DESC LIMIT 300`,
+    amzSCFulfillment: `SELECT fulfillment_channel, COUNT(DISTINCT amazon_order_id) AS orders, ROUND(SUM(CAST(item_price AS FLOAT64)),0) AS rev, SUM(CAST(quantity AS INT64)) AS units FROM \`frido-429506.production.amazon_seller_central_all_orders\` WHERE purchase_date_ist BETWEEN '${start}' AND '${end}' AND item_status != 'Cancelled' AND CAST(item_price AS FLOAT64) > 0 GROUP BY fulfillment_channel`,
+    amzSCStatus: `SELECT order_status, COUNT(DISTINCT amazon_order_id) AS orders FROM \`frido-429506.production.amazon_seller_central_all_orders\` WHERE purchase_date_ist BETWEEN '${start}' AND '${end}' GROUP BY order_status ORDER BY orders DESC`,
+    amzSCStates: `SELECT ship_state, COUNT(DISTINCT amazon_order_id) AS orders, ROUND(SUM(CAST(item_price AS FLOAT64)),0) AS rev FROM \`frido-429506.production.amazon_seller_central_all_orders\` WHERE purchase_date_ist BETWEEN '${start}' AND '${end}' AND item_status != 'Cancelled' AND CAST(item_price AS FLOAT64) > 0 GROUP BY ship_state ORDER BY rev DESC LIMIT 20`,
+    amzSCSKUs: `SELECT sku, asin, COUNT(DISTINCT amazon_order_id) AS orders, SUM(CAST(quantity AS INT64)) AS units, ROUND(SUM(CAST(item_price AS FLOAT64)),0) AS rev FROM \`frido-429506.production.amazon_seller_central_all_orders\` WHERE purchase_date_ist BETWEEN '${start}' AND '${end}' AND item_status != 'Cancelled' AND CAST(item_price AS FLOAT64) > 0 GROUP BY sku, asin ORDER BY rev DESC LIMIT 20`,
+    amzSCDaily: `SELECT CAST(purchase_date_ist AS STRING) AS date, fulfillment_channel, COUNT(DISTINCT amazon_order_id) AS orders, ROUND(SUM(CAST(item_price AS FLOAT64)),0) AS rev FROM \`frido-429506.production.amazon_seller_central_all_orders\` WHERE purchase_date_ist BETWEEN '${start}' AND '${end}' AND item_status != 'Cancelled' AND CAST(item_price AS FLOAT64) > 0 GROUP BY date, fulfillment_channel ORDER BY date`,
+    amzVCAccounts: `SELECT vendor_account, SUM(orderedUnits) AS ordered_units, ROUND(SUM(CAST(ordered_revenue AS FLOAT64)),0) AS ordered_rev, SUM(shippedUnits) AS shipped_units, ROUND(SUM(CAST(COALESCE(NULLIF(shipped_revenue,''),'0') AS FLOAT64)),0) AS shipped_rev, SUM(customerReturns) AS returns FROM \`frido-429506.production.Amazon_Vendor_Central_sales_DateASIN_wise\` WHERE sales_date BETWEEN '${start}' AND '${end}' GROUP BY vendor_account ORDER BY ordered_rev DESC`,
+    amzVCDaily: `SELECT CAST(sales_date AS STRING) AS date, SUM(orderedUnits) AS ordered_units, ROUND(SUM(CAST(ordered_revenue AS FLOAT64)),0) AS ordered_rev, SUM(shippedUnits) AS shipped_units FROM \`frido-429506.production.Amazon_Vendor_Central_sales_DateASIN_wise\` WHERE sales_date BETWEEN '${start}' AND '${end}' GROUP BY date ORDER BY date`,
+    amzVCASINs: `SELECT asin, SUM(orderedUnits) AS ordered_units, ROUND(SUM(CAST(ordered_revenue AS FLOAT64)),0) AS ordered_rev, SUM(shippedUnits) AS shipped_units, SUM(customerReturns) AS returns FROM \`frido-429506.production.Amazon_Vendor_Central_sales_DateASIN_wise\` WHERE sales_date BETWEEN '${start}' AND '${end}' GROUP BY asin ORDER BY ordered_rev DESC LIMIT 20`,
+    amzIntlCountries: `SELECT Country, COUNT(DISTINCT amazon_order_id) AS orders, ROUND(SUM(CAST(item_price AS FLOAT64)),0) AS rev, SUM(CAST(quantity AS INT64)) AS units FROM \`frido-429506.production.amazon_seller_central_uk_uae_all_orders\` WHERE purchase_date_ist BETWEEN '${start}' AND '${end}' AND item_status != 'Cancelled' GROUP BY Country ORDER BY rev DESC`,
+    amzIntlSKUs: `SELECT sku, Country, COUNT(DISTINCT amazon_order_id) AS orders, SUM(CAST(quantity AS INT64)) AS units, ROUND(SUM(CAST(item_price AS FLOAT64)),0) AS rev FROM \`frido-429506.production.amazon_seller_central_uk_uae_all_orders\` WHERE purchase_date_ist BETWEEN '${start}' AND '${end}' AND item_status != 'Cancelled' GROUP BY sku, Country ORDER BY rev DESC LIMIT 20`,
+    amzIntlDaily: `SELECT CAST(purchase_date_ist AS STRING) AS date, Country, COUNT(DISTINCT amazon_order_id) AS orders, ROUND(SUM(CAST(item_price AS FLOAT64)),0) AS rev FROM \`frido-429506.production.amazon_seller_central_uk_uae_all_orders\` WHERE purchase_date_ist BETWEEN '${start}' AND '${end}' AND item_status != 'Cancelled' GROUP BY date, Country ORDER BY date`,
   }
 
   try {
@@ -139,6 +150,23 @@ export default async function handler(req, res) {
       financialStatusMap, fulfilmentStatusMap, refundTrend,
       voucherList: (r.byVoucherRaw || []).map(x => ({ code: x.voucher_code, orders: parseInt(x.orders) || 0 })),
       orders, skuRows, rows: [],
+      amzSC: {
+        fulfillment: (r.amzSCFulfillment || []).map(x => ({ type: x.fulfillment_channel === 'Amazon' ? 'FBA' : 'MFN', orders: parseInt(x.orders)||0, rev: parseFloat(x.rev)||0, units: parseInt(x.units)||0 })),
+        status: (r.amzSCStatus || []).map(x => ({ status: x.order_status, orders: parseInt(x.orders)||0 })),
+        states: (r.amzSCStates || []).map(x => ({ state: x.ship_state, orders: parseInt(x.orders)||0, rev: parseFloat(x.rev)||0 })),
+        skus: (r.amzSCSKUs || []).map(x => ({ sku: x.sku, asin: x.asin, orders: parseInt(x.orders)||0, units: parseInt(x.units)||0, rev: parseFloat(x.rev)||0 })),
+        daily: (r.amzSCDaily || []).map(x => ({ date: x.date, type: x.fulfillment_channel === 'Amazon' ? 'FBA' : 'MFN', orders: parseInt(x.orders)||0, rev: parseFloat(x.rev)||0 })),
+      },
+      amzVC: {
+        accounts: (r.amzVCAccounts || []).map(x => ({ account: x.vendor_account, orderedUnits: parseInt(x.ordered_units)||0, orderedRev: parseFloat(x.ordered_rev)||0, shippedUnits: parseInt(x.shipped_units)||0, shippedRev: parseFloat(x.shipped_rev)||0, returns: parseInt(x.returns)||0 })),
+        daily: (r.amzVCDaily || []).map(x => ({ date: x.date, orderedUnits: parseInt(x.ordered_units)||0, orderedRev: parseFloat(x.ordered_rev)||0, shippedUnits: parseInt(x.shipped_units)||0 })),
+        asins: (r.amzVCASINs || []).map(x => ({ asin: x.asin, orderedUnits: parseInt(x.ordered_units)||0, orderedRev: parseFloat(x.ordered_rev)||0, shippedUnits: parseInt(x.shipped_units)||0, returns: parseInt(x.returns)||0 })),
+      },
+      amzIntl: {
+        countries: (r.amzIntlCountries || []).map(x => ({ country: x.Country, orders: parseInt(x.orders)||0, rev: parseFloat(x.rev)||0, units: parseInt(x.units)||0 })),
+        skus: (r.amzIntlSKUs || []).map(x => ({ sku: x.sku, country: x.Country, orders: parseInt(x.orders)||0, units: parseInt(x.units)||0, rev: parseFloat(x.rev)||0 })),
+        daily: (r.amzIntlDaily || []).map(x => ({ date: x.date, country: x.Country, orders: parseInt(x.orders)||0, rev: parseFloat(x.rev)||0 })),
+      },
     })
   } catch (err) {
     console.error('[api/bq]', err.message)
