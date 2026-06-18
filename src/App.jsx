@@ -914,10 +914,12 @@ function AmazonTab({ data }) {
   const scCancelRate = scStatusTotal ? (scCancelOrders / scStatusTotal * 100) : 0
   const scPending = amzSC.status?.find(s => s.status === 'Pending')?.orders || 0
   // Daily SC - pivot FBA/MFN into single daily array
+  const [scChartMetric, setScChartMetric] = useState('rev')
   const scDailyMap = {}
   ;(amzSC.daily || []).forEach(d => {
-    if (!scDailyMap[d.date]) scDailyMap[d.date] = { date: d.date, FBA: 0, MFN: 0 }
+    if (!scDailyMap[d.date]) scDailyMap[d.date] = { date: d.date, FBA: 0, MFN: 0, FBA_orders: 0, MFN_orders: 0 }
     scDailyMap[d.date][d.type] = d.rev
+    scDailyMap[d.date][d.type + '_orders'] = d.orders
   })
   const scDailyArr = Object.values(scDailyMap).sort((a, b) => a.date.localeCompare(b.date))
   const maxStateRev = Math.max(...(amzSC.states || []).map(s => s.rev), 1)
@@ -983,16 +985,16 @@ function AmazonTab({ data }) {
           </div>
           {/* Row 1: Daily Revenue + Order Status Breakdown */}
           <div style={{ display: 'grid', gridTemplateColumns: '3fr 2fr', gap: 14, alignItems: 'stretch' }}>
-            <Card title="Daily Revenue · India (Seller Central FBA + MFN)">
+            <Card title={`Daily ${scChartMetric === 'rev' ? 'Revenue' : 'Orders'} · India (Seller Central FBA + MFN)`} action={<div style={{ display: 'flex', gap: 4 }}>{[{ v: 'rev', label: 'Revenue' }, { v: 'orders', label: 'Orders' }].map(opt => <button key={opt.v} onClick={() => setScChartMetric(opt.v)} style={{ fontSize: 11, fontWeight: 600, padding: '3px 10px', borderRadius: 5, border: `1.5px solid ${scChartMetric === opt.v ? C.t1 : C.border}`, background: scChartMetric === opt.v ? C.t1 : 'transparent', color: scChartMetric === opt.v ? '#fff' : C.t2, cursor: 'pointer', fontFamily: 'var(--font)' }}>{opt.label}</button>)}</div>}>
               <ResponsiveContainer width="100%" height={200}>
                 <BarChart data={scDailyArr} margin={{ top: 0, right: 0, bottom: 0, left: 0 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke={C.border} vertical={false} />
                   <XAxis dataKey="date" tick={{ fontSize: 10, fill: C.t3 }} tickFormatter={d => d?.slice(5)} />
-                  <YAxis tick={{ fontSize: 10, fill: C.t3 }} tickFormatter={v => v >= 1e5 ? `${(v/1e5).toFixed(0)}L` : v} width={40} />
+                  <YAxis tick={{ fontSize: 10, fill: C.t3 }} tickFormatter={v => scChartMetric === 'rev' ? (v >= 1e5 ? `${(v/1e5).toFixed(0)}L` : v) : fmtN(v)} width={40} />
                   <Tooltip content={<ChartTooltip />} />
                   <Legend iconSize={8} wrapperStyle={{ fontSize: 10 }} />
-                  <Bar dataKey="FBA" stackId="a" fill="#E8930A" />
-                  <Bar dataKey="MFN" stackId="a" fill="#2E74CC" />
+                  <Bar dataKey={scChartMetric === 'rev' ? 'FBA' : 'FBA_orders'} stackId="a" fill="#E8930A" name="FBA" />
+                  <Bar dataKey={scChartMetric === 'rev' ? 'MFN' : 'MFN_orders'} stackId="a" fill="#2E74CC" name="MFN" />
                 </BarChart>
               </ResponsiveContainer>
             </Card>
@@ -1114,16 +1116,16 @@ function AmazonTab({ data }) {
             </Card>
           </div>
           {/* Daily trend FBA vs MFN */}
-          <Card title="Daily Revenue · FBA vs MFN">
+          <Card title={`Daily ${scChartMetric === 'rev' ? 'Revenue' : 'Orders'} · FBA vs MFN`} action={<div style={{ display: 'flex', gap: 4 }}>{[{ v: 'rev', label: 'Revenue' }, { v: 'orders', label: 'Orders' }].map(opt => <button key={opt.v} onClick={() => setScChartMetric(opt.v)} style={{ fontSize: 11, fontWeight: 600, padding: '3px 10px', borderRadius: 5, border: `1.5px solid ${scChartMetric === opt.v ? C.t1 : C.border}`, background: scChartMetric === opt.v ? C.t1 : 'transparent', color: scChartMetric === opt.v ? '#fff' : C.t2, cursor: 'pointer', fontFamily: 'var(--font)' }}>{opt.label}</button>)}</div>}>
             <ResponsiveContainer width="100%" height={200}>
               <BarChart data={scDailyArr} margin={{ top: 0, right: 0, bottom: 0, left: 0 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke={C.border} vertical={false} />
                 <XAxis dataKey="date" tick={{ fontSize: 10, fill: C.t3 }} tickFormatter={d => d?.slice(5)} />
-                <YAxis tick={{ fontSize: 10, fill: C.t3 }} tickFormatter={v => v >= 1e5 ? `${(v/1e5).toFixed(0)}L` : v} width={40} />
+                <YAxis tick={{ fontSize: 10, fill: C.t3 }} tickFormatter={v => scChartMetric === 'rev' ? (v >= 1e5 ? `${(v/1e5).toFixed(0)}L` : v) : fmtN(v)} width={40} />
                 <Tooltip content={<ChartTooltip />} />
                 <Legend iconSize={8} wrapperStyle={{ fontSize: 10 }} />
-                <Bar dataKey="FBA" stackId="a" fill="#E8930A" />
-                <Bar dataKey="MFN" stackId="a" fill="#2E74CC" />
+                <Bar dataKey={scChartMetric === 'rev' ? 'FBA' : 'FBA_orders'} stackId="a" fill="#E8930A" name="FBA" />
+                <Bar dataKey={scChartMetric === 'rev' ? 'MFN' : 'MFN_orders'} stackId="a" fill="#2E74CC" name="MFN" />
               </BarChart>
             </ResponsiveContainer>
           </Card>
