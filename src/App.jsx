@@ -957,11 +957,9 @@ function AmazonTab({ data }) {
             <KPICard label="ASP" value={`₹${scTotalUnits ? Math.round(scTotalRev / scTotalUnits).toLocaleString('en-IN') : 0}`} sub="Avg selling price / unit" />
           </div>
           {/* KPI row 2 */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5,1fr)', gap: 10 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 10 }}>
             <KPICard label="Total Units" value={fmtN(scTotalUnits + vcTotalOrderedUnits)} sub="SC + VC" />
             <KPICard label="Cancellation Rate" value={`${scCancelRate.toFixed(1)}%`} sub={`${fmtN(scCancelOrders)} cancelled`} accent={scCancelRate > 10 ? '#7A1A1A' : undefined} />
-            <KPICard label="Pending Orders" value={fmtN(scPending)} accent={scPending > 500 ? '#7A4000' : undefined} />
-            <KPICard label="VC Accounts" value={fmtN(amzVC.accounts?.length || 0)} sub="Active accounts" />
             <KPICard label="Daily Avg Revenue" value={fmt((scTotalRev + vcTotalOrdered) / (data.nDays || 1))} sub="SC + VC per day" />
           </div>
           {/* Daily revenue chart — SC FBA+MFN stacked */}
@@ -1033,8 +1031,7 @@ function AmazonTab({ data }) {
             <KPICard label="Cancellation Rate" value={`${scCancelRate.toFixed(1)}%`} sub={`${fmtN(scCancelOrders)} cancelled`} accent={scCancelRate > 10 ? '#7A1A1A' : undefined} />
           </div>
           {/* KPIs row 2 */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 10 }}>
-            <KPICard label="Pending Orders" value={fmtN(scPending)} accent={scPending > 500 ? '#7A4000' : undefined} />
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 10 }}>
             <KPICard label="Daily Avg Revenue" value={fmt(scTotalRev / (data.nDays || 1))} sub="Revenue per day" />
             <KPICard label="Units per Order" value={scTotalOrders ? (scTotalUnits / scTotalOrders).toFixed(2) : '0'} sub="Avg basket size" />
             <KPICard label="FBA Share" value={`${scTotalRev ? (scFBA.rev / scTotalRev * 100).toFixed(1) : 0}%`} sub={`MFN ${scTotalRev ? (scMFN.rev / scTotalRev * 100).toFixed(1) : 0}%`} />
