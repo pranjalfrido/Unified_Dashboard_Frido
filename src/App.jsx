@@ -1378,13 +1378,17 @@ function FlipkartTab({ data }) {
       </div>
 
       {/* KPI Row 1 */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6,1fr)', gap: 10 }}>
-        <KPICard label="Total Revenue" value={fmt(rev)} sub={`${nDays} days`} />
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 10 }}>
+        <KPICard label="Gross Revenue (Inc. GST)" value={fmt(rev)} sub={`${nDays} days`} />
+        <KPICard label="Net Revenue (Exc. GST)" value={fmt(excRev)} sub={`GST: ${fmt(rev - excRev)}`} />
         <KPICard label="Orders" value={fmtN(nOrders)} sub={subView === 'overview' ? 'FBF + Non-FBF' : subView === 'fbf' ? 'FBF only' : 'Non-FBF only'} />
+        <KPICard label="Daily Avg Revenue" value={fmt(rev / nDays)} sub="Per day" />
+      </div>
+      {/* KPI Row 1b */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 10 }}>
         <KPICard label="AOV" value={`₹${Math.round(aov).toLocaleString('en-IN')}`} sub="Avg order value" />
         <KPICard label="ASP" value={`₹${Math.round(asp).toLocaleString('en-IN')}`} sub="Avg selling price" />
         <KPICard label="Total Units" value={fmtN(qty)} />
-        <KPICard label="Daily Avg Revenue" value={fmt(rev / nDays)} sub="Per day" />
       </div>
 
       {/* KPI Row 2 */}
