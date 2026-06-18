@@ -1000,20 +1000,22 @@ function AmazonTab({ data }) {
               ))}
             </Card>
             {/* Top States */}
-            <Card title="Top States · Seller Central">
-              <div style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '0 0 6px', borderBottom: `1px solid ${C.border}`, marginBottom: 2 }}>
-                <span style={{ width: 8, flexShrink: 0 }} />
-                <span style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.05em', color: C.t3, width: 110, flexShrink: 0 }}>State</span>
-                <span style={{ flex: 1 }} />
-                <span style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.05em', color: C.t3, minWidth: 62, textAlign: 'right' }}>Revenue</span>
-                <span style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.05em', color: C.t3, width: 50, textAlign: 'right' }}>Orders</span>
-              </div>
-              <div style={{ overflowY: 'auto', maxHeight: 520 }}>
-                {(amzSC.states || []).map((s, i) => (
-                  <HBar key={s.state} dot={['#E8930A','#2E74CC','#0D9E68','#CC4078','#9B59B6','#534AB7','#CC8A00','#E24B4A'][i % 8]} label={s.state?.charAt(0) + s.state?.slice(1).toLowerCase()} width={(s.rev / maxStateRev) * 100} value={fmt(s.rev)} pctVal={fmtN(s.orders)} />
-                ))}
-              </div>
-            </Card>
+            <div style={{ alignSelf: 'flex-start' }}>
+              <Card title="Top States · Seller Central">
+                <div style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '0 0 6px', borderBottom: `1px solid ${C.border}`, marginBottom: 2 }}>
+                  <span style={{ width: 8, flexShrink: 0 }} />
+                  <span style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.05em', color: C.t3, width: 110, flexShrink: 0 }}>State</span>
+                  <span style={{ flex: 1 }} />
+                  <span style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.05em', color: C.t3, minWidth: 62, textAlign: 'right' }}>Revenue</span>
+                  <span style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.05em', color: C.t3, width: 50, textAlign: 'right' }}>Orders</span>
+                </div>
+                <div style={{ overflowY: 'auto', maxHeight: 520 }}>
+                  {(amzSC.states || []).map((s, i) => (
+                    <HBar key={s.state} dot={['#E8930A','#2E74CC','#0D9E68','#CC4078','#9B59B6','#534AB7','#CC8A00','#E24B4A'][i % 8]} label={s.state?.charAt(0) + s.state?.slice(1).toLowerCase()} width={(s.rev / maxStateRev) * 100} value={fmt(s.rev)} pctVal={fmtN(s.orders)} />
+                  ))}
+                </div>
+              </Card>
+            </div>
           </div>
         </div>
       )}
@@ -1089,20 +1091,22 @@ function AmazonTab({ data }) {
           </Card>
           <div className="g-2" style={{ alignItems: 'stretch' }}>
             {/* Top States */}
-            <Card title="Top States">
-              <div style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '0 0 6px', borderBottom: `1px solid ${C.border}`, marginBottom: 2 }}>
-                <span style={{ width: 8, flexShrink: 0 }} />
-                <span style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.05em', color: C.t3, width: 110, flexShrink: 0 }}>State</span>
-                <span style={{ flex: 1 }} />
-                <span style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.05em', color: C.t3, minWidth: 62, textAlign: 'right' }}>Revenue</span>
-                <span style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.05em', color: C.t3, width: 50, textAlign: 'right' }}>Orders</span>
-              </div>
-              <div style={{ overflowY: 'auto', maxHeight: 520 }}>
-                {(amzSC.states || []).map((s, i) => (
-                  <HBar key={s.state} dot={['#E8930A','#2E74CC','#0D9E68','#CC4078','#9B59B6','#534AB7','#CC8A00','#E24B4A','#FF6B35','#4AB89A'][i % 10]} label={s.state?.charAt(0) + s.state?.slice(1).toLowerCase()} width={(s.rev / maxStateRev) * 100} value={fmt(s.rev)} pctVal={fmtN(s.orders)} />
-                ))}
-              </div>
-            </Card>
+            <div style={{ alignSelf: 'flex-start' }}>
+              <Card title="Top States">
+                <div style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '0 0 6px', borderBottom: `1px solid ${C.border}`, marginBottom: 2 }}>
+                  <span style={{ width: 8, flexShrink: 0 }} />
+                  <span style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.05em', color: C.t3, width: 110, flexShrink: 0 }}>State</span>
+                  <span style={{ flex: 1 }} />
+                  <span style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.05em', color: C.t3, minWidth: 62, textAlign: 'right' }}>Revenue</span>
+                  <span style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.05em', color: C.t3, width: 50, textAlign: 'right' }}>Orders</span>
+                </div>
+                <div style={{ overflowY: 'auto', maxHeight: 520 }}>
+                  {(amzSC.states || []).map((s, i) => (
+                    <HBar key={s.state} dot={['#E8930A','#2E74CC','#0D9E68','#CC4078','#9B59B6','#534AB7','#CC8A00','#E24B4A','#FF6B35','#4AB89A'][i % 10]} label={s.state?.charAt(0) + s.state?.slice(1).toLowerCase()} width={(s.rev / maxStateRev) * 100} value={fmt(s.rev)} pctVal={fmtN(s.orders)} />
+                  ))}
+                </div>
+              </Card>
+            </div>
             {/* Top SKUs */}
             <Card title="Top SKUs · Seller Central">
               <DataTable columns={[
