@@ -943,7 +943,8 @@ function SalesPage({ data, filters, setFilters }) {
             <option value="">All States</option>{states.map(s => <option key={s} value={s}>{s}</option>)}
           </select>
           <input type="text" placeholder="Search SKU…" value={filters.sku} onChange={e => setFilters(f => ({ ...f, sku: e.target.value }))} className="fsrch" />
-          <button onClick={() => setFilters(f => ({ ...f, category: '', subCategory: '', state: '', sku: '', subChannel: '' }))} className="fclr">✕ Clear</button>
+          <input type="text" placeholder="Voucher code(s), comma-sep…" value={filters.voucher} onChange={e => setFilters(f => ({ ...f, voucher: e.target.value }))} className="fsrch" style={{ width: 200 }} />
+          <button onClick={() => setFilters(f => ({ ...f, category: '', subCategory: '', state: '', sku: '', subChannel: '', voucher: '' }))} className="fclr">✕ Clear</button>
         </div>
       </div>
       {/* Content */}
@@ -1218,7 +1219,7 @@ function Skeleton() {
 export default function App() {
   const [page, setPage] = useState('overview')
   const def = getDefaultDates()
-  const [filters, setFilters] = useState({ start: def.start, end: def.end, category: '', subCategory: '', state: '', sku: '', subChannel: '' })
+  const [filters, setFilters] = useState({ start: def.start, end: def.end, category: '', subCategory: '', state: '', sku: '', subChannel: '', voucher: '' })
   const [rawRows, setRawRows] = useState(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
@@ -1249,17 +1250,18 @@ export default function App() {
     const dateChanged = filters.start !== prevDateRef.current.start || filters.end !== prevDateRef.current.end
     if (dateChanged) { prevDateRef.current = { start: filters.start, end: filters.end }; setRawRows(null) }
     debounceRef.current = setTimeout(() => {
-      const { start, end, category, subCategory, state, sku, subChannel } = filtersRef.current
+      const { start, end, category, subCategory, state, sku, subChannel, voucher } = filtersRef.current
       const extra = {}
       if (category) extra.category = category
       if (subCategory) extra.subCategory = subCategory
       if (state) extra.state = state
       if (sku) extra.sku = sku
       if (subChannel) extra.subChannel = subChannel
+      if (voucher) extra.voucher = voucher
       fetchData(start, end, extra)
     }, 600)
     return () => clearTimeout(debounceRef.current)
-  }, [filters.start, filters.end, filters.category, filters.subCategory, filters.state, filters.sku, filters.subChannel, fetchData])
+  }, [filters.start, filters.end, filters.category, filters.subCategory, filters.state, filters.sku, filters.subChannel, filters.voucher, fetchData])
 
   const data = useMemo(() => { if (!rawRows) return null; if (rawRows.source === 'postgres-aggregated') return rawRows; return processData(rawRows) }, [rawRows])
   const alerts = useMemo(() => data ? detectAlerts(data) : [], [data])

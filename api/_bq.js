@@ -20,13 +20,21 @@ export function getBQ() {
 }
 
 export function buildQuery(s, e, filters = {}) {
-  const { category, subCategory, state, sku, subChannel } = filters
+  const { category, subCategory, state, sku, subChannel, voucher } = filters
   const whereClauses = []
   if (category) whereClauses.push(`COALESCE(im.Category, 'Frido') = '${category.replace(/'/g, "''")}'`)
   if (subCategory) whereClauses.push(`COALESCE(im.SubCategory, 'Frido') = '${subCategory.replace(/'/g, "''")}'`)
   if (state) whereClauses.push(`UPPER(TRIM(u.State)) = '${state.toUpperCase().replace(/'/g, "''")}'`)
   if (sku) whereClauses.push(`UPPER(TRIM(u.ChannelSKUCode)) LIKE '%${sku.toUpperCase().replace(/'/g, "''").replace(/%/g, '\\%')}%'`)
   if (subChannel) whereClauses.push(`u.SubChannel = '${subChannel.replace(/'/g, "''")}'`)
+  if (voucher) {
+    const codes = voucher.split(',').map(v => v.trim().toUpperCase().replace(/'/g, "''")).filter(Boolean)
+    if (codes.length === 1) {
+      whereClauses.push(`UPPER(TRIM(u.voucher_code)) LIKE '%${codes[0]}%'`)
+    } else if (codes.length > 1) {
+      whereClauses.push(`(${codes.map(c => `UPPER(TRIM(u.voucher_code)) LIKE '%${c}%'`).join(' OR ')})`)
+    }
+  }
   const whereClause = whereClauses.length ? `WHERE ${whereClauses.join(' AND ')} ` : ''
   return `WITH
 sku_mapping AS (SELECT DISTINCT TRIM(productid) AS productid, TRIM(masterskucode) AS masterskucode FROM \`frido-429506.sharepoint_to_gcp.Frido_Item_Master__productid_sku_mapping\` WHERE TRIM(masterskucode) NOT IN ('', 'not found')),
