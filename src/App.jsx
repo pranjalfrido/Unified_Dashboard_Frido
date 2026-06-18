@@ -747,9 +747,20 @@ function ShopifyTab({ data, filters, setFilters }) {
         <OrderValuePieCard buckets={data.buckets || {}} bucketRev={data.bucketRev || {}} />
       </div>
       <div className="g-2" style={{ alignItems: 'stretch' }}>
-      <Card title="Daily Revenue Trend · Shopify">
-        <AreaTrendChart data={dailyArr} dataKey="Shopify" color={C.ch['Shopify']} />
-      </Card>
+        <Card title="Daily Revenue Trend · Shopify">
+          <AreaTrendChart data={dailyArr} dataKey="Shopify" color={C.ch['Shopify']} />
+        </Card>
+        <Card title="Daily Refund Rate %">
+          <ResponsiveContainer width="100%" height={180}>
+            <LineChart data={refundTrend} margin={{top:0,right:0,bottom:0,left:0}}>
+              <CartesianGrid strokeDasharray="3 3" stroke={C.border} vertical={false} />
+              <XAxis dataKey="date" tick={{ fontSize: 10, fill: C.t3 }} tickFormatter={d => d?.slice(5)} />
+              <YAxis tick={{ fontSize: 10, fill: C.t3 }} tickFormatter={v => `${v.toFixed(1)}%`} width={40} />
+              <Tooltip content={<ChartTooltip />} />
+              <Line type="monotone" dataKey="rate" stroke={C.red?.tx || '#E24B4A'} strokeWidth={2} dot={false} name="Refund Rate %" />
+            </LineChart>
+          </ResponsiveContainer>
+        </Card>
       </div>
       <div className="g-2">
         <Card title="Financial Status">
@@ -775,17 +786,6 @@ function ShopifyTab({ data, filters, setFilters }) {
           </ResponsiveContainer>
         </Card>
       </div>
-      <Card title="Daily Refund Rate %">
-        <ResponsiveContainer width="100%" height={180}>
-          <LineChart data={refundTrend} margin={{top:0,right:0,bottom:0,left:0}}>
-            <CartesianGrid strokeDasharray="3 3" stroke={C.border} vertical={false} />
-            <XAxis dataKey="date" tick={{ fontSize: 10, fill: C.t3 }} tickFormatter={d => d?.slice(5)} />
-            <YAxis tick={{ fontSize: 10, fill: C.t3 }} tickFormatter={v => `${v.toFixed(1)}%`} width={40} />
-            <Tooltip content={<ChartTooltip />} />
-            <Line type="monotone" dataKey="rate" stroke={C.red?.tx || '#E24B4A'} strokeWidth={2} dot={false} name="Refund Rate %" />
-          </LineChart>
-        </ResponsiveContainer>
-      </Card>
       <div className="g-2" style={{ alignItems: 'stretch' }}>
         <Card title="Category Revenue" style={{ display: 'flex', flexDirection: 'column' }}>
           <div style={{ overflowX: 'auto' }}>
