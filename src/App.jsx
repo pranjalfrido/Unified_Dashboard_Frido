@@ -1048,20 +1048,20 @@ function AmazonTab({ data }) {
           </div>
           {/* Cancellation summary — full width */}
           <Card title="Order Status Breakdown · Seller Central">
-            <div style={{ display: 'flex', alignItems: 'center', gap: 24, flexWrap: 'wrap' }}>
-              <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', flex: 1 }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap' }}>
+              <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
                 {(amzSC.status || []).map(s => {
                   const clr = { Shipped: '#2E74CC', Pending: '#E8930A', Cancelled: '#E24B4A', Shipping: '#9B59B6' }[s.status] || C.t3
                   return (
-                    <div key={s.status} style={{ textAlign: 'center', padding: '10px 20px', borderRadius: 10, background: C.bg, border: `1px solid ${C.border}`, minWidth: 100 }}>
+                    <div key={s.status} style={{ textAlign: 'center', padding: '10px 24px', borderRadius: 10, background: C.bg, border: `1px solid ${C.border}` }}>
                       <div style={{ fontSize: 20, fontWeight: 700, color: clr, fontFamily: 'var(--mono)' }}>{fmtN(s.orders)}</div>
-                      <div style={{ fontSize: 11, color: C.t3, marginTop: 3 }}>{s.status}</div>
+                      <div style={{ fontSize: 11, color: C.t2, marginTop: 3, fontWeight: 500 }}>{s.status}</div>
                       <div style={{ fontSize: 11, color: C.t3 }}>{scStatusTotal ? (s.orders / scStatusTotal * 100).toFixed(1) : 0}%</div>
                     </div>
                   )
                 })}
               </div>
-              <div style={{ textAlign: 'right', paddingRight: 8 }}>
+              <div style={{ textAlign: 'right' }}>
                 <div style={{ fontSize: 11, color: C.t3 }}>Total Orders</div>
                 <div style={{ fontSize: 22, fontWeight: 700, color: C.t1, fontFamily: 'var(--mono)' }}>{fmtN(scStatusTotal)}</div>
                 <div style={{ fontSize: 11, color: C.red.tx, marginTop: 4 }}>Cancel Rate: <strong>{scCancelRate.toFixed(1)}%</strong></div>
