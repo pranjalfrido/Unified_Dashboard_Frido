@@ -637,9 +637,6 @@ function ShopifyTab({ data, filters, setFilters }) {
         <Card title="Sub-channel Breakdown">
           {subChKeys.map((k, i) => { const dots = ['#FFD600','#0D9E68','#2E74CC','#CC4078','#9B59B6']; return <HBar key={k} dot={dots[i % dots.length]} label={k} width={(subChannelMap[k].rev / maxSubChRev) * 100} value={fmt(subChannelMap[k].rev)} pctVal={rev ? pct(subChannelMap[k].rev, rev) : '—'} /> })}
         </Card>
-        <Card title="Voucher Breakdown">
-          {Object.entries(voucherMap).sort((a, b) => b[1].orders - a[1].orders).map(([k, v], i) => { const dots = ['#B0ADB8','#0D9E68','#2E74CC','#CC8A00','#CC4078']; return <HBar key={k} dot={dots[i % dots.length]} label={k} width={(v.orders / maxVoucherOrders) * 100} value={fmtN(v.orders)} pctVal={pct(v.orders, totalVoucherOrders)} /> })}
-        </Card>
         <Card title="High-ticket Orders ≥₹10K">
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10, paddingTop: 4 }}>
             <KPICard label="High-ticket Orders" value={fmtN(data.htCount || 0)} sub={`≥ ₹10,000 per order`} />
