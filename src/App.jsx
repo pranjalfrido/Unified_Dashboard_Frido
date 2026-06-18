@@ -980,8 +980,8 @@ function AmazonTab({ data }) {
                 </BarChart>
               </ResponsiveContainer>
             </Card>
-          {/* Row: FBA vs MFN + Order Status Pie */}
-          <div className="g-2" style={{ alignItems: 'stretch' }}>
+          {/* FBA vs MFN — full width */}
+          <div>
             <Card title="FBA vs MFN · Seller Central">
               {[{ label: 'FBA (Fulfilled by Amazon)', ...scFBA }, { label: 'MFN (Merchant Fulfilled)', ...scMFN }].map((r, i) => (
                 <div key={r.label} style={{ padding: '10px 0', borderBottom: i === 0 ? `1px solid ${C.border}` : 'none' }}>
@@ -1000,19 +1000,6 @@ function AmazonTab({ data }) {
                   </div>
                 </div>
               ))}
-            </Card>
-            {/* Order Status Pie */}
-            <Card title="Order Status Distribution">
-              <ResponsiveContainer width="100%" height={220}>
-                <PieChart>
-                  <Pie data={(amzSC.status || []).map(s => ({ name: s.status, value: s.orders }))} cx="50%" cy="50%" outerRadius={80} dataKey="value" label={({ name, percent }) => `${name} ${(percent*100).toFixed(0)}%`} labelLine={false} fontSize={10}>
-                    {(amzSC.status || []).map((s) => (
-                      <Cell key={s.status} fill={({ Shipped: '#2E74CC', Pending: '#E8930A', Cancelled: '#E24B4A', Shipping: '#9B59B6' })[s.status] || C.t3} />
-                    ))}
-                  </Pie>
-                  <Tooltip formatter={(v) => fmtN(v)} />
-                </PieChart>
-              </ResponsiveContainer>
             </Card>
           </div>
           {/* Row: Top 5 States bar + All States scrollable */}
