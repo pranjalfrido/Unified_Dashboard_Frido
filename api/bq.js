@@ -51,6 +51,12 @@ export default async function handler(req, res) {
     amzIntlCountries: `SELECT Country, COUNT(DISTINCT amazon_order_id) AS orders, ROUND(SUM(CAST(item_price AS FLOAT64)),0) AS rev, SUM(CAST(quantity AS INT64)) AS units FROM \`frido-429506.production.amazon_seller_central_uk_uae_all_orders\` WHERE purchase_date_ist BETWEEN '${start}' AND '${end}' AND item_status != 'Cancelled' GROUP BY Country ORDER BY rev DESC`,
     amzIntlSKUs: `SELECT sku, Country, COUNT(DISTINCT amazon_order_id) AS orders, SUM(CAST(quantity AS INT64)) AS units, ROUND(SUM(CAST(item_price AS FLOAT64)),0) AS rev FROM \`frido-429506.production.amazon_seller_central_uk_uae_all_orders\` WHERE purchase_date_ist BETWEEN '${start}' AND '${end}' AND item_status != 'Cancelled' GROUP BY sku, Country ORDER BY rev DESC LIMIT 20`,
     amzIntlDaily: `SELECT CAST(purchase_date_ist AS STRING) AS date, Country, COUNT(DISTINCT amazon_order_id) AS orders, ROUND(SUM(CAST(item_price AS FLOAT64)),0) AS rev FROM \`frido-429506.production.amazon_seller_central_uk_uae_all_orders\` WHERE purchase_date_ist BETWEEN '${start}' AND '${end}' AND item_status != 'Cancelled' GROUP BY date, Country ORDER BY date`,
+    fkTotals: `WITH q AS (${base}) SELECT CASE WHEN UPPER(TRIM(u.SubChannel))='FLIPKART FBF' THEN 'FBF' ELSE 'NON-FBF' END AS sub, COUNT(DISTINCT u.OrderId) AS orders, ROUND(SUM(u.SellingPrice_Inc_GST),0) AS rev, ROUND(SUM(u.SellingPrice_Exc_GST),0) AS exc_rev, SUM(u.ItemQty) AS units FROM q u WHERE u.Channel='Flipkart' GROUP BY sub`,
+    fkDaily: `WITH q AS (${base}) SELECT CAST(u.OrderDate AS STRING) AS date, CASE WHEN UPPER(TRIM(u.SubChannel))='FLIPKART FBF' THEN 'FBF' ELSE 'NON-FBF' END AS sub, COUNT(DISTINCT u.OrderId) AS orders, ROUND(SUM(u.SellingPrice_Inc_GST),0) AS rev FROM q u WHERE u.Channel='Flipkart' GROUP BY date, sub ORDER BY date`,
+    fkStatus: `WITH q AS (${base}) SELECT u.Order_Status AS status, CASE WHEN UPPER(TRIM(u.SubChannel))='FLIPKART FBF' THEN 'FBF' ELSE 'NON-FBF' END AS sub, COUNT(DISTINCT u.OrderId) AS orders FROM q u WHERE u.Channel='Flipkart' AND u.Order_Status IS NOT NULL GROUP BY status, sub ORDER BY orders DESC`,
+    fkSKUs: `WITH q AS (${base}) SELECT u.ChannelSKUCode AS sku, CASE WHEN UPPER(TRIM(u.SubChannel))='FLIPKART FBF' THEN 'FBF' ELSE 'NON-FBF' END AS sub, COUNT(DISTINCT u.OrderId) AS orders, SUM(u.ItemQty) AS units, ROUND(SUM(u.SellingPrice_Inc_GST),0) AS rev FROM q u WHERE u.Channel='Flipkart' AND u.ChannelSKUCode IS NOT NULL GROUP BY sku, sub ORDER BY rev DESC LIMIT 30`,
+    fkCategories: `WITH q AS (${base}) SELECT COALESCE(im.Category,'Unknown') AS category, CASE WHEN UPPER(TRIM(u.SubChannel))='FLIPKART FBF' THEN 'FBF' ELSE 'NON-FBF' END AS sub, COUNT(DISTINCT u.OrderId) AS orders, ROUND(SUM(u.SellingPrice_Inc_GST),0) AS rev, SUM(u.ItemQty) AS units FROM q u LEFT JOIN (SELECT DISTINCT TRIM(Product_Code) AS Product_Code, TRIM(Category_Name) AS Category FROM \`frido-429506.sharepoint_to_gcp.Frido_Item_Master__frido_item_sku_master\` WHERE TRIM(Product_Code)!='') im ON COALESCE((SELECT masterskucode FROM \`frido-429506.sharepoint_to_gcp.Frido_Item_Master__productid_sku_mapping\` WHERE TRIM(productid)=TRIM(u.ProductId) LIMIT 1), TRIM(u.ProductId))=im.Product_Code WHERE u.Channel='Flipkart' GROUP BY category, sub ORDER BY rev DESC`,
+    fkStates: `WITH q AS (${base}) SELECT UPPER(TRIM(u.State)) AS state, CASE WHEN UPPER(TRIM(u.SubChannel))='FLIPKART FBF' THEN 'FBF' ELSE 'NON-FBF' END AS sub, COUNT(DISTINCT u.OrderId) AS orders, ROUND(SUM(u.SellingPrice_Inc_GST),0) AS rev FROM q u WHERE u.Channel='Flipkart' AND u.State IS NOT NULL GROUP BY state, sub ORDER BY rev DESC`,
   }
 
   try {
@@ -166,6 +172,14 @@ export default async function handler(req, res) {
         countries: (r.amzIntlCountries || []).map(x => ({ country: x.Country, orders: parseInt(x.orders)||0, rev: parseFloat(x.rev)||0, units: parseInt(x.units)||0 })),
         skus: (r.amzIntlSKUs || []).map(x => ({ sku: x.sku, country: x.Country, orders: parseInt(x.orders)||0, units: parseInt(x.units)||0, rev: parseFloat(x.rev)||0 })),
         daily: (r.amzIntlDaily || []).map(x => ({ date: x.date, country: x.Country, orders: parseInt(x.orders)||0, rev: parseFloat(x.rev)||0 })),
+      },
+      flipkart: {
+        totals: (r.fkTotals || []).map(x => ({ sub: x.sub, orders: parseInt(x.orders)||0, rev: parseFloat(x.rev)||0, excRev: parseFloat(x.exc_rev)||0, units: parseInt(x.units)||0 })),
+        daily: (r.fkDaily || []).map(x => ({ date: x.date, sub: x.sub, orders: parseInt(x.orders)||0, rev: parseFloat(x.rev)||0 })),
+        status: (r.fkStatus || []).map(x => ({ status: x.status, sub: x.sub, orders: parseInt(x.orders)||0 })),
+        skus: (r.fkSKUs || []).map(x => ({ sku: x.sku, sub: x.sub, orders: parseInt(x.orders)||0, units: parseInt(x.units)||0, rev: parseFloat(x.rev)||0 })),
+        categories: (r.fkCategories || []).map(x => ({ category: x.category, sub: x.sub, orders: parseInt(x.orders)||0, rev: parseFloat(x.rev)||0, units: parseInt(x.units)||0 })),
+        states: (r.fkStates || []).map(x => ({ state: x.state, sub: x.sub, orders: parseInt(x.orders)||0, rev: parseFloat(x.rev)||0 })),
       },
     })
   } catch (err) {

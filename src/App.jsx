@@ -1294,86 +1294,73 @@ function AmazonTab({ data }) {
 }
 
 function FlipkartTab({ data }) {
-  const [subView, setSubView] = useState('overview') // 'overview' | 'fbf' | 'nonfbf'
+  const [subView, setSubView] = useState('overview')
   const subToggleStyle = active => ({ fontSize: 12, fontWeight: 700, padding: '5px 16px', borderRadius: 7, border: `1.5px solid ${active ? C.t1 : C.border}`, background: active ? C.t1 : C.card, color: active ? '#fff' : C.t1, cursor: 'pointer', fontFamily: 'var(--font)', transition: 'all .15s', boxShadow: active ? '0 2px 6px rgba(0,0,0,.15)' : 'none' })
 
-  const allRows = (data.rows || []).filter(r => r.Channel === 'Flipkart')
-  const allOrders = (data.orders || []).filter(o => o.channel === 'Flipkart')
-
-  const fbfRows = allRows.filter(r => r.SubChannel === 'Flipkart FBF')
-  const fbfOrders = allOrders.filter(o => o.subChannel === 'Flipkart FBF')
-  const nfbfRows = allRows.filter(r => r.SubChannel === 'Flipkart NON-FBF')
-  const nfbfOrders = allOrders.filter(o => o.subChannel === 'Flipkart NON-FBF')
-
-  const rows = subView === 'fbf' ? fbfRows : subView === 'nonfbf' ? nfbfRows : allRows
-  const orders = subView === 'fbf' ? fbfOrders : subView === 'nonfbf' ? nfbfOrders : allOrders
-
-  const rev = orders.reduce((s, o) => s + o.rev, 0)
-  const nOrders = orders.length
-  const aov = nOrders ? rev / nOrders : 0
-  const qty = orders.reduce((s, o) => s + o.qty, 0)
-  const asp = qty ? rev / qty : 0
-  const excRev = rows.reduce((s, r) => s + parseFloat(r.SellingPrice_Exc_GST || 0), 0)
+  const fk = data.flipkart || {}
   const nDays = data.nDays || 1
+  const statusColors = { Delivered: C.green.tx, Dispatched: C.blue.tx, RTO: C.amber.tx, Cancelled: C.red.tx, Shipped: '#2E74CC', Pending: '#E8930A', Return: '#9B59B6' }
 
-  // FBF vs Non-FBF split for overview
-  const fbfRev = fbfOrders.reduce((s, o) => s + o.rev, 0)
-  const nfbfRev = nfbfOrders.reduce((s, o) => s + o.rev, 0)
-  const fbfOrderCount = fbfOrders.length
-  const nfbfOrderCount = nfbfOrders.length
+  // Filter all arrays by subView
+  const filterSub = arr => subView === 'overview' ? arr : arr.filter(x => x.sub === (subView === 'fbf' ? 'FBF' : 'NON-FBF'))
 
-  // Daily trend — split by FBF/NonFBF
+  const totals = filterSub(fk.totals || [])
+  const rev = totals.reduce((s, x) => s + x.rev, 0)
+  const nOrders = totals.reduce((s, x) => s + x.orders, 0)
+  const qty = totals.reduce((s, x) => s + x.units, 0)
+  const excRev = totals.reduce((s, x) => s + x.excRev, 0)
+  const aov = nOrders ? rev / nOrders : 0
+  const asp = qty ? rev / qty : 0
+
+  const fbfT = (fk.totals || []).find(x => x.sub === 'FBF') || { rev: 0, orders: 0, units: 0 }
+  const nfbfT = (fk.totals || []).find(x => x.sub === 'NON-FBF') || { rev: 0, orders: 0, units: 0 }
+  const allRev = fbfT.rev + nfbfT.rev
+
+  // Daily chart
   const dailyMap = {}
-  allOrders.forEach(o => {
-    if (!dailyMap[o.date]) dailyMap[o.date] = { date: o.date, FBF: 0, NonFBF: 0, FBF_o: 0, NonFBF_o: 0 }
-    if (o.subChannel === 'Flipkart FBF') { dailyMap[o.date].FBF += o.rev; dailyMap[o.date].FBF_o += 1 }
-    else { dailyMap[o.date].NonFBF += o.rev; dailyMap[o.date].NonFBF_o += 1 }
+  ;(fk.daily || []).forEach(x => {
+    if (!dailyMap[x.date]) dailyMap[x.date] = { date: x.date, FBF: 0, NonFBF: 0 }
+    if (x.sub === 'FBF') dailyMap[x.date].FBF = x.rev
+    else dailyMap[x.date].NonFBF = x.rev
   })
   const dailyArr = Object.values(dailyMap).sort((a, b) => a.date?.localeCompare(b.date))
+  const subDailyArr = filterSub(fk.daily || []).map(x => ({ date: x.date, rev: x.rev, orders: x.orders }))
+    .reduce((acc, x) => { const e = acc.find(a => a.date === x.date); if (e) { e.rev += x.rev } else acc.push({ ...x }); return acc }, [])
+    .sort((a, b) => a.date?.localeCompare(b.date))
 
-  // Daily for selected sub-view
-  const subDailyMap = {}
-  orders.forEach(o => { if (!subDailyMap[o.date]) subDailyMap[o.date] = { date: o.date, rev: 0, orders: 0 }; subDailyMap[o.date].rev += o.rev; subDailyMap[o.date].orders += 1 })
-  const subDailyArr = Object.values(subDailyMap).sort((a, b) => a.date?.localeCompare(b.date))
+  // Status
+  const statusFiltered = filterSub(fk.status || [])
+  const statusAgg = {}
+  statusFiltered.forEach(x => { statusAgg[x.status] = (statusAgg[x.status] || 0) + x.orders })
+  const statusTotal = Object.values(statusAgg).reduce((s, v) => s + v, 0)
 
-  // Status breakdown
-  const statusMap = {}
-  orders.forEach(o => { const s = o.orderStatus || o.fulfilmentStatus || 'Unknown'; statusMap[s] = (statusMap[s] || 0) + 1 })
-  const statusTotal = Object.values(statusMap).reduce((s, v) => s + v, 0)
-
-  // Category breakdown
-  const catMap = {}
-  rows.forEach(r => {
-    const cat = r.Category || 'Unknown'
-    if (!catMap[cat]) catMap[cat] = { rev: 0, orders: new Set(), units: 0 }
-    catMap[cat].rev += parseFloat(r.SellingPrice_Inc_GST || 0)
-    catMap[cat].orders.add(r.OrderId)
-    catMap[cat].units += parseInt(r.ItemQty || 0)
+  // Categories
+  const catFiltered = filterSub(fk.categories || [])
+  const catAgg = {}
+  catFiltered.forEach(x => {
+    if (!catAgg[x.category]) catAgg[x.category] = { name: x.category, rev: 0, orders: 0, units: 0 }
+    catAgg[x.category].rev += x.rev; catAgg[x.category].orders += x.orders; catAgg[x.category].units += x.units
   })
-  const catRows = Object.entries(catMap).map(([k, v]) => ({ name: k, rev: v.rev, orders: v.orders.size, units: v.units, aov: v.orders.size ? v.rev / v.orders.size : 0 })).sort((a, b) => b.rev - a.rev)
+  const catRows = Object.values(catAgg).map(v => ({ ...v, aov: v.orders ? v.rev / v.orders : 0 })).sort((a, b) => b.rev - a.rev)
 
-  // SKU breakdown
-  const skuMap = {}
-  rows.forEach(r => {
-    const sku = r.ChannelSKUCode || r.ProductId || 'Unknown'
-    if (!skuMap[sku]) skuMap[sku] = { sku, rev: 0, orders: new Set(), units: 0, subChannel: r.SubChannel }
-    skuMap[sku].rev += parseFloat(r.SellingPrice_Inc_GST || 0)
-    skuMap[sku].orders.add(r.OrderId)
-    skuMap[sku].units += parseInt(r.ItemQty || 0)
+  // SKUs
+  const skuFiltered = filterSub(fk.skus || [])
+  const skuAgg = {}
+  skuFiltered.forEach(x => {
+    if (!skuAgg[x.sku]) skuAgg[x.sku] = { sku: x.sku, rev: 0, orders: 0, units: 0, sub: x.sub }
+    skuAgg[x.sku].rev += x.rev; skuAgg[x.sku].orders += x.orders; skuAgg[x.sku].units += x.units
   })
-  const skuRows = Object.values(skuMap).map(v => ({ ...v, orders: v.orders.size, aov: v.orders.size ? v.rev / v.orders.size : 0 })).sort((a, b) => b.rev - a.rev).slice(0, 20)
+  const skuRows = Object.values(skuAgg).sort((a, b) => b.rev - a.rev).slice(0, 20)
 
   // States
-  const stateMap = {}
-  orders.forEach(o => {
-    const st = o.state || 'Unknown'
-    if (!stateMap[st]) stateMap[st] = { state: st, rev: 0, orders: 0 }
-    stateMap[st].rev += o.rev; stateMap[st].orders += 1
+  const stateFiltered = filterSub(fk.states || [])
+  const stateAgg = {}
+  stateFiltered.forEach(x => {
+    if (!stateAgg[x.state]) stateAgg[x.state] = { state: x.state, rev: 0, orders: 0 }
+    stateAgg[x.state].rev += x.rev; stateAgg[x.state].orders += x.orders
   })
-  const stateRows = Object.values(stateMap).sort((a, b) => b.rev - a.rev)
+  const stateRows = Object.values(stateAgg).sort((a, b) => b.rev - a.rev)
   const maxStateRev = Math.max(...stateRows.map(s => s.rev), 1)
-
-  const statusColors = { Delivered: C.green.tx, Dispatched: C.blue.tx, RTO: C.amber.tx, Cancelled: C.red.tx, Shipped: '#2E74CC', Pending: '#E8930A', Return: '#9B59B6' }
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
@@ -1400,13 +1387,13 @@ function FlipkartTab({ data }) {
         <KPICard label="Daily Avg Revenue" value={fmt(rev / nDays)} sub="Per day" />
       </div>
 
-      {/* KPI Row 2 — FBF vs Non-FBF split (overview only) or sub-view stats */}
+      {/* KPI Row 2 */}
       {subView === 'overview' ? (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 10 }}>
-          <KPICard label="FBF Revenue" value={fmt(fbfRev)} sub={`${fmtN(fbfOrderCount)} orders`} />
-          <KPICard label="Non-FBF Revenue" value={fmt(nfbfRev)} sub={`${fmtN(nfbfOrderCount)} orders`} />
-          <KPICard label="FBF Share" value={`${rev ? (fbfRev / rev * 100).toFixed(1) : 0}%`} sub="of total revenue" />
-          <KPICard label="Non-FBF Share" value={`${rev ? (nfbfRev / rev * 100).toFixed(1) : 0}%`} sub="of total revenue" />
+          <KPICard label="FBF Revenue" value={fmt(fbfT.rev)} sub={`${fmtN(fbfT.orders)} orders`} />
+          <KPICard label="Non-FBF Revenue" value={fmt(nfbfT.rev)} sub={`${fmtN(nfbfT.orders)} orders`} />
+          <KPICard label="FBF Share" value={`${allRev ? (fbfT.rev / allRev * 100).toFixed(1) : 0}%`} sub="of total revenue" />
+          <KPICard label="Non-FBF Share" value={`${allRev ? (nfbfT.rev / allRev * 100).toFixed(1) : 0}%`} sub="of total revenue" />
         </div>
       ) : (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 10 }}>
@@ -1416,7 +1403,7 @@ function FlipkartTab({ data }) {
         </div>
       )}
 
-      {/* Row 1 charts: Daily Revenue + FBF vs Non-FBF breakdown */}
+      {/* Row 1: Daily chart + FBF vs Non-FBF breakdown */}
       <div style={{ display: 'grid', gridTemplateColumns: '3fr 2fr', gap: 14, alignItems: 'stretch' }}>
         <Card title={subView === 'overview' ? 'Daily Revenue · FBF vs Non-FBF' : `Daily Revenue · ${subView === 'fbf' ? 'FBF' : 'Non-FBF'}`}>
           {subView === 'overview' ? (
@@ -1435,9 +1422,8 @@ function FlipkartTab({ data }) {
             <AreaTrendChart data={subDailyArr} color={subView === 'fbf' ? '#E8930A' : '#2E74CC'} />
           )}
         </Card>
-        {/* FBF vs Non-FBF card */}
         <Card title="FBF vs Non-FBF Breakdown">
-          {[{ label: 'FBF (Fulfilled by Flipkart)', rev: fbfRev, orders: fbfOrderCount }, { label: 'Non-FBF (Seller Fulfilled)', rev: nfbfRev, orders: nfbfOrderCount }].map((r, i) => (
+          {[{ label: 'FBF (Fulfilled by Flipkart)', ...fbfT }, { label: 'Non-FBF (Seller Fulfilled)', ...nfbfT }].map((r, i) => (
             <div key={r.label} style={{ padding: '10px 0', borderBottom: i === 0 ? `1px solid ${C.border}` : 'none' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
                 <span style={{ fontSize: 12, fontWeight: 600, color: C.t1 }}>{r.label}</span>
@@ -1446,10 +1432,10 @@ function FlipkartTab({ data }) {
               <div style={{ display: 'flex', gap: 16, marginBottom: 7 }}>
                 <span style={{ fontSize: 11, color: C.t3 }}>Orders: <strong style={{ color: C.t1 }}>{fmtN(r.orders)}</strong></span>
                 <span style={{ fontSize: 11, color: C.t3 }}>AOV: <strong style={{ color: C.t1 }}>₹{r.orders ? Math.round(r.rev / r.orders).toLocaleString('en-IN') : 0}</strong></span>
-                <span style={{ fontSize: 11, color: C.t3 }}>Share: <strong style={{ color: C.t1 }}>{rev ? (r.rev / rev * 100).toFixed(1) : 0}%</strong></span>
+                <span style={{ fontSize: 11, color: C.t3 }}>Share: <strong style={{ color: C.t1 }}>{allRev ? (r.rev / allRev * 100).toFixed(1) : 0}%</strong></span>
               </div>
               <div style={{ height: 6, background: C.bg, borderRadius: 3 }}>
-                <div style={{ height: '100%', borderRadius: 3, background: i === 0 ? '#E8930A' : '#2E74CC', width: `${rev ? (r.rev / rev * 100) : 0}%`, transition: 'width .5s' }} />
+                <div style={{ height: '100%', borderRadius: 3, background: i === 0 ? '#E8930A' : '#2E74CC', width: `${allRev ? (r.rev / allRev * 100) : 0}%`, transition: 'width .5s' }} />
               </div>
             </div>
           ))}
@@ -1459,7 +1445,7 @@ function FlipkartTab({ data }) {
       {/* Row 2: Order Status + Top States */}
       <div className="g-2" style={{ alignItems: 'stretch' }}>
         <Card title="Order Status Breakdown">
-          {Object.entries(statusMap).sort((a, b) => b[1] - a[1]).map(([s, count]) => {
+          {Object.entries(statusAgg).sort((a, b) => b[1] - a[1]).map(([s, count]) => {
             const clr = statusColors[s] || C.t3
             return (
               <div key={s} style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '5px 0', borderBottom: `1px solid ${C.border}` }}>
@@ -1474,8 +1460,7 @@ function FlipkartTab({ data }) {
         <div style={{ alignSelf: 'flex-start' }}>
           <Card title="Top States">
             <div style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '0 0 6px', borderBottom: `1px solid ${C.border}`, marginBottom: 2 }}>
-              <span style={{ width: 8, flexShrink: 0 }} />
-              <span style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.05em', color: C.t3, width: 110, flexShrink: 0 }}>State</span>
+              <span style={{ width: 8, flexShrink: 0 }} /><span style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.05em', color: C.t3, width: 110, flexShrink: 0 }}>State</span>
               <span style={{ flex: 1 }} />
               <span style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.05em', color: C.t3, minWidth: 62, textAlign: 'right' }}>Revenue</span>
               <span style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.05em', color: C.t3, width: 50, textAlign: 'right' }}>Orders</span>
@@ -1492,22 +1477,10 @@ function FlipkartTab({ data }) {
       {/* Category + SKU tables */}
       <div className="g-2">
         <Card title="Category Breakdown">
-          <DataTable columns={[
-            { key: 'name', label: 'Category' },
-            { key: 'rev', label: 'Revenue', align: 'right', mono: true, render: v => fmt(v) },
-            { key: 'orders', label: 'Orders', align: 'right', render: v => fmtN(v) },
-            { key: 'units', label: 'Units', align: 'right', render: v => fmtN(v) },
-            { key: 'aov', label: 'AOV', align: 'right', render: v => `₹${Math.round(v).toLocaleString('en-IN')}` },
-          ]} rows={catRows} />
+          <DataTable columns={[{ key: 'name', label: 'Category' }, { key: 'rev', label: 'Revenue', align: 'right', mono: true, render: v => fmt(v) }, { key: 'orders', label: 'Orders', align: 'right', render: v => fmtN(v) }, { key: 'units', label: 'Units', align: 'right', render: v => fmtN(v) }, { key: 'aov', label: 'AOV', align: 'right', render: v => `₹${Math.round(v).toLocaleString('en-IN')}` }]} rows={catRows} />
         </Card>
         <Card title="Top SKUs">
-          <DataTable columns={[
-            { key: 'sku', label: 'SKU' },
-            { key: 'subChannel', label: 'Type', render: v => v === 'Flipkart FBF' ? 'FBF' : 'Non-FBF' },
-            { key: 'rev', label: 'Revenue', align: 'right', mono: true, render: v => fmt(v) },
-            { key: 'orders', label: 'Orders', align: 'right', render: v => fmtN(v) },
-            { key: 'units', label: 'Units', align: 'right', render: v => fmtN(v) },
-          ]} rows={skuRows} />
+          <DataTable columns={[{ key: 'sku', label: 'SKU' }, { key: 'sub', label: 'Type' }, { key: 'rev', label: 'Revenue', align: 'right', mono: true, render: v => fmt(v) }, { key: 'orders', label: 'Orders', align: 'right', render: v => fmtN(v) }, { key: 'units', label: 'Units', align: 'right', render: v => fmtN(v) }]} rows={skuRows} />
         </Card>
       </div>
     </div>
