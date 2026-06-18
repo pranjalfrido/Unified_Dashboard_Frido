@@ -306,6 +306,48 @@ function VoucherDropdown({ voucherList, selected, onChange }) {
   )
 }
 
+// ── Searchable single-select dropdown ────────────────────────
+function SearchableSelect({ options, value, onChange, placeholder }) {
+  const [open, setOpen] = useState(false)
+  const [search, setSearch] = useState('')
+  const ref = useRef(null)
+  const filtered = options.filter(o => o.toLowerCase().includes(search.toLowerCase()))
+
+  useEffect(() => {
+    const handler = e => { if (ref.current && !ref.current.contains(e.target)) setOpen(false) }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [])
+
+  const select = v => { onChange(v); setSearch(''); setOpen(false) }
+
+  return (
+    <div ref={ref} style={{ position: 'relative', flexShrink: 0 }}>
+      <div onClick={() => setOpen(o => !o)} className="fsel" style={{ display: 'flex', alignItems: 'center', gap: 5, cursor: 'pointer', minWidth: 140, background: value ? '#FFF9CC' : undefined, borderColor: value ? C.acm : undefined }}>
+        <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: 11.5 }}>{value || placeholder}</span>
+        <span style={{ fontSize: 8, color: C.t3, flexShrink: 0 }}>▼</span>
+      </div>
+      {open && (
+        <div style={{ position: 'absolute', top: '110%', left: 0, zIndex: 200, background: C.card, border: `1px solid ${C.border2}`, borderRadius: 9, boxShadow: '0 8px 28px rgba(0,0,0,.14)', width: 220 }}>
+          <div style={{ padding: '7px 8px', borderBottom: `1px solid ${C.border}` }}>
+            <input autoFocus value={search} onChange={e => setSearch(e.target.value)} onMouseDown={e => e.stopPropagation()} placeholder={`Search ${placeholder?.toLowerCase() || ''}…`} style={{ width: '100%', fontSize: 11.5, padding: '4px 8px', border: `1px solid ${C.border2}`, borderRadius: 6, outline: 'none', fontFamily: 'var(--font)', background: C.bg }} />
+          </div>
+          <div style={{ maxHeight: 240, overflowY: 'auto' }}>
+            <div onClick={() => select('')} style={{ padding: '6px 10px', fontSize: 12, cursor: 'pointer', color: !value ? C.t1 : C.t2, fontWeight: !value ? 600 : 400, background: !value ? C.acl : undefined }}>{placeholder}</div>
+            <div style={{ height: 1, background: C.border }} />
+            {filtered.map(opt => (
+              <div key={opt} onClick={() => select(opt)} style={{ padding: '5px 10px', fontSize: 11.5, cursor: 'pointer', background: value === opt ? C.acl : undefined, color: value === opt ? C.t1 : C.t2, fontWeight: value === opt ? 600 : 400, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {opt}
+              </div>
+            ))}
+            {filtered.length === 0 && <div style={{ padding: '10px', fontSize: 11.5, color: C.t3, textAlign: 'center' }}>No results</div>}
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
 const CHART_METRICS = [
   { id: 'rev', label: 'Revenue', key: ch => ch },
   { id: 'orders', label: 'Orders', key: ch => ch + '_o' },
@@ -1017,12 +1059,8 @@ function SalesPage({ data, filters, setFilters }) {
       {/* Filter bar */}
       <div className="fbar">
         <div className="fbar-inner">
-          <select className="fsel" value={filters.category} onChange={e => setFilters(f => ({ ...f, category: e.target.value, subCategory: '' }))}>
-            <option value="">All Categories</option>{cats.map(c => <option key={c} value={c}>{c}</option>)}
-          </select>
-          <select className="fsel" value={filters.subCategory || ''} onChange={e => setFilters(f => ({ ...f, subCategory: e.target.value }))}>
-            <option value="">All Sub-categories</option>{subCats.map(s => <option key={s} value={s}>{s}</option>)}
-          </select>
+          <SearchableSelect options={cats} value={filters.category} onChange={v => setFilters(f => ({ ...f, category: v, subCategory: '' }))} placeholder="All Categories" />
+          <SearchableSelect options={subCats} value={filters.subCategory || ''} onChange={v => setFilters(f => ({ ...f, subCategory: v }))} placeholder="All Sub-categories" />
           <select className="fsel" value={filters.state} onChange={e => setFilters(f => ({ ...f, state: e.target.value }))}>
             <option value="">All States</option>{states.map(s => <option key={s} value={s}>{s}</option>)}
           </select>
