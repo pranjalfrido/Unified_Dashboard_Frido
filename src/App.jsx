@@ -739,7 +739,7 @@ function ShopifyTab({ data, filters, setFilters }) {
   const atRiskRev = (orderStatusRevMap['RTO'] || 0) + (orderStatusRevMap['Cancelled'] || 0)
   const repeatRate = nCusts ? (repeatCusts / nCusts * 100).toFixed(1) : '0'
 
-  const subChKeys = Object.keys(subChannelMap)
+  const subChKeys = Object.keys(subChannelMap).filter(k => k !== 'Unknown')
   const maxSubChRev = Math.max(...Object.values(subChannelMap).map(v => v.rev), 1)
   const totalVoucherOrders = Object.values(voucherMap).reduce((s, v) => s + v.orders, 0) || 1
   const maxVoucherOrders = Math.max(...Object.values(voucherMap).map(v => v.orders), 1)
