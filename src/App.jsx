@@ -878,7 +878,7 @@ function ShopifyTab({ data, filters, setFilters }) {
 
 function AmazonTab({ data }) {
   const [region, setRegion] = useState('india') // 'india' | 'intl'
-  const [subView, setSubView] = useState('sc') // 'sc' | 'vc'
+  const [subView, setSubView] = useState('india') // 'india' | 'sc' | 'vc'
   const amzSC = data.amzSC || {}
   const amzVC = data.amzVC || {}
   const amzIntl = data.amzIntl || {}
@@ -934,15 +934,80 @@ function AmazonTab({ data }) {
         </div>
         {/* Divider */}
         {region === 'india' && <span style={{ color: C.border2, fontSize: 18, lineHeight: 1 }}>│</span>}
-        {/* Sub-toggle: SC / VC — India only */}
+        {/* Sub-toggle: India Overview / SC / VC — India only */}
         {region === 'india' && (
           <div style={{ display: 'flex', background: C.bg, borderRadius: 9, padding: 3, border: `1px solid ${C.border}`, gap: 0 }}>
-            {[{ id: 'sc', label: 'Seller Central' }, { id: 'vc', label: 'Vendor Central' }].map(opt => (
+            {[{ id: 'india', label: 'India Overview' }, { id: 'sc', label: 'Seller Central' }, { id: 'vc', label: 'Vendor Central' }].map(opt => (
               <button key={opt.id} onClick={() => setSubView(opt.id)} style={{ fontSize: 12, fontWeight: subView === opt.id ? 700 : 500, padding: '5px 16px', borderRadius: 7, border: 'none', background: subView === opt.id ? C.card : 'transparent', color: subView === opt.id ? C.t1 : C.t2, cursor: 'pointer', fontFamily: 'var(--font)', transition: 'all .15s', boxShadow: subView === opt.id ? '0 1px 4px rgba(0,0,0,.08)' : 'none' }}>{opt.label}</button>
             ))}
           </div>
         )}
       </div>
+
+      {/* ── INDIA · OVERVIEW (SC + VC combined) ── */}
+      {region === 'india' && subView === 'india' && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+          {/* KPI row 1 — combined */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6,1fr)', gap: 10 }}>
+            <KPICard label="Total Revenue" value={fmt(scTotalRev + vcTotalOrdered)} sub={`SC + VC · ${data.nDays || 7} days`} />
+            <KPICard label="SC Revenue" value={fmt(scTotalRev)} sub="Seller Central" />
+            <KPICard label="VC Revenue" value={fmt(vcTotalOrdered)} sub="Vendor Central" />
+            <KPICard label="Total Orders" value={fmtN(scTotalOrders)} sub="SC orders" />
+            <KPICard label="AOV" value={`₹${Math.round(scAOV).toLocaleString('en-IN')}`} sub="SC avg order value" />
+            <KPICard label="ASP" value={`₹${scTotalUnits ? Math.round(scTotalRev / scTotalUnits).toLocaleString('en-IN') : 0}`} sub="Avg selling price / unit" />
+          </div>
+          {/* KPI row 2 */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5,1fr)', gap: 10 }}>
+            <KPICard label="Total Units" value={fmtN(scTotalUnits + vcTotalOrderedUnits)} sub="SC + VC" />
+            <KPICard label="Cancellation Rate" value={`${scCancelRate.toFixed(1)}%`} sub={`${fmtN(scCancelOrders)} cancelled`} accent={scCancelRate > 10 ? '#7A1A1A' : undefined} />
+            <KPICard label="Pending Orders" value={fmtN(scPending)} accent={scPending > 500 ? '#7A4000' : undefined} />
+            <KPICard label="VC Fill Rate" value={`${vcFillRate.toFixed(1)}%`} sub="Shipped / Ordered" accent={vcFillRate < 80 ? '#7A1A1A' : vcFillRate >= 95 ? '#286010' : undefined} />
+            <KPICard label="Daily Avg Revenue" value={fmt((scTotalRev + vcTotalOrdered) / (data.nDays || 1))} sub="SC + VC per day" />
+          </div>
+          {/* Daily revenue chart — SC FBA+MFN stacked */}
+          <Card title="Daily Revenue · India (Seller Central FBA + MFN)">
+            <ResponsiveContainer width="100%" height={200}>
+              <BarChart data={scDailyArr} margin={{ top: 0, right: 0, bottom: 0, left: 0 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke={C.border} vertical={false} />
+                <XAxis dataKey="date" tick={{ fontSize: 10, fill: C.t3 }} tickFormatter={d => d?.slice(5)} />
+                <YAxis tick={{ fontSize: 10, fill: C.t3 }} tickFormatter={v => v >= 1e5 ? `${(v/1e5).toFixed(0)}L` : v} width={40} />
+                <Tooltip content={<ChartTooltip />} />
+                <Legend iconSize={8} wrapperStyle={{ fontSize: 10 }} />
+                <Bar dataKey="FBA" stackId="a" fill="#E8930A" />
+                <Bar dataKey="MFN" stackId="a" fill="#2E74CC" />
+              </BarChart>
+            </ResponsiveContainer>
+          </Card>
+          <div className="g-2" style={{ alignItems: 'stretch' }}>
+            {/* FBA vs MFN */}
+            <Card title="FBA vs MFN · Seller Central">
+              {[{ label: 'FBA (Fulfilled by Amazon)', ...scFBA }, { label: 'MFN (Merchant Fulfilled)', ...scMFN }].map((r, i) => (
+                <div key={r.label} style={{ padding: '10px 0', borderBottom: i === 0 ? `1px solid ${C.border}` : 'none' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
+                    <span style={{ fontSize: 12, fontWeight: 600, color: C.t1 }}>{r.label}</span>
+                    <span style={{ fontSize: 12, fontWeight: 700, color: C.t1, fontFamily: 'var(--mono)' }}>{fmt(r.rev)}</span>
+                  </div>
+                  <div style={{ display: 'flex', gap: 16 }}>
+                    <span style={{ fontSize: 11, color: C.t3 }}>Orders: <strong style={{ color: C.t1 }}>{fmtN(r.orders)}</strong></span>
+                    <span style={{ fontSize: 11, color: C.t3 }}>Units: <strong style={{ color: C.t1 }}>{fmtN(r.units)}</strong></span>
+                    <span style={{ fontSize: 11, color: C.t3 }}>AOV: <strong style={{ color: C.t1 }}>₹{r.orders ? Math.round(r.rev / r.orders).toLocaleString('en-IN') : 0}</strong></span>
+                    <span style={{ fontSize: 11, color: C.t3 }}>Share: <strong style={{ color: C.t1 }}>{scTotalRev ? (r.rev / scTotalRev * 100).toFixed(1) : 0}%</strong></span>
+                  </div>
+                  <div style={{ marginTop: 7, height: 6, background: C.bg, borderRadius: 3 }}>
+                    <div style={{ height: '100%', borderRadius: 3, background: i === 0 ? '#E8930A' : '#2E74CC', width: `${scTotalRev ? (r.rev / scTotalRev * 100) : 0}%`, transition: 'width .5s' }} />
+                  </div>
+                </div>
+              ))}
+            </Card>
+            {/* Top States */}
+            <Card title="Top States · Seller Central">
+              {(amzSC.states || []).slice(0, 8).map((s, i) => (
+                <HBar key={s.state} dot={['#E8930A','#2E74CC','#0D9E68','#CC4078','#9B59B6','#534AB7','#CC8A00','#E24B4A'][i % 8]} label={s.state?.charAt(0) + s.state?.slice(1).toLowerCase()} width={(s.rev / maxStateRev) * 100} value={fmt(s.rev)} pctVal={fmtN(s.orders) + ' ord'} />
+              ))}
+            </Card>
+          </div>
+        </div>
+      )}
 
       {/* ── INDIA · SELLER CENTRAL ── */}
       {region === 'india' && subView === 'sc' && (
@@ -951,15 +1016,15 @@ function AmazonTab({ data }) {
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6,1fr)', gap: 10 }}>
             <KPICard label="Total Revenue" value={fmt(scTotalRev)} sub={`${data.nDays || 7} days`} />
             <KPICard label="Total Orders" value={fmtN(scTotalOrders)} />
-            <KPICard label="AOV" value={`₹${Math.round(scAOV).toLocaleString('en-IN')}`} />
+            <KPICard label="AOV" value={`₹${Math.round(scAOV).toLocaleString('en-IN')}`} sub="Revenue / Orders" />
+            <KPICard label="ASP" value={`₹${scTotalUnits ? Math.round(scTotalRev / scTotalUnits).toLocaleString('en-IN') : 0}`} sub="Revenue / Units" />
             <KPICard label="Total Units" value={fmtN(scTotalUnits)} />
-            <KPICard label="Cancel Rate" value={`${scCancelRate.toFixed(1)}%`} sub={`${fmtN(scCancelOrders)} cancelled`} accent={scCancelRate > 10 ? '#7A1A1A' : undefined} />
-            <KPICard label="Pending Orders" value={fmtN(scPending)} accent={scPending > 500 ? '#7A4000' : undefined} />
+            <KPICard label="Cancellation Rate" value={`${scCancelRate.toFixed(1)}%`} sub={`${fmtN(scCancelOrders)} cancelled`} accent={scCancelRate > 10 ? '#7A1A1A' : undefined} />
           </div>
           {/* KPIs row 2 */}
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 10 }}>
+            <KPICard label="Pending Orders" value={fmtN(scPending)} accent={scPending > 500 ? '#7A4000' : undefined} />
             <KPICard label="Daily Avg Revenue" value={fmt(scTotalRev / (data.nDays || 1))} sub="Revenue per day" />
-            <KPICard label="Revenue per Unit" value={`₹${scTotalUnits ? Math.round(scTotalRev / scTotalUnits).toLocaleString('en-IN') : 0}`} sub="Avg price per unit" />
             <KPICard label="Units per Order" value={scTotalOrders ? (scTotalUnits / scTotalOrders).toFixed(2) : '0'} sub="Avg basket size" />
             <KPICard label="FBA Share" value={`${scTotalRev ? (scFBA.rev / scTotalRev * 100).toFixed(1) : 0}%`} sub={`MFN ${scTotalRev ? (scMFN.rev / scTotalRev * 100).toFixed(1) : 0}%`} />
           </div>
@@ -1038,17 +1103,17 @@ function AmazonTab({ data }) {
         <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6,1fr)', gap: 10 }}>
             <KPICard label="Ordered Revenue" value={fmt(vcTotalOrdered)} sub="Gross ordered value" />
-            <KPICard label="Ordered Units" value={fmtN(vcTotalOrderedUnits)} />
-            <KPICard label="Shipped Units" value={fmtN(vcTotalShippedUnits)} />
+            <KPICard label="Shipped Revenue" value={fmt(vcTotalShipped)} sub="Actual shipped value" />
+            <KPICard label="ASP" value={`₹${vcTotalOrderedUnits ? Math.round(vcTotalOrdered / vcTotalOrderedUnits).toLocaleString('en-IN') : 0}`} sub="Ordered rev / units" />
             <KPICard label="Fill Rate" value={`${vcFillRate.toFixed(1)}%`} sub="Shipped / Ordered" accent={vcFillRate < 80 ? '#7A1A1A' : vcFillRate >= 95 ? '#286010' : undefined} />
             <KPICard label="Customer Returns" value={fmtN(vcTotalReturns)} accent={vcTotalReturns > 100 ? '#7A4000' : undefined} />
             <KPICard label="Return Rate" value={`${vcReturnRate.toFixed(1)}%`} sub="Returns / Shipped" accent={vcReturnRate > 5 ? '#7A1A1A' : undefined} />
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 10 }}>
-            <KPICard label="Shipped Revenue" value={fmt(vcTotalShipped)} sub="Actual shipped value" />
+            <KPICard label="Ordered Units" value={fmtN(vcTotalOrderedUnits)} />
+            <KPICard label="Shipped Units" value={fmtN(vcTotalShippedUnits)} />
             <KPICard label="Backlog Units" value={fmtN(Math.max(0, vcTotalOrderedUnits - vcTotalShippedUnits))} sub="Ordered - Shipped" accent={vcTotalOrderedUnits > vcTotalShippedUnits ? '#7A4000' : undefined} />
             <KPICard label="Daily Avg Ordered" value={fmt(vcTotalOrdered / (data.nDays || 1))} sub="Revenue per day" />
-            <KPICard label="Vendor Accounts" value={fmtN(amzVC.accounts?.length || 0)} sub="Active accounts" />
           </div>
           <div className="g-2" style={{ alignItems: 'stretch' }}>
             <Card title="Vendor Account Breakdown">
@@ -1102,18 +1167,25 @@ function AmazonTab({ data }) {
       {/* ── INTERNATIONAL · SELLER CENTRAL ── */}
       {region === 'intl' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 10 }}>
-            <KPICard label="Total Revenue" value={fmt(intlTotalRev)} sub={`${(amzIntl.countries || []).length} markets`} />
-            <KPICard label="Total Orders" value={fmtN(intlTotalOrders)} />
-            <KPICard label="Blended AOV" value={`₹${Math.round(intlAOV).toLocaleString('en-IN')}`} />
-            <KPICard label="Total Units" value={fmtN((amzIntl.countries || []).reduce((s, c) => s + (c.units || 0), 0))} />
-          </div>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 10 }}>
-            <KPICard label="Daily Avg Revenue" value={fmt(intlTotalRev / (data.nDays || 1))} sub="Revenue per day" />
-            <KPICard label="Revenue per Unit" value={`₹${(amzIntl.countries || []).reduce((s,c) => s+(c.units||0),0) ? Math.round(intlTotalRev / (amzIntl.countries || []).reduce((s,c) => s+(c.units||0),0)).toLocaleString('en-IN') : 0}`} sub="Avg price per unit" />
-            <KPICard label="Units per Order" value={intlTotalOrders ? ((amzIntl.countries || []).reduce((s,c) => s+(c.units||0),0) / intlTotalOrders).toFixed(2) : '0'} sub="Avg basket size" />
-            <KPICard label="Top Market" value={(amzIntl.countries?.[0]?.country) || '—'} sub={amzIntl.countries?.[0] ? `${fmt(amzIntl.countries[0].rev)} revenue` : ''} />
-          </div>
+          {(() => {
+            const intlTotalUnits = (amzIntl.countries || []).reduce((s, c) => s + (c.units || 0), 0)
+            const intlASP = intlTotalUnits ? Math.round(intlTotalRev / intlTotalUnits) : 0
+            return (<>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6,1fr)', gap: 10 }}>
+                <KPICard label="Total Revenue" value={fmt(intlTotalRev)} sub={`${(amzIntl.countries || []).length} markets`} />
+                <KPICard label="Total Orders" value={fmtN(intlTotalOrders)} />
+                <KPICard label="AOV" value={`₹${Math.round(intlAOV).toLocaleString('en-IN')}`} sub="Revenue / Orders" />
+                <KPICard label="ASP" value={`₹${intlASP.toLocaleString('en-IN')}`} sub="Revenue / Units" />
+                <KPICard label="Total Units" value={fmtN(intlTotalUnits)} />
+                <KPICard label="Top Market" value={(amzIntl.countries?.[0]?.country) || '—'} sub={amzIntl.countries?.[0] ? `${fmt(amzIntl.countries[0].rev)}` : ''} />
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 10 }}>
+                <KPICard label="Daily Avg Revenue" value={fmt(intlTotalRev / (data.nDays || 1))} sub="Revenue per day" />
+                <KPICard label="Units per Order" value={intlTotalOrders ? (intlTotalUnits / intlTotalOrders).toFixed(2) : '0'} sub="Avg basket size" />
+                <KPICard label="Markets" value={fmtN((amzIntl.countries || []).length)} sub="Active countries" />
+              </div>
+            </>)
+          })()}
           {/* Daily revenue by country */}
           {(() => {
             const intlCountryColors = { UAE: '#E8930A', UK: '#2E74CC', US: '#0D9E68' }
