@@ -1278,7 +1278,7 @@ export default function App() {
       if (!res.ok) throw new Error(`API error ${res.status}: ${await res.text()}`)
       const json = await res.json()
       if (reqId !== reqIdRef.current) return // stale response, ignore
-      setRawRows(json.source === 'postgres-aggregated' ? json : (json.rows || []))
+      setRawRows(json.source === 'postgres-aggregated' ? json : (json.totalRev !== undefined ? json : (json.rows || [])))
     } catch (e) { if (reqId === reqIdRef.current) setError(e.message) }
     finally { if (reqId === reqIdRef.current) setLoading(false) }
   }, [API])
@@ -1306,7 +1306,7 @@ export default function App() {
     return () => clearTimeout(debounceRef.current)
   }, [filters.start, filters.end, filters.category, filters.subCategory, filters.state, filters.sku, filters.subChannel, filters.voucher, fetchData])
 
-  const data = useMemo(() => { if (!rawRows) return null; if (rawRows.source === 'postgres-aggregated') return rawRows; return processData(rawRows) }, [rawRows])
+  const data = useMemo(() => { if (!rawRows) return null; if (rawRows.source === 'postgres-aggregated' || rawRows.totalRev !== undefined) return rawRows; return processData(rawRows) }, [rawRows])
   const alerts = useMemo(() => data ? detectAlerts(data) : [], [data])
 
   return (
