@@ -57,6 +57,11 @@ export default async function handler(req, res) {
     fkSKUs: `WITH q AS (${base}) SELECT ChannelSKUCode AS sku, CASE WHEN SubChannel='Flipkart FBF' THEN 'FBF' ELSE 'NON-FBF' END AS sub, COUNT(DISTINCT OrderId) AS orders, SUM(ItemQty) AS units, ROUND(SUM(SellingPrice_Inc_GST),0) AS rev FROM q WHERE Channel='Flipkart' AND ChannelSKUCode IS NOT NULL GROUP BY sku, sub ORDER BY rev DESC LIMIT 30`,
     fkCategories: `WITH q AS (${base}) SELECT Category AS category, CASE WHEN SubChannel='Flipkart FBF' THEN 'FBF' ELSE 'NON-FBF' END AS sub, COUNT(DISTINCT OrderId) AS orders, ROUND(SUM(SellingPrice_Inc_GST),0) AS rev, SUM(ItemQty) AS units FROM q WHERE Channel='Flipkart' GROUP BY category, sub ORDER BY rev DESC`,
     fkStates: `WITH q AS (${base}) SELECT UPPER(TRIM(State)) AS state, CASE WHEN SubChannel='Flipkart FBF' THEN 'FBF' ELSE 'NON-FBF' END AS sub, COUNT(DISTINCT OrderId) AS orders, ROUND(SUM(SellingPrice_Inc_GST),0) AS rev FROM q WHERE Channel='Flipkart' AND State IS NOT NULL GROUP BY state, sub ORDER BY rev DESC`,
+    blTotals: `SELECT SUM(qty_sold) AS units, ROUND(SUM(mrp*qty_sold),0) AS rev, COUNT(DISTINCT item_id) AS skus, COUNT(DISTINCT city_name) AS cities, COUNT(DISTINCT date) AS days FROM \`frido-429506.production.fact_blinkit_sales_report\` WHERE date BETWEEN '${start}' AND '${end}'`,
+    blDaily: `SELECT CAST(date AS STRING) AS date, SUM(qty_sold) AS units, ROUND(SUM(mrp*qty_sold),0) AS rev FROM \`frido-429506.production.fact_blinkit_sales_report\` WHERE date BETWEEN '${start}' AND '${end}' GROUP BY date ORDER BY date`,
+    blCategories: `SELECT category, SUM(qty_sold) AS units, ROUND(SUM(mrp*qty_sold),0) AS rev, COUNT(DISTINCT item_id) AS skus FROM \`frido-429506.production.fact_blinkit_sales_report\` WHERE date BETWEEN '${start}' AND '${end}' GROUP BY category ORDER BY rev DESC`,
+    blSKUs: `SELECT item_id, item_name, SUM(qty_sold) AS units, ROUND(SUM(mrp*qty_sold),0) AS rev, MAX(mrp) AS mrp, COUNT(DISTINCT city_name) AS cities FROM \`frido-429506.production.fact_blinkit_sales_report\` WHERE date BETWEEN '${start}' AND '${end}' GROUP BY item_id, item_name ORDER BY rev DESC`,
+    blCities: `SELECT city_name, SUM(qty_sold) AS units, ROUND(SUM(mrp*qty_sold),0) AS rev, COUNT(DISTINCT item_id) AS skus FROM \`frido-429506.production.fact_blinkit_sales_report\` WHERE date BETWEEN '${start}' AND '${end}' GROUP BY city_name ORDER BY rev DESC`,
   }
 
   try {
@@ -180,6 +185,13 @@ export default async function handler(req, res) {
         skus: (r.fkSKUs || []).map(x => ({ sku: x.sku, sub: x.sub, orders: parseInt(x.orders)||0, units: parseInt(x.units)||0, rev: parseFloat(x.rev)||0 })),
         categories: (r.fkCategories || []).map(x => ({ category: x.category, sub: x.sub, orders: parseInt(x.orders)||0, rev: parseFloat(x.rev)||0, units: parseInt(x.units)||0 })),
         states: (r.fkStates || []).map(x => ({ state: x.state, sub: x.sub, orders: parseInt(x.orders)||0, rev: parseFloat(x.rev)||0 })),
+      },
+      blinkit: {
+        totals: r.blTotals?.[0] ? { units: parseInt(r.blTotals[0].units)||0, rev: parseFloat(r.blTotals[0].rev)||0, skus: parseInt(r.blTotals[0].skus)||0, cities: parseInt(r.blTotals[0].cities)||0, days: parseInt(r.blTotals[0].days)||0 } : {},
+        daily: (r.blDaily || []).map(x => ({ date: x.date, units: parseInt(x.units)||0, rev: parseFloat(x.rev)||0 })),
+        categories: (r.blCategories || []).map(x => ({ category: x.category, units: parseInt(x.units)||0, rev: parseFloat(x.rev)||0, skus: parseInt(x.skus)||0 })),
+        skus: (r.blSKUs || []).map(x => ({ itemId: x.item_id, name: x.item_name, units: parseInt(x.units)||0, rev: parseFloat(x.rev)||0, mrp: parseFloat(x.mrp)||0, cities: parseInt(x.cities)||0 })),
+        cities: (r.blCities || []).map(x => ({ city: x.city_name, units: parseInt(x.units)||0, rev: parseFloat(x.rev)||0, skus: parseInt(x.skus)||0 })),
       },
     })
   } catch (err) {
