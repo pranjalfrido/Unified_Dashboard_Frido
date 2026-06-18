@@ -213,7 +213,6 @@ function OverviewPage({ data, alerts }) {
 const TABS = [
   { id: 'all', label: 'All Channels' },
   { id: 'shopify', label: 'Shopify', ch: 'Shopify' },
-  { id: 'shopify_intl', label: 'Shopify Intl', ch: 'Shopify International' },
   { id: 'amazon', label: 'Amazon', ch: 'Amazon' },
   { id: 'flipkart', label: 'Flipkart', ch: 'Flipkart' },
   { id: 'blinkit', label: 'Blinkit', ch: 'Blinkit' },
@@ -716,34 +715,61 @@ function OrderValuePieCard({ buckets, bucketRev }) {
 }
 
 function ShopifyTab({ data, filters, setFilters }) {
+  const [region, setRegion] = useState('india') // 'india' | 'international'
   const subChannelMap = data.subChannelMap || {}
   const paymentModeMap = data.paymentModeMap || {}
   const { chMap, orderStatusMap = {}, orderStatusRevMap = {}, nOrders, nCusts, repeatCusts, dailyArr, catMap, subCatMap, stateMap, cityRows = [], voucherMap = {}, orders, financialStatusMap = {}, fulfilmentStatusMap = {}, refundTrend = [] } = data
-  const sel = filters.subChannel || ''
 
-  const totalRev = data.totalRev || 0
-  const totalExcRev = data.totalExcRev || 0
-  const totalQty = data.totalQty || 0
-  const rev = totalRev
-  const excRev = totalExcRev
-  const qty = totalQty
-  const shopifyOrders = data.nOrders || 0
+  // Split orders by region
+  const allOrders = orders || []
+  const indiaOrders = allOrders.filter(o => o.subChannel !== 'International')
+  const intlOrders = allOrders.filter(o => o.subChannel === 'International')
+  const regionOrders = region === 'india' ? indiaOrders : intlOrders
+
+  const rev = regionOrders.reduce((s, o) => s + o.rev, 0)
+  const excRev = regionOrders.reduce((s, o) => s + o.excRev, 0)
+  const qty = regionOrders.reduce((s, o) => s + o.qty, 0)
+  const shopifyOrders = regionOrders.length
   const gst = rev - excRev
   const nDays = data.nDays || 1
   const dailyAvg = nDays ? rev / nDays : 0
   const aov = shopifyOrders ? rev / shopifyOrders : 0
   const asp = qty ? rev / qty : 0
-  const deliveredOrders = orderStatusMap['Delivered'] || 0
-  const rtoOrders = orderStatusMap['RTO'] || 0
-  const fulfilmentPct = nOrders ? (deliveredOrders / nOrders * 100) : 0
-  const rtoPct = nOrders ? (rtoOrders / nOrders * 100) : 0
-  const atRiskRev = (orderStatusRevMap['RTO'] || 0) + (orderStatusRevMap['Cancelled'] || 0)
-  const repeatRate = nCusts ? (repeatCusts / nCusts * 100).toFixed(1) : '0'
 
-  const subChKeys = Object.keys(subChannelMap)
-  const maxSubChRev = Math.max(...Object.values(subChannelMap).map(v => v.rev), 1)
+  const regionOrderStatusMap = {}
+  regionOrders.forEach(o => { if (o.orderStatus) regionOrderStatusMap[o.orderStatus] = (regionOrderStatusMap[o.orderStatus] || 0) + 1 })
+  const deliveredOrders = regionOrderStatusMap['Delivered'] || 0
+  const rtoOrders = regionOrderStatusMap['RTO'] || 0
+  const fulfilmentPct = shopifyOrders ? (deliveredOrders / shopifyOrders * 100) : 0
+  const rtoPct = shopifyOrders ? (rtoOrders / shopifyOrders * 100) : 0
+  const atRiskRev = regionOrders.filter(o => o.orderStatus === 'RTO' || o.orderStatus === 'Cancelled').reduce((s, o) => s + o.rev, 0)
+  const regionNCusts = new Set(regionOrders.map(o => o.customerId).filter(Boolean)).size
+  const regionRepeatCusts = Object.values(regionOrders.reduce((m, o) => { if (o.customerId) m[o.customerId] = (m[o.customerId] || 0) + 1; return m }, {})).filter(n => n >= 2).length
+  const repeatRate = regionNCusts ? (regionRepeatCusts / regionNCusts * 100).toFixed(1) : '0'
+
+  // India: sub-channel breakdown (excl International)
+  const indiaSubChMap = {}
+  indiaOrders.forEach(o => {
+    const k = o.subChannel || 'Other'
+    if (k === 'International') return
+    if (!indiaSubChMap[k]) indiaSubChMap[k] = { rev: 0, orders: 0 }
+    indiaSubChMap[k].rev += o.rev; indiaSubChMap[k].orders += 1
+  })
+  const indiaSubChKeys = Object.keys(indiaSubChMap).sort((a, b) => indiaSubChMap[b].rev - indiaSubChMap[a].rev)
+  const maxIndiaSubChRev = Math.max(...Object.values(indiaSubChMap).map(v => v.rev), 1)
+
+  // International: breakdown by ChannelAccount (UAE/UK/US)
+  const intlAccountMap = {}
+  intlOrders.forEach(o => {
+    const k = o.channelAccount || 'Other'
+    if (!intlAccountMap[k]) intlAccountMap[k] = { rev: 0, orders: 0 }
+    intlAccountMap[k].rev += o.rev; intlAccountMap[k].orders += 1
+  })
+  const intlKeys = Object.keys(intlAccountMap).sort((a, b) => intlAccountMap[b].rev - intlAccountMap[a].rev)
+  const maxIntlRev = Math.max(...Object.values(intlAccountMap).map(v => v.rev), 1)
+  const intlDots = { UAE: '#E8930A', UK: '#2E74CC', US: '#0D9E68' }
+
   const totalVoucherOrders = Object.values(voucherMap).reduce((s, v) => s + v.orders, 0) || 1
-  const maxVoucherOrders = Math.max(...Object.values(voucherMap).map(v => v.orders), 1)
   const maxPaymentOrders = Math.max(...Object.values(paymentModeMap).map(v => v.orders), 1)
 
   const [selectedCat, setSelectedCat] = useState(null)
@@ -751,18 +777,21 @@ function ShopifyTab({ data, filters, setFilters }) {
   const allSubCatRows = Object.entries(subCatMap).map(([k, v]) => ({ name: k, rev: v.rev, orders: v.orders.size, aov: v.orders.size ? v.rev / v.orders.size : 0, category: v.category })).sort((a, b) => b.rev - a.rev)
   const subCatRows = selectedCat ? allSubCatRows.filter(r => r.category === selectedCat) : allSubCatRows
   const stateRows = Object.entries(stateMap).map(([k, v]) => ({ state: k, rev: v.rev, orders: v.orders, aov: v.orders ? v.rev / v.orders : 0, cities: v.cities.size })).sort((a, b) => b.rev - a.rev)
-  const shopifyOrderRows = orders.filter(o => o.channel === 'Shopify')
 
-  const selStyle = { fontSize: 11.5, padding: '4px 10px', borderRadius: 7, border: `1px solid ${C.border2}`, background: C.card, color: C.t1, outline: 'none', fontFamily: 'var(--font)', cursor: 'pointer' }
+  const toggleStyle = active => ({ fontSize: 12, fontWeight: active ? 700 : 500, padding: '5px 18px', borderRadius: 7, border: `1.5px solid ${active ? C.acm : C.border2}`, background: active ? C.acc : C.card, color: C.t1, cursor: 'pointer', fontFamily: 'var(--font)', transition: 'all .12s' })
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-        <span style={{ fontSize: 12, fontWeight: 600, color: C.t2 }}>Sub-channel:</span>
-        <select value={sel} onChange={e => setFilters(f => ({ ...f, subChannel: e.target.value }))} style={selStyle}>
-          <option value="">All</option>
-          {subChKeys.map(k => <option key={k} value={k}>{k}</option>)}
-        </select>
+      {/* India / International toggle */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        <button style={toggleStyle(region === 'india')} onClick={() => setRegion('india')}>🇮🇳 India</button>
+        <button style={toggleStyle(region === 'international')} onClick={() => setRegion('international')}>🌍 International</button>
+        {region === 'india' && (
+          <span style={{ fontSize: 11, color: C.t3, marginLeft: 4 }}>MyFrido · Mobility · Retail Store · Shopify B2B</span>
+        )}
+        {region === 'international' && (
+          <span style={{ fontSize: 11, color: C.t3, marginLeft: 4 }}>UAE · UK · US</span>
+        )}
       </div>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6,1fr)', gap: 10 }}>
         <KPICard label="Gross Revenue" value={fmt(rev)} sub={`${nDays} days`} />
@@ -778,11 +807,14 @@ function ShopifyTab({ data, filters, setFilters }) {
         <KPICard label="Fulfilment %" value={`${fulfilmentPct.toFixed(1)}%`} sub={`${fmtN(deliveredOrders)} delivered`} accent={fulfilmentPct < 80 ? '#7A1A1A' : fulfilmentPct >= 90 ? '#286010' : undefined} />
         <KPICard label="RTO %" value={`${rtoPct.toFixed(1)}%`} sub={`${fmtN(rtoOrders)} RTO orders`} accent={rtoPct > 10 ? '#7A1A1A' : undefined} />
         <KPICard label="Revenue at Risk" value={fmt(atRiskRev)} sub="RTO + Cancelled" accent={atRiskRev > 0 ? '#7A4000' : undefined} />
-        <KPICard label="Repeat Rate" value={`${repeatRate}%`} sub={`${fmtN(repeatCusts)} of ${fmtN(nCusts)} custs`} />
+        <KPICard label="Repeat Rate" value={`${repeatRate}%`} sub={`${fmtN(regionRepeatCusts)} of ${fmtN(regionNCusts)} custs`} />
       </div>
       <div className="g-3">
-        <Card title="Sub-channel Breakdown">
-          {subChKeys.map((k, i) => { const dots = ['#FFD600','#0D9E68','#2E74CC','#CC4078','#9B59B6']; return <HBar key={k} dot={dots[i % dots.length]} label={k} width={(subChannelMap[k].rev / maxSubChRev) * 100} value={fmt(subChannelMap[k].rev)} pctVal={rev ? pct(subChannelMap[k].rev, rev) : '—'} /> })}
+        <Card title={region === 'india' ? 'Sub-channel Breakdown' : 'International Breakdown'}>
+          {region === 'india'
+            ? indiaSubChKeys.map((k, i) => { const dots = ['#FFD600','#0D9E68','#2E74CC','#CC4078','#9B59B6']; return <HBar key={k} dot={dots[i % dots.length]} label={k} width={(indiaSubChMap[k].rev / maxIndiaSubChRev) * 100} value={fmt(indiaSubChMap[k].rev)} pctVal={rev ? pct(indiaSubChMap[k].rev, rev) : '—'} /> })
+            : intlKeys.map((k, i) => { const dots = ['#E8930A','#2E74CC','#0D9E68','#9B59B6']; return <HBar key={k} dot={intlDots[k] || dots[i % dots.length]} label={k} width={(intlAccountMap[k].rev / maxIntlRev) * 100} value={fmt(intlAccountMap[k].rev)} pctVal={rev ? pct(intlAccountMap[k].rev, rev) : '—'} /> })
+          }
         </Card>
         <Card title="Category Revenue">
           {catRows.slice(0, 8).map((r, i) => { const dots = ['#534AB7','#0D9E68','#2E74CC','#CC8A00','#CC4078','#E24B4A','#9B59B6','#FF6B35']; return <HBar key={r.name} dot={dots[i % dots.length]} label={r.name} width={(r.rev / (catRows[0]?.rev || 1)) * 100} value={fmt(r.rev)} pctVal={totalRev ? pct(r.rev, totalRev) : '—'} /> })}
@@ -1074,7 +1106,6 @@ function SalesPage({ data, filters, setFilters }) {
       <div className="page-scroll">
         {activeTab === 'all' && <AllTab data={filteredData} />}
         {activeTab === 'shopify' && <ChannelTab data={filteredData} channel="Shopify" filters={filters} setFilters={setFilters} />}
-        {activeTab === 'shopify_intl' && <ChannelTab data={filteredData} channel="Shopify International" />}
         {activeTab === 'amazon' && <ChannelTab data={filteredData} channel="Amazon" />}
         {activeTab === 'flipkart' && <ChannelTab data={filteredData} channel="Flipkart" />}
         {activeTab === 'blinkit' && <ChannelTab data={filteredData} channel="Blinkit" />}
