@@ -246,6 +246,48 @@ function PaginatedCard({ title, rows, columns, pageSize = 10 }) {
   )
 }
 
+// ── Multi-select Voucher Dropdown ────────────────────────────
+function VoucherDropdown({ voucherMap, selected, onChange }) {
+  const [open, setOpen] = useState(false)
+  const ref = useRef(null)
+  const options = Object.keys(voucherMap || {}).sort()
+  const selectedArr = selected ? selected.split(',').map(s => s.trim()).filter(Boolean) : []
+
+  useEffect(() => {
+    const handler = e => { if (ref.current && !ref.current.contains(e.target)) setOpen(false) }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [])
+
+  const toggle = (val) => {
+    const next = selectedArr.includes(val) ? selectedArr.filter(v => v !== val) : [...selectedArr, val]
+    onChange(next.join(', '))
+  }
+
+  const label = selectedArr.length === 0 ? 'All Vouchers' : selectedArr.length === 1 ? selectedArr[0] : `${selectedArr.length} vouchers`
+
+  return (
+    <div ref={ref} style={{ position: 'relative', flexShrink: 0 }}>
+      <button onClick={() => setOpen(o => !o)} className="fsel" style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer', background: selectedArr.length ? '#FFF9CC' : undefined, borderColor: selectedArr.length ? C.acm : undefined, minWidth: 140 }}>
+        <span style={{ flex: 1, textAlign: 'left', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{label}</span>
+        <span style={{ fontSize: 9, color: C.t3 }}>{open ? '▲' : '▼'}</span>
+      </button>
+      {open && (
+        <div style={{ position: 'absolute', top: '110%', left: 0, zIndex: 100, background: C.card, border: `1px solid ${C.border2}`, borderRadius: 9, boxShadow: '0 6px 24px rgba(0,0,0,.12)', minWidth: 210, maxHeight: 280, overflowY: 'auto', padding: '5px 0' }}>
+          <div onClick={() => { onChange(''); setOpen(false) }} style={{ padding: '6px 12px', fontSize: 12, color: selectedArr.length === 0 ? C.t1 : C.t2, fontWeight: selectedArr.length === 0 ? 600 : 400, cursor: 'pointer', background: selectedArr.length === 0 ? C.acl : undefined }}>All Vouchers</div>
+          <div style={{ height: 1, background: C.border, margin: '4px 0' }} />
+          {options.map(opt => (
+            <div key={opt} onClick={() => toggle(opt)} style={{ padding: '6px 12px', fontSize: 12, color: C.t1, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8, background: selectedArr.includes(opt) ? C.acl : undefined }}>
+              <span style={{ width: 14, height: 14, borderRadius: 3, border: `1.5px solid ${selectedArr.includes(opt) ? C.acm : C.border2}`, background: selectedArr.includes(opt) ? C.acc : '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, fontSize: 9 }}>{selectedArr.includes(opt) ? '✓' : ''}</span>
+              {opt}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
 const CHART_METRICS = [
   { id: 'rev', label: 'Revenue', key: ch => ch },
   { id: 'orders', label: 'Orders', key: ch => ch + '_o' },
@@ -943,7 +985,7 @@ function SalesPage({ data, filters, setFilters }) {
             <option value="">All States</option>{states.map(s => <option key={s} value={s}>{s}</option>)}
           </select>
           <input type="text" placeholder="Search SKU…" value={filters.sku} onChange={e => setFilters(f => ({ ...f, sku: e.target.value }))} className="fsrch" />
-          <input type="text" placeholder="Voucher code(s), comma-sep…" value={filters.voucher} onChange={e => setFilters(f => ({ ...f, voucher: e.target.value }))} className="fsrch" style={{ width: 200 }} />
+          <VoucherDropdown voucherMap={data?.voucherMap || {}} selected={filters.voucher} onChange={v => setFilters(f => ({ ...f, voucher: v }))} />
           <button onClick={() => setFilters(f => ({ ...f, category: '', subCategory: '', state: '', sku: '', subChannel: '', voucher: '' }))} className="fclr">✕ Clear</button>
         </div>
       </div>
