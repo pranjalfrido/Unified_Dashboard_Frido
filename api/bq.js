@@ -111,7 +111,7 @@ export default async function handler(req, res) {
     const nOrders = parseInt(t.n_orders) || 0
     const totalQty = parseInt(t.total_qty) || 0
     const nDays = parseInt(t.n_days) || 1
-    const nCusts = parseInt(t.n_custs) || 0
+    const nCusts = parseInt(r.repeatRate[0]?.n_custs) || parseInt(t.n_custs) || 0
     const repeatCusts = parseInt(r.repeatRate[0]?.repeat_custs) || 0
     const htCount = parseInt(r.highTicket[0]?.ht_count) || 0
     const htRevAgg = parseFloat(r.highTicket[0]?.ht_rev) || 0
