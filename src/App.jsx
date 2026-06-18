@@ -251,26 +251,31 @@ function PaginatedCard({ title, rows, columns, pageSize = 10 }) {
 function VoucherDropdown({ voucherList, selected, onChange }) {
   const [open, setOpen] = useState(false)
   const [search, setSearch] = useState('')
+  const [pending, setPending] = useState(null)
   const ref = useRef(null)
   const selectedArr = selected ? selected.split(',').map(s => s.trim()).filter(Boolean) : []
+  const staged = pending !== null ? pending : selectedArr
   const filtered = (voucherList || []).filter(({ code }) => code.toLowerCase().includes(search.toLowerCase()))
 
   useEffect(() => {
-    const handler = e => { if (ref.current && !ref.current.contains(e.target)) setOpen(false) }
+    const handler = e => { if (ref.current && !ref.current.contains(e.target)) { setOpen(false); setPending(null); setSearch('') } }
     document.addEventListener('mousedown', handler)
     return () => document.removeEventListener('mousedown', handler)
   }, [])
 
   const toggle = code => {
-    const next = selectedArr.includes(code) ? selectedArr.filter(v => v !== code) : [...selectedArr, code]
-    onChange(next.join(','))
+    const next = staged.includes(code) ? staged.filter(v => v !== code) : [...staged, code]
+    setPending(next)
   }
+
+  const apply = () => { onChange((pending !== null ? pending : staged).join(',')); setPending(null); setOpen(false); setSearch('') }
+  const clear = () => setPending([])
 
   const label = selectedArr.length === 0 ? 'All Vouchers' : selectedArr.length === 1 ? selectedArr[0] : `${selectedArr.length} vouchers selected`
 
   return (
     <div ref={ref} style={{ position: 'relative', flexShrink: 0 }}>
-      <div onClick={() => setOpen(o => !o)} className="fsel" style={{ display: 'flex', alignItems: 'center', gap: 5, cursor: 'pointer', minWidth: 160, maxWidth: 200, background: selectedArr.length ? '#FFF9CC' : undefined, borderColor: selectedArr.length ? C.acm : undefined }}>
+      <div onClick={() => { setPending(null); setOpen(o => !o) }} className="fsel" style={{ display: 'flex', alignItems: 'center', gap: 5, cursor: 'pointer', minWidth: 160, maxWidth: 200, background: selectedArr.length ? '#FFF9CC' : undefined, borderColor: selectedArr.length ? C.acm : undefined }}>
         <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: 11.5 }}>{label}</span>
         <span style={{ fontSize: 8, color: C.t3, flexShrink: 0 }}>▼</span>
       </div>
@@ -280,10 +285,8 @@ function VoucherDropdown({ voucherList, selected, onChange }) {
             <input autoFocus value={search} onChange={e => setSearch(e.target.value)} onMouseDown={e => e.stopPropagation()} placeholder="Search voucher…" style={{ width: '100%', fontSize: 11.5, padding: '4px 8px', border: `1px solid ${C.border2}`, borderRadius: 6, outline: 'none', fontFamily: 'var(--font)', background: C.bg }} />
           </div>
           <div style={{ maxHeight: 260, overflowY: 'auto' }}>
-            <div onClick={() => { onChange(''); setSearch(''); setOpen(false) }} style={{ padding: '6px 10px', fontSize: 12, cursor: 'pointer', color: selectedArr.length === 0 ? C.t1 : C.t2, fontWeight: selectedArr.length === 0 ? 600 : 400, background: selectedArr.length === 0 ? C.acl : undefined }}>All Vouchers</div>
-            <div style={{ height: 1, background: C.border }} />
             {filtered.map(({ code, orders }) => {
-              const checked = selectedArr.includes(code)
+              const checked = staged.includes(code)
               return (
                 <div key={code} onClick={() => toggle(code)} style={{ padding: '5px 10px', fontSize: 11.5, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 7, background: checked ? C.acl : undefined }}>
                   <span style={{ width: 13, height: 13, borderRadius: 3, border: `1.5px solid ${checked ? C.acm : C.border2}`, background: checked ? C.acc : '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, fontSize: 8, fontWeight: 700 }}>{checked ? '✓' : ''}</span>
@@ -294,12 +297,10 @@ function VoucherDropdown({ voucherList, selected, onChange }) {
             })}
             {filtered.length === 0 && <div style={{ padding: '10px', fontSize: 11.5, color: C.t3, textAlign: 'center' }}>No results</div>}
           </div>
-          {selectedArr.length > 0 && (
-            <div style={{ padding: '6px 10px', borderTop: `1px solid ${C.border}`, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <span style={{ fontSize: 11, color: C.t3 }}>{selectedArr.length} selected</span>
-              <span onClick={() => onChange('')} style={{ fontSize: 11, color: '#A32D2D', cursor: 'pointer', fontWeight: 500 }}>Clear</span>
-            </div>
-          )}
+          <div style={{ display: 'flex', gap: 6, padding: '8px', borderTop: `1px solid ${C.border}` }}>
+            <button onMouseDown={e => e.stopPropagation()} onClick={clear} style={{ flex: 1, fontSize: 11.5, fontWeight: 600, padding: '5px 0', borderRadius: 6, border: `1.5px solid ${C.border2}`, background: 'transparent', color: C.t2, cursor: 'pointer', fontFamily: 'var(--font)' }}>Clear</button>
+            <button onMouseDown={e => e.stopPropagation()} onClick={apply} style={{ flex: 1, fontSize: 11.5, fontWeight: 700, padding: '5px 0', borderRadius: 6, border: 'none', background: C.t1, color: '#fff', cursor: 'pointer', fontFamily: 'var(--font)' }}>Apply</button>
+          </div>
         </div>
       )}
     </div>
