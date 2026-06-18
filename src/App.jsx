@@ -934,11 +934,11 @@ function AmazonTab({ data }) {
         </div>
         {/* Divider */}
         {region === 'india' && <span style={{ color: C.border2, fontSize: 18, lineHeight: 1 }}>│</span>}
-        {/* Sub-toggle: India Overview / SC / VC — India only */}
+        {/* Sub-toggle: SC / VC — India only */}
         {region === 'india' && (
-          <div style={{ display: 'flex', background: C.bg, borderRadius: 9, padding: 3, border: `1px solid ${C.border}`, gap: 0 }}>
+          <div style={{ display: 'flex', gap: 8 }}>
             {[{ id: 'sc', label: 'Seller Central' }, { id: 'vc', label: 'Vendor Central' }].map(opt => (
-              <button key={opt.id} onClick={() => setSubView(opt.id)} style={{ fontSize: 12, fontWeight: subView === opt.id ? 700 : 500, padding: '5px 16px', borderRadius: 7, border: 'none', background: subView === opt.id ? C.card : 'transparent', color: subView === opt.id ? C.t1 : C.t2, cursor: 'pointer', fontFamily: 'var(--font)', transition: 'all .15s', boxShadow: subView === opt.id ? '0 1px 4px rgba(0,0,0,.08)' : 'none' }}>{opt.label}</button>
+              <button key={opt.id} onClick={() => setSubView(opt.id)} style={subToggleStyle(subView === opt.id)}>{opt.label}</button>
             ))}
           </div>
         )}
