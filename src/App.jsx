@@ -957,10 +957,13 @@ function AmazonTab({ data }) {
             <KPICard label="ASP" value={`₹${scTotalUnits ? Math.round(scTotalRev / scTotalUnits).toLocaleString('en-IN') : 0}`} sub="Avg selling price / unit" />
           </div>
           {/* KPI row 2 */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 10 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6,1fr)', gap: 10 }}>
             <KPICard label="Total Units" value={fmtN(scTotalUnits + vcTotalOrderedUnits)} sub="SC + VC" />
             <KPICard label="Cancellation Rate" value={`${scCancelRate.toFixed(1)}%`} sub={`${fmtN(scCancelOrders)} cancelled`} accent={scCancelRate > 10 ? '#7A1A1A' : undefined} />
             <KPICard label="Daily Avg Revenue" value={fmt((scTotalRev + vcTotalOrdered) / (data.nDays || 1))} sub="SC + VC per day" />
+            <KPICard label="Shipped Orders" value={fmtN(amzSC.status?.find(s => s.status === 'Shipped')?.orders || 0)} sub="Successfully shipped" accent={C.green?.tx} />
+            <KPICard label="FBA Share" value={`${scTotalRev ? (scFBA.rev / scTotalRev * 100).toFixed(1) : 0}%`} sub={`₹${Math.round(scFBA.rev/1e5).toLocaleString('en-IN')}L revenue`} />
+            <KPICard label="MFN Share" value={`${scTotalRev ? (scMFN.rev / scTotalRev * 100).toFixed(1) : 0}%`} sub={`₹${Math.round(scMFN.rev/1e5).toLocaleString('en-IN')}L revenue`} />
           </div>
           {/* Daily revenue chart — SC FBA+MFN stacked */}
           <Card title="Daily Revenue · India (Seller Central FBA + MFN)">
