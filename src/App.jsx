@@ -947,7 +947,7 @@ function AmazonTab({ data }) {
       {/* ── INDIA · SELLER CENTRAL ── */}
       {region === 'india' && subView === 'sc' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-          {/* KPIs */}
+          {/* KPIs row 1 */}
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6,1fr)', gap: 10 }}>
             <KPICard label="Total Revenue" value={fmt(scTotalRev)} sub={`${data.nDays || 7} days`} />
             <KPICard label="Total Orders" value={fmtN(scTotalOrders)} />
@@ -955,6 +955,13 @@ function AmazonTab({ data }) {
             <KPICard label="Total Units" value={fmtN(scTotalUnits)} />
             <KPICard label="Cancel Rate" value={`${scCancelRate.toFixed(1)}%`} sub={`${fmtN(scCancelOrders)} cancelled`} accent={scCancelRate > 10 ? '#7A1A1A' : undefined} />
             <KPICard label="Pending Orders" value={fmtN(scPending)} accent={scPending > 500 ? '#7A4000' : undefined} />
+          </div>
+          {/* KPIs row 2 */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 10 }}>
+            <KPICard label="Daily Avg Revenue" value={fmt(scTotalRev / (data.nDays || 1))} sub="Revenue per day" />
+            <KPICard label="Revenue per Unit" value={`₹${scTotalUnits ? Math.round(scTotalRev / scTotalUnits).toLocaleString('en-IN') : 0}`} sub="Avg price per unit" />
+            <KPICard label="Units per Order" value={scTotalOrders ? (scTotalUnits / scTotalOrders).toFixed(2) : '0'} sub="Avg basket size" />
+            <KPICard label="FBA Share" value={`${scTotalRev ? (scFBA.rev / scTotalRev * 100).toFixed(1) : 0}%`} sub={`MFN ${scTotalRev ? (scMFN.rev / scTotalRev * 100).toFixed(1) : 0}%`} />
           </div>
           {/* FBA vs MFN */}
           <div className="g-2">
@@ -1037,6 +1044,12 @@ function AmazonTab({ data }) {
             <KPICard label="Customer Returns" value={fmtN(vcTotalReturns)} accent={vcTotalReturns > 100 ? '#7A4000' : undefined} />
             <KPICard label="Return Rate" value={`${vcReturnRate.toFixed(1)}%`} sub="Returns / Shipped" accent={vcReturnRate > 5 ? '#7A1A1A' : undefined} />
           </div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 10 }}>
+            <KPICard label="Shipped Revenue" value={fmt(vcTotalShipped)} sub="Actual shipped value" />
+            <KPICard label="Backlog Units" value={fmtN(Math.max(0, vcTotalOrderedUnits - vcTotalShippedUnits))} sub="Ordered - Shipped" accent={vcTotalOrderedUnits > vcTotalShippedUnits ? '#7A4000' : undefined} />
+            <KPICard label="Daily Avg Ordered" value={fmt(vcTotalOrdered / (data.nDays || 1))} sub="Revenue per day" />
+            <KPICard label="Vendor Accounts" value={fmtN(amzVC.accounts?.length || 0)} sub="Active accounts" />
+          </div>
           <div className="g-2" style={{ alignItems: 'stretch' }}>
             <Card title="Vendor Account Breakdown">
               {(amzVC.accounts || []).map((a, i) => {
@@ -1094,6 +1107,12 @@ function AmazonTab({ data }) {
             <KPICard label="Total Orders" value={fmtN(intlTotalOrders)} />
             <KPICard label="Blended AOV" value={`₹${Math.round(intlAOV).toLocaleString('en-IN')}`} />
             <KPICard label="Total Units" value={fmtN((amzIntl.countries || []).reduce((s, c) => s + (c.units || 0), 0))} />
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 10 }}>
+            <KPICard label="Daily Avg Revenue" value={fmt(intlTotalRev / (data.nDays || 1))} sub="Revenue per day" />
+            <KPICard label="Revenue per Unit" value={`₹${(amzIntl.countries || []).reduce((s,c) => s+(c.units||0),0) ? Math.round(intlTotalRev / (amzIntl.countries || []).reduce((s,c) => s+(c.units||0),0)).toLocaleString('en-IN') : 0}`} sub="Avg price per unit" />
+            <KPICard label="Units per Order" value={intlTotalOrders ? ((amzIntl.countries || []).reduce((s,c) => s+(c.units||0),0) / intlTotalOrders).toFixed(2) : '0'} sub="Avg basket size" />
+            <KPICard label="Top Market" value={(amzIntl.countries?.[0]?.country) || '—'} sub={amzIntl.countries?.[0] ? `${fmt(amzIntl.countries[0].rev)} revenue` : ''} />
           </div>
           {/* Daily revenue by country */}
           {(() => {
