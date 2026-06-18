@@ -981,7 +981,7 @@ function AmazonTab({ data }) {
           </Card>
           <div className="g-2" style={{ alignItems: 'flex-start' }}>
             {/* FBA vs MFN */}
-            <Card title="FBA vs MFN · Seller Central">
+            <Card title="FBA vs MFN · Seller Central" style={{ height: 'auto' }}>
               {[{ label: 'FBA (Fulfilled by Amazon)', ...scFBA }, { label: 'MFN (Merchant Fulfilled)', ...scMFN }].map((r, i) => (
                 <div key={r.label} style={{ padding: '10px 0', borderBottom: i === 0 ? `1px solid ${C.border}` : 'none' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
@@ -1041,7 +1041,7 @@ function AmazonTab({ data }) {
           </div>
           {/* FBA vs MFN */}
           <div className="g-2" style={{ alignItems: 'flex-start' }}>
-            <Card title="FBA vs MFN Breakdown">
+            <Card title="FBA vs MFN Breakdown" style={{ height: 'auto' }}>
               {[{ label: 'FBA (Fulfilled by Amazon)', ...scFBA }, { label: 'MFN (Merchant Fulfilled)', ...scMFN }].map((r, i) => (
                 <div key={r.label} style={{ padding: '10px 0', borderBottom: i === 0 ? `1px solid ${C.border}` : 'none' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
