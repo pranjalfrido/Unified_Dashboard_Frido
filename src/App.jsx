@@ -877,12 +877,14 @@ function ShopifyTab({ data, filters, setFilters }) {
 }
 
 function AmazonTab({ data }) {
-  const [view, setView] = useState('sc') // 'sc' | 'vc' | 'intl'
+  const [region, setRegion] = useState('india') // 'india' | 'intl'
+  const [subView, setSubView] = useState('sc') // 'sc' | 'vc'
   const amzSC = data.amzSC || {}
   const amzVC = data.amzVC || {}
   const amzIntl = data.amzIntl || {}
 
   const toggleStyle = active => ({ fontSize: 12, fontWeight: active ? 700 : 500, padding: '5px 18px', borderRadius: 7, border: `1.5px solid ${active ? C.acm : C.border2}`, background: active ? C.acc : C.card, color: C.t1, cursor: 'pointer', fontFamily: 'var(--font)', transition: 'all .12s' })
+  const subToggleStyle = active => ({ fontSize: 11.5, fontWeight: active ? 700 : 500, padding: '4px 14px', borderRadius: 6, border: `1px solid ${active ? C.acm : C.border}`, background: active ? C.acl : C.bg, color: active ? C.t1 : C.t2, cursor: 'pointer', fontFamily: 'var(--font)', transition: 'all .12s' })
 
   // ── Seller Central calcs ──
   const scFBA = amzSC.fulfillment?.find(f => f.type === 'FBA') || { orders: 0, rev: 0, units: 0 }
@@ -921,15 +923,21 @@ function AmazonTab({ data }) {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-      {/* Toggle */}
+      {/* Region toggle */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-        <button style={toggleStyle(view === 'sc')} onClick={() => setView('sc')}>Seller Central</button>
-        <button style={toggleStyle(view === 'vc')} onClick={() => setView('vc')}>Vendor Central</button>
-        <button style={toggleStyle(view === 'intl')} onClick={() => setView('intl')}>🌍 International</button>
+        <button style={toggleStyle(region === 'india')} onClick={() => setRegion('india')}>🇮🇳 India</button>
+        <button style={toggleStyle(region === 'intl')} onClick={() => setRegion('intl')}>🌍 International</button>
       </div>
+      {/* Sub-view toggle — India only */}
+      {region === 'india' && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          <button style={subToggleStyle(subView === 'sc')} onClick={() => setSubView('sc')}>Seller Central</button>
+          <button style={subToggleStyle(subView === 'vc')} onClick={() => setSubView('vc')}>Vendor Central</button>
+        </div>
+      )}
 
-      {/* ── SELLER CENTRAL ── */}
-      {view === 'sc' && (
+      {/* ── INDIA · SELLER CENTRAL ── */}
+      {region === 'india' && subView === 'sc' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
           {/* KPIs */}
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6,1fr)', gap: 10 }}>
@@ -1010,8 +1018,8 @@ function AmazonTab({ data }) {
         </div>
       )}
 
-      {/* ── VENDOR CENTRAL ── */}
-      {view === 'vc' && (
+      {/* ── INDIA · VENDOR CENTRAL ── */}
+      {region === 'india' && subView === 'vc' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6,1fr)', gap: 10 }}>
             <KPICard label="Ordered Revenue" value={fmt(vcTotalOrdered)} sub="Gross ordered value" />
@@ -1070,15 +1078,40 @@ function AmazonTab({ data }) {
         </div>
       )}
 
-      {/* ── INTERNATIONAL ── */}
-      {view === 'intl' && (
+      {/* ── INTERNATIONAL · SELLER CENTRAL ── */}
+      {region === 'intl' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 10 }}>
-            <KPICard label="Total Revenue" value={fmt(intlTotalRev)} />
+            <KPICard label="Total Revenue" value={fmt(intlTotalRev)} sub={`${(amzIntl.countries || []).length} markets`} />
             <KPICard label="Total Orders" value={fmtN(intlTotalOrders)} />
-            <KPICard label="AOV" value={`₹${Math.round(intlAOV).toLocaleString('en-IN')}`} />
-            <KPICard label="Markets" value={fmtN(amzIntl.countries?.length || 0)} sub="Active countries" />
+            <KPICard label="Blended AOV" value={`₹${Math.round(intlAOV).toLocaleString('en-IN')}`} />
+            <KPICard label="Total Units" value={fmtN((amzIntl.countries || []).reduce((s, c) => s + (c.units || 0), 0))} />
           </div>
+          {/* Daily revenue by country */}
+          {(() => {
+            const intlCountryColors = { UAE: '#E8930A', UK: '#2E74CC', US: '#0D9E68' }
+            const intlDailyMap = {}
+            ;(amzIntl.daily || []).forEach(d => {
+              if (!intlDailyMap[d.date]) intlDailyMap[d.date] = { date: d.date }
+              intlDailyMap[d.date][d.country] = (intlDailyMap[d.date][d.country] || 0) + d.rev
+            })
+            const intlDailyArr = Object.values(intlDailyMap).sort((a, b) => a.date.localeCompare(b.date))
+            const intlCountries = [...new Set((amzIntl.daily || []).map(d => d.country).filter(Boolean))]
+            return (
+              <Card title="Daily Revenue by Country · Seller Central">
+                <ResponsiveContainer width="100%" height={200}>
+                  <BarChart data={intlDailyArr} margin={{ top: 0, right: 0, bottom: 0, left: 0 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke={C.border} vertical={false} />
+                    <XAxis dataKey="date" tick={{ fontSize: 10, fill: C.t3 }} tickFormatter={d => d?.slice(5)} />
+                    <YAxis tick={{ fontSize: 10, fill: C.t3 }} tickFormatter={v => v >= 1e5 ? `${(v/1e5).toFixed(0)}L` : v} width={40} />
+                    <Tooltip content={<ChartTooltip />} />
+                    <Legend iconSize={8} wrapperStyle={{ fontSize: 10 }} />
+                    {intlCountries.map(ct => <Bar key={ct} dataKey={ct} stackId="a" fill={intlCountryColors[ct] || C.t3} />)}
+                  </BarChart>
+                </ResponsiveContainer>
+              </Card>
+            )
+          })()}
           <div className="g-2" style={{ alignItems: 'stretch' }}>
             <Card title="Country Breakdown">
               {(amzIntl.countries || []).map((c, i) => (
@@ -1086,11 +1119,12 @@ function AmazonTab({ data }) {
               ))}
               {(!amzIntl.countries || amzIntl.countries.length === 0) && <div style={{ fontSize: 12, color: C.t3, padding: '20px 0', textAlign: 'center' }}>No international orders in this period</div>}
             </Card>
-            <Card title="Top SKUs · International">
+            <Card title="Top SKUs · International Seller Central">
               <DataTable columns={[
                 { key: 'sku', label: 'SKU' },
                 { key: 'country', label: 'Country' },
                 { key: 'orders', label: 'Orders', align: 'right', render: v => fmtN(v) },
+                { key: 'units', label: 'Units', align: 'right', render: v => fmtN(v) },
                 { key: 'rev', label: 'Revenue', align: 'right', mono: true, render: v => fmt(v) },
               ]} rows={amzIntl.skus || []} maxRows={20} />
             </Card>
