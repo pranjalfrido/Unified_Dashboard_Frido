@@ -310,23 +310,29 @@ function VoucherDropdown({ voucherList, selected, onChange }) {
 function SearchableSelect({ options, value, onChange, placeholder, dropdownWidth, multi }) {
   const [open, setOpen] = useState(false)
   const [search, setSearch] = useState('')
+  const [pending, setPending] = useState(null) // staged selection before Apply (multi only)
   const ref = useRef(null)
   const filtered = options.filter(o => o.toLowerCase().includes(search.toLowerCase()))
-  // multi: value is array, single: value is string
   const selected = multi ? (value || []) : value
+  // while dropdown is open, work on pending; on close without apply, discard
+  const staged = multi ? (pending !== null ? pending : selected) : selected
 
   useEffect(() => {
-    const handler = e => { if (ref.current && !ref.current.contains(e.target)) setOpen(false) }
+    const handler = e => { if (ref.current && !ref.current.contains(e.target)) { setOpen(false); setPending(null); setSearch('') } }
     document.addEventListener('mousedown', handler)
     return () => document.removeEventListener('mousedown', handler)
   }, [])
 
+  const openDropdown = () => { setPending(null); setOpen(o => !o) }
+
   const toggle = v => {
     if (!multi) { onChange(v); setSearch(''); setOpen(false); return }
-    const arr = selected.includes(v) ? selected.filter(x => x !== v) : [...selected, v]
-    onChange(arr)
+    const arr = staged.includes(v) ? staged.filter(x => x !== v) : [...staged, v]
+    setPending(arr)
   }
-  const clearAll = () => { onChange(multi ? [] : ''); setSearch(''); if (!multi) setOpen(false) }
+
+  const apply = () => { onChange(pending !== null ? pending : staged); setPending(null); setOpen(false); setSearch('') }
+  const clear = () => { if (multi) { setPending([]); } else { onChange(''); setOpen(false) } }
 
   const hasValue = multi ? selected.length > 0 : !!selected
   const label = multi
@@ -335,7 +341,7 @@ function SearchableSelect({ options, value, onChange, placeholder, dropdownWidth
 
   return (
     <div ref={ref} style={{ position: 'relative', flexShrink: 0 }}>
-      <div onClick={() => setOpen(o => !o)} className="fsel" style={{ display: 'flex', alignItems: 'center', gap: 5, cursor: 'pointer', minWidth: 140, background: hasValue ? '#FFF9CC' : undefined, borderColor: hasValue ? C.acm : undefined }}>
+      <div onClick={openDropdown} className="fsel" style={{ display: 'flex', alignItems: 'center', gap: 5, cursor: 'pointer', minWidth: 140, background: hasValue ? '#FFF9CC' : undefined, borderColor: hasValue ? C.acm : undefined }}>
         <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: 11.5 }}>{label}</span>
         <span style={{ fontSize: 8, color: C.t3, flexShrink: 0 }}>▼</span>
       </div>
@@ -345,10 +351,8 @@ function SearchableSelect({ options, value, onChange, placeholder, dropdownWidth
             <input autoFocus value={search} onChange={e => setSearch(e.target.value)} onMouseDown={e => e.stopPropagation()} placeholder={`Search ${placeholder?.toLowerCase() || ''}…`} style={{ width: '100%', fontSize: 11.5, padding: '4px 8px', border: `1px solid ${C.border2}`, borderRadius: 6, outline: 'none', fontFamily: 'var(--font)', background: C.bg }} />
           </div>
           <div style={{ maxHeight: 240, overflowY: 'auto' }}>
-            <div onClick={clearAll} style={{ padding: '6px 10px', fontSize: 12, cursor: 'pointer', color: !hasValue ? C.t1 : C.t2, fontWeight: !hasValue ? 600 : 400, background: !hasValue ? C.acl : undefined }}>{placeholder}</div>
-            <div style={{ height: 1, background: C.border }} />
             {filtered.map(opt => {
-              const active = multi ? selected.includes(opt) : selected === opt
+              const active = multi ? staged.includes(opt) : staged === opt
               return (
                 <div key={opt} onClick={() => toggle(opt)} style={{ padding: '5px 10px', fontSize: 11.5, cursor: 'pointer', background: active ? C.acl : undefined, color: active ? C.t1 : C.t2, fontWeight: active ? 600 : 400, whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', gap: 7 }}>
                   {multi && <span style={{ width: 13, height: 13, borderRadius: 3, border: `1.5px solid ${active ? C.acm : C.border2}`, background: active ? C.acm : 'transparent', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{active && <span style={{ color: '#fff', fontSize: 9, lineHeight: 1 }}>✓</span>}</span>}
@@ -358,6 +362,12 @@ function SearchableSelect({ options, value, onChange, placeholder, dropdownWidth
             })}
             {filtered.length === 0 && <div style={{ padding: '10px', fontSize: 11.5, color: C.t3, textAlign: 'center' }}>No results</div>}
           </div>
+          {multi && (
+            <div style={{ display: 'flex', gap: 6, padding: '8px', borderTop: `1px solid ${C.border}` }}>
+              <button onMouseDown={e => e.stopPropagation()} onClick={clear} style={{ flex: 1, fontSize: 11.5, fontWeight: 600, padding: '5px 0', borderRadius: 6, border: `1.5px solid ${C.border2}`, background: 'transparent', color: C.t2, cursor: 'pointer', fontFamily: 'var(--font)' }}>Clear</button>
+              <button onMouseDown={e => e.stopPropagation()} onClick={apply} style={{ flex: 1, fontSize: 11.5, fontWeight: 700, padding: '5px 0', borderRadius: 6, border: 'none', background: C.t1, color: '#fff', cursor: 'pointer', fontFamily: 'var(--font)' }}>Apply</button>
+            </div>
+          )}
         </div>
       )}
     </div>
