@@ -923,18 +923,25 @@ function AmazonTab({ data }) {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-      {/* Region toggle */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-        <button style={toggleStyle(region === 'india')} onClick={() => setRegion('india')}>🇮🇳 India</button>
-        <button style={toggleStyle(region === 'intl')} onClick={() => setRegion('intl')}>🌍 International</button>
-      </div>
-      {/* Sub-view toggle — India only */}
-      {region === 'india' && (
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-          <button style={subToggleStyle(subView === 'sc')} onClick={() => setSubView('sc')}>Seller Central</button>
-          <button style={subToggleStyle(subView === 'vc')} onClick={() => setSubView('vc')}>Vendor Central</button>
+      {/* Region + sub-view in one row */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+        {/* Pill toggle: India / International */}
+        <div style={{ display: 'flex', background: C.bg, borderRadius: 9, padding: 3, border: `1px solid ${C.border}`, gap: 0 }}>
+          {[{ id: 'india', label: '🇮🇳 India' }, { id: 'intl', label: '🌍 International' }].map(opt => (
+            <button key={opt.id} onClick={() => setRegion(opt.id)} style={{ fontSize: 12, fontWeight: region === opt.id ? 700 : 500, padding: '5px 16px', borderRadius: 7, border: 'none', background: region === opt.id ? C.acc : 'transparent', color: C.t1, cursor: 'pointer', fontFamily: 'var(--font)', transition: 'all .15s', boxShadow: region === opt.id ? '0 1px 4px rgba(0,0,0,.10)' : 'none' }}>{opt.label}</button>
+          ))}
         </div>
-      )}
+        {/* Divider */}
+        {region === 'india' && <span style={{ color: C.border2, fontSize: 18, lineHeight: 1 }}>│</span>}
+        {/* Sub-toggle: SC / VC — India only */}
+        {region === 'india' && (
+          <div style={{ display: 'flex', background: C.bg, borderRadius: 9, padding: 3, border: `1px solid ${C.border}`, gap: 0 }}>
+            {[{ id: 'sc', label: 'Seller Central' }, { id: 'vc', label: 'Vendor Central' }].map(opt => (
+              <button key={opt.id} onClick={() => setSubView(opt.id)} style={{ fontSize: 12, fontWeight: subView === opt.id ? 700 : 500, padding: '5px 16px', borderRadius: 7, border: 'none', background: subView === opt.id ? C.card : 'transparent', color: subView === opt.id ? C.t1 : C.t2, cursor: 'pointer', fontFamily: 'var(--font)', transition: 'all .15s', boxShadow: subView === opt.id ? '0 1px 4px rgba(0,0,0,.08)' : 'none' }}>{opt.label}</button>
+            ))}
+          </div>
+        )}
+      </div>
 
       {/* ── INDIA · SELLER CENTRAL ── */}
       {region === 'india' && subView === 'sc' && (
