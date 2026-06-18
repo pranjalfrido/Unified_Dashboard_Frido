@@ -984,7 +984,7 @@ function SalesPage({ data, filters, setFilters }) {
       {/* Tab bar */}
       <div className="sales-tabs">
         {TABS.map(tab => (
-          <button key={tab.id} onClick={() => setActiveTab(tab.id)} className={`stab${activeTab === tab.id ? ' active' : ''}`}>
+          <button key={tab.id} onClick={() => { setActiveTab(tab.id); if (tab.id !== 'shopify') setFilters(f => ({ ...f, voucher: '' })) }} className={`stab${activeTab === tab.id ? ' active' : ''}`}>
             {tab.ch && <span style={{ width: 7, height: 7, borderRadius: '50%', background: C.ch[tab.ch], display: 'inline-block', flexShrink: 0 }} />}
             {tab.label}
           </button>
@@ -1003,7 +1003,7 @@ function SalesPage({ data, filters, setFilters }) {
             <option value="">All States</option>{states.map(s => <option key={s} value={s}>{s}</option>)}
           </select>
           <input type="text" placeholder="Search SKU…" value={filters.sku} onChange={e => setFilters(f => ({ ...f, sku: e.target.value }))} className="fsrch" />
-          <VoucherDropdown voucherList={data?.voucherList || []} selected={filters.voucher} onChange={v => setFilters(f => ({ ...f, voucher: v }))} />
+          {activeTab === 'shopify' && <VoucherDropdown voucherList={data?.voucherList || []} selected={filters.voucher} onChange={v => setFilters(f => ({ ...f, voucher: v }))} />}
           <button onClick={() => setFilters(f => ({ ...f, category: '', subCategory: '', state: '', sku: '', subChannel: '', voucher: '' }))} className="fclr">✕ Clear</button>
         </div>
       </div>
