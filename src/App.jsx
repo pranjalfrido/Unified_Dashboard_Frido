@@ -307,7 +307,7 @@ function VoucherDropdown({ voucherList, selected, onChange }) {
 }
 
 // ── Searchable single-select dropdown ────────────────────────
-function SearchableSelect({ options, value, onChange, placeholder }) {
+function SearchableSelect({ options, value, onChange, placeholder, dropdownWidth }) {
   const [open, setOpen] = useState(false)
   const [search, setSearch] = useState('')
   const ref = useRef(null)
@@ -328,7 +328,7 @@ function SearchableSelect({ options, value, onChange, placeholder }) {
         <span style={{ fontSize: 8, color: C.t3, flexShrink: 0 }}>▼</span>
       </div>
       {open && (
-        <div style={{ position: 'absolute', top: '110%', left: 0, zIndex: 200, background: C.card, border: `1px solid ${C.border2}`, borderRadius: 9, boxShadow: '0 8px 28px rgba(0,0,0,.14)', width: 220 }}>
+        <div style={{ position: 'absolute', top: '110%', left: 0, zIndex: 200, background: C.card, border: `1px solid ${C.border2}`, borderRadius: 9, boxShadow: '0 8px 28px rgba(0,0,0,.14)', width: dropdownWidth || 220 }}>
           <div style={{ padding: '7px 8px', borderBottom: `1px solid ${C.border}` }}>
             <input autoFocus value={search} onChange={e => setSearch(e.target.value)} onMouseDown={e => e.stopPropagation()} placeholder={`Search ${placeholder?.toLowerCase() || ''}…`} style={{ width: '100%', fontSize: 11.5, padding: '4px 8px', border: `1px solid ${C.border2}`, borderRadius: 6, outline: 'none', fontFamily: 'var(--font)', background: C.bg }} />
           </div>
@@ -336,7 +336,7 @@ function SearchableSelect({ options, value, onChange, placeholder }) {
             <div onClick={() => select('')} style={{ padding: '6px 10px', fontSize: 12, cursor: 'pointer', color: !value ? C.t1 : C.t2, fontWeight: !value ? 600 : 400, background: !value ? C.acl : undefined }}>{placeholder}</div>
             <div style={{ height: 1, background: C.border }} />
             {filtered.map(opt => (
-              <div key={opt} onClick={() => select(opt)} style={{ padding: '5px 10px', fontSize: 11.5, cursor: 'pointer', background: value === opt ? C.acl : undefined, color: value === opt ? C.t1 : C.t2, fontWeight: value === opt ? 600 : 400, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              <div key={opt} onClick={() => select(opt)} style={{ padding: '5px 10px', fontSize: 11.5, cursor: 'pointer', background: value === opt ? C.acl : undefined, color: value === opt ? C.t1 : C.t2, fontWeight: value === opt ? 600 : 400, whiteSpace: 'nowrap' }}>
                 {opt}
               </div>
             ))}
@@ -1060,7 +1060,7 @@ function SalesPage({ data, filters, setFilters }) {
       <div className="fbar">
         <div className="fbar-inner">
           <SearchableSelect options={cats} value={filters.category} onChange={v => setFilters(f => ({ ...f, category: v, subCategory: '' }))} placeholder="All Categories" />
-          <SearchableSelect options={subCats} value={filters.subCategory || ''} onChange={v => setFilters(f => ({ ...f, subCategory: v }))} placeholder="All Sub-categories" />
+          <SearchableSelect options={subCats} value={filters.subCategory || ''} onChange={v => setFilters(f => ({ ...f, subCategory: v }))} placeholder="All Sub-categories" dropdownWidth={320} />
           <select className="fsel" value={filters.state} onChange={e => setFilters(f => ({ ...f, state: e.target.value }))}>
             <option value="">All States</option>{states.map(s => <option key={s} value={s}>{s}</option>)}
           </select>
