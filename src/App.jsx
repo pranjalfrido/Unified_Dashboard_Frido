@@ -979,7 +979,7 @@ function AmazonTab({ data }) {
               </BarChart>
             </ResponsiveContainer>
           </Card>
-          <div className="g-2" style={{ alignItems: 'stretch' }}>
+          <div className="g-2" style={{ alignItems: 'flex-start' }}>
             {/* FBA vs MFN */}
             <Card title="FBA vs MFN · Seller Central">
               {[{ label: 'FBA (Fulfilled by Amazon)', ...scFBA }, { label: 'MFN (Merchant Fulfilled)', ...scMFN }].map((r, i) => (
@@ -1040,7 +1040,7 @@ function AmazonTab({ data }) {
             <KPICard label="FBA Share" value={`${scTotalRev ? (scFBA.rev / scTotalRev * 100).toFixed(1) : 0}%`} sub={`MFN ${scTotalRev ? (scMFN.rev / scTotalRev * 100).toFixed(1) : 0}%`} />
           </div>
           {/* FBA vs MFN */}
-          <div className="g-2">
+          <div className="g-2" style={{ alignItems: 'flex-start' }}>
             <Card title="FBA vs MFN Breakdown">
               {[{ label: 'FBA (Fulfilled by Amazon)', ...scFBA }, { label: 'MFN (Merchant Fulfilled)', ...scMFN }].map((r, i) => (
                 <div key={r.label} style={{ padding: '10px 0', borderBottom: i === 0 ? `1px solid ${C.border}` : 'none' }}>
