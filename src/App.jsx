@@ -1110,7 +1110,7 @@ function AmazonTab({ data }) {
                 { key: 'orders', label: 'Orders', align: 'right', render: v => fmtN(v) },
                 { key: 'units', label: 'Units', align: 'right', render: v => fmtN(v) },
                 { key: 'rev', label: 'Revenue', align: 'right', mono: true, render: v => fmt(v) },
-              ]} rows={amzSC.skus || []} maxRows={15} />
+              ]} rows={amzSC.skus || []} maxRows={20} />
             </Card>
           </div>
         </div>
