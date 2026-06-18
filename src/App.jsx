@@ -218,7 +218,7 @@ const TABS = [
   { id: 'blinkit', label: 'Blinkit', ch: 'Blinkit', logo: 'https://www.google.com/s2/favicons?domain=blinkit.com&sz=32' },
   { id: 'cred', label: 'CRED', ch: 'CRED', logo: 'https://www.google.com/s2/favicons?domain=cred.club&sz=32' },
   { id: 'instamart', label: 'Instamart', ch: 'Instamart', logo: 'https://www.google.com/s2/favicons?domain=swiggy.com&sz=32' },
-  { id: 'zepto', label: 'Zepto', ch: 'Zepto', logo: 'https://www.google.com/s2/favicons?domain=zeptonow.com&sz=32' },
+  { id: 'zepto', label: 'Zepto', ch: 'Zepto', logo: 'https://www.google.com/s2/favicons?domain=zepto.com&sz=32' },
   { id: 'myntra', label: 'Myntra', ch: 'Myntra', logo: 'https://www.google.com/s2/favicons?domain=myntra.com&sz=32' },
 ]
 
