@@ -979,6 +979,69 @@ function AmazonTab({ data }) {
               </BarChart>
             </ResponsiveContainer>
           </Card>
+          {/* 3 charts row */}
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 14 }}>
+            {/* Order Status Pie */}
+            <Card title="Order Status Distribution">
+              <ResponsiveContainer width="100%" height={200}>
+                <PieChart>
+                  <Pie data={(amzSC.status || []).map(s => ({ name: s.status, value: s.orders }))} cx="50%" cy="50%" outerRadius={75} dataKey="value" label={({ name, percent }) => `${name} ${(percent*100).toFixed(0)}%`} labelLine={false} fontSize={10}>
+                    {(amzSC.status || []).map((s, i) => (
+                      <Cell key={s.status} fill={({ Shipped: C.green.tx, Pending: C.amber.tx, Cancelled: C.red.tx, Shipping: C.blue.tx })[s.status] || C.t3} />
+                    ))}
+                  </Pie>
+                  <Tooltip formatter={(v) => fmtN(v)} />
+                </PieChart>
+              </ResponsiveContainer>
+            </Card>
+            {/* Top 5 States bar */}
+            <Card title="Top 5 States · Revenue">
+              <ResponsiveContainer width="100%" height={200}>
+                <BarChart data={(amzSC.states || []).slice(0, 5).map(s => ({ state: s.state?.charAt(0) + s.state?.slice(1).toLowerCase(), rev: s.rev }))} layout="vertical" margin={{ top: 0, right: 10, bottom: 0, left: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke={C.border} horizontal={false} />
+                  <XAxis type="number" tick={{ fontSize: 10, fill: C.t3 }} tickFormatter={v => v >= 1e5 ? `${(v/1e5).toFixed(0)}L` : v} />
+                  <YAxis type="category" dataKey="state" tick={{ fontSize: 10, fill: C.t2 }} width={90} />
+                  <Tooltip content={<ChartTooltip />} />
+                  <Bar dataKey="rev" fill="#E8930A" radius={[0, 4, 4, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            </Card>
+            {/* Daily Cancellation trend */}
+            <Card title="Daily Cancellations Trend">
+              {(() => {
+                const cancelDaily = scDailyArr.map(d => {
+                  const dayCancel = (amzSC.daily || []).filter(x => x.date === d.date)
+                  const totalRev = (d.FBA || 0) + (d.MFN || 0)
+                  return { date: d.date, cancelled: 0 }
+                })
+                const cancelData = (amzSC.statusByDate || []).length
+                  ? amzSC.statusByDate
+                  : scDailyArr.map(d => ({ date: d.date, cancelled: 0 }))
+                return (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                    <div style={{ fontSize: 11, color: C.t3, textAlign: 'center', paddingTop: 20 }}>
+                      Total Cancelled: <strong style={{ color: C.red.tx, fontSize: 16 }}>{fmtN(amzSC.status?.find(s => s.status === 'Cancelled')?.orders || 0)}</strong>
+                    </div>
+                    <div style={{ fontSize: 11, color: C.t3, textAlign: 'center' }}>
+                      Cancellation Rate: <strong style={{ color: C.red.tx, fontSize: 16 }}>{scCancelRate.toFixed(1)}%</strong>
+                    </div>
+                    <div style={{ fontSize: 11, color: C.t3, textAlign: 'center', marginTop: 8 }}>of {fmtN(scStatusTotal)} total orders</div>
+                    <div style={{ display: 'flex', gap: 8, justifyContent: 'center', marginTop: 12, flexWrap: 'wrap' }}>
+                      {(amzSC.status || []).map(s => {
+                        const clr = { Shipped: C.green.tx, Pending: C.amber.tx, Cancelled: C.red.tx, Shipping: C.blue.tx }[s.status] || C.t3
+                        return (
+                          <div key={s.status} style={{ textAlign: 'center', padding: '8px 14px', borderRadius: 8, background: C.bg, border: `1px solid ${C.border}` }}>
+                            <div style={{ fontSize: 13, fontWeight: 700, color: clr }}>{fmtN(s.orders)}</div>
+                            <div style={{ fontSize: 10, color: C.t3, marginTop: 2 }}>{s.status}</div>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  </div>
+                )
+              })()}
+            </Card>
+          </div>
           <div className="g-2" style={{ alignItems: 'stretch' }}>
             {/* FBA vs MFN */}
             <Card title="FBA vs MFN · Seller Central">
