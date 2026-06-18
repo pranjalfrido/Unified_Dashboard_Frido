@@ -32,6 +32,7 @@ export function processData(rows) {
         date: r.OrderDate?.slice(0, 10), state: r.State, city: r.City,
         customerId: r.CustomerId, voucher: r.voucher_code,
         dispatchDate: r.Dispatch_Date, deliverDate: r.Delivered_Date, orderStatus: r.Order_Status,
+        financialStatus: r.FinancialStatus, fulfilmentStatus: r.FulfilmentStatus,
         isRTO: false, isCIR: false, isExchange: false, isCancelled: false,
       }
     }
