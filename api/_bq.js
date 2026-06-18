@@ -22,8 +22,16 @@ export function getBQ() {
 export function buildQuery(s, e, filters = {}) {
   const { category, subCategory, state, sku, subChannel, voucher } = filters
   const whereClauses = []
-  if (category) whereClauses.push(`COALESCE(im.Category, 'Frido') = '${category.replace(/'/g, "''")}'`)
-  if (subCategory) whereClauses.push(`COALESCE(im.SubCategory, 'Frido') = '${subCategory.replace(/'/g, "''")}'`)
+  if (category) {
+    const cats = category.split(',').map(c => c.trim()).filter(Boolean)
+    if (cats.length === 1) whereClauses.push(`COALESCE(im.Category, 'Frido') = '${cats[0].replace(/'/g, "''")}'`)
+    else if (cats.length > 1) whereClauses.push(`COALESCE(im.Category, 'Frido') IN (${cats.map(c => `'${c.replace(/'/g, "''")}'`).join(',')})`)
+  }
+  if (subCategory) {
+    const subs = subCategory.split(',').map(c => c.trim()).filter(Boolean)
+    if (subs.length === 1) whereClauses.push(`COALESCE(im.SubCategory, 'Frido') = '${subs[0].replace(/'/g, "''")}'`)
+    else if (subs.length > 1) whereClauses.push(`COALESCE(im.SubCategory, 'Frido') IN (${subs.map(c => `'${c.replace(/'/g, "''")}'`).join(',')})`)
+  }
   if (state) whereClauses.push(`UPPER(TRIM(u.State)) = '${state.toUpperCase().replace(/'/g, "''")}'`)
   if (sku) whereClauses.push(`UPPER(TRIM(u.ChannelSKUCode)) LIKE '%${sku.toUpperCase().replace(/'/g, "''").replace(/%/g, '\\%')}%'`)
   if (subChannel) whereClauses.push(`u.SubChannel = '${subChannel.replace(/'/g, "''")}'`)
