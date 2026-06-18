@@ -1001,9 +1001,11 @@ function AmazonTab({ data }) {
             </Card>
             {/* Top States */}
             <Card title="Top States · Seller Central">
-              {(amzSC.states || []).map((s, i) => (
-                <HBar key={s.state} dot={['#E8930A','#2E74CC','#0D9E68','#CC4078','#9B59B6','#534AB7','#CC8A00','#E24B4A'][i % 8]} label={s.state?.charAt(0) + s.state?.slice(1).toLowerCase()} width={(s.rev / maxStateRev) * 100} value={fmt(s.rev)} pctVal={fmtN(s.orders) + ' ord'} />
-              ))}
+              <div style={{ overflowY: 'auto', maxHeight: 320 }}>
+                {(amzSC.states || []).map((s, i) => (
+                  <HBar key={s.state} dot={['#E8930A','#2E74CC','#0D9E68','#CC4078','#9B59B6','#534AB7','#CC8A00','#E24B4A'][i % 8]} label={s.state?.charAt(0) + s.state?.slice(1).toLowerCase()} width={(s.rev / maxStateRev) * 100} value={fmt(s.rev)} pctVal={fmtN(s.orders) + ' ord'} />
+                ))}
+              </div>
             </Card>
           </div>
         </div>
@@ -1081,9 +1083,11 @@ function AmazonTab({ data }) {
           <div className="g-2" style={{ alignItems: 'stretch' }}>
             {/* Top States */}
             <Card title="Top States">
-              {(amzSC.states || []).map((s, i) => (
-                <HBar key={s.state} dot={['#E8930A','#2E74CC','#0D9E68','#CC4078','#9B59B6','#534AB7','#CC8A00','#E24B4A','#FF6B35','#4AB89A'][i % 10]} label={s.state?.charAt(0) + s.state?.slice(1).toLowerCase()} width={(s.rev / maxStateRev) * 100} value={fmt(s.rev)} pctVal={fmtN(s.orders) + ' ord'} />
-              ))}
+              <div style={{ overflowY: 'auto', maxHeight: 320 }}>
+                {(amzSC.states || []).map((s, i) => (
+                  <HBar key={s.state} dot={['#E8930A','#2E74CC','#0D9E68','#CC4078','#9B59B6','#534AB7','#CC8A00','#E24B4A','#FF6B35','#4AB89A'][i % 10]} label={s.state?.charAt(0) + s.state?.slice(1).toLowerCase()} width={(s.rev / maxStateRev) * 100} value={fmt(s.rev)} pctVal={fmtN(s.orders) + ' ord'} />
+                ))}
+              </div>
             </Card>
             {/* Top SKUs */}
             <Card title="Top SKUs · Seller Central">
