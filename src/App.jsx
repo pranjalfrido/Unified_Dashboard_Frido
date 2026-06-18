@@ -991,7 +991,7 @@ function AmazonTab({ data }) {
                   <CartesianGrid strokeDasharray="3 3" stroke={C.border} vertical={false} />
                   <XAxis dataKey="date" tick={{ fontSize: 10, fill: C.t3 }} tickFormatter={d => d?.slice(5)} />
                   <YAxis tick={{ fontSize: 10, fill: C.t3 }} tickFormatter={v => scChartMetric === 'rev' ? (v >= 1e5 ? `${(v/1e5).toFixed(0)}L` : v) : fmtN(v)} width={40} />
-                  <Tooltip content={<ChartTooltip />} />
+                  <Tooltip content={<ChartTooltip formatter={scChartMetric === 'orders' ? fmtN : undefined} />} />
                   <Legend iconSize={8} wrapperStyle={{ fontSize: 10 }} />
                   <Bar dataKey={scChartMetric === 'rev' ? 'FBA' : 'FBA_orders'} stackId="a" fill="#E8930A" name="FBA" />
                   <Bar dataKey={scChartMetric === 'rev' ? 'MFN' : 'MFN_orders'} stackId="a" fill="#2E74CC" name="MFN" />
@@ -1122,7 +1122,7 @@ function AmazonTab({ data }) {
                 <CartesianGrid strokeDasharray="3 3" stroke={C.border} vertical={false} />
                 <XAxis dataKey="date" tick={{ fontSize: 10, fill: C.t3 }} tickFormatter={d => d?.slice(5)} />
                 <YAxis tick={{ fontSize: 10, fill: C.t3 }} tickFormatter={v => scChartMetric === 'rev' ? (v >= 1e5 ? `${(v/1e5).toFixed(0)}L` : v) : fmtN(v)} width={40} />
-                <Tooltip content={<ChartTooltip />} />
+                <Tooltip content={<ChartTooltip formatter={scChartMetric === 'orders' ? fmtN : undefined} />} />
                 <Legend iconSize={8} wrapperStyle={{ fontSize: 10 }} />
                 <Bar dataKey={scChartMetric === 'rev' ? 'FBA' : 'FBA_orders'} stackId="a" fill="#E8930A" name="FBA" />
                 <Bar dataKey={scChartMetric === 'rev' ? 'MFN' : 'MFN_orders'} stackId="a" fill="#2E74CC" name="MFN" />
@@ -1409,7 +1409,7 @@ function FlipkartTab({ data }) {
                 <CartesianGrid strokeDasharray="3 3" stroke={C.border} vertical={false} />
                 <XAxis dataKey="date" tick={{ fontSize: 10, fill: C.t3 }} tickFormatter={d => d?.slice(5)} />
                 <YAxis tick={{ fontSize: 10, fill: C.t3 }} tickFormatter={v => chartMetric === 'rev' ? (v >= 1e5 ? `${(v/1e5).toFixed(0)}L` : v) : fmtN(v)} width={40} />
-                <Tooltip content={<ChartTooltip />} />
+                <Tooltip content={<ChartTooltip formatter={chartMetric === 'orders' ? fmtN : undefined} />} />
                 <Legend iconSize={8} wrapperStyle={{ fontSize: 10 }} />
                 <Bar dataKey={chartMetric === 'rev' ? 'FBF' : 'FBF_orders'} stackId="a" fill="#E8930A" name="FBF" />
                 <Bar dataKey={chartMetric === 'rev' ? 'NonFBF' : 'NonFBF_orders'} stackId="a" fill="#2E74CC" name="Non-FBF" />

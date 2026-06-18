@@ -3,8 +3,9 @@ import { BarChart, Bar, LineChart, Line, AreaChart, Area, XAxis, YAxis, Cartesia
 
 export { BarChart, Bar, LineChart, Line, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell }
 
-export function ChartTooltip({ active, payload, label }) {
+export function ChartTooltip({ active, payload, label, formatter }) {
   if (!active || !payload?.length) return null
+  const format = formatter || fmt
   return (
     <div style={{ background: '#fff', border: `1px solid ${C.border}`, borderRadius: 9, padding: '8px 12px', fontSize: 11, boxShadow: '0 4px 16px rgba(0,0,0,.10)' }}>
       <div style={{ fontWeight: 700, color: C.t2, marginBottom: 5 }}>{label}</div>
@@ -12,7 +13,7 @@ export function ChartTooltip({ active, payload, label }) {
         <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 2 }}>
           <span style={{ width: 8, height: 8, borderRadius: '50%', background: p.color, display: 'inline-block', flexShrink: 0, border: p.color === '#FFD600' ? '1px solid #E6C200' : 'none' }} />
           <span style={{ color: C.t2 }}>{p.name}</span>
-          <span style={{ fontWeight: 700, color: C.t1, marginLeft: 'auto', paddingLeft: 12, fontFamily: 'var(--mono)' }}>{fmt(p.value)}</span>
+          <span style={{ fontWeight: 700, color: C.t1, marginLeft: 'auto', paddingLeft: 12, fontFamily: 'var(--mono)' }}>{format(p.value)}</span>
         </div>
       ))}
     </div>
