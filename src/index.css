@@ -149,9 +149,8 @@ html,body{height:100%;background:var(--bg);font-family:var(--font);color:var(--t
 .spin{animation:spin 1s linear infinite}
 
 /* ── Sales tabs ────────────────────────────── */
-.sales-tabs{height:44px;background:var(--card);border-bottom:1px solid var(--b1);display:flex;align-items:center;padding:0 16px;overflow-x:auto;scrollbar-width:none;flex-shrink:0}
-.sales-tabs::-webkit-scrollbar{display:none}
-.stab{display:inline-flex;align-items:center;gap:5px;padding:0 12px;height:44px;font-size:12px;font-weight:500;color:var(--t3);cursor:pointer;border-bottom:2.5px solid transparent;white-space:nowrap;flex-shrink:0;background:none;border-top:none;border-left:none;border-right:none;font-family:var(--font)}
+.sales-tabs{height:44px;background:var(--card);border-bottom:1px solid var(--b1);display:flex;align-items:stretch;padding:0;flex-shrink:0}
+.stab{display:inline-flex;align-items:center;justify-content:center;gap:5px;flex:1;height:44px;font-size:12px;font-weight:500;color:var(--t3);cursor:pointer;border-bottom:2.5px solid transparent;white-space:nowrap;background:none;border-top:none;border-left:none;border-right:none;font-family:var(--font)}
 .stab.active{color:var(--t1);border-bottom-color:var(--acc);font-weight:600}
 
 /* ── Filter bar ────────────────────────────── */
@@ -208,8 +207,7 @@ html,body{height:100%;background:var(--bg);font-family:var(--font);color:var(--t
   .tbl-wrap{ overflow-x:auto;-webkit-overflow-scrolling:touch }
 
   /* Sales tabs always scrollable */
-  .sales-tabs{ padding:0 10px }
-  .stab{ padding:0 10px;font-size:11.5px }
+  .stab{ font-size:11px }
 
   /* Intel cards full width */
   .intel-row{ grid-template-columns:1fr !important }

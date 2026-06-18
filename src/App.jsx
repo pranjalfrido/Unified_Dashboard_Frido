@@ -212,17 +212,14 @@ function OverviewPage({ data, alerts }) {
 // ── Sales sub-tabs ────────────────────────────────────────────
 const TABS = [
   { id: 'all', label: 'All Channels' },
-  { id: 'shopify', label: 'Shopify', ch: 'Shopify' },
-  { id: 'amazon', label: 'Amazon', ch: 'Amazon' },
-  { id: 'flipkart', label: 'Flipkart', ch: 'Flipkart' },
-  { id: 'blinkit', label: 'Blinkit', ch: 'Blinkit' },
-  { id: 'cred', label: 'CRED', ch: 'CRED' },
-  { id: 'instamart', label: 'Instamart', ch: 'Instamart' },
-  { id: 'zepto', label: 'Zepto', ch: 'Zepto' },
-  { id: 'myntra', label: 'Myntra', ch: 'Myntra' },
-  { id: 'qc', label: '⚡ Quick Commerce' },
-  { id: 'ops', label: '🚚 Operations' },
-  { id: 'cx', label: '👥 Customers' },
+  { id: 'shopify', label: 'Shopify', ch: 'Shopify', logo: 'https://www.google.com/s2/favicons?domain=shopify.com&sz=32' },
+  { id: 'amazon', label: 'Amazon', ch: 'Amazon', logo: 'https://www.google.com/s2/favicons?domain=amazon.in&sz=32' },
+  { id: 'flipkart', label: 'Flipkart', ch: 'Flipkart', logo: 'https://www.google.com/s2/favicons?domain=flipkart.com&sz=32' },
+  { id: 'blinkit', label: 'Blinkit', ch: 'Blinkit', logo: 'https://www.google.com/s2/favicons?domain=blinkit.com&sz=32' },
+  { id: 'cred', label: 'CRED', ch: 'CRED', logo: 'https://www.google.com/s2/favicons?domain=cred.club&sz=32' },
+  { id: 'instamart', label: 'Instamart', ch: 'Instamart', logo: 'https://www.google.com/s2/favicons?domain=swiggy.com&sz=32' },
+  { id: 'zepto', label: 'Zepto', ch: 'Zepto', logo: 'https://www.google.com/s2/favicons?domain=zeptonow.com&sz=32' },
+  { id: 'myntra', label: 'Myntra', ch: 'Myntra', logo: 'https://www.google.com/s2/favicons?domain=myntra.com&sz=32' },
 ]
 
 function PaginatedCard({ title, rows, columns, pageSize = 10 }) {
@@ -1686,7 +1683,7 @@ function SalesPage({ data, filters, setFilters }) {
       <div className="sales-tabs">
         {TABS.map(tab => (
           <button key={tab.id} onClick={() => { setActiveTab(tab.id); if (tab.id !== 'shopify') setFilters(f => ({ ...f, voucher: '' })) }} className={`stab${activeTab === tab.id ? ' active' : ''}`}>
-            {tab.ch && <span style={{ width: 7, height: 7, borderRadius: '50%', background: C.ch[tab.ch], display: 'inline-block', flexShrink: 0 }} />}
+            {tab.logo && <img src={tab.logo} alt="" style={{ width: 14, height: 14, borderRadius: 3, flexShrink: 0, objectFit: 'contain' }} />}
             {tab.label}
           </button>
         ))}
