@@ -307,11 +307,13 @@ function VoucherDropdown({ voucherList, selected, onChange }) {
 }
 
 // ── Searchable single-select dropdown ────────────────────────
-function SearchableSelect({ options, value, onChange, placeholder, dropdownWidth }) {
+function SearchableSelect({ options, value, onChange, placeholder, dropdownWidth, multi }) {
   const [open, setOpen] = useState(false)
   const [search, setSearch] = useState('')
   const ref = useRef(null)
   const filtered = options.filter(o => o.toLowerCase().includes(search.toLowerCase()))
+  // multi: value is array, single: value is string
+  const selected = multi ? (value || []) : value
 
   useEffect(() => {
     const handler = e => { if (ref.current && !ref.current.contains(e.target)) setOpen(false) }
@@ -319,12 +321,22 @@ function SearchableSelect({ options, value, onChange, placeholder, dropdownWidth
     return () => document.removeEventListener('mousedown', handler)
   }, [])
 
-  const select = v => { onChange(v); setSearch(''); setOpen(false) }
+  const toggle = v => {
+    if (!multi) { onChange(v); setSearch(''); setOpen(false); return }
+    const arr = selected.includes(v) ? selected.filter(x => x !== v) : [...selected, v]
+    onChange(arr)
+  }
+  const clearAll = () => { onChange(multi ? [] : ''); setSearch(''); if (!multi) setOpen(false) }
+
+  const hasValue = multi ? selected.length > 0 : !!selected
+  const label = multi
+    ? (selected.length === 0 ? placeholder : selected.length === 1 ? selected[0] : `${selected[0]} +${selected.length - 1}`)
+    : (selected || placeholder)
 
   return (
     <div ref={ref} style={{ position: 'relative', flexShrink: 0 }}>
-      <div onClick={() => setOpen(o => !o)} className="fsel" style={{ display: 'flex', alignItems: 'center', gap: 5, cursor: 'pointer', minWidth: 140, background: value ? '#FFF9CC' : undefined, borderColor: value ? C.acm : undefined }}>
-        <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: 11.5 }}>{value || placeholder}</span>
+      <div onClick={() => setOpen(o => !o)} className="fsel" style={{ display: 'flex', alignItems: 'center', gap: 5, cursor: 'pointer', minWidth: 140, background: hasValue ? '#FFF9CC' : undefined, borderColor: hasValue ? C.acm : undefined }}>
+        <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: 11.5 }}>{label}</span>
         <span style={{ fontSize: 8, color: C.t3, flexShrink: 0 }}>▼</span>
       </div>
       {open && (
@@ -333,13 +345,17 @@ function SearchableSelect({ options, value, onChange, placeholder, dropdownWidth
             <input autoFocus value={search} onChange={e => setSearch(e.target.value)} onMouseDown={e => e.stopPropagation()} placeholder={`Search ${placeholder?.toLowerCase() || ''}…`} style={{ width: '100%', fontSize: 11.5, padding: '4px 8px', border: `1px solid ${C.border2}`, borderRadius: 6, outline: 'none', fontFamily: 'var(--font)', background: C.bg }} />
           </div>
           <div style={{ maxHeight: 240, overflowY: 'auto' }}>
-            <div onClick={() => select('')} style={{ padding: '6px 10px', fontSize: 12, cursor: 'pointer', color: !value ? C.t1 : C.t2, fontWeight: !value ? 600 : 400, background: !value ? C.acl : undefined }}>{placeholder}</div>
+            <div onClick={clearAll} style={{ padding: '6px 10px', fontSize: 12, cursor: 'pointer', color: !hasValue ? C.t1 : C.t2, fontWeight: !hasValue ? 600 : 400, background: !hasValue ? C.acl : undefined }}>{placeholder}</div>
             <div style={{ height: 1, background: C.border }} />
-            {filtered.map(opt => (
-              <div key={opt} onClick={() => select(opt)} style={{ padding: '5px 10px', fontSize: 11.5, cursor: 'pointer', background: value === opt ? C.acl : undefined, color: value === opt ? C.t1 : C.t2, fontWeight: value === opt ? 600 : 400, whiteSpace: 'nowrap' }}>
-                {opt}
-              </div>
-            ))}
+            {filtered.map(opt => {
+              const active = multi ? selected.includes(opt) : selected === opt
+              return (
+                <div key={opt} onClick={() => toggle(opt)} style={{ padding: '5px 10px', fontSize: 11.5, cursor: 'pointer', background: active ? C.acl : undefined, color: active ? C.t1 : C.t2, fontWeight: active ? 600 : 400, whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', gap: 7 }}>
+                  {multi && <span style={{ width: 13, height: 13, borderRadius: 3, border: `1.5px solid ${active ? C.acm : C.border2}`, background: active ? C.acm : 'transparent', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{active && <span style={{ color: '#fff', fontSize: 9, lineHeight: 1 }}>✓</span>}</span>}
+                  {opt}
+                </div>
+              )
+            })}
             {filtered.length === 0 && <div style={{ padding: '10px', fontSize: 11.5, color: C.t3, textAlign: 'center' }}>No results</div>}
           </div>
         </div>
@@ -1453,10 +1469,10 @@ function SalesPage({ data, filters, setFilters }) {
   const filteredData = data
 
   const cats = useMemo(() => Object.keys(data?.catMap || {}).filter(Boolean).sort(), [data])
-  const states = useMemo(() => Object.keys(data?.stateMap || {}).filter(Boolean).sort(), [data])
   const subCats = useMemo(() => {
     const all = Object.entries(data?.subCatMap || {})
-    const filtered = filters.category ? all.filter(([, v]) => v.category === filters.category) : all
+    const cats = filters.category?.length > 0 ? filters.category : null
+    const filtered = cats ? all.filter(([, v]) => cats.includes(v.category)) : all
     return filtered.map(([k]) => k).filter(Boolean).sort()
   }, [data, filters.category])
 
@@ -1475,14 +1491,11 @@ function SalesPage({ data, filters, setFilters }) {
       {/* Filter bar */}
       <div className="fbar">
         <div className="fbar-inner">
-          <SearchableSelect options={cats} value={filters.category} onChange={v => setFilters(f => ({ ...f, category: v, subCategory: '' }))} placeholder="All Categories" />
-          <SearchableSelect options={subCats} value={filters.subCategory || ''} onChange={v => setFilters(f => ({ ...f, subCategory: v }))} placeholder="All Sub-categories" dropdownWidth={320} />
-          <select className="fsel" value={filters.state} onChange={e => setFilters(f => ({ ...f, state: e.target.value }))}>
-            <option value="">All States</option>{states.map(s => <option key={s} value={s}>{s}</option>)}
-          </select>
+          <SearchableSelect multi options={cats} value={filters.category || []} onChange={v => setFilters(f => ({ ...f, category: v, subCategory: [] }))} placeholder="All Categories" />
+          <SearchableSelect multi options={subCats} value={filters.subCategory || []} onChange={v => setFilters(f => ({ ...f, subCategory: v }))} placeholder="All Sub-categories" dropdownWidth={320} />
           <input type="text" placeholder="Search SKU…" value={filters.sku} onChange={e => setFilters(f => ({ ...f, sku: e.target.value }))} className="fsrch" />
           {activeTab === 'shopify' && <VoucherDropdown voucherList={data?.voucherList || []} selected={filters.voucher} onChange={v => setFilters(f => ({ ...f, voucher: v }))} />}
-          <button onClick={() => setFilters(f => ({ ...f, category: '', subCategory: '', state: '', sku: '', subChannel: '', voucher: '' }))} className="fclr">✕ Clear</button>
+          <button onClick={() => setFilters(f => ({ ...f, category: [], subCategory: [], sku: '', subChannel: '', voucher: '' }))} className="fclr">✕ Clear</button>
         </div>
       </div>
       {/* Content */}
@@ -1757,7 +1770,7 @@ function Skeleton() {
 export default function App() {
   const [page, setPage] = useState('overview')
   const def = getDefaultDates()
-  const [filters, setFilters] = useState({ start: def.start, end: def.end, category: '', subCategory: '', state: '', sku: '', subChannel: '', voucher: '' })
+  const [filters, setFilters] = useState({ start: def.start, end: def.end, category: [], subCategory: [], sku: '', subChannel: '', voucher: '' })
   const [rawRows, setRawRows] = useState(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
@@ -1788,18 +1801,17 @@ export default function App() {
     const dateChanged = filters.start !== prevDateRef.current.start || filters.end !== prevDateRef.current.end
     if (dateChanged) { prevDateRef.current = { start: filters.start, end: filters.end }; setRawRows(null) }
     debounceRef.current = setTimeout(() => {
-      const { start, end, category, subCategory, state, sku, subChannel, voucher } = filtersRef.current
+      const { start, end, category, subCategory, sku, subChannel, voucher } = filtersRef.current
       const extra = {}
-      if (category) extra.category = category
-      if (subCategory) extra.subCategory = subCategory
-      if (state) extra.state = state
+      if (category?.length) extra.category = category.join(',')
+      if (subCategory?.length) extra.subCategory = subCategory.join(',')
       if (sku) extra.sku = sku
       if (subChannel) extra.subChannel = subChannel
       if (voucher) extra.voucher = voucher
       fetchData(start, end, extra)
     }, 600)
     return () => clearTimeout(debounceRef.current)
-  }, [filters.start, filters.end, filters.category, filters.subCategory, filters.state, filters.sku, filters.subChannel, filters.voucher, fetchData])
+  }, [filters.start, filters.end, filters.category, filters.subCategory, filters.sku, filters.subChannel, filters.voucher, fetchData])
 
   const data = useMemo(() => { if (!rawRows) return null; if (rawRows.source === 'postgres-aggregated' || rawRows.totalRev !== undefined) return rawRows; return processData(rawRows) }, [rawRows])
   const alerts = useMemo(() => data ? detectAlerts(data) : [], [data])
