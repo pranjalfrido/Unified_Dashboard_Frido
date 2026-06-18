@@ -1125,17 +1125,16 @@ function AmazonTab({ data }) {
         <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6,1fr)', gap: 10 }}>
             <KPICard label="Ordered Revenue" value={fmt(vcTotalOrdered)} sub="Gross ordered value" />
-            <KPICard label="Shipped Revenue" value={fmt(vcTotalShipped)} sub="Actual shipped value" />
+            <KPICard label="Ordered Units" value={fmtN(vcTotalOrderedUnits)} />
+            <KPICard label="Shipped Units" value={fmtN(vcTotalShippedUnits)} />
             <KPICard label="ASP" value={`₹${vcTotalOrderedUnits ? Math.round(vcTotalOrdered / vcTotalOrderedUnits).toLocaleString('en-IN') : 0}`} sub="Ordered rev / units" />
             <KPICard label="Fill Rate" value={`${vcFillRate.toFixed(1)}%`} sub="Shipped / Ordered" accent={vcFillRate < 80 ? '#7A1A1A' : vcFillRate >= 95 ? '#286010' : undefined} />
             <KPICard label="Customer Returns" value={fmtN(vcTotalReturns)} accent={vcTotalReturns > 100 ? '#7A4000' : undefined} />
-            <KPICard label="Return Rate" value={`${vcReturnRate.toFixed(1)}%`} sub="Returns / Shipped" accent={vcReturnRate > 5 ? '#7A1A1A' : undefined} />
           </div>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 10 }}>
-            <KPICard label="Ordered Units" value={fmtN(vcTotalOrderedUnits)} />
-            <KPICard label="Shipped Units" value={fmtN(vcTotalShippedUnits)} />
-            <KPICard label="Backlog Units" value={fmtN(Math.max(0, vcTotalOrderedUnits - vcTotalShippedUnits))} sub="Ordered - Shipped" accent={vcTotalOrderedUnits > vcTotalShippedUnits ? '#7A4000' : undefined} />
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 10 }}>
+            <KPICard label="Return Rate" value={`${vcReturnRate.toFixed(1)}%`} sub="Returns / Shipped" accent={vcReturnRate > 5 ? '#7A1A1A' : undefined} />
             <KPICard label="Daily Avg Ordered" value={fmt(vcTotalOrdered / (data.nDays || 1))} sub="Revenue per day" />
+            <KPICard label="Vendor Accounts" value={fmtN(amzVC.accounts?.length || 0)} sub="Active accounts" />
           </div>
           <div className="g-2" style={{ alignItems: 'stretch' }}>
             <Card title="Vendor Account Breakdown">
