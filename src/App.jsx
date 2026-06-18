@@ -1451,7 +1451,7 @@ function FlipkartTab({ data }) {
           })}
         </Card>
         <div style={{ alignSelf: 'flex-start' }}>
-          <Card title="Top States">
+          <Card title="All States">
             <div style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '0 0 6px', borderBottom: `1px solid ${C.border}`, marginBottom: 2 }}>
               <span style={{ width: 8, flexShrink: 0 }} /><span style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.05em', color: C.t3, width: 110, flexShrink: 0 }}>State</span>
               <span style={{ flex: 1 }} />
