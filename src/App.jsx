@@ -903,8 +903,7 @@ function ShopifyTab({ data, filters, setFilters }) {
   )
 }
 
-function AmazonTab({ data }) {
-  const [region, setRegion] = useState('india') // 'india' | 'intl'
+function AmazonTab({ data, region = 'india', setRegion = () => {} }) {
   const [subView, setSubView] = useState('overview') // 'overview' | 'sc' | 'vc'
   const amzSC = data.amzSC || {}
   const amzVC = data.amzVC || {}
@@ -1495,9 +1494,9 @@ function FlipkartTab({ data }) {
   )
 }
 
-function ChannelTab({ data, channel, filters, setFilters }) {
+function ChannelTab({ data, channel, filters, setFilters, amzRegion, setAmzRegion }) {
   if (channel === 'Shopify') return <ShopifyTab data={data} filters={filters} setFilters={setFilters} />
-  if (channel === 'Amazon') return <AmazonTab data={data} />
+  if (channel === 'Amazon') return <AmazonTab data={data} region={amzRegion} setRegion={setAmzRegion} />
   if (channel === 'Flipkart') return <FlipkartTab data={data} />
   const chOrders = data.orders.filter(o => o.channel === channel)
   const chRows = data.rows.filter(r => r.Channel === channel)
@@ -1669,6 +1668,7 @@ function CXTab({ data }) {
 
 function SalesPage({ data, filters, setFilters }) {
   const [activeTab, setActiveTab] = useState('all')
+  const [amzRegion, setAmzRegion] = useState('india') // lifted from AmazonTab to blur filters for intl
   const filteredData = data
 
   const cats = useMemo(() => Object.keys(data?.catMap || {}).filter(Boolean).sort(), [data])
@@ -1694,8 +1694,17 @@ function SalesPage({ data, filters, setFilters }) {
       {/* Filter bar */}
       <div className="fbar">
         <div className="fbar-inner">
-          <SearchableSelect multi options={cats} value={filters.category || []} onChange={v => setFilters(f => ({ ...f, category: v, subCategory: [] }))} placeholder="All Categories" />
-          <SearchableSelect multi options={subCats} value={filters.subCategory || []} onChange={v => setFilters(f => ({ ...f, subCategory: v }))} placeholder="All Sub-categories" dropdownWidth={320} />
+          {(() => {
+            const catBlur = activeTab === 'amazon' && amzRegion === 'intl'
+            return <>
+              <div style={{ position: 'relative', opacity: catBlur ? 0.35 : 1, pointerEvents: catBlur ? 'none' : 'auto' }} title={catBlur ? 'Not applicable for International' : undefined}>
+                <SearchableSelect multi options={cats} value={filters.category || []} onChange={v => setFilters(f => ({ ...f, category: v, subCategory: [] }))} placeholder="All Categories" />
+              </div>
+              <div style={{ position: 'relative', opacity: catBlur ? 0.35 : 1, pointerEvents: catBlur ? 'none' : 'auto' }} title={catBlur ? 'Not applicable for International' : undefined}>
+                <SearchableSelect multi options={subCats} value={filters.subCategory || []} onChange={v => setFilters(f => ({ ...f, subCategory: v }))} placeholder="All Sub-categories" dropdownWidth={320} />
+              </div>
+            </>
+          })()}
           <input type="text" placeholder="Search SKU…" value={filters.sku} onChange={e => setFilters(f => ({ ...f, sku: e.target.value }))} className="fsrch" />
           {activeTab === 'shopify' && <VoucherDropdown voucherList={data?.voucherList || []} selected={filters.voucher} onChange={v => setFilters(f => ({ ...f, voucher: v }))} />}
           <button onClick={() => setFilters(f => ({ ...f, category: [], subCategory: [], sku: '', subChannel: '', voucher: '' }))} className="fclr">✕ Clear</button>
@@ -1705,7 +1714,7 @@ function SalesPage({ data, filters, setFilters }) {
       <div className="page-scroll">
         {activeTab === 'all' && <AllTab data={filteredData} />}
         {activeTab === 'shopify' && <ChannelTab data={filteredData} channel="Shopify" filters={filters} setFilters={setFilters} />}
-        {activeTab === 'amazon' && <ChannelTab data={filteredData} channel="Amazon" />}
+        {activeTab === 'amazon' && <ChannelTab data={filteredData} channel="Amazon" amzRegion={amzRegion} setAmzRegion={setAmzRegion} />}
         {activeTab === 'flipkart' && <ChannelTab data={filteredData} channel="Flipkart" />}
         {activeTab === 'blinkit' && <ChannelTab data={filteredData} channel="Blinkit" />}
         {activeTab === 'cred' && <ChannelTab data={filteredData} channel="CRED" />}
