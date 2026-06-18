@@ -1005,23 +1005,25 @@ function AmazonTab({ data }) {
           {/* Row 2: FBA vs MFN + Top States */}
           <div className="g-2" style={{ alignItems: 'stretch' }}>
             <Card title="FBA vs MFN · Seller Central">
-              {[{ label: 'FBA (Fulfilled by Amazon)', ...scFBA }, { label: 'MFN (Merchant Fulfilled)', ...scMFN }].map((r, i) => (
-                <div key={r.label} style={{ padding: '10px 0', borderBottom: i === 0 ? `1px solid ${C.border}` : 'none' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
-                    <span style={{ fontSize: 12, fontWeight: 600, color: C.t1 }}>{r.label}</span>
-                    <span style={{ fontSize: 12, fontWeight: 700, color: C.t1, fontFamily: 'var(--mono)' }}>{fmt(r.rev)}</span>
+              <div style={{ display: 'flex', flexDirection: 'column', height: '100%', justifyContent: 'space-around' }}>
+                {[{ label: 'FBA (Fulfilled by Amazon)', ...scFBA }, { label: 'MFN (Merchant Fulfilled)', ...scMFN }].map((r, i) => (
+                  <div key={r.label} style={{ padding: '16px 0', borderBottom: i === 0 ? `1px solid ${C.border}` : 'none' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 10 }}>
+                      <span style={{ fontSize: 13, fontWeight: 600, color: C.t1 }}>{r.label}</span>
+                      <span style={{ fontSize: 13, fontWeight: 700, color: C.t1, fontFamily: 'var(--mono)' }}>{fmt(r.rev)}</span>
+                    </div>
+                    <div style={{ display: 'flex', gap: 24, marginBottom: 10 }}>
+                      <span style={{ fontSize: 12, color: C.t3 }}>Orders: <strong style={{ color: C.t1 }}>{fmtN(r.orders)}</strong></span>
+                      <span style={{ fontSize: 12, color: C.t3 }}>Units: <strong style={{ color: C.t1 }}>{fmtN(r.units)}</strong></span>
+                      <span style={{ fontSize: 12, color: C.t3 }}>AOV: <strong style={{ color: C.t1 }}>₹{r.orders ? Math.round(r.rev / r.orders).toLocaleString('en-IN') : 0}</strong></span>
+                      <span style={{ fontSize: 12, color: C.t3 }}>Share: <strong style={{ color: C.t1 }}>{scTotalRev ? (r.rev / scTotalRev * 100).toFixed(1) : 0}%</strong></span>
+                    </div>
+                    <div style={{ height: 8, background: C.bg, borderRadius: 4 }}>
+                      <div style={{ height: '100%', borderRadius: 4, background: i === 0 ? '#E8930A' : '#2E74CC', width: `${scTotalRev ? (r.rev / scTotalRev * 100) : 0}%`, transition: 'width .5s' }} />
+                    </div>
                   </div>
-                  <div style={{ display: 'flex', gap: 16 }}>
-                    <span style={{ fontSize: 11, color: C.t3 }}>Orders: <strong style={{ color: C.t1 }}>{fmtN(r.orders)}</strong></span>
-                    <span style={{ fontSize: 11, color: C.t3 }}>Units: <strong style={{ color: C.t1 }}>{fmtN(r.units)}</strong></span>
-                    <span style={{ fontSize: 11, color: C.t3 }}>AOV: <strong style={{ color: C.t1 }}>₹{r.orders ? Math.round(r.rev / r.orders).toLocaleString('en-IN') : 0}</strong></span>
-                    <span style={{ fontSize: 11, color: C.t3 }}>Share: <strong style={{ color: C.t1 }}>{scTotalRev ? (r.rev / scTotalRev * 100).toFixed(1) : 0}%</strong></span>
-                  </div>
-                  <div style={{ marginTop: 7, height: 6, background: C.bg, borderRadius: 3 }}>
-                    <div style={{ height: '100%', borderRadius: 3, background: i === 0 ? '#E8930A' : '#2E74CC', width: `${scTotalRev ? (r.rev / scTotalRev * 100) : 0}%`, transition: 'width .5s' }} />
-                  </div>
-                </div>
-              ))}
+                ))}
+              </div>
             </Card>
             <div style={{ alignSelf: 'flex-start' }}>
               <Card title="Top States · Seller Central">
