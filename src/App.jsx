@@ -1826,9 +1826,11 @@ function CredTab({ data }) {
   const aov = orders ? rev / orders : 0
   const dailyAvg = nDays ? rev / nDays : 0
 
+  const [selectedCat, setSelectedCat] = useState(null)
   const daily = cr.daily || []
-  const maxDailyRev = Math.max(...daily.map(d => d.rev), 1)
   const cats = cr.categories || []
+  const allSubCats = cr.subCategories || []
+  const subCats = selectedCat ? allSubCats.filter(s => s.category === selectedCat) : allSubCats
   const maxCatRev = Math.max(...cats.map(c => c.rev), 1)
   const statusRows = cr.status || []
   const stateRows = cr.states || []
@@ -1891,20 +1893,36 @@ function CredTab({ data }) {
         </Card>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '3fr 2fr', gap: 14, alignItems: 'stretch' }}>
-        <Card title="Category Breakdown">
-          {cats.map((c, i) => (
-            <div key={c.category} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '5px 0', borderBottom: `1px solid ${C.border}` }}>
-              <span style={{ width: 8, height: 8, borderRadius: '50%', background: catColors[i % catColors.length], flexShrink: 0 }} />
-              <span style={{ fontSize: 11.5, color: C.t2, flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{c.category}</span>
-              <div style={{ width: 80, height: 5, background: C.bg, borderRadius: 3, flexShrink: 0 }}>
-                <div style={{ height: '100%', borderRadius: 3, background: catColors[i % catColors.length], width: `${(c.rev / maxCatRev) * 100}%` }} />
-              </div>
-              <span style={{ fontSize: 11.5, fontWeight: 600, color: C.t1, minWidth: 60, textAlign: 'right', fontFamily: 'var(--mono)' }}>{fmt(c.rev)}</span>
-              <span style={{ fontSize: 11, color: C.t3, minWidth: 40, textAlign: 'right' }}>{fmtN(c.orders)}o</span>
-            </div>
-          ))}
+      <div className="g-2" style={{ alignItems: 'stretch' }}>
+        <Card title="Category Revenue" style={{ display: 'flex', flexDirection: 'column' }}>
+          <div style={{ overflowX: 'auto' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+              <thead>
+                <tr>
+                  {[{ label: 'Category' }, { label: 'Revenue', align: 'right' }, { label: 'Exc GST', align: 'right' }, { label: 'Orders', align: 'right' }, { label: 'AOV', align: 'right' }].map(c => (
+                    <th key={c.label} style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.05em', color: C.t3, textAlign: c.align || 'left', padding: '3px 5px 7px', borderBottom: `1px solid ${C.border}` }}>{c.label}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {cats.map((r, i) => {
+                  const isSelected = selectedCat === r.category
+                  const catAov = r.orders ? r.rev / r.orders : 0
+                  return (
+                    <tr key={r.category} onClick={() => setSelectedCat(isSelected ? null : r.category)} style={{ borderBottom: i < cats.length - 1 ? `1px solid ${C.border}` : 'none', background: isSelected ? C.acl : '', cursor: 'pointer' }} onMouseEnter={e => { if (!isSelected) e.currentTarget.style.background = '#FFFBE6' }} onMouseLeave={e => { e.currentTarget.style.background = isSelected ? C.acl : '' }}>
+                      <td style={{ padding: '5.5px 5px', color: C.t2 }}>{isSelected ? <strong>{r.category}</strong> : r.category}</td>
+                      <td style={{ padding: '5.5px 5px', textAlign: 'right', fontFamily: 'var(--mono)', fontSize: 11.5, color: C.t1 }}>{fmt(r.rev)}</td>
+                      <td style={{ padding: '5.5px 5px', textAlign: 'right', color: C.t2 }}>{fmt(r.excRev)}</td>
+                      <td style={{ padding: '5.5px 5px', textAlign: 'right', color: C.t2 }}>{fmtN(r.orders)}</td>
+                      <td style={{ padding: '5.5px 5px', textAlign: 'right', color: C.t2 }}>₹{Math.round(catAov).toLocaleString('en-IN')}</td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
         </Card>
+        <PaginatedCard title={selectedCat ? `Sub-categories · ${selectedCat}` : 'Sub-categories'} rows={subCats.map(s => ({ name: s.subcategory, rev: s.rev, orders: s.orders, aov: s.orders ? s.rev / s.orders : 0 }))} columns={[{ key: 'name', label: 'Sub-category' }, { key: 'rev', label: 'Revenue', align: 'right', mono: true, render: v => fmt(v) }, { key: 'orders', label: 'Orders', align: 'right', render: v => fmtN(v) }, { key: 'aov', label: 'AOV', align: 'right', render: v => `₹${Math.round(v).toLocaleString('en-IN')}` }]} pageSize={selectedCat ? subCats.length : cats.length} />
       </div>
 
       <div className="g-2">
