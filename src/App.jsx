@@ -396,8 +396,8 @@ function OverviewPage({ data, alerts }) {
         </Card>
       </div>
 
-      {/* Scorecard row — scorecard + top states side by side, shrink to content */}
-      <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start' }}>
+      {/* Scorecard row — scorecard + new vs repeat side by side, stretch to same height */}
+      <div style={{ display: 'flex', gap: 12, alignItems: 'stretch' }}>
         <Card title="Channel scorecard" style={{ flexShrink: 0, width: 'fit-content', minWidth: 380 }}>
           <DataTable columns={[
             { key: 'ch', label: 'Channel' },
@@ -406,7 +406,11 @@ function OverviewPage({ data, alerts }) {
             { key: 'aov', label: 'AOV', align: 'right', mono: true, render: v => `₹${Math.round(v).toLocaleString('en-IN')}` },
           ]} rows={Object.keys(C.ch).map(ch => { const v = chMap[ch] || { rev: 0, orders: 0 }; return { ch, rev: v.rev, orders: v.orders, aov: v.orders ? v.rev / v.orders : 0 } })} />
         </Card>
-        <Card title="New vs Repeat Customers" note={`${fmtN(nCusts)} total`} style={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+        <div style={{ flex: 1, background: C.card, border: `1px solid ${C.border}`, borderRadius: 13, padding: '16px 18px', display: 'flex', flexDirection: 'column' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 11 }}>
+            <span style={{ fontSize: 13, fontWeight: 600, color: C.t1 }}>New vs Repeat Customers</span>
+            <span style={{ fontSize: 11.5, color: C.t3 }}>{fmtN(nCusts)} total</span>
+          </div>
           {(() => {
             const newCusts = nCusts - repeatCusts
             const donutData = [
@@ -414,28 +418,28 @@ function OverviewPage({ data, alerts }) {
               { name: 'Repeat', value: repeatCusts, color: '#0D9E68' },
             ]
             return (
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 32, padding: '8px 0' }}>
-                <div style={{ position: 'relative', width: 140, height: 140, flexShrink: 0 }}>
-                  <PieChart width={140} height={140}>
-                    <Pie data={donutData} cx={65} cy={65} innerRadius={42} outerRadius={65} dataKey="value" paddingAngle={3}>
+              <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 40 }}>
+                <div style={{ position: 'relative', flexShrink: 0 }}>
+                  <PieChart width={160} height={160}>
+                    <Pie data={donutData} cx={78} cy={78} innerRadius={50} outerRadius={75} dataKey="value" paddingAngle={3}>
                       {donutData.map((d, i) => <Cell key={i} fill={d.color} />)}
                     </Pie>
                   </PieChart>
-                  <div style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%,-50%)', textAlign: 'center' }}>
-                    <div style={{ fontSize: 18, fontWeight: 700, color: C.t1, lineHeight: 1 }}>{fmtN(nCusts)}</div>
-                    <div style={{ fontSize: 9, color: C.t3, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.04em', marginTop: 2 }}>Total</div>
+                  <div style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%,-50%)', textAlign: 'center', pointerEvents: 'none' }}>
+                    <div style={{ fontSize: 17, fontWeight: 700, color: C.t1, lineHeight: 1 }}>{fmtN(nCusts)}</div>
+                    <div style={{ fontSize: 9, color: C.t3, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.04em', marginTop: 3 }}>Total</div>
                   </div>
                 </div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
                   {donutData.map(d => (
-                    <div key={d.name} style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                      <div style={{ width: 36, height: 36, borderRadius: 10, background: d.color + '22', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                        <span style={{ width: 12, height: 12, borderRadius: '50%', background: d.color, display: 'block' }} />
+                    <div key={d.name} style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+                      <div style={{ width: 42, height: 42, borderRadius: 12, background: d.color + '20', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                        <span style={{ width: 14, height: 14, borderRadius: '50%', background: d.color, display: 'block' }} />
                       </div>
                       <div>
-                        <div style={{ fontSize: 11, color: C.t3, fontWeight: 500 }}>{d.name} customers</div>
-                        <div style={{ fontSize: 20, fontWeight: 700, color: C.t1, letterSpacing: '-.02em', lineHeight: 1.2 }}>{fmtN(d.value)}</div>
-                        <div style={{ fontSize: 11, color: C.t3 }}>{nCusts ? (d.value / nCusts * 100).toFixed(1) : 0}%</div>
+                        <div style={{ fontSize: 11, color: C.t3, fontWeight: 500, marginBottom: 1 }}>{d.name} customers</div>
+                        <div style={{ fontSize: 22, fontWeight: 700, color: C.t1, letterSpacing: '-.02em', lineHeight: 1 }}>{fmtN(d.value)}</div>
+                        <div style={{ fontSize: 11, color: C.t3, marginTop: 1 }}>{nCusts ? (d.value / nCusts * 100).toFixed(1) : 0}% of total</div>
                       </div>
                     </div>
                   ))}
@@ -443,7 +447,7 @@ function OverviewPage({ data, alerts }) {
               </div>
             )
           })()}
-        </Card>
+        </div>
       </div>
 
       {/* Category + Sub-category full width row */}
