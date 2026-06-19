@@ -320,6 +320,30 @@ function Topnav({ page, alerts, onRefresh, loading, filters, setFilters, rawRows
   )
 }
 
+// ── HeroKPICard ───────────────────────────────────────────────
+function HeroKPICard({ label, value, sub, chg, sparkData, dataKey = 'cur', color, gradId }) {
+  return (
+    <div className="kpi-card" style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+      <div className="kpi-label">{label}</div>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        <div className="kpi-value">{value}</div>
+        {chg !== null && chg !== undefined && <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 7px', borderRadius: 5, background: chg >= 0 ? '#E6F4E0' : '#FDE8E8', color: chg >= 0 ? '#286010' : '#7A1A1A' }}>{chg >= 0 ? '▲' : '▼'} {Math.abs(chg).toFixed(1)}%</span>}
+      </div>
+      {sub && <div className="kpi-sub">{sub}</div>}
+      {sparkData?.length > 0 && (
+        <ResponsiveContainer width="100%" height={32}>
+          <AreaChart data={sparkData} margin={{ top: 2, right: 0, bottom: 0, left: 0 }}>
+            <defs><linearGradient id={gradId} x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor={color} stopOpacity={0.25} /><stop offset="95%" stopColor={color} stopOpacity={0} /></linearGradient></defs>
+            <Area type="monotone" dataKey={dataKey} name="Current" stroke={color} strokeWidth={1.5} fill={`url(#${gradId})`} dot={false} connectNulls />
+            <Area type="monotone" dataKey="prev" name="Prev" stroke="#94939F" strokeWidth={1} fill="none" dot={false} strokeDasharray="3 2" connectNulls />
+            <Tooltip content={({ active, payload }) => active && payload?.length ? <div style={{ background: '#fff', border: '1px solid #E8E6DC', borderRadius: 6, padding: '4px 8px', fontSize: 10 }}>{payload.map(p => <div key={p.name} style={{ color: p.name === 'Current' ? '#13121A' : '#94939F' }}>{p.name}: {p.value != null ? `₹${(p.value >= 1e7 ? (p.value/1e7).toFixed(2)+' Cr' : p.value >= 1e5 ? (p.value/1e5).toFixed(1)+' L' : Math.round(p.value).toLocaleString('en-IN'))}` : '—'}</div>)}</div> : null} />
+          </AreaChart>
+        </ResponsiveContainer>
+      )}
+    </div>
+  )
+}
+
 // ── Overview Page ─────────────────────────────────────────────
 function OverviewPage({ data, alerts }) {
   const { totalRev, totalExcRev, gstCollected, nOrders, totalQty, blendedAOV, nDays, chMap, catMap, subCatMap, stateMap, nCusts, repeatCusts, dailyArr, orders, htCount, htRev, multiItemOrders } = data
@@ -1165,6 +1189,20 @@ function ShopifyTab({ data, filters, setFilters }) {
   const totalExcRev = data.totalExcRev || 0
   const totalQty = data.totalQty || 0
   const gst = totalRev - totalExcRev
+  const prevRev = data.prevRev || 0
+  const prevExcRev = data.prevExcRev || 0
+  const prevOrders = data.prevOrders || 0
+  const prevDailyArr = data.prevDailyArr || []
+
+  const shRevChg = prevRev > 0 ? ((totalRev - prevRev) / prevRev * 100) : null
+  const shOrdChg = prevOrders > 0 ? ((nOrders - prevOrders) / prevOrders * 100) : null
+  const shExcChg = prevExcRev > 0 ? ((totalExcRev - prevExcRev) / prevExcRev * 100) : null
+  const shSparkData = Array.from({ length: Math.max(dailyArr.length, prevDailyArr.length) }, (_, i) => {
+    const cur = dailyArr[i]
+    const pre = prevDailyArr[i]
+    const curRev = cur ? Object.entries(cur).filter(([k]) => k !== 'date' && !k.endsWith('_o')).reduce((s, [, v]) => s + (v || 0), 0) : null
+    return { i, cur: curRev, prev: pre?.rev ?? null }
+  })
   const nDays = data.nDays || 1
   const dailyAvg = nDays ? totalRev / nDays : 0
   const aov = nOrders ? totalRev / nOrders : 0
@@ -1216,9 +1254,9 @@ function ShopifyTab({ data, filters, setFilters }) {
         )}
         {isIntl && <span style={{ fontSize: 11, color: C.t3, marginLeft: 4 }}>UAE · UK · US</span>}
       </div>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6,1fr)', gap: 10 }}>
-        <KPICard label="Gross Revenue" value={fmt(totalRev)} sub={`${nDays} days`} />
-        <KPICard label="Net (Exc GST)" value={fmt(totalExcRev)} />
+      <div style={{ display: 'grid', gridTemplateColumns: '1.4fr 1.2fr 1fr 1fr 1fr 1fr', gap: 10 }}>
+        <HeroKPICard label="Gross Revenue · Inc. GST" value={fmt(totalRev)} sub={`${fmtN(nOrders)} orders · ${fmtN(totalQty)} units ${shOrdChg !== null ? (shOrdChg >= 0 ? '▲' : '▼') + Math.abs(shOrdChg).toFixed(1) + '%' : ''}`} chg={shRevChg} sparkData={shSparkData} color="#FFD600" gradId="shGrossGrad" />
+        <HeroKPICard label="Net (Exc GST)" value={fmt(totalExcRev)} sub={`GST ${fmt(gst)}`} chg={shExcChg} sparkData={shSparkData} color="#7AB4EE" gradId="shNetGrad" />
         <KPICard label="GST Collected" value={fmt(gst)} sub={totalRev > 0 ? `${((gst / totalRev) * 100).toFixed(1)}% of gross` : '—'} />
         <KPICard label="Orders" value={fmtN(nOrders)} />
         <KPICard label="Units" value={fmtN(totalQty)} />
@@ -1356,6 +1394,21 @@ function AmazonTab({ data, region = 'india', setRegion = () => {} }) {
   const vcReturnRate = vcTotalShippedUnits ? (vcTotalReturns / vcTotalShippedUnits * 100) : 0
   const vcMaxRev = Math.max(...(amzVC.accounts || []).map(a => a.orderedRev), 1)
 
+  // ── Amazon prev-period for HeroKPICard ──
+  const amzPrevSCRev = amzSC.prevRev || 0
+  const amzPrevVCRev = amzVC.prevRev || 0
+  const amzPrevTotalRev = amzPrevSCRev + amzPrevVCRev
+  const amzTotalRev = scTotalRev + vcTotalOrdered
+  const amzTotalChg = amzPrevTotalRev > 0 ? ((amzTotalRev - amzPrevTotalRev) / amzPrevTotalRev * 100) : null
+  const amzSCChg = amzPrevSCRev > 0 ? ((scTotalRev - amzPrevSCRev) / amzPrevSCRev * 100) : null
+  const amzVCChg = amzPrevVCRev > 0 ? ((vcTotalOrdered - amzPrevVCRev) / amzPrevVCRev * 100) : null
+  const amzPrevDailyArr = amzSC.prevDaily || []
+  const amzSparkData = Array.from({ length: Math.max(scDailyArr.length, amzPrevDailyArr.length) }, (_, i) => {
+    const cur = scDailyArr[i]
+    const pre = amzPrevDailyArr[i]
+    return { i, cur: cur ? (cur.FBA || 0) + (cur.MFN || 0) : null, prev: pre?.rev ?? null }
+  })
+
   // ── International calcs ──
   const intlTotalRev = amzIntl.countries?.reduce((s, c) => s + c.rev, 0) || 0
   const intlTotalOrders = amzIntl.countries?.reduce((s, c) => s + c.orders, 0) || 0
@@ -1388,10 +1441,10 @@ function AmazonTab({ data, region = 'india', setRegion = () => {} }) {
       {region === 'india' && subView === 'overview' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
           {/* KPI row 1 — combined */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6,1fr)', gap: 10 }}>
-            <KPICard label="Total Revenue" value={fmt(scTotalRev + vcTotalOrdered)} sub={`SC + VC · ${data.nDays || 7} days`} />
-            <KPICard label="SC Revenue" value={fmt(scTotalRev)} sub="Seller Central" />
-            <KPICard label="VC Revenue" value={fmt(vcTotalOrdered)} sub="Vendor Central" />
+          <div style={{ display: 'grid', gridTemplateColumns: '1.4fr 1.2fr 1.2fr 1fr 1fr 1fr', gap: 10 }}>
+            <HeroKPICard label="Total Revenue" value={fmt(scTotalRev + vcTotalOrdered)} sub={`SC + VC · ${data.nDays || 7} days`} chg={amzTotalChg} sparkData={amzSparkData} color="#FFD600" gradId="amzTotalGrad" />
+            <HeroKPICard label="SC Revenue" value={fmt(scTotalRev)} sub="Seller Central" chg={amzSCChg} sparkData={amzSparkData} color="#E8930A" gradId="amzSCGrad" />
+            <HeroKPICard label="VC Revenue" value={fmt(vcTotalOrdered)} sub="Vendor Central" chg={amzVCChg} sparkData={[]} color="#B8A000" gradId="amzVCGrad" />
             <KPICard label="Total Orders" value={fmtN(scTotalOrders)} sub="SC orders" />
             <KPICard label="AOV" value={`₹${Math.round(scAOV).toLocaleString('en-IN')}`} sub="SC avg order value" />
             <KPICard label="ASP" value={`₹${scTotalUnits ? Math.round(scTotalRev / scTotalUnits).toLocaleString('en-IN') : 0}`} sub="Avg selling price / unit" />
@@ -1740,6 +1793,12 @@ function FlipkartTab({ data }) {
   const nfbfT = (fk.totals || []).find(x => x.sub === 'NON-FBF') || { rev: 0, orders: 0, units: 0 }
   const allRev = fbfT.rev + nfbfT.rev
 
+  const fkPrevRev = fk.prevRev || data.prevRev || 0
+  const fkPrevExcRev = fk.prevExcRev || data.prevExcRev || 0
+  const fkPrevDailyArr = fk.prevDaily || data.prevDailyArr || []
+  const fkRevChg = fkPrevRev > 0 ? ((rev - fkPrevRev) / fkPrevRev * 100) : null
+  const fkExcChg = fkPrevExcRev > 0 ? ((excRev - fkPrevExcRev) / fkPrevExcRev * 100) : null
+
   // Daily chart
   const [chartMetric, setChartMetric] = useState('rev')
   const dailyMap = {}
@@ -1752,6 +1811,11 @@ function FlipkartTab({ data }) {
   const subDailyArr = filterSub(fk.daily || []).map(x => ({ date: x.date, rev: x.rev, orders: x.orders }))
     .reduce((acc, x) => { const e = acc.find(a => a.date === x.date); if (e) { e.rev += x.rev } else acc.push({ ...x }); return acc }, [])
     .sort((a, b) => a.date?.localeCompare(b.date))
+  const fkSparkData = Array.from({ length: Math.max(subDailyArr.length, fkPrevDailyArr.length) }, (_, i) => {
+    const cur = subDailyArr[i]
+    const pre = fkPrevDailyArr[i]
+    return { i, cur: cur?.rev ?? null, prev: pre?.rev ?? null }
+  })
 
   // Status
   const statusFiltered = filterSub(fk.status || [])
@@ -1803,9 +1867,9 @@ function FlipkartTab({ data }) {
       </div>
 
       {/* KPI Row 1 */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6,1fr)', gap: 10 }}>
-        <KPICard label="Gross Revenue (Inc. GST)" value={fmt(rev)} sub={`${nDays} days`} />
-        <KPICard label="Net Revenue (Exc. GST)" value={fmt(excRev)} sub={`GST: ${fmt(rev - excRev)}`} />
+      <div style={{ display: 'grid', gridTemplateColumns: '1.4fr 1.2fr 1fr 1fr 1fr 1fr', gap: 10 }}>
+        <HeroKPICard label="Gross Revenue (Inc. GST)" value={fmt(rev)} sub={`${nDays} days`} chg={fkRevChg} sparkData={fkSparkData} color="#FFD600" gradId="fkGrossGrad" />
+        <HeroKPICard label="Net Revenue (Exc. GST)" value={fmt(excRev)} sub={`GST: ${fmt(rev - excRev)}`} chg={fkExcChg} sparkData={fkSparkData} color="#7AB4EE" gradId="fkNetGrad" />
         <KPICard label="Orders" value={fmtN(nOrders)} sub={subView === 'overview' ? 'FBF + Non-FBF' : subView === 'fbf' ? 'FBF only' : 'Non-FBF only'} />
         <KPICard label="Daily Avg Revenue" value={fmt(rev / nDays)} sub="Per day" />
         <KPICard label="AOV" value={`₹${Math.round(aov).toLocaleString('en-IN')}`} sub="Avg order value" />
@@ -1919,6 +1983,12 @@ function BlinkitTab({ data }) {
 
   const daily = bl.daily || []
   const maxDailyRev = Math.max(...daily.map(d => d.rev), 1)
+  const blPrevRev = bl.prevRev || 0
+  const blPrevDailyArr = bl.prevDaily || []
+  const blRevChg = blPrevRev > 0 ? ((rev - blPrevRev) / blPrevRev * 100) : null
+  const blSparkData = Array.from({ length: Math.max(daily.length, blPrevDailyArr.length) }, (_, i) => ({
+    i, cur: daily[i]?.rev ?? null, prev: blPrevDailyArr[i]?.rev ?? null
+  }))
 
   const cats = bl.categories || []
   const maxCatRev = Math.max(...cats.map(c => c.rev), 1)
@@ -1932,8 +2002,8 @@ function BlinkitTab({ data }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
       {/* KPI Row 1 */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6,1fr)', gap: 10 }}>
-        <KPICard label="Gross Revenue (MRP)" value={fmt(rev)} sub={`${nDays} days`} />
+      <div style={{ display: 'grid', gridTemplateColumns: '1.4fr 1fr 1fr 1fr 1fr 1fr', gap: 10 }}>
+        <HeroKPICard label="Gross Revenue (MRP)" value={fmt(rev)} sub={`${nDays} days`} chg={blRevChg} sparkData={blSparkData} color="#FFD600" gradId="blGrossGrad" />
         <KPICard label="Daily Avg Revenue" value={fmt(dailyAvg)} sub="Per day" />
         <KPICard label="Units Sold" value={fmtN(units)} sub={`${skus} SKUs`} />
         <KPICard label="ASP" value={`₹${Math.round(asp).toLocaleString('en-IN')}`} sub="Avg selling price" />
@@ -2021,6 +2091,12 @@ function InstaTab({ data }) {
 
   const daily = ins.daily || []
   const maxDailyRev = Math.max(...daily.map(d => d.rev), 1)
+  const insPrevRev = ins.prevRev || 0
+  const insPrevDailyArr = ins.prevDaily || []
+  const insRevChg = insPrevRev > 0 ? ((rev - insPrevRev) / insPrevRev * 100) : null
+  const insSparkData = Array.from({ length: Math.max(daily.length, insPrevDailyArr.length) }, (_, i) => ({
+    i, cur: daily[i]?.rev ?? null, prev: insPrevDailyArr[i]?.rev ?? null
+  }))
 
   const cats = ins.categories || []
   const maxCatRev = Math.max(...cats.map(c => c.rev), 1)
@@ -2033,8 +2109,8 @@ function InstaTab({ data }) {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6,1fr)', gap: 10 }}>
-        <KPICard label="Gross Revenue (Inc GST)" value={fmt(rev)} sub={`${nDays} days`} />
+      <div style={{ display: 'grid', gridTemplateColumns: '1.4fr 1fr 1fr 1fr 1fr 1fr', gap: 10 }}>
+        <HeroKPICard label="Gross Revenue (Inc GST)" value={fmt(rev)} sub={`${nDays} days`} chg={insRevChg} sparkData={insSparkData} color="#FF6B35" gradId="inGrossGrad" />
         <KPICard label="Net Revenue (Exc GST)" value={fmt(excRev)} sub="Before tax" />
         <KPICard label="Daily Avg Revenue" value={fmt(dailyAvg)} sub="Inc GST / day" />
         <KPICard label="Units Sold" value={fmtN(units)} sub={`${skus} SKUs`} />
@@ -2120,6 +2196,12 @@ function ZeptoTab({ data }) {
   const dailyAvg = nDays ? rev / nDays : 0
 
   const daily = zp.daily || []
+  const zpPrevRev = zp.prevRev || 0
+  const zpPrevDailyArr = zp.prevDaily || []
+  const zpRevChg = zpPrevRev > 0 ? ((rev - zpPrevRev) / zpPrevRev * 100) : null
+  const zpSparkData = Array.from({ length: Math.max(daily.length, zpPrevDailyArr.length) }, (_, i) => ({
+    i, cur: daily[i]?.rev ?? null, prev: zpPrevDailyArr[i]?.rev ?? null
+  }))
   const cats = zp.categories || []
   const maxCatRev = Math.max(...cats.map(c => c.rev), 1)
   const cityRows = zp.cities || []
@@ -2129,8 +2211,8 @@ function ZeptoTab({ data }) {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6,1fr)', gap: 10 }}>
-        <KPICard label="Gross Revenue (Inc GST)" value={fmt(rev)} sub={`${nDays} days`} />
+      <div style={{ display: 'grid', gridTemplateColumns: '1.4fr 1fr 1fr 1fr 1fr 1fr', gap: 10 }}>
+        <HeroKPICard label="Gross Revenue (Inc GST)" value={fmt(rev)} sub={`${nDays} days`} chg={zpRevChg} sparkData={zpSparkData} color="#8B5CF6" gradId="zpGrossGrad" />
         <KPICard label="Net Revenue (Exc GST)" value={fmt(excRev)} sub="Before tax" />
         <KPICard label="Daily Avg Revenue" value={fmt(dailyAvg)} sub="Inc GST / day" />
         <KPICard label="Orders" value={fmtN(orders)} sub={`${fmtN(units)} units sold`} />
@@ -2215,8 +2297,17 @@ function CredTab({ data }) {
   const aov = orders ? rev / orders : 0
   const dailyAvg = nDays ? rev / nDays : 0
 
+  const crPrevRev = cr.prevRev || 0
+  const crPrevExcRev = cr.prevExcRev || 0
+  const crPrevDailyArr = cr.prevDaily || []
+  const crRevChg = crPrevRev > 0 ? ((rev - crPrevRev) / crPrevRev * 100) : null
+  const crExcChg = crPrevExcRev > 0 ? ((excRev - crPrevExcRev) / crPrevExcRev * 100) : null
+
   const [selectedCat, setSelectedCat] = useState(null)
   const daily = cr.daily || []
+  const crSparkData = Array.from({ length: Math.max(daily.length, crPrevDailyArr.length) }, (_, i) => ({
+    i, cur: daily[i]?.rev ?? null, prev: crPrevDailyArr[i]?.rev ?? null
+  }))
   const cats = cr.categories || []
   const allSubCats = cr.subCategories || []
   const subCats = selectedCat ? allSubCats.filter(s => s.category === selectedCat) : allSubCats
@@ -2230,9 +2321,9 @@ function CredTab({ data }) {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6,1fr)', gap: 10 }}>
-        <KPICard label="Gross Revenue (Inc GST)" value={fmt(rev)} sub={`${nDays} days`} />
-        <KPICard label="Net Revenue (Exc GST)" value={fmt(excRev)} sub="Before tax" />
+      <div style={{ display: 'grid', gridTemplateColumns: '1.4fr 1.2fr 1fr 1fr 1fr 1fr', gap: 10 }}>
+        <HeroKPICard label="Gross Revenue (Inc GST)" value={fmt(rev)} sub={`${nDays} days`} chg={crRevChg} sparkData={crSparkData} color="#E11D48" gradId="crGrossGrad" />
+        <HeroKPICard label="Net Revenue (Exc GST)" value={fmt(excRev)} sub="Before tax" chg={crExcChg} sparkData={crSparkData} color="#7AB4EE" gradId="crNetGrad" />
         <KPICard label="Daily Avg Revenue" value={fmt(dailyAvg)} sub="Inc GST / day" />
         <KPICard label="Orders" value={fmtN(orders)} sub={`${fmtN(units)} units · ${skus} SKUs`} />
         <KPICard label="AOV" value={`₹${Math.round(aov).toLocaleString('en-IN')}`} sub="Avg order value" />
