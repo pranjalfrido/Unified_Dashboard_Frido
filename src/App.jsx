@@ -376,11 +376,31 @@ function OverviewPage({ data, alerts }) {
           <RevTrendChart dailyArr={dailyArr} channels={channels} />
           <div style={{ marginTop: 12 }}>
             <div style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.07em', color: C.t3, marginBottom: 7 }}>D2C vs Q-Commerce vs Marketplace</div>
-            <div className="spbar">
-              <div style={{ width: `${d2cPct}%`, background: C.acc, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 700, color: '#13121A', minWidth: 50 }}>{d2cPct}% D2C</div>
-              <div style={{ width: `${pct(qcRev, totalRev)}`, background: '#0D9E68', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 700, color: '#fff', minWidth: 40 }}>{parseFloat(pct(qcRev, totalRev)).toFixed(1)}% QC</div>
-              <div style={{ flex: 1, background: '#B0ADB8', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 700, color: '#13121A' }}>{(100 - parseFloat(d2cPct) - parseFloat(pct(qcRev, totalRev))).toFixed(1)}% Mkt</div>
-            </div>
+            {(() => {
+              const qcP = totalRev ? qcRev / totalRev * 100 : 0
+              const d2cP = parseFloat(d2cPct)
+              const mktP = Math.max(0, 100 - d2cP - qcP)
+              const segs = [
+                { pct: d2cP, bg: C.acc, color: '#13121A', label: `${d2cP.toFixed(1)}% D2C` },
+                { pct: qcP,  bg: '#0D9E68', color: '#fff', label: `${qcP.toFixed(1)}% QC` },
+                { pct: mktP, bg: '#B0ADB8', color: '#13121A', label: `${mktP.toFixed(1)}% Mkt` },
+              ]
+              return (
+                <div style={{ position: 'relative' }}>
+                  <div className="spbar">
+                    {segs.map((s, i) => (
+                      <div key={i} style={{ width: `${s.pct}%`, background: s.bg, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 700, color: s.color, overflow: 'hidden', whiteSpace: 'nowrap', minWidth: s.pct > 0 ? 4 : 0 }}>
+                        {s.pct >= 8 ? s.label : ''}
+                      </div>
+                    ))}
+                  </div>
+                  {/* labels for narrow segments */}
+                  {segs.filter(s => s.pct > 0 && s.pct < 8).map((s, i) => (
+                    <div key={i} style={{ fontSize: 10, color: C.t3, marginTop: 3 }}>{s.label}</div>
+                  ))}
+                </div>
+              )
+            })()}
             <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap', marginTop: 8 }}>
               {sortedCh.slice(0, 6).map(([ch, v]) => (
                 <div key={ch} style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 11.5, color: C.t2 }}>
