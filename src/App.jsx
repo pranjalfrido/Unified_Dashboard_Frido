@@ -899,11 +899,6 @@ function DailyChannelTable({ dailyArr, channels, nDays = 7 }) {
 
   const selStyle = { fontSize: 11.5, padding: '4px 8px', borderRadius: 7, border: `1px solid ${C.border2}`, background: C.card, color: C.t1, outline: 'none', fontFamily: 'var(--font)', cursor: 'pointer' }
 
-  // Per-column max for heat intensity
-  const colMax = {}
-  channels.forEach(ch => { colMax[ch] = Math.max(...grouped.map(d => getVal(d, ch)), 1) })
-  const totalMax = Math.max(...grouped.map(d => getTotalVal(d)), 1)
-
   // Peak row = highest total
   const peakIdx = grouped.reduce((pi, d, i) => getTotalVal(d) > getTotalVal(grouped[pi]) ? i : pi, 0)
 
@@ -911,18 +906,6 @@ function DailyChannelTable({ dailyArr, channels, nDays = 7 }) {
   const colTotals = {}
   channels.forEach(ch => { colTotals[ch] = grouped.reduce((s, d) => s + getVal(d, ch), 0) })
   const grandTotal = channels.reduce((s, ch) => s + colTotals[ch], 0)
-
-  // Hex color → rgba with opacity for heat bg
-  const hexToRgb = hex => {
-    const h = hex.replace('#', '')
-    return [parseInt(h.slice(0,2),16), parseInt(h.slice(2,4),16), parseInt(h.slice(4,6),16)]
-  }
-  const heatBg = (ch, val, max) => {
-    if (!val) return 'transparent'
-    const intensity = Math.pow(val / max, 0.5) * 0.22 + 0.04
-    const [r,g,b] = hexToRgb(C.ch[ch] || '#FFD600')
-    return `rgba(${r},${g},${b},${intensity})`
-  }
 
   const fmtDate = d => {
     if (!d || d.length < 8) return d
@@ -970,14 +953,14 @@ function DailyChannelTable({ dailyArr, channels, nDays = 7 }) {
                   </td>
                   {channels.map(ch => {
                     const v = getVal(d, ch)
-                    const bg = heatBg(ch, v, colMax[ch])
+                    const sharePct = grandTotal && v ? (v / grandTotal * 100).toFixed(1) : null
                     return (
-                      <td key={ch} style={{ padding: '6px 8px', textAlign: 'right', fontFamily: 'var(--mono)', fontSize: 11.5, background: bg, color: v ? C.t1 : C.t3, borderLeft: `1px solid ${C.border}` }}>
-                        {v ? fmtVal(v) : '—'}
+                      <td key={ch} style={{ padding: '6px 8px', textAlign: 'right', fontFamily: 'var(--mono)', fontSize: 11.5, color: v ? C.t1 : C.t3, borderLeft: `1px solid ${C.border}` }}>
+                        {v ? <>{fmtVal(v)}<span style={{ fontSize: 10, color: C.t3, fontWeight: 400, marginLeft: 4 }}>{sharePct}%</span></> : '—'}
                       </td>
                     )
                   })}
-                  <td style={{ padding: '6px 8px', textAlign: 'right', fontWeight: 700, fontFamily: 'var(--mono)', fontSize: 11.5, color: C.t1, borderLeft: `1px solid ${C.border}`, background: `rgba(19,18,26,${Math.pow(rowTotal/totalMax,0.5)*0.06})` }}>
+                  <td style={{ padding: '6px 8px', textAlign: 'right', fontWeight: 700, fontFamily: 'var(--mono)', fontSize: 11.5, color: C.t1, borderLeft: `1px solid ${C.border}` }}>
                     {fmtVal(rowTotal)}
                   </td>
                 </tr>
