@@ -1027,7 +1027,7 @@ function AllTab({ data }) {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-      <div style={{ display: 'grid', gridTemplateColumns: '1.4fr 1.2fr 1fr 1fr 1fr 1fr', gap: 10, alignItems: 'end' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: '1.4fr 1.2fr 1fr 1fr 1fr 1fr 1fr', gap: 10, alignItems: 'stretch' }}>
         {/* Gross Revenue hero */}
         <div className="kpi-card" style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
           <div className="kpi-label">Gross Revenue · Inc. GST</div>
@@ -1069,10 +1069,11 @@ function AllTab({ data }) {
         })()}
         {[
           { label: 'Return %', value: `${returnPct.toFixed(1)}%`, sub: `${fmtN(rtoOrders)} RTO orders`, accent: returnPct > 10 ? '#7A1A1A' : undefined },
-          { label: 'Blended AOV', value: `₹${Math.round(blendedAOV).toLocaleString('en-IN')}` },
-          { label: 'Daily Avg', value: fmt(totalRev / nDays) },
+          { label: 'Blended AOV', value: `₹${Math.round(blendedAOV).toLocaleString('en-IN')}`, sub: `${fmtN(nOrders)} orders` },
+          { label: 'Daily Avg', value: fmt(totalRev / nDays), sub: `over ${nDays} days` },
+          { label: 'Units Sold', value: fmtN(totalQty), sub: `${nOrders ? (totalQty / nOrders).toFixed(1) : 0} per order` },
         ].map(k => (
-          <div key={k.label} className="kpi-card" style={{ padding: '8px 11px', height: 80, boxSizing: 'border-box' }}>
+          <div key={k.label} className="kpi-card" style={{ padding: '8px 11px' }}>
             <div className="kpi-label">{k.label}</div>
             <div className="kpi-value" style={{ fontSize: 17, ...(k.accent ? { color: k.accent } : {}) }}>{k.value}</div>
             {k.sub && <div className="kpi-sub">{k.sub}</div>}
