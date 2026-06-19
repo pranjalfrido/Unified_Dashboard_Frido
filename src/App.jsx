@@ -396,9 +396,9 @@ function OverviewPage({ data, alerts }) {
         </Card>
       </div>
 
-      {/* Scorecard + Top Performers */}
-      <div className="g-2">
-        <Card title="Channel scorecard">
+      {/* Scorecard row — scorecard + top states side by side, shrink to content */}
+      <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start' }}>
+        <Card title="Channel scorecard" style={{ flexShrink: 0, width: 'fit-content', minWidth: 380 }}>
           <DataTable columns={[
             { key: 'ch', label: 'Channel' },
             { key: 'rev', label: 'Revenue', align: 'right', mono: true, render: v => fmt(v) },
@@ -406,7 +406,15 @@ function OverviewPage({ data, alerts }) {
             { key: 'aov', label: 'AOV', align: 'right', mono: true, render: v => `₹${Math.round(v).toLocaleString('en-IN')}` },
           ]} rows={Object.keys(C.ch).map(ch => { const v = chMap[ch] || { rev: 0, orders: 0 }; return { ch, rev: v.rev, orders: v.orders, aov: v.orders ? v.rev / v.orders : 0 } })} />
         </Card>
-        <div className="g-2">
+        <Card title="Top States" style={{ flex: 1 }}>
+          {Object.entries(stateMap).sort((a,b) => b[1].rev - a[1].rev).slice(0,10).map(([st, v]) => (
+            <HBar key={st} dot={C.acc} label={st} width={(v.rev / (Object.values(stateMap).sort((a,b)=>b.rev-a.rev)[0]?.rev||1))*100} value={fmt(v.rev)} pctVal={pct(v.rev, totalRev)} />
+          ))}
+        </Card>
+      </div>
+
+      {/* Category + Sub-category full width row */}
+      <div className="g-2">
           {/* Category table */}
           <Card title="Category Revenue" note={selectedCat ? <span style={{ cursor: 'pointer', color: C.acc, fontWeight: 600 }} onClick={() => setSelectedCat(null)}>✕ Clear</span> : `${allCats.length} total`}>
             <div style={{ overflowX: 'auto' }}>
@@ -453,7 +461,6 @@ function OverviewPage({ data, alerts }) {
             )
           })()}
         </div>
-      </div>
     </div>
   )
 }
