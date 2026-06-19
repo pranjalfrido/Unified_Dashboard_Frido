@@ -1363,30 +1363,6 @@ function ShopifyTab({ data, filters, setFilters }) {
           </ResponsiveContainer>
         </Card>
       </div>
-      <div className="g-2">
-        <Card title="Financial Status">
-          <ResponsiveContainer width="100%" height={200}>
-            <BarChart data={Object.entries(financialStatusMap).map(([k,v]) => ({ name: k, orders: v.orders, rev: v.rev }))} layout="vertical" margin={{top:0,right:10,bottom:0,left:0}}>
-              <CartesianGrid strokeDasharray="3 3" stroke={C.border} horizontal={false} />
-              <XAxis type="number" tick={{ fontSize: 10, fill: C.t3 }} />
-              <YAxis type="category" dataKey="name" tick={{ fontSize: 10, fill: C.t3 }} width={90} />
-              <Tooltip content={<ChartTooltip />} />
-              <Bar dataKey="orders" fill={C.acc} radius={[0,4,4,0]} />
-            </BarChart>
-          </ResponsiveContainer>
-        </Card>
-        <Card title="Fulfilment Status">
-          <ResponsiveContainer width="100%" height={200}>
-            <BarChart data={Object.entries(fulfilmentStatusMap).map(([k,v]) => ({ name: k, orders: v }))} layout="vertical" margin={{top:0,right:10,bottom:0,left:0}}>
-              <CartesianGrid strokeDasharray="3 3" stroke={C.border} horizontal={false} />
-              <XAxis type="number" tick={{ fontSize: 10, fill: C.t3 }} />
-              <YAxis type="category" dataKey="name" tick={{ fontSize: 10, fill: C.t3 }} width={90} />
-              <Tooltip content={<ChartTooltip />} />
-              <Bar dataKey="orders" fill="#0D9E68" radius={[0,4,4,0]} />
-            </BarChart>
-          </ResponsiveContainer>
-        </Card>
-      </div>
       <div className="g-2" style={{ alignItems: 'stretch' }}>
         <Card title="Category Revenue" style={{ display: 'flex', flexDirection: 'column' }}>
           <div style={{ overflowX: 'auto' }}>
