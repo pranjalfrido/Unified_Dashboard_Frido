@@ -1,6 +1,6 @@
 import { useState, useMemo, useCallback, useEffect, useRef } from 'react'
 import { C, fmt, fmtN, pct, processData, detectAlerts, exportCSV, getDefaultDates } from './utils.js'
-import { KPICard, AlertCard, HBar, DataTable, Card, Badge, RevTrendChart, AreaTrendChart, MultiLineChart, ChartTooltip, BarChart, Bar, LineChart, Line, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell } from './components.jsx'
+import { KPICard, AlertCard, HBar, DataTable, Card, Badge, RevTrendChart, AreaTrendChart, MultiLineChart, ChartTooltip, BarChart, Bar, LineChart, Line, AreaChart, Area, ComposedChart, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell } from './components.jsx'
 
 // ── Sidebar ───────────────────────────────────────────────────
 function Sidebar({ page, setPage }) {
@@ -1851,11 +1851,17 @@ function CredTab({ data }) {
       <div style={{ display: 'grid', gridTemplateColumns: '3fr 2fr', gap: 14, alignItems: 'stretch' }}>
         <Card title="Daily Revenue & Orders">
           <ResponsiveContainer width="100%" height={220}>
-            <BarChart data={daily} margin={{ top: 4, right: 40, bottom: 0, left: 0 }}>
+            <ComposedChart data={daily} margin={{ top: 4, right: 40, bottom: 0, left: 0 }}>
+              <defs>
+                <linearGradient id="credRevGrad" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="5%" stopColor="#E11D48" stopOpacity={0.18} />
+                  <stop offset="95%" stopColor="#E11D48" stopOpacity={0} />
+                </linearGradient>
+              </defs>
               <CartesianGrid strokeDasharray="3 3" stroke={C.border} vertical={false} />
               <XAxis dataKey="date" tick={{ fontSize: 10, fill: C.t3 }} tickFormatter={d => d?.slice(5)} />
               <YAxis yAxisId="rev" tick={{ fontSize: 10, fill: C.t3 }} tickFormatter={v => `₹${(v/1000).toFixed(0)}k`} width={42} />
-              <YAxis yAxisId="orders" orientation="right" tick={{ fontSize: 10, fill: '#E11D48' }} tickFormatter={v => fmtN(v)} width={30} />
+              <YAxis yAxisId="orders" orientation="right" tick={{ fontSize: 10, fill: '#2E74CC' }} tickFormatter={v => fmtN(v)} width={30} />
               <Tooltip content={({ active, payload, label }) => active && payload?.length ? (
                 <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 8, padding: '8px 12px', fontSize: 11.5 }}>
                   <div style={{ color: C.t3, marginBottom: 4 }}>{label}</div>
@@ -1863,9 +1869,9 @@ function CredTab({ data }) {
                 </div>
               ) : null} />
               <Legend wrapperStyle={{ fontSize: 11 }} />
-              <Bar yAxisId="rev" dataKey="rev" name="Revenue" fill="#E11D4820" stroke="#E11D48" strokeWidth={1.5} radius={[3,3,0,0]} />
-              <Bar yAxisId="orders" dataKey="orders" name="Orders" fill="#2E74CC" radius={[3,3,0,0]} />
-            </BarChart>
+              <Area yAxisId="rev" type="monotone" dataKey="rev" name="Revenue" stroke="#E11D48" strokeWidth={2} fill="url(#credRevGrad)" dot={false} />
+              <Line yAxisId="orders" type="monotone" dataKey="orders" name="Orders" stroke="#2E74CC" strokeWidth={2} dot={{ r: 3, fill: '#2E74CC' }} activeDot={{ r: 5 }} />
+            </ComposedChart>
           </ResponsiveContainer>
         </Card>
         <Card title="Top States">
