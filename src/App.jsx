@@ -295,7 +295,6 @@ function Topnav({ page, alerts, onRefresh, loading, filters, setFilters, rawRows
       <span className="tnav-title">{titles[page]}</span>
       <div className="tnav-right">
         <DateRangePicker filters={filters} setFilters={setFilters} />
-        {critical > 0 && <span style={{ fontSize: 11, fontWeight: 600, padding: '3px 9px', borderRadius: 20, background: C.red.bg, color: C.red.tx, border: `1px solid ${C.red.bd}`, display: 'inline-flex', alignItems: 'center', gap: 4 }}>⚠ {critical} critical</span>}
         <button onClick={onRefresh} className="tnav-btn">
           <span style={{ display: 'inline-block', animation: loading ? 'spin 1s linear infinite' : 'none', fontSize: 14 }}>↻</span> Refresh
         </button>
@@ -382,10 +381,6 @@ function OverviewPage({ data, alerts }) {
 
       {/* Alerts + Scorecard + Top Performers */}
       <div className="g-3">
-        <Card title="Management alerts" note={`${alerts.filter(a => a.type === 'red').length} critical · ${alerts.filter(a => a.type === 'amber').length} watch`}>
-          {alerts.length === 0 && <div style={{ fontSize: 12, color: C.t3 }}>No alerts for this period.</div>}
-          {alerts.map((a, i) => <AlertCard key={i} {...a} />)}
-        </Card>
         <Card title="Channel scorecard">
           <DataTable columns={[
             { key: 'ch', label: 'Channel' },
@@ -2178,8 +2173,6 @@ function ChannelTab({ data, channel, filters, setFilters, amzRegion, setAmzRegio
         <KPICard label="Revenue at Risk" value={channel === 'Shopify' ? fmt(chRTORev) : 'N/A'} sub="RTO + Cancelled" accent={chRTORev > 0 ? '#7A4000' : undefined} />
         <KPICard label="Units per Order" value={upo.toFixed(2)} sub="Avg basket size" />
       </div>
-      {channel === 'Blinkit' && <AlertCard type="red" title="Blinkit GST pipeline broken" body="SellingPrice_Exc_GST unreliable — implied GST 800%+. Use Inc_GST only." />}
-      {channel === 'CRED' && <AlertCard type="amber" title="CRED batch anomaly" body="Spikes may represent delayed batch processing, not organic demand." />}
       <div className="g-2">
         <Card title={`${channel} Daily Revenue`}>
           <AreaTrendChart data={dailyArr} color={C.ch[channel] || C.acc} />
@@ -2293,7 +2286,6 @@ function CXTab({ data }) {
         <KPICard label="3×+ Buyers" value={fmtN(buyers3x)} />
         <KPICard label="Voucher Penetration" value={pct(voucherOrders, nOrders)} />
       </div>
-      {parseFloat(repeatRate) < 10 && nCusts > 0 && <AlertCard type="red" title={`Repeat rate ${repeatRate}% — launch CRM programme`} body="90%+ customers never reordered. Implement post-purchase flows, loyalty points, and win-back campaigns." />}
       <Card title="Voucher Analysis">
         <DataTable columns={[{ key: 'type', label: 'Type' }, { key: 'orders', label: 'Orders', align: 'right', render: v => fmtN(v) }, { key: 'rev', label: 'Revenue', align: 'right', mono: true, render: v => fmt(v) }, { key: 'aov', label: 'AOV', align: 'right', render: v => `₹${Math.round(v).toLocaleString('en-IN')}` }]}
           rows={Object.entries(voucherMap).map(([k, v]) => ({ type: k, orders: v.orders, rev: v.rev, aov: v.orders ? v.rev / v.orders : 0 })).sort((a, b) => b.rev - a.rev)} />
