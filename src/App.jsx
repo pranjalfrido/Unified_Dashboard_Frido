@@ -899,10 +899,47 @@ function DailyChannelTable({ dailyArr, channels, nDays = 7 }) {
 
   const selStyle = { fontSize: 11.5, padding: '4px 8px', borderRadius: 7, border: `1px solid ${C.border2}`, background: C.card, color: C.t1, outline: 'none', fontFamily: 'var(--font)', cursor: 'pointer' }
 
+  // Per-column max for heat intensity
+  const colMax = {}
+  channels.forEach(ch => { colMax[ch] = Math.max(...grouped.map(d => getVal(d, ch)), 1) })
+  const totalMax = Math.max(...grouped.map(d => getTotalVal(d)), 1)
+
+  // Peak row = highest total
+  const peakIdx = grouped.reduce((pi, d, i) => getTotalVal(d) > getTotalVal(grouped[pi]) ? i : pi, 0)
+
+  // Column totals
+  const colTotals = {}
+  channels.forEach(ch => { colTotals[ch] = grouped.reduce((s, d) => s + getVal(d, ch), 0) })
+  const grandTotal = channels.reduce((s, ch) => s + colTotals[ch], 0)
+
+  // Hex color → rgba with opacity for heat bg
+  const hexToRgb = hex => {
+    const h = hex.replace('#', '')
+    return [parseInt(h.slice(0,2),16), parseInt(h.slice(2,4),16), parseInt(h.slice(4,6),16)]
+  }
+  const heatBg = (ch, val, max) => {
+    if (!val) return 'transparent'
+    const intensity = Math.pow(val / max, 0.5) * 0.22 + 0.04
+    const [r,g,b] = hexToRgb(C.ch[ch] || '#FFD600')
+    return `rgba(${r},${g},${b},${intensity})`
+  }
+
+  const fmtDate = d => {
+    if (!d || d.length < 8) return d
+    if (groupBy !== 'daily') return d
+    const dt = new Date(d + 'T00:00:00')
+    return dt.toLocaleDateString('en-IN', { weekday: 'short', month: 'short', day: 'numeric' })
+  }
+
+  const thStyle = (ch) => ({ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.05em', color: ch ? (C.ch[ch] || C.t3) : C.t3, textAlign: 'right', padding: '5px 8px 7px', borderBottom: `2px solid ${ch ? (C.ch[ch] || C.border) : C.border}`, whiteSpace: 'nowrap', background: C.card })
+
   return (
     <Card>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 11 }}>
-        <span style={{ fontSize: 13, fontWeight: 600, color: C.t1 }}>{GROUP_OPTS.find(x => x.id === groupBy).label} {m.label} by Channel</span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <span style={{ fontSize: 13, fontWeight: 600, color: C.t1 }}>{GROUP_OPTS.find(x => x.id === groupBy).label} {m.label} by Channel</span>
+          <span style={{ fontSize: 11, color: C.t3 }}>{grouped.length} {groupBy === 'daily' ? 'days' : groupBy === 'weekly' ? 'weeks' : 'periods'} of data</span>
+        </div>
         <div style={{ display: 'flex', gap: 6 }}>
           <select value={groupBy} onChange={e => setGroupBy(e.target.value)} style={selStyle}>
             {GROUP_OPTS.map(x => <option key={x.id} value={x.id}>{x.label}</option>)}
@@ -912,24 +949,55 @@ function DailyChannelTable({ dailyArr, channels, nDays = 7 }) {
           </select>
         </div>
       </div>
-      <div style={{ maxHeight: 260, overflowY: 'auto', overflowX: 'auto' }}>
-        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
-          <thead style={{ position: 'sticky', top: 0, background: C.card, zIndex: 1 }}>
+      <div style={{ overflowX: 'auto', overflowY: 'auto', maxHeight: 380 }}>
+        <table style={{ borderCollapse: 'collapse', fontSize: 12, minWidth: 700, width: '100%' }}>
+          <thead style={{ position: 'sticky', top: 0, zIndex: 2 }}>
             <tr>
-              <th style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.05em', color: C.t3, textAlign: 'left', padding: '3px 5px 7px', borderBottom: `1px solid ${C.border}` }}>Period</th>
-              {channels.map(ch => <th key={ch} style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.05em', color: C.t3, textAlign: 'right', padding: '3px 5px 7px', borderBottom: `1px solid ${C.border}` }}>{ch}</th>)}
-              <th style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.05em', color: C.t3, textAlign: 'right', padding: '3px 5px 7px', borderBottom: `1px solid ${C.border}` }}>Total</th>
+              <th style={{ ...thStyle(null), textAlign: 'left', minWidth: 110 }}>Period</th>
+              {channels.map(ch => <th key={ch} style={thStyle(ch)}>{ch}</th>)}
+              <th style={thStyle(null)}>Total</th>
             </tr>
           </thead>
           <tbody>
-            {grouped.map((d, i) => (
-              <tr key={i} style={{ borderBottom: i < grouped.length - 1 ? `1px solid ${C.border}` : 'none' }} onMouseEnter={e => e.currentTarget.style.background = '#FFFBE6'} onMouseLeave={e => e.currentTarget.style.background = ''}>
-                <td style={{ padding: '5.5px 5px', color: C.t2 }}>{d.date}</td>
-                {channels.map(ch => <td key={ch} style={{ padding: '5.5px 5px', textAlign: 'right', color: C.t1, fontFamily: 'var(--mono)', fontSize: 11.5 }}>{fmtVal(getVal(d, ch))}</td>)}
-                <td style={{ padding: '5.5px 5px', textAlign: 'right', fontWeight: 700, color: C.t1, fontFamily: 'var(--mono)', fontSize: 11.5 }}>{fmtVal(getTotalVal(d))}</td>
-              </tr>
-            ))}
+            {grouped.map((d, i) => {
+              const isPeak = i === peakIdx
+              const rowTotal = getTotalVal(d)
+              return (
+                <tr key={i} style={{ borderBottom: `1px solid ${C.border}` }} onMouseEnter={e => e.currentTarget.style.background = '#FFFDF0'} onMouseLeave={e => e.currentTarget.style.background = ''}>
+                  <td style={{ padding: '6px 8px', color: C.t2, whiteSpace: 'nowrap', fontWeight: isPeak ? 700 : 400 }}>
+                    <span>{fmtDate(d.date)}</span>
+                    {isPeak && <span style={{ marginLeft: 6, fontSize: 9.5, fontWeight: 700, padding: '1px 5px', borderRadius: 4, background: C.acl, color: C.t1, border: `1px solid ${C.acm}` }}>Peak</span>}
+                  </td>
+                  {channels.map(ch => {
+                    const v = getVal(d, ch)
+                    const bg = heatBg(ch, v, colMax[ch])
+                    return (
+                      <td key={ch} style={{ padding: '6px 8px', textAlign: 'right', fontFamily: 'var(--mono)', fontSize: 11.5, background: bg, color: v ? C.t1 : C.t3, borderLeft: `1px solid ${C.border}` }}>
+                        {v ? fmtVal(v) : '—'}
+                      </td>
+                    )
+                  })}
+                  <td style={{ padding: '6px 8px', textAlign: 'right', fontWeight: 700, fontFamily: 'var(--mono)', fontSize: 11.5, color: C.t1, borderLeft: `1px solid ${C.border}`, background: `rgba(19,18,26,${Math.pow(rowTotal/totalMax,0.5)*0.06})` }}>
+                    {fmtVal(rowTotal)}
+                  </td>
+                </tr>
+              )
+            })}
           </tbody>
+          <tfoot>
+            <tr style={{ borderTop: `2px solid ${C.border}`, background: C.bg }}>
+              <td style={{ padding: '6px 8px', fontSize: 11, fontWeight: 700, color: C.t1 }}>Total</td>
+              {channels.map(ch => <td key={ch} style={{ padding: '6px 8px', textAlign: 'right', fontWeight: 700, fontFamily: 'var(--mono)', fontSize: 11.5, color: C.t1, borderLeft: `1px solid ${C.border}` }}>{fmtVal(colTotals[ch])}</td>)}
+              <td style={{ padding: '6px 8px', textAlign: 'right', fontWeight: 700, fontFamily: 'var(--mono)', fontSize: 11.5, color: C.t1, borderLeft: `1px solid ${C.border}` }}>{fmtVal(grandTotal)}</td>
+            </tr>
+            {metric === 'rev' && (
+              <tr style={{ background: C.bg }}>
+                <td style={{ padding: '4px 8px', fontSize: 10.5, color: C.t3, fontWeight: 600 }}>Share %</td>
+                {channels.map(ch => <td key={ch} style={{ padding: '4px 8px', textAlign: 'right', fontSize: 11, color: C.t3, borderLeft: `1px solid ${C.border}` }}>{grandTotal ? (colTotals[ch] / grandTotal * 100).toFixed(1) + '%' : '—'}</td>)}
+                <td style={{ padding: '4px 8px', textAlign: 'right', fontSize: 11, color: C.t3, borderLeft: `1px solid ${C.border}` }}>100%</td>
+              </tr>
+            )}
+          </tfoot>
         </table>
       </div>
     </Card>
