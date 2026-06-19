@@ -1571,6 +1571,7 @@ function BlinkitTab({ data }) {
       {/* SKU Table + City Table */}
       <div className="g-2">
         <Card title="SKU Performance">
+          <div style={{ overflowY: 'auto', maxHeight: 400 }}>
           <DataTable
             columns={[
               { key: 'name', label: 'Product', render: v => <span style={{ fontSize: 11, display: 'block', wordBreak: 'break-word' }}>{v}</span> },
@@ -1581,6 +1582,7 @@ function BlinkitTab({ data }) {
             ]}
             rows={skuRows}
           />
+          </div>
         </Card>
         <Card title="All Cities">
           <div style={{ overflowY: 'auto', maxHeight: 400 }}>
