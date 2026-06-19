@@ -1027,7 +1027,7 @@ function AllTab({ data }) {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-      <div style={{ display: 'grid', gridTemplateColumns: '1.4fr 1.2fr 1fr 1fr 1fr 1fr 1fr', gap: 10, alignItems: 'stretch' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 10, alignItems: 'stretch' }}>
         {/* Gross Revenue hero */}
         <div className="kpi-card" style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
           <div className="kpi-label">Gross Revenue · Inc. GST</div>
