@@ -212,14 +212,14 @@ function OverviewPage({ data, alerts }) {
 // ── Sales sub-tabs ────────────────────────────────────────────
 const TABS = [
   { id: 'all', label: 'All Channels' },
-  { id: 'shopify', label: 'Shopify', ch: 'Shopify', logo: 'https://www.google.com/s2/favicons?domain=shopify.com&sz=32' },
-  { id: 'amazon', label: 'Amazon', ch: 'Amazon', logo: 'https://www.google.com/s2/favicons?domain=amazon.in&sz=32' },
-  { id: 'flipkart', label: 'Flipkart', ch: 'Flipkart', logo: 'https://www.google.com/s2/favicons?domain=flipkart.com&sz=32' },
-  { id: 'blinkit', label: 'Blinkit', ch: 'Blinkit', logo: 'https://www.google.com/s2/favicons?domain=blinkit.com&sz=32' },
-  { id: 'cred', label: 'CRED', ch: 'CRED', logo: 'https://www.google.com/s2/favicons?domain=cred.club&sz=32' },
-  { id: 'instamart', label: 'Instamart', ch: 'Instamart', logo: 'https://www.google.com/s2/favicons?domain=swiggy.com&sz=32' },
-  { id: 'zepto', label: 'Zepto', ch: 'Zepto', logo: 'https://www.google.com/s2/favicons?domain=zepto.com&sz=32' },
-  { id: 'myntra', label: 'Myntra', ch: 'Myntra', logo: 'https://www.google.com/s2/favicons?domain=myntra.com&sz=32' },
+  { id: 'shopify', label: 'Shopify', ch: 'Shopify', logo: '/logo-shopify.png' },
+  { id: 'amazon', label: 'Amazon', ch: 'Amazon', logo: '/logo-amazon.png' },
+  { id: 'flipkart', label: 'Flipkart', ch: 'Flipkart', logo: '/logo-flipkart.png' },
+  { id: 'blinkit', label: 'Blinkit', ch: 'Blinkit', logo: '/logo-blinkit.png' },
+  { id: 'cred', label: 'CRED', ch: 'CRED', logo: '/logo-cred.png' },
+  { id: 'instamart', label: 'Instamart', ch: 'Instamart', logo: '/logo-instamart.png' },
+  { id: 'zepto', label: 'Zepto', ch: 'Zepto', logo: '/logo-zepto.png' },
+  { id: 'myntra', label: 'Myntra', ch: 'Myntra', logo: '/logo-myntra.png' },
 ]
 
 function PaginatedCard({ title, rows, columns, pageSize = 10 }) {
