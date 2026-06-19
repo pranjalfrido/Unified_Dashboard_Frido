@@ -1520,7 +1520,7 @@ function BlinkitTab({ data }) {
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6,1fr)', gap: 10 }}>
         <KPICard label="Gross Revenue (MRP)" value={fmt(rev)} sub={`${nDays} days`} />
         <KPICard label="Daily Avg Revenue" value={fmt(dailyAvg)} sub="Per day" />
-        <KPICard label="Total Units Sold" value={fmtN(units)} sub={`${skus} SKUs`} />
+        <KPICard label="Units Sold" value={fmtN(units)} sub={`${skus} SKUs`} />
         <KPICard label="ASP" value={`₹${Math.round(asp).toLocaleString('en-IN')}`} sub="Avg selling price" />
         <KPICard label="Cities" value={fmtN(cities)} sub="Cities with sales" />
         <KPICard label="Active SKUs" value={fmtN(skus)} sub="In date range" />
@@ -1632,7 +1632,7 @@ function InstaTab({ data }) {
         <KPICard label="Gross Revenue (Inc GST)" value={fmt(rev)} sub={`${nDays} days`} />
         <KPICard label="Net Revenue (Exc GST)" value={fmt(excRev)} sub="Before tax" />
         <KPICard label="Daily Avg Revenue" value={fmt(dailyAvg)} sub="Inc GST / day" />
-        <KPICard label="Total Units Sold" value={fmtN(units)} sub={`${skus} SKUs`} />
+        <KPICard label="Units Sold" value={fmtN(units)} sub={`${skus} SKUs`} />
         <KPICard label="ASP (Inc GST)" value={`₹${Math.round(asp).toLocaleString('en-IN')}`} sub="Avg selling price" />
         <KPICard label="Cities" value={fmtN(cities)} sub="Cities with sales" />
       </div>
@@ -1716,6 +1716,7 @@ function ZeptoTab({ data }) {
   const rev = t.rev || 0
   const excRev = t.excRev || 0
   const units = t.units || 0
+  const orders = t.orders || 0
   const skus = t.skus || 0
   const cities = t.cities || 0
   const asp = units ? rev / units : 0
@@ -1735,7 +1736,7 @@ function ZeptoTab({ data }) {
         <KPICard label="Gross Revenue (Inc GST)" value={fmt(rev)} sub={`${nDays} days`} />
         <KPICard label="Net Revenue (Exc GST)" value={fmt(excRev)} sub="Before tax" />
         <KPICard label="Daily Avg Revenue" value={fmt(dailyAvg)} sub="Inc GST / day" />
-        <KPICard label="Total Units Sold" value={fmtN(units)} sub={`${skus} SKUs`} />
+        <KPICard label="Orders" value={fmtN(orders)} sub={`${fmtN(units)} units sold`} />
         <KPICard label="ASP (Inc GST)" value={`₹${Math.round(asp).toLocaleString('en-IN')}`} sub="Avg selling price" />
         <KPICard label="Cities" value={fmtN(cities)} sub="Cities with sales" />
       </div>
