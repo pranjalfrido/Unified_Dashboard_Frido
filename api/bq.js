@@ -137,7 +137,7 @@ export default async function handler(req, res) {
     r.byCategory.forEach(x => { catMap[x.Category || 'Unknown'] = { rev: parseFloat(x.rev) || 0, excRev: parseFloat(x.exc_rev) || 0, orders: { size: parseInt(x.orders) }, units: parseInt(x.units) || 0 } })
 
     const subCatMap = {}
-    r.bySubCategory.forEach(x => { subCatMap[x.SubCategory || 'Unknown'] = { rev: parseFloat(x.rev) || 0, orders: { size: parseInt(x.orders) || 0 }, category: x.Category || 'Unknown' } })
+    r.bySubCategory.forEach(x => { const key = `${x.Category || 'Unknown'}::${x.SubCategory || 'Unknown'}`; subCatMap[key] = { rev: parseFloat(x.rev) || 0, orders: { size: parseInt(x.orders) || 0 } } })
 
     const catChannelMap = {}
     r.byCategoryChannel.forEach(x => {
