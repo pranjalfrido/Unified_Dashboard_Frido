@@ -406,7 +406,7 @@ function OverviewPage({ data, alerts }) {
             { key: 'aov', label: 'AOV', align: 'right', mono: true, render: v => `₹${Math.round(v).toLocaleString('en-IN')}` },
           ]} rows={Object.keys(C.ch).map(ch => { const v = chMap[ch] || { rev: 0, orders: 0 }; return { ch, rev: v.rev, orders: v.orders, aov: v.orders ? v.rev / v.orders : 0 } })} />
         </Card>
-        <Card title="New vs Repeat Customers" note={`${fmtN(nCusts)} total in period`} style={{ flex: 1 }}>
+        <Card title="New vs Repeat Customers" note={`${fmtN(nCusts)} total`} style={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
           {(() => {
             const newCusts = nCusts - repeatCusts
             const donutData = [
@@ -414,22 +414,29 @@ function OverviewPage({ data, alerts }) {
               { name: 'Repeat', value: repeatCusts, color: '#0D9E68' },
             ]
             return (
-              <div style={{ display: 'flex', alignItems: 'center', gap: 24 }}>
-                <PieChart width={160} height={160}>
-                  <Pie data={donutData} cx={75} cy={75} innerRadius={45} outerRadius={72} dataKey="value" paddingAngle={2}>
-                    {donutData.map((d, i) => <Cell key={i} fill={d.color} />)}
-                  </Pie>
-                  <Tooltip formatter={(v) => fmtN(v)} />
-                </PieChart>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 32, padding: '8px 0' }}>
+                <div style={{ position: 'relative', width: 140, height: 140, flexShrink: 0 }}>
+                  <PieChart width={140} height={140}>
+                    <Pie data={donutData} cx={65} cy={65} innerRadius={42} outerRadius={65} dataKey="value" paddingAngle={3}>
+                      {donutData.map((d, i) => <Cell key={i} fill={d.color} />)}
+                    </Pie>
+                  </PieChart>
+                  <div style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%,-50%)', textAlign: 'center' }}>
+                    <div style={{ fontSize: 18, fontWeight: 700, color: C.t1, lineHeight: 1 }}>{fmtN(nCusts)}</div>
+                    <div style={{ fontSize: 9, color: C.t3, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.04em', marginTop: 2 }}>Total</div>
+                  </div>
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
                   {donutData.map(d => (
-                    <div key={d.name} style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                        <span style={{ width: 10, height: 10, borderRadius: '50%', background: d.color, flexShrink: 0 }} />
-                        <span style={{ fontSize: 12, color: C.t2 }}>{d.name}</span>
+                    <div key={d.name} style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                      <div style={{ width: 36, height: 36, borderRadius: 10, background: d.color + '22', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                        <span style={{ width: 12, height: 12, borderRadius: '50%', background: d.color, display: 'block' }} />
                       </div>
-                      <span style={{ fontSize: 20, fontWeight: 700, color: C.t1, letterSpacing: '-.02em', paddingLeft: 16 }}>{fmtN(d.value)}</span>
-                      <span style={{ fontSize: 11, color: C.t3, paddingLeft: 16 }}>{nCusts ? (d.value / nCusts * 100).toFixed(1) : 0}% of total</span>
+                      <div>
+                        <div style={{ fontSize: 11, color: C.t3, fontWeight: 500 }}>{d.name} customers</div>
+                        <div style={{ fontSize: 20, fontWeight: 700, color: C.t1, letterSpacing: '-.02em', lineHeight: 1.2 }}>{fmtN(d.value)}</div>
+                        <div style={{ fontSize: 11, color: C.t3 }}>{nCusts ? (d.value / nCusts * 100).toFixed(1) : 0}%</div>
+                      </div>
                     </div>
                   ))}
                 </div>
