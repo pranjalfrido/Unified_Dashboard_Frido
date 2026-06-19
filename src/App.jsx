@@ -1583,7 +1583,7 @@ function BlinkitTab({ data }) {
           />
         </Card>
         <Card title="All Cities">
-          <div>
+          <div style={{ overflowY: 'auto', maxHeight: 400 }}>
             <DataTable
               columns={[
                 { key: 'city', label: 'City' },
