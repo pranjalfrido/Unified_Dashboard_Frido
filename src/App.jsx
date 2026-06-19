@@ -1003,7 +1003,7 @@ function AllTab({ data }) {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-      <div style={{ display: 'grid', gridTemplateColumns: '1.4fr 1.2fr 1fr 1fr 1fr 1fr', gap: 10 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: '1.4fr 1.2fr 1fr 1fr 1fr 1fr', gap: 10, alignItems: 'start' }}>
         {/* Gross Revenue hero */}
         <div className="kpi-card" style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
           <div className="kpi-label">Gross Revenue · Inc. GST</div>
@@ -1025,7 +1025,7 @@ function AllTab({ data }) {
         {(() => {
           const excChg = prevExcRev > 0 ? ((totalExcRev - prevExcRev) / prevExcRev * 100) : null
           return (
-            <div className="kpi-card" style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+            <div className="kpi-card" style={{ display: 'flex', flexDirection: 'column', gap: 4, padding: '10px 13px' }}>
               <div className="kpi-label">Net (Exc GST)</div>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                 <div className="kpi-value">{fmt(totalExcRev)}</div>
@@ -1043,10 +1043,18 @@ function AllTab({ data }) {
             </div>
           )
         })()}
-        <KPICard label="Orders" value={fmtN(nOrders)} sub={`${fmtN(totalQty)} units`} />
-        <KPICard label="Return %" value={`${returnPct.toFixed(1)}%`} sub={`${fmtN(rtoOrders)} RTO orders`} accent={returnPct > 10 ? '#7A1A1A' : undefined} />
-        <KPICard label="Blended AOV" value={`₹${Math.round(blendedAOV).toLocaleString('en-IN')}`} />
-        <KPICard label="Daily Avg" value={fmt(totalRev / nDays)} />
+        {[
+          { label: 'Orders', value: fmtN(nOrders), sub: `${fmtN(totalQty)} units` },
+          { label: 'Return %', value: `${returnPct.toFixed(1)}%`, sub: `${fmtN(rtoOrders)} RTO orders`, accent: returnPct > 10 ? '#7A1A1A' : undefined },
+          { label: 'Blended AOV', value: `₹${Math.round(blendedAOV).toLocaleString('en-IN')}` },
+          { label: 'Daily Avg', value: fmt(totalRev / nDays) },
+        ].map(k => (
+          <div key={k.label} className="kpi-card" style={{ padding: '8px 11px' }}>
+            <div className="kpi-label">{k.label}</div>
+            <div className="kpi-value" style={{ fontSize: 17, ...(k.accent ? { color: k.accent } : {}) }}>{k.value}</div>
+            {k.sub && <div className="kpi-sub">{k.sub}</div>}
+          </div>
+        ))}
       </div>
       <div style={{display:'grid',gridTemplateColumns:'repeat(6,1fr)',gap:10}}>
         <KPICard label="ASP" value={`₹${Math.round(asp).toLocaleString('en-IN')}`} sub={`Revenue per unit sold`} />
