@@ -759,7 +759,6 @@ function SearchableSelect({ options, value, onChange, placeholder, dropdownWidth
 
 const CHART_METRICS = [
   { id: 'rev', label: 'Revenue', key: ch => ch },
-  { id: 'orders', label: 'Orders', key: ch => ch + '_o' },
   { id: 'units', label: 'Units', key: ch => ch + '_u' },
 ]
 const CHART_TYPES = [
@@ -1378,9 +1377,10 @@ function AmazonTab({ data, region = 'india', setRegion = () => {} }) {
   const [scChartMetric, setScChartMetric] = useState('rev')
   const scDailyMap = {}
   ;(amzSC.daily || []).forEach(d => {
-    if (!scDailyMap[d.date]) scDailyMap[d.date] = { date: d.date, FBA: 0, MFN: 0, FBA_orders: 0, MFN_orders: 0 }
+    if (!scDailyMap[d.date]) scDailyMap[d.date] = { date: d.date, FBA: 0, MFN: 0, FBA_orders: 0, MFN_orders: 0, FBA_units: 0, MFN_units: 0 }
     scDailyMap[d.date][d.type] = d.rev
     scDailyMap[d.date][d.type + '_orders'] = d.orders
+    scDailyMap[d.date][d.type + '_units'] = d.units || 0
   })
   const scDailyArr = Object.values(scDailyMap).sort((a, b) => a.date.localeCompare(b.date))
   const maxStateRev = Math.max(...(amzSC.states || []).map(s => s.rev), 1)
@@ -1461,16 +1461,16 @@ function AmazonTab({ data, region = 'india', setRegion = () => {} }) {
           </div>
           {/* Row 1: Daily Revenue + Order Status Breakdown */}
           <div style={{ display: 'grid', gridTemplateColumns: '3fr 2fr', gap: 14, alignItems: 'stretch' }}>
-            <Card title={`Daily ${scChartMetric === 'rev' ? 'Revenue' : 'Orders'} · India (Seller Central FBA + MFN)`} action={<div style={{ display: 'flex', gap: 4 }}>{[{ v: 'rev', label: 'Revenue' }, { v: 'orders', label: 'Orders' }].map(opt => <button key={opt.v} onClick={() => setScChartMetric(opt.v)} style={{ fontSize: 11, fontWeight: 600, padding: '3px 10px', borderRadius: 5, border: `1.5px solid ${scChartMetric === opt.v ? C.t1 : C.border}`, background: scChartMetric === opt.v ? C.t1 : 'transparent', color: scChartMetric === opt.v ? '#fff' : C.t2, cursor: 'pointer', fontFamily: 'var(--font)' }}>{opt.label}</button>)}</div>}>
+            <Card title={`Daily ${scChartMetric === 'rev' ? 'Revenue' : scChartMetric === 'units' ? 'Units' : 'Orders'} · India (Seller Central FBA + MFN)`} action={<div style={{ display: 'flex', gap: 4 }}>{[{ v: 'rev', label: 'Revenue' }, { v: 'units', label: 'Units' }, { v: 'orders', label: 'Orders' }].map(opt => <button key={opt.v} onClick={() => setScChartMetric(opt.v)} style={{ fontSize: 11, fontWeight: 600, padding: '3px 10px', borderRadius: 5, border: `1.5px solid ${scChartMetric === opt.v ? C.t1 : C.border}`, background: scChartMetric === opt.v ? C.t1 : 'transparent', color: scChartMetric === opt.v ? '#fff' : C.t2, cursor: 'pointer', fontFamily: 'var(--font)' }}>{opt.label}</button>)}</div>}>
               <ResponsiveContainer width="100%" height={200}>
                 <BarChart data={scDailyArr} margin={{ top: 0, right: 0, bottom: 0, left: 0 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke={C.border} vertical={false} />
                   <XAxis dataKey="date" tick={{ fontSize: 10, fill: C.t3 }} tickFormatter={d => d?.slice(5)} />
                   <YAxis tick={{ fontSize: 10, fill: C.t3 }} tickFormatter={v => scChartMetric === 'rev' ? (v >= 1e5 ? `${(v/1e5).toFixed(0)}L` : v) : fmtN(v)} width={40} />
-                  <Tooltip content={<ChartTooltip formatter={scChartMetric === 'orders' ? fmtN : undefined} />} />
+                  <Tooltip content={<ChartTooltip formatter={scChartMetric !== 'rev' ? fmtN : undefined} />} />
                   <Legend iconSize={8} wrapperStyle={{ fontSize: 10 }} />
-                  <Bar dataKey={scChartMetric === 'rev' ? 'FBA' : 'FBA_orders'} stackId="a" fill="#E8930A" name="FBA" />
-                  <Bar dataKey={scChartMetric === 'rev' ? 'MFN' : 'MFN_orders'} stackId="a" fill="#2E74CC" name="MFN" />
+                  <Bar dataKey={scChartMetric === 'rev' ? 'FBA' : scChartMetric === 'units' ? 'FBA_units' : 'FBA_orders'} stackId="a" fill="#E8930A" name="FBA" />
+                  <Bar dataKey={scChartMetric === 'rev' ? 'MFN' : scChartMetric === 'units' ? 'MFN_units' : 'MFN_orders'} stackId="a" fill="#2E74CC" name="MFN" />
                 </BarChart>
               </ResponsiveContainer>
             </Card>
@@ -1804,9 +1804,9 @@ function FlipkartTab({ data }) {
   const [chartMetric, setChartMetric] = useState('rev')
   const dailyMap = {}
   ;(fk.daily || []).forEach(x => {
-    if (!dailyMap[x.date]) dailyMap[x.date] = { date: x.date, FBF: 0, NonFBF: 0, FBF_orders: 0, NonFBF_orders: 0 }
-    if (x.sub === 'FBF') { dailyMap[x.date].FBF = x.rev; dailyMap[x.date].FBF_orders = x.orders }
-    else { dailyMap[x.date].NonFBF = x.rev; dailyMap[x.date].NonFBF_orders = x.orders }
+    if (!dailyMap[x.date]) dailyMap[x.date] = { date: x.date, FBF: 0, NonFBF: 0, FBF_orders: 0, NonFBF_orders: 0, FBF_units: 0, NonFBF_units: 0 }
+    if (x.sub === 'FBF') { dailyMap[x.date].FBF = x.rev; dailyMap[x.date].FBF_orders = x.orders; dailyMap[x.date].FBF_units = x.units || 0 }
+    else { dailyMap[x.date].NonFBF = x.rev; dailyMap[x.date].NonFBF_orders = x.orders; dailyMap[x.date].NonFBF_units = x.units || 0 }
   })
   const dailyArr = Object.values(dailyMap).sort((a, b) => a.date?.localeCompare(b.date))
   const subDailyArr = filterSub(fk.daily || []).map(x => ({ date: x.date, rev: x.rev, orders: x.orders }))
@@ -1888,18 +1888,18 @@ function FlipkartTab({ data }) {
 
       {/* Row 1: Daily chart + FBF vs Non-FBF breakdown */}
       <div style={{ display: 'grid', gridTemplateColumns: '3fr 2fr', gap: 14, alignItems: 'stretch' }}>
-        <Card title={subView === 'overview' ? `Daily ${chartMetric === 'rev' ? 'Revenue' : 'Orders'} · FBF vs Non-FBF` : `Daily ${chartMetric === 'rev' ? 'Revenue' : 'Orders'} · ${subView === 'fbf' ? 'FBF' : 'Non-FBF'}`}
-          action={<div style={{ display: 'flex', gap: 4 }}>{[{ v: 'rev', label: 'Revenue' }, { v: 'orders', label: 'Orders' }].map(opt => <button key={opt.v} onClick={() => setChartMetric(opt.v)} style={{ fontSize: 11, fontWeight: 600, padding: '3px 10px', borderRadius: 5, border: `1.5px solid ${chartMetric === opt.v ? C.t1 : C.border}`, background: chartMetric === opt.v ? C.t1 : 'transparent', color: chartMetric === opt.v ? '#fff' : C.t2, cursor: 'pointer', fontFamily: 'var(--font)' }}>{opt.label}</button>)}</div>}>
+        <Card title={subView === 'overview' ? `Daily ${chartMetric === 'rev' ? 'Revenue' : chartMetric === 'units' ? 'Units' : 'Orders'} · FBF vs Non-FBF` : `Daily ${chartMetric === 'rev' ? 'Revenue' : chartMetric === 'units' ? 'Units' : 'Orders'} · ${subView === 'fbf' ? 'FBF' : 'Non-FBF'}`}
+          action={<div style={{ display: 'flex', gap: 4 }}>{[{ v: 'rev', label: 'Revenue' }, { v: 'units', label: 'Units' }, { v: 'orders', label: 'Orders' }].map(opt => <button key={opt.v} onClick={() => setChartMetric(opt.v)} style={{ fontSize: 11, fontWeight: 600, padding: '3px 10px', borderRadius: 5, border: `1.5px solid ${chartMetric === opt.v ? C.t1 : C.border}`, background: chartMetric === opt.v ? C.t1 : 'transparent', color: chartMetric === opt.v ? '#fff' : C.t2, cursor: 'pointer', fontFamily: 'var(--font)' }}>{opt.label}</button>)}</div>}>
           {subView === 'overview' ? (
             <ResponsiveContainer width="100%" height={200}>
               <BarChart data={dailyArr} margin={{ top: 0, right: 0, bottom: 0, left: 0 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke={C.border} vertical={false} />
                 <XAxis dataKey="date" tick={{ fontSize: 10, fill: C.t3 }} tickFormatter={d => d?.slice(5)} />
                 <YAxis tick={{ fontSize: 10, fill: C.t3 }} tickFormatter={v => chartMetric === 'rev' ? (v >= 1e5 ? `${(v/1e5).toFixed(0)}L` : v) : fmtN(v)} width={40} />
-                <Tooltip content={<ChartTooltip formatter={chartMetric === 'orders' ? fmtN : undefined} />} />
+                <Tooltip content={<ChartTooltip formatter={chartMetric !== 'rev' ? fmtN : undefined} />} />
                 <Legend iconSize={8} wrapperStyle={{ fontSize: 10 }} />
-                <Bar dataKey={chartMetric === 'rev' ? 'FBF' : 'FBF_orders'} stackId="a" fill="#E8930A" name="FBF" />
-                <Bar dataKey={chartMetric === 'rev' ? 'NonFBF' : 'NonFBF_orders'} stackId="a" fill="#2E74CC" name="Non-FBF" />
+                <Bar dataKey={chartMetric === 'rev' ? 'FBF' : chartMetric === 'units' ? 'FBF_units' : 'FBF_orders'} stackId="a" fill="#E8930A" name="FBF" />
+                <Bar dataKey={chartMetric === 'rev' ? 'NonFBF' : chartMetric === 'units' ? 'NonFBF_units' : 'NonFBF_orders'} stackId="a" fill="#2E74CC" name="Non-FBF" />
               </BarChart>
             </ResponsiveContainer>
           ) : (
@@ -2353,7 +2353,7 @@ function CredTab({ data }) {
               ) : null} />
               <Legend wrapperStyle={{ fontSize: 11 }} />
               <Area yAxisId="rev" type="monotone" dataKey="rev" name="Revenue" stroke="#E11D48" strokeWidth={2} fill="url(#credRevGrad)" dot={false} />
-              <Line yAxisId="orders" type="monotone" dataKey="orders" name="Orders" stroke="#2E74CC" strokeWidth={2} dot={{ r: 3, fill: '#2E74CC' }} activeDot={{ r: 5 }} />
+              <Line yAxisId="orders" type="monotone" dataKey="units" name="Units" stroke="#2E74CC" strokeWidth={2} dot={{ r: 3, fill: '#2E74CC' }} activeDot={{ r: 5 }} />
             </ComposedChart>
           </ResponsiveContainer>
         </Card>

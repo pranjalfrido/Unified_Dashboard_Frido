@@ -64,14 +64,15 @@ export function processData(rows) {
   const dailyChMap = {}
   orders.forEach(o => {
     const k = `${o.date}__${o.channel}`
-    if (!dailyChMap[k]) dailyChMap[k] = { rev: 0, orders: 0, date: o.date, channel: o.channel }
-    dailyChMap[k].rev += o.rev; dailyChMap[k].orders += 1
+    if (!dailyChMap[k]) dailyChMap[k] = { rev: 0, orders: 0, qty: 0, date: o.date, channel: o.channel }
+    dailyChMap[k].rev += o.rev; dailyChMap[k].orders += 1; dailyChMap[k].qty += o.qty
   })
   const dailyMap = {}
   Object.values(dailyChMap).forEach(d => {
     if (!dailyMap[d.date]) dailyMap[d.date] = { date: d.date }
     dailyMap[d.date][d.channel] = (dailyMap[d.date][d.channel] || 0) + d.rev
     dailyMap[d.date][d.channel + '_o'] = (dailyMap[d.date][d.channel + '_o'] || 0) + d.orders
+    dailyMap[d.date][d.channel + '_u'] = (dailyMap[d.date][d.channel + '_u'] || 0) + d.qty
   })
   const dailyArr = uniqueDates.map(d => dailyMap[d] || { date: d })
 
