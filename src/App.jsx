@@ -957,7 +957,7 @@ function CategoryChannelMatrix({ heatData, channels, maxHeat }) {
 }
 
 function AllTab({ data }) {
-  const { totalRev, totalExcRev, gstCollected, nOrders, totalQty, blendedAOV, nDays, dailyArr, chMap, catMap, subCatMap, stateMap, cityRows = [], buckets, bucketRev, rows, orders, orderStatusRevMap = {}, orderStatusMap = {}, catChannelMap = {} } = data
+  const { totalRev, totalExcRev, gstCollected, nOrders, totalQty, blendedAOV, nDays, dailyArr, chMap, catMap, subCatMap, stateMap, cityRows = [], buckets, bucketRev, rows, orders, orderStatusRevMap = {}, orderStatusMap = {}, catChannelMap = {}, prevRev = 0, prevOrders = 0, prevDailyArr = [] } = data
   const channels = Object.keys(C.ch).filter(ch => chMap[ch])
   const sortedCh = Object.entries(chMap).sort((a, b) => b[1].rev - a[1].rev)
   const maxChRev = sortedCh[0]?.[1].rev || 1
@@ -991,12 +991,57 @@ function AllTab({ data }) {
   const deliveredOrders = orderStatusMap['Delivered'] || 0
   const fulfilmentPct = nOrders > 0 ? (deliveredOrders / nOrders * 100) : 0
 
+  const revChg = prevRev > 0 ? ((totalRev - prevRev) / prevRev * 100) : null
+  const ordChg = prevOrders > 0 ? ((nOrders - prevOrders) / prevOrders * 100) : null
+  // Sparkline: normalise both periods to index 0..n-1 for comparison
+  const sparkData = Array.from({ length: Math.max(dailyArr.length, prevDailyArr.length) }, (_, i) => {
+    const cur = dailyArr[i]
+    const pre = prevDailyArr[i]
+    const curRev = cur ? Object.entries(cur).filter(([k]) => k !== 'date' && !k.endsWith('_o')).reduce((s, [, v]) => s + (v || 0), 0) : null
+    return { i, cur: curRev, prev: pre?.rev ?? null }
+  })
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-      <div style={{display:'grid',gridTemplateColumns:'repeat(6,1fr)',gap:10}}>
-        <KPICard label="Gross Revenue" value={fmt(totalRev)} sub={`${nDays} days`} />
+      <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr 1fr 1fr', gap: 10 }}>
+        {/* Hero Gross Revenue card */}
+        <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 13, padding: '16px 18px', display: 'flex', flexDirection: 'column', gap: 8 }}>
+          <div style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.055em', color: C.t3 }}>Gross Revenue · Inc. GST</div>
+          <div style={{ fontSize: 28, fontWeight: 700, color: C.t1, letterSpacing: '-.03em', lineHeight: 1 }}>{fmt(totalRev)}</div>
+          <div style={{ display: 'flex', gap: 20 }}>
+            <div>
+              <div style={{ fontSize: 11, color: C.t3 }}>Orders</div>
+              <div style={{ fontSize: 15, fontWeight: 700, color: C.t1 }}>{fmtN(nOrders)}</div>
+              {ordChg !== null && <div style={{ fontSize: 10, fontWeight: 600, color: ordChg >= 0 ? C.green.tx : C.red.tx }}>{ordChg >= 0 ? '▲' : '▼'} {Math.abs(ordChg).toFixed(1)}% vs prev</div>}
+            </div>
+            <div>
+              <div style={{ fontSize: 11, color: C.t3 }}>Units</div>
+              <div style={{ fontSize: 15, fontWeight: 700, color: C.t1 }}>{fmtN(totalQty)}</div>
+            </div>
+            {revChg !== null && (
+              <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'flex-start' }}>
+                <span style={{ fontSize: 12, fontWeight: 700, padding: '3px 8px', borderRadius: 6, background: revChg >= 0 ? C.green.bg : C.red.bg, color: revChg >= 0 ? C.green.tx : C.red.tx }}>
+                  {revChg >= 0 ? '▲' : '▼'} {Math.abs(revChg).toFixed(1)}%
+                </span>
+              </div>
+            )}
+          </div>
+          <ResponsiveContainer width="100%" height={55}>
+            <AreaChart data={sparkData} margin={{ top: 2, right: 0, bottom: 0, left: 0 }}>
+              <defs>
+                <linearGradient id="curGrad" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="5%" stopColor={C.acc} stopOpacity={0.3} />
+                  <stop offset="95%" stopColor={C.acc} stopOpacity={0} />
+                </linearGradient>
+              </defs>
+              <Area type="monotone" dataKey="cur" name="Current" stroke={C.acc} strokeWidth={2} fill="url(#curGrad)" dot={false} connectNulls />
+              <Area type="monotone" dataKey="prev" name="Prev period" stroke={C.t3} strokeWidth={1.5} fill="none" dot={false} strokeDasharray="4 3" connectNulls />
+              <Tooltip content={({ active, payload }) => active && payload?.length ? <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 7, padding: '5px 9px', fontSize: 11 }}>{payload.map(p => <div key={p.name} style={{ color: p.name === 'Current' ? C.t1 : C.t3 }}>{p.name}: {fmt(p.value)}</div>)}</div> : null} />
+            </AreaChart>
+          </ResponsiveContainer>
+          <div style={{ fontSize: 10, color: C.t3 }}>— Current &nbsp;· · · Prev {nDays}d</div>
+        </div>
         <KPICard label="Net (Exc GST)" value={fmt(totalExcRev)} />
-        <KPICard label="Orders" value={fmtN(nOrders)} sub={`${fmtN(totalQty)} units`} />
         <KPICard label="Return %" value={`${returnPct.toFixed(1)}%`} sub={`${fmtN(rtoOrders)} RTO orders`} accent={returnPct > 10 ? '#7A1A1A' : undefined} />
         <KPICard label="Blended AOV" value={`₹${Math.round(blendedAOV).toLocaleString('en-IN')}`} />
         <KPICard label="Daily Avg" value={fmt(totalRev / nDays)} />
