@@ -1003,51 +1003,10 @@ function AllTab({ data }) {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-      <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr 1fr 1fr', gap: 10 }}>
-        {/* Hero Gross Revenue card */}
-        <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 13, padding: '13px 15px', display: 'flex', flexDirection: 'column', gap: 6 }}>
-          <div style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.055em', color: C.t3 }}>Gross Revenue · Inc. GST</div>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-            <div style={{ fontSize: 21, fontWeight: 700, color: C.t1, letterSpacing: '-.02em', lineHeight: 1 }}>{fmt(totalRev)}</div>
-            {revChg !== null && <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 7px', borderRadius: 5, background: revChg >= 0 ? C.green.bg : C.red.bg, color: revChg >= 0 ? C.green.tx : C.red.tx }}>{revChg >= 0 ? '▲' : '▼'} {Math.abs(revChg).toFixed(1)}%</span>}
-          </div>
-          <div style={{ display: 'flex', gap: 16 }}>
-            <span style={{ fontSize: 11, color: C.t3 }}><b style={{ color: C.t1 }}>{fmtN(nOrders)}</b> orders {ordChg !== null && <span style={{ color: ordChg >= 0 ? C.green.tx : C.red.tx, fontWeight: 600 }}>{ordChg >= 0 ? '▲' : '▼'}{Math.abs(ordChg).toFixed(1)}%</span>}</span>
-            <span style={{ fontSize: 11, color: C.t3 }}><b style={{ color: C.t1 }}>{fmtN(totalQty)}</b> units</span>
-          </div>
-          <ResponsiveContainer width="100%" height={36}>
-            <AreaChart data={sparkData} margin={{ top: 1, right: 0, bottom: 0, left: 0 }}>
-              <defs><linearGradient id="curGrad" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor={C.acc} stopOpacity={0.25} /><stop offset="95%" stopColor={C.acc} stopOpacity={0} /></linearGradient></defs>
-              <Area type="monotone" dataKey="cur" name="Current" stroke={C.acc} strokeWidth={1.5} fill="url(#curGrad)" dot={false} connectNulls />
-              <Area type="monotone" dataKey="prev" name="Prev" stroke={C.t3} strokeWidth={1} fill="none" dot={false} strokeDasharray="3 2" connectNulls />
-              <Tooltip content={({ active, payload }) => active && payload?.length ? <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 6, padding: '4px 8px', fontSize: 10 }}>{payload.map(p => <div key={p.name} style={{ color: p.name === 'Current' ? C.t1 : C.t3 }}>{p.name}: {fmt(p.value)}</div>)}</div> : null} />
-            </AreaChart>
-          </ResponsiveContainer>
-          <div style={{ fontSize: 9.5, color: C.t3 }}>— Current &nbsp;· · · Prev {nDays}d</div>
-        </div>
-        {/* Net Exc GST hero card */}
-        {(() => {
-          const excChg = prevExcRev > 0 ? ((totalExcRev - prevExcRev) / prevExcRev * 100) : null
-          return (
-            <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 13, padding: '13px 15px', display: 'flex', flexDirection: 'column', gap: 6 }}>
-              <div style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.055em', color: C.t3 }}>Net (Exc GST)</div>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                <div style={{ fontSize: 21, fontWeight: 700, color: C.t1, letterSpacing: '-.02em', lineHeight: 1 }}>{fmt(totalExcRev)}</div>
-                {excChg !== null && <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 7px', borderRadius: 5, background: excChg >= 0 ? C.green.bg : C.red.bg, color: excChg >= 0 ? C.green.tx : C.red.tx }}>{excChg >= 0 ? '▲' : '▼'} {Math.abs(excChg).toFixed(1)}%</span>}
-              </div>
-              <div style={{ fontSize: 11, color: C.t3 }}>GST <b style={{ color: C.t1 }}>{fmt(gstCollected)}</b> · {(gstCollected / totalRev * 100).toFixed(1)}%</div>
-              <ResponsiveContainer width="100%" height={36}>
-                <AreaChart data={sparkData} margin={{ top: 1, right: 0, bottom: 0, left: 0 }}>
-                  <defs><linearGradient id="netGrad" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor={C.blue.bd} stopOpacity={0.25} /><stop offset="95%" stopColor={C.blue.bd} stopOpacity={0} /></linearGradient></defs>
-                  <Area type="monotone" dataKey="cur" name="Current" stroke={C.blue.bd} strokeWidth={1.5} fill="url(#netGrad)" dot={false} connectNulls />
-                  <Area type="monotone" dataKey="prev" name="Prev" stroke={C.t3} strokeWidth={1} fill="none" dot={false} strokeDasharray="3 2" connectNulls />
-                  <Tooltip content={({ active, payload }) => active && payload?.length ? <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 6, padding: '4px 8px', fontSize: 10 }}>{payload.map(p => <div key={p.name} style={{ color: p.name === 'Current' ? C.t1 : C.t3 }}>{p.name}: {fmt(p.value)}</div>)}</div> : null} />
-                </AreaChart>
-              </ResponsiveContainer>
-              <div style={{ fontSize: 9.5, color: C.t3 }}>— Current &nbsp;· · · Prev {nDays}d</div>
-            </div>
-          )
-        })()}
+      <div style={{display:'grid',gridTemplateColumns:'repeat(6,1fr)',gap:10}}>
+        <KPICard label="Gross Revenue" value={fmt(totalRev)} sub={`${nDays} days`} />
+        <KPICard label="Net (Exc GST)" value={fmt(totalExcRev)} />
+        <KPICard label="Orders" value={fmtN(nOrders)} sub={`${fmtN(totalQty)} units`} />
         <KPICard label="Return %" value={`${returnPct.toFixed(1)}%`} sub={`${fmtN(rtoOrders)} RTO orders`} accent={returnPct > 10 ? '#7A1A1A' : undefined} />
         <KPICard label="Blended AOV" value={`₹${Math.round(blendedAOV).toLocaleString('en-IN')}`} />
         <KPICard label="Daily Avg" value={fmt(totalRev / nDays)} />
