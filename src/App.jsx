@@ -395,8 +395,8 @@ function OverviewPage({ data, alerts }) {
         </Card>
       </div>
 
-      {/* Alerts + Scorecard + Top Performers */}
-      <div className="g-3">
+      {/* Scorecard + Top Performers */}
+      <div className="g-2">
         <Card title="Channel scorecard">
           <DataTable columns={[
             { key: 'ch', label: 'Channel' },
