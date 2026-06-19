@@ -67,6 +67,11 @@ export default async function handler(req, res) {
     inCategories: `WITH q AS (${base}) SELECT Category AS category, SUM(ItemQty) AS units, ROUND(SUM(SellingPrice_Inc_GST),0) AS rev, COUNT(DISTINCT ChannelSKUCode) AS skus FROM q WHERE Channel='Instamart' GROUP BY category ORDER BY rev DESC`,
     inSKUs: `WITH q AS (${base}), names AS (SELECT DISTINCT TRIM(productid) AS productid, channelproductname FROM \`frido-429506.sharepoint_to_gcp.Frido_Item_Master__productid_sku_mapping\` WHERE TRIM(channelname)='Instamart') SELECT q.ChannelSKUCode AS item_id, COALESCE(MAX(n.channelproductname), q.ChannelSKUCode) AS item_name, SUM(q.ItemQty) AS units, ROUND(SUM(q.SellingPrice_Inc_GST),0) AS rev, COUNT(DISTINCT q.City) AS cities FROM q LEFT JOIN names n ON q.ChannelSKUCode = n.productid WHERE q.Channel='Instamart' AND q.ChannelSKUCode IS NOT NULL GROUP BY item_id ORDER BY rev DESC`,
     inCities: `WITH q AS (${base}) SELECT City AS city_name, SUM(ItemQty) AS units, ROUND(SUM(SellingPrice_Inc_GST),0) AS rev, COUNT(DISTINCT ChannelSKUCode) AS skus FROM q WHERE Channel='Instamart' AND City IS NOT NULL GROUP BY city_name ORDER BY rev DESC`,
+    zpTotals: `WITH q AS (${base}) SELECT SUM(ItemQty) AS units, ROUND(SUM(SellingPrice_Inc_GST),0) AS rev, ROUND(SUM(SellingPrice_Exc_GST),0) AS exc_rev, COUNT(DISTINCT ChannelSKUCode) AS skus, COUNT(DISTINCT City) AS cities, COUNT(DISTINCT OrderDate) AS days FROM q WHERE Channel='Zepto'`,
+    zpDaily: `WITH q AS (${base}) SELECT CAST(OrderDate AS STRING) AS date, SUM(ItemQty) AS units, ROUND(SUM(SellingPrice_Inc_GST),0) AS rev FROM q WHERE Channel='Zepto' GROUP BY date ORDER BY date`,
+    zpCategories: `WITH q AS (${base}) SELECT Category AS category, SUM(ItemQty) AS units, ROUND(SUM(SellingPrice_Inc_GST),0) AS rev, COUNT(DISTINCT ChannelSKUCode) AS skus FROM q WHERE Channel='Zepto' GROUP BY category ORDER BY rev DESC`,
+    zpSKUs: `WITH q AS (${base}), names AS (SELECT DISTINCT TRIM(sku_number) AS sku_number, sku_name FROM \`frido-429506.production.zepto_sales_report\`) SELECT q.ChannelSKUCode AS item_id, COALESCE(MAX(n.sku_name), q.ChannelSKUCode) AS item_name, SUM(q.ItemQty) AS units, ROUND(SUM(q.SellingPrice_Inc_GST),0) AS rev, COUNT(DISTINCT q.City) AS cities FROM q LEFT JOIN names n ON q.ChannelSKUCode = n.sku_number WHERE q.Channel='Zepto' AND q.ChannelSKUCode IS NOT NULL GROUP BY item_id ORDER BY rev DESC`,
+    zpCities: `WITH q AS (${base}) SELECT City AS city_name, SUM(ItemQty) AS units, ROUND(SUM(SellingPrice_Inc_GST),0) AS rev, COUNT(DISTINCT ChannelSKUCode) AS skus FROM q WHERE Channel='Zepto' AND City IS NOT NULL GROUP BY city_name ORDER BY rev DESC`,
   }
 
   try {
@@ -190,6 +195,13 @@ export default async function handler(req, res) {
         skus: (r.fkSKUs || []).map(x => ({ sku: x.sku, sub: x.sub, orders: parseInt(x.orders)||0, units: parseInt(x.units)||0, rev: parseFloat(x.rev)||0 })),
         categories: (r.fkCategories || []).map(x => ({ category: x.category, sub: x.sub, orders: parseInt(x.orders)||0, rev: parseFloat(x.rev)||0, units: parseInt(x.units)||0 })),
         states: (r.fkStates || []).map(x => ({ state: x.state, sub: x.sub, orders: parseInt(x.orders)||0, rev: parseFloat(x.rev)||0 })),
+      },
+      zepto: {
+        totals: r.zpTotals?.[0] ? { units: parseInt(r.zpTotals[0].units)||0, rev: parseFloat(r.zpTotals[0].rev)||0, excRev: parseFloat(r.zpTotals[0].exc_rev)||0, skus: parseInt(r.zpTotals[0].skus)||0, cities: parseInt(r.zpTotals[0].cities)||0, days: parseInt(r.zpTotals[0].days)||0 } : {},
+        daily: (r.zpDaily || []).map(x => ({ date: x.date, units: parseInt(x.units)||0, rev: parseFloat(x.rev)||0 })),
+        categories: (r.zpCategories || []).map(x => ({ category: x.category, units: parseInt(x.units)||0, rev: parseFloat(x.rev)||0, skus: parseInt(x.skus)||0 })),
+        skus: (r.zpSKUs || []).map(x => ({ itemId: x.item_id, name: x.item_name, units: parseInt(x.units)||0, rev: parseFloat(x.rev)||0, cities: parseInt(x.cities)||0 })),
+        cities: (r.zpCities || []).map(x => ({ city: x.city_name, units: parseInt(x.units)||0, rev: parseFloat(x.rev)||0, skus: parseInt(x.skus)||0 })),
       },
       instamart: {
         totals: r.inTotals?.[0] ? { units: parseInt(r.inTotals[0].units)||0, rev: parseFloat(r.inTotals[0].rev)||0, excRev: parseFloat(r.inTotals[0].exc_rev)||0, skus: parseInt(r.inTotals[0].skus)||0, cities: parseInt(r.inTotals[0].cities)||0, days: parseInt(r.inTotals[0].days)||0 } : {},
