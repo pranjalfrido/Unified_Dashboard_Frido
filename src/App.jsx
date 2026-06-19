@@ -83,8 +83,9 @@ function DateRangePicker({ filters, setFilters }) {
   const parseD = s => { const d = new Date(s + 'T00:00:00'); return isNaN(d) ? null : d }
 
   const [leftMonth, setLeftMonth] = useState(() => { const d = parseD(filters.start) || today; return new Date(d.getFullYear(), d.getMonth(), 1) })
-  const rightMonth = new Date(leftMonth.getFullYear(), leftMonth.getMonth() + 1, 1)
-  const [monthPickerOpen, setMonthPickerOpen] = useState(false)
+  const [rightMonth, setRightMonth] = useState(() => { const d = parseD(filters.start) || today; return new Date(d.getFullYear(), d.getMonth() + 1, 1) })
+  const [monthPickerSide, setMonthPickerSide] = useState(null) // 'left' | 'right' | null
+  const monthPickerOpen = monthPickerSide !== null
   const [yearInput, setYearInput] = useState(() => (parseD(filters.start) || today).getFullYear())
 
   const PRESETS = [
@@ -213,9 +214,15 @@ function DateRangePicker({ filters, setFilters }) {
                 </div>
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 5 }}>
                   {MONTH_NAMES.map((mn, i) => {
-                    const isCurrent = leftMonth.getFullYear() === yearInput && leftMonth.getMonth() === i
+                    const refMonth = monthPickerSide === 'right' ? rightMonth : leftMonth
+                    const isCurrent = refMonth.getFullYear() === yearInput && refMonth.getMonth() === i
                     return (
-                      <button key={mn} onClick={() => { setLeftMonth(new Date(yearInput, i, 1)); setMonthPickerOpen(false) }}
+                      <button key={mn} onClick={() => {
+                        const picked = new Date(yearInput, i, 1)
+                        if (monthPickerSide === 'right') setRightMonth(picked)
+                        else setLeftMonth(picked)
+                        setMonthPickerSide(null)
+                      }}
                         style={{ padding: '6px 4px', borderRadius: 6, border: isCurrent ? `2px solid ${C.acc}` : `1px solid ${C.border}`, background: isCurrent ? C.acl : 'transparent', color: C.t1, cursor: 'pointer', fontSize: 12, fontWeight: isCurrent ? 700 : 400, fontFamily: 'var(--font)' }}>
                         {mn}
                       </button>
@@ -223,26 +230,26 @@ function DateRangePicker({ filters, setFilters }) {
                   })}
                 </div>
                 <div style={{ textAlign: 'center', marginTop: 2 }}>
-                  <button onClick={() => setMonthPickerOpen(false)} style={{ padding: '3px 14px', borderRadius: 6, border: `1px solid ${C.border}`, background: 'transparent', color: C.t3, cursor: 'pointer', fontSize: 11, fontFamily: 'var(--font)' }}>← back</button>
+                  <button onClick={() => setMonthPickerSide(null)} style={{ padding: '3px 14px', borderRadius: 6, border: `1px solid ${C.border}`, background: 'transparent', color: C.t3, cursor: 'pointer', fontSize: 11, fontFamily: 'var(--font)' }}>← back</button>
                 </div>
               </div>
             ) : (
               /* ── Dual calendar view ── */
               <>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: -4 }}>
-                  <button onClick={() => setLeftMonth(m => new Date(m.getFullYear(), m.getMonth()-1, 1))} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 18, color: C.t2, padding: '2px 8px' }}>‹</button>
+                  <button onClick={() => { setLeftMonth(m => new Date(m.getFullYear(), m.getMonth()-1, 1)); setRightMonth(m => new Date(m.getFullYear(), m.getMonth()-1, 1)) }} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 18, color: C.t2, padding: '2px 8px' }}>‹</button>
                   <div style={{ display: 'flex', gap: 8 }}>
-                    <button onClick={() => { setYearInput(leftMonth.getFullYear()); setMonthPickerOpen(true) }}
+                    <button onClick={() => { setYearInput(leftMonth.getFullYear()); setMonthPickerSide('left') }}
                       style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 13, fontWeight: 700, color: C.t1, padding: '2px 6px', borderRadius: 6, display: 'flex', alignItems: 'center', gap: 3 }}>
                       {leftMonth.toLocaleDateString('en-IN', { month: 'long', year: 'numeric' })} <span style={{ fontSize: 10, color: C.t3 }}>▾</span>
                     </button>
                     <span style={{ color: C.border2, fontSize: 16 }}>|</span>
-                    <button onClick={() => { setYearInput(rightMonth.getFullYear()); setMonthPickerOpen(true) }}
+                    <button onClick={() => { setYearInput(rightMonth.getFullYear()); setMonthPickerSide('right') }}
                       style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 13, fontWeight: 700, color: C.t1, padding: '2px 6px', borderRadius: 6, display: 'flex', alignItems: 'center', gap: 3 }}>
                       {rightMonth.toLocaleDateString('en-IN', { month: 'long', year: 'numeric' })} <span style={{ fontSize: 10, color: C.t3 }}>▾</span>
                     </button>
                   </div>
-                  <button onClick={() => setLeftMonth(m => new Date(m.getFullYear(), m.getMonth()+1, 1))} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 18, color: C.t2, padding: '2px 8px' }}>›</button>
+                  <button onClick={() => { setLeftMonth(m => new Date(m.getFullYear(), m.getMonth()+1, 1)); setRightMonth(m => new Date(m.getFullYear(), m.getMonth()+1, 1)) }} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 18, color: C.t2, padding: '2px 8px' }}>›</button>
                 </div>
                 <div style={{ display: 'flex', gap: 24 }}>
                   {renderMonth(leftMonth)}
