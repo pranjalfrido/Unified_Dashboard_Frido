@@ -1,5 +1,30 @@
 import { getBQ, buildQuery } from './_bq.js'
 
+// Server-side in-memory cache with 5-minute TTL
+const cache = new Map()
+const CACHE_TTL = 5 * 60 * 1000
+
+function getCacheKey(body) {
+  const { start, end, category, subCategory, sku, subChannel, voucher, channel } = body
+  return JSON.stringify({ start, end, category, subCategory, sku, subChannel, voucher, channel })
+}
+
+function getFromCache(key) {
+  const entry = cache.get(key)
+  if (!entry) return null
+  if (Date.now() - entry.ts > CACHE_TTL) { cache.delete(key); return null }
+  return entry.data
+}
+
+function setInCache(key, data) {
+  // Keep cache size bounded to 200 entries
+  if (cache.size >= 200) {
+    const oldest = cache.keys().next().value
+    cache.delete(oldest)
+  }
+  cache.set(key, { data, ts: Date.now() })
+}
+
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*')
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS')
@@ -9,6 +34,13 @@ export default async function handler(req, res) {
 
   const { start, end, category, subCategory, sku, subChannel, voucher, channel: activeChannel } = req.body
   if (!start || !end) return res.status(400).json({ error: 'Missing start or end date' })
+
+  const cacheKey = getCacheKey(req.body)
+  const cached = getFromCache(cacheKey)
+  if (cached) {
+    res.setHeader('X-Cache', 'HIT')
+    return res.json(cached)
+  }
 
   const bq = getBQ()
 
@@ -173,7 +205,7 @@ export default async function handler(req, res) {
       isRTO: false, isCIR: false, isCancelled: false, isExchange: false
     }))
 
-    res.json({
+    const payload = {
       source: 'postgres-aggregated',
       totalRev, totalExcRev, totalQty, nOrders, nDays,
       blendedAOV: nOrders ? totalRev / nOrders : 0,
@@ -241,7 +273,10 @@ export default async function handler(req, res) {
         skus: (r.blSKUs || []).map(x => ({ itemId: x.item_id, name: x.item_name, units: parseInt(x.units)||0, rev: parseFloat(x.rev)||0, mrp: parseFloat(x.mrp)||0, cities: parseInt(x.cities)||0 })),
         cities: (r.blCities || []).map(x => ({ city: x.city_name, units: parseInt(x.units)||0, rev: parseFloat(x.rev)||0, skus: parseInt(x.skus)||0 })),
       },
-    })
+    }
+    setInCache(cacheKey, payload)
+    res.setHeader('X-Cache', 'MISS')
+    res.json(payload)
   } catch (err) {
     console.error('[api/bq]', err.message)
     res.status(500).json({ error: err.message })

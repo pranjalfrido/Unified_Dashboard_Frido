@@ -2448,23 +2448,36 @@ export default function App() {
   const reqIdRef = useRef(0)
   const activeTabRef = useRef(activeTab)
   activeTabRef.current = activeTab
+  // Client-side cache: key → response data. Cleared when dates change.
+  const clientCacheRef = useRef(new Map())
 
   const fetchData = useCallback(async (start, end, extraFilters = {}, keepPrev = false) => {
+    const ch = TAB_TO_CHANNEL[activeTabRef.current] || null
+    const cacheKey = JSON.stringify({ start, end, ...extraFilters, channel: ch })
+
+    // Client-side cache hit: skip fetch entirely
+    if (keepPrev && clientCacheRef.current.has(cacheKey)) {
+      setRawRows(prev => {
+        const cached = clientCacheRef.current.get(cacheKey)
+        if (prev && typeof prev === 'object' && !Array.isArray(prev)) return { ...prev, ...cached }
+        return cached
+      })
+      return
+    }
+
     const reqId = ++reqIdRef.current
     if (!keepPrev) setLoading(true)
     else setChannelLoading(true)
     setError(null)
     try {
-      const ch = TAB_TO_CHANNEL[activeTabRef.current] || null
       const res = await fetch(`${API}/api/bq`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ start, end, ...extraFilters, ...(ch ? { channel: ch } : {}) }) })
       if (!res.ok) throw new Error(`API error ${res.status}: ${await res.text()}`)
       const json = await res.json()
       if (reqId !== reqIdRef.current) return // stale response, ignore
+      const next = json.source === 'postgres-aggregated' ? json : (json.totalRev !== undefined ? json : (json.rows || []))
+      clientCacheRef.current.set(cacheKey, next)
       setRawRows(prev => {
-        const next = json.source === 'postgres-aggregated' ? json : (json.totalRev !== undefined ? json : (json.rows || []))
-        if (keepPrev && prev && typeof prev === 'object' && !Array.isArray(prev)) {
-          return { ...prev, ...next }
-        }
+        if (keepPrev && prev && typeof prev === 'object' && !Array.isArray(prev)) return { ...prev, ...next }
         return next
       })
     } catch (e) { if (reqId === reqIdRef.current) setError(e.message) }
@@ -2479,7 +2492,7 @@ export default function App() {
     if (!filters.start || !filters.end) return
     clearTimeout(debounceRef.current)
     const dateChanged = filters.start !== prevDateRef.current.start || filters.end !== prevDateRef.current.end
-    if (dateChanged) { prevDateRef.current = { start: filters.start, end: filters.end }; setRawRows(null) }
+    if (dateChanged) { prevDateRef.current = { start: filters.start, end: filters.end }; setRawRows(null); clientCacheRef.current.clear() }
     debounceRef.current = setTimeout(() => {
       const { start, end, category, subCategory, sku, subChannel, voucher } = filtersRef.current
       const extra = {}
