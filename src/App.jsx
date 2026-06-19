@@ -1607,6 +1607,7 @@ function InstaTab({ data }) {
   const t = ins.totals || {}
   const nDays = t.days || 1
   const rev = t.rev || 0
+  const excRev = t.excRev || 0
   const units = t.units || 0
   const skus = t.skus || 0
   const cities = t.cities || 0
@@ -1628,12 +1629,12 @@ function InstaTab({ data }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6,1fr)', gap: 10 }}>
-        <KPICard label="Gross Revenue" value={fmt(rev)} sub={`${nDays} days`} />
-        <KPICard label="Daily Avg Revenue" value={fmt(dailyAvg)} sub="Per day" />
+        <KPICard label="Gross Revenue (Inc GST)" value={fmt(rev)} sub={`${nDays} days`} />
+        <KPICard label="Net Revenue (Exc GST)" value={fmt(excRev)} sub="Before tax" />
+        <KPICard label="Daily Avg Revenue" value={fmt(dailyAvg)} sub="Inc GST / day" />
         <KPICard label="Total Units Sold" value={fmtN(units)} sub={`${skus} SKUs`} />
-        <KPICard label="ASP" value={`₹${Math.round(asp).toLocaleString('en-IN')}`} sub="Avg selling price" />
+        <KPICard label="ASP (Inc GST)" value={`₹${Math.round(asp).toLocaleString('en-IN')}`} sub="Avg selling price" />
         <KPICard label="Cities" value={fmtN(cities)} sub="Cities with sales" />
-        <KPICard label="Active SKUs" value={fmtN(skus)} sub="In date range" />
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: '3fr 2fr', gap: 14, alignItems: 'stretch' }}>
