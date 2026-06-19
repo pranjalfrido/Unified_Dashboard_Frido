@@ -387,16 +387,19 @@ function OverviewPage({ data, alerts }) {
               ]
               return (
                 <div>
-                  <div className="spbar" style={{ position: 'relative' }}>
+                  <div className="spbar">
                     {segs.map((s, i) => (
-                      <div key={i} style={{ width: `${s.pct}%`, background: s.bg, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 700, color: s.color, overflow: 'visible', whiteSpace: 'nowrap', minWidth: s.pct > 0 ? 4 : 0, position: 'relative' }}>
-                        {s.pct >= 8 ? s.label : null}
-                        {s.pct > 0 && s.pct < 8 && (
-                          <span style={{ position: 'absolute', top: -20, left: '50%', transform: 'translateX(-50%)', background: s.bg, color: s.color, fontSize: 10, fontWeight: 700, padding: '1px 5px', borderRadius: 4, whiteSpace: 'nowrap', border: '1px solid rgba(0,0,0,0.1)' }}>
-                            {s.label}
-                          </span>
-                        )}
+                      <div key={i} style={{ width: `${s.pct}%`, background: s.bg, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 700, color: s.color, overflow: 'hidden', whiteSpace: 'nowrap', minWidth: s.pct > 0 ? 4 : 0 }}>
+                        {s.pct >= 8 ? s.label : ''}
                       </div>
+                    ))}
+                  </div>
+                  <div style={{ display: 'flex', gap: 14, marginTop: 5 }}>
+                    {segs.map((s, i) => (
+                      <span key={i} style={{ fontSize: 10, fontWeight: 600, color: C.t2 }}>
+                        <span style={{ display: 'inline-block', width: 8, height: 8, borderRadius: 2, background: s.bg, marginRight: 4 }} />
+                        {s.label}
+                      </span>
                     ))}
                   </div>
                 </div>
