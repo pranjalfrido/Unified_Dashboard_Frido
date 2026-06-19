@@ -72,9 +72,11 @@ function BottomNav({ page, setPage }) {
 function DateRangePicker({ filters, setFilters }) {
   const [open, setOpen] = useState(false)
   const [draft, setDraft] = useState({ start: filters.start, end: filters.end })
-  const [selecting, setSelecting] = useState('start') // 'start' | 'end'
+  const [selecting, setSelecting] = useState('start')
   const [hover, setHover] = useState(null)
+  const [dropPos, setDropPos] = useState({ top: 0, right: 0 })
   const ref = useRef(null)
+  const btnRef = useRef(null)
 
   const today = new Date(); today.setHours(0,0,0,0)
   const fmt0 = d => { const y = d.getFullYear(), m = String(d.getMonth()+1).padStart(2,'0'), dd = String(d.getDate()).padStart(2,'0'); return `${y}-${m}-${dd}` }
@@ -176,12 +178,12 @@ function DateRangePicker({ filters, setFilters }) {
 
   return (
     <div ref={ref} style={{ position: 'relative' }}>
-      <button onClick={() => { setDraft({ start: filters.start, end: filters.end }); setSelecting('start'); setOpen(o => !o) }}
+      <button ref={btnRef} onClick={() => { const r = btnRef.current?.getBoundingClientRect(); if (r) setDropPos({ top: r.bottom + 6, right: window.innerWidth - r.right }); setDraft({ start: filters.start, end: filters.end }); setSelecting('start'); setOpen(o => !o) }}
         style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '6px 12px', borderRadius: 8, border: `1px solid ${C.border2}`, background: C.card, color: C.t1, cursor: 'pointer', fontSize: 12, fontFamily: 'var(--font)', whiteSpace: 'nowrap' }}>
         <span style={{ fontSize: 14 }}>📅</span> {displayLabel}
       </button>
       {open && (
-        <div style={{ position: 'absolute', top: '110%', right: 0, zIndex: 1000, background: C.card, border: `1px solid ${C.border2}`, borderRadius: 12, boxShadow: '0 8px 32px rgba(0,0,0,.15)', display: 'flex', minWidth: 680 }}>
+        <div style={{ position: 'fixed', top: dropPos.top, right: dropPos.right, zIndex: 9999, background: C.card, border: `1px solid ${C.border2}`, borderRadius: 12, boxShadow: '0 8px 32px rgba(0,0,0,.15)', display: 'flex', minWidth: 680 }}>
           {/* Preset list */}
           <div style={{ width: 160, borderRight: `1px solid ${C.border}`, padding: '12px 0', flexShrink: 0 }}>
             {PRESETS.map(p => (

@@ -68,12 +68,12 @@ html,body{height:100%;background:var(--bg);font-family:var(--font);color:var(--t
 /* ── Topnav ────────────────────────────────── */
 .topnav{
   height:var(--nav);background:var(--card);border-bottom:1px solid var(--b1);
-  display:flex;align-items:center;padding:0 16px;gap:8px;flex-shrink:0;
+  display:flex;align-items:center;padding:0 16px;gap:8px;flex-shrink:0;overflow:visible;position:relative;z-index:100;
 }
 .tnav-title{font-size:14px;font-weight:600;color:var(--t1);white-space:nowrap}
 .tnav-sep{width:1px;height:15px;background:var(--b1);flex-shrink:0}
 .tnav-sub{font-size:11px;color:var(--t3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.tnav-right{display:flex;align-items:center;gap:6px;flex-wrap:nowrap;overflow-x:auto;margin-left:auto}
+.tnav-right{display:flex;align-items:center;gap:6px;flex-wrap:nowrap;margin-left:auto;overflow:visible}
 .tnav-right::-webkit-scrollbar{display:none}
 .tnav-btn{display:inline-flex;align-items:center;gap:5px;padding:5px 10px;border-radius:8px;border:1px solid var(--b2);font-size:12px;font-weight:500;color:var(--t2);background:var(--card);cursor:pointer;font-family:var(--font);white-space:nowrap;flex-shrink:0}
 .tnav-btn:hover{background:var(--hov)}
