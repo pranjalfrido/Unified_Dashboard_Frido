@@ -957,7 +957,7 @@ function CategoryChannelMatrix({ heatData, channels, maxHeat }) {
 }
 
 function AllTab({ data }) {
-  const { totalRev, totalExcRev, gstCollected, nOrders, totalQty, blendedAOV, nDays, dailyArr, chMap, catMap, subCatMap, stateMap, cityRows = [], buckets, bucketRev, rows, orders, orderStatusRevMap = {}, orderStatusMap = {}, catChannelMap = {}, prevRev = 0, prevOrders = 0, prevDailyArr = [] } = data
+  const { totalRev, totalExcRev, gstCollected, nOrders, totalQty, blendedAOV, nDays, dailyArr, chMap, catMap, subCatMap, stateMap, cityRows = [], buckets, bucketRev, rows, orders, orderStatusRevMap = {}, orderStatusMap = {}, catChannelMap = {}, prevRev = 0, prevExcRev = 0, prevOrders = 0, prevDailyArr = [] } = data
   const channels = Object.keys(C.ch).filter(ch => chMap[ch])
   const sortedCh = Object.entries(chMap).sort((a, b) => b[1].rev - a[1].rev)
   const maxChRev = sortedCh[0]?.[1].rev || 1
@@ -1041,7 +1041,33 @@ function AllTab({ data }) {
           </ResponsiveContainer>
           <div style={{ fontSize: 10, color: C.t3 }}>— Current &nbsp;· · · Prev {nDays}d</div>
         </div>
-        <KPICard label="Net (Exc GST)" value={fmt(totalExcRev)} />
+        {/* Net Exc GST hero card */}
+        {(() => {
+          const excChg = prevExcRev > 0 ? ((totalExcRev - prevExcRev) / prevExcRev * 100) : null
+          return (
+            <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 13, padding: '16px 18px', display: 'flex', flexDirection: 'column', gap: 8 }}>
+              <div style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.055em', color: C.t3 }}>Net (Exc GST)</div>
+              <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}>
+                <div style={{ fontSize: 28, fontWeight: 700, color: C.t1, letterSpacing: '-.03em', lineHeight: 1 }}>{fmt(totalExcRev)}</div>
+                {excChg !== null && <span style={{ fontSize: 12, fontWeight: 700, padding: '3px 8px', borderRadius: 6, background: excChg >= 0 ? C.green.bg : C.red.bg, color: excChg >= 0 ? C.green.tx : C.red.tx }}>{excChg >= 0 ? '▲' : '▼'} {Math.abs(excChg).toFixed(1)}%</span>}
+              </div>
+              <div style={{ fontSize: 11, color: C.t3 }}>GST {fmt(gstCollected)} · {(gstCollected / totalRev * 100).toFixed(1)}% of gross</div>
+              <ResponsiveContainer width="100%" height={55}>
+                <AreaChart data={sparkData} margin={{ top: 2, right: 0, bottom: 0, left: 0 }}>
+                  <defs>
+                    <linearGradient id="netGrad" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor={C.blue.bd} stopOpacity={0.3} />
+                      <stop offset="95%" stopColor={C.blue.bd} stopOpacity={0} />
+                    </linearGradient>
+                  </defs>
+                  <Area type="monotone" dataKey="cur" name="Current" stroke={C.blue.bd} strokeWidth={2} fill="url(#netGrad)" dot={false} connectNulls />
+                  <Area type="monotone" dataKey="prev" name="Prev period" stroke={C.t3} strokeWidth={1.5} fill="none" dot={false} strokeDasharray="4 3" connectNulls />
+                  <Tooltip content={({ active, payload }) => active && payload?.length ? <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 7, padding: '5px 9px', fontSize: 11 }}>{payload.map(p => <div key={p.name} style={{ color: p.name === 'Current' ? C.t1 : C.t3 }}>{p.name}: {fmt(p.value)}</div>)}</div> : null} />
+                </AreaChart>
+              </ResponsiveContainer>
+            </div>
+          )
+        })()}
         <KPICard label="Return %" value={`${returnPct.toFixed(1)}%`} sub={`${fmtN(rtoOrders)} RTO orders`} accent={returnPct > 10 ? '#7A1A1A' : undefined} />
         <KPICard label="Blended AOV" value={`₹${Math.round(blendedAOV).toLocaleString('en-IN')}`} />
         <KPICard label="Daily Avg" value={fmt(totalRev / nDays)} />
