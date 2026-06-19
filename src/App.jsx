@@ -398,7 +398,7 @@ function OverviewPage({ data, alerts }) {
 
       {/* Scorecard row — scorecard + new vs repeat side by side, stretch to same height */}
       <div style={{ display: 'flex', gap: 12, alignItems: 'stretch' }}>
-        <Card title="Channel scorecard" style={{ flexShrink: 0, width: 'fit-content', minWidth: 380 }}>
+        <Card title="Channel scorecard" style={{ flexShrink: 0, width: 'fit-content', minWidth: 520 }}>
           <DataTable columns={[
             { key: 'ch', label: 'Channel' },
             { key: 'rev', label: 'Revenue', align: 'right', mono: true, render: v => fmt(v) },
