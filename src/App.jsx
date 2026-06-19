@@ -190,7 +190,17 @@ function DateRangePicker({ filters, setFilters }) {
     <div ref={ref} style={{ position: 'relative' }}>
       <button ref={btnRef} onClick={() => { const r = btnRef.current?.getBoundingClientRect(); if (r) setDropPos({ top: r.bottom + 6, right: window.innerWidth - r.right }); setDraft({ start: filters.start, end: filters.end }); setSelecting('start'); setOpen(o => !o) }}
         style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '6px 12px', borderRadius: 8, border: `1px solid ${C.border2}`, background: C.card, color: C.t1, cursor: 'pointer', fontSize: 12, fontFamily: 'var(--font)', whiteSpace: 'nowrap' }}>
-        <span style={{ fontSize: 14 }}>📅</span> {displayLabel}
+        <svg width="13" height="13" viewBox="0 0 16 16" fill="none" style={{ flexShrink: 0 }}>
+          <rect x="1" y="2.5" width="14" height="12.5" rx="2" stroke={C.t2} strokeWidth="1.4" fill="none"/>
+          <path d="M1 6h14" stroke={C.t2} strokeWidth="1.4"/>
+          <path d="M5 1v3M11 1v3" stroke={C.t2} strokeWidth="1.4" strokeLinecap="round"/>
+          <rect x="4" y="8.5" width="2" height="2" rx=".4" fill={C.t2}/>
+          <rect x="7.5" y="8.5" width="2" height="2" rx=".4" fill={C.t2}/>
+          <rect x="11" y="8.5" width="2" height="2" rx=".4" fill={C.t2}/>
+          <rect x="4" y="11.5" width="2" height="2" rx=".4" fill={C.t2}/>
+          <rect x="7.5" y="11.5" width="2" height="2" rx=".4" fill={C.t2}/>
+        </svg>
+        {displayLabel}
       </button>
       {open && (
         <div style={{ position: 'fixed', top: dropPos.top, right: dropPos.right, zIndex: 9999, background: C.card, border: `1px solid ${C.border2}`, borderRadius: 12, boxShadow: '0 8px 32px rgba(0,0,0,.15)', display: 'flex', minWidth: 680 }}>
