@@ -1558,27 +1558,13 @@ function BlinkitTab({ data }) {
         </Card>
       </div>
 
-      {/* Row 2: Daily bar chart (units) + Top Cities */}
-      <div style={{ display: 'grid', gridTemplateColumns: '3fr 2fr', gap: 14, alignItems: 'stretch' }}>
-        <Card title="Daily Units Sold">
-          <ResponsiveContainer width="100%" height={200}>
-            <BarChart data={daily} margin={{ top: 0, right: 0, bottom: 0, left: 0 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke={C.border} vertical={false} />
-              <XAxis dataKey="date" tick={{ fontSize: 10, fill: C.t3 }} tickFormatter={d => d?.slice(5)} />
-              <YAxis tick={{ fontSize: 10, fill: C.t3 }} tickFormatter={v => fmtN(v)} width={40} />
-              <Tooltip content={<ChartTooltip formatter={fmtN} />} />
-              <Bar dataKey="units" fill="#FFD600" name="Units" radius={[3,3,0,0]} />
-            </BarChart>
-          </ResponsiveContainer>
-        </Card>
-        <Card title="Top Cities">
-          <div style={{ overflowY: 'auto', maxHeight: 240 }}>
-            {cityRows.slice(0, 20).map((c, i) => (
-              <HBar key={c.city} dot={catColors[i % catColors.length]} label={c.city} width={(c.rev / maxCityRev) * 100} value={fmt(c.rev)} pctVal={`${fmtN(c.units)}u`} />
-            ))}
-          </div>
-        </Card>
-      </div>
+      <Card title="Top Cities">
+        <div style={{ overflowY: 'auto', maxHeight: 240 }}>
+          {cityRows.slice(0, 20).map((c, i) => (
+            <HBar key={c.city} dot={catColors[i % catColors.length]} label={c.city} width={(c.rev / maxCityRev) * 100} value={fmt(c.rev)} pctVal={`${fmtN(c.units)}u`} />
+          ))}
+        </div>
+      </Card>
 
       {/* SKU Table + City Table */}
       <div className="g-2">
@@ -1680,26 +1666,13 @@ function InstaTab({ data }) {
         </Card>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '3fr 2fr', gap: 14, alignItems: 'stretch' }}>
-        <Card title="Daily Units Sold">
-          <ResponsiveContainer width="100%" height={200}>
-            <BarChart data={daily} margin={{ top: 0, right: 0, bottom: 0, left: 0 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke={C.border} vertical={false} />
-              <XAxis dataKey="date" tick={{ fontSize: 10, fill: C.t3 }} tickFormatter={d => d?.slice(5)} />
-              <YAxis tick={{ fontSize: 10, fill: C.t3 }} tickFormatter={v => fmtN(v)} width={40} />
-              <Tooltip content={<ChartTooltip formatter={fmtN} />} />
-              <Bar dataKey="units" fill="#FF6B35" name="Units" radius={[3,3,0,0]} />
-            </BarChart>
-          </ResponsiveContainer>
-        </Card>
-        <Card title="Top Cities">
-          <div style={{ overflowY: 'auto', maxHeight: 240 }}>
-            {cityRows.slice(0, 20).map((c, i) => (
-              <HBar key={c.city} dot={catColors[i % catColors.length]} label={c.city} width={(c.rev / maxCityRev) * 100} value={fmt(c.rev)} pctVal={`${fmtN(c.units)}u`} />
-            ))}
-          </div>
-        </Card>
-      </div>
+      <Card title="Top Cities">
+        <div style={{ overflowY: 'auto', maxHeight: 240 }}>
+          {cityRows.slice(0, 20).map((c, i) => (
+            <HBar key={c.city} dot={catColors[i % catColors.length]} label={c.city} width={(c.rev / maxCityRev) * 100} value={fmt(c.rev)} pctVal={`${fmtN(c.units)}u`} />
+          ))}
+        </div>
+      </Card>
 
       <div className="g-2">
         <Card title="SKU Performance">
@@ -1796,26 +1769,13 @@ function ZeptoTab({ data }) {
         </Card>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '3fr 2fr', gap: 14, alignItems: 'stretch' }}>
-        <Card title="Daily Units Sold">
-          <ResponsiveContainer width="100%" height={200}>
-            <BarChart data={daily} margin={{ top: 0, right: 0, bottom: 0, left: 0 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke={C.border} vertical={false} />
-              <XAxis dataKey="date" tick={{ fontSize: 10, fill: C.t3 }} tickFormatter={d => d?.slice(5)} />
-              <YAxis tick={{ fontSize: 10, fill: C.t3 }} tickFormatter={v => fmtN(v)} width={40} />
-              <Tooltip content={<ChartTooltip formatter={fmtN} />} />
-              <Bar dataKey="units" fill="#8B5CF6" name="Units" radius={[3,3,0,0]} />
-            </BarChart>
-          </ResponsiveContainer>
-        </Card>
-        <Card title="Top Cities">
-          <div style={{ overflowY: 'auto', maxHeight: 240 }}>
-            {cityRows.slice(0, 20).map((c, i) => (
-              <HBar key={c.city} dot={catColors[i % catColors.length]} label={c.city} width={(c.rev / maxCityRev) * 100} value={fmt(c.rev)} pctVal={`${fmtN(c.units)}u`} />
-            ))}
-          </div>
-        </Card>
-      </div>
+      <Card title="Top Cities">
+        <div style={{ overflowY: 'auto', maxHeight: 240 }}>
+          {cityRows.slice(0, 20).map((c, i) => (
+            <HBar key={c.city} dot={catColors[i % catColors.length]} label={c.city} width={(c.rev / maxCityRev) * 100} value={fmt(c.rev)} pctVal={`${fmtN(c.units)}u`} />
+          ))}
+        </div>
+      </Card>
 
       <div className="g-2">
         <Card title="SKU Performance">
