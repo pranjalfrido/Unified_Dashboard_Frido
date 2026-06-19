@@ -386,18 +386,19 @@ function OverviewPage({ data, alerts }) {
                 { pct: mktP, bg: '#B0ADB8', color: '#13121A', label: `${mktP.toFixed(1)}% Mkt` },
               ]
               return (
-                <div style={{ position: 'relative' }}>
-                  <div className="spbar">
+                <div>
+                  <div className="spbar" style={{ position: 'relative' }}>
                     {segs.map((s, i) => (
-                      <div key={i} style={{ width: `${s.pct}%`, background: s.bg, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 700, color: s.color, overflow: 'hidden', whiteSpace: 'nowrap', minWidth: s.pct > 0 ? 4 : 0 }}>
-                        {s.pct >= 8 ? s.label : ''}
+                      <div key={i} style={{ width: `${s.pct}%`, background: s.bg, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 700, color: s.color, overflow: 'visible', whiteSpace: 'nowrap', minWidth: s.pct > 0 ? 4 : 0, position: 'relative' }}>
+                        {s.pct >= 8 ? s.label : null}
+                        {s.pct > 0 && s.pct < 8 && (
+                          <span style={{ position: 'absolute', top: -20, left: '50%', transform: 'translateX(-50%)', background: s.bg, color: s.color, fontSize: 10, fontWeight: 700, padding: '1px 5px', borderRadius: 4, whiteSpace: 'nowrap', border: '1px solid rgba(0,0,0,0.1)' }}>
+                            {s.label}
+                          </span>
+                        )}
                       </div>
                     ))}
                   </div>
-                  {/* labels for narrow segments */}
-                  {segs.filter(s => s.pct > 0 && s.pct < 8).map((s, i) => (
-                    <div key={i} style={{ fontSize: 10, color: C.t3, marginTop: 3 }}>{s.label}</div>
-                  ))}
                 </div>
               )
             })()}
