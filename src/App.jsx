@@ -284,14 +284,9 @@ function Topnav({ page, alerts, onRefresh, loading, filters, setFilters, rawRows
   const critical = alerts.filter(a => a.type === 'red').length
   return (
     <div className="topnav">
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: 30, height: 30, borderRadius: 8, background: C.acc, flexShrink: 0 }}>
-          <span style={{ fontSize: 14, fontWeight: 900, color: '#13121A', letterSpacing: '-.02em' }}>F</span>
-        </div>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
-          <span style={{ fontSize: 14, fontWeight: 800, color: C.t1, letterSpacing: '-.01em', lineHeight: 1 }}>Frido</span>
-          <span style={{ fontSize: 10, color: C.t3, fontWeight: 500, lineHeight: 1, letterSpacing: '.02em', textTransform: 'uppercase' }}>Analytics</span>
-        </div>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 1, flexShrink: 0 }}>
+        <span style={{ fontSize: 15, fontWeight: 800, color: C.t1, letterSpacing: '-.01em', lineHeight: 1 }}>Frido</span>
+        <span style={{ fontSize: 10, color: C.t3, fontWeight: 500, lineHeight: 1, letterSpacing: '.02em', textTransform: 'uppercase' }}>Analytics</span>
       </div>
       <div className="tnav-sep" />
       <span className="tnav-title">{titles[page]}</span>
