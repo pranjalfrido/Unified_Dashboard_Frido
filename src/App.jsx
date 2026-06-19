@@ -1528,8 +1528,20 @@ function BlinkitTab({ data }) {
 
       {/* Row 1: Daily trend + Category breakdown */}
       <div style={{ display: 'grid', gridTemplateColumns: '3fr 2fr', gap: 14, alignItems: 'stretch' }}>
-        <Card title="Daily Revenue Trend">
-          <AreaTrendChart data={daily} color="#FFD600" />
+        <Card title="Daily Revenue & Units">
+          <ResponsiveContainer width="100%" height={220}>
+            <ComposedChart data={daily} margin={{ top: 4, right: 40, bottom: 0, left: 0 }}>
+              <defs><linearGradient id="blRevGrad" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#FFD600" stopOpacity={0.2} /><stop offset="95%" stopColor="#FFD600" stopOpacity={0} /></linearGradient></defs>
+              <CartesianGrid strokeDasharray="3 3" stroke={C.border} vertical={false} />
+              <XAxis dataKey="date" tick={{ fontSize: 10, fill: C.t3 }} tickFormatter={d => d?.slice(5)} />
+              <YAxis yAxisId="rev" tick={{ fontSize: 10, fill: C.t3 }} tickFormatter={v => `₹${(v/1000).toFixed(0)}k`} width={42} />
+              <YAxis yAxisId="units" orientation="right" tick={{ fontSize: 10, fill: '#2E74CC' }} tickFormatter={v => fmtN(v)} width={30} />
+              <Tooltip content={({ active, payload, label }) => active && payload?.length ? (<div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 8, padding: '8px 12px', fontSize: 11.5 }}><div style={{ color: C.t3, marginBottom: 4 }}>{label}</div>{payload.map(p => <div key={p.name} style={{ color: p.color, fontWeight: 600 }}>{p.name}: {p.name === 'Revenue' ? fmt(p.value) : fmtN(p.value)}</div>)}</div>) : null} />
+              <Legend wrapperStyle={{ fontSize: 11 }} />
+              <Area yAxisId="rev" type="monotone" dataKey="rev" name="Revenue" stroke="#FFD600" strokeWidth={2} fill="url(#blRevGrad)" dot={false} />
+              <Line yAxisId="units" type="monotone" dataKey="units" name="Units" stroke="#2E74CC" strokeWidth={2} dot={{ r: 3, fill: '#2E74CC' }} activeDot={{ r: 5 }} />
+            </ComposedChart>
+          </ResponsiveContainer>
         </Card>
         <Card title="Category Breakdown">
           {cats.map((c, i) => (
@@ -1638,8 +1650,20 @@ function InstaTab({ data }) {
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: '3fr 2fr', gap: 14, alignItems: 'stretch' }}>
-        <Card title="Daily Revenue Trend">
-          <AreaTrendChart data={daily} color="#FF6B35" />
+        <Card title="Daily Revenue & Units">
+          <ResponsiveContainer width="100%" height={220}>
+            <ComposedChart data={daily} margin={{ top: 4, right: 40, bottom: 0, left: 0 }}>
+              <defs><linearGradient id="inRevGrad" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#FF6B35" stopOpacity={0.2} /><stop offset="95%" stopColor="#FF6B35" stopOpacity={0} /></linearGradient></defs>
+              <CartesianGrid strokeDasharray="3 3" stroke={C.border} vertical={false} />
+              <XAxis dataKey="date" tick={{ fontSize: 10, fill: C.t3 }} tickFormatter={d => d?.slice(5)} />
+              <YAxis yAxisId="rev" tick={{ fontSize: 10, fill: C.t3 }} tickFormatter={v => `₹${(v/1000).toFixed(0)}k`} width={42} />
+              <YAxis yAxisId="units" orientation="right" tick={{ fontSize: 10, fill: '#2E74CC' }} tickFormatter={v => fmtN(v)} width={30} />
+              <Tooltip content={({ active, payload, label }) => active && payload?.length ? (<div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 8, padding: '8px 12px', fontSize: 11.5 }}><div style={{ color: C.t3, marginBottom: 4 }}>{label}</div>{payload.map(p => <div key={p.name} style={{ color: p.color, fontWeight: 600 }}>{p.name}: {p.name === 'Revenue' ? fmt(p.value) : fmtN(p.value)}</div>)}</div>) : null} />
+              <Legend wrapperStyle={{ fontSize: 11 }} />
+              <Area yAxisId="rev" type="monotone" dataKey="rev" name="Revenue" stroke="#FF6B35" strokeWidth={2} fill="url(#inRevGrad)" dot={false} />
+              <Line yAxisId="units" type="monotone" dataKey="units" name="Units" stroke="#2E74CC" strokeWidth={2} dot={{ r: 3, fill: '#2E74CC' }} activeDot={{ r: 5 }} />
+            </ComposedChart>
+          </ResponsiveContainer>
         </Card>
         <Card title="Category Breakdown">
           {cats.map((c, i) => (
@@ -1742,8 +1766,20 @@ function ZeptoTab({ data }) {
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: '3fr 2fr', gap: 14, alignItems: 'stretch' }}>
-        <Card title="Daily Revenue Trend">
-          <AreaTrendChart data={daily} color="#8B5CF6" />
+        <Card title="Daily Revenue & Orders">
+          <ResponsiveContainer width="100%" height={220}>
+            <ComposedChart data={daily} margin={{ top: 4, right: 40, bottom: 0, left: 0 }}>
+              <defs><linearGradient id="zpRevGrad" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#8B5CF6" stopOpacity={0.2} /><stop offset="95%" stopColor="#8B5CF6" stopOpacity={0} /></linearGradient></defs>
+              <CartesianGrid strokeDasharray="3 3" stroke={C.border} vertical={false} />
+              <XAxis dataKey="date" tick={{ fontSize: 10, fill: C.t3 }} tickFormatter={d => d?.slice(5)} />
+              <YAxis yAxisId="rev" tick={{ fontSize: 10, fill: C.t3 }} tickFormatter={v => `₹${(v/1000).toFixed(0)}k`} width={42} />
+              <YAxis yAxisId="units" orientation="right" tick={{ fontSize: 10, fill: '#2E74CC' }} tickFormatter={v => fmtN(v)} width={30} />
+              <Tooltip content={({ active, payload, label }) => active && payload?.length ? (<div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 8, padding: '8px 12px', fontSize: 11.5 }}><div style={{ color: C.t3, marginBottom: 4 }}>{label}</div>{payload.map(p => <div key={p.name} style={{ color: p.color, fontWeight: 600 }}>{p.name}: {p.name === 'Revenue' ? fmt(p.value) : fmtN(p.value)}</div>)}</div>) : null} />
+              <Legend wrapperStyle={{ fontSize: 11 }} />
+              <Area yAxisId="rev" type="monotone" dataKey="rev" name="Revenue" stroke="#8B5CF6" strokeWidth={2} fill="url(#zpRevGrad)" dot={false} />
+              <Line yAxisId="units" type="monotone" dataKey="units" name="Units" stroke="#2E74CC" strokeWidth={2} dot={{ r: 3, fill: '#2E74CC' }} activeDot={{ r: 5 }} />
+            </ComposedChart>
+          </ResponsiveContainer>
         </Card>
         <Card title="Category Breakdown">
           {cats.map((c, i) => (
