@@ -101,6 +101,15 @@ function DateRangePicker({ filters, setFilters }) {
     { label: 'Last Month', fn: () => { const s = new Date(today.getFullYear(), today.getMonth()-1, 1); const e = new Date(today.getFullYear(), today.getMonth(), 0); return { start: fmt0(s), end: fmt0(e) } } },
     { label: 'This Quarter', fn: () => { const q = Math.floor(today.getMonth()/3); const s = new Date(today.getFullYear(), q*3, 1); return { start: fmt0(s), end: fmt0(today) } } },
     { label: 'Last Quarter', fn: () => { const q = Math.floor(today.getMonth()/3); const s = new Date(today.getFullYear(), (q-1)*3, 1); const e = new Date(today.getFullYear(), q*3, 0); return { start: fmt0(s), end: fmt0(e) } } },
+    ...(() => {
+      // Current FY starts Apr of this year if month>=3, else Apr of last year
+      const fyStart = today.getMonth() >= 3 ? today.getFullYear() : today.getFullYear() - 1
+      return [0, 1, 2].map(offset => {
+        const fy = fyStart - offset
+        const label = offset === 0 ? 'This FY' : offset === 1 ? 'Last FY' : `FY ${fy}-${String(fy+1).slice(2)}`
+        return { label, fn: () => ({ start: fmt0(new Date(fy, 3, 1)), end: offset === 0 ? fmt0(today) : fmt0(new Date(fy+1, 2, 31)) }) }
+      })
+    })(),
   ]
 
   useEffect(() => {
