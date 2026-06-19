@@ -2528,82 +2528,118 @@ function CredTab({ data }) {
 function MyntraTab({ data }) {
   const mn = data.myntra || {}
   const totals = mn.totals || {}
+  const nDays = data.nDays || 1
+  const rev = totals.rev || 0
+  const excRev = totals.excRev || 0
+  const nOrders = totals.orders || 0
+  const qty = totals.units || 0
+  const aov = nOrders ? rev / nOrders : 0
+  const asp = qty ? excRev / qty : 0
+
   const prevRev = mn.prevRev || 0
-  const revChg = prevRev > 0 ? ((totals.rev - prevRev) / prevRev * 100) : null
+  const prevExcRev = mn.prevExcRev || 0
   const prevOrders = mn.prevOrders || 0
-  const ordChg = prevOrders > 0 ? ((totals.orders - prevOrders) / prevOrders * 100) : null
+  const revChg = prevRev > 0 ? ((rev - prevRev) / prevRev * 100) : null
+  const excChg = prevExcRev > 0 ? ((excRev - prevExcRev) / prevExcRev * 100) : null
+  const ordChg = prevOrders > 0 ? ((nOrders - prevOrders) / prevOrders * 100) : null
 
   const STATUS_LABEL = { C: 'Delivered', F: 'Fulfilled', SH: 'Shipped', RTO: 'RTO', PK: 'Packed', WP: 'WH Packed', L: 'Lost' }
+  const STATUS_COLOR = { C: C.green.bd, RTO: C.red.bd, SH: C.blue.bd, F: C.green.bd, PK: C.amber.bd, WP: C.amber.bd, L: C.red.bd }
+
   const dailyArr = mn.daily || []
-  const [metric, setMetric] = useState('rev')
   const prevDaily = mn.prevDaily || []
-  const allDates = [...new Set([...dailyArr.map(d => d.date), ...prevDaily.map(d => d.date)])].sort()
-  const prevMap = Object.fromEntries(prevDaily.map(d => [d.date, d.rev]))
-  const chartData = dailyArr.map(d => ({ date: d.date, current: metric === 'rev' ? d.rev : metric === 'units' ? d.units : d.orders }))
+  const [chartMetric, setChartMetric] = useState('exc_rev')
+
+  const sparkData = Array.from({ length: Math.max(dailyArr.length, prevDaily.length) }, (_, i) => ({
+    i, cur: dailyArr[i]?.excRev ?? null, prev: prevDaily[i]?.rev ?? null
+  }))
+
+  const chartData = dailyArr.map(d => ({
+    date: d.date,
+    current: chartMetric === 'exc_rev' ? d.excRev : chartMetric === 'rev' ? d.rev : chartMetric === 'units' ? d.units : d.orders
+  }))
 
   const catColors = ['#E87858','#0D9E68','#2E74CC','#CC4078','#FF6B35','#534AB7','#CC8A00','#8B5CF6']
-  const toggleStyle = active => ({ fontSize: 12, fontWeight: active ? 700 : 500, padding: '5px 16px', borderRadius: 7, border: `1.5px solid ${active ? C.acm : C.border2}`, background: active ? C.acc : C.card, color: C.t1, cursor: 'pointer', fontFamily: 'var(--font)' })
-
+  const maxCatRev = Math.max(...(mn.categories || []).map(c => c.rev), 1)
   const maxStateRev = Math.max(...(mn.states || []).map(s => s.rev), 1)
+  const statusTotal = (mn.status || []).reduce((s, x) => s + x.orders, 0)
+
+  const toggleBtn = (active) => ({ fontSize: 11, fontWeight: 600, padding: '3px 10px', borderRadius: 5, border: `1.5px solid ${active ? C.t1 : C.border}`, background: active ? C.t1 : 'transparent', color: active ? '#fff' : C.t2, cursor: 'pointer', fontFamily: 'var(--font)' })
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-      {/* KPI row */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6,1fr)', gap: 10 }}>
-        <KPICard label="Revenue" value={fmt(totals.rev)} sub={revChg != null ? `${revChg >= 0 ? '▲' : '▼'} ${Math.abs(revChg).toFixed(1)}% vs prev` : 'vs prev period'} accent={revChg != null ? (revChg >= 0 ? C.green.tx : C.red.tx) : undefined} />
-        <KPICard label="Orders" value={fmtN(totals.orders)} sub={ordChg != null ? `${ordChg >= 0 ? '▲' : '▼'} ${Math.abs(ordChg).toFixed(1)}% vs prev` : 'vs prev period'} accent={ordChg != null ? (ordChg >= 0 ? C.green.tx : C.red.tx) : undefined} />
-        <KPICard label="Units Sold" value={fmtN(totals.units)} sub="Total qty" />
-        <KPICard label="AOV" value={totals.orders ? `₹${Math.round(totals.rev / totals.orders).toLocaleString('en-IN')}` : '—'} sub="Avg order value" />
-        <KPICard label="SKUs" value={fmtN(totals.skus)} sub="Unique SKUs" />
-        <KPICard label="Cities" value={fmtN(totals.cities)} sub="Cities covered" />
+
+      {/* KPI Row 1 — Hero */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1.4fr 1.2fr 1fr 1fr 1fr 1fr', gap: 10 }}>
+        <HeroKPICard label="Gross Revenue (Inc. GST)" value={fmt(rev)} sub={`${nDays} days`} chg={revChg} sparkData={sparkData} color="#E87858" gradId="mnGrossGrad" />
+        <HeroKPICard label="Net Revenue (Exc. GST)" value={fmt(excRev)} sub={`GST: ${fmt(rev - excRev)}`} chg={excChg} sparkData={sparkData} color="#9B56B6" gradId="mnNetGrad" />
+        <KPICard label="Orders" value={fmtN(nOrders)} sub={ordChg != null ? `${ordChg >= 0 ? '▲' : '▼'} ${Math.abs(ordChg).toFixed(1)}% vs prev` : '—'} accent={ordChg != null ? (ordChg >= 0 ? C.green.tx : C.red.tx) : undefined} />
+        <KPICard label="Daily Avg Revenue" value={fmt(excRev / nDays)} sub="Net per day" />
+        <KPICard label="AOV" value={`₹${Math.round(aov).toLocaleString('en-IN')}`} sub="Avg order value" />
+        <KPICard label="Units Sold" value={fmtN(qty)} sub={`ASP ₹${Math.round(asp).toLocaleString('en-IN')}`} />
       </div>
 
-      {/* Daily trend */}
-      <Card title="Daily Trend">
-        <div style={{ display: 'flex', gap: 8, marginBottom: 10 }}>
-          {[['rev','Revenue'],['units','Units'],['orders','Orders']].map(([k,l]) => (
-            <button key={k} onClick={() => setMetric(k)} style={toggleStyle(metric === k)}>{l}</button>
-          ))}
-        </div>
-        <ResponsiveContainer width="100%" height={220}>
-          <AreaChart data={chartData} margin={{ top: 4, right: 10, left: 0, bottom: 0 }}>
-            <defs><linearGradient id="mnGrad" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#E87858" stopOpacity={0.18}/><stop offset="95%" stopColor="#E87858" stopOpacity={0}/></linearGradient></defs>
-            <CartesianGrid strokeDasharray="3 3" stroke={C.border} />
-            <XAxis dataKey="date" tick={{ fontSize: 11, fill: C.t3 }} tickFormatter={d => d?.slice(5)} />
-            <YAxis tick={{ fontSize: 11, fill: C.t3 }} tickFormatter={metric === 'rev' ? v => fmt(v) : v => fmtN(v)} width={70} />
-            <ChartTooltip formatter={metric !== 'rev' ? fmtN : undefined} />
-            <Area type="monotone" dataKey="current" name={metric === 'rev' ? 'Revenue' : metric === 'units' ? 'Units' : 'Orders'} stroke="#E87858" fill="url(#mnGrad)" strokeWidth={2} dot={false} />
-          </AreaChart>
-        </ResponsiveContainer>
-      </Card>
+      {/* KPI Row 2 */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6,1fr)', gap: 10 }}>
+        <KPICard label="GST Collected" value={fmt(rev - excRev)} sub="Inc GST − Exc GST" />
+        <KPICard label="Unique SKUs" value={fmtN(totals.skus)} sub="Active SKUs" />
+        <KPICard label="Cities" value={fmtN(totals.cities)} sub="Cities covered" />
+        <KPICard label="Units per Order" value={nOrders ? (qty / nOrders).toFixed(2) : '0'} sub="Avg basket size" />
+        <KPICard label="Net per Unit" value={`₹${Math.round(asp).toLocaleString('en-IN')}`} sub="Exc. GST per unit" />
+        <KPICard label="Active Days" value={fmtN(totals.days)} sub="Days with orders" />
+      </div>
 
-      <div className="g-2">
-        {/* Order Status */}
+      {/* Daily chart + Order Status */}
+      <div style={{ display: 'grid', gridTemplateColumns: '3fr 2fr', gap: 14, alignItems: 'stretch' }}>
+        <Card title="Daily Trend"
+          action={<div style={{ display: 'flex', gap: 4 }}>
+            {[{ v: 'exc_rev', label: 'Net Rev' }, { v: 'rev', label: 'Gross Rev' }, { v: 'units', label: 'Units' }, { v: 'orders', label: 'Orders' }].map(opt => (
+              <button key={opt.v} onClick={() => setChartMetric(opt.v)} style={toggleBtn(chartMetric === opt.v)}>{opt.label}</button>
+            ))}
+          </div>}>
+          <ResponsiveContainer width="100%" height={200}>
+            <AreaChart data={chartData} margin={{ top: 4, right: 10, left: 0, bottom: 0 }}>
+              <defs>
+                <linearGradient id="mnTrendGrad" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="5%" stopColor="#E87858" stopOpacity={0.2}/>
+                  <stop offset="95%" stopColor="#E87858" stopOpacity={0}/>
+                </linearGradient>
+              </defs>
+              <CartesianGrid strokeDasharray="3 3" stroke={C.border} vertical={false} />
+              <XAxis dataKey="date" tick={{ fontSize: 10, fill: C.t3 }} tickFormatter={d => d?.slice(5)} />
+              <YAxis tick={{ fontSize: 10, fill: C.t3 }} tickFormatter={v => chartMetric === 'orders' || chartMetric === 'units' ? fmtN(v) : fmt(v)} width={60} />
+              <Tooltip content={<ChartTooltip formatter={chartMetric === 'orders' || chartMetric === 'units' ? fmtN : undefined} />} />
+              <Area type="monotone" dataKey="current" name={chartMetric === 'exc_rev' ? 'Net Revenue' : chartMetric === 'rev' ? 'Gross Revenue' : chartMetric === 'units' ? 'Units' : 'Orders'} stroke="#E87858" fill="url(#mnTrendGrad)" strokeWidth={2} dot={false} />
+            </AreaChart>
+          </ResponsiveContainer>
+        </Card>
+
         <Card title="Order Status">
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
             {(mn.status || []).map((s, i) => {
-              const total = (mn.status || []).reduce((acc, x) => acc + x.orders, 0)
-              const pct = total ? (s.orders / total * 100).toFixed(1) : 0
+              const pct = statusTotal ? (s.orders / statusTotal * 100) : 0
               return (
-                <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <span style={{ minWidth: 90, fontSize: 12, color: C.t2 }}>{STATUS_LABEL[s.status] || s.status}</span>
-                  <div style={{ flex: 1, height: 8, background: C.bg, borderRadius: 4, overflow: 'hidden' }}>
-                    <div style={{ width: `${pct}%`, height: '100%', background: s.status === 'RTO' ? C.red.bd : s.status === 'C' ? C.green.bd : C.acm, borderRadius: 4 }} />
+                <div key={i}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 3 }}>
+                    <span style={{ fontSize: 12, color: C.t2 }}>{STATUS_LABEL[s.status] || s.status}</span>
+                    <span style={{ fontSize: 12, fontWeight: 600, color: C.t1 }}>{fmtN(s.orders)} <span style={{ color: C.t3, fontWeight: 400 }}>({pct.toFixed(1)}%)</span></span>
                   </div>
-                  <span style={{ fontSize: 12, fontWeight: 600, color: C.t1, minWidth: 36, textAlign: 'right' }}>{fmtN(s.orders)}</span>
-                  <span style={{ fontSize: 11, color: C.t3, minWidth: 38, textAlign: 'right' }}>{pct}%</span>
+                  <div style={{ height: 6, background: C.bg, borderRadius: 3, overflow: 'hidden' }}>
+                    <div style={{ width: `${pct}%`, height: '100%', background: STATUS_COLOR[s.status] || C.acm, borderRadius: 3 }} />
+                  </div>
                 </div>
               )
             })}
           </div>
         </Card>
+      </div>
 
-        {/* Categories */}
-        <Card title="Categories">
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+      {/* Categories + SKUs */}
+      <div className="g-2" style={{ alignItems: 'stretch' }}>
+        <Card title="Revenue by Category">
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
             {(mn.categories || []).map((c, i) => {
-              const maxRev = Math.max(...(mn.categories || []).map(x => x.rev), 1)
-              const pct = (c.rev / maxRev * 100).toFixed(1)
+              const pct = (c.rev / maxCatRev * 100).toFixed(1)
               return (
                 <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                   <span style={{ minWidth: 130, fontSize: 12, color: C.t2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{c.category}</span>
@@ -2611,6 +2647,25 @@ function MyntraTab({ data }) {
                     <div style={{ width: `${pct}%`, height: '100%', background: catColors[i % catColors.length], borderRadius: 4 }} />
                   </div>
                   <span style={{ fontSize: 12, fontWeight: 600, color: C.t1, minWidth: 60, textAlign: 'right' }}>{fmt(c.rev)}</span>
+                  <span style={{ fontSize: 11, color: C.t3, minWidth: 30, textAlign: 'right' }}>{fmtN(c.orders)}</span>
+                </div>
+              )
+            })}
+          </div>
+        </Card>
+
+        <Card title="Top States">
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+            {(mn.states || []).slice(0, 15).map((s, i) => {
+              const pct = (s.rev / maxStateRev * 100).toFixed(1)
+              return (
+                <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <span style={{ minWidth: 120, fontSize: 12, color: C.t2 }}>{s.state ? s.state.charAt(0) + s.state.slice(1).toLowerCase() : '—'}</span>
+                  <div style={{ flex: 1, height: 7, background: C.bg, borderRadius: 4, overflow: 'hidden' }}>
+                    <div style={{ width: `${pct}%`, height: '100%', background: '#E87858', borderRadius: 4 }} />
+                  </div>
+                  <span style={{ fontSize: 12, fontWeight: 600, minWidth: 55, textAlign: 'right' }}>{fmt(s.rev)}</span>
+                  <span style={{ fontSize: 11, color: C.t3, minWidth: 36, textAlign: 'right' }}>{fmtN(s.orders)}</span>
                 </div>
               )
             })}
@@ -2624,38 +2679,20 @@ function MyntraTab({ data }) {
         { key: 'category', label: 'Category' },
         { key: 'orders', label: 'Orders', align: 'right', render: v => fmtN(v) },
         { key: 'units', label: 'Units', align: 'right', render: v => fmtN(v) },
-        { key: 'rev', label: 'Revenue', align: 'right', mono: true, render: v => fmt(v) },
+        { key: 'rev', label: 'Gross Rev', align: 'right', mono: true, render: v => fmt(v) },
+        { key: 'excRev', label: 'Net Rev', align: 'right', mono: true, render: v => fmt(v) },
         { key: 'aov', label: 'AOV', align: 'right', render: (_, r) => `₹${r.orders ? Math.round(r.rev / r.orders).toLocaleString('en-IN') : 0}` },
       ]} pageSize={15} />
 
-      {/* States + Cities */}
-      <div className="g-2" style={{ alignItems: 'stretch' }}>
-        <Card title="Top States">
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
-            {(mn.states || []).slice(0, 15).map((s, i) => {
-              const pct = (s.rev / maxStateRev * 100).toFixed(1)
-              return (
-                <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <span style={{ minWidth: 120, fontSize: 12, color: C.t2 }}>{s.state ? s.state.charAt(0) + s.state.slice(1).toLowerCase() : '—'}</span>
-                  <div style={{ flex: 1, height: 7, background: C.bg, borderRadius: 4, overflow: 'hidden' }}>
-                    <div style={{ width: `${pct}%`, height: '100%', background: '#E87858', borderRadius: 4 }} />
-                  </div>
-                  <span style={{ fontSize: 12, fontWeight: 600, minWidth: 60, textAlign: 'right' }}>{fmt(s.rev)}</span>
-                  <span style={{ fontSize: 11, color: C.t3, minWidth: 40, textAlign: 'right' }}>{fmtN(s.orders)} orders</span>
-                </div>
-              )
-            })}
-          </div>
-        </Card>
-        <PaginatedCard title="Top Cities" rows={mn.cities || []} columns={[
-          { key: 'city', label: 'City' },
-          { key: 'region', label: 'Region', render: v => v || '—' },
-          { key: 'cityTier', label: 'Tier', render: v => v ? `Tier ${v}` : '—' },
-          { key: 'orders', label: 'Orders', align: 'right', render: v => fmtN(v) },
-          { key: 'rev', label: 'Revenue', align: 'right', mono: true, render: v => fmt(v) },
-          { key: 'aov', label: 'AOV', align: 'right', render: (_, r) => `₹${r.orders ? Math.round(r.rev / r.orders).toLocaleString('en-IN') : 0}` },
-        ]} pageSize={15} />
-      </div>
+      {/* Cities */}
+      <PaginatedCard title="Top Cities" rows={mn.cities || []} columns={[
+        { key: 'city', label: 'City' },
+        { key: 'region', label: 'Region', render: v => v || '—' },
+        { key: 'cityTier', label: 'Tier', render: v => v ? `Tier ${v}` : '—' },
+        { key: 'orders', label: 'Orders', align: 'right', render: v => fmtN(v) },
+        { key: 'rev', label: 'Gross Rev', align: 'right', mono: true, render: v => fmt(v) },
+        { key: 'aov', label: 'AOV', align: 'right', render: (_, r) => `₹${r.orders ? Math.round(r.rev / r.orders).toLocaleString('en-IN') : 0}` },
+      ]} pageSize={15} />
     </div>
   )
 }
