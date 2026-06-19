@@ -417,9 +417,13 @@ function OverviewPage({ data, alerts }) {
               { name: 'New', value: newCusts, color: C.acc },
               { name: 'Repeat', value: repeatCusts, color: '#0D9E68' },
             ]
-            const totalOrders = dailyArr.map(d => ({ date: d.date, orders: Object.entries(d).filter(([k]) => k !== 'date').reduce((s, [, v]) => s + (v || 0), 0) }))
+            const totalOrders = dailyArr.map(d => ({ date: d.date, orders: Object.entries(d).filter(([k]) => k !== 'date' && !k.endsWith('_o')).reduce((s, [, v]) => s + (v || 0), 0) }))
+            const newPct = nCusts ? newCusts / nCusts * 100 : 0
+            const repPct = nCusts ? repeatCusts / nCusts * 100 : 0
+            const avgOrdersPerDay = totalOrders.length ? (totalOrders.reduce((s, d) => s + d.orders, 0) / totalOrders.length).toFixed(0) : 0
+            const peakDay = totalOrders.reduce((a, b) => b.orders > a.orders ? b : a, { orders: 0, date: '' })
             return (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
                 {/* Top: donut + stats */}
                 <div style={{ display: 'flex', alignItems: 'center', gap: 32 }}>
                   <div style={{ position: 'relative', flexShrink: 0 }}>
@@ -433,20 +437,47 @@ function OverviewPage({ data, alerts }) {
                       <div style={{ fontSize: 8.5, color: C.t3, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.04em', marginTop: 2 }}>Total</div>
                     </div>
                   </div>
-                  <div style={{ display: 'flex', gap: 28 }}>
-                    {donutData.map(d => (
-                      <div key={d.name}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
-                          <span style={{ width: 8, height: 8, borderRadius: '50%', background: d.color, flexShrink: 0 }} />
-                          <span style={{ fontSize: 11, color: C.t3 }}>{d.name}</span>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ display: 'flex', gap: 28, marginBottom: 12 }}>
+                      {donutData.map(d => (
+                        <div key={d.name}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+                            <span style={{ width: 8, height: 8, borderRadius: '50%', background: d.color, flexShrink: 0 }} />
+                            <span style={{ fontSize: 11, color: C.t3 }}>{d.name}</span>
+                          </div>
+                          <div style={{ fontSize: 24, fontWeight: 700, color: C.t1, letterSpacing: '-.02em', lineHeight: 1 }}>{fmtN(d.value)}</div>
+                          <div style={{ fontSize: 11, color: C.t3, marginTop: 3 }}>{nCusts ? (d.value / nCusts * 100).toFixed(1) : 0}% of total</div>
                         </div>
-                        <div style={{ fontSize: 24, fontWeight: 700, color: C.t1, letterSpacing: '-.02em', lineHeight: 1 }}>{fmtN(d.value)}</div>
-                        <div style={{ fontSize: 11, color: C.t3, marginTop: 3 }}>{nCusts ? (d.value / nCusts * 100).toFixed(1) : 0}% of total</div>
-                      </div>
-                    ))}
+                      ))}
+                    </div>
+                    {/* New vs Repeat split bar */}
+                    <div style={{ height: 6, borderRadius: 4, overflow: 'hidden', display: 'flex', background: C.border }}>
+                      <div style={{ width: `${newPct}%`, background: C.acc, transition: 'width .5s' }} />
+                      <div style={{ width: `${repPct}%`, background: '#0D9E68', transition: 'width .5s' }} />
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 4 }}>
+                      <span style={{ fontSize: 10, color: C.t3 }}>New {newPct.toFixed(1)}%</span>
+                      <span style={{ fontSize: 10, color: C.t3 }}>Repeat {repPct.toFixed(1)}%</span>
+                    </div>
                   </div>
                 </div>
-                {/* Bottom: daily orders trend line */}
+
+                {/* Mini stat row */}
+                <div style={{ display: 'flex', gap: 0, borderTop: `1px solid ${C.border}`, borderBottom: `1px solid ${C.border}`, padding: '10px 0' }}>
+                  {[
+                    { label: 'Avg Orders/Day', value: fmtN(avgOrdersPerDay) },
+                    { label: 'Peak Day', value: peakDay.date ? peakDay.date.slice(5) : '—' },
+                    { label: 'Peak Orders', value: fmtN(peakDay.orders) },
+                    { label: 'Repeat Rate', value: repPct.toFixed(1) + '%' },
+                  ].map((s, i, arr) => (
+                    <div key={s.label} style={{ flex: 1, textAlign: 'center', borderRight: i < arr.length - 1 ? `1px solid ${C.border}` : 'none' }}>
+                      <div style={{ fontSize: 13, fontWeight: 700, color: C.t1 }}>{s.value}</div>
+                      <div style={{ fontSize: 10, color: C.t3, marginTop: 2 }}>{s.label}</div>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Daily orders trend */}
                 <div>
                   <div style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.05em', color: C.t3, marginBottom: 6 }}>Daily Orders Trend</div>
                   <ResponsiveContainer width="100%" height={90}>
