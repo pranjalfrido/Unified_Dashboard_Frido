@@ -1911,7 +1911,6 @@ function BlinkitTab({ data }) {
           <DataTable
             columns={[
               { key: 'name', label: 'Product', render: v => <span style={{ fontSize: 11, display: 'block', wordBreak: 'break-word' }}>{v}</span> },
-              { key: 'mrp', label: 'MRP', align: 'right', render: v => `₹${Math.round(v).toLocaleString('en-IN')}` },
               { key: 'units', label: 'Units', align: 'right', render: v => fmtN(v) },
               { key: 'rev', label: 'Revenue', align: 'right', mono: true, render: v => fmt(v) },
               { key: 'cities', label: 'Cities', align: 'right', render: v => fmtN(v) },
