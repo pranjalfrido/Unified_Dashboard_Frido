@@ -1071,7 +1071,7 @@ function AllTab({ data }) {
           { label: 'Return %', value: `${returnPct.toFixed(1)}%`, sub: `${fmtN(rtoOrders)} RTO orders`, accent: returnPct > 10 ? '#7A1A1A' : undefined },
           { label: 'Blended AOV', value: `₹${Math.round(blendedAOV).toLocaleString('en-IN')}`, sub: `${fmtN(nOrders)} orders` },
           { label: 'Daily Avg', value: fmt(totalRev / nDays), sub: `over ${nDays} days` },
-          { label: 'Units Sold', value: fmtN(totalQty), sub: `${nOrders ? (totalQty / nOrders).toFixed(1) : 0} per order` },
+          { label: 'Repeat Rate', value: `${nCusts ? (repeatCusts / nCusts * 100).toFixed(1) : 0}%`, sub: `${fmtN(repeatCusts)} of ${fmtN(nCusts)} custs` },
         ].map(k => (
           <div key={k.label} className="kpi-card" style={{ padding: '8px 11px' }}>
             <div className="kpi-label">{k.label}</div>
@@ -2628,7 +2628,7 @@ function SalesPage({ data, filters, setFilters, activeTab, setActiveTab, fetchDa
       {/* Tab bar */}
       <div className="sales-tabs">
         {TABS.map(tab => (
-          <button key={tab.id} onClick={() => { setActiveTab(tab.id); if (tab.id !== 'shopify') setFilters(f => ({ ...f, voucher: '' })) }} className={`stab${activeTab === tab.id ? ' active' : ''}`}>
+          <button key={tab.id} onClick={() => { setActiveTab(tab.id); if (tab.id !== 'shopify') setFilters(f => ({ ...f, voucher: '' })) }} className={`stab${activeTab === tab.id ? ' active' : ''}`} style={tab.id === 'all' ? { fontWeight: activeTab === 'all' ? 800 : 700, fontSize: 13 } : {}}>
             {tab.logo && <img src={tab.logo} alt="" style={{ width: 14, height: 14, borderRadius: 3, flexShrink: 0, objectFit: 'contain', filter: tab.id === 'cred' ? 'invert(1)' : 'none' }} />}
             {tab.label}
           </button>
