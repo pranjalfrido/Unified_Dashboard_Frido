@@ -1852,15 +1852,18 @@ function CredTab({ data }) {
         <Card title="Daily Revenue Trend">
           <AreaTrendChart data={daily} color="#E11D48" />
         </Card>
-        <Card title="Order Status">
-          {statusRows.map((s, i) => (
-            <div key={s.status} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '5px 0', borderBottom: `1px solid ${C.border}` }}>
+        <Card title="Top States">
+          {(() => { const maxRev = Math.max(...stateRows.map(s => s.rev), 1); return stateRows.slice(0, 8).map((s, i) => (
+            <div key={s.state} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '5px 0', borderBottom: `1px solid ${C.border}` }}>
               <span style={{ width: 8, height: 8, borderRadius: '50%', background: catColors[i % catColors.length], flexShrink: 0 }} />
-              <span style={{ fontSize: 11.5, color: C.t2, flex: 1 }}>{s.status}</span>
-              <span style={{ fontSize: 11.5, fontWeight: 600, color: C.t1, minWidth: 50, textAlign: 'right' }}>{fmtN(s.orders)}</span>
-              <span style={{ fontSize: 11, color: C.t3, minWidth: 70, textAlign: 'right', fontFamily: 'var(--mono)' }}>{fmt(s.rev)}</span>
+              <span style={{ fontSize: 11.5, color: C.t2, flex: 1 }}>{s.state}</span>
+              <div style={{ width: 70, height: 5, background: C.bg, borderRadius: 3, flexShrink: 0 }}>
+                <div style={{ height: '100%', borderRadius: 3, background: catColors[i % catColors.length], width: `${(s.rev / maxRev) * 100}%` }} />
+              </div>
+              <span style={{ fontSize: 11.5, fontWeight: 600, color: C.t1, minWidth: 40, textAlign: 'right' }}>{fmtN(s.orders)}</span>
+              <span style={{ fontSize: 11, color: C.t3, minWidth: 65, textAlign: 'right', fontFamily: 'var(--mono)' }}>{fmt(s.rev)}</span>
             </div>
-          ))}
+          ))})()}
         </Card>
       </div>
 
