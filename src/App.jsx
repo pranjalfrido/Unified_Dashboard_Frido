@@ -2864,7 +2864,7 @@ export default function App() {
     <div className="app-shell">
       <Sidebar page={page} setPage={setPage} />
       <div className="app-main">
-        <Topnav page={page} alerts={alerts} onRefresh={() => { const { start, end, category, state, orderStatus } = filters; const e = {}; if (category) e.category = category; if (state) e.state = state; if (orderStatus) e.orderStatus = orderStatus; fetchData(start, end, e) }} loading={loading} filters={filters} setFilters={setFilters} rawRows={rawRows} />
+        <Topnav page={page} alerts={alerts} onRefresh={() => { const { start, end, category, subCategory, sku, subChannel, voucher } = filters; const e = {}; if (category?.length) e.category = category.join(','); if (subCategory?.length) e.subCategory = subCategory.join(','); if (sku) e.sku = sku; if (subChannel) e.subChannel = subChannel; if (voucher) e.voucher = voucher; fetchData(start, end, e) }} loading={loading} filters={filters} setFilters={setFilters} rawRows={rawRows} />
         {loading && (
           <div style={{ height: 2, background: C.border, flexShrink: 0 }}>
             <div className="progress-bar" style={{ height: '100%', background: C.acc }} />
