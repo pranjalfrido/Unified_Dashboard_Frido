@@ -152,14 +152,6 @@ export function detectAlerts(data) {
     const blExc = blRows.reduce((s, r) => s + parseFloat(r.SellingPrice_Exc_GST || 0), 0)
     if (blExc > 0 && (blInc - blExc) / blExc * 100 > 50) alerts.push({ type: 'red', title: 'Blinkit GST pipeline broken', body: `Implied GST = ${((blInc - blExc) / blExc * 100).toFixed(0)}%.` })
   }
-  const credByDay = {}
-  orders.filter(o => o.channel === 'CRED').forEach(o => { credByDay[o.date] = (credByDay[o.date] || 0) + o.rev })
-  const credRevs = Object.values(credByDay)
-  if (credRevs.length >= 3) {
-    const mean = credRevs.reduce((a, b) => a + b, 0) / credRevs.length
-    const gaps = Object.entries(credByDay).filter(([, v]) => v < mean * 0.2)
-    if (gaps.length) alerts.push({ type: 'red', title: `CRED feed gap: ${gaps.map(([d]) => d).join(', ')}`, body: `Revenue on gap days vs mean ${fmt(mean)}/day.` })
-  }
   const shopO = orders.filter(o => o.channel === 'Shopify')
   const cirRate = shopO.length ? shopO.filter(o => o.isCIR).length / shopO.length * 100 : 0
   if (cirRate > 10) alerts.push({ type: 'amber', title: `CIR returns ${cirRate.toFixed(1)}% (Shopify)`, body: 'Review sizing and product quality.' })
