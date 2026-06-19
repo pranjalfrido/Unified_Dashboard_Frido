@@ -403,8 +403,7 @@ function OverviewPage({ data, alerts }) {
             { key: 'rev', label: 'Revenue', align: 'right', mono: true, render: v => fmt(v) },
             { key: 'orders', label: 'Orders', align: 'right', render: v => fmtN(v) },
             { key: 'aov', label: 'AOV', align: 'right', mono: true, render: v => `₹${Math.round(v).toLocaleString('en-IN')}` },
-            { key: 'health', label: 'Health', render: v => <Badge type={v === 'Healthy' ? 'green' : v === 'GST flag' ? 'amber' : 'red'}>{v}</Badge> },
-          ]} rows={Object.keys(C.ch).map(ch => { const v = chMap[ch] || { rev: 0, orders: 0 }; return { ch, rev: v.rev, orders: v.orders, aov: v.orders ? v.rev / v.orders : 0, health: ch === 'Blinkit' ? 'GST flag' : ch === 'CRED' ? 'Feed gap' : 'Healthy' } })} />
+          ]} rows={Object.keys(C.ch).map(ch => { const v = chMap[ch] || { rev: 0, orders: 0 }; return { ch, rev: v.rev, orders: v.orders, aov: v.orders ? v.rev / v.orders : 0 } })} />
         </Card>
         <Card title="Top performers">
           <div style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.07em', color: C.t3, marginBottom: 7 }}>Categories</div>
