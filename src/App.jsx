@@ -305,7 +305,6 @@ function Topnav({ page, alerts, onRefresh, loading, filters, setFilters, rawRows
         <button onClick={onRefresh} className="tnav-btn">
           <span style={{ display: 'inline-block', animation: loading ? 'spin 1s linear infinite' : 'none', fontSize: 14 }}>↻</span> Refresh
         </button>
-        <button onClick={() => exportCSV(rawRows)} className="tnav-btn tnav-btn-primary" style={{ color: '#13121A' }}>↓ Export</button>
       </div>
     </div>
   )
