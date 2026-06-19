@@ -174,7 +174,7 @@ function DateRangePicker({ filters, setFilters }) {
               }}
               onMouseEnter={() => selecting === 'end' && setHover(ds)}
               onMouseLeave={() => setHover(null)}
-              style={{ textAlign: 'center', padding: '5px 2px', borderRadius: 6, fontSize: 12, cursor: 'pointer', fontWeight: sel ? 700 : isToday ? 600 : 400, background: sel ? C.acc : inR ? '#FFF9CC' : 'transparent', color: sel ? '#13121A' : isToday ? C.acc : C.t1, border: isToday && !sel ? `1px solid ${C.acc}` : '1px solid transparent' }}>
+              style={{ textAlign: 'center', padding: '4px 1px', borderRadius: 5, fontSize: 12, cursor: 'pointer', fontWeight: sel ? 700 : isToday ? 600 : 400, background: sel ? C.acc : inR ? '#FFF9CC' : 'transparent', color: sel ? '#13121A' : isToday ? C.acc : C.t1, border: isToday && !sel ? `1px solid ${C.acc}` : '1px solid transparent' }}>
                 {day.getDate()}
               </div>
             )
@@ -195,10 +195,10 @@ function DateRangePicker({ filters, setFilters }) {
       {open && (
         <div style={{ position: 'fixed', top: dropPos.top, right: dropPos.right, zIndex: 9999, background: C.card, border: `1px solid ${C.border2}`, borderRadius: 12, boxShadow: '0 8px 32px rgba(0,0,0,.15)', display: 'flex', minWidth: 680 }}>
           {/* Preset list */}
-          <div style={{ width: 160, borderRight: `1px solid ${C.border}`, padding: '12px 0', flexShrink: 0 }}>
+          <div style={{ width: 140, borderRight: `1px solid ${C.border}`, padding: '8px 0', flexShrink: 0 }}>
             {PRESETS.map(p => (
               <div key={p.label} onClick={() => { const r = p.fn(); setDraft(r); apply(r.start, r.end) }}
-                style={{ padding: '7px 16px', fontSize: 12.5, color: C.t2, cursor: 'pointer', whiteSpace: 'nowrap' }}
+                style={{ padding: '5px 14px', fontSize: 12, color: C.t2, cursor: 'pointer', whiteSpace: 'nowrap' }}
                 onMouseEnter={e => e.currentTarget.style.background = C.bg}
                 onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
                 {p.label}
@@ -206,7 +206,7 @@ function DateRangePicker({ filters, setFilters }) {
             ))}
           </div>
           {/* Calendar */}
-          <div style={{ flex: 1, padding: 16, display: 'flex', flexDirection: 'column', gap: 12 }}>
+          <div style={{ flex: 1, padding: '12px 14px', display: 'flex', flexDirection: 'column', gap: 10 }}>
             {/* Selected range display */}
             <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
               <div style={{ flex: 1, padding: '6px 10px', border: `1.5px solid ${selecting === 'start' ? C.acc : C.border}`, borderRadius: 7, fontSize: 12, color: draft.start ? C.t1 : C.t3 }}>{draft.start ? fmtDisplay(draft.start) : 'Start date'}</div>
@@ -268,7 +268,7 @@ function DateRangePicker({ filters, setFilters }) {
               </>
             )}
             {/* Footer */}
-            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, paddingTop: 8, borderTop: `1px solid ${C.border}` }}>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, paddingTop: 6, borderTop: `1px solid ${C.border}`, marginTop: 'auto' }}>
               <button onClick={() => setOpen(false)} style={{ padding: '6px 16px', borderRadius: 7, border: `1px solid ${C.border2}`, background: 'transparent', color: C.t2, cursor: 'pointer', fontSize: 12, fontFamily: 'var(--font)' }}>Cancel</button>
               <button onClick={() => apply()} disabled={!draft.start || !draft.end} style={{ padding: '6px 16px', borderRadius: 7, border: 'none', background: draft.start && draft.end ? C.acc : C.border, color: '#13121A', cursor: draft.start && draft.end ? 'pointer' : 'default', fontSize: 12, fontWeight: 600, fontFamily: 'var(--font)' }}>Apply</button>
             </div>
