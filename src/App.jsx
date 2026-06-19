@@ -2525,6 +2525,141 @@ function CredTab({ data }) {
   )
 }
 
+function MyntraTab({ data }) {
+  const mn = data.myntra || {}
+  const totals = mn.totals || {}
+  const prevRev = mn.prevRev || 0
+  const revChg = prevRev > 0 ? ((totals.rev - prevRev) / prevRev * 100) : null
+  const prevOrders = mn.prevOrders || 0
+  const ordChg = prevOrders > 0 ? ((totals.orders - prevOrders) / prevOrders * 100) : null
+
+  const STATUS_LABEL = { C: 'Delivered', F: 'Fulfilled', SH: 'Shipped', RTO: 'RTO', PK: 'Packed', WP: 'WH Packed', L: 'Lost' }
+  const dailyArr = mn.daily || []
+  const [metric, setMetric] = useState('rev')
+  const prevDaily = mn.prevDaily || []
+  const allDates = [...new Set([...dailyArr.map(d => d.date), ...prevDaily.map(d => d.date)])].sort()
+  const prevMap = Object.fromEntries(prevDaily.map(d => [d.date, d.rev]))
+  const chartData = dailyArr.map(d => ({ date: d.date, current: metric === 'rev' ? d.rev : metric === 'units' ? d.units : d.orders }))
+
+  const catColors = ['#E87858','#0D9E68','#2E74CC','#CC4078','#FF6B35','#534AB7','#CC8A00','#8B5CF6']
+  const toggleStyle = active => ({ fontSize: 12, fontWeight: active ? 700 : 500, padding: '5px 16px', borderRadius: 7, border: `1.5px solid ${active ? C.acm : C.border2}`, background: active ? C.acc : C.card, color: C.t1, cursor: 'pointer', fontFamily: 'var(--font)' })
+
+  const maxStateRev = Math.max(...(mn.states || []).map(s => s.rev), 1)
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+      {/* KPI row */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6,1fr)', gap: 10 }}>
+        <KPICard label="Revenue" value={fmt(totals.rev)} sub={revChg != null ? `${revChg >= 0 ? '▲' : '▼'} ${Math.abs(revChg).toFixed(1)}% vs prev` : 'vs prev period'} accent={revChg != null ? (revChg >= 0 ? C.green.tx : C.red.tx) : undefined} />
+        <KPICard label="Orders" value={fmtN(totals.orders)} sub={ordChg != null ? `${ordChg >= 0 ? '▲' : '▼'} ${Math.abs(ordChg).toFixed(1)}% vs prev` : 'vs prev period'} accent={ordChg != null ? (ordChg >= 0 ? C.green.tx : C.red.tx) : undefined} />
+        <KPICard label="Units Sold" value={fmtN(totals.units)} sub="Total qty" />
+        <KPICard label="AOV" value={totals.orders ? `₹${Math.round(totals.rev / totals.orders).toLocaleString('en-IN')}` : '—'} sub="Avg order value" />
+        <KPICard label="SKUs" value={fmtN(totals.skus)} sub="Unique SKUs" />
+        <KPICard label="Cities" value={fmtN(totals.cities)} sub="Cities covered" />
+      </div>
+
+      {/* Daily trend */}
+      <Card title="Daily Trend">
+        <div style={{ display: 'flex', gap: 8, marginBottom: 10 }}>
+          {[['rev','Revenue'],['units','Units'],['orders','Orders']].map(([k,l]) => (
+            <button key={k} onClick={() => setMetric(k)} style={toggleStyle(metric === k)}>{l}</button>
+          ))}
+        </div>
+        <ResponsiveContainer width="100%" height={220}>
+          <AreaChart data={chartData} margin={{ top: 4, right: 10, left: 0, bottom: 0 }}>
+            <defs><linearGradient id="mnGrad" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#E87858" stopOpacity={0.18}/><stop offset="95%" stopColor="#E87858" stopOpacity={0}/></linearGradient></defs>
+            <CartesianGrid strokeDasharray="3 3" stroke={C.border} />
+            <XAxis dataKey="date" tick={{ fontSize: 11, fill: C.t3 }} tickFormatter={d => d?.slice(5)} />
+            <YAxis tick={{ fontSize: 11, fill: C.t3 }} tickFormatter={metric === 'rev' ? v => fmt(v) : v => fmtN(v)} width={70} />
+            <ChartTooltip formatter={metric !== 'rev' ? fmtN : undefined} />
+            <Area type="monotone" dataKey="current" name={metric === 'rev' ? 'Revenue' : metric === 'units' ? 'Units' : 'Orders'} stroke="#E87858" fill="url(#mnGrad)" strokeWidth={2} dot={false} />
+          </AreaChart>
+        </ResponsiveContainer>
+      </Card>
+
+      <div className="g-2">
+        {/* Order Status */}
+        <Card title="Order Status">
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            {(mn.status || []).map((s, i) => {
+              const total = (mn.status || []).reduce((acc, x) => acc + x.orders, 0)
+              const pct = total ? (s.orders / total * 100).toFixed(1) : 0
+              return (
+                <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <span style={{ minWidth: 90, fontSize: 12, color: C.t2 }}>{STATUS_LABEL[s.status] || s.status}</span>
+                  <div style={{ flex: 1, height: 8, background: C.bg, borderRadius: 4, overflow: 'hidden' }}>
+                    <div style={{ width: `${pct}%`, height: '100%', background: s.status === 'RTO' ? C.red.bd : s.status === 'C' ? C.green.bd : C.acm, borderRadius: 4 }} />
+                  </div>
+                  <span style={{ fontSize: 12, fontWeight: 600, color: C.t1, minWidth: 36, textAlign: 'right' }}>{fmtN(s.orders)}</span>
+                  <span style={{ fontSize: 11, color: C.t3, minWidth: 38, textAlign: 'right' }}>{pct}%</span>
+                </div>
+              )
+            })}
+          </div>
+        </Card>
+
+        {/* Categories */}
+        <Card title="Categories">
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            {(mn.categories || []).map((c, i) => {
+              const maxRev = Math.max(...(mn.categories || []).map(x => x.rev), 1)
+              const pct = (c.rev / maxRev * 100).toFixed(1)
+              return (
+                <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <span style={{ minWidth: 130, fontSize: 12, color: C.t2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{c.category}</span>
+                  <div style={{ flex: 1, height: 8, background: C.bg, borderRadius: 4, overflow: 'hidden' }}>
+                    <div style={{ width: `${pct}%`, height: '100%', background: catColors[i % catColors.length], borderRadius: 4 }} />
+                  </div>
+                  <span style={{ fontSize: 12, fontWeight: 600, color: C.t1, minWidth: 60, textAlign: 'right' }}>{fmt(c.rev)}</span>
+                </div>
+              )
+            })}
+          </div>
+        </Card>
+      </div>
+
+      {/* SKU table */}
+      <PaginatedCard title="Top SKUs" rows={mn.skus || []} columns={[
+        { key: 'sku', label: 'SKU' },
+        { key: 'category', label: 'Category' },
+        { key: 'orders', label: 'Orders', align: 'right', render: v => fmtN(v) },
+        { key: 'units', label: 'Units', align: 'right', render: v => fmtN(v) },
+        { key: 'rev', label: 'Revenue', align: 'right', mono: true, render: v => fmt(v) },
+        { key: 'aov', label: 'AOV', align: 'right', render: (_, r) => `₹${r.orders ? Math.round(r.rev / r.orders).toLocaleString('en-IN') : 0}` },
+      ]} pageSize={15} />
+
+      {/* States + Cities */}
+      <div className="g-2" style={{ alignItems: 'stretch' }}>
+        <Card title="Top States">
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+            {(mn.states || []).slice(0, 15).map((s, i) => {
+              const pct = (s.rev / maxStateRev * 100).toFixed(1)
+              return (
+                <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <span style={{ minWidth: 120, fontSize: 12, color: C.t2 }}>{s.state ? s.state.charAt(0) + s.state.slice(1).toLowerCase() : '—'}</span>
+                  <div style={{ flex: 1, height: 7, background: C.bg, borderRadius: 4, overflow: 'hidden' }}>
+                    <div style={{ width: `${pct}%`, height: '100%', background: '#E87858', borderRadius: 4 }} />
+                  </div>
+                  <span style={{ fontSize: 12, fontWeight: 600, minWidth: 60, textAlign: 'right' }}>{fmt(s.rev)}</span>
+                  <span style={{ fontSize: 11, color: C.t3, minWidth: 40, textAlign: 'right' }}>{fmtN(s.orders)} orders</span>
+                </div>
+              )
+            })}
+          </div>
+        </Card>
+        <PaginatedCard title="Top Cities" rows={mn.cities || []} columns={[
+          { key: 'city', label: 'City' },
+          { key: 'region', label: 'Region', render: v => v || '—' },
+          { key: 'cityTier', label: 'Tier', render: v => v ? `Tier ${v}` : '—' },
+          { key: 'orders', label: 'Orders', align: 'right', render: v => fmtN(v) },
+          { key: 'rev', label: 'Revenue', align: 'right', mono: true, render: v => fmt(v) },
+          { key: 'aov', label: 'AOV', align: 'right', render: (_, r) => `₹${r.orders ? Math.round(r.rev / r.orders).toLocaleString('en-IN') : 0}` },
+        ]} pageSize={15} />
+      </div>
+    </div>
+  )
+}
+
 function ChannelTab({ data, channel, filters, setFilters, amzRegion, setAmzRegion }) {
   if (channel === 'Shopify') return <ShopifyTab data={data} filters={filters} setFilters={setFilters} />
   if (channel === 'Amazon') return <AmazonTab data={data} region={amzRegion} setRegion={setAmzRegion} />
@@ -2533,6 +2668,7 @@ function ChannelTab({ data, channel, filters, setFilters, amzRegion, setAmzRegio
   if (channel === 'Instamart') return <InstaTab data={data} />
   if (channel === 'Zepto') return <ZeptoTab data={data} />
   if (channel === 'CRED') return <CredTab data={data} />
+  if (channel === 'Myntra') return <MyntraTab data={data} />
   const chOrders = data.orders.filter(o => o.channel === channel)
   const chRows = data.rows.filter(r => r.Channel === channel)
   const rev = chOrders.reduce((s, o) => s + o.rev, 0)

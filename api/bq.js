@@ -140,6 +140,15 @@ export default async function handler(req, res) {
     crStates: `WITH q AS (${base}) SELECT UPPER(TRIM(State)) AS state, COUNT(DISTINCT OrderId) AS orders, ROUND(SUM(SellingPrice_Inc_GST),0) AS rev FROM q WHERE Channel='CRED' AND State IS NOT NULL GROUP BY state ORDER BY rev DESC`,
     crStatus: `WITH q AS (${base}) SELECT FulfilmentStatus AS status, COUNT(DISTINCT OrderId) AS orders, ROUND(SUM(SellingPrice_Inc_GST),0) AS rev FROM q WHERE Channel='CRED' AND FulfilmentStatus IS NOT NULL GROUP BY status ORDER BY orders DESC`,
     crCities: `WITH q AS (${base}) SELECT TRIM(City) AS city, COUNT(DISTINCT OrderId) AS orders, ROUND(SUM(SellingPrice_Inc_GST),0) AS rev FROM q WHERE Channel='CRED' AND City IS NOT NULL GROUP BY city ORDER BY rev DESC LIMIT 30`,
+    mnTotals: `WITH q AS (${base}) SELECT COUNT(DISTINCT OrderId) AS orders, SUM(ItemQty) AS units, ROUND(SUM(SellingPrice_Inc_GST),0) AS rev, ROUND(SUM(SellingPrice_Exc_GST),0) AS exc_rev, COUNT(DISTINCT ChannelSKUCode) AS skus, COUNT(DISTINCT City) AS cities, COUNT(DISTINCT OrderDate) AS days FROM q WHERE Channel='Myntra'`,
+    mnDaily: `WITH q AS (${base}) SELECT CAST(OrderDate AS STRING) AS date, COUNT(DISTINCT OrderId) AS orders, SUM(ItemQty) AS units, ROUND(SUM(SellingPrice_Inc_GST),0) AS rev FROM q WHERE Channel='Myntra' GROUP BY date ORDER BY date`,
+    mnStatus: `WITH q AS (${base}) SELECT FulfilmentStatus AS status, COUNT(DISTINCT OrderId) AS orders, ROUND(SUM(SellingPrice_Inc_GST),0) AS rev FROM q WHERE Channel='Myntra' AND FulfilmentStatus IS NOT NULL GROUP BY status ORDER BY orders DESC`,
+    mnCategories: `WITH q AS (${base}) SELECT Category AS category, COUNT(DISTINCT OrderId) AS orders, SUM(ItemQty) AS units, ROUND(SUM(SellingPrice_Inc_GST),0) AS rev FROM q WHERE Channel='Myntra' GROUP BY category ORDER BY rev DESC`,
+    mnSKUs: `WITH q AS (${base}) SELECT ChannelSKUCode AS sku, Category AS category, COUNT(DISTINCT OrderId) AS orders, SUM(ItemQty) AS units, ROUND(SUM(SellingPrice_Inc_GST),0) AS rev FROM q WHERE Channel='Myntra' AND ChannelSKUCode IS NOT NULL GROUP BY sku, category ORDER BY rev DESC LIMIT 30`,
+    mnStates: `WITH q AS (${base}) SELECT UPPER(TRIM(State)) AS state, COUNT(DISTINCT OrderId) AS orders, ROUND(SUM(SellingPrice_Inc_GST),0) AS rev FROM q WHERE Channel='Myntra' AND State IS NOT NULL GROUP BY state ORDER BY rev DESC`,
+    mnCities: `WITH q AS (${base}) SELECT City AS city, Region AS region, City_Tier AS city_tier, COUNT(DISTINCT OrderId) AS orders, ROUND(SUM(SellingPrice_Inc_GST),0) AS rev FROM q WHERE Channel='Myntra' AND City IS NOT NULL GROUP BY city, region, city_tier ORDER BY rev DESC LIMIT 30`,
+    prevMn: `WITH q AS (${prevBase}) SELECT SUM(SellingPrice_Inc_GST) AS rev, COUNT(DISTINCT OrderId) AS orders FROM q WHERE Channel='Myntra'`,
+    prevMnDaily: `WITH q AS (${prevBase}) SELECT CAST(OrderDate AS STRING) AS date, SUM(SellingPrice_Inc_GST) AS rev FROM q WHERE Channel='Myntra' GROUP BY date ORDER BY date`,
   }
 
   try {
@@ -307,6 +316,18 @@ export default async function handler(req, res) {
         categories: (r.inCategories || []).map(x => ({ category: x.category, units: parseInt(x.units)||0, rev: parseFloat(x.rev)||0, skus: parseInt(x.skus)||0 })),
         skus: (r.inSKUs || []).map(x => ({ itemId: x.item_id, name: x.item_name, units: parseInt(x.units)||0, rev: parseFloat(x.rev)||0, cities: parseInt(x.cities)||0 })),
         cities: (r.inCities || []).map(x => ({ city: x.city_name, region: x.region || '', cityTier: x.city_tier || '', units: parseInt(x.units)||0, rev: parseFloat(x.rev)||0, skus: parseInt(x.skus)||0 })),
+      },
+      myntra: {
+        prevRev: parseFloat(r.prevMn?.[0]?.rev) || 0,
+        prevOrders: parseInt(r.prevMn?.[0]?.orders) || 0,
+        prevDaily: (r.prevMnDaily || []).map(x => ({ date: x.date, rev: parseFloat(x.rev) || 0 })),
+        totals: r.mnTotals?.[0] ? { orders: parseInt(r.mnTotals[0].orders)||0, units: parseInt(r.mnTotals[0].units)||0, rev: parseFloat(r.mnTotals[0].rev)||0, excRev: parseFloat(r.mnTotals[0].exc_rev)||0, skus: parseInt(r.mnTotals[0].skus)||0, cities: parseInt(r.mnTotals[0].cities)||0, days: parseInt(r.mnTotals[0].days)||0 } : {},
+        daily: (r.mnDaily || []).map(x => ({ date: x.date, orders: parseInt(x.orders)||0, units: parseInt(x.units)||0, rev: parseFloat(x.rev)||0 })),
+        status: (r.mnStatus || []).map(x => ({ status: x.status, orders: parseInt(x.orders)||0, rev: parseFloat(x.rev)||0 })),
+        categories: (r.mnCategories || []).map(x => ({ category: x.category, orders: parseInt(x.orders)||0, units: parseInt(x.units)||0, rev: parseFloat(x.rev)||0 })),
+        skus: (r.mnSKUs || []).map(x => ({ sku: x.sku, category: x.category || '', orders: parseInt(x.orders)||0, units: parseInt(x.units)||0, rev: parseFloat(x.rev)||0 })),
+        states: (r.mnStates || []).map(x => ({ state: x.state, orders: parseInt(x.orders)||0, rev: parseFloat(x.rev)||0 })),
+        cities: (r.mnCities || []).map(x => ({ city: x.city, region: x.region || '', cityTier: x.city_tier || '', orders: parseInt(x.orders)||0, rev: parseFloat(x.rev)||0 })),
       },
       blinkit: {
         totals: r.blTotals?.[0] ? { units: parseInt(r.blTotals[0].units)||0, rev: parseFloat(r.blTotals[0].rev)||0, skus: parseInt(r.blTotals[0].skus)||0, cities: parseInt(r.blTotals[0].cities)||0, days: parseInt(r.blTotals[0].days)||0 } : {},
