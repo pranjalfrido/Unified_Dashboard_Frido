@@ -408,14 +408,33 @@ function OverviewPage({ data, alerts }) {
         </Card>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
           <Card title="Categories" note={selectedCat ? <span style={{ cursor: 'pointer', color: C.acc, fontWeight: 600 }} onClick={() => setSelectedCat(null)}>✕ Clear</span> : `${allCats.length} total`}>
-            <DataTable columns={[
-              { key: 'name', label: 'Category', render: (v) => (
-                <span onClick={() => setSelectedCat(s => s === v ? null : v)} style={{ cursor: 'pointer', color: selectedCat === v ? C.t1 : C.t2, fontWeight: selectedCat === v ? 700 : 400, background: selectedCat === v ? C.acl : 'transparent', borderRadius: 5, padding: '1px 5px', display: 'inline-block' }}>{v}</span>
-              )},
-              { key: 'rev', label: 'Revenue', align: 'right', mono: true, render: v => fmt(v) },
-              { key: 'orders', label: 'Orders', align: 'right', render: v => fmtN(v) },
-              { key: 'aov', label: 'AOV', align: 'right', render: v => `₹${Math.round(v).toLocaleString('en-IN')}` },
-            ]} rows={allCats} maxRows={allCats.length} />
+            <div style={{ overflowX: 'auto' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+                <thead>
+                  <tr>
+                    {['Category','Revenue','Orders','AOV'].map((h, i) => (
+                      <th key={h} style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.05em', color: C.t3, textAlign: i === 0 ? 'left' : 'right', padding: '3px 5px 7px', borderBottom: `1px solid ${C.border}` }}>{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {allCats.map((row, i) => {
+                    const active = selectedCat === row.name
+                    return (
+                      <tr key={row.name} onClick={() => setSelectedCat(s => s === row.name ? null : row.name)}
+                        style={{ cursor: 'pointer', background: active ? C.acl : 'transparent', borderBottom: i < allCats.length - 1 ? `1px solid ${C.border}` : 'none' }}
+                        onMouseEnter={e => { if (!active) e.currentTarget.style.background = '#FFFBE6' }}
+                        onMouseLeave={e => { e.currentTarget.style.background = active ? C.acl : 'transparent' }}>
+                        <td style={{ padding: '5.5px 5px', color: C.t2, fontWeight: active ? 700 : 400 }}>{row.name}</td>
+                        <td style={{ padding: '5.5px 5px', textAlign: 'right', fontFamily: 'var(--mono)', fontSize: 11.5, color: C.t1 }}>{fmt(row.rev)}</td>
+                        <td style={{ padding: '5.5px 5px', textAlign: 'right', color: C.t1 }}>{fmtN(row.orders)}</td>
+                        <td style={{ padding: '5.5px 5px', textAlign: 'right', color: C.t1 }}>₹{Math.round(row.aov).toLocaleString('en-IN')}</td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </div>
           </Card>
           {selectedCat && (() => {
             const subRows = Object.entries(subCatMap || {})
