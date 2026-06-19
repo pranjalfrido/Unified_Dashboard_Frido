@@ -1512,7 +1512,6 @@ function BlinkitTab({ data }) {
   const maxCityRev = Math.max(...cityRows.map(c => c.rev), 1)
 
   const skuRows = bl.skus || []
-
   const catColors = ['#FFD600','#0D9E68','#2E74CC','#CC4078','#9B59B6','#534AB7','#CC8A00','#E24B4A']
 
   return (

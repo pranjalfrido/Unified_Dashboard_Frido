@@ -5,6 +5,9 @@ import pkg from 'pg'
 import { join, dirname } from 'path'
 import { fileURLToPath } from 'url'
 import { config } from 'dotenv'
+import * as XLSX from 'xlsx'
+import { writeFileSync } from 'fs'
+import { buildQuery as buildUnifiedQuery } from './api/_bq.js'
 
 config()
 
@@ -652,6 +655,63 @@ function scheduleDailySync() {
   console.log(`[scheduler] Daily sync in ${Math.round(ms / 60000)} min`)
   setTimeout(runDailySync, ms)
 }
+
+// ── API: export channel data as Excel ────────────────────────
+app.post('/api/export-excel', async (req, res) => {
+  const { start, end, channel = 'Blinkit' } = req.body
+  if (!start || !end) return res.status(400).json({ error: 'Missing start or end date' })
+  try {
+    const base = buildUnifiedQuery(start, end)
+    const sql = `WITH q AS (${base})
+SELECT
+  CAST(q.OrderDate AS STRING) AS Date,
+  q.Channel,
+  q.SubChannel,
+  q.ChannelAccount,
+  q.ProductId AS Item_ID,
+  q.ChannelSKUCode AS Channel_SKU,
+  q.MasterSKU AS Master_SKU,
+  q.Category,
+  q.SubCategory,
+  q.City,
+  q.State,
+  q.Country,
+  ROUND(q.ItemQty, 0) AS Units_Sold,
+  ROUND(q.SellingPrice_Exc_GST, 2) AS Selling_Price_Exc_GST,
+  ROUND(q.SellingPrice_Inc_GST, 2) AS Selling_Price_Inc_GST,
+  q.GST_Tax_Type_Code AS GST_Rate_Pct,
+  ROUND(q.SellingPrice_Inc_GST - q.SellingPrice_Exc_GST, 2) AS GST_Amount,
+  ROUND(q.ItemQty * q.SellingPrice_Exc_GST, 2) AS Net_Revenue_Exc_GST,
+  ROUND(q.ItemQty * q.SellingPrice_Inc_GST, 2) AS Gross_Revenue_Inc_GST
+FROM q
+WHERE q.Channel = '${channel.replace(/'/g, "''")}'
+ORDER BY q.OrderDate, q.ProductId`
+
+    const [rows] = await bq.query({ query: sql, maximumBytesBilled: '10000000000' })
+
+    const sheetData = rows.map(r => {
+      const out = {}
+      for (const [k, v] of Object.entries(r)) {
+        if (v != null && typeof v === 'object' && v.value !== undefined) out[k] = v.value
+        else out[k] = v
+      }
+      return out
+    })
+
+    const ws = XLSX.utils.json_to_sheet(sheetData)
+    const wb = XLSX.utils.book_new()
+    XLSX.utils.book_append_sheet(wb, ws, channel)
+    const buf = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' })
+
+    const filename = `${channel}_${start}_to_${end}.xlsx`
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`)
+    res.send(buf)
+  } catch (err) {
+    console.error('[export-excel]', err.message)
+    res.status(500).json({ error: err.message })
+  }
+})
 
 // ── Startup ───────────────────────────────────────────────────
 async function start() {
