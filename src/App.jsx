@@ -2107,7 +2107,7 @@ function SalesPage({ data, filters, setFilters, activeTab, setActiveTab, fetchDa
   useEffect(() => {
     const prev = prevTabRef.current
     prevTabRef.current = activeTab
-    if (TAB_TO_CHANNEL[activeTab] && !TAB_TO_CHANNEL[prev]) {
+    if (TAB_TO_CHANNEL[activeTab] && prev !== activeTab) {
       const { start, end, category, subCategory, sku, subChannel, voucher } = filtersRef.current
       if (!start || !end) return
       const extra = {}
