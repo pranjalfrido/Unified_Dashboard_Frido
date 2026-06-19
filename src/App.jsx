@@ -1049,7 +1049,7 @@ function AllTab({ data }) {
           { label: 'Blended AOV', value: `₹${Math.round(blendedAOV).toLocaleString('en-IN')}` },
           { label: 'Daily Avg', value: fmt(totalRev / nDays) },
         ].map(k => (
-          <div key={k.label} className="kpi-card" style={{ padding: '8px 11px' }}>
+          <div key={k.label} className="kpi-card" style={{ padding: '8px 11px', height: 80, boxSizing: 'border-box' }}>
             <div className="kpi-label">{k.label}</div>
             <div className="kpi-value" style={{ fontSize: 17, ...(k.accent ? { color: k.accent } : {}) }}>{k.value}</div>
             {k.sub && <div className="kpi-sub">{k.sub}</div>}
