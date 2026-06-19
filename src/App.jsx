@@ -1874,8 +1874,9 @@ function CredTab({ data }) {
             </ComposedChart>
           </ResponsiveContainer>
         </Card>
-        <Card title="Top States">
-          {(() => { const maxRev = Math.max(...stateRows.map(s => s.rev), 1); return stateRows.slice(0, 8).map((s, i) => (
+        <Card title="All States">
+          <div style={{ overflowY: 'auto', maxHeight: 220 }}>
+          {(() => { const maxRev = Math.max(...stateRows.map(s => s.rev), 1); return stateRows.map((s, i) => (
             <div key={s.state} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '5px 0', borderBottom: `1px solid ${C.border}` }}>
               <span style={{ width: 8, height: 8, borderRadius: '50%', background: catColors[i % catColors.length], flexShrink: 0 }} />
               <span style={{ fontSize: 11.5, color: C.t2, flex: 1 }}>{s.state}</span>
@@ -1886,6 +1887,7 @@ function CredTab({ data }) {
               <span style={{ fontSize: 11, color: C.t3, minWidth: 65, textAlign: 'right', fontFamily: 'var(--mono)' }}>{fmt(s.rev)}</span>
             </div>
           ))})()}
+          </div>
         </Card>
       </div>
 
