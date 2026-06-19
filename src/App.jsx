@@ -2147,6 +2147,8 @@ function BlinkitTab({ data }) {
             <DataTable
               columns={[
                 { key: 'city', label: 'City' },
+                { key: 'region', label: 'Region', render: v => v || '—' },
+                { key: 'cityTier', label: 'Tier', render: v => v ? `Tier ${v}` : '—' },
                 { key: 'units', label: 'Units', align: 'right', render: v => fmtN(v) },
                 { key: 'rev', label: 'Revenue', align: 'right', mono: true, render: v => fmt(v) },
                 { key: 'skus', label: 'SKUs', align: 'right', render: v => fmtN(v) },
@@ -2252,6 +2254,8 @@ function InstaTab({ data }) {
             <DataTable
               columns={[
                 { key: 'city', label: 'City' },
+                { key: 'region', label: 'Region', render: v => v || '—' },
+                { key: 'cityTier', label: 'Tier', render: v => v ? `Tier ${v}` : '—' },
                 { key: 'units', label: 'Units', align: 'right', render: v => fmtN(v) },
                 { key: 'rev', label: 'Revenue', align: 'right', mono: true, render: v => fmt(v) },
                 { key: 'skus', label: 'SKUs', align: 'right', render: v => fmtN(v) },
@@ -2354,6 +2358,8 @@ function ZeptoTab({ data }) {
             <DataTable
               columns={[
                 { key: 'city', label: 'City' },
+                { key: 'region', label: 'Region', render: v => v || '—' },
+                { key: 'cityTier', label: 'Tier', render: v => v ? `Tier ${v}` : '—' },
                 { key: 'units', label: 'Units', align: 'right', render: v => fmtN(v) },
                 { key: 'rev', label: 'Revenue', align: 'right', mono: true, render: v => fmt(v) },
                 { key: 'skus', label: 'SKUs', align: 'right', render: v => fmtN(v) },
