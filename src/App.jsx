@@ -417,32 +417,53 @@ function OverviewPage({ data, alerts }) {
               { name: 'New', value: newCusts, color: C.acc },
               { name: 'Repeat', value: repeatCusts, color: '#0D9E68' },
             ]
+            const totalOrders = dailyArr.map(d => ({ date: d.date, orders: Object.entries(d).filter(([k]) => k !== 'date').reduce((s, [, v]) => s + (v || 0), 0) }))
             return (
-              <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 40 }}>
-                <div style={{ position: 'relative', flexShrink: 0 }}>
-                  <PieChart width={160} height={160}>
-                    <Pie data={donutData} cx={78} cy={78} innerRadius={50} outerRadius={75} dataKey="value" paddingAngle={3}>
-                      {donutData.map((d, i) => <Cell key={i} fill={d.color} />)}
-                    </Pie>
-                  </PieChart>
-                  <div style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%,-50%)', textAlign: 'center', pointerEvents: 'none' }}>
-                    <div style={{ fontSize: 17, fontWeight: 700, color: C.t1, lineHeight: 1 }}>{fmtN(nCusts)}</div>
-                    <div style={{ fontSize: 9, color: C.t3, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.04em', marginTop: 3 }}>Total</div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                {/* Top: donut + stats */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 32 }}>
+                  <div style={{ position: 'relative', flexShrink: 0 }}>
+                    <PieChart width={140} height={140}>
+                      <Pie data={donutData} cx={68} cy={68} innerRadius={44} outerRadius={66} dataKey="value" paddingAngle={3}>
+                        {donutData.map((d, i) => <Cell key={i} fill={d.color} />)}
+                      </Pie>
+                    </PieChart>
+                    <div style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%,-50%)', textAlign: 'center', pointerEvents: 'none' }}>
+                      <div style={{ fontSize: 15, fontWeight: 700, color: C.t1, lineHeight: 1 }}>{fmtN(nCusts)}</div>
+                      <div style={{ fontSize: 8.5, color: C.t3, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.04em', marginTop: 2 }}>Total</div>
+                    </div>
+                  </div>
+                  <div style={{ display: 'flex', gap: 28 }}>
+                    {donutData.map(d => (
+                      <div key={d.name}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+                          <span style={{ width: 8, height: 8, borderRadius: '50%', background: d.color, flexShrink: 0 }} />
+                          <span style={{ fontSize: 11, color: C.t3 }}>{d.name}</span>
+                        </div>
+                        <div style={{ fontSize: 24, fontWeight: 700, color: C.t1, letterSpacing: '-.02em', lineHeight: 1 }}>{fmtN(d.value)}</div>
+                        <div style={{ fontSize: 11, color: C.t3, marginTop: 3 }}>{nCusts ? (d.value / nCusts * 100).toFixed(1) : 0}% of total</div>
+                      </div>
+                    ))}
                   </div>
                 </div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-                  {donutData.map(d => (
-                    <div key={d.name} style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
-                      <div style={{ width: 42, height: 42, borderRadius: 12, background: d.color + '20', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                        <span style={{ width: 14, height: 14, borderRadius: '50%', background: d.color, display: 'block' }} />
-                      </div>
-                      <div>
-                        <div style={{ fontSize: 11, color: C.t3, fontWeight: 500, marginBottom: 1 }}>{d.name} customers</div>
-                        <div style={{ fontSize: 22, fontWeight: 700, color: C.t1, letterSpacing: '-.02em', lineHeight: 1 }}>{fmtN(d.value)}</div>
-                        <div style={{ fontSize: 11, color: C.t3, marginTop: 1 }}>{nCusts ? (d.value / nCusts * 100).toFixed(1) : 0}% of total</div>
-                      </div>
-                    </div>
-                  ))}
+                {/* Bottom: daily orders trend line */}
+                <div>
+                  <div style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.05em', color: C.t3, marginBottom: 6 }}>Daily Orders Trend</div>
+                  <ResponsiveContainer width="100%" height={90}>
+                    <AreaChart data={totalOrders} margin={{ top: 2, right: 0, bottom: 0, left: 0 }}>
+                      <defs>
+                        <linearGradient id="ordGrad" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="5%" stopColor={C.acc} stopOpacity={0.25} />
+                          <stop offset="95%" stopColor={C.acc} stopOpacity={0} />
+                        </linearGradient>
+                      </defs>
+                      <CartesianGrid strokeDasharray="3 3" stroke={C.border} vertical={false} />
+                      <XAxis dataKey="date" tick={{ fontSize: 9, fill: C.t3 }} tickFormatter={d => d?.slice(5)} />
+                      <YAxis hide />
+                      <Tooltip content={<ChartTooltip formatter={fmtN} />} />
+                      <Area type="monotone" dataKey="orders" name="Orders" stroke={C.acc} strokeWidth={2} fill="url(#ordGrad)" dot={false} />
+                    </AreaChart>
+                  </ResponsiveContainer>
                 </div>
               </div>
             )
