@@ -2492,7 +2492,7 @@ export default function App() {
     if (!filters.start || !filters.end) return
     clearTimeout(debounceRef.current)
     const dateChanged = filters.start !== prevDateRef.current.start || filters.end !== prevDateRef.current.end
-    if (dateChanged) { prevDateRef.current = { start: filters.start, end: filters.end }; setRawRows(null); clientCacheRef.current.clear() }
+    if (dateChanged) { prevDateRef.current = { start: filters.start, end: filters.end }; setRawRows(null) }
     debounceRef.current = setTimeout(() => {
       const { start, end, category, subCategory, sku, subChannel, voucher } = filtersRef.current
       const extra = {}
