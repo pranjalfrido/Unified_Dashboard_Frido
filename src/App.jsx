@@ -1849,8 +1849,24 @@ function CredTab({ data }) {
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: '3fr 2fr', gap: 14, alignItems: 'stretch' }}>
-        <Card title="Daily Revenue Trend">
-          <AreaTrendChart data={daily} color="#E11D48" />
+        <Card title="Daily Revenue & Orders">
+          <ResponsiveContainer width="100%" height={220}>
+            <BarChart data={daily} margin={{ top: 4, right: 40, bottom: 0, left: 0 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke={C.border} vertical={false} />
+              <XAxis dataKey="date" tick={{ fontSize: 10, fill: C.t3 }} tickFormatter={d => d?.slice(5)} />
+              <YAxis yAxisId="rev" tick={{ fontSize: 10, fill: C.t3 }} tickFormatter={v => `₹${(v/1000).toFixed(0)}k`} width={42} />
+              <YAxis yAxisId="orders" orientation="right" tick={{ fontSize: 10, fill: '#E11D48' }} tickFormatter={v => fmtN(v)} width={30} />
+              <Tooltip content={({ active, payload, label }) => active && payload?.length ? (
+                <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 8, padding: '8px 12px', fontSize: 11.5 }}>
+                  <div style={{ color: C.t3, marginBottom: 4 }}>{label}</div>
+                  {payload.map(p => <div key={p.name} style={{ color: p.color, fontWeight: 600 }}>{p.name}: {p.name === 'Revenue' ? fmt(p.value) : fmtN(p.value)}</div>)}
+                </div>
+              ) : null} />
+              <Legend wrapperStyle={{ fontSize: 11 }} />
+              <Bar yAxisId="rev" dataKey="rev" name="Revenue" fill="#E11D4820" stroke="#E11D48" strokeWidth={1.5} radius={[3,3,0,0]} />
+              <Bar yAxisId="orders" dataKey="orders" name="Orders" fill="#2E74CC" radius={[3,3,0,0]} />
+            </BarChart>
+          </ResponsiveContainer>
         </Card>
         <Card title="Top States">
           {(() => { const maxRev = Math.max(...stateRows.map(s => s.rev), 1); return stateRows.slice(0, 8).map((s, i) => (
@@ -1868,17 +1884,6 @@ function CredTab({ data }) {
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: '3fr 2fr', gap: 14, alignItems: 'stretch' }}>
-        <Card title="Daily Orders">
-          <ResponsiveContainer width="100%" height={200}>
-            <BarChart data={daily} margin={{ top: 0, right: 0, bottom: 0, left: 0 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke={C.border} vertical={false} />
-              <XAxis dataKey="date" tick={{ fontSize: 10, fill: C.t3 }} tickFormatter={d => d?.slice(5)} />
-              <YAxis tick={{ fontSize: 10, fill: C.t3 }} tickFormatter={v => fmtN(v)} width={35} />
-              <Tooltip content={<ChartTooltip formatter={fmtN} />} />
-              <Bar dataKey="orders" fill="#E11D48" name="Orders" radius={[3,3,0,0]} />
-            </BarChart>
-          </ResponsiveContainer>
-        </Card>
         <Card title="Category Breakdown">
           {cats.map((c, i) => (
             <div key={c.category} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '5px 0', borderBottom: `1px solid ${C.border}` }}>
