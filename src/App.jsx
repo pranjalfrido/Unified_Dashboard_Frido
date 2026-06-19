@@ -69,17 +69,164 @@ function BottomNav({ page, setPage }) {
 }
 
 // ── Topnav ─────────────────────────────────────────────────────
+function DateRangePicker({ filters, setFilters }) {
+  const [open, setOpen] = useState(false)
+  const [draft, setDraft] = useState({ start: filters.start, end: filters.end })
+  const [selecting, setSelecting] = useState('start') // 'start' | 'end'
+  const [hover, setHover] = useState(null)
+  const ref = useRef(null)
+
+  const today = new Date(); today.setHours(0,0,0,0)
+  const fmt0 = d => { const y = d.getFullYear(), m = String(d.getMonth()+1).padStart(2,'0'), dd = String(d.getDate()).padStart(2,'0'); return `${y}-${m}-${dd}` }
+  const parseD = s => { const d = new Date(s + 'T00:00:00'); return isNaN(d) ? null : d }
+
+  const [leftMonth, setLeftMonth] = useState(() => { const d = parseD(filters.start) || today; return new Date(d.getFullYear(), d.getMonth(), 1) })
+  const rightMonth = new Date(leftMonth.getFullYear(), leftMonth.getMonth() + 1, 1)
+
+  const PRESETS = [
+    { label: 'Today', fn: () => { const d = fmt0(today); return { start: d, end: d } } },
+    { label: 'Yesterday', fn: () => { const d = new Date(today); d.setDate(d.getDate()-1); const s = fmt0(d); return { start: s, end: s } } },
+    { label: 'Last 7 Days', fn: () => { const s = new Date(today); s.setDate(s.getDate()-6); return { start: fmt0(s), end: fmt0(today) } } },
+    { label: 'Last 15 Days', fn: () => { const s = new Date(today); s.setDate(s.getDate()-14); return { start: fmt0(s), end: fmt0(today) } } },
+    { label: 'Last 30 Days', fn: () => { const s = new Date(today); s.setDate(s.getDate()-29); return { start: fmt0(s), end: fmt0(today) } } },
+    { label: 'Last 90 Days', fn: () => { const s = new Date(today); s.setDate(s.getDate()-89); return { start: fmt0(s), end: fmt0(today) } } },
+    { label: 'This Week', fn: () => { const s = new Date(today); s.setDate(s.getDate()-s.getDay()); return { start: fmt0(s), end: fmt0(today) } } },
+    { label: 'Last Week', fn: () => { const s = new Date(today); s.setDate(s.getDate()-s.getDay()-7); const e = new Date(s); e.setDate(e.getDate()+6); return { start: fmt0(s), end: fmt0(e) } } },
+    { label: 'This Month', fn: () => { const s = new Date(today.getFullYear(), today.getMonth(), 1); return { start: fmt0(s), end: fmt0(today) } } },
+    { label: 'Last Month', fn: () => { const s = new Date(today.getFullYear(), today.getMonth()-1, 1); const e = new Date(today.getFullYear(), today.getMonth(), 0); return { start: fmt0(s), end: fmt0(e) } } },
+    { label: 'This Quarter', fn: () => { const q = Math.floor(today.getMonth()/3); const s = new Date(today.getFullYear(), q*3, 1); return { start: fmt0(s), end: fmt0(today) } } },
+    { label: 'Last Quarter', fn: () => { const q = Math.floor(today.getMonth()/3); const s = new Date(today.getFullYear(), (q-1)*3, 1); const e = new Date(today.getFullYear(), q*3, 0); return { start: fmt0(s), end: fmt0(e) } } },
+  ]
+
+  useEffect(() => {
+    const handler = e => { if (ref.current && !ref.current.contains(e.target)) setOpen(false) }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [])
+
+  const apply = (s, e) => {
+    const start = s || draft.start, end = e || draft.end
+    if (start && end) { setFilters(f => ({ ...f, start, end })); setOpen(false) }
+  }
+
+  const getDays = (monthStart) => {
+    const days = []
+    const first = new Date(monthStart)
+    const startDow = first.getDay()
+    for (let i = 0; i < startDow; i++) days.push(null)
+    const m = monthStart.getMonth()
+    const d = new Date(monthStart)
+    while (d.getMonth() === m) { days.push(new Date(d)); d.setDate(d.getDate()+1) }
+    return days
+  }
+
+  const inRange = (day) => {
+    if (!day) return false
+    const ds = parseD(draft.start), de = parseD(draft.end)
+    const hd = hover ? parseD(hover) : null
+    if (ds && selecting === 'end' && hd) return day >= Math.min(ds, hd) && day <= Math.max(ds, hd)
+    if (ds && de) return day >= ds && day <= de
+    return false
+  }
+  const isStart = day => day && fmt0(day) === draft.start
+  const isEnd = day => day && fmt0(day) === draft.end
+
+  const fmtDisplay = s => { if (!s) return '—'; const d = parseD(s); if (!d) return s; return d.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }) }
+
+  const renderMonth = (monthStart) => {
+    const days = getDays(monthStart)
+    const monthName = monthStart.toLocaleDateString('en-IN', { month: 'long', year: 'numeric' })
+    return (
+      <div style={{ flex: 1 }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+          <span style={{ fontSize: 13, fontWeight: 700, color: C.t1 }}>{monthName}</span>
+        </div>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7,1fr)', gap: 2, marginBottom: 4 }}>
+          {['Su','Mo','Tu','We','Th','Fr','Sa'].map(d => <div key={d} style={{ fontSize: 10, fontWeight: 600, color: C.t3, textAlign: 'center', padding: '2px 0' }}>{d}</div>)}
+        </div>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7,1fr)', gap: 2 }}>
+          {days.map((day, i) => {
+            if (!day) return <div key={i} />
+            const ds = fmt0(day)
+            const sel = isStart(day) || isEnd(day)
+            const inR = inRange(day)
+            const isToday = fmt0(day) === fmt0(today)
+            return (
+              <div key={i} onClick={() => {
+                if (selecting === 'start') { setDraft({ start: ds, end: '' }); setSelecting('end') }
+                else {
+                  const s = parseD(draft.start)
+                  if (day < s) { setDraft({ start: ds, end: draft.start }); setSelecting('start') }
+                  else { setDraft(d => ({ ...d, end: ds })); setSelecting('start') }
+                }
+              }}
+              onMouseEnter={() => selecting === 'end' && setHover(ds)}
+              onMouseLeave={() => setHover(null)}
+              style={{ textAlign: 'center', padding: '5px 2px', borderRadius: 6, fontSize: 12, cursor: 'pointer', fontWeight: sel ? 700 : isToday ? 600 : 400, background: sel ? C.acc : inR ? '#FFF9CC' : 'transparent', color: sel ? '#13121A' : isToday ? C.acc : C.t1, border: isToday && !sel ? `1px solid ${C.acc}` : '1px solid transparent' }}>
+                {day.getDate()}
+              </div>
+            )
+          })}
+        </div>
+      </div>
+    )
+  }
+
+  const displayLabel = filters.start && filters.end ? `${fmtDisplay(filters.start)}  →  ${fmtDisplay(filters.end)}` : 'Select date range'
+
+  return (
+    <div ref={ref} style={{ position: 'relative' }}>
+      <button onClick={() => { setDraft({ start: filters.start, end: filters.end }); setSelecting('start'); setOpen(o => !o) }}
+        style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '6px 12px', borderRadius: 8, border: `1px solid ${C.border2}`, background: C.card, color: C.t1, cursor: 'pointer', fontSize: 12, fontFamily: 'var(--font)', whiteSpace: 'nowrap' }}>
+        <span style={{ fontSize: 14 }}>📅</span> {displayLabel}
+      </button>
+      {open && (
+        <div style={{ position: 'absolute', top: '110%', right: 0, zIndex: 1000, background: C.card, border: `1px solid ${C.border2}`, borderRadius: 12, boxShadow: '0 8px 32px rgba(0,0,0,.15)', display: 'flex', minWidth: 680 }}>
+          {/* Preset list */}
+          <div style={{ width: 160, borderRight: `1px solid ${C.border}`, padding: '12px 0', flexShrink: 0 }}>
+            {PRESETS.map(p => (
+              <div key={p.label} onClick={() => { const r = p.fn(); setDraft(r); apply(r.start, r.end) }}
+                style={{ padding: '7px 16px', fontSize: 12.5, color: C.t2, cursor: 'pointer', whiteSpace: 'nowrap' }}
+                onMouseEnter={e => e.currentTarget.style.background = C.bg}
+                onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
+                {p.label}
+              </div>
+            ))}
+          </div>
+          {/* Calendar */}
+          <div style={{ flex: 1, padding: 16, display: 'flex', flexDirection: 'column', gap: 12 }}>
+            {/* Selected range display */}
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+              <div style={{ flex: 1, padding: '6px 10px', border: `1.5px solid ${selecting === 'start' ? C.acc : C.border}`, borderRadius: 7, fontSize: 12, color: draft.start ? C.t1 : C.t3 }}>{draft.start ? fmtDisplay(draft.start) : 'Start date'}</div>
+              <span style={{ color: C.t3, fontSize: 13 }}>→</span>
+              <div style={{ flex: 1, padding: '6px 10px', border: `1.5px solid ${selecting === 'end' ? C.acc : C.border}`, borderRadius: 7, fontSize: 12, color: draft.end ? C.t1 : C.t3 }}>{draft.end ? fmtDisplay(draft.end) : 'End date'}</div>
+            </div>
+            {/* Month nav */}
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: -4 }}>
+              <button onClick={() => setLeftMonth(m => new Date(m.getFullYear(), m.getMonth()-1, 1))} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 16, color: C.t2, padding: '2px 6px' }}>‹</button>
+              <div style={{ flex: 1 }} />
+              <button onClick={() => setLeftMonth(m => new Date(m.getFullYear(), m.getMonth()+1, 1))} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 16, color: C.t2, padding: '2px 6px' }}>›</button>
+            </div>
+            <div style={{ display: 'flex', gap: 24 }}>
+              {renderMonth(leftMonth)}
+              <div style={{ width: 1, background: C.border }} />
+              {renderMonth(rightMonth)}
+            </div>
+            {/* Footer */}
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, paddingTop: 8, borderTop: `1px solid ${C.border}` }}>
+              <button onClick={() => setOpen(false)} style={{ padding: '6px 16px', borderRadius: 7, border: `1px solid ${C.border2}`, background: 'transparent', color: C.t2, cursor: 'pointer', fontSize: 12, fontFamily: 'var(--font)' }}>Cancel</button>
+              <button onClick={() => apply()} disabled={!draft.start || !draft.end} style={{ padding: '6px 16px', borderRadius: 7, border: 'none', background: draft.start && draft.end ? C.acc : C.border, color: '#13121A', cursor: draft.start && draft.end ? 'pointer' : 'default', fontSize: 12, fontWeight: 600, fontFamily: 'var(--font)' }}>Apply</button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
 function Topnav({ page, alerts, onRefresh, loading, filters, setFilters, rawRows }) {
   const titles = { overview: 'Overview', sales: 'Sales Analytics', intelligence: 'Intelligence' }
   const critical = alerts.filter(a => a.type === 'red').length
-  const today = new Date()
-  const fmt0 = d => d.toISOString().slice(0, 10)
-  const presets = [
-    { label: 'Today', fn: () => { const d = fmt0(today); setFilters(f => ({ ...f, start: d, end: d })) } },
-    { label: '7D', fn: () => { const s = new Date(today); s.setDate(s.getDate() - 6); setFilters(f => ({ ...f, start: fmt0(s), end: fmt0(today) })) } },
-    { label: '30D', fn: () => { const s = new Date(today); s.setDate(s.getDate() - 29); setFilters(f => ({ ...f, start: fmt0(s), end: fmt0(today) })) } },
-    { label: 'MTD', fn: () => { const s = new Date(today.getFullYear(), today.getMonth(), 1); setFilters(f => ({ ...f, start: fmt0(s), end: fmt0(today) })) } },
-  ]
   return (
     <div className="topnav">
       <div style={{ display: 'flex', flexDirection: 'column', gap: 1, flexShrink: 0 }}>
@@ -91,15 +238,8 @@ function Topnav({ page, alerts, onRefresh, loading, filters, setFilters, rawRows
       </div>
       <div className="tnav-sep" />
       <span className="tnav-title">{titles[page]}</span>
-      <div className="tnav-sep" />
-      <span className="tnav-sub">{filters.start} → {filters.end}</span>
       <div className="tnav-right">
-        {presets.map(p => (
-          <button key={p.label} onClick={p.fn} className="tnav-preset">{p.label}</button>
-        ))}
-        <input type="date" value={filters.start} onChange={e => setFilters(f => ({ ...f, start: e.target.value }))} className="tnav-date" />
-        <span style={{ fontSize: 12, color: C.t3 }}>→</span>
-        <input type="date" value={filters.end} onChange={e => setFilters(f => ({ ...f, end: e.target.value }))} className="tnav-date" />
+        <DateRangePicker filters={filters} setFilters={setFilters} />
         {critical > 0 && <span style={{ fontSize: 11, fontWeight: 600, padding: '3px 9px', borderRadius: 20, background: C.red.bg, color: C.red.tx, border: `1px solid ${C.red.bd}`, display: 'inline-flex', alignItems: 'center', gap: 4 }}>⚠ {critical} critical</span>}
         <button onClick={onRefresh} className="tnav-btn">
           <span style={{ display: 'inline-block', animation: loading ? 'spin 1s linear infinite' : 'none', fontSize: 14 }}>↻</span> Refresh
