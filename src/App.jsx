@@ -295,8 +295,8 @@ function Topnav({ page, alerts, onRefresh, loading, filters, setFilters, rawRows
   return (
     <div className="topnav">
       <div style={{ display: 'flex', flexDirection: 'column', gap: 1, flexShrink: 0 }}>
-        <span style={{ fontSize: 15, fontWeight: 800, color: C.t1, letterSpacing: '-.01em', lineHeight: 1 }}>Frido</span>
-        <span style={{ fontSize: 10, color: C.t3, fontWeight: 500, lineHeight: 1, letterSpacing: '.02em', textTransform: 'uppercase' }}>Analytics</span>
+        <span style={{ fontSize: 20, fontWeight: 800, color: C.t1, letterSpacing: '-.02em', lineHeight: 1 }}>Frido</span>
+        <span style={{ fontSize: 11, color: C.t3, fontWeight: 600, lineHeight: 1, letterSpacing: '.04em', textTransform: 'uppercase' }}>Analytics</span>
       </div>
       <div className="tnav-sep" />
       <span className="tnav-title">{titles[page]}</span>
