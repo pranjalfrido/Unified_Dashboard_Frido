@@ -27,7 +27,7 @@ html,body{height:100%;background:var(--bg);font-family:var(--font);color:var(--t
 
 ::-webkit-scrollbar{width:4px;height:4px}
 ::-webkit-scrollbar-track{background:transparent}
-::-webkit-scrollbar-thumb{background:var(--b2);border-radius:2px}
+::-webkit-scrollbar-thumb{background:#c0c0c0;border-radius:2px}
 
 /* ── App shell ─────────────────────────────── */
 .app-shell{display:flex;height:100vh;overflow:hidden;background:var(--bg)}
@@ -86,7 +86,7 @@ html,body{height:100%;background:var(--bg);font-family:var(--font);color:var(--t
 /* ── Page scroll area ──────────────────────── */
 .page-scroll{flex:1;overflow-y:auto;padding:16px}
 .page-scroll::-webkit-scrollbar{width:4px}
-.page-scroll::-webkit-scrollbar-thumb{background:var(--b2);border-radius:2px}
+.page-scroll::-webkit-scrollbar-thumb{background:#c0c0c0;border-radius:2px}
 
 /* ── Responsive grids ──────────────────────── */
 .g-hero{display:grid;grid-template-columns:1.6fr 1fr 1fr 1fr;gap:12px}
