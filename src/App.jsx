@@ -417,7 +417,7 @@ function OverviewPage({ data, alerts }) {
               { name: 'New', value: newCusts, color: C.acc },
               { name: 'Repeat', value: repeatCusts, color: '#0D9E68' },
             ]
-            const totalOrders = dailyArr.map(d => ({ date: d.date, orders: Object.entries(d).filter(([k]) => k !== 'date' && !k.endsWith('_o')).reduce((s, [, v]) => s + (v || 0), 0) }))
+            const totalOrders = dailyArr.map(d => ({ date: d.date, orders: Object.entries(d).filter(([k]) => k.endsWith('_o')).reduce((s, [, v]) => s + (v || 0), 0) }))
             const newPct = nCusts ? newCusts / nCusts * 100 : 0
             const repPct = nCusts ? repeatCusts / nCusts * 100 : 0
             const avgOrdersPerDay = totalOrders.length ? (totalOrders.reduce((s, d) => s + d.orders, 0) / totalOrders.length).toFixed(0) : 0
