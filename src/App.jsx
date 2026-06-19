@@ -1602,11 +1602,118 @@ function BlinkitTab({ data }) {
   )
 }
 
+function InstaTab({ data }) {
+  const ins = data.instamart || {}
+  const t = ins.totals || {}
+  const nDays = t.days || 1
+  const rev = t.rev || 0
+  const units = t.units || 0
+  const skus = t.skus || 0
+  const cities = t.cities || 0
+  const asp = units ? rev / units : 0
+  const dailyAvg = nDays ? rev / nDays : 0
+
+  const daily = ins.daily || []
+  const maxDailyRev = Math.max(...daily.map(d => d.rev), 1)
+
+  const cats = ins.categories || []
+  const maxCatRev = Math.max(...cats.map(c => c.rev), 1)
+
+  const cityRows = ins.cities || []
+  const maxCityRev = Math.max(...cityRows.map(c => c.rev), 1)
+
+  const skuRows = ins.skus || []
+  const catColors = ['#FF6B35','#0D9E68','#2E74CC','#CC4078','#9B59B6','#534AB7','#CC8A00','#E24B4A']
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6,1fr)', gap: 10 }}>
+        <KPICard label="Gross Revenue" value={fmt(rev)} sub={`${nDays} days`} />
+        <KPICard label="Daily Avg Revenue" value={fmt(dailyAvg)} sub="Per day" />
+        <KPICard label="Total Units Sold" value={fmtN(units)} sub={`${skus} SKUs`} />
+        <KPICard label="ASP" value={`₹${Math.round(asp).toLocaleString('en-IN')}`} sub="Avg selling price" />
+        <KPICard label="Cities" value={fmtN(cities)} sub="Cities with sales" />
+        <KPICard label="Active SKUs" value={fmtN(skus)} sub="In date range" />
+      </div>
+
+      <div style={{ display: 'grid', gridTemplateColumns: '3fr 2fr', gap: 14, alignItems: 'stretch' }}>
+        <Card title="Daily Revenue Trend">
+          <AreaTrendChart data={daily} color="#FF6B35" />
+        </Card>
+        <Card title="Category Breakdown">
+          {cats.map((c, i) => (
+            <div key={c.category} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '5px 0', borderBottom: `1px solid ${C.border}` }}>
+              <span style={{ width: 8, height: 8, borderRadius: '50%', background: catColors[i % catColors.length], flexShrink: 0 }} />
+              <span style={{ fontSize: 11.5, color: C.t2, flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{c.category}</span>
+              <div style={{ width: 80, height: 5, background: C.bg, borderRadius: 3, flexShrink: 0 }}>
+                <div style={{ height: '100%', borderRadius: 3, background: catColors[i % catColors.length], width: `${(c.rev / maxCatRev) * 100}%` }} />
+              </div>
+              <span style={{ fontSize: 11.5, fontWeight: 600, color: C.t1, minWidth: 60, textAlign: 'right', fontFamily: 'var(--mono)' }}>{fmt(c.rev)}</span>
+              <span style={{ fontSize: 11, color: C.t3, minWidth: 40, textAlign: 'right' }}>{fmtN(c.units)}u</span>
+            </div>
+          ))}
+        </Card>
+      </div>
+
+      <div style={{ display: 'grid', gridTemplateColumns: '3fr 2fr', gap: 14, alignItems: 'stretch' }}>
+        <Card title="Daily Units Sold">
+          <ResponsiveContainer width="100%" height={200}>
+            <BarChart data={daily} margin={{ top: 0, right: 0, bottom: 0, left: 0 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke={C.border} vertical={false} />
+              <XAxis dataKey="date" tick={{ fontSize: 10, fill: C.t3 }} tickFormatter={d => d?.slice(5)} />
+              <YAxis tick={{ fontSize: 10, fill: C.t3 }} tickFormatter={v => fmtN(v)} width={40} />
+              <Tooltip content={<ChartTooltip formatter={fmtN} />} />
+              <Bar dataKey="units" fill="#FF6B35" name="Units" radius={[3,3,0,0]} />
+            </BarChart>
+          </ResponsiveContainer>
+        </Card>
+        <Card title="Top Cities">
+          <div style={{ overflowY: 'auto', maxHeight: 240 }}>
+            {cityRows.slice(0, 20).map((c, i) => (
+              <HBar key={c.city} dot={catColors[i % catColors.length]} label={c.city} width={(c.rev / maxCityRev) * 100} value={fmt(c.rev)} pctVal={`${fmtN(c.units)}u`} />
+            ))}
+          </div>
+        </Card>
+      </div>
+
+      <div className="g-2">
+        <Card title="SKU Performance">
+          <div style={{ overflowY: 'auto', maxHeight: 400 }}>
+            <DataTable
+              columns={[
+                { key: 'name', label: 'Product', render: v => <span style={{ fontSize: 11, display: 'block', wordBreak: 'break-word' }}>{v}</span> },
+                { key: 'units', label: 'Units', align: 'right', render: v => fmtN(v) },
+                { key: 'rev', label: 'Revenue', align: 'right', mono: true, render: v => fmt(v) },
+                { key: 'cities', label: 'Cities', align: 'right', render: v => fmtN(v) },
+              ]}
+              rows={skuRows}
+            />
+          </div>
+        </Card>
+        <Card title="All Cities">
+          <div style={{ overflowY: 'auto', maxHeight: 400 }}>
+            <DataTable
+              columns={[
+                { key: 'city', label: 'City' },
+                { key: 'units', label: 'Units', align: 'right', render: v => fmtN(v) },
+                { key: 'rev', label: 'Revenue', align: 'right', mono: true, render: v => fmt(v) },
+                { key: 'skus', label: 'SKUs', align: 'right', render: v => fmtN(v) },
+              ]}
+              rows={cityRows}
+            />
+          </div>
+        </Card>
+      </div>
+    </div>
+  )
+}
+
 function ChannelTab({ data, channel, filters, setFilters, amzRegion, setAmzRegion }) {
   if (channel === 'Shopify') return <ShopifyTab data={data} filters={filters} setFilters={setFilters} />
   if (channel === 'Amazon') return <AmazonTab data={data} region={amzRegion} setRegion={setAmzRegion} />
   if (channel === 'Flipkart') return <FlipkartTab data={data} />
   if (channel === 'Blinkit') return <BlinkitTab data={data} />
+  if (channel === 'Instamart') return <InstaTab data={data} />
   const chOrders = data.orders.filter(o => o.channel === channel)
   const chRows = data.rows.filter(r => r.Channel === channel)
   const rev = chOrders.reduce((s, o) => s + o.rev, 0)
