@@ -179,6 +179,7 @@ export function exportCSV(rows) {
 
 export function getDefaultDates() {
   const end = new Date(), start = new Date()
-  start.setDate(start.getDate() - 6)
+  end.setDate(end.getDate() - 1)   // yesterday — today's data not yet fully loaded
+  start.setDate(end.getDate() - 6)
   return { start: start.toISOString().slice(0, 10), end: end.toISOString().slice(0, 10) }
 }
