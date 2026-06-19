@@ -2509,6 +2509,32 @@ export default function App() {
   const data = useMemo(() => { if (!rawRows) return null; if (rawRows.source === 'postgres-aggregated' || rawRows.totalRev !== undefined) return rawRows; return processData(rawRows) }, [rawRows])
   const alerts = useMemo(() => data ? detectAlerts(data) : [], [data])
 
+  // After initial load, prefetch all channel tabs in the background so switching is instant
+  const prefetchDoneRef = useRef('')
+  useEffect(() => {
+    if (!data || loading) return
+    const { start, end, category, subCategory, sku, subChannel, voucher } = filters
+    if (!start || !end) return
+    const prefetchKey = `${start}|${end}|${category}|${subCategory}|${sku}|${subChannel}|${voucher}`
+    if (prefetchDoneRef.current === prefetchKey) return
+    prefetchDoneRef.current = prefetchKey
+    const extra = {}
+    if (category?.length) extra.category = category.join(',')
+    if (subCategory?.length) extra.subCategory = subCategory.join(',')
+    if (sku) extra.sku = sku
+    if (subChannel) extra.subChannel = subChannel
+    if (voucher) extra.voucher = voucher
+    const channels = ['Blinkit', 'Instamart', 'Zepto', 'CRED']
+    channels.forEach(ch => {
+      const cacheKey = JSON.stringify({ start, end, ...extra, channel: ch })
+      if (clientCacheRef.current.has(cacheKey)) return
+      fetch(`${API}/api/bq`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ start, end, ...extra, channel: ch }) })
+        .then(r => r.ok ? r.json() : null)
+        .then(json => { if (json) clientCacheRef.current.set(cacheKey, json) })
+        .catch(() => {})
+    })
+  }, [data, loading, filters, API])
+
   return (
     <div className="app-shell">
       <Sidebar page={page} setPage={setPage} />
