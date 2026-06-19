@@ -1031,7 +1031,7 @@ function CategoryChannelMatrix({ heatData, channels, maxHeat }) {
 }
 
 function AllTab({ data }) {
-  const { totalRev, totalExcRev, gstCollected, nOrders, totalQty, blendedAOV, nDays, dailyArr, chMap, catMap, subCatMap, stateMap, cityRows = [], buckets, bucketRev, rows, orders, orderStatusRevMap = {}, orderStatusMap = {}, catChannelMap = {}, prevRev = 0, prevExcRev = 0, prevOrders = 0, prevDailyArr = [], prevChMap = {}, nCusts = 0, repeatCusts = 0 } = data
+  const { totalRev, totalExcRev, gstCollected, nOrders, totalQty, blendedAOV, nDays, dailyArr, chMap, catMap, subCatMap, stateMap, cityRows = [], regionRows = [], tierRows = [], buckets, bucketRev, rows, orders, orderStatusRevMap = {}, orderStatusMap = {}, catChannelMap = {}, prevRev = 0, prevExcRev = 0, prevOrders = 0, prevDailyArr = [], prevChMap = {}, nCusts = 0, repeatCusts = 0 } = data
   const channels = Object.keys(C.ch).filter(ch => chMap[ch])
   const sortedCh = Object.entries(chMap).sort((a, b) => b[1].rev - a[1].rev)
   const maxChRev = sortedCh[0]?.[1].rev || 1
@@ -1195,8 +1195,46 @@ function AllTab({ data }) {
       </div>
       <div className="g-2" style={{ alignItems: 'stretch' }}>
         <PaginatedCard title="Top States" rows={stateRows} columns={[{ key: 'state', label: 'State', render: v => v ? v.charAt(0).toUpperCase() + v.slice(1).toLowerCase() : v }, { key: 'rev', label: 'Revenue', align: 'right', mono: true, render: v => fmt(v) }, { key: 'orders', label: 'Orders', align: 'right', render: v => fmtN(v) }, { key: 'aov', label: 'AOV', align: 'right', render: v => `₹${Math.round(v).toLocaleString('en-IN')}` }, { key: 'cities', label: 'Cities' }]} pageSize={15} />
-        <PaginatedCard title="Top Cities" rows={cityRows} columns={[{ key: 'city', label: 'City', render: v => v ? v.charAt(0).toUpperCase() + v.slice(1).toLowerCase() : v }, { key: 'rev', label: 'Revenue', align: 'right', mono: true, render: v => fmt(v) }, { key: 'orders', label: 'Orders', align: 'right', render: v => fmtN(v) }, { key: 'aov', label: 'AOV', align: 'right', render: (_, r) => `₹${r.orders ? Math.round(r.rev / r.orders).toLocaleString('en-IN') : 0}` }]} pageSize={15} />
+        <PaginatedCard title="Top Cities" rows={cityRows} columns={[{ key: 'city', label: 'City', render: v => v ? v.charAt(0).toUpperCase() + v.slice(1).toLowerCase() : v }, { key: 'state', label: 'State', render: v => v ? v.charAt(0).toUpperCase() + v.slice(1).toLowerCase() : '—' }, { key: 'region', label: 'Region', render: v => v || '—' }, { key: 'rev', label: 'Revenue', align: 'right', mono: true, render: v => fmt(v) }, { key: 'orders', label: 'Orders', align: 'right', render: v => fmtN(v) }, { key: 'aov', label: 'AOV', align: 'right', render: (_, r) => `₹${r.orders ? Math.round(r.rev / r.orders).toLocaleString('en-IN') : 0}` }]} pageSize={15} />
       </div>
+      {(regionRows.length > 0 || tierRows.length > 0) && (
+        <div className="g-2" style={{ alignItems: 'stretch' }}>
+          {regionRows.length > 0 && (
+            <PaginatedCard title="Revenue by Region" rows={regionRows} columns={[
+              { key: 'region', label: 'Region' },
+              { key: 'rev', label: 'Revenue', align: 'right', mono: true, render: v => fmt(v) },
+              { key: 'orders', label: 'Orders', align: 'right', render: v => fmtN(v) },
+              { key: 'units', label: 'Units', align: 'right', render: v => fmtN(v) },
+              { key: 'aov', label: 'AOV', align: 'right', render: (_, r) => `₹${r.orders ? Math.round(r.rev / r.orders).toLocaleString('en-IN') : 0}` },
+            ]} pageSize={10} />
+          )}
+          {tierRows.length > 0 && (
+            <Card title="City Tier Breakdown">
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+                <thead>
+                  <tr style={{ borderBottom: `1.5px solid ${C.border}` }}>
+                    {['Tier', 'Label', 'Revenue', 'Orders', 'Units', 'AOV'].map(h => (
+                      <th key={h} style={{ padding: '6px 10px', textAlign: h === 'Tier' || h === 'Label' ? 'left' : 'right', color: C.t2, fontWeight: 700, fontSize: 11 }}>{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {tierRows.map((r, i) => (
+                    <tr key={i} style={{ borderBottom: `1px solid ${C.border}`, background: i % 2 === 0 ? 'transparent' : C.bg }}>
+                      <td style={{ padding: '7px 10px', fontWeight: 700, color: C.t1 }}>{r.tier ? `Tier ${r.tier}` : '—'}</td>
+                      <td style={{ padding: '7px 10px', color: C.t2 }}>{r.label || '—'}</td>
+                      <td style={{ padding: '7px 10px', textAlign: 'right', fontFamily: 'monospace', color: C.t1 }}>{fmt(r.rev)}</td>
+                      <td style={{ padding: '7px 10px', textAlign: 'right', color: C.t2 }}>{fmtN(r.orders)}</td>
+                      <td style={{ padding: '7px 10px', textAlign: 'right', color: C.t2 }}>{fmtN(r.units)}</td>
+                      <td style={{ padding: '7px 10px', textAlign: 'right', color: C.t2 }}>₹{r.orders ? Math.round(r.rev / r.orders).toLocaleString('en-IN') : 0}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </Card>
+          )}
+        </div>
+      )}
     </div>
   )
 }
