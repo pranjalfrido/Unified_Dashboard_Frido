@@ -3,14 +3,23 @@ import { C, fmt, fmtN, pct, processData, detectAlerts, exportCSV, getDefaultDate
 import { KPICard, AlertCard, HBar, DataTable, Card, Badge, RevTrendChart, AreaTrendChart, MultiLineChart, ChartTooltip, BarChart, Bar, LineChart, Line, AreaChart, Area, ComposedChart, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell } from './components.jsx'
 
 // ── Sidebar ───────────────────────────────────────────────────
+const SvgIcon = ({ d, size = 18, stroke = 'currentColor', fill = 'none', strokeWidth = 1.6 }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill={fill} stroke={stroke} strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round">
+    {Array.isArray(d) ? d.map((p, i) => <path key={i} d={p} />) : <path d={d} />}
+  </svg>
+)
+
 function Sidebar({ page, setPage }) {
   const items = [
-    { id: 'overview', icon: '⊞', label: 'Overview' },
-    { id: 'sales', icon: '▦', label: 'Sales' },
-    { id: 'intelligence', icon: '◈', label: 'Intel' },
+    { id: 'overview', label: 'Overview', icon: <SvgIcon d={['M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z','M9 22V12h6v10']} /> },
+    { id: 'sales', label: 'Sales', icon: <SvgIcon d={['M18 20V10','M12 20V4','M6 20v-6']} /> },
+    { id: 'intelligence', label: 'Intel', icon: <SvgIcon d={['M12 2a7 7 0 017 7c0 3.5-2 5.5-2 8H7c0-2.5-2-4.5-2-8a7 7 0 017-7z','M9 21h6','M9.5 17.5h5']} /> },
   ]
   const dims = [
-    { label: 'P&L' }, { label: 'Inventory' }, { label: 'Courier' }, { label: 'Marketing' }
+    { label: 'P&L', icon: <SvgIcon d={['M12 1v22','M17 5H9.5a3.5 3.5 0 100 7h5a3.5 3.5 0 110 7H6']} /> },
+    { label: 'Inventory', icon: <SvgIcon d={['M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z','M3.27 6.96L12 12.01l8.73-5.05','M12 22.08V12']} /> },
+    { label: 'Courier', icon: <SvgIcon d={['M1 3h15v13H1z','M16 8h4l3 3v5h-7V8z','M5.5 19a1.5 1.5 0 100-3 1.5 1.5 0 000 3z','M18.5 19a1.5 1.5 0 100-3 1.5 1.5 0 000 3z']} /> },
+    { label: 'Marketing', icon: <SvgIcon d={['M22 12h-4l-3 9L9 3l-3 9H2']} /> },
   ]
   return (
     <nav className="sidebar">
@@ -30,15 +39,18 @@ function Sidebar({ page, setPage }) {
       <div className="sb-div" />
       {dims.map(d => (
         <div key={d.label} className="sb-item dim">
-          <span className="sb-icon" style={{ fontSize: 16 }}>○</span>
+          <span className="sb-icon">{d.icon}</span>
           <span className="sb-label">{d.label}</span>
         </div>
       ))}
       <div style={{ marginTop: 'auto', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
         <div className="sb-div" />
-        {[{ ic: '⚙', label: 'Settings' }, { ic: '👤', label: 'Profile' }].map(b => (
+        {[
+          { label: 'Settings', icon: <SvgIcon d={['M12 15a3 3 0 100-6 3 3 0 000 6z', 'M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z']} /> },
+          { label: 'Profile', icon: <SvgIcon d={['M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2', 'M12 11a4 4 0 100-8 4 4 0 000 8z']} /> },
+        ].map(b => (
           <div key={b.label} className="sb-item">
-            <span className="sb-icon" style={{ fontSize: 16 }}>{b.ic}</span>
+            <span className="sb-icon">{b.icon}</span>
             <span className="sb-label">{b.label}</span>
           </div>
         ))}
@@ -50,9 +62,9 @@ function Sidebar({ page, setPage }) {
 // ── Bottom Nav (mobile) ───────────────────────────────────────
 function BottomNav({ page, setPage }) {
   const items = [
-    { id: 'overview', icon: '⊞', label: 'Overview' },
-    { id: 'sales', icon: '▦', label: 'Sales' },
-    { id: 'intelligence', icon: '◈', label: 'Intel' },
+    { id: 'overview', label: 'Overview', icon: <SvgIcon d={['M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z','M9 22V12h6v10']} size={22} /> },
+    { id: 'sales', label: 'Sales', icon: <SvgIcon d={['M18 20V10','M12 20V4','M6 20v-6']} size={22} /> },
+    { id: 'intelligence', label: 'Intel', icon: <SvgIcon d={['M12 2a7 7 0 017 7c0 3.5-2 5.5-2 8H7c0-2.5-2-4.5-2-8a7 7 0 017-7z','M9 21h6','M9.5 17.5h5']} size={22} /> },
   ]
   return (
     <nav className="bottom-nav">
