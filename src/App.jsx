@@ -2116,7 +2116,7 @@ function SalesPage({ data, filters, setFilters, activeTab, setActiveTab, fetchDa
       if (sku) extra.sku = sku
       if (subChannel) extra.subChannel = subChannel
       if (voucher) extra.voucher = voucher
-      fetchData(start, end, extra)
+      fetchData(start, end, extra, true)
     }
   }, [activeTab, fetchData])
 
@@ -2444,16 +2444,23 @@ export default function App() {
   const activeTabRef = useRef(activeTab)
   activeTabRef.current = activeTab
 
-  const fetchData = useCallback(async (start, end, extraFilters = {}) => {
+  const fetchData = useCallback(async (start, end, extraFilters = {}, keepPrev = false) => {
     const reqId = ++reqIdRef.current
-    setLoading(true); setError(null)
+    if (!keepPrev) setLoading(true)
+    setError(null)
     try {
       const ch = TAB_TO_CHANNEL[activeTabRef.current] || null
       const res = await fetch(`${API}/api/bq`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ start, end, ...extraFilters, ...(ch ? { channel: ch } : {}) }) })
       if (!res.ok) throw new Error(`API error ${res.status}: ${await res.text()}`)
       const json = await res.json()
       if (reqId !== reqIdRef.current) return // stale response, ignore
-      setRawRows(json.source === 'postgres-aggregated' ? json : (json.totalRev !== undefined ? json : (json.rows || [])))
+      setRawRows(prev => {
+        const next = json.source === 'postgres-aggregated' ? json : (json.totalRev !== undefined ? json : (json.rows || []))
+        if (keepPrev && prev && typeof prev === 'object' && !Array.isArray(prev)) {
+          return { ...prev, ...next }
+        }
+        return next
+      })
     } catch (e) { if (reqId === reqIdRef.current) setError(e.message) }
     finally { if (reqId === reqIdRef.current) setLoading(false) }
   }, [API])
