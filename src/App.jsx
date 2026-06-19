@@ -2422,11 +2422,17 @@ export default function App() {
   const API = import.meta.env.VITE_API_URL || ''
   const reqIdRef = useRef(0)
 
+  const activeTabRef = useRef(activeTab)
+  activeTabRef.current = activeTab
+
+  const tabToChannel = { blinkit: 'Blinkit', instamart: 'Instamart', zepto: 'Zepto', cred: 'CRED' }
+
   const fetchData = useCallback(async (start, end, extraFilters = {}) => {
     const reqId = ++reqIdRef.current
     setLoading(true); setError(null)
     try {
-      const res = await fetch(`${API}/api/bq`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ start, end, ...extraFilters }) })
+      const ch = tabToChannel[activeTabRef.current] || null
+      const res = await fetch(`${API}/api/bq`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ start, end, ...extraFilters, ...(ch ? { channel: ch } : {}) }) })
       if (!res.ok) throw new Error(`API error ${res.status}: ${await res.text()}`)
       const json = await res.json()
       if (reqId !== reqIdRef.current) return // stale response, ignore
@@ -2456,6 +2462,25 @@ export default function App() {
     }, 600)
     return () => clearTimeout(debounceRef.current)
   }, [filters.start, filters.end, filters.category, filters.subCategory, filters.sku, filters.subChannel, filters.voucher, fetchData])
+
+  const prevTabRef = useRef(activeTab)
+  useEffect(() => {
+    const prev = prevTabRef.current
+    prevTabRef.current = activeTab
+    const channelTabs = ['blinkit','instamart','zepto','cred']
+    if (channelTabs.includes(activeTab) && !channelTabs.includes(prev)) {
+      // switching into a channel tab — refetch with channel param
+      const { start, end, category, subCategory, sku, subChannel, voucher } = filtersRef.current
+      if (!start || !end) return
+      const extra = {}
+      if (category?.length) extra.category = category.join(',')
+      if (subCategory?.length) extra.subCategory = subCategory.join(',')
+      if (sku) extra.sku = sku
+      if (subChannel) extra.subChannel = subChannel
+      if (voucher) extra.voucher = voucher
+      fetchData(start, end, extra)
+    }
+  }, [activeTab, fetchData])
 
   const data = useMemo(() => { if (!rawRows) return null; if (rawRows.source === 'postgres-aggregated' || rawRows.totalRev !== undefined) return rawRows; return processData(rawRows) }, [rawRows])
   const alerts = useMemo(() => data ? detectAlerts(data) : [], [data])
