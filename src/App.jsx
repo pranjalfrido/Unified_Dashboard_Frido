@@ -914,7 +914,7 @@ function DailyChannelTable({ dailyArr, channels, nDays = 7 }) {
     return dt.toLocaleDateString('en-IN', { weekday: 'short', month: 'short', day: 'numeric' })
   }
 
-  const thStyle = (ch) => ({ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.05em', color: ch ? (C.ch[ch] || C.t3) : C.t3, textAlign: 'right', padding: '5px 8px 7px', borderBottom: `2px solid ${ch ? (C.ch[ch] || C.border) : C.border}`, whiteSpace: 'nowrap', background: C.card })
+  const thStyle = (ch) => ({ fontSize: 11, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '.05em', color: ch ? (C.ch[ch] || C.t2) : C.t1, textAlign: 'right', padding: '5px 8px 7px', borderBottom: `2px solid ${ch ? (C.ch[ch] || C.border) : C.border}`, whiteSpace: 'nowrap', background: C.card })
 
   return (
     <Card>
