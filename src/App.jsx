@@ -2586,7 +2586,6 @@ function MyntraTab({ data }) {
         <KPICard label="Cities" value={fmtN(totals.cities)} sub="Cities covered" />
         <KPICard label="Units per Order" value={nOrders ? (qty / nOrders).toFixed(2) : '0'} sub="Avg basket size" />
         <KPICard label="Net per Unit" value={`₹${Math.round(asp).toLocaleString('en-IN')}`} sub="Exc. GST per unit" />
-        <KPICard label="Active Days" value={fmtN(totals.days)} sub="Days with orders" />
       </div>
 
       {/* Daily chart + Order Status */}
