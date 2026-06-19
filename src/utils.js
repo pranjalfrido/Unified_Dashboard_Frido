@@ -87,10 +87,12 @@ export function processData(rows) {
 
   const subCatMap = {}
   rows.forEach(r => {
+    const cat = r.Category || 'Unknown'
     const sc = r.SubCategory || 'Unknown'
-    if (!subCatMap[sc]) subCatMap[sc] = { rev: 0, orders: new Set() }
-    subCatMap[sc].rev += parseFloat(r.SellingPrice_Inc_GST || 0)
-    subCatMap[sc].orders.add(r.OrderId)
+    const key = `${cat}::${sc}`
+    if (!subCatMap[key]) subCatMap[key] = { rev: 0, orders: new Set() }
+    subCatMap[key].rev += parseFloat(r.SellingPrice_Inc_GST || 0)
+    subCatMap[key].orders.add(r.OrderId)
   })
 
   const stateMap = {}

@@ -322,7 +322,8 @@ function Topnav({ page, alerts, onRefresh, loading, filters, setFilters, rawRows
 
 // ── Overview Page ─────────────────────────────────────────────
 function OverviewPage({ data, alerts }) {
-  const { totalRev, totalExcRev, gstCollected, nOrders, totalQty, blendedAOV, nDays, chMap, catMap, stateMap, nCusts, repeatCusts, dailyArr, orders, htCount, htRev, multiItemOrders } = data
+  const { totalRev, totalExcRev, gstCollected, nOrders, totalQty, blendedAOV, nDays, chMap, catMap, subCatMap, stateMap, nCusts, repeatCusts, dailyArr, orders, htCount, htRev, multiItemOrders } = data
+  const [selectedCat, setSelectedCat] = useState(null)
   const shopifyRev = chMap['Shopify']?.rev || 0
   const d2cPct = totalRev ? (shopifyRev / totalRev * 100).toFixed(1) : '0'
   const mktPct = (100 - parseFloat(d2cPct)).toFixed(1)
@@ -334,7 +335,7 @@ function OverviewPage({ data, alerts }) {
   const sortedCh = Object.entries(chMap).sort((a, b) => b[1].rev - a[1].rev)
   const maxChRev = sortedCh[0]?.[1].rev || 1
   const bestAOV = sortedCh.reduce((b, [ch, v]) => { const a = v.orders ? v.rev / v.orders : 0; return a > b.aov ? { ch, aov: a } : b }, { ch: '', aov: 0 })
-  const topCats = Object.entries(catMap).map(([k, v]) => ({ name: k, rev: v.rev, orders: v.orders.size, aov: v.orders.size ? v.rev / v.orders.size : 0 })).sort((a, b) => b.rev - a.rev).slice(0, 5)
+  const allCats = Object.entries(catMap).map(([k, v]) => ({ name: k, rev: v.rev, orders: v.orders.size, aov: v.orders.size ? v.rev / v.orders.size : 0 })).sort((a, b) => b.rev - a.rev)
   const channels = Object.keys(C.ch).filter(ch => chMap[ch])
   const voucherOrders = orders.filter(o => o.voucher).length
 
@@ -405,10 +406,34 @@ function OverviewPage({ data, alerts }) {
             { key: 'aov', label: 'AOV', align: 'right', mono: true, render: v => `₹${Math.round(v).toLocaleString('en-IN')}` },
           ]} rows={Object.keys(C.ch).map(ch => { const v = chMap[ch] || { rev: 0, orders: 0 }; return { ch, rev: v.rev, orders: v.orders, aov: v.orders ? v.rev / v.orders : 0 } })} />
         </Card>
-        <Card title="Top performers">
-          <div style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.07em', color: C.t3, marginBottom: 7 }}>Categories</div>
-          <DataTable columns={[{ key: 'name', label: 'Category' }, { key: 'rev', label: 'Revenue', align: 'right', mono: true, render: v => fmt(v) }, { key: 'aov', label: 'AOV', align: 'right', render: v => `₹${Math.round(v).toLocaleString('en-IN')}` }]} rows={topCats} maxRows={5} />
-        </Card>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+          <Card title="Categories" note={selectedCat ? <span style={{ cursor: 'pointer', color: C.acc, fontWeight: 600 }} onClick={() => setSelectedCat(null)}>✕ Clear</span> : `${allCats.length} total`}>
+            <DataTable columns={[
+              { key: 'name', label: 'Category', render: (v) => (
+                <span onClick={() => setSelectedCat(s => s === v ? null : v)} style={{ cursor: 'pointer', color: selectedCat === v ? C.t1 : C.t2, fontWeight: selectedCat === v ? 700 : 400, background: selectedCat === v ? C.acl : 'transparent', borderRadius: 5, padding: '1px 5px', display: 'inline-block' }}>{v}</span>
+              )},
+              { key: 'rev', label: 'Revenue', align: 'right', mono: true, render: v => fmt(v) },
+              { key: 'orders', label: 'Orders', align: 'right', render: v => fmtN(v) },
+              { key: 'aov', label: 'AOV', align: 'right', render: v => `₹${Math.round(v).toLocaleString('en-IN')}` },
+            ]} rows={allCats} maxRows={allCats.length} />
+          </Card>
+          {selectedCat && (() => {
+            const subRows = Object.entries(subCatMap || {})
+              .filter(([k]) => k.startsWith(selectedCat + '::'))
+              .map(([k, v]) => ({ name: k.split('::')[1], rev: v.rev, orders: v.orders.size, aov: v.orders.size ? v.rev / v.orders.size : 0 }))
+              .sort((a, b) => b.rev - a.rev)
+            return (
+              <Card title={`Sub-categories · ${selectedCat}`}>
+                <DataTable columns={[
+                  { key: 'name', label: 'Sub-category' },
+                  { key: 'rev', label: 'Revenue', align: 'right', mono: true, render: v => fmt(v) },
+                  { key: 'orders', label: 'Orders', align: 'right', render: v => fmtN(v) },
+                  { key: 'aov', label: 'AOV', align: 'right', render: v => `₹${Math.round(v).toLocaleString('en-IN')}` },
+                ]} rows={subRows} maxRows={subRows.length} />
+              </Card>
+            )
+          })()}
+        </div>
       </div>
     </div>
   )
