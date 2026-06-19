@@ -1558,13 +1558,6 @@ function BlinkitTab({ data }) {
         </Card>
       </div>
 
-      <Card title="Top Cities">
-        <div style={{ overflowY: 'auto', maxHeight: 240 }}>
-          {cityRows.slice(0, 20).map((c, i) => (
-            <HBar key={c.city} dot={catColors[i % catColors.length]} label={c.city} width={(c.rev / maxCityRev) * 100} value={fmt(c.rev)} pctVal={`${fmtN(c.units)}u`} />
-          ))}
-        </div>
-      </Card>
 
       {/* SKU Table + City Table */}
       <div className="g-2">
@@ -1666,13 +1659,6 @@ function InstaTab({ data }) {
         </Card>
       </div>
 
-      <Card title="Top Cities">
-        <div style={{ overflowY: 'auto', maxHeight: 240 }}>
-          {cityRows.slice(0, 20).map((c, i) => (
-            <HBar key={c.city} dot={catColors[i % catColors.length]} label={c.city} width={(c.rev / maxCityRev) * 100} value={fmt(c.rev)} pctVal={`${fmtN(c.units)}u`} />
-          ))}
-        </div>
-      </Card>
 
       <div className="g-2">
         <Card title="SKU Performance">
@@ -1769,13 +1755,6 @@ function ZeptoTab({ data }) {
         </Card>
       </div>
 
-      <Card title="Top Cities">
-        <div style={{ overflowY: 'auto', maxHeight: 240 }}>
-          {cityRows.slice(0, 20).map((c, i) => (
-            <HBar key={c.city} dot={catColors[i % catColors.length]} label={c.city} width={(c.rev / maxCityRev) * 100} value={fmt(c.rev)} pctVal={`${fmtN(c.units)}u`} />
-          ))}
-        </div>
-      </Card>
 
       <div className="g-2">
         <Card title="SKU Performance">
