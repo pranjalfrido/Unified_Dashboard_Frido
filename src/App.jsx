@@ -24,9 +24,7 @@ function Sidebar({ page, setPage }) {
   return (
     <nav className="sidebar">
       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', marginBottom: 14, gap: 2 }}>
-        <div style={{ width: 36, height: 36, borderRadius: 10, background: C.acc, display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 3px 12px rgba(255,214,0,.4)' }}>
-          <span style={{ fontSize: 13, fontWeight: 700, color: '#13121A' }}>Fr</span>
-        </div>
+        <img src="/frido-logo.png" alt="Frido" style={{ width: 36, height: 36, borderRadius: 10, objectFit: 'cover' }} />
         <span style={{ fontSize: 7.5, fontWeight: 600, color: C.t3, letterSpacing: '.04em', textTransform: 'uppercase', lineHeight: 1, textAlign: 'center' }}>Analytics</span>
       </div>
       {items.map(item => (
@@ -306,9 +304,9 @@ function Topnav({ page, alerts, onRefresh, loading, filters, setFilters, rawRows
   const critical = alerts.filter(a => a.type === 'red').length
   return (
     <div className="topnav">
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 1, flexShrink: 0 }}>
-        <span style={{ fontSize: 20, fontWeight: 800, color: C.t1, letterSpacing: '-.02em', lineHeight: 1 }}>Frido</span>
-        <span style={{ fontSize: 11, color: C.t3, fontWeight: 600, lineHeight: 1, letterSpacing: '.04em', textTransform: 'uppercase' }}>Analytics</span>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+        <img src="/frido-logo.png" alt="Frido" style={{ height: 28, width: 28, borderRadius: 7, objectFit: 'cover', flexShrink: 0 }} />
+        <span style={{ fontSize: 11, color: C.t3, fontWeight: 600, letterSpacing: '.04em', textTransform: 'uppercase' }}>Analytics</span>
       </div>
       <div className="tnav-sep" />
       <span className="tnav-title">{titles[page]}</span>
