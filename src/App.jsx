@@ -406,10 +406,36 @@ function OverviewPage({ data, alerts }) {
             { key: 'aov', label: 'AOV', align: 'right', mono: true, render: v => `₹${Math.round(v).toLocaleString('en-IN')}` },
           ]} rows={Object.keys(C.ch).map(ch => { const v = chMap[ch] || { rev: 0, orders: 0 }; return { ch, rev: v.rev, orders: v.orders, aov: v.orders ? v.rev / v.orders : 0 } })} />
         </Card>
-        <Card title="Top States" style={{ flex: 1 }}>
-          {Object.entries(stateMap).sort((a,b) => b[1].rev - a[1].rev).slice(0,10).map(([st, v]) => (
-            <HBar key={st} dot={C.acc} label={st} width={(v.rev / (Object.values(stateMap).sort((a,b)=>b.rev-a.rev)[0]?.rev||1))*100} value={fmt(v.rev)} pctVal={pct(v.rev, totalRev)} />
-          ))}
+        <Card title="New vs Repeat Customers" note={`${fmtN(nCusts)} total in period`} style={{ flex: 1 }}>
+          {(() => {
+            const newCusts = nCusts - repeatCusts
+            const donutData = [
+              { name: 'New', value: newCusts, color: C.acc },
+              { name: 'Repeat', value: repeatCusts, color: '#0D9E68' },
+            ]
+            return (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 24 }}>
+                <PieChart width={160} height={160}>
+                  <Pie data={donutData} cx={75} cy={75} innerRadius={45} outerRadius={72} dataKey="value" paddingAngle={2}>
+                    {donutData.map((d, i) => <Cell key={i} fill={d.color} />)}
+                  </Pie>
+                  <Tooltip formatter={(v) => fmtN(v)} />
+                </PieChart>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+                  {donutData.map(d => (
+                    <div key={d.name} style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                        <span style={{ width: 10, height: 10, borderRadius: '50%', background: d.color, flexShrink: 0 }} />
+                        <span style={{ fontSize: 12, color: C.t2 }}>{d.name}</span>
+                      </div>
+                      <span style={{ fontSize: 20, fontWeight: 700, color: C.t1, letterSpacing: '-.02em', paddingLeft: 16 }}>{fmtN(d.value)}</span>
+                      <span style={{ fontSize: 11, color: C.t3, paddingLeft: 16 }}>{nCusts ? (d.value / nCusts * 100).toFixed(1) : 0}% of total</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )
+          })()}
         </Card>
       </div>
 
