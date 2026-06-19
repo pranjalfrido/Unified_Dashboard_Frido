@@ -1044,7 +1044,6 @@ function AllTab({ data }) {
           )
         })()}
         {[
-          { label: 'Orders', value: fmtN(nOrders), sub: `${fmtN(totalQty)} units` },
           { label: 'Return %', value: `${returnPct.toFixed(1)}%`, sub: `${fmtN(rtoOrders)} RTO orders`, accent: returnPct > 10 ? '#7A1A1A' : undefined },
           { label: 'Blended AOV', value: `₹${Math.round(blendedAOV).toLocaleString('en-IN')}` },
           { label: 'Daily Avg', value: fmt(totalRev / nDays) },
