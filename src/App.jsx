@@ -394,14 +394,6 @@ function OverviewPage({ data, alerts }) {
                       </div>
                     ))}
                   </div>
-                  <div style={{ display: 'flex', gap: 14, marginTop: 5 }}>
-                    {segs.map((s, i) => (
-                      <span key={i} style={{ fontSize: 10, fontWeight: 600, color: C.t2 }}>
-                        <span style={{ display: 'inline-block', width: 8, height: 8, borderRadius: 2, background: s.bg, marginRight: 4 }} />
-                        {s.label}
-                      </span>
-                    ))}
-                  </div>
                 </div>
               )
             })()}
