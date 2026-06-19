@@ -1491,7 +1491,8 @@ function FlipkartTab({ data }) {
   )
 }
 
-function BlinkitTab({ data }) {
+function BlinkitTab({ data, loading }) {
+  if (loading && !data.blinkit) return <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: 300, color: '#888', fontSize: 14 }}>Loading Blinkit data…</div>
   const bl = data.blinkit || {}
   const t = bl.totals || {}
   const nDays = t.days || 1
@@ -1602,7 +1603,8 @@ function BlinkitTab({ data }) {
   )
 }
 
-function InstaTab({ data }) {
+function InstaTab({ data, loading }) {
+  if (loading && !data.instamart) return <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: 300, color: '#888', fontSize: 14 }}>Loading Instamart data…</div>
   const ins = data.instamart || {}
   const t = ins.totals || {}
   const nDays = t.days || 1
@@ -1709,7 +1711,8 @@ function InstaTab({ data }) {
   )
 }
 
-function ZeptoTab({ data }) {
+function ZeptoTab({ data, loading }) {
+  if (loading && !data.zepto) return <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: 300, color: '#888', fontSize: 14 }}>Loading Zepto data…</div>
   const zp = data.zepto || {}
   const t = zp.totals || {}
   const nDays = t.days || 1
@@ -1813,7 +1816,8 @@ function ZeptoTab({ data }) {
   )
 }
 
-function CredTab({ data }) {
+function CredTab({ data, loading }) {
+  if (loading && !data.cred) return <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: 300, color: '#888', fontSize: 14 }}>Loading CRED data…</div>
   const cr = data.cred || {}
   const t = cr.totals || {}
   const nDays = t.days || 1
@@ -1922,14 +1926,14 @@ function CredTab({ data }) {
   )
 }
 
-function ChannelTab({ data, channel, filters, setFilters, amzRegion, setAmzRegion }) {
+function ChannelTab({ data, channel, filters, setFilters, amzRegion, setAmzRegion, channelLoading }) {
   if (channel === 'Shopify') return <ShopifyTab data={data} filters={filters} setFilters={setFilters} />
   if (channel === 'Amazon') return <AmazonTab data={data} region={amzRegion} setRegion={setAmzRegion} />
   if (channel === 'Flipkart') return <FlipkartTab data={data} />
-  if (channel === 'Blinkit') return <BlinkitTab data={data} />
-  if (channel === 'Instamart') return <InstaTab data={data} />
-  if (channel === 'Zepto') return <ZeptoTab data={data} />
-  if (channel === 'CRED') return <CredTab data={data} />
+  if (channel === 'Blinkit') return <BlinkitTab data={data} loading={channelLoading} />
+  if (channel === 'Instamart') return <InstaTab data={data} loading={channelLoading} />
+  if (channel === 'Zepto') return <ZeptoTab data={data} loading={channelLoading} />
+  if (channel === 'CRED') return <CredTab data={data} loading={channelLoading} />
   const chOrders = data.orders.filter(o => o.channel === channel)
   const chRows = data.rows.filter(r => r.Channel === channel)
   const rev = chOrders.reduce((s, o) => s + o.rev, 0)
@@ -2098,7 +2102,7 @@ function CXTab({ data }) {
   )
 }
 
-function SalesPage({ data, filters, setFilters, activeTab, setActiveTab, fetchData }) {
+function SalesPage({ data, filters, setFilters, activeTab, setActiveTab, fetchData, channelLoading }) {
   const [amzRegion, setAmzRegion] = useState('india') // lifted from AmazonTab to blur filters for intl
   const filteredData = data
   const filtersRef = useRef(filters)
@@ -2165,10 +2169,10 @@ function SalesPage({ data, filters, setFilters, activeTab, setActiveTab, fetchDa
         {activeTab === 'shopify' && <ChannelTab data={filteredData} channel="Shopify" filters={filters} setFilters={setFilters} />}
         {activeTab === 'amazon' && <ChannelTab data={filteredData} channel="Amazon" amzRegion={amzRegion} setAmzRegion={setAmzRegion} />}
         {activeTab === 'flipkart' && <ChannelTab data={filteredData} channel="Flipkart" />}
-        {activeTab === 'blinkit' && <ChannelTab data={filteredData} channel="Blinkit" />}
-        {activeTab === 'cred' && <ChannelTab data={filteredData} channel="CRED" />}
-        {activeTab === 'instamart' && <ChannelTab data={filteredData} channel="Instamart" />}
-        {activeTab === 'zepto' && <ChannelTab data={filteredData} channel="Zepto" />}
+        {activeTab === 'blinkit' && <ChannelTab data={filteredData} channel="Blinkit" channelLoading={channelLoading} />}
+        {activeTab === 'cred' && <ChannelTab data={filteredData} channel="CRED" channelLoading={channelLoading} />}
+        {activeTab === 'instamart' && <ChannelTab data={filteredData} channel="Instamart" channelLoading={channelLoading} />}
+        {activeTab === 'zepto' && <ChannelTab data={filteredData} channel="Zepto" channelLoading={channelLoading} />}
         {activeTab === 'myntra' && <ChannelTab data={filteredData} channel="Myntra" />}
         {activeTab === 'qc' && <QCTab data={filteredData} />}
         {activeTab === 'ops' && <OpsTab data={filteredData} />}
@@ -2437,6 +2441,7 @@ export default function App() {
   const [activeTab, setActiveTab] = useState('all')
   const [rawRows, setRawRows] = useState(null)
   const [loading, setLoading] = useState(false)
+  const [channelLoading, setChannelLoading] = useState(false)
   const [error, setError] = useState(null)
 
   const API = import.meta.env.VITE_API_URL || ''
@@ -2447,6 +2452,7 @@ export default function App() {
   const fetchData = useCallback(async (start, end, extraFilters = {}, keepPrev = false) => {
     const reqId = ++reqIdRef.current
     if (!keepPrev) setLoading(true)
+    else setChannelLoading(true)
     setError(null)
     try {
       const ch = TAB_TO_CHANNEL[activeTabRef.current] || null
@@ -2462,7 +2468,7 @@ export default function App() {
         return next
       })
     } catch (e) { if (reqId === reqIdRef.current) setError(e.message) }
-    finally { if (reqId === reqIdRef.current) setLoading(false) }
+    finally { if (reqId === reqIdRef.current) { setLoading(false); setChannelLoading(false) } }
   }, [API])
 
   const debounceRef = useRef(null)
@@ -2525,7 +2531,7 @@ export default function App() {
               <OverviewPage data={data} alerts={alerts} />
             </div>
           )}
-          {page === 'sales' && data && <SalesPage data={data} filters={filters} setFilters={setFilters} activeTab={activeTab} setActiveTab={setActiveTab} fetchData={fetchData} />}
+          {page === 'sales' && data && <SalesPage data={data} filters={filters} setFilters={setFilters} activeTab={activeTab} setActiveTab={setActiveTab} fetchData={fetchData} channelLoading={channelLoading} />}
           {page === 'intelligence' && (
             <div className="page-scroll">
               <IntelPage data={data} />
