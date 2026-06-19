@@ -205,25 +205,25 @@ function DateRangePicker({ filters, setFilters }) {
             </div>
             {monthPickerOpen ? (
               /* ── Month/Year quick-jump overlay ── */
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 16, padding: '8px 0' }}>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 16 }}>
-                  <button onClick={() => setYearInput(y => y - 1)} style={{ background: 'none', border: `1px solid ${C.border2}`, borderRadius: 6, cursor: 'pointer', fontSize: 16, color: C.t2, padding: '4px 14px', fontFamily: 'var(--font)' }}>‹</button>
-                  <span style={{ fontSize: 20, fontWeight: 700, color: C.t1, minWidth: 70, textAlign: 'center' }}>{yearInput}</span>
-                  <button onClick={() => setYearInput(y => y + 1)} style={{ background: 'none', border: `1px solid ${C.border2}`, borderRadius: 6, cursor: 'pointer', fontSize: 16, color: C.t2, padding: '4px 14px', fontFamily: 'var(--font)' }}>›</button>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10 }}>
+                  <button onClick={() => setYearInput(y => y - 1)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 16, color: C.t2, padding: '2px 8px', fontFamily: 'var(--font)' }}>‹</button>
+                  <span style={{ fontSize: 15, fontWeight: 700, color: C.t1, minWidth: 48, textAlign: 'center' }}>{yearInput}</span>
+                  <button onClick={() => setYearInput(y => y + 1)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 16, color: C.t2, padding: '2px 8px', fontFamily: 'var(--font)' }}>›</button>
                 </div>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 8 }}>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 5 }}>
                   {MONTH_NAMES.map((mn, i) => {
                     const isCurrent = leftMonth.getFullYear() === yearInput && leftMonth.getMonth() === i
                     return (
                       <button key={mn} onClick={() => { setLeftMonth(new Date(yearInput, i, 1)); setMonthPickerOpen(false) }}
-                        style={{ padding: '10px 4px', borderRadius: 8, border: isCurrent ? `2px solid ${C.acc}` : `1px solid ${C.border}`, background: isCurrent ? C.acl : 'transparent', color: C.t1, cursor: 'pointer', fontSize: 13, fontWeight: isCurrent ? 700 : 400, fontFamily: 'var(--font)' }}>
+                        style={{ padding: '6px 4px', borderRadius: 6, border: isCurrent ? `2px solid ${C.acc}` : `1px solid ${C.border}`, background: isCurrent ? C.acl : 'transparent', color: C.t1, cursor: 'pointer', fontSize: 12, fontWeight: isCurrent ? 700 : 400, fontFamily: 'var(--font)' }}>
                         {mn}
                       </button>
                     )
                   })}
                 </div>
-                <div style={{ textAlign: 'center' }}>
-                  <button onClick={() => setMonthPickerOpen(false)} style={{ padding: '5px 20px', borderRadius: 7, border: `1px solid ${C.border2}`, background: 'transparent', color: C.t2, cursor: 'pointer', fontSize: 12, fontFamily: 'var(--font)' }}>← Back to calendar</button>
+                <div style={{ textAlign: 'center', marginTop: 2 }}>
+                  <button onClick={() => setMonthPickerOpen(false)} style={{ padding: '3px 14px', borderRadius: 6, border: `1px solid ${C.border}`, background: 'transparent', color: C.t3, cursor: 'pointer', fontSize: 11, fontFamily: 'var(--font)' }}>← back</button>
                 </div>
               </div>
             ) : (
