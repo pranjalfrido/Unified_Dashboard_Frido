@@ -304,9 +304,9 @@ function Topnav({ page, alerts, onRefresh, loading, filters, setFilters, rawRows
   const critical = alerts.filter(a => a.type === 'red').length
   return (
     <div className="topnav">
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 2, flexShrink: 0 }}>
-        <img src="/frido-logo.png" alt="Frido" style={{ height: 22, width: 'auto', borderRadius: 5, objectFit: 'cover' }} />
-        <span style={{ fontSize: 10, color: C.t3, fontWeight: 600, letterSpacing: '.04em', textTransform: 'uppercase', lineHeight: 1 }}>Analytics</span>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 1, flexShrink: 0 }}>
+        <span style={{ fontSize: 20, fontWeight: 800, color: C.t1, letterSpacing: '-.02em', lineHeight: 1 }}>Frido</span>
+        <span style={{ fontSize: 10, color: C.t3, fontWeight: 600, lineHeight: 1, letterSpacing: '.04em', textTransform: 'uppercase' }}>Analytics</span>
       </div>
       <div className="tnav-sep" />
       <span className="tnav-title">{titles[page]}</span>
