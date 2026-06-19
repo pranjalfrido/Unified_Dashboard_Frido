@@ -406,8 +406,9 @@ function OverviewPage({ data, alerts }) {
             { key: 'aov', label: 'AOV', align: 'right', mono: true, render: v => `₹${Math.round(v).toLocaleString('en-IN')}` },
           ]} rows={Object.keys(C.ch).map(ch => { const v = chMap[ch] || { rev: 0, orders: 0 }; return { ch, rev: v.rev, orders: v.orders, aov: v.orders ? v.rev / v.orders : 0 } })} />
         </Card>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-          <Card title="Categories" note={selectedCat ? <span style={{ cursor: 'pointer', color: C.acc, fontWeight: 600 }} onClick={() => setSelectedCat(null)}>✕ Clear</span> : `${allCats.length} total`}>
+        <div className="g-2">
+          {/* Category table */}
+          <Card title="Category Revenue" note={selectedCat ? <span style={{ cursor: 'pointer', color: C.acc, fontWeight: 600 }} onClick={() => setSelectedCat(null)}>✕ Clear</span> : `${allCats.length} total`}>
             <div style={{ overflowX: 'auto' }}>
               <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
                 <thead>
@@ -425,7 +426,7 @@ function OverviewPage({ data, alerts }) {
                         style={{ cursor: 'pointer', background: active ? C.acl : 'transparent', borderBottom: i < allCats.length - 1 ? `1px solid ${C.border}` : 'none' }}
                         onMouseEnter={e => { if (!active) e.currentTarget.style.background = '#FFFBE6' }}
                         onMouseLeave={e => { e.currentTarget.style.background = active ? C.acl : 'transparent' }}>
-                        <td style={{ padding: '5.5px 5px', color: C.t2, fontWeight: active ? 700 : 400 }}>{row.name}</td>
+                        <td style={{ padding: '5.5px 5px', color: active ? C.t1 : C.t2, fontWeight: active ? 700 : 400 }}>{row.name}</td>
                         <td style={{ padding: '5.5px 5px', textAlign: 'right', fontFamily: 'var(--mono)', fontSize: 11.5, color: C.t1 }}>{fmt(row.rev)}</td>
                         <td style={{ padding: '5.5px 5px', textAlign: 'right', color: C.t1 }}>{fmtN(row.orders)}</td>
                         <td style={{ padding: '5.5px 5px', textAlign: 'right', color: C.t1 }}>₹{Math.round(row.aov).toLocaleString('en-IN')}</td>
@@ -436,20 +437,19 @@ function OverviewPage({ data, alerts }) {
               </table>
             </div>
           </Card>
-          {selectedCat && (() => {
+          {/* Sub-category table — always visible, filters on click */}
+          {(() => {
             const subRows = Object.entries(subCatMap || {})
-              .filter(([k]) => k.startsWith(selectedCat + '::'))
-              .map(([k, v]) => ({ name: k.split('::')[1], rev: v.rev, orders: v.orders.size, aov: v.orders.size ? v.rev / v.orders.size : 0 }))
+              .filter(([k]) => !selectedCat || k.startsWith(selectedCat + '::'))
+              .map(([k, v]) => ({ name: k.split('::')[1], cat: k.split('::')[0], rev: v.rev, orders: v.orders.size, aov: v.orders.size ? v.rev / v.orders.size : 0 }))
               .sort((a, b) => b.rev - a.rev)
             return (
-              <Card title={`Sub-categories · ${selectedCat}`}>
-                <DataTable columns={[
-                  { key: 'name', label: 'Sub-category' },
-                  { key: 'rev', label: 'Revenue', align: 'right', mono: true, render: v => fmt(v) },
-                  { key: 'orders', label: 'Orders', align: 'right', render: v => fmtN(v) },
-                  { key: 'aov', label: 'AOV', align: 'right', render: v => `₹${Math.round(v).toLocaleString('en-IN')}` },
-                ]} rows={subRows} maxRows={subRows.length} />
-              </Card>
+              <PaginatedCard title={selectedCat ? `Sub-categories · ${selectedCat}` : 'Sub-categories'} rows={subRows} columns={[
+                { key: 'name', label: 'Sub-category' },
+                { key: 'rev', label: 'Revenue', align: 'right', mono: true, render: v => fmt(v) },
+                { key: 'orders', label: 'Orders', align: 'right', render: v => fmtN(v) },
+                { key: 'aov', label: 'AOV', align: 'right', render: v => `₹${Math.round(v).toLocaleString('en-IN')}` },
+              ]} pageSize={15} />
             )
           })()}
         </div>
