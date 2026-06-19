@@ -980,7 +980,7 @@ function CategoryChannelMatrix({ heatData, channels, maxHeat }) {
 }
 
 function AllTab({ data }) {
-  const { totalRev, totalExcRev, gstCollected, nOrders, totalQty, blendedAOV, nDays, dailyArr, chMap, catMap, subCatMap, stateMap, cityRows = [], buckets, bucketRev, rows, orders, orderStatusRevMap = {}, orderStatusMap = {}, catChannelMap = {}, prevRev = 0, prevExcRev = 0, prevOrders = 0, prevDailyArr = [], nCusts = 0, repeatCusts = 0 } = data
+  const { totalRev, totalExcRev, gstCollected, nOrders, totalQty, blendedAOV, nDays, dailyArr, chMap, catMap, subCatMap, stateMap, cityRows = [], buckets, bucketRev, rows, orders, orderStatusRevMap = {}, orderStatusMap = {}, catChannelMap = {}, prevRev = 0, prevExcRev = 0, prevOrders = 0, prevDailyArr = [], prevChMap = {}, nCusts = 0, repeatCusts = 0 } = data
   const channels = Object.keys(C.ch).filter(ch => chMap[ch])
   const sortedCh = Object.entries(chMap).sort((a, b) => b[1].rev - a[1].rev)
   const maxChRev = sortedCh[0]?.[1].rev || 1
@@ -1090,7 +1090,24 @@ function AllTab({ data }) {
       <div className="g-21">
         <ChannelTrendCard dailyArr={dailyArr} channels={channels} />
         <Card title="Channel Share">
-          {sortedCh.map(([ch, v]) => <HBar key={ch} dot={C.ch[ch] || C.acm} label={ch} width={(v.rev / maxChRev) * 100} value={fmt(v.rev)} pctVal={pct(v.rev, totalRev)} />)}
+          {sortedCh.map(([ch, v]) => {
+            const prevChRev = prevChMap[ch] || 0
+            const chg = prevChRev > 0 ? ((v.rev - prevChRev) / prevChRev * 100) : null
+            return (
+              <div key={ch} style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '5px 0', borderBottom: `1px solid ${C.border}` }}>
+                <span style={{ width: 8, height: 8, borderRadius: '50%', background: C.ch[ch] || C.acm, flexShrink: 0 }} />
+                <span style={{ fontSize: 12, color: C.t2, width: 90, flexShrink: 0 }}>{ch}</span>
+                <div style={{ flex: 1, height: 5, background: C.bg, borderRadius: 3 }}>
+                  <div style={{ height: '100%', borderRadius: 3, background: C.ch[ch] || C.acm, width: `${(v.rev / maxChRev) * 100}%`, transition: 'width .5s' }} />
+                </div>
+                <span style={{ fontSize: 12, fontWeight: 700, color: C.t1, minWidth: 72, textAlign: 'right', fontFamily: 'var(--mono)' }}>{fmt(v.rev)}</span>
+                <span style={{ fontSize: 11, color: C.t3, minWidth: 36, textAlign: 'right' }}>{pct(v.rev, totalRev)}</span>
+                {chg !== null
+                  ? <span style={{ fontSize: 10.5, fontWeight: 700, minWidth: 48, textAlign: 'right', color: chg >= 0 ? '#286010' : '#7A1A1A' }}>{chg >= 0 ? '▲' : '▼'} {Math.abs(chg).toFixed(1)}%</span>
+                  : <span style={{ minWidth: 48 }} />}
+              </div>
+            )
+          })}
         </Card>
       </div>
       <DailyChannelTable dailyArr={dailyArr} channels={channels} nDays={nDays} />
