@@ -1100,7 +1100,7 @@ function RegionTierDonutRow({ regionRows, tierRows }) {
 }
 
 function AllTab({ data }) {
-  const { totalRev, totalExcRev, gstCollected, nOrders, totalQty, blendedAOV, nDays, dailyArr, chMap, catMap, subCatMap, stateMap, cityRows = [], regionRows = [], tierRows = [], buckets, bucketRev, rows, orders, orderStatusRevMap = {}, orderStatusMap = {}, catChannelMap = {}, prevRev = 0, prevExcRev = 0, prevOrders = 0, prevDailyArr = [], prevChMap = {}, nCusts = 0, repeatCusts = 0 } = data
+  const { totalRev, totalExcRev, gstCollected, nOrders, totalQty, blendedAOV, nDays, dailyArr, chMap, catMap, subCatMap, stateMap, cityRows = [], regionRows = [], tierRows = [], buckets, bucketRev, rows, orders, orderStatusRevMap = {}, orderStatusMap = {}, catChannelMap = {}, prevRev = 0, prevExcRev = 0, prevOrders = 0, prevDailyArr = [], prevChMap = {}, nCusts = 0, repeatCusts = 0, rtoRev = 0, cirRev = 0, cancellRev = 0, netRevenueCalc = 0 } = data
   const channels = Object.keys(C.ch).filter(ch => chMap[ch])
   const sortedCh = Object.entries(chMap).sort((a, b) => b[1].rev - a[1].rev)
   const maxChRev = sortedCh[0]?.[1].rev || 1
@@ -1174,13 +1174,19 @@ function AllTab({ data }) {
               const excChg = prevExcRev > 0 ? ((totalExcRev - prevExcRev) / prevExcRev * 100) : null
               return (
                 <div className="kpi-card" style={{ display: 'flex', flexDirection: 'column', gap: 4, padding: '10px 13px' }}>
-                  <div className="kpi-label">Net (Exc GST)</div>
+                  <div className="kpi-label">Net Revenue</div>
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                    <div className="kpi-value">{fmt(totalExcRev)}</div>
+                    <div className="kpi-value">{fmt(netRevenueCalc)}</div>
                     {excChg !== null && <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 7px', borderRadius: 5, background: excChg >= 0 ? C.green.bg : C.red.bg, color: excChg >= 0 ? C.green.tx : C.red.tx }}>{excChg >= 0 ? '▲' : '▼'} {Math.abs(excChg).toFixed(1)}%</span>}
                   </div>
-                  <div className="kpi-sub">GST {fmt(gstCollected)} · {(gstCollected / totalRev * 100).toFixed(1)}%</div>
-                  <ResponsiveContainer width="100%" height={28}>
+                  <div style={{ fontSize: 10, color: C.t3, lineHeight: 1.7, marginTop: 2 }}>
+                    <span style={{ color: C.t2 }}>Gross</span> {fmt(totalRev)}
+                    <span style={{ color: C.red.tx }}> − GST</span> {fmt(gstCollected)}
+                    <span style={{ color: C.red.tx }}> − RTO</span> {fmt(rtoRev)}
+                    <span style={{ color: C.red.tx }}> − CIR</span> {fmt(cirRev)}
+                    <span style={{ color: C.red.tx }}> − Cancel</span> {fmt(cancellRev)}
+                  </div>
+                  <ResponsiveContainer width="100%" height={24}>
                     <AreaChart data={sparkData} margin={{ top: 2, right: 0, bottom: 0, left: 0 }}>
                       <defs><linearGradient id="netGrad" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor={C.blue.bd} stopOpacity={0.25} /><stop offset="95%" stopColor={C.blue.bd} stopOpacity={0} /></linearGradient></defs>
                       <Area type="monotone" dataKey="cur" name="Current" stroke={C.blue.bd} strokeWidth={1.5} fill="url(#netGrad)" dot={false} connectNulls />

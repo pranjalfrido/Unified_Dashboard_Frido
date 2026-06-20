@@ -138,7 +138,12 @@ export function processData(rows) {
     gstMap[g].rev += parseFloat(r.SellingPrice_Inc_GST || 0); gstMap[g].orders.add(r.OrderId)
   })
 
-  return { totalRev, totalExcRev, totalQty, nOrders, blendedAOV, nDays, gstCollected: totalRev - totalExcRev, dailyArr, catMap, subCatMap, chMap, stateMap, nCusts, repeatCusts, tatOrders, buckets, bucketRev, voucherMap, gstMap, orders, rows, uniqueDates }
+  const rtoRev = orders.filter(o => o.isRTO).reduce((s, o) => s + o.rev, 0)
+  const cirRev = orders.filter(o => o.isCIR).reduce((s, o) => s + o.rev, 0)
+  const cancellRev = orders.filter(o => o.isCancelled).reduce((s, o) => s + o.rev, 0)
+  const netRevenueCalc = totalRev - (totalRev - totalExcRev) - rtoRev - cirRev - cancellRev
+
+  return { totalRev, totalExcRev, totalQty, nOrders, blendedAOV, nDays, gstCollected: totalRev - totalExcRev, dailyArr, catMap, subCatMap, chMap, stateMap, nCusts, repeatCusts, tatOrders, buckets, bucketRev, voucherMap, gstMap, orders, rows, uniqueDates, rtoRev, cirRev, cancellRev, netRevenueCalc }
 }
 
 export function detectAlerts(data) {
