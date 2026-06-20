@@ -1130,7 +1130,7 @@ function AllTab({ data }) {
   const unitsPerOrder = nOrders > 0 ? totalQty / nOrders : 0
   const rtoOrders = orderStatusMap['RTO'] || 0
   const returnPct = nOrders > 0 ? (rtoOrders / nOrders * 100) : 0
-  const asp = totalQty > 0 ? totalRev / totalQty : 0
+  const asp = totalQty > 0 ? totalExcRev / totalQty : 0
   const deliveredOrders = orderStatusMap['Delivered'] || 0
   const fulfilmentPct = nOrders > 0 ? (deliveredOrders / nOrders * 100) : 0
 
@@ -1206,7 +1206,7 @@ function AllTab({ data }) {
             })()}
             {[
               { label: 'Return %', value: `${returnPct.toFixed(1)}%`, sub: `${fmtN(rtoOrders)} RTO orders`, accent: returnPct > 10 ? '#7A1A1A' : undefined, badge: null },
-              { label: 'Blended AOV', value: `₹${Math.round(blendedAOV).toLocaleString('en-IN')}`, sub: `${fmtN(nOrders)} orders`, badge: chgBadge(blendedAOV, prevAOV) },
+              { label: 'AOV', value: `₹${Math.round(blendedAOV).toLocaleString('en-IN')}`, sub: `Gross rev ÷ orders`, badge: chgBadge(blendedAOV, prevAOV) },
               { label: 'Daily Avg', value: fmt(totalRev / nDays), sub: `over ${nDays} days`, badge: chgBadge(totalRev / nDays, prevDailyAvg) },
             ].map(k => (
               <div key={k.label} className="kpi-card" style={{ padding: '10px 13px' }}>
@@ -1222,7 +1222,7 @@ function AllTab({ data }) {
           {/* Row 2 */}
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10, flex: 1 }}>
             {[
-              { label: 'ASP', value: `₹${Math.round(asp).toLocaleString('en-IN')}`, sub: 'Revenue per unit sold', badge: chgBadge(asp, prevASP) },
+              { label: 'ASP', value: `₹${Math.round(asp).toLocaleString('en-IN')}`, sub: 'Net rev ÷ units sold', badge: chgBadge(asp, prevASP) },
               { label: 'GST Collected', value: fmt(gstCollected), sub: `${totalRev > 0 ? ((gstCollected / totalRev) * 100).toFixed(1) : 0}% of gross rev`, badge: chgBadge(gstCollected, prevGST) },
               { label: 'Revenue at Risk', value: fmt(atRiskRev), sub: 'RTO + Cancelled', accent: atRiskRev > 0 ? '#7A4000' : undefined, badge: null },
               { label: 'Units per Order', value: unitsPerOrder.toFixed(2), sub: 'Avg basket size', badge: chgBadge(unitsPerOrder, prevUPO) },
