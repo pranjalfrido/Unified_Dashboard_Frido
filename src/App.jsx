@@ -1451,7 +1451,8 @@ function ShopifyTab({ data, filters, setFilters }) {
   const prevDailyArr = sh.prevDaily || []
 
   const shRevChg = prevRev > 0 ? ((totalRev - prevRev) / prevRev * 100) : null
-  const shOrdChg = prevOrders > 0 ? ((nOrders - prevOrders) / prevOrders * 100) : null
+  const shNOrders = shCh.orders || 0
+  const shOrdChg = prevOrders > 0 ? ((shNOrders - prevOrders) / prevOrders * 100) : null
   const shExcChg = prevExcRev > 0 ? ((totalExcRev - prevExcRev) / prevExcRev * 100) : null
   const shSparkData = Array.from({ length: Math.max(dailyArr.length, prevDailyArr.length) }, (_, i) => {
     const cur = dailyArr[i]
@@ -1459,14 +1460,14 @@ function ShopifyTab({ data, filters, setFilters }) {
     const curRev = cur ? (cur['Shopify'] || 0) : null
     return { i, cur: curRev, prev: pre?.rev ?? null }
   })
-  const nDays = data.nDays || 1
+  const nDays = sh.nDays || data.nDays || 1
   const dailyAvg = nDays ? totalRev / nDays : 0
-  const aov = nOrders ? totalRev / nOrders : 0
+  const aov = shNOrders ? totalRev / shNOrders : 0
   const asp = totalQty ? totalExcRev / totalQty : 0
   const deliveredOrders = orderStatusMap['Delivered'] || 0
   const rtoOrders = orderStatusMap['RTO'] || 0
-  const fulfilmentPct = nOrders ? (deliveredOrders / nOrders * 100) : 0
-  const rtoPct = nOrders ? (rtoOrders / nOrders * 100) : 0
+  const fulfilmentPct = shNOrders ? (deliveredOrders / shNOrders * 100) : 0
+  const rtoPct = shNOrders ? (rtoOrders / shNOrders * 100) : 0
   const atRiskRev = (orderStatusRevMap['RTO'] || 0) + (orderStatusRevMap['Cancelled'] || 0)
   const repeatRate = nCusts ? (repeatCusts / nCusts * 100).toFixed(1) : '0'
 
@@ -1511,10 +1512,10 @@ function ShopifyTab({ data, filters, setFilters }) {
         {isIntl && <span style={{ fontSize: 11, color: C.t3, marginLeft: 4 }}>UAE · UK · US</span>}
       </div>
       <div style={{ display: 'grid', gridTemplateColumns: '1.4fr 1.2fr 1fr 1fr 1fr 1fr', gap: 10 }}>
-        <HeroKPICard label="Gross Revenue · Inc. GST" value={fmt(totalRev)} sub={`${nOrders >= 1000 ? (nOrders/1000).toFixed(1).replace(/\.0$/,'')+'k' : fmtN(nOrders)} orders · ${totalQty >= 1000 ? (totalQty/1000).toFixed(1).replace(/\.0$/,'')+'k' : fmtN(totalQty)} units`} chg={shRevChg} sparkData={shSparkData} color="#FFD600" gradId="shGrossGrad" />
+        <HeroKPICard label="Gross Revenue · Inc. GST" value={fmt(totalRev)} sub={`${shNOrders >= 1000 ? (shNOrders/1000).toFixed(1).replace(/\.0$/,'')+'k' : fmtN(shNOrders)} orders · ${totalQty >= 1000 ? (totalQty/1000).toFixed(1).replace(/\.0$/,'')+'k' : fmtN(totalQty)} units`} chg={shRevChg} sparkData={shSparkData} color="#FFD600" gradId="shGrossGrad" />
         <HeroKPICard label="Net (Exc GST)" value={fmt(totalExcRev)} sub={`GST ${fmt(gst)}`} chg={shExcChg} sparkData={shSparkData} color="#7AB4EE" gradId="shNetGrad" />
         <KPICard label="GST Collected" value={fmt(gst)} sub={totalRev > 0 ? `${((gst / totalRev) * 100).toFixed(1)}% of gross` : '—'} />
-        <KPICard label="Orders" value={fmtN(nOrders)} />
+        <KPICard label="Orders" value={fmtN(shNOrders)} />
         <KPICard label="Units" value={fmtN(totalQty)} />
         <KPICard label="Daily Avg" value={fmt(dailyAvg)} />
       </div>
@@ -2682,7 +2683,7 @@ function CredTab({ data }) {
 function MyntraTab({ data }) {
   const mn = data.myntra || {}
   const totals = mn.totals || {}
-  const nDays = data.nDays || 1
+  const nDays = totals.days || data.nDays || 1
   const rev = totals.rev || 0
   const excRev = totals.excRev || 0
   const nOrders = totals.orders || 0
