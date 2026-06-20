@@ -1228,7 +1228,7 @@ function AllTab({ data }) {
             {[
               { label: 'ASP', value: `₹${Math.round(asp).toLocaleString('en-IN')}`, sub: 'Net rev ÷ units sold', badge: chgBadge(asp, prevASP) },
               { label: 'GST Collected', value: fmt(gstCollected), sub: `${totalRev > 0 ? ((gstCollected / totalRev) * 100).toFixed(1) : 0}% of gross rev`, badge: chgBadge(gstCollected, prevGST) },
-              { label: 'Revenue at Risk', value: fmt(atRiskRev), sub: 'RTO + Cancelled', accent: atRiskRev > 0 ? '#7A4000' : undefined, badge: null },
+              { label: 'Revenue at Risk', value: fmt(atRiskRev), sub: `${totalRev > 0 ? (atRiskRev / totalRev * 100).toFixed(1) : 0}% of gross · RTO + Cancel`, accent: atRiskRev > 0 ? '#7A4000' : undefined, badge: null },
               { label: 'Units per Order', value: unitsPerOrder.toFixed(2), sub: 'Avg basket size', badge: chgBadge(unitsPerOrder, prevUPO) },
             ].map(k => (
               <div key={k.label} className="kpi-card" style={{ padding: '10px 13px' }}>
