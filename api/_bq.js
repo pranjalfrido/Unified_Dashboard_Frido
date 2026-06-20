@@ -32,10 +32,23 @@ export function buildQuery(s, e, filters = {}) {
     if (subs.length === 1) whereClauses.push(`COALESCE(im.SubCategory, 'Frido') = '${subs[0].replace(/'/g, "''")}'`)
     else if (subs.length > 1) whereClauses.push(`COALESCE(im.SubCategory, 'Frido') IN (${subs.map(c => `'${c.replace(/'/g, "''")}'`).join(',')})`)
   }
-  if (state) whereClauses.push(`UPPER(TRIM(u.State)) = '${state.toUpperCase().replace(/'/g, "''")}'`)
-  if (region) whereClauses.push(`COALESCE(pm.Region, cm.Region) = '${region.replace(/'/g, "''")}'`)
+  if (state) {
+    const vals = state.split(',').map(s => s.trim()).filter(Boolean)
+    if (vals.length === 1) whereClauses.push(`UPPER(TRIM(u.State)) = '${vals[0].toUpperCase().replace(/'/g, "''")}'`)
+    else if (vals.length > 1) whereClauses.push(`UPPER(TRIM(u.State)) IN (${vals.map(s => `'${s.toUpperCase().replace(/'/g, "''")}'`).join(',')})`)
+  }
+  if (region) {
+    const vals = region.split(',').map(r => r.trim()).filter(Boolean)
+    if (vals.length === 1) whereClauses.push(`COALESCE(pm.Region, cm.Region) = '${vals[0].replace(/'/g, "''")}'`)
+    else if (vals.length > 1) whereClauses.push(`COALESCE(pm.Region, cm.Region) IN (${vals.map(r => `'${r.replace(/'/g, "''")}'`).join(',')})`)
+  }
   if (city) whereClauses.push(`COALESCE(pm.City_L1, cm.City_L1, u.City) = '${city.replace(/'/g, "''")}'`)
-  if (tier) { const TIER_MAP = { 'Tier I': 1, 'Tier II': 2, 'Tier III': 3 }; const tierNum = TIER_MAP[tier] || parseInt(tier); if (tierNum) whereClauses.push(`COALESCE(pm.City_Tier, cm.City_Tier) = ${tierNum}`) }
+  if (tier) {
+    const TIER_MAP = { 'Tier I': 1, 'Tier II': 2, 'Tier III': 3 }
+    const nums = tier.split(',').map(t => TIER_MAP[t.trim()] || parseInt(t.trim())).filter(Boolean)
+    if (nums.length === 1) whereClauses.push(`COALESCE(pm.City_Tier, cm.City_Tier) = ${nums[0]}`)
+    else if (nums.length > 1) whereClauses.push(`COALESCE(pm.City_Tier, cm.City_Tier) IN (${nums.join(',')})`)
+  }
   if (sku) whereClauses.push(`UPPER(TRIM(u.ChannelSKUCode)) LIKE '%${sku.toUpperCase().replace(/'/g, "''").replace(/%/g, '\\%')}%'`)
   if (subChannel) whereClauses.push(`u.SubChannel = '${subChannel.replace(/'/g, "''")}'`)
   if (voucher) {
