@@ -1592,9 +1592,10 @@ function AmazonTab({ data, region = 'india', setRegion = () => {} }) {
   const subToggleStyle = active => ({ fontSize: 12, fontWeight: 700, padding: '5px 16px', borderRadius: 7, border: `1.5px solid ${active ? C.t1 : C.border}`, background: active ? C.t1 : C.card, color: active ? '#fff' : C.t1, cursor: 'pointer', fontFamily: 'var(--font)', transition: 'all .15s', boxShadow: active ? '0 2px 6px rgba(0,0,0,.15)' : 'none' })
 
   // ── Seller Central calcs ──
-  const scFBA = amzSC.fulfillment?.find(f => f.type === 'FBA') || { orders: 0, rev: 0, units: 0 }
-  const scMFN = amzSC.fulfillment?.find(f => f.type === 'MFN') || { orders: 0, rev: 0, units: 0 }
+  const scFBA = amzSC.fulfillment?.find(f => f.type === 'FBA') || { orders: 0, rev: 0, excRev: 0, units: 0 }
+  const scMFN = amzSC.fulfillment?.find(f => f.type === 'MFN') || { orders: 0, rev: 0, excRev: 0, units: 0 }
   const scTotalRev = scFBA.rev + scMFN.rev
+  const scTotalExcRev = (scFBA.excRev || 0) + (scMFN.excRev || 0)
   const scTotalOrders = scFBA.orders + scMFN.orders
   const scAOV = scTotalOrders ? scTotalRev / scTotalOrders : 0
   const scTotalUnits = scFBA.units + scMFN.units
@@ -1772,6 +1773,7 @@ function AmazonTab({ data, region = 'india', setRegion = () => {} }) {
           {/* KPIs row 1 */}
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6,1fr)', gap: 10 }}>
             <KPICard label="Total Revenue" value={fmt(scTotalRev)} sub={`${data.nDays || 7} days`} />
+            <KPICard label="Net Revenue (Exc GST)" value={fmt(scTotalExcRev)} sub={`GST ${fmt(scTotalRev - scTotalExcRev)}`} />
             <KPICard label="Total Orders" value={fmtN(scTotalOrders)} />
             <KPICard label="AOV" value={`₹${Math.round(scAOV).toLocaleString('en-IN')}`} sub="Revenue / Orders" />
             <KPICard label="ASP" value={`₹${scTotalUnits ? Math.round(scTotalRev / scTotalUnits).toLocaleString('en-IN') : 0}`} sub="Revenue / Units" />
@@ -2205,6 +2207,7 @@ function BlinkitTab({ data }) {
   const t = bl.totals || {}
   const nDays = t.days || 1
   const rev = t.rev || 0
+  const excRev = t.excRev || 0
   const units = t.units || 0
   const skus = t.skus || 0
   const cities = t.cities || 0
@@ -2234,6 +2237,7 @@ function BlinkitTab({ data }) {
       {/* KPI Row 1 */}
       <div style={{ display: 'grid', gridTemplateColumns: '1.4fr 1fr 1fr 1fr 1fr 1fr', gap: 10 }}>
         <HeroKPICard label="Gross Revenue (MRP)" value={fmt(rev)} sub={`${nDays} days`} chg={blRevChg} sparkData={blSparkData} color="#FFD600" gradId="blGrossGrad" />
+        <KPICard label="Net Revenue (Exc GST)" value={fmt(excRev)} sub={`GST ${fmt(rev - excRev)}`} />
         <KPICard label="Daily Avg Revenue" value={fmt(dailyAvg)} sub="Per day" />
         <KPICard label="Units Sold" value={fmtN(units)} sub={`${skus} SKUs`} />
         <KPICard label="ASP" value={`₹${Math.round(asp).toLocaleString('en-IN')}`} sub="Avg selling price" />
