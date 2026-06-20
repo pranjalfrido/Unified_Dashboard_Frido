@@ -82,6 +82,7 @@ export default async function handler(req, res) {
     byRefundTrend: `WITH q AS (${base}) SELECT CAST(OrderDate AS STRING) AS date, COUNT(DISTINCT OrderId) AS total_orders, COUNTIF(RefundStatus = 'true') AS refund_lines FROM q WHERE Channel = 'Shopify' GROUP BY date ORDER BY date`,
     topOrders: `WITH q AS (${base}), ot AS (SELECT OrderId, CAST(OrderDate AS STRING) AS order_date, Channel, State, City, SUM(SellingPrice_Inc_GST) AS rev, SUM(ItemQty) AS qty, MAX(FulfilmentStatus) AS order_status, MAX(CustomerId) AS customer_id, MAX(voucher_code) AS voucher_code, STRING_AGG(DISTINCT ChannelSKUCode, ', ' ORDER BY ChannelSKUCode LIMIT 5) AS skus FROM q GROUP BY OrderId, OrderDate, Channel, State, City) SELECT * FROM ot ORDER BY rev DESC LIMIT 20`,
     byVoucherRaw: `WITH q AS (${base}) SELECT TRIM(voucher_code) AS voucher_code, COUNT(DISTINCT OrderId) AS orders FROM q WHERE Channel = 'Shopify' AND voucher_code IS NOT NULL AND TRIM(voucher_code) != '' GROUP BY TRIM(voucher_code) ORDER BY orders DESC LIMIT 300`,
+    byCIR: `WITH q AS (${base}) SELECT SUM(SellingPrice_Inc_GST) AS cir_rev, COUNT(DISTINCT OrderId) AS cir_orders FROM q WHERE is_CIR_return = 1`,
     prevTotals: `WITH q AS (${prevBase}) SELECT SUM(SellingPrice_Inc_GST) AS total_rev, SUM(SellingPrice_Exc_GST) AS total_exc_rev, COUNT(DISTINCT OrderId) AS n_orders FROM q`,
     prevByChannel: `WITH q AS (${prevBase}) SELECT Channel, SUM(SellingPrice_Inc_GST) AS rev FROM q GROUP BY Channel`,
     prevByDate: `WITH q AS (${prevBase}) SELECT CAST(OrderDate AS STRING) AS date, SUM(SellingPrice_Inc_GST) AS rev FROM q GROUP BY date ORDER BY date`,
@@ -237,6 +238,11 @@ export default async function handler(req, res) {
       isRTO: false, isCIR: false, isCancelled: false, isExchange: false
     }))
 
+    const rtoRev = parseFloat(r.byOrderStatus?.find(x => x.order_status === 'RTO')?.rev) || 0
+    const cancellRev = parseFloat(r.byOrderStatus?.find(x => x.order_status === 'Cancelled')?.rev) || 0
+    const cirRev = parseFloat(r.byCIR?.[0]?.cir_rev) || 0
+    const netRevenueCalc = totalRev - (totalRev - totalExcRev) - rtoRev - cirRev - cancellRev
+
     const payload = {
       source: 'postgres-aggregated',
       prevRev: parseFloat(r.prevTotals?.[0]?.total_rev) || 0,
@@ -247,6 +253,7 @@ export default async function handler(req, res) {
       totalRev, totalExcRev, totalQty, nOrders, nDays,
       blendedAOV: nOrders ? totalRev / nOrders : 0,
       gstCollected: totalRev - totalExcRev,
+      rtoRev, cancellRev, cirRev, netRevenueCalc,
       nCusts, repeatCusts,
       uniqueDates: dateSet,
       dailyArr, chMap, catMap, subCatMap, stateMap, cityRows, regionRows, tierRows, catChannelMap, orderStatusMap, orderStatusRevMap,
