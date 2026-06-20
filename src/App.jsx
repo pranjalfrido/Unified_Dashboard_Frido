@@ -1100,7 +1100,7 @@ function RegionTierDonutRow({ regionRows, tierRows }) {
 }
 
 function AllTab({ data }) {
-  const { totalRev, totalExcRev, gstCollected, nOrders, totalQty, blendedAOV, nDays, dailyArr, chMap, catMap, subCatMap, stateMap, cityRows = [], regionRows = [], tierRows = [], buckets, bucketRev, rows, orders, orderStatusRevMap = {}, orderStatusMap = {}, catChannelMap = {}, prevRev = 0, prevExcRev = 0, prevOrders = 0, prevDailyArr = [], prevChMap = {}, nCusts = 0, repeatCusts = 0, rtoRev = 0, cirRev = 0, cancellRev = 0, netRevenueCalc = 0 } = data
+  const { totalRev, totalExcRev, gstCollected, nOrders, totalQty, blendedAOV, nDays, dailyArr, chMap, catMap, subCatMap, stateMap, cityRows = [], regionRows = [], tierRows = [], buckets, bucketRev, rows, orders, orderStatusRevMap = {}, orderStatusMap = {}, catChannelMap = {}, prevRev = 0, prevExcRev = 0, prevOrders = 0, prevQty = 0, prevDailyArr = [], prevChMap = {}, nCusts = 0, repeatCusts = 0, rtoRev = 0, cirRev = 0, cancellRev = 0, netRevenueCalc = 0 } = data
   const channels = Object.keys(C.ch).filter(ch => chMap[ch])
   const sortedCh = Object.entries(chMap).sort((a, b) => b[1].rev - a[1].rev)
   const maxChRev = sortedCh[0]?.[1].rev || 1
@@ -1133,6 +1133,19 @@ function AllTab({ data }) {
   const asp = totalQty > 0 ? totalRev / totalQty : 0
   const deliveredOrders = orderStatusMap['Delivered'] || 0
   const fulfilmentPct = nOrders > 0 ? (deliveredOrders / nOrders * 100) : 0
+
+  // prev period derived values
+  const prevAOV = prevOrders > 0 ? prevRev / prevOrders : 0
+  const prevDailyAvg = prevRev > 0 ? prevRev / nDays : 0
+  const prevASP = prevQty > 0 ? prevExcRev / prevQty : 0
+  const prevGST = prevRev - prevExcRev
+  const prevUPO = prevOrders > 0 && prevQty > 0 ? prevQty / prevOrders : 0
+  const prevAtRisk = 0 // not tracked in prev period
+  const chgBadge = (cur, prev) => {
+    if (!prev) return null
+    const pct = (cur - prev) / prev * 100
+    return <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 4, background: pct >= 0 ? C.green.bg : C.red.bg, color: pct >= 0 ? C.green.tx : C.red.tx, flexShrink: 0 }}>{pct >= 0 ? '▲' : '▼'} {Math.abs(pct).toFixed(1)}%</span>
+  }
 
   const revChg = prevRev > 0 ? ((totalRev - prevRev) / prevRev * 100) : null
   const ordChg = prevOrders > 0 ? ((nOrders - prevOrders) / prevOrders * 100) : null
@@ -1192,23 +1205,37 @@ function AllTab({ data }) {
               )
             })()}
             {[
-              { label: 'Return %', value: `${returnPct.toFixed(1)}%`, sub: `${fmtN(rtoOrders)} RTO orders`, accent: returnPct > 10 ? '#7A1A1A' : undefined },
-              { label: 'Blended AOV', value: `₹${Math.round(blendedAOV).toLocaleString('en-IN')}`, sub: `${fmtN(nOrders)} orders` },
-              { label: 'Daily Avg', value: fmt(totalRev / nDays), sub: `over ${nDays} days` },
+              { label: 'Return %', value: `${returnPct.toFixed(1)}%`, sub: `${fmtN(rtoOrders)} RTO orders`, accent: returnPct > 10 ? '#7A1A1A' : undefined, badge: null },
+              { label: 'Blended AOV', value: `₹${Math.round(blendedAOV).toLocaleString('en-IN')}`, sub: `${fmtN(nOrders)} orders`, badge: chgBadge(blendedAOV, prevAOV) },
+              { label: 'Daily Avg', value: fmt(totalRev / nDays), sub: `over ${nDays} days`, badge: chgBadge(totalRev / nDays, prevDailyAvg) },
             ].map(k => (
               <div key={k.label} className="kpi-card" style={{ padding: '10px 13px' }}>
                 <div className="kpi-label">{k.label}</div>
-                <div className="kpi-value" style={{ fontSize: 17, ...(k.accent ? { color: k.accent } : {}) }}>{k.value}</div>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 4 }}>
+                  <div className="kpi-value" style={{ fontSize: 17, ...(k.accent ? { color: k.accent } : {}) }}>{k.value}</div>
+                  {k.badge}
+                </div>
                 {k.sub && <div className="kpi-sub">{k.sub}</div>}
               </div>
             ))}
           </div>
           {/* Row 2 */}
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10, flex: 1 }}>
-            <KPICard label="ASP" value={`₹${Math.round(asp).toLocaleString('en-IN')}`} sub={`Revenue per unit sold`} />
-            <KPICard label="GST Collected" value={fmt(gstCollected)} sub={`${totalRev > 0 ? ((gstCollected / totalRev) * 100).toFixed(1) : 0}% of gross rev`} />
-            <KPICard label="Revenue at Risk" value={fmt(atRiskRev)} sub={`RTO + Cancelled`} accent={atRiskRev > 0 ? '#7A4000' : undefined} />
-            <KPICard label="Units per Order" value={unitsPerOrder.toFixed(2)} sub={`Avg basket size`} />
+            {[
+              { label: 'ASP', value: `₹${Math.round(asp).toLocaleString('en-IN')}`, sub: 'Revenue per unit sold', badge: chgBadge(asp, prevASP) },
+              { label: 'GST Collected', value: fmt(gstCollected), sub: `${totalRev > 0 ? ((gstCollected / totalRev) * 100).toFixed(1) : 0}% of gross rev`, badge: chgBadge(gstCollected, prevGST) },
+              { label: 'Revenue at Risk', value: fmt(atRiskRev), sub: 'RTO + Cancelled', accent: atRiskRev > 0 ? '#7A4000' : undefined, badge: null },
+              { label: 'Units per Order', value: unitsPerOrder.toFixed(2), sub: 'Avg basket size', badge: chgBadge(unitsPerOrder, prevUPO) },
+            ].map(k => (
+              <div key={k.label} className="kpi-card" style={{ padding: '10px 13px' }}>
+                <div className="kpi-label">{k.label}</div>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 4 }}>
+                  <div className="kpi-value" style={{ fontSize: 17, ...(k.accent ? { color: k.accent } : {}) }}>{k.value}</div>
+                  {k.badge}
+                </div>
+                {k.sub && <div className="kpi-sub">{k.sub}</div>}
+              </div>
+            ))}
           </div>
         </div>
       </div>
