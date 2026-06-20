@@ -651,7 +651,7 @@ function VoucherDropdown({ voucherList, selected, onChange }) {
   }
 
   const apply = () => { onChange((pending !== null ? pending : staged).join(',')); setPending(null); setOpen(false); setSearch('') }
-  const clear = () => { onChange(''); setPending(null); setOpen(false); setSearch('') }
+  const clear = () => { setPending([]) }
 
   const label = selectedArr.length === 0 ? 'All Vouchers' : selectedArr.length === 1 ? selectedArr[0] : `${selectedArr.length} vouchers selected`
 
@@ -715,7 +715,7 @@ function SearchableSelect({ options, value, onChange, placeholder, dropdownWidth
   }
 
   const apply = () => { onChange(pending !== null ? pending : staged); setPending(null); setOpen(false); setSearch('') }
-  const clear = () => { if (multi) { onChange([]); setPending(null); setOpen(false); setSearch('') } else { onChange(''); setOpen(false) } }
+  const clear = () => { if (multi) { setPending([]) } else { onChange(''); setOpen(false) } }
 
   const hasValue = multi ? selected.length > 0 : !!selected
   const label = multi
