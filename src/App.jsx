@@ -1192,7 +1192,7 @@ function AllTab({ data }) {
                     <div className="kpi-value">{fmt(totalExcRev)}</div>
                     {excChg !== null && <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 7px', borderRadius: 5, background: excChg >= 0 ? C.green.bg : C.red.bg, color: excChg >= 0 ? C.green.tx : C.red.tx }}>{excChg >= 0 ? '▲' : '▼'} {Math.abs(excChg).toFixed(1)}%</span>}
                   </div>
-                  <div className="kpi-sub">GST {fmt(gstCollected)} · {(gstCollected / totalRev * 100).toFixed(1)}%</div>
+                  <div className="kpi-sub">{totalRev > 0 ? (totalExcRev / totalRev * 100).toFixed(1) : 0}% of gross · GST {fmt(gstCollected)}</div>
                   <ResponsiveContainer width="100%" height={24}>
                     <AreaChart data={sparkData} margin={{ top: 2, right: 0, bottom: 0, left: 0 }}>
                       <defs><linearGradient id="netGrad" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor={C.blue.bd} stopOpacity={0.25} /><stop offset="95%" stopColor={C.blue.bd} stopOpacity={0} /></linearGradient></defs>
