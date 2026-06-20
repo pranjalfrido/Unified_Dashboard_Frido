@@ -87,6 +87,7 @@ export default async function handler(req, res) {
       : `WITH in_range AS (SELECT DISTINCT customer_id FROM \`frido-429506.production.fact_shopify_myfrido_mobility_all_orders\` WHERE order_date_ist BETWEEN '${start}' AND '${end}' AND customer_id IS NOT NULL), prior AS (SELECT DISTINCT customer_id FROM \`frido-429506.production.fact_shopify_myfrido_mobility_all_orders\` WHERE order_date_ist < '${start}' AND customer_id IS NOT NULL) SELECT COUNT(*) AS n_custs, COUNTIF(p.customer_id IS NOT NULL) AS repeat_custs FROM in_range ir LEFT JOIN prior p USING (customer_id)`,
     bySubCategory: `WITH q AS (${base}) SELECT Category, SubCategory, COUNT(DISTINCT OrderId) AS orders, SUM(SellingPrice_Inc_GST) AS rev FROM q GROUP BY Category, SubCategory ORDER BY rev DESC LIMIT 200`,
     byCategoryChannel: `WITH q AS (${base}) SELECT Category, Channel, SUM(SellingPrice_Inc_GST) AS rev FROM q GROUP BY Category, Channel`,
+    bySubCategoryChannel: `WITH q AS (${base}) SELECT Category, SubCategory, Channel, SUM(SellingPrice_Inc_GST) AS rev FROM q GROUP BY Category, SubCategory, Channel ORDER BY rev DESC`,
     byCity: `WITH q AS (${base}) SELECT City AS city, UPPER(TRIM(State)) AS state, Region AS region, City_Tier AS city_tier, COUNT(DISTINCT OrderId) AS orders, SUM(SellingPrice_Inc_GST) AS rev FROM q WHERE City IS NOT NULL AND TRIM(City) != '' GROUP BY City, UPPER(TRIM(State)), Region, City_Tier ORDER BY rev DESC LIMIT 50`,
     bySKU: `WITH q AS (${base}) SELECT ChannelSKUCode AS sku, Category AS category, SubCategory AS subcategory, Channel AS channel, SUM(ItemQty) AS units, COUNT(DISTINCT OrderId) AS orders, SUM(SellingPrice_Inc_GST) AS rev FROM q WHERE ChannelSKUCode IS NOT NULL AND TRIM(ChannelSKUCode) != '' GROUP BY ChannelSKUCode, Category, SubCategory, Channel ORDER BY rev DESC LIMIT 500`,
     byFinancialStatus: `WITH q AS (${base}) SELECT FinancialStatus AS financial_status, COUNT(DISTINCT OrderId) AS orders, SUM(SellingPrice_Inc_GST) AS rev FROM q WHERE Channel = 'Shopify' AND FinancialStatus IS NOT NULL GROUP BY FinancialStatus ORDER BY orders DESC`,
@@ -198,6 +199,17 @@ export default async function handler(req, res) {
       catChannelMap[cat][x.Channel] = parseFloat(x.rev) || 0
     })
 
+    const subCatChannelMap = {}
+    ;(r.bySubCategoryChannel || []).forEach(x => {
+      const cat = x.Category || 'Unknown'
+      const sc = x.SubCategory || 'Unknown'
+      const ch = x.Channel
+      if (!ch) return
+      if (!subCatChannelMap[cat]) subCatChannelMap[cat] = {}
+      if (!subCatChannelMap[cat][sc]) subCatChannelMap[cat][sc] = {}
+      subCatChannelMap[cat][sc][ch] = (subCatChannelMap[cat][sc][ch] || 0) + (parseFloat(x.rev) || 0)
+    })
+
     const stateMap = {}
     r.byState.forEach(x => { if (!x.state) return; stateMap[x.state] = { rev: parseFloat(x.rev) || 0, orders: parseInt(x.orders) || 0, cities: { size: parseInt(x.cities) } } })
 
@@ -278,7 +290,7 @@ export default async function handler(req, res) {
       momPeriod: `${moms} → ${mome}`, yoyPeriod: `${yoys} → ${yoye}`,
       nCusts, repeatCusts,
       uniqueDates: dateSet,
-      dailyArr, chMap, catMap, subCatMap, stateMap, cityRows, regionRows, tierRows, catChannelMap, orderStatusMap, orderStatusRevMap,
+      dailyArr, chMap, catMap, subCatMap, stateMap, cityRows, regionRows, tierRows, catChannelMap, subCatChannelMap, orderStatusMap, orderStatusRevMap,
       buckets, bucketRev, voucherMap, subChannelMap, paymentModeMap, tatOrders: [],
       htCount, htRev: htRevAgg, multiItemOrders,
       financialStatusMap, fulfilmentStatusMap, refundTrend,
