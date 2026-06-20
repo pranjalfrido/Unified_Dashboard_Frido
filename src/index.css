@@ -132,11 +132,11 @@ html,body{height:100%;background:var(--bg);font-family:var(--font);color:var(--t
 .hbar-row:last-child{border-bottom:none;padding-bottom:14px}
 
 /* ── Heat cells ────────────────────────────── */
-.h0{background:#fff;color:var(--t3)}
-.h1{background:#FFFDE7;color:#7A6000}
-.h2{background:#FFF176;color:#5A4500}
-.h3{background:#FFD600;color:#1A1A1A}
-.h4{background:#F9A800;color:#1A1A1A;font-weight:700}
+.h0{color:var(--t3)}
+.h1{color:var(--t2)}
+.h2{color:var(--t2)}
+.h3{color:var(--t1);font-weight:600}
+.h4{color:var(--t1);font-weight:700}
 
 /* ── Misc ──────────────────────────────────── */
 .ins-box{background:var(--acl);border:1px solid var(--acm);border-radius:10px;padding:12px 14px}
