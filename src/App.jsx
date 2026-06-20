@@ -1000,7 +1000,17 @@ function DailyChannelTable({ dailyArr, channels, nDays = 7 }) {
   )
 }
 
-function CategoryChannelMatrix({ heatData, channels, maxHeat }) {
+function CategoryChannelMatrix({ heatData, channels, maxHeat, subCatChannelMap = {} }) {
+  const [expanded, setExpanded] = useState({})
+  const toggle = cat => setExpanded(prev => ({ ...prev, [cat]: !prev[cat] }))
+
+  const renderCell = (v, rowTotal) => {
+    const intensity = rowTotal > 0 ? v / rowTotal : 0
+    const share = rowTotal > 0 ? (v / rowTotal * 100).toFixed(0) : 0
+    const cls = intensity === 0 ? 'h0' : intensity < 0.1 ? 'h1' : intensity < 0.3 ? 'h2' : intensity < 0.6 ? 'h3' : 'h4'
+    return { cls, content: v > 0 ? <>{fmt(v)}<span style={{ fontSize: 9, fontWeight: 500, color: 'rgba(0,0,0,0.38)', marginLeft: 3 }}>{share}%</span></> : '—' }
+  }
+
   return (
     <Card title="Category × Channel Revenue Matrix" note="₹ shading = intensity">
       <div className="tbl-wrap">
@@ -1015,22 +1025,47 @@ function CategoryChannelMatrix({ heatData, channels, maxHeat }) {
           <tbody>
             {heatData.map((row, i) => {
               const rowTotal = channels.reduce((s, ch) => s + (row[ch] || 0), 0)
+              const isOpen = expanded[row.cat]
+              const subCats = Object.entries(subCatChannelMap[row.cat] || {}).sort((a, b) => {
+                const ta = channels.reduce((s, ch) => s + (b[1][ch] || 0), 0)
+                const tb = channels.reduce((s, ch) => s + (a[1][ch] || 0), 0)
+                return ta - tb
+              })
+              const hasSubCats = subCats.length > 0
               return (
-                <tr key={i} style={{ borderBottom: `1px solid ${C.border}` }}>
-                  <td style={{ padding: '5px', fontWeight: 600, color: C.t1 }}>{row.cat}</td>
-                  {channels.map(ch => {
-                    const v = row[ch] || 0
-                    const intensity = v / rowTotal
-                    const share = rowTotal > 0 ? (v / rowTotal * 100).toFixed(0) : 0
-                    const cls = intensity === 0 ? 'h0' : intensity < 0.1 ? 'h1' : intensity < 0.3 ? 'h2' : intensity < 0.6 ? 'h3' : 'h4'
+                <React.Fragment key={i}>
+                  <tr style={{ borderBottom: `1px solid ${C.border}` }}>
+                    <td style={{ padding: '5px', fontWeight: 600, color: C.t1 }}>
+                      <span
+                        onClick={() => hasSubCats && toggle(row.cat)}
+                        style={{ cursor: hasSubCats ? 'pointer' : 'default', userSelect: 'none', display: 'inline-flex', alignItems: 'center', gap: 5 }}
+                      >
+                        {hasSubCats && <span style={{ fontSize: 9, color: C.t3, display: 'inline-block', transform: isOpen ? 'rotate(90deg)' : 'rotate(0deg)', transition: 'transform .15s' }}>▶</span>}
+                        {row.cat}
+                      </span>
+                    </td>
+                    {channels.map(ch => {
+                      const v = row[ch] || 0
+                      const { cls, content } = renderCell(v, rowTotal)
+                      return <td key={ch} className={cls} style={{ padding: '5px', textAlign: 'right', fontFamily: 'var(--mono)', fontSize: 11 }}>{content}</td>
+                    })}
+                    <td style={{ padding: '5px', textAlign: 'right', fontWeight: 700, color: C.t1, fontFamily: 'var(--mono)', fontSize: 11 }}>{fmt(rowTotal)}</td>
+                  </tr>
+                  {isOpen && subCats.map(([sc, chData]) => {
+                    const scTotal = channels.reduce((s, ch) => s + (chData[ch] || 0), 0)
                     return (
-                      <td key={ch} className={cls} style={{ padding: '5px', textAlign: 'right', fontFamily: 'var(--mono)', fontSize: 11 }}>
-                        {v > 0 ? <>{fmt(v)}<span style={{ fontSize: 9, fontWeight: 500, color: 'rgba(0,0,0,0.38)', marginLeft: 3 }}>{share}%</span></> : '—'}
-                      </td>
+                      <tr key={sc} style={{ borderBottom: `1px solid ${C.border}`, background: '#FAFAF7' }}>
+                        <td style={{ padding: '4px 5px 4px 20px', color: C.t2, fontSize: 10.5 }}>└ {sc}</td>
+                        {channels.map(ch => {
+                          const v = chData[ch] || 0
+                          const { cls, content } = renderCell(v, scTotal)
+                          return <td key={ch} className={cls} style={{ padding: '4px 5px', textAlign: 'right', fontFamily: 'var(--mono)', fontSize: 10.5 }}>{content}</td>
+                        })}
+                        <td style={{ padding: '4px 5px', textAlign: 'right', fontWeight: 600, color: C.t2, fontFamily: 'var(--mono)', fontSize: 10.5 }}>{fmt(scTotal)}</td>
+                      </tr>
                     )
                   })}
-                  <td style={{ padding: '5px', textAlign: 'right', fontWeight: 700, color: C.t1, fontFamily: 'var(--mono)', fontSize: 11 }}>{fmt(rowTotal)}</td>
-                </tr>
+                </React.Fragment>
               )
             })}
           </tbody>
@@ -1125,6 +1160,16 @@ function AllTab({ data }) {
     return row
   })
   const maxHeat = Math.max(...heatData.flatMap(r => channels.map(ch => r[ch] || 0)), 1)
+  const subCatChannelMap = {}
+  ;(rows || []).forEach(r => {
+    const cat = r.Category || 'Unknown'
+    const sc = r.SubCategory || 'Unknown'
+    const ch = r.Channel
+    if (!ch) return
+    if (!subCatChannelMap[cat]) subCatChannelMap[cat] = {}
+    if (!subCatChannelMap[cat][sc]) subCatChannelMap[cat][sc] = {}
+    subCatChannelMap[cat][sc][ch] = (subCatChannelMap[cat][sc][ch] || 0) + parseFloat(r.SellingPrice_Inc_GST || 0)
+  })
 
   const grossMarginPct = totalRev > 0 ? ((totalRev - totalExcRev) / totalRev * 100) : 0
   const revPerUnit = totalQty > 0 ? totalExcRev / totalQty : 0
@@ -1275,7 +1320,7 @@ function AllTab({ data }) {
         </Card>
       </div>
       <DailyChannelTable dailyArr={dailyArr} channels={channels} nDays={nDays} />
-      <CategoryChannelMatrix heatData={heatData} channels={channels} maxHeat={maxHeat} />
+      <CategoryChannelMatrix heatData={heatData} channels={channels} maxHeat={maxHeat} subCatChannelMap={subCatChannelMap} />
       {(regionRows.length > 0 || tierRows.length > 0) && (
         <RegionTierDonutRow regionRows={regionRows} tierRows={tierRows} />
       )}
