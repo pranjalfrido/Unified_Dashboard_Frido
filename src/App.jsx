@@ -835,10 +835,7 @@ function ChannelTrendCard({ dailyArr, channels }) {
 
 const DAILY_METRICS = [
   { id: 'rev', label: 'Revenue' },
-  { id: 'orders', label: 'Orders' },
   { id: 'units', label: 'Units' },
-  { id: 'aov', label: 'AOV' },
-  { id: 'asp', label: 'ASP' },
 ]
 
 const GROUP_OPTS = [
