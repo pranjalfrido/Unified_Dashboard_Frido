@@ -2920,6 +2920,7 @@ function SalesPage({ data, filters, setFilters, activeTab, setActiveTab, fetchDa
     const filtered = cats ? all.filter(([k]) => cats.includes(k.split('::')[0])) : all
     return [...new Set(filtered.map(([k]) => k.split('::')[1]).filter(Boolean))].sort()
   }, [data, filters.category])
+  const stateOpts = useMemo(() => Object.keys(data?.stateMap || {}).filter(Boolean).map(s => s.charAt(0).toUpperCase() + s.slice(1).toLowerCase()).sort(), [data])
 
   if (!filteredData) return null
   return (
@@ -2949,7 +2950,10 @@ function SalesPage({ data, filters, setFilters, activeTab, setActiveTab, fetchDa
           })()}
           <input type="text" placeholder="Search SKU…" value={filters.sku} onChange={e => setFilters(f => ({ ...f, sku: e.target.value }))} className="fsrch" />
           {activeTab === 'shopify' && <VoucherDropdown voucherList={data?.voucherList || []} selected={filters.voucher} onChange={v => setFilters(f => ({ ...f, voucher: v }))} />}
-          <button onClick={() => setFilters(f => ({ ...f, category: [], subCategory: [], sku: '', subChannel: '', voucher: '' }))} className="fclr">✕ Clear</button>
+          <SearchableSelect options={['West','South','North','East','Central','Northeast']} value={filters.region ? [filters.region] : []} onChange={v => setFilters(f => ({ ...f, region: v[0] || '' }))} placeholder="All Regions" />
+          <SearchableSelect options={['Tier I','Tier II','Tier III']} value={filters.tier ? [filters.tier] : []} onChange={v => setFilters(f => ({ ...f, tier: v[0] || '' }))} placeholder="All Tiers" />
+          <SearchableSelect options={stateOpts} value={filters.state ? [filters.state] : []} onChange={v => setFilters(f => ({ ...f, state: v[0] || '' }))} placeholder="All States" dropdownWidth={220} />
+          <button onClick={() => setFilters(f => ({ ...f, category: [], subCategory: [], sku: '', subChannel: '', voucher: '', region: '', tier: '', state: '', city: '' }))} className="fclr">✕ Clear</button>
         </div>
       </div>
       {/* Content */}
@@ -3226,7 +3230,7 @@ const TAB_TO_CHANNEL = { blinkit: 'Blinkit', instamart: 'Instamart', zepto: 'Zep
 export default function App() {
   const [page, setPage] = useState('overview')
   const def = getDefaultDates()
-  const [filters, setFilters] = useState({ start: def.start, end: def.end, category: [], subCategory: [], sku: '', subChannel: '', voucher: '' })
+  const [filters, setFilters] = useState({ start: def.start, end: def.end, category: [], subCategory: [], sku: '', subChannel: '', voucher: '', region: '', tier: '', state: '', city: '' })
   const [activeTab, setActiveTab] = useState('all')
   const [rawRows, setRawRows] = useState(null)
   const [loading, setLoading] = useState(false)
@@ -3281,17 +3285,21 @@ export default function App() {
     const dateChanged = filters.start !== prevDateRef.current.start || filters.end !== prevDateRef.current.end
     if (dateChanged) { prevDateRef.current = { start: filters.start, end: filters.end }; setRawRows(null) }
     debounceRef.current = setTimeout(() => {
-      const { start, end, category, subCategory, sku, subChannel, voucher } = filtersRef.current
+      const { start, end, category, subCategory, sku, subChannel, voucher, region, tier, state, city } = filtersRef.current
       const extra = {}
       if (category?.length) extra.category = category.join(',')
       if (subCategory?.length) extra.subCategory = subCategory.join(',')
       if (sku) extra.sku = sku
       if (subChannel) extra.subChannel = subChannel
       if (voucher) extra.voucher = voucher
+      if (region) extra.region = region
+      if (tier) extra.tier = tier
+      if (state) extra.state = state
+      if (city) extra.city = city
       fetchData(start, end, extra)
     }, 600)
     return () => clearTimeout(debounceRef.current)
-  }, [filters.start, filters.end, filters.category, filters.subCategory, filters.sku, filters.subChannel, filters.voucher, fetchData])
+  }, [filters.start, filters.end, filters.category, filters.subCategory, filters.sku, filters.subChannel, filters.voucher, filters.region, filters.tier, filters.state, filters.city, fetchData])
 
   const data = useMemo(() => { if (!rawRows) return null; if (rawRows.source === 'postgres-aggregated' || rawRows.totalRev !== undefined) return rawRows; return processData(rawRows) }, [rawRows])
   const alerts = useMemo(() => data ? detectAlerts(data) : [], [data])
@@ -3301,7 +3309,7 @@ export default function App() {
     <div className="app-shell">
       <Sidebar page={page} setPage={setPage} />
       <div className="app-main">
-        <Topnav page={page} alerts={alerts} onRefresh={() => { const { start, end, category, subCategory, sku, subChannel, voucher } = filters; const e = {}; if (category?.length) e.category = category.join(','); if (subCategory?.length) e.subCategory = subCategory.join(','); if (sku) e.sku = sku; if (subChannel) e.subChannel = subChannel; if (voucher) e.voucher = voucher; fetchData(start, end, e) }} loading={loading} filters={filters} setFilters={setFilters} rawRows={rawRows} />
+        <Topnav page={page} alerts={alerts} onRefresh={() => { const { start, end, category, subCategory, sku, subChannel, voucher, region, tier, state, city } = filters; const e = {}; if (category?.length) e.category = category.join(','); if (subCategory?.length) e.subCategory = subCategory.join(','); if (sku) e.sku = sku; if (subChannel) e.subChannel = subChannel; if (voucher) e.voucher = voucher; if (region) e.region = region; if (tier) e.tier = tier; if (state) e.state = state; if (city) e.city = city; fetchData(start, end, e) }} loading={loading} filters={filters} setFilters={setFilters} rawRows={rawRows} />
         {loading && (
           <div style={{ height: 2, background: C.border, flexShrink: 0 }}>
             <div className="progress-bar" style={{ height: '100%', background: C.acc }} />

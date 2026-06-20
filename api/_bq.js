@@ -20,7 +20,7 @@ export function getBQ() {
 }
 
 export function buildQuery(s, e, filters = {}) {
-  const { category, subCategory, state, sku, subChannel, voucher } = filters
+  const { category, subCategory, state, sku, subChannel, voucher, region, tier, city } = filters
   const whereClauses = []
   if (category) {
     const cats = category.split(',').map(c => c.trim()).filter(Boolean)
@@ -33,6 +33,9 @@ export function buildQuery(s, e, filters = {}) {
     else if (subs.length > 1) whereClauses.push(`COALESCE(im.SubCategory, 'Frido') IN (${subs.map(c => `'${c.replace(/'/g, "''")}'`).join(',')})`)
   }
   if (state) whereClauses.push(`UPPER(TRIM(u.State)) = '${state.toUpperCase().replace(/'/g, "''")}'`)
+  if (region) whereClauses.push(`COALESCE(pm.Region, cm.Region) = '${region.replace(/'/g, "''")}'`)
+  if (city) whereClauses.push(`COALESCE(pm.City_L1, cm.City_L1, u.City) = '${city.replace(/'/g, "''")}'`)
+  if (tier) { const TIER_MAP = { 'Tier I': 1, 'Tier II': 2, 'Tier III': 3 }; const tierNum = TIER_MAP[tier] || parseInt(tier); if (tierNum) whereClauses.push(`COALESCE(pm.City_Tier, cm.City_Tier) = ${tierNum}`) }
   if (sku) whereClauses.push(`UPPER(TRIM(u.ChannelSKUCode)) LIKE '%${sku.toUpperCase().replace(/'/g, "''").replace(/%/g, '\\%')}%'`)
   if (subChannel) whereClauses.push(`u.SubChannel = '${subChannel.replace(/'/g, "''")}'`)
   if (voucher) {
