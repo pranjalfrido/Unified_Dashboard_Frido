@@ -296,6 +296,12 @@ export default async function handler(req, res) {
       financialStatusMap, fulfilmentStatusMap, refundTrend,
       voucherList: (r.byVoucherRaw || []).map(x => ({ code: x.voucher_code, orders: parseInt(x.orders) || 0 })),
       orders, skuRows, rows: [],
+      shopify: {
+        prevRev: parseFloat(r.prevShopify?.[0]?.rev) || 0,
+        prevExcRev: parseFloat(r.prevShopify?.[0]?.exc_rev) || 0,
+        prevOrders: parseInt(r.prevShopify?.[0]?.orders) || 0,
+        prevDaily: (r.prevShopifyDaily || []).map(x => ({ date: x.date, rev: parseFloat(x.rev) || 0 })),
+      },
       amzSC: {
         prevRev: parseFloat(r.prevAmzSC?.[0]?.rev) || 0,
         prevDaily: (r.prevAmzDaily || []).map(x => ({ date: x.date, rev: parseFloat(x.rev) || 0 })),

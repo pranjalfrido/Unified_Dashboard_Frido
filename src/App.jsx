@@ -1438,14 +1438,17 @@ function ShopifyTab({ data, filters, setFilters }) {
   const paymentModeMap = data.paymentModeMap || {}
   const { orderStatusMap = {}, orderStatusRevMap = {}, nOrders, nCusts, repeatCusts, dailyArr, catMap, subCatMap, stateMap, cityRows = [], voucherMap = {}, financialStatusMap = {}, fulfilmentStatusMap = {}, refundTrend = [] } = data
 
-  const totalRev = data.totalRev || 0
-  const totalExcRev = data.totalExcRev || 0
-  const totalQty = data.totalQty || 0
+  // Use Shopify-specific rev from chMap, not all-channels totalRev
+  const shCh = data.chMap?.['Shopify'] || {}
+  const totalRev = shCh.rev || 0
+  const totalExcRev = shCh.excRev || data.totalExcRev || 0
+  const totalQty = shCh.qty || data.totalQty || 0
   const gst = totalRev - totalExcRev
-  const prevRev = data.prevRev || 0
-  const prevExcRev = data.prevExcRev || 0
-  const prevOrders = data.prevOrders || 0
-  const prevDailyArr = data.prevDailyArr || []
+  const sh = data.shopify || {}
+  const prevRev = sh.prevRev || 0
+  const prevExcRev = sh.prevExcRev || 0
+  const prevOrders = sh.prevOrders || 0
+  const prevDailyArr = sh.prevDaily || []
 
   const shRevChg = prevRev > 0 ? ((totalRev - prevRev) / prevRev * 100) : null
   const shOrdChg = prevOrders > 0 ? ((nOrders - prevOrders) / prevOrders * 100) : null
@@ -1453,13 +1456,13 @@ function ShopifyTab({ data, filters, setFilters }) {
   const shSparkData = Array.from({ length: Math.max(dailyArr.length, prevDailyArr.length) }, (_, i) => {
     const cur = dailyArr[i]
     const pre = prevDailyArr[i]
-    const curRev = cur ? Object.entries(cur).filter(([k]) => k !== 'date' && !k.endsWith('_o')).reduce((s, [, v]) => s + (v || 0), 0) : null
+    const curRev = cur ? (cur['Shopify'] || 0) : null
     return { i, cur: curRev, prev: pre?.rev ?? null }
   })
   const nDays = data.nDays || 1
   const dailyAvg = nDays ? totalRev / nDays : 0
   const aov = nOrders ? totalRev / nOrders : 0
-  const asp = totalQty ? totalRev / totalQty : 0
+  const asp = totalQty ? totalExcRev / totalQty : 0
   const deliveredOrders = orderStatusMap['Delivered'] || 0
   const rtoOrders = orderStatusMap['RTO'] || 0
   const fulfilmentPct = nOrders ? (deliveredOrders / nOrders * 100) : 0
