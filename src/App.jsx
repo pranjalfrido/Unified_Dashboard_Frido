@@ -775,8 +775,13 @@ function ChannelTrendCard({ dailyArr, channels }) {
   const fmtTick = v => v >= 1e5 ? `${(v / 1e5).toFixed(0)}L` : v >= 1e3 ? `${(v / 1e3).toFixed(0)}K` : v
   const selStyle = { fontSize: 11.5, padding: '4px 8px', borderRadius: 7, border: `1px solid ${C.border2}`, background: C.card, color: C.t1, outline: 'none', fontFamily: 'var(--font)', cursor: 'pointer' }
 
+  const enrichedDaily = dailyArr.map(row => {
+    const total = channels.reduce((s, ch) => s + (row[dataKey(ch)] || 0), 0)
+    return { ...row, _total: total }
+  })
+
   const chartProps = {
-    data: dailyArr,
+    data: enrichedDaily,
     margin: { top: 0, right: 0, bottom: 0, left: 0 },
   }
   const axisProps = {
@@ -809,6 +814,7 @@ function ChannelTrendCard({ dailyArr, channels }) {
         ) : (
           <LineChart {...chartProps}>
             {axisProps.grid}{axisProps.xAxis}{axisProps.yAxis}{axisProps.tooltip}{axisProps.legend}
+            <Line key="_total" type="monotone" dataKey="_total" name="Total" stroke="#111111" strokeWidth={3} dot={false} strokeDasharray="0" />
             {channels.map(ch => <Line key={ch} type="monotone" dataKey={dataKey(ch)} name={ch} stroke={C.ch[ch] || C.acc} strokeWidth={2} dot={false} />)}
           </LineChart>
         )}
