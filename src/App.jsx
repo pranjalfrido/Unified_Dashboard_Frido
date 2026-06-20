@@ -2878,8 +2878,8 @@ function SalesPage({ data, filters, setFilters, activeTab, setActiveTab, fetchDa
   const subCats = useMemo(() => {
     const all = Object.entries(data?.subCatMap || {})
     const cats = filters.category?.length > 0 ? filters.category : null
-    const filtered = cats ? all.filter(([, v]) => cats.includes(v.category)) : all
-    return filtered.map(([k]) => k).filter(Boolean).sort()
+    const filtered = cats ? all.filter(([k]) => cats.includes(k.split('::')[0])) : all
+    return [...new Set(filtered.map(([k]) => k.split('::')[1]).filter(Boolean))].sort()
   }, [data, filters.category])
 
   if (!filteredData) return null
