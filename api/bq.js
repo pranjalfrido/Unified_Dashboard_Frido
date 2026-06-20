@@ -188,7 +188,7 @@ export default async function handler(req, res) {
 
     const cityRows = (r.byCity || []).map(x => ({ city: x.city, state: x.state, region: x.region || '', cityTier: x.city_tier || '', orders: parseInt(x.orders) || 0, rev: parseFloat(x.rev) || 0 }))
     const regionRows = (r.byRegion || []).map(x => ({ region: x.region, orders: parseInt(x.orders) || 0, rev: parseFloat(x.rev) || 0, units: parseInt(x.units) || 0 }))
-    const tierRows = (r.byTier || []).map(x => ({ tier: x.city_tier, label: x.tier_label, orders: parseInt(x.orders) || 0, rev: parseFloat(x.rev) || 0, units: parseInt(x.units) || 0 }))
+    const tierRows = (r.byTier || []).map(x => ({ tier: parseInt(x.city_tier) || x.city_tier, label: x.tier_label, orders: parseInt(x.orders) || 0, rev: parseFloat(x.rev) || 0, units: parseInt(x.units) || 0 }))
     const skuRows = (r.bySKU || []).map(x => ({ sku: x.sku, category: x.category || '', subCategory: x.subcategory || '', channel: x.channel || '', units: parseInt(x.units) || 0, orders: parseInt(x.orders) || 0, rev: parseFloat(x.rev) || 0 }))
 
     const financialStatusMap = {}

@@ -1050,8 +1050,12 @@ function RegionTierDonutRow({ regionRows, tierRows }) {
   const selStyle = active => ({ fontSize: 11, fontWeight: active ? 700 : 500, padding: '3px 9px', borderRadius: 5, border: `1px solid ${active ? C.acm : C.border}`, background: active ? C.acc : 'transparent', color: C.t1, cursor: 'pointer', fontFamily: 'var(--font)' })
 
   const regionData = regionRows.map((r, i) => ({ name: r.region, value: metricVal(r, regionMetric), color: REGION_COLORS[i % REGION_COLORS.length], raw: r }))
-  const TIER_NAMES = { 1: 'Tier I', 2: 'Tier II', 3: 'Tier III' }
-  const tierData = tierRows.map((r, i) => ({ name: TIER_NAMES[r.tier] || `Tier ${r.tier}`, value: metricVal(r, tierMetric), color: TIER_COLORS[i % TIER_COLORS.length], raw: r }))
+  const TIER_NAMES = { '1': 'Tier I', '2': 'Tier II', '3': 'Tier III', 'I': 'Tier I', 'II': 'Tier II', 'III': 'Tier III' }
+  const tierData = tierRows.map((r, i) => {
+    const key = String(r.tier).replace(/^tier\s*/i, '').trim()
+    const name = TIER_NAMES[key] || r.label || `Tier ${key}`
+    return { name, value: metricVal(r, tierMetric), color: TIER_COLORS[i % TIER_COLORS.length], raw: r }
+  })
 
   const DonutCard = ({ title, data, metric, setMetric }) => {
     const total = data.reduce((s, d) => s + d.value, 0)
