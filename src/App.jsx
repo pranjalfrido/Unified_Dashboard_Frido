@@ -1384,7 +1384,7 @@ function ShopifyTab({ data, filters, setFilters }) {
         {isIntl && <span style={{ fontSize: 11, color: C.t3, marginLeft: 4 }}>UAE · UK · US</span>}
       </div>
       <div style={{ display: 'grid', gridTemplateColumns: '1.4fr 1.2fr 1fr 1fr 1fr 1fr', gap: 10 }}>
-        <HeroKPICard label="Gross Revenue · Inc. GST" value={fmt(totalRev)} sub={`${fmtN(nOrders)} orders · ${fmtN(totalQty)} units ${shOrdChg !== null ? (shOrdChg >= 0 ? '▲' : '▼') + Math.abs(shOrdChg).toFixed(1) + '%' : ''}`} chg={shRevChg} sparkData={shSparkData} color="#FFD600" gradId="shGrossGrad" />
+        <HeroKPICard label="Gross Revenue · Inc. GST" value={fmt(totalRev)} sub={`${nOrders >= 1000 ? (nOrders/1000).toFixed(1).replace(/\.0$/,'')+'k' : fmtN(nOrders)} orders · ${totalQty >= 1000 ? (totalQty/1000).toFixed(1).replace(/\.0$/,'')+'k' : fmtN(totalQty)} units`} chg={shRevChg} sparkData={shSparkData} color="#FFD600" gradId="shGrossGrad" />
         <HeroKPICard label="Net (Exc GST)" value={fmt(totalExcRev)} sub={`GST ${fmt(gst)}`} chg={shExcChg} sparkData={shSparkData} color="#7AB4EE" gradId="shNetGrad" />
         <KPICard label="GST Collected" value={fmt(gst)} sub={totalRev > 0 ? `${((gst / totalRev) * 100).toFixed(1)}% of gross` : '—'} />
         <KPICard label="Orders" value={fmtN(nOrders)} />
