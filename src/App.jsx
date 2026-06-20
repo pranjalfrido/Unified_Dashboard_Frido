@@ -1030,6 +1030,63 @@ function CategoryChannelMatrix({ heatData, channels, maxHeat }) {
   )
 }
 
+const REGION_COLORS = ['#534AB7','#0D9E68','#E8930A','#CC4078','#2E74CC','#CC8A00']
+const TIER_COLORS = ['#FFD600','#7AB4EE','#9DD470']
+
+function RegionTierDonutRow({ regionRows, tierRows }) {
+  const [regionMetric, setRegionMetric] = useState('rev')
+  const [tierMetric, setTierMetric] = useState('rev')
+
+  const metricVal = (r, m) => m === 'rev' ? r.rev : m === 'orders' ? r.orders : m === 'units' ? r.units : (r.orders ? Math.round(r.rev / r.orders) : 0)
+  const metricFmt = (v, m) => m === 'aov' ? `₹${v.toLocaleString('en-IN')}` : m === 'rev' ? fmt(v) : fmtN(v)
+
+  const selStyle = active => ({ fontSize: 11, fontWeight: active ? 700 : 500, padding: '3px 9px', borderRadius: 5, border: `1px solid ${active ? C.acm : C.border}`, background: active ? C.acc : 'transparent', color: C.t1, cursor: 'pointer', fontFamily: 'var(--font)' })
+
+  const regionData = regionRows.map((r, i) => ({ name: r.region, value: metricVal(r, regionMetric), color: REGION_COLORS[i % REGION_COLORS.length], raw: r }))
+  const tierData = tierRows.map((r, i) => ({ name: r.label || `Tier ${r.tier}`, value: metricVal(r, tierMetric), color: TIER_COLORS[i % TIER_COLORS.length], raw: r }))
+
+  const DonutCard = ({ title, data, metric, setMetric }) => {
+    const total = data.reduce((s, d) => s + d.value, 0)
+    return (
+      <Card title={title} action={
+        <div style={{ display: 'flex', gap: 3 }}>
+          {[['rev','Revenue'],['orders','Orders'],['units','Units'],['aov','AOV']].map(([k,l]) => (
+            <button key={k} onClick={() => setMetric(k)} style={selStyle(metric === k)}>{l}</button>
+          ))}
+        </div>
+      }>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 20 }}>
+          <ResponsiveContainer width={180} height={180}>
+            <PieChart>
+              <Pie data={data} cx="50%" cy="50%" innerRadius={52} outerRadius={80} dataKey="value" paddingAngle={2}>
+                {data.map((d, i) => <Cell key={i} fill={d.color} />)}
+              </Pie>
+              <Tooltip formatter={(v, name) => [metricFmt(v, metric), name]} />
+            </PieChart>
+          </ResponsiveContainer>
+          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 6 }}>
+            {data.map((d, i) => (
+              <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
+                <span style={{ width: 10, height: 10, borderRadius: '50%', background: d.color, flexShrink: 0 }} />
+                <span style={{ fontSize: 12, color: C.t2, flex: 1 }}>{d.name}</span>
+                <span style={{ fontSize: 12, fontWeight: 700, color: C.t1, fontFamily: 'var(--mono)' }}>{metricFmt(d.value, metric)}</span>
+                <span style={{ fontSize: 11, color: C.t3, minWidth: 36, textAlign: 'right' }}>{total ? (d.value / total * 100).toFixed(1) : 0}%</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      </Card>
+    )
+  }
+
+  return (
+    <div className="g-2" style={{ alignItems: 'stretch' }}>
+      {regionRows.length > 0 && <DonutCard title="Revenue by Region" data={regionData} metric={regionMetric} setMetric={setRegionMetric} />}
+      {tierRows.length > 0 && <DonutCard title="City Tier Breakdown" data={tierData} metric={tierMetric} setMetric={setTierMetric} />}
+    </div>
+  )
+}
+
 function AllTab({ data }) {
   const { totalRev, totalExcRev, gstCollected, nOrders, totalQty, blendedAOV, nDays, dailyArr, chMap, catMap, subCatMap, stateMap, cityRows = [], regionRows = [], tierRows = [], buckets, bucketRev, rows, orders, orderStatusRevMap = {}, orderStatusMap = {}, catChannelMap = {}, prevRev = 0, prevExcRev = 0, prevOrders = 0, prevDailyArr = [], prevChMap = {}, nCusts = 0, repeatCusts = 0 } = data
   const channels = Object.keys(C.ch).filter(ch => chMap[ch])
@@ -1198,42 +1255,7 @@ function AllTab({ data }) {
         <PaginatedCard title="Top Cities" rows={cityRows} columns={[{ key: 'city', label: 'City', render: v => v ? v.charAt(0).toUpperCase() + v.slice(1).toLowerCase() : v }, { key: 'state', label: 'State', render: v => v ? v.charAt(0).toUpperCase() + v.slice(1).toLowerCase() : '—' }, { key: 'region', label: 'Region', render: v => v || '—' }, { key: 'rev', label: 'Revenue', align: 'right', mono: true, render: v => fmt(v) }, { key: 'orders', label: 'Orders', align: 'right', render: v => fmtN(v) }, { key: 'aov', label: 'AOV', align: 'right', render: (_, r) => `₹${r.orders ? Math.round(r.rev / r.orders).toLocaleString('en-IN') : 0}` }]} pageSize={15} />
       </div>
       {(regionRows.length > 0 || tierRows.length > 0) && (
-        <div className="g-2" style={{ alignItems: 'stretch' }}>
-          {regionRows.length > 0 && (
-            <PaginatedCard title="Revenue by Region" rows={regionRows} columns={[
-              { key: 'region', label: 'Region' },
-              { key: 'rev', label: 'Revenue', align: 'right', mono: true, render: v => fmt(v) },
-              { key: 'orders', label: 'Orders', align: 'right', render: v => fmtN(v) },
-              { key: 'units', label: 'Units', align: 'right', render: v => fmtN(v) },
-              { key: 'aov', label: 'AOV', align: 'right', render: (_, r) => `₹${r.orders ? Math.round(r.rev / r.orders).toLocaleString('en-IN') : 0}` },
-            ]} pageSize={10} />
-          )}
-          {tierRows.length > 0 && (
-            <Card title="City Tier Breakdown">
-              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
-                <thead>
-                  <tr style={{ borderBottom: `1.5px solid ${C.border}` }}>
-                    {['Tier', 'Label', 'Revenue', 'Orders', 'Units', 'AOV'].map(h => (
-                      <th key={h} style={{ padding: '6px 10px', textAlign: h === 'Tier' || h === 'Label' ? 'left' : 'right', color: C.t2, fontWeight: 700, fontSize: 11 }}>{h}</th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {tierRows.map((r, i) => (
-                    <tr key={i} style={{ borderBottom: `1px solid ${C.border}`, background: i % 2 === 0 ? 'transparent' : C.bg }}>
-                      <td style={{ padding: '7px 10px', fontWeight: 700, color: C.t1 }}>{r.tier ? `Tier ${r.tier}` : '—'}</td>
-                      <td style={{ padding: '7px 10px', color: C.t2 }}>{r.label || '—'}</td>
-                      <td style={{ padding: '7px 10px', textAlign: 'right', fontFamily: 'monospace', color: C.t1 }}>{fmt(r.rev)}</td>
-                      <td style={{ padding: '7px 10px', textAlign: 'right', color: C.t2 }}>{fmtN(r.orders)}</td>
-                      <td style={{ padding: '7px 10px', textAlign: 'right', color: C.t2 }}>{fmtN(r.units)}</td>
-                      <td style={{ padding: '7px 10px', textAlign: 'right', color: C.t2 }}>₹{r.orders ? Math.round(r.rev / r.orders).toLocaleString('en-IN') : 0}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </Card>
-          )}
-        </div>
+        <RegionTierDonutRow regionRows={regionRows} tierRows={tierRows} />
       )}
     </div>
   )
