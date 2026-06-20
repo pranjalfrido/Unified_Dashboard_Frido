@@ -1158,7 +1158,7 @@ function AllTab({ data }) {
         {/* Right: 2 rows of 5 KPIs each */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
           {/* Row 1 */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 10, flex: 1 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10, flex: 1 }}>
             {(() => {
               const excChg = prevExcRev > 0 ? ((totalExcRev - prevExcRev) / prevExcRev * 100) : null
               return (
@@ -1184,7 +1184,6 @@ function AllTab({ data }) {
               { label: 'Return %', value: `${returnPct.toFixed(1)}%`, sub: `${fmtN(rtoOrders)} RTO orders`, accent: returnPct > 10 ? '#7A1A1A' : undefined },
               { label: 'Blended AOV', value: `₹${Math.round(blendedAOV).toLocaleString('en-IN')}`, sub: `${fmtN(nOrders)} orders` },
               { label: 'Daily Avg', value: fmt(totalRev / nDays), sub: `over ${nDays} days` },
-              { label: 'Repeat Rate', value: `${nCusts ? (repeatCusts / nCusts * 100).toFixed(1) : 0}%`, sub: `${fmtN(repeatCusts)} of ${fmtN(nCusts)} custs` },
             ].map(k => (
               <div key={k.label} className="kpi-card" style={{ padding: '10px 13px' }}>
                 <div className="kpi-label">{k.label}</div>
@@ -1194,9 +1193,8 @@ function AllTab({ data }) {
             ))}
           </div>
           {/* Row 2 */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 10, flex: 1 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10, flex: 1 }}>
             <KPICard label="ASP" value={`₹${Math.round(asp).toLocaleString('en-IN')}`} sub={`Revenue per unit sold`} />
-            <KPICard label="Fulfilment %" value={`${fulfilmentPct.toFixed(1)}%`} sub={`${fmtN(deliveredOrders)} delivered`} accent={fulfilmentPct < 80 ? '#7A1A1A' : fulfilmentPct >= 90 ? '#286010' : undefined} />
             <KPICard label="GST Collected" value={fmt(gstCollected)} sub={`${totalRev > 0 ? ((gstCollected / totalRev) * 100).toFixed(1) : 0}% of gross rev`} />
             <KPICard label="Revenue at Risk" value={fmt(atRiskRev)} sub={`RTO + Cancelled`} accent={atRiskRev > 0 ? '#7A4000' : undefined} />
             <KPICard label="Units per Order" value={unitsPerOrder.toFixed(2)} sub={`Avg basket size`} />
