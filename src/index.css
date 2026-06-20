@@ -139,7 +139,7 @@ html,body{height:100%;background:var(--bg);font-family:var(--font);color:var(--t
 .h4{color:var(--t1);font-weight:700}
 
 /* ── Misc ──────────────────────────────────── */
-.ins-box{background:var(--acl);border:1px solid var(--acm);border-radius:10px;padding:12px 14px}
+.ins-box{background:var(--acl);border:1px solid var(--acm);border-radius:7px;padding:6px 10px;display:inline-flex;align-items:center;gap:8px}
 .spbar{height:22px;border-radius:8px;overflow:hidden;display:flex}
 .hero-grad{background:linear-gradient(135deg,#FFD600 0%,#FFE033 55%,#E6C200 100%)}
 @keyframes progress{from{width:0}to{width:85%}}

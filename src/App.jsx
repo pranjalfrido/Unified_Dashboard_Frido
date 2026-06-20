@@ -1072,8 +1072,8 @@ function CategoryChannelMatrix({ heatData, channels, maxHeat, subCatChannelMap =
         </table>
       </div>
       <div className="ins-box" style={{ marginTop: 10 }}>
-        <div style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.07em', color: '#7A6000', marginBottom: 5 }}>⚡ Gap analysis</div>
-        <div style={{ fontSize: 12, color: C.t2, lineHeight: 1.7 }}>Red cells (—) = zero revenue. Look for high-performing categories with missing channel presence to find growth opportunities.</div>
+        <span style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.07em', color: '#7A6000', whiteSpace: 'nowrap' }}>⚡ Gap analysis</span>
+        <span style={{ fontSize: 11, color: C.t2 }}>— cells = zero revenue. Find high-performing categories missing on a channel.</span>
       </div>
     </Card>
   )
