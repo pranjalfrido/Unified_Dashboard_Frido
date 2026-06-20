@@ -51,9 +51,21 @@ export default async function handler(req, res) {
   const prevStart = new Date(prevEnd); prevStart.setDate(prevStart.getDate() - nDaysRange + 1)
   const ps = prevStart.toISOString().slice(0, 10), pe = prevEnd.toISOString().slice(0, 10)
 
+  // MoM: same date range shifted back 1 month
+  const momStartD = new Date(startD); momStartD.setMonth(momStartD.getMonth() - 1)
+  const momEndD = new Date(endD); momEndD.setMonth(momEndD.getMonth() - 1)
+  const moms = momStartD.toISOString().slice(0, 10), mome = momEndD.toISOString().slice(0, 10)
+
+  // YoY: same date range shifted back 1 year
+  const yoyStartD = new Date(startD); yoyStartD.setFullYear(yoyStartD.getFullYear() - 1)
+  const yoyEndD = new Date(endD); yoyEndD.setFullYear(yoyEndD.getFullYear() - 1)
+  const yoys = yoyStartD.toISOString().slice(0, 10), yoye = yoyEndD.toISOString().slice(0, 10)
+
   // Run all aggregation queries in parallel directly on BigQuery
   const base = buildQuery(start, end, { category, subCategory, sku, subChannel, voucher, region, tier, state, city })
   const prevBase = buildQuery(ps, pe, { category, subCategory, sku, subChannel, voucher, region, tier, state, city })
+  const momBase = buildQuery(moms, mome, { category, subCategory, sku, subChannel, voucher, region, tier, state, city })
+  const yoyBase = buildQuery(yoys, yoye, { category, subCategory, sku, subChannel, voucher, region, tier, state, city })
 
   const queries = {
     totals: `WITH q AS (${base}) SELECT COUNT(DISTINCT OrderId) AS n_orders, SUM(SellingPrice_Inc_GST) AS total_rev, SUM(SellingPrice_Exc_GST) AS total_exc_rev, SUM(ItemQty) AS total_qty, COUNT(DISTINCT OrderDate) AS n_days, COUNT(DISTINCT CustomerId) AS n_custs FROM q`,
@@ -84,6 +96,8 @@ export default async function handler(req, res) {
     byVoucherRaw: `WITH q AS (${base}) SELECT TRIM(voucher_code) AS voucher_code, COUNT(DISTINCT OrderId) AS orders FROM q WHERE Channel = 'Shopify' AND voucher_code IS NOT NULL AND TRIM(voucher_code) != '' GROUP BY TRIM(voucher_code) ORDER BY orders DESC LIMIT 300`,
     byCIR: `WITH q AS (${base}) SELECT SUM(SellingPrice_Inc_GST) AS cir_rev, COUNT(DISTINCT OrderId) AS cir_orders FROM q WHERE is_CIR_return = 1`,
     prevTotals: `WITH q AS (${prevBase}) SELECT SUM(SellingPrice_Inc_GST) AS total_rev, SUM(SellingPrice_Exc_GST) AS total_exc_rev, COUNT(DISTINCT OrderId) AS n_orders, SUM(ItemQty) AS total_qty FROM q`,
+    momTotals: `WITH q AS (${momBase}) SELECT SUM(SellingPrice_Inc_GST) AS total_rev, SUM(SellingPrice_Exc_GST) AS total_exc_rev, COUNT(DISTINCT OrderId) AS n_orders FROM q`,
+    yoyTotals: `WITH q AS (${yoyBase}) SELECT SUM(SellingPrice_Inc_GST) AS total_rev, SUM(SellingPrice_Exc_GST) AS total_exc_rev, COUNT(DISTINCT OrderId) AS n_orders FROM q`,
     prevByChannel: `WITH q AS (${prevBase}) SELECT Channel, SUM(SellingPrice_Inc_GST) AS rev FROM q GROUP BY Channel`,
     prevByDate: `WITH q AS (${prevBase}) SELECT CAST(OrderDate AS STRING) AS date, SUM(SellingPrice_Inc_GST) AS rev FROM q GROUP BY date ORDER BY date`,
     prevShopify: `WITH q AS (${prevBase}) SELECT SUM(SellingPrice_Inc_GST) AS rev, SUM(SellingPrice_Exc_GST) AS exc_rev, COUNT(DISTINCT OrderId) AS orders FROM q WHERE Channel='Shopify'`,
@@ -238,6 +252,11 @@ export default async function handler(req, res) {
       isRTO: false, isCIR: false, isCancelled: false, isExchange: false
     }))
 
+    const momRev = parseFloat(r.momTotals?.[0]?.total_rev) || 0
+    const yoyRev = parseFloat(r.yoyTotals?.[0]?.total_rev) || 0
+    const momOrders = parseInt(r.momTotals?.[0]?.n_orders) || 0
+    const yoyOrders = parseInt(r.yoyTotals?.[0]?.n_orders) || 0
+
     const rtoRev = parseFloat(r.byOrderStatus?.find(x => x.order_status === 'RTO')?.rev) || 0
     const cancellRev = parseFloat(r.byOrderStatus?.find(x => x.order_status === 'Cancelled')?.rev) || 0
     const cirRev = parseFloat(r.byCIR?.[0]?.cir_rev) || 0
@@ -255,6 +274,8 @@ export default async function handler(req, res) {
       blendedAOV: nOrders ? totalRev / nOrders : 0,
       gstCollected: totalRev - totalExcRev,
       rtoRev, cancellRev, cirRev, netRevenueCalc,
+      momRev, yoyRev, momOrders, yoyOrders,
+      momPeriod: `${moms} → ${mome}`, yoyPeriod: `${yoys} → ${yoye}`,
       nCusts, repeatCusts,
       uniqueDates: dateSet,
       dailyArr, chMap, catMap, subCatMap, stateMap, cityRows, regionRows, tierRows, catChannelMap, orderStatusMap, orderStatusRevMap,
