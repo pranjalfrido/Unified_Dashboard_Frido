@@ -1220,6 +1220,9 @@ function AllTab({ data }) {
       </div>
       <DailyChannelTable dailyArr={dailyArr} channels={channels} nDays={nDays} />
       <CategoryChannelMatrix heatData={heatData} channels={channels} maxHeat={maxHeat} />
+      {(regionRows.length > 0 || tierRows.length > 0) && (
+        <RegionTierDonutRow regionRows={regionRows} tierRows={tierRows} />
+      )}
       <div className="g-2" style={{ alignItems: 'stretch' }}>
         <Card title="Category Revenue" style={{ display: 'flex', flexDirection: 'column' }}>
           <div style={{ overflowX: 'auto' }}>
@@ -1254,9 +1257,6 @@ function AllTab({ data }) {
         <PaginatedCard title="Top States" rows={stateRows} columns={[{ key: 'state', label: 'State', render: v => v ? v.charAt(0).toUpperCase() + v.slice(1).toLowerCase() : v }, { key: 'rev', label: 'Revenue', align: 'right', mono: true, render: v => fmt(v) }, { key: 'orders', label: 'Orders', align: 'right', render: v => fmtN(v) }, { key: 'aov', label: 'AOV', align: 'right', render: v => `₹${Math.round(v).toLocaleString('en-IN')}` }, { key: 'cities', label: 'Cities' }]} pageSize={15} />
         <PaginatedCard title="Top Cities" rows={cityRows} columns={[{ key: 'city', label: 'City', render: v => v ? v.charAt(0).toUpperCase() + v.slice(1).toLowerCase() : v }, { key: 'state', label: 'State', render: v => v ? v.charAt(0).toUpperCase() + v.slice(1).toLowerCase() : '—' }, { key: 'region', label: 'Region', render: v => v || '—' }, { key: 'rev', label: 'Revenue', align: 'right', mono: true, render: v => fmt(v) }, { key: 'orders', label: 'Orders', align: 'right', render: v => fmtN(v) }, { key: 'aov', label: 'AOV', align: 'right', render: (_, r) => `₹${r.orders ? Math.round(r.rev / r.orders).toLocaleString('en-IN') : 0}` }]} pageSize={15} />
       </div>
-      {(regionRows.length > 0 || tierRows.length > 0) && (
-        <RegionTierDonutRow regionRows={regionRows} tierRows={tierRows} />
-      )}
     </div>
   )
 }
