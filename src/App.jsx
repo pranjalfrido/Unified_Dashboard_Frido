@@ -1021,10 +1021,11 @@ function CategoryChannelMatrix({ heatData, channels, maxHeat }) {
                   {channels.map(ch => {
                     const v = row[ch] || 0
                     const intensity = v / rowTotal
+                    const share = rowTotal > 0 ? (v / rowTotal * 100).toFixed(0) : 0
                     const cls = intensity === 0 ? 'h0' : intensity < 0.1 ? 'h1' : intensity < 0.3 ? 'h2' : intensity < 0.6 ? 'h3' : 'h4'
                     return (
                       <td key={ch} className={cls} style={{ padding: '5px', textAlign: 'right', fontFamily: 'var(--mono)', fontSize: 11 }}>
-                        {v > 0 ? fmt(v) : '—'}
+                        {v > 0 ? <>{fmt(v)}<span style={{ fontSize: 9, fontWeight: 500, color: 'rgba(0,0,0,0.38)', marginLeft: 3 }}>{share}%</span></> : '—'}
                       </td>
                     )
                   })}
