@@ -2950,9 +2950,9 @@ function SalesPage({ data, filters, setFilters, activeTab, setActiveTab, fetchDa
           })()}
           <input type="text" placeholder="Search SKU…" value={filters.sku} onChange={e => setFilters(f => ({ ...f, sku: e.target.value }))} className="fsrch" />
           {activeTab === 'shopify' && <VoucherDropdown voucherList={data?.voucherList || []} selected={filters.voucher} onChange={v => setFilters(f => ({ ...f, voucher: v }))} />}
-          <SearchableSelect options={['West','South','North','East','Central','Northeast']} value={filters.region ? [filters.region] : []} onChange={v => setFilters(f => ({ ...f, region: v[0] || '' }))} placeholder="All Regions" />
-          <SearchableSelect options={['Tier I','Tier II','Tier III']} value={filters.tier ? [filters.tier] : []} onChange={v => setFilters(f => ({ ...f, tier: v[0] || '' }))} placeholder="All Tiers" />
-          <SearchableSelect options={stateOpts} value={filters.state ? [filters.state] : []} onChange={v => setFilters(f => ({ ...f, state: v[0] || '' }))} placeholder="All States" dropdownWidth={220} />
+          <SearchableSelect options={['West','South','North','East','Central','Northeast']} value={filters.region || ''} onChange={v => setFilters(f => ({ ...f, region: v }))} placeholder="All Regions" />
+          <SearchableSelect options={['Tier I','Tier II','Tier III']} value={filters.tier || ''} onChange={v => setFilters(f => ({ ...f, tier: v }))} placeholder="All Tiers" />
+          <SearchableSelect options={stateOpts} value={filters.state || ''} onChange={v => setFilters(f => ({ ...f, state: v }))} placeholder="All States" dropdownWidth={220} />
           <button onClick={() => setFilters(f => ({ ...f, category: [], subCategory: [], sku: '', subChannel: '', voucher: '', region: '', tier: '', state: '', city: '' }))} className="fclr">✕ Clear</button>
         </div>
       </div>
