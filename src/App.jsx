@@ -775,7 +775,12 @@ function ChannelTrendCard({ dailyArr, channels }) {
   const fmtTick = v => v >= 1e5 ? `${(v / 1e5).toFixed(0)}L` : v >= 1e3 ? `${(v / 1e3).toFixed(0)}K` : v
   const selStyle = { fontSize: 11.5, padding: '4px 8px', borderRadius: 7, border: `1px solid ${C.border2}`, background: C.card, color: C.t1, outline: 'none', fontFamily: 'var(--font)', cursor: 'pointer' }
 
-  const enrichedDaily = dailyArr.map(row => {
+  const nDays = dailyArr.length
+  const autoGroup = nDays <= 14 ? 'daily' : nDays <= 90 ? 'weekly' : 'monthly'
+  const [groupBy, setGroupBy] = useState(autoGroup)
+
+  const grouped = groupDailyArr(dailyArr, channels, groupBy)
+  const enrichedDaily = grouped.map(row => {
     const total = channels.reduce((s, ch) => s + (row[dataKey(ch)] || 0), 0)
     return { ...row, _total: total }
   })
@@ -795,10 +800,15 @@ function ChannelTrendCard({ dailyArr, channels }) {
   return (
     <Card>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 11 }}>
-        <span style={{ fontSize: 13, fontWeight: 600, color: C.t1 }}>Daily {m.label} by Channel</span>
-        <select value={metric} onChange={e => setMetric(e.target.value)} style={selStyle}>
-          {CHART_METRICS.map(x => <option key={x.id} value={x.id}>{x.label}</option>)}
-        </select>
+        <span style={{ fontSize: 13, fontWeight: 600, color: C.t1 }}>{GROUP_OPTS.find(x => x.id === groupBy)?.label} {m.label} by Channel</span>
+        <div style={{ display: 'flex', gap: 6 }}>
+          <select value={groupBy} onChange={e => setGroupBy(e.target.value)} style={selStyle}>
+            {GROUP_OPTS.map(x => <option key={x.id} value={x.id}>{x.label}</option>)}
+          </select>
+          <select value={metric} onChange={e => setMetric(e.target.value)} style={selStyle}>
+            {CHART_METRICS.map(x => <option key={x.id} value={x.id}>{x.label}</option>)}
+          </select>
+        </div>
       </div>
       <ResponsiveContainer width="100%" height={220}>
         {chartType === 'bar' ? (
