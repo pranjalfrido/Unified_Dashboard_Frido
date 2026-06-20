@@ -966,7 +966,7 @@ function DailyChannelTable({ dailyArr, channels, nDays = 7 }) {
                   </td>
                   {channels.map(ch => {
                     const v = getVal(d, ch)
-                    const sharePct = grandTotal && v ? (v / grandTotal * 100).toFixed(1) : null
+                    const sharePct = rowTotal && v ? (v / rowTotal * 100).toFixed(1) : null
                     return (
                       <td key={ch} style={{ padding: '6px 8px', textAlign: 'right', fontFamily: 'var(--mono)', fontSize: 11.5, color: v ? C.t1 : C.t3, borderLeft: `1px solid ${C.border}` }}>
                         {v ? <>{fmtVal(v)}<span style={{ fontSize: 10, color: C.t3, fontWeight: 400, marginLeft: 4 }}>{sharePct}%</span></> : '—'}
@@ -988,7 +988,7 @@ function DailyChannelTable({ dailyArr, channels, nDays = 7 }) {
             </tr>
             {metric === 'rev' && (
               <tr style={{ background: C.bg }}>
-                <td style={{ padding: '4px 8px', fontSize: 10.5, color: C.t3, fontWeight: 600 }}>Share %</td>
+                <td style={{ padding: '4px 8px', fontSize: 10.5, color: C.t3, fontWeight: 600 }}>Channel share</td>
                 {channels.map(ch => <td key={ch} style={{ padding: '4px 8px', textAlign: 'right', fontSize: 11, color: C.t3, borderLeft: `1px solid ${C.border}` }}>{grandTotal ? (colTotals[ch] / grandTotal * 100).toFixed(1) + '%' : '—'}</td>)}
                 <td style={{ padding: '4px 8px', textAlign: 'right', fontSize: 11, color: C.t3, borderLeft: `1px solid ${C.border}` }}>100%</td>
               </tr>
