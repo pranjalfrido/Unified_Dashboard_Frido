@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback, useEffect, useRef } from 'react'
+import { useState, useMemo, useCallback, useEffect, useRef, Fragment } from 'react'
 import { C, fmt, fmtN, pct, processData, detectAlerts, exportCSV, getDefaultDates } from './utils.js'
 import { KPICard, AlertCard, HBar, DataTable, Card, Badge, RevTrendChart, AreaTrendChart, MultiLineChart, ChartTooltip, BarChart, Bar, LineChart, Line, AreaChart, Area, ComposedChart, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell } from './components.jsx'
 
@@ -1033,7 +1033,7 @@ function CategoryChannelMatrix({ heatData, channels, maxHeat, subCatChannelMap =
               })
               const hasSubCats = subCats.length > 0
               return (
-                <React.Fragment key={i}>
+                <Fragment key={i}>
                   <tr style={{ borderBottom: `1px solid ${C.border}` }}>
                     <td style={{ padding: '5px', fontWeight: 600, color: C.t1 }}>
                       <span
@@ -1065,7 +1065,7 @@ function CategoryChannelMatrix({ heatData, channels, maxHeat, subCatChannelMap =
                       </tr>
                     )
                   })}
-                </React.Fragment>
+                </Fragment>
               )
             })}
           </tbody>
