@@ -1154,8 +1154,8 @@ function AllTab({ data }) {
                 <span style={{ fontSize: 12, fontWeight: 700, color: C.t1, minWidth: 72, textAlign: 'right', fontFamily: 'var(--mono)' }}>{fmt(v.rev)}</span>
                 <span style={{ fontSize: 11, color: C.t3, minWidth: 36, textAlign: 'right' }}>{pct(v.rev, totalRev)}</span>
                 {chg !== null
-                  ? <span style={{ fontSize: 10.5, fontWeight: 700, minWidth: 48, textAlign: 'right', padding: '1px 5px', borderRadius: 4, background: chg >= 0 ? '#E6F4E0' : '#FDE8E8', color: chg >= 0 ? '#286010' : '#7A1A1A' }}>{chg >= 0 ? '▲' : '▼'} {Math.abs(chg).toFixed(1)}%</span>
-                  : <span style={{ minWidth: 48 }} />}
+                  ? <span style={{ fontSize: 10.5, fontWeight: 700, width: 58, flexShrink: 0, textAlign: 'center', padding: '2px 0', borderRadius: 4, background: chg >= 0 ? '#E6F4E0' : '#FDE8E8', color: chg >= 0 ? '#286010' : '#7A1A1A', display: 'inline-block' }}>{chg >= 0 ? '▲' : '▼'} {Math.abs(chg).toFixed(1)}%</span>
+                  : <span style={{ width: 58, flexShrink: 0 }} />}
               </div>
             )
           })}
