@@ -982,17 +982,15 @@ function DailyChannelTable({ dailyArr, channels, nDays = 7 }) {
           </tbody>
           <tfoot>
             <tr style={{ borderTop: `2px solid ${C.border}`, background: C.bg }}>
-              <td style={{ padding: '6px 8px', fontSize: 11, fontWeight: 700, color: C.t1 }}>Total</td>
-              {channels.map(ch => <td key={ch} style={{ padding: '6px 8px', textAlign: 'right', fontWeight: 700, fontFamily: 'var(--mono)', fontSize: 11.5, color: C.t1, borderLeft: `1px solid ${C.border}` }}>{fmtVal(colTotals[ch])}</td>)}
+              <td style={{ padding: '6px 8px', fontSize: 11, fontWeight: 700, color: C.t1 }}>Total <span style={{ fontSize: 9.5, fontWeight: 400, color: C.t3 }}>(channel share)</span></td>
+              {channels.map(ch => (
+                <td key={ch} style={{ padding: '6px 8px', textAlign: 'right', fontWeight: 700, fontFamily: 'var(--mono)', fontSize: 11.5, color: C.t1, borderLeft: `1px solid ${C.border}` }}>
+                  {fmtVal(colTotals[ch])}
+                  {metric === 'rev' && grandTotal ? <span style={{ fontSize: 10, fontWeight: 400, color: C.t3, marginLeft: 4 }}>{(colTotals[ch] / grandTotal * 100).toFixed(1)}%</span> : null}
+                </td>
+              ))}
               <td style={{ padding: '6px 8px', textAlign: 'right', fontWeight: 700, fontFamily: 'var(--mono)', fontSize: 11.5, color: C.t1, borderLeft: `1px solid ${C.border}` }}>{fmtVal(grandTotal)}</td>
             </tr>
-            {metric === 'rev' && (
-              <tr style={{ background: C.bg }}>
-                <td style={{ padding: '4px 8px', fontSize: 10.5, color: C.t3, fontWeight: 600 }}>Channel share</td>
-                {channels.map(ch => <td key={ch} style={{ padding: '4px 8px', textAlign: 'right', fontSize: 11, color: C.t3, borderLeft: `1px solid ${C.border}` }}>{grandTotal ? (colTotals[ch] / grandTotal * 100).toFixed(1) + '%' : '—'}</td>)}
-                <td style={{ padding: '4px 8px', textAlign: 'right', fontSize: 11, color: C.t3, borderLeft: `1px solid ${C.border}` }}>100%</td>
-              </tr>
-            )}
           </tfoot>
         </table>
       </div>
