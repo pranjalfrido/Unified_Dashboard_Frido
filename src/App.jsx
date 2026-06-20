@@ -1241,14 +1241,6 @@ function AllTab({ data }) {
                     {excChg !== null && <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 7px', borderRadius: 5, background: excChg >= 0 ? C.green.bg : C.red.bg, color: excChg >= 0 ? C.green.tx : C.red.tx }}>{excChg >= 0 ? '▲' : '▼'} {Math.abs(excChg).toFixed(1)}%</span>}
                   </div>
                   <div className="kpi-sub">{totalRev > 0 ? (totalExcRev / totalRev * 100).toFixed(1) : 0}% of gross · GST {fmt(gstCollected)}</div>
-                  <ResponsiveContainer width="100%" height={24}>
-                    <AreaChart data={sparkData} margin={{ top: 2, right: 0, bottom: 0, left: 0 }}>
-                      <defs><linearGradient id="netGrad" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor={C.blue.bd} stopOpacity={0.25} /><stop offset="95%" stopColor={C.blue.bd} stopOpacity={0} /></linearGradient></defs>
-                      <Area type="monotone" dataKey="cur" name="Current" stroke={C.blue.bd} strokeWidth={1.5} fill="url(#netGrad)" dot={false} connectNulls />
-                      <Area type="monotone" dataKey="prev" name="Prev" stroke={C.t3} strokeWidth={1} fill="none" dot={false} strokeDasharray="3 2" connectNulls />
-                      <Tooltip content={({ active, payload }) => active && payload?.length ? <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 6, padding: '4px 8px', fontSize: 10 }}>{payload.map(p => <div key={p.name} style={{ color: p.name === 'Current' ? C.t1 : C.t3 }}>{p.name}: {fmt(p.value)}</div>)}</div> : null} />
-                    </AreaChart>
-                  </ResponsiveContainer>
                 </div>
               )
             })()}
