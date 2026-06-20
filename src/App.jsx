@@ -1438,21 +1438,12 @@ function ShopifyTab({ data, filters, setFilters }) {
   const paymentModeMap = data.paymentModeMap || {}
   const { orderStatusMap = {}, orderStatusRevMap = {}, nOrders, nCusts, repeatCusts, dailyArr, cityRows = [], voucherMap = {}, financialStatusMap = {}, fulfilmentStatusMap = {}, refundTrend = [] } = data
 
-  // Shopify-only category/state maps from filtered rows
-  const shRows = (data.rows || []).filter(r => r.Channel === 'Shopify')
-  const catMap = {}; const subCatMap = {}; const stateMap = {}
-  shRows.forEach(r => {
-    const cat = r.Category || 'Unknown'
-    if (!catMap[cat]) catMap[cat] = { rev: 0, excRev: 0, orders: new Set(), units: 0 }
-    catMap[cat].rev += parseFloat(r.SellingPrice_Inc_GST || 0); catMap[cat].excRev += parseFloat(r.SellingPrice_Exc_GST || 0); catMap[cat].orders.add(r.OrderId); catMap[cat].units += parseInt(r.ItemQty || 0)
-    const sc = r.SubCategory || 'Unknown'; const scKey = `${cat}::${sc}`
-    if (!subCatMap[scKey]) subCatMap[scKey] = { rev: 0, orders: new Set() }
-    subCatMap[scKey].rev += parseFloat(r.SellingPrice_Inc_GST || 0); subCatMap[scKey].orders.add(r.OrderId)
-    const st = ((r.State || 'Unknown').toUpperCase().trim())
-    if (!stateMap[st]) stateMap[st] = { rev: 0, orders: new Set(), cities: new Set() }
-    stateMap[st].rev += parseFloat(r.SellingPrice_Inc_GST || 0); stateMap[st].orders.add(r.OrderId)
-    if (r.City) stateMap[st].cities.add(r.City.toUpperCase().trim())
-  })
+  // Shopify-only category/state maps from server-side queries
+  const sh = data.shopify || {}
+  const catMap = sh.catMap || {}
+  const subCatMap = sh.subCatMap || {}
+  const stateMap = sh.stateMap || {}
+  const shCityRows = sh.cityRows || []
 
   // Use Shopify-specific rev from chMap, not all-channels totalRev
   const shCh = data.chMap?.['Shopify'] || {}
@@ -1460,7 +1451,6 @@ function ShopifyTab({ data, filters, setFilters }) {
   const totalExcRev = shCh.excRev || data.totalExcRev || 0
   const totalQty = shCh.qty || data.totalQty || 0
   const gst = totalRev - totalExcRev
-  const sh = data.shopify || {}
   const prevRev = sh.prevRev || 0
   const prevExcRev = sh.prevExcRev || 0
   const prevOrders = sh.prevOrders || 0
@@ -1596,7 +1586,7 @@ function ShopifyTab({ data, filters, setFilters }) {
       </div>
       <div className="g-2" style={{ alignItems: 'stretch' }}>
         <PaginatedCard title="Top States" rows={stateRows} columns={[{ key: 'state', label: 'State', render: v => v ? v.charAt(0).toUpperCase() + v.slice(1).toLowerCase() : v }, { key: 'rev', label: 'Revenue', align: 'right', mono: true, render: v => fmt(v) }, { key: 'orders', label: 'Orders', align: 'right', render: v => fmtN(v) }, { key: 'aov', label: 'AOV', align: 'right', render: v => `₹${Math.round(v).toLocaleString('en-IN')}` }, { key: 'cities', label: 'Cities' }]} pageSize={15} />
-        <PaginatedCard title="Top Cities" rows={cityRows} columns={[{ key: 'city', label: 'City', render: v => v ? v.charAt(0).toUpperCase() + v.slice(1).toLowerCase() : v }, { key: 'rev', label: 'Revenue', align: 'right', mono: true, render: v => fmt(v) }, { key: 'orders', label: 'Orders', align: 'right', render: v => fmtN(v) }, { key: 'aov', label: 'AOV', align: 'right', render: (_, r) => `₹${r.orders ? Math.round(r.rev / r.orders).toLocaleString('en-IN') : 0}` }]} pageSize={15} />
+        <PaginatedCard title="Top Cities" rows={shCityRows} columns={[{ key: 'city', label: 'City', render: v => v ? v.charAt(0).toUpperCase() + v.slice(1).toLowerCase() : v }, { key: 'rev', label: 'Revenue', align: 'right', mono: true, render: v => fmt(v) }, { key: 'orders', label: 'Orders', align: 'right', render: v => fmtN(v) }, { key: 'aov', label: 'AOV', align: 'right', render: (_, r) => `₹${r.orders ? Math.round(r.rev / r.orders).toLocaleString('en-IN') : 0}` }]} pageSize={15} />
       </div>
     </div>
   )
