@@ -1085,7 +1085,7 @@ function AllTab({ data }) {
             <div className="kpi-value">{fmt(totalRev)}</div>
             {revChg !== null && <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 7px', borderRadius: 5, background: revChg >= 0 ? C.green.bg : C.red.bg, color: revChg >= 0 ? C.green.tx : C.red.tx }}>{revChg >= 0 ? '▲' : '▼'} {Math.abs(revChg).toFixed(1)}%</span>}
           </div>
-          <div className="kpi-sub">{fmtN(nOrders)} orders · {fmtN(totalQty)} units {ordChg !== null && <span style={{ color: ordChg >= 0 ? C.green.tx : C.red.tx, fontWeight: 600 }}>({ordChg >= 0 ? '▲' : '▼'}{Math.abs(ordChg).toFixed(1)}%)</span>}</div>
+          <div className="kpi-sub">{fmtN(nOrders)} orders · {fmtN(totalQty)} units</div>
           <ResponsiveContainer width="100%" height={32}>
             <AreaChart data={sparkData} margin={{ top: 2, right: 0, bottom: 0, left: 0 }}>
               <defs><linearGradient id="curGrad" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor={C.acc} stopOpacity={0.25} /><stop offset="95%" stopColor={C.acc} stopOpacity={0} /></linearGradient></defs>
