@@ -998,9 +998,11 @@ function DailyChannelTable({ dailyArr, channels, nDays = 7 }) {
   )
 }
 
-function CategoryChannelMatrix({ heatData, channels, maxHeat, subCatChannelMap = {} }) {
+function CategoryChannelMatrix({ heatData, channels, maxHeat, subCatChannelMap = {}, skuChannelMap = {} }) {
   const [expanded, setExpanded] = useState({})
+  const [expandedSC, setExpandedSC] = useState({})
   const toggle = cat => setExpanded(prev => ({ ...prev, [cat]: !prev[cat] }))
+  const toggleSC = key => setExpandedSC(prev => ({ ...prev, [key]: !prev[key] }))
 
   const renderCell = (v, rowTotal) => {
     const intensity = rowTotal > 0 ? v / rowTotal : 0
@@ -1051,16 +1053,45 @@ function CategoryChannelMatrix({ heatData, channels, maxHeat, subCatChannelMap =
                   </tr>
                   {isOpen && subCats.map(([sc, chData]) => {
                     const scTotal = channels.reduce((s, ch) => s + (chData[ch] || 0), 0)
+                    const scKey = `${row.cat}::${sc}`
+                    const skus = Object.entries(skuChannelMap[row.cat]?.[sc] || {}).sort((a, b) => {
+                      const ta = channels.reduce((s, ch) => s + (b[1][ch] || 0), 0)
+                      const tb = channels.reduce((s, ch) => s + (a[1][ch] || 0), 0)
+                      return ta - tb
+                    })
+                    const hasSkus = skus.length > 0
+                    const scOpen = expandedSC[scKey]
                     return (
-                      <tr key={sc} style={{ borderBottom: `1px solid ${C.border}`, background: '#FAFAF7' }}>
-                        <td style={{ padding: '4px 5px 4px 20px', color: C.t2, fontSize: 10.5 }}>└ {sc}</td>
-                        {channels.map(ch => {
-                          const v = chData[ch] || 0
-                          const { cls, content } = renderCell(v, scTotal)
-                          return <td key={ch} className={cls} style={{ padding: '4px 5px', textAlign: 'right', fontFamily: 'var(--mono)', fontSize: 10.5 }}>{content}</td>
+                      <Fragment key={sc}>
+                        <tr style={{ borderBottom: `1px solid ${C.border}`, background: '#FAFAF7' }}>
+                          <td style={{ padding: '4px 5px 4px 20px', color: C.t2, fontSize: 10.5 }}>
+                            <span onClick={() => hasSkus && toggleSC(scKey)} style={{ cursor: hasSkus ? 'pointer' : 'default', userSelect: 'none', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                              {hasSkus && <span style={{ fontSize: 8, color: C.t3, display: 'inline-block', transform: scOpen ? 'rotate(90deg)' : 'rotate(0deg)', transition: 'transform .15s' }}>▶</span>}
+                              └ {sc}
+                            </span>
+                          </td>
+                          {channels.map(ch => {
+                            const v = chData[ch] || 0
+                            const { cls, content } = renderCell(v, scTotal)
+                            return <td key={ch} className={cls} style={{ padding: '4px 5px', textAlign: 'right', fontFamily: 'var(--mono)', fontSize: 10.5 }}>{content}</td>
+                          })}
+                          <td style={{ padding: '4px 5px', textAlign: 'right', fontWeight: 600, color: C.t2, fontFamily: 'var(--mono)', fontSize: 10.5 }}>{fmt(scTotal)}</td>
+                        </tr>
+                        {scOpen && skus.map(([sku, skuChData]) => {
+                          const skuTotal = channels.reduce((s, ch) => s + (skuChData[ch] || 0), 0)
+                          return (
+                            <tr key={sku} style={{ borderBottom: `1px solid ${C.border}`, background: '#F5F5F0' }}>
+                              <td style={{ padding: '3px 5px 3px 36px', color: C.t3, fontSize: 10, fontFamily: 'var(--mono)' }}>└ {sku}</td>
+                              {channels.map(ch => {
+                                const v = skuChData[ch] || 0
+                                const { cls, content } = renderCell(v, skuTotal)
+                                return <td key={ch} className={cls} style={{ padding: '3px 5px', textAlign: 'right', fontFamily: 'var(--mono)', fontSize: 10 }}>{content}</td>
+                              })}
+                              <td style={{ padding: '3px 5px', textAlign: 'right', fontWeight: 500, color: C.t3, fontFamily: 'var(--mono)', fontSize: 10 }}>{fmt(skuTotal)}</td>
+                            </tr>
+                          )
                         })}
-                        <td style={{ padding: '4px 5px', textAlign: 'right', fontWeight: 600, color: C.t2, fontFamily: 'var(--mono)', fontSize: 10.5 }}>{fmt(scTotal)}</td>
-                      </tr>
+                      </Fragment>
                     )
                   })}
                 </Fragment>
@@ -1141,7 +1172,7 @@ function RegionTierDonutRow({ regionRows, tierRows }) {
 }
 
 function AllTab({ data }) {
-  const { totalRev, totalExcRev, gstCollected, nOrders, totalQty, blendedAOV, nDays, dailyArr, chMap, catMap, subCatMap, stateMap, cityRows = [], regionRows = [], tierRows = [], buckets, bucketRev, rows, orders, orderStatusRevMap = {}, orderStatusMap = {}, catChannelMap = {}, subCatChannelMap: serverSubCatChannelMap = {}, prevRev = 0, prevExcRev = 0, prevOrders = 0, prevQty = 0, prevDailyArr = [], prevChMap = {}, nCusts = 0, repeatCusts = 0, rtoRev = 0, cirRev = 0, cancellRev = 0, netRevenueCalc = 0, momRev = 0, yoyRev = 0, momPeriod = '', yoyPeriod = '' } = data
+  const { totalRev, totalExcRev, gstCollected, nOrders, totalQty, blendedAOV, nDays, dailyArr, chMap, catMap, subCatMap, stateMap, cityRows = [], regionRows = [], tierRows = [], buckets, bucketRev, rows, orders, orderStatusRevMap = {}, orderStatusMap = {}, catChannelMap = {}, subCatChannelMap: serverSubCatChannelMap = {}, skuRows: allSkuRows = [], prevRev = 0, prevExcRev = 0, prevOrders = 0, prevQty = 0, prevDailyArr = [], prevChMap = {}, nCusts = 0, repeatCusts = 0, rtoRev = 0, cirRev = 0, cancellRev = 0, netRevenueCalc = 0, momRev = 0, yoyRev = 0, momPeriod = '', yoyPeriod = '' } = data
   const channels = Object.keys(C.ch).filter(ch => chMap[ch])
   const sortedCh = Object.entries(chMap).sort((a, b) => b[1].rev - a[1].rev)
   const maxChRev = sortedCh[0]?.[1].rev || 1
@@ -1159,6 +1190,18 @@ function AllTab({ data }) {
   })
   const maxHeat = Math.max(...heatData.flatMap(r => channels.map(ch => r[ch] || 0)), 1)
   const subCatChannelMap = serverSubCatChannelMap
+  const skuChannelMap = {}
+  allSkuRows.forEach(x => {
+    const cat = x.category || 'Unknown'
+    const sc = x.subCategory || 'Unknown'
+    const sku = x.sku
+    const ch = x.channel
+    if (!sku || !ch) return
+    if (!skuChannelMap[cat]) skuChannelMap[cat] = {}
+    if (!skuChannelMap[cat][sc]) skuChannelMap[cat][sc] = {}
+    if (!skuChannelMap[cat][sc][sku]) skuChannelMap[cat][sc][sku] = {}
+    skuChannelMap[cat][sc][sku][ch] = (skuChannelMap[cat][sc][sku][ch] || 0) + x.rev
+  })
 
   const grossMarginPct = totalRev > 0 ? ((totalRev - totalExcRev) / totalRev * 100) : 0
   const revPerUnit = totalQty > 0 ? totalExcRev / totalQty : 0
@@ -1301,7 +1344,7 @@ function AllTab({ data }) {
         </Card>
       </div>
       <DailyChannelTable dailyArr={dailyArr} channels={channels} nDays={nDays} />
-      <CategoryChannelMatrix heatData={heatData} channels={channels} maxHeat={maxHeat} subCatChannelMap={subCatChannelMap} />
+      <CategoryChannelMatrix heatData={heatData} channels={channels} maxHeat={maxHeat} subCatChannelMap={subCatChannelMap} skuChannelMap={skuChannelMap} />
       {(regionRows.length > 0 || tierRows.length > 0) && (
         <RegionTierDonutRow regionRows={regionRows} tierRows={tierRows} />
       )}
