@@ -1257,6 +1257,17 @@ function AllTab({ data }) {
             </div>
           </div>
           <div className="kpi-sub" style={{ fontSize: 13 }}>{nOrders >= 1000 ? (nOrders/1000).toFixed(1).replace(/\.0$/,'')+'k' : fmtN(nOrders)} orders · {totalQty >= 1000 ? (totalQty/1000).toFixed(1).replace(/\.0$/,'')+'k' : fmtN(totalQty)} units</div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+            {Object.entries(chMap).sort((a,b) => b[1].rev - a[1].rev).map(([ch, v]) => {
+              const share = totalRev > 0 ? v.rev / totalRev * 100 : 0
+              return (
+                <div key={ch} style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                  <div style={{ width: `${Math.max(share, 1)}%`, height: 4, borderRadius: 2, background: C.ch[ch] || C.acc, minWidth: 3 }} />
+                  <span style={{ fontSize: 9.5, color: C.t2, whiteSpace: 'nowrap' }}>{ch} {fmt(v.rev)} <span style={{ color: C.t3 }}>{share.toFixed(1)}%</span></span>
+                </div>
+              )
+            })}
+          </div>
           <div style={{ flex: 1, minHeight: 0 }}>
             <ResponsiveContainer width="100%" height="100%">
               <AreaChart data={sparkData} margin={{ top: 4, right: 0, bottom: 0, left: 0 }}>
