@@ -1436,7 +1436,23 @@ function ShopifyTab({ data, filters, setFilters }) {
 
   const subChannelMap = data.subChannelMap || {}
   const paymentModeMap = data.paymentModeMap || {}
-  const { orderStatusMap = {}, orderStatusRevMap = {}, nOrders, nCusts, repeatCusts, dailyArr, catMap, subCatMap, stateMap, cityRows = [], voucherMap = {}, financialStatusMap = {}, fulfilmentStatusMap = {}, refundTrend = [] } = data
+  const { orderStatusMap = {}, orderStatusRevMap = {}, nOrders, nCusts, repeatCusts, dailyArr, cityRows = [], voucherMap = {}, financialStatusMap = {}, fulfilmentStatusMap = {}, refundTrend = [] } = data
+
+  // Shopify-only category/state maps from filtered rows
+  const shRows = (data.rows || []).filter(r => r.Channel === 'Shopify')
+  const catMap = {}; const subCatMap = {}; const stateMap = {}
+  shRows.forEach(r => {
+    const cat = r.Category || 'Unknown'
+    if (!catMap[cat]) catMap[cat] = { rev: 0, excRev: 0, orders: new Set(), units: 0 }
+    catMap[cat].rev += parseFloat(r.SellingPrice_Inc_GST || 0); catMap[cat].excRev += parseFloat(r.SellingPrice_Exc_GST || 0); catMap[cat].orders.add(r.OrderId); catMap[cat].units += parseInt(r.ItemQty || 0)
+    const sc = r.SubCategory || 'Unknown'; const scKey = `${cat}::${sc}`
+    if (!subCatMap[scKey]) subCatMap[scKey] = { rev: 0, orders: new Set() }
+    subCatMap[scKey].rev += parseFloat(r.SellingPrice_Inc_GST || 0); subCatMap[scKey].orders.add(r.OrderId)
+    const st = ((r.State || 'Unknown').toUpperCase().trim())
+    if (!stateMap[st]) stateMap[st] = { rev: 0, orders: new Set(), cities: new Set() }
+    stateMap[st].rev += parseFloat(r.SellingPrice_Inc_GST || 0); stateMap[st].orders.add(r.OrderId)
+    if (r.City) stateMap[st].cities.add(r.City.toUpperCase().trim())
+  })
 
   // Use Shopify-specific rev from chMap, not all-channels totalRev
   const shCh = data.chMap?.['Shopify'] || {}
@@ -1485,7 +1501,7 @@ function ShopifyTab({ data, filters, setFilters }) {
   const catRows = Object.entries(catMap).map(([k, v]) => ({ name: k, rev: v.rev, excRev: v.excRev, orders: v.orders.size, units: v.units, aov: v.orders.size ? v.rev / v.orders.size : 0 })).sort((a, b) => b.rev - a.rev)
   const allSubCatRows = Object.entries(subCatMap).map(([k, v]) => ({ name: k.split('::')[1] || k, category: k.split('::')[0] || '', rev: v.rev, orders: v.orders.size, aov: v.orders.size ? v.rev / v.orders.size : 0 })).sort((a, b) => b.rev - a.rev)
   const subCatRows = selectedCat ? allSubCatRows.filter(r => r.category === selectedCat) : allSubCatRows
-  const stateRows = Object.entries(stateMap).map(([k, v]) => ({ state: k, rev: v.rev, orders: v.orders, aov: v.orders ? v.rev / v.orders : 0, cities: v.cities?.size || v.cities || 0 })).sort((a, b) => b.rev - a.rev)
+  const stateRows = Object.entries(stateMap).map(([k, v]) => { const ord = v.orders instanceof Set ? v.orders.size : v.orders; return { state: k, rev: v.rev, orders: ord, aov: ord ? v.rev / ord : 0, cities: v.cities?.size || 0 } }).sort((a, b) => b.rev - a.rev)
 
   const toggleStyle = active => ({ fontSize: 12, fontWeight: active ? 700 : 500, padding: '5px 18px', borderRadius: 7, border: `1.5px solid ${active ? C.acm : C.border2}`, background: active ? C.acc : C.card, color: C.t1, cursor: 'pointer', fontFamily: 'var(--font)', transition: 'all .12s' })
   const selStyle = { fontSize: 11.5, padding: '4px 10px', borderRadius: 7, border: `1px solid ${C.border2}`, background: C.card, color: C.t1, outline: 'none', fontFamily: 'var(--font)', cursor: 'pointer' }
