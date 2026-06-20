@@ -2211,7 +2211,7 @@ function BlinkitTab({ data }) {
   const units = t.units || 0
   const skus = t.skus || 0
   const cities = t.cities || 0
-  const asp = units ? rev / units : 0
+  const asp = units ? excRev / units : 0
   const dailyAvg = nDays ? rev / nDays : 0
 
   const daily = bl.daily || []
@@ -2322,7 +2322,7 @@ function InstaTab({ data }) {
   const units = t.units || 0
   const skus = t.skus || 0
   const cities = t.cities || 0
-  const asp = units ? rev / units : 0
+  const asp = units ? excRev / units : 0
   const dailyAvg = nDays ? rev / nDays : 0
 
   const daily = ins.daily || []
@@ -2430,7 +2430,7 @@ function ZeptoTab({ data }) {
   const orders = t.orders || 0
   const skus = t.skus || 0
   const cities = t.cities || 0
-  const asp = units ? rev / units : 0
+  const asp = units ? excRev / units : 0
   const dailyAvg = nDays ? rev / nDays : 0
 
   const daily = zp.daily || []
