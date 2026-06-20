@@ -1038,7 +1038,8 @@ function RegionTierDonutRow({ regionRows, tierRows }) {
   const [tierMetric, setTierMetric] = useState('rev')
 
   const metricVal = (r, m) => m === 'rev' ? r.rev : m === 'orders' ? r.orders : m === 'units' ? r.units : (r.orders ? Math.round(r.rev / r.orders) : 0)
-  const metricFmt = (v, m) => m === 'aov' ? `₹${v.toLocaleString('en-IN')}` : m === 'rev' ? fmt(v) : fmtN(v)
+  const fmtK = v => v >= 1000 ? (v / 1000).toFixed(1).replace(/\.0$/, '') + 'k' : fmtN(v)
+  const metricFmt = (v, m) => m === 'aov' ? `₹${v.toLocaleString('en-IN')}` : m === 'rev' ? fmt(v) : fmtK(v)
 
   const selStyle = active => ({ fontSize: 11, fontWeight: active ? 700 : 500, padding: '3px 9px', borderRadius: 5, border: `1px solid ${active ? C.acm : C.border}`, background: active ? C.acc : 'transparent', color: C.t1, cursor: 'pointer', fontFamily: 'var(--font)' })
 
