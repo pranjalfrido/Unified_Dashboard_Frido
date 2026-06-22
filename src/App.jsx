@@ -1,6 +1,6 @@
 import { useState, useMemo, useCallback, useEffect, useRef, Fragment } from 'react'
 import { C, fmt, fmtN, pct, processData, detectAlerts, exportCSV, getDefaultDates } from './utils.js'
-import { KPICard, AlertCard, HBar, DataTable, Card, Badge, RevTrendChart, AreaTrendChart, MultiLineChart, ChartTooltip, BarChart, Bar, LineChart, Line, AreaChart, Area, ComposedChart, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell } from './components.jsx'
+import { KPICard, AlertCard, HBar, DataTable, Card, Badge, RevTrendChart, AreaTrendChart, MultiLineChart, ChartTooltip, BarChart, Bar, LineChart, Line, AreaChart, Area, ComposedChart, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell, Treemap } from './components.jsx'
 
 // ── Sidebar ───────────────────────────────────────────────────
 const SvgIcon = ({ d, size = 18, stroke = 'currentColor', fill = 'none', strokeWidth = 1.6 }) => (
@@ -1178,6 +1178,7 @@ function AllTab({ data }) {
   const sortedCh = Object.entries(chMap).filter(([, v]) => v.rev > 0).sort((a, b) => b[1].rev - a[1].rev)
   const maxChRev = sortedCh[0]?.[1].rev || 1
   const [selectedCat, setSelectedCat] = useState(null)
+  const [catView, setCatView] = useState('table')
   const catRows = Object.entries(catMap).map(([k, v]) => ({ name: k, rev: v.rev, excRev: v.excRev, orders: v.orders.size, units: v.units, aov: v.orders.size ? v.rev / v.orders.size : 0 })).sort((a, b) => b.rev - a.rev)
   const allSubCatRows = Object.entries(subCatMap).map(([k, v]) => ({ name: k.split('::')[1] || k, category: k.split('::')[0] || '', rev: v.rev, orders: v.orders.size, aov: v.orders.size ? v.rev / v.orders.size : 0 })).sort((a, b) => b.rev - a.rev)
   const subCatRows = selectedCat ? allSubCatRows.filter(r => r.category === selectedCat) : allSubCatRows
@@ -1350,33 +1351,92 @@ function AllTab({ data }) {
         <RegionTierDonutRow regionRows={regionRows} tierRows={tierRows} />
       )}
       <div className="g-2" style={{ alignItems: 'stretch' }}>
-        <Card title="Category Revenue" style={{ display: 'flex', flexDirection: 'column' }}>
-          <div style={{ overflowX: 'auto' }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
-              <thead>
-                <tr>
-                  {[{ label: 'Category' }, { label: 'Revenue', align: 'right' }, { label: 'Exc GST', align: 'right' }, { label: 'Orders', align: 'right' }, { label: 'AOV', align: 'right' }].map(c => (
-                    <th key={c.label} style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.05em', color: C.t3, textAlign: c.align || 'left', padding: '3px 5px 7px', borderBottom: `1px solid ${C.border}` }}>{c.label}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {catRows.map((r, i) => {
-                  const isSelected = selectedCat === r.name
-                  return (
-                    <tr key={r.name} onClick={() => setSelectedCat(isSelected ? null : r.name)} style={{ borderBottom: i < catRows.length - 1 ? `1px solid ${C.border}` : 'none', background: isSelected ? C.acl : '', cursor: 'pointer' }} onMouseEnter={e => { if (!isSelected) e.currentTarget.style.background = '#FFFBE6' }} onMouseLeave={e => { e.currentTarget.style.background = isSelected ? C.acl : '' }}>
-                      <td style={{ padding: '5.5px 5px', color: C.t2 }}>{isSelected ? <strong>{r.name}</strong> : r.name}</td>
-                      <td style={{ padding: '5.5px 5px', textAlign: 'right', fontFamily: 'var(--mono)', fontSize: 11.5, color: C.t1 }}>{fmt(r.rev)}</td>
-                      <td style={{ padding: '5.5px 5px', textAlign: 'right', color: C.t2 }}>{fmt(r.excRev)}</td>
-                      <td style={{ padding: '5.5px 5px', textAlign: 'right', color: C.t2 }}>{fmtN(r.orders)}</td>
-                      <td style={{ padding: '5.5px 5px', textAlign: 'right', color: C.t2 }}>₹{Math.round(r.aov).toLocaleString('en-IN')}</td>
-                    </tr>
-                  )
-                })}
-              </tbody>
-            </table>
-          </div>
-        </Card>
+        {(() => {
+          const CAT_COLORS = ['#534AB7','#0D9E68','#2E74CC','#CC8A00','#CC4078','#E24B4A','#9B59B6','#FF6B35','#00B4D8','#06D6A0','#F77F00','#6A4C93','#1982C4','#8AC926']
+          const colorOf = name => CAT_COLORS[catRows.findIndex(r => r.name === name) % CAT_COLORS.length]
+          const btnStyle = v => ({ fontSize: 11, fontWeight: 600, padding: '3px 10px', borderRadius: 5, border: `1.5px solid ${catView === v ? C.t1 : C.border}`, background: catView === v ? C.t1 : 'transparent', color: catView === v ? '#fff' : C.t2, cursor: 'pointer', fontFamily: 'var(--font)' })
+          return (
+            <Card title="Category Revenue" note={selectedCat ? <span style={{ cursor: 'pointer', color: C.acc, fontWeight: 600 }} onClick={() => setSelectedCat(null)}>✕ Clear</span> : `${catRows.length} total`}
+              action={<div style={{ display: 'flex', gap: 4 }}>
+                <button style={btnStyle('table')} onClick={() => setCatView('table')}>Table</button>
+                <button style={btnStyle('treemap')} onClick={() => setCatView('treemap')}>Treemap</button>
+                <button style={btnStyle('bar')} onClick={() => setCatView('bar')}>Bar</button>
+                <button style={btnStyle('sunburst')} onClick={() => setCatView('sunburst')}>Sunburst</button>
+              </div>}>
+
+              {catView === 'table' && (
+                <div style={{ overflowX: 'auto' }}>
+                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+                    <thead><tr>{[{ label: 'Category' }, { label: 'Revenue', align: 'right' }, { label: 'Exc GST', align: 'right' }, { label: 'Orders', align: 'right' }, { label: 'AOV', align: 'right' }].map(c => <th key={c.label} style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.05em', color: C.t3, textAlign: c.align || 'left', padding: '3px 5px 7px', borderBottom: `1px solid ${C.border}` }}>{c.label}</th>)}</tr></thead>
+                    <tbody>{catRows.map((r, i) => { const isSelected = selectedCat === r.name; return <tr key={r.name} onClick={() => setSelectedCat(isSelected ? null : r.name)} style={{ borderBottom: i < catRows.length - 1 ? `1px solid ${C.border}` : 'none', background: isSelected ? C.acl : '', cursor: 'pointer' }} onMouseEnter={e => { if (!isSelected) e.currentTarget.style.background = '#FFFBE6' }} onMouseLeave={e => { e.currentTarget.style.background = isSelected ? C.acl : '' }}><td style={{ padding: '5.5px 5px', color: C.t2 }}><span style={{ display: 'inline-block', width: 8, height: 8, borderRadius: 2, background: colorOf(r.name), marginRight: 6 }} />{isSelected ? <strong>{r.name}</strong> : r.name}</td><td style={{ padding: '5.5px 5px', textAlign: 'right', fontFamily: 'var(--mono)', fontSize: 11.5, color: C.t1 }}>{fmt(r.rev)}</td><td style={{ padding: '5.5px 5px', textAlign: 'right', color: C.t2 }}>{fmt(r.excRev)}</td><td style={{ padding: '5.5px 5px', textAlign: 'right', color: C.t2 }}>{fmtN(r.orders)}</td><td style={{ padding: '5.5px 5px', textAlign: 'right', color: C.t2 }}>₹{Math.round(r.aov).toLocaleString('en-IN')}</td></tr> })}</tbody>
+                  </table>
+                </div>
+              )}
+
+              {catView === 'treemap' && (
+                <ResponsiveContainer width="100%" height={300}>
+                  <Treemap
+                    data={catRows.map(r => ({ name: r.name, size: r.rev, orders: r.orders, aov: r.aov }))}
+                    dataKey="size"
+                    aspectRatio={4 / 3}
+                    content={({ x, y, width, height, name, size }) => {
+                      const active = selectedCat === name
+                      const color = colorOf(name)
+                      if (width < 30 || height < 20) return null
+                      return (
+                        <g onClick={() => setSelectedCat(active ? null : name)} style={{ cursor: 'pointer' }}>
+                          <rect x={x+1} y={y+1} width={width-2} height={height-2} fill={color} opacity={active ? 1 : selectedCat ? 0.45 : 0.82} rx={4} />
+                          {width > 60 && height > 30 && <text x={x + width/2} y={y + height/2 - (height > 50 ? 8 : 0)} textAnchor="middle" fill="#fff" fontSize={Math.min(12, width/8)} fontWeight={600} fontFamily="var(--font)">{name}</text>}
+                          {width > 60 && height > 50 && <text x={x + width/2} y={y + height/2 + 10} textAnchor="middle" fill="rgba(255,255,255,0.85)" fontSize={10} fontFamily="var(--mono)">{fmt(size)}</text>}
+                        </g>
+                      )
+                    }}
+                  />
+                </ResponsiveContainer>
+              )}
+
+              {catView === 'bar' && (
+                <ResponsiveContainer width="100%" height={300}>
+                  <BarChart data={catRows} layout="vertical" margin={{ top: 0, right: 60, bottom: 0, left: 100 }}>
+                    <XAxis type="number" tick={{ fontSize: 10, fill: C.t3 }} tickFormatter={v => v >= 1e7 ? `${(v/1e7).toFixed(1)}Cr` : v >= 1e5 ? `${(v/1e5).toFixed(0)}L` : fmt(v)} />
+                    <YAxis type="category" dataKey="name" tick={{ fontSize: 11, fill: C.t2 }} width={95} />
+                    <CartesianGrid strokeDasharray="3 3" stroke={C.border} horizontal={false} />
+                    <Tooltip formatter={v => fmt(v)} />
+                    <Bar dataKey="rev" name="Revenue" radius={[0,4,4,0]} onClick={r => setSelectedCat(selectedCat === r.name ? null : r.name)}>
+                      {catRows.map((r) => <Cell key={r.name} fill={colorOf(r.name)} opacity={selectedCat && selectedCat !== r.name ? 0.35 : 1} />)}
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              )}
+
+              {catView === 'sunburst' && (() => {
+                const subRows = selectedCat
+                  ? allSubCatRows.filter(r => r.category === selectedCat)
+                  : allSubCatRows
+                const innerData = catRows.map(r => ({ name: r.name, value: r.rev }))
+                const outerData = subRows.map(r => ({ name: r.name, value: r.rev, category: r.category }))
+                return (
+                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                    <ResponsiveContainer width="100%" height={300}>
+                      <PieChart>
+                        <Pie data={innerData} cx="50%" cy="50%" innerRadius={55} outerRadius={95} dataKey="value" onClick={d => setSelectedCat(selectedCat === d.name ? null : d.name)}>
+                          {innerData.map(d => <Cell key={d.name} fill={colorOf(d.name)} opacity={selectedCat && selectedCat !== d.name ? 0.35 : 1} stroke="#fff" strokeWidth={1.5} style={{ cursor: 'pointer' }} />)}
+                        </Pie>
+                        <Pie data={outerData} cx="50%" cy="50%" innerRadius={100} outerRadius={130} dataKey="value" onClick={d => setSelectedCat(selectedCat === d.category ? null : d.category)}>
+                          {outerData.map((d, i) => <Cell key={i} fill={colorOf(d.category)} opacity={selectedCat && selectedCat !== d.category ? 0.2 : 0.65} stroke="#fff" strokeWidth={1} style={{ cursor: 'pointer' }} />)}
+                        </Pie>
+                        <Tooltip formatter={(v, n) => [fmt(v), n]} />
+                      </PieChart>
+                    </ResponsiveContainer>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px 12px', justifyContent: 'center', marginTop: 4 }}>
+                      {innerData.map(d => <span key={d.name} onClick={() => setSelectedCat(selectedCat === d.name ? null : d.name)} style={{ fontSize: 10.5, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4, opacity: selectedCat && selectedCat !== d.name ? 0.4 : 1 }}><span style={{ width: 8, height: 8, borderRadius: 2, background: colorOf(d.name), display: 'inline-block' }} />{d.name}</span>)}
+                    </div>
+                  </div>
+                )
+              })()}
+            </Card>
+          )
+        })()}
         <PaginatedCard title={selectedCat ? `Sub-categories · ${selectedCat}` : 'Sub-categories'} rows={subCatRows} columns={[{ key: 'name', label: 'Sub-category' }, { key: 'rev', label: 'Revenue', align: 'right', mono: true, render: v => fmt(v) }, { key: 'orders', label: 'Orders', align: 'right', render: v => fmtN(v) }, { key: 'aov', label: 'AOV', align: 'right', render: v => `₹${Math.round(v).toLocaleString('en-IN')}` }]} pageSize={selectedCat ? subCatRows.length : catRows.length} />
       </div>
       <div className="g-2" style={{ alignItems: 'stretch' }}>
