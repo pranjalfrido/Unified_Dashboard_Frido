@@ -1571,21 +1571,72 @@ function ShopifyTab({ data, filters, setFilters }) {
         )}
         {isIntl && <span style={{ fontSize: 11, color: C.t3, marginLeft: 4 }}>UAE · UK · US</span>}
       </div>
-      <div style={{ display: 'grid', gridTemplateColumns: '1.4fr 1.2fr 1fr 1fr 1fr 1fr', gap: 10 }}>
-        <HeroKPICard label="Gross Revenue · Inc. GST" value={fmt(totalRev)} sub={`${shNOrders >= 1000 ? (shNOrders/1000).toFixed(1).replace(/\.0$/,'')+'k' : fmtN(shNOrders)} orders · ${totalQty >= 1000 ? (totalQty/1000).toFixed(1).replace(/\.0$/,'')+'k' : fmtN(totalQty)} units`} chg={shRevChg} sparkData={shSparkData} color="#FFD600" gradId="shGrossGrad" />
-        <HeroKPICard label="Net (Exc GST)" value={fmt(totalExcRev)} sub={`GST ${fmt(gst)}`} chg={shExcChg} sparkData={shSparkData} color="#7AB4EE" gradId="shNetGrad" />
-        {(() => { const prevGst = prevRev - prevExcRev; return <KPICard label="GST Collected" value={fmt(gst)} sub={totalRev > 0 ? `${((gst / totalRev) * 100).toFixed(1)}% of gross` : '—'} badge={shChgBadge(gst, prevGst)} /> })()}
-        <KPICard label="Orders" value={fmtN(shNOrders)} badge={shChgBadge(shNOrders, prevOrders)} />
-        <KPICard label="Units" value={fmtN(totalQty)} />
-        <KPICard label="Daily Avg" value={fmt(dailyAvg)} badge={shChgBadge(dailyAvg, prevRev > 0 ? prevRev / nDays : 0)} />
-      </div>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6,1fr)', gap: 10 }}>
-        <KPICard label="AOV" value={`₹${Math.round(aov).toLocaleString('en-IN')}`} badge={shChgBadge(aov, prevOrders > 0 ? prevRev / prevOrders : 0)} />
-        <KPICard label="ASP" value={`₹${Math.round(asp).toLocaleString('en-IN')}`} sub="Revenue per unit" />
-        <KPICard label="Fulfilment %" value={`${fulfilmentPct.toFixed(1)}%`} sub={`${fmtN(deliveredOrders)} delivered`} accent={fulfilmentPct < 80 ? '#7A1A1A' : fulfilmentPct >= 90 ? '#286010' : undefined} />
-        <KPICard label="RTO %" value={`${rtoPct.toFixed(1)}%`} sub={`${fmtN(rtoOrders)} RTO orders`} accent={rtoPct > 10 ? '#7A1A1A' : undefined} />
-        <KPICard label="Revenue at Risk" value={fmt(atRiskRev)} sub="RTO + Cancelled" accent={atRiskRev > 0 ? '#7A4000' : undefined} />
-        <KPICard label="Repeat Rate" value={`${repeatRate}%`} sub={`${fmtN(repeatCusts)} of ${fmtN(nCusts)} custs`} />
+      <div style={{ display: 'grid', gridTemplateColumns: '1.5fr 5fr', gap: 10, alignItems: 'stretch' }}>
+        {/* Hero card */}
+        <div className="kpi-card" style={{ display: 'flex', flexDirection: 'column', gap: 8, padding: '16px 18px' }}>
+          <div className="kpi-label" style={{ fontSize: 11 }}>Gross Revenue · Inc. GST</div>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 6 }}>
+            <div className="kpi-value" style={{ fontSize: 32, fontWeight: 800 }}>{fmt(totalRev)}</div>
+            {shRevChg !== null && <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 7px', borderRadius: 4, background: shRevChg >= 0 ? C.green.bg : C.red.bg, color: shRevChg >= 0 ? C.green.tx : C.red.tx }}>{shRevChg >= 0 ? '▲' : '▼'} {Math.abs(shRevChg).toFixed(1)}%</span>}
+          </div>
+          <div className="kpi-sub" style={{ fontSize: 13 }}>{shNOrders >= 1000 ? (shNOrders/1000).toFixed(1).replace(/\.0$/,'')+'k' : fmtN(shNOrders)} orders · {totalQty >= 1000 ? (totalQty/1000).toFixed(1).replace(/\.0$/,'')+'k' : fmtN(totalQty)} units</div>
+          <div style={{ flex: 1, minHeight: 0 }}>
+            <ResponsiveContainer width="100%" height="100%">
+              <AreaChart data={shSparkData} margin={{ top: 4, right: 0, bottom: 0, left: 0 }}>
+                <defs><linearGradient id="shGrad" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#FFD600" stopOpacity={0.25} /><stop offset="95%" stopColor="#FFD600" stopOpacity={0} /></linearGradient></defs>
+                <Area type="monotone" dataKey="cur" name="Current" stroke="#FFD600" strokeWidth={2} fill="url(#shGrad)" dot={false} connectNulls />
+                <Area type="monotone" dataKey="prev" name="Prev" stroke={C.t3} strokeWidth={1} fill="none" dot={false} strokeDasharray="3 2" connectNulls />
+                <Tooltip content={({ active, payload }) => active && payload?.length ? <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 6, padding: '4px 8px', fontSize: 10 }}>{payload.map(p => <div key={p.name} style={{ color: p.name === 'Current' ? C.t1 : C.t3 }}>{p.name}: {fmt(p.value)}</div>)}</div> : null} />
+              </AreaChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+        {/* Right: 2 rows of 4 KPIs */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10, flex: 1 }}>
+            {(() => { const excChg = prevExcRev > 0 ? ((totalExcRev - prevExcRev) / prevExcRev * 100) : null; return (
+              <div className="kpi-card" style={{ display: 'flex', flexDirection: 'column', gap: 4, padding: '10px 13px' }}>
+                <div className="kpi-label">Net (Exc GST)</div>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <div className="kpi-value">{fmt(totalExcRev)}</div>
+                  {excChg !== null && <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 7px', borderRadius: 5, background: excChg >= 0 ? C.green.bg : C.red.bg, color: excChg >= 0 ? C.green.tx : C.red.tx }}>{excChg >= 0 ? '▲' : '▼'} {Math.abs(excChg).toFixed(1)}%</span>}
+                </div>
+                <div className="kpi-sub">{totalRev > 0 ? (totalExcRev / totalRev * 100).toFixed(1) : 0}% of gross · GST {fmt(gst)}</div>
+              </div>
+            )})()}
+            {[
+              { label: 'GST Collected', value: fmt(gst), sub: totalRev > 0 ? `${((gst / totalRev) * 100).toFixed(1)}% of gross` : '—', badge: shChgBadge(gst, prevRev - prevExcRev) },
+              { label: 'Orders', value: fmtN(shNOrders), badge: shChgBadge(shNOrders, prevOrders) },
+              { label: 'Daily Avg', value: fmt(dailyAvg), sub: `over ${nDays} days`, badge: shChgBadge(dailyAvg, prevRev > 0 ? prevRev / nDays : 0) },
+            ].map(k => (
+              <div key={k.label} className="kpi-card" style={{ padding: '10px 13px' }}>
+                <div className="kpi-label">{k.label}</div>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 4 }}>
+                  <div className="kpi-value" style={{ fontSize: 17 }}>{k.value}</div>
+                  {k.badge}
+                </div>
+                {k.sub && <div className="kpi-sub">{k.sub}</div>}
+              </div>
+            ))}
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10, flex: 1 }}>
+            {[
+              { label: 'AOV', value: `₹${Math.round(aov).toLocaleString('en-IN')}`, sub: 'Gross rev ÷ orders', badge: shChgBadge(aov, prevOrders > 0 ? prevRev / prevOrders : 0) },
+              { label: 'ASP', value: `₹${Math.round(asp).toLocaleString('en-IN')}`, sub: 'Net rev ÷ units sold' },
+              { label: 'RTO %', value: `${rtoPct.toFixed(1)}%`, sub: `${fmtN(rtoOrders)} RTO orders`, accent: rtoPct > 10 ? '#7A1A1A' : undefined },
+              { label: 'Repeat Rate', value: `${repeatRate}%`, sub: `${fmtN(repeatCusts)} of ${fmtN(nCusts)} custs` },
+            ].map(k => (
+              <div key={k.label} className="kpi-card" style={{ padding: '10px 13px' }}>
+                <div className="kpi-label">{k.label}</div>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 4 }}>
+                  <div className="kpi-value" style={{ fontSize: 17, ...(k.accent ? { color: k.accent } : {}) }}>{k.value}</div>
+                  {k.badge}
+                </div>
+                {k.sub && <div className="kpi-sub">{k.sub}</div>}
+              </div>
+            ))}
+          </div>
+        </div>
       </div>
       <div className="g-3">
         <Card title={isIntl ? 'International Breakdown' : 'Sub-channel Breakdown'}>
