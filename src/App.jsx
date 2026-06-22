@@ -794,7 +794,7 @@ function ChannelTrendCard({ dailyArr, channels }) {
     xAxis: <XAxis dataKey="date" tick={{ fontSize: 10, fill: C.t3 }} tickFormatter={d => d?.slice(5)} />,
     yAxis: <YAxis tick={{ fontSize: 10, fill: C.t3 }} tickFormatter={fmtTick} width={40} />,
     grid: <CartesianGrid strokeDasharray="3 3" stroke={C.border} vertical={false} />,
-    tooltip: <Tooltip content={<ChartTooltip formatter={metric === 'units' ? fmtN : undefined} />} cursor={{ stroke: '#BBBBBB', strokeWidth: 1 }} />,
+    tooltip: <Tooltip content={<ChartTooltip formatter={metric === 'units' ? fmtN : undefined} />} cursor={({ points }) => { if (!points?.length) return null; const x = points[0].x; return <line x1={x} y1={0} x2={x} y2={9999} stroke="#BBBBBB" strokeWidth={1} /> }} />,
     legend: <Legend iconSize={8} wrapperStyle={{ fontSize: 10 }} />,
   }
 
