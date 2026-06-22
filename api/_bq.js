@@ -49,7 +49,16 @@ export function buildQuery(s, e, filters = {}) {
     if (nums.length === 1) whereClauses.push(`COALESCE(pm.City_Tier, cm.City_Tier) = ${nums[0]}`)
     else if (nums.length > 1) whereClauses.push(`COALESCE(pm.City_Tier, cm.City_Tier) IN (${nums.join(',')})`)
   }
-  if (sku) whereClauses.push(`UPPER(TRIM(u.ChannelSKUCode)) LIKE '%${sku.toUpperCase().replace(/'/g, "''").replace(/%/g, '\\%')}%'`)
+  if (sku) {
+    const skuList = sku.split(',').map(s => s.trim()).filter(Boolean)
+    if (skuList.length === 1) {
+      const s1 = skuList[0].replace(/'/g, "''")
+      whereClauses.push(`COALESCE(sm.masterskucode, TRIM(u.ProductId)) = '${s1}'`)
+    } else if (skuList.length > 1) {
+      const inList = skuList.map(s => `'${s.replace(/'/g, "''")}'`).join(', ')
+      whereClauses.push(`COALESCE(sm.masterskucode, TRIM(u.ProductId)) IN (${inList})`)
+    }
+  }
   if (subChannel) whereClauses.push(`u.SubChannel = '${subChannel.replace(/'/g, "''")}'`)
   if (voucher) {
     const codes = voucher.split(',').map(v => v.trim()).filter(Boolean)
