@@ -1356,48 +1356,23 @@ function AllTab({ data }) {
           const CAT_COLORS = ['#534AB7','#0D9E68','#2E74CC','#CC8A00','#CC4078','#E24B4A','#9B59B6','#FF6B35','#00B4D8','#06D6A0','#F77F00','#6A4C93','#1982C4','#8AC926']
           const colorOf = name => CAT_COLORS[catRows.findIndex(r => r.name === name) % CAT_COLORS.length]
           const btnStyle = v => ({ fontSize: 11, fontWeight: 600, padding: '3px 10px', borderRadius: 5, border: `1.5px solid ${catView === v ? C.t1 : C.border}`, background: catView === v ? C.t1 : 'transparent', color: catView === v ? '#fff' : C.t2, cursor: 'pointer', fontFamily: 'var(--font)' })
+          const FIXED_H = 420
           return (
             <Card title="Category Revenue" note={selectedCat ? <span style={{ cursor: 'pointer', color: C.acc, fontWeight: 600 }} onClick={() => setSelectedCat(null)}>✕ Clear</span> : `${catRows.length} total`}
               action={<div style={{ display: 'flex', gap: 4 }}>
                 <button style={btnStyle('table')} onClick={() => setCatView('table')}>Table</button>
-                <button style={btnStyle('treemap')} onClick={() => setCatView('treemap')}>Treemap</button>
                 <button style={btnStyle('bar')} onClick={() => setCatView('bar')}>Bar</button>
-                <button style={btnStyle('sunburst')} onClick={() => setCatView('sunburst')}>Sunburst</button>
               </div>}>
-
               {catView === 'table' && (
-                <div style={{ overflowX: 'auto' }}>
+                <div style={{ overflowY: 'auto', maxHeight: FIXED_H }}>
                   <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
-                    <thead><tr>{[{ label: 'Category' }, { label: 'Revenue', align: 'right' }, { label: 'Exc GST', align: 'right' }, { label: 'Orders', align: 'right' }, { label: 'AOV', align: 'right' }].map(c => <th key={c.label} style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.05em', color: C.t3, textAlign: c.align || 'left', padding: '3px 5px 7px', borderBottom: `1px solid ${C.border}` }}>{c.label}</th>)}</tr></thead>
+                    <thead style={{ position: 'sticky', top: 0, background: C.card, zIndex: 1 }}><tr>{[{ label: 'Category' }, { label: 'Revenue', align: 'right' }, { label: 'Exc GST', align: 'right' }, { label: 'Orders', align: 'right' }, { label: 'AOV', align: 'right' }].map(c => <th key={c.label} style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.05em', color: C.t3, textAlign: c.align || 'left', padding: '3px 5px 7px', borderBottom: `1px solid ${C.border}` }}>{c.label}</th>)}</tr></thead>
                     <tbody>{catRows.map((r, i) => { const isSelected = selectedCat === r.name; return <tr key={r.name} onClick={() => setSelectedCat(isSelected ? null : r.name)} style={{ borderBottom: i < catRows.length - 1 ? `1px solid ${C.border}` : 'none', background: isSelected ? C.acl : '', cursor: 'pointer' }} onMouseEnter={e => { if (!isSelected) e.currentTarget.style.background = '#FFFBE6' }} onMouseLeave={e => { e.currentTarget.style.background = isSelected ? C.acl : '' }}><td style={{ padding: '5.5px 5px', color: C.t2 }}><span style={{ display: 'inline-block', width: 8, height: 8, borderRadius: 2, background: colorOf(r.name), marginRight: 6 }} />{isSelected ? <strong>{r.name}</strong> : r.name}</td><td style={{ padding: '5.5px 5px', textAlign: 'right', fontFamily: 'var(--mono)', fontSize: 11.5, color: C.t1 }}>{fmt(r.rev)}</td><td style={{ padding: '5.5px 5px', textAlign: 'right', color: C.t2 }}>{fmt(r.excRev)}</td><td style={{ padding: '5.5px 5px', textAlign: 'right', color: C.t2 }}>{fmtN(r.orders)}</td><td style={{ padding: '5.5px 5px', textAlign: 'right', color: C.t2 }}>₹{Math.round(r.aov).toLocaleString('en-IN')}</td></tr> })}</tbody>
                   </table>
                 </div>
               )}
-
-              {catView === 'treemap' && (
-                <ResponsiveContainer width="100%" height={300}>
-                  <Treemap
-                    data={catRows.map(r => ({ name: r.name, size: r.rev, orders: r.orders, aov: r.aov }))}
-                    dataKey="size"
-                    aspectRatio={4 / 3}
-                    content={({ x, y, width, height, name, size }) => {
-                      const active = selectedCat === name
-                      const color = colorOf(name)
-                      if (width < 30 || height < 20) return null
-                      return (
-                        <g onClick={() => setSelectedCat(active ? null : name)} style={{ cursor: 'pointer' }}>
-                          <rect x={x+1} y={y+1} width={width-2} height={height-2} fill={color} opacity={active ? 1 : selectedCat ? 0.45 : 0.82} rx={4} />
-                          {width > 60 && height > 30 && <text x={x + width/2} y={y + height/2 - (height > 50 ? 8 : 0)} textAnchor="middle" fill="#fff" fontSize={Math.min(12, width/8)} fontWeight={600} fontFamily="var(--font)">{name}</text>}
-                          {width > 60 && height > 50 && <text x={x + width/2} y={y + height/2 + 10} textAnchor="middle" fill="rgba(255,255,255,0.85)" fontSize={10} fontFamily="var(--mono)">{fmt(size)}</text>}
-                        </g>
-                      )
-                    }}
-                  />
-                </ResponsiveContainer>
-              )}
-
               {catView === 'bar' && (
-                <ResponsiveContainer width="100%" height={300}>
+                <ResponsiveContainer width="100%" height={FIXED_H}>
                   <BarChart data={catRows} layout="vertical" margin={{ top: 0, right: 60, bottom: 0, left: 100 }}>
                     <XAxis type="number" tick={{ fontSize: 10, fill: C.t3 }} tickFormatter={v => v >= 1e7 ? `${(v/1e7).toFixed(1)}Cr` : v >= 1e5 ? `${(v/1e5).toFixed(0)}L` : fmt(v)} />
                     <YAxis type="category" dataKey="name" tick={{ fontSize: 11, fill: C.t2 }} width={95} />
@@ -1409,32 +1384,6 @@ function AllTab({ data }) {
                   </BarChart>
                 </ResponsiveContainer>
               )}
-
-              {catView === 'sunburst' && (() => {
-                const subRows = selectedCat
-                  ? allSubCatRows.filter(r => r.category === selectedCat)
-                  : allSubCatRows
-                const innerData = catRows.map(r => ({ name: r.name, value: r.rev }))
-                const outerData = subRows.map(r => ({ name: r.name, value: r.rev, category: r.category }))
-                return (
-                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-                    <ResponsiveContainer width="100%" height={300}>
-                      <PieChart>
-                        <Pie data={innerData} cx="50%" cy="50%" innerRadius={55} outerRadius={95} dataKey="value" onClick={d => setSelectedCat(selectedCat === d.name ? null : d.name)}>
-                          {innerData.map(d => <Cell key={d.name} fill={colorOf(d.name)} opacity={selectedCat && selectedCat !== d.name ? 0.35 : 1} stroke="#fff" strokeWidth={1.5} style={{ cursor: 'pointer' }} />)}
-                        </Pie>
-                        <Pie data={outerData} cx="50%" cy="50%" innerRadius={100} outerRadius={130} dataKey="value" onClick={d => setSelectedCat(selectedCat === d.category ? null : d.category)}>
-                          {outerData.map((d, i) => <Cell key={i} fill={colorOf(d.category)} opacity={selectedCat && selectedCat !== d.category ? 0.2 : 0.65} stroke="#fff" strokeWidth={1} style={{ cursor: 'pointer' }} />)}
-                        </Pie>
-                        <Tooltip formatter={(v, n) => [fmt(v), n]} />
-                      </PieChart>
-                    </ResponsiveContainer>
-                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px 12px', justifyContent: 'center', marginTop: 4 }}>
-                      {innerData.map(d => <span key={d.name} onClick={() => setSelectedCat(selectedCat === d.name ? null : d.name)} style={{ fontSize: 10.5, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4, opacity: selectedCat && selectedCat !== d.name ? 0.4 : 1 }}><span style={{ width: 8, height: 8, borderRadius: 2, background: colorOf(d.name), display: 'inline-block' }} />{d.name}</span>)}
-                    </div>
-                  </div>
-                )
-              })()}
             </Card>
           )
         })()}
@@ -1442,56 +1391,32 @@ function AllTab({ data }) {
           const SC_COLORS = ['#0D9E68','#2E74CC','#CC8A00','#CC4078','#534AB7','#E24B4A','#9B59B6','#FF6B35','#00B4D8','#06D6A0','#F77F00','#6A4C93','#1982C4','#8AC926']
           const scColorOf = (_, i) => SC_COLORS[i % SC_COLORS.length]
           const btnStyle = v => ({ fontSize: 11, fontWeight: 600, padding: '3px 10px', borderRadius: 5, border: `1.5px solid ${subCatView === v ? C.t1 : C.border}`, background: subCatView === v ? C.t1 : 'transparent', color: subCatView === v ? '#fff' : C.t2, cursor: 'pointer', fontFamily: 'var(--font)' })
+          const FIXED_H = 420
           return (
             <Card title={selectedCat ? `Sub-categories · ${selectedCat}` : 'Sub-categories'} note={`${subCatRows.length} total`}
               action={<div style={{ display: 'flex', gap: 4 }}>
                 <button style={btnStyle('table')} onClick={() => setSubCatView('table')}>Table</button>
-                <button style={btnStyle('treemap')} onClick={() => setSubCatView('treemap')}>Treemap</button>
                 <button style={btnStyle('bar')} onClick={() => setSubCatView('bar')}>Bar</button>
-                <button style={btnStyle('sunburst')} onClick={() => setSubCatView('sunburst')}>Sunburst</button>
               </div>}>
               {subCatView === 'table' && (
-                <div style={{ overflowX: 'auto' }}>
+                <div style={{ overflowY: 'auto', maxHeight: FIXED_H }}>
                   <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
-                    <thead><tr>{[{ label: 'Sub-category' }, { label: 'Revenue', align: 'right' }, { label: 'Orders', align: 'right' }, { label: 'AOV', align: 'right' }].map(c => <th key={c.label} style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.05em', color: C.t3, textAlign: c.align || 'left', padding: '3px 5px 7px', borderBottom: `1px solid ${C.border}` }}>{c.label}</th>)}</tr></thead>
+                    <thead style={{ position: 'sticky', top: 0, background: C.card, zIndex: 1 }}><tr>{[{ label: 'Sub-category' }, { label: 'Revenue', align: 'right' }, { label: 'Orders', align: 'right' }, { label: 'AOV', align: 'right' }].map(c => <th key={c.label} style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.05em', color: C.t3, textAlign: c.align || 'left', padding: '3px 5px 7px', borderBottom: `1px solid ${C.border}` }}>{c.label}</th>)}</tr></thead>
                     <tbody>{subCatRows.map((r, i) => <tr key={r.name} style={{ borderBottom: i < subCatRows.length - 1 ? `1px solid ${C.border}` : 'none' }} onMouseEnter={e => e.currentTarget.style.background = '#FFFBE6'} onMouseLeave={e => e.currentTarget.style.background = ''}><td style={{ padding: '5.5px 5px', color: C.t2 }}><span style={{ display: 'inline-block', width: 8, height: 8, borderRadius: 2, background: scColorOf(r.name, i), marginRight: 6 }} />{r.name}</td><td style={{ padding: '5.5px 5px', textAlign: 'right', fontFamily: 'var(--mono)', fontSize: 11.5, color: C.t1 }}>{fmt(r.rev)}</td><td style={{ padding: '5.5px 5px', textAlign: 'right', color: C.t2 }}>{fmtN(r.orders)}</td><td style={{ padding: '5.5px 5px', textAlign: 'right', color: C.t2 }}>₹{Math.round(r.aov).toLocaleString('en-IN')}</td></tr>)}</tbody>
                   </table>
                 </div>
               )}
-              {subCatView === 'treemap' && (
-                <ResponsiveContainer width="100%" height={300}>
-                  <Treemap data={subCatRows.map((r, i) => ({ name: r.name, size: r.rev, _i: i }))} dataKey="size" aspectRatio={4/3}
-                    content={({ x, y, width, height, name, size, _i }) => {
-                      const color = scColorOf(name, _i ?? 0)
-                      if (width < 30 || height < 20) return null
-                      return <g><rect x={x+1} y={y+1} width={width-2} height={height-2} fill={color} opacity={0.82} rx={4} />{width > 60 && height > 30 && <text x={x+width/2} y={y+height/2-(height>50?8:0)} textAnchor="middle" fill="#fff" fontSize={Math.min(11,width/9)} fontWeight={600} fontFamily="var(--font)">{name}</text>}{width > 60 && height > 50 && <text x={x+width/2} y={y+height/2+10} textAnchor="middle" fill="rgba(255,255,255,0.85)" fontSize={10} fontFamily="var(--mono)">{fmt(size)}</text>}</g>
-                    }} />
-                </ResponsiveContainer>
-              )}
               {subCatView === 'bar' && (
-                <ResponsiveContainer width="100%" height={Math.max(250, subCatRows.length * 24)}>
-                  <BarChart data={subCatRows} layout="vertical" margin={{ top: 0, right: 60, bottom: 0, left: 140 }}>
-                    <XAxis type="number" tick={{ fontSize: 10, fill: C.t3 }} tickFormatter={v => v >= 1e7 ? `${(v/1e7).toFixed(1)}Cr` : v >= 1e5 ? `${(v/1e5).toFixed(0)}L` : fmt(v)} />
-                    <YAxis type="category" dataKey="name" tick={{ fontSize: 10, fill: C.t2 }} width={135} />
-                    <CartesianGrid strokeDasharray="3 3" stroke={C.border} horizontal={false} />
-                    <Tooltip formatter={v => fmt(v)} />
-                    <Bar dataKey="rev" name="Revenue" radius={[0,4,4,0]}>{subCatRows.map((r, i) => <Cell key={r.name} fill={scColorOf(r.name, i)} />)}</Bar>
-                  </BarChart>
-                </ResponsiveContainer>
-              )}
-              {subCatView === 'sunburst' && (
-                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-                  <ResponsiveContainer width="100%" height={300}>
-                    <PieChart>
-                      <Pie data={subCatRows.map((r, i) => ({ name: r.name, value: r.rev, _i: i }))} cx="50%" cy="50%" innerRadius={60} outerRadius={120} dataKey="value">
-                        {subCatRows.map((r, i) => <Cell key={r.name} fill={scColorOf(r.name, i)} opacity={0.85} stroke="#fff" strokeWidth={1.5} />)}
-                      </Pie>
-                      <Tooltip formatter={(v, n) => [fmt(v), n]} />
-                    </PieChart>
+                <div style={{ overflowY: 'auto', maxHeight: FIXED_H }}>
+                  <ResponsiveContainer width="100%" height={Math.max(FIXED_H, subCatRows.length * 26)}>
+                    <BarChart data={subCatRows} layout="vertical" margin={{ top: 0, right: 60, bottom: 0, left: 140 }}>
+                      <XAxis type="number" tick={{ fontSize: 10, fill: C.t3 }} tickFormatter={v => v >= 1e7 ? `${(v/1e7).toFixed(1)}Cr` : v >= 1e5 ? `${(v/1e5).toFixed(0)}L` : fmt(v)} />
+                      <YAxis type="category" dataKey="name" tick={{ fontSize: 10, fill: C.t2 }} width={135} />
+                      <CartesianGrid strokeDasharray="3 3" stroke={C.border} horizontal={false} />
+                      <Tooltip formatter={v => fmt(v)} />
+                      <Bar dataKey="rev" name="Revenue" radius={[0,4,4,0]}>{subCatRows.map((r, i) => <Cell key={r.name} fill={scColorOf(r.name, i)} />)}</Bar>
+                    </BarChart>
                   </ResponsiveContainer>
-                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px 12px', justifyContent: 'center', marginTop: 4 }}>
-                    {subCatRows.map((r, i) => <span key={r.name} style={{ fontSize: 10.5, display: 'flex', alignItems: 'center', gap: 4 }}><span style={{ width: 8, height: 8, borderRadius: 2, background: scColorOf(r.name, i), display: 'inline-block' }} />{r.name}</span>)}
-                  </div>
                 </div>
               )}
             </Card>
