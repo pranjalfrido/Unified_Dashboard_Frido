@@ -1611,10 +1611,7 @@ function ShopifyTab({ data, filters, setFilters }) {
             ].map(k => (
               <div key={k.label} className="kpi-card" style={{ padding: '10px 13px' }}>
                 <div className="kpi-label">{k.label}</div>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 4 }}>
-                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 4 }}><div className="kpi-value" style={{ fontSize: 17 }}>{k.value}</div>{k.badge}</div>
-                  {k.badge}
-                </div>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 4 }}><div className="kpi-value" style={{ fontSize: 17 }}>{k.value}</div>{k.badge}</div>
                 {k.sub && <div className="kpi-sub">{k.sub}</div>}
               </div>
             ))}
@@ -1822,10 +1819,7 @@ function AmazonTab({ data, region = 'india', setRegion = () => {} }) {
                     ].map(k => (
                       <div key={k.label} className="kpi-card" style={{ padding: '10px 13px' }}>
                         <div className="kpi-label">{k.label}</div>
-                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 4 }}>
-                          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 4 }}><div className="kpi-value" style={{ fontSize: 17 }}>{k.value}</div>{k.badge}</div>
-                          {k.badge}
-                        </div>
+                        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 4 }}><div className="kpi-value" style={{ fontSize: 17 }}>{k.value}</div>{k.badge}</div>
                         {k.sub && <div className="kpi-sub">{k.sub}</div>}
                       </div>
                     ))}
@@ -2795,10 +2789,7 @@ function ZeptoTab({ data }) {
             ].map(k => (
               <div key={k.label} className="kpi-card" style={{ padding: '10px 13px' }}>
                 <div className="kpi-label">{k.label}</div>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 4 }}>
-                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 4 }}><div className="kpi-value" style={{ fontSize: 17 }}>{k.value}</div>{k.badge}</div>
-                  {k.badge}
-                </div>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 4 }}><div className="kpi-value" style={{ fontSize: 17 }}>{k.value}</div>{k.badge}</div>
                 {k.sub && <div className="kpi-sub">{k.sub}</div>}
               </div>
             ))}
@@ -3187,10 +3178,7 @@ function MyntraTab({ data }) {
             ].map(k => (
               <div key={k.label} className="kpi-card" style={{ padding: '10px 13px' }}>
                 <div className="kpi-label">{k.label}</div>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 4 }}>
-                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 4 }}><div className="kpi-value" style={{ fontSize: 17 }}>{k.value}</div>{k.badge}</div>
-                  {k.badge}
-                </div>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 4 }}><div className="kpi-value" style={{ fontSize: 17 }}>{k.value}</div>{k.badge}</div>
                 {k.sub && <div className="kpi-sub">{k.sub}</div>}
               </div>
             ))}
