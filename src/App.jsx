@@ -1217,7 +1217,8 @@ function AllTab({ data }) {
   const fulfilmentRate = fulfilmentBase > 0 ? (deliveredCount / fulfilmentBase * 100) : 0
   const unitsPerOrder = nOrders > 0 ? totalQty / nOrders : 0
   const rtoOrders = orderStatusMap['RTO'] || 0
-  const returnPct = nOrders > 0 ? (rtoOrders / nOrders * 100) : 0
+  const cirOrderCount = orders.filter(o => o.isCIR).length
+  const returnPct = nOrders > 0 ? ((rtoOrders + cirOrderCount) / nOrders * 100) : 0
   const asp = totalQty > 0 ? totalExcRev / totalQty : 0
   const deliveredOrders = orderStatusMap['Delivered'] || 0
   const fulfilmentPct = nOrders > 0 ? (deliveredOrders / nOrders * 100) : 0
@@ -1289,7 +1290,7 @@ function AllTab({ data }) {
               )
             })()}
             {[
-              { label: 'Return %', value: `${returnPct.toFixed(1)}%`, sub: `${fmtN(rtoOrders)} RTO orders`, accent: returnPct > 10 ? '#7A1A1A' : undefined, badge: null },
+              { label: 'Return %', value: `${returnPct.toFixed(1)}%`, sub: `${fmtN(rtoOrders)} RTO · ${fmtN(cirOrderCount)} CIR`, accent: returnPct > 10 ? '#7A1A1A' : undefined, badge: null },
               { label: 'AOV', value: `₹${Math.round(blendedAOV).toLocaleString('en-IN')}`, sub: `Gross rev ÷ orders`, badge: chgBadge(blendedAOV, prevAOV) },
               { label: 'Daily Avg', value: fmt(totalRev / nDays), sub: `over ${nDays} days`, badge: chgBadge(totalRev / nDays, prevDailyAvg) },
             ].map(k => (
