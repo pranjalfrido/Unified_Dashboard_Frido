@@ -2044,11 +2044,14 @@ function FlipkartTab({ data }) {
 
   // Daily chart
   const [chartMetric, setChartMetric] = useState('rev')
+  const fkEstimatedDays = fk.estimatedDays || 0
+  const fkLatestReal = fk.latestRealDate || null
   const dailyMap = {}
   ;(fk.daily || []).forEach(x => {
-    if (!dailyMap[x.date]) dailyMap[x.date] = { date: x.date, FBF: 0, NonFBF: 0, FBF_orders: 0, NonFBF_orders: 0, FBF_units: 0, NonFBF_units: 0 }
+    if (!dailyMap[x.date]) dailyMap[x.date] = { date: x.date, FBF: 0, NonFBF: 0, FBF_orders: 0, NonFBF_orders: 0, FBF_units: 0, NonFBF_units: 0, estimated: x.estimated || false }
     if (x.sub === 'FBF') { dailyMap[x.date].FBF = x.rev; dailyMap[x.date].FBF_orders = x.orders; dailyMap[x.date].FBF_units = x.units || 0 }
     else { dailyMap[x.date].NonFBF = x.rev; dailyMap[x.date].NonFBF_orders = x.orders; dailyMap[x.date].NonFBF_units = x.units || 0 }
+    if (x.estimated) dailyMap[x.date].estimated = true
   })
   const dailyArr = Object.values(dailyMap).sort((a, b) => a.date?.localeCompare(b.date))
   const subDailyArr = filterSub(fk.daily || []).map(x => ({ date: x.date, rev: x.rev, orders: x.orders }))
@@ -2132,16 +2135,25 @@ function FlipkartTab({ data }) {
       <div style={{ display: 'grid', gridTemplateColumns: '3fr 2fr', gap: 14, alignItems: 'stretch' }}>
         <Card title={subView === 'overview' ? `Daily ${chartMetric === 'rev' ? 'Revenue' : chartMetric === 'units' ? 'Units' : 'Orders'} · FBF vs Non-FBF` : `Daily ${chartMetric === 'rev' ? 'Revenue' : chartMetric === 'units' ? 'Units' : 'Orders'} · ${subView === 'fbf' ? 'FBF' : 'Non-FBF'}`}
           action={<div style={{ display: 'flex', gap: 4 }}>{[{ v: 'rev', label: 'Revenue' }, { v: 'units', label: 'Units' }, { v: 'orders', label: 'Orders' }].map(opt => <button key={opt.v} onClick={() => setChartMetric(opt.v)} style={{ fontSize: 11, fontWeight: 600, padding: '3px 10px', borderRadius: 5, border: `1.5px solid ${chartMetric === opt.v ? C.t1 : C.border}`, background: chartMetric === opt.v ? C.t1 : 'transparent', color: chartMetric === opt.v ? '#fff' : C.t2, cursor: 'pointer', fontFamily: 'var(--font)' }}>{opt.label}</button>)}</div>}>
+          {fkEstimatedDays > 0 && (
+            <div style={{ fontSize: 11, color: '#92600A', background: '#FFF8E1', border: '1px solid #FFE082', borderRadius: 6, padding: '5px 10px', marginBottom: 8 }}>
+              ⏳ Data available till {fkLatestReal} · Last {fkEstimatedDays} day{fkEstimatedDays > 1 ? 's' : ''} shown as 7-day rolling avg estimate
+            </div>
+          )}
           {subView === 'overview' ? (
             <ResponsiveContainer width="100%" height={200}>
               <BarChart data={dailyArr} margin={{ top: 0, right: 0, bottom: 0, left: 0 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke={C.border} vertical={false} />
                 <XAxis dataKey="date" tick={{ fontSize: 10, fill: C.t3 }} tickFormatter={d => d?.slice(5)} />
                 <YAxis tick={{ fontSize: 10, fill: C.t3 }} tickFormatter={v => chartMetric === 'rev' ? (v >= 1e5 ? `${(v/1e5).toFixed(0)}L` : v) : fmtN(v)} width={40} />
-                <Tooltip content={<ChartTooltip formatter={chartMetric !== 'rev' ? fmtN : undefined} />} />
+                <Tooltip content={<ChartTooltip formatter={chartMetric !== 'rev' ? fmtN : undefined} extraLabel={entry => entry?.estimated ? ' (est.)' : ''} />} />
                 <Legend iconSize={8} wrapperStyle={{ fontSize: 10 }} />
-                <Bar dataKey={chartMetric === 'rev' ? 'FBF' : chartMetric === 'units' ? 'FBF_units' : 'FBF_orders'} stackId="a" fill="#E8930A" name="FBF" />
-                <Bar dataKey={chartMetric === 'rev' ? 'NonFBF' : chartMetric === 'units' ? 'NonFBF_units' : 'NonFBF_orders'} stackId="a" fill="#2E74CC" name="Non-FBF" />
+                <Bar dataKey={chartMetric === 'rev' ? 'FBF' : chartMetric === 'units' ? 'FBF_units' : 'FBF_orders'} stackId="a" name="FBF">
+                  {dailyArr.map((entry, i) => <Cell key={i} fill={entry.estimated ? '#F5C97A' : '#E8930A'} opacity={entry.estimated ? 0.6 : 1} />)}
+                </Bar>
+                <Bar dataKey={chartMetric === 'rev' ? 'NonFBF' : chartMetric === 'units' ? 'NonFBF_units' : 'NonFBF_orders'} stackId="a" name="Non-FBF">
+                  {dailyArr.map((entry, i) => <Cell key={i} fill={entry.estimated ? '#A8C8F0' : '#2E74CC'} opacity={entry.estimated ? 0.6 : 1} />)}
+                </Bar>
               </BarChart>
             </ResponsiveContainer>
           ) : (
