@@ -1509,6 +1509,11 @@ function ShopifyTab({ data, filters, setFilters }) {
   const shNOrders = shCh.orders || 0
   const shOrdChg = prevOrders > 0 ? ((shNOrders - prevOrders) / prevOrders * 100) : null
   const shExcChg = prevExcRev > 0 ? ((totalExcRev - prevExcRev) / prevExcRev * 100) : null
+  const shChgBadge = (cur, prev) => {
+    if (!prev) return null
+    const p = (cur - prev) / prev * 100
+    return <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 4, background: p >= 0 ? C.green.bg : C.red.bg, color: p >= 0 ? C.green.tx : C.red.tx, flexShrink: 0 }}>{p >= 0 ? '▲' : '▼'} {Math.abs(p).toFixed(1)}%</span>
+  }
   const shSparkData = Array.from({ length: Math.max(dailyArr.length, prevDailyArr.length) }, (_, i) => {
     const cur = dailyArr[i]
     const pre = prevDailyArr[i]
@@ -1569,13 +1574,13 @@ function ShopifyTab({ data, filters, setFilters }) {
       <div style={{ display: 'grid', gridTemplateColumns: '1.4fr 1.2fr 1fr 1fr 1fr 1fr', gap: 10 }}>
         <HeroKPICard label="Gross Revenue · Inc. GST" value={fmt(totalRev)} sub={`${shNOrders >= 1000 ? (shNOrders/1000).toFixed(1).replace(/\.0$/,'')+'k' : fmtN(shNOrders)} orders · ${totalQty >= 1000 ? (totalQty/1000).toFixed(1).replace(/\.0$/,'')+'k' : fmtN(totalQty)} units`} chg={shRevChg} sparkData={shSparkData} color="#FFD600" gradId="shGrossGrad" />
         <HeroKPICard label="Net (Exc GST)" value={fmt(totalExcRev)} sub={`GST ${fmt(gst)}`} chg={shExcChg} sparkData={shSparkData} color="#7AB4EE" gradId="shNetGrad" />
-        <KPICard label="GST Collected" value={fmt(gst)} sub={totalRev > 0 ? `${((gst / totalRev) * 100).toFixed(1)}% of gross` : '—'} />
-        <KPICard label="Orders" value={fmtN(shNOrders)} />
+        {(() => { const prevGst = prevRev - prevExcRev; return <KPICard label="GST Collected" value={fmt(gst)} sub={totalRev > 0 ? `${((gst / totalRev) * 100).toFixed(1)}% of gross` : '—'} badge={shChgBadge(gst, prevGst)} /> })()}
+        <KPICard label="Orders" value={fmtN(shNOrders)} badge={shChgBadge(shNOrders, prevOrders)} />
         <KPICard label="Units" value={fmtN(totalQty)} />
-        <KPICard label="Daily Avg" value={fmt(dailyAvg)} />
+        <KPICard label="Daily Avg" value={fmt(dailyAvg)} badge={shChgBadge(dailyAvg, prevRev > 0 ? prevRev / nDays : 0)} />
       </div>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6,1fr)', gap: 10 }}>
-        <KPICard label="AOV" value={`₹${Math.round(aov).toLocaleString('en-IN')}`} />
+        <KPICard label="AOV" value={`₹${Math.round(aov).toLocaleString('en-IN')}`} badge={shChgBadge(aov, prevOrders > 0 ? prevRev / prevOrders : 0)} />
         <KPICard label="ASP" value={`₹${Math.round(asp).toLocaleString('en-IN')}`} sub="Revenue per unit" />
         <KPICard label="Fulfilment %" value={`${fulfilmentPct.toFixed(1)}%`} sub={`${fmtN(deliveredOrders)} delivered`} accent={fulfilmentPct < 80 ? '#7A1A1A' : fulfilmentPct >= 90 ? '#286010' : undefined} />
         <KPICard label="RTO %" value={`${rtoPct.toFixed(1)}%`} sub={`${fmtN(rtoOrders)} RTO orders`} accent={rtoPct > 10 ? '#7A1A1A' : undefined} />
