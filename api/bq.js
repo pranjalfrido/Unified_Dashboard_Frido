@@ -169,6 +169,7 @@ export default async function handler(req, res) {
     mnCities: `WITH q AS (${base}) SELECT City AS city, Region AS region, City_Tier AS city_tier, COUNT(DISTINCT OrderId) AS orders, ROUND(SUM(SellingPrice_Inc_GST),0) AS rev FROM q WHERE Channel='Myntra' AND City IS NOT NULL GROUP BY city, region, city_tier ORDER BY rev DESC LIMIT 30`,
     prevMn: `WITH q AS (${prevBase}) SELECT SUM(SellingPrice_Inc_GST) AS rev, SUM(SellingPrice_Exc_GST) AS exc_rev, COUNT(DISTINCT OrderId) AS orders FROM q WHERE Channel='Myntra'`,
     prevMnDaily: `WITH q AS (${prevBase}) SELECT CAST(OrderDate AS STRING) AS date, SUM(SellingPrice_Inc_GST) AS rev FROM q WHERE Channel='Myntra' GROUP BY date ORDER BY date`,
+    masterSkuList: `SELECT DISTINCT TRIM(Product_Code) AS sku FROM \`frido-429506.sharepoint_to_gcp.Frido_Item_Master__frido_item_sku_master\` WHERE TRIM(Product_Code) != '' ORDER BY sku`,
   }
 
   try {
@@ -300,6 +301,7 @@ export default async function handler(req, res) {
       financialStatusMap, fulfilmentStatusMap, refundTrend,
       voucherList: (r.byVoucherRaw || []).map(x => ({ code: x.voucher_code, orders: parseInt(x.orders) || 0 })),
       orders, skuRows, rows: [],
+      masterSkuList: (r.masterSkuList || []).map(x => x.sku).filter(Boolean),
       shopify: {
         prevRev: parseFloat(r.prevShopify?.[0]?.rev) || 0,
         prevExcRev: parseFloat(r.prevShopify?.[0]?.exc_rev) || 0,

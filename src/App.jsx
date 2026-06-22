@@ -3043,6 +3043,7 @@ function SalesPage({ data, filters, setFilters, activeTab, setActiveTab, fetchDa
     return [...new Set(filtered.map(([k]) => k.split('::')[1]).filter(Boolean))].sort()
   }, [data, filters.category])
   const stateOpts = useMemo(() => Object.keys(data?.stateMap || {}).filter(Boolean).map(s => s.charAt(0).toUpperCase() + s.slice(1).toLowerCase()).sort(), [data])
+  const skuOpts = useMemo(() => data?.masterSkuList || [], [data])
 
   if (!filteredData) return null
   return (
@@ -3070,12 +3071,12 @@ function SalesPage({ data, filters, setFilters, activeTab, setActiveTab, fetchDa
               </div>
             </>
           })()}
-          <input type="text" placeholder="Search SKU…" value={filters.sku} onChange={e => setFilters(f => ({ ...f, sku: e.target.value }))} className="fsrch" />
+          <SearchableSelect multi options={skuOpts} value={filters.sku || []} onChange={v => setFilters(f => ({ ...f, sku: v }))} placeholder="All SKUs" dropdownWidth={280} />
           {activeTab === 'shopify' && <VoucherDropdown voucherList={data?.voucherList || []} selected={filters.voucher} onChange={v => setFilters(f => ({ ...f, voucher: v }))} />}
           <SearchableSelect multi options={['West','South','North','East','Central','Northeast']} value={filters.region || []} onChange={v => setFilters(f => ({ ...f, region: v }))} placeholder="All Regions" />
           <SearchableSelect multi options={['Tier I','Tier II','Tier III']} value={filters.tier || []} onChange={v => setFilters(f => ({ ...f, tier: v }))} placeholder="All Tiers" />
           <SearchableSelect multi options={stateOpts} value={filters.state || []} onChange={v => setFilters(f => ({ ...f, state: v }))} placeholder="All States" dropdownWidth={220} />
-          <button onClick={() => setFilters(f => ({ ...f, category: [], subCategory: [], sku: '', subChannel: '', voucher: '', region: [], tier: [], state: [], city: '' }))} className="fclr">✕ Clear</button>
+          <button onClick={() => setFilters(f => ({ ...f, category: [], subCategory: [], sku: [], subChannel: '', voucher: '', region: [], tier: [], state: [], city: '' }))} className="fclr">✕ Clear</button>
         </div>
       </div>
       {/* Content */}
@@ -3352,7 +3353,7 @@ const TAB_TO_CHANNEL = { blinkit: 'Blinkit', instamart: 'Instamart', zepto: 'Zep
 export default function App() {
   const [page, setPage] = useState('overview')
   const def = getDefaultDates()
-  const [filters, setFilters] = useState({ start: def.start, end: def.end, category: [], subCategory: [], sku: '', subChannel: '', voucher: '', region: [], tier: [], state: [], city: '' })
+  const [filters, setFilters] = useState({ start: def.start, end: def.end, category: [], subCategory: [], sku: [], subChannel: '', voucher: '', region: [], tier: [], state: [], city: '' })
   const [activeTab, setActiveTab] = useState('all')
   const [rawRows, setRawRows] = useState(null)
   const [loading, setLoading] = useState(false)
@@ -3411,7 +3412,7 @@ export default function App() {
       const extra = {}
       if (category?.length) extra.category = category.join(',')
       if (subCategory?.length) extra.subCategory = subCategory.join(',')
-      if (sku) extra.sku = sku
+      if (sku?.length) extra.sku = sku.join(',')
       if (subChannel) extra.subChannel = subChannel
       if (voucher) extra.voucher = voucher
       if (region?.length) extra.region = region.join(',')
@@ -3431,7 +3432,7 @@ export default function App() {
     <div className="app-shell">
       <Sidebar page={page} setPage={setPage} />
       <div className="app-main">
-        <Topnav page={page} alerts={alerts} onRefresh={() => { const { start, end, category, subCategory, sku, subChannel, voucher, region, tier, state, city } = filters; const e = {}; if (category?.length) e.category = category.join(','); if (subCategory?.length) e.subCategory = subCategory.join(','); if (sku) e.sku = sku; if (subChannel) e.subChannel = subChannel; if (voucher) e.voucher = voucher; if (region?.length) e.region = region.join(','); if (tier?.length) e.tier = tier.join(','); if (state?.length) e.state = state.join(','); if (city) e.city = city; fetchData(start, end, e) }} loading={loading} filters={filters} setFilters={setFilters} rawRows={rawRows} />
+        <Topnav page={page} alerts={alerts} onRefresh={() => { const { start, end, category, subCategory, sku, subChannel, voucher, region, tier, state, city } = filters; const e = {}; if (category?.length) e.category = category.join(','); if (subCategory?.length) e.subCategory = subCategory.join(','); if (sku?.length) e.sku = sku.join(','); if (subChannel) e.subChannel = subChannel; if (voucher) e.voucher = voucher; if (region?.length) e.region = region.join(','); if (tier?.length) e.tier = tier.join(','); if (state?.length) e.state = state.join(','); if (city) e.city = city; fetchData(start, end, e) }} loading={loading} filters={filters} setFilters={setFilters} rawRows={rawRows} />
         {loading && (
           <div style={{ height: 2, background: C.border, flexShrink: 0 }}>
             <div className="progress-bar" style={{ height: '100%', background: C.acc }} />
