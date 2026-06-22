@@ -1612,7 +1612,7 @@ function ShopifyTab({ data, filters, setFilters }) {
               <div key={k.label} className="kpi-card" style={{ padding: '10px 13px' }}>
                 <div className="kpi-label">{k.label}</div>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 4 }}>
-                  <div className="kpi-value" style={{ fontSize: 17 }}>{k.value}</div>
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 4 }}><div className="kpi-value" style={{ fontSize: 17 }}>{k.value}</div>{k.badge}</div>
                   {k.badge}
                 </div>
                 {k.sub && <div className="kpi-sub">{k.sub}</div>}
@@ -1823,7 +1823,7 @@ function AmazonTab({ data, region = 'india', setRegion = () => {} }) {
                       <div key={k.label} className="kpi-card" style={{ padding: '10px 13px' }}>
                         <div className="kpi-label">{k.label}</div>
                         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 4 }}>
-                          <div className="kpi-value" style={{ fontSize: 17 }}>{k.value}</div>
+                          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 4 }}><div className="kpi-value" style={{ fontSize: 17 }}>{k.value}</div>{k.badge}</div>
                           {k.badge}
                         </div>
                         {k.sub && <div className="kpi-sub">{k.sub}</div>}
@@ -2189,9 +2189,11 @@ function FlipkartTab({ data }) {
 
   const fkPrevRev = fk.prevRev || data.prevRev || 0
   const fkPrevExcRev = fk.prevExcRev || data.prevExcRev || 0
+  const fkPrevOrders = fk.prevOrders || 0
   const fkPrevDailyArr = fk.prevDaily || data.prevDailyArr || []
   const fkRevChg = fkPrevRev > 0 ? ((rev - fkPrevRev) / fkPrevRev * 100) : null
   const fkExcChg = fkPrevExcRev > 0 ? ((excRev - fkPrevExcRev) / fkPrevExcRev * 100) : null
+  const fkChgBadge = (cur, prev) => { if (!prev) return null; const p = (cur - prev) / prev * 100; return <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 4, background: p >= 0 ? C.green.bg : C.red.bg, color: p >= 0 ? C.green.tx : C.red.tx, flexShrink: 0 }}>{p >= 0 ? '▲' : '▼'} {Math.abs(p).toFixed(1)}%</span> }
 
   // Daily chart
   const [chartMetric, setChartMetric] = useState('rev')
@@ -2296,13 +2298,13 @@ function FlipkartTab({ data }) {
               </div>
             )})()}
             {[
-              { label: 'Orders', value: fmtN(nOrders), sub: subView === 'overview' ? 'FBF + Non-FBF' : subView === 'fbf' ? 'FBF only' : 'Non-FBF only' },
-              { label: 'Daily Avg', value: fmt(rev / nDays), sub: `over ${nDays} days` },
-              { label: 'AOV', value: `₹${Math.round(aov).toLocaleString('en-IN')}`, sub: 'Avg order value' },
+              { label: 'Orders', value: fmtN(nOrders), sub: subView === 'overview' ? 'FBF + Non-FBF' : subView === 'fbf' ? 'FBF only' : 'Non-FBF only', badge: fkChgBadge(nOrders, fkPrevOrders) },
+              { label: 'Daily Avg', value: fmt(rev / nDays), sub: `over ${nDays} days`, badge: fkChgBadge(rev / nDays, fkPrevRev > 0 ? fkPrevRev / nDays : 0) },
+              { label: 'AOV', value: `₹${Math.round(aov).toLocaleString('en-IN')}`, sub: 'Avg order value', badge: fkChgBadge(aov, fkPrevOrders > 0 ? fkPrevRev / fkPrevOrders : 0) },
             ].map(k => (
               <div key={k.label} className="kpi-card" style={{ padding: '10px 13px' }}>
                 <div className="kpi-label">{k.label}</div>
-                <div className="kpi-value" style={{ fontSize: 17 }}>{k.value}</div>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 4 }}><div className="kpi-value" style={{ fontSize: 17 }}>{k.value}</div>{k.badge}</div>
                 {k.sub && <div className="kpi-sub">{k.sub}</div>}
               </div>
             ))}
@@ -2316,7 +2318,7 @@ function FlipkartTab({ data }) {
             ].map(k => (
               <div key={k.label} className="kpi-card" style={{ padding: '10px 13px' }}>
                 <div className="kpi-label">{k.label}</div>
-                <div className="kpi-value" style={{ fontSize: 17 }}>{k.value}</div>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 4 }}><div className="kpi-value" style={{ fontSize: 17 }}>{k.value}</div>{k.badge}</div>
                 {k.sub && <div className="kpi-sub">{k.sub}</div>}
               </div>
             ))}
@@ -2435,6 +2437,7 @@ function BlinkitTab({ data }) {
   const blPrevRev = bl.prevRev || 0
   const blPrevDailyArr = bl.prevDaily || []
   const blRevChg = blPrevRev > 0 ? ((rev - blPrevRev) / blPrevRev * 100) : null
+  const blChgBadge = (cur, prev) => { if (!prev) return null; const p = (cur - prev) / prev * 100; return <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 4, background: p >= 0 ? C.green.bg : C.red.bg, color: p >= 0 ? C.green.tx : C.red.tx, flexShrink: 0 }}>{p >= 0 ? '▲' : '▼'} {Math.abs(p).toFixed(1)}%</span> }
   const blSparkData = Array.from({ length: Math.max(daily.length, blPrevDailyArr.length) }, (_, i) => ({
     i, cur: daily[i]?.rev ?? null, prev: blPrevDailyArr[i]?.rev ?? null
   }))
@@ -2474,12 +2477,12 @@ function BlinkitTab({ data }) {
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10, flex: 1 }}>
             {[
               { label: 'Net Revenue (Exc GST)', value: fmt(excRev), sub: `GST ${fmt(rev - excRev)}` },
-              { label: 'Daily Avg', value: fmt(dailyAvg), sub: `over ${nDays} days` },
+              { label: 'Daily Avg', value: fmt(dailyAvg), sub: `over ${nDays} days`, badge: blChgBadge(dailyAvg, blPrevRev > 0 ? blPrevRev / nDays : 0) },
               { label: 'Units Sold', value: fmtN(units), sub: `${skus} SKUs` },
             ].map(k => (
               <div key={k.label} className="kpi-card" style={{ padding: '10px 13px' }}>
                 <div className="kpi-label">{k.label}</div>
-                <div className="kpi-value" style={{ fontSize: 17 }}>{k.value}</div>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 4 }}><div className="kpi-value" style={{ fontSize: 17 }}>{k.value}</div>{k.badge}</div>
                 {k.sub && <div className="kpi-sub">{k.sub}</div>}
               </div>
             ))}
@@ -2492,7 +2495,7 @@ function BlinkitTab({ data }) {
             ].map(k => (
               <div key={k.label} className="kpi-card" style={{ padding: '10px 13px' }}>
                 <div className="kpi-label">{k.label}</div>
-                <div className="kpi-value" style={{ fontSize: 17 }}>{k.value}</div>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 4 }}><div className="kpi-value" style={{ fontSize: 17 }}>{k.value}</div>{k.badge}</div>
                 {k.sub && <div className="kpi-sub">{k.sub}</div>}
               </div>
             ))}
@@ -2633,7 +2636,7 @@ function InstaTab({ data }) {
               <div key={k.label} className="kpi-card" style={{ padding: '10px 13px' }}>
                 <div className="kpi-label">{k.label}</div>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 4 }}>
-                  <div className="kpi-value" style={{ fontSize: 17 }}>{k.value}</div>
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 4 }}><div className="kpi-value" style={{ fontSize: 17 }}>{k.value}</div>{k.badge}</div>
                 </div>
                 {k.sub && <div className="kpi-sub">{k.sub}</div>}
               </div>
@@ -2648,7 +2651,7 @@ function InstaTab({ data }) {
               <div key={k.label} className="kpi-card" style={{ padding: '10px 13px' }}>
                 <div className="kpi-label">{k.label}</div>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 4 }}>
-                  <div className="kpi-value" style={{ fontSize: 17 }}>{k.value}</div>
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 4 }}><div className="kpi-value" style={{ fontSize: 17 }}>{k.value}</div>{k.badge}</div>
                 </div>
                 {k.sub && <div className="kpi-sub">{k.sub}</div>}
               </div>
@@ -2785,7 +2788,7 @@ function ZeptoTab({ data }) {
               <div key={k.label} className="kpi-card" style={{ padding: '10px 13px' }}>
                 <div className="kpi-label">{k.label}</div>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 4 }}>
-                  <div className="kpi-value" style={{ fontSize: 17 }}>{k.value}</div>
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 4 }}><div className="kpi-value" style={{ fontSize: 17 }}>{k.value}</div>{k.badge}</div>
                   {k.badge}
                 </div>
                 {k.sub && <div className="kpi-sub">{k.sub}</div>}
@@ -2801,7 +2804,7 @@ function ZeptoTab({ data }) {
               <div key={k.label} className="kpi-card" style={{ padding: '10px 13px' }}>
                 <div className="kpi-label">{k.label}</div>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 4 }}>
-                  <div className="kpi-value" style={{ fontSize: 17 }}>{k.value}</div>
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 4 }}><div className="kpi-value" style={{ fontSize: 17 }}>{k.value}</div>{k.badge}</div>
                 </div>
                 {k.sub && <div className="kpi-sub">{k.sub}</div>}
               </div>
@@ -2956,7 +2959,7 @@ function CredTab({ data }) {
               <div key={k.label} className="kpi-card" style={{ padding: '10px 13px' }}>
                 <div className="kpi-label">{k.label}</div>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 4 }}>
-                  <div className="kpi-value" style={{ fontSize: 17 }}>{k.value}</div>
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 4 }}><div className="kpi-value" style={{ fontSize: 17 }}>{k.value}</div>{k.badge}</div>
                   {k.badge}
                 </div>
                 {k.sub && <div className="kpi-sub">{k.sub}</div>}
@@ -2973,7 +2976,7 @@ function CredTab({ data }) {
               <div key={k.label} className="kpi-card" style={{ padding: '10px 13px' }}>
                 <div className="kpi-label">{k.label}</div>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 4 }}>
-                  <div className="kpi-value" style={{ fontSize: 17 }}>{k.value}</div>
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 4 }}><div className="kpi-value" style={{ fontSize: 17 }}>{k.value}</div>{k.badge}</div>
                 </div>
                 {k.sub && <div className="kpi-sub">{k.sub}</div>}
               </div>
@@ -3176,7 +3179,7 @@ function MyntraTab({ data }) {
               <div key={k.label} className="kpi-card" style={{ padding: '10px 13px' }}>
                 <div className="kpi-label">{k.label}</div>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 4 }}>
-                  <div className="kpi-value" style={{ fontSize: 17 }}>{k.value}</div>
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 4 }}><div className="kpi-value" style={{ fontSize: 17 }}>{k.value}</div>{k.badge}</div>
                   {k.badge}
                 </div>
                 {k.sub && <div className="kpi-sub">{k.sub}</div>}
@@ -3193,7 +3196,7 @@ function MyntraTab({ data }) {
               <div key={k.label} className="kpi-card" style={{ padding: '10px 13px' }}>
                 <div className="kpi-label">{k.label}</div>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 4 }}>
-                  <div className="kpi-value" style={{ fontSize: 17 }}>{k.value}</div>
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 4 }}><div className="kpi-value" style={{ fontSize: 17 }}>{k.value}</div>{k.badge}</div>
                 </div>
                 {k.sub && <div className="kpi-sub">{k.sub}</div>}
               </div>
