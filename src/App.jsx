@@ -2439,6 +2439,10 @@ function BlinkitTab({ data }) {
   const daily = bl.daily || []
   const maxDailyRev = Math.max(...daily.map(d => d.rev), 1)
   const blPrevRev = bl.prevRev || 0
+  const blPrevExcRev = bl.prevExcRev || 0
+  const blPrevUnits = bl.prevUnits || 0
+  const blPrevSkus = bl.prevSkus || 0
+  const blPrevCities = bl.prevCities || 0
   const blPrevDailyArr = bl.prevDaily || []
   const blRevChg = blPrevRev > 0 ? ((rev - blPrevRev) / blPrevRev * 100) : null
   const blChgBadge = (cur, prev) => { if (!prev) return null; const p = (cur - prev) / prev * 100; return <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 4, background: p >= 0 ? C.green.bg : C.red.bg, color: p >= 0 ? C.green.tx : C.red.tx, flexShrink: 0 }}>{p >= 0 ? '▲' : '▼'} {Math.abs(p).toFixed(1)}%</span> }
@@ -2480,9 +2484,9 @@ function BlinkitTab({ data }) {
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10, flex: 1 }}>
             {[
-              { label: 'Net Revenue (Exc GST)', value: fmt(excRev), sub: `GST ${fmt(rev - excRev)}` },
+              { label: 'Net Revenue (Exc GST)', value: fmt(excRev), sub: `GST ${fmt(rev - excRev)}`, badge: blChgBadge(excRev, blPrevExcRev) },
               { label: 'Daily Avg', value: fmt(dailyAvg), sub: `over ${nDays} days`, badge: blChgBadge(dailyAvg, blPrevRev > 0 ? blPrevRev / nDays : 0) },
-              { label: 'Units Sold', value: fmtN(units), sub: `${skus} SKUs` },
+              { label: 'Units Sold', value: fmtN(units), sub: `${skus} SKUs`, badge: blChgBadge(units, blPrevUnits) },
             ].map(k => (
               <div key={k.label} className="kpi-card" style={{ padding: '10px 13px' }}>
                 <div className="kpi-label">{k.label}</div>
@@ -2493,9 +2497,9 @@ function BlinkitTab({ data }) {
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10, flex: 1 }}>
             {[
-              { label: 'ASP', value: `₹${Math.round(asp).toLocaleString('en-IN')}`, sub: 'Avg selling price' },
-              { label: 'Cities', value: fmtN(cities), sub: 'Cities with sales' },
-              { label: 'Active SKUs', value: fmtN(skus), sub: 'In date range' },
+              { label: 'ASP', value: `₹${Math.round(asp).toLocaleString('en-IN')}`, sub: 'Avg selling price', badge: blChgBadge(asp, blPrevUnits > 0 ? blPrevExcRev / blPrevUnits : 0) },
+              { label: 'Cities', value: fmtN(cities), sub: 'Cities with sales', badge: blChgBadge(cities, blPrevCities) },
+              { label: 'Active SKUs', value: fmtN(skus), sub: 'In date range', badge: blChgBadge(skus, blPrevSkus) },
             ].map(k => (
               <div key={k.label} className="kpi-card" style={{ padding: '10px 13px' }}>
                 <div className="kpi-label">{k.label}</div>
