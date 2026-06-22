@@ -53,10 +53,10 @@ export function buildQuery(s, e, filters = {}) {
     const skuList = sku.split(',').map(s => s.trim()).filter(Boolean)
     if (skuList.length === 1) {
       const s1 = skuList[0].replace(/'/g, "''")
-      whereClauses.push(`COALESCE(sm.masterskucode, TRIM(u.ProductId)) = '${s1}'`)
+      whereClauses.push(`sm.masterskucode = '${s1}'`)
     } else if (skuList.length > 1) {
       const inList = skuList.map(s => `'${s.replace(/'/g, "''")}'`).join(', ')
-      whereClauses.push(`COALESCE(sm.masterskucode, TRIM(u.ProductId)) IN (${inList})`)
+      whereClauses.push(`sm.masterskucode IN (${inList})`)
     }
   }
   if (subChannel) whereClauses.push(`u.SubChannel = '${subChannel.replace(/'/g, "''")}'`)

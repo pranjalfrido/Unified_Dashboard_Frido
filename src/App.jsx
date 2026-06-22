@@ -356,11 +356,11 @@ function OverviewPage({ data, alerts }) {
   const qcOrds = qcChs.reduce((s, c) => s + (chMap[c]?.orders || 0), 0)
   const qcAOV = qcOrds ? Math.round(qcRev / qcOrds) : 0
   const repeatRate = nCusts ? (repeatCusts / nCusts * 100).toFixed(1) : '0'
-  const sortedCh = Object.entries(chMap).sort((a, b) => b[1].rev - a[1].rev)
+  const sortedCh = Object.entries(chMap).filter(([, v]) => v.rev > 0).sort((a, b) => b[1].rev - a[1].rev)
   const maxChRev = sortedCh[0]?.[1].rev || 1
   const bestAOV = sortedCh.reduce((b, [ch, v]) => { const a = v.orders ? v.rev / v.orders : 0; return a > b.aov ? { ch, aov: a } : b }, { ch: '', aov: 0 })
   const allCats = Object.entries(catMap).map(([k, v]) => ({ name: k, rev: v.rev, orders: v.orders.size, aov: v.orders.size ? v.rev / v.orders.size : 0 })).sort((a, b) => b.rev - a.rev)
-  const channels = Object.keys(C.ch).filter(ch => chMap[ch])
+  const channels = Object.keys(C.ch).filter(ch => chMap[ch] && chMap[ch].rev > 0)
   const voucherOrders = orders.filter(o => o.voucher).length
 
   return (
@@ -444,7 +444,7 @@ function OverviewPage({ data, alerts }) {
             { key: 'rev', label: 'Revenue', align: 'right', mono: true, render: v => fmt(v) },
             { key: 'orders', label: 'Orders', align: 'right', render: v => fmtN(v) },
             { key: 'aov', label: 'AOV', align: 'right', mono: true, render: v => `₹${Math.round(v).toLocaleString('en-IN')}` },
-          ]} rows={Object.keys(C.ch).map(ch => { const v = chMap[ch] || { rev: 0, orders: 0 }; return { ch, rev: v.rev, orders: v.orders, aov: v.orders ? v.rev / v.orders : 0 } })} />
+          ]} rows={Object.keys(C.ch).filter(ch => chMap[ch] && chMap[ch].rev > 0).map(ch => { const v = chMap[ch]; return { ch, rev: v.rev, orders: v.orders, aov: v.orders ? v.rev / v.orders : 0 } })} />
         </Card>
         <div style={{ flex: 1, background: C.card, border: `1px solid ${C.border}`, borderRadius: 13, padding: '16px 18px', display: 'flex', flexDirection: 'column' }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 11 }}>
@@ -1173,8 +1173,8 @@ function RegionTierDonutRow({ regionRows, tierRows }) {
 
 function AllTab({ data }) {
   const { totalRev, totalExcRev, gstCollected, nOrders, totalQty, blendedAOV, nDays, dailyArr, chMap, catMap, subCatMap, stateMap, cityRows = [], regionRows = [], tierRows = [], buckets, bucketRev, rows, orders, orderStatusRevMap = {}, orderStatusMap = {}, catChannelMap = {}, subCatChannelMap: serverSubCatChannelMap = {}, skuRows: allSkuRows = [], prevRev = 0, prevExcRev = 0, prevOrders = 0, prevQty = 0, prevDailyArr = [], prevChMap = {}, nCusts = 0, repeatCusts = 0, rtoRev = 0, cirRev = 0, cancellRev = 0, netRevenueCalc = 0, momRev = 0, yoyRev = 0, momPeriod = '', yoyPeriod = '' } = data
-  const channels = Object.keys(C.ch).filter(ch => chMap[ch])
-  const sortedCh = Object.entries(chMap).sort((a, b) => b[1].rev - a[1].rev)
+  const channels = Object.keys(C.ch).filter(ch => chMap[ch] && chMap[ch].rev > 0)
+  const sortedCh = Object.entries(chMap).filter(([, v]) => v.rev > 0).sort((a, b) => b[1].rev - a[1].rev)
   const maxChRev = sortedCh[0]?.[1].rev || 1
   const [selectedCat, setSelectedCat] = useState(null)
   const catRows = Object.entries(catMap).map(([k, v]) => ({ name: k, rev: v.rev, excRev: v.excRev, orders: v.orders.size, units: v.units, aov: v.orders.size ? v.rev / v.orders.size : 0 })).sort((a, b) => b.rev - a.rev)
