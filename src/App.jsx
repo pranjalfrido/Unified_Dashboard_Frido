@@ -2598,15 +2598,63 @@ function InstaTab({ data }) {
   const skuRows = ins.skus || []
   const catColors = ['#FF6B35','#0D9E68','#2E74CC','#CC4078','#9B59B6','#534AB7','#CC8A00','#E24B4A']
 
+  const insChgBadge = (cur, prev) => { if (!prev) return null; const p = (cur - prev) / prev * 100; return <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 4, background: p >= 0 ? C.green.bg : C.red.bg, color: p >= 0 ? C.green.tx : C.red.tx, flexShrink: 0 }}>{p >= 0 ? '▲' : '▼'} {Math.abs(p).toFixed(1)}%</span> }
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-      <div style={{ display: 'grid', gridTemplateColumns: '1.4fr 1fr 1fr 1fr 1fr 1fr', gap: 10 }}>
-        <HeroKPICard label="Gross Revenue (Inc GST)" value={fmt(rev)} sub={`${nDays} days`} chg={insRevChg} sparkData={insSparkData} color="#FF6B35" gradId="inGrossGrad" />
-        <KPICard label="Net Revenue (Exc GST)" value={fmt(excRev)} sub="Before tax" />
-        <KPICard label="Daily Avg Revenue" value={fmt(dailyAvg)} sub="Inc GST / day" />
-        <KPICard label="Units Sold" value={fmtN(units)} sub={`${skus} SKUs`} />
-        <KPICard label="ASP (Inc GST)" value={`₹${Math.round(asp).toLocaleString('en-IN')}`} sub="Avg selling price" />
-        <KPICard label="Cities" value={fmtN(cities)} sub="Cities with sales" />
+      <div style={{ display: 'grid', gridTemplateColumns: '1.5fr 5fr', gap: 10, alignItems: 'stretch' }}>
+        {/* Hero card */}
+        <div className="kpi-card" style={{ display: 'flex', flexDirection: 'column', gap: 8, padding: '16px 18px' }}>
+          <div className="kpi-label" style={{ fontSize: 11 }}>Gross Revenue · Inc. GST</div>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 6 }}>
+            <div className="kpi-value" style={{ fontSize: 32, fontWeight: 800 }}>{fmt(rev)}</div>
+            {insRevChg !== null && <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 7px', borderRadius: 4, background: insRevChg >= 0 ? C.green.bg : C.red.bg, color: insRevChg >= 0 ? C.green.tx : C.red.tx }}>{insRevChg >= 0 ? '▲' : '▼'} {Math.abs(insRevChg).toFixed(1)}%</span>}
+          </div>
+          <div className="kpi-sub" style={{ fontSize: 13 }}>{nDays} days · {fmtN(units)} units</div>
+          <div style={{ flex: 1, minHeight: 0 }}>
+            <ResponsiveContainer width="100%" height="100%">
+              <AreaChart data={insSparkData} margin={{ top: 4, right: 0, bottom: 0, left: 0 }}>
+                <defs><linearGradient id="inGrossGrad" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#FF6B35" stopOpacity={0.25} /><stop offset="95%" stopColor="#FF6B35" stopOpacity={0} /></linearGradient></defs>
+                <Area type="monotone" dataKey="cur" name="Current" stroke="#FF6B35" strokeWidth={2} fill="url(#inGrossGrad)" dot={false} connectNulls />
+                <Area type="monotone" dataKey="prev" name="Prev" stroke={C.t3} strokeWidth={1} fill="none" dot={false} strokeDasharray="3 2" connectNulls />
+                <Tooltip content={({ active, payload }) => active && payload?.length ? <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 6, padding: '4px 8px', fontSize: 10 }}>{payload.map(p => <div key={p.name} style={{ color: p.name === 'Current' ? C.t1 : C.t3 }}>{p.name}: {fmt(p.value)}</div>)}</div> : null} />
+              </AreaChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+        {/* Right: 2 rows of 3 KPIs */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10, flex: 1 }}>
+            {[
+              { label: 'Net Revenue (Exc GST)', value: fmt(excRev), sub: 'Before tax' },
+              { label: 'Daily Avg Revenue', value: fmt(dailyAvg), sub: 'Inc GST / day' },
+              { label: 'Units Sold', value: fmtN(units), sub: `${skus} SKUs` },
+            ].map(k => (
+              <div key={k.label} className="kpi-card" style={{ padding: '10px 13px' }}>
+                <div className="kpi-label">{k.label}</div>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 4 }}>
+                  <div className="kpi-value" style={{ fontSize: 17 }}>{k.value}</div>
+                </div>
+                {k.sub && <div className="kpi-sub">{k.sub}</div>}
+              </div>
+            ))}
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10, flex: 1 }}>
+            {[
+              { label: 'ASP (Inc GST)', value: `₹${Math.round(asp).toLocaleString('en-IN')}`, sub: 'Avg selling price' },
+              { label: 'Cities', value: fmtN(cities), sub: 'Cities with sales' },
+              { label: 'SKUs', value: fmtN(skus), sub: 'Active SKUs' },
+            ].map(k => (
+              <div key={k.label} className="kpi-card" style={{ padding: '10px 13px' }}>
+                <div className="kpi-label">{k.label}</div>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 4 }}>
+                  <div className="kpi-value" style={{ fontSize: 17 }}>{k.value}</div>
+                </div>
+                {k.sub && <div className="kpi-sub">{k.sub}</div>}
+              </div>
+            ))}
+          </div>
+        </div>
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: '3fr 2fr', gap: 14, alignItems: 'stretch' }}>
@@ -2702,15 +2750,64 @@ function ZeptoTab({ data }) {
   const skuRows = zp.skus || []
   const catColors = ['#8B5CF6','#0D9E68','#2E74CC','#CC4078','#FF6B35','#534AB7','#CC8A00','#E24B4A']
 
+  const zpChgBadge = (cur, prev) => { if (!prev) return null; const p = (cur - prev) / prev * 100; return <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 4, background: p >= 0 ? C.green.bg : C.red.bg, color: p >= 0 ? C.green.tx : C.red.tx, flexShrink: 0 }}>{p >= 0 ? '▲' : '▼'} {Math.abs(p).toFixed(1)}%</span> }
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-      <div style={{ display: 'grid', gridTemplateColumns: '1.4fr 1fr 1fr 1fr 1fr 1fr', gap: 10 }}>
-        <HeroKPICard label="Gross Revenue (Inc GST)" value={fmt(rev)} sub={`${nDays} days`} chg={zpRevChg} sparkData={zpSparkData} color="#8B5CF6" gradId="zpGrossGrad" />
-        <KPICard label="Net Revenue (Exc GST)" value={fmt(excRev)} sub="Before tax" />
-        <KPICard label="Daily Avg Revenue" value={fmt(dailyAvg)} sub="Inc GST / day" />
-        <KPICard label="Orders" value={fmtN(orders)} sub={`${fmtN(units)} units sold`} />
-        <KPICard label="ASP (Inc GST)" value={`₹${Math.round(asp).toLocaleString('en-IN')}`} sub="Avg selling price" />
-        <KPICard label="Cities" value={fmtN(cities)} sub="Cities with sales" />
+      <div style={{ display: 'grid', gridTemplateColumns: '1.5fr 5fr', gap: 10, alignItems: 'stretch' }}>
+        {/* Hero card */}
+        <div className="kpi-card" style={{ display: 'flex', flexDirection: 'column', gap: 8, padding: '16px 18px' }}>
+          <div className="kpi-label" style={{ fontSize: 11 }}>Gross Revenue · Inc. GST</div>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 6 }}>
+            <div className="kpi-value" style={{ fontSize: 32, fontWeight: 800 }}>{fmt(rev)}</div>
+            {zpRevChg !== null && <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 7px', borderRadius: 4, background: zpRevChg >= 0 ? C.green.bg : C.red.bg, color: zpRevChg >= 0 ? C.green.tx : C.red.tx }}>{zpRevChg >= 0 ? '▲' : '▼'} {Math.abs(zpRevChg).toFixed(1)}%</span>}
+          </div>
+          <div className="kpi-sub" style={{ fontSize: 13 }}>{nDays} days · {fmtN(orders)} orders · {fmtN(units)} units</div>
+          <div style={{ flex: 1, minHeight: 0 }}>
+            <ResponsiveContainer width="100%" height="100%">
+              <AreaChart data={zpSparkData} margin={{ top: 4, right: 0, bottom: 0, left: 0 }}>
+                <defs><linearGradient id="zpGrossGrad" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#8B5CF6" stopOpacity={0.25} /><stop offset="95%" stopColor="#8B5CF6" stopOpacity={0} /></linearGradient></defs>
+                <Area type="monotone" dataKey="cur" name="Current" stroke="#8B5CF6" strokeWidth={2} fill="url(#zpGrossGrad)" dot={false} connectNulls />
+                <Area type="monotone" dataKey="prev" name="Prev" stroke={C.t3} strokeWidth={1} fill="none" dot={false} strokeDasharray="3 2" connectNulls />
+                <Tooltip content={({ active, payload }) => active && payload?.length ? <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 6, padding: '4px 8px', fontSize: 10 }}>{payload.map(p => <div key={p.name} style={{ color: p.name === 'Current' ? C.t1 : C.t3 }}>{p.name}: {fmt(p.value)}</div>)}</div> : null} />
+              </AreaChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+        {/* Right: 2 rows of 3 KPIs */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10, flex: 1 }}>
+            {[
+              { label: 'Net Revenue (Exc GST)', value: fmt(excRev), sub: 'Before tax' },
+              { label: 'Daily Avg Revenue', value: fmt(dailyAvg), sub: 'Inc GST / day', badge: zpChgBadge(dailyAvg, zpPrevRev > 0 ? zpPrevRev / nDays : 0) },
+              { label: 'Orders', value: fmtN(orders), sub: `${fmtN(units)} units sold` },
+            ].map(k => (
+              <div key={k.label} className="kpi-card" style={{ padding: '10px 13px' }}>
+                <div className="kpi-label">{k.label}</div>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 4 }}>
+                  <div className="kpi-value" style={{ fontSize: 17 }}>{k.value}</div>
+                  {k.badge}
+                </div>
+                {k.sub && <div className="kpi-sub">{k.sub}</div>}
+              </div>
+            ))}
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10, flex: 1 }}>
+            {[
+              { label: 'ASP (Inc GST)', value: `₹${Math.round(asp).toLocaleString('en-IN')}`, sub: 'Avg selling price' },
+              { label: 'Cities', value: fmtN(cities), sub: 'Cities with sales' },
+              { label: 'SKUs', value: fmtN(skus), sub: 'Active SKUs' },
+            ].map(k => (
+              <div key={k.label} className="kpi-card" style={{ padding: '10px 13px' }}>
+                <div className="kpi-label">{k.label}</div>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 4 }}>
+                  <div className="kpi-value" style={{ fontSize: 17 }}>{k.value}</div>
+                </div>
+                {k.sub && <div className="kpi-sub">{k.sub}</div>}
+              </div>
+            ))}
+          </div>
+        </div>
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: '3fr 2fr', gap: 14, alignItems: 'stretch' }}>
@@ -2814,15 +2911,75 @@ function CredTab({ data }) {
   const skuRows = cr.skus || []
   const catColors = ['#E11D48','#0D9E68','#2E74CC','#CC4078','#FF6B35','#534AB7','#CC8A00','#8B5CF6']
 
+  const crChgBadge = (cur, prev) => { if (!prev) return null; const p = (cur - prev) / prev * 100; return <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 4, background: p >= 0 ? C.green.bg : C.red.bg, color: p >= 0 ? C.green.tx : C.red.tx, flexShrink: 0 }}>{p >= 0 ? '▲' : '▼'} {Math.abs(p).toFixed(1)}%</span> }
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-      <div style={{ display: 'grid', gridTemplateColumns: '1.4fr 1.2fr 1fr 1fr 1fr 1fr', gap: 10 }}>
-        <HeroKPICard label="Gross Revenue (Inc GST)" value={fmt(rev)} sub={`${nDays} days`} chg={crRevChg} sparkData={crSparkData} color="#E11D48" gradId="crGrossGrad" />
-        <HeroKPICard label="Net Revenue (Exc GST)" value={fmt(excRev)} sub="Before tax" chg={crExcChg} sparkData={crSparkData} color="#7AB4EE" gradId="crNetGrad" />
-        <KPICard label="Daily Avg Revenue" value={fmt(dailyAvg)} sub="Inc GST / day" />
-        <KPICard label="Orders" value={fmtN(orders)} sub={`${fmtN(units)} units · ${skus} SKUs`} />
-        <KPICard label="AOV" value={`₹${Math.round(aov).toLocaleString('en-IN')}`} sub="Avg order value" />
-        <KPICard label="Cities" value={fmtN(cities)} sub="Cities with orders" />
+      <div style={{ display: 'grid', gridTemplateColumns: '1.5fr 5fr', gap: 10, alignItems: 'stretch' }}>
+        {/* Hero card */}
+        <div className="kpi-card" style={{ display: 'flex', flexDirection: 'column', gap: 8, padding: '16px 18px' }}>
+          <div className="kpi-label" style={{ fontSize: 11 }}>Gross Revenue · Inc. GST</div>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 6 }}>
+            <div className="kpi-value" style={{ fontSize: 32, fontWeight: 800 }}>{fmt(rev)}</div>
+            {crRevChg !== null && <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 7px', borderRadius: 4, background: crRevChg >= 0 ? C.green.bg : C.red.bg, color: crRevChg >= 0 ? C.green.tx : C.red.tx }}>{crRevChg >= 0 ? '▲' : '▼'} {Math.abs(crRevChg).toFixed(1)}%</span>}
+          </div>
+          <div className="kpi-sub" style={{ fontSize: 13 }}>{nDays} days · {fmtN(orders)} orders · {fmtN(units)} units</div>
+          <div style={{ flex: 1, minHeight: 0 }}>
+            <ResponsiveContainer width="100%" height="100%">
+              <AreaChart data={crSparkData} margin={{ top: 4, right: 0, bottom: 0, left: 0 }}>
+                <defs><linearGradient id="crGrossGrad" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#E11D48" stopOpacity={0.25} /><stop offset="95%" stopColor="#E11D48" stopOpacity={0} /></linearGradient></defs>
+                <Area type="monotone" dataKey="cur" name="Current" stroke="#E11D48" strokeWidth={2} fill="url(#crGrossGrad)" dot={false} connectNulls />
+                <Area type="monotone" dataKey="prev" name="Prev" stroke={C.t3} strokeWidth={1} fill="none" dot={false} strokeDasharray="3 2" connectNulls />
+                <Tooltip content={({ active, payload }) => active && payload?.length ? <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 6, padding: '4px 8px', fontSize: 10 }}>{payload.map(p => <div key={p.name} style={{ color: p.name === 'Current' ? C.t1 : C.t3 }}>{p.name}: {fmt(p.value)}</div>)}</div> : null} />
+              </AreaChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+        {/* Right: 2 rows of 4 KPIs */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10, flex: 1 }}>
+            {(() => { return (
+              <div className="kpi-card" style={{ display: 'flex', flexDirection: 'column', gap: 4, padding: '10px 13px' }}>
+                <div className="kpi-label">Net (Exc GST)</div>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <div className="kpi-value" style={{ fontSize: 17 }}>{fmt(excRev)}</div>
+                  {crExcChg !== null && <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 4, background: crExcChg >= 0 ? C.green.bg : C.red.bg, color: crExcChg >= 0 ? C.green.tx : C.red.tx, flexShrink: 0 }}>{crExcChg >= 0 ? '▲' : '▼'} {Math.abs(crExcChg).toFixed(1)}%</span>}
+                </div>
+                <div className="kpi-sub">Before tax</div>
+              </div>
+            )})()}
+            {[
+              { label: 'Daily Avg Revenue', value: fmt(dailyAvg), sub: `over ${nDays} days`, badge: crChgBadge(dailyAvg, crPrevRev > 0 ? crPrevRev / nDays : 0) },
+              { label: 'Orders', value: fmtN(orders), sub: `${fmtN(units)} units · ${skus} SKUs`, badge: crChgBadge(orders, cr.prevOrders || 0) },
+              { label: 'AOV', value: `₹${Math.round(aov).toLocaleString('en-IN')}`, sub: 'Avg order value', badge: crChgBadge(aov, (cr.prevOrders || 0) > 0 ? crPrevRev / (cr.prevOrders || 1) : 0) },
+            ].map(k => (
+              <div key={k.label} className="kpi-card" style={{ padding: '10px 13px' }}>
+                <div className="kpi-label">{k.label}</div>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 4 }}>
+                  <div className="kpi-value" style={{ fontSize: 17 }}>{k.value}</div>
+                  {k.badge}
+                </div>
+                {k.sub && <div className="kpi-sub">{k.sub}</div>}
+              </div>
+            ))}
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10, flex: 1 }}>
+            {[
+              { label: 'Units Sold', value: fmtN(units), sub: `${skus} SKUs` },
+              { label: 'Cities', value: fmtN(cities), sub: 'Cities with orders' },
+              { label: 'GST Collected', value: fmt(rev - excRev), sub: `${rev > 0 ? ((rev - excRev) / rev * 100).toFixed(1) : 0}% of gross` },
+              { label: 'Net per Unit', value: units ? `₹${Math.round(excRev / units).toLocaleString('en-IN')}` : '—', sub: 'Exc. GST per unit' },
+            ].map(k => (
+              <div key={k.label} className="kpi-card" style={{ padding: '10px 13px' }}>
+                <div className="kpi-label">{k.label}</div>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 4 }}>
+                  <div className="kpi-value" style={{ fontSize: 17 }}>{k.value}</div>
+                </div>
+                {k.sub && <div className="kpi-sub">{k.sub}</div>}
+              </div>
+            ))}
+          </div>
+        </div>
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: '3fr 2fr', gap: 14, alignItems: 'stretch' }}>
@@ -2972,26 +3129,77 @@ function MyntraTab({ data }) {
 
   const toggleBtn = (active) => ({ fontSize: 11, fontWeight: 600, padding: '3px 10px', borderRadius: 5, border: `1.5px solid ${active ? C.t1 : C.border}`, background: active ? C.t1 : 'transparent', color: active ? '#fff' : C.t2, cursor: 'pointer', fontFamily: 'var(--font)' })
 
+  const mnChgBadge = (cur, prev) => { if (!prev) return null; const p = (cur - prev) / prev * 100; return <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 4, background: p >= 0 ? C.green.bg : C.red.bg, color: p >= 0 ? C.green.tx : C.red.tx, flexShrink: 0 }}>{p >= 0 ? '▲' : '▼'} {Math.abs(p).toFixed(1)}%</span> }
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
 
-      {/* KPI Row 1 — Hero */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1.4fr 1.2fr 1fr 1fr 1fr 1fr', gap: 10 }}>
-        <HeroKPICard label="Gross Revenue (Inc. GST)" value={fmt(rev)} sub={`${nDays} days`} chg={revChg} sparkData={sparkData} color="#E87858" gradId="mnGrossGrad" />
-        <HeroKPICard label="Net Revenue (Exc. GST)" value={fmt(excRev)} sub={`GST: ${fmt(rev - excRev)}`} chg={excChg} sparkData={sparkData} color="#9B56B6" gradId="mnNetGrad" />
-        <KPICard label="Orders" value={fmtN(nOrders)} sub={ordChg != null ? `${ordChg >= 0 ? '▲' : '▼'} ${Math.abs(ordChg).toFixed(1)}% vs prev` : '—'} accent={ordChg != null ? (ordChg >= 0 ? C.green.tx : C.red.tx) : undefined} />
-        <KPICard label="Daily Avg Revenue" value={fmt(excRev / nDays)} sub="Net per day" />
-        <KPICard label="AOV" value={`₹${Math.round(aov).toLocaleString('en-IN')}`} sub="Avg order value" />
-        <KPICard label="Units Sold" value={fmtN(qty)} sub={`ASP ₹${Math.round(asp).toLocaleString('en-IN')}`} />
-      </div>
-
-      {/* KPI Row 2 */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6,1fr)', gap: 10 }}>
-        <KPICard label="GST Collected" value={fmt(rev - excRev)} sub="Inc GST − Exc GST" />
-        <KPICard label="Unique SKUs" value={fmtN(totals.skus)} sub="Active SKUs" />
-        <KPICard label="Cities" value={fmtN(totals.cities)} sub="Cities covered" />
-        <KPICard label="Units per Order" value={nOrders ? (qty / nOrders).toFixed(2) : '0'} sub="Avg basket size" />
-        <KPICard label="Net per Unit" value={`₹${Math.round(asp).toLocaleString('en-IN')}`} sub="Exc. GST per unit" />
+      {/* KPI Hero + 2×4 grid */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1.5fr 5fr', gap: 10, alignItems: 'stretch' }}>
+        {/* Hero card */}
+        <div className="kpi-card" style={{ display: 'flex', flexDirection: 'column', gap: 8, padding: '16px 18px' }}>
+          <div className="kpi-label" style={{ fontSize: 11 }}>Gross Revenue · Inc. GST</div>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 6 }}>
+            <div className="kpi-value" style={{ fontSize: 32, fontWeight: 800 }}>{fmt(rev)}</div>
+            {revChg !== null && <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 7px', borderRadius: 4, background: revChg >= 0 ? C.green.bg : C.red.bg, color: revChg >= 0 ? C.green.tx : C.red.tx }}>{revChg >= 0 ? '▲' : '▼'} {Math.abs(revChg).toFixed(1)}%</span>}
+          </div>
+          <div className="kpi-sub" style={{ fontSize: 13 }}>{nDays} days · {fmtN(nOrders)} orders · {fmtN(qty)} units</div>
+          <div style={{ flex: 1, minHeight: 0 }}>
+            <ResponsiveContainer width="100%" height="100%">
+              <AreaChart data={sparkData} margin={{ top: 4, right: 0, bottom: 0, left: 0 }}>
+                <defs><linearGradient id="mnGrossGrad" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#E87858" stopOpacity={0.25} /><stop offset="95%" stopColor="#E87858" stopOpacity={0} /></linearGradient></defs>
+                <Area type="monotone" dataKey="cur" name="Current" stroke="#E87858" strokeWidth={2} fill="url(#mnGrossGrad)" dot={false} connectNulls />
+                <Area type="monotone" dataKey="prev" name="Prev" stroke={C.t3} strokeWidth={1} fill="none" dot={false} strokeDasharray="3 2" connectNulls />
+                <Tooltip content={({ active, payload }) => active && payload?.length ? <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 6, padding: '4px 8px', fontSize: 10 }}>{payload.map(p => <div key={p.name} style={{ color: p.name === 'Current' ? C.t1 : C.t3 }}>{p.name}: {fmt(p.value)}</div>)}</div> : null} />
+              </AreaChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+        {/* Right: 2 rows of 4 KPIs */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10, flex: 1 }}>
+            {(() => { return (
+              <div className="kpi-card" style={{ display: 'flex', flexDirection: 'column', gap: 4, padding: '10px 13px' }}>
+                <div className="kpi-label">Net (Exc. GST)</div>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <div className="kpi-value" style={{ fontSize: 17 }}>{fmt(excRev)}</div>
+                  {excChg !== null && <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 4, background: excChg >= 0 ? C.green.bg : C.red.bg, color: excChg >= 0 ? C.green.tx : C.red.tx, flexShrink: 0 }}>{excChg >= 0 ? '▲' : '▼'} {Math.abs(excChg).toFixed(1)}%</span>}
+                </div>
+                <div className="kpi-sub">GST: {fmt(rev - excRev)}</div>
+              </div>
+            )})()}
+            {[
+              { label: 'Orders', value: fmtN(nOrders), sub: ordChg != null ? `${ordChg >= 0 ? '▲' : '▼'} ${Math.abs(ordChg).toFixed(1)}% vs prev` : '—', badge: mnChgBadge(nOrders, prevOrders) },
+              { label: 'Daily Avg Revenue', value: fmt(excRev / nDays), sub: 'Net per day', badge: mnChgBadge(excRev / nDays, prevExcRev > 0 ? prevExcRev / nDays : 0) },
+              { label: 'AOV', value: `₹${Math.round(aov).toLocaleString('en-IN')}`, sub: 'Avg order value', badge: mnChgBadge(aov, prevOrders > 0 ? prevRev / prevOrders : 0) },
+            ].map(k => (
+              <div key={k.label} className="kpi-card" style={{ padding: '10px 13px' }}>
+                <div className="kpi-label">{k.label}</div>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 4 }}>
+                  <div className="kpi-value" style={{ fontSize: 17 }}>{k.value}</div>
+                  {k.badge}
+                </div>
+                {k.sub && <div className="kpi-sub">{k.sub}</div>}
+              </div>
+            ))}
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10, flex: 1 }}>
+            {[
+              { label: 'Units Sold', value: fmtN(qty), sub: `ASP ₹${Math.round(asp).toLocaleString('en-IN')}` },
+              { label: 'GST Collected', value: fmt(rev - excRev), sub: rev > 0 ? `${((rev - excRev) / rev * 100).toFixed(1)}% of gross` : '—' },
+              { label: 'Unique SKUs', value: fmtN(totals.skus), sub: 'Active SKUs' },
+              { label: 'Cities', value: fmtN(totals.cities), sub: 'Cities covered' },
+            ].map(k => (
+              <div key={k.label} className="kpi-card" style={{ padding: '10px 13px' }}>
+                <div className="kpi-label">{k.label}</div>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 4 }}>
+                  <div className="kpi-value" style={{ fontSize: 17 }}>{k.value}</div>
+                </div>
+                {k.sub && <div className="kpi-sub">{k.sub}</div>}
+              </div>
+            ))}
+          </div>
+        </div>
       </div>
 
       {/* Daily chart + Order Status */}
