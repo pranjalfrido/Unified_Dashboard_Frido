@@ -110,7 +110,7 @@ export default async function handler(req, res) {
     prevAmzSC: `WITH q AS (${prevBase}) SELECT SUM(SellingPrice_Inc_GST) AS rev FROM q WHERE SubChannel='Amazon Seller Central'`,
     prevAmzVC: `WITH q AS (${prevBase}) SELECT SUM(SellingPrice_Inc_GST) AS rev FROM q WHERE SubChannel='Amazon Vendor Central'`,
     prevAmzDaily: `WITH q AS (${prevBase}) SELECT CAST(OrderDate AS STRING) AS date, SUM(SellingPrice_Inc_GST) AS rev FROM q WHERE Channel='Amazon' GROUP BY date ORDER BY date`,
-    prevFk: `WITH q AS (${prevBase}) SELECT SUM(SellingPrice_Inc_GST) AS rev, SUM(SellingPrice_Exc_GST) AS exc_rev FROM q WHERE Channel='Flipkart'`,
+    prevFk: `WITH q AS (${prevBase}) SELECT SUM(SellingPrice_Inc_GST) AS rev, SUM(SellingPrice_Exc_GST) AS exc_rev, COUNT(DISTINCT OrderId) AS orders, SUM(ItemQty) AS units FROM q WHERE Channel='Flipkart'`,
     prevFkDaily: `WITH q AS (${prevBase}) SELECT CAST(OrderDate AS STRING) AS date, SUM(SellingPrice_Inc_GST) AS rev FROM q WHERE Channel='Flipkart' GROUP BY date ORDER BY date`,
     prevBl: `WITH q AS (${prevBase}) SELECT SUM(SellingPrice_Inc_GST) AS rev FROM q WHERE Channel='Blinkit'`,
     prevBlDaily: `WITH q AS (${prevBase}) SELECT CAST(OrderDate AS STRING) AS date, SUM(SellingPrice_Inc_GST) AS rev FROM q WHERE Channel='Blinkit' GROUP BY date ORDER BY date`,
@@ -387,6 +387,8 @@ export default async function handler(req, res) {
       flipkart: {
         prevRev: parseFloat(r.prevFk?.[0]?.rev) || 0,
         prevExcRev: parseFloat(r.prevFk?.[0]?.exc_rev) || 0,
+        prevOrders: parseInt(r.prevFk?.[0]?.orders) || 0,
+        prevUnits: parseInt(r.prevFk?.[0]?.units) || 0,
         prevDaily: (r.prevFkDaily || []).map(x => ({ date: x.date, rev: parseFloat(x.rev) || 0 })),
         totals: fkBlock.patchedTotals,
         estTotalRev: fkBlock.estTotalRev, estTotalOrders: fkBlock.estTotalOrders, estTotalUnits: fkBlock.estTotalUnits,

@@ -2190,6 +2190,7 @@ function FlipkartTab({ data }) {
   const fkPrevRev = fk.prevRev || data.prevRev || 0
   const fkPrevExcRev = fk.prevExcRev || data.prevExcRev || 0
   const fkPrevOrders = fk.prevOrders || 0
+  const fkPrevUnits = fk.prevUnits || 0
   const fkPrevDailyArr = fk.prevDaily || data.prevDailyArr || []
   const fkRevChg = fkPrevRev > 0 ? ((rev - fkPrevRev) / fkPrevRev * 100) : null
   const fkExcChg = fkPrevExcRev > 0 ? ((excRev - fkPrevExcRev) / fkPrevExcRev * 100) : null
@@ -2311,7 +2312,7 @@ function FlipkartTab({ data }) {
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10, flex: 1 }}>
             {[
-              { label: 'Total Units', value: fmtN(qty), sub: `ASP ₹${Math.round(asp).toLocaleString('en-IN')}` },
+              { label: 'Total Units', value: fmtN(qty), sub: `ASP ₹${Math.round(asp).toLocaleString('en-IN')}`, badge: fkChgBadge(qty, fkPrevUnits) },
               { label: 'GST Collected', value: fmt(rev - excRev), sub: 'Inc GST − Exc GST' },
               { label: 'FBF Share', value: `${allRev ? (fbfT.rev / allRev * 100).toFixed(1) : 0}%`, sub: `${fmt(fbfT.rev)} · ${fmtN(fbfT.orders)} orders` },
               { label: 'Non-FBF Share', value: `${allRev ? (nfbfT.rev / allRev * 100).toFixed(1) : 0}%`, sub: `${fmt(nfbfT.rev)} · ${fmtN(nfbfT.orders)} orders` },
