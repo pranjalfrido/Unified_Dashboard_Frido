@@ -132,7 +132,7 @@ SELECT u.Country, u.OrderId, u.Channel, u.SubChannel, u.ChannelAccount, u.OrderD
   END AS Tax,
   u.fulfillment_channel, u.RefundStatus, u.PaymentMode, u.CustomerId, u.voucher_code,
   COALESCE(im.Category, 'Frido') AS Category, COALESCE(im.SubCategory, 'Frido') AS SubCategory, COALESCE(im.GST_Tax_Type_Code, 'Not Found') AS GST_Tax_Type_Code,
-  COALESCE(sm.masterskucode, TRIM(u.ProductId)) AS MasterSKU,
+  sm.masterskucode AS MasterSKU,
   CASE WHEN u.Channel='Shopify' THEN COALESCE(cr.is_cir_return, 0) ELSE NULL END AS is_CIR_return,
   CASE WHEN u.Channel='Shopify' THEN COALESCE(cr.is_exchange, 0) ELSE NULL END AS is_exchange,
   CASE WHEN u.Channel='Shopify' THEN COALESCE(rto.is_rto, 0) ELSE NULL END AS is_rto,
