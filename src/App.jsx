@@ -1353,8 +1353,7 @@ function AllTab({ data }) {
       )}
       <div className="g-2" style={{ alignItems: 'stretch' }}>
         {(() => {
-          const CAT_COLORS = ['#534AB7','#0D9E68','#2E74CC','#CC8A00','#CC4078','#E24B4A','#9B59B6','#FF6B35','#00B4D8','#06D6A0','#F77F00','#6A4C93','#1982C4','#8AC926']
-          const colorOf = name => CAT_COLORS[catRows.findIndex(r => r.name === name) % CAT_COLORS.length]
+          const colorOf = () => '#FFD600'
           const btnStyle = v => ({ fontSize: 11, fontWeight: 600, padding: '3px 10px', borderRadius: 5, border: `1.5px solid ${catView === v ? C.t1 : C.border}`, background: catView === v ? C.t1 : 'transparent', color: catView === v ? '#fff' : C.t2, cursor: 'pointer', fontFamily: 'var(--font)' })
           const FIXED_H = 420
           return (
@@ -1388,8 +1387,7 @@ function AllTab({ data }) {
           )
         })()}
         {(() => {
-          const SC_COLORS = ['#0D9E68','#2E74CC','#CC8A00','#CC4078','#534AB7','#E24B4A','#9B59B6','#FF6B35','#00B4D8','#06D6A0','#F77F00','#6A4C93','#1982C4','#8AC926']
-          const scColorOf = (_, i) => SC_COLORS[i % SC_COLORS.length]
+          const scColorOf = () => '#FFD600'
           const btnStyle = v => ({ fontSize: 11, fontWeight: 600, padding: '3px 10px', borderRadius: 5, border: `1.5px solid ${subCatView === v ? C.t1 : C.border}`, background: subCatView === v ? C.t1 : 'transparent', color: subCatView === v ? '#fff' : C.t2, cursor: 'pointer', fontFamily: 'var(--font)' })
           const FIXED_H = 420
           return (
