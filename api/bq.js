@@ -279,6 +279,58 @@ export default async function handler(req, res) {
     const cirRev = parseFloat(r.byCIR?.[0]?.cir_rev) || 0
     const netRevenueCalc = totalRev - (totalRev - totalExcRev) - rtoRev - cirRev - cancellRev
 
+    // Build flipkart block early so we can patch overall totals with estimated days
+    const fkBlock = (() => {
+        const fkRealDaily = (r.fkDaily || []).map(x => ({ date: x.date, sub: x.sub, orders: parseInt(x.orders)||0, units: parseInt(x.units)||0, rev: parseFloat(x.rev)||0, estimated: false }))
+        const fkDates = [...new Set(fkRealDaily.map(x => x.date))].sort()
+        const latestFkDate = fkDates[fkDates.length - 1]
+        const estimatedDaily = []
+        if (latestFkDate && latestFkDate < end) {
+          const dayTotals = {}
+          fkRealDaily.forEach(x => {
+            if (!dayTotals[x.date]) dayTotals[x.date] = { rev: 0, orders: 0, units: 0 }
+            dayTotals[x.date].rev += x.rev; dayTotals[x.date].orders += x.orders; dayTotals[x.date].units += x.units
+          })
+          const last7 = fkDates.slice(-7).map(d => dayTotals[d] || { rev: 0, orders: 0, units: 0 })
+          const avgRev = Math.round(last7.reduce((s, d) => s + d.rev, 0) / last7.length)
+          const avgOrders = Math.round(last7.reduce((s, d) => s + d.orders, 0) / last7.length)
+          const avgUnits = Math.round(last7.reduce((s, d) => s + d.units, 0) / last7.length)
+          const cur = new Date(latestFkDate), end_ = new Date(end)
+          cur.setDate(cur.getDate() + 1)
+          while (cur <= end_) {
+            const d = cur.toISOString().slice(0, 10)
+            estimatedDaily.push({ date: d, sub: 'NON-FBF', rev: avgRev, orders: avgOrders, units: avgUnits, estimated: true })
+            cur.setDate(cur.getDate() + 1)
+          }
+        }
+        const estTotalRev = estimatedDaily.reduce((s, d) => s + d.rev, 0)
+        const estTotalOrders = estimatedDaily.reduce((s, d) => s + d.orders, 0)
+        const estTotalUnits = estimatedDaily.reduce((s, d) => s + d.units, 0)
+        const realTotals = (r.fkTotals || []).map(x => ({ sub: x.sub, orders: parseInt(x.orders)||0, rev: parseFloat(x.rev)||0, excRev: parseFloat(x.exc_rev)||0, units: parseInt(x.units)||0 }))
+        const patchedTotals = realTotals.map(t => t.sub === 'NON-FBF' ? { ...t, rev: t.rev + estTotalRev, orders: t.orders + estTotalOrders, units: t.units + estTotalUnits, excRev: t.excRev + estTotalRev } : t)
+        if (!patchedTotals.find(t => t.sub === 'NON-FBF') && estTotalRev > 0) patchedTotals.push({ sub: 'NON-FBF', rev: estTotalRev, orders: estTotalOrders, units: estTotalUnits, excRev: estTotalRev })
+        return { estTotalRev, estTotalOrders, estTotalUnits, latestFkDate, estimatedDays: estimatedDaily.length, daily: [...fkRealDaily, ...estimatedDaily], patchedTotals }
+    })()
+
+    // Patch overall totals with Flipkart estimated days
+    const adjTotalRev = totalRev + fkBlock.estTotalRev
+    const adjTotalExcRev = totalExcRev + fkBlock.estTotalRev
+    const adjNOrders = nOrders + fkBlock.estTotalOrders
+    const adjTotalQty = totalQty + fkBlock.estTotalUnits
+    if (chMap['Flipkart']) {
+      chMap['Flipkart'].rev += fkBlock.estTotalRev
+      chMap['Flipkart'].excRev += fkBlock.estTotalRev
+      chMap['Flipkart'].orders += fkBlock.estTotalOrders
+      chMap['Flipkart'].qty += fkBlock.estTotalUnits
+    }
+    // Patch dailyArr for all-channels chart
+    fkBlock.daily.filter(x => x.estimated).forEach(x => {
+      const entry = dailyArr.find(d => d.date === x.date)
+      if (entry) { entry['Flipkart'] = (entry['Flipkart'] || 0) + x.rev; entry['Flipkart_o'] = (entry['Flipkart_o'] || 0) + x.orders; entry['Flipkart_u'] = (entry['Flipkart_u'] || 0) + x.units }
+      else dailyArr.push({ date: x.date, Flipkart: x.rev, Flipkart_o: x.orders, Flipkart_u: x.units })
+    })
+    dailyArr.sort((a, b) => a.date?.localeCompare(b.date))
+
     const payload = {
       source: 'postgres-aggregated',
       prevRev: parseFloat(r.prevTotals?.[0]?.total_rev) || 0,
@@ -287,9 +339,9 @@ export default async function handler(req, res) {
       prevQty: parseInt(r.prevTotals?.[0]?.total_qty) || 0,
       prevDailyArr: (r.prevByDate || []).map(x => ({ date: x.date, rev: parseFloat(x.rev) || 0 })),
       prevChMap: Object.fromEntries((r.prevByChannel || []).map(x => [x.Channel, parseFloat(x.rev) || 0])),
-      totalRev, totalExcRev, totalQty, nOrders, nDays,
-      blendedAOV: nOrders ? totalRev / nOrders : 0,
-      gstCollected: totalRev - totalExcRev,
+      totalRev: adjTotalRev, totalExcRev: adjTotalExcRev, totalQty: adjTotalQty, nOrders: adjNOrders, nDays,
+      blendedAOV: adjNOrders ? adjTotalRev / adjNOrders : 0,
+      gstCollected: adjTotalRev - adjTotalExcRev,
       rtoRev, cancellRev, cirRev, netRevenueCalc,
       momRev, yoyRev, momOrders, yoyOrders,
       momPeriod: `${moms} → ${mome}`, yoyPeriod: `${yoys} → ${yoye}`,
@@ -332,55 +384,20 @@ export default async function handler(req, res) {
         skus: (r.amzIntlSKUs || []).map(x => ({ sku: x.sku, country: x.Country, orders: parseInt(x.orders)||0, units: parseInt(x.units)||0, rev: parseFloat(x.rev)||0 })),
         daily: (r.amzIntlDaily || []).map(x => ({ date: x.date, country: x.Country, orders: parseInt(x.orders)||0, rev: parseFloat(x.rev)||0 })),
       },
-      flipkart: (() => {
-        const fkRealDaily = (r.fkDaily || []).map(x => ({ date: x.date, sub: x.sub, orders: parseInt(x.orders)||0, units: parseInt(x.units)||0, rev: parseFloat(x.rev)||0, estimated: false }))
-
-        // Fill missing days up to end date with rolling 7-day avg
-        const fkDates = [...new Set(fkRealDaily.map(x => x.date))].sort()
-        const latestFkDate = fkDates[fkDates.length - 1]
-        const endDate = end
-
-        const estimatedDaily = []
-        if (latestFkDate && latestFkDate < endDate) {
-          // Compute per-day totals from real data (across FBF+NON-FBF)
-          const dayTotals = {}
-          fkRealDaily.forEach(x => {
-            if (!dayTotals[x.date]) dayTotals[x.date] = { rev: 0, orders: 0, units: 0 }
-            dayTotals[x.date].rev += x.rev
-            dayTotals[x.date].orders += x.orders
-            dayTotals[x.date].units += x.units
-          })
-          // Last 7 real days for rolling avg
-          const last7 = fkDates.slice(-7).map(d => dayTotals[d] || { rev: 0, orders: 0, units: 0 })
-          const avgRev = Math.round(last7.reduce((s, d) => s + d.rev, 0) / last7.length)
-          const avgOrders = Math.round(last7.reduce((s, d) => s + d.orders, 0) / last7.length)
-          const avgUnits = Math.round(last7.reduce((s, d) => s + d.units, 0) / last7.length)
-
-          // Walk from day after latest to end date
-          const cur = new Date(latestFkDate)
-          const end_ = new Date(endDate)
-          cur.setDate(cur.getDate() + 1)
-          while (cur <= end_) {
-            const d = cur.toISOString().slice(0, 10)
-            estimatedDaily.push({ date: d, sub: 'NON-FBF', rev: avgRev, orders: avgOrders, units: avgUnits, estimated: true })
-            cur.setDate(cur.getDate() + 1)
-          }
-        }
-
-        return {
-          prevRev: parseFloat(r.prevFk?.[0]?.rev) || 0,
-          prevExcRev: parseFloat(r.prevFk?.[0]?.exc_rev) || 0,
-          prevDaily: (r.prevFkDaily || []).map(x => ({ date: x.date, rev: parseFloat(x.rev) || 0 })),
-          totals: (r.fkTotals || []).map(x => ({ sub: x.sub, orders: parseInt(x.orders)||0, rev: parseFloat(x.rev)||0, excRev: parseFloat(x.exc_rev)||0, units: parseInt(x.units)||0 })),
-          daily: [...fkRealDaily, ...estimatedDaily],
-          latestRealDate: latestFkDate || null,
-          estimatedDays: estimatedDaily.length,
-          status: (r.fkStatus || []).map(x => ({ status: x.status, sub: x.sub, orders: parseInt(x.orders)||0 })),
-          skus: (r.fkSKUs || []).map(x => ({ sku: x.sku, sub: x.sub, orders: parseInt(x.orders)||0, units: parseInt(x.units)||0, rev: parseFloat(x.rev)||0 })),
-          categories: (r.fkCategories || []).map(x => ({ category: x.category, sub: x.sub, orders: parseInt(x.orders)||0, rev: parseFloat(x.rev)||0, units: parseInt(x.units)||0 })),
-          states: (r.fkStates || []).map(x => ({ state: x.state, sub: x.sub, orders: parseInt(x.orders)||0, rev: parseFloat(x.rev)||0 })),
-        }
-      })(),
+      flipkart: {
+        prevRev: parseFloat(r.prevFk?.[0]?.rev) || 0,
+        prevExcRev: parseFloat(r.prevFk?.[0]?.exc_rev) || 0,
+        prevDaily: (r.prevFkDaily || []).map(x => ({ date: x.date, rev: parseFloat(x.rev) || 0 })),
+        totals: fkBlock.patchedTotals,
+        estTotalRev: fkBlock.estTotalRev, estTotalOrders: fkBlock.estTotalOrders, estTotalUnits: fkBlock.estTotalUnits,
+        daily: fkBlock.daily,
+        latestRealDate: fkBlock.latestFkDate || null,
+        estimatedDays: fkBlock.estimatedDays,
+        status: (r.fkStatus || []).map(x => ({ status: x.status, sub: x.sub, orders: parseInt(x.orders)||0 })),
+        skus: (r.fkSKUs || []).map(x => ({ sku: x.sku, sub: x.sub, orders: parseInt(x.orders)||0, units: parseInt(x.units)||0, rev: parseFloat(x.rev)||0 })),
+        categories: (r.fkCategories || []).map(x => ({ category: x.category, sub: x.sub, orders: parseInt(x.orders)||0, rev: parseFloat(x.rev)||0, units: parseInt(x.units)||0 })),
+        states: (r.fkStates || []).map(x => ({ state: x.state, sub: x.sub, orders: parseInt(x.orders)||0, rev: parseFloat(x.rev)||0 })),
+      },
       cred: {
         prevRev: parseFloat(r.prevCr?.[0]?.rev) || 0,
         prevExcRev: parseFloat(r.prevCr?.[0]?.exc_rev) || 0,
