@@ -2902,6 +2902,10 @@ function CredTab({ data }) {
 
   const crPrevRev = cr.prevRev || 0
   const crPrevExcRev = cr.prevExcRev || 0
+  const crPrevOrders = cr.prevOrders || 0
+  const crPrevUnits = cr.prevUnits || 0
+  const crPrevSkus = cr.prevSkus || 0
+  const crPrevCities = cr.prevCities || 0
   const crPrevDailyArr = cr.prevDaily || []
   const crRevChg = crPrevRev > 0 ? ((rev - crPrevRev) / crPrevRev * 100) : null
   const crExcChg = crPrevExcRev > 0 ? ((excRev - crPrevExcRev) / crPrevExcRev * 100) : null
@@ -2961,25 +2965,22 @@ function CredTab({ data }) {
             )})()}
             {[
               { label: 'Daily Avg Revenue', value: fmt(dailyAvg), sub: `over ${nDays} days`, badge: crChgBadge(dailyAvg, crPrevRev > 0 ? crPrevRev / nDays : 0) },
-              { label: 'Orders', value: fmtN(orders), sub: `${fmtN(units)} units · ${skus} SKUs`, badge: crChgBadge(orders, cr.prevOrders || 0) },
-              { label: 'AOV', value: `₹${Math.round(aov).toLocaleString('en-IN')}`, sub: 'Avg order value', badge: crChgBadge(aov, (cr.prevOrders || 0) > 0 ? crPrevRev / (cr.prevOrders || 1) : 0) },
+              { label: 'Orders', value: fmtN(orders), sub: `${fmtN(units)} units · ${skus} SKUs`, badge: crChgBadge(orders, crPrevOrders) },
+              { label: 'AOV', value: `₹${Math.round(aov).toLocaleString('en-IN')}`, sub: 'Avg order value', badge: crChgBadge(aov, crPrevOrders > 0 ? crPrevRev / crPrevOrders : 0) },
             ].map(k => (
               <div key={k.label} className="kpi-card" style={{ padding: '10px 13px' }}>
                 <div className="kpi-label">{k.label}</div>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 4 }}>
-                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 4 }}><div className="kpi-value" style={{ fontSize: 17 }}>{k.value}</div>{k.badge}</div>
-                  {k.badge}
-                </div>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 4 }}><div className="kpi-value" style={{ fontSize: 17 }}>{k.value}</div>{k.badge}</div>
                 {k.sub && <div className="kpi-sub">{k.sub}</div>}
               </div>
             ))}
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10, flex: 1 }}>
             {[
-              { label: 'Units Sold', value: fmtN(units), sub: `${skus} SKUs` },
-              { label: 'Cities', value: fmtN(cities), sub: 'Cities with orders' },
-              { label: 'GST Collected', value: fmt(rev - excRev), sub: `${rev > 0 ? ((rev - excRev) / rev * 100).toFixed(1) : 0}% of gross` },
-              { label: 'Net per Unit', value: units ? `₹${Math.round(excRev / units).toLocaleString('en-IN')}` : '—', sub: 'Exc. GST per unit' },
+              { label: 'Units Sold', value: fmtN(units), sub: `${skus} SKUs`, badge: crChgBadge(units, crPrevUnits) },
+              { label: 'Cities', value: fmtN(cities), sub: 'Cities with orders', badge: crChgBadge(cities, crPrevCities) },
+              { label: 'GST Collected', value: fmt(rev - excRev), sub: `${rev > 0 ? ((rev - excRev) / rev * 100).toFixed(1) : 0}% of gross`, badge: crChgBadge(rev - excRev, crPrevRev - crPrevExcRev) },
+              { label: 'Net per Unit', value: units ? `₹${Math.round(excRev / units).toLocaleString('en-IN')}` : '—', sub: 'Exc. GST per unit', badge: crChgBadge(units > 0 ? excRev / units : 0, crPrevUnits > 0 ? crPrevExcRev / crPrevUnits : 0) },
             ].map(k => (
               <div key={k.label} className="kpi-card" style={{ padding: '10px 13px' }}>
                 <div className="kpi-label">{k.label}</div>
