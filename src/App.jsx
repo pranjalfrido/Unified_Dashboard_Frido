@@ -1180,8 +1180,8 @@ function AllTab({ data }) {
   const [selectedCat, setSelectedCat] = useState(null)
   const [catView, setCatView] = useState('table')
   const [subCatView, setSubCatView] = useState('table')
-  const catRows = Object.entries(catMap).map(([k, v]) => ({ name: k, rev: v.rev, excRev: v.excRev, orders: v.orders.size, units: v.units, aov: v.orders.size ? v.rev / v.orders.size : 0 })).sort((a, b) => b.rev - a.rev)
-  const allSubCatRows = Object.entries(subCatMap).map(([k, v]) => ({ name: k.split('::')[1] || k, category: k.split('::')[0] || '', rev: v.rev, orders: v.orders.size, aov: v.orders.size ? v.rev / v.orders.size : 0 })).sort((a, b) => b.rev - a.rev)
+  const catRows = Object.entries(catMap).map(([k, v]) => ({ name: k, rev: v.rev, units: v.units || 0, asp: (v.units || 0) ? v.rev / v.units : 0 })).sort((a, b) => b.rev - a.rev)
+  const allSubCatRows = Object.entries(subCatMap).map(([k, v]) => ({ name: k.split('::')[1] || k, category: k.split('::')[0] || '', rev: v.rev, units: v.units || 0, asp: (v.units || 0) ? v.rev / v.units : 0 })).sort((a, b) => b.rev - a.rev)
   const subCatRows = selectedCat ? allSubCatRows.filter(r => r.category === selectedCat) : allSubCatRows
   const stateRows = Object.entries(stateMap).map(([k, v]) => ({ state: k, rev: v.rev, orders: v.orders, aov: v.orders ? v.rev / v.orders : 0, cities: v.cities.size })).sort((a, b) => b.rev - a.rev)
   const bucketData = Object.entries(buckets).map(([k, v]) => ({ name: k, orders: v, rev: bucketRev[k] }))
@@ -1362,14 +1362,17 @@ function AllTab({ data }) {
                 <button style={btnStyle('table')} onClick={() => setCatView('table')}>Table</button>
                 <button style={btnStyle('bar')} onClick={() => setCatView('bar')}>Bar</button>
               </div>}>
-              {catView === 'table' && (
-                <div style={{ overflowY: 'auto', maxHeight: FIXED_H }}>
-                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
-                    <thead style={{ position: 'sticky', top: 0, background: C.card, zIndex: 1 }}><tr>{[{ label: 'Category' }, { label: 'Revenue', align: 'right' }, { label: 'Exc GST', align: 'right' }, { label: 'Orders', align: 'right' }, { label: 'AOV', align: 'right' }].map(c => <th key={c.label} style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.05em', color: C.t3, textAlign: c.align || 'left', padding: '3px 5px 7px', borderBottom: `1px solid ${C.border}` }}>{c.label}</th>)}</tr></thead>
-                    <tbody>{catRows.map((r, i) => { const isSelected = selectedCat === r.name; return <tr key={r.name} onClick={() => setSelectedCat(isSelected ? null : r.name)} style={{ borderBottom: i < catRows.length - 1 ? `1px solid ${C.border}` : 'none', background: isSelected ? C.acl : '', cursor: 'pointer' }} onMouseEnter={e => { if (!isSelected) e.currentTarget.style.background = '#FFFBE6' }} onMouseLeave={e => { e.currentTarget.style.background = isSelected ? C.acl : '' }}><td style={{ padding: '5.5px 5px', color: C.t2 }}><span style={{ display: 'inline-block', width: 8, height: 8, borderRadius: 2, background: colorOf(r.name), marginRight: 6 }} />{isSelected ? <strong>{r.name}</strong> : r.name}</td><td style={{ padding: '5.5px 5px', textAlign: 'right', fontFamily: 'var(--mono)', fontSize: 11.5, color: C.t1 }}>{fmt(r.rev)}</td><td style={{ padding: '5.5px 5px', textAlign: 'right', color: C.t2 }}>{fmt(r.excRev)}</td><td style={{ padding: '5.5px 5px', textAlign: 'right', color: C.t2 }}>{fmtN(r.orders)}</td><td style={{ padding: '5.5px 5px', textAlign: 'right', color: C.t2 }}>₹{Math.round(r.aov).toLocaleString('en-IN')}</td></tr> })}</tbody>
-                  </table>
-                </div>
-              )}
+              {catView === 'table' && (() => {
+                const totalCatRev = catRows.reduce((s, r) => s + r.rev, 0)
+                return (
+                  <div style={{ overflowY: 'auto', maxHeight: FIXED_H }}>
+                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+                      <thead style={{ position: 'sticky', top: 0, background: C.card, zIndex: 1 }}><tr>{[{ label: 'Category' }, { label: 'Revenue', align: 'right' }, { label: 'Share', align: 'right' }, { label: 'Units Sold', align: 'right' }, { label: 'ASP', align: 'right' }].map(c => <th key={c.label} style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.05em', color: C.t3, textAlign: c.align || 'left', padding: '3px 5px 7px', borderBottom: `1px solid ${C.border}` }}>{c.label}</th>)}</tr></thead>
+                      <tbody>{catRows.map((r, i) => { const isSelected = selectedCat === r.name; return <tr key={r.name} onClick={() => setSelectedCat(isSelected ? null : r.name)} style={{ borderBottom: i < catRows.length - 1 ? `1px solid ${C.border}` : 'none', background: isSelected ? C.acl : '', cursor: 'pointer' }} onMouseEnter={e => { if (!isSelected) e.currentTarget.style.background = '#FFFBE6' }} onMouseLeave={e => { e.currentTarget.style.background = isSelected ? C.acl : '' }}><td style={{ padding: '5.5px 5px', color: C.t2 }}><span style={{ display: 'inline-block', width: 8, height: 8, borderRadius: 2, background: colorOf(r.name), marginRight: 6 }} />{isSelected ? <strong>{r.name}</strong> : r.name}</td><td style={{ padding: '5.5px 5px', textAlign: 'right', fontFamily: 'var(--mono)', fontSize: 11.5, color: C.t1 }}>{fmt(r.rev)}</td><td style={{ padding: '5.5px 5px', textAlign: 'right', color: C.t3, fontSize: 11 }}>{totalCatRev ? (r.rev / totalCatRev * 100).toFixed(1) + '%' : '—'}</td><td style={{ padding: '5.5px 5px', textAlign: 'right', color: C.t2 }}>{fmtN(r.units)}</td><td style={{ padding: '5.5px 5px', textAlign: 'right', color: C.t2 }}>₹{Math.round(r.asp).toLocaleString('en-IN')}</td></tr> })}</tbody>
+                    </table>
+                  </div>
+                )
+              })()}
               {catView === 'bar' && (
                 <ResponsiveContainer width="100%" height={FIXED_H}>
                   <BarChart data={catRows} layout="vertical" margin={{ top: 0, right: 60, bottom: 0, left: 100 }}>
@@ -1396,14 +1399,17 @@ function AllTab({ data }) {
                 <button style={btnStyle('table')} onClick={() => setSubCatView('table')}>Table</button>
                 <button style={btnStyle('bar')} onClick={() => setSubCatView('bar')}>Bar</button>
               </div>}>
-              {subCatView === 'table' && (
-                <div style={{ overflowY: 'auto', maxHeight: FIXED_H }}>
-                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
-                    <thead style={{ position: 'sticky', top: 0, background: C.card, zIndex: 1 }}><tr>{[{ label: 'Sub-category' }, { label: 'Revenue', align: 'right' }, { label: 'Orders', align: 'right' }, { label: 'AOV', align: 'right' }].map(c => <th key={c.label} style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.05em', color: C.t3, textAlign: c.align || 'left', padding: '3px 5px 7px', borderBottom: `1px solid ${C.border}` }}>{c.label}</th>)}</tr></thead>
-                    <tbody>{subCatRows.map((r, i) => <tr key={r.name} style={{ borderBottom: i < subCatRows.length - 1 ? `1px solid ${C.border}` : 'none' }} onMouseEnter={e => e.currentTarget.style.background = '#FFFBE6'} onMouseLeave={e => e.currentTarget.style.background = ''}><td style={{ padding: '5.5px 5px', color: C.t2 }}><span style={{ display: 'inline-block', width: 8, height: 8, borderRadius: 2, background: scColorOf(r.name, i), marginRight: 6 }} />{r.name}</td><td style={{ padding: '5.5px 5px', textAlign: 'right', fontFamily: 'var(--mono)', fontSize: 11.5, color: C.t1 }}>{fmt(r.rev)}</td><td style={{ padding: '5.5px 5px', textAlign: 'right', color: C.t2 }}>{fmtN(r.orders)}</td><td style={{ padding: '5.5px 5px', textAlign: 'right', color: C.t2 }}>₹{Math.round(r.aov).toLocaleString('en-IN')}</td></tr>)}</tbody>
-                  </table>
-                </div>
-              )}
+              {subCatView === 'table' && (() => {
+                const totalSubRev = subCatRows.reduce((s, r) => s + r.rev, 0)
+                return (
+                  <div style={{ overflowY: 'auto', maxHeight: FIXED_H }}>
+                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+                      <thead style={{ position: 'sticky', top: 0, background: C.card, zIndex: 1 }}><tr>{[{ label: 'Sub-category' }, { label: 'Revenue', align: 'right' }, { label: 'Share', align: 'right' }, { label: 'Units Sold', align: 'right' }, { label: 'ASP', align: 'right' }].map(c => <th key={c.label} style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.05em', color: C.t3, textAlign: c.align || 'left', padding: '3px 5px 7px', borderBottom: `1px solid ${C.border}` }}>{c.label}</th>)}</tr></thead>
+                      <tbody>{subCatRows.map((r, i) => <tr key={r.name} style={{ borderBottom: i < subCatRows.length - 1 ? `1px solid ${C.border}` : 'none' }} onMouseEnter={e => e.currentTarget.style.background = '#FFFBE6'} onMouseLeave={e => e.currentTarget.style.background = ''}><td style={{ padding: '5.5px 5px', color: C.t2 }}><span style={{ display: 'inline-block', width: 8, height: 8, borderRadius: 2, background: scColorOf(r.name, i), marginRight: 6 }} />{r.name}</td><td style={{ padding: '5.5px 5px', textAlign: 'right', fontFamily: 'var(--mono)', fontSize: 11.5, color: C.t1 }}>{fmt(r.rev)}</td><td style={{ padding: '5.5px 5px', textAlign: 'right', color: C.t3, fontSize: 11 }}>{totalSubRev ? (r.rev / totalSubRev * 100).toFixed(1) + '%' : '—'}</td><td style={{ padding: '5.5px 5px', textAlign: 'right', color: C.t2 }}>{fmtN(r.units)}</td><td style={{ padding: '5.5px 5px', textAlign: 'right', color: C.t2 }}>₹{Math.round(r.asp).toLocaleString('en-IN')}</td></tr>)}</tbody>
+                    </table>
+                  </div>
+                )
+              })()}
               {subCatView === 'bar' && (
                 <div style={{ overflowY: 'auto', maxHeight: FIXED_H }}>
                   <ResponsiveContainer width="100%" height={Math.max(FIXED_H, subCatRows.length * 26)}>
@@ -1531,8 +1537,8 @@ function ShopifyTab({ data, filters, setFilters }) {
   const indiaSubChKeys = Object.keys(indiaSubChMap)
 
   const [selectedCat, setSelectedCat] = useState(null)
-  const catRows = Object.entries(catMap).map(([k, v]) => ({ name: k, rev: v.rev, excRev: v.excRev, orders: v.orders.size, units: v.units, aov: v.orders.size ? v.rev / v.orders.size : 0 })).sort((a, b) => b.rev - a.rev)
-  const allSubCatRows = Object.entries(subCatMap).map(([k, v]) => ({ name: k.split('::')[1] || k, category: k.split('::')[0] || '', rev: v.rev, orders: v.orders.size, aov: v.orders.size ? v.rev / v.orders.size : 0 })).sort((a, b) => b.rev - a.rev)
+  const catRows = Object.entries(catMap).map(([k, v]) => ({ name: k, rev: v.rev, units: v.units || 0, asp: (v.units || 0) ? v.rev / v.units : 0 })).sort((a, b) => b.rev - a.rev)
+  const allSubCatRows = Object.entries(subCatMap).map(([k, v]) => ({ name: k.split('::')[1] || k, category: k.split('::')[0] || '', rev: v.rev, units: v.units || 0, asp: (v.units || 0) ? v.rev / v.units : 0 })).sort((a, b) => b.rev - a.rev)
   const subCatRows = selectedCat ? allSubCatRows.filter(r => r.category === selectedCat) : allSubCatRows
   const stateRows = Object.entries(stateMap).map(([k, v]) => { const ord = v.orders instanceof Set ? v.orders.size : v.orders; return { state: k, rev: v.rev, orders: ord, aov: ord ? v.rev / ord : 0, cities: v.cities?.size || 0 } }).sort((a, b) => b.rev - a.rev)
 
