@@ -1543,6 +1543,8 @@ function ShopifyTab({ data, filters, setFilters }) {
   // India sub-channel keys for dropdown (excl International)
   const indiaSubChKeys = Object.keys(indiaSubChMap)
 
+  const [subChOpen, setSubChOpen] = useState(false)
+  const [pendingSubCh, setPendingSubCh] = useState([])
   const [selectedCat, setSelectedCat] = useState(null)
   const catRows = Object.entries(catMap).map(([k, v]) => { const orders = v.orders?.size ?? v.orders ?? 0; return { name: k, rev: v.rev, excRev: v.excRev || 0, orders, units: v.units || 0, aov: orders ? v.rev / orders : 0, asp: (v.units || 0) ? v.rev / v.units : 0 } }).sort((a, b) => b.rev - a.rev)
   const allSubCatRows = Object.entries(subCatMap).map(([k, v]) => { const orders = v.orders?.size ?? v.orders ?? 0; return { name: k.split('::')[1] || k, category: k.split('::')[0] || '', rev: v.rev, orders, units: v.units || 0, aov: orders ? v.rev / orders : 0, asp: (v.units || 0) ? v.rev / v.units : 0 } }).sort((a, b) => b.rev - a.rev)
@@ -1558,49 +1560,78 @@ function ShopifyTab({ data, filters, setFilters }) {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-      {/* India / International toggle + sub-channel tiles */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+      {/* India / International toggle + sub-channel dropdown + tiles on right */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        {/* Left: region toggles + sub-channel dropdown */}
         <button style={toggleStyle(!isIntl)} onClick={() => switchRegion(false)}>🇮🇳 India</button>
         <button style={toggleStyle(isIntl)} onClick={() => switchRegion(true)}>🌐 International</button>
-        {!isIntl && indiaSubChKeys.length > 0 && (
-          <>
-            <div style={{ width: 1, height: 28, background: C.border2, margin: '0 4px' }} />
-            {indiaSubChKeys.map(k => {
-              const v = indiaSubChMap[k]
-              const sel = filters.subChannel ? filters.subChannel.split(',').map(x => x.trim()).filter(Boolean) : []
-              const isActive = sel.includes(k)
-              const totalSubRev = Object.values(indiaSubChMap).reduce((s, x) => s + x.rev, 0)
-              return (
-                <button
-                  key={k}
-                  onClick={() => {
-                    const cur = filters.subChannel ? filters.subChannel.split(',').map(x => x.trim()).filter(Boolean) : []
-                    const next = cur.includes(k) ? cur.filter(x => x !== k) : [...cur, k]
-                    setFilters(f => ({ ...f, subChannel: next.join(',') }))
-                  }}
-                  style={{
-                    display: 'flex', flexDirection: 'column', alignItems: 'flex-start',
-                    padding: '5px 10px', borderRadius: 8, cursor: 'pointer', fontFamily: 'var(--font)',
-                    border: `1.5px solid ${isActive ? C.acm : C.border2}`,
-                    background: isActive ? C.acc : C.card,
-                    transition: 'all .12s',
-                  }}
-                >
-                  <span style={{ fontSize: 10, color: isActive ? C.acm : C.t3, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.04em' }}>{k}</span>
-                  <span style={{ fontSize: 12, fontWeight: 700, color: C.t1, fontFamily: 'var(--mono)' }}>{fmt(v.rev)}</span>
-                  <span style={{ fontSize: 10, color: C.t3 }}>{totalSubRev ? pct(v.rev, totalSubRev) : '—'}</span>
-                </button>
-              )
-            })}
-            {(filters.subChannel || '').split(',').filter(Boolean).length > 0 && (
+        {!isIntl && indiaSubChKeys.length > 0 && (() => {
+          const sel = filters.subChannel ? filters.subChannel.split(',').map(x => x.trim()).filter(Boolean) : []
+          return (
+            <div style={{ position: 'relative' }}>
               <button
-                onClick={() => setFilters(f => ({ ...f, subChannel: '' }))}
-                style={{ fontSize: 11, padding: '4px 10px', borderRadius: 6, border: `1px solid ${C.border2}`, background: C.card, color: C.t2, cursor: 'pointer' }}
-              >✕ Clear</button>
-            )}
-          </>
-        )}
+                style={{ ...selStyle, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 5 }}
+                onClick={() => { setPendingSubCh(sel); setSubChOpen(o => !o) }}
+              >
+                {sel.length === 0 ? 'All Sub-channels' : `${sel.length} selected`}
+                <span style={{ fontSize: 10 }}>{subChOpen ? '▲' : '▼'}</span>
+              </button>
+              {subChOpen && (
+                <div style={{ position: 'absolute', top: '110%', left: 0, zIndex: 200, background: C.card, border: `1px solid ${C.border2}`, borderRadius: 8, boxShadow: '0 4px 16px rgba(0,0,0,.12)', minWidth: 180, padding: '8px 0' }}>
+                  {indiaSubChKeys.map(k => (
+                    <label key={k} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '5px 14px', cursor: 'pointer', fontSize: 12, color: C.t1 }}>
+                      <input type="checkbox" checked={pendingSubCh.includes(k)} onChange={e => setPendingSubCh(prev => e.target.checked ? [...prev, k] : prev.filter(v => v !== k))} style={{ accentColor: C.acm }} />
+                      {k}
+                    </label>
+                  ))}
+                  <div style={{ display: 'flex', gap: 6, padding: '8px 14px 4px', borderTop: `1px solid ${C.border}`, marginTop: 4 }}>
+                    <button style={{ flex: 1, fontSize: 11, padding: '4px 0', borderRadius: 5, border: `1px solid ${C.border2}`, background: C.card, color: C.t2, cursor: 'pointer' }} onClick={() => { setFilters(f => ({ ...f, subChannel: '' })); setPendingSubCh([]); setSubChOpen(false) }}>Clear</button>
+                    <button style={{ flex: 1, fontSize: 11, padding: '4px 0', borderRadius: 5, border: 'none', background: C.acm, color: '#fff', cursor: 'pointer', fontWeight: 700 }} onClick={() => { setFilters(f => ({ ...f, subChannel: pendingSubCh.join(',') })); setSubChOpen(false) }}>Apply</button>
+                  </div>
+                </div>
+              )}
+            </div>
+          )
+        })()}
         {isIntl && <span style={{ fontSize: 11, color: C.t3, marginLeft: 4 }}>UAE · UK · US</span>}
+
+        {/* Right: sub-channel tiles pushed to far right */}
+        {!isIntl && indiaSubChKeys.length > 0 && (() => {
+          const totalSubRev = Object.values(indiaSubChMap).reduce((s, x) => s + x.rev, 0)
+          const sel = filters.subChannel ? filters.subChannel.split(',').map(x => x.trim()).filter(Boolean) : []
+          return (
+            <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 6 }}>
+              {indiaSubChKeys.map(k => {
+                const v = indiaSubChMap[k]
+                const isActive = sel.includes(k)
+                return (
+                  <button
+                    key={k}
+                    onClick={() => {
+                      const cur = filters.subChannel ? filters.subChannel.split(',').map(x => x.trim()).filter(Boolean) : []
+                      const next = cur.includes(k) ? cur.filter(x => x !== k) : [...cur, k]
+                      setFilters(f => ({ ...f, subChannel: next.join(',') }))
+                    }}
+                    style={{
+                      display: 'flex', flexDirection: 'column', alignItems: 'flex-start',
+                      padding: '5px 11px', borderRadius: 8, cursor: 'pointer', fontFamily: 'var(--font)',
+                      border: `1.5px solid ${isActive ? C.acm : C.border2}`,
+                      background: isActive ? C.acc : C.card,
+                      transition: 'all .12s',
+                    }}
+                  >
+                    <span style={{ fontSize: 9.5, color: isActive ? C.acm : C.t3, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.04em' }}>{k}</span>
+                    <span style={{ fontSize: 12.5, fontWeight: 700, color: C.t1, fontFamily: 'var(--mono)' }}>{fmt(v.rev)}</span>
+                    <span style={{ fontSize: 10, color: C.t3 }}>{totalSubRev ? pct(v.rev, totalSubRev) : '—'}</span>
+                  </button>
+                )
+              })}
+              {sel.length > 0 && (
+                <button onClick={() => setFilters(f => ({ ...f, subChannel: '' }))} style={{ fontSize: 11, padding: '4px 8px', borderRadius: 6, border: `1px solid ${C.border2}`, background: C.card, color: C.t2, cursor: 'pointer' }}>✕</button>
+              )}
+            </div>
+          )
+        })()}
       </div>
       <div style={{ display: 'grid', gridTemplateColumns: '1.5fr 5fr', gap: 10, alignItems: 'stretch' }}>
         {/* Hero card */}
