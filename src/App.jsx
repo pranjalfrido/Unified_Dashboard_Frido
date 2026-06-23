@@ -1505,11 +1505,11 @@ function ShopifyGeoDonutRow({ regionRows, tierRows, topStates }) {
           </ResponsiveContainer>
           <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 4 }}>
             {data.map((d, i) => (
-              <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
                 <span style={{ width: 8, height: 8, borderRadius: '50%', background: colors[i % colors.length], flexShrink: 0 }} />
-                <span style={{ fontSize: 11, color: C.t2, flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{d.name}</span>
-                <span style={{ fontSize: 11, fontWeight: 700, color: C.t1, fontFamily: 'var(--mono)' }}>{metricFmt(d.value)}</span>
-                <span style={{ fontSize: 10, color: C.t3, minWidth: 32, textAlign: 'right' }}>{total ? (d.value / total * 100).toFixed(0) : 0}%</span>
+                <span style={{ fontSize: 11, color: C.t2, whiteSpace: 'nowrap' }}>{d.name}</span>
+                <span style={{ fontSize: 11, fontWeight: 700, color: C.t1, fontFamily: 'var(--mono)', marginLeft: 4 }}>{metricFmt(d.value)}</span>
+                <span style={{ fontSize: 10, color: C.t3 }}>{total ? (d.value / total * 100).toFixed(0) : 0}%</span>
               </div>
             ))}
           </div>
