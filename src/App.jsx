@@ -1180,8 +1180,8 @@ function AllTab({ data }) {
   const [selectedCat, setSelectedCat] = useState(null)
   const [catView, setCatView] = useState('table')
   const [subCatView, setSubCatView] = useState('table')
-  const catRows = Object.entries(catMap).map(([k, v]) => ({ name: k, rev: v.rev, units: v.units || 0, asp: (v.units || 0) ? v.rev / v.units : 0 })).sort((a, b) => b.rev - a.rev)
-  const allSubCatRows = Object.entries(subCatMap).map(([k, v]) => ({ name: k.split('::')[1] || k, category: k.split('::')[0] || '', rev: v.rev, units: v.units || 0, asp: (v.units || 0) ? v.rev / v.units : 0 })).sort((a, b) => b.rev - a.rev)
+  const catRows = Object.entries(catMap).map(([k, v]) => { const orders = v.orders?.size ?? v.orders ?? 0; return { name: k, rev: v.rev, excRev: v.excRev || 0, orders, units: v.units || 0, aov: orders ? v.rev / orders : 0, asp: (v.units || 0) ? v.rev / v.units : 0 } }).sort((a, b) => b.rev - a.rev)
+  const allSubCatRows = Object.entries(subCatMap).map(([k, v]) => { const orders = v.orders?.size ?? v.orders ?? 0; return { name: k.split('::')[1] || k, category: k.split('::')[0] || '', rev: v.rev, orders, units: v.units || 0, aov: orders ? v.rev / orders : 0, asp: (v.units || 0) ? v.rev / v.units : 0 } }).sort((a, b) => b.rev - a.rev)
   const subCatRows = selectedCat ? allSubCatRows.filter(r => r.category === selectedCat) : allSubCatRows
   const stateRows = Object.entries(stateMap).map(([k, v]) => ({ state: k, rev: v.rev, orders: v.orders, aov: v.orders ? v.rev / v.orders : 0, cities: v.cities.size })).sort((a, b) => b.rev - a.rev)
   const bucketData = Object.entries(buckets).map(([k, v]) => ({ name: k, orders: v, rev: bucketRev[k] }))
@@ -1544,8 +1544,8 @@ function ShopifyTab({ data, filters, setFilters }) {
   const indiaSubChKeys = Object.keys(indiaSubChMap)
 
   const [selectedCat, setSelectedCat] = useState(null)
-  const catRows = Object.entries(catMap).map(([k, v]) => ({ name: k, rev: v.rev, units: v.units || 0, asp: (v.units || 0) ? v.rev / v.units : 0 })).sort((a, b) => b.rev - a.rev)
-  const allSubCatRows = Object.entries(subCatMap).map(([k, v]) => ({ name: k.split('::')[1] || k, category: k.split('::')[0] || '', rev: v.rev, units: v.units || 0, asp: (v.units || 0) ? v.rev / v.units : 0 })).sort((a, b) => b.rev - a.rev)
+  const catRows = Object.entries(catMap).map(([k, v]) => { const orders = v.orders?.size ?? v.orders ?? 0; return { name: k, rev: v.rev, excRev: v.excRev || 0, orders, units: v.units || 0, aov: orders ? v.rev / orders : 0, asp: (v.units || 0) ? v.rev / v.units : 0 } }).sort((a, b) => b.rev - a.rev)
+  const allSubCatRows = Object.entries(subCatMap).map(([k, v]) => { const orders = v.orders?.size ?? v.orders ?? 0; return { name: k.split('::')[1] || k, category: k.split('::')[0] || '', rev: v.rev, orders, units: v.units || 0, aov: orders ? v.rev / orders : 0, asp: (v.units || 0) ? v.rev / v.units : 0 } }).sort((a, b) => b.rev - a.rev)
   const subCatRows = selectedCat ? allSubCatRows.filter(r => r.category === selectedCat) : allSubCatRows
   const stateRows = Object.entries(stateMap).map(([k, v]) => { const ord = v.orders instanceof Set ? v.orders.size : v.orders; return { state: k, rev: v.rev, orders: ord, aov: ord ? v.rev / ord : 0, cities: v.cities?.size || 0 } }).sort((a, b) => b.rev - a.rev)
 
