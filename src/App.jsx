@@ -1530,7 +1530,7 @@ function ShopifyTab({ data, filters, setFilters }) {
   const fulfilmentPct = shNOrders ? (deliveredOrders / shNOrders * 100) : 0
   const rtoPct = shNOrders ? (rtoOrders / shNOrders * 100) : 0
   const atRiskRev = (orderStatusRevMap['RTO'] || 0) + (orderStatusRevMap['Cancelled'] || 0) + (data.cirRev || 0)
-  const returnRevPct = totalRev > 0 ? ((data.cirRev || 0) / totalRev * 100) : 0
+  const returnRevPct = totalRev > 0 ? (((orderStatusRevMap['RTO'] || 0) + (data.cirRev || 0)) / totalRev * 100) : 0
   const repeatRate = nCusts ? (repeatCusts / nCusts * 100).toFixed(1) : '0'
 
   // Sub-channel breakdown — India excludes International, Intl shows only International
@@ -1623,7 +1623,7 @@ function ShopifyTab({ data, filters, setFilters }) {
               { label: 'AOV', value: `₹${Math.round(aov).toLocaleString('en-IN')}`, sub: 'Gross rev ÷ orders', badge: shChgBadge(aov, prevOrders > 0 ? prevRev / prevOrders : 0) },
               { label: 'ASP', value: `₹${Math.round(asp).toLocaleString('en-IN')}`, sub: 'Net rev ÷ units sold' },
               { label: 'RTO %', value: `${rtoPct.toFixed(1)}%`, sub: `${fmtN(rtoOrders)} RTO orders`, accent: rtoPct > 10 ? '#7A1A1A' : undefined },
-              { label: 'Return %', value: `${returnRevPct.toFixed(1)}%`, sub: `${fmt(data.cirRev || 0)} CIR+Exchange rev`, accent: returnRevPct > 5 ? '#7A1A1A' : undefined },
+              { label: 'Return %', value: `${returnRevPct.toFixed(1)}%`, sub: `${fmt((orderStatusRevMap['RTO'] || 0) + (data.cirRev || 0))} RTO+CIR rev`, accent: returnRevPct > 5 ? '#7A1A1A' : undefined },
               { label: 'Repeat Rate', value: `${repeatRate}%`, sub: `${fmtN(repeatCusts)} of ${fmtN(nCusts)} custs` },
             ].map(k => (
               <div key={k.label} className="kpi-card" style={{ padding: '10px 13px' }}>
