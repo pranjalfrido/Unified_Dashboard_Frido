@@ -1209,7 +1209,7 @@ function AllTab({ data }) {
   const grossMarginPct = totalRev > 0 ? ((totalRev - totalExcRev) / totalRev * 100) : 0
   const revPerUnit = totalQty > 0 ? totalExcRev / totalQty : 0
   const shopifyOrders = orders.filter(o => o.channel === 'Shopify')
-  const atRiskRev = (orderStatusRevMap['RTO'] || 0) + (orderStatusRevMap['Cancelled'] || 0)
+  const atRiskRev = (orderStatusRevMap['RTO'] || 0) + (orderStatusRevMap['Cancelled'] || 0) + (cirRev || 0)
   const deliveredCount = orders.filter(o => o.orderStatus === 'Delivered').length
   const rtoCount = orders.filter(o => o.orderStatus === 'RTO' || o.isRTO).length
   const cancelCount = orders.filter(o => o.orderStatus === 'Cancelled' || o.isCancelled).length
@@ -1309,7 +1309,7 @@ function AllTab({ data }) {
             {[
               { label: 'ASP', value: `₹${Math.round(asp).toLocaleString('en-IN')}`, sub: 'Net rev ÷ units sold', badge: chgBadge(asp, prevASP) },
               { label: 'GST Collected', value: fmt(gstCollected), sub: `${totalRev > 0 ? ((gstCollected / totalRev) * 100).toFixed(1) : 0}% of gross rev`, badge: chgBadge(gstCollected, prevGST) },
-              { label: 'Revenue at Risk', value: fmt(atRiskRev), sub: `${totalRev > 0 ? (atRiskRev / totalRev * 100).toFixed(1) : 0}% of gross · RTO + Cancel`, accent: atRiskRev > 0 ? '#7A4000' : undefined, badge: null },
+              { label: 'Revenue at Risk', value: fmt(atRiskRev), sub: `${totalRev > 0 ? (atRiskRev / totalRev * 100).toFixed(1) : 0}% of gross · RTO + Cancel + CIR`, accent: atRiskRev > 0 ? '#7A4000' : undefined, badge: null },
               { label: 'Units per Order', value: unitsPerOrder.toFixed(2), sub: 'Avg basket size', badge: chgBadge(unitsPerOrder, prevUPO) },
             ].map(k => (
               <div key={k.label} className="kpi-card" style={{ padding: '10px 13px' }}>
@@ -1529,7 +1529,7 @@ function ShopifyTab({ data, filters, setFilters }) {
   const rtoOrders = orderStatusMap['RTO'] || 0
   const fulfilmentPct = shNOrders ? (deliveredOrders / shNOrders * 100) : 0
   const rtoPct = shNOrders ? (rtoOrders / shNOrders * 100) : 0
-  const atRiskRev = (orderStatusRevMap['RTO'] || 0) + (orderStatusRevMap['Cancelled'] || 0)
+  const atRiskRev = (orderStatusRevMap['RTO'] || 0) + (orderStatusRevMap['Cancelled'] || 0) + (data.cirRev || 0)
   const repeatRate = nCusts ? (repeatCusts / nCusts * 100).toFixed(1) : '0'
 
   // Sub-channel breakdown — India excludes International, Intl shows only International
@@ -3342,7 +3342,7 @@ function ChannelTab({ data, channel, filters, setFilters, amzRegion, setAmzRegio
   const chExcRev = chRows.reduce((s, r) => s + parseFloat(r.SellingPrice_Exc_GST || 0), 0)
   const grossMarginPct = rev > 0 ? ((rev - chExcRev) / rev * 100) : 0
   const revPerUnit = qty > 0 ? rev / qty : 0
-  const chRTORev = channel === 'Shopify' ? chOrders.filter(o => o.isRTO).reduce((s, o) => s + o.rev, 0) + chOrders.filter(o => o.isCancelled).reduce((s, o) => s + o.rev, 0) : 0
+  const chRTORev = channel === 'Shopify' ? chOrders.filter(o => o.isRTO).reduce((s, o) => s + o.rev, 0) + chOrders.filter(o => o.isCancelled).reduce((s, o) => s + o.rev, 0) + (data.cirRev || 0) : 0
   const deliveredCh = chOrders.filter(o => o.orderStatus === 'Delivered').length
   const rtoCh = chOrders.filter(o => o.orderStatus === 'RTO' || o.isRTO).length
   const cancelCh = chOrders.filter(o => o.orderStatus === 'Cancelled' || o.isCancelled).length
@@ -3361,7 +3361,7 @@ function ChannelTab({ data, channel, filters, setFilters, amzRegion, setAmzRegio
       </div>
       <div className="g-kpi3">
         <KPICard label="Revenue per Unit" value={`₹${Math.round(revPerUnit).toLocaleString('en-IN')}`} sub="Avg price per SKU" />
-        <KPICard label="Revenue at Risk" value={channel === 'Shopify' ? fmt(chRTORev) : 'N/A'} sub="RTO + Cancelled" accent={chRTORev > 0 ? '#7A4000' : undefined} />
+        <KPICard label="Revenue at Risk" value={channel === 'Shopify' ? fmt(chRTORev) : 'N/A'} sub="RTO + Cancelled + CIR" accent={chRTORev > 0 ? '#7A4000' : undefined} />
         <KPICard label="Units per Order" value={upo.toFixed(2)} sub="Avg basket size" />
       </div>
       <div className="g-2">
