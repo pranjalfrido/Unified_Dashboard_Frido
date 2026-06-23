@@ -1544,6 +1544,8 @@ function ShopifyTab({ data, filters, setFilters }) {
   const indiaSubChKeys = Object.keys(indiaSubChMap)
 
   const [selectedCat, setSelectedCat] = useState(null)
+  const [subChOpen, setSubChOpen] = useState(false)
+  const [pendingSubCh, setPendingSubCh] = useState([])
   const catRows = Object.entries(catMap).map(([k, v]) => { const orders = v.orders?.size ?? v.orders ?? 0; return { name: k, rev: v.rev, excRev: v.excRev || 0, orders, units: v.units || 0, aov: orders ? v.rev / orders : 0, asp: (v.units || 0) ? v.rev / v.units : 0 } }).sort((a, b) => b.rev - a.rev)
   const allSubCatRows = Object.entries(subCatMap).map(([k, v]) => { const orders = v.orders?.size ?? v.orders ?? 0; return { name: k.split('::')[1] || k, category: k.split('::')[0] || '', rev: v.rev, orders, units: v.units || 0, aov: orders ? v.rev / orders : 0, asp: (v.units || 0) ? v.rev / v.units : 0 } }).sort((a, b) => b.rev - a.rev)
   const subCatRows = selectedCat ? allSubCatRows.filter(r => r.category === selectedCat) : allSubCatRows
@@ -1561,15 +1563,49 @@ function ShopifyTab({ data, filters, setFilters }) {
       {/* India / International toggle */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
         <button style={toggleStyle(!isIntl)} onClick={() => switchRegion(false)}>🇮🇳 India</button>
-        <button style={toggleStyle(isIntl)} onClick={() => switchRegion(true)}>🌍 International</button>
+        <button style={toggleStyle(isIntl)} onClick={() => switchRegion(true)}>🌐 International</button>
         {!isIntl && indiaSubChKeys.length > 0 && (
-          <>
-            <span style={{ fontSize: 12, fontWeight: 600, color: C.t2, marginLeft: 8 }}>Sub-channel:</span>
-            <select value={filters.subChannel || ''} onChange={e => setFilters(f => ({ ...f, subChannel: e.target.value }))} style={selStyle}>
-              <option value="">All</option>
-              {indiaSubChKeys.map(k => <option key={k} value={k}>{k}</option>)}
-            </select>
-          </>
+          <div style={{ position: 'relative', marginLeft: 8 }}>
+            <button
+              style={{ ...selStyle, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 5 }}
+              onClick={() => {
+                const cur = filters.subChannel ? filters.subChannel.split(',').map(v => v.trim()).filter(Boolean) : []
+                setPendingSubCh(cur)
+                setSubChOpen(o => !o)
+              }}
+            >
+              {(() => {
+                const sel = filters.subChannel ? filters.subChannel.split(',').map(v => v.trim()).filter(Boolean) : []
+                return sel.length === 0 ? 'All Sub-channels' : `${sel.length} selected`
+              })()}
+              <span style={{ fontSize: 10, marginLeft: 2 }}>{subChOpen ? '▲' : '▼'}</span>
+            </button>
+            {subChOpen && (
+              <div style={{ position: 'absolute', top: '110%', left: 0, zIndex: 200, background: C.card, border: `1px solid ${C.border2}`, borderRadius: 8, boxShadow: '0 4px 16px rgba(0,0,0,.12)', minWidth: 200, padding: '8px 0' }}>
+                {indiaSubChKeys.map(k => (
+                  <label key={k} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '5px 14px', cursor: 'pointer', fontSize: 12, color: C.t1 }}>
+                    <input
+                      type="checkbox"
+                      checked={pendingSubCh.includes(k)}
+                      onChange={e => setPendingSubCh(prev => e.target.checked ? [...prev, k] : prev.filter(v => v !== k))}
+                      style={{ accentColor: C.acm }}
+                    />
+                    {k}
+                  </label>
+                ))}
+                <div style={{ display: 'flex', gap: 6, padding: '8px 14px 4px', borderTop: `1px solid ${C.border}`, marginTop: 4 }}>
+                  <button
+                    style={{ flex: 1, fontSize: 11, padding: '4px 0', borderRadius: 5, border: `1px solid ${C.border2}`, background: C.card, color: C.t2, cursor: 'pointer' }}
+                    onClick={() => { setFilters(f => ({ ...f, subChannel: '' })); setPendingSubCh([]); setSubChOpen(false) }}
+                  >Clear</button>
+                  <button
+                    style={{ flex: 1, fontSize: 11, padding: '4px 0', borderRadius: 5, border: 'none', background: C.acm, color: '#fff', cursor: 'pointer', fontWeight: 700 }}
+                    onClick={() => { setFilters(f => ({ ...f, subChannel: pendingSubCh.join(',') })); setSubChOpen(false) }}
+                  >Apply</button>
+                </div>
+              </div>
+            )}
+          </div>
         )}
         {isIntl && <span style={{ fontSize: 11, color: C.t3, marginLeft: 4 }}>UAE · UK · US</span>}
       </div>
@@ -1593,50 +1629,62 @@ function ShopifyTab({ data, filters, setFilters }) {
             </ResponsiveContainer>
           </div>
         </div>
-        {/* Right: 2 rows of 4 KPIs */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10, flex: 1 }}>
-            {(() => { const excChg = prevExcRev > 0 ? ((totalExcRev - prevExcRev) / prevExcRev * 100) : null; return (
-              <div className="kpi-card" style={{ display: 'flex', flexDirection: 'column', gap: 4, padding: '10px 13px' }}>
-                <div className="kpi-label">Net (Exc GST)</div>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                  <div className="kpi-value">{fmt(totalExcRev)}</div>
-                  {excChg !== null && <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 7px', borderRadius: 5, background: excChg >= 0 ? C.green.bg : C.red.bg, color: excChg >= 0 ? C.green.tx : C.red.tx }}>{excChg >= 0 ? '▲' : '▼'} {Math.abs(excChg).toFixed(1)}%</span>}
-                </div>
-                <div className="kpi-sub">{totalRev > 0 ? (totalExcRev / totalRev * 100).toFixed(1) : 0}% of gross · GST {fmt(gst)}</div>
+        {/* Right: 2 rows of 5 KPIs */}
+        {(() => {
+          const cirOrders = data.cirOrders || 0
+          const exchangeOrders = data.exchangeOrders || 0
+          const cancelledOrders = orderStatusMap['Cancelled'] || 0
+          const cancelPct = shNOrders ? (cancelledOrders / shNOrders * 100) : 0
+          const cirPct = shNOrders ? (cirOrders / shNOrders * 100) : 0
+          const exchangePct = shNOrders ? (exchangeOrders / shNOrders * 100) : 0
+          const excChg = prevExcRev > 0 ? ((totalExcRev - prevExcRev) / prevExcRev * 100) : null
+          const row1 = [
+            {
+              label: 'Net Revenue',
+              value: fmt(totalExcRev),
+              sub: null,
+              badge: excChg !== null ? <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 4, background: excChg >= 0 ? C.green.bg : C.red.bg, color: excChg >= 0 ? C.green.tx : C.red.tx, flexShrink: 0 }}>{excChg >= 0 ? '▲' : '▼'} {Math.abs(excChg).toFixed(1)}%</span> : null,
+            },
+            { label: 'GST Collected', value: fmt(gst), sub: totalRev > 0 ? `${((gst / totalRev) * 100).toFixed(1)}% of gross` : '—', badge: shChgBadge(gst, prevRev - prevExcRev) },
+            { label: 'Daily Avg', value: fmt(dailyAvg), sub: `over ${nDays} days`, badge: shChgBadge(dailyAvg, prevRev > 0 ? prevRev / nDays : 0) },
+            { label: 'AOV', value: `₹${Math.round(aov).toLocaleString('en-IN')}`, sub: 'Gross rev ÷ orders', badge: shChgBadge(aov, prevOrders > 0 ? prevRev / prevOrders : 0) },
+            { label: 'ASP', value: `₹${Math.round(asp).toLocaleString('en-IN')}`, sub: 'Net rev ÷ units sold' },
+          ]
+          const row2 = [
+            { label: 'Cancellation %', value: `${cancelPct.toFixed(1)}%`, sub: `${fmtN(cancelledOrders)} cancelled`, accent: cancelPct > 5 ? '#7A1A1A' : undefined },
+            { label: 'CIR %', value: `${cirPct.toFixed(1)}%`, sub: `${fmtN(cirOrders)} CIR orders` },
+            { label: 'Exchange %', value: `${exchangePct.toFixed(1)}%`, sub: `${fmtN(exchangeOrders)} exchange orders` },
+            { label: 'RTO %', value: `${rtoPct.toFixed(1)}%`, sub: `${fmtN(rtoOrders)} RTO orders`, accent: rtoPct > 10 ? '#7A1A1A' : undefined },
+            { label: 'Return %', value: `${returnRevPct.toFixed(1)}%`, sub: `${fmt((data.rtoRevDirect || 0) + (data.cirRev || 0))} RTO+CIR rev`, accent: returnRevPct > 5 ? '#7A1A1A' : undefined },
+          ]
+          return (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 10, flex: 1 }}>
+                {row1.map(k => (
+                  <div key={k.label} className="kpi-card" style={{ padding: '10px 13px' }}>
+                    <div className="kpi-label">{k.label}</div>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 4 }}>
+                      <div className="kpi-value" style={{ fontSize: 17 }}>{k.value}</div>
+                      {k.badge}
+                    </div>
+                    {k.sub && <div className="kpi-sub">{k.sub}</div>}
+                  </div>
+                ))}
               </div>
-            )})()}
-            {[
-              { label: 'GST Collected', value: fmt(gst), sub: totalRev > 0 ? `${((gst / totalRev) * 100).toFixed(1)}% of gross` : '—', badge: shChgBadge(gst, prevRev - prevExcRev) },
-              { label: 'Orders', value: fmtN(shNOrders), badge: shChgBadge(shNOrders, prevOrders) },
-              { label: 'Daily Avg', value: fmt(dailyAvg), sub: `over ${nDays} days`, badge: shChgBadge(dailyAvg, prevRev > 0 ? prevRev / nDays : 0) },
-            ].map(k => (
-              <div key={k.label} className="kpi-card" style={{ padding: '10px 13px' }}>
-                <div className="kpi-label">{k.label}</div>
-                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 4 }}><div className="kpi-value" style={{ fontSize: 17 }}>{k.value}</div>{k.badge}</div>
-                {k.sub && <div className="kpi-sub">{k.sub}</div>}
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 10, flex: 1 }}>
+                {row2.map(k => (
+                  <div key={k.label} className="kpi-card" style={{ padding: '10px 13px' }}>
+                    <div className="kpi-label">{k.label}</div>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 4 }}>
+                      <div className="kpi-value" style={{ fontSize: 17, ...(k.accent ? { color: k.accent } : {}) }}>{k.value}</div>
+                    </div>
+                    {k.sub && <div className="kpi-sub">{k.sub}</div>}
+                  </div>
+                ))}
               </div>
-            ))}
-          </div>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 10, flex: 1 }}>
-            {[
-              { label: 'AOV', value: `₹${Math.round(aov).toLocaleString('en-IN')}`, sub: 'Gross rev ÷ orders', badge: shChgBadge(aov, prevOrders > 0 ? prevRev / prevOrders : 0) },
-              { label: 'ASP', value: `₹${Math.round(asp).toLocaleString('en-IN')}`, sub: 'Net rev ÷ units sold' },
-              { label: 'RTO %', value: `${rtoPct.toFixed(1)}%`, sub: `${fmtN(rtoOrders)} RTO orders`, accent: rtoPct > 10 ? '#7A1A1A' : undefined },
-              { label: 'Return %', value: `${returnRevPct.toFixed(1)}%`, sub: `${fmt((data.rtoRevDirect || 0) + (data.cirRev || 0))} RTO+CIR rev`, accent: returnRevPct > 5 ? '#7A1A1A' : undefined },
-              { label: 'Repeat Rate', value: `${repeatRate}%`, sub: `${fmtN(repeatCusts)} of ${fmtN(nCusts)} custs` },
-            ].map(k => (
-              <div key={k.label} className="kpi-card" style={{ padding: '10px 13px' }}>
-                <div className="kpi-label">{k.label}</div>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 4 }}>
-                  <div className="kpi-value" style={{ fontSize: 17, ...(k.accent ? { color: k.accent } : {}) }}>{k.value}</div>
-                  {k.badge}
-                </div>
-                {k.sub && <div className="kpi-sub">{k.sub}</div>}
-              </div>
-            ))}
-          </div>
-        </div>
+            </div>
+          )
+        })()}
       </div>
       <div className="g-3">
         <Card title={isIntl ? 'International Breakdown' : 'Sub-channel Breakdown'}>
