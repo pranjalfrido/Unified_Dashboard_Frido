@@ -228,3 +228,6 @@ html,body{height:100%;background:var(--bg);font-family:var(--font);color:var(--t
   .g-3{ grid-template-columns:1fr 1fr !important }
   .g-intel{ grid-template-columns:repeat(3,1fr) !important }
 }
+
+/* Remove Recharts focus outlines */
+.recharts-wrapper:focus,.recharts-wrapper *:focus,.recharts-surface:focus{outline:none!important}
