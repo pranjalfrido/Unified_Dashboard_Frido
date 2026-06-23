@@ -1480,6 +1480,66 @@ function OrderValuePieCard({ buckets, bucketRev }) {
   )
 }
 
+function ShopifyGeoDonutRow({ regionRows, tierRows, topStates }) {
+  const [metric, setMetric] = useState('rev')
+  const REGION_COLORS = ['#534AB7','#0D9E68','#2E74CC','#CC8A00','#CC4078','#E24B4A']
+  const TIER_COLORS = ['#FFD600','#FF6B35','#9B59B6']
+  const STATE_COLORS = ['#0D9E68','#2E74CC','#534AB7','#CC8A00','#E24B4A','#9B59B6']
+  const metricVal = (r, m) => m === 'rev' ? r.rev : m === 'orders' ? r.orders : (r.orders ? Math.round(r.rev / r.orders) : 0)
+  const metricFmt = v => metric === 'rev' ? fmt(v) : metric === 'aov' ? `₹${v.toLocaleString('en-IN')}` : fmtN(v)
+  const selStyle = active => ({ fontSize: 10, fontWeight: active ? 700 : 500, padding: '2px 8px', borderRadius: 4, border: `1px solid ${active ? C.acm : C.border}`, background: active ? C.acc : 'transparent', color: C.t1, cursor: 'pointer', fontFamily: 'var(--font)' })
+
+  const SmallDonut = ({ title, data, colors }) => {
+    const total = data.reduce((s, d) => s + d.value, 0)
+    return (
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ fontSize: 11, fontWeight: 700, color: C.t2, marginBottom: 8, textTransform: 'uppercase', letterSpacing: '.04em' }}>{title}</div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          <ResponsiveContainer width={110} height={110}>
+            <PieChart>
+              <Pie data={data} cx="50%" cy="50%" innerRadius={32} outerRadius={50} dataKey="value" paddingAngle={2}>
+                {data.map((d, i) => <Cell key={i} fill={colors[i % colors.length]} />)}
+              </Pie>
+              <Tooltip content={({ active, payload }) => active && payload?.length ? <div style={{ background: '#fff', border: `1px solid ${C.border}`, borderRadius: 6, padding: '4px 8px', fontSize: 11, color: '#111', fontWeight: 600 }}>{payload[0].name}: {metricFmt(payload[0].value)}</div> : null} />
+            </PieChart>
+          </ResponsiveContainer>
+          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 4 }}>
+            {data.map((d, i) => (
+              <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                <span style={{ width: 8, height: 8, borderRadius: '50%', background: colors[i % colors.length], flexShrink: 0 }} />
+                <span style={{ fontSize: 11, color: C.t2, flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{d.name}</span>
+                <span style={{ fontSize: 11, fontWeight: 700, color: C.t1, fontFamily: 'var(--mono)' }}>{metricFmt(d.value)}</span>
+                <span style={{ fontSize: 10, color: C.t3, minWidth: 32, textAlign: 'right' }}>{total ? (d.value / total * 100).toFixed(0) : 0}%</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  const TIER_NAMES = { '1': 'Tier I', '2': 'Tier II', '3': 'Tier III', 'I': 'Tier I', 'II': 'Tier II', 'III': 'Tier III' }
+  const regionData = regionRows.map((r, i) => ({ name: r.region, value: metricVal(r, metric) }))
+  const tierData = tierRows.map(r => { const key = String(r.tier).replace(/^tier\s*/i, '').trim(); return { name: TIER_NAMES[key] || r.label || `Tier ${key}`, value: metricVal(r, metric) } })
+  const stateData = topStates.map(r => ({ name: r.name ? r.name.charAt(0).toUpperCase() + r.name.slice(1).toLowerCase() : r.name, value: metricVal(r, metric) }))
+
+  if (!regionData.length && !tierData.length && !stateData.length) return null
+
+  return (
+    <Card title="Geography Breakdown" action={
+      <div style={{ display: 'flex', gap: 3 }}>
+        {[['rev','Revenue'],['orders','Orders'],['aov','AOV']].map(([k,l]) => <button key={k} onClick={() => setMetric(k)} style={selStyle(metric === k)}>{l}</button>)}
+      </div>
+    }>
+      <div style={{ display: 'flex', gap: 24, flexWrap: 'wrap' }}>
+        {regionData.length > 0 && <SmallDonut title="By Region" data={regionData} colors={REGION_COLORS} />}
+        {tierData.length > 0 && <SmallDonut title="By City Tier" data={tierData} colors={TIER_COLORS} />}
+        {stateData.length > 0 && <SmallDonut title="Top States" data={stateData} colors={STATE_COLORS} />}
+      </div>
+    </Card>
+  )
+}
+
 function ShopifyTab({ data, filters, setFilters }) {
   // region toggle drives subChannel filter via API — all aggregated data is correct
   const isIntl = filters.subChannel === 'International'
@@ -1782,6 +1842,7 @@ function ShopifyTab({ data, filters, setFilters }) {
           )
         })()}
       </div>
+      <ShopifyGeoDonutRow regionRows={sh.regionRows || []} tierRows={sh.tierRows || []} topStates={sh.topStates || []} />
       <div className="g-2" style={{ alignItems: 'stretch' }}>
         {(() => {
           const FIXED_H = 420

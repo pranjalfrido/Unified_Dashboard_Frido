@@ -374,6 +374,9 @@ export default async function handler(req, res) {
         subCatMap: Object.fromEntries((r.shSubCategory || []).map(x => [`${x.Category||'Unknown'}::${x.SubCategory||'Unknown'}`, { rev: parseFloat(x.rev)||0, orders: { size: parseInt(x.orders)||0 }, units: parseInt(x.units)||0 }])),
         stateMap: Object.fromEntries((r.shState || []).filter(x => x.state).map(x => [x.state, { rev: parseFloat(x.rev)||0, orders: parseInt(x.orders)||0, cities: { size: parseInt(x.cities)||0 } }])),
         cityRows: (r.shCity || []).map(x => ({ city: x.city, state: x.state, orders: parseInt(x.orders)||0, rev: parseFloat(x.rev)||0 })),
+        regionRows: (r.shRegion || []).map(x => ({ region: x.region, orders: parseInt(x.orders)||0, rev: parseFloat(x.rev)||0, units: parseInt(x.units)||0 })),
+        tierRows: (r.shTier || []).map(x => ({ tier: parseInt(x.city_tier)||x.city_tier, label: x.tier_label, orders: parseInt(x.orders)||0, rev: parseFloat(x.rev)||0, units: parseInt(x.units)||0 })),
+        topStates: (r.shState || []).slice(0, 6).filter(x => x.state).map(x => ({ name: x.state, orders: parseInt(x.orders)||0, rev: parseFloat(x.rev)||0, units: 0 })),
       },
       amzSC: {
         prevRev: parseFloat(r.prevAmzSC?.[0]?.rev) || 0,
