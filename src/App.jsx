@@ -2055,8 +2055,14 @@ function AmazonTab({ data, region = 'india', setRegion = () => {} }) {
           {(() => {
             const amzChgBadge = (cur, prev) => { if (!prev) return null; const p = (cur - prev) / prev * 100; return <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 4, background: p >= 0 ? C.green.bg : C.red.bg, color: p >= 0 ? C.green.tx : C.red.tx, flexShrink: 0 }}>{p >= 0 ? '▲' : '▼'} {Math.abs(p).toFixed(1)}%</span> }
             const amzPrevOrders = amzSC.prevOrders || 0
+            const amzPrevUnits = amzSC.prevUnits || 0
+            const amzPrevFbaRev = amzSC.prevFbaRev || 0
+            const amzPrevCancelledOrders = amzSC.prevCancelledOrders || 0
             const amzPrevAOV = amzPrevOrders > 0 ? amzPrevSCRev / amzPrevOrders : 0
+            const amzPrevASP = amzPrevUnits > 0 ? amzPrevSCRev / amzPrevUnits : 0
             const amzPrevDailyAvg = amzPrevTotalRev > 0 ? amzPrevTotalRev / (data.nDays || 1) : 0
+            const amzPrevFbaShare = amzPrevSCRev > 0 ? (amzPrevFbaRev / amzPrevSCRev * 100) : 0
+            const amzPrevCancelRate = amzPrevOrders > 0 ? (amzPrevCancelledOrders / amzPrevOrders * 100) : 0
             return (
               <div style={{ display: 'grid', gridTemplateColumns: '1.5fr 5fr', gap: 10, alignItems: 'stretch' }}>
                 <div className="kpi-card" style={{ display: 'flex', flexDirection: 'column', gap: 8, padding: '16px 18px' }}>
@@ -2095,9 +2101,9 @@ function AmazonTab({ data, region = 'india', setRegion = () => {} }) {
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10, flex: 1 }}>
                     {[
                       { label: 'AOV', value: `₹${Math.round(scAOV).toLocaleString('en-IN')}`, sub: 'SC avg order value', badge: amzChgBadge(scAOV, amzPrevAOV) },
-                      { label: 'ASP', value: `₹${scTotalUnits ? Math.round(scTotalRev / scTotalUnits).toLocaleString('en-IN') : 0}`, sub: 'Avg selling price / unit' },
-                      { label: 'FBA Share', value: `${scTotalRev ? (scFBA.rev / scTotalRev * 100).toFixed(1) : 0}%`, sub: `${fmt(scFBA.rev)} revenue` },
-                      { label: 'Cancellation Rate', value: `${scCancelRate.toFixed(1)}%`, sub: `${fmtN(scCancelOrders)} cancelled`, accent: scCancelRate > 10 ? '#7A1A1A' : undefined },
+                      { label: 'ASP', value: `₹${scTotalUnits ? Math.round(scTotalRev / scTotalUnits).toLocaleString('en-IN') : 0}`, sub: 'Avg selling price / unit', badge: amzChgBadge(scTotalUnits ? scTotalRev / scTotalUnits : 0, amzPrevASP) },
+                      { label: 'FBA Share', value: `${scTotalRev ? (scFBA.rev / scTotalRev * 100).toFixed(1) : 0}%`, sub: `${fmt(scFBA.rev)} revenue`, badge: amzChgBadge(scTotalRev ? scFBA.rev / scTotalRev * 100 : 0, amzPrevFbaShare) },
+                      { label: 'Cancellation Rate', value: `${scCancelRate.toFixed(1)}%`, sub: `${fmtN(scCancelOrders)} cancelled`, accent: scCancelRate > 10 ? '#7A1A1A' : undefined, badge: amzPrevCancelRate ? (() => { const p = (scCancelRate - amzPrevCancelRate) / amzPrevCancelRate * 100; return <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 4, background: p > 0 ? C.red.bg : C.green.bg, color: p > 0 ? C.red.tx : C.green.tx, flexShrink: 0 }}>{p > 0 ? '▲' : '▼'} {Math.abs(p).toFixed(1)}%</span> })() : null },
                     ].map(k => (
                       <div key={k.label} className="kpi-card" style={{ padding: '10px 13px' }}>
                         <div className="kpi-label">{k.label}</div>
@@ -2194,22 +2200,73 @@ function AmazonTab({ data, region = 'india', setRegion = () => {} }) {
       {/* ── INDIA · SELLER CENTRAL ── */}
       {region === 'india' && subView === 'sc' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-          {/* KPIs row 1 */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6,1fr)', gap: 10 }}>
-            <KPICard label="Total Revenue" value={fmt(scTotalRev)} sub={`${data.nDays || 7} days`} />
-            <KPICard label="Net Revenue (Exc GST)" value={fmt(scTotalExcRev)} sub={`GST ${fmt(scTotalRev - scTotalExcRev)}`} />
-            <KPICard label="Total Orders" value={fmtN(scTotalOrders)} />
-            <KPICard label="AOV" value={`₹${Math.round(scAOV).toLocaleString('en-IN')}`} sub="Revenue / Orders" />
-            <KPICard label="ASP" value={`₹${scTotalUnits ? Math.round(scTotalRev / scTotalUnits).toLocaleString('en-IN') : 0}`} sub="Revenue / Units" />
-            <KPICard label="Total Units" value={fmtN(scTotalUnits)} />
-            <KPICard label="Cancellation Rate" value={`${scCancelRate.toFixed(1)}%`} sub={`${fmtN(scCancelOrders)} cancelled`} accent={scCancelRate > 10 ? '#7A1A1A' : undefined} />
-          </div>
-          {/* KPIs row 2 */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 10 }}>
-            <KPICard label="Daily Avg Revenue" value={fmt(scTotalRev / (data.nDays || 1))} sub="Revenue per day" />
-            <KPICard label="Units per Order" value={scTotalOrders ? (scTotalUnits / scTotalOrders).toFixed(2) : '0'} sub="Avg basket size" />
-            <KPICard label="FBA Share" value={`${scTotalRev ? (scFBA.rev / scTotalRev * 100).toFixed(1) : 0}%`} sub={`MFN ${scTotalRev ? (scMFN.rev / scTotalRev * 100).toFixed(1) : 0}%`} />
-          </div>
+          {/* Hero + KPI rows */}
+          {(() => {
+            const scChgBadge = (cur, prev) => { if (!prev) return null; const p = (cur - prev) / prev * 100; return <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 4, background: p >= 0 ? C.green.bg : C.red.bg, color: p >= 0 ? C.green.tx : C.red.tx, flexShrink: 0 }}>{p >= 0 ? '▲' : '▼'} {Math.abs(p).toFixed(1)}%</span> }
+            const prevSCRev = amzSC.prevRev || 0
+            const prevSCOrders = amzSC.prevOrders || 0
+            const prevSCUnits = amzSC.prevUnits || 0
+            const prevSCAOV = prevSCOrders > 0 ? prevSCRev / prevSCOrders : 0
+            const prevSCASP = prevSCUnits > 0 ? prevSCRev / prevSCUnits : 0
+            const prevSCDailyAvg = prevSCRev > 0 ? prevSCRev / (data.nDays || 1) : 0
+            const scSparkData = Array.from({ length: Math.max(scDailyArr.length, (amzSC.prevDaily || []).length) }, (_, i) => {
+              const cur = scDailyArr[i]
+              const pre = (amzSC.prevDaily || [])[i]
+              return { i, cur: cur ? (cur.FBA || 0) + (cur.MFN || 0) : null, prev: pre?.rev ?? null }
+            })
+            return (
+              <div style={{ display: 'grid', gridTemplateColumns: '1.5fr 5fr', gap: 10, alignItems: 'stretch' }}>
+                <div className="kpi-card" style={{ display: 'flex', flexDirection: 'column', gap: 8, padding: '16px 18px' }}>
+                  <div className="kpi-label" style={{ fontSize: 11 }}>Total Revenue · Seller Central</div>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 6 }}>
+                    <div className="kpi-value" style={{ fontSize: 32, fontWeight: 800 }}>{fmt(scTotalRev)}</div>
+                    {scChgBadge(scTotalRev, prevSCRev)}
+                  </div>
+                  <div className="kpi-sub" style={{ fontSize: 13 }}>{fmtN(scTotalOrders)} orders · {fmtN(scTotalUnits)} units</div>
+                  <div style={{ flex: 1, minHeight: 60 }}>
+                    <ResponsiveContainer width="100%" height="100%">
+                      <AreaChart data={scSparkData} margin={{ top: 4, right: 0, bottom: 0, left: 0 }}>
+                        <defs><linearGradient id="scGrad" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#FFD600" stopOpacity={0.25} /><stop offset="95%" stopColor="#FFD600" stopOpacity={0} /></linearGradient></defs>
+                        <Area type="monotone" dataKey="cur" name="Current" stroke="#FFD600" strokeWidth={2} fill="url(#scGrad)" dot={false} connectNulls />
+                        <Area type="monotone" dataKey="prev" name="Prev" stroke={C.t3} strokeWidth={1} fill="none" dot={false} strokeDasharray="3 2" connectNulls />
+                        <Tooltip content={({ active, payload }) => active && payload?.length ? <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 6, padding: '4px 8px', fontSize: 10 }}>{payload.map(p => <div key={p.name} style={{ color: p.name === 'Current' ? C.t1 : C.t3 }}>{p.name}: {fmt(p.value)}</div>)}</div> : null} />
+                      </AreaChart>
+                    </ResponsiveContainer>
+                  </div>
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10 }}>
+                    {[
+                      { label: 'Net Revenue (Exc GST)', value: fmt(scTotalExcRev), sub: `GST ${fmt(scTotalRev - scTotalExcRev)}` },
+                      { label: 'Total Orders', value: fmtN(scTotalOrders), sub: 'Confirmed orders', badge: scChgBadge(scTotalOrders, prevSCOrders) },
+                      { label: 'AOV', value: `₹${Math.round(scAOV).toLocaleString('en-IN')}`, sub: 'Revenue / Orders', badge: scChgBadge(scAOV, prevSCAOV) },
+                      { label: 'ASP', value: `₹${scTotalUnits ? Math.round(scTotalRev / scTotalUnits).toLocaleString('en-IN') : 0}`, sub: 'Revenue / Units', badge: scChgBadge(scTotalRev / (scTotalUnits || 1), prevSCASP) },
+                    ].map(k => (
+                      <div key={k.label} className="kpi-card" style={{ padding: '10px 13px' }}>
+                        <div className="kpi-label">{k.label}</div>
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 4 }}><div className="kpi-value" style={{ fontSize: 17 }}>{k.value}</div>{k.badge}</div>
+                        {k.sub && <div className="kpi-sub">{k.sub}</div>}
+                      </div>
+                    ))}
+                  </div>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10 }}>
+                    {[
+                      { label: 'Total Units', value: fmtN(scTotalUnits), sub: 'Units sold', badge: scChgBadge(scTotalUnits, prevSCUnits) },
+                      { label: 'Daily Avg Revenue', value: fmt(scTotalRev / (data.nDays || 1)), sub: 'Revenue per day', badge: scChgBadge(scTotalRev / (data.nDays || 1), prevSCDailyAvg) },
+                      { label: 'FBA Share', value: `${scTotalRev ? (scFBA.rev / scTotalRev * 100).toFixed(1) : 0}%`, sub: `MFN ${scTotalRev ? (scMFN.rev / scTotalRev * 100).toFixed(1) : 0}%`, badge: scChgBadge(scTotalRev ? scFBA.rev / scTotalRev * 100 : 0, prevSCRev > 0 ? (amzSC.prevFbaRev || 0) / prevSCRev * 100 : 0) },
+                      { label: 'Cancellation Rate', value: `${scCancelRate.toFixed(1)}%`, sub: `${fmtN(scCancelOrders)} cancelled`, accent: scCancelRate > 10 ? '#7A1A1A' : undefined, badge: (amzSC.prevCancelledOrders && prevSCOrders) ? (() => { const prevRate = amzSC.prevCancelledOrders / prevSCOrders * 100; const p = (scCancelRate - prevRate) / prevRate * 100; return <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 4, background: p > 0 ? C.red.bg : C.green.bg, color: p > 0 ? C.red.tx : C.green.tx, flexShrink: 0 }}>{p > 0 ? '▲' : '▼'} {Math.abs(p).toFixed(1)}%</span> })() : null },
+                    ].map(k => (
+                      <div key={k.label} className="kpi-card" style={{ padding: '10px 13px' }}>
+                        <div className="kpi-label">{k.label}</div>
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 4 }}><div className="kpi-value" style={{ fontSize: 17, ...(k.accent ? { color: k.accent } : {}) }}>{k.value}</div>{k.badge}</div>
+                        {k.sub && <div className="kpi-sub">{k.sub}</div>}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )
+          })()}
           {/* FBA vs MFN */}
           <div className="g-2" style={{ alignItems: 'stretch' }}>
             <Card title="FBA vs MFN Breakdown">
@@ -2294,18 +2351,66 @@ function AmazonTab({ data, region = 'india', setRegion = () => {} }) {
       {/* ── INDIA · VENDOR CENTRAL ── */}
       {region === 'india' && subView === 'vc' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6,1fr)', gap: 10 }}>
-            <KPICard label="Ordered Revenue" value={fmt(vcTotalOrdered)} sub="Gross ordered value" />
-            <KPICard label="Ordered Units" value={fmtN(vcTotalOrderedUnits)} />
-            <KPICard label="Shipped Units" value={fmtN(vcTotalShippedUnits)} />
-            <KPICard label="ASP" value={`₹${vcTotalOrderedUnits ? Math.round(vcTotalOrdered / vcTotalOrderedUnits).toLocaleString('en-IN') : 0}`} sub="Ordered rev / units" />
-            <KPICard label="Vendor Accounts" value={fmtN(amzVC.accounts?.length || 0)} sub="Active accounts" />
-            <KPICard label="Customer Returns" value={fmtN(vcTotalReturns)} accent={vcTotalReturns > 100 ? '#7A4000' : undefined} />
-          </div>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2,1fr)', gap: 10 }}>
-            <KPICard label="Return Rate" value={`${vcReturnRate.toFixed(1)}%`} sub="Returns / Shipped" accent={vcReturnRate > 5 ? '#7A1A1A' : undefined} />
-            <KPICard label="Daily Avg Ordered" value={fmt(vcTotalOrdered / (data.nDays || 1))} sub="Revenue per day" />
-          </div>
+          {/* Hero + KPI rows */}
+          {(() => {
+            const vcChgBadge = (cur, prev) => { if (!prev) return null; const p = (cur - prev) / prev * 100; return <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 4, background: p >= 0 ? C.green.bg : C.red.bg, color: p >= 0 ? C.green.tx : C.red.tx, flexShrink: 0 }}>{p >= 0 ? '▲' : '▼'} {Math.abs(p).toFixed(1)}%</span> }
+            const prevVCRev = amzVC.prevRev || 0
+            const prevVCUnits = amzVC.prevUnits || 0
+            const prevVCASP = prevVCUnits > 0 ? prevVCRev / prevVCUnits : 0
+            const prevVCDailyAvg = prevVCRev > 0 ? prevVCRev / (data.nDays || 1) : 0
+            const vcSparkData = (amzVC.daily || []).map((d, i) => ({ i, cur: d.orderedRev || null }))
+            return (
+              <div style={{ display: 'grid', gridTemplateColumns: '1.5fr 5fr', gap: 10, alignItems: 'stretch' }}>
+                <div className="kpi-card" style={{ display: 'flex', flexDirection: 'column', gap: 8, padding: '16px 18px' }}>
+                  <div className="kpi-label" style={{ fontSize: 11 }}>Ordered Revenue · Vendor Central</div>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 6 }}>
+                    <div className="kpi-value" style={{ fontSize: 32, fontWeight: 800 }}>{fmt(vcTotalOrdered)}</div>
+                    {vcChgBadge(vcTotalOrdered, prevVCRev)}
+                  </div>
+                  <div className="kpi-sub" style={{ fontSize: 13 }}>{fmtN(vcTotalOrderedUnits)} ordered · {fmtN(vcTotalShippedUnits)} shipped</div>
+                  <div style={{ flex: 1, minHeight: 60 }}>
+                    <ResponsiveContainer width="100%" height="100%">
+                      <AreaChart data={vcSparkData} margin={{ top: 4, right: 0, bottom: 0, left: 0 }}>
+                        <defs><linearGradient id="vcGrad" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#2E74CC" stopOpacity={0.25} /><stop offset="95%" stopColor="#2E74CC" stopOpacity={0} /></linearGradient></defs>
+                        <Area type="monotone" dataKey="cur" name="Ordered" stroke="#2E74CC" strokeWidth={2} fill="url(#vcGrad)" dot={false} connectNulls />
+                        <Tooltip content={({ active, payload }) => active && payload?.length ? <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 6, padding: '4px 8px', fontSize: 10 }}>{payload.map(p => <div key={p.name} style={{ color: C.t1 }}>{p.name}: {fmt(p.value)}</div>)}</div> : null} />
+                      </AreaChart>
+                    </ResponsiveContainer>
+                  </div>
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10 }}>
+                    {[
+                      { label: 'Ordered Units', value: fmtN(vcTotalOrderedUnits), sub: 'Gross ordered units', badge: vcChgBadge(vcTotalOrderedUnits, prevVCUnits) },
+                      { label: 'Shipped Units', value: fmtN(vcTotalShippedUnits), sub: `Fill rate ${vcFillRate.toFixed(1)}%` },
+                      { label: 'ASP', value: `₹${vcTotalOrderedUnits ? Math.round(vcTotalOrdered / vcTotalOrderedUnits).toLocaleString('en-IN') : 0}`, sub: 'Ordered rev / units', badge: vcChgBadge(vcTotalOrderedUnits ? vcTotalOrdered / vcTotalOrderedUnits : 0, prevVCASP) },
+                      { label: 'Daily Avg Ordered', value: fmt(vcTotalOrdered / (data.nDays || 1)), sub: 'Revenue per day', badge: vcChgBadge(vcTotalOrdered / (data.nDays || 1), prevVCDailyAvg) },
+                    ].map(k => (
+                      <div key={k.label} className="kpi-card" style={{ padding: '10px 13px' }}>
+                        <div className="kpi-label">{k.label}</div>
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 4 }}><div className="kpi-value" style={{ fontSize: 17 }}>{k.value}</div>{k.badge}</div>
+                        {k.sub && <div className="kpi-sub">{k.sub}</div>}
+                      </div>
+                    ))}
+                  </div>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10 }}>
+                    {[
+                      { label: 'Vendor Accounts', value: fmtN(amzVC.accounts?.length || 0), sub: 'Active accounts' },
+                      { label: 'Customer Returns', value: fmtN(vcTotalReturns), sub: 'Units returned', accent: vcTotalReturns > 100 ? '#7A4000' : undefined },
+                      { label: 'Return Rate', value: `${vcReturnRate.toFixed(1)}%`, sub: 'Returns / Shipped', accent: vcReturnRate > 5 ? '#7A1A1A' : undefined },
+                      { label: 'Fill Rate', value: `${vcFillRate.toFixed(1)}%`, sub: 'Shipped / Ordered' },
+                    ].map(k => (
+                      <div key={k.label} className="kpi-card" style={{ padding: '10px 13px' }}>
+                        <div className="kpi-label">{k.label}</div>
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 4 }}><div className="kpi-value" style={{ fontSize: 17, ...(k.accent ? { color: k.accent } : {}) }}>{k.value}</div>{k.badge}</div>
+                        {k.sub && <div className="kpi-sub">{k.sub}</div>}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )
+          })()}
           <div className="g-2" style={{ alignItems: 'stretch' }}>
             <Card title="Vendor Account Breakdown">
               {(amzVC.accounts || []).map((a, i) => {
