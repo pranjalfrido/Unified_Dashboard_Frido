@@ -1546,6 +1546,7 @@ function ShopifyTab({ data, filters, setFilters }) {
   const [subChOpen, setSubChOpen] = useState(false)
   const [pendingSubCh, setPendingSubCh] = useState([])
   const [selectedCat, setSelectedCat] = useState(null)
+  const [shTrendGroup, setShTrendGroup] = useState('daily')
   const catRows = Object.entries(catMap).map(([k, v]) => { const orders = v.orders?.size ?? v.orders ?? 0; return { name: k, rev: v.rev, excRev: v.excRev || 0, orders, units: v.units || 0, aov: orders ? v.rev / orders : 0, asp: (v.units || 0) ? v.rev / v.units : 0 } }).sort((a, b) => b.rev - a.rev)
   const allSubCatRows = Object.entries(subCatMap).map(([k, v]) => { const orders = v.orders?.size ?? v.orders ?? 0; return { name: k.split('::')[1] || k, category: k.split('::')[0] || '', rev: v.rev, orders, units: v.units || 0, aov: orders ? v.rev / orders : 0, asp: (v.units || 0) ? v.rev / v.units : 0 } }).sort((a, b) => b.rev - a.rev)
   const subCatRows = selectedCat ? allSubCatRows.filter(r => r.category === selectedCat) : allSubCatRows
@@ -1712,33 +1713,55 @@ function ShopifyTab({ data, filters, setFilters }) {
         })()}
       </div>
       <div className="g-2">
-        <Card title="Daily Revenue & Returns Trend">
-          {(() => {
-            const trendData = (dailyArr || []).map(d => {
-              const grossRev = d['Shopify'] || 0
-              const totalDayRev = Object.keys(C.ch).reduce((s, ch) => s + (d[ch] || 0), 0) || grossRev
-              const dayOrders = d['Shopify_o'] || 0
-              return {
-                date: d.date,
-                grossRev,
-                netRev: grossRev > 0 ? grossRev / 1.12 : 0,
+        {(() => {
+          const rawDaily = (dailyArr || []).map(d => {
+            const grossRev = d['Shopify'] || 0
+            const cancelData = (refundTrend || []).find(x => x.date === d.date)
+            return { date: d.date, grossRev, netRev: grossRev > 0 ? grossRev / 1.12 : 0, cancelPct: cancelData?.rate || 0 }
+          }).filter(d => d.grossRev > 0)
+
+          const grouped = (() => {
+            if (shTrendGroup === 'daily') return rawDaily
+            const buckets = {}
+            rawDaily.forEach(d => {
+              const dt = new Date(d.date)
+              let key
+              if (shTrendGroup === 'weekly') {
+                const day = dt.getDay(), diff = dt.getDate() - day + (day === 0 ? -6 : 1)
+                key = new Date(dt.setDate(diff)).toISOString().slice(0, 10)
+              } else if (shTrendGroup === 'monthly') {
+                key = d.date.slice(0, 7)
+              } else {
+                const m = parseInt(d.date.slice(5, 7))
+                const q = Math.ceil(m / 3)
+                key = `${d.date.slice(0, 4)}-Q${q}`
               }
-            }).filter(d => d.grossRev > 0 || d.netRev > 0)
-            const cancelData = (refundTrend || []).map(d => ({ date: d.date, cancelPct: d.rate || 0 }))
-            const merged = trendData.map(d => {
-              const cd = cancelData.find(x => x.date === d.date) || {}
-              return { ...d, cancelPct: cd.cancelPct || 0 }
+              if (!buckets[key]) buckets[key] = { date: key, grossRev: 0, netRev: 0, cancelPct: 0, _n: 0 }
+              buckets[key].grossRev += d.grossRev
+              buckets[key].netRev += d.netRev
+              buckets[key].cancelPct += d.cancelPct
+              buckets[key]._n += 1
             })
-            return (
+            return Object.values(buckets).map(b => ({ ...b, cancelPct: b._n ? b.cancelPct / b._n : 0 })).sort((a, b) => a.date.localeCompare(b.date))
+          })()
+
+          const btnSty = active => ({ fontSize: 11, fontWeight: active ? 700 : 500, padding: '3px 9px', borderRadius: 5, border: `1px solid ${active ? C.acm : C.border}`, background: active ? C.acc : 'transparent', color: C.t1, cursor: 'pointer', fontFamily: 'var(--font)' })
+          const xFmt = d => shTrendGroup === 'daily' ? d?.slice(5) : shTrendGroup === 'monthly' ? d?.slice(0, 7) : d
+          return (
+            <Card title="Revenue & Returns Trend" action={
+              <div style={{ display: 'flex', gap: 4 }}>
+                {['daily','weekly','monthly','quarterly'].map(g => <button key={g} style={btnSty(shTrendGroup === g)} onClick={() => setShTrendGroup(g)}>{g.charAt(0).toUpperCase() + g.slice(1)}</button>)}
+              </div>
+            }>
               <ResponsiveContainer width="100%" height={220}>
-                <ComposedChart data={merged} margin={{ top: 4, right: 50, bottom: 0, left: 0 }}>
+                <ComposedChart data={grouped} margin={{ top: 4, right: 50, bottom: 0, left: 0 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke={C.border} vertical={false} />
-                  <XAxis dataKey="date" tick={{ fontSize: 10, fill: C.t3 }} tickFormatter={d => d?.slice(5)} />
+                  <XAxis dataKey="date" tick={{ fontSize: 10, fill: C.t3 }} tickFormatter={xFmt} />
                   <YAxis yAxisId="rev" tick={{ fontSize: 10, fill: C.t3 }} tickFormatter={v => fmt(v)} width={60} />
                   <YAxis yAxisId="pct" orientation="right" tick={{ fontSize: 10, fill: C.t3 }} tickFormatter={v => `${v.toFixed(1)}%`} width={40} />
                   <Tooltip content={({ active, payload, label }) => active && payload?.length ? (
                     <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 7, padding: '7px 11px', fontSize: 11 }}>
-                      <div style={{ fontWeight: 700, marginBottom: 4, color: C.t2 }}>{label?.slice(5)}</div>
+                      <div style={{ fontWeight: 700, marginBottom: 4, color: C.t2 }}>{xFmt(label)}</div>
                       {payload.map(p => <div key={p.name} style={{ color: p.color }}>{p.name}: {p.yAxisId === 'pct' ? `${Number(p.value).toFixed(1)}%` : fmt(p.value)}</div>)}
                     </div>
                   ) : null} />
@@ -1748,9 +1771,9 @@ function ShopifyTab({ data, filters, setFilters }) {
                   <Line yAxisId="pct" type="monotone" dataKey="cancelPct" name="Cancel %" stroke="#E24B4A" strokeWidth={1.5} dot={false} />
                 </ComposedChart>
               </ResponsiveContainer>
-            )
-          })()}
-        </Card>
+            </Card>
+          )
+        })()}
         <Card title="Category Revenue">
           {catRows.slice(0, 8).map((r, i) => { const dots = ['#534AB7','#0D9E68','#2E74CC','#CC8A00','#CC4078','#E24B4A','#9B59B6','#FF6B35']; return <HBar key={r.name} dot={dots[i % dots.length]} label={r.name} width={(r.rev / (catRows[0]?.rev || 1)) * 100} value={fmt(r.rev)} pctVal={totalRev ? pct(r.rev, totalRev) : '—'} /> })}
         </Card>
