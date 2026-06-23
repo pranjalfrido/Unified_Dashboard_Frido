@@ -1583,8 +1583,8 @@ function ShopifyTab({ data, filters, setFilters }) {
   // For return/cancel metrics: higher is worse, so invert colors
   const shReturnBadge = (curPct, prevPct) => {
     if (!prevPct) return null
-    const p = curPct - prevPct
-    return <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 4, background: p > 0 ? C.red.bg : C.green.bg, color: p > 0 ? C.red.tx : C.green.tx, flexShrink: 0 }}>{p > 0 ? '▲' : '▼'} {Math.abs(p).toFixed(1)}pp</span>
+    const p = (curPct - prevPct) / prevPct * 100
+    return <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 4, background: p > 0 ? C.red.bg : C.green.bg, color: p > 0 ? C.red.tx : C.green.tx, flexShrink: 0 }}>{p > 0 ? '▲' : '▼'} {Math.abs(p).toFixed(1)}%</span>
   }
   const shSparkData = Array.from({ length: Math.max(dailyArr.length, prevDailyArr.length) }, (_, i) => {
     const cur = dailyArr[i]
