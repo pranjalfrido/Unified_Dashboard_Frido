@@ -1564,6 +1564,11 @@ function ShopifyTab({ data, filters, setFilters }) {
   const prevRev = sh.prevRev || 0
   const prevExcRev = sh.prevExcRev || 0
   const prevOrders = sh.prevOrders || 0
+  const prevUnits = sh.prevUnits || 0
+  const prevRtoOrders = sh.prevRtoOrders || 0
+  const prevCirOrders = sh.prevCirOrders || 0
+  const prevExchangeOrders = sh.prevExchangeOrders || 0
+  const prevCancelledOrders = sh.prevCancelledOrders || 0
   const prevDailyArr = sh.prevDaily || []
 
   const shRevChg = prevRev > 0 ? ((totalRev - prevRev) / prevRev * 100) : null
@@ -1574,6 +1579,12 @@ function ShopifyTab({ data, filters, setFilters }) {
     if (!prev) return null
     const p = (cur - prev) / prev * 100
     return <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 4, background: p >= 0 ? C.green.bg : C.red.bg, color: p >= 0 ? C.green.tx : C.red.tx, flexShrink: 0 }}>{p >= 0 ? '▲' : '▼'} {Math.abs(p).toFixed(1)}%</span>
+  }
+  // For return/cancel metrics: higher is worse, so invert colors
+  const shReturnBadge = (curPct, prevPct) => {
+    if (!prevPct) return null
+    const p = curPct - prevPct
+    return <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 4, background: p > 0 ? C.red.bg : C.green.bg, color: p > 0 ? C.red.tx : C.green.tx, flexShrink: 0 }}>{p > 0 ? '▲' : '▼'} {Math.abs(p).toFixed(1)}pp</span>
   }
   const shSparkData = Array.from({ length: Math.max(dailyArr.length, prevDailyArr.length) }, (_, i) => {
     const cur = dailyArr[i]
@@ -1754,14 +1765,19 @@ function ShopifyTab({ data, filters, setFilters }) {
             { label: 'GST Collected', value: fmt(gst), sub: totalRev > 0 ? `${((gst / totalRev) * 100).toFixed(1)}% of gross` : '—', badge: shChgBadge(gst, prevRev - prevExcRev) },
             { label: 'Daily Avg', value: fmt(dailyAvg), sub: `over ${nDays} days`, badge: shChgBadge(dailyAvg, prevRev > 0 ? prevRev / nDays : 0) },
             { label: 'AOV', value: `₹${Math.round(aov).toLocaleString('en-IN')}`, sub: 'Gross rev ÷ orders', badge: shChgBadge(aov, prevOrders > 0 ? prevRev / prevOrders : 0) },
-            { label: 'ASP', value: `₹${Math.round(asp).toLocaleString('en-IN')}`, sub: 'Net rev ÷ units sold' },
+            { label: 'ASP', value: `₹${Math.round(asp).toLocaleString('en-IN')}`, sub: 'Net rev ÷ units sold', badge: shChgBadge(asp, prevUnits > 0 ? prevExcRev / prevUnits : 0) },
           ]
+          const prevCancelPct = prevOrders > 0 ? prevCancelledOrders / prevOrders * 100 : 0
+          const prevCirPct = prevOrders > 0 ? prevCirOrders / prevOrders * 100 : 0
+          const prevExchangePct = prevOrders > 0 ? prevExchangeOrders / prevOrders * 100 : 0
+          const prevRtoPct = prevOrders > 0 ? prevRtoOrders / prevOrders * 100 : 0
+          const prevReturnRevPct = prevRev > 0 ? ((prevRtoOrders + prevCirOrders) / prevOrders * 100) : 0
           const row2 = [
-            { label: 'Cancellation %', value: `${cancelPct.toFixed(1)}%`, sub: `${fmtN(cancelledOrders)} cancelled`, accent: cancelPct > 5 ? '#7A1A1A' : undefined },
-            { label: 'CIR %', value: `${cirPct.toFixed(1)}%`, sub: `${fmtN(cirOrders)} CIR orders` },
-            { label: 'Exchange %', value: `${exchangePct.toFixed(1)}%`, sub: `${fmtN(exchangeOrders)} exchange orders` },
-            { label: 'RTO %', value: `${rtoPct.toFixed(1)}%`, sub: `${fmtN(rtoOrders)} RTO orders`, accent: rtoPct > 10 ? '#7A1A1A' : undefined },
-            { label: 'Return %', value: `${returnRevPct.toFixed(1)}%`, sub: `${fmt((data.rtoRevDirect || 0) + (data.cirRev || 0))} RTO+CIR rev`, accent: returnRevPct > 5 ? '#7A1A1A' : undefined },
+            { label: 'Cancellation %', value: `${cancelPct.toFixed(1)}%`, sub: `${fmtN(cancelledOrders)} cancelled`, accent: cancelPct > 5 ? '#7A1A1A' : undefined, badge: shReturnBadge(cancelPct, prevCancelPct) },
+            { label: 'CIR %', value: `${cirPct.toFixed(1)}%`, sub: `${fmtN(cirOrders)} CIR orders`, badge: shReturnBadge(cirPct, prevCirPct) },
+            { label: 'Exchange %', value: `${exchangePct.toFixed(1)}%`, sub: `${fmtN(exchangeOrders)} exchange orders`, badge: shReturnBadge(exchangePct, prevExchangePct) },
+            { label: 'RTO %', value: `${rtoPct.toFixed(1)}%`, sub: `${fmtN(rtoOrders)} RTO orders`, accent: rtoPct > 10 ? '#7A1A1A' : undefined, badge: shReturnBadge(rtoPct, prevRtoPct) },
+            { label: 'Return %', value: `${returnRevPct.toFixed(1)}%`, sub: `${fmt((data.rtoRevDirect || 0) + (data.cirRev || 0))} RTO+CIR rev`, accent: returnRevPct > 5 ? '#7A1A1A' : undefined, badge: shReturnBadge(returnRevPct, prevReturnRevPct) },
           ]
           return (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
@@ -1783,6 +1799,7 @@ function ShopifyTab({ data, filters, setFilters }) {
                     <div className="kpi-label">{k.label}</div>
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 4 }}>
                       <div className="kpi-value" style={{ fontSize: 17, ...(k.accent ? { color: k.accent } : {}) }}>{k.value}</div>
+                      {k.badge}
                     </div>
                     {k.sub && <div className="kpi-sub">{k.sub}</div>}
                   </div>
