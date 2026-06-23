@@ -1711,30 +1711,52 @@ function ShopifyTab({ data, filters, setFilters }) {
           )
         })()}
       </div>
-      <div className="g-3">
-        <Card title={isIntl ? 'International Breakdown' : 'Sub-channel Breakdown'}>
-          {activeSubChKeys.map((k, i) => { const dots = ['#FFD600','#0D9E68','#2E74CC','#CC4078','#9B59B6']; return <HBar key={k} dot={dots[i % dots.length]} label={k} width={(activeSubChMap[k].rev / maxSubChRev) * 100} value={fmt(activeSubChMap[k].rev)} pctVal={totalRev ? pct(activeSubChMap[k].rev, totalRev) : '—'} /> })}
+      <div className="g-2">
+        <Card title="Daily Revenue & Returns Trend">
+          {(() => {
+            const trendData = (dailyArr || []).map(d => {
+              const grossRev = d['Shopify'] || 0
+              const totalDayRev = Object.keys(C.ch).reduce((s, ch) => s + (d[ch] || 0), 0) || grossRev
+              const dayOrders = d['Shopify_o'] || 0
+              return {
+                date: d.date,
+                grossRev,
+                netRev: grossRev > 0 ? grossRev / 1.12 : 0,
+              }
+            }).filter(d => d.grossRev > 0 || d.netRev > 0)
+            const cancelData = (refundTrend || []).map(d => ({ date: d.date, cancelPct: d.rate || 0 }))
+            const merged = trendData.map(d => {
+              const cd = cancelData.find(x => x.date === d.date) || {}
+              return { ...d, cancelPct: cd.cancelPct || 0 }
+            })
+            return (
+              <ResponsiveContainer width="100%" height={220}>
+                <ComposedChart data={merged} margin={{ top: 4, right: 50, bottom: 0, left: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke={C.border} vertical={false} />
+                  <XAxis dataKey="date" tick={{ fontSize: 10, fill: C.t3 }} tickFormatter={d => d?.slice(5)} />
+                  <YAxis yAxisId="rev" tick={{ fontSize: 10, fill: C.t3 }} tickFormatter={v => fmt(v)} width={60} />
+                  <YAxis yAxisId="pct" orientation="right" tick={{ fontSize: 10, fill: C.t3 }} tickFormatter={v => `${v.toFixed(1)}%`} width={40} />
+                  <Tooltip content={({ active, payload, label }) => active && payload?.length ? (
+                    <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 7, padding: '7px 11px', fontSize: 11 }}>
+                      <div style={{ fontWeight: 700, marginBottom: 4, color: C.t2 }}>{label?.slice(5)}</div>
+                      {payload.map(p => <div key={p.name} style={{ color: p.color }}>{p.name}: {p.yAxisId === 'pct' ? `${Number(p.value).toFixed(1)}%` : fmt(p.value)}</div>)}
+                    </div>
+                  ) : null} />
+                  <Legend wrapperStyle={{ fontSize: 11 }} />
+                  <Area yAxisId="rev" type="monotone" dataKey="grossRev" name="Gross Revenue" stroke="#FFD600" fill="#FFD60022" strokeWidth={2} dot={false} />
+                  <Area yAxisId="rev" type="monotone" dataKey="netRev" name="Net Revenue" stroke="#0D9E68" fill="#0D9E6811" strokeWidth={2} dot={false} strokeDasharray="4 2" />
+                  <Line yAxisId="pct" type="monotone" dataKey="cancelPct" name="Cancel %" stroke="#E24B4A" strokeWidth={1.5} dot={false} />
+                </ComposedChart>
+              </ResponsiveContainer>
+            )
+          })()}
         </Card>
         <Card title="Category Revenue">
           {catRows.slice(0, 8).map((r, i) => { const dots = ['#534AB7','#0D9E68','#2E74CC','#CC8A00','#CC4078','#E24B4A','#9B59B6','#FF6B35']; return <HBar key={r.name} dot={dots[i % dots.length]} label={r.name} width={(r.rev / (catRows[0]?.rev || 1)) * 100} value={fmt(r.rev)} pctVal={totalRev ? pct(r.rev, totalRev) : '—'} /> })}
         </Card>
-        <OrderValuePieCard buckets={data.buckets || {}} bucketRev={data.bucketRev || {}} />
       </div>
-      <div className="g-2" style={{ alignItems: 'stretch' }}>
-        <Card title={`Daily Revenue Trend · Shopify ${isIntl ? 'International' : 'India'}`}>
-          <AreaTrendChart data={dailyArr} dataKey="Shopify" color={C.ch['Shopify']} />
-        </Card>
-        <Card title="Daily Refund Rate %">
-          <ResponsiveContainer width="100%" height={180}>
-            <LineChart data={refundTrend} margin={{top:0,right:0,bottom:0,left:0}}>
-              <CartesianGrid strokeDasharray="3 3" stroke={C.border} vertical={false} />
-              <XAxis dataKey="date" tick={{ fontSize: 10, fill: C.t3 }} tickFormatter={d => d?.slice(5)} />
-              <YAxis tick={{ fontSize: 10, fill: C.t3 }} tickFormatter={v => `${v.toFixed(1)}%`} width={40} />
-              <Tooltip content={<ChartTooltip />} />
-              <Line type="monotone" dataKey="rate" stroke={C.red?.tx || '#E24B4A'} strokeWidth={2} dot={false} name="Refund Rate %" />
-            </LineChart>
-          </ResponsiveContainer>
-        </Card>
+      <div className="g-3">
+        <OrderValuePieCard buckets={data.buckets || {}} bucketRev={data.bucketRev || {}} />
       </div>
       <div className="g-2" style={{ alignItems: 'stretch' }}>
         <Card title="Category Revenue" style={{ display: 'flex', flexDirection: 'column' }}>
