@@ -1875,7 +1875,7 @@ function ShopifyTab({ data, filters, setFilters }) {
                     <CartesianGrid strokeDasharray="3 3" stroke={C.border} horizontal={false} />
                     <Tooltip formatter={v => fmt(v)} />
                     <Bar dataKey="rev" name="Revenue" radius={[0,4,4,0]} onClick={r => setSelectedCat(selectedCat === r.name ? null : r.name)}>
-                      {catRows.map(r => <Cell key={r.name} fill={colorOf(r.name)} opacity={selectedCat && selectedCat !== r.name ? 0.35 : 1} />)}
+                      {catRows.map(r => <Cell key={r.name} fill="#FFD600" opacity={selectedCat && selectedCat !== r.name ? 0.35 : 1} />)}
                     </Bar>
                   </BarChart>
                 </ResponsiveContainer>
