@@ -1749,13 +1749,12 @@ function ShopifyTab({ data, filters, setFilters }) {
             return Object.values(buckets).map(b => ({ ...b, rtoPct: b._n ? b.rtoPct / b._n : 0, exchPct: b._n ? b.exchPct / b._n : 0, cirPct: b._n ? b.cirPct / b._n : 0 })).sort((a, b) => a.date.localeCompare(b.date))
           })()
 
-          const btnSty = active => ({ fontSize: 11, fontWeight: active ? 700 : 500, padding: '3px 9px', borderRadius: 5, border: `1px solid ${active ? C.acm : C.border}`, background: active ? C.acc : 'transparent', color: C.t1, cursor: 'pointer', fontFamily: 'var(--font)' })
           const xFmt = d => shTrendGroup === 'daily' ? d?.slice(5) : shTrendGroup === 'monthly' ? d?.slice(0, 7) : d
           return (
             <Card title="Revenue & Returns Trend" action={
-              <div style={{ display: 'flex', gap: 4 }}>
-                {['daily','weekly','monthly','quarterly'].map(g => <button key={g} style={btnSty(shTrendGroup === g)} onClick={() => setShTrendGroup(g)}>{g.charAt(0).toUpperCase() + g.slice(1)}</button>)}
-              </div>
+              <select value={shTrendGroup} onChange={e => setShTrendGroup(e.target.value)} style={{ fontSize: 11, fontWeight: 600, padding: '3px 8px', borderRadius: 6, border: `1px solid ${C.border2}`, background: C.card, color: C.t1, cursor: 'pointer', fontFamily: 'var(--font)', outline: 'none' }}>
+                {['daily','weekly','monthly','quarterly'].map(g => <option key={g} value={g}>{g.charAt(0).toUpperCase() + g.slice(1)}</option>)}
+              </select>
             }>
               <ResponsiveContainer width="100%" height={220}>
                 <ComposedChart data={grouped} margin={{ top: 4, right: 50, bottom: 0, left: 0 }}>
