@@ -1714,10 +1714,12 @@ function ShopifyTab({ data, filters, setFilters }) {
       </div>
       <div className="g-2">
         {(() => {
+          const returnTrendMap = {}
+          ;(data.dailyReturnTrend || []).forEach(x => { returnTrendMap[x.date] = x })
           const rawDaily = (dailyArr || []).map(d => {
             const grossRev = d['Shopify'] || 0
-            const cancelData = (refundTrend || []).find(x => x.date === d.date)
-            return { date: d.date, grossRev, netRev: grossRev > 0 ? grossRev / 1.12 : 0, cancelPct: cancelData?.rate || 0 }
+            const rt = returnTrendMap[d.date] || {}
+            return { date: d.date, grossRev, netRev: grossRev > 0 ? grossRev / 1.12 : 0, rtoPct: rt.rtoPct || 0, exchPct: rt.exchPct || 0, cirPct: rt.cirPct || 0 }
           }).filter(d => d.grossRev > 0)
 
           const grouped = (() => {
@@ -1736,13 +1738,15 @@ function ShopifyTab({ data, filters, setFilters }) {
                 const q = Math.ceil(m / 3)
                 key = `${d.date.slice(0, 4)}-Q${q}`
               }
-              if (!buckets[key]) buckets[key] = { date: key, grossRev: 0, netRev: 0, cancelPct: 0, _n: 0 }
+              if (!buckets[key]) buckets[key] = { date: key, grossRev: 0, netRev: 0, rtoPct: 0, exchPct: 0, cirPct: 0, _n: 0 }
               buckets[key].grossRev += d.grossRev
               buckets[key].netRev += d.netRev
-              buckets[key].cancelPct += d.cancelPct
+              buckets[key].rtoPct += d.rtoPct
+              buckets[key].exchPct += d.exchPct
+              buckets[key].cirPct += d.cirPct
               buckets[key]._n += 1
             })
-            return Object.values(buckets).map(b => ({ ...b, cancelPct: b._n ? b.cancelPct / b._n : 0 })).sort((a, b) => a.date.localeCompare(b.date))
+            return Object.values(buckets).map(b => ({ ...b, rtoPct: b._n ? b.rtoPct / b._n : 0, exchPct: b._n ? b.exchPct / b._n : 0, cirPct: b._n ? b.cirPct / b._n : 0 })).sort((a, b) => a.date.localeCompare(b.date))
           })()
 
           const btnSty = active => ({ fontSize: 11, fontWeight: active ? 700 : 500, padding: '3px 9px', borderRadius: 5, border: `1px solid ${active ? C.acm : C.border}`, background: active ? C.acc : 'transparent', color: C.t1, cursor: 'pointer', fontFamily: 'var(--font)' })
@@ -1768,7 +1772,9 @@ function ShopifyTab({ data, filters, setFilters }) {
                   <Legend wrapperStyle={{ fontSize: 11 }} />
                   <Area yAxisId="rev" type="monotone" dataKey="grossRev" name="Gross Revenue" stroke="#FFD600" fill="#FFD60022" strokeWidth={2} dot={false} />
                   <Area yAxisId="rev" type="monotone" dataKey="netRev" name="Net Revenue" stroke="#0D9E68" fill="#0D9E6811" strokeWidth={2} dot={false} strokeDasharray="4 2" />
-                  <Line yAxisId="pct" type="monotone" dataKey="cancelPct" name="Cancel %" stroke="#E24B4A" strokeWidth={1.5} dot={false} />
+                  <Line yAxisId="pct" type="monotone" dataKey="rtoPct" name="RTO %" stroke="#E24B4A" strokeWidth={1.5} dot={false} />
+                  <Line yAxisId="pct" type="monotone" dataKey="exchPct" name="Exchange %" stroke="#9B59B6" strokeWidth={1.5} dot={false} strokeDasharray="3 2" />
+                  <Line yAxisId="pct" type="monotone" dataKey="cirPct" name="CIR %" stroke="#2E74CC" strokeWidth={1.5} dot={false} strokeDasharray="5 3" />
                 </ComposedChart>
               </ResponsiveContainer>
             </Card>
