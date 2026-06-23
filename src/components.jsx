@@ -47,9 +47,9 @@ export function AlertCard({ type, title, body }) {
   )
 }
 
-export function HBar({ dot, label, width, value, pctVal }) {
+export function HBar({ dot, label, width, value, pctVal, onClick, isSelected }) {
   return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '6px 0', borderBottom: `1px solid ${C.border}` }} className="hbar-row">
+    <div onClick={onClick} style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '6px 0', borderBottom: `1px solid ${C.border}`, cursor: onClick ? 'pointer' : 'default', background: isSelected ? '#FFFBE6' : 'transparent', borderRadius: isSelected ? 4 : 0 }} className="hbar-row">
       <span style={{ width: 8, height: 8, borderRadius: '50%', background: dot, flexShrink: 0 }} />
       <span style={{ fontSize: 12, color: C.t2, flexShrink: 0, width: 110 }}>{label}</span>
       <div className="hb-track" style={{ flex: 1 }}><div className="hb-fill" style={{ width: `${width}%`, background: dot }} /></div>
