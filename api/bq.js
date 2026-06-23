@@ -100,6 +100,7 @@ export default async function handler(req, res) {
     topOrders: `WITH q AS (${base}), ot AS (SELECT OrderId, CAST(OrderDate AS STRING) AS order_date, Channel, State, City, SUM(SellingPrice_Inc_GST) AS rev, SUM(ItemQty) AS qty, MAX(FulfilmentStatus) AS order_status, MAX(CustomerId) AS customer_id, MAX(voucher_code) AS voucher_code, STRING_AGG(DISTINCT ChannelSKUCode, ', ' ORDER BY ChannelSKUCode LIMIT 5) AS skus FROM q GROUP BY OrderId, OrderDate, Channel, State, City) SELECT * FROM ot ORDER BY rev DESC LIMIT 20`,
     byVoucherRaw: `WITH q AS (${base}) SELECT TRIM(voucher_code) AS voucher_code, COUNT(DISTINCT OrderId) AS orders FROM q WHERE Channel = 'Shopify' AND voucher_code IS NOT NULL AND TRIM(voucher_code) != '' GROUP BY TRIM(voucher_code) ORDER BY orders DESC LIMIT 300`,
     byCIR: `WITH q AS (${base}) SELECT SUM(SellingPrice_Inc_GST) AS cir_rev, COUNT(DISTINCT OrderId) AS cir_orders FROM q WHERE is_CIR_return = 1`,
+    byRTO: `WITH q AS (${base}) SELECT SUM(SellingPrice_Inc_GST) AS rto_rev, COUNT(DISTINCT OrderId) AS rto_orders FROM q WHERE is_rto = 1 AND Channel = 'Shopify'`,
     prevTotals: `WITH q AS (${prevBase}) SELECT SUM(SellingPrice_Inc_GST) AS total_rev, SUM(SellingPrice_Exc_GST) AS total_exc_rev, COUNT(DISTINCT OrderId) AS n_orders, SUM(ItemQty) AS total_qty, COUNT(DISTINCT CASE WHEN FulfilmentStatus='RTO' THEN OrderId END) AS rto_orders, COUNT(DISTINCT CASE WHEN is_CIR_return=1 THEN OrderId END) AS cir_orders FROM q`,
     momTotals: `WITH q AS (${momBase}) SELECT SUM(SellingPrice_Inc_GST) AS total_rev, SUM(SellingPrice_Exc_GST) AS total_exc_rev, COUNT(DISTINCT OrderId) AS n_orders FROM q`,
     yoyTotals: `WITH q AS (${yoyBase}) SELECT SUM(SellingPrice_Inc_GST) AS total_rev, SUM(SellingPrice_Exc_GST) AS total_exc_rev, COUNT(DISTINCT OrderId) AS n_orders FROM q`,
@@ -277,6 +278,7 @@ export default async function handler(req, res) {
     const rtoRev = parseFloat(r.byOrderStatus?.find(x => x.order_status === 'RTO')?.rev) || 0
     const cancellRev = parseFloat(r.byOrderStatus?.find(x => x.order_status === 'Cancelled')?.rev) || 0
     const cirRev = parseFloat(r.byCIR?.[0]?.cir_rev) || 0
+    const rtoRevDirect = parseFloat(r.byRTO?.[0]?.rto_rev) || 0
     const netRevenueCalc = totalRev - (totalRev - totalExcRev) - rtoRev - cirRev - cancellRev
 
     // Build flipkart block early so we can patch overall totals with estimated days
@@ -344,7 +346,7 @@ export default async function handler(req, res) {
       totalRev: adjTotalRev, totalExcRev: adjTotalExcRev, totalQty: adjTotalQty, nOrders: adjNOrders, nDays,
       blendedAOV: adjNOrders ? adjTotalRev / adjNOrders : 0,
       gstCollected: adjTotalRev - adjTotalExcRev,
-      rtoRev, cancellRev, cirRev, netRevenueCalc,
+      rtoRev, cancellRev, cirRev, rtoRevDirect, netRevenueCalc,
       momRev, yoyRev, momOrders, yoyOrders,
       momPeriod: `${moms} → ${mome}`, yoyPeriod: `${yoys} → ${yoye}`,
       nCusts, repeatCusts,

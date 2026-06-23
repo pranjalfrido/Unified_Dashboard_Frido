@@ -1,0 +1,1632 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Frido Dashboard — KPI &amp; Data Source Reference</title>
+<style>
+  /* ── Reset & Base ── */
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: 'Segoe UI', Arial, sans-serif;
+    font-size: 10pt;
+    color: #13121A;
+    background: #fff;
+    line-height: 1.5;
+  }
+
+  /* ── Page Layout ── */
+  .page {
+    width: 210mm;
+    min-height: 297mm;
+    margin: 0 auto 20px;
+    padding: 18mm 18mm 22mm;
+    background: #fff;
+    position: relative;
+    box-shadow: 0 2px 12px rgba(0,0,0,0.10);
+  }
+
+  /* ── Cover Page ── */
+  .cover {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: flex-start;
+    min-height: 260mm;
+    padding-top: 40mm;
+  }
+
+  .cover-badge {
+    background: #FFD600;
+    color: #13121A;
+    font-weight: 700;
+    font-size: 8pt;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    padding: 4px 12px;
+    border-radius: 2px;
+    margin-bottom: 18px;
+    display: inline-block;
+  }
+
+  .cover h1 {
+    font-size: 26pt;
+    font-weight: 800;
+    color: #13121A;
+    line-height: 1.15;
+    margin-bottom: 10px;
+    max-width: 160mm;
+  }
+
+  .cover h1 span { color: #FFD600; }
+
+  .cover .subtitle {
+    font-size: 12pt;
+    color: #555;
+    margin-bottom: 6px;
+    font-weight: 400;
+  }
+
+  .cover .cover-meta {
+    margin-top: 30px;
+    font-size: 9pt;
+    color: #888;
+    border-top: 2px solid #FFD600;
+    padding-top: 12px;
+    width: 100%;
+  }
+
+  .cover .cover-meta strong { color: #13121A; }
+
+  .cover-divider {
+    width: 60px;
+    height: 4px;
+    background: #FFD600;
+    margin: 16px 0;
+    border-radius: 2px;
+  }
+
+  /* ── Footer ── */
+  .footer {
+    position: absolute;
+    bottom: 10mm;
+    left: 18mm;
+    right: 18mm;
+    border-top: 1px solid #e0e0e0;
+    padding-top: 4px;
+    display: flex;
+    justify-content: space-between;
+    font-size: 7.5pt;
+    color: #aaa;
+  }
+
+  .footer strong { color: #888; }
+
+  /* ── Table of Contents ── */
+  .toc h2 {
+    font-size: 16pt;
+    font-weight: 800;
+    color: #13121A;
+    margin-bottom: 6px;
+    border-bottom: 3px solid #FFD600;
+    padding-bottom: 6px;
+  }
+
+  .toc-list {
+    list-style: none;
+    margin-top: 18px;
+  }
+
+  .toc-list li {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    border-bottom: 1px dotted #ddd;
+    padding: 5px 0;
+    font-size: 10pt;
+  }
+
+  .toc-list li .toc-num {
+    font-weight: 700;
+    color: #FFD600;
+    min-width: 24px;
+  }
+
+  .toc-list li .toc-title { flex: 1; padding: 0 8px; }
+
+  .toc-list li.section-header {
+    background: #FFFBE6;
+    font-weight: 700;
+    font-size: 9pt;
+    padding: 4px 6px;
+    margin-top: 8px;
+    border-bottom: none;
+    color: #555;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+  }
+
+  /* ── Section Headers ── */
+  .section-title {
+    font-size: 16pt;
+    font-weight: 800;
+    color: #13121A;
+    border-bottom: 3px solid #FFD600;
+    padding-bottom: 6px;
+    margin-bottom: 16px;
+  }
+
+  .section-title .section-num {
+    color: #FFD600;
+    margin-right: 6px;
+  }
+
+  .subsection-title {
+    font-size: 12pt;
+    font-weight: 700;
+    color: #13121A;
+    margin: 18px 0 8px;
+    padding-left: 8px;
+    border-left: 4px solid #FFD600;
+  }
+
+  .sub2-title {
+    font-size: 10pt;
+    font-weight: 700;
+    color: #555;
+    margin: 14px 0 6px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+
+  /* ── Tables ── */
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-bottom: 14px;
+    font-size: 8.5pt;
+  }
+
+  thead tr {
+    background: #13121A;
+    color: #FFD600;
+  }
+
+  thead th {
+    padding: 7px 8px;
+    text-align: left;
+    font-weight: 700;
+    border: 1px solid #333;
+    white-space: nowrap;
+  }
+
+  tbody tr { border-bottom: 1px solid #e0e0e0; }
+
+  tbody tr:nth-child(even) { background: #FFFBE6; }
+
+  tbody td {
+    padding: 5px 8px;
+    border: 1px solid #ddd;
+    vertical-align: top;
+  }
+
+  tbody td code {
+    background: #f5f5f5;
+    border: 1px solid #ddd;
+    border-radius: 3px;
+    padding: 1px 4px;
+    font-family: 'Courier New', monospace;
+    font-size: 7.5pt;
+    color: #c0392b;
+    word-break: break-all;
+  }
+
+  /* ── Info Boxes ── */
+  .info-box {
+    background: #FFFBE6;
+    border: 1px solid #FFD600;
+    border-left: 4px solid #FFD600;
+    border-radius: 4px;
+    padding: 10px 14px;
+    margin-bottom: 14px;
+    font-size: 8.5pt;
+  }
+
+  .info-box strong { color: #13121A; }
+
+  .note-box {
+    background: #f8f8f8;
+    border: 1px solid #ddd;
+    border-left: 4px solid #888;
+    border-radius: 4px;
+    padding: 8px 12px;
+    margin-bottom: 10px;
+    font-size: 8pt;
+    color: #555;
+  }
+
+  /* ── Page Break ── */
+  .page-break { page-break-before: always; }
+
+  /* ── Print Styles ── */
+  @media print {
+    body { background: #fff; }
+
+    .page {
+      width: 210mm;
+      min-height: 297mm;
+      margin: 0;
+      padding: 15mm 15mm 22mm;
+      box-shadow: none;
+    }
+
+    .page-break { page-break-before: always; }
+
+    thead { display: table-header-group; }
+    tr { page-break-inside: avoid; }
+
+    a { text-decoration: none; color: inherit; }
+  }
+
+  @page {
+    size: A4;
+    margin: 0;
+  }
+</style>
+</head>
+<body>
+
+<!-- ═══════════════════════════════════════════════════════ -->
+<!-- COVER PAGE                                              -->
+<!-- ═══════════════════════════════════════════════════════ -->
+<div class="page">
+  <div class="cover">
+    <div class="cover-badge">Technical Reference</div>
+    <h1>Frido Dashboard —<br><span>KPI &amp; Data Source</span> Reference</h1>
+    <div class="cover-divider"></div>
+    <p class="subtitle">Technical Reference Document</p>
+    <p style="font-size:9pt;color:#777;">All Channels · Shopify · Amazon · Flipkart · Blinkit · Instamart · Zepto · CRED / Firstcry / Pharmeasy · Myntra</p>
+    <div class="cover-meta">
+      <strong>Prepared for:</strong> Frido Analytics Team &nbsp;&nbsp;|&nbsp;&nbsp;
+      <strong>Date:</strong> June 21, 2026 &nbsp;&nbsp;|&nbsp;&nbsp;
+      <strong>Classification:</strong> Confidential — Internal Use Only
+    </div>
+  </div>
+  <div class="footer">
+    <span><strong>Frido Dashboard</strong> — Confidential</span>
+    <span>Page 1</span>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════ -->
+<!-- TABLE OF CONTENTS                                       -->
+<!-- ═══════════════════════════════════════════════════════ -->
+<div class="page page-break">
+  <div class="toc">
+    <h2>Table of Contents</h2>
+    <ul class="toc-list">
+      <li class="section-header"><span>Overview</span></li>
+      <li><span class="toc-num">1.</span><span class="toc-title">Data Sources (BigQuery Tables)</span></li>
+      <li><span class="toc-num">2.</span><span class="toc-title">Key Computed Columns</span></li>
+      <li><span class="toc-num">3.</span><span class="toc-title">Global Filters</span></li>
+      <li><span class="toc-num">4.</span><span class="toc-title">Previous Period Comparison Logic</span></li>
+
+      <li class="section-header"><span>Dashboard Tabs — KPIs &amp; Charts</span></li>
+      <li><span class="toc-num">5.</span><span class="toc-title">All Channels Tab</span></li>
+      <li><span class="toc-num">6.</span><span class="toc-title">Shopify Tab</span></li>
+      <li><span class="toc-num">7.</span><span class="toc-title">Amazon Tab (Seller Central + Vendor Central)</span></li>
+      <li><span class="toc-num">8.</span><span class="toc-title">Flipkart Tab</span></li>
+      <li><span class="toc-num">9.</span><span class="toc-title">Blinkit Tab</span></li>
+      <li><span class="toc-num">10.</span><span class="toc-title">Instamart Tab</span></li>
+      <li><span class="toc-num">11.</span><span class="toc-title">Zepto Tab</span></li>
+      <li><span class="toc-num">12.</span><span class="toc-title">CRED / Firstcry / Pharmeasy Tab</span></li>
+      <li><span class="toc-num">13.</span><span class="toc-title">Myntra Tab</span></li>
+    </ul>
+  </div>
+  <div class="footer">
+    <span><strong>Frido Dashboard</strong> — Confidential</span>
+    <span>Page 2</span>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════ -->
+<!-- SECTION 1 — DATA SOURCES                               -->
+<!-- ═══════════════════════════════════════════════════════ -->
+<div class="page page-break">
+  <div class="section-title"><span class="section-num">1.</span>Data Sources — BigQuery Tables</div>
+
+  <p style="margin-bottom:12px;font-size:9pt;color:#555;">All dashboard queries are powered by the following BigQuery tables. The unified CTE joins these sources to produce a consistent, channel-agnostic dataset used for cross-channel KPIs.</p>
+
+  <table>
+    <thead>
+      <tr>
+        <th style="width:38%">Table Name</th>
+        <th style="width:22%">Dataset</th>
+        <th>Purpose / Channel</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><code>fact_shopify_myfrido_mobility_all_orders</code></td>
+        <td>production</td>
+        <td>Shopify India orders (MyFrido + Mobility sub-channels)</td>
+      </tr>
+      <tr>
+        <td><code>fact_shopify_b2b_orders</code></td>
+        <td>production</td>
+        <td>Shopify B2B orders</td>
+      </tr>
+      <tr>
+        <td><code>fact_shopify_international_orders</code></td>
+        <td>production</td>
+        <td>Shopify International orders</td>
+      </tr>
+      <tr>
+        <td><code>amazon_seller_central_all_orders</code></td>
+        <td>production</td>
+        <td>Amazon Seller Central — India</td>
+      </tr>
+      <tr>
+        <td><code>Amazon_Vendor_Central_sales_DateASIN_wise</code></td>
+        <td>production</td>
+        <td>Amazon Vendor Central (VC)</td>
+      </tr>
+      <tr>
+        <td><code>amazon_seller_central_uk_uae_all_orders</code></td>
+        <td>production</td>
+        <td>Amazon International — UK &amp; UAE</td>
+      </tr>
+      <tr>
+        <td><code>flipkart_reports.sales_report</code></td>
+        <td>flipkart_reports</td>
+        <td>Flipkart orders</td>
+      </tr>
+      <tr>
+        <td><code>fact_myntra_orders_report</code></td>
+        <td>production</td>
+        <td>Myntra orders</td>
+      </tr>
+      <tr>
+        <td><code>Unicommerce_Sale_Orders_Report</code></td>
+        <td>production</td>
+        <td>CRED / Firstcry / Pharmeasy orders</td>
+      </tr>
+      <tr>
+        <td><code>partnerbizz_reports_v2.sales</code></td>
+        <td>partnerbizz_reports_v2</td>
+        <td>Blinkit sales</td>
+      </tr>
+      <tr>
+        <td><code>zepto_sales_report</code></td>
+        <td>production</td>
+        <td>Zepto sales</td>
+      </tr>
+      <tr>
+        <td><code>fact_instamart_sales_report</code></td>
+        <td>production</td>
+        <td>Instamart (Swiggy) sales</td>
+      </tr>
+      <tr>
+        <td><code>Frido_Item_Master__productid_sku_mapping</code></td>
+        <td>sharepoint_to_gcp</td>
+        <td>Price master — <code>Selling_Price</code> (exc GST) per channel SKU. Used for Blinkit &amp; Instamart revenue computation.</td>
+      </tr>
+      <tr>
+        <td><code>Frido_Item_Master__frido_item_sku_master</code></td>
+        <td>sharepoint_to_gcp</td>
+        <td>Item master — Category, SubCategory, <code>GST_Tax_Type_Code</code>. Joined via master SKU code for all channels.</td>
+      </tr>
+      <tr>
+        <td><code>pincode_city_master</code></td>
+        <td>production</td>
+        <td>Pincode → State, City, Region, City_Tier lookup</td>
+      </tr>
+      <tr>
+        <td><code>Clickpost_Shipment_Tracking_Report</code></td>
+        <td>production</td>
+        <td>RTO / Delivered status for Shopify fulfilment KPIs</td>
+      </tr>
+      <tr>
+        <td><code>Clickpost_Returns_Exchange_Report</code></td>
+        <td>production</td>
+        <td>CIR returns and exchanges tracking</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div class="footer">
+    <span><strong>Frido Dashboard</strong> — Confidential</span>
+    <span>Page 3</span>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════ -->
+<!-- SECTION 2 — KEY COMPUTED COLUMNS                       -->
+<!-- ═══════════════════════════════════════════════════════ -->
+<div class="page page-break">
+  <div class="section-title"><span class="section-num">2.</span>Key Computed Columns</div>
+
+  <p style="margin-bottom:12px;font-size:9pt;color:#555;">These two columns are the foundational revenue metrics computed inside the unified CTE. All downstream KPIs are derived from them.</p>
+
+  <div class="subsection-title">2.1 Gross Revenue — <code>SellingPrice_Inc_GST</code></div>
+
+  <table>
+    <thead>
+      <tr>
+        <th style="width:24%">Channel</th>
+        <th style="width:36%">Source Field / Expression</th>
+        <th>Notes</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>Shopify</td>
+        <td><code>final_total_incl_tax</code></td>
+        <td>Direct from source — already includes GST</td>
+      </tr>
+      <tr>
+        <td>Amazon Seller Central</td>
+        <td><code>item_price</code></td>
+        <td>Direct from source — MRP-level price including tax</td>
+      </tr>
+      <tr>
+        <td>Flipkart</td>
+        <td><code>price_after_discount_price_before_discount_total_discountx</code></td>
+        <td>Direct from source — Flipkart invoice price post-discount</td>
+      </tr>
+      <tr>
+        <td>Myntra</td>
+        <td><code>final_amount</code></td>
+        <td>Direct from source</td>
+      </tr>
+      <tr>
+        <td>CRED / Firstcry / Pharmeasy</td>
+        <td><code>SellingPrice</code></td>
+        <td>Direct from Unicommerce source</td>
+      </tr>
+      <tr>
+        <td>Blinkit</td>
+        <td><code>Selling_Price (exc GST) × qty × (1 + GST_Tax_Type_Code / 100)</code></td>
+        <td>Selling_Price from price master; GST % from item SKU master</td>
+      </tr>
+      <tr>
+        <td>Instamart</td>
+        <td><code>Selling_Price (exc GST) × units_sold × (1 + GST_Tax_Type_Code / 100)</code></td>
+        <td>Selling_Price from price master; GST % from item SKU master</td>
+      </tr>
+      <tr>
+        <td>Zepto</td>
+        <td><code>gross_selling_value × (1 + GST_Tax_Type_Code / 100)</code></td>
+        <td><code>gross_selling_value</code> = selling_price × sales_qty_units (already totalled in source)</td>
+      </tr>
+      <tr>
+        <td>Amazon Vendor Central</td>
+        <td><code>ordered_revenue × (1 + GST_Tax_Type_Code / 100)</code></td>
+        <td><code>ordered_revenue</code> is exc-GST in VC source; GST uplift applied via item master</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div class="subsection-title">2.2 Net Revenue — <code>SellingPrice_Exc_GST</code></div>
+
+  <table>
+    <thead>
+      <tr>
+        <th style="width:24%">Channel</th>
+        <th style="width:36%">Source Field / Expression</th>
+        <th>Notes</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>Shopify</td>
+        <td><code>selling_price_excl_shipping_tax</code></td>
+        <td>Direct from source</td>
+      </tr>
+      <tr>
+        <td>Amazon Seller Central</td>
+        <td><code>item_price − item_tax</code></td>
+        <td>Actual tax deducted per line item</td>
+      </tr>
+      <tr>
+        <td>Flipkart</td>
+        <td><code>taxable_value_final_invoice_amount_taxesx</code></td>
+        <td>Direct from source</td>
+      </tr>
+      <tr>
+        <td>Myntra</td>
+        <td><code>seller_price</code></td>
+        <td>Direct from source</td>
+      </tr>
+      <tr>
+        <td>CRED / Firstcry / Pharmeasy</td>
+        <td><code>Subtotal</code></td>
+        <td>Direct from Unicommerce source</td>
+      </tr>
+      <tr>
+        <td>Blinkit</td>
+        <td><code>Selling_Price (exc GST) × qty</code></td>
+        <td>From price master — already excl. GST per unit</td>
+      </tr>
+      <tr>
+        <td>Instamart</td>
+        <td><code>Selling_Price (exc GST) × units_sold</code></td>
+        <td>From price master — already excl. GST per unit</td>
+      </tr>
+      <tr>
+        <td>Zepto</td>
+        <td><code>gross_selling_value</code></td>
+        <td>Direct from source — already qty × unit selling price (exc GST)</td>
+      </tr>
+      <tr>
+        <td>Amazon Vendor Central</td>
+        <td><code>ordered_revenue</code></td>
+        <td>Direct from VC source — already exc-GST</td>
+      </tr>
+      <tr>
+        <td>Fallback (other channels)</td>
+        <td><code>SellingPrice_Inc_GST / (1 + GST% / 100)</code></td>
+        <td>If GST% known from item master; else divide by 1.18 (assumed 18%)</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div class="info-box">
+    <strong>GST Rate Source:</strong> The <code>GST_Tax_Type_Code</code> column in <code>Frido_Item_Master__frido_item_sku_master</code> (dataset: <code>sharepoint_to_gcp</code>) is joined to the unified CTE via the master SKU code. This is the single source of truth for GST % across all channels.
+  </div>
+
+  <div class="footer">
+    <span><strong>Frido Dashboard</strong> — Confidential</span>
+    <span>Page 4</span>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════ -->
+<!-- SECTION 3 — FILTERS                                    -->
+<!-- ═══════════════════════════════════════════════════════ -->
+<div class="page page-break">
+  <div class="section-title"><span class="section-num">3.</span>Global Filters</div>
+
+  <p style="margin-bottom:12px;font-size:9pt;color:#555;">All filters are applied as WHERE clauses to every query across all dashboard tabs. Filters are composable — multiple filters are AND-ed together.</p>
+
+  <table>
+    <thead>
+      <tr>
+        <th style="width:22%">Filter</th>
+        <th style="width:42%">WHERE Clause Expression</th>
+        <th>Notes</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>Date Range</td>
+        <td><code>OrderDate BETWEEN start AND end</code></td>
+        <td>Applied to all queries. Drives previous period window too.</td>
+      </tr>
+      <tr>
+        <td>Category</td>
+        <td><code>COALESCE(im.Category, 'Frido') = value</code></td>
+        <td>Joined from <code>Frido_Item_Master__frido_item_sku_master</code></td>
+      </tr>
+      <tr>
+        <td>Sub-category</td>
+        <td><code>COALESCE(im.SubCategory, 'Frido') = value</code></td>
+        <td>Joined from item master</td>
+      </tr>
+      <tr>
+        <td>SKU</td>
+        <td><code>ChannelSKUCode LIKE '%value%'</code></td>
+        <td>Partial match across all channel SKUs</td>
+      </tr>
+      <tr>
+        <td>Sub-channel</td>
+        <td><code>SubChannel = value</code></td>
+        <td>E.g., MyFrido / Mobility / B2B / FBF / FBA / MFN</td>
+      </tr>
+      <tr>
+        <td>Voucher Code</td>
+        <td><code>TRIM(voucher_code) IN (list)</code></td>
+        <td>Multi-select list; TRIM handles whitespace</td>
+      </tr>
+      <tr>
+        <td>State</td>
+        <td><code>UPPER(TRIM(State)) = value</code></td>
+        <td>Normalised uppercase match</td>
+      </tr>
+      <tr>
+        <td>Region</td>
+        <td><code>COALESCE(pm.Region, cm.Region) = value</code></td>
+        <td><code>pm</code> = pincode master; <code>cm</code> = city master fallback</td>
+      </tr>
+      <tr>
+        <td>City</td>
+        <td><code>COALESCE(pm.City_L1, cm.City_L1, u.City) = value</code></td>
+        <td>Three-level fallback across pincode master, city master, and Unicommerce city field</td>
+      </tr>
+      <tr>
+        <td>City Tier</td>
+        <td><code>COALESCE(pm.City_Tier, cm.City_Tier) = value</code></td>
+        <td>Tier 1 / 2 / 3 classification from pincode or city master</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <!-- SECTION 4 — PREV PERIOD -->
+  <div class="section-title" style="margin-top:24px;"><span class="section-num">4.</span>Previous Period Comparison Logic</div>
+
+  <p style="margin-bottom:10px;font-size:9pt;color:#555;">Every KPI card that shows a % change badge uses the <strong>immediately preceding period of equal length</strong>.</p>
+
+  <div class="info-box">
+    <strong>Example:</strong> Selected range = Jun 14–Jun 20 (7 days) → Previous period = Jun 7–Jun 13 (7 days).<br>
+    <strong>Formula:</strong> <code>(Current Value − Previous Value) ÷ Previous Value × 100</code><br><br>
+    <strong>Badge colours:</strong>
+    <span style="background:#22c55e;color:#fff;padding:2px 8px;border-radius:3px;font-size:8pt;margin-right:6px;">Green = Positive change</span>
+    <span style="background:#ef4444;color:#fff;padding:2px 8px;border-radius:3px;font-size:8pt;">Red = Negative change</span>
+  </div>
+
+  <div class="note-box">
+    MoM and YoY comparisons (available on the All Channels tab) use the same-length window shifted by 1 month or 1 year respectively, rather than an equal-days window.
+  </div>
+
+  <div class="footer">
+    <span><strong>Frido Dashboard</strong> — Confidential</span>
+    <span>Page 5</span>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════ -->
+<!-- SECTION 5 — ALL CHANNELS TAB                           -->
+<!-- ═══════════════════════════════════════════════════════ -->
+<div class="page page-break">
+  <div class="section-title"><span class="section-num">5.</span>All Channels Tab</div>
+
+  <div class="subsection-title">5.1 KPIs</div>
+
+  <table>
+    <thead>
+      <tr>
+        <th style="width:26%">KPI</th>
+        <th style="width:38%">Formula</th>
+        <th>Query / Source</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>Gross Revenue (Inc GST)</td>
+        <td><code>SUM(SellingPrice_Inc_GST)</code></td>
+        <td>Unified CTE — all channels</td>
+      </tr>
+      <tr>
+        <td>Net Revenue (Exc GST)</td>
+        <td><code>SUM(SellingPrice_Exc_GST)</code></td>
+        <td>Unified CTE — all channels</td>
+      </tr>
+      <tr>
+        <td>GST Collected</td>
+        <td><code>Gross Revenue − Net Revenue</code></td>
+        <td>Calculated</td>
+      </tr>
+      <tr>
+        <td>Total Orders</td>
+        <td><code>COUNT(DISTINCT OrderId)</code></td>
+        <td>Unified CTE</td>
+      </tr>
+      <tr>
+        <td>Total Units</td>
+        <td><code>SUM(ItemQty)</code></td>
+        <td>Unified CTE</td>
+      </tr>
+      <tr>
+        <td>Blended AOV</td>
+        <td><code>Gross Revenue ÷ Total Orders</code></td>
+        <td>Calculated</td>
+      </tr>
+      <tr>
+        <td>Daily Avg Revenue</td>
+        <td><code>Gross Revenue ÷ COUNT(DISTINCT OrderDate)</code></td>
+        <td>Calculated</td>
+      </tr>
+      <tr>
+        <td>D2C Share %</td>
+        <td><code>Shopify Revenue ÷ Total Revenue × 100</code></td>
+        <td>byChannel grouping</td>
+      </tr>
+      <tr>
+        <td>Q-commerce Share %</td>
+        <td><code>(Blinkit + Instamart + Zepto Revenue) ÷ Total Revenue × 100</code></td>
+        <td>byChannel grouping</td>
+      </tr>
+      <tr>
+        <td>Marketplace Share %</td>
+        <td><code>100% − D2C% − Q-commerce%</code></td>
+        <td>Calculated</td>
+      </tr>
+      <tr>
+        <td>Multi-item Rate %</td>
+        <td><code>Orders with ItemQty &gt; 1 ÷ Total Orders × 100</code></td>
+        <td>multiItem query</td>
+      </tr>
+      <tr>
+        <td>Voucher Penetration %</td>
+        <td><code>Orders with voucher_code ÷ Total Orders × 100</code></td>
+        <td>byVoucher query</td>
+      </tr>
+      <tr>
+        <td>High-ticket Orders (≥ ₹10K)</td>
+        <td><code>COUNT(OrderId) WHERE order total ≥ ₹10,000</code></td>
+        <td>highTicket query</td>
+      </tr>
+      <tr>
+        <td>Unique Customers</td>
+        <td><code>COUNT(DISTINCT CustomerId)</code></td>
+        <td>totals query</td>
+      </tr>
+      <tr>
+        <td>Repeat Rate %</td>
+        <td><code>Customers with prior order ÷ Total customers × 100</code></td>
+        <td>repeatRate query</td>
+      </tr>
+      <tr>
+        <td>MoM Revenue %</td>
+        <td><code>(Current − MoM period) ÷ MoM period × 100</code></td>
+        <td>momTotals query</td>
+      </tr>
+      <tr>
+        <td>YoY Revenue %</td>
+        <td><code>(Current − YoY period) ÷ YoY period × 100</code></td>
+        <td>yoyTotals query</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div class="subsection-title">5.2 Charts &amp; Tables</div>
+
+  <table>
+    <thead>
+      <tr>
+        <th style="width:30%">Chart / Table</th>
+        <th style="width:40%">What It Shows</th>
+        <th>Query</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>Revenue Trend (stacked area)</td>
+        <td>Daily revenue by channel over selected period</td>
+        <td>byDate — <code>SUM(SellingPrice_Inc_GST) GROUP BY date, Channel</code></td>
+      </tr>
+      <tr>
+        <td>Channel Share bars</td>
+        <td>Revenue and % share per channel</td>
+        <td>byChannel</td>
+      </tr>
+      <tr>
+        <td>Category × Channel Matrix</td>
+        <td>Revenue by category and channel with row % share</td>
+        <td>byCategoryChannel + bySubCategoryChannel</td>
+      </tr>
+      <tr>
+        <td>Daily Channel Table</td>
+        <td>Revenue &amp; Units by day; toggle: daily / weekly / monthly</td>
+        <td>byDate</td>
+      </tr>
+      <tr>
+        <td>Top States</td>
+        <td>Revenue, orders, city count per state</td>
+        <td>byState</td>
+      </tr>
+      <tr>
+        <td>Top Cities</td>
+        <td>Revenue and orders per city</td>
+        <td>byCity</td>
+      </tr>
+      <tr>
+        <td>Category Revenue</td>
+        <td>Revenue, orders, units per category</td>
+        <td>byCategory</td>
+      </tr>
+      <tr>
+        <td>Sub-category Revenue</td>
+        <td>Revenue, orders per sub-category</td>
+        <td>bySubCategory</td>
+      </tr>
+      <tr>
+        <td>Order Value Distribution</td>
+        <td>Orders and revenue bucketed by order value band</td>
+        <td>byOrderValue</td>
+      </tr>
+      <tr>
+        <td>Net Revenue KPI</td>
+        <td><code>SUM(SellingPrice_Exc_GST)</code> — all channels, no sparkline</td>
+        <td>totals query</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div class="footer">
+    <span><strong>Frido Dashboard</strong> — Confidential</span>
+    <span>Page 6</span>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════ -->
+<!-- SECTION 6 — SHOPIFY TAB                                -->
+<!-- ═══════════════════════════════════════════════════════ -->
+<div class="page page-break">
+  <div class="section-title"><span class="section-num">6.</span>Shopify Tab</div>
+
+  <div class="subsection-title">6.1 KPIs</div>
+
+  <table>
+    <thead>
+      <tr>
+        <th style="width:26%">KPI</th>
+        <th style="width:42%">Formula</th>
+        <th>Query / Source</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>Gross Revenue (Inc GST)</td>
+        <td><code>SUM(SellingPrice_Inc_GST) WHERE Channel='Shopify'</code></td>
+        <td>chMap['Shopify'].rev</td>
+      </tr>
+      <tr>
+        <td>Net Revenue (Exc GST)</td>
+        <td><code>SUM(SellingPrice_Exc_GST) WHERE Channel='Shopify'</code></td>
+        <td>chMap['Shopify'].excRev</td>
+      </tr>
+      <tr>
+        <td>GST Collected</td>
+        <td><code>Gross − Net</code></td>
+        <td>Calculated</td>
+      </tr>
+      <tr>
+        <td>Orders</td>
+        <td><code>COUNT(DISTINCT OrderId) WHERE Channel='Shopify'</code></td>
+        <td>chMap['Shopify'].orders</td>
+      </tr>
+      <tr>
+        <td>Units</td>
+        <td><code>SUM(ItemQty) WHERE Channel='Shopify'</code></td>
+        <td>chMap['Shopify'].qty</td>
+      </tr>
+      <tr>
+        <td>Daily Avg Revenue</td>
+        <td><code>Shopify Gross ÷ nDays</code></td>
+        <td>Calculated</td>
+      </tr>
+      <tr>
+        <td>AOV (Avg Order Value)</td>
+        <td><code>Shopify Gross ÷ Shopify Orders</code></td>
+        <td>Calculated</td>
+      </tr>
+      <tr>
+        <td>ASP (Avg Selling Price)</td>
+        <td><code>Shopify Net ÷ Shopify Units</code></td>
+        <td>Calculated</td>
+      </tr>
+      <tr>
+        <td>Fulfilment %</td>
+        <td><code>Delivered orders ÷ Total Shopify orders × 100</code></td>
+        <td>byOrderStatus WHERE Channel='Shopify', status='Delivered' (from Clickpost)</td>
+      </tr>
+      <tr>
+        <td>RTO %</td>
+        <td><code>RTO orders ÷ Total Shopify orders × 100</code></td>
+        <td>byOrderStatus WHERE Channel='Shopify', status='RTO'</td>
+      </tr>
+      <tr>
+        <td>Revenue at Risk</td>
+        <td><code>SUM of RTO + Cancelled order revenue</code></td>
+        <td>byOrderStatus — Clickpost + order status</td>
+      </tr>
+      <tr>
+        <td>Repeat Rate %</td>
+        <td><code>Customers with prior order ÷ Total customers × 100</code></td>
+        <td>repeatRate query — <code>fact_shopify_myfrido_mobility_all_orders</code></td>
+      </tr>
+      <tr>
+        <td>% Change vs Prev Period</td>
+        <td><code>(Current − Prev) ÷ Prev × 100</code></td>
+        <td>prevShopify query — equal-length preceding window</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div class="subsection-title">6.2 Charts &amp; Tables</div>
+
+  <table>
+    <thead>
+      <tr>
+        <th style="width:30%">Chart / Table</th>
+        <th style="width:42%">What It Shows</th>
+        <th>Query / Source</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>Gross Revenue Sparkline</td>
+        <td>Daily Shopify revenue vs prev period overlay</td>
+        <td>byDate dataKey='Shopify' vs prevShopifyDaily</td>
+      </tr>
+      <tr>
+        <td>Daily Revenue Trend</td>
+        <td>Daily Shopify revenue area chart</td>
+        <td>byDate, Channel='Shopify'</td>
+      </tr>
+      <tr>
+        <td>Daily Refund Rate %</td>
+        <td>Refunded lines ÷ total orders per day</td>
+        <td>byRefundTrend — <code>COUNTIF(RefundStatus='true')</code></td>
+      </tr>
+      <tr>
+        <td>Sub-channel Breakdown</td>
+        <td>Revenue split: MyFrido / Mobility / B2B / Retail</td>
+        <td>bySubChannel WHERE Channel='Shopify'</td>
+      </tr>
+      <tr>
+        <td>Category Revenue Table</td>
+        <td>Revenue, exc GST, orders, AOV per category</td>
+        <td>shCategory query — Shopify only</td>
+      </tr>
+      <tr>
+        <td>Sub-categories Table</td>
+        <td>Revenue and orders per sub-category</td>
+        <td>shSubCategory query — Shopify only</td>
+      </tr>
+      <tr>
+        <td>Top States</td>
+        <td>Revenue, orders, city count per state</td>
+        <td>shState query — Shopify only</td>
+      </tr>
+      <tr>
+        <td>Top Cities</td>
+        <td>Revenue and orders per city</td>
+        <td>shCity query — Shopify only</td>
+      </tr>
+      <tr>
+        <td>Voucher Breakdown</td>
+        <td>Orders and revenue grouped by voucher type / code</td>
+        <td>byVoucher WHERE Channel='Shopify'</td>
+      </tr>
+      <tr>
+        <td>Payment Mode (COD vs Prepaid)</td>
+        <td>Orders split by payment type</td>
+        <td>byPaymentMode WHERE Channel='Shopify'</td>
+      </tr>
+      <tr>
+        <td>Financial Status</td>
+        <td>Paid / Pending / Refunded order counts</td>
+        <td>byFinancialStatus WHERE Channel='Shopify'</td>
+      </tr>
+      <tr>
+        <td>Fulfilment Status</td>
+        <td>Fulfilled / Unfulfilled / Partial order counts</td>
+        <td>byFulfilmentStatus WHERE Channel='Shopify'</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div class="footer">
+    <span><strong>Frido Dashboard</strong> — Confidential</span>
+    <span>Page 7</span>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════ -->
+<!-- SECTION 7 — AMAZON TAB                                 -->
+<!-- ═══════════════════════════════════════════════════════ -->
+<div class="page page-break">
+  <div class="section-title"><span class="section-num">7.</span>Amazon Tab</div>
+
+  <div class="subsection-title">7.1 Seller Central (SC) — KPIs</div>
+
+  <table>
+    <thead>
+      <tr>
+        <th style="width:26%">KPI</th>
+        <th style="width:42%">Formula</th>
+        <th>Query / Source</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>Gross Revenue</td>
+        <td><code>SUM(SellingPrice_Inc_GST) WHERE SubChannel='Amazon Seller Central', NOT Cancelled</code></td>
+        <td>amzSCFulfillment</td>
+      </tr>
+      <tr>
+        <td>Net Revenue</td>
+        <td><code>SUM(item_price − item_tax)</code></td>
+        <td>amzSCFulfillment</td>
+      </tr>
+      <tr>
+        <td>Orders</td>
+        <td><code>COUNT(DISTINCT OrderId)</code></td>
+        <td>amzSCFulfillment</td>
+      </tr>
+      <tr>
+        <td>Units</td>
+        <td><code>SUM(ItemQty)</code></td>
+        <td>amzSCFulfillment</td>
+      </tr>
+      <tr>
+        <td>AOV</td>
+        <td><code>Gross ÷ Orders</code></td>
+        <td>Calculated</td>
+      </tr>
+      <tr>
+        <td>FBA Revenue</td>
+        <td><code>SUM(Gross) WHERE fulfillment_channel = 'Amazon'</code></td>
+        <td>amzSCFulfillment GROUP BY fulfillment_channel</td>
+      </tr>
+      <tr>
+        <td>MFN Revenue</td>
+        <td><code>SUM(Gross) WHERE fulfillment_channel = 'Merchant'</code></td>
+        <td>amzSCFulfillment GROUP BY fulfillment_channel</td>
+      </tr>
+      <tr>
+        <td>Cancel Rate %</td>
+        <td><code>Cancelled orders ÷ Total SC orders × 100</code></td>
+        <td>amzSCStatus</td>
+      </tr>
+      <tr>
+        <td>Daily Avg Revenue</td>
+        <td><code>Gross ÷ nDays</code></td>
+        <td>Calculated</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div class="subsection-title">7.2 Vendor Central (VC) — KPIs</div>
+
+  <table>
+    <thead>
+      <tr>
+        <th style="width:26%">KPI</th>
+        <th style="width:42%">Formula</th>
+        <th>Query / Source</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>Ordered Revenue</td>
+        <td><code>SUM(ordered_revenue)</code> — direct from VC source</td>
+        <td>amzVCAccounts</td>
+      </tr>
+      <tr>
+        <td>Shipped Revenue</td>
+        <td>Same as Ordered Revenue (VC source has single revenue field)</td>
+        <td>amzVCAccounts</td>
+      </tr>
+      <tr>
+        <td>Ordered Units</td>
+        <td><code>SUM(orderedUnits)</code></td>
+        <td>amzVCAccounts</td>
+      </tr>
+      <tr>
+        <td>Fill Rate %</td>
+        <td><code>Shipped Units ÷ Ordered Units × 100</code></td>
+        <td>Calculated</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div class="subsection-title">7.3 Charts</div>
+
+  <table>
+    <thead>
+      <tr>
+        <th style="width:40%">Chart / Table</th>
+        <th>Source</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>Daily SC Revenue (FBA vs MFN stacked)</td>
+        <td>amzSCDaily — <code>GROUP BY date, fulfillment_channel</code></td>
+      </tr>
+      <tr>
+        <td>Top States bar chart</td>
+        <td>amzSCStates — pincode master join</td>
+      </tr>
+      <tr>
+        <td>Top SKUs table</td>
+        <td>amzSCSKUs — <code>GROUP BY ChannelSKUCode</code></td>
+      </tr>
+      <tr>
+        <td>VC Daily Trend</td>
+        <td>amzVCDaily — <code>GROUP BY date</code></td>
+      </tr>
+      <tr>
+        <td>VC ASIN Table</td>
+        <td>amzVCASINs — <code>GROUP BY ASIN</code></td>
+      </tr>
+      <tr>
+        <td>International Countries</td>
+        <td>amzIntlCountries — direct from <code>amazon_seller_central_uk_uae_all_orders</code></td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div class="footer">
+    <span><strong>Frido Dashboard</strong> — Confidential</span>
+    <span>Page 8</span>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════ -->
+<!-- SECTION 8 — FLIPKART TAB                               -->
+<!-- ═══════════════════════════════════════════════════════ -->
+<div class="page page-break">
+  <div class="section-title"><span class="section-num">8.</span>Flipkart Tab</div>
+
+  <div class="subsection-title">8.1 KPIs</div>
+
+  <table>
+    <thead>
+      <tr>
+        <th style="width:26%">KPI</th>
+        <th style="width:42%">Formula</th>
+        <th>Query / Source</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>Gross Revenue</td>
+        <td><code>SUM(price_after_discount)</code></td>
+        <td>fkTotals — WHERE Channel='Flipkart'</td>
+      </tr>
+      <tr>
+        <td>Net Revenue</td>
+        <td><code>SUM(taxable_value)</code></td>
+        <td>fkTotals</td>
+      </tr>
+      <tr>
+        <td>Orders</td>
+        <td><code>COUNT(DISTINCT OrderId)</code></td>
+        <td>fkTotals</td>
+      </tr>
+      <tr>
+        <td>Units</td>
+        <td><code>SUM(ItemQty)</code></td>
+        <td>fkTotals</td>
+      </tr>
+      <tr>
+        <td>AOV</td>
+        <td><code>Gross ÷ Orders</code></td>
+        <td>Calculated</td>
+      </tr>
+      <tr>
+        <td>Daily Avg Revenue</td>
+        <td><code>Gross ÷ nDays</code></td>
+        <td>Calculated</td>
+      </tr>
+      <tr>
+        <td>FBF Revenue</td>
+        <td><code>SUM(Gross) WHERE SubChannel='Flipkart FBF'</code></td>
+        <td>fkTotals GROUP BY sub</td>
+      </tr>
+      <tr>
+        <td>Non-FBF Revenue</td>
+        <td><code>SUM(Gross) WHERE SubChannel != 'Flipkart FBF'</code></td>
+        <td>fkTotals GROUP BY sub</td>
+      </tr>
+      <tr>
+        <td>% Change vs Prev Period</td>
+        <td><code>(Current − Prev) ÷ Prev × 100</code></td>
+        <td>prevFk query</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div class="subsection-title">8.2 Charts &amp; Tables</div>
+
+  <table>
+    <thead>
+      <tr>
+        <th style="width:40%">Chart / Table</th>
+        <th>Source</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>Daily Revenue (FBF vs Non-FBF stacked)</td>
+        <td>fkDaily — <code>GROUP BY date, SubChannel</code></td>
+      </tr>
+      <tr>
+        <td>Fulfilment Status</td>
+        <td>fkStatus — order status breakdown</td>
+      </tr>
+      <tr>
+        <td>Top SKUs</td>
+        <td>fkSKUs — <code>GROUP BY ChannelSKUCode</code></td>
+      </tr>
+      <tr>
+        <td>Category Breakdown</td>
+        <td>fkCategories — <code>GROUP BY Category</code></td>
+      </tr>
+      <tr>
+        <td>Top States</td>
+        <td>fkStates — pincode master join</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div class="footer">
+    <span><strong>Frido Dashboard</strong> — Confidential</span>
+    <span>Page 9</span>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════ -->
+<!-- SECTION 9 — BLINKIT TAB                                -->
+<!-- ═══════════════════════════════════════════════════════ -->
+<div class="page page-break">
+  <div class="section-title"><span class="section-num">9.</span>Blinkit Tab</div>
+
+  <div class="info-box">
+    <strong>Revenue computation:</strong> Blinkit does not carry selling price in the raw transaction table. Revenue is computed by joining <code>Frido_Item_Master__productid_sku_mapping</code> WHERE <code>channelname = 'Blinkit'</code>, using the <code>Selling_Price</code> column (exc GST per unit). GST uplift uses <code>GST_Tax_Type_Code</code> from <code>Frido_Item_Master__frido_item_sku_master</code>.
+  </div>
+
+  <div class="subsection-title">9.1 KPIs</div>
+
+  <table>
+    <thead>
+      <tr>
+        <th style="width:26%">KPI</th>
+        <th style="width:42%">Formula</th>
+        <th>Query / Source</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>Gross Revenue (Inc GST)</td>
+        <td><code>SUM(Selling_Price_exc × qty × (1 + GST% / 100))</code></td>
+        <td>blTotals — <code>SUM(SellingPrice_Inc_GST) WHERE Channel='Blinkit'</code></td>
+      </tr>
+      <tr>
+        <td>Net Revenue (Exc GST)</td>
+        <td><code>SUM(Selling_Price_exc × qty)</code></td>
+        <td>blTotals — <code>SUM(SellingPrice_Exc_GST)</code></td>
+      </tr>
+      <tr>
+        <td>Units</td>
+        <td><code>SUM(qty_sold)</code></td>
+        <td>blTotals — from <code>partnerbizz_reports_v2.sales</code></td>
+      </tr>
+      <tr>
+        <td>SKUs</td>
+        <td><code>COUNT(DISTINCT item_id)</code></td>
+        <td>blTotals</td>
+      </tr>
+      <tr>
+        <td>Cities</td>
+        <td><code>COUNT(DISTINCT city_name)</code></td>
+        <td>blTotals</td>
+      </tr>
+      <tr>
+        <td>ASP (Avg Selling Price)</td>
+        <td><code>Net Revenue ÷ Units</code></td>
+        <td>Calculated</td>
+      </tr>
+      <tr>
+        <td>Daily Avg Revenue</td>
+        <td><code>Gross ÷ nDays</code></td>
+        <td>Calculated</td>
+      </tr>
+      <tr>
+        <td>% Change vs Prev Period</td>
+        <td><code>(Current − Prev) ÷ Prev × 100</code></td>
+        <td>prevBl query</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div class="subsection-title">9.2 Charts &amp; Tables</div>
+
+  <table>
+    <thead>
+      <tr>
+        <th style="width:40%">Chart / Table</th>
+        <th>Source</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>Daily Revenue Trend</td>
+        <td>blDaily — <code>GROUP BY date</code></td>
+      </tr>
+      <tr>
+        <td>Category Breakdown</td>
+        <td>blCategories — item master join</td>
+      </tr>
+      <tr>
+        <td>Top SKUs Table</td>
+        <td>blSKUs — joined with partnerbizz <code>item_name</code></td>
+      </tr>
+      <tr>
+        <td>Top Cities</td>
+        <td>blCities — <code>GROUP BY city_name</code></td>
+      </tr>
+      <tr>
+        <td>State Revenue Bars</td>
+        <td>city_name_master join for region / tier mapping</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div class="footer">
+    <span><strong>Frido Dashboard</strong> — Confidential</span>
+    <span>Page 10</span>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════ -->
+<!-- SECTION 10 — INSTAMART TAB                             -->
+<!-- ═══════════════════════════════════════════════════════ -->
+<div class="page page-break">
+  <div class="section-title"><span class="section-num">10.</span>Instamart Tab</div>
+
+  <div class="info-box">
+    <strong>Revenue computation:</strong> Like Blinkit, Instamart revenue is computed from the price master. Join <code>Frido_Item_Master__productid_sku_mapping</code> WHERE <code>channelname = 'Instamart'</code>, column <code>Selling_Price</code> (exc GST per unit). GST uplift via <code>GST_Tax_Type_Code</code> from item SKU master.
+  </div>
+
+  <div class="subsection-title">10.1 KPIs</div>
+
+  <table>
+    <thead>
+      <tr>
+        <th style="width:26%">KPI</th>
+        <th style="width:42%">Formula</th>
+        <th>Query / Source</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>Gross Revenue (Inc GST)</td>
+        <td><code>SUM(Selling_Price_exc × units_sold × (1 + GST% / 100))</code></td>
+        <td>inTotals — <code>SUM(SellingPrice_Inc_GST) WHERE Channel='Instamart'</code></td>
+      </tr>
+      <tr>
+        <td>Net Revenue (Exc GST)</td>
+        <td><code>SUM(Selling_Price_exc × units_sold)</code></td>
+        <td>inTotals — <code>SUM(SellingPrice_Exc_GST)</code></td>
+      </tr>
+      <tr>
+        <td>Units</td>
+        <td><code>SUM(units_sold)</code></td>
+        <td>inTotals — from <code>fact_instamart_sales_report</code></td>
+      </tr>
+      <tr>
+        <td>ASP (Avg Selling Price)</td>
+        <td><code>Net Revenue ÷ Units</code></td>
+        <td>Calculated</td>
+      </tr>
+      <tr>
+        <td>Daily Avg Revenue</td>
+        <td><code>Gross ÷ nDays</code></td>
+        <td>Calculated</td>
+      </tr>
+      <tr>
+        <td>% Change vs Prev Period</td>
+        <td><code>(Current − Prev) ÷ Prev × 100</code></td>
+        <td>prevIn query</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div class="note-box">
+    Source table: <code>fact_instamart_sales_report</code> (dataset: production). Units column: <code>units_sold</code>. No order-level data available — ASP is the primary per-unit metric.
+  </div>
+
+  <!-- ═══════════════════════════════════════════════════════ -->
+  <!-- SECTION 11 — ZEPTO TAB                                 -->
+  <!-- ═══════════════════════════════════════════════════════ -->
+  <div class="section-title" style="margin-top:24px;"><span class="section-num">11.</span>Zepto Tab</div>
+
+  <div class="info-box">
+    <strong>Revenue computation:</strong> <code>gross_selling_value</code> in <code>zepto_sales_report</code> = <code>selling_price × sales_qty_units</code> — already a totalled field (exc GST). Gross Revenue is computed by multiplying by <code>(1 + GST_Tax_Type_Code / 100)</code> from the item master.
+  </div>
+
+  <div class="subsection-title">11.1 KPIs</div>
+
+  <table>
+    <thead>
+      <tr>
+        <th style="width:26%">KPI</th>
+        <th style="width:42%">Formula</th>
+        <th>Query / Source</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>Gross Revenue (Inc GST)</td>
+        <td><code>SUM(gross_selling_value × (1 + GST% / 100))</code></td>
+        <td>zpTotals — <code>SUM(SellingPrice_Inc_GST) WHERE Channel='Zepto'</code></td>
+      </tr>
+      <tr>
+        <td>Net Revenue (Exc GST)</td>
+        <td><code>SUM(gross_selling_value)</code></td>
+        <td>zpTotals — direct from source</td>
+      </tr>
+      <tr>
+        <td>Units</td>
+        <td><code>SUM(sales_qty_units)</code></td>
+        <td>zpTotals — <code>zepto_sales_report</code></td>
+      </tr>
+      <tr>
+        <td>Orders</td>
+        <td><code>SUM(orders)</code> column from <code>zepto_sales_report</code> directly</td>
+        <td>zpTotals subquery</td>
+      </tr>
+      <tr>
+        <td>ASP (Avg Selling Price)</td>
+        <td><code>Net Revenue ÷ Units</code></td>
+        <td>Calculated</td>
+      </tr>
+      <tr>
+        <td>Daily Avg Revenue</td>
+        <td><code>Gross ÷ nDays</code></td>
+        <td>Calculated</td>
+      </tr>
+      <tr>
+        <td>% Change vs Prev Period</td>
+        <td><code>(Current − Prev) ÷ Prev × 100</code></td>
+        <td>prevZp query</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div class="footer">
+    <span><strong>Frido Dashboard</strong> — Confidential</span>
+    <span>Page 11</span>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════ -->
+<!-- SECTION 12 — CRED / FIRSTCRY / PHARMEASY TAB           -->
+<!-- ═══════════════════════════════════════════════════════ -->
+<div class="page page-break">
+  <div class="section-title"><span class="section-num">12.</span>CRED / Firstcry / Pharmeasy Tab</div>
+
+  <div class="info-box">
+    <strong>Source table:</strong> <code>Unicommerce_Sale_Orders_Report</code> (dataset: production). Filtered by <code>ChannelName LIKE 'cred%'</code> (covers CRED, Firstcry, Pharmeasy sub-channels). Cancelled orders are excluded from revenue KPIs.
+  </div>
+
+  <div class="subsection-title">12.1 KPIs</div>
+
+  <table>
+    <thead>
+      <tr>
+        <th style="width:26%">KPI</th>
+        <th style="width:42%">Formula</th>
+        <th>Query / Source</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>Gross Revenue</td>
+        <td><code>SUM(SellingPrice)</code> from Unicommerce</td>
+        <td>crTotals WHERE Channel='CRED'</td>
+      </tr>
+      <tr>
+        <td>Net Revenue</td>
+        <td><code>SUM(Subtotal)</code> from Unicommerce</td>
+        <td>crTotals</td>
+      </tr>
+      <tr>
+        <td>Orders</td>
+        <td><code>COUNT(DISTINCT DisplayOrderCode)</code></td>
+        <td>crTotals</td>
+      </tr>
+      <tr>
+        <td>Units</td>
+        <td><code>SUM(1 per row)</code> — ItemQty = 1 per line</td>
+        <td>crTotals</td>
+      </tr>
+      <tr>
+        <td>ASP (Avg Selling Price)</td>
+        <td><code>Net ÷ Units</code></td>
+        <td>Calculated</td>
+      </tr>
+      <tr>
+        <td>Daily Avg Revenue</td>
+        <td><code>Gross ÷ nDays</code></td>
+        <td>Calculated</td>
+      </tr>
+      <tr>
+        <td>% Change vs Prev Period</td>
+        <td><code>(Current − Prev) ÷ Prev × 100</code></td>
+        <td>prevCr query</td>
+      </tr>
+      <tr>
+        <td>Status Breakdown</td>
+        <td>Count and revenue by order status</td>
+        <td>crStatus — Delivered / Cancelled / Dispatched</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div class="note-box">
+    Each row in <code>Unicommerce_Sale_Orders_Report</code> represents one line item. <code>DisplayOrderCode</code> is the order-level identifier. <code>SellingPrice</code> is the gross (inc-GST) amount; <code>Subtotal</code> is net (exc-GST).
+  </div>
+
+  <!-- ═══════════════════════════════════════════════════════ -->
+  <!-- SECTION 13 — MYNTRA TAB                                -->
+  <!-- ═══════════════════════════════════════════════════════ -->
+  <div class="section-title" style="margin-top:24px;"><span class="section-num">13.</span>Myntra Tab</div>
+
+  <div class="subsection-title">13.1 KPIs</div>
+
+  <table>
+    <thead>
+      <tr>
+        <th style="width:26%">KPI</th>
+        <th style="width:42%">Formula</th>
+        <th>Query / Source</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>Gross Revenue</td>
+        <td><code>SUM(final_amount)</code></td>
+        <td>mnTotals WHERE Channel='Myntra'</td>
+      </tr>
+      <tr>
+        <td>Net Revenue</td>
+        <td><code>SUM(seller_price)</code></td>
+        <td>mnTotals</td>
+      </tr>
+      <tr>
+        <td>Orders</td>
+        <td><code>COUNT(DISTINCT store_order_id)</code></td>
+        <td>mnTotals — <code>fact_myntra_orders_report</code></td>
+      </tr>
+      <tr>
+        <td>Units</td>
+        <td><code>SUM(1 per row)</code> — ItemQty = 1 per line</td>
+        <td>mnTotals</td>
+      </tr>
+      <tr>
+        <td>AOV (Avg Order Value)</td>
+        <td><code>Gross ÷ Orders</code></td>
+        <td>Calculated</td>
+      </tr>
+      <tr>
+        <td>ASP (Avg Selling Price)</td>
+        <td><code>Net ÷ Units</code></td>
+        <td>Calculated</td>
+      </tr>
+      <tr>
+        <td>Daily Avg Revenue</td>
+        <td><code>Net ÷ COUNT(DISTINCT OrderDate)</code></td>
+        <td>mnTotals — days = distinct order dates</td>
+      </tr>
+      <tr>
+        <td>% Change vs Prev Period</td>
+        <td><code>(Current − Prev) ÷ Prev × 100</code></td>
+        <td>prevMn query</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div class="note-box">
+    Source table: <code>fact_myntra_orders_report</code> (dataset: production). Order identifier: <code>store_order_id</code>. Gross = <code>final_amount</code> (inc-GST); Net = <code>seller_price</code> (exc-GST). Each row = one line item; <code>ItemQty</code> is treated as 1 per row.
+  </div>
+
+  <div style="margin-top:30px;padding:12px;background:#FFFBE6;border:1px solid #FFD600;border-radius:4px;font-size:8pt;color:#555;">
+    <strong style="color:#13121A;">Document End</strong><br>
+    This document covers all 9 dashboard tabs, 17 BigQuery source tables, all computed column definitions, global filter logic, and previous period comparison methodology. For implementation queries, contact the Frido Analytics team.
+  </div>
+
+  <div class="footer">
+    <span><strong>Frido Dashboard</strong> — Confidential</span>
+    <span>Page 12</span>
+  </div>
+</div>
+
+</body>
+</html>
