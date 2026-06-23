@@ -1783,9 +1783,6 @@ function ShopifyTab({ data, filters, setFilters }) {
           {catRows.slice(0, 8).map((r, i) => { const dots = ['#534AB7','#0D9E68','#2E74CC','#CC8A00','#CC4078','#E24B4A','#9B59B6','#FF6B35']; return <HBar key={r.name} dot={dots[i % dots.length]} label={r.name} width={(r.rev / (catRows[0]?.rev || 1)) * 100} value={fmt(r.rev)} pctVal={totalRev ? pct(r.rev, totalRev) : '—'} /> })}
         </Card>
       </div>
-      <div className="g-3">
-        <OrderValuePieCard buckets={data.buckets || {}} bucketRev={data.bucketRev || {}} />
-      </div>
       <div className="g-2" style={{ alignItems: 'stretch' }}>
         <Card title="Category Revenue" style={{ display: 'flex', flexDirection: 'column' }}>
           <div style={{ overflowX: 'auto' }}>
