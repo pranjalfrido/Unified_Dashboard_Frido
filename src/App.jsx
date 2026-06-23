@@ -1600,8 +1600,8 @@ function ShopifyTab({ data, filters, setFilters }) {
           const totalSubRev = Object.values(indiaSubChMap).reduce((s, x) => s + x.rev, 0)
           const sel = filters.subChannel ? filters.subChannel.split(',').map(x => x.trim()).filter(Boolean) : []
           return (
-            <div style={{ marginLeft: 'auto', display: 'flex', flexDirection: 'column', gap: 4 }}>
-              {indiaSubChKeys.map(k => {
+            <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 0, border: `1.5px solid ${C.border2}`, borderRadius: 8, overflow: 'hidden', background: C.card }}>
+              {indiaSubChKeys.map((k, i) => {
                 const v = indiaSubChMap[k]
                 const isActive = sel.includes(k)
                 return (
@@ -1613,21 +1613,22 @@ function ShopifyTab({ data, filters, setFilters }) {
                       setFilters(f => ({ ...f, subChannel: next.join(',') }))
                     }}
                     style={{
-                      display: 'flex', flexDirection: 'row', alignItems: 'center', gap: 12,
-                      padding: '5px 12px', borderRadius: 7, cursor: 'pointer', fontFamily: 'var(--font)',
-                      border: `1.5px solid ${isActive ? C.acm : C.border2}`,
-                      background: isActive ? C.acc : C.card,
-                      transition: 'all .12s', whiteSpace: 'nowrap',
+                      display: 'flex', flexDirection: 'row', alignItems: 'center', gap: 8,
+                      padding: '6px 14px', cursor: 'pointer', fontFamily: 'var(--font)',
+                      borderLeft: i > 0 ? `1px solid ${C.border2}` : 'none',
+                      border: 'none',
+                      background: isActive ? C.acc : 'transparent',
+                      transition: 'background .12s', whiteSpace: 'nowrap',
                     }}
                   >
-                    <span style={{ fontSize: 10, color: isActive ? C.acm : C.t3, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.04em', minWidth: 70, textAlign: 'left' }}>{k}</span>
+                    <span style={{ fontSize: 10, color: isActive ? C.acm : C.t3, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.05em' }}>{k}</span>
                     <span style={{ fontSize: 12, fontWeight: 700, color: C.t1, fontFamily: 'var(--mono)' }}>{fmt(v.rev)}</span>
-                    <span style={{ fontSize: 11, color: C.t3, minWidth: 38, textAlign: 'right' }}>{totalSubRev ? pct(v.rev, totalSubRev) : '—'}</span>
+                    <span style={{ fontSize: 11, color: isActive ? C.acm : C.t3 }}>{totalSubRev ? pct(v.rev, totalSubRev) : '—'}</span>
                   </button>
                 )
               })}
               {sel.length > 0 && (
-                <button onClick={() => setFilters(f => ({ ...f, subChannel: '' }))} style={{ fontSize: 11, padding: '3px 8px', borderRadius: 6, border: `1px solid ${C.border2}`, background: C.card, color: C.t2, cursor: 'pointer', alignSelf: 'flex-end' }}>✕ Clear</button>
+                <button onClick={() => setFilters(f => ({ ...f, subChannel: '' }))} style={{ fontSize: 11, padding: '6px 10px', borderLeft: `1px solid ${C.border2}`, border: 'none', borderLeft: `1px solid ${C.border2}`, background: 'transparent', color: C.t3, cursor: 'pointer' }}>✕</button>
               )}
             </div>
           )
