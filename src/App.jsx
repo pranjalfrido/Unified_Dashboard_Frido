@@ -1482,9 +1482,9 @@ function OrderValuePieCard({ buckets, bucketRev }) {
 
 function ShopifyGeoDonutRow({ regionRows, tierRows, topStates }) {
   const [metric, setMetric] = useState('rev')
-  const REGION_COLORS = ['#FFD600','#FFC200','#FFB300','#FFCA28','#FFD740','#FFE57F']
-  const TIER_COLORS = ['#FFD600','#FFC200','#FFB300']
-  const STATE_COLORS = ['#FFD600','#FFC200','#FFB300','#FFCA28','#FFD740','#FFE57F']
+  const REGION_COLORS = ['#534AB7','#0D9E68','#2E74CC','#CC8A00','#CC4078','#E24B4A']
+  const TIER_COLORS = ['#FFD600','#FF6B35','#9B59B6']
+  const STATE_COLORS = ['#0D9E68','#2E74CC','#534AB7','#CC8A00','#E24B4A','#9B59B6']
   const metricVal = (r, m) => m === 'rev' ? r.rev : m === 'orders' ? r.orders : (r.orders ? Math.round(r.rev / r.orders) : 0)
   const metricFmt = v => metric === 'rev' ? fmt(v) : metric === 'aov' ? `₹${v.toLocaleString('en-IN')}` : fmtN(v)
   const selStyle = active => ({ fontSize: 10, fontWeight: active ? 700 : 500, padding: '2px 8px', borderRadius: 4, border: `1px solid ${active ? C.acm : C.border}`, background: active ? C.acc : 'transparent', color: C.t1, cursor: 'pointer', fontFamily: 'var(--font)' })
@@ -1866,25 +1866,25 @@ function ShopifyTab({ data, filters, setFilters }) {
                     </div>
                   ) : null} />
                   <Legend wrapperStyle={{ fontSize: 11 }} />
-                  <Area yAxisId="rev" type="monotone" dataKey="grossRev" name="Gross Revenue" stroke="#FFD600" fill="#FFD60033" strokeWidth={2.5} dot={false} />
-                  <Area yAxisId="rev" type="monotone" dataKey="netRev" name="Net Revenue" stroke="#FFC200" fill="#FFC20018" strokeWidth={2} dot={false} strokeDasharray="4 2" />
-                  <Line yAxisId="pct" type="monotone" dataKey="rtoPct" name="RTO %" stroke="#FFB300" strokeWidth={1.5} dot={false} />
-                  <Line yAxisId="pct" type="monotone" dataKey="exchPct" name="Exchange %" stroke="#FFCA28" strokeWidth={1.5} dot={false} strokeDasharray="3 2" />
-                  <Line yAxisId="pct" type="monotone" dataKey="cirPct" name="CIR %" stroke="#FFD740" strokeWidth={1.5} dot={false} strokeDasharray="5 3" />
+                  <Area yAxisId="rev" type="monotone" dataKey="grossRev" name="Gross Revenue" stroke="#FFD600" fill="#FFD60022" strokeWidth={2} dot={false} />
+                  <Area yAxisId="rev" type="monotone" dataKey="netRev" name="Net Revenue" stroke="#0D9E68" fill="#0D9E6811" strokeWidth={2} dot={false} strokeDasharray="4 2" />
+                  <Line yAxisId="pct" type="monotone" dataKey="rtoPct" name="RTO %" stroke="#E24B4A" strokeWidth={1.5} dot={false} />
+                  <Line yAxisId="pct" type="monotone" dataKey="exchPct" name="Exchange %" stroke="#9B59B6" strokeWidth={1.5} dot={false} strokeDasharray="3 2" />
+                  <Line yAxisId="pct" type="monotone" dataKey="cirPct" name="CIR %" stroke="#2E74CC" strokeWidth={1.5} dot={false} strokeDasharray="5 3" />
                 </ComposedChart>
               </ResponsiveContainer>
             </Card>
           )
         })()}
         <Card title="Category Revenue">
-          {catRows.slice(0, 8).map((r, i) => { const dots = ['#FFD600','#FFC200','#FFB300','#FFCA28','#FFD740','#FFE57F','#FFE0B2','#FFAB00']; const isSelected = (filters.category || []).includes(r.name); return <HBar key={r.name} dot={dots[i % dots.length]} label={r.name} width={(r.rev / (catRows[0]?.rev || 1)) * 100} value={fmt(r.rev)} pctVal={totalRev ? pct(r.rev, totalRev) : '—'} isSelected={isSelected} onClick={() => { const next = isSelected ? [] : [r.name]; setSelectedCat(next[0] || null); setFilters(f => ({ ...f, category: next, subCategory: [] })) }} /> })}
+          {catRows.slice(0, 8).map((r, i) => { const dots = ['#534AB7','#0D9E68','#2E74CC','#CC8A00','#CC4078','#E24B4A','#9B59B6','#FF6B35']; const isSelected = (filters.category || []).includes(r.name); return <HBar key={r.name} dot={dots[i % dots.length]} label={r.name} width={(r.rev / (catRows[0]?.rev || 1)) * 100} value={fmt(r.rev)} pctVal={totalRev ? pct(r.rev, totalRev) : '—'} isSelected={isSelected} onClick={() => { const next = isSelected ? [] : [r.name]; setSelectedCat(next[0] || null); setFilters(f => ({ ...f, category: next, subCategory: [] })) }} /> })}
         </Card>
       </div>
       <ShopifyGeoDonutRow regionRows={sh.regionRows || []} tierRows={sh.tierRows || []} topStates={sh.topStates || []} />
       <div className="g-2" style={{ alignItems: 'stretch' }}>
         {(() => {
           const FIXED_H = 420
-          const CAT_COLORS = ['#FFD600','#FFC200','#FFB300','#FFCA28','#FFD740','#FFE57F','#FFE0B2','#FFAB00','#FFD740','#FFC107']
+          const CAT_COLORS = ['#534AB7','#0D9E68','#2E74CC','#CC8A00','#CC4078','#E24B4A','#9B59B6','#FF6B35','#00B4D8','#06D6A0']
           const colorOf = name => { const idx = catRows.findIndex(r => r.name === name); return CAT_COLORS[idx >= 0 ? idx % CAT_COLORS.length : 0] }
           const btnStyle = v => ({ fontSize: 11, fontWeight: 600, padding: '3px 10px', borderRadius: 5, border: `1.5px solid ${shCatView === v ? C.acm : C.border}`, background: shCatView === v ? C.acc : 'transparent', color: shCatView === v ? C.t1 : C.t2, cursor: 'pointer', fontFamily: 'var(--font)' })
           const totalCatRev = catRows.reduce((s, r) => s + r.rev, 0)
