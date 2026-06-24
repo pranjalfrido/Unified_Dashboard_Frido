@@ -1986,6 +1986,8 @@ function AmazonTab({ data, region = 'india', setRegion = () => {} }) {
   // Daily SC - pivot FBA/MFN into single daily array
   const [scChartMetric, setScChartMetric] = useState('rev')
   const [scTrendGroup, setScTrendGroup] = useState('daily')
+  const [ovTrendMetric, setOvTrendMetric] = useState('rev')
+  const [ovTrendGroup, setOvTrendGroup] = useState('daily')
   const scDailyMap = {}
   ;(amzSC.daily || []).forEach(d => {
     if (!scDailyMap[d.date]) scDailyMap[d.date] = { date: d.date, FBA: 0, MFN: 0, FBA_orders: 0, MFN_orders: 0, FBA_units: 0, MFN_units: 0 }
@@ -2119,43 +2121,106 @@ function AmazonTab({ data, region = 'india', setRegion = () => {} }) {
               </div>
             )
           })()}
-          {/* Row 1: Daily Revenue + Order Status Breakdown */}
-          <div style={{ display: 'grid', gridTemplateColumns: '3fr 2fr', gap: 14, alignItems: 'stretch' }}>
-            <Card title={`Daily ${scChartMetric === 'rev' ? 'Revenue' : scChartMetric === 'units' ? 'Units' : 'Orders'} · India (Seller Central FBA + MFN)`} action={<div style={{ display: 'flex', gap: 4 }}>{[{ v: 'rev', label: 'Revenue' }, { v: 'units', label: 'Units' }, { v: 'orders', label: 'Orders' }].map(opt => <button key={opt.v} onClick={() => setScChartMetric(opt.v)} style={{ fontSize: 11, fontWeight: 600, padding: '3px 10px', borderRadius: 5, border: `1.5px solid ${scChartMetric === opt.v ? C.t1 : C.border}`, background: scChartMetric === opt.v ? C.t1 : 'transparent', color: scChartMetric === opt.v ? '#fff' : C.t2, cursor: 'pointer', fontFamily: 'var(--font)' }}>{opt.label}</button>)}</div>}>
-              <ResponsiveContainer width="100%" height={200}>
-                <BarChart data={scDailyArr} margin={{ top: 0, right: 0, bottom: 0, left: 0 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke={C.border} vertical={false} />
-                  <XAxis dataKey="date" tick={{ fontSize: 10, fill: C.t3 }} tickFormatter={d => d?.slice(5)} />
-                  <YAxis tick={{ fontSize: 10, fill: C.t3 }} tickFormatter={v => scChartMetric === 'rev' ? (v >= 1e5 ? `${(v/1e5).toFixed(0)}L` : v) : fmtN(v)} width={40} />
-                  <Tooltip content={<ChartTooltip formatter={scChartMetric !== 'rev' ? fmtN : undefined} />} />
-                  <Legend iconSize={8} wrapperStyle={{ fontSize: 10 }} />
-                  <Bar dataKey={scChartMetric === 'rev' ? 'FBA' : scChartMetric === 'units' ? 'FBA_units' : 'FBA_orders'} stackId="a" fill="#E8930A" name="FBA" />
-                  <Bar dataKey={scChartMetric === 'rev' ? 'MFN' : scChartMetric === 'units' ? 'MFN_units' : 'MFN_orders'} stackId="a" fill="#2E74CC" name="MFN" />
-                </BarChart>
-              </ResponsiveContainer>
-            </Card>
-            <Card title="Order Status Breakdown · Seller Central">
-              <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: 10, height: '100%' }}>
-                <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', justifyContent: 'center' }}>
-                  {(amzSC.status || []).map(s => {
-                    const clr = { Shipped: '#2E74CC', Pending: '#E8930A', Cancelled: '#E24B4A', Shipping: '#9B59B6' }[s.status] || C.t3
-                    return (
-                      <div key={s.status} style={{ textAlign: 'center', padding: '10px 18px', borderRadius: 10, background: C.bg, border: `1px solid ${C.border}` }}>
-                        <div style={{ fontSize: 20, fontWeight: 700, color: clr, fontFamily: 'var(--mono)' }}>{fmtN(s.orders)}</div>
-                        <div style={{ fontSize: 11, color: C.t2, marginTop: 3, fontWeight: 500 }}>{s.status}</div>
-                        <div style={{ fontSize: 11, color: C.t3 }}>{scStatusTotal ? (s.orders / scStatusTotal * 100).toFixed(1) : 0}%</div>
+          {/* Overview Trend Analysis: SC + VC combined */}
+          {(() => {
+            const vcDailyMap = {}
+            ;(amzVC.daily || []).forEach(d => { vcDailyMap[d.date] = { orderedRev: d.orderedRev || 0, orderedUnits: d.orderedUnits || 0 } })
+            const gstRate = scTotalRev > 0 ? (scTotalRev - scTotalExcRev) / scTotalRev : 0
+            const allDates = [...new Set([...scDailyArr.map(d => d.date), ...Object.keys(vcDailyMap)])].sort()
+            const rawDaily = allDates.map(date => {
+              const sc = scDailyMap[date] || {}
+              const vc = vcDailyMap[date] || { orderedRev: 0, orderedUnits: 0 }
+              const scRev = (sc.FBA || 0) + (sc.MFN || 0)
+              const vcRev = vc.orderedRev
+              const gross = scRev + vcRev
+              const scO = (sc.FBA_orders || 0) + (sc.MFN_orders || 0)
+              const scU = (sc.FBA_units || 0) + (sc.MFN_units || 0)
+              const vcU = vc.orderedUnits
+              return {
+                date,
+                grossRev: gross, netRev: gross * (1 - gstRate),
+                scRev, vcRev,
+                scShare: gross > 0 ? scRev / gross * 100 : null,
+                scOrders: scO, vcOrders: vcU,
+                totalOrders: scO + vcU,
+                scOrderShare: (scO + vcU) > 0 ? scO / (scO + vcU) * 100 : null,
+                scUnits: scU, vcUnits: vcU,
+                totalUnits: scU + vcU,
+                scUnitShare: (scU + vcU) > 0 ? scU / (scU + vcU) * 100 : null,
+              }
+            })
+            const grouped = (() => {
+              if (ovTrendGroup === 'daily') return rawDaily
+              const buckets = {}
+              rawDaily.forEach(d => {
+                const dt = new Date(d.date)
+                let key
+                if (ovTrendGroup === 'weekly') {
+                  const day = dt.getDay(), diff = dt.getDate() - day + (day === 0 ? -6 : 1)
+                  key = new Date(new Date(d.date).setDate(diff)).toISOString().slice(0, 10)
+                } else if (ovTrendGroup === 'monthly') {
+                  key = d.date.slice(0, 7)
+                } else {
+                  key = `${d.date.slice(0, 4)}-Q${Math.ceil(parseInt(d.date.slice(5, 7)) / 3)}`
+                }
+                if (!buckets[key]) buckets[key] = { date: key, grossRev: 0, netRev: 0, scRev: 0, vcRev: 0, scOrders: 0, vcOrders: 0, totalOrders: 0, scUnits: 0, vcUnits: 0, totalUnits: 0 }
+                buckets[key].grossRev += d.grossRev; buckets[key].netRev += d.netRev
+                buckets[key].scRev += d.scRev; buckets[key].vcRev += d.vcRev
+                buckets[key].scOrders += d.scOrders; buckets[key].vcOrders += d.vcOrders; buckets[key].totalOrders += d.totalOrders
+                buckets[key].scUnits += d.scUnits; buckets[key].vcUnits += d.vcUnits; buckets[key].totalUnits += d.totalUnits
+              })
+              return Object.values(buckets).sort((a, b) => a.date.localeCompare(b.date)).map(b => ({
+                ...b,
+                scShare: b.grossRev > 0 ? b.scRev / b.grossRev * 100 : null,
+                scOrderShare: b.totalOrders > 0 ? b.scOrders / b.totalOrders * 100 : null,
+                scUnitShare: b.totalUnits > 0 ? b.scUnits / b.totalUnits * 100 : null,
+              }))
+            })()
+            const xFmt = d => ovTrendGroup === 'daily' ? d?.slice(5) : ovTrendGroup === 'monthly' ? d?.slice(0, 7) : d
+            const isRev = ovTrendMetric === 'rev', isOrders = ovTrendMetric === 'orders'
+            const mainFmt = isRev ? (v => v >= 1e5 ? `${(v/1e5).toFixed(1)}L` : fmt(v)) : (v => fmtN(v))
+            const ttFmt = isRev ? fmt : fmtN
+            const dk = isRev
+              ? { total: 'grossRev', totalName: 'Gross Revenue', sub: 'netRev', subName: 'Net Revenue', a: 'scRev', aName: 'SC Rev', b: 'vcRev', bName: 'VC Rev', share: 'scShare', shareName: 'SC Share %' }
+              : isOrders
+              ? { total: 'totalOrders', totalName: 'Total Orders', sub: null, a: 'scOrders', aName: 'SC Orders', b: 'vcOrders', bName: 'VC Orders', share: 'scOrderShare', shareName: 'SC Share %' }
+              : { total: 'totalUnits', totalName: 'Total Units', sub: null, a: 'scUnits', aName: 'SC Units', b: 'vcUnits', bName: 'VC Units', share: 'scUnitShare', shareName: 'SC Share %' }
+            return (
+              <Card title="Trend Analysis · SC + VC" action={
+                <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                  <div style={{ display: 'flex', gap: 4 }}>
+                    {[{ v: 'rev', label: 'Revenue' }, { v: 'orders', label: 'Orders' }, { v: 'units', label: 'Units' }].map(opt => (
+                      <button key={opt.v} onClick={() => setOvTrendMetric(opt.v)} style={{ fontSize: 11, fontWeight: 600, padding: '3px 10px', borderRadius: 5, border: `1.5px solid ${ovTrendMetric === opt.v ? C.t1 : C.border}`, background: ovTrendMetric === opt.v ? C.t1 : 'transparent', color: ovTrendMetric === opt.v ? '#fff' : C.t2, cursor: 'pointer', fontFamily: 'var(--font)' }}>{opt.label}</button>
+                    ))}
+                  </div>
+                  <select value={ovTrendGroup} onChange={e => setOvTrendGroup(e.target.value)} style={{ fontSize: 11, fontWeight: 600, padding: '3px 8px', borderRadius: 6, border: `1px solid ${C.border2}`, background: C.card, color: C.t1, cursor: 'pointer', fontFamily: 'var(--font)', outline: 'none' }}>
+                    {['daily','weekly','monthly','quarterly'].map(g => <option key={g} value={g}>{g.charAt(0).toUpperCase() + g.slice(1)}</option>)}
+                  </select>
+                </div>
+              }>
+                <ResponsiveContainer width="100%" height={240}>
+                  <ComposedChart data={grouped} margin={{ top: 4, right: 50, bottom: 0, left: 0 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke={C.border} vertical={false} />
+                    <XAxis dataKey="date" tick={{ fontSize: 10, fill: C.t3 }} tickFormatter={xFmt} />
+                    <YAxis yAxisId="main" tick={{ fontSize: 10, fill: C.t3 }} tickFormatter={mainFmt} width={60} />
+                    <YAxis yAxisId="pct" orientation="right" tick={{ fontSize: 10, fill: C.t3 }} tickFormatter={v => `${v?.toFixed(0)}%`} domain={[0, 100]} width={38} />
+                    <Tooltip content={({ active, payload, label }) => active && payload?.length ? (
+                      <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 7, padding: '7px 11px', fontSize: 11 }}>
+                        <div style={{ fontWeight: 700, marginBottom: 4, color: C.t2 }}>{xFmt(label)}</div>
+                        {payload.map(p => <div key={p.name} style={{ color: p.color }}>{p.name}: {p.name.includes('%') ? `${p.value?.toFixed(1)}%` : ttFmt(p.value)}</div>)}
                       </div>
-                    )
-                  })}
-                </div>
-                <div style={{ textAlign: 'center', paddingTop: 4 }}>
-                  <div style={{ fontSize: 11, color: C.t3 }}>Total Orders</div>
-                  <div style={{ fontSize: 22, fontWeight: 700, color: C.t1, fontFamily: 'var(--mono)' }}>{fmtN(scStatusTotal)}</div>
-                  <div style={{ fontSize: 11, color: C.red.tx, marginTop: 4 }}>Cancel Rate: <strong>{scCancelRate.toFixed(1)}%</strong></div>
-                </div>
-              </div>
-            </Card>
-          </div>
+                    ) : null} />
+                    <Legend wrapperStyle={{ fontSize: 11 }} />
+                    <Area yAxisId="main" type="monotone" dataKey={dk.total} name={dk.totalName} stroke="#FFD600" fill="#FFD60022" strokeWidth={2} dot={false} />
+                    {isRev && <Area yAxisId="main" type="monotone" dataKey={dk.sub} name={dk.subName} stroke="#0D9E68" fill="#0D9E6811" strokeWidth={2} dot={false} strokeDasharray="4 2" />}
+                    <Line yAxisId="main" type="monotone" dataKey={dk.a} name={dk.aName} stroke="#E8930A" strokeWidth={1.5} dot={false} />
+                    <Line yAxisId="main" type="monotone" dataKey={dk.b} name={dk.bName} stroke="#2E74CC" strokeWidth={1.5} dot={false} strokeDasharray="3 2" />
+                    <Line yAxisId="pct" type="monotone" dataKey={dk.share} name={dk.shareName} stroke="#9B59B6" strokeWidth={1.5} dot={false} strokeDasharray="5 3" />
+                  </ComposedChart>
+                </ResponsiveContainer>
+              </Card>
+            )
+          })()}
           {/* Row 2: FBA vs MFN + Top States */}
           <div className="g-2" style={{ alignItems: 'stretch' }}>
             <Card title="FBA vs MFN · Seller Central">
