@@ -2228,8 +2228,8 @@ function AmazonTab({ data, region = 'india', setRegion = () => {} }) {
                   </ResponsiveContainer>
                 </Card>
                 <Card title="SC vs VC · Revenue Split">
-                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', gap: 12 }}>
-                    <ResponsiveContainer width="100%" height={140}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', gap: 8 }}>
+                    <ResponsiveContainer width={140} height={140}>
                       <PieChart>
                         <Pie data={splitData} cx="50%" cy="50%" innerRadius={42} outerRadius={62} dataKey="value" paddingAngle={3}>
                           {splitData.map((e, i) => <Cell key={i} fill={e.color} />)}
@@ -2237,13 +2237,15 @@ function AmazonTab({ data, region = 'india', setRegion = () => {} }) {
                         <Tooltip content={({ active, payload }) => active && payload?.length ? <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 6, padding: '5px 9px', fontSize: 11 }}><div style={{ color: payload[0].payload.color, fontWeight: 600 }}>{payload[0].name}</div><div style={{ color: C.t1 }}>{fmt(payload[0].value)} · {(payload[0].value / (scRevTotal + vcRevTotal) * 100).toFixed(1)}%</div></div> : null} />
                       </PieChart>
                     </ResponsiveContainer>
-                    <div style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: 7 }}>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
                       {splitData.map(s => (
-                        <div key={s.name} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                          <div style={{ width: 9, height: 9, borderRadius: '50%', background: s.color, flexShrink: 0 }} />
-                          <span style={{ fontSize: 11, color: C.t2, flex: 1 }}>{s.name}</span>
-                          <span style={{ fontSize: 12, fontWeight: 700, color: C.t1, fontFamily: 'var(--mono)' }}>{fmt(s.value)}</span>
-                          <span style={{ fontSize: 11, color: C.t3, minWidth: 38, textAlign: 'right' }}>{(scRevTotal + vcRevTotal) > 0 ? ((s.value / (scRevTotal + vcRevTotal)) * 100).toFixed(1) : 0}%</span>
+                        <div key={s.name} style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                            <div style={{ width: 9, height: 9, borderRadius: '50%', background: s.color, flexShrink: 0 }} />
+                            <span style={{ fontSize: 11, color: C.t2 }}>{s.name}</span>
+                          </div>
+                          <div style={{ fontSize: 16, fontWeight: 700, color: C.t1, fontFamily: 'var(--mono)', paddingLeft: 15 }}>{fmt(s.value)}</div>
+                          <div style={{ fontSize: 11, color: C.t3, paddingLeft: 15 }}>{(scRevTotal + vcRevTotal) > 0 ? ((s.value / (scRevTotal + vcRevTotal)) * 100).toFixed(1) : 0}%</div>
                         </div>
                       ))}
                     </div>
