@@ -1482,9 +1482,9 @@ function OrderValuePieCard({ buckets, bucketRev }) {
 
 function ShopifyGeoDonutRow({ regionRows, tierRows, topStates }) {
   const [metric, setMetric] = useState('rev')
-  const REGION_COLORS = ['#534AB7','#0D9E68','#2E74CC','#CC8A00','#CC4078','#E24B4A']
-  const TIER_COLORS = ['#FFD600','#FF6B35','#9B59B6']
-  const STATE_COLORS = ['#0D9E68','#2E74CC','#534AB7','#CC8A00','#E24B4A','#9B59B6']
+  const REGION_COLORS = ['#FFD600','#FFC200','#FFB300','#FFCA28','#FFD740','#FFE57F']
+  const TIER_COLORS = ['#FFD600','#FFC200','#FFB300']
+  const STATE_COLORS = ['#FFD600','#FFC200','#FFB300','#FFCA28','#FFD740','#FFE57F']
   const metricVal = (r, m) => m === 'rev' ? r.rev : m === 'orders' ? r.orders : (r.orders ? Math.round(r.rev / r.orders) : 0)
   const metricFmt = v => metric === 'rev' ? fmt(v) : metric === 'aov' ? `₹${v.toLocaleString('en-IN')}` : fmtN(v)
   const selStyle = active => ({ fontSize: 10, fontWeight: active ? 700 : 500, padding: '2px 8px', borderRadius: 4, border: `1px solid ${active ? C.acm : C.border}`, background: active ? C.acc : 'transparent', color: C.t1, cursor: 'pointer', fontFamily: 'var(--font)' })
