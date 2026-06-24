@@ -2091,7 +2091,7 @@ function AmazonTab({ data, region = 'india', setRegion = () => {} }) {
                       { label: 'SC Revenue', value: fmt(scTotalRev), sub: 'Seller Central', badge: amzChgBadge(scTotalRev, amzPrevSCRev) },
                       { label: 'VC Revenue', value: fmt(vcTotalOrdered), sub: 'Vendor Central', badge: amzChgBadge(vcTotalOrdered, amzPrevVCRev) },
                       { label: 'Total Units', value: fmtN(scTotalUnits + vcTotalOrderedUnits), sub: 'SC + VC units', badge: amzChgBadge(scTotalUnits + vcTotalOrderedUnits, (amzPrevUnits || 0) + (amzVC.prevUnits || 0)) },
-                      { label: 'GST Collected', value: fmt((scTotalRev - scTotalExcRev) + (vcTotalOrdered - vcTotalOrderedExcRev)), sub: 'SC + VC GST' },
+                      { label: 'GST Collected', value: fmt((scTotalRev - scTotalExcRev) + (vcTotalOrdered - vcTotalOrderedExcRev)), sub: 'SC + VC GST', badge: amzChgBadge((scTotalRev - scTotalExcRev) + (vcTotalOrdered - vcTotalOrderedExcRev), ((amzSC.prevRev || 0) - (amzSC.prevExcRev || 0)) + ((amzVC.prevRev || 0) - (amzVC.prevExcRev || 0))) },
                     ].map(k => (
                       <div key={k.label} className="kpi-card" style={{ padding: '10px 13px' }}>
                         <div className="kpi-label">{k.label}</div>

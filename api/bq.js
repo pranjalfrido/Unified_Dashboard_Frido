@@ -113,8 +113,8 @@ export default async function handler(req, res) {
     prevShopify: `WITH q AS (${prevBase}) SELECT SUM(SellingPrice_Inc_GST) AS rev, SUM(SellingPrice_Exc_GST) AS exc_rev, COUNT(DISTINCT OrderId) AS orders, SUM(ItemQty) AS units, COUNTIF(is_rto=1) AS rto_orders, COUNTIF(is_CIR_return=1) AS cir_orders, COUNTIF(is_exchange=1) AS exchange_orders FROM q WHERE Channel='Shopify'`,
     prevShopifyDaily: `WITH q AS (${prevBase}) SELECT CAST(OrderDate AS STRING) AS date, SUM(SellingPrice_Inc_GST) AS rev FROM q WHERE Channel='Shopify' GROUP BY date ORDER BY date`,
     prevShopifyCancel: `WITH q AS (${prevBase}) SELECT COUNT(DISTINCT CASE WHEN Order_Status='Cancelled' THEN OrderId END) AS cancelled_orders, COUNT(DISTINCT OrderId) AS total_orders FROM q WHERE Channel='Shopify'`,
-    prevAmzSC: `WITH q AS (${prevBase}) SELECT SUM(SellingPrice_Inc_GST) AS rev, COUNT(DISTINCT OrderId) AS orders, SUM(ItemQty) AS units, SUM(CASE WHEN fulfillment_channel='Amazon' THEN SellingPrice_Inc_GST ELSE 0 END) AS fba_rev, COUNT(DISTINCT CASE WHEN FinancialStatus='Cancelled' THEN OrderId END) AS cancelled_orders FROM q WHERE SubChannel='Amazon Seller Central'`,
-    prevAmzVC: `WITH q AS (${prevBase}) SELECT SUM(SellingPrice_Inc_GST) AS rev, SUM(ItemQty) AS units FROM q WHERE SubChannel='Amazon Vendor Central'`,
+    prevAmzSC: `WITH q AS (${prevBase}) SELECT SUM(SellingPrice_Inc_GST) AS rev, SUM(SellingPrice_Exc_GST) AS exc_rev, COUNT(DISTINCT OrderId) AS orders, SUM(ItemQty) AS units, SUM(CASE WHEN fulfillment_channel='Amazon' THEN SellingPrice_Inc_GST ELSE 0 END) AS fba_rev, COUNT(DISTINCT CASE WHEN FinancialStatus='Cancelled' THEN OrderId END) AS cancelled_orders FROM q WHERE SubChannel='Amazon Seller Central'`,
+    prevAmzVC: `WITH q AS (${prevBase}) SELECT SUM(SellingPrice_Inc_GST) AS rev, SUM(SellingPrice_Exc_GST) AS exc_rev, SUM(ItemQty) AS units FROM q WHERE SubChannel='Amazon Vendor Central'`,
     prevAmzDaily: `WITH q AS (${prevBase}) SELECT CAST(OrderDate AS STRING) AS date, SUM(SellingPrice_Inc_GST) AS rev FROM q WHERE Channel='Amazon' GROUP BY date ORDER BY date`,
     prevFk: `WITH q AS (${prevBase}) SELECT SUM(SellingPrice_Inc_GST) AS rev, SUM(SellingPrice_Exc_GST) AS exc_rev, COUNT(DISTINCT OrderId) AS orders, SUM(ItemQty) AS units, SUM(CASE WHEN SubChannel='FBF' THEN SellingPrice_Inc_GST ELSE 0 END) AS fbf_rev, SUM(CASE WHEN SubChannel!='FBF' THEN SellingPrice_Inc_GST ELSE 0 END) AS nonfbf_rev FROM q WHERE Channel='Flipkart'`,
     prevFkDaily: `WITH q AS (${prevBase}) SELECT CAST(OrderDate AS STRING) AS date, SUM(SellingPrice_Inc_GST) AS rev FROM q WHERE Channel='Flipkart' GROUP BY date ORDER BY date`,
@@ -386,6 +386,7 @@ export default async function handler(req, res) {
       },
       amzSC: {
         prevRev: parseFloat(r.prevAmzSC?.[0]?.rev) || 0,
+        prevExcRev: parseFloat(r.prevAmzSC?.[0]?.exc_rev) || 0,
         prevOrders: parseInt(r.prevAmzSC?.[0]?.orders) || 0,
         prevUnits: parseInt(r.prevAmzSC?.[0]?.units) || 0,
         prevFbaRev: parseFloat(r.prevAmzSC?.[0]?.fba_rev) || 0,
@@ -399,6 +400,7 @@ export default async function handler(req, res) {
       },
       amzVC: {
         prevRev: parseFloat(r.prevAmzVC?.[0]?.rev) || 0,
+        prevExcRev: parseFloat(r.prevAmzVC?.[0]?.exc_rev) || 0,
         prevUnits: parseInt(r.prevAmzVC?.[0]?.units) || 0,
         accounts: (r.amzVCAccounts || []).map(x => ({ account: x.vendor_account, orderedUnits: parseInt(x.ordered_units)||0, orderedRev: parseFloat(x.ordered_rev)||0, orderedExcRev: parseFloat(x.ordered_exc_rev)||0, shippedUnits: parseInt(x.shipped_units)||0, shippedRev: parseFloat(x.shipped_rev)||0, returns: parseInt(x.returns)||0 })),
         daily: (r.amzVCDaily || []).map(x => ({ date: x.date, orderedUnits: parseInt(x.ordered_units)||0, orderedRev: parseFloat(x.ordered_rev)||0, shippedUnits: parseInt(x.shipped_units)||0 })),
