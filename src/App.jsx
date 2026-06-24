@@ -1637,7 +1637,7 @@ function ShopifyTab({ data, filters, setFilters }) {
       {/* India / International toggle + sub-channel dropdown + tiles on right */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
         {/* Left: region toggles + sub-channel dropdown */}
-        <button style={toggleStyle(!isIntl)} onClick={() => switchRegion(false)}><img src="https://flagcdn.com/w20/in.png" width="18" style={{ verticalAlign: 'middle', marginRight: 4, borderRadius: 2 }} /> India</button>
+        <button style={{ ...toggleStyle(!isIntl), display: 'inline-flex', alignItems: 'center', gap: 5 }} onClick={() => switchRegion(false)}><img src="https://flagcdn.com/w20/in.png" width="18" style={{ borderRadius: 2, flexShrink: 0 }} /> India</button>
         <button style={toggleStyle(isIntl)} onClick={() => switchRegion(true)}><span style={{ fontFamily: 'sans-serif' }}>🌐</span> International</button>
         {!isIntl && indiaSubChKeys.length > 0 && (() => {
           const sel = filters.subChannel ? filters.subChannel.split(',').map(x => x.trim()).filter(Boolean) : []
