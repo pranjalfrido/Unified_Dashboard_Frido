@@ -1528,7 +1528,7 @@ function ShopifyGeoDonutRow({ regionRows, tierRows, topStates }) {
   return (
     <Card title="Geography Breakdown" action={
       <div style={{ display: 'flex', gap: 3 }}>
-        {[['rev','Revenue'],['orders','Orders'],['aov','AOV']].map(([k,l]) => <button key={k} onClick={() => setMetric(k)} style={selStyle(metric === k)}>{l}</button>)}
+        {[['rev','Revenue'],['orders','Orders'],['aov','ASP']].map(([k,l]) => <button key={k} onClick={() => setMetric(k)} style={selStyle(metric === k)}>{l}</button>)}
       </div>
     }>
       <div style={{ display: 'flex', gap: 24, flexWrap: 'wrap' }}>
