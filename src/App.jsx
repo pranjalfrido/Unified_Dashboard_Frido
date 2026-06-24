@@ -2228,33 +2228,24 @@ function AmazonTab({ data, region = 'india', setRegion = () => {} }) {
                   </ResponsiveContainer>
                 </Card>
                 <Card title="SC vs VC · Revenue Split">
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 12, height: '100%', justifyContent: 'space-between' }}>
-                    {/* SC vs VC bars */}
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', gap: 12 }}>
+                    <ResponsiveContainer width="100%" height={140}>
+                      <PieChart>
+                        <Pie data={splitData} cx="50%" cy="50%" innerRadius={42} outerRadius={62} dataKey="value" paddingAngle={3}>
+                          {splitData.map((e, i) => <Cell key={i} fill={e.color} />)}
+                        </Pie>
+                        <Tooltip content={({ active, payload }) => active && payload?.length ? <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 6, padding: '5px 9px', fontSize: 11 }}><div style={{ color: payload[0].payload.color, fontWeight: 600 }}>{payload[0].name}</div><div style={{ color: C.t1 }}>{fmt(payload[0].value)} · {(payload[0].value / (scRevTotal + vcRevTotal) * 100).toFixed(1)}%</div></div> : null} />
+                      </PieChart>
+                    </ResponsiveContainer>
+                    <div style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: 7 }}>
                       {splitData.map(s => (
-                        <div key={s.name}>
-                          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
-                            <span style={{ fontSize: 11, color: C.t2, display: 'flex', alignItems: 'center', gap: 6 }}><span style={{ width: 8, height: 8, borderRadius: '50%', background: s.color, display: 'inline-block' }} />{s.name}</span>
-                            <span style={{ fontSize: 12, fontWeight: 700, color: C.t1, fontFamily: 'var(--mono)' }}>{fmt(s.value)} <span style={{ fontSize: 11, color: C.t3, fontWeight: 400 }}>{(scRevTotal + vcRevTotal) > 0 ? ((s.value / (scRevTotal + vcRevTotal)) * 100).toFixed(1) : 0}%</span></span>
-                          </div>
-                          <div style={{ height: 7, background: C.bg, borderRadius: 4 }}>
-                            <div style={{ height: '100%', borderRadius: 4, background: s.color, width: `${(scRevTotal + vcRevTotal) > 0 ? (s.value / (scRevTotal + vcRevTotal) * 100) : 0}%`, transition: 'width .5s' }} />
-                          </div>
+                        <div key={s.name} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                          <div style={{ width: 9, height: 9, borderRadius: '50%', background: s.color, flexShrink: 0 }} />
+                          <span style={{ fontSize: 11, color: C.t2, flex: 1 }}>{s.name}</span>
+                          <span style={{ fontSize: 12, fontWeight: 700, color: C.t1, fontFamily: 'var(--mono)' }}>{fmt(s.value)}</span>
+                          <span style={{ fontSize: 11, color: C.t3, minWidth: 38, textAlign: 'right' }}>{(scRevTotal + vcRevTotal) > 0 ? ((s.value / (scRevTotal + vcRevTotal)) * 100).toFixed(1) : 0}%</span>
                         </div>
                       ))}
-                    </div>
-                    {/* SC Order Status */}
-                    <div>
-                      <div style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.05em', color: C.t3, marginBottom: 8 }}>SC Order Status</div>
-                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 6 }}>
-                        {(amzSC.status || []).map(s => (
-                          <div key={s.status} style={{ background: C.bg, borderRadius: 8, padding: '8px 10px', border: `1px solid ${C.border}` }}>
-                            <div style={{ fontSize: 16, fontWeight: 700, color: statusColors[s.status] || C.t3, fontFamily: 'var(--mono)' }}>{fmtN(s.orders)}</div>
-                            <div style={{ fontSize: 10, color: C.t2, marginTop: 2 }}>{s.status}</div>
-                            <div style={{ fontSize: 10, color: C.t3 }}>{scStatusTotal ? (s.orders / scStatusTotal * 100).toFixed(1) : 0}%</div>
-                          </div>
-                        ))}
-                      </div>
                     </div>
                   </div>
                 </Card>
