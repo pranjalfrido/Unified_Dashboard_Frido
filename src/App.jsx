@@ -2073,7 +2073,7 @@ function AmazonTab({ data, region = 'india', setRegion = () => {} }) {
                     <div className="kpi-value" style={{ fontSize: 32, fontWeight: 800 }}>{fmt(scTotalRev + vcTotalOrdered)}</div>
                     {amzTotalChg !== null && <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 7px', borderRadius: 4, background: amzTotalChg >= 0 ? C.green.bg : C.red.bg, color: amzTotalChg >= 0 ? C.green.tx : C.red.tx }}>{amzTotalChg >= 0 ? '▲' : '▼'} {Math.abs(amzTotalChg).toFixed(1)}%</span>}
                   </div>
-                  <div className="kpi-sub" style={{ fontSize: 13 }}>{fmtN(scStatusTotal + vcTotalOrderedUnits)} orders · {fmtN(scTotalUnits + vcTotalOrderedUnits)} units</div>
+                  <div className="kpi-sub" style={{ fontSize: 13 }}>{fmtN((amzSC.totalOrders || 0) + vcTotalOrderedUnits)} orders · {fmtN((amzSC.totalUnits || 0) + vcTotalOrderedUnits)} units</div>
                   <div style={{ flex: 1, minHeight: 0 }}>
                     <ResponsiveContainer width="100%" height="100%">
                       <AreaChart data={amzSparkData} margin={{ top: 4, right: 0, bottom: 0, left: 0 }}>
@@ -2090,7 +2090,7 @@ function AmazonTab({ data, region = 'india', setRegion = () => {} }) {
                     {[
                       { label: 'SC Revenue', value: fmt(scTotalRev), sub: 'Seller Central', badge: amzChgBadge(scTotalRev, amzPrevSCRev) },
                       { label: 'VC Revenue', value: fmt(vcTotalOrdered), sub: 'Vendor Central', badge: amzChgBadge(vcTotalOrdered, amzPrevVCRev) },
-                      { label: 'Total Units', value: fmtN(scTotalUnits + vcTotalOrderedUnits), sub: 'SC + VC units', badge: amzChgBadge(scTotalUnits + vcTotalOrderedUnits, (amzPrevUnits || 0) + (amzVC.prevUnits || 0)) },
+                      { label: 'Total Units', value: fmtN((amzSC.totalUnits || 0) + vcTotalOrderedUnits), sub: 'SC + VC units', badge: amzChgBadge((amzSC.totalUnits || 0) + vcTotalOrderedUnits, (amzPrevUnits || 0) + (amzVC.prevUnits || 0)) },
                       { label: 'GST Collected', value: fmt((scTotalRev - scTotalExcRev) + (vcTotalOrdered - vcTotalOrderedExcRev)), sub: 'SC + VC GST', badge: amzChgBadge((scTotalRev - scTotalExcRev) + (vcTotalOrdered - vcTotalOrderedExcRev), ((amzSC.prevRev || 0) - (amzSC.prevExcRev || 0)) + ((amzVC.prevRev || 0) - (amzVC.prevExcRev || 0))) },
                     ].map(k => (
                       <div key={k.label} className="kpi-card" style={{ padding: '10px 13px' }}>
@@ -2104,7 +2104,7 @@ function AmazonTab({ data, region = 'india', setRegion = () => {} }) {
                     {[
                       { label: 'Daily Avg', value: fmt((scTotalRev + vcTotalOrdered) / (data.nDays || 1)), sub: 'SC + VC per day', badge: amzChgBadge((scTotalRev + vcTotalOrdered) / (data.nDays || 1), amzPrevDailyAvg) },
                       { label: 'ASP', value: `₹${scTotalUnits ? Math.round(scTotalRev / scTotalUnits).toLocaleString('en-IN') : 0}`, sub: 'SC avg selling price / unit', badge: amzChgBadge(scTotalUnits ? scTotalRev / scTotalUnits : 0, amzPrevASP) },
-                      { label: 'SC Orders', value: fmtN(scStatusTotal), sub: 'All SC orders', badge: amzChgBadge(scStatusTotal, amzPrevOrders) },
+                      { label: 'SC Orders', value: fmtN(amzSC.totalOrders || 0), sub: 'SC excl. cancelled', badge: amzChgBadge(amzSC.totalOrders || 0, amzPrevOrders) },
                       { label: 'Cancellation Rate', value: `${scCancelRate.toFixed(1)}%`, sub: `${fmtN(scCancelOrders)} cancelled`, accent: scCancelRate > 10 ? '#7A1A1A' : undefined, badge: amzPrevCancelRate ? (() => { const p = (scCancelRate - amzPrevCancelRate) / amzPrevCancelRate * 100; return <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 4, background: p > 0 ? C.red.bg : C.green.bg, color: p > 0 ? C.red.tx : C.green.tx, flexShrink: 0 }}>{p > 0 ? '▲' : '▼'} {Math.abs(p).toFixed(1)}%</span> })() : null },
                     ].map(k => (
                       <div key={k.label} className="kpi-card" style={{ padding: '10px 13px' }}>
