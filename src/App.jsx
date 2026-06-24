@@ -2269,13 +2269,25 @@ function AmazonTab({ data, region = 'india', setRegion = () => {} }) {
           })()}
           {/* Trend Analysis */}
           {(() => {
-            const rawDaily = scDailyArr.map(d => ({
-              date: d.date,
-              grossRev: (d.FBA || 0) + (d.MFN || 0),
-              netRev: (d.FBA || 0) + (d.MFN || 0) - ((scTotalRev > 0 ? (scTotalRev - scTotalExcRev) / scTotalRev : 0) * ((d.FBA || 0) + (d.MFN || 0))),
-              fbaRev: d.FBA || 0,
-              mfnRev: d.MFN || 0,
-            }))
+            const gstRate = scTotalRev > 0 ? (scTotalRev - scTotalExcRev) / scTotalRev : 0
+            const rawDaily = scDailyArr.map(d => {
+              const gross = (d.FBA || 0) + (d.MFN || 0)
+              const fbaO = d.FBA_orders || 0, mfnO = d.MFN_orders || 0
+              const fbaU = d.FBA_units || 0, mfnU = d.MFN_units || 0
+              const totalO = fbaO + mfnO, totalU = fbaU + mfnU
+              return {
+                date: d.date,
+                grossRev: gross,
+                netRev: gross * (1 - gstRate),
+                fbaRev: d.FBA || 0,
+                mfnRev: d.MFN || 0,
+                fbaShare: gross > 0 ? (d.FBA || 0) / gross * 100 : null,
+                totalOrders: totalO, fbaOrders: fbaO, mfnOrders: mfnO,
+                fbaOrderShare: totalO > 0 ? fbaO / totalO * 100 : null,
+                totalUnits: totalU, fbaUnits: fbaU, mfnUnits: mfnU,
+                fbaUnitShare: totalU > 0 ? fbaU / totalU * 100 : null,
+              }
+            })
             const grouped = (() => {
               if (scTrendGroup === 'daily') return rawDaily
               const buckets = {}
@@ -2288,40 +2300,61 @@ function AmazonTab({ data, region = 'india', setRegion = () => {} }) {
                 } else if (scTrendGroup === 'monthly') {
                   key = d.date.slice(0, 7)
                 } else {
-                  const q = Math.ceil(parseInt(d.date.slice(5, 7)) / 3)
-                  key = `${d.date.slice(0, 4)}-Q${q}`
+                  key = `${d.date.slice(0, 4)}-Q${Math.ceil(parseInt(d.date.slice(5, 7)) / 3)}`
                 }
-                if (!buckets[key]) buckets[key] = { date: key, grossRev: 0, netRev: 0, fbaRev: 0, mfnRev: 0 }
-                buckets[key].grossRev += d.grossRev
-                buckets[key].netRev += d.netRev
-                buckets[key].fbaRev += d.fbaRev
-                buckets[key].mfnRev += d.mfnRev
+                if (!buckets[key]) buckets[key] = { date: key, grossRev: 0, netRev: 0, fbaRev: 0, mfnRev: 0, totalOrders: 0, fbaOrders: 0, mfnOrders: 0, totalUnits: 0, fbaUnits: 0, mfnUnits: 0 }
+                buckets[key].grossRev += d.grossRev; buckets[key].netRev += d.netRev
+                buckets[key].fbaRev += d.fbaRev; buckets[key].mfnRev += d.mfnRev
+                buckets[key].totalOrders += d.totalOrders; buckets[key].fbaOrders += d.fbaOrders; buckets[key].mfnOrders += d.mfnOrders
+                buckets[key].totalUnits += d.totalUnits; buckets[key].fbaUnits += d.fbaUnits; buckets[key].mfnUnits += d.mfnUnits
               })
-              return Object.values(buckets).sort((a, b) => a.date.localeCompare(b.date))
+              return Object.values(buckets).sort((a, b) => a.date.localeCompare(b.date)).map(b => ({
+                ...b,
+                fbaShare: b.grossRev > 0 ? b.fbaRev / b.grossRev * 100 : null,
+                fbaOrderShare: b.totalOrders > 0 ? b.fbaOrders / b.totalOrders * 100 : null,
+                fbaUnitShare: b.totalUnits > 0 ? b.fbaUnits / b.totalUnits * 100 : null,
+              }))
             })()
             const xFmt = d => scTrendGroup === 'daily' ? d?.slice(5) : scTrendGroup === 'monthly' ? d?.slice(0, 7) : d
+            const isRev = scChartMetric === 'rev', isOrders = scChartMetric === 'orders'
+            const mainFmt = isRev ? (v => v >= 1e5 ? `${(v/1e5).toFixed(1)}L` : fmt(v)) : (v => fmtN(v))
+            const tooltipFmt = isRev ? fmt : fmtN
+            const dataKeys = isRev
+              ? { total: 'grossRev', totalName: 'Gross Revenue', sub1: 'netRev', sub1Name: 'Net Revenue', fba: 'fbaRev', fbaName: 'FBA Rev', mfn: 'mfnRev', mfnName: 'MFN Rev', share: 'fbaShare' }
+              : isOrders
+              ? { total: 'totalOrders', totalName: 'Total Orders', sub1: null, fba: 'fbaOrders', fbaName: 'FBA Orders', mfn: 'mfnOrders', mfnName: 'MFN Orders', share: 'fbaOrderShare' }
+              : { total: 'totalUnits', totalName: 'Total Units', sub1: null, fba: 'fbaUnits', fbaName: 'FBA Units', mfn: 'mfnUnits', mfnName: 'MFN Units', share: 'fbaUnitShare' }
             return (
-              <Card title="Revenue Trend · Seller Central" action={
-                <select value={scTrendGroup} onChange={e => setScTrendGroup(e.target.value)} style={{ fontSize: 11, fontWeight: 600, padding: '3px 8px', borderRadius: 6, border: `1px solid ${C.border2}`, background: C.card, color: C.t1, cursor: 'pointer', fontFamily: 'var(--font)', outline: 'none' }}>
-                  {['daily','weekly','monthly','quarterly'].map(g => <option key={g} value={g}>{g.charAt(0).toUpperCase() + g.slice(1)}</option>)}
-                </select>
+              <Card title="Trend Analysis · Seller Central" action={
+                <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                  <div style={{ display: 'flex', gap: 4 }}>
+                    {[{ v: 'rev', label: 'Revenue' }, { v: 'orders', label: 'Orders' }, { v: 'units', label: 'Units' }].map(opt => (
+                      <button key={opt.v} onClick={() => setScChartMetric(opt.v)} style={{ fontSize: 11, fontWeight: 600, padding: '3px 10px', borderRadius: 5, border: `1.5px solid ${scChartMetric === opt.v ? C.t1 : C.border}`, background: scChartMetric === opt.v ? C.t1 : 'transparent', color: scChartMetric === opt.v ? '#fff' : C.t2, cursor: 'pointer', fontFamily: 'var(--font)' }}>{opt.label}</button>
+                    ))}
+                  </div>
+                  <select value={scTrendGroup} onChange={e => setScTrendGroup(e.target.value)} style={{ fontSize: 11, fontWeight: 600, padding: '3px 8px', borderRadius: 6, border: `1px solid ${C.border2}`, background: C.card, color: C.t1, cursor: 'pointer', fontFamily: 'var(--font)', outline: 'none' }}>
+                    {['daily','weekly','monthly','quarterly'].map(g => <option key={g} value={g}>{g.charAt(0).toUpperCase() + g.slice(1)}</option>)}
+                  </select>
+                </div>
               }>
-                <ResponsiveContainer width="100%" height={220}>
-                  <ComposedChart data={grouped} margin={{ top: 4, right: 10, bottom: 0, left: 0 }}>
+                <ResponsiveContainer width="100%" height={240}>
+                  <ComposedChart data={grouped} margin={{ top: 4, right: 50, bottom: 0, left: 0 }}>
                     <CartesianGrid strokeDasharray="3 3" stroke={C.border} vertical={false} />
                     <XAxis dataKey="date" tick={{ fontSize: 10, fill: C.t3 }} tickFormatter={xFmt} />
-                    <YAxis tick={{ fontSize: 10, fill: C.t3 }} tickFormatter={v => v >= 1e5 ? `${(v/1e5).toFixed(0)}L` : fmt(v)} width={60} />
+                    <YAxis yAxisId="main" tick={{ fontSize: 10, fill: C.t3 }} tickFormatter={mainFmt} width={60} />
+                    <YAxis yAxisId="pct" orientation="right" tick={{ fontSize: 10, fill: C.t3 }} tickFormatter={v => `${v.toFixed(0)}%`} domain={[0, 100]} width={38} />
                     <Tooltip content={({ active, payload, label }) => active && payload?.length ? (
                       <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 7, padding: '7px 11px', fontSize: 11 }}>
                         <div style={{ fontWeight: 700, marginBottom: 4, color: C.t2 }}>{xFmt(label)}</div>
-                        {payload.map(p => <div key={p.name} style={{ color: p.color }}>{p.name}: {fmt(p.value)}</div>)}
+                        {payload.map(p => <div key={p.name} style={{ color: p.color }}>{p.name}: {p.name.includes('%') ? `${p.value?.toFixed(1)}%` : tooltipFmt(p.value)}</div>)}
                       </div>
                     ) : null} />
                     <Legend wrapperStyle={{ fontSize: 11 }} />
-                    <Area type="monotone" dataKey="grossRev" name="Gross Revenue" stroke="#FFD600" fill="#FFD60022" strokeWidth={2} dot={false} />
-                    <Area type="monotone" dataKey="netRev" name="Net Revenue" stroke="#0D9E68" fill="#0D9E6811" strokeWidth={2} dot={false} strokeDasharray="4 2" />
-                    <Line type="monotone" dataKey="fbaRev" name="FBA" stroke="#E8930A" strokeWidth={1.5} dot={false} />
-                    <Line type="monotone" dataKey="mfnRev" name="MFN" stroke="#2E74CC" strokeWidth={1.5} dot={false} strokeDasharray="3 2" />
+                    <Area yAxisId="main" type="monotone" dataKey={dataKeys.total} name={dataKeys.totalName} stroke="#FFD600" fill="#FFD60022" strokeWidth={2} dot={false} />
+                    {isRev && <Area yAxisId="main" type="monotone" dataKey={dataKeys.sub1} name={dataKeys.sub1Name} stroke="#0D9E68" fill="#0D9E6811" strokeWidth={2} dot={false} strokeDasharray="4 2" />}
+                    <Line yAxisId="main" type="monotone" dataKey={dataKeys.fba} name={dataKeys.fbaName} stroke="#E8930A" strokeWidth={1.5} dot={false} />
+                    <Line yAxisId="main" type="monotone" dataKey={dataKeys.mfn} name={dataKeys.mfnName} stroke="#2E74CC" strokeWidth={1.5} dot={false} strokeDasharray="3 2" />
+                    <Line yAxisId="pct" type="monotone" dataKey={dataKeys.share} name="FBA Share %" stroke="#9B59B6" strokeWidth={1.5} dot={false} strokeDasharray="5 3" />
                   </ComposedChart>
                 </ResponsiveContainer>
               </Card>
