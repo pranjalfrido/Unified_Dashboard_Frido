@@ -2302,11 +2302,14 @@ function AmazonTab({ data, region = 'india', setRegion = () => {} }) {
           {(() => {
             const scChgBadge = (cur, prev) => { if (!prev) return null; const p = (cur - prev) / prev * 100; return <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 4, background: p >= 0 ? C.green.bg : C.red.bg, color: p >= 0 ? C.green.tx : C.red.tx, flexShrink: 0 }}>{p >= 0 ? '▲' : '▼'} {Math.abs(p).toFixed(1)}%</span> }
             const prevSCRev = amzSC.prevRev || 0
+            const prevSCExcRev = amzSC.prevExcRev || 0
             const prevSCOrders = amzSC.prevOrders || 0
             const prevSCUnits = amzSC.prevUnits || 0
             const prevSCAOV = prevSCOrders > 0 ? prevSCRev / prevSCOrders : 0
             const prevSCASP = prevSCUnits > 0 ? prevSCRev / prevSCUnits : 0
             const prevSCDailyAvg = prevSCRev > 0 ? prevSCRev / (data.nDays || 1) : 0
+            const prevSCFbaRev = amzSC.prevFbaRev || 0
+            const prevSCFbaShare = prevSCRev > 0 ? prevSCFbaRev / prevSCRev * 100 : 0
             const scSparkData = Array.from({ length: Math.max(scDailyArr.length, (amzSC.prevDaily || []).length) }, (_, i) => {
               const cur = scDailyArr[i]
               const pre = (amzSC.prevDaily || [])[i]
@@ -2320,7 +2323,7 @@ function AmazonTab({ data, region = 'india', setRegion = () => {} }) {
                     <div className="kpi-value" style={{ fontSize: 32, fontWeight: 800 }}>{fmt(scTotalRev)}</div>
                     {scChgBadge(scTotalRev, prevSCRev)}
                   </div>
-                  <div className="kpi-sub" style={{ fontSize: 13 }}>{fmtN(scTotalOrders)} orders · {fmtN(scTotalUnits)} units</div>
+                  <div className="kpi-sub" style={{ fontSize: 13 }}>{fmtN(amzSC.totalOrders || 0)} orders · {fmtN(amzSC.totalUnits || 0)} units</div>
                   <div style={{ flex: 1, minHeight: 60 }}>
                     <ResponsiveContainer width="100%" height="100%">
                       <AreaChart data={scSparkData} margin={{ top: 4, right: 0, bottom: 0, left: 0 }}>
@@ -2335,8 +2338,8 @@ function AmazonTab({ data, region = 'india', setRegion = () => {} }) {
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10 }}>
                     {[
-                      { label: 'Net Revenue (Exc GST)', value: fmt(scTotalExcRev), sub: `Net after GST deduction` },
-                      { label: 'GST Collected', value: fmt(scTotalRev - scTotalExcRev), sub: 'Gross − Net revenue' },
+                      { label: 'Net Revenue (Exc GST)', value: fmt(scTotalExcRev), sub: 'Net after GST deduction', badge: scChgBadge(scTotalExcRev, prevSCExcRev) },
+                      { label: 'GST Collected', value: fmt(scTotalRev - scTotalExcRev), sub: 'Gross − Net revenue', badge: scChgBadge(scTotalRev - scTotalExcRev, prevSCRev - prevSCExcRev) },
                       { label: 'AOV', value: `₹${Math.round(scAOV).toLocaleString('en-IN')}`, sub: 'Revenue / Orders', badge: scChgBadge(scAOV, prevSCAOV) },
                       { label: 'ASP', value: `₹${scTotalUnits ? Math.round(scTotalRev / scTotalUnits).toLocaleString('en-IN') : 0}`, sub: 'Revenue / Units', badge: scChgBadge(scTotalRev / (scTotalUnits || 1), prevSCASP) },
                     ].map(k => (
@@ -2352,7 +2355,7 @@ function AmazonTab({ data, region = 'india', setRegion = () => {} }) {
                       { label: 'Daily Avg Revenue', value: fmt(scTotalRev / (data.nDays || 1)), sub: 'Revenue per day', badge: scChgBadge(scTotalRev / (data.nDays || 1), prevSCDailyAvg) },
                       { label: 'Order Status', value: (() => { const shipped = amzSC.status?.find(s => s.status === 'Shipped')?.orders || 0; return `${scStatusTotal ? (shipped / scStatusTotal * 100).toFixed(1) : 0}% Shipped` })(), sub: `${fmtN(scStatusTotal)} total · ${fmtN(scPending)} pending` },
                       { label: 'Cancellation Rate', value: `${scCancelRate.toFixed(1)}%`, sub: `${fmtN(scCancelOrders)} cancelled`, accent: scCancelRate > 10 ? '#7A1A1A' : undefined, badge: (amzSC.prevCancelledOrders && prevSCOrders) ? (() => { const prevRate = amzSC.prevCancelledOrders / prevSCOrders * 100; const p = (scCancelRate - prevRate) / prevRate * 100; return <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 4, background: p > 0 ? C.red.bg : C.green.bg, color: p > 0 ? C.red.tx : C.green.tx, flexShrink: 0 }}>{p > 0 ? '▲' : '▼'} {Math.abs(p).toFixed(1)}%</span> })() : null },
-                      { label: 'FBA vs MFN', value: `${scTotalRev ? (scFBA.rev / scTotalRev * 100).toFixed(1) : 0}% FBA`, sub: `MFN ${scTotalRev ? (scMFN.rev / scTotalRev * 100).toFixed(1) : 0}%` },
+                      { label: 'FBA vs MFN', value: `${scTotalRev ? (scFBA.rev / scTotalRev * 100).toFixed(1) : 0}% FBA`, sub: `MFN ${scTotalRev ? (scMFN.rev / scTotalRev * 100).toFixed(1) : 0}%`, badge: scChgBadge(scTotalRev ? scFBA.rev / scTotalRev * 100 : 0, prevSCFbaShare) },
                     ].map(k => (
                       <div key={k.label} className="kpi-card" style={{ padding: '10px 13px' }}>
                         <div className="kpi-label">{k.label}</div>
