@@ -2185,40 +2185,79 @@ function AmazonTab({ data, region = 'india', setRegion = () => {} }) {
               : isOrders
               ? { total: 'totalOrders', totalName: 'Total Orders', sub: null, a: 'scOrders', aName: 'SC Orders', b: 'vcOrders', bName: 'VC Orders', share: 'scOrderShare', shareName: 'SC Share %' }
               : { total: 'totalUnits', totalName: 'Total Units', sub: null, a: 'scUnits', aName: 'SC Units', b: 'vcUnits', bName: 'VC Units', share: 'scUnitShare', shareName: 'SC Share %' }
+            const scRevTotal = grouped.reduce((s, d) => s + (d.scRev || 0), 0)
+            const vcRevTotal = grouped.reduce((s, d) => s + (d.vcRev || 0), 0)
+            const splitData = [
+              { name: 'Seller Central', value: scRevTotal, color: '#E8930A' },
+              { name: 'Vendor Central', value: vcRevTotal, color: '#2E74CC' },
+            ]
+            const statusColors = { Shipped: '#2E74CC', Pending: '#E8930A', Cancelled: '#E24B4A', Shipping: '#9B59B6' }
             return (
-              <Card title="Trend Analysis · SC + VC" action={
-                <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                  <div style={{ display: 'flex', gap: 4 }}>
-                    {[{ v: 'rev', label: 'Revenue' }, { v: 'orders', label: 'Orders' }, { v: 'units', label: 'Units' }].map(opt => (
-                      <button key={opt.v} onClick={() => setOvTrendMetric(opt.v)} style={{ fontSize: 11, fontWeight: 600, padding: '3px 10px', borderRadius: 5, border: `1.5px solid ${ovTrendMetric === opt.v ? C.t1 : C.border}`, background: ovTrendMetric === opt.v ? C.t1 : 'transparent', color: ovTrendMetric === opt.v ? '#fff' : C.t2, cursor: 'pointer', fontFamily: 'var(--font)' }}>{opt.label}</button>
-                    ))}
+              <div style={{ display: 'grid', gridTemplateColumns: '3fr 2fr', gap: 14, alignItems: 'stretch' }}>
+                <Card title="Trend Analysis · SC + VC" action={
+                  <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                    <div style={{ display: 'flex', gap: 4 }}>
+                      {[{ v: 'rev', label: 'Revenue' }, { v: 'orders', label: 'Orders' }, { v: 'units', label: 'Units' }].map(opt => (
+                        <button key={opt.v} onClick={() => setOvTrendMetric(opt.v)} style={{ fontSize: 11, fontWeight: 600, padding: '3px 10px', borderRadius: 5, border: `1.5px solid ${ovTrendMetric === opt.v ? C.t1 : C.border}`, background: ovTrendMetric === opt.v ? C.t1 : 'transparent', color: ovTrendMetric === opt.v ? '#fff' : C.t2, cursor: 'pointer', fontFamily: 'var(--font)' }}>{opt.label}</button>
+                      ))}
+                    </div>
+                    <select value={ovTrendGroup} onChange={e => setOvTrendGroup(e.target.value)} style={{ fontSize: 11, fontWeight: 600, padding: '3px 8px', borderRadius: 6, border: `1px solid ${C.border2}`, background: C.card, color: C.t1, cursor: 'pointer', fontFamily: 'var(--font)', outline: 'none' }}>
+                      {['daily','weekly','monthly','quarterly'].map(g => <option key={g} value={g}>{g.charAt(0).toUpperCase() + g.slice(1)}</option>)}
+                    </select>
                   </div>
-                  <select value={ovTrendGroup} onChange={e => setOvTrendGroup(e.target.value)} style={{ fontSize: 11, fontWeight: 600, padding: '3px 8px', borderRadius: 6, border: `1px solid ${C.border2}`, background: C.card, color: C.t1, cursor: 'pointer', fontFamily: 'var(--font)', outline: 'none' }}>
-                    {['daily','weekly','monthly','quarterly'].map(g => <option key={g} value={g}>{g.charAt(0).toUpperCase() + g.slice(1)}</option>)}
-                  </select>
-                </div>
-              }>
-                <ResponsiveContainer width="100%" height={240}>
-                  <ComposedChart data={grouped} margin={{ top: 4, right: 50, bottom: 0, left: 0 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke={C.border} vertical={false} />
-                    <XAxis dataKey="date" tick={{ fontSize: 10, fill: C.t3 }} tickFormatter={xFmt} />
-                    <YAxis yAxisId="main" tick={{ fontSize: 10, fill: C.t3 }} tickFormatter={mainFmt} width={60} />
-                    <YAxis yAxisId="pct" orientation="right" tick={{ fontSize: 10, fill: C.t3 }} tickFormatter={v => `${v?.toFixed(0)}%`} domain={[0, 100]} width={38} />
-                    <Tooltip content={({ active, payload, label }) => active && payload?.length ? (
-                      <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 7, padding: '7px 11px', fontSize: 11 }}>
-                        <div style={{ fontWeight: 700, marginBottom: 4, color: C.t2 }}>{xFmt(label)}</div>
-                        {payload.map(p => <div key={p.name} style={{ color: p.color }}>{p.name}: {p.name.includes('%') ? `${p.value?.toFixed(1)}%` : ttFmt(p.value)}</div>)}
+                }>
+                  <ResponsiveContainer width="100%" height={190}>
+                    <ComposedChart data={grouped} margin={{ top: 4, right: 46, bottom: 0, left: 0 }}>
+                      <CartesianGrid strokeDasharray="3 3" stroke={C.border} vertical={false} />
+                      <XAxis dataKey="date" tick={{ fontSize: 10, fill: C.t3 }} tickFormatter={xFmt} />
+                      <YAxis yAxisId="main" tick={{ fontSize: 10, fill: C.t3 }} tickFormatter={mainFmt} width={58} />
+                      <YAxis yAxisId="pct" orientation="right" tick={{ fontSize: 10, fill: C.t3 }} tickFormatter={v => `${v?.toFixed(0)}%`} domain={[0, 100]} width={36} />
+                      <Tooltip content={({ active, payload, label }) => active && payload?.length ? (
+                        <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 7, padding: '7px 11px', fontSize: 11 }}>
+                          <div style={{ fontWeight: 700, marginBottom: 4, color: C.t2 }}>{xFmt(label)}</div>
+                          {payload.map(p => <div key={p.name} style={{ color: p.color }}>{p.name}: {p.name.includes('%') ? `${p.value?.toFixed(1)}%` : ttFmt(p.value)}</div>)}
+                        </div>
+                      ) : null} />
+                      <Legend wrapperStyle={{ fontSize: 10 }} />
+                      <Area yAxisId="main" type="monotone" dataKey={dk.total} name={dk.totalName} stroke="#FFD600" fill="#FFD60022" strokeWidth={2} dot={false} />
+                      {isRev && <Area yAxisId="main" type="monotone" dataKey={dk.sub} name={dk.subName} stroke="#0D9E68" fill="#0D9E6811" strokeWidth={2} dot={false} strokeDasharray="4 2" />}
+                      <Line yAxisId="main" type="monotone" dataKey={dk.a} name={dk.aName} stroke="#E8930A" strokeWidth={1.5} dot={false} />
+                      <Line yAxisId="main" type="monotone" dataKey={dk.b} name={dk.bName} stroke="#2E74CC" strokeWidth={1.5} dot={false} strokeDasharray="3 2" />
+                      <Line yAxisId="pct" type="monotone" dataKey={dk.share} name={dk.shareName} stroke="#9B59B6" strokeWidth={1.5} dot={false} strokeDasharray="5 3" />
+                    </ComposedChart>
+                  </ResponsiveContainer>
+                </Card>
+                <Card title="SC vs VC Split">
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 10, height: '100%', justifyContent: 'center' }}>
+                    <ResponsiveContainer width="100%" height={110}>
+                      <PieChart>
+                        <Pie data={splitData} cx="50%" cy="50%" innerRadius={32} outerRadius={50} dataKey="value" paddingAngle={3}>
+                          {splitData.map((e, i) => <Cell key={i} fill={e.color} />)}
+                        </Pie>
+                        <Tooltip content={({ active, payload }) => active && payload?.length ? <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 6, padding: '4px 8px', fontSize: 10 }}><div style={{ color: payload[0].payload.color }}>{payload[0].name}: {fmt(payload[0].value)} ({(payload[0].value / (scRevTotal + vcRevTotal) * 100).toFixed(1)}%)</div></div> : null} />
+                      </PieChart>
+                    </ResponsiveContainer>
+                    {splitData.map(s => (
+                      <div key={s.name} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <div style={{ width: 8, height: 8, borderRadius: '50%', background: s.color, flexShrink: 0 }} />
+                        <span style={{ fontSize: 11, color: C.t2, flex: 1 }}>{s.name}</span>
+                        <span style={{ fontSize: 12, fontWeight: 700, color: C.t1, fontFamily: 'var(--mono)' }}>{fmt(s.value)}</span>
+                        <span style={{ fontSize: 11, color: C.t3, minWidth: 36, textAlign: 'right' }}>{(scRevTotal + vcRevTotal) > 0 ? ((s.value / (scRevTotal + vcRevTotal)) * 100).toFixed(1) : 0}%</span>
                       </div>
-                    ) : null} />
-                    <Legend wrapperStyle={{ fontSize: 11 }} />
-                    <Area yAxisId="main" type="monotone" dataKey={dk.total} name={dk.totalName} stroke="#FFD600" fill="#FFD60022" strokeWidth={2} dot={false} />
-                    {isRev && <Area yAxisId="main" type="monotone" dataKey={dk.sub} name={dk.subName} stroke="#0D9E68" fill="#0D9E6811" strokeWidth={2} dot={false} strokeDasharray="4 2" />}
-                    <Line yAxisId="main" type="monotone" dataKey={dk.a} name={dk.aName} stroke="#E8930A" strokeWidth={1.5} dot={false} />
-                    <Line yAxisId="main" type="monotone" dataKey={dk.b} name={dk.bName} stroke="#2E74CC" strokeWidth={1.5} dot={false} strokeDasharray="3 2" />
-                    <Line yAxisId="pct" type="monotone" dataKey={dk.share} name={dk.shareName} stroke="#9B59B6" strokeWidth={1.5} dot={false} strokeDasharray="5 3" />
-                  </ComposedChart>
-                </ResponsiveContainer>
-              </Card>
+                    ))}
+                    <div style={{ borderTop: `1px solid ${C.border}`, paddingTop: 8, marginTop: 2 }}>
+                      <div style={{ fontSize: 10, color: C.t3, marginBottom: 4 }}>SC Order Status</div>
+                      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                        {(amzSC.status || []).map(s => (
+                          <div key={s.status} style={{ fontSize: 10, color: statusColors[s.status] || C.t3, fontWeight: 600 }}>
+                            {s.status}: <span style={{ fontFamily: 'var(--mono)' }}>{fmtN(s.orders)}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                </Card>
+              </div>
             )
           })()}
           {/* Row 2: FBA vs MFN + Top States */}
