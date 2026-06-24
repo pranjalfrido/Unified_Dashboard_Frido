@@ -1637,8 +1637,8 @@ function ShopifyTab({ data, filters, setFilters }) {
       {/* India / International toggle + sub-channel dropdown + tiles on right */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
         {/* Left: region toggles + sub-channel dropdown */}
-        <button style={toggleStyle(!isIntl)} onClick={() => switchRegion(false)}>🇮🇳 India</button>
-        <button style={toggleStyle(isIntl)} onClick={() => switchRegion(true)}>🌐 International</button>
+        <button style={toggleStyle(!isIntl)} onClick={() => switchRegion(false)}><span style={{ fontFamily: 'sans-serif' }}>🇮🇳</span> India</button>
+        <button style={toggleStyle(isIntl)} onClick={() => switchRegion(true)}><span style={{ fontFamily: 'sans-serif' }}>🌐</span> International</button>
         {!isIntl && indiaSubChKeys.length > 0 && (() => {
           const sel = filters.subChannel ? filters.subChannel.split(',').map(x => x.trim()).filter(Boolean) : []
           return (
@@ -2033,8 +2033,8 @@ function AmazonTab({ data, region = 'india', setRegion = () => {} }) {
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
         {/* Pill toggle: India / International */}
         <div style={{ display: 'flex', background: C.bg, borderRadius: 9, padding: 3, border: `1px solid ${C.border}`, gap: 0 }}>
-          {[{ id: 'india', label: '🇮🇳 India' }, { id: 'intl', label: '🌍 International' }].map(opt => (
-            <button key={opt.id} onClick={() => { setRegion(opt.id); setSubView('overview') }} style={{ fontSize: 12, fontWeight: region === opt.id ? 700 : 500, padding: '5px 16px', borderRadius: 7, border: 'none', background: region === opt.id ? C.acc : 'transparent', color: C.t1, cursor: 'pointer', fontFamily: 'var(--font)', transition: 'all .15s', boxShadow: region === opt.id ? '0 1px 4px rgba(0,0,0,.10)' : 'none' }}>{opt.label}</button>
+          {[{ id: 'india', emoji: '🇮🇳', label: 'India' }, { id: 'intl', emoji: '🌍', label: 'International' }].map(opt => (
+            <button key={opt.id} onClick={() => { setRegion(opt.id); setSubView('overview') }} style={{ fontSize: 12, fontWeight: region === opt.id ? 700 : 500, padding: '5px 16px', borderRadius: 7, border: 'none', background: region === opt.id ? C.acc : 'transparent', color: C.t1, cursor: 'pointer', fontFamily: 'var(--font)', transition: 'all .15s', boxShadow: region === opt.id ? '0 1px 4px rgba(0,0,0,.10)' : 'none' }}><span style={{ fontFamily: 'sans-serif' }}>{opt.emoji}</span> {opt.label}</button>
           ))}
         </div>
         {/* Divider */}
