@@ -2072,7 +2072,7 @@ function AmazonTab({ data, region = 'india', setRegion = () => {} }) {
                     <div className="kpi-value" style={{ fontSize: 32, fontWeight: 800 }}>{fmt(scTotalRev + vcTotalOrdered)}</div>
                     {amzTotalChg !== null && <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 7px', borderRadius: 4, background: amzTotalChg >= 0 ? C.green.bg : C.red.bg, color: amzTotalChg >= 0 ? C.green.tx : C.red.tx }}>{amzTotalChg >= 0 ? '▲' : '▼'} {Math.abs(amzTotalChg).toFixed(1)}%</span>}
                   </div>
-                  <div className="kpi-sub" style={{ fontSize: 13 }}>{fmtN(scTotalOrders)} orders · {fmtN(scTotalUnits + vcTotalOrderedUnits)} units</div>
+                  <div className="kpi-sub" style={{ fontSize: 13 }}>{fmtN(scStatusTotal)} orders · {fmtN(scTotalUnits + vcTotalOrderedUnits)} units</div>
                   <div style={{ flex: 1, minHeight: 0 }}>
                     <ResponsiveContainer width="100%" height="100%">
                       <AreaChart data={amzSparkData} margin={{ top: 4, right: 0, bottom: 0, left: 0 }}>
@@ -2089,8 +2089,8 @@ function AmazonTab({ data, region = 'india', setRegion = () => {} }) {
                     {[
                       { label: 'SC Revenue', value: fmt(scTotalRev), sub: 'Seller Central', badge: amzChgBadge(scTotalRev, amzPrevSCRev) },
                       { label: 'VC Revenue', value: fmt(vcTotalOrdered), sub: 'Vendor Central', badge: amzChgBadge(vcTotalOrdered, amzPrevVCRev) },
-                      { label: 'Total Orders', value: fmtN(scTotalOrders), sub: 'SC orders', badge: amzChgBadge(scTotalOrders, amzPrevOrders) },
-                      { label: 'Daily Avg', value: fmt((scTotalRev + vcTotalOrdered) / (data.nDays || 1)), sub: 'SC + VC per day', badge: amzChgBadge((scTotalRev + vcTotalOrdered) / (data.nDays || 1), amzPrevDailyAvg) },
+                      { label: 'Total Orders', value: fmtN(scStatusTotal), sub: 'SC orders (all)', badge: amzChgBadge(scStatusTotal, amzPrevOrders) },
+                      { label: 'Total Units', value: fmtN(scTotalUnits + vcTotalOrderedUnits), sub: 'SC + VC units', badge: amzChgBadge(scTotalUnits + vcTotalOrderedUnits, (amzPrevUnits || 0) + (amzVC.prevUnits || 0)) },
                     ].map(k => (
                       <div key={k.label} className="kpi-card" style={{ padding: '10px 13px' }}>
                         <div className="kpi-label">{k.label}</div>
@@ -2101,7 +2101,7 @@ function AmazonTab({ data, region = 'india', setRegion = () => {} }) {
                   </div>
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10, flex: 1 }}>
                     {[
-                      { label: 'AOV', value: `₹${Math.round(scAOV).toLocaleString('en-IN')}`, sub: 'SC avg order value', badge: amzChgBadge(scAOV, amzPrevAOV) },
+                      { label: 'Daily Avg', value: fmt((scTotalRev + vcTotalOrdered) / (data.nDays || 1)), sub: 'SC + VC per day', badge: amzChgBadge((scTotalRev + vcTotalOrdered) / (data.nDays || 1), amzPrevDailyAvg) },
                       { label: 'ASP', value: `₹${scTotalUnits ? Math.round(scTotalRev / scTotalUnits).toLocaleString('en-IN') : 0}`, sub: 'Avg selling price / unit', badge: amzChgBadge(scTotalUnits ? scTotalRev / scTotalUnits : 0, amzPrevASP) },
                       { label: 'FBA Share', value: `${scTotalRev ? (scFBA.rev / scTotalRev * 100).toFixed(1) : 0}%`, sub: `${fmt(scFBA.rev)} revenue`, badge: amzChgBadge(scTotalRev ? scFBA.rev / scTotalRev * 100 : 0, amzPrevFbaShare) },
                       { label: 'Cancellation Rate', value: `${scCancelRate.toFixed(1)}%`, sub: `${fmtN(scCancelOrders)} cancelled`, accent: scCancelRate > 10 ? '#7A1A1A' : undefined, badge: amzPrevCancelRate ? (() => { const p = (scCancelRate - amzPrevCancelRate) / amzPrevCancelRate * 100; return <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 4, background: p > 0 ? C.red.bg : C.green.bg, color: p > 0 ? C.red.tx : C.green.tx, flexShrink: 0 }}>{p > 0 ? '▲' : '▼'} {Math.abs(p).toFixed(1)}%</span> })() : null },
