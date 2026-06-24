@@ -2335,35 +2335,23 @@ function AmazonTab({ data, region = 'india', setRegion = () => {} }) {
                     </ResponsiveContainer>
                   </div>
                 </div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10 }}>
-                    {[
-                      { label: 'Net Revenue (Exc GST)', value: fmt(scTotalExcRev), sub: 'Net after GST deduction', badge: scChgBadge(scTotalExcRev, prevSCExcRev) },
-                      { label: 'GST Collected', value: fmt(scTotalRev - scTotalExcRev), sub: 'Gross − Net revenue', badge: scChgBadge(scTotalRev - scTotalExcRev, prevSCRev - prevSCExcRev) },
-                      { label: 'AOV', value: `₹${Math.round(scAOV).toLocaleString('en-IN')}`, sub: 'Revenue / Orders', badge: scChgBadge(scAOV, prevSCAOV) },
-                      { label: 'ASP', value: `₹${scTotalUnits ? Math.round(scTotalRev / scTotalUnits).toLocaleString('en-IN') : 0}`, sub: 'Revenue / Units', badge: scChgBadge(scTotalRev / (scTotalUnits || 1), prevSCASP) },
-                    ].map(k => (
-                      <div key={k.label} className="kpi-card" style={{ padding: '10px 13px' }}>
-                        <div className="kpi-label">{k.label}</div>
-                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 4 }}><div className="kpi-value" style={{ fontSize: 17 }}>{k.value}</div>{k.badge}</div>
-                        {k.sub && <div className="kpi-sub">{k.sub}</div>}
-                      </div>
-                    ))}
-                  </div>
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10 }}>
-                    {[
-                      { label: 'Daily Avg Revenue', value: fmt(scTotalRev / (data.nDays || 1)), sub: 'Revenue per day', badge: scChgBadge(scTotalRev / (data.nDays || 1), prevSCDailyAvg) },
-                      { label: 'Order Status', value: (() => { const shipped = amzSC.status?.find(s => s.status === 'Shipped')?.orders || 0; const total = amzSC.totalOrders || 0; return `${total ? (shipped / total * 100).toFixed(1) : 0}% Shipped` })(), sub: `${fmtN(amzSC.totalOrders || 0)} total · ${fmtN(scPending)} pending` },
-                      { label: 'Cancellation Rate', value: `${scCancelRate.toFixed(1)}%`, sub: `${fmtN(scCancelOrders)} cancelled`, accent: scCancelRate > 10 ? '#7A1A1A' : undefined, badge: (amzSC.prevCancelledOrders && prevSCOrders) ? (() => { const prevRate = amzSC.prevCancelledOrders / prevSCOrders * 100; const p = (scCancelRate - prevRate) / prevRate * 100; return <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 4, background: p > 0 ? C.red.bg : C.green.bg, color: p > 0 ? C.red.tx : C.green.tx, flexShrink: 0 }}>{p > 0 ? '▲' : '▼'} {Math.abs(p).toFixed(1)}%</span> })() : null },
-                      { label: 'FBA vs MFN', value: `${scTotalRev ? (scFBA.rev / scTotalRev * 100).toFixed(1) : 0}% FBA`, sub: `MFN ${scTotalRev ? (scMFN.rev / scTotalRev * 100).toFixed(1) : 0}%`, badge: scChgBadge(scTotalRev ? scFBA.rev / scTotalRev * 100 : 0, prevSCFbaShare) },
-                    ].map(k => (
-                      <div key={k.label} className="kpi-card" style={{ padding: '10px 13px' }}>
-                        <div className="kpi-label">{k.label}</div>
-                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 4 }}><div className="kpi-value" style={{ fontSize: 17, ...(k.accent ? { color: k.accent } : {}) }}>{k.value}</div>{k.badge}</div>
-                        {k.sub && <div className="kpi-sub">{k.sub}</div>}
-                      </div>
-                    ))}
-                  </div>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gridAutoRows: '1fr', gap: 10 }}>
+                  {[
+                    { label: 'Net Revenue (Exc GST)', value: fmt(scTotalExcRev), sub: 'Net after GST deduction', badge: scChgBadge(scTotalExcRev, prevSCExcRev) },
+                    { label: 'GST Collected', value: fmt(scTotalRev - scTotalExcRev), sub: 'Gross − Net revenue', badge: scChgBadge(scTotalRev - scTotalExcRev, prevSCRev - prevSCExcRev) },
+                    { label: 'AOV', value: `₹${Math.round(scAOV).toLocaleString('en-IN')}`, sub: 'Revenue / Orders', badge: scChgBadge(scAOV, prevSCAOV) },
+                    { label: 'ASP', value: `₹${scTotalUnits ? Math.round(scTotalRev / scTotalUnits).toLocaleString('en-IN') : 0}`, sub: 'Revenue / Units', badge: scChgBadge(scTotalRev / (scTotalUnits || 1), prevSCASP) },
+                    { label: 'Daily Avg Revenue', value: fmt(scTotalRev / (data.nDays || 1)), sub: 'Revenue per day', badge: scChgBadge(scTotalRev / (data.nDays || 1), prevSCDailyAvg) },
+                    { label: 'Order Status', value: (() => { const shipped = amzSC.status?.find(s => s.status === 'Shipped')?.orders || 0; const total = amzSC.totalOrders || 0; return `${total ? (shipped / total * 100).toFixed(1) : 0}% Shipped` })(), sub: `${fmtN(amzSC.totalOrders || 0)} total · ${fmtN(scPending)} pending` },
+                    { label: 'Cancellation Rate', value: `${scCancelRate.toFixed(1)}%`, sub: `${fmtN(scCancelOrders)} cancelled`, accent: scCancelRate > 10 ? '#7A1A1A' : undefined, badge: (amzSC.prevCancelledOrders && prevSCOrders) ? (() => { const prevRate = amzSC.prevCancelledOrders / prevSCOrders * 100; const p = (scCancelRate - prevRate) / prevRate * 100; return <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 4, background: p > 0 ? C.red.bg : C.green.bg, color: p > 0 ? C.red.tx : C.green.tx, flexShrink: 0 }}>{p > 0 ? '▲' : '▼'} {Math.abs(p).toFixed(1)}%</span> })() : null },
+                    { label: 'FBA vs MFN', value: `${scTotalRev ? (scFBA.rev / scTotalRev * 100).toFixed(1) : 0}% FBA`, sub: `MFN ${scTotalRev ? (scMFN.rev / scTotalRev * 100).toFixed(1) : 0}%`, badge: scChgBadge(scTotalRev ? scFBA.rev / scTotalRev * 100 : 0, prevSCFbaShare) },
+                  ].map(k => (
+                    <div key={k.label} className="kpi-card" style={{ padding: '10px 13px' }}>
+                      <div className="kpi-label">{k.label}</div>
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 4 }}><div className="kpi-value" style={{ fontSize: 17, ...(k.accent ? { color: k.accent } : {}) }}>{k.value}</div>{k.badge}</div>
+                      {k.sub && <div className="kpi-sub">{k.sub}</div>}
+                    </div>
+                  ))}
                 </div>
               </div>
             )
