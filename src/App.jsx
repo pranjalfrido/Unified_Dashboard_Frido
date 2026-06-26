@@ -1972,7 +1972,7 @@ function ShopifyGeoDonutRow({ regionRows, tierRows, topStates, allStateRows }) {
   if (!regionData.length && !tierData.length) return null
 
   return (
-    <div style={{ width: '50%' }}>
+    <div style={{ flex: 1, minWidth: 0 }}>
       <Card title="Geography Breakdown" action={
         <div style={{ display: 'flex', gap: 3 }}>
           {[['rev','Revenue'],['orders','Orders'],['aov','ASP']].map(([k,l]) => <button key={k} onClick={() => setMetric(k)} style={selStyle(metric === k)}>{l}</button>)}
@@ -1981,6 +1981,30 @@ function ShopifyGeoDonutRow({ regionRows, tierRows, topStates, allStateRows }) {
         <div style={{ display: 'flex', gap: 16 }}>
           {regionData.length > 0 && <SmallDonut title="By Region" data={regionData} colors={REGION_COLORS} />}
           {tierData.length > 0 && <SmallDonut title="By City Tier" data={tierData} colors={TIER_COLORS} />}
+        </div>
+      </Card>
+    </div>
+  )
+}
+
+function TopSubCatBar({ subCatRows }) {
+  const top10 = (subCatRows || []).slice(0, 10)
+  const maxRev = top10[0]?.rev || 1
+  const BAR_COLORS = ['#534AB7','#0D9E68','#2E74CC','#CC8A00','#CC4078','#E24B4A','#9B59B6','#FF6B35','#00B4D8','#06D6A0']
+  return (
+    <div style={{ flex: 1, minWidth: 0 }}>
+      <Card title="Top 10 Sub-categories · Revenue">
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
+          {top10.map((r, i) => (
+            <div key={r.name} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <div style={{ width: 120, fontSize: 11, color: C.t2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', flexShrink: 0 }}>{r.name}</div>
+              <div style={{ flex: 1, background: C.border, borderRadius: 3, height: 8, overflow: 'hidden' }}>
+                <div style={{ width: `${(r.rev / maxRev) * 100}%`, background: BAR_COLORS[i % BAR_COLORS.length], height: '100%', borderRadius: 3, transition: 'width .3s' }} />
+              </div>
+              <div style={{ width: 72, fontSize: 11, fontWeight: 700, color: C.t1, fontFamily: 'var(--mono)', textAlign: 'right', flexShrink: 0 }}>{fmt(r.rev)}</div>
+            </div>
+          ))}
+          {top10.length === 0 && <div style={{ fontSize: 12, color: C.t3, textAlign: 'center', padding: '12px 0' }}>No data</div>}
         </div>
       </Card>
     </div>
@@ -2338,7 +2362,10 @@ function ShopifyTab({ data, filters, setFilters }) {
           {catRows.slice(0, 8).map((r, i) => { const dots = ['#534AB7','#0D9E68','#2E74CC','#CC8A00','#CC4078','#E24B4A','#9B59B6','#FF6B35']; const isSelected = (filters.category || []).includes(r.name); return <HBar key={r.name} dot={dots[i % dots.length]} label={r.name} width={(r.rev / (catRows[0]?.rev || 1)) * 100} value={fmt(r.rev)} pctVal={totalRev ? pct(r.rev, totalRev) : '—'} isSelected={isSelected} onClick={() => { const next = isSelected ? [] : [r.name]; setSelectedCat(next[0] || null); setFilters(f => ({ ...f, category: next, subCategory: [] })) }} /> })}
         </Card>
       </div>
-      <ShopifyGeoDonutRow regionRows={sh.regionRows || []} tierRows={sh.tierRows || []} topStates={sh.topStates || []} allStateRows={Object.entries(sh.stateMap || {}).map(([k, v]) => ({ name: k, rev: v.rev, orders: v.orders?.size || 0 }))} />
+      <div style={{ display: 'flex', gap: 14, alignItems: 'stretch' }}>
+        <ShopifyGeoDonutRow regionRows={sh.regionRows || []} tierRows={sh.tierRows || []} topStates={sh.topStates || []} allStateRows={Object.entries(sh.stateMap || {}).map(([k, v]) => ({ name: k, rev: v.rev, orders: v.orders?.size || 0 }))} />
+        <TopSubCatBar subCatRows={allSubCatRows} />
+      </div>
       {/* Category Revenue Matrix · Shopify */}
       {(() => {
         const catData = {}
@@ -2769,7 +2796,10 @@ function AmazonTab({ data, region = 'india', setRegion = () => {} }) {
               </div>
             )
           })()}
-          <ShopifyGeoDonutRow regionRows={amzSC.regionRows || []} tierRows={amzSC.tierRows || []} topStates={amzSC.topStates || []} allStateRows={amzSC.topStates || []} />
+          <div style={{ display: 'flex', gap: 14, alignItems: 'stretch' }}>
+            <ShopifyGeoDonutRow regionRows={amzSC.regionRows || []} tierRows={amzSC.tierRows || []} topStates={amzSC.topStates || []} allStateRows={amzSC.topStates || []} />
+            <TopSubCatBar subCatRows={(() => { const rows = []; Object.entries(amzSC.subCatChannel || {}).forEach(([cat, scMap]) => { Object.entries(scMap).forEach(([sc, chData]) => { const rev = (chData.FBA?.rev||0)+(chData.MFN?.rev||0); rows.push({ name: sc, rev }) }) }); return rows.sort((a,b) => b.rev - a.rev) })()} />
+          </div>
           {(() => {
             const pickRet = (...chs) => { for (const c of chs) if (c?.totalOrdersForReturn) return { returned: c.returned||0, totalOrdersForReturn: c.totalOrdersForReturn } ; return { returned: 0, totalOrdersForReturn: 0 } }
             const allCats = new Set([...Object.keys(amzSC.catChannel || {}), ...Object.keys(amzVCMatrix.catData || {})])
@@ -3002,7 +3032,10 @@ function AmazonTab({ data, region = 'india', setRegion = () => {} }) {
               </Card>
             )
           })()}
-          <ShopifyGeoDonutRow regionRows={amzSC.regionRows || []} tierRows={amzSC.tierRows || []} topStates={amzSC.topStates || []} allStateRows={amzSC.topStates || []} />
+          <div style={{ display: 'flex', gap: 14, alignItems: 'stretch' }}>
+            <ShopifyGeoDonutRow regionRows={amzSC.regionRows || []} tierRows={amzSC.tierRows || []} topStates={amzSC.topStates || []} allStateRows={amzSC.topStates || []} />
+            <TopSubCatBar subCatRows={(() => { const rows = []; Object.entries(amzSC.subCatChannel || {}).forEach(([cat, scMap]) => { Object.entries(scMap).forEach(([sc, chData]) => { const rev = (chData.FBA?.rev||0)+(chData.MFN?.rev||0); rows.push({ name: sc, rev }) }) }); return rows.sort((a,b) => b.rev - a.rev) })()} />
+          </div>
           <div style={{ display: 'grid', gridTemplateColumns: '3fr 2fr', gap: 14, alignItems: 'stretch' }}>
             {(() => {
               const pickRet = (...chs) => { for (const c of chs) if (c?.totalOrdersForReturn) return { returned: c.returned||0, totalOrdersForReturn: c.totalOrdersForReturn }; return { returned: 0, totalOrdersForReturn: 0 } }
