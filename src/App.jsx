@@ -2723,7 +2723,12 @@ function AmazonTab({ data, region = 'india', setRegion = () => {} }) {
               }))
             })()
             const retRateByDate = Object.fromEntries((amzSC.returnRate?.daily || []).map(x => [x.date, x.rate]))
-            const groupedWithRet = grouped.map(d => ({ ...d, _ret: ovTrendGroup === 'daily' ? (retRateByDate[d.date] ?? null) : null }))
+            const groupedWithRet = (() => {
+              if (ovTrendGroup !== 'daily') return grouped.map(d => ({ ...d, _ret: null }))
+              const dateSet = new Set(grouped.map(d => d.date))
+              const extraDates = (amzSC.returnRate?.daily || []).filter(x => !dateSet.has(x.date)).map(x => ({ date: x.date, grossRev: null, netRev: null, scRev: null, vcRev: null, scOrders: null, vcOrders: null, totalOrders: null, scUnits: null, vcUnits: null, totalUnits: null }))
+              return [...grouped, ...extraDates].sort((a, b) => a.date.localeCompare(b.date)).map(d => ({ ...d, _ret: retRateByDate[d.date] ?? null }))
+            })()
             const xFmt = d => ovTrendGroup === 'daily' ? d?.slice(5) : ovTrendGroup === 'monthly' ? d?.slice(0, 7) : d
             const isRev = ovTrendMetric === 'rev', isOrders = ovTrendMetric === 'orders'
             const mainFmt = isRev ? (v => v >= 1e5 ? `${(v/1e5).toFixed(1)}L` : fmt(v)) : (v => fmtN(v))
@@ -2772,7 +2777,7 @@ function AmazonTab({ data, region = 'india', setRegion = () => {} }) {
                       {isRev && <Area yAxisId="main" type="monotone" dataKey={dk.sub} name={dk.subName} stroke="#0D9E68" fill="#0D9E6811" strokeWidth={2} dot={false} strokeDasharray="4 2" />}
                       <Line yAxisId="main" type="monotone" dataKey={dk.a} name={dk.aName} stroke="#E8930A" strokeWidth={1.5} dot={false} />
                       <Line yAxisId="main" type="monotone" dataKey={dk.b} name={dk.bName} stroke="#2E74CC" strokeWidth={1.5} dot={false} strokeDasharray="3 2" />
-                      {returnRateReliable && ovTrendGroup === 'daily' && <Line yAxisId="pct" type="monotone" dataKey="_ret" name="_ret" stroke="#E24B4A" strokeWidth={1.5} dot={false} strokeDasharray="4 2" connectNulls={false} />}
+                      {returnRateReliable && <Line yAxisId="pct" type="monotone" dataKey="_ret" name="_ret" stroke="#E24B4A" strokeWidth={1.5} dot={false} strokeDasharray="4 2" connectNulls={false} />}
                     </ComposedChart>
                   </ResponsiveContainer>
                 </Card>
@@ -2992,7 +2997,12 @@ function AmazonTab({ data, region = 'india', setRegion = () => {} }) {
               }))
             })()
             const retRateByDate2 = Object.fromEntries((amzSC.returnRate?.daily || []).map(x => [x.date, x.rate]))
-            const groupedWithRet2 = grouped.map(d => ({ ...d, _ret: scTrendGroup === 'daily' ? (retRateByDate2[d.date] ?? null) : null }))
+            const groupedWithRet2 = (() => {
+              if (scTrendGroup !== 'daily') return grouped.map(d => ({ ...d, _ret: null }))
+              const dateSet2 = new Set(grouped.map(d => d.date))
+              const extraDates2 = (amzSC.returnRate?.daily || []).filter(x => !dateSet2.has(x.date)).map(x => ({ date: x.date, grossRev: null, netRev: null, fbaRev: null, mfnRev: null, totalOrders: null, fbaOrders: null, mfnOrders: null, totalUnits: null, fbaUnits: null, mfnUnits: null }))
+              return [...grouped, ...extraDates2].sort((a, b) => a.date.localeCompare(b.date)).map(d => ({ ...d, _ret: retRateByDate2[d.date] ?? null }))
+            })()
             const xFmt = d => scTrendGroup === 'daily' ? d?.slice(5) : scTrendGroup === 'monthly' ? d?.slice(0, 7) : d
             const isRev = scChartMetric === 'rev', isOrders = scChartMetric === 'orders'
             const mainFmt = isRev ? (v => v >= 1e5 ? `${(v/1e5).toFixed(1)}L` : fmt(v)) : (v => fmtN(v))
@@ -3033,7 +3043,7 @@ function AmazonTab({ data, region = 'india', setRegion = () => {} }) {
                     {isRev && <Area yAxisId="main" type="monotone" dataKey={dataKeys.sub1} name={dataKeys.sub1Name} stroke="#0D9E68" fill="#0D9E6811" strokeWidth={2} dot={false} strokeDasharray="4 2" />}
                     <Line yAxisId="main" type="monotone" dataKey={dataKeys.fba} name={dataKeys.fbaName} stroke="#E8930A" strokeWidth={1.5} dot={false} />
                     <Line yAxisId="main" type="monotone" dataKey={dataKeys.mfn} name={dataKeys.mfnName} stroke="#2E74CC" strokeWidth={1.5} dot={false} strokeDasharray="3 2" />
-                    {returnRateReliable && scTrendGroup === 'daily' && <Line yAxisId="pct" type="monotone" dataKey="_ret" name="_ret" stroke="#E24B4A" strokeWidth={1.5} dot={false} strokeDasharray="4 2" connectNulls={false} />}
+                    {returnRateReliable && <Line yAxisId="pct" type="monotone" dataKey="_ret" name="_ret" stroke="#E24B4A" strokeWidth={1.5} dot={false} strokeDasharray="4 2" connectNulls={false} />}
                   </ComposedChart>
                 </ResponsiveContainer>
               </Card>
