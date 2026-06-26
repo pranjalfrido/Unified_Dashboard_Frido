@@ -1245,42 +1245,38 @@ function AmazonCategoryMatrix({ channels, catChannel, subCatChannel, skuChannel,
   )
 }
 
-// FinancialCategoryMatrix: fixed columns Gross / GST / Net / ASP / Returns / Return%
-// catData: { [cat]: { rev, excRev, units, returned?, totalOrdersForReturn? } }
-// subCatData / skuData: same shape nested
+// FinancialCategoryMatrix: Gross Rev, Units, ASP, GST, Cancel, RTO, CIR, Exch, Net Rev
 function FinancialCategoryMatrix({ catData, subCatData, skuData, title }) {
   const [expanded, setExpanded] = useState({})
   const [expandedSC, setExpandedSC] = useState({})
   const toggle = cat => setExpanded(prev => ({ ...prev, [cat]: !prev[cat] }))
   const toggleSC = key => setExpandedSC(prev => ({ ...prev, [key]: !prev[key] }))
 
-  const cats = Object.entries(catData || {}).map(([cat, d]) => ({
-    cat,
+  const mapRow = (d) => ({
     gross: d.rev || 0,
     net: d.excRev || 0,
     gst: (d.rev || 0) - (d.excRev || 0),
     units: d.units || 0,
-    returned: d.returned || 0,
-    totalOrders: d.totalOrdersForReturn || 0,
-  })).sort((a, b) => b.gross - a.gross)
+    orders: (d.orders?.size ?? d.orders) || 0,
+    cancelled: d.cancelled || 0,
+    rto: d.rto || 0,
+    cir: d.cir || 0,
+    exch: d.exch || 0,
+  })
 
-  const totGross = cats.reduce((s, r) => s + r.gross, 0)
-  const totNet = cats.reduce((s, r) => s + r.net, 0)
-  const totGST = cats.reduce((s, r) => s + r.gst, 0)
-  const totUnits = cats.reduce((s, r) => s + r.units, 0)
-  const totReturned = cats.reduce((s, r) => s + r.returned, 0)
-  const totTotalOrders = cats.reduce((s, r) => s + r.totalOrders, 0)
-  const hasReturns = cats.some(r => r.returned > 0 || r.totalOrders > 0)
+  const cats = Object.entries(catData || {}).map(([cat, d]) => ({ cat, ...mapRow(d) })).sort((a, b) => b.gross - a.gross)
 
-  const colHdr = { textAlign: 'right', padding: '3px 6px 7px', borderBottom: `1px solid ${C.border}`, fontSize: 10, fontWeight: 700, textTransform: 'uppercase' }
-  const cell = { padding: '5px 6px', textAlign: 'right', fontFamily: 'var(--mono)', fontSize: 11, fontWeight: 400 }
+  const tot = cats.reduce((s, r) => ({
+    gross: s.gross + r.gross, net: s.net + r.net, gst: s.gst + r.gst,
+    units: s.units + r.units, orders: s.orders + r.orders,
+    cancelled: s.cancelled + r.cancelled, rto: s.rto + r.rto, cir: s.cir + r.cir, exch: s.exch + r.exch,
+  }), { gross: 0, net: 0, gst: 0, units: 0, orders: 0, cancelled: 0, rto: 0, cir: 0, exch: 0 })
 
-  const RetPct = ({ returned, totalOrders, fs = 9.5 }) => {
-    if (!totalOrders) return null
-    const pct = (returned / totalOrders * 100).toFixed(1)
-    const color = parseFloat(pct) > 20 ? '#B91C1C' : parseFloat(pct) > 10 ? '#92400E' : C.t3
-    return <span style={{ fontSize: fs, color, marginLeft: 4, fontWeight: 400 }}>{pct}%</span>
-  }
+  const hasCancelData = cats.some(r => r.cancelled > 0 || r.rto > 0 || r.cir > 0 || r.exch > 0)
+
+  const colHdr = { textAlign: 'right', padding: '3px 5px 7px', borderBottom: `1px solid ${C.border}`, fontSize: 9.5, fontWeight: 700, textTransform: 'uppercase', whiteSpace: 'nowrap' }
+  const cell = (fs = 11) => ({ padding: '5px 5px', textAlign: 'right', fontFamily: 'var(--mono)', fontSize: fs, fontWeight: 400 })
+  const pctSpan = (n, d, warn = 15) => { if (!d || !n) return null; const p = (n / d * 100).toFixed(1); const col = parseFloat(p) > warn ? '#B91C1C' : C.t3; return <span style={{ fontSize: 9, color: col, marginLeft: 3 }}>{p}%</span> }
 
   return (
     <Card title={title || 'Category Revenue Matrix'} note="Gross = incl. GST · Net = excl. GST">
@@ -1288,22 +1284,24 @@ function FinancialCategoryMatrix({ catData, subCatData, skuData, title }) {
         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11, fontWeight: 400 }}>
           <thead style={{ position: 'sticky', top: 0, background: C.card, zIndex: 1 }}>
             <tr>
-              <th style={{ textAlign: 'left', padding: '3px 5px 7px', borderBottom: `1px solid ${C.border}`, color: C.t3, fontSize: 10, fontWeight: 700, textTransform: 'uppercase' }}>Category</th>
+              <th style={{ textAlign: 'left', padding: '3px 5px 7px', borderBottom: `1px solid ${C.border}`, color: C.t3, fontSize: 9.5, fontWeight: 700, textTransform: 'uppercase' }}>Category</th>
               <th style={{ ...colHdr, color: '#286010' }}>Gross Rev</th>
-              <th style={{ ...colHdr, color: C.t2 }}>GST</th>
-              <th style={{ ...colHdr, color: '#2E74CC' }}>Net Rev</th>
+              <th style={{ ...colHdr, color: C.t2 }}>Units</th>
               <th style={{ ...colHdr, color: C.t3 }}>ASP</th>
-              {hasReturns && <th style={{ ...colHdr, color: '#B91C1C' }}>Returns</th>}
+              <th style={{ ...colHdr, color: C.t2 }}>GST</th>
+              {hasCancelData && <>
+                <th style={{ ...colHdr, color: '#B91C1C' }}>Cancel</th>
+                <th style={{ ...colHdr, color: '#E24B4A' }}>RTO</th>
+                <th style={{ ...colHdr, color: '#2E74CC' }}>CIR</th>
+                <th style={{ ...colHdr, color: '#9B59B6' }}>Exch</th>
+              </>}
+              <th style={{ ...colHdr, color: '#2E74CC' }}>Net Rev</th>
             </tr>
           </thead>
           <tbody>
             {cats.map(row => {
               const isOpen = expanded[row.cat]
-              const asp = row.units > 0 ? Math.round(row.gross / row.units) : 0
-              const subCats = Object.entries(subCatData?.[row.cat] || {}).map(([sc, d]) => ({
-                sc, gross: d.rev||0, net: d.excRev||0, gst: (d.rev||0)-(d.excRev||0), units: d.units||0,
-                returned: d.returned||0, totalOrders: d.totalOrdersForReturn||0,
-              })).sort((a, b) => b.gross - a.gross)
+              const subCats = Object.entries(subCatData?.[row.cat] || {}).map(([sc, d]) => ({ sc, ...mapRow(d) })).sort((a, b) => b.gross - a.gross)
               const hasSubs = subCats.length > 0
               return (
                 <Fragment key={row.cat}>
@@ -1314,20 +1312,22 @@ function FinancialCategoryMatrix({ catData, subCatData, skuData, title }) {
                         {row.cat}
                       </span>
                     </td>
-                    <td style={{ ...cell, color: '#286010', fontWeight: 600 }}>{fmt(row.gross)}</td>
-                    <td style={{ ...cell, color: C.t2 }}>{fmt(row.gst)}</td>
-                    <td style={{ ...cell, color: '#2E74CC', fontWeight: 600 }}>{fmt(row.net)}</td>
-                    <td style={{ ...cell, color: C.t3 }}>₹{asp.toLocaleString('en-IN')}</td>
-                    {hasReturns && <td style={{ ...cell, color: '#B91C1C' }}>{fmtN(row.returned)}<RetPct returned={row.returned} totalOrders={row.totalOrders} /></td>}
+                    <td style={{ ...cell(), color: '#286010', fontWeight: 600 }}>{fmt(row.gross)}</td>
+                    <td style={{ ...cell(), color: C.t2 }}>{fmtN(row.units)}</td>
+                    <td style={{ ...cell(), color: C.t3 }}>₹{(row.units > 0 ? Math.round(row.gross / row.units) : 0).toLocaleString('en-IN')}</td>
+                    <td style={{ ...cell(), color: C.t2 }}>{fmt(row.gst)}</td>
+                    {hasCancelData && <>
+                      <td style={{ ...cell(), color: '#B91C1C' }}>{row.cancelled > 0 ? <>{fmtN(row.cancelled)}{pctSpan(row.cancelled, row.orders)}</> : <span style={{ color: C.t3 }}>—</span>}</td>
+                      <td style={{ ...cell(), color: '#E24B4A' }}>{row.rto > 0 ? <>{fmtN(row.rto)}{pctSpan(row.rto, row.orders)}</> : <span style={{ color: C.t3 }}>—</span>}</td>
+                      <td style={{ ...cell(), color: '#2E74CC' }}>{row.cir > 0 ? <>{fmtN(row.cir)}{pctSpan(row.cir, row.orders)}</> : <span style={{ color: C.t3 }}>—</span>}</td>
+                      <td style={{ ...cell(), color: '#9B59B6' }}>{row.exch > 0 ? <>{fmtN(row.exch)}{pctSpan(row.exch, row.orders)}</> : <span style={{ color: C.t3 }}>—</span>}</td>
+                    </>}
+                    <td style={{ ...cell(), color: '#2E74CC', fontWeight: 600 }}>{fmt(row.net)}</td>
                   </tr>
                   {isOpen && subCats.map(sr => {
                     const scKey = `${row.cat}::${sr.sc}`
                     const scOpen = expandedSC[scKey]
-                    const srAsp = sr.units > 0 ? Math.round(sr.gross / sr.units) : 0
-                    const skus = Object.entries(skuData?.[row.cat]?.[sr.sc] || {}).map(([sku, d]) => ({
-                      sku, gross: d.rev||0, net: d.excRev||0, gst: (d.rev||0)-(d.excRev||0), units: d.units||0,
-                      returned: d.returned||0, totalOrders: d.totalOrdersForReturn||0,
-                    })).sort((a, b) => b.gross - a.gross)
+                    const skus = Object.entries(skuData?.[row.cat]?.[sr.sc] || {}).map(([sku, d]) => ({ sku, ...mapRow(d) })).sort((a, b) => b.gross - a.gross)
                     const hasSkus = skus.length > 0
                     return (
                       <Fragment key={sr.sc}>
@@ -1338,25 +1338,34 @@ function FinancialCategoryMatrix({ catData, subCatData, skuData, title }) {
                               └ {sr.sc}
                             </span>
                           </td>
-                          <td style={{ ...cell, fontSize: 10.5, color: '#286010' }}>{fmt(sr.gross)}</td>
-                          <td style={{ ...cell, fontSize: 10.5, color: C.t2 }}>{fmt(sr.gst)}</td>
-                          <td style={{ ...cell, fontSize: 10.5, color: '#2E74CC' }}>{fmt(sr.net)}</td>
-                          <td style={{ ...cell, fontSize: 10.5, color: C.t3 }}>₹{srAsp.toLocaleString('en-IN')}</td>
-                          {hasReturns && <td style={{ ...cell, fontSize: 10.5, color: '#B91C1C' }}>{fmtN(sr.returned)}<RetPct returned={sr.returned} totalOrders={sr.totalOrders} fs={9} /></td>}
+                          <td style={{ ...cell(10.5), color: '#286010' }}>{fmt(sr.gross)}</td>
+                          <td style={{ ...cell(10.5), color: C.t2 }}>{fmtN(sr.units)}</td>
+                          <td style={{ ...cell(10.5), color: C.t3 }}>₹{(sr.units > 0 ? Math.round(sr.gross / sr.units) : 0).toLocaleString('en-IN')}</td>
+                          <td style={{ ...cell(10.5), color: C.t2 }}>{fmt(sr.gst)}</td>
+                          {hasCancelData && <>
+                            <td style={{ ...cell(10.5), color: '#B91C1C' }}>{sr.cancelled > 0 ? <>{fmtN(sr.cancelled)}{pctSpan(sr.cancelled, sr.orders)}</> : <span style={{ color: C.t3 }}>—</span>}</td>
+                            <td style={{ ...cell(10.5), color: '#E24B4A' }}>{sr.rto > 0 ? <>{fmtN(sr.rto)}{pctSpan(sr.rto, sr.orders)}</> : <span style={{ color: C.t3 }}>—</span>}</td>
+                            <td style={{ ...cell(10.5), color: '#2E74CC' }}>{sr.cir > 0 ? <>{fmtN(sr.cir)}{pctSpan(sr.cir, sr.orders)}</> : <span style={{ color: C.t3 }}>—</span>}</td>
+                            <td style={{ ...cell(10.5), color: '#9B59B6' }}>{sr.exch > 0 ? <>{fmtN(sr.exch)}{pctSpan(sr.exch, sr.orders)}</> : <span style={{ color: C.t3 }}>—</span>}</td>
+                          </>}
+                          <td style={{ ...cell(10.5), color: '#2E74CC' }}>{fmt(sr.net)}</td>
                         </tr>
-                        {scOpen && skus.map(sk => {
-                          const skAsp = sk.units > 0 ? Math.round(sk.gross / sk.units) : 0
-                          return (
-                            <tr key={sk.sku} style={{ borderBottom: `1px solid ${C.border}`, background: '#F5F5F0' }}>
-                              <td style={{ padding: '3px 5px 3px 36px', color: C.t3, fontSize: 10, fontFamily: 'var(--mono)' }}>└ {sk.sku}</td>
-                              <td style={{ ...cell, fontSize: 10, color: '#286010' }}>{fmt(sk.gross)}</td>
-                              <td style={{ ...cell, fontSize: 10, color: C.t2 }}>{fmt(sk.gst)}</td>
-                              <td style={{ ...cell, fontSize: 10, color: '#2E74CC' }}>{fmt(sk.net)}</td>
-                              <td style={{ ...cell, fontSize: 10, color: C.t3 }}>₹{skAsp.toLocaleString('en-IN')}</td>
-                              {hasReturns && <td style={{ ...cell, fontSize: 10, color: '#B91C1C' }}>{fmtN(sk.returned)}<RetPct returned={sk.returned} totalOrders={sk.totalOrders} fs={8.5} /></td>}
-                            </tr>
-                          )
-                        })}
+                        {scOpen && skus.map(sk => (
+                          <tr key={sk.sku} style={{ borderBottom: `1px solid ${C.border}`, background: '#F5F5F0' }}>
+                            <td style={{ padding: '3px 5px 3px 36px', color: C.t3, fontSize: 10, fontFamily: 'var(--mono)' }}>└ {sk.sku}</td>
+                            <td style={{ ...cell(10), color: '#286010' }}>{fmt(sk.gross)}</td>
+                            <td style={{ ...cell(10), color: C.t2 }}>{fmtN(sk.units)}</td>
+                            <td style={{ ...cell(10), color: C.t3 }}>₹{(sk.units > 0 ? Math.round(sk.gross / sk.units) : 0).toLocaleString('en-IN')}</td>
+                            <td style={{ ...cell(10), color: C.t2 }}>{fmt(sk.gst)}</td>
+                            {hasCancelData && <>
+                              <td style={{ ...cell(10), color: '#B91C1C' }}>{sk.cancelled > 0 ? <>{fmtN(sk.cancelled)}{pctSpan(sk.cancelled, sk.orders)}</> : <span style={{ color: C.t3 }}>—</span>}</td>
+                              <td style={{ ...cell(10), color: '#E24B4A' }}>{sk.rto > 0 ? <>{fmtN(sk.rto)}{pctSpan(sk.rto, sk.orders)}</> : <span style={{ color: C.t3 }}>—</span>}</td>
+                              <td style={{ ...cell(10), color: '#2E74CC' }}>{sk.cir > 0 ? <>{fmtN(sk.cir)}{pctSpan(sk.cir, sk.orders)}</> : <span style={{ color: C.t3 }}>—</span>}</td>
+                              <td style={{ ...cell(10), color: '#9B59B6' }}>{sk.exch > 0 ? <>{fmtN(sk.exch)}{pctSpan(sk.exch, sk.orders)}</> : <span style={{ color: C.t3 }}>—</span>}</td>
+                            </>}
+                            <td style={{ ...cell(10), color: '#2E74CC' }}>{fmt(sk.net)}</td>
+                          </tr>
+                        ))}
                       </Fragment>
                     )
                   })}
@@ -1367,11 +1376,17 @@ function FinancialCategoryMatrix({ catData, subCatData, skuData, title }) {
           <tfoot>
             <tr style={{ borderTop: `2px solid ${C.border}`, background: C.bg }}>
               <td style={{ padding: '6px 8px', fontSize: 11, fontWeight: 700, color: C.t1 }}>Total</td>
-              <td style={{ padding: '6px 8px', textAlign: 'right', fontWeight: 700, fontFamily: 'var(--mono)', fontSize: 11.5, color: '#286010', borderLeft: `1px solid ${C.border}` }}>{fmt(totGross)}</td>
-              <td style={{ padding: '6px 8px', textAlign: 'right', fontWeight: 700, fontFamily: 'var(--mono)', fontSize: 11.5, color: C.t2, borderLeft: `1px solid ${C.border}` }}>{fmt(totGST)}</td>
-              <td style={{ padding: '6px 8px', textAlign: 'right', fontWeight: 700, fontFamily: 'var(--mono)', fontSize: 11.5, color: '#2E74CC', borderLeft: `1px solid ${C.border}` }}>{fmt(totNet)}</td>
-              <td style={{ padding: '6px 8px', textAlign: 'right', fontWeight: 700, fontFamily: 'var(--mono)', fontSize: 11.5, color: C.t3, borderLeft: `1px solid ${C.border}` }}>₹{totUnits > 0 ? Math.round(totGross / totUnits).toLocaleString('en-IN') : '—'}</td>
-              {hasReturns && <td style={{ padding: '6px 8px', textAlign: 'right', fontWeight: 700, fontFamily: 'var(--mono)', fontSize: 11.5, color: '#B91C1C', borderLeft: `1px solid ${C.border}` }}>{fmtN(totReturned)}<RetPct returned={totReturned} totalOrders={totTotalOrders} /></td>}
+              <td style={{ padding: '5px 5px', textAlign: 'right', fontWeight: 700, fontFamily: 'var(--mono)', fontSize: 11.5, color: '#286010' }}>{fmt(tot.gross)}</td>
+              <td style={{ padding: '5px 5px', textAlign: 'right', fontWeight: 700, fontFamily: 'var(--mono)', fontSize: 11.5, color: C.t2 }}>{fmtN(tot.units)}</td>
+              <td style={{ padding: '5px 5px', textAlign: 'right', fontWeight: 700, fontFamily: 'var(--mono)', fontSize: 11.5, color: C.t3 }}>₹{tot.units > 0 ? Math.round(tot.gross / tot.units).toLocaleString('en-IN') : '—'}</td>
+              <td style={{ padding: '5px 5px', textAlign: 'right', fontWeight: 700, fontFamily: 'var(--mono)', fontSize: 11.5, color: C.t2 }}>{fmt(tot.gst)}</td>
+              {hasCancelData && <>
+                <td style={{ padding: '5px 5px', textAlign: 'right', fontWeight: 700, fontFamily: 'var(--mono)', fontSize: 11.5, color: '#B91C1C' }}>{fmtN(tot.cancelled)}{pctSpan(tot.cancelled, tot.orders)}</td>
+                <td style={{ padding: '5px 5px', textAlign: 'right', fontWeight: 700, fontFamily: 'var(--mono)', fontSize: 11.5, color: '#E24B4A' }}>{fmtN(tot.rto)}{pctSpan(tot.rto, tot.orders)}</td>
+                <td style={{ padding: '5px 5px', textAlign: 'right', fontWeight: 700, fontFamily: 'var(--mono)', fontSize: 11.5, color: '#2E74CC' }}>{fmtN(tot.cir)}{pctSpan(tot.cir, tot.orders)}</td>
+                <td style={{ padding: '5px 5px', textAlign: 'right', fontWeight: 700, fontFamily: 'var(--mono)', fontSize: 11.5, color: '#9B59B6' }}>{fmtN(tot.exch)}{pctSpan(tot.exch, tot.orders)}</td>
+              </>}
+              <td style={{ padding: '5px 5px', textAlign: 'right', fontWeight: 700, fontFamily: 'var(--mono)', fontSize: 11.5, color: '#2E74CC' }}>{fmt(tot.net)}</td>
             </tr>
           </tfoot>
         </table>
@@ -1954,7 +1969,7 @@ function ShopifyGeoDonutRow({ regionRows, tierRows, topStates, allStateRows }) {
   const stateData = topStates.map(r => ({ name: r.name ? r.name.charAt(0).toUpperCase() + r.name.slice(1).toLowerCase() : r.name, value: metricVal(r, metric) }))
   const allStateGrandTotal = (allStateRows || []).reduce((s, r) => s + metricVal(r, metric), 0) || null
 
-  if (!regionData.length && !tierData.length && !stateData.length) return null
+  if (!regionData.length && !tierData.length) return null
 
   return (
     <Card title="Geography Breakdown" action={
@@ -1962,10 +1977,9 @@ function ShopifyGeoDonutRow({ regionRows, tierRows, topStates, allStateRows }) {
         {[['rev','Revenue'],['orders','Orders'],['aov','ASP']].map(([k,l]) => <button key={k} onClick={() => setMetric(k)} style={selStyle(metric === k)}>{l}</button>)}
       </div>
     }>
-      <div style={{ display: 'flex', gap: 24, flexWrap: 'wrap' }}>
+      <div style={{ display: 'flex', gap: 24 }}>
         {regionData.length > 0 && <SmallDonut title="By Region" data={regionData} colors={REGION_COLORS} />}
         {tierData.length > 0 && <SmallDonut title="By City Tier" data={tierData} colors={TIER_COLORS} />}
-        {stateData.length > 0 && <SmallDonut title="Top States" data={stateData} colors={STATE_COLORS} grandTotal={allStateGrandTotal} />}
       </div>
     </Card>
   )
