@@ -2457,14 +2457,8 @@ function AmazonTab({ data, region = 'india', setRegion = () => {} }) {
   const toggleStyle = active => ({ fontSize: 12, fontWeight: active ? 700 : 500, padding: '5px 18px', borderRadius: 7, border: `1.5px solid ${active ? C.acm : C.border2}`, background: active ? C.acc : C.card, color: C.t1, cursor: 'pointer', fontFamily: 'var(--font)', transition: 'all .12s' })
   const subToggleStyle = active => ({ fontSize: 12, fontWeight: 700, padding: '5px 16px', borderRadius: 7, border: `1.5px solid ${active ? C.t1 : C.border}`, background: active ? C.t1 : C.card, color: active ? '#fff' : C.t1, cursor: 'pointer', fontFamily: 'var(--font)', transition: 'all .15s', boxShadow: active ? '0 2px 6px rgba(0,0,0,.15)' : 'none' })
 
-  // Return rate is only reliable when end date is >30 days ago (settlement lag)
-  const returnRateReliable = (() => {
-    const dates = (amzSC.daily || []).map(d => d.date).sort()
-    if (!dates.length) return false
-    const endDate = new Date(dates[dates.length - 1] + 'T00:00:00')
-    const today = new Date(); today.setHours(0,0,0,0)
-    return (today - endDate) / 86400000 > 7
-  })()
+  // Rolling 30d return rate — data is pre-filtered to reliable dates (latest_settlement - 15 days)
+  const returnRateReliable = (amzSC.returnRate?.daily || []).length > 0
 
   // ── Seller Central calcs ──
   const scFBA = amzSC.fulfillment?.find(f => f.type === 'FBA') || { orders: 0, rev: 0, excRev: 0, units: 0 }
@@ -2619,7 +2613,7 @@ function AmazonTab({ data, region = 'india', setRegion = () => {} }) {
                       { label: 'Daily Avg', value: fmt((scCatRev + vcCatRev) / (data.nDays || 1)), sub: 'SC + VC per day', badge: selectedCat ? null : amzChgBadge((scTotalRev + vcTotalOrdered) / (data.nDays || 1), amzPrevDailyAvg) },
                       { label: 'ASP', value: `₹${scCatUnits ? Math.round(scCatRev / scCatUnits).toLocaleString('en-IN') : 0}`, sub: 'SC avg selling price / unit', badge: selectedCat ? null : amzChgBadge(scTotalUnits ? scTotalRev / scTotalUnits : 0, amzPrevASP) },
                       { label: 'Cancellation Rate', value: `${scCancelRate.toFixed(1)}%`, sub: `${fmtN(scCancelOrders)} cancelled`, accent: scCancelRate > 10 ? '#7A1A1A' : undefined, badge: amzPrevCancelRate ? (() => { const p = (scCancelRate - amzPrevCancelRate) / amzPrevCancelRate * 100; return <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 4, background: p > 0 ? C.red.bg : C.green.bg, color: p > 0 ? C.red.tx : C.green.tx, flexShrink: 0 }}>{p > 0 ? '▲' : '▼'} {Math.abs(p).toFixed(1)}%</span> })() : null },
-                      { label: 'Return Rate (SC)', value: returnRateReliable ? `${(amzSC.returnRate?.pct || 0).toFixed(1)}%` : 'N/A', sub: returnRateReliable ? `${fmtN(amzSC.returnRate?.returned || 0)} of ${fmtN(amzSC.returnRate?.total || 0)} orders` : 'Data too recent (<30d lag)', accent: returnRateReliable && (amzSC.returnRate?.pct || 0) > 18 ? '#7A1A1A' : undefined },
+                      { label: 'Return Rate (SC)', value: returnRateReliable ? `${(amzSC.returnRate?.pct || 0).toFixed(1)}%` : 'N/A', sub: returnRateReliable ? `Rolling 30d · ${fmtN(amzSC.returnRate?.rollReturned || 0)} of ${fmtN(amzSC.returnRate?.rollOrders || 0)} orders` : 'No reliable data', accent: returnRateReliable && (amzSC.returnRate?.pct || 0) > 18 ? '#7A1A1A' : undefined },
                     ].map(k => (
                       <div key={k.label} className="kpi-card" style={{ padding: '10px 13px' }}>
                         <div className="kpi-label">{k.label}</div>
@@ -2694,6 +2688,8 @@ function AmazonTab({ data, region = 'india', setRegion = () => {} }) {
                 scUnitShare: b.totalUnits > 0 ? b.scUnits / b.totalUnits * 100 : null,
               }))
             })()
+            const retRateByDate = Object.fromEntries((amzSC.returnRate?.daily || []).map(x => [x.date, x.rate]))
+            const groupedWithRet = grouped.map(d => ({ ...d, _ret: ovTrendGroup === 'daily' ? (retRateByDate[d.date] ?? null) : null }))
             const xFmt = d => ovTrendGroup === 'daily' ? d?.slice(5) : ovTrendGroup === 'monthly' ? d?.slice(0, 7) : d
             const isRev = ovTrendMetric === 'rev', isOrders = ovTrendMetric === 'orders'
             const mainFmt = isRev ? (v => v >= 1e5 ? `${(v/1e5).toFixed(1)}L` : fmt(v)) : (v => fmtN(v))
@@ -2725,7 +2721,7 @@ function AmazonTab({ data, region = 'india', setRegion = () => {} }) {
                   </div>
                 }>
                   <ResponsiveContainer width="100%" height={190}>
-                    <ComposedChart data={grouped} margin={{ top: 4, right: 44, bottom: 0, left: 0 }}>
+                    <ComposedChart data={groupedWithRet} margin={{ top: 4, right: 44, bottom: 0, left: 0 }}>
                       <CartesianGrid strokeDasharray="3 3" stroke={C.border} vertical={false} />
                       <XAxis dataKey="date" tick={{ fontSize: 10, fill: C.t3 }} tickFormatter={xFmt} />
                       <YAxis yAxisId="main" tick={{ fontSize: 10, fill: C.t3 }} tickFormatter={mainFmt} width={58} />
@@ -2733,16 +2729,16 @@ function AmazonTab({ data, region = 'india', setRegion = () => {} }) {
                       <Tooltip content={({ active, payload, label }) => active && payload?.length ? (
                         <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 7, padding: '7px 11px', fontSize: 11 }}>
                           <div style={{ fontWeight: 700, marginBottom: 4, color: C.t2 }}>{xFmt(label)}</div>
-                          {payload.filter(p => p.name !== '_ret').map(p => <div key={p.name} style={{ color: p.color }}>{p.name}: {ttFmt(p.value)}</div>)}
-                          <div style={{ color: '#E24B4A' }}>Return Rate: {(amzSC.returnRate?.pct || 0).toFixed(1)}%</div>
+                          {payload.filter(p => p.dataKey !== '_ret').map(p => <div key={p.name} style={{ color: p.color }}>{p.name}: {ttFmt(p.value)}</div>)}
+                          {payload.find(p => p.dataKey === '_ret' && p.value != null) && <div style={{ color: '#E24B4A' }}>30d Return Rate: {payload.find(p => p.dataKey === '_ret').value?.toFixed(1)}%</div>}
                         </div>
                       ) : null} />
-                      <Legend wrapperStyle={{ fontSize: 10 }} formatter={v => v === '_ret' ? 'Return Rate %' : v} />
+                      <Legend wrapperStyle={{ fontSize: 10 }} formatter={v => v === '_ret' ? 'Rolling 30d Return %' : v} />
                       <Area yAxisId="main" type="monotone" dataKey={dk.total} name={dk.totalName} stroke="#FFD600" fill="#FFD60022" strokeWidth={2} dot={false} />
                       {isRev && <Area yAxisId="main" type="monotone" dataKey={dk.sub} name={dk.subName} stroke="#0D9E68" fill="#0D9E6811" strokeWidth={2} dot={false} strokeDasharray="4 2" />}
                       <Line yAxisId="main" type="monotone" dataKey={dk.a} name={dk.aName} stroke="#E8930A" strokeWidth={1.5} dot={false} />
                       <Line yAxisId="main" type="monotone" dataKey={dk.b} name={dk.bName} stroke="#2E74CC" strokeWidth={1.5} dot={false} strokeDasharray="3 2" />
-                      {returnRateReliable && <ReferenceLine yAxisId="pct" y={amzSC.returnRate?.pct || 0} stroke="#E24B4A" strokeWidth={1.5} strokeDasharray="6 3" label={{ value: `Return ${(amzSC.returnRate?.pct || 0).toFixed(1)}%`, position: 'right', fontSize: 9, fill: '#E24B4A' }} />}
+                      {returnRateReliable && ovTrendGroup === 'daily' && <Line yAxisId="pct" type="monotone" dataKey="_ret" name="_ret" stroke="#E24B4A" strokeWidth={1.5} dot={false} strokeDasharray="4 2" connectNulls={false} />}
                     </ComposedChart>
                   </ResponsiveContainer>
                 </Card>
@@ -2898,7 +2894,7 @@ function AmazonTab({ data, region = 'india', setRegion = () => {} }) {
                     { label: 'Daily Avg Revenue', value: fmt(scTotalRev / (data.nDays || 1)), sub: 'Revenue per day', badge: scChgBadge(scTotalRev / (data.nDays || 1), prevSCDailyAvg) },
                     { label: 'Order Status', value: (() => { const shipped = amzSC.status?.find(s => s.status === 'Shipped')?.orders || 0; const total = amzSC.totalOrders || 0; return `${total ? (shipped / total * 100).toFixed(1) : 0}% Shipped` })(), sub: `${fmtN(amzSC.totalOrders || 0)} total · ${fmtN(scPending)} pending`, badge: (() => { const shipped = amzSC.status?.find(s => s.status === 'Shipped')?.orders || 0; const total = amzSC.totalOrders || 0; const curPct = total ? shipped / total * 100 : 0; const prevPct = prevSCOrders ? (amzSC.prevShippedOrders || 0) / prevSCOrders * 100 : 0; return scChgBadge(curPct, prevPct) })() },
                     { label: 'Cancellation Rate', value: `${scCancelRate.toFixed(1)}%`, sub: `${fmtN(scCancelOrders)} cancelled`, accent: scCancelRate > 10 ? '#7A1A1A' : undefined, badge: (amzSC.prevCancelledOrders && prevSCOrders) ? (() => { const prevRate = amzSC.prevCancelledOrders / prevSCOrders * 100; const p = (scCancelRate - prevRate) / prevRate * 100; return <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 4, background: p > 0 ? C.red.bg : C.green.bg, color: p > 0 ? C.red.tx : C.green.tx, flexShrink: 0 }}>{p > 0 ? '▲' : '▼'} {Math.abs(p).toFixed(1)}%</span> })() : null },
-                    { label: 'Return Rate', value: returnRateReliable ? `${(amzSC.returnRate?.pct || 0).toFixed(1)}%` : 'N/A', sub: returnRateReliable ? `${fmtN(amzSC.returnRate?.returned || 0)} of ${fmtN(amzSC.returnRate?.total || 0)} orders returned` : 'Data too recent (<30d lag)', accent: returnRateReliable && (amzSC.returnRate?.pct || 0) > 18 ? '#7A1A1A' : undefined },
+                    { label: 'Return Rate', value: returnRateReliable ? `${(amzSC.returnRate?.pct || 0).toFixed(1)}%` : 'N/A', sub: returnRateReliable ? `Rolling 30d · ${fmtN(amzSC.returnRate?.rollReturned || 0)} of ${fmtN(amzSC.returnRate?.rollOrders || 0)} orders returned` : 'No reliable data', accent: returnRateReliable && (amzSC.returnRate?.pct || 0) > 18 ? '#7A1A1A' : undefined },
                   ].map(k => (
                     <div key={k.label} className="kpi-card" style={{ padding: '10px 13px' }}>
                       <div className="kpi-label">{k.label}</div>
@@ -2958,6 +2954,8 @@ function AmazonTab({ data, region = 'india', setRegion = () => {} }) {
                 fbaUnitShare: b.totalUnits > 0 ? b.fbaUnits / b.totalUnits * 100 : null,
               }))
             })()
+            const retRateByDate2 = Object.fromEntries((amzSC.returnRate?.daily || []).map(x => [x.date, x.rate]))
+            const groupedWithRet2 = grouped.map(d => ({ ...d, _ret: scTrendGroup === 'daily' ? (retRateByDate2[d.date] ?? null) : null }))
             const xFmt = d => scTrendGroup === 'daily' ? d?.slice(5) : scTrendGroup === 'monthly' ? d?.slice(0, 7) : d
             const isRev = scChartMetric === 'rev', isOrders = scChartMetric === 'orders'
             const mainFmt = isRev ? (v => v >= 1e5 ? `${(v/1e5).toFixed(1)}L` : fmt(v)) : (v => fmtN(v))
@@ -2981,7 +2979,7 @@ function AmazonTab({ data, region = 'india', setRegion = () => {} }) {
                 </div>
               }>
                 <ResponsiveContainer width="100%" height={240}>
-                  <ComposedChart data={grouped} margin={{ top: 4, right: 44, bottom: 0, left: 0 }}>
+                  <ComposedChart data={groupedWithRet2} margin={{ top: 4, right: 44, bottom: 0, left: 0 }}>
                     <CartesianGrid strokeDasharray="3 3" stroke={C.border} vertical={false} />
                     <XAxis dataKey="date" tick={{ fontSize: 10, fill: C.t3 }} tickFormatter={xFmt} />
                     <YAxis yAxisId="main" tick={{ fontSize: 10, fill: C.t3 }} tickFormatter={mainFmt} width={60} />
@@ -2989,16 +2987,16 @@ function AmazonTab({ data, region = 'india', setRegion = () => {} }) {
                     <Tooltip content={({ active, payload, label }) => active && payload?.length ? (
                       <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 7, padding: '7px 11px', fontSize: 11 }}>
                         <div style={{ fontWeight: 700, marginBottom: 4, color: C.t2 }}>{xFmt(label)}</div>
-                        {payload.filter(p => p.name !== '_ret').map(p => <div key={p.name} style={{ color: p.color }}>{p.name}: {tooltipFmt(p.value)}</div>)}
-                        <div style={{ color: '#E24B4A' }}>Return Rate: {(amzSC.returnRate?.pct || 0).toFixed(1)}%</div>
+                        {payload.filter(p => p.dataKey !== '_ret').map(p => <div key={p.name} style={{ color: p.color }}>{p.name}: {tooltipFmt(p.value)}</div>)}
+                        {payload.find(p => p.dataKey === '_ret' && p.value != null) && <div style={{ color: '#E24B4A' }}>30d Return Rate: {payload.find(p => p.dataKey === '_ret').value?.toFixed(1)}%</div>}
                       </div>
                     ) : null} />
-                    <Legend wrapperStyle={{ fontSize: 11 }} formatter={v => v === '_ret' ? 'Return Rate %' : v} />
+                    <Legend wrapperStyle={{ fontSize: 11 }} formatter={v => v === '_ret' ? 'Rolling 30d Return %' : v} />
                     <Area yAxisId="main" type="monotone" dataKey={dataKeys.total} name={dataKeys.totalName} stroke="#FFD600" fill="#FFD60022" strokeWidth={2} dot={false} />
                     {isRev && <Area yAxisId="main" type="monotone" dataKey={dataKeys.sub1} name={dataKeys.sub1Name} stroke="#0D9E68" fill="#0D9E6811" strokeWidth={2} dot={false} strokeDasharray="4 2" />}
                     <Line yAxisId="main" type="monotone" dataKey={dataKeys.fba} name={dataKeys.fbaName} stroke="#E8930A" strokeWidth={1.5} dot={false} />
                     <Line yAxisId="main" type="monotone" dataKey={dataKeys.mfn} name={dataKeys.mfnName} stroke="#2E74CC" strokeWidth={1.5} dot={false} strokeDasharray="3 2" />
-                    <ReferenceLine yAxisId="pct" y={amzSC.returnRate?.pct || 0} stroke="#E24B4A" strokeWidth={1.5} strokeDasharray="6 3" label={{ value: `Return ${(amzSC.returnRate?.pct || 0).toFixed(1)}%`, position: 'right', fontSize: 9, fill: '#E24B4A' }} />
+                    {returnRateReliable && scTrendGroup === 'daily' && <Line yAxisId="pct" type="monotone" dataKey="_ret" name="_ret" stroke="#E24B4A" strokeWidth={1.5} dot={false} strokeDasharray="4 2" connectNulls={false} />}
                   </ComposedChart>
                 </ResponsiveContainer>
               </Card>
