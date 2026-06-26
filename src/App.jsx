@@ -4840,6 +4840,7 @@ function SalesPage({ data, filters, setFilters, activeTab, setActiveTab, fetchDa
         {activeTab === 'flipkart' && <ChannelTab data={filteredData} channel="Flipkart" />}
         {activeTab === 'blinkit' && <ChannelTab data={filteredData} channel="Blinkit" />}
         {activeTab === 'cred' && <ChannelTab data={filteredData} channel="CRED" />}
+        {activeTab === 'firstcry' && <ChannelTab data={filteredData} channel="Firstcry" />}
         {activeTab === 'instamart' && <ChannelTab data={filteredData} channel="Instamart" />}
         {activeTab === 'zepto' && <ChannelTab data={filteredData} channel="Zepto" />}
         {activeTab === 'myntra' && <ChannelTab data={filteredData} channel="Myntra" />}
