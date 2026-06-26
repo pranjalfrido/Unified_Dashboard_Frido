@@ -5,8 +5,8 @@ const cache = new Map()
 const CACHE_TTL = 5 * 60 * 1000
 
 function getCacheKey(body) {
-  const { start, end, category, subCategory, sku, subChannel, voucher, channel, region, tier, state, city } = body
-  return JSON.stringify({ start, end, category, subCategory, sku, subChannel, voucher, channel, region, tier, state, city })
+  const { start, end, category, subCategory, sku, subChannel, voucher, channel, region, tier, state, city, country } = body
+  return JSON.stringify({ start, end, category, subCategory, sku, subChannel, voucher, channel, region, tier, state, city, country })
 }
 
 function getFromCache(key) {
@@ -32,7 +32,7 @@ export default async function handler(req, res) {
   if (req.method === 'OPTIONS') return res.status(200).end()
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' })
 
-  const { start, end, category, subCategory, sku, subChannel, voucher, channel: activeChannel, region, tier, state, city } = req.body
+  const { start, end, category, subCategory, sku, subChannel, voucher, channel: activeChannel, region, tier, state, city, country } = req.body
   if (!start || !end) return res.status(400).json({ error: 'Missing start or end date' })
 
   const cacheKey = getCacheKey(req.body)
@@ -62,10 +62,10 @@ export default async function handler(req, res) {
   const yoys = yoyStartD.toISOString().slice(0, 10), yoye = yoyEndD.toISOString().slice(0, 10)
 
   // Run all aggregation queries in parallel directly on BigQuery
-  const base = buildQuery(start, end, { category, subCategory, sku, subChannel, voucher, region, tier, state, city })
-  const prevBase = buildQuery(ps, pe, { category, subCategory, sku, subChannel, voucher, region, tier, state, city })
-  const momBase = buildQuery(moms, mome, { category, subCategory, sku, subChannel, voucher, region, tier, state, city })
-  const yoyBase = buildQuery(yoys, yoye, { category, subCategory, sku, subChannel, voucher, region, tier, state, city })
+  const base = buildQuery(start, end, { category, subCategory, sku, subChannel, voucher, region, tier, state, city, country })
+  const prevBase = buildQuery(ps, pe, { category, subCategory, sku, subChannel, voucher, region, tier, state, city, country })
+  const momBase = buildQuery(moms, mome, { category, subCategory, sku, subChannel, voucher, region, tier, state, city, country })
+  const yoyBase = buildQuery(yoys, yoye, { category, subCategory, sku, subChannel, voucher, region, tier, state, city, country })
 
   const queries = {
     totals: `WITH q AS (${base}) SELECT COUNT(DISTINCT OrderId) AS n_orders, SUM(SellingPrice_Inc_GST) AS total_rev, SUM(SellingPrice_Exc_GST) AS total_exc_rev, SUM(ItemQty) AS total_qty, COUNT(DISTINCT OrderDate) AS n_days, COUNT(DISTINCT CustomerId) AS n_custs FROM q`,

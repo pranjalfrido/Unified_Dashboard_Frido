@@ -2047,6 +2047,7 @@ function ShopifyTab({ data, filters, setFilters }) {
 
   const [subChOpen, setSubChOpen] = useState(false)
   const [pendingSubCh, setPendingSubCh] = useState([])
+  const [intlCountry, setIntlCountry] = useState(null)
   const [selectedCat, setSelectedCat] = useState(null)
   const [shTrendGroup, setShTrendGroup] = useState('daily')
   const [shCatView, setShCatView] = useState('table')
@@ -2060,7 +2061,8 @@ function ShopifyTab({ data, filters, setFilters }) {
   const selStyle = { fontSize: 11.5, padding: '4px 10px', borderRadius: 7, border: `1px solid ${C.border2}`, background: C.card, color: C.t1, outline: 'none', fontFamily: 'var(--font)', cursor: 'pointer' }
 
   const switchRegion = toIntl => {
-    setFilters(f => ({ ...f, subChannel: toIntl ? 'International' : '', voucher: '' }))
+    setIntlCountry(null)
+    setFilters(f => ({ ...f, subChannel: toIntl ? 'International' : '', country: '', voucher: '' }))
   }
 
   return (
@@ -2098,7 +2100,16 @@ function ShopifyTab({ data, filters, setFilters }) {
             </div>
           )
         })()}
-        {isIntl && <span style={{ fontSize: 11, color: C.t3, marginLeft: 4 }}>UAE · UK · US</span>}
+        {isIntl && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginLeft: 4, border: `1.5px solid ${C.border2}`, borderRadius: 8, overflow: 'hidden', background: C.card }}>
+            {[{ id: null, label: 'All' }, { id: 'UAE', label: '🇦🇪 UAE' }, { id: 'UK', label: '🇬🇧 UK' }, { id: 'US', label: '🇺🇸 US' }].map(opt => (
+              <button key={String(opt.id)} onClick={() => {
+                setIntlCountry(opt.id)
+                setFilters(f => ({ ...f, country: opt.id || '' }))
+              }} style={{ fontSize: 12, fontWeight: intlCountry === opt.id ? 700 : 500, padding: '5px 14px', border: 'none', borderRight: `1px solid ${C.border2}`, background: intlCountry === opt.id ? C.acc : 'transparent', color: intlCountry === opt.id ? C.t1 : C.t2, cursor: 'pointer', fontFamily: 'var(--font)', transition: 'all .12s' }}>{opt.label}</button>
+            ))}
+          </div>
+        )}
 
         {/* Right: sub-channel tiles pushed to far right */}
         {!isIntl && indiaSubChKeys.length > 0 && (() => {
@@ -5162,7 +5173,7 @@ export default function App() {
     const dateChanged = filters.start !== prevDateRef.current.start || filters.end !== prevDateRef.current.end
     if (dateChanged) { prevDateRef.current = { start: filters.start, end: filters.end }; setRawRows(null) }
     debounceRef.current = setTimeout(() => {
-      const { start, end, category, subCategory, sku, subChannel, voucher, region, tier, state, city } = filtersRef.current
+      const { start, end, category, subCategory, sku, subChannel, voucher, region, tier, state, city, country } = filtersRef.current
       const extra = {}
       if (category?.length) extra.category = category.join(',')
       if (subCategory?.length) extra.subCategory = subCategory.join(',')
@@ -5173,10 +5184,11 @@ export default function App() {
       if (tier?.length) extra.tier = tier.join(',')
       if (state?.length) extra.state = state.join(',')
       if (city) extra.city = city
+      if (country) extra.country = country
       fetchData(start, end, extra)
     }, 600)
     return () => clearTimeout(debounceRef.current)
-  }, [filters.start, filters.end, filters.category, filters.subCategory, filters.sku, filters.subChannel, filters.voucher, filters.region, filters.tier, filters.state, filters.city, fetchData])
+  }, [filters.start, filters.end, filters.category, filters.subCategory, filters.sku, filters.subChannel, filters.voucher, filters.region, filters.tier, filters.state, filters.city, filters.country, fetchData])
 
   const data = useMemo(() => { if (!rawRows) return null; if (rawRows.source === 'postgres-aggregated' || rawRows.totalRev !== undefined) return rawRows; return processData(rawRows) }, [rawRows])
   const alerts = useMemo(() => data ? detectAlerts(data) : [], [data])
@@ -5186,7 +5198,7 @@ export default function App() {
     <div className="app-shell">
       <Sidebar page={page} setPage={setPage} />
       <div className="app-main">
-        <Topnav page={page} alerts={alerts} onRefresh={() => { const { start, end, category, subCategory, sku, subChannel, voucher, region, tier, state, city } = filters; const e = {}; if (category?.length) e.category = category.join(','); if (subCategory?.length) e.subCategory = subCategory.join(','); if (sku?.length) e.sku = sku.join(','); if (subChannel) e.subChannel = subChannel; if (voucher) e.voucher = voucher; if (region?.length) e.region = region.join(','); if (tier?.length) e.tier = tier.join(','); if (state?.length) e.state = state.join(','); if (city) e.city = city; fetchData(start, end, e) }} loading={loading} filters={filters} setFilters={setFilters} rawRows={rawRows} />
+        <Topnav page={page} alerts={alerts} onRefresh={() => { const { start, end, category, subCategory, sku, subChannel, voucher, region, tier, state, city, country } = filters; const e = {}; if (category?.length) e.category = category.join(','); if (subCategory?.length) e.subCategory = subCategory.join(','); if (sku?.length) e.sku = sku.join(','); if (subChannel) e.subChannel = subChannel; if (voucher) e.voucher = voucher; if (region?.length) e.region = region.join(','); if (tier?.length) e.tier = tier.join(','); if (state?.length) e.state = state.join(','); if (city) e.city = city; if (country) e.country = country; fetchData(start, end, e) }} loading={loading} filters={filters} setFilters={setFilters} rawRows={rawRows} />
         {loading && (
           <div style={{ height: 2, background: C.border, flexShrink: 0 }}>
             <div className="progress-bar" style={{ height: '100%', background: C.acc }} />

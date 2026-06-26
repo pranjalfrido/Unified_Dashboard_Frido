@@ -20,7 +20,7 @@ export function getBQ() {
 }
 
 export function buildQuery(s, e, filters = {}) {
-  const { category, subCategory, state, sku, subChannel, voucher, region, tier, city } = filters
+  const { category, subCategory, state, sku, subChannel, voucher, region, tier, city, country } = filters
   const whereClauses = []
   if (category) {
     const cats = category.split(',').map(c => c.trim()).filter(Boolean)
@@ -63,6 +63,11 @@ export function buildQuery(s, e, filters = {}) {
     const vals = subChannel.split(',').map(v => v.trim()).filter(Boolean)
     if (vals.length === 1) whereClauses.push(`u.SubChannel = '${vals[0].replace(/'/g, "''")}'`)
     else if (vals.length > 1) whereClauses.push(`u.SubChannel IN (${vals.map(v => `'${v.replace(/'/g, "''")}'`).join(', ')})`)
+  }
+  if (country) {
+    const vals = country.split(',').map(v => v.trim()).filter(Boolean)
+    if (vals.length === 1) whereClauses.push(`u.ChannelAccount = '${vals[0].replace(/'/g, "''")}'`)
+    else if (vals.length > 1) whereClauses.push(`u.ChannelAccount IN (${vals.map(v => `'${v.replace(/'/g, "''")}'`).join(', ')})`)
   }
   if (voucher) {
     const codes = voucher.split(',').map(v => v.trim()).filter(Boolean)
