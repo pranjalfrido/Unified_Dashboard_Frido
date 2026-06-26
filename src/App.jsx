@@ -1996,10 +1996,10 @@ function TopSubCatBar({ subCatRows }) {
       <Card title="Top 10 Sub-categories · Revenue">
         {top10.length === 0
           ? <div style={{ fontSize: 12, color: C.t3, textAlign: 'center', padding: '12px 0' }}>No data</div>
-          : <ResponsiveContainer width="100%" height={220}>
-              <BarChart data={chartData} margin={{ top: 4, right: 8, bottom: 60, left: 0 }}>
+          : <ResponsiveContainer width="100%" height={260}>
+              <BarChart data={chartData} margin={{ top: 4, right: 8, bottom: 90, left: 0 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke={C.border} horizontal={true} vertical={false} />
-                <XAxis dataKey="name" tick={{ fontSize: 9, fill: C.t2 }} interval={0} angle={-40} textAnchor="end" />
+                <XAxis dataKey="name" tick={{ fontSize: 9, fill: C.t2 }} interval={0} angle={-45} textAnchor="end" />
                 <YAxis tick={{ fontSize: 10, fill: C.t3 }} tickFormatter={v => v >= 1e5 ? `${(v/1e5).toFixed(0)}L` : fmt(v)} width={48} />
                 <Tooltip content={({ active, payload }) => active && payload?.length ? (
                   <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 7, padding: '6px 10px', fontSize: 11 }}>
