@@ -1972,16 +1972,18 @@ function ShopifyGeoDonutRow({ regionRows, tierRows, topStates, allStateRows }) {
   if (!regionData.length && !tierData.length) return null
 
   return (
-    <Card title="Geography Breakdown" action={
-      <div style={{ display: 'flex', gap: 3 }}>
-        {[['rev','Revenue'],['orders','Orders'],['aov','ASP']].map(([k,l]) => <button key={k} onClick={() => setMetric(k)} style={selStyle(metric === k)}>{l}</button>)}
-      </div>
-    }>
-      <div style={{ display: 'flex', gap: 24 }}>
-        {regionData.length > 0 && <SmallDonut title="By Region" data={regionData} colors={REGION_COLORS} />}
-        {tierData.length > 0 && <SmallDonut title="By City Tier" data={tierData} colors={TIER_COLORS} />}
-      </div>
-    </Card>
+    <div style={{ width: '50%' }}>
+      <Card title="Geography Breakdown" action={
+        <div style={{ display: 'flex', gap: 3 }}>
+          {[['rev','Revenue'],['orders','Orders'],['aov','ASP']].map(([k,l]) => <button key={k} onClick={() => setMetric(k)} style={selStyle(metric === k)}>{l}</button>)}
+        </div>
+      }>
+        <div style={{ display: 'flex', gap: 16 }}>
+          {regionData.length > 0 && <SmallDonut title="By Region" data={regionData} colors={REGION_COLORS} />}
+          {tierData.length > 0 && <SmallDonut title="By City Tier" data={tierData} colors={TIER_COLORS} />}
+        </div>
+      </Card>
+    </div>
   )
 }
 
