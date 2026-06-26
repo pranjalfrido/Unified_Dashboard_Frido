@@ -46,8 +46,8 @@ export function buildQuery(s, e, filters = {}) {
   if (tier) {
     const TIER_MAP = { 'Tier I': 1, 'Tier II': 2, 'Tier III': 3 }
     const nums = tier.split(',').map(t => TIER_MAP[t.trim()] || parseInt(t.trim())).filter(Boolean)
-    if (nums.length === 1) whereClauses.push(`COALESCE(pm.City_Tier, cm.City_Tier) = ${nums[0]}`)
-    else if (nums.length > 1) whereClauses.push(`COALESCE(pm.City_Tier, cm.City_Tier) IN (${nums.join(',')})`)
+    if (nums.length === 1) whereClauses.push(`CAST(COALESCE(pm.City_Tier, cm.City_Tier) AS STRING) = '${nums[0]}'`)
+    else if (nums.length > 1) whereClauses.push(`CAST(COALESCE(pm.City_Tier, cm.City_Tier) AS STRING) IN (${nums.map(n => `'${n}'`).join(',')})`)
   }
   if (sku) {
     const skuList = sku.split(',').map(s => s.trim()).filter(Boolean)
