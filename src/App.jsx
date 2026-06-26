@@ -1989,23 +1989,30 @@ function ShopifyGeoDonutRow({ regionRows, tierRows, topStates, allStateRows }) {
 
 function TopSubCatBar({ subCatRows }) {
   const top10 = (subCatRows || []).slice(0, 10)
-  const maxRev = top10[0]?.rev || 1
   const BAR_COLORS = ['#534AB7','#0D9E68','#2E74CC','#CC8A00','#CC4078','#E24B4A','#9B59B6','#FF6B35','#00B4D8','#06D6A0']
+  const chartData = top10.map((r, i) => ({ name: r.name, rev: r.rev, color: BAR_COLORS[i % BAR_COLORS.length] }))
   return (
     <div style={{ flex: 1, minWidth: 0 }}>
       <Card title="Top 10 Sub-categories · Revenue">
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
-          {top10.map((r, i) => (
-            <div key={r.name} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <div style={{ width: 120, fontSize: 11, color: C.t2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', flexShrink: 0 }}>{r.name}</div>
-              <div style={{ flex: 1, background: C.border, borderRadius: 3, height: 8, overflow: 'hidden' }}>
-                <div style={{ width: `${(r.rev / maxRev) * 100}%`, background: BAR_COLORS[i % BAR_COLORS.length], height: '100%', borderRadius: 3, transition: 'width .3s' }} />
-              </div>
-              <div style={{ width: 72, fontSize: 11, fontWeight: 700, color: C.t1, fontFamily: 'var(--mono)', textAlign: 'right', flexShrink: 0 }}>{fmt(r.rev)}</div>
-            </div>
-          ))}
-          {top10.length === 0 && <div style={{ fontSize: 12, color: C.t3, textAlign: 'center', padding: '12px 0' }}>No data</div>}
-        </div>
+        {top10.length === 0
+          ? <div style={{ fontSize: 12, color: C.t3, textAlign: 'center', padding: '12px 0' }}>No data</div>
+          : <ResponsiveContainer width="100%" height={220}>
+              <BarChart data={chartData} margin={{ top: 4, right: 8, bottom: 60, left: 0 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke={C.border} horizontal={true} vertical={false} />
+                <XAxis dataKey="name" tick={{ fontSize: 9, fill: C.t2 }} interval={0} angle={-40} textAnchor="end" />
+                <YAxis tick={{ fontSize: 10, fill: C.t3 }} tickFormatter={v => v >= 1e5 ? `${(v/1e5).toFixed(0)}L` : fmt(v)} width={48} />
+                <Tooltip content={({ active, payload }) => active && payload?.length ? (
+                  <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 7, padding: '6px 10px', fontSize: 11 }}>
+                    <div style={{ fontWeight: 700, color: C.t1, marginBottom: 2 }}>{payload[0].payload.name}</div>
+                    <div style={{ color: payload[0].payload.color }}>{fmt(payload[0].value)}</div>
+                  </div>
+                ) : null} />
+                <Bar dataKey="rev" radius={[4, 4, 0, 0]}>
+                  {chartData.map((d, i) => <Cell key={i} fill={d.color} />)}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+        }
       </Card>
     </div>
   )
