@@ -1855,6 +1855,8 @@ const CAT_PALETTE = ['#534AB7','#0D9E68','#2E74CC','#CC8A00','#CC4078','#E24B4A'
 const colorOf = (name, rows) => { const idx = rows.findIndex(r => r.name === name); return CAT_PALETTE[idx >= 0 ? idx % CAT_PALETTE.length : 0] }
 
 function CatSubCatRow({ catRows, subCatRows, title = 'Category Revenue', selectedCat: externalSelectedCat, onSelectCat, selectedSubCat: externalSelectedSubCat, onSelectSubCat }) {
+  return null
+  // eslint-disable-next-line no-unreachable
   const [catView, setCatView] = useState('table')
   const [subCatView, setSubCatView] = useState('table')
   const [internalSelectedCat, setInternalSelectedCat] = useState(null)
@@ -2397,7 +2399,7 @@ function ShopifyTab({ data, filters, setFilters }) {
         })
         return <FinancialCategoryMatrix catData={catData} subCatData={subCatData} skuData={skuData} title={`Category Revenue Matrix · Shopify ${isIntl ? 'International' : 'India'}`} />
       })()}
-      <div className="g-2" style={{ alignItems: 'stretch' }}>
+      {false && <div className="g-2" style={{ alignItems: 'stretch' }}>
         {(() => {
           const FIXED_H = 420
           const CAT_COLORS = ['#534AB7','#0D9E68','#2E74CC','#CC8A00','#CC4078','#E24B4A','#9B59B6','#FF6B35','#00B4D8','#06D6A0']
@@ -2469,7 +2471,7 @@ function ShopifyTab({ data, filters, setFilters }) {
             </Card>
           )
         })()}
-      </div>
+      </div>}
       <div className="g-2" style={{ alignItems: 'stretch' }}>
         <PaginatedCard title="Top States" rows={stateRows} columns={[{ key: 'state', label: 'State', render: v => v ? v.charAt(0).toUpperCase() + v.slice(1).toLowerCase() : v }, { key: 'rev', label: 'Revenue', align: 'right', mono: true, render: v => fmt(v) }, { key: 'orders', label: 'Orders', align: 'right', render: v => fmtN(v) }, { key: 'aov', label: 'ASP', align: 'right', render: v => `₹${Math.round(v).toLocaleString('en-IN')}` }]} pageSize={15} />
         <PaginatedCard title="Top Cities" rows={shCityRows} columns={[{ key: 'city', label: 'City', render: v => v ? v.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' ') : v }, { key: 'rev', label: 'Revenue', align: 'right', mono: true, render: v => fmt(v) }, { key: 'orders', label: 'Orders', align: 'right', render: v => fmtN(v) }, { key: 'aov', label: 'ASP', align: 'right', render: (_, r) => `₹${r.orders ? Math.round(r.rev / r.orders).toLocaleString('en-IN') : 0}` }]} pageSize={15} />
