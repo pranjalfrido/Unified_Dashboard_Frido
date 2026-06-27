@@ -1246,7 +1246,7 @@ function AmazonCategoryMatrix({ channels, catChannel, subCatChannel, skuChannel,
 }
 
 // FinancialCategoryMatrix: Gross Rev, Units, ASP, GST, Cancel, RTO, CIR, Exch, Net Rev
-function FinancialCategoryMatrix({ catData, subCatData, skuData, title }) {
+function FinancialCategoryMatrix({ catData, subCatData, skuData, title, showReturns = true }) {
   const [expanded, setExpanded] = useState({})
   const [expandedSC, setExpandedSC] = useState({})
   const toggle = cat => setExpanded(prev => ({ ...prev, [cat]: !prev[cat] }))
@@ -1294,7 +1294,7 @@ function FinancialCategoryMatrix({ catData, subCatData, skuData, title }) {
                 <th style={{ ...colHdr, color: '#E24B4A' }}>RTO</th>
                 <th style={{ ...colHdr, color: '#2E74CC' }}>CIR</th>
                 <th style={{ ...colHdr, color: '#9B59B6' }}>Exch</th>
-                <th style={{ ...colHdr, color: '#7A1A1A' }}>Returns</th>
+                {showReturns && <th style={{ ...colHdr, color: '#7A1A1A' }}>Returns</th>}
               </>}
               <th style={{ ...colHdr, color: '#2E74CC' }}>Net Rev</th>
             </tr>
@@ -1322,7 +1322,7 @@ function FinancialCategoryMatrix({ catData, subCatData, skuData, title }) {
                       <td style={{ ...cell(), color: '#E24B4A' }}>{row.rto > 0 ? <>{fmtN(row.rto)}{pctSpan(row.rto, row.orders)}</> : <span style={{ color: C.t3 }}>—</span>}</td>
                       <td style={{ ...cell(), color: '#2E74CC' }}>{row.cir > 0 ? <>{fmtN(row.cir)}{pctSpan(row.cir, row.orders)}</> : <span style={{ color: C.t3 }}>—</span>}</td>
                       <td style={{ ...cell(), color: '#9B59B6' }}>{row.exch > 0 ? <>{fmtN(row.exch)}{pctSpan(row.exch, row.orders)}</> : <span style={{ color: C.t3 }}>—</span>}</td>
-                      <td style={{ ...cell(), color: '#7A1A1A', fontWeight: 600 }}>{(row.rto + row.cir) > 0 ? <>{fmtN(row.rto + row.cir)}{pctSpan(row.rto + row.cir, row.orders)}</> : <span style={{ color: C.t3 }}>—</span>}</td>
+                      {showReturns && <td style={{ ...cell(), color: '#7A1A1A', fontWeight: 600 }}>{(row.rto + row.cir) > 0 ? <>{fmtN(row.rto + row.cir)}{pctSpan(row.rto + row.cir, row.orders)}</> : <span style={{ color: C.t3 }}>—</span>}</td>}
                     </>}
                     <td style={{ ...cell(), color: '#2E74CC', fontWeight: 600 }}>{fmt(row.net)}</td>
                   </tr>
@@ -1349,7 +1349,7 @@ function FinancialCategoryMatrix({ catData, subCatData, skuData, title }) {
                             <td style={{ ...cell(10.5), color: '#E24B4A' }}>{sr.rto > 0 ? <>{fmtN(sr.rto)}{pctSpan(sr.rto, sr.orders)}</> : <span style={{ color: C.t3 }}>—</span>}</td>
                             <td style={{ ...cell(10.5), color: '#2E74CC' }}>{sr.cir > 0 ? <>{fmtN(sr.cir)}{pctSpan(sr.cir, sr.orders)}</> : <span style={{ color: C.t3 }}>—</span>}</td>
                             <td style={{ ...cell(10.5), color: '#9B59B6' }}>{sr.exch > 0 ? <>{fmtN(sr.exch)}{pctSpan(sr.exch, sr.orders)}</> : <span style={{ color: C.t3 }}>—</span>}</td>
-                            <td style={{ ...cell(10.5), color: '#7A1A1A', fontWeight: 600 }}>{(sr.rto + sr.cir) > 0 ? <>{fmtN(sr.rto + sr.cir)}{pctSpan(sr.rto + sr.cir, sr.orders)}</> : <span style={{ color: C.t3 }}>—</span>}</td>
+                            {showReturns && <td style={{ ...cell(10.5), color: '#7A1A1A', fontWeight: 600 }}>{(sr.rto + sr.cir) > 0 ? <>{fmtN(sr.rto + sr.cir)}{pctSpan(sr.rto + sr.cir, sr.orders)}</> : <span style={{ color: C.t3 }}>—</span>}</td>}
                           </>}
                           <td style={{ ...cell(10.5), color: '#2E74CC' }}>{fmt(sr.net)}</td>
                         </tr>
@@ -1365,7 +1365,7 @@ function FinancialCategoryMatrix({ catData, subCatData, skuData, title }) {
                               <td style={{ ...cell(10), color: '#E24B4A' }}>{sk.rto > 0 ? <>{fmtN(sk.rto)}{pctSpan(sk.rto, sk.orders)}</> : <span style={{ color: C.t3 }}>—</span>}</td>
                               <td style={{ ...cell(10), color: '#2E74CC' }}>{sk.cir > 0 ? <>{fmtN(sk.cir)}{pctSpan(sk.cir, sk.orders)}</> : <span style={{ color: C.t3 }}>—</span>}</td>
                               <td style={{ ...cell(10), color: '#9B59B6' }}>{sk.exch > 0 ? <>{fmtN(sk.exch)}{pctSpan(sk.exch, sk.orders)}</> : <span style={{ color: C.t3 }}>—</span>}</td>
-                              <td style={{ ...cell(10), color: '#7A1A1A', fontWeight: 600 }}>{(sk.rto + sk.cir) > 0 ? <>{fmtN(sk.rto + sk.cir)}{pctSpan(sk.rto + sk.cir, sk.orders)}</> : <span style={{ color: C.t3 }}>—</span>}</td>
+                              {showReturns && <td style={{ ...cell(10), color: '#7A1A1A', fontWeight: 600 }}>{(sk.rto + sk.cir) > 0 ? <>{fmtN(sk.rto + sk.cir)}{pctSpan(sk.rto + sk.cir, sk.orders)}</> : <span style={{ color: C.t3 }}>—</span>}</td>}
                             </>}
                             <td style={{ ...cell(10), color: '#2E74CC' }}>{fmt(sk.net)}</td>
                           </tr>
@@ -1389,7 +1389,7 @@ function FinancialCategoryMatrix({ catData, subCatData, skuData, title }) {
                 <td style={{ padding: '5px 5px', textAlign: 'right', fontWeight: 700, fontFamily: 'var(--mono)', fontSize: 11.5, color: '#E24B4A' }}>{fmtN(tot.rto)}{pctSpan(tot.rto, tot.orders)}</td>
                 <td style={{ padding: '5px 5px', textAlign: 'right', fontWeight: 700, fontFamily: 'var(--mono)', fontSize: 11.5, color: '#2E74CC' }}>{fmtN(tot.cir)}{pctSpan(tot.cir, tot.orders)}</td>
                 <td style={{ padding: '5px 5px', textAlign: 'right', fontWeight: 700, fontFamily: 'var(--mono)', fontSize: 11.5, color: '#9B59B6' }}>{fmtN(tot.exch)}{pctSpan(tot.exch, tot.orders)}</td>
-                <td style={{ padding: '5px 5px', textAlign: 'right', fontWeight: 700, fontFamily: 'var(--mono)', fontSize: 11.5, color: '#7A1A1A' }}>{fmtN(tot.rto + tot.cir)}{pctSpan(tot.rto + tot.cir, tot.orders)}</td>
+                {showReturns && <td style={{ padding: '5px 5px', textAlign: 'right', fontWeight: 700, fontFamily: 'var(--mono)', fontSize: 11.5, color: '#7A1A1A' }}>{fmtN(tot.rto + tot.cir)}{pctSpan(tot.rto + tot.cir, tot.orders)}</td>}
               </>}
               <td style={{ padding: '5px 5px', textAlign: 'right', fontWeight: 700, fontFamily: 'var(--mono)', fontSize: 11.5, color: '#2E74CC' }}>{fmt(tot.net)}</td>
             </tr>
@@ -2853,7 +2853,7 @@ function AmazonTab({ data, region = 'india', setRegion = () => {} }) {
                 })
               })
             })
-            return <FinancialCategoryMatrix catData={catData} subCatData={subCatData} skuData={skuData} title="Category Revenue Matrix · Amazon India" />
+            return <FinancialCategoryMatrix catData={catData} subCatData={subCatData} skuData={skuData} title="Category Revenue Matrix · Amazon India" showReturns={false} />
           })()}
           {(() => {
             const pickRet = (...chs) => { for (const c of chs) if (c?.totalOrdersForReturn) return { returned: c.returned||0, totalOrdersForReturn: c.totalOrdersForReturn }; return { returned: 0, totalOrdersForReturn: 0 } }
@@ -3074,7 +3074,7 @@ function AmazonTab({ data, region = 'india', setRegion = () => {} }) {
                   })
                 })
               })
-              return <FinancialCategoryMatrix catData={catData} subCatData={subCatData} skuData={skuData} title="Category Revenue Matrix · Seller Central" />
+              return <FinancialCategoryMatrix catData={catData} subCatData={subCatData} skuData={skuData} title="Category Revenue Matrix · Seller Central" showReturns={false} />
             })()}
             <Card title="FBA vs MFN · Seller Central">
               {[{ label: 'FBA (Fulfilled by Amazon)', ...scFBA }, { label: 'MFN (Merchant Fulfilled)', ...scMFN }].map((r, i) => (
@@ -3284,7 +3284,7 @@ function AmazonTab({ data, region = 'india', setRegion = () => {} }) {
                 )
               })}
             </Card>
-            <FinancialCategoryMatrix catData={amzVCMatrix.catData} subCatData={amzVCMatrix.subCatData} skuData={amzVCMatrix.skuData} title="Category Revenue Matrix · Vendor Central" />
+            <FinancialCategoryMatrix catData={amzVCMatrix.catData} subCatData={amzVCMatrix.subCatData} skuData={amzVCMatrix.skuData} title="Category Revenue Matrix · Vendor Central" showReturns={false} />
           </div>
           {(() => {
             const catRows = Object.entries(amzVCMatrix.catData || {}).map(([cat, v]) => ({ name: cat, rev: v.rev||0, units: v.units||0, orders: v.orders||0 })).sort((a,b) => b.rev-a.rev)
@@ -3452,7 +3452,7 @@ function AmazonTab({ data, region = 'india', setRegion = () => {} }) {
                   })
                 })
               })
-              return <FinancialCategoryMatrix catData={catData} subCatData={subCatData} skuData={skuData} title="Category Revenue Matrix · International SC" />
+              return <FinancialCategoryMatrix catData={catData} subCatData={subCatData} skuData={skuData} title="Category Revenue Matrix · International SC" showReturns={false} />
             })()}
           </div>
         </div>
