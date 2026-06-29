@@ -4693,58 +4693,99 @@ function OfflineTab({ data }) {
     { id: 'MTGT', label: 'MT GT' },
   ]
 
-  // Filter all rows by selected sub-channel where SubChannel is available
-  const subChannelRows = off.subChannelRows || []
-  const subTotals = (() => {
-    if (sub === 'all') return off.totals || {}
-    const m = subChannelRows.find(s => s.subChannel === sub)
-    return m ? { rev: m.rev, excRev: m.excRev, orders: m.orders, units: m.units } : {}
-  })()
-  const rev = subTotals.rev || 0
-  const excRev = subTotals.excRev || 0
-  const nOrders = subTotals.orders || 0
-  const qty = subTotals.units || 0
+  // Sub-channel filter helper — returns rows matching current selection (or all when 'all')
+  const filterSub = rows => sub === 'all' ? rows : rows.filter(r => r.subChannel === sub)
+
+  // Totals: sum across all SubChannels when 'all', else pick one
+  const totalsBySub = off.totalsBySub || []
+  const filteredTotals = filterSub(totalsBySub)
+  const rev = filteredTotals.reduce((s, r) => s + (r.rev || 0), 0)
+  const excRev = filteredTotals.reduce((s, r) => s + (r.excRev || 0), 0)
+  const nOrders = filteredTotals.reduce((s, r) => s + (r.orders || 0), 0)
+  const qty = filteredTotals.reduce((s, r) => s + (r.units || 0), 0)
   const asp = qty ? excRev / qty : 0
   const nDays = data.nDays || 1
 
-  const prevRev = off.prevRev || 0
-  const prevExcRev = off.prevExcRev || 0
-  const prevOrders = off.prevOrders || 0
-  const prevUnits = off.prevUnits || 0
-  const revChg = (sub === 'all' && prevRev > 0) ? ((rev - prevRev) / prevRev * 100) : null
-  const excChg = (sub === 'all' && prevExcRev > 0) ? ((excRev - prevExcRev) / prevExcRev * 100) : null
+  const prevBySub = off.prevBySub || []
+  const filteredPrev = filterSub(prevBySub)
+  const prevRev = filteredPrev.reduce((s, r) => s + (r.rev || 0), 0)
+  const prevExcRev = filteredPrev.reduce((s, r) => s + (r.excRev || 0), 0)
+  const prevOrders = filteredPrev.reduce((s, r) => s + (r.orders || 0), 0)
+  const prevUnits = filteredPrev.reduce((s, r) => s + (r.units || 0), 0)
+  const revChg = prevRev > 0 ? ((rev - prevRev) / prevRev * 100) : null
 
-  // Daily series — filter by sub-channel if needed
-  const rawDaily = off.daily || []
-  const dailyByDate = {}
-  rawDaily.forEach(d => {
-    if (sub !== 'all' && d.subChannel !== sub) return
-    if (!dailyByDate[d.date]) dailyByDate[d.date] = { date: d.date, rev: 0, excRev: 0, orders: 0, units: 0 }
-    dailyByDate[d.date].rev += d.rev || 0
-    dailyByDate[d.date].excRev += d.excRev || 0
-    dailyByDate[d.date].orders += d.orders || 0
-    dailyByDate[d.date].units += d.units || 0
-  })
-  const dailyArr = Object.values(dailyByDate).sort((a, b) => a.date.localeCompare(b.date))
-  const prevDaily = off.prevDaily || []
-  const sparkData = Array.from({ length: Math.max(dailyArr.length, prevDaily.length) }, (_, i) => ({
-    i, cur: dailyArr[i]?.rev ?? null, prev: prevDaily[i]?.rev ?? null
+  // Daily series — filter by sub-channel, aggregate by date
+  const aggByDate = rows => {
+    const m = {}
+    filterSub(rows).forEach(d => {
+      if (!m[d.date]) m[d.date] = { date: d.date, rev: 0, excRev: 0, orders: 0, units: 0 }
+      m[d.date].rev += d.rev || 0
+      m[d.date].excRev += d.excRev || 0
+      m[d.date].orders += d.orders || 0
+      m[d.date].units += d.units || 0
+    })
+    return Object.values(m).sort((a, b) => a.date.localeCompare(b.date))
+  }
+  const dailyArr = aggByDate(off.daily || [])
+  const prevDailyArr = aggByDate(off.prevDaily || [])
+  const sparkData = Array.from({ length: Math.max(dailyArr.length, prevDailyArr.length) }, (_, i) => ({
+    i, cur: dailyArr[i]?.rev ?? null, prev: prevDailyArr[i]?.rev ?? null
   }))
 
-  const chgBadge = (cur, prev) => { if (!prev || sub !== 'all') return null; const p = (cur - prev) / prev * 100; return <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 4, background: p >= 0 ? C.green.bg : C.red.bg, color: p >= 0 ? C.green.tx : C.red.tx, flexShrink: 0 }}>{p >= 0 ? '▲' : '▼'} {Math.abs(p).toFixed(1)}%</span> }
+  const chgBadge = (cur, prev) => { if (!prev) return null; const p = (cur - prev) / prev * 100; return <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 4, background: p >= 0 ? C.green.bg : C.red.bg, color: p >= 0 ? C.green.tx : C.red.tx, flexShrink: 0 }}>{p >= 0 ? '▲' : '▼'} {Math.abs(p).toFixed(1)}%</span> }
 
-  // Categories — note: data doesn't pre-aggregate by sub-channel, so cat/sub-cat/geo show "all offline".
-  // If users need per-sub-channel category breakdown, that's a separate query.
-  const catRows = Object.entries(off.catMap || {}).map(([name, v]) => ({ name, rev: v.rev, excRev: v.excRev, orders: v.orders?.size || 0, units: v.units || 0 })).sort((a, b) => b.rev - a.rev)
-  const allSubCatRows = Object.entries(off.subCatMap || {}).map(([k, v]) => ({ name: k.split('::')[1] || k, category: k.split('::')[0] || '', rev: v.rev, excRev: v.excRev, orders: v.orders?.size || 0, units: v.units || 0, asp: (v.units || 0) ? v.rev / v.units : 0 })).sort((a, b) => b.rev - a.rev)
-  const stateRows = Object.entries(off.stateMap || {}).map(([name, v]) => ({ state: name, name, rev: v.rev, orders: v.orders, cities: v.cities?.size || 0 })).sort((a, b) => b.rev - a.rev)
-  const cityRows = (off.cityRows || []).map(c => ({ ...c, name: c.city }))
+  // Category aggregation — sum across selected sub-channel(s)
+  const aggCat = rows => {
+    const m = {}
+    filterSub(rows).forEach(r => {
+      if (!m[r.category]) m[r.category] = { name: r.category, rev: 0, excRev: 0, orders: 0, units: 0 }
+      m[r.category].rev += r.rev || 0; m[r.category].excRev += r.excRev || 0
+      m[r.category].orders += r.orders || 0; m[r.category].units += r.units || 0
+    })
+    return Object.values(m).sort((a, b) => b.rev - a.rev)
+  }
+  const catRows = aggCat(off.categoryRows || [])
 
-  // Category matrix data
+  const aggSubCat = rows => {
+    const m = {}
+    filterSub(rows).forEach(r => {
+      const k = `${r.category}::${r.subCategory}`
+      if (!m[k]) m[k] = { name: r.subCategory, category: r.category, rev: 0, excRev: 0, orders: 0, units: 0 }
+      m[k].rev += r.rev || 0; m[k].excRev += r.excRev || 0
+      m[k].orders += r.orders || 0; m[k].units += r.units || 0
+    })
+    return Object.values(m).sort((a, b) => b.rev - a.rev)
+  }
+  const allSubCatRows = aggSubCat(off.subCategoryRows || []).map(x => ({ ...x, asp: x.units ? x.rev / x.units : 0 }))
+
+  // State / City / Region / Tier aggregation
+  const aggBy = (rows, keyFn, baseFields = {}) => {
+    const m = {}
+    filterSub(rows).forEach(r => {
+      const k = keyFn(r)
+      if (!m[k]) m[k] = { ...baseFields(r), rev: 0, orders: 0, units: 0 }
+      m[k].rev += r.rev || 0; m[k].orders += r.orders || 0; m[k].units += r.units || 0
+    })
+    return Object.values(m).sort((a, b) => b.rev - a.rev)
+  }
+  const stateRows = aggBy(off.stateRows || [], r => r.state, r => ({ state: r.state, name: r.state, cities: r.cities || 0 }))
+  const cityRows = aggBy(off.cityRows || [], r => `${r.city}|${r.state}`, r => ({ city: r.city, state: r.state, region: r.region, name: r.city }))
+  const regionRows = aggBy(off.regionRows || [], r => r.region, r => ({ region: r.region }))
+  const tierRows = aggBy(off.tierRows || [], r => `${r.tier}`, r => ({ tier: r.tier, label: r.label }))
+
+  // Category matrix
   const catMatrixData = {}
-  Object.entries(off.catMap || {}).forEach(([cat, v]) => { catMatrixData[cat] = { rev: v.rev || 0, excRev: v.excRev || 0, units: v.units || 0, orders: v.orders } })
+  catRows.forEach(c => { catMatrixData[c.name] = { rev: c.rev, excRev: c.excRev, units: c.units, orders: c.orders } })
   const subCatMatrixData = {}
-  Object.entries(off.subCatMap || {}).forEach(([key, v]) => { const [cat, sc] = key.split('::'); if (!subCatMatrixData[cat]) subCatMatrixData[cat] = {}; subCatMatrixData[cat][sc] = { rev: v.rev || 0, excRev: v.excRev || 0, units: v.units || 0, orders: v.orders } })
+  allSubCatRows.forEach(s => { if (!subCatMatrixData[s.category]) subCatMatrixData[s.category] = {}; subCatMatrixData[s.category][s.name] = { rev: s.rev, excRev: s.excRev, units: s.units, orders: s.orders } })
+  const skuMatrixData = {}
+  filterSub(off.skuRows || []).forEach(x => {
+    if (!skuMatrixData[x.category]) skuMatrixData[x.category] = {}
+    if (!skuMatrixData[x.category][x.subCategory]) skuMatrixData[x.category][x.subCategory] = {}
+    const cur = skuMatrixData[x.category][x.subCategory][x.sku] || { rev: 0, excRev: 0, units: 0, orders: 0 }
+    cur.rev += x.rev || 0; cur.excRev += x.excRev || 0; cur.units += x.units || 0; cur.orders += x.orders || 0
+    skuMatrixData[x.category][x.subCategory][x.sku] = cur
+  })
 
   const totalRev = rev
   const pct = (a, b) => b > 0 ? `${(a / b * 100).toFixed(1)}%` : '—'
@@ -4828,12 +4869,12 @@ function OfflineTab({ data }) {
 
       {/* Geography Breakdown + Top 10 Sub-cats */}
       <div style={{ display: 'flex', gap: 14, alignItems: 'stretch' }}>
-        <ShopifyGeoDonutRow regionRows={off.regionRows || []} tierRows={off.tierRows || []} topStates={stateRows.slice(0, 6)} allStateRows={stateRows} />
+        <ShopifyGeoDonutRow regionRows={regionRows} tierRows={tierRows} topStates={stateRows.slice(0, 6)} allStateRows={stateRows} />
         <TopSubCatBar subCatRows={allSubCatRows} />
       </div>
 
       {/* Category Revenue Matrix — Gross / Units / ASP / GST / Net only (no returns/cancel/rto/cir/exch) */}
-      <FinancialCategoryMatrix catData={catMatrixData} subCatData={subCatMatrixData} skuData={off.skuMap || {}} title="Category Revenue Matrix · Offline" showReturns={false} />
+      <FinancialCategoryMatrix catData={catMatrixData} subCatData={subCatMatrixData} skuData={skuMatrixData} title={`Category Revenue Matrix · Offline${sub !== 'all' ? ' · ' + (SUB_OPTIONS.find(o => o.id === sub)?.label || sub) : ''}`} showReturns={false} />
 
       {/* Top States + Top Cities */}
       <div className="g-2" style={{ alignItems: 'stretch' }}>
