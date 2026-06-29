@@ -4696,13 +4696,21 @@ function OfflineTab({ data }) {
   // Sub-channel filter helper — returns rows matching current selection (or all when 'all')
   const filterSub = rows => sub === 'all' ? rows : rows.filter(r => r.subChannel === sub)
 
-  // Totals: sum across all SubChannels when 'all', else pick one
+  // Totals: prefer totalsBySub; fall back to summing daily rows if empty
   const totalsBySub = off.totalsBySub || []
-  const filteredTotals = filterSub(totalsBySub)
-  const rev = filteredTotals.reduce((s, r) => s + (r.rev || 0), 0)
-  const excRev = filteredTotals.reduce((s, r) => s + (r.excRev || 0), 0)
-  const nOrders = filteredTotals.reduce((s, r) => s + (r.orders || 0), 0)
-  const qty = filteredTotals.reduce((s, r) => s + (r.units || 0), 0)
+  let filteredTotals = filterSub(totalsBySub)
+  let rev = filteredTotals.reduce((s, r) => s + (r.rev || 0), 0)
+  let excRev = filteredTotals.reduce((s, r) => s + (r.excRev || 0), 0)
+  let nOrders = filteredTotals.reduce((s, r) => s + (r.orders || 0), 0)
+  let qty = filteredTotals.reduce((s, r) => s + (r.units || 0), 0)
+  // Fallback: derive from daily rows
+  if (rev === 0 && excRev === 0) {
+    const dailyRows = filterSub(off.daily || [])
+    rev = dailyRows.reduce((s, r) => s + (r.rev || 0), 0)
+    excRev = dailyRows.reduce((s, r) => s + (r.excRev || 0), 0)
+    nOrders = dailyRows.reduce((s, r) => s + (r.orders || 0), 0)
+    qty = dailyRows.reduce((s, r) => s + (r.units || 0), 0)
+  }
   const asp = qty ? excRev / qty : 0
   const nDays = data.nDays || 1
 
