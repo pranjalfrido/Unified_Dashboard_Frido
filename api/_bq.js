@@ -120,14 +120,16 @@ SELECT u.Country, u.OrderId, u.Channel, u.SubChannel, u.ChannelAccount, u.OrderD
   COALESCE(pm.Is_Metro_City, cm.Is_Metro_City, FALSE) AS Is_Metro_City,
   u.ProductId, u.ChannelSKUCode, u.ItemQty,
   CASE
-    WHEN u.Channel IN ('Blinkit','Zepto','Instamart') AND u.SellingPrice_Exc_GST IS NOT NULL AND u.SellingPrice_Exc_GST > 0 AND SAFE_CAST(im.GST_Tax_Type_Code AS FLOAT64) IS NOT NULL
+    WHEN u.Channel IN ('Blinkit','Zepto','Instamart','offline_sales') AND u.SellingPrice_Exc_GST IS NOT NULL AND SAFE_CAST(im.GST_Tax_Type_Code AS FLOAT64) IS NOT NULL
       THEN u.SellingPrice_Exc_GST * (1 + SAFE_CAST(im.GST_Tax_Type_Code AS FLOAT64) / 100)
+    WHEN u.Channel IN ('Blinkit','Zepto','Instamart','offline_sales') AND u.SellingPrice_Exc_GST IS NOT NULL
+      THEN u.SellingPrice_Exc_GST * 1.18
     WHEN u.SubChannel = 'Amazon Vendor Central' AND u.SellingPrice_Exc_GST IS NOT NULL AND u.SellingPrice_Exc_GST > 0 AND SAFE_CAST(im.GST_Tax_Type_Code AS FLOAT64) IS NOT NULL
       THEN u.SellingPrice_Exc_GST * (1 + SAFE_CAST(im.GST_Tax_Type_Code AS FLOAT64) / 100)
     ELSE u.SellingPrice_Inc_GST
   END AS SellingPrice_Inc_GST,
   CASE
-    WHEN u.Channel IN ('Blinkit','Zepto','Instamart') AND u.SellingPrice_Exc_GST IS NOT NULL AND u.SellingPrice_Exc_GST > 0 THEN u.SellingPrice_Exc_GST
+    WHEN u.Channel IN ('Blinkit','Zepto','Instamart','offline_sales') AND u.SellingPrice_Exc_GST IS NOT NULL THEN u.SellingPrice_Exc_GST
     WHEN u.SubChannel = 'Amazon Vendor Central' AND u.SellingPrice_Exc_GST IS NOT NULL AND u.SellingPrice_Exc_GST > 0 THEN u.SellingPrice_Exc_GST
     WHEN SAFE_CAST(im.GST_Tax_Type_Code AS FLOAT64) IS NOT NULL THEN u.SellingPrice_Inc_GST / (1 + SAFE_CAST(im.GST_Tax_Type_Code AS FLOAT64) / 100)
     WHEN u.SellingPrice_Exc_GST IS NOT NULL AND u.SellingPrice_Exc_GST != 0 THEN u.SellingPrice_Exc_GST
@@ -135,7 +137,7 @@ SELECT u.Country, u.OrderId, u.Channel, u.SubChannel, u.ChannelAccount, u.OrderD
   END AS SellingPrice_Exc_GST,
   u.OrderTrackingStatus, u.FulfilmentStatus, u.FinancialStatus,
   CASE
-    WHEN u.Channel IN ('Blinkit','Zepto','Instamart') AND u.SellingPrice_Exc_GST IS NOT NULL AND u.SellingPrice_Exc_GST > 0 AND SAFE_CAST(im.GST_Tax_Type_Code AS FLOAT64) IS NOT NULL
+    WHEN u.Channel IN ('Blinkit','Zepto','Instamart','offline_sales') AND u.SellingPrice_Exc_GST IS NOT NULL AND SAFE_CAST(im.GST_Tax_Type_Code AS FLOAT64) IS NOT NULL
       THEN CAST(u.SellingPrice_Exc_GST * SAFE_CAST(im.GST_Tax_Type_Code AS FLOAT64) / 100 AS STRING)
     WHEN u.SubChannel = 'Amazon Vendor Central' AND u.SellingPrice_Exc_GST IS NOT NULL AND u.SellingPrice_Exc_GST > 0 AND SAFE_CAST(im.GST_Tax_Type_Code AS FLOAT64) IS NOT NULL
       THEN CAST(u.SellingPrice_Exc_GST * SAFE_CAST(im.GST_Tax_Type_Code AS FLOAT64) / 100 AS STRING)
