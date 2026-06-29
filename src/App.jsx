@@ -4827,9 +4827,10 @@ function OfflineTab({ data }) {
             </ResponsiveContainer>
           </div>
         </div>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 10 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10 }}>
           {[
-            { label: 'Net Revenue (Exc. GST)', value: fmt(excRev), sub: `GST: ${fmt(rev - excRev)}`, badge: chgBadge(excRev, prevExcRev) },
+            { label: 'Net Revenue (Exc. GST)', value: fmt(excRev), sub: 'Excluding GST', badge: chgBadge(excRev, prevExcRev) },
+            { label: 'GST Collected', value: fmt(rev - excRev), sub: 'Gross − Net', badge: chgBadge(rev - excRev, prevRev - prevExcRev) },
             { label: 'Daily Avg Revenue', value: fmt(excRev / Math.max(nDays, 1)), sub: 'Net per day', badge: null },
             { label: 'ASP', value: `₹${Math.round(asp).toLocaleString('en-IN')}`, sub: 'Net rev ÷ units', badge: chgBadge(asp, prevUnits > 0 ? prevExcRev / prevUnits : 0) },
             { label: 'Units Sold', value: fmtN(qty), sub: `${fmtN(nOrders)} orders`, badge: chgBadge(qty, prevUnits) },
