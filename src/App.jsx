@@ -4696,42 +4696,54 @@ function OfflineTab({ data }) {
   // Sub-channel filter helper — returns rows matching current selection (or all when 'all')
   const filterSub = rows => sub === 'all' ? rows : rows.filter(r => r.subChannel === sub)
 
-  // Totals: prefer totalsBySub; fall back to summing daily rows if empty
+  // Totals: split sales vs credit notes
   const totalsBySub = off.totalsBySub || []
-  let filteredTotals = filterSub(totalsBySub)
-  let rev = filteredTotals.reduce((s, r) => s + (r.rev || 0), 0)
-  let excRev = filteredTotals.reduce((s, r) => s + (r.excRev || 0), 0)
-  let nOrders = filteredTotals.reduce((s, r) => s + (r.orders || 0), 0)
-  let qty = filteredTotals.reduce((s, r) => s + (r.units || 0), 0)
-  // Fallback: derive from daily rows
-  if (rev === 0 && excRev === 0) {
-    const dailyRows = filterSub(off.daily || [])
-    rev = dailyRows.reduce((s, r) => s + (r.rev || 0), 0)
-    excRev = dailyRows.reduce((s, r) => s + (r.excRev || 0), 0)
-    nOrders = dailyRows.reduce((s, r) => s + (r.orders || 0), 0)
-    qty = dailyRows.reduce((s, r) => s + (r.units || 0), 0)
-  }
-  const asp = qty ? excRev / qty : 0
+  const filteredTotals = filterSub(totalsBySub)
+  const grossRev = filteredTotals.reduce((s, r) => s + (r.revSales || 0), 0)            // Gross = sales only
+  const cnRev = filteredTotals.reduce((s, r) => s + (r.cnRev || 0), 0)                  // Credit notes (Inc. GST)
+  const cnRevAbs = Math.abs(cnRev)                                                       // absolute credit note amount
+  const grossAfterCN = grossRev - cnRevAbs                                              // gross minus credit notes
+  const cnExcRev = filteredTotals.reduce((s, r) => s + (r.cnExcRev || 0), 0)
+  const excRevSales = filteredTotals.reduce((s, r) => s + (r.excRevSales || 0), 0)
+  // Net Revenue = (Gross − Credit Notes) excluding GST
+  const netRev = excRevSales - Math.abs(cnExcRev)
+  const gstCollected = grossAfterCN - netRev
+  const nOrders = filteredTotals.reduce((s, r) => s + (r.orders || 0), 0)
+  const qty = filteredTotals.reduce((s, r) => s + (r.units || 0), 0)
+  const asp = qty ? netRev / qty : 0
   const nDays = data.nDays || 1
 
   const prevBySub = off.prevBySub || []
   const filteredPrev = filterSub(prevBySub)
-  const prevRev = filteredPrev.reduce((s, r) => s + (r.rev || 0), 0)
-  const prevExcRev = filteredPrev.reduce((s, r) => s + (r.excRev || 0), 0)
+  const prevGrossRev = filteredPrev.reduce((s, r) => s + (r.revSales || 0), 0)
+  const prevCnRev = Math.abs(filteredPrev.reduce((s, r) => s + (r.cnRev || 0), 0))
+  const prevCnExcRev = Math.abs(filteredPrev.reduce((s, r) => s + (r.cnExcRev || 0), 0))
+  const prevExcRevSales = filteredPrev.reduce((s, r) => s + (r.excRevSales || 0), 0)
+  const prevNetRev = prevExcRevSales - prevCnExcRev
   const prevOrders = filteredPrev.reduce((s, r) => s + (r.orders || 0), 0)
   const prevUnits = filteredPrev.reduce((s, r) => s + (r.units || 0), 0)
-  const revChg = prevRev > 0 ? ((rev - prevRev) / prevRev * 100) : null
+  const revChg = prevGrossRev > 0 ? ((grossRev - prevGrossRev) / prevGrossRev * 100) : null
 
-  // Daily series — filter by sub-channel, aggregate by date
+  // Backward-compat aliases for the rest of the component
+  const rev = grossRev
+  const excRev = netRev
+  const prevRev = prevGrossRev
+  const prevExcRev = prevNetRev
+
+  // Daily series — filter by sub-channel, aggregate by date.
+  // rev/excRev are Sales-only; cnRev/cnExcRev are Credit Notes; net = excRev - |cnExcRev|
   const aggByDate = rows => {
     const m = {}
     filterSub(rows).forEach(d => {
-      if (!m[d.date]) m[d.date] = { date: d.date, rev: 0, excRev: 0, orders: 0, units: 0 }
+      if (!m[d.date]) m[d.date] = { date: d.date, rev: 0, excRev: 0, cnRev: 0, cnExcRev: 0, orders: 0, units: 0, net: 0 }
       m[d.date].rev += d.rev || 0
       m[d.date].excRev += d.excRev || 0
+      m[d.date].cnRev += Math.abs(d.cnRev || 0)
+      m[d.date].cnExcRev += Math.abs(d.cnExcRev || 0)
       m[d.date].orders += d.orders || 0
       m[d.date].units += d.units || 0
     })
+    Object.values(m).forEach(d => { d.net = (d.excRev || 0) - (d.cnExcRev || 0) })
     return Object.values(m).sort((a, b) => a.date.localeCompare(b.date))
   }
   const dailyArr = aggByDate(off.daily || [])
@@ -4829,11 +4841,12 @@ function OfflineTab({ data }) {
         </div>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10 }}>
           {[
-            { label: 'Net Revenue (Exc. GST)', value: fmt(excRev), sub: 'Excluding GST', badge: chgBadge(excRev, prevExcRev) },
-            { label: 'GST Collected', value: fmt(rev - excRev), sub: 'Gross − Net', badge: chgBadge(rev - excRev, prevRev - prevExcRev) },
-            { label: 'Daily Avg Revenue', value: fmt(excRev / Math.max(nDays, 1)), sub: 'Net per day', badge: null },
-            { label: 'ASP', value: `₹${Math.round(asp).toLocaleString('en-IN')}`, sub: 'Net rev ÷ units', badge: chgBadge(asp, prevUnits > 0 ? prevExcRev / prevUnits : 0) },
+            { label: 'Credit Notes', value: fmt(cnRevAbs), sub: 'Returns / refunds', badge: chgBadge(cnRevAbs, prevCnRev), accent: '#B91C1C' },
+            { label: 'Net Revenue (Exc. GST)', value: fmt(netRev), sub: 'Gross − Credit Notes − GST', badge: chgBadge(netRev, prevNetRev) },
+            { label: 'GST Collected', value: fmt(gstCollected), sub: 'On net sales', badge: null },
+            { label: 'ASP', value: `₹${Math.round(asp).toLocaleString('en-IN')}`, sub: 'Net rev ÷ units', badge: chgBadge(asp, prevUnits > 0 ? prevNetRev / prevUnits : 0) },
             { label: 'Units Sold', value: fmtN(qty), sub: `${fmtN(nOrders)} orders`, badge: chgBadge(qty, prevUnits) },
+            { label: 'Daily Avg', value: fmt(netRev / Math.max(nDays, 1)), sub: 'Net rev per day', badge: null },
           ].map(k => (
             <div key={k.label} className="kpi-card" style={{ padding: '10px 13px' }}>
               <div className="kpi-label">{k.label}</div>
@@ -4854,15 +4867,19 @@ function OfflineTab({ data }) {
             <XAxis dataKey="date" tick={{ fontSize: 10, fill: C.t3 }} tickFormatter={d => d?.slice(5)} />
             <YAxis yAxisId="main" tick={{ fontSize: 10, fill: C.t3 }} tickFormatter={v => v >= 1e5 ? `${(v/1e5).toFixed(1)}L` : fmt(v)} width={60} />
             <YAxis yAxisId="units" orientation="right" tick={{ fontSize: 10, fill: C.t3 }} tickFormatter={v => fmtN(v)} width={42} />
-            <Tooltip content={({ active, payload, label }) => active && payload?.length ? (
-              <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 7, padding: '7px 11px', fontSize: 11 }}>
-                <div style={{ fontWeight: 700, marginBottom: 4, color: C.t2 }}>{label}</div>
-                {payload.map(p => <div key={p.name} style={{ color: p.color }}>{p.name}: {p.name === 'Units' ? fmtN(p.value) : fmt(p.value)}</div>)}
-              </div>
-            ) : null} />
+            <Tooltip content={({ active, payload, label }) => {
+              if (!active || !payload?.length) return null
+              return (
+                <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 7, padding: '7px 11px', fontSize: 11 }}>
+                  <div style={{ fontWeight: 700, marginBottom: 4, color: C.t2 }}>{label}</div>
+                  {payload.map(p => <div key={p.name} style={{ color: p.color }}>{p.name}: {p.name === 'Units' ? fmtN(p.value) : fmt(p.value)}</div>)}
+                </div>
+              )
+            }} />
             <Legend wrapperStyle={{ fontSize: 11 }} />
             <Area yAxisId="main" type="monotone" dataKey="rev" name="Gross Revenue" stroke="#FFD600" fill="#FFD60022" strokeWidth={2} dot={false} />
-            <Area yAxisId="main" type="monotone" dataKey="excRev" name="Net Revenue" stroke="#0D9E68" fill="#0D9E6811" strokeWidth={2} dot={false} strokeDasharray="4 2" />
+            <Area yAxisId="main" type="monotone" dataKey="net" name="Net Revenue" stroke="#0D9E68" fill="#0D9E6811" strokeWidth={2} dot={false} strokeDasharray="4 2" />
+            <Line yAxisId="main" type="monotone" dataKey="cnRev" name="Credit Notes" stroke="#B91C1C" strokeWidth={1.5} dot={false} strokeDasharray="2 2" />
             <Line yAxisId="units" type="monotone" dataKey="units" name="Units" stroke="#2E74CC" strokeWidth={1.5} dot={false} />
           </ComposedChart>
         </ResponsiveContainer>
