@@ -4863,42 +4863,68 @@ function OfflineTab({ data }) {
         </div>
       </div>
 
-      {/* Sub-channel Share (revenue split across all 3 offline sub-channels) */}
+      {/* Sub-channel Share + Funnel side by side */}
       {(() => {
         const SUB_COLORS = { 'Stockist': '#534AB7', 'Offline_B2B': '#0D9E68', 'MTGT': '#E8930A' }
         const SUB_LABELS = { 'Stockist': 'Stockist', 'Offline_B2B': 'Offline B2B', 'MTGT': 'MT GT' }
-        // Always show all 3 sub-channels regardless of `sub` filter — this is the "share" view
         const splitData = (off.totalsBySub || [])
           .filter(r => r.subChannel && (r.revSales || 0) > 0)
           .map(r => ({ name: SUB_LABELS[r.subChannel] || r.subChannel, value: r.revSales, color: SUB_COLORS[r.subChannel] || '#888', orders: r.orders, units: r.units }))
           .sort((a, b) => b.value - a.value)
         const total = splitData.reduce((s, d) => s + d.value, 0)
         if (!splitData.length) return null
+
+        // Funnel data: Orders → Units → Revenue (uses currently selected sub)
+        const funnelStages = [
+          { label: 'Orders', value: nOrders, display: fmtN(nOrders), color: '#534AB7' },
+          { label: 'Units Sold', value: qty, display: fmtN(qty), color: '#0D9E68', ratio: nOrders ? `${(qty/nOrders).toFixed(2)} units/order` : null },
+          { label: 'Net Revenue', value: netRev, display: fmt(netRev), color: '#E8930A', ratio: qty ? `₹${Math.round(netRev/qty).toLocaleString('en-IN')} ASP` : null },
+        ]
+        const maxVal = Math.max(...funnelStages.map(s => s.value)) || 1
+
         return (
-          <Card title="Sub-channel Share · Offline" note="Gross Revenue split (always all sub-channels)">
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 24 }}>
-              <ResponsiveContainer width={180} height={180}>
-                <PieChart>
-                  <Pie data={splitData} cx="50%" cy="50%" innerRadius={48} outerRadius={75} dataKey="value" paddingAngle={3}>
-                    {splitData.map((e, i) => <Cell key={i} fill={e.color} />)}
-                  </Pie>
-                  <Tooltip content={({ active, payload }) => active && payload?.length ? <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 6, padding: '5px 9px', fontSize: 11 }}><div style={{ color: payload[0].payload.color, fontWeight: 600 }}>{payload[0].name}</div><div style={{ color: C.t1 }}>{fmt(payload[0].value)} · {(payload[0].value / total * 100).toFixed(1)}%</div></div> : null} />
-                </PieChart>
-              </ResponsiveContainer>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-                {splitData.map(s => (
-                  <div key={s.name} style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                      <div style={{ width: 9, height: 9, borderRadius: '50%', background: s.color, flexShrink: 0 }} />
-                      <span style={{ fontSize: 11, color: C.t2 }}>{s.name}</span>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, alignItems: 'stretch' }}>
+            <Card title="Sub-channel Share · Offline" note="Gross Revenue split (always all sub-channels)">
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 24 }}>
+                <ResponsiveContainer width={180} height={180}>
+                  <PieChart>
+                    <Pie data={splitData} cx="50%" cy="50%" innerRadius={48} outerRadius={75} dataKey="value" paddingAngle={3}>
+                      {splitData.map((e, i) => <Cell key={i} fill={e.color} />)}
+                    </Pie>
+                    <Tooltip content={({ active, payload }) => active && payload?.length ? <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 6, padding: '5px 9px', fontSize: 11 }}><div style={{ color: payload[0].payload.color, fontWeight: 600 }}>{payload[0].name}</div><div style={{ color: C.t1 }}>{fmt(payload[0].value)} · {(payload[0].value / total * 100).toFixed(1)}%</div></div> : null} />
+                  </PieChart>
+                </ResponsiveContainer>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+                  {splitData.map(s => (
+                    <div key={s.name} style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                        <div style={{ width: 9, height: 9, borderRadius: '50%', background: s.color, flexShrink: 0 }} />
+                        <span style={{ fontSize: 11, color: C.t2 }}>{s.name}</span>
+                      </div>
+                      <div style={{ fontSize: 16, fontWeight: 700, color: C.t1, fontFamily: 'var(--mono)', paddingLeft: 15 }}>{fmt(s.value)}</div>
+                      <div style={{ fontSize: 11, color: C.t3, paddingLeft: 15 }}>{total > 0 ? ((s.value / total) * 100).toFixed(1) : 0}% · {fmtN(s.orders)} orders · {fmtN(s.units)} units</div>
                     </div>
-                    <div style={{ fontSize: 16, fontWeight: 700, color: C.t1, fontFamily: 'var(--mono)', paddingLeft: 15 }}>{fmt(s.value)}</div>
-                    <div style={{ fontSize: 11, color: C.t3, paddingLeft: 15 }}>{total > 0 ? ((s.value / total) * 100).toFixed(1) : 0}% · {fmtN(s.orders)} orders · {fmtN(s.units)} units</div>
-                  </div>
-                ))}
+                  ))}
+                </div>
               </div>
-            </div>
-          </Card>
+            </Card>
+            <Card title="Funnel · Orders → Units → Revenue" note={sub !== 'all' ? SUB_OPTIONS.find(o => o.id === sub)?.label : 'All offline sub-channels'}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8, padding: '4px 0' }}>
+                {funnelStages.map((stage, i) => {
+                  const widthPct = (stage.value / maxVal) * 100
+                  return (
+                    <div key={stage.label} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
+                      <div style={{ width: `${Math.max(widthPct, 25)}%`, background: stage.color, color: '#fff', padding: '10px 14px', borderRadius: 6, textAlign: 'center', boxShadow: '0 1px 3px rgba(0,0,0,.1)' }}>
+                        <div style={{ fontSize: 10, fontWeight: 600, opacity: 0.85, textTransform: 'uppercase', letterSpacing: '.05em' }}>{stage.label}</div>
+                        <div style={{ fontSize: 18, fontWeight: 800, fontFamily: 'var(--mono)', marginTop: 2 }}>{stage.display}</div>
+                      </div>
+                      {stage.ratio && i < funnelStages.length && <div style={{ fontSize: 10, color: C.t3, fontStyle: 'italic' }}>↓ {stage.ratio}</div>}
+                    </div>
+                  )
+                })}
+              </div>
+            </Card>
+          </div>
         )
       })()}
 
