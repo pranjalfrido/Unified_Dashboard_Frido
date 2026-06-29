@@ -4845,10 +4845,10 @@ function OfflineTab({ data }) {
           {[
             { label: 'Credit Notes', value: fmt(cnRevAbs), sub: `${fmtN(cnOrders)} orders · ${fmtN(cnUnits)} units`, badge: chgBadge(cnRevAbs, prevCnRev), accent: '#B91C1C' },
             { label: 'Net Revenue (Exc. GST)', value: fmt(netRev), sub: 'Gross − Credit Notes − GST', badge: chgBadge(netRev, prevNetRev) },
-            { label: 'GST Collected', value: fmt(gstCollected), sub: 'On net sales', badge: null },
+            { label: 'GST Collected', value: fmt(gstCollected), sub: 'On net sales', badge: chgBadge(gstCollected, (prevGrossRev - prevCnRev) - prevNetRev) },
             { label: 'ASP', value: `₹${Math.round(asp).toLocaleString('en-IN')}`, sub: 'Net rev ÷ units', badge: chgBadge(asp, prevUnits > 0 ? prevNetRev / prevUnits : 0) },
             { label: 'Units Sold', value: fmtN(qty), sub: `${fmtN(nOrders)} orders`, badge: chgBadge(qty, prevUnits) },
-            { label: 'Daily Avg', value: fmt(netRev / Math.max(nDays, 1)), sub: 'Net rev per day', badge: null },
+            { label: 'Daily Avg', value: fmt(netRev / Math.max(nDays, 1)), sub: 'Net rev per day', badge: chgBadge(netRev / Math.max(nDays, 1), prevNetRev / Math.max(nDays, 1)) },
           ].map(k => (
             <div key={k.label} className="kpi-card" style={{ padding: '10px 13px' }}>
               <div className="kpi-label">{k.label}</div>
