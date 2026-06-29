@@ -4704,6 +4704,8 @@ function OfflineTab({ data }) {
   const cnRevAbs = Math.abs(cnRev)                                                       // absolute credit note amount
   const grossAfterCN = grossRev - cnRevAbs                                              // gross minus credit notes
   const cnExcRev = filteredTotals.reduce((s, r) => s + (r.cnExcRev || 0), 0)
+  const cnOrders = filteredTotals.reduce((s, r) => s + (r.cnOrders || 0), 0)
+  const cnUnits = Math.abs(filteredTotals.reduce((s, r) => s + (r.cnUnits || 0), 0))
   const excRevSales = filteredTotals.reduce((s, r) => s + (r.excRevSales || 0), 0)
   // Net Revenue = (Gross − Credit Notes) excluding GST
   const netRev = excRevSales - Math.abs(cnExcRev)
@@ -4841,7 +4843,7 @@ function OfflineTab({ data }) {
         </div>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10 }}>
           {[
-            { label: 'Credit Notes', value: fmt(cnRevAbs), sub: 'Returns / refunds', badge: chgBadge(cnRevAbs, prevCnRev), accent: '#B91C1C' },
+            { label: 'Credit Notes', value: fmt(cnRevAbs), sub: `${fmtN(cnOrders)} orders · ${fmtN(cnUnits)} units`, badge: chgBadge(cnRevAbs, prevCnRev), accent: '#B91C1C' },
             { label: 'Net Revenue (Exc. GST)', value: fmt(netRev), sub: 'Gross − Credit Notes − GST', badge: chgBadge(netRev, prevNetRev) },
             { label: 'GST Collected', value: fmt(gstCollected), sub: 'On net sales', badge: null },
             { label: 'ASP', value: `₹${Math.round(asp).toLocaleString('en-IN')}`, sub: 'Net rev ÷ units', badge: chgBadge(asp, prevUnits > 0 ? prevNetRev / prevUnits : 0) },
