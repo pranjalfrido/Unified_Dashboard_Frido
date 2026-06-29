@@ -4876,9 +4876,9 @@ function OfflineTab({ data }) {
 
         // Funnel data: Orders → Units → Revenue (uses currently selected sub)
         const funnelStages = [
-          { label: 'Orders', value: nOrders, display: fmtN(nOrders), color: '#534AB7' },
-          { label: 'Units Sold', value: qty, display: fmtN(qty), color: '#0D9E68', ratio: nOrders ? `${(qty/nOrders).toFixed(2)} units/order` : null },
-          { label: 'Net Revenue', value: netRev, display: fmt(netRev), color: '#E8930A', ratio: qty ? `₹${Math.round(netRev/qty).toLocaleString('en-IN')} ASP` : null },
+          { label: 'Orders', value: nOrders, display: fmtN(nOrders), color: '#3D3580' },
+          { label: 'Units Sold', value: qty, display: fmtN(qty), color: '#0A6E4A', ratio: nOrders ? `${(qty/nOrders).toFixed(2)} units/order` : null },
+          { label: 'Net Revenue', value: netRev, display: fmt(netRev), color: '#A66608', ratio: qty ? `₹${Math.round(netRev/qty).toLocaleString('en-IN')} ASP` : null },
         ]
         const maxVal = Math.max(...funnelStages.map(s => s.value)) || 1
 
