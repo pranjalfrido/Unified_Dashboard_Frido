@@ -1933,12 +1933,12 @@ function CatSubCatRow({ catRows, subCatRows, title = 'Category Revenue', selecte
   )
 }
 
-function ShopifyGeoDonutRow({ regionRows, tierRows, topStates, allStateRows }) {
-  const [metric, setMetric] = useState('rev')
+function ShopifyGeoDonutRow({ regionRows, tierRows, topStates, allStateRows, useUnits = false }) {
+  const [metric, setMetric] = useState(useUnits ? 'units' : 'rev')
   const REGION_COLORS = ['#534AB7','#0D9E68','#2E74CC','#CC8A00','#CC4078','#E24B4A']
   const TIER_COLORS = ['#FFD600','#FF6B35','#9B59B6']
   const STATE_COLORS = ['#0D9E68','#2E74CC','#534AB7','#CC8A00','#E24B4A','#9B59B6']
-  const metricVal = (r, m) => m === 'rev' ? r.rev : m === 'orders' ? r.orders : (r.orders ? Math.round(r.rev / r.orders) : 0)
+  const metricVal = (r, m) => m === 'rev' ? r.rev : m === 'units' ? (r.units || 0) : m === 'orders' ? r.orders : (r.orders ? Math.round(r.rev / r.orders) : 0)
   const metricFmt = v => metric === 'rev' ? fmt(v) : metric === 'aov' ? `₹${v.toLocaleString('en-IN')}` : fmtN(v)
   const selStyle = active => ({ fontSize: 10, fontWeight: active ? 700 : 500, padding: '2px 8px', borderRadius: 4, border: `1px solid ${active ? C.acm : C.border}`, background: active ? C.acc : 'transparent', color: C.t1, cursor: 'pointer', fontFamily: 'var(--font)' })
 
@@ -1983,7 +1983,7 @@ function ShopifyGeoDonutRow({ regionRows, tierRows, topStates, allStateRows }) {
     <div style={{ flex: 1, minWidth: 0 }}>
       <Card title="Geography Breakdown" action={
         <div style={{ display: 'flex', gap: 3 }}>
-          {[['rev','Revenue'],['orders','Orders']].map(([k,l]) => <button key={k} onClick={() => setMetric(k)} style={selStyle(metric === k)}>{l}</button>)}
+          {(useUnits ? [['rev','Revenue'],['units','Units']] : [['rev','Revenue'],['orders','Orders']]).map(([k,l]) => <button key={k} onClick={() => setMetric(k)} style={selStyle(metric === k)}>{l}</button>)}
         </div>
       }>
         <div style={{ display: 'flex', gap: 16 }}>
@@ -4841,12 +4841,14 @@ function OfflineTab({ data }) {
             </ResponsiveContainer>
           </div>
         </div>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10 }}>
           {[
             { label: 'Credit Notes', value: fmt(cnRevAbs), sub: `${fmtN(cnOrders)} orders · ${fmtN(cnUnits)} units`, badge: chgBadge(cnRevAbs, prevCnRev), accent: '#B91C1C' },
             { label: 'Net Revenue (Exc. GST)', value: fmt(netRev), sub: 'Gross − Credit Notes − GST', badge: chgBadge(netRev, prevNetRev) },
             { label: 'GST Collected', value: fmt(gstCollected), sub: 'On net sales', badge: chgBadge(gstCollected, (prevGrossRev - prevCnRev) - prevNetRev) },
+            { label: 'AOV', value: `₹${Math.round(nOrders ? netRev / nOrders : 0).toLocaleString('en-IN')}`, sub: 'Net rev ÷ orders', badge: chgBadge(nOrders ? netRev / nOrders : 0, prevOrders ? prevNetRev / prevOrders : 0) },
             { label: 'ASP', value: `₹${Math.round(asp).toLocaleString('en-IN')}`, sub: 'Net rev ÷ units', badge: chgBadge(asp, prevUnits > 0 ? prevNetRev / prevUnits : 0) },
+            { label: 'Units / Order', value: nOrders ? (qty / nOrders).toFixed(2) : '0', sub: 'Avg units per order', badge: chgBadge(nOrders ? qty / nOrders : 0, prevOrders ? prevUnits / prevOrders : 0) },
             { label: 'Units Sold', value: fmtN(qty), sub: `${fmtN(nOrders)} orders`, badge: chgBadge(qty, prevUnits) },
             { label: 'Daily Avg', value: fmt(netRev / Math.max(nDays, 1)), sub: 'Net rev per day', badge: chgBadge(netRev / Math.max(nDays, 1), prevNetRev / Math.max(nDays, 1)) },
           ].map(k => (
@@ -4860,6 +4862,45 @@ function OfflineTab({ data }) {
           ))}
         </div>
       </div>
+
+      {/* Sub-channel Share (revenue split across all 3 offline sub-channels) */}
+      {(() => {
+        const SUB_COLORS = { 'Stockist': '#534AB7', 'Offline_B2B': '#0D9E68', 'MTGT': '#E8930A' }
+        const SUB_LABELS = { 'Stockist': 'Stockist', 'Offline_B2B': 'Offline B2B', 'MTGT': 'MT GT' }
+        // Always show all 3 sub-channels regardless of `sub` filter — this is the "share" view
+        const splitData = (off.totalsBySub || [])
+          .filter(r => r.subChannel && (r.revSales || 0) > 0)
+          .map(r => ({ name: SUB_LABELS[r.subChannel] || r.subChannel, value: r.revSales, color: SUB_COLORS[r.subChannel] || '#888', orders: r.orders, units: r.units }))
+          .sort((a, b) => b.value - a.value)
+        const total = splitData.reduce((s, d) => s + d.value, 0)
+        if (!splitData.length) return null
+        return (
+          <Card title="Sub-channel Share · Offline" note="Gross Revenue split (always all sub-channels)">
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 24 }}>
+              <ResponsiveContainer width={180} height={180}>
+                <PieChart>
+                  <Pie data={splitData} cx="50%" cy="50%" innerRadius={48} outerRadius={75} dataKey="value" paddingAngle={3}>
+                    {splitData.map((e, i) => <Cell key={i} fill={e.color} />)}
+                  </Pie>
+                  <Tooltip content={({ active, payload }) => active && payload?.length ? <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 6, padding: '5px 9px', fontSize: 11 }}><div style={{ color: payload[0].payload.color, fontWeight: 600 }}>{payload[0].name}</div><div style={{ color: C.t1 }}>{fmt(payload[0].value)} · {(payload[0].value / total * 100).toFixed(1)}%</div></div> : null} />
+                </PieChart>
+              </ResponsiveContainer>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+                {splitData.map(s => (
+                  <div key={s.name} style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <div style={{ width: 9, height: 9, borderRadius: '50%', background: s.color, flexShrink: 0 }} />
+                      <span style={{ fontSize: 11, color: C.t2 }}>{s.name}</span>
+                    </div>
+                    <div style={{ fontSize: 16, fontWeight: 700, color: C.t1, fontFamily: 'var(--mono)', paddingLeft: 15 }}>{fmt(s.value)}</div>
+                    <div style={{ fontSize: 11, color: C.t3, paddingLeft: 15 }}>{total > 0 ? ((s.value / total) * 100).toFixed(1) : 0}% · {fmtN(s.orders)} orders · {fmtN(s.units)} units</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </Card>
+        )
+      })()}
 
       {/* Trend Analysis + Category Revenue (side by side) */}
       <div style={{ display: 'grid', gridTemplateColumns: '3fr 2fr', gap: 14, alignItems: 'stretch' }}>
@@ -4882,7 +4923,6 @@ function OfflineTab({ data }) {
               <Legend wrapperStyle={{ fontSize: 11 }} />
               <Area yAxisId="main" type="monotone" dataKey="rev" name="Gross Revenue" stroke="#FFD600" fill="#FFD60022" strokeWidth={2} dot={false} />
               <Area yAxisId="main" type="monotone" dataKey="net" name="Net Revenue" stroke="#0D9E68" fill="#0D9E6811" strokeWidth={2} dot={false} strokeDasharray="4 2" />
-              <Line yAxisId="main" type="monotone" dataKey="cnRev" name="Credit Notes" stroke="#B91C1C" strokeWidth={1.5} dot={false} strokeDasharray="2 2" />
               <Line yAxisId="units" type="monotone" dataKey="units" name="Units" stroke="#2E74CC" strokeWidth={1.5} dot={false} />
             </ComposedChart>
           </ResponsiveContainer>
@@ -4897,7 +4937,7 @@ function OfflineTab({ data }) {
 
       {/* Geography Breakdown + Top 10 Sub-cats */}
       <div style={{ display: 'flex', gap: 14, alignItems: 'stretch' }}>
-        <ShopifyGeoDonutRow regionRows={regionRows} tierRows={tierRows} topStates={stateRows.slice(0, 6)} allStateRows={stateRows} />
+        <ShopifyGeoDonutRow regionRows={regionRows} tierRows={tierRows} topStates={stateRows.slice(0, 6)} allStateRows={stateRows} useUnits={true} />
         <TopSubCatBar subCatRows={allSubCatRows} />
       </div>
 
