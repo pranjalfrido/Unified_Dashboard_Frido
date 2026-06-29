@@ -607,6 +607,7 @@ const TABS = [
   { id: 'instamart', label: 'Instamart', ch: 'Instamart', logo: '/logo-instamart.png' },
   { id: 'zepto', label: 'Zepto', ch: 'Zepto', logo: '/logo-zepto.png' },
   { id: 'myntra', label: 'Myntra', ch: 'Myntra', logo: '/logo-myntra.png' },
+  { id: 'offline', label: 'Offline Sales', ch: 'offline_sales' },
 ]
 
 function PaginatedCard({ title, rows, columns, pageSize = 10 }) {
@@ -4681,6 +4682,178 @@ function MyntraTab({ data }) {
   )
 }
 
+function OfflineTab({ data }) {
+  const off = data.offline || {}
+  const [sub, setSub] = useState('all') // 'all' | 'Stockist' | 'Offline_B2B' | 'MTGT'
+
+  const SUB_OPTIONS = [
+    { id: 'all', label: 'All Offline' },
+    { id: 'Stockist', label: 'Stockist' },
+    { id: 'Offline_B2B', label: 'Offline B2B' },
+    { id: 'MTGT', label: 'MT GT' },
+  ]
+
+  // Filter all rows by selected sub-channel where SubChannel is available
+  const subChannelRows = off.subChannelRows || []
+  const subTotals = (() => {
+    if (sub === 'all') return off.totals || {}
+    const m = subChannelRows.find(s => s.subChannel === sub)
+    return m ? { rev: m.rev, excRev: m.excRev, orders: m.orders, units: m.units } : {}
+  })()
+  const rev = subTotals.rev || 0
+  const excRev = subTotals.excRev || 0
+  const nOrders = subTotals.orders || 0
+  const qty = subTotals.units || 0
+  const asp = qty ? excRev / qty : 0
+  const nDays = data.nDays || 1
+
+  const prevRev = off.prevRev || 0
+  const prevExcRev = off.prevExcRev || 0
+  const prevOrders = off.prevOrders || 0
+  const prevUnits = off.prevUnits || 0
+  const revChg = (sub === 'all' && prevRev > 0) ? ((rev - prevRev) / prevRev * 100) : null
+  const excChg = (sub === 'all' && prevExcRev > 0) ? ((excRev - prevExcRev) / prevExcRev * 100) : null
+
+  // Daily series — filter by sub-channel if needed
+  const rawDaily = off.daily || []
+  const dailyByDate = {}
+  rawDaily.forEach(d => {
+    if (sub !== 'all' && d.subChannel !== sub) return
+    if (!dailyByDate[d.date]) dailyByDate[d.date] = { date: d.date, rev: 0, excRev: 0, orders: 0, units: 0 }
+    dailyByDate[d.date].rev += d.rev || 0
+    dailyByDate[d.date].excRev += d.excRev || 0
+    dailyByDate[d.date].orders += d.orders || 0
+    dailyByDate[d.date].units += d.units || 0
+  })
+  const dailyArr = Object.values(dailyByDate).sort((a, b) => a.date.localeCompare(b.date))
+  const prevDaily = off.prevDaily || []
+  const sparkData = Array.from({ length: Math.max(dailyArr.length, prevDaily.length) }, (_, i) => ({
+    i, cur: dailyArr[i]?.rev ?? null, prev: prevDaily[i]?.rev ?? null
+  }))
+
+  const chgBadge = (cur, prev) => { if (!prev || sub !== 'all') return null; const p = (cur - prev) / prev * 100; return <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 4, background: p >= 0 ? C.green.bg : C.red.bg, color: p >= 0 ? C.green.tx : C.red.tx, flexShrink: 0 }}>{p >= 0 ? '▲' : '▼'} {Math.abs(p).toFixed(1)}%</span> }
+
+  // Categories — note: data doesn't pre-aggregate by sub-channel, so cat/sub-cat/geo show "all offline".
+  // If users need per-sub-channel category breakdown, that's a separate query.
+  const catRows = Object.entries(off.catMap || {}).map(([name, v]) => ({ name, rev: v.rev, excRev: v.excRev, orders: v.orders?.size || 0, units: v.units || 0 })).sort((a, b) => b.rev - a.rev)
+  const allSubCatRows = Object.entries(off.subCatMap || {}).map(([k, v]) => ({ name: k.split('::')[1] || k, category: k.split('::')[0] || '', rev: v.rev, excRev: v.excRev, orders: v.orders?.size || 0, units: v.units || 0, asp: (v.units || 0) ? v.rev / v.units : 0 })).sort((a, b) => b.rev - a.rev)
+  const stateRows = Object.entries(off.stateMap || {}).map(([name, v]) => ({ state: name, name, rev: v.rev, orders: v.orders, cities: v.cities?.size || 0 })).sort((a, b) => b.rev - a.rev)
+  const cityRows = (off.cityRows || []).map(c => ({ ...c, name: c.city }))
+
+  // Category matrix data
+  const catMatrixData = {}
+  Object.entries(off.catMap || {}).forEach(([cat, v]) => { catMatrixData[cat] = { rev: v.rev || 0, excRev: v.excRev || 0, units: v.units || 0, orders: v.orders } })
+  const subCatMatrixData = {}
+  Object.entries(off.subCatMap || {}).forEach(([key, v]) => { const [cat, sc] = key.split('::'); if (!subCatMatrixData[cat]) subCatMatrixData[cat] = {}; subCatMatrixData[cat][sc] = { rev: v.rev || 0, excRev: v.excRev || 0, units: v.units || 0, orders: v.orders } })
+
+  const totalRev = rev
+  const pct = (a, b) => b > 0 ? `${(a / b * 100).toFixed(1)}%` : '—'
+
+  const subTab = active => ({ fontSize: 12, fontWeight: 700, padding: '5px 16px', borderRadius: 7, border: `1.5px solid ${active ? C.t1 : C.border}`, background: active ? C.t1 : C.card, color: active ? '#fff' : C.t1, cursor: 'pointer', fontFamily: 'var(--font)', transition: 'all .15s' })
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+      {/* Sub-channel toggle */}
+      <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+        {SUB_OPTIONS.map(o => <button key={o.id} onClick={() => setSub(o.id)} style={subTab(sub === o.id)}>{o.label}</button>)}
+      </div>
+
+      {/* KPI Hero + 2×2 grid */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1.5fr 5fr', gap: 10, alignItems: 'stretch' }}>
+        <div className="kpi-card" style={{ display: 'flex', flexDirection: 'column', gap: 8, padding: '16px 18px' }}>
+          <div className="kpi-label" style={{ fontSize: 11 }}>Gross Revenue · Inc. GST</div>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 6 }}>
+            <div className="kpi-value" style={{ fontSize: 32, fontWeight: 800 }}>{fmt(rev)}</div>
+            {revChg !== null && <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 7px', borderRadius: 4, background: revChg >= 0 ? C.green.bg : C.red.bg, color: revChg >= 0 ? C.green.tx : C.red.tx }}>{revChg >= 0 ? '▲' : '▼'} {Math.abs(revChg).toFixed(1)}%</span>}
+          </div>
+          <div className="kpi-sub" style={{ fontSize: 13 }}>{nDays} days · {fmtN(nOrders)} orders · {fmtN(qty)} units</div>
+          <div style={{ flex: 1, minHeight: 0 }}>
+            <ResponsiveContainer width="100%" height="100%">
+              <AreaChart data={sparkData} margin={{ top: 4, right: 0, bottom: 0, left: 0 }}>
+                <defs><linearGradient id="offGrossGrad" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#0D9E68" stopOpacity={0.25} /><stop offset="95%" stopColor="#0D9E68" stopOpacity={0} /></linearGradient></defs>
+                <Area type="monotone" dataKey="cur" name="Current" stroke="#0D9E68" strokeWidth={2} fill="url(#offGrossGrad)" dot={false} connectNulls />
+                <Area type="monotone" dataKey="prev" name="Prev" stroke={C.t3} strokeWidth={1} fill="none" dot={false} strokeDasharray="3 2" connectNulls />
+                <Tooltip content={({ active, payload }) => active && payload?.length ? <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 6, padding: '4px 8px', fontSize: 10 }}>{payload.map(p => <div key={p.name} style={{ color: p.name === 'Current' ? C.t1 : C.t3 }}>{p.name}: {fmt(p.value)}</div>)}</div> : null} />
+              </AreaChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 10 }}>
+          {[
+            { label: 'Net Revenue (Exc. GST)', value: fmt(excRev), sub: `GST: ${fmt(rev - excRev)}`, badge: chgBadge(excRev, prevExcRev) },
+            { label: 'Daily Avg Revenue', value: fmt(excRev / Math.max(nDays, 1)), sub: 'Net per day', badge: null },
+            { label: 'ASP', value: `₹${Math.round(asp).toLocaleString('en-IN')}`, sub: 'Net rev ÷ units', badge: chgBadge(asp, prevUnits > 0 ? prevExcRev / prevUnits : 0) },
+            { label: 'Units Sold', value: fmtN(qty), sub: `${fmtN(nOrders)} orders`, badge: chgBadge(qty, prevUnits) },
+          ].map(k => (
+            <div key={k.label} className="kpi-card" style={{ padding: '10px 13px' }}>
+              <div className="kpi-label">{k.label}</div>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 4 }}>
+                <div className="kpi-value" style={{ fontSize: 17 }}>{k.value}</div>{k.badge}
+              </div>
+              {k.sub && <div className="kpi-sub">{k.sub}</div>}
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Trend Analysis · Gross / Net / Units */}
+      <Card title={`Trend Analysis · Offline${sub !== 'all' ? ' · ' + (SUB_OPTIONS.find(o => o.id === sub)?.label || sub) : ''}`}>
+        <ResponsiveContainer width="100%" height={220}>
+          <ComposedChart data={dailyArr} margin={{ top: 4, right: 16, bottom: 0, left: 0 }}>
+            <CartesianGrid strokeDasharray="3 3" stroke={C.border} vertical={false} />
+            <XAxis dataKey="date" tick={{ fontSize: 10, fill: C.t3 }} tickFormatter={d => d?.slice(5)} />
+            <YAxis yAxisId="main" tick={{ fontSize: 10, fill: C.t3 }} tickFormatter={v => v >= 1e5 ? `${(v/1e5).toFixed(1)}L` : fmt(v)} width={60} />
+            <YAxis yAxisId="units" orientation="right" tick={{ fontSize: 10, fill: C.t3 }} tickFormatter={v => fmtN(v)} width={42} />
+            <Tooltip content={({ active, payload, label }) => active && payload?.length ? (
+              <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 7, padding: '7px 11px', fontSize: 11 }}>
+                <div style={{ fontWeight: 700, marginBottom: 4, color: C.t2 }}>{label}</div>
+                {payload.map(p => <div key={p.name} style={{ color: p.color }}>{p.name}: {p.name === 'Units' ? fmtN(p.value) : fmt(p.value)}</div>)}
+              </div>
+            ) : null} />
+            <Legend wrapperStyle={{ fontSize: 11 }} />
+            <Area yAxisId="main" type="monotone" dataKey="rev" name="Gross Revenue" stroke="#FFD600" fill="#FFD60022" strokeWidth={2} dot={false} />
+            <Area yAxisId="main" type="monotone" dataKey="excRev" name="Net Revenue" stroke="#0D9E68" fill="#0D9E6811" strokeWidth={2} dot={false} strokeDasharray="4 2" />
+            <Line yAxisId="units" type="monotone" dataKey="units" name="Units" stroke="#2E74CC" strokeWidth={1.5} dot={false} />
+          </ComposedChart>
+        </ResponsiveContainer>
+      </Card>
+
+      {/* Category Revenue */}
+      <Card title="Category Revenue · Offline">
+        {catRows.slice(0, 8).map((r, i) => {
+          const dots = ['#534AB7','#0D9E68','#2E74CC','#CC8A00','#CC4078','#E24B4A','#9B59B6','#FF6B35']
+          return <HBar key={r.name} dot={dots[i % dots.length]} label={r.name} width={(r.rev / (catRows[0]?.rev || 1)) * 100} value={fmt(r.rev)} pctVal={totalRev ? pct(r.rev, totalRev) : '—'} isSelected={false} onClick={() => {}} />
+        })}
+      </Card>
+
+      {/* Geography Breakdown + Top 10 Sub-cats */}
+      <div style={{ display: 'flex', gap: 14, alignItems: 'stretch' }}>
+        <ShopifyGeoDonutRow regionRows={off.regionRows || []} tierRows={off.tierRows || []} topStates={stateRows.slice(0, 6)} allStateRows={stateRows} />
+        <TopSubCatBar subCatRows={allSubCatRows} />
+      </div>
+
+      {/* Category Revenue Matrix — Gross / Units / ASP / GST / Net only (no returns/cancel/rto/cir/exch) */}
+      <FinancialCategoryMatrix catData={catMatrixData} subCatData={subCatMatrixData} skuData={off.skuMap || {}} title="Category Revenue Matrix · Offline" showReturns={false} />
+
+      {/* Top States + Top Cities */}
+      <div className="g-2" style={{ alignItems: 'stretch' }}>
+        <PaginatedCard title="Top States · Offline" rows={stateRows} columns={[
+          { key: 'state', label: 'State', render: v => v ? v.charAt(0).toUpperCase() + v.slice(1).toLowerCase() : v },
+          { key: 'rev', label: 'Revenue', align: 'right', mono: true, render: v => fmt(v) },
+          { key: 'orders', label: 'Orders', align: 'right', render: v => fmtN(v) },
+          { key: 'asp', label: 'ASP', align: 'right', render: (_, r) => `₹${r.orders ? Math.round(r.rev / r.orders).toLocaleString('en-IN') : 0}` },
+        ]} pageSize={15} />
+        <PaginatedCard title="Top Cities · Offline" rows={cityRows} columns={[
+          { key: 'city', label: 'City', render: v => v ? v.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' ') : v },
+          { key: 'rev', label: 'Revenue', align: 'right', mono: true, render: v => fmt(v) },
+          { key: 'orders', label: 'Orders', align: 'right', render: v => fmtN(v) },
+          { key: 'asp', label: 'ASP', align: 'right', render: (_, r) => `₹${r.orders ? Math.round(r.rev / r.orders).toLocaleString('en-IN') : 0}` },
+        ]} pageSize={15} />
+      </div>
+    </div>
+  )
+}
+
 function ChannelTab({ data, channel, filters, setFilters, amzRegion, setAmzRegion }) {
   if (channel === 'Shopify') return <ShopifyTab data={data} filters={filters} setFilters={setFilters} />
   if (channel === 'Amazon') return <AmazonTab data={data} region={amzRegion} setRegion={setAmzRegion} />
@@ -4916,6 +5089,7 @@ function SalesPage({ data, filters, setFilters, activeTab, setActiveTab, fetchDa
         {activeTab === 'instamart' && <ChannelTab data={filteredData} channel="Instamart" />}
         {activeTab === 'zepto' && <ChannelTab data={filteredData} channel="Zepto" />}
         {activeTab === 'myntra' && <ChannelTab data={filteredData} channel="Myntra" />}
+        {activeTab === 'offline' && <OfflineTab data={filteredData} />}
         {activeTab === 'qc' && <QCTab data={filteredData} />}
         {activeTab === 'ops' && <OpsTab data={filteredData} />}
         {activeTab === 'cx' && <CXTab data={filteredData} />}
