@@ -4861,39 +4861,39 @@ function OfflineTab({ data }) {
         </div>
       </div>
 
-      {/* Trend Analysis · Gross / Net / Units */}
-      <Card title={`Trend Analysis · Offline${sub !== 'all' ? ' · ' + (SUB_OPTIONS.find(o => o.id === sub)?.label || sub) : ''}`}>
-        <ResponsiveContainer width="100%" height={220}>
-          <ComposedChart data={dailyArr} margin={{ top: 4, right: 16, bottom: 0, left: 0 }}>
-            <CartesianGrid strokeDasharray="3 3" stroke={C.border} vertical={false} />
-            <XAxis dataKey="date" tick={{ fontSize: 10, fill: C.t3 }} tickFormatter={d => d?.slice(5)} />
-            <YAxis yAxisId="main" tick={{ fontSize: 10, fill: C.t3 }} tickFormatter={v => v >= 1e5 ? `${(v/1e5).toFixed(1)}L` : fmt(v)} width={60} />
-            <YAxis yAxisId="units" orientation="right" tick={{ fontSize: 10, fill: C.t3 }} tickFormatter={v => fmtN(v)} width={42} />
-            <Tooltip content={({ active, payload, label }) => {
-              if (!active || !payload?.length) return null
-              return (
-                <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 7, padding: '7px 11px', fontSize: 11 }}>
-                  <div style={{ fontWeight: 700, marginBottom: 4, color: C.t2 }}>{label}</div>
-                  {payload.map(p => <div key={p.name} style={{ color: p.color }}>{p.name}: {p.name === 'Units' ? fmtN(p.value) : fmt(p.value)}</div>)}
-                </div>
-              )
-            }} />
-            <Legend wrapperStyle={{ fontSize: 11 }} />
-            <Area yAxisId="main" type="monotone" dataKey="rev" name="Gross Revenue" stroke="#FFD600" fill="#FFD60022" strokeWidth={2} dot={false} />
-            <Area yAxisId="main" type="monotone" dataKey="net" name="Net Revenue" stroke="#0D9E68" fill="#0D9E6811" strokeWidth={2} dot={false} strokeDasharray="4 2" />
-            <Line yAxisId="main" type="monotone" dataKey="cnRev" name="Credit Notes" stroke="#B91C1C" strokeWidth={1.5} dot={false} strokeDasharray="2 2" />
-            <Line yAxisId="units" type="monotone" dataKey="units" name="Units" stroke="#2E74CC" strokeWidth={1.5} dot={false} />
-          </ComposedChart>
-        </ResponsiveContainer>
-      </Card>
-
-      {/* Category Revenue */}
-      <Card title="Category Revenue · Offline">
-        {catRows.slice(0, 8).map((r, i) => {
-          const dots = ['#534AB7','#0D9E68','#2E74CC','#CC8A00','#CC4078','#E24B4A','#9B59B6','#FF6B35']
-          return <HBar key={r.name} dot={dots[i % dots.length]} label={r.name} width={(r.rev / (catRows[0]?.rev || 1)) * 100} value={fmt(r.rev)} pctVal={totalRev ? pct(r.rev, totalRev) : '—'} isSelected={false} onClick={() => {}} />
-        })}
-      </Card>
+      {/* Trend Analysis + Category Revenue (side by side) */}
+      <div style={{ display: 'grid', gridTemplateColumns: '3fr 2fr', gap: 14, alignItems: 'stretch' }}>
+        <Card title={`Trend Analysis · Offline${sub !== 'all' ? ' · ' + (SUB_OPTIONS.find(o => o.id === sub)?.label || sub) : ''}`}>
+          <ResponsiveContainer width="100%" height={260}>
+            <ComposedChart data={dailyArr} margin={{ top: 4, right: 16, bottom: 0, left: 0 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke={C.border} vertical={false} />
+              <XAxis dataKey="date" tick={{ fontSize: 10, fill: C.t3 }} tickFormatter={d => d?.slice(5)} />
+              <YAxis yAxisId="main" tick={{ fontSize: 10, fill: C.t3 }} tickFormatter={v => v >= 1e5 ? `${(v/1e5).toFixed(1)}L` : fmt(v)} width={60} />
+              <YAxis yAxisId="units" orientation="right" tick={{ fontSize: 10, fill: C.t3 }} tickFormatter={v => fmtN(v)} width={42} />
+              <Tooltip content={({ active, payload, label }) => {
+                if (!active || !payload?.length) return null
+                return (
+                  <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 7, padding: '7px 11px', fontSize: 11 }}>
+                    <div style={{ fontWeight: 700, marginBottom: 4, color: C.t2 }}>{label}</div>
+                    {payload.map(p => <div key={p.name} style={{ color: p.color }}>{p.name}: {p.name === 'Units' ? fmtN(p.value) : fmt(p.value)}</div>)}
+                  </div>
+                )
+              }} />
+              <Legend wrapperStyle={{ fontSize: 11 }} />
+              <Area yAxisId="main" type="monotone" dataKey="rev" name="Gross Revenue" stroke="#FFD600" fill="#FFD60022" strokeWidth={2} dot={false} />
+              <Area yAxisId="main" type="monotone" dataKey="net" name="Net Revenue" stroke="#0D9E68" fill="#0D9E6811" strokeWidth={2} dot={false} strokeDasharray="4 2" />
+              <Line yAxisId="main" type="monotone" dataKey="cnRev" name="Credit Notes" stroke="#B91C1C" strokeWidth={1.5} dot={false} strokeDasharray="2 2" />
+              <Line yAxisId="units" type="monotone" dataKey="units" name="Units" stroke="#2E74CC" strokeWidth={1.5} dot={false} />
+            </ComposedChart>
+          </ResponsiveContainer>
+        </Card>
+        <Card title="Category Revenue · Offline">
+          {catRows.slice(0, 8).map((r, i) => {
+            const dots = ['#534AB7','#0D9E68','#2E74CC','#CC8A00','#CC4078','#E24B4A','#9B59B6','#FF6B35']
+            return <HBar key={r.name} dot={dots[i % dots.length]} label={r.name} width={(r.rev / (catRows[0]?.rev || 1)) * 100} value={fmt(r.rev)} pctVal={totalRev ? pct(r.rev, totalRev) : '—'} isSelected={false} onClick={() => {}} />
+          })}
+        </Card>
+      </div>
 
       {/* Geography Breakdown + Top 10 Sub-cats */}
       <div style={{ display: 'flex', gap: 14, alignItems: 'stretch' }}>
