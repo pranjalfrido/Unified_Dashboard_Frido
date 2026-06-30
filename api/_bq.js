@@ -20,7 +20,7 @@ export function getBQ() {
 }
 
 export function buildQuery(s, e, filters = {}) {
-  const { category, subCategory, state, sku, subChannel, voucher, region, tier, city, country } = filters
+  const { category, subCategory, state, sku, subChannel, voucher, region, tier, city, country, paymentType } = filters
   // Filters now reference the dbt fact table columns directly (u.Category, u.SubCategory, u.masterskucode).
   // Region/Tier still come from pincode_city_master join (pm/cm).
   const whereClauses = []
@@ -83,6 +83,11 @@ export function buildQuery(s, e, filters = {}) {
       const inList = codes.map(c => `'${c.replace(/'/g, "''")}'`).join(', ')
       whereClauses.push(`TRIM(u.voucher_code) IN (${inList})`)
     }
+  }
+  if (paymentType) {
+    const vals = paymentType.split(',').map(v => v.trim()).filter(Boolean)
+    if (vals.length === 1) whereClauses.push(`u.payment_type = '${vals[0].replace(/'/g, "''")}'`)
+    else if (vals.length > 1) whereClauses.push(`u.payment_type IN (${vals.map(v => `'${v.replace(/'/g, "''")}'`).join(', ')})`)
   }
   // ============================================================================
   // Source: frido-429506.production.fact_all_platform_sales_report (dbt model)
