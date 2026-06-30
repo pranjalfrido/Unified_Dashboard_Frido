@@ -21,16 +21,18 @@ export function getBQ() {
 
 export function buildQuery(s, e, filters = {}) {
   const { category, subCategory, state, sku, subChannel, voucher, region, tier, city, country } = filters
+  // Filters now reference the dbt fact table columns directly (u.Category, u.SubCategory, u.masterskucode).
+  // Region/Tier still come from pincode_city_master join (pm/cm).
   const whereClauses = []
   if (category) {
     const cats = category.split(',').map(c => c.trim()).filter(Boolean)
-    if (cats.length === 1) whereClauses.push(`COALESCE(im.Category, 'Frido') = '${cats[0].replace(/'/g, "''")}'`)
-    else if (cats.length > 1) whereClauses.push(`COALESCE(im.Category, 'Frido') IN (${cats.map(c => `'${c.replace(/'/g, "''")}'`).join(',')})`)
+    if (cats.length === 1) whereClauses.push(`u.Category = '${cats[0].replace(/'/g, "''")}'`)
+    else if (cats.length > 1) whereClauses.push(`u.Category IN (${cats.map(c => `'${c.replace(/'/g, "''")}'`).join(',')})`)
   }
   if (subCategory) {
     const subs = subCategory.split(',').map(c => c.trim()).filter(Boolean)
-    if (subs.length === 1) whereClauses.push(`COALESCE(im.SubCategory, 'Frido') = '${subs[0].replace(/'/g, "''")}'`)
-    else if (subs.length > 1) whereClauses.push(`COALESCE(im.SubCategory, 'Frido') IN (${subs.map(c => `'${c.replace(/'/g, "''")}'`).join(',')})`)
+    if (subs.length === 1) whereClauses.push(`u.SubCategory = '${subs[0].replace(/'/g, "''")}'`)
+    else if (subs.length > 1) whereClauses.push(`u.SubCategory IN (${subs.map(c => `'${c.replace(/'/g, "''")}'`).join(',')})`)
   }
   if (state) {
     const vals = state.split(',').map(s => s.trim()).filter(Boolean)
@@ -53,10 +55,10 @@ export function buildQuery(s, e, filters = {}) {
     const skuList = sku.split(',').map(s => s.trim()).filter(Boolean)
     if (skuList.length === 1) {
       const s1 = skuList[0].replace(/'/g, "''")
-      whereClauses.push(`sm.masterskucode = '${s1}'`)
+      whereClauses.push(`u.masterskucode = '${s1}'`)
     } else if (skuList.length > 1) {
       const inList = skuList.map(s => `'${s.replace(/'/g, "''")}'`).join(', ')
-      whereClauses.push(`sm.masterskucode IN (${inList})`)
+      whereClauses.push(`u.masterskucode IN (${inList})`)
     }
   }
   if (subChannel) {
@@ -76,40 +78,28 @@ export function buildQuery(s, e, filters = {}) {
       whereClauses.push(`TRIM(u.voucher_code) IN (${inList})`)
     }
   }
-  const whereClause = whereClauses.length ? `WHERE ${whereClauses.join(' AND ')} ` : ''
+  // ============================================================================
+  // Source: frido-429506.production.fact_all_platform_sales_report (dbt model)
+  // Already has: Category, SubCategory, GST_Tax_Type_Code, masterskucode, Order_Status,
+  //              is_CIR_return, is_exchange, is_rto, is_cancelled, is_refund,
+  //              payment_type, Clickpost_Status, Unicommerce_Status, etc.
+  // We only enrich with pincode_city_master for Region/City_Tier/Tier_Label/Is_Metro_City.
+  // ============================================================================
+  // Column aliases for backward compatibility with bq.js:
+  //   masterskucode  -> MasterSKU
+  //   payment_type   -> PaymentMode
+  const whereClause = whereClauses.length ? `AND ${whereClauses.join(' AND ')} ` : ''
   return `WITH
-sku_mapping AS (SELECT DISTINCT TRIM(productid) AS productid, TRIM(masterskucode) AS masterskucode FROM \`frido-429506.sharepoint_to_gcp.Frido_Item_Master__productid_sku_mapping\` WHERE TRIM(masterskucode) NOT IN ('', 'not found')),
-price_amazon AS (SELECT DISTINCT TRIM(productid) AS productid, CAST(NULL AS FLOAT64) AS selling_price FROM \`frido-429506.sharepoint_to_gcp.Frido_Item_Master__productid_sku_mapping\` WHERE TRIM(channelname) = 'Amazon'),
-price_blinkit AS (SELECT DISTINCT TRIM(productid) AS productid, SAFE_CAST(NULLIF(TRIM(Selling_Price),'') AS FLOAT64) AS selling_price FROM \`frido-429506.sharepoint_to_gcp.Frido_Item_Master__productid_sku_mapping\` WHERE TRIM(channelname) = 'Blinkit'),
-price_zepto AS (SELECT DISTINCT TRIM(productid) AS productid, SAFE_CAST(NULLIF(TRIM(Selling_Price),'') AS FLOAT64) AS selling_price FROM \`frido-429506.sharepoint_to_gcp.Frido_Item_Master__productid_sku_mapping\` WHERE TRIM(channelname) = 'Zepto'),
-price_instamart AS (SELECT DISTINCT TRIM(productid) AS productid, SAFE_CAST(NULLIF(TRIM(Selling_Price),'') AS FLOAT64) AS selling_price FROM \`frido-429506.sharepoint_to_gcp.Frido_Item_Master__productid_sku_mapping\` WHERE TRIM(channelname) = 'Instamart'),
-item_master AS (SELECT DISTINCT TRIM(Product_Code) AS Product_Code, TRIM(Category_Name) AS Category, TRIM(Sub_category) AS SubCategory, TRIM(GST_Tax_Type_Code) AS GST_Tax_Type_Code FROM \`frido-429506.sharepoint_to_gcp.Frido_Item_Master__frido_item_sku_master\` WHERE TRIM(Product_Code) != ''),
-pincode_master AS (SELECT DISTINCT CAST(Pincode AS STRING) AS pincode, City_L1, City_L2, State, Region, City_Tier, Tier_Label, Is_Metro_City FROM \`frido-429506.production.pincode_city_master\`),
-city_name_master AS (SELECT DISTINCT City_L1, City_L2, State, Region, City_Tier, Tier_Label, Is_Metro_City FROM \`frido-429506.production.pincode_city_master\`),
-shopify_india AS (SELECT 'India' AS Country, order_name AS OrderId, 'Shopify' AS Channel, CASE WHEN source_name='Retail Store' THEN 'Retail Store' WHEN order_name LIKE '#MF%' THEN 'MyFrido' WHEN order_name LIKE '#FM%' THEN 'Mobility' ELSE source_name END AS SubChannel, CASE WHEN source_name='Retail Store' THEN 'Retail' WHEN order_name LIKE '#MF%' THEN 'MyFrido' WHEN order_name LIKE '#FM%' THEN 'Mobility' ELSE 'B2B' END AS ChannelAccount, order_date_ist AS OrderDate, shipping_state AS State, shipping_city AS City, CAST(shipping_pincode AS STRING) AS Pincode, sku AS ProductId, sku AS ChannelSKUCode, CAST(qty AS FLOAT64) AS ItemQty, CAST(final_total_incl_tax AS FLOAT64) AS SellingPrice_Inc_GST, CAST(selling_price_excl_shipping_tax AS FLOAT64) AS SellingPrice_Exc_GST, fulfillment_tracking_url AS OrderTrackingStatus, order_fulfillment_status AS FulfilmentStatus, financial_status AS FinancialStatus, CAST(item_gst_tax AS FLOAT64) AS Tax, CAST(NULL AS STRING) AS fulfillment_channel, CAST(is_refunded_line AS STRING) AS RefundStatus, gateway AS PaymentMode, customer_id AS CustomerId, voucher_code AS voucher_code FROM \`frido-429506.production.fact_shopify_myfrido_mobility_all_orders\` WHERE order_date_ist BETWEEN '${s}' AND '${e}'),
-shopify_international AS (SELECT 'International' AS Country, order_name AS OrderId, 'Shopify' AS Channel, 'International' AS SubChannel, CASE WHEN currency='AED' THEN 'UAE' WHEN currency='GBP' THEN 'UK' WHEN currency='USD' THEN 'US' ELSE currency END AS ChannelAccount, order_date AS OrderDate, shipping_state AS State, shipping_city AS City, CAST(shipping_pincode AS STRING) AS Pincode, sku AS ProductId, sku AS ChannelSKUCode, CAST(qty AS FLOAT64) AS ItemQty, CAST(final_total_incl_tax AS FLOAT64) AS SellingPrice_Inc_GST, CAST(selling_price_excl_shipping_tax AS FLOAT64) AS SellingPrice_Exc_GST, fulfillment_tracking_url AS OrderTrackingStatus, order_fulfillment_status AS FulfilmentStatus, financial_status AS FinancialStatus, CAST(item_gst_tax AS FLOAT64) AS Tax, CAST(NULL AS STRING) AS fulfillment_channel, CAST(is_refunded_line AS STRING) AS RefundStatus, gateway AS PaymentMode, customer_id AS CustomerId, voucher_code AS voucher_code FROM \`frido-429506.production.fact_shopify_international_orders\` WHERE order_date BETWEEN '${s}' AND '${e}'),
-amazon_seller_central AS (SELECT 'India' AS Country, amazon_order_id AS OrderId, 'Amazon' AS Channel, 'Amazon Seller Central' AS SubChannel, 'Seller Central' AS ChannelAccount, purchase_date_ist AS OrderDate, ship_state AS State, ship_city AS City, CAST(ship_postal_code AS STRING) AS Pincode, asin AS ProductId, sku AS ChannelSKUCode, CAST(quantity AS FLOAT64) AS ItemQty, CAST(item_price AS FLOAT64) AS SellingPrice_Inc_GST, CAST(item_price AS FLOAT64) - CAST(item_tax AS FLOAT64) AS SellingPrice_Exc_GST, CAST(NULL AS STRING) AS OrderTrackingStatus, item_status AS FulfilmentStatus, order_status AS FinancialStatus, CAST(item_tax AS FLOAT64) AS Tax, fulfillment_channel AS fulfillment_channel, CAST(NULL AS STRING) AS RefundStatus, CAST(NULL AS STRING) AS PaymentMode, CAST(NULL AS STRING) AS CustomerId, promotion_ids AS voucher_code FROM \`frido-429506.production.amazon_seller_central_all_orders\` WHERE purchase_date_ist BETWEEN '${s}' AND '${e}'),
-amazon_vendor_central AS (SELECT 'India' AS Country, CONCAT('AVC', LPAD(CAST(ROW_NUMBER() OVER (ORDER BY sales_date, asin) AS STRING), 6, '0')) AS OrderId, 'Amazon' AS Channel, 'Amazon Vendor Central' AS SubChannel, vendor_account AS ChannelAccount, sales_date AS OrderDate, CAST(NULL AS STRING) AS State, CAST(NULL AS STRING) AS City, CAST(NULL AS STRING) AS Pincode, asin AS ProductId, CAST(NULL AS STRING) AS ChannelSKUCode, CAST(orderedUnits AS FLOAT64) AS ItemQty, CAST(ordered_revenue AS FLOAT64) AS SellingPrice_Inc_GST, CAST(pa.selling_price AS FLOAT64) AS SellingPrice_Exc_GST, CAST(NULL AS STRING) AS OrderTrackingStatus, CAST(NULL AS STRING) AS FulfilmentStatus, CAST(NULL AS STRING) AS FinancialStatus, CAST(NULL AS FLOAT64) AS Tax, CAST(NULL AS STRING) AS fulfillment_channel, CAST(NULL AS STRING) AS RefundStatus, CAST(NULL AS STRING) AS PaymentMode, CAST(NULL AS STRING) AS CustomerId, CAST(NULL AS STRING) AS voucher_code FROM \`frido-429506.production.Amazon_Vendor_Central_sales_DateASIN_wise\` LEFT JOIN price_amazon pa ON TRIM(asin) = pa.productid WHERE sales_date BETWEEN '${s}' AND '${e}'),
-amazon_international AS (SELECT Country AS Country, amazon_order_id AS OrderId, 'Amazon' AS Channel, 'Amazon International' AS SubChannel, CASE WHEN UPPER(Country)='UK' THEN 'Amazon SC UK' WHEN UPPER(Country)='UAE' THEN 'Amazon SC UAE' ELSE Country END AS ChannelAccount, purchase_date_ist AS OrderDate, ship_state AS State, ship_city AS City, CAST(ship_postal_code AS STRING) AS Pincode, asin AS ProductId, sku AS ChannelSKUCode, CAST(quantity AS FLOAT64) AS ItemQty, CAST(item_price AS FLOAT64) AS SellingPrice_Inc_GST, CAST(NULL AS FLOAT64) AS SellingPrice_Exc_GST, CAST(NULL AS STRING) AS OrderTrackingStatus, item_status AS FulfilmentStatus, order_status AS FinancialStatus, CAST(item_tax AS FLOAT64) AS Tax, fulfillment_channel AS fulfillment_channel, CAST(NULL AS STRING) AS RefundStatus, CAST(NULL AS STRING) AS PaymentMode, CAST(NULL AS STRING) AS CustomerId, promotion_ids AS voucher_code FROM \`frido-429506.production.amazon_seller_central_uk_uae_all_orders\` WHERE purchase_date_ist BETWEEN '${s}' AND '${e}'),
-flipkart AS (SELECT 'India' AS Country, order_id AS OrderId, 'Flipkart' AS Channel, CASE WHEN UPPER(TRIM(fulfilment_type))='FBF' THEN 'Flipkart FBF' ELSE 'Flipkart NON-FBF' END AS SubChannel, 'Flipkart' AS ChannelAccount, DATE(SUBSTR(order_date,1,10)) AS OrderDate, customer_s_delivery_state AS State, CAST(NULL AS STRING) AS City, CAST(customer_s_delivery_pincode AS STRING) AS Pincode, TRIM(REPLACE(fsn,'"','')) AS ProductId, TRIM(REPLACE(REGEXP_REPLACE(sku,r'"{2,}SKU:-*"{0,}',''),'"','')) AS ChannelSKUCode, CAST(item_quantity AS FLOAT64) AS ItemQty, CAST(price_after_discount_price_before_discount_total_discountx AS FLOAT64) AS SellingPrice_Inc_GST, CAST(taxable_value_final_invoice_amount_taxesx AS FLOAT64) AS SellingPrice_Exc_GST, CAST(NULL AS STRING) AS OrderTrackingStatus, event_sub_type AS FulfilmentStatus, order_type AS FinancialStatus, CAST(igst_amount AS FLOAT64) AS Tax, fulfilment_type AS fulfillment_channel, event_type AS RefundStatus, CAST(NULL AS STRING) AS PaymentMode, CAST(NULL AS STRING) AS CustomerId, CAST(NULL AS STRING) AS voucher_code FROM \`frido-429506.flipkart_reports.sales_report\` WHERE DATE(SUBSTR(order_date,1,10)) BETWEEN '${s}' AND '${e}'),
-myntra AS (SELECT 'India' AS Country, store_order_id AS OrderId, 'Myntra' AS Channel, 'Myntra' AS SubChannel, 'Myntra' AS ChannelAccount, created_on AS OrderDate, state AS State, city AS City, CAST(zipcode AS STRING) AS Pincode, myntra_sku_code AS ProductId, seller_sku_code AS ChannelSKUCode, CAST(1 AS FLOAT64) AS ItemQty, CAST(final_amount AS FLOAT64) AS SellingPrice_Inc_GST, CAST(seller_price AS FLOAT64) AS SellingPrice_Exc_GST, order_tracking_number AS OrderTrackingStatus, order_status AS FulfilmentStatus, order_status AS FinancialStatus, CAST(tax_recovery AS FLOAT64) AS Tax, courier_code AS fulfillment_channel, CAST(return_creation_date AS STRING) AS RefundStatus, CAST(NULL AS STRING) AS PaymentMode, CAST(NULL AS STRING) AS CustomerId, CAST(NULL AS STRING) AS voucher_code FROM \`frido-429506.production.fact_myntra_orders_report\` WHERE created_on BETWEEN '${s}' AND '${e}'),
-cred AS (SELECT 'India' AS Country, DisplayOrderCode AS OrderId, 'CRED' AS Channel, 'CRED' AS SubChannel, ChannelName AS ChannelAccount, DATE(OrderDateasddmmyyyyhhMMss) AS OrderDate, ShippingAddressState AS State, ShippingAddressCity AS City, CAST(ShippingAddressPincode_in AS STRING) AS Pincode, ItemSKUCode AS ProductId, ItemSKUCode AS ChannelSKUCode, CAST(1 AS FLOAT64) AS ItemQty, CAST(COALESCE(NULLIF(TRIM(CAST(SellingPrice AS STRING)),''), NULLIF(TRIM(SellingPrice_st),''), '0') AS FLOAT64) AS SellingPrice_Inc_GST, CAST(Subtotal AS FLOAT64) AS SellingPrice_Exc_GST, TrackingNumber AS OrderTrackingStatus, ShippingPackageStatusCode AS FulfilmentStatus, SaleOrderStatus AS FinancialStatus, CAST(Tax AS FLOAT64) AS Tax, ShippingCourier AS fulfillment_channel, ReturnDate AS RefundStatus, PaymentInstrument AS PaymentMode, CAST(NULL AS STRING) AS CustomerId, VoucherCode AS voucher_code FROM \`frido-429506.production.Unicommerce_Sale_Orders_Report\` WHERE DATE(OrderDateasddmmyyyyhhMMss) BETWEEN '${s}' AND '${e}' AND LOWER(TRIM(ChannelName)) LIKE 'cred%' AND SaleOrderStatus != 'CANCELLED'),
-firstcry AS (SELECT 'India' AS Country, DisplayOrderCode AS OrderId, 'Firstcry' AS Channel, 'Firstcry' AS SubChannel, ChannelName AS ChannelAccount, DATE(OrderDateasddmmyyyyhhMMss) AS OrderDate, ShippingAddressState AS State, ShippingAddressCity AS City, CAST(ShippingAddressPincode_in AS STRING) AS Pincode, ItemSKUCode AS ProductId, ItemSKUCode AS ChannelSKUCode, CAST(1 AS FLOAT64) AS ItemQty, CAST(COALESCE(NULLIF(TRIM(CAST(SellingPrice AS STRING)),''), NULLIF(TRIM(SellingPrice_st),''), '0') AS FLOAT64) AS SellingPrice_Inc_GST, CAST(Subtotal AS FLOAT64) AS SellingPrice_Exc_GST, TrackingNumber AS OrderTrackingStatus, ShippingPackageStatusCode AS FulfilmentStatus, SaleOrderStatus AS FinancialStatus, CAST(Tax AS FLOAT64) AS Tax, ShippingCourier AS fulfillment_channel, ReturnDate AS RefundStatus, PaymentInstrument AS PaymentMode, CAST(NULL AS STRING) AS CustomerId, VoucherCode AS voucher_code FROM \`frido-429506.production.Unicommerce_Sale_Orders_Report\` WHERE DATE(OrderDateasddmmyyyyhhMMss) BETWEEN '${s}' AND '${e}' AND LOWER(TRIM(ChannelName)) LIKE 'firstcry%' AND SaleOrderStatus != 'CANCELLED'),
-pharmeasy AS (SELECT 'India' AS Country, DisplayOrderCode AS OrderId, 'Pharmeasy' AS Channel, 'Pharmeasy' AS SubChannel, ChannelName AS ChannelAccount, DATE(OrderDateasddmmyyyyhhMMss) AS OrderDate, ShippingAddressState AS State, ShippingAddressCity AS City, CAST(ShippingAddressPincode_in AS STRING) AS Pincode, ItemSKUCode AS ProductId, ItemSKUCode AS ChannelSKUCode, CAST(1 AS FLOAT64) AS ItemQty, CAST(COALESCE(NULLIF(TRIM(CAST(SellingPrice AS STRING)),''), NULLIF(TRIM(SellingPrice_st),''), '0') AS FLOAT64) AS SellingPrice_Inc_GST, CAST(Subtotal AS FLOAT64) AS SellingPrice_Exc_GST, TrackingNumber AS OrderTrackingStatus, ShippingPackageStatusCode AS FulfilmentStatus, SaleOrderStatus AS FinancialStatus, CAST(Tax AS FLOAT64) AS Tax, ShippingCourier AS fulfillment_channel, ReturnDate AS RefundStatus, PaymentInstrument AS PaymentMode, CAST(NULL AS STRING) AS CustomerId, VoucherCode AS voucher_code FROM \`frido-429506.production.Unicommerce_Sale_Orders_Report\` WHERE DATE(OrderDateasddmmyyyyhhMMss) BETWEEN '${s}' AND '${e}' AND LOWER(TRIM(ChannelName)) LIKE 'pharmeasy%' AND SaleOrderStatus != 'CANCELLED'),
-blinkit_raw AS (SELECT item_id, city_name, DATE(date) AS date, CAST(qty_sold AS FLOAT64) AS qty_sold, ROW_NUMBER() OVER (PARTITION BY item_id, city_id, date ORDER BY _dlt_load_id DESC) AS rn FROM \`frido-429506.partnerbizz_reports_v2.sales\` WHERE DATE(date) BETWEEN '${s}' AND '${e}'),
-blinkit AS (SELECT 'India' AS Country, CONCAT('BLI', LPAD(CAST(ROW_NUMBER() OVER (ORDER BY b.date, b.item_id) AS STRING), 6, '0')) AS OrderId, 'Blinkit' AS Channel, 'Blinkit' AS SubChannel, 'Blinkit' AS ChannelAccount, b.date AS OrderDate, CAST(NULL AS STRING) AS State, b.city_name AS City, CAST(NULL AS STRING) AS Pincode, b.item_id AS ProductId, b.item_id AS ChannelSKUCode, b.qty_sold AS ItemQty, CAST(NULL AS FLOAT64) AS SellingPrice_Inc_GST, SAFE_MULTIPLY(CAST(pb.selling_price AS FLOAT64), b.qty_sold) AS SellingPrice_Exc_GST, CAST(NULL AS STRING) AS OrderTrackingStatus, CAST(NULL AS STRING) AS FulfilmentStatus, CAST(NULL AS STRING) AS FinancialStatus, CAST(NULL AS FLOAT64) AS Tax, CAST(NULL AS STRING) AS fulfillment_channel, CAST(NULL AS STRING) AS RefundStatus, CAST(NULL AS STRING) AS PaymentMode, CAST(NULL AS STRING) AS CustomerId, CAST(NULL AS STRING) AS voucher_code FROM blinkit_raw b LEFT JOIN price_blinkit pb ON TRIM(b.item_id) = pb.productid WHERE b.rn = 1),
-zepto AS (SELECT 'India' AS Country, CONCAT('ZEP', LPAD(CAST(ROW_NUMBER() OVER (ORDER BY date, sku_number) AS STRING), 6, '0')) AS OrderId, 'Zepto' AS Channel, 'Zepto' AS SubChannel, 'Zepto' AS ChannelAccount, date AS OrderDate, CAST(NULL AS STRING) AS State, city AS City, CAST(NULL AS STRING) AS Pincode, sku_number AS ProductId, sku_number AS ChannelSKUCode, CAST(sales_qty_units AS FLOAT64) AS ItemQty, CAST(NULL AS FLOAT64) AS SellingPrice_Inc_GST, CAST(gross_selling_value AS FLOAT64) AS SellingPrice_Exc_GST, CAST(NULL AS STRING) AS OrderTrackingStatus, CAST(NULL AS STRING) AS FulfilmentStatus, CAST(NULL AS STRING) AS FinancialStatus, CAST(NULL AS FLOAT64) AS Tax, CAST(NULL AS STRING) AS fulfillment_channel, CAST(NULL AS STRING) AS RefundStatus, CAST(NULL AS STRING) AS PaymentMode, CAST(NULL AS STRING) AS CustomerId, CAST(NULL AS STRING) AS voucher_code FROM \`frido-429506.production.zepto_sales_report\` LEFT JOIN price_zepto pz ON TRIM(sku_number) = pz.productid WHERE date BETWEEN '${s}' AND '${e}'),
-instamart AS (SELECT 'India' AS Country, CONCAT('INS', LPAD(CAST(ROW_NUMBER() OVER (ORDER BY ordered_date, item_code) AS STRING), 6, '0')) AS OrderId, 'Instamart' AS Channel, 'Instamart' AS SubChannel, 'Instamart' AS ChannelAccount, DATE(ordered_date) AS OrderDate, CAST(NULL AS STRING) AS State, city AS City, CAST(NULL AS STRING) AS Pincode, item_code AS ProductId, item_code AS ChannelSKUCode, CAST(units_sold AS FLOAT64) AS ItemQty, CAST(NULL AS FLOAT64) AS SellingPrice_Inc_GST, SAFE_MULTIPLY(CAST(pi.selling_price AS FLOAT64), CAST(units_sold AS FLOAT64)) AS SellingPrice_Exc_GST, CAST(NULL AS STRING) AS OrderTrackingStatus, CAST(NULL AS STRING) AS FulfilmentStatus, CAST(NULL AS STRING) AS FinancialStatus, CAST(NULL AS FLOAT64) AS Tax, CAST(NULL AS STRING) AS fulfillment_channel, CAST(NULL AS STRING) AS RefundStatus, CAST(NULL AS STRING) AS PaymentMode, CAST(NULL AS STRING) AS CustomerId, CAST(NULL AS STRING) AS voucher_code FROM \`frido-429506.production.fact_instamart_sales_report\` LEFT JOIN price_instamart pi ON TRIM(item_code) = pi.productid WHERE DATE(ordered_date) BETWEEN '${s}' AND '${e}'),
-offline_MTGT AS (SELECT 'India' AS Country, Voucher_No_ AS OrderId, 'offline_sales' AS Channel, 'MTGT' AS SubChannel, 'MTGT' AS ChannelAccount, PARSE_DATE('%Y-%m-%d', SUBSTR(Date, 1, 10)) AS OrderDate, State AS State, City AS City, CAST(Pincode AS STRING) AS Pincode, Particulars AS ProductId, Particulars AS ChannelSKUCode, CAST(COALESCE(Alt__Units, Quantity) AS FLOAT64) AS ItemQty, CAST(NULL AS FLOAT64) AS SellingPrice_Inc_GST, CAST(Value AS FLOAT64) AS SellingPrice_Exc_GST, CAST(NULL AS STRING) AS OrderTrackingStatus, CAST(NULL AS STRING) AS FulfilmentStatus, Voucher_Type AS FinancialStatus, CAST(NULL AS FLOAT64) AS Tax, CAST(NULL AS STRING) AS fulfillment_channel, CAST(NULL AS STRING) AS RefundStatus, 'Offline' AS PaymentMode, CAST(NULL AS STRING) AS CustomerId, CAST(NULL AS STRING) AS voucher_code FROM \`frido-429506.offline_sales.MTGT\` WHERE PARSE_DATE('%Y-%m-%d', SUBSTR(Date, 1, 10)) BETWEEN '${s}' AND '${e}'),
-offline_B2B AS (SELECT 'India' AS Country, Voucher_No_ AS OrderId, 'offline_sales' AS Channel, 'Offline_B2B' AS SubChannel, 'Offline_B2B' AS ChannelAccount, PARSE_DATE('%Y-%m-%d', SUBSTR(Date, 1, 10)) AS OrderDate, State AS State, City AS City, CAST(Pincode AS STRING) AS Pincode, Particulars AS ProductId, Particulars AS ChannelSKUCode, CAST(COALESCE(Alt__Units, Quantity) AS FLOAT64) AS ItemQty, CAST(NULL AS FLOAT64) AS SellingPrice_Inc_GST, CAST(Value AS FLOAT64) AS SellingPrice_Exc_GST, CAST(NULL AS STRING) AS OrderTrackingStatus, CAST(NULL AS STRING) AS FulfilmentStatus, Voucher_Type AS FinancialStatus, CAST(NULL AS FLOAT64) AS Tax, CAST(NULL AS STRING) AS fulfillment_channel, CAST(NULL AS STRING) AS RefundStatus, 'Offline' AS PaymentMode, CAST(NULL AS STRING) AS CustomerId, CAST(NULL AS STRING) AS voucher_code FROM \`frido-429506.offline_sales.Offline_B2B\` WHERE PARSE_DATE('%Y-%m-%d', SUBSTR(Date, 1, 10)) BETWEEN '${s}' AND '${e}'),
-offline_Stockist AS (SELECT 'India' AS Country, Voucher_No_ AS OrderId, 'offline_sales' AS Channel, 'Stockist' AS SubChannel, 'Stockist' AS ChannelAccount, PARSE_DATE('%Y-%m-%d', SUBSTR(Date, 1, 10)) AS OrderDate, State AS State, City AS City, CAST(Pincode AS STRING) AS Pincode, Particulars AS ProductId, Particulars AS ChannelSKUCode, CAST(COALESCE(Alt__Units, Quantity) AS FLOAT64) AS ItemQty, CAST(NULL AS FLOAT64) AS SellingPrice_Inc_GST, CAST(Value AS FLOAT64) AS SellingPrice_Exc_GST, CAST(NULL AS STRING) AS OrderTrackingStatus, CAST(NULL AS STRING) AS FulfilmentStatus, Voucher_Type AS FinancialStatus, CAST(NULL AS FLOAT64) AS Tax, CAST(NULL AS STRING) AS fulfillment_channel, CAST(NULL AS STRING) AS RefundStatus, 'Offline' AS PaymentMode, CAST(NULL AS STRING) AS CustomerId, CAST(NULL AS STRING) AS voucher_code FROM \`frido-429506.offline_sales.Stockist\` WHERE PARSE_DATE('%Y-%m-%d', SUBSTR(Date, 1, 10)) BETWEEN '${s}' AND '${e}'),
-unicommerce_status_map AS (SELECT TRIM(DisplayOrderCode) AS order_id, CASE WHEN UPPER(ShippingPackageStatusCode)='DELIVERED' THEN ShippingPackageStatusCode WHEN UPPER(ShippingPackageStatusCode) IN ('RETURNED','RETURN_EXPECTED','RETURN_ACKNOWLEDGED') THEN ShippingPackageStatusCode WHEN UPPER(SaleOrderItemStatus)='CANCELLED' THEN SaleOrderItemStatus WHEN UPPER(SaleOrderItemStatus)='DISPATCHED' THEN SaleOrderItemStatus ELSE NULL END AS unicommerce_status, COALESCE(CAST(DeliveryTime_dtm AS STRING), CAST(DeliveryTime AS STRING)) AS delivered_date_uni, COALESCE(CAST(DispatchDate_dtm AS STRING), CAST(DispatchDate AS STRING)) AS dispatch_date_uni FROM (SELECT *, ROW_NUMBER() OVER (PARTITION BY DisplayOrderCode ORDER BY Updated DESC) AS rn FROM \`frido-429506.production.Unicommerce_Sale_Orders_Report\` WHERE DisplayOrderCode IS NOT NULL) WHERE rn = 1),
-clickpost_status_map AS (SELECT TRIM(order_id) AS order_id, clickpost_unified_status, delivery_date, out_for_pickup_1st_attempt FROM (SELECT *, ROW_NUMBER() OVER (PARTITION BY order_id ORDER BY updated_at DESC) AS rn FROM \`frido-429506.production.Clickpost_Shipment_Tracking_Report\` WHERE order_id IS NOT NULL AND LOWER(TRIM(shipment_type))='forward') WHERE rn = 1),
-cancelled_orders AS (SELECT TRIM(DisplayOrderCode) AS order_id, 1 AS is_cancelled FROM (SELECT *, ROW_NUMBER() OVER (PARTITION BY DisplayOrderCode ORDER BY Updated DESC) AS rn FROM \`frido-429506.production.Unicommerce_Sale_Orders_Report\` WHERE DisplayOrderCode IS NOT NULL AND SaleOrderItemStatus='CANCELLED') WHERE rn = 1),
-rto_shipments AS (SELECT TRIM(order_id) AS order_id, 1 AS is_rto FROM (SELECT *, ROW_NUMBER() OVER (PARTITION BY order_id ORDER BY updated_at DESC) AS rn FROM \`frido-429506.production.Clickpost_Shipment_Tracking_Report\` WHERE order_id IS NOT NULL AND (UPPER(clickpost_unified_status) LIKE 'RTO%' OR rto_mark_date IS NOT NULL)) WHERE rn = 1),
-cir_returns AS (SELECT TRIM(forward_order_id) AS order_id, 1 AS is_cir_return, CASE WHEN UPPER(TRIM(Return_Type))='EXCHANGE' THEN 1 ELSE 0 END AS is_exchange FROM (SELECT *, ROW_NUMBER() OVER (PARTITION BY forward_order_id ORDER BY request_created_on DESC) AS rn FROM \`frido-429506.production.Clickpost_Returns_Exchange_Report\` WHERE forward_order_id IS NOT NULL) WHERE rn = 1),
-unified AS (SELECT * FROM shopify_india UNION ALL SELECT * FROM shopify_international UNION ALL SELECT * FROM amazon_seller_central UNION ALL SELECT * FROM amazon_vendor_central UNION ALL SELECT * FROM amazon_international UNION ALL SELECT * FROM flipkart UNION ALL SELECT * FROM myntra UNION ALL SELECT * FROM cred UNION ALL SELECT * FROM firstcry UNION ALL SELECT * FROM pharmeasy UNION ALL SELECT * FROM blinkit UNION ALL SELECT * FROM zepto UNION ALL SELECT * FROM instamart UNION ALL SELECT * FROM offline_MTGT UNION ALL SELECT * FROM offline_B2B UNION ALL SELECT * FROM offline_Stockist)
-SELECT u.Country, u.OrderId, u.Channel, u.SubChannel, u.ChannelAccount, u.OrderDate,
+pincode_master AS (
+  SELECT DISTINCT CAST(Pincode AS STRING) AS pincode, City_L1, City_L2, State, Region, City_Tier, Tier_Label, Is_Metro_City
+  FROM \`frido-429506.production.pincode_city_master\`
+),
+city_name_master AS (
+  SELECT DISTINCT City_L1, City_L2, State, Region, City_Tier, Tier_Label, Is_Metro_City
+  FROM \`frido-429506.production.pincode_city_master\`
+)
+SELECT
+  u.Country, u.OrderId, u.Channel, u.SubChannel, u.ChannelAccount, u.OrderDate,
   COALESCE(pm.State, cm.State, u.State) AS State,
   COALESCE(pm.City_L1, cm.City_L1, u.City) AS City,
   COALESCE(pm.City_L2, cm.City_L2) AS City_L2,
@@ -118,54 +108,25 @@ SELECT u.Country, u.OrderId, u.Channel, u.SubChannel, u.ChannelAccount, u.OrderD
   COALESCE(pm.City_Tier, cm.City_Tier) AS City_Tier,
   COALESCE(pm.Tier_Label, cm.Tier_Label) AS Tier_Label,
   COALESCE(pm.Is_Metro_City, cm.Is_Metro_City, FALSE) AS Is_Metro_City,
-  u.ProductId, u.ChannelSKUCode, u.ItemQty,
-  CASE
-    WHEN u.Channel IN ('Blinkit','Zepto','Instamart','offline_sales') AND u.SellingPrice_Exc_GST IS NOT NULL AND SAFE_CAST(im.GST_Tax_Type_Code AS FLOAT64) IS NOT NULL
-      THEN u.SellingPrice_Exc_GST * (1 + SAFE_CAST(im.GST_Tax_Type_Code AS FLOAT64) / 100)
-    WHEN u.Channel IN ('Blinkit','Zepto','Instamart','offline_sales') AND u.SellingPrice_Exc_GST IS NOT NULL
-      THEN u.SellingPrice_Exc_GST * 1.18
-    WHEN u.SubChannel = 'Amazon Vendor Central' AND u.SellingPrice_Exc_GST IS NOT NULL AND u.SellingPrice_Exc_GST > 0 AND SAFE_CAST(im.GST_Tax_Type_Code AS FLOAT64) IS NOT NULL
-      THEN u.SellingPrice_Exc_GST * (1 + SAFE_CAST(im.GST_Tax_Type_Code AS FLOAT64) / 100)
-    ELSE u.SellingPrice_Inc_GST
-  END AS SellingPrice_Inc_GST,
-  CASE
-    WHEN u.Channel IN ('Blinkit','Zepto','Instamart','offline_sales') AND u.SellingPrice_Exc_GST IS NOT NULL THEN u.SellingPrice_Exc_GST
-    WHEN u.SubChannel = 'Amazon Vendor Central' AND u.SellingPrice_Exc_GST IS NOT NULL AND u.SellingPrice_Exc_GST > 0 THEN u.SellingPrice_Exc_GST
-    WHEN SAFE_CAST(im.GST_Tax_Type_Code AS FLOAT64) IS NOT NULL THEN u.SellingPrice_Inc_GST / (1 + SAFE_CAST(im.GST_Tax_Type_Code AS FLOAT64) / 100)
-    WHEN u.SellingPrice_Exc_GST IS NOT NULL AND u.SellingPrice_Exc_GST != 0 THEN u.SellingPrice_Exc_GST
-    ELSE u.SellingPrice_Inc_GST / 1.18
-  END AS SellingPrice_Exc_GST,
+  u.ProductId, u.ChannelSKUCode,
+  CAST(u.ItemQty AS FLOAT64) AS ItemQty,
+  u.SellingPrice_Inc_GST,
+  u.SellingPrice_Exc_GST,
   u.OrderTrackingStatus, u.FulfilmentStatus, u.FinancialStatus,
-  CASE
-    WHEN u.Channel IN ('Blinkit','Zepto','Instamart','offline_sales') AND u.SellingPrice_Exc_GST IS NOT NULL AND SAFE_CAST(im.GST_Tax_Type_Code AS FLOAT64) IS NOT NULL
-      THEN CAST(u.SellingPrice_Exc_GST * SAFE_CAST(im.GST_Tax_Type_Code AS FLOAT64) / 100 AS STRING)
-    WHEN u.SubChannel = 'Amazon Vendor Central' AND u.SellingPrice_Exc_GST IS NOT NULL AND u.SellingPrice_Exc_GST > 0 AND SAFE_CAST(im.GST_Tax_Type_Code AS FLOAT64) IS NOT NULL
-      THEN CAST(u.SellingPrice_Exc_GST * SAFE_CAST(im.GST_Tax_Type_Code AS FLOAT64) / 100 AS STRING)
-    WHEN SAFE_CAST(im.GST_Tax_Type_Code AS FLOAT64) IS NOT NULL THEN CAST(u.SellingPrice_Inc_GST - (u.SellingPrice_Inc_GST / (1 + SAFE_CAST(im.GST_Tax_Type_Code AS FLOAT64) / 100)) AS STRING)
-    ELSE 'Not Found'
-  END AS Tax,
-  u.fulfillment_channel, u.RefundStatus, u.PaymentMode, u.CustomerId, u.voucher_code,
-  COALESCE(im.Category, 'Frido') AS Category, COALESCE(im.SubCategory, 'Frido') AS SubCategory, COALESCE(im.GST_Tax_Type_Code, 'Not Found') AS GST_Tax_Type_Code,
-  sm.masterskucode AS MasterSKU,
-  CASE WHEN u.Channel='Shopify' THEN COALESCE(cr.is_cir_return, 0) ELSE NULL END AS is_CIR_return,
-  CASE WHEN u.Channel='Shopify' THEN COALESCE(cr.is_exchange, 0) ELSE NULL END AS is_exchange,
-  CASE WHEN u.Channel='Shopify' THEN COALESCE(rto.is_rto, 0) ELSE NULL END AS is_rto,
-  CASE WHEN u.Channel='Shopify' THEN COALESCE(co.is_cancelled, 0) ELSE NULL END AS is_cancelled,
-  cs.clickpost_unified_status AS Clickpost_Status, us.unicommerce_status AS Unicommerce_Status,
-  CASE WHEN u.Channel='offline_sales' AND LOWER(u.FinancialStatus) LIKE '%credit%' THEN 'Credit Note' WHEN u.Channel='offline_sales' THEN 'Sales' WHEN UPPER(cs.clickpost_unified_status) LIKE 'RTO%' THEN 'RTO' WHEN UPPER(us.unicommerce_status) IN ('RETURNED','RETURN_EXPECTED','RETURN_ACKNOWLEDGED') THEN 'RTO' WHEN UPPER(us.unicommerce_status)='DELIVERED' THEN 'Delivered' WHEN UPPER(cs.clickpost_unified_status) LIKE '%DELIVERED%' THEN 'Delivered' WHEN UPPER(us.unicommerce_status)='CANCELLED' THEN 'Cancelled' WHEN UPPER(cs.clickpost_unified_status) LIKE '%CANCELLED%' THEN 'Cancelled' WHEN UPPER(us.unicommerce_status)='DISPATCHED' THEN 'Dispatched' WHEN UPPER(cs.clickpost_unified_status) LIKE '%DISPATCHED%' THEN 'Dispatched' ELSE NULL END AS Order_Status,
-  COALESCE(CAST(us.dispatch_date_uni AS STRING), CAST(cs.out_for_pickup_1st_attempt AS STRING)) AS Dispatch_Date,
-  COALESCE(CAST(us.delivered_date_uni AS STRING), CAST(cs.delivery_date AS STRING)) AS Delivered_Date
-FROM unified u
-LEFT JOIN sku_mapping sm ON TRIM(u.ProductId) = sm.productid
-LEFT JOIN item_master im ON COALESCE(sm.masterskucode, TRIM(u.ProductId)) = im.Product_Code
+  u.Tax,
+  u.fulfillment_channel, u.RefundStatus,
+  u.payment_type AS PaymentMode,
+  u.CustomerId, u.voucher_code,
+  u.Category, u.SubCategory, u.GST_Tax_Type_Code,
+  u.masterskucode AS MasterSKU,
+  u.is_CIR_return, u.is_exchange, u.is_rto, u.is_cancelled, u.is_refund,
+  u.Clickpost_Status, u.Unicommerce_Status, u.Order_Status,
+  u.Dispatch_Date, u.Delivered_Date
+FROM \`frido-429506.production.fact_all_platform_sales_report\` u
 LEFT JOIN pincode_master pm ON u.Pincode IS NOT NULL AND TRIM(CAST(u.Pincode AS STRING)) = pm.pincode
 LEFT JOIN city_name_master cm ON pm.pincode IS NULL AND u.Channel IN ('Blinkit','Zepto','Instamart') AND cm.City_L1 = CASE UPPER(TRIM(u.City)) WHEN 'BANGALORE' THEN 'Bengaluru' WHEN 'GURGAON' THEN 'Gurugram' WHEN 'DELHI' THEN 'New Delhi' WHEN 'SAS NAGAR' THEN 'Mohali' ELSE INITCAP(TRIM(u.City)) END
-LEFT JOIN cir_returns cr ON TRIM(u.OrderId) = cr.order_id
-LEFT JOIN rto_shipments rto ON TRIM(u.OrderId) = rto.order_id
-LEFT JOIN cancelled_orders co ON TRIM(u.OrderId) = co.order_id
-LEFT JOIN unicommerce_status_map us ON TRIM(u.OrderId) = us.order_id
-LEFT JOIN clickpost_status_map cs ON TRIM(u.OrderId) = cs.order_id
-${whereClause}ORDER BY u.OrderDate DESC`
+WHERE u.OrderDate BETWEEN '${s}' AND '${e}' ${whereClause}
+ORDER BY u.OrderDate DESC`
 }
 
 const unwrap = v => {
