@@ -2043,12 +2043,23 @@ function ShopifyTab({ data, filters, setFilters }) {
 
   // Use Shopify-specific rev from chMap, not all-channels totalRev
   const shCh = data.chMap?.['Shopify'] || {}
-  const totalRev = shCh.rev || 0
-  const totalExcRev = shCh.excRev || data.totalExcRev || 0
+  const totalRev = shCh.rev || 0                          // Gross Revenue (Inc. GST), all Shopify orders
+  const totalExcRevRaw = shCh.excRev || data.totalExcRev || 0  // Net of GST only (used to derive effective GST rate)
   const totalQty = shCh.qty || data.totalQty || 0
-  const gst = totalRev - totalExcRev
+  // Subtract Cancelled + RTO + CIR revenue from Gross, then strip GST → final Net Revenue
+  const cancelledRev = data.orderStatusRevMap?.['Cancelled'] || 0
+  const rtoRev = data.orderStatusRevMap?.['RTO'] || 0
+  const cirRev = data.cirRev || 0
+  const grossAfterReturns = totalRev - cancelledRev - rtoRev - cirRev
+  // Use the effective GST ratio observed across all Shopify orders to strip GST from the trimmed total
+  const gstRatio = totalRev > 0 ? (totalRev - totalExcRevRaw) / totalRev : 0
+  const netRev = grossAfterReturns * (1 - gstRatio)
+  const gst = grossAfterReturns - netRev
+  // Keep `totalExcRev` available as alias for backward-compat; it now equals true Net Revenue
+  const totalExcRev = netRev
+
   const prevRev = sh.prevRev || 0
-  const prevExcRev = sh.prevExcRev || 0
+  const prevExcRevRaw = sh.prevExcRev || 0
   const prevOrders = sh.prevOrders || 0
   const prevUnits = sh.prevUnits || 0
   const prevRtoOrders = sh.prevRtoOrders || 0
@@ -2056,11 +2067,17 @@ function ShopifyTab({ data, filters, setFilters }) {
   const prevExchangeOrders = sh.prevExchangeOrders || 0
   const prevCancelledOrders = sh.prevCancelledOrders || 0
   const prevDailyArr = sh.prevDaily || []
+  // Apply the same shrink ratio to previous period for an apples-to-apples Net Revenue change
+  const prevReturnsShrink = totalRev > 0 ? (cancelledRev + rtoRev + cirRev) / totalRev : 0
+  const prevGrossAfterReturns = prevRev * (1 - prevReturnsShrink)
+  const prevGstRatio = prevRev > 0 ? (prevRev - prevExcRevRaw) / prevRev : gstRatio
+  const prevNetRev = prevGrossAfterReturns * (1 - prevGstRatio)
+  const prevExcRev = prevNetRev  // alias for backward-compat
 
   const shRevChg = prevRev > 0 ? ((totalRev - prevRev) / prevRev * 100) : null
   const shNOrders = shCh.orders || 0
   const shOrdChg = prevOrders > 0 ? ((shNOrders - prevOrders) / prevOrders * 100) : null
-  const shExcChg = prevExcRev > 0 ? ((totalExcRev - prevExcRev) / prevExcRev * 100) : null
+  const shExcChg = prevNetRev > 0 ? ((netRev - prevNetRev) / prevNetRev * 100) : null
   const shChgBadge = (cur, prev) => {
     if (!prev) return null
     const p = (cur - prev) / prev * 100
@@ -2252,17 +2269,18 @@ function ShopifyTab({ data, filters, setFilters }) {
           const cirPct = shNOrders ? (cirOrders / shNOrders * 100) : 0
           const exchangePct = shNOrders ? (exchangeOrders / shNOrders * 100) : 0
           const excChg = prevExcRev > 0 ? ((totalExcRev - prevExcRev) / prevExcRev * 100) : null
+          const prevGst = prevGrossAfterReturns - prevNetRev
           const row1 = [
             {
               label: 'Net Revenue',
-              value: fmt(totalExcRev),
-              sub: null,
+              value: fmt(netRev),
+              sub: 'Gross − Cancel − RTO − CIR − GST',
               badge: excChg !== null ? <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 4, background: excChg >= 0 ? C.green.bg : C.red.bg, color: excChg >= 0 ? C.green.tx : C.red.tx, flexShrink: 0 }}>{excChg >= 0 ? '▲' : '▼'} {Math.abs(excChg).toFixed(1)}%</span> : null,
             },
-            { label: 'GST Collected', value: fmt(gst), sub: totalRev > 0 ? `${((gst / totalRev) * 100).toFixed(1)}% of gross` : '—', badge: shChgBadge(gst, prevRev - prevExcRev) },
+            { label: 'GST Collected', value: fmt(gst), sub: grossAfterReturns > 0 ? `${((gst / grossAfterReturns) * 100).toFixed(1)}% of net sales` : '—', badge: shChgBadge(gst, prevGst) },
             { label: 'Daily Avg', value: fmt(dailyAvg), sub: `over ${nDays} days`, badge: shChgBadge(dailyAvg, prevRev > 0 ? prevRev / nDays : 0) },
             { label: 'AOV', value: `₹${Math.round(aov).toLocaleString('en-IN')}`, sub: 'Gross rev ÷ orders', badge: shChgBadge(aov, prevOrders > 0 ? prevRev / prevOrders : 0) },
-            { label: 'ASP', value: `₹${Math.round(asp).toLocaleString('en-IN')}`, sub: 'Net rev ÷ units sold', badge: shChgBadge(asp, prevUnits > 0 ? prevExcRev / prevUnits : 0) },
+            { label: 'ASP', value: `₹${Math.round(asp).toLocaleString('en-IN')}`, sub: 'Net rev ÷ units sold', badge: shChgBadge(asp, prevUnits > 0 ? prevNetRev / prevUnits : 0) },
           ]
           const prevCancelPct = prevOrders > 0 ? prevCancelledOrders / prevOrders * 100 : 0
           const prevCirPct = prevOrders > 0 ? prevCirOrders / prevOrders * 100 : 0
@@ -2310,10 +2328,13 @@ function ShopifyTab({ data, filters, setFilters }) {
         {(() => {
           const returnTrendMap = {}
           ;(data.dailyReturnTrend || []).forEach(x => { returnTrendMap[x.date] = x })
+          // Net Revenue line: apply the same period-level shrink as the KPI
+          // (Gross − Cancel − RTO − CIR, then strip GST)
+          const netShrinkFactor = totalRev > 0 ? (grossAfterReturns / totalRev) * (1 - gstRatio) : (1 - gstRatio)
           const rawDaily = (dailyArr || []).map(d => {
             const grossRev = d['Shopify'] || 0
             const rt = returnTrendMap[d.date] || {}
-            return { date: d.date, grossRev, netRev: grossRev > 0 ? grossRev / 1.12 : 0, rtoPct: rt.rtoPct || 0, exchPct: rt.exchPct || 0, cirPct: rt.cirPct || 0 }
+            return { date: d.date, grossRev, netRev: grossRev > 0 ? grossRev * netShrinkFactor : 0, rtoPct: rt.rtoPct || 0, exchPct: rt.exchPct || 0, cirPct: rt.cirPct || 0 }
           }).filter(d => d.grossRev > 0)
 
           const grouped = (() => {
