@@ -1287,8 +1287,7 @@ function FinancialCategoryMatrix({ catData, subCatData, skuData, title, showRetu
           <thead style={{ position: 'sticky', top: 0, background: C.card, zIndex: 1 }}>
             <tr>
               <th style={{ textAlign: 'left', padding: '3px 5px 7px', borderBottom: `1px solid ${C.border}`, color: C.t3, fontSize: 9.5, fontWeight: 700, textTransform: 'uppercase' }}>Category</th>
-              <th style={{ ...colHdr, color: grossColor }}>Gross Rev</th>
-              {showShare && <th style={{ ...colHdr, color: C.t3 }}>% Share</th>}
+              <th style={{ ...colHdr, color: grossColor }}>Gross Rev{showShare ? ' / Share' : ''}</th>
               <th style={{ ...colHdr, color: C.t2 }}>Units</th>
               <th style={{ ...colHdr, color: C.t3 }}>ASP</th>
               <th style={{ ...colHdr, color: C.t2 }}>GST</th>
@@ -1316,8 +1315,7 @@ function FinancialCategoryMatrix({ catData, subCatData, skuData, title, showRetu
                         {row.cat}
                       </span>
                     </td>
-                    <td style={{ ...cell(), color: grossColor, fontWeight: 600 }}>{fmt(row.gross)}</td>
-                    {showShare && <td style={{ ...cell(), color: C.t3 }}>{tot.gross > 0 ? (row.gross / tot.gross * 100).toFixed(1) : '0.0'}%</td>}
+                    <td style={{ ...cell(), color: grossColor, fontWeight: 600 }}>{fmt(row.gross)}{showShare && tot.gross > 0 ? <span style={{ fontSize: 9.5, color: C.t3, marginLeft: 6, fontWeight: 400 }}>({(row.gross / tot.gross * 100).toFixed(1)}%)</span> : null}</td>
                     <td style={{ ...cell(), color: C.t2 }}>{fmtN(row.units)}</td>
                     <td style={{ ...cell(), color: C.t3 }}>₹{(row.units > 0 ? Math.round(row.gross / row.units) : 0).toLocaleString('en-IN')}</td>
                     <td style={{ ...cell(), color: C.t2 }}>{fmt(row.gst)}</td>
@@ -1344,8 +1342,7 @@ function FinancialCategoryMatrix({ catData, subCatData, skuData, title, showRetu
                               └ {sr.sc}
                             </span>
                           </td>
-                          <td style={{ ...cell(10.5), color: grossColor }}>{fmt(sr.gross)}</td>
-                          {showShare && <td style={{ ...cell(10.5), color: C.t3 }}>{tot.gross > 0 ? (sr.gross / tot.gross * 100).toFixed(1) : '0.0'}%</td>}
+                          <td style={{ ...cell(10.5), color: grossColor }}>{fmt(sr.gross)}{showShare && tot.gross > 0 ? <span style={{ fontSize: 9, color: C.t3, marginLeft: 5 }}>({(sr.gross / tot.gross * 100).toFixed(1)}%)</span> : null}</td>
                           <td style={{ ...cell(10.5), color: C.t2 }}>{fmtN(sr.units)}</td>
                           <td style={{ ...cell(10.5), color: C.t3 }}>₹{(sr.units > 0 ? Math.round(sr.gross / sr.units) : 0).toLocaleString('en-IN')}</td>
                           <td style={{ ...cell(10.5), color: C.t2 }}>{fmt(sr.gst)}</td>
@@ -1361,8 +1358,7 @@ function FinancialCategoryMatrix({ catData, subCatData, skuData, title, showRetu
                         {scOpen && skus.map(sk => (
                           <tr key={sk.sku} style={{ borderBottom: `1px solid ${C.border}`, background: '#F5F5F0' }}>
                             <td style={{ padding: '3px 5px 3px 36px', color: C.t3, fontSize: 10, fontFamily: 'var(--mono)' }}>└ {sk.sku}</td>
-                            <td style={{ ...cell(10), color: grossColor }}>{fmt(sk.gross)}</td>
-                            {showShare && <td style={{ ...cell(10), color: C.t3 }}>{tot.gross > 0 ? (sk.gross / tot.gross * 100).toFixed(1) : '0.0'}%</td>}
+                            <td style={{ ...cell(10), color: grossColor }}>{fmt(sk.gross)}{showShare && tot.gross > 0 ? <span style={{ fontSize: 8.5, color: C.t3, marginLeft: 5 }}>({(sk.gross / tot.gross * 100).toFixed(1)}%)</span> : null}</td>
                             <td style={{ ...cell(10), color: C.t2 }}>{fmtN(sk.units)}</td>
                             <td style={{ ...cell(10), color: C.t3 }}>₹{(sk.units > 0 ? Math.round(sk.gross / sk.units) : 0).toLocaleString('en-IN')}</td>
                             <td style={{ ...cell(10), color: C.t2 }}>{fmt(sk.gst)}</td>
@@ -1386,8 +1382,7 @@ function FinancialCategoryMatrix({ catData, subCatData, skuData, title, showRetu
           <tfoot>
             <tr style={{ borderTop: `2px solid ${C.border}`, background: C.bg }}>
               <td style={{ padding: '6px 8px', fontSize: 11, fontWeight: 700, color: C.t1 }}>Total</td>
-              <td style={{ padding: '5px 5px', textAlign: 'right', fontWeight: 700, fontFamily: 'var(--mono)', fontSize: 11.5, color: grossColor }}>{fmt(tot.gross)}</td>
-              {showShare && <td style={{ padding: '5px 5px', textAlign: 'right', fontWeight: 700, fontFamily: 'var(--mono)', fontSize: 11.5, color: C.t3 }}>100.0%</td>}
+              <td style={{ padding: '5px 5px', textAlign: 'right', fontWeight: 700, fontFamily: 'var(--mono)', fontSize: 11.5, color: grossColor }}>{fmt(tot.gross)}{showShare ? <span style={{ fontSize: 9.5, color: C.t3, marginLeft: 6, fontWeight: 400 }}>(100%)</span> : null}</td>
               <td style={{ padding: '5px 5px', textAlign: 'right', fontWeight: 700, fontFamily: 'var(--mono)', fontSize: 11.5, color: C.t2 }}>{fmtN(tot.units)}</td>
               <td style={{ padding: '5px 5px', textAlign: 'right', fontWeight: 700, fontFamily: 'var(--mono)', fontSize: 11.5, color: C.t3 }}>₹{tot.units > 0 ? Math.round(tot.gross / tot.units).toLocaleString('en-IN') : '—'}</td>
               <td style={{ padding: '5px 5px', textAlign: 'right', fontWeight: 700, fontFamily: 'var(--mono)', fontSize: 11.5, color: C.t2 }}>{fmt(tot.gst)}</td>
