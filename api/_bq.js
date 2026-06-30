@@ -46,10 +46,16 @@ export function buildQuery(s, e, filters = {}) {
   }
   if (city) whereClauses.push(`COALESCE(pm.City_L1, cm.City_L1, u.City) = '${city.replace(/'/g, "''")}'`)
   if (tier) {
-    const TIER_MAP = { 'Tier I': 1, 'Tier II': 2, 'Tier III': 3 }
-    const nums = tier.split(',').map(t => TIER_MAP[t.trim()] || parseInt(t.trim())).filter(Boolean)
-    if (nums.length === 1) whereClauses.push(`CAST(COALESCE(pm.City_Tier, cm.City_Tier) AS STRING) = '${nums[0]}'`)
-    else if (nums.length > 1) whereClauses.push(`CAST(COALESCE(pm.City_Tier, cm.City_Tier) AS STRING) IN (${nums.map(n => `'${n}'`).join(',')})`)
+    // City_Tier in pincode_city_master is stored as a STRING ("Tier I", "Tier II", "Tier III")
+    // — keep the label as-is when comparing.
+    const NUM_TO_LABEL = { '1': 'Tier I', '2': 'Tier II', '3': 'Tier III' }
+    const vals = tier.split(',').map(t => {
+      const trimmed = t.trim()
+      // Accept both label form ("Tier I") and numeric form ("1")
+      return NUM_TO_LABEL[trimmed] || trimmed
+    }).filter(Boolean)
+    if (vals.length === 1) whereClauses.push(`COALESCE(pm.City_Tier, cm.City_Tier) = '${vals[0].replace(/'/g, "''")}'`)
+    else if (vals.length > 1) whereClauses.push(`COALESCE(pm.City_Tier, cm.City_Tier) IN (${vals.map(v => `'${v.replace(/'/g, "''")}'`).join(',')})`)
   }
   if (sku) {
     const skuList = sku.split(',').map(s => s.trim()).filter(Boolean)
