@@ -159,14 +159,16 @@ latest_settlement AS (
 ),
 daily AS (
   SELECT
-    DATE(o.purchase_date_ist) AS order_date,
-    COUNT(DISTINCT o.amazon_order_id) AS orders,
-    COUNT(DISTINCT CASE WHEN r.order_id IS NOT NULL THEN o.amazon_order_id END) AS returned
-  FROM \`frido-429506.production.amazon_seller_central_all_orders\` o
-  LEFT JOIN refunds r ON o.amazon_order_id = r.order_id
+    DATE(o.OrderDate) AS order_date,
+    ROUND(SUM(o.SellingPrice_Exc_GST), 2) AS orders,
+    ROUND(SUM(CASE WHEN r.order_id IS NOT NULL THEN o.SellingPrice_Exc_GST ELSE 0 END), 2) AS returned
+  FROM \`frido-429506.production.fact_all_platform_sales_report\` o
+  LEFT JOIN refunds r ON o.OrderId = r.order_id
   CROSS JOIN latest_settlement ls
-  WHERE DATE(o.purchase_date_ist) BETWEEN DATE_SUB(ls.latest_date, INTERVAL 60 DAY) AND ls.latest_date
-    AND o.order_status != 'Cancelled'
+  WHERE DATE(o.OrderDate) BETWEEN DATE_SUB(ls.latest_date, INTERVAL 60 DAY) AND ls.latest_date
+    AND o.SubChannel = 'Amazon Seller Central'
+    AND o.Order_Status != 'Cancelled'
+    AND o.SellingPrice_Exc_GST > 0
   GROUP BY order_date
 ),
 rolling AS (
@@ -181,7 +183,6 @@ rolling AS (
   FROM daily
 ),
 ls2 AS (SELECT latest_date FROM latest_settlement),
--- only keep rows where the 30-day window is fully settled (end at latest_date - 15 days to be safe)
 reliable AS (
   SELECT r.*
   FROM rolling r CROSS JOIN ls2
