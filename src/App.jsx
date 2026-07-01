@@ -1302,7 +1302,9 @@ function FinancialCategoryMatrix({ catData, subCatData, skuData, title, showRetu
   let cumAcc = 0
   cats.forEach(r => { r.sharePct = tot.gross > 0 ? (r.gross / tot.gross * 100) : 0; cumAcc += r.sharePct; r.cumPct = cumAcc })
 
-  const hasCancelData = cats.some(r => r.cancelled > 0 || r.rto > 0 || r.cir > 0 || r.exch > 0)
+  // When neutral (Shopify), always show Cancel/RTO/CIR/Exch/Returns columns even if all zeros,
+  // so India and International tabs stay visually consistent.
+  const hasCancelData = neutral || cats.some(r => r.cancelled > 0 || r.rto > 0 || r.cir > 0 || r.exch > 0)
   const showExtras = neutral  // MoM, Cum %, Prev Rev only when neutral (Shopify)
 
   const colHdr = { textAlign: 'right', padding: '3px 3px 6px', borderBottom: `1px solid ${C.border}`, fontSize: 8.5, fontWeight: 700, textTransform: 'uppercase', whiteSpace: 'nowrap', letterSpacing: '.01em' }
