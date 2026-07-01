@@ -2042,7 +2042,7 @@ function ShopifyGeoDonutRow({ regionRows, tierRows, topStates, allStateRows, use
   if (!regionData.length && !tierData.length) return null
 
   return (
-    <div style={{ flex: 1, minWidth: 0 }}>
+    <div style={{ flex: 1, minWidth: 0, alignSelf: 'flex-start' }}>
       <Card title="Geography Breakdown" action={
         <div style={{ display: 'flex', gap: 3 }}>
           {(useUnits ? [['rev','Revenue'],['units','Units']] : [['rev','Revenue'],['orders','Orders']]).map(([k,l]) => <button key={k} onClick={() => setMetric(k)} style={selStyle(metric === k)}>{l}</button>)}
