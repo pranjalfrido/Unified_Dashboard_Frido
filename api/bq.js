@@ -150,9 +150,9 @@ export default async function handler(req, res) {
     amzSCReturnCat: `WITH q AS (${base}), ret AS (SELECT DISTINCT order_id FROM \`frido-429506.production.fact_all_settlement_report\` WHERE transaction_type = 'Refund' AND settlement_region = 'India') SELECT q.Category, COUNT(DISTINCT q.OrderId) AS orders, COUNT(DISTINCT CASE WHEN ret.order_id IS NOT NULL THEN q.OrderId END) AS returned FROM q LEFT JOIN ret ON q.OrderId = ret.order_id WHERE q.SubChannel = 'Amazon Seller Central' AND q.FinancialStatus != 'Cancelled' AND q.Category IS NOT NULL GROUP BY q.Category`,
     amzSCReturnSubCat: `WITH q AS (${base}), ret AS (SELECT DISTINCT order_id FROM \`frido-429506.production.fact_all_settlement_report\` WHERE transaction_type = 'Refund' AND settlement_region = 'India') SELECT q.Category, q.SubCategory, COUNT(DISTINCT q.OrderId) AS orders, COUNT(DISTINCT CASE WHEN ret.order_id IS NOT NULL THEN q.OrderId END) AS returned FROM q LEFT JOIN ret ON q.OrderId = ret.order_id WHERE q.SubChannel = 'Amazon Seller Central' AND q.FinancialStatus != 'Cancelled' AND q.Category IS NOT NULL GROUP BY q.Category, q.SubCategory`,
     amzSCReturnSKU: `WITH q AS (${base}), ret AS (SELECT DISTINCT order_id FROM \`frido-429506.production.fact_all_settlement_report\` WHERE transaction_type = 'Refund' AND settlement_region = 'India') SELECT q.Category, q.SubCategory, q.MasterSKU AS sku, COUNT(DISTINCT q.OrderId) AS orders, COUNT(DISTINCT CASE WHEN ret.order_id IS NOT NULL THEN q.OrderId END) AS returned FROM q LEFT JOIN ret ON q.OrderId = ret.order_id WHERE q.SubChannel = 'Amazon Seller Central' AND q.FinancialStatus != 'Cancelled' AND q.MasterSKU IS NOT NULL GROUP BY q.Category, q.SubCategory, q.MasterSKU`,
-    amzSCCatChannel: `WITH q AS (${base}) SELECT Category, CASE WHEN fulfillment_channel='Amazon' THEN 'FBA' ELSE 'MFN' END AS ch, COUNT(DISTINCT OrderId) AS orders, SUM(ItemQty) AS units, ROUND(SUM(SellingPrice_Inc_GST),0) AS rev, ROUND(SUM(SellingPrice_Exc_GST),0) AS exc_rev FROM q WHERE SubChannel = 'Amazon Seller Central' AND FinancialStatus != 'Cancelled' AND Category IS NOT NULL GROUP BY Category, ch ORDER BY rev DESC`,
-    amzSCSubCatChannel: `WITH q AS (${base}) SELECT Category, SubCategory, CASE WHEN fulfillment_channel='Amazon' THEN 'FBA' ELSE 'MFN' END AS ch, COUNT(DISTINCT OrderId) AS orders, SUM(ItemQty) AS units, ROUND(SUM(SellingPrice_Inc_GST),0) AS rev, ROUND(SUM(SellingPrice_Exc_GST),0) AS exc_rev FROM q WHERE SubChannel = 'Amazon Seller Central' AND FinancialStatus != 'Cancelled' AND Category IS NOT NULL GROUP BY Category, SubCategory, ch ORDER BY rev DESC`,
-    amzSCSKUChannel: `WITH q AS (${base}) SELECT Category, SubCategory, MasterSKU AS sku, CASE WHEN fulfillment_channel='Amazon' THEN 'FBA' ELSE 'MFN' END AS ch, COUNT(DISTINCT OrderId) AS orders, SUM(ItemQty) AS units, ROUND(SUM(SellingPrice_Inc_GST),0) AS rev, ROUND(SUM(SellingPrice_Exc_GST),0) AS exc_rev FROM q WHERE SubChannel = 'Amazon Seller Central' AND FinancialStatus != 'Cancelled' AND MasterSKU IS NOT NULL GROUP BY Category, SubCategory, sku, ch ORDER BY rev DESC LIMIT 500`,
+    amzSCCatChannel: `WITH q AS (${base}) SELECT Category, CASE WHEN fulfillment_channel='Amazon' THEN 'FBA' ELSE 'MFN' END AS ch, COUNT(DISTINCT OrderId) AS orders, SUM(ItemQty) AS units, ROUND(SUM(SellingPrice_Inc_GST),0) AS rev, ROUND(SUM(SellingPrice_Exc_GST),0) AS exc_rev, ROUND(SUM(CASE WHEN Order_Status='Cancelled' THEN SellingPrice_Inc_GST ELSE 0 END),0) AS cancel_rev, ROUND(SUM(CASE WHEN Order_Status='RTO' THEN SellingPrice_Inc_GST ELSE 0 END),0) AS rto_rev, ROUND(SUM(CASE WHEN Order_Status='CIR' THEN SellingPrice_Inc_GST ELSE 0 END),0) AS cir_rev, ROUND(SUM(CASE WHEN Order_Status='Exchange' THEN SellingPrice_Inc_GST ELSE 0 END),0) AS exch_rev, ROUND(SUM(CASE WHEN Order_Status='Return' THEN SellingPrice_Inc_GST ELSE 0 END),0) AS return_rev FROM q WHERE SubChannel = 'Amazon Seller Central' AND Category IS NOT NULL GROUP BY Category, ch ORDER BY rev DESC`,
+    amzSCSubCatChannel: `WITH q AS (${base}) SELECT Category, SubCategory, CASE WHEN fulfillment_channel='Amazon' THEN 'FBA' ELSE 'MFN' END AS ch, COUNT(DISTINCT OrderId) AS orders, SUM(ItemQty) AS units, ROUND(SUM(SellingPrice_Inc_GST),0) AS rev, ROUND(SUM(SellingPrice_Exc_GST),0) AS exc_rev, ROUND(SUM(CASE WHEN Order_Status='Cancelled' THEN SellingPrice_Inc_GST ELSE 0 END),0) AS cancel_rev, ROUND(SUM(CASE WHEN Order_Status='RTO' THEN SellingPrice_Inc_GST ELSE 0 END),0) AS rto_rev, ROUND(SUM(CASE WHEN Order_Status='CIR' THEN SellingPrice_Inc_GST ELSE 0 END),0) AS cir_rev, ROUND(SUM(CASE WHEN Order_Status='Exchange' THEN SellingPrice_Inc_GST ELSE 0 END),0) AS exch_rev, ROUND(SUM(CASE WHEN Order_Status='Return' THEN SellingPrice_Inc_GST ELSE 0 END),0) AS return_rev FROM q WHERE SubChannel = 'Amazon Seller Central' AND Category IS NOT NULL GROUP BY Category, SubCategory, ch ORDER BY rev DESC`,
+    amzSCSKUChannel: `WITH q AS (${base}) SELECT Category, SubCategory, MasterSKU AS sku, CASE WHEN fulfillment_channel='Amazon' THEN 'FBA' ELSE 'MFN' END AS ch, COUNT(DISTINCT OrderId) AS orders, SUM(ItemQty) AS units, ROUND(SUM(SellingPrice_Inc_GST),0) AS rev, ROUND(SUM(SellingPrice_Exc_GST),0) AS exc_rev, ROUND(SUM(CASE WHEN Order_Status='Cancelled' THEN SellingPrice_Inc_GST ELSE 0 END),0) AS cancel_rev, ROUND(SUM(CASE WHEN Order_Status='RTO' THEN SellingPrice_Inc_GST ELSE 0 END),0) AS rto_rev, ROUND(SUM(CASE WHEN Order_Status='CIR' THEN SellingPrice_Inc_GST ELSE 0 END),0) AS cir_rev, ROUND(SUM(CASE WHEN Order_Status='Exchange' THEN SellingPrice_Inc_GST ELSE 0 END),0) AS exch_rev, ROUND(SUM(CASE WHEN Order_Status='Return' THEN SellingPrice_Inc_GST ELSE 0 END),0) AS return_rev FROM q WHERE SubChannel = 'Amazon Seller Central' AND MasterSKU IS NOT NULL GROUP BY Category, SubCategory, sku, ch ORDER BY rev DESC LIMIT 500`,
     amzVCCat: `WITH q AS (${base}) SELECT Category, COUNT(DISTINCT OrderId) AS orders, SUM(ItemQty) AS units, ROUND(SUM(SellingPrice_Inc_GST),0) AS rev, ROUND(SUM(SellingPrice_Exc_GST),0) AS exc_rev FROM q WHERE SubChannel = 'Amazon Vendor Central' AND Category IS NOT NULL GROUP BY Category ORDER BY rev DESC`,
     amzVCSubCat: `WITH q AS (${base}) SELECT Category, SubCategory, COUNT(DISTINCT OrderId) AS orders, SUM(ItemQty) AS units, ROUND(SUM(SellingPrice_Inc_GST),0) AS rev, ROUND(SUM(SellingPrice_Exc_GST),0) AS exc_rev FROM q WHERE SubChannel = 'Amazon Vendor Central' AND Category IS NOT NULL GROUP BY Category, SubCategory ORDER BY rev DESC`,
     amzVCSKU: `WITH q AS (${base}) SELECT Category, SubCategory, MasterSKU AS sku, COUNT(DISTINCT OrderId) AS orders, SUM(ItemQty) AS units, ROUND(SUM(SellingPrice_Inc_GST),0) AS rev, ROUND(SUM(SellingPrice_Exc_GST),0) AS exc_rev FROM q WHERE SubChannel = 'Amazon Vendor Central' AND MasterSKU IS NOT NULL GROUP BY Category, SubCategory, sku ORDER BY rev DESC LIMIT 500`,
@@ -510,48 +510,30 @@ export default async function handler(req, res) {
         topStates: (r.amzSCStates || []).slice(0, 6).map(x => ({ name: x.ship_state, orders: parseInt(x.orders)||0, rev: parseFloat(x.rev)||0, units: 0 })),
         cities: (r.amzSCCities || []).map(x => ({ city: x.city, orders: parseInt(x.orders)||0, rev: parseFloat(x.rev)||0 })),
         catChannel: (() => {
-          const retMap = {}
-          ;(r.amzSCReturnCat || []).forEach(x => { retMap[x.Category] = { orders: parseInt(x.orders)||0, returned: parseInt(x.returned)||0 } })
           const map = {}
           ;(r.amzSCCatChannel || []).forEach(x => {
             if (!map[x.Category]) map[x.Category] = {}
-            map[x.Category][x.ch] = { rev: parseFloat(x.rev)||0, excRev: parseFloat(x.exc_rev)||0, units: parseInt(x.units)||0, orders: parseInt(x.orders)||0 }
-          })
-          Object.keys(map).forEach(cat => {
-            const rd = retMap[cat] || { orders: 0, returned: 0 }
-            Object.keys(map[cat]).forEach(ch => { map[cat][ch].returned = rd.returned; map[cat][ch].totalOrdersForReturn = rd.orders })
+            map[x.Category][x.ch] = { rev: parseFloat(x.rev)||0, excRev: parseFloat(x.exc_rev)||0, units: parseInt(x.units)||0, orders: parseInt(x.orders)||0, cancelRev: parseFloat(x.cancel_rev)||0, rtoRev: parseFloat(x.rto_rev)||0, cirRev: parseFloat(x.cir_rev)||0, exchRev: parseFloat(x.exch_rev)||0, returnRev: parseFloat(x.return_rev)||0 }
           })
           return map
         })(),
         subCatChannel: (() => {
-          const retMap = {}
-          ;(r.amzSCReturnSubCat || []).forEach(x => { retMap[`${x.Category}::${x.SubCategory}`] = { orders: parseInt(x.orders)||0, returned: parseInt(x.returned)||0 } })
           const map = {}
           ;(r.amzSCSubCatChannel || []).forEach(x => {
             if (!map[x.Category]) map[x.Category] = {}
             if (!map[x.Category][x.SubCategory]) map[x.Category][x.SubCategory] = {}
-            map[x.Category][x.SubCategory][x.ch] = { rev: parseFloat(x.rev)||0, excRev: parseFloat(x.exc_rev)||0, units: parseInt(x.units)||0, orders: parseInt(x.orders)||0 }
+            map[x.Category][x.SubCategory][x.ch] = { rev: parseFloat(x.rev)||0, excRev: parseFloat(x.exc_rev)||0, units: parseInt(x.units)||0, orders: parseInt(x.orders)||0, cancelRev: parseFloat(x.cancel_rev)||0, rtoRev: parseFloat(x.rto_rev)||0, cirRev: parseFloat(x.cir_rev)||0, exchRev: parseFloat(x.exch_rev)||0, returnRev: parseFloat(x.return_rev)||0 }
           })
-          Object.keys(map).forEach(cat => Object.keys(map[cat]).forEach(sc => {
-            const rd = retMap[`${cat}::${sc}`] || { orders: 0, returned: 0 }
-            Object.keys(map[cat][sc]).forEach(ch => { map[cat][sc][ch].returned = rd.returned; map[cat][sc][ch].totalOrdersForReturn = rd.orders })
-          }))
           return map
         })(),
         skuChannel: (() => {
-          const retMap = {}
-          ;(r.amzSCReturnSKU || []).forEach(x => { retMap[`${x.Category}::${x.SubCategory}::${x.sku}`] = { orders: parseInt(x.orders)||0, returned: parseInt(x.returned)||0 } })
           const map = {}
           ;(r.amzSCSKUChannel || []).forEach(x => {
             if (!map[x.Category]) map[x.Category] = {}
             if (!map[x.Category][x.SubCategory]) map[x.Category][x.SubCategory] = {}
             if (!map[x.Category][x.SubCategory][x.sku]) map[x.Category][x.SubCategory][x.sku] = {}
-            map[x.Category][x.SubCategory][x.sku][x.ch] = { rev: parseFloat(x.rev)||0, excRev: parseFloat(x.exc_rev)||0, units: parseInt(x.units)||0, orders: parseInt(x.orders)||0 }
+            map[x.Category][x.SubCategory][x.sku][x.ch] = { rev: parseFloat(x.rev)||0, excRev: parseFloat(x.exc_rev)||0, units: parseInt(x.units)||0, orders: parseInt(x.orders)||0, cancelRev: parseFloat(x.cancel_rev)||0, rtoRev: parseFloat(x.rto_rev)||0, cirRev: parseFloat(x.cir_rev)||0, exchRev: parseFloat(x.exch_rev)||0, returnRev: parseFloat(x.return_rev)||0 }
           })
-          Object.keys(map).forEach(cat => Object.keys(map[cat]).forEach(sc => Object.keys(map[cat][sc]).forEach(sku => {
-            const rd = retMap[`${cat}::${sc}::${sku}`] || { orders: 0, returned: 0 }
-            Object.keys(map[cat][sc][sku]).forEach(ch => { map[cat][sc][sku][ch].returned = rd.returned; map[cat][sc][sku][ch].totalOrdersForReturn = rd.orders })
-          })))
           return map
         })(),
         dailyCat: (r.amzSCDailyCat || []).map(x => ({ date: x.date, category: x.category, subcategory: x.subcategory, ch: x.ch, orders: parseInt(x.orders)||0, units: parseInt(x.units)||0, rev: parseFloat(x.rev)||0, excRev: parseFloat(x.exc_rev)||0 })),
