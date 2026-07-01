@@ -2,7 +2,6 @@ import { useState, useMemo, useCallback, useEffect, useRef, Fragment } from 'rea
 import { C, fmt, fmtN, pct, processData, detectAlerts, exportCSV, getDefaultDates } from './utils.js'
 import { KPICard, AlertCard, HBar, DataTable, Card, Badge, RevTrendChart, AreaTrendChart, MultiLineChart, ChartTooltip, BarChart, Bar, LineChart, Line, AreaChart, Area, ComposedChart, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell, Treemap } from './components.jsx'
 import { ReferenceLine } from 'recharts'
-import { INDIA_STATE_PATHS } from './indiaMapPaths.js'
 
 // ── Sidebar ───────────────────────────────────────────────────
 const SvgIcon = ({ d, size = 18, stroke = 'currentColor', fill = 'none', strokeWidth = 1.6 }) => (
@@ -2058,74 +2057,6 @@ function ShopifyGeoDonutRow({ regionRows, tierRows, topStates, allStateRows, use
   )
 }
 
-// GeoJSON id → stateMap uppercase key
-const GEO_ID_ALIAS = {
-  'ORISSA': 'ODISHA',
-  'UTTARANCHAL': 'UTTARAKHAND',
-  'JAMMU AND KASHMIR': 'JAMMU AND KASHMIR',
-  'ANDAMAN AND NICOBAR': 'ANDAMAN AND NICOBAR ISLANDS',
-}
-const resolveStateKey = id => GEO_ID_ALIAS[id] || id
-
-function IndiaRevenueMap({ stateMap = {} }) {
-  const [tooltip, setTooltip] = useState(null)
-  const maxRev = useMemo(() => Math.max(...Object.values(stateMap).map(v => v.rev), 1), [stateMap])
-
-  const colorMap = useMemo(() => {
-    const m = {}
-    INDIA_STATE_PATHS.forEach(s => {
-      const v = stateMap[resolveStateKey(s.id)]
-      if (!v || !v.rev) { m[s.id] = '#e8e8f0'; return }
-      const t = Math.pow(v.rev / maxRev, 0.45)
-      m[s.id] = `rgb(${Math.round(83 - 83*t)},${Math.round(74 - 52*t)},${Math.round(183 - 103*t)})`
-    })
-    return m
-  }, [stateMap, maxRev])
-
-  return (
-    <div style={{ flex: 1, minWidth: 0, height: '100%' }}>
-      <Card title="Revenue by State · India Map">
-        <svg viewBox="0 0 600 680" width="100%" style={{ display: 'block' }}>
-          {INDIA_STATE_PATHS.map(s => {
-            const v = stateMap[resolveStateKey(s.id)]
-            return (
-              <path
-                key={s.id}
-                d={s.d}
-                fill={colorMap[s.id]}
-                stroke="#fff"
-                strokeWidth={1.2}
-                strokeLinejoin="round"
-                style={{ cursor: 'pointer', transition: 'opacity 0.1s' }}
-                onMouseEnter={e => setTooltip({ name: s.name, rev: v?.rev || 0, units: v?.units || 0, x: e.clientX, y: e.clientY })}
-                onMouseMove={e => setTooltip(t => t ? { ...t, x: e.clientX, y: e.clientY } : null)}
-                onMouseLeave={() => setTooltip(null)}
-              />
-            )
-          })}
-        </svg>
-        <div style={{ display: 'flex', gap: 6, alignItems: 'center', marginTop: 4, fontSize: 11, color: C.t3 }}>
-          {[0.08,0.28,0.50,0.72,0.92].map(t => (
-            <div key={t} style={{ width: 20, height: 10, borderRadius: 2, background: `rgb(${Math.round(83-83*t)},${Math.round(74-52*t)},${Math.round(183-103*t)})` }} />
-          ))}
-          <span style={{ marginLeft: 2 }}>Low → High Revenue</span>
-        </div>
-      </Card>
-      {tooltip && (
-        <div style={{
-          position: 'fixed', left: tooltip.x + 14, top: tooltip.y - 14, zIndex: 9999,
-          background: C.card, border: `1px solid ${C.border}`, borderRadius: 8, padding: '8px 12px',
-          fontSize: 12, pointerEvents: 'none', boxShadow: '0 4px 16px rgba(0,0,0,0.18)'
-        }}>
-          <div style={{ fontWeight: 700, color: C.t1, marginBottom: 4 }}>{tooltip.name}</div>
-          <div style={{ color: C.t2 }}>Revenue: <span style={{ fontWeight: 600, color: '#534AB7' }}>{fmt(tooltip.rev)}</span></div>
-          <div style={{ color: C.t2 }}>Units Sold: <span style={{ fontWeight: 600 }}>{fmtN(tooltip.units)}</span></div>
-          {tooltip.rev === 0 && <div style={{ color: C.t3, fontSize: 11 }}>No data for this period</div>}
-        </div>
-      )}
-    </div>
-  )
-}
 
 function TopSubCatBar({ subCatRows }) {
   const top10 = (subCatRows || []).slice(0, 10)
@@ -2701,11 +2632,8 @@ function ShopifyTab({ data, filters, setFilters }) {
         </Card>
       </div>
       <div style={{ display: 'flex', gap: 14, alignItems: 'stretch' }}>
-        <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 14 }}>
-          <ShopifyGeoDonutRow regionRows={sh.regionRows || []} tierRows={sh.tierRows || []} topStates={sh.topStates || []} allStateRows={Object.entries(sh.stateMap || {}).map(([k, v]) => ({ name: k, rev: v.rev, orders: v.orders?.size || 0 }))} />
-          <TopSubCatBar subCatRows={allSubCatRows} />
-        </div>
-        <IndiaRevenueMap stateMap={sh.stateMap || {}} />
+        <ShopifyGeoDonutRow regionRows={sh.regionRows || []} tierRows={sh.tierRows || []} topStates={sh.topStates || []} allStateRows={Object.entries(sh.stateMap || {}).map(([k, v]) => ({ name: k, rev: v.rev, orders: v.orders?.size || 0 }))} />
+        <TopSubCatBar subCatRows={allSubCatRows} />
       </div>
       {/* Category Revenue Matrix · Shopify */}
       {(() => {
