@@ -2058,6 +2058,15 @@ function ShopifyGeoDonutRow({ regionRows, tierRows, topStates, allStateRows, use
   )
 }
 
+// GeoJSON id → stateMap uppercase key
+const GEO_ID_ALIAS = {
+  'ORISSA': 'ODISHA',
+  'UTTARANCHAL': 'UTTARAKHAND',
+  'JAMMU AND KASHMIR': 'JAMMU AND KASHMIR',
+  'ANDAMAN AND NICOBAR': 'ANDAMAN AND NICOBAR ISLANDS',
+}
+const resolveStateKey = id => GEO_ID_ALIAS[id] || id
+
 function IndiaRevenueMap({ stateMap = {} }) {
   const [tooltip, setTooltip] = useState(null)
   const maxRev = useMemo(() => Math.max(...Object.values(stateMap).map(v => v.rev), 1), [stateMap])
@@ -2065,7 +2074,7 @@ function IndiaRevenueMap({ stateMap = {} }) {
   const colorMap = useMemo(() => {
     const m = {}
     INDIA_STATE_PATHS.forEach(s => {
-      const v = stateMap[s.id]
+      const v = stateMap[resolveStateKey(s.id)]
       if (!v || !v.rev) { m[s.id] = '#e8e8f0'; return }
       const t = Math.pow(v.rev / maxRev, 0.45)
       m[s.id] = `rgb(${Math.round(83 - 83*t)},${Math.round(74 - 52*t)},${Math.round(183 - 103*t)})`
@@ -2076,9 +2085,9 @@ function IndiaRevenueMap({ stateMap = {} }) {
   return (
     <div style={{ flex: 1, minWidth: 0, height: '100%' }}>
       <Card title="Revenue by State · India Map">
-        <svg viewBox="95 12 690 625" width="100%" style={{ display: 'block' }}>
+        <svg viewBox="0 0 600 680" width="100%" style={{ display: 'block' }}>
           {INDIA_STATE_PATHS.map(s => {
-            const v = stateMap[s.id]
+            const v = stateMap[resolveStateKey(s.id)]
             return (
               <path
                 key={s.id}
