@@ -2102,9 +2102,9 @@ function IndiaRevenueMap({ stateMap = {} }) {
         <div style={{ position: 'relative' }}>
           <ComposableMap
             projection="geoMercator"
-            projectionConfig={{ center: [82.5, 22], scale: 1000 }}
-            width={500} height={560}
-            style={{ width: '100%', height: 'auto', maxHeight: 360 }}
+            projectionConfig={{ center: [82.5, 22], scale: 1050 }}
+            width={500} height={600}
+            style={{ width: '100%', height: 'auto' }}
           >
             <Geographies geography={INDIA_TOPO_URL}>
               {({ geographies }) =>
@@ -2735,7 +2735,10 @@ function ShopifyTab({ data, filters, setFilters }) {
         <ShopifyGeoDonutRow regionRows={sh.regionRows || []} tierRows={sh.tierRows || []} topStates={sh.topStates || []} allStateRows={Object.entries(sh.stateMap || {}).map(([k, v]) => ({ name: k, rev: v.rev, orders: v.orders?.size || 0 }))} />
         <IndiaRevenueMap stateMap={sh.stateMap || {}} />
       </div>
-      <TopSubCatBar subCatRows={allSubCatRows} />
+      <div style={{ display: 'flex', gap: 14 }}>
+        <TopSubCatBar subCatRows={allSubCatRows} />
+        <div style={{ flex: 1, minWidth: 0 }} />
+      </div>
       {/* Category Revenue Matrix · Shopify */}
       {(() => {
         const pick = v => ({ rev: v.rev || 0, excRev: v.excRev || 0, units: v.units || 0, orders: v.orders, cancelled: v.cancelled || 0, rto: v.rto || 0, cir: v.cir || 0, exch: v.exch || 0, cancelRev: v.cancelRev || 0, rtoRev: v.rtoRev || 0, cirRev: v.cirRev || 0, exchRev: v.exchRev || 0 })
