@@ -3067,13 +3067,11 @@ function AmazonTab({ data, region = 'india', setRegion = () => {} }) {
             <TopSubCatBar subCatRows={(() => { const rows = []; Object.entries(amzSC.subCatChannel || {}).forEach(([cat, scMap]) => { Object.entries(scMap).forEach(([sc, chData]) => { const rev = (chData.FBA?.rev||0)+(chData.MFN?.rev||0); rows.push({ name: sc, rev }) }) }); return rows.sort((a,b) => b.rev - a.rev) })()} />
           </div>
           {(() => {
-            const pickRet = (...chs) => { for (const c of chs) if (c?.totalOrdersForReturn) return { returned: c.returned||0, totalOrdersForReturn: c.totalOrdersForReturn } ; return { returned: 0, totalOrdersForReturn: 0 } }
+            const pickAmz = (scChData, vc) => { const r = {}; ['rev','excRev','units','cancelRev','rtoRev','cirRev','exchRev','returnRev'].forEach(k => { r[k] = (scChData?.FBA?.[k]||0)+(scChData?.MFN?.[k]||0)+(vc?.[k]||0) }); return r }
             const allCats = new Set([...Object.keys(amzSC.catChannel || {}), ...Object.keys(amzVCMatrix.catData || {})])
             const catData = {}
             allCats.forEach(cat => {
-              const scChData = amzSC.catChannel?.[cat] || {}
-              const vc = amzVCMatrix.catData?.[cat] || {}
-              catData[cat] = { rev: (scChData.FBA?.rev||0)+(scChData.MFN?.rev||0)+(vc.rev||0), excRev: (scChData.FBA?.excRev||0)+(scChData.MFN?.excRev||0)+(vc.excRev||0), units: (scChData.FBA?.units||0)+(scChData.MFN?.units||0)+(vc.units||0), ...pickRet(scChData.FBA, scChData.MFN) }
+              catData[cat] = pickAmz(amzSC.catChannel?.[cat], amzVCMatrix.catData?.[cat])
             })
             const allScSub = amzSC.subCatChannel || {}
             const allVcSub = amzVCMatrix.subCatData || {}
@@ -3083,9 +3081,7 @@ function AmazonTab({ data, region = 'india', setRegion = () => {} }) {
               subCatData[cat] = {}
               const allSubs = new Set([...Object.keys(allScSub[cat]||{}), ...Object.keys(allVcSub[cat]||{})])
               allSubs.forEach(sc => {
-                const scChD = allScSub[cat]?.[sc] || {}
-                const vcD = allVcSub[cat]?.[sc] || {}
-                subCatData[cat][sc] = { rev: (scChD.FBA?.rev||0)+(scChD.MFN?.rev||0)+(vcD.rev||0), excRev: (scChD.FBA?.excRev||0)+(scChD.MFN?.excRev||0)+(vcD.excRev||0), units: (scChD.FBA?.units||0)+(scChD.MFN?.units||0)+(vcD.units||0), ...pickRet(scChD.FBA, scChD.MFN) }
+                subCatData[cat][sc] = pickAmz(allScSub[cat]?.[sc], allVcSub[cat]?.[sc])
               })
             })
             const allScSku = amzSC.skuChannel || {}
@@ -3099,13 +3095,11 @@ function AmazonTab({ data, region = 'india', setRegion = () => {} }) {
                 skuData[cat][sc] = {}
                 const allSkus = new Set([...Object.keys(allScSku[cat]?.[sc]||{}), ...Object.keys(allVcSku[cat]?.[sc]||{})])
                 allSkus.forEach(sku => {
-                  const scChD = allScSku[cat]?.[sc]?.[sku] || {}
-                  const vcD = allVcSku[cat]?.[sc]?.[sku] || {}
-                  skuData[cat][sc][sku] = { rev: (scChD.FBA?.rev||0)+(scChD.MFN?.rev||0)+(vcD.rev||0), excRev: (scChD.FBA?.excRev||0)+(scChD.MFN?.excRev||0)+(vcD.excRev||0), units: (scChD.FBA?.units||0)+(scChD.MFN?.units||0)+(vcD.units||0), ...pickRet(scChD.FBA, scChD.MFN) }
+                  skuData[cat][sc][sku] = pickAmz(allScSku[cat]?.[sc]?.[sku], allVcSku[cat]?.[sc]?.[sku])
                 })
               })
             })
-            return <FinancialCategoryMatrix catData={catData} subCatData={subCatData} skuData={skuData} title="Category Revenue Matrix · Amazon India" showReturns={false} />
+            return <FinancialCategoryMatrix catData={catData} subCatData={subCatData} skuData={skuData} title="Category Revenue Matrix · Amazon India" showReturns={true} />
           })()}
           {(() => {
             const pickRet = (...chs) => { for (const c of chs) if (c?.totalOrdersForReturn) return { returned: c.returned||0, totalOrdersForReturn: c.totalOrdersForReturn }; return { returned: 0, totalOrdersForReturn: 0 } }
