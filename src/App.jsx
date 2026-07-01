@@ -2,17 +2,7 @@ import { useState, useMemo, useCallback, useEffect, useRef, Fragment } from 'rea
 import { C, fmt, fmtN, pct, processData, detectAlerts, exportCSV, getDefaultDates } from './utils.js'
 import { KPICard, AlertCard, HBar, DataTable, Card, Badge, RevTrendChart, AreaTrendChart, MultiLineChart, ChartTooltip, BarChart, Bar, LineChart, Line, AreaChart, Area, ComposedChart, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell, Treemap } from './components.jsx'
 import { ReferenceLine } from 'recharts'
-import { ComposableMap, Geographies, Geography } from 'react-simple-maps'
-
-const INDIA_TOPO_URL = 'https://raw.githubusercontent.com/geohacker/india/master/state/india_telengana.geojson'
-// Cache GeoJSON at module level so it's fetched once per page load
-let _indiaGeoCache = null
-let _indiaGeoPromise = null
-function getIndiaGeo() {
-  if (_indiaGeoCache) return Promise.resolve(_indiaGeoCache)
-  if (!_indiaGeoPromise) _indiaGeoPromise = fetch(INDIA_TOPO_URL).then(r => r.json()).then(d => { _indiaGeoCache = d; return d })
-  return _indiaGeoPromise
-}
+import { INDIA_STATE_PATHS } from './indiaMapPaths.js'
 
 // ── Sidebar ───────────────────────────────────────────────────
 const SvgIcon = ({ d, size = 18, stroke = 'currentColor', fill = 'none', strokeWidth = 1.6 }) => (
@@ -2068,105 +2058,62 @@ function ShopifyGeoDonutRow({ regionRows, tierRows, topStates, allStateRows, use
   )
 }
 
-// State name normalization: GeoJSON NAME_1 -> uppercase key in stateMap
-const GEO_STATE_ALIAS = {
-  'Andaman and Nicobar': 'ANDAMAN AND NICOBAR ISLANDS',
-  'Dadra and Nagar Haveli': 'DADRA AND NAGAR HAVELI',
-  'Daman and Diu': 'DAMAN AND DIU',
-  'Jammu and Kashmir': 'JAMMU AND KASHMIR',
-  'Jammu & Kashmir': 'JAMMU AND KASHMIR',
-  'Odisha': 'ODISHA',
-  'Orissa': 'ODISHA',
-  'Uttarakhand': 'UTTARAKHAND',
-  'Uttaranchal': 'UTTARAKHAND',
-  'NCT of Delhi': 'DELHI',
-  'Delhi': 'DELHI',
-  'Telangana': 'TELANGANA',
-}
-
 function IndiaRevenueMap({ stateMap = {} }) {
   const [tooltip, setTooltip] = useState(null)
-  const [geoData, setGeoData] = useState(_indiaGeoCache)
-  const maxRev = Math.max(...Object.values(stateMap).map(v => v.rev), 1)
+  const maxRev = useMemo(() => Math.max(...Object.values(stateMap).map(v => v.rev), 1), [stateMap])
 
-  useEffect(() => {
-    if (!geoData) getIndiaGeo().then(setGeoData)
-  }, [])
-
-  const resolveKey = (geoName) => {
-    if (!geoName) return null
-    return GEO_STATE_ALIAS[geoName] || geoName.toUpperCase().trim()
-  }
-
-  const getColor = (geoName) => {
-    const key = resolveKey(geoName)
-    const v = key ? stateMap[key] : null
-    if (!v || !v.rev) return '#e8e8f0'
-    const intensity = Math.pow(v.rev / maxRev, 0.45)
-    const r = Math.round(83 + (0 - 83) * intensity)
-    const g = Math.round(74 + (74 * 0.3) * (1 - intensity))
-    const b = Math.round(183 - 103 * intensity)
-    return `rgb(${r},${g},${b})`
-  }
+  const colorMap = useMemo(() => {
+    const m = {}
+    INDIA_STATE_PATHS.forEach(s => {
+      const v = stateMap[s.id]
+      if (!v || !v.rev) { m[s.id] = '#e8e8f0'; return }
+      const t = Math.pow(v.rev / maxRev, 0.45)
+      m[s.id] = `rgb(${Math.round(83 - 83*t)},${Math.round(74 - 52*t)},${Math.round(183 - 103*t)})`
+    })
+    return m
+  }, [stateMap, maxRev])
 
   return (
     <div style={{ flex: 1, minWidth: 0, height: '100%' }}>
       <Card title="Revenue by State · India Map">
-        <div style={{ position: 'relative' }}>
-          <ComposableMap
-            projection="geoMercator"
-            projectionConfig={{ center: [82.5, 22], scale: 1000 }}
-            width={500} height={560}
-            style={{ width: '100%', height: 'auto' }}
-          >
-            <Geographies geography={geoData || INDIA_TOPO_URL}>
-              {({ geographies }) =>
-                geographies.map(geo => {
-                  const name = geo.properties.NAME_1 || geo.properties.name || geo.properties.ST_NM || ''
-                  const key = resolveKey(name)
-                  const v = key ? stateMap[key] : null
-                  return (
-                    <Geography
-                      key={geo.rsmKey}
-                      geography={geo}
-                      fill={getColor(name)}
-                      stroke="#fff"
-                      strokeWidth={0.8}
-                      style={{ default: { outline: 'none', cursor: 'pointer' }, hover: { outline: 'none', cursor: 'pointer', opacity: 0.85 }, pressed: { outline: 'none' } }}
-                      onMouseEnter={e => setTooltip({ name: name || 'Unknown', rev: v?.rev || 0, units: v?.units || 0, orders: v?.orders || 0, x: e.clientX, y: e.clientY })}
-                      onMouseMove={e => setTooltip(t => t ? { ...t, x: e.clientX, y: e.clientY } : null)}
-                      onMouseLeave={() => setTooltip(null)}
-                    />
-                  )
-                })
-              }
-            </Geographies>
-          </ComposableMap>
-          {tooltip && (
-            <div style={{
-              position: 'fixed', left: tooltip.x + 14, top: tooltip.y - 14, zIndex: 9999,
-              background: C.card, border: `1px solid ${C.border}`, borderRadius: 8, padding: '8px 12px',
-              fontSize: 12, pointerEvents: 'none', boxShadow: '0 4px 16px rgba(0,0,0,0.18)'
-            }}>
-              <div style={{ fontWeight: 700, color: C.t1, marginBottom: 4 }}>{tooltip.name}</div>
-              <div style={{ color: C.t2 }}>Revenue: <span style={{ fontWeight: 600, color: '#534AB7' }}>{fmt(tooltip.rev)}</span></div>
-              <div style={{ color: C.t2 }}>Units Sold: <span style={{ fontWeight: 600 }}>{fmtN(tooltip.units)}</span></div>
-              {tooltip.rev === 0 && <div style={{ color: C.t3, fontSize: 11 }}>No data for selected period</div>}
-            </div>
-          )}
-        </div>
-        <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginTop: 6, fontSize: 11, color: C.t3 }}>
-          <div style={{ display: 'flex', gap: 2, alignItems: 'center' }}>
-            {[0.1, 0.3, 0.5, 0.7, 0.9].map(i => {
-              const r = Math.round(83 + (0 - 83) * i)
-              const g = Math.round(83 - 83 * 0.3 * i)
-              const b = Math.round(183 - 103 * i)
-              return <div key={i} style={{ width: 18, height: 10, borderRadius: 2, background: `rgb(${r},${g},${b})` }} />
-            })}
-          </div>
-          <span>Low → High Revenue</span>
+        <svg viewBox="95 12 690 625" width="100%" style={{ display: 'block' }}>
+          {INDIA_STATE_PATHS.map(s => {
+            const v = stateMap[s.id]
+            return (
+              <path
+                key={s.id}
+                d={s.d}
+                fill={colorMap[s.id]}
+                stroke="#fff"
+                strokeWidth={1.2}
+                strokeLinejoin="round"
+                style={{ cursor: 'pointer', transition: 'opacity 0.1s' }}
+                onMouseEnter={e => setTooltip({ name: s.name, rev: v?.rev || 0, units: v?.units || 0, x: e.clientX, y: e.clientY })}
+                onMouseMove={e => setTooltip(t => t ? { ...t, x: e.clientX, y: e.clientY } : null)}
+                onMouseLeave={() => setTooltip(null)}
+              />
+            )
+          })}
+        </svg>
+        <div style={{ display: 'flex', gap: 6, alignItems: 'center', marginTop: 4, fontSize: 11, color: C.t3 }}>
+          {[0.08,0.28,0.50,0.72,0.92].map(t => (
+            <div key={t} style={{ width: 20, height: 10, borderRadius: 2, background: `rgb(${Math.round(83-83*t)},${Math.round(74-52*t)},${Math.round(183-103*t)})` }} />
+          ))}
+          <span style={{ marginLeft: 2 }}>Low → High Revenue</span>
         </div>
       </Card>
+      {tooltip && (
+        <div style={{
+          position: 'fixed', left: tooltip.x + 14, top: tooltip.y - 14, zIndex: 9999,
+          background: C.card, border: `1px solid ${C.border}`, borderRadius: 8, padding: '8px 12px',
+          fontSize: 12, pointerEvents: 'none', boxShadow: '0 4px 16px rgba(0,0,0,0.18)'
+        }}>
+          <div style={{ fontWeight: 700, color: C.t1, marginBottom: 4 }}>{tooltip.name}</div>
+          <div style={{ color: C.t2 }}>Revenue: <span style={{ fontWeight: 600, color: '#534AB7' }}>{fmt(tooltip.rev)}</span></div>
+          <div style={{ color: C.t2 }}>Units Sold: <span style={{ fontWeight: 600 }}>{fmtN(tooltip.units)}</span></div>
+          {tooltip.rev === 0 && <div style={{ color: C.t3, fontSize: 11 }}>No data for this period</div>}
+        </div>
+      )}
     </div>
   )
 }
