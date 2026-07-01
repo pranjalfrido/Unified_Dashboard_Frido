@@ -2102,8 +2102,8 @@ function IndiaRevenueMap({ stateMap = {} }) {
         <div style={{ position: 'relative' }}>
           <ComposableMap
             projection="geoMercator"
-            projectionConfig={{ center: [82.5, 22], scale: 1050 }}
-            width={500} height={600}
+            projectionConfig={{ center: [82.5, 22], scale: 1000 }}
+            width={500} height={560}
             style={{ width: '100%', height: 'auto' }}
           >
             <Geographies geography={INDIA_TOPO_URL}>
