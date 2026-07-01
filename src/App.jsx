@@ -1270,6 +1270,8 @@ function FinancialCategoryMatrix({ catData, subCatData, skuData, title, showRetu
     rto: d.rto || 0,
     cir: d.cir || 0,
     exch: d.exch || 0,
+    rtoRev: d.rtoRev || 0,
+    cirRev: d.cirRev || 0,
   })
 
   const cats = Object.entries(catData || {}).map(([cat, d]) => ({ cat, prevGross: catPrevMap[cat] || 0, ...mapRow(d) })).sort((a, b) => b.gross - a.gross)
@@ -1278,7 +1280,8 @@ function FinancialCategoryMatrix({ catData, subCatData, skuData, title, showRetu
     gross: s.gross + r.gross, prevGross: s.prevGross + r.prevGross, net: s.net + r.net, gst: s.gst + r.gst,
     units: s.units + r.units, orders: s.orders + r.orders,
     cancelled: s.cancelled + r.cancelled, rto: s.rto + r.rto, cir: s.cir + r.cir, exch: s.exch + r.exch,
-  }), { gross: 0, prevGross: 0, net: 0, gst: 0, units: 0, orders: 0, cancelled: 0, rto: 0, cir: 0, exch: 0 })
+    rtoRev: s.rtoRev + (r.rtoRev || 0), cirRev: s.cirRev + (r.cirRev || 0),
+  }), { gross: 0, prevGross: 0, net: 0, gst: 0, units: 0, orders: 0, cancelled: 0, rto: 0, cir: 0, exch: 0, rtoRev: 0, cirRev: 0 })
 
   // Cumulative % share, top to bottom
   let cumAcc = 0
@@ -1296,6 +1299,12 @@ function FinancialCategoryMatrix({ catData, subCatData, skuData, title, showRetu
     const positive = p >= 0
     return <span style={{ fontSize: 10, fontWeight: 700, color: positive ? '#0D9E68' : '#B91C1C' }}>{positive ? '↗' : '↘'} {Math.abs(p).toFixed(1)}%</span>
   }
+  const returnsRevCell = (rtoRev, cirRev, gross) => {
+    const total = (rtoRev || 0) + (cirRev || 0)
+    if (total <= 0) return <span style={{ color: C.t3 }}>—</span>
+    const pct = gross > 0 ? (total / gross * 100).toFixed(1) : null
+    return <>{fmt(total)}{pct !== null && <span style={{ fontSize: 9, color: C.t3, marginLeft: 3 }}>({pct}%)</span>}</>
+  }
 
   return (
     <Card title={title || 'Category Revenue Matrix'} note="Gross = incl. GST · Net = excl. GST">
@@ -1305,7 +1314,6 @@ function FinancialCategoryMatrix({ catData, subCatData, skuData, title, showRetu
             <tr>
               <th style={{ textAlign: 'left', padding: '3px 5px 7px', borderBottom: `1px solid ${C.border}`, color: C.t3, fontSize: 9.5, fontWeight: 700, textTransform: 'uppercase' }}>Category</th>
               <th style={{ ...colHdr, color: grossColor }}>Gross Rev{showShare ? ' / Share' : ''}</th>
-              {showExtras && <th style={{ ...colHdr, color: C.t3 }}>Prev Rev</th>}
               {showExtras && <th style={{ ...colHdr, color: C.t3 }}>MoM</th>}
               {showExtras && <th style={{ ...colHdr, color: C.t3 }}>Cum %</th>}
               <th style={{ ...colHdr, color: C.t2 }}>Units</th>
@@ -1336,7 +1344,6 @@ function FinancialCategoryMatrix({ catData, subCatData, skuData, title, showRetu
                       </span>
                     </td>
                     <td style={{ ...cell(), color: grossColor, fontWeight: 600 }}>{fmt(row.gross)}{showShare && tot.gross > 0 ? <span style={{ fontSize: 9.5, color: C.t3, marginLeft: 6, fontWeight: 400 }}>({(row.gross / tot.gross * 100).toFixed(1)}%)</span> : null}</td>
-                    {showExtras && <td style={{ ...cell(), color: C.t3 }}>{row.prevGross > 0 ? fmt(row.prevGross) : '—'}</td>}
                     {showExtras && <td style={{ ...cell() }}>{momCell(row.gross, row.prevGross)}</td>}
                     {showExtras && <td style={{ ...cell(), color: C.t3 }}>{row.cumPct.toFixed(1)}%</td>}
                     <td style={{ ...cell(), color: C.t2 }}>{fmtN(row.units)}</td>
@@ -1347,7 +1354,7 @@ function FinancialCategoryMatrix({ catData, subCatData, skuData, title, showRetu
                       <td style={{ ...cell(), color: rtoColor }}>{row.rto > 0 ? <>{fmtN(row.rto)}{pctSpan(row.rto, row.orders)}</> : <span style={{ color: C.t3 }}>—</span>}</td>
                       <td style={{ ...cell(), color: cirColor }}>{row.cir > 0 ? <>{fmtN(row.cir)}{pctSpan(row.cir, row.orders)}</> : <span style={{ color: C.t3 }}>—</span>}</td>
                       <td style={{ ...cell(), color: exchColor }}>{row.exch > 0 ? <>{fmtN(row.exch)}{pctSpan(row.exch, row.orders)}</> : <span style={{ color: C.t3 }}>—</span>}</td>
-                      {showReturns && <td style={{ ...cell(), color: returnColor, fontWeight: 600 }}>{(row.rto + row.cir) > 0 ? <>{fmtN(row.rto + row.cir)}{pctSpan(row.rto + row.cir, row.orders)}</> : <span style={{ color: C.t3 }}>—</span>}</td>}
+                      {showReturns && <td style={{ ...cell(), color: returnColor, fontWeight: 600 }}>{returnsRevCell(row.rtoRev, row.cirRev, row.gross)}</td>}
                     </>}
                     <td style={{ ...cell(), color: netColor, fontWeight: 600 }}>{fmt(row.net)}</td>
                   </tr>
@@ -1376,7 +1383,6 @@ function FinancialCategoryMatrix({ catData, subCatData, skuData, title, showRetu
                             </span>
                           </td>
                           <td style={{ ...cell(10.5), color: grossColor }}>{fmt(sr.gross)}{showShare && tot.gross > 0 ? <span style={{ fontSize: 9, color: C.t3, marginLeft: 5 }}>({(sr.gross / tot.gross * 100).toFixed(1)}%)</span> : null}</td>
-                          {showExtras && <td style={{ ...cell(10.5), color: C.t3 }}>{srPrev > 0 ? fmt(srPrev) : '—'}</td>}
                           {showExtras && <td style={{ ...cell(10.5) }}>{momCell(sr.gross, srPrev)}</td>}
                           {showExtras && <td style={{ ...cell(10.5), color: C.t3 }}>{sr.cumPct ? sr.cumPct.toFixed(1) : '0.0'}%</td>}
                           <td style={{ ...cell(10.5), color: C.t2 }}>{fmtN(sr.units)}</td>
@@ -1387,7 +1393,7 @@ function FinancialCategoryMatrix({ catData, subCatData, skuData, title, showRetu
                             <td style={{ ...cell(10.5), color: rtoColor }}>{sr.rto > 0 ? <>{fmtN(sr.rto)}{pctSpan(sr.rto, sr.orders)}</> : <span style={{ color: C.t3 }}>—</span>}</td>
                             <td style={{ ...cell(10.5), color: cirColor }}>{sr.cir > 0 ? <>{fmtN(sr.cir)}{pctSpan(sr.cir, sr.orders)}</> : <span style={{ color: C.t3 }}>—</span>}</td>
                             <td style={{ ...cell(10.5), color: exchColor }}>{sr.exch > 0 ? <>{fmtN(sr.exch)}{pctSpan(sr.exch, sr.orders)}</> : <span style={{ color: C.t3 }}>—</span>}</td>
-                            {showReturns && <td style={{ ...cell(10.5), color: returnColor, fontWeight: 600 }}>{(sr.rto + sr.cir) > 0 ? <>{fmtN(sr.rto + sr.cir)}{pctSpan(sr.rto + sr.cir, sr.orders)}</> : <span style={{ color: C.t3 }}>—</span>}</td>}
+                            {showReturns && <td style={{ ...cell(10.5), color: returnColor, fontWeight: 600 }}>{returnsRevCell(sr.rtoRev, sr.cirRev, sr.gross)}</td>}
                           </>}
                           <td style={{ ...cell(10.5), color: netColor }}>{fmt(sr.net)}</td>
                         </tr>
@@ -1395,7 +1401,6 @@ function FinancialCategoryMatrix({ catData, subCatData, skuData, title, showRetu
                           <tr key={sk.sku} style={{ borderBottom: `1px solid ${C.border}`, background: '#F5F5F0' }}>
                             <td style={{ padding: '3px 5px 3px 36px', color: C.t3, fontSize: 10, fontFamily: 'var(--mono)' }}>└ {sk.sku}</td>
                             <td style={{ ...cell(10), color: grossColor }}>{fmt(sk.gross)}{showShare && tot.gross > 0 ? <span style={{ fontSize: 8.5, color: C.t3, marginLeft: 5 }}>({(sk.gross / tot.gross * 100).toFixed(1)}%)</span> : null}</td>
-                            {showExtras && <td style={{ ...cell(10), color: C.t3 }}>{sk.prevGross > 0 ? fmt(sk.prevGross) : '—'}</td>}
                             {showExtras && <td style={{ ...cell(10) }}>{momCell(sk.gross, sk.prevGross)}</td>}
                             {showExtras && <td style={{ ...cell(10), color: C.t3 }}>{sk.cumPct ? sk.cumPct.toFixed(1) : '0.0'}%</td>}
                             <td style={{ ...cell(10), color: C.t2 }}>{fmtN(sk.units)}</td>
@@ -1406,7 +1411,7 @@ function FinancialCategoryMatrix({ catData, subCatData, skuData, title, showRetu
                               <td style={{ ...cell(10), color: rtoColor }}>{sk.rto > 0 ? <>{fmtN(sk.rto)}{pctSpan(sk.rto, sk.orders)}</> : <span style={{ color: C.t3 }}>—</span>}</td>
                               <td style={{ ...cell(10), color: cirColor }}>{sk.cir > 0 ? <>{fmtN(sk.cir)}{pctSpan(sk.cir, sk.orders)}</> : <span style={{ color: C.t3 }}>—</span>}</td>
                               <td style={{ ...cell(10), color: exchColor }}>{sk.exch > 0 ? <>{fmtN(sk.exch)}{pctSpan(sk.exch, sk.orders)}</> : <span style={{ color: C.t3 }}>—</span>}</td>
-                              {showReturns && <td style={{ ...cell(10), color: returnColor, fontWeight: 600 }}>{(sk.rto + sk.cir) > 0 ? <>{fmtN(sk.rto + sk.cir)}{pctSpan(sk.rto + sk.cir, sk.orders)}</> : <span style={{ color: C.t3 }}>—</span>}</td>}
+                              {showReturns && <td style={{ ...cell(10), color: returnColor, fontWeight: 600 }}>{returnsRevCell(sk.rtoRev, sk.cirRev, sk.gross)}</td>}
                             </>}
                             <td style={{ ...cell(10), color: netColor }}>{fmt(sk.net)}</td>
                           </tr>
@@ -1422,7 +1427,6 @@ function FinancialCategoryMatrix({ catData, subCatData, skuData, title, showRetu
             <tr style={{ borderTop: `2px solid ${C.border}`, background: C.bg }}>
               <td style={{ padding: '6px 8px', fontSize: 11, fontWeight: 700, color: C.t1 }}>Total</td>
               <td style={{ padding: '5px 5px', textAlign: 'right', fontWeight: 700, fontFamily: 'var(--mono)', fontSize: 11.5, color: grossColor }}>{fmt(tot.gross)}{showShare ? <span style={{ fontSize: 9.5, color: C.t3, marginLeft: 6, fontWeight: 400 }}>(100%)</span> : null}</td>
-              {showExtras && <td style={{ padding: '5px 5px', textAlign: 'right', fontWeight: 700, fontFamily: 'var(--mono)', fontSize: 11.5, color: C.t3 }}>{tot.prevGross > 0 ? fmt(tot.prevGross) : '—'}</td>}
               {showExtras && <td style={{ padding: '5px 5px', textAlign: 'right', fontWeight: 700, fontFamily: 'var(--mono)', fontSize: 11.5 }}>{momCell(tot.gross, tot.prevGross)}</td>}
               {showExtras && <td style={{ padding: '5px 5px', textAlign: 'right', fontWeight: 700, fontFamily: 'var(--mono)', fontSize: 11.5, color: C.t3 }}>100.0%</td>}
               <td style={{ padding: '5px 5px', textAlign: 'right', fontWeight: 700, fontFamily: 'var(--mono)', fontSize: 11.5, color: C.t2 }}>{fmtN(tot.units)}</td>
@@ -1433,7 +1437,7 @@ function FinancialCategoryMatrix({ catData, subCatData, skuData, title, showRetu
                 <td style={{ padding: '5px 5px', textAlign: 'right', fontWeight: 700, fontFamily: 'var(--mono)', fontSize: 11.5, color: rtoColor }}>{fmtN(tot.rto)}{pctSpan(tot.rto, tot.orders)}</td>
                 <td style={{ padding: '5px 5px', textAlign: 'right', fontWeight: 700, fontFamily: 'var(--mono)', fontSize: 11.5, color: cirColor }}>{fmtN(tot.cir)}{pctSpan(tot.cir, tot.orders)}</td>
                 <td style={{ padding: '5px 5px', textAlign: 'right', fontWeight: 700, fontFamily: 'var(--mono)', fontSize: 11.5, color: exchColor }}>{fmtN(tot.exch)}{pctSpan(tot.exch, tot.orders)}</td>
-                {showReturns && <td style={{ padding: '5px 5px', textAlign: 'right', fontWeight: 700, fontFamily: 'var(--mono)', fontSize: 11.5, color: returnColor }}>{fmtN(tot.rto + tot.cir)}{pctSpan(tot.rto + tot.cir, tot.orders)}</td>}
+                {showReturns && <td style={{ padding: '5px 5px', textAlign: 'right', fontWeight: 700, fontFamily: 'var(--mono)', fontSize: 11.5, color: returnColor }}>{returnsRevCell(tot.rtoRev, tot.cirRev, tot.gross)}</td>}
               </>}
               <td style={{ padding: '5px 5px', textAlign: 'right', fontWeight: 700, fontFamily: 'var(--mono)', fontSize: 11.5, color: netColor }}>{fmt(tot.net)}</td>
             </tr>
