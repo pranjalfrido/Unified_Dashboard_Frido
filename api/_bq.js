@@ -69,8 +69,24 @@ export function buildQuery(s, e, filters = {}) {
   }
   if (subChannel) {
     const vals = subChannel.split(',').map(v => v.trim()).filter(Boolean)
-    if (vals.length === 1) whereClauses.push(`u.SubChannel = '${vals[0].replace(/'/g, "''")}'`)
-    else if (vals.length > 1) whereClauses.push(`u.SubChannel IN (${vals.map(v => `'${v.replace(/'/g, "''")}'`).join(', ')})`)
+    // Special case: 'International' isn't a SubChannel in the dbt model
+    // (SubChannel is NULL for Shopify International). It's tracked via Country instead.
+    if (vals.length === 1 && vals[0] === 'International') {
+      whereClauses.push(`u.Country = 'International'`)
+    } else if (vals.length === 1) {
+      whereClauses.push(`u.SubChannel = '${vals[0].replace(/'/g, "''")}'`)
+    } else if (vals.length > 1) {
+      const hasIntl = vals.includes('International')
+      const otherVals = vals.filter(v => v !== 'International')
+      if (hasIntl && otherVals.length === 0) {
+        whereClauses.push(`u.Country = 'International'`)
+      } else if (hasIntl) {
+        const subChList = otherVals.map(v => `'${v.replace(/'/g, "''")}'`).join(', ')
+        whereClauses.push(`(u.SubChannel IN (${subChList}) OR u.Country = 'International')`)
+      } else {
+        whereClauses.push(`u.SubChannel IN (${vals.map(v => `'${v.replace(/'/g, "''")}'`).join(', ')})`)
+      }
+    }
   }
   if (country) {
     const vals = country.split(',').map(v => v.trim()).filter(Boolean)
