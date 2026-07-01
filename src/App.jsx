@@ -2211,8 +2211,10 @@ function ShopifyTab({ data, filters, setFilters }) {
   const catRows = Object.entries(catMap).map(([k, v]) => { const orders = v.orders?.size ?? v.orders ?? 0; return { name: k, rev: v.rev, excRev: v.excRev || 0, orders, units: v.units || 0, aov: orders ? v.rev / orders : 0, asp: (v.units || 0) ? v.rev / v.units : 0 } }).sort((a, b) => b.rev - a.rev)
   const allSubCatRows = Object.entries(subCatMap).map(([k, v]) => { const orders = v.orders?.size ?? v.orders ?? 0; return { name: k.split('::')[1] || k, category: k.split('::')[0] || '', rev: v.rev, orders, units: v.units || 0, aov: orders ? v.rev / orders : 0, asp: (v.units || 0) ? v.rev / v.units : 0 } }).sort((a, b) => b.rev - a.rev)
   const subCatRows = selectedCat ? allSubCatRows.filter(r => r.category === selectedCat) : allSubCatRows
+  const stateTotal = sh.stateTotal || { rev: 0, orders: 0 }
   const stateRows = (() => {
-    const totalRevAll = Object.values(stateMap).reduce((s, v) => s + (v.rev || 0), 0)
+    // % Share denominator is TRUE all-states revenue, not just top-30
+    const totalRevAll = stateTotal.rev || Object.values(stateMap).reduce((s, v) => s + (v.rev || 0), 0)
     const sorted = Object.entries(stateMap).map(([k, v]) => {
       const ord = v.orders instanceof Set ? v.orders.size : v.orders
       const prev = statePrevMap[k] || { rev: 0, orders: 0 }
@@ -2235,8 +2237,10 @@ function ShopifyTab({ data, filters, setFilters }) {
     sorted.forEach(r => { cum += r.sharePct; r.cumPct = cum })
     return sorted
   })()
+  const cityTotal = sh.cityTotal || { rev: 0, orders: 0 }
   const enrichedCityRows = (() => {
-    const totalRevAll = shCityRows.reduce((s, c) => s + (c.rev || 0), 0)
+    // % Share denominator is TRUE all-cities revenue, not just top-50
+    const totalRevAll = cityTotal.rev || shCityRows.reduce((s, c) => s + (c.rev || 0), 0)
     const sorted = shCityRows.map(c => {
       const key = `${c.city}|${c.state || ''}`
       const prev = cityPrevMap[key] || { rev: 0, orders: 0 }
