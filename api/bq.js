@@ -146,58 +146,7 @@ export default async function handler(req, res) {
     amzSCCities: `WITH q AS (${base}) SELECT UPPER(TRIM(City_L2)) AS city, COUNT(DISTINCT OrderId) AS orders, ROUND(SUM(SellingPrice_Inc_GST),0) AS rev FROM q WHERE SubChannel = 'Amazon Seller Central' AND FinancialStatus != 'Cancelled' AND City_L2 IS NOT NULL AND TRIM(City_L2) != '' GROUP BY city ORDER BY rev DESC LIMIT 50`,
     amzSCSKUs: `WITH q AS (${base}) SELECT ChannelSKUCode AS sku, ProductId AS asin, COUNT(DISTINCT OrderId) AS orders, SUM(ItemQty) AS units, ROUND(SUM(SellingPrice_Inc_GST),0) AS rev FROM q WHERE SubChannel = 'Amazon Seller Central' AND FulfilmentStatus != 'Cancelled' AND SellingPrice_Inc_GST > 0 GROUP BY sku, asin ORDER BY rev DESC LIMIT 20`,
     amzSCDaily: `WITH q AS (${base}) SELECT CAST(OrderDate AS STRING) AS date, fulfillment_channel, COUNT(DISTINCT OrderId) AS orders, SUM(ItemQty) AS units, ROUND(SUM(SellingPrice_Inc_GST),0) AS rev FROM q WHERE SubChannel = 'Amazon Seller Central' AND FulfilmentStatus != 'Cancelled' AND SellingPrice_Inc_GST > 0 GROUP BY date, fulfillment_channel ORDER BY date`,
-    amzSCReturnRate: `
-WITH refunds AS (
-  SELECT DISTINCT order_id
-  FROM \`frido-429506.production.fact_all_settlement_report\`
-  WHERE transaction_type = 'Refund' AND settlement_region = 'India'
-),
-latest_settlement AS (
-  SELECT MAX(DATE(settlement_start_date)) AS latest_date
-  FROM \`frido-429506.production.fact_all_settlement_report\`
-  WHERE transaction_type = 'Refund' AND settlement_region = 'India'
-),
-daily AS (
-  SELECT
-    DATE(o.OrderDate) AS order_date,
-    ROUND(SUM(o.SellingPrice_Exc_GST), 2) AS orders,
-    ROUND(SUM(CASE WHEN r.order_id IS NOT NULL THEN o.SellingPrice_Exc_GST ELSE 0 END), 2) AS returned
-  FROM \`frido-429506.production.fact_all_platform_sales_report\` o
-  LEFT JOIN refunds r ON o.OrderId = r.order_id
-  CROSS JOIN latest_settlement ls
-  WHERE DATE(o.OrderDate) BETWEEN DATE_SUB(ls.latest_date, INTERVAL 60 DAY) AND ls.latest_date
-    AND o.SubChannel = 'Amazon Seller Central'
-    AND o.Order_Status != 'Cancelled'
-    AND o.SellingPrice_Exc_GST > 0
-  GROUP BY order_date
-),
-rolling AS (
-  SELECT
-    order_date,
-    orders,
-    returned,
-    SUM(orders) OVER (ORDER BY order_date ROWS BETWEEN 29 PRECEDING AND CURRENT ROW) AS roll_orders,
-    SUM(returned) OVER (ORDER BY order_date ROWS BETWEEN 29 PRECEDING AND CURRENT ROW) AS roll_returned,
-    ROUND(SUM(returned) OVER (ORDER BY order_date ROWS BETWEEN 29 PRECEDING AND CURRENT ROW) * 100.0 /
-      NULLIF(SUM(orders) OVER (ORDER BY order_date ROWS BETWEEN 29 PRECEDING AND CURRENT ROW), 0), 2) AS rate
-  FROM daily
-),
-ls2 AS (SELECT latest_date FROM latest_settlement),
-reliable AS (
-  SELECT r.*
-  FROM rolling r CROSS JOIN ls2
-  WHERE r.order_date <= DATE_SUB(ls2.latest_date, INTERVAL 15 DAY)
-    AND r.order_date >= DATE_SUB(ls2.latest_date, INTERVAL 60 DAY)
-)
-SELECT
-  CAST(order_date AS STRING) AS date,
-  orders,
-  returned,
-  roll_orders,
-  roll_returned,
-  rate
-FROM reliable
-ORDER BY order_date`,
+    amzSCReturnRate: `WITH q AS (${base}), ret AS (SELECT DISTINCT order_id FROM \`frido-429506.production.fact_all_settlement_report\` WHERE transaction_type = 'Refund' AND settlement_region = 'India') SELECT ROUND(SUM(q.SellingPrice_Exc_GST), 2) AS total_rev, ROUND(SUM(CASE WHEN ret.order_id IS NOT NULL THEN q.SellingPrice_Exc_GST ELSE 0 END), 2) AS returned_rev FROM q LEFT JOIN ret ON q.OrderId = ret.order_id WHERE q.SubChannel = 'Amazon Seller Central' AND q.Order_Status != 'Cancelled' AND q.SellingPrice_Exc_GST > 0`,
     amzSCReturnCat: `WITH q AS (${base}), ret AS (SELECT DISTINCT order_id FROM \`frido-429506.production.fact_all_settlement_report\` WHERE transaction_type = 'Refund' AND settlement_region = 'India') SELECT q.Category, COUNT(DISTINCT q.OrderId) AS orders, COUNT(DISTINCT CASE WHEN ret.order_id IS NOT NULL THEN q.OrderId END) AS returned FROM q LEFT JOIN ret ON q.OrderId = ret.order_id WHERE q.SubChannel = 'Amazon Seller Central' AND q.FinancialStatus != 'Cancelled' AND q.Category IS NOT NULL GROUP BY q.Category`,
     amzSCReturnSubCat: `WITH q AS (${base}), ret AS (SELECT DISTINCT order_id FROM \`frido-429506.production.fact_all_settlement_report\` WHERE transaction_type = 'Refund' AND settlement_region = 'India') SELECT q.Category, q.SubCategory, COUNT(DISTINCT q.OrderId) AS orders, COUNT(DISTINCT CASE WHEN ret.order_id IS NOT NULL THEN q.OrderId END) AS returned FROM q LEFT JOIN ret ON q.OrderId = ret.order_id WHERE q.SubChannel = 'Amazon Seller Central' AND q.FinancialStatus != 'Cancelled' AND q.Category IS NOT NULL GROUP BY q.Category, q.SubCategory`,
     amzSCReturnSKU: `WITH q AS (${base}), ret AS (SELECT DISTINCT order_id FROM \`frido-429506.production.fact_all_settlement_report\` WHERE transaction_type = 'Refund' AND settlement_region = 'India') SELECT q.Category, q.SubCategory, q.MasterSKU AS sku, COUNT(DISTINCT q.OrderId) AS orders, COUNT(DISTINCT CASE WHEN ret.order_id IS NOT NULL THEN q.OrderId END) AS returned FROM q LEFT JOIN ret ON q.OrderId = ret.order_id WHERE q.SubChannel = 'Amazon Seller Central' AND q.FinancialStatus != 'Cancelled' AND q.MasterSKU IS NOT NULL GROUP BY q.Category, q.SubCategory, q.MasterSKU`,
@@ -550,11 +499,11 @@ ORDER BY order_date`,
         skus: (r.amzSCSKUs || []).map(x => ({ sku: x.sku, asin: x.asin, orders: parseInt(x.orders)||0, units: parseInt(x.units)||0, rev: parseFloat(x.rev)||0 })),
         daily: (r.amzSCDaily || []).map(x => ({ date: x.date, type: x.fulfillment_channel === 'Amazon' ? 'FBA' : 'MFN', orders: parseInt(x.orders)||0, units: parseInt(x.units)||0, rev: parseFloat(x.rev)||0 })),
         returnRate: (() => {
-          const rows = r.amzSCReturnRate || []
-          const last = rows[rows.length - 1]
-          const pct = parseFloat(last?.rate) || 0
-          const daily = rows.map(x => ({ date: typeof x.date === 'object' ? x.date.value : x.date, rate: parseFloat(x.rate) || 0, orders: parseFloat(x.orders)||0, returned: parseFloat(x.returned)||0, rollOrders: parseFloat(x.roll_orders)||0, rollReturned: parseFloat(x.roll_returned)||0 }))
-          return { pct, daily, lastDate: last?.date || null, rollOrders: parseFloat(last?.roll_orders)||0, rollReturned: parseFloat(last?.roll_returned)||0 }
+          const row = (r.amzSCReturnRate || [])[0]
+          const totalRev = parseFloat(row?.total_rev) || 0
+          const returnedRev = parseFloat(row?.returned_rev) || 0
+          const pct = totalRev > 0 ? Math.round(returnedRev / totalRev * 1000) / 10 : 0
+          return { pct, daily: [], rollOrders: totalRev, rollReturned: returnedRev }
         })(),
         regionRows: (r.amzSCRegion || []).map(x => ({ region: x.region, orders: parseInt(x.orders)||0, rev: parseFloat(x.rev)||0, units: parseInt(x.units)||0 })),
         tierRows: (r.amzSCTier || []).map(x => ({ tier: parseInt(x.city_tier)||x.city_tier, label: x.tier_label, orders: parseInt(x.orders)||0, rev: parseFloat(x.rev)||0, units: parseInt(x.units)||0 })),
