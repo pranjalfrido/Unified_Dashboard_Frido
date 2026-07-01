@@ -2621,15 +2621,17 @@ function ShopifyTab({ data, filters, setFilters }) {
       </div>
       {/* Category Revenue Matrix · Shopify */}
       {(() => {
+        // Pass through ALL fields including counts and return revenues so the matrix
+        // can render Cancel/RTO/CIR/Exch/Returns columns and % calculations.
         const catData = {}
         Object.entries(sh.catMap || {}).forEach(([cat, v]) => {
-          catData[cat] = { rev: v.rev || 0, excRev: v.excRev || 0, units: v.units || 0 }
+          catData[cat] = { rev: v.rev || 0, excRev: v.excRev || 0, units: v.units || 0, orders: v.orders, cancelled: v.cancelled || 0, rto: v.rto || 0, cir: v.cir || 0, exch: v.exch || 0, rtoRev: v.rtoRev || 0, cirRev: v.cirRev || 0 }
         })
         const subCatData = {}
         Object.entries(sh.subCatMap || {}).forEach(([key, v]) => {
           const [cat, sc] = key.split('::')
           if (!subCatData[cat]) subCatData[cat] = {}
-          subCatData[cat][sc] = { rev: v.rev || 0, excRev: v.excRev || 0, units: v.units || 0 }
+          subCatData[cat][sc] = { rev: v.rev || 0, excRev: v.excRev || 0, units: v.units || 0, orders: v.orders, cancelled: v.cancelled || 0, rto: v.rto || 0, cir: v.cir || 0, exch: v.exch || 0, rtoRev: v.rtoRev || 0, cirRev: v.cirRev || 0 }
         })
         const skuData = {}
         Object.entries(sh.skuMap || {}).forEach(([cat, scMap]) => {
@@ -2637,7 +2639,7 @@ function ShopifyTab({ data, filters, setFilters }) {
           Object.entries(scMap).forEach(([sc, skuMap_]) => {
             skuData[cat][sc] = {}
             Object.entries(skuMap_).forEach(([sku, v]) => {
-              skuData[cat][sc][sku] = { rev: v.rev || 0, excRev: v.excRev || 0, units: v.units || 0 }
+              skuData[cat][sc][sku] = { rev: v.rev || 0, excRev: v.excRev || 0, units: v.units || 0, orders: v.orders, cancelled: v.cancelled || 0, rto: v.rto || 0, cir: v.cir || 0, exch: v.exch || 0, rtoRev: v.rtoRev || 0, cirRev: v.cirRev || 0 }
             })
           })
         })
