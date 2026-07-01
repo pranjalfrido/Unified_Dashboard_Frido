@@ -2242,6 +2242,7 @@ function ShopifyTab({ data, filters, setFilters }) {
       const prev = cityPrevMap[key] || { rev: 0, orders: 0 }
       return {
         ...c,
+        aov: c.orders ? c.rev / c.orders : 0,
         rtoPct: c.orders ? ((c.rtoOrders || 0) / c.orders * 100) : 0,
         prevRev: prev.rev,
         prevOrders: prev.orders,
