@@ -1,0 +1,1511 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<title>Shopify India · Sales Report · 1–30 June 2026</title>
+<style>
+  * { box-sizing: border-box; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; margin: 0; padding: 28px; background: #FAFAF7; color: #1A1A1A; }
+  h1 { font-size: 24px; margin: 0 0 4px; }
+  .sub { color: #6B6864; font-size: 13px; margin-bottom: 24px; }
+  .card { background: #fff; border: 1px solid #E5E1D8; border-radius: 10px; padding: 18px 22px; margin-bottom: 16px; box-shadow: 0 1px 3px rgba(0,0,0,.02); }
+  .card-title { font-size: 13px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; color: #6B6864; margin-bottom: 12px; }
+  .kpi-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+  .kpi { background: #fff; border: 1px solid #E5E1D8; border-radius: 8px; padding: 12px 14px; }
+  .kpi-label { font-size: 10.5px; font-weight: 700; color: #898781; text-transform: uppercase; letter-spacing: .05em; margin-bottom: 5px; }
+  .kpi-value { font-size: 20px; font-weight: 800; }
+  .kpi-sub { font-size: 11px; color: #898781; margin-top: 3px; }
+  .chg { display: inline-block; font-size: 10px; font-weight: 700; padding: 2px 6px; border-radius: 4px; margin-left: 4px; }
+  .chg.up { background: #E6F4EA; color: #0A6E4A; }
+  .chg.down { background: #FDE8E8; color: #B91C1C; }
+  table { width: 100%; border-collapse: collapse; font-size: 11px; }
+  th { text-align: right; padding: 6px 6px 8px; border-bottom: 1px solid #E5E1D8; font-size: 9.5px; font-weight: 700; text-transform: uppercase; color: #898781; }
+  th:first-child { text-align: left; }
+  td { padding: 6px 6px; border-bottom: 1px solid #EFECE5; text-align: right; }
+  td:first-child { text-align: left; }
+  .mono { font-family: 'SF Mono', Menlo, monospace; }
+  .muted { color: #898781; }
+  tr.total td { border-top: 2px solid #C4C0B5; border-bottom: none; font-weight: 700; background: #FAFAF7; }
+  .bar-container { display: inline-block; width: 90px; height: 8px; background: #EFECE5; border-radius: 3px; overflow: hidden; vertical-align: middle; margin-right: 6px; }
+  .bar-fill { height: 100%; border-radius: 3px; }
+  .hbar-row { display: grid; grid-template-columns: 90px 1fr 100px 40px; gap: 8px; align-items: center; padding: 3px 0; font-size: 12px; }
+  .hbar-bar { height: 12px; background: #EFECE5; border-radius: 3px; overflow: hidden; }
+  .hbar-bar-fill { height: 100%; border-radius: 3px; }
+  .flex-row { display: flex; gap: 16px; }
+  .flex-row > * { flex: 1; }
+  .rto-chip { display: inline-block; font-size: 9.5px; font-weight: 700; padding: 2px 6px; border-radius: 10px; }
+  .rto-low { background: #E6F4EA; color: #0A6E4A; }
+  .rto-mid { background: #FFF4E0; color: #A66608; }
+  .rto-high { background: #FDE8E8; color: #B91C1C; }
+  h2 { font-size: 14px; margin: 0 0 12px; color: #1A1A1A; }
+  .footer { font-size: 11px; color: #898781; text-align: center; margin-top: 24px; }
+  @media print {
+    body { background: #fff; padding: 12px; }
+    .card { box-shadow: none; page-break-inside: avoid; }
+  }
+</style></head>
+<body>
+
+<h1>Shopify India — Sales Report</h1>
+<div class="sub">Period: 1 June 2026 → 30 June 2026 · Compared vs 2 May → 31 May · Excludes Shopify B2B and International</div>
+
+<!-- ================ KPIs ================ -->
+<div class="card">
+  <div class="card-title">Key Metrics</div>
+  <div class="kpi-grid">
+    <div class="kpi">
+      <div class="kpi-label">Gross Revenue · Inc. GST</div>
+      <div class="kpi-value">₹39.15 Cr <span class="chg up">▲ 8.7%</span></div>
+      <div class="kpi-sub">1,50,614 orders · 2,69,965 units</div>
+    </div>
+    <div class="kpi">
+      <div class="kpi-label">Net Revenue · Exc. GST</div>
+      <div class="kpi-value">₹30.25 Cr</div>
+      <div class="kpi-sub">Gross − Cancel − RTO − CIR − GST</div>
+    </div>
+    <div class="kpi">
+      <div class="kpi-label">GST Collected</div>
+      <div class="kpi-value">₹3.21 Cr</div>
+      <div class="kpi-sub">9.6% of net sales</div>
+    </div>
+    <div class="kpi">
+      <div class="kpi-label">Daily Avg (Net)</div>
+      <div class="kpi-value">₹1.01 Cr</div>
+      <div class="kpi-sub">over 30 days</div>
+    </div>
+    <div class="kpi">
+      <div class="kpi-label">AOV</div>
+      <div class="kpi-value">₹2,599</div>
+      <div class="kpi-sub">Gross ÷ orders</div>
+    </div>
+    <div class="kpi">
+      <div class="kpi-label">ASP</div>
+      <div class="kpi-value">₹1,121</div>
+      <div class="kpi-sub">Net ÷ units</div>
+    </div>
+    <div class="kpi">
+      <div class="kpi-label">Cancellation %</div>
+      <div class="kpi-value">3.7%</div>
+      <div class="kpi-sub">5,588 orders · ₹2.09 Cr</div>
+    </div>
+    <div class="kpi">
+      <div class="kpi-label">RTO %</div>
+      <div class="kpi-value">4.8%</div>
+      <div class="kpi-sub">7,188 orders · ₹1.82 Cr</div>
+    </div>
+    <div class="kpi">
+      <div class="kpi-label">CIR %</div>
+      <div class="kpi-value">4.2%</div>
+      <div class="kpi-sub">6,304 orders · ₹1.78 Cr</div>
+    </div>
+    <div class="kpi">
+      <div class="kpi-label">Exchange %</div>
+      <div class="kpi-value">4.1%</div>
+      <div class="kpi-sub">6,220 orders · ₹1.15 Cr</div>
+    </div>
+    <div class="kpi">
+      <div class="kpi-label">Return % (revenue)</div>
+      <div class="kpi-value">9.2%</div>
+      <div class="kpi-sub">₹3.60 Cr RTO+CIR rev</div>
+    </div>
+    <div class="kpi">
+      <div class="kpi-label">Repeat Ratio</div>
+      <div class="kpi-value">—</div>
+      <div class="kpi-sub">Not computed in this report</div>
+    </div>
+  </div>
+</div>
+
+<!-- ================ Sub-channel tiles ================ -->
+<div class="card">
+  <div class="card-title">Sub-channel Breakdown</div>
+  <div class="flex-row">
+    
+      <div style="border: 1px solid #E5E1D8; border-radius: 8px; padding: 10px 14px;">
+        <div style="font-size: 10px; font-weight: 700; color: #898781; text-transform: uppercase; margin-bottom: 3px;">MyFrido</div>
+        <div style="font-size: 15px; font-weight: 700; font-family: monospace;">₹33.18 Cr</div>
+        <div style="font-size: 10.5px; color: #898781;">1,45,667 orders · 84.7%</div>
+      </div>
+    
+      <div style="border: 1px solid #E5E1D8; border-radius: 8px; padding: 10px 14px;">
+        <div style="font-size: 10px; font-weight: 700; color: #898781; text-transform: uppercase; margin-bottom: 3px;">Mobility</div>
+        <div style="font-size: 15px; font-weight: 700; font-family: monospace;">₹4.00 Cr</div>
+        <div style="font-size: 10.5px; color: #898781;">1,101 orders · 10.2%</div>
+      </div>
+    
+      <div style="border: 1px solid #E5E1D8; border-radius: 8px; padding: 10px 14px;">
+        <div style="font-size: 10px; font-weight: 700; color: #898781; text-transform: uppercase; margin-bottom: 3px;">Retail Store</div>
+        <div style="font-size: 15px; font-weight: 700; font-family: monospace;">₹1.97 Cr</div>
+        <div style="font-size: 10.5px; color: #898781;">3,846 orders · 5.0%</div>
+      </div>
+    
+  </div>
+</div>
+
+<!-- ================ Geography Breakdown ================ -->
+<div class="card">
+  <div class="card-title">Geography Breakdown</div>
+  <div class="flex-row">
+    <div>
+      <h2>By Region</h2>
+      <div class="hbar-row">
+          <div>West</div>
+          <div class="hbar-bar"><div class="hbar-bar-fill" style="width:100%;background:#534AB7"></div></div>
+          <div class="mono" style="text-align: right;">₹11.81 Cr</div>
+          <div class="muted" style="text-align: right;">30%</div>
+        </div><div class="hbar-row">
+          <div>North</div>
+          <div class="hbar-bar"><div class="hbar-bar-fill" style="width:92.86101824868553%;background:#0D9E68"></div></div>
+          <div class="mono" style="text-align: right;">₹10.96 Cr</div>
+          <div class="muted" style="text-align: right;">28%</div>
+        </div><div class="hbar-row">
+          <div>South</div>
+          <div class="hbar-bar"><div class="hbar-bar-fill" style="width:91.04127935022737%;background:#2E74CC"></div></div>
+          <div class="mono" style="text-align: right;">₹10.75 Cr</div>
+          <div class="muted" style="text-align: right;">28%</div>
+        </div><div class="hbar-row">
+          <div>East</div>
+          <div class="hbar-bar"><div class="hbar-bar-fill" style="width:24.323760567559052%;background:#CC8A00"></div></div>
+          <div class="mono" style="text-align: right;">₹2.87 Cr</div>
+          <div class="muted" style="text-align: right;">7%</div>
+        </div><div class="hbar-row">
+          <div>Central</div>
+          <div class="hbar-bar"><div class="hbar-bar-fill" style="width:13.843193428511768%;background:#CC4078"></div></div>
+          <div class="mono" style="text-align: right;">₹1.63 Cr</div>
+          <div class="muted" style="text-align: right;">4%</div>
+        </div><div class="hbar-row">
+          <div>Northeast</div>
+          <div class="hbar-bar"><div class="hbar-bar-fill" style="width:6.8392278761545215%;background:#E24B4A"></div></div>
+          <div class="mono" style="text-align: right;">₹80.8 L</div>
+          <div class="muted" style="text-align: right;">2%</div>
+        </div>
+    </div>
+    <div>
+      <h2>By City Tier</h2>
+      <div class="hbar-row">
+          <div>Tier I</div>
+          <div class="hbar-bar"><div class="hbar-bar-fill" style="width:99.6401350381037%;background:#FFD600"></div></div>
+          <div class="mono" style="text-align: right;">₹15.25 Cr</div>
+          <div class="muted" style="text-align: right;">39%</div>
+        </div><div class="hbar-row">
+          <div>Tier II</div>
+          <div class="hbar-bar"><div class="hbar-bar-fill" style="width:100%;background:#FF6B35"></div></div>
+          <div class="mono" style="text-align: right;">₹15.31 Cr</div>
+          <div class="muted" style="text-align: right;">39%</div>
+        </div><div class="hbar-row">
+          <div>Tier III</div>
+          <div class="hbar-bar"><div class="hbar-bar-fill" style="width:54.082570658058096%;background:#9B59B6"></div></div>
+          <div class="mono" style="text-align: right;">₹8.28 Cr</div>
+          <div class="muted" style="text-align: right;">21%</div>
+        </div>
+    </div>
+  </div>
+</div>
+
+<!-- ================ Category Matrix ================ -->
+<div class="card">
+  <div class="card-title">Category Revenue Matrix (Gross = incl. GST · Net = excl. GST)</div>
+  <table>
+    <thead>
+      <tr>
+        <th>Category</th>
+        <th>Gross Rev / Share</th>
+        <th>Units</th>
+        <th>MoM</th>
+        <th>ASP</th>
+        <th>Cancel</th>
+        <th>RTO</th>
+        <th>CIR</th>
+        <th>Exch</th>
+        <th>Returns</th>
+        <th>Net Rev</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+          <td>Footwear</td>
+          <td class="mono">₹7.80 Cr <span class="muted" style="font-size:9.5px">(19.9%)</span></td>
+          <td class="mono">47,382</td>
+          <td><span class="chg up">↗ 5.2%</span></td>
+          <td class="mono">₹1,645</td>
+          <td class="mono">₹39.9 L <span class="muted" style="font-size:9px;">(5.1%)</span></td>
+          <td class="mono">₹38.1 L <span class="muted" style="font-size:9px;">(4.9%)</span></td>
+          <td class="mono">₹63.7 L <span class="muted" style="font-size:9px;">(8.2%)</span></td>
+          <td class="mono">₹46.2 L <span class="muted" style="font-size:9px;">(5.9%)</span></td>
+          <td class="mono">₹1.02 Cr <span class="muted" style="font-size:9px;">(13.1%)</span></td>
+          <td class="mono">₹5.98 Cr</td>
+        </tr><tr>
+          <td>Orthotics</td>
+          <td class="mono">₹7.38 Cr <span class="muted" style="font-size:9.5px">(18.9%)</span></td>
+          <td class="mono">72,687</td>
+          <td><span class="chg up">↗ 81.3%</span></td>
+          <td class="mono">₹1,015</td>
+          <td class="mono">₹19.7 L <span class="muted" style="font-size:9px;">(2.7%)</span></td>
+          <td class="mono">₹37.6 L <span class="muted" style="font-size:9px;">(5.1%)</span></td>
+          <td class="mono">₹23.3 L <span class="muted" style="font-size:9px;">(3.2%)</span></td>
+          <td class="mono">₹35.7 L <span class="muted" style="font-size:9px;">(4.8%)</span></td>
+          <td class="mono">₹60.9 L <span class="muted" style="font-size:9px;">(8.3%)</span></td>
+          <td class="mono">₹5.92 Cr</td>
+        </tr><tr>
+          <td>Combo</td>
+          <td class="mono">₹5.57 Cr <span class="muted" style="font-size:9.5px">(14.2%)</span></td>
+          <td class="mono">16,819</td>
+          <td><span class="chg down">↘ 1.6%</span></td>
+          <td class="mono">₹3,312</td>
+          <td class="mono">₹30.2 L <span class="muted" style="font-size:9px;">(5.4%)</span></td>
+          <td class="mono">₹26.8 L <span class="muted" style="font-size:9px;">(4.8%)</span></td>
+          <td class="mono">₹28.3 L <span class="muted" style="font-size:9px;">(5.1%)</span></td>
+          <td class="mono">₹8.4 L <span class="muted" style="font-size:9px;">(1.5%)</span></td>
+          <td class="mono">₹55.0 L <span class="muted" style="font-size:9px;">(9.9%)</span></td>
+          <td class="mono">₹4.13 Cr</td>
+        </tr><tr>
+          <td>Mobility</td>
+          <td class="mono">₹4.23 Cr <span class="muted" style="font-size:9.5px">(10.8%)</span></td>
+          <td class="mono">1,520</td>
+          <td><span class="chg up">↗ 4.1%</span></td>
+          <td class="mono">₹27,861</td>
+          <td class="mono">₹24.0 L <span class="muted" style="font-size:9px;">(5.7%)</span></td>
+          <td class="mono">₹12.4 L <span class="muted" style="font-size:9px;">(2.9%)</span></td>
+          <td class="mono">₹20.8K <span class="muted" style="font-size:9px;">(0.0%)</span></td>
+          <td class="mono">₹7.4K <span class="muted" style="font-size:9px;">(0.0%)</span></td>
+          <td class="mono">₹12.7 L <span class="muted" style="font-size:9px;">(3.0%)</span></td>
+          <td class="mono">₹3.66 Cr</td>
+        </tr><tr>
+          <td>Ergo Furniture</td>
+          <td class="mono">₹3.56 Cr <span class="muted" style="font-size:9.5px">(9.1%)</span></td>
+          <td class="mono">1,638</td>
+          <td><span class="chg down">↘ 8.8%</span></td>
+          <td class="mono">₹21,716</td>
+          <td class="mono">₹31.1 L <span class="muted" style="font-size:9px;">(8.8%)</span></td>
+          <td class="mono">₹13.4 L <span class="muted" style="font-size:9px;">(3.8%)</span></td>
+          <td class="mono">₹12.1 L <span class="muted" style="font-size:9px;">(3.4%)</span></td>
+          <td class="mono">₹5.9 L <span class="muted" style="font-size:9px;">(1.7%)</span></td>
+          <td class="mono">₹25.5 L <span class="muted" style="font-size:9px;">(7.2%)</span></td>
+          <td class="mono">₹2.71 Cr</td>
+        </tr><tr>
+          <td>Cushions</td>
+          <td class="mono">₹3.38 Cr <span class="muted" style="font-size:9.5px">(8.6%)</span></td>
+          <td class="mono">17,693</td>
+          <td><span class="chg up">↗ 20.0%</span></td>
+          <td class="mono">₹1,910</td>
+          <td class="mono">₹27.9 L <span class="muted" style="font-size:9px;">(8.3%)</span></td>
+          <td class="mono">₹19.0 L <span class="muted" style="font-size:9px;">(5.6%)</span></td>
+          <td class="mono">₹15.0 L <span class="muted" style="font-size:9px;">(4.4%)</span></td>
+          <td class="mono">₹4.6 L <span class="muted" style="font-size:9px;">(1.3%)</span></td>
+          <td class="mono">₹34.0 L <span class="muted" style="font-size:9px;">(10.1%)</span></td>
+          <td class="mono">₹2.42 Cr</td>
+        </tr><tr>
+          <td>Pillows</td>
+          <td class="mono">₹3.32 Cr <span class="muted" style="font-size:9.5px">(8.5%)</span></td>
+          <td class="mono">21,326</td>
+          <td><span class="chg down">↘ 9.3%</span></td>
+          <td class="mono">₹1,556</td>
+          <td class="mono">₹16.2 L <span class="muted" style="font-size:9px;">(4.9%)</span></td>
+          <td class="mono">₹19.2 L <span class="muted" style="font-size:9px;">(5.8%)</span></td>
+          <td class="mono">₹19.1 L <span class="muted" style="font-size:9px;">(5.8%)</span></td>
+          <td class="mono">₹5.6 L <span class="muted" style="font-size:9px;">(1.7%)</span></td>
+          <td class="mono">₹38.3 L <span class="muted" style="font-size:9px;">(11.5%)</span></td>
+          <td class="mono">₹2.43 Cr</td>
+        </tr><tr>
+          <td>Mattress Topper</td>
+          <td class="mono">₹1.57 Cr <span class="muted" style="font-size:9.5px">(4.0%)</span></td>
+          <td class="mono">1,908</td>
+          <td><span class="chg down">↘ 29.0%</span></td>
+          <td class="mono">₹8,228</td>
+          <td class="mono">₹9.7 L <span class="muted" style="font-size:9px;">(6.2%)</span></td>
+          <td class="mono">₹5.9 L <span class="muted" style="font-size:9px;">(3.7%)</span></td>
+          <td class="mono">₹8.6 L <span class="muted" style="font-size:9px;">(5.5%)</span></td>
+          <td class="mono">₹4.6 L <span class="muted" style="font-size:9px;">(2.9%)</span></td>
+          <td class="mono">₹14.4 L <span class="muted" style="font-size:9px;">(9.2%)</span></td>
+          <td class="mono">₹1.17 Cr</td>
+        </tr><tr>
+          <td>Personal Care</td>
+          <td class="mono">₹1.34 Cr <span class="muted" style="font-size:9.5px">(3.4%)</span></td>
+          <td class="mono">10,051</td>
+          <td><span class="chg up">↗ 25.4%</span></td>
+          <td class="mono">₹1,333</td>
+          <td class="mono">₹6.7 L <span class="muted" style="font-size:9px;">(5.0%)</span></td>
+          <td class="mono">₹6.7 L <span class="muted" style="font-size:9px;">(5.0%)</span></td>
+          <td class="mono">₹2.1 L <span class="muted" style="font-size:9px;">(1.6%)</span></td>
+          <td class="mono">₹68.7K <span class="muted" style="font-size:9px;">(0.5%)</span></td>
+          <td class="mono">₹8.8 L <span class="muted" style="font-size:9px;">(6.6%)</span></td>
+          <td class="mono">₹1.04 Cr</td>
+        </tr><tr>
+          <td>Insoles</td>
+          <td class="mono">₹68.3 L <span class="muted" style="font-size:9.5px">(1.7%)</span></td>
+          <td class="mono">7,673</td>
+          <td><span class="chg down">↘ 3.4%</span></td>
+          <td class="mono">₹891</td>
+          <td class="mono">₹2.6 L <span class="muted" style="font-size:9px;">(3.7%)</span></td>
+          <td class="mono">₹2.4 L <span class="muted" style="font-size:9px;">(3.5%)</span></td>
+          <td class="mono">₹3.6 L <span class="muted" style="font-size:9px;">(5.3%)</span></td>
+          <td class="mono">₹2.3 L <span class="muted" style="font-size:9px;">(3.4%)</span></td>
+          <td class="mono">₹6.0 L <span class="muted" style="font-size:9px;">(8.8%)</span></td>
+          <td class="mono">₹52.5 L</td>
+        </tr><tr>
+          <td>Socks</td>
+          <td class="mono">₹18.1 L <span class="muted" style="font-size:9.5px">(0.5%)</span></td>
+          <td class="mono">4,986</td>
+          <td><span class="chg down">↘ 35.2%</span></td>
+          <td class="mono">₹364</td>
+          <td class="mono">₹38.4K <span class="muted" style="font-size:9px;">(2.1%)</span></td>
+          <td class="mono">₹55.2K <span class="muted" style="font-size:9px;">(3.0%)</span></td>
+          <td class="mono">₹72.7K <span class="muted" style="font-size:9px;">(4.0%)</span></td>
+          <td class="mono">₹39.4K <span class="muted" style="font-size:9px;">(2.2%)</span></td>
+          <td class="mono">₹1.3 L <span class="muted" style="font-size:9px;">(7.0%)</span></td>
+          <td class="mono">₹15.3 L</td>
+        </tr><tr>
+          <td>Covers</td>
+          <td class="mono">₹7.9 L <span class="muted" style="font-size:9.5px">(0.2%)</span></td>
+          <td class="mono">1,078</td>
+          <td><span class="chg down">↘ 13.5%</span></td>
+          <td class="mono">₹732</td>
+          <td class="mono">₹19.3K <span class="muted" style="font-size:9px;">(2.4%)</span></td>
+          <td class="mono">₹22.2K <span class="muted" style="font-size:9px;">(2.8%)</span></td>
+          <td class="mono">₹69.4K <span class="muted" style="font-size:9px;">(8.8%)</span></td>
+          <td class="mono">₹22.2K <span class="muted" style="font-size:9px;">(2.8%)</span></td>
+          <td class="mono">₹91.6K <span class="muted" style="font-size:9px;">(11.6%)</span></td>
+          <td class="mono">₹6.0 L</td>
+        </tr><tr>
+          <td>Frido</td>
+          <td class="mono">₹3.3 L <span class="muted" style="font-size:9.5px">(0.1%)</span></td>
+          <td class="mono">64,803</td>
+          <td><span class="chg down">↘ 37.7%</span></td>
+          <td class="mono">₹5</td>
+          <td class="mono">₹27.5K <span class="muted" style="font-size:9px;">(8.4%)</span></td>
+          <td class="mono">₹5.3K <span class="muted" style="font-size:9px;">(1.6%)</span></td>
+          <td class="mono">₹16.1K <span class="muted" style="font-size:9px;">(4.9%)</span></td>
+          <td class="mono">₹7.0K <span class="muted" style="font-size:9px;">(2.1%)</span></td>
+          <td class="mono">₹21.4K <span class="muted" style="font-size:9px;">(6.6%)</span></td>
+          <td class="mono">₹2.6 L</td>
+        </tr><tr>
+          <td>Mask</td>
+          <td class="mono">₹1.4 L <span class="muted" style="font-size:9.5px">(0.0%)</span></td>
+          <td class="mono">395</td>
+          <td><span class="chg down">↘ 21.5%</span></td>
+          <td class="mono">₹366</td>
+          <td class="mono">₹3.5K <span class="muted" style="font-size:9px;">(2.4%)</span></td>
+          <td class="mono">₹7.3K <span class="muted" style="font-size:9px;">(5.1%)</span></td>
+          <td class="mono">₹4.6K <span class="muted" style="font-size:9px;">(3.2%)</span></td>
+          <td class="mono">₹4.4K <span class="muted" style="font-size:9px;">(3.0%)</span></td>
+          <td class="mono">₹11.9K <span class="muted" style="font-size:9px;">(8.2%)</span></td>
+          <td class="mono">₹1.2 L</td>
+        </tr><tr>
+          <td>Sparepart (Chair & Mobility)</td>
+          <td class="mono">₹63.6K <span class="muted" style="font-size:9.5px">(0.0%)</span></td>
+          <td class="mono">6</td>
+          <td><span class="chg up">↗ 29.8%</span></td>
+          <td class="mono">₹10,596</td>
+          <td class="mono">—</td>
+          <td class="mono">—</td>
+          <td class="mono">—</td>
+          <td class="mono">—</td>
+          <td class="mono">—</td>
+          <td class="mono">₹55.2K</td>
+        </tr>
+      <tr class="total">
+        <td>Total</td>
+        <td class="mono">₹39.15 Cr (100%)</td>
+        <td class="mono">2,69,965</td>
+        <td>—</td>
+        <td class="mono">₹1,450</td>
+        <td class="mono">₹2.09 Cr <span class="muted" style="font-size:9px;">(5.3%)</span></td>
+        <td class="mono">₹1.82 Cr <span class="muted" style="font-size:9px;">(4.7%)</span></td>
+        <td class="mono">₹1.78 Cr <span class="muted" style="font-size:9px;">(4.5%)</span></td>
+        <td class="mono">₹1.15 Cr <span class="muted" style="font-size:9px;">(2.9%)</span></td>
+        <td class="mono">₹3.60 Cr <span class="muted" style="font-size:9px;">(9.2%)</span></td>
+        <td class="mono">₹30.25 Cr</td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- ================ Top States ================ -->
+<div class="card">
+  <div class="card-title">Top States</div>
+  <table>
+    <thead>
+      <tr>
+        <th>#</th><th>State</th><th>Revenue</th><th>% Share</th><th>Cum %</th><th>Orders</th><th>AOV</th><th>MoM</th><th>RTO %</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+          <td class="muted">1</td>
+          <td>Maharashtra</td>
+          <td class="mono">₹8.55 Cr</td>
+          <td class="mono muted">22.1%</td>
+          <td class="mono muted">22.1%</td>
+          <td class="mono">32,605</td>
+          <td class="mono">₹2,623</td>
+          <td><span class="chg up">↗ 3.6%</span></td>
+          <td><span class="rto-chip rto-low">4%</span></td>
+        </tr><tr>
+          <td class="muted">2</td>
+          <td>Karnataka</td>
+          <td class="mono">₹4.07 Cr</td>
+          <td class="mono muted">10.5%</td>
+          <td class="mono muted">32.6%</td>
+          <td class="mono">16,002</td>
+          <td class="mono">₹2,546</td>
+          <td><span class="chg up">↗ 15.0%</span></td>
+          <td><span class="rto-chip rto-low">4%</span></td>
+        </tr><tr>
+          <td class="muted">3</td>
+          <td>Uttar pradesh</td>
+          <td class="mono">₹3.16 Cr</td>
+          <td class="mono muted">8.2%</td>
+          <td class="mono muted">40.7%</td>
+          <td class="mono">11,180</td>
+          <td class="mono">₹2,826</td>
+          <td><span class="chg up">↗ 7.2%</span></td>
+          <td><span class="rto-chip rto-low">6%</span></td>
+        </tr><tr>
+          <td class="muted">4</td>
+          <td>Gujarat</td>
+          <td class="mono">₹3.02 Cr</td>
+          <td class="mono muted">7.8%</td>
+          <td class="mono muted">48.5%</td>
+          <td class="mono">12,419</td>
+          <td class="mono">₹2,432</td>
+          <td><span class="chg up">↗ 12.0%</span></td>
+          <td><span class="rto-chip rto-low">4%</span></td>
+        </tr><tr>
+          <td class="muted">5</td>
+          <td>Telangana</td>
+          <td class="mono">₹2.44 Cr</td>
+          <td class="mono muted">6.3%</td>
+          <td class="mono muted">54.8%</td>
+          <td class="mono">9,664</td>
+          <td class="mono">₹2,530</td>
+          <td><span class="chg up">↗ 8.4%</span></td>
+          <td><span class="rto-chip rto-low">5%</span></td>
+        </tr><tr>
+          <td class="muted">6</td>
+          <td>Delhi</td>
+          <td class="mono">₹2.29 Cr</td>
+          <td class="mono muted">5.9%</td>
+          <td class="mono muted">60.7%</td>
+          <td class="mono">8,853</td>
+          <td class="mono">₹2,584</td>
+          <td><span class="chg up">↗ 2.4%</span></td>
+          <td><span class="rto-chip rto-low">4%</span></td>
+        </tr><tr>
+          <td class="muted">7</td>
+          <td>Tamil nadu</td>
+          <td class="mono">₹2.19 Cr</td>
+          <td class="mono muted">5.6%</td>
+          <td class="mono muted">66.4%</td>
+          <td class="mono">8,682</td>
+          <td class="mono">₹2,522</td>
+          <td><span class="chg up">↗ 23.8%</span></td>
+          <td><span class="rto-chip rto-low">5%</span></td>
+        </tr><tr>
+          <td class="muted">8</td>
+          <td>Haryana</td>
+          <td class="mono">₹1.89 Cr</td>
+          <td class="mono muted">4.9%</td>
+          <td class="mono muted">71.2%</td>
+          <td class="mono">6,640</td>
+          <td class="mono">₹2,841</td>
+          <td><span class="chg up">↗ 5.0%</span></td>
+          <td><span class="rto-chip rto-low">4%</span></td>
+        </tr><tr>
+          <td class="muted">9</td>
+          <td>Rajasthan</td>
+          <td class="mono">₹1.45 Cr</td>
+          <td class="mono muted">3.7%</td>
+          <td class="mono muted">75.0%</td>
+          <td class="mono">5,260</td>
+          <td class="mono">₹2,759</td>
+          <td><span class="chg up">↗ 10.9%</span></td>
+          <td><span class="rto-chip rto-low">6%</span></td>
+        </tr><tr>
+          <td class="muted">10</td>
+          <td>West bengal</td>
+          <td class="mono">₹1.24 Cr</td>
+          <td class="mono muted">3.2%</td>
+          <td class="mono muted">78.2%</td>
+          <td class="mono">4,665</td>
+          <td class="mono">₹2,650</td>
+          <td><span class="chg up">↗ 11.2%</span></td>
+          <td><span class="rto-chip rto-low">4%</span></td>
+        </tr><tr>
+          <td class="muted">11</td>
+          <td>Madhya pradesh</td>
+          <td class="mono">₹1.15 Cr</td>
+          <td class="mono muted">3.0%</td>
+          <td class="mono muted">81.1%</td>
+          <td class="mono">4,295</td>
+          <td class="mono">₹2,682</td>
+          <td><span class="chg up">↗ 2.0%</span></td>
+          <td><span class="rto-chip rto-low">5%</span></td>
+        </tr><tr>
+          <td class="muted">12</td>
+          <td>Andhra pradesh</td>
+          <td class="mono">₹1.10 Cr</td>
+          <td class="mono muted">2.8%</td>
+          <td class="mono muted">84.0%</td>
+          <td class="mono">4,274</td>
+          <td class="mono">₹2,566</td>
+          <td><span class="chg up">↗ 31.4%</span></td>
+          <td><span class="rto-chip rto-low">5%</span></td>
+        </tr><tr>
+          <td class="muted">13</td>
+          <td>Punjab</td>
+          <td class="mono">₹98.5 L</td>
+          <td class="mono muted">2.5%</td>
+          <td class="mono muted">86.5%</td>
+          <td class="mono">3,908</td>
+          <td class="mono">₹2,521</td>
+          <td><span class="chg down">↘ 0.5%</span></td>
+          <td><span class="rto-chip rto-low">6%</span></td>
+        </tr><tr>
+          <td class="muted">14</td>
+          <td>Kerala</td>
+          <td class="mono">₹90.0 L</td>
+          <td class="mono muted">2.3%</td>
+          <td class="mono muted">88.8%</td>
+          <td class="mono">3,666</td>
+          <td class="mono">₹2,456</td>
+          <td><span class="chg up">↗ 6.7%</span></td>
+          <td><span class="rto-chip rto-low">4%</span></td>
+        </tr><tr>
+          <td class="muted">15</td>
+          <td>Odisha</td>
+          <td class="mono">₹68.9 L</td>
+          <td class="mono muted">1.8%</td>
+          <td class="mono muted">90.6%</td>
+          <td class="mono">2,416</td>
+          <td class="mono">₹2,851</td>
+          <td><span class="chg up">↗ 8.4%</span></td>
+          <td><span class="rto-chip rto-low">6%</span></td>
+        </tr><tr>
+          <td class="muted">16</td>
+          <td>Bihar</td>
+          <td class="mono">₹55.1 L</td>
+          <td class="mono muted">1.4%</td>
+          <td class="mono muted">92.0%</td>
+          <td class="mono">1,884</td>
+          <td class="mono">₹2,925</td>
+          <td><span class="chg up">↗ 11.3%</span></td>
+          <td><span class="rto-chip rto-low">7%</span></td>
+        </tr><tr>
+          <td class="muted">17</td>
+          <td>Chhattisgarh</td>
+          <td class="mono">₹48.4 L</td>
+          <td class="mono muted">1.2%</td>
+          <td class="mono muted">93.3%</td>
+          <td class="mono">2,064</td>
+          <td class="mono">₹2,347</td>
+          <td><span class="chg up">↗ 8.3%</span></td>
+          <td><span class="rto-chip rto-low">6%</span></td>
+        </tr><tr>
+          <td class="muted">18</td>
+          <td>Jammu and kashmir</td>
+          <td class="mono">₹45.7 L</td>
+          <td class="mono muted">1.2%</td>
+          <td class="mono muted">94.5%</td>
+          <td class="mono">1,769</td>
+          <td class="mono">₹2,581</td>
+          <td><span class="chg up">↗ 20.2%</span></td>
+          <td><span class="rto-chip rto-low">11%</span></td>
+        </tr><tr>
+          <td class="muted">19</td>
+          <td>Assam</td>
+          <td class="mono">₹45.0 L</td>
+          <td class="mono muted">1.2%</td>
+          <td class="mono muted">95.6%</td>
+          <td class="mono">1,796</td>
+          <td class="mono">₹2,505</td>
+          <td><span class="chg up">↗ 3.2%</span></td>
+          <td><span class="rto-chip rto-low">7%</span></td>
+        </tr><tr>
+          <td class="muted">20</td>
+          <td>Uttarakhand</td>
+          <td class="mono">₹42.6 L</td>
+          <td class="mono muted">1.1%</td>
+          <td class="mono muted">96.7%</td>
+          <td class="mono">1,532</td>
+          <td class="mono">₹2,778</td>
+          <td><span class="chg up">↗ 16.4%</span></td>
+          <td><span class="rto-chip rto-low">6%</span></td>
+        </tr><tr>
+          <td class="muted">21</td>
+          <td>Jharkhand</td>
+          <td class="mono">₹36.0 L</td>
+          <td class="mono muted">0.9%</td>
+          <td class="mono muted">97.7%</td>
+          <td class="mono">1,335</td>
+          <td class="mono">₹2,699</td>
+          <td><span class="chg up">↗ 14.9%</span></td>
+          <td><span class="rto-chip rto-low">6%</span></td>
+        </tr><tr>
+          <td class="muted">22</td>
+          <td>Himachal pradesh</td>
+          <td class="mono">₹22.6 L</td>
+          <td class="mono muted">0.6%</td>
+          <td class="mono muted">98.2%</td>
+          <td class="mono">894</td>
+          <td class="mono">₹2,529</td>
+          <td><span class="chg up">↗ 9.7%</span></td>
+          <td><span class="rto-chip rto-low">4%</span></td>
+        </tr><tr>
+          <td class="muted">23</td>
+          <td>Goa</td>
+          <td class="mono">₹22.3 L</td>
+          <td class="mono muted">0.6%</td>
+          <td class="mono muted">98.8%</td>
+          <td class="mono">863</td>
+          <td class="mono">₹2,586</td>
+          <td><span class="chg up">↗ 12.4%</span></td>
+          <td><span class="rto-chip rto-low">5%</span></td>
+        </tr><tr>
+          <td class="muted">24</td>
+          <td>Chandigarh</td>
+          <td class="mono">₹11.1 L</td>
+          <td class="mono muted">0.3%</td>
+          <td class="mono muted">99.1%</td>
+          <td class="mono">459</td>
+          <td class="mono">₹2,423</td>
+          <td><span class="chg up">↗ 0.1%</span></td>
+          <td><span class="rto-chip rto-low">5%</span></td>
+        </tr><tr>
+          <td class="muted">25</td>
+          <td>Arunachal pradesh</td>
+          <td class="mono">₹7.1 L</td>
+          <td class="mono muted">0.2%</td>
+          <td class="mono muted">99.3%</td>
+          <td class="mono">308</td>
+          <td class="mono">₹2,307</td>
+          <td><span class="chg down">↘ 14.6%</span></td>
+          <td><span class="rto-chip rto-low">9%</span></td>
+        </tr><tr>
+          <td class="muted">26</td>
+          <td>Nagaland</td>
+          <td class="mono">₹6.1 L</td>
+          <td class="mono muted">0.2%</td>
+          <td class="mono muted">99.4%</td>
+          <td class="mono">219</td>
+          <td class="mono">₹2,781</td>
+          <td><span class="chg up">↗ 27.1%</span></td>
+          <td><span class="rto-chip rto-low">5%</span></td>
+        </tr><tr>
+          <td class="muted">27</td>
+          <td>Manipur</td>
+          <td class="mono">₹5.8 L</td>
+          <td class="mono muted">0.1%</td>
+          <td class="mono muted">99.6%</td>
+          <td class="mono">237</td>
+          <td class="mono">₹2,429</td>
+          <td><span class="chg up">↗ 26.0%</span></td>
+          <td><span class="rto-chip rto-low">9%</span></td>
+        </tr><tr>
+          <td class="muted">28</td>
+          <td>Puducherry</td>
+          <td class="mono">₹5.6 L</td>
+          <td class="mono muted">0.1%</td>
+          <td class="mono muted">99.7%</td>
+          <td class="mono">172</td>
+          <td class="mono">₹3,277</td>
+          <td><span class="chg up">↗ 98.1%</span></td>
+          <td><span class="rto-chip rto-low">6%</span></td>
+        </tr><tr>
+          <td class="muted">29</td>
+          <td>Meghalaya</td>
+          <td class="mono">₹5.4 L</td>
+          <td class="mono muted">0.1%</td>
+          <td class="mono muted">99.9%</td>
+          <td class="mono">246</td>
+          <td class="mono">₹2,193</td>
+          <td><span class="chg up">↗ 0.9%</span></td>
+          <td><span class="rto-chip rto-low">4%</span></td>
+        </tr><tr>
+          <td class="muted">30</td>
+          <td>Sikkim</td>
+          <td class="mono">₹4.7 L</td>
+          <td class="mono muted">0.1%</td>
+          <td class="mono muted">100.0%</td>
+          <td class="mono">202</td>
+          <td class="mono">₹2,305</td>
+          <td><span class="chg down">↘ 18.3%</span></td>
+          <td><span class="rto-chip rto-low">7%</span></td>
+        </tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- ================ Top Cities ================ -->
+<div class="card">
+  <div class="card-title">Top Cities</div>
+  <table>
+    <thead>
+      <tr>
+        <th>#</th><th>City</th><th>State</th><th>Revenue</th><th>% Share</th><th>Cum %</th><th>Orders</th><th>AOV</th><th>RTO %</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+          <td class="muted">1</td>
+          <td>Mumbai</td>
+          <td class="muted">Maharashtra</td>
+          <td class="mono">₹2.53 Cr</td>
+          <td class="mono muted">11.0%</td>
+          <td class="mono muted">11.0%</td>
+          <td class="mono">10,290</td>
+          <td class="mono">₹2,454</td>
+          <td><span class="rto-chip rto-low">3%</span></td>
+        </tr><tr>
+          <td class="muted">2</td>
+          <td>Pune</td>
+          <td class="muted">Maharashtra</td>
+          <td class="mono">₹2.49 Cr</td>
+          <td class="mono muted">10.9%</td>
+          <td class="mono muted">21.9%</td>
+          <td class="mono">8,562</td>
+          <td class="mono">₹2,903</td>
+          <td><span class="rto-chip rto-low">4%</span></td>
+        </tr><tr>
+          <td class="muted">3</td>
+          <td>Bangalore</td>
+          <td class="muted">Karnataka</td>
+          <td class="mono">₹2.45 Cr</td>
+          <td class="mono muted">10.7%</td>
+          <td class="mono muted">32.7%</td>
+          <td class="mono">10,436</td>
+          <td class="mono">₹2,352</td>
+          <td><span class="rto-chip rto-low">3%</span></td>
+        </tr><tr>
+          <td class="muted">4</td>
+          <td>Hyderabad</td>
+          <td class="muted">Telangana</td>
+          <td class="mono">₹1.33 Cr</td>
+          <td class="mono muted">5.8%</td>
+          <td class="mono muted">38.5%</td>
+          <td class="mono">5,139</td>
+          <td class="mono">₹2,596</td>
+          <td><span class="rto-chip rto-low">5%</span></td>
+        </tr><tr>
+          <td class="muted">5</td>
+          <td>Thane</td>
+          <td class="muted">Maharashtra</td>
+          <td class="mono">₹91.5 L</td>
+          <td class="mono muted">4.0%</td>
+          <td class="mono muted">42.5%</td>
+          <td class="mono">4,066</td>
+          <td class="mono">₹2,250</td>
+          <td><span class="rto-chip rto-low">3%</span></td>
+        </tr><tr>
+          <td class="muted">6</td>
+          <td>Ahmedabad</td>
+          <td class="muted">Gujarat</td>
+          <td class="mono">₹82.4 L</td>
+          <td class="mono muted">3.6%</td>
+          <td class="mono muted">46.1%</td>
+          <td class="mono">3,452</td>
+          <td class="mono">₹2,388</td>
+          <td><span class="rto-chip rto-low">3%</span></td>
+        </tr><tr>
+          <td class="muted">7</td>
+          <td>Gurgaon</td>
+          <td class="muted">Haryana</td>
+          <td class="mono">₹76.2 L</td>
+          <td class="mono muted">3.3%</td>
+          <td class="mono muted">49.4%</td>
+          <td class="mono">2,784</td>
+          <td class="mono">₹2,736</td>
+          <td><span class="rto-chip rto-low">4%</span></td>
+        </tr><tr>
+          <td class="muted">8</td>
+          <td>Chennai</td>
+          <td class="muted">Tamil Nadu</td>
+          <td class="mono">₹68.7 L</td>
+          <td class="mono muted">3.0%</td>
+          <td class="mono muted">52.4%</td>
+          <td class="mono">2,960</td>
+          <td class="mono">₹2,321</td>
+          <td><span class="rto-chip rto-low">3%</span></td>
+        </tr><tr>
+          <td class="muted">9</td>
+          <td>Surat</td>
+          <td class="muted">Gujarat</td>
+          <td class="mono">₹56.8 L</td>
+          <td class="mono muted">2.5%</td>
+          <td class="mono muted">54.9%</td>
+          <td class="mono">2,410</td>
+          <td class="mono">₹2,356</td>
+          <td><span class="rto-chip rto-low">4%</span></td>
+        </tr><tr>
+          <td class="muted">10</td>
+          <td>Jaipur</td>
+          <td class="muted">Rajasthan</td>
+          <td class="mono">₹54.7 L</td>
+          <td class="mono muted">2.4%</td>
+          <td class="mono muted">57.3%</td>
+          <td class="mono">1,844</td>
+          <td class="mono">₹2,968</td>
+          <td><span class="rto-chip rto-low">6%</span></td>
+        </tr><tr>
+          <td class="muted">11</td>
+          <td>Gautam Buddha Nagar</td>
+          <td class="muted">Uttar Pradesh</td>
+          <td class="mono">₹52.7 L</td>
+          <td class="mono muted">2.3%</td>
+          <td class="mono muted">59.6%</td>
+          <td class="mono">2,149</td>
+          <td class="mono">₹2,454</td>
+          <td><span class="rto-chip rto-low">5%</span></td>
+        </tr><tr>
+          <td class="muted">12</td>
+          <td>Bengaluru</td>
+          <td class="muted">Karnataka</td>
+          <td class="mono">₹47.3 L</td>
+          <td class="mono muted">2.1%</td>
+          <td class="mono muted">61.7%</td>
+          <td class="mono">905</td>
+          <td class="mono">₹5,230</td>
+          <td><span class="rto-chip rto-low">3%</span></td>
+        </tr><tr>
+          <td class="muted">13</td>
+          <td>Kolkata</td>
+          <td class="muted">West Bengal</td>
+          <td class="mono">₹46.4 L</td>
+          <td class="mono muted">2.0%</td>
+          <td class="mono muted">63.7%</td>
+          <td class="mono">1,636</td>
+          <td class="mono">₹2,834</td>
+          <td><span class="rto-chip rto-low">3%</span></td>
+        </tr><tr>
+          <td class="muted">14</td>
+          <td>Ghaziabad</td>
+          <td class="muted">Uttar Pradesh</td>
+          <td class="mono">₹42.0 L</td>
+          <td class="mono muted">1.8%</td>
+          <td class="mono muted">65.5%</td>
+          <td class="mono">1,564</td>
+          <td class="mono">₹2,682</td>
+          <td><span class="rto-chip rto-low">4%</span></td>
+        </tr><tr>
+          <td class="muted">15</td>
+          <td>Ranga Reddy</td>
+          <td class="muted">Telangana</td>
+          <td class="mono">₹40.6 L</td>
+          <td class="mono muted">1.8%</td>
+          <td class="mono muted">67.3%</td>
+          <td class="mono">1,614</td>
+          <td class="mono">₹2,516</td>
+          <td><span class="rto-chip rto-low">4%</span></td>
+        </tr><tr>
+          <td class="muted">16</td>
+          <td>Lucknow</td>
+          <td class="muted">Uttar Pradesh</td>
+          <td class="mono">₹37.1 L</td>
+          <td class="mono muted">1.6%</td>
+          <td class="mono muted">68.9%</td>
+          <td class="mono">1,324</td>
+          <td class="mono">₹2,802</td>
+          <td><span class="rto-chip rto-low">5%</span></td>
+        </tr><tr>
+          <td class="muted">17</td>
+          <td>West</td>
+          <td class="muted">Delhi</td>
+          <td class="mono">₹34.6 L</td>
+          <td class="mono muted">1.5%</td>
+          <td class="mono muted">70.5%</td>
+          <td class="mono">1,513</td>
+          <td class="mono">₹2,285</td>
+          <td><span class="rto-chip rto-low">4%</span></td>
+        </tr><tr>
+          <td class="muted">18</td>
+          <td>Indore</td>
+          <td class="muted">Madhya Pradesh</td>
+          <td class="mono">₹31.9 L</td>
+          <td class="mono muted">1.4%</td>
+          <td class="mono muted">71.9%</td>
+          <td class="mono">1,186</td>
+          <td class="mono">₹2,694</td>
+          <td><span class="rto-chip rto-low">5%</span></td>
+        </tr><tr>
+          <td class="muted">19</td>
+          <td>New Delhi</td>
+          <td class="muted">Delhi</td>
+          <td class="mono">₹31.6 L</td>
+          <td class="mono muted">1.4%</td>
+          <td class="mono muted">73.2%</td>
+          <td class="mono">1,008</td>
+          <td class="mono">₹3,136</td>
+          <td><span class="rto-chip rto-low">5%</span></td>
+        </tr><tr>
+          <td class="muted">20</td>
+          <td>Vadodara</td>
+          <td class="muted">Gujarat</td>
+          <td class="mono">₹30.9 L</td>
+          <td class="mono muted">1.4%</td>
+          <td class="mono muted">74.6%</td>
+          <td class="mono">1,299</td>
+          <td class="mono">₹2,378</td>
+          <td><span class="rto-chip rto-low">3%</span></td>
+        </tr><tr>
+          <td class="muted">21</td>
+          <td>Nagpur</td>
+          <td class="muted">Maharashtra</td>
+          <td class="mono">₹30.5 L</td>
+          <td class="mono muted">1.3%</td>
+          <td class="mono muted">75.9%</td>
+          <td class="mono">1,142</td>
+          <td class="mono">₹2,673</td>
+          <td><span class="rto-chip rto-low">5%</span></td>
+        </tr><tr>
+          <td class="muted">22</td>
+          <td>Faridabad</td>
+          <td class="muted">Haryana</td>
+          <td class="mono">₹27.7 L</td>
+          <td class="mono muted">1.2%</td>
+          <td class="mono muted">77.1%</td>
+          <td class="mono">1,017</td>
+          <td class="mono">₹2,720</td>
+          <td><span class="rto-chip rto-low">3%</span></td>
+        </tr><tr>
+          <td class="muted">23</td>
+          <td>Medchal Malkajgiri</td>
+          <td class="muted">Telangana</td>
+          <td class="mono">₹25.3 L</td>
+          <td class="mono muted">1.1%</td>
+          <td class="mono muted">78.2%</td>
+          <td class="mono">1,117</td>
+          <td class="mono">₹2,266</td>
+          <td><span class="rto-chip rto-low">5%</span></td>
+        </tr><tr>
+          <td class="muted">24</td>
+          <td>Raigad</td>
+          <td class="muted">Maharashtra</td>
+          <td class="mono">₹24.0 L</td>
+          <td class="mono muted">1.0%</td>
+          <td class="mono muted">79.3%</td>
+          <td class="mono">1,040</td>
+          <td class="mono">₹2,304</td>
+          <td><span class="rto-chip rto-low">4%</span></td>
+        </tr><tr>
+          <td class="muted">25</td>
+          <td>South</td>
+          <td class="muted">Delhi</td>
+          <td class="mono">₹23.1 L</td>
+          <td class="mono muted">1.0%</td>
+          <td class="mono muted">80.3%</td>
+          <td class="mono">1,000</td>
+          <td class="mono">₹2,312</td>
+          <td><span class="rto-chip rto-low">5%</span></td>
+        </tr><tr>
+          <td class="muted">26</td>
+          <td>North West</td>
+          <td class="muted">Delhi</td>
+          <td class="mono">₹21.8 L</td>
+          <td class="mono muted">1.0%</td>
+          <td class="mono muted">81.2%</td>
+          <td class="mono">972</td>
+          <td class="mono">₹2,243</td>
+          <td><span class="rto-chip rto-low">4%</span></td>
+        </tr><tr>
+          <td class="muted">27</td>
+          <td>Ernakulam</td>
+          <td class="muted">Kerala</td>
+          <td class="mono">₹21.6 L</td>
+          <td class="mono muted">0.9%</td>
+          <td class="mono muted">82.2%</td>
+          <td class="mono">840</td>
+          <td class="mono">₹2,571</td>
+          <td><span class="rto-chip rto-low">3%</span></td>
+        </tr><tr>
+          <td class="muted">28</td>
+          <td>Nashik</td>
+          <td class="muted">Maharashtra</td>
+          <td class="mono">₹21.1 L</td>
+          <td class="mono muted">0.9%</td>
+          <td class="mono muted">83.1%</td>
+          <td class="mono">906</td>
+          <td class="mono">₹2,326</td>
+          <td><span class="rto-chip rto-low">6%</span></td>
+        </tr><tr>
+          <td class="muted">29</td>
+          <td>Coimbatore</td>
+          <td class="muted">Tamil Nadu</td>
+          <td class="mono">₹20.9 L</td>
+          <td class="mono muted">0.9%</td>
+          <td class="mono muted">84.0%</td>
+          <td class="mono">869</td>
+          <td class="mono">₹2,408</td>
+          <td><span class="rto-chip rto-low">6%</span></td>
+        </tr><tr>
+          <td class="muted">30</td>
+          <td>Ludhiana</td>
+          <td class="muted">Punjab</td>
+          <td class="mono">₹20.2 L</td>
+          <td class="mono muted">0.9%</td>
+          <td class="mono muted">84.9%</td>
+          <td class="mono">808</td>
+          <td class="mono">₹2,504</td>
+          <td><span class="rto-chip rto-low">7%</span></td>
+        </tr><tr>
+          <td class="muted">31</td>
+          <td>Chengalpattu</td>
+          <td class="muted">Tamil Nadu</td>
+          <td class="mono">₹20.2 L</td>
+          <td class="mono muted">0.9%</td>
+          <td class="mono muted">85.8%</td>
+          <td class="mono">820</td>
+          <td class="mono">₹2,466</td>
+          <td><span class="rto-chip rto-low">5%</span></td>
+        </tr><tr>
+          <td class="muted">32</td>
+          <td>Bhopal</td>
+          <td class="muted">Madhya Pradesh</td>
+          <td class="mono">₹20.2 L</td>
+          <td class="mono muted">0.9%</td>
+          <td class="mono muted">86.7%</td>
+          <td class="mono">698</td>
+          <td class="mono">₹2,892</td>
+          <td><span class="rto-chip rto-low">3%</span></td>
+        </tr><tr>
+          <td class="muted">33</td>
+          <td>Rajkot</td>
+          <td class="muted">Gujarat</td>
+          <td class="mono">₹20.2 L</td>
+          <td class="mono muted">0.9%</td>
+          <td class="mono muted">87.6%</td>
+          <td class="mono">845</td>
+          <td class="mono">₹2,385</td>
+          <td><span class="rto-chip rto-low">4%</span></td>
+        </tr><tr>
+          <td class="muted">34</td>
+          <td>Delhi</td>
+          <td class="muted">Delhi</td>
+          <td class="mono">₹19.9 L</td>
+          <td class="mono muted">0.9%</td>
+          <td class="mono muted">88.4%</td>
+          <td class="mono">387</td>
+          <td class="mono">₹5,152</td>
+          <td><span class="rto-chip rto-low">4%</span></td>
+        </tr><tr>
+          <td class="muted">35</td>
+          <td>Dehradun</td>
+          <td class="muted">Uttarakhand</td>
+          <td class="mono">₹19.9 L</td>
+          <td class="mono muted">0.9%</td>
+          <td class="mono muted">89.3%</td>
+          <td class="mono">699</td>
+          <td class="mono">₹2,844</td>
+          <td><span class="rto-chip rto-low">6%</span></td>
+        </tr><tr>
+          <td class="muted">36</td>
+          <td>Raipur</td>
+          <td class="muted">Chhattisgarh</td>
+          <td class="mono">₹19.0 L</td>
+          <td class="mono muted">0.8%</td>
+          <td class="mono muted">90.1%</td>
+          <td class="mono">786</td>
+          <td class="mono">₹2,413</td>
+          <td><span class="rto-chip rto-low">6%</span></td>
+        </tr><tr>
+          <td class="muted">37</td>
+          <td>South West</td>
+          <td class="muted">Delhi</td>
+          <td class="mono">₹18.6 L</td>
+          <td class="mono muted">0.8%</td>
+          <td class="mono muted">90.9%</td>
+          <td class="mono">665</td>
+          <td class="mono">₹2,803</td>
+          <td><span class="rto-chip rto-low">3%</span></td>
+        </tr><tr>
+          <td class="muted">38</td>
+          <td>24 Paraganas North</td>
+          <td class="muted">West Bengal</td>
+          <td class="mono">₹18.4 L</td>
+          <td class="mono muted">0.8%</td>
+          <td class="mono muted">91.8%</td>
+          <td class="mono">766</td>
+          <td class="mono">₹2,403</td>
+          <td><span class="rto-chip rto-low">4%</span></td>
+        </tr><tr>
+          <td class="muted">39</td>
+          <td>North</td>
+          <td class="muted">Delhi</td>
+          <td class="mono">₹17.8 L</td>
+          <td class="mono muted">0.8%</td>
+          <td class="mono muted">92.5%</td>
+          <td class="mono">852</td>
+          <td class="mono">₹2,094</td>
+          <td><span class="rto-chip rto-low">5%</span></td>
+        </tr><tr>
+          <td class="muted">40</td>
+          <td>Visakhapatnam</td>
+          <td class="muted">Andhra Pradesh</td>
+          <td class="mono">₹17.7 L</td>
+          <td class="mono muted">0.8%</td>
+          <td class="mono muted">93.3%</td>
+          <td class="mono">638</td>
+          <td class="mono">₹2,782</td>
+          <td><span class="rto-chip rto-low">4%</span></td>
+        </tr><tr>
+          <td class="muted">41</td>
+          <td>Patna</td>
+          <td class="muted">Bihar</td>
+          <td class="mono">₹17.3 L</td>
+          <td class="mono muted">0.8%</td>
+          <td class="mono muted">94.1%</td>
+          <td class="mono">598</td>
+          <td class="mono">₹2,885</td>
+          <td><span class="rto-chip rto-low">6%</span></td>
+        </tr><tr>
+          <td class="muted">42</td>
+          <td>Palghar</td>
+          <td class="muted">Maharashtra</td>
+          <td class="mono">₹17.0 L</td>
+          <td class="mono muted">0.7%</td>
+          <td class="mono muted">94.8%</td>
+          <td class="mono">783</td>
+          <td class="mono">₹2,173</td>
+          <td><span class="rto-chip rto-low">4%</span></td>
+        </tr><tr>
+          <td class="muted">43</td>
+          <td>S.A.S Nagar</td>
+          <td class="muted">Punjab</td>
+          <td class="mono">₹16.8 L</td>
+          <td class="mono muted">0.7%</td>
+          <td class="mono muted">95.5%</td>
+          <td class="mono">732</td>
+          <td class="mono">₹2,296</td>
+          <td><span class="rto-chip rto-low">5%</span></td>
+        </tr><tr>
+          <td class="muted">44</td>
+          <td>Khorda</td>
+          <td class="muted">Odisha</td>
+          <td class="mono">₹16.7 L</td>
+          <td class="mono muted">0.7%</td>
+          <td class="mono muted">96.3%</td>
+          <td class="mono">639</td>
+          <td class="mono">₹2,615</td>
+          <td><span class="rto-chip rto-low">5%</span></td>
+        </tr><tr>
+          <td class="muted">45</td>
+          <td>South East</td>
+          <td class="muted">Delhi</td>
+          <td class="mono">₹15.9 L</td>
+          <td class="mono muted">0.7%</td>
+          <td class="mono muted">97.0%</td>
+          <td class="mono">696</td>
+          <td class="mono">₹2,289</td>
+          <td><span class="rto-chip rto-low">4%</span></td>
+        </tr><tr>
+          <td class="muted">46</td>
+          <td>Jammu</td>
+          <td class="muted">Jammu And Kashmir</td>
+          <td class="mono">₹15.8 L</td>
+          <td class="mono muted">0.7%</td>
+          <td class="mono muted">97.7%</td>
+          <td class="mono">582</td>
+          <td class="mono">₹2,716</td>
+          <td><span class="rto-chip rto-low">7%</span></td>
+        </tr><tr>
+          <td class="muted">47</td>
+          <td>East</td>
+          <td class="muted">Delhi</td>
+          <td class="mono">₹13.9 L</td>
+          <td class="mono muted">0.6%</td>
+          <td class="mono muted">98.3%</td>
+          <td class="mono">541</td>
+          <td class="mono">₹2,562</td>
+          <td><span class="rto-chip rto-low">2%</span></td>
+        </tr><tr>
+          <td class="muted">48</td>
+          <td>Kamrup Metro</td>
+          <td class="muted">Assam</td>
+          <td class="mono">₹13.5 L</td>
+          <td class="mono muted">0.6%</td>
+          <td class="mono muted">98.9%</td>
+          <td class="mono">590</td>
+          <td class="mono">₹2,294</td>
+          <td><span class="rto-chip rto-low">5%</span></td>
+        </tr><tr>
+          <td class="muted">49</td>
+          <td>Krishna</td>
+          <td class="muted">Andhra Pradesh</td>
+          <td class="mono">₹13.3 L</td>
+          <td class="mono muted">0.6%</td>
+          <td class="mono muted">99.4%</td>
+          <td class="mono">538</td>
+          <td class="mono">₹2,477</td>
+          <td><span class="rto-chip rto-low">6%</span></td>
+        </tr><tr>
+          <td class="muted">50</td>
+          <td>Aurangabad</td>
+          <td class="muted">Maharashtra</td>
+          <td class="mono">₹12.7 L</td>
+          <td class="mono muted">0.6%</td>
+          <td class="mono muted">100.0%</td>
+          <td class="mono">491</td>
+          <td class="mono">₹2,592</td>
+          <td><span class="rto-chip rto-low">7%</span></td>
+        </tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- ================ Daily Trend ================ -->
+<div class="card">
+  <div class="card-title">Daily Revenue & Returns Trend</div>
+  <table>
+    <thead>
+      <tr>
+        <th>Date</th><th>Gross Revenue</th><th>Orders</th><th>Cancel</th><th>RTO</th><th>CIR</th><th>Exch</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>2026-06-01</td>
+        <td class="mono">₹1.35 Cr</td>
+        <td class="mono">5,069</td>
+        <td class="mono">89</td>
+        <td class="mono">312</td>
+        <td class="mono">341</td>
+        <td class="mono">292</td>
+      </tr><tr>
+        <td>2026-06-02</td>
+        <td class="mono">₹1.43 Cr</td>
+        <td class="mono">5,452</td>
+        <td class="mono">100</td>
+        <td class="mono">389</td>
+        <td class="mono">359</td>
+        <td class="mono">264</td>
+      </tr><tr>
+        <td>2026-06-03</td>
+        <td class="mono">₹1.34 Cr</td>
+        <td class="mono">5,100</td>
+        <td class="mono">83</td>
+        <td class="mono">364</td>
+        <td class="mono">316</td>
+        <td class="mono">267</td>
+      </tr><tr>
+        <td>2026-06-04</td>
+        <td class="mono">₹1.37 Cr</td>
+        <td class="mono">5,182</td>
+        <td class="mono">98</td>
+        <td class="mono">384</td>
+        <td class="mono">305</td>
+        <td class="mono">255</td>
+      </tr><tr>
+        <td>2026-06-05</td>
+        <td class="mono">₹1.32 Cr</td>
+        <td class="mono">4,888</td>
+        <td class="mono">102</td>
+        <td class="mono">372</td>
+        <td class="mono">236</td>
+        <td class="mono">283</td>
+      </tr><tr>
+        <td>2026-06-06</td>
+        <td class="mono">₹1.36 Cr</td>
+        <td class="mono">5,076</td>
+        <td class="mono">95</td>
+        <td class="mono">349</td>
+        <td class="mono">239</td>
+        <td class="mono">307</td>
+      </tr><tr>
+        <td>2026-06-07</td>
+        <td class="mono">₹1.47 Cr</td>
+        <td class="mono">5,613</td>
+        <td class="mono">96</td>
+        <td class="mono">335</td>
+        <td class="mono">258</td>
+        <td class="mono">325</td>
+      </tr><tr>
+        <td>2026-06-08</td>
+        <td class="mono">₹1.40 Cr</td>
+        <td class="mono">5,126</td>
+        <td class="mono">85</td>
+        <td class="mono">345</td>
+        <td class="mono">239</td>
+        <td class="mono">277</td>
+      </tr><tr>
+        <td>2026-06-09</td>
+        <td class="mono">₹1.36 Cr</td>
+        <td class="mono">5,190</td>
+        <td class="mono">93</td>
+        <td class="mono">347</td>
+        <td class="mono">248</td>
+        <td class="mono">282</td>
+      </tr><tr>
+        <td>2026-06-10</td>
+        <td class="mono">₹1.38 Cr</td>
+        <td class="mono">5,203</td>
+        <td class="mono">108</td>
+        <td class="mono">378</td>
+        <td class="mono">248</td>
+        <td class="mono">275</td>
+      </tr><tr>
+        <td>2026-06-11</td>
+        <td class="mono">₹1.34 Cr</td>
+        <td class="mono">5,185</td>
+        <td class="mono">114</td>
+        <td class="mono">359</td>
+        <td class="mono">240</td>
+        <td class="mono">280</td>
+      </tr><tr>
+        <td>2026-06-12</td>
+        <td class="mono">₹1.24 Cr</td>
+        <td class="mono">4,614</td>
+        <td class="mono">101</td>
+        <td class="mono">317</td>
+        <td class="mono">236</td>
+        <td class="mono">219</td>
+      </tr><tr>
+        <td>2026-06-13</td>
+        <td class="mono">₹1.27 Cr</td>
+        <td class="mono">4,938</td>
+        <td class="mono">86</td>
+        <td class="mono">289</td>
+        <td class="mono">255</td>
+        <td class="mono">256</td>
+      </tr><tr>
+        <td>2026-06-14</td>
+        <td class="mono">₹1.39 Cr</td>
+        <td class="mono">5,451</td>
+        <td class="mono">122</td>
+        <td class="mono">330</td>
+        <td class="mono">281</td>
+        <td class="mono">272</td>
+      </tr><tr>
+        <td>2026-06-15</td>
+        <td class="mono">₹1.38 Cr</td>
+        <td class="mono">5,071</td>
+        <td class="mono">147</td>
+        <td class="mono">317</td>
+        <td class="mono">252</td>
+        <td class="mono">227</td>
+      </tr><tr>
+        <td>2026-06-16</td>
+        <td class="mono">₹1.29 Cr</td>
+        <td class="mono">5,259</td>
+        <td class="mono">132</td>
+        <td class="mono">324</td>
+        <td class="mono">259</td>
+        <td class="mono">238</td>
+      </tr><tr>
+        <td>2026-06-17</td>
+        <td class="mono">₹1.42 Cr</td>
+        <td class="mono">5,283</td>
+        <td class="mono">89</td>
+        <td class="mono">312</td>
+        <td class="mono">258</td>
+        <td class="mono">229</td>
+      </tr><tr>
+        <td>2026-06-18</td>
+        <td class="mono">₹1.34 Cr</td>
+        <td class="mono">5,024</td>
+        <td class="mono">150</td>
+        <td class="mono">313</td>
+        <td class="mono">247</td>
+        <td class="mono">241</td>
+      </tr><tr>
+        <td>2026-06-19</td>
+        <td class="mono">₹1.22 Cr</td>
+        <td class="mono">4,632</td>
+        <td class="mono">122</td>
+        <td class="mono">240</td>
+        <td class="mono">238</td>
+        <td class="mono">184</td>
+      </tr><tr>
+        <td>2026-06-20</td>
+        <td class="mono">₹1.16 Cr</td>
+        <td class="mono">4,444</td>
+        <td class="mono">104</td>
+        <td class="mono">165</td>
+        <td class="mono">216</td>
+        <td class="mono">187</td>
+      </tr><tr>
+        <td>2026-06-21</td>
+        <td class="mono">₹1.27 Cr</td>
+        <td class="mono">5,201</td>
+        <td class="mono">145</td>
+        <td class="mono">151</td>
+        <td class="mono">236</td>
+        <td class="mono">222</td>
+      </tr><tr>
+        <td>2026-06-22</td>
+        <td class="mono">₹1.32 Cr</td>
+        <td class="mono">4,966</td>
+        <td class="mono">185</td>
+        <td class="mono">132</td>
+        <td class="mono">184</td>
+        <td class="mono">161</td>
+      </tr><tr>
+        <td>2026-06-23</td>
+        <td class="mono">₹1.29 Cr</td>
+        <td class="mono">4,981</td>
+        <td class="mono">283</td>
+        <td class="mono">94</td>
+        <td class="mono">192</td>
+        <td class="mono">213</td>
+      </tr><tr>
+        <td>2026-06-24</td>
+        <td class="mono">₹1.21 Cr</td>
+        <td class="mono">4,519</td>
+        <td class="mono">92</td>
+        <td class="mono">81</td>
+        <td class="mono">138</td>
+        <td class="mono">156</td>
+      </tr><tr>
+        <td>2026-06-25</td>
+        <td class="mono">₹1.12 Cr</td>
+        <td class="mono">4,677</td>
+        <td class="mono">136</td>
+        <td class="mono">76</td>
+        <td class="mono">147</td>
+        <td class="mono">147</td>
+      </tr><tr>
+        <td>2026-06-26</td>
+        <td class="mono">₹1.22 Cr</td>
+        <td class="mono">4,986</td>
+        <td class="mono">306</td>
+        <td class="mono">53</td>
+        <td class="mono">79</td>
+        <td class="mono">106</td>
+      </tr><tr>
+        <td>2026-06-27</td>
+        <td class="mono">₹1.19 Cr</td>
+        <td class="mono">4,477</td>
+        <td class="mono">421</td>
+        <td class="mono">22</td>
+        <td class="mono">36</td>
+        <td class="mono">34</td>
+      </tr><tr>
+        <td>2026-06-28</td>
+        <td class="mono">₹1.27 Cr</td>
+        <td class="mono">5,243</td>
+        <td class="mono">888</td>
+        <td class="mono">24</td>
+        <td class="mono">17</td>
+        <td class="mono">17</td>
+      </tr><tr>
+        <td>2026-06-29</td>
+        <td class="mono">₹1.24 Cr</td>
+        <td class="mono">4,826</td>
+        <td class="mono">570</td>
+        <td class="mono">12</td>
+        <td class="mono">3</td>
+        <td class="mono">3</td>
+      </tr><tr>
+        <td>2026-06-30</td>
+        <td class="mono">₹1.18 Cr</td>
+        <td class="mono">4,938</td>
+        <td class="mono">446</td>
+        <td class="mono">2</td>
+        <td class="mono">1</td>
+        <td class="mono">1</td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+
+<div class="footer">
+  Generated 2026-07-01 10:05:03 UTC · Source: frido-429506.production.fact_all_platform_sales_report<br>
+  To save as PDF: Ctrl+P (Cmd+P) → Destination "Save as PDF"
+</div>
+
+</body></html>

@@ -2,6 +2,9 @@ import { useState, useMemo, useCallback, useEffect, useRef, Fragment } from 'rea
 import { C, fmt, fmtN, pct, processData, detectAlerts, exportCSV, getDefaultDates } from './utils.js'
 import { KPICard, AlertCard, HBar, DataTable, Card, Badge, RevTrendChart, AreaTrendChart, MultiLineChart, ChartTooltip, BarChart, Bar, LineChart, Line, AreaChart, Area, ComposedChart, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell, Treemap } from './components.jsx'
 import { ReferenceLine } from 'recharts'
+import { ComposableMap, Geographies, Geography } from 'react-simple-maps'
+
+const INDIA_TOPO_URL = 'https://raw.githubusercontent.com/geohacker/india/master/state/india_telengana.geojson'
 
 // ── Sidebar ───────────────────────────────────────────────────
 const SvgIcon = ({ d, size = 18, stroke = 'currentColor', fill = 'none', strokeWidth = 1.6 }) => (
@@ -2057,6 +2060,104 @@ function ShopifyGeoDonutRow({ regionRows, tierRows, topStates, allStateRows, use
   )
 }
 
+// State name normalization: GeoJSON NAME_1 -> uppercase key in stateMap
+const GEO_STATE_ALIAS = {
+  'Andaman and Nicobar': 'ANDAMAN AND NICOBAR ISLANDS',
+  'Dadra and Nagar Haveli': 'DADRA AND NAGAR HAVELI',
+  'Daman and Diu': 'DAMAN AND DIU',
+  'Jammu and Kashmir': 'JAMMU AND KASHMIR',
+  'Jammu & Kashmir': 'JAMMU AND KASHMIR',
+  'Odisha': 'ODISHA',
+  'Orissa': 'ODISHA',
+  'Uttarakhand': 'UTTARAKHAND',
+  'Uttaranchal': 'UTTARAKHAND',
+  'NCT of Delhi': 'DELHI',
+  'Delhi': 'DELHI',
+  'Telangana': 'TELANGANA',
+}
+
+function IndiaRevenueMap({ stateMap = {} }) {
+  const [tooltip, setTooltip] = useState(null)
+  const maxRev = Math.max(...Object.values(stateMap).map(v => v.rev), 1)
+
+  const resolveKey = (geoName) => {
+    if (!geoName) return null
+    return GEO_STATE_ALIAS[geoName] || geoName.toUpperCase().trim()
+  }
+
+  const getColor = (geoName) => {
+    const key = resolveKey(geoName)
+    const v = key ? stateMap[key] : null
+    if (!v || !v.rev) return '#e8e8f0'
+    const intensity = Math.pow(v.rev / maxRev, 0.45)
+    const r = Math.round(83 + (0 - 83) * intensity)
+    const g = Math.round(74 + (74 * 0.3) * (1 - intensity))
+    const b = Math.round(183 - 103 * intensity)
+    return `rgb(${r},${g},${b})`
+  }
+
+  return (
+    <div style={{ flex: 1, minWidth: 0 }}>
+      <Card title="Revenue by State · India Map">
+        <div style={{ position: 'relative' }}>
+          <ComposableMap
+            projection="geoMercator"
+            projectionConfig={{ center: [82.5, 22], scale: 1000 }}
+            width={500} height={560}
+            style={{ width: '100%', height: 'auto', maxHeight: 360 }}
+          >
+            <Geographies geography={INDIA_TOPO_URL}>
+              {({ geographies }) =>
+                geographies.map(geo => {
+                  const name = geo.properties.NAME_1 || geo.properties.name || geo.properties.ST_NM || ''
+                  const key = resolveKey(name)
+                  const v = key ? stateMap[key] : null
+                  return (
+                    <Geography
+                      key={geo.rsmKey}
+                      geography={geo}
+                      fill={getColor(name)}
+                      stroke="#fff"
+                      strokeWidth={0.8}
+                      style={{ default: { outline: 'none', cursor: 'pointer' }, hover: { outline: 'none', cursor: 'pointer', opacity: 0.85 }, pressed: { outline: 'none' } }}
+                      onMouseEnter={e => setTooltip({ name: name || 'Unknown', rev: v?.rev || 0, units: v?.units || 0, orders: v?.orders || 0, x: e.clientX, y: e.clientY })}
+                      onMouseMove={e => setTooltip(t => t ? { ...t, x: e.clientX, y: e.clientY } : null)}
+                      onMouseLeave={() => setTooltip(null)}
+                    />
+                  )
+                })
+              }
+            </Geographies>
+          </ComposableMap>
+          {tooltip && (
+            <div style={{
+              position: 'fixed', left: tooltip.x + 14, top: tooltip.y - 14, zIndex: 9999,
+              background: C.card, border: `1px solid ${C.border}`, borderRadius: 8, padding: '8px 12px',
+              fontSize: 12, pointerEvents: 'none', boxShadow: '0 4px 16px rgba(0,0,0,0.18)'
+            }}>
+              <div style={{ fontWeight: 700, color: C.t1, marginBottom: 4 }}>{tooltip.name}</div>
+              <div style={{ color: C.t2 }}>Revenue: <span style={{ fontWeight: 600, color: '#534AB7' }}>{fmt(tooltip.rev)}</span></div>
+              <div style={{ color: C.t2 }}>Units Sold: <span style={{ fontWeight: 600 }}>{fmtN(tooltip.units)}</span></div>
+              {tooltip.rev === 0 && <div style={{ color: C.t3, fontSize: 11 }}>No data for selected period</div>}
+            </div>
+          )}
+        </div>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginTop: 6, fontSize: 11, color: C.t3 }}>
+          <div style={{ display: 'flex', gap: 2, alignItems: 'center' }}>
+            {[0.1, 0.3, 0.5, 0.7, 0.9].map(i => {
+              const r = Math.round(83 + (0 - 83) * i)
+              const g = Math.round(83 - 83 * 0.3 * i)
+              const b = Math.round(183 - 103 * i)
+              return <div key={i} style={{ width: 18, height: 10, borderRadius: 2, background: `rgb(${r},${g},${b})` }} />
+            })}
+          </div>
+          <span>Low → High Revenue</span>
+        </div>
+      </Card>
+    </div>
+  )
+}
+
 function TopSubCatBar({ subCatRows }) {
   const top10 = (subCatRows || []).slice(0, 10)
   const BAR_COLORS = ['#534AB7','#0D9E68','#2E74CC','#CC8A00','#CC4078','#E24B4A','#9B59B6','#FF6B35','#00B4D8','#06D6A0']
@@ -2632,8 +2733,9 @@ function ShopifyTab({ data, filters, setFilters }) {
       </div>
       <div style={{ display: 'flex', gap: 14, alignItems: 'stretch' }}>
         <ShopifyGeoDonutRow regionRows={sh.regionRows || []} tierRows={sh.tierRows || []} topStates={sh.topStates || []} allStateRows={Object.entries(sh.stateMap || {}).map(([k, v]) => ({ name: k, rev: v.rev, orders: v.orders?.size || 0 }))} />
-        <TopSubCatBar subCatRows={allSubCatRows} />
+        <IndiaRevenueMap stateMap={sh.stateMap || {}} />
       </div>
+      <TopSubCatBar subCatRows={allSubCatRows} />
       {/* Category Revenue Matrix · Shopify */}
       {(() => {
         const pick = v => ({ rev: v.rev || 0, excRev: v.excRev || 0, units: v.units || 0, orders: v.orders, cancelled: v.cancelled || 0, rto: v.rto || 0, cir: v.cir || 0, exch: v.exch || 0, cancelRev: v.cancelRev || 0, rtoRev: v.rtoRev || 0, cirRev: v.cirRev || 0, exchRev: v.exchRev || 0 })
