@@ -2123,11 +2123,11 @@ function ShopifyTab({ data, filters, setFilters }) {
   const cityPrevMap = sh.cityPrevMap || {}
   const paymentTypes = sh.paymentTypes || []
 
-  // Use Shopify-specific rev from chMap, not all-channels totalRev
-  const shCh = data.chMap?.['Shopify'] || {}
-  const totalRev = shCh.rev || 0                          // Gross Revenue (Inc. GST), all Shopify orders
-  const totalExcRevRaw = shCh.excRev || data.totalExcRev || 0  // Net of GST only (used to derive effective GST rate)
-  const totalQty = shCh.qty || data.totalQty || 0
+  // Use Shopify-specific totals that EXCLUDE Shopify B2B sub-channel
+  const shCh = sh.totals || {}
+  const totalRev = shCh.rev || 0                          // Gross Revenue (Inc. GST), Shopify India+International EXCLUDING B2B
+  const totalExcRevRaw = shCh.excRev || 0
+  const totalQty = shCh.qty || 0
   // Subtract Cancelled + RTO + CIR revenue from Gross, then strip GST → final Net Revenue
   const cancelledRev = data.orderStatusRevMap?.['Cancelled'] || 0
   const rtoRev = data.orderStatusRevMap?.['RTO'] || 0
@@ -2171,11 +2171,11 @@ function ShopifyTab({ data, filters, setFilters }) {
     const p = (curPct - prevPct) / prevPct * 100
     return <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 4, background: p > 0 ? C.red.bg : C.green.bg, color: p > 0 ? C.red.tx : C.green.tx, flexShrink: 0 }}>{p > 0 ? '▲' : '▼'} {Math.abs(p).toFixed(1)}%</span>
   }
-  const shSparkData = Array.from({ length: Math.max(dailyArr.length, prevDailyArr.length) }, (_, i) => {
-    const cur = dailyArr[i]
+  const shDailyArr = sh.daily || []
+  const shSparkData = Array.from({ length: Math.max(shDailyArr.length, prevDailyArr.length) }, (_, i) => {
+    const cur = shDailyArr[i]
     const pre = prevDailyArr[i]
-    const curRev = cur ? (cur['Shopify'] || 0) : null
-    return { i, cur: curRev, prev: pre?.rev ?? null }
+    return { i, cur: cur ? cur.rev : null, prev: pre?.rev ?? null }
   })
   const nDays = sh.nDays || data.nDays || 1
   const dailyAvg = nDays ? totalRev / nDays : 0
@@ -2190,7 +2190,7 @@ function ShopifyTab({ data, filters, setFilters }) {
   const repeatRate = nCusts ? (repeatCusts / nCusts * 100).toFixed(1) : '0'
 
   // Sub-channel breakdown — India excludes International, Intl shows only International
-  const indiaSubChMap = Object.fromEntries(Object.entries(subChannelMap).filter(([k]) => k !== 'International'))
+  const indiaSubChMap = Object.fromEntries(Object.entries(subChannelMap).filter(([k]) => k !== 'International' && k !== 'Shopify B2B'))
   const intlSubChMap = subChannelMap['International'] ? { International: subChannelMap['International'] } : {}
   const activeSubChMap = isIntl ? intlSubChMap : indiaSubChMap
   const activeSubChKeys = Object.keys(activeSubChMap).sort((a, b) => activeSubChMap[b].rev - activeSubChMap[a].rev)
@@ -2484,8 +2484,9 @@ function ShopifyTab({ data, filters, setFilters }) {
           // Net Revenue line: apply the same period-level shrink as the KPI
           // (Gross − Cancel − RTO − CIR, then strip GST)
           const netShrinkFactor = totalRev > 0 ? (grossAfterReturns / totalRev) * (1 - gstRatio) : (1 - gstRatio)
-          const rawDaily = (dailyArr || []).map(d => {
-            const grossRev = d['Shopify'] || 0
+          // Use Shopify-specific daily (EXCLUDES Shopify B2B)
+          const rawDaily = (sh.daily || []).map(d => {
+            const grossRev = d.rev || 0
             const rt = returnTrendMap[d.date] || {}
             return { date: d.date, grossRev, netRev: grossRev > 0 ? grossRev * netShrinkFactor : 0, rtoPct: rt.rtoPct || 0, exchPct: rt.exchPct || 0, cirPct: rt.cirPct || 0, cancelPct: rt.cancelPct || 0 }
           }).filter(d => d.grossRev > 0)
