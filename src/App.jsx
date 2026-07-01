@@ -5,6 +5,14 @@ import { ReferenceLine } from 'recharts'
 import { ComposableMap, Geographies, Geography } from 'react-simple-maps'
 
 const INDIA_TOPO_URL = 'https://raw.githubusercontent.com/geohacker/india/master/state/india_telengana.geojson'
+// Cache GeoJSON at module level so it's fetched once per page load
+let _indiaGeoCache = null
+let _indiaGeoPromise = null
+function getIndiaGeo() {
+  if (_indiaGeoCache) return Promise.resolve(_indiaGeoCache)
+  if (!_indiaGeoPromise) _indiaGeoPromise = fetch(INDIA_TOPO_URL).then(r => r.json()).then(d => { _indiaGeoCache = d; return d })
+  return _indiaGeoPromise
+}
 
 // ── Sidebar ───────────────────────────────────────────────────
 const SvgIcon = ({ d, size = 18, stroke = 'currentColor', fill = 'none', strokeWidth = 1.6 }) => (
@@ -2078,7 +2086,12 @@ const GEO_STATE_ALIAS = {
 
 function IndiaRevenueMap({ stateMap = {} }) {
   const [tooltip, setTooltip] = useState(null)
+  const [geoData, setGeoData] = useState(_indiaGeoCache)
   const maxRev = Math.max(...Object.values(stateMap).map(v => v.rev), 1)
+
+  useEffect(() => {
+    if (!geoData) getIndiaGeo().then(setGeoData)
+  }, [])
 
   const resolveKey = (geoName) => {
     if (!geoName) return null
@@ -2097,7 +2110,7 @@ function IndiaRevenueMap({ stateMap = {} }) {
   }
 
   return (
-    <div style={{ flex: 1, minWidth: 0 }}>
+    <div style={{ flex: 1, minWidth: 0, height: '100%' }}>
       <Card title="Revenue by State · India Map">
         <div style={{ position: 'relative' }}>
           <ComposableMap
@@ -2106,7 +2119,7 @@ function IndiaRevenueMap({ stateMap = {} }) {
             width={500} height={560}
             style={{ width: '100%', height: 'auto' }}
           >
-            <Geographies geography={INDIA_TOPO_URL}>
+            <Geographies geography={geoData || INDIA_TOPO_URL}>
               {({ geographies }) =>
                 geographies.map(geo => {
                   const name = geo.properties.NAME_1 || geo.properties.name || geo.properties.ST_NM || ''
@@ -2732,12 +2745,11 @@ function ShopifyTab({ data, filters, setFilters }) {
         </Card>
       </div>
       <div style={{ display: 'flex', gap: 14, alignItems: 'stretch' }}>
-        <ShopifyGeoDonutRow regionRows={sh.regionRows || []} tierRows={sh.tierRows || []} topStates={sh.topStates || []} allStateRows={Object.entries(sh.stateMap || {}).map(([k, v]) => ({ name: k, rev: v.rev, orders: v.orders?.size || 0 }))} />
+        <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 14 }}>
+          <ShopifyGeoDonutRow regionRows={sh.regionRows || []} tierRows={sh.tierRows || []} topStates={sh.topStates || []} allStateRows={Object.entries(sh.stateMap || {}).map(([k, v]) => ({ name: k, rev: v.rev, orders: v.orders?.size || 0 }))} />
+          <TopSubCatBar subCatRows={allSubCatRows} />
+        </div>
         <IndiaRevenueMap stateMap={sh.stateMap || {}} />
-      </div>
-      <div style={{ display: 'flex', gap: 14 }}>
-        <TopSubCatBar subCatRows={allSubCatRows} />
-        <div style={{ flex: 1, minWidth: 0 }} />
       </div>
       {/* Category Revenue Matrix · Shopify */}
       {(() => {
