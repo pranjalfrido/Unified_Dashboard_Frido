@@ -553,8 +553,8 @@ ORDER BY order_date`,
           const rows = r.amzSCReturnRate || []
           const last = rows[rows.length - 1]
           const pct = parseFloat(last?.rate) || 0
-          const daily = rows.map(x => ({ date: typeof x.date === 'object' ? x.date.value : x.date, rate: parseFloat(x.rate) || 0, orders: parseInt(x.orders)||0, returned: parseInt(x.returned)||0, rollOrders: parseInt(x.roll_orders)||0, rollReturned: parseInt(x.roll_returned)||0 }))
-          return { pct, daily, lastDate: last?.date || null, rollOrders: parseInt(last?.roll_orders)||0, rollReturned: parseInt(last?.roll_returned)||0 }
+          const daily = rows.map(x => ({ date: typeof x.date === 'object' ? x.date.value : x.date, rate: parseFloat(x.rate) || 0, orders: parseFloat(x.orders)||0, returned: parseFloat(x.returned)||0, rollOrders: parseFloat(x.roll_orders)||0, rollReturned: parseFloat(x.roll_returned)||0 }))
+          return { pct, daily, lastDate: last?.date || null, rollOrders: parseFloat(last?.roll_orders)||0, rollReturned: parseFloat(last?.roll_returned)||0 }
         })(),
         regionRows: (r.amzSCRegion || []).map(x => ({ region: x.region, orders: parseInt(x.orders)||0, rev: parseFloat(x.rev)||0, units: parseInt(x.units)||0 })),
         tierRows: (r.amzSCTier || []).map(x => ({ tier: parseInt(x.city_tier)||x.city_tier, label: x.tier_label, orders: parseInt(x.orders)||0, rev: parseFloat(x.rev)||0, units: parseInt(x.units)||0 })),
