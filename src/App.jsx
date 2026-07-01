@@ -2001,30 +2001,33 @@ function ShopifyGeoDonutRow({ regionRows, tierRows, topStates, allStateRows, use
   const metricFmt = v => metric === 'rev' ? fmt(v) : metric === 'aov' ? `₹${v.toLocaleString('en-IN')}` : fmtN(v)
   const selStyle = active => ({ fontSize: 10, fontWeight: active ? 700 : 500, padding: '2px 8px', borderRadius: 4, border: `1px solid ${active ? C.acm : C.border}`, background: active ? C.acc : 'transparent', color: C.t1, cursor: 'pointer', fontFamily: 'var(--font)' })
 
-  const SmallDonut = ({ title, data, colors, grandTotal }) => {
+  // Horizontal-bar breakdown: label on left, colored bar in middle, value + % on right.
+  const HBarBreakdown = ({ title, data, colors, grandTotal }) => {
     const total = grandTotal || data.reduce((s, d) => s + d.value, 0)
+    const sorted = [...data].sort((a, b) => b.value - a.value)
+    const maxVal = sorted[0]?.value || 1
+    const labelWidth = 62
     return (
       <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ fontSize: 11, fontWeight: 700, color: C.t2, marginBottom: 8, textTransform: 'uppercase', letterSpacing: '.04em' }}>{title}</div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-          <ResponsiveContainer width={110} height={110}>
-            <PieChart>
-              <Pie data={data} cx="50%" cy="50%" innerRadius={32} outerRadius={50} dataKey="value" paddingAngle={2}>
-                {data.map((d, i) => <Cell key={i} fill={colors[i % colors.length]} />)}
-              </Pie>
-              <Tooltip content={({ active, payload }) => active && payload?.length ? <div style={{ background: '#fff', border: `1px solid ${C.border}`, borderRadius: 6, padding: '4px 8px', fontSize: 11, color: '#111', fontWeight: 600 }}>{payload[0].name}: {metricFmt(payload[0].value)}</div> : null} />
-            </PieChart>
-          </ResponsiveContainer>
-          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 4 }}>
-            {data.map((d, i) => (
-              <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-                <span style={{ width: 8, height: 8, borderRadius: '50%', background: colors[i % colors.length], flexShrink: 0 }} />
-                <span style={{ fontSize: 11, color: C.t2, whiteSpace: 'nowrap' }}>{d.name}</span>
-                <span style={{ fontSize: 11, fontWeight: 700, color: C.t1, fontFamily: 'var(--mono)', marginLeft: 4 }}>{metricFmt(d.value)}</span>
-                <span style={{ fontSize: 10, color: C.t3 }}>{total ? (d.value / total * 100).toFixed(0) : 0}%</span>
+        <div style={{ fontSize: 11, fontWeight: 700, color: C.t2, marginBottom: 10, textTransform: 'uppercase', letterSpacing: '.04em' }}>{title}</div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+          {sorted.map((d, i) => {
+            const barPct = (d.value / maxVal) * 100
+            const sharePct = total > 0 ? (d.value / total * 100) : 0
+            const color = colors[i % colors.length]
+            return (
+              <div key={d.name} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <div style={{ width: labelWidth, fontSize: 11, color: C.t2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', flexShrink: 0 }} title={d.name}>{d.name}</div>
+                <div style={{ flex: 1, minWidth: 40, position: 'relative', height: 14 }}>
+                  <div style={{ width: `${barPct}%`, background: color, height: '100%', borderRadius: 3, transition: 'width .3s' }} title={metricFmt(d.value)} />
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 5, flexShrink: 0, minWidth: 108, justifyContent: 'flex-end' }}>
+                  <span style={{ fontSize: 10.5, fontFamily: 'var(--mono)', color: C.t1 }}>{metricFmt(d.value)}</span>
+                  <span style={{ fontSize: 10.5, color: C.t3, minWidth: 30, textAlign: 'right' }}>{sharePct.toFixed(0)}%</span>
+                </div>
               </div>
-            ))}
-          </div>
+            )
+          })}
         </div>
       </div>
     )
@@ -2045,9 +2048,9 @@ function ShopifyGeoDonutRow({ regionRows, tierRows, topStates, allStateRows, use
           {(useUnits ? [['rev','Revenue'],['units','Units']] : [['rev','Revenue'],['orders','Orders']]).map(([k,l]) => <button key={k} onClick={() => setMetric(k)} style={selStyle(metric === k)}>{l}</button>)}
         </div>
       }>
-        <div style={{ display: 'flex', gap: 16 }}>
-          {regionData.length > 0 && <SmallDonut title="By Region" data={regionData} colors={REGION_COLORS} />}
-          {tierData.length > 0 && <SmallDonut title="By City Tier" data={tierData} colors={TIER_COLORS} />}
+        <div style={{ display: 'flex', gap: 24 }}>
+          {regionData.length > 0 && <HBarBreakdown title="By Region" data={regionData} colors={REGION_COLORS} />}
+          {tierData.length > 0 && <HBarBreakdown title="By City Tier" data={tierData} colors={TIER_COLORS} />}
         </div>
       </Card>
     </div>
