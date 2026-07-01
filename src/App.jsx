@@ -1260,21 +1260,34 @@ function FinancialCategoryMatrix({ catData, subCatData, skuData, title, showRetu
   const toggle = cat => setExpanded(prev => ({ ...prev, [cat]: !prev[cat] }))
   const toggleSC = key => setExpandedSC(prev => ({ ...prev, [key]: !prev[key] }))
 
-  const mapRow = (d) => ({
-    gross: d.rev || 0,
-    net: d.excRev || 0,
-    gst: (d.rev || 0) - (d.excRev || 0),
-    units: d.units || 0,
-    orders: (d.orders?.size ?? d.orders) || 0,
-    cancelled: d.cancelled || 0,
-    rto: d.rto || 0,
-    cir: d.cir || 0,
-    exch: d.exch || 0,
-    cancelRev: d.cancelRev || 0,
-    rtoRev: d.rtoRev || 0,
-    cirRev: d.cirRev || 0,
-    exchRev: d.exchRev || 0,
-  })
+  const mapRow = (d) => {
+    const gross = d.rev || 0
+    const excRev = d.excRev || 0
+    const cancelRev = d.cancelRev || 0
+    const rtoRev = d.rtoRev || 0
+    const cirRev = d.cirRev || 0
+    // Effective GST ratio observed for this row's gross vs exc-GST revenue
+    const gstRatio = gross > 0 ? (gross - excRev) / gross : 0
+    // Net Rev = (Gross − Cancel − RTO − CIR) with GST stripped out at the same effective ratio
+    const grossAfterReturns = gross - cancelRev - rtoRev - cirRev
+    const net = grossAfterReturns * (1 - gstRatio)
+    const gst = grossAfterReturns - net
+    return {
+      gross,
+      net,
+      gst,
+      units: d.units || 0,
+      orders: (d.orders?.size ?? d.orders) || 0,
+      cancelled: d.cancelled || 0,
+      rto: d.rto || 0,
+      cir: d.cir || 0,
+      exch: d.exch || 0,
+      cancelRev,
+      rtoRev,
+      cirRev,
+      exchRev: d.exchRev || 0,
+    }
+  }
 
   const cats = Object.entries(catData || {}).map(([cat, d]) => ({ cat, prevGross: catPrevMap[cat] || 0, ...mapRow(d) })).sort((a, b) => b.gross - a.gross)
 
