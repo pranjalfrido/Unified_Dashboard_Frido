@@ -3099,7 +3099,7 @@ function AmazonTab({ data, region = 'india', setRegion = () => {} }) {
                 })
               })
             })
-            return <FinancialCategoryMatrix catData={catData} subCatData={subCatData} skuData={skuData} title="Category Revenue Matrix · Amazon India" showReturns={true} />
+            return <FinancialCategoryMatrix catData={catData} subCatData={subCatData} skuData={skuData} title="Category Revenue Matrix · Amazon India" showReturns={true} neutral={true} />
           })()}
           {(() => {
             const pickRet = (...chs) => { for (const c of chs) if (c?.totalOrdersForReturn) return { returned: c.returned||0, totalOrdersForReturn: c.totalOrdersForReturn }; return { returned: 0, totalOrdersForReturn: 0 } }
@@ -3320,7 +3320,7 @@ function AmazonTab({ data, region = 'india', setRegion = () => {} }) {
                   })
                 })
               })
-              return <FinancialCategoryMatrix catData={catData} subCatData={subCatData} skuData={skuData} title="Category Revenue Matrix · Seller Central" showReturns={true} />
+              return <FinancialCategoryMatrix catData={catData} subCatData={subCatData} skuData={skuData} title="Category Revenue Matrix · Seller Central" showReturns={true} neutral={true} />
             })()}
             <Card title="FBA vs MFN · Seller Central">
               {[{ label: 'FBA (Fulfilled by Amazon)', ...scFBA }, { label: 'MFN (Merchant Fulfilled)', ...scMFN }].map((r, i) => (
