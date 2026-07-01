@@ -1245,10 +1245,16 @@ function AmazonCategoryMatrix({ channels, catChannel, subCatChannel, skuChannel,
   )
 }
 
-// FinancialCategoryMatrix: Gross Rev, Units, ASP, GST, Cancel, RTO, CIR, Exch, Net Rev
-function FinancialCategoryMatrix({ catData, subCatData, skuData, title, showReturns = true, neutral = false, showShare = false }) {
+// FinancialCategoryMatrix: Gross Rev, Units, ASP, GST, Cancel, RTO, CIR, Exch, Returns, Net Rev
+// With optional extras when neutral=true: Prev Rev, MoM %, Cum %, Cancel/RTO/CIR/Exch % chips
+function FinancialCategoryMatrix({ catData, subCatData, skuData, title, showReturns = true, neutral = false, showShare = false, catPrevMap = {}, subCatPrevMap = {}, skuPrevMap = {} }) {
   const grossColor = neutral ? C.t1 : '#286010'
   const netColor = neutral ? C.t1 : '#2E74CC'
+  const cancelColor = neutral ? C.t1 : '#B91C1C'
+  const rtoColor = neutral ? C.t1 : '#E24B4A'
+  const cirColor = neutral ? C.t1 : '#2E74CC'
+  const exchColor = neutral ? C.t1 : '#9B59B6'
+  const returnColor = neutral ? C.t1 : '#7A1A1A'
   const [expanded, setExpanded] = useState({})
   const [expandedSC, setExpandedSC] = useState({})
   const toggle = cat => setExpanded(prev => ({ ...prev, [cat]: !prev[cat] }))
@@ -1266,37 +1272,51 @@ function FinancialCategoryMatrix({ catData, subCatData, skuData, title, showRetu
     exch: d.exch || 0,
   })
 
-  const cats = Object.entries(catData || {}).map(([cat, d]) => ({ cat, ...mapRow(d) })).sort((a, b) => b.gross - a.gross)
+  const cats = Object.entries(catData || {}).map(([cat, d]) => ({ cat, prevGross: catPrevMap[cat] || 0, ...mapRow(d) })).sort((a, b) => b.gross - a.gross)
 
   const tot = cats.reduce((s, r) => ({
-    gross: s.gross + r.gross, net: s.net + r.net, gst: s.gst + r.gst,
+    gross: s.gross + r.gross, prevGross: s.prevGross + r.prevGross, net: s.net + r.net, gst: s.gst + r.gst,
     units: s.units + r.units, orders: s.orders + r.orders,
     cancelled: s.cancelled + r.cancelled, rto: s.rto + r.rto, cir: s.cir + r.cir, exch: s.exch + r.exch,
-  }), { gross: 0, net: 0, gst: 0, units: 0, orders: 0, cancelled: 0, rto: 0, cir: 0, exch: 0 })
+  }), { gross: 0, prevGross: 0, net: 0, gst: 0, units: 0, orders: 0, cancelled: 0, rto: 0, cir: 0, exch: 0 })
+
+  // Cumulative % share, top to bottom
+  let cumAcc = 0
+  cats.forEach(r => { r.sharePct = tot.gross > 0 ? (r.gross / tot.gross * 100) : 0; cumAcc += r.sharePct; r.cumPct = cumAcc })
 
   const hasCancelData = cats.some(r => r.cancelled > 0 || r.rto > 0 || r.cir > 0 || r.exch > 0)
+  const showExtras = neutral  // MoM, Cum %, Prev Rev only when neutral (Shopify)
 
   const colHdr = { textAlign: 'right', padding: '3px 5px 7px', borderBottom: `1px solid ${C.border}`, fontSize: 9.5, fontWeight: 700, textTransform: 'uppercase', whiteSpace: 'nowrap' }
   const cell = (fs = 11) => ({ padding: '5px 5px', textAlign: 'right', fontFamily: 'var(--mono)', fontSize: fs, fontWeight: 400 })
-  const pctSpan = (n, d, warn = 15) => { if (!d || !n) return null; const p = (n / d * 100).toFixed(1); const col = parseFloat(p) > warn ? '#B91C1C' : C.t3; return <span style={{ fontSize: 9, color: col, marginLeft: 3 }}>{p}%</span> }
+  const pctSpan = (n, d) => { if (!d || !n) return null; const p = (n / d * 100).toFixed(1); return <span style={{ fontSize: 9, color: C.t3, marginLeft: 3 }}>({p}%)</span> }
+  const momCell = (cur, prev) => {
+    if (!prev || prev === 0) return <span style={{ color: C.t3, fontSize: 10 }}>—</span>
+    const p = ((cur - prev) / prev) * 100
+    const positive = p >= 0
+    return <span style={{ fontSize: 10, fontWeight: 700, color: positive ? '#0D9E68' : '#B91C1C' }}>{positive ? '↗' : '↘'} {Math.abs(p).toFixed(1)}%</span>
+  }
 
   return (
     <Card title={title || 'Category Revenue Matrix'} note="Gross = incl. GST · Net = excl. GST">
-      <div className="tbl-wrap" style={{ maxHeight: 560, overflowY: 'auto' }}>
-        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11, fontWeight: 400 }}>
+      <div className="tbl-wrap" style={{ maxHeight: 560, overflowY: 'auto', overflowX: 'auto' }}>
+        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11, fontWeight: 400, minWidth: showExtras ? 1400 : undefined }}>
           <thead style={{ position: 'sticky', top: 0, background: C.card, zIndex: 1 }}>
             <tr>
               <th style={{ textAlign: 'left', padding: '3px 5px 7px', borderBottom: `1px solid ${C.border}`, color: C.t3, fontSize: 9.5, fontWeight: 700, textTransform: 'uppercase' }}>Category</th>
               <th style={{ ...colHdr, color: grossColor }}>Gross Rev{showShare ? ' / Share' : ''}</th>
+              {showExtras && <th style={{ ...colHdr, color: C.t3 }}>Prev Rev</th>}
+              {showExtras && <th style={{ ...colHdr, color: C.t3 }}>MoM</th>}
+              {showExtras && <th style={{ ...colHdr, color: C.t3 }}>Cum %</th>}
               <th style={{ ...colHdr, color: C.t2 }}>Units</th>
               <th style={{ ...colHdr, color: C.t3 }}>ASP</th>
               <th style={{ ...colHdr, color: C.t2 }}>GST</th>
               {hasCancelData && <>
-                <th style={{ ...colHdr, color: '#B91C1C' }}>Cancel</th>
-                <th style={{ ...colHdr, color: '#E24B4A' }}>RTO</th>
-                <th style={{ ...colHdr, color: '#2E74CC' }}>CIR</th>
-                <th style={{ ...colHdr, color: '#9B59B6' }}>Exch</th>
-                {showReturns && <th style={{ ...colHdr, color: '#7A1A1A' }}>Returns</th>}
+                <th style={{ ...colHdr, color: cancelColor }}>Cancel</th>
+                <th style={{ ...colHdr, color: rtoColor }}>RTO</th>
+                <th style={{ ...colHdr, color: cirColor }}>CIR</th>
+                <th style={{ ...colHdr, color: exchColor }}>Exch</th>
+                {showReturns && <th style={{ ...colHdr, color: returnColor }}>Returns</th>}
               </>}
               <th style={{ ...colHdr, color: netColor }}>Net Rev</th>
             </tr>
@@ -1316,23 +1336,36 @@ function FinancialCategoryMatrix({ catData, subCatData, skuData, title, showRetu
                       </span>
                     </td>
                     <td style={{ ...cell(), color: grossColor, fontWeight: 600 }}>{fmt(row.gross)}{showShare && tot.gross > 0 ? <span style={{ fontSize: 9.5, color: C.t3, marginLeft: 6, fontWeight: 400 }}>({(row.gross / tot.gross * 100).toFixed(1)}%)</span> : null}</td>
+                    {showExtras && <td style={{ ...cell(), color: C.t3 }}>{row.prevGross > 0 ? fmt(row.prevGross) : '—'}</td>}
+                    {showExtras && <td style={{ ...cell() }}>{momCell(row.gross, row.prevGross)}</td>}
+                    {showExtras && <td style={{ ...cell(), color: C.t3 }}>{row.cumPct.toFixed(1)}%</td>}
                     <td style={{ ...cell(), color: C.t2 }}>{fmtN(row.units)}</td>
                     <td style={{ ...cell(), color: C.t3 }}>₹{(row.units > 0 ? Math.round(row.gross / row.units) : 0).toLocaleString('en-IN')}</td>
                     <td style={{ ...cell(), color: C.t2 }}>{fmt(row.gst)}</td>
                     {hasCancelData && <>
-                      <td style={{ ...cell(), color: '#B91C1C' }}>{row.cancelled > 0 ? <>{fmtN(row.cancelled)}{pctSpan(row.cancelled, row.orders)}</> : <span style={{ color: C.t3 }}>—</span>}</td>
-                      <td style={{ ...cell(), color: '#E24B4A' }}>{row.rto > 0 ? <>{fmtN(row.rto)}{pctSpan(row.rto, row.orders)}</> : <span style={{ color: C.t3 }}>—</span>}</td>
-                      <td style={{ ...cell(), color: '#2E74CC' }}>{row.cir > 0 ? <>{fmtN(row.cir)}{pctSpan(row.cir, row.orders)}</> : <span style={{ color: C.t3 }}>—</span>}</td>
-                      <td style={{ ...cell(), color: '#9B59B6' }}>{row.exch > 0 ? <>{fmtN(row.exch)}{pctSpan(row.exch, row.orders)}</> : <span style={{ color: C.t3 }}>—</span>}</td>
-                      {showReturns && <td style={{ ...cell(), color: '#7A1A1A', fontWeight: 600 }}>{(row.rto + row.cir) > 0 ? <>{fmtN(row.rto + row.cir)}{pctSpan(row.rto + row.cir, row.orders)}</> : <span style={{ color: C.t3 }}>—</span>}</td>}
+                      <td style={{ ...cell(), color: cancelColor }}>{row.cancelled > 0 ? <>{fmtN(row.cancelled)}{pctSpan(row.cancelled, row.orders)}</> : <span style={{ color: C.t3 }}>—</span>}</td>
+                      <td style={{ ...cell(), color: rtoColor }}>{row.rto > 0 ? <>{fmtN(row.rto)}{pctSpan(row.rto, row.orders)}</> : <span style={{ color: C.t3 }}>—</span>}</td>
+                      <td style={{ ...cell(), color: cirColor }}>{row.cir > 0 ? <>{fmtN(row.cir)}{pctSpan(row.cir, row.orders)}</> : <span style={{ color: C.t3 }}>—</span>}</td>
+                      <td style={{ ...cell(), color: exchColor }}>{row.exch > 0 ? <>{fmtN(row.exch)}{pctSpan(row.exch, row.orders)}</> : <span style={{ color: C.t3 }}>—</span>}</td>
+                      {showReturns && <td style={{ ...cell(), color: returnColor, fontWeight: 600 }}>{(row.rto + row.cir) > 0 ? <>{fmtN(row.rto + row.cir)}{pctSpan(row.rto + row.cir, row.orders)}</> : <span style={{ color: C.t3 }}>—</span>}</td>}
                     </>}
                     <td style={{ ...cell(), color: netColor, fontWeight: 600 }}>{fmt(row.net)}</td>
                   </tr>
+                  {isOpen && (() => {
+                    // Compute per-sub-cat cum % within this parent category
+                    let scCum = 0
+                    subCats.forEach(sr => { sr.sharePct = row.gross > 0 ? (sr.gross / row.gross * 100) : 0; scCum += sr.sharePct; sr.cumPct = scCum })
+                    return null
+                  })()}
                   {isOpen && subCats.map(sr => {
                     const scKey = `${row.cat}::${sr.sc}`
                     const scOpen = expandedSC[scKey]
-                    const skus = Object.entries(skuData?.[row.cat]?.[sr.sc] || {}).map(([sku, d]) => ({ sku, ...mapRow(d) })).sort((a, b) => b.gross - a.gross)
+                    const skus = Object.entries(skuData?.[row.cat]?.[sr.sc] || {}).map(([sku, d]) => ({ sku, ...mapRow(d), prevGross: skuPrevMap?.[row.cat]?.[sr.sc]?.[sku] || 0 })).sort((a, b) => b.gross - a.gross)
+                    // Compute SKU cum% within this sub-cat
+                    let skuCum = 0
+                    skus.forEach(sk => { sk.sharePct = sr.gross > 0 ? (sk.gross / sr.gross * 100) : 0; skuCum += sk.sharePct; sk.cumPct = skuCum })
                     const hasSkus = skus.length > 0
+                    const srPrev = subCatPrevMap[`${row.cat}::${sr.sc}`] || 0
                     return (
                       <Fragment key={sr.sc}>
                         <tr style={{ borderBottom: `1px solid ${C.border}`, background: '#FAFAF7' }}>
@@ -1343,15 +1376,18 @@ function FinancialCategoryMatrix({ catData, subCatData, skuData, title, showRetu
                             </span>
                           </td>
                           <td style={{ ...cell(10.5), color: grossColor }}>{fmt(sr.gross)}{showShare && tot.gross > 0 ? <span style={{ fontSize: 9, color: C.t3, marginLeft: 5 }}>({(sr.gross / tot.gross * 100).toFixed(1)}%)</span> : null}</td>
+                          {showExtras && <td style={{ ...cell(10.5), color: C.t3 }}>{srPrev > 0 ? fmt(srPrev) : '—'}</td>}
+                          {showExtras && <td style={{ ...cell(10.5) }}>{momCell(sr.gross, srPrev)}</td>}
+                          {showExtras && <td style={{ ...cell(10.5), color: C.t3 }}>{sr.cumPct ? sr.cumPct.toFixed(1) : '0.0'}%</td>}
                           <td style={{ ...cell(10.5), color: C.t2 }}>{fmtN(sr.units)}</td>
                           <td style={{ ...cell(10.5), color: C.t3 }}>₹{(sr.units > 0 ? Math.round(sr.gross / sr.units) : 0).toLocaleString('en-IN')}</td>
                           <td style={{ ...cell(10.5), color: C.t2 }}>{fmt(sr.gst)}</td>
                           {hasCancelData && <>
-                            <td style={{ ...cell(10.5), color: '#B91C1C' }}>{sr.cancelled > 0 ? <>{fmtN(sr.cancelled)}{pctSpan(sr.cancelled, sr.orders)}</> : <span style={{ color: C.t3 }}>—</span>}</td>
-                            <td style={{ ...cell(10.5), color: '#E24B4A' }}>{sr.rto > 0 ? <>{fmtN(sr.rto)}{pctSpan(sr.rto, sr.orders)}</> : <span style={{ color: C.t3 }}>—</span>}</td>
-                            <td style={{ ...cell(10.5), color: '#2E74CC' }}>{sr.cir > 0 ? <>{fmtN(sr.cir)}{pctSpan(sr.cir, sr.orders)}</> : <span style={{ color: C.t3 }}>—</span>}</td>
-                            <td style={{ ...cell(10.5), color: '#9B59B6' }}>{sr.exch > 0 ? <>{fmtN(sr.exch)}{pctSpan(sr.exch, sr.orders)}</> : <span style={{ color: C.t3 }}>—</span>}</td>
-                            {showReturns && <td style={{ ...cell(10.5), color: '#7A1A1A', fontWeight: 600 }}>{(sr.rto + sr.cir) > 0 ? <>{fmtN(sr.rto + sr.cir)}{pctSpan(sr.rto + sr.cir, sr.orders)}</> : <span style={{ color: C.t3 }}>—</span>}</td>}
+                            <td style={{ ...cell(10.5), color: cancelColor }}>{sr.cancelled > 0 ? <>{fmtN(sr.cancelled)}{pctSpan(sr.cancelled, sr.orders)}</> : <span style={{ color: C.t3 }}>—</span>}</td>
+                            <td style={{ ...cell(10.5), color: rtoColor }}>{sr.rto > 0 ? <>{fmtN(sr.rto)}{pctSpan(sr.rto, sr.orders)}</> : <span style={{ color: C.t3 }}>—</span>}</td>
+                            <td style={{ ...cell(10.5), color: cirColor }}>{sr.cir > 0 ? <>{fmtN(sr.cir)}{pctSpan(sr.cir, sr.orders)}</> : <span style={{ color: C.t3 }}>—</span>}</td>
+                            <td style={{ ...cell(10.5), color: exchColor }}>{sr.exch > 0 ? <>{fmtN(sr.exch)}{pctSpan(sr.exch, sr.orders)}</> : <span style={{ color: C.t3 }}>—</span>}</td>
+                            {showReturns && <td style={{ ...cell(10.5), color: returnColor, fontWeight: 600 }}>{(sr.rto + sr.cir) > 0 ? <>{fmtN(sr.rto + sr.cir)}{pctSpan(sr.rto + sr.cir, sr.orders)}</> : <span style={{ color: C.t3 }}>—</span>}</td>}
                           </>}
                           <td style={{ ...cell(10.5), color: netColor }}>{fmt(sr.net)}</td>
                         </tr>
@@ -1359,15 +1395,18 @@ function FinancialCategoryMatrix({ catData, subCatData, skuData, title, showRetu
                           <tr key={sk.sku} style={{ borderBottom: `1px solid ${C.border}`, background: '#F5F5F0' }}>
                             <td style={{ padding: '3px 5px 3px 36px', color: C.t3, fontSize: 10, fontFamily: 'var(--mono)' }}>└ {sk.sku}</td>
                             <td style={{ ...cell(10), color: grossColor }}>{fmt(sk.gross)}{showShare && tot.gross > 0 ? <span style={{ fontSize: 8.5, color: C.t3, marginLeft: 5 }}>({(sk.gross / tot.gross * 100).toFixed(1)}%)</span> : null}</td>
+                            {showExtras && <td style={{ ...cell(10), color: C.t3 }}>{sk.prevGross > 0 ? fmt(sk.prevGross) : '—'}</td>}
+                            {showExtras && <td style={{ ...cell(10) }}>{momCell(sk.gross, sk.prevGross)}</td>}
+                            {showExtras && <td style={{ ...cell(10), color: C.t3 }}>{sk.cumPct ? sk.cumPct.toFixed(1) : '0.0'}%</td>}
                             <td style={{ ...cell(10), color: C.t2 }}>{fmtN(sk.units)}</td>
                             <td style={{ ...cell(10), color: C.t3 }}>₹{(sk.units > 0 ? Math.round(sk.gross / sk.units) : 0).toLocaleString('en-IN')}</td>
                             <td style={{ ...cell(10), color: C.t2 }}>{fmt(sk.gst)}</td>
                             {hasCancelData && <>
-                              <td style={{ ...cell(10), color: '#B91C1C' }}>{sk.cancelled > 0 ? <>{fmtN(sk.cancelled)}{pctSpan(sk.cancelled, sk.orders)}</> : <span style={{ color: C.t3 }}>—</span>}</td>
-                              <td style={{ ...cell(10), color: '#E24B4A' }}>{sk.rto > 0 ? <>{fmtN(sk.rto)}{pctSpan(sk.rto, sk.orders)}</> : <span style={{ color: C.t3 }}>—</span>}</td>
-                              <td style={{ ...cell(10), color: '#2E74CC' }}>{sk.cir > 0 ? <>{fmtN(sk.cir)}{pctSpan(sk.cir, sk.orders)}</> : <span style={{ color: C.t3 }}>—</span>}</td>
-                              <td style={{ ...cell(10), color: '#9B59B6' }}>{sk.exch > 0 ? <>{fmtN(sk.exch)}{pctSpan(sk.exch, sk.orders)}</> : <span style={{ color: C.t3 }}>—</span>}</td>
-                              {showReturns && <td style={{ ...cell(10), color: '#7A1A1A', fontWeight: 600 }}>{(sk.rto + sk.cir) > 0 ? <>{fmtN(sk.rto + sk.cir)}{pctSpan(sk.rto + sk.cir, sk.orders)}</> : <span style={{ color: C.t3 }}>—</span>}</td>}
+                              <td style={{ ...cell(10), color: cancelColor }}>{sk.cancelled > 0 ? <>{fmtN(sk.cancelled)}{pctSpan(sk.cancelled, sk.orders)}</> : <span style={{ color: C.t3 }}>—</span>}</td>
+                              <td style={{ ...cell(10), color: rtoColor }}>{sk.rto > 0 ? <>{fmtN(sk.rto)}{pctSpan(sk.rto, sk.orders)}</> : <span style={{ color: C.t3 }}>—</span>}</td>
+                              <td style={{ ...cell(10), color: cirColor }}>{sk.cir > 0 ? <>{fmtN(sk.cir)}{pctSpan(sk.cir, sk.orders)}</> : <span style={{ color: C.t3 }}>—</span>}</td>
+                              <td style={{ ...cell(10), color: exchColor }}>{sk.exch > 0 ? <>{fmtN(sk.exch)}{pctSpan(sk.exch, sk.orders)}</> : <span style={{ color: C.t3 }}>—</span>}</td>
+                              {showReturns && <td style={{ ...cell(10), color: returnColor, fontWeight: 600 }}>{(sk.rto + sk.cir) > 0 ? <>{fmtN(sk.rto + sk.cir)}{pctSpan(sk.rto + sk.cir, sk.orders)}</> : <span style={{ color: C.t3 }}>—</span>}</td>}
                             </>}
                             <td style={{ ...cell(10), color: netColor }}>{fmt(sk.net)}</td>
                           </tr>
@@ -1383,15 +1422,18 @@ function FinancialCategoryMatrix({ catData, subCatData, skuData, title, showRetu
             <tr style={{ borderTop: `2px solid ${C.border}`, background: C.bg }}>
               <td style={{ padding: '6px 8px', fontSize: 11, fontWeight: 700, color: C.t1 }}>Total</td>
               <td style={{ padding: '5px 5px', textAlign: 'right', fontWeight: 700, fontFamily: 'var(--mono)', fontSize: 11.5, color: grossColor }}>{fmt(tot.gross)}{showShare ? <span style={{ fontSize: 9.5, color: C.t3, marginLeft: 6, fontWeight: 400 }}>(100%)</span> : null}</td>
+              {showExtras && <td style={{ padding: '5px 5px', textAlign: 'right', fontWeight: 700, fontFamily: 'var(--mono)', fontSize: 11.5, color: C.t3 }}>{tot.prevGross > 0 ? fmt(tot.prevGross) : '—'}</td>}
+              {showExtras && <td style={{ padding: '5px 5px', textAlign: 'right', fontWeight: 700, fontFamily: 'var(--mono)', fontSize: 11.5 }}>{momCell(tot.gross, tot.prevGross)}</td>}
+              {showExtras && <td style={{ padding: '5px 5px', textAlign: 'right', fontWeight: 700, fontFamily: 'var(--mono)', fontSize: 11.5, color: C.t3 }}>100.0%</td>}
               <td style={{ padding: '5px 5px', textAlign: 'right', fontWeight: 700, fontFamily: 'var(--mono)', fontSize: 11.5, color: C.t2 }}>{fmtN(tot.units)}</td>
               <td style={{ padding: '5px 5px', textAlign: 'right', fontWeight: 700, fontFamily: 'var(--mono)', fontSize: 11.5, color: C.t3 }}>₹{tot.units > 0 ? Math.round(tot.gross / tot.units).toLocaleString('en-IN') : '—'}</td>
               <td style={{ padding: '5px 5px', textAlign: 'right', fontWeight: 700, fontFamily: 'var(--mono)', fontSize: 11.5, color: C.t2 }}>{fmt(tot.gst)}</td>
               {hasCancelData && <>
-                <td style={{ padding: '5px 5px', textAlign: 'right', fontWeight: 700, fontFamily: 'var(--mono)', fontSize: 11.5, color: '#B91C1C' }}>{fmtN(tot.cancelled)}{pctSpan(tot.cancelled, tot.orders)}</td>
-                <td style={{ padding: '5px 5px', textAlign: 'right', fontWeight: 700, fontFamily: 'var(--mono)', fontSize: 11.5, color: '#E24B4A' }}>{fmtN(tot.rto)}{pctSpan(tot.rto, tot.orders)}</td>
-                <td style={{ padding: '5px 5px', textAlign: 'right', fontWeight: 700, fontFamily: 'var(--mono)', fontSize: 11.5, color: '#2E74CC' }}>{fmtN(tot.cir)}{pctSpan(tot.cir, tot.orders)}</td>
-                <td style={{ padding: '5px 5px', textAlign: 'right', fontWeight: 700, fontFamily: 'var(--mono)', fontSize: 11.5, color: '#9B59B6' }}>{fmtN(tot.exch)}{pctSpan(tot.exch, tot.orders)}</td>
-                {showReturns && <td style={{ padding: '5px 5px', textAlign: 'right', fontWeight: 700, fontFamily: 'var(--mono)', fontSize: 11.5, color: '#7A1A1A' }}>{fmtN(tot.rto + tot.cir)}{pctSpan(tot.rto + tot.cir, tot.orders)}</td>}
+                <td style={{ padding: '5px 5px', textAlign: 'right', fontWeight: 700, fontFamily: 'var(--mono)', fontSize: 11.5, color: cancelColor }}>{fmtN(tot.cancelled)}{pctSpan(tot.cancelled, tot.orders)}</td>
+                <td style={{ padding: '5px 5px', textAlign: 'right', fontWeight: 700, fontFamily: 'var(--mono)', fontSize: 11.5, color: rtoColor }}>{fmtN(tot.rto)}{pctSpan(tot.rto, tot.orders)}</td>
+                <td style={{ padding: '5px 5px', textAlign: 'right', fontWeight: 700, fontFamily: 'var(--mono)', fontSize: 11.5, color: cirColor }}>{fmtN(tot.cir)}{pctSpan(tot.cir, tot.orders)}</td>
+                <td style={{ padding: '5px 5px', textAlign: 'right', fontWeight: 700, fontFamily: 'var(--mono)', fontSize: 11.5, color: exchColor }}>{fmtN(tot.exch)}{pctSpan(tot.exch, tot.orders)}</td>
+                {showReturns && <td style={{ padding: '5px 5px', textAlign: 'right', fontWeight: 700, fontFamily: 'var(--mono)', fontSize: 11.5, color: returnColor }}>{fmtN(tot.rto + tot.cir)}{pctSpan(tot.rto + tot.cir, tot.orders)}</td>}
               </>}
               <td style={{ padding: '5px 5px', textAlign: 'right', fontWeight: 700, fontFamily: 'var(--mono)', fontSize: 11.5, color: netColor }}>{fmt(tot.net)}</td>
             </tr>
@@ -2595,7 +2637,7 @@ function ShopifyTab({ data, filters, setFilters }) {
             })
           })
         })
-        return <FinancialCategoryMatrix catData={catData} subCatData={subCatData} skuData={skuData} title={`Category Revenue Matrix · Shopify ${isIntl ? 'International' : 'India'}`} neutral={true} showShare={true} />
+        return <FinancialCategoryMatrix catData={catData} subCatData={subCatData} skuData={skuData} title={`Category Revenue Matrix · Shopify ${isIntl ? 'International' : 'India'}`} neutral={true} showShare={true} catPrevMap={sh.catPrevMap || {}} subCatPrevMap={sh.subCatPrevMap || {}} skuPrevMap={sh.skuPrevMap || {}} />
       })()}
       {false && <div className="g-2" style={{ alignItems: 'stretch' }}>
         {(() => {
