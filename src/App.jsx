@@ -4062,7 +4062,28 @@ function FlipkartTab({ data }) {
           })
         })
         const title = subView === 'overview' ? 'Category Revenue Matrix · Flipkart' : subView === 'fbf' ? 'Category Revenue Matrix · FBF' : 'Category Revenue Matrix · Non-FBF'
-        return <FinancialCategoryMatrix catData={catAggMatrix} subCatData={subCatData} skuData={skuData} title={title} />
+        const subKeys = subView === 'overview' ? ['FBF', 'NON-FBF'] : subView === 'fbf' ? ['FBF'] : ['NON-FBF']
+        const catPrevMap = {}
+        ;(fk.catPrevMap ? Object.entries(fk.catPrevMap) : []).forEach(([k, v]) => {
+          const [cat, sub] = k.split('::')
+          if (subKeys.includes(sub)) catPrevMap[cat] = (catPrevMap[cat] || 0) + v
+        })
+        const subCatPrevMap = {}
+        ;(fk.subCatPrevMap ? Object.entries(fk.subCatPrevMap) : []).forEach(([k, v]) => {
+          const parts = k.split('::'); const sub = parts[2]
+          if (subKeys.includes(sub)) { const key = `${parts[0]}::${parts[1]}`; subCatPrevMap[key] = (subCatPrevMap[key] || 0) + v }
+        })
+        const skuPrevMap = {}
+        ;(fk.skuPrevMap ? Object.entries(fk.skuPrevMap) : []).forEach(([k, v]) => {
+          const parts = k.split('::'); const sub = parts[3]
+          if (subKeys.includes(sub)) {
+            const [cat, sc, sku] = parts
+            if (!skuPrevMap[cat]) skuPrevMap[cat] = {}
+            if (!skuPrevMap[cat][sc]) skuPrevMap[cat][sc] = {}
+            skuPrevMap[cat][sc][sku] = (skuPrevMap[cat][sc][sku] || 0) + v
+          }
+        })
+        return <FinancialCategoryMatrix catData={catAggMatrix} subCatData={subCatData} skuData={skuData} title={title} showReturns={true} showMoM={true} catPrevMap={catPrevMap} subCatPrevMap={subCatPrevMap} skuPrevMap={skuPrevMap} />
       })()}
       {(() => {
         const catRows = Object.entries((() => { const m = {}; filterSub(fk.categories || []).forEach(x => { if (!m[x.category]) m[x.category] = { rev: 0, units: 0, orders: 0 }; m[x.category].rev += x.rev; m[x.category].units += x.units; m[x.category].orders += x.orders }); return m })()||{}).map(([cat, v]) => ({ name: cat, rev: v.rev, units: v.units, orders: v.orders })).sort((a,b) => b.rev-a.rev)
