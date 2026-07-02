@@ -3129,20 +3129,32 @@ function AmazonTab({ data, region = 'india', setRegion = () => {} }) {
             }).sort((a,b) => b.rev - a.rev)
             return <CatSubCatRow catRows={catRows} subCatRows={subCatRows} title="Category Revenue · Amazon India" selectedCat={selectedCat} onSelectCat={v => { setSelectedCat(v); setSelectedSubCat(null) }} selectedSubCat={selectedSubCat} onSelectSubCat={setSelectedSubCat} />
           })()}
-          <div className="g-2" style={{ alignItems: 'stretch' }}>
-            <PaginatedCard title="Top States" rows={(amzSC.states || []).map(s => ({ ...s, state: s.state ? s.state.charAt(0).toUpperCase() + s.state.slice(1).toLowerCase() : s.state, aov: s.orders ? Math.round(s.rev / s.orders) : 0 }))} columns={[
-              { key: 'state', label: 'State' },
-              { key: 'rev', label: 'Revenue', align: 'right', mono: true, render: v => fmt(v) },
-              { key: 'orders', label: 'Orders', align: 'right', render: v => fmtN(v) },
-              { key: 'aov', label: 'ASP', align: 'right', render: v => `₹${v.toLocaleString('en-IN')}` },
-            ]} pageSize={15} />
-            <PaginatedCard title="Top Cities" rows={(amzSC.cities || []).map(c => ({ ...c, city: c.city ? c.city.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' ') : c.city, aov: c.orders ? Math.round(c.rev / c.orders) : 0 }))} columns={[
-              { key: 'city', label: 'City' },
-              { key: 'rev', label: 'Revenue', align: 'right', mono: true, render: v => fmt(v) },
-              { key: 'orders', label: 'Orders', align: 'right', render: v => fmtN(v) },
-              { key: 'aov', label: 'ASP', align: 'right', render: v => `₹${v.toLocaleString('en-IN')}` },
-            ]} pageSize={15} />
-          </div>
+          {(() => {
+            const statePrevMap = amzSC.statePrevMap || {}
+            const totalStateRev = (amzSC.states||[]).reduce((s,x) => s+x.rev, 0)
+            let cum = 0
+            const enrichedStates = (amzSC.states||[]).map(s => {
+              const prev = statePrevMap[s.state] || 0
+              const sharePct = totalStateRev > 0 ? s.rev / totalStateRev * 100 : 0
+              cum += sharePct
+              return { ...s, aov: s.orders ? s.rev / s.orders : 0, rtoPct: s.orders ? (s.rtoOrders||0) / s.orders * 100 : 0, mom: prev > 0 ? (s.rev - prev) / prev * 100 : null, sharePct, cumPct: cum }
+            })
+            const cityPrevMap = amzSC.cityPrevMap || {}
+            const totalCityRev = (amzSC.cities||[]).reduce((s,x) => s+x.rev, 0)
+            let cumC = 0
+            const enrichedCities = (amzSC.cities||[]).map(c => {
+              const prev = cityPrevMap[c.city] || 0
+              const sharePct = totalCityRev > 0 ? c.rev / totalCityRev * 100 : 0
+              cumC += sharePct
+              return { ...c, aov: c.orders ? c.rev / c.orders : 0, rtoPct: c.orders ? (c.rtoOrders||0) / c.orders * 100 : 0, mom: prev > 0 ? (c.rev - prev) / prev * 100 : null, sharePct, cumPct: cumC }
+            })
+            return (
+              <div className="g-2" style={{ alignItems: 'stretch' }}>
+                <ShopifyGeoRichTable title="Top States" rows={enrichedStates} firstKey="state" firstLabel="State" formatFirst={v => v ? v.charAt(0).toUpperCase() + v.slice(1).toLowerCase() : v} />
+                <ShopifyGeoRichTable title="Top Cities" rows={enrichedCities} firstKey="city" firstLabel="City" formatFirst={v => v ? v.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' ') : v} />
+              </div>
+            )
+          })()}
         </div>
       )}
 
@@ -3358,20 +3370,32 @@ function AmazonTab({ data, region = 'india', setRegion = () => {} }) {
             const subCatRows = Object.entries(amzSC.subCatChannel || {}).flatMap(([cat, scMap]) => Object.entries(scMap).map(([sc, chData]) => ({ name: sc, category: cat, rev: (chData.FBA?.rev||0)+(chData.MFN?.rev||0), units: (chData.FBA?.units||0)+(chData.MFN?.units||0), orders: (chData.FBA?.orders||0)+(chData.MFN?.orders||0) }))).sort((a,b) => b.rev-a.rev)
             return <CatSubCatRow catRows={catRows} subCatRows={subCatRows} title="Category Revenue · Seller Central" selectedCat={selectedCat} onSelectCat={v => { setSelectedCat(v); setSelectedSubCat(null) }} selectedSubCat={selectedSubCat} onSelectSubCat={setSelectedSubCat} />
           })()}
-          <div className="g-2" style={{ alignItems: 'stretch' }}>
-            <PaginatedCard title="Top States" rows={(amzSC.states || []).map(s => ({ ...s, state: s.state ? s.state.charAt(0).toUpperCase() + s.state.slice(1).toLowerCase() : s.state, aov: s.orders ? Math.round(s.rev / s.orders) : 0 }))} columns={[
-              { key: 'state', label: 'State' },
-              { key: 'rev', label: 'Revenue', align: 'right', mono: true, render: v => fmt(v) },
-              { key: 'orders', label: 'Orders', align: 'right', render: v => fmtN(v) },
-              { key: 'aov', label: 'ASP', align: 'right', render: v => `₹${v.toLocaleString('en-IN')}` },
-            ]} pageSize={15} />
-            <PaginatedCard title="Top Cities" rows={(amzSC.cities || []).map(c => ({ ...c, city: c.city ? c.city.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' ') : c.city, aov: c.orders ? Math.round(c.rev / c.orders) : 0 }))} columns={[
-              { key: 'city', label: 'City' },
-              { key: 'rev', label: 'Revenue', align: 'right', mono: true, render: v => fmt(v) },
-              { key: 'orders', label: 'Orders', align: 'right', render: v => fmtN(v) },
-              { key: 'aov', label: 'ASP', align: 'right', render: v => `₹${v.toLocaleString('en-IN')}` },
-            ]} pageSize={15} />
-          </div>
+          {(() => {
+            const statePrevMap = amzSC.statePrevMap || {}
+            const totalStateRev = (amzSC.states||[]).reduce((s,x) => s+x.rev, 0)
+            let cum = 0
+            const enrichedStates = (amzSC.states||[]).map(s => {
+              const prev = statePrevMap[s.state] || 0
+              const sharePct = totalStateRev > 0 ? s.rev / totalStateRev * 100 : 0
+              cum += sharePct
+              return { ...s, aov: s.orders ? s.rev / s.orders : 0, rtoPct: s.orders ? (s.rtoOrders||0) / s.orders * 100 : 0, mom: prev > 0 ? (s.rev - prev) / prev * 100 : null, sharePct, cumPct: cum }
+            })
+            const cityPrevMap = amzSC.cityPrevMap || {}
+            const totalCityRev = (amzSC.cities||[]).reduce((s,x) => s+x.rev, 0)
+            let cumC = 0
+            const enrichedCities = (amzSC.cities||[]).map(c => {
+              const prev = cityPrevMap[c.city] || 0
+              const sharePct = totalCityRev > 0 ? c.rev / totalCityRev * 100 : 0
+              cumC += sharePct
+              return { ...c, aov: c.orders ? c.rev / c.orders : 0, rtoPct: c.orders ? (c.rtoOrders||0) / c.orders * 100 : 0, mom: prev > 0 ? (c.rev - prev) / prev * 100 : null, sharePct, cumPct: cumC }
+            })
+            return (
+              <div className="g-2" style={{ alignItems: 'stretch' }}>
+                <ShopifyGeoRichTable title="Top States" rows={enrichedStates} firstKey="state" firstLabel="State" formatFirst={v => v ? v.charAt(0).toUpperCase() + v.slice(1).toLowerCase() : v} />
+                <ShopifyGeoRichTable title="Top Cities" rows={enrichedCities} firstKey="city" firstLabel="City" formatFirst={v => v ? v.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' ') : v} />
+              </div>
+            )
+          })()}
         </div>
       )}
 
