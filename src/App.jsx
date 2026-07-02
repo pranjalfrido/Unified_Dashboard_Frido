@@ -4087,8 +4087,8 @@ function FlipkartTab({ data }) {
         // aggregate already-filtered stateRows (filterSub already applied)
         const stateMap = {}
         filterSub(fk.states||[]).forEach(x => {
-          if (!stateMap[x.state]) stateMap[x.state] = { state: x.state, rev: 0, orders: 0 }
-          stateMap[x.state].rev += x.rev; stateMap[x.state].orders += x.orders
+          if (!stateMap[x.state]) stateMap[x.state] = { state: x.state, rev: 0, orders: 0, rtoOrders: 0 }
+          stateMap[x.state].rev += x.rev; stateMap[x.state].orders += x.orders; stateMap[x.state].rtoOrders += (x.rtoOrders||0)
         })
         let cum = 0
         const enrichedStates = Object.values(stateMap).sort((a,b) => b.rev-a.rev).map(s => {
@@ -4097,12 +4097,12 @@ function FlipkartTab({ data }) {
           const prev = subView === 'overview' ? prevFBF + prevNFBF : subView === 'fbf' ? prevFBF : prevNFBF
           const sharePct = totalStateRev > 0 ? s.rev / totalStateRev * 100 : 0
           cum += sharePct
-          return { ...s, aov: s.orders ? s.rev / s.orders : 0, rtoPct: 0, mom: prev > 0 ? (s.rev - prev) / prev * 100 : null, sharePct, cumPct: cum }
+          return { ...s, aov: s.orders ? s.rev / s.orders : 0, rtoPct: s.orders ? (s.rtoOrders||0) / s.orders * 100 : 0, mom: prev > 0 ? (s.rev - prev) / prev * 100 : null, sharePct, cumPct: cum }
         })
         const cityMap = {}
         filterSub(fk.cities||[]).forEach(x => {
-          if (!cityMap[x.city]) cityMap[x.city] = { city: x.city, rev: 0, orders: 0 }
-          cityMap[x.city].rev += x.rev; cityMap[x.city].orders += x.orders
+          if (!cityMap[x.city]) cityMap[x.city] = { city: x.city, rev: 0, orders: 0, rtoOrders: 0 }
+          cityMap[x.city].rev += x.rev; cityMap[x.city].orders += x.orders; cityMap[x.city].rtoOrders += (x.rtoOrders||0)
         })
         let cumC = 0
         const enrichedCities = Object.values(cityMap).sort((a,b) => b.rev-a.rev).map(c => {
@@ -4111,7 +4111,7 @@ function FlipkartTab({ data }) {
           const prev = subView === 'overview' ? prevFBF + prevNFBF : subView === 'fbf' ? prevFBF : prevNFBF
           const sharePct = totalCityRev > 0 ? c.rev / totalCityRev * 100 : 0
           cumC += sharePct
-          return { ...c, aov: c.orders ? c.rev / c.orders : 0, rtoPct: 0, mom: prev > 0 ? (c.rev - prev) / prev * 100 : null, sharePct, cumPct: cumC }
+          return { ...c, aov: c.orders ? c.rev / c.orders : 0, rtoPct: c.orders ? (c.rtoOrders||0) / c.orders * 100 : 0, mom: prev > 0 ? (c.rev - prev) / prev * 100 : null, sharePct, cumPct: cumC }
         })
         return (
           <div className="g-2" style={{ alignItems: 'stretch' }}>
