@@ -4474,7 +4474,7 @@ function InstaTab({ data }) {
         return <ShopifyGeoDonutRow regionRows={regionRows} tierRows={tierRows} topStates={topStates} allStateRows={stateRows} />
       })()}
 
-      <FinancialCategoryMatrix catData={catMatrixData} subCatData={subCatMatrixData} skuData={ins.skuMatrix || {}} title="Category Revenue Matrix · Instamart" />
+      <FinancialCategoryMatrix catData={catMatrixData} subCatData={subCatMatrixData} skuData={ins.skuMatrix || {}} title="Category Revenue Matrix · Instamart" showMoM={true} catPrevMap={ins.catPrevMap || {}} subCatPrevMap={ins.subCatPrevMap || {}} skuPrevMap={ins.skuPrevMap || {}} />
 
       <CatSubCatRow
         catRows={catRowsForCatSubCat}
@@ -4484,21 +4484,32 @@ function InstaTab({ data }) {
         onSelectCat={setSelectedCat}
       />
 
-      <div className="g-2">
-        <PaginatedCard title="All Cities" rows={cityRows} columns={[
-          { key: 'city', label: 'City' },
-          { key: 'region', label: 'Region', render: v => v || '—' },
-          { key: 'cityTier', label: 'Tier', render: v => v ? `Tier ${v}` : '—' },
-          { key: 'units', label: 'Units', align: 'right', render: v => fmtN(v) },
-          { key: 'rev', label: 'Revenue', align: 'right', mono: true, render: v => fmt(v) },
-          { key: 'skus', label: 'SKUs', align: 'right', render: v => fmtN(v) },
-        ]} pageSize={15} />
-        <PaginatedCard title="Top States" rows={stateRows} columns={[
-          { key: 'state', label: 'State' },
-          { key: 'units', label: 'Units', align: 'right', render: v => fmtN(v) },
-          { key: 'rev', label: 'Revenue', align: 'right', mono: true, render: v => fmt(v) },
-        ]} pageSize={15} />
-      </div>
+      {(() => {
+        const statePrevMap = ins.statePrevMap || {}
+        const cityPrevMap = ins.cityPrevMap || {}
+        const totalStateRev = ins.stateTotal || stateRows.reduce((s, x) => s + x.rev, 0)
+        const totalCityRev = ins.cityTotal || cityRows.reduce((s, x) => s + x.rev, 0)
+        let sCum = 0
+        const enrichedStates = stateRows.map(s => {
+          const prev = statePrevMap[s.state] || 0
+          const sharePct = totalStateRev > 0 ? s.rev / totalStateRev * 100 : 0
+          sCum += sharePct
+          return { state: s.state, rev: s.rev, orders: s.orders || 0, asp: s.units > 0 ? s.rev / s.units : 0, sharePct, cumPct: sCum, mom: prev > 0 ? (s.rev - prev) / prev * 100 : null }
+        })
+        let cCum = 0
+        const enrichedCities = cityRows.map(c => {
+          const prev = cityPrevMap[c.city] || 0
+          const sharePct = totalCityRev > 0 ? c.rev / totalCityRev * 100 : 0
+          cCum += sharePct
+          return { city: c.city, rev: c.rev, orders: c.orders || 0, asp: c.units > 0 ? c.rev / c.units : 0, sharePct, cumPct: cCum, mom: prev > 0 ? (c.rev - prev) / prev * 100 : null }
+        })
+        return (
+          <div className="g-2" style={{ alignItems: 'stretch' }}>
+            <ShopifyGeoRichTable title="Top States" rows={enrichedStates} firstKey="state" firstLabel="State" formatFirst={v => v ? v.charAt(0).toUpperCase() + v.slice(1).toLowerCase() : v} showAOV={false} showRTO={false} showASP={true} />
+            <ShopifyGeoRichTable title="Top Cities" rows={enrichedCities} firstKey="city" firstLabel="City" formatFirst={v => v ? v.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' ') : v} showAOV={false} showRTO={false} showASP={true} />
+          </div>
+        )
+      })()}
     </div>
   )
 }
@@ -4618,7 +4629,7 @@ function ZeptoTab({ data }) {
         return <ShopifyGeoDonutRow regionRows={regionRows} tierRows={tierRows} topStates={topStates} allStateRows={stateRows} />
       })()}
 
-      <FinancialCategoryMatrix catData={catMatrixData} subCatData={subCatMatrixData} skuData={zp.skuMatrix || {}} title="Category Revenue Matrix · Zepto" />
+      <FinancialCategoryMatrix catData={catMatrixData} subCatData={subCatMatrixData} skuData={zp.skuMatrix || {}} title="Category Revenue Matrix · Zepto" showMoM={true} catPrevMap={zp.catPrevMap || {}} subCatPrevMap={zp.subCatPrevMap || {}} skuPrevMap={zp.skuPrevMap || {}} />
 
       <CatSubCatRow
         catRows={catRowsForCatSubCat}
@@ -4628,21 +4639,32 @@ function ZeptoTab({ data }) {
         onSelectCat={setSelectedCat}
       />
 
-      <div className="g-2">
-        <PaginatedCard title="All Cities" rows={cityRows} columns={[
-          { key: 'city', label: 'City' },
-          { key: 'region', label: 'Region', render: v => v || '—' },
-          { key: 'cityTier', label: 'Tier', render: v => v ? `Tier ${v}` : '—' },
-          { key: 'units', label: 'Units', align: 'right', render: v => fmtN(v) },
-          { key: 'rev', label: 'Revenue', align: 'right', mono: true, render: v => fmt(v) },
-          { key: 'skus', label: 'SKUs', align: 'right', render: v => fmtN(v) },
-        ]} pageSize={15} />
-        <PaginatedCard title="Top States" rows={stateRows} columns={[
-          { key: 'state', label: 'State' },
-          { key: 'units', label: 'Units', align: 'right', render: v => fmtN(v) },
-          { key: 'rev', label: 'Revenue', align: 'right', mono: true, render: v => fmt(v) },
-        ]} pageSize={15} />
-      </div>
+      {(() => {
+        const statePrevMap = zp.statePrevMap || {}
+        const cityPrevMap = zp.cityPrevMap || {}
+        const totalStateRev = zp.stateTotal || stateRows.reduce((s, x) => s + x.rev, 0)
+        const totalCityRev = zp.cityTotal || cityRows.reduce((s, x) => s + x.rev, 0)
+        let sCum = 0
+        const enrichedStates = stateRows.map(s => {
+          const prev = statePrevMap[s.state] || 0
+          const sharePct = totalStateRev > 0 ? s.rev / totalStateRev * 100 : 0
+          sCum += sharePct
+          return { state: s.state, rev: s.rev, orders: s.orders || 0, asp: s.units > 0 ? s.rev / s.units : 0, sharePct, cumPct: sCum, mom: prev > 0 ? (s.rev - prev) / prev * 100 : null }
+        })
+        let cCum = 0
+        const enrichedCities = cityRows.map(c => {
+          const prev = cityPrevMap[c.city] || 0
+          const sharePct = totalCityRev > 0 ? c.rev / totalCityRev * 100 : 0
+          cCum += sharePct
+          return { city: c.city, rev: c.rev, orders: c.orders || 0, asp: c.units > 0 ? c.rev / c.units : 0, sharePct, cumPct: cCum, mom: prev > 0 ? (c.rev - prev) / prev * 100 : null }
+        })
+        return (
+          <div className="g-2" style={{ alignItems: 'stretch' }}>
+            <ShopifyGeoRichTable title="Top States" rows={enrichedStates} firstKey="state" firstLabel="State" formatFirst={v => v ? v.charAt(0).toUpperCase() + v.slice(1).toLowerCase() : v} showAOV={false} showRTO={false} showASP={true} />
+            <ShopifyGeoRichTable title="Top Cities" rows={enrichedCities} firstKey="city" firstLabel="City" formatFirst={v => v ? v.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' ') : v} showAOV={false} showRTO={false} showASP={true} />
+          </div>
+        )
+      })()}
     </div>
   )
 }
