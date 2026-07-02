@@ -2090,7 +2090,7 @@ function TopSubCatBar({ subCatRows }) {
   )
 }
 
-function ShopifyGeoRichTable({ title, rows, firstKey, firstLabel, formatFirst, rtoLabel = 'RTO %' }) {
+function ShopifyGeoRichTable({ title, rows, firstKey, firstLabel, formatFirst, rtoLabel = 'RTO %', showAOV = true, showRTO = true, showASP = false }) {
   const [page, setPage] = useState(0)
   const pageSize = 15
   useEffect(() => { setPage(0) }, [rows])
@@ -2122,9 +2122,10 @@ function ShopifyGeoRichTable({ title, rows, firstKey, firstLabel, formatFirst, r
               <th style={{ ...th, textAlign: 'right' }}>% Share</th>
               <th style={{ ...th, textAlign: 'right' }}>Cum %</th>
               <th style={{ ...th, textAlign: 'right' }}>Orders</th>
-              <th style={{ ...th, textAlign: 'right' }}>AOV</th>
+              {showAOV && <th style={{ ...th, textAlign: 'right' }}>AOV</th>}
+              {showASP && <th style={{ ...th, textAlign: 'right' }}>ASP</th>}
               <th style={{ ...th, textAlign: 'right' }}>MoM</th>
-              <th style={{ ...th, textAlign: 'right' }}>{rtoLabel}</th>
+              {showRTO && <th style={{ ...th, textAlign: 'right' }}>{rtoLabel}</th>}
             </tr>
           </thead>
           <tbody>
@@ -2146,9 +2147,10 @@ function ShopifyGeoRichTable({ title, rows, firstKey, firstLabel, formatFirst, r
                   <td style={{ ...td, textAlign: 'right', fontFamily: 'var(--mono)', color: C.t2 }}>{r.sharePct.toFixed(1)}%</td>
                   <td style={{ ...td, textAlign: 'right', fontFamily: 'var(--mono)', color: C.t2 }}>{r.cumPct.toFixed(1)}%</td>
                   <td style={{ ...td, textAlign: 'right', fontFamily: 'var(--mono)' }}>{fmtN(r.orders)}</td>
-                  <td style={{ ...td, textAlign: 'right', fontFamily: 'var(--mono)' }}>₹{Math.round(r.aov || 0).toLocaleString('en-IN')}</td>
+                  {showAOV && <td style={{ ...td, textAlign: 'right', fontFamily: 'var(--mono)' }}>₹{Math.round(r.aov || 0).toLocaleString('en-IN')}</td>}
+                  {showASP && <td style={{ ...td, textAlign: 'right', fontFamily: 'var(--mono)' }}>₹{Math.round(r.asp || 0).toLocaleString('en-IN')}</td>}
                   <td style={{ ...td, textAlign: 'right' }}>{momCell(r.mom)}</td>
-                  <td style={{ ...td, textAlign: 'right' }}>{rtoChip(r.rtoPct || 0)}</td>
+                  {showRTO && <td style={{ ...td, textAlign: 'right' }}>{rtoChip(r.rtoPct || 0)}</td>}
                 </tr>
               )
             })}
@@ -4338,19 +4340,19 @@ function BlinkitTab({ data }) {
           const prev = statePrevMap[s.state] || 0
           const sharePct = totalStateRev > 0 ? s.rev / totalStateRev * 100 : 0
           sCum += sharePct
-          return { state: s.state, rev: s.rev, orders: s.orders || 0, sharePct, cumPct: sCum, mom: prev > 0 ? (s.rev - prev) / prev * 100 : null, rtoPct: 0 }
+          return { state: s.state, rev: s.rev, orders: s.orders || 0, asp: s.units > 0 ? s.rev / s.units : 0, sharePct, cumPct: sCum, mom: prev > 0 ? (s.rev - prev) / prev * 100 : null }
         })
         let cCum = 0
         const enrichedCities = cityRows.map(c => {
           const prev = cityPrevMap[c.city] || 0
           const sharePct = totalCityRev > 0 ? c.rev / totalCityRev * 100 : 0
           cCum += sharePct
-          return { city: c.city, rev: c.rev, orders: c.orders || 0, sharePct, cumPct: cCum, mom: prev > 0 ? (c.rev - prev) / prev * 100 : null, rtoPct: 0 }
+          return { city: c.city, rev: c.rev, orders: c.orders || 0, asp: c.units > 0 ? c.rev / c.units : 0, sharePct, cumPct: cCum, mom: prev > 0 ? (c.rev - prev) / prev * 100 : null }
         })
         return (
           <div className="g-2" style={{ alignItems: 'stretch' }}>
-            <ShopifyGeoRichTable title="Top States" rows={enrichedStates} firstKey="state" firstLabel="State" formatFirst={v => v ? v.charAt(0).toUpperCase() + v.slice(1).toLowerCase() : v} />
-            <ShopifyGeoRichTable title="Top Cities" rows={enrichedCities} firstKey="city" firstLabel="City" formatFirst={v => v ? v.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' ') : v} />
+            <ShopifyGeoRichTable title="Top States" rows={enrichedStates} firstKey="state" firstLabel="State" formatFirst={v => v ? v.charAt(0).toUpperCase() + v.slice(1).toLowerCase() : v} showAOV={false} showRTO={false} showASP={true} />
+            <ShopifyGeoRichTable title="Top Cities" rows={enrichedCities} firstKey="city" firstLabel="City" formatFirst={v => v ? v.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' ') : v} showAOV={false} showRTO={false} showASP={true} />
           </div>
         )
       })()}
