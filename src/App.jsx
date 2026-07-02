@@ -3131,7 +3131,7 @@ function AmazonTab({ data, region = 'india', setRegion = () => {} }) {
           })()}
           {(() => {
             const statePrevMap = amzSC.statePrevMap || {}
-            const totalStateRev = (amzSC.states||[]).reduce((s,x) => s+x.rev, 0)
+            const totalStateRev = amzSC.stateTotal || (amzSC.states||[]).reduce((s,x) => s+x.rev, 0)
             let cum = 0
             const enrichedStates = (amzSC.states||[]).map(s => {
               const prev = statePrevMap[s.state] || 0
@@ -3140,7 +3140,7 @@ function AmazonTab({ data, region = 'india', setRegion = () => {} }) {
               return { ...s, aov: s.orders ? s.rev / s.orders : 0, rtoPct: s.orders ? (s.rtoOrders||0) / s.orders * 100 : 0, mom: prev > 0 ? (s.rev - prev) / prev * 100 : null, sharePct, cumPct: cum }
             })
             const cityPrevMap = amzSC.cityPrevMap || {}
-            const totalCityRev = (amzSC.cities||[]).reduce((s,x) => s+x.rev, 0)
+            const totalCityRev = amzSC.cityTotal || (amzSC.cities||[]).reduce((s,x) => s+x.rev, 0)
             let cumC = 0
             const enrichedCities = (amzSC.cities||[]).map(c => {
               const prev = cityPrevMap[c.city] || 0
@@ -3372,7 +3372,7 @@ function AmazonTab({ data, region = 'india', setRegion = () => {} }) {
           })()}
           {(() => {
             const statePrevMap = amzSC.statePrevMap || {}
-            const totalStateRev = (amzSC.states||[]).reduce((s,x) => s+x.rev, 0)
+            const totalStateRev = amzSC.stateTotal || (amzSC.states||[]).reduce((s,x) => s+x.rev, 0)
             let cum = 0
             const enrichedStates = (amzSC.states||[]).map(s => {
               const prev = statePrevMap[s.state] || 0
@@ -3381,7 +3381,7 @@ function AmazonTab({ data, region = 'india', setRegion = () => {} }) {
               return { ...s, aov: s.orders ? s.rev / s.orders : 0, rtoPct: s.orders ? (s.rtoOrders||0) / s.orders * 100 : 0, mom: prev > 0 ? (s.rev - prev) / prev * 100 : null, sharePct, cumPct: cum }
             })
             const cityPrevMap = amzSC.cityPrevMap || {}
-            const totalCityRev = (amzSC.cities||[]).reduce((s,x) => s+x.rev, 0)
+            const totalCityRev = amzSC.cityTotal || (amzSC.cities||[]).reduce((s,x) => s+x.rev, 0)
             let cumC = 0
             const enrichedCities = (amzSC.cities||[]).map(c => {
               const prev = cityPrevMap[c.city] || 0
