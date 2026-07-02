@@ -2276,10 +2276,9 @@ function ShopifyTab({ data, filters, setFilters }) {
   const catRows = Object.entries(catMap).map(([k, v]) => { const orders = v.orders?.size ?? v.orders ?? 0; return { name: k, rev: v.rev, excRev: v.excRev || 0, orders, units: v.units || 0, aov: orders ? v.rev / orders : 0, asp: (v.units || 0) ? v.rev / v.units : 0 } }).sort((a, b) => b.rev - a.rev)
   const allSubCatRows = Object.entries(subCatMap).map(([k, v]) => { const orders = v.orders?.size ?? v.orders ?? 0; return { name: k.split('::')[1] || k, category: k.split('::')[0] || '', rev: v.rev, orders, units: v.units || 0, aov: orders ? v.rev / orders : 0, asp: (v.units || 0) ? v.rev / v.units : 0 } }).sort((a, b) => b.rev - a.rev)
   const subCatRows = selectedCat ? allSubCatRows.filter(r => r.category === selectedCat) : allSubCatRows
-  const stateTotal = sh.stateTotal || { rev: 0, orders: 0 }
   const stateRows = (() => {
-    // % Share denominator is TRUE all-states revenue, not just top-30
-    const totalRevAll = stateTotal.rev || Object.values(stateMap).reduce((s, v) => s + (v.rev || 0), 0)
+    // % Share denominator is sum of displayed rows only
+    const totalRevAll = Object.values(stateMap).reduce((s, v) => s + (v.rev || 0), 0)
     const sorted = Object.entries(stateMap).map(([k, v]) => {
       const ord = v.orders instanceof Set ? v.orders.size : v.orders
       const prev = statePrevMap[k] || { rev: 0, orders: 0 }
@@ -2302,10 +2301,9 @@ function ShopifyTab({ data, filters, setFilters }) {
     sorted.forEach(r => { cum += r.sharePct; r.cumPct = cum })
     return sorted
   })()
-  const cityTotal = sh.cityTotal || { rev: 0, orders: 0 }
   const enrichedCityRows = (() => {
-    // % Share denominator is TRUE all-cities revenue, not just top-50
-    const totalRevAll = cityTotal.rev || shCityRows.reduce((s, c) => s + (c.rev || 0), 0)
+    // % Share denominator is sum of displayed rows only
+    const totalRevAll = shCityRows.reduce((s, c) => s + (c.rev || 0), 0)
     const sorted = shCityRows.map(c => {
       const key = `${c.city}|${c.state || ''}`
       const prev = cityPrevMap[key] || { rev: 0, orders: 0 }
@@ -3133,7 +3131,7 @@ function AmazonTab({ data, region = 'india', setRegion = () => {} }) {
           })()}
           {(() => {
             const statePrevMap = amzSC.statePrevMap || {}
-            const totalStateRev = amzSC.stateTotal || (amzSC.states||[]).reduce((s,x) => s+x.rev, 0)
+            const totalStateRev = (amzSC.states||[]).reduce((s,x) => s+x.rev, 0)
             let cum = 0
             const enrichedStates = (amzSC.states||[]).map(s => {
               const prev = statePrevMap[s.state] || 0
@@ -3142,7 +3140,7 @@ function AmazonTab({ data, region = 'india', setRegion = () => {} }) {
               return { ...s, aov: s.orders ? s.rev / s.orders : 0, rtoPct: s.orders ? (s.rtoOrders||0) / s.orders * 100 : 0, mom: prev > 0 ? (s.rev - prev) / prev * 100 : null, sharePct, cumPct: cum }
             })
             const cityPrevMap = amzSC.cityPrevMap || {}
-            const totalCityRev = amzSC.cityTotal || (amzSC.cities||[]).reduce((s,x) => s+x.rev, 0)
+            const totalCityRev = (amzSC.cities||[]).reduce((s,x) => s+x.rev, 0)
             let cumC = 0
             const enrichedCities = (amzSC.cities||[]).map(c => {
               const prev = cityPrevMap[c.city] || 0
@@ -3374,7 +3372,7 @@ function AmazonTab({ data, region = 'india', setRegion = () => {} }) {
           })()}
           {(() => {
             const statePrevMap = amzSC.statePrevMap || {}
-            const totalStateRev = amzSC.stateTotal || (amzSC.states||[]).reduce((s,x) => s+x.rev, 0)
+            const totalStateRev = (amzSC.states||[]).reduce((s,x) => s+x.rev, 0)
             let cum = 0
             const enrichedStates = (amzSC.states||[]).map(s => {
               const prev = statePrevMap[s.state] || 0
@@ -3383,7 +3381,7 @@ function AmazonTab({ data, region = 'india', setRegion = () => {} }) {
               return { ...s, aov: s.orders ? s.rev / s.orders : 0, rtoPct: s.orders ? (s.rtoOrders||0) / s.orders * 100 : 0, mom: prev > 0 ? (s.rev - prev) / prev * 100 : null, sharePct, cumPct: cum }
             })
             const cityPrevMap = amzSC.cityPrevMap || {}
-            const totalCityRev = amzSC.cityTotal || (amzSC.cities||[]).reduce((s,x) => s+x.rev, 0)
+            const totalCityRev = (amzSC.cities||[]).reduce((s,x) => s+x.rev, 0)
             let cumC = 0
             const enrichedCities = (amzSC.cities||[]).map(c => {
               const prev = cityPrevMap[c.city] || 0
@@ -4098,21 +4096,13 @@ function FlipkartTab({ data }) {
       {(() => {
         const statePrevMap = fk.statePrevMap || {}
         const cityPrevMap = fk.cityPrevMap || {}
-        const stateTotalMap = fk.stateTotalMap || {}
-        const cityTotalMap = fk.cityTotalMap || {}
-        // total rev for selected sub (overview = FBF + NON-FBF combined)
-        const totalStateRev = subView === 'overview'
-          ? (stateTotalMap['FBF']||0) + (stateTotalMap['NON-FBF']||0)
-          : (stateTotalMap[subView === 'fbf' ? 'FBF' : 'NON-FBF']||0)
-        const totalCityRev = subView === 'overview'
-          ? (cityTotalMap['FBF']||0) + (cityTotalMap['NON-FBF']||0)
-          : (cityTotalMap[subView === 'fbf' ? 'FBF' : 'NON-FBF']||0)
         // aggregate already-filtered stateRows (filterSub already applied)
         const stateMap = {}
         filterSub(fk.states||[]).forEach(x => {
           if (!stateMap[x.state]) stateMap[x.state] = { state: x.state, rev: 0, orders: 0, rtoOrders: 0 }
           stateMap[x.state].rev += x.rev; stateMap[x.state].orders += x.orders; stateMap[x.state].rtoOrders += (x.rtoOrders||0)
         })
+        const totalStateRev = Object.values(stateMap).reduce((s, v) => s + v.rev, 0)
         let cum = 0
         const enrichedStates = Object.values(stateMap).sort((a,b) => b.rev-a.rev).map(s => {
           const prevFBF = statePrevMap[`${s.state}::FBF`]||0
@@ -4127,6 +4117,7 @@ function FlipkartTab({ data }) {
           if (!cityMap[x.city]) cityMap[x.city] = { city: x.city, rev: 0, orders: 0, rtoOrders: 0 }
           cityMap[x.city].rev += x.rev; cityMap[x.city].orders += x.orders; cityMap[x.city].rtoOrders += (x.rtoOrders||0)
         })
+        const totalCityRev = Object.values(cityMap).reduce((s, v) => s + v.rev, 0)
         let cumC = 0
         const enrichedCities = Object.values(cityMap).sort((a,b) => b.rev-a.rev).map(c => {
           const prevFBF = cityPrevMap[`${c.city}::FBF`]||0
@@ -4333,8 +4324,8 @@ function BlinkitTab({ data }) {
       {(() => {
         const statePrevMap = bl.statePrevMap || {}
         const cityPrevMap = bl.cityPrevMap || {}
-        const totalStateRev = bl.stateTotal || stateRows.reduce((s, x) => s + x.rev, 0)
-        const totalCityRev = bl.cityTotal || cityRows.reduce((s, x) => s + x.rev, 0)
+        const totalStateRev = stateRows.reduce((s, x) => s + x.rev, 0)
+        const totalCityRev = cityRows.reduce((s, x) => s + x.rev, 0)
         let sCum = 0
         const enrichedStates = stateRows.map(s => {
           const prev = statePrevMap[s.state] || 0
@@ -4487,8 +4478,8 @@ function InstaTab({ data }) {
       {(() => {
         const statePrevMap = ins.statePrevMap || {}
         const cityPrevMap = ins.cityPrevMap || {}
-        const totalStateRev = ins.stateTotal || stateRows.reduce((s, x) => s + x.rev, 0)
-        const totalCityRev = ins.cityTotal || cityRows.reduce((s, x) => s + x.rev, 0)
+        const totalStateRev = stateRows.reduce((s, x) => s + x.rev, 0)
+        const totalCityRev = cityRows.reduce((s, x) => s + x.rev, 0)
         let sCum = 0
         const enrichedStates = stateRows.map(s => {
           const prev = statePrevMap[s.state] || 0
@@ -4642,8 +4633,8 @@ function ZeptoTab({ data }) {
       {(() => {
         const statePrevMap = zp.statePrevMap || {}
         const cityPrevMap = zp.cityPrevMap || {}
-        const totalStateRev = zp.stateTotal || stateRows.reduce((s, x) => s + x.rev, 0)
-        const totalCityRev = zp.cityTotal || cityRows.reduce((s, x) => s + x.rev, 0)
+        const totalStateRev = stateRows.reduce((s, x) => s + x.rev, 0)
+        const totalCityRev = cityRows.reduce((s, x) => s + x.rev, 0)
         let sCum = 0
         const enrichedStates = stateRows.map(s => {
           const prev = statePrevMap[s.state] || 0
