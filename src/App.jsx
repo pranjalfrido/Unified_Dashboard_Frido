@@ -1247,7 +1247,7 @@ function AmazonCategoryMatrix({ channels, catChannel, subCatChannel, skuChannel,
 
 // FinancialCategoryMatrix: Gross Rev, Units, ASP, GST, Cancel, RTO, CIR, Exch, Returns, Net Rev
 // With optional extras when neutral=true: Prev Rev, MoM %, Cum %, Cancel/RTO/CIR/Exch % chips
-function FinancialCategoryMatrix({ catData, subCatData, skuData, title, showReturns = true, neutral = false, showShare = false, catPrevMap = {}, subCatPrevMap = {}, skuPrevMap = {} }) {
+function FinancialCategoryMatrix({ catData, subCatData, skuData, title, showReturns = true, neutral = false, showShare = false, showMoM = false, catPrevMap = {}, subCatPrevMap = {}, skuPrevMap = {} }) {
   const grossColor = neutral ? C.t1 : '#286010'
   const netColor = neutral ? C.t1 : '#2E74CC'
   const cancelColor = neutral ? C.t1 : '#B91C1C'
@@ -1306,7 +1306,7 @@ function FinancialCategoryMatrix({ catData, subCatData, skuData, title, showRetu
   // When neutral (Shopify), always show Cancel/RTO/CIR/Exch/Returns columns even if all zeros,
   // so India and International tabs stay visually consistent.
   const hasCancelData = neutral || cats.some(r => r.cancelled > 0 || r.rto > 0 || r.cir > 0 || r.exch > 0 || r.cancelRev > 0 || r.rtoRev > 0 || r.cirRev > 0 || r.exchRev > 0 || r.returnRev > 0)
-  const showExtras = neutral  // MoM, Cum %, Prev Rev only when neutral (Shopify)
+  const showExtras = neutral || showMoM
 
   const colHdr = { textAlign: 'right', padding: '3px 3px 6px', borderBottom: `1px solid ${C.border}`, fontSize: 8.5, fontWeight: 700, textTransform: 'uppercase', whiteSpace: 'nowrap', letterSpacing: '.01em' }
   const cell = (fs = 10) => ({ padding: '4px 3px', textAlign: 'right', fontFamily: 'var(--mono)', fontSize: fs, fontWeight: 400, whiteSpace: 'nowrap' })
@@ -3099,7 +3099,18 @@ function AmazonTab({ data, region = 'india', setRegion = () => {} }) {
                 })
               })
             })
-            return <FinancialCategoryMatrix catData={catData} subCatData={subCatData} skuData={skuData} title="Category Revenue Matrix · Amazon India" showReturns={true} />
+            // MoM prev maps: SC prev + VC prev combined
+            const scCatPrev = amzSC.catPrevMap || {}; const vcCatPrev = amzVCMatrix.catPrevMap || {}
+            const allPrevCats = new Set([...Object.keys(scCatPrev), ...Object.keys(vcCatPrev)])
+            const catPrevMap = {}; allPrevCats.forEach(c => { catPrevMap[c] = (scCatPrev[c]||0) + (vcCatPrev[c]||0) })
+            const scSubPrev = amzSC.subCatPrevMap || {}; const vcSubPrev = amzVCMatrix.subCatPrevMap || {}
+            const subCatPrevMap = {}
+            new Set([...Object.keys(scSubPrev), ...Object.keys(vcSubPrev)]).forEach(k => { subCatPrevMap[k] = (scSubPrev[k]||0) + (vcSubPrev[k]||0) })
+            const scSkuPrev = amzSC.skuPrevMap || {}; const vcSkuPrev = amzVCMatrix.skuPrevMap || {}
+            const skuPrevMap = {}
+            const skuCats = new Set([...Object.keys(scSkuPrev), ...Object.keys(vcSkuPrev)])
+            skuCats.forEach(cat => { skuPrevMap[cat] = {}; const allScs = new Set([...Object.keys(scSkuPrev[cat]||{}), ...Object.keys(vcSkuPrev[cat]||{})]); allScs.forEach(sc => { skuPrevMap[cat][sc] = {}; const allSkus = new Set([...Object.keys(scSkuPrev[cat]?.[sc]||{}), ...Object.keys(vcSkuPrev[cat]?.[sc]||{})]); allSkus.forEach(sku => { skuPrevMap[cat][sc][sku] = (scSkuPrev[cat]?.[sc]?.[sku]||0) + (vcSkuPrev[cat]?.[sc]?.[sku]||0) }) }) })
+            return <FinancialCategoryMatrix catData={catData} subCatData={subCatData} skuData={skuData} title="Category Revenue Matrix · Amazon India" showReturns={true} showMoM={true} catPrevMap={catPrevMap} subCatPrevMap={subCatPrevMap} skuPrevMap={skuPrevMap} />
           })()}
           {(() => {
             const pickRet = (...chs) => { for (const c of chs) if (c?.totalOrdersForReturn) return { returned: c.returned||0, totalOrdersForReturn: c.totalOrdersForReturn }; return { returned: 0, totalOrdersForReturn: 0 } }
@@ -3320,7 +3331,7 @@ function AmazonTab({ data, region = 'india', setRegion = () => {} }) {
                   })
                 })
               })
-              return <FinancialCategoryMatrix catData={catData} subCatData={subCatData} skuData={skuData} title="Category Revenue Matrix · Seller Central" showReturns={true} />
+              return <FinancialCategoryMatrix catData={catData} subCatData={subCatData} skuData={skuData} title="Category Revenue Matrix · Seller Central" showReturns={true} showMoM={true} catPrevMap={amzSC.catPrevMap || {}} subCatPrevMap={amzSC.subCatPrevMap || {}} skuPrevMap={amzSC.skuPrevMap || {}} />
             })()}
             <Card title="FBA vs MFN · Seller Central">
               {[{ label: 'FBA (Fulfilled by Amazon)', ...scFBA }, { label: 'MFN (Merchant Fulfilled)', ...scMFN }].map((r, i) => (
@@ -3530,7 +3541,7 @@ function AmazonTab({ data, region = 'india', setRegion = () => {} }) {
                 )
               })}
             </Card>
-            <FinancialCategoryMatrix catData={amzVCMatrix.catData} subCatData={amzVCMatrix.subCatData} skuData={amzVCMatrix.skuData} title="Category Revenue Matrix · Vendor Central" showReturns={false} />
+            <FinancialCategoryMatrix catData={amzVCMatrix.catData} subCatData={amzVCMatrix.subCatData} skuData={amzVCMatrix.skuData} title="Category Revenue Matrix · Vendor Central" showReturns={false} showMoM={true} catPrevMap={amzVCMatrix.catPrevMap || {}} subCatPrevMap={amzVCMatrix.subCatPrevMap || {}} skuPrevMap={amzVCMatrix.skuPrevMap || {}} />
           </div>
           {(() => {
             const catRows = Object.entries(amzVCMatrix.catData || {}).map(([cat, v]) => ({ name: cat, rev: v.rev||0, units: v.units||0, orders: v.orders||0 })).sort((a,b) => b.rev-a.rev)
