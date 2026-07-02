@@ -2090,7 +2090,7 @@ function TopSubCatBar({ subCatRows }) {
   )
 }
 
-function ShopifyGeoRichTable({ title, rows, firstKey, firstLabel, formatFirst }) {
+function ShopifyGeoRichTable({ title, rows, firstKey, firstLabel, formatFirst, rtoLabel = 'RTO %' }) {
   const [page, setPage] = useState(0)
   const pageSize = 15
   useEffect(() => { setPage(0) }, [rows])
@@ -2124,7 +2124,7 @@ function ShopifyGeoRichTable({ title, rows, firstKey, firstLabel, formatFirst })
               <th style={{ ...th, textAlign: 'right' }}>Orders</th>
               <th style={{ ...th, textAlign: 'right' }}>AOV</th>
               <th style={{ ...th, textAlign: 'right' }}>MoM</th>
-              <th style={{ ...th, textAlign: 'right' }}>RTO %</th>
+              <th style={{ ...th, textAlign: 'right' }}>{rtoLabel}</th>
             </tr>
           </thead>
           <tbody>
@@ -3150,8 +3150,8 @@ function AmazonTab({ data, region = 'india', setRegion = () => {} }) {
             })
             return (
               <div className="g-2" style={{ alignItems: 'stretch' }}>
-                <ShopifyGeoRichTable title="Top States" rows={enrichedStates} firstKey="state" firstLabel="State" formatFirst={v => v ? v.charAt(0).toUpperCase() + v.slice(1).toLowerCase() : v} />
-                <ShopifyGeoRichTable title="Top Cities" rows={enrichedCities} firstKey="city" firstLabel="City" formatFirst={v => v ? v.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' ') : v} />
+                <ShopifyGeoRichTable title="Top States" rows={enrichedStates} firstKey="state" firstLabel="State" formatFirst={v => v ? v.charAt(0).toUpperCase() + v.slice(1).toLowerCase() : v} rtoLabel="Return %" />
+                <ShopifyGeoRichTable title="Top Cities" rows={enrichedCities} firstKey="city" firstLabel="City" formatFirst={v => v ? v.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' ') : v} rtoLabel="Return %" />
               </div>
             )
           })()}
@@ -3391,8 +3391,8 @@ function AmazonTab({ data, region = 'india', setRegion = () => {} }) {
             })
             return (
               <div className="g-2" style={{ alignItems: 'stretch' }}>
-                <ShopifyGeoRichTable title="Top States" rows={enrichedStates} firstKey="state" firstLabel="State" formatFirst={v => v ? v.charAt(0).toUpperCase() + v.slice(1).toLowerCase() : v} />
-                <ShopifyGeoRichTable title="Top Cities" rows={enrichedCities} firstKey="city" firstLabel="City" formatFirst={v => v ? v.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' ') : v} />
+                <ShopifyGeoRichTable title="Top States" rows={enrichedStates} firstKey="state" firstLabel="State" formatFirst={v => v ? v.charAt(0).toUpperCase() + v.slice(1).toLowerCase() : v} rtoLabel="Return %" />
+                <ShopifyGeoRichTable title="Top Cities" rows={enrichedCities} firstKey="city" firstLabel="City" formatFirst={v => v ? v.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' ') : v} rtoLabel="Return %" />
               </div>
             )
           })()}
