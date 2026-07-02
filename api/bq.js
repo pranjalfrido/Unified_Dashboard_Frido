@@ -182,6 +182,7 @@ export default async function handler(req, res) {
     amzIntlSKUs: `SELECT sku, Country, COUNT(DISTINCT amazon_order_id) AS orders, SUM(CAST(quantity AS INT64)) AS units, ROUND(SUM(CAST(item_price AS FLOAT64)),0) AS rev, ROUND(SUM(CAST(item_price AS FLOAT64) - CAST(item_tax AS FLOAT64)),0) AS net_rev FROM \`frido-429506.production.amazon_seller_central_uk_uae_all_orders\` WHERE purchase_date_ist BETWEEN '${start}' AND '${end}' AND item_status != 'Cancelled' GROUP BY sku, Country ORDER BY rev DESC LIMIT 20`,
     amzIntlDaily: `WITH q AS (${base}) SELECT CAST(OrderDate AS STRING) AS date, Country, COUNT(DISTINCT OrderId) AS orders, SUM(ItemQty) AS units, ROUND(SUM(SellingPrice_Inc_GST),0) AS rev, ROUND(SUM(SellingPrice_Exc_GST),0) AS net_rev FROM q WHERE SubChannel = 'Amazon International' AND FinancialStatus != 'Cancelled' GROUP BY date, Country ORDER BY date`,
     fkTotals: `WITH q AS (${base}) SELECT CASE WHEN SubChannel='Flipkart FBF' THEN 'FBF' ELSE 'NON-FBF' END AS sub, COUNT(DISTINCT OrderId) AS orders, ROUND(SUM(SellingPrice_Inc_GST),0) AS rev, ROUND(SUM(SellingPrice_Exc_GST),0) AS exc_rev, SUM(ItemQty) AS units, COUNT(DISTINCT CASE WHEN RefundStatus='Return' AND FulfilmentStatus='Return' THEN OrderId END) AS returns FROM q WHERE Channel='Flipkart' GROUP BY sub`,
+    fkLast7: `SELECT CAST(OrderDate AS STRING) AS date, CASE WHEN SubChannel='Flipkart FBF' THEN 'FBF' ELSE 'NON-FBF' END AS sub, COUNT(DISTINCT OrderId) AS orders, SUM(ItemQty) AS units, ROUND(SUM(SellingPrice_Inc_GST),0) AS rev FROM \`frido-429506.production.fact_all_platform_sales_report\` WHERE Channel='Flipkart' AND OrderDate IN (SELECT DISTINCT OrderDate FROM \`frido-429506.production.fact_all_platform_sales_report\` WHERE Channel='Flipkart' ORDER BY OrderDate DESC LIMIT 7) GROUP BY date, sub ORDER BY date`,
     fkDaily: `WITH q AS (${base}) SELECT CAST(OrderDate AS STRING) AS date, CASE WHEN SubChannel='Flipkart FBF' THEN 'FBF' ELSE 'NON-FBF' END AS sub, COUNT(DISTINCT OrderId) AS orders, SUM(ItemQty) AS units, ROUND(SUM(SellingPrice_Inc_GST),0) AS rev, COUNT(DISTINCT CASE WHEN RefundStatus='Return' AND FulfilmentStatus='Return' THEN OrderId END) AS returns FROM q WHERE Channel='Flipkart' GROUP BY date, sub ORDER BY date`,
     fkStatus: `WITH q AS (${base}) SELECT FulfilmentStatus AS status, CASE WHEN SubChannel='Flipkart FBF' THEN 'FBF' ELSE 'NON-FBF' END AS sub, COUNT(DISTINCT OrderId) AS orders FROM q WHERE Channel='Flipkart' AND FulfilmentStatus IS NOT NULL GROUP BY status, sub ORDER BY orders DESC`,
     fkSKUs: `WITH q AS (${base}) SELECT ChannelSKUCode AS sku, CASE WHEN SubChannel='Flipkart FBF' THEN 'FBF' ELSE 'NON-FBF' END AS sub, COUNT(DISTINCT OrderId) AS orders, SUM(ItemQty) AS units, ROUND(SUM(SellingPrice_Inc_GST),0) AS rev FROM q WHERE Channel='Flipkart' AND ChannelSKUCode IS NOT NULL GROUP BY sku, sub ORDER BY rev DESC LIMIT 30`,
@@ -379,16 +380,22 @@ export default async function handler(req, res) {
     const fkBlock = (() => {
         const fkRealDaily = (r.fkDaily || []).map(x => ({ date: x.date, sub: x.sub, orders: parseInt(x.orders)||0, units: parseInt(x.units)||0, rev: parseFloat(x.rev)||0, returns: parseInt(x.returns)||0, estimated: false }))
         const fkDates = [...new Set(fkRealDaily.map(x => x.date))].sort()
-        const latestFkDate = fkDates[fkDates.length - 1]
+        // When selected range is entirely after latest FK data, fall back to fkLast7 for avg baseline
+        const fkLast7Rows = (r.fkLast7 || []).map(x => ({ date: x.date, sub: x.sub === 'FBF' ? 'FBF' : 'NON-FBF', orders: parseInt(x.orders)||0, units: parseInt(x.units)||0, rev: parseFloat(x.rev)||0 }))
+        const fkLast7Dates = [...new Set(fkLast7Rows.map(x => x.date))].sort()
+        const latestFkDate = fkDates[fkDates.length - 1] || fkLast7Dates[fkLast7Dates.length - 1]
         const estimatedDaily = []
         if (latestFkDate && latestFkDate < end) {
+          // Use real daily rows if available, else fall back to fkLast7 baseline
+          const baselineRows = fkRealDaily.length > 0 ? fkRealDaily : fkLast7Rows
+          const baselineDates = fkRealDaily.length > 0 ? fkDates : fkLast7Dates
           const subTotals = { FBF: {}, 'NON-FBF': {} }
-          fkRealDaily.forEach(x => {
+          baselineRows.forEach(x => {
             const s = x.sub === 'FBF' ? 'FBF' : 'NON-FBF'
             if (!subTotals[s][x.date]) subTotals[s][x.date] = { rev: 0, orders: 0, units: 0 }
             subTotals[s][x.date].rev += x.rev; subTotals[s][x.date].orders += x.orders; subTotals[s][x.date].units += x.units
           })
-          const last7Dates = fkDates.slice(-7)
+          const last7Dates = baselineDates.slice(-7)
           for (const sub of ['FBF', 'NON-FBF']) {
             const last7 = last7Dates.map(d => subTotals[sub][d] || { rev: 0, orders: 0, units: 0 })
             const avgRev = Math.round(last7.reduce((s, d) => s + d.rev, 0) / last7.length)
