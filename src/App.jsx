@@ -4071,8 +4071,55 @@ function FlipkartTab({ data }) {
         return <CatSubCatRow catRows={catRows} subCatRows={subCatRows} title={tableTitle} selectedCat={selectedCat} onSelectCat={v => { setSelectedCat(v); setSelectedSubCat(null) }} selectedSubCat={selectedSubCat} onSelectSubCat={setSelectedSubCat} />
       })()}
 
-      {/* Top States paginated */}
-      <PaginatedCard title="Top States" rows={stateRows.map(s => ({ ...s, state: s.state?.charAt(0).toUpperCase() + s.state?.slice(1).toLowerCase(), aov: s.orders ? Math.round(s.rev / s.orders) : 0 }))} columns={[{ key: 'state', label: 'State' }, { key: 'rev', label: 'Revenue', align: 'right', mono: true, render: v => fmt(v) }, { key: 'orders', label: 'Orders', align: 'right', render: v => fmtN(v) }, { key: 'aov', label: 'AOV', align: 'right', render: v => `₹${v.toLocaleString('en-IN')}` }]} pageSize={15} />
+      {/* Top States + Cities rich tables */}
+      {(() => {
+        const statePrevMap = fk.statePrevMap || {}
+        const cityPrevMap = fk.cityPrevMap || {}
+        const stateTotalMap = fk.stateTotalMap || {}
+        const cityTotalMap = fk.cityTotalMap || {}
+        // total rev for selected sub (overview = FBF + NON-FBF combined)
+        const totalStateRev = subView === 'overview'
+          ? (stateTotalMap['FBF']||0) + (stateTotalMap['NON-FBF']||0)
+          : (stateTotalMap[subView === 'fbf' ? 'FBF' : 'NON-FBF']||0)
+        const totalCityRev = subView === 'overview'
+          ? (cityTotalMap['FBF']||0) + (cityTotalMap['NON-FBF']||0)
+          : (cityTotalMap[subView === 'fbf' ? 'FBF' : 'NON-FBF']||0)
+        // aggregate already-filtered stateRows (filterSub already applied)
+        const stateMap = {}
+        filterSub(fk.states||[]).forEach(x => {
+          if (!stateMap[x.state]) stateMap[x.state] = { state: x.state, rev: 0, orders: 0 }
+          stateMap[x.state].rev += x.rev; stateMap[x.state].orders += x.orders
+        })
+        let cum = 0
+        const enrichedStates = Object.values(stateMap).sort((a,b) => b.rev-a.rev).map(s => {
+          const prevFBF = statePrevMap[`${s.state}::FBF`]||0
+          const prevNFBF = statePrevMap[`${s.state}::NON-FBF`]||0
+          const prev = subView === 'overview' ? prevFBF + prevNFBF : subView === 'fbf' ? prevFBF : prevNFBF
+          const sharePct = totalStateRev > 0 ? s.rev / totalStateRev * 100 : 0
+          cum += sharePct
+          return { ...s, aov: s.orders ? s.rev / s.orders : 0, rtoPct: 0, mom: prev > 0 ? (s.rev - prev) / prev * 100 : null, sharePct, cumPct: cum }
+        })
+        const cityMap = {}
+        filterSub(fk.cities||[]).forEach(x => {
+          if (!cityMap[x.city]) cityMap[x.city] = { city: x.city, rev: 0, orders: 0 }
+          cityMap[x.city].rev += x.rev; cityMap[x.city].orders += x.orders
+        })
+        let cumC = 0
+        const enrichedCities = Object.values(cityMap).sort((a,b) => b.rev-a.rev).map(c => {
+          const prevFBF = cityPrevMap[`${c.city}::FBF`]||0
+          const prevNFBF = cityPrevMap[`${c.city}::NON-FBF`]||0
+          const prev = subView === 'overview' ? prevFBF + prevNFBF : subView === 'fbf' ? prevFBF : prevNFBF
+          const sharePct = totalCityRev > 0 ? c.rev / totalCityRev * 100 : 0
+          cumC += sharePct
+          return { ...c, aov: c.orders ? c.rev / c.orders : 0, rtoPct: 0, mom: prev > 0 ? (c.rev - prev) / prev * 100 : null, sharePct, cumPct: cumC }
+        })
+        return (
+          <div className="g-2" style={{ alignItems: 'stretch' }}>
+            <ShopifyGeoRichTable title="Top States" rows={enrichedStates} firstKey="state" firstLabel="State" formatFirst={v => v ? v.charAt(0).toUpperCase() + v.slice(1).toLowerCase() : v} />
+            <ShopifyGeoRichTable title="Top Cities" rows={enrichedCities} firstKey="city" firstLabel="City" formatFirst={v => v ? v.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' ') : v} />
+          </div>
+        )
+      })()}
     </div>
   )
 }
