@@ -1602,8 +1602,8 @@ function RegionTierDonutRow({ regionRows, tierRows }) {
 
   return (
     <div className="g-2" style={{ alignItems: 'stretch' }}>
-      {regionRows.length > 0 && <DonutCard title="Revenue by Region" data={regionData} metric={regionMetric} setMetric={setRegionMetric} />}
-      {tierRows.length > 0 && <DonutCard title="City Tier Breakdown" data={tierData} metric={tierMetric} setMetric={setTierMetric} />}
+      {regionRows.length > 0 && <DonutCard title={`${regionMetric === 'rev' ? 'Revenue' : regionMetric === 'orders' ? 'Orders' : regionMetric === 'units' ? 'Units' : 'AOV'} by Region`} data={regionData} metric={regionMetric} setMetric={setRegionMetric} />}
+      {tierRows.length > 0 && <DonutCard title={`${tierMetric === 'rev' ? 'Revenue' : tierMetric === 'orders' ? 'Orders' : tierMetric === 'units' ? 'Units' : 'AOV'} by City Tier`} data={tierData} metric={tierMetric} setMetric={setTierMetric} />}
     </div>
   )
 }
