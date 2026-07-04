@@ -1652,7 +1652,7 @@ function AllTab({ data }) {
   const fulfilmentBase = deliveredCount + rtoCount + cancelCount
   const fulfilmentRate = fulfilmentBase > 0 ? (deliveredCount / fulfilmentBase * 100) : 0
   const unitsPerOrder = nOrders > 0 ? totalQty / nOrders : 0
-  const rtoOrders = orderStatusMap['RTO'] || 0
+  const rtoOrders = (orderStatusMap['RTO'] || 0) + (orderStatusMap['Return'] || 0)
   const cirOrderCount = orders.filter(o => o.isCIR).length
   const returnPct = nOrders > 0 ? ((rtoOrders + cirOrderCount) / nOrders * 100) : 0
   const asp = totalQty > 0 ? totalExcRev / totalQty : 0
@@ -2267,10 +2267,10 @@ function ShopifyTab({ data, filters, setFilters }) {
   const aov = shNOrders ? totalRev / shNOrders : 0
   const asp = totalQty ? totalExcRev / totalQty : 0
   const deliveredOrders = orderStatusMap['Delivered'] || 0
-  const rtoOrders = orderStatusMap['RTO'] || 0
+  const rtoOrders = (orderStatusMap['RTO'] || 0) + (orderStatusMap['Return'] || 0)
   const fulfilmentPct = shNOrders ? (deliveredOrders / shNOrders * 100) : 0
   const rtoPct = shNOrders ? (rtoOrders / shNOrders * 100) : 0
-  const atRiskRev = (orderStatusRevMap['RTO'] || 0) + (orderStatusRevMap['Cancelled'] || 0) + (data.cirRev || 0)
+  const atRiskRev = (orderStatusRevMap['RTO'] || 0) + (orderStatusRevMap['Return'] || 0) + (orderStatusRevMap['Cancelled'] || 0) + (data.cirRev || 0)
   const returnRevPct = totalRev > 0 ? (((data.rtoRevDirect || 0) + (data.cirRev || 0)) / totalRev * 100) : 0
   const repeatRate = nCusts ? (repeatCusts / nCusts * 100).toFixed(1) : '0'
 
