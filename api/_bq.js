@@ -73,6 +73,8 @@ export function buildQuery(s, e, filters = {}) {
     // (SubChannel is NULL for Shopify International). It's tracked via Country instead.
     if (vals.length === 1 && vals[0] === 'International') {
       whereClauses.push(`u.Country = 'International'`)
+    } else if (vals.length === 1 && vals[0] === 'ShopifyIndia') {
+      whereClauses.push(`u.Country != 'International'`)
     } else if (vals.length === 1) {
       whereClauses.push(`u.SubChannel = '${vals[0].replace(/'/g, "''")}'`)
     } else if (vals.length > 1) {
