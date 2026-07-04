@@ -2216,8 +2216,9 @@ function ShopifyTab({ data, filters, setFilters }) {
   // Subtract Cancelled + RTO + CIR revenue from Gross, then strip GST → final Net Revenue
   const cancelledRev = data.orderStatusRevMap?.['Cancelled'] || 0
   const rtoRev = data.orderStatusRevMap?.['RTO'] || 0
+  const returnStatusRev = data.orderStatusRevMap?.['Return'] || 0
   const cirRev = data.cirRev || 0
-  const grossAfterReturns = totalRev - cancelledRev - rtoRev - cirRev
+  const grossAfterReturns = totalRev - cancelledRev - rtoRev - returnStatusRev - cirRev
   // Use the effective GST ratio observed across all Shopify orders to strip GST from the trimmed total
   const gstRatio = totalRev > 0 ? (totalRev - totalExcRevRaw) / totalRev : 0
   const netRev = grossAfterReturns * (1 - gstRatio)
@@ -2513,7 +2514,7 @@ function ShopifyTab({ data, filters, setFilters }) {
             {
               label: 'Net Revenue',
               value: fmt(netRev),
-              sub: 'Gross − Cancel − RTO − CIR − GST',
+              sub: 'Gross − Cancel − RTO − Return − CIR − GST',
               badge: excChg !== null ? <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 4, background: excChg >= 0 ? C.green.bg : C.red.bg, color: excChg >= 0 ? C.green.tx : C.red.tx, flexShrink: 0 }}>{excChg >= 0 ? '▲' : '▼'} {Math.abs(excChg).toFixed(1)}%</span> : null,
             },
             { label: 'GST Collected', value: fmt(gst), sub: grossAfterReturns > 0 ? `${((gst / grossAfterReturns) * 100).toFixed(1)}% of net sales` : '—', badge: shChgBadge(gst, prevGst) },
@@ -2568,7 +2569,7 @@ function ShopifyTab({ data, filters, setFilters }) {
           const returnTrendMap = {}
           ;(data.dailyReturnTrend || []).forEach(x => { returnTrendMap[x.date] = x })
           // Net Revenue line: apply the same period-level shrink as the KPI
-          // (Gross − Cancel − RTO − CIR, then strip GST)
+          // (Gross − Cancel − RTO − Return − CIR, then strip GST)
           const netShrinkFactor = totalRev > 0 ? (grossAfterReturns / totalRev) * (1 - gstRatio) : (1 - gstRatio)
           // Use Shopify-specific daily (EXCLUDES Shopify B2B)
           const rawDaily = (sh.daily || []).map(d => {
