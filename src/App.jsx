@@ -115,7 +115,7 @@ function DateRangePicker({ filters, setFilters }) {
     ...(() => {
       // Current FY starts Apr of this year if month>=3, else Apr of last year
       const fyStart = today.getMonth() >= 3 ? today.getFullYear() : today.getFullYear() - 1
-      return [0, 1, 2].map(offset => {
+      return [0, 1].map(offset => {
         const fy = fyStart - offset
         const label = offset === 0 ? 'This FY' : offset === 1 ? 'Last FY' : `FY ${fy}-${String(fy+1).slice(2)}`
         return { label, fn: () => ({ start: fmt0(new Date(fy, 3, 1)), end: offset === 0 ? fmt0(today) : fmt0(new Date(fy+1, 2, 31)) }) }
