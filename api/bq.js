@@ -127,18 +127,19 @@ export default async function handler(req, res) {
     byFinancialStatus: `WITH q AS (${base}) SELECT FinancialStatus AS financial_status, COUNT(DISTINCT OrderId) AS orders, SUM(SellingPrice_Inc_GST) AS rev FROM q WHERE Channel = 'Shopify' AND (SubChannel != 'Shopify B2B' OR SubChannel IS NULL) AND FinancialStatus IS NOT NULL GROUP BY FinancialStatus ORDER BY orders DESC`,
     byFulfilmentStatus: `WITH q AS (${base}) SELECT FulfilmentStatus AS fulfil_status, COUNT(DISTINCT OrderId) AS orders FROM q WHERE Channel = 'Shopify' AND (SubChannel != 'Shopify B2B' OR SubChannel IS NULL) AND FulfilmentStatus IS NOT NULL GROUP BY FulfilmentStatus ORDER BY orders DESC`,
     byRefundTrend: `WITH q AS (${base}) SELECT CAST(OrderDate AS STRING) AS date, COUNT(DISTINCT OrderId) AS total_orders, COUNTIF(RefundStatus = 'true') AS refund_lines FROM q WHERE Channel = 'Shopify' AND (SubChannel != 'Shopify B2B' OR SubChannel IS NULL) GROUP BY date ORDER BY date`,
-    byDailyReturnTrend: `WITH q AS (${base}) SELECT CAST(OrderDate AS STRING) AS date, COUNT(DISTINCT OrderId) AS total_orders, COUNT(DISTINCT CASE WHEN Order_Status IN ('RTO','Return') THEN OrderId END) AS rto_orders, COUNT(DISTINCT CASE WHEN Order_Status='Exchange' THEN OrderId END) AS exch_orders, COUNT(DISTINCT CASE WHEN Order_Status='CIR' THEN OrderId END) AS cir_orders, COUNT(DISTINCT CASE WHEN Order_Status='Cancelled' THEN OrderId END) AS cancel_orders FROM q WHERE Channel = 'Shopify' AND (SubChannel != 'Shopify B2B' OR SubChannel IS NULL) GROUP BY date ORDER BY date`,
+    byDailyReturnTrend: `WITH q AS (${base}) SELECT CAST(OrderDate AS STRING) AS date, COUNT(DISTINCT OrderId) AS total_orders, COUNT(DISTINCT CASE WHEN Order_Status='RTO' THEN OrderId END) AS rto_orders, COUNT(DISTINCT CASE WHEN Order_Status='Return' THEN OrderId END) AS return_orders, COUNT(DISTINCT CASE WHEN Order_Status='Exchange' THEN OrderId END) AS exch_orders, COUNT(DISTINCT CASE WHEN Order_Status='CIR' THEN OrderId END) AS cir_orders, COUNT(DISTINCT CASE WHEN Order_Status='Cancelled' THEN OrderId END) AS cancel_orders FROM q WHERE Channel = 'Shopify' AND (SubChannel != 'Shopify B2B' OR SubChannel IS NULL) GROUP BY date ORDER BY date`,
     topOrders: `WITH q AS (${base}), ot AS (SELECT OrderId, CAST(OrderDate AS STRING) AS order_date, Channel, State, City, SUM(SellingPrice_Inc_GST) AS rev, SUM(ItemQty) AS qty, MAX(FulfilmentStatus) AS order_status, MAX(CustomerId) AS customer_id, MAX(voucher_code) AS voucher_code, STRING_AGG(DISTINCT ChannelSKUCode, ', ' ORDER BY ChannelSKUCode LIMIT 5) AS skus FROM q GROUP BY OrderId, OrderDate, Channel, State, City) SELECT * FROM ot ORDER BY rev DESC LIMIT 20`,
     byVoucherRaw: `WITH q AS (${base}) SELECT TRIM(voucher_code) AS voucher_code, COUNT(DISTINCT OrderId) AS orders FROM q WHERE Channel = 'Shopify' AND (SubChannel != 'Shopify B2B' OR SubChannel IS NULL) AND voucher_code IS NOT NULL AND TRIM(voucher_code) != '' GROUP BY TRIM(voucher_code) ORDER BY orders DESC LIMIT 300`,
-    byCIR: `WITH q AS (${base}) SELECT SUM(SellingPrice_Inc_GST) AS cir_rev, COUNT(DISTINCT OrderId) AS cir_orders FROM q WHERE Order_Status IN ('CIR','Return') AND Channel = 'Shopify' AND (SubChannel != 'Shopify B2B' OR SubChannel IS NULL)`,
+    byCIR: `WITH q AS (${base}) SELECT SUM(SellingPrice_Inc_GST) AS cir_rev, COUNT(DISTINCT OrderId) AS cir_orders FROM q WHERE Order_Status = 'CIR' AND Channel = 'Shopify' AND (SubChannel != 'Shopify B2B' OR SubChannel IS NULL)`,
+    byReturn: `WITH q AS (${base}) SELECT SUM(SellingPrice_Inc_GST) AS return_rev, COUNT(DISTINCT OrderId) AS return_orders FROM q WHERE Order_Status = 'Return' AND Channel = 'Shopify' AND (SubChannel != 'Shopify B2B' OR SubChannel IS NULL)`,
     byExchange: `WITH q AS (${base}) SELECT COUNT(DISTINCT OrderId) AS exchange_orders FROM q WHERE Order_Status = 'Exchange' AND Channel = 'Shopify' AND (SubChannel != 'Shopify B2B' OR SubChannel IS NULL)`,
-    byRTO: `WITH q AS (${base}) SELECT SUM(SellingPrice_Inc_GST) AS rto_rev, COUNT(DISTINCT OrderId) AS rto_orders FROM q WHERE Order_Status IN ('RTO','Return') AND Channel = 'Shopify' AND (SubChannel != 'Shopify B2B' OR SubChannel IS NULL)`,
-    prevTotals: `WITH q AS (${prevBase}) SELECT SUM(SellingPrice_Inc_GST) AS total_rev, SUM(SellingPrice_Exc_GST) AS total_exc_rev, COUNT(DISTINCT OrderId) AS n_orders, SUM(ItemQty) AS total_qty, COUNT(DISTINCT CASE WHEN Order_Status IN ('RTO','Return') THEN OrderId END) AS rto_orders, COUNT(DISTINCT CASE WHEN Order_Status IN ('CIR','Return') THEN OrderId END) AS cir_orders FROM q`,
+    byRTO: `WITH q AS (${base}) SELECT SUM(SellingPrice_Inc_GST) AS rto_rev, COUNT(DISTINCT OrderId) AS rto_orders FROM q WHERE Order_Status = 'RTO' AND Channel = 'Shopify' AND (SubChannel != 'Shopify B2B' OR SubChannel IS NULL)`,
+    prevTotals: `WITH q AS (${prevBase}) SELECT SUM(SellingPrice_Inc_GST) AS total_rev, SUM(SellingPrice_Exc_GST) AS total_exc_rev, COUNT(DISTINCT OrderId) AS n_orders, SUM(ItemQty) AS total_qty, COUNT(DISTINCT CASE WHEN Order_Status IN ('RTO','Return') THEN OrderId END) AS rto_orders, COUNT(DISTINCT CASE WHEN Order_Status = 'CIR' THEN OrderId END) AS cir_orders FROM q`,
     momTotals: `WITH q AS (${momBase}) SELECT SUM(SellingPrice_Inc_GST) AS total_rev, SUM(SellingPrice_Exc_GST) AS total_exc_rev, COUNT(DISTINCT OrderId) AS n_orders FROM q`,
     yoyTotals: `WITH q AS (${yoyBase}) SELECT SUM(SellingPrice_Inc_GST) AS total_rev, SUM(SellingPrice_Exc_GST) AS total_exc_rev, COUNT(DISTINCT OrderId) AS n_orders FROM q`,
     prevByChannel: `WITH q AS (${prevBase}) SELECT Channel, SUM(SellingPrice_Inc_GST) AS rev FROM q GROUP BY Channel`,
     prevByDate: `WITH q AS (${prevBase}) SELECT CAST(OrderDate AS STRING) AS date, SUM(SellingPrice_Inc_GST) AS rev FROM q GROUP BY date ORDER BY date`,
-    prevShopify: `WITH q AS (${prevBase}) SELECT SUM(SellingPrice_Inc_GST) AS rev, SUM(SellingPrice_Exc_GST) AS exc_rev, COUNT(DISTINCT OrderId) AS orders, SUM(ItemQty) AS units, COUNT(DISTINCT CASE WHEN Order_Status IN ('RTO','Return') THEN OrderId END) AS rto_orders, COUNT(DISTINCT CASE WHEN Order_Status IN ('CIR','Return') THEN OrderId END) AS cir_orders, COUNT(DISTINCT CASE WHEN Order_Status='Exchange' THEN OrderId END) AS exchange_orders FROM q WHERE Channel='Shopify' AND (SubChannel != 'Shopify B2B' OR SubChannel IS NULL)`,
+    prevShopify: `WITH q AS (${prevBase}) SELECT SUM(SellingPrice_Inc_GST) AS rev, SUM(SellingPrice_Exc_GST) AS exc_rev, COUNT(DISTINCT OrderId) AS orders, SUM(ItemQty) AS units, COUNT(DISTINCT CASE WHEN Order_Status IN ('RTO','Return') THEN OrderId END) AS rto_orders, COUNT(DISTINCT CASE WHEN Order_Status = 'CIR' THEN OrderId END) AS cir_orders, COUNT(DISTINCT CASE WHEN Order_Status='Exchange' THEN OrderId END) AS exchange_orders FROM q WHERE Channel='Shopify' AND (SubChannel != 'Shopify B2B' OR SubChannel IS NULL)`,
     shTotals: `WITH q AS (${base}) SELECT SUM(SellingPrice_Inc_GST) AS rev, SUM(SellingPrice_Exc_GST) AS exc_rev, COUNT(DISTINCT OrderId) AS orders, SUM(ItemQty) AS qty FROM q WHERE Channel='Shopify' AND (SubChannel != 'Shopify B2B' OR SubChannel IS NULL)`,
     shDaily: `WITH q AS (${base}) SELECT CAST(OrderDate AS STRING) AS date, SUM(SellingPrice_Inc_GST) AS rev, COUNT(DISTINCT OrderId) AS orders, SUM(ItemQty) AS units FROM q WHERE Channel='Shopify' AND (SubChannel != 'Shopify B2B' OR SubChannel IS NULL) GROUP BY date ORDER BY date`,
     prevShopifyDaily: `WITH q AS (${prevBase}) SELECT CAST(OrderDate AS STRING) AS date, SUM(SellingPrice_Inc_GST) AS rev FROM q WHERE Channel='Shopify' AND (SubChannel != 'Shopify B2B' OR SubChannel IS NULL) GROUP BY date ORDER BY date`,
@@ -383,7 +384,7 @@ export default async function handler(req, res) {
     r.byFulfilmentStatus.forEach(x => { fulfilmentStatusMap[x.fulfil_status || 'Unknown'] = parseInt(x.orders) || 0 })
 
     const refundTrend = (r.byRefundTrend || []).map(x => ({ date: x.date, total: parseInt(x.total_orders) || 0, refunds: parseInt(x.refund_lines) || 0, rate: x.total_orders ? (parseInt(x.refund_lines) / parseInt(x.total_orders) * 100) : 0 }))
-    const dailyReturnTrend = (r.byDailyReturnTrend || []).map(x => ({ date: x.date, total: parseInt(x.total_orders) || 0, rtoPct: x.total_orders ? (parseInt(x.rto_orders) / parseInt(x.total_orders) * 100) : 0, exchPct: x.total_orders ? (parseInt(x.exch_orders) / parseInt(x.total_orders) * 100) : 0, cirPct: x.total_orders ? (parseInt(x.cir_orders) / parseInt(x.total_orders) * 100) : 0, cancelPct: x.total_orders ? (parseInt(x.cancel_orders) / parseInt(x.total_orders) * 100) : 0 }))
+    const dailyReturnTrend = (r.byDailyReturnTrend || []).map(x => ({ date: x.date, total: parseInt(x.total_orders) || 0, rtoPct: x.total_orders ? ((parseInt(x.rto_orders) + parseInt(x.return_orders || 0)) / parseInt(x.total_orders) * 100) : 0, exchPct: x.total_orders ? (parseInt(x.exch_orders) / parseInt(x.total_orders) * 100) : 0, cirPct: x.total_orders ? (parseInt(x.cir_orders) / parseInt(x.total_orders) * 100) : 0, cancelPct: x.total_orders ? (parseInt(x.cancel_orders) / parseInt(x.total_orders) * 100) : 0 }))
 
     const chMap = {}
     r.byChannel.forEach(x => { chMap[x.Channel] = { rev: parseFloat(x.rev) || 0, excRev: parseFloat(x.exc_rev) || 0, orders: parseInt(x.orders) || 0, qty: parseInt(x.qty) || 0 } })
@@ -428,11 +429,12 @@ export default async function handler(req, res) {
     const momOrders = parseInt(r.momTotals?.[0]?.n_orders) || 0
     const yoyOrders = parseInt(r.yoyTotals?.[0]?.n_orders) || 0
 
-    const rtoRev = (parseFloat(r.byOrderStatus?.find(x => x.order_status === 'RTO')?.rev) || 0) + (parseFloat(r.byOrderStatus?.find(x => x.order_status === 'Return')?.rev) || 0)
+    const rtoRev = parseFloat(r.byOrderStatus?.find(x => x.order_status === 'RTO')?.rev) || 0
+    const returnRev = parseFloat(r.byReturn?.[0]?.return_rev) || 0
     const cancellRev = parseFloat(r.byOrderStatus?.find(x => x.order_status === 'Cancelled')?.rev) || 0
     const cirRev = parseFloat(r.byCIR?.[0]?.cir_rev) || 0
     const rtoRevDirect = parseFloat(r.byRTO?.[0]?.rto_rev) || 0
-    const netRevenueCalc = totalRev - (totalRev - totalExcRev) - rtoRev - cirRev - cancellRev
+    const netRevenueCalc = totalRev - (totalRev - totalExcRev) - rtoRev - returnRev - cirRev - cancellRev
 
     // Build flipkart block early so we can patch overall totals with estimated days
     const fkBlock = (() => {
@@ -514,7 +516,7 @@ export default async function handler(req, res) {
       totalRev: adjTotalRev, totalExcRev: adjTotalExcRev, totalQty: adjTotalQty, nOrders: adjNOrders, nDays,
       blendedAOV: adjNOrders ? adjTotalRev / adjNOrders : 0,
       gstCollected: adjTotalRev - adjTotalExcRev,
-      rtoRev, cancellRev, cirRev, rtoRevDirect, netRevenueCalc,
+      rtoRev, returnRev, cancellRev, cirRev, rtoRevDirect, netRevenueCalc,
       cirOrders: parseInt(r.byCIR?.[0]?.cir_orders) || 0,
       exchangeOrders: parseInt(r.byExchange?.[0]?.exchange_orders) || 0,
       momRev, yoyRev, momOrders, yoyOrders,

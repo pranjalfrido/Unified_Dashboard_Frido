@@ -2270,8 +2270,8 @@ function ShopifyTab({ data, filters, setFilters }) {
   const rtoOrders = (orderStatusMap['RTO'] || 0) + (orderStatusMap['Return'] || 0)
   const fulfilmentPct = shNOrders ? (deliveredOrders / shNOrders * 100) : 0
   const rtoPct = shNOrders ? (rtoOrders / shNOrders * 100) : 0
-  const atRiskRev = (orderStatusRevMap['RTO'] || 0) + (orderStatusRevMap['Return'] || 0) + (orderStatusRevMap['Cancelled'] || 0) + (data.cirRev || 0)
-  const returnRevPct = totalRev > 0 ? (((data.rtoRevDirect || 0) + (data.cirRev || 0)) / totalRev * 100) : 0
+  const atRiskRev = (data.rtoRevDirect || 0) + (data.returnRev || 0) + (data.cirRev || 0) + (orderStatusRevMap['Cancelled'] || 0)
+  const returnRevPct = totalRev > 0 ? (((data.rtoRevDirect || 0) + (data.returnRev || 0) + (data.cirRev || 0)) / totalRev * 100) : 0
   const repeatRate = nCusts ? (repeatCusts / nCusts * 100).toFixed(1) : '0'
 
   // Sub-channel breakdown — India excludes International, Intl shows only International
@@ -2530,7 +2530,7 @@ function ShopifyTab({ data, filters, setFilters }) {
             { label: 'Cancellation %', value: `${cancelPct.toFixed(1)}%`, sub: `${fmtN(cancelledOrders)} cancelled`, accent: cancelPct > 5 ? '#7A1A1A' : undefined, badge: shReturnBadge(cancelPct, prevCancelPct) },
             { label: 'Return % (Orders)', value: `${returnOrderPct.toFixed(1)}%`, sub: `${fmtN(rtoOrders + cirOrders)} RTO+CIR orders`, accent: returnOrderPct > 10 ? '#7A1A1A' : undefined, badge: shReturnBadge(returnOrderPct, prevReturnOrderPct) },
             { label: 'Exchange %', value: `${exchangePct.toFixed(1)}%`, sub: `${fmtN(exchangeOrders)} exchange orders`, badge: shReturnBadge(exchangePct, prevExchangePct) },
-            { label: 'Return % (Rev)', value: `${returnRevPct.toFixed(1)}%`, sub: `${fmt((data.rtoRevDirect || 0) + (data.cirRev || 0))} RTO+CIR rev`, accent: returnRevPct > 5 ? '#7A1A1A' : undefined, badge: shReturnBadge(returnRevPct, prevReturnRevPct) },
+            { label: 'Return % (Rev)', value: `${returnRevPct.toFixed(1)}%`, sub: `${fmt((data.rtoRevDirect || 0) + (data.returnRev || 0) + (data.cirRev || 0))} RTO+Return+CIR rev`, accent: returnRevPct > 5 ? '#7A1A1A' : undefined, badge: shReturnBadge(returnRevPct, prevReturnRevPct) },
             { label: 'RTO %', value: `${rtoPct.toFixed(1)}%`, sub: `${fmtN(rtoOrders)} RTO · ${cirOrders} CIR orders`, accent: rtoPct > 10 ? '#7A1A1A' : undefined },
           ]
           return (
