@@ -146,7 +146,7 @@ SELECT
   u.CustomerId, u.voucher_code,
   u.Category, u.SubCategory, u.GST_Tax_Type_Code,
   u.masterskucode AS MasterSKU,
-  u.is_CIR_return, u.is_exchange, u.is_rto, u.is_cancelled, u.is_refund,
+  CASE WHEN u.RefundStatus = 'true' OR u.RefundStatus = '1' THEN 1 ELSE 0 END AS is_refund,
   u.Clickpost_Status, u.Unicommerce_Status, u.Order_Status,
   u.Dispatch_Date, u.Delivered_Date
 FROM \`frido-429506.production.fact_all_platform_sales_report\` u
