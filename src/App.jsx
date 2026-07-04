@@ -2909,7 +2909,7 @@ function AmazonTab({ data, region = 'india', setRegion = () => {} }) {
                     {[
                       { label: 'SC Revenue', value: fmt(scCatRev), sub: 'Seller Central', badge: selectedCat ? null : amzChgBadge(scTotalRev, amzPrevSCRev) },
                       { label: 'VC Revenue', value: fmt(vcCatRev), sub: 'Vendor Central', badge: selectedCat ? null : amzChgBadge(vcTotalOrdered, amzPrevVCRev) },
-                      { label: 'Net Revenue', value: fmt(scCatExcRev + vcCatExcRev), sub: 'SC: Gross−Cancel−Returns−GST', badge: selectedCat ? null : amzChgBadge(scTotalExcRev + vcTotalOrderedExcRev, (amzSC.prevExcRev || 0) + (amzVC.prevExcRev || 0)) },
+                      { label: 'Net Revenue', value: fmt(scCatExcRev + vcCatExcRev), sub: 'SC (Gross−Cancel−Returns−GST) + VC excl. GST', badge: selectedCat ? null : amzChgBadge(scTotalExcRev + vcTotalOrderedExcRev, (amzSC.prevExcRev || 0) + (amzVC.prevExcRev || 0)) },
                       { label: 'GST Collected', value: fmt((scCatRev - scCatExcRev) + (vcCatRev - vcCatExcRev)), sub: 'SC + VC GST', badge: selectedCat ? null : amzChgBadge((scTotalRev - scTotalExcRev) + (vcTotalOrdered - vcTotalOrderedExcRev), ((amzSC.prevRev || 0) - (amzSC.prevExcRev || 0)) + ((amzVC.prevRev || 0) - (amzVC.prevExcRev || 0))) },
                     ].map(k => (
                       <div key={k.label} className="kpi-card" style={{ padding: '10px 13px' }}>
