@@ -2775,7 +2775,7 @@ function AmazonTab({ data, region = 'india', setRegion = () => {} }) {
   const scFBA = amzSC.fulfillment?.find(f => f.type === 'FBA') || { orders: 0, rev: 0, excRev: 0, units: 0 }
   const scMFN = amzSC.fulfillment?.find(f => f.type === 'MFN') || { orders: 0, rev: 0, excRev: 0, units: 0 }
   const scTotalRev = scFBA.rev + scMFN.rev
-  const scTotalExcRev = (scFBA.excRev || 0) + (scMFN.excRev || 0)
+  const scTotalExcRev = amzSC.netCalc?.netRev || (scFBA.excRev || 0) + (scMFN.excRev || 0)
   const scTotalOrders = scFBA.orders + scMFN.orders
   const scAOV = scTotalOrders ? scTotalRev / scTotalOrders : 0
   const scTotalUnits = scFBA.units + scMFN.units
@@ -2909,7 +2909,7 @@ function AmazonTab({ data, region = 'india', setRegion = () => {} }) {
                     {[
                       { label: 'SC Revenue', value: fmt(scCatRev), sub: 'Seller Central', badge: selectedCat ? null : amzChgBadge(scTotalRev, amzPrevSCRev) },
                       { label: 'VC Revenue', value: fmt(vcCatRev), sub: 'Vendor Central', badge: selectedCat ? null : amzChgBadge(vcTotalOrdered, amzPrevVCRev) },
-                      { label: 'Net Revenue', value: fmt(scCatExcRev + vcCatExcRev), sub: 'SC + VC excl. GST', badge: selectedCat ? null : amzChgBadge(scTotalExcRev + vcTotalOrderedExcRev, (amzSC.prevExcRev || 0) + (amzVC.prevExcRev || 0)) },
+                      { label: 'Net Revenue', value: fmt(scCatExcRev + vcCatExcRev), sub: 'SC: Gross−Cancel−Returns−GST', badge: selectedCat ? null : amzChgBadge(scTotalExcRev + vcTotalOrderedExcRev, (amzSC.prevExcRev || 0) + (amzVC.prevExcRev || 0)) },
                       { label: 'GST Collected', value: fmt((scCatRev - scCatExcRev) + (vcCatRev - vcCatExcRev)), sub: 'SC + VC GST', badge: selectedCat ? null : amzChgBadge((scTotalRev - scTotalExcRev) + (vcTotalOrdered - vcTotalOrderedExcRev), ((amzSC.prevRev || 0) - (amzSC.prevExcRev || 0)) + ((amzVC.prevRev || 0) - (amzVC.prevExcRev || 0))) },
                     ].map(k => (
                       <div key={k.label} className="kpi-card" style={{ padding: '10px 13px' }}>
