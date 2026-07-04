@@ -114,6 +114,8 @@ export default async function handler(req, res) {
       ? `WITH in_range AS (SELECT DISTINCT customer_id FROM \`frido-429506.production.fact_shopify_international_orders\` WHERE order_date BETWEEN '${start}' AND '${end}' AND customer_id IS NOT NULL), prior AS (SELECT DISTINCT customer_id FROM \`frido-429506.production.fact_shopify_international_orders\` WHERE order_date < '${start}' AND customer_id IS NOT NULL) SELECT COUNT(*) AS n_custs, COUNTIF(p.customer_id IS NOT NULL) AS repeat_custs FROM in_range ir LEFT JOIN prior p USING (customer_id)`
       : `WITH in_range AS (SELECT DISTINCT customer_id FROM \`frido-429506.production.fact_shopify_myfrido_mobility_all_orders\` WHERE order_date_ist BETWEEN '${start}' AND '${end}' AND customer_id IS NOT NULL), prior AS (SELECT DISTINCT customer_id FROM \`frido-429506.production.fact_shopify_myfrido_mobility_all_orders\` WHERE order_date_ist < '${start}' AND customer_id IS NOT NULL) SELECT COUNT(*) AS n_custs, COUNTIF(p.customer_id IS NOT NULL) AS repeat_custs FROM in_range ir LEFT JOIN prior p USING (customer_id)`,
     bySubCategory: `WITH q AS (${base}) SELECT Category, SubCategory, COUNT(DISTINCT OrderId) AS orders, SUM(SellingPrice_Inc_GST) AS rev, SUM(ItemQty) AS units FROM q GROUP BY Category, SubCategory ORDER BY rev DESC LIMIT 200`,
+    prevByCategory: `WITH q AS (${prevBase}) SELECT Category, ROUND(SUM(SellingPrice_Inc_GST),0) AS rev FROM q WHERE Category IS NOT NULL GROUP BY Category`,
+    prevBySubCategory: `WITH q AS (${prevBase}) SELECT Category, SubCategory, ROUND(SUM(SellingPrice_Inc_GST),0) AS rev FROM q WHERE Category IS NOT NULL GROUP BY Category, SubCategory`,
     byCategoryChannel: `WITH q AS (${base}) SELECT Category, Channel, SUM(SellingPrice_Inc_GST) AS rev FROM q GROUP BY Category, Channel`,
     bySubCategoryChannel: `WITH q AS (${base}) SELECT Category, SubCategory, Channel, SUM(SellingPrice_Inc_GST) AS rev FROM q GROUP BY Category, SubCategory, Channel ORDER BY rev DESC`,
     byCity: `WITH q AS (${base}) SELECT UPPER(TRIM(City_L2)) AS city, COUNT(DISTINCT OrderId) AS orders, SUM(SellingPrice_Inc_GST) AS rev FROM q WHERE City_L2 IS NOT NULL AND TRIM(City_L2) != '' GROUP BY UPPER(TRIM(City_L2)) ORDER BY rev DESC LIMIT 50`,
@@ -332,6 +334,12 @@ export default async function handler(req, res) {
     const subCatMap = {}
     r.bySubCategory.forEach(x => { const key = `${x.Category || 'Unknown'}::${x.SubCategory || 'Unknown'}`; subCatMap[key] = { rev: parseFloat(x.rev) || 0, orders: { size: parseInt(x.orders) || 0 }, units: parseInt(x.units) || 0 } })
 
+    const catPrevMap = {}
+    ;(r.prevByCategory || []).forEach(x => { catPrevMap[x.Category || 'Unknown'] = parseFloat(x.rev) || 0 })
+
+    const subCatPrevMap = {}
+    ;(r.prevBySubCategory || []).forEach(x => { subCatPrevMap[`${x.Category || 'Unknown'}::${x.SubCategory || 'Unknown'}`] = parseFloat(x.rev) || 0 })
+
     const catChannelMap = {}
     r.byCategoryChannel.forEach(x => {
       const cat = x.Category || 'Unknown'
@@ -503,7 +511,7 @@ export default async function handler(req, res) {
       momPeriod: `${moms} → ${mome}`, yoyPeriod: `${yoys} → ${yoye}`,
       nCusts, repeatCusts,
       uniqueDates: dateSet,
-      dailyArr, chMap, catMap, subCatMap, stateMap, cityRows, regionRows, tierRows, catChannelMap, subCatChannelMap, orderStatusMap, orderStatusRevMap,
+      dailyArr, chMap, catMap, subCatMap, catPrevMap, subCatPrevMap, stateMap, cityRows, regionRows, tierRows, catChannelMap, subCatChannelMap, orderStatusMap, orderStatusRevMap,
       buckets, bucketRev, voucherMap, subChannelMap, paymentModeMap, tatOrders: [],
       htCount, htRev: htRevAgg, multiItemOrders,
       financialStatusMap, fulfilmentStatusMap, refundTrend, dailyReturnTrend,
