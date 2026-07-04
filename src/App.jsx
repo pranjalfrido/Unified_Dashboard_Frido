@@ -2522,16 +2522,16 @@ function ShopifyTab({ data, filters, setFilters }) {
             { label: 'ASP', value: `₹${Math.round(asp).toLocaleString('en-IN')}`, sub: 'Net rev ÷ units sold', badge: shChgBadge(asp, prevUnits > 0 ? prevNetRev / prevUnits : 0) },
           ]
           const prevCancelPct = prevOrders > 0 ? prevCancelledOrders / prevOrders * 100 : 0
-          const prevCirPct = prevOrders > 0 ? prevCirOrders / prevOrders * 100 : 0
           const prevExchangePct = prevOrders > 0 ? prevExchangeOrders / prevOrders * 100 : 0
-          const prevRtoPct = prevOrders > 0 ? prevRtoOrders / prevOrders * 100 : 0
+          const prevReturnOrderPct = prevOrders > 0 ? (prevRtoOrders + prevCirOrders) / prevOrders * 100 : 0
           const prevReturnRevPct = prevRev > 0 ? ((prevRtoOrders + prevCirOrders) / prevOrders * 100) : 0
+          const returnOrderPct = shNOrders ? ((rtoOrders + cirOrders) / shNOrders * 100) : 0
           const row2 = [
             { label: 'Cancellation %', value: `${cancelPct.toFixed(1)}%`, sub: `${fmtN(cancelledOrders)} cancelled`, accent: cancelPct > 5 ? '#7A1A1A' : undefined, badge: shReturnBadge(cancelPct, prevCancelPct) },
-            { label: 'CIR %', value: `${cirPct.toFixed(1)}%`, sub: `${fmtN(cirOrders)} CIR orders`, badge: shReturnBadge(cirPct, prevCirPct) },
+            { label: 'Return % (Orders)', value: `${returnOrderPct.toFixed(1)}%`, sub: `${fmtN(rtoOrders + cirOrders)} RTO+CIR orders`, accent: returnOrderPct > 10 ? '#7A1A1A' : undefined, badge: shReturnBadge(returnOrderPct, prevReturnOrderPct) },
             { label: 'Exchange %', value: `${exchangePct.toFixed(1)}%`, sub: `${fmtN(exchangeOrders)} exchange orders`, badge: shReturnBadge(exchangePct, prevExchangePct) },
-            { label: 'RTO %', value: `${rtoPct.toFixed(1)}%`, sub: `${fmtN(rtoOrders)} RTO orders`, accent: rtoPct > 10 ? '#7A1A1A' : undefined, badge: shReturnBadge(rtoPct, prevRtoPct) },
-            { label: 'Return %', value: `${returnRevPct.toFixed(1)}%`, sub: `${fmt((data.rtoRevDirect || 0) + (data.cirRev || 0))} RTO+CIR rev`, accent: returnRevPct > 5 ? '#7A1A1A' : undefined, badge: shReturnBadge(returnRevPct, prevReturnRevPct) },
+            { label: 'Return % (Rev)', value: `${returnRevPct.toFixed(1)}%`, sub: `${fmt((data.rtoRevDirect || 0) + (data.cirRev || 0))} RTO+CIR rev`, accent: returnRevPct > 5 ? '#7A1A1A' : undefined, badge: shReturnBadge(returnRevPct, prevReturnRevPct) },
+            { label: 'RTO %', value: `${rtoPct.toFixed(1)}%`, sub: `${fmtN(rtoOrders)} RTO · ${cirOrders} CIR orders`, accent: rtoPct > 10 ? '#7A1A1A' : undefined },
           ]
           return (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
@@ -2574,7 +2574,7 @@ function ShopifyTab({ data, filters, setFilters }) {
           const rawDaily = (sh.daily || []).map(d => {
             const grossRev = d.rev || 0
             const rt = returnTrendMap[d.date] || {}
-            return { date: d.date, grossRev, netRev: grossRev > 0 ? grossRev * netShrinkFactor : 0, rtoPct: rt.rtoPct || 0, exchPct: rt.exchPct || 0, cirPct: rt.cirPct || 0, cancelPct: rt.cancelPct || 0 }
+            return { date: d.date, grossRev, netRev: grossRev > 0 ? grossRev * netShrinkFactor : 0, returnPct: (rt.rtoPct || 0) + (rt.cirPct || 0), exchPct: rt.exchPct || 0, cancelPct: rt.cancelPct || 0 }
           }).filter(d => d.grossRev > 0)
 
           const grouped = (() => {
@@ -2593,16 +2593,15 @@ function ShopifyTab({ data, filters, setFilters }) {
                 const q = Math.ceil(m / 3)
                 key = `${d.date.slice(0, 4)}-Q${q}`
               }
-              if (!buckets[key]) buckets[key] = { date: key, grossRev: 0, netRev: 0, rtoPct: 0, exchPct: 0, cirPct: 0, cancelPct: 0, _n: 0 }
+              if (!buckets[key]) buckets[key] = { date: key, grossRev: 0, netRev: 0, returnPct: 0, exchPct: 0, cancelPct: 0, _n: 0 }
               buckets[key].grossRev += d.grossRev
               buckets[key].netRev += d.netRev
-              buckets[key].rtoPct += d.rtoPct
+              buckets[key].returnPct += d.returnPct
               buckets[key].exchPct += d.exchPct
-              buckets[key].cirPct += d.cirPct
               buckets[key].cancelPct += d.cancelPct
               buckets[key]._n += 1
             })
-            return Object.values(buckets).map(b => ({ ...b, rtoPct: b._n ? b.rtoPct / b._n : 0, exchPct: b._n ? b.exchPct / b._n : 0, cirPct: b._n ? b.cirPct / b._n : 0, cancelPct: b._n ? b.cancelPct / b._n : 0 })).sort((a, b) => a.date.localeCompare(b.date))
+            return Object.values(buckets).map(b => ({ ...b, returnPct: b._n ? b.returnPct / b._n : 0, exchPct: b._n ? b.exchPct / b._n : 0, cancelPct: b._n ? b.cancelPct / b._n : 0 })).sort((a, b) => a.date.localeCompare(b.date))
           })()
 
           const xFmt = d => shTrendGroup === 'daily' ? d?.slice(5) : shTrendGroup === 'monthly' ? d?.slice(0, 7) : d
@@ -2637,8 +2636,7 @@ function ShopifyTab({ data, filters, setFilters }) {
                   <Legend wrapperStyle={{ fontSize: 11 }} />
                   <Area yAxisId="rev" type="monotone" dataKey="grossRev" name="Gross Revenue" stroke="#E0B800" fill="url(#shGrossGrad)" strokeWidth={2.5} dot={false} />
                   <Area yAxisId="rev" type="monotone" dataKey="netRev" name="Net Revenue" stroke="#0D9E68" fill="url(#shNetGrad)" strokeWidth={2} dot={false} strokeDasharray="4 2" />
-                  <Line yAxisId="pct" type="monotone" dataKey="rtoPct" name="RTO %" stroke="#E24B4A" strokeWidth={1.5} dot={false} />
-                  <Line yAxisId="pct" type="monotone" dataKey="cirPct" name="CIR %" stroke="#2E74CC" strokeWidth={1.5} dot={false} strokeDasharray="5 3" />
+                  <Line yAxisId="pct" type="monotone" dataKey="returnPct" name="Return % (RTO+CIR)" stroke="#E24B4A" strokeWidth={1.5} dot={false} />
                   <Line yAxisId="pct" type="monotone" dataKey="exchPct" name="Exchange %" stroke="#9B59B6" strokeWidth={1.5} dot={false} strokeDasharray="3 2" />
                   <Line yAxisId="pct" type="monotone" dataKey="cancelPct" name="Cancellation %" stroke="#B91C1C" strokeWidth={1.5} dot={false} strokeDasharray="6 2" />
                 </ComposedChart>
