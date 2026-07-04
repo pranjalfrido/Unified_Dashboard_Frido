@@ -2775,7 +2775,9 @@ function AmazonTab({ data, region = 'india', setRegion = () => {} }) {
   const scFBA = amzSC.fulfillment?.find(f => f.type === 'FBA') || { orders: 0, rev: 0, excRev: 0, units: 0 }
   const scMFN = amzSC.fulfillment?.find(f => f.type === 'MFN') || { orders: 0, rev: 0, excRev: 0, units: 0 }
   const scTotalRev = scFBA.rev + scMFN.rev
-  const scTotalExcRev = amzSC.netCalc?.netRev || (scFBA.excRev || 0) + (scMFN.excRev || 0)
+  const scTotalExcRevRaw = (scFBA.excRev || 0) + (scMFN.excRev || 0)
+  const scNetRev = amzSC.netCalc?.netRev || scTotalExcRevRaw
+  const scTotalExcRev = scNetRev
   const scTotalOrders = scFBA.orders + scMFN.orders
   const scAOV = scTotalOrders ? scTotalRev / scTotalOrders : 0
   const scTotalUnits = scFBA.units + scMFN.units
@@ -2910,7 +2912,7 @@ function AmazonTab({ data, region = 'india', setRegion = () => {} }) {
                       { label: 'SC Revenue', value: fmt(scCatRev), sub: 'Seller Central', badge: selectedCat ? null : amzChgBadge(scTotalRev, amzPrevSCRev) },
                       { label: 'VC Revenue', value: fmt(vcCatRev), sub: 'Vendor Central', badge: selectedCat ? null : amzChgBadge(vcTotalOrdered, amzPrevVCRev) },
                       { label: 'Net Revenue', value: fmt(scCatExcRev + vcCatExcRev), sub: 'SC (Gross−Cancel−Returns−GST) + VC excl. GST', badge: selectedCat ? null : amzChgBadge(scTotalExcRev + vcTotalOrderedExcRev, (amzSC.prevExcRev || 0) + (amzVC.prevExcRev || 0)) },
-                      { label: 'GST Collected', value: fmt((scCatRev - scCatExcRev) + (vcCatRev - vcCatExcRev)), sub: 'SC + VC GST', badge: selectedCat ? null : amzChgBadge((scTotalRev - scTotalExcRev) + (vcTotalOrdered - vcTotalOrderedExcRev), ((amzSC.prevRev || 0) - (amzSC.prevExcRev || 0)) + ((amzVC.prevRev || 0) - (amzVC.prevExcRev || 0))) },
+                      { label: 'GST Collected', value: fmt((scCatRev - scTotalExcRevRaw) + (vcCatRev - vcCatExcRev)), sub: 'SC + VC GST', badge: selectedCat ? null : amzChgBadge((scTotalRev - scTotalExcRevRaw) + (vcTotalOrdered - vcTotalOrderedExcRev), ((amzSC.prevRev || 0) - (amzSC.prevExcRev || 0)) + ((amzVC.prevRev || 0) - (amzVC.prevExcRev || 0))) },
                     ].map(k => (
                       <div key={k.label} className="kpi-card" style={{ padding: '10px 13px' }}>
                         <div className="kpi-label">{k.label}</div>
@@ -2948,7 +2950,9 @@ function AmazonTab({ data, region = 'india', setRegion = () => {} }) {
             } else {
               ;(amzVC.daily || []).forEach(d => { vcDailyMap[d.date] = { orderedRev: d.orderedRev || 0, orderedUnits: d.orderedUnits || 0 } })
             }
-            const gstRate = scTotalRev > 0 ? (scTotalRev - scTotalExcRev) / scTotalRev : 0
+            const gstRate = scTotalRev > 0 ? (scTotalRev - scTotalExcRevRaw) / scTotalRev : 0
+            const returnRate = scTotalRev > 0 ? (amzSC.netCalc?.returnRev || 0) / scTotalRev : 0
+            const cancelRate2 = scTotalRev > 0 ? (amzSC.netCalc?.cancelRev || 0) / scTotalRev : 0
             const allDates = [...new Set([...scDailyCatArr.map(d => d.date), ...Object.keys(vcDailyMap)])].sort()
             const rawDaily = allDates.map(date => {
               const sc = scDailyCatArr.find(d => d.date === date) || {}
@@ -2959,9 +2963,11 @@ function AmazonTab({ data, region = 'india', setRegion = () => {} }) {
               const scO = (sc.FBA_orders || 0) + (sc.MFN_orders || 0)
               const scU = (sc.FBA_units || 0) + (sc.MFN_units || 0)
               const vcU = vc.orderedUnits
+              const scNetDaily = scRev * (1 - cancelRate2 - returnRate) * (1 - gstRate)
+              const vcNetDaily = vcRev * (1 - gstRate)
               return {
                 date,
-                grossRev: gross, netRev: gross * (1 - gstRate),
+                grossRev: gross, netRev: scNetDaily + vcNetDaily,
                 scRev, vcRev,
                 scShare: gross > 0 ? scRev / gross * 100 : null,
                 scOrders: scO, vcOrders: vcU,
@@ -3218,8 +3224,8 @@ function AmazonTab({ data, region = 'india', setRegion = () => {} }) {
                 </div>
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gridAutoRows: '1fr', gap: 10 }}>
                   {[
-                    { label: 'Net Revenue (Exc GST)', value: fmt(scTotalExcRev), sub: 'Net after GST deduction', badge: scChgBadge(scTotalExcRev, prevSCExcRev) },
-                    { label: 'GST Collected', value: fmt(scTotalRev - scTotalExcRev), sub: 'Gross − Net revenue', badge: scChgBadge(scTotalRev - scTotalExcRev, prevSCRev - prevSCExcRev) },
+                    { label: 'Net Revenue', value: fmt(scNetRev), sub: 'Gross−Cancel−Returns−GST', badge: scChgBadge(scNetRev, prevSCExcRev) },
+                    { label: 'GST Collected', value: fmt(scTotalRev - scTotalExcRevRaw), sub: 'SC GST', badge: scChgBadge(scTotalRev - scTotalExcRevRaw, prevSCRev - prevSCExcRev) },
                     { label: 'AOV', value: `₹${Math.round(scAOV).toLocaleString('en-IN')}`, sub: 'Revenue / Orders', badge: scChgBadge(scAOV, prevSCAOV) },
                     { label: 'ASP', value: `₹${scTotalUnits ? Math.round(scTotalRev / scTotalUnits).toLocaleString('en-IN') : 0}`, sub: 'Revenue / Units', badge: scChgBadge(scTotalRev / (scTotalUnits || 1), prevSCASP) },
                     { label: 'Daily Avg Revenue', value: fmt(scTotalRev / (data.nDays || 1)), sub: 'Revenue per day', badge: scChgBadge(scTotalRev / (data.nDays || 1), prevSCDailyAvg) },
@@ -3239,7 +3245,9 @@ function AmazonTab({ data, region = 'india', setRegion = () => {} }) {
           })()}
           {/* Trend Analysis */}
           {(() => {
-            const gstRate = scTotalRev > 0 ? (scTotalRev - scTotalExcRev) / scTotalRev : 0
+            const gstRate = scTotalRev > 0 ? (scTotalRev - scTotalExcRevRaw) / scTotalRev : 0
+            const returnRate2 = scTotalRev > 0 ? (amzSC.netCalc?.returnRev || 0) / scTotalRev : 0
+            const cancelRate3 = scTotalRev > 0 ? (amzSC.netCalc?.cancelRev || 0) / scTotalRev : 0
             const rawDaily = scDailyArr.map(d => {
               const gross = (d.FBA || 0) + (d.MFN || 0)
               const fbaO = d.FBA_orders || 0, mfnO = d.MFN_orders || 0
@@ -3248,7 +3256,7 @@ function AmazonTab({ data, region = 'india', setRegion = () => {} }) {
               return {
                 date: d.date,
                 grossRev: gross,
-                netRev: gross * (1 - gstRate),
+                netRev: gross * (1 - cancelRate3 - returnRate2) * (1 - gstRate),
                 fbaRev: d.FBA || 0,
                 mfnRev: d.MFN || 0,
                 fbaShare: gross > 0 ? (d.FBA || 0) / gross * 100 : null,
