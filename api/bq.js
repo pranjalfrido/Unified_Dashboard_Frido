@@ -119,6 +119,10 @@ export default async function handler(req, res) {
     byCategoryChannel: `WITH q AS (${base}) SELECT Category, Channel, SUM(SellingPrice_Inc_GST) AS rev FROM q GROUP BY Category, Channel`,
     bySubCategoryChannel: `WITH q AS (${base}) SELECT Category, SubCategory, Channel, SUM(SellingPrice_Inc_GST) AS rev FROM q GROUP BY Category, SubCategory, Channel ORDER BY rev DESC`,
     byCity: `WITH q AS (${base}) SELECT UPPER(TRIM(City_L2)) AS city, COUNT(DISTINCT OrderId) AS orders, SUM(SellingPrice_Inc_GST) AS rev FROM q WHERE City_L2 IS NOT NULL AND TRIM(City_L2) != '' GROUP BY UPPER(TRIM(City_L2)) ORDER BY rev DESC LIMIT 50`,
+    byStatePrev: `WITH q AS (${prevBase}) SELECT CASE WHEN TRIM(State) IS NULL OR TRIM(State) IN ('','-') THEN 'OTHERS' ELSE UPPER(TRIM(State)) END AS state, SUM(SellingPrice_Inc_GST) AS rev FROM q WHERE State IS NOT NULL GROUP BY 1`,
+    byStateTotal: `WITH q AS (${base}) SELECT SUM(SellingPrice_Inc_GST) AS total_rev FROM q WHERE State IS NOT NULL AND TRIM(State) != ''`,
+    byCityPrev: `WITH q AS (${prevBase}) SELECT UPPER(TRIM(City_L2)) AS city, SUM(SellingPrice_Inc_GST) AS rev FROM q WHERE City_L2 IS NOT NULL AND TRIM(City_L2) != '' GROUP BY UPPER(TRIM(City_L2))`,
+    byCityTotal: `WITH q AS (${base}) SELECT SUM(SellingPrice_Inc_GST) AS total_rev FROM q WHERE City_L2 IS NOT NULL AND TRIM(City_L2) != ''`,
     bySKU: `WITH q AS (${base}) SELECT MasterSKU AS sku, Category AS category, SubCategory AS subcategory, Channel AS channel, SUM(ItemQty) AS units, COUNT(DISTINCT OrderId) AS orders, SUM(SellingPrice_Inc_GST) AS rev FROM q WHERE MasterSKU IS NOT NULL AND TRIM(MasterSKU) != '' GROUP BY MasterSKU, Category, SubCategory, Channel ORDER BY rev DESC LIMIT 500`,
     byFinancialStatus: `WITH q AS (${base}) SELECT FinancialStatus AS financial_status, COUNT(DISTINCT OrderId) AS orders, SUM(SellingPrice_Inc_GST) AS rev FROM q WHERE Channel = 'Shopify' AND (SubChannel != 'Shopify B2B' OR SubChannel IS NULL) AND FinancialStatus IS NOT NULL GROUP BY FinancialStatus ORDER BY orders DESC`,
     byFulfilmentStatus: `WITH q AS (${base}) SELECT FulfilmentStatus AS fulfil_status, COUNT(DISTINCT OrderId) AS orders FROM q WHERE Channel = 'Shopify' AND (SubChannel != 'Shopify B2B' OR SubChannel IS NULL) AND FulfilmentStatus IS NOT NULL GROUP BY FulfilmentStatus ORDER BY orders DESC`,
@@ -360,8 +364,12 @@ export default async function handler(req, res) {
 
     const stateMap = {}
     r.byState.forEach(x => { if (!x.state) return; stateMap[x.state] = { rev: parseFloat(x.rev) || 0, orders: parseInt(x.orders) || 0, cities: { size: parseInt(x.cities) } } })
+    const statePrevMap = Object.fromEntries((r.byStatePrev || []).filter(x => x.state).map(x => [x.state, parseFloat(x.rev) || 0]))
+    const stateTotal = parseFloat(r.byStateTotal?.[0]?.total_rev) || 0
 
     const cityRows = (r.byCity || []).map(x => ({ city: x.city, state: x.state, region: x.region || '', cityTier: x.city_tier || '', orders: parseInt(x.orders) || 0, rev: parseFloat(x.rev) || 0 }))
+    const cityPrevMap = Object.fromEntries((r.byCityPrev || []).filter(x => x.city).map(x => [x.city, parseFloat(x.rev) || 0]))
+    const cityTotal = parseFloat(r.byCityTotal?.[0]?.total_rev) || 0
     const regionRows = (r.byRegion || []).map(x => ({ region: x.region, orders: parseInt(x.orders) || 0, rev: parseFloat(x.rev) || 0, units: parseInt(x.units) || 0 }))
     const tierRows = (r.byTier || []).map(x => ({ tier: parseInt(x.city_tier) || x.city_tier, label: x.tier_label, orders: parseInt(x.orders) || 0, rev: parseFloat(x.rev) || 0, units: parseInt(x.units) || 0 }))
     const skuRows = (r.bySKU || []).map(x => ({ sku: x.sku, category: x.category || '', subCategory: x.subcategory || '', channel: x.channel || '', units: parseInt(x.units) || 0, orders: parseInt(x.orders) || 0, rev: parseFloat(x.rev) || 0 }))
@@ -511,7 +519,7 @@ export default async function handler(req, res) {
       momPeriod: `${moms} → ${mome}`, yoyPeriod: `${yoys} → ${yoye}`,
       nCusts, repeatCusts,
       uniqueDates: dateSet,
-      dailyArr, chMap, catMap, subCatMap, catPrevMap, subCatPrevMap, stateMap, cityRows, regionRows, tierRows, catChannelMap, subCatChannelMap, orderStatusMap, orderStatusRevMap,
+      dailyArr, chMap, catMap, subCatMap, catPrevMap, subCatPrevMap, stateMap, statePrevMap, stateTotal, cityRows, cityPrevMap, cityTotal, regionRows, tierRows, catChannelMap, subCatChannelMap, orderStatusMap, orderStatusRevMap,
       buckets, bucketRev, voucherMap, subChannelMap, paymentModeMap, tatOrders: [],
       htCount, htRev: htRevAgg, multiItemOrders,
       financialStatusMap, fulfilmentStatusMap, refundTrend, dailyReturnTrend,
