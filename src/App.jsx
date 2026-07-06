@@ -1330,7 +1330,7 @@ function FinancialCategoryMatrix({ catData, subCatData, skuData, title, showRetu
   }
 
   return (
-    <Card title={title || 'Category Revenue Matrix'} note="Gross = incl. GST · Net = excl. GST">
+    <Card title={title || 'Category Revenue Matrix'}>
       <div className="tbl-wrap" style={{ maxHeight: 560, overflowY: 'auto' }}>
         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 10, fontWeight: 400, tableLayout: 'auto' }}>
           <thead style={{ position: 'sticky', top: 0, background: C.card, zIndex: 1 }}>
