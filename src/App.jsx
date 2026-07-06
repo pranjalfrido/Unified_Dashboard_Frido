@@ -3852,8 +3852,8 @@ function FlipkartTab({ data }) {
   const subDailyArr = (filtDailyCat
     ? filtDailyCat.map(x => ({ date: x.date, rev: x.rev, orders: x.orders, returns: 0 }))
         .reduce((acc, x) => { const e = acc.find(a => a.date === x.date); if (e) { e.rev += x.rev; e.orders += x.orders } else acc.push({ ...x }); return acc }, [])
-    : filterSub(fk.daily || []).map(x => ({ date: x.date, rev: x.rev, orders: x.orders, returns: x.returns || 0 }))
-        .reduce((acc, x) => { const e = acc.find(a => a.date === x.date); if (e) { e.rev += x.rev; e.returns += x.returns } else acc.push({ ...x }); return acc }, [])
+    : filterSub(fk.daily || []).map(x => ({ date: x.date, rev: x.rev, orders: x.orders, returns: x.returns || 0, returnRev: x.returnRev || 0 }))
+        .reduce((acc, x) => { const e = acc.find(a => a.date === x.date); if (e) { e.rev += x.rev; e.returns += x.returns; e.returnRev += x.returnRev } else acc.push({ ...x }); return acc }, [])
   ).sort((a, b) => a.date?.localeCompare(b.date))
   const fkSparkData = Array.from({ length: Math.max(subDailyArr.length, fkPrevDailyArr.length) }, (_, i) => {
     const cur = subDailyArr[i]
