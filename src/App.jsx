@@ -3829,6 +3829,14 @@ function FlipkartTab({ data }) {
   const fkReturnNFBF = fkReturnBySub['NON-FBF'] || { pct: 0, deliveredRev: 0, returnRev: 0 }
   const fkReturnCur = subView === 'fbf' ? fkReturnFBF : subView === 'nonfbf' ? fkReturnNFBF : fkReturnAll
 
+  // Delivered %
+  const fkDeliveredPct = (() => {
+    const statusRows = (fk.status || []).filter(x => subView === 'overview' || (subView === 'fbf' ? x.sub === 'FBF' : x.sub === 'NON-FBF'))
+    const deliveredOrders = statusRows.filter(x => x.status === 'Delivered').reduce((s, x) => s + x.orders, 0)
+    const nonCancelledOrders = statusRows.filter(x => x.status !== 'Cancelled').reduce((s, x) => s + x.orders, 0)
+    return { deliveredOrders, nonCancelledOrders, pct: nonCancelledOrders > 0 ? deliveredOrders / nonCancelledOrders * 100 : 0 }
+  })()
+
   // Daily chart
   const [chartMetric, setChartMetric] = useState('rev')
   const fkEstimatedDays = fk.estimatedDays || 0
@@ -3934,6 +3942,7 @@ function FlipkartTab({ data }) {
             {[
               { label: 'Daily Avg', value: fmt(rev / nDays), sub: `over ${nDays} days`, badge: fkChgBadge(rev / nDays, fkPrevRev > 0 ? fkPrevRev / nDays : 0) },
               { label: 'AOV', value: `₹${Math.round(aov).toLocaleString('en-IN')}`, sub: 'Avg order value', badge: fkChgBadge(aov, fkPrevOrders > 0 ? fkPrevRev / fkPrevOrders : 0) },
+              { label: 'Delivered %', value: `${fkDeliveredPct.pct.toFixed(1)}%`, sub: `${fmtN(fkDeliveredPct.deliveredOrders)} del · ${fmtN(fkDeliveredPct.nonCancelledOrders)} non-cancel`, accent: fkDeliveredPct.pct < 50 ? '#7A1A1A' : undefined },
             ].map(k => (
               <div key={k.label} className="kpi-card" style={{ padding: '10px 13px' }}>
                 <div className="kpi-label">{k.label}</div>
