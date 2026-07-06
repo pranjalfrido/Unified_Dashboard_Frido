@@ -3816,15 +3816,23 @@ function FlipkartTab({ data }) {
   const fkExcChg = fkPrevExcRev > 0 ? ((excRev - fkPrevExcRev) / fkPrevExcRev * 100) : null
   const fkChgBadge = (cur, prev) => { if (!prev) return null; const p = (cur - prev) / prev * 100; return <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 4, background: p >= 0 ? C.green.bg : C.red.bg, color: p >= 0 ? C.green.tx : C.red.tx, flexShrink: 0 }}>{p >= 0 ? '▲' : '▼'} {Math.abs(p).toFixed(1)}%</span> }
 
+  // Return rate
+  const fkReturnRate = fk.returnRate || {}
+  const fkReturnAll = fkReturnRate.all || { pct: 0, deliveredRev: 0, returnRev: 0 }
+  const fkReturnBySub = fkReturnRate.bySub || {}
+  const fkReturnFBF = fkReturnBySub['FBF'] || { pct: 0, deliveredRev: 0, returnRev: 0 }
+  const fkReturnNFBF = fkReturnBySub['NON-FBF'] || { pct: 0, deliveredRev: 0, returnRev: 0 }
+  const fkReturnCur = subView === 'fbf' ? fkReturnFBF : subView === 'nonfbf' ? fkReturnNFBF : fkReturnAll
+
   // Daily chart
   const [chartMetric, setChartMetric] = useState('rev')
   const fkEstimatedDays = fk.estimatedDays || 0
   const fkLatestReal = fk.latestRealDate || null
   const dailyMap = {}
   ;(fk.daily || []).forEach(x => {
-    if (!dailyMap[x.date]) dailyMap[x.date] = { date: x.date, FBF: 0, NonFBF: 0, FBF_orders: 0, NonFBF_orders: 0, FBF_units: 0, NonFBF_units: 0, FBF_returns: 0, NonFBF_returns: 0, estimated: x.estimated || false }
-    if (x.sub === 'FBF') { dailyMap[x.date].FBF = x.rev; dailyMap[x.date].FBF_orders = x.orders; dailyMap[x.date].FBF_units = x.units || 0; dailyMap[x.date].FBF_returns = x.returns || 0 }
-    else { dailyMap[x.date].NonFBF = x.rev; dailyMap[x.date].NonFBF_orders = x.orders; dailyMap[x.date].NonFBF_units = x.units || 0; dailyMap[x.date].NonFBF_returns = x.returns || 0 }
+    if (!dailyMap[x.date]) dailyMap[x.date] = { date: x.date, FBF: 0, NonFBF: 0, FBF_orders: 0, NonFBF_orders: 0, FBF_units: 0, NonFBF_units: 0, FBF_returns: 0, NonFBF_returns: 0, FBF_returnRev: 0, NonFBF_returnRev: 0, estimated: x.estimated || false }
+    if (x.sub === 'FBF') { dailyMap[x.date].FBF = x.rev; dailyMap[x.date].FBF_orders = x.orders; dailyMap[x.date].FBF_units = x.units || 0; dailyMap[x.date].FBF_returns = x.returns || 0; dailyMap[x.date].FBF_returnRev = x.returnRev || 0 }
+    else { dailyMap[x.date].NonFBF = x.rev; dailyMap[x.date].NonFBF_orders = x.orders; dailyMap[x.date].NonFBF_units = x.units || 0; dailyMap[x.date].NonFBF_returns = x.returns || 0; dailyMap[x.date].NonFBF_returnRev = x.returnRev || 0 }
     if (x.estimated) dailyMap[x.date].estimated = true
   })
   const dailyArr = Object.values(dailyMap).sort((a, b) => a.date?.localeCompare(b.date))
@@ -3910,7 +3918,7 @@ function FlipkartTab({ data }) {
           </div>
         </div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10, flex: 1 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10, flex: 1 }}>
             {(() => { const excChg = fkPrevExcRev > 0 ? ((excRev - fkPrevExcRev) / fkPrevExcRev * 100) : null; return (
               <div className="kpi-card" style={{ display: 'flex', flexDirection: 'column', gap: 4, padding: '10px 13px' }}>
                 <div className="kpi-label">Net (Exc GST)</div>
@@ -3932,11 +3940,12 @@ function FlipkartTab({ data }) {
               </div>
             ))}
           </div>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10, flex: 1 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10, flex: 1 }}>
             {[
               { label: 'ASP', value: `₹${Math.round(asp).toLocaleString('en-IN')}`, sub: 'Gross rev ÷ units', badge: fkChgBadge(asp, fkPrevUnits > 0 ? fkPrevRev / fkPrevUnits : 0) },
               { label: 'GST Collected', value: fmt(rev - excRev), sub: 'Inc GST − Exc GST', badge: fkChgBadge(rev - excRev, fkPrevGST) },
               { label: 'Total Units', value: fmtN(qty), sub: `${fmtN(nOrders)} orders`, badge: fkChgBadge(qty, fkPrevUnits) },
+              { label: 'Return % (Rev)', value: `${fkReturnCur.pct.toFixed(1)}%`, sub: `${fmt(fkReturnCur.returnRev)} ret · ${fmt(fkReturnCur.deliveredRev)} del`, accent: fkReturnCur.pct > 20 ? '#7A1A1A' : undefined },
             ].map(k => (
               <div key={k.label} className="kpi-card" style={{ padding: '10px 13px' }}>
                 <div className="kpi-label">{k.label}</div>
@@ -3952,9 +3961,10 @@ function FlipkartTab({ data }) {
       <div className="g-2" style={{ alignItems: 'stretch' }}>
       {(() => {
         const subLabel = subView === 'overview' ? 'FBF + Non-FBF' : subView === 'fbf' ? 'FBF' : 'Non-FBF'
+        const gstRatio = rev > 0 ? (rev - excRev) / rev : 0
         const rawDaily = subView === 'overview'
-          ? dailyArr.map(d => ({ date: d.date, grossRev: d.FBF + d.NonFBF, netRev: (d.FBF + d.NonFBF) * (excRev > 0 && rev > 0 ? excRev / rev : 1), orders: d.FBF_orders + d.NonFBF_orders, units: d.FBF_units + d.NonFBF_units, returns: d.FBF_returns + d.NonFBF_returns, estimated: d.estimated }))
-          : subDailyArr.map(d => ({ date: d.date, grossRev: d.rev, netRev: d.rev * (excRev > 0 && rev > 0 ? excRev / rev : 1), orders: d.orders, units: 0, returns: d.returns || 0, estimated: false }))
+          ? dailyArr.map(d => { const gr = d.FBF + d.NonFBF; const retRev = (d.FBF_returnRev || 0) + (d.NonFBF_returnRev || 0); return { date: d.date, grossRev: gr, netRev: gr * (1 - gstRatio), orders: d.FBF_orders + d.NonFBF_orders, units: d.FBF_units + d.NonFBF_units, returns: d.FBF_returns + d.NonFBF_returns, returnRev: retRev, returnPct: gr > 0 ? retRev / gr * 100 : 0, estimated: d.estimated } })
+          : subDailyArr.map(d => { const gr = d.rev; const retRev = d.returnRev || 0; return { date: d.date, grossRev: gr, netRev: gr * (1 - gstRatio), orders: d.orders, units: 0, returns: d.returns || 0, returnRev: retRev, returnPct: gr > 0 ? retRev / gr * 100 : 0, estimated: false } })
         const totalReturns = subView === 'overview' ? ((fbfT.returns || 0) + (nfbfT.returns || 0)) : subView === 'fbf' ? (fbfT.returns || 0) : (nfbfT.returns || 0)
         const grouped = (() => {
           if (fkTrendGroup === 'daily') return rawDaily
@@ -3965,11 +3975,11 @@ function FlipkartTab({ data }) {
             if (fkTrendGroup === 'weekly') { const day = dt.getDay(), diff = dt.getDate() - day + (day === 0 ? -6 : 1); key = new Date(new Date(d.date).setDate(diff)).toISOString().slice(0, 10) }
             else if (fkTrendGroup === 'monthly') { key = d.date.slice(0, 7) }
             else { key = `${d.date.slice(0, 4)}-Q${Math.ceil(parseInt(d.date.slice(5, 7)) / 3)}` }
-            if (!buckets[key]) buckets[key] = { date: key, grossRev: 0, netRev: 0, orders: 0, units: 0, returns: 0 }
+            if (!buckets[key]) buckets[key] = { date: key, grossRev: 0, netRev: 0, orders: 0, units: 0, returns: 0, returnRev: 0 }
             buckets[key].grossRev += d.grossRev; buckets[key].netRev += d.netRev
-            buckets[key].orders += d.orders; buckets[key].units += d.units; buckets[key].returns += d.returns || 0
+            buckets[key].orders += d.orders; buckets[key].units += d.units; buckets[key].returns += d.returns || 0; buckets[key].returnRev += d.returnRev || 0
           })
-          return Object.values(buckets).sort((a, b) => a.date.localeCompare(b.date))
+          return Object.values(buckets).map(b => ({ ...b, returnPct: b.grossRev > 0 ? b.returnRev / b.grossRev * 100 : 0 })).sort((a, b) => a.date.localeCompare(b.date))
         })()
         const isRev = fkTrendMetric === 'rev'
         const xFmt = d => fkTrendGroup === 'daily' ? d?.slice(5) : fkTrendGroup === 'monthly' ? d?.slice(0, 7) : d
@@ -4000,32 +4010,33 @@ function FlipkartTab({ data }) {
               )}
             </div>
             <ResponsiveContainer width="100%" height={240}>
-              <ComposedChart data={grouped} margin={{ top: 4, right: 10, bottom: 0, left: 0 }}>
+              <ComposedChart data={grouped} margin={{ top: 4, right: 50, bottom: 0, left: 0 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke={C.border} vertical={false} />
                 <XAxis dataKey="date" tick={{ fontSize: 10, fill: C.t3 }} tickFormatter={xFmt} />
-                <YAxis tick={{ fontSize: 10, fill: C.t3 }} tickFormatter={yFmt} width={60} />
+                <YAxis yAxisId="main" tick={{ fontSize: 10, fill: C.t3 }} tickFormatter={yFmt} width={60} />
+                <YAxis yAxisId="pct" orientation="right" tick={{ fontSize: 10, fill: C.t3 }} tickFormatter={v => `${v.toFixed(1)}%`} width={40} />
                 <Tooltip content={({ active, payload, label }) => {
                   if (!active || !payload?.length) return null
                   const d = payload[0]?.payload
-                  const retCount = d?.returns || 0
-                  const retPct = d?.orders > 0 ? (retCount / d.orders * 100).toFixed(1) : null
                   return (
                     <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 7, padding: '7px 11px', fontSize: 11 }}>
                       <div style={{ fontWeight: 700, marginBottom: 4, color: C.t2 }}>{xFmt(label)}</div>
-                      {payload.map(p => <div key={p.name} style={{ color: p.color }}>{p.name}: {isRev ? fmt(p.value) : fmtN(p.value)}</div>)}
-                      <div style={{ marginTop: 4, color: C.t1 }}>Returns: <strong>{fmtN(retCount)}</strong>{retPct !== null && <span style={{ color: C.t3, fontSize: 10, marginLeft: 4 }}>{retPct}%</span>}</div>
+                      {payload.filter(p => p.yAxisId === 'main').map(p => <div key={p.name} style={{ color: p.color }}>{p.name}: {isRev ? fmt(p.value) : fmtN(p.value)}</div>)}
+                      <div style={{ marginTop: 4, color: '#E24B4A' }}>Return %: <strong>{(d?.returnPct || 0).toFixed(1)}%</strong> ({fmt(d?.returnRev || 0)})</div>
                     </div>
                   )
                 }} />
                 <Legend wrapperStyle={{ fontSize: 11 }} />
                 {isRev ? (<>
-                  <Area type="monotone" dataKey="grossRev" name="Gross Revenue" stroke="#E8930A" fill="#E8930A22" strokeWidth={2} dot={false} />
-                  <Area type="monotone" dataKey="netRev" name="Net Revenue" stroke="#0D9E68" fill="#0D9E6811" strokeWidth={2} dot={false} strokeDasharray="4 2" />
+                  <Area yAxisId="main" type="monotone" dataKey="grossRev" name="Gross Revenue" stroke="#E8930A" fill="#E8930A22" strokeWidth={2} dot={false} />
+                  <Area yAxisId="main" type="monotone" dataKey="netRev" name="Net Revenue" stroke="#0D9E68" fill="#0D9E6811" strokeWidth={2} dot={false} strokeDasharray="4 2" />
                 </>) : fkTrendMetric === 'orders' ? (
-                  <Area type="monotone" dataKey="orders" name="Orders" stroke="#E8930A" fill="#E8930A22" strokeWidth={2} dot={false} />
+                  <Area yAxisId="main" type="monotone" dataKey="orders" name="Orders" stroke="#E8930A" fill="#E8930A22" strokeWidth={2} dot={false} />
                 ) : (
-                  <Area type="monotone" dataKey="units" name="Units" stroke="#E8930A" fill="#E8930A22" strokeWidth={2} dot={false} />
+                  <Area yAxisId="main" type="monotone" dataKey="units" name="Units" stroke="#E8930A" fill="#E8930A22" strokeWidth={2} dot={false} />
                 )}
+                <Line yAxisId="pct" type="monotone" dataKey="returnPct" name="Return %" stroke="#E24B4A" strokeWidth={1.5} dot={false} />
+                {fkReturnCur.pct > 0 && <ReferenceLine yAxisId="pct" y={fkReturnCur.pct} stroke="#E24B4A" strokeWidth={1} strokeDasharray="5 3" label={{ value: `Avg ${fkReturnCur.pct.toFixed(1)}%`, position: 'insideTopRight', fontSize: 10, fill: '#E24B4A' }} />}
               </ComposedChart>
             </ResponsiveContainer>
           </Card>
@@ -4065,16 +4076,16 @@ function FlipkartTab({ data }) {
       {(() => {
         const catAggMatrix = {}
         filterSub(fk.categories || []).forEach(x => {
-          if (!catAggMatrix[x.category]) catAggMatrix[x.category] = { rev: 0, excRev: 0, units: 0, returned: 0, totalOrdersForReturn: 0 }
+          if (!catAggMatrix[x.category]) catAggMatrix[x.category] = { rev: 0, excRev: 0, units: 0, orders: 0, returnRev: 0, rtoRev: 0, cirRev: 0, exchRev: 0, cancelRev: 0 }
           catAggMatrix[x.category].rev += x.rev; catAggMatrix[x.category].excRev += x.excRev || 0; catAggMatrix[x.category].units += x.units
-          catAggMatrix[x.category].returned += x.returns || 0; catAggMatrix[x.category].totalOrdersForReturn += x.orders || 0
+          catAggMatrix[x.category].orders += x.orders || 0; catAggMatrix[x.category].returnRev += x.returnRev || 0
         })
         const subCatData = {}
         filterSub(fk.subCategories || []).forEach(x => {
           if (!subCatData[x.category]) subCatData[x.category] = {}
-          if (!subCatData[x.category][x.subcategory]) subCatData[x.category][x.subcategory] = { rev: 0, excRev: 0, units: 0, returned: 0, totalOrdersForReturn: 0 }
+          if (!subCatData[x.category][x.subcategory]) subCatData[x.category][x.subcategory] = { rev: 0, excRev: 0, units: 0, orders: 0, returnRev: 0, rtoRev: 0, cirRev: 0, exchRev: 0, cancelRev: 0 }
           subCatData[x.category][x.subcategory].rev += x.rev; subCatData[x.category][x.subcategory].excRev += x.excRev || 0; subCatData[x.category][x.subcategory].units += x.units
-          subCatData[x.category][x.subcategory].returned += x.returns || 0; subCatData[x.category][x.subcategory].totalOrdersForReturn += x.orders || 0
+          subCatData[x.category][x.subcategory].orders += x.orders || 0; subCatData[x.category][x.subcategory].returnRev += x.returnRev || 0
         })
         const skuData = {}
         Object.entries(fk.skuMatrix || {}).forEach(([cat, scMap]) => {
@@ -4126,9 +4137,11 @@ function FlipkartTab({ data }) {
         // aggregate already-filtered stateRows (filterSub already applied)
         const stateMap = {}
         filterSub(fk.states||[]).forEach(x => {
-          if (!stateMap[x.state]) stateMap[x.state] = { state: x.state, rev: 0, orders: 0, rtoOrders: 0 }
-          stateMap[x.state].rev += x.rev; stateMap[x.state].orders += x.orders; stateMap[x.state].rtoOrders += (x.rtoOrders||0)
+          if (!stateMap[x.state]) stateMap[x.state] = { state: x.state, rev: 0, orders: 0, returnRev: 0, deliveredRev: 0 }
+          stateMap[x.state].rev += x.rev; stateMap[x.state].orders += x.orders
+          stateMap[x.state].returnRev += (x.returnRev||0); stateMap[x.state].deliveredRev += (x.deliveredRev||0)
         })
+        // sharePct denominator = total ALL states rev from BQ (not just top N returned)
         const fkStateTotalBQ = subView === 'overview' ? (stateTotalMap['FBF']||0) + (stateTotalMap['NON-FBF']||0) : (stateTotalMap[subView === 'fbf' ? 'FBF' : 'NON-FBF']||0)
         const totalStateRev = fkStateTotalBQ || Object.values(stateMap).reduce((s, v) => s + v.rev, 0)
         let cum = 0
@@ -4138,12 +4151,14 @@ function FlipkartTab({ data }) {
           const prev = subView === 'overview' ? prevFBF + prevNFBF : subView === 'fbf' ? prevFBF : prevNFBF
           const sharePct = totalStateRev > 0 ? s.rev / totalStateRev * 100 : 0
           cum += sharePct
-          return { ...s, aov: s.orders ? s.rev / s.orders : 0, rtoPct: s.orders ? (s.rtoOrders||0) / s.orders * 100 : 0, mom: prev > 0 ? (s.rev - prev) / prev * 100 : null, sharePct, cumPct: cum }
+          const rtoPct = s.deliveredRev > 0 ? s.returnRev / s.deliveredRev * 100 : 0
+          return { ...s, aov: s.orders ? s.rev / s.orders : 0, rtoPct, mom: prev > 0 ? (s.rev - prev) / prev * 100 : null, sharePct, cumPct: cum }
         })
         const cityMap = {}
         filterSub(fk.cities||[]).forEach(x => {
-          if (!cityMap[x.city]) cityMap[x.city] = { city: x.city, rev: 0, orders: 0, rtoOrders: 0 }
-          cityMap[x.city].rev += x.rev; cityMap[x.city].orders += x.orders; cityMap[x.city].rtoOrders += (x.rtoOrders||0)
+          if (!cityMap[x.city]) cityMap[x.city] = { city: x.city, rev: 0, orders: 0, returnRev: 0, deliveredRev: 0 }
+          cityMap[x.city].rev += x.rev; cityMap[x.city].orders += x.orders
+          cityMap[x.city].returnRev += (x.returnRev||0); cityMap[x.city].deliveredRev += (x.deliveredRev||0)
         })
         const fkCityTotalBQ = subView === 'overview' ? (cityTotalMap['FBF']||0) + (cityTotalMap['NON-FBF']||0) : (cityTotalMap[subView === 'fbf' ? 'FBF' : 'NON-FBF']||0)
         const totalCityRev = fkCityTotalBQ || Object.values(cityMap).reduce((s, v) => s + v.rev, 0)
@@ -4154,12 +4169,13 @@ function FlipkartTab({ data }) {
           const prev = subView === 'overview' ? prevFBF + prevNFBF : subView === 'fbf' ? prevFBF : prevNFBF
           const sharePct = totalCityRev > 0 ? c.rev / totalCityRev * 100 : 0
           cumC += sharePct
-          return { ...c, aov: c.orders ? c.rev / c.orders : 0, rtoPct: c.orders ? (c.rtoOrders||0) / c.orders * 100 : 0, mom: prev > 0 ? (c.rev - prev) / prev * 100 : null, sharePct, cumPct: cumC }
+          const rtoPct = c.deliveredRev > 0 ? c.returnRev / c.deliveredRev * 100 : 0
+          return { ...c, aov: c.orders ? c.rev / c.orders : 0, rtoPct, mom: prev > 0 ? (c.rev - prev) / prev * 100 : null, sharePct, cumPct: cumC }
         })
         return (
           <div className="g-2" style={{ alignItems: 'stretch' }}>
-            <ShopifyGeoRichTable title="Top States" rows={enrichedStates} firstKey="state" firstLabel="State" formatFirst={v => v ? v.charAt(0).toUpperCase() + v.slice(1).toLowerCase() : v} rtoLabel="Return %" />
-            <ShopifyGeoRichTable title="Top Cities" rows={enrichedCities} firstKey="city" firstLabel="City" formatFirst={v => v ? v.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' ') : v} rtoLabel="Return %" />
+            <ShopifyGeoRichTable title="Top States" rows={enrichedStates} firstKey="state" firstLabel="State" formatFirst={v => v ? v.charAt(0).toUpperCase() + v.slice(1).toLowerCase() : v} rtoLabel="Return % (Rev)" />
+            <ShopifyGeoRichTable title="Top Cities" rows={enrichedCities} firstKey="city" firstLabel="City" formatFirst={v => v ? v.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' ') : v} rtoLabel="Return % (Rev)" />
           </div>
         )
       })()}
