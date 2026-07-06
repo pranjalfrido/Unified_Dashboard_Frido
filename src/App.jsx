@@ -4768,11 +4768,27 @@ function CredTab({ data }) {
 
   // Category matrix data
   const catMatrixData = {}
-  allCats.forEach(c => { catMatrixData[c.category] = { rev: c.rev, excRev: c.excRev || 0, units: c.units, prevRev: catPrevMap[c.category] || 0 } })
+  allCats.forEach(c => { catMatrixData[c.category] = { rev: c.rev, excRev: c.excRev || 0, units: c.units } })
   const subCatMatrixData = {}
   allSubCats.forEach(s => {
     if (!subCatMatrixData[s.category]) subCatMatrixData[s.category] = {}
-    subCatMatrixData[s.category][s.subcategory] = { rev: s.rev, excRev: s.excRev || 0, units: s.units, prevRev: subCatPrevMap[`${s.category}::${s.subcategory}`] || 0 }
+    subCatMatrixData[s.category][s.subcategory] = { rev: s.rev, excRev: s.excRev || 0, units: s.units }
+  })
+
+  // Enrich states/cities for ShopifyGeoRichTable
+  let cumS = 0
+  const enrichedStates = stateRows.map(s => {
+    const prevRev = statePrevMap[s.state] || 0
+    const sharePct = stateTotal > 0 ? s.rev / stateTotal * 100 : 0
+    cumS += sharePct
+    return { ...s, state: s.state, asp: s.orders ? s.rev / s.orders : 0, aov: s.orders ? s.rev / s.orders : 0, rtoPct: 0, mom: prevRev > 0 ? (s.rev - prevRev) / prevRev * 100 : null, sharePct, cumPct: cumS }
+  })
+  let cumC = 0
+  const enrichedCities = cityRows.map(c => {
+    const prevRev = cityPrevMap[c.city] || 0
+    const sharePct = cityTotal > 0 ? c.rev / cityTotal * 100 : 0
+    cumC += sharePct
+    return { ...c, city: c.city, asp: c.orders ? c.rev / c.orders : 0, aov: c.orders ? c.rev / c.orders : 0, rtoPct: 0, mom: prevRev > 0 ? (c.rev - prevRev) / prevRev * 100 : null, sharePct, cumPct: cumC }
   })
 
   const crSparkData = Array.from({ length: Math.max(daily.length, crPrevDailyArr.length) }, (_, i) => ({
@@ -4846,32 +4862,8 @@ function CredTab({ data }) {
 
       {/* States + Cities */}
       <div className="g-2">
-        <PaginatedCard title="Top States" rows={stateRows.map(s => {
-          const prevRev = statePrevMap[s.state] || 0
-          const mom = prevRev > 0 ? (s.rev - prevRev) / prevRev * 100 : null
-          const sharePct = stateTotal > 0 ? s.rev / stateTotal * 100 : 0
-          return { ...s, aov: s.orders ? Math.round(s.rev / s.orders) : 0, sharePct, mom }
-        })} columns={[
-          { key: 'state', label: 'State' },
-          { key: 'rev', label: 'Revenue', align: 'right', mono: true, render: v => fmt(v) },
-          { key: 'sharePct', label: '% Share', align: 'right', render: v => `${v.toFixed(1)}%` },
-          { key: 'orders', label: 'Orders', align: 'right', render: v => fmtN(v) },
-          { key: 'aov', label: 'AOV', align: 'right', render: v => `₹${v.toLocaleString('en-IN')}` },
-          { key: 'mom', label: 'MoM %', align: 'right', render: v => v == null ? '—' : <span style={{ color: v >= 0 ? C.green.tx : C.red.tx, fontWeight: 600 }}>{v >= 0 ? '▲' : '▼'} {Math.abs(v).toFixed(1)}%</span> },
-        ]} pageSize={15} />
-        <PaginatedCard title="Top Cities" rows={cityRows.map(c => {
-          const prevRev = cityPrevMap[c.city] || 0
-          const mom = prevRev > 0 ? (c.rev - prevRev) / prevRev * 100 : null
-          const sharePct = cityTotal > 0 ? c.rev / cityTotal * 100 : 0
-          return { ...c, aov: c.orders ? Math.round(c.rev / c.orders) : 0, sharePct, mom }
-        })} columns={[
-          { key: 'city', label: 'City' },
-          { key: 'rev', label: 'Revenue', align: 'right', mono: true, render: v => fmt(v) },
-          { key: 'sharePct', label: '% Share', align: 'right', render: v => `${v.toFixed(1)}%` },
-          { key: 'orders', label: 'Orders', align: 'right', render: v => fmtN(v) },
-          { key: 'aov', label: 'AOV', align: 'right', render: v => `₹${v.toLocaleString('en-IN')}` },
-          { key: 'mom', label: 'MoM %', align: 'right', render: v => v == null ? '—' : <span style={{ color: v >= 0 ? C.green.tx : C.red.tx, fontWeight: 600 }}>{v >= 0 ? '▲' : '▼'} {Math.abs(v).toFixed(1)}%</span> },
-        ]} pageSize={15} />
+        <ShopifyGeoRichTable title="Top States" rows={enrichedStates} firstKey="state" firstLabel="State" showRTO={false} showAOV={false} showASP={true} />
+        <ShopifyGeoRichTable title="Top Cities" rows={enrichedCities} firstKey="city" firstLabel="City" showRTO={false} showAOV={false} showASP={true} />
       </div>
     </div>
   )
@@ -5036,12 +5028,35 @@ function MyntraTab({ data }) {
   const cityRows = mn.cities || []
   const stateRows = mn.states || []
 
+  const mnCatPrevMap = mn.catPrevMap || {}
+  const mnSubCatPrevMap = mn.subCatPrevMap || {}
+  const mnStatePrevMap = mn.statePrevMap || {}
+  const mnCityPrevMap = mn.cityPrevMap || {}
+  const mnStateTotal = mn.stateTotal || 0
+  const mnCityTotal = mn.cityTotal || 0
+
   const catMatrixData = {}
   ;(mn.categories || []).forEach(c => { catMatrixData[c.category] = { rev: c.rev, excRev: c.excRev || 0, units: c.units, orders: c.orders } })
   const subCatMatrixData = {}
   ;(mn.subCategories || []).forEach(x => { if (!subCatMatrixData[x.category]) subCatMatrixData[x.category] = {}; subCatMatrixData[x.category][x.subcategory] = { rev: x.rev, excRev: x.excRev || 0, units: x.units, orders: x.orders } })
   const catRowsForCatSubCat = (mn.categories || []).map(c => ({ name: c.category, rev: c.rev, excRev: c.excRev || 0, units: c.units, orders: c.orders }))
   const subCatRowsForCatSubCat = (mn.subCategories || []).map(x => ({ name: x.subcategory, category: x.category, rev: x.rev, excRev: x.excRev || 0, units: x.units, orders: x.orders }))
+
+  // Enrich states/cities
+  let mnCumS = 0
+  const mnEnrichedStates = stateRows.map(s => {
+    const prevRev = mnStatePrevMap[s.state] || 0
+    const sharePct = mnStateTotal > 0 ? s.rev / mnStateTotal * 100 : 0
+    mnCumS += sharePct
+    return { ...s, asp: s.orders ? s.rev / s.orders : 0, aov: s.orders ? s.rev / s.orders : 0, rtoPct: 0, mom: prevRev > 0 ? (s.rev - prevRev) / prevRev * 100 : null, sharePct, cumPct: mnCumS }
+  })
+  let mnCumC = 0
+  const mnEnrichedCities = cityRows.map(c => {
+    const prevRev = mnCityPrevMap[c.city] || 0
+    const sharePct = mnCityTotal > 0 ? c.rev / mnCityTotal * 100 : 0
+    mnCumC += sharePct
+    return { ...c, asp: c.orders ? c.rev / c.orders : 0, aov: c.orders ? c.rev / c.orders : 0, rtoPct: 0, mom: prevRev > 0 ? (c.rev - prevRev) / prevRev * 100 : null, sharePct, cumPct: mnCumC }
+  })
 
   const [selectedCat, setSelectedCat] = useState(null)
   const [selectedSubCat, setSelectedSubCat] = useState(null)
@@ -5101,7 +5116,7 @@ function MyntraTab({ data }) {
       })()}
 
       {/* Category Revenue Matrix */}
-      <FinancialCategoryMatrix catData={catMatrixData} subCatData={subCatMatrixData} skuData={mn.skuMatrix || {}} title="Category Revenue Matrix · Myntra" />
+      <FinancialCategoryMatrix catData={catMatrixData} subCatData={subCatMatrixData} skuData={mn.skuMatrix || {}} title="Category Revenue Matrix · Myntra" showMoM={true} catPrevMap={mnCatPrevMap} subCatPrevMap={mnSubCatPrevMap} />
 
       {/* Category + SubCategory table */}
       <CatSubCatRow
@@ -5116,18 +5131,8 @@ function MyntraTab({ data }) {
 
       {/* Top States + Top Cities side by side */}
       <div className="g-2" style={{ alignItems: 'stretch' }}>
-        <PaginatedCard title="Top States · Myntra" rows={stateRows} columns={[
-          { key: 'state', label: 'State' },
-          { key: 'rev', label: 'Revenue', align: 'right', mono: true, render: v => fmt(v) },
-          { key: 'orders', label: 'Orders', align: 'right', render: v => fmtN(v) },
-          { key: 'asp', label: 'ASP', align: 'right', render: (_, r) => `₹${r.orders ? Math.round(r.rev / r.orders).toLocaleString('en-IN') : 0}` },
-        ]} pageSize={15} />
-        <PaginatedCard title="Top Cities · Myntra" rows={cityRows} columns={[
-          { key: 'city', label: 'City' },
-          { key: 'rev', label: 'Revenue', align: 'right', mono: true, render: v => fmt(v) },
-          { key: 'orders', label: 'Orders', align: 'right', render: v => fmtN(v) },
-          { key: 'asp', label: 'ASP', align: 'right', render: (_, r) => `₹${r.orders ? Math.round(r.rev / r.orders).toLocaleString('en-IN') : 0}` },
-        ]} pageSize={15} />
+        <ShopifyGeoRichTable title="Top States · Myntra" rows={mnEnrichedStates} firstKey="state" firstLabel="State" showRTO={false} showAOV={false} showASP={true} />
+        <ShopifyGeoRichTable title="Top Cities · Myntra" rows={mnEnrichedCities} firstKey="city" firstLabel="City" showRTO={false} showAOV={false} showASP={true} />
       </div>
     </div>
   )
