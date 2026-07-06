@@ -5140,17 +5140,23 @@ function MyntraTab({ data }) {
 
 function OfflineTab({ data }) {
   const off = data.offline || {}
-  const [sub, setSub] = useState('all') // 'all' | 'Stockist' | 'Offline_B2B' | 'MTGT'
+  const [sub, setSub] = useState('all') // 'all' | 'Stockist' | 'MTGT' | 'b2b'
 
   const SUB_OPTIONS = [
     { id: 'all', label: 'All Offline' },
     { id: 'Stockist', label: 'Stockist' },
-    { id: 'Offline_B2B', label: 'Offline B2B' },
     { id: 'MTGT', label: 'MT GT' },
+    { id: 'b2b', label: 'B2B' },
   ]
 
+  const B2B_SUBS = ['Offline_B2B', 'Shopify B2B']
+
   // Sub-channel filter helper — returns rows matching current selection (or all when 'all')
-  const filterSub = rows => sub === 'all' ? rows : rows.filter(r => r.subChannel === sub)
+  const filterSub = rows => {
+    if (sub === 'all') return rows
+    if (sub === 'b2b') return rows.filter(r => B2B_SUBS.includes(r.subChannel))
+    return rows.filter(r => r.subChannel === sub)
+  }
 
   // Totals: split sales vs credit notes
   const totalsBySub = off.totalsBySub || []
