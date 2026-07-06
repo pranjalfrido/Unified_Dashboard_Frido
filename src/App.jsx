@@ -3974,8 +3974,8 @@ function FlipkartTab({ data }) {
         const subLabel = subView === 'overview' ? 'FBF + Non-FBF' : subView === 'fbf' ? 'FBF' : 'Non-FBF'
         const gstRatio = rev > 0 ? (rev - excRev) / rev : 0
         const rawDaily = subView === 'overview'
-          ? dailyArr.map(d => { const gr = d.FBF + d.NonFBF; const retRev = (d.FBF_returnRev || 0) + (d.NonFBF_returnRev || 0); return { date: d.date, grossRev: gr, netRev: gr * (1 - gstRatio), orders: d.FBF_orders + d.NonFBF_orders, units: d.FBF_units + d.NonFBF_units, returns: d.FBF_returns + d.NonFBF_returns, returnRev: retRev, returnPct: gr > 0 ? retRev / gr * 100 : 0, estimated: d.estimated } })
-          : subDailyArr.map(d => { const gr = d.rev; const retRev = d.returnRev || 0; return { date: d.date, grossRev: gr, netRev: gr * (1 - gstRatio), orders: d.orders, units: 0, returns: d.returns || 0, returnRev: retRev, returnPct: gr > 0 ? retRev / gr * 100 : 0, estimated: false } })
+          ? dailyArr.map(d => { const gr = d.FBF + d.NonFBF; const retRev = (d.FBF_returnRev || 0) + (d.NonFBF_returnRev || 0); return { date: d.date, grossRev: gr, netRev: Math.max(gr - retRev, 0) * (1 - gstRatio), orders: d.FBF_orders + d.NonFBF_orders, units: d.FBF_units + d.NonFBF_units, returns: d.FBF_returns + d.NonFBF_returns, returnRev: retRev, returnPct: gr > 0 ? retRev / gr * 100 : 0, estimated: d.estimated } })
+          : subDailyArr.map(d => { const gr = d.rev; const retRev = d.returnRev || 0; return { date: d.date, grossRev: gr, netRev: Math.max(gr - retRev, 0) * (1 - gstRatio), orders: d.orders, units: 0, returns: d.returns || 0, returnRev: retRev, returnPct: gr > 0 ? retRev / gr * 100 : 0, estimated: false } })
         const totalReturns = subView === 'overview' ? ((fbfT.returns || 0) + (nfbfT.returns || 0)) : subView === 'fbf' ? (fbfT.returns || 0) : (nfbfT.returns || 0)
         const grouped = (() => {
           if (fkTrendGroup === 'daily') return rawDaily
