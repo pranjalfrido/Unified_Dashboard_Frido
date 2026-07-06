@@ -479,7 +479,8 @@ export default async function handler(req, res) {
         const realTotals = (r.fkTotals || []).map(x => ({ sub: x.sub, orders: parseInt(x.orders)||0, rev: parseFloat(x.rev)||0, excRev: parseFloat(x.exc_rev)||0, units: parseInt(x.units)||0, returns: parseInt(x.returns)||0, cancelOrders: parseInt(x.cancel_orders)||0, cancelRev: parseFloat(x.cancel_rev)||0, returnRev: parseFloat(x.return_rev)||0, totalReturnRev: parseFloat(x.total_return_rev)||0 }))
         const patchedTotals = realTotals.map(t => {
           const e = estBySub[t.sub] || { rev: 0, orders: 0, units: 0 }
-          return { ...t, rev: t.rev + e.rev, orders: t.orders + e.orders, units: t.units + e.units, excRev: t.excRev + e.rev }
+          // Only patch rev/excRev with estimated — orders/units stay as real COUNT(DISTINCT) to avoid inflation
+          return { ...t, rev: t.rev + e.rev, orders: t.orders, units: t.units, excRev: t.excRev + e.rev }
         })
         if (!patchedTotals.find(t => t.sub === 'NON-FBF') && estBySub['NON-FBF'].rev > 0) patchedTotals.push({ sub: 'NON-FBF', ...estBySub['NON-FBF'], excRev: estBySub['NON-FBF'].rev })
         return { estTotalRev, estTotalOrders, estTotalUnits, latestFkDate, estimatedDays: estimatedDaily.length, daily: [...fkRealDaily, ...estimatedDaily], patchedTotals }
