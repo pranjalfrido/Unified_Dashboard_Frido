@@ -5246,8 +5246,54 @@ function OfflineTab({ data }) {
     })
     return Object.values(m).sort((a, b) => b.rev - a.rev)
   }
-  const stateRows = aggBy(off.stateRows || [], r => r.state, r => ({ state: r.state, name: r.state, cities: r.cities || 0 }))
-  const cityRows = aggBy(off.cityRows || [], r => `${r.city}|${r.state}`, r => ({ city: r.city, state: r.state, region: r.region, name: r.city }))
+  const stateRowsRaw = aggBy(off.stateRows || [], r => r.state, r => ({ state: r.state, name: r.state, cities: r.cities || 0 }))
+  const cityRowsRaw = aggBy(off.cityRows || [], r => `${r.city}|${r.state}`, r => ({ city: r.city, state: r.state, region: r.region, name: r.city }))
+
+  // Build prev/total maps from sub-channel-aware rows
+  const catPrevMap = (() => {
+    const m = {}
+    filterSub(off.catPrevRows || []).forEach(x => { m[x.category] = (m[x.category] || 0) + x.rev })
+    return m
+  })()
+  const subCatPrevMap = (() => {
+    const m = {}
+    filterSub(off.subCatPrevRows || []).forEach(x => { const k = `${x.category}::${x.subcategory}`; m[k] = (m[k] || 0) + x.rev })
+    return m
+  })()
+  const statePrevMap = (() => {
+    const m = {}
+    filterSub(off.statePrevRows || []).forEach(x => { m[x.state] = (m[x.state] || 0) + x.rev })
+    return m
+  })()
+  const cityPrevMap = (() => {
+    const m = {}
+    filterSub(off.cityPrevRows || []).forEach(x => { m[x.city] = (m[x.city] || 0) + x.rev })
+    return m
+  })()
+  const stateTotal = filterSub(off.stateTotalRows || []).reduce((s, x) => s + x.total, 0) || rev
+  const cityTotal = filterSub(off.cityTotalRows || []).reduce((s, x) => s + x.total, 0) || rev
+
+  // Enrich state rows with sharePct, cumPct, asp, mom
+  const stateRows = (() => {
+    let cum = 0
+    return stateRowsRaw.map(r => {
+      const sharePct = stateTotal > 0 ? r.rev / stateTotal * 100 : 0
+      cum += sharePct
+      const prevRev = statePrevMap[r.state] || 0
+      const mom = prevRev > 0 ? (r.rev - prevRev) / prevRev * 100 : null
+      return { ...r, sharePct, cumPct: cum, asp: r.orders ? r.rev / r.orders : 0, mom }
+    })
+  })()
+  const cityRows = (() => {
+    let cum = 0
+    return cityRowsRaw.map(r => {
+      const sharePct = cityTotal > 0 ? r.rev / cityTotal * 100 : 0
+      cum += sharePct
+      const prevRev = cityPrevMap[r.city] || 0
+      const mom = prevRev > 0 ? (r.rev - prevRev) / prevRev * 100 : null
+      return { ...r, sharePct, cumPct: cum, asp: r.orders ? r.rev / r.orders : 0, mom }
+    })
+  })()
   const regionRows = aggBy(off.regionRows || [], r => r.region, r => ({ region: r.region }))
   const tierRows = aggBy(off.tierRows || [], r => `${r.tier}`, r => ({ tier: r.tier, label: r.label }))
 
@@ -5359,22 +5405,12 @@ function OfflineTab({ data }) {
       </div>
 
       {/* Category Revenue Matrix — Gross / Units / ASP / GST / Net only (no returns/cancel/rto/cir/exch) */}
-      <FinancialCategoryMatrix catData={catMatrixData} subCatData={subCatMatrixData} skuData={skuMatrixData} title={`Category Revenue Matrix · Offline${sub !== 'all' ? ' · ' + (SUB_OPTIONS.find(o => o.id === sub)?.label || sub) : ''}`} showReturns={false} />
+      <FinancialCategoryMatrix catData={catMatrixData} subCatData={subCatMatrixData} skuData={skuMatrixData} title={`Category Revenue Matrix · Offline${sub !== 'all' ? ' · ' + (SUB_OPTIONS.find(o => o.id === sub)?.label || sub) : ''}`} showReturns={false} showMoM={true} catPrevMap={catPrevMap} subCatPrevMap={subCatPrevMap} />
 
       {/* Top States + Top Cities */}
       <div className="g-2" style={{ alignItems: 'stretch' }}>
-        <PaginatedCard title="Top States · Offline" rows={stateRows} columns={[
-          { key: 'state', label: 'State', render: v => v ? v.charAt(0).toUpperCase() + v.slice(1).toLowerCase() : v },
-          { key: 'rev', label: 'Revenue', align: 'right', mono: true, render: v => fmt(v) },
-          { key: 'orders', label: 'Orders', align: 'right', render: v => fmtN(v) },
-          { key: 'asp', label: 'ASP', align: 'right', render: (_, r) => `₹${r.orders ? Math.round(r.rev / r.orders).toLocaleString('en-IN') : 0}` },
-        ]} pageSize={15} />
-        <PaginatedCard title="Top Cities · Offline" rows={cityRows} columns={[
-          { key: 'city', label: 'City', render: v => v ? v.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' ') : v },
-          { key: 'rev', label: 'Revenue', align: 'right', mono: true, render: v => fmt(v) },
-          { key: 'orders', label: 'Orders', align: 'right', render: v => fmtN(v) },
-          { key: 'asp', label: 'ASP', align: 'right', render: (_, r) => `₹${r.orders ? Math.round(r.rev / r.orders).toLocaleString('en-IN') : 0}` },
-        ]} pageSize={15} />
+        <ShopifyGeoRichTable title={`Top States · Offline${sub !== 'all' ? ' · ' + (SUB_OPTIONS.find(o => o.id === sub)?.label || sub) : ''}`} rows={stateRows} firstKey="state" firstLabel="State" formatFirst={v => v ? v.charAt(0).toUpperCase() + v.slice(1).toLowerCase() : v} showRTO={false} showAOV={false} showASP={true} />
+        <ShopifyGeoRichTable title={`Top Cities · Offline${sub !== 'all' ? ' · ' + (SUB_OPTIONS.find(o => o.id === sub)?.label || sub) : ''}`} rows={cityRows} firstKey="city" firstLabel="City" formatFirst={v => v ? v.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' ') : v} showRTO={false} showAOV={false} showASP={true} />
       </div>
     </div>
   )
