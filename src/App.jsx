@@ -4039,14 +4039,14 @@ function FlipkartTab({ data }) {
                 }} />
                 <Legend wrapperStyle={{ fontSize: 11 }} />
                 {isRev ? (<>
-                  <Area yAxisId="main" type="monotone" dataKey="grossRev" name="Gross Revenue" stroke="#E8930A" fill="#E8930A22" strokeWidth={2} dot={false} />
-                  <Area yAxisId="main" type="monotone" dataKey="netRev" name="Net Revenue" stroke="#0D9E68" fill="#0D9E6811" strokeWidth={2} dot={false} strokeDasharray="4 2" />
+                  <Area yAxisId="main" type="monotone" dataKey="grossRev" name="Gross Revenue" stroke="#E8930A" fill="#E8930A22" strokeWidth={2} dot={grouped.length <= 3} />
+                  <Area yAxisId="main" type="monotone" dataKey="netRev" name="Net Revenue" stroke="#0D9E68" fill="#0D9E6811" strokeWidth={2} dot={grouped.length <= 3} strokeDasharray="4 2" />
                 </>) : fkTrendMetric === 'orders' ? (
-                  <Area yAxisId="main" type="monotone" dataKey="orders" name="Orders" stroke="#E8930A" fill="#E8930A22" strokeWidth={2} dot={false} />
+                  <Area yAxisId="main" type="monotone" dataKey="orders" name="Orders" stroke="#E8930A" fill="#E8930A22" strokeWidth={2} dot={grouped.length <= 3} />
                 ) : (
-                  <Area yAxisId="main" type="monotone" dataKey="units" name="Units" stroke="#E8930A" fill="#E8930A22" strokeWidth={2} dot={false} />
+                  <Area yAxisId="main" type="monotone" dataKey="units" name="Units" stroke="#E8930A" fill="#E8930A22" strokeWidth={2} dot={grouped.length <= 3} />
                 )}
-                <Line yAxisId="pct" type="monotone" dataKey="returnPct" name="Return %" stroke="#E24B4A" strokeWidth={1.5} dot={false} />
+                <Line yAxisId="pct" type="monotone" dataKey="returnPct" name="Return %" stroke="#E24B4A" strokeWidth={1.5} dot={grouped.length <= 3} />
                 {fkReturnCur.pct > 0 && <ReferenceLine yAxisId="pct" y={fkReturnCur.pct} stroke="#E24B4A" strokeWidth={1} strokeDasharray="5 3" label={{ value: `Avg ${fkReturnCur.pct.toFixed(1)}%`, position: 'insideTopRight', fontSize: 10, fill: '#E24B4A' }} />}
               </ComposedChart>
             </ResponsiveContainer>
