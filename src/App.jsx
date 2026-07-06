@@ -3791,12 +3791,17 @@ function FlipkartTab({ data }) {
     : null
 
   const totals = filtDailyCat
-    ? (() => { const agg = {}; filtDailyCat.forEach(x => { const s = x.sub || 'ALL'; if (!agg[s]) agg[s] = { sub: s, rev: 0, excRev: 0, orders: 0, units: 0, returns: 0 }; agg[s].rev += x.rev; agg[s].excRev += x.excRev; agg[s].orders += x.orders; agg[s].units += x.units }); return Object.values(agg) })()
+    ? (() => { const agg = {}; filtDailyCat.forEach(x => { const s = x.sub || 'ALL'; if (!agg[s]) agg[s] = { sub: s, rev: 0, excRev: 0, orders: 0, units: 0, returns: 0, cancelRev: 0, cancelOrders: 0, totalReturnRev: 0 }; agg[s].rev += x.rev; agg[s].excRev += x.excRev; agg[s].orders += x.orders; agg[s].units += x.units }); return Object.values(agg) })()
     : filterSub(fk.totals || [])
   const rev = totals.reduce((s, x) => s + x.rev, 0)
   const nOrders = totals.reduce((s, x) => s + x.orders, 0)
   const qty = totals.reduce((s, x) => s + x.units, 0)
   const excRev = totals.reduce((s, x) => s + x.excRev, 0)
+  const cancelRev = totals.reduce((s, x) => s + (x.cancelRev || 0), 0)
+  const cancelOrders = totals.reduce((s, x) => s + (x.cancelOrders || 0), 0)
+  const fkTotalReturnRev = totals.reduce((s, x) => s + (x.totalReturnRev || 0), 0)
+  const gstRatioFk = rev > 0 ? (rev - excRev) / rev : 0
+  const fkNetRev = Math.max(rev - cancelRev - fkTotalReturnRev, 0) * (1 - gstRatioFk)
   const aov = nOrders ? rev / nOrders : 0
   const asp = qty ? rev / qty : 0
 
@@ -3919,16 +3924,13 @@ function FlipkartTab({ data }) {
         </div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10, flex: 1 }}>
-            {(() => { const excChg = fkPrevExcRev > 0 ? ((excRev - fkPrevExcRev) / fkPrevExcRev * 100) : null; return (
-              <div className="kpi-card" style={{ display: 'flex', flexDirection: 'column', gap: 4, padding: '10px 13px' }}>
-                <div className="kpi-label">Net (Exc GST)</div>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                  <div className="kpi-value">{fmt(excRev)}</div>
-                  {excChg !== null && <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 7px', borderRadius: 5, background: excChg >= 0 ? C.green.bg : C.red.bg, color: excChg >= 0 ? C.green.tx : C.red.tx }}>{excChg >= 0 ? '▲' : '▼'} {Math.abs(excChg).toFixed(1)}%</span>}
-                </div>
-                <div className="kpi-sub">{rev > 0 ? (excRev / rev * 100).toFixed(1) : 0}% of gross · GST {fmt(rev - excRev)}</div>
+            <div className="kpi-card" style={{ display: 'flex', flexDirection: 'column', gap: 4, padding: '10px 13px' }}>
+              <div className="kpi-label">Net Revenue</div>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <div className="kpi-value">{fmt(fkNetRev)}</div>
               </div>
-            )})()}
+              <div className="kpi-sub">(Gross − Cancel − Return) × (1 − GST%)</div>
+            </div>
             {[
               { label: 'Daily Avg', value: fmt(rev / nDays), sub: `over ${nDays} days`, badge: fkChgBadge(rev / nDays, fkPrevRev > 0 ? fkPrevRev / nDays : 0) },
               { label: 'AOV', value: `₹${Math.round(aov).toLocaleString('en-IN')}`, sub: 'Avg order value', badge: fkChgBadge(aov, fkPrevOrders > 0 ? fkPrevRev / fkPrevOrders : 0) },
@@ -3944,7 +3946,7 @@ function FlipkartTab({ data }) {
             {[
               { label: 'ASP', value: `₹${Math.round(asp).toLocaleString('en-IN')}`, sub: 'Gross rev ÷ units', badge: fkChgBadge(asp, fkPrevUnits > 0 ? fkPrevRev / fkPrevUnits : 0) },
               { label: 'GST Collected', value: fmt(rev - excRev), sub: 'Inc GST − Exc GST', badge: fkChgBadge(rev - excRev, fkPrevGST) },
-              { label: 'Total Units', value: fmtN(qty), sub: `${fmtN(nOrders)} orders`, badge: fkChgBadge(qty, fkPrevUnits) },
+              { label: 'Cancellation %', value: `${nOrders > 0 ? (cancelOrders / nOrders * 100).toFixed(1) : 0}%`, sub: `${fmtN(cancelOrders)} cancelled · ${fmt(cancelRev)} rev`, accent: nOrders > 0 && cancelOrders / nOrders > 0.1 ? '#7A1A1A' : undefined },
               { label: 'Return % (Rev)', value: `${fkReturnCur.pct.toFixed(1)}%`, sub: `${fmt(fkReturnCur.returnRev)} ret · ${fmt(fkReturnCur.deliveredRev)} del`, accent: fkReturnCur.pct > 20 ? '#7A1A1A' : undefined },
             ].map(k => (
               <div key={k.label} className="kpi-card" style={{ padding: '10px 13px' }}>
