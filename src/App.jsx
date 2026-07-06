@@ -4756,16 +4756,23 @@ function CredTab({ data }) {
   // Category / subcategory rows for CatSubCatRow
   const allCats = cr.categories || []
   const allSubCats = cr.subCategories || []
+  const catPrevMap = cr.catPrevMap || {}
+  const subCatPrevMap = cr.subCatPrevMap || {}
+  const statePrevMap = cr.statePrevMap || {}
+  const cityPrevMap = cr.cityPrevMap || {}
+  const stateTotal = cr.stateTotal || 0
+  const cityTotal = cr.cityTotal || 0
+
   const catRows = allCats.map(c => ({ name: c.category, rev: c.rev, excRev: c.excRev || 0, units: c.units, orders: c.orders }))
   const subCatRows = allSubCats.map(s => ({ name: s.subcategory, category: s.category, rev: s.rev, excRev: s.excRev || 0, units: s.units, orders: s.orders }))
 
   // Category matrix data
   const catMatrixData = {}
-  allCats.forEach(c => { catMatrixData[c.category] = { rev: c.rev, excRev: c.excRev || 0, units: c.units } })
+  allCats.forEach(c => { catMatrixData[c.category] = { rev: c.rev, excRev: c.excRev || 0, units: c.units, prevRev: catPrevMap[c.category] || 0 } })
   const subCatMatrixData = {}
   allSubCats.forEach(s => {
     if (!subCatMatrixData[s.category]) subCatMatrixData[s.category] = {}
-    subCatMatrixData[s.category][s.subcategory] = { rev: s.rev, excRev: s.excRev || 0, units: s.units }
+    subCatMatrixData[s.category][s.subcategory] = { rev: s.rev, excRev: s.excRev || 0, units: s.units, prevRev: subCatPrevMap[`${s.category}::${s.subcategory}`] || 0 }
   })
 
   const crSparkData = Array.from({ length: Math.max(daily.length, crPrevDailyArr.length) }, (_, i) => ({
@@ -4824,7 +4831,7 @@ function CredTab({ data }) {
       />
 
       {/* Category Revenue Matrix */}
-      <FinancialCategoryMatrix catData={catMatrixData} subCatData={subCatMatrixData} skuData={cr.skuMatrix || {}} title="Category Revenue Matrix · CRED" />
+      <FinancialCategoryMatrix catData={catMatrixData} subCatData={subCatMatrixData} skuData={cr.skuMatrix || {}} title="Category Revenue Matrix · CRED" showMoM={true} catPrevMap={catPrevMap} subCatPrevMap={subCatPrevMap} />
 
       {/* Category + Sub-category table */}
       <CatSubCatRow
@@ -4839,17 +4846,31 @@ function CredTab({ data }) {
 
       {/* States + Cities */}
       <div className="g-2">
-        <PaginatedCard title="Top States" rows={stateRows.map(s => ({ ...s, aov: s.orders ? Math.round(s.rev / s.orders) : 0 }))} columns={[
+        <PaginatedCard title="Top States" rows={stateRows.map(s => {
+          const prevRev = statePrevMap[s.state] || 0
+          const mom = prevRev > 0 ? (s.rev - prevRev) / prevRev * 100 : null
+          const sharePct = stateTotal > 0 ? s.rev / stateTotal * 100 : 0
+          return { ...s, aov: s.orders ? Math.round(s.rev / s.orders) : 0, sharePct, mom }
+        })} columns={[
           { key: 'state', label: 'State' },
           { key: 'rev', label: 'Revenue', align: 'right', mono: true, render: v => fmt(v) },
+          { key: 'sharePct', label: '% Share', align: 'right', render: v => `${v.toFixed(1)}%` },
           { key: 'orders', label: 'Orders', align: 'right', render: v => fmtN(v) },
           { key: 'aov', label: 'AOV', align: 'right', render: v => `₹${v.toLocaleString('en-IN')}` },
+          { key: 'mom', label: 'MoM %', align: 'right', render: v => v == null ? '—' : <span style={{ color: v >= 0 ? C.green.tx : C.red.tx, fontWeight: 600 }}>{v >= 0 ? '▲' : '▼'} {Math.abs(v).toFixed(1)}%</span> },
         ]} pageSize={15} />
-        <PaginatedCard title="Top Cities" rows={cityRows.map(c => ({ ...c, aov: c.orders ? Math.round(c.rev / c.orders) : 0 }))} columns={[
+        <PaginatedCard title="Top Cities" rows={cityRows.map(c => {
+          const prevRev = cityPrevMap[c.city] || 0
+          const mom = prevRev > 0 ? (c.rev - prevRev) / prevRev * 100 : null
+          const sharePct = cityTotal > 0 ? c.rev / cityTotal * 100 : 0
+          return { ...c, aov: c.orders ? Math.round(c.rev / c.orders) : 0, sharePct, mom }
+        })} columns={[
           { key: 'city', label: 'City' },
           { key: 'rev', label: 'Revenue', align: 'right', mono: true, render: v => fmt(v) },
+          { key: 'sharePct', label: '% Share', align: 'right', render: v => `${v.toFixed(1)}%` },
           { key: 'orders', label: 'Orders', align: 'right', render: v => fmtN(v) },
           { key: 'aov', label: 'AOV', align: 'right', render: v => `₹${v.toLocaleString('en-IN')}` },
+          { key: 'mom', label: 'MoM %', align: 'right', render: v => v == null ? '—' : <span style={{ color: v >= 0 ? C.green.tx : C.red.tx, fontWeight: 600 }}>{v >= 0 ? '▲' : '▼'} {Math.abs(v).toFixed(1)}%</span> },
         ]} pageSize={15} />
       </div>
     </div>
