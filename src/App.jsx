@@ -2085,7 +2085,7 @@ function TopSubCatBar({ subCatRows }) {
   const chartData = top10.map((r, i) => ({ name: r.name, rev: r.rev, color: BAR_COLORS[i % BAR_COLORS.length] }))
   return (
     <div style={{ flex: 1, minWidth: 0 }}>
-      <Card title="Top 10 Sub-categories · Revenue">
+      <Card title="Top 10 Products · Revenue">
         {top10.length === 0
           ? <div style={{ fontSize: 12, color: C.t3, textAlign: 'center', padding: '12px 0' }}>No data</div>
           : <ResponsiveContainer width="100%" height={260}>
