@@ -4032,7 +4032,7 @@ function FlipkartTab({ data }) {
                   return (
                     <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 7, padding: '7px 11px', fontSize: 11 }}>
                       <div style={{ fontWeight: 700, marginBottom: 4, color: C.t2 }}>{xFmt(label)}</div>
-                      {payload.filter(p => p.yAxisId === 'main').map(p => <div key={p.name} style={{ color: p.color }}>{p.name}: {isRev ? fmt(p.value) : fmtN(p.value)}</div>)}
+                      {payload.filter(p => p.name !== 'Return %').map(p => <div key={p.name} style={{ color: p.color }}>{p.name}: {isRev ? fmt(p.value) : fmtN(p.value)}</div>)}
                       <div style={{ marginTop: 4, color: '#E24B4A' }}>Return %: <strong>{(d?.returnPct || 0).toFixed(1)}%</strong> ({fmt(d?.returnRev || 0)})</div>
                     </div>
                   )
