@@ -420,7 +420,7 @@ export default async function handler(req, res) {
     const voucherMap = {}
     r.byVoucher.forEach(x => { voucherMap[x.voucher_type] = { orders: parseInt(x.orders) || 0, rev: parseFloat(x.rev) || 0 } })
     const subChannelMap = {}
-    r.bySubChannel.forEach(x => { subChannelMap[x.SubChannel || 'Unknown'] = { rev: parseFloat(x.rev) || 0, excRev: parseFloat(x.exc_rev) || 0, orders: parseInt(x.orders) || 0, qty: parseInt(x.qty) || 0 } })
+    r.bySubChannel.forEach(x => { if (x.SubChannel) subChannelMap[x.SubChannel] = { rev: parseFloat(x.rev) || 0, excRev: parseFloat(x.exc_rev) || 0, orders: parseInt(x.orders) || 0, qty: parseInt(x.qty) || 0 } })
     const paymentModeMap = {}
     r.byPaymentMode.forEach(x => { paymentModeMap[x.payment_mode] = { orders: parseInt(x.orders) || 0, rev: parseFloat(x.rev) || 0 } })
 

@@ -2276,7 +2276,7 @@ function ShopifyTab({ data, filters, setFilters }) {
   const repeatRate = nCusts ? (repeatCusts / nCusts * 100).toFixed(1) : '0'
 
   // Sub-channel breakdown — India excludes International, Intl shows only International
-  const indiaSubChMap = Object.fromEntries(Object.entries(subChannelMap).filter(([k]) => k !== 'International' && k !== 'Shopify B2B'))
+  const indiaSubChMap = Object.fromEntries(Object.entries(subChannelMap).filter(([k]) => k !== 'International' && k !== 'Shopify B2B' && k !== 'Shopify International' && k !== 'Unknown'))
   const intlSubChMap = subChannelMap['International'] ? { International: subChannelMap['International'] } : {}
   const activeSubChMap = isIntl ? intlSubChMap : indiaSubChMap
   const activeSubChKeys = Object.keys(activeSubChMap).sort((a, b) => activeSubChMap[b].rev - activeSubChMap[a].rev)
