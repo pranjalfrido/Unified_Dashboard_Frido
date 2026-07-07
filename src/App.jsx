@@ -4331,7 +4331,7 @@ function BlinkitTab({ data }) {
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10, flex: 1 }}>
             {[
               { label: 'Net Revenue (Exc GST)', value: fmt(excRev), sub: `GST ${fmt(gst)}`, badge: blChgBadge(excRev, blPrevExcRev) },
-              { label: 'GST Collected', value: fmt(gst), sub: `${rev > 0 ? ((gst/rev)*100).toFixed(1) : 0}% of gross rev` },
+              { label: 'GST Collected', value: fmt(gst), sub: `${rev > 0 ? ((gst/rev)*100).toFixed(1) : 0}% of gross rev`, badge: blChgBadge(gst, blPrevRev - blPrevExcRev) },
               { label: 'Daily Avg', value: fmt(dailyAvg), sub: `over ${nDays} days`, badge: blChgBadge(dailyAvg, blPrevRev > 0 ? blPrevRev / nDays : 0) },
             ].map(k => (
               <div key={k.label} className="kpi-card" style={{ padding: '10px 13px' }}>
@@ -4496,7 +4496,7 @@ function InstaTab({ data }) {
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10, flex: 1 }}>
             {[
               { label: 'Net Revenue (Exc GST)', value: fmt(excRev), sub: `GST ${fmt(gst)}`, badge: insChgBadge(excRev, insPrevExcRev) },
-              { label: 'GST Collected', value: fmt(gst), sub: `${rev > 0 ? ((gst/rev)*100).toFixed(1) : 0}% of gross rev` },
+              { label: 'GST Collected', value: fmt(gst), sub: `${rev > 0 ? ((gst/rev)*100).toFixed(1) : 0}% of gross rev`, badge: insChgBadge(gst, insPrevRev - insPrevExcRev) },
               { label: 'Daily Avg Revenue', value: fmt(dailyAvg), sub: `Inc GST / day`, badge: insChgBadge(dailyAvg, insPrevRev > 0 ? insPrevRev / nDays : 0) },
             ].map(k => (
               <div key={k.label} className="kpi-card" style={{ padding: '10px 13px' }}>
@@ -4656,7 +4656,7 @@ function ZeptoTab({ data }) {
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10, flex: 1 }}>
             {[
               { label: 'Net Revenue (Exc GST)', value: fmt(excRev), sub: `GST ${fmt(gst)}`, badge: zpChgBadge(excRev, zpPrevExcRev) },
-              { label: 'GST Collected', value: fmt(gst), sub: `${rev > 0 ? ((gst/rev)*100).toFixed(1) : 0}% of gross rev` },
+              { label: 'GST Collected', value: fmt(gst), sub: `${rev > 0 ? ((gst/rev)*100).toFixed(1) : 0}% of gross rev`, badge: zpChgBadge(gst, zpPrevRev - zpPrevExcRev) },
               { label: 'Daily Avg Revenue', value: fmt(dailyAvg), sub: 'Inc GST / day', badge: zpChgBadge(dailyAvg, zpPrevRev > 0 ? zpPrevRev / nDays : 0) },
             ].map(k => (
               <div key={k.label} className="kpi-card" style={{ padding: '10px 13px' }}>
