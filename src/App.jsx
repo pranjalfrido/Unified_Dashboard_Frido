@@ -4264,7 +4264,10 @@ function BlinkitTab({ data }) {
   const units = filtCats.reduce((s, c) => s + c.units, 0) || t.units || 0
   const skus = t.skus || 0
   const cities = t.cities || 0
+  const orders = t.orders || 0
   const asp = units ? excRev / units : 0
+  const aov = orders ? rev / orders : 0
+  const gst = rev - excRev
   const dailyAvg = nDays ? rev / nDays : 0
 
   const daily = bl.daily || []
@@ -4273,6 +4276,7 @@ function BlinkitTab({ data }) {
   const blPrevUnits = bl.prevUnits || 0
   const blPrevSkus = bl.prevSkus || 0
   const blPrevCities = bl.prevCities || 0
+  const blPrevOrders = bl.prevOrders || 0
   const blPrevDailyArr = bl.prevDaily || []
   const blRevChg = blPrevRev > 0 ? ((rev - blPrevRev) / blPrevRev * 100) : null
   const blChgBadge = (cur, prev) => { if (!prev) return null; const p = (cur - prev) / prev * 100; return <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 4, background: p >= 0 ? C.green.bg : C.red.bg, color: p >= 0 ? C.green.tx : C.red.tx, flexShrink: 0 }}>{p >= 0 ? '▲' : '▼'} {Math.abs(p).toFixed(1)}%</span> }
@@ -4324,9 +4328,10 @@ function BlinkitTab({ data }) {
           </div>
         </div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 10, flex: 1 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10, flex: 1 }}>
             {[
-              { label: 'Net Revenue (Exc GST)', value: fmt(excRev), sub: `GST ${fmt(rev - excRev)}`, badge: blChgBadge(excRev, blPrevExcRev) },
+              { label: 'Net Revenue (Exc GST)', value: fmt(excRev), sub: `GST ${fmt(gst)}`, badge: blChgBadge(excRev, blPrevExcRev) },
+              { label: 'GST Collected', value: fmt(gst), sub: `${rev > 0 ? ((gst/rev)*100).toFixed(1) : 0}% of gross rev` },
               { label: 'Daily Avg', value: fmt(dailyAvg), sub: `over ${nDays} days`, badge: blChgBadge(dailyAvg, blPrevRev > 0 ? blPrevRev / nDays : 0) },
             ].map(k => (
               <div key={k.label} className="kpi-card" style={{ padding: '10px 13px' }}>
@@ -4336,10 +4341,11 @@ function BlinkitTab({ data }) {
               </div>
             ))}
           </div>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 10, flex: 1 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10, flex: 1 }}>
             {[
-              { label: 'ASP', value: `₹${Math.round(asp).toLocaleString('en-IN')}`, sub: 'Avg selling price', badge: blChgBadge(asp, blPrevUnits > 0 ? blPrevExcRev / blPrevUnits : 0) },
-              { label: 'Active Products', value: fmtN(skus), sub: 'Product types sold', badge: blChgBadge(skus, blPrevSkus) },
+              { label: 'Orders', value: fmtN(orders), sub: `${fmtN(cities)} cities`, badge: blChgBadge(orders, blPrevOrders) },
+              { label: 'AOV', value: `₹${Math.round(aov).toLocaleString('en-IN')}`, sub: 'Avg order value (inc GST)', badge: blChgBadge(aov, blPrevOrders > 0 ? blPrevRev / blPrevOrders : 0) },
+              { label: 'ASP', value: `₹${Math.round(asp).toLocaleString('en-IN')}`, sub: 'Avg selling price (exc GST)', badge: blChgBadge(asp, blPrevUnits > 0 ? blPrevExcRev / blPrevUnits : 0) },
             ].map(k => (
               <div key={k.label} className="kpi-card" style={{ padding: '10px 13px' }}>
                 <div className="kpi-label">{k.label}</div>
@@ -4423,7 +4429,10 @@ function InstaTab({ data }) {
   const units = filtCats.reduce((s, c) => s + c.units, 0) || t.units || 0
   const skus = t.skus || 0
   const cities = t.cities || 0
+  const orders = t.orders || 0
   const asp = units ? excRev / units : 0
+  const aov = orders ? rev / orders : 0
+  const gst = rev - excRev
   const dailyAvg = nDays ? rev / nDays : 0
 
   const daily = ins.daily || []
@@ -4432,6 +4441,7 @@ function InstaTab({ data }) {
   const insPrevUnits = ins.prevUnits || 0
   const insPrevSkus = ins.prevSkus || 0
   const insPrevCities = ins.prevCities || 0
+  const insPrevOrders = ins.prevOrders || 0
   const insPrevDailyArr = ins.prevDaily || []
   const insRevChg = insPrevRev > 0 ? ((rev - insPrevRev) / insPrevRev * 100) : null
   const insSparkData = Array.from({ length: Math.max(daily.length, insPrevDailyArr.length) }, (_, i) => ({
@@ -4483,9 +4493,10 @@ function InstaTab({ data }) {
           </div>
         </div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 10, flex: 1 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10, flex: 1 }}>
             {[
-              { label: 'Net Revenue (Exc GST)', value: fmt(excRev), sub: `GST ${fmt(rev - excRev)}`, badge: insChgBadge(excRev, insPrevExcRev) },
+              { label: 'Net Revenue (Exc GST)', value: fmt(excRev), sub: `GST ${fmt(gst)}`, badge: insChgBadge(excRev, insPrevExcRev) },
+              { label: 'GST Collected', value: fmt(gst), sub: `${rev > 0 ? ((gst/rev)*100).toFixed(1) : 0}% of gross rev` },
               { label: 'Daily Avg Revenue', value: fmt(dailyAvg), sub: `Inc GST / day`, badge: insChgBadge(dailyAvg, insPrevRev > 0 ? insPrevRev / nDays : 0) },
             ].map(k => (
               <div key={k.label} className="kpi-card" style={{ padding: '10px 13px' }}>
@@ -4495,10 +4506,11 @@ function InstaTab({ data }) {
               </div>
             ))}
           </div>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 10, flex: 1 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10, flex: 1 }}>
             {[
-              { label: 'ASP (Inc GST)', value: `₹${Math.round(asp).toLocaleString('en-IN')}`, sub: 'Avg selling price', badge: insChgBadge(asp, insPrevUnits > 0 ? insPrevExcRev / insPrevUnits : 0) },
-              { label: 'Active Products', value: fmtN(skus), sub: 'Product types sold', badge: insChgBadge(skus, insPrevSkus) },
+              { label: 'Orders', value: fmtN(orders), sub: `${fmtN(cities)} cities`, badge: insChgBadge(orders, insPrevOrders) },
+              { label: 'AOV', value: `₹${Math.round(aov).toLocaleString('en-IN')}`, sub: 'Avg order value (inc GST)', badge: insChgBadge(aov, insPrevOrders > 0 ? insPrevRev / insPrevOrders : 0) },
+              { label: 'ASP (Exc GST)', value: `₹${Math.round(asp).toLocaleString('en-IN')}`, sub: 'Avg selling price', badge: insChgBadge(asp, insPrevUnits > 0 ? insPrevExcRev / insPrevUnits : 0) },
             ].map(k => (
               <div key={k.label} className="kpi-card" style={{ padding: '10px 13px' }}>
                 <div className="kpi-label">{k.label}</div>
@@ -4579,6 +4591,8 @@ function ZeptoTab({ data }) {
   const skus = t.skus || 0
   const cities = t.cities || 0
   const asp = units ? excRev / units : 0
+  const aov = orders ? rev / orders : 0
+  const gst = rev - excRev
   const dailyAvg = nDays ? rev / nDays : 0
 
   const daily = zp.daily || []
@@ -4587,6 +4601,7 @@ function ZeptoTab({ data }) {
   const zpPrevUnits = zp.prevUnits || 0
   const zpPrevSkus = zp.prevSkus || 0
   const zpPrevCities = zp.prevCities || 0
+  const zpPrevOrders = zp.prevOrders || 0
   const zpPrevDailyArr = zp.prevDaily || []
   const zpRevChg = zpPrevRev > 0 ? ((rev - zpPrevRev) / zpPrevRev * 100) : null
   const zpSparkData = Array.from({ length: Math.max(daily.length, zpPrevDailyArr.length) }, (_, i) => ({
@@ -4638,9 +4653,10 @@ function ZeptoTab({ data }) {
           </div>
         </div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 10, flex: 1 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10, flex: 1 }}>
             {[
-              { label: 'Net Revenue (Exc GST)', value: fmt(excRev), sub: `GST ${fmt(rev - excRev)}`, badge: zpChgBadge(excRev, zpPrevExcRev) },
+              { label: 'Net Revenue (Exc GST)', value: fmt(excRev), sub: `GST ${fmt(gst)}`, badge: zpChgBadge(excRev, zpPrevExcRev) },
+              { label: 'GST Collected', value: fmt(gst), sub: `${rev > 0 ? ((gst/rev)*100).toFixed(1) : 0}% of gross rev` },
               { label: 'Daily Avg Revenue', value: fmt(dailyAvg), sub: 'Inc GST / day', badge: zpChgBadge(dailyAvg, zpPrevRev > 0 ? zpPrevRev / nDays : 0) },
             ].map(k => (
               <div key={k.label} className="kpi-card" style={{ padding: '10px 13px' }}>
@@ -4650,10 +4666,11 @@ function ZeptoTab({ data }) {
               </div>
             ))}
           </div>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 10, flex: 1 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10, flex: 1 }}>
             {[
-              { label: 'ASP (Inc GST)', value: `₹${Math.round(asp).toLocaleString('en-IN')}`, sub: 'Avg selling price', badge: zpChgBadge(asp, zpPrevUnits > 0 ? zpPrevExcRev / zpPrevUnits : 0) },
-              { label: 'Active Products', value: fmtN(skus), sub: 'Product types sold', badge: zpChgBadge(skus, zpPrevSkus) },
+              { label: 'Orders', value: fmtN(orders), sub: `${fmtN(cities)} cities`, badge: zpChgBadge(orders, zpPrevOrders) },
+              { label: 'AOV', value: `₹${Math.round(aov).toLocaleString('en-IN')}`, sub: 'Avg order value (inc GST)', badge: zpChgBadge(aov, zpPrevOrders > 0 ? zpPrevRev / zpPrevOrders : 0) },
+              { label: 'ASP (Exc GST)', value: `₹${Math.round(asp).toLocaleString('en-IN')}`, sub: 'Avg selling price', badge: zpChgBadge(asp, zpPrevUnits > 0 ? zpPrevExcRev / zpPrevUnits : 0) },
             ].map(k => (
               <div key={k.label} className="kpi-card" style={{ padding: '10px 13px' }}>
                 <div className="kpi-label">{k.label}</div>
