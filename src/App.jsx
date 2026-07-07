@@ -4834,21 +4834,37 @@ function CredTab({ data }) {
             </ResponsiveContainer>
           </div>
         </div>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 10 }}>
-          {[
-            { label: 'Net Revenue', value: fmt(excRev), sub: 'Exc. GST', badge: crChgBadge(excRev, crPrevExcRev) },
-            { label: 'Daily Avg', value: fmt(dailyAvg), sub: `over ${nDays} days`, badge: crChgBadge(dailyAvg, crPrevRev > 0 ? crPrevRev / nDays : 0) },
-            { label: 'ASP', value: `₹${Math.round(asp).toLocaleString('en-IN')}`, sub: 'Avg selling price / unit', badge: crChgBadge(asp, crPrevUnits > 0 ? crPrevRev / crPrevUnits : 0) },
-            { label: 'Active Products', value: fmtN(skus), sub: 'Product types sold', badge: null },
-          ].map(k => (
-            <div key={k.label} className="kpi-card" style={{ padding: '10px 13px' }}>
-              <div className="kpi-label">{k.label}</div>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 4 }}>
-                <div className="kpi-value" style={{ fontSize: 17 }}>{k.value}</div>{k.badge}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10 }}>
+            {[
+              { label: 'Net Revenue (Exc GST)', value: fmt(excRev), sub: `GST ${fmt(rev - excRev)}`, badge: crChgBadge(excRev, crPrevExcRev) },
+              { label: 'GST Collected', value: fmt(rev - excRev), sub: `${rev > 0 ? (((rev - excRev)/rev)*100).toFixed(1) : 0}% of gross rev`, badge: crChgBadge(rev - excRev, crPrevRev - crPrevExcRev) },
+              { label: 'Daily Avg', value: fmt(dailyAvg), sub: `over ${nDays} days`, badge: crChgBadge(dailyAvg, crPrevRev > 0 ? crPrevRev / nDays : 0) },
+            ].map(k => (
+              <div key={k.label} className="kpi-card" style={{ padding: '10px 13px' }}>
+                <div className="kpi-label">{k.label}</div>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 4 }}>
+                  <div className="kpi-value" style={{ fontSize: 17 }}>{k.value}</div>{k.badge}
+                </div>
+                {k.sub && <div className="kpi-sub">{k.sub}</div>}
               </div>
-              {k.sub && <div className="kpi-sub">{k.sub}</div>}
-            </div>
-          ))}
+            ))}
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10 }}>
+            {[
+              { label: 'Orders', value: fmtN(orders), sub: `${fmtN(units)} units`, badge: crChgBadge(orders, crPrevOrders) },
+              { label: 'AOV', value: `₹${Math.round(orders ? rev / orders : 0).toLocaleString('en-IN')}`, sub: 'Avg order value (inc GST)', badge: crChgBadge(orders ? rev / orders : 0, crPrevOrders > 0 ? crPrevRev / crPrevOrders : 0) },
+              { label: 'ASP', value: `₹${Math.round(asp).toLocaleString('en-IN')}`, sub: 'Avg selling price / unit', badge: crChgBadge(asp, crPrevUnits > 0 ? crPrevRev / crPrevUnits : 0) },
+            ].map(k => (
+              <div key={k.label} className="kpi-card" style={{ padding: '10px 13px' }}>
+                <div className="kpi-label">{k.label}</div>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 4 }}>
+                  <div className="kpi-value" style={{ fontSize: 17 }}>{k.value}</div>{k.badge}
+                </div>
+                {k.sub && <div className="kpi-sub">{k.sub}</div>}
+              </div>
+            ))}
+          </div>
         </div>
       </div>
 
@@ -4960,12 +4976,12 @@ function FirstcryTab({ data }) {
             </ResponsiveContainer>
           </div>
         </div>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 10 }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10 }}>
           {[
-            { label: 'Net Revenue', value: fmt(excRev), sub: 'Exc. GST', badge: fcChgBadge(excRev, fcPrevExcRev) },
+            { label: 'Net Revenue (Exc GST)', value: fmt(excRev), sub: `GST ${fmt(rev - excRev)}`, badge: fcChgBadge(excRev, fcPrevExcRev) },
+            { label: 'GST Collected', value: fmt(rev - excRev), sub: `${rev > 0 ? (((rev - excRev)/rev)*100).toFixed(1) : 0}% of gross rev`, badge: fcChgBadge(rev - excRev, fcPrevRev - fcPrevExcRev) },
             { label: 'Daily Avg', value: fmt(dailyAvg), sub: `over ${nDays} days`, badge: fcChgBadge(dailyAvg, fcPrevRev > 0 ? fcPrevRev / nDays : 0) },
-            { label: 'ASP', value: `₹${Math.round(asp).toLocaleString('en-IN')}`, sub: 'Avg selling price / unit', badge: fcChgBadge(asp, fcPrevUnits > 0 ? fcPrevRev / fcPrevUnits : 0) },
-            { label: 'Active Products', value: fmtN(skus), sub: 'Product types sold', badge: null },
           ].map(k => (
             <div key={k.label} className="kpi-card" style={{ padding: '10px 13px' }}>
               <div className="kpi-label">{k.label}</div>
@@ -4975,6 +4991,22 @@ function FirstcryTab({ data }) {
               {k.sub && <div className="kpi-sub">{k.sub}</div>}
             </div>
           ))}
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10 }}>
+          {[
+            { label: 'Orders', value: fmtN(orders), sub: `${fmtN(units)} units`, badge: fcChgBadge(orders, fcPrevOrders) },
+            { label: 'AOV', value: `₹${Math.round(orders ? rev / orders : 0).toLocaleString('en-IN')}`, sub: 'Avg order value (inc GST)', badge: fcChgBadge(orders ? rev / orders : 0, fcPrevOrders > 0 ? fcPrevRev / fcPrevOrders : 0) },
+            { label: 'ASP', value: `₹${Math.round(asp).toLocaleString('en-IN')}`, sub: 'Avg selling price / unit', badge: fcChgBadge(asp, fcPrevUnits > 0 ? fcPrevRev / fcPrevUnits : 0) },
+          ].map(k => (
+            <div key={k.label} className="kpi-card" style={{ padding: '10px 13px' }}>
+              <div className="kpi-label">{k.label}</div>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 4 }}>
+                <div className="kpi-value" style={{ fontSize: 17 }}>{k.value}</div>{k.badge}
+              </div>
+              {k.sub && <div className="kpi-sub">{k.sub}</div>}
+            </div>
+          ))}
+          </div>
         </div>
       </div>
 
