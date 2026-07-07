@@ -2191,7 +2191,13 @@ function ShopifyGeoRichTable({ title, rows, firstKey, firstLabel, formatFirst, r
 }
 
 function ShopifyTab({ data, filters, setFilters }) {
-  // region toggle drives subChannel filter via API — all aggregated data is correct
+  // On mount, default to India scope if no region is set yet
+  useEffect(() => {
+    if (filters.subChannel !== 'International' && filters.subChannel !== 'ShopifyIndia') {
+      setFilters(f => ({ ...f, subChannel: 'ShopifyIndia' }))
+    }
+  }, [])
+
   const isIntl = filters.subChannel === 'International'
 
   const subChannelMap = data.subChannelMap || {}
@@ -5666,7 +5672,7 @@ function SalesPage({ data, filters, setFilters, activeTab, setActiveTab, fetchDa
       {/* Tab bar */}
       <div className="sales-tabs">
         {TABS.map(tab => (
-          <button key={tab.id} onClick={() => { setActiveTab(tab.id); if (tab.id === 'shopify') setFilters(f => ({ ...f, subChannel: 'ShopifyIndia', voucher: '' })); else setFilters(f => ({ ...f, subChannel: '', voucher: '' })) }} className={`stab${activeTab === tab.id ? ' active' : ''}`} style={tab.id === 'all' ? { fontWeight: activeTab === 'all' ? 800 : 700, fontSize: 13 } : {}}>
+          <button key={tab.id} onClick={() => { setActiveTab(tab.id); setFilters(f => ({ ...f, subChannel: '', voucher: '' })) }} className={`stab${activeTab === tab.id ? ' active' : ''}`} style={tab.id === 'all' ? { fontWeight: activeTab === 'all' ? 800 : 700, fontSize: 13 } : {}}>
             {tab.logo && <img src={tab.logo} alt="" style={{ width: 14, height: 14, borderRadius: 3, flexShrink: 0, objectFit: 'contain', filter: tab.id === 'cred' ? 'invert(1)' : 'none' }} />}
             {tab.label}
           </button>
