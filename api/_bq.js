@@ -36,8 +36,8 @@ export function buildQuery(s, e, filters = {}) {
   }
   if (state) {
     const vals = state.split(',').map(s => s.trim()).filter(Boolean)
-    if (vals.length === 1) whereClauses.push(`UPPER(TRIM(u.State)) = '${vals[0].toUpperCase().replace(/'/g, "''")}'`)
-    else if (vals.length > 1) whereClauses.push(`UPPER(TRIM(u.State)) IN (${vals.map(s => `'${s.toUpperCase().replace(/'/g, "''")}'`).join(',')})`)
+    if (vals.length === 1) whereClauses.push(`UPPER(TRIM(COALESCE(pm.State, cm.State, u.State))) = '${vals[0].toUpperCase().replace(/'/g, "''")}'`)
+    else if (vals.length > 1) whereClauses.push(`UPPER(TRIM(COALESCE(pm.State, cm.State, u.State))) IN (${vals.map(s => `'${s.toUpperCase().replace(/'/g, "''")}'`).join(',')})`)
   }
   if (region) {
     const vals = region.split(',').map(r => r.trim()).filter(Boolean)
