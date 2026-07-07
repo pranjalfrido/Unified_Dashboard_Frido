@@ -2363,7 +2363,7 @@ function ShopifyTab({ data, filters, setFilters }) {
         <button style={{ ...toggleStyle(!isIntl), display: 'inline-flex', alignItems: 'center', gap: 5 }} onClick={() => switchRegion(false)}><img src="https://flagcdn.com/w20/in.png" width="18" style={{ borderRadius: 2, flexShrink: 0 }} /> India</button>
         <button style={toggleStyle(isIntl)} onClick={() => switchRegion(true)}><span style={{ fontFamily: 'sans-serif' }}>🌐</span> International</button>
         {!isIntl && indiaSubChKeys.length > 0 && (() => {
-          const sel = filters.subChannel ? filters.subChannel.split(',').map(x => x.trim()).filter(Boolean) : []
+          const sel = filters.subChannel ? filters.subChannel.split(',').map(x => x.trim()).filter(v => v && v !== 'ShopifyIndia' && v !== 'International') : []
           return (
             <div style={{ position: 'relative' }}>
               <button
@@ -2432,7 +2432,7 @@ function ShopifyTab({ data, filters, setFilters }) {
         {/* Right: sub-channel tiles pushed to far right */}
         {!isIntl && indiaSubChKeys.length > 0 && (() => {
           const totalSubRev = Object.values(indiaSubChMap).reduce((s, x) => s + x.rev, 0)
-          const sel = filters.subChannel ? filters.subChannel.split(',').map(x => x.trim()).filter(Boolean) : []
+          const sel = filters.subChannel ? filters.subChannel.split(',').map(x => x.trim()).filter(v => v && v !== 'ShopifyIndia' && v !== 'International') : []
           return (
             <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 0, border: `1.5px solid ${C.border2}`, borderRadius: 8, overflow: 'hidden', background: C.card }}>
               {indiaSubChKeys.map((k, i) => {
