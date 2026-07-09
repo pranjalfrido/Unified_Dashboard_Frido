@@ -4417,7 +4417,7 @@ function AdsTab({ data }) {
             { label: 'CPC', value: `₹${overallCpc.toFixed(2)}`, badge: chgBadge(overallCpc, prevCpc), sub: 'Spend / Clicks' },
             { label: 'Orders', value: fmtN(currentOrders), sub: 'Distinct orders', badge: chgBadge(currentOrders, prevOrders) },
             { label: 'Cost Per Order', value: costPerOrder > 0 ? `₹${Math.round(costPerOrder).toLocaleString('en-IN')}` : '—', sub: 'Spend / Orders', badge: costPerOrder > 0 && prevCpo > 0 ? chgBadge(prevCpo, costPerOrder) : undefined },
-            { label: 'CAC', value: cac === null ? '—' : cac > 0 ? `₹${Math.round(cac).toLocaleString('en-IN')}` : '—', sub: cac === null ? 'N/A for marketplace' : `Spend / ${fmtN(shopifyNewCustomers)} new custs` },
+            ...(!selPlatform || selPlatform === 'Meta' || selPlatform === 'Google' ? [{ label: 'CAC', value: cac > 0 ? `₹${Math.round(cac).toLocaleString('en-IN')}` : '—', sub: `Spend / ${fmtN(shopifyNewCustomers)} new custs` }] : []),
           ].map(k => (
             <div key={k.label} className="kpi-card" style={{ padding: '12px 14px' }}>
               <div className="kpi-label">{k.label}</div>
