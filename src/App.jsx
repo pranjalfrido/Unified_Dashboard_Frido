@@ -4335,9 +4335,30 @@ function AdsTab({ data }) {
   const overallCpc = totalClicks > 0 ? totalSpend / totalClicks : 0
 
   const prevSpend = selPlatform ? (prevTotals[selPlatform]?.spend || 0) : Object.values(prevTotals).reduce((s, x) => s + x.spend, 0)
-  const prevRevenue = selPlatform ? (prevTotals[selPlatform]?.revenue || 0) : Object.values(prevTotals).reduce((s, x) => s + x.revenue, 0)
   const prevClicks = selPlatform ? (prevTotals[selPlatform]?.clicks || 0) : Object.values(prevTotals).reduce((s, x) => s + x.clicks, 0)
   const prevImpressions = selPlatform ? (prevTotals[selPlatform]?.impressions || 0) : Object.values(prevTotals).reduce((s, x) => s + x.impressions, 0)
+
+  // Prev net revenue from sales data (same source as totalRevenue)
+  const prevChMap = data.prevChMap || {}
+  const prevShopifyExcRev = data.shopify?.prevExcRev || 0
+  const prevMetaSpend = prevTotals['Meta']?.spend || 0
+  const prevGoogleSpend = prevTotals['Google']?.spend || 0
+  const prevShopifyAdSpendTotal = prevMetaSpend + prevGoogleSpend
+  const prevMetaShopifyRev = prevShopifyAdSpendTotal > 0 ? prevShopifyExcRev * (prevMetaSpend / prevShopifyAdSpendTotal) : prevShopifyExcRev
+  const prevGoogleShopifyRev = prevShopifyAdSpendTotal > 0 ? prevShopifyExcRev * (prevGoogleSpend / prevShopifyAdSpendTotal) : 0
+  const prevPlatformNetRev = {
+    Meta:      prevMetaShopifyRev,
+    Google:    prevGoogleShopifyRev,
+    Amazon:    prevChMap['Amazon'] || data.amzSC?.prevExcRev || 0,
+    Blinkit:   prevChMap['Blinkit'] || 0,
+    Zepto:     prevChMap['Zepto'] || 0,
+    Instamart: prevChMap['Instamart'] || 0,
+    Myntra:    prevChMap['Myntra'] || 0,
+    Flipkart:  prevChMap['Flipkart'] || data.flipkart?.prevExcRev || 0,
+  }
+  const prevAllNetRev = prevShopifyExcRev + (prevChMap['Amazon'] || 0) + (prevChMap['Blinkit'] || 0) +
+    (prevChMap['Zepto'] || 0) + (prevChMap['Instamart'] || 0) + (prevChMap['Myntra'] || 0) + (prevChMap['Flipkart'] || 0)
+  const prevRevenue = selPlatform ? (prevPlatformNetRev[selPlatform] || 0) : prevAllNetRev
   const prevRoas = prevSpend > 0 ? prevRevenue / prevSpend : 0
   const prevCtr = prevImpressions > 0 ? prevClicks / prevImpressions * 100 : 0
   const prevCpc = prevClicks > 0 ? prevSpend / prevClicks : 0
