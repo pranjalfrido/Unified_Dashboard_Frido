@@ -4276,9 +4276,11 @@ function AdsTab({ data }) {
   const campaigns = ads.campaigns || []
   const byCategory = ads.byCategory || []
   const bySku = ads.bySku || []
+  const categoryBreakdown = ads.categoryBreakdown || []
   const prevTotals = ads.prevTotals || {}
 
   const [selPlatform, setSelPlatform] = useState(null)
+  const [catView, setCatView] = useState('category')
   const [trendGran, setTrendGran] = useState('daily')
   const [selAdType, setSelAdType] = useState({})
 
@@ -4572,6 +4574,84 @@ function AdsTab({ data }) {
             )
           })()}
         </div>
+
+        {/* Category & Product Breakdown — platform tabs only */}
+        {selPlatform && (() => {
+          const platRows = categoryBreakdown.filter(r => r.platform === selPlatform)
+          if (!platRows.length) return null
+          const totalSpendHere = platRows.reduce((s, r) => s + r.spend, 0)
+
+          // Category view — group by category
+          const catMap = {}
+          platRows.forEach(r => {
+            const k = r.category
+            if (!catMap[k]) catMap[k] = { category: k, spend: 0, orders: 0, clicks: 0, impressions: 0, revenue: 0 }
+            catMap[k].spend += r.spend
+            catMap[k].orders += r.orders
+            catMap[k].clicks += r.clicks
+            catMap[k].impressions += r.impressions
+            catMap[k].revenue += r.revenue
+          })
+          const catRows = Object.values(catMap).sort((a, b) => b.spend - a.spend)
+
+          // Product view — individual rows sorted by spend
+          const prodRows = platRows.filter(r => r.subCategory).sort((a, b) => b.spend - a.spend)
+
+          const tableRows = catView === 'category' ? catRows : prodRows
+
+          return (
+            <div className="kpi-card" style={{ padding: '14px 16px', marginBottom: 16 }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
+                <div>
+                  <div style={{ fontWeight: 700, fontSize: 13, color: C.t1 }}>Spend Breakdown</div>
+                  <div style={{ fontSize: 11, color: C.t3, marginTop: 2 }}>Excluding brand campaigns (target type: all)</div>
+                </div>
+                <div style={{ display: 'flex', gap: 6 }}>
+                  {['category', 'product'].map(v => (
+                    <button key={v} onClick={() => setCatView(v)}
+                      style={{ fontSize: 11, fontWeight: 600, padding: '5px 14px', borderRadius: 6, border: `1.5px solid ${catView === v ? C.acc : C.border}`, background: catView === v ? C.acc : 'transparent', color: catView === v ? C.t1 : C.t2, cursor: 'pointer', textTransform: 'capitalize' }}>
+                      {v}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+                <thead>
+                  <tr style={{ borderBottom: `1.5px solid ${C.border}` }}>
+                    {catView === 'product' && <th style={{ textAlign: 'left', padding: '6px 8px', color: C.t3, fontWeight: 600, fontSize: 11 }}>Category</th>}
+                    <th style={{ textAlign: 'left', padding: '6px 8px', color: C.t3, fontWeight: 600, fontSize: 11 }}>{catView === 'category' ? 'Category' : 'Product'}</th>
+                    <th style={{ textAlign: 'right', padding: '6px 8px', color: C.t3, fontWeight: 600, fontSize: 11 }}>Spend</th>
+                    <th style={{ textAlign: 'right', padding: '6px 8px', color: C.t3, fontWeight: 600, fontSize: 11 }}>% of Total</th>
+                    <th style={{ textAlign: 'right', padding: '6px 8px', color: C.t3, fontWeight: 600, fontSize: 11 }}>Clicks</th>
+                    <th style={{ textAlign: 'right', padding: '6px 8px', color: C.t3, fontWeight: 600, fontSize: 11 }}>Impressions</th>
+                    <th style={{ textAlign: 'right', padding: '6px 8px', color: C.t3, fontWeight: 600, fontSize: 11 }}>CTR</th>
+                    <th style={{ textAlign: 'right', padding: '6px 8px', color: C.t3, fontWeight: 600, fontSize: 11 }}>Orders</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {tableRows.map((r, i) => {
+                    const ctr = r.impressions > 0 ? (r.clicks / r.impressions * 100).toFixed(2) : null
+                    const pct = totalSpendHere > 0 ? (r.spend / totalSpendHere * 100).toFixed(1) : 0
+                    return (
+                      <tr key={i} style={{ borderBottom: `1px solid ${C.border}`, background: i % 2 === 0 ? '#fff' : C.bg }}>
+                        {catView === 'product' && <td style={{ padding: '7px 8px', color: C.t3, fontSize: 11 }}>{r.category}</td>}
+                        <td style={{ padding: '7px 8px', color: C.t1, fontWeight: 500, maxWidth: 220, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{catView === 'category' ? r.category : r.subCategory}</td>
+                        <td style={{ padding: '7px 8px', color: C.t1, textAlign: 'right', fontWeight: 600 }}>{fmt(r.spend)}</td>
+                        <td style={{ padding: '7px 8px', textAlign: 'right' }}>
+                          <span style={{ background: C.acl, color: C.t2, borderRadius: 4, padding: '2px 7px', fontSize: 11, fontWeight: 600 }}>{pct}%</span>
+                        </td>
+                        <td style={{ padding: '7px 8px', color: C.t2, textAlign: 'right' }}>{fmtBig(r.clicks)}</td>
+                        <td style={{ padding: '7px 8px', color: C.t2, textAlign: 'right' }}>{fmtBig(r.impressions)}</td>
+                        <td style={{ padding: '7px 8px', color: C.t2, textAlign: 'right' }}>{ctr ? `${ctr}%` : '—'}</td>
+                        <td style={{ padding: '7px 8px', color: C.t2, textAlign: 'right' }}>{r.orders > 0 ? fmtN(Math.round(r.orders)) : '—'}</td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )
+        })()}
 
         {/* Zero Order Spend — Google and Flipkart only */}
         {(selPlatform === 'Google' || selPlatform === 'Flipkart') && (() => {
