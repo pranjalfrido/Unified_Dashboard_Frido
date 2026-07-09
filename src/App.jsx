@@ -4578,9 +4578,15 @@ function AdsTab({ data }) {
           const adTypes = filtAdTypes.map(x => x.adType).filter((v, i, a) => a.indexOf(v) === i)
           const activeType = selAdType[selPlatform] || adTypes[0]
           const x = filtAdTypes.find(t => t.adType === activeType) || {}
-          const netRev = x.revenue > 0 ? x.revenue : 0
-          const roas = x.spend > 0 && netRev > 0 ? netRev / x.spend : 0
           const isMetaOnly = selPlatform === 'Meta'
+          // Meta stores revenue only at platform level — distribute by spend share
+          const platformTotalSpend = filtAdTypes.reduce((s, t) => s + (t.spend || 0), 0)
+          const platformTotalRev = filtTotals.reduce((s, t) => s + (t.revenue || 0), 0)
+          const spendShare = platformTotalSpend > 0 ? (x.spend || 0) / platformTotalSpend : 0
+          const netRev = isMetaOnly
+            ? (x.revenue > 0 ? x.revenue : spendShare * platformTotalRev)
+            : (x.revenue > 0 ? x.revenue : 0)
+          const roas = x.spend > 0 && netRev > 0 ? netRev / x.spend : 0
           const kpis = isMetaOnly ? [
             { label: 'Spend', value: fmt(x.spend || 0) },
             { label: 'Net Revenue', value: netRev > 0 ? fmt(netRev) : '—', sub: 'Ad-attributed' },
