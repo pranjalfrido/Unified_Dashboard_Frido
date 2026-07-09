@@ -4587,7 +4587,7 @@ function AdsTab({ data }) {
             const k = (r.category || 'Unknown').trim()
             if (!catMap[k]) catMap[k] = { category: k, spend: 0, orders: 0, clicks: 0, impressions: 0, revenue: 0 }
             catMap[k].spend += r.spend
-            catMap[k].orders += r.orders
+            catMap[k].units = (catMap[k].units || 0) + (r.units || 0)
             catMap[k].clicks += r.clicks
             catMap[k].impressions += r.impressions
             catMap[k].revenue += r.revenue
@@ -4625,7 +4625,7 @@ function AdsTab({ data }) {
                     <th style={{ textAlign: 'right', padding: '6px 8px', color: C.t3, fontWeight: 600, fontSize: 11 }}>Clicks</th>
                     <th style={{ textAlign: 'right', padding: '6px 8px', color: C.t3, fontWeight: 600, fontSize: 11 }}>Impressions</th>
                     <th style={{ textAlign: 'right', padding: '6px 8px', color: C.t3, fontWeight: 600, fontSize: 11 }}>CTR</th>
-                    <th style={{ textAlign: 'right', padding: '6px 8px', color: C.t3, fontWeight: 600, fontSize: 11 }}>Orders</th>
+                    <th style={{ textAlign: 'right', padding: '6px 8px', color: C.t3, fontWeight: 600, fontSize: 11 }}>Units Sold</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -4643,7 +4643,7 @@ function AdsTab({ data }) {
                         <td style={{ padding: '7px 8px', color: C.t2, textAlign: 'right' }}>{fmtBig(r.clicks)}</td>
                         <td style={{ padding: '7px 8px', color: C.t2, textAlign: 'right' }}>{fmtBig(r.impressions)}</td>
                         <td style={{ padding: '7px 8px', color: C.t2, textAlign: 'right' }}>{ctr ? `${ctr}%` : '—'}</td>
-                        <td style={{ padding: '7px 8px', color: C.t2, textAlign: 'right' }}>{r.orders > 0 ? fmtN(Math.round(r.orders)) : '—'}</td>
+                        <td style={{ padding: '7px 8px', color: C.t2, textAlign: 'right' }}>{r.units > 0 ? fmtN(Math.round(r.units)) : '—'}</td>
                       </tr>
                     )
                   })}
