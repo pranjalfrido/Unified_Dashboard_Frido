@@ -4338,6 +4338,9 @@ function AdsTab({ data }) {
   const prevRevenue = selPlatform ? (prevTotals[selPlatform]?.revenue || 0) : Object.values(prevTotals).reduce((s, x) => s + x.revenue, 0)
   const prevClicks = selPlatform ? (prevTotals[selPlatform]?.clicks || 0) : Object.values(prevTotals).reduce((s, x) => s + x.clicks, 0)
   const prevImpressions = selPlatform ? (prevTotals[selPlatform]?.impressions || 0) : Object.values(prevTotals).reduce((s, x) => s + x.impressions, 0)
+  const prevRoas = prevSpend > 0 ? prevRevenue / prevSpend : 0
+  const prevCtr = prevImpressions > 0 ? prevClicks / prevImpressions * 100 : 0
+  const prevCpc = prevClicks > 0 ? prevSpend / prevClicks : 0
 
   const dailyByDate = {}
   filtDaily.forEach(d => {
@@ -4372,12 +4375,12 @@ function AdsTab({ data }) {
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10 }}>
           {[
             { label: 'Total Spend', value: fmt(totalSpend), badge: chgBadge(totalSpend, prevSpend), sub: 'Ad spend incl. all platforms' },
-            { label: 'Net Revenue', value: fmt(totalRevenue), sub: selPlatform ? `${selPlatform === 'Meta' || selPlatform === 'Google' ? 'Shopify (spend-split)' : selPlatform} net exc. GST` : 'All channels net exc. GST' },
-            { label: 'Overall ROAS', value: `${overallRoas.toFixed(2)}x`, sub: 'Net rev / Spend', roasVal: overallRoas },
+            { label: 'Net Revenue', value: fmt(totalRevenue), badge: chgBadge(totalRevenue, prevRevenue), sub: selPlatform ? `${selPlatform === 'Meta' || selPlatform === 'Google' ? 'Shopify (spend-split)' : selPlatform} net exc. GST` : 'All channels net exc. GST' },
+            { label: 'Overall ROAS', value: `${overallRoas.toFixed(2)}x`, badge: chgBadge(overallRoas, prevRoas), sub: 'Net rev / Spend', roasVal: overallRoas },
             { label: 'Total Clicks', value: fmtN(Math.round(totalClicks)), badge: chgBadge(totalClicks, prevClicks), sub: 'Across all platforms' },
             { label: 'Impressions', value: fmtN(Math.round(totalImpressions)), badge: chgBadge(totalImpressions, prevImpressions), sub: 'Total ad impressions' },
-            { label: 'CTR', value: overallCtr.toFixed(2) + '%', sub: 'Clicks / Impressions' },
-            { label: 'CPC', value: `₹${overallCpc.toFixed(2)}`, sub: 'Spend / Clicks' },
+            { label: 'CTR', value: overallCtr.toFixed(2) + '%', badge: chgBadge(overallCtr, prevCtr), sub: 'Clicks / Impressions' },
+            { label: 'CPC', value: `₹${overallCpc.toFixed(2)}`, badge: chgBadge(overallCpc, prevCpc), sub: 'Spend / Clicks' },
             { label: 'Orders', value: fmtN((() => { if (!selPlatform) return (data.shopify?.totals?.qty || 0) + (data.amzSC?.totalUnits || 0) + (data.amzVC?.accounts || []).reduce((s, a) => s + (a.orderedUnits || 0), 0) + (data.blinkit?.totals?.units || 0) + (data.zepto?.totals?.units || 0) + (data.instamart?.totals?.units || 0) + (data.flipkart?.totals || []).reduce((s, t) => s + (t.units || 0), 0) + (data.myntra?.totals?.units || 0); if (selPlatform === 'Amazon') return (data.amzSC?.totalUnits || 0) + (data.amzVC?.accounts || []).reduce((s, a) => s + (a.orderedUnits || 0), 0); if (selPlatform === 'Flipkart') return (data.flipkart?.totals || []).reduce((s, t) => s + (t.units || 0), 0); if (selPlatform === 'Myntra') return data.myntra?.totals?.units || 0; if (selPlatform === 'Zepto') return data.zepto?.totals?.units || 0; if (selPlatform === 'Instamart') return data.instamart?.totals?.units || 0; if (selPlatform === 'Blinkit') return data.blinkit?.totals?.units || 0; if (selPlatform === 'Meta' || selPlatform === 'Google') return data.shopify?.totals?.qty || 0; return 0 })()), sub: 'Item qty sold' },
           ].map(k => (
             <div key={k.label} className="kpi-card" style={{ padding: '12px 14px' }}>
