@@ -4579,14 +4579,17 @@ function AdsTab({ data }) {
           const activeType = selAdType[selPlatform] || adTypes[0]
           const x = filtAdTypes.find(t => t.adType === activeType) || {}
           const isMetaOnly = selPlatform === 'Meta'
-          // Meta/Google: revenue per ad_type is 0 in BQ — distribute platform sales revenue by spend share
+          // Revenue/orders may be 0 per ad_type in BQ — distribute platform totals by spend share
           const platformTotalSpend = filtAdTypes.reduce((s, t) => s + (t.spend || 0), 0)
           const salesRevForPlatform = platformNetRev[selPlatform] || 0
+          const platformTotalOrders = filtTotals.reduce((s, t) => s + (t.orders || 0), 0)
           const spendShare = platformTotalSpend > 0 ? (x.spend || 0) / platformTotalSpend : 0
           const netRev = isMetaOnly
             ? (salesRevForPlatform > 0 ? spendShare * salesRevForPlatform : 0)
             : (x.revenue > 0 ? x.revenue : 0)
           const roas = x.spend > 0 && netRev > 0 ? netRev / x.spend : 0
+          // Orders: use ad_type value if available, else distribute platform total by spend share
+          const adTypeOrders = x.orders > 0 ? x.orders : spendShare * platformTotalOrders
           const kpis = isMetaOnly ? [
             { label: 'Spend', value: fmt(x.spend || 0) },
             { label: 'Net Revenue', value: netRev > 0 ? fmt(netRev) : '—', sub: 'Ad-attributed' },
@@ -4600,7 +4603,7 @@ function AdsTab({ data }) {
             { label: 'Impressions', value: fmtBig(x.impressions || 0) },
             { label: 'CTR', value: x.ctr > 0 ? `${x.ctr.toFixed(2)}%` : '—' },
             { label: 'CPC', value: x.cpc > 0 ? `₹${x.cpc.toFixed(0)}` : '—' },
-            { label: 'Orders', value: x.orders > 0 ? fmtN(Math.round(x.orders)) : '—' },
+            { label: 'Orders', value: adTypeOrders > 0 ? fmtN(Math.round(adTypeOrders)) : '—' },
           ]
           return (
             <div className="kpi-card" style={{ padding: '14px 16px' }}>
