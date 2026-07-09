@@ -984,14 +984,29 @@ export default async function handler(req, res) {
         bySku: (r.adsBySku || []).map(x => ({ platform: x.platform, category: x.category, sku: x.product_name, spend: parseFloat(x.spend)||0, revenue: parseFloat(x.revenue)||0, impressions: parseFloat(x.impressions)||0, clicks: parseFloat(x.clicks)||0, orders: parseFloat(x.orders)||0, roas: parseFloat(x.roas)||0 })),
         categoryBreakdown: (() => {
           const salesOrders = r.salesCategoryOrders || []
-          const PLATFORM_TO_CHANNEL = { Amazon: 'Amazon', Flipkart: 'Flipkart', Meta: 'myfrido' }
-          const getSalesOrders = (platform, category, subCategory) => {
-            const ch = PLATFORM_TO_CHANNEL[platform] || platform
+          // Meta and Google both drive Shopify (myfrido) sales — split by their spend share
+          const adsTotals = r.adsTotals || []
+          const metaSpend = parseFloat(adsTotals.find(t => t.platform === 'Meta')?.spend) || 0
+          const googleSpend = parseFloat(adsTotals.find(t => t.platform === 'Google')?.spend) || 0
+          const shopifyAdSpend = metaSpend + googleSpend
+          const metaShare = shopifyAdSpend > 0 ? metaSpend / shopifyAdSpend : 0.5
+          const googleShare = shopifyAdSpend > 0 ? googleSpend / shopifyAdSpend : 0.5
+
+          const getShopifyOrders = (category, subCategory) => {
             if (subCategory) {
-              const row = salesOrders.find(s => s.platform === ch && s.category === category && s.sub_category === subCategory)
+              const row = salesOrders.find(s => s.platform === 'myfrido' && s.category === category && s.sub_category === subCategory)
               return row ? parseInt(row.orders)||0 : 0
             }
-            return salesOrders.filter(s => s.platform === ch && s.category === category).reduce((sum, s) => sum + (parseInt(s.orders)||0), 0)
+            return salesOrders.filter(s => s.platform === 'myfrido' && s.category === category).reduce((sum, s) => sum + (parseInt(s.orders)||0), 0)
+          }
+          const getSalesOrders = (platform, category, subCategory) => {
+            if (platform === 'Meta') return Math.round(getShopifyOrders(category, subCategory) * metaShare)
+            if (platform === 'Google') return Math.round(getShopifyOrders(category, subCategory) * googleShare)
+            const row = subCategory
+              ? salesOrders.find(s => s.platform === platform && s.category === category && s.sub_category === subCategory)
+              : null
+            if (row) return parseInt(row.orders)||0
+            return salesOrders.filter(s => s.platform === platform && s.category === category).reduce((sum, s) => sum + (parseInt(s.orders)||0), 0)
           }
           return (r.adsCategoryBreakdown || []).map(x => {
             const cat = x.category || 'Unknown'
