@@ -4575,16 +4575,9 @@ function AdsTab({ data }) {
 
         {/* Zero Order Spend — Google and Flipkart only */}
         {(selPlatform === 'Google' || selPlatform === 'Flipkart') && (() => {
-          // Group bySku by product name (fallback to sku field which maps to product_name)
-          const productMap = {}
-          filtBySku.forEach(x => {
-            const key = x.sku || 'Unknown'
-            if (!productMap[key]) productMap[key] = { product: key, spend: 0, orders: 0 }
-            productMap[key].spend += x.spend || 0
-            productMap[key].orders += x.orders || 0
-          })
-          const zeroRows = Object.values(productMap)
-            .filter(r => r.orders === 0 && r.spend > 0)
+          const zeroOrderData = ads.zeroOrder || []
+          const zeroRows = zeroOrderData
+            .filter(r => r.platform === selPlatform && r.orders === 0 && r.spend > 0)
             .sort((a, b) => b.spend - a.spend)
           if (!zeroRows.length) return null
           const wastedSpend = zeroRows.reduce((s, r) => s + r.spend, 0)
@@ -4616,7 +4609,7 @@ function AdsTab({ data }) {
                 </thead>
                 <tbody>
                   {zeroRows.map((r, i) => (
-                    <tr key={r.product} style={{ borderBottom: `1px solid ${C.border}`, background: i % 2 === 0 ? '#fff' : C.bg }}>
+                    <tr key={r.product + r.campaign} style={{ borderBottom: `1px solid ${C.border}`, background: i % 2 === 0 ? '#fff' : C.bg }}>
                       <td style={{ padding: '7px 8px', color: C.t1, fontWeight: 500, maxWidth: 320, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.product}</td>
                       <td style={{ padding: '7px 8px', color: C.t1, textAlign: 'right', fontWeight: 600 }}>{fmt(r.spend)}</td>
                       <td style={{ padding: '7px 8px', textAlign: 'right' }}>
