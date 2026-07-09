@@ -4366,7 +4366,7 @@ function AdsTab({ data }) {
 
   const prevCpo = prevOrders > 0 ? prevSpend / prevOrders : 0
   const costPerOrder = currentOrders > 0 ? totalSpend / currentOrders : 0
-  const shopifyNewCustomers = (data.nCusts || 0) - (data.repeatCusts || 0)
+  const shopifyNewCustomers = (ads.nCusts || data.nCusts || 0) - (ads.repeatCusts || data.repeatCusts || 0)
   const shopifyAdSpend = metaSpend + googleSpend
   const cac = (() => {
     if (!selPlatform) return shopifyNewCustomers > 0 ? shopifyAdSpend / shopifyNewCustomers : 0
