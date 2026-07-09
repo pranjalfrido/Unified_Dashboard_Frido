@@ -4468,33 +4468,40 @@ function AdsTab({ data }) {
           {!selPlatform && (() => {
             const sortedTotals = [...totals].sort((a, b) => b.spend - a.spend)
             const totalAllSpend = sortedTotals.reduce((s, t) => s + t.spend, 0)
+            const pieData = sortedTotals.map(t => ({ name: t.platform, value: t.spend, roas: t.roas }))
             return (
               <div className="kpi-card" style={{ padding: '16px 18px' }}>
-                <div style={{ fontWeight: 700, fontSize: 13, marginBottom: 14, color: C.t1 }}>Spend by Platform</div>
-                {/* Stacked share bar */}
-                <div style={{ display: 'flex', height: 8, borderRadius: 6, overflow: 'hidden', marginBottom: 16, gap: 1 }}>
-                  {sortedTotals.map(t => (
-                    <div key={t.platform} title={`${t.platform}: ${((t.spend / totalAllSpend) * 100).toFixed(1)}%`}
-                      style={{ height: '100%', background: PLATFORM_COLORS[t.platform] || C.acc, width: `${(t.spend / totalAllSpend * 100).toFixed(2)}%`, transition: 'width 0.5s ease' }} />
-                  ))}
-                </div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                  {sortedTotals.map(t => {
-                    const color = PLATFORM_COLORS[t.platform] || C.acc
-                    const sharePct = totalAllSpend > 0 ? (t.spend / totalAllSpend * 100).toFixed(1) : '0'
-                    return (
-                      <div key={t.platform} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                        {platformLogo(t.platform)
-                          ? <img src={platformLogo(t.platform)} alt="" style={{ width: 15, height: 15, borderRadius: 3, objectFit: 'contain', flexShrink: 0 }} />
-                          : <span style={{ width: 8, height: 8, borderRadius: '50%', background: color, display: 'inline-block', flexShrink: 0 }} />
-                        }
-                        <span style={{ fontSize: 12, fontWeight: 600, color: C.t1, flex: 1 }}>{t.platform}</span>
-                        <span style={{ fontSize: 11, color: C.t3, marginRight: 4 }}>{sharePct}%</span>
-                        <span style={{ fontSize: 12, fontWeight: 700, color: C.t1, minWidth: 60, textAlign: 'right' }}>{fmt(t.spend)}</span>
-                        {t.roas > 0 && <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 4, background: roasBg(t.roas), color: roasColor(t.roas), minWidth: 38, textAlign: 'center' }}>{t.roas.toFixed(2)}x</span>}
-                      </div>
-                    )
-                  })}
+                <div style={{ fontWeight: 700, fontSize: 13, marginBottom: 12, color: C.t1 }}>Spend by Platform</div>
+                <div style={{ display: 'flex', gap: 16, alignItems: 'center' }}>
+                  {/* Donut */}
+                  <div style={{ flexShrink: 0 }}>
+                    <ResponsiveContainer width={130} height={130}>
+                      <PieChart>
+                        <Pie data={pieData} cx="50%" cy="50%" innerRadius={38} outerRadius={58} dataKey="value" paddingAngle={2} strokeWidth={0}>
+                          {pieData.map((entry, i) => (
+                            <Cell key={entry.name} fill={PLATFORM_COLORS[entry.name] || C.acc} />
+                          ))}
+                        </Pie>
+                        <Tooltip formatter={(v) => [fmt(v), 'Spend']} contentStyle={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 6, fontSize: 11 }} />
+                      </PieChart>
+                    </ResponsiveContainer>
+                  </div>
+                  {/* Legend list */}
+                  <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 7 }}>
+                    {sortedTotals.map(t => {
+                      const color = PLATFORM_COLORS[t.platform] || C.acc
+                      const sharePct = totalAllSpend > 0 ? (t.spend / totalAllSpend * 100).toFixed(1) : '0'
+                      return (
+                        <div key={t.platform} style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
+                          <span style={{ width: 8, height: 8, borderRadius: '50%', background: color, flexShrink: 0 }} />
+                          <span style={{ fontSize: 12, fontWeight: 600, color: C.t1, flex: 1 }}>{t.platform}</span>
+                          <span style={{ fontSize: 11, color: C.t3 }}>{sharePct}%</span>
+                          <span style={{ fontSize: 12, fontWeight: 700, color: C.t1, minWidth: 56, textAlign: 'right' }}>{fmt(t.spend)}</span>
+                          {t.roas > 0 && <span style={{ fontSize: 10, fontWeight: 700, padding: '1px 6px', borderRadius: 4, background: roasBg(t.roas), color: roasColor(t.roas), minWidth: 36, textAlign: 'center' }}>{t.roas.toFixed(2)}x</span>}
+                        </div>
+                      )
+                    })}
+                  </div>
                 </div>
               </div>
             )
