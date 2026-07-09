@@ -4342,7 +4342,7 @@ function AdsTab({ data }) {
   const prevCtr = prevImpressions > 0 ? prevClicks / prevImpressions * 100 : 0
   const prevCpc = prevClicks > 0 ? prevSpend / prevClicks : 0
   const prevOrders = (() => {
-    if (!selPlatform) return data.prevNOrders || 0
+    if (!selPlatform) return data.prevOrders || 0
     if (selPlatform === 'Amazon') return data.amzSC?.prevOrders || 0
     if (selPlatform === 'Flipkart') return data.flipkart?.prevOrders || 0
     if (selPlatform === 'Myntra') return data.myntra?.prevOrders || 0
@@ -4365,6 +4365,12 @@ function AdsTab({ data }) {
   })()
 
   const prevCpo = prevOrders > 0 ? prevSpend / prevOrders : 0
+  const prevCac = (() => {
+    if (!selPlatform) return shopifyNewCustomers > 0 ? (prevTotals['Meta']?.spend || 0) + (prevTotals['Google']?.spend || 0) > 0 ? ((prevTotals['Meta']?.spend || 0) + (prevTotals['Google']?.spend || 0)) / shopifyNewCustomers : 0 : 0
+    if (selPlatform === 'Meta') return shopifyNewCustomers > 0 && prevTotals['Meta']?.spend ? prevTotals['Meta'].spend / shopifyNewCustomers : 0
+    if (selPlatform === 'Google') return shopifyNewCustomers > 0 && prevTotals['Google']?.spend ? prevTotals['Google'].spend / shopifyNewCustomers : 0
+    return 0
+  })()
   const costPerOrder = currentOrders > 0 ? totalSpend / currentOrders : 0
   const shopifyNewCustomers = (ads.nCusts || data.nCusts || 0) - (ads.repeatCusts || data.repeatCusts || 0)
   const shopifyAdSpend = metaSpend + googleSpend
@@ -4415,8 +4421,8 @@ function AdsTab({ data }) {
             { label: 'CTR', value: overallCtr.toFixed(2) + '%', badge: chgBadge(overallCtr, prevCtr), sub: 'Clicks / Impressions' },
             { label: 'CPC', value: `₹${overallCpc.toFixed(2)}`, badge: chgBadge(overallCpc, prevCpc), sub: 'Spend / Clicks' },
             { label: 'Orders', value: fmtN(currentOrders), sub: 'Distinct orders', badge: chgBadge(currentOrders, prevOrders) },
-            { label: 'Cost Per Order', value: costPerOrder > 0 ? `₹${Math.round(costPerOrder).toLocaleString('en-IN')}` : '—', sub: 'Spend / Orders', badge: costPerOrder > 0 && prevCpo > 0 ? chgBadge(prevCpo, costPerOrder) : undefined },
-            ...(!selPlatform || selPlatform === 'Meta' || selPlatform === 'Google' ? [{ label: 'CAC', value: cac > 0 ? `₹${Math.round(cac).toLocaleString('en-IN')}` : '—', sub: `Spend / ${fmtN(shopifyNewCustomers)} new custs` }] : []),
+            { label: 'Cost Per Order', value: costPerOrder > 0 ? `₹${Math.round(costPerOrder).toLocaleString('en-IN')}` : '—', sub: 'Spend / Orders', badge: chgBadge(prevCpo, costPerOrder) },
+            ...(!selPlatform || selPlatform === 'Meta' || selPlatform === 'Google' ? [{ label: 'CAC', value: cac > 0 ? `₹${Math.round(cac).toLocaleString('en-IN')}` : '—', sub: `Spend / ${fmtN(shopifyNewCustomers)} new custs`, badge: chgBadge(prevCac, cac) }] : []),
           ].map(k => (
             <div key={k.label} className="kpi-card" style={{ padding: '12px 14px' }}>
               <div className="kpi-label">{k.label}</div>
