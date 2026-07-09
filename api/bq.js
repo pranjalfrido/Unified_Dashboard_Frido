@@ -341,7 +341,7 @@ export default async function handler(req, res) {
     adsBySku: `SELECT platform, category, product_name, ROUND(SUM(spend),0) AS spend, ROUND(SUM(revenue),0) AS revenue, ROUND(SUM(impressions),0) AS impressions, ROUND(SUM(clicks),0) AS clicks, ROUND(SUM(orders),0) AS orders, ROUND(SAFE_DIVIDE(SUM(revenue),SUM(spend)),2) AS roas FROM \`frido-429506.production.fact_all_platform_ads_report\` WHERE report_date BETWEEN '${start}' AND '${end}' AND product_name IS NOT NULL AND TRIM(product_name) != '' GROUP BY platform, category, product_name ORDER BY spend DESC LIMIT 200`,
     adsCategoryBreakdown: `SELECT a.platform, a.target_type, a.product_name, CASE WHEN a.target_type = 'product' THEN COALESCE(MAX(i_prod.Category_Name), 'Unknown') WHEN a.target_type = 'category' THEN COALESCE(MAX(i_cat.Category_Name), a.product_name) END AS category, ROUND(SUM(a.spend),0) AS spend, ROUND(SUM(a.orders),0) AS orders, ROUND(SUM(a.revenue),0) AS revenue, ROUND(SUM(a.clicks),0) AS clicks, ROUND(SUM(a.impressions),0) AS impressions, ROUND(SAFE_DIVIDE(SUM(a.clicks),SUM(a.impressions))*100,2) AS ctr, ROUND(SAFE_DIVIDE(SUM(a.spend),SUM(a.clicks)),2) AS cpc, ROUND(SAFE_DIVIDE(SUM(a.revenue),SUM(a.spend)),2) AS roas FROM \`frido-429506.production.fact_all_platform_ads_report\` a LEFT JOIN \`frido-429506.sharepoint_to_gcp.Frido_Item_Master__frido_item_sku_master\` i_prod ON a.target_type = 'product' AND LOWER(TRIM(a.product_name)) = LOWER(TRIM(i_prod.Sub_category)) LEFT JOIN \`frido-429506.sharepoint_to_gcp.Frido_Item_Master__frido_item_sku_master\` i_cat ON a.target_type = 'category' AND LOWER(TRIM(a.product_name)) = LOWER(TRIM(i_cat.Category_Name)) WHERE a.report_date BETWEEN '${start}' AND '${end}' AND a.target_type != 'all' AND a.product_name IS NOT NULL AND TRIM(a.product_name) != '' GROUP BY a.platform, a.target_type, a.product_name ORDER BY a.platform, spend DESC LIMIT 500`,
     adsZeroOrder: `SELECT * FROM (SELECT platform, COALESCE(NULLIF(TRIM(product_name),''), NULLIF(TRIM(campaign_name),''), 'Unknown') AS product, campaign_name, ROUND(SUM(spend),0) AS spend, ROUND(SUM(orders),0) AS orders, ROUND(SUM(clicks),0) AS clicks, ROUND(SUM(impressions),0) AS impressions, ROUND(SAFE_DIVIDE(SUM(clicks),SUM(impressions))*100,2) AS ctr, ROUND(SAFE_DIVIDE(SUM(spend),SUM(clicks)),2) AS cpc FROM \`frido-429506.production.fact_all_platform_ads_report\` WHERE report_date BETWEEN '${start}' AND '${end}' AND platform IN ('Google','Flipkart') GROUP BY platform, product, campaign_name) WHERE spend > 0 ORDER BY platform, spend DESC LIMIT 500`,
-    salesCategoryOrders: `SELECT Channel AS platform, Category AS category, SubCategory AS sub_category, COUNT(DISTINCT CASE WHEN Order_Status='Sales' THEN OrderId END) AS orders FROM \`frido-429506.production.fact_all_platform_sales_report\` WHERE OrderDate BETWEEN '${start}' AND '${end}' AND Channel IN ('Amazon','Flipkart','Shopify') AND Country = 'India' AND Category IS NOT NULL AND TRIM(Category) != '' GROUP BY platform, category, sub_category ORDER BY platform, orders DESC`,
+    salesCategoryOrders: `SELECT CASE s.Channel WHEN 'Shopify' THEN 'Shopify' WHEN 'Amazon' THEN 'Amazon' WHEN 'Flipkart' THEN 'Flipkart' END AS platform, s.Category AS category, s.SubCategory AS sub_category, COUNT(DISTINCT CASE WHEN s.Order_Status='Sales' THEN s.OrderId END) AS orders FROM \`frido-429506.production.fact_all_platform_sales_report\` s WHERE s.OrderDate BETWEEN '${start}' AND '${end}' AND s.Channel IN ('Amazon','Flipkart','Shopify') AND s.Country = 'India' AND s.Category IS NOT NULL AND TRIM(s.Category) != '' GROUP BY platform, category, sub_category ORDER BY platform, orders DESC`,
     prevAdsTotals: `SELECT platform, ROUND(SUM(spend),0) AS spend, ROUND(SUM(revenue),0) AS revenue, ROUND(SUM(impressions),0) AS impressions, ROUND(SUM(clicks),0) AS clicks FROM \`frido-429506.production.fact_all_platform_ads_report\` WHERE report_date BETWEEN '${ps}' AND '${pe}' GROUP BY platform`,
     shopifyNewCusts: `WITH in_range AS (SELECT DISTINCT customer_id FROM \`frido-429506.production.fact_shopify_myfrido_mobility_all_orders\` WHERE order_date_ist BETWEEN '${start}' AND '${end}' AND customer_id IS NOT NULL), prior AS (SELECT DISTINCT customer_id FROM \`frido-429506.production.fact_shopify_myfrido_mobility_all_orders\` WHERE order_date_ist < '${start}' AND customer_id IS NOT NULL) SELECT COUNT(*) AS n_custs, COUNTIF(p.customer_id IS NOT NULL) AS repeat_custs FROM in_range ir LEFT JOIN prior p USING (customer_id)`,
   }
@@ -992,26 +992,31 @@ export default async function handler(req, res) {
           const metaShare = shopifyAdSpend > 0 ? metaSpend / shopifyAdSpend : 0.5
           const googleShare = shopifyAdSpend > 0 ? googleSpend / shopifyAdSpend : 0.5
 
-          const getShopifyOrders = (category, subCategory) => {
-            if (subCategory) {
-              const row = salesOrders.find(s => s.platform === 'Shopify' && s.category === category && s.sub_category === subCategory)
-              return row ? parseInt(row.orders)||0 : 0
+          // Match by subcategory name (product_name in ads = SubCategory in sales) — most reliable
+          // For category-level rows, match by category name case-insensitively
+          const ordersForChannel = (ch) => salesOrders.filter(s => s.platform === ch)
+          const findBySubCat = (rows, subCat) => rows.find(s => s.sub_category && s.sub_category.toLowerCase().trim() === subCat.toLowerCase().trim())
+          const findByCat = (rows, cat) => rows.filter(s => s.category && s.category.toLowerCase().trim() === cat.toLowerCase().trim())
+
+          const getSalesOrders = (platform, category, subCategory, productName) => {
+            const ch = platform === 'Meta' || platform === 'Google' ? 'Shopify' : platform
+            const share = platform === 'Meta' ? metaShare : platform === 'Google' ? googleShare : 1
+            const chRows = ordersForChannel(ch)
+            let orders = 0
+            if (productName) {
+              // product-level: match ads product_name → sales SubCategory
+              const row = findBySubCat(chRows, productName)
+              orders = row ? parseInt(row.orders)||0 : 0
+            } else {
+              // category-level: sum all sales rows with matching category
+              orders = findByCat(chRows, category).reduce((s, r) => s + (parseInt(r.orders)||0), 0)
             }
-            return salesOrders.filter(s => s.platform === 'Shopify' && s.category === category).reduce((sum, s) => sum + (parseInt(s.orders)||0), 0)
-          }
-          const getSalesOrders = (platform, category, subCategory) => {
-            if (platform === 'Meta') return Math.round(getShopifyOrders(category, subCategory) * metaShare)
-            if (platform === 'Google') return Math.round(getShopifyOrders(category, subCategory) * googleShare)
-            const row = subCategory
-              ? salesOrders.find(s => s.platform === platform && s.category === category && s.sub_category === subCategory)
-              : null
-            if (row) return parseInt(row.orders)||0
-            return salesOrders.filter(s => s.platform === platform && s.category === category).reduce((sum, s) => sum + (parseInt(s.orders)||0), 0)
+            return Math.round(orders * share)
           }
           return (r.adsCategoryBreakdown || []).map(x => {
             const cat = x.category || 'Unknown'
             const subCat = x.target_type === 'product' ? x.product_name : null
-            const salesOrd = getSalesOrders(x.platform, cat, subCat)
+            const salesOrd = getSalesOrders(x.platform, cat, subCat, x.target_type === 'product' ? x.product_name : null)
             return { platform: x.platform, targetType: x.target_type, category: cat, subCategory: subCat, spend: parseFloat(x.spend)||0, orders: salesOrd, revenue: parseFloat(x.revenue)||0, clicks: parseFloat(x.clicks)||0, impressions: parseFloat(x.impressions)||0, ctr: parseFloat(x.ctr)||0, cpc: parseFloat(x.cpc)||0, roas: parseFloat(x.roas)||0 }
           })
         })(),
