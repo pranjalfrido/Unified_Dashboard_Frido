@@ -4603,7 +4603,7 @@ function AdsTab({ data }) {
             { label: 'Impressions', value: fmtBig(x.impressions || 0) },
             { label: 'CTR', value: x.ctr > 0 ? `${x.ctr.toFixed(2)}%` : '—' },
             { label: 'CPC', value: x.cpc > 0 ? `₹${x.cpc.toFixed(0)}` : '—' },
-            { label: 'Orders', value: adTypeOrders > 0 ? fmtN(Math.round(adTypeOrders)) : '—' },
+            { label: 'Orders', value: adTypeOrders > 0 ? `~${fmtN(Math.round(adTypeOrders))}` : '—', sub: 'est. by spend share' },
           ]
           return (
             <div className="kpi-card" style={{ padding: '14px 16px' }}>
