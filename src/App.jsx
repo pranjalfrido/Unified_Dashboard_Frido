@@ -4582,7 +4582,7 @@ function AdsTab({ data }) {
           // Revenue/orders may be 0 per ad_type in BQ — distribute platform totals by spend share
           const platformTotalSpend = filtAdTypes.reduce((s, t) => s + (t.spend || 0), 0)
           const salesRevForPlatform = platformNetRev[selPlatform] || 0
-          const platformTotalOrders = filtTotals.reduce((s, t) => s + (t.orders || 0), 0)
+          const platformTotalOrders = currentOrders || filtTotals.reduce((s, t) => s + (t.orders || 0), 0)
           const spendShare = platformTotalSpend > 0 ? (x.spend || 0) / platformTotalSpend : 0
           const netRev = isMetaOnly
             ? (salesRevForPlatform > 0 ? spendShare * salesRevForPlatform : 0)
