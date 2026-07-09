@@ -4341,7 +4341,6 @@ function AdsTab({ data }) {
   const prevRoas = prevSpend > 0 ? prevRevenue / prevSpend : 0
   const prevCtr = prevImpressions > 0 ? prevClicks / prevImpressions * 100 : 0
   const prevCpc = prevClicks > 0 ? prevSpend / prevClicks : 0
-  const prevCpo = prevOrders > 0 ? prevSpend / prevOrders : 0
   const prevOrders = (() => {
     if (!selPlatform) return data.prevNOrders || 0
     if (selPlatform === 'Amazon') return data.amzSC?.prevOrders || 0
@@ -4365,6 +4364,7 @@ function AdsTab({ data }) {
     return 0
   })()
 
+  const prevCpo = prevOrders > 0 ? prevSpend / prevOrders : 0
   const costPerOrder = currentOrders > 0 ? totalSpend / currentOrders : 0
   const shopifyNewCustomers = (data.nCusts || 0) - (data.repeatCusts || 0)
   const shopifyAdSpend = metaSpend + googleSpend
