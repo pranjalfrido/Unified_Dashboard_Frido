@@ -4578,12 +4578,12 @@ function AdsTab({ data }) {
           const adTypes = filtAdTypes.map(x => x.adType).filter((v, i, a) => a.indexOf(v) === i)
           const activeType = selAdType[selPlatform] || adTypes[0]
           const x = filtAdTypes.find(t => t.adType === activeType) || {}
-          const netRev = x.revenue > 0 ? x.revenue / (1 + 0.18) : 0
+          const netRev = x.revenue > 0 ? x.revenue : 0
           const roas = x.spend > 0 && netRev > 0 ? netRev / x.spend : 0
           const isMetaOnly = selPlatform === 'Meta'
           const kpis = isMetaOnly ? [
             { label: 'Spend', value: fmt(x.spend || 0) },
-            { label: 'Net Revenue', value: netRev > 0 ? fmt(netRev) : '—', sub: 'Ad-attributed exc. GST' },
+            { label: 'Net Revenue', value: netRev > 0 ? fmt(netRev) : '—', sub: 'Ad-attributed' },
             { label: 'ROAS', value: roas > 0 ? `${roas.toFixed(2)}x` : '—', roasVal: roas },
             { label: 'CTR', value: x.ctr > 0 ? `${x.ctr.toFixed(2)}%` : '—' },
             { label: 'CPC', value: x.cpc > 0 ? `₹${x.cpc.toFixed(0)}` : '—' },
