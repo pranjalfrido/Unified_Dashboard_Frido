@@ -4580,13 +4580,21 @@ function AdsTab({ data }) {
           const x = filtAdTypes.find(t => t.adType === activeType) || {}
           const netRev = x.revenue > 0 ? x.revenue / (1 + 0.18) : 0
           const roas = x.spend > 0 && netRev > 0 ? netRev / x.spend : 0
-          const kpis = [
+          const isMetaOnly = selPlatform === 'Meta'
+          const kpis = isMetaOnly ? [
             { label: 'Spend', value: fmt(x.spend || 0) },
             { label: 'Net Revenue', value: netRev > 0 ? fmt(netRev) : '—', sub: 'Ad-attributed exc. GST' },
             { label: 'ROAS', value: roas > 0 ? `${roas.toFixed(2)}x` : '—', roasVal: roas },
             { label: 'CTR', value: x.ctr > 0 ? `${x.ctr.toFixed(2)}%` : '—' },
             { label: 'CPC', value: x.cpc > 0 ? `₹${x.cpc.toFixed(0)}` : '—' },
             { label: 'Impressions', value: fmtBig(x.impressions || 0) },
+          ] : [
+            { label: 'Spend', value: fmt(x.spend || 0) },
+            { label: 'Clicks', value: fmtBig(x.clicks || 0) },
+            { label: 'Impressions', value: fmtBig(x.impressions || 0) },
+            { label: 'CTR', value: x.ctr > 0 ? `${x.ctr.toFixed(2)}%` : '—' },
+            { label: 'CPC', value: x.cpc > 0 ? `₹${x.cpc.toFixed(0)}` : '—' },
+            { label: 'Orders', value: x.orders > 0 ? fmtN(Math.round(x.orders)) : '—' },
           ]
           return (
             <div className="kpi-card" style={{ padding: '14px 16px' }}>
