@@ -8,6 +8,7 @@ import { config } from 'dotenv'
 import * as XLSX from 'xlsx'
 import { writeFileSync } from 'fs'
 import { buildQuery as buildUnifiedQuery } from './api/_bq.js'
+import bqHandler from './api/bq.js'
 
 config()
 
@@ -23,11 +24,20 @@ const KEY_PATH = existsSync(RENDER_SECRET_PATH) ? RENDER_SECRET_PATH : LOCAL_KEY
 
 const bq = new BigQuery({ keyFilename: KEY_PATH, projectId: 'frido-429506' })
 
+const supabaseUrl = process.env.SUPABASE_URL
+const parsedUrl = new URL(supabaseUrl)
 const pool = new Pool({
-  connectionString: process.env.SUPABASE_URL,
+  host: parsedUrl.hostname,
+  port: parseInt(parsedUrl.port) || 5432,
+  database: parsedUrl.pathname.slice(1),
+  user: decodeURIComponent(parsedUrl.username),
+  password: decodeURIComponent(parsedUrl.password),
   ssl: { rejectUnauthorized: false },
-  max: 5
+  max: 3,
+  idleTimeoutMillis: 30000,
+  connectionTimeoutMillis: 10000,
 })
+pool.on('error', (err) => console.error('[pool] idle client error:', err.message))
 
 const app = express()
 app.use(cors())
@@ -240,8 +250,11 @@ async function hasDataInPG(start, end) {
   return syncedDays >= expectedDays - 2
 }
 
-// ── API: main data endpoint (server-side aggregation) ────────
-app.post('/api/bq', async (req, res) => {
+// ── API: main data endpoint — delegates to api/bq.js (BigQuery) ─
+app.post('/api/bq', (req, res) => bqHandler(req, res))
+
+// ── OLD Supabase-based route (kept for reference, never reached) ─
+async function _legacyBqRoute(req, res) {
   const { start, end } = req.body
   if (!start || !end) return res.status(400).json({ error: 'Missing start or end date' })
   try {
@@ -562,7 +575,7 @@ app.post('/api/bq', async (req, res) => {
     console.error('[api/bq] Error:', err.message)
     res.status(500).json({ error: err.message })
   }
-})
+}
 
 // ── API: manual sync trigger ──────────────────────────────────
 app.post('/api/sync', async (req, res) => {

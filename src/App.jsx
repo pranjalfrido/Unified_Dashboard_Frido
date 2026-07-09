@@ -14,6 +14,7 @@ function Sidebar({ page, setPage }) {
   const items = [
     { id: 'overview', label: 'Overview', icon: <SvgIcon d={['M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z','M9 22V12h6v10']} /> },
     { id: 'sales', label: 'Sales', icon: <SvgIcon d={['M18 20V10','M12 20V4','M6 20v-6']} /> },
+    { id: 'ads', label: 'Ads', icon: <SvgIcon d={['M15 3h4a2 2 0 012 2v14a2 2 0 01-2 2h-4','M10 17l5-5-5-5','M13.8 12H3']} /> },
     { id: 'intelligence', label: 'Intel', icon: <SvgIcon d={['M12 2a7 7 0 017 7c0 3.5-2 5.5-2 8H7c0-2.5-2-4.5-2-8a7 7 0 017-7z','M9 21h6','M9.5 17.5h5']} /> },
   ]
   const dims = [
@@ -4254,6 +4255,339 @@ function TrendAnalysisCard({ title, daily, grossColor, grossGradId, revKey = 're
   )
 }
 
+const PLATFORM_COLORS = { Meta: '#1877F2', Google: '#EA4335', Amazon: '#FF9900', Blinkit: '#FFD600', Zepto: '#8B5CF6', Instamart: '#FF6B35', Flipkart: '#2E74CC', Myntra: '#FF3F6C' }
+const ADS_PLATFORMS = [
+  { id: 'All', label: 'All' },
+  { id: 'Meta', label: 'Meta', logo: '/logo-meta.svg' },
+  { id: 'Google', label: 'Google', logo: '/logo-google.svg' },
+  { id: 'Amazon', label: 'Amazon', logo: '/logo-amazon.png' },
+  { id: 'Blinkit', label: 'Blinkit', logo: '/logo-blinkit.png' },
+  { id: 'Zepto', label: 'Zepto', logo: '/logo-zepto.png' },
+  { id: 'Instamart', label: 'Instamart', logo: '/logo-instamart.png' },
+  { id: 'Flipkart', label: 'Flipkart', logo: '/logo-flipkart.png' },
+  { id: 'Myntra', label: 'Myntra', logo: '/logo-myntra.png' },
+]
+
+function AdsTab({ data }) {
+  const ads = data.ads || {}
+  const totals = ads.totals || []
+  const daily = ads.daily || []
+  const byAdType = ads.byAdType || []
+  const campaigns = ads.campaigns || []
+  const byCategory = ads.byCategory || []
+  const bySku = ads.bySku || []
+  const prevTotals = ads.prevTotals || {}
+
+  const [selPlatform, setSelPlatform] = useState(null)
+
+  const roasColor = r => r >= 2 ? C.green.tx : r >= 1 ? '#D97706' : r > 0 ? C.red.tx : C.t3
+  const roasBg = r => r >= 2 ? C.green.bg : r >= 1 ? '#FEF3C7' : r > 0 ? C.red.bg : C.bg
+
+  const chgBadge = (cur, prev) => {
+    if (!prev) return null
+    const p = (cur - prev) / prev * 100
+    return <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 4, background: p >= 0 ? C.green.bg : C.red.bg, color: p >= 0 ? C.green.tx : C.red.tx, flexShrink: 0 }}>{p >= 0 ? '▲' : '▼'} {Math.abs(p).toFixed(1)}%</span>
+  }
+
+  const filtTotals = selPlatform ? totals.filter(t => t.platform === selPlatform) : totals
+  const filtDaily = selPlatform ? daily.filter(d => d.platform === selPlatform) : daily
+  const filtCampaigns = selPlatform ? campaigns.filter(c => c.platform === selPlatform) : campaigns
+  const filtAdTypes = selPlatform ? byAdType.filter(x => x.platform === selPlatform) : byAdType
+  const filtByCategory = selPlatform ? byCategory.filter(x => x.platform === selPlatform) : byCategory
+  const filtBySku = selPlatform ? bySku.filter(x => x.platform === selPlatform) : bySku
+
+  const chMap = data.chMap || {}
+
+  // Shopify revenue split between Meta & Google proportionally by their ad spend
+  const shopifyExcRev = chMap['Shopify']?.excRev || 0
+  const metaSpend = totals.find(t => t.platform === 'Meta')?.spend || 0
+  const googleSpend = totals.find(t => t.platform === 'Google')?.spend || 0
+  const shopifyAdSpendTotal = metaSpend + googleSpend
+  const metaShopifyRev = shopifyAdSpendTotal > 0 ? shopifyExcRev * (metaSpend / shopifyAdSpendTotal) : shopifyExcRev
+  const googleShopifyRev = shopifyAdSpendTotal > 0 ? shopifyExcRev * (googleSpend / shopifyAdSpendTotal) : 0
+
+  // Net revenue (exc GST) from sales data per platform
+  const platformNetRev = {
+    Meta:      metaShopifyRev,
+    Google:    googleShopifyRev,
+    Amazon:    chMap['Amazon']?.excRev    || 0,
+    Blinkit:   chMap['Blinkit']?.excRev   || 0,
+    Zepto:     chMap['Zepto']?.excRev     || 0,
+    Instamart: chMap['Instamart']?.excRev || 0,
+    Myntra:    chMap['Myntra']?.excRev    || 0,
+    Flipkart:  chMap['Flipkart']?.excRev  || 0,
+  }
+  // For "All" tab, sum unique channels (Shopify counted once)
+  const allNetRev = shopifyExcRev + (chMap['Amazon']?.excRev || 0) +
+    (chMap['Blinkit']?.excRev || 0) + (chMap['Zepto']?.excRev || 0) +
+    (chMap['Instamart']?.excRev || 0) + (chMap['Myntra']?.excRev || 0) +
+    (chMap['Flipkart']?.excRev || 0)
+
+  const totalSpend = filtTotals.reduce((s, x) => s + x.spend, 0)
+  const adAttributedRevenue = filtTotals.reduce((s, x) => s + x.revenue, 0)
+  const totalRevenue = selPlatform ? (platformNetRev[selPlatform] || 0) : allNetRev
+  const totalImpressions = filtTotals.reduce((s, x) => s + x.impressions, 0)
+  const totalClicks = filtTotals.reduce((s, x) => s + x.clicks, 0)
+  const totalOrders = filtTotals.reduce((s, x) => s + x.orders, 0)
+  // ROAS = net channel revenue (exc GST) / spend
+  const overallRoas = totalSpend > 0 ? totalRevenue / totalSpend : 0
+  const overallCtr = totalImpressions > 0 ? totalClicks / totalImpressions * 100 : 0
+  const overallCpc = totalClicks > 0 ? totalSpend / totalClicks : 0
+
+  const prevSpend = selPlatform ? (prevTotals[selPlatform]?.spend || 0) : Object.values(prevTotals).reduce((s, x) => s + x.spend, 0)
+  const prevRevenue = selPlatform ? (prevTotals[selPlatform]?.revenue || 0) : Object.values(prevTotals).reduce((s, x) => s + x.revenue, 0)
+  const prevClicks = selPlatform ? (prevTotals[selPlatform]?.clicks || 0) : Object.values(prevTotals).reduce((s, x) => s + x.clicks, 0)
+  const prevImpressions = selPlatform ? (prevTotals[selPlatform]?.impressions || 0) : Object.values(prevTotals).reduce((s, x) => s + x.impressions, 0)
+
+  const dailyByDate = {}
+  filtDaily.forEach(d => {
+    if (!dailyByDate[d.date]) dailyByDate[d.date] = { date: d.date, spend: 0, revenue: 0 }
+    dailyByDate[d.date].spend += d.spend
+    dailyByDate[d.date].revenue += d.revenue
+  })
+  const dailyArr = Object.values(dailyByDate).sort((a, b) => a.date.localeCompare(b.date))
+
+  const maxSpend = Math.max(...totals.map(t => t.spend), 1)
+  const platformLogo = p => {
+    const found = ADS_PLATFORMS.find(x => x.id === p)
+    return found?.logo || null
+  }
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+      <div className="sales-tabs">
+        {ADS_PLATFORMS.map(p => (
+          <button key={p.id} onClick={() => setSelPlatform(p.id === 'All' ? null : p.id)}
+            className={`stab${(p.id === 'All' ? !selPlatform : selPlatform === p.id) ? ' active' : ''}`}
+            style={p.id === 'All' ? { fontWeight: !selPlatform ? 800 : 700, fontSize: 13 } : {}}>
+            {p.logo && <img src={p.logo} alt="" style={{ width: 14, height: 14, borderRadius: 3, flexShrink: 0, objectFit: 'contain' }} />}
+            {p.label}
+          </button>
+        ))}
+      </div>
+
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 14, padding: '14px 16px', flex: 1, overflowY: 'auto' }}>
+
+        {/* KPI Cards */}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10 }}>
+          {[
+            { label: 'Total Spend', value: fmt(totalSpend), badge: chgBadge(totalSpend, prevSpend), sub: 'Ad spend incl. all platforms' },
+            { label: 'Net Revenue', value: fmt(totalRevenue), sub: selPlatform ? `${selPlatform === 'Meta' || selPlatform === 'Google' ? 'Shopify (spend-split)' : selPlatform} net exc. GST` : 'All channels net exc. GST' },
+            { label: 'Overall ROAS', value: `${overallRoas.toFixed(2)}x`, sub: 'Net rev / Spend', roasVal: overallRoas },
+            { label: 'Total Clicks', value: fmtN(Math.round(totalClicks)), badge: chgBadge(totalClicks, prevClicks), sub: 'Across all platforms' },
+            { label: 'Impressions', value: fmtN(Math.round(totalImpressions)), badge: chgBadge(totalImpressions, prevImpressions), sub: 'Total ad impressions' },
+            { label: 'CTR', value: overallCtr.toFixed(2) + '%', sub: 'Clicks / Impressions' },
+            { label: 'CPC', value: `₹${overallCpc.toFixed(2)}`, sub: 'Spend / Clicks' },
+            { label: 'Orders', value: fmtN((() => { if (!selPlatform) return (data.shopify?.totals?.qty || 0) + (data.amzSC?.totalUnits || 0) + (data.amzVC?.accounts || []).reduce((s, a) => s + (a.orderedUnits || 0), 0) + (data.blinkit?.totals?.units || 0) + (data.zepto?.totals?.units || 0) + (data.instamart?.totals?.units || 0) + (data.flipkart?.totals || []).reduce((s, t) => s + (t.units || 0), 0) + (data.myntra?.totals?.units || 0); if (selPlatform === 'Amazon') return (data.amzSC?.totalUnits || 0) + (data.amzVC?.accounts || []).reduce((s, a) => s + (a.orderedUnits || 0), 0); if (selPlatform === 'Flipkart') return (data.flipkart?.totals || []).reduce((s, t) => s + (t.units || 0), 0); if (selPlatform === 'Myntra') return data.myntra?.totals?.units || 0; if (selPlatform === 'Zepto') return data.zepto?.totals?.units || 0; if (selPlatform === 'Instamart') return data.instamart?.totals?.units || 0; if (selPlatform === 'Blinkit') return data.blinkit?.totals?.units || 0; if (selPlatform === 'Meta' || selPlatform === 'Google') return data.shopify?.totals?.qty || 0; return 0 })()), sub: 'Item qty sold' },
+          ].map(k => (
+            <div key={k.label} className="kpi-card" style={{ padding: '12px 14px' }}>
+              <div className="kpi-label">{k.label}</div>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 4, marginTop: 4 }}>
+                <div className="kpi-value" style={{ fontSize: 18, color: k.roasVal != null ? roasColor(k.roasVal) : C.t1 }}>{k.value}</div>
+                {k.badge}
+              </div>
+              {k.sub && <div className="kpi-sub" style={{ marginTop: 3 }}>{k.sub}</div>}
+            </div>
+          ))}
+        </div>
+
+        {/* Spend by Platform + Daily Chart — split only on All tab */}
+        <div style={{ display: 'grid', gridTemplateColumns: selPlatform ? '1fr' : '38% 1fr', gap: 12 }}>
+
+          {/* Spend by Platform bars — only on All */}
+          {!selPlatform && (
+            <div className="kpi-card" style={{ padding: '14px 16px' }}>
+              <div style={{ fontWeight: 700, fontSize: 13, marginBottom: 12, color: C.t1 }}>Spend by Platform</div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                {[...totals].sort((a, b) => b.spend - a.spend).map(t => (
+                  <div key={t.platform}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+                      {platformLogo(t.platform)
+                        ? <img src={platformLogo(t.platform)} alt="" style={{ width: 14, height: 14, borderRadius: 2, objectFit: 'contain', flexShrink: 0 }} />
+                        : <span style={{ width: 8, height: 8, borderRadius: '50%', background: PLATFORM_COLORS[t.platform] || C.acc, display: 'inline-block', flexShrink: 0 }} />
+                      }
+                      <span style={{ fontSize: 12, fontWeight: 600, color: C.t1, flex: 1 }}>{t.platform}</span>
+                      <span style={{ fontSize: 12, fontWeight: 700, color: C.t1 }}>{fmt(t.spend)}</span>
+                      {t.roas > 0 && <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 4, background: roasBg(t.roas), color: roasColor(t.roas), minWidth: 36, textAlign: 'center' }}>{t.roas.toFixed(2)}x</span>}
+                    </div>
+                    <div style={{ height: 5, borderRadius: 3, background: C.border, overflow: 'hidden' }}>
+                      <div style={{ height: '100%', borderRadius: 3, background: PLATFORM_COLORS[t.platform] || C.acc, width: `${Math.max(4, (Math.log(t.spend + 1) / Math.log(maxSpend + 1)) * 100).toFixed(1)}%`, transition: 'width .4s' }} />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Daily trend */}
+          <div className="kpi-card" style={{ padding: '14px 16px' }}>
+            <div style={{ fontWeight: 700, fontSize: 13, marginBottom: 10, color: C.t1 }}>Daily Spend & Revenue Trend</div>
+            <ResponsiveContainer width="100%" height={200}>
+              <AreaChart data={dailyArr} margin={{ top: 4, right: 8, bottom: 0, left: 0 }}>
+                <defs>
+                  <linearGradient id="adsSpendGrad" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#6366F1" stopOpacity={0.3}/><stop offset="95%" stopColor="#6366F1" stopOpacity={0}/></linearGradient>
+                  <linearGradient id="adsRevGrad" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#10B981" stopOpacity={0.2}/><stop offset="95%" stopColor="#10B981" stopOpacity={0}/></linearGradient>
+                </defs>
+                <CartesianGrid strokeDasharray="3 3" stroke={C.border} />
+                <XAxis dataKey="date" tick={{ fontSize: 10, fill: C.t3 }} tickFormatter={d => d?.slice(5)} />
+                <YAxis tick={{ fontSize: 10, fill: C.t3 }} tickFormatter={v => fmt(v)} width={55} />
+                <Tooltip formatter={(v, n) => [fmt(v), n]} labelFormatter={l => l} contentStyle={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 6, fontSize: 11 }} />
+                <Legend wrapperStyle={{ fontSize: 11 }} />
+                <Area type="monotone" dataKey="spend" name="Spend" stroke="#6366F1" strokeWidth={2} fill="url(#adsSpendGrad)" dot={false} />
+                <Area type="monotone" dataKey="revenue" name="Revenue" stroke="#10B981" strokeWidth={2} fill="url(#adsRevGrad)" dot={false} />
+              </AreaChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+
+        {/* Ad Type Breakdown cards */}
+        <div>
+          <div style={{ fontWeight: 700, fontSize: 13, marginBottom: 10, color: C.t1 }}>Ad Type Breakdown</div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10 }}>
+            {filtAdTypes.map((x, i) => (
+              <div key={i} className="kpi-card" style={{ padding: 0, overflow: 'hidden', borderLeft: `3px solid ${PLATFORM_COLORS[x.platform] || C.acc}` }}>
+                <div style={{ padding: '10px 13px 8px', borderBottom: `1px solid ${C.border}`, display: 'flex', alignItems: 'center', gap: 8 }}>
+                  {platformLogo(x.platform)
+                    ? <img src={platformLogo(x.platform)} alt="" style={{ width: 16, height: 16, borderRadius: 3, objectFit: 'contain', flexShrink: 0 }} />
+                    : <span style={{ width: 8, height: 8, borderRadius: '50%', background: PLATFORM_COLORS[x.platform] || C.acc, display: 'inline-block', flexShrink: 0 }} />
+                  }
+                  <span style={{ fontWeight: 700, fontSize: 12, color: C.t1 }}>{x.platform}</span>
+                  <span style={{ fontSize: 10, padding: '1px 7px', borderRadius: 10, background: C.bg, color: C.t2, border: `1px solid ${C.border}`, fontWeight: 500 }}>{x.adType}</span>
+                </div>
+                <div style={{ padding: '10px 13px' }}>
+                  <div style={{ fontSize: 20, fontWeight: 800, color: C.t1, marginBottom: 6 }}>{fmt(x.spend)}</div>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 4 }}>
+                    {[
+                      { label: 'Revenue', value: x.revenue > 0 ? fmt(x.revenue) : '—' },
+                      { label: 'ROAS', value: x.roas > 0 ? x.roas.toFixed(2) + 'x' : '—', color: x.roas > 0 ? roasColor(x.roas) : C.t3 },
+                      { label: 'CTR', value: x.ctr > 0 ? x.ctr.toFixed(1) + '%' : '—' },
+                      { label: 'CPC', value: x.cpc > 0 ? '₹' + x.cpc.toFixed(0) : '—' },
+                    ].map(m => (
+                      <div key={m.label} style={{ textAlign: 'center' }}>
+                        <div style={{ fontSize: 11, fontWeight: 700, color: m.color || C.t1 }}>{m.value}</div>
+                        <div style={{ fontSize: 9, color: C.t3, marginTop: 1 }}>{m.label}</div>
+                      </div>
+                    ))}
+                  </div>
+                  {x.orders > 0 && <div style={{ marginTop: 8, fontSize: 10, color: C.t2 }}>{fmtN(Math.round(x.orders))} orders · {fmtN(Math.round(x.impressions))} impr.</div>}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Category & SKU breakdown — only if data exists */}
+        {filtByCategory.length > 0 && (
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+
+            {/* By Category */}
+            <div className="kpi-card" style={{ padding: '14px 16px' }}>
+              <div style={{ fontWeight: 700, fontSize: 13, marginBottom: 10, color: C.t1 }}>Spend by Category</div>
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+                <thead>
+                  <tr style={{ borderBottom: `1px solid ${C.border}` }}>
+                    {['Category', 'Spend', 'Revenue', 'ROAS', 'Orders'].map(h => (
+                      <th key={h} style={{ padding: '5px 8px', textAlign: h === 'Category' ? 'left' : 'right', color: C.t2, fontWeight: 600, fontSize: 11 }}>{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {filtByCategory.map((x, i) => (
+                    <tr key={i} style={{ borderBottom: `1px solid ${C.border}` }}>
+                      <td style={{ padding: '6px 8px', fontWeight: 500 }}>{x.category}</td>
+                      <td style={{ padding: '6px 8px', textAlign: 'right', fontWeight: 700 }}>{fmt(x.spend)}</td>
+                      <td style={{ padding: '6px 8px', textAlign: 'right' }}>{x.revenue > 0 ? fmt(x.revenue) : '—'}</td>
+                      <td style={{ padding: '6px 8px', textAlign: 'right' }}>
+                        {x.roas > 0 ? <span style={{ fontWeight: 700, color: roasColor(x.roas) }}>{x.roas.toFixed(2)}x</span> : '—'}
+                      </td>
+                      <td style={{ padding: '6px 8px', textAlign: 'right' }}>{x.orders > 0 ? fmtN(Math.round(x.orders)) : '—'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            {/* By SKU */}
+            {filtBySku.length > 0 && (
+              <div className="kpi-card" style={{ padding: '14px 16px' }}>
+                <div style={{ fontWeight: 700, fontSize: 13, marginBottom: 10, color: C.t1 }}>Top SKUs by Spend</div>
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+                  <thead>
+                    <tr style={{ borderBottom: `1px solid ${C.border}` }}>
+                      {['SKU', 'Category', 'Spend', 'Revenue', 'ROAS', 'Orders'].map(h => (
+                        <th key={h} style={{ padding: '5px 8px', textAlign: h === 'SKU' || h === 'Category' ? 'left' : 'right', color: C.t2, fontWeight: 600, fontSize: 11 }}>{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filtBySku.slice(0, 15).map((x, i) => (
+                      <tr key={i} style={{ borderBottom: `1px solid ${C.border}` }}>
+                        <td style={{ padding: '6px 8px', fontWeight: 500, maxWidth: 160, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={x.sku}>{x.sku}</td>
+                        <td style={{ padding: '6px 8px', color: C.t2, fontSize: 11 }}>{x.category || '—'}</td>
+                        <td style={{ padding: '6px 8px', textAlign: 'right', fontWeight: 700 }}>{fmt(x.spend)}</td>
+                        <td style={{ padding: '6px 8px', textAlign: 'right' }}>{x.revenue > 0 ? fmt(x.revenue) : '—'}</td>
+                        <td style={{ padding: '6px 8px', textAlign: 'right' }}>
+                          {x.roas > 0 ? <span style={{ fontWeight: 700, color: roasColor(x.roas) }}>{x.roas.toFixed(2)}x</span> : '—'}
+                        </td>
+                        <td style={{ padding: '6px 8px', textAlign: 'right' }}>{x.orders > 0 ? fmtN(Math.round(x.orders)) : '—'}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Top Campaigns */}
+        <div className="kpi-card" style={{ padding: '14px 16px' }}>
+          <div style={{ fontWeight: 700, fontSize: 13, marginBottom: 10, color: C.t1 }}>Top Campaigns by Spend</div>
+          <div style={{ overflowX: 'auto' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+              <thead>
+                <tr style={{ borderBottom: `2px solid ${C.border}` }}>
+                  {['', 'Campaign', 'Ad Type', 'Spend', 'Revenue', 'ROAS', 'Clicks', 'CTR', 'CPC', 'Orders'].map(h => (
+                    <th key={h} style={{ padding: '7px 10px', textAlign: h === 'Campaign' || h === 'Ad Type' || h === '' ? 'left' : 'right', color: C.t2, fontWeight: 600, whiteSpace: 'nowrap', fontSize: 11 }}>{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {filtCampaigns.slice(0, 30).map((x, i) => {
+                  const borderColor = x.roas >= 2 ? '#10B981' : x.roas >= 1 ? '#D97706' : x.roas > 0 ? '#EF4444' : C.border
+                  return (
+                    <tr key={i} style={{ borderBottom: `1px solid ${C.border}`, borderLeft: `3px solid ${borderColor}` }}>
+                      <td style={{ padding: '7px 10px 7px 8px', width: 24 }}>
+                        {platformLogo(x.platform)
+                          ? <img src={platformLogo(x.platform)} alt={x.platform} style={{ width: 16, height: 16, borderRadius: 3, objectFit: 'contain', display: 'block' }} />
+                          : <span style={{ width: 8, height: 8, borderRadius: '50%', background: PLATFORM_COLORS[x.platform] || C.acc, display: 'inline-block' }} />
+                        }
+                      </td>
+                      <td style={{ padding: '7px 10px', maxWidth: 260, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontWeight: 500 }} title={x.campaign}>{x.campaign || '—'}</td>
+                      <td style={{ padding: '7px 10px', color: C.t2, whiteSpace: 'nowrap' }}><span style={{ fontSize: 10, padding: '1px 6px', borderRadius: 8, background: C.bg, border: `1px solid ${C.border}` }}>{x.adType || '—'}</span></td>
+                      <td style={{ padding: '7px 10px', textAlign: 'right', fontWeight: 700 }}>{fmt(x.spend)}</td>
+                      <td style={{ padding: '7px 10px', textAlign: 'right' }}>{x.revenue > 0 ? fmt(x.revenue) : '—'}</td>
+                      <td style={{ padding: '7px 10px', textAlign: 'right' }}>
+                        {x.roas > 0
+                          ? <span style={{ fontWeight: 700, padding: '2px 6px', borderRadius: 4, background: roasBg(x.roas), color: roasColor(x.roas) }}>{x.roas.toFixed(2)}x</span>
+                          : <span style={{ color: C.t3 }}>—</span>}
+                      </td>
+                      <td style={{ padding: '7px 10px', textAlign: 'right' }}>{fmtN(Math.round(x.clicks))}</td>
+                      <td style={{ padding: '7px 10px', textAlign: 'right' }}>{x.ctr > 0 ? x.ctr.toFixed(2) + '%' : '—'}</td>
+                      <td style={{ padding: '7px 10px', textAlign: 'right' }}>{x.cpc > 0 ? '₹' + x.cpc.toFixed(2) : '—'}</td>
+                      <td style={{ padding: '7px 10px', textAlign: 'right' }}>{x.orders > 0 ? fmtN(Math.round(x.orders)) : '—'}</td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  )
+}
+
 function BlinkitTab({ data }) {
   const bl = data.blinkit || {}
   const t = bl.totals || {}
@@ -6089,6 +6423,11 @@ export default function App() {
             </div>
           )}
           {page === 'sales' && data && <SalesPage data={data} filters={filters} setFilters={setFilters} activeTab={activeTab} setActiveTab={setActiveTab} fetchData={fetchData} />}
+          {page === 'ads' && data && (
+            <div className="page-scroll">
+              <AdsTab data={data} />
+            </div>
+          )}
           {page === 'intelligence' && (
             <div className="page-scroll">
               <IntelPage data={data} />
