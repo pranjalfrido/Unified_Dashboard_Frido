@@ -4333,17 +4333,6 @@ function AdsTab({ data }) {
   const overallRoas = totalSpend > 0 ? totalRevenue / totalSpend : 0
   const overallCtr = totalImpressions > 0 ? totalClicks / totalImpressions * 100 : 0
   const overallCpc = totalClicks > 0 ? totalSpend / totalClicks : 0
-  const costPerOrder = currentOrders > 0 ? totalSpend / currentOrders : 0
-
-  // CAC = Shopify ad spend (Meta+Google) / new Shopify customers
-  const shopifyNewCustomers = (data.nCusts || 0) - (data.repeatCusts || 0)
-  const shopifyAdSpend = metaSpend + googleSpend
-  const cac = (() => {
-    if (!selPlatform) return shopifyNewCustomers > 0 ? shopifyAdSpend / shopifyNewCustomers : 0
-    if (selPlatform === 'Meta') return shopifyNewCustomers > 0 ? metaSpend / shopifyNewCustomers : 0
-    if (selPlatform === 'Google') return shopifyNewCustomers > 0 ? googleSpend / shopifyNewCustomers : 0
-    return null // not applicable for marketplace platforms
-  })()
 
   const prevSpend = selPlatform ? (prevTotals[selPlatform]?.spend || 0) : Object.values(prevTotals).reduce((s, x) => s + x.spend, 0)
   const prevRevenue = selPlatform ? (prevTotals[selPlatform]?.revenue || 0) : Object.values(prevTotals).reduce((s, x) => s + x.revenue, 0)
@@ -4374,6 +4363,16 @@ function AdsTab({ data }) {
     if (selPlatform === 'Blinkit') return data.chMap?.['Blinkit']?.orders || data.blinkit?.totals?.orders || 0
     if (selPlatform === 'Meta' || selPlatform === 'Google') return data.shopify?.totals?.orders || 0
     return 0
+  })()
+
+  const costPerOrder = currentOrders > 0 ? totalSpend / currentOrders : 0
+  const shopifyNewCustomers = (data.nCusts || 0) - (data.repeatCusts || 0)
+  const shopifyAdSpend = metaSpend + googleSpend
+  const cac = (() => {
+    if (!selPlatform) return shopifyNewCustomers > 0 ? shopifyAdSpend / shopifyNewCustomers : 0
+    if (selPlatform === 'Meta') return shopifyNewCustomers > 0 ? metaSpend / shopifyNewCustomers : 0
+    if (selPlatform === 'Google') return shopifyNewCustomers > 0 ? googleSpend / shopifyNewCustomers : 0
+    return null
   })()
 
   const dailyByDate = {}
