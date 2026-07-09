@@ -4365,12 +4365,6 @@ function AdsTab({ data }) {
   })()
 
   const prevCpo = prevOrders > 0 ? prevSpend / prevOrders : 0
-  const prevCac = (() => {
-    if (!selPlatform) return shopifyNewCustomers > 0 ? (prevTotals['Meta']?.spend || 0) + (prevTotals['Google']?.spend || 0) > 0 ? ((prevTotals['Meta']?.spend || 0) + (prevTotals['Google']?.spend || 0)) / shopifyNewCustomers : 0 : 0
-    if (selPlatform === 'Meta') return shopifyNewCustomers > 0 && prevTotals['Meta']?.spend ? prevTotals['Meta'].spend / shopifyNewCustomers : 0
-    if (selPlatform === 'Google') return shopifyNewCustomers > 0 && prevTotals['Google']?.spend ? prevTotals['Google'].spend / shopifyNewCustomers : 0
-    return 0
-  })()
   const costPerOrder = currentOrders > 0 ? totalSpend / currentOrders : 0
   const shopifyNewCustomers = (ads.nCusts || data.nCusts || 0) - (ads.repeatCusts || data.repeatCusts || 0)
   const shopifyAdSpend = metaSpend + googleSpend
@@ -4379,6 +4373,12 @@ function AdsTab({ data }) {
     if (selPlatform === 'Meta') return shopifyNewCustomers > 0 ? metaSpend / shopifyNewCustomers : 0
     if (selPlatform === 'Google') return shopifyNewCustomers > 0 ? googleSpend / shopifyNewCustomers : 0
     return null
+  })()
+  const prevCac = (() => {
+    if (!selPlatform) return shopifyNewCustomers > 0 ? ((prevTotals['Meta']?.spend || 0) + (prevTotals['Google']?.spend || 0)) / shopifyNewCustomers : 0
+    if (selPlatform === 'Meta') return shopifyNewCustomers > 0 && prevTotals['Meta']?.spend ? prevTotals['Meta'].spend / shopifyNewCustomers : 0
+    if (selPlatform === 'Google') return shopifyNewCustomers > 0 && prevTotals['Google']?.spend ? prevTotals['Google'].spend / shopifyNewCustomers : 0
+    return 0
   })()
 
   const dailyByDate = {}
