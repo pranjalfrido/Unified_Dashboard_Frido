@@ -4581,10 +4581,10 @@ function AdsTab({ data }) {
           if (!platRows.length) return null
           const totalSpendHere = platRows.reduce((s, r) => s + r.spend, 0)
 
-          // Category view — group by category
+          // Category view — group by category (normalize to avoid duplicates from whitespace/case)
           const catMap = {}
           platRows.forEach(r => {
-            const k = r.category
+            const k = (r.category || 'Unknown').trim()
             if (!catMap[k]) catMap[k] = { category: k, spend: 0, orders: 0, clicks: 0, impressions: 0, revenue: 0 }
             catMap[k].spend += r.spend
             catMap[k].orders += r.orders
