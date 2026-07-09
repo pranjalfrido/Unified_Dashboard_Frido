@@ -4467,28 +4467,31 @@ function AdsTab({ data }) {
           {/* Spend by Platform bars — only on All */}
           {!selPlatform && (() => {
             const sortedTotals = [...totals].sort((a, b) => b.spend - a.spend)
-            const maxPlatformSpend = sortedTotals[0]?.spend || 1
+            const totalAllSpend = sortedTotals.reduce((s, t) => s + t.spend, 0)
             return (
               <div className="kpi-card" style={{ padding: '16px 18px' }}>
                 <div style={{ fontWeight: 700, fontSize: 13, marginBottom: 14, color: C.t1 }}>Spend by Platform</div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                {/* Stacked share bar */}
+                <div style={{ display: 'flex', height: 8, borderRadius: 6, overflow: 'hidden', marginBottom: 16, gap: 1 }}>
+                  {sortedTotals.map(t => (
+                    <div key={t.platform} title={`${t.platform}: ${((t.spend / totalAllSpend) * 100).toFixed(1)}%`}
+                      style={{ height: '100%', background: PLATFORM_COLORS[t.platform] || C.acc, width: `${(t.spend / totalAllSpend * 100).toFixed(2)}%`, transition: 'width 0.5s ease' }} />
+                  ))}
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                   {sortedTotals.map(t => {
-                    const pct = Math.max(3, (t.spend / maxPlatformSpend) * 100)
                     const color = PLATFORM_COLORS[t.platform] || C.acc
+                    const sharePct = totalAllSpend > 0 ? (t.spend / totalAllSpend * 100).toFixed(1) : '0'
                     return (
-                      <div key={t.platform}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 5 }}>
-                          {platformLogo(t.platform)
-                            ? <img src={platformLogo(t.platform)} alt="" style={{ width: 16, height: 16, borderRadius: 3, objectFit: 'contain', flexShrink: 0 }} />
-                            : <span style={{ width: 8, height: 8, borderRadius: '50%', background: color, display: 'inline-block', flexShrink: 0 }} />
-                          }
-                          <span style={{ fontSize: 12, fontWeight: 600, color: C.t1, flex: 1 }}>{t.platform}</span>
-                          <span style={{ fontSize: 12, fontWeight: 700, color: C.t1 }}>{fmt(t.spend)}</span>
-                          {t.roas > 0 && <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 7px', borderRadius: 4, background: roasBg(t.roas), color: roasColor(t.roas), minWidth: 38, textAlign: 'center' }}>{t.roas.toFixed(2)}x</span>}
-                        </div>
-                        <div style={{ height: 6, borderRadius: 4, background: C.border, overflow: 'hidden' }}>
-                          <div style={{ height: '100%', borderRadius: 4, background: color, width: `${pct.toFixed(1)}%`, transition: 'width 0.5s ease', opacity: 0.85 }} />
-                        </div>
+                      <div key={t.platform} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        {platformLogo(t.platform)
+                          ? <img src={platformLogo(t.platform)} alt="" style={{ width: 15, height: 15, borderRadius: 3, objectFit: 'contain', flexShrink: 0 }} />
+                          : <span style={{ width: 8, height: 8, borderRadius: '50%', background: color, display: 'inline-block', flexShrink: 0 }} />
+                        }
+                        <span style={{ fontSize: 12, fontWeight: 600, color: C.t1, flex: 1 }}>{t.platform}</span>
+                        <span style={{ fontSize: 11, color: C.t3, marginRight: 4 }}>{sharePct}%</span>
+                        <span style={{ fontSize: 12, fontWeight: 700, color: C.t1, minWidth: 60, textAlign: 'right' }}>{fmt(t.spend)}</span>
+                        {t.roas > 0 && <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 4, background: roasBg(t.roas), color: roasColor(t.roas), minWidth: 38, textAlign: 'center' }}>{t.roas.toFixed(2)}x</span>}
                       </div>
                     )
                   })}
