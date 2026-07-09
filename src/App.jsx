@@ -4592,10 +4592,10 @@ function AdsTab({ data }) {
             <div className="kpi-card" style={{ padding: '14px 16px' }}>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
                 <div style={{ fontWeight: 700, fontSize: 13, color: C.t1 }}>Ad Type Breakdown</div>
-                <div style={{ display: 'flex', gap: 6 }}>
+                <div style={{ display: 'flex', gap: 6, flex: 1, marginLeft: 16 }}>
                   {adTypes.map(t => (
                     <button key={t} onClick={() => setSelAdType(prev => ({ ...prev, [selPlatform]: t }))}
-                      style={{ fontSize: 11, fontWeight: 600, padding: '4px 12px', borderRadius: 6, border: `1.5px solid ${activeType === t ? PLATFORM_COLORS[selPlatform] || C.acc : C.border}`, background: activeType === t ? PLATFORM_COLORS[selPlatform] || C.acc : 'transparent', color: activeType === t ? '#fff' : C.t2, cursor: 'pointer' }}>
+                      style={{ flex: 1, fontSize: 11, fontWeight: 600, padding: '5px 8px', borderRadius: 6, border: `1.5px solid ${activeType === t ? PLATFORM_COLORS[selPlatform] || C.acc : C.border}`, background: activeType === t ? PLATFORM_COLORS[selPlatform] || C.acc : 'transparent', color: activeType === t ? '#fff' : C.t2, cursor: 'pointer', textAlign: 'center' }}>
                       {t}
                     </button>
                   ))}
