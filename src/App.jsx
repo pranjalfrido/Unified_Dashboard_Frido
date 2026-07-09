@@ -4604,14 +4604,22 @@ function AdsTab({ data }) {
                   <tr style={{ borderBottom: `1.5px solid ${C.border}` }}>
                     <th style={{ textAlign: 'left', padding: '6px 8px', color: C.t3, fontWeight: 600, fontSize: 11 }}>Product</th>
                     <th style={{ textAlign: 'right', padding: '6px 8px', color: C.t3, fontWeight: 600, fontSize: 11 }}>Spend</th>
+                    <th style={{ textAlign: 'right', padding: '6px 8px', color: C.t3, fontWeight: 600, fontSize: 11 }}>Clicks</th>
+                    <th style={{ textAlign: 'right', padding: '6px 8px', color: C.t3, fontWeight: 600, fontSize: 11 }}>Impressions</th>
+                    <th style={{ textAlign: 'right', padding: '6px 8px', color: C.t3, fontWeight: 600, fontSize: 11 }}>CTR</th>
+                    <th style={{ textAlign: 'right', padding: '6px 8px', color: C.t3, fontWeight: 600, fontSize: 11 }}>CPC</th>
                     <th style={{ textAlign: 'right', padding: '6px 8px', color: C.t3, fontWeight: 600, fontSize: 11 }}>Orders</th>
                   </tr>
                 </thead>
                 <tbody>
                   {zeroRows.map((r, i) => (
                     <tr key={r.product + r.campaign} style={{ borderBottom: `1px solid ${C.border}`, background: i % 2 === 0 ? '#fff' : C.bg }}>
-                      <td style={{ padding: '7px 8px', color: C.t1, fontWeight: 500, maxWidth: 320, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.product}</td>
+                      <td style={{ padding: '7px 8px', color: C.t1, fontWeight: 500, maxWidth: 260, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.product}</td>
                       <td style={{ padding: '7px 8px', color: C.t1, textAlign: 'right', fontWeight: 600 }}>{fmt(r.spend)}</td>
+                      <td style={{ padding: '7px 8px', color: C.t2, textAlign: 'right' }}>{fmtBig(r.clicks)}</td>
+                      <td style={{ padding: '7px 8px', color: C.t2, textAlign: 'right' }}>{fmtBig(r.impressions)}</td>
+                      <td style={{ padding: '7px 8px', color: C.t2, textAlign: 'right' }}>{r.ctr > 0 ? `${r.ctr.toFixed(2)}%` : '—'}</td>
+                      <td style={{ padding: '7px 8px', color: C.t2, textAlign: 'right' }}>{r.cpc > 0 ? `₹${r.cpc.toFixed(0)}` : '—'}</td>
                       <td style={{ padding: '7px 8px', textAlign: 'right' }}>
                         <span style={{ background: C.red.bg, color: C.red.tx, border: `1px solid ${C.red.bd}`, borderRadius: 5, padding: '2px 8px', fontWeight: 700, fontSize: 11 }}>0</span>
                       </td>
