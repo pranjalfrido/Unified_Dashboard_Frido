@@ -4579,12 +4579,12 @@ function AdsTab({ data }) {
           const activeType = selAdType[selPlatform] || adTypes[0]
           const x = filtAdTypes.find(t => t.adType === activeType) || {}
           const isMetaOnly = selPlatform === 'Meta'
-          // Meta stores revenue only at platform level — distribute by spend share
+          // Meta/Google: revenue per ad_type is 0 in BQ — distribute platform sales revenue by spend share
           const platformTotalSpend = filtAdTypes.reduce((s, t) => s + (t.spend || 0), 0)
-          const platformTotalRev = filtTotals.reduce((s, t) => s + (t.revenue || 0), 0)
+          const salesRevForPlatform = platformNetRev[selPlatform] || 0
           const spendShare = platformTotalSpend > 0 ? (x.spend || 0) / platformTotalSpend : 0
           const netRev = isMetaOnly
-            ? (x.revenue > 0 ? x.revenue : spendShare * platformTotalRev)
+            ? (salesRevForPlatform > 0 ? spendShare * salesRevForPlatform : 0)
             : (x.revenue > 0 ? x.revenue : 0)
           const roas = x.spend > 0 && netRev > 0 ? netRev / x.spend : 0
           const kpis = isMetaOnly ? [
