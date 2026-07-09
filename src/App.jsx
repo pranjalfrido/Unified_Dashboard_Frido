@@ -4573,6 +4573,63 @@ function AdsTab({ data }) {
           })()}
         </div>
 
+        {/* Zero Order Spend — Google and Flipkart only */}
+        {(selPlatform === 'Google' || selPlatform === 'Flipkart') && (() => {
+          // Group bySku by product name (fallback to sku field which maps to product_name)
+          const productMap = {}
+          filtBySku.forEach(x => {
+            const key = x.sku || 'Unknown'
+            if (!productMap[key]) productMap[key] = { product: key, spend: 0, orders: 0 }
+            productMap[key].spend += x.spend || 0
+            productMap[key].orders += x.orders || 0
+          })
+          const zeroRows = Object.values(productMap)
+            .filter(r => r.orders === 0 && r.spend > 0)
+            .sort((a, b) => b.spend - a.spend)
+          if (!zeroRows.length) return null
+          const wastedSpend = zeroRows.reduce((s, r) => s + r.spend, 0)
+          return (
+            <div className="kpi-card" style={{ padding: '14px 16px', marginBottom: 16 }}>
+              <div style={{ marginBottom: 12 }}>
+                <div style={{ fontWeight: 700, fontSize: 13, color: C.t1 }}>Zero Order Spend</div>
+                <div style={{ fontSize: 11, color: C.t3, marginTop: 2 }}>Spend with no resulting orders in this period.</div>
+              </div>
+              {/* Summary strip */}
+              <div style={{ display: 'flex', gap: 12, marginBottom: 14 }}>
+                <div style={{ background: C.red.bg, border: `1px solid ${C.red.bd}`, borderRadius: 8, padding: '8px 14px' }}>
+                  <div style={{ fontSize: 10, color: C.red.tx, fontWeight: 600, marginBottom: 2 }}>TOTAL WASTED SPEND</div>
+                  <div style={{ fontSize: 16, fontWeight: 700, color: C.red.tx }}>{fmt(wastedSpend)}</div>
+                </div>
+                <div style={{ background: C.amber.bg, border: `1px solid ${C.amber.bd}`, borderRadius: 8, padding: '8px 14px' }}>
+                  <div style={{ fontSize: 10, color: C.amber.tx, fontWeight: 600, marginBottom: 2 }}>PRODUCTS FLAGGED</div>
+                  <div style={{ fontSize: 16, fontWeight: 700, color: C.amber.tx }}>{zeroRows.length}</div>
+                </div>
+              </div>
+              {/* Table */}
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+                <thead>
+                  <tr style={{ borderBottom: `1.5px solid ${C.border}` }}>
+                    <th style={{ textAlign: 'left', padding: '6px 8px', color: C.t3, fontWeight: 600, fontSize: 11 }}>Product</th>
+                    <th style={{ textAlign: 'right', padding: '6px 8px', color: C.t3, fontWeight: 600, fontSize: 11 }}>Spend</th>
+                    <th style={{ textAlign: 'right', padding: '6px 8px', color: C.t3, fontWeight: 600, fontSize: 11 }}>Orders</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {zeroRows.map((r, i) => (
+                    <tr key={r.product} style={{ borderBottom: `1px solid ${C.border}`, background: i % 2 === 0 ? '#fff' : C.bg }}>
+                      <td style={{ padding: '7px 8px', color: C.t1, fontWeight: 500, maxWidth: 320, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.product}</td>
+                      <td style={{ padding: '7px 8px', color: C.t1, textAlign: 'right', fontWeight: 600 }}>{fmt(r.spend)}</td>
+                      <td style={{ padding: '7px 8px', textAlign: 'right' }}>
+                        <span style={{ background: C.red.bg, color: C.red.tx, border: `1px solid ${C.red.bd}`, borderRadius: 5, padding: '2px 8px', fontWeight: 700, fontSize: 11 }}>0</span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )
+        })()}
+
         {/* Ad Type Breakdown — Amazon, Meta, Zepto only */}
         {(selPlatform === 'Amazon' || selPlatform === 'Meta' || selPlatform === 'Zepto') && (() => {
           const adTypes = filtAdTypes.map(x => x.adType).filter((v, i, a) => a.indexOf(v) === i)
