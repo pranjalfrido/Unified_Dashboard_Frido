@@ -1,5 +1,5 @@
 import { useState, useMemo, useCallback, useEffect, useRef, Fragment } from 'react'
-import { C, fmt, fmtN, pct, processData, detectAlerts, exportCSV, getDefaultDates } from './utils.js'
+import { C, fmt, fmtN, fmtBig, pct, processData, detectAlerts, exportCSV, getDefaultDates } from './utils.js'
 import { KPICard, AlertCard, HBar, DataTable, Card, Badge, RevTrendChart, AreaTrendChart, MultiLineChart, ChartTooltip, BarChart, Bar, LineChart, Line, AreaChart, Area, ComposedChart, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell, Treemap } from './components.jsx'
 import { ReferenceLine } from 'recharts'
 
@@ -4341,6 +4341,28 @@ function AdsTab({ data }) {
   const prevRoas = prevSpend > 0 ? prevRevenue / prevSpend : 0
   const prevCtr = prevImpressions > 0 ? prevClicks / prevImpressions * 100 : 0
   const prevCpc = prevClicks > 0 ? prevSpend / prevClicks : 0
+  const prevOrders = (() => {
+    if (!selPlatform) return data.prevNOrders || 0
+    if (selPlatform === 'Amazon') return data.amzSC?.prevOrders || 0
+    if (selPlatform === 'Flipkart') return data.flipkart?.prevOrders || 0
+    if (selPlatform === 'Myntra') return data.myntra?.prevOrders || 0
+    if (selPlatform === 'Zepto') return data.zepto?.prevOrders || 0
+    if (selPlatform === 'Instamart') return data.instamart?.prevOrders || 0
+    if (selPlatform === 'Blinkit') return data.blinkit?.prevOrders || 0
+    if (selPlatform === 'Meta' || selPlatform === 'Google') return data.shopify?.prevOrders || 0
+    return 0
+  })()
+  const currentOrders = (() => {
+    if (!selPlatform) return data.nOrders || 0
+    if (selPlatform === 'Amazon') return data.amzSC?.totalOrders || 0
+    if (selPlatform === 'Flipkart') return (data.flipkart?.totals || []).reduce((s, t) => s + (t.orders || 0), 0)
+    if (selPlatform === 'Myntra') return data.myntra?.totals?.orders || 0
+    if (selPlatform === 'Zepto') return data.chMap?.['Zepto']?.orders || data.zepto?.totals?.orders || 0
+    if (selPlatform === 'Instamart') return data.chMap?.['Instamart']?.orders || data.instamart?.totals?.orders || 0
+    if (selPlatform === 'Blinkit') return data.chMap?.['Blinkit']?.orders || data.blinkit?.totals?.orders || 0
+    if (selPlatform === 'Meta' || selPlatform === 'Google') return data.shopify?.totals?.orders || 0
+    return 0
+  })()
 
   const dailyByDate = {}
   filtDaily.forEach(d => {
@@ -4377,11 +4399,11 @@ function AdsTab({ data }) {
             { label: 'Total Spend', value: fmt(totalSpend), badge: chgBadge(totalSpend, prevSpend), sub: 'Ad spend incl. all platforms' },
             { label: 'Net Revenue', value: fmt(totalRevenue), badge: chgBadge(totalRevenue, prevRevenue), sub: selPlatform ? `${selPlatform === 'Meta' || selPlatform === 'Google' ? 'Shopify (spend-split)' : selPlatform} net exc. GST` : 'All channels net exc. GST' },
             { label: 'Overall ROAS', value: `${overallRoas.toFixed(2)}x`, badge: chgBadge(overallRoas, prevRoas), sub: 'Net rev / Spend', roasVal: overallRoas },
-            { label: 'Total Clicks', value: fmtN(Math.round(totalClicks)), badge: chgBadge(totalClicks, prevClicks), sub: 'Across all platforms' },
-            { label: 'Impressions', value: fmtN(Math.round(totalImpressions)), badge: chgBadge(totalImpressions, prevImpressions), sub: 'Total ad impressions' },
+            { label: 'Total Clicks', value: fmtBig(totalClicks), badge: chgBadge(totalClicks, prevClicks), sub: 'Across all platforms' },
+            { label: 'Impressions', value: fmtBig(totalImpressions), badge: chgBadge(totalImpressions, prevImpressions), sub: 'Total ad impressions' },
             { label: 'CTR', value: overallCtr.toFixed(2) + '%', badge: chgBadge(overallCtr, prevCtr), sub: 'Clicks / Impressions' },
             { label: 'CPC', value: `₹${overallCpc.toFixed(2)}`, badge: chgBadge(overallCpc, prevCpc), sub: 'Spend / Clicks' },
-            { label: 'Orders', value: fmtN((() => { if (!selPlatform) return data.nOrders || 0; if (selPlatform === 'Amazon') return data.amzSC?.totalOrders || 0; if (selPlatform === 'Flipkart') return (data.flipkart?.totals || []).reduce((s, t) => s + (t.orders || 0), 0); if (selPlatform === 'Myntra') return data.myntra?.totals?.orders || 0; if (selPlatform === 'Zepto') return data.chMap?.['Zepto']?.orders || data.zepto?.totals?.orders || 0; if (selPlatform === 'Instamart') return data.chMap?.['Instamart']?.orders || data.instamart?.totals?.orders || 0; if (selPlatform === 'Blinkit') return data.chMap?.['Blinkit']?.orders || data.blinkit?.totals?.orders || 0; if (selPlatform === 'Meta' || selPlatform === 'Google') return data.shopify?.totals?.orders || 0; return 0 })()), sub: 'Distinct orders' },
+            { label: 'Orders', value: fmtN(currentOrders), sub: 'Distinct orders', badge: chgBadge(currentOrders, prevOrders) },
           ].map(k => (
             <div key={k.label} className="kpi-card" style={{ padding: '12px 14px' }}>
               <div className="kpi-label">{k.label}</div>
