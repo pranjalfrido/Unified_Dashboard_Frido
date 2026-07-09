@@ -4333,6 +4333,7 @@ function AdsTab({ data }) {
   const overallRoas = totalSpend > 0 ? totalRevenue / totalSpend : 0
   const overallCtr = totalImpressions > 0 ? totalClicks / totalImpressions * 100 : 0
   const overallCpc = totalClicks > 0 ? totalSpend / totalClicks : 0
+  const overallCpm = totalImpressions > 0 ? (totalSpend / totalImpressions) * 1000 : 0
 
   const prevSpend = selPlatform ? (prevTotals[selPlatform]?.spend || 0) : Object.values(prevTotals).reduce((s, x) => s + x.spend, 0)
   const prevClicks = selPlatform ? (prevTotals[selPlatform]?.clicks || 0) : Object.values(prevTotals).reduce((s, x) => s + x.clicks, 0)
@@ -4362,6 +4363,7 @@ function AdsTab({ data }) {
   const prevRoas = prevSpend > 0 ? prevRevenue / prevSpend : 0
   const prevCtr = prevImpressions > 0 ? prevClicks / prevImpressions * 100 : 0
   const prevCpc = prevClicks > 0 ? prevSpend / prevClicks : 0
+  const prevCpm = prevImpressions > 0 ? (prevSpend / prevImpressions) * 1000 : 0
   const prevOrders = (() => {
     if (!selPlatform) return data.prevOrders || 0
     if (selPlatform === 'Amazon') return data.amzSC?.prevOrders || 0
@@ -4443,7 +4445,9 @@ function AdsTab({ data }) {
             { label: 'CPC', value: `₹${overallCpc.toFixed(2)}`, badge: chgBadge(overallCpc, prevCpc), sub: 'Spend / Clicks' },
             { label: 'Orders', value: fmtN(currentOrders), sub: 'Distinct orders', badge: chgBadge(currentOrders, prevOrders) },
             { label: 'Cost Per Order', value: costPerOrder > 0 ? `₹${Math.round(costPerOrder).toLocaleString('en-IN')}` : '—', sub: 'Spend / Orders', badge: chgBadge(prevCpo, costPerOrder) },
-            ...(!selPlatform || selPlatform === 'Meta' || selPlatform === 'Google' ? [{ label: 'CAC (Shopify)', value: cac > 0 ? `₹${Math.round(cac).toLocaleString('en-IN')}` : '—', sub: `Spend / ${fmtN(shopifyNewCustomers)} new custs`, badge: chgBadge(prevCac, cac) }] : []),
+            ...(!selPlatform || selPlatform === 'Meta' || selPlatform === 'Google'
+              ? [{ label: 'CAC (Shopify)', value: cac > 0 ? `₹${Math.round(cac).toLocaleString('en-IN')}` : '—', sub: `Spend / ${fmtN(shopifyNewCustomers)} new custs`, badge: chgBadge(prevCac, cac) }]
+              : [{ label: 'CPM', value: overallCpm > 0 ? `₹${Math.round(overallCpm).toLocaleString('en-IN')}` : '—', sub: 'Cost per 1K impressions', badge: chgBadge(prevCpm, overallCpm) }]),
           ].map(k => (
             <div key={k.label} className="kpi-card" style={{ padding: '12px 14px' }}>
               <div className="kpi-label">{k.label}</div>
