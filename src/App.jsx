@@ -4279,6 +4279,7 @@ function AdsTab({ data }) {
   const prevTotals = ads.prevTotals || {}
 
   const [selPlatform, setSelPlatform] = useState(null)
+  const [trendGran, setTrendGran] = useState('daily')
 
   const roasColor = r => r >= 2 ? C.green.tx : r >= 1 ? '#D97706' : r > 0 ? C.red.tx : C.t3
   const roasBg = r => r >= 2 ? C.green.bg : r >= 1 ? '#FEF3C7' : r > 0 ? C.red.bg : C.bg
@@ -4496,25 +4497,69 @@ function AdsTab({ data }) {
             )
           })()}
 
-          {/* Daily trend */}
-          <div className="kpi-card" style={{ padding: '14px 16px' }}>
-            <div style={{ fontWeight: 700, fontSize: 13, marginBottom: 10, color: C.t1 }}>Daily Spend & Revenue Trend</div>
-            <ResponsiveContainer width="100%" height={200}>
-              <AreaChart data={dailyArr} margin={{ top: 4, right: 8, bottom: 0, left: 0 }}>
-                <defs>
-                  <linearGradient id="adsSpendGrad" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#6366F1" stopOpacity={0.3}/><stop offset="95%" stopColor="#6366F1" stopOpacity={0}/></linearGradient>
-                  <linearGradient id="adsRevGrad" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#10B981" stopOpacity={0.2}/><stop offset="95%" stopColor="#10B981" stopOpacity={0}/></linearGradient>
-                </defs>
-                <CartesianGrid strokeDasharray="3 3" stroke={C.border} />
-                <XAxis dataKey="date" tick={{ fontSize: 10, fill: C.t3 }} tickFormatter={d => d?.slice(5)} />
-                <YAxis tick={{ fontSize: 10, fill: C.t3 }} tickFormatter={v => fmt(v)} width={55} />
-                <Tooltip formatter={(v, n) => [fmt(v), n]} labelFormatter={l => l} contentStyle={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 6, fontSize: 11 }} />
-                <Legend wrapperStyle={{ fontSize: 11 }} />
-                <Area type="monotone" dataKey="spend" name="Spend" stroke="#6366F1" strokeWidth={2} fill="url(#adsSpendGrad)" dot={false} />
-                <Area type="monotone" dataKey="revenue" name="Revenue" stroke="#10B981" strokeWidth={2} fill="url(#adsRevGrad)" dot={false} />
-              </AreaChart>
-            </ResponsiveContainer>
-          </div>
+          {/* Spend, Revenue & ROAS Trend */}
+          {(() => {
+            const aggTrend = (rows, gran) => {
+              const map = {}
+              rows.forEach(r => {
+                let key
+                if (gran === 'weekly') {
+                  const d = new Date(r.date); const day = d.getDay(); const diff = d.getDate() - day + (day === 0 ? -6 : 1)
+                  const mon = new Date(d.setDate(diff)); key = mon.toISOString().slice(0, 10)
+                } else if (gran === 'monthly') {
+                  key = r.date.slice(0, 7)
+                } else if (gran === 'quarterly') {
+                  const m = parseInt(r.date.slice(5, 7)); const q = Math.ceil(m / 3)
+                  key = `${r.date.slice(0, 4)}-Q${q}`
+                } else {
+                  key = r.date
+                }
+                if (!map[key]) map[key] = { date: key, spend: 0, revenue: 0 }
+                map[key].spend += r.spend
+                map[key].revenue += r.revenue
+              })
+              return Object.values(map).sort((a, b) => a.date.localeCompare(b.date)).map(r => ({
+                ...r, roas: r.spend > 0 ? +(r.revenue / r.spend).toFixed(2) : 0
+              }))
+            }
+            const trendData = aggTrend(Object.values(dailyByDate), trendGran)
+            const xFmt = d => {
+              if (trendGran === 'monthly') return d
+              if (trendGran === 'quarterly') return d
+              return d?.slice(5)
+            }
+            return (
+              <div className="kpi-card" style={{ padding: '14px 16px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+                  <div style={{ fontWeight: 700, fontSize: 13, color: C.t1 }}>Spend, Revenue & ROAS Trend</div>
+                  <select value={trendGran} onChange={e => setTrendGran(e.target.value)}
+                    style={{ fontSize: 11, fontWeight: 600, padding: '3px 8px', borderRadius: 6, border: `1px solid ${C.border}`, background: C.card, color: C.t2, cursor: 'pointer', outline: 'none' }}>
+                    <option value="daily">Daily</option>
+                    <option value="weekly">Weekly</option>
+                    <option value="monthly">Monthly</option>
+                    <option value="quarterly">Quarterly</option>
+                  </select>
+                </div>
+                <ResponsiveContainer width="100%" height={210}>
+                  <ComposedChart data={trendData} margin={{ top: 4, right: 50, bottom: 0, left: 0 }}>
+                    <defs>
+                      <linearGradient id="adsSpendGrad" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#6366F1" stopOpacity={0.25}/><stop offset="95%" stopColor="#6366F1" stopOpacity={0}/></linearGradient>
+                      <linearGradient id="adsRevGrad" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#10B981" stopOpacity={0.2}/><stop offset="95%" stopColor="#10B981" stopOpacity={0}/></linearGradient>
+                    </defs>
+                    <CartesianGrid strokeDasharray="3 3" stroke={C.border} />
+                    <XAxis dataKey="date" tick={{ fontSize: 10, fill: C.t3 }} tickFormatter={xFmt} />
+                    <YAxis yAxisId="left" tick={{ fontSize: 10, fill: C.t3 }} tickFormatter={v => fmt(v)} width={55} />
+                    <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 10, fill: '#F59E0B' }} tickFormatter={v => `${v}x`} width={38} />
+                    <Tooltip formatter={(v, n) => n === 'ROAS' ? [`${v}x`, n] : [fmt(v), n]} labelFormatter={l => l} contentStyle={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 6, fontSize: 11 }} />
+                    <Legend wrapperStyle={{ fontSize: 11 }} />
+                    <Area yAxisId="left" type="monotone" dataKey="spend" name="Spend" stroke="#6366F1" strokeWidth={2} fill="url(#adsSpendGrad)" dot={false} />
+                    <Area yAxisId="left" type="monotone" dataKey="revenue" name="Revenue" stroke="#10B981" strokeWidth={2} fill="url(#adsRevGrad)" dot={false} />
+                    <Line yAxisId="right" type="monotone" dataKey="roas" name="ROAS" stroke="#F59E0B" strokeWidth={2} dot={false} strokeDasharray="4 2" />
+                  </ComposedChart>
+                </ResponsiveContainer>
+              </div>
+            )
+          })()}
         </div>
 
         {/* Ad Type Breakdown cards */}
