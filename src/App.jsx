@@ -4333,6 +4333,17 @@ function AdsTab({ data }) {
   const overallRoas = totalSpend > 0 ? totalRevenue / totalSpend : 0
   const overallCtr = totalImpressions > 0 ? totalClicks / totalImpressions * 100 : 0
   const overallCpc = totalClicks > 0 ? totalSpend / totalClicks : 0
+  const costPerOrder = currentOrders > 0 ? totalSpend / currentOrders : 0
+
+  // CAC = Shopify ad spend (Meta+Google) / new Shopify customers
+  const shopifyNewCustomers = (data.nCusts || 0) - (data.repeatCusts || 0)
+  const shopifyAdSpend = metaSpend + googleSpend
+  const cac = (() => {
+    if (!selPlatform) return shopifyNewCustomers > 0 ? shopifyAdSpend / shopifyNewCustomers : 0
+    if (selPlatform === 'Meta') return shopifyNewCustomers > 0 ? metaSpend / shopifyNewCustomers : 0
+    if (selPlatform === 'Google') return shopifyNewCustomers > 0 ? googleSpend / shopifyNewCustomers : 0
+    return null // not applicable for marketplace platforms
+  })()
 
   const prevSpend = selPlatform ? (prevTotals[selPlatform]?.spend || 0) : Object.values(prevTotals).reduce((s, x) => s + x.spend, 0)
   const prevRevenue = selPlatform ? (prevTotals[selPlatform]?.revenue || 0) : Object.values(prevTotals).reduce((s, x) => s + x.revenue, 0)
@@ -4341,6 +4352,7 @@ function AdsTab({ data }) {
   const prevRoas = prevSpend > 0 ? prevRevenue / prevSpend : 0
   const prevCtr = prevImpressions > 0 ? prevClicks / prevImpressions * 100 : 0
   const prevCpc = prevClicks > 0 ? prevSpend / prevClicks : 0
+  const prevCpo = prevOrders > 0 ? prevSpend / prevOrders : 0
   const prevOrders = (() => {
     if (!selPlatform) return data.prevNOrders || 0
     if (selPlatform === 'Amazon') return data.amzSC?.prevOrders || 0
@@ -4394,7 +4406,7 @@ function AdsTab({ data }) {
       <div style={{ display: 'flex', flexDirection: 'column', gap: 14, padding: '14px 16px', flex: 1, overflowY: 'auto' }}>
 
         {/* KPI Cards */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 10 }}>
           {[
             { label: 'Total Spend', value: fmt(totalSpend), badge: chgBadge(totalSpend, prevSpend), sub: 'Ad spend incl. all platforms' },
             { label: 'Net Revenue', value: fmt(totalRevenue), badge: chgBadge(totalRevenue, prevRevenue), sub: selPlatform ? `${selPlatform === 'Meta' || selPlatform === 'Google' ? 'Shopify (spend-split)' : selPlatform} net exc. GST` : 'All channels net exc. GST' },
@@ -4404,6 +4416,8 @@ function AdsTab({ data }) {
             { label: 'CTR', value: overallCtr.toFixed(2) + '%', badge: chgBadge(overallCtr, prevCtr), sub: 'Clicks / Impressions' },
             { label: 'CPC', value: `₹${overallCpc.toFixed(2)}`, badge: chgBadge(overallCpc, prevCpc), sub: 'Spend / Clicks' },
             { label: 'Orders', value: fmtN(currentOrders), sub: 'Distinct orders', badge: chgBadge(currentOrders, prevOrders) },
+            { label: 'Cost Per Order', value: costPerOrder > 0 ? `₹${Math.round(costPerOrder).toLocaleString('en-IN')}` : '—', sub: 'Spend / Orders', badge: costPerOrder > 0 && prevCpo > 0 ? chgBadge(prevCpo, costPerOrder) : undefined },
+            { label: 'CAC', value: cac === null ? '—' : cac > 0 ? `₹${Math.round(cac).toLocaleString('en-IN')}` : '—', sub: cac === null ? 'N/A for marketplace' : `Spend / ${fmtN(shopifyNewCustomers)} new custs` },
           ].map(k => (
             <div key={k.label} className="kpi-card" style={{ padding: '12px 14px' }}>
               <div className="kpi-label">{k.label}</div>
