@@ -4650,7 +4650,6 @@ function AdsTab({ data }) {
           const adTypeOrders = x.orders > 0 ? x.orders : spendShare * platformTotalOrders
           const kpis = isMetaOnly ? [
             { label: 'Spend', value: fmt(x.spend || 0) },
-            { label: 'ROAS', value: roas > 0 ? `${roas.toFixed(2)}x` : '—', roasVal: roas },
             { label: 'CTR', value: x.ctr > 0 ? `${x.ctr.toFixed(2)}%` : '—' },
             { label: 'CPC', value: x.cpc > 0 ? `₹${x.cpc.toFixed(0)}` : '—' },
             { label: 'Impressions', value: fmtBig(x.impressions || 0) },
