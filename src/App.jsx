@@ -4280,6 +4280,7 @@ function AdsTab({ data }) {
 
   const [selPlatform, setSelPlatform] = useState(null)
   const [trendGran, setTrendGran] = useState('daily')
+  const [selAdType, setSelAdType] = useState({})
 
   const roasColor = r => r >= 2 ? C.green.tx : r >= 1 ? '#D97706' : r > 0 ? C.red.tx : C.t3
   const roasBg = r => r >= 2 ? C.green.bg : r >= 1 ? '#FEF3C7' : r > 0 ? C.red.bg : C.bg
@@ -4572,6 +4573,46 @@ function AdsTab({ data }) {
           })()}
         </div>
 
+        {/* Ad Type Breakdown — Amazon, Meta, Zepto only */}
+        {(selPlatform === 'Amazon' || selPlatform === 'Meta' || selPlatform === 'Zepto') && (() => {
+          const adTypes = filtAdTypes.map(x => x.adType).filter((v, i, a) => a.indexOf(v) === i)
+          const activeType = selAdType[selPlatform] || adTypes[0]
+          const x = filtAdTypes.find(t => t.adType === activeType) || {}
+          const netRev = x.revenue > 0 ? x.revenue / (1 + 0.18) : 0
+          const roas = x.spend > 0 && netRev > 0 ? netRev / x.spend : 0
+          const kpis = [
+            { label: 'Spend', value: fmt(x.spend || 0) },
+            { label: 'Net Revenue', value: netRev > 0 ? fmt(netRev) : '—', sub: 'Ad-attributed exc. GST' },
+            { label: 'ROAS', value: roas > 0 ? `${roas.toFixed(2)}x` : '—', roasVal: roas },
+            { label: 'CTR', value: x.ctr > 0 ? `${x.ctr.toFixed(2)}%` : '—' },
+            { label: 'CPC', value: x.cpc > 0 ? `₹${x.cpc.toFixed(0)}` : '—' },
+            { label: 'Impressions', value: fmtBig(x.impressions || 0) },
+          ]
+          return (
+            <div className="kpi-card" style={{ padding: '14px 16px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+                <div style={{ fontWeight: 700, fontSize: 13, color: C.t1 }}>Ad Type Breakdown</div>
+                <div style={{ display: 'flex', gap: 6 }}>
+                  {adTypes.map(t => (
+                    <button key={t} onClick={() => setSelAdType(prev => ({ ...prev, [selPlatform]: t }))}
+                      style={{ fontSize: 11, fontWeight: 600, padding: '4px 12px', borderRadius: 6, border: `1.5px solid ${activeType === t ? PLATFORM_COLORS[selPlatform] || C.acc : C.border}`, background: activeType === t ? PLATFORM_COLORS[selPlatform] || C.acc : 'transparent', color: activeType === t ? '#fff' : C.t2, cursor: 'pointer' }}>
+                      {t}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: `repeat(${kpis.length}, 1fr)`, gap: 10 }}>
+                {kpis.map(k => (
+                  <div key={k.label} className="kpi-card" style={{ padding: '10px 13px', background: C.bg }}>
+                    <div className="kpi-label">{k.label}</div>
+                    <div className="kpi-value" style={{ fontSize: 17, marginTop: 4, color: k.roasVal != null ? roasColor(k.roasVal) : C.t1 }}>{k.value}</div>
+                    {k.sub && <div className="kpi-sub" style={{ marginTop: 2 }}>{k.sub}</div>}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )
+        })()}
 
       </div>
     </div>
