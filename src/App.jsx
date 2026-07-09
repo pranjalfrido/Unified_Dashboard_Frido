@@ -4497,7 +4497,7 @@ function AdsTab({ data }) {
                           <span style={{ fontSize: 12, fontWeight: 600, color: C.t1, flex: 1 }}>{t.platform}</span>
                           <span style={{ fontSize: 11, color: C.t3 }}>{sharePct}%</span>
                           <span style={{ fontSize: 12, fontWeight: 700, color: C.t1, minWidth: 56, textAlign: 'right' }}>{fmt(t.spend)}</span>
-                          {t.roas > 0 && <span style={{ fontSize: 10, fontWeight: 700, padding: '1px 6px', borderRadius: 4, background: roasBg(t.roas), color: roasColor(t.roas), minWidth: 36, textAlign: 'center' }}>{t.roas.toFixed(2)}x</span>}
+                          {(() => { const r = t.roas > 0 ? t.roas : (t.spend > 0 ? (platformNetRev[t.platform] || 0) / t.spend : 0); return r > 0 ? <span style={{ fontSize: 10, fontWeight: 700, padding: '1px 6px', borderRadius: 4, background: roasBg(r), color: roasColor(r), minWidth: 36, textAlign: 'center' }}>{r.toFixed(2)}x</span> : null })()}
                         </div>
                       )
                     })}
