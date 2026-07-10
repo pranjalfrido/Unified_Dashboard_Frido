@@ -4417,6 +4417,9 @@ function AdsTab({ data }) {
   const shopifyDailyMap = {}
   ;(data.shopify?.daily || []).forEach(d => { shopifyDailyMap[d.date] = d.excRev || 0 })
 
+  // Daily excRev maps for marketplace channels from sales table (channel-level)
+  const channelDailyMaps = ads.channelDailyExcRev || {}
+
   const dailyByDate = {}
   filtDaily.forEach(d => {
     if (!dailyByDate[d.date]) dailyByDate[d.date] = { date: d.date, spend: 0, revenue: 0, metaSpend: 0, googleSpend: 0 }
@@ -4425,7 +4428,7 @@ function AdsTab({ data }) {
     if (d.platform === 'Google') dailyByDate[d.date].googleSpend += d.spend
   })
   // For D2C/Meta/Google: revenue = Shopify daily excRev split by spend share per day
-  // For other platforms: revenue from ads table (no Shopify split needed)
+  // For marketplace channels: revenue = channel sales daily excRev
   Object.values(dailyByDate).forEach(d => {
     if (isD2C || selPlatform === 'Meta' || selPlatform === 'Google') {
       const shopifyExcRevDay = shopifyDailyMap[d.date] || 0
@@ -4437,6 +4440,8 @@ function AdsTab({ data }) {
       } else {
         d.revenue = shopifyExcRevDay
       }
+    } else if (channelDailyMaps[selPlatform]) {
+      d.revenue = channelDailyMaps[selPlatform][d.date] || 0
     }
   })
   const dailyArr = Object.values(dailyByDate).sort((a, b) => a.date.localeCompare(b.date))
