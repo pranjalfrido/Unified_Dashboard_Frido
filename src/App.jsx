@@ -4573,8 +4573,8 @@ function AdsTab({ data }) {
                               <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
                                 {isD2CRow ? (
                                   <>
-                                    <span style={{ width: 15, height: 15, borderRadius: 3, background: '#1877F2', flexShrink: 0, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: 9, fontWeight: 800, color: '#fff' }}>M</span>
-                                    <span style={{ width: 15, height: 15, borderRadius: 3, background: '#EA4335', flexShrink: 0, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: 9, fontWeight: 800, color: '#fff' }}>G</span>
+                                    <img src="/channels4_profile.jpg" alt="Meta" style={{ width: 16, height: 16, borderRadius: 3, objectFit: 'contain', flexShrink: 0 }} />
+                                    <img src="/channels4_profile (1).jpg" alt="Google" style={{ width: 16, height: 16, borderRadius: 3, objectFit: 'contain', flexShrink: 0 }} />
                                   </>
                                 ) : platLogos[t.platform] ? (
                                   <img src={platLogos[t.platform]} alt="" style={{ width: 16, height: 16, borderRadius: 3, objectFit: 'contain', flexShrink: 0 }} />
