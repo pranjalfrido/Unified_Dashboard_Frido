@@ -4708,7 +4708,7 @@ function AdsTab({ data }) {
               <div style={{ fontWeight: 700, fontSize: 13, color: C.t1, marginBottom: 10 }}>Spend Breakdown</div>
 
               {/* Brand bar */}
-              {isD2C && brandSpendVal > 0 && (() => {
+              {brandSpendVal > 0 && (() => {
                 const brandClicks = filtPlatClicks > 0 ? Math.round(filtPlatClicks * brandSpendVal / filtPlatSpend) : 0
                 const brandImpr = filtPlatImpr > 0 ? Math.round(filtPlatImpr * brandSpendVal / filtPlatSpend) : 0
                 const brandCpc = brandClicks > 0 ? (brandSpendVal / brandClicks).toFixed(1) : null
@@ -4721,8 +4721,8 @@ function AdsTab({ data }) {
                 const divider = <span style={{ width: 1, height: 16, background: C.border, display: 'inline-block', margin: '0 12px', verticalAlign: 'middle' }} />
                 return (
                   <div style={{ display: 'flex', alignItems: 'center', background: C.card, border: `1px solid ${C.border}`, borderLeft: '3px solid #6366F1', borderRadius: 8, padding: '8px 16px', marginBottom: 12 }}>
-                    <img src="/frido-logo.png" alt="Frido" style={{ width: 18, height: 18, objectFit: 'contain', marginRight: 6, borderRadius: 3 }} />
-                    <span style={{ fontSize: 11, fontWeight: 700, color: '#6366F1', marginRight: 14 }}>Brand (Frido)</span>
+                    {isD2C && <img src="/frido-logo.png" alt="Frido" style={{ width: 18, height: 18, objectFit: 'contain', marginRight: 6, borderRadius: 3 }} />}
+                    <span style={{ fontSize: 11, fontWeight: 700, color: '#6366F1', marginRight: 14 }}>{isD2C ? 'Brand (Frido)' : 'Unmapped / Awareness'}</span>
                     <span style={{ fontSize: 13, fontWeight: 700, color: C.t1 }}>{fmt(brandSpendVal)}</span>
                     {brandWow && <span style={{ fontSize: 10, fontWeight: 700, color: brandWowUp ? '#10B981' : '#EF4444', marginLeft: 6 }}>{brandWowUp ? '▲' : '▼'}{Math.abs(brandWow)}%</span>}
                     {divider}
