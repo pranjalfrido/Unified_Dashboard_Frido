@@ -4517,14 +4517,12 @@ function AdsTab({ data }) {
           {/* Platform Table — only on All tab */}
           {!selPlatform && (() => {
             const platLogos = {
-              Meta: ADS_PLATFORMS.find(p => p.id === 'Meta')?.logo,
-              Google: ADS_PLATFORMS.find(p => p.id === 'Google')?.logo,
-              Amazon: ADS_PLATFORMS.find(p => p.id === 'Amazon')?.logo,
-              Flipkart: ADS_PLATFORMS.find(p => p.id === 'Flipkart')?.logo,
-              Myntra: ADS_PLATFORMS.find(p => p.id === 'Myntra')?.logo,
-              Zepto: ADS_PLATFORMS.find(p => p.id === 'Zepto')?.logo,
-              Instamart: ADS_PLATFORMS.find(p => p.id === 'Instamart')?.logo,
-              Blinkit: ADS_PLATFORMS.find(p => p.id === 'Blinkit')?.logo,
+              Amazon: '/logo-amazon.png',
+              Flipkart: '/logo-flipkart.png',
+              Myntra: '/logo-myntra.png',
+              Zepto: '/logo-zepto.png',
+              Instamart: '/logo-instamart.png',
+              Blinkit: '/logo-blinkit.png',
             }
             // Merge Meta + Google into one D2C row
             const metaT = totals.find(t => t.platform === 'Meta') || {}
@@ -4575,8 +4573,8 @@ function AdsTab({ data }) {
                               <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
                                 {isD2CRow ? (
                                   <>
-                                    <img src={platLogos.Meta} alt="" style={{ width: 15, height: 15, borderRadius: 3, objectFit: 'contain', flexShrink: 0 }} />
-                                    <img src={platLogos.Google} alt="" style={{ width: 15, height: 15, borderRadius: 3, objectFit: 'contain', flexShrink: 0 }} />
+                                    <span style={{ width: 15, height: 15, borderRadius: 3, background: '#1877F2', flexShrink: 0, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: 9, fontWeight: 800, color: '#fff' }}>M</span>
+                                    <span style={{ width: 15, height: 15, borderRadius: 3, background: '#EA4335', flexShrink: 0, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: 9, fontWeight: 800, color: '#fff' }}>G</span>
                                   </>
                                 ) : platLogos[t.platform] ? (
                                   <img src={platLogos[t.platform]} alt="" style={{ width: 16, height: 16, borderRadius: 3, objectFit: 'contain', flexShrink: 0 }} />
