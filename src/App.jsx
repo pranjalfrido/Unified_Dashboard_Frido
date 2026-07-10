@@ -4443,8 +4443,13 @@ function AdsTab({ data }) {
       } else {
         d.revenue = shopifyExcRevDay
       }
-    } else if (channelDailyMaps[selPlatform]) {
+    } else if (selPlatform && channelDailyMaps[selPlatform]) {
       d.revenue = channelDailyMaps[selPlatform][d.date] || 0
+    } else if (!selPlatform) {
+      // All tab: Shopify + all marketplace channels
+      const shopifyDay = shopifyDailyMap[d.date] || 0
+      const marketplaceDay = Object.values(channelDailyMaps).reduce((s, m) => s + (m[d.date] || 0), 0)
+      d.revenue = shopifyDay + marketplaceDay
     }
   })
   const dailyArr = Object.values(dailyByDate).sort((a, b) => a.date.localeCompare(b.date))
