@@ -4258,7 +4258,7 @@ function TrendAnalysisCard({ title, daily, grossColor, grossGradId, revKey = 're
 const PLATFORM_COLORS = { Meta: '#1877F2', Google: '#EA4335', Amazon: '#FF9900', Blinkit: '#FFD600', Zepto: '#8B5CF6', Instamart: '#FF6B35', Flipkart: '#2E74CC', Myntra: '#FF3F6C' }
 const ADS_PLATFORMS = [
   { id: 'All', label: 'All' },
-  { id: 'D2C', label: 'D2C', logo: '/logo-meta.svg', logo2: '/logo-google.svg' },
+  { id: 'D2C', label: 'D2C' },
   { id: 'Amazon', label: 'Amazon', logo: '/logo-amazon.png' },
   { id: 'Blinkit', label: 'Blinkit', logo: '/logo-blinkit.png' },
   { id: 'Zepto', label: 'Zepto', logo: '/logo-zepto.png' },
