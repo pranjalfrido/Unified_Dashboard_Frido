@@ -4642,11 +4642,10 @@ function AdsTab({ data }) {
             )
           }
 
-          const renderTotalRow = (t, prevSpendTotal, roasSpend) => {
+          const renderTotalRow = (t, prevSpendTotal) => {
             const ctr = t.impressions > 0 ? (t.clicks / t.impressions * 100).toFixed(2) : null
             const cpc = t.clicks > 0 ? (t.spend / t.clicks).toFixed(1) : null
-            const effectiveSpend = roasSpend || t.spend
-            const roas = effectiveSpend > 0 && t.salesRevenue > 0 ? (t.salesRevenue / effectiveSpend).toFixed(2) : null
+            const roas = t.spend > 0 && t.salesRevenue > 0 ? (t.salesRevenue / t.spend).toFixed(2) : null
             const wow = prevSpendTotal > 0 ? ((t.spend - prevSpendTotal) / prevSpendTotal * 100).toFixed(1) : null
             const wowUp = wow >= 0
             return (
@@ -4731,7 +4730,7 @@ function AdsTab({ data }) {
                       <colgroup>
                         <col style={{ width: '26%' }} /><col style={{ width: '14%' }} /><col style={{ width: '12%' }} /><col style={{ width: '10%' }} /><col style={{ width: '10%' }} /><col style={{ width: '16%' }} /><col style={{ width: '12%' }} />
                       </colgroup>
-                      <tbody>{renderTotalRow(catTotal, prevCatTotal, filtPlatSpend)}</tbody>
+                      <tbody>{renderTotalRow(catTotal, prevCatTotal)}</tbody>
                     </table>
                   </div>
                 </div>
@@ -4758,7 +4757,7 @@ function AdsTab({ data }) {
                       <colgroup>
                         <col style={{ width: '26%' }} /><col style={{ width: '14%' }} /><col style={{ width: '12%' }} /><col style={{ width: '10%' }} /><col style={{ width: '10%' }} /><col style={{ width: '16%' }} /><col style={{ width: '12%' }} />
                       </colgroup>
-                      <tbody>{renderTotalRow(prodTotal, prevProdTotal, filtPlatSpend)}</tbody>
+                      <tbody>{renderTotalRow(prodTotal, prevProdTotal)}</tbody>
                     </table>
                   </div>
                 </div>
