@@ -4520,13 +4520,9 @@ function AdsTab({ data }) {
             </div>
           )
           return (
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6, 1fr)', gap: 10 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 10 }}>
               {card('Meta Spend', fmt(metaSpend), 'Meta ad spend', chgBadge(metaSpend, prevMetaSpend), '#1877F2')}
-              {card('Meta Net Revenue', fmt(metaRev), 'Shopify (Meta share)', null, '#1877F2')}
-              {card('Meta ROAS', `${metaRoas.toFixed(2)}x`, 'Meta rev / Meta spend', null, '#1877F2')}
               {card('Google Spend', fmt(googleSpend), 'Google ad spend', chgBadge(googleSpend, prevGoogleSpend), '#34A853')}
-              {card('Google Net Revenue', fmt(googleRev), 'Shopify (Google share)', null, '#34A853')}
-              {card('Google ROAS', `${googleRoas.toFixed(2)}x`, 'Google rev / Google spend', null, '#34A853')}
             </div>
           )
         })()}
