@@ -4718,17 +4718,25 @@ function AdsTab({ data }) {
                 {/* Category table */}
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ fontSize: 11, fontWeight: 700, color: C.t2, marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.5px' }}>By Category</div>
-                  <div style={{ maxHeight: 340, overflowY: 'auto' }}>
-                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11 }}>
-                      {thead('Category')}
-                      <tbody>
-                        {catRows.map((r, i) => renderRow(r, i, 'cat'))}
-                      </tbody>
+                  <div style={{ display: 'flex', flexDirection: 'column', maxHeight: 380 }}>
+                    <div style={{ overflowY: 'auto', flex: 1 }}>
+                      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11, tableLayout: 'fixed' }}>
+                        <colgroup>
+                          <col style={{ width: '22%' }} /><col style={{ width: '12%' }} /><col style={{ width: '10%' }} /><col style={{ width: '9%' }} /><col style={{ width: '9%' }} /><col style={{ width: '9%' }} /><col style={{ width: '10%' }} /><col style={{ width: '11%' }} /><col style={{ width: '8%' }} />
+                        </colgroup>
+                        {thead('Category')}
+                        <tbody>
+                          {catRows.map((r, i) => renderRow(r, i, 'cat'))}
+                        </tbody>
+                      </table>
+                    </div>
+                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11, tableLayout: 'fixed', flexShrink: 0 }}>
+                      <colgroup>
+                        <col style={{ width: '22%' }} /><col style={{ width: '12%' }} /><col style={{ width: '10%' }} /><col style={{ width: '9%' }} /><col style={{ width: '9%' }} /><col style={{ width: '9%' }} /><col style={{ width: '10%' }} /><col style={{ width: '11%' }} /><col style={{ width: '8%' }} />
+                      </colgroup>
+                      <tbody>{renderTotalRow(catTotal)}</tbody>
                     </table>
                   </div>
-                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11 }}>
-                    <tbody>{renderTotalRow(catTotal)}</tbody>
-                  </table>
                 </div>
 
                 {/* Divider */}
@@ -4737,17 +4745,25 @@ function AdsTab({ data }) {
                 {/* Product table */}
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ fontSize: 11, fontWeight: 700, color: C.t2, marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.5px' }}>By Product</div>
-                  <div style={{ maxHeight: 340, overflowY: 'auto' }}>
-                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11 }}>
-                      {thead('Product')}
-                      <tbody>
-                        {prodRows.map((r, i) => renderRow(r, i, 'prod'))}
-                      </tbody>
+                  <div style={{ display: 'flex', flexDirection: 'column', maxHeight: 380 }}>
+                    <div style={{ overflowY: 'auto', flex: 1 }}>
+                      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11, tableLayout: 'fixed' }}>
+                        <colgroup>
+                          <col style={{ width: '22%' }} /><col style={{ width: '12%' }} /><col style={{ width: '10%' }} /><col style={{ width: '9%' }} /><col style={{ width: '9%' }} /><col style={{ width: '9%' }} /><col style={{ width: '10%' }} /><col style={{ width: '11%' }} /><col style={{ width: '8%' }} />
+                        </colgroup>
+                        {thead('Product')}
+                        <tbody>
+                          {prodRows.map((r, i) => renderRow(r, i, 'prod'))}
+                        </tbody>
+                      </table>
+                    </div>
+                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11, tableLayout: 'fixed', flexShrink: 0 }}>
+                      <colgroup>
+                        <col style={{ width: '22%' }} /><col style={{ width: '12%' }} /><col style={{ width: '10%' }} /><col style={{ width: '9%' }} /><col style={{ width: '9%' }} /><col style={{ width: '9%' }} /><col style={{ width: '10%' }} /><col style={{ width: '11%' }} /><col style={{ width: '8%' }} />
+                      </colgroup>
+                      <tbody>{renderTotalRow(prodTotal)}</tbody>
                     </table>
                   </div>
-                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11 }}>
-                    <tbody>{renderTotalRow(prodTotal)}</tbody>
-                  </table>
                 </div>
               </div>
             </div>
