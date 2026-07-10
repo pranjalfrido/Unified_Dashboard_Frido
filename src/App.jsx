@@ -4516,7 +4516,6 @@ function AdsTab({ data }) {
 
           {/* Platform Table — only on All tab */}
           {!selPlatform && (() => {
-            const sortedTotals = [...totals].sort((a, b) => b.spend - a.spend)
             const platLogos = {
               Meta: ADS_PLATFORMS.find(p => p.id === 'Meta')?.logo,
               Google: ADS_PLATFORMS.find(p => p.id === 'Google')?.logo,
@@ -4527,6 +4526,20 @@ function AdsTab({ data }) {
               Instamart: ADS_PLATFORMS.find(p => p.id === 'Instamart')?.logo,
               Blinkit: ADS_PLATFORMS.find(p => p.id === 'Blinkit')?.logo,
             }
+            // Merge Meta + Google into one D2C row
+            const metaT = totals.find(t => t.platform === 'Meta') || {}
+            const googleT = totals.find(t => t.platform === 'Google') || {}
+            const d2cRow = {
+              platform: 'D2C',
+              spend: (metaT.spend || 0) + (googleT.spend || 0),
+              clicks: (metaT.clicks || 0) + (googleT.clicks || 0),
+              impressions: (metaT.impressions || 0) + (googleT.impressions || 0),
+              orders: (metaT.orders || 0) + (googleT.orders || 0),
+              rev: platformNetRev['D2C'] || 0,
+            }
+            const otherTotals = totals.filter(t => t.platform !== 'Meta' && t.platform !== 'Google')
+            const tableRows = [d2cRow, ...otherTotals.map(t => ({ ...t, rev: platformNetRev[t.platform] || 0 }))].sort((a, b) => b.spend - a.spend)
+
             const thStyle = { fontSize: 10, fontWeight: 700, color: C.t3, textTransform: 'uppercase', letterSpacing: 0.4, padding: '6px 10px', textAlign: 'right', whiteSpace: 'nowrap', borderBottom: `1px solid ${C.border}` }
             const tdStyle = { fontSize: 12, padding: '7px 10px', textAlign: 'right', color: C.t1, borderBottom: `1px solid ${C.border}` }
             return (
@@ -4547,28 +4560,35 @@ function AdsTab({ data }) {
                       </tr>
                     </thead>
                     <tbody>
-                      {sortedTotals.map(t => {
-                        const rev = platformNetRev[t.platform] || 0
+                      {tableRows.map(t => {
+                        const rev = t.rev || 0
                         const roas = t.spend > 0 && rev > 0 ? rev / t.spend : 0
                         const ctr = t.impressions > 0 ? (t.clicks / t.impressions * 100) : 0
                         const cpc = t.clicks > 0 ? t.spend / t.clicks : 0
                         const orders = t.orders || 0
-                        const logo = platLogos[t.platform]
+                        const isD2CRow = t.platform === 'D2C'
                         return (
                           <tr key={t.platform} style={{ cursor: 'default' }}
                             onMouseEnter={e => e.currentTarget.style.background = C.hover}
                             onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
                             <td style={{ ...tdStyle, textAlign: 'left' }}>
-                              <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
-                                {logo
-                                  ? <img src={logo} alt="" style={{ width: 16, height: 16, borderRadius: 3, objectFit: 'contain', flexShrink: 0 }} />
-                                  : <span style={{ width: 10, height: 10, borderRadius: '50%', background: PLATFORM_COLORS[t.platform] || C.acc, flexShrink: 0, display: 'inline-block' }} />}
-                                <span style={{ fontWeight: 700 }}>{t.platform}</span>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                                {isD2CRow ? (
+                                  <>
+                                    <img src={platLogos.Meta} alt="" style={{ width: 15, height: 15, borderRadius: 3, objectFit: 'contain', flexShrink: 0 }} />
+                                    <img src={platLogos.Google} alt="" style={{ width: 15, height: 15, borderRadius: 3, objectFit: 'contain', flexShrink: 0 }} />
+                                  </>
+                                ) : platLogos[t.platform] ? (
+                                  <img src={platLogos[t.platform]} alt="" style={{ width: 16, height: 16, borderRadius: 3, objectFit: 'contain', flexShrink: 0 }} />
+                                ) : (
+                                  <span style={{ width: 10, height: 10, borderRadius: '50%', background: PLATFORM_COLORS[t.platform] || C.acc, flexShrink: 0, display: 'inline-block' }} />
+                                )}
+                                <span style={{ fontWeight: 700 }}>{isD2CRow ? 'D2C (Meta + Google)' : t.platform}</span>
                               </div>
                             </td>
                             <td style={tdStyle}>{fmt(t.spend)}</td>
                             <td style={tdStyle}>{rev > 0 ? fmt(rev) : '—'}</td>
-                            <td style={{ ...tdStyle }}>
+                            <td style={tdStyle}>
                               {roas > 0
                                 ? <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 7px', borderRadius: 4, background: roasBg(roas), color: roasColor(roas) }}>{roas.toFixed(2)}x</span>
                                 : '—'}
