@@ -4258,8 +4258,7 @@ function TrendAnalysisCard({ title, daily, grossColor, grossGradId, revKey = 're
 const PLATFORM_COLORS = { Meta: '#1877F2', Google: '#EA4335', Amazon: '#FF9900', Blinkit: '#FFD600', Zepto: '#8B5CF6', Instamart: '#FF6B35', Flipkart: '#2E74CC', Myntra: '#FF3F6C' }
 const ADS_PLATFORMS = [
   { id: 'All', label: 'All' },
-  { id: 'Meta', label: 'Meta', logo: '/logo-meta.svg' },
-  { id: 'Google', label: 'Google', logo: '/logo-google.svg' },
+  { id: 'D2C', label: 'D2C', logo: '/logo-meta.svg', logo2: '/logo-google.svg' },
   { id: 'Amazon', label: 'Amazon', logo: '/logo-amazon.png' },
   { id: 'Blinkit', label: 'Blinkit', logo: '/logo-blinkit.png' },
   { id: 'Zepto', label: 'Zepto', logo: '/logo-zepto.png' },
@@ -4293,12 +4292,14 @@ function AdsTab({ data }) {
     return <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 4, background: p >= 0 ? C.green.bg : C.red.bg, color: p >= 0 ? C.green.tx : C.red.tx, flexShrink: 0 }}>{p >= 0 ? '▲' : '▼'} {Math.abs(p).toFixed(1)}%</span>
   }
 
-  const filtTotals = selPlatform ? totals.filter(t => t.platform === selPlatform) : totals
-  const filtDaily = selPlatform ? daily.filter(d => d.platform === selPlatform) : daily
-  const filtCampaigns = selPlatform ? campaigns.filter(c => c.platform === selPlatform) : campaigns
-  const filtAdTypes = selPlatform ? byAdType.filter(x => x.platform === selPlatform) : byAdType
-  const filtByCategory = selPlatform ? byCategory.filter(x => x.platform === selPlatform) : byCategory
-  const filtBySku = selPlatform ? bySku.filter(x => x.platform === selPlatform) : bySku
+  const isD2C = selPlatform === 'D2C'
+  const d2cPlatforms = ['Meta', 'Google']
+  const filtTotals = selPlatform ? totals.filter(t => isD2C ? d2cPlatforms.includes(t.platform) : t.platform === selPlatform) : totals
+  const filtDaily = selPlatform ? daily.filter(d => isD2C ? d2cPlatforms.includes(d.platform) : d.platform === selPlatform) : daily
+  const filtCampaigns = selPlatform ? campaigns.filter(c => isD2C ? d2cPlatforms.includes(c.platform) : c.platform === selPlatform) : campaigns
+  const filtAdTypes = selPlatform ? byAdType.filter(x => isD2C ? d2cPlatforms.includes(x.platform) : x.platform === selPlatform) : byAdType
+  const filtByCategory = selPlatform ? byCategory.filter(x => isD2C ? d2cPlatforms.includes(x.platform) : x.platform === selPlatform) : byCategory
+  const filtBySku = selPlatform ? bySku.filter(x => isD2C ? d2cPlatforms.includes(x.platform) : x.platform === selPlatform) : bySku
 
   const chMap = data.chMap || {}
 
@@ -4312,6 +4313,7 @@ function AdsTab({ data }) {
 
   // Net revenue (exc GST) from sales data per platform
   const platformNetRev = {
+    D2C:       shopifyExcRev,
     Meta:      metaShopifyRev,
     Google:    googleShopifyRev,
     Amazon:    chMap['Amazon']?.excRev    || 0,
@@ -4339,9 +4341,9 @@ function AdsTab({ data }) {
   const overallCpc = totalClicks > 0 ? totalSpend / totalClicks : 0
   const overallCpm = totalImpressions > 0 ? (totalSpend / totalImpressions) * 1000 : 0
 
-  const prevSpend = selPlatform ? (prevTotals[selPlatform]?.spend || 0) : Object.values(prevTotals).reduce((s, x) => s + x.spend, 0)
-  const prevClicks = selPlatform ? (prevTotals[selPlatform]?.clicks || 0) : Object.values(prevTotals).reduce((s, x) => s + x.clicks, 0)
-  const prevImpressions = selPlatform ? (prevTotals[selPlatform]?.impressions || 0) : Object.values(prevTotals).reduce((s, x) => s + x.impressions, 0)
+  const prevSpend = isD2C ? d2cPlatforms.reduce((s, p) => s + (prevTotals[p]?.spend || 0), 0) : selPlatform ? (prevTotals[selPlatform]?.spend || 0) : Object.values(prevTotals).reduce((s, x) => s + x.spend, 0)
+  const prevClicks = isD2C ? d2cPlatforms.reduce((s, p) => s + (prevTotals[p]?.clicks || 0), 0) : selPlatform ? (prevTotals[selPlatform]?.clicks || 0) : Object.values(prevTotals).reduce((s, x) => s + x.clicks, 0)
+  const prevImpressions = isD2C ? d2cPlatforms.reduce((s, p) => s + (prevTotals[p]?.impressions || 0), 0) : selPlatform ? (prevTotals[selPlatform]?.impressions || 0) : Object.values(prevTotals).reduce((s, x) => s + x.impressions, 0)
 
   // Prev net revenue from sales data (same source as totalRevenue)
   const prevChMap = data.prevChMap || {}
@@ -4352,6 +4354,7 @@ function AdsTab({ data }) {
   const prevMetaShopifyRev = prevShopifyAdSpendTotal > 0 ? prevShopifyExcRev * (prevMetaSpend / prevShopifyAdSpendTotal) : prevShopifyExcRev
   const prevGoogleShopifyRev = prevShopifyAdSpendTotal > 0 ? prevShopifyExcRev * (prevGoogleSpend / prevShopifyAdSpendTotal) : 0
   const prevPlatformNetRev = {
+    D2C:       prevShopifyExcRev,
     Meta:      prevMetaShopifyRev,
     Google:    prevGoogleShopifyRev,
     Amazon:    prevChMap['Amazon'] || data.amzSC?.prevExcRev || 0,
@@ -4369,6 +4372,7 @@ function AdsTab({ data }) {
   const prevCpc = prevClicks > 0 ? prevSpend / prevClicks : 0
   const prevCpm = prevImpressions > 0 ? (prevSpend / prevImpressions) * 1000 : 0
   const prevOrders = (() => {
+    if (isD2C) return data.shopify?.prevOrders || 0
     if (!selPlatform) return data.prevOrders || 0
     if (selPlatform === 'Amazon') return data.amzSC?.prevOrders || 0
     if (selPlatform === 'Flipkart') return data.flipkart?.prevOrders || 0
@@ -4380,6 +4384,7 @@ function AdsTab({ data }) {
     return 0
   })()
   const currentOrders = (() => {
+    if (isD2C) return data.shopify?.totals?.orders || 0
     if (!selPlatform) return data.nOrders || 0
     if (selPlatform === 'Amazon') return data.amzSC?.totalOrders || 0
     if (selPlatform === 'Flipkart') return (data.flipkart?.totals || []).reduce((s, t) => s + (t.orders || 0), 0)
@@ -4396,13 +4401,13 @@ function AdsTab({ data }) {
   const shopifyNewCustomers = (ads.nCusts || data.nCusts || 0) - (ads.repeatCusts || data.repeatCusts || 0)
   const shopifyAdSpend = metaSpend + googleSpend
   const cac = (() => {
-    if (!selPlatform) return shopifyNewCustomers > 0 ? shopifyAdSpend / shopifyNewCustomers : 0
+    if (!selPlatform || isD2C) return shopifyNewCustomers > 0 ? shopifyAdSpend / shopifyNewCustomers : 0
     if (selPlatform === 'Meta') return shopifyNewCustomers > 0 ? metaSpend / shopifyNewCustomers : 0
     if (selPlatform === 'Google') return shopifyNewCustomers > 0 ? googleSpend / shopifyNewCustomers : 0
     return null
   })()
   const prevCac = (() => {
-    if (!selPlatform) return shopifyNewCustomers > 0 ? ((prevTotals['Meta']?.spend || 0) + (prevTotals['Google']?.spend || 0)) / shopifyNewCustomers : 0
+    if (!selPlatform || isD2C) return shopifyNewCustomers > 0 ? ((prevTotals['Meta']?.spend || 0) + (prevTotals['Google']?.spend || 0)) / shopifyNewCustomers : 0
     if (selPlatform === 'Meta') return shopifyNewCustomers > 0 && prevTotals['Meta']?.spend ? prevTotals['Meta'].spend / shopifyNewCustomers : 0
     if (selPlatform === 'Google') return shopifyNewCustomers > 0 && prevTotals['Google']?.spend ? prevTotals['Google'].spend / shopifyNewCustomers : 0
     return 0
@@ -4430,6 +4435,7 @@ function AdsTab({ data }) {
             className={`stab${(p.id === 'All' ? !selPlatform : selPlatform === p.id) ? ' active' : ''}`}
             style={p.id === 'All' ? { fontWeight: !selPlatform ? 800 : 700, fontSize: 13 } : {}}>
             {p.logo && <img src={p.logo} alt="" style={{ width: 14, height: 14, borderRadius: 3, flexShrink: 0, objectFit: 'contain' }} />}
+            {p.logo2 && <img src={p.logo2} alt="" style={{ width: 14, height: 14, borderRadius: 3, flexShrink: 0, objectFit: 'contain', marginLeft: -4 }} />}
             {p.label}
           </button>
         ))}
@@ -4441,7 +4447,7 @@ function AdsTab({ data }) {
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 10 }}>
           {[
             { label: 'Total Spend', value: fmt(totalSpend), badge: chgBadge(totalSpend, prevSpend), sub: 'Ad spend incl. all platforms' },
-            { label: 'Net Revenue', value: fmt(totalRevenue), badge: chgBadge(totalRevenue, prevRevenue), sub: selPlatform ? `${selPlatform === 'Meta' || selPlatform === 'Google' ? 'Shopify (spend-split)' : selPlatform} net exc. GST` : 'All channels net exc. GST' },
+            { label: 'Net Revenue', value: fmt(totalRevenue), badge: chgBadge(totalRevenue, prevRevenue), sub: isD2C ? 'Shopify net exc. GST (Meta+Google)' : selPlatform ? `${selPlatform === 'Meta' || selPlatform === 'Google' ? 'Shopify (spend-split)' : selPlatform} net exc. GST` : 'All channels net exc. GST' },
             { label: 'Overall ROAS', value: `${overallRoas.toFixed(2)}x`, badge: chgBadge(overallRoas, prevRoas), sub: 'Net rev / Spend', roasVal: overallRoas },
             { label: 'Total Clicks', value: fmtBig(totalClicks), badge: chgBadge(totalClicks, prevClicks), sub: 'Across all platforms' },
             { label: 'Impressions', value: fmtBig(totalImpressions), badge: chgBadge(totalImpressions, prevImpressions), sub: 'Total ad impressions' },
@@ -4449,7 +4455,7 @@ function AdsTab({ data }) {
             { label: 'CPC', value: `₹${overallCpc.toFixed(2)}`, badge: chgBadge(overallCpc, prevCpc), sub: 'Spend / Clicks' },
             { label: 'Orders', value: fmtN(currentOrders), sub: 'Distinct orders', badge: chgBadge(currentOrders, prevOrders) },
             { label: 'Cost Per Order', value: costPerOrder > 0 ? `₹${Math.round(costPerOrder).toLocaleString('en-IN')}` : '—', sub: 'Spend / Orders', badge: chgBadge(prevCpo, costPerOrder) },
-            ...(!selPlatform || selPlatform === 'Meta' || selPlatform === 'Google'
+            ...(!selPlatform || isD2C || selPlatform === 'Meta' || selPlatform === 'Google'
               ? [{ label: 'CAC (Shopify)', value: cac > 0 ? `₹${Math.round(cac).toLocaleString('en-IN')}` : '—', sub: `Spend / ${fmtN(shopifyNewCustomers)} new custs`, badge: chgBadge(prevCac, cac) }]
               : [{ label: 'CPM', value: overallCpm > 0 ? `₹${Math.round(overallCpm).toLocaleString('en-IN')}` : '—', sub: 'Cost per 1K impressions', badge: chgBadge(prevCpm, overallCpm) }]),
           ].map(k => (
@@ -4577,7 +4583,7 @@ function AdsTab({ data }) {
 
         {/* Category & Product Breakdown — platform tabs only */}
         {selPlatform && (() => {
-          const platRows = categoryBreakdown.filter(r => r.platform === selPlatform)
+          const platRows = categoryBreakdown.filter(r => isD2C ? d2cPlatforms.includes(r.platform) : r.platform === selPlatform)
           if (!platRows.length) return null
           const totalSpendHere = platRows.reduce((s, r) => s + r.spend, 0)
 
