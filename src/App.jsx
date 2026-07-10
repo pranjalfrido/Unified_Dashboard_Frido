@@ -4626,6 +4626,8 @@ function AdsTab({ data }) {
           // Grand totals
           const catTotal = catRows.reduce((a, r) => ({ spend: a.spend+r.spend, clicks: a.clicks+r.clicks, impressions: a.impressions+r.impressions, orders: a.orders+r.orders, salesRevenue: a.salesRevenue+r.salesRevenue }), { spend:0, clicks:0, impressions:0, orders:0, salesRevenue:0 })
           const prodTotal = prodRows.reduce((a, r) => ({ spend: a.spend+r.spend, clicks: a.clicks+r.clicks, impressions: a.impressions+r.impressions, orders: a.orders+(r.orders||0), salesRevenue: a.salesRevenue+(r.salesRevenue||0) }), { spend:0, clicks:0, impressions:0, orders:0, salesRevenue:0 })
+          const prevCatTotal = prevCB.reduce((s, r) => s + r.spend, 0)
+          const prevProdTotal = prevCB.filter(r => r.subCategory).reduce((s, r) => s + r.spend, 0)
 
           const thStyle = { textAlign: 'right', padding: '5px 6px', color: C.t3, fontWeight: 600, fontSize: 10, whiteSpace: 'nowrap' }
           const thStyleL = { textAlign: 'left', padding: '5px 6px', color: C.t3, fontWeight: 600, fontSize: 10 }
@@ -4643,7 +4645,6 @@ function AdsTab({ data }) {
           const renderRow = (r, i, key) => {
             const ctr = r.impressions > 0 ? (r.clicks / r.impressions * 100).toFixed(2) : null
             const cpc = r.clicks > 0 ? (r.spend / r.clicks).toFixed(1) : null
-            const cpo = r.orders > 0 ? Math.round(r.spend / r.orders) : null
             const roas = r.spend > 0 && r.salesRevenue > 0 ? (r.salesRevenue / r.spend).toFixed(2) : null
             const prev = key === 'cat' ? (prevCatSpend[r.category] || 0) : (prevProdSpend[r.subCategory?.trim()] || 0)
             const label = key === 'cat' ? r.category : r.subCategory
@@ -4654,28 +4655,25 @@ function AdsTab({ data }) {
                 <td style={tdStyle}><WoW curr={r.spend} prev={prev} /></td>
                 <td style={tdStyle}>{cpc ? `₹${cpc}` : '—'}</td>
                 <td style={tdStyle}>{ctr ? `${ctr}%` : '—'}</td>
-                <td style={tdStyle}>{r.orders > 0 ? fmtN(r.orders) : '—'}</td>
-                <td style={tdStyle}>{cpo ? `₹${fmtN(cpo)}` : '—'}</td>
                 <td style={tdStyle}>{r.salesRevenue > 0 ? fmt(r.salesRevenue) : '—'}</td>
                 <td style={{ ...tdStyle, fontWeight: 600, color: roas >= 2 ? '#10B981' : roas ? '#F59E0B' : C.t3 }}>{roas ? `${roas}x` : '—'}</td>
               </tr>
             )
           }
 
-          const renderTotalRow = (t) => {
+          const renderTotalRow = (t, prevSpendTotal) => {
             const ctr = t.impressions > 0 ? (t.clicks / t.impressions * 100).toFixed(2) : null
             const cpc = t.clicks > 0 ? (t.spend / t.clicks).toFixed(1) : null
-            const cpo = t.orders > 0 ? Math.round(t.spend / t.orders) : null
             const roas = t.spend > 0 && t.salesRevenue > 0 ? (t.salesRevenue / t.spend).toFixed(2) : null
+            const wow = prevSpendTotal > 0 ? ((t.spend - prevSpendTotal) / prevSpendTotal * 100).toFixed(1) : null
+            const wowUp = wow >= 0
             return (
               <tr style={totalRowStyle}>
                 <td style={{ ...tdStyleL, fontWeight: 700, color: C.t1 }}>Total</td>
                 <td style={{ ...tdStyle, fontWeight: 700, color: C.t1 }}>{fmt(t.spend)}</td>
-                <td style={tdStyle}>—</td>
+                <td style={tdStyle}>{wow ? <span style={{ fontSize: 10, fontWeight: 700, color: wowUp ? '#10B981' : '#EF4444' }}>{wowUp ? '▲' : '▼'}{Math.abs(wow)}%</span> : '—'}</td>
                 <td style={tdStyle}>{cpc ? `₹${cpc}` : '—'}</td>
                 <td style={tdStyle}>{ctr ? `${ctr}%` : '—'}</td>
-                <td style={{ ...tdStyle, fontWeight: 700 }}>{t.orders > 0 ? fmtN(t.orders) : '—'}</td>
-                <td style={tdStyle}>{cpo ? `₹${fmtN(cpo)}` : '—'}</td>
                 <td style={{ ...tdStyle, fontWeight: 700, color: C.t1 }}>{t.salesRevenue > 0 ? fmt(t.salesRevenue) : '—'}</td>
                 <td style={{ ...tdStyle, fontWeight: 700, color: roas >= 2 ? '#10B981' : roas ? '#F59E0B' : C.t3 }}>{roas ? `${roas}x` : '—'}</td>
               </tr>
@@ -4690,8 +4688,6 @@ function AdsTab({ data }) {
                 <th style={thStyle}>WoW</th>
                 <th style={thStyle}>CPC</th>
                 <th style={thStyle}>CTR</th>
-                <th style={thStyle}>Orders</th>
-                <th style={thStyle}>₹/Order</th>
                 <th style={thStyle}>Revenue</th>
                 <th style={thStyle}>ROAS</th>
               </tr>
@@ -4741,7 +4737,7 @@ function AdsTab({ data }) {
                     <div style={{ overflowY: 'auto', flex: 1 }}>
                       <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11, tableLayout: 'fixed' }}>
                         <colgroup>
-                          <col style={{ width: '22%' }} /><col style={{ width: '12%' }} /><col style={{ width: '10%' }} /><col style={{ width: '9%' }} /><col style={{ width: '9%' }} /><col style={{ width: '9%' }} /><col style={{ width: '10%' }} /><col style={{ width: '11%' }} /><col style={{ width: '8%' }} />
+                          <col style={{ width: '26%' }} /><col style={{ width: '14%' }} /><col style={{ width: '12%' }} /><col style={{ width: '10%' }} /><col style={{ width: '10%' }} /><col style={{ width: '16%' }} /><col style={{ width: '12%' }} />
                         </colgroup>
                         {thead('Category')}
                         <tbody>
@@ -4751,9 +4747,9 @@ function AdsTab({ data }) {
                     </div>
                     <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11, tableLayout: 'fixed', flexShrink: 0 }}>
                       <colgroup>
-                        <col style={{ width: '22%' }} /><col style={{ width: '12%' }} /><col style={{ width: '10%' }} /><col style={{ width: '9%' }} /><col style={{ width: '9%' }} /><col style={{ width: '9%' }} /><col style={{ width: '10%' }} /><col style={{ width: '11%' }} /><col style={{ width: '8%' }} />
+                        <col style={{ width: '26%' }} /><col style={{ width: '14%' }} /><col style={{ width: '12%' }} /><col style={{ width: '10%' }} /><col style={{ width: '10%' }} /><col style={{ width: '16%' }} /><col style={{ width: '12%' }} />
                       </colgroup>
-                      <tbody>{renderTotalRow(catTotal)}</tbody>
+                      <tbody>{renderTotalRow(catTotal, prevCatTotal)}</tbody>
                     </table>
                   </div>
                 </div>
@@ -4768,7 +4764,7 @@ function AdsTab({ data }) {
                     <div style={{ overflowY: 'auto', flex: 1 }}>
                       <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11, tableLayout: 'fixed' }}>
                         <colgroup>
-                          <col style={{ width: '22%' }} /><col style={{ width: '12%' }} /><col style={{ width: '10%' }} /><col style={{ width: '9%' }} /><col style={{ width: '9%' }} /><col style={{ width: '9%' }} /><col style={{ width: '10%' }} /><col style={{ width: '11%' }} /><col style={{ width: '8%' }} />
+                          <col style={{ width: '26%' }} /><col style={{ width: '14%' }} /><col style={{ width: '12%' }} /><col style={{ width: '10%' }} /><col style={{ width: '10%' }} /><col style={{ width: '16%' }} /><col style={{ width: '12%' }} />
                         </colgroup>
                         {thead('Product')}
                         <tbody>
@@ -4778,9 +4774,9 @@ function AdsTab({ data }) {
                     </div>
                     <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11, tableLayout: 'fixed', flexShrink: 0 }}>
                       <colgroup>
-                        <col style={{ width: '22%' }} /><col style={{ width: '12%' }} /><col style={{ width: '10%' }} /><col style={{ width: '9%' }} /><col style={{ width: '9%' }} /><col style={{ width: '9%' }} /><col style={{ width: '10%' }} /><col style={{ width: '11%' }} /><col style={{ width: '8%' }} />
+                        <col style={{ width: '26%' }} /><col style={{ width: '14%' }} /><col style={{ width: '12%' }} /><col style={{ width: '10%' }} /><col style={{ width: '10%' }} /><col style={{ width: '16%' }} /><col style={{ width: '12%' }} />
                       </colgroup>
-                      <tbody>{renderTotalRow(prodTotal)}</tbody>
+                      <tbody>{renderTotalRow(prodTotal, prevProdTotal)}</tbody>
                     </table>
                   </div>
                 </div>
