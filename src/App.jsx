@@ -4503,8 +4503,10 @@ function AdsTab({ data }) {
           const googleSpend = filtTotals.find(t => t.platform === 'Google')?.spend || 0
           const metaRev = platformNetRev['Meta'] || 0
           const googleRev = platformNetRev['Google'] || 0
-          const metaRoas = metaSpend > 0 ? metaRev / metaSpend : 0
-          const googleRoas = googleSpend > 0 ? googleRev / googleSpend : 0
+          // Round to same precision as fmt() display so ROAS matches displayed values
+          const fmtRaw = v => v >= 1e7 ? Math.round(v / 1e5) * 1e5 : v >= 1e5 ? Math.round(v / 1e3) * 1e3 : Math.round(v)
+          const metaRoas = metaSpend > 0 ? fmtRaw(metaRev) / fmtRaw(metaSpend) : 0
+          const googleRoas = googleSpend > 0 ? fmtRaw(googleRev) / fmtRaw(googleSpend) : 0
           const prevMetaSpend = prevTotals['Meta']?.spend || 0
           const prevGoogleSpend = prevTotals['Google']?.spend || 0
           const card = (label, value, sub, badge, color) => (
