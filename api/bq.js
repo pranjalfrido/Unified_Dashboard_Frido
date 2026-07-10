@@ -1078,6 +1078,50 @@ export default async function handler(req, res) {
             advertisedProducts.push({ platform: 'D2C', category: 'Others', subCategory: 'Others', spend: 0, clicks: 0, impressions: 0, salesRevenue: othersRevenue, orders: othersOrders })
           }
 
+          // MARKETPLACE PLATFORMS: build category+product rows per platform
+          const mktPlatforms = ['Amazon', 'Flipkart', 'Myntra', 'Zepto', 'Instamart', 'Blinkit']
+          mktPlatforms.forEach(plat => {
+            const platSales = salesRows.filter(s => s.platform === plat)
+            if (!platSales.length) return
+
+            // Category rows for this platform
+            const platCatSales = {}
+            platSales.forEach(s => {
+              const cat = (s.category || 'Unknown').trim()
+              if (!platCatSales[cat]) platCatSales[cat] = { revenue: 0, orders: 0 }
+              platCatSales[cat].revenue += parseFloat(s.revenue) || 0
+              platCatSales[cat].orders += parseFloat(s.orders) || 0
+            })
+            Object.entries(platCatSales).forEach(([cat, sales]) => {
+              const adEntry = adCatMap[`${plat}||${cat}`] || {}
+              categoryRows.push({ platform: plat, category: cat, subCategory: null, spend: adEntry.spend || 0, clicks: adEntry.clicks || 0, impressions: adEntry.impressions || 0, salesRevenue: Math.round(sales.revenue), orders: Math.round(sales.orders) })
+            })
+
+            // Product rows for this platform
+            const platSubCatSales = {}
+            platSales.forEach(s => {
+              const subCat = (s.sub_category || '').trim()
+              const cat = (s.category || 'Unknown').trim()
+              if (!subCat) return
+              if (!platSubCatSales[subCat]) platSubCatSales[subCat] = { category: cat, revenue: 0, orders: 0 }
+              platSubCatSales[subCat].revenue += parseFloat(s.revenue) || 0
+              platSubCatSales[subCat].orders += parseFloat(s.orders) || 0
+            })
+            let platOthersRev = 0, platOthersOrders = 0
+            Object.entries(platSubCatSales).forEach(([subCat, s]) => {
+              const adEntry = adProdMap[`${plat}||${subCat}`] || {}
+              if (adEntry.spend > 0) {
+                advertisedProducts.push({ platform: plat, category: s.category, subCategory: subCat, spend: adEntry.spend || 0, clicks: adEntry.clicks || 0, impressions: adEntry.impressions || 0, salesRevenue: Math.round(s.revenue), orders: Math.round(s.orders) })
+              } else {
+                platOthersRev += s.revenue
+                platOthersOrders += s.orders
+              }
+            })
+            if (platOthersRev > 0) {
+              advertisedProducts.push({ platform: plat, category: 'Others', subCategory: 'Others', spend: 0, clicks: 0, impressions: 0, salesRevenue: Math.round(platOthersRev), orders: Math.round(platOthersOrders) })
+            }
+          })
+
           return { categoryRows, productRows: advertisedProducts }
         })(),
         zeroOrder: (r.adsZeroOrder || []).map(x => ({ platform: x.platform, product: x.product, campaign: x.campaign_name, spend: parseFloat(x.spend)||0, orders: parseFloat(x.orders)||0, clicks: parseFloat(x.clicks)||0, impressions: parseFloat(x.impressions)||0, ctr: parseFloat(x.ctr)||0, cpc: parseFloat(x.cpc)||0 })),

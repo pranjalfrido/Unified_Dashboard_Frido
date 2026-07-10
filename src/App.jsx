@@ -4608,10 +4608,11 @@ function AdsTab({ data }) {
 
         {/* Category & Product Breakdown — platform tabs only */}
         {selPlatform && (() => {
-          const { categoryRows: allCatRows = [], productRows: allProdRows = [] } = categoryBreakdown
+          const platFilter = isD2C ? (r => r.platform === 'D2C') : (r => r.platform === selPlatform)
+          const allCatRows = (categoryBreakdown.categoryRows || []).filter(platFilter)
+          const allProdRows = (categoryBreakdown.productRows || []).filter(platFilter)
 
-          // For non-D2C platforms, fall back to empty (breakdown currently only built for D2C/Shopify)
-          if (!isD2C && !allCatRows.length) return null
+          if (!allCatRows.length && !allProdRows.length) return null
 
           // Prev period breakdown for WoW (spend only)
           const prevCB = (ads.prevCategoryBreakdown || []).filter(r => isD2C ? d2cPlatforms.includes(r.platform) : r.platform === selPlatform)
