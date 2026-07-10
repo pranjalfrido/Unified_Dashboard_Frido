@@ -4303,15 +4303,15 @@ function AdsTab({ data }) {
 
   const chMap = data.chMap || {}
 
-  // Shopify revenue split between Meta & Google proportionally by their ad spend
+  // Shopify revenue split between Meta & Google proportionally by their ad spend (use filtTotals for correct period)
   const shopifyExcRev = chMap['Shopify']?.excRev || 0
-  const metaSpend = totals.find(t => t.platform === 'Meta')?.spend || 0
-  const googleSpend = totals.find(t => t.platform === 'Google')?.spend || 0
-  const shopifyAdSpendTotal = metaSpend + googleSpend
-  const metaShopifyRev = shopifyAdSpendTotal > 0 ? shopifyExcRev * (metaSpend / shopifyAdSpendTotal) : shopifyExcRev
-  const googleShopifyRev = shopifyAdSpendTotal > 0 ? shopifyExcRev * (googleSpend / shopifyAdSpendTotal) : 0
 
   // Net revenue (exc GST) from sales data per platform
+  const _filtMetaSpend = filtTotals.find(t => t.platform === 'Meta')?.spend || 0
+  const _filtGoogleSpend = filtTotals.find(t => t.platform === 'Google')?.spend || 0
+  const _filtD2CSpend = _filtMetaSpend + _filtGoogleSpend
+  const metaShopifyRev = _filtD2CSpend > 0 ? shopifyExcRev * (_filtMetaSpend / _filtD2CSpend) : shopifyExcRev
+  const googleShopifyRev = _filtD2CSpend > 0 ? shopifyExcRev * (_filtGoogleSpend / _filtD2CSpend) : 0
   const platformNetRev = {
     D2C:       shopifyExcRev,
     Meta:      metaShopifyRev,
