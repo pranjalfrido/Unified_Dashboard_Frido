@@ -4503,8 +4503,11 @@ function AdsTab({ data }) {
           const googleSpend = filtTotals.find(t => t.platform === 'Google')?.spend || 0
           const metaRev = platformNetRev['Meta'] || 0
           const googleRev = platformNetRev['Google'] || 0
-          const metaRoas = metaSpend > 0 ? metaRev / metaSpend : 0
-          const googleRoas = googleSpend > 0 ? googleRev / googleSpend : 0
+          // Use ads-attributed revenue for ROAS (spend-split gives same ROAS for both)
+          const metaAdsRev = filtTotals.find(t => t.platform === 'Meta')?.revenue || 0
+          const googleAdsRev = filtTotals.find(t => t.platform === 'Google')?.revenue || 0
+          const metaRoas = metaSpend > 0 ? metaAdsRev / metaSpend : 0
+          const googleRoas = googleSpend > 0 ? googleAdsRev / googleSpend : 0
           const prevMetaSpend = prevTotals['Meta']?.spend || 0
           const prevGoogleSpend = prevTotals['Google']?.spend || 0
           const card = (label, value, sub, badge, color) => (
