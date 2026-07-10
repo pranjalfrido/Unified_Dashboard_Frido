@@ -4413,11 +4413,31 @@ function AdsTab({ data }) {
     return 0
   })()
 
+  // Build daily spend by date, and for D2C/Meta/Google use Shopify daily excRev split by spend share
+  const shopifyDailyMap = {}
+  ;(data.shopify?.daily || []).forEach(d => { shopifyDailyMap[d.date] = d.excRev || 0 })
+
   const dailyByDate = {}
   filtDaily.forEach(d => {
-    if (!dailyByDate[d.date]) dailyByDate[d.date] = { date: d.date, spend: 0, revenue: 0 }
+    if (!dailyByDate[d.date]) dailyByDate[d.date] = { date: d.date, spend: 0, revenue: 0, metaSpend: 0, googleSpend: 0 }
     dailyByDate[d.date].spend += d.spend
-    dailyByDate[d.date].revenue += d.revenue
+    if (d.platform === 'Meta') dailyByDate[d.date].metaSpend += d.spend
+    if (d.platform === 'Google') dailyByDate[d.date].googleSpend += d.spend
+  })
+  // For D2C/Meta/Google: revenue = Shopify daily excRev split by spend share per day
+  // For other platforms: revenue from ads table (no Shopify split needed)
+  Object.values(dailyByDate).forEach(d => {
+    if (isD2C || selPlatform === 'Meta' || selPlatform === 'Google') {
+      const shopifyExcRevDay = shopifyDailyMap[d.date] || 0
+      const dayShopifySpend = d.metaSpend + d.googleSpend
+      if (selPlatform === 'Meta') {
+        d.revenue = dayShopifySpend > 0 ? shopifyExcRevDay * (d.metaSpend / dayShopifySpend) : 0
+      } else if (selPlatform === 'Google') {
+        d.revenue = dayShopifySpend > 0 ? shopifyExcRevDay * (d.googleSpend / dayShopifySpend) : 0
+      } else {
+        d.revenue = shopifyExcRevDay
+      }
+    }
   })
   const dailyArr = Object.values(dailyByDate).sort((a, b) => a.date.localeCompare(b.date))
 
