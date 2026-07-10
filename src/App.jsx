@@ -4511,47 +4511,77 @@ function AdsTab({ data }) {
           )
         })()}
 
-        {/* Spend by Platform + Daily Chart — split only on All tab */}
-        <div style={{ display: 'grid', gridTemplateColumns: selPlatform ? '1fr' : '38% 1fr', gap: 12 }}>
+        {/* Spend by Platform Table + Daily Chart */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
 
-          {/* Spend by Platform bars — only on All */}
+          {/* Platform Table — only on All tab */}
           {!selPlatform && (() => {
             const sortedTotals = [...totals].sort((a, b) => b.spend - a.spend)
-            const totalAllSpend = sortedTotals.reduce((s, t) => s + t.spend, 0)
-            const pieData = sortedTotals.map(t => ({ name: t.platform, value: t.spend, roas: t.roas }))
+            const platLogos = {
+              Meta: ADS_PLATFORMS.find(p => p.id === 'Meta')?.logo,
+              Google: ADS_PLATFORMS.find(p => p.id === 'Google')?.logo,
+              Amazon: ADS_PLATFORMS.find(p => p.id === 'Amazon')?.logo,
+              Flipkart: ADS_PLATFORMS.find(p => p.id === 'Flipkart')?.logo,
+              Myntra: ADS_PLATFORMS.find(p => p.id === 'Myntra')?.logo,
+              Zepto: ADS_PLATFORMS.find(p => p.id === 'Zepto')?.logo,
+              Instamart: ADS_PLATFORMS.find(p => p.id === 'Instamart')?.logo,
+              Blinkit: ADS_PLATFORMS.find(p => p.id === 'Blinkit')?.logo,
+            }
+            const thStyle = { fontSize: 10, fontWeight: 700, color: C.t3, textTransform: 'uppercase', letterSpacing: 0.4, padding: '6px 10px', textAlign: 'right', whiteSpace: 'nowrap', borderBottom: `1px solid ${C.border}` }
+            const tdStyle = { fontSize: 12, padding: '7px 10px', textAlign: 'right', color: C.t1, borderBottom: `1px solid ${C.border}` }
             return (
-              <div className="kpi-card" style={{ padding: '16px 18px' }}>
-                <div style={{ fontWeight: 700, fontSize: 13, marginBottom: 12, color: C.t1 }}>Spend by Platform</div>
-                <div style={{ display: 'flex', gap: 16, alignItems: 'center' }}>
-                  {/* Donut */}
-                  <div style={{ flexShrink: 0 }}>
-                    <ResponsiveContainer width={130} height={130}>
-                      <PieChart>
-                        <Pie data={pieData} cx="50%" cy="50%" innerRadius={38} outerRadius={58} dataKey="value" paddingAngle={2} strokeWidth={0}>
-                          {pieData.map((entry, i) => (
-                            <Cell key={entry.name} fill={PLATFORM_COLORS[entry.name] || C.acc} />
-                          ))}
-                        </Pie>
-                        <Tooltip formatter={(v) => [fmt(v), 'Spend']} contentStyle={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 6, fontSize: 11 }} />
-                      </PieChart>
-                    </ResponsiveContainer>
-                  </div>
-                  {/* Legend list */}
-                  <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 7 }}>
-                    {sortedTotals.map(t => {
-                      const color = PLATFORM_COLORS[t.platform] || C.acc
-                      const sharePct = totalAllSpend > 0 ? (t.spend / totalAllSpend * 100).toFixed(1) : '0'
-                      return (
-                        <div key={t.platform} style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
-                          <span style={{ width: 8, height: 8, borderRadius: '50%', background: color, flexShrink: 0 }} />
-                          <span style={{ fontSize: 12, fontWeight: 600, color: C.t1, flex: 1 }}>{t.platform}</span>
-                          <span style={{ fontSize: 11, color: C.t3 }}>{sharePct}%</span>
-                          <span style={{ fontSize: 12, fontWeight: 700, color: C.t1, minWidth: 56, textAlign: 'right' }}>{fmt(t.spend)}</span>
-                          {(() => { const r = t.roas > 0 ? t.roas : (t.spend > 0 ? (platformNetRev[t.platform] || 0) / t.spend : 0); return r > 0 ? <span style={{ fontSize: 10, fontWeight: 700, padding: '1px 6px', borderRadius: 4, background: roasBg(r), color: roasColor(r), minWidth: 36, textAlign: 'center' }}>{r.toFixed(2)}x</span> : null })()}
-                        </div>
-                      )
-                    })}
-                  </div>
+              <div className="kpi-card" style={{ padding: '14px 16px' }}>
+                <div style={{ fontWeight: 700, fontSize: 13, marginBottom: 10, color: C.t1 }}>Platform Overview</div>
+                <div style={{ overflowX: 'auto' }}>
+                  <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 620 }}>
+                    <thead>
+                      <tr>
+                        <th style={{ ...thStyle, textAlign: 'left' }}>Platform</th>
+                        <th style={thStyle}>Spend</th>
+                        <th style={thStyle}>Revenue</th>
+                        <th style={thStyle}>ROAS</th>
+                        <th style={thStyle}>Clicks</th>
+                        <th style={thStyle}>CTR</th>
+                        <th style={thStyle}>CPC</th>
+                        <th style={thStyle}>Orders</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {sortedTotals.map(t => {
+                        const rev = platformNetRev[t.platform] || 0
+                        const roas = t.spend > 0 && rev > 0 ? rev / t.spend : 0
+                        const ctr = t.impressions > 0 ? (t.clicks / t.impressions * 100) : 0
+                        const cpc = t.clicks > 0 ? t.spend / t.clicks : 0
+                        const orders = t.orders || 0
+                        const logo = platLogos[t.platform]
+                        return (
+                          <tr key={t.platform} style={{ cursor: 'default' }}
+                            onMouseEnter={e => e.currentTarget.style.background = C.hover}
+                            onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
+                            <td style={{ ...tdStyle, textAlign: 'left' }}>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
+                                {logo
+                                  ? <img src={logo} alt="" style={{ width: 16, height: 16, borderRadius: 3, objectFit: 'contain', flexShrink: 0 }} />
+                                  : <span style={{ width: 10, height: 10, borderRadius: '50%', background: PLATFORM_COLORS[t.platform] || C.acc, flexShrink: 0, display: 'inline-block' }} />}
+                                <span style={{ fontWeight: 700 }}>{t.platform}</span>
+                              </div>
+                            </td>
+                            <td style={tdStyle}>{fmt(t.spend)}</td>
+                            <td style={tdStyle}>{rev > 0 ? fmt(rev) : '—'}</td>
+                            <td style={{ ...tdStyle }}>
+                              {roas > 0
+                                ? <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 7px', borderRadius: 4, background: roasBg(roas), color: roasColor(roas) }}>{roas.toFixed(2)}x</span>
+                                : '—'}
+                            </td>
+                            <td style={tdStyle}>{t.clicks > 0 ? fmtBig(t.clicks) : '—'}</td>
+                            <td style={tdStyle}>{ctr > 0 ? ctr.toFixed(2) + '%' : '—'}</td>
+                            <td style={tdStyle}>{cpc > 0 ? `₹${cpc.toFixed(0)}` : '—'}</td>
+                            <td style={tdStyle}>{orders > 0 ? fmtN(orders) : '—'}</td>
+                          </tr>
+                        )
+                      })}
+                    </tbody>
+                  </table>
                 </div>
               </div>
             )
