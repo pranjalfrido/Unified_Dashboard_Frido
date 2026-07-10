@@ -984,8 +984,7 @@ export default async function handler(req, res) {
         byCategory: (r.adsByCategory || []).map(x => ({ platform: x.platform, category: x.category, spend: parseFloat(x.spend)||0, revenue: parseFloat(x.revenue)||0, impressions: parseFloat(x.impressions)||0, clicks: parseFloat(x.clicks)||0, orders: parseFloat(x.orders)||0, roas: parseFloat(x.roas)||0 })),
         bySku: (r.adsBySku || []).map(x => ({ platform: x.platform, category: x.category, sku: x.product_name, spend: parseFloat(x.spend)||0, revenue: parseFloat(x.revenue)||0, impressions: parseFloat(x.impressions)||0, clicks: parseFloat(x.clicks)||0, orders: parseFloat(x.orders)||0, roas: parseFloat(x.roas)||0 })),
         categoryBreakdown: (() => {
-          const salesOrders = r.salesCategoryOrders || []
-          // Meta and Google both drive Shopify (myfrido) sales — split by their spend share
+          const salesRows = r.salesCategoryOrders || []
           const adsTotals = r.adsTotals || []
           const metaSpend = parseFloat(adsTotals.find(t => t.platform === 'Meta')?.spend) || 0
           const googleSpend = parseFloat(adsTotals.find(t => t.platform === 'Google')?.spend) || 0
@@ -993,38 +992,84 @@ export default async function handler(req, res) {
           const metaShare = shopifyAdSpend > 0 ? metaSpend / shopifyAdSpend : 0.5
           const googleShare = shopifyAdSpend > 0 ? googleSpend / shopifyAdSpend : 0.5
 
-          // Match by subcategory name (product_name in ads = SubCategory in sales) — most reliable
-          // For category-level rows, match by category name case-insensitively
-          const ordersForChannel = (ch) => salesOrders.filter(s => s.platform === ch)
-          const findBySubCat = (rows, subCat) => rows.find(s => s.sub_category && s.sub_category.toLowerCase().trim() === subCat.toLowerCase().trim())
-          const findByCat = (rows, cat) => rows.filter(s => s.category && s.category.toLowerCase().trim() === cat.toLowerCase().trim())
+          const shopifySales = salesRows.filter(s => s.platform === 'Shopify')
 
-          const getSalesData = (platform, category, productName) => {
-            const ch = platform === 'Meta' || platform === 'Google' ? 'Shopify' : platform
-            const share = platform === 'Meta' ? metaShare : platform === 'Google' ? googleShare : 1
-            const chRows = ordersForChannel(ch)
-            let orders = 0, revenue = 0
-            if (productName) {
-              const row = findBySubCat(chRows, productName)
-              orders = row ? parseFloat(row.orders)||0 : 0
-              revenue = row ? parseFloat(row.revenue)||0 : 0
-            } else {
-              const rows = findByCat(chRows, category)
-              orders = rows.reduce((s, r) => s + (parseFloat(r.orders)||0), 0)
-              revenue = rows.reduce((s, r) => s + (parseFloat(r.revenue)||0), 0)
-            }
-            return { orders: Math.round(orders * share), revenue: Math.round(revenue * share) }
-          }
-          return (r.adsCategoryBreakdown || []).map(x => {
-            const cat = x.category || 'Unknown'
-            const productName = x.target_type === 'product' ? x.product_name : null
-            const subCat = productName
-            const { orders: salesOrders, revenue: salesRevenue } = getSalesData(x.platform, cat, productName)
-            const spend = parseFloat(x.spend)||0
-            const clicks = parseFloat(x.clicks)||0
-            const impressions = parseFloat(x.impressions)||0
-            return { platform: x.platform, targetType: x.target_type, category: cat, subCategory: subCat, spend, orders: salesOrders, salesRevenue, clicks, impressions }
+          // Build ad spend lookup by platform → category → spend/clicks/impressions
+          const adsCB = r.adsCategoryBreakdown || []
+          // ad spend by platform+category (for category table)
+          const adCatMap = {}
+          adsCB.forEach(x => {
+            const key = `${x.platform}||${(x.category || 'Unknown').trim()}`
+            if (!adCatMap[key]) adCatMap[key] = { spend: 0, clicks: 0, impressions: 0 }
+            adCatMap[key].spend += parseFloat(x.spend) || 0
+            adCatMap[key].clicks += parseFloat(x.clicks) || 0
+            adCatMap[key].impressions += parseFloat(x.impressions) || 0
           })
+          // ad spend by platform+subCategory (for product table)
+          const adProdMap = {}
+          adsCB.filter(x => x.target_type === 'product' && x.product_name).forEach(x => {
+            const key = `${x.platform}||${x.product_name.trim()}`
+            if (!adProdMap[key]) adProdMap[key] = { spend: 0, clicks: 0, impressions: 0, category: x.category || 'Unknown' }
+            adProdMap[key].spend += parseFloat(x.spend) || 0
+            adProdMap[key].clicks += parseFloat(x.clicks) || 0
+            adProdMap[key].impressions += parseFloat(x.impressions) || 0
+          })
+
+          // CATEGORY TABLE: built from sales, revenue = full category sales, spend from ads
+          // For D2C (Meta+Google) use Shopify sales split by spend share
+          const catSalesMap = {}
+          shopifySales.forEach(s => {
+            const cat = (s.category || 'Unknown').trim()
+            if (!catSalesMap[cat]) catSalesMap[cat] = { revenue: 0, orders: 0 }
+            catSalesMap[cat].revenue += parseFloat(s.revenue) || 0
+            catSalesMap[cat].orders += parseFloat(s.orders) || 0
+          })
+
+          const categoryRows = Object.entries(catSalesMap).map(([cat, sales]) => {
+            const metaAd = adCatMap[`Meta||${cat}`] || {}
+            const googleAd = adCatMap[`Google||${cat}`] || {}
+            const spend = (metaAd.spend || 0) + (googleAd.spend || 0)
+            const clicks = (metaAd.clicks || 0) + (googleAd.clicks || 0)
+            const impressions = (metaAd.impressions || 0) + (googleAd.impressions || 0)
+            return { platform: 'D2C', category: cat, subCategory: null, spend, clicks, impressions, salesRevenue: Math.round(sales.revenue), orders: Math.round(sales.orders) }
+          })
+
+          // PRODUCT TABLE: built from sales subcategories, revenue = full subcat sales, spend from ads
+          const subCatSalesMap = {}
+          shopifySales.forEach(s => {
+            const subCat = (s.sub_category || '').trim()
+            const cat = (s.category || 'Unknown').trim()
+            const key = subCat || `__nosubcat__${cat}`
+            if (!subCatSalesMap[key]) subCatSalesMap[key] = { subCategory: subCat || null, category: cat, revenue: 0, orders: 0 }
+            subCatSalesMap[key].revenue += parseFloat(s.revenue) || 0
+            subCatSalesMap[key].orders += parseFloat(s.orders) || 0
+          })
+
+          // Track which subCats are matched by ads
+          const matchedSubCats = new Set()
+          const productRows = Object.values(subCatSalesMap).map(s => {
+            const subCat = s.subCategory
+            if (!subCat) return null
+            const metaKey = `Meta||${subCat}`
+            const googleKey = `Google||${subCat}`
+            const metaAd = adProdMap[metaKey] || {}
+            const googleAd = adProdMap[googleKey] || {}
+            const spend = (metaAd.spend || 0) + (googleAd.spend || 0)
+            const clicks = (metaAd.clicks || 0) + (googleAd.clicks || 0)
+            const impressions = (metaAd.impressions || 0) + (googleAd.impressions || 0)
+            if (spend > 0) matchedSubCats.add(subCat)
+            return { platform: 'D2C', category: s.category, subCategory: subCat, spend, clicks, impressions, salesRevenue: Math.round(s.revenue), orders: Math.round(s.orders) }
+          }).filter(Boolean)
+
+          // Others: subCats with sales but no ad spend — aggregate into one Others row
+          const othersRevenue = productRows.filter(r => r.spend === 0).reduce((s, r) => s + r.salesRevenue, 0)
+          const othersOrders = productRows.filter(r => r.spend === 0).reduce((s, r) => s + r.orders, 0)
+          const advertisedProducts = productRows.filter(r => r.spend > 0)
+          if (othersRevenue > 0) {
+            advertisedProducts.push({ platform: 'D2C', category: 'Others', subCategory: 'Others', spend: 0, clicks: 0, impressions: 0, salesRevenue: othersRevenue, orders: othersOrders })
+          }
+
+          return { categoryRows, productRows: advertisedProducts }
         })(),
         zeroOrder: (r.adsZeroOrder || []).map(x => ({ platform: x.platform, product: x.product, campaign: x.campaign_name, spend: parseFloat(x.spend)||0, orders: parseFloat(x.orders)||0, clicks: parseFloat(x.clicks)||0, impressions: parseFloat(x.impressions)||0, ctr: parseFloat(x.ctr)||0, cpc: parseFloat(x.cpc)||0 })),
         prevTotals: (r.prevAdsTotals || []).reduce((m, x) => { m[x.platform] = { spend: parseFloat(x.spend)||0, revenue: parseFloat(x.revenue)||0, impressions: parseFloat(x.impressions)||0, clicks: parseFloat(x.clicks)||0 }; return m }, {}),

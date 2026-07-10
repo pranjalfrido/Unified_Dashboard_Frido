@@ -4275,7 +4275,7 @@ function AdsTab({ data }) {
   const campaigns = ads.campaigns || []
   const byCategory = ads.byCategory || []
   const bySku = ads.bySku || []
-  const categoryBreakdown = ads.categoryBreakdown || []
+  const categoryBreakdown = ads.categoryBreakdown || { categoryRows: [], productRows: [] }
   const prevTotals = ads.prevTotals || {}
 
   const [selPlatform, setSelPlatform] = useState(null)
@@ -4583,48 +4583,29 @@ function AdsTab({ data }) {
 
         {/* Category & Product Breakdown — platform tabs only */}
         {selPlatform && (() => {
-          const platRows = categoryBreakdown.filter(r => isD2C ? d2cPlatforms.includes(r.platform) : r.platform === selPlatform)
-          if (!platRows.length) return null
-          const totalSpendHere = platRows.reduce((s, r) => s + r.spend, 0)
+          const { categoryRows: allCatRows = [], productRows: allProdRows = [] } = categoryBreakdown
 
-          // Prev period breakdown for WoW
+          // For non-D2C platforms, fall back to empty (breakdown currently only built for D2C/Shopify)
+          if (!isD2C && !allCatRows.length) return null
+
+          // Prev period breakdown for WoW (spend only)
           const prevCB = (ads.prevCategoryBreakdown || []).filter(r => isD2C ? d2cPlatforms.includes(r.platform) : r.platform === selPlatform)
           const prevCatSpend = {}
           prevCB.forEach(r => { const k = (r.category || 'Unknown').trim(); prevCatSpend[k] = (prevCatSpend[k] || 0) + r.spend })
           const prevProdSpend = {}
           prevCB.forEach(r => { if (r.subCategory) { const k = r.subCategory.trim(); prevProdSpend[k] = (prevProdSpend[k] || 0) + r.spend } })
 
-          // Brand rows (target_type = 'all') — from adsTotals brand spend
-          const allPlatRows = (ads.categoryBreakdown || []).filter(r => isD2C ? d2cPlatforms.includes(r.platform) : r.platform === selPlatform)
-          const brandRows = (filtTotals || [])
-          const brandSpend = (() => {
-            const q = `SELECT platform, ROUND(SUM(spend),0) AS spend, ROUND(SUM(clicks),0) AS clicks, ROUND(SUM(impressions),0) AS impressions, COUNT(DISTINCT campaign_name) AS campaigns FROM fact_all_platform_ads_report WHERE target_type = 'all' GROUP BY platform`
-            return null // computed below from filtTotals minus platRows total
-          })()
-          // Approximate brand spend = total platform spend - breakdown spend (which excludes all)
           const filtPlatSpend = filtTotals.reduce((s, t) => s + (parseFloat(t.spend) || 0), 0)
           const filtPlatClicks = filtTotals.reduce((s, t) => s + (parseFloat(t.clicks) || 0), 0)
           const filtPlatImpr = filtTotals.reduce((s, t) => s + (parseFloat(t.impressions) || 0), 0)
+          const totalSpendHere = allCatRows.reduce((s, r) => s + r.spend, 0)
           const brandSpendVal = filtPlatSpend - totalSpendHere
 
-          // Category view
-          const catMap = {}
-          platRows.forEach(r => {
-            const k = (r.category || 'Unknown').trim()
-            if (!catMap[k]) catMap[k] = { category: k, spend: 0, clicks: 0, impressions: 0, salesRevenue: 0, orders: 0 }
-            catMap[k].spend += r.spend
-            catMap[k].orders += (r.orders || 0)
-            catMap[k].clicks += r.clicks
-            catMap[k].impressions += r.impressions
-            catMap[k].salesRevenue += (r.salesRevenue || 0)
-          })
-          const catRows = Object.values(catMap).sort((a, b) => b.spend - a.spend)
+          const catRows = [...allCatRows].sort((a, b) => b.spend - a.spend)
+          const prodRows = [...allProdRows].sort((a, b) => b.spend - a.spend)
 
-          // Product view
-          const prodRows = platRows.filter(r => r.subCategory).sort((a, b) => b.spend - a.spend)
-
-          // Grand totals
-          const catTotal = catRows.reduce((a, r) => ({ spend: a.spend+r.spend, clicks: a.clicks+r.clicks, impressions: a.impressions+r.impressions, orders: a.orders+r.orders, salesRevenue: a.salesRevenue+r.salesRevenue }), { spend:0, clicks:0, impressions:0, orders:0, salesRevenue:0 })
+          // Grand totals — ROAS uses filtPlatSpend (incl. brand) to match KPI
+          const catTotal = catRows.reduce((a, r) => ({ spend: a.spend+r.spend, clicks: a.clicks+r.clicks, impressions: a.impressions+r.impressions, orders: a.orders+(r.orders||0), salesRevenue: a.salesRevenue+(r.salesRevenue||0) }), { spend:0, clicks:0, impressions:0, orders:0, salesRevenue:0 })
           const prodTotal = prodRows.reduce((a, r) => ({ spend: a.spend+r.spend, clicks: a.clicks+r.clicks, impressions: a.impressions+r.impressions, orders: a.orders+(r.orders||0), salesRevenue: a.salesRevenue+(r.salesRevenue||0) }), { spend:0, clicks:0, impressions:0, orders:0, salesRevenue:0 })
           const prevCatTotal = prevCB.reduce((s, r) => s + r.spend, 0)
           const prevProdTotal = prevCB.filter(r => r.subCategory).reduce((s, r) => s + r.spend, 0)
@@ -4661,10 +4642,11 @@ function AdsTab({ data }) {
             )
           }
 
-          const renderTotalRow = (t, prevSpendTotal) => {
+          const renderTotalRow = (t, prevSpendTotal, roasSpend) => {
             const ctr = t.impressions > 0 ? (t.clicks / t.impressions * 100).toFixed(2) : null
             const cpc = t.clicks > 0 ? (t.spend / t.clicks).toFixed(1) : null
-            const roas = t.spend > 0 && t.salesRevenue > 0 ? (t.salesRevenue / t.spend).toFixed(2) : null
+            const effectiveSpend = roasSpend || t.spend
+            const roas = effectiveSpend > 0 && t.salesRevenue > 0 ? (t.salesRevenue / effectiveSpend).toFixed(2) : null
             const wow = prevSpendTotal > 0 ? ((t.spend - prevSpendTotal) / prevSpendTotal * 100).toFixed(1) : null
             const wowUp = wow >= 0
             return (
@@ -4749,7 +4731,7 @@ function AdsTab({ data }) {
                       <colgroup>
                         <col style={{ width: '26%' }} /><col style={{ width: '14%' }} /><col style={{ width: '12%' }} /><col style={{ width: '10%' }} /><col style={{ width: '10%' }} /><col style={{ width: '16%' }} /><col style={{ width: '12%' }} />
                       </colgroup>
-                      <tbody>{renderTotalRow(catTotal, prevCatTotal)}</tbody>
+                      <tbody>{renderTotalRow(catTotal, prevCatTotal, filtPlatSpend)}</tbody>
                     </table>
                   </div>
                 </div>
@@ -4776,7 +4758,7 @@ function AdsTab({ data }) {
                       <colgroup>
                         <col style={{ width: '26%' }} /><col style={{ width: '14%' }} /><col style={{ width: '12%' }} /><col style={{ width: '10%' }} /><col style={{ width: '10%' }} /><col style={{ width: '16%' }} /><col style={{ width: '12%' }} />
                       </colgroup>
-                      <tbody>{renderTotalRow(prodTotal, prevProdTotal)}</tbody>
+                      <tbody>{renderTotalRow(prodTotal, prevProdTotal, filtPlatSpend)}</tbody>
                     </table>
                   </div>
                 </div>
