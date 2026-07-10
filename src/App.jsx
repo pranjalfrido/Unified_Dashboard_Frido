@@ -4718,15 +4718,17 @@ function AdsTab({ data }) {
                 {/* Category table */}
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ fontSize: 11, fontWeight: 700, color: C.t2, marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.5px' }}>By Category</div>
-                  <div style={{ maxHeight: 380, overflowY: 'auto' }}>
+                  <div style={{ maxHeight: 340, overflowY: 'auto' }}>
                     <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11 }}>
                       {thead('Category')}
                       <tbody>
                         {catRows.map((r, i) => renderRow(r, i, 'cat'))}
-                        {renderTotalRow(catTotal)}
                       </tbody>
                     </table>
                   </div>
+                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11 }}>
+                    <tbody>{renderTotalRow(catTotal)}</tbody>
+                  </table>
                 </div>
 
                 {/* Divider */}
@@ -4735,15 +4737,17 @@ function AdsTab({ data }) {
                 {/* Product table */}
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ fontSize: 11, fontWeight: 700, color: C.t2, marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.5px' }}>By Product</div>
-                  <div style={{ maxHeight: 380, overflowY: 'auto' }}>
+                  <div style={{ maxHeight: 340, overflowY: 'auto' }}>
                     <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11 }}>
                       {thead('Product')}
                       <tbody>
                         {prodRows.map((r, i) => renderRow(r, i, 'prod'))}
-                        {renderTotalRow(prodTotal)}
                       </tbody>
                     </table>
                   </div>
+                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11 }}>
+                    <tbody>{renderTotalRow(prodTotal)}</tbody>
+                  </table>
                 </div>
               </div>
             </div>
