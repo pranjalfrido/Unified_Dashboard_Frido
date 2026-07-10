@@ -4399,11 +4399,11 @@ function AdsTab({ data }) {
   const prevCpo = prevOrders > 0 ? prevSpend / prevOrders : 0
   const costPerOrder = currentOrders > 0 ? totalSpend / currentOrders : 0
   const shopifyNewCustomers = (ads.nCusts || data.nCusts || 0) - (ads.repeatCusts || data.repeatCusts || 0)
-  const shopifyAdSpend = metaSpend + googleSpend
+  const shopifyAdSpend = _filtMetaSpend + _filtGoogleSpend
   const cac = (() => {
     if (!selPlatform || isD2C) return shopifyNewCustomers > 0 ? shopifyAdSpend / shopifyNewCustomers : 0
-    if (selPlatform === 'Meta') return shopifyNewCustomers > 0 ? metaSpend / shopifyNewCustomers : 0
-    if (selPlatform === 'Google') return shopifyNewCustomers > 0 ? googleSpend / shopifyNewCustomers : 0
+    if (selPlatform === 'Meta') return shopifyNewCustomers > 0 ? _filtMetaSpend / shopifyNewCustomers : 0
+    if (selPlatform === 'Google') return shopifyNewCustomers > 0 ? _filtGoogleSpend / shopifyNewCustomers : 0
     return null
   })()
   const prevCac = (() => {
