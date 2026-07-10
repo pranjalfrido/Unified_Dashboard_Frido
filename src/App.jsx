@@ -4621,7 +4621,7 @@ function AdsTab({ data }) {
                   ))}
                 </div>
               </div>
-              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12, tableLayout: 'fixed' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
                 <thead>
                   <tr style={{ borderBottom: `1.5px solid ${C.border}` }}>
                     {catView === 'product' && <th style={{ textAlign: 'left', padding: '6px 8px', color: C.t3, fontWeight: 600, fontSize: 11 }}>Category</th>}
@@ -4634,9 +4634,6 @@ function AdsTab({ data }) {
                     <th style={{ textAlign: 'right', padding: '6px 8px', color: C.t3, fontWeight: 600, fontSize: 11 }}>Units Sold</th>
                   </tr>
                 </thead>
-              </table>
-              <div style={{ maxHeight: 360, overflowY: 'auto' }}>
-              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12, tableLayout: 'fixed' }}>
                 <tbody>
                   {tableRows.map((r, i) => {
                     const ctr = r.impressions > 0 ? (r.clicks / r.impressions * 100).toFixed(2) : null
@@ -4658,7 +4655,6 @@ function AdsTab({ data }) {
                   })}
                 </tbody>
               </table>
-              </div>
             </div>
           )
         })()}
