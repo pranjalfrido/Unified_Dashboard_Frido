@@ -4433,10 +4433,12 @@ function AdsTab({ data }) {
     if (isD2C || selPlatform === 'Meta' || selPlatform === 'Google') {
       const shopifyExcRevDay = shopifyDailyMap[d.date] || 0
       const dayShopifySpend = d.metaSpend + d.googleSpend
+      d.metaRevenue = dayShopifySpend > 0 ? shopifyExcRevDay * (d.metaSpend / dayShopifySpend) : 0
+      d.googleRevenue = dayShopifySpend > 0 ? shopifyExcRevDay * (d.googleSpend / dayShopifySpend) : 0
       if (selPlatform === 'Meta') {
-        d.revenue = dayShopifySpend > 0 ? shopifyExcRevDay * (d.metaSpend / dayShopifySpend) : 0
+        d.revenue = d.metaRevenue
       } else if (selPlatform === 'Google') {
-        d.revenue = dayShopifySpend > 0 ? shopifyExcRevDay * (d.googleSpend / dayShopifySpend) : 0
+        d.revenue = d.googleRevenue
       } else {
         d.revenue = shopifyExcRevDay
       }
@@ -4494,6 +4496,38 @@ function AdsTab({ data }) {
             </div>
           ))}
         </div>
+
+        {/* D2C Meta + Google split KPIs */}
+        {isD2C && (() => {
+          const metaSpend = filtTotals.find(t => t.platform === 'Meta')?.spend || 0
+          const googleSpend = filtTotals.find(t => t.platform === 'Google')?.spend || 0
+          const metaRev = platformNetRev['Meta'] || 0
+          const googleRev = platformNetRev['Google'] || 0
+          const metaRoas = metaSpend > 0 ? metaRev / metaSpend : 0
+          const googleRoas = googleSpend > 0 ? googleRev / googleSpend : 0
+          const prevMetaSpend = prevTotals['Meta']?.spend || 0
+          const prevGoogleSpend = prevTotals['Google']?.spend || 0
+          const card = (label, value, sub, badge, color) => (
+            <div key={label} className="kpi-card" style={{ padding: '10px 14px', borderLeft: `3px solid ${color}` }}>
+              <div className="kpi-label" style={{ fontSize: 10 }}>{label}</div>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 4, marginTop: 3 }}>
+                <div className="kpi-value" style={{ fontSize: 16 }}>{value}</div>
+                {badge}
+              </div>
+              <div className="kpi-sub" style={{ marginTop: 2 }}>{sub}</div>
+            </div>
+          )
+          return (
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6, 1fr)', gap: 10 }}>
+              {card('Meta Spend', fmt(metaSpend), 'Meta ad spend', chgBadge(metaSpend, prevMetaSpend), '#1877F2')}
+              {card('Meta Net Revenue', fmt(metaRev), 'Shopify (Meta share)', null, '#1877F2')}
+              {card('Meta ROAS', `${metaRoas.toFixed(2)}x`, 'Meta rev / Meta spend', null, '#1877F2')}
+              {card('Google Spend', fmt(googleSpend), 'Google ad spend', chgBadge(googleSpend, prevGoogleSpend), '#34A853')}
+              {card('Google Net Revenue', fmt(googleRev), 'Shopify (Google share)', null, '#34A853')}
+              {card('Google ROAS', `${googleRoas.toFixed(2)}x`, 'Google rev / Google spend', null, '#34A853')}
+            </div>
+          )
+        })()}
 
         {/* Spend by Platform + Daily Chart — split only on All tab */}
         <div style={{ display: 'grid', gridTemplateColumns: selPlatform ? '1fr' : '38% 1fr', gap: 12 }}>
@@ -4558,9 +4592,13 @@ function AdsTab({ data }) {
                 } else {
                   key = r.date
                 }
-                if (!map[key]) map[key] = { date: key, spend: 0, revenue: 0 }
+                if (!map[key]) map[key] = { date: key, spend: 0, revenue: 0, metaSpend: 0, googleSpend: 0, metaRevenue: 0, googleRevenue: 0 }
                 map[key].spend += r.spend
                 map[key].revenue += r.revenue
+                map[key].metaSpend += r.metaSpend || 0
+                map[key].googleSpend += r.googleSpend || 0
+                map[key].metaRevenue += r.metaRevenue || 0
+                map[key].googleRevenue += r.googleRevenue || 0
               })
               return Object.values(map).sort((a, b) => a.date.localeCompare(b.date)).map(r => ({
                 ...r, roas: r.spend > 0 ? +(r.revenue / r.spend).toFixed(2) : 0
@@ -4599,6 +4637,10 @@ function AdsTab({ data }) {
                     <Area yAxisId="left" type="monotone" dataKey="spend" name="Spend" stroke="#6366F1" strokeWidth={2} fill="url(#adsSpendGrad)" dot={false} />
                     <Area yAxisId="left" type="monotone" dataKey="revenue" name="Revenue" stroke="#10B981" strokeWidth={2} fill="url(#adsRevGrad)" dot={false} />
                     <Line yAxisId="right" type="monotone" dataKey="roas" name="ROAS" stroke="#F59E0B" strokeWidth={2} dot={false} strokeDasharray="4 2" />
+                    {isD2C && <Line yAxisId="left" type="monotone" dataKey="metaSpend" name="Meta Spend" stroke="#1877F2" strokeWidth={1.5} dot={false} strokeDasharray="3 2" />}
+                    {isD2C && <Line yAxisId="left" type="monotone" dataKey="googleSpend" name="Google Spend" stroke="#34A853" strokeWidth={1.5} dot={false} strokeDasharray="3 2" />}
+                    {isD2C && <Line yAxisId="left" type="monotone" dataKey="metaRevenue" name="Meta Revenue" stroke="#1877F2" strokeWidth={1.5} dot={false} />}
+                    {isD2C && <Line yAxisId="left" type="monotone" dataKey="googleRevenue" name="Google Revenue" stroke="#34A853" strokeWidth={1.5} dot={false} />}
                   </ComposedChart>
                 </ResponsiveContainer>
               </div>
