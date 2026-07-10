@@ -4669,17 +4669,15 @@ function AdsTab({ data }) {
           }
 
           const renderTotalRow = (t, prevSpendTotal) => {
-            const totalSpend = filtPlatSpend  // use full platform spend (incl. unmapped) to match KPI
             const ctr = t.impressions > 0 ? (t.clicks / t.impressions * 100).toFixed(2) : null
-            const cpc = t.clicks > 0 ? (totalSpend / t.clicks).toFixed(1) : null
-            const roas = totalSpend > 0 && t.salesRevenue > 0 ? (t.salesRevenue / totalSpend).toFixed(2) : null
-            const prevFullSpend = isD2C ? d2cPlatforms.reduce((s, p) => s + (prevTotals[p]?.spend || 0), 0) : (prevTotals[selPlatform]?.spend || 0)
-            const wow = prevFullSpend > 0 ? ((totalSpend - prevFullSpend) / prevFullSpend * 100).toFixed(1) : null
+            const cpc = t.clicks > 0 ? (t.spend / t.clicks).toFixed(1) : null
+            const roas = t.spend > 0 && t.salesRevenue > 0 ? (t.salesRevenue / t.spend).toFixed(2) : null
+            const wow = prevSpendTotal > 0 ? ((t.spend - prevSpendTotal) / prevSpendTotal * 100).toFixed(1) : null
             const wowUp = wow >= 0
             return (
               <tr style={totalRowStyle}>
                 <td style={{ ...tdStyleL, fontWeight: 700, color: C.t1 }}>Total</td>
-                <td style={{ ...tdStyle, fontWeight: 700, color: C.t1 }}>{fmt(totalSpend)}</td>
+                <td style={{ ...tdStyle, fontWeight: 700, color: C.t1 }}>{fmt(t.spend)}</td>
                 <td style={tdStyle}>{wow ? <span style={{ fontSize: 10, fontWeight: 700, color: wowUp ? '#10B981' : '#EF4444' }}>{wowUp ? '▲' : '▼'}{Math.abs(wow)}%</span> : '—'}</td>
                 <td style={tdStyle}>{cpc ? `₹${cpc}` : '—'}</td>
                 <td style={tdStyle}>{ctr ? `${ctr}%` : '—'}</td>
