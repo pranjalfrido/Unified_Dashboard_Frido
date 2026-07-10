@@ -4471,13 +4471,21 @@ function AdsTab({ data }) {
       <div style={{ display: 'flex', flexDirection: 'column', gap: 14, padding: '14px 16px', flex: 1, overflowY: 'auto' }}>
 
         {/* KPI Cards */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 10 }}>
-          {[
+        {(() => {
+          const d2cMetaSpend = isD2C ? (filtTotals.find(t => t.platform === 'Meta')?.spend || 0) : 0
+          const d2cGoogleSpend = isD2C ? (filtTotals.find(t => t.platform === 'Google')?.spend || 0) : 0
+          const d2cPrevMetaSpend = isD2C ? (prevTotals['Meta']?.spend || 0) : 0
+          const d2cPrevGoogleSpend = isD2C ? (prevTotals['Google']?.spend || 0) : 0
+          const cols = isD2C ? 6 : 5
+          const row1Items = [
             { label: 'Total Spend', value: fmt(totalSpend), badge: chgBadge(totalSpend, prevSpend), sub: 'Ad spend incl. all platforms' },
             { label: 'Net Revenue', value: fmt(totalRevenue), badge: chgBadge(totalRevenue, prevRevenue), sub: isD2C ? 'Shopify net exc. GST (Meta+Google)' : selPlatform ? `${selPlatform === 'Meta' || selPlatform === 'Google' ? 'Shopify (spend-split)' : selPlatform} net exc. GST` : 'All channels net exc. GST' },
             { label: 'Overall ROAS', value: `${overallRoas.toFixed(2)}x`, badge: chgBadge(overallRoas, prevRoas), sub: 'Net rev / Spend', roasVal: overallRoas },
             { label: 'Total Clicks', value: fmtBig(totalClicks), badge: chgBadge(totalClicks, prevClicks), sub: 'Across all platforms' },
             { label: 'Impressions', value: fmtBig(totalImpressions), badge: chgBadge(totalImpressions, prevImpressions), sub: 'Total ad impressions' },
+            ...(isD2C ? [{ label: 'Meta Spend', value: fmt(d2cMetaSpend), badge: chgBadge(d2cMetaSpend, d2cPrevMetaSpend), sub: 'Meta ad spend', accentColor: '#1877F2' }] : []),
+          ]
+          const row2Items = [
             { label: 'CTR', value: overallCtr.toFixed(2) + '%', badge: chgBadge(overallCtr, prevCtr), sub: 'Clicks / Impressions' },
             { label: 'CPC', value: `₹${overallCpc.toFixed(2)}`, badge: chgBadge(overallCpc, prevCpc), sub: 'Spend / Clicks' },
             { label: 'Orders', value: fmtN(currentOrders), sub: 'Distinct orders', badge: chgBadge(currentOrders, prevOrders) },
@@ -4485,44 +4493,20 @@ function AdsTab({ data }) {
             ...(!selPlatform || isD2C || selPlatform === 'Meta' || selPlatform === 'Google'
               ? [{ label: 'CAC (Shopify)', value: cac > 0 ? `₹${Math.round(cac).toLocaleString('en-IN')}` : '—', sub: `Spend / ${fmtN(shopifyNewCustomers)} new custs`, badge: chgBadge(prevCac, cac) }]
               : [{ label: 'CPM', value: overallCpm > 0 ? `₹${Math.round(overallCpm).toLocaleString('en-IN')}` : '—', sub: 'Cost per 1K impressions', badge: chgBadge(prevCpm, overallCpm) }]),
-          ].map(k => (
-            <div key={k.label} className="kpi-card" style={{ padding: '12px 14px' }}>
-              <div className="kpi-label">{k.label}</div>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 4, marginTop: 4 }}>
-                <div className="kpi-value" style={{ fontSize: 18, color: k.roasVal != null ? roasColor(k.roasVal) : C.t1 }}>{k.value}</div>
-                {k.badge}
-              </div>
-              {k.sub && <div className="kpi-sub" style={{ marginTop: 3 }}>{k.sub}</div>}
-            </div>
-          ))}
-        </div>
-
-        {/* D2C Meta + Google split KPIs */}
-        {isD2C && (() => {
-          const metaSpend = filtTotals.find(t => t.platform === 'Meta')?.spend || 0
-          const googleSpend = filtTotals.find(t => t.platform === 'Google')?.spend || 0
-          const metaRev = platformNetRev['Meta'] || 0
-          const googleRev = platformNetRev['Google'] || 0
-          // Round to same precision as fmt() display so ROAS matches displayed values
-          const fmtRaw = v => v >= 1e7 ? Math.round(v / 1e5) * 1e5 : v >= 1e5 ? Math.round(v / 1e3) * 1e3 : Math.round(v)
-          const metaRoas = metaSpend > 0 ? fmtRaw(metaRev) / fmtRaw(metaSpend) : 0
-          const googleRoas = googleSpend > 0 ? fmtRaw(googleRev) / fmtRaw(googleSpend) : 0
-          const prevMetaSpend = prevTotals['Meta']?.spend || 0
-          const prevGoogleSpend = prevTotals['Google']?.spend || 0
-          const card = (label, value, sub, badge, color) => (
-            <div key={label} className="kpi-card" style={{ padding: '10px 14px', borderLeft: `3px solid ${color}` }}>
-              <div className="kpi-label" style={{ fontSize: 10 }}>{label}</div>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 4, marginTop: 3 }}>
-                <div className="kpi-value" style={{ fontSize: 16 }}>{value}</div>
-                {badge}
-              </div>
-              <div className="kpi-sub" style={{ marginTop: 2 }}>{sub}</div>
-            </div>
-          )
+            ...(isD2C ? [{ label: 'Google Spend', value: fmt(d2cGoogleSpend), badge: chgBadge(d2cGoogleSpend, d2cPrevGoogleSpend), sub: 'Google ad spend', accentColor: '#34A853' }] : []),
+          ]
           return (
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 10 }}>
-              {card('Meta Spend', fmt(metaSpend), 'Meta ad spend', chgBadge(metaSpend, prevMetaSpend), '#1877F2')}
-              {card('Google Spend', fmt(googleSpend), 'Google ad spend', chgBadge(googleSpend, prevGoogleSpend), '#34A853')}
+            <div style={{ display: 'grid', gridTemplateColumns: `repeat(${cols}, 1fr)`, gap: 10 }}>
+              {[...row1Items, ...row2Items].map(k => (
+                <div key={k.label} className="kpi-card" style={{ padding: '12px 14px', ...(k.accentColor ? { borderLeft: `3px solid ${k.accentColor}` } : {}) }}>
+                  <div className="kpi-label">{k.label}</div>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 4, marginTop: 4 }}>
+                    <div className="kpi-value" style={{ fontSize: 18, color: k.roasVal != null ? roasColor(k.roasVal) : C.t1 }}>{k.value}</div>
+                    {k.badge}
+                  </div>
+                  {k.sub && <div className="kpi-sub" style={{ marginTop: 3 }}>{k.sub}</div>}
+                </div>
+              ))}
             </div>
           )
         })()}
