@@ -4611,22 +4611,27 @@ function AdsTab({ data }) {
           const catMap = {}
           platRows.forEach(r => {
             const k = (r.category || 'Unknown').trim()
-            if (!catMap[k]) catMap[k] = { category: k, spend: 0, clicks: 0, impressions: 0, revenue: 0, units: 0 }
+            if (!catMap[k]) catMap[k] = { category: k, spend: 0, clicks: 0, impressions: 0, salesRevenue: 0, units: 0 }
             catMap[k].spend += r.spend
             catMap[k].units += (r.units || 0)
             catMap[k].clicks += r.clicks
             catMap[k].impressions += r.impressions
-            catMap[k].revenue += r.revenue
+            catMap[k].salesRevenue += (r.salesRevenue || 0)
           })
           const catRows = Object.values(catMap).sort((a, b) => b.spend - a.spend)
 
           // Product view
           const prodRows = platRows.filter(r => r.subCategory).sort((a, b) => b.spend - a.spend)
 
+          // Grand totals
+          const catTotal = catRows.reduce((a, r) => ({ spend: a.spend+r.spend, clicks: a.clicks+r.clicks, impressions: a.impressions+r.impressions, units: a.units+r.units, salesRevenue: a.salesRevenue+r.salesRevenue }), { spend:0, clicks:0, impressions:0, units:0, salesRevenue:0 })
+          const prodTotal = prodRows.reduce((a, r) => ({ spend: a.spend+r.spend, clicks: a.clicks+r.clicks, impressions: a.impressions+r.impressions, units: a.units+r.units, salesRevenue: a.salesRevenue+(r.salesRevenue||0) }), { spend:0, clicks:0, impressions:0, units:0, salesRevenue:0 })
+
           const thStyle = { textAlign: 'right', padding: '5px 6px', color: C.t3, fontWeight: 600, fontSize: 10, whiteSpace: 'nowrap' }
           const thStyleL = { textAlign: 'left', padding: '5px 6px', color: C.t3, fontWeight: 600, fontSize: 10 }
           const tdStyle = { padding: '6px 6px', color: C.t2, textAlign: 'right', fontSize: 11 }
           const tdStyleL = { padding: '6px 6px', color: C.t1, fontWeight: 500, fontSize: 11, maxWidth: 130, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }
+          const totalRowStyle = { borderTop: `2px solid ${C.border}`, background: C.acl }
 
           const WoW = ({ curr, prev }) => {
             if (!prev) return null
@@ -4634,6 +4639,64 @@ function AdsTab({ data }) {
             const up = curr >= prev
             return <span style={{ fontSize: 9, fontWeight: 700, color: up ? '#10B981' : '#EF4444', marginLeft: 3 }}>{up ? '▲' : '▼'}{Math.abs(pct)}%</span>
           }
+
+          const renderRow = (r, i, key) => {
+            const ctr = r.impressions > 0 ? (r.clicks / r.impressions * 100).toFixed(2) : null
+            const cpc = r.clicks > 0 ? (r.spend / r.clicks).toFixed(1) : null
+            const cpu = r.units > 0 ? Math.round(r.spend / r.units) : null
+            const roas = r.spend > 0 && r.salesRevenue > 0 ? (r.salesRevenue / r.spend).toFixed(2) : null
+            const prev = key === 'cat' ? (prevCatSpend[r.category] || 0) : (prevProdSpend[r.subCategory?.trim()] || 0)
+            const label = key === 'cat' ? r.category : r.subCategory
+            return (
+              <tr key={i} style={{ borderBottom: `1px solid ${C.border}`, background: i % 2 === 0 ? '#fff' : C.bg }}>
+                <td style={key === 'prod' ? { ...tdStyleL, maxWidth: 120 } : tdStyleL} title={label}>{label}</td>
+                <td style={{ ...tdStyle, fontWeight: 600, color: C.t1 }}>{fmt(r.spend)}</td>
+                <td style={tdStyle}><WoW curr={r.spend} prev={prev} /></td>
+                <td style={tdStyle}>{cpc ? `₹${cpc}` : '—'}</td>
+                <td style={tdStyle}>{ctr ? `${ctr}%` : '—'}</td>
+                <td style={tdStyle}>{r.units > 0 ? fmtN(Math.round(r.units)) : '—'}</td>
+                <td style={tdStyle}>{cpu ? `₹${fmtN(cpu)}` : '—'}</td>
+                <td style={tdStyle}>{r.salesRevenue > 0 ? fmt(r.salesRevenue) : '—'}</td>
+                <td style={{ ...tdStyle, fontWeight: 600, color: roas >= 2 ? '#10B981' : roas ? '#F59E0B' : C.t3 }}>{roas ? `${roas}x` : '—'}</td>
+              </tr>
+            )
+          }
+
+          const renderTotalRow = (t) => {
+            const ctr = t.impressions > 0 ? (t.clicks / t.impressions * 100).toFixed(2) : null
+            const cpc = t.clicks > 0 ? (t.spend / t.clicks).toFixed(1) : null
+            const cpu = t.units > 0 ? Math.round(t.spend / t.units) : null
+            const roas = t.spend > 0 && t.salesRevenue > 0 ? (t.salesRevenue / t.spend).toFixed(2) : null
+            return (
+              <tr style={totalRowStyle}>
+                <td style={{ ...tdStyleL, fontWeight: 700, color: C.t1 }}>Total</td>
+                <td style={{ ...tdStyle, fontWeight: 700, color: C.t1 }}>{fmt(t.spend)}</td>
+                <td style={tdStyle}>—</td>
+                <td style={tdStyle}>{cpc ? `₹${cpc}` : '—'}</td>
+                <td style={tdStyle}>{ctr ? `${ctr}%` : '—'}</td>
+                <td style={{ ...tdStyle, fontWeight: 700 }}>{t.units > 0 ? fmtN(Math.round(t.units)) : '—'}</td>
+                <td style={tdStyle}>{cpu ? `₹${fmtN(cpu)}` : '—'}</td>
+                <td style={{ ...tdStyle, fontWeight: 700, color: C.t1 }}>{t.salesRevenue > 0 ? fmt(t.salesRevenue) : '—'}</td>
+                <td style={{ ...tdStyle, fontWeight: 700, color: roas >= 2 ? '#10B981' : roas ? '#F59E0B' : C.t3 }}>{roas ? `${roas}x` : '—'}</td>
+              </tr>
+            )
+          }
+
+          const thead = (label) => (
+            <thead style={{ position: 'sticky', top: 0, background: C.card, zIndex: 1 }}>
+              <tr style={{ borderBottom: `1.5px solid ${C.border}` }}>
+                <th style={thStyleL}>{label}</th>
+                <th style={thStyle}>Spend</th>
+                <th style={thStyle}>WoW</th>
+                <th style={thStyle}>CPC</th>
+                <th style={thStyle}>CTR</th>
+                <th style={thStyle}>Units</th>
+                <th style={thStyle}>₹/Unit</th>
+                <th style={thStyle}>Revenue</th>
+                <th style={thStyle}>ROAS</th>
+              </tr>
+            </thead>
+          )
 
           return (
             <div className="kpi-card" style={{ padding: '14px 16px', marginBottom: 16 }}>
@@ -4652,44 +4715,15 @@ function AdsTab({ data }) {
 
               {/* Side by side tables */}
               <div style={{ display: 'flex', gap: 12 }}>
-
                 {/* Category table */}
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ fontSize: 11, fontWeight: 700, color: C.t2, marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.5px' }}>By Category</div>
-                  <div style={{ maxHeight: 340, overflowY: 'auto' }}>
+                  <div style={{ maxHeight: 380, overflowY: 'auto' }}>
                     <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11 }}>
-                      <thead style={{ position: 'sticky', top: 0, background: C.card, zIndex: 1 }}>
-                        <tr style={{ borderBottom: `1.5px solid ${C.border}` }}>
-                          <th style={thStyleL}>Category</th>
-                          <th style={thStyle}>Spend</th>
-                          <th style={thStyle}>WoW</th>
-                          <th style={thStyle}>% Share</th>
-                          <th style={thStyle}>CPC</th>
-                          <th style={thStyle}>CTR</th>
-                          <th style={thStyle}>Units</th>
-                          <th style={thStyle}>₹/Unit</th>
-                        </tr>
-                      </thead>
+                      {thead('Category')}
                       <tbody>
-                        {catRows.map((r, i) => {
-                          const ctr = r.impressions > 0 ? (r.clicks / r.impressions * 100).toFixed(2) : null
-                          const pct = totalSpendHere > 0 ? (r.spend / totalSpendHere * 100).toFixed(1) : 0
-                          const cpc = r.clicks > 0 ? (r.spend / r.clicks).toFixed(1) : null
-                          const cpu = r.units > 0 ? Math.round(r.spend / r.units) : null
-                          const prev = prevCatSpend[r.category] || 0
-                          return (
-                            <tr key={i} style={{ borderBottom: `1px solid ${C.border}`, background: i % 2 === 0 ? '#fff' : C.bg }}>
-                              <td style={tdStyleL}>{r.category}</td>
-                              <td style={{ ...tdStyle, fontWeight: 600, color: C.t1 }}>{fmt(r.spend)}</td>
-                              <td style={tdStyle}><WoW curr={r.spend} prev={prev} /></td>
-                              <td style={tdStyle}><span style={{ background: C.acl, borderRadius: 4, padding: '1px 5px', fontSize: 10, fontWeight: 600 }}>{pct}%</span></td>
-                              <td style={tdStyle}>{cpc ? `₹${cpc}` : '—'}</td>
-                              <td style={tdStyle}>{ctr ? `${ctr}%` : '—'}</td>
-                              <td style={tdStyle}>{r.units > 0 ? fmtN(Math.round(r.units)) : '—'}</td>
-                              <td style={tdStyle}>{cpu ? `₹${fmtN(cpu)}` : '—'}</td>
-                            </tr>
-                          )
-                        })}
+                        {catRows.map((r, i) => renderRow(r, i, 'cat'))}
+                        {renderTotalRow(catTotal)}
                       </tbody>
                     </table>
                   </div>
@@ -4701,40 +4735,12 @@ function AdsTab({ data }) {
                 {/* Product table */}
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ fontSize: 11, fontWeight: 700, color: C.t2, marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.5px' }}>By Product</div>
-                  <div style={{ maxHeight: 340, overflowY: 'auto' }}>
+                  <div style={{ maxHeight: 380, overflowY: 'auto' }}>
                     <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11 }}>
-                      <thead style={{ position: 'sticky', top: 0, background: C.card, zIndex: 1 }}>
-                        <tr style={{ borderBottom: `1.5px solid ${C.border}` }}>
-                          <th style={thStyleL}>Product</th>
-                          <th style={thStyle}>Spend</th>
-                          <th style={thStyle}>WoW</th>
-                          <th style={thStyle}>% Share</th>
-                          <th style={thStyle}>CPC</th>
-                          <th style={thStyle}>CTR</th>
-                          <th style={thStyle}>Units</th>
-                          <th style={thStyle}>₹/Unit</th>
-                        </tr>
-                      </thead>
+                      {thead('Product')}
                       <tbody>
-                        {prodRows.map((r, i) => {
-                          const ctr = r.impressions > 0 ? (r.clicks / r.impressions * 100).toFixed(2) : null
-                          const pct = totalSpendHere > 0 ? (r.spend / totalSpendHere * 100).toFixed(1) : 0
-                          const cpc = r.clicks > 0 ? (r.spend / r.clicks).toFixed(1) : null
-                          const cpu = r.units > 0 ? Math.round(r.spend / r.units) : null
-                          const prev = prevProdSpend[r.subCategory?.trim()] || 0
-                          return (
-                            <tr key={i} style={{ borderBottom: `1px solid ${C.border}`, background: i % 2 === 0 ? '#fff' : C.bg }}>
-                              <td style={{ ...tdStyleL, maxWidth: 120 }} title={r.subCategory}>{r.subCategory}</td>
-                              <td style={{ ...tdStyle, fontWeight: 600, color: C.t1 }}>{fmt(r.spend)}</td>
-                              <td style={tdStyle}><WoW curr={r.spend} prev={prev} /></td>
-                              <td style={tdStyle}><span style={{ background: C.acl, borderRadius: 4, padding: '1px 5px', fontSize: 10, fontWeight: 600 }}>{pct}%</span></td>
-                              <td style={tdStyle}>{cpc ? `₹${cpc}` : '—'}</td>
-                              <td style={tdStyle}>{ctr ? `${ctr}%` : '—'}</td>
-                              <td style={tdStyle}>{r.units > 0 ? fmtN(Math.round(r.units)) : '—'}</td>
-                              <td style={tdStyle}>{cpu ? `₹${fmtN(cpu)}` : '—'}</td>
-                            </tr>
-                          )
-                        })}
+                        {prodRows.map((r, i) => renderRow(r, i, 'prod'))}
+                        {renderTotalRow(prodTotal)}
                       </tbody>
                     </table>
                   </div>
