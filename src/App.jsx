@@ -4685,16 +4685,34 @@ function AdsTab({ data }) {
           })()}
         </div>
 
-        {/* Category & Product Breakdown — platform tabs only */}
-        {selPlatform && (() => {
-          const platFilter = isD2C ? (r => r.platform === 'D2C') : (r => r.platform === selPlatform)
-          const allCatRows = (categoryBreakdown.categoryRows || []).filter(platFilter)
-          const allProdRows = (categoryBreakdown.productRows || []).filter(platFilter)
+        {/* Category & Product Breakdown — all tabs */}
+        {(() => {
+          const platFilter = !selPlatform ? (() => true) : isD2C ? (r => r.platform === 'D2C') : (r => r.platform === selPlatform)
+
+          // For All tab: merge rows by category/product, summing metrics
+          const mergeRows = (rows, keyFn) => {
+            const map = {}
+            rows.filter(platFilter).forEach(r => {
+              const k = keyFn(r)
+              if (!k) return
+              if (!map[k]) map[k] = { ...r }
+              else {
+                map[k].spend += r.spend || 0
+                map[k].clicks += r.clicks || 0
+                map[k].impressions += r.impressions || 0
+                map[k].orders = (map[k].orders || 0) + (r.orders || 0)
+                map[k].salesRevenue = (map[k].salesRevenue || 0) + (r.salesRevenue || 0)
+              }
+            })
+            return Object.values(map)
+          }
+          const allCatRows = mergeRows(categoryBreakdown.categoryRows || [], r => r.category)
+          const allProdRows = mergeRows(categoryBreakdown.productRows || [], r => r.subCategory)
 
           if (!allCatRows.length && !allProdRows.length) return null
 
           // Prev period breakdown for WoW (spend only)
-          const prevCB = (ads.prevCategoryBreakdown || []).filter(r => isD2C ? d2cPlatforms.includes(r.platform) : r.platform === selPlatform)
+          const prevCB = (ads.prevCategoryBreakdown || []).filter(!selPlatform ? (() => true) : r => isD2C ? d2cPlatforms.includes(r.platform) : r.platform === selPlatform)
           const prevCatSpend = {}
           prevCB.forEach(r => { const k = (r.category || 'Unknown').trim(); prevCatSpend[k] = (prevCatSpend[k] || 0) + r.spend })
           const prevProdSpend = {}
@@ -4790,8 +4808,8 @@ function AdsTab({ data }) {
                 const brandImpr = filtPlatImpr > 0 ? Math.round(filtPlatImpr * brandSpendVal / filtPlatSpend) : 0
                 const brandCpc = brandClicks > 0 ? (brandSpendVal / brandClicks).toFixed(1) : null
                 const brandCtr = brandImpr > 0 ? (brandClicks / brandImpr * 100).toFixed(2) : null
-                const prevPlatSpend = isD2C ? d2cPlatforms.reduce((s, p) => s + (prevTotals[p]?.spend || 0), 0) : (prevTotals[selPlatform]?.spend || 0)
-                const prevBreakdownSpend = (ads.prevCategoryBreakdown || []).filter(r => isD2C ? d2cPlatforms.includes(r.platform) : r.platform === selPlatform).reduce((s, r) => s + r.spend, 0)
+                const prevPlatSpend = !selPlatform ? Object.values(prevTotals).reduce((s, t) => s + (t?.spend || 0), 0) : isD2C ? d2cPlatforms.reduce((s, p) => s + (prevTotals[p]?.spend || 0), 0) : (prevTotals[selPlatform]?.spend || 0)
+                const prevBreakdownSpend = (ads.prevCategoryBreakdown || []).filter(!selPlatform ? (() => true) : r => isD2C ? d2cPlatforms.includes(r.platform) : r.platform === selPlatform).reduce((s, r) => s + r.spend, 0)
                 const prevBrandSpend = prevPlatSpend - prevBreakdownSpend
                 const brandWow = prevBrandSpend > 0 ? ((brandSpendVal - prevBrandSpend) / prevBrandSpend * 100).toFixed(1) : null
                 const brandWowUp = brandWow >= 0
