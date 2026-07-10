@@ -4276,6 +4276,7 @@ function AdsTab({ data }) {
   const byCategory = ads.byCategory || []
   const bySku = ads.bySku || []
   const categoryBreakdown = ads.categoryBreakdown || { categoryRows: [], productRows: [] }
+  const channelSalesOrders = ads.channelSalesOrders || {}
   const prevTotals = ads.prevTotals || {}
 
   const [selPlatform, setSelPlatform] = useState(null)
@@ -4524,7 +4525,7 @@ function AdsTab({ data }) {
               Instamart: '/logo-instamart.png',
               Blinkit: '/logo-blinkit.png',
             }
-            // Merge Meta + Google into one D2C row
+            // Merge Meta + Google into one D2C row; use sales orders for all platforms
             const metaT = totals.find(t => t.platform === 'Meta') || {}
             const googleT = totals.find(t => t.platform === 'Google') || {}
             const d2cRow = {
@@ -4532,11 +4533,12 @@ function AdsTab({ data }) {
               spend: (metaT.spend || 0) + (googleT.spend || 0),
               clicks: (metaT.clicks || 0) + (googleT.clicks || 0),
               impressions: (metaT.impressions || 0) + (googleT.impressions || 0),
-              orders: (metaT.orders || 0) + (googleT.orders || 0),
+              orders: channelSalesOrders['Shopify'] || 0,
               rev: platformNetRev['D2C'] || 0,
             }
             const otherTotals = totals.filter(t => t.platform !== 'Meta' && t.platform !== 'Google')
-            const tableRows = [d2cRow, ...otherTotals.map(t => ({ ...t, rev: platformNetRev[t.platform] || 0 }))].sort((a, b) => b.spend - a.spend)
+            const platformToChannel = { Amazon: 'Amazon', Flipkart: 'Flipkart', Myntra: 'Myntra', Zepto: 'Zepto', Instamart: 'Instamart', Blinkit: 'Blinkit' }
+            const tableRows = [d2cRow, ...otherTotals.map(t => ({ ...t, rev: platformNetRev[t.platform] || 0, orders: channelSalesOrders[platformToChannel[t.platform]] || t.orders || 0 }))].sort((a, b) => b.spend - a.spend)
 
             const thStyle = { fontSize: 10, fontWeight: 700, color: C.t3, textTransform: 'uppercase', letterSpacing: 0.4, padding: '6px 10px', textAlign: 'right', whiteSpace: 'nowrap', borderBottom: `1px solid ${C.border}` }
             const tdStyle = { fontSize: 12, padding: '7px 10px', textAlign: 'right', color: C.t1, borderBottom: `1px solid ${C.border}` }

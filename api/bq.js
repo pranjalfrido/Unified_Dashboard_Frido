@@ -988,6 +988,11 @@ export default async function handler(req, res) {
           })
           return map
         })(),
+        channelSalesOrders: (() => {
+          const m = {}
+          ;(r.byChannel || []).forEach(x => { m[x.Channel] = parseInt(x.orders) || 0 })
+          return m
+        })(),
         byAdType: (r.adsByAdType || []).map(x => ({ platform: x.platform, adType: x.ad_type, spend: parseFloat(x.spend)||0, revenue: parseFloat(x.revenue)||0, impressions: parseFloat(x.impressions)||0, clicks: parseFloat(x.clicks)||0, orders: parseFloat(x.orders)||0, ctr: parseFloat(x.ctr)||0, cpc: parseFloat(x.cpc)||0, roas: parseFloat(x.roas)||0 })),
         campaigns: (r.adsCampaigns || []).map(x => ({ platform: x.platform, adType: x.ad_type, campaign: x.campaign_name, spend: parseFloat(x.spend)||0, revenue: parseFloat(x.revenue)||0, impressions: parseFloat(x.impressions)||0, clicks: parseFloat(x.clicks)||0, orders: parseFloat(x.orders)||0, ctr: parseFloat(x.ctr)||0, cpc: parseFloat(x.cpc)||0, roas: parseFloat(x.roas)||0 })),
         byCategory: (r.adsByCategory || []).map(x => ({ platform: x.platform, category: x.category, spend: parseFloat(x.spend)||0, revenue: parseFloat(x.revenue)||0, impressions: parseFloat(x.impressions)||0, clicks: parseFloat(x.clicks)||0, orders: parseFloat(x.orders)||0, roas: parseFloat(x.roas)||0 })),
