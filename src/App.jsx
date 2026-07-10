@@ -4706,7 +4706,7 @@ function AdsTab({ data }) {
               <div style={{ fontWeight: 700, fontSize: 13, color: C.t1, marginBottom: 10 }}>Spend Breakdown</div>
 
               {/* Brand bar */}
-              {brandSpendVal > 0 && (() => {
+              {isD2C && brandSpendVal > 0 && (() => {
                 const brandClicks = filtPlatClicks > 0 ? Math.round(filtPlatClicks * brandSpendVal / filtPlatSpend) : 0
                 const brandImpr = filtPlatImpr > 0 ? Math.round(filtPlatImpr * brandSpendVal / filtPlatSpend) : 0
                 const brandCpc = brandClicks > 0 ? (brandSpendVal / brandClicks).toFixed(1) : null
