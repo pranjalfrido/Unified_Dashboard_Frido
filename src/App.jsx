@@ -72,6 +72,7 @@ function LDropdown({ label, options, value, onChange }) {
 }
 
 function LogisticsPage({ filters }) {
+  const API = import.meta.env.VITE_API_URL || ''
   const [lFilters, setLFilters] = useState({ couriers: [], shipmentType: 'all', sddNdd: 'all', paymentMode: null, zone: null, pickupState: null, dropState: null, pickupCity: null, dropCity: null, weightSlab: null, category: null, subCategory: null })
   const [data, setData] = useState(null)
   const [loading, setLoading] = useState(false)
@@ -91,7 +92,7 @@ function LogisticsPage({ filters }) {
       if (lFilters.dropState) body.dropState = lFilters.dropState
       if (lFilters.category) body.category = [lFilters.category]
       if (lFilters.subCategory) body.subCategory = [lFilters.subCategory]
-      const r = await fetch('/api/logistics', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+      const r = await fetch(`${API}/api/logistics`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
       if (!r.ok) throw new Error(await r.text())
       setData(await r.json())
     } catch (e) { setError(e.message) }
