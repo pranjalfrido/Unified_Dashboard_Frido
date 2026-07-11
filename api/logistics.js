@@ -57,6 +57,8 @@ WITH base AS (
     SAFE.PARSE_DATE('%Y-%m-%d', SUBSTR(c.pickup_date, 1, 10)) AS pickup_date,
     SAFE.PARSE_DATE('%Y-%m-%d', SUBSTR(c.rto_mark_date, 1, 10)) AS rto_mark_date,
     SAFE.PARSE_DATE('%Y-%m-%d', SUBSTR(c.out_for_delivery_1st_attempt, 1, 10)) AS ofd1_date,
+    SAFE.PARSE_DATE('%Y-%m-%d', SUBSTR(c.order_date, 1, 10)) AS order_date,
+    SAFE.PARSE_DATE('%Y-%m-%d', SUBSTR(c.latest_timestamp, 1, 10)) AS latest_ts_date,
     c.reason_for_last_failed_delivery,
     c.channel_name,
     im.CategoryName AS category,
@@ -91,9 +93,9 @@ kpis AS (
     ROUND(AVG(DATE_DIFF(delivery_date, pickup_date, DAY)), 1) AS avg_intransit,
     ROUND(AVG(DATE_DIFF(pickup_date, created_date, DAY)), 1) AS avg_pickup,
     ROUND(AVG(DATE_DIFF(delivery_date, created_date, DAY)), 1) AS avg_fulfilment,
-    ROUND(AVG(DATE_DIFF(CURRENT_DATE(), rto_mark_date, DAY)), 1) AS avg_rto_tat,
+    ROUND(AVG(IF(clickpost_unified_status='RTO-Delivered' AND DATE_DIFF(latest_ts_date, rto_mark_date, DAY) BETWEEN 0 AND 20, DATE_DIFF(latest_ts_date, rto_mark_date, DAY), NULL)), 1) AS avg_rto_tat,
     ROUND(AVG(DATE_DIFF(ofd1_date, pickup_date, DAY)), 1) AS avg_s2a,
-    ROUND(AVG(DATE_DIFF(ofd1_date, created_date, DAY)), 1) AS avg_processing,
+    ROUND(AVG(IF(DATE_DIFF(created_date, order_date, DAY) BETWEEN 0 AND 10, DATE_DIFF(created_date, order_date, DAY), NULL)), 1) AS avg_processing,
     ROUND(AVG(committed_sla), 1) AS avg_sla
   FROM base
 ),
@@ -112,9 +114,9 @@ by_courier AS (
     ROUND(AVG(DATE_DIFF(delivery_date, pickup_date, DAY)), 2) AS avg_intransit_days,
     ROUND(AVG(DATE_DIFF(delivery_date, created_date, DAY)), 2) AS avg_fulfilment_days,
     ROUND(AVG(DATE_DIFF(pickup_date, created_date, DAY)), 2) AS avg_pickup_days,
-    ROUND(AVG(DATE_DIFF(ofd1_date, created_date, DAY)), 2) AS avg_processing_days,
+    ROUND(AVG(IF(DATE_DIFF(created_date, order_date, DAY) BETWEEN 0 AND 10, DATE_DIFF(created_date, order_date, DAY), NULL)), 2) AS avg_processing_days,
     ROUND(AVG(DATE_DIFF(ofd1_date, pickup_date, DAY)), 2) AS avg_s2a_days,
-    ROUND(AVG(DATE_DIFF(CURRENT_DATE(), rto_mark_date, DAY)), 2) AS avg_rto_tat_days
+    ROUND(AVG(IF(clickpost_unified_status='RTO-Delivered' AND DATE_DIFF(latest_ts_date, rto_mark_date, DAY) BETWEEN 0 AND 20, DATE_DIFF(latest_ts_date, rto_mark_date, DAY), NULL)), 2) AS avg_rto_tat_days
   FROM base GROUP BY 1
 ),
 by_status AS (
