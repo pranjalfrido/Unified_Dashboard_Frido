@@ -44,7 +44,7 @@ function LogisticsChip({ label, logo, active, onClick, grow }) {
 
 function LogisticsToggle({ options, value, onChange }) {
   return (
-    <div style={{ display: 'inline-flex', border: `1.5px solid ${C.border2}`, borderRadius: 8, overflow: 'hidden', flexShrink: 0, background: C.bg }}>
+    <div style={{ display: 'inline-flex', border: `1.5px solid ${C.border2}`, borderRadius: 8, overflow: 'hidden', flexShrink: 0, background: C.card }}>
       {options.map((opt, i) => (
         <button key={opt} onClick={() => onChange(opt === value ? 'all' : opt)} style={{
           padding: '6px 16px', border: 'none', borderLeft: i > 0 ? `1.5px solid ${C.border2}` : 'none',
