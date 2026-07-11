@@ -301,7 +301,7 @@ function LogisticsPage({ filters }) {
                 <Line yAxisId="right" type="monotone" dataKey="rto_pct" name="RTO %" stroke="#b91c1c" strokeWidth={1.5} strokeDasharray="3 2" dot={false} />
               </ComposedChart>
             </ResponsiveContainer>
-            <div style={{ display: 'flex', gap: 16, justifyContent: 'center', marginTop: 8 }}>
+            <div style={{ display: 'flex', gap: 16, justifyContent: 'center', marginTop: 6 }}>
               {[['#E6A800','Delivered'],['#7A1A1A','RTO'],['#b91c1c','RTO %'],['#94939F','Total']].map(([color, label]) => (
                 <span key={label} style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 10, color: C.t2 }}>
                   <span style={{ width: 10, height: 10, borderRadius: 2, background: color, display: 'inline-block' }} />{label}
@@ -313,8 +313,8 @@ function LogisticsPage({ filters }) {
           {/* Courier TAT */}
           <div style={cardStyle}>
             <div style={chartTitle}>Courier · Total Shipments & TAT</div>
-            <ResponsiveContainer width="100%" height={270}>
-              <ComposedChart data={byCourierData} margin={{ top: 10, right: 16, left: 0, bottom: 60 }}>
+            <ResponsiveContainer width="100%" height={260}>
+              <ComposedChart data={byCourierData} margin={{ top: 10, right: 16, left: 0, bottom: 50 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke={C.border} vertical={false} />
                 <XAxis dataKey="courier_group" tick={{ fontSize: 9, fill: C.t3 }} angle={-35} textAnchor="end" interval={0} />
                 <YAxis yAxisId="left" tick={{ fontSize: 9, fill: '#5BA4CF' }} tickFormatter={v => v >= 1000 ? (v/1000).toFixed(0)+'K' : v} />
@@ -325,7 +325,7 @@ function LogisticsPage({ filters }) {
                 <Line yAxisId="right" type="monotone" dataKey="avg_fulfilment_days" name="Avg Fulfilment Days" stroke="#F97316" strokeWidth={2} dot={{ fill: '#F97316', r: 3 }} />
               </ComposedChart>
             </ResponsiveContainer>
-            <div style={{ display: 'flex', gap: 16, justifyContent: 'center', marginTop: 8 }}>
+            <div style={{ display: 'flex', gap: 16, justifyContent: 'center', marginTop: 6 }}>
               {[['#F97316','Avg Fulfilment Days'],['#1E3A5F','Avg Intransit Days'],['#5BA4CF','Total']].map(([color, label]) => (
                 <span key={label} style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 10, color: C.t2 }}>
                   <span style={{ width: 10, height: 10, borderRadius: 2, background: color, display: 'inline-block' }} />{label}
