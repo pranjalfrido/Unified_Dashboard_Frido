@@ -222,8 +222,8 @@ function LogisticsPage({ filters }) {
 
         {/* ── Volume KPIs ── */}
         <LSectionTitle title="Volume Overview" />
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(130px, 1fr))', gap: 8 }}>
-          <LKpiCard label="Total Shipments" value={n(k.total_shipments)} badgeText={pct2(k.total_shipments, k.total_shipments) ? null : null} />
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(8, 1fr)', gap: 10 }}>
+          <LKpiCard label="Total Shipments" value={n(k.total_shipments)} />
           <LKpiCard label="Total GMV" value={k.total_value != null ? fmt(k.total_value) : '—'} />
           <LKpiCard label="Delivered" value={n(k.delivered)} badgeText={'▲ ' + pct2(k.delivered, k.total_shipments)} badgeVariant="G" />
           <LKpiCard label="RTO" value={n(k.rto)} badgeText={pct2(k.rto, k.total_shipments)} badgeVariant="R" />
@@ -235,7 +235,7 @@ function LogisticsPage({ filters }) {
 
         {/* ── Quality KPIs ── */}
         <LSectionTitle title="Delivery Quality & SLA" />
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(130px, 1fr))', gap: 8 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(8, 1fr)', gap: 10 }}>
           <LKpiCard label="On Time Delivery" value={n(k.on_time)} badgeText={pct2(k.on_time, k.delivered)} badgeVariant="G" />
           <LKpiCard label="SLA Breach" value={n(k.sla_breach)} badgeText={pct2(k.sla_breach, k.delivered)} badgeVariant="R" />
           <LKpiCard label="EDD Breached" value={n(k.edd_breached)} badgeText="Live" badgeVariant="A" />
@@ -248,7 +248,7 @@ function LogisticsPage({ filters }) {
 
         {/* ── TAT KPIs ── */}
         <LSectionTitle title="Turnaround Time" />
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(130px, 1fr))', gap: 8 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6, 1fr)', gap: 10 }}>
           <LKpiCard label="Avg Pickup TAT" value={d1(k.avg_pickup)} badgeText="Cr→Pick" badgeVariant="B" />
           <LKpiCard label="Avg In-Transit TAT" value={d1(k.avg_intransit)} badgeText="Pick→Del" badgeVariant="N" />
           <LKpiCard label="Avg Fulfilment TAT" value={d1(k.avg_fulfilment)} badgeText="Cr→Del" badgeVariant="G" />
