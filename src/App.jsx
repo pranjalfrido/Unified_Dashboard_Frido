@@ -381,14 +381,7 @@ function LogisticsPage({ filters }) {
                             <span style={{ fontSize: 11, color: C.t2 }}>{volPct}%</span>
                           </td>
                           <td style={{ padding: '9px 10px', textAlign: 'right', color: C.t1, fontWeight: 600 }}>{n(r.total)}</td>
-                          <td style={{ padding: '9px 10px', textAlign: 'right' }}>
-                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 5 }}>
-                              <div style={{ width: 40, height: 4, background: C.border, borderRadius: 2, overflow: 'hidden' }}>
-                                <div style={{ height: '100%', width: ((r.delivered / maxCourierTotal) * 100) + '%', background: C.green.tx, borderRadius: 2 }} />
-                              </div>
-                              <span style={{ color: C.t2 }}>{n(r.delivered)}</span>
-                            </div>
-                          </td>
+                          <td style={{ padding: '9px 10px', textAlign: 'right', color: C.t2 }}>{n(r.delivered)}</td>
                           <td style={{ padding: '9px 10px', textAlign: 'right' }}>
                             <span style={{ color: delColor, fontWeight: 700, background: delBg, padding: '2px 8px', borderRadius: 20, fontSize: 11 }}>{delPct}%</span>
                           </td>
