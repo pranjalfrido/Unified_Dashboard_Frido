@@ -263,9 +263,9 @@ function LogisticsPage({ filters }) {
           <LKpiCard label="Avg S2A Days" value={d1(k.avg_s2a)} badgeText="Ship→OFD" badgeVariant="B" />
         </div>
 
-        {/* ── Monthly Trend + Status Donut ── */}
+        {/* ── Monthly Trend + Status Donut + Courier TAT ── */}
         <LSectionTitle title="Monthly Trend" />
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 14 }}>
           <div style={cardStyle}>
             <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 10 }}>
               <div>
@@ -326,28 +326,29 @@ function LogisticsPage({ filters }) {
               </div>
             </div>
           </div>
-        </div>
 
-        {/* ── Courier TAT Chart + Table side by side ── */}
-        <LSectionTitle title="Courier Performance" />
-        <div style={{ display: 'grid', gridTemplateColumns: '1.3fr 1fr', gap: 14, alignItems: 'start' }}>
+          {/* 3rd: Courier TAT */}
           <div style={cardStyle}>
-            <div style={chartTitle}>Total Shipments · Avg Intransit Days · Avg Fulfilment Days — by Courier</div>
-            <ResponsiveContainer width="100%" height={260}>
-              <ComposedChart data={byCourierData} margin={{ top: 20, right: 20, left: 0, bottom: 50 }}>
+            <div style={chartTitle}>Courier · Total Shipments & TAT</div>
+            <ResponsiveContainer width="100%" height={200}>
+              <ComposedChart data={byCourierData} margin={{ top: 10, right: 16, left: 0, bottom: 45 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke={C.border} vertical={false} />
-                <XAxis dataKey="courier_group" tick={{ fontSize: 10, fill: C.t3 }} angle={-35} textAnchor="end" interval={0} />
-                <YAxis yAxisId="left" tick={{ fontSize: 10, fill: '#5BA4CF' }} tickFormatter={v => v >= 1000 ? (v/1000).toFixed(0)+'K' : v} />
-                <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 10, fill: C.t2 }} tickFormatter={v => v + 'd'} />
+                <XAxis dataKey="courier_group" tick={{ fontSize: 9, fill: C.t3 }} angle={-35} textAnchor="end" interval={0} />
+                <YAxis yAxisId="left" tick={{ fontSize: 9, fill: '#5BA4CF' }} tickFormatter={v => v >= 1000 ? (v/1000).toFixed(0)+'K' : v} />
+                <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 9, fill: C.t2 }} tickFormatter={v => v + 'd'} />
                 <Tooltip formatter={(value, name) => name.includes('Days') ? [value + ' days', name] : [Number(value).toLocaleString('en-IN'), name]} />
-                <Legend wrapperStyle={{ fontSize: 11, paddingTop: 8 }} />
-                <Bar yAxisId="left" dataKey="total" name="Total Shipments" fill="#5BA4CF" opacity={0.85} radius={[3,3,0,0]} />
-                <Line yAxisId="right" type="monotone" dataKey="avg_intransit_days" name="Avg Intransit Days" stroke="#1E3A5F" strokeWidth={2.5} dot={{ fill: '#1E3A5F', r: 4 }} activeDot={{ r: 6 }} />
-                <Line yAxisId="right" type="monotone" dataKey="avg_fulfilment_days" name="Avg Fulfilment Days" stroke="#F97316" strokeWidth={2.5} dot={{ fill: '#F97316', r: 4 }} activeDot={{ r: 6 }} />
+                <Legend wrapperStyle={{ fontSize: 10 }} />
+                <Bar yAxisId="left" dataKey="total" name="Total" fill="#5BA4CF" opacity={0.8} radius={[3,3,0,0]} />
+                <Line yAxisId="right" type="monotone" dataKey="avg_intransit_days" name="Avg Intransit Days" stroke="#1E3A5F" strokeWidth={2} dot={{ fill: '#1E3A5F', r: 3 }} />
+                <Line yAxisId="right" type="monotone" dataKey="avg_fulfilment_days" name="Avg Fulfilment Days" stroke="#F97316" strokeWidth={2} dot={{ fill: '#F97316', r: 3 }} />
               </ComposedChart>
             </ResponsiveContainer>
           </div>
+        </div>
 
+        {/* ── Courier Performance Table ── */}
+        <LSectionTitle title="Courier Performance" />
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 14 }}>
           <div style={cardStyle}>
           <div style={chartTitle}>Courier-wise Breakdown</div>
           <div style={{ overflowX: 'auto' }}>
@@ -394,7 +395,7 @@ function LogisticsPage({ filters }) {
               </tbody>
             </table>
           </div>
-          </div>
+        </div>
         </div>
 
         {/* ── Geographic + Payment + Courier Share ── */}
