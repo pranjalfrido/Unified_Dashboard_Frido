@@ -129,6 +129,8 @@ function LogisticsPage({ filters }) {
   const [lFilters, setLFilters] = useState({ couriers: [], shipmentType: 'all', sddNdd: 'all', paymentMode: null, zone: null, pickupState: null, dropState: null, category: null, subCategory: null })
   const [trendGranularity, setTrendGranularity] = useState('Daily')
   const [cSort, setCSort] = useState({ col: 'total', dir: 'desc' })
+  const [cView, setCView] = useState('courier') // 'courier' | 'month'
+  const [cExpanded, setCExpanded] = useState({})
   const [data, setData] = useState(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
@@ -340,7 +342,18 @@ function LogisticsPage({ filters }) {
         <LSectionTitle title="Courier Performance" />
         <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 14 }}>
           <div style={cardStyle}>
-          <div style={chartTitle}>Courier-wise Breakdown</div>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+            <div style={chartTitle}>Courier-wise Breakdown</div>
+            <div style={{ display: 'inline-flex', border: `1.5px solid ${C.border2}`, borderRadius: 7, overflow: 'hidden' }}>
+              {['Courier','Month'].map((v,i) => (
+                <button key={v} onClick={() => setCView(v.toLowerCase())} style={{
+                  padding: '4px 14px', border: 'none', borderLeft: i>0 ? `1.5px solid ${C.border2}` : 'none',
+                  background: cView===v.toLowerCase() ? C.t1 : 'transparent', color: cView===v.toLowerCase() ? '#fff' : C.t2,
+                  fontSize: 11.5, fontWeight: cView===v.toLowerCase() ? 700 : 500, cursor: 'pointer', fontFamily: 'var(--font)', transition: 'all .15s'
+                }}>{v}</button>
+              ))}
+            </div>
+          </div>
           <div style={{ overflowX: 'auto' }}>
             {(() => {
               const totalAll = byCourierData.reduce((s, r) => s + (r.total || 0), 0) || 1
@@ -380,6 +393,87 @@ function LogisticsPage({ filters }) {
                 return sortDir === 'asc' ? av - bv : bv - av
               }) : enriched
               const d = (v) => v != null ? (+v).toFixed(2) + 'd' : '—'
+              // ── Month view ──────────────────────────────────
+              const byMonthAll = (data?.byMonthAll || [])
+              const monthTotalAll = byMonthAll.reduce((s,r) => s + (r.total||0), 0) || 1
+              const enrichMonth = byMonthAll.map(r => ({
+                ...r,
+                _volPct: +((r.total / monthTotalAll) * 100).toFixed(2),
+                _delPct: r.total ? +((r.delivered / r.total) * 100).toFixed(2) : 0,
+                _rtoPct: r.total ? +((r.rto / r.total) * 100).toFixed(2) : 0,
+                _zrtoPct: r.total ? +(((r.z_rto||0) / r.total) * 100).toFixed(2) : 0,
+                _cancPct: r.total ? +(((r.cancelled||0) / r.total) * 100).toFixed(2) : 0,
+                _fasrPct: r.ofd_total ? +((r.d1 / r.ofd_total) * 100).toFixed(2) : null,
+                _rasrPct: r.ofd_total ? +(((r.rasr_num||0) / r.ofd_total) * 100).toFixed(2) : null,
+              }))
+              const byCourierMonth = (data?.byCourierMonth || [])
+              if (cView === 'month') {
+                const tot = monthTotalAll
+                const sumD = enrichMonth.reduce((s,r)=>s+(r.delivered||0),0)
+                const sumR = enrichMonth.reduce((s,r)=>s+(r.rto||0),0)
+                const sumZ = enrichMonth.reduce((s,r)=>s+(r.z_rto||0),0)
+                const sumC = enrichMonth.reduce((s,r)=>s+(r.cancelled||0),0)
+                const sumD1 = enrichMonth.reduce((s,r)=>s+(r.d1||0),0)
+                const sumRN = enrichMonth.reduce((s,r)=>s+(r.rasr_num||0),0)
+                const sumOfd = enrichMonth.reduce((s,r)=>s+(r.ofd_total||0),0)
+                const wavgM = (key) => { const w = enrichMonth.reduce((s,r)=>s+(r[key]!=null?r[key]*r.total:0),0); return w/tot }
+                return (
+                  <table style={{ width:'100%', borderCollapse:'collapse', fontSize:12 }}>
+                    <thead>
+                      <tr style={{ borderBottom:`1.5px solid ${C.border}` }}>
+                        {['Month','Vol %','Total','Del %','RTO %','Z-RTO %','Canc %','FASR %','RASR %','Avg Processing','Avg Pickup','Avg S2D','Avg O2D','Avg RTO TAT','Avg S2A'].map((h,i) => (
+                          <th key={h} style={{ padding:'9px 10px', textAlign:i===0?'left':'right', color:C.t3, fontWeight:700, fontSize:9.5, letterSpacing:'.05em', textTransform:'uppercase', whiteSpace:'nowrap' }}>{h}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {enrichMonth.map(r => {
+                        const delColor = r._delPct>=80?'#16a34a':r._delPct>=60?'#d97706':'#dc2626'
+                        const rtoColor = r._rtoPct<=3?'#16a34a':r._rtoPct<=7?'#d97706':'#dc2626'
+                        const tatColor = (v,hi,lo) => v==null?C.t3:+v<=lo?'#16a34a':+v<=hi?'#d97706':'#dc2626'
+                        return (
+                          <tr key={r.month_label} style={{ borderBottom:`1px solid ${C.border}` }}>
+                            <td style={{ padding:'9px 10px', color:C.t1, fontWeight:600, whiteSpace:'nowrap' }}>{r.month_label}</td>
+                            <td style={{ padding:'9px 10px', textAlign:'right', color:C.t2, fontSize:11 }}>{r._volPct.toFixed(2)}%</td>
+                            <td style={{ padding:'9px 10px', textAlign:'right', color:C.t1, fontWeight:600 }}>{n(r.total)}</td>
+                            <td style={{ padding:'9px 10px', textAlign:'right', fontWeight:700, color:delColor, fontSize:11 }}>{r._delPct.toFixed(2)}%</td>
+                            <td style={{ padding:'9px 10px', textAlign:'right', fontWeight:700, color:rtoColor, fontSize:11 }}>{r._rtoPct.toFixed(2)}%</td>
+                            <td style={{ padding:'9px 10px', textAlign:'right', color:C.t2, fontSize:11 }}>{r._zrtoPct.toFixed(2)}%</td>
+                            <td style={{ padding:'9px 10px', textAlign:'right', color:C.t2, fontSize:11 }}>{r._cancPct.toFixed(2)}%</td>
+                            <td style={{ padding:'9px 10px', textAlign:'right', fontWeight:700, color:'#2563eb', fontSize:11 }}>{r._fasrPct!=null?r._fasrPct.toFixed(2)+'%':'—'}</td>
+                            <td style={{ padding:'9px 10px', textAlign:'right', fontWeight:700, color:'#7c3aed', fontSize:11 }}>{r._rasrPct!=null?r._rasrPct.toFixed(2)+'%':'—'}</td>
+                            <td style={{ padding:'9px 10px', textAlign:'right', color:tatColor(r.avg_processing_days,2,1), fontSize:11 }}>{d(r.avg_processing_days)}</td>
+                            <td style={{ padding:'9px 10px', textAlign:'right', color:tatColor(r.avg_pickup_days,1,0.5), fontSize:11 }}>{d(r.avg_pickup_days)}</td>
+                            <td style={{ padding:'9px 10px', textAlign:'right', color:tatColor(r.avg_intransit_days,4,2), fontSize:11 }}>{d(r.avg_intransit_days)}</td>
+                            <td style={{ padding:'9px 10px', textAlign:'right', color:tatColor(r.avg_fulfilment_days,6,4), fontSize:11 }}>{d(r.avg_fulfilment_days)}</td>
+                            <td style={{ padding:'9px 10px', textAlign:'right', color:tatColor(r.avg_rto_tat_days,10,5), fontSize:11 }}>{d(r.avg_rto_tat_days)}</td>
+                            <td style={{ padding:'9px 10px', textAlign:'right', color:tatColor(r.avg_s2a_days,3,1.5), fontSize:11 }}>{d(r.avg_s2a_days)}</td>
+                          </tr>
+                        )
+                      })}
+                    </tbody>
+                    <tfoot>
+                      <tr style={{ borderTop:`2px solid ${C.border}`, background:C.bg, fontWeight:700 }}>
+                        <td style={{ padding:'9px 10px', color:C.t1, fontWeight:700 }}>Total</td>
+                        <td style={{ padding:'9px 10px', textAlign:'right', color:C.t2, fontSize:11 }}>100.00%</td>
+                        <td style={{ padding:'9px 10px', textAlign:'right', color:C.t1, fontWeight:700 }}>{n(tot)}</td>
+                        <td style={{ padding:'9px 10px', textAlign:'right', color:'#16a34a', fontWeight:700, fontSize:11 }}>{(sumD/tot*100).toFixed(2)}%</td>
+                        <td style={{ padding:'9px 10px', textAlign:'right', color:'#dc2626', fontWeight:700, fontSize:11 }}>{(sumR/tot*100).toFixed(2)}%</td>
+                        <td style={{ padding:'9px 10px', textAlign:'right', color:C.t2, fontSize:11 }}>{(sumZ/tot*100).toFixed(2)}%</td>
+                        <td style={{ padding:'9px 10px', textAlign:'right', color:C.t2, fontSize:11 }}>{(sumC/tot*100).toFixed(2)}%</td>
+                        <td style={{ padding:'9px 10px', textAlign:'right', color:'#2563eb', fontWeight:700, fontSize:11 }}>{sumOfd?(sumD1/sumOfd*100).toFixed(2)+'%':'—'}</td>
+                        <td style={{ padding:'9px 10px', textAlign:'right', color:'#7c3aed', fontWeight:700, fontSize:11 }}>{sumOfd?(sumRN/sumOfd*100).toFixed(2)+'%':'—'}</td>
+                        <td style={{ padding:'9px 10px', textAlign:'right', color:C.t2, fontSize:11 }}>{wavgM('avg_processing_days').toFixed(2)}d</td>
+                        <td style={{ padding:'9px 10px', textAlign:'right', color:C.t2, fontSize:11 }}>{wavgM('avg_pickup_days').toFixed(2)}d</td>
+                        <td style={{ padding:'9px 10px', textAlign:'right', color:C.t2, fontSize:11 }}>{wavgM('avg_intransit_days').toFixed(2)}d</td>
+                        <td style={{ padding:'9px 10px', textAlign:'right', color:C.t2, fontSize:11 }}>{wavgM('avg_fulfilment_days').toFixed(2)}d</td>
+                        <td style={{ padding:'9px 10px', textAlign:'right', color:C.t2, fontSize:11 }}>{wavgM('avg_rto_tat_days').toFixed(2)}d</td>
+                        <td style={{ padding:'9px 10px', textAlign:'right', color:C.t2, fontSize:11 }}>{wavgM('avg_s2a_days').toFixed(2)}d</td>
+                      </tr>
+                    </tfoot>
+                  </table>
+                )
+              }
               return (
                 <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
                   <thead>
@@ -399,9 +493,11 @@ function LogisticsPage({ filters }) {
                       const rtoColor = r._rtoPct <= 3 ? '#16a34a' : r._rtoPct <= 7 ? '#d97706' : '#dc2626'
                       const tatColor = (v, hi, lo) => v == null ? C.t3 : +v <= lo ? '#16a34a' : +v <= hi ? '#d97706' : '#dc2626'
                       return (
-                        <tr key={r.courier_group} style={{ borderBottom: `1px solid ${C.border}` }}>
+                        <Fragment key={r.courier_group}>
+                        <tr style={{ borderBottom: cExpanded[r.courier_group] ? 'none' : `1px solid ${C.border}` }}>
                           <td style={{ padding: '9px 10px', minWidth: 160 }}>
                             <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
+                              <button onClick={() => setCExpanded(e => ({ ...e, [r.courier_group]: !e[r.courier_group] }))} style={{ width:16, height:16, borderRadius:3, border:`1px solid ${C.border2}`, background:C.bg, color:C.t2, fontSize:10, fontWeight:700, cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0, padding:0, lineHeight:1 }}>{cExpanded[r.courier_group]?'−':'+'}</button>
                               {logo
                                 ? <img src={logo} alt="" style={{ width: 28, height: 28, objectFit: 'contain', borderRadius: 4, flexShrink: 0, background: '#fff', border: `1px solid ${C.border}` }} onError={e => { e.currentTarget.style.display = 'none' }} />
                                 : <span style={{ width: 28, height: 28, borderRadius: 4, background: color, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, fontWeight: 800, color: '#fff', flexShrink: 0 }}>{r.courier_group.charAt(0)}</span>
@@ -424,6 +520,38 @@ function LogisticsPage({ filters }) {
                           <td style={{ padding: '9px 10px', textAlign: 'right', color: tatColor(r.avg_rto_tat_days,10,5), fontSize: 11 }}>{d(r.avg_rto_tat_days)}</td>
                           <td style={{ padding: '9px 10px', textAlign: 'right', color: tatColor(r.avg_s2a_days,3,1.5), fontSize: 11 }}>{d(r.avg_s2a_days)}</td>
                         </tr>
+                        {cExpanded[r.courier_group] && byCourierMonth.filter(m => m.courier_group === r.courier_group).sort((a,b) => a.month_dt < b.month_dt ? -1 : 1).map(m => {
+                          const _delPct = m.total ? +((m.delivered/m.total)*100).toFixed(2) : 0
+                          const _rtoPct = m.total ? +((m.rto/m.total)*100).toFixed(2) : 0
+                          const _zrtoPct = m.total ? +(((m.z_rto||0)/m.total)*100).toFixed(2) : 0
+                          const _cancPct = m.total ? +(((m.cancelled||0)/m.total)*100).toFixed(2) : 0
+                          const _fasrPct = m.ofd_total ? +((m.d1/m.ofd_total)*100).toFixed(2) : null
+                          const _rasrPct = m.ofd_total ? +(((m.rasr_num||0)/m.ofd_total)*100).toFixed(2) : null
+                          const mVolPct = +((m.total/totalAll)*100).toFixed(2)
+                          const delColor = _delPct>=80?'#16a34a':_delPct>=60?'#d97706':'#dc2626'
+                          const rtoColor = _rtoPct<=3?'#16a34a':_rtoPct<=7?'#d97706':'#dc2626'
+                          const tatColor = (v,hi,lo) => v==null?C.t3:+v<=lo?'#16a34a':+v<=hi?'#d97706':'#dc2626'
+                          return (
+                            <tr key={m.month_label} style={{ borderBottom:`1px solid ${C.border}`, background:'#FAFAF8' }}>
+                              <td style={{ padding:'7px 10px 7px 26px', color:C.t2, fontSize:11, whiteSpace:'nowrap' }}>{m.month_label}</td>
+                              <td style={{ padding:'7px 10px', textAlign:'right', color:C.t3, fontSize:11 }}>{mVolPct.toFixed(2)}%</td>
+                              <td style={{ padding:'7px 10px', textAlign:'right', color:C.t2, fontSize:11 }}>{n(m.total)}</td>
+                              <td style={{ padding:'7px 10px', textAlign:'right', color:delColor, fontSize:11 }}>{_delPct.toFixed(2)}%</td>
+                              <td style={{ padding:'7px 10px', textAlign:'right', color:rtoColor, fontSize:11 }}>{_rtoPct.toFixed(2)}%</td>
+                              <td style={{ padding:'7px 10px', textAlign:'right', color:C.t3, fontSize:11 }}>{_zrtoPct.toFixed(2)}%</td>
+                              <td style={{ padding:'7px 10px', textAlign:'right', color:C.t3, fontSize:11 }}>{_cancPct.toFixed(2)}%</td>
+                              <td style={{ padding:'7px 10px', textAlign:'right', color:'#2563eb', fontSize:11 }}>{_fasrPct!=null?_fasrPct.toFixed(2)+'%':'—'}</td>
+                              <td style={{ padding:'7px 10px', textAlign:'right', color:'#7c3aed', fontSize:11 }}>{_rasrPct!=null?_rasrPct.toFixed(2)+'%':'—'}</td>
+                              <td style={{ padding:'7px 10px', textAlign:'right', color:tatColor(m.avg_processing_days,2,1), fontSize:11 }}>{d(m.avg_processing_days)}</td>
+                              <td style={{ padding:'7px 10px', textAlign:'right', color:tatColor(m.avg_pickup_days,1,0.5), fontSize:11 }}>{d(m.avg_pickup_days)}</td>
+                              <td style={{ padding:'7px 10px', textAlign:'right', color:tatColor(m.avg_intransit_days,4,2), fontSize:11 }}>{d(m.avg_intransit_days)}</td>
+                              <td style={{ padding:'7px 10px', textAlign:'right', color:tatColor(m.avg_fulfilment_days,6,4), fontSize:11 }}>{d(m.avg_fulfilment_days)}</td>
+                              <td style={{ padding:'7px 10px', textAlign:'right', color:tatColor(m.avg_rto_tat_days,10,5), fontSize:11 }}>{d(m.avg_rto_tat_days)}</td>
+                              <td style={{ padding:'7px 10px', textAlign:'right', color:tatColor(m.avg_s2a_days,3,1.5), fontSize:11 }}>{d(m.avg_s2a_days)}</td>
+                            </tr>
+                          )
+                        })}
+                        </Fragment>
                       )
                     })}
                   </tbody>
