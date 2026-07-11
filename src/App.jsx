@@ -267,8 +267,11 @@ function LogisticsPage({ filters }) {
         <LSectionTitle title="Monthly Trend" />
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
           <div style={cardStyle}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
-              <div style={chartTitle}>Shipment Trend</div>
+            <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 10 }}>
+              <div>
+                <div style={chartTitle}>Shipment Trend</div>
+                <div style={{ fontSize: 10, color: C.t3, marginTop: -8 }}>Total = all AWBs created on that date (regardless of status) · Raw order volume per day</div>
+              </div>
               <div style={{ display: 'flex', gap: 4 }}>
                 {['Daily','Weekly','Monthly'].map(g => (
                   <button key={g} onClick={() => setTrendGranularity(g)} style={{ fontSize: 11, padding: '3px 10px', borderRadius: 6, border: `1px solid ${trendGranularity === g ? C.acc : C.border}`, background: trendGranularity === g ? C.acl : C.card, color: trendGranularity === g ? C.t1 : C.t2, cursor: 'pointer', fontWeight: trendGranularity === g ? 700 : 500, fontFamily: 'var(--font)' }}>{g}</button>
