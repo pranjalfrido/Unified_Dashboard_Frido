@@ -47,7 +47,25 @@ WITH base AS (
       WHEN c.clickpost_unified_status = 'Cancelled' THEN 'Cancelled'
       ELSE 'Intransit'
     END AS unified_status,
-    c.courier_partner AS courier_group,
+    CASE
+      WHEN LOWER(c.courier_partner) LIKE '%bluedart%' THEN 'Bluedart'
+      WHEN LOWER(c.courier_partner) LIKE '%ekart%' THEN 'Ekart'
+      WHEN LOWER(c.courier_partner) LIKE '%elastic%' THEN 'ElasticRun'
+      WHEN LOWER(c.courier_partner) LIKE '%delhivery%' AND LOWER(c.courier_partner) LIKE '%hld%' THEN 'Delhivery DS'
+      WHEN LOWER(c.courier_partner) LIKE '%delhivery%' AND LEFT(c.awb, 4) = '5448' THEN 'Delhivery NDD'
+      WHEN LOWER(c.courier_partner) LIKE '%delhivery%' THEN 'Delhivery'
+      WHEN LOWER(c.courier_partner) LIKE '%safexpress%' THEN 'Safexpress'
+      WHEN LOWER(c.courier_partner) LIKE '%shadowfax%' THEN 'Shadowfax'
+      WHEN LOWER(c.courier_partner) LIKE '%shiprocket%' THEN 'Shiprocket'
+      WHEN LOWER(c.courier_partner) LIKE '%shipyaari%' THEN 'Shipyaari'
+      WHEN LOWER(c.courier_partner) LIKE '%sky air%' OR LOWER(c.courier_partner) LIKE '%skye air%' THEN 'Sky Air'
+      WHEN LOWER(c.courier_partner) LIKE '%swift%' AND LOWER(c.courier_partner) LIKE '%reverse%' THEN 'Swift Reverse'
+      WHEN LOWER(c.courier_partner) LIKE '%swift%' THEN 'Swift'
+      WHEN LOWER(c.courier_partner) LIKE '%urbane bolt%' OR LOWER(c.courier_partner) LIKE '%urbanbolt%' THEN 'UrbaneBolt'
+      WHEN LOWER(c.courier_partner) LIKE '%wareiq%' THEN 'WareIQ'
+      WHEN LOWER(c.courier_partner) LIKE '%zippee%' THEN 'Zippee'
+      ELSE c.courier_partner
+    END AS courier_group,
     SAFE_CAST(c.invoice_value AS FLOAT64) AS invoice_value,
     SAFE_CAST(c.committed_sla AS FLOAT64) AS committed_sla,
     SAFE_CAST(c.out_for_delivery_attempts AS INT64) AS ofd_attempts,
@@ -90,12 +108,12 @@ kpis AS (
     COUNTIF(ofd_attempts IS NOT NULL AND ofd_attempts != 0) AS total_ofd_attempts,
     COUNTIF(unified_status = 'RTO' AND clickpost_unified_status NOT IN ('RTO-Delivered')) AS rto_undelivered,
     COUNTIF(ofd_attempts > 1 AND unified_status = 'RTO') AS delivered_2attempt_rto,
-    ROUND(AVG(DATE_DIFF(delivery_date, pickup_date, DAY)), 1) AS avg_intransit,
-    ROUND(AVG(DATE_DIFF(pickup_date, created_date, DAY)), 1) AS avg_pickup,
-    ROUND(AVG(DATE_DIFF(delivery_date, created_date, DAY)), 1) AS avg_fulfilment,
-    ROUND(AVG(IF(clickpost_unified_status='RTO-Delivered' AND DATE_DIFF(latest_ts_date, rto_mark_date, DAY) BETWEEN 0 AND 20, DATE_DIFF(latest_ts_date, rto_mark_date, DAY), NULL)), 1) AS avg_rto_tat,
-    ROUND(AVG(DATE_DIFF(ofd1_date, pickup_date, DAY)), 1) AS avg_s2a,
-    ROUND(AVG(IF(DATE_DIFF(created_date, order_date, DAY) BETWEEN 0 AND 10, DATE_DIFF(created_date, order_date, DAY), NULL)), 1) AS avg_processing,
+    ROUND(AVG(IF(pickup_date IS NOT NULL AND delivery_date IS NOT NULL AND DATE_DIFF(delivery_date, pickup_date, DAY) BETWEEN 0 AND 20, DATE_DIFF(delivery_date, pickup_date, DAY), NULL)), 1) AS avg_intransit,
+    ROUND(AVG(IF(pickup_date IS NOT NULL AND created_date IS NOT NULL AND DATE_DIFF(pickup_date, created_date, DAY) BETWEEN 0 AND 10, DATE_DIFF(pickup_date, created_date, DAY), NULL)), 1) AS avg_pickup,
+    ROUND(AVG(IF(delivery_date IS NOT NULL AND order_date IS NOT NULL AND DATE_DIFF(delivery_date, order_date, DAY) BETWEEN 0 AND 20, DATE_DIFF(delivery_date, order_date, DAY), NULL)), 1) AS avg_fulfilment,
+    ROUND(AVG(IF(clickpost_unified_status='RTO-Delivered' AND rto_mark_date IS NOT NULL AND latest_ts_date IS NOT NULL AND DATE_DIFF(latest_ts_date, rto_mark_date, DAY) BETWEEN 0 AND 20, DATE_DIFF(latest_ts_date, rto_mark_date, DAY), NULL)), 1) AS avg_rto_tat,
+    ROUND(AVG(IF(ofd1_date IS NOT NULL AND pickup_date IS NOT NULL, DATE_DIFF(ofd1_date, pickup_date, DAY), NULL)), 1) AS avg_s2a,
+    ROUND(AVG(IF(created_date IS NOT NULL AND order_date IS NOT NULL AND DATE_DIFF(created_date, order_date, DAY) BETWEEN 0 AND 10, DATE_DIFF(created_date, order_date, DAY), NULL)), 1) AS avg_processing,
     ROUND(AVG(committed_sla), 1) AS avg_sla
   FROM base
 ),
@@ -110,13 +128,13 @@ by_courier AS (
     COUNTIF(ofd_attempts=1 AND unified_status='Delivered') AS d1,
     COUNTIF(ofd_attempts > 1 AND unified_status='Delivered') AS rasr_num,
     COUNTIF(ofd_attempts IS NOT NULL AND ofd_attempts != 0) AS ofd_total,
-    ROUND(AVG(DATE_DIFF(delivery_date, pickup_date, DAY)), 2) AS avg_tat,
-    ROUND(AVG(DATE_DIFF(delivery_date, pickup_date, DAY)), 2) AS avg_intransit_days,
-    ROUND(AVG(DATE_DIFF(delivery_date, created_date, DAY)), 2) AS avg_fulfilment_days,
-    ROUND(AVG(DATE_DIFF(pickup_date, created_date, DAY)), 2) AS avg_pickup_days,
-    ROUND(AVG(IF(DATE_DIFF(created_date, order_date, DAY) BETWEEN 0 AND 10, DATE_DIFF(created_date, order_date, DAY), NULL)), 2) AS avg_processing_days,
-    ROUND(AVG(DATE_DIFF(ofd1_date, pickup_date, DAY)), 2) AS avg_s2a_days,
-    ROUND(AVG(IF(clickpost_unified_status='RTO-Delivered' AND DATE_DIFF(latest_ts_date, rto_mark_date, DAY) BETWEEN 0 AND 20, DATE_DIFF(latest_ts_date, rto_mark_date, DAY), NULL)), 2) AS avg_rto_tat_days
+    ROUND(AVG(IF(pickup_date IS NOT NULL AND delivery_date IS NOT NULL AND DATE_DIFF(delivery_date, pickup_date, DAY) BETWEEN 0 AND 20, DATE_DIFF(delivery_date, pickup_date, DAY), NULL)), 2) AS avg_tat,
+    ROUND(AVG(IF(pickup_date IS NOT NULL AND delivery_date IS NOT NULL AND DATE_DIFF(delivery_date, pickup_date, DAY) BETWEEN 0 AND 20, DATE_DIFF(delivery_date, pickup_date, DAY), NULL)), 2) AS avg_intransit_days,
+    ROUND(AVG(IF(delivery_date IS NOT NULL AND order_date IS NOT NULL AND DATE_DIFF(delivery_date, order_date, DAY) BETWEEN 0 AND 20, DATE_DIFF(delivery_date, order_date, DAY), NULL)), 2) AS avg_fulfilment_days,
+    ROUND(AVG(IF(pickup_date IS NOT NULL AND created_date IS NOT NULL AND DATE_DIFF(pickup_date, created_date, DAY) BETWEEN 0 AND 10, DATE_DIFF(pickup_date, created_date, DAY), NULL)), 2) AS avg_pickup_days,
+    ROUND(AVG(IF(created_date IS NOT NULL AND order_date IS NOT NULL AND DATE_DIFF(created_date, order_date, DAY) BETWEEN 0 AND 10, DATE_DIFF(created_date, order_date, DAY), NULL)), 2) AS avg_processing_days,
+    ROUND(AVG(IF(ofd1_date IS NOT NULL AND pickup_date IS NOT NULL, DATE_DIFF(ofd1_date, pickup_date, DAY), NULL)), 2) AS avg_s2a_days,
+    ROUND(AVG(IF(clickpost_unified_status='RTO-Delivered' AND rto_mark_date IS NOT NULL AND latest_ts_date IS NOT NULL AND DATE_DIFF(latest_ts_date, rto_mark_date, DAY) BETWEEN 0 AND 20, DATE_DIFF(latest_ts_date, rto_mark_date, DAY), NULL)), 2) AS avg_rto_tat_days
   FROM base GROUP BY 1
 ),
 by_status AS (
