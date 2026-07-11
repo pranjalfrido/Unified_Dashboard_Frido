@@ -22,20 +22,20 @@ function LogisticsChip({ label, logo, active, onClick }) {
   const [imgErr, setImgErr] = useState(false)
   return (
     <button onClick={onClick} style={{
-      display: 'inline-flex', alignItems: 'center', gap: 7,
-      padding: '0 16px', height: 38, borderRadius: 9,
+      display: 'inline-flex', alignItems: 'center', gap: 5,
+      padding: '0 11px', height: 34, borderRadius: 8,
       border: `1.5px solid ${active ? '#FFD600' : C.border}`,
       background: active ? '#FEFDF0' : C.card,
       color: active ? '#1a1400' : C.t2,
-      fontSize: 12.5, fontWeight: active ? 700 : 500,
+      fontSize: 11.5, fontWeight: active ? 700 : 500,
       cursor: 'pointer', fontFamily: 'var(--font)',
       whiteSpace: 'nowrap', transition: 'all .15s',
       boxShadow: active ? '0 0 0 1px #FFD60066' : 'none',
       flexShrink: 0,
     }}>
       {logo && !imgErr
-        ? <img src={logo} alt="" style={{ width: 22, height: 22, objectFit: 'contain', borderRadius: 4, flexShrink: 0 }} onError={() => setImgErr(true)} />
-        : <span style={{ width: 22, height: 22, borderRadius: 4, background: COURIER_COLORS[label] || '#64748b', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 9, fontWeight: 800, color: '#fff', flexShrink: 0 }}>{label.charAt(0)}</span>
+        ? <img src={logo} alt="" style={{ width: 18, height: 18, objectFit: 'contain', borderRadius: 3, flexShrink: 0 }} onError={() => setImgErr(true)} />
+        : <span style={{ width: 18, height: 18, borderRadius: 3, background: COURIER_COLORS[label] || '#64748b', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 8, fontWeight: 800, color: '#fff', flexShrink: 0 }}>{label.charAt(0)}</span>
       }
       {label}
     </button>
@@ -186,7 +186,7 @@ function LogisticsPage({ filters }) {
       <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 0, padding: '16px 24px', display: 'flex', flexDirection: 'column', gap: 14 }}>
         <div>
           <div style={{ fontSize: 10, fontWeight: 700, color: C.t3, letterSpacing: '.06em', textTransform: 'uppercase', marginBottom: 10 }}>Courier Partner</div>
-          <div style={{ display: 'flex', gap: 8, alignItems: 'center', overflowX: 'auto', flexWrap: 'nowrap', paddingBottom: 2 }}>
+          <div style={{ display: 'flex', gap: 5, alignItems: 'center', overflowX: 'auto', flexWrap: 'nowrap', paddingBottom: 2 }}>
             {COURIERS.map(c => (
               <LogisticsChip key={c} label={c} logo={COURIER_LOGOS[c]} active={lFilters.couriers.includes(c)} onClick={() => toggleCourier(c)} />
             ))}
