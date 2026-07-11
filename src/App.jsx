@@ -6,7 +6,7 @@ import { ReferenceLine } from 'recharts'
 // ── Logistics Page ────────────────────────────────────────────
 const COURIERS = ['Bluedart','Delhivery','Delhivery DS','Delhivery NDD','Ekart','ElasticRun','Safexpress','Shadowfax','Sky Air','Swift','UrbanBolt']
 const COURIER_COLORS = { Bluedart:'#E8400A', Delhivery:'#E60000', 'Delhivery DS':'#C00000', 'Delhivery NDD':'#A00000', Ekart:'#F78F1E', ElasticRun:'#00509E', Safexpress:'#1B4D9E', Shadowfax:'#6B3FA0', 'Sky Air':'#00B0F0', Swift:'#13803A', UrbanBolt:'#FFD600' }
-const COURIER_LOGOS = { Bluedart:'/blue%20dart.jpg', Delhivery:'/Delhivery.png', 'Delhivery DS':'/Delhivery.png', 'Delhivery NDD':'/Delhivery%20NDD.png', Ekart:'/ekart_logistics_logo.jpg', ElasticRun:'/elasticrun_logo.jpg', Safexpress:'/safeexpress.webp', Shadowfax:'/shadow%20fax.jpg', 'Sky Air':'/sky%20air.webp', Swift:'/swift%20courier.jpg', UrbanBolt:'/urban%20bolt.jpg' }
+const COURIER_LOGOS = { Bluedart:'/blue-dart.jpg', Delhivery:'/Delhivery.png', 'Delhivery DS':'/Delhivery.png', 'Delhivery NDD':'/delhivery-ndd.png', Ekart:'/ekart_logistics_logo.jpg', ElasticRun:'/elasticrun_logo.jpg', Safexpress:'/safeexpress.webp', Shadowfax:'/shadow-fax.jpg', 'Sky Air':'/sky-air.webp', Swift:'/swift-courier.jpg', UrbanBolt:'/urban-bolt.jpg' }
 
 function LogisticsKPI({ label, value, sub, color, badge }) {
   return (
@@ -186,12 +186,12 @@ function LogisticsPage({ filters }) {
       <div style={{ ...cardStyle, borderRadius: 14, padding: '18px 20px', display: 'flex', flexDirection: 'column', gap: 14 }}>
         <div>
           <div style={{ fontSize: 10, fontWeight: 700, color: C.t3, letterSpacing: '.06em', textTransform: 'uppercase', marginBottom: 10 }}>Courier Partner</div>
-          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center', overflowX: 'auto', flexWrap: 'nowrap', paddingBottom: 2 }}>
             {COURIERS.map(c => (
               <LogisticsChip key={c} label={c} logo={COURIER_LOGOS[c]} active={lFilters.couriers.includes(c)} onClick={() => toggleCourier(c)} />
             ))}
             {lFilters.couriers.length > 0 && (
-              <button onClick={() => setLFilters(f => ({ ...f, couriers: [] }))} style={{ fontSize: 11, color: C.t3, background: 'none', border: `1px solid ${C.border}`, borderRadius: 6, padding: '4px 10px', cursor: 'pointer', fontFamily: 'var(--font)' }}>✕ Clear</button>
+              <button onClick={() => setLFilters(f => ({ ...f, couriers: [] }))} style={{ fontSize: 11, color: C.t3, background: 'none', border: `1px solid ${C.border}`, borderRadius: 6, padding: '4px 10px', cursor: 'pointer', fontFamily: 'var(--font)', flexShrink: 0 }}>✕ Clear</button>
             )}
           </div>
         </div>
