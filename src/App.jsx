@@ -6,7 +6,7 @@ import { ReferenceLine } from 'recharts'
 // ── Logistics Page ────────────────────────────────────────────
 const COURIERS = ['Bluedart','Delhivery','Delhivery DS','Delhivery NDD','Ekart','ElasticRun','Safexpress','Shadowfax','Sky Air','Swift','UrbanBolt']
 const COURIER_COLORS = { Bluedart:'#E8400A', Delhivery:'#E60000', 'Delhivery DS':'#C00000', 'Delhivery NDD':'#A00000', Ekart:'#F78F1E', ElasticRun:'#00509E', Safexpress:'#1B4D9E', Shadowfax:'#6B3FA0', 'Sky Air':'#00B0F0', Swift:'#13803A', UrbanBolt:'#FFD600' }
-const COURIER_LOGOS = { Bluedart:'/logo-bluedart.png', Delhivery:'/logo-delhivery.png', 'Delhivery DS':'/logo-delhivery.png', 'Delhivery NDD':'/logo-delhivery.png', Ekart:'/logo-ekart.png', ElasticRun:'/logo-elasticrun.png', Safexpress:'/logo-safexpress.png', Shadowfax:'/logo-shadowfax.png', 'Sky Air':'/logo-skyair.png', Swift:'/logo-swift.png', UrbanBolt:'/logo-urbanbolt.png' }
+const COURIER_LOGOS = { Bluedart:'/blue dart.jpg', Delhivery:'/Delhivery.png', 'Delhivery DS':'/Dlehivery ds.avif', 'Delhivery NDD':'/Delhivery NDD.png', Ekart:'/ekart_logistics_logo.jpg', ElasticRun:'/elasticrun_logo.jpg', Safexpress:'/safeexpress.webp', Shadowfax:'/shadow fax.jpg', 'Sky Air':'/sky air.webp', Swift:'/swift courier.jpg', UrbanBolt:'/urban bolt.jpg' }
 
 function LogisticsKPI({ label, value, sub, color, badge }) {
   return (
@@ -21,13 +21,30 @@ function LogisticsKPI({ label, value, sub, color, badge }) {
 function LogisticsChip({ label, logo, active, onClick }) {
   return (
     <button onClick={onClick} style={{
-      display: 'flex', alignItems: 'center', gap: 6,
-      padding: '5px 11px', borderRadius: 8, border: `1.5px solid ${active ? C.t1 : C.border}`,
-      background: active ? C.t1 : C.card, color: active ? '#fff' : C.t2,
-      fontSize: 11.5, fontWeight: active ? 600 : 400, cursor: 'pointer', fontFamily: 'var(--font)',
-      whiteSpace: 'nowrap', transition: 'all .15s', boxShadow: active ? '0 2px 8px rgba(0,0,0,.15)' : 'none'
+      display: 'inline-flex', alignItems: 'center', gap: 7,
+      padding: '0 16px', height: 38, borderRadius: 9,
+      border: `1.5px solid ${active ? '#FFD600' : C.border}`,
+      background: active ? '#FEFDF0' : C.card,
+      color: active ? '#1a1400' : C.t2,
+      fontSize: 12.5, fontWeight: active ? 700 : 500,
+      cursor: 'pointer', fontFamily: 'var(--font)',
+      whiteSpace: 'nowrap', transition: 'all .15s',
+      boxShadow: active ? '0 0 0 1px #FFD60066' : 'none',
+      flexShrink: 0,
     }}>
-      {logo && <img src={logo} alt="" style={{ width: 16, height: 16, objectFit: 'contain', borderRadius: 3, filter: active ? 'brightness(0) invert(1)' : 'none' }} onError={e => e.target.style.display='none'} />}
+      {logo && (
+        <img src={logo} alt="" style={{ width: 22, height: 22, objectFit: 'contain', borderRadius: 4, flexShrink: 0 }}
+          onError={e => {
+            e.target.style.display = 'none'
+            e.target.nextSibling && (e.target.nextSibling.style.display = 'flex')
+          }}
+        />
+      )}
+      {logo && (
+        <span style={{ display: 'none', width: 22, height: 22, borderRadius: 4, background: COURIER_COLORS[label] || C.border, alignItems: 'center', justifyContent: 'center', fontSize: 9, fontWeight: 800, color: '#fff', flexShrink: 0 }}>
+          {label.charAt(0)}
+        </span>
+      )}
       {label}
     </button>
   )
@@ -174,10 +191,10 @@ function LogisticsPage({ filters }) {
     <div style={{ padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: 14 }}>
 
       {/* ── Filter Bar ── */}
-      <div style={{ ...cardStyle, borderRadius: 14, display: 'flex', flexDirection: 'column', gap: 12 }}>
+      <div style={{ ...cardStyle, borderRadius: 14, padding: '18px 20px', display: 'flex', flexDirection: 'column', gap: 14 }}>
         <div>
-          <div style={{ fontSize: 10, fontWeight: 700, color: C.t3, letterSpacing: '.06em', textTransform: 'uppercase', marginBottom: 8 }}>Courier Partner</div>
-          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
+          <div style={{ fontSize: 10, fontWeight: 700, color: C.t3, letterSpacing: '.06em', textTransform: 'uppercase', marginBottom: 10 }}>Courier Partner</div>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
             {COURIERS.map(c => (
               <LogisticsChip key={c} label={c} logo={COURIER_LOGOS[c]} active={lFilters.couriers.includes(c)} onClick={() => toggleCourier(c)} />
             ))}
