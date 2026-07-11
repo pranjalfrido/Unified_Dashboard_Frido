@@ -173,7 +173,7 @@ function LogisticsPage({ filters }) {
   const byCourierData = (data?.byCourier || []).slice(0, 10).map(d => ({ ...d, del_pct: d.total ? +((d.delivered / d.total) * 100).toFixed(1) : 0, rto_pct: d.total ? +((d.rto / d.total) * 100).toFixed(1) : 0 }))
   const maxCourierTotal = byCourierData[0]?.total || 1
 
-  const statusDonutData = (data?.byStatus || []).sort((a, b) => b.total - a.total)
+  const statusDonutData = [...(data?.byStatus || [])].sort((a, b) => b.total - a.total)
   const paymentDonutData = data?.byPayment || []
 
   const cardStyle = { background: C.card, border: `1px solid ${C.border}`, borderRadius: 14, padding: '16px 18px' }
