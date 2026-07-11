@@ -86,11 +86,14 @@ kpis AS (
     COUNTIF(ofd_attempts = 1 AND unified_status = 'Delivered') AS delivered_1attempt,
     COUNTIF(ofd_attempts > 1 AND unified_status = 'Delivered') AS delivered_multi,
     COUNTIF(ofd_attempts IS NOT NULL AND ofd_attempts != 0) AS total_ofd_attempts,
+    COUNTIF(unified_status = 'RTO' AND clickpost_unified_status NOT IN ('RTO-Delivered')) AS rto_undelivered,
+    COUNTIF(ofd_attempts > 1 AND unified_status = 'RTO') AS delivered_2attempt_rto,
     ROUND(AVG(DATE_DIFF(delivery_date, pickup_date, DAY)), 1) AS avg_intransit,
     ROUND(AVG(DATE_DIFF(pickup_date, created_date, DAY)), 1) AS avg_pickup,
     ROUND(AVG(DATE_DIFF(delivery_date, created_date, DAY)), 1) AS avg_fulfilment,
     ROUND(AVG(DATE_DIFF(CURRENT_DATE(), rto_mark_date, DAY)), 1) AS avg_rto_tat,
     ROUND(AVG(DATE_DIFF(ofd1_date, pickup_date, DAY)), 1) AS avg_s2a,
+    ROUND(AVG(DATE_DIFF(ofd1_date, created_date, DAY)), 1) AS avg_processing,
     ROUND(AVG(committed_sla), 1) AS avg_sla
   FROM base
 ),
