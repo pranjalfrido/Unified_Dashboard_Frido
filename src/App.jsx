@@ -4,9 +4,9 @@ import { KPICard, AlertCard, HBar, DataTable, Card, Badge, RevTrendChart, AreaTr
 import { ReferenceLine } from 'recharts'
 
 // ── Logistics Page ────────────────────────────────────────────
-const COURIERS = ['Bluedart','Delhivery','Delhivery DS','Delhivery NDD','Ekart','ElasticRun','Safexpress','Shadowfax','Sky Air','Swift','UrbanBolt']
-const COURIER_COLORS = { Bluedart:'#E8400A', Delhivery:'#E60000', 'Delhivery DS':'#C00000', 'Delhivery NDD':'#A00000', Ekart:'#F78F1E', ElasticRun:'#00509E', Safexpress:'#1B4D9E', Shadowfax:'#6B3FA0', 'Sky Air':'#00B0F0', Swift:'#13803A', UrbanBolt:'#FFD600' }
-const COURIER_LOGOS = { Bluedart:'/blue-dart.jpg', Delhivery:'/Delhivery.png', 'Delhivery DS':'/Delhivery.png', 'Delhivery NDD':'/delhivery-ndd.png', Ekart:'/ekart_logistics_logo.jpg', ElasticRun:'/elasticrun_logo.jpg', Safexpress:'/safeexpress.webp', Shadowfax:'/shadow-fax.jpg', 'Sky Air':'/sky-air.webp', Swift:'/swift-courier.jpg', UrbanBolt:'/urban-bolt.jpg' }
+const COURIERS = ['Bluedart','Delhivery','Delhivery DS','Delhivery NDD','Ekart','ElasticRun','Safexpress','Shadowfax','Sky Air','Skye Air','Swift','UrbanBolt','Urbane Bolt']
+const COURIER_COLORS = { Bluedart:'#E8400A', 'Bluedart Reverse':'#E8400A', Delhivery:'#E60000', 'Delhivery DS':'#C00000', 'Delhivery NDD':'#A00000', 'Delhivery Reverse':'#C00000', 'Delhivery HLD':'#900000', Ekart:'#F78F1E', ElasticRun:'#00509E', Safexpress:'#1B4D9E', Shadowfax:'#6B3FA0', 'Sky Air':'#00B0F0', 'Skye Air':'#00B0F0', Swift:'#13803A', UrbanBolt:'#FFD600', 'Urbane Bolt':'#FFD600' }
+const COURIER_LOGOS = { Bluedart:'/blue-dart.jpg', 'Bluedart Reverse':'/blue-dart.jpg', Delhivery:'/Delhivery.png', 'Delhivery DS':'/Delhivery.png', 'Delhivery NDD':'/delhivery-ndd.png', 'Delhivery Reverse':'/Delhivery.png', 'Delhivery HLD':'/Delhivery.png', Ekart:'/ekart_logistics_logo.jpg', ElasticRun:'/elasticrun_logo.jpg', Safexpress:'/safeexpress.webp', Shadowfax:'/shadow-fax.jpg', 'Sky Air':'/sky-air.webp', 'Skye Air':'/sky-air.webp', Swift:'/swift-courier.jpg', UrbanBolt:'/urban-bolt.jpg', 'Urbane Bolt':'/urban-bolt.jpg' }
 
 function LogisticsKPI({ label, value, sub, color, badge }) {
   return (
@@ -266,8 +266,8 @@ function LogisticsPage({ filters }) {
         {/* ── Monthly Trend + Courier TAT ── */}
         <LSectionTitle title="Monthly Trend" />
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
-          <div style={cardStyle}>
-            <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 10 }}>
+          <div style={{ ...cardStyle, display: 'flex', flexDirection: 'column' }}>
+            <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 10, flexShrink: 0 }}>
               <div>
                 <div style={chartTitle}>Shipment Trend</div>
                 <div style={{ fontSize: 10, color: C.t3, marginTop: -8 }}>Total = all AWBs created on that date (regardless of status) · Raw order volume per day</div>
@@ -278,7 +278,7 @@ function LogisticsPage({ filters }) {
                 ))}
               </div>
             </div>
-            <ResponsiveContainer width="100%" height={200}>
+            <ResponsiveContainer width="100%" height={220}>
               <ComposedChart data={trendData} margin={{ top: 4, right: 32, left: 0, bottom: 0 }}>
                 <defs>
                   <linearGradient id="lgDel" x1="0" y1="0" x2="0" y2="1">
@@ -301,7 +301,7 @@ function LogisticsPage({ filters }) {
                 <Line yAxisId="right" type="monotone" dataKey="rto_pct" name="RTO %" stroke="#b91c1c" strokeWidth={1.5} strokeDasharray="3 2" dot={false} />
               </ComposedChart>
             </ResponsiveContainer>
-            <div style={{ display: 'flex', gap: 16, justifyContent: 'center', marginTop: 6 }}>
+            <div style={{ display: 'flex', gap: 16, justifyContent: 'center', marginTop: 8, flexShrink: 0 }}>
               {[['#E6A800','Delivered'],['#7A1A1A','RTO'],['#b91c1c','RTO %'],['#94939F','Total']].map(([color, label]) => (
                 <span key={label} style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 10, color: C.t2 }}>
                   <span style={{ width: 10, height: 10, borderRadius: 2, background: color, display: 'inline-block' }} />{label}
@@ -311,10 +311,10 @@ function LogisticsPage({ filters }) {
           </div>
 
           {/* Courier TAT */}
-          <div style={cardStyle}>
-            <div style={chartTitle}>Courier · Total Shipments & TAT</div>
-            <ResponsiveContainer width="100%" height={260}>
-              <ComposedChart data={byCourierData} margin={{ top: 10, right: 16, left: 0, bottom: 50 }}>
+          <div style={{ ...cardStyle, display: 'flex', flexDirection: 'column' }}>
+            <div style={{ flexShrink: 0, marginBottom: 6 }}><div style={chartTitle}>Courier · Total Shipments & TAT</div></div>
+            <ResponsiveContainer width="100%" height={220}>
+              <ComposedChart data={byCourierData} margin={{ top: 10, right: 16, left: 0, bottom: 40 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke={C.border} vertical={false} />
                 <XAxis dataKey="courier_group" tick={{ fontSize: 9, fill: C.t3 }} angle={-35} textAnchor="end" interval={0} />
                 <YAxis yAxisId="left" tick={{ fontSize: 9, fill: '#5BA4CF' }} tickFormatter={v => v >= 1000 ? (v/1000).toFixed(0)+'K' : v} />
@@ -325,7 +325,7 @@ function LogisticsPage({ filters }) {
                 <Line yAxisId="right" type="monotone" dataKey="avg_fulfilment_days" name="Avg Fulfilment Days" stroke="#F97316" strokeWidth={2} dot={{ fill: '#F97316', r: 3 }} />
               </ComposedChart>
             </ResponsiveContainer>
-            <div style={{ display: 'flex', gap: 16, justifyContent: 'center', marginTop: 6 }}>
+            <div style={{ display: 'flex', gap: 16, justifyContent: 'center', marginTop: 8, flexShrink: 0 }}>
               {[['#F97316','Avg Fulfilment Days'],['#1E3A5F','Avg Intransit Days'],['#5BA4CF','Total']].map(([color, label]) => (
                 <span key={label} style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 10, color: C.t2 }}>
                   <span style={{ width: 10, height: 10, borderRadius: 2, background: color, display: 'inline-block' }} />{label}
@@ -341,48 +341,83 @@ function LogisticsPage({ filters }) {
           <div style={cardStyle}>
           <div style={chartTitle}>Courier-wise Breakdown</div>
           <div style={{ overflowX: 'auto' }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
-              <thead>
-                <tr style={{ borderBottom: `1.5px solid ${C.border}` }}>
-                  {['Courier', 'Total', 'Delivered', 'Delivery %', 'RTO', 'RTO %', 'FASR %', 'Avg TAT'].map((h, i) => (
-                    <th key={h} style={{ padding: '9px 12px', textAlign: i === 0 ? 'left' : 'right', color: C.t3, fontWeight: 700, fontSize: 9.5, letterSpacing: '.05em', textTransform: 'uppercase' }}>{h}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {byCourierData.map((r, i) => (
-                  <tr key={r.courier_group} style={{ borderBottom: `1px solid ${C.border}` }}>
-                    <td style={{ padding: '10px 12px' }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                        <span style={{ width: 8, height: 8, borderRadius: '50%', background: COURIER_COLORS[r.courier_group] || C.t3, flexShrink: 0 }} />
-                        <img src={COURIER_LOGOS[r.courier_group]} alt="" style={{ width: 20, height: 20, objectFit: 'contain', borderRadius: 3 }} onError={e => { e.target.style.display='none' }} />
-                        <span style={{ color: C.t1, fontWeight: 500 }}>{r.courier_group}</span>
-                      </div>
-                    </td>
-                    <td style={{ padding: '10px 12px', textAlign: 'right', color: C.t2, fontWeight: 500 }}>{n(r.total)}</td>
-                    <td style={{ padding: '10px 12px', textAlign: 'right' }}>
-                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 6 }}>
-                        <div style={{ width: 50, height: 4, background: C.border, borderRadius: 2, overflow: 'hidden' }}>
-                          <div style={{ height: '100%', width: ((r.delivered / maxCourierTotal) * 100) + '%', background: C.green.tx, borderRadius: 2 }} />
-                        </div>
-                        <span style={{ color: C.t2 }}>{n(r.delivered)}</span>
-                      </div>
-                    </td>
-                    <td style={{ padding: '10px 12px', textAlign: 'right' }}>
-                      <span style={{ color: C.green.tx, fontWeight: 700, background: C.green.bg, padding: '2px 8px', borderRadius: 20, fontSize: 11 }}>{pct2(r.delivered, r.total)}</span>
-                    </td>
-                    <td style={{ padding: '10px 12px', textAlign: 'right', color: C.t2 }}>{n(r.rto)}</td>
-                    <td style={{ padding: '10px 12px', textAlign: 'right' }}>
-                      <span style={{ color: C.red.tx, fontWeight: 700, background: C.red.bg, padding: '2px 8px', borderRadius: 20, fontSize: 11 }}>{pct2(r.rto, r.total)}</span>
-                    </td>
-                    <td style={{ padding: '10px 12px', textAlign: 'right' }}>
-                      <span style={{ color: C.blue.tx, fontWeight: 700, background: C.blue.bg, padding: '2px 8px', borderRadius: 20, fontSize: 11 }}>{pct2(r.d1, r.ofd_total)}</span>
-                    </td>
-                    <td style={{ padding: '10px 12px', textAlign: 'right', color: C.t3 }}>{r.avg_tat != null ? (+r.avg_tat).toFixed(1) + 'd' : '—'}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+            {(() => {
+              const totalAll = byCourierData.reduce((s, r) => s + (r.total || 0), 0) || 1
+              return (
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+                  <thead>
+                    <tr style={{ borderBottom: `1.5px solid ${C.border}` }}>
+                      {['Courier','Vol %','Total','Delivered','Del %','RTO','RTO %','In-Transit','FASR %','Avg TAT'].map((h, i) => (
+                        <th key={h} style={{ padding: '9px 10px', textAlign: i === 0 ? 'left' : 'right', color: C.t3, fontWeight: 700, fontSize: 9.5, letterSpacing: '.05em', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {byCourierData.map((r) => {
+                      const logo = COURIER_LOGOS[r.courier_group]
+                      const color = COURIER_COLORS[r.courier_group] || C.t3
+                      const volPct = ((r.total / totalAll) * 100).toFixed(1)
+                      const intransit = r.total - (r.delivered || 0) - (r.rto || 0)
+                      const intransitPct = r.total ? ((intransit / r.total) * 100).toFixed(0) : 0
+                      const delPct = r.total ? ((r.delivered / r.total) * 100).toFixed(1) : 0
+                      const rtoPct = r.total ? ((r.rto / r.total) * 100).toFixed(1) : 0
+                      const fasrPct = r.ofd_total ? ((r.d1 / r.ofd_total) * 100).toFixed(1) : null
+                      const delColor = +delPct >= 60 ? C.green.tx : +delPct >= 40 ? C.amber.tx : C.red.tx
+                      const delBg = +delPct >= 60 ? C.green.bg : +delPct >= 40 ? C.amber.bg : C.red.bg
+                      const rtoColor = +rtoPct <= 2 ? C.green.tx : +rtoPct <= 5 ? C.amber.tx : C.red.tx
+                      const rtoBg = +rtoPct <= 2 ? C.green.bg : +rtoPct <= 5 ? C.amber.bg : C.red.bg
+                      return (
+                        <tr key={r.courier_group} style={{ borderBottom: `1px solid ${C.border}` }}>
+                          <td style={{ padding: '9px 10px', minWidth: 160 }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
+                              <span style={{ width: 8, height: 8, borderRadius: '50%', background: color, flexShrink: 0 }} />
+                              {logo
+                                ? <img src={logo} alt="" style={{ width: 22, height: 22, objectFit: 'contain', borderRadius: 3, flexShrink: 0 }} onError={e => { e.currentTarget.style.display = 'none' }} />
+                                : <span style={{ width: 22, height: 22, borderRadius: 3, background: color, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 8, fontWeight: 800, color: '#fff', flexShrink: 0 }}>{r.courier_group.charAt(0)}</span>
+                              }
+                              <span style={{ color: C.t1, fontWeight: 600 }}>{r.courier_group}</span>
+                            </div>
+                          </td>
+                          <td style={{ padding: '9px 10px', textAlign: 'right' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 5 }}>
+                              <div style={{ width: 40, height: 4, background: C.border, borderRadius: 2, overflow: 'hidden' }}>
+                                <div style={{ height: '100%', width: volPct + '%', background: color, borderRadius: 2 }} />
+                              </div>
+                              <span style={{ fontSize: 11, color: C.t2, minWidth: 32, textAlign: 'right' }}>{volPct}%</span>
+                            </div>
+                          </td>
+                          <td style={{ padding: '9px 10px', textAlign: 'right', color: C.t1, fontWeight: 600 }}>{n(r.total)}</td>
+                          <td style={{ padding: '9px 10px', textAlign: 'right' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 5 }}>
+                              <div style={{ width: 40, height: 4, background: C.border, borderRadius: 2, overflow: 'hidden' }}>
+                                <div style={{ height: '100%', width: ((r.delivered / maxCourierTotal) * 100) + '%', background: C.green.tx, borderRadius: 2 }} />
+                              </div>
+                              <span style={{ color: C.t2 }}>{n(r.delivered)}</span>
+                            </div>
+                          </td>
+                          <td style={{ padding: '9px 10px', textAlign: 'right' }}>
+                            <span style={{ color: delColor, fontWeight: 700, background: delBg, padding: '2px 8px', borderRadius: 20, fontSize: 11 }}>{delPct}%</span>
+                          </td>
+                          <td style={{ padding: '9px 10px', textAlign: 'right', color: C.t2 }}>{n(r.rto)}</td>
+                          <td style={{ padding: '9px 10px', textAlign: 'right' }}>
+                            <span style={{ color: rtoColor, fontWeight: 700, background: rtoBg, padding: '2px 8px', borderRadius: 20, fontSize: 11 }}>{rtoPct}%</span>
+                          </td>
+                          <td style={{ padding: '9px 10px', textAlign: 'right' }}>
+                            <span style={{ color: C.blue.tx, fontWeight: 500, fontSize: 11 }}>{n(intransit)} <span style={{ color: C.t3, fontWeight: 400 }}>({intransitPct}%)</span></span>
+                          </td>
+                          <td style={{ padding: '9px 10px', textAlign: 'right' }}>
+                            {fasrPct != null
+                              ? <span style={{ color: C.blue.tx, fontWeight: 700, background: C.blue.bg, padding: '2px 8px', borderRadius: 20, fontSize: 11 }}>{fasrPct}%</span>
+                              : <span style={{ color: C.t3 }}>—</span>}
+                          </td>
+                          <td style={{ padding: '9px 10px', textAlign: 'right', color: C.t3 }}>{r.avg_tat != null ? (+r.avg_tat).toFixed(1) + 'd' : '—'}</td>
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
+              )
+            })()}
           </div>
         </div>
         </div>
