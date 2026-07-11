@@ -348,9 +348,7 @@ function LogisticsPage({ filters }) {
                 { key: 'courier_group', label: 'Courier', left: true, str: true },
                 { key: '_volPct', label: 'Vol %' },
                 { key: 'total', label: 'Total' },
-                { key: 'delivered', label: 'Delivered' },
                 { key: '_delPct', label: 'Del %' },
-                { key: 'rto', label: 'RTO' },
                 { key: '_rtoPct', label: 'RTO %' },
                 { key: '_zrtoPct', label: 'Z-RTO %' },
                 { key: '_cancPct', label: 'Canc %' },
@@ -415,9 +413,7 @@ function LogisticsPage({ filters }) {
                           </td>
                           <td style={{ padding: '9px 10px', textAlign: 'right', color: C.t2, fontSize: 11 }}>{r._volPct.toFixed(1)}%</td>
                           <td style={{ padding: '9px 10px', textAlign: 'right', color: C.t1, fontWeight: 600 }}>{n(r.total)}</td>
-                          <td style={{ padding: '9px 10px', textAlign: 'right', color: C.t2 }}>{n(r.delivered)}</td>
                           <td style={{ padding: '9px 10px', textAlign: 'right', fontWeight: 700, color: delColor, fontSize: 11 }}>{r._delPct.toFixed(1)}%</td>
-                          <td style={{ padding: '9px 10px', textAlign: 'right', color: C.t2 }}>{n(r.rto)}</td>
                           <td style={{ padding: '9px 10px', textAlign: 'right', fontWeight: 700, color: rtoColor, fontSize: 11 }}>{r._rtoPct.toFixed(1)}%</td>
                           <td style={{ padding: '9px 10px', textAlign: 'right', color: C.t3, fontSize: 11 }}>{r._zrtoPct.toFixed(1)}%</td>
                           <td style={{ padding: '9px 10px', textAlign: 'right', color: C.t3, fontSize: 11 }}>{r._cancPct.toFixed(1)}%</td>
