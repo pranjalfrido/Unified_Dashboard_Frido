@@ -303,15 +303,25 @@ function LogisticsPage({ filters }) {
 
           <div style={cardStyle}>
             <div style={chartTitle}>Status Distribution</div>
-            <ResponsiveContainer width="100%" height={220}>
-              <PieChart>
-                <Pie data={statusDonutData} dataKey="total" nameKey="unified_status" cx="50%" cy="50%" innerRadius={60} outerRadius={90} paddingAngle={2}>
-                  {statusDonutData.map(s => <Cell key={s.unified_status} fill={STATUS_COLORS[s.unified_status] || '#64748b'} />)}
-                </Pie>
-                <Tooltip formatter={(v, n) => [v.toLocaleString('en-IN'), n]} />
-                <Legend wrapperStyle={{ fontSize: 11 }} />
-              </PieChart>
-            </ResponsiveContainer>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+              <ResponsiveContainer width="60%" height={200}>
+                <PieChart>
+                  <Pie data={statusDonutData} dataKey="total" nameKey="unified_status" cx="50%" cy="50%" innerRadius={55} outerRadius={85} paddingAngle={2}>
+                    {statusDonutData.map(s => <Cell key={s.unified_status} fill={STATUS_COLORS[s.unified_status] || '#64748b'} />)}
+                  </Pie>
+                  <Tooltip formatter={(v, n) => [v.toLocaleString('en-IN'), n]} />
+                </PieChart>
+              </ResponsiveContainer>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8, flex: 1 }}>
+                {statusDonutData.map(s => (
+                  <div key={s.unified_status} style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
+                    <div style={{ width: 10, height: 10, borderRadius: 3, background: STATUS_COLORS[s.unified_status] || '#64748b', flexShrink: 0 }} />
+                    <span style={{ fontSize: 11, color: C.t2, flex: 1 }}>{s.unified_status}</span>
+                    <span style={{ fontSize: 11, fontWeight: 700, color: C.t1 }}>{s.total.toLocaleString('en-IN')}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
           </div>
         </div>
 
