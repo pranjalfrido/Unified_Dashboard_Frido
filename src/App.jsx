@@ -767,7 +767,7 @@ function DateRangePicker({ filters, setFilters }) {
 }
 
 function Topnav({ page, alerts, onRefresh, loading, filters, setFilters, rawRows }) {
-  const titles = { overview: 'Overview', sales: 'Sales Analytics', intelligence: 'Intelligence' }
+  const titles = { overview: 'Overview', sales: 'Sales Analytics', ads: 'Ads Analytics', intelligence: 'Intelligence', logistics: 'Logistics Performance Analytics' }
   const critical = alerts.filter(a => a.type === 'red').length
   return (
     <div className="topnav">
