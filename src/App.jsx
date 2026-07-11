@@ -128,6 +128,7 @@ function LogisticsPage({ filters }) {
   const API = import.meta.env.VITE_API_URL || ''
   const [lFilters, setLFilters] = useState({ couriers: [], shipmentType: 'all', sddNdd: 'all', paymentMode: null, zone: null, pickupState: null, dropState: null, category: null, subCategory: null })
   const [trendGranularity, setTrendGranularity] = useState('Daily')
+  const [cSort, setCSort] = useState({ col: 'total', dir: 'desc' })
   const [data, setData] = useState(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
@@ -343,33 +344,64 @@ function LogisticsPage({ filters }) {
           <div style={{ overflowX: 'auto' }}>
             {(() => {
               const totalAll = byCourierData.reduce((s, r) => s + (r.total || 0), 0) || 1
+              const COLS = [
+                { key: 'courier_group', label: 'Courier', left: true, str: true },
+                { key: '_volPct', label: 'Vol %' },
+                { key: 'total', label: 'Total' },
+                { key: 'delivered', label: 'Delivered' },
+                { key: '_delPct', label: 'Del %' },
+                { key: 'rto', label: 'RTO' },
+                { key: '_rtoPct', label: 'RTO %' },
+                { key: '_zrtoPct', label: 'Z-RTO %' },
+                { key: '_cancPct', label: 'Canc %' },
+                { key: '_intransit', label: 'In-Transit' },
+                { key: '_fasrPct', label: 'FASR %' },
+                { key: '_rasrPct', label: 'RASR %' },
+                { key: 'avg_processing_days', label: 'Avg Processing' },
+                { key: 'avg_pickup_days', label: 'Avg Pickup' },
+                { key: 'avg_intransit_days', label: 'Avg S2D' },
+                { key: 'avg_fulfilment_days', label: 'Avg O2D' },
+                { key: 'avg_rto_tat_days', label: 'Avg RTO TAT' },
+                { key: 'avg_s2a_days', label: 'Avg S2A' },
+              ]
+              const enriched = byCourierData.map(r => ({
+                ...r,
+                _volPct: +((r.total / totalAll) * 100).toFixed(2),
+                _delPct: r.total ? +((r.delivered / r.total) * 100).toFixed(2) : 0,
+                _rtoPct: r.total ? +((r.rto / r.total) * 100).toFixed(2) : 0,
+                _zrtoPct: r.rto ? +((r.z_rto / r.rto) * 100).toFixed(2) : 0,
+                _cancPct: r.total ? +(((r.cancelled || 0) / r.total) * 100).toFixed(2) : 0,
+                _intransit: r.total - (r.delivered || 0) - (r.rto || 0),
+                _fasrPct: r.ofd_total ? +((r.d1 / r.ofd_total) * 100).toFixed(2) : null,
+                _rasrPct: r.total ? +((r.d1 / r.total) * 100).toFixed(2) : null,
+              }))
+              const [sortCol, setSortCol] = [cSort?.col, (col) => setCSort(s => ({ col, dir: s?.col === col && s?.dir === 'desc' ? 'asc' : 'desc' }))]
+              const sortDir = cSort?.dir || 'desc'
+              const sorted = sortCol ? [...enriched].sort((a, b) => {
+                const av = a[sortCol], bv = b[sortCol]
+                if (av == null) return 1; if (bv == null) return -1
+                if (typeof av === 'string') return sortDir === 'asc' ? av.localeCompare(bv) : bv.localeCompare(av)
+                return sortDir === 'asc' ? av - bv : bv - av
+              }) : enriched
+              const d = (v) => v != null ? (+v).toFixed(1) + 'd' : '—'
               return (
                 <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
                   <thead>
                     <tr style={{ borderBottom: `1.5px solid ${C.border}` }}>
-                      {['Courier','Vol %','Total','Delivered','Del %','RTO','RTO %','Z-RTO %','Canc %','In-Transit','FASR %','RASR %','Avg Processing','Avg Pickup','Avg S2D','Avg O2D','Avg RTO TAT','Avg S2A'].map((h, i) => (
-                        <th key={h} style={{ padding: '9px 10px', textAlign: i === 0 ? 'left' : 'right', color: C.t3, fontWeight: 700, fontSize: 9.5, letterSpacing: '.05em', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>{h}</th>
+                      {COLS.map((col) => (
+                        <th key={col.key} onClick={() => setSortCol(col.key)} style={{ padding: '9px 10px', textAlign: col.left ? 'left' : 'right', color: sortCol === col.key ? C.t1 : C.t3, fontWeight: 700, fontSize: 9.5, letterSpacing: '.05em', textTransform: 'uppercase', whiteSpace: 'nowrap', cursor: 'pointer', userSelect: 'none' }}>
+                          {col.label}{sortCol === col.key ? (sortDir === 'desc' ? ' ↓' : ' ↑') : ''}
+                        </th>
                       ))}
                     </tr>
                   </thead>
                   <tbody>
-                    {byCourierData.map((r) => {
+                    {sorted.map((r) => {
                       const logo = COURIER_LOGOS[r.courier_group]
                       const color = COURIER_COLORS[r.courier_group] || C.t3
-                      const volPct = ((r.total / totalAll) * 100).toFixed(1)
-                      const intransit = r.total - (r.delivered || 0) - (r.rto || 0)
-                      const intransitPct = r.total ? ((intransit / r.total) * 100).toFixed(0) : 0
-                      const delPct = r.total ? ((r.delivered / r.total) * 100).toFixed(1) : 0
-                      const rtoPct = r.total ? ((r.rto / r.total) * 100).toFixed(1) : 0
-                      const zrtoPct = r.rto ? ((r.z_rto / r.rto) * 100).toFixed(1) : 0
-                      const cancPct = r.total ? (((r.cancelled || 0) / r.total) * 100).toFixed(1) : 0
-                      const fasrPct = r.ofd_total ? ((r.d1 / r.ofd_total) * 100).toFixed(1) : null
-                      const rasrPct = r.total ? ((r.d1 / r.total) * 100).toFixed(1) : null
-                      const d = (v) => v != null ? (+v).toFixed(1) + 'd' : '—'
-                      const delColor = +delPct >= 60 ? C.green.tx : +delPct >= 40 ? C.amber.tx : C.red.tx
-                      const delBg = +delPct >= 60 ? C.green.bg : +delPct >= 40 ? C.amber.bg : C.red.bg
-                      const rtoColor = +rtoPct <= 2 ? C.green.tx : +rtoPct <= 5 ? C.amber.tx : C.red.tx
-                      const rtoBg = +rtoPct <= 2 ? C.green.bg : +rtoPct <= 5 ? C.amber.bg : C.red.bg
+                      const intransitPct = r.total ? ((r._intransit / r.total) * 100).toFixed(0) : 0
+                      const delColor = r._delPct >= 60 ? C.green.tx : r._delPct >= 40 ? C.amber.tx : C.red.tx
+                      const rtoColor = r._rtoPct <= 2 ? C.green.tx : r._rtoPct <= 5 ? C.amber.tx : C.red.tx
                       return (
                         <tr key={r.courier_group} style={{ borderBottom: `1px solid ${C.border}` }}>
                           <td style={{ padding: '9px 10px', minWidth: 160 }}>
@@ -381,27 +413,17 @@ function LogisticsPage({ filters }) {
                               <span style={{ color: C.t1, fontWeight: 600 }}>{r.courier_group}</span>
                             </div>
                           </td>
-                          <td style={{ padding: '9px 10px', textAlign: 'right', color: C.t2, fontSize: 11 }}>{volPct}%</td>
+                          <td style={{ padding: '9px 10px', textAlign: 'right', color: C.t2, fontSize: 11 }}>{r._volPct.toFixed(1)}%</td>
                           <td style={{ padding: '9px 10px', textAlign: 'right', color: C.t1, fontWeight: 600 }}>{n(r.total)}</td>
                           <td style={{ padding: '9px 10px', textAlign: 'right', color: C.t2 }}>{n(r.delivered)}</td>
-                          <td style={{ padding: '9px 10px', textAlign: 'right' }}>
-                            <span style={{ color: delColor, fontWeight: 700, background: delBg, padding: '2px 8px', borderRadius: 20, fontSize: 11 }}>{delPct}%</span>
-                          </td>
+                          <td style={{ padding: '9px 10px', textAlign: 'right', fontWeight: 700, color: delColor, fontSize: 11 }}>{r._delPct.toFixed(1)}%</td>
                           <td style={{ padding: '9px 10px', textAlign: 'right', color: C.t2 }}>{n(r.rto)}</td>
-                          <td style={{ padding: '9px 10px', textAlign: 'right' }}>
-                            <span style={{ color: rtoColor, fontWeight: 700, background: rtoBg, padding: '2px 8px', borderRadius: 20, fontSize: 11 }}>{rtoPct}%</span>
-                          </td>
-                          <td style={{ padding: '9px 10px', textAlign: 'right', color: C.t3, fontSize: 11 }}>{zrtoPct}%</td>
-                          <td style={{ padding: '9px 10px', textAlign: 'right', color: C.t3, fontSize: 11 }}>{cancPct}%</td>
-                          <td style={{ padding: '9px 10px', textAlign: 'right' }}>
-                            <span style={{ color: C.blue.tx, fontWeight: 500, fontSize: 11 }}>{n(intransit)} <span style={{ color: C.t3, fontWeight: 400 }}>({intransitPct}%)</span></span>
-                          </td>
-                          <td style={{ padding: '9px 10px', textAlign: 'right' }}>
-                            {fasrPct != null ? <span style={{ color: C.blue.tx, fontWeight: 700, background: C.blue.bg, padding: '2px 8px', borderRadius: 20, fontSize: 11 }}>{fasrPct}%</span> : <span style={{ color: C.t3 }}>—</span>}
-                          </td>
-                          <td style={{ padding: '9px 10px', textAlign: 'right' }}>
-                            {rasrPct != null ? <span style={{ color: C.blue.tx, fontWeight: 700, background: C.blue.bg, padding: '2px 8px', borderRadius: 20, fontSize: 11 }}>{rasrPct}%</span> : <span style={{ color: C.t3 }}>—</span>}
-                          </td>
+                          <td style={{ padding: '9px 10px', textAlign: 'right', fontWeight: 700, color: rtoColor, fontSize: 11 }}>{r._rtoPct.toFixed(1)}%</td>
+                          <td style={{ padding: '9px 10px', textAlign: 'right', color: C.t3, fontSize: 11 }}>{r._zrtoPct.toFixed(1)}%</td>
+                          <td style={{ padding: '9px 10px', textAlign: 'right', color: C.t3, fontSize: 11 }}>{r._cancPct.toFixed(1)}%</td>
+                          <td style={{ padding: '9px 10px', textAlign: 'right', color: C.blue.tx, fontSize: 11 }}>{n(r._intransit)} <span style={{ color: C.t3 }}>({intransitPct}%)</span></td>
+                          <td style={{ padding: '9px 10px', textAlign: 'right', fontWeight: 700, color: C.blue.tx, fontSize: 11 }}>{r._fasrPct != null ? r._fasrPct.toFixed(1) + '%' : '—'}</td>
+                          <td style={{ padding: '9px 10px', textAlign: 'right', fontWeight: 700, color: C.blue.tx, fontSize: 11 }}>{r._rasrPct != null ? r._rasrPct.toFixed(1) + '%' : '—'}</td>
                           <td style={{ padding: '9px 10px', textAlign: 'right', color: C.t3, fontSize: 11 }}>{d(r.avg_processing_days)}</td>
                           <td style={{ padding: '9px 10px', textAlign: 'right', color: C.t3, fontSize: 11 }}>{d(r.avg_pickup_days)}</td>
                           <td style={{ padding: '9px 10px', textAlign: 'right', color: C.t3, fontSize: 11 }}>{d(r.avg_intransit_days)}</td>
