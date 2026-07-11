@@ -370,7 +370,6 @@ function LogisticsPage({ filters }) {
                         <tr key={r.courier_group} style={{ borderBottom: `1px solid ${C.border}` }}>
                           <td style={{ padding: '9px 10px', minWidth: 160 }}>
                             <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
-                              <span style={{ width: 8, height: 8, borderRadius: '50%', background: color, flexShrink: 0 }} />
                               {logo
                                 ? <img src={logo} alt="" style={{ width: 22, height: 22, objectFit: 'contain', borderRadius: 3, flexShrink: 0 }} onError={e => { e.currentTarget.style.display = 'none' }} />
                                 : <span style={{ width: 22, height: 22, borderRadius: 3, background: color, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 8, fontWeight: 800, color: '#fff', flexShrink: 0 }}>{r.courier_group.charAt(0)}</span>
@@ -379,12 +378,7 @@ function LogisticsPage({ filters }) {
                             </div>
                           </td>
                           <td style={{ padding: '9px 10px', textAlign: 'right' }}>
-                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 5 }}>
-                              <div style={{ width: 40, height: 4, background: C.border, borderRadius: 2, overflow: 'hidden' }}>
-                                <div style={{ height: '100%', width: volPct + '%', background: color, borderRadius: 2 }} />
-                              </div>
-                              <span style={{ fontSize: 11, color: C.t2, minWidth: 32, textAlign: 'right' }}>{volPct}%</span>
-                            </div>
+                            <span style={{ fontSize: 11, color: C.t2 }}>{volPct}%</span>
                           </td>
                           <td style={{ padding: '9px 10px', textAlign: 'right', color: C.t1, fontWeight: 600 }}>{n(r.total)}</td>
                           <td style={{ padding: '9px 10px', textAlign: 'right' }}>
