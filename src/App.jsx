@@ -352,7 +352,6 @@ function LogisticsPage({ filters }) {
                 { key: '_rtoPct', label: 'RTO %' },
                 { key: '_zrtoPct', label: 'Z-RTO %' },
                 { key: '_cancPct', label: 'Canc %' },
-                { key: '_intransit', label: 'In-Transit' },
                 { key: '_fasrPct', label: 'FASR %' },
                 { key: '_rasrPct', label: 'RASR %' },
                 { key: 'avg_processing_days', label: 'Avg Processing' },
@@ -417,7 +416,6 @@ function LogisticsPage({ filters }) {
                           <td style={{ padding: '9px 10px', textAlign: 'right', fontWeight: 700, color: rtoColor, fontSize: 11 }}>{r._rtoPct.toFixed(1)}%</td>
                           <td style={{ padding: '9px 10px', textAlign: 'right', color: C.t3, fontSize: 11 }}>{r._zrtoPct.toFixed(1)}%</td>
                           <td style={{ padding: '9px 10px', textAlign: 'right', color: C.t3, fontSize: 11 }}>{r._cancPct.toFixed(1)}%</td>
-                          <td style={{ padding: '9px 10px', textAlign: 'right', color: '#2563eb', fontSize: 11 }}>{n(r._intransit)} <span style={{ color: C.t3 }}>({intransitPct}%)</span></td>
                           <td style={{ padding: '9px 10px', textAlign: 'right', fontWeight: 700, color: '#2563eb', fontSize: 11 }}>{r._fasrPct != null ? r._fasrPct.toFixed(1) + '%' : '—'}</td>
                           <td style={{ padding: '9px 10px', textAlign: 'right', fontWeight: 700, color: '#2563eb', fontSize: 11 }}>{r._rasrPct != null ? r._rasrPct.toFixed(1) + '%' : '—'}</td>
                           <td style={{ padding: '9px 10px', textAlign: 'right', color: C.t3, fontSize: 11 }}>{d(r.avg_processing_days)}</td>
