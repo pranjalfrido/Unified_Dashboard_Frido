@@ -93,9 +93,36 @@ function LDropdown({ label, options, value, onChange }) {
   )
 }
 
+function LKpiCard({ label, value, sub, accentColor, badgeText, badgeColor }) {
+  const badgeBg = (badgeColor || accentColor) + '22'
+  const badgeFg = badgeColor || accentColor || C.t3
+  return (
+    <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, padding: '14px 16px', minWidth: 0, display: 'flex', flexDirection: 'column', gap: 5, position: 'relative', overflow: 'hidden' }}>
+      <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 3, background: accentColor || C.border, borderRadius: '12px 12px 0 0' }} />
+      <div style={{ fontSize: 9.5, fontWeight: 700, letterSpacing: '.05em', textTransform: 'uppercase', color: C.t3, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginTop: 2 }}>{label}</div>
+      <div style={{ fontSize: 26, fontWeight: 800, color: C.t1, letterSpacing: '-0.5px', lineHeight: 1 }}>{value ?? '—'}</div>
+      {(sub || badgeText) && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+          {badgeText && <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 9px', borderRadius: 20, background: badgeBg, color: badgeFg }}>{badgeText}</span>}
+          {sub && !badgeText && <span style={{ fontSize: 11, color: C.t3 }}>{sub}</span>}
+        </div>
+      )}
+    </div>
+  )
+}
+
+function LSectionTitle({ title }) {
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 10, margin: '6px 0 10px' }}>
+      <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: '.08em', textTransform: 'uppercase', color: C.t3 }}>{title}</span>
+      <div style={{ flex: 1, height: 1, background: C.border }} />
+    </div>
+  )
+}
+
 function LogisticsPage({ filters }) {
   const API = import.meta.env.VITE_API_URL || ''
-  const [lFilters, setLFilters] = useState({ couriers: [], shipmentType: 'all', sddNdd: 'all', paymentMode: null, zone: null, pickupState: null, dropState: null, pickupCity: null, dropCity: null, weightSlab: null, category: null, subCategory: null })
+  const [lFilters, setLFilters] = useState({ couriers: [], shipmentType: 'all', sddNdd: 'all', paymentMode: null, zone: null, pickupState: null, dropState: null, category: null, subCategory: null })
   const [data, setData] = useState(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
@@ -128,22 +155,28 @@ function LogisticsPage({ filters }) {
   const n = v => (v || 0).toLocaleString('en-IN')
   const d1 = v => v != null ? (+v).toFixed(1) + 'd' : '—'
   const opts = data?.filterOpts || {}
-
   const toggleCourier = c => setLFilters(f => ({ ...f, couriers: f.couriers.includes(c) ? f.couriers.filter(x => x !== c) : [...f.couriers, c] }))
 
-  const SectionTitle = ({ title }) => (
-    <div style={{ fontSize: 11, fontWeight: 700, color: C.t3, letterSpacing: '.06em', textTransform: 'uppercase', marginBottom: 2 }}>{title}</div>
-  )
+  const STATUS_COLORS = { Delivered: C.green.tx, RTO: C.red.tx, Intransit: C.blue.tx, 'Pickup Pending': '#f59e0b', Cancelled: '#a855f7', Lost: '#f97316', Damaged: '#64748b' }
+  const STATUS_BG = { Delivered: C.green.bg, RTO: C.red.bg, Intransit: C.blue.bg, 'Pickup Pending': '#f59e0b22', Cancelled: '#a855f722', Lost: '#f9731622', Damaged: '#64748b22' }
+
+  const byMonthData = (data?.byMonth || []).map(d => ({ ...d, rto_pct: d.total ? +((d.rto / d.total) * 100).toFixed(1) : 0, del_pct: d.total ? +((d.delivered / d.total) * 100).toFixed(1) : 0 }))
+  const byCourierData = (data?.byCourier || []).slice(0, 10).map(d => ({ ...d, del_pct: d.total ? +((d.delivered / d.total) * 100).toFixed(1) : 0, rto_pct: d.total ? +((d.rto / d.total) * 100).toFixed(1) : 0 }))
+  const maxCourierTotal = byCourierData[0]?.total || 1
+
+  const statusDonutData = (data?.byStatus || []).sort((a, b) => b.total - a.total)
+  const paymentDonutData = data?.byPayment || []
+
+  const cardStyle = { background: C.card, border: `1px solid ${C.border}`, borderRadius: 14, padding: '16px 18px' }
+  const chartTitle = { fontSize: 11, fontWeight: 700, color: C.t2, letterSpacing: '.06em', textTransform: 'uppercase', marginBottom: 14 }
 
   return (
     <div style={{ padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: 14 }}>
 
       {/* ── Filter Bar ── */}
-      <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 14, padding: '14px 18px', display: 'flex', flexDirection: 'column', gap: 12 }}>
-
-        {/* Row 1: Courier chips */}
+      <div style={{ ...cardStyle, borderRadius: 14, display: 'flex', flexDirection: 'column', gap: 12 }}>
         <div>
-          <div style={{ fontSize: 10.5, fontWeight: 700, color: C.t3, letterSpacing: '.06em', textTransform: 'uppercase', marginBottom: 8 }}>Courier Partner</div>
+          <div style={{ fontSize: 10, fontWeight: 700, color: C.t3, letterSpacing: '.06em', textTransform: 'uppercase', marginBottom: 8 }}>Courier Partner</div>
           <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
             {COURIERS.map(c => (
               <LogisticsChip key={c} label={c} logo={COURIER_LOGOS[c]} active={lFilters.couriers.includes(c)} onClick={() => toggleCourier(c)} />
@@ -153,11 +186,7 @@ function LogisticsPage({ filters }) {
             )}
           </div>
         </div>
-
-        {/* Divider */}
         <div style={{ height: 1, background: C.border }} />
-
-        {/* Row 2: Toggles + Dropdowns */}
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
           <LogisticsToggle options={['Forward','Reverse']} value={lFilters.shipmentType} onChange={v => setLFilters(f => ({ ...f, shipmentType: v }))} />
           <LogisticsToggle options={['Regular','SDD/NDD']} value={lFilters.sddNdd} onChange={v => setLFilters(f => ({ ...f, sddNdd: v }))} />
@@ -178,7 +207,7 @@ function LogisticsPage({ filters }) {
       {error && <div style={{ padding: '10px 14px', borderRadius: 9, background: C.red.bg, border: `1px solid ${C.red.bd}`, color: C.red.tx, fontSize: 12 }}>⚠ {error}</div>}
       {loading && !data && (
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 60, gap: 10, color: C.t3, fontSize: 13 }}>
-          <div className="progress-bar" style={{ width: 120, height: 3, borderRadius: 2, background: C.border, overflow: 'hidden' }}>
+          <div style={{ width: 120, height: 3, borderRadius: 2, background: C.border, overflow: 'hidden' }}>
             <div style={{ width: '60%', height: '100%', background: C.acc, animation: 'pulse 1.5s ease infinite' }} />
           </div>
           Loading logistics data…
@@ -186,211 +215,244 @@ function LogisticsPage({ filters }) {
       )}
 
       {data && <>
-        {/* ── KPI Section 1: Volume & Status ── */}
-        <div>
-          <SectionTitle title="Volume & Status" />
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(148px, 1fr))', gap: 10 }}>
-            <LogisticsKPI label="Total Shipments" value={n(k.total_shipments)} />
-            <LogisticsKPI label="Total Value" value={k.total_value != null ? fmt(k.total_value) : '—'} />
-            <LogisticsKPI label="Delivered" value={n(k.delivered)} sub={pct2(k.delivered, k.total_shipments) + ' of total'} color={C.green.tx} />
-            <LogisticsKPI label="RTO" value={n(k.rto)} sub={pct2(k.rto, k.total_shipments) + ' of total'} color={C.red.tx} />
-            <LogisticsKPI label="In Transit" value={n(k.in_transit)} color={C.blue.tx} />
-            <LogisticsKPI label="Pickup Pending" value={n(k.pickup_pending)} color={C.amber.tx} />
-            <LogisticsKPI label="Cancelled" value={n(k.cancelled)} sub={pct2(k.cancelled, k.total_shipments) + ' of total'} />
-            <LogisticsKPI label="Lost & Damaged" value={n(k.lost_damaged)} color={C.red.tx} />
-          </div>
+
+        {/* ── Volume KPIs ── */}
+        <LSectionTitle title="Volume Overview" />
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))', gap: 10 }}>
+          <LKpiCard label="Total Shipments" value={n(k.total_shipments)} accentColor="#FFD600" badgeText={filters.start + ' → ' + filters.end} badgeColor="#FFD600" />
+          <LKpiCard label="Total GMV" value={k.total_value != null ? fmt(k.total_value) : '—'} accentColor="#FFD600" badgeText="Invoice Value" badgeColor="#FFD600" />
+          <LKpiCard label="Delivered" value={n(k.delivered)} accentColor={C.green.tx} badgeText={'▲ ' + pct2(k.delivered, k.total_shipments)} badgeColor={C.green.tx} />
+          <LKpiCard label="RTO" value={n(k.rto)} accentColor={C.red.tx} badgeText={pct2(k.rto, k.total_shipments)} badgeColor={C.red.tx} />
+          <LKpiCard label="In Transit" value={n(k.in_transit)} accentColor={C.blue.tx} badgeText={pct2(k.in_transit, k.total_shipments)} badgeColor={C.blue.tx} />
+          <LKpiCard label="Pickup Pending" value={n(k.pickup_pending)} accentColor="#f59e0b" badgeText={pct2(k.pickup_pending, k.total_shipments)} badgeColor="#f59e0b" />
+          <LKpiCard label="Cancelled" value={n(k.cancelled)} accentColor="#a855f7" badgeText={pct2(k.cancelled, k.total_shipments)} badgeColor="#a855f7" />
+          <LKpiCard label="Lost & Damaged" value={n(k.lost_damaged)} accentColor={C.red.tx} badgeText={pct2(k.lost_damaged, k.total_shipments)} badgeColor={C.red.tx} />
         </div>
 
-        {/* ── KPI Section 2: Quality ── */}
-        <div>
-          <SectionTitle title="Delivery Quality" />
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(148px, 1fr))', gap: 10 }}>
-            <LogisticsKPI label="OTD %" value={pct2(k.on_time, k.delivered)} color={C.green.tx} />
-            <LogisticsKPI label="SLA Breached %" value={pct2(k.sla_breach, k.delivered)} color={C.red.tx} />
-            <LogisticsKPI label="EDD Breached" value={n(k.edd_breached)} color={C.amber.tx} />
-            <LogisticsKPI label="Critical Stuck" value={n(k.critical_stuck)} color={C.red.tx} />
-            <LogisticsKPI label="RTO 10+ Days" value={n(k.rto_10plus)} color={C.red.tx} />
-            <LogisticsKPI label="Z-RTO %" value={pct2(k.z_rto, k.total_shipments)} color={C.amber.tx} />
-            <LogisticsKPI label="FASR %" value={pct2(k.delivered_1attempt, k.total_ofd_attempts)} color={C.green.tx} />
-            <LogisticsKPI label="RASR %" value={pct2(k.delivered_multi, k.total_ofd_attempts)} color={C.blue.tx} />
-          </div>
+        {/* ── Quality KPIs ── */}
+        <LSectionTitle title="Delivery Quality & SLA" />
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))', gap: 10 }}>
+          <LKpiCard label="On Time Delivery" value={n(k.on_time)} accentColor={C.green.tx} badgeText={pct2(k.on_time, k.delivered) + ' of delivered'} badgeColor={C.green.tx} />
+          <LKpiCard label="SLA Breach" value={n(k.sla_breach)} accentColor={C.red.tx} badgeText={pct2(k.sla_breach, k.delivered) + ' of delivered'} badgeColor={C.red.tx} />
+          <LKpiCard label="EDD Breached" value={n(k.edd_breached)} accentColor="#f59e0b" badgeText="Live count" badgeColor="#f59e0b" />
+          <LKpiCard label="Critical Stuck" value={n(k.critical_stuck)} accentColor={C.red.tx} badgeText="EDD >5d past" badgeColor={C.red.tx} />
+          <LKpiCard label="RTO 10+ Days" value={n(k.rto_10plus)} accentColor={C.red.tx} badgeText="Aging RTOs" badgeColor={C.red.tx} />
+          <LKpiCard label="Zero-Attempt RTO" value={n(k.z_rto)} accentColor="#f59e0b" badgeText={pct2(k.z_rto, k.total_shipments)} badgeColor="#f59e0b" />
+          <LKpiCard label="1st Attempt Del%" value={pct2(k.delivered_1attempt, k.total_ofd_attempts)} accentColor={C.green.tx} badgeText="FASR" badgeColor={C.green.tx} />
+          <LKpiCard label="Multi-Attempt Del" value={n(k.delivered_multi)} accentColor={C.blue.tx} badgeText={pct2(k.delivered_multi, k.total_ofd_attempts)} badgeColor={C.blue.tx} />
         </div>
 
-        {/* ── KPI Section 3: TAT ── */}
-        <div>
-          <SectionTitle title="Turnaround Time" />
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(148px, 1fr))', gap: 10 }}>
-            <LogisticsKPI label="Avg Pickup TAT" value={d1(k.avg_pickup)} />
-            <LogisticsKPI label="Avg In-Transit" value={d1(k.avg_intransit)} />
-            <LogisticsKPI label="Avg Fulfilment" value={d1(k.avg_fulfilment)} />
-            <LogisticsKPI label="Avg RTO TAT" value={d1(k.avg_rto_tat)} />
-            <LogisticsKPI label="Avg S2A Days" value={d1(k.avg_s2a)} />
-            <LogisticsKPI label="Avg SLA Days" value={d1(k.avg_sla)} />
-          </div>
+        {/* ── TAT KPIs ── */}
+        <LSectionTitle title="Turnaround Time" />
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))', gap: 10 }}>
+          <LKpiCard label="Avg Pickup TAT" value={d1(k.avg_pickup)} accentColor={C.blue.tx} badgeText="Creation → Pickup" badgeColor={C.blue.tx} />
+          <LKpiCard label="Avg In-Transit TAT" value={d1(k.avg_intransit)} accentColor="#FFD600" badgeText="Pickup → Delivery" badgeColor="#FFD600" />
+          <LKpiCard label="Avg Fulfilment TAT" value={d1(k.avg_fulfilment)} accentColor={C.green.tx} badgeText="Creation → Delivery" badgeColor={C.green.tx} />
+          <LKpiCard label="Avg RTO TAT" value={d1(k.avg_rto_tat)} accentColor={C.red.tx} badgeText="Days since RTO mark" badgeColor={C.red.tx} />
+          <LKpiCard label="Avg S2A Days" value={d1(k.avg_s2a)} accentColor={C.blue.tx} badgeText="Ship → 1st OFD" badgeColor={C.blue.tx} />
+          <LKpiCard label="Avg Committed SLA" value={d1(k.avg_sla)} accentColor="#64748b" badgeText="Promised days" badgeColor="#64748b" />
         </div>
 
-        {/* ── Charts Row 1 ── */}
+        {/* ── Monthly Trend + Status Donut ── */}
+        <LSectionTitle title="Monthly Trend" />
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
-
-          {/* Shipments & RTO % over time */}
-          <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 14, padding: '16px 18px' }}>
-            <div style={{ fontSize: 12, fontWeight: 600, color: C.t1, marginBottom: 14 }}>Shipments & RTO % by Month</div>
-            <ResponsiveContainer width="100%" height={210}>
-              <ComposedChart data={(data.byMonth || []).map(d => ({ ...d, rto_pct: d.total ? +((d.rto / d.total) * 100).toFixed(1) : 0 }))} margin={{ top: 4, right: 20, left: 0, bottom: 0 }}>
+          <div style={cardStyle}>
+            <div style={chartTitle}>Monthly Shipment Volume</div>
+            <ResponsiveContainer width="100%" height={220}>
+              <ComposedChart data={byMonthData} margin={{ top: 4, right: 24, left: 0, bottom: 0 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke={C.border} />
                 <XAxis dataKey="month_label" tick={{ fontSize: 10, fill: C.t3 }} />
                 <YAxis yAxisId="left" tick={{ fontSize: 10, fill: C.t3 }} />
                 <YAxis yAxisId="right" orientation="right" tickFormatter={v => v + '%'} tick={{ fontSize: 10, fill: C.t3 }} />
                 <Tooltip content={<ChartTooltip />} />
                 <Legend wrapperStyle={{ fontSize: 11 }} />
-                <Bar yAxisId="left" dataKey="total" name="Shipments" fill={C.acc} radius={[3,3,0,0]} />
-                <Line yAxisId="right" dataKey="rto_pct" name="RTO %" stroke={C.red.tx} strokeWidth={2} dot={false} />
+                <Bar yAxisId="left" dataKey="delivered" name="Delivered" stackId="s" fill={C.green.tx + 'cc'} radius={[0,0,0,0]} />
+                <Bar yAxisId="left" dataKey="rto" name="RTO" stackId="s" fill={C.red.tx + 'cc'} radius={[0,0,0,0]} />
+                <Bar yAxisId="left" dataKey="in_transit" name="Intransit" stackId="s" fill={C.blue.tx + 'cc'} radius={[3,3,0,0]} />
+                <Line yAxisId="right" dataKey="rto_pct" name="RTO %" stroke={C.red.tx} strokeWidth={2} dot={{ fill: C.red.tx, r: 3 }} />
               </ComposedChart>
             </ResponsiveContainer>
           </div>
 
-          {/* Courier Delivery % vs RTO % */}
-          <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 14, padding: '16px 18px' }}>
-            <div style={{ fontSize: 12, fontWeight: 600, color: C.t1, marginBottom: 14 }}>Courier — Delivery % vs RTO %</div>
-            <ResponsiveContainer width="100%" height={210}>
-              <BarChart
-                data={(data.byCourier || []).slice(0,10).map(d => ({ ...d, del_pct: d.total ? +((d.delivered / d.total) * 100).toFixed(1) : 0, rto_pct: d.total ? +((d.rto / d.total) * 100).toFixed(1) : 0 }))}
-                layout="vertical" margin={{ top: 0, right: 30, left: 80, bottom: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke={C.border} horizontal={false} />
-                <XAxis type="number" tickFormatter={v => v + '%'} tick={{ fontSize: 10, fill: C.t3 }} />
-                <YAxis type="category" dataKey="courier_group" tick={{ fontSize: 10, fill: C.t2 }} width={80} />
-                <Tooltip content={<ChartTooltip />} formatter={v => v + '%'} />
+          <div style={cardStyle}>
+            <div style={chartTitle}>Status Distribution</div>
+            <ResponsiveContainer width="100%" height={220}>
+              <PieChart>
+                <Pie data={statusDonutData} dataKey="total" nameKey="unified_status" cx="50%" cy="50%" innerRadius={60} outerRadius={90} paddingAngle={2}>
+                  {statusDonutData.map(s => <Cell key={s.unified_status} fill={STATUS_COLORS[s.unified_status] || '#64748b'} />)}
+                </Pie>
+                <Tooltip formatter={(v, n) => [v.toLocaleString('en-IN'), n]} />
                 <Legend wrapperStyle={{ fontSize: 11 }} />
-                <Bar dataKey="del_pct" name="Delivered %" fill={C.green.tx} radius={[0,3,3,0]} />
-                <Bar dataKey="rto_pct" name="RTO %" fill={C.red.tx} radius={[0,3,3,0]} />
-              </BarChart>
+              </PieChart>
             </ResponsiveContainer>
-          </div>
-
-          {/* Zone wise performance */}
-          <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 14, padding: '16px 18px' }}>
-            <div style={{ fontSize: 12, fontWeight: 600, color: C.t1, marginBottom: 14 }}>Zone — Shipments & RTO %</div>
-            <ResponsiveContainer width="100%" height={210}>
-              <ComposedChart data={(data.byZone || []).map(d => ({ ...d, rto_pct: d.total ? +((d.rto / d.total) * 100).toFixed(1) : 0 }))} margin={{ top: 4, right: 20, left: 0, bottom: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke={C.border} />
-                <XAxis dataKey="zone" tick={{ fontSize: 10, fill: C.t3 }} />
-                <YAxis yAxisId="left" tick={{ fontSize: 10, fill: C.t3 }} />
-                <YAxis yAxisId="right" orientation="right" tickFormatter={v => v + '%'} tick={{ fontSize: 10, fill: C.t3 }} />
-                <Tooltip content={<ChartTooltip />} />
-                <Legend wrapperStyle={{ fontSize: 11 }} />
-                <Bar yAxisId="left" dataKey="total" name="Shipments" fill={C.acc} radius={[3,3,0,0]} />
-                <Line yAxisId="right" dataKey="rto_pct" name="RTO %" stroke={C.red.tx} strokeWidth={2} dot={false} />
-              </ComposedChart>
-            </ResponsiveContainer>
-          </div>
-
-          {/* RTO Reasons */}
-          <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 14, padding: '16px 18px' }}>
-            <div style={{ fontSize: 12, fontWeight: 600, color: C.t1, marginBottom: 14 }}>Top RTO Reasons</div>
-            <ResponsiveContainer width="100%" height={210}>
-              <BarChart data={data.rtoReasons || []} layout="vertical" margin={{ top: 0, right: 16, left: 140, bottom: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke={C.border} horizontal={false} />
-                <XAxis type="number" tick={{ fontSize: 10, fill: C.t3 }} />
-                <YAxis type="category" dataKey="reason" tick={{ fontSize: 9.5, fill: C.t2 }} width={140} />
-                <Tooltip content={<ChartTooltip />} />
-                <Bar dataKey="total" name="Shipments" fill={C.red.tx} radius={[0,3,3,0]} />
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-        </div>
-
-        {/* ── Status Breakdown + Top States ── */}
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
-          <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 14, padding: '16px 18px' }}>
-            <div style={{ fontSize: 12, fontWeight: 600, color: C.t1, marginBottom: 14 }}>Shipment Status Breakdown</div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-              {(data.byStatus || []).sort((a,b) => b.total - a.total).map(s => {
-                const w = Math.min(100, ((s.total / (k.total_shipments || 1)) * 100)).toFixed(1)
-                const col = s.unified_status === 'Delivered' ? C.green.tx : s.unified_status === 'RTO' ? C.red.tx : s.unified_status === 'Intransit' ? C.blue.tx : C.amber.tx
-                const bgCol = s.unified_status === 'Delivered' ? C.green.bg : s.unified_status === 'RTO' ? C.red.bg : s.unified_status === 'Intransit' ? C.blue.bg : C.amber.bg
-                return (
-                  <div key={s.unified_status}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 5 }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
-                        <span style={{ width: 8, height: 8, borderRadius: '50%', background: col, flexShrink: 0 }} />
-                        <span style={{ fontSize: 12, color: C.t2, fontWeight: 500 }}>{s.unified_status}</span>
-                      </div>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                        <span style={{ fontSize: 11, color: C.t3 }}>{n(s.total)}</span>
-                        <span style={{ fontSize: 11, fontWeight: 700, color: col, background: bgCol, padding: '2px 7px', borderRadius: 20 }}>{w}%</span>
-                      </div>
-                    </div>
-                    <div style={{ height: 6, borderRadius: 4, background: C.border }}>
-                      <div style={{ height: '100%', width: w + '%', borderRadius: 4, background: col, transition: 'width .4s ease' }} />
-                    </div>
-                  </div>
-                )
-              })}
-            </div>
-          </div>
-
-          <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 14, padding: '16px 18px' }}>
-            <div style={{ fontSize: 12, fontWeight: 600, color: C.t1, marginBottom: 14 }}>Top Drop States</div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-              {(data.topDropStates || []).map(s => {
-                const w = Math.min(100, ((s.total / (k.total_shipments || 1)) * 100)).toFixed(1)
-                return (
-                  <div key={s.state}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 5 }}>
-                      <span style={{ fontSize: 12, color: C.t2, fontWeight: 500 }}>{s.state}</span>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                        <span style={{ fontSize: 11, color: C.t3 }}>{n(s.total)}</span>
-                        <span style={{ fontSize: 11, fontWeight: 700, color: C.t1, background: C.acl, padding: '2px 7px', borderRadius: 20 }}>{w}%</span>
-                      </div>
-                    </div>
-                    <div style={{ height: 6, borderRadius: 4, background: C.border }}>
-                      <div style={{ height: '100%', width: w + '%', borderRadius: 4, background: C.acc, transition: 'width .4s ease' }} />
-                    </div>
-                  </div>
-                )
-              })}
-            </div>
           </div>
         </div>
 
         {/* ── Courier Performance Table ── */}
-        <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 14, padding: '16px 18px' }}>
-          <div style={{ fontSize: 12, fontWeight: 600, color: C.t1, marginBottom: 14 }}>Courier Performance</div>
+        <LSectionTitle title="Courier Performance" />
+        <div style={cardStyle}>
+          <div style={chartTitle}>Courier-wise Breakdown</div>
           <div style={{ overflowX: 'auto' }}>
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
               <thead>
                 <tr style={{ borderBottom: `1.5px solid ${C.border}` }}>
-                  {['Courier','Shipments','Delivered %','RTO %','FASR %','Avg TAT'].map(h => (
-                    <th key={h} style={{ padding: '9px 12px', textAlign: h === 'Courier' ? 'left' : 'right', color: C.t3, fontWeight: 600, fontSize: 10.5, letterSpacing: '.04em', textTransform: 'uppercase' }}>{h}</th>
+                  {['Courier', 'Total', 'Delivered', 'Delivery %', 'RTO', 'RTO %', 'FASR %', 'Avg TAT'].map((h, i) => (
+                    <th key={h} style={{ padding: '9px 12px', textAlign: i === 0 ? 'left' : 'right', color: C.t3, fontWeight: 700, fontSize: 9.5, letterSpacing: '.05em', textTransform: 'uppercase' }}>{h}</th>
                   ))}
                 </tr>
               </thead>
               <tbody>
-                {(data.byCourier || []).map((r, i) => (
-                  <tr key={r.courier_group} style={{ borderBottom: `1px solid ${C.border}`, background: i % 2 === 0 ? 'transparent' : C.bg }}>
+                {byCourierData.map((r, i) => (
+                  <tr key={r.courier_group} style={{ borderBottom: `1px solid ${C.border}` }}>
                     <td style={{ padding: '10px 12px' }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                        <img src={COURIER_LOGOS[r.courier_group]} alt="" style={{ width: 20, height: 20, objectFit: 'contain', borderRadius: 4 }} onError={e => { e.target.style.display='none' }} />
-                        <span style={{ color: C.t1, fontWeight: 500, fontSize: 12 }}>{r.courier_group}</span>
+                        <span style={{ width: 8, height: 8, borderRadius: '50%', background: COURIER_COLORS[r.courier_group] || C.t3, flexShrink: 0 }} />
+                        <img src={COURIER_LOGOS[r.courier_group]} alt="" style={{ width: 20, height: 20, objectFit: 'contain', borderRadius: 3 }} onError={e => { e.target.style.display='none' }} />
+                        <span style={{ color: C.t1, fontWeight: 500 }}>{r.courier_group}</span>
                       </div>
                     </td>
                     <td style={{ padding: '10px 12px', textAlign: 'right', color: C.t2, fontWeight: 500 }}>{n(r.total)}</td>
                     <td style={{ padding: '10px 12px', textAlign: 'right' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 6 }}>
+                        <div style={{ width: 50, height: 4, background: C.border, borderRadius: 2, overflow: 'hidden' }}>
+                          <div style={{ height: '100%', width: ((r.delivered / maxCourierTotal) * 100) + '%', background: C.green.tx, borderRadius: 2 }} />
+                        </div>
+                        <span style={{ color: C.t2 }}>{n(r.delivered)}</span>
+                      </div>
+                    </td>
+                    <td style={{ padding: '10px 12px', textAlign: 'right' }}>
                       <span style={{ color: C.green.tx, fontWeight: 700, background: C.green.bg, padding: '2px 8px', borderRadius: 20, fontSize: 11 }}>{pct2(r.delivered, r.total)}</span>
                     </td>
+                    <td style={{ padding: '10px 12px', textAlign: 'right', color: C.t2 }}>{n(r.rto)}</td>
                     <td style={{ padding: '10px 12px', textAlign: 'right' }}>
                       <span style={{ color: C.red.tx, fontWeight: 700, background: C.red.bg, padding: '2px 8px', borderRadius: 20, fontSize: 11 }}>{pct2(r.rto, r.total)}</span>
                     </td>
                     <td style={{ padding: '10px 12px', textAlign: 'right' }}>
                       <span style={{ color: C.blue.tx, fontWeight: 700, background: C.blue.bg, padding: '2px 8px', borderRadius: 20, fontSize: 11 }}>{pct2(r.d1, r.ofd_total)}</span>
                     </td>
-                    <td style={{ padding: '10px 12px', textAlign: 'right', color: C.t2, fontWeight: 500 }}>{r.avg_tat != null ? (+r.avg_tat).toFixed(1) + 'd' : '—'}</td>
+                    <td style={{ padding: '10px 12px', textAlign: 'right', color: C.t3 }}>{r.avg_tat != null ? (+r.avg_tat).toFixed(1) + 'd' : '—'}</td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
         </div>
+
+        {/* ── Geographic + Payment + Courier Share ── */}
+        <LSectionTitle title="Geographic & Payment" />
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 14 }}>
+
+          {/* Top Drop States — horizontal bars */}
+          <div style={cardStyle}>
+            <div style={chartTitle}>Top Drop States</div>
+            <ResponsiveContainer width="100%" height={260}>
+              <BarChart data={data.topDropStates || []} layout="vertical" margin={{ top: 0, right: 16, left: 90, bottom: 0 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke={C.border} horizontal={false} />
+                <XAxis type="number" tick={{ fontSize: 9, fill: C.t3 }} />
+                <YAxis type="category" dataKey="state" tick={{ fontSize: 10, fill: C.t2 }} width={90} />
+                <Tooltip content={<ChartTooltip />} />
+                <Bar dataKey="total" name="Shipments" fill="#FFD600cc" radius={[0,3,3,0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+
+          {/* Payment Donut */}
+          <div style={cardStyle}>
+            <div style={chartTitle}>Payment Mode Split</div>
+            <ResponsiveContainer width="100%" height={260}>
+              <PieChart>
+                <Pie data={paymentDonutData} dataKey="total" nameKey="payment_mode" cx="50%" cy="45%" innerRadius={65} outerRadius={95} paddingAngle={3}>
+                  {paymentDonutData.map((p, i) => <Cell key={p.payment_mode} fill={[C.blue.tx, '#FFD600'][i % 2]} />)}
+                </Pie>
+                <Tooltip formatter={(v, n) => [v.toLocaleString('en-IN'), n]} />
+                <Legend wrapperStyle={{ fontSize: 11 }} />
+              </PieChart>
+            </ResponsiveContainer>
+          </div>
+
+          {/* Courier Volume Pie */}
+          <div style={cardStyle}>
+            <div style={chartTitle}>Courier Volume Share</div>
+            <ResponsiveContainer width="100%" height={260}>
+              <PieChart>
+                <Pie data={byCourierData} dataKey="total" nameKey="courier_group" cx="50%" cy="45%" innerRadius={55} outerRadius={85} paddingAngle={2}>
+                  {byCourierData.map(r => <Cell key={r.courier_group} fill={COURIER_COLORS[r.courier_group] || '#64748b'} />)}
+                </Pie>
+                <Tooltip formatter={(v, n) => [v.toLocaleString('en-IN'), n]} />
+                <Legend wrapperStyle={{ fontSize: 10 }} />
+              </PieChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+
+        {/* ── RTO Analysis ── */}
+        <LSectionTitle title="RTO Analysis" />
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+
+          {/* RTO Reasons — custom bars matching HTML style */}
+          <div style={cardStyle}>
+            <div style={chartTitle}>Top RTO Reasons</div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+              {(data.rtoReasons || []).map((r, i) => {
+                const maxR = data.rtoReasons[0]?.total || 1
+                const w = ((r.total / maxR) * 100).toFixed(1)
+                return (
+                  <div key={r.reason}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 5 }}>
+                      <span style={{ fontSize: 11, color: C.t2, maxWidth: '75%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.reason}</span>
+                      <span style={{ fontSize: 11, fontWeight: 700, color: C.t1 }}>{r.total.toLocaleString('en-IN')}</span>
+                    </div>
+                    <div style={{ height: 6, borderRadius: 3, background: C.border, overflow: 'hidden' }}>
+                      <div style={{ height: '100%', width: w + '%', background: C.red.tx, borderRadius: 3, transition: 'width .4s ease' }} />
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+
+          {/* OFD Attempts Donut */}
+          <div style={cardStyle}>
+            <div style={chartTitle}>OFD Attempt Breakdown</div>
+            <ResponsiveContainer width="100%" height={260}>
+              <PieChart>
+                <Pie
+                  data={[
+                    { name: '1st Attempt Delivered', value: k.delivered_1attempt || 0 },
+                    { name: 'Multi-Attempt Delivered', value: k.delivered_multi || 0 },
+                    { name: 'RTO', value: k.rto || 0 },
+                  ]}
+                  dataKey="value" cx="50%" cy="45%" innerRadius={65} outerRadius={95} paddingAngle={3}
+                >
+                  <Cell fill={C.green.tx} />
+                  <Cell fill="#f97316" />
+                  <Cell fill={C.red.tx} />
+                </Pie>
+                <Tooltip formatter={(v, n) => [v.toLocaleString('en-IN'), n]} />
+                <Legend wrapperStyle={{ fontSize: 11 }} />
+              </PieChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+
+        {/* ── Zone Performance ── */}
+        <LSectionTitle title="Zone Performance" />
+        <div style={cardStyle}>
+          <div style={chartTitle}>Zone — Shipments & RTO %</div>
+          <ResponsiveContainer width="100%" height={200}>
+            <ComposedChart data={(data.byZone || []).map(d => ({ ...d, rto_pct: d.total ? +((d.rto / d.total) * 100).toFixed(1) : 0 }))} margin={{ top: 4, right: 24, left: 0, bottom: 0 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke={C.border} />
+              <XAxis dataKey="zone" tick={{ fontSize: 10, fill: C.t3 }} />
+              <YAxis yAxisId="left" tick={{ fontSize: 10, fill: C.t3 }} />
+              <YAxis yAxisId="right" orientation="right" tickFormatter={v => v + '%'} tick={{ fontSize: 10, fill: C.t3 }} />
+              <Tooltip content={<ChartTooltip />} />
+              <Legend wrapperStyle={{ fontSize: 11 }} />
+              <Bar yAxisId="left" dataKey="total" name="Shipments" fill={C.acc} radius={[3,3,0,0]} />
+              <Line yAxisId="right" dataKey="rto_pct" name="RTO %" stroke={C.red.tx} strokeWidth={2} dot={{ fill: C.red.tx, r: 3 }} />
+            </ComposedChart>
+          </ResponsiveContainer>
+        </div>
+
       </>}
     </div>
   )
