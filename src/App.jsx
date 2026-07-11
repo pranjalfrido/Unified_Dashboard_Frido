@@ -274,7 +274,7 @@ function LogisticsPage({ filters }) {
                 <YAxis yAxisId="right" orientation="right" tickFormatter={v => v + '%'} tick={{ fontSize: 10, fill: C.t3 }} />
                 <Tooltip formatter={(value, name) => name === 'RTO %' ? [value + '%', name] : [value.toLocaleString('en-IN'), name]} />
                 <Legend wrapperStyle={{ fontSize: 11 }} />
-                <Bar yAxisId="left" dataKey="delivered" name="Delivered" stackId="s" fill={C.green.tx + 'cc'} radius={[0,0,0,0]} />
+                <Bar yAxisId="left" dataKey="delivered" name="Delivered" stackId="s" fill="#FFD600cc" radius={[0,0,0,0]} />
                 <Bar yAxisId="left" dataKey="rto" name="RTO" stackId="s" fill={C.red.tx + 'cc'} radius={[3,3,0,0]} />
                 <Line yAxisId="right" dataKey="rto_pct" name="RTO %" stroke="#b91c1c" strokeWidth={2} dot={{ fill: '#b91c1c', r: 3 }} />
               </ComposedChart>
