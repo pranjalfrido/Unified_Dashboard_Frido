@@ -183,7 +183,7 @@ function LogisticsPage({ filters }) {
     <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
 
       {/* ── Filter Bar ── */}
-      <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 0, padding: '16px 24px', display: 'flex', flexDirection: 'column', gap: 14 }}>
+      <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 0, padding: '16px 32px', margin: '-16px -16px 0 -16px', display: 'flex', flexDirection: 'column', gap: 14 }}>
         <div>
           <div style={{ fontSize: 10, fontWeight: 700, color: C.t3, letterSpacing: '.06em', textTransform: 'uppercase', marginBottom: 10 }}>Courier Partner</div>
           <div style={{ display: 'flex', gap: 5, alignItems: 'center', overflowX: 'auto', flexWrap: 'nowrap', paddingBottom: 2 }}>
