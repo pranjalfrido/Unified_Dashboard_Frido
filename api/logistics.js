@@ -106,7 +106,7 @@ by_courier AS (
     COUNTIF(unified_status='Cancelled') AS cancelled,
     COUNTIF(unified_status='RTO' AND COALESCE(ofd_attempts,0)=0) AS z_rto,
     COUNTIF(ofd_attempts=1 AND unified_status='Delivered') AS d1,
-    COUNTIF(ofd_attempts=1 AND unified_status='Delivered') AS rasr_num,
+    COUNTIF(ofd_attempts > 1 AND unified_status='Delivered') AS rasr_num,
     COUNTIF(ofd_attempts IS NOT NULL AND ofd_attempts != 0) AS ofd_total,
     ROUND(AVG(DATE_DIFF(delivery_date, pickup_date, DAY)), 2) AS avg_tat,
     ROUND(AVG(DATE_DIFF(delivery_date, pickup_date, DAY)), 2) AS avg_intransit_days,
