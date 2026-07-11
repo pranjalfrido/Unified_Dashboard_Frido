@@ -295,13 +295,19 @@ function LogisticsPage({ filters }) {
                 <YAxis yAxisId="left" tick={{ fontSize: 10, fill: C.t3 }} tickFormatter={v => v >= 1000 ? (v/1000).toFixed(0)+'K' : v} />
                 <YAxis yAxisId="right" orientation="right" tickFormatter={v => v + '%'} tick={{ fontSize: 10, fill: C.t3 }} />
                 <Tooltip formatter={(value, name) => name === 'RTO %' ? [value + '%', name] : [Number(value).toLocaleString('en-IN'), name]} />
-                <Legend wrapperStyle={{ fontSize: 11 }} />
                 <Area yAxisId="left" type="monotone" dataKey="delivered" name="Delivered" stroke="#E6A800" strokeWidth={2.5} fill="url(#lgDel)" dot={false} activeDot={{ r: 5 }} />
                 <Area yAxisId="left" type="monotone" dataKey="rto" name="RTO" stroke={C.red.tx} strokeWidth={2} fill="url(#lgRto)" dot={false} activeDot={{ r: 4 }} />
                 <Line yAxisId="left" type="monotone" dataKey="total" name="Total" stroke={C.t3} strokeWidth={1.5} strokeDasharray="4 3" dot={false} />
                 <Line yAxisId="right" type="monotone" dataKey="rto_pct" name="RTO %" stroke="#b91c1c" strokeWidth={1.5} strokeDasharray="3 2" dot={false} />
               </ComposedChart>
             </ResponsiveContainer>
+            <div style={{ display: 'flex', gap: 16, justifyContent: 'center', marginTop: 8 }}>
+              {[['#E6A800','Delivered'],['#7A1A1A','RTO'],['#b91c1c','RTO %'],['#94939F','Total']].map(([color, label]) => (
+                <span key={label} style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 10, color: C.t2 }}>
+                  <span style={{ width: 10, height: 10, borderRadius: 2, background: color, display: 'inline-block' }} />{label}
+                </span>
+              ))}
+            </div>
           </div>
 
           {/* Courier TAT */}
