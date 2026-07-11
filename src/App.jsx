@@ -263,9 +263,9 @@ function LogisticsPage({ filters }) {
           <LKpiCard label="Avg S2A Days" value={d1(k.avg_s2a)} badgeText="Ship→OFD" badgeVariant="B" />
         </div>
 
-        {/* ── Monthly Trend + Status Donut + Courier TAT ── */}
+        {/* ── Monthly Trend + Courier TAT ── */}
         <LSectionTitle title="Monthly Trend" />
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 14 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
           <div style={cardStyle}>
             <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 10 }}>
               <div>
@@ -304,30 +304,7 @@ function LogisticsPage({ filters }) {
             </ResponsiveContainer>
           </div>
 
-          <div style={cardStyle}>
-            <div style={chartTitle}>Status Distribution</div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-              <ResponsiveContainer width="60%" height={200}>
-                <PieChart>
-                  <Pie data={statusDonutData} dataKey="total" nameKey="unified_status" cx="50%" cy="50%" innerRadius={55} outerRadius={85} paddingAngle={2}>
-                    {statusDonutData.map(s => <Cell key={s.unified_status} fill={STATUS_COLORS[s.unified_status] || '#64748b'} />)}
-                  </Pie>
-                  <Tooltip formatter={(v, n) => [v.toLocaleString('en-IN'), n]} />
-                </PieChart>
-              </ResponsiveContainer>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 8, flex: 1 }}>
-                {statusDonutData.map(s => (
-                  <div key={s.unified_status} style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
-                    <div style={{ width: 10, height: 10, borderRadius: 3, background: STATUS_COLORS[s.unified_status] || '#64748b', flexShrink: 0 }} />
-                    <span style={{ fontSize: 11, color: C.t2, flex: 1 }}>{s.unified_status}</span>
-                    <span style={{ fontSize: 11, fontWeight: 700, color: C.t1 }}>{s.total.toLocaleString('en-IN')}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-
-          {/* 3rd: Courier TAT */}
+          {/* Courier TAT */}
           <div style={cardStyle}>
             <div style={chartTitle}>Courier · Total Shipments & TAT</div>
             <ResponsiveContainer width="100%" height={200}>
