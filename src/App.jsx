@@ -18,12 +18,12 @@ function LogisticsKPI({ label, value, sub, color, badge }) {
   )
 }
 
-function LogisticsChip({ label, logo, active, onClick }) {
+function LogisticsChip({ label, logo, active, onClick, grow }) {
   const [imgErr, setImgErr] = useState(false)
   return (
     <button onClick={onClick} style={{
-      display: 'inline-flex', alignItems: 'center', gap: 5,
-      padding: '0 11px', height: 34, borderRadius: 8,
+      display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 5,
+      padding: '0 8px', height: 34, borderRadius: 8,
       border: `1.5px solid ${active ? '#FFD600' : C.border}`,
       background: active ? '#FEFDF0' : C.card,
       color: active ? '#1a1400' : C.t2,
@@ -31,7 +31,7 @@ function LogisticsChip({ label, logo, active, onClick }) {
       cursor: 'pointer', fontFamily: 'var(--font)',
       whiteSpace: 'nowrap', transition: 'all .15s',
       boxShadow: active ? '0 0 0 1px #FFD60066' : 'none',
-      flexShrink: 0,
+      flex: grow ? 1 : '0 0 auto',
     }}>
       {logo && !imgErr
         ? <img src={logo} alt="" style={{ width: 18, height: 18, objectFit: 'contain', borderRadius: 3, flexShrink: 0 }} onError={() => setImgErr(true)} />
@@ -186,9 +186,9 @@ function LogisticsPage({ filters }) {
       <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 14, padding: '14px 18px', display: 'flex', flexDirection: 'column', gap: 14 }}>
         <div>
           <div style={{ fontSize: 10, fontWeight: 700, color: C.t3, letterSpacing: '.06em', textTransform: 'uppercase', marginBottom: 10 }}>Courier Partner</div>
-          <div style={{ display: 'flex', gap: 5, alignItems: 'center', overflowX: 'auto', flexWrap: 'nowrap', paddingBottom: 2 }}>
+          <div style={{ display: 'flex', gap: 5, alignItems: 'center', flexWrap: 'nowrap' }}>
             {COURIERS.map(c => (
-              <LogisticsChip key={c} label={c} logo={COURIER_LOGOS[c]} active={lFilters.couriers.includes(c)} onClick={() => toggleCourier(c)} />
+              <LogisticsChip key={c} label={c} logo={COURIER_LOGOS[c]} active={lFilters.couriers.includes(c)} onClick={() => toggleCourier(c)} grow />
             ))}
             {lFilters.couriers.length > 0 && (
               <button onClick={() => setLFilters(f => ({ ...f, couriers: [] }))} style={{ fontSize: 11, color: C.t3, background: 'none', border: `1px solid ${C.border}`, borderRadius: 6, padding: '4px 10px', cursor: 'pointer', fontFamily: 'var(--font)', flexShrink: 0 }}>✕ Clear</button>
