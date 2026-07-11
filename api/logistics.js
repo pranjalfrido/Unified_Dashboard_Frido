@@ -41,11 +41,18 @@ WITH base AS (
     c.clickpost_unified_status,
     CASE
       WHEN c.clickpost_unified_status = 'Delivered' THEN 'Delivered'
-      WHEN c.clickpost_unified_status LIKE 'RTO%' THEN 'RTO'
-      WHEN c.clickpost_unified_status = 'Pickup Pending' THEN 'Pickup Pending'
-      WHEN c.clickpost_unified_status IN ('Lost','Damaged') THEN c.clickpost_unified_status
+      WHEN c.clickpost_unified_status = 'NoStatusExist' AND LOWER(c.latest_remark) LIKE '%delivered%' THEN 'Delivered'
+      WHEN c.clickpost_unified_status IN ('RTO-Marked','RTO-ShipmentDelay','RTO-InTransit','RTO-Delivered','RTO-Requested','RTO-ContactCustomerCare','RTO-OutForDelivery','RTO-Failed') THEN 'RTO'
+      WHEN c.clickpost_unified_status = 'NoStatusExist' AND LOWER(c.latest_remark) LIKE '%rto%' THEN 'RTO'
+      WHEN c.clickpost_unified_status IN ('PickupFailed','OutForPickup','PickupPending','OrderPlaced') THEN 'Pickup Pending'
+      WHEN c.clickpost_unified_status IN ('ShipmentHeld','ContactCustomerCare','InTransit','DestinationHubIn','FailedDelivery','ShipmentDelayed','PickedUp','OutForDelivery','OriginCityOut','OriginCityIn') THEN 'Intransit'
       WHEN c.clickpost_unified_status = 'Cancelled' THEN 'Cancelled'
-      ELSE 'Intransit'
+      WHEN c.clickpost_unified_status = 'Lost' THEN 'Lost'
+      WHEN c.clickpost_unified_status = 'Damaged' THEN 'Damaged'
+      WHEN c.clickpost_unified_status = 'NoStatusExist' THEN 'Undelivered'
+      WHEN c.clickpost_unified_status = 'ReShippedOnNewWaybill' THEN 'Reshipped'
+      WHEN c.clickpost_unified_status = 'NotServiceable' THEN 'Non-Serviceable'
+      ELSE 'Others'
     END AS unified_status,
     CASE
       WHEN LOWER(c.courier_partner) LIKE '%bluedart%' THEN 'Bluedart'
@@ -78,6 +85,7 @@ WITH base AS (
     SAFE.PARSE_DATE('%Y-%m-%d', SUBSTR(c.order_date, 1, 10)) AS order_date,
     SAFE.PARSE_DATE('%Y-%m-%d', SUBSTR(c.latest_timestamp, 1, 10)) AS latest_ts_date,
     c.reason_for_last_failed_delivery,
+    c.latest_remark,
     c.channel_name,
     im.CategoryName AS category,
     im.Sub_category AS sub_category
