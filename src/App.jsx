@@ -162,7 +162,7 @@ function LogisticsPage({ filters }) {
   const opts = data?.filterOpts || {}
   const toggleCourier = c => setLFilters(f => ({ ...f, couriers: f.couriers.includes(c) ? f.couriers.filter(x => x !== c) : [...f.couriers, c] }))
 
-  const STATUS_COLORS = { Delivered: C.green.tx, RTO: C.red.tx, Intransit: C.blue.tx, 'Pickup Pending': '#f59e0b', Cancelled: '#a855f7', Lost: '#f97316', Damaged: '#64748b' }
+  const STATUS_COLORS = { Delivered: '#FFD600', RTO: '#F87171', Intransit: '#60A5FA', 'Pickup Pending': '#FBBF24', Cancelled: '#C084FC', Lost: '#FB923C', Damaged: '#94A3B8' }
   const STATUS_BG = { Delivered: C.green.bg, RTO: C.red.bg, Intransit: C.blue.bg, 'Pickup Pending': '#f59e0b22', Cancelled: '#a855f722', Lost: '#f9731622', Damaged: '#64748b22' }
 
   const trendRaw = trendGranularity === 'Daily' ? (data?.byDay || []) : trendGranularity === 'Weekly' ? (data?.byWeek || []) : (data?.byMonth || [])
