@@ -185,7 +185,7 @@ function LogisticsPage({ filters }) {
       {/* ── Filter Bar ── */}
       <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 14, padding: '14px 18px', display: 'flex', flexDirection: 'column', gap: 14 }}>
         <div>
-          <div style={{ fontSize: 10, fontWeight: 700, color: C.t3, letterSpacing: '.06em', textTransform: 'uppercase', marginBottom: 10 }}>Courier Partner</div>
+          <div style={{ fontSize: 12, fontWeight: 800, color: C.t1, letterSpacing: '.04em', textTransform: 'uppercase', marginBottom: 10 }}>Courier Partner</div>
           <div style={{ display: 'flex', gap: 5, alignItems: 'center', flexWrap: 'nowrap' }}>
             {COURIERS.map(c => (
               <LogisticsChip key={c} label={c} logo={COURIER_LOGOS[c]} active={lFilters.couriers.includes(c)} onClick={() => toggleCourier(c)} grow />
