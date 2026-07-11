@@ -106,14 +106,15 @@ function LKpiCard({ label, value, sub, accentColor, badgeText, badgeColor }) {
   const badgeBg = (badgeColor || accentColor) + '22'
   const badgeFg = badgeColor || accentColor || C.t3
   return (
-    <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, padding: '14px 16px', minWidth: 0, display: 'flex', flexDirection: 'column', gap: 5, position: 'relative', overflow: 'hidden' }}>
-      <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 3, background: accentColor || C.border, borderRadius: '12px 12px 0 0' }} />
-      <div style={{ fontSize: 9.5, fontWeight: 700, letterSpacing: '.05em', textTransform: 'uppercase', color: C.t3, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginTop: 2 }}>{label}</div>
-      <div style={{ fontSize: 26, fontWeight: 800, color: C.t1, letterSpacing: '-0.5px', lineHeight: 1 }}>{value ?? '—'}</div>
+    <div className="kpi-card" style={{ borderTopColor: accentColor || 'transparent', display: 'flex', flexDirection: 'column', gap: 0 }}>
+      <div className="kpi-label">{label}</div>
+      <div className="kpi-value">{value ?? '—'}</div>
       {(sub || badgeText) && (
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-          {badgeText && <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 9px', borderRadius: 20, background: badgeBg, color: badgeFg }}>{badgeText}</span>}
-          {sub && !badgeText && <span style={{ fontSize: 11, color: C.t3 }}>{sub}</span>}
+        <div className="kpi-sub">
+          {badgeText
+            ? <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 9px', borderRadius: 20, background: badgeBg, color: badgeFg }}>{badgeText}</span>
+            : sub
+          }
         </div>
       )}
     </div>
@@ -123,7 +124,7 @@ function LKpiCard({ label, value, sub, accentColor, badgeText, badgeColor }) {
 function LSectionTitle({ title }) {
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 10, margin: '6px 0 10px' }}>
-      <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: '.08em', textTransform: 'uppercase', color: C.t3 }}>{title}</span>
+      <span style={{ fontSize: 11, fontWeight: 800, letterSpacing: '.06em', textTransform: 'uppercase', color: C.t1 }}>{title}</span>
       <div style={{ flex: 1, height: 1, background: C.border }} />
     </div>
   )
