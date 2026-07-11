@@ -307,14 +307,14 @@ function LogisticsPage({ filters }) {
           {/* Courier TAT */}
           <div style={cardStyle}>
             <div style={chartTitle}>Courier · Total Shipments & TAT</div>
-            <ResponsiveContainer width="100%" height={200}>
-              <ComposedChart data={byCourierData} margin={{ top: 10, right: 16, left: 0, bottom: 45 }}>
+            <ResponsiveContainer width="100%" height={260}>
+              <ComposedChart data={byCourierData} margin={{ top: 10, right: 16, left: 0, bottom: 55 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke={C.border} vertical={false} />
                 <XAxis dataKey="courier_group" tick={{ fontSize: 9, fill: C.t3 }} angle={-35} textAnchor="end" interval={0} />
                 <YAxis yAxisId="left" tick={{ fontSize: 9, fill: '#5BA4CF' }} tickFormatter={v => v >= 1000 ? (v/1000).toFixed(0)+'K' : v} />
                 <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 9, fill: C.t2 }} tickFormatter={v => v + 'd'} />
                 <Tooltip formatter={(value, name) => name.includes('Days') ? [value + ' days', name] : [Number(value).toLocaleString('en-IN'), name]} />
-                <Legend wrapperStyle={{ fontSize: 10 }} />
+                <Legend wrapperStyle={{ fontSize: 10, marginTop: 8, paddingTop: 12 }} verticalAlign="bottom" />
                 <Bar yAxisId="left" dataKey="total" name="Total" fill="#5BA4CF" opacity={0.8} radius={[3,3,0,0]} />
                 <Line yAxisId="right" type="monotone" dataKey="avg_intransit_days" name="Avg Intransit Days" stroke="#1E3A5F" strokeWidth={2} dot={{ fill: '#1E3A5F', r: 3 }} />
                 <Line yAxisId="right" type="monotone" dataKey="avg_fulfilment_days" name="Avg Fulfilment Days" stroke="#F97316" strokeWidth={2} dot={{ fill: '#F97316', r: 3 }} />
