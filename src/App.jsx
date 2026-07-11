@@ -347,7 +347,7 @@ function LogisticsPage({ filters }) {
                 <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
                   <thead>
                     <tr style={{ borderBottom: `1.5px solid ${C.border}` }}>
-                      {['Courier','Vol %','Total','Delivered','Del %','RTO','RTO %','In-Transit','FASR %','Avg TAT'].map((h, i) => (
+                      {['Courier','Vol %','Total','Delivered','Del %','RTO','RTO %','Z-RTO %','Canc %','In-Transit','FASR %','RASR %','Avg Processing','Avg Pickup','Avg S2D','Avg O2D','Avg RTO TAT','Avg S2A'].map((h, i) => (
                         <th key={h} style={{ padding: '9px 10px', textAlign: i === 0 ? 'left' : 'right', color: C.t3, fontWeight: 700, fontSize: 9.5, letterSpacing: '.05em', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>{h}</th>
                       ))}
                     </tr>
@@ -361,7 +361,11 @@ function LogisticsPage({ filters }) {
                       const intransitPct = r.total ? ((intransit / r.total) * 100).toFixed(0) : 0
                       const delPct = r.total ? ((r.delivered / r.total) * 100).toFixed(1) : 0
                       const rtoPct = r.total ? ((r.rto / r.total) * 100).toFixed(1) : 0
+                      const zrtoPct = r.rto ? ((r.z_rto / r.rto) * 100).toFixed(1) : 0
+                      const cancPct = r.total ? (((r.cancelled || 0) / r.total) * 100).toFixed(1) : 0
                       const fasrPct = r.ofd_total ? ((r.d1 / r.ofd_total) * 100).toFixed(1) : null
+                      const rasrPct = r.total ? ((r.d1 / r.total) * 100).toFixed(1) : null
+                      const d = (v) => v != null ? (+v).toFixed(1) + 'd' : '—'
                       const delColor = +delPct >= 60 ? C.green.tx : +delPct >= 40 ? C.amber.tx : C.red.tx
                       const delBg = +delPct >= 60 ? C.green.bg : +delPct >= 40 ? C.amber.bg : C.red.bg
                       const rtoColor = +rtoPct <= 2 ? C.green.tx : +rtoPct <= 5 ? C.amber.tx : C.red.tx
@@ -377,9 +381,7 @@ function LogisticsPage({ filters }) {
                               <span style={{ color: C.t1, fontWeight: 600 }}>{r.courier_group}</span>
                             </div>
                           </td>
-                          <td style={{ padding: '9px 10px', textAlign: 'right' }}>
-                            <span style={{ fontSize: 11, color: C.t2 }}>{volPct}%</span>
-                          </td>
+                          <td style={{ padding: '9px 10px', textAlign: 'right', color: C.t2, fontSize: 11 }}>{volPct}%</td>
                           <td style={{ padding: '9px 10px', textAlign: 'right', color: C.t1, fontWeight: 600 }}>{n(r.total)}</td>
                           <td style={{ padding: '9px 10px', textAlign: 'right', color: C.t2 }}>{n(r.delivered)}</td>
                           <td style={{ padding: '9px 10px', textAlign: 'right' }}>
@@ -389,15 +391,23 @@ function LogisticsPage({ filters }) {
                           <td style={{ padding: '9px 10px', textAlign: 'right' }}>
                             <span style={{ color: rtoColor, fontWeight: 700, background: rtoBg, padding: '2px 8px', borderRadius: 20, fontSize: 11 }}>{rtoPct}%</span>
                           </td>
+                          <td style={{ padding: '9px 10px', textAlign: 'right', color: C.t3, fontSize: 11 }}>{zrtoPct}%</td>
+                          <td style={{ padding: '9px 10px', textAlign: 'right', color: C.t3, fontSize: 11 }}>{cancPct}%</td>
                           <td style={{ padding: '9px 10px', textAlign: 'right' }}>
                             <span style={{ color: C.blue.tx, fontWeight: 500, fontSize: 11 }}>{n(intransit)} <span style={{ color: C.t3, fontWeight: 400 }}>({intransitPct}%)</span></span>
                           </td>
                           <td style={{ padding: '9px 10px', textAlign: 'right' }}>
-                            {fasrPct != null
-                              ? <span style={{ color: C.blue.tx, fontWeight: 700, background: C.blue.bg, padding: '2px 8px', borderRadius: 20, fontSize: 11 }}>{fasrPct}%</span>
-                              : <span style={{ color: C.t3 }}>—</span>}
+                            {fasrPct != null ? <span style={{ color: C.blue.tx, fontWeight: 700, background: C.blue.bg, padding: '2px 8px', borderRadius: 20, fontSize: 11 }}>{fasrPct}%</span> : <span style={{ color: C.t3 }}>—</span>}
                           </td>
-                          <td style={{ padding: '9px 10px', textAlign: 'right', color: C.t3 }}>{r.avg_tat != null ? (+r.avg_tat).toFixed(1) + 'd' : '—'}</td>
+                          <td style={{ padding: '9px 10px', textAlign: 'right' }}>
+                            {rasrPct != null ? <span style={{ color: C.blue.tx, fontWeight: 700, background: C.blue.bg, padding: '2px 8px', borderRadius: 20, fontSize: 11 }}>{rasrPct}%</span> : <span style={{ color: C.t3 }}>—</span>}
+                          </td>
+                          <td style={{ padding: '9px 10px', textAlign: 'right', color: C.t3, fontSize: 11 }}>{d(r.avg_processing_days)}</td>
+                          <td style={{ padding: '9px 10px', textAlign: 'right', color: C.t3, fontSize: 11 }}>{d(r.avg_pickup_days)}</td>
+                          <td style={{ padding: '9px 10px', textAlign: 'right', color: C.t3, fontSize: 11 }}>{d(r.avg_intransit_days)}</td>
+                          <td style={{ padding: '9px 10px', textAlign: 'right', color: C.t3, fontSize: 11 }}>{d(r.avg_fulfilment_days)}</td>
+                          <td style={{ padding: '9px 10px', textAlign: 'right', color: C.t3, fontSize: 11 }}>{d(r.avg_rto_tat_days)}</td>
+                          <td style={{ padding: '9px 10px', textAlign: 'right', color: C.t3, fontSize: 11 }}>{d(r.avg_s2a_days)}</td>
                         </tr>
                       )
                     })}

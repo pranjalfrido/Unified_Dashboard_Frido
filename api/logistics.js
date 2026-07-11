@@ -103,11 +103,18 @@ by_courier AS (
     COUNT(awb) AS total,
     COUNTIF(unified_status='Delivered') AS delivered,
     COUNTIF(unified_status='RTO') AS rto,
+    COUNTIF(unified_status='Cancelled') AS cancelled,
+    COUNTIF(unified_status='RTO' AND COALESCE(ofd_attempts,0)=0) AS z_rto,
     COUNTIF(ofd_attempts=1 AND unified_status='Delivered') AS d1,
+    COUNTIF(ofd_attempts=1 AND unified_status='Delivered') AS rasr_num,
     COUNTIF(ofd_attempts IS NOT NULL AND ofd_attempts != 0) AS ofd_total,
     ROUND(AVG(DATE_DIFF(delivery_date, pickup_date, DAY)), 2) AS avg_tat,
     ROUND(AVG(DATE_DIFF(delivery_date, pickup_date, DAY)), 2) AS avg_intransit_days,
-    ROUND(AVG(DATE_DIFF(delivery_date, created_date, DAY)), 2) AS avg_fulfilment_days
+    ROUND(AVG(DATE_DIFF(delivery_date, created_date, DAY)), 2) AS avg_fulfilment_days,
+    ROUND(AVG(DATE_DIFF(pickup_date, created_date, DAY)), 2) AS avg_pickup_days,
+    ROUND(AVG(DATE_DIFF(ofd1_date, created_date, DAY)), 2) AS avg_processing_days,
+    ROUND(AVG(DATE_DIFF(ofd1_date, pickup_date, DAY)), 2) AS avg_s2a_days,
+    ROUND(AVG(DATE_DIFF(CURRENT_DATE(), rto_mark_date, DAY)), 2) AS avg_rto_tat_days
   FROM base GROUP BY 1
 ),
 by_status AS (
