@@ -253,6 +253,189 @@ async function hasDataInPG(start, end) {
 // ── API: main data endpoint — delegates to api/bq.js (BigQuery) ─
 app.post('/api/bq', (req, res) => bqHandler(req, res))
 
+// ── API: Logistics / Clickpost data ──────────────────────────
+app.post('/api/logistics', async (req, res) => {
+  const { start, end, courier, shipmentType, sddNdd, paymentMode, zone, pickupState, dropState, pickupCity, dropCity, weightSlab, category, subCategory } = req.body
+  if (!start || !end) return res.status(400).json({ error: 'Missing start or end' })
+
+  const filters = []
+  if (courier?.length) filters.push(`c.courier_partner IN (${courier.map(v => `'${v}'`).join(',')})`)
+  if (shipmentType && shipmentType !== 'all') filters.push(`LOWER(c.shipment_type) = '${shipmentType.toLowerCase()}'`)
+  if (sddNdd && sddNdd !== 'all') {
+    if (sddNdd === 'SDD/NDD') filters.push(`c.committed_sla IN ('0','1')`)
+    else filters.push(`(c.committed_sla IS NULL OR CAST(c.committed_sla AS INT64) > 1)`)
+  }
+  if (paymentMode) filters.push(`LOWER(c.payment_mode) = '${paymentMode.toLowerCase()}'`)
+  if (zone) filters.push(`c.zone = '${zone}'`)
+  if (pickupState) filters.push(`c.pickup_state = '${pickupState}'`)
+  if (dropState) filters.push(`c.drop_state = '${dropState}'`)
+  if (pickupCity) filters.push(`c.pickup_city = '${pickupCity}'`)
+  if (dropCity) filters.push(`c.drop_city = '${dropCity}'`)
+  if (weightSlab) filters.push(`c.shipment_weight = '${weightSlab}'`)
+  if (category?.length) filters.push(`im.CategoryName IN (${category.map(v => `'${v}'`).join(',')})`)
+  if (subCategory?.length) filters.push(`im.Sub_category IN (${subCategory.map(v => `'${v}'`).join(',')})`)
+
+  const whereClause = filters.length ? `AND ${filters.join(' AND ')}` : ''
+
+  const query = `
+WITH base AS (
+  SELECT
+    c.awb, c.courier_partner, c.shipment_type, c.payment_mode, c.zone,
+    c.pickup_city, c.pickup_state, c.drop_city, c.drop_state,
+    c.clickpost_unified_status,
+    CASE
+      WHEN c.clickpost_unified_status = 'Delivered' THEN 'Delivered'
+      WHEN c.clickpost_unified_status LIKE 'RTO%' THEN 'RTO'
+      WHEN c.clickpost_unified_status = 'Pickup Pending' THEN 'Pickup Pending'
+      WHEN c.clickpost_unified_status IN ('Lost','Damaged') THEN c.clickpost_unified_status
+      WHEN c.clickpost_unified_status = 'Cancelled' THEN 'Cancelled'
+      ELSE 'Intransit'
+    END AS unified_status,
+    CASE
+      WHEN c.courier_partner IN ('Delhivery','Delhivery Surface') THEN 'Delhivery'
+      WHEN c.courier_partner IN ('Delhivery DS','Delhivery NDD') THEN c.courier_partner
+      ELSE c.courier_partner
+    END AS courier_group,
+    SAFE_CAST(c.invoice_value AS FLOAT64) AS invoice_value,
+    SAFE_CAST(c.committed_sla AS FLOAT64) AS committed_sla,
+    SAFE_CAST(c.out_for_delivery_attempts AS INT64) AS ofd_attempts,
+    DATE(PARSE_TIMESTAMP('%Y-%m-%dT%H:%M:%E*S%Ez', c.created_at)) AS created_date,
+    DATE(PARSE_TIMESTAMP('%Y-%m-%dT%H:%M:%E*S%Ez', c.delivery_date)) AS delivery_date,
+    DATE(PARSE_TIMESTAMP('%Y-%m-%dT%H:%M:%E*S%Ez', c.expected_delivery_date_by_courier_partner)) AS edd,
+    DATE(PARSE_TIMESTAMP('%Y-%m-%dT%H:%M:%E*S%Ez', c.pickup_date)) AS pickup_date,
+    DATE(PARSE_TIMESTAMP('%Y-%m-%dT%H:%M:%E*S%Ez', c.rto_mark_date)) AS rto_mark_date,
+    DATE(PARSE_TIMESTAMP('%Y-%m-%dT%H:%M:%E*S%Ez', c.out_for_delivery_1st_attempt)) AS ofd1_date,
+    c.reason_for_last_failed_delivery,
+    c.channel_name,
+    im.CategoryName AS category,
+    im.Sub_category AS sub_category
+  FROM \`frido-429506.production.Clickpost_Shipment_Tracking_Report\` c
+  LEFT JOIN \`frido-429506.production.Unicommerce_Item_Master\` im
+    ON TRIM(c.product_sku_code) = TRIM(im.ProductCode)
+  WHERE DATE(PARSE_TIMESTAMP('%Y-%m-%dT%H:%M:%E*S%Ez', c.created_at)) BETWEEN '${start}' AND '${end}'
+  ${whereClause}
+),
+kpis AS (
+  SELECT
+    COUNT(awb) AS total_shipments,
+    SUM(invoice_value) AS total_value,
+    COUNTIF(unified_status = 'Delivered') AS delivered,
+    COUNTIF(unified_status = 'RTO') AS rto,
+    COUNTIF(unified_status = 'Intransit') AS in_transit,
+    COUNTIF(unified_status = 'Pickup Pending') AS pickup_pending,
+    COUNTIF(unified_status = 'Cancelled') AS cancelled,
+    COUNTIF(unified_status IN ('Lost','Damaged')) AS lost_damaged,
+    COUNTIF(delivery_date IS NOT NULL AND edd IS NOT NULL AND delivery_date <= edd) AS on_time,
+    COUNTIF(delivery_date IS NOT NULL AND edd IS NOT NULL AND delivery_date > edd) AS sla_breach,
+    COUNTIF(
+      edd IS NOT NULL AND edd < CURRENT_DATE() - 5
+      AND delivery_date IS NULL AND unified_status = 'Intransit'
+    ) AS critical_stuck,
+    COUNTIF(
+      rto_mark_date IS NOT NULL
+      AND clickpost_unified_status NOT IN ('RTO-Delivered','Delivered')
+      AND DATE_DIFF(CURRENT_DATE(), rto_mark_date, DAY) > 10
+    ) AS rto_10plus,
+    COUNTIF(
+      clickpost_unified_status NOT IN ('Delivered','RTO-Delivered')
+      AND pickup_date IS NOT NULL AND edd IS NOT NULL
+      AND CURRENT_DATE() > edd
+    ) AS edd_breached,
+    COUNTIF(unified_status = 'RTO' AND COALESCE(ofd_attempts, 0) = 0) AS z_rto,
+    COUNTIF(ofd_attempts = 1 AND unified_status = 'Delivered') AS delivered_1attempt,
+    COUNTIF(ofd_attempts > 1 AND unified_status = 'Delivered') AS delivered_multi,
+    COUNTIF(ofd_attempts IS NOT NULL AND ofd_attempts != 0) AS total_ofd_attempts,
+    AVG(DATE_DIFF(delivery_date, pickup_date, DAY)) AS avg_intransit,
+    AVG(DATE_DIFF(pickup_date, created_date, DAY)) AS avg_pickup,
+    AVG(DATE_DIFF(delivery_date, created_date, DAY)) AS avg_fulfilment,
+    AVG(DATE_DIFF(CURRENT_DATE(), rto_mark_date, DAY)) AS avg_rto_tat,
+    AVG(DATE_DIFF(ofd1_date, pickup_date, DAY)) AS avg_s2a,
+    AVG(committed_sla) AS avg_sla
+  FROM base
+),
+by_courier AS (
+  SELECT
+    courier_group,
+    COUNT(awb) AS total,
+    COUNTIF(unified_status='Delivered') AS delivered,
+    COUNTIF(unified_status='RTO') AS rto,
+    COUNTIF(ofd_attempts=1 AND unified_status='Delivered') AS d1,
+    COUNTIF(ofd_attempts IS NOT NULL AND ofd_attempts != 0) AS ofd_total,
+    AVG(DATE_DIFF(delivery_date, pickup_date, DAY)) AS avg_tat
+  FROM base GROUP BY 1
+),
+by_status AS (
+  SELECT unified_status, COUNT(awb) AS total FROM base GROUP BY 1
+),
+by_zone AS (
+  SELECT zone, COUNT(awb) AS total,
+    COUNTIF(unified_status='Delivered') AS delivered,
+    COUNTIF(unified_status='RTO') AS rto
+  FROM base WHERE zone IS NOT NULL GROUP BY 1
+),
+by_month AS (
+  SELECT FORMAT_DATE('%b %Y', created_date) AS month_label,
+    DATE_TRUNC(created_date, MONTH) AS month_dt,
+    COUNT(awb) AS total,
+    COUNTIF(unified_status='RTO') AS rto,
+    COUNTIF(unified_status='Delivered') AS delivered
+  FROM base GROUP BY 1,2 ORDER BY 2
+),
+rto_reasons AS (
+  SELECT reason_for_last_failed_delivery AS reason, COUNT(awb) AS total
+  FROM base WHERE reason_for_last_failed_delivery IS NOT NULL AND unified_status='RTO'
+  GROUP BY 1 ORDER BY 2 DESC LIMIT 10
+),
+top_drop_states AS (
+  SELECT drop_state AS state, COUNT(awb) AS total
+  FROM base WHERE drop_state IS NOT NULL GROUP BY 1 ORDER BY 2 DESC LIMIT 10
+),
+by_payment AS (
+  SELECT payment_mode, COUNT(awb) AS total FROM base WHERE payment_mode IS NOT NULL GROUP BY 1
+),
+filter_opts AS (
+  SELECT
+    ARRAY_AGG(DISTINCT courier_partner IGNORE NULLS ORDER BY courier_partner) AS couriers,
+    ARRAY_AGG(DISTINCT zone IGNORE NULLS ORDER BY zone) AS zones,
+    ARRAY_AGG(DISTINCT pickup_state IGNORE NULLS ORDER BY pickup_state) AS pickup_states,
+    ARRAY_AGG(DISTINCT drop_state IGNORE NULLS ORDER BY drop_state) AS drop_states,
+    ARRAY_AGG(DISTINCT category IGNORE NULLS ORDER BY category) AS categories,
+    ARRAY_AGG(DISTINCT sub_category IGNORE NULLS ORDER BY sub_category) AS sub_categories
+  FROM base
+)
+SELECT
+  TO_JSON_STRING((SELECT AS STRUCT * FROM kpis)) AS kpis,
+  TO_JSON_STRING(ARRAY(SELECT AS STRUCT * FROM by_courier ORDER BY total DESC)) AS by_courier,
+  TO_JSON_STRING(ARRAY(SELECT AS STRUCT * FROM by_status)) AS by_status,
+  TO_JSON_STRING(ARRAY(SELECT AS STRUCT * FROM by_zone ORDER BY total DESC)) AS by_zone,
+  TO_JSON_STRING(ARRAY(SELECT AS STRUCT * FROM by_month)) AS by_month,
+  TO_JSON_STRING(ARRAY(SELECT AS STRUCT * FROM rto_reasons)) AS rto_reasons,
+  TO_JSON_STRING(ARRAY(SELECT AS STRUCT * FROM top_drop_states)) AS top_drop_states,
+  TO_JSON_STRING(ARRAY(SELECT AS STRUCT * FROM by_payment)) AS by_payment,
+  TO_JSON_STRING((SELECT AS STRUCT * FROM filter_opts)) AS filter_opts
+`
+
+  try {
+    const [rows] = await bq.query({ query, maximumBytesBilled: '10000000000' })
+    if (!rows.length) return res.json({})
+    const r = rows[0]
+    res.json({
+      kpis: JSON.parse(r.kpis),
+      byCourier: JSON.parse(r.by_courier),
+      byStatus: JSON.parse(r.by_status),
+      byZone: JSON.parse(r.by_zone),
+      byMonth: JSON.parse(r.by_month),
+      rtoReasons: JSON.parse(r.rto_reasons),
+      topDropStates: JSON.parse(r.top_drop_states),
+      byPayment: JSON.parse(r.by_payment),
+      filterOpts: JSON.parse(r.filter_opts),
+    })
+  } catch (e) {
+    console.error('[logistics]', e.message)
+    res.status(500).json({ error: e.message })
+  }
+})
+
 // ── OLD Supabase-based route (kept for reference, never reached) ─
 async function _legacyBqRoute(req, res) {
   const { start, end } = req.body

@@ -3,6 +3,327 @@ import { C, fmt, fmtN, fmtBig, pct, processData, detectAlerts, exportCSV, getDef
 import { KPICard, AlertCard, HBar, DataTable, Card, Badge, RevTrendChart, AreaTrendChart, MultiLineChart, ChartTooltip, BarChart, Bar, LineChart, Line, AreaChart, Area, ComposedChart, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell, Treemap } from './components.jsx'
 import { ReferenceLine } from 'recharts'
 
+// ── Logistics Page ────────────────────────────────────────────
+const COURIERS = ['Bluedart','Delhivery','Delhivery DS','Delhivery NDD','Ekart','ElasticRun','Safexpress','Shadowfax','Sky Air','Swift','UrbanBolt']
+const COURIER_COLORS = { Bluedart:'#E8400A', Delhivery:'#E60000', 'Delhivery DS':'#C00000', 'Delhivery NDD':'#A00000', Ekart:'#F78F1E', ElasticRun:'#00509E', Safexpress:'#1B4D9E', Shadowfax:'#6B3FA0', 'Sky Air':'#00B0F0', Swift:'#13803A', UrbanBolt:'#FFD600' }
+
+function LogisticsKPI({ label, value, sub, color }) {
+  return (
+    <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, padding: '14px 16px', minWidth: 0 }}>
+      <div style={{ fontSize: 11, color: C.t3, fontWeight: 500, marginBottom: 6, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{label}</div>
+      <div style={{ fontSize: 22, fontWeight: 700, color: color || C.t1, letterSpacing: '-0.5px', lineHeight: 1 }}>{value ?? '—'}</div>
+      {sub && <div style={{ fontSize: 11, color: C.t3, marginTop: 4 }}>{sub}</div>}
+    </div>
+  )
+}
+
+function LogisticsChip({ label, active, onClick }) {
+  return (
+    <button onClick={onClick} style={{
+      padding: '5px 12px', borderRadius: 20, border: `1.5px solid ${active ? C.t1 : C.border2}`,
+      background: active ? C.t1 : C.card, color: active ? '#fff' : C.t2,
+      fontSize: 11.5, fontWeight: active ? 600 : 400, cursor: 'pointer', fontFamily: 'var(--font)',
+      whiteSpace: 'nowrap', transition: 'all .15s'
+    }}>{label}</button>
+  )
+}
+
+function LogisticsToggle({ options, value, onChange }) {
+  return (
+    <div style={{ display: 'flex', border: `1.5px solid ${C.border2}`, borderRadius: 8, overflow: 'hidden', flexShrink: 0 }}>
+      {options.map((opt, i) => (
+        <button key={opt} onClick={() => onChange(opt === value ? 'all' : opt)} style={{
+          padding: '5px 14px', border: 'none', borderLeft: i > 0 ? `1.5px solid ${C.border2}` : 'none',
+          background: value === opt ? C.t1 : C.card, color: value === opt ? '#fff' : C.t2,
+          fontSize: 11.5, fontWeight: value === opt ? 700 : 400, cursor: 'pointer', fontFamily: 'var(--font)'
+        }}>{opt}</button>
+      ))}
+    </div>
+  )
+}
+
+function LDropdown({ label, options, value, onChange }) {
+  const [open, setOpen] = useState(false)
+  const ref = useRef(null)
+  useEffect(() => {
+    const h = e => { if (ref.current && !ref.current.contains(e.target)) setOpen(false) }
+    document.addEventListener('mousedown', h)
+    return () => document.removeEventListener('mousedown', h)
+  }, [])
+  return (
+    <div ref={ref} style={{ position: 'relative', flexShrink: 0 }}>
+      <div onClick={() => setOpen(o => !o)} className="fsel" style={{ display: 'flex', alignItems: 'center', gap: 5, cursor: 'pointer', minWidth: 110, background: value ? C.acl : undefined, borderColor: value ? C.acm : undefined }}>
+        <span style={{ flex: 1, fontSize: 11.5, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: value ? C.t1 : C.t3 }}>{value || label}</span>
+        <span style={{ fontSize: 8, color: C.t3, flexShrink: 0 }}>▼</span>
+      </div>
+      {open && (
+        <div style={{ position: 'absolute', top: '110%', left: 0, zIndex: 300, background: C.card, border: `1px solid ${C.border2}`, borderRadius: 9, boxShadow: '0 8px 24px rgba(0,0,0,.13)', minWidth: 160, maxHeight: 260, overflowY: 'auto' }}>
+          <div onClick={() => { onChange(null); setOpen(false) }} style={{ padding: '7px 12px', fontSize: 11.5, cursor: 'pointer', color: C.t3, borderBottom: `1px solid ${C.border}` }}>All</div>
+          {(options || []).map(opt => (
+            <div key={opt} onClick={() => { onChange(opt); setOpen(false) }}
+              style={{ padding: '7px 12px', fontSize: 11.5, cursor: 'pointer', background: value === opt ? C.acl : undefined, color: value === opt ? C.t1 : C.t2 }}>
+              {opt}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+function LogisticsPage({ filters }) {
+  const [lFilters, setLFilters] = useState({ couriers: [], shipmentType: 'all', sddNdd: 'all', paymentMode: null, zone: null, pickupState: null, dropState: null, pickupCity: null, dropCity: null, weightSlab: null, category: null, subCategory: null })
+  const [data, setData] = useState(null)
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState(null)
+
+  const fetchLogistics = useCallback(async () => {
+    if (!filters.start || !filters.end) return
+    setLoading(true); setError(null)
+    try {
+      const body = { start: filters.start, end: filters.end }
+      if (lFilters.couriers.length) body.courier = lFilters.couriers
+      if (lFilters.shipmentType !== 'all') body.shipmentType = lFilters.shipmentType
+      if (lFilters.sddNdd !== 'all') body.sddNdd = lFilters.sddNdd
+      if (lFilters.paymentMode) body.paymentMode = lFilters.paymentMode
+      if (lFilters.zone) body.zone = lFilters.zone
+      if (lFilters.pickupState) body.pickupState = lFilters.pickupState
+      if (lFilters.dropState) body.dropState = lFilters.dropState
+      if (lFilters.category) body.category = [lFilters.category]
+      if (lFilters.subCategory) body.subCategory = [lFilters.subCategory]
+      const r = await fetch('/api/logistics', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+      if (!r.ok) throw new Error(await r.text())
+      setData(await r.json())
+    } catch (e) { setError(e.message) }
+    finally { setLoading(false) }
+  }, [filters.start, filters.end, lFilters])
+
+  useEffect(() => { fetchLogistics() }, [fetchLogistics])
+
+  const k = data?.kpis || {}
+  const pct2 = (a, b) => b ? ((a / b) * 100).toFixed(1) + '%' : '—'
+  const n = v => (v || 0).toLocaleString('en-IN')
+  const d1 = v => v != null ? (+v).toFixed(1) + 'd' : '—'
+  const opts = data?.filterOpts || {}
+
+  const toggleCourier = c => setLFilters(f => ({ ...f, couriers: f.couriers.includes(c) ? f.couriers.filter(x => x !== c) : [...f.couriers, c] }))
+
+  return (
+    <div style={{ padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: 16 }}>
+
+      {/* ── Filter Bar ── */}
+      <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, padding: '12px 16px', display: 'flex', flexDirection: 'column', gap: 10 }}>
+        {/* Courier chips */}
+        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
+          <span style={{ fontSize: 11, color: C.t3, fontWeight: 600, marginRight: 4 }}>COURIER</span>
+          {COURIERS.map(c => (
+            <LogisticsChip key={c} label={c} active={lFilters.couriers.includes(c)} onClick={() => toggleCourier(c)} />
+          ))}
+          {lFilters.couriers.length > 0 && (
+            <button onClick={() => setLFilters(f => ({ ...f, couriers: [] }))} style={{ fontSize: 11, color: C.t3, background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'var(--font)' }}>Clear</button>
+          )}
+        </div>
+
+        {/* Toggles + Dropdowns */}
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+          <LogisticsToggle options={['Forward','Reverse']} value={lFilters.shipmentType} onChange={v => setLFilters(f => ({ ...f, shipmentType: v }))} />
+          <LogisticsToggle options={['Regular','SDD/NDD']} value={lFilters.sddNdd} onChange={v => setLFilters(f => ({ ...f, sddNdd: v }))} />
+          <LDropdown label="Zone" options={opts.zones} value={lFilters.zone} onChange={v => setLFilters(f => ({ ...f, zone: v }))} />
+          <LDropdown label="Pickup State" options={opts.pickup_states} value={lFilters.pickupState} onChange={v => setLFilters(f => ({ ...f, pickupState: v }))} />
+          <LDropdown label="Drop State" options={opts.drop_states} value={lFilters.dropState} onChange={v => setLFilters(f => ({ ...f, dropState: v }))} />
+          <LDropdown label="Payment" options={['COD','Prepaid']} value={lFilters.paymentMode} onChange={v => setLFilters(f => ({ ...f, paymentMode: v }))} />
+          <LDropdown label="Category" options={opts.categories} value={lFilters.category} onChange={v => setLFilters(f => ({ ...f, category: v, subCategory: null }))} />
+          <LDropdown label="Sub-category" options={opts.sub_categories} value={lFilters.subCategory} onChange={v => setLFilters(f => ({ ...f, subCategory: v }))} />
+        </div>
+      </div>
+
+      {error && <div style={{ padding: '10px 14px', borderRadius: 9, background: C.red.bg, border: `1px solid ${C.red.bd}`, color: C.red.tx, fontSize: 12 }}>⚠ {error}</div>}
+      {loading && !data && <div style={{ textAlign: 'center', padding: 40, color: C.t3, fontSize: 13 }}>Loading logistics data…</div>}
+
+      {data && <>
+        {/* ── KPI Row 1: Volume ── */}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))', gap: 10 }}>
+          <LogisticsKPI label="Total Shipments" value={n(k.total_shipments)} />
+          <LogisticsKPI label="Total Value" value={k.total_value != null ? fmt(k.total_value) : '—'} />
+          <LogisticsKPI label="Delivered" value={n(k.delivered)} sub={pct2(k.delivered, k.total_shipments)} color={C.green.tx} />
+          <LogisticsKPI label="RTO" value={n(k.rto)} sub={pct2(k.rto, k.total_shipments)} color={C.red.tx} />
+          <LogisticsKPI label="In Transit" value={n(k.in_transit)} color={C.blue.tx} />
+          <LogisticsKPI label="Pickup Pending" value={n(k.pickup_pending)} color={C.amber.tx} />
+          <LogisticsKPI label="Cancelled" value={n(k.cancelled)} sub={pct2(k.cancelled, k.total_shipments)} />
+          <LogisticsKPI label="Lost & Damaged" value={n(k.lost_damaged)} color={C.red.tx} />
+        </div>
+
+        {/* ── KPI Row 2: Performance ── */}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))', gap: 10 }}>
+          <LogisticsKPI label="OTD %" value={pct2(k.on_time, k.delivered)} color={C.green.tx} />
+          <LogisticsKPI label="SLA Breached %" value={pct2(k.sla_breach, k.delivered)} color={C.red.tx} />
+          <LogisticsKPI label="EDD Breached" value={n(k.edd_breached)} color={C.amber.tx} />
+          <LogisticsKPI label="Critical Stuck" value={n(k.critical_stuck)} color={C.red.tx} />
+          <LogisticsKPI label="RTO 10+ Days" value={n(k.rto_10plus)} color={C.red.tx} />
+          <LogisticsKPI label="Z-RTO %" value={pct2(k.z_rto, k.total_shipments)} color={C.amber.tx} />
+          <LogisticsKPI label="FASR %" value={pct2(k.delivered_1attempt, k.total_ofd_attempts)} color={C.green.tx} />
+          <LogisticsKPI label="RASR %" value={pct2(k.delivered_multi, k.total_ofd_attempts)} />
+        </div>
+
+        {/* ── KPI Row 3: TAT ── */}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))', gap: 10 }}>
+          <LogisticsKPI label="Avg Pickup TAT" value={d1(k.avg_pickup)} />
+          <LogisticsKPI label="Avg In-Transit" value={d1(k.avg_intransit)} />
+          <LogisticsKPI label="Avg Fulfilment" value={d1(k.avg_fulfilment)} />
+          <LogisticsKPI label="Avg RTO TAT" value={d1(k.avg_rto_tat)} />
+          <LogisticsKPI label="Avg S2A Days" value={d1(k.avg_s2a)} />
+          <LogisticsKPI label="Avg SLA Days" value={d1(k.avg_sla)} />
+        </div>
+
+        {/* ── Charts Row ── */}
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+
+          {/* Shipments & RTO % over time */}
+          <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, padding: 16 }}>
+            <div style={{ fontSize: 12, fontWeight: 600, color: C.t1, marginBottom: 12 }}>Shipments & RTO % by Month</div>
+            <ResponsiveContainer width="100%" height={200}>
+              <ComposedChart data={data.byMonth || []} margin={{ top: 4, right: 16, left: 0, bottom: 0 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke={C.border} />
+                <XAxis dataKey="month_label" tick={{ fontSize: 10, fill: C.t3 }} />
+                <YAxis yAxisId="left" tick={{ fontSize: 10, fill: C.t3 }} />
+                <YAxis yAxisId="right" orientation="right" tickFormatter={v => v + '%'} tick={{ fontSize: 10, fill: C.t3 }} />
+                <Tooltip content={<ChartTooltip />} />
+                <Bar yAxisId="left" dataKey="total" name="Shipments" fill={C.acc} radius={[3,3,0,0]} />
+                <Line yAxisId="right" dataKey={d => d.total ? +((d.rto / d.total) * 100).toFixed(1) : 0} name="RTO %" stroke={C.red.tx} strokeWidth={2} dot={false} />
+              </ComposedChart>
+            </ResponsiveContainer>
+          </div>
+
+          {/* Courier wise Delivered % & RTO % */}
+          <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, padding: 16 }}>
+            <div style={{ fontSize: 12, fontWeight: 600, color: C.t1, marginBottom: 12 }}>Courier — Delivery % vs RTO %</div>
+            <ResponsiveContainer width="100%" height={200}>
+              <BarChart data={(data.byCourier || []).slice(0, 10)} layout="vertical" margin={{ top: 0, right: 40, left: 70, bottom: 0 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke={C.border} horizontal={false} />
+                <XAxis type="number" tickFormatter={v => v + '%'} tick={{ fontSize: 10, fill: C.t3 }} />
+                <YAxis type="category" dataKey="courier_group" tick={{ fontSize: 10, fill: C.t2 }} width={70} />
+                <Tooltip content={<ChartTooltip />} formatter={(v, n, p) => [((p.payload[n === 'Delivered %' ? 'delivered' : 'rto'] / p.payload.total) * 100).toFixed(1) + '%', n]} />
+                <Bar dataKey={d => d.total ? +((d.delivered / d.total) * 100).toFixed(1) : 0} name="Delivered %" fill={C.green.tx} radius={[0,3,3,0]} />
+                <Bar dataKey={d => d.total ? +((d.rto / d.total) * 100).toFixed(1) : 0} name="RTO %" fill={C.red.tx} radius={[0,3,3,0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+
+          {/* Zone wise performance */}
+          <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, padding: 16 }}>
+            <div style={{ fontSize: 12, fontWeight: 600, color: C.t1, marginBottom: 12 }}>Zone — Shipment & RTO %</div>
+            <ResponsiveContainer width="100%" height={200}>
+              <ComposedChart data={data.byZone || []} margin={{ top: 4, right: 16, left: 0, bottom: 0 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke={C.border} />
+                <XAxis dataKey="zone" tick={{ fontSize: 10, fill: C.t3 }} />
+                <YAxis yAxisId="left" tick={{ fontSize: 10, fill: C.t3 }} />
+                <YAxis yAxisId="right" orientation="right" tickFormatter={v => v + '%'} tick={{ fontSize: 10, fill: C.t3 }} />
+                <Tooltip content={<ChartTooltip />} />
+                <Bar yAxisId="left" dataKey="total" name="Shipments" fill={C.acc} radius={[3,3,0,0]} />
+                <Line yAxisId="right" dataKey={d => d.total ? +((d.rto / d.total) * 100).toFixed(1) : 0} name="RTO %" stroke={C.red.tx} strokeWidth={2} dot={false} />
+              </ComposedChart>
+            </ResponsiveContainer>
+          </div>
+
+          {/* RTO Reasons */}
+          <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, padding: 16 }}>
+            <div style={{ fontSize: 12, fontWeight: 600, color: C.t1, marginBottom: 12 }}>Top RTO Reasons</div>
+            <ResponsiveContainer width="100%" height={200}>
+              <BarChart data={data.rtoReasons || []} layout="vertical" margin={{ top: 0, right: 16, left: 130, bottom: 0 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke={C.border} horizontal={false} />
+                <XAxis type="number" tick={{ fontSize: 10, fill: C.t3 }} />
+                <YAxis type="category" dataKey="reason" tick={{ fontSize: 9.5, fill: C.t2 }} width={130} />
+                <Tooltip content={<ChartTooltip />} />
+                <Bar dataKey="total" name="Shipments" fill={C.red.tx} radius={[0,3,3,0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+
+        {/* ── Shipment Status + Payment ── */}
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+          {/* Status breakdown */}
+          <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, padding: 16 }}>
+            <div style={{ fontSize: 12, fontWeight: 600, color: C.t1, marginBottom: 12 }}>Shipment Status Breakdown</div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+              {(data.byStatus || []).sort((a,b) => b.total - a.total).map(s => {
+                const total = k.total_shipments || 1
+                const w = ((s.total / total) * 100).toFixed(1)
+                const col = s.unified_status === 'Delivered' ? C.green.tx : s.unified_status === 'RTO' ? C.red.tx : s.unified_status === 'Intransit' ? C.blue.tx : C.amber.tx
+                return (
+                  <div key={s.unified_status}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 3, fontSize: 11 }}>
+                      <span style={{ color: C.t2 }}>{s.unified_status}</span>
+                      <span style={{ color: col, fontWeight: 600 }}>{n(s.total)} ({w}%)</span>
+                    </div>
+                    <div style={{ height: 5, borderRadius: 3, background: C.border }}>
+                      <div style={{ height: '100%', width: w + '%', borderRadius: 3, background: col }} />
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+
+          {/* Top Drop States */}
+          <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, padding: 16 }}>
+            <div style={{ fontSize: 12, fontWeight: 600, color: C.t1, marginBottom: 12 }}>Top Drop States</div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+              {(data.topDropStates || []).map(s => {
+                const w = ((s.total / (k.total_shipments || 1)) * 100).toFixed(1)
+                return (
+                  <div key={s.state}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 3, fontSize: 11 }}>
+                      <span style={{ color: C.t2 }}>{s.state}</span>
+                      <span style={{ color: C.t1, fontWeight: 600 }}>{n(s.total)} ({w}%)</span>
+                    </div>
+                    <div style={{ height: 5, borderRadius: 3, background: C.border }}>
+                      <div style={{ height: '100%', width: w + '%', borderRadius: 3, background: C.acc }} />
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+        </div>
+
+        {/* ── Courier Detail Table ── */}
+        <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, padding: 16 }}>
+          <div style={{ fontSize: 12, fontWeight: 600, color: C.t1, marginBottom: 12 }}>Courier Performance</div>
+          <div style={{ overflowX: 'auto' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+              <thead>
+                <tr style={{ borderBottom: `1.5px solid ${C.border}` }}>
+                  {['Courier','Shipments','Delivered %','RTO %','FASR %','Avg TAT'].map(h => (
+                    <th key={h} style={{ padding: '7px 10px', textAlign: h === 'Courier' ? 'left' : 'right', color: C.t3, fontWeight: 600, fontSize: 11 }}>{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {(data.byCourier || []).map((r, i) => (
+                  <tr key={r.courier_group} style={{ borderBottom: `1px solid ${C.border}`, background: i % 2 === 0 ? 'transparent' : C.bg }}>
+                    <td style={{ padding: '7px 10px', color: C.t1, fontWeight: 500 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
+                        <span style={{ width: 8, height: 8, borderRadius: '50%', background: COURIER_COLORS[r.courier_group] || C.t3, flexShrink: 0 }} />
+                        {r.courier_group}
+                      </div>
+                    </td>
+                    <td style={{ padding: '7px 10px', textAlign: 'right', color: C.t2 }}>{n(r.total)}</td>
+                    <td style={{ padding: '7px 10px', textAlign: 'right', color: C.green.tx, fontWeight: 600 }}>{pct2(r.delivered, r.total)}</td>
+                    <td style={{ padding: '7px 10px', textAlign: 'right', color: C.red.tx, fontWeight: 600 }}>{pct2(r.rto, r.total)}</td>
+                    <td style={{ padding: '7px 10px', textAlign: 'right', color: C.blue.tx, fontWeight: 600 }}>{pct2(r.d1, r.ofd_total)}</td>
+                    <td style={{ padding: '7px 10px', textAlign: 'right', color: C.t2 }}>{r.avg_tat != null ? (+r.avg_tat).toFixed(1) + 'd' : '—'}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </>}
+    </div>
+  )
+}
+
 // ── Sidebar ───────────────────────────────────────────────────
 const SvgIcon = ({ d, size = 18, stroke = 'currentColor', fill = 'none', strokeWidth = 1.6 }) => (
   <svg width={size} height={size} viewBox="0 0 24 24" fill={fill} stroke={stroke} strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round">
@@ -16,6 +337,7 @@ function Sidebar({ page, setPage }) {
     { id: 'sales', label: 'Sales', icon: <SvgIcon d={['M18 20V10','M12 20V4','M6 20v-6']} /> },
     { id: 'ads', label: 'Ads', icon: <SvgIcon d={['M15 3h4a2 2 0 012 2v14a2 2 0 01-2 2h-4','M10 17l5-5-5-5','M13.8 12H3']} /> },
     { id: 'intelligence', label: 'Intel', icon: <SvgIcon d={['M12 2a7 7 0 017 7c0 3.5-2 5.5-2 8H7c0-2.5-2-4.5-2-8a7 7 0 017-7z','M9 21h6','M9.5 17.5h5']} /> },
+    { id: 'logistics', label: 'Logistics', icon: <SvgIcon d={['M1 3h15v13H1z','M16 8h4l3 3v5h-7V8z','M5.5 19a1.5 1.5 0 100-3 1.5 1.5 0 000 3z','M18.5 19a1.5 1.5 0 100-3 1.5 1.5 0 000 3z']} /> },
   ]
   const dims = [
     { label: 'P&L', icon: <SvgIcon d={['M12 1v22','M17 5H9.5a3.5 3.5 0 100 7h5a3.5 3.5 0 110 7H6']} /> },
@@ -6851,6 +7173,11 @@ export default function App() {
           {page === 'intelligence' && (
             <div className="page-scroll">
               <IntelPage data={data} />
+            </div>
+          )}
+          {page === 'logistics' && (
+            <div className="page-scroll">
+              <LogisticsPage filters={filters} />
             </div>
           )}
         </div>
