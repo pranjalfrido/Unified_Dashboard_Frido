@@ -6,7 +6,7 @@ import { ReferenceLine } from 'recharts'
 // ── Logistics Page ────────────────────────────────────────────
 const COURIERS = ['Bluedart','Delhivery','Delhivery DS','Delhivery NDD','Ekart','ElasticRun','Safexpress','Shadowfax','Sky Air','Swift','UrbanBolt']
 const COURIER_COLORS = { Bluedart:'#E8400A', Delhivery:'#E60000', 'Delhivery DS':'#C00000', 'Delhivery NDD':'#A00000', Ekart:'#F78F1E', ElasticRun:'#00509E', Safexpress:'#1B4D9E', Shadowfax:'#6B3FA0', 'Sky Air':'#00B0F0', Swift:'#13803A', UrbanBolt:'#FFD600' }
-const COURIER_LOGOS = { Bluedart:'/blue dart.jpg', Delhivery:'/Delhivery.png', 'Delhivery DS':'/Dlehivery ds.avif', 'Delhivery NDD':'/Delhivery NDD.png', Ekart:'/ekart_logistics_logo.jpg', ElasticRun:'/elasticrun_logo.jpg', Safexpress:'/safeexpress.webp', Shadowfax:'/shadow fax.jpg', 'Sky Air':'/sky air.webp', Swift:'/swift courier.jpg', UrbanBolt:'/urban bolt.jpg' }
+const COURIER_LOGOS = { Bluedart:'/blue%20dart.jpg', Delhivery:'/Delhivery.png', 'Delhivery DS':'/Delhivery.png', 'Delhivery NDD':'/Delhivery%20NDD.png', Ekart:'/ekart_logistics_logo.jpg', ElasticRun:'/elasticrun_logo.jpg', Safexpress:'/safeexpress.webp', Shadowfax:'/shadow%20fax.jpg', 'Sky Air':'/sky%20air.webp', Swift:'/swift%20courier.jpg', UrbanBolt:'/urban%20bolt.jpg' }
 
 function LogisticsKPI({ label, value, sub, color, badge }) {
   return (
@@ -19,6 +19,7 @@ function LogisticsKPI({ label, value, sub, color, badge }) {
 }
 
 function LogisticsChip({ label, logo, active, onClick }) {
+  const [imgErr, setImgErr] = useState(false)
   return (
     <button onClick={onClick} style={{
       display: 'inline-flex', alignItems: 'center', gap: 7,
@@ -32,19 +33,10 @@ function LogisticsChip({ label, logo, active, onClick }) {
       boxShadow: active ? '0 0 0 1px #FFD60066' : 'none',
       flexShrink: 0,
     }}>
-      {logo && (
-        <img src={logo} alt="" style={{ width: 22, height: 22, objectFit: 'contain', borderRadius: 4, flexShrink: 0 }}
-          onError={e => {
-            e.target.style.display = 'none'
-            e.target.nextSibling && (e.target.nextSibling.style.display = 'flex')
-          }}
-        />
-      )}
-      {logo && (
-        <span style={{ display: 'none', width: 22, height: 22, borderRadius: 4, background: COURIER_COLORS[label] || C.border, alignItems: 'center', justifyContent: 'center', fontSize: 9, fontWeight: 800, color: '#fff', flexShrink: 0 }}>
-          {label.charAt(0)}
-        </span>
-      )}
+      {logo && !imgErr
+        ? <img src={logo} alt="" style={{ width: 22, height: 22, objectFit: 'contain', borderRadius: 4, flexShrink: 0 }} onError={() => setImgErr(true)} />
+        : <span style={{ width: 22, height: 22, borderRadius: 4, background: COURIER_COLORS[label] || '#64748b', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 9, fontWeight: 800, color: '#fff', flexShrink: 0 }}>{label.charAt(0)}</span>
+      }
       {label}
     </button>
   )
