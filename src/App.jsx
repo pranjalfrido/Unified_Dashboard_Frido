@@ -127,6 +127,7 @@ function LSectionTitle({ title }) {
 function LogisticsPage({ filters }) {
   const API = import.meta.env.VITE_API_URL || ''
   const [lFilters, setLFilters] = useState({ couriers: [], shipmentType: 'all', sddNdd: 'all', paymentMode: null, zone: null, pickupState: null, dropState: null, category: null, subCategory: null })
+  const [trendGranularity, setTrendGranularity] = useState('Daily')
   const [data, setData] = useState(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
@@ -164,7 +165,8 @@ function LogisticsPage({ filters }) {
   const STATUS_COLORS = { Delivered: C.green.tx, RTO: C.red.tx, Intransit: C.blue.tx, 'Pickup Pending': '#f59e0b', Cancelled: '#a855f7', Lost: '#f97316', Damaged: '#64748b' }
   const STATUS_BG = { Delivered: C.green.bg, RTO: C.red.bg, Intransit: C.blue.bg, 'Pickup Pending': '#f59e0b22', Cancelled: '#a855f722', Lost: '#f9731622', Damaged: '#64748b22' }
 
-  const byMonthData = (data?.byMonth || []).map(d => ({ ...d, rto_pct: d.total ? +((d.rto / d.total) * 100).toFixed(1) : 0, del_pct: d.total ? +((d.delivered / d.total) * 100).toFixed(1) : 0 }))
+  const trendRaw = trendGranularity === 'Daily' ? (data?.byDay || []) : trendGranularity === 'Weekly' ? (data?.byWeek || []) : (data?.byMonth || [])
+  const trendData = trendRaw.map(d => ({ ...d, rto_pct: d.rto_pct ?? (d.total ? +((d.rto / d.total) * 100).toFixed(1) : 0) }))
   const byCourierData = (data?.byCourier || []).slice(0, 10).map(d => ({ ...d, del_pct: d.total ? +((d.delivered / d.total) * 100).toFixed(1) : 0, rto_pct: d.total ? +((d.rto / d.total) * 100).toFixed(1) : 0 }))
   const maxCourierTotal = byCourierData[0]?.total || 1
 
@@ -265,19 +267,36 @@ function LogisticsPage({ filters }) {
         <LSectionTitle title="Monthly Trend" />
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
           <div style={cardStyle}>
-            <div style={chartTitle}>Monthly Shipment Volume</div>
-            <ResponsiveContainer width="100%" height={220}>
-              <ComposedChart data={byMonthData} margin={{ top: 8, right: 32, left: 0, bottom: 0 }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+              <div style={chartTitle}>Shipment Trend</div>
+              <div style={{ display: 'flex', gap: 4 }}>
+                {['Daily','Weekly','Monthly'].map(g => (
+                  <button key={g} onClick={() => setTrendGranularity(g)} style={{ fontSize: 11, padding: '3px 10px', borderRadius: 6, border: `1px solid ${trendGranularity === g ? C.acc : C.border}`, background: trendGranularity === g ? C.acl : C.card, color: trendGranularity === g ? C.t1 : C.t2, cursor: 'pointer', fontWeight: trendGranularity === g ? 700 : 500, fontFamily: 'var(--font)' }}>{g}</button>
+                ))}
+              </div>
+            </div>
+            <ResponsiveContainer width="100%" height={200}>
+              <ComposedChart data={trendData} margin={{ top: 4, right: 32, left: 0, bottom: 0 }}>
+                <defs>
+                  <linearGradient id="lgDel" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#FFD600" stopOpacity={0.25} />
+                    <stop offset="95%" stopColor="#FFD600" stopOpacity={0.02} />
+                  </linearGradient>
+                  <linearGradient id="lgRto" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor={C.red.tx} stopOpacity={0.18} />
+                    <stop offset="95%" stopColor={C.red.tx} stopOpacity={0.02} />
+                  </linearGradient>
+                </defs>
                 <CartesianGrid strokeDasharray="3 3" stroke={C.border} />
-                <XAxis dataKey="month_label" tick={{ fontSize: 10, fill: C.t3 }} />
+                <XAxis dataKey="label" tick={{ fontSize: 10, fill: C.t3 }} />
                 <YAxis yAxisId="left" tick={{ fontSize: 10, fill: C.t3 }} tickFormatter={v => v >= 1000 ? (v/1000).toFixed(0)+'K' : v} />
                 <YAxis yAxisId="right" orientation="right" tickFormatter={v => v + '%'} tick={{ fontSize: 10, fill: C.t3 }} />
-                <Tooltip formatter={(value, name) => name === 'RTO %' ? [value + '%', name] : [value.toLocaleString('en-IN'), name]} />
+                <Tooltip formatter={(value, name) => name === 'RTO %' ? [value + '%', name] : [Number(value).toLocaleString('en-IN'), name]} />
                 <Legend wrapperStyle={{ fontSize: 11 }} />
-                <Line yAxisId="left" dataKey="total" name="Total" stroke={C.t3} strokeWidth={2} strokeDasharray="4 3" dot={{ fill: C.t3, r: 3 }} />
-                <Line yAxisId="left" dataKey="delivered" name="Delivered" stroke="#E6A800" strokeWidth={2.5} dot={{ fill: '#E6A800', r: 4 }} activeDot={{ r: 6 }} />
-                <Line yAxisId="left" dataKey="rto" name="RTO" stroke={C.red.tx} strokeWidth={2} dot={{ fill: C.red.tx, r: 3 }} />
-                <Line yAxisId="right" dataKey="rto_pct" name="RTO %" stroke="#b91c1c" strokeWidth={1.5} strokeDasharray="3 2" dot={{ fill: '#b91c1c', r: 3 }} />
+                <Area yAxisId="left" type="monotone" dataKey="delivered" name="Delivered" stroke="#E6A800" strokeWidth={2.5} fill="url(#lgDel)" dot={false} activeDot={{ r: 5 }} />
+                <Area yAxisId="left" type="monotone" dataKey="rto" name="RTO" stroke={C.red.tx} strokeWidth={2} fill="url(#lgRto)" dot={false} activeDot={{ r: 4 }} />
+                <Line yAxisId="left" type="monotone" dataKey="total" name="Total" stroke={C.t3} strokeWidth={1.5} strokeDasharray="4 3" dot={false} />
+                <Line yAxisId="right" type="monotone" dataKey="rto_pct" name="RTO %" stroke="#b91c1c" strokeWidth={1.5} strokeDasharray="3 2" dot={false} />
               </ComposedChart>
             </ResponsiveContainer>
           </div>

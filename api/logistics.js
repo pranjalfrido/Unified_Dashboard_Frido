@@ -117,14 +117,35 @@ by_zone AS (
     COUNTIF(unified_status='RTO') AS rto
   FROM base WHERE zone IS NOT NULL GROUP BY 1
 ),
-by_month AS (
+by_day AS (
   SELECT
-    FORMAT_DATE('%b %Y', created_date) AS month_label,
-    DATE_TRUNC(created_date, MONTH) AS month_dt,
+    FORMAT_DATE('%d %b', created_date) AS label,
+    created_date AS dt,
     COUNT(awb) AS total,
     COUNTIF(unified_status='RTO') AS rto,
-    COUNTIF(unified_status='Delivered') AS delivered
-  FROM base GROUP BY 1,2 ORDER BY 2
+    COUNTIF(unified_status='Delivered') AS delivered,
+    ROUND(COUNTIF(unified_status='RTO') * 100.0 / NULLIF(COUNT(awb),0), 1) AS rto_pct
+  FROM base WHERE created_date IS NOT NULL GROUP BY 1,2 ORDER BY 2
+),
+by_week AS (
+  SELECT
+    FORMAT_DATE('W%V %Y', created_date) AS label,
+    DATE_TRUNC(created_date, WEEK) AS dt,
+    COUNT(awb) AS total,
+    COUNTIF(unified_status='RTO') AS rto,
+    COUNTIF(unified_status='Delivered') AS delivered,
+    ROUND(COUNTIF(unified_status='RTO') * 100.0 / NULLIF(COUNT(awb),0), 1) AS rto_pct
+  FROM base WHERE created_date IS NOT NULL GROUP BY 1,2 ORDER BY 2
+),
+by_month AS (
+  SELECT
+    FORMAT_DATE('%b %Y', created_date) AS label,
+    DATE_TRUNC(created_date, MONTH) AS dt,
+    COUNT(awb) AS total,
+    COUNTIF(unified_status='RTO') AS rto,
+    COUNTIF(unified_status='Delivered') AS delivered,
+    ROUND(COUNTIF(unified_status='RTO') * 100.0 / NULLIF(COUNT(awb),0), 1) AS rto_pct
+  FROM base WHERE created_date IS NOT NULL GROUP BY 1,2 ORDER BY 2
 ),
 rto_reasons AS (
   SELECT reason_for_last_failed_delivery AS reason, COUNT(awb) AS total
@@ -153,6 +174,8 @@ SELECT
   TO_JSON_STRING(ARRAY(SELECT AS STRUCT * FROM by_courier ORDER BY total DESC)) AS by_courier,
   TO_JSON_STRING(ARRAY(SELECT AS STRUCT * FROM by_status)) AS by_status,
   TO_JSON_STRING(ARRAY(SELECT AS STRUCT * FROM by_zone ORDER BY total DESC)) AS by_zone,
+  TO_JSON_STRING(ARRAY(SELECT AS STRUCT * FROM by_day)) AS by_day,
+  TO_JSON_STRING(ARRAY(SELECT AS STRUCT * FROM by_week)) AS by_week,
   TO_JSON_STRING(ARRAY(SELECT AS STRUCT * FROM by_month)) AS by_month,
   TO_JSON_STRING(ARRAY(SELECT AS STRUCT * FROM rto_reasons)) AS rto_reasons,
   TO_JSON_STRING(ARRAY(SELECT AS STRUCT * FROM top_drop_states)) AS top_drop_states,
@@ -170,6 +193,8 @@ SELECT
       byCourier: JSON.parse(r.by_courier),
       byStatus: JSON.parse(r.by_status),
       byZone: JSON.parse(r.by_zone),
+      byDay: JSON.parse(r.by_day),
+      byWeek: JSON.parse(r.by_week),
       byMonth: JSON.parse(r.by_month),
       rtoReasons: JSON.parse(r.rto_reasons),
       topDropStates: JSON.parse(r.top_drop_states),
