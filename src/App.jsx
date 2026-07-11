@@ -247,7 +247,7 @@ function LogisticsPage({ filters }) {
           <LKpiCard label="EDD Breached" value={n(k.edd_breached)} badgeText="Live" badgeVariant="A" />
           <LKpiCard label="Critical Stuck" value={n(k.critical_stuck)} badgeText=">5d EDD" badgeVariant="R" />
           <LKpiCard label="RTO 10+ Days" value={n(k.rto_10plus)} badgeText="Aging" badgeVariant="R" />
-          <LKpiCard label="Z-RTO" value={n(k.z_rto)} badgeText={pct2(k.z_rto, k.rto)} badgeVariant="A" />
+          <LKpiCard label="Z-RTO" value={n(k.z_rto)} badgeText={pct2(k.z_rto, k.total_shipments)} badgeVariant="A" />
           <LKpiCard label="FASR %" value={pct2(k.delivered_1attempt, k.total_ofd_attempts)} badgeText="1st att" badgeVariant="G" />
           <LKpiCard label="RASR %" value={pct2(k.delivered_multi, k.total_ofd_attempts)} badgeText="Re-att" badgeVariant="B" />
           <LKpiCard label="Multi-Att Del" value={n(k.delivered_multi)} badgeText={pct2(k.delivered_multi, k.total_ofd_attempts)} badgeVariant="B" />
