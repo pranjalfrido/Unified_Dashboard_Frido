@@ -267,16 +267,17 @@ function LogisticsPage({ filters }) {
           <div style={cardStyle}>
             <div style={chartTitle}>Monthly Shipment Volume</div>
             <ResponsiveContainer width="100%" height={220}>
-              <ComposedChart data={byMonthData} margin={{ top: 4, right: 24, left: 0, bottom: 0 }}>
+              <ComposedChart data={byMonthData} margin={{ top: 8, right: 32, left: 0, bottom: 0 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke={C.border} />
                 <XAxis dataKey="month_label" tick={{ fontSize: 10, fill: C.t3 }} />
-                <YAxis yAxisId="left" tick={{ fontSize: 10, fill: C.t3 }} />
+                <YAxis yAxisId="left" tick={{ fontSize: 10, fill: C.t3 }} tickFormatter={v => v >= 1000 ? (v/1000).toFixed(0)+'K' : v} />
                 <YAxis yAxisId="right" orientation="right" tickFormatter={v => v + '%'} tick={{ fontSize: 10, fill: C.t3 }} />
                 <Tooltip formatter={(value, name) => name === 'RTO %' ? [value + '%', name] : [value.toLocaleString('en-IN'), name]} />
                 <Legend wrapperStyle={{ fontSize: 11 }} />
-                <Bar yAxisId="left" dataKey="delivered" name="Delivered" stackId="s" fill="#FFD600cc" radius={[0,0,0,0]} />
-                <Bar yAxisId="left" dataKey="rto" name="RTO" stackId="s" fill={C.red.tx + 'cc'} radius={[3,3,0,0]} />
-                <Line yAxisId="right" dataKey="rto_pct" name="RTO %" stroke="#b91c1c" strokeWidth={2} dot={{ fill: '#b91c1c', r: 3 }} />
+                <Line yAxisId="left" dataKey="total" name="Total" stroke={C.t3} strokeWidth={2} strokeDasharray="4 3" dot={{ fill: C.t3, r: 3 }} />
+                <Line yAxisId="left" dataKey="delivered" name="Delivered" stroke="#E6A800" strokeWidth={2.5} dot={{ fill: '#E6A800', r: 4 }} activeDot={{ r: 6 }} />
+                <Line yAxisId="left" dataKey="rto" name="RTO" stroke={C.red.tx} strokeWidth={2} dot={{ fill: C.red.tx, r: 3 }} />
+                <Line yAxisId="right" dataKey="rto_pct" name="RTO %" stroke="#b91c1c" strokeWidth={1.5} strokeDasharray="3 2" dot={{ fill: '#b91c1c', r: 3 }} />
               </ComposedChart>
             </ResponsiveContainer>
           </div>
