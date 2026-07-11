@@ -57,7 +57,7 @@ function LogisticsToggle({ options, value, onChange }) {
   )
 }
 
-function LDropdown({ label, options, value, onChange }) {
+function LDropdown({ label, options, value, onChange, flex }) {
   const [open, setOpen] = useState(false)
   const [search, setSearch] = useState('')
   const ref = useRef(null)
@@ -68,13 +68,13 @@ function LDropdown({ label, options, value, onChange }) {
   }, [])
   const filtered = (options || []).filter(o => o.toLowerCase().includes(search.toLowerCase()))
   return (
-    <div ref={ref} style={{ position: 'relative', flexShrink: 0 }}>
+    <div ref={ref} style={{ position: 'relative', flex: flex ? 1 : '0 0 auto', minWidth: 0 }}>
       <button onClick={() => setOpen(o => !o)} style={{
         display: 'flex', alignItems: 'center', gap: 6, padding: '6px 12px',
         border: `1.5px solid ${value ? C.acm : C.border2}`, borderRadius: 8,
         background: value ? C.acl : C.card, cursor: 'pointer', fontFamily: 'var(--font)',
         fontSize: 11.5, color: value ? C.t1 : C.t2, fontWeight: value ? 600 : 400,
-        minWidth: 100, whiteSpace: 'nowrap'
+        width: '100%', whiteSpace: 'nowrap'
       }}>
         <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', textAlign: 'left' }}>{value || label}</span>
         <span style={{ fontSize: 8, color: C.t3, flexShrink: 0, marginLeft: 2 }}>{open ? '▲' : '▼'}</span>
@@ -196,19 +196,19 @@ function LogisticsPage({ filters }) {
           </div>
         </div>
         <div style={{ height: 1, background: C.border }} />
-        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center', width: '100%' }}>
           <LogisticsToggle options={['Forward','Reverse']} value={lFilters.shipmentType} onChange={v => setLFilters(f => ({ ...f, shipmentType: v }))} />
           <LogisticsToggle options={['Regular','SDD/NDD']} value={lFilters.sddNdd} onChange={v => setLFilters(f => ({ ...f, sddNdd: v }))} />
-          <div style={{ width: 1, height: 28, background: C.border, margin: '0 2px' }} />
-          <LDropdown label="Zone" options={opts.zones} value={lFilters.zone} onChange={v => setLFilters(f => ({ ...f, zone: v }))} />
-          <LDropdown label="Pickup State" options={opts.pickup_states} value={lFilters.pickupState} onChange={v => setLFilters(f => ({ ...f, pickupState: v }))} />
-          <LDropdown label="Drop State" options={opts.drop_states} value={lFilters.dropState} onChange={v => setLFilters(f => ({ ...f, dropState: v }))} />
-          <LDropdown label="Payment" options={['COD','Prepaid']} value={lFilters.paymentMode} onChange={v => setLFilters(f => ({ ...f, paymentMode: v }))} />
-          <LDropdown label="Category" options={opts.categories} value={lFilters.category} onChange={v => setLFilters(f => ({ ...f, category: v, subCategory: null }))} />
-          <LDropdown label="Sub-category" options={opts.sub_categories} value={lFilters.subCategory} onChange={v => setLFilters(f => ({ ...f, subCategory: v }))} />
+          <div style={{ width: 1, height: 28, background: C.border, margin: '0 2px', flexShrink: 0 }} />
+          <LDropdown label="Zone" options={opts.zones} value={lFilters.zone} onChange={v => setLFilters(f => ({ ...f, zone: v }))} flex />
+          <LDropdown label="Pickup State" options={opts.pickup_states} value={lFilters.pickupState} onChange={v => setLFilters(f => ({ ...f, pickupState: v }))} flex />
+          <LDropdown label="Drop State" options={opts.drop_states} value={lFilters.dropState} onChange={v => setLFilters(f => ({ ...f, dropState: v }))} flex />
+          <LDropdown label="Payment" options={['COD','Prepaid']} value={lFilters.paymentMode} onChange={v => setLFilters(f => ({ ...f, paymentMode: v }))} flex />
+          <LDropdown label="Category" options={opts.categories} value={lFilters.category} onChange={v => setLFilters(f => ({ ...f, category: v, subCategory: null }))} flex />
+          <LDropdown label="Sub-category" options={opts.sub_categories} value={lFilters.subCategory} onChange={v => setLFilters(f => ({ ...f, subCategory: v }))} flex />
           {(lFilters.zone || lFilters.pickupState || lFilters.dropState || lFilters.paymentMode || lFilters.category || lFilters.subCategory) && (
             <button onClick={() => setLFilters(f => ({ ...f, zone: null, pickupState: null, dropState: null, paymentMode: null, category: null, subCategory: null }))}
-              style={{ fontSize: 11, color: C.t3, background: 'none', border: `1px solid ${C.border}`, borderRadius: 6, padding: '4px 10px', cursor: 'pointer', fontFamily: 'var(--font)' }}>✕ Clear filters</button>
+              style={{ fontSize: 11, color: C.t3, background: 'none', border: `1px solid ${C.border}`, borderRadius: 6, padding: '4px 10px', cursor: 'pointer', fontFamily: 'var(--font)', flexShrink: 0 }}>✕ Clear</button>
           )}
         </div>
       </div>
