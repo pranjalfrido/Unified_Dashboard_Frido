@@ -328,8 +328,28 @@ function LogisticsPage({ filters }) {
           </div>
         </div>
 
-        {/* ── Courier Performance Table ── */}
+        {/* ── Courier TAT Chart (Power BI style) ── */}
         <LSectionTitle title="Courier Performance" />
+        <div style={cardStyle}>
+          <div style={chartTitle}>Total Shipments · Avg Intransit Days · Avg Fulfilment Days — by Courier</div>
+          <ResponsiveContainer width="100%" height={240}>
+            <ComposedChart data={byCourierData} margin={{ top: 20, right: 20, left: 0, bottom: 40 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke={C.border} vertical={false} />
+              <XAxis dataKey="courier_group" tick={{ fontSize: 10, fill: C.t3 }} angle={-30} textAnchor="end" interval={0} />
+              <YAxis yAxisId="left" tick={{ fontSize: 10, fill: '#5BA4CF' }} tickFormatter={v => v >= 1000 ? (v/1000).toFixed(0)+'K' : v} />
+              <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 10, fill: C.t2 }} tickFormatter={v => v + 'd'} />
+              <Tooltip formatter={(value, name) => name.includes('Days') ? [value + ' days', name] : [Number(value).toLocaleString('en-IN'), name]} />
+              <Legend wrapperStyle={{ fontSize: 11, paddingTop: 8 }} />
+              <Bar yAxisId="left" dataKey="total" name="Total Shipments" fill="#5BA4CF" opacity={0.85} radius={[3,3,0,0]}>
+                {byCourierData.map((r, i) => <Cell key={i} fill="#5BA4CF" />)}
+              </Bar>
+              <Line yAxisId="right" type="monotone" dataKey="avg_intransit_days" name="Avg Intransit Days" stroke="#1E3A5F" strokeWidth={2.5} dot={{ fill: '#1E3A5F', r: 4 }} activeDot={{ r: 6 }} />
+              <Line yAxisId="right" type="monotone" dataKey="avg_fulfilment_days" name="Avg Fulfilment Days" stroke="#F97316" strokeWidth={2.5} dot={{ fill: '#F97316', r: 4 }} activeDot={{ r: 6 }} />
+            </ComposedChart>
+          </ResponsiveContainer>
+        </div>
+
+        {/* ── Courier Performance Table ── */}
         <div style={cardStyle}>
           <div style={chartTitle}>Courier-wise Breakdown</div>
           <div style={{ overflowX: 'auto' }}>
