@@ -102,17 +102,17 @@ function LDropdown({ label, options, value, onChange, flex }) {
   )
 }
 
-function LKpiCard({ label, value, sub, accentColor, badgeText, badgeColor }) {
-  const badgeBg = (badgeColor || accentColor) + '22'
-  const badgeFg = badgeColor || accentColor || C.t3
+function LKpiCard({ label, value, sub, badgeText, badgeVariant }) {
+  // badgeVariant: 'G' green, 'R' red, 'A' amber, 'B' blue, 'N' neutral (default)
+  const bv = badgeVariant || 'N'
   return (
-    <div className="kpi-card" style={{ borderTopColor: accentColor || 'transparent', display: 'flex', flexDirection: 'column', gap: 0 }}>
+    <div className="kpi-card" style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
       <div className="kpi-label">{label}</div>
       <div className="kpi-value">{value ?? '—'}</div>
       {(sub || badgeText) && (
-        <div className="kpi-sub">
+        <div className="kpi-sub" style={{ marginTop: 2 }}>
           {badgeText
-            ? <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 9px', borderRadius: 20, background: badgeBg, color: badgeFg }}>{badgeText}</span>
+            ? <span className={`bdg bdg-${bv}`}>{badgeText}</span>
             : sub
           }
         </div>
@@ -229,38 +229,38 @@ function LogisticsPage({ filters }) {
         {/* ── Volume KPIs ── */}
         <LSectionTitle title="Volume Overview" />
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))', gap: 10 }}>
-          <LKpiCard label="Total Shipments" value={n(k.total_shipments)} accentColor="#FFD600" badgeText={filters.start + ' → ' + filters.end} badgeColor="#FFD600" />
-          <LKpiCard label="Total GMV" value={k.total_value != null ? fmt(k.total_value) : '—'} accentColor="#FFD600" badgeText="Invoice Value" badgeColor="#FFD600" />
-          <LKpiCard label="Delivered" value={n(k.delivered)} accentColor={C.green.tx} badgeText={'▲ ' + pct2(k.delivered, k.total_shipments)} badgeColor={C.green.tx} />
-          <LKpiCard label="RTO" value={n(k.rto)} accentColor={C.red.tx} badgeText={pct2(k.rto, k.total_shipments)} badgeColor={C.red.tx} />
-          <LKpiCard label="In Transit" value={n(k.in_transit)} accentColor={C.blue.tx} badgeText={pct2(k.in_transit, k.total_shipments)} badgeColor={C.blue.tx} />
-          <LKpiCard label="Pickup Pending" value={n(k.pickup_pending)} accentColor="#f59e0b" badgeText={pct2(k.pickup_pending, k.total_shipments)} badgeColor="#f59e0b" />
-          <LKpiCard label="Cancelled" value={n(k.cancelled)} accentColor="#a855f7" badgeText={pct2(k.cancelled, k.total_shipments)} badgeColor="#a855f7" />
-          <LKpiCard label="Lost & Damaged" value={n(k.lost_damaged)} accentColor={C.red.tx} badgeText={pct2(k.lost_damaged, k.total_shipments)} badgeColor={C.red.tx} />
+          <LKpiCard label="Total Shipments" value={n(k.total_shipments)} badgeText={filters.start + ' → ' + filters.end} badgeVariant="N" />
+          <LKpiCard label="Total GMV" value={k.total_value != null ? fmt(k.total_value) : '—'} badgeText="Invoice Value" badgeVariant="N" />
+          <LKpiCard label="Delivered" value={n(k.delivered)} badgeText={'▲ ' + pct2(k.delivered, k.total_shipments)} badgeVariant="G" />
+          <LKpiCard label="RTO" value={n(k.rto)} badgeText={pct2(k.rto, k.total_shipments)} badgeVariant="R" />
+          <LKpiCard label="In Transit" value={n(k.in_transit)} badgeText={pct2(k.in_transit, k.total_shipments)} badgeVariant="B" />
+          <LKpiCard label="Pickup Pending" value={n(k.pickup_pending)} badgeText={pct2(k.pickup_pending, k.total_shipments)} badgeVariant="A" />
+          <LKpiCard label="Cancelled" value={n(k.cancelled)} badgeText={pct2(k.cancelled, k.total_shipments)} badgeVariant="N" />
+          <LKpiCard label="Lost & Damaged" value={n(k.lost_damaged)} badgeText={pct2(k.lost_damaged, k.total_shipments)} badgeVariant="R" />
         </div>
 
         {/* ── Quality KPIs ── */}
         <LSectionTitle title="Delivery Quality & SLA" />
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))', gap: 10 }}>
-          <LKpiCard label="On Time Delivery" value={n(k.on_time)} accentColor={C.green.tx} badgeText={pct2(k.on_time, k.delivered) + ' of delivered'} badgeColor={C.green.tx} />
-          <LKpiCard label="SLA Breach" value={n(k.sla_breach)} accentColor={C.red.tx} badgeText={pct2(k.sla_breach, k.delivered) + ' of delivered'} badgeColor={C.red.tx} />
-          <LKpiCard label="EDD Breached" value={n(k.edd_breached)} accentColor="#f59e0b" badgeText="Live count" badgeColor="#f59e0b" />
-          <LKpiCard label="Critical Stuck" value={n(k.critical_stuck)} accentColor={C.red.tx} badgeText="EDD >5d past" badgeColor={C.red.tx} />
-          <LKpiCard label="RTO 10+ Days" value={n(k.rto_10plus)} accentColor={C.red.tx} badgeText="Aging RTOs" badgeColor={C.red.tx} />
-          <LKpiCard label="Zero-Attempt RTO" value={n(k.z_rto)} accentColor="#f59e0b" badgeText={pct2(k.z_rto, k.total_shipments)} badgeColor="#f59e0b" />
-          <LKpiCard label="1st Attempt Del%" value={pct2(k.delivered_1attempt, k.total_ofd_attempts)} accentColor={C.green.tx} badgeText="FASR" badgeColor={C.green.tx} />
-          <LKpiCard label="Multi-Attempt Del" value={n(k.delivered_multi)} accentColor={C.blue.tx} badgeText={pct2(k.delivered_multi, k.total_ofd_attempts)} badgeColor={C.blue.tx} />
+          <LKpiCard label="On Time Delivery" value={n(k.on_time)} badgeText={pct2(k.on_time, k.delivered) + ' of delivered'} badgeVariant="G" />
+          <LKpiCard label="SLA Breach" value={n(k.sla_breach)} badgeText={pct2(k.sla_breach, k.delivered) + ' of delivered'} badgeVariant="R" />
+          <LKpiCard label="EDD Breached" value={n(k.edd_breached)} badgeText="Live count" badgeVariant="A" />
+          <LKpiCard label="Critical Stuck" value={n(k.critical_stuck)} badgeText="EDD >5d past" badgeVariant="R" />
+          <LKpiCard label="RTO 10+ Days" value={n(k.rto_10plus)} badgeText="Aging RTOs" badgeVariant="R" />
+          <LKpiCard label="Zero-Attempt RTO" value={n(k.z_rto)} badgeText={pct2(k.z_rto, k.total_shipments)} badgeVariant="A" />
+          <LKpiCard label="1st Attempt Del%" value={pct2(k.delivered_1attempt, k.total_ofd_attempts)} badgeText="FASR" badgeVariant="G" />
+          <LKpiCard label="Multi-Attempt Del" value={n(k.delivered_multi)} badgeText={pct2(k.delivered_multi, k.total_ofd_attempts)} badgeVariant="B" />
         </div>
 
         {/* ── TAT KPIs ── */}
         <LSectionTitle title="Turnaround Time" />
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))', gap: 10 }}>
-          <LKpiCard label="Avg Pickup TAT" value={d1(k.avg_pickup)} accentColor={C.blue.tx} badgeText="Creation → Pickup" badgeColor={C.blue.tx} />
-          <LKpiCard label="Avg In-Transit TAT" value={d1(k.avg_intransit)} accentColor="#FFD600" badgeText="Pickup → Delivery" badgeColor="#FFD600" />
-          <LKpiCard label="Avg Fulfilment TAT" value={d1(k.avg_fulfilment)} accentColor={C.green.tx} badgeText="Creation → Delivery" badgeColor={C.green.tx} />
-          <LKpiCard label="Avg RTO TAT" value={d1(k.avg_rto_tat)} accentColor={C.red.tx} badgeText="Days since RTO mark" badgeColor={C.red.tx} />
-          <LKpiCard label="Avg S2A Days" value={d1(k.avg_s2a)} accentColor={C.blue.tx} badgeText="Ship → 1st OFD" badgeColor={C.blue.tx} />
-          <LKpiCard label="Avg Committed SLA" value={d1(k.avg_sla)} accentColor="#64748b" badgeText="Promised days" badgeColor="#64748b" />
+          <LKpiCard label="Avg Pickup TAT" value={d1(k.avg_pickup)} badgeText="Creation → Pickup" badgeVariant="B" />
+          <LKpiCard label="Avg In-Transit TAT" value={d1(k.avg_intransit)} badgeText="Pickup → Delivery" badgeVariant="N" />
+          <LKpiCard label="Avg Fulfilment TAT" value={d1(k.avg_fulfilment)} badgeText="Creation → Delivery" badgeVariant="G" />
+          <LKpiCard label="Avg RTO TAT" value={d1(k.avg_rto_tat)} badgeText="Days since RTO mark" badgeVariant="R" />
+          <LKpiCard label="Avg S2A Days" value={d1(k.avg_s2a)} badgeText="Ship → 1st OFD" badgeVariant="B" />
+          <LKpiCard label="Avg Committed SLA" value={d1(k.avg_sla)} badgeText="Promised days" badgeVariant="N" />
         </div>
 
         {/* ── Monthly Trend + Status Donut ── */}
