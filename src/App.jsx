@@ -400,8 +400,8 @@ function LogisticsPage({ filters }) {
                       const logo = COURIER_LOGOS[r.courier_group]
                       const color = COURIER_COLORS[r.courier_group] || C.t3
                       const intransitPct = r.total ? ((r._intransit / r.total) * 100).toFixed(0) : 0
-                      const delColor = r._delPct >= 60 ? C.green.tx : r._delPct >= 40 ? C.amber.tx : C.red.tx
-                      const rtoColor = r._rtoPct <= 2 ? C.green.tx : r._rtoPct <= 5 ? C.amber.tx : C.red.tx
+                      const delColor = r._delPct >= 60 ? '#16a34a' : r._delPct >= 40 ? '#d97706' : '#dc2626'
+                      const rtoColor = r._rtoPct <= 2 ? '#16a34a' : r._rtoPct <= 5 ? '#d97706' : '#dc2626'
                       return (
                         <tr key={r.courier_group} style={{ borderBottom: `1px solid ${C.border}` }}>
                           <td style={{ padding: '9px 10px', minWidth: 160 }}>
@@ -421,9 +421,9 @@ function LogisticsPage({ filters }) {
                           <td style={{ padding: '9px 10px', textAlign: 'right', fontWeight: 700, color: rtoColor, fontSize: 11 }}>{r._rtoPct.toFixed(1)}%</td>
                           <td style={{ padding: '9px 10px', textAlign: 'right', color: C.t3, fontSize: 11 }}>{r._zrtoPct.toFixed(1)}%</td>
                           <td style={{ padding: '9px 10px', textAlign: 'right', color: C.t3, fontSize: 11 }}>{r._cancPct.toFixed(1)}%</td>
-                          <td style={{ padding: '9px 10px', textAlign: 'right', color: C.blue.tx, fontSize: 11 }}>{n(r._intransit)} <span style={{ color: C.t3 }}>({intransitPct}%)</span></td>
-                          <td style={{ padding: '9px 10px', textAlign: 'right', fontWeight: 700, color: C.blue.tx, fontSize: 11 }}>{r._fasrPct != null ? r._fasrPct.toFixed(1) + '%' : '—'}</td>
-                          <td style={{ padding: '9px 10px', textAlign: 'right', fontWeight: 700, color: C.blue.tx, fontSize: 11 }}>{r._rasrPct != null ? r._rasrPct.toFixed(1) + '%' : '—'}</td>
+                          <td style={{ padding: '9px 10px', textAlign: 'right', color: '#2563eb', fontSize: 11 }}>{n(r._intransit)} <span style={{ color: C.t3 }}>({intransitPct}%)</span></td>
+                          <td style={{ padding: '9px 10px', textAlign: 'right', fontWeight: 700, color: '#2563eb', fontSize: 11 }}>{r._fasrPct != null ? r._fasrPct.toFixed(1) + '%' : '—'}</td>
+                          <td style={{ padding: '9px 10px', textAlign: 'right', fontWeight: 700, color: '#2563eb', fontSize: 11 }}>{r._rasrPct != null ? r._rasrPct.toFixed(1) + '%' : '—'}</td>
                           <td style={{ padding: '9px 10px', textAlign: 'right', color: C.t3, fontSize: 11 }}>{d(r.avg_processing_days)}</td>
                           <td style={{ padding: '9px 10px', textAlign: 'right', color: C.t3, fontSize: 11 }}>{d(r.avg_pickup_days)}</td>
                           <td style={{ padding: '9px 10px', textAlign: 'right', color: C.t3, fontSize: 11 }}>{d(r.avg_intransit_days)}</td>
