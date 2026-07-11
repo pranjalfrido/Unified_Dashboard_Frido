@@ -272,12 +272,11 @@ function LogisticsPage({ filters }) {
                 <XAxis dataKey="month_label" tick={{ fontSize: 10, fill: C.t3 }} />
                 <YAxis yAxisId="left" tick={{ fontSize: 10, fill: C.t3 }} />
                 <YAxis yAxisId="right" orientation="right" tickFormatter={v => v + '%'} tick={{ fontSize: 10, fill: C.t3 }} />
-                <Tooltip content={<ChartTooltip />} />
+                <Tooltip formatter={(value, name) => name === 'RTO %' ? [value + '%', name] : [value.toLocaleString('en-IN'), name]} />
                 <Legend wrapperStyle={{ fontSize: 11 }} />
                 <Bar yAxisId="left" dataKey="delivered" name="Delivered" stackId="s" fill={C.green.tx + 'cc'} radius={[0,0,0,0]} />
-                <Bar yAxisId="left" dataKey="rto" name="RTO" stackId="s" fill={C.red.tx + 'cc'} radius={[0,0,0,0]} />
-                <Bar yAxisId="left" dataKey="in_transit" name="Intransit" stackId="s" fill={C.blue.tx + 'cc'} radius={[3,3,0,0]} />
-                <Line yAxisId="right" dataKey="rto_pct" name="RTO %" stroke={C.red.tx} strokeWidth={2} dot={{ fill: C.red.tx, r: 3 }} />
+                <Bar yAxisId="left" dataKey="rto" name="RTO" stackId="s" fill={C.red.tx + 'cc'} radius={[3,3,0,0]} />
+                <Line yAxisId="right" dataKey="rto_pct" name="RTO %" stroke="#b91c1c" strokeWidth={2} dot={{ fill: '#b91c1c', r: 3 }} />
               </ComposedChart>
             </ResponsiveContainer>
           </div>
