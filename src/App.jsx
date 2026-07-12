@@ -176,6 +176,46 @@ function LogisticsPage({ filters }) {
   const pct2 = (a, b) => b ? ((a / b) * 100).toFixed(1) + '%' : '—'
   const n = v => (v || 0).toLocaleString('en-IN')
   const d1 = v => v != null ? (+v).toFixed(1) + 'd' : '—'
+
+  // ── Smart Alerts ──
+  const alerts = useMemo(() => {
+    if (!data) return []
+    const flags = []
+    const total = k.total_shipments || 1
+    const rtoPct = k.rto ? (k.rto / total) * 100 : 0
+    const delPct = k.delivered ? (k.delivered / total) * 100 : 0
+    const slaPct = (k.on_time && k.sla_breach) ? (k.sla_breach / (k.on_time + k.sla_breach)) * 100 : 0
+    const ppPct = k.pickup_pending ? (k.pickup_pending / total) * 100 : 0
+    const zrtoPct = k.z_rto ? (k.z_rto / total) * 100 : 0
+    const couriers = data.byCourier || []
+
+    if (rtoPct > 15) flags.push({ level: 'critical', icon: '🔴', title: 'High RTO Rate', msg: `RTO is at ${rtoPct.toFixed(1)}% — above 15% threshold. Immediate action needed.` })
+    else if (rtoPct > 10) flags.push({ level: 'warning', icon: '🟡', title: 'Elevated RTO Rate', msg: `RTO at ${rtoPct.toFixed(1)}% — approaching critical threshold of 15%.` })
+
+    if (zrtoPct > 3) flags.push({ level: 'warning', icon: '🟡', title: 'Zero-Attempt RTOs', msg: `${n(k.z_rto)} shipments (${zrtoPct.toFixed(1)}%) returned without any delivery attempt.` })
+
+    if (delPct < 60) flags.push({ level: 'critical', icon: '🔴', title: 'Low Delivery Rate', msg: `Delivery rate is ${delPct.toFixed(1)}% — well below 75% benchmark.` })
+    else if (delPct < 70) flags.push({ level: 'warning', icon: '🟡', title: 'Below-target Delivery Rate', msg: `Delivery rate ${delPct.toFixed(1)}% is below the 75% target.` })
+
+    if (slaPct > 20) flags.push({ level: 'warning', icon: '🟡', title: 'SLA Breaches', msg: `${n(k.sla_breach)} shipments (${slaPct.toFixed(1)}%) breached committed SLA.` })
+
+    if (ppPct > 10) flags.push({ level: 'warning', icon: '🟡', title: 'High Pickup Pending', msg: `${n(k.pickup_pending)} shipments (${ppPct.toFixed(1)}%) are still pending pickup.` })
+
+    if (k.critical_stuck > 0) flags.push({ level: 'critical', icon: '🔴', title: 'Critical Stuck Shipments', msg: `${n(k.critical_stuck)} shipments are past EDD with no delivery — risk of customer escalation.` })
+
+    if (k.lost_damaged > 0) flags.push({ level: 'info', icon: '🔵', title: 'Lost / Damaged', msg: `${n(k.lost_damaged)} shipments marked Lost or Damaged in the period.` })
+
+    // Courier-level alerts
+    couriers.forEach(c => {
+      const cRtoPct = c.total ? (c.rto / c.total) * 100 : 0
+      const cDelPct = c.total ? (c.delivered / c.total) * 100 : 0
+      if (c.total > 100 && cRtoPct > 20) flags.push({ level: 'warning', icon: '🟡', title: `${c.courier_group} — High RTO`, msg: `RTO at ${cRtoPct.toFixed(1)}% for ${n(c.total)} shipments.` })
+      if (c.total > 100 && cDelPct < 50) flags.push({ level: 'critical', icon: '🔴', title: `${c.courier_group} — Low Delivery`, msg: `Delivery rate only ${cDelPct.toFixed(1)}% — consider volume reallocation.` })
+    })
+
+    if (flags.length === 0) flags.push({ level: 'ok', icon: '🟢', title: 'All metrics within range', msg: 'No critical issues detected for the selected period.' })
+    return flags
+  }, [data, k])
   const opts = data?.filterOpts || {}
   const toggleCourier = c => setLFilters(f => ({ ...f, couriers: f.couriers.includes(c) ? f.couriers.filter(x => x !== c) : [...f.couriers, c] }))
 
@@ -238,6 +278,30 @@ function LogisticsPage({ filters }) {
       )}
 
       {data && <>
+
+        {/* ── Smart Alerts ── */}
+        {alerts.length > 0 && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            {alerts.map((a, i) => {
+              const styles = {
+                critical: { bg: '#FEF2F2', border: '#FECACA', dot: '#dc2626', text: '#991b1b' },
+                warning:  { bg: '#FFFBEB', border: '#FDE68A', dot: '#d97706', text: '#92400e' },
+                info:     { bg: '#EFF6FF', border: '#BFDBFE', dot: '#2563eb', text: '#1e40af' },
+                ok:       { bg: '#F0FDF4', border: '#BBF7D0', dot: '#16a34a', text: '#14532d' },
+              }
+              const s = styles[a.level] || styles.info
+              return (
+                <div key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: 10, background: s.bg, border: `1px solid ${s.border}`, borderRadius: 10, padding: '10px 14px' }}>
+                  <div style={{ width: 8, height: 8, borderRadius: '50%', background: s.dot, marginTop: 4, flexShrink: 0 }} />
+                  <div style={{ flex: 1 }}>
+                    <span style={{ fontSize: 12, fontWeight: 700, color: s.text }}>{a.title} — </span>
+                    <span style={{ fontSize: 12, color: s.text, opacity: 0.85 }}>{a.msg}</span>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        )}
 
         {/* ── Volume KPIs ── */}
         <LSectionTitle title="Volume Overview" />
