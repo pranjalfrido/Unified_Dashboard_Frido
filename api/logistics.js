@@ -11,7 +11,25 @@ export default async function handler(req, res) {
   if (!start || !end) return res.status(400).json({ error: 'Missing start or end' })
 
   const filters = []
-  if (courier?.length) filters.push(`c.courier_partner IN (${courier.map(v => `'${v.replace(/'/g, "\\'")}'`).join(',')})`)
+  if (courier?.length) {
+    const COURIER_LIKE = {
+      'Bluedart':     `LOWER(c.courier_partner) LIKE '%bluedart%'`,
+      'Ekart':        `LOWER(c.courier_partner) LIKE '%ekart%'`,
+      'ElasticRun':   `LOWER(c.courier_partner) LIKE '%elastic%'`,
+      'Delhivery DS': `(LOWER(c.courier_partner) LIKE '%delhivery%' AND LOWER(c.courier_partner) LIKE '%hld%')`,
+      'Delhivery NDD':`(LOWER(c.courier_partner) LIKE '%delhivery%' AND LEFT(c.awb, 4) = '5448')`,
+      'Delhivery':    `(LOWER(c.courier_partner) LIKE '%delhivery%' AND LOWER(c.courier_partner) NOT LIKE '%hld%' AND LEFT(c.awb, 4) != '5448')`,
+      'Safexpress':   `LOWER(c.courier_partner) LIKE '%safexpress%'`,
+      'Shadowfax':    `LOWER(c.courier_partner) LIKE '%shadowfax%'`,
+      'Sky Air':      `(LOWER(c.courier_partner) LIKE '%sky air%' OR LOWER(c.courier_partner) LIKE '%skye air%')`,
+      'Skye Air':     `(LOWER(c.courier_partner) LIKE '%sky air%' OR LOWER(c.courier_partner) LIKE '%skye air%')`,
+      'Swift':        `(LOWER(c.courier_partner) LIKE '%swift%')`,
+      'UrbanBolt':    `(LOWER(c.courier_partner) LIKE '%urbane bolt%' OR LOWER(c.courier_partner) LIKE '%urbanbolt%')`,
+      'Urbane Bolt':  `(LOWER(c.courier_partner) LIKE '%urbane bolt%' OR LOWER(c.courier_partner) LIKE '%urbanbolt%')`,
+    }
+    const clauses = courier.map(v => COURIER_LIKE[v] || `LOWER(c.courier_partner) LIKE '%${v.toLowerCase().replace(/'/g, "\\'")}%'`)
+    filters.push(`(${clauses.join(' OR ')})`)
+  }
   if (shipmentType && shipmentType !== 'all') filters.push(`LOWER(TRIM(c.shipment_type)) = '${shipmentType.toLowerCase()}'`)
   if (sddNdd && sddNdd !== 'all') {
     if (sddNdd === 'SDD/NDD') filters.push(`SAFE_CAST(c.committed_sla AS INT64) <= 1`)
