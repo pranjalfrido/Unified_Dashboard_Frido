@@ -135,6 +135,9 @@ function LogisticsPage({ filters }) {
   const [data, setData] = useState(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
+  const [retData, setRetData] = useState(null)
+  const [retTrendGran, setRetTrendGran] = useState('Monthly')
+  const [retReasonView, setRetReasonView] = useState('reason') // 'reason' | 'sub'
 
   const fetchLogistics = useCallback(async () => {
     if (!filters.start || !filters.end) return
@@ -158,6 +161,16 @@ function LogisticsPage({ filters }) {
   }, [filters.start, filters.end, lFilters])
 
   useEffect(() => { fetchLogistics() }, [fetchLogistics])
+
+  const fetchReturns = useCallback(async () => {
+    if (!filters.start || !filters.end) return
+    try {
+      const r = await fetch(`${API}/api/returns`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ start: filters.start, end: filters.end }) })
+      if (r.ok) setRetData(await r.json())
+    } catch (e) { console.error('[returns]', e.message) }
+  }, [filters.start, filters.end])
+
+  useEffect(() => { fetchReturns() }, [fetchReturns])
 
   const k = data?.kpis || {}
   const pct2 = (a, b) => b ? ((a / b) * 100).toFixed(1) + '%' : '—'
@@ -774,73 +787,130 @@ function LogisticsPage({ filters }) {
           )
         })()}
 
-        {/* ── RTO Analysis ── */}
-        <LSectionTitle title="RTO Analysis" />
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+        {/* ── Returns & Exchange Analytics ── */}
+        <LSectionTitle title="Returns & Exchange Analytics" />
+        {(() => {
+          const rk = retData?.kpis || {}
+          const totalReq = rk.total_requests || 1
+          const pickupSuccessPct = rk.pickup_success ? ((rk.pickup_success / totalReq) * 100).toFixed(1) : '—'
+          const refundPct = rk.refund_processed ? ((rk.refund_processed / totalReq) * 100).toFixed(1) : '—'
 
-          {/* RTO Reasons — custom bars matching HTML style */}
-          <div style={cardStyle}>
-            <div style={chartTitle}>Top RTO Reasons</div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-              {(data.rtoReasons || []).map((r, i) => {
-                const maxR = data.rtoReasons[0]?.total || 1
-                const w = ((r.total / maxR) * 100).toFixed(1)
-                return (
-                  <div key={r.reason}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 5 }}>
-                      <span style={{ fontSize: 11, color: C.t2, maxWidth: '75%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.reason}</span>
-                      <span style={{ fontSize: 11, fontWeight: 700, color: C.t1 }}>{r.total.toLocaleString('en-IN')}</span>
-                    </div>
-                    <div style={{ height: 6, borderRadius: 3, background: C.border, overflow: 'hidden' }}>
-                      <div style={{ height: '100%', width: w + '%', background: C.red.tx, borderRadius: 3, transition: 'width .4s ease' }} />
+          // Trend data
+          const retTrendRaw = retTrendGran === 'Daily' ? (retData?.byDay || []) : retTrendGran === 'Weekly' ? (retData?.byWeek || []) : (retData?.byMonth || [])
+          const retTrendTitle = retTrendGran === 'Daily' ? 'Daily Trend' : retTrendGran === 'Weekly' ? 'Weekly Trend' : 'Monthly Trend'
+
+          // Reason bars
+          const reasonRows = retReasonView === 'reason' ? (retData?.byReason || []) : (retData?.bySubReason || [])
+          const maxReasonTotal = reasonRows[0]?.total || 1
+
+          return (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+
+              {/* KPI Cards */}
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 14 }}>
+                {[
+                  { label: 'Total Requests', value: (rk.total_requests||0).toLocaleString('en-IN'), sub: `Returns: ${(rk.total_returns||0).toLocaleString('en-IN')} · Exchange: ${(rk.total_exchanges||0).toLocaleString('en-IN')}`, color: '#2563eb', bg: '#EFF6FF', border: '#BFDBFE' },
+                  { label: 'Pickup Success %', value: pickupSuccessPct+'%', sub: `${(rk.pickup_success||0).toLocaleString('en-IN')} picked up`, color: '#16a34a', bg: '#F0FDF4', border: '#BBF7D0' },
+                  { label: 'Refund Processed %', value: refundPct+'%', sub: `${(rk.refund_processed||0).toLocaleString('en-IN')} processed`, color: '#d97706', bg: '#FFFBEB', border: '#FDE68A' },
+                  { label: 'Avg Refund ₹', value: rk.avg_refund_amount ? '₹'+(rk.avg_refund_amount).toLocaleString('en-IN') : '—', sub: `Total: ₹${((rk.total_refunded||0)/100000).toFixed(1)}L`, color: '#7c3aed', bg: '#F5F3FF', border: '#DDD6FE' },
+                ].map(m => (
+                  <div key={m.label} style={{ background: m.bg, border: `1.5px solid ${m.border}`, borderRadius: 14, padding: '16px 18px' }}>
+                    <div style={{ fontSize: 9.5, color: '#94939F', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.04em', marginBottom: 6 }}>{m.label}</div>
+                    <div style={{ fontSize: 22, fontWeight: 700, color: m.color, letterSpacing: '-0.5px', marginBottom: 4 }}>{m.value}</div>
+                    <div style={{ fontSize: 10, color: '#94939F' }}>{m.sub}</div>
+                  </div>
+                ))}
+              </div>
+
+              {/* Row: Reasons (full width) */}
+              <div style={cardStyle}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
+                  <div>
+                    <div style={chartTitle}>Return Reasons</div>
+                    <div style={{ fontSize: 11, color: C.t3, marginTop: 2 }}>Why customers are returning — top {reasonRows.length}</div>
+                  </div>
+                  <div style={{ display: 'flex', gap: 4 }}>
+                    {[['reason','Main Reason'],['sub','Sub Reason']].map(([v,l]) => (
+                      <button key={v} onClick={() => setRetReasonView(v)} style={{ fontSize: 10.5, padding: '3px 12px', borderRadius: 6, border: `1px solid ${retReasonView===v ? C.acc : C.border}`, background: retReasonView===v ? C.acl : 'transparent', color: retReasonView===v ? C.t1 : C.t2, cursor: 'pointer', fontWeight: retReasonView===v ? 700 : 500, fontFamily: 'var(--font)', transition: 'all .15s' }}>{l}</button>
+                    ))}
+                  </div>
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                  {reasonRows.map((r, i) => {
+                    const barW = ((r.total / maxReasonTotal) * 100).toFixed(1)
+                    const colors = ['#2563eb','#3b82f6','#60a5fa','#93c5fd','#bfdbfe','#1d4ed8','#1e40af','#172554','#0ea5e9','#38bdf8','#7dd3fc','#0369a1','#0284c7','#0891b2','#06b6d4']
+                    return (
+                      <div key={r.reason} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                        <div style={{ width: 200, minWidth: 200, fontSize: 11, color: C.t2, textAlign: 'right', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{r.reason}</div>
+                        <div style={{ flex: 1, height: 22, borderRadius: 4, background: C.border, overflow: 'hidden', position: 'relative' }}>
+                          <div style={{ height: '100%', width: barW + '%', background: colors[i] || '#2563eb', borderRadius: 4, transition: 'width .5s ease', display: 'flex', alignItems: 'center', justifyContent: 'flex-end', paddingRight: 8 }}>
+                            {parseFloat(barW) > 15 && <span style={{ fontSize: 10, fontWeight: 700, color: '#fff' }}>{r.pct}%</span>}
+                          </div>
+                          {parseFloat(barW) <= 15 && <span style={{ position: 'absolute', left: barW+'%', top: '50%', transform: 'translateY(-50%)', marginLeft: 6, fontSize: 10, fontWeight: 700, color: C.t1 }}>{r.pct}%</span>}
+                        </div>
+                        <div style={{ width: 70, minWidth: 70, fontSize: 11, fontWeight: 700, color: C.t1, textAlign: 'right' }}>{r.total.toLocaleString('en-IN')}</div>
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+
+              {/* Row: Trend + Products side by side */}
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+
+                {/* Trend chart */}
+                <div style={cardStyle}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 2 }}>
+                    <div style={chartTitle}>{retTrendTitle} — Returns & Pickup %</div>
+                    <div style={{ display: 'flex', gap: 4 }}>
+                      {['Daily','Weekly','Monthly'].map(g => (
+                        <button key={g} onClick={() => setRetTrendGran(g)} style={{ fontSize: 10.5, padding: '3px 10px', borderRadius: 6, border: `1px solid ${retTrendGran===g ? C.acc : C.border}`, background: retTrendGran===g ? C.acl : 'transparent', color: retTrendGran===g ? C.t1 : C.t2, cursor: 'pointer', fontWeight: retTrendGran===g ? 700 : 500, fontFamily: 'var(--font)', transition: 'all .15s' }}>{g}</button>
+                      ))}
                     </div>
                   </div>
-                )
-              })}
+                  <div style={{ fontSize: 11, color: C.t3, marginBottom: 12, marginTop: 2 }}>Returns (bars) · Pickup Success % (line)</div>
+                  <ResponsiveContainer width="100%" height={260}>
+                    <ComposedChart data={retTrendRaw} margin={{ top: 4, right: 40, left: 0, bottom: 0 }}>
+                      <CartesianGrid strokeDasharray="3 3" stroke={C.border} vertical={false} strokeOpacity={0.5} />
+                      <XAxis dataKey="label" tick={{ fontSize: 9.5, fill: C.t3 }} />
+                      <YAxis yAxisId="vol" tick={{ fontSize: 9, fill: C.t3 }} />
+                      <YAxis yAxisId="pct" orientation="right" tick={{ fontSize: 9, fill: C.t3 }} tickFormatter={v => v+'%'} domain={[0,100]} />
+                      <Tooltip formatter={(v, n) => n.includes('%') ? [v.toFixed(1)+'%', n] : [v.toLocaleString('en-IN'), n]} />
+                      <Legend wrapperStyle={{ fontSize: 10, paddingTop: 8 }} />
+                      <Bar yAxisId="vol" dataKey="returns" name="Returns" fill="#2563eb" radius={[3,3,0,0]} />
+                      <Bar yAxisId="vol" dataKey="exchanges" name="Exchanges" fill="#FFD600" radius={[3,3,0,0]} />
+                      <Line yAxisId="pct" type="monotone" dataKey="pickup_pct" name="Pickup %" stroke="#16a34a" strokeWidth={2} dot={{ r: 2.5, fill: '#16a34a' }} />
+                    </ComposedChart>
+                  </ResponsiveContainer>
+                </div>
+
+                {/* Top Products */}
+                <div style={cardStyle}>
+                  <div style={chartTitle}>Top Returned Products</div>
+                  <div style={{ fontSize: 11, color: C.t3, marginBottom: 14, marginTop: 2 }}>Most returned items in selected period</div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                    {(retData?.byProduct || []).map((r, i) => {
+                      const maxP = retData.byProduct[0]?.total || 1
+                      const w = ((r.total / maxP) * 100).toFixed(1)
+                      return (
+                        <div key={r.product}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+                            <span style={{ fontSize: 11, color: C.t2, maxWidth: '70%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.product}</span>
+                            <span style={{ fontSize: 11, fontWeight: 700, color: C.t1 }}>{r.total.toLocaleString('en-IN')} <span style={{ color: C.t3, fontWeight: 400 }}>({r.pct}%)</span></span>
+                          </div>
+                          <div style={{ height: 7, borderRadius: 4, background: C.border, overflow: 'hidden' }}>
+                            <div style={{ height: '100%', width: w+'%', background: i === 0 ? '#dc2626' : '#2563eb', borderRadius: 4, opacity: 1 - i*0.06, transition: 'width .4s ease' }} />
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                </div>
+
+              </div>
             </div>
-          </div>
-
-          {/* OFD Attempts Donut */}
-          <div style={cardStyle}>
-            <div style={chartTitle}>OFD Attempt Breakdown</div>
-            <ResponsiveContainer width="100%" height={260}>
-              <PieChart>
-                <Pie
-                  data={[
-                    { name: '1st Attempt Delivered', value: k.delivered_1attempt || 0 },
-                    { name: 'Multi-Attempt Delivered', value: k.delivered_multi || 0 },
-                    { name: 'RTO', value: k.rto || 0 },
-                  ]}
-                  dataKey="value" cx="50%" cy="45%" innerRadius={65} outerRadius={95} paddingAngle={3}
-                >
-                  <Cell fill={C.green.tx} />
-                  <Cell fill="#f97316" />
-                  <Cell fill={C.red.tx} />
-                </Pie>
-                <Tooltip formatter={(v, n) => [v.toLocaleString('en-IN'), n]} />
-                <Legend wrapperStyle={{ fontSize: 11 }} />
-              </PieChart>
-            </ResponsiveContainer>
-          </div>
-        </div>
-
-        {/* ── Zone Performance ── */}
-        <LSectionTitle title="Zone Performance" />
-        <div style={cardStyle}>
-          <div style={chartTitle}>Zone — Shipments & RTO %</div>
-          <ResponsiveContainer width="100%" height={200}>
-            <ComposedChart data={(data.byZone || []).map(d => ({ ...d, rto_pct: d.total ? +((d.rto / d.total) * 100).toFixed(1) : 0 }))} margin={{ top: 4, right: 24, left: 0, bottom: 0 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke={C.border} />
-              <XAxis dataKey="zone" tick={{ fontSize: 10, fill: C.t3 }} />
-              <YAxis yAxisId="left" tick={{ fontSize: 10, fill: C.t3 }} />
-              <YAxis yAxisId="right" orientation="right" tickFormatter={v => v + '%'} tick={{ fontSize: 10, fill: C.t3 }} />
-              <Tooltip content={<ChartTooltip />} />
-              <Legend wrapperStyle={{ fontSize: 11 }} />
-              <Bar yAxisId="left" dataKey="total" name="Shipments" fill={C.acc} radius={[3,3,0,0]} />
-              <Line yAxisId="right" dataKey="rto_pct" name="RTO %" stroke={C.red.tx} strokeWidth={2} dot={{ fill: C.red.tx, r: 3 }} />
-            </ComposedChart>
-          </ResponsiveContainer>
-        </div>
+          )
+        })()}
 
       </>}
     </div>
