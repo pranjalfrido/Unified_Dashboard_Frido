@@ -661,22 +661,32 @@ function LogisticsPage({ filters }) {
               {/* Row 2: 2 charts side by side */}
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
 
-                {/* Chart 1: Monthly trend — stacked bars (volume) + lines (Del%, RTO%) */}
+                {/* Chart 1: Monthly trend — area lines for Del% + RTO% */}
                 <div style={cardStyle}>
-                  <div style={chartTitle}>Monthly Trend — Volume & Delivery Rate</div>
-                  <div style={{ fontSize: 11, color: C.t3, marginBottom: 12, marginTop: 2 }}>Bars = shipment volume · Lines = Del% per mode</div>
+                  <div style={chartTitle}>Monthly Trend — Delivery & RTO Rate</div>
+                  <div style={{ fontSize: 11, color: C.t3, marginBottom: 12, marginTop: 2 }}>PREPAID vs COD · Del% (left axis) · RTO% (right axis)</div>
                   <ResponsiveContainer width="100%" height={240}>
-                    <ComposedChart data={trendData} margin={{ top: 4, right: 40, left: 0, bottom: 0 }} barCategoryGap="30%">
-                      <CartesianGrid strokeDasharray="3 3" stroke={C.border} vertical={false} />
+                    <ComposedChart data={trendData} margin={{ top: 8, right: 40, left: 0, bottom: 0 }}>
+                      <defs>
+                        <linearGradient id="prepaidDelGrad" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="5%" stopColor="#2563eb" stopOpacity={0.15}/>
+                          <stop offset="95%" stopColor="#2563eb" stopOpacity={0}/>
+                        </linearGradient>
+                        <linearGradient id="codDelGrad" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="5%" stopColor="#d97706" stopOpacity={0.15}/>
+                          <stop offset="95%" stopColor="#d97706" stopOpacity={0}/>
+                        </linearGradient>
+                      </defs>
+                      <CartesianGrid strokeDasharray="3 3" stroke={C.border} vertical={true} strokeOpacity={0.5} />
                       <XAxis dataKey="month" tick={{ fontSize: 10, fill: C.t3 }} />
-                      <YAxis yAxisId="vol" tick={{ fontSize: 9, fill: C.t3 }} tickFormatter={v => v>=1000?(v/1000).toFixed(0)+'K':v} />
-                      <YAxis yAxisId="pct" orientation="right" tick={{ fontSize: 9, fill: C.t3 }} tickFormatter={v => v+'%'} domain={[0,100]} />
-                      <Tooltip formatter={(v,n) => n.includes('%') ? [v.toFixed(1)+'%',n] : [Number(v).toLocaleString('en-IN'),n]} />
+                      <YAxis yAxisId="del" tick={{ fontSize: 9, fill: C.t3 }} tickFormatter={v => v+'%'} domain={[50,100]} />
+                      <YAxis yAxisId="rto" orientation="right" tick={{ fontSize: 9, fill: C.t3 }} tickFormatter={v => v+'%'} domain={[0,35]} />
+                      <Tooltip formatter={(v,n) => [v.toFixed(1)+'%', n]} />
                       <Legend wrapperStyle={{ fontSize: 11, paddingTop: 8 }} />
-                      <Bar yAxisId="vol" dataKey="PREPAID_vol" name="PREPAID Vol" stackId="v" fill="#93c5fd" radius={[0,0,0,0]} />
-                      <Bar yAxisId="vol" dataKey="COD_vol" name="COD Vol" stackId="v" fill="#FDE68A" radius={[3,3,0,0]} />
-                      <Line yAxisId="pct" type="monotone" dataKey="PREPAID_del" name="PREPAID Del%" stroke="#2563eb" strokeWidth={2.5} dot={{ r: 3, fill: '#2563eb' }} />
-                      <Line yAxisId="pct" type="monotone" dataKey="COD_del" name="COD Del%" stroke="#d97706" strokeWidth={2.5} dot={{ r: 3, fill: '#d97706' }} strokeDasharray="5 3" />
+                      <Area yAxisId="del" type="monotone" dataKey="PREPAID_del" name="PREPAID Del%" stroke="#2563eb" strokeWidth={2.5} fill="url(#prepaidDelGrad)" dot={{ r: 3, fill: '#2563eb', strokeWidth: 0 }} activeDot={{ r: 5 }} />
+                      <Area yAxisId="del" type="monotone" dataKey="COD_del" name="COD Del%" stroke="#d97706" strokeWidth={2.5} fill="url(#codDelGrad)" dot={{ r: 3, fill: '#d97706', strokeWidth: 0 }} activeDot={{ r: 5 }} />
+                      <Line yAxisId="rto" type="monotone" dataKey="PREPAID_rto" name="PREPAID RTO%" stroke="#93c5fd" strokeWidth={1.5} dot={{ r: 2 }} strokeDasharray="4 3" />
+                      <Line yAxisId="rto" type="monotone" dataKey="COD_rto" name="COD RTO%" stroke="#fca5a5" strokeWidth={1.5} dot={{ r: 2 }} strokeDasharray="4 3" />
                     </ComposedChart>
                   </ResponsiveContainer>
                 </div>
