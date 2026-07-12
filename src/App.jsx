@@ -235,7 +235,7 @@ function LogisticsPage({ filters }) {
   const chartTitle = { fontSize: 11, fontWeight: 700, color: C.t2, letterSpacing: '.06em', textTransform: 'uppercase', marginBottom: 14 }
 
   return (
-    <div style={{ padding: '10px 20px 16px', display: 'flex', flexDirection: 'column', gap: 14 }}>
+    <div style={{ padding: '4px 20px 16px', display: 'flex', flexDirection: 'column', gap: 14 }}>
 
       {/* ── View Toggle ── */}
       <div style={{ display: 'flex', justifyContent: 'center' }}>
