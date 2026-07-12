@@ -130,7 +130,7 @@ function LogisticsPage({ filters }) {
   const [trendGranularity, setTrendGranularity] = useState('Daily')
   const [cSort, setCSort] = useState({ col: 'total', dir: 'desc' })
   const [cView, setCView] = useState('courier') // 'courier' | 'month'
-  const [payTrendGran, setPayTrendGran] = useState('Monthly')
+  const [payTrendGran, setPayTrendGran] = useState('Daily')
   const [cExpanded, setCExpanded] = useState({})
   const [data, setData] = useState(null)
   const [loading, setLoading] = useState(false)
