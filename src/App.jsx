@@ -136,7 +136,7 @@ function LogisticsPage({ filters }) {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
   const [retData, setRetData] = useState(null)
-  const [retTrendGran, setRetTrendGran] = useState('Monthly')
+  const [retTrendGran, setRetTrendGran] = useState('Daily')
   const [retReasonView, setRetReasonView] = useState('reason') // 'reason' | 'sub'
 
   const fetchLogistics = useCallback(async () => {
@@ -868,7 +868,7 @@ function LogisticsPage({ filters }) {
                       ))}
                     </div>
                   </div>
-                  <div style={{ fontSize: 11, color: C.t3, marginBottom: 12, marginTop: 2 }}>Returns (bars) · Pickup Success % (line)</div>
+                  <div style={{ fontSize: 11, color: C.t3, marginBottom: 12, marginTop: 2 }}>Returns · Exchanges · Pickup Success % (dashed)</div>
                   <ResponsiveContainer width="100%" height={260}>
                     <ComposedChart data={retTrendRaw} margin={{ top: 4, right: 40, left: 0, bottom: 0 }}>
                       <CartesianGrid strokeDasharray="3 3" stroke={C.border} vertical={false} strokeOpacity={0.5} />
@@ -877,9 +877,9 @@ function LogisticsPage({ filters }) {
                       <YAxis yAxisId="pct" orientation="right" tick={{ fontSize: 9, fill: C.t3 }} tickFormatter={v => v+'%'} domain={[0,100]} />
                       <Tooltip formatter={(v, n) => n.includes('%') ? [v.toFixed(1)+'%', n] : [v.toLocaleString('en-IN'), n]} />
                       <Legend wrapperStyle={{ fontSize: 10, paddingTop: 8 }} />
-                      <Bar yAxisId="vol" dataKey="returns" name="Returns" fill="#2563eb" radius={[3,3,0,0]} />
-                      <Bar yAxisId="vol" dataKey="exchanges" name="Exchanges" fill="#FFD600" radius={[3,3,0,0]} />
-                      <Line yAxisId="pct" type="monotone" dataKey="pickup_pct" name="Pickup %" stroke="#16a34a" strokeWidth={2} dot={{ r: 2.5, fill: '#16a34a' }} />
+                      <Line yAxisId="vol" type="monotone" dataKey="returns" name="Returns" stroke="#2563eb" strokeWidth={2.5} dot={{ r: 2.5, fill: '#2563eb', strokeWidth: 0 }} activeDot={{ r: 4 }} />
+                      <Line yAxisId="vol" type="monotone" dataKey="exchanges" name="Exchanges" stroke="#FFD600" strokeWidth={2.5} dot={{ r: 2.5, fill: '#FFD600', strokeWidth: 0 }} activeDot={{ r: 4 }} />
+                      <Line yAxisId="pct" type="monotone" dataKey="pickup_pct" name="Pickup %" stroke="#16a34a" strokeWidth={2} dot={{ r: 2.5, fill: '#16a34a', strokeWidth: 0 }} strokeDasharray="4 3" />
                     </ComposedChart>
                   </ResponsiveContainer>
                 </div>
