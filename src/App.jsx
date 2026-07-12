@@ -117,7 +117,7 @@ function LKpiCard({ label, value, badgeText, badgeVariant }) {
 
 function LSectionTitle({ title }) {
   return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 10, margin: '8px 0 6px' }}>
+    <div style={{ display: 'flex', alignItems: 'center', gap: 10, margin: '6px 0 2px' }}>
       <span style={{ fontSize: 10, fontWeight: 800, letterSpacing: '.06em', textTransform: 'uppercase', color: C.t1 }}>{title}</span>
       <div style={{ flex: 1, height: 1, background: C.border }} />
     </div>
@@ -126,6 +126,7 @@ function LSectionTitle({ title }) {
 
 function LogisticsPage({ filters }) {
   const API = import.meta.env.VITE_API_URL || ''
+  const [logisticsView, setLogisticsView] = useState('Logistics')
   const [lFilters, setLFilters] = useState({ couriers: [], shipmentType: 'all', sddNdd: 'all', paymentMode: null, zone: null, pickupState: null, dropState: null, category: null, subCategory: null })
   const [trendGranularity, setTrendGranularity] = useState('Daily')
   const [cSort, setCSort] = useState({ col: 'total', dir: 'desc' })
@@ -235,6 +236,13 @@ function LogisticsPage({ filters }) {
 
   return (
     <div style={{ padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: 14 }}>
+
+      {/* ── View Toggle ── */}
+      <div style={{ display: 'flex', gap: 0, background: C.card, border: `1px solid ${C.border}`, borderRadius: 10, padding: 4, alignSelf: 'flex-start' }}>
+        {['Logistics', 'Operations'].map(v => (
+          <button key={v} onClick={() => setLogisticsView(v)} style={{ padding: '6px 22px', borderRadius: 7, border: 'none', cursor: 'pointer', fontFamily: 'var(--font)', fontSize: 12, fontWeight: logisticsView === v ? 700 : 500, background: logisticsView === v ? C.acc : 'transparent', color: logisticsView === v ? '#000' : C.t3, transition: 'all .15s' }}>{v}</button>
+        ))}
+      </div>
 
       {/* ── Filter Bar ── */}
       <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 14, padding: '14px 18px', display: 'flex', flexDirection: 'column', gap: 14 }}>
