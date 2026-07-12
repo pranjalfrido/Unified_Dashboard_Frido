@@ -533,7 +533,7 @@ function LogisticsPage({ filters }) {
                           const tatColor = (v,hi,lo) => v==null?C.t3:+v<=lo?'#16a34a':+v<=hi?'#d97706':'#dc2626'
                           return (
                             <tr key={m.month_label} style={{ borderBottom:`1px solid ${C.border}`, background:'#FAFAF8' }}>
-                              <td style={{ padding:'7px 10px 7px 26px', color:C.t2, fontSize:11, whiteSpace:'nowrap' }}>{m.month_label}</td>
+                              <td style={{ padding:'7px 10px 7px 46px', color:C.t2, fontSize:11, whiteSpace:'nowrap' }}>{m.month_label}</td>
                               <td style={{ padding:'7px 10px', textAlign:'right', color:C.t3, fontSize:11 }}>{mVolPct.toFixed(2)}%</td>
                               <td style={{ padding:'7px 10px', textAlign:'right', color:C.t2, fontSize:11 }}>{n(m.total)}</td>
                               <td style={{ padding:'7px 10px', textAlign:'right', color:delColor, fontSize:11 }}>{_delPct.toFixed(2)}%</td>
