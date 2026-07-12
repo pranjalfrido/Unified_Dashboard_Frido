@@ -235,13 +235,15 @@ function LogisticsPage({ filters }) {
   const chartTitle = { fontSize: 11, fontWeight: 700, color: C.t2, letterSpacing: '.06em', textTransform: 'uppercase', marginBottom: 14 }
 
   return (
-    <div style={{ padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: 14 }}>
+    <div style={{ padding: '10px 20px 16px', display: 'flex', flexDirection: 'column', gap: 14 }}>
 
       {/* ── View Toggle ── */}
-      <div style={{ display: 'flex', gap: 0, background: C.card, border: `1px solid ${C.border}`, borderRadius: 10, padding: 4, alignSelf: 'flex-start' }}>
+      <div style={{ display: 'flex', justifyContent: 'center' }}>
+      <div style={{ display: 'flex', gap: 0, background: C.card, border: `1px solid ${C.border}`, borderRadius: 10, padding: 4 }}>
         {['Logistics', 'Operations'].map(v => (
           <button key={v} onClick={() => setLogisticsView(v)} style={{ padding: '6px 22px', borderRadius: 7, border: 'none', cursor: 'pointer', fontFamily: 'var(--font)', fontSize: 12, fontWeight: logisticsView === v ? 700 : 500, background: logisticsView === v ? C.acc : 'transparent', color: logisticsView === v ? '#000' : C.t3, transition: 'all .15s' }}>{v}</button>
         ))}
+      </div>
       </div>
 
       {/* ── Filter Bar ── */}
