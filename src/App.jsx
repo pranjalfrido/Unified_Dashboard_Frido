@@ -395,34 +395,7 @@ function LogisticsPage({ filters }) {
         {/* ── Courier Performance Table ── */}
         <LSectionTitle title="Courier Performance" />
 
-        {/* Alerts strip */}
-        {alerts.filter(a => a.level !== 'ok').length > 0 && (() => {
-          const alertStyles = {
-            critical: { bg: '#FEF2F2', border: '#FECACA', dot: '#dc2626', text: '#991b1b' },
-            warning:  { bg: '#FFFBEB', border: '#FDE68A', dot: '#d97706', text: '#92400e' },
-            info:     { bg: '#EFF6FF', border: '#BFDBFE', dot: '#2563eb', text: '#1e40af' },
-          }
-          const flagged = alerts.filter(a => a.level !== 'ok')
-          return (
-            <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, padding: '12px 16px' }}>
-              <div style={{ fontSize: 10, fontWeight: 800, letterSpacing: '.06em', textTransform: 'uppercase', color: C.t3, marginBottom: 10 }}>Performance Alerts · {flagged.length} flag{flagged.length > 1 ? 's' : ''}</div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                {flagged.map((a, i) => {
-                  const s = alertStyles[a.level] || alertStyles.info
-                  return (
-                    <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 10, background: s.bg, border: `1px solid ${s.border}`, borderRadius: 8, padding: '8px 12px' }}>
-                      <div style={{ width: 7, height: 7, borderRadius: '50%', background: s.dot, flexShrink: 0 }} />
-                      <span style={{ fontSize: 11.5, fontWeight: 700, color: s.text, whiteSpace: 'nowrap' }}>{a.title}</span>
-                      <span style={{ fontSize: 11.5, color: s.text, opacity: 0.8 }}>— {a.msg}</span>
-                    </div>
-                  )
-                })}
-              </div>
-            </div>
-          )
-        })()}
-
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 14 }}>
+<div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 14 }}>
           <div style={cardStyle}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
             <div style={chartTitle}>Courier-wise Breakdown</div>
