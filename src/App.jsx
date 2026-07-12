@@ -170,7 +170,7 @@ function LogisticsPage({ filters }) {
 
   const trendRaw = trendGranularity === 'Daily' ? (data?.byDay || []) : trendGranularity === 'Weekly' ? (data?.byWeek || []) : (data?.byMonth || [])
   const trendData = trendRaw.map(d => ({ ...d, rto_pct: d.rto_pct ?? (d.total ? +((d.rto / d.total) * 100).toFixed(1) : 0) }))
-  const byCourierData = (data?.byCourier || []).slice(0, 10).map(d => ({ ...d, del_pct: d.total ? +((d.delivered / d.total) * 100).toFixed(1) : 0, rto_pct: d.total ? +((d.rto / d.total) * 100).toFixed(1) : 0 }))
+  const byCourierData = (data?.byCourier || []).map(d => ({ ...d, del_pct: d.total ? +((d.delivered / d.total) * 100).toFixed(1) : 0, rto_pct: d.total ? +((d.rto / d.total) * 100).toFixed(1) : 0 }))
   const maxCourierTotal = byCourierData[0]?.total || 1
 
   const statusDonutData = [...(data?.byStatus || [])].sort((a, b) => b.total - a.total)
