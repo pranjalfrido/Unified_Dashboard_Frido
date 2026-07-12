@@ -827,7 +827,7 @@ function LogisticsPage({ filters }) {
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
                   <div>
                     <div style={chartTitle}>Return Reasons</div>
-                    <div style={{ fontSize: 11, color: C.t3, marginTop: 2 }}>Why customers are returning — top {reasonRows.length}</div>
+                    <div style={{ fontSize: 11, color: C.t3, marginTop: 2 }}>Why customers are returning — {reasonRows.length} reasons</div>
                   </div>
                   <div style={{ display: 'flex', gap: 4 }}>
                     {[['reason','Main Reason'],['sub','Sub Reason']].map(([v,l]) => (
@@ -835,7 +835,7 @@ function LogisticsPage({ filters }) {
                     ))}
                   </div>
                 </div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 10, maxHeight: 320, overflowY: 'auto', paddingRight: 4 }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 10, maxHeight: 420, overflowY: 'auto', paddingRight: 6 }}>
                   {reasonRows.map((r, i) => {
                     const barW = ((r.total / maxReasonTotal) * 100).toFixed(1)
                     const colors = ['#FFD600','#FFD600','#FFD600','#FFD600','#FFD600','#FFD600','#FFD600','#FFD600','#FFD600','#FFD600','#FFD600','#FFD600','#FFD600','#FFD600','#FFD600']

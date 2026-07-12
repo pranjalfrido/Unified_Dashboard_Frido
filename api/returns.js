@@ -64,7 +64,7 @@ by_reason AS (
     ROUND(COUNT(awb) * 100.0 / NULLIF((SELECT COUNT(*) FROM base WHERE return_reason IS NOT NULL AND return_reason != ''), 0), 2) AS pct
   FROM base
   WHERE return_reason IS NOT NULL AND return_reason != ''
-  GROUP BY 1 ORDER BY 2 DESC LIMIT 15
+  GROUP BY 1 ORDER BY 2 DESC
 ),
 by_sub_reason AS (
   SELECT
@@ -73,7 +73,7 @@ by_sub_reason AS (
     ROUND(COUNT(awb) * 100.0 / NULLIF((SELECT COUNT(*) FROM base WHERE sub_reason IS NOT NULL AND sub_reason != ''), 0), 2) AS pct
   FROM base
   WHERE sub_reason IS NOT NULL AND sub_reason != ''
-  GROUP BY 1 ORDER BY 2 DESC LIMIT 15
+  GROUP BY 1 ORDER BY 2 DESC
 ),
 by_product AS (
   SELECT
