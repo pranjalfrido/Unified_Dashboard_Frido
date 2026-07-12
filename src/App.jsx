@@ -763,12 +763,12 @@ function LogisticsPage({ filters }) {
               <div style={cardStyle}>
                 <div style={chartTitle}>Total Shipments by Pickup City</div>
                 <div style={{ fontSize: 11, color: C.t3, marginBottom: 12, marginTop: 2 }}>Top 10 origin cities</div>
-                {geoBar(data.topPickupCities || [], 'city', '#16a34a')}
+                {geoBar(data.topPickupCities || [], 'city', '#FFD600')}
               </div>
               <div style={cardStyle}>
                 <div style={chartTitle}>Total Shipments by Drop State</div>
                 <div style={{ fontSize: 11, color: C.t3, marginBottom: 12, marginTop: 2 }}>Top 10 destination states</div>
-                {geoBar(data.topDropStates || [], 'state', '#d97706')}
+                {geoBar(data.topDropStates || [], 'state', '#2563eb')}
               </div>
             </div>
           )
