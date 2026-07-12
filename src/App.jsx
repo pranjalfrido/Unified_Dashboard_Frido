@@ -594,6 +594,136 @@ function LogisticsPage({ filters }) {
         </div>
         </div>
 
+        {/* ── Payment Analytics ── */}
+        <LSectionTitle title="Payment Analytics" />
+        {(() => {
+          const pd = (data?.byPaymentDetail || [])
+          const pm = (data?.byPaymentMonth || [])
+          const PREPAID = pd.find(r => r.payment_mode === 'PREPAID') || {}
+          const COD = pd.find(r => r.payment_mode === 'COD') || {}
+          const totalAll = pd.reduce((s,r) => s+(r.total||0),0) || 1
+          const COLORS = { PREPAID: '#2563eb', COD: '#FFD600' }
+          const COLORS_DARK = { PREPAID: '#1d4ed8', COD: '#d97706' }
+
+          // monthly trend data shaped for recharts
+          const months = [...new Set(pm.map(r => r.month_label))]
+          const trendData = months.map(m => {
+            const p = pm.find(r => r.month_label===m && r.payment_mode==='PREPAID') || {}
+            const c = pm.find(r => r.month_label===m && r.payment_mode==='COD') || {}
+            return { month: m, PREPAID_del: p.del_pct||0, COD_del: c.del_pct||0, PREPAID_rto: p.rto_pct||0, COD_rto: c.rto_pct||0, PREPAID_vol: p.total||0, COD_vol: c.total||0 }
+          })
+
+          // TAT comparison data
+          const tatData = [
+            { name: 'Avg Processing', PREPAID: PREPAID.avg_processing_days, COD: COD.avg_processing_days },
+            { name: 'Avg Pickup', PREPAID: PREPAID.avg_pickup_days, COD: COD.avg_pickup_days },
+            { name: 'Avg S2D', PREPAID: PREPAID.avg_intransit_days, COD: COD.avg_intransit_days },
+            { name: 'Avg O2D', PREPAID: PREPAID.avg_fulfilment_days, COD: COD.avg_fulfilment_days },
+          ]
+
+          return (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+
+              {/* Row 1: KPI summary cards */}
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+                {[{ label: 'PREPAID', d: PREPAID, color: '#2563eb', bg: '#EFF6FF', border: '#BFDBFE' }, { label: 'COD', d: COD, color: '#d97706', bg: '#FFFBEB', border: '#FDE68A' }].map(({ label, d, color, bg, border }) => {
+                  const tot = d.total || 0
+                  const delPct = tot ? ((d.delivered/tot)*100).toFixed(1) : '—'
+                  const rtoPct = tot ? ((d.rto/tot)*100).toFixed(1) : '—'
+                  const volPct = ((tot/totalAll)*100).toFixed(1)
+                  return (
+                    <div key={label} style={{ background: bg, border: `1.5px solid ${border}`, borderRadius: 14, padding: '18px 20px' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                          <div style={{ width: 10, height: 10, borderRadius: '50%', background: color }} />
+                          <span style={{ fontSize: 13, fontWeight: 700, color: '#13121A' }}>{label}</span>
+                        </div>
+                        <span style={{ fontSize: 11, color, fontWeight: 700, background: '#fff', padding: '2px 10px', borderRadius: 20, border: `1px solid ${border}` }}>{volPct}% of total</span>
+                      </div>
+                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 10 }}>
+                        {[
+                          { label: 'Shipments', value: (tot).toLocaleString('en-IN'), sub: null },
+                          { label: 'Delivered %', value: delPct+'%', sub: null, vColor: label==='PREPAID'?'#16a34a':'#d97706' },
+                          { label: 'RTO %', value: rtoPct+'%', sub: null, vColor: label==='COD'?'#dc2626':'#16a34a' },
+                          { label: 'Avg O2D', value: d.avg_fulfilment_days ? d.avg_fulfilment_days+'d' : '—', sub: null },
+                        ].map(m => (
+                          <div key={m.label} style={{ background: '#fff', borderRadius: 10, padding: '10px 12px', border: `1px solid ${border}` }}>
+                            <div style={{ fontSize: 9.5, color: '#94939F', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.04em', marginBottom: 4 }}>{m.label}</div>
+                            <div style={{ fontSize: 18, fontWeight: 700, color: m.vColor || '#13121A', letterSpacing: '-0.5px' }}>{m.value}</div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+
+              {/* Row 2: Trend + TAT */}
+              <div style={{ display: 'grid', gridTemplateColumns: '1.6fr 1fr', gap: 14 }}>
+
+                {/* Chart 1: Monthly Del% & RTO% trend */}
+                <div style={cardStyle}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+                    <div>
+                      <div style={chartTitle}>Delivery & RTO Trend by Payment Mode</div>
+                      <div style={{ fontSize: 11, color: C.t3, marginTop: 2 }}>Monthly Del% and RTO% — PREPAID vs COD</div>
+                    </div>
+                  </div>
+                  <ResponsiveContainer width="100%" height={220}>
+                    <ComposedChart data={trendData} margin={{ top: 4, right: 16, left: 0, bottom: 0 }}>
+                      <CartesianGrid strokeDasharray="3 3" stroke={C.border} vertical={false} />
+                      <XAxis dataKey="month" tick={{ fontSize: 10, fill: C.t3 }} />
+                      <YAxis yAxisId="l" tick={{ fontSize: 9, fill: C.t3 }} tickFormatter={v => v+'%'} domain={[60,100]} />
+                      <YAxis yAxisId="r" orientation="right" tick={{ fontSize: 9, fill: C.t3 }} tickFormatter={v => v+'%'} domain={[0,30]} />
+                      <Tooltip formatter={(v,n) => [v.toFixed(1)+'%', n]} />
+                      <Legend wrapperStyle={{ fontSize: 11, paddingTop: 8 }} />
+                      <Line yAxisId="l" type="monotone" dataKey="PREPAID_del" name="PREPAID Del%" stroke="#2563eb" strokeWidth={2} dot={{ r: 3 }} />
+                      <Line yAxisId="l" type="monotone" dataKey="COD_del" name="COD Del%" stroke="#d97706" strokeWidth={2} dot={{ r: 3 }} strokeDasharray="4 3" />
+                      <Line yAxisId="r" type="monotone" dataKey="PREPAID_rto" name="PREPAID RTO%" stroke="#93c5fd" strokeWidth={1.5} dot={{ r: 2 }} />
+                      <Line yAxisId="r" type="monotone" dataKey="COD_rto" name="COD RTO%" stroke="#fca5a5" strokeWidth={1.5} dot={{ r: 2 }} strokeDasharray="4 3" />
+                    </ComposedChart>
+                  </ResponsiveContainer>
+                </div>
+
+                {/* Chart 2: TAT comparison grouped bars */}
+                <div style={cardStyle}>
+                  <div style={chartTitle}>TAT Comparison: PREPAID vs COD</div>
+                  <div style={{ fontSize: 11, color: C.t3, marginBottom: 12, marginTop: 2 }}>Average days at each stage</div>
+                  <ResponsiveContainer width="100%" height={220}>
+                    <BarChart data={tatData} margin={{ top: 4, right: 8, left: 0, bottom: 0 }} barCategoryGap="30%">
+                      <CartesianGrid strokeDasharray="3 3" stroke={C.border} vertical={false} />
+                      <XAxis dataKey="name" tick={{ fontSize: 9.5, fill: C.t3 }} />
+                      <YAxis tick={{ fontSize: 9, fill: C.t3 }} tickFormatter={v => v+'d'} />
+                      <Tooltip formatter={(v,n) => [v != null ? (+v).toFixed(2)+'d' : '—', n]} />
+                      <Legend wrapperStyle={{ fontSize: 11, paddingTop: 8 }} />
+                      <Bar dataKey="PREPAID" name="PREPAID" fill="#2563eb" radius={[4,4,0,0]} />
+                      <Bar dataKey="COD" name="COD" fill="#FFD600" radius={[4,4,0,0]} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+              </div>
+
+              {/* Row 3: Volume trend bars */}
+              <div style={cardStyle}>
+                <div style={chartTitle}>Monthly Volume Split — PREPAID vs COD</div>
+                <div style={{ fontSize: 11, color: C.t3, marginBottom: 12, marginTop: 2 }}>Shipment count per month by payment mode</div>
+                <ResponsiveContainer width="100%" height={180}>
+                  <BarChart data={trendData} margin={{ top: 4, right: 16, left: 0, bottom: 0 }} barCategoryGap="25%" barGap={2}>
+                    <CartesianGrid strokeDasharray="3 3" stroke={C.border} vertical={false} />
+                    <XAxis dataKey="month" tick={{ fontSize: 10, fill: C.t3 }} />
+                    <YAxis tick={{ fontSize: 9, fill: C.t3 }} tickFormatter={v => v>=1000?(v/1000).toFixed(0)+'K':v} />
+                    <Tooltip formatter={(v,n) => [v.toLocaleString('en-IN'), n]} />
+                    <Legend wrapperStyle={{ fontSize: 11, paddingTop: 8 }} />
+                    <Bar dataKey="PREPAID_vol" name="PREPAID" stackId="a" fill="#2563eb" radius={[0,0,0,0]} />
+                    <Bar dataKey="COD_vol" name="COD" stackId="a" fill="#FFD600" radius={[4,4,0,0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+
+            </div>
+          )
+        })()}
+
         {/* ── Geographic + Payment + Courier Share ── */}
         <LSectionTitle title="Geographic & Payment" />
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 14 }}>

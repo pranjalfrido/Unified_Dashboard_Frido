@@ -198,6 +198,34 @@ by_zone AS (
     COUNTIF(unified_status='RTO') AS rto
   FROM base WHERE zone IS NOT NULL GROUP BY 1
 ),
+by_payment_detail AS (
+  SELECT
+    payment_mode,
+    COUNT(awb) AS total,
+    COUNTIF(unified_status='Delivered') AS delivered,
+    COUNTIF(unified_status='RTO') AS rto,
+    COUNTIF(unified_status='Cancelled') AS cancelled,
+    COUNTIF(unified_status='Intransit') AS in_transit,
+    COUNTIF(unified_status='RTO' AND COALESCE(ofd_attempts,0)=0) AS z_rto,
+    ROUND(AVG(IF(delivery_date IS NOT NULL AND order_date IS NOT NULL AND DATE_DIFF(delivery_date, order_date, DAY) BETWEEN 0 AND 20, DATE_DIFF(delivery_date, order_date, DAY), NULL)), 2) AS avg_fulfilment_days,
+    ROUND(AVG(IF(pickup_ts IS NOT NULL AND delivery_ts IS NOT NULL AND TIMESTAMP_DIFF(delivery_ts, pickup_ts, MINUTE) BETWEEN 0 AND 28800, TIMESTAMP_DIFF(delivery_ts, pickup_ts, MINUTE) / 1440.0, NULL)), 2) AS avg_intransit_days,
+    ROUND(AVG(IF(pickup_ts IS NOT NULL AND created_ts IS NOT NULL AND TIMESTAMP_DIFF(pickup_ts, created_ts, MINUTE) BETWEEN 0 AND 14400, TIMESTAMP_DIFF(pickup_ts, created_ts, MINUTE) / 1440.0, NULL)), 2) AS avg_pickup_days,
+    ROUND(AVG(IF(created_date IS NOT NULL AND order_date IS NOT NULL AND DATE_DIFF(created_date, order_date, DAY) BETWEEN 0 AND 10, DATE_DIFF(created_date, order_date, DAY), NULL)), 2) AS avg_processing_days,
+    ROUND(AVG(SAFE_CAST(invoice_value AS FLOAT64)), 0) AS avg_order_value
+  FROM base WHERE payment_mode IS NOT NULL GROUP BY 1
+),
+by_payment_month AS (
+  SELECT
+    payment_mode,
+    FORMAT_DATE('%b-%y', created_date) AS month_label,
+    DATE_TRUNC(created_date, MONTH) AS month_dt,
+    COUNT(awb) AS total,
+    COUNTIF(unified_status='Delivered') AS delivered,
+    COUNTIF(unified_status='RTO') AS rto,
+    ROUND(COUNTIF(unified_status='Delivered') * 100.0 / NULLIF(COUNT(awb),0), 2) AS del_pct,
+    ROUND(COUNTIF(unified_status='RTO') * 100.0 / NULLIF(COUNT(awb),0), 2) AS rto_pct
+  FROM base WHERE payment_mode IS NOT NULL AND created_date IS NOT NULL GROUP BY 1,2,3
+),
 by_day AS (
   SELECT
     FORMAT_DATE('%d %b', created_date) AS label,
@@ -263,6 +291,8 @@ SELECT
   TO_JSON_STRING(ARRAY(SELECT AS STRUCT * FROM by_payment)) AS by_payment,
   TO_JSON_STRING(ARRAY(SELECT AS STRUCT * FROM by_courier_month ORDER BY courier_group, month_dt)) AS by_courier_month,
   TO_JSON_STRING(ARRAY(SELECT AS STRUCT * FROM by_month_all ORDER BY month_dt)) AS by_month_all,
+  TO_JSON_STRING(ARRAY(SELECT AS STRUCT * FROM by_payment_detail ORDER BY total DESC)) AS by_payment_detail,
+  TO_JSON_STRING(ARRAY(SELECT AS STRUCT * FROM by_payment_month ORDER BY payment_mode, month_dt)) AS by_payment_month,
   TO_JSON_STRING((SELECT AS STRUCT * FROM filter_opts)) AS filter_opts
 `
 
@@ -284,6 +314,8 @@ SELECT
       byPayment: JSON.parse(r.by_payment),
       byCourierMonth: JSON.parse(r.by_courier_month),
       byMonthAll: JSON.parse(r.by_month_all),
+      byPaymentDetail: JSON.parse(r.by_payment_detail),
+      byPaymentMonth: JSON.parse(r.by_payment_month),
       filterOpts: JSON.parse(r.filter_opts),
     })
   } catch (e) {
