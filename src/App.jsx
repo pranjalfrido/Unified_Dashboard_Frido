@@ -728,52 +728,51 @@ function LogisticsPage({ filters }) {
           )
         })()}
 
-        {/* ── Geographic + Payment + Courier Share ── */}
-        <LSectionTitle title="Geographic & Payment" />
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 14 }}>
-
-          {/* Top Drop States — horizontal bars */}
-          <div style={cardStyle}>
-            <div style={chartTitle}>Top Drop States</div>
-            <ResponsiveContainer width="100%" height={260}>
-              <BarChart data={data.topDropStates || []} layout="vertical" margin={{ top: 0, right: 16, left: 90, bottom: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke={C.border} horizontal={false} />
-                <XAxis type="number" tick={{ fontSize: 9, fill: C.t3 }} />
-                <YAxis type="category" dataKey="state" tick={{ fontSize: 10, fill: C.t2 }} width={90} />
-                <Tooltip content={<ChartTooltip />} />
-                <Bar dataKey="total" name="Shipments" fill="#FFD600cc" radius={[0,3,3,0]} />
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-
-          {/* Payment Donut */}
-          <div style={cardStyle}>
-            <div style={chartTitle}>Payment Mode Split</div>
-            <ResponsiveContainer width="100%" height={260}>
-              <PieChart>
-                <Pie data={paymentDonutData} dataKey="total" nameKey="payment_mode" cx="50%" cy="45%" innerRadius={65} outerRadius={95} paddingAngle={3}>
-                  {paymentDonutData.map((p, i) => <Cell key={p.payment_mode} fill={[C.blue.tx, '#FFD600'][i % 2]} />)}
-                </Pie>
-                <Tooltip formatter={(v, n) => [v.toLocaleString('en-IN'), n]} />
-                <Legend wrapperStyle={{ fontSize: 11 }} />
-              </PieChart>
-            </ResponsiveContainer>
-          </div>
-
-          {/* Courier Volume Pie */}
-          <div style={cardStyle}>
-            <div style={chartTitle}>Courier Volume Share</div>
-            <ResponsiveContainer width="100%" height={260}>
-              <PieChart>
-                <Pie data={byCourierData} dataKey="total" nameKey="courier_group" cx="50%" cy="45%" innerRadius={55} outerRadius={85} paddingAngle={2}>
-                  {byCourierData.map(r => <Cell key={r.courier_group} fill={COURIER_COLORS[r.courier_group] || '#64748b'} />)}
-                </Pie>
-                <Tooltip formatter={(v, n) => [v.toLocaleString('en-IN'), n]} />
-                <Legend wrapperStyle={{ fontSize: 10 }} />
-              </PieChart>
-            </ResponsiveContainer>
-          </div>
-        </div>
+        {/* ── Geographic ── */}
+        <LSectionTitle title="Geographic" />
+        {(() => {
+          const geoBar = (rows, labelKey, color) => {
+            const grandTotal = rows.reduce((s,r) => s + (r.total||0), 0) || 1
+            return (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                {rows.map(r => {
+                  const pct = ((r.total / grandTotal) * 100).toFixed(1)
+                  const w = ((r.total / rows[0].total) * 100).toFixed(1)
+                  return (
+                    <div key={r[labelKey]}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+                        <span style={{ fontSize: 11, color: C.t2, maxWidth: '65%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r[labelKey]}</span>
+                        <span style={{ fontSize: 11, fontWeight: 700, color: C.t1 }}>{r.total.toLocaleString('en-IN')} <span style={{ color: C.t3, fontWeight: 400 }}>({pct}%)</span></span>
+                      </div>
+                      <div style={{ height: 7, borderRadius: 4, background: C.border, overflow: 'hidden' }}>
+                        <div style={{ height: '100%', width: w + '%', background: color, borderRadius: 4, transition: 'width .4s ease' }} />
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            )
+          }
+          return (
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 14 }}>
+              <div style={cardStyle}>
+                <div style={chartTitle}>Total Shipments by Drop City</div>
+                <div style={{ fontSize: 11, color: C.t3, marginBottom: 12, marginTop: 2 }}>Top 10 destination cities</div>
+                {geoBar(data.topDropCities || [], 'city', '#2563eb')}
+              </div>
+              <div style={cardStyle}>
+                <div style={chartTitle}>Total Shipments by Pickup City</div>
+                <div style={{ fontSize: 11, color: C.t3, marginBottom: 12, marginTop: 2 }}>Top 10 origin cities</div>
+                {geoBar(data.topPickupCities || [], 'city', '#16a34a')}
+              </div>
+              <div style={cardStyle}>
+                <div style={chartTitle}>Total Shipments by Drop State</div>
+                <div style={{ fontSize: 11, color: C.t3, marginBottom: 12, marginTop: 2 }}>Top 10 destination states</div>
+                {geoBar(data.topDropStates || [], 'state', '#d97706')}
+              </div>
+            </div>
+          )
+        })()}
 
         {/* ── RTO Analysis ── */}
         <LSectionTitle title="RTO Analysis" />
