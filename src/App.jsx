@@ -838,12 +838,12 @@ function LogisticsPage({ filters }) {
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 10, maxHeight: 420, overflowY: 'auto', paddingRight: 6 }}>
                   {reasonRows.map((r, i) => {
                     const barW = ((r.total / maxReasonTotal) * 100).toFixed(1)
-                    const colors = ['#FFD600','#FFD600','#FFD600','#FFD600','#FFD600','#FFD600','#FFD600','#FFD600','#FFD600','#FFD600','#FFD600','#FFD600','#FFD600','#FFD600','#FFD600']
+                    const barColor = '#FFD600'
                     return (
                       <div key={r.reason} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                         <div style={{ width: 200, minWidth: 200, fontSize: 11, color: C.t2, textAlign: 'right', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{r.reason}</div>
                         <div style={{ flex: 1, height: 22, borderRadius: 4, background: C.border, overflow: 'hidden', position: 'relative' }}>
-                          <div style={{ height: '100%', width: barW + '%', background: colors[i] || '#2563eb', borderRadius: 4, transition: 'width .5s ease', display: 'flex', alignItems: 'center', justifyContent: 'flex-end', paddingRight: 8 }}>
+                          <div style={{ height: '100%', width: barW + '%', background: barColor, borderRadius: 4, transition: 'width .5s ease', display: 'flex', alignItems: 'center', justifyContent: 'flex-end', paddingRight: 8 }}>
                             {parseFloat(barW) > 15 && <span style={{ fontSize: 10, fontWeight: 700, color: '#13121A' }}>{r.pct}%</span>}
                           </div>
                           {parseFloat(barW) <= 15 && <span style={{ position: 'absolute', left: barW+'%', top: '50%', transform: 'translateY(-50%)', marginLeft: 6, fontSize: 10, fontWeight: 700, color: C.t1 }}>{r.pct}%</span>}
