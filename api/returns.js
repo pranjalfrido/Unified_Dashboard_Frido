@@ -26,27 +26,35 @@ WITH base AS (
     refund_method,
     pickup_state,
     pickup_city,
+    Return_Type,
     SAFE_CAST(refunded_amount AS FLOAT64) AS refunded_amount,
     SAFE_CAST(item_price AS FLOAT64) AS item_price,
-    SAFE.PARSE_DATE('%Y-%m-%d', SUBSTR(created_at, 1, 10)) AS created_date,
-    SAFE.PARSE_DATE('%Y-%m-%d', SUBSTR(pickup_date, 1, 10)) AS pickup_date,
-    Return_Type
+    SAFE_CAST(return_quantity AS INT64) AS return_quantity,
+    PARSE_DATE('%Y-%m-%d', SUBSTR(created_at, 1, 10)) AS created_date,
+    CASE
+      WHEN pickup_date IS NOT NULL AND pickup_date != '' THEN PARSE_DATE('%Y-%m-%d', SUBSTR(pickup_date, 1, 10))
+      ELSE NULL
+    END AS pickup_dt
   FROM \`frido-429506.production.Clickpost_Returns_Exchange_Report\`
-  WHERE SUBSTR(created_at, 1, 10) BETWEEN '${start}' AND '${end}'
-    AND created_at IS NOT NULL AND created_at != ''
+  WHERE created_at IS NOT NULL AND created_at != ''
+    AND SUBSTR(created_at, 1, 10) BETWEEN '${start}' AND '${end}'
 ),
 kpis AS (
   SELECT
     COUNT(awb) AS total_requests,
     COUNTIF(Return_Type = 'Return') AS total_returns,
     COUNTIF(Return_Type = 'Exchange') AS total_exchanges,
-    COUNTIF(clickpost_unified_status IN ('Delivered','PickedUp','InTransit','OutForDelivery')) AS pickup_success,
+    COUNTIF(clickpost_unified_status IN ('Delivered','PickedUp','InTransit','OutForDelivery','ShipmentDelayed')) AS pickup_success,
     COUNTIF(clickpost_unified_status = 'PickupFailed') AS pickup_failed,
     COUNTIF(clickpost_unified_status = 'Cancelled') AS cancelled,
+    COUNTIF(clickpost_unified_status = 'PickupPending') AS pickup_pending,
     COUNTIF(refund_status = 'Processed') AS refund_processed,
     COUNTIF(refund_status IN ('Initiated','Queued')) AS refund_initiated,
+    COUNTIF(refund_status = 'Failed') AS refund_failed,
     ROUND(AVG(IF(refunded_amount > 0, refunded_amount, NULL)), 0) AS avg_refund_amount,
-    ROUND(SUM(IF(refunded_amount > 0, refunded_amount, NULL)), 0) AS total_refunded
+    ROUND(SUM(IF(refunded_amount > 0, refunded_amount, NULL)), 0) AS total_refunded,
+    COUNTIF(order_type = 'PREPAID') AS prepaid_count,
+    COUNTIF(order_type = 'COD') AS cod_count
   FROM base
 ),
 by_reason AS (
@@ -83,8 +91,8 @@ by_day AS (
     COUNT(awb) AS total,
     COUNTIF(Return_Type = 'Return') AS returns,
     COUNTIF(Return_Type = 'Exchange') AS exchanges,
-    COUNTIF(clickpost_unified_status IN ('Delivered','PickedUp','InTransit','OutForDelivery')) AS pickup_success,
-    ROUND(COUNTIF(clickpost_unified_status IN ('Delivered','PickedUp','InTransit','OutForDelivery')) * 100.0 / NULLIF(COUNT(awb), 0), 2) AS pickup_pct
+    COUNTIF(clickpost_unified_status IN ('Delivered','PickedUp','InTransit','OutForDelivery','ShipmentDelayed')) AS pickup_success,
+    ROUND(COUNTIF(clickpost_unified_status IN ('Delivered','PickedUp','InTransit','OutForDelivery','ShipmentDelayed')) * 100.0 / NULLIF(COUNT(awb), 0), 2) AS pickup_pct
   FROM base WHERE created_date IS NOT NULL GROUP BY 1,2 ORDER BY 2
 ),
 by_week AS (
@@ -94,8 +102,8 @@ by_week AS (
     COUNT(awb) AS total,
     COUNTIF(Return_Type = 'Return') AS returns,
     COUNTIF(Return_Type = 'Exchange') AS exchanges,
-    COUNTIF(clickpost_unified_status IN ('Delivered','PickedUp','InTransit','OutForDelivery')) AS pickup_success,
-    ROUND(COUNTIF(clickpost_unified_status IN ('Delivered','PickedUp','InTransit','OutForDelivery')) * 100.0 / NULLIF(COUNT(awb), 0), 2) AS pickup_pct
+    COUNTIF(clickpost_unified_status IN ('Delivered','PickedUp','InTransit','OutForDelivery','ShipmentDelayed')) AS pickup_success,
+    ROUND(COUNTIF(clickpost_unified_status IN ('Delivered','PickedUp','InTransit','OutForDelivery','ShipmentDelayed')) * 100.0 / NULLIF(COUNT(awb), 0), 2) AS pickup_pct
   FROM base WHERE created_date IS NOT NULL GROUP BY 1,2 ORDER BY 2
 ),
 by_month AS (
@@ -105,17 +113,36 @@ by_month AS (
     COUNT(awb) AS total,
     COUNTIF(Return_Type = 'Return') AS returns,
     COUNTIF(Return_Type = 'Exchange') AS exchanges,
-    COUNTIF(clickpost_unified_status IN ('Delivered','PickedUp','InTransit','OutForDelivery')) AS pickup_success,
-    ROUND(COUNTIF(clickpost_unified_status IN ('Delivered','PickedUp','InTransit','OutForDelivery')) * 100.0 / NULLIF(COUNT(awb), 0), 2) AS pickup_pct
+    COUNTIF(clickpost_unified_status IN ('Delivered','PickedUp','InTransit','OutForDelivery','ShipmentDelayed')) AS pickup_success,
+    ROUND(COUNTIF(clickpost_unified_status IN ('Delivered','PickedUp','InTransit','OutForDelivery','ShipmentDelayed')) * 100.0 / NULLIF(COUNT(awb), 0), 2) AS pickup_pct
   FROM base WHERE created_date IS NOT NULL GROUP BY 1,2 ORDER BY 2
 ),
 by_courier AS (
   SELECT
     courier_partner,
     COUNT(awb) AS total,
-    COUNTIF(clickpost_unified_status IN ('Delivered','PickedUp','InTransit','OutForDelivery')) AS pickup_success,
-    ROUND(COUNTIF(clickpost_unified_status IN ('Delivered','PickedUp','InTransit','OutForDelivery')) * 100.0 / NULLIF(COUNT(awb), 0), 2) AS pickup_pct
-  FROM base WHERE courier_partner IS NOT NULL AND courier_partner != '' GROUP BY 1 ORDER BY 2 DESC
+    COUNTIF(clickpost_unified_status IN ('Delivered','PickedUp','InTransit','OutForDelivery','ShipmentDelayed')) AS pickup_success,
+    COUNTIF(clickpost_unified_status = 'PickupFailed') AS pickup_failed,
+    ROUND(COUNTIF(clickpost_unified_status IN ('Delivered','PickedUp','InTransit','OutForDelivery','ShipmentDelayed')) * 100.0 / NULLIF(COUNT(awb), 0), 2) AS pickup_pct
+  FROM base WHERE courier_partner IS NOT NULL AND courier_partner != ''
+    AND courier_partner NOT LIKE '%description%'
+  GROUP BY 1 ORDER BY 2 DESC
+),
+by_status AS (
+  SELECT
+    clickpost_unified_status AS status,
+    COUNT(awb) AS total,
+    ROUND(COUNT(awb) * 100.0 / NULLIF((SELECT COUNT(*) FROM base), 0), 2) AS pct
+  FROM base WHERE clickpost_unified_status IS NOT NULL AND clickpost_unified_status != ''
+  GROUP BY 1 ORDER BY 2 DESC
+),
+by_state AS (
+  SELECT
+    CONCAT(UPPER(SUBSTR(pickup_state,1,1)), LOWER(SUBSTR(pickup_state,2))) AS state,
+    COUNT(awb) AS total,
+    ROUND(COUNT(awb) * 100.0 / NULLIF((SELECT COUNT(*) FROM base WHERE pickup_state IS NOT NULL AND pickup_state != ''), 0), 2) AS pct
+  FROM base WHERE pickup_state IS NOT NULL AND pickup_state != ''
+  GROUP BY 1 ORDER BY 2 DESC LIMIT 10
 ),
 by_refund_method AS (
   SELECT
@@ -135,6 +162,8 @@ SELECT
   TO_JSON_STRING(ARRAY(SELECT AS STRUCT * FROM by_week)) AS by_week,
   TO_JSON_STRING(ARRAY(SELECT AS STRUCT * FROM by_month)) AS by_month,
   TO_JSON_STRING(ARRAY(SELECT AS STRUCT * FROM by_courier)) AS by_courier,
+  TO_JSON_STRING(ARRAY(SELECT AS STRUCT * FROM by_status)) AS by_status,
+  TO_JSON_STRING(ARRAY(SELECT AS STRUCT * FROM by_state)) AS by_state,
   TO_JSON_STRING(ARRAY(SELECT AS STRUCT * FROM by_refund_method)) AS by_refund_method
 `
 
@@ -152,6 +181,8 @@ SELECT
       byWeek: JSON.parse(r.by_week),
       byMonth: JSON.parse(r.by_month),
       byCourier: JSON.parse(r.by_courier),
+      byStatus: JSON.parse(r.by_status),
+      byState: JSON.parse(r.by_state),
       byRefundMethod: JSON.parse(r.by_refund_method),
     })
   } catch (e) {
