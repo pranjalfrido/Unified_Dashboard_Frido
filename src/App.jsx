@@ -838,7 +838,7 @@ function LogisticsPage({ filters }) {
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
                   {reasonRows.map((r, i) => {
                     const barW = ((r.total / maxReasonTotal) * 100).toFixed(1)
-                    const colors = ['#D4A000','#F5C400','#FFD600','#FFE033','#FFEA66','#C49500','#B88A00','#A07800','#E6C200','#EBC800','#F0CE00','#D9B000','#CC9F00','#BF9000','#B38300']
+                    const colors = ['#FFD600','#FFD600','#FFD600','#FFD600','#FFD600','#FFD600','#FFD600','#FFD600','#FFD600','#FFD600','#FFD600','#FFD600','#FFD600','#FFD600','#FFD600']
                     return (
                       <div key={r.reason} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                         <div style={{ width: 200, minWidth: 200, fontSize: 11, color: C.t2, textAlign: 'right', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{r.reason}</div>
