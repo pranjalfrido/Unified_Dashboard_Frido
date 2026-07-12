@@ -82,7 +82,7 @@ by_product AS (
     ROUND(COUNT(awb) * 100.0 / NULLIF((SELECT COUNT(*) FROM base WHERE item_description IS NOT NULL AND item_description != ''), 0), 2) AS pct
   FROM base
   WHERE item_description IS NOT NULL AND item_description != ''
-  GROUP BY 1 ORDER BY 2 DESC LIMIT 10
+  GROUP BY 1 ORDER BY 2 DESC
 ),
 by_day AS (
   SELECT

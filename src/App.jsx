@@ -886,20 +886,20 @@ function LogisticsPage({ filters }) {
 
                 {/* Top Products */}
                 <div style={cardStyle}>
-                  <div style={chartTitle}>Top Returned Products</div>
-                  <div style={{ fontSize: 11, color: C.t3, marginBottom: 14, marginTop: 2 }}>Most returned items in selected period</div>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                  <div style={chartTitle}>Returned Products</div>
+                  <div style={{ fontSize: 11, color: C.t3, marginBottom: 14, marginTop: 2 }}>{(retData?.byProduct || []).length} products · % share of total returns</div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 10, maxHeight: 310, overflowY: 'auto', paddingRight: 4 }}>
                     {(retData?.byProduct || []).map((r, i) => {
                       const maxP = retData.byProduct[0]?.total || 1
                       const w = ((r.total / maxP) * 100).toFixed(1)
                       return (
                         <div key={r.product}>
                           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
-                            <span style={{ fontSize: 11, color: C.t2, maxWidth: '70%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.product}</span>
+                            <span style={{ fontSize: 11, color: C.t2, maxWidth: '65%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.product}</span>
                             <span style={{ fontSize: 11, fontWeight: 700, color: C.t1 }}>{r.total.toLocaleString('en-IN')} <span style={{ color: C.t3, fontWeight: 400 }}>({r.pct}%)</span></span>
                           </div>
                           <div style={{ height: 7, borderRadius: 4, background: C.border, overflow: 'hidden' }}>
-                            <div style={{ height: '100%', width: w+'%', background: i === 0 ? '#dc2626' : '#2563eb', borderRadius: 4, opacity: 1 - i*0.06, transition: 'width .4s ease' }} />
+                            <div style={{ height: '100%', width: w+'%', background: '#FFD600', borderRadius: 4, transition: 'width .4s ease' }} />
                           </div>
                         </div>
                       )
