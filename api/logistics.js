@@ -214,11 +214,35 @@ by_payment_detail AS (
     ROUND(AVG(SAFE_CAST(invoice_value AS FLOAT64)), 0) AS avg_order_value
   FROM base WHERE payment_mode IS NOT NULL GROUP BY 1
 ),
+by_payment_day AS (
+  SELECT
+    payment_mode,
+    FORMAT_DATE('%d %b', created_date) AS period_label,
+    created_date AS period_dt,
+    COUNT(awb) AS total,
+    COUNTIF(unified_status='Delivered') AS delivered,
+    COUNTIF(unified_status='RTO') AS rto,
+    ROUND(COUNTIF(unified_status='Delivered') * 100.0 / NULLIF(COUNT(awb),0), 2) AS del_pct,
+    ROUND(COUNTIF(unified_status='RTO') * 100.0 / NULLIF(COUNT(awb),0), 2) AS rto_pct
+  FROM base WHERE payment_mode IS NOT NULL AND created_date IS NOT NULL GROUP BY 1,2,3
+),
+by_payment_week AS (
+  SELECT
+    payment_mode,
+    FORMAT_DATE('W%V %Y', created_date) AS period_label,
+    DATE_TRUNC(created_date, WEEK) AS period_dt,
+    COUNT(awb) AS total,
+    COUNTIF(unified_status='Delivered') AS delivered,
+    COUNTIF(unified_status='RTO') AS rto,
+    ROUND(COUNTIF(unified_status='Delivered') * 100.0 / NULLIF(COUNT(awb),0), 2) AS del_pct,
+    ROUND(COUNTIF(unified_status='RTO') * 100.0 / NULLIF(COUNT(awb),0), 2) AS rto_pct
+  FROM base WHERE payment_mode IS NOT NULL AND created_date IS NOT NULL GROUP BY 1,2,3
+),
 by_payment_month AS (
   SELECT
     payment_mode,
-    FORMAT_DATE('%b-%y', created_date) AS month_label,
-    DATE_TRUNC(created_date, MONTH) AS month_dt,
+    FORMAT_DATE('%b-%y', created_date) AS period_label,
+    DATE_TRUNC(created_date, MONTH) AS period_dt,
     COUNT(awb) AS total,
     COUNTIF(unified_status='Delivered') AS delivered,
     COUNTIF(unified_status='RTO') AS rto,
@@ -262,8 +286,22 @@ rto_reasons AS (
   GROUP BY 1 ORDER BY 2 DESC LIMIT 10
 ),
 top_drop_states AS (
-  SELECT drop_state AS state, COUNT(awb) AS total
-  FROM base WHERE drop_state IS NOT NULL GROUP BY 1 ORDER BY 2 DESC LIMIT 10
+  SELECT
+    CONCAT(UPPER(SUBSTR(drop_state,1,1)), LOWER(SUBSTR(drop_state,2))) AS state,
+    COUNT(awb) AS total
+  FROM base WHERE drop_state IS NOT NULL AND drop_state != '' GROUP BY 1 ORDER BY 2 DESC LIMIT 10
+),
+top_drop_cities AS (
+  SELECT
+    CONCAT(UPPER(SUBSTR(drop_city,1,1)), LOWER(SUBSTR(drop_city,2))) AS city,
+    COUNT(awb) AS total
+  FROM base WHERE drop_city IS NOT NULL AND drop_city != '' GROUP BY 1 ORDER BY 2 DESC LIMIT 10
+),
+top_pickup_cities AS (
+  SELECT
+    CONCAT(UPPER(SUBSTR(pickup_city,1,1)), LOWER(SUBSTR(pickup_city,2))) AS city,
+    COUNT(awb) AS total
+  FROM base WHERE pickup_city IS NOT NULL AND pickup_city != '' GROUP BY 1 ORDER BY 2 DESC LIMIT 10
 ),
 by_payment AS (
   SELECT payment_mode, COUNT(awb) AS total FROM base WHERE payment_mode IS NOT NULL GROUP BY 1
@@ -292,7 +330,9 @@ SELECT
   TO_JSON_STRING(ARRAY(SELECT AS STRUCT * FROM by_courier_month ORDER BY courier_group, month_dt)) AS by_courier_month,
   TO_JSON_STRING(ARRAY(SELECT AS STRUCT * FROM by_month_all ORDER BY month_dt)) AS by_month_all,
   TO_JSON_STRING(ARRAY(SELECT AS STRUCT * FROM by_payment_detail ORDER BY total DESC)) AS by_payment_detail,
-  TO_JSON_STRING(ARRAY(SELECT AS STRUCT * FROM by_payment_month ORDER BY payment_mode, month_dt)) AS by_payment_month,
+  TO_JSON_STRING(ARRAY(SELECT AS STRUCT * FROM by_payment_day ORDER BY payment_mode, period_dt)) AS by_payment_day,
+  TO_JSON_STRING(ARRAY(SELECT AS STRUCT * FROM by_payment_week ORDER BY payment_mode, period_dt)) AS by_payment_week,
+  TO_JSON_STRING(ARRAY(SELECT AS STRUCT * FROM by_payment_month ORDER BY payment_mode, period_dt)) AS by_payment_month,
   TO_JSON_STRING((SELECT AS STRUCT * FROM filter_opts)) AS filter_opts
 `
 
@@ -315,6 +355,8 @@ SELECT
       byCourierMonth: JSON.parse(r.by_courier_month),
       byMonthAll: JSON.parse(r.by_month_all),
       byPaymentDetail: JSON.parse(r.by_payment_detail),
+      byPaymentDay: JSON.parse(r.by_payment_day),
+      byPaymentWeek: JSON.parse(r.by_payment_week),
       byPaymentMonth: JSON.parse(r.by_payment_month),
       filterOpts: JSON.parse(r.filter_opts),
     })

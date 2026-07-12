@@ -130,6 +130,7 @@ function LogisticsPage({ filters }) {
   const [trendGranularity, setTrendGranularity] = useState('Daily')
   const [cSort, setCSort] = useState({ col: 'total', dir: 'desc' })
   const [cView, setCView] = useState('courier') // 'courier' | 'month'
+  const [payTrendGran, setPayTrendGran] = useState('Monthly')
   const [cExpanded, setCExpanded] = useState({})
   const [data, setData] = useState(null)
   const [loading, setLoading] = useState(false)
@@ -598,20 +599,21 @@ function LogisticsPage({ filters }) {
         <LSectionTitle title="Payment Analytics" />
         {(() => {
           const pd = (data?.byPaymentDetail || [])
-          const pm = (data?.byPaymentMonth || [])
           const PREPAID = pd.find(r => r.payment_mode === 'PREPAID') || {}
           const COD = pd.find(r => r.payment_mode === 'COD') || {}
           const totalAll = pd.reduce((s,r) => s+(r.total||0),0) || 1
           const COLORS = { PREPAID: '#2563eb', COD: '#FFD600' }
           const COLORS_DARK = { PREPAID: '#1d4ed8', COD: '#d97706' }
 
-          // monthly trend data shaped for recharts
-          const months = [...new Set(pm.map(r => r.month_label))]
-          const trendData = months.map(m => {
-            const p = pm.find(r => r.month_label===m && r.payment_mode==='PREPAID') || {}
-            const c = pm.find(r => r.month_label===m && r.payment_mode==='COD') || {}
-            return { month: m, PREPAID_del: p.del_pct||0, COD_del: c.del_pct||0, PREPAID_rto: p.rto_pct||0, COD_rto: c.rto_pct||0, PREPAID_vol: p.total||0, COD_vol: c.total||0 }
+          // trend data shaped for recharts — switches by granularity
+          const pmRaw = payTrendGran === 'Daily' ? (data?.byPaymentDay || []) : payTrendGran === 'Weekly' ? (data?.byPaymentWeek || []) : (data?.byPaymentMonth || [])
+          const periods = [...new Set(pmRaw.map(r => r.period_label))]
+          const trendData = periods.map(m => {
+            const p = pmRaw.find(r => r.period_label===m && r.payment_mode==='PREPAID') || {}
+            const c = pmRaw.find(r => r.period_label===m && r.payment_mode==='COD') || {}
+            return { month: m, PREPAID_del: p.del_pct||0, COD_del: c.del_pct||0, PREPAID_rto: p.rto_pct||0, COD_rto: c.rto_pct||0 }
           })
+          const trendTitle = payTrendGran === 'Daily' ? 'Daily Trend — Delivery & RTO Rate' : payTrendGran === 'Weekly' ? 'Weekly Trend — Delivery & RTO Rate' : 'Monthly Trend — Delivery & RTO Rate'
 
           // TAT comparison data
           const tatData = [
@@ -661,9 +663,16 @@ function LogisticsPage({ filters }) {
               {/* Row 2: 2 charts side by side */}
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
 
-                {/* Chart 1: Monthly trend — area lines for Del% + RTO% */}
+                {/* Chart 1: Trend — area lines for Del% + RTO% with Daily/Weekly/Monthly toggle */}
                 <div style={cardStyle}>
-                  <div style={chartTitle}>Monthly Trend — Delivery & RTO Rate</div>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 2 }}>
+                    <div style={chartTitle}>{trendTitle}</div>
+                    <div style={{ display: 'flex', gap: 4 }}>
+                      {['Daily','Weekly','Monthly'].map(g => (
+                        <button key={g} onClick={() => setPayTrendGran(g)} style={{ fontSize: 10.5, padding: '3px 10px', borderRadius: 6, border: `1px solid ${payTrendGran===g ? C.acc : C.border}`, background: payTrendGran===g ? C.acl : 'transparent', color: payTrendGran===g ? C.t1 : C.t2, cursor: 'pointer', fontWeight: payTrendGran===g ? 700 : 500, fontFamily: 'var(--font)', transition: 'all .15s' }}>{g}</button>
+                      ))}
+                    </div>
+                  </div>
                   <div style={{ fontSize: 11, color: C.t3, marginBottom: 12, marginTop: 2 }}>PREPAID vs COD · Del% (left axis) · RTO% (right axis)</div>
                   <ResponsiveContainer width="100%" height={240}>
                     <ComposedChart data={trendData} margin={{ top: 8, right: 40, left: 0, bottom: 0 }}>
