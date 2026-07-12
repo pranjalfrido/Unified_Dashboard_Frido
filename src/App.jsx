@@ -841,7 +841,7 @@ function LogisticsPage({ filters }) {
                     const barColor = '#FFD600'
                     return (
                       <div key={r.reason} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                        <div style={{ width: 200, minWidth: 200, fontSize: 11, color: C.t2, textAlign: 'right', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{r.reason}</div>
+                        <div title={r.reason} style={{ width: 200, minWidth: 200, fontSize: 11, color: C.t2, textAlign: 'right', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', cursor: 'default' }}>{r.reason}</div>
                         <div style={{ flex: 1, height: 22, borderRadius: 4, background: C.border, overflow: 'hidden', position: 'relative' }}>
                           <div style={{ height: '100%', width: barW + '%', background: barColor, borderRadius: 4, transition: 'width .5s ease', display: 'flex', alignItems: 'center', justifyContent: 'flex-end', paddingRight: 8 }}>
                             {parseFloat(barW) > 15 && <span style={{ fontSize: 10, fontWeight: 700, color: '#13121A' }}>{r.pct}%</span>}
