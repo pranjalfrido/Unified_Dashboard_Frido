@@ -805,50 +805,41 @@ function LogisticsPage({ filters }) {
           return (
             <div style={{ display: 'grid', gridTemplateColumns: '320px 1fr', gap: 14 }}>
 
-              {/* Left: Donut + KPI stats */}
+              {/* Left: Donut + 3 KPIs beside it */}
               <div style={cardStyle}>
                 <div style={chartTitle}>Payment Split</div>
-                <ResponsiveContainer width="100%" height={160}>
-                  <PieChart>
-                    <Pie data={donutData} cx="50%" cy="50%" innerRadius={48} outerRadius={72} dataKey="value" paddingAngle={3}>
-                      {donutData.map((d,i) => <Cell key={i} fill={d.color} />)}
-                    </Pie>
-                    <Tooltip formatter={(v,n) => [v.toLocaleString('en-IN'), n]} />
-                  </PieChart>
-                </ResponsiveContainer>
-                <div style={{ display: 'flex', gap: 8, justifyContent: 'center', marginBottom: 14 }}>
-                  {donutData.map(d => (
-                    <span key={d.name} style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 10.5, color: C.t2, fontWeight: 600 }}>
-                      <span style={{ width: 10, height: 10, borderRadius: 2, background: d.color, display: 'inline-block' }} />{d.name}
-                    </span>
-                  ))}
-                </div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                  {[
-                    { label: 'Shipments', prepaid: (PREPAID.total||0).toLocaleString('en-IN'), cod: (COD.total||0).toLocaleString('en-IN') },
-                    { label: 'Vol %', prepaid: prepaidVolPct+'%', cod: codVolPct+'%' },
-                    { label: 'Delivered %', prepaid: prepaidDelPct+'%', cod: codDelPct+'%', pColor: '#16a34a', cColor: '#d97706' },
-                    { label: 'RTO %', prepaid: prepaidRtoPct+'%', cod: codRtoPct+'%', pColor: '#16a34a', cColor: '#dc2626' },
-                    { label: 'Avg O2D', prepaid: PREPAID.avg_fulfilment_days ? PREPAID.avg_fulfilment_days+'d' : '—', cod: COD.avg_fulfilment_days ? COD.avg_fulfilment_days+'d' : '—' },
-                    { label: 'Avg S2D', prepaid: PREPAID.avg_intransit_days ? PREPAID.avg_intransit_days+'d' : '—', cod: COD.avg_intransit_days ? COD.avg_intransit_days+'d' : '—' },
-                    { label: 'Avg Processing', prepaid: PREPAID.avg_processing_days ? PREPAID.avg_processing_days+'d' : '—', cod: COD.avg_processing_days ? COD.avg_processing_days+'d' : '—' },
-                    { label: 'Avg Pickup', prepaid: PREPAID.avg_pickup_days ? PREPAID.avg_pickup_days+'d' : '—', cod: COD.avg_pickup_days ? COD.avg_pickup_days+'d' : '—' },
-                    { label: 'Avg Order Value', prepaid: PREPAID.avg_order_value ? '₹'+PREPAID.avg_order_value.toLocaleString('en-IN') : '—', cod: COD.avg_order_value ? '₹'+COD.avg_order_value.toLocaleString('en-IN') : '—' },
-                    { label: 'Z-RTO', prepaid: PREPAID.z_rto||0, cod: COD.z_rto||0 },
-                    { label: 'Cancelled', prepaid: PREPAID.cancelled||0, cod: COD.cancelled||0 },
-                    { label: 'In Transit', prepaid: PREPAID.in_transit||0, cod: COD.in_transit||0 },
-                  ].map(row => (
-                    <div key={row.label} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: `1px solid ${C.border}`, paddingBottom: 5 }}>
-                      <span style={{ fontSize: 10.5, color: C.t3, fontWeight: 600 }}>{row.label}</span>
-                      <div style={{ display: 'flex', gap: 16 }}>
-                        <span style={{ fontSize: 11, fontWeight: 700, color: row.pColor||C.t1, minWidth: 50, textAlign: 'right' }}>{row.prepaid}</span>
-                        <span style={{ fontSize: 11, fontWeight: 700, color: row.cColor||C.t1, minWidth: 50, textAlign: 'right' }}>{row.cod}</span>
-                      </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 8 }}>
+                  <div style={{ flexShrink: 0, width: 140, height: 140 }}>
+                    <ResponsiveContainer width="100%" height="100%">
+                      <PieChart>
+                        <Pie data={donutData} cx="50%" cy="50%" innerRadius={40} outerRadius={62} dataKey="value" paddingAngle={3}>
+                          {donutData.map((d,i) => <Cell key={i} fill={d.color} />)}
+                        </Pie>
+                        <Tooltip formatter={(v,n) => [v.toLocaleString('en-IN'), n]} />
+                      </PieChart>
+                    </ResponsiveContainer>
+                  </div>
+                  <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 10 }}>
+                    <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', marginBottom: 2 }}>
+                      {donutData.map(d => (
+                        <span key={d.name} style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 10, color: C.t2, fontWeight: 700 }}>
+                          <span style={{ width: 8, height: 8, borderRadius: 2, background: d.color, display: 'inline-block' }} />{d.name}
+                        </span>
+                      ))}
                     </div>
-                  ))}
-                  <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 16, marginTop: 2 }}>
-                    <span style={{ fontSize: 10, color: '#2563eb', fontWeight: 700, minWidth: 50, textAlign: 'right' }}>PREPAID</span>
-                    <span style={{ fontSize: 10, color: '#F59E0B', fontWeight: 700, minWidth: 50, textAlign: 'right' }}>COD</span>
+                    {[
+                      { label: 'Shipments', prepaid: (PREPAID.total||0).toLocaleString('en-IN'), cod: (COD.total||0).toLocaleString('en-IN') },
+                      { label: 'Delivered %', prepaid: prepaidDelPct+'%', cod: codDelPct+'%', pColor: '#16a34a', cColor: '#d97706' },
+                      { label: 'RTO %', prepaid: prepaidRtoPct+'%', cod: codRtoPct+'%', pColor: '#16a34a', cColor: '#dc2626' },
+                    ].map(row => (
+                      <div key={row.label} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: `1px solid ${C.border}`, paddingBottom: 6 }}>
+                        <span style={{ fontSize: 10.5, color: C.t3, fontWeight: 600 }}>{row.label}</span>
+                        <div style={{ display: 'flex', gap: 14 }}>
+                          <span style={{ fontSize: 12, fontWeight: 700, color: row.pColor||C.t1, minWidth: 52, textAlign: 'right' }}>{row.prepaid}</span>
+                          <span style={{ fontSize: 12, fontWeight: 700, color: row.cColor||C.t1, minWidth: 52, textAlign: 'right' }}>{row.cod}</span>
+                        </div>
+                      </div>
+                    ))}
                   </div>
                 </div>
               </div>
@@ -911,6 +902,34 @@ function LogisticsPage({ filters }) {
                       <span style={{ width: 10, height: 10, borderRadius: 2, background: color, display: 'inline-block' }} />{label}
                     </span>
                   ))}
+                </div>
+                {/* Stats table below chart */}
+                <div style={{ marginTop: 16, borderTop: `1px solid ${C.border}`, paddingTop: 12 }}>
+                  <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 16, marginBottom: 6 }}>
+                    <span style={{ fontSize: 10, color: '#2563eb', fontWeight: 700, minWidth: 64, textAlign: 'right' }}>PREPAID</span>
+                    <span style={{ fontSize: 10, color: '#F59E0B', fontWeight: 700, minWidth: 64, textAlign: 'right' }}>COD</span>
+                  </div>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px 24px' }}>
+                    {[
+                      { label: 'Vol %', prepaid: prepaidVolPct+'%', cod: codVolPct+'%' },
+                      { label: 'Avg O2D', prepaid: PREPAID.avg_fulfilment_days ? PREPAID.avg_fulfilment_days+'d' : '—', cod: COD.avg_fulfilment_days ? COD.avg_fulfilment_days+'d' : '—' },
+                      { label: 'Avg S2D', prepaid: PREPAID.avg_intransit_days ? PREPAID.avg_intransit_days+'d' : '—', cod: COD.avg_intransit_days ? COD.avg_intransit_days+'d' : '—' },
+                      { label: 'Avg Processing', prepaid: PREPAID.avg_processing_days ? PREPAID.avg_processing_days+'d' : '—', cod: COD.avg_processing_days ? COD.avg_processing_days+'d' : '—' },
+                      { label: 'Avg Pickup', prepaid: PREPAID.avg_pickup_days ? PREPAID.avg_pickup_days+'d' : '—', cod: COD.avg_pickup_days ? COD.avg_pickup_days+'d' : '—' },
+                      { label: 'Avg Order Value', prepaid: PREPAID.avg_order_value ? '₹'+PREPAID.avg_order_value.toLocaleString('en-IN') : '—', cod: COD.avg_order_value ? '₹'+COD.avg_order_value.toLocaleString('en-IN') : '—' },
+                      { label: 'Z-RTO', prepaid: PREPAID.z_rto||0, cod: COD.z_rto||0 },
+                      { label: 'Cancelled', prepaid: PREPAID.cancelled||0, cod: COD.cancelled||0 },
+                      { label: 'In Transit', prepaid: PREPAID.in_transit||0, cod: COD.in_transit||0 },
+                    ].map(row => (
+                      <div key={row.label} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: `1px solid ${C.border}`, paddingBottom: 4 }}>
+                        <span style={{ fontSize: 10.5, color: C.t3, fontWeight: 600 }}>{row.label}</span>
+                        <div style={{ display: 'flex', gap: 16 }}>
+                          <span style={{ fontSize: 11, fontWeight: 700, color: C.t1, minWidth: 64, textAlign: 'right' }}>{row.prepaid}</span>
+                          <span style={{ fontSize: 11, fontWeight: 700, color: C.t1, minWidth: 64, textAlign: 'right' }}>{row.cod}</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
                 </div>
               </div>
 
