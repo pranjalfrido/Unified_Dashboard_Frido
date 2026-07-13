@@ -32,8 +32,8 @@ function LogisticsChip({ label, logo, active, onClick, grow, sidebar }) {
       borderLeft: active ? '3px solid #FFD600' : '3px solid transparent',
     }}>
       {logo && !imgErr
-        ? <img src={logo} alt="" style={{ width: 18, height: 18, objectFit: 'contain', borderRadius: 3, flexShrink: 0, background: '#fff' }} onError={() => setImgErr(true)} />
-        : <span style={{ width: 18, height: 18, borderRadius: 3, background: COURIER_COLORS[label] || '#64748b', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 8, fontWeight: 800, color: '#fff', flexShrink: 0 }}>{label.charAt(0)}</span>
+        ? <img src={logo} alt="" style={{ width: 22, height: 22, objectFit: 'contain', borderRadius: 4, flexShrink: 0, background: '#fff', padding: 1 }} onError={() => setImgErr(true)} />
+        : <span style={{ width: 22, height: 22, borderRadius: 4, background: COURIER_COLORS[label] || '#64748b', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 9, fontWeight: 800, color: '#fff', flexShrink: 0 }}>{label.charAt(0)}</span>
       }
       {label}
     </button>
@@ -145,7 +145,7 @@ function LSectionTitle({ title }) {
 function LogisticsPage({ filters }) {
   const API = import.meta.env.VITE_API_URL || ''
   const [logisticsView, setLogisticsView] = useState('Logistics')
-  const [lFilters, setLFilters] = useState({ couriers: [], shipmentType: 'all', sddNdd: 'all', paymentMode: null, zone: null, pickupState: null, dropState: null, category: null, subCategory: null })
+  const [lFilters, setLFilters] = useState({ couriers: [], shipmentType: 'all', sddNdd: 'all', paymentMode: null, zone: null, pickupState: null, dropState: null, dropCity: null, category: null, subCategory: null })
   const [trendGranularity, setTrendGranularity] = useState('Daily')
   const [trendMetric, setTrendMetric] = useState('Qty')
   const [courierTatGran, setCourierTatGran] = useState('Daily')
@@ -173,6 +173,7 @@ function LogisticsPage({ filters }) {
       if (lFilters.zone) body.zone = lFilters.zone
       if (lFilters.pickupState) body.pickupState = lFilters.pickupState
       if (lFilters.dropState) body.dropState = lFilters.dropState
+      if (lFilters.dropCity) body.dropCity = lFilters.dropCity
       if (lFilters.category) body.category = [lFilters.category]
       if (lFilters.subCategory) body.subCategory = [lFilters.subCategory]
       const r = await fetch(`${API}/api/logistics`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
@@ -271,7 +272,7 @@ function LogisticsPage({ filters }) {
             )}
           </div>
           <div style={{ height: 1, background: C.border, margin: '4px 0' }} />
-          <div style={{ fontSize: 10, fontWeight: 800, color: C.t3, letterSpacing: '.06em', textTransform: 'uppercase' }}>Direction</div>
+          <div style={{ fontSize: 10, fontWeight: 800, color: C.t3, letterSpacing: '.06em', textTransform: 'uppercase' }}>Courier Direction</div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
             {[['Forward','Reverse'],['Regular','SDD/NDD']].map((opts, gi) => {
               const val = gi === 0 ? lFilters.shipmentType : lFilters.sddNdd
@@ -295,11 +296,12 @@ function LogisticsPage({ filters }) {
           <LDropdown label="Zone" options={opts.zones} value={lFilters.zone} onChange={v => setLFilters(f => ({ ...f, zone: v }))} />
           <LDropdown label="Pickup State" options={opts.pickup_states} value={lFilters.pickupState} onChange={v => setLFilters(f => ({ ...f, pickupState: v }))} />
           <LDropdown label="Drop State" options={opts.drop_states} value={lFilters.dropState} onChange={v => setLFilters(f => ({ ...f, dropState: v }))} />
+          <LDropdown label="Drop City" options={opts.drop_cities} value={lFilters.dropCity} onChange={v => setLFilters(f => ({ ...f, dropCity: v }))} />
           <LDropdown label="Payment" options={['COD','Prepaid']} value={lFilters.paymentMode} onChange={v => setLFilters(f => ({ ...f, paymentMode: v }))} />
           <LDropdown label="Category" options={opts.categories} value={lFilters.category} onChange={v => setLFilters(f => ({ ...f, category: v, subCategory: null }))} />
           <LDropdown label="Sub-category" options={opts.sub_categories} value={lFilters.subCategory} onChange={v => setLFilters(f => ({ ...f, subCategory: v }))} />
-          {(lFilters.zone || lFilters.pickupState || lFilters.dropState || lFilters.paymentMode || lFilters.category || lFilters.subCategory) && (
-            <button onClick={() => setLFilters(f => ({ ...f, zone: null, pickupState: null, dropState: null, paymentMode: null, category: null, subCategory: null }))}
+          {(lFilters.zone || lFilters.pickupState || lFilters.dropState || lFilters.dropCity || lFilters.paymentMode || lFilters.category || lFilters.subCategory) && (
+            <button onClick={() => setLFilters(f => ({ ...f, zone: null, pickupState: null, dropState: null, dropCity: null, paymentMode: null, category: null, subCategory: null }))}
               style={{ fontSize: 11, color: C.t3, background: 'none', border: `1px solid ${C.border}`, borderRadius: 6, padding: '4px 10px', cursor: 'pointer', fontFamily: 'var(--font)' }}>✕ Clear All</button>
           )}
         </div>

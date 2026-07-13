@@ -7,7 +7,7 @@ export default async function handler(req, res) {
   if (req.method === 'OPTIONS') return res.status(200).end()
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' })
 
-  const { start, end, courier, shipmentType, sddNdd, paymentMode, zone, pickupState, dropState, category, subCategory } = req.body
+  const { start, end, courier, shipmentType, sddNdd, paymentMode, zone, pickupState, dropState, dropCity, category, subCategory } = req.body
   if (!start || !end) return res.status(400).json({ error: 'Missing start or end' })
 
   // NDD split: show Delhivery NDD as separate row when Forward selected OR NDD chip selected
@@ -41,6 +41,7 @@ export default async function handler(req, res) {
   if (zone) filters.push(`c.zone = '${zone.replace(/'/g, "\\'")}'`)
   if (pickupState) filters.push(`c.pickup_state = '${pickupState.replace(/'/g, "\\'")}'`)
   if (dropState) filters.push(`c.drop_state = '${dropState.replace(/'/g, "\\'")}'`)
+  if (dropCity) filters.push(`LOWER(c.drop_city) = LOWER('${dropCity.replace(/'/g, "\\'")}')`)
   if (category?.length) filters.push(`im.CategoryName IN (${category.map(v => `'${v.replace(/'/g, "\\'")}'`).join(',')})`)
   if (subCategory?.length) filters.push(`im.Sub_category IN (${subCategory.map(v => `'${v.replace(/'/g, "\\'")}'`).join(',')})`)
 
@@ -404,6 +405,7 @@ filter_opts AS (
     ARRAY_AGG(DISTINCT zone IGNORE NULLS ORDER BY zone) AS zones,
     ARRAY_AGG(DISTINCT pickup_state IGNORE NULLS ORDER BY pickup_state) AS pickup_states,
     ARRAY_AGG(DISTINCT drop_state IGNORE NULLS ORDER BY drop_state) AS drop_states,
+    ARRAY_AGG(DISTINCT drop_city IGNORE NULLS ORDER BY drop_city) AS drop_cities,
     ARRAY_AGG(DISTINCT category IGNORE NULLS ORDER BY category) AS categories,
     ARRAY_AGG(DISTINCT sub_category IGNORE NULLS ORDER BY sub_category) AS sub_categories
   FROM base
