@@ -123,17 +123,17 @@ function LDropdown({ label, options, value, onChange, flex }) {
 function LKpiCard({ label, value, badgeText, badgeVariant, subValue, cur, prev }) {
   const bv = badgeVariant || 'N'
   const chg = (cur != null && prev != null && prev !== 0) ? ((cur - prev) / prev * 100) : null
+  const chgBadge = chg != null && Math.abs(chg) < 999
+    ? <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 4, background: chg >= 0 ? C.green.bg : C.red.bg, color: chg >= 0 ? C.green.tx : C.red.tx, display: 'inline-block' }}>{chg >= 0 ? '▲' : '▼'} {Math.abs(chg).toFixed(1)}%</span>
+    : badgeText ? <span className={`bdg bdg-${bv}`} style={{ fontSize: 10, display: 'inline-block' }}>{badgeText}</span> : null
   return (
     <div className="kpi-card" style={{ display: 'flex', flexDirection: 'column', gap: 0, padding: '7px 10px' }}>
       <div className="kpi-label" style={{ marginBottom: 2 }}>{label}</div>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 4 }}>
-        <div className="kpi-value" style={{ fontSize: 16 }}>{value ?? '—'}</div>
-        {chg != null && Math.abs(chg) < 999
-          ? <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 4, background: chg >= 0 ? C.green.bg : C.red.bg, color: chg >= 0 ? C.green.tx : C.red.tx, flexShrink: 0 }}>{chg >= 0 ? '▲' : '▼'} {Math.abs(chg).toFixed(1)}%</span>
-          : badgeText ? <span className={`bdg bdg-${bv}`} style={{ flexShrink: 0, fontSize: 10 }}>{badgeText}</span> : null
-        }
+      <div className="kpi-value" style={{ fontSize: 16, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{value ?? '—'}</div>
+      <div style={{ marginTop: 2, display: 'flex', alignItems: 'center', gap: 6 }}>
+        {chgBadge}
+        {subValue && <span style={{ fontSize: 11, fontWeight: 500, color: C.t3 }}>{subValue} of total</span>}
       </div>
-      {subValue && <div style={{ fontSize: 11, fontWeight: 500, color: C.t3, marginTop: 1 }}>{subValue} of total</div>}
     </div>
   )
 }
