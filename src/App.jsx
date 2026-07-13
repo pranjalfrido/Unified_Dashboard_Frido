@@ -432,6 +432,8 @@ function LogisticsPage({ filters }) {
               const tatData = src.map(d => ({
                 label: d.label,
                 total: d.total || 0,
+                avg_processing_days: d.avg_processing_days ?? null,
+                avg_pickup_days: d.avg_pickup_days ?? null,
                 avg_intransit_days: d.avg_intransit_days ?? null,
                 avg_fulfilment_days: d.avg_fulfilment_days ?? null,
               }))
@@ -444,12 +446,14 @@ function LogisticsPage({ filters }) {
                 <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 9, fill: C.t2 }} tickFormatter={v => v + 'd'} />
                 <Tooltip formatter={(value, name) => name.includes('Days') ? [value != null ? value + 'd' : '—', name] : [Number(value).toLocaleString('en-IN'), name]} />
                 <Bar yAxisId="left" dataKey="total" name="Total Shipments" fill="#5BA4CF" opacity={0.8} radius={[3,3,0,0]} />
+                <Line yAxisId="right" type="monotone" dataKey="avg_processing_days" name="Avg Processing Days" stroke="#8B5CF6" strokeWidth={2} dot={{ fill: '#8B5CF6', r: 3 }} />
+                <Line yAxisId="right" type="monotone" dataKey="avg_pickup_days" name="Avg Pickup Days" stroke="#10B981" strokeWidth={2} dot={{ fill: '#10B981', r: 3 }} />
                 <Line yAxisId="right" type="monotone" dataKey="avg_intransit_days" name="Avg Intransit Days" stroke="#1E3A5F" strokeWidth={2} dot={{ fill: '#1E3A5F', r: 3 }} />
                 <Line yAxisId="right" type="monotone" dataKey="avg_fulfilment_days" name="Avg Fulfilment Days" stroke="#F97316" strokeWidth={2} dot={{ fill: '#F97316', r: 3 }} />
               </ComposedChart>
             </ResponsiveContainer>
             <div style={{ display: 'flex', gap: 16, justifyContent: 'center', marginTop: 8, flexWrap: 'wrap', flexShrink: 0 }}>
-              {[['#F97316','Avg Fulfilment Days'],['#1E3A5F','Avg Intransit Days'],['#5BA4CF','Total Shipments']].map(([color, label]) => (
+              {[['#5BA4CF','Total Shipments'],['#8B5CF6','Avg Processing Days'],['#10B981','Avg Pickup Days'],['#1E3A5F','Avg Intransit Days'],['#F97316','Avg Fulfilment Days']].map(([color, label]) => (
                 <span key={label} style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 10, color: C.t2 }}>
                   <span style={{ width: 10, height: 10, borderRadius: 2, background: color, display: 'inline-block' }} />{label}
                 </span>
