@@ -803,7 +803,7 @@ function LogisticsPage({ filters }) {
           ]
 
           return (
-            <div style={{ display: 'grid', gridTemplateColumns: '320px 1fr', gap: 14 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '320px 1fr', gap: 14, alignItems: 'stretch' }}>
 
               {/* Left: Donut + 3 KPIs beside it */}
               <div style={cardStyle}>
@@ -902,34 +902,6 @@ function LogisticsPage({ filters }) {
                       <span style={{ width: 10, height: 10, borderRadius: 2, background: color, display: 'inline-block' }} />{label}
                     </span>
                   ))}
-                </div>
-                {/* Stats table below chart */}
-                <div style={{ marginTop: 16, borderTop: `1px solid ${C.border}`, paddingTop: 12 }}>
-                  <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 16, marginBottom: 6 }}>
-                    <span style={{ fontSize: 10, color: '#2563eb', fontWeight: 700, minWidth: 64, textAlign: 'right' }}>PREPAID</span>
-                    <span style={{ fontSize: 10, color: '#F59E0B', fontWeight: 700, minWidth: 64, textAlign: 'right' }}>COD</span>
-                  </div>
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px 24px' }}>
-                    {[
-                      { label: 'Vol %', prepaid: prepaidVolPct+'%', cod: codVolPct+'%' },
-                      { label: 'Avg O2D', prepaid: PREPAID.avg_fulfilment_days ? PREPAID.avg_fulfilment_days+'d' : '—', cod: COD.avg_fulfilment_days ? COD.avg_fulfilment_days+'d' : '—' },
-                      { label: 'Avg S2D', prepaid: PREPAID.avg_intransit_days ? PREPAID.avg_intransit_days+'d' : '—', cod: COD.avg_intransit_days ? COD.avg_intransit_days+'d' : '—' },
-                      { label: 'Avg Processing', prepaid: PREPAID.avg_processing_days ? PREPAID.avg_processing_days+'d' : '—', cod: COD.avg_processing_days ? COD.avg_processing_days+'d' : '—' },
-                      { label: 'Avg Pickup', prepaid: PREPAID.avg_pickup_days ? PREPAID.avg_pickup_days+'d' : '—', cod: COD.avg_pickup_days ? COD.avg_pickup_days+'d' : '—' },
-                      { label: 'Avg Order Value', prepaid: PREPAID.avg_order_value ? '₹'+PREPAID.avg_order_value.toLocaleString('en-IN') : '—', cod: COD.avg_order_value ? '₹'+COD.avg_order_value.toLocaleString('en-IN') : '—' },
-                      { label: 'Z-RTO', prepaid: PREPAID.z_rto||0, cod: COD.z_rto||0 },
-                      { label: 'Cancelled', prepaid: PREPAID.cancelled||0, cod: COD.cancelled||0 },
-                      { label: 'In Transit', prepaid: PREPAID.in_transit||0, cod: COD.in_transit||0 },
-                    ].map(row => (
-                      <div key={row.label} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: `1px solid ${C.border}`, paddingBottom: 4 }}>
-                        <span style={{ fontSize: 10.5, color: C.t3, fontWeight: 600 }}>{row.label}</span>
-                        <div style={{ display: 'flex', gap: 16 }}>
-                          <span style={{ fontSize: 11, fontWeight: 700, color: C.t1, minWidth: 64, textAlign: 'right' }}>{row.prepaid}</span>
-                          <span style={{ fontSize: 11, fontWeight: 700, color: C.t1, minWidth: 64, textAlign: 'right' }}>{row.cod}</span>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
                 </div>
               </div>
 
