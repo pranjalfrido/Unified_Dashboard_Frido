@@ -130,10 +130,13 @@ function LKpiCard({ label, value, badgeText, badgeVariant, subValue, cur, prev, 
     <div className="kpi-card" style={{ display: 'flex', flexDirection: 'column', gap: 0, padding: '7px 10px' }}>
       <div className="kpi-label" style={{ marginBottom: 2 }}>{label}</div>
       {compact ? (
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 4, minWidth: 0 }}>
-          <div className="kpi-value" style={{ fontSize: 16, whiteSpace: 'nowrap', minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis' }}>{value ?? '—'}</div>
-          {chgBadge}
-        </div>
+        <>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 4, minWidth: 0 }}>
+            <div className="kpi-value" style={{ fontSize: 16, whiteSpace: 'nowrap', minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis' }}>{value ?? '—'}</div>
+            {chgBadge}
+          </div>
+          {subValue && <div style={{ fontSize: 11, fontWeight: 500, color: C.t3, marginTop: 1 }}>{subValue} of total</div>}
+        </>
       ) : (
         <>
           <div className="kpi-value" style={{ fontSize: 16, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{value ?? '—'}</div>
