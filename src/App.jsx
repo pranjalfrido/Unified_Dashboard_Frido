@@ -370,10 +370,21 @@ function LogisticsPage({ filters }) {
                 <XAxis dataKey="label" tick={{ fontSize: 10, fill: C.t3 }} />
                 <YAxis yAxisId="left" tick={{ fontSize: 10, fill: C.t3 }} tickFormatter={v => trendMetric === 'Value' ? (v >= 100000 ? '₹'+(v/100000).toFixed(1)+'L' : v >= 1000 ? '₹'+(v/1000).toFixed(0)+'K' : '₹'+v) : (v >= 1000 ? (v/1000).toFixed(0)+'K' : v)} />
                 <YAxis yAxisId="right" orientation="right" tickFormatter={v => v + '%'} tick={{ fontSize: 10, fill: C.t3 }} />
-                <Tooltip formatter={(value, name) => {
-                  if (name === 'RTO %') return [value + '%', name]
-                  if (trendMetric === 'Value') return ['₹' + Number(value).toLocaleString('en-IN'), name]
-                  return [Number(value).toLocaleString('en-IN'), name]
+                <Tooltip content={({ active, payload, label }) => {
+                  if (!active || !payload?.length) return null
+                  const get = key => payload.find(p => p.dataKey === key)?.value
+                  return (
+                    <div style={{ background: C.card, border: `1px solid ${C.border2}`, borderRadius: 8, padding: '10px 14px', fontSize: 12, color: C.t1, minWidth: 140 }}>
+                      <div style={{ fontWeight: 700, marginBottom: 6 }}>{label}</div>
+                      {trendMetric === 'Qty' ? <>
+                        <div style={{ color: '#b91c1c', fontWeight: 600 }}>RTO % : {get('rto_pct') ?? '—'}%</div>
+                        <div style={{ color: C.t2 }}>Total : {Number(get('total') ?? 0).toLocaleString('en-IN')}</div>
+                      </> : <>
+                        <div style={{ color: '#b91c1c', fontWeight: 600 }}>RTO % : {get('rto_value_pct') ?? '—'}%</div>
+                        <div style={{ color: C.t2 }}>Total Value : ₹{Number(get('total_value') ?? 0).toLocaleString('en-IN')}</div>
+                      </>}
+                    </div>
+                  )
                 }} />
                 {trendMetric === 'Qty' ? <>
                   <Area yAxisId="left" type="monotone" dataKey="delivered" name="Delivered" stroke="#E6A800" strokeWidth={2.5} fill="url(#lgDel)" dot={false} activeDot={{ r: 5 }} />
