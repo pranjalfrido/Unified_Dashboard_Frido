@@ -803,45 +803,43 @@ function LogisticsPage({ filters }) {
           ]
 
           return (
-            <div style={{ display: 'grid', gridTemplateColumns: '320px 1fr', gap: 14, alignItems: 'stretch' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '280px 1fr', gap: 14, alignItems: 'stretch' }}>
 
               {/* Left: Donut + 3 KPIs beside it */}
               <div style={cardStyle}>
                 <div style={chartTitle}>Payment Split</div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 8 }}>
-                  <div style={{ flexShrink: 0, width: 140, height: 140 }}>
-                    <ResponsiveContainer width="100%" height="100%">
-                      <PieChart>
-                        <Pie data={donutData} cx="50%" cy="50%" innerRadius={40} outerRadius={62} dataKey="value" paddingAngle={3}>
-                          {donutData.map((d,i) => <Cell key={i} fill={d.color} />)}
-                        </Pie>
-                        <Tooltip formatter={(v,n) => [v.toLocaleString('en-IN'), n]} />
-                      </PieChart>
-                    </ResponsiveContainer>
-                  </div>
-                  <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 10 }}>
-                    <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', marginBottom: 2 }}>
-                      {donutData.map(d => (
-                        <span key={d.name} style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 10, color: C.t2, fontWeight: 700 }}>
-                          <span style={{ width: 8, height: 8, borderRadius: 2, background: d.color, display: 'inline-block' }} />{d.name}
-                        </span>
-                      ))}
-                    </div>
-                    {[
-                      { label: 'Shipments', prepaid: (PREPAID.total||0).toLocaleString('en-IN'), cod: (COD.total||0).toLocaleString('en-IN') },
-                      { label: 'Delivered %', prepaid: prepaidDelPct+'%', cod: codDelPct+'%', pColor: '#16a34a', cColor: '#d97706' },
-                      { label: 'RTO %', prepaid: prepaidRtoPct+'%', cod: codRtoPct+'%', pColor: '#16a34a', cColor: '#dc2626' },
-                    ].map(row => (
-                      <div key={row.label} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: `1px solid ${C.border}`, paddingBottom: 6 }}>
-                        <span style={{ fontSize: 10.5, color: C.t3, fontWeight: 600 }}>{row.label}</span>
-                        <div style={{ display: 'flex', gap: 14 }}>
-                          <span style={{ fontSize: 12, fontWeight: 700, color: row.pColor||C.t1, minWidth: 52, textAlign: 'right' }}>{row.prepaid}</span>
-                          <span style={{ fontSize: 12, fontWeight: 700, color: row.cColor||C.t1, minWidth: 52, textAlign: 'right' }}>{row.cod}</span>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
+                <ResponsiveContainer width="100%" height={160}>
+                  <PieChart>
+                    <Pie data={donutData} cx="50%" cy="50%" innerRadius={44} outerRadius={68} dataKey="value" paddingAngle={3}>
+                      {donutData.map((d,i) => <Cell key={i} fill={d.color} />)}
+                    </Pie>
+                    <Tooltip formatter={(v,n) => [v.toLocaleString('en-IN'), n]} />
+                  </PieChart>
+                </ResponsiveContainer>
+                <div style={{ display: 'flex', justifyContent: 'center', gap: 16, marginBottom: 12 }}>
+                  {donutData.map(d => (
+                    <span key={d.name} style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 10.5, color: C.t2, fontWeight: 700 }}>
+                      <span style={{ width: 9, height: 9, borderRadius: 2, background: d.color, display: 'inline-block' }} />{d.name}
+                    </span>
+                  ))}
                 </div>
+                <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 14, marginBottom: 6 }}>
+                  <span style={{ fontSize: 10, color: '#2563eb', fontWeight: 700, minWidth: 52, textAlign: 'right' }}>PREPAID</span>
+                  <span style={{ fontSize: 10, color: '#F59E0B', fontWeight: 700, minWidth: 52, textAlign: 'right' }}>COD</span>
+                </div>
+                {[
+                  { label: 'Shipments', prepaid: (PREPAID.total||0).toLocaleString('en-IN'), cod: (COD.total||0).toLocaleString('en-IN') },
+                  { label: 'Delivered %', prepaid: prepaidDelPct+'%', cod: codDelPct+'%', pColor: '#16a34a', cColor: '#d97706' },
+                  { label: 'RTO %', prepaid: prepaidRtoPct+'%', cod: codRtoPct+'%', pColor: '#16a34a', cColor: '#dc2626' },
+                ].map(row => (
+                  <div key={row.label} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: `1px solid ${C.border}`, paddingBottom: 8, marginBottom: 8 }}>
+                    <span style={{ fontSize: 11, color: C.t3, fontWeight: 600 }}>{row.label}</span>
+                    <div style={{ display: 'flex', gap: 14 }}>
+                      <span style={{ fontSize: 13, fontWeight: 700, color: row.pColor||C.t1, minWidth: 52, textAlign: 'right' }}>{row.prepaid}</span>
+                      <span style={{ fontSize: 13, fontWeight: 700, color: row.cColor||C.t1, minWidth: 52, textAlign: 'right' }}>{row.cod}</span>
+                    </div>
+                  </div>
+                ))}
               </div>
 
               {/* Right: Rich trend chart */}
