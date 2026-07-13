@@ -322,6 +322,8 @@ by_day AS (
     ROUND(SUM(IF(unified_status='RTO', invoice_value, 0)), 0) AS rto_value,
     ROUND(SUM(IF(unified_status='RTO', invoice_value, 0)) * 100.0 / NULLIF(SUM(invoice_value),0), 1) AS rto_value_pct,
     ROUND(SUM(IF(unified_status='Delivered', invoice_value, 0)) * 100.0 / NULLIF(SUM(invoice_value),0), 1) AS del_value_pct,
+    ROUND(AVG(IF(pickup_ts IS NOT NULL AND created_ts IS NOT NULL AND TIMESTAMP_DIFF(pickup_ts, created_ts, MINUTE) BETWEEN 0 AND 14400, TIMESTAMP_DIFF(pickup_ts, created_ts, MINUTE) / 1440.0, NULL)), 2) AS avg_pickup_days,
+    ROUND(AVG(IF(created_date IS NOT NULL AND order_date IS NOT NULL AND DATE_DIFF(created_date, order_date, DAY) BETWEEN 0 AND 10, DATE_DIFF(created_date, order_date, DAY), NULL)), 2) AS avg_processing_days,
     ROUND(AVG(IF(pickup_ts IS NOT NULL AND delivery_ts IS NOT NULL AND TIMESTAMP_DIFF(delivery_ts, pickup_ts, MINUTE) BETWEEN 0 AND 28800, TIMESTAMP_DIFF(delivery_ts, pickup_ts, MINUTE) / 1440.0, NULL)), 2) AS avg_intransit_days,
     ROUND(AVG(IF(delivery_date IS NOT NULL AND order_date IS NOT NULL AND DATE_DIFF(delivery_date, order_date, DAY) BETWEEN 0 AND 20, DATE_DIFF(delivery_date, order_date, DAY), NULL)), 2) AS avg_fulfilment_days
   FROM base WHERE created_date IS NOT NULL GROUP BY 1,2 ORDER BY 2
@@ -339,6 +341,8 @@ by_week AS (
     ROUND(SUM(IF(unified_status='RTO', invoice_value, 0)), 0) AS rto_value,
     ROUND(SUM(IF(unified_status='RTO', invoice_value, 0)) * 100.0 / NULLIF(SUM(invoice_value),0), 1) AS rto_value_pct,
     ROUND(SUM(IF(unified_status='Delivered', invoice_value, 0)) * 100.0 / NULLIF(SUM(invoice_value),0), 1) AS del_value_pct,
+    ROUND(AVG(IF(pickup_ts IS NOT NULL AND created_ts IS NOT NULL AND TIMESTAMP_DIFF(pickup_ts, created_ts, MINUTE) BETWEEN 0 AND 14400, TIMESTAMP_DIFF(pickup_ts, created_ts, MINUTE) / 1440.0, NULL)), 2) AS avg_pickup_days,
+    ROUND(AVG(IF(created_date IS NOT NULL AND order_date IS NOT NULL AND DATE_DIFF(created_date, order_date, DAY) BETWEEN 0 AND 10, DATE_DIFF(created_date, order_date, DAY), NULL)), 2) AS avg_processing_days,
     ROUND(AVG(IF(pickup_ts IS NOT NULL AND delivery_ts IS NOT NULL AND TIMESTAMP_DIFF(delivery_ts, pickup_ts, MINUTE) BETWEEN 0 AND 28800, TIMESTAMP_DIFF(delivery_ts, pickup_ts, MINUTE) / 1440.0, NULL)), 2) AS avg_intransit_days,
     ROUND(AVG(IF(delivery_date IS NOT NULL AND order_date IS NOT NULL AND DATE_DIFF(delivery_date, order_date, DAY) BETWEEN 0 AND 20, DATE_DIFF(delivery_date, order_date, DAY), NULL)), 2) AS avg_fulfilment_days
   FROM base WHERE created_date IS NOT NULL GROUP BY 1,2 ORDER BY 2
@@ -356,6 +360,8 @@ by_month AS (
     ROUND(SUM(IF(unified_status='RTO', invoice_value, 0)), 0) AS rto_value,
     ROUND(SUM(IF(unified_status='RTO', invoice_value, 0)) * 100.0 / NULLIF(SUM(invoice_value),0), 1) AS rto_value_pct,
     ROUND(SUM(IF(unified_status='Delivered', invoice_value, 0)) * 100.0 / NULLIF(SUM(invoice_value),0), 1) AS del_value_pct,
+    ROUND(AVG(IF(pickup_ts IS NOT NULL AND created_ts IS NOT NULL AND TIMESTAMP_DIFF(pickup_ts, created_ts, MINUTE) BETWEEN 0 AND 14400, TIMESTAMP_DIFF(pickup_ts, created_ts, MINUTE) / 1440.0, NULL)), 2) AS avg_pickup_days,
+    ROUND(AVG(IF(created_date IS NOT NULL AND order_date IS NOT NULL AND DATE_DIFF(created_date, order_date, DAY) BETWEEN 0 AND 10, DATE_DIFF(created_date, order_date, DAY), NULL)), 2) AS avg_processing_days,
     ROUND(AVG(IF(pickup_ts IS NOT NULL AND delivery_ts IS NOT NULL AND TIMESTAMP_DIFF(delivery_ts, pickup_ts, MINUTE) BETWEEN 0 AND 28800, TIMESTAMP_DIFF(delivery_ts, pickup_ts, MINUTE) / 1440.0, NULL)), 2) AS avg_intransit_days,
     ROUND(AVG(IF(delivery_date IS NOT NULL AND order_date IS NOT NULL AND DATE_DIFF(delivery_date, order_date, DAY) BETWEEN 0 AND 20, DATE_DIFF(delivery_date, order_date, DAY), NULL)), 2) AS avg_fulfilment_days
   FROM base WHERE created_date IS NOT NULL GROUP BY 1,2 ORDER BY 2
