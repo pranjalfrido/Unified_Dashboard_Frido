@@ -776,125 +776,141 @@ function LogisticsPage({ filters }) {
           const PREPAID = pd.find(r => r.payment_mode === 'PREPAID') || {}
           const COD = pd.find(r => r.payment_mode === 'COD') || {}
           const totalAll = pd.reduce((s,r) => s+(r.total||0),0) || 1
-          const COLORS = { PREPAID: '#2563eb', COD: '#FFD600' }
-          const COLORS_DARK = { PREPAID: '#1d4ed8', COD: '#d97706' }
 
-          // trend data shaped for recharts — switches by granularity
           const pmRaw = payTrendGran === 'Daily' ? (data?.byPaymentDay || []) : payTrendGran === 'Weekly' ? (data?.byPaymentWeek || []) : (data?.byPaymentMonth || [])
           const periods = [...new Set(pmRaw.map(r => r.period_label))]
           const trendData = periods.map(m => {
             const p = pmRaw.find(r => r.period_label===m && r.payment_mode==='PREPAID') || {}
             const c = pmRaw.find(r => r.period_label===m && r.payment_mode==='COD') || {}
-            return { month: m, PREPAID_del: p.del_pct||0, COD_del: c.del_pct||0, PREPAID_rto: p.rto_pct||0, COD_rto: c.rto_pct||0 }
+            return {
+              label: m,
+              PREPAID_total: p.total||0, COD_total: c.total||0,
+              PREPAID_del: p.del_pct||0, COD_del: c.del_pct||0,
+              PREPAID_rto: p.rto_pct||0, COD_rto: c.rto_pct||0,
+            }
           })
-          const trendTitle = payTrendGran === 'Daily' ? 'Daily Trend — Delivery & RTO Rate' : payTrendGran === 'Weekly' ? 'Weekly Trend — Delivery & RTO Rate' : 'Monthly Trend — Delivery & RTO Rate'
 
-          // TAT comparison data
-          const tatData = [
-            { name: 'Avg Processing', PREPAID: PREPAID.avg_processing_days, COD: COD.avg_processing_days },
-            { name: 'Avg Pickup', PREPAID: PREPAID.avg_pickup_days, COD: COD.avg_pickup_days },
-            { name: 'Avg S2D', PREPAID: PREPAID.avg_intransit_days, COD: COD.avg_intransit_days },
-            { name: 'Avg O2D', PREPAID: PREPAID.avg_fulfilment_days, COD: COD.avg_fulfilment_days },
+          const prepaidDelPct = PREPAID.total ? +((PREPAID.delivered/PREPAID.total)*100).toFixed(1) : 0
+          const codDelPct = COD.total ? +((COD.delivered/COD.total)*100).toFixed(1) : 0
+          const prepaidRtoPct = PREPAID.total ? +((PREPAID.rto/PREPAID.total)*100).toFixed(1) : 0
+          const codRtoPct = COD.total ? +((COD.rto/COD.total)*100).toFixed(1) : 0
+          const prepaidVolPct = +((PREPAID.total||0)/totalAll*100).toFixed(1)
+          const codVolPct = +((COD.total||0)/totalAll*100).toFixed(1)
+
+          const donutData = [
+            { name: 'PREPAID', value: PREPAID.total||0, color: '#2563eb' },
+            { name: 'COD', value: COD.total||0, color: '#F59E0B' },
           ]
 
           return (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '320px 1fr', gap: 14 }}>
 
-              {/* Row 1: KPI summary cards */}
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
-                {[{ label: 'PREPAID', d: PREPAID, color: '#2563eb', bg: '#EFF6FF', border: '#BFDBFE' }, { label: 'COD', d: COD, color: '#d97706', bg: '#FFFBEB', border: '#FDE68A' }].map(({ label, d, color, bg, border }) => {
-                  const tot = d.total || 0
-                  const delPct = tot ? ((d.delivered/tot)*100).toFixed(1) : '—'
-                  const rtoPct = tot ? ((d.rto/tot)*100).toFixed(1) : '—'
-                  const volPct = ((tot/totalAll)*100).toFixed(1)
-                  return (
-                    <div key={label} style={{ background: bg, border: `1.5px solid ${border}`, borderRadius: 14, padding: '18px 20px' }}>
-                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                          <div style={{ width: 10, height: 10, borderRadius: '50%', background: color }} />
-                          <span style={{ fontSize: 13, fontWeight: 700, color: '#13121A' }}>{label}</span>
-                        </div>
-                        <span style={{ fontSize: 11, color, fontWeight: 700, background: '#fff', padding: '2px 10px', borderRadius: 20, border: `1px solid ${border}` }}>{volPct}% of total</span>
-                      </div>
-                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 10 }}>
-                        {[
-                          { label: 'Shipments', value: (tot).toLocaleString('en-IN'), sub: null },
-                          { label: 'Delivered %', value: delPct+'%', sub: null, vColor: label==='PREPAID'?'#16a34a':'#d97706' },
-                          { label: 'RTO %', value: rtoPct+'%', sub: null, vColor: label==='COD'?'#dc2626':'#16a34a' },
-                          { label: 'Avg O2D', value: d.avg_fulfilment_days ? d.avg_fulfilment_days+'d' : '—', sub: null },
-                        ].map(m => (
-                          <div key={m.label} style={{ background: '#fff', borderRadius: 10, padding: '10px 12px', border: `1px solid ${border}` }}>
-                            <div style={{ fontSize: 9.5, color: '#94939F', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.04em', marginBottom: 4 }}>{m.label}</div>
-                            <div style={{ fontSize: 18, fontWeight: 700, color: m.vColor || '#13121A', letterSpacing: '-0.5px' }}>{m.value}</div>
-                          </div>
-                        ))}
+              {/* Left: Donut + KPI stats */}
+              <div style={cardStyle}>
+                <div style={chartTitle}>Payment Split</div>
+                <ResponsiveContainer width="100%" height={160}>
+                  <PieChart>
+                    <Pie data={donutData} cx="50%" cy="50%" innerRadius={48} outerRadius={72} dataKey="value" paddingAngle={3}>
+                      {donutData.map((d,i) => <Cell key={i} fill={d.color} />)}
+                    </Pie>
+                    <Tooltip formatter={(v,n) => [v.toLocaleString('en-IN'), n]} />
+                  </PieChart>
+                </ResponsiveContainer>
+                <div style={{ display: 'flex', gap: 8, justifyContent: 'center', marginBottom: 14 }}>
+                  {donutData.map(d => (
+                    <span key={d.name} style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 10.5, color: C.t2, fontWeight: 600 }}>
+                      <span style={{ width: 10, height: 10, borderRadius: 2, background: d.color, display: 'inline-block' }} />{d.name}
+                    </span>
+                  ))}
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  {[
+                    { label: 'Shipments', prepaid: (PREPAID.total||0).toLocaleString('en-IN'), cod: (COD.total||0).toLocaleString('en-IN') },
+                    { label: 'Vol %', prepaid: prepaidVolPct+'%', cod: codVolPct+'%' },
+                    { label: 'Delivered %', prepaid: prepaidDelPct+'%', cod: codDelPct+'%', pColor: '#16a34a', cColor: '#d97706' },
+                    { label: 'RTO %', prepaid: prepaidRtoPct+'%', cod: codRtoPct+'%', pColor: '#16a34a', cColor: '#dc2626' },
+                    { label: 'Avg O2D', prepaid: PREPAID.avg_fulfilment_days ? PREPAID.avg_fulfilment_days+'d' : '—', cod: COD.avg_fulfilment_days ? COD.avg_fulfilment_days+'d' : '—' },
+                    { label: 'Avg S2D', prepaid: PREPAID.avg_intransit_days ? PREPAID.avg_intransit_days+'d' : '—', cod: COD.avg_intransit_days ? COD.avg_intransit_days+'d' : '—' },
+                    { label: 'Avg Processing', prepaid: PREPAID.avg_processing_days ? PREPAID.avg_processing_days+'d' : '—', cod: COD.avg_processing_days ? COD.avg_processing_days+'d' : '—' },
+                    { label: 'Avg Pickup', prepaid: PREPAID.avg_pickup_days ? PREPAID.avg_pickup_days+'d' : '—', cod: COD.avg_pickup_days ? COD.avg_pickup_days+'d' : '—' },
+                    { label: 'Avg Order Value', prepaid: PREPAID.avg_order_value ? '₹'+PREPAID.avg_order_value.toLocaleString('en-IN') : '—', cod: COD.avg_order_value ? '₹'+COD.avg_order_value.toLocaleString('en-IN') : '—' },
+                    { label: 'Z-RTO', prepaid: PREPAID.z_rto||0, cod: COD.z_rto||0 },
+                    { label: 'Cancelled', prepaid: PREPAID.cancelled||0, cod: COD.cancelled||0 },
+                    { label: 'In Transit', prepaid: PREPAID.in_transit||0, cod: COD.in_transit||0 },
+                  ].map(row => (
+                    <div key={row.label} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: `1px solid ${C.border}`, paddingBottom: 5 }}>
+                      <span style={{ fontSize: 10.5, color: C.t3, fontWeight: 600 }}>{row.label}</span>
+                      <div style={{ display: 'flex', gap: 16 }}>
+                        <span style={{ fontSize: 11, fontWeight: 700, color: row.pColor||C.t1, minWidth: 50, textAlign: 'right' }}>{row.prepaid}</span>
+                        <span style={{ fontSize: 11, fontWeight: 700, color: row.cColor||C.t1, minWidth: 50, textAlign: 'right' }}>{row.cod}</span>
                       </div>
                     </div>
-                  )
-                })}
+                  ))}
+                  <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 16, marginTop: 2 }}>
+                    <span style={{ fontSize: 10, color: '#2563eb', fontWeight: 700, minWidth: 50, textAlign: 'right' }}>PREPAID</span>
+                    <span style={{ fontSize: 10, color: '#F59E0B', fontWeight: 700, minWidth: 50, textAlign: 'right' }}>COD</span>
+                  </div>
+                </div>
               </div>
 
-              {/* Row 2: 2 charts side by side */}
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
-
-                {/* Chart 1: Trend — area lines for Del% + RTO% with Daily/Weekly/Monthly toggle */}
-                <div style={cardStyle}>
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 2 }}>
-                    <div style={chartTitle}>{trendTitle}</div>
-                    <div style={{ display: 'flex', gap: 4 }}>
-                      {['Daily','Weekly','Monthly'].map(g => (
-                        <button key={g} onClick={() => setPayTrendGran(g)} style={{ fontSize: 10.5, padding: '3px 10px', borderRadius: 6, border: `1px solid ${payTrendGran===g ? C.acc : C.border}`, background: payTrendGran===g ? C.acl : 'transparent', color: payTrendGran===g ? C.t1 : C.t2, cursor: 'pointer', fontWeight: payTrendGran===g ? 700 : 500, fontFamily: 'var(--font)', transition: 'all .15s' }}>{g}</button>
-                      ))}
-                    </div>
+              {/* Right: Rich trend chart */}
+              <div style={cardStyle}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
+                  <div style={chartTitle}>PREPAID vs COD Trend</div>
+                  <div style={{ display: 'flex', gap: 4 }}>
+                    {['Daily','Weekly','Monthly'].map(g => (
+                      <button key={g} onClick={() => setPayTrendGran(g)} style={{ fontSize: 10.5, padding: '3px 10px', borderRadius: 6, border: `1px solid ${payTrendGran===g ? C.acc : C.border}`, background: payTrendGran===g ? C.acl : 'transparent', color: payTrendGran===g ? C.t1 : C.t2, cursor: 'pointer', fontWeight: payTrendGran===g ? 700 : 500, fontFamily: 'var(--font)', transition: 'all .15s' }}>{g}</button>
+                    ))}
                   </div>
-                  <div style={{ fontSize: 11, color: C.t3, marginBottom: 12, marginTop: 2 }}>PREPAID vs COD · Del% (left axis) · RTO% (right axis)</div>
-                  <ResponsiveContainer width="100%" height={240}>
-                    <ComposedChart data={trendData} margin={{ top: 8, right: 40, left: 0, bottom: 0 }}>
-                      <defs>
-                        <linearGradient id="prepaidDelGrad" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="5%" stopColor="#2563eb" stopOpacity={0.15}/>
-                          <stop offset="95%" stopColor="#2563eb" stopOpacity={0}/>
-                        </linearGradient>
-                        <linearGradient id="codDelGrad" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="5%" stopColor="#d97706" stopOpacity={0.15}/>
-                          <stop offset="95%" stopColor="#d97706" stopOpacity={0}/>
-                        </linearGradient>
-                      </defs>
-                      <CartesianGrid strokeDasharray="3 3" stroke={C.border} vertical={true} strokeOpacity={0.5} />
-                      <XAxis dataKey="month" tick={{ fontSize: 10, fill: C.t3 }} />
-                      <YAxis yAxisId="del" tick={{ fontSize: 9, fill: C.t3 }} tickFormatter={v => v+'%'} domain={[50,100]} />
-                      <YAxis yAxisId="rto" orientation="right" tick={{ fontSize: 9, fill: C.t3 }} tickFormatter={v => v+'%'} domain={[0,35]} />
-                      <Tooltip formatter={(v,n) => [v.toFixed(1)+'%', n]} />
-                      <Legend wrapperStyle={{ fontSize: 11, paddingTop: 8 }} />
-                      <Area yAxisId="del" type="monotone" dataKey="PREPAID_del" name="PREPAID Del%" stroke="#2563eb" strokeWidth={2.5} fill="url(#prepaidDelGrad)" dot={{ r: 3, fill: '#2563eb', strokeWidth: 0 }} activeDot={{ r: 5 }} />
-                      <Area yAxisId="del" type="monotone" dataKey="COD_del" name="COD Del%" stroke="#d97706" strokeWidth={2.5} fill="url(#codDelGrad)" dot={{ r: 3, fill: '#d97706', strokeWidth: 0 }} activeDot={{ r: 5 }} />
-                      <Line yAxisId="rto" type="monotone" dataKey="PREPAID_rto" name="PREPAID RTO%" stroke="#93c5fd" strokeWidth={1.5} dot={{ r: 2 }} strokeDasharray="4 3" />
-                      <Line yAxisId="rto" type="monotone" dataKey="COD_rto" name="COD RTO%" stroke="#fca5a5" strokeWidth={1.5} dot={{ r: 2 }} strokeDasharray="4 3" />
-                    </ComposedChart>
-                  </ResponsiveContainer>
                 </div>
-
-                {/* Chart 2: TAT + RTO% grouped bars */}
-                <div style={cardStyle}>
-                  <div style={chartTitle}>Performance Breakdown — TAT & RTO %</div>
-                  <div style={{ fontSize: 11, color: C.t3, marginBottom: 12, marginTop: 2 }}>PREPAID vs COD at each fulfilment stage</div>
-                  <ResponsiveContainer width="100%" height={240}>
-                    <BarChart data={[
-                      { name: 'RTO %', PREPAID: PREPAID.total ? +((PREPAID.rto/PREPAID.total)*100).toFixed(2) : 0, COD: COD.total ? +((COD.rto/COD.total)*100).toFixed(2) : 0 },
-                      { name: 'Avg Processing', PREPAID: PREPAID.avg_processing_days, COD: COD.avg_processing_days },
-                      { name: 'Avg Pickup', PREPAID: PREPAID.avg_pickup_days, COD: COD.avg_pickup_days },
-                      { name: 'Avg S2D', PREPAID: PREPAID.avg_intransit_days, COD: COD.avg_intransit_days },
-                      { name: 'Avg O2D', PREPAID: PREPAID.avg_fulfilment_days, COD: COD.avg_fulfilment_days },
-                    ]} margin={{ top: 4, right: 8, left: 0, bottom: 0 }} barCategoryGap="28%">
-                      <CartesianGrid strokeDasharray="3 3" stroke={C.border} vertical={false} />
-                      <XAxis dataKey="name" tick={{ fontSize: 9.5, fill: C.t3 }} />
-                      <YAxis tick={{ fontSize: 9, fill: C.t3 }} />
-                      <Tooltip formatter={(v,n) => [v != null ? (+v).toFixed(2) : '—', n]} />
-                      <Legend wrapperStyle={{ fontSize: 11, paddingTop: 8 }} />
-                      <Bar dataKey="PREPAID" name="PREPAID" fill="#2563eb" radius={[4,4,0,0]} />
-                      <Bar dataKey="COD" name="COD" fill="#FFD600" radius={[4,4,0,0]} />
-                    </BarChart>
-                  </ResponsiveContainer>
+                <div style={{ fontSize: 11, color: C.t3, marginBottom: 8 }}>Del % & RTO % by payment mode · Shipments (bars)</div>
+                <ResponsiveContainer width="100%" height={340}>
+                  <ComposedChart data={trendData} margin={{ top: 4, right: 44, left: 0, bottom: 0 }}>
+                    <defs>
+                      <linearGradient id="pmPrepaidGrad" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="#2563eb" stopOpacity={0.12}/>
+                        <stop offset="95%" stopColor="#2563eb" stopOpacity={0}/>
+                      </linearGradient>
+                      <linearGradient id="pmCodGrad" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="#F59E0B" stopOpacity={0.12}/>
+                        <stop offset="95%" stopColor="#F59E0B" stopOpacity={0}/>
+                      </linearGradient>
+                    </defs>
+                    <CartesianGrid strokeDasharray="3 3" stroke={C.border} vertical={false} />
+                    <XAxis dataKey="label" tick={{ fontSize: 10, fill: C.t3 }} />
+                    <YAxis yAxisId="cnt" tick={{ fontSize: 9, fill: C.t3 }} tickFormatter={v => v>=1000?(v/1000).toFixed(0)+'K':v} />
+                    <YAxis yAxisId="pct" orientation="right" tick={{ fontSize: 9, fill: C.t3 }} tickFormatter={v => v+'%'} />
+                    <Tooltip content={({ active, payload, label }) => {
+                      if (!active || !payload?.length) return null
+                      const get = key => payload.find(p => p.dataKey===key)?.value
+                      return (
+                        <div style={{ background: C.card, border: `1px solid ${C.border2}`, borderRadius: 8, padding: '10px 14px', fontSize: 11.5, minWidth: 180 }}>
+                          <div style={{ fontWeight: 700, marginBottom: 6 }}>{label}</div>
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+                            <div style={{ color: '#2563eb', fontWeight: 600 }}>PREPAID · {(get('PREPAID_total')||0).toLocaleString('en-IN')} ships</div>
+                            <div style={{ color: '#16a34a', marginLeft: 8 }}>Del %: {get('PREPAID_del')}%</div>
+                            <div style={{ color: '#dc2626', marginLeft: 8 }}>RTO %: {get('PREPAID_rto')}%</div>
+                            <div style={{ color: '#F59E0B', fontWeight: 600, marginTop: 4 }}>COD · {(get('COD_total')||0).toLocaleString('en-IN')} ships</div>
+                            <div style={{ color: '#16a34a', marginLeft: 8 }}>Del %: {get('COD_del')}%</div>
+                            <div style={{ color: '#dc2626', marginLeft: 8 }}>RTO %: {get('COD_rto')}%</div>
+                          </div>
+                        </div>
+                      )
+                    }} />
+                    <Bar yAxisId="cnt" dataKey="PREPAID_total" name="PREPAID Ships" fill="#2563eb" opacity={0.25} radius={[2,2,0,0]} barSize={12} />
+                    <Bar yAxisId="cnt" dataKey="COD_total" name="COD Ships" fill="#F59E0B" opacity={0.35} radius={[2,2,0,0]} barSize={12} />
+                    <Line yAxisId="pct" type="monotone" dataKey="PREPAID_del" name="PREPAID Del%" stroke="#2563eb" strokeWidth={2.5} dot={{ r: 3, fill: '#2563eb' }} activeDot={{ r: 5 }} />
+                    <Line yAxisId="pct" type="monotone" dataKey="COD_del" name="COD Del%" stroke="#F59E0B" strokeWidth={2.5} dot={{ r: 3, fill: '#F59E0B' }} activeDot={{ r: 5 }} />
+                    <Line yAxisId="pct" type="monotone" dataKey="PREPAID_rto" name="PREPAID RTO%" stroke="#93c5fd" strokeWidth={1.5} strokeDasharray="4 3" dot={{ r: 2 }} />
+                    <Line yAxisId="pct" type="monotone" dataKey="COD_rto" name="COD RTO%" stroke="#fca5a5" strokeWidth={1.5} strokeDasharray="4 3" dot={{ r: 2 }} />
+                  </ComposedChart>
+                </ResponsiveContainer>
+                <div style={{ display: 'flex', gap: 16, justifyContent: 'center', marginTop: 8, flexWrap: 'wrap' }}>
+                  {[['#2563eb','PREPAID Del%'],['#F59E0B','COD Del%'],['#93c5fd','PREPAID RTO%'],['#fca5a5','COD RTO%']].map(([color,label]) => (
+                    <span key={label} style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 10, color: C.t2 }}>
+                      <span style={{ width: 10, height: 10, borderRadius: 2, background: color, display: 'inline-block' }} />{label}
+                    </span>
+                  ))}
                 </div>
               </div>
 
