@@ -356,7 +356,7 @@ function LogisticsPage({ filters }) {
           <LKpiCard label="Total GMV" value={k.total_value != null ? fmt(k.total_value) : '—'} cur={k.total_value} prev={pk.total_value} />
           <LKpiCard label="Delivered" value={n(k.delivered)} badgeVariant="G" subValue={pct2(k.delivered, k.total_shipments)} cur={k.delivered} prev={pk.delivered} />
           <LKpiCard label="RTO %" value={pct2(k.rto, k.total_shipments)} badgeVariant="R" cur={k.rto} prev={pk.rto} />
-          <LKpiCard label="RTO" value={n(k.rto)} badgeVariant="R" cur={k.rto} prev={pk.rto} />
+          <LKpiCard label="RTO" value={n(k.rto)} badgeVariant="R" subValue={pct2(k.rto, k.total_shipments)} cur={k.rto} prev={pk.rto} />
           <LKpiCard label="RTO Undelivered" value={n(k.rto_undelivered)} badgeVariant="R" cur={k.rto_undelivered} prev={pk.rto_undelivered} />
           <LKpiCard label="In Transit" value={n(k.in_transit)} badgeVariant="B" cur={k.in_transit} prev={pk.in_transit} />
           <LKpiCard label="Pickup Pending" value={n(k.pickup_pending)} badgeVariant="A" cur={k.pickup_pending} prev={pk.pickup_pending} />
