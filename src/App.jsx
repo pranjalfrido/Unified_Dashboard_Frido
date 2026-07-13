@@ -364,11 +364,10 @@ function LogisticsPage({ filters }) {
 
         {/* ── Volume KPIs ── */}
         <LSectionTitle title="Volume Overview" />
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(9, 1fr)', gap: 7 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(8, 1fr)', gap: 7 }}>
           <LKpiCard label="Total Shipments" value={n(k.total_shipments)} cur={k.total_shipments} prev={pk.total_shipments} compact={!filterSidebarOpen} />
           <LKpiCard label="Total GMV" value={fmtGMV(k.total_value)} cur={k.total_value} prev={pk.total_value} compact={!filterSidebarOpen} />
           <LKpiCard label="Delivered" value={n(k.delivered)} badgeVariant="G" subValue={pct2(k.delivered, k.total_shipments)} cur={k.delivered} prev={pk.delivered} hideSubValue={filterSidebarOpen} compact={!filterSidebarOpen} />
-          <LKpiCard label="RTO %" value={pct2(k.rto, k.total_shipments)} badgeVariant="R" cur={k.rto} prev={pk.rto} compact={!filterSidebarOpen} />
           <LKpiCard label="RTO" value={n(k.rto)} badgeVariant="R" subValue={pct2(k.rto, k.total_shipments)} cur={k.rto} prev={pk.rto} hideSubValue={filterSidebarOpen} compact={!filterSidebarOpen} />
           <LKpiCard label="RTO Undelivered" value={n(k.rto_undelivered)} badgeVariant="R" cur={k.rto_undelivered} prev={pk.rto_undelivered} compact={!filterSidebarOpen} />
           <LKpiCard label="In Transit" value={n(k.in_transit)} badgeVariant="B" cur={k.in_transit} prev={pk.in_transit} compact={!filterSidebarOpen} />
