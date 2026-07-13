@@ -372,7 +372,7 @@ function LogisticsPage({ filters }) {
           <LKpiCard label="RTO Undelivered" value={n(k.rto_undelivered)} badgeVariant="R" cur={k.rto_undelivered} prev={pk.rto_undelivered} compact={!filterSidebarOpen} />
           <LKpiCard label="In Transit" value={n(k.in_transit)} badgeVariant="B" cur={k.in_transit} prev={pk.in_transit} compact={!filterSidebarOpen} />
           <LKpiCard label="Pickup Pending" value={n(k.pickup_pending)} badgeVariant="A" cur={k.pickup_pending} prev={pk.pickup_pending} compact={!filterSidebarOpen} />
-          <LKpiCard label="Cancelled" value={n(k.cancelled)} badgeVariant="N" cur={k.cancelled} prev={pk.cancelled} compact={!filterSidebarOpen} />
+          <LKpiCard label="Cancelled" value={n(k.cancelled)} badgeVariant="N" subValue={pct2(k.cancelled, k.total_shipments)} cur={k.cancelled} prev={pk.cancelled} hideSubValue={filterSidebarOpen} compact={!filterSidebarOpen} />
         </div>
 
         {/* ── Quality KPIs ── */}
