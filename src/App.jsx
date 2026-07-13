@@ -352,8 +352,8 @@ function LogisticsPage({ filters }) {
 
       {error && <div style={{ padding: '10px 14px', borderRadius: 9, background: C.red.bg, border: `1px solid ${C.red.bd}`, color: C.red.tx, fontSize: 12 }}>⚠ {error}</div>}
       {loading && !data && (
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 60, gap: 10, color: C.t3, fontSize: 13 }}>
-          <div style={{ width: 120, height: 3, borderRadius: 2, background: C.border, overflow: 'hidden' }}>
+        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 14, color: C.t3, fontSize: 13, minHeight: 300 }}>
+          <div style={{ width: 160, height: 3, borderRadius: 2, background: C.border, overflow: 'hidden' }}>
             <div style={{ width: '60%', height: '100%', background: C.acc, animation: 'pulse 1.5s ease infinite' }} />
           </div>
           Loading logistics data…
