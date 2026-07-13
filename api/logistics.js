@@ -376,7 +376,7 @@ by_month AS (
 rto_reasons AS (
   SELECT reason_for_last_failed_delivery AS reason, COUNT(awb) AS total
   FROM base WHERE reason_for_last_failed_delivery IS NOT NULL AND unified_status='RTO'
-  GROUP BY 1 ORDER BY 2 DESC LIMIT 10
+  GROUP BY 1 ORDER BY 2 DESC
 ),
 top_drop_states AS (
   SELECT
