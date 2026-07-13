@@ -282,7 +282,9 @@ by_payment_day AS (
     COUNTIF(unified_status='Delivered') AS delivered,
     COUNTIF(unified_status='RTO') AS rto,
     ROUND(COUNTIF(unified_status='Delivered') * 100.0 / NULLIF(COUNT(awb),0), 2) AS del_pct,
-    ROUND(COUNTIF(unified_status='RTO') * 100.0 / NULLIF(COUNT(awb),0), 2) AS rto_pct
+    ROUND(COUNTIF(unified_status='RTO') * 100.0 / NULLIF(COUNT(awb),0), 2) AS rto_pct,
+    ROUND(AVG(IF(delivery_date IS NOT NULL AND order_date IS NOT NULL AND DATE_DIFF(delivery_date, order_date, DAY) BETWEEN 0 AND 20, DATE_DIFF(delivery_date, order_date, DAY), NULL)), 2) AS avg_fulfilment_days,
+    ROUND(AVG(IF(created_date IS NOT NULL AND order_date IS NOT NULL AND DATE_DIFF(created_date, order_date, DAY) BETWEEN 0 AND 10, DATE_DIFF(created_date, order_date, DAY), NULL)), 2) AS avg_processing_days
   FROM base WHERE payment_mode IS NOT NULL AND created_date IS NOT NULL GROUP BY 1,2,3
 ),
 by_payment_week AS (
@@ -294,7 +296,9 @@ by_payment_week AS (
     COUNTIF(unified_status='Delivered') AS delivered,
     COUNTIF(unified_status='RTO') AS rto,
     ROUND(COUNTIF(unified_status='Delivered') * 100.0 / NULLIF(COUNT(awb),0), 2) AS del_pct,
-    ROUND(COUNTIF(unified_status='RTO') * 100.0 / NULLIF(COUNT(awb),0), 2) AS rto_pct
+    ROUND(COUNTIF(unified_status='RTO') * 100.0 / NULLIF(COUNT(awb),0), 2) AS rto_pct,
+    ROUND(AVG(IF(delivery_date IS NOT NULL AND order_date IS NOT NULL AND DATE_DIFF(delivery_date, order_date, DAY) BETWEEN 0 AND 20, DATE_DIFF(delivery_date, order_date, DAY), NULL)), 2) AS avg_fulfilment_days,
+    ROUND(AVG(IF(created_date IS NOT NULL AND order_date IS NOT NULL AND DATE_DIFF(created_date, order_date, DAY) BETWEEN 0 AND 10, DATE_DIFF(created_date, order_date, DAY), NULL)), 2) AS avg_processing_days
   FROM base WHERE payment_mode IS NOT NULL AND created_date IS NOT NULL GROUP BY 1,2,3
 ),
 by_payment_month AS (
@@ -306,7 +310,9 @@ by_payment_month AS (
     COUNTIF(unified_status='Delivered') AS delivered,
     COUNTIF(unified_status='RTO') AS rto,
     ROUND(COUNTIF(unified_status='Delivered') * 100.0 / NULLIF(COUNT(awb),0), 2) AS del_pct,
-    ROUND(COUNTIF(unified_status='RTO') * 100.0 / NULLIF(COUNT(awb),0), 2) AS rto_pct
+    ROUND(COUNTIF(unified_status='RTO') * 100.0 / NULLIF(COUNT(awb),0), 2) AS rto_pct,
+    ROUND(AVG(IF(delivery_date IS NOT NULL AND order_date IS NOT NULL AND DATE_DIFF(delivery_date, order_date, DAY) BETWEEN 0 AND 20, DATE_DIFF(delivery_date, order_date, DAY), NULL)), 2) AS avg_fulfilment_days,
+    ROUND(AVG(IF(created_date IS NOT NULL AND order_date IS NOT NULL AND DATE_DIFF(created_date, order_date, DAY) BETWEEN 0 AND 10, DATE_DIFF(created_date, order_date, DAY), NULL)), 2) AS avg_processing_days
   FROM base WHERE payment_mode IS NOT NULL AND created_date IS NOT NULL GROUP BY 1,2,3
 ),
 by_day AS (

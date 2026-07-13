@@ -787,6 +787,8 @@ function LogisticsPage({ filters }) {
               PREPAID_total: p.total||0, COD_total: c.total||0,
               PREPAID_del: p.del_pct||0, COD_del: c.del_pct||0,
               PREPAID_rto: p.rto_pct||0, COD_rto: c.rto_pct||0,
+              PREPAID_o2d: p.avg_fulfilment_days||null, COD_o2d: c.avg_fulfilment_days||null,
+              PREPAID_proc: p.avg_processing_days||null, COD_proc: c.avg_processing_days||null,
             }
           })
 
@@ -869,19 +871,25 @@ function LogisticsPage({ filters }) {
                     <XAxis dataKey="label" tick={{ fontSize: 10, fill: C.t3 }} />
                     <YAxis yAxisId="cnt" tick={{ fontSize: 9, fill: C.t3 }} tickFormatter={v => v>=1000?(v/1000).toFixed(0)+'K':v} />
                     <YAxis yAxisId="pct" orientation="right" tick={{ fontSize: 9, fill: C.t3 }} tickFormatter={v => v+'%'} />
+                    <YAxis yAxisId="days" orientation="right" hide />
                     <Tooltip content={({ active, payload, label }) => {
                       if (!active || !payload?.length) return null
                       const get = key => payload.find(p => p.dataKey===key)?.value
+                      const d = v => v != null ? (+v).toFixed(2)+'d' : '—'
                       return (
-                        <div style={{ background: C.card, border: `1px solid ${C.border2}`, borderRadius: 8, padding: '10px 14px', fontSize: 11.5, minWidth: 180 }}>
+                        <div style={{ background: C.card, border: `1px solid ${C.border2}`, borderRadius: 8, padding: '10px 14px', fontSize: 11.5, minWidth: 200 }}>
                           <div style={{ fontWeight: 700, marginBottom: 6 }}>{label}</div>
                           <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
                             <div style={{ color: '#2563eb', fontWeight: 600 }}>PREPAID · {(get('PREPAID_total')||0).toLocaleString('en-IN')} ships</div>
                             <div style={{ color: '#16a34a', marginLeft: 8 }}>Del %: {get('PREPAID_del')}%</div>
                             <div style={{ color: '#dc2626', marginLeft: 8 }}>RTO %: {get('PREPAID_rto')}%</div>
+                            <div style={{ color: '#7c3aed', marginLeft: 8 }}>Avg O2D: {d(get('PREPAID_o2d'))}</div>
+                            <div style={{ color: '#0891b2', marginLeft: 8 }}>Avg Processing: {d(get('PREPAID_proc'))}</div>
                             <div style={{ color: '#F59E0B', fontWeight: 600, marginTop: 4 }}>COD · {(get('COD_total')||0).toLocaleString('en-IN')} ships</div>
                             <div style={{ color: '#16a34a', marginLeft: 8 }}>Del %: {get('COD_del')}%</div>
                             <div style={{ color: '#dc2626', marginLeft: 8 }}>RTO %: {get('COD_rto')}%</div>
+                            <div style={{ color: '#a78bfa', marginLeft: 8 }}>Avg O2D: {d(get('COD_o2d'))}</div>
+                            <div style={{ color: '#67e8f9', marginLeft: 8 }}>Avg Processing: {d(get('COD_proc'))}</div>
                           </div>
                         </div>
                       )
@@ -892,10 +900,14 @@ function LogisticsPage({ filters }) {
                     <Line yAxisId="pct" type="monotone" dataKey="COD_del" name="COD Del%" stroke="#F59E0B" strokeWidth={2.5} dot={{ r: 3, fill: '#F59E0B' }} activeDot={{ r: 5 }} />
                     <Line yAxisId="pct" type="monotone" dataKey="PREPAID_rto" name="PREPAID RTO%" stroke="#93c5fd" strokeWidth={1.5} strokeDasharray="4 3" dot={{ r: 2 }} />
                     <Line yAxisId="pct" type="monotone" dataKey="COD_rto" name="COD RTO%" stroke="#fca5a5" strokeWidth={1.5} strokeDasharray="4 3" dot={{ r: 2 }} />
+                    <Line yAxisId="days" type="monotone" dataKey="PREPAID_o2d" name="PREPAID Avg O2D" stroke="#7c3aed" strokeWidth={1.5} strokeDasharray="6 2" dot={{ r: 2 }} />
+                    <Line yAxisId="days" type="monotone" dataKey="COD_o2d" name="COD Avg O2D" stroke="#a78bfa" strokeWidth={1.5} strokeDasharray="6 2" dot={{ r: 2 }} />
+                    <Line yAxisId="days" type="monotone" dataKey="PREPAID_proc" name="PREPAID Avg Processing" stroke="#0891b2" strokeWidth={1.5} strokeDasharray="2 3" dot={{ r: 2 }} />
+                    <Line yAxisId="days" type="monotone" dataKey="COD_proc" name="COD Avg Processing" stroke="#67e8f9" strokeWidth={1.5} strokeDasharray="2 3" dot={{ r: 2 }} />
                   </ComposedChart>
                 </ResponsiveContainer>
-                <div style={{ display: 'flex', gap: 16, justifyContent: 'center', marginTop: 8, flexWrap: 'wrap' }}>
-                  {[['#2563eb','PREPAID Del%'],['#F59E0B','COD Del%'],['#93c5fd','PREPAID RTO%'],['#fca5a5','COD RTO%']].map(([color,label]) => (
+                <div style={{ display: 'flex', gap: 12, justifyContent: 'center', marginTop: 8, flexWrap: 'wrap' }}>
+                  {[['#2563eb','PREPAID Del%'],['#F59E0B','COD Del%'],['#93c5fd','PREPAID RTO%'],['#fca5a5','COD RTO%'],['#7c3aed','PREPAID O2D'],['#a78bfa','COD O2D'],['#0891b2','PREPAID Proc'],['#67e8f9','COD Proc']].map(([color,label]) => (
                     <span key={label} style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 10, color: C.t2 }}>
                       <span style={{ width: 10, height: 10, borderRadius: 2, background: color, display: 'inline-block' }} />{label}
                     </span>
