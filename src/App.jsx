@@ -377,12 +377,9 @@ function LogisticsPage({ filters }) {
 
         {/* ── Quality KPIs ── */}
         <LSectionTitle title="Delivery Quality & SLA" />
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(10, 1fr)', gap: 7 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 7 }}>
           <LKpiCard label="On Time Del" value={n(k.on_time)} badgeText={pct2(k.on_time, k.delivered)} badgeVariant="G" cur={k.on_time} prev={pk.on_time} compact={!filterSidebarOpen} />
-          <LKpiCard label="SLA Breach" value={n(k.sla_breach)} badgeText={pct2(k.sla_breach, k.delivered)} badgeVariant="R" cur={k.sla_breach} prev={pk.sla_breach} compact={!filterSidebarOpen} />
-          <LKpiCard label="SLA Breached %" value={pct2(k.sla_breach, k.delivered)} badgeVariant="R" cur={k.sla_breach} prev={pk.sla_breach} compact={!filterSidebarOpen} />
-          <LKpiCard label="EDD Breached" value={n(k.edd_breached)} badgeText="Live" badgeVariant="A" cur={k.edd_breached} prev={pk.edd_breached} compact={!filterSidebarOpen} />
-          <LKpiCard label="Critical Stuck" value={n(k.critical_stuck)} badgeVariant="R" cur={k.critical_stuck} prev={pk.critical_stuck} compact={!filterSidebarOpen} />
+          <LKpiCard label="SLA Breach" value={n(k.sla_breach)} badgeVariant="R" subValue={pct2(k.sla_breach, k.delivered)} cur={k.sla_breach} prev={pk.sla_breach} hideSubValue={filterSidebarOpen} compact={!filterSidebarOpen} />
           <LKpiCard label="RTO 10+ Days" value={n(k.rto_10plus)} badgeText="Aging" badgeVariant="R" cur={k.rto_10plus} prev={pk.rto_10plus} compact={!filterSidebarOpen} />
           <LKpiCard label="Z-RTO" value={n(k.z_rto)} badgeText={pct2(k.z_rto, k.total_shipments)} badgeVariant="A" cur={k.z_rto} prev={pk.z_rto} compact={!filterSidebarOpen} />
           <LKpiCard label="FASR %" value={pct2(k.delivered_1attempt, k.total_ofd_attempts)} badgeVariant="G" cur={k.delivered_1attempt} prev={pk.delivered_1attempt} compact={!filterSidebarOpen} />
