@@ -349,11 +349,9 @@ function LogisticsPage({ filters }) {
                     <button key={m} onClick={() => setTrendMetric(m)} style={{ fontSize: 10, padding: '2px 10px', borderRadius: 5, border: 'none', background: trendMetric === m ? C.acc : 'transparent', color: trendMetric === m ? '#000' : C.t3, cursor: 'pointer', fontWeight: trendMetric === m ? 700 : 500, fontFamily: 'var(--font)' }}>{m}</button>
                   ))}
                 </div>
-                <div style={{ display: 'flex', gap: 4 }}>
-                  {['Daily','Weekly','Monthly'].map(g => (
-                    <button key={g} onClick={() => setTrendGranularity(g)} style={{ fontSize: 11, padding: '3px 10px', borderRadius: 6, border: `1px solid ${trendGranularity === g ? C.acc : C.border}`, background: trendGranularity === g ? C.acl : C.card, color: trendGranularity === g ? C.t1 : C.t2, cursor: 'pointer', fontWeight: trendGranularity === g ? 700 : 500, fontFamily: 'var(--font)' }}>{g}</button>
-                  ))}
-                </div>
+                <select value={trendGranularity} onChange={e => setTrendGranularity(e.target.value)} style={{ fontSize: 11, padding: '3px 8px', borderRadius: 6, border: `1px solid ${C.border}`, background: C.card, color: C.t1, cursor: 'pointer', fontFamily: 'var(--font)', fontWeight: 600 }}>
+                  {['Daily','Weekly','Monthly'].map(g => <option key={g} value={g}>{g}</option>)}
+                </select>
               </div>
             </div>
             <ResponsiveContainer width="100%" height={220}>
