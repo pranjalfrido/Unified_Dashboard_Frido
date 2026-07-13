@@ -376,16 +376,11 @@ function LogisticsPage({ filters }) {
                   return (
                     <div style={{ background: C.card, border: `1px solid ${C.border2}`, borderRadius: 8, padding: '10px 14px', fontSize: 12, color: C.t1, minWidth: 140 }}>
                       <div style={{ fontWeight: 700, marginBottom: 6 }}>{label}</div>
-                      {trendMetric === 'Qty' ? (() => {
-                        const total = get('total') ?? 0
-                        const delivered = get('delivered') ?? 0
-                        const delPct = total > 0 ? ((delivered / total) * 100).toFixed(1) : '—'
-                        return <>
-                          <div style={{ color: '#E6A800', fontWeight: 600 }}>Del % : {delPct}%</div>
+                      {trendMetric === 'Qty' ? <>
+                          <div style={{ color: '#E6A800', fontWeight: 600 }}>Del % : {get('del_pct') ?? '—'}%</div>
                           <div style={{ color: '#b91c1c', fontWeight: 600 }}>RTO % : {get('rto_pct') ?? '—'}%</div>
-                          <div style={{ color: C.t2 }}>Total : {Number(total).toLocaleString('en-IN')}</div>
-                        </>
-                      })() : <>
+                          <div style={{ color: C.t2 }}>Total : {Number(get('total') ?? 0).toLocaleString('en-IN')}</div>
+                        </> : <>
                         <div style={{ color: '#b91c1c', fontWeight: 600 }}>RTO % : {get('rto_value_pct') ?? '—'}%</div>
                         <div style={{ color: C.t2 }}>Total Value : ₹{Number(get('total_value') ?? 0).toLocaleString('en-IN')}</div>
                       </>}
