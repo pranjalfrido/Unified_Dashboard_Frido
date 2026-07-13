@@ -455,7 +455,7 @@ function LogisticsPage({ filters }) {
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
             <div style={chartTitle}>Courier-wise Breakdown</div>
             <div style={{ display: 'inline-flex', border: `1.5px solid ${C.border2}`, borderRadius: 7, overflow: 'hidden' }}>
-              {['Courier','Monthly'].map((v,i) => (
+              {['Courier','Month'].map((v,i) => (
                 <button key={v} onClick={() => setCView(v.toLowerCase())} style={{
                   padding: '4px 14px', border: 'none', borderLeft: i>0 ? `1.5px solid ${C.border2}` : 'none',
                   background: cView===v.toLowerCase() ? C.t1 : 'transparent', color: cView===v.toLowerCase() ? '#fff' : C.t2,
