@@ -381,6 +381,7 @@ function LogisticsPage({ filters }) {
                           <div style={{ color: '#b91c1c', fontWeight: 600 }}>RTO % : {get('rto_pct') ?? '—'}%</div>
                           <div style={{ color: C.t2 }}>Total : {Number(get('total') ?? 0).toLocaleString('en-IN')}</div>
                         </> : <>
+                        <div style={{ color: '#E6A800', fontWeight: 600 }}>Del % : {get('del_value_pct') ?? '—'}%</div>
                         <div style={{ color: '#b91c1c', fontWeight: 600 }}>RTO % : {get('rto_value_pct') ?? '—'}%</div>
                         <div style={{ color: C.t2 }}>Total Value : ₹{Number(get('total_value') ?? 0).toLocaleString('en-IN')}</div>
                       </>}
@@ -394,6 +395,7 @@ function LogisticsPage({ filters }) {
                 </> : <>
                   <Area yAxisId="left" type="monotone" dataKey="total_value" name="Total Value" stroke="#E6A800" strokeWidth={2.5} fill="url(#lgDel)" dot={false} activeDot={{ r: 5 }} />
                   <Area yAxisId="left" type="monotone" dataKey="rto_value" name="RTO Value" stroke={C.red.tx} strokeWidth={2} fill="url(#lgRto)" dot={false} activeDot={{ r: 4 }} />
+                  <Line yAxisId="right" type="monotone" dataKey="del_value_pct" name="Del %" stroke="#E6A800" strokeWidth={2} dot={false} />
                   <Line yAxisId="right" type="monotone" dataKey="rto_value_pct" name="RTO %" stroke="#b91c1c" strokeWidth={1.5} strokeDasharray="3 2" dot={false} />
                 </>}
               </ComposedChart>
@@ -405,7 +407,7 @@ function LogisticsPage({ filters }) {
                       <span style={{ width: 10, height: 10, borderRadius: 2, background: color, display: 'inline-block' }} />{label}
                     </span>
                   ))
-                : [['#E6A800','Total Value'],['#7A1A1A','RTO Value'],['#b91c1c','RTO %']].map(([color, label]) => (
+                : [['#E6A800','Total Value'],['#7A1A1A','RTO Value'],['#E6A800','Del %'],['#b91c1c','RTO %']].map(([color, label]) => (
                     <span key={label} style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 10, color: C.t2 }}>
                       <span style={{ width: 10, height: 10, borderRadius: 2, background: color, display: 'inline-block' }} />{label}
                     </span>
