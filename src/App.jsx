@@ -220,6 +220,7 @@ function LogisticsPage({ filters }) {
   const pct2 = (a, b) => b ? ((a / b) * 100).toFixed(1) + '%' : '—'
   const n = v => (v || 0).toLocaleString('en-IN')
   const d1 = v => v != null ? (+v).toFixed(1) + 'd' : '—'
+  const fmtGMV = v => v == null ? '—' : v >= 1e7 ? (v/1e7).toFixed(2)+' Cr' : v >= 1e5 ? (v/1e5).toFixed(1)+' L' : v.toLocaleString('en-IN')
 
   // ── Smart Alerts ──
   const alerts = useMemo(() => {
@@ -353,7 +354,7 @@ function LogisticsPage({ filters }) {
         <LSectionTitle title="Volume Overview" />
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(9, 1fr)', gap: 7 }}>
           <LKpiCard label="Total Shipments" value={n(k.total_shipments)} cur={k.total_shipments} prev={pk.total_shipments} />
-          <LKpiCard label="Total GMV" value={k.total_value != null ? fmt(k.total_value) : '—'} cur={k.total_value} prev={pk.total_value} />
+          <LKpiCard label="Total GMV" value={fmtGMV(k.total_value)} cur={k.total_value} prev={pk.total_value} />
           <LKpiCard label="Delivered" value={n(k.delivered)} badgeVariant="G" subValue={pct2(k.delivered, k.total_shipments)} cur={k.delivered} prev={pk.delivered} />
           <LKpiCard label="RTO %" value={pct2(k.rto, k.total_shipments)} badgeVariant="R" cur={k.rto} prev={pk.rto} />
           <LKpiCard label="RTO" value={n(k.rto)} badgeVariant="R" subValue={pct2(k.rto, k.total_shipments)} cur={k.rto} prev={pk.rto} />
