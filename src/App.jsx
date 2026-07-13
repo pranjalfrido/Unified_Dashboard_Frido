@@ -120,7 +120,7 @@ function LDropdown({ label, options, value, onChange, flex }) {
   )
 }
 
-function LKpiCard({ label, value, badgeText, badgeVariant, subValue, cur, prev }) {
+function LKpiCard({ label, value, badgeText, badgeVariant, subValue, cur, prev, hideSubValue }) {
   const bv = badgeVariant || 'N'
   const chg = (cur != null && prev != null && prev !== 0) ? ((cur - prev) / prev * 100) : null
   const chgBadge = chg != null && Math.abs(chg) < 999
@@ -132,7 +132,7 @@ function LKpiCard({ label, value, badgeText, badgeVariant, subValue, cur, prev }
       <div className="kpi-value" style={{ fontSize: 16, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{value ?? '—'}</div>
       <div style={{ marginTop: 2, display: 'flex', alignItems: 'center', gap: 6 }}>
         {chgBadge}
-        {subValue && <span style={{ fontSize: 11, fontWeight: 500, color: C.t3 }}>{subValue} of total</span>}
+        {subValue && !hideSubValue && <span style={{ fontSize: 11, fontWeight: 500, color: C.t3 }}>{subValue} of total</span>}
       </div>
     </div>
   )
@@ -355,9 +355,9 @@ function LogisticsPage({ filters }) {
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(9, 1fr)', gap: 7 }}>
           <LKpiCard label="Total Shipments" value={n(k.total_shipments)} cur={k.total_shipments} prev={pk.total_shipments} />
           <LKpiCard label="Total GMV" value={fmtGMV(k.total_value)} cur={k.total_value} prev={pk.total_value} />
-          <LKpiCard label="Delivered" value={n(k.delivered)} badgeVariant="G" subValue={pct2(k.delivered, k.total_shipments)} cur={k.delivered} prev={pk.delivered} />
+          <LKpiCard label="Delivered" value={n(k.delivered)} badgeVariant="G" subValue={pct2(k.delivered, k.total_shipments)} cur={k.delivered} prev={pk.delivered} hideSubValue={filterSidebarOpen} />
           <LKpiCard label="RTO %" value={pct2(k.rto, k.total_shipments)} badgeVariant="R" cur={k.rto} prev={pk.rto} />
-          <LKpiCard label="RTO" value={n(k.rto)} badgeVariant="R" subValue={pct2(k.rto, k.total_shipments)} cur={k.rto} prev={pk.rto} />
+          <LKpiCard label="RTO" value={n(k.rto)} badgeVariant="R" subValue={pct2(k.rto, k.total_shipments)} cur={k.rto} prev={pk.rto} hideSubValue={filterSidebarOpen} />
           <LKpiCard label="RTO Undelivered" value={n(k.rto_undelivered)} badgeVariant="R" cur={k.rto_undelivered} prev={pk.rto_undelivered} />
           <LKpiCard label="In Transit" value={n(k.in_transit)} badgeVariant="B" cur={k.in_transit} prev={pk.in_transit} />
           <LKpiCard label="Pickup Pending" value={n(k.pickup_pending)} badgeVariant="A" cur={k.pickup_pending} prev={pk.pickup_pending} />
