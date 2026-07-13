@@ -272,8 +272,24 @@ function LogisticsPage({ filters }) {
           </div>
           <div style={{ height: 1, background: C.border, margin: '4px 0' }} />
           <div style={{ fontSize: 10, fontWeight: 800, color: C.t3, letterSpacing: '.06em', textTransform: 'uppercase' }}>Direction</div>
-          <LogisticsToggle options={['Forward','Reverse']} value={lFilters.shipmentType} onChange={v => setLFilters(f => ({ ...f, shipmentType: v }))} />
-          <LogisticsToggle options={['Regular','SDD/NDD']} value={lFilters.sddNdd} onChange={v => setLFilters(f => ({ ...f, sddNdd: v }))} />
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            {[['Forward','Reverse'],['Regular','SDD/NDD']].map((opts, gi) => {
+              const val = gi === 0 ? lFilters.shipmentType : lFilters.sddNdd
+              const onChange = v => gi === 0 ? setLFilters(f => ({ ...f, shipmentType: v })) : setLFilters(f => ({ ...f, sddNdd: v }))
+              return (
+                <div key={gi} style={{ display: 'flex', border: `1.5px solid ${C.border2}`, borderRadius: 8, overflow: 'hidden', background: C.card }}>
+                  {opts.map((opt, i) => (
+                    <button key={opt} onClick={() => onChange(opt === val ? 'all' : opt)} style={{
+                      flex: 1, padding: '6px 0', border: 'none', borderLeft: i > 0 ? `1.5px solid ${C.border2}` : 'none',
+                      background: val === opt ? C.t1 : 'transparent', color: val === opt ? '#fff' : C.t2,
+                      fontSize: 11.5, fontWeight: val === opt ? 700 : 500, cursor: 'pointer', fontFamily: 'var(--font)',
+                      textAlign: 'center', transition: 'all .15s'
+                    }}>{opt}</button>
+                  ))}
+                </div>
+              )
+            })}
+          </div>
           <div style={{ height: 1, background: C.border, margin: '4px 0' }} />
           <div style={{ fontSize: 10, fontWeight: 800, color: C.t3, letterSpacing: '.06em', textTransform: 'uppercase' }}>Filters</div>
           <LDropdown label="Zone" options={opts.zones} value={lFilters.zone} onChange={v => setLFilters(f => ({ ...f, zone: v }))} />
