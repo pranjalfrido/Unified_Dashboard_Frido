@@ -334,7 +334,7 @@ function LogisticsPage({ filters }) {
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(9, 1fr)', gap: 7 }}>
           <LKpiCard label="Total Shipments" value={n(k.total_shipments)} />
           <LKpiCard label="Total GMV" value={k.total_value != null ? fmt(k.total_value) : '—'} />
-          <LKpiCard label="Delivered" value={n(k.delivered)} badgeText={pct2(k.delivered, k.total_shipments)} badgeVariant="G" subValue={pct2(k.delivered, k.total_shipments) + ' of total'} />
+          <LKpiCard label="Delivered" value={n(k.delivered)} badgeVariant="G" subValue={pct2(k.delivered, k.total_shipments)} />
           <LKpiCard label="RTO %" value={pct2(k.rto, k.total_shipments)} badgeText="of total" badgeVariant="R" />
           <LKpiCard label="RTO" value={n(k.rto)} badgeText={pct2(k.rto, k.total_shipments)} badgeVariant="R" />
           <LKpiCard label="RTO Undelivered" value={n(k.rto_undelivered)} badgeText="Not returned" badgeVariant="R" />
