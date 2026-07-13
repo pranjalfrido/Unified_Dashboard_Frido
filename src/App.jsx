@@ -8028,7 +8028,7 @@ export default function App() {
               </div>
             </div>
           )}
-          {loading && !data && <Skeleton />}
+          {loading && !data && page !== 'logistics' && <Skeleton />}
           {page === 'overview' && data && (
             <div className="page-scroll">
               <OverviewPage data={data} alerts={alerts} />
