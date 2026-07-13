@@ -315,14 +315,6 @@ function LogisticsPage({ filters }) {
       {/* ── Main Content ── */}
       <div style={{ flex: 1, overflow: 'auto', padding: '4px 20px 16px', display: 'flex', flexDirection: 'column', gap: 14 }}>
 
-        {/* ── View Toggle ── */}
-        <div style={{ display: 'flex', justifyContent: 'center' }}>
-          <div style={{ display: 'flex', gap: 0, background: C.card, border: `1px solid ${C.border}`, borderRadius: 10, padding: 4 }}>
-            {['Logistics', 'Operations'].map(v => (
-              <button key={v} onClick={() => setLogisticsView(v)} style={{ padding: '6px 22px', borderRadius: 7, border: 'none', cursor: 'pointer', fontFamily: 'var(--font)', fontSize: 12, fontWeight: logisticsView === v ? 700 : 500, background: logisticsView === v ? C.acc : 'transparent', color: logisticsView === v ? '#000' : C.t3, transition: 'all .15s' }}>{v}</button>
-            ))}
-          </div>
-        </div>
 
       {error && <div style={{ padding: '10px 14px', borderRadius: 9, background: C.red.bg, border: `1px solid ${C.red.bd}`, color: C.red.tx, fontSize: 12 }}>⚠ {error}</div>}
       {loading && !data && (
