@@ -1,7 +1,7 @@
 import { useState, useMemo, useCallback, useEffect, useRef, Fragment } from 'react'
 import { C, fmt, fmtN, fmtBig, pct, processData, detectAlerts, exportCSV, getDefaultDates } from './utils.js'
 import { KPICard, AlertCard, HBar, DataTable, Card, Badge, RevTrendChart, AreaTrendChart, MultiLineChart, ChartTooltip, BarChart, Bar, LineChart, Line, AreaChart, Area, ComposedChart, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell, Treemap } from './components.jsx'
-import { ReferenceLine } from 'recharts'
+import { ReferenceLine, LabelList } from 'recharts'
 
 // ── Logistics Page ────────────────────────────────────────────
 const COURIERS = ['Bluedart','Delhivery','Delhivery NDD','Ekart','ElasticRun','Safexpress','Shadowfax','Shiprocket','Skye Air','Swift','Urbane Bolt']
@@ -1030,9 +1030,42 @@ function LogisticsPage({ filters }) {
           )
         })()}
 
-        {/* ── Returns & Exchange Analytics ── */}
-        <LSectionTitle title="Returns & Exchange Analytics" />
+        {/* ── RTO Reasons ── */}
+        <LSectionTitle title="RTO Reasons" />
         {(() => {
+          const reasons = (data.rtoReasons || []).filter(r => r.reason && r.total > 0).sort((a, b) => b.total - a.total)
+          const totalRto = reasons.reduce((s, r) => s + r.total, 0) || 1
+          if (!reasons.length) return <div style={{ color: C.t3, fontSize: 12 }}>No RTO reason data available.</div>
+          return (
+            <div style={{ ...cardStyle, padding: '16px 18px' }}>
+              <div style={{ ...chartTitle, marginBottom: 16 }}>RTO Reasons — Shipment Count & % of Total RTO</div>
+              <ResponsiveContainer width="100%" height={280}>
+                <BarChart data={reasons} margin={{ top: 20, right: 10, left: 0, bottom: 80 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke={C.border} vertical={false} />
+                  <XAxis dataKey="reason" tick={{ fontSize: 10, fill: C.t3 }} angle={-35} textAnchor="end" interval={0} />
+                  <YAxis tick={{ fontSize: 10, fill: C.t3 }} />
+                  <Tooltip content={({ active, payload }) => {
+                    if (!active || !payload?.length) return null
+                    const d = payload[0].payload
+                    return (
+                      <div style={{ background: '#fff', border: `1px solid ${C.border}`, borderRadius: 8, padding: '8px 12px', fontSize: 11 }}>
+                        <div style={{ fontWeight: 700, marginBottom: 4, color: C.t1 }}>{d.reason}</div>
+                        <div style={{ color: C.t2 }}>Shipments: <b>{d.total.toLocaleString('en-IN')}</b></div>
+                        <div style={{ color: C.t2 }}>% of RTO: <b>{((d.total / totalRto) * 100).toFixed(1)}%</b></div>
+                      </div>
+                    )
+                  }} />
+                  <Bar dataKey="total" fill="#3B82F6" radius={[4, 4, 0, 0]}>
+                    <LabelList dataKey="total" position="top" formatter={v => ((v / totalRto) * 100).toFixed(1) + '%'} style={{ fontSize: 9, fill: C.t3 }} />
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          )
+        })()}
+
+        {/* ── Returns & Exchange Analytics (hidden) ── */}
+        {false && (() => {
           const rk = retData?.kpis || {}
           const totalReq = rk.total_requests || 1
           const pickupSuccessPct = rk.pickup_success ? ((rk.pickup_success / totalReq) * 100).toFixed(1) : '—'
