@@ -134,6 +134,7 @@ function LogisticsPage({ filters }) {
   const [cSort, setCSort] = useState({ col: 'total', dir: 'desc' })
   const [cView, setCView] = useState('courier') // 'courier' | 'month'
   const [payTrendGran, setPayTrendGran] = useState('Daily')
+  const [filterSidebarOpen, setFilterSidebarOpen] = useState(true)
   const [cExpanded, setCExpanded] = useState({})
   const [data, setData] = useState(null)
   const [loading, setLoading] = useState(false)
@@ -237,47 +238,55 @@ function LogisticsPage({ filters }) {
   const chartTitle = { fontSize: 11, fontWeight: 700, color: C.t2, letterSpacing: '.06em', textTransform: 'uppercase', marginBottom: 14 }
 
   return (
-    <div style={{ padding: '4px 20px 16px', display: 'flex', flexDirection: 'column', gap: 14 }}>
+    <div style={{ display: 'flex', height: '100%', overflow: 'hidden' }}>
 
-      {/* ── View Toggle ── */}
-      <div style={{ display: 'flex', justifyContent: 'center' }}>
-      <div style={{ display: 'flex', gap: 0, background: C.card, border: `1px solid ${C.border}`, borderRadius: 10, padding: 4 }}>
-        {['Logistics', 'Operations'].map(v => (
-          <button key={v} onClick={() => setLogisticsView(v)} style={{ padding: '6px 22px', borderRadius: 7, border: 'none', cursor: 'pointer', fontFamily: 'var(--font)', fontSize: 12, fontWeight: logisticsView === v ? 700 : 500, background: logisticsView === v ? C.acc : 'transparent', color: logisticsView === v ? '#000' : C.t3, transition: 'all .15s' }}>{v}</button>
-        ))}
-      </div>
-      </div>
-
-      {/* ── Filter Bar ── */}
-      <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 14, padding: '14px 18px', display: 'flex', flexDirection: 'column', gap: 14 }}>
-        <div>
-          <div style={{ fontSize: 12, fontWeight: 800, color: C.t1, letterSpacing: '.04em', textTransform: 'uppercase', marginBottom: 10 }}>Courier Partner</div>
-          <div style={{ display: 'flex', gap: 5, alignItems: 'center', flexWrap: 'nowrap' }}>
+      {/* ── Filter Sidebar ── */}
+      <div style={{ width: filterSidebarOpen ? 220 : 0, minWidth: filterSidebarOpen ? 220 : 0, transition: 'width 0.25s ease, min-width 0.25s ease', overflow: 'hidden', borderRight: `1px solid ${C.border}`, background: C.card, display: 'flex', flexDirection: 'column', flexShrink: 0 }}>
+        <div style={{ width: 220, padding: '14px 12px', display: 'flex', flexDirection: 'column', gap: 10, overflowY: 'auto', height: '100%' }}>
+          <div style={{ fontSize: 10, fontWeight: 800, color: C.t3, letterSpacing: '.06em', textTransform: 'uppercase' }}>Courier Partner</div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
             {COURIERS.map(c => (
               <LogisticsChip key={c} label={c} logo={COURIER_LOGOS[c]} active={lFilters.couriers.includes(c)} onClick={() => toggleCourier(c)} grow />
             ))}
             {lFilters.couriers.length > 0 && (
-              <button onClick={() => setLFilters(f => ({ ...f, couriers: [] }))} style={{ fontSize: 11, color: C.t3, background: 'none', border: `1px solid ${C.border}`, borderRadius: 6, padding: '4px 10px', cursor: 'pointer', fontFamily: 'var(--font)', flexShrink: 0 }}>✕ Clear</button>
+              <button onClick={() => setLFilters(f => ({ ...f, couriers: [] }))} style={{ fontSize: 11, color: C.t3, background: 'none', border: `1px solid ${C.border}`, borderRadius: 6, padding: '4px 10px', cursor: 'pointer', fontFamily: 'var(--font)' }}>✕ Clear</button>
             )}
           </div>
-        </div>
-        <div style={{ height: 1, background: C.border }} />
-        <div style={{ display: 'flex', gap: 8, alignItems: 'center', width: '100%' }}>
+          <div style={{ height: 1, background: C.border, margin: '4px 0' }} />
+          <div style={{ fontSize: 10, fontWeight: 800, color: C.t3, letterSpacing: '.06em', textTransform: 'uppercase' }}>Direction</div>
           <LogisticsToggle options={['Forward','Reverse']} value={lFilters.shipmentType} onChange={v => setLFilters(f => ({ ...f, shipmentType: v }))} />
           <LogisticsToggle options={['Regular','SDD/NDD']} value={lFilters.sddNdd} onChange={v => setLFilters(f => ({ ...f, sddNdd: v }))} />
-          <div style={{ width: 1, height: 28, background: C.border, margin: '0 2px', flexShrink: 0 }} />
-          <LDropdown label="Zone" options={opts.zones} value={lFilters.zone} onChange={v => setLFilters(f => ({ ...f, zone: v }))} flex />
-          <LDropdown label="Pickup State" options={opts.pickup_states} value={lFilters.pickupState} onChange={v => setLFilters(f => ({ ...f, pickupState: v }))} flex />
-          <LDropdown label="Drop State" options={opts.drop_states} value={lFilters.dropState} onChange={v => setLFilters(f => ({ ...f, dropState: v }))} flex />
-          <LDropdown label="Payment" options={['COD','Prepaid']} value={lFilters.paymentMode} onChange={v => setLFilters(f => ({ ...f, paymentMode: v }))} flex />
-          <LDropdown label="Category" options={opts.categories} value={lFilters.category} onChange={v => setLFilters(f => ({ ...f, category: v, subCategory: null }))} flex />
-          <LDropdown label="Sub-category" options={opts.sub_categories} value={lFilters.subCategory} onChange={v => setLFilters(f => ({ ...f, subCategory: v }))} flex />
+          <div style={{ height: 1, background: C.border, margin: '4px 0' }} />
+          <div style={{ fontSize: 10, fontWeight: 800, color: C.t3, letterSpacing: '.06em', textTransform: 'uppercase' }}>Filters</div>
+          <LDropdown label="Zone" options={opts.zones} value={lFilters.zone} onChange={v => setLFilters(f => ({ ...f, zone: v }))} />
+          <LDropdown label="Pickup State" options={opts.pickup_states} value={lFilters.pickupState} onChange={v => setLFilters(f => ({ ...f, pickupState: v }))} />
+          <LDropdown label="Drop State" options={opts.drop_states} value={lFilters.dropState} onChange={v => setLFilters(f => ({ ...f, dropState: v }))} />
+          <LDropdown label="Payment" options={['COD','Prepaid']} value={lFilters.paymentMode} onChange={v => setLFilters(f => ({ ...f, paymentMode: v }))} />
+          <LDropdown label="Category" options={opts.categories} value={lFilters.category} onChange={v => setLFilters(f => ({ ...f, category: v, subCategory: null }))} />
+          <LDropdown label="Sub-category" options={opts.sub_categories} value={lFilters.subCategory} onChange={v => setLFilters(f => ({ ...f, subCategory: v }))} />
           {(lFilters.zone || lFilters.pickupState || lFilters.dropState || lFilters.paymentMode || lFilters.category || lFilters.subCategory) && (
             <button onClick={() => setLFilters(f => ({ ...f, zone: null, pickupState: null, dropState: null, paymentMode: null, category: null, subCategory: null }))}
-              style={{ fontSize: 11, color: C.t3, background: 'none', border: `1px solid ${C.border}`, borderRadius: 6, padding: '4px 10px', cursor: 'pointer', fontFamily: 'var(--font)', flexShrink: 0 }}>✕ Clear</button>
+              style={{ fontSize: 11, color: C.t3, background: 'none', border: `1px solid ${C.border}`, borderRadius: 6, padding: '4px 10px', cursor: 'pointer', fontFamily: 'var(--font)' }}>✕ Clear All</button>
           )}
         </div>
       </div>
+
+      {/* ── Sidebar Toggle Button ── */}
+      <button onClick={() => setFilterSidebarOpen(o => !o)} style={{ width: 16, alignSelf: 'flex-start', marginTop: 20, height: 48, border: `1px solid ${C.border}`, borderLeft: 'none', background: C.card, cursor: 'pointer', borderRadius: '0 6px 6px 0', display: 'flex', alignItems: 'center', justifyContent: 'center', color: C.t3, fontSize: 12, flexShrink: 0, boxShadow: '2px 0 4px rgba(0,0,0,0.06)', padding: 0 }}>
+        {filterSidebarOpen ? '‹' : '›'}
+      </button>
+
+      {/* ── Main Content ── */}
+      <div style={{ flex: 1, overflow: 'auto', padding: '4px 20px 16px', display: 'flex', flexDirection: 'column', gap: 14 }}>
+
+        {/* ── View Toggle ── */}
+        <div style={{ display: 'flex', justifyContent: 'center' }}>
+          <div style={{ display: 'flex', gap: 0, background: C.card, border: `1px solid ${C.border}`, borderRadius: 10, padding: 4 }}>
+            {['Logistics', 'Operations'].map(v => (
+              <button key={v} onClick={() => setLogisticsView(v)} style={{ padding: '6px 22px', borderRadius: 7, border: 'none', cursor: 'pointer', fontFamily: 'var(--font)', fontSize: 12, fontWeight: logisticsView === v ? 700 : 500, background: logisticsView === v ? C.acc : 'transparent', color: logisticsView === v ? '#000' : C.t3, transition: 'all .15s' }}>{v}</button>
+            ))}
+          </div>
+        </div>
 
       {error && <div style={{ padding: '10px 14px', borderRadius: 9, background: C.red.bg, border: `1px solid ${C.red.bd}`, color: C.red.tx, fontSize: 12 }}>⚠ {error}</div>}
       {loading && !data && (
@@ -1090,6 +1099,7 @@ function LogisticsPage({ filters }) {
         })()}
 
       </>}
+      </div>
     </div>
   )
 }
