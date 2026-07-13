@@ -12,7 +12,7 @@ export default async function handler(req, res) {
 
   // NDD split: show Delhivery NDD as separate row when Forward selected OR NDD chip selected
   const nddSelected = courier?.includes('Delhivery NDD')
-  const splitNDD = nddSelected || (shipmentType === 'forward')
+  const splitNDD = nddSelected || (shipmentType?.toLowerCase() === 'forward')
 
   const filters = []
   if (courier?.length) {
