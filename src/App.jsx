@@ -7990,7 +7990,7 @@ export default function App() {
             </div>
           )}
           {page === 'logistics' && (
-            <div className="page-scroll">
+            <div style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
               <LogisticsPage filters={filters} />
             </div>
           )}
