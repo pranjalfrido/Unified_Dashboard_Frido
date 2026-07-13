@@ -18,8 +18,26 @@ function LogisticsKPI({ label, value, sub, color, badge }) {
   )
 }
 
-function LogisticsChip({ label, logo, active, onClick, grow }) {
+function LogisticsChip({ label, logo, active, onClick, grow, sidebar }) {
   const [imgErr, setImgErr] = useState(false)
+  if (sidebar) return (
+    <button onClick={onClick} style={{
+      display: 'flex', alignItems: 'center', gap: 8,
+      padding: '6px 8px', borderRadius: 7, border: 'none',
+      background: active ? '#FEFDF0' : 'transparent',
+      color: active ? '#1a1400' : C.t2,
+      fontSize: 12, fontWeight: active ? 700 : 500,
+      cursor: 'pointer', fontFamily: 'var(--font)',
+      width: '100%', textAlign: 'left', transition: 'all .15s',
+      borderLeft: active ? '3px solid #FFD600' : '3px solid transparent',
+    }}>
+      {logo && !imgErr
+        ? <img src={logo} alt="" style={{ width: 18, height: 18, objectFit: 'contain', borderRadius: 3, flexShrink: 0, background: '#fff' }} onError={() => setImgErr(true)} />
+        : <span style={{ width: 18, height: 18, borderRadius: 3, background: COURIER_COLORS[label] || '#64748b', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 8, fontWeight: 800, color: '#fff', flexShrink: 0 }}>{label.charAt(0)}</span>
+      }
+      {label}
+    </button>
+  )
   return (
     <button onClick={onClick} style={{
       display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 5,
@@ -244,9 +262,9 @@ function LogisticsPage({ filters }) {
       <div style={{ width: filterSidebarOpen ? 220 : 0, minWidth: filterSidebarOpen ? 220 : 0, transition: 'width 0.25s ease, min-width 0.25s ease', overflow: 'hidden', borderRight: `1px solid ${C.border}`, background: C.card, display: 'flex', flexDirection: 'column', flexShrink: 0 }}>
         <div style={{ width: 220, padding: '14px 12px', display: 'flex', flexDirection: 'column', gap: 10, overflowY: 'auto', height: '100%' }}>
           <div style={{ fontSize: 10, fontWeight: 800, color: C.t3, letterSpacing: '.06em', textTransform: 'uppercase' }}>Courier Partner</div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
             {COURIERS.map(c => (
-              <LogisticsChip key={c} label={c} logo={COURIER_LOGOS[c]} active={lFilters.couriers.includes(c)} onClick={() => toggleCourier(c)} grow />
+              <LogisticsChip key={c} label={c} logo={COURIER_LOGOS[c]} active={lFilters.couriers.includes(c)} onClick={() => toggleCourier(c)} sidebar />
             ))}
             {lFilters.couriers.length > 0 && (
               <button onClick={() => setLFilters(f => ({ ...f, couriers: [] }))} style={{ fontSize: 11, color: C.t3, background: 'none', border: `1px solid ${C.border}`, borderRadius: 6, padding: '4px 10px', cursor: 'pointer', fontFamily: 'var(--font)' }}>✕ Clear</button>
