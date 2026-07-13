@@ -13,19 +13,16 @@ export default async function handler(req, res) {
   const filters = []
   if (courier?.length) {
     const COURIER_LIKE = {
-      'Bluedart':     `LOWER(c.courier_partner) LIKE '%bluedart%'`,
-      'Ekart':        `LOWER(c.courier_partner) LIKE '%ekart%'`,
-      'ElasticRun':   `LOWER(c.courier_partner) LIKE '%elastic%'`,
-      'Delhivery DS': `(LOWER(c.courier_partner) LIKE '%delhivery%' AND LOWER(c.courier_partner) LIKE '%hld%')`,
-      'Delhivery NDD':`(LOWER(c.courier_partner) LIKE '%delhivery%' AND LEFT(c.awb, 4) = '5448')`,
-      'Delhivery':    `(LOWER(c.courier_partner) LIKE '%delhivery%' AND LOWER(c.courier_partner) NOT LIKE '%hld%' AND LEFT(c.awb, 4) != '5448')`,
-      'Safexpress':   `LOWER(c.courier_partner) LIKE '%safexpress%'`,
-      'Shadowfax':    `LOWER(c.courier_partner) LIKE '%shadowfax%'`,
-      'Sky Air':      `(LOWER(c.courier_partner) LIKE '%sky air%' OR LOWER(c.courier_partner) LIKE '%skye air%')`,
-      'Skye Air':     `(LOWER(c.courier_partner) LIKE '%sky air%' OR LOWER(c.courier_partner) LIKE '%skye air%')`,
-      'Swift':        `(LOWER(c.courier_partner) LIKE '%swift%')`,
-      'UrbanBolt':    `(LOWER(c.courier_partner) LIKE '%urbane bolt%' OR LOWER(c.courier_partner) LIKE '%urbanbolt%')`,
-      'Urbane Bolt':  `(LOWER(c.courier_partner) LIKE '%urbane bolt%' OR LOWER(c.courier_partner) LIKE '%urbanbolt%')`,
+      'Bluedart':    `LOWER(c.courier_partner) LIKE '%bluedart%'`,
+      'Delhivery':   `LOWER(c.courier_partner) LIKE '%delhivery%'`,
+      'Ekart':       `LOWER(c.courier_partner) LIKE '%ekart%'`,
+      'ElasticRun':  `LOWER(c.courier_partner) LIKE '%elastic%'`,
+      'Safexpress':  `LOWER(c.courier_partner) LIKE '%safexpress%'`,
+      'Shadowfax':   `LOWER(c.courier_partner) LIKE '%shadowfax%'`,
+      'Shiprocket':  `LOWER(c.courier_partner) LIKE '%shiprocket%'`,
+      'Skye Air':    `(LOWER(c.courier_partner) LIKE '%sky air%' OR LOWER(c.courier_partner) LIKE '%skye air%')`,
+      'Swift':       `LOWER(c.courier_partner) LIKE '%swift%'`,
+      'Urbane Bolt': `(LOWER(c.courier_partner) LIKE '%urbane bolt%' OR LOWER(c.courier_partner) LIKE '%urbanbolt%')`,
     }
     const clauses = courier.map(v => COURIER_LIKE[v] || `LOWER(c.courier_partner) LIKE '%${v.toLowerCase().replace(/'/g, "\\'")}%'`)
     filters.push(`(${clauses.join(' OR ')})`)
@@ -76,17 +73,13 @@ WITH base AS (
       WHEN LOWER(c.courier_partner) LIKE '%bluedart%' THEN 'Bluedart'
       WHEN LOWER(c.courier_partner) LIKE '%ekart%' THEN 'Ekart'
       WHEN LOWER(c.courier_partner) LIKE '%elastic%' THEN 'ElasticRun'
-      WHEN LOWER(c.courier_partner) LIKE '%delhivery%' AND LOWER(c.courier_partner) LIKE '%hld%' THEN 'Delhivery DS'
-      WHEN LOWER(c.courier_partner) LIKE '%delhivery%' AND LEFT(c.awb, 4) = '5448' THEN 'Delhivery NDD'
       WHEN LOWER(c.courier_partner) LIKE '%delhivery%' THEN 'Delhivery'
       WHEN LOWER(c.courier_partner) LIKE '%safexpress%' THEN 'Safexpress'
       WHEN LOWER(c.courier_partner) LIKE '%shadowfax%' THEN 'Shadowfax'
       WHEN LOWER(c.courier_partner) LIKE '%shiprocket%' THEN 'Shiprocket'
-      WHEN LOWER(c.courier_partner) LIKE '%shipyaari%' THEN 'Shipyaari'
-      WHEN LOWER(c.courier_partner) LIKE '%sky air%' OR LOWER(c.courier_partner) LIKE '%skye air%' THEN 'Sky Air'
-      WHEN LOWER(c.courier_partner) LIKE '%swift%' AND LOWER(c.courier_partner) LIKE '%reverse%' THEN 'Swift Reverse'
+      WHEN LOWER(c.courier_partner) LIKE '%sky air%' OR LOWER(c.courier_partner) LIKE '%skye air%' THEN 'Skye Air'
       WHEN LOWER(c.courier_partner) LIKE '%swift%' THEN 'Swift'
-      WHEN LOWER(c.courier_partner) LIKE '%urbane bolt%' OR LOWER(c.courier_partner) LIKE '%urbanbolt%' THEN 'UrbaneBolt'
+      WHEN LOWER(c.courier_partner) LIKE '%urbane bolt%' OR LOWER(c.courier_partner) LIKE '%urbanbolt%' THEN 'Urbane Bolt'
       WHEN LOWER(c.courier_partner) LIKE '%wareiq%' THEN 'WareIQ'
       WHEN LOWER(c.courier_partner) LIKE '%zippee%' THEN 'Zippee'
       ELSE c.courier_partner
