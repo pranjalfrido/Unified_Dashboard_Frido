@@ -24,12 +24,12 @@ function LogisticsChip({ label, logo, active, onClick, grow, sidebar }) {
     <button onClick={onClick} style={{
       display: 'flex', alignItems: 'center', gap: 8,
       padding: '6px 8px', borderRadius: 7, border: 'none',
-      background: active ? '#FEFDF0' : 'transparent',
-      color: active ? '#1a1400' : C.t2,
+      background: active ? '#EFEFEF' : 'transparent',
+      color: active ? '#1a1a1a' : C.t2,
       fontSize: 12, fontWeight: active ? 700 : 500,
       cursor: 'pointer', fontFamily: 'var(--font)',
       width: '100%', textAlign: 'left', transition: 'all .15s',
-      borderLeft: active ? '3px solid #FFD600' : '3px solid transparent',
+      borderLeft: active ? '3px solid #888' : '3px solid transparent',
     }}>
       {logo && !imgErr
         ? <img src={logo} alt="" style={{ width: 22, height: 22, objectFit: 'contain', borderRadius: 4, flexShrink: 0, background: '#fff', padding: 1 }} onError={() => setImgErr(true)} />
