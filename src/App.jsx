@@ -418,35 +418,34 @@ function LogisticsPage({ filters }) {
             {(() => {
               const src = courierTatGran === 'Daily' ? (data?.byCourierDay || []) : courierTatGran === 'Weekly' ? (data?.byCourierWeek || []) : (data?.byCourierMonth || [])
               const labelKey = courierTatGran === 'Monthly' ? 'month_label' : 'period_label'
-              // get sorted periods and all couriers
+              // get latest period only — aggregate per courier
               const periods = [...new Set(src.map(r => r[labelKey]))].sort()
-              const couriers = [...new Set(src.map(r => r.courier_group))].sort()
-              // pivot: one row per period, one key per courier
-              const pivoted = periods.map(p => {
-                const row = { label: p }
-                couriers.forEach(cg => {
-                  const match = src.find(r => r[labelKey] === p && r.courier_group === cg)
-                  row[cg] = match?.total || 0
-                })
-                return row
-              })
-              const COURIER_LINE_COLORS = ['#E8400A','#E60000','#F78F1E','#00509E','#1B4D9E','#6B3FA0','#00B0F0','#13803A','#FFD600','#F97316']
+              const latestPeriod = periods[periods.length - 1]
+              const periodRows = src.filter(r => r[labelKey] === latestPeriod)
+              const tatData = (periodRows.length ? periodRows : byCourierData).map(d => ({
+                ...d,
+                del_pct: d.total ? +((d.delivered / d.total) * 100).toFixed(1) : 0,
+                rto_pct: d.total ? +((d.rto / d.total) * 100).toFixed(1) : 0
+              })).sort((a,b) => b.total - a.total)
+              const periodLabel = latestPeriod || ''
               return (<>
+            <div style={{ fontSize: 10, color: C.t3, marginBottom: 4 }}>Showing: {periodLabel}</div>
             <ResponsiveContainer width="100%" height={220}>
-              <ComposedChart data={pivoted} margin={{ top: 10, right: 16, left: 0, bottom: 0 }}>
+              <ComposedChart data={tatData} margin={{ top: 10, right: 40, left: 0, bottom: 40 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke={C.border} vertical={false} />
-                <XAxis dataKey="label" tick={{ fontSize: 10, fill: C.t3 }} />
-                <YAxis tick={{ fontSize: 9, fill: C.t3 }} tickFormatter={v => v >= 1000 ? (v/1000).toFixed(0)+'K' : v} />
-                <Tooltip formatter={(value, name) => [Number(value).toLocaleString('en-IN'), name]} />
-                {couriers.map((cg, i) => (
-                  <Line key={cg} type="monotone" dataKey={cg} name={cg} stroke={COURIER_LINE_COLORS[i % COURIER_LINE_COLORS.length]} strokeWidth={2} dot={{ r: 3 }} activeDot={{ r: 5 }} />
-                ))}
+                <XAxis dataKey="courier_group" tick={{ fontSize: 9, fill: C.t3 }} angle={-35} textAnchor="end" interval={0} />
+                <YAxis yAxisId="left" tick={{ fontSize: 9, fill: '#5BA4CF' }} tickFormatter={v => v >= 1000 ? (v/1000).toFixed(0)+'K' : v} />
+                <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 9, fill: C.t2 }} tickFormatter={v => v + 'd'} />
+                <Tooltip formatter={(value, name) => name.includes('Days') ? [value != null ? value + 'd' : '—', name] : [Number(value).toLocaleString('en-IN'), name]} />
+                <Bar yAxisId="left" dataKey="total" name="Total Shipments" fill="#5BA4CF" opacity={0.8} radius={[3,3,0,0]} />
+                <Line yAxisId="right" type="monotone" dataKey="avg_intransit_days" name="Avg Intransit Days" stroke="#1E3A5F" strokeWidth={2} dot={{ fill: '#1E3A5F', r: 3 }} />
+                <Line yAxisId="right" type="monotone" dataKey="avg_fulfilment_days" name="Avg Fulfilment Days" stroke="#F97316" strokeWidth={2} dot={{ fill: '#F97316', r: 3 }} />
               </ComposedChart>
             </ResponsiveContainer>
-            <div style={{ display: 'flex', gap: 10, justifyContent: 'center', marginTop: 8, flexWrap: 'wrap', flexShrink: 0 }}>
-              {couriers.map((cg, i) => (
-                <span key={cg} style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 10, color: C.t2 }}>
-                  <span style={{ width: 10, height: 10, borderRadius: 2, background: COURIER_LINE_COLORS[i % COURIER_LINE_COLORS.length], display: 'inline-block' }} />{cg}
+            <div style={{ display: 'flex', gap: 16, justifyContent: 'center', marginTop: 4, flexWrap: 'wrap', flexShrink: 0 }}>
+              {[['#F97316','Avg Fulfilment Days'],['#1E3A5F','Avg Intransit Days'],['#5BA4CF','Total Shipments']].map(([color, label]) => (
+                <span key={label} style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 10, color: C.t2 }}>
+                  <span style={{ width: 10, height: 10, borderRadius: 2, background: color, display: 'inline-block' }} />{label}
                 </span>
               ))}
             </div>
