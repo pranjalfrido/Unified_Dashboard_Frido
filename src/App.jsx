@@ -120,14 +120,18 @@ function LDropdown({ label, options, value, onChange, flex }) {
   )
 }
 
-function LKpiCard({ label, value, badgeText, badgeVariant, subValue }) {
+function LKpiCard({ label, value, badgeText, badgeVariant, subValue, cur, prev }) {
   const bv = badgeVariant || 'N'
+  const chg = (cur != null && prev != null && prev !== 0) ? ((cur - prev) / prev * 100) : null
   return (
     <div className="kpi-card" style={{ display: 'flex', flexDirection: 'column', gap: 0, padding: '7px 10px' }}>
       <div className="kpi-label" style={{ marginBottom: 2 }}>{label}</div>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 4 }}>
         <div className="kpi-value" style={{ fontSize: 16 }}>{value ?? '—'}</div>
-        {badgeText && <span className={`bdg bdg-${bv}`} style={{ flexShrink: 0, fontSize: 10 }}>{badgeText}</span>}
+        {chg != null && Math.abs(chg) < 999
+          ? <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 4, background: chg >= 0 ? C.green.bg : C.red.bg, color: chg >= 0 ? C.green.tx : C.red.tx, flexShrink: 0 }}>{chg >= 0 ? '▲' : '▼'} {Math.abs(chg).toFixed(1)}%</span>
+          : badgeText ? <span className={`bdg bdg-${bv}`} style={{ flexShrink: 0, fontSize: 10 }}>{badgeText}</span> : null
+        }
       </div>
       {subValue && <div style={{ fontSize: 11, fontWeight: 500, color: C.t3, marginTop: 1 }}>{subValue} of total</div>}
     </div>
@@ -156,6 +160,7 @@ function LogisticsPage({ filters }) {
   const [filterSidebarOpen, setFilterSidebarOpen] = useState(true)
   const [cExpanded, setCExpanded] = useState({})
   const [data, setData] = useState(null)
+  const [prevData, setPrevData] = useState(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
   const [retData, setRetData] = useState(null)
@@ -177,9 +182,23 @@ function LogisticsPage({ filters }) {
       if (lFilters.dropCity) body.dropCity = lFilters.dropCity
       if (lFilters.category) body.category = [lFilters.category]
       if (lFilters.subCategory) body.subCategory = [lFilters.subCategory]
-      const r = await fetch(`${API}/api/logistics`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+
+      // calc prev period (same # of days, ending day before start)
+      const s = new Date(filters.start), e = new Date(filters.end)
+      const days = Math.round((e - s) / 86400000) + 1
+      const prevEnd = new Date(s); prevEnd.setDate(prevEnd.getDate() - 1)
+      const prevStart = new Date(prevEnd); prevStart.setDate(prevStart.getDate() - days + 1)
+      const fmt = d => d.toISOString().slice(0, 10)
+      const prevBody = { ...body, start: fmt(prevStart), end: fmt(prevEnd) }
+
+      const [r, rPrev] = await Promise.all([
+        fetch(`${API}/api/logistics`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }),
+        fetch(`${API}/api/logistics`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(prevBody) }),
+      ])
       if (!r.ok) throw new Error(await r.text())
-      setData(await r.json())
+      const [cur, prev] = await Promise.all([r.json(), rPrev.ok ? rPrev.json() : Promise.resolve(null)])
+      setData(cur)
+      setPrevData(prev)
     } catch (e) { setError(e.message) }
     finally { setLoading(false) }
   }, [filters.start, filters.end, lFilters])
@@ -197,6 +216,7 @@ function LogisticsPage({ filters }) {
   useEffect(() => { fetchReturns() }, [fetchReturns])
 
   const k = data?.kpis || {}
+  const pk = prevData?.kpis || {}
   const pct2 = (a, b) => b ? ((a / b) * 100).toFixed(1) + '%' : '—'
   const n = v => (v || 0).toLocaleString('en-IN')
   const d1 = v => v != null ? (+v).toFixed(1) + 'd' : '—'
@@ -332,41 +352,41 @@ function LogisticsPage({ filters }) {
         {/* ── Volume KPIs ── */}
         <LSectionTitle title="Volume Overview" />
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(9, 1fr)', gap: 7 }}>
-          <LKpiCard label="Total Shipments" value={n(k.total_shipments)} />
-          <LKpiCard label="Total GMV" value={k.total_value != null ? fmt(k.total_value) : '—'} />
-          <LKpiCard label="Delivered" value={n(k.delivered)} badgeVariant="G" subValue={pct2(k.delivered, k.total_shipments)} />
-          <LKpiCard label="RTO %" value={pct2(k.rto, k.total_shipments)} badgeVariant="R" />
-          <LKpiCard label="RTO" value={n(k.rto)} badgeText={pct2(k.rto, k.total_shipments)} badgeVariant="R" />
-          <LKpiCard label="RTO Undelivered" value={n(k.rto_undelivered)} badgeVariant="R" />
-          <LKpiCard label="In Transit" value={n(k.in_transit)} badgeText={pct2(k.in_transit, k.total_shipments)} badgeVariant="B" />
-          <LKpiCard label="Pickup Pending" value={n(k.pickup_pending)} badgeText={pct2(k.pickup_pending, k.total_shipments)} badgeVariant="A" />
-          <LKpiCard label="Cancelled" value={n(k.cancelled)} badgeText={pct2(k.cancelled, k.total_shipments)} badgeVariant="N" />
+          <LKpiCard label="Total Shipments" value={n(k.total_shipments)} cur={k.total_shipments} prev={pk.total_shipments} />
+          <LKpiCard label="Total GMV" value={k.total_value != null ? fmt(k.total_value) : '—'} cur={k.total_value} prev={pk.total_value} />
+          <LKpiCard label="Delivered" value={n(k.delivered)} badgeVariant="G" subValue={pct2(k.delivered, k.total_shipments)} cur={k.delivered} prev={pk.delivered} />
+          <LKpiCard label="RTO %" value={pct2(k.rto, k.total_shipments)} badgeVariant="R" cur={k.rto} prev={pk.rto} />
+          <LKpiCard label="RTO" value={n(k.rto)} badgeVariant="R" cur={k.rto} prev={pk.rto} />
+          <LKpiCard label="RTO Undelivered" value={n(k.rto_undelivered)} badgeVariant="R" cur={k.rto_undelivered} prev={pk.rto_undelivered} />
+          <LKpiCard label="In Transit" value={n(k.in_transit)} badgeVariant="B" cur={k.in_transit} prev={pk.in_transit} />
+          <LKpiCard label="Pickup Pending" value={n(k.pickup_pending)} badgeVariant="A" cur={k.pickup_pending} prev={pk.pickup_pending} />
+          <LKpiCard label="Cancelled" value={n(k.cancelled)} badgeVariant="N" cur={k.cancelled} prev={pk.cancelled} />
         </div>
 
         {/* ── Quality KPIs ── */}
         <LSectionTitle title="Delivery Quality & SLA" />
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(10, 1fr)', gap: 7 }}>
-          <LKpiCard label="On Time Del" value={n(k.on_time)} badgeText={pct2(k.on_time, k.delivered)} badgeVariant="G" />
-          <LKpiCard label="SLA Breach" value={n(k.sla_breach)} badgeText={pct2(k.sla_breach, k.delivered)} badgeVariant="R" />
-          <LKpiCard label="SLA Breached %" value={pct2(k.sla_breach, k.delivered)} badgeText="of del" badgeVariant="R" />
-          <LKpiCard label="EDD Breached" value={n(k.edd_breached)} badgeText="Live" badgeVariant="A" />
-          <LKpiCard label="Critical Stuck" value={n(k.critical_stuck)} badgeText=">5d EDD" badgeVariant="R" />
-          <LKpiCard label="RTO 10+ Days" value={n(k.rto_10plus)} badgeText="Aging" badgeVariant="R" />
-          <LKpiCard label="Z-RTO" value={n(k.z_rto)} badgeText={pct2(k.z_rto, k.total_shipments)} badgeVariant="A" />
-          <LKpiCard label="FASR %" value={pct2(k.delivered_1attempt, k.total_ofd_attempts)} badgeText="1st att" badgeVariant="G" />
-          <LKpiCard label="RASR %" value={pct2(k.delivered_multi, k.total_ofd_attempts)} badgeText="Re-att" badgeVariant="B" />
-          <LKpiCard label="Multi-Att Del" value={n(k.delivered_multi)} badgeText={pct2(k.delivered_multi, k.total_ofd_attempts)} badgeVariant="B" />
+          <LKpiCard label="On Time Del" value={n(k.on_time)} badgeText={pct2(k.on_time, k.delivered)} badgeVariant="G" cur={k.on_time} prev={pk.on_time} />
+          <LKpiCard label="SLA Breach" value={n(k.sla_breach)} badgeText={pct2(k.sla_breach, k.delivered)} badgeVariant="R" cur={k.sla_breach} prev={pk.sla_breach} />
+          <LKpiCard label="SLA Breached %" value={pct2(k.sla_breach, k.delivered)} badgeVariant="R" cur={k.sla_breach} prev={pk.sla_breach} />
+          <LKpiCard label="EDD Breached" value={n(k.edd_breached)} badgeText="Live" badgeVariant="A" cur={k.edd_breached} prev={pk.edd_breached} />
+          <LKpiCard label="Critical Stuck" value={n(k.critical_stuck)} badgeText=">5d EDD" badgeVariant="R" cur={k.critical_stuck} prev={pk.critical_stuck} />
+          <LKpiCard label="RTO 10+ Days" value={n(k.rto_10plus)} badgeText="Aging" badgeVariant="R" cur={k.rto_10plus} prev={pk.rto_10plus} />
+          <LKpiCard label="Z-RTO" value={n(k.z_rto)} badgeText={pct2(k.z_rto, k.total_shipments)} badgeVariant="A" cur={k.z_rto} prev={pk.z_rto} />
+          <LKpiCard label="FASR %" value={pct2(k.delivered_1attempt, k.total_ofd_attempts)} badgeVariant="G" cur={k.delivered_1attempt} prev={pk.delivered_1attempt} />
+          <LKpiCard label="RASR %" value={pct2(k.delivered_multi, k.total_ofd_attempts)} badgeVariant="B" cur={k.delivered_multi} prev={pk.delivered_multi} />
+          <LKpiCard label="Multi-Att Del" value={n(k.delivered_multi)} badgeVariant="B" cur={k.delivered_multi} prev={pk.delivered_multi} />
         </div>
 
         {/* ── TAT KPIs ── */}
         <LSectionTitle title="Turnaround Time" />
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6, 1fr)', gap: 7 }}>
-          <LKpiCard label="Avg Processing" value={d1(k.avg_processing)} badgeText="Cr→1st OFD" badgeVariant="N" />
-          <LKpiCard label="Avg Pickup TAT" value={d1(k.avg_pickup)} badgeText="Cr→Pick" badgeVariant="B" />
-          <LKpiCard label="Avg In-Transit" value={d1(k.avg_intransit)} badgeText="Pick→Del" badgeVariant="N" />
-          <LKpiCard label="Avg Fulfilment" value={d1(k.avg_fulfilment)} badgeText="Cr→Del" badgeVariant="G" />
-          <LKpiCard label="Avg RTO TAT" value={d1(k.avg_rto_tat)} badgeText="RTO days" badgeVariant="R" />
-          <LKpiCard label="Avg S2A Days" value={d1(k.avg_s2a)} badgeText="Ship→OFD" badgeVariant="B" />
+          <LKpiCard label="Avg Processing" value={d1(k.avg_processing)} badgeText="Cr→1st OFD" badgeVariant="N" cur={k.avg_processing} prev={pk.avg_processing} />
+          <LKpiCard label="Avg Pickup TAT" value={d1(k.avg_pickup)} badgeText="Cr→Pick" badgeVariant="B" cur={k.avg_pickup} prev={pk.avg_pickup} />
+          <LKpiCard label="Avg In-Transit" value={d1(k.avg_intransit)} badgeText="Pick→Del" badgeVariant="N" cur={k.avg_intransit} prev={pk.avg_intransit} />
+          <LKpiCard label="Avg Fulfilment" value={d1(k.avg_fulfilment)} badgeText="Cr→Del" badgeVariant="G" cur={k.avg_fulfilment} prev={pk.avg_fulfilment} />
+          <LKpiCard label="Avg RTO TAT" value={d1(k.avg_rto_tat)} badgeText="RTO days" badgeVariant="R" cur={k.avg_rto_tat} prev={pk.avg_rto_tat} />
+          <LKpiCard label="Avg S2A Days" value={d1(k.avg_s2a)} badgeText="Ship→OFD" badgeVariant="B" cur={k.avg_s2a} prev={pk.avg_s2a} />
         </div>
 
         {/* ── Monthly Trend + Courier TAT ── */}
