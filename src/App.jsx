@@ -371,7 +371,7 @@ function LogisticsPage({ filters }) {
           <LKpiCard label="SLA Breach" value={n(k.sla_breach)} badgeText={pct2(k.sla_breach, k.delivered)} badgeVariant="R" cur={k.sla_breach} prev={pk.sla_breach} />
           <LKpiCard label="SLA Breached %" value={pct2(k.sla_breach, k.delivered)} badgeVariant="R" cur={k.sla_breach} prev={pk.sla_breach} />
           <LKpiCard label="EDD Breached" value={n(k.edd_breached)} badgeText="Live" badgeVariant="A" cur={k.edd_breached} prev={pk.edd_breached} />
-          <LKpiCard label="Critical Stuck >5d EDD" value={n(k.critical_stuck)} badgeVariant="R" cur={k.critical_stuck} prev={pk.critical_stuck} />
+          <LKpiCard label="Critical Stuck" value={n(k.critical_stuck)} badgeVariant="R" cur={k.critical_stuck} prev={pk.critical_stuck} />
           <LKpiCard label="RTO 10+ Days" value={n(k.rto_10plus)} badgeText="Aging" badgeVariant="R" cur={k.rto_10plus} prev={pk.rto_10plus} />
           <LKpiCard label="Z-RTO" value={n(k.z_rto)} badgeText={pct2(k.z_rto, k.total_shipments)} badgeVariant="A" cur={k.z_rto} prev={pk.z_rto} />
           <LKpiCard label="FASR %" value={pct2(k.delivered_1attempt, k.total_ofd_attempts)} badgeVariant="G" cur={k.delivered_1attempt} prev={pk.delivered_1attempt} />
