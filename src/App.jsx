@@ -256,91 +256,64 @@ function LogisticsPage({ filters }) {
   const cardStyle = { background: C.card, border: `1px solid ${C.border}`, borderRadius: 14, padding: '16px 18px' }
   const chartTitle = { fontSize: 11, fontWeight: 700, color: C.t2, letterSpacing: '.06em', textTransform: 'uppercase', marginBottom: 14 }
 
-  const hasActiveFilters = lFilters.couriers.length > 0 || lFilters.shipmentType !== 'all' || lFilters.sddNdd !== 'all' || lFilters.zone || lFilters.pickupState || lFilters.dropState || lFilters.dropCity || lFilters.paymentMode || lFilters.category || lFilters.subCategory
-
   return (
-    <div style={{ position: 'relative', flex: 1, overflow: 'auto', padding: '4px 20px 16px', display: 'flex', flexDirection: 'column', gap: 14 }}>
+    <div style={{ display: 'flex', height: '100%', overflow: 'hidden' }}>
 
-      {/* ── Floating Filter Button ── */}
-      <div style={{ position: 'absolute', top: 10, right: 20, zIndex: 100 }}>
-        <button onClick={() => setFilterSidebarOpen(o => !o)} style={{
-          display: 'flex', alignItems: 'center', gap: 6,
-          padding: '7px 14px', borderRadius: 9,
-          border: `1.5px solid ${hasActiveFilters ? '#FFD600' : C.border}`,
-          background: hasActiveFilters ? '#FEFDF0' : C.card,
-          color: hasActiveFilters ? '#1a1400' : C.t2,
-          fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: 'var(--font)',
-          boxShadow: '0 2px 8px rgba(0,0,0,0.08)', transition: 'all .15s'
-        }}>
-          ⚙ Filters {hasActiveFilters && <span style={{ background: '#FFD600', color: '#13121A', borderRadius: 99, fontSize: 10, fontWeight: 800, padding: '1px 6px' }}>ON</span>}
-          <span style={{ fontSize: 10, color: C.t3 }}>{filterSidebarOpen ? '▲' : '▼'}</span>
-        </button>
-
-        {/* ── Floating Panel ── */}
-        {filterSidebarOpen && (
-          <>
-            {/* backdrop */}
-            <div onClick={() => setFilterSidebarOpen(false)} style={{ position: 'fixed', inset: 0, zIndex: 99 }} />
-            <div style={{
-              position: 'absolute', top: '100%', right: 0, marginTop: 6,
-              width: 260, maxHeight: '80vh', overflowY: 'auto',
-              background: C.card, border: `1px solid ${C.border}`,
-              borderRadius: 14, boxShadow: '0 8px 32px rgba(0,0,0,0.14)',
-              zIndex: 200, padding: '14px 14px', display: 'flex', flexDirection: 'column', gap: 10
-            }}>
-              {/* Courier Partner */}
-              <div style={{ fontSize: 10, fontWeight: 800, color: C.t3, letterSpacing: '.06em', textTransform: 'uppercase' }}>Courier Partner</div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                {COURIERS.map(c => (
-                  <LogisticsChip key={c} label={c} logo={COURIER_LOGOS[c]} active={lFilters.couriers.includes(c)} onClick={() => toggleCourier(c)} sidebar />
-                ))}
-                {lFilters.couriers.length > 0 && (
-                  <button onClick={() => setLFilters(f => ({ ...f, couriers: [] }))} style={{ fontSize: 11, color: C.t3, background: 'none', border: `1px solid ${C.border}`, borderRadius: 6, padding: '4px 10px', cursor: 'pointer', fontFamily: 'var(--font)' }}>✕ Clear</button>
-                )}
-              </div>
-
-              <div style={{ height: 1, background: C.border, margin: '2px 0' }} />
-
-              {/* Courier Direction */}
-              <div style={{ fontSize: 10, fontWeight: 800, color: C.t3, letterSpacing: '.06em', textTransform: 'uppercase' }}>Courier Direction</div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                {[['Forward','Reverse'],['Regular','SDD/NDD']].map((opts, gi) => {
-                  const val = gi === 0 ? lFilters.shipmentType : lFilters.sddNdd
-                  const onChange = v => gi === 0 ? setLFilters(f => ({ ...f, shipmentType: v })) : setLFilters(f => ({ ...f, sddNdd: v }))
-                  return (
-                    <div key={gi} style={{ display: 'flex', border: `1.5px solid ${C.border2}`, borderRadius: 8, overflow: 'hidden', background: C.card }}>
-                      {opts.map((opt, i) => (
-                        <button key={opt} onClick={() => onChange(opt === val ? 'all' : opt)} style={{
-                          flex: 1, padding: '6px 0', border: 'none', borderLeft: i > 0 ? `1.5px solid ${C.border2}` : 'none',
-                          background: val === opt ? C.t1 : 'transparent', color: val === opt ? '#fff' : C.t2,
-                          fontSize: 11.5, fontWeight: val === opt ? 700 : 500, cursor: 'pointer', fontFamily: 'var(--font)',
-                          textAlign: 'center', transition: 'all .15s'
-                        }}>{opt}</button>
-                      ))}
-                    </div>
-                  )
-                })}
-              </div>
-
-              <div style={{ height: 1, background: C.border, margin: '2px 0' }} />
-
-              {/* Dropdowns */}
-              <div style={{ fontSize: 10, fontWeight: 800, color: C.t3, letterSpacing: '.06em', textTransform: 'uppercase' }}>Filters</div>
-              <LDropdown label="Zone" options={opts.zones} value={lFilters.zone} onChange={v => setLFilters(f => ({ ...f, zone: v }))} />
-              <LDropdown label="Pickup State" options={opts.pickup_states} value={lFilters.pickupState} onChange={v => setLFilters(f => ({ ...f, pickupState: v }))} />
-              <LDropdown label="Drop State" options={opts.drop_states} value={lFilters.dropState} onChange={v => setLFilters(f => ({ ...f, dropState: v }))} />
-              <LDropdown label="Drop City" options={opts.drop_cities} value={lFilters.dropCity} onChange={v => setLFilters(f => ({ ...f, dropCity: v }))} />
-              <LDropdown label="Payment" options={['COD','Prepaid']} value={lFilters.paymentMode} onChange={v => setLFilters(f => ({ ...f, paymentMode: v }))} />
-              <LDropdown label="Category" options={opts.categories} value={lFilters.category} onChange={v => setLFilters(f => ({ ...f, category: v, subCategory: null }))} />
-              <LDropdown label="Sub-category" options={opts.sub_categories} value={lFilters.subCategory} onChange={v => setLFilters(f => ({ ...f, subCategory: v }))} />
-              {(lFilters.zone || lFilters.pickupState || lFilters.dropState || lFilters.dropCity || lFilters.paymentMode || lFilters.category || lFilters.subCategory) && (
-                <button onClick={() => setLFilters(f => ({ ...f, zone: null, pickupState: null, dropState: null, dropCity: null, paymentMode: null, category: null, subCategory: null }))}
-                  style={{ fontSize: 11, color: C.t3, background: 'none', border: `1px solid ${C.border}`, borderRadius: 6, padding: '4px 10px', cursor: 'pointer', fontFamily: 'var(--font)' }}>✕ Clear All</button>
-              )}
-            </div>
-          </>
-        )}
+      {/* ── Filter Sidebar ── */}
+      <div style={{ width: filterSidebarOpen ? 220 : 0, minWidth: filterSidebarOpen ? 220 : 0, transition: 'width 0.25s ease, min-width 0.25s ease', overflow: 'hidden', borderRight: `1px solid ${C.border}`, background: C.card, display: 'flex', flexDirection: 'column', flexShrink: 0 }}>
+        <div style={{ width: 220, padding: '14px 12px', display: 'flex', flexDirection: 'column', gap: 10, overflowY: 'auto', height: '100%' }}>
+          <div style={{ fontSize: 10, fontWeight: 800, color: C.t3, letterSpacing: '.06em', textTransform: 'uppercase' }}>Courier Partner</div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+            {COURIERS.map(c => (
+              <LogisticsChip key={c} label={c} logo={COURIER_LOGOS[c]} active={lFilters.couriers.includes(c)} onClick={() => toggleCourier(c)} sidebar />
+            ))}
+            {lFilters.couriers.length > 0 && (
+              <button onClick={() => setLFilters(f => ({ ...f, couriers: [] }))} style={{ fontSize: 11, color: C.t3, background: 'none', border: `1px solid ${C.border}`, borderRadius: 6, padding: '4px 10px', cursor: 'pointer', fontFamily: 'var(--font)' }}>✕ Clear</button>
+            )}
+          </div>
+          <div style={{ height: 1, background: C.border, margin: '4px 0' }} />
+          <div style={{ fontSize: 10, fontWeight: 800, color: C.t3, letterSpacing: '.06em', textTransform: 'uppercase' }}>Courier Direction</div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            {[['Forward','Reverse'],['Regular','SDD/NDD']].map((opts, gi) => {
+              const val = gi === 0 ? lFilters.shipmentType : lFilters.sddNdd
+              const onChange = v => gi === 0 ? setLFilters(f => ({ ...f, shipmentType: v })) : setLFilters(f => ({ ...f, sddNdd: v }))
+              return (
+                <div key={gi} style={{ display: 'flex', border: `1.5px solid ${C.border2}`, borderRadius: 8, overflow: 'hidden', background: C.card }}>
+                  {opts.map((opt, i) => (
+                    <button key={opt} onClick={() => onChange(opt === val ? 'all' : opt)} style={{
+                      flex: 1, padding: '6px 0', border: 'none', borderLeft: i > 0 ? `1.5px solid ${C.border2}` : 'none',
+                      background: val === opt ? C.t1 : 'transparent', color: val === opt ? '#fff' : C.t2,
+                      fontSize: 11.5, fontWeight: val === opt ? 700 : 500, cursor: 'pointer', fontFamily: 'var(--font)',
+                      textAlign: 'center', transition: 'all .15s'
+                    }}>{opt}</button>
+                  ))}
+                </div>
+              )
+            })}
+          </div>
+          <div style={{ height: 1, background: C.border, margin: '4px 0' }} />
+          <div style={{ fontSize: 10, fontWeight: 800, color: C.t3, letterSpacing: '.06em', textTransform: 'uppercase' }}>Filters</div>
+          <LDropdown label="Zone" options={opts.zones} value={lFilters.zone} onChange={v => setLFilters(f => ({ ...f, zone: v }))} />
+          <LDropdown label="Pickup State" options={opts.pickup_states} value={lFilters.pickupState} onChange={v => setLFilters(f => ({ ...f, pickupState: v }))} />
+          <LDropdown label="Drop State" options={opts.drop_states} value={lFilters.dropState} onChange={v => setLFilters(f => ({ ...f, dropState: v }))} />
+          <LDropdown label="Drop City" options={opts.drop_cities} value={lFilters.dropCity} onChange={v => setLFilters(f => ({ ...f, dropCity: v }))} />
+          <LDropdown label="Payment" options={['COD','Prepaid']} value={lFilters.paymentMode} onChange={v => setLFilters(f => ({ ...f, paymentMode: v }))} />
+          <LDropdown label="Category" options={opts.categories} value={lFilters.category} onChange={v => setLFilters(f => ({ ...f, category: v, subCategory: null }))} />
+          <LDropdown label="Sub-category" options={opts.sub_categories} value={lFilters.subCategory} onChange={v => setLFilters(f => ({ ...f, subCategory: v }))} />
+          {(lFilters.zone || lFilters.pickupState || lFilters.dropState || lFilters.dropCity || lFilters.paymentMode || lFilters.category || lFilters.subCategory) && (
+            <button onClick={() => setLFilters(f => ({ ...f, zone: null, pickupState: null, dropState: null, dropCity: null, paymentMode: null, category: null, subCategory: null }))}
+              style={{ fontSize: 11, color: C.t3, background: 'none', border: `1px solid ${C.border}`, borderRadius: 6, padding: '4px 10px', cursor: 'pointer', fontFamily: 'var(--font)' }}>✕ Clear All</button>
+          )}
+        </div>
       </div>
+
+      {/* ── Sidebar Toggle Button ── */}
+      <button onClick={() => setFilterSidebarOpen(o => !o)} style={{ width: 16, alignSelf: 'flex-start', marginTop: 20, height: 48, border: `1px solid ${C.border}`, borderLeft: 'none', background: C.card, cursor: 'pointer', borderRadius: '0 6px 6px 0', display: 'flex', alignItems: 'center', justifyContent: 'center', color: C.t3, fontSize: 12, flexShrink: 0, boxShadow: '2px 0 4px rgba(0,0,0,0.06)', padding: 0 }}>
+        {filterSidebarOpen ? '‹' : '›'}
+      </button>
+
+      {/* ── Main Content ── */}
+      <div style={{ flex: 1, overflow: 'auto', padding: '4px 20px 16px', display: 'flex', flexDirection: 'column', gap: 14 }}>
 
 
       {error && <div style={{ padding: '10px 14px', borderRadius: 9, background: C.red.bg, border: `1px solid ${C.red.bd}`, color: C.red.tx, fontSize: 12 }}>⚠ {error}</div>}
@@ -1154,6 +1127,7 @@ function LogisticsPage({ filters }) {
         })()}
 
       </>}
+      </div>
     </div>
   )
 }
