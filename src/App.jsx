@@ -1042,7 +1042,7 @@ function LogisticsPage({ filters }) {
               <ResponsiveContainer width="100%" height={280}>
                 <BarChart data={reasons} margin={{ top: 20, right: 10, left: 0, bottom: 80 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke={C.border} vertical={false} />
-                  <XAxis dataKey="reason" tick={{ fontSize: 10, fill: C.t3 }} angle={-35} textAnchor="end" interval={0} />
+                  <XAxis dataKey="reason" tick={{ fontSize: 10, fill: C.t1, fontWeight: 600 }} angle={-35} textAnchor="end" interval={0} />
                   <YAxis tick={{ fontSize: 10, fill: C.t3 }} />
                   <Tooltip content={({ active, payload }) => {
                     if (!active || !payload?.length) return null
