@@ -129,7 +129,7 @@ function LKpiCard({ label, value, badgeText, badgeVariant, subValue }) {
         <div className="kpi-value" style={{ fontSize: 16 }}>{value ?? '—'}</div>
         {badgeText && <span className={`bdg bdg-${bv}`} style={{ flexShrink: 0, fontSize: 10 }}>{badgeText}</span>}
       </div>
-      {subValue && <div style={{ fontSize: 11, fontWeight: 600, color: '#3a7d44', marginTop: 2 }}>{subValue}</div>}
+      {subValue && <div style={{ fontSize: 11, fontWeight: 500, color: C.t3, marginTop: 1 }}>{subValue} of total</div>}
     </div>
   )
 }
