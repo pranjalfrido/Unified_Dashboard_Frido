@@ -130,6 +130,7 @@ function LogisticsPage({ filters }) {
   const [lFilters, setLFilters] = useState({ couriers: [], shipmentType: 'all', sddNdd: 'all', paymentMode: null, zone: null, pickupState: null, dropState: null, category: null, subCategory: null })
   const [trendGranularity, setTrendGranularity] = useState('Daily')
   const [trendMetric, setTrendMetric] = useState('Qty')
+  const [courierTatGran, setCourierTatGran] = useState('Daily')
   const [cSort, setCSort] = useState({ col: 'total', dir: 'desc' })
   const [cView, setCView] = useState('courier') // 'courier' | 'month'
   const [payTrendGran, setPayTrendGran] = useState('Daily')
@@ -406,9 +407,27 @@ function LogisticsPage({ filters }) {
 
           {/* Courier TAT */}
           <div style={{ ...cardStyle, display: 'flex', flexDirection: 'column' }}>
-            <div style={{ flexShrink: 0, marginBottom: 6 }}><div style={chartTitle}>Courier · Total Shipments & TAT</div></div>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0, marginBottom: 6 }}>
+              <div style={chartTitle}>Courier · Total Shipments & TAT</div>
+              <div style={{ display: 'flex', gap: 4 }}>
+                {['Daily','Weekly','Monthly'].map(g => (
+                  <button key={g} onClick={() => setCourierTatGran(g)} style={{ fontSize: 11, padding: '3px 10px', borderRadius: 6, border: `1px solid ${courierTatGran === g ? C.acc : C.border}`, background: courierTatGran === g ? C.acl : C.card, color: courierTatGran === g ? C.t1 : C.t2, cursor: 'pointer', fontWeight: courierTatGran === g ? 700 : 500, fontFamily: 'var(--font)' }}>{g}</button>
+                ))}
+              </div>
+            </div>
+            {(() => {
+              // pick the right source and get latest period's data per courier
+              const src = courierTatGran === 'Daily' ? (data?.byCourierDay || []) : courierTatGran === 'Weekly' ? (data?.byCourierWeek || []) : (data?.byCourierMonth || [])
+              // find latest period
+              const periods = [...new Set(src.map(r => r.period_label || r.month_label))].sort()
+              const latestPeriod = periods[periods.length - 1]
+              const tatRows = courierTatGran === 'Monthly'
+                ? src.filter(r => r.month_label === latestPeriod).map(r => ({ ...r, courier_group: r.courier_group, avg_intransit_days: r.avg_intransit_days, avg_fulfilment_days: r.avg_fulfilment_days, total: r.total }))
+                : src.filter(r => r.period_label === latestPeriod).map(r => ({ ...r }))
+              const courierTatData = (tatRows.length ? tatRows : byCourierData).map(d => ({ ...d, del_pct: d.total ? +((d.delivered / d.total) * 100).toFixed(1) : 0, rto_pct: d.total ? +((d.rto / d.total) * 100).toFixed(1) : 0 }))
+              return (
             <ResponsiveContainer width="100%" height={220}>
-              <ComposedChart data={byCourierData} margin={{ top: 10, right: 16, left: 0, bottom: 40 }}>
+              <ComposedChart data={courierTatData} margin={{ top: 10, right: 16, left: 0, bottom: 40 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke={C.border} vertical={false} />
                 <XAxis dataKey="courier_group" tick={{ fontSize: 9, fill: C.t3 }} angle={-35} textAnchor="end" interval={0} />
                 <YAxis yAxisId="left" tick={{ fontSize: 9, fill: '#5BA4CF' }} tickFormatter={v => v >= 1000 ? (v/1000).toFixed(0)+'K' : v} />
@@ -419,6 +438,8 @@ function LogisticsPage({ filters }) {
                 <Line yAxisId="right" type="monotone" dataKey="avg_fulfilment_days" name="Avg Fulfilment Days" stroke="#F97316" strokeWidth={2} dot={{ fill: '#F97316', r: 3 }} />
               </ComposedChart>
             </ResponsiveContainer>
+              )
+            })()}
             <div style={{ display: 'flex', gap: 16, justifyContent: 'center', marginTop: 8, flexShrink: 0 }}>
               {[['#F97316','Avg Fulfilment Days'],['#1E3A5F','Avg Intransit Days'],['#5BA4CF','Total']].map(([color, label]) => (
                 <span key={label} style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 10, color: C.t2 }}>
@@ -437,7 +458,7 @@ function LogisticsPage({ filters }) {
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
             <div style={chartTitle}>Courier-wise Breakdown</div>
             <div style={{ display: 'inline-flex', border: `1.5px solid ${C.border2}`, borderRadius: 7, overflow: 'hidden' }}>
-              {['Courier','Month'].map((v,i) => (
+              {['Courier','Daily','Weekly','Monthly'].map((v,i) => (
                 <button key={v} onClick={() => setCView(v.toLowerCase())} style={{
                   padding: '4px 14px', border: 'none', borderLeft: i>0 ? `1.5px solid ${C.border2}` : 'none',
                   background: cView===v.toLowerCase() ? C.t1 : 'transparent', color: cView===v.toLowerCase() ? '#fff' : C.t2,
@@ -499,6 +520,54 @@ function LogisticsPage({ filters }) {
                 _rasrPct: r.ofd_total ? +(((r.rasr_num||0) / r.ofd_total) * 100).toFixed(2) : null,
               }))
               const byCourierMonth = (data?.byCourierMonth || [])
+              const byCourierDay = (data?.byCourierDay || [])
+              const byCourierWeek = (data?.byCourierWeek || [])
+              // helper to build period breakdown table for daily/weekly/monthly courier views
+              const periodRows = cView === 'daily' ? byCourierDay : cView === 'weekly' ? byCourierWeek : byCourierMonth
+              const periodLabelKey = cView === 'monthly' ? 'month_label' : 'period_label'
+              if (cView === 'daily' || cView === 'weekly' || cView === 'monthly') {
+                const periods = [...new Set(periodRows.map(r => r[periodLabelKey]))].sort()
+                const periodTotal = periodRows.reduce((s,r) => s+(r.total||0), 0) || 1
+                return (
+                  <div style={{ overflowX: 'auto' }}>
+                  <table style={{ width:'100%', borderCollapse:'collapse', fontSize:12 }}>
+                    <thead>
+                      <tr style={{ borderBottom:`1.5px solid ${C.border}` }}>
+                        <th style={{ padding:'9px 10px', textAlign:'left', color:C.t3, fontWeight:700, fontSize:9.5, letterSpacing:'.05em', textTransform:'uppercase', whiteSpace:'nowrap' }}>Courier</th>
+                        {periods.map(p => (
+                          <th key={p} colSpan={3} style={{ padding:'9px 10px', textAlign:'center', color:C.t3, fontWeight:700, fontSize:9.5, letterSpacing:'.05em', textTransform:'uppercase', whiteSpace:'nowrap', borderLeft:`1px solid ${C.border}` }}>{p}</th>
+                        ))}
+                      </tr>
+                      <tr style={{ borderBottom:`1px solid ${C.border}` }}>
+                        <th style={{ padding:'4px 10px' }}></th>
+                        {periods.map(p => (
+                          ['Total','Del %','RTO %'].map(h => (
+                            <th key={p+h} style={{ padding:'4px 8px', textAlign:'right', color:C.t3, fontWeight:600, fontSize:9, whiteSpace:'nowrap', borderLeft: h==='Total' ? `1px solid ${C.border}` : 'none' }}>{h}</th>
+                          ))
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {[...new Set(periodRows.map(r => r.courier_group))].sort().map(cg => (
+                        <tr key={cg} style={{ borderBottom:`1px solid ${C.border}` }}>
+                          <td style={{ padding:'8px 10px', fontWeight:600, fontSize:11, whiteSpace:'nowrap' }}>{cg}</td>
+                          {periods.map(p => {
+                            const row = periodRows.find(r => r.courier_group === cg && r[periodLabelKey] === p)
+                            const delPct = row?.total ? ((row.delivered/row.total)*100).toFixed(1)+'%' : '—'
+                            const rtoPct = row?.total ? ((row.rto/row.total)*100).toFixed(1)+'%' : '—'
+                            return ['total','del','rto'].map((f,fi) => (
+                              <td key={p+f} style={{ padding:'8px 8px', textAlign:'right', fontSize:11, color: fi===1?C.green.tx:fi===2?C.red.tx:C.t1, borderLeft: fi===0?`1px solid ${C.border}`:'none' }}>
+                                {fi===0 ? (row?.total||'—') : fi===1 ? delPct : rtoPct}
+                              </td>
+                            ))
+                          })}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                  </div>
+                )
+              }
               if (cView === 'month') {
                 const tot = monthTotalAll
                 const sumD = enrichMonth.reduce((s,r)=>s+(r.delivered||0),0)
