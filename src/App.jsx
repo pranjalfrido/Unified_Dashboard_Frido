@@ -4,9 +4,9 @@ import { KPICard, AlertCard, HBar, DataTable, Card, Badge, RevTrendChart, AreaTr
 import { ReferenceLine } from 'recharts'
 
 // ── Logistics Page ────────────────────────────────────────────
-const COURIERS = ['Bluedart','Delhivery','Ekart','ElasticRun','Safexpress','Shadowfax','Shiprocket','Skye Air','Swift','Urbane Bolt']
-const COURIER_COLORS = { Bluedart:'#E8400A', Delhivery:'#E60000', Ekart:'#F78F1E', ElasticRun:'#00509E', Safexpress:'#1B4D9E', Shadowfax:'#6B3FA0', Shiprocket:'#E8400A', 'Skye Air':'#00B0F0', Swift:'#13803A', 'Urbane Bolt':'#FFD600' }
-const COURIER_LOGOS = { Bluedart:'/blue-dart.jpg', Delhivery:'/Delhivery.png', Ekart:'/ekart_logistics_logo.jpg', ElasticRun:'/elasticrun_logo.jpg', Safexpress:'/safeexpress.webp', Shadowfax:'/shadow-fax.jpg', Shiprocket:'/shiprocket.jpg', 'Skye Air':'/sky-air.webp', Swift:'/swift-courier.jpg', 'Urbane Bolt':'/urban-bolt.jpg' }
+const COURIERS = ['Bluedart','Delhivery','Delhivery NDD','Ekart','ElasticRun','Safexpress','Shadowfax','Shiprocket','Skye Air','Swift','Urbane Bolt']
+const COURIER_COLORS = { Bluedart:'#E8400A', Delhivery:'#E60000', 'Delhivery NDD':'#A00000', Ekart:'#F78F1E', ElasticRun:'#00509E', Safexpress:'#1B4D9E', Shadowfax:'#6B3FA0', Shiprocket:'#E8400A', 'Skye Air':'#00B0F0', Swift:'#13803A', 'Urbane Bolt':'#FFD600' }
+const COURIER_LOGOS = { Bluedart:'/blue-dart.jpg', Delhivery:'/Delhivery.png', 'Delhivery NDD':'/delhivery-ndd.png', Ekart:'/ekart_logistics_logo.jpg', ElasticRun:'/elasticrun_logo.jpg', Safexpress:'/safeexpress.webp', Shadowfax:'/shadow-fax.jpg', Shiprocket:'/shiprocket.jpg', 'Skye Air':'/sky-air.webp', Swift:'/swift-courier.jpg', 'Urbane Bolt':'/urban-bolt.jpg' }
 
 function LogisticsKPI({ label, value, sub, color, badge }) {
   return (
