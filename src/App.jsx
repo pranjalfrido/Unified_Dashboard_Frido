@@ -769,9 +769,8 @@ function LogisticsPage({ filters }) {
         </div>
         </div>
 
-        {/* ── Payment Analytics ── */}
-        <LSectionTitle title="Payment Analytics" />
-        {(() => {
+        {/* ── Payment Analytics — removed ── */}
+        {(() => { return null;
           const pd = (data?.byPaymentDetail || [])
           const PREPAID = pd.find(r => r.payment_mode === 'PREPAID') || {}
           const COD = pd.find(r => r.payment_mode === 'COD') || {}
