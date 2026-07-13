@@ -408,7 +408,7 @@ function LogisticsPage({ filters }) {
           {/* Courier TAT */}
           <div style={{ ...cardStyle, display: 'flex', flexDirection: 'column' }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0, marginBottom: 6 }}>
-              <div style={chartTitle}>Courier · Total Shipments & TAT</div>
+              <div style={chartTitle}>Shipment Volume & TAT Trend</div>
               <div style={{ display: 'flex', gap: 4 }}>
                 {['Daily','Weekly','Monthly'].map(g => (
                   <button key={g} onClick={() => setCourierTatGran(g)} style={{ fontSize: 11, padding: '3px 10px', borderRadius: 6, border: `1px solid ${courierTatGran === g ? C.acc : C.border}`, background: courierTatGran === g ? C.acl : C.card, color: courierTatGran === g ? C.t1 : C.t2, cursor: 'pointer', fontWeight: courierTatGran === g ? 700 : 500, fontFamily: 'var(--font)' }}>{g}</button>
@@ -416,24 +416,19 @@ function LogisticsPage({ filters }) {
               </div>
             </div>
             {(() => {
-              const src = courierTatGran === 'Daily' ? (data?.byCourierDay || []) : courierTatGran === 'Weekly' ? (data?.byCourierWeek || []) : (data?.byCourierMonth || [])
-              const labelKey = courierTatGran === 'Monthly' ? 'month_label' : 'period_label'
-              // get latest period only — aggregate per courier
-              const periods = [...new Set(src.map(r => r[labelKey]))].sort()
-              const latestPeriod = periods[periods.length - 1]
-              const periodRows = src.filter(r => r[labelKey] === latestPeriod)
-              const tatData = (periodRows.length ? periodRows : byCourierData).map(d => ({
-                ...d,
-                del_pct: d.total ? +((d.delivered / d.total) * 100).toFixed(1) : 0,
-                rto_pct: d.total ? +((d.rto / d.total) * 100).toFixed(1) : 0
-              })).sort((a,b) => b.total - a.total)
-              const periodLabel = latestPeriod || ''
+              // use byDay/byWeek/byMonth (overall, not per courier) for date-based X-axis
+              const src = courierTatGran === 'Daily' ? (data?.byDay || []) : courierTatGran === 'Weekly' ? (data?.byWeek || []) : (data?.byMonth || [])
+              const tatData = src.map(d => ({
+                label: d.label,
+                total: d.total || 0,
+                avg_intransit_days: d.avg_intransit_days ?? null,
+                avg_fulfilment_days: d.avg_fulfilment_days ?? null,
+              }))
               return (<>
-            <div style={{ fontSize: 10, color: C.t3, marginBottom: 4 }}>Showing: {periodLabel}</div>
             <ResponsiveContainer width="100%" height={220}>
-              <ComposedChart data={tatData} margin={{ top: 10, right: 40, left: 0, bottom: 40 }}>
+              <ComposedChart data={tatData} margin={{ top: 10, right: 40, left: 0, bottom: 0 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke={C.border} vertical={false} />
-                <XAxis dataKey="courier_group" tick={{ fontSize: 9, fill: C.t3 }} angle={-35} textAnchor="end" interval={0} />
+                <XAxis dataKey="label" tick={{ fontSize: 10, fill: C.t3 }} />
                 <YAxis yAxisId="left" tick={{ fontSize: 9, fill: '#5BA4CF' }} tickFormatter={v => v >= 1000 ? (v/1000).toFixed(0)+'K' : v} />
                 <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 9, fill: C.t2 }} tickFormatter={v => v + 'd'} />
                 <Tooltip formatter={(value, name) => name.includes('Days') ? [value != null ? value + 'd' : '—', name] : [Number(value).toLocaleString('en-IN'), name]} />
@@ -442,7 +437,7 @@ function LogisticsPage({ filters }) {
                 <Line yAxisId="right" type="monotone" dataKey="avg_fulfilment_days" name="Avg Fulfilment Days" stroke="#F97316" strokeWidth={2} dot={{ fill: '#F97316', r: 3 }} />
               </ComposedChart>
             </ResponsiveContainer>
-            <div style={{ display: 'flex', gap: 16, justifyContent: 'center', marginTop: 4, flexWrap: 'wrap', flexShrink: 0 }}>
+            <div style={{ display: 'flex', gap: 16, justifyContent: 'center', marginTop: 8, flexWrap: 'wrap', flexShrink: 0 }}>
               {[['#F97316','Avg Fulfilment Days'],['#1E3A5F','Avg Intransit Days'],['#5BA4CF','Total Shipments']].map(([color, label]) => (
                 <span key={label} style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 10, color: C.t2 }}>
                   <span style={{ width: 10, height: 10, borderRadius: 2, background: color, display: 'inline-block' }} />{label}
