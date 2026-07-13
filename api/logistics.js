@@ -275,7 +275,10 @@ by_day AS (
     COUNT(awb) AS total,
     COUNTIF(unified_status='RTO') AS rto,
     COUNTIF(unified_status='Delivered') AS delivered,
-    ROUND(COUNTIF(unified_status='RTO') * 100.0 / NULLIF(COUNT(awb),0), 1) AS rto_pct
+    ROUND(COUNTIF(unified_status='RTO') * 100.0 / NULLIF(COUNT(awb),0), 1) AS rto_pct,
+    ROUND(SUM(invoice_value), 0) AS total_value,
+    ROUND(SUM(IF(unified_status='RTO', invoice_value, 0)), 0) AS rto_value,
+    ROUND(SUM(IF(unified_status='RTO', invoice_value, 0)) * 100.0 / NULLIF(SUM(invoice_value),0), 1) AS rto_value_pct
   FROM base WHERE created_date IS NOT NULL GROUP BY 1,2 ORDER BY 2
 ),
 by_week AS (
@@ -285,7 +288,10 @@ by_week AS (
     COUNT(awb) AS total,
     COUNTIF(unified_status='RTO') AS rto,
     COUNTIF(unified_status='Delivered') AS delivered,
-    ROUND(COUNTIF(unified_status='RTO') * 100.0 / NULLIF(COUNT(awb),0), 1) AS rto_pct
+    ROUND(COUNTIF(unified_status='RTO') * 100.0 / NULLIF(COUNT(awb),0), 1) AS rto_pct,
+    ROUND(SUM(invoice_value), 0) AS total_value,
+    ROUND(SUM(IF(unified_status='RTO', invoice_value, 0)), 0) AS rto_value,
+    ROUND(SUM(IF(unified_status='RTO', invoice_value, 0)) * 100.0 / NULLIF(SUM(invoice_value),0), 1) AS rto_value_pct
   FROM base WHERE created_date IS NOT NULL GROUP BY 1,2 ORDER BY 2
 ),
 by_month AS (
@@ -295,7 +301,10 @@ by_month AS (
     COUNT(awb) AS total,
     COUNTIF(unified_status='RTO') AS rto,
     COUNTIF(unified_status='Delivered') AS delivered,
-    ROUND(COUNTIF(unified_status='RTO') * 100.0 / NULLIF(COUNT(awb),0), 1) AS rto_pct
+    ROUND(COUNTIF(unified_status='RTO') * 100.0 / NULLIF(COUNT(awb),0), 1) AS rto_pct,
+    ROUND(SUM(invoice_value), 0) AS total_value,
+    ROUND(SUM(IF(unified_status='RTO', invoice_value, 0)), 0) AS rto_value,
+    ROUND(SUM(IF(unified_status='RTO', invoice_value, 0)) * 100.0 / NULLIF(SUM(invoice_value),0), 1) AS rto_value_pct
   FROM base WHERE created_date IS NOT NULL GROUP BY 1,2 ORDER BY 2
 ),
 rto_reasons AS (

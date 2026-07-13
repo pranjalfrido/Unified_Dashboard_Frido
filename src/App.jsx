@@ -129,6 +129,7 @@ function LogisticsPage({ filters }) {
   const [logisticsView, setLogisticsView] = useState('Logistics')
   const [lFilters, setLFilters] = useState({ couriers: [], shipmentType: 'all', sddNdd: 'all', paymentMode: null, zone: null, pickupState: null, dropState: null, category: null, subCategory: null })
   const [trendGranularity, setTrendGranularity] = useState('Daily')
+  const [trendMetric, setTrendMetric] = useState('Qty')
   const [cSort, setCSort] = useState({ col: 'total', dir: 'desc' })
   const [cView, setCView] = useState('courier') // 'courier' | 'month'
   const [payTrendGran, setPayTrendGran] = useState('Daily')
@@ -337,12 +338,21 @@ function LogisticsPage({ filters }) {
             <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 10, flexShrink: 0 }}>
               <div>
                 <div style={chartTitle}>Shipment Trend</div>
-                <div style={{ fontSize: 10, color: C.t3, marginTop: -8 }}>Total = all AWBs created on that date (regardless of status) · Raw order volume per day</div>
+                <div style={{ fontSize: 10, color: C.t3, marginTop: -8 }}>
+                  {trendMetric === 'Qty' ? 'Total = all AWBs created on that date · Raw order volume per day' : 'Invoice value of all AWBs · RTO% by value'}
+                </div>
               </div>
-              <div style={{ display: 'flex', gap: 4 }}>
-                {['Daily','Weekly','Monthly'].map(g => (
-                  <button key={g} onClick={() => setTrendGranularity(g)} style={{ fontSize: 11, padding: '3px 10px', borderRadius: 6, border: `1px solid ${trendGranularity === g ? C.acc : C.border}`, background: trendGranularity === g ? C.acl : C.card, color: trendGranularity === g ? C.t1 : C.t2, cursor: 'pointer', fontWeight: trendGranularity === g ? 700 : 500, fontFamily: 'var(--font)' }}>{g}</button>
-                ))}
+              <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                <div style={{ display: 'flex', background: C.bg, border: `1px solid ${C.border}`, borderRadius: 7, padding: 3, gap: 0 }}>
+                  {['Qty','Value'].map(m => (
+                    <button key={m} onClick={() => setTrendMetric(m)} style={{ fontSize: 10, padding: '2px 10px', borderRadius: 5, border: 'none', background: trendMetric === m ? C.acc : 'transparent', color: trendMetric === m ? '#000' : C.t3, cursor: 'pointer', fontWeight: trendMetric === m ? 700 : 500, fontFamily: 'var(--font)' }}>{m}</button>
+                  ))}
+                </div>
+                <div style={{ display: 'flex', gap: 4 }}>
+                  {['Daily','Weekly','Monthly'].map(g => (
+                    <button key={g} onClick={() => setTrendGranularity(g)} style={{ fontSize: 11, padding: '3px 10px', borderRadius: 6, border: `1px solid ${trendGranularity === g ? C.acc : C.border}`, background: trendGranularity === g ? C.acl : C.card, color: trendGranularity === g ? C.t1 : C.t2, cursor: 'pointer', fontWeight: trendGranularity === g ? 700 : 500, fontFamily: 'var(--font)' }}>{g}</button>
+                  ))}
+                </div>
               </div>
             </div>
             <ResponsiveContainer width="100%" height={220}>
@@ -359,21 +369,38 @@ function LogisticsPage({ filters }) {
                 </defs>
                 <CartesianGrid strokeDasharray="3 3" stroke={C.border} />
                 <XAxis dataKey="label" tick={{ fontSize: 10, fill: C.t3 }} />
-                <YAxis yAxisId="left" tick={{ fontSize: 10, fill: C.t3 }} tickFormatter={v => v >= 1000 ? (v/1000).toFixed(0)+'K' : v} />
+                <YAxis yAxisId="left" tick={{ fontSize: 10, fill: C.t3 }} tickFormatter={v => trendMetric === 'Value' ? (v >= 100000 ? '₹'+(v/100000).toFixed(1)+'L' : v >= 1000 ? '₹'+(v/1000).toFixed(0)+'K' : '₹'+v) : (v >= 1000 ? (v/1000).toFixed(0)+'K' : v)} />
                 <YAxis yAxisId="right" orientation="right" tickFormatter={v => v + '%'} tick={{ fontSize: 10, fill: C.t3 }} />
-                <Tooltip formatter={(value, name) => name === 'RTO %' ? [value + '%', name] : [Number(value).toLocaleString('en-IN'), name]} />
-                <Area yAxisId="left" type="monotone" dataKey="delivered" name="Delivered" stroke="#E6A800" strokeWidth={2.5} fill="url(#lgDel)" dot={false} activeDot={{ r: 5 }} />
-                <Area yAxisId="left" type="monotone" dataKey="rto" name="RTO" stroke={C.red.tx} strokeWidth={2} fill="url(#lgRto)" dot={false} activeDot={{ r: 4 }} />
-                <Line yAxisId="left" type="monotone" dataKey="total" name="Total" stroke={C.t3} strokeWidth={1.5} strokeDasharray="4 3" dot={false} />
-                <Line yAxisId="right" type="monotone" dataKey="rto_pct" name="RTO %" stroke="#b91c1c" strokeWidth={1.5} strokeDasharray="3 2" dot={false} />
+                <Tooltip formatter={(value, name) => {
+                  if (name === 'RTO %') return [value + '%', name]
+                  if (trendMetric === 'Value') return ['₹' + Number(value).toLocaleString('en-IN'), name]
+                  return [Number(value).toLocaleString('en-IN'), name]
+                }} />
+                {trendMetric === 'Qty' ? <>
+                  <Area yAxisId="left" type="monotone" dataKey="delivered" name="Delivered" stroke="#E6A800" strokeWidth={2.5} fill="url(#lgDel)" dot={false} activeDot={{ r: 5 }} />
+                  <Area yAxisId="left" type="monotone" dataKey="rto" name="RTO" stroke={C.red.tx} strokeWidth={2} fill="url(#lgRto)" dot={false} activeDot={{ r: 4 }} />
+                  <Line yAxisId="left" type="monotone" dataKey="total" name="Total" stroke={C.t3} strokeWidth={1.5} strokeDasharray="4 3" dot={false} />
+                  <Line yAxisId="right" type="monotone" dataKey="rto_pct" name="RTO %" stroke="#b91c1c" strokeWidth={1.5} strokeDasharray="3 2" dot={false} />
+                </> : <>
+                  <Area yAxisId="left" type="monotone" dataKey="total_value" name="Total Value" stroke="#E6A800" strokeWidth={2.5} fill="url(#lgDel)" dot={false} activeDot={{ r: 5 }} />
+                  <Area yAxisId="left" type="monotone" dataKey="rto_value" name="RTO Value" stroke={C.red.tx} strokeWidth={2} fill="url(#lgRto)" dot={false} activeDot={{ r: 4 }} />
+                  <Line yAxisId="right" type="monotone" dataKey="rto_value_pct" name="RTO %" stroke="#b91c1c" strokeWidth={1.5} strokeDasharray="3 2" dot={false} />
+                </>}
               </ComposedChart>
             </ResponsiveContainer>
             <div style={{ display: 'flex', gap: 16, justifyContent: 'center', marginTop: 8, flexShrink: 0 }}>
-              {[['#E6A800','Delivered'],['#7A1A1A','RTO'],['#b91c1c','RTO %'],['#94939F','Total']].map(([color, label]) => (
-                <span key={label} style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 10, color: C.t2 }}>
-                  <span style={{ width: 10, height: 10, borderRadius: 2, background: color, display: 'inline-block' }} />{label}
-                </span>
-              ))}
+              {trendMetric === 'Qty'
+                ? [['#E6A800','Delivered'],['#7A1A1A','RTO'],['#b91c1c','RTO %'],['#94939F','Total']].map(([color, label]) => (
+                    <span key={label} style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 10, color: C.t2 }}>
+                      <span style={{ width: 10, height: 10, borderRadius: 2, background: color, display: 'inline-block' }} />{label}
+                    </span>
+                  ))
+                : [['#E6A800','Total Value'],['#7A1A1A','RTO Value'],['#b91c1c','RTO %']].map(([color, label]) => (
+                    <span key={label} style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 10, color: C.t2 }}>
+                      <span style={{ width: 10, height: 10, borderRadius: 2, background: color, display: 'inline-block' }} />{label}
+                    </span>
+                  ))
+              }
             </div>
           </div>
 
