@@ -164,7 +164,7 @@ function LogisticsPage({ filters }) {
   const [logisticsView, setLogisticsView] = useState('Logistics')
   const [lopsTab, setLopsTab] = useState('overview') // 'overview' | 'operations'
   const [tatCourierView, setTatCourierView] = useState('courier') // 'courier' | 'month'
-  const [lFilters, setLFilters] = useState({ couriers: [], shipmentType: 'all', sddNdd: 'all', paymentMode: null, zone: null, pickupState: null, dropState: null, dropCity: null, category: null, subCategory: null })
+  const [lFilters, setLFilters] = useState({ couriers: [], shipmentType: 'forward', sddNdd: 'all', paymentMode: null, zone: null, pickupState: null, dropState: null, dropCity: null, category: null, subCategory: null })
   const [trendGranularity, setTrendGranularity] = useState('Daily')
   const [trendMetric, setTrendMetric] = useState('Qty')
   const [courierTatGran, setCourierTatGran] = useState('Daily')
