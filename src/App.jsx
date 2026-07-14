@@ -991,7 +991,7 @@ function LogisticsPage({ filters }) {
 
         {/* ── OFD Attempt Efficiency ── */}
         {(() => {
-          const byCr = data.byCourier || []
+          const byCr = (data?.byCourier || []).filter(r => (r.courier_group || '').length > 0)
           const thS = { fontSize: 10, fontWeight: 700, color: C.t3, textTransform: 'uppercase', letterSpacing: '.04em', padding: '7px 10px', borderBottom: `1px solid ${C.border}`, whiteSpace: 'nowrap', textAlign: 'right' }
           const thLS = { ...thS, textAlign: 'left' }
           const tdS = { fontSize: 11.5, color: C.t1, padding: '6px 10px', borderBottom: `1px solid ${C.border}`, textAlign: 'right', whiteSpace: 'nowrap' }
@@ -1019,7 +1019,7 @@ function LogisticsPage({ filters }) {
                       </tr>
                     </thead>
                     <tbody>
-                      {byCr.filter(r => r.total > 0).sort((a,b) => b.total - a.total).map((row, i) => {
+                      {byCr.sort((a,b) => (b.delivered||0) - (a.delivered||0)).map((row, i) => {
                         const logo = COURIER_LOGOS[row.courier_group]
                         const color = COURIER_COLORS[row.courier_group] || C.t3
                         const del = row.delivered || 0
