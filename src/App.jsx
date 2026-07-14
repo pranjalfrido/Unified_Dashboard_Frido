@@ -1317,9 +1317,17 @@ function LogisticsPage({ filters }) {
                       </tr>
                     </thead>
                     <tbody>
-                      {byCourier.sort((a,b) => b.total - a.total).map((row, i) => (
+                      {byCourier.sort((a,b) => b.total - a.total).map((row, i) => {
+                        const logo = COURIER_LOGOS[row.courier_group]
+                        const color = COURIER_COLORS[row.courier_group] || C.t3
+                        return (
                         <tr key={row.courier_group} style={{ background: i % 2 === 0 ? 'transparent' : `${C.border}33` }}>
-                          <td style={tdL}>{row.courier_group}</td>
+                          <td style={tdL}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
+                              {logo ? <img src={logo} alt="" style={{ width: 22, height: 22, objectFit: 'contain', borderRadius: 3, flexShrink: 0, background: '#fff', border: `1px solid ${C.border}` }} onError={e => { e.currentTarget.style.display='none' }} /> : <span style={{ width: 22, height: 22, borderRadius: 3, background: color, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 9, fontWeight: 800, color: '#fff', flexShrink: 0 }}>{row.courier_group.charAt(0)}</span>}
+                              {row.courier_group}
+                            </div>
+                          </td>
                           <td style={tdStyle}>{(row.total||0).toLocaleString('en-IN')}</td>
                           <td style={{ ...tdStyle, color: '#16a34a', fontWeight: 600 }}>{pct1(row.delivered, row.total)}</td>
                           <td style={{ ...tdStyle, color: '#dc2626', fontWeight: 600 }}>{pct1(row.rto, row.total)}</td>
@@ -1327,7 +1335,8 @@ function LogisticsPage({ filters }) {
                           <td style={tdStyle}>{d2(row.avg_intransit_days)}</td>
                           <td style={tdStyle}>{d2(row.avg_fulfilment_days)}</td>
                         </tr>
-                      ))}
+                        )
+                      })}
                     </tbody>
                   </table>
                 </div>
@@ -1388,9 +1397,17 @@ function LogisticsPage({ filters }) {
                     </tr>
                   </thead>
                   <tbody>
-                    {byCourier.sort((a,b) => b.total - a.total).map((row, i) => (
+                    {byCourier.sort((a,b) => b.total - a.total).map((row, i) => {
+                      const logo = COURIER_LOGOS[row.courier_group]
+                      const color = COURIER_COLORS[row.courier_group] || C.t3
+                      return (
                       <tr key={row.courier_group} style={{ background: i % 2 === 0 ? 'transparent' : `${C.border}33` }}>
-                        <td style={tdL}>{row.courier_group}</td>
+                        <td style={tdL}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
+                            {logo ? <img src={logo} alt="" style={{ width: 22, height: 22, objectFit: 'contain', borderRadius: 3, flexShrink: 0, background: '#fff', border: `1px solid ${C.border}` }} onError={e => { e.currentTarget.style.display='none' }} /> : <span style={{ width: 22, height: 22, borderRadius: 3, background: color, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 9, fontWeight: 800, color: '#fff', flexShrink: 0 }}>{row.courier_group.charAt(0)}</span>}
+                            {row.courier_group}
+                          </div>
+                        </td>
                         <td style={tdStyle}>{(row.total||0).toLocaleString('en-IN')}</td>
                         <td style={{ ...tdStyle, color: '#16a34a' }}>{(row.delivered||0).toLocaleString('en-IN')}</td>
                         <td style={{ ...tdStyle, color: '#16a34a', fontWeight: 700 }}>{pct1(row.delivered, row.total)}</td>
@@ -1403,7 +1420,7 @@ function LogisticsPage({ filters }) {
                         <td style={tdStyle}>{d2(row.avg_s2a_days)}</td>
                         <td style={tdStyle}>{d2(row.avg_rto_tat_days)}</td>
                       </tr>
-                    ))}
+                    )})}
                   </tbody>
                 </table>
               </div>
@@ -1449,9 +1466,18 @@ function LogisticsPage({ filters }) {
                               <tbody>
                                 {rows.map((row, i) => {
                                   const tot = row.delivered || 0
+                                  const logo = view === 'courier' ? COURIER_LOGOS[row.courier_group] : null
+                                  const color = view === 'courier' ? (COURIER_COLORS[row.courier_group] || C.t3) : null
                                   return (
                                     <tr key={row[rowKey]} style={{ background: i % 2 === 0 ? 'transparent' : `${C.border}33` }}>
-                                      <td style={tdL}>{row[rowKey]}</td>
+                                      <td style={tdL}>
+                                        {view === 'courier' ? (
+                                          <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
+                                            {logo ? <img src={logo} alt="" style={{ width: 22, height: 22, objectFit: 'contain', borderRadius: 3, flexShrink: 0, background: '#fff', border: `1px solid ${C.border}` }} onError={e => { e.currentTarget.style.display='none' }} /> : <span style={{ width: 22, height: 22, borderRadius: 3, background: color, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 9, fontWeight: 800, color: '#fff', flexShrink: 0 }}>{row.courier_group?.charAt(0)}</span>}
+                                            {row[rowKey]}
+                                          </div>
+                                        ) : row[rowKey]}
+                                      </td>
                                       <td style={tdStyle}>{tot.toLocaleString('en-IN')}</td>
                                       <td style={tdStyle}>{pctB(row.bucket_0_1, tot)}</td>
                                       <td style={tdStyle}>{pctB(row.bucket_2_3, tot)}</td>
