@@ -163,6 +163,7 @@ function LogisticsPage({ filters }) {
   const API = import.meta.env.VITE_API_URL || ''
   const [logisticsView, setLogisticsView] = useState('Logistics')
   const [lopsTab, setLopsTab] = useState('overview') // 'overview' | 'operations'
+  const [tatCourierView, setTatCourierView] = useState('courier') // 'courier' | 'month'
   const [lFilters, setLFilters] = useState({ couriers: [], shipmentType: 'all', sddNdd: 'all', paymentMode: null, zone: null, pickupState: null, dropState: null, dropCity: null, category: null, subCategory: null })
   const [trendGranularity, setTrendGranularity] = useState('Daily')
   const [trendMetric, setTrendMetric] = useState('Qty')
@@ -1407,6 +1408,108 @@ function LogisticsPage({ filters }) {
                 </table>
               </div>
             </div>
+
+            {/* ── TAT Bucket Tables ── */}
+            {(() => {
+              const tatByCourier = data.tatByCourier || []
+              const tatByMonth = data.tatByMonth || []
+              const tatByFacility = data.tatByFacility || []
+              const bucketCols = ['0-1d','2-3d','4-5d','5+d']
+              const pctB = (v, total) => total ? ((v/total)*100).toFixed(1)+'%' : '—'
+
+              return (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+                  <LSectionTitle title="TAT Bucket Analysis" />
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+
+                    {/* Table 1: Pickup to Delivery TAT — Courier + Month toggle */}
+                    {(() => {
+                      const view = tatCourierView
+                      const rows = view === 'courier' ? tatByCourier : [...tatByMonth].sort((a,b) => (b.month_dt||'').localeCompare(a.month_dt||''))
+                      const rowKey = view === 'courier' ? 'courier_group' : 'month_label'
+                      return (
+                        <div style={tableCard}>
+                          <div style={{ ...tableTitle, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                            <span>Pickup → Delivery TAT</span>
+                            <div style={{ display: 'inline-flex', border: `1px solid ${C.border2}`, borderRadius: 6, overflow: 'hidden' }}>
+                              {[['courier','Courier'],['month','Month']].map(([id, lbl], i) => (
+                                <button key={id} onClick={() => setTatCourierView(id)} style={{ padding: '3px 10px', border: 'none', borderLeft: i > 0 ? `1px solid ${C.border2}` : 'none', background: view === id ? C.t1 : 'transparent', color: view === id ? '#fff' : C.t2, fontSize: 10.5, fontWeight: view === id ? 700 : 500, cursor: 'pointer', fontFamily: 'var(--font)' }}>{lbl}</button>
+                              ))}
+                            </div>
+                          </div>
+                          <div style={{ overflowX: 'auto' }}>
+                            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                              <thead>
+                                <tr>
+                                  <th style={thL}>{view === 'courier' ? 'Courier' : 'Month'}</th>
+                                  <th style={thStyle}>Total Del</th>
+                                  {bucketCols.map(b => <th key={b} style={thStyle}>{b}</th>)}
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {rows.map((row, i) => {
+                                  const tot = row.delivered || 0
+                                  return (
+                                    <tr key={row[rowKey]} style={{ background: i % 2 === 0 ? 'transparent' : `${C.border}33` }}>
+                                      <td style={tdL}>{row[rowKey]}</td>
+                                      <td style={tdStyle}>{tot.toLocaleString('en-IN')}</td>
+                                      <td style={tdStyle}>{pctB(row.bucket_0_1, tot)}</td>
+                                      <td style={tdStyle}>{pctB(row.bucket_2_3, tot)}</td>
+                                      <td style={tdStyle}>{pctB(row.bucket_4_5, tot)}</td>
+                                      <td style={{ ...tdStyle, color: (row.bucket_5plus/tot) > 0.2 ? '#dc2626' : C.t1, fontWeight: (row.bucket_5plus/tot) > 0.2 ? 700 : 400 }}>{pctB(row.bucket_5plus, tot)}</td>
+                                    </tr>
+                                  )
+                                })}
+                              </tbody>
+                            </table>
+                          </div>
+                        </div>
+                      )
+                    })()}
+
+                    {/* Table 2: WH Facility — Processing TAT + Order→Delivery TAT */}
+                    <div style={tableCard}>
+                      <div style={tableTitle}>WH Facility — Processing & Fulfillment TAT</div>
+                      <div style={{ overflowX: 'auto' }}>
+                        <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                          <thead>
+                            <tr>
+                              <th style={thL} rowSpan={2}>Facility</th>
+                              <th style={{ ...thStyle, borderBottom: 'none', textAlign: 'center' }} colSpan={4}>Processing → Pickup</th>
+                              <th style={{ ...thStyle, borderBottom: 'none', textAlign: 'center', borderLeft: `2px solid ${C.border2}` }} colSpan={4}>Order → Delivery</th>
+                            </tr>
+                            <tr>
+                              {['0-12h','12-24h','24-48h','48h+'].map(b => <th key={b} style={thStyle}>{b}</th>)}
+                              {['0-1d','2-3d','4-5d','5+d'].map((b,i) => <th key={b} style={{ ...thStyle, borderLeft: i === 0 ? `2px solid ${C.border2}` : 'none' }}>{b}</th>)}
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {tatByFacility.filter(r => r.facility).map((row, i) => {
+                              const procTot = (row.proc_0_12h||0)+(row.proc_12_24h||0)+(row.proc_24_48h||0)+(row.proc_48plus||0)
+                              const ordTot = (row.ord_0_1||0)+(row.ord_2_3||0)+(row.ord_4_5||0)+(row.ord_5plus||0)
+                              return (
+                                <tr key={row.facility} style={{ background: i % 2 === 0 ? 'transparent' : `${C.border}33` }}>
+                                  <td style={tdL}>{row.facility}</td>
+                                  <td style={tdStyle}>{pctB(row.proc_0_12h, procTot)}</td>
+                                  <td style={tdStyle}>{pctB(row.proc_12_24h, procTot)}</td>
+                                  <td style={tdStyle}>{pctB(row.proc_24_48h, procTot)}</td>
+                                  <td style={{ ...tdStyle, color: (row.proc_48plus/procTot) > 0.2 ? '#dc2626' : C.t1, fontWeight: (row.proc_48plus/procTot) > 0.2 ? 700 : 400 }}>{pctB(row.proc_48plus, procTot)}</td>
+                                  <td style={{ ...tdStyle, borderLeft: `2px solid ${C.border2}` }}>{pctB(row.ord_0_1, ordTot)}</td>
+                                  <td style={tdStyle}>{pctB(row.ord_2_3, ordTot)}</td>
+                                  <td style={tdStyle}>{pctB(row.ord_4_5, ordTot)}</td>
+                                  <td style={{ ...tdStyle, color: (row.ord_5plus/ordTot) > 0.2 ? '#dc2626' : C.t1, fontWeight: (row.ord_5plus/ordTot) > 0.2 ? 700 : 400 }}>{pctB(row.ord_5plus, ordTot)}</td>
+                                </tr>
+                              )
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+
+                  </div>
+                </div>
+              )
+            })()}
 
           </div>
         )
