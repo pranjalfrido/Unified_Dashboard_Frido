@@ -448,6 +448,40 @@ tat_by_facility AS (
     COUNTIF(delivery_date IS NOT NULL AND order_date IS NOT NULL AND DATE_DIFF(delivery_date, order_date, DAY) > 5) AS ord_5plus
   FROM base WHERE pickup_city IS NOT NULL GROUP BY 1
 ),
+failed_delivery_reasons AS (
+  SELECT
+    reason_for_last_failed_delivery AS reason,
+    COUNT(awb) AS total
+  FROM base
+  WHERE reason_for_last_failed_delivery IS NOT NULL
+    AND reason_for_last_failed_delivery != ''
+    AND ofd_attempts > 1
+  GROUP BY 1 ORDER BY 2 DESC
+),
+by_zone_detail AS (
+  SELECT
+    zone,
+    COUNT(awb) AS total,
+    COUNTIF(unified_status='Delivered') AS delivered,
+    COUNTIF(unified_status='RTO') AS rto,
+    COUNTIF(unified_status='Cancelled') AS cancelled,
+    ROUND(AVG(IF(delivery_date IS NOT NULL AND order_date IS NOT NULL AND DATE_DIFF(delivery_date, order_date, DAY) BETWEEN 0 AND 20, DATE_DIFF(delivery_date, order_date, DAY), NULL)), 2) AS avg_fulfilment_days,
+    ROUND(AVG(IF(pickup_ts IS NOT NULL AND delivery_ts IS NOT NULL AND TIMESTAMP_DIFF(delivery_ts, pickup_ts, MINUTE) BETWEEN 0 AND 28800, TIMESTAMP_DIFF(delivery_ts, pickup_ts, MINUTE) / 1440.0, NULL)), 2) AS avg_intransit_days
+  FROM base WHERE zone IS NOT NULL AND zone != '' GROUP BY 1
+),
+by_channel AS (
+  SELECT
+    channel_name AS channel,
+    COUNT(awb) AS total,
+    COUNTIF(unified_status='Delivered') AS delivered,
+    COUNTIF(unified_status='RTO') AS rto,
+    COUNTIF(unified_status='Cancelled') AS cancelled,
+    COUNTIF(unified_status='Intransit') AS in_transit,
+    ROUND(AVG(IF(delivery_date IS NOT NULL AND order_date IS NOT NULL AND DATE_DIFF(delivery_date, order_date, DAY) BETWEEN 0 AND 20, DATE_DIFF(delivery_date, order_date, DAY), NULL)), 2) AS avg_fulfilment_days,
+    ROUND(AVG(IF(pickup_ts IS NOT NULL AND delivery_ts IS NOT NULL AND TIMESTAMP_DIFF(delivery_ts, pickup_ts, MINUTE) BETWEEN 0 AND 28800, TIMESTAMP_DIFF(delivery_ts, pickup_ts, MINUTE) / 1440.0, NULL)), 2) AS avg_intransit_days,
+    ROUND(AVG(SAFE_CAST(invoice_value AS FLOAT64)), 0) AS avg_gmv
+  FROM base WHERE channel_name IS NOT NULL AND channel_name != '' GROUP BY 1
+),
 filter_opts AS (
   SELECT
     ARRAY_AGG(DISTINCT courier_partner IGNORE NULLS ORDER BY courier_partner) AS couriers,
@@ -480,6 +514,9 @@ SELECT
   TO_JSON_STRING(ARRAY(SELECT AS STRUCT * FROM by_payment_day ORDER BY payment_mode, period_dt)) AS by_payment_day,
   TO_JSON_STRING(ARRAY(SELECT AS STRUCT * FROM by_payment_week ORDER BY payment_mode, period_dt)) AS by_payment_week,
   TO_JSON_STRING(ARRAY(SELECT AS STRUCT * FROM by_payment_month ORDER BY payment_mode, period_dt)) AS by_payment_month,
+  TO_JSON_STRING(ARRAY(SELECT AS STRUCT * FROM failed_delivery_reasons)) AS failed_delivery_reasons,
+  TO_JSON_STRING(ARRAY(SELECT AS STRUCT * FROM by_zone_detail ORDER BY total DESC)) AS by_zone_detail,
+  TO_JSON_STRING(ARRAY(SELECT AS STRUCT * FROM by_channel ORDER BY total DESC)) AS by_channel,
   TO_JSON_STRING(ARRAY(SELECT AS STRUCT * FROM tat_by_courier ORDER BY total DESC)) AS tat_by_courier,
   TO_JSON_STRING(ARRAY(SELECT AS STRUCT * FROM tat_by_month ORDER BY month_dt)) AS tat_by_month,
   TO_JSON_STRING(ARRAY(SELECT AS STRUCT * FROM tat_by_facility ORDER BY total DESC)) AS tat_by_facility,
@@ -512,6 +549,9 @@ SELECT
       byPaymentDay: JSON.parse(r.by_payment_day),
       byPaymentWeek: JSON.parse(r.by_payment_week),
       byPaymentMonth: JSON.parse(r.by_payment_month),
+      failedDeliveryReasons: JSON.parse(r.failed_delivery_reasons),
+      byZoneDetail: JSON.parse(r.by_zone_detail),
+      byChannel: JSON.parse(r.by_channel),
       tatByCourier: JSON.parse(r.tat_by_courier),
       tatByMonth: JSON.parse(r.tat_by_month),
       tatByFacility: JSON.parse(r.tat_by_facility),

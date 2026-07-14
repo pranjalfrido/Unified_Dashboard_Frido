@@ -1257,8 +1257,12 @@ function LogisticsPage({ filters }) {
         const tableCard = { background: C.card, border: `1px solid ${C.border}`, borderRadius: 10, overflow: 'hidden' }
         const tableTitle = { fontSize: 11, fontWeight: 700, color: C.t2, padding: '10px 12px 8px', borderBottom: `1px solid ${C.border}`, letterSpacing: '.02em' }
 
+        const byZone = data.byZoneDetail || []
+        const byChannel = data.byChannel || []
+        const failedDeliveryReasons = data.failedDeliveryReasons || []
+
         return (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
 
             {/* TAT KPIs */}
             <LSectionTitle title="TAT Overview" />
@@ -1464,6 +1468,126 @@ function LogisticsPage({ filters }) {
                 </div>
               )
             })()}
+
+            {/* ── Failed Delivery Reasons ── */}
+            {failedDeliveryReasons.length > 0 && <>
+              <LSectionTitle title="Failed Delivery Reasons" />
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+                <div style={tableCard}>
+                  <div style={tableTitle}>Top Reasons for Failed Delivery Attempts</div>
+                  <div style={{ overflowX: 'auto' }}>
+                    <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                      <thead><tr>
+                        <th style={thL}>Reason</th>
+                        <th style={thStyle}>Count</th>
+                        <th style={thStyle}>% of Failed</th>
+                      </tr></thead>
+                      <tbody>
+                        {failedDeliveryReasons.map((row, i) => {
+                          const total = failedDeliveryReasons.reduce((s, r) => s + (r.total||0), 0)
+                          return (
+                            <tr key={row.reason} style={{ background: i % 2 === 0 ? 'transparent' : `${C.border}33` }}>
+                              <td style={{ ...tdL, fontWeight: 600 }}>{row.reason}</td>
+                              <td style={tdStyle}>{(row.total||0).toLocaleString('en-IN')}</td>
+                              <td style={tdStyle}>{total ? ((row.total/total)*100).toFixed(1)+'%' : '—'}</td>
+                            </tr>
+                          )
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
+                  {failedDeliveryReasons.slice(0, 6).map((row, i) => {
+                    const total = failedDeliveryReasons.reduce((s, r) => s + (r.total||0), 0)
+                    const pct = total ? (row.total/total) : 0
+                    return (
+                      <div key={row.reason} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                        <div style={{ fontSize: 11, color: C.t2, width: 180, flexShrink: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{row.reason}</div>
+                        <div style={{ flex: 1, height: 8, background: C.border, borderRadius: 4, overflow: 'hidden' }}>
+                          <div style={{ width: `${(pct*100).toFixed(1)}%`, height: '100%', background: '#dc2626', borderRadius: 4 }} />
+                        </div>
+                        <div style={{ fontSize: 11, fontWeight: 700, color: C.t1, width: 40, textAlign: 'right', flexShrink: 0 }}>{(pct*100).toFixed(1)}%</div>
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+            </>}
+
+            {/* ── Zone-wise Performance ── */}
+            {byZone.length > 0 && <>
+              <LSectionTitle title="Zone-wise Performance" />
+              <div style={tableCard}>
+                <div style={tableTitle}>Delivery Performance by Zone</div>
+                <div style={{ overflowX: 'auto' }}>
+                  <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                    <thead><tr>
+                      <th style={thL}>Zone</th>
+                      <th style={thStyle}>Total</th>
+                      <th style={thStyle}>Delivered</th>
+                      <th style={thStyle}>Del%</th>
+                      <th style={thStyle}>RTO</th>
+                      <th style={thStyle}>RTO%</th>
+                      <th style={thStyle}>Avg Fulfillment</th>
+                      <th style={thStyle}>Avg In-Transit</th>
+                    </tr></thead>
+                    <tbody>
+                      {byZone.sort((a,b) => b.total - a.total).map((row, i) => (
+                        <tr key={row.zone} style={{ background: i % 2 === 0 ? 'transparent' : `${C.border}33` }}>
+                          <td style={{ ...tdL, fontWeight: 700 }}>{row.zone}</td>
+                          <td style={tdStyle}>{(row.total||0).toLocaleString('en-IN')}</td>
+                          <td style={tdStyle}>{(row.delivered||0).toLocaleString('en-IN')}</td>
+                          <td style={{ ...tdStyle, color: (row.delivered/row.total) >= 0.8 ? '#16a34a' : (row.delivered/row.total) >= 0.6 ? '#d97706' : '#dc2626', fontWeight: 700 }}>{pct1(row.delivered, row.total)}</td>
+                          <td style={tdStyle}>{(row.rto||0).toLocaleString('en-IN')}</td>
+                          <td style={{ ...tdStyle, color: (row.rto/row.total) <= 0.05 ? '#16a34a' : (row.rto/row.total) <= 0.1 ? '#d97706' : '#dc2626', fontWeight: 700 }}>{pct1(row.rto, row.total)}</td>
+                          <td style={tdStyle}>{row.avg_fulfilment_days != null ? row.avg_fulfilment_days.toFixed(2)+'d' : '—'}</td>
+                          <td style={tdStyle}>{row.avg_intransit_days != null ? row.avg_intransit_days.toFixed(2)+'d' : '—'}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </>}
+
+            {/* ── Channel-wise Performance ── */}
+            {byChannel.length > 0 && <>
+              <LSectionTitle title="Channel-wise Performance" />
+              <div style={tableCard}>
+                <div style={tableTitle}>Delivery Performance by Sales Channel</div>
+                <div style={{ overflowX: 'auto' }}>
+                  <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                    <thead><tr>
+                      <th style={thL}>Channel</th>
+                      <th style={thStyle}>Total</th>
+                      <th style={thStyle}>Delivered</th>
+                      <th style={thStyle}>Del%</th>
+                      <th style={thStyle}>RTO</th>
+                      <th style={thStyle}>RTO%</th>
+                      <th style={thStyle}>Cancelled%</th>
+                      <th style={thStyle}>Avg Fulfillment</th>
+                      <th style={thStyle}>Avg GMV/Shipment</th>
+                    </tr></thead>
+                    <tbody>
+                      {byChannel.sort((a,b) => b.total - a.total).map((row, i) => (
+                        <tr key={row.channel} style={{ background: i % 2 === 0 ? 'transparent' : `${C.border}33` }}>
+                          <td style={{ ...tdL, fontWeight: 700 }}>{row.channel}</td>
+                          <td style={tdStyle}>{(row.total||0).toLocaleString('en-IN')}</td>
+                          <td style={tdStyle}>{(row.delivered||0).toLocaleString('en-IN')}</td>
+                          <td style={{ ...tdStyle, color: (row.delivered/row.total) >= 0.8 ? '#16a34a' : (row.delivered/row.total) >= 0.6 ? '#d97706' : '#dc2626', fontWeight: 700 }}>{pct1(row.delivered, row.total)}</td>
+                          <td style={tdStyle}>{(row.rto||0).toLocaleString('en-IN')}</td>
+                          <td style={{ ...tdStyle, color: (row.rto/row.total) <= 0.05 ? '#16a34a' : (row.rto/row.total) <= 0.1 ? '#d97706' : '#dc2626', fontWeight: 700 }}>{pct1(row.rto, row.total)}</td>
+                          <td style={{ ...tdStyle, color: '#d97706' }}>{pct1(row.cancelled, row.total)}</td>
+                          <td style={tdStyle}>{row.avg_fulfilment_days != null ? row.avg_fulfilment_days.toFixed(2)+'d' : '—'}</td>
+                          <td style={tdStyle}>{row.avg_gmv != null ? '₹'+Math.round(row.avg_gmv).toLocaleString('en-IN') : '—'}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </>}
 
           </div>
         )
