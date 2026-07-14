@@ -985,6 +985,238 @@ function LogisticsPage({ filters }) {
           )
         })()}
 
+        {/* ── OFD Attempt Efficiency ── */}
+        {(() => {
+          const byCr = data.byCourier || []
+          const thS = { fontSize: 10, fontWeight: 700, color: C.t3, textTransform: 'uppercase', letterSpacing: '.04em', padding: '7px 10px', borderBottom: `1px solid ${C.border}`, whiteSpace: 'nowrap', textAlign: 'right' }
+          const thLS = { ...thS, textAlign: 'left' }
+          const tdS = { fontSize: 11.5, color: C.t1, padding: '6px 10px', borderBottom: `1px solid ${C.border}`, textAlign: 'right', whiteSpace: 'nowrap' }
+          const tdLS = { ...tdS, textAlign: 'left', fontWeight: 600 }
+          const tCard = { background: C.card, border: `1px solid ${C.border}`, borderRadius: 10, overflow: 'hidden' }
+          const tTitle = { fontSize: 11, fontWeight: 700, color: C.t2, padding: '10px 12px 8px', borderBottom: `1px solid ${C.border}`, letterSpacing: '.02em' }
+          return (
+            <>
+              <LSectionTitle title="OFD Attempt Efficiency" />
+              <div style={tCard}>
+                <div style={tTitle}>Courier-wise Out-for-Delivery Attempt Analysis</div>
+                <div style={{ overflowX: 'auto' }}>
+                  <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                    <thead>
+                      <tr>
+                        <th style={thLS}>Courier</th>
+                        <th style={thS}>Total Delivered</th>
+                        <th style={thS}>Total OFD Attempts</th>
+                        <th style={thS}>Avg Attempts / Delivery</th>
+                        <th style={thS}>1st Attempt Del</th>
+                        <th style={thS}>1st Attempt %</th>
+                        <th style={thS}>2nd+ Attempt Del</th>
+                        <th style={thS}>2nd+ Attempt %</th>
+                        <th style={thS}>Zero Attempt RTO</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {byCr.filter(r => r.total > 0).sort((a,b) => b.total - a.total).map((row, i) => {
+                        const logo = COURIER_LOGOS[row.courier_group]
+                        const color = COURIER_COLORS[row.courier_group] || C.t3
+                        const del = row.delivered || 0
+                        const d1r = row.d1 || 0
+                        const multi = row.rasr_num || 0
+                        const ofdTotal = row.ofd_total || 0
+                        const avgAttempts = del > 0 ? (ofdTotal / del).toFixed(2) : '—'
+                        const d1pct = del > 0 ? ((d1r/del)*100).toFixed(1)+'%' : '—'
+                        const multipct = del > 0 ? ((multi/del)*100).toFixed(1)+'%' : '—'
+                        const d1Color = del > 0 ? (d1r/del >= 0.85 ? '#16a34a' : d1r/del >= 0.70 ? '#d97706' : '#dc2626') : C.t1
+                        const avgColor = avgAttempts !== '—' ? (parseFloat(avgAttempts) <= 1.2 ? '#16a34a' : parseFloat(avgAttempts) <= 1.5 ? '#d97706' : '#dc2626') : C.t1
+                        return (
+                          <tr key={row.courier_group} style={{ background: i % 2 === 0 ? 'transparent' : `${C.border}33` }}>
+                            <td style={tdLS}>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
+                                {logo ? <img src={logo} alt="" style={{ width: 22, height: 22, objectFit: 'contain', borderRadius: 3, flexShrink: 0, background: '#fff', border: `1px solid ${C.border}` }} onError={e => { e.currentTarget.style.display='none' }} /> : <span style={{ width: 22, height: 22, borderRadius: 3, background: color, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 9, fontWeight: 800, color: '#fff', flexShrink: 0 }}>{row.courier_group.charAt(0)}</span>}
+                                {row.courier_group}
+                              </div>
+                            </td>
+                            <td style={tdS}>{del.toLocaleString('en-IN')}</td>
+                            <td style={tdS}>{ofdTotal.toLocaleString('en-IN')}</td>
+                            <td style={{ ...tdS, color: avgColor, fontWeight: 700 }}>{avgAttempts}</td>
+                            <td style={tdS}>{d1r.toLocaleString('en-IN')}</td>
+                            <td style={{ ...tdS, color: d1Color, fontWeight: 700 }}>{d1pct}</td>
+                            <td style={tdS}>{multi.toLocaleString('en-IN')}</td>
+                            <td style={{ ...tdS, color: multi/del > 0.15 ? '#dc2626' : C.t1 }}>{multipct}</td>
+                            <td style={{ ...tdS, color: (row.z_rto||0) > 0 ? '#7c3aed' : C.t1 }}>{(row.z_rto||0).toLocaleString('en-IN')}</td>
+                          </tr>
+                        )
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </>
+          )
+        })()}
+
+        {/* ── Operations Sections ── */}
+        {(() => {
+        const pct1 = (a, b) => b ? ((a / b) * 100).toFixed(1) + '%' : '—'
+        const d1 = v => v != null ? v.toFixed(1) + 'd' : '—'
+
+        const pickupPending5 = k.pickup_pending || 0
+        const rto10plus = k.rto_10plus || 0
+        const eddBreached = k.edd_breached || 0
+
+        const byCourier = data.byCourier || []
+
+        const tatKpis = [
+          { label: 'Avg Processing Time', value: d1(k.avg_processing), sub: 'Order → Pickup Scan' },
+          { label: 'Avg Pickup TAT', value: d1(k.avg_pickup), sub: 'Order → Picked Up' },
+          { label: 'Avg In-Transit', value: d1(k.avg_intransit), sub: 'Pickup → Delivery' },
+          { label: 'Avg Fulfillment', value: d1(k.avg_fulfilment), sub: 'Order → Delivered' },
+          { label: 'Avg RTO TAT', value: d1(k.avg_rto_tat), sub: 'RTO Mark → RTO Delivered' },
+          { label: 'Avg Scan to Attempt', value: d1(k.avg_s2a), sub: 'Pickup → 1st OFD' },
+          { label: 'Avg Committed SLA', value: d1(k.avg_sla), sub: 'Promised delivery days' },
+        ]
+
+        const qKpis = [
+          { label: '1st Attempt Delivery', value: pct1(k.delivered_1attempt, k.delivered), sub: `${(k.delivered_1attempt||0).toLocaleString('en-IN')} shipments` },
+          { label: 'Multi Attempt Delivery', value: pct1(k.delivered_multi, k.delivered), sub: `${(k.delivered_multi||0).toLocaleString('en-IN')} shipments` },
+          { label: 'Zero Attempt RTO', value: pct1(k.z_rto, k.rto), sub: `${(k.z_rto||0).toLocaleString('en-IN')} shipments` },
+          { label: 'On-Time Delivery', value: pct1(k.on_time, k.delivered), sub: `${(k.on_time||0).toLocaleString('en-IN')} on time` },
+          { label: 'SLA Breach', value: pct1(k.sla_breach, k.total_shipments), sub: `${(k.sla_breach||0).toLocaleString('en-IN')} breached` },
+          { label: 'Lost & Damaged', value: (k.lost_damaged||0).toLocaleString('en-IN'), sub: 'Total count' },
+        ]
+
+        const ageingKpis = [
+          { label: 'Pickup Pending', value: (pickupPending5||0).toLocaleString('en-IN'), sub: 'Currently pending pickup' },
+          { label: 'EDD Breached', value: (eddBreached||0).toLocaleString('en-IN'), sub: 'Past EDD, not delivered' },
+          { label: 'RTO Undelivered 10d+', value: (rto10plus||0).toLocaleString('en-IN'), sub: 'RTO pending > 10 days' },
+          { label: 'Critical Stuck', value: (k.critical_stuck||0).toLocaleString('en-IN'), sub: 'In-transit > EDD+5d' },
+        ]
+
+        const opsCardStyle = { background: C.card, border: `1px solid ${C.border}`, borderRadius: 10, padding: '10px 14px', display: 'flex', flexDirection: 'column', gap: 3 }
+        const opsLabelStyle = { fontSize: 9.5, color: C.t3, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.04em', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }
+        const opsValStyle = { fontSize: 20, fontWeight: 700, color: C.t1, letterSpacing: '-0.5px', lineHeight: 1.1 }
+        const opsSubStyle = { fontSize: 10.5, color: C.t3 }
+
+        const thStyle2 = { fontSize: 10, fontWeight: 700, color: C.t3, textTransform: 'uppercase', letterSpacing: '.04em', padding: '7px 10px', borderBottom: `1px solid ${C.border}`, whiteSpace: 'nowrap', textAlign: 'right' }
+        const thL2 = { ...thStyle2, textAlign: 'left' }
+        const tdStyle2 = { fontSize: 11.5, color: C.t1, padding: '6px 10px', borderBottom: `1px solid ${C.border}`, textAlign: 'right', whiteSpace: 'nowrap' }
+        const tdL2 = { ...tdStyle2, textAlign: 'left', fontWeight: 600 }
+        const tableCard2 = { background: C.card, border: `1px solid ${C.border}`, borderRadius: 10, overflow: 'hidden' }
+        const tableTitle2 = { fontSize: 11, fontWeight: 700, color: C.t2, padding: '10px 12px 8px', borderBottom: `1px solid ${C.border}`, letterSpacing: '.02em' }
+
+        const byZone2 = data.byZoneDetail || []
+
+        return (
+          <>
+            {/* TAT Bucket Analysis */}
+            {(() => {
+              const tatByCourier = data.tatByCourier || []
+              const tatByMonth = data.tatByMonth || []
+              const tatByFacility = data.tatByFacility || []
+              const bucketCols = ['0-1d','2-3d','4-5d','5+d']
+              const pctB = (v, total) => total ? ((v/total)*100).toFixed(1)+'%' : '—'
+              return (
+                <>
+                  <LSectionTitle title="TAT Bucket Analysis" />
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+                    {(() => {
+                      const view = tatCourierView
+                      const rows = view === 'courier' ? tatByCourier : [...tatByMonth].sort((a,b) => (b.month_dt||'').localeCompare(a.month_dt||''))
+                      const rowKey = view === 'courier' ? 'courier_group' : 'month_label'
+                      return (
+                        <div style={tableCard2}>
+                          <div style={{ ...tableTitle2, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                            <span>Pickup → Delivery TAT</span>
+                            <div style={{ display: 'inline-flex', border: `1px solid ${C.border2}`, borderRadius: 6, overflow: 'hidden' }}>
+                              {[['courier','Courier'],['month','Month']].map(([id, lbl], i) => (
+                                <button key={id} onClick={() => setTatCourierView(id)} style={{ padding: '3px 10px', border: 'none', borderLeft: i > 0 ? `1px solid ${C.border2}` : 'none', background: view === id ? C.t1 : 'transparent', color: view === id ? '#fff' : C.t2, fontSize: 10.5, fontWeight: view === id ? 700 : 500, cursor: 'pointer', fontFamily: 'var(--font)' }}>{lbl}</button>
+                              ))}
+                            </div>
+                          </div>
+                          <div style={{ overflowX: 'auto' }}>
+                            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                              <thead>
+                                <tr>
+                                  <th style={thL2}>{view === 'courier' ? 'Courier' : 'Month'}</th>
+                                  <th style={thStyle2}>Total Del</th>
+                                  {bucketCols.map(b => <th key={b} style={thStyle2}>{b}</th>)}
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {rows.map((row, i) => {
+                                  const tot = row.delivered || 0
+                                  const logo = view === 'courier' ? COURIER_LOGOS[row.courier_group] : null
+                                  const color = view === 'courier' ? (COURIER_COLORS[row.courier_group] || C.t3) : null
+                                  return (
+                                    <tr key={row[rowKey]} style={{ background: i % 2 === 0 ? 'transparent' : `${C.border}33` }}>
+                                      <td style={tdL2}>
+                                        {view === 'courier' ? (
+                                          <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
+                                            {logo ? <img src={logo} alt="" style={{ width: 22, height: 22, objectFit: 'contain', borderRadius: 3, flexShrink: 0, background: '#fff', border: `1px solid ${C.border}` }} onError={e => { e.currentTarget.style.display='none' }} /> : <span style={{ width: 22, height: 22, borderRadius: 3, background: color, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 9, fontWeight: 800, color: '#fff', flexShrink: 0 }}>{row.courier_group?.charAt(0)}</span>}
+                                            {row[rowKey]}
+                                          </div>
+                                        ) : row[rowKey]}
+                                      </td>
+                                      <td style={tdStyle2}>{tot.toLocaleString('en-IN')}</td>
+                                      <td style={tdStyle2}>{pctB(row.bucket_0_1, tot)}</td>
+                                      <td style={tdStyle2}>{pctB(row.bucket_2_3, tot)}</td>
+                                      <td style={tdStyle2}>{pctB(row.bucket_4_5, tot)}</td>
+                                      <td style={{ ...tdStyle2, color: (row.bucket_5plus/tot) > 0.2 ? '#dc2626' : C.t1, fontWeight: (row.bucket_5plus/tot) > 0.2 ? 700 : 400 }}>{pctB(row.bucket_5plus, tot)}</td>
+                                    </tr>
+                                  )
+                                })}
+                              </tbody>
+                            </table>
+                          </div>
+                        </div>
+                      )
+                    })()}
+                    <div style={tableCard2}>
+                      <div style={tableTitle2}>WH Facility — Processing & Fulfillment TAT</div>
+                      <div style={{ overflowX: 'auto' }}>
+                        <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                          <thead>
+                            <tr>
+                              <th style={thL2} rowSpan={2}>Facility</th>
+                              <th style={{ ...thStyle2, borderBottom: 'none', textAlign: 'center', fontWeight: 800, fontSize: 11, color: C.t1 }} colSpan={4}>Processing → Pickup</th>
+                              <th style={{ ...thStyle2, borderBottom: 'none', textAlign: 'center', borderLeft: `2px solid ${C.border2}`, fontWeight: 800, fontSize: 11, color: C.t1 }} colSpan={4}>Order → Delivery</th>
+                            </tr>
+                            <tr>
+                              {['0-12h','12-24h','24-48h','48h+'].map(b => <th key={b} style={thStyle2}>{b}</th>)}
+                              {['0-1d','2-3d','4-5d','5+d'].map((b,i) => <th key={b} style={{ ...thStyle2, borderLeft: i === 0 ? `2px solid ${C.border2}` : 'none' }}>{b}</th>)}
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {tatByFacility.filter(r => r.facility).map((row, i) => {
+                              const procTot = (row.proc_0_12h||0)+(row.proc_12_24h||0)+(row.proc_24_48h||0)+(row.proc_48plus||0)
+                              const ordTot = (row.ord_0_1||0)+(row.ord_2_3||0)+(row.ord_4_5||0)+(row.ord_5plus||0)
+                              return (
+                                <tr key={row.facility} style={{ background: i % 2 === 0 ? 'transparent' : `${C.border}33` }}>
+                                  <td style={tdL2}>{row.facility}</td>
+                                  <td style={tdStyle2}>{pctB(row.proc_0_12h, procTot)}</td>
+                                  <td style={tdStyle2}>{pctB(row.proc_12_24h, procTot)}</td>
+                                  <td style={tdStyle2}>{pctB(row.proc_24_48h, procTot)}</td>
+                                  <td style={{ ...tdStyle2, color: (row.proc_48plus/procTot) > 0.2 ? '#dc2626' : C.t1, fontWeight: (row.proc_48plus/procTot) > 0.2 ? 700 : 400 }}>{pctB(row.proc_48plus, procTot)}</td>
+                                  <td style={{ ...tdStyle2, borderLeft: `2px solid ${C.border2}` }}>{pctB(row.ord_0_1, ordTot)}</td>
+                                  <td style={tdStyle2}>{pctB(row.ord_2_3, ordTot)}</td>
+                                  <td style={tdStyle2}>{pctB(row.ord_4_5, ordTot)}</td>
+                                  <td style={{ ...tdStyle2, color: (row.ord_5plus/ordTot) > 0.2 ? '#dc2626' : C.t1, fontWeight: (row.ord_5plus/ordTot) > 0.2 ? 700 : 400 }}>{pctB(row.ord_5plus, ordTot)}</td>
+                                </tr>
+                              )
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  </div>
+                </>
+              )
+            })()}
+
+          </>
+        )
+        })()}
+
+
         {/* ── Geographic ── */}
         <LSectionTitle title="Geographic" />
         {(() => {
@@ -1187,168 +1419,6 @@ function LogisticsPage({ filters }) {
               </div>
             </div>
           )
-        })()}
-
-        {/* ── Operations Sections ── */}
-        {(() => {
-        const pct1 = (a, b) => b ? ((a / b) * 100).toFixed(1) + '%' : '—'
-        const d1 = v => v != null ? v.toFixed(1) + 'd' : '—'
-
-        const pickupPending5 = k.pickup_pending || 0
-        const rto10plus = k.rto_10plus || 0
-        const eddBreached = k.edd_breached || 0
-
-        const byCourier = data.byCourier || []
-
-        const tatKpis = [
-          { label: 'Avg Processing Time', value: d1(k.avg_processing), sub: 'Order → Pickup Scan' },
-          { label: 'Avg Pickup TAT', value: d1(k.avg_pickup), sub: 'Order → Picked Up' },
-          { label: 'Avg In-Transit', value: d1(k.avg_intransit), sub: 'Pickup → Delivery' },
-          { label: 'Avg Fulfillment', value: d1(k.avg_fulfilment), sub: 'Order → Delivered' },
-          { label: 'Avg RTO TAT', value: d1(k.avg_rto_tat), sub: 'RTO Mark → RTO Delivered' },
-          { label: 'Avg Scan to Attempt', value: d1(k.avg_s2a), sub: 'Pickup → 1st OFD' },
-          { label: 'Avg Committed SLA', value: d1(k.avg_sla), sub: 'Promised delivery days' },
-        ]
-
-        const qKpis = [
-          { label: '1st Attempt Delivery', value: pct1(k.delivered_1attempt, k.delivered), sub: `${(k.delivered_1attempt||0).toLocaleString('en-IN')} shipments` },
-          { label: 'Multi Attempt Delivery', value: pct1(k.delivered_multi, k.delivered), sub: `${(k.delivered_multi||0).toLocaleString('en-IN')} shipments` },
-          { label: 'Zero Attempt RTO', value: pct1(k.z_rto, k.rto), sub: `${(k.z_rto||0).toLocaleString('en-IN')} shipments` },
-          { label: 'On-Time Delivery', value: pct1(k.on_time, k.delivered), sub: `${(k.on_time||0).toLocaleString('en-IN')} on time` },
-          { label: 'SLA Breach', value: pct1(k.sla_breach, k.total_shipments), sub: `${(k.sla_breach||0).toLocaleString('en-IN')} breached` },
-          { label: 'Lost & Damaged', value: (k.lost_damaged||0).toLocaleString('en-IN'), sub: 'Total count' },
-        ]
-
-        const ageingKpis = [
-          { label: 'Pickup Pending', value: (pickupPending5||0).toLocaleString('en-IN'), sub: 'Currently pending pickup' },
-          { label: 'EDD Breached', value: (eddBreached||0).toLocaleString('en-IN'), sub: 'Past EDD, not delivered' },
-          { label: 'RTO Undelivered 10d+', value: (rto10plus||0).toLocaleString('en-IN'), sub: 'RTO pending > 10 days' },
-          { label: 'Critical Stuck', value: (k.critical_stuck||0).toLocaleString('en-IN'), sub: 'In-transit > EDD+5d' },
-        ]
-
-        const opsCardStyle = { background: C.card, border: `1px solid ${C.border}`, borderRadius: 10, padding: '10px 14px', display: 'flex', flexDirection: 'column', gap: 3 }
-        const opsLabelStyle = { fontSize: 9.5, color: C.t3, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.04em', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }
-        const opsValStyle = { fontSize: 20, fontWeight: 700, color: C.t1, letterSpacing: '-0.5px', lineHeight: 1.1 }
-        const opsSubStyle = { fontSize: 10.5, color: C.t3 }
-
-        const thStyle2 = { fontSize: 10, fontWeight: 700, color: C.t3, textTransform: 'uppercase', letterSpacing: '.04em', padding: '7px 10px', borderBottom: `1px solid ${C.border}`, whiteSpace: 'nowrap', textAlign: 'right' }
-        const thL2 = { ...thStyle2, textAlign: 'left' }
-        const tdStyle2 = { fontSize: 11.5, color: C.t1, padding: '6px 10px', borderBottom: `1px solid ${C.border}`, textAlign: 'right', whiteSpace: 'nowrap' }
-        const tdL2 = { ...tdStyle2, textAlign: 'left', fontWeight: 600 }
-        const tableCard2 = { background: C.card, border: `1px solid ${C.border}`, borderRadius: 10, overflow: 'hidden' }
-        const tableTitle2 = { fontSize: 11, fontWeight: 700, color: C.t2, padding: '10px 12px 8px', borderBottom: `1px solid ${C.border}`, letterSpacing: '.02em' }
-
-        const byZone2 = data.byZoneDetail || []
-
-        return (
-          <>
-            {/* TAT Bucket Analysis */}
-            {(() => {
-              const tatByCourier = data.tatByCourier || []
-              const tatByMonth = data.tatByMonth || []
-              const tatByFacility = data.tatByFacility || []
-              const bucketCols = ['0-1d','2-3d','4-5d','5+d']
-              const pctB = (v, total) => total ? ((v/total)*100).toFixed(1)+'%' : '—'
-              return (
-                <>
-                  <LSectionTitle title="TAT Bucket Analysis" />
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
-                    {(() => {
-                      const view = tatCourierView
-                      const rows = view === 'courier' ? tatByCourier : [...tatByMonth].sort((a,b) => (b.month_dt||'').localeCompare(a.month_dt||''))
-                      const rowKey = view === 'courier' ? 'courier_group' : 'month_label'
-                      return (
-                        <div style={tableCard2}>
-                          <div style={{ ...tableTitle2, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                            <span>Pickup → Delivery TAT</span>
-                            <div style={{ display: 'inline-flex', border: `1px solid ${C.border2}`, borderRadius: 6, overflow: 'hidden' }}>
-                              {[['courier','Courier'],['month','Month']].map(([id, lbl], i) => (
-                                <button key={id} onClick={() => setTatCourierView(id)} style={{ padding: '3px 10px', border: 'none', borderLeft: i > 0 ? `1px solid ${C.border2}` : 'none', background: view === id ? C.t1 : 'transparent', color: view === id ? '#fff' : C.t2, fontSize: 10.5, fontWeight: view === id ? 700 : 500, cursor: 'pointer', fontFamily: 'var(--font)' }}>{lbl}</button>
-                              ))}
-                            </div>
-                          </div>
-                          <div style={{ overflowX: 'auto' }}>
-                            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-                              <thead>
-                                <tr>
-                                  <th style={thL2}>{view === 'courier' ? 'Courier' : 'Month'}</th>
-                                  <th style={thStyle2}>Total Del</th>
-                                  {bucketCols.map(b => <th key={b} style={thStyle2}>{b}</th>)}
-                                </tr>
-                              </thead>
-                              <tbody>
-                                {rows.map((row, i) => {
-                                  const tot = row.delivered || 0
-                                  const logo = view === 'courier' ? COURIER_LOGOS[row.courier_group] : null
-                                  const color = view === 'courier' ? (COURIER_COLORS[row.courier_group] || C.t3) : null
-                                  return (
-                                    <tr key={row[rowKey]} style={{ background: i % 2 === 0 ? 'transparent' : `${C.border}33` }}>
-                                      <td style={tdL2}>
-                                        {view === 'courier' ? (
-                                          <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
-                                            {logo ? <img src={logo} alt="" style={{ width: 22, height: 22, objectFit: 'contain', borderRadius: 3, flexShrink: 0, background: '#fff', border: `1px solid ${C.border}` }} onError={e => { e.currentTarget.style.display='none' }} /> : <span style={{ width: 22, height: 22, borderRadius: 3, background: color, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 9, fontWeight: 800, color: '#fff', flexShrink: 0 }}>{row.courier_group?.charAt(0)}</span>}
-                                            {row[rowKey]}
-                                          </div>
-                                        ) : row[rowKey]}
-                                      </td>
-                                      <td style={tdStyle2}>{tot.toLocaleString('en-IN')}</td>
-                                      <td style={tdStyle2}>{pctB(row.bucket_0_1, tot)}</td>
-                                      <td style={tdStyle2}>{pctB(row.bucket_2_3, tot)}</td>
-                                      <td style={tdStyle2}>{pctB(row.bucket_4_5, tot)}</td>
-                                      <td style={{ ...tdStyle2, color: (row.bucket_5plus/tot) > 0.2 ? '#dc2626' : C.t1, fontWeight: (row.bucket_5plus/tot) > 0.2 ? 700 : 400 }}>{pctB(row.bucket_5plus, tot)}</td>
-                                    </tr>
-                                  )
-                                })}
-                              </tbody>
-                            </table>
-                          </div>
-                        </div>
-                      )
-                    })()}
-                    <div style={tableCard2}>
-                      <div style={tableTitle2}>WH Facility — Processing & Fulfillment TAT</div>
-                      <div style={{ overflowX: 'auto' }}>
-                        <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-                          <thead>
-                            <tr>
-                              <th style={thL2} rowSpan={2}>Facility</th>
-                              <th style={{ ...thStyle2, borderBottom: 'none', textAlign: 'center', fontWeight: 800, fontSize: 11, color: C.t1 }} colSpan={4}>Processing → Pickup</th>
-                              <th style={{ ...thStyle2, borderBottom: 'none', textAlign: 'center', borderLeft: `2px solid ${C.border2}`, fontWeight: 800, fontSize: 11, color: C.t1 }} colSpan={4}>Order → Delivery</th>
-                            </tr>
-                            <tr>
-                              {['0-12h','12-24h','24-48h','48h+'].map(b => <th key={b} style={thStyle2}>{b}</th>)}
-                              {['0-1d','2-3d','4-5d','5+d'].map((b,i) => <th key={b} style={{ ...thStyle2, borderLeft: i === 0 ? `2px solid ${C.border2}` : 'none' }}>{b}</th>)}
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {tatByFacility.filter(r => r.facility).map((row, i) => {
-                              const procTot = (row.proc_0_12h||0)+(row.proc_12_24h||0)+(row.proc_24_48h||0)+(row.proc_48plus||0)
-                              const ordTot = (row.ord_0_1||0)+(row.ord_2_3||0)+(row.ord_4_5||0)+(row.ord_5plus||0)
-                              return (
-                                <tr key={row.facility} style={{ background: i % 2 === 0 ? 'transparent' : `${C.border}33` }}>
-                                  <td style={tdL2}>{row.facility}</td>
-                                  <td style={tdStyle2}>{pctB(row.proc_0_12h, procTot)}</td>
-                                  <td style={tdStyle2}>{pctB(row.proc_12_24h, procTot)}</td>
-                                  <td style={tdStyle2}>{pctB(row.proc_24_48h, procTot)}</td>
-                                  <td style={{ ...tdStyle2, color: (row.proc_48plus/procTot) > 0.2 ? '#dc2626' : C.t1, fontWeight: (row.proc_48plus/procTot) > 0.2 ? 700 : 400 }}>{pctB(row.proc_48plus, procTot)}</td>
-                                  <td style={{ ...tdStyle2, borderLeft: `2px solid ${C.border2}` }}>{pctB(row.ord_0_1, ordTot)}</td>
-                                  <td style={tdStyle2}>{pctB(row.ord_2_3, ordTot)}</td>
-                                  <td style={tdStyle2}>{pctB(row.ord_4_5, ordTot)}</td>
-                                  <td style={{ ...tdStyle2, color: (row.ord_5plus/ordTot) > 0.2 ? '#dc2626' : C.t1, fontWeight: (row.ord_5plus/ordTot) > 0.2 ? 700 : 400 }}>{pctB(row.ord_5plus, ordTot)}</td>
-                                </tr>
-                              )
-                            })}
-                          </tbody>
-                        </table>
-                      </div>
-                    </div>
-                  </div>
-                </>
-              )
-            })()}
-
-          </>
-        )
         })()}
 
       </>}
