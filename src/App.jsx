@@ -1469,51 +1469,6 @@ function LogisticsPage({ filters }) {
               )
             })()}
 
-            {/* ── Failed Delivery Reasons ── */}
-            {failedDeliveryReasons.length > 0 && <>
-              <LSectionTitle title="Failed Delivery Reasons" />
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
-                <div style={tableCard}>
-                  <div style={tableTitle}>Top Reasons for Failed Delivery Attempts</div>
-                  <div style={{ overflowX: 'auto' }}>
-                    <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-                      <thead><tr>
-                        <th style={thL}>Reason</th>
-                        <th style={thStyle}>Count</th>
-                        <th style={thStyle}>% of Failed</th>
-                      </tr></thead>
-                      <tbody>
-                        {failedDeliveryReasons.map((row, i) => {
-                          const total = failedDeliveryReasons.reduce((s, r) => s + (r.total||0), 0)
-                          return (
-                            <tr key={row.reason} style={{ background: i % 2 === 0 ? 'transparent' : `${C.border}33` }}>
-                              <td style={{ ...tdL, fontWeight: 600 }}>{row.reason}</td>
-                              <td style={tdStyle}>{(row.total||0).toLocaleString('en-IN')}</td>
-                              <td style={tdStyle}>{total ? ((row.total/total)*100).toFixed(1)+'%' : '—'}</td>
-                            </tr>
-                          )
-                        })}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
-                  {failedDeliveryReasons.slice(0, 6).map((row, i) => {
-                    const total = failedDeliveryReasons.reduce((s, r) => s + (r.total||0), 0)
-                    const pct = total ? (row.total/total) : 0
-                    return (
-                      <div key={row.reason} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                        <div style={{ fontSize: 11, color: C.t2, width: 180, flexShrink: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{row.reason}</div>
-                        <div style={{ flex: 1, height: 8, background: C.border, borderRadius: 4, overflow: 'hidden' }}>
-                          <div style={{ width: `${(pct*100).toFixed(1)}%`, height: '100%', background: '#dc2626', borderRadius: 4 }} />
-                        </div>
-                        <div style={{ fontSize: 11, fontWeight: 700, color: C.t1, width: 40, textAlign: 'right', flexShrink: 0 }}>{(pct*100).toFixed(1)}%</div>
-                      </div>
-                    )
-                  })}
-                </div>
-              </div>
-            </>}
 
             {/* ── Zone-wise Performance ── */}
             {byZone.length > 0 && <>
