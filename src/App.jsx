@@ -154,7 +154,7 @@ function LSectionTitle({ title, collapsed, onToggle }) {
   const clickable = typeof onToggle === 'function'
   return (
     <div onClick={clickable ? onToggle : undefined} style={{ display: 'flex', alignItems: 'center', gap: 10, margin: '6px 0 2px', cursor: clickable ? 'pointer' : 'default', userSelect: 'none' }}>
-      {clickable && <span style={{ fontSize: 9, color: C.t3, display: 'inline-block', transform: collapsed ? 'rotate(-90deg)' : 'rotate(0deg)', transition: 'transform .2s' }}>&#9660;</span>}
+      {clickable && <span style={{ fontSize: 9, color: C.t3, display: 'inline-block', transform: collapsed ? 'rotate(-90deg)' : 'rotate(0deg)', transition: 'transform .2s' }}>▼</span>}
       <span style={{ fontSize: 10, fontWeight: 800, letterSpacing: '.06em', textTransform: 'uppercase', color: C.t1 }}>{title}</span>
       <div style={{ flex: 1, height: 1, background: C.border }} />
     </div>
@@ -1001,7 +1001,7 @@ function LogisticsPage({ filters }) {
           return (
             <>
               <LSectionTitle title="OFD Attempt Efficiency" collapsed={secCollapsed['ofd']} onToggle={() => toggleSec('ofd')} />
-              <div style={{ ...tCard, display: secCollapsed['ofd'] ? 'none' : undefined }}>
+              <div style={{ ...tCard, display: secCollapsed['ofd'] ? 'none' : 'block' }}>
                 <div style={tTitle}>Courier-wise Out-for-Delivery Attempt Analysis</div>
                 <div style={{ overflowX: 'auto' }}>
                   <table style={{ width: '100%', borderCollapse: 'collapse' }}>
