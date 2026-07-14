@@ -153,13 +153,8 @@ function LKpiCard({ label, value, badgeText, badgeVariant, subValue, cur, prev, 
 function LSectionTitle({ title, collapsed, onToggle }) {
   const clickable = typeof onToggle === 'function'
   return (
-    <div
-      onClick={clickable ? onToggle : undefined}
-      style={{ display: 'flex', alignItems: 'center', gap: 10, margin: '6px 0 2px', cursor: clickable ? 'pointer' : 'default', userSelect: 'none' }}
-    >
-      {clickable && (
-        <span style={{ fontSize: 9, color: C.t3, lineHeight: 1, transition: 'transform .2s', display: 'inline-block', transform: collapsed ? 'rotate(-90deg)' : 'rotate(0deg)' }}>▼</span>
-      )}
+    <div onClick={clickable ? onToggle : undefined} style={{ display: 'flex', alignItems: 'center', gap: 10, margin: '6px 0 2px', cursor: clickable ? 'pointer' : 'default', userSelect: 'none' }}>
+      {clickable && <span style={{ fontSize: 9, color: C.t3, display: 'inline-block', transform: collapsed ? 'rotate(-90deg)' : 'rotate(0deg)', transition: 'transform .2s' }}>&#9660;</span>}
       <span style={{ fontSize: 10, fontWeight: 800, letterSpacing: '.06em', textTransform: 'uppercase', color: C.t1 }}>{title}</span>
       <div style={{ flex: 1, height: 1, background: C.border }} />
     </div>
@@ -376,18 +371,18 @@ function LogisticsPage({ filters }) {
 
         {/* ── Volume KPIs ── */}
         <LSectionTitle title="Volume Overview" collapsed={secCollapsed['volume']} onToggle={() => toggleSec('volume')} />
-        {!secCollapsed['volume'] && <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6, 1fr)', gap: 7 }}>
+        <div style={{ display: secCollapsed['volume'] ? 'none' : 'grid', gridTemplateColumns: 'repeat(6, 1fr)', gap: 7 }}>
           <LKpiCard label="Total Shipments" value={n(k.total_shipments)} cur={k.total_shipments} prev={pk.total_shipments} compact={!filterSidebarOpen} />
           <LKpiCard label="Total GMV" value={fmtGMV(k.total_value)} cur={k.total_value} prev={pk.total_value} compact={!filterSidebarOpen} />
           <LKpiCard label="Delivered" value={n(k.delivered)} badgeVariant="G" subValue={pct2(k.delivered, k.total_shipments)} cur={k.delivered} prev={pk.delivered} hideSubValue={filterSidebarOpen} compact={!filterSidebarOpen} />
           <LKpiCard label="RTO" value={n(k.rto)} badgeVariant="R" subValue={pct2(k.rto, k.total_shipments)} cur={k.rto} prev={pk.rto} hideSubValue={filterSidebarOpen} compact={!filterSidebarOpen} />
           <LKpiCard label="Pickup Pending" value={n(k.pickup_pending)} badgeVariant="A" cur={k.pickup_pending} prev={pk.pickup_pending} compact={!filterSidebarOpen} />
           <LKpiCard label="Cancelled" value={n(k.cancelled)} badgeVariant="N" subValue={pct2(k.cancelled, k.total_shipments)} cur={k.cancelled} prev={pk.cancelled} hideSubValue={filterSidebarOpen} compact={!filterSidebarOpen} />
-        </div>}
+        </div>
 
         {/* ── Quality KPIs ── */}
         <LSectionTitle title="Delivery Quality & SLA" collapsed={secCollapsed['quality']} onToggle={() => toggleSec('quality')} />
-        {!secCollapsed['quality'] && <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 7 }}>
+        <div style={{ display: secCollapsed['quality'] ? 'none' : 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 7 }}>
           <LKpiCard label="On Time Del" value={n(k.on_time)} badgeText={pct2(k.on_time, k.delivered)} badgeVariant="G" cur={k.on_time} prev={pk.on_time} compact={!filterSidebarOpen} />
           <LKpiCard label="SLA Breach" value={n(k.sla_breach)} badgeVariant="R" subValue={pct2(k.sla_breach, k.delivered)} cur={k.sla_breach} prev={pk.sla_breach} hideSubValue={filterSidebarOpen} compact={!filterSidebarOpen} />
           <LKpiCard label="RTO 10+ Days" value={n(k.rto_10plus)} badgeText="Aging" badgeVariant="R" cur={k.rto_10plus} prev={pk.rto_10plus} compact={!filterSidebarOpen} />
@@ -395,22 +390,22 @@ function LogisticsPage({ filters }) {
           <LKpiCard label="FASR %" value={pct2(k.delivered_1attempt, k.total_ofd_attempts)} badgeVariant="G" cur={k.delivered_1attempt} prev={pk.delivered_1attempt} compact={!filterSidebarOpen} />
           <LKpiCard label="RASR %" value={pct2(k.delivered_multi, k.total_ofd_attempts)} badgeVariant="B" cur={k.delivered_multi} prev={pk.delivered_multi} compact={!filterSidebarOpen} />
           <LKpiCard label="Multi-Att Del" value={n(k.delivered_multi)} badgeVariant="B" cur={k.delivered_multi} prev={pk.delivered_multi} compact={!filterSidebarOpen} />
-        </div>}
+        </div>
 
         {/* ── TAT KPIs ── */}
         <LSectionTitle title="Turnaround Time" collapsed={secCollapsed['tat']} onToggle={() => toggleSec('tat')} />
-        {!secCollapsed['tat'] && <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6, 1fr)', gap: 7 }}>
+        <div style={{ display: secCollapsed['tat'] ? 'none' : 'grid', gridTemplateColumns: 'repeat(6, 1fr)', gap: 7 }}>
           <LKpiCard label="Avg Processing" value={d1(k.avg_processing)} badgeText="Cr→1st OFD" badgeVariant="N" cur={k.avg_processing} prev={pk.avg_processing} compact={!filterSidebarOpen} />
           <LKpiCard label="Avg Pickup TAT" value={d1(k.avg_pickup)} badgeText="Cr→Pick" badgeVariant="B" cur={k.avg_pickup} prev={pk.avg_pickup} compact={!filterSidebarOpen} />
           <LKpiCard label="Avg In-Transit" value={d1(k.avg_intransit)} badgeText="Pick→Del" badgeVariant="N" cur={k.avg_intransit} prev={pk.avg_intransit} compact={!filterSidebarOpen} />
           <LKpiCard label="Avg Fulfilment" value={d1(k.avg_fulfilment)} badgeText="Cr→Del" badgeVariant="G" cur={k.avg_fulfilment} prev={pk.avg_fulfilment} compact={!filterSidebarOpen} />
           <LKpiCard label="Avg RTO TAT" value={d1(k.avg_rto_tat)} badgeText="RTO days" badgeVariant="R" cur={k.avg_rto_tat} prev={pk.avg_rto_tat} compact={!filterSidebarOpen} />
           <LKpiCard label="Avg S2A Days" value={d1(k.avg_s2a)} badgeText="Ship→OFD" badgeVariant="B" cur={k.avg_s2a} prev={pk.avg_s2a} compact={!filterSidebarOpen} />
-        </div>}
+        </div>
 
         {/* ── Monthly Trend + Courier TAT ── */}
         <LSectionTitle title="Monthly Trend" collapsed={secCollapsed['trend']} onToggle={() => toggleSec('trend')} />
-        {!secCollapsed['trend'] && <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+        <div style={{ display: secCollapsed['trend'] ? 'none' : 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
           <div style={{ ...cardStyle, display: 'flex', flexDirection: 'column' }}>
             <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 10, flexShrink: 0 }}>
               <div>
@@ -538,12 +533,12 @@ function LogisticsPage({ filters }) {
               </>)
             })()}
           </div>
-        </div>}
+        </div>
 
         {/* ── Courier Performance Table ── */}
         <LSectionTitle title="Courier Performance" collapsed={secCollapsed['courier']} onToggle={() => toggleSec('courier')} />
 
-        {!secCollapsed['courier'] && <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 14 }}>
+<div style={{ display: secCollapsed['courier'] ? 'none' : 'grid', gridTemplateColumns: '1fr', gap: 14 }}>
           <div style={cardStyle}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
             <div style={chartTitle}>Courier-wise Breakdown</div>
@@ -993,7 +988,6 @@ function LogisticsPage({ filters }) {
             </div>
           )
         })()}
-        </div>}
 
         {/* ── OFD Attempt Efficiency ── */}
         {(() => {
@@ -1007,8 +1001,7 @@ function LogisticsPage({ filters }) {
           return (
             <>
               <LSectionTitle title="OFD Attempt Efficiency" collapsed={secCollapsed['ofd']} onToggle={() => toggleSec('ofd')} />
-              {secCollapsed['ofd'] ? null : <>
-              <div style={tCard}>
+              <div style={{ ...tCard, display: secCollapsed['ofd'] ? 'none' : undefined }}>
                 <div style={tTitle}>Courier-wise Out-for-Delivery Attempt Analysis</div>
                 <div style={{ overflowX: 'auto' }}>
                   <table style={{ width: '100%', borderCollapse: 'collapse' }}>
@@ -1061,7 +1054,6 @@ function LogisticsPage({ filters }) {
                   </table>
                 </div>
               </div>
-              </>}
             </>
           )
         })()}
@@ -1129,7 +1121,7 @@ function LogisticsPage({ filters }) {
               return (
                 <>
                   <LSectionTitle title="TAT Bucket Analysis" collapsed={secCollapsed['tatbucket']} onToggle={() => toggleSec('tatbucket')} />
-                  {!secCollapsed['tatbucket'] && <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+                  <div style={{ display: secCollapsed['tatbucket'] ? 'none' : 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
                     {(() => {
                       const view = tatCourierView
                       const rows = view === 'courier' ? tatByCourier : [...tatByMonth].sort((a,b) => (b.month_dt||'').localeCompare(a.month_dt||''))
@@ -1219,7 +1211,7 @@ function LogisticsPage({ filters }) {
                         </table>
                       </div>
                     </div>
-                  </div>}
+                  </div>
                 </>
               )
             })()}
@@ -1231,7 +1223,7 @@ function LogisticsPage({ filters }) {
 
         {/* ── Geographic ── */}
         <LSectionTitle title="Geographic" collapsed={secCollapsed['geo']} onToggle={() => toggleSec('geo')} />
-        {!secCollapsed['geo'] && (() => {
+        {(() => {
           const geoBar = (rows, labelKey, color) => {
             const grandTotal = rows.reduce((s,r) => s + (r.total||0), 0) || 1
             return (
@@ -1255,7 +1247,7 @@ function LogisticsPage({ filters }) {
             )
           }
           return (
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 14 }}>
+            <div style={{ display: secCollapsed['geo'] ? 'none' : 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 14 }}>
               <div style={cardStyle}>
                 <div style={chartTitle}>Total Shipments by Drop City</div>
                 <div style={{ fontSize: 11, color: C.t3, marginBottom: 12, marginTop: 2 }}>Top 10 destination cities</div>
@@ -1277,12 +1269,12 @@ function LogisticsPage({ filters }) {
 
         {/* ── RTO Reasons ── */}
         <LSectionTitle title="RTO Reasons" collapsed={secCollapsed['rto']} onToggle={() => toggleSec('rto')} />
-        {!secCollapsed['rto'] && (() => {
+        {(() => {
           const reasons = (data.rtoReasons || []).filter(r => r.reason && r.total > 0).sort((a, b) => b.total - a.total)
           const totalRto = reasons.reduce((s, r) => s + r.total, 0) || 1
           if (!reasons.length) return <div style={{ color: C.t3, fontSize: 12 }}>No RTO reason data available.</div>
           return (
-            <div style={{ ...cardStyle, padding: '16px 18px' }}>
+            <div style={{ ...cardStyle, padding: '16px 18px', display: secCollapsed['rto'] ? 'none' : undefined }}>
               <div style={{ ...chartTitle, marginBottom: 16 }}>RTO Reasons — Shipment Count & % of Total RTO</div>
               <ResponsiveContainer width="100%" height={280}>
                 <BarChart data={reasons} margin={{ top: 20, right: 10, left: 0, bottom: 80 }}>
