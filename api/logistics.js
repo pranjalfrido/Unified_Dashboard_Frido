@@ -425,14 +425,14 @@ tat_by_month AS (
 tat_by_facility AS (
   SELECT
     CASE
-      WHEN UPPER(pickup_city) IN ('DELHI','GURGAON','GURUGRAM','HARYANA') THEN 'Delhi'
-      WHEN UPPER(pickup_city) IN ('MUMBAI','BHIWANDI') THEN 'Mumbai'
-      WHEN UPPER(pickup_city) IN ('PUNE','MAVAL') THEN 'Pune'
-      WHEN UPPER(pickup_city) IN ('BANGALORE','BENGALURU') THEN 'Bengaluru'
-      WHEN UPPER(pickup_city) IN ('KOLKATA','HOWRAH','HOOGHLY') THEN 'Kolkata'
-      WHEN UPPER(pickup_city) = 'CHENNAI' THEN 'Chennai'
-      WHEN UPPER(pickup_city) = 'HYDERABAD' THEN 'Hyderabad'
-      ELSE pickup_city
+      WHEN UPPER(TRIM(pickup_city)) IN ('DELHI','GURGAON','GURUGRAM','HARYANA') THEN 'Delhi'
+      WHEN UPPER(TRIM(pickup_city)) IN ('MUMBAI','BHIWANDI') THEN 'Mumbai'
+      WHEN UPPER(TRIM(pickup_city)) IN ('PUNE','MAVAL') THEN 'Pune'
+      WHEN UPPER(TRIM(pickup_city)) IN ('BANGALORE','BENGALURU') THEN 'Bengaluru'
+      WHEN UPPER(TRIM(pickup_city)) IN ('KOLKATA','HOWRAH','HOOGHLY') THEN 'Kolkata'
+      WHEN UPPER(TRIM(pickup_city)) = 'CHENNAI' THEN 'Chennai'
+      WHEN UPPER(TRIM(pickup_city)) = 'HYDERABAD' THEN 'Hyderabad'
+      ELSE TRIM(pickup_city)
     END AS facility,
     COUNT(awb) AS total,
     COUNTIF(unified_status='Delivered') AS delivered,

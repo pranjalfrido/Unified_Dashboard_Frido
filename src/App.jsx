@@ -1501,8 +1501,8 @@ function LogisticsPage({ filters }) {
                           <thead>
                             <tr>
                               <th style={thL} rowSpan={2}>Facility</th>
-                              <th style={{ ...thStyle, borderBottom: 'none', textAlign: 'center' }} colSpan={4}>Processing → Pickup</th>
-                              <th style={{ ...thStyle, borderBottom: 'none', textAlign: 'center', borderLeft: `2px solid ${C.border2}` }} colSpan={4}>Order → Delivery</th>
+                              <th style={{ ...thStyle, borderBottom: 'none', textAlign: 'center', fontWeight: 800, fontSize: 11, color: C.t1 }} colSpan={4}>Processing → Pickup</th>
+                              <th style={{ ...thStyle, borderBottom: 'none', textAlign: 'center', borderLeft: `2px solid ${C.border2}`, fontWeight: 800, fontSize: 11, color: C.t1 }} colSpan={4}>Order → Delivery</th>
                             </tr>
                             <tr>
                               {['0-12h','12-24h','24-48h','48h+'].map(b => <th key={b} style={thStyle}>{b}</th>)}
