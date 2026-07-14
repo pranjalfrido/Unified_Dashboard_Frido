@@ -1239,10 +1239,10 @@ function LogisticsPage({ filters }) {
         ]
 
         const ageingKpis = [
-          { label: 'Pickup Pending', value: (pickupPending5||0).toLocaleString('en-IN'), sub: 'Currently pending pickup', color: '#d97706' },
-          { label: 'EDD Breached', value: (eddBreached||0).toLocaleString('en-IN'), sub: 'Past EDD, not delivered', color: '#dc2626' },
-          { label: 'RTO Undelivered 10d+', value: (rto10plus||0).toLocaleString('en-IN'), sub: 'RTO pending > 10 days', color: '#7c3aed' },
-          { label: 'Critical Stuck', value: (k.critical_stuck||0).toLocaleString('en-IN'), sub: 'In-transit > EDD+5d', color: '#dc2626' },
+          { label: 'Pickup Pending', value: (pickupPending5||0).toLocaleString('en-IN'), sub: 'Currently pending pickup' },
+          { label: 'EDD Breached', value: (eddBreached||0).toLocaleString('en-IN'), sub: 'Past EDD, not delivered' },
+          { label: 'RTO Undelivered 10d+', value: (rto10plus||0).toLocaleString('en-IN'), sub: 'RTO pending > 10 days' },
+          { label: 'Critical Stuck', value: (k.critical_stuck||0).toLocaleString('en-IN'), sub: 'In-transit > EDD+5d' },
         ]
 
         const cardStyle = { background: C.card, border: `1px solid ${C.border}`, borderRadius: 10, padding: '10px 14px', display: 'flex', flexDirection: 'column', gap: 3 }
@@ -1288,9 +1288,9 @@ function LogisticsPage({ filters }) {
             <LSectionTitle title="Ageing & Stuck Shipments" />
             <div style={{ display: 'grid', gridTemplateColumns: `repeat(${ageingKpis.length}, 1fr)`, gap: 7 }}>
               {ageingKpis.map(k => (
-                <div key={k.label} style={{ ...cardStyle, borderLeft: `3px solid ${k.color || C.border}` }}>
+                <div key={k.label} style={cardStyle}>
                   <div style={labelStyle}>{k.label}</div>
-                  <div style={{ ...valStyle, color: k.color || C.t1 }}>{k.value}</div>
+                  <div style={valStyle}>{k.value}</div>
                   <div style={subStyle}>{k.sub}</div>
                 </div>
               ))}
