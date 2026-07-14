@@ -1471,7 +1471,7 @@ function LogisticsPage({ filters }) {
 
 
             {/* ── Zone-wise Performance ── */}
-            {byZone.length > 0 && <>
+            <>
               <LSectionTitle title="Zone-wise Performance" />
               <div style={tableCard}>
                 <div style={tableTitle}>Delivery Performance by Zone</div>
@@ -1504,10 +1504,10 @@ function LogisticsPage({ filters }) {
                   </table>
                 </div>
               </div>
-            </>}
+            </>
 
             {/* ── Channel-wise Performance ── */}
-            {byChannel.length > 0 && <>
+            <>
               <LSectionTitle title="Channel-wise Performance" />
               <div style={tableCard}>
                 <div style={tableTitle}>Delivery Performance by Sales Channel</div>
@@ -1542,7 +1542,7 @@ function LogisticsPage({ filters }) {
                   </table>
                 </div>
               </div>
-            </>}
+            </>
 
           </div>
         )
