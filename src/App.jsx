@@ -1506,43 +1506,6 @@ function LogisticsPage({ filters }) {
               </div>
             </>
 
-            {/* ── Channel-wise Performance ── */}
-            <>
-              <LSectionTitle title="Channel-wise Performance" />
-              <div style={tableCard}>
-                <div style={tableTitle}>Delivery Performance by Sales Channel</div>
-                <div style={{ overflowX: 'auto' }}>
-                  <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-                    <thead><tr>
-                      <th style={thL}>Channel</th>
-                      <th style={thStyle}>Total</th>
-                      <th style={thStyle}>Delivered</th>
-                      <th style={thStyle}>Del%</th>
-                      <th style={thStyle}>RTO</th>
-                      <th style={thStyle}>RTO%</th>
-                      <th style={thStyle}>Cancelled%</th>
-                      <th style={thStyle}>Avg Fulfillment</th>
-                      <th style={thStyle}>Avg GMV/Shipment</th>
-                    </tr></thead>
-                    <tbody>
-                      {byChannel.sort((a,b) => b.total - a.total).map((row, i) => (
-                        <tr key={row.channel} style={{ background: i % 2 === 0 ? 'transparent' : `${C.border}33` }}>
-                          <td style={{ ...tdL, fontWeight: 700 }}>{row.channel}</td>
-                          <td style={tdStyle}>{(row.total||0).toLocaleString('en-IN')}</td>
-                          <td style={tdStyle}>{(row.delivered||0).toLocaleString('en-IN')}</td>
-                          <td style={{ ...tdStyle, color: (row.delivered/row.total) >= 0.8 ? '#16a34a' : (row.delivered/row.total) >= 0.6 ? '#d97706' : '#dc2626', fontWeight: 700 }}>{pct1(row.delivered, row.total)}</td>
-                          <td style={tdStyle}>{(row.rto||0).toLocaleString('en-IN')}</td>
-                          <td style={{ ...tdStyle, color: (row.rto/row.total) <= 0.05 ? '#16a34a' : (row.rto/row.total) <= 0.1 ? '#d97706' : '#dc2626', fontWeight: 700 }}>{pct1(row.rto, row.total)}</td>
-                          <td style={{ ...tdStyle, color: '#d97706' }}>{pct1(row.cancelled, row.total)}</td>
-                          <td style={tdStyle}>{row.avg_fulfilment_days != null ? row.avg_fulfilment_days.toFixed(2)+'d' : '—'}</td>
-                          <td style={tdStyle}>{row.avg_gmv != null ? '₹'+Math.round(row.avg_gmv).toLocaleString('en-IN') : '—'}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            </>
 
           </div>
         )
