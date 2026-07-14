@@ -1436,6 +1436,63 @@ function LogisticsPage({ filters }) {
 
               return (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+
+                  {/* OFD Attempt Efficiency */}
+                  <LSectionTitle title="OFD Attempt Efficiency" />
+                  <div style={tableCard}>
+                    <div style={tableTitle}>Courier-wise Out-for-Delivery Attempt Analysis</div>
+                    <div style={{ overflowX: 'auto' }}>
+                      <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                        <thead>
+                          <tr>
+                            <th style={thL}>Courier</th>
+                            <th style={thStyle}>Total Delivered</th>
+                            <th style={thStyle}>Total OFD Attempts</th>
+                            <th style={thStyle}>Avg Attempts / Delivery</th>
+                            <th style={thStyle}>1st Attempt Del</th>
+                            <th style={thStyle}>1st Attempt %</th>
+                            <th style={thStyle}>2nd+ Attempt Del</th>
+                            <th style={thStyle}>2nd+ Attempt %</th>
+                            <th style={thStyle}>Zero Attempt RTO</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {byCourier.filter(r => r.total > 0).sort((a,b) => b.total - a.total).map((row, i) => {
+                            const logo = COURIER_LOGOS[row.courier_group]
+                            const color = COURIER_COLORS[row.courier_group] || C.t3
+                            const del = row.delivered || 0
+                            const d1 = row.d1 || 0
+                            const multi = row.rasr_num || 0
+                            const ofdTotal = row.ofd_total || 0
+                            const avgAttempts = del > 0 ? (ofdTotal / del).toFixed(2) : '—'
+                            const d1pct = del > 0 ? ((d1/del)*100).toFixed(1)+'%' : '—'
+                            const multipct = del > 0 ? ((multi/del)*100).toFixed(1)+'%' : '—'
+                            const d1Color = del > 0 ? (d1/del >= 0.85 ? '#16a34a' : d1/del >= 0.70 ? '#d97706' : '#dc2626') : C.t1
+                            const avgColor = avgAttempts !== '—' ? (parseFloat(avgAttempts) <= 1.2 ? '#16a34a' : parseFloat(avgAttempts) <= 1.5 ? '#d97706' : '#dc2626') : C.t1
+                            return (
+                              <tr key={row.courier_group} style={{ background: i % 2 === 0 ? 'transparent' : `${C.border}33` }}>
+                                <td style={tdL}>
+                                  <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
+                                    {logo ? <img src={logo} alt="" style={{ width: 22, height: 22, objectFit: 'contain', borderRadius: 3, flexShrink: 0, background: '#fff', border: `1px solid ${C.border}` }} onError={e => { e.currentTarget.style.display='none' }} /> : <span style={{ width: 22, height: 22, borderRadius: 3, background: color, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 9, fontWeight: 800, color: '#fff', flexShrink: 0 }}>{row.courier_group.charAt(0)}</span>}
+                                    {row.courier_group}
+                                  </div>
+                                </td>
+                                <td style={tdStyle}>{del.toLocaleString('en-IN')}</td>
+                                <td style={tdStyle}>{ofdTotal.toLocaleString('en-IN')}</td>
+                                <td style={{ ...tdStyle, color: avgColor, fontWeight: 700 }}>{avgAttempts}</td>
+                                <td style={tdStyle}>{d1.toLocaleString('en-IN')}</td>
+                                <td style={{ ...tdStyle, color: d1Color, fontWeight: 700 }}>{d1pct}</td>
+                                <td style={tdStyle}>{multi.toLocaleString('en-IN')}</td>
+                                <td style={{ ...tdStyle, color: multi/del > 0.15 ? '#dc2626' : C.t1 }}>{multipct}</td>
+                                <td style={{ ...tdStyle, color: (row.z_rto||0) > 0 ? '#7c3aed' : C.t1 }}>{(row.z_rto||0).toLocaleString('en-IN')}</td>
+                              </tr>
+                            )
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+
                   <LSectionTitle title="TAT Bucket Analysis" />
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
 
