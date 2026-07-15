@@ -1136,8 +1136,7 @@ function LogisticsPage({ filters }) {
                     </div>
 
                     {/* Table 2: Pickup → Delivery by Courier (scrollable, matches sibling height) */}
-                    {/* maxHeight = title(38) + header(29) + 7 data rows(29×7) + total(29) + card padding(32) = 331px */}
-                    <div style={{ ...tableCard2, alignSelf: 'start', display: 'flex', flexDirection: 'column', maxHeight: 331, overflow: 'hidden' }}>
+                    <div style={{ ...tableCard2, alignSelf: 'start', display: 'flex', flexDirection: 'column', maxHeight: 312, overflow: 'hidden' }}>
                       <div style={{ ...tableTitle2, flexShrink: 0 }}>Pickup → Delivery <span style={{ fontWeight: 400, color: C.t3 }}>(by Courier)</span></div>
                       <div style={{ flex: 1, overflowY: 'auto' }}>
                         <table style={{ width: '100%', borderCollapse: 'collapse' }}>
