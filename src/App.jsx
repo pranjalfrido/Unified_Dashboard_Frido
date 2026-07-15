@@ -1152,6 +1152,53 @@ function LogisticsPage({ filters }) {
         })()}
 
 
+        {/* ── Weight Based Analysis ── */}
+        <LSectionTitle title="Weight Based Analysis" collapsed={secCollapsed['weight']} onToggle={() => toggleSec('weight')} />
+        {(() => {
+          const wData = (data.byWeightSlab || []).filter(r => r.slab !== 'Unknown')
+          if (!wData.length) return null
+          const SLABS = ['0-500g','500g-1kg','1-2kg','2-5kg','5kg+']
+          const ordered = SLABS.map(s => wData.find(r => r.slab === s)).filter(Boolean)
+          return (
+            <div style={{ display: secCollapsed['weight'] ? 'none' : 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+              {/* Chart 1: Volume by slab */}
+              <div style={cardStyle}>
+                <div style={chartTitle}>Shipment Volume by Weight Slab</div>
+                <ResponsiveContainer width="100%" height={220}>
+                  <BarChart data={ordered} margin={{ top: 8, right: 10, left: -10, bottom: 0 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke={C.border} />
+                    <XAxis dataKey="slab" tick={{ fontSize: 10, fill: C.t2 }} />
+                    <YAxis tick={{ fontSize: 10, fill: C.t2 }} />
+                    <Tooltip contentStyle={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 6, fontSize: 11 }} />
+                    <Legend wrapperStyle={{ fontSize: 10 }} />
+                    <Bar dataKey="total" name="Total" fill="#60A5FA" radius={[3,3,0,0]} />
+                    <Bar dataKey="delivered" name="Delivered" fill="#4ADE80" radius={[3,3,0,0]} />
+                    <Bar dataKey="rto" name="RTO" fill={C.red.tx} radius={[3,3,0,0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+              {/* Chart 2: Delivery % and Avg TAT by slab */}
+              <div style={cardStyle}>
+                <div style={chartTitle}>Delivery % & Avg TAT by Weight Slab</div>
+                <ResponsiveContainer width="100%" height={220}>
+                  <ComposedChart data={ordered} margin={{ top: 8, right: 30, left: -10, bottom: 0 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke={C.border} />
+                    <XAxis dataKey="slab" tick={{ fontSize: 10, fill: C.t2 }} />
+                    <YAxis yAxisId="left" tick={{ fontSize: 10, fill: C.t2 }} unit="%" domain={[0,100]} />
+                    <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 10, fill: C.t2 }} unit="d" />
+                    <Tooltip contentStyle={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 6, fontSize: 11 }} formatter={(v, n) => n === 'Avg TAT' ? [`${v}d`, n] : [`${v}%`, n]} />
+                    <Legend wrapperStyle={{ fontSize: 10 }} />
+                    <Bar yAxisId="left" dataKey="del_pct" name="Del %" fill="#4ADE80" radius={[3,3,0,0]} />
+                    <Bar yAxisId="left" dataKey="rto_pct" name="RTO %" fill={C.red.tx} radius={[3,3,0,0]} />
+                    <Line yAxisId="right" type="monotone" dataKey="avg_tat" name="Avg TAT" stroke="#60A5FA" strokeWidth={2} dot={{ r: 3 }} />
+                  </ComposedChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+          )
+        })()}
+
+
         {/* ── Geographic ── */}
         <LSectionTitle title="Geographic" collapsed={secCollapsed['geo']} onToggle={() => toggleSec('geo')} />
         {(() => {

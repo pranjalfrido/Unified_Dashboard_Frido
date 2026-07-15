@@ -109,7 +109,8 @@ WITH base AS (
     c.latest_remark,
     c.channel_name,
     im.CategoryName AS category,
-    im.Sub_category AS sub_category
+    im.Sub_category AS sub_category,
+    SAFE_CAST(REGEXP_REPLACE(TRIM(c.shipment_weight), r'[^0-9.]', '') AS FLOAT64) AS weight_g
   FROM \`frido-429506.production.Clickpost_Shipment_Tracking_Report\` c
   LEFT JOIN \`frido-429506.production.Unicommerce_Item_Master\` im
     ON TRIM(c.product_sku_code) = TRIM(im.ProductCode)
@@ -489,6 +490,34 @@ by_channel AS (
   LEFT JOIN base b ON b.channel_name = ac.channel
   GROUP BY 1
 ),
+by_weight_slab AS (
+  SELECT
+    CASE
+      WHEN weight_g IS NULL THEN 'Unknown'
+      WHEN weight_g <= 500 THEN '0-500g'
+      WHEN weight_g <= 1000 THEN '500g-1kg'
+      WHEN weight_g <= 2000 THEN '1-2kg'
+      WHEN weight_g <= 5000 THEN '2-5kg'
+      ELSE '5kg+'
+    END AS slab,
+    CASE
+      WHEN weight_g IS NULL THEN 0
+      WHEN weight_g <= 500 THEN 1
+      WHEN weight_g <= 1000 THEN 2
+      WHEN weight_g <= 2000 THEN 3
+      WHEN weight_g <= 5000 THEN 4
+      ELSE 5
+    END AS slab_order,
+    COUNT(awb) AS total,
+    COUNTIF(unified_status='Delivered') AS delivered,
+    COUNTIF(unified_status='RTO') AS rto,
+    COUNTIF(unified_status='Intransit') AS in_transit,
+    ROUND(SAFE_DIVIDE(COUNTIF(unified_status='Delivered') * 100.0, COUNT(awb)), 1) AS del_pct,
+    ROUND(SAFE_DIVIDE(COUNTIF(unified_status='RTO') * 100.0, COUNT(awb)), 1) AS rto_pct,
+    ROUND(AVG(IF(pickup_ts IS NOT NULL AND delivery_ts IS NOT NULL AND TIMESTAMP_DIFF(delivery_ts, pickup_ts, MINUTE) BETWEEN 0 AND 28800, TIMESTAMP_DIFF(delivery_ts, pickup_ts, MINUTE) / 1440.0, NULL)), 2) AS avg_tat
+  FROM base
+  GROUP BY 1, 2
+),
 filter_opts AS (
   SELECT
     ARRAY_AGG(DISTINCT courier_partner IGNORE NULLS ORDER BY courier_partner) AS couriers,
@@ -527,6 +556,7 @@ SELECT
   TO_JSON_STRING(ARRAY(SELECT AS STRUCT * FROM tat_by_courier ORDER BY total DESC)) AS tat_by_courier,
   TO_JSON_STRING(ARRAY(SELECT AS STRUCT * FROM tat_by_month ORDER BY month_dt)) AS tat_by_month,
   TO_JSON_STRING(ARRAY(SELECT AS STRUCT * FROM tat_by_facility ORDER BY total DESC)) AS tat_by_facility,
+  TO_JSON_STRING(ARRAY(SELECT AS STRUCT * FROM by_weight_slab ORDER BY slab_order)) AS by_weight_slab,
   TO_JSON_STRING((SELECT AS STRUCT * FROM filter_opts)) AS filter_opts
 `
 
@@ -562,6 +592,7 @@ SELECT
       tatByCourier: JSON.parse(r.tat_by_courier),
       tatByMonth: JSON.parse(r.tat_by_month),
       tatByFacility: JSON.parse(r.tat_by_facility),
+      byWeightSlab: JSON.parse(r.by_weight_slab),
       filterOpts: JSON.parse(r.filter_opts),
     })
   } catch (e) {
