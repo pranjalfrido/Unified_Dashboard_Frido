@@ -1164,21 +1164,17 @@ function LogisticsPage({ filters }) {
                                 </tr>
                               )
                             })}
+                            <tr style={{ background: `${C.border}55`, borderTop: `2px solid ${C.border2}` }}>
+                              <td style={totalRowL}>Total</td>
+                              <td style={totalRowS}>{courierTotals.delivered.toLocaleString('en-IN')}</td>
+                              <td style={totalRowS}>{pctB(courierTotals.bucket_0_1, courierTotals.delivered)}</td>
+                              <td style={totalRowS}>{pctB(courierTotals.bucket_2_3, courierTotals.delivered)}</td>
+                              <td style={totalRowS}>{pctB(courierTotals.bucket_4_5, courierTotals.delivered)}</td>
+                              <td style={totalRowS}>{pctB(courierTotals.bucket_5plus, courierTotals.delivered)}</td>
+                            </tr>
                           </tbody>
                         </table>
                       </div>
-                      <table style={{ width: '100%', borderCollapse: 'collapse', flexShrink: 0, borderTop: `2px solid ${C.border2}` }}>
-                        <tbody>
-                          <tr style={{ background: `${C.border}55` }}>
-                            <td style={totalRowL}>Total</td>
-                            <td style={totalRowS}>{courierTotals.delivered.toLocaleString('en-IN')}</td>
-                            <td style={totalRowS}>{pctB(courierTotals.bucket_0_1, courierTotals.delivered)}</td>
-                            <td style={totalRowS}>{pctB(courierTotals.bucket_2_3, courierTotals.delivered)}</td>
-                            <td style={totalRowS}>{pctB(courierTotals.bucket_4_5, courierTotals.delivered)}</td>
-                            <td style={totalRowS}>{pctB(courierTotals.bucket_5plus, courierTotals.delivered)}</td>
-                          </tr>
-                        </tbody>
-                      </table>
                     </div>
 
                     {/* Table 3: Processing → Pickup by Facility */}
