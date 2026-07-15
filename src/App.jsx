@@ -3891,6 +3891,13 @@ function ShopifyTab({ data, filters, setFilters }) {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+      {/* Return Analysis Button */}
+      <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+        <button style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '7px 16px', borderRadius: 8, border: `1.5px solid #6366f1`, background: '#EEF2FF', color: '#4F46E5', fontSize: 12, fontWeight: 700, cursor: 'pointer', fontFamily: 'var(--font)', transition: 'all .15s' }}
+          onClick={() => alert('Return Analysis — Coming Soon!')}>
+          ↩ View Return Analysis
+        </button>
+      </div>
       {/* India / International toggle + sub-channel dropdown + tiles on right */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
         {/* Left: region toggles + sub-channel dropdown */}
@@ -4390,6 +4397,13 @@ function AmazonTab({ data, region = 'india', setRegion = () => {} }) {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+      {/* Return Analysis Button */}
+      <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+        <button style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '7px 16px', borderRadius: 8, border: `1.5px solid #6366f1`, background: '#EEF2FF', color: '#4F46E5', fontSize: 12, fontWeight: 700, cursor: 'pointer', fontFamily: 'var(--font)', transition: 'all .15s' }}
+          onClick={() => alert('Return Analysis — Coming Soon!')}>
+          ↩ View Return Analysis
+        </button>
+      </div>
       {/* Region + sub-view in one row */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
         {/* Pill toggle: India / International */}
