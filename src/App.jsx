@@ -1143,7 +1143,7 @@ function LogisticsPage({ filters }) {
                           <thead style={{ position: 'sticky', top: 0, zIndex: 2, background: C.card }}>
                             <tr>
                               <th style={thL}>Courier</th>
-                              <th style={thS}>Total Del</th>
+                              <th style={thS}>Del</th>
                               <th style={thS}>0-1d</th>
                               <th style={thS}>2-3d</th>
                               <th style={thS}>4-5d</th>
