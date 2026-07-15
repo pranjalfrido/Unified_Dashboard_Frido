@@ -1161,7 +1161,7 @@ function LogisticsPage({ filters }) {
           const ordered = SLABS.map(s => wData.find(r => r.slab === s)).filter(Boolean)
           return (
             <div style={{ display: secCollapsed['weight'] ? 'none' : 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
-              {/* Chart 1: Volume by slab */}
+              {/* Chart 1: Volume by slab with % in tooltip */}
               <div style={cardStyle}>
                 <div style={chartTitle}>Shipment Volume by Weight Slab</div>
                 <ResponsiveContainer width="100%" height={220}>
@@ -1169,7 +1169,21 @@ function LogisticsPage({ filters }) {
                     <CartesianGrid strokeDasharray="3 3" stroke={C.border} />
                     <XAxis dataKey="slab" tick={{ fontSize: 10, fill: C.t2 }} />
                     <YAxis tick={{ fontSize: 10, fill: C.t2 }} />
-                    <Tooltip contentStyle={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 6, fontSize: 11 }} />
+                    <Tooltip content={({ active, payload, label }) => {
+                      if (!active || !payload?.length) return null
+                      const row = ordered.find(r => r.slab === label) || {}
+                      const tot = row.total || 0
+                      const delPct = tot ? ((row.delivered||0) / tot * 100).toFixed(1) : '—'
+                      const rtoPct = tot ? ((row.rto||0) / tot * 100).toFixed(1) : '—'
+                      return (
+                        <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 8, padding: '10px 14px', fontSize: 11, color: C.t1 }}>
+                          <div style={{ fontWeight: 700, marginBottom: 6 }}>{label}</div>
+                          <div style={{ color: '#4ADE80' }}>Delivered : <strong>{(row.delivered||0).toLocaleString('en-IN')}</strong> <span style={{ color: C.t3 }}>({delPct}%)</span></div>
+                          <div style={{ color: C.red.tx }}>RTO : <strong>{(row.rto||0).toLocaleString('en-IN')}</strong> <span style={{ color: C.t3 }}>({rtoPct}%)</span></div>
+                          <div style={{ color: '#60A5FA', marginTop: 4 }}>Total : <strong>{tot.toLocaleString('en-IN')}</strong></div>
+                        </div>
+                      )
+                    }} />
                     <Legend wrapperStyle={{ fontSize: 10 }} />
                     <Bar dataKey="total" name="Total" fill="#60A5FA" radius={[3,3,0,0]} />
                     <Bar dataKey="delivered" name="Delivered" fill="#4ADE80" radius={[3,3,0,0]} />
@@ -1177,14 +1191,14 @@ function LogisticsPage({ filters }) {
                   </BarChart>
                 </ResponsiveContainer>
               </div>
-              {/* Chart 2: Delivery % and Avg TAT by slab */}
+              {/* Chart 2: RTO Rate % + Avg TAT dual line */}
               <div style={cardStyle}>
-                <div style={chartTitle}>Delivery % & Avg TAT by Weight Slab</div>
+                <div style={chartTitle}>RTO Rate % & Avg TAT by Weight Slab</div>
                 <ResponsiveContainer width="100%" height={220}>
                   <ComposedChart data={ordered} margin={{ top: 8, right: 30, left: -10, bottom: 0 }}>
                     <CartesianGrid strokeDasharray="3 3" stroke={C.border} />
                     <XAxis dataKey="slab" tick={{ fontSize: 10, fill: C.t2 }} />
-                    <YAxis yAxisId="left" tick={{ fontSize: 10, fill: C.t2 }} unit="%" domain={[0,100]} />
+                    <YAxis yAxisId="left" tick={{ fontSize: 10, fill: C.t2 }} unit="%" />
                     <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 10, fill: C.t2 }} unit="d" />
                     <Tooltip content={({ active, payload, label }) => {
                       if (!active || !payload?.length) return null
@@ -1192,7 +1206,7 @@ function LogisticsPage({ filters }) {
                       return (
                         <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 8, padding: '10px 14px', fontSize: 11, color: C.t1 }}>
                           <div style={{ fontWeight: 700, marginBottom: 6 }}>{label}</div>
-                          <div style={{ color: C.t2 }}>Total : <strong>{(row.total||0).toLocaleString('en-IN')}</strong></div>
+                          <div style={{ color: C.t2, marginBottom: 4 }}>Total : <strong>{(row.total||0).toLocaleString('en-IN')}</strong></div>
                           {payload.map(p => (
                             <div key={p.dataKey} style={{ color: p.color }}>
                               {p.name} : <strong>{p.dataKey === 'avg_tat' ? `${p.value}d` : `${p.value}%`}</strong>
@@ -1202,8 +1216,7 @@ function LogisticsPage({ filters }) {
                       )
                     }} />
                     <Legend wrapperStyle={{ fontSize: 10 }} />
-                    <Bar yAxisId="left" dataKey="del_pct" name="Del %" fill="#4ADE80" radius={[3,3,0,0]} />
-                    <Bar yAxisId="left" dataKey="rto_pct" name="RTO %" fill={C.red.tx} radius={[3,3,0,0]} />
+                    <Line yAxisId="left" type="monotone" dataKey="rto_pct" name="RTO Rate %" stroke={C.red.tx} strokeWidth={2} dot={{ r: 3 }} />
                     <Line yAxisId="right" type="monotone" dataKey="avg_tat" name="Avg TAT" stroke="#60A5FA" strokeWidth={2} dot={{ r: 3 }} />
                   </ComposedChart>
                 </ResponsiveContainer>
