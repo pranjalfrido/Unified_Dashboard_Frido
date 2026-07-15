@@ -42,8 +42,8 @@ export default async function handler(req, res) {
   if (pickupState) filters.push(`LOWER(c.pickup_state) = LOWER('${pickupState.replace(/'/g, "\\'")}')`  )
   if (dropState) filters.push(`LOWER(c.drop_state) = LOWER('${dropState.replace(/'/g, "\\'")}')`)
   if (dropCity) filters.push(`LOWER(c.drop_city) = LOWER('${dropCity.replace(/'/g, "\\'")}')`)
-  if (category?.length) filters.push(`im.CategoryName IN (${category.map(v => `'${v.replace(/'/g, "\\'")}'`).join(',')})`)
-  if (subCategory?.length) filters.push(`im.Sub_category IN (${subCategory.map(v => `'${v.replace(/'/g, "\\'")}'`).join(',')})`)
+  if (category?.length) filters.push(`COALESCE(im.Category_Name, 'Others') IN (${category.map(v => `'${v.replace(/'/g, "\\'")}'`).join(',')})`)
+  if (subCategory?.length) filters.push(`COALESCE(im.Sub_category, 'Mixed Shipments') IN (${subCategory.map(v => `'${v.replace(/'/g, "\\'")}'`).join(',')})`)
 
   const whereClause = filters.length ? `AND ${filters.join(' AND ')}` : ''
 
@@ -108,12 +108,14 @@ WITH base AS (
     c.reason_for_last_failed_delivery,
     c.latest_remark,
     c.channel_name,
-    im.CategoryName AS category,
-    im.Sub_category AS sub_category,
+    COALESCE(im.Category_Name, 'Others') AS category,
+    COALESCE(im.Sub_category, 'Mixed Shipments') AS sub_category,
     SAFE_CAST(REGEXP_REPLACE(TRIM(c.shipment_weight), r'[^0-9.]', '') AS FLOAT64) AS weight_g
   FROM \`frido-429506.production.Clickpost_Shipment_Tracking_Report\` c
-  LEFT JOIN \`frido-429506.production.Unicommerce_Item_Master\` im
-    ON TRIM(c.product_sku_code) = TRIM(im.ProductCode)
+  LEFT JOIN \`frido-429506.sharepoint_to_gcp.Frido_Item_Master__productid_sku_mapping\` skm
+    ON TRIM(c.product_sku_code) = TRIM(skm.productid)
+  LEFT JOIN \`frido-429506.sharepoint_to_gcp.Frido_Item_Master__frido_item_sku_master\` im
+    ON TRIM(skm.masterskucode) = TRIM(im.Product_Code)
   WHERE SUBSTR(c.created_at, 1, 10) BETWEEN '${start}' AND '${end}'
   ${whereClause}
 ),
