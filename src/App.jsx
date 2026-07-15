@@ -1297,7 +1297,7 @@ function LogisticsPage({ filters }) {
                   <ComposedChart data={ordered} margin={{ top: 4, right: 10, left: -10, bottom: 0 }}>
                     <CartesianGrid strokeDasharray="3 3" stroke={C.border} vertical={false} />
                     <XAxis dataKey="slab" tick={{ fontSize: 10, fill: C.t2 }} />
-                    <YAxis tick={{ fontSize: 10, fill: C.t2 }} unit="%" domain={[0, 100]} />
+                    <YAxis tick={{ fontSize: 10, fill: C.t2 }} unit="%" domain={[0, 'dataMax + 10']} />
                     <Tooltip content={({ active, payload, label }) => {
                       if (!active || !payload?.length) return null
                       const row = ordered.find(r => r.slab === label) || {}
