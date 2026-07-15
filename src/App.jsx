@@ -1316,15 +1316,6 @@ function LogisticsPage({ filters }) {
                     <Bar dataKey="rto_pct" name="RTO %" fill={C.red.tx} radius={[3,3,0,0]} barSize={14} />
                   </ComposedChart>
                 </ResponsiveContainer>
-                {/* Intrasit TAT legend row */}
-                <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap', marginTop: 6 }}>
-                  {ordered.map(r => (
-                    <div key={r.slab} style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 12, color: C.t2 }}>
-                      <div style={{ width: 8, height: 8, borderRadius: '50%', background: r.color }} />
-                      {r.slab}: <strong style={{ color: C.t1 }}>{r.avg_tat??'—'}d</strong>
-                    </div>
-                  ))}
-                </div>
               </div>
             </div>
           )
