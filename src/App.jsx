@@ -2852,7 +2852,7 @@ function FinancialCategoryMatrix({ catData, subCatData, skuData, title, showRetu
     return <span style={{ fontSize: 10, fontWeight: 700, color: positive ? '#0D9E68' : '#B91C1C' }}>{positive ? '↗' : '↘'} {Math.abs(p).toFixed(1)}%</span>
   }
   const returnsRevCell = (rtoRev, cirRev, exchRev, gross, returnRev) => {
-    const total = (returnRev || 0) + (rtoRev || 0) + (cirRev || 0) + (exchRev || 0)
+    const total = (returnRev || 0) + (rtoRev || 0) + (cirRev || 0)
     if (total <= 0) return <span style={{ color: C.t3 }}>—</span>
     const pct = gross > 0 ? (total / gross * 100).toFixed(1) : null
     return <>{fmt(total)}{pct !== null && <span style={{ fontSize: 8, color: C.t3, marginLeft: 2 }}>({pct}%)</span>}</>
