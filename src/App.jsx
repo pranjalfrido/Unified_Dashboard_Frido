@@ -1097,11 +1097,11 @@ function LogisticsPage({ filters }) {
                   <div style={{ display: secCollapsed['tatbucket'] ? 'none' : 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 14 }}>
 
                     {/* Table 1: Order → Pickup by Facility */}
-                    <div style={{ ...tableCard2, display: 'flex', flexDirection: 'column', height: BOX_H }}>
-                      <div style={{ ...tableTitle2, flexShrink: 0 }}>Order → Pickup <span style={{ fontWeight: 400, color: C.t3 }}>(by Facility)</span></div>
-                      <div style={{ flex: 1, overflowY: 'auto', overflowX: 'auto' }}>
+                    <div style={tableCard2}>
+                      <div style={tableTitle2}>Order → Pickup <span style={{ fontWeight: 400, color: C.t3 }}>(by Facility)</span></div>
+                      <div style={{ overflowX: 'auto' }}>
                         <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-                          <thead style={{ position: 'sticky', top: 0, zIndex: 2, background: C.card }}>
+                          <thead>
                             <tr>
                               <th style={thL}>Facility</th>
                               <th style={thS}>0-12h</th>
@@ -1123,8 +1123,6 @@ function LogisticsPage({ filters }) {
                                 </tr>
                               )
                             })}
-                          </tbody>
-                          <tfoot style={{ position: 'sticky', bottom: 0, zIndex: 2 }}>
                             {(() => { const t=(facTotals.proc_0_12h+facTotals.proc_12_24h+facTotals.proc_24_48h+facTotals.proc_48plus); return (
                               <tr style={{ background: `${C.border}55`, borderTop: `2px solid ${C.border2}` }}>
                                 <td style={totalRowL}>Total</td>
@@ -1134,12 +1132,12 @@ function LogisticsPage({ filters }) {
                                 <td style={totalRowS}>{pctB(facTotals.proc_48plus,t)}</td>
                               </tr>
                             ) })()}
-                          </tfoot>
+                          </tbody>
                         </table>
                       </div>
                     </div>
 
-                    {/* Table 2: Pickup → Delivery by Courier (scrollable) */}
+                    {/* Table 2: Pickup → Delivery by Courier (scrollable, fixed height) */}
                     <div style={{ ...tableCard2, display: 'flex', flexDirection: 'column', height: BOX_H }}>
                       <div style={{ ...tableTitle2, flexShrink: 0 }}>Pickup → Delivery <span style={{ fontWeight: 400, color: C.t3 }}>(by Courier)</span></div>
                       <div style={{ flex: 1, overflowY: 'auto', overflowX: 'auto' }}>
@@ -1176,26 +1174,29 @@ function LogisticsPage({ filters }) {
                               )
                             })}
                           </tbody>
-                          <tfoot style={{ position: 'sticky', bottom: 0, zIndex: 2 }}>
-                            <tr style={{ background: `${C.border}55`, borderTop: `2px solid ${C.border2}` }}>
-                              <td style={totalRowL}>Total</td>
-                              <td style={totalRowS}>{courierTotals.delivered.toLocaleString('en-IN')}</td>
-                              <td style={totalRowS}>{pctB(courierTotals.bucket_0_1, courierTotals.delivered)}</td>
-                              <td style={totalRowS}>{pctB(courierTotals.bucket_2_3, courierTotals.delivered)}</td>
-                              <td style={totalRowS}>{pctB(courierTotals.bucket_4_5, courierTotals.delivered)}</td>
-                              <td style={totalRowS}>{pctB(courierTotals.bucket_5plus, courierTotals.delivered)}</td>
-                            </tr>
-                          </tfoot>
                         </table>
                       </div>
+                      {/* total pinned outside scroll area */}
+                      <table style={{ width: '100%', borderCollapse: 'collapse', flexShrink: 0, borderTop: `2px solid ${C.border2}` }}>
+                        <tbody>
+                          <tr style={{ background: `${C.border}55` }}>
+                            <td style={{ ...totalRowL, width: '34%' }}>Total</td>
+                            <td style={totalRowS}>{courierTotals.delivered.toLocaleString('en-IN')}</td>
+                            <td style={totalRowS}>{pctB(courierTotals.bucket_0_1, courierTotals.delivered)}</td>
+                            <td style={totalRowS}>{pctB(courierTotals.bucket_2_3, courierTotals.delivered)}</td>
+                            <td style={totalRowS}>{pctB(courierTotals.bucket_4_5, courierTotals.delivered)}</td>
+                            <td style={totalRowS}>{pctB(courierTotals.bucket_5plus, courierTotals.delivered)}</td>
+                          </tr>
+                        </tbody>
+                      </table>
                     </div>
 
                     {/* Table 3: Processing → Pickup by Facility */}
-                    <div style={{ ...tableCard2, display: 'flex', flexDirection: 'column', height: BOX_H }}>
-                      <div style={{ ...tableTitle2, flexShrink: 0 }}>Processing → Pickup <span style={{ fontWeight: 400, color: C.t3 }}>(by Facility)</span></div>
-                      <div style={{ flex: 1, overflowY: 'auto', overflowX: 'auto' }}>
+                    <div style={tableCard2}>
+                      <div style={tableTitle2}>Processing → Pickup <span style={{ fontWeight: 400, color: C.t3 }}>(by Facility)</span></div>
+                      <div style={{ overflowX: 'auto' }}>
                         <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-                          <thead style={{ position: 'sticky', top: 0, zIndex: 2, background: C.card }}>
+                          <thead>
                             <tr>
                               <th style={thL}>Facility</th>
                               <th style={thS}>0-1d</th>
@@ -1217,8 +1218,6 @@ function LogisticsPage({ filters }) {
                                 </tr>
                               )
                             })}
-                          </tbody>
-                          <tfoot style={{ position: 'sticky', bottom: 0, zIndex: 2 }}>
                             {(() => { const t=(facTotals.ord_0_1+facTotals.ord_2_3+facTotals.ord_4_5+facTotals.ord_5plus); return (
                               <tr style={{ background: `${C.border}55`, borderTop: `2px solid ${C.border2}` }}>
                                 <td style={totalRowL}>Total</td>
@@ -1228,7 +1227,7 @@ function LogisticsPage({ filters }) {
                                 <td style={totalRowS}>{pctB(facTotals.ord_5plus,t)}</td>
                               </tr>
                             ) })()}
-                          </tfoot>
+                          </tbody>
                         </table>
                       </div>
                     </div>
