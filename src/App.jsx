@@ -2855,12 +2855,12 @@ function FinancialCategoryMatrix({ catData, subCatData, skuData, title, showRetu
     const total = (returnRev || 0) + (rtoRev || 0) + (cirRev || 0)
     if (total <= 0) return <span style={{ color: C.t3 }}>—</span>
     const pct = gross > 0 ? (total / gross * 100).toFixed(1) : null
-    return <>{fmt(total)}{pct !== null && <span style={{ fontSize: 8, color: C.t3, marginLeft: 2 }}>({pct}%)</span>}</>
+    return pct !== null ? <>{pct}%</> : <span style={{ color: C.t3 }}>—</span>
   }
   const revPctCell = (val, gross) => {
     if (!val || val <= 0) return <span style={{ color: C.t3 }}>—</span>
     const pct = gross > 0 ? (val / gross * 100).toFixed(1) : null
-    return <>{fmt(val)}{pct !== null && <span style={{ fontSize: 8, color: C.t3, marginLeft: 2 }}>({pct}%)</span>}</>
+    return pct !== null ? <>{pct}%</> : <span style={{ color: C.t3 }}>—</span>
   }
 
   return (
