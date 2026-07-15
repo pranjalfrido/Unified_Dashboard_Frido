@@ -1186,7 +1186,21 @@ function LogisticsPage({ filters }) {
                     <XAxis dataKey="slab" tick={{ fontSize: 10, fill: C.t2 }} />
                     <YAxis yAxisId="left" tick={{ fontSize: 10, fill: C.t2 }} unit="%" domain={[0,100]} />
                     <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 10, fill: C.t2 }} unit="d" />
-                    <Tooltip contentStyle={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 6, fontSize: 11 }} formatter={(v, n) => n === 'Avg TAT' ? [`${v}d`, n] : [`${v}%`, n]} />
+                    <Tooltip content={({ active, payload, label }) => {
+                      if (!active || !payload?.length) return null
+                      const row = ordered.find(r => r.slab === label) || {}
+                      return (
+                        <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 8, padding: '10px 14px', fontSize: 11, color: C.t1 }}>
+                          <div style={{ fontWeight: 700, marginBottom: 6 }}>{label}</div>
+                          <div style={{ color: C.t2 }}>Total : <strong>{(row.total||0).toLocaleString('en-IN')}</strong></div>
+                          {payload.map(p => (
+                            <div key={p.dataKey} style={{ color: p.color }}>
+                              {p.name} : <strong>{p.dataKey === 'avg_tat' ? `${p.value}d` : `${p.value}%`}</strong>
+                            </div>
+                          ))}
+                        </div>
+                      )
+                    }} />
                     <Legend wrapperStyle={{ fontSize: 10 }} />
                     <Bar yAxisId="left" dataKey="del_pct" name="Del %" fill="#4ADE80" radius={[3,3,0,0]} />
                     <Bar yAxisId="left" dataKey="rto_pct" name="RTO %" fill={C.red.tx} radius={[3,3,0,0]} />
