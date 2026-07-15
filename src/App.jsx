@@ -167,6 +167,7 @@ function LogisticsPage({ filters }) {
   const [lopsTab, setLopsTab] = useState('overview') // kept for compat but toggle removed
   const [tatCourierView, setTatCourierView] = useState('courier') // 'courier' | 'month'
   const [secCollapsed, setSecCollapsed] = useState({})
+  const [wMetric, setWMetric] = useState('qty')
   const toggleSec = key => setSecCollapsed(p => ({ ...p, [key]: !p[key] }))
   const [lFilters, setLFilters] = useState({ couriers: [], shipmentType: 'forward', sddNdd: 'all', paymentMode: null, zone: null, pickupState: null, dropState: null, dropCity: null, category: null, subCategory: null })
   const [trendGranularity, setTrendGranularity] = useState('Daily')
@@ -1261,7 +1262,6 @@ function LogisticsPage({ filters }) {
           const ordered = SLABS.map((s,i) => { const r = wData.find(x => x.slab === s); return r ? { ...r, color: SLAB_COLORS[i] } : null }).filter(Boolean)
           const grandTotal = ordered.reduce((s,r) => s + (r.total||0), 0) || 1
           const grandValue = ordered.reduce((s,r) => s + (r.total_value||0), 0) || 1
-          const [wMetric, setWMetric] = useState('qty')
           const donutData = ordered.map(r => ({
             name: r.slab,
             value: wMetric === 'qty' ? (r.total||0) : (r.total_value||0),
