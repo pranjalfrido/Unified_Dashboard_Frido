@@ -1068,103 +1068,179 @@ function LogisticsPage({ filters }) {
             {/* TAT Bucket Analysis */}
             {(() => {
               const tatByCourier = data.tatByCourier || []
-              const tatByMonth = data.tatByMonth || []
-              const tatByFacility = data.tatByFacility || []
-              const bucketCols = ['0-1d','2-3d','4-5d','5+d']
+              const tatByFacility = (data.tatByFacility || []).filter(r => r.facility)
               const pctB = (v, total) => total ? ((v/total)*100).toFixed(1)+'%' : '—'
+
+              // totals rows
+              const facTotals = tatByFacility.reduce((acc, r) => {
+                acc.total += r.total||0; acc.proc_0_12h += r.proc_0_12h||0; acc.proc_12_24h += r.proc_12_24h||0; acc.proc_24_48h += r.proc_24_48h||0; acc.proc_48plus += r.proc_48plus||0
+                acc.ord_0_1 += r.ord_0_1||0; acc.ord_2_3 += r.ord_2_3||0; acc.ord_4_5 += r.ord_4_5||0; acc.ord_5plus += r.ord_5plus||0
+                return acc
+              }, { total:0, proc_0_12h:0, proc_12_24h:0, proc_24_48h:0, proc_48plus:0, ord_0_1:0, ord_2_3:0, ord_4_5:0, ord_5plus:0 })
+              const courierTotals = tatByCourier.reduce((acc, r) => {
+                acc.total += r.total||0; acc.delivered += r.delivered||0; acc.bucket_0_1 += r.bucket_0_1||0; acc.bucket_2_3 += r.bucket_2_3||0; acc.bucket_4_5 += r.bucket_4_5||0; acc.bucket_5plus += r.bucket_5plus||0
+                return acc
+              }, { total:0, delivered:0, bucket_0_1:0, bucket_2_3:0, bucket_4_5:0, bucket_5plus:0 })
+
+              const BOX_H = 320
+              const thS = { fontSize: 10, fontWeight: 700, color: C.t3, textTransform: 'uppercase', letterSpacing: '.04em', padding: '6px 8px', borderBottom: `1px solid ${C.border}`, whiteSpace: 'nowrap', textAlign: 'right', background: C.card }
+              const thL = { ...thS, textAlign: 'left' }
+              const tdS = { fontSize: 11, color: C.t1, padding: '5px 8px', borderBottom: `1px solid ${C.border}`, textAlign: 'right', whiteSpace: 'nowrap' }
+              const tdL = { ...tdS, textAlign: 'left', fontWeight: 600 }
+              const totalRowS = { fontSize: 11, fontWeight: 700, color: C.t1, padding: '5px 8px', textAlign: 'right', whiteSpace: 'nowrap', background: `${C.border}55` }
+              const totalRowL = { ...totalRowS, textAlign: 'left' }
+
               return (
                 <>
                   <LSectionTitle title="TAT Bucket Analysis" collapsed={secCollapsed['tatbucket']} onToggle={() => toggleSec('tatbucket')} />
-                  <div style={{ display: secCollapsed['tatbucket'] ? 'none' : 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
-                    {(() => {
-                      const view = tatCourierView
-                      const rows = view === 'courier' ? tatByCourier : [...tatByMonth].sort((a,b) => (b.month_dt||'').localeCompare(a.month_dt||''))
-                      const rowKey = view === 'courier' ? 'courier_group' : 'month_label'
-                      return (
-                        <div style={tableCard2}>
-                          <div style={{ ...tableTitle2, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                            <span>Pickup → Delivery TAT</span>
-                            <div style={{ display: 'inline-flex', border: `1px solid ${C.border2}`, borderRadius: 6, overflow: 'hidden' }}>
-                              {[['courier','Courier'],['month','Month']].map(([id, lbl], i) => (
-                                <button key={id} onClick={() => setTatCourierView(id)} style={{ padding: '3px 10px', border: 'none', borderLeft: i > 0 ? `1px solid ${C.border2}` : 'none', background: view === id ? C.t1 : 'transparent', color: view === id ? '#fff' : C.t2, fontSize: 10.5, fontWeight: view === id ? 700 : 500, cursor: 'pointer', fontFamily: 'var(--font)' }}>{lbl}</button>
-                              ))}
-                            </div>
-                          </div>
-                          <div style={{ overflowX: 'auto' }}>
-                            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-                              <thead>
-                                <tr>
-                                  <th style={thL2}>{view === 'courier' ? 'Courier' : 'Month'}</th>
-                                  <th style={thStyle2}>Total Del</th>
-                                  {bucketCols.map(b => <th key={b} style={thStyle2}>{b}</th>)}
-                                </tr>
-                              </thead>
-                              <tbody>
-                                {rows.map((row, i) => {
-                                  const tot = row.delivered || 0
-                                  const logo = view === 'courier' ? COURIER_LOGOS[row.courier_group] : null
-                                  const color = view === 'courier' ? (COURIER_COLORS[row.courier_group] || C.t3) : null
-                                  return (
-                                    <tr key={row[rowKey]} style={{ background: i % 2 === 0 ? 'transparent' : `${C.border}33` }}>
-                                      <td style={tdL2}>
-                                        {view === 'courier' ? (
-                                          <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
-                                            {logo ? <img src={logo} alt="" style={{ width: 22, height: 22, objectFit: 'contain', borderRadius: 3, flexShrink: 0, background: '#fff', border: `1px solid ${C.border}` }} onError={e => { e.currentTarget.style.display='none' }} /> : <span style={{ width: 22, height: 22, borderRadius: 3, background: color, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 9, fontWeight: 800, color: '#fff', flexShrink: 0 }}>{row.courier_group?.charAt(0)}</span>}
-                                            {row[rowKey]}
-                                          </div>
-                                        ) : row[rowKey]}
-                                      </td>
-                                      <td style={tdStyle2}>{tot.toLocaleString('en-IN')}</td>
-                                      <td style={tdStyle2}>{pctB(row.bucket_0_1, tot)}</td>
-                                      <td style={tdStyle2}>{pctB(row.bucket_2_3, tot)}</td>
-                                      <td style={tdStyle2}>{pctB(row.bucket_4_5, tot)}</td>
-                                      <td style={{ ...tdStyle2, color: (row.bucket_5plus/tot) > 0.2 ? '#dc2626' : C.t1, fontWeight: (row.bucket_5plus/tot) > 0.2 ? 700 : 400 }}>{pctB(row.bucket_5plus, tot)}</td>
-                                    </tr>
-                                  )
-                                })}
-                              </tbody>
-                            </table>
-                          </div>
-                        </div>
-                      )
-                    })()}
-                    <div style={tableCard2}>
-                      <div style={tableTitle2}>WH Facility — Processing & Fulfillment TAT</div>
-                      <div style={{ overflowX: 'auto' }}>
+                  <div style={{ display: secCollapsed['tatbucket'] ? 'none' : 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 14 }}>
+
+                    {/* Table 1: Order → Pickup by Facility */}
+                    <div style={{ ...tableCard2, display: 'flex', flexDirection: 'column', height: BOX_H }}>
+                      <div style={{ ...tableTitle2, flexShrink: 0 }}>Order → Pickup <span style={{ fontWeight: 400, color: C.t3 }}>(by Facility)</span></div>
+                      <div style={{ flex: 1, overflowY: 'auto', overflowX: 'auto' }}>
                         <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-                          <thead>
+                          <thead style={{ position: 'sticky', top: 0, zIndex: 1 }}>
                             <tr>
-                              <th style={thL2} rowSpan={2}>Facility</th>
-                              <th style={{ ...thStyle2, borderBottom: 'none', textAlign: 'center', fontWeight: 800, fontSize: 11, color: C.t1 }} colSpan={4}>Processing → Pickup</th>
-                              <th style={{ ...thStyle2, borderBottom: 'none', textAlign: 'center', borderLeft: `2px solid ${C.border2}`, fontWeight: 800, fontSize: 11, color: C.t1 }} colSpan={4}>Order → Delivery</th>
-                            </tr>
-                            <tr>
-                              {['0-12h','12-24h','24-48h','48h+'].map(b => <th key={b} style={thStyle2}>{b}</th>)}
-                              {['0-1d','2-3d','4-5d','5+d'].map((b,i) => <th key={b} style={{ ...thStyle2, borderLeft: i === 0 ? `2px solid ${C.border2}` : 'none' }}>{b}</th>)}
+                              <th style={thL}>Facility</th>
+                              <th style={thS}>0-12h</th>
+                              <th style={thS}>12-24h</th>
+                              <th style={thS}>24-48h</th>
+                              <th style={thS}>48h+</th>
                             </tr>
                           </thead>
                           <tbody>
-                            {tatByFacility.filter(r => r.facility).map((row, i) => {
-                              const procTot = (row.proc_0_12h||0)+(row.proc_12_24h||0)+(row.proc_24_48h||0)+(row.proc_48plus||0)
-                              const ordTot = (row.ord_0_1||0)+(row.ord_2_3||0)+(row.ord_4_5||0)+(row.ord_5plus||0)
+                            {tatByFacility.map((row, i) => {
+                              const tot = (row.proc_0_12h||0)+(row.proc_12_24h||0)+(row.proc_24_48h||0)+(row.proc_48plus||0)
                               return (
-                                <tr key={row.facility} style={{ background: i % 2 === 0 ? 'transparent' : `${C.border}33` }}>
-                                  <td style={tdL2}>{row.facility}</td>
-                                  <td style={tdStyle2}>{pctB(row.proc_0_12h, procTot)}</td>
-                                  <td style={tdStyle2}>{pctB(row.proc_12_24h, procTot)}</td>
-                                  <td style={tdStyle2}>{pctB(row.proc_24_48h, procTot)}</td>
-                                  <td style={{ ...tdStyle2, color: (row.proc_48plus/procTot) > 0.2 ? '#dc2626' : C.t1, fontWeight: (row.proc_48plus/procTot) > 0.2 ? 700 : 400 }}>{pctB(row.proc_48plus, procTot)}</td>
-                                  <td style={{ ...tdStyle2, borderLeft: `2px solid ${C.border2}` }}>{pctB(row.ord_0_1, ordTot)}</td>
-                                  <td style={tdStyle2}>{pctB(row.ord_2_3, ordTot)}</td>
-                                  <td style={tdStyle2}>{pctB(row.ord_4_5, ordTot)}</td>
-                                  <td style={{ ...tdStyle2, color: (row.ord_5plus/ordTot) > 0.2 ? '#dc2626' : C.t1, fontWeight: (row.ord_5plus/ordTot) > 0.2 ? 700 : 400 }}>{pctB(row.ord_5plus, ordTot)}</td>
+                                <tr key={row.facility} style={{ background: i%2===0?'transparent':`${C.border}33` }}>
+                                  <td style={tdL}>{row.facility}</td>
+                                  <td style={tdS}>{pctB(row.proc_0_12h, tot)}</td>
+                                  <td style={tdS}>{pctB(row.proc_12_24h, tot)}</td>
+                                  <td style={tdS}>{pctB(row.proc_24_48h, tot)}</td>
+                                  <td style={{ ...tdS, color: (row.proc_48plus/tot)>0.2?'#dc2626':C.t1, fontWeight: (row.proc_48plus/tot)>0.2?700:400 }}>{pctB(row.proc_48plus, tot)}</td>
                                 </tr>
                               )
                             })}
                           </tbody>
                         </table>
                       </div>
+                      {/* fixed total row */}
+                      <table style={{ width: '100%', borderCollapse: 'collapse', flexShrink: 0, borderTop: `2px solid ${C.border2}` }}>
+                        <tbody>
+                          <tr>
+                            <td style={{ ...totalRowL, width: '35%' }}>Total</td>
+                            {(() => { const t=(facTotals.proc_0_12h+facTotals.proc_12_24h+facTotals.proc_24_48h+facTotals.proc_48plus); return (<>
+                              <td style={totalRowS}>{pctB(facTotals.proc_0_12h,t)}</td>
+                              <td style={totalRowS}>{pctB(facTotals.proc_12_24h,t)}</td>
+                              <td style={totalRowS}>{pctB(facTotals.proc_24_48h,t)}</td>
+                              <td style={totalRowS}>{pctB(facTotals.proc_48plus,t)}</td>
+                            </>) })()}
+                          </tr>
+                        </tbody>
+                      </table>
                     </div>
+
+                    {/* Table 2: Pickup → Delivery by Courier (scrollable) */}
+                    <div style={{ ...tableCard2, display: 'flex', flexDirection: 'column', height: BOX_H }}>
+                      <div style={{ ...tableTitle2, flexShrink: 0 }}>Pickup → Delivery <span style={{ fontWeight: 400, color: C.t3 }}>(by Courier)</span></div>
+                      <div style={{ flex: 1, overflowY: 'auto', overflowX: 'auto' }}>
+                        <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                          <thead style={{ position: 'sticky', top: 0, zIndex: 1 }}>
+                            <tr>
+                              <th style={thL}>Courier</th>
+                              <th style={thS}>Total Del</th>
+                              <th style={thS}>0-1d</th>
+                              <th style={thS}>2-3d</th>
+                              <th style={thS}>4-5d</th>
+                              <th style={thS}>5+d</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {tatByCourier.map((row, i) => {
+                              const tot = row.delivered || 0
+                              const logo = COURIER_LOGOS[row.courier_group]
+                              const color = COURIER_COLORS[row.courier_group] || C.t3
+                              return (
+                                <tr key={row.courier_group} style={{ background: i%2===0?'transparent':`${C.border}33` }}>
+                                  <td style={tdL}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                                      {logo ? <img src={logo} alt="" style={{ width: 20, height: 20, objectFit: 'contain', borderRadius: 3, flexShrink: 0, background: '#fff', border: `1px solid ${C.border}` }} onError={e => { e.currentTarget.style.display='none' }} /> : <span style={{ width: 20, height: 20, borderRadius: 3, background: color, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 8, fontWeight: 800, color: '#fff', flexShrink: 0 }}>{row.courier_group?.charAt(0)}</span>}
+                                      {row.courier_group}
+                                    </div>
+                                  </td>
+                                  <td style={tdS}>{tot.toLocaleString('en-IN')}</td>
+                                  <td style={tdS}>{pctB(row.bucket_0_1, tot)}</td>
+                                  <td style={tdS}>{pctB(row.bucket_2_3, tot)}</td>
+                                  <td style={tdS}>{pctB(row.bucket_4_5, tot)}</td>
+                                  <td style={{ ...tdS, color: (row.bucket_5plus/tot)>0.2?'#dc2626':C.t1, fontWeight: (row.bucket_5plus/tot)>0.2?700:400 }}>{pctB(row.bucket_5plus, tot)}</td>
+                                </tr>
+                              )
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
+                      {/* fixed total row */}
+                      <table style={{ width: '100%', borderCollapse: 'collapse', flexShrink: 0, borderTop: `2px solid ${C.border2}` }}>
+                        <tbody>
+                          <tr>
+                            <td style={{ ...totalRowL, width: '32%' }}>Total</td>
+                            <td style={totalRowS}>{courierTotals.delivered.toLocaleString('en-IN')}</td>
+                            <td style={totalRowS}>{pctB(courierTotals.bucket_0_1, courierTotals.delivered)}</td>
+                            <td style={totalRowS}>{pctB(courierTotals.bucket_2_3, courierTotals.delivered)}</td>
+                            <td style={totalRowS}>{pctB(courierTotals.bucket_4_5, courierTotals.delivered)}</td>
+                            <td style={totalRowS}>{pctB(courierTotals.bucket_5plus, courierTotals.delivered)}</td>
+                          </tr>
+                        </tbody>
+                      </table>
+                    </div>
+
+                    {/* Table 3: Processing → Pickup by Facility */}
+                    <div style={{ ...tableCard2, display: 'flex', flexDirection: 'column', height: BOX_H }}>
+                      <div style={{ ...tableTitle2, flexShrink: 0 }}>Processing → Pickup <span style={{ fontWeight: 400, color: C.t3 }}>(by Facility)</span></div>
+                      <div style={{ flex: 1, overflowY: 'auto', overflowX: 'auto' }}>
+                        <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                          <thead style={{ position: 'sticky', top: 0, zIndex: 1 }}>
+                            <tr>
+                              <th style={thL}>Facility</th>
+                              <th style={thS}>0-1d</th>
+                              <th style={thS}>2-3d</th>
+                              <th style={thS}>4-5d</th>
+                              <th style={thS}>5+d</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {tatByFacility.map((row, i) => {
+                              const tot = (row.ord_0_1||0)+(row.ord_2_3||0)+(row.ord_4_5||0)+(row.ord_5plus||0)
+                              return (
+                                <tr key={row.facility} style={{ background: i%2===0?'transparent':`${C.border}33` }}>
+                                  <td style={tdL}>{row.facility}</td>
+                                  <td style={tdS}>{pctB(row.ord_0_1, tot)}</td>
+                                  <td style={tdS}>{pctB(row.ord_2_3, tot)}</td>
+                                  <td style={tdS}>{pctB(row.ord_4_5, tot)}</td>
+                                  <td style={{ ...tdS, color: (row.ord_5plus/tot)>0.2?'#dc2626':C.t1, fontWeight: (row.ord_5plus/tot)>0.2?700:400 }}>{pctB(row.ord_5plus, tot)}</td>
+                                </tr>
+                              )
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
+                      {/* fixed total row */}
+                      <table style={{ width: '100%', borderCollapse: 'collapse', flexShrink: 0, borderTop: `2px solid ${C.border2}` }}>
+                        <tbody>
+                          <tr>
+                            <td style={{ ...totalRowL, width: '35%' }}>Total</td>
+                            {(() => { const t=(facTotals.ord_0_1+facTotals.ord_2_3+facTotals.ord_4_5+facTotals.ord_5plus); return (<>
+                              <td style={totalRowS}>{pctB(facTotals.ord_0_1,t)}</td>
+                              <td style={totalRowS}>{pctB(facTotals.ord_2_3,t)}</td>
+                              <td style={totalRowS}>{pctB(facTotals.ord_4_5,t)}</td>
+                              <td style={totalRowS}>{pctB(facTotals.ord_5plus,t)}</td>
+                            </>) })()}
+                          </tr>
+                        </tbody>
+                      </table>
+                    </div>
+
                   </div>
                 </>
               )
