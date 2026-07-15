@@ -286,7 +286,17 @@ function LogisticsPage({ filters }) {
   const STATUS_BG = { Delivered: C.green.bg, RTO: C.red.bg, Intransit: C.blue.bg, 'Pickup Pending': '#f59e0b22', Cancelled: '#a855f722', Lost: '#f9731622', Damaged: '#64748b22' }
 
   const trendRaw = trendGranularity === 'Daily' ? (data?.byDay || []) : trendGranularity === 'Weekly' ? (data?.byWeek || []) : (data?.byMonth || [])
-  const trendData = trendRaw.map(d => ({ ...d, rto_pct: d.rto_pct ?? (d.total ? +((d.rto / d.total) * 100).toFixed(1) : 0), del_pct: d.total ? +((d.delivered / d.total) * 100).toFixed(1) : 0 }))
+  const trendDeduped = Object.values(trendRaw.reduce((acc, d) => {
+    if (!acc[d.label]) { acc[d.label] = { ...d, _n: 1 } }
+    else {
+      acc[d.label].total = (acc[d.label].total || 0) + (d.total || 0)
+      acc[d.label].delivered = (acc[d.label].delivered || 0) + (d.delivered || 0)
+      acc[d.label].rto = (acc[d.label].rto || 0) + (d.rto || 0)
+      acc[d.label]._n++
+    }
+    return acc
+  }, {}))
+  const trendData = trendDeduped.map(d => ({ ...d, rto_pct: d.total ? +((d.rto / d.total) * 100).toFixed(1) : 0, del_pct: d.total ? +((d.delivered / d.total) * 100).toFixed(1) : 0 }))
   const byCourierData = (data?.byCourier || []).map(d => ({ ...d, del_pct: d.total ? +((d.delivered / d.total) * 100).toFixed(1) : 0, rto_pct: d.total ? +((d.rto / d.total) * 100).toFixed(1) : 0 }))
   const maxCourierTotal = byCourierData[0]?.total || 1
 
