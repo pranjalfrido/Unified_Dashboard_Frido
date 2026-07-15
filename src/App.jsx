@@ -3810,7 +3810,7 @@ function ShopifyTab({ data, filters, setFilters }) {
   const deliveredOrders = orderStatusMap['Delivered'] || 0
   const rtoOrders = (orderStatusMap['RTO'] || 0) + (orderStatusMap['Return'] || 0)
   const fulfilmentPct = shNOrders ? (deliveredOrders / shNOrders * 100) : 0
-  const rtoPct = shNOrders ? (rtoOrders / shNOrders * 100) : 0
+  const rtoPct = totalRev > 0 ? ((data.rtoRevDirect || 0) + (data.returnRev || 0)) / totalRev * 100 : 0
   const atRiskRev = (data.rtoRevDirect || 0) + (data.returnRev || 0) + (data.cirRev || 0) + (orderStatusRevMap['Cancelled'] || 0)
   const returnRevPct = totalRev > 0 ? (((data.rtoRevDirect || 0) + (data.returnRev || 0) + (data.cirRev || 0)) / totalRev * 100) : 0
   const repeatRate = nCusts ? (repeatCusts / nCusts * 100).toFixed(1) : '0'
@@ -4046,7 +4046,7 @@ function ShopifyTab({ data, filters, setFilters }) {
           const exchangeOrders = data.exchangeOrders || 0
           const cancelledOrders = orderStatusMap['Cancelled'] || 0
           const cancelPct = shNOrders ? (cancelledOrders / shNOrders * 100) : 0
-          const cirPct = shNOrders ? (cirOrders / shNOrders * 100) : 0
+          const cirPct = totalRev > 0 ? (data.cirRev || 0) / totalRev * 100 : 0
           const exchangePct = shNOrders ? (exchangeOrders / shNOrders * 100) : 0
           const excChg = prevExcRev > 0 ? ((totalExcRev - prevExcRev) / prevExcRev * 100) : null
           const prevGst = prevGrossAfterReturns - prevNetRev
@@ -4071,8 +4071,8 @@ function ShopifyTab({ data, filters, setFilters }) {
             { label: 'Cancellation %', value: `${cancelPct.toFixed(1)}%`, sub: `${fmtN(cancelledOrders)} cancelled`, accent: cancelPct > 5 ? '#7A1A1A' : undefined, badge: shReturnBadge(cancelPct, prevCancelPct) },
             { label: 'Return %', value: `${returnRevPct.toFixed(1)}%`, sub: `${fmt((data.rtoRevDirect || 0) + (data.returnRev || 0) + (data.cirRev || 0))} RTO+CIR rev`, accent: returnRevPct > 5 ? '#7A1A1A' : undefined, badge: shReturnBadge(returnRevPct, prevReturnRevPct) },
             { label: 'Exchange %', value: `${exchangePct.toFixed(1)}%`, sub: `${fmtN(exchangeOrders)} exchange orders`, badge: shReturnBadge(exchangePct, prevExchangePct) },
-            { label: 'RTO %', value: `${rtoPct.toFixed(1)}%`, sub: `${fmtN(rtoOrders)} RTO orders`, accent: rtoPct > 10 ? '#7A1A1A' : undefined },
-            { label: 'CIR %', value: `${cirPct.toFixed(1)}%`, sub: `${fmtN(cirOrders)} CIR orders` },
+            { label: 'RTO %', value: `${rtoPct.toFixed(1)}%`, sub: `${fmt((data.rtoRevDirect||0)+(data.returnRev||0))} RTO+Return rev`, accent: rtoPct > 10 ? '#7A1A1A' : undefined },
+            { label: 'CIR %', value: `${cirPct.toFixed(1)}%`, sub: `${fmt(data.cirRev||0)} CIR rev` },
           ]
           return (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
@@ -4171,7 +4171,7 @@ function ShopifyTab({ data, filters, setFilters }) {
                   <Tooltip content={({ active, payload, label }) => active && payload?.length ? (
                     <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 7, padding: '7px 11px', fontSize: 11 }}>
                       <div style={{ fontWeight: 700, marginBottom: 4, color: C.t2 }}>{xFmt(label)}</div>
-                      {payload.map(p => <div key={p.name} style={{ color: p.color }}>{p.name}: {(p.yAxisId === 'pct' || p.name.endsWith('%')) ? `${Number(p.value).toFixed(1)}%` : fmt(p.value)}</div>)}
+                      {payload.map(p => <div key={p.name} style={{ color: p.color }}>{p.name}: {(p.yAxisId === 'pct' || p.name.endsWith('%') || ['returnPct','exchPct','cancelPct'].includes(p.dataKey)) ? `${Number(p.value).toFixed(1)}%` : fmt(p.value)}</div>)}
                     </div>
                   ) : null} />
                   <Legend wrapperStyle={{ fontSize: 11 }} />
@@ -7985,12 +7985,6 @@ function SalesPage({ data, filters, setFilters, activeTab, setActiveTab, fetchDa
           <SearchableSelect multi options={['Tier I','Tier II','Tier III']} value={filters.tier || []} onChange={v => setFilters(f => ({ ...f, tier: v }))} placeholder="All Tiers" />
           <SearchableSelect multi options={stateOpts} value={filters.state || []} onChange={v => setFilters(f => ({ ...f, state: v }))} placeholder="All States" dropdownWidth={220} />
           <button onClick={() => setFilters(f => ({ ...f, category: [], subCategory: [], sku: [], subChannel: '', voucher: '', region: [], tier: [], state: [], city: '' }))} className="fclr">✕ Clear</button>
-          {(activeTab === 'shopify' || activeTab === 'amazon') && (
-            <button style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '5px 13px', borderRadius: 7, border: '1.5px solid #6366f1', background: '#EEF2FF', color: '#4F46E5', fontSize: 12, fontWeight: 700, cursor: 'pointer', fontFamily: 'var(--font)', whiteSpace: 'nowrap', marginLeft: 'auto' }}
-              onClick={() => alert('Return Analysis — Coming Soon!')}>
-              ↩ View Return Analysis
-            </button>
-          )}
         </div>
       </div>
       {/* Content */}
