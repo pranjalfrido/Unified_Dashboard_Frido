@@ -320,10 +320,11 @@ function LogisticsPage({ filters }) {
               return (
                 <div key={gi} style={{ display: 'flex', border: `1.5px solid ${C.border2}`, borderRadius: 8, overflow: 'hidden', background: C.card }}>
                   {opts.map((opt, i) => (
-                    <button key={opt} onClick={() => onChange(opt === val ? 'all' : opt)} style={{
+                    <button key={opt} onClick={() => { const v = gi === 0 ? opt.toLowerCase() : opt; onChange(v === val ? 'all' : v) }} style={{
                       flex: 1, padding: '6px 0', border: 'none', borderLeft: i > 0 ? `1.5px solid ${C.border2}` : 'none',
-                      background: val === opt ? C.t1 : 'transparent', color: val === opt ? '#fff' : C.t2,
-                      fontSize: 11.5, fontWeight: val === opt ? 700 : 500, cursor: 'pointer', fontFamily: 'var(--font)',
+                      background: val === (gi === 0 ? opt.toLowerCase() : opt) ? C.t1 : 'transparent',
+                      color: val === (gi === 0 ? opt.toLowerCase() : opt) ? '#fff' : C.t2,
+                      fontSize: 11.5, fontWeight: val === (gi === 0 ? opt.toLowerCase() : opt) ? 700 : 500, cursor: 'pointer', fontFamily: 'var(--font)',
                       textAlign: 'center', transition: 'all .15s'
                     }}>{opt}</button>
                   ))}
