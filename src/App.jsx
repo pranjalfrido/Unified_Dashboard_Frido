@@ -501,13 +501,25 @@ function LogisticsPage({ filters }) {
             {(() => {
               // use byDay/byWeek/byMonth (overall, not per courier) for date-based X-axis
               const src = courierTatGran === 'Daily' ? (data?.byDay || []) : courierTatGran === 'Weekly' ? (data?.byWeek || []) : (data?.byMonth || [])
-              const tatData = src.map(d => ({
+              // dedupe by label (week boundary issues can produce duplicate week labels)
+              const deduped = Object.values(src.reduce((acc, d) => {
+                if (!acc[d.label]) { acc[d.label] = { ...d, _count: 1 } }
+                else {
+                  acc[d.label].total = (acc[d.label].total || 0) + (d.total || 0)
+                  ;['avg_processing_days','avg_pickup_days','avg_intransit_days','avg_fulfilment_days'].forEach(k => {
+                    if (d[k] != null) { acc[d.label][k] = ((acc[d.label][k] || 0) * acc[d.label]._count + d[k]) / (acc[d.label]._count + 1) }
+                  })
+                  acc[d.label]._count++
+                }
+                return acc
+              }, {}))
+              const tatData = deduped.map(d => ({
                 label: d.label,
                 total: d.total || 0,
-                avg_processing_days: d.avg_processing_days ?? null,
-                avg_pickup_days: d.avg_pickup_days ?? null,
-                avg_intransit_days: d.avg_intransit_days ?? null,
-                avg_fulfilment_days: d.avg_fulfilment_days ?? null,
+                avg_processing_days: d.avg_processing_days != null ? Math.round(d.avg_processing_days * 100) / 100 : null,
+                avg_pickup_days: d.avg_pickup_days != null ? Math.round(d.avg_pickup_days * 100) / 100 : null,
+                avg_intransit_days: d.avg_intransit_days != null ? Math.round(d.avg_intransit_days * 100) / 100 : null,
+                avg_fulfilment_days: d.avg_fulfilment_days != null ? Math.round(d.avg_fulfilment_days * 100) / 100 : null,
               }))
               return (<>
             <ResponsiveContainer width="100%" height={220}>
