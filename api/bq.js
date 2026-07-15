@@ -133,6 +133,7 @@ export default async function handler(req, res) {
     byCIR: `WITH q AS (${base}) SELECT SUM(SellingPrice_Inc_GST) AS cir_rev, COUNT(DISTINCT OrderId) AS cir_orders FROM q WHERE Order_Status = 'CIR' AND Channel = 'Shopify' AND Channel = 'Shopify'`,
     byReturn: `WITH q AS (${base}) SELECT SUM(SellingPrice_Inc_GST) AS return_rev, COUNT(DISTINCT OrderId) AS return_orders FROM q WHERE Order_Status = 'Return' AND Channel = 'Shopify' AND Channel = 'Shopify'`,
     byExchange: `WITH q AS (${base}) SELECT COUNT(DISTINCT OrderId) AS exchange_orders, SUM(SellingPrice_Inc_GST) AS exchange_rev FROM q WHERE Order_Status = 'Exchange' AND Channel = 'Shopify'`,
+    shReturnReasons: `WITH q AS (${base}) SELECT COALESCE(NULLIF(TRIM(Customer_Return_Reason),''), 'Unknown') AS reason, COALESCE(NULLIF(TRIM(Customer_Sub_Reason),''), 'Unknown') AS sub_reason, COALESCE(NULLIF(TRIM(Category),''), 'Unknown') AS category, COALESCE(NULLIF(TRIM(SubCategory),''), 'Unknown') AS sub_category, COUNT(DISTINCT OrderId) AS orders, SUM(SellingPrice_Inc_GST) AS rev FROM q WHERE Channel = 'Shopify' AND Order_Status IN ('RTO','Return','CIR') AND Customer_Return_Reason IS NOT NULL AND TRIM(Customer_Return_Reason) != '' GROUP BY 1,2,3,4 ORDER BY orders DESC`,
     byRTO: `WITH q AS (${base}) SELECT SUM(SellingPrice_Inc_GST) AS rto_rev, COUNT(DISTINCT OrderId) AS rto_orders FROM q WHERE Order_Status = 'RTO' AND Channel = 'Shopify' AND Channel = 'Shopify'`,
     prevTotals: `WITH q AS (${prevBase}) SELECT SUM(SellingPrice_Inc_GST) AS total_rev, SUM(SellingPrice_Exc_GST) AS total_exc_rev, COUNT(DISTINCT OrderId) AS n_orders, SUM(ItemQty) AS total_qty, COUNT(DISTINCT CASE WHEN Order_Status IN ('RTO','Return') THEN OrderId END) AS rto_orders, COUNT(DISTINCT CASE WHEN Order_Status = 'CIR' THEN OrderId END) AS cir_orders FROM q`,
     momTotals: `WITH q AS (${momBase}) SELECT SUM(SellingPrice_Inc_GST) AS total_rev, SUM(SellingPrice_Exc_GST) AS total_exc_rev, COUNT(DISTINCT OrderId) AS n_orders FROM q`,
@@ -592,6 +593,7 @@ export default async function handler(req, res) {
         regionRows: (r.shRegion || []).map(x => ({ region: x.region, orders: parseInt(x.orders)||0, rev: parseFloat(x.rev)||0, units: parseInt(x.units)||0 })),
         tierRows: (r.shTier || []).map(x => ({ tier: parseInt(x.city_tier)||x.city_tier, label: x.tier_label, orders: parseInt(x.orders)||0, rev: parseFloat(x.rev)||0, units: parseInt(x.units)||0 })),
         topStates: (r.shState || []).slice(0, 6).filter(x => x.state).map(x => ({ name: x.state, orders: parseInt(x.orders)||0, rev: parseFloat(x.rev)||0, units: 0 })),
+        returnReasons: (r.shReturnReasons || []).map(x => ({ reason: x.reason, subReason: x.sub_reason, category: x.category, subCategory: x.sub_category, orders: parseInt(x.orders)||0, rev: parseFloat(x.rev)||0 })),
       },
       amzSC: {
         totalOrders: parseInt(r.amzSCTotals?.[0]?.orders) || 0,

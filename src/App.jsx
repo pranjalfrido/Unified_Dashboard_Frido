@@ -3724,6 +3724,113 @@ function ShopifyGeoRichTable({ title, rows, firstKey, firstLabel, formatFirst, r
   )
 }
 
+function ShopifyReturnReasonsTable({ reasons = [] }) {
+  const [expandedReason, setExpandedReason] = useState({})
+  const [expandedSubReason, setExpandedSubReason] = useState({})
+
+  if (!reasons || reasons.length === 0) return null
+
+  // Group: reason → subReason → category → subCategory
+  const grouped = {}
+  reasons.forEach(r => {
+    if (!grouped[r.reason]) grouped[r.reason] = { orders: 0, rev: 0, subReasons: {} }
+    grouped[r.reason].orders += r.orders
+    grouped[r.reason].rev += r.rev
+    if (!grouped[r.reason].subReasons[r.subReason]) grouped[r.reason].subReasons[r.subReason] = { orders: 0, rev: 0, cats: {} }
+    grouped[r.reason].subReasons[r.subReason].orders += r.orders
+    grouped[r.reason].subReasons[r.subReason].rev += r.rev
+    const catKey = r.category
+    if (!grouped[r.reason].subReasons[r.subReason].cats[catKey]) grouped[r.reason].subReasons[r.subReason].cats[catKey] = { orders: 0, rev: 0, subCats: {} }
+    grouped[r.reason].subReasons[r.subReason].cats[catKey].orders += r.orders
+    grouped[r.reason].subReasons[r.subReason].cats[catKey].rev += r.rev
+    const scKey = r.subCategory
+    if (!grouped[r.reason].subReasons[r.subReason].cats[catKey].subCats[scKey]) grouped[r.reason].subReasons[r.subReason].cats[catKey].subCats[scKey] = { orders: 0, rev: 0 }
+    grouped[r.reason].subReasons[r.subReason].cats[catKey].subCats[scKey].orders += r.orders
+    grouped[r.reason].subReasons[r.subReason].cats[catKey].subCats[scKey].rev += r.rev
+  })
+
+  const totalOrders = Object.values(grouped).reduce((s, v) => s + v.orders, 0)
+  const sortedReasons = Object.entries(grouped).sort((a, b) => b[1].orders - a[1].orders)
+
+  const thStyle = { fontSize: 9, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.05em', color: C.t3, padding: '3px 6px 6px', borderBottom: `1px solid ${C.border}`, textAlign: 'right', whiteSpace: 'nowrap' }
+  const thL = { ...thStyle, textAlign: 'left' }
+  const tdR = (indent = 0) => ({ padding: '4px 6px', textAlign: 'right', fontFamily: 'var(--mono)', fontSize: 11, color: C.t1, whiteSpace: 'nowrap', paddingLeft: indent })
+  const tdL = (indent = 0) => ({ padding: '4px 6px', fontSize: 11, color: C.t2, paddingLeft: indent })
+
+  return (
+    <Card title="Return Reasons · Shopify" note={`${sortedReasons.length} reasons · ${totalOrders.toLocaleString('en-IN')} orders`}>
+      <div style={{ overflowY: 'auto', maxHeight: 480 }}>
+        <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+          <thead style={{ position: 'sticky', top: 0, background: C.card, zIndex: 1 }}>
+            <tr>
+              <th style={thL}>Reason / Sub-reason / Category</th>
+              <th style={thStyle}>Orders</th>
+              <th style={thStyle}>% Share</th>
+              <th style={thStyle}>Revenue</th>
+            </tr>
+          </thead>
+          <tbody>
+            {sortedReasons.map(([reason, rd], ri) => {
+              const isExpR = expandedReason[reason]
+              const sharePct = totalOrders > 0 ? (rd.orders / totalOrders * 100).toFixed(1) : '0.0'
+              const sortedSubs = Object.entries(rd.subReasons).sort((a, b) => b[1].orders - a[1].orders)
+              return [
+                <tr key={`r-${reason}`} style={{ borderBottom: `1px solid ${C.border}`, background: ri % 2 === 0 ? C.card : C.bg, cursor: 'pointer' }}
+                  onClick={() => setExpandedReason(p => ({ ...p, [reason]: !p[reason] }))}>
+                  <td style={{ ...tdL(), fontWeight: 600, color: C.t1 }}>
+                    <span style={{ marginRight: 6, fontSize: 10, color: C.t3 }}>{isExpR ? '▼' : '▶'}</span>
+                    {reason}
+                  </td>
+                  <td style={tdR()}>{rd.orders.toLocaleString('en-IN')}</td>
+                  <td style={tdR()}><span style={{ fontSize: 10, color: C.t3 }}>{sharePct}%</span></td>
+                  <td style={tdR()}>{fmt(rd.rev)}</td>
+                </tr>,
+                ...(isExpR ? sortedSubs.map(([subReason, sd]) => {
+                  const subKey = `${reason}::${subReason}`
+                  const isExpSub = expandedSubReason[subKey]
+                  const subPct = totalOrders > 0 ? (sd.orders / totalOrders * 100).toFixed(1) : '0.0'
+                  const sortedCats = Object.entries(sd.cats).sort((a, b) => b[1].orders - a[1].orders)
+                  return [
+                    <tr key={`sr-${subKey}`} style={{ borderBottom: `1px solid ${C.border}`, background: C.acl, cursor: 'pointer' }}
+                      onClick={() => setExpandedSubReason(p => ({ ...p, [subKey]: !p[subKey] }))}>
+                      <td style={{ ...tdL(22), color: C.t2 }}>
+                        <span style={{ marginRight: 6, fontSize: 9, color: C.t3 }}>{isExpSub ? '▼' : '▶'}</span>
+                        {subReason}
+                      </td>
+                      <td style={{ ...tdR(), color: C.t2 }}>{sd.orders.toLocaleString('en-IN')}</td>
+                      <td style={tdR()}><span style={{ fontSize: 10, color: C.t3 }}>{subPct}%</span></td>
+                      <td style={{ ...tdR(), color: C.t2 }}>{fmt(sd.rev)}</td>
+                    </tr>,
+                    ...(isExpSub ? sortedCats.flatMap(([cat, cd]) => {
+                      const sortedSCs = Object.entries(cd.subCats).sort((a, b) => b[1].orders - a[1].orders)
+                      return [
+                        <tr key={`cat-${subKey}-${cat}`} style={{ borderBottom: `1px solid ${C.border}`, background: '#F8F8FF' }}>
+                          <td style={{ ...tdL(42), color: C.t2, fontStyle: 'italic' }}>{cat}</td>
+                          <td style={{ ...tdR(), color: C.t3 }}>{cd.orders.toLocaleString('en-IN')}</td>
+                          <td style={tdR()}></td>
+                          <td style={{ ...tdR(), color: C.t3 }}>{fmt(cd.rev)}</td>
+                        </tr>,
+                        ...sortedSCs.map(([sc, scd]) => (
+                          <tr key={`sc-${subKey}-${cat}-${sc}`} style={{ borderBottom: `1px solid ${C.border}`, background: '#F8F8FF' }}>
+                            <td style={{ ...tdL(62), color: C.t3 }}>↳ {sc}</td>
+                            <td style={{ ...tdR(), color: C.t3 }}>{scd.orders.toLocaleString('en-IN')}</td>
+                            <td style={tdR()}></td>
+                            <td style={{ ...tdR(), color: C.t3 }}>{fmt(scd.rev)}</td>
+                          </tr>
+                        ))
+                      ]
+                    }) : [])
+                  ]
+                }).flat() : [])
+              ]
+            }).flat()}
+          </tbody>
+        </table>
+      </div>
+    </Card>
+  )
+}
+
 function ShopifyTab({ data, filters, setFilters }) {
   // On mount, default to India scope if no region is set yet
   useEffect(() => {
@@ -4294,6 +4401,7 @@ function ShopifyTab({ data, filters, setFilters }) {
         <ShopifyGeoRichTable title="Top States" rows={stateRows} firstKey="state" firstLabel="State" formatFirst={v => v ? v.charAt(0).toUpperCase() + v.slice(1).toLowerCase() : v} />
         <ShopifyGeoRichTable title="Top Cities" rows={enrichedCityRows} firstKey="city" firstLabel="City" formatFirst={v => v ? v.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' ') : v} />
       </div>
+      <ShopifyReturnReasonsTable reasons={sh.returnReasons || []} />
     </div>
   )
 }
