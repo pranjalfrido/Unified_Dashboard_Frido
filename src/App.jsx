@@ -4045,7 +4045,7 @@ function ShopifyTab({ data, filters, setFilters }) {
           const cirOrders = data.cirOrders || 0
           const exchangeOrders = data.exchangeOrders || 0
           const cancelledOrders = orderStatusMap['Cancelled'] || 0
-          const cancelPct = shNOrders ? (cancelledOrders / shNOrders * 100) : 0
+          const cancelPct = totalRev > 0 ? (cancelledRev / totalRev * 100) : 0
           const cirPct = totalRev > 0 ? (data.cirRev || 0) / totalRev * 100 : 0
           const exchangePct = shNOrders ? (exchangeOrders / shNOrders * 100) : 0
           const excChg = prevExcRev > 0 ? ((totalExcRev - prevExcRev) / prevExcRev * 100) : null
@@ -4062,13 +4062,14 @@ function ShopifyTab({ data, filters, setFilters }) {
             { label: 'AOV', value: `₹${Math.round(aov).toLocaleString('en-IN')}`, sub: 'Gross rev ÷ orders', badge: shChgBadge(aov, prevOrders > 0 ? prevRev / prevOrders : 0) },
             { label: 'ASP', value: `₹${Math.round(asp).toLocaleString('en-IN')}`, sub: 'Net rev ÷ units sold', badge: shChgBadge(asp, prevUnits > 0 ? prevNetRev / prevUnits : 0) },
           ]
-          const prevCancelPct = prevOrders > 0 ? prevCancelledOrders / prevOrders * 100 : 0
+          const cancelRevPerOrder = cancelledOrders > 0 ? cancelledRev / cancelledOrders : 0
+          const prevCancelPct = prevRev > 0 ? (prevCancelledOrders * cancelRevPerOrder) / prevRev * 100 : 0
           const prevExchangePct = prevOrders > 0 ? prevExchangeOrders / prevOrders * 100 : 0
           const prevReturnOrderPct = prevOrders > 0 ? (prevRtoOrders + prevCirOrders) / prevOrders * 100 : 0
           const prevReturnRevPct = prevRev > 0 ? ((prevRtoOrders + prevCirOrders) / prevOrders * 100) : 0
           const returnOrderPct = shNOrders ? ((rtoOrders + cirOrders) / shNOrders * 100) : 0
           const row2 = [
-            { label: 'Cancellation %', value: `${cancelPct.toFixed(1)}%`, sub: `${fmtN(cancelledOrders)} cancelled`, accent: cancelPct > 5 ? '#7A1A1A' : undefined, badge: shReturnBadge(cancelPct, prevCancelPct) },
+            { label: 'Cancellation %', value: `${cancelPct.toFixed(1)}%`, sub: `${fmt(cancelledRev)} cancelled rev`, accent: cancelPct > 5 ? '#7A1A1A' : undefined, badge: shReturnBadge(cancelPct, prevCancelPct) },
             { label: 'Return %', value: `${returnRevPct.toFixed(1)}%`, sub: `${fmt((data.rtoRevDirect || 0) + (data.returnRev || 0) + (data.cirRev || 0))} RTO+CIR rev`, accent: returnRevPct > 5 ? '#7A1A1A' : undefined, badge: shReturnBadge(returnRevPct, prevReturnRevPct) },
             { label: 'Exchange %', value: `${exchangePct.toFixed(1)}%`, sub: `${fmtN(exchangeOrders)} exchange orders`, badge: shReturnBadge(exchangePct, prevExchangePct) },
             { label: 'RTO %', value: `${rtoPct.toFixed(1)}%`, sub: `${fmt((data.rtoRevDirect||0)+(data.returnRev||0))} RTO+Return rev`, accent: rtoPct > 10 ? '#7A1A1A' : undefined },
