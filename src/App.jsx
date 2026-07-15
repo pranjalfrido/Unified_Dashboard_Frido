@@ -7986,7 +7986,7 @@ function SalesPage({ data, filters, setFilters, activeTab, setActiveTab, fetchDa
           <SearchableSelect multi options={stateOpts} value={filters.state || []} onChange={v => setFilters(f => ({ ...f, state: v }))} placeholder="All States" dropdownWidth={220} />
           <button onClick={() => setFilters(f => ({ ...f, category: [], subCategory: [], sku: [], subChannel: '', voucher: '', region: [], tier: [], state: [], city: '' }))} className="fclr">✕ Clear</button>
           {(activeTab === 'shopify' || activeTab === 'amazon') && (
-            <button style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '5px 13px', borderRadius: 7, border: '1.5px solid #6366f1', background: '#EEF2FF', color: '#4F46E5', fontSize: 12, fontWeight: 700, cursor: 'pointer', fontFamily: 'var(--font)', whiteSpace: 'nowrap' }}
+            <button style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '5px 13px', borderRadius: 7, border: '1.5px solid #6366f1', background: '#EEF2FF', color: '#4F46E5', fontSize: 12, fontWeight: 700, cursor: 'pointer', fontFamily: 'var(--font)', whiteSpace: 'nowrap', marginLeft: 'auto' }}
               onClick={() => alert('Return Analysis — Coming Soon!')}>
               ↩ View Return Analysis
             </button>
