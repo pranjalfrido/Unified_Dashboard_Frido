@@ -3726,102 +3726,79 @@ function ShopifyGeoRichTable({ title, rows, firstKey, firstLabel, formatFirst, r
 
 function ShopifyReturnReasonsTable({ reasons = [] }) {
   const [expandedReason, setExpandedReason] = useState({})
-  const [expandedSubReason, setExpandedSubReason] = useState({})
 
   if (!reasons || reasons.length === 0) return null
 
-  // Group: reason → subReason → category → subCategory
+  // Derive all unique categories (columns), sorted by total orders desc
+  const catTotals = {}
+  reasons.forEach(r => { catTotals[r.category] = (catTotals[r.category] || 0) + r.orders })
+  const cats = Object.keys(catTotals).sort((a, b) => catTotals[b] - catTotals[a])
+
+  // Group: reason → { orders per cat, subReasons: { subReason → orders per cat } }
   const grouped = {}
   reasons.forEach(r => {
-    if (!grouped[r.reason]) grouped[r.reason] = { orders: 0, rev: 0, subReasons: {} }
-    grouped[r.reason].orders += r.orders
-    grouped[r.reason].rev += r.rev
-    if (!grouped[r.reason].subReasons[r.subReason]) grouped[r.reason].subReasons[r.subReason] = { orders: 0, rev: 0, cats: {} }
-    grouped[r.reason].subReasons[r.subReason].orders += r.orders
-    grouped[r.reason].subReasons[r.subReason].rev += r.rev
-    const catKey = r.category
-    if (!grouped[r.reason].subReasons[r.subReason].cats[catKey]) grouped[r.reason].subReasons[r.subReason].cats[catKey] = { orders: 0, rev: 0, subCats: {} }
-    grouped[r.reason].subReasons[r.subReason].cats[catKey].orders += r.orders
-    grouped[r.reason].subReasons[r.subReason].cats[catKey].rev += r.rev
-    const scKey = r.subCategory
-    if (!grouped[r.reason].subReasons[r.subReason].cats[catKey].subCats[scKey]) grouped[r.reason].subReasons[r.subReason].cats[catKey].subCats[scKey] = { orders: 0, rev: 0 }
-    grouped[r.reason].subReasons[r.subReason].cats[catKey].subCats[scKey].orders += r.orders
-    grouped[r.reason].subReasons[r.subReason].cats[catKey].subCats[scKey].rev += r.rev
+    if (!grouped[r.reason]) { grouped[r.reason] = { catOrders: {}, subReasons: {} } }
+    grouped[r.reason].catOrders[r.category] = (grouped[r.reason].catOrders[r.category] || 0) + r.orders
+    if (!grouped[r.reason].subReasons[r.subReason]) grouped[r.reason].subReasons[r.subReason] = { catOrders: {} }
+    const sr = grouped[r.reason].subReasons[r.subReason]
+    sr.catOrders[r.category] = (sr.catOrders[r.category] || 0) + r.orders
   })
 
-  const totalOrders = Object.values(grouped).reduce((s, v) => s + v.orders, 0)
-  const sortedReasons = Object.entries(grouped).sort((a, b) => b[1].orders - a[1].orders)
+  const reasonTotal = reason => Object.values(grouped[reason].catOrders).reduce((s, v) => s + v, 0)
+  const grandTotal = Object.keys(grouped).reduce((s, r) => s + reasonTotal(r), 0)
 
-  const thStyle = { fontSize: 9, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.05em', color: C.t3, padding: '3px 6px 6px', borderBottom: `1px solid ${C.border}`, textAlign: 'right', whiteSpace: 'nowrap' }
-  const thL = { ...thStyle, textAlign: 'left' }
-  const tdR = (indent = 0) => ({ padding: '4px 6px', textAlign: 'right', fontFamily: 'var(--mono)', fontSize: 11, color: C.t1, whiteSpace: 'nowrap', paddingLeft: indent })
-  const tdL = (indent = 0) => ({ padding: '4px 6px', fontSize: 11, color: C.t2, paddingLeft: indent })
+  const sortedReasons = Object.keys(grouped).sort((a, b) => reasonTotal(b) - reasonTotal(a))
+
+  const thStyle = { fontSize: 9, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.04em', color: C.t3, padding: '4px 8px 6px', borderBottom: `1px solid ${C.border}`, textAlign: 'right', whiteSpace: 'nowrap', background: C.card }
+  const thL = { ...thStyle, textAlign: 'left', minWidth: 180 }
+  const cell = (v, base, bold) => {
+    if (!v) return <span style={{ color: C.t3, fontSize: 10 }}>—</span>
+    const pct = base > 0 ? (v / base * 100).toFixed(1) : null
+    return <span style={{ fontWeight: bold ? 600 : 400 }}>{v.toLocaleString('en-IN')}{pct !== null ? <span style={{ fontSize: 9, color: C.t3, marginLeft: 3 }}>({pct}%)</span> : null}</span>
+  }
 
   return (
-    <Card title="Return Reasons · Shopify" note={`${sortedReasons.length} reasons · ${totalOrders.toLocaleString('en-IN')} orders`}>
-      <div style={{ overflowY: 'auto', maxHeight: 480 }}>
-        <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-          <thead style={{ position: 'sticky', top: 0, background: C.card, zIndex: 1 }}>
+    <Card title="Return Reasons · Shopify" note={`${sortedReasons.length} reasons · ${grandTotal.toLocaleString('en-IN')} orders`}>
+      <div style={{ overflowX: 'auto', overflowY: 'auto', maxHeight: 500 }}>
+        <table style={{ borderCollapse: 'collapse', fontSize: 11, minWidth: '100%' }}>
+          <thead style={{ position: 'sticky', top: 0, zIndex: 2 }}>
             <tr>
-              <th style={thL}>Reason / Sub-reason / Category</th>
-              <th style={thStyle}>Orders</th>
-              <th style={thStyle}>% Share</th>
-              <th style={thStyle}>Revenue</th>
+              <th style={thL}>Reason / Sub-reason</th>
+              {cats.map(cat => <th key={cat} style={thStyle}>{cat}</th>)}
             </tr>
           </thead>
           <tbody>
-            {sortedReasons.map(([reason, rd], ri) => {
-              const isExpR = expandedReason[reason]
-              const sharePct = totalOrders > 0 ? (rd.orders / totalOrders * 100).toFixed(1) : '0.0'
-              const sortedSubs = Object.entries(rd.subReasons).sort((a, b) => b[1].orders - a[1].orders)
+            {sortedReasons.map((reason, ri) => {
+              const rd = grouped[reason]
+              const rTotal = reasonTotal(reason)
+              const isExp = expandedReason[reason]
+              const sortedSubs = Object.entries(rd.subReasons).sort((a, b) => {
+                const ta = Object.values(a[1].catOrders).reduce((s, v) => s + v, 0)
+                const tb = Object.values(b[1].catOrders).reduce((s, v) => s + v, 0)
+                return tb - ta
+              })
               return [
                 <tr key={`r-${reason}`} style={{ borderBottom: `1px solid ${C.border}`, background: ri % 2 === 0 ? C.card : C.bg, cursor: 'pointer' }}
                   onClick={() => setExpandedReason(p => ({ ...p, [reason]: !p[reason] }))}>
-                  <td style={{ ...tdL(), fontWeight: 600, color: C.t1 }}>
-                    <span style={{ marginRight: 6, fontSize: 10, color: C.t3 }}>{isExpR ? '▼' : '▶'}</span>
+                  <td style={{ padding: '5px 8px', fontWeight: 600, color: C.t1, whiteSpace: 'nowrap' }}>
+                    <span style={{ marginRight: 6, fontSize: 10, color: C.t3 }}>{isExp ? '▼' : '▶'}</span>
                     {reason}
+                    <span style={{ marginLeft: 8, fontSize: 9, color: C.t3, fontWeight: 400 }}>{rTotal.toLocaleString('en-IN')} · {grandTotal > 0 ? (rTotal / grandTotal * 100).toFixed(1) : 0}%</span>
                   </td>
-                  <td style={tdR()}>{rd.orders.toLocaleString('en-IN')}</td>
-                  <td style={tdR()}><span style={{ fontSize: 10, color: C.t3 }}>{sharePct}%</span></td>
-                  <td style={tdR()}>{fmt(rd.rev)}</td>
+                  {cats.map(cat => <td key={cat} style={{ padding: '5px 8px', textAlign: 'right', fontFamily: 'var(--mono)', color: C.t1 }}>{cell(rd.catOrders[cat], rTotal, false)}</td>)}
                 </tr>,
-                ...(isExpR ? sortedSubs.map(([subReason, sd]) => {
-                  const subKey = `${reason}::${subReason}`
-                  const isExpSub = expandedSubReason[subKey]
-                  const subPct = totalOrders > 0 ? (sd.orders / totalOrders * 100).toFixed(1) : '0.0'
-                  const sortedCats = Object.entries(sd.cats).sort((a, b) => b[1].orders - a[1].orders)
-                  return [
-                    <tr key={`sr-${subKey}`} style={{ borderBottom: `1px solid ${C.border}`, background: C.acl, cursor: 'pointer' }}
-                      onClick={() => setExpandedSubReason(p => ({ ...p, [subKey]: !p[subKey] }))}>
-                      <td style={{ ...tdL(22), color: C.t2 }}>
-                        <span style={{ marginRight: 6, fontSize: 9, color: C.t3 }}>{isExpSub ? '▼' : '▶'}</span>
-                        {subReason}
+                ...(isExp ? sortedSubs.map(([subReason, sd]) => {
+                  const srTotal = Object.values(sd.catOrders).reduce((s, v) => s + v, 0)
+                  return (
+                    <tr key={`sr-${reason}-${subReason}`} style={{ borderBottom: `1px solid ${C.border}`, background: C.acl }}>
+                      <td style={{ padding: '4px 8px 4px 28px', color: C.t2, whiteSpace: 'nowrap' }}>
+                        ↳ {subReason}
+                        <span style={{ marginLeft: 8, fontSize: 9, color: C.t3 }}>{srTotal.toLocaleString('en-IN')} · {rTotal > 0 ? (srTotal / rTotal * 100).toFixed(1) : 0}%</span>
                       </td>
-                      <td style={{ ...tdR(), color: C.t2 }}>{sd.orders.toLocaleString('en-IN')}</td>
-                      <td style={tdR()}><span style={{ fontSize: 10, color: C.t3 }}>{subPct}%</span></td>
-                      <td style={{ ...tdR(), color: C.t2 }}>{fmt(sd.rev)}</td>
-                    </tr>,
-                    ...(isExpSub ? sortedCats.flatMap(([cat, cd]) => {
-                      const sortedSCs = Object.entries(cd.subCats).sort((a, b) => b[1].orders - a[1].orders)
-                      return [
-                        <tr key={`cat-${subKey}-${cat}`} style={{ borderBottom: `1px solid ${C.border}`, background: '#F8F8FF' }}>
-                          <td style={{ ...tdL(42), color: C.t2, fontStyle: 'italic' }}>{cat}</td>
-                          <td style={{ ...tdR(), color: C.t3 }}>{cd.orders.toLocaleString('en-IN')}</td>
-                          <td style={tdR()}></td>
-                          <td style={{ ...tdR(), color: C.t3 }}>{fmt(cd.rev)}</td>
-                        </tr>,
-                        ...sortedSCs.map(([sc, scd]) => (
-                          <tr key={`sc-${subKey}-${cat}-${sc}`} style={{ borderBottom: `1px solid ${C.border}`, background: '#F8F8FF' }}>
-                            <td style={{ ...tdL(62), color: C.t3 }}>↳ {sc}</td>
-                            <td style={{ ...tdR(), color: C.t3 }}>{scd.orders.toLocaleString('en-IN')}</td>
-                            <td style={tdR()}></td>
-                            <td style={{ ...tdR(), color: C.t3 }}>{fmt(scd.rev)}</td>
-                          </tr>
-                        ))
-                      ]
-                    }) : [])
-                  ]
-                }).flat() : [])
+                      {cats.map(cat => <td key={cat} style={{ padding: '4px 8px', textAlign: 'right', fontFamily: 'var(--mono)', color: C.t2 }}>{cell(sd.catOrders[cat], srTotal, false)}</td>)}
+                    </tr>
+                  )
+                }) : [])
               ]
             }).flat()}
           </tbody>
