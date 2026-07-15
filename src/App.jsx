@@ -1139,7 +1139,8 @@ function LogisticsPage({ filters }) {
                     <div style={{ ...tableCard2, alignSelf: 'start', display: 'flex', flexDirection: 'column', maxHeight: 281, overflow: 'hidden' }}>
                       <div style={{ ...tableTitle2, flexShrink: 0 }}>Pickup → Delivery <span style={{ fontWeight: 400, color: C.t3 }}>(by Courier)</span></div>
                       <div style={{ flex: 1, overflowY: 'auto' }}>
-                        <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                        <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed' }}>
+                          <colgroup><col style={{width:'34%'}}/><col style={{width:'13%'}}/><col style={{width:'13%'}}/><col style={{width:'13%'}}/><col style={{width:'13%'}}/><col style={{width:'13%'}}/></colgroup>
                           <thead style={{ position: 'sticky', top: 0, zIndex: 2, background: C.card }}>
                             <tr>
                               <th style={thL}>Courier</th>
@@ -1164,17 +1165,22 @@ function LogisticsPage({ filters }) {
                                 </tr>
                               )
                             })}
-                            <tr style={{ background: `${C.border}55`, borderTop: `2px solid ${C.border2}` }}>
-                              <td style={totalRowL}>Total</td>
-                              <td style={totalRowS}>{courierTotals.delivered.toLocaleString('en-IN')}</td>
-                              <td style={totalRowS}>{pctB(courierTotals.bucket_0_1, courierTotals.delivered)}</td>
-                              <td style={totalRowS}>{pctB(courierTotals.bucket_2_3, courierTotals.delivered)}</td>
-                              <td style={totalRowS}>{pctB(courierTotals.bucket_4_5, courierTotals.delivered)}</td>
-                              <td style={totalRowS}>{pctB(courierTotals.bucket_5plus, courierTotals.delivered)}</td>
-                            </tr>
                           </tbody>
                         </table>
                       </div>
+                      <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed', flexShrink: 0, borderTop: `2px solid ${C.border2}` }}>
+                        <colgroup><col style={{width:'34%'}}/><col style={{width:'13%'}}/><col style={{width:'13%'}}/><col style={{width:'13%'}}/><col style={{width:'13%'}}/><col style={{width:'13%'}}/></colgroup>
+                        <tbody>
+                          <tr style={{ background: `${C.border}55` }}>
+                            <td style={totalRowL}>Total</td>
+                            <td style={totalRowS}>{courierTotals.delivered.toLocaleString('en-IN')}</td>
+                            <td style={totalRowS}>{pctB(courierTotals.bucket_0_1, courierTotals.delivered)}</td>
+                            <td style={totalRowS}>{pctB(courierTotals.bucket_2_3, courierTotals.delivered)}</td>
+                            <td style={totalRowS}>{pctB(courierTotals.bucket_4_5, courierTotals.delivered)}</td>
+                            <td style={totalRowS}>{pctB(courierTotals.bucket_5plus, courierTotals.delivered)}</td>
+                          </tr>
+                        </tbody>
+                      </table>
                     </div>
 
                     {/* Table 3: Processing → Pickup by Facility */}
