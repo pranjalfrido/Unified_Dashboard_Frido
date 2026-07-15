@@ -1290,30 +1290,31 @@ function LogisticsPage({ filters }) {
                   </div>
                 </div>
               </div>
-              {/* Right: Del% / RTO% / Avg TAT bar chart */}
+              {/* Right: Shipment Qty bars + RTO% & Intrasit TAT lines */}
               <div style={cardStyle}>
                 <div style={chartTitle}>Delivery Performance by Weight Slab</div>
                 <ResponsiveContainer width="100%" height={220}>
-                  <ComposedChart data={ordered} margin={{ top: 4, right: 10, left: -10, bottom: 0 }}>
+                  <ComposedChart data={ordered} margin={{ top: 4, right: 40, left: -10, bottom: 0 }}>
                     <CartesianGrid strokeDasharray="3 3" stroke={C.border} vertical={false} />
                     <XAxis dataKey="slab" tick={{ fontSize: 10, fill: C.t2 }} />
-                    <YAxis tick={{ fontSize: 10, fill: C.t2 }} unit="%" domain={[0, 'dataMax + 10']} />
+                    <YAxis yAxisId="qty" tick={{ fontSize: 10, fill: C.t2 }} tickFormatter={v => v >= 1000 ? `${(v/1000).toFixed(0)}K` : v} />
+                    <YAxis yAxisId="pct" orientation="right" tick={{ fontSize: 10, fill: C.t2 }} unit="%" domain={[0, 'dataMax + 5']} />
                     <Tooltip content={({ active, payload, label }) => {
                       if (!active || !payload?.length) return null
                       const row = ordered.find(r => r.slab === label) || {}
                       return (
                         <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 8, padding: '8px 12px', fontSize: 11, color: C.t1 }}>
                           <div style={{ fontWeight: 700, marginBottom: 4 }}>{label}</div>
-                          <div style={{ color: C.t2 }}>Total: <strong>{(row.total||0).toLocaleString('en-IN')}</strong></div>
-                          <div style={{ color: '#4ADE80' }}>Del %: <strong>{row.del_pct??'—'}%</strong></div>
+                          <div style={{ color: '#5BA4CF' }}>Shipments: <strong>{(row.total||0).toLocaleString('en-IN')}</strong></div>
                           <div style={{ color: C.red.tx }}>RTO %: <strong>{row.rto_pct??'—'}%</strong></div>
                           <div style={{ color: '#60A5FA' }}>Intrasit TAT: <strong>{row.avg_tat??'—'}d</strong></div>
                         </div>
                       )
                     }} />
+                    <Bar yAxisId="qty" dataKey="total" name="Shipments" fill="#5BA4CF" radius={[3,3,0,0]} barSize={20} />
+                    <Line yAxisId="pct" type="monotone" dataKey="rto_pct" name="RTO %" stroke={C.red.tx} strokeWidth={2} dot={{ r: 3, fill: C.red.tx }} />
+                    <Line yAxisId="pct" type="monotone" dataKey="avg_tat" name="Intrasit TAT" stroke="#60A5FA" strokeWidth={2} dot={{ r: 3, fill: '#60A5FA' }} />
                     <Legend wrapperStyle={{ fontSize: 10 }} />
-                    <Bar dataKey="del_pct" name="Del %" fill="#4ADE80" radius={[3,3,0,0]} barSize={14} />
-                    <Bar dataKey="rto_pct" name="RTO %" fill={C.red.tx} radius={[3,3,0,0]} barSize={14} />
                   </ComposedChart>
                 </ResponsiveContainer>
               </div>
