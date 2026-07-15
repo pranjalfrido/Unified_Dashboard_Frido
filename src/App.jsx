@@ -1180,69 +1180,98 @@ function LogisticsPage({ filters }) {
         {(() => {
           const wData = (data.byWeightSlab || []).filter(r => r.slab !== 'Unknown')
           if (!wData.length) return null
-          const SLABS = ['0-500g','500g-1kg','1-2kg','2-5kg','5kg+']
-          const ordered = SLABS.map(s => wData.find(r => r.slab === s)).filter(Boolean)
+          const SLABS = ['0-2kg','2-5kg','5-10kg','10-20kg','20-50kg','50kg+']
+          const SLAB_COLORS = ['#60A5FA','#34D399','#FBBF24','#F87171','#A78BFA','#FB923C']
+          const ordered = SLABS.map((s,i) => { const r = wData.find(x => x.slab === s); return r ? { ...r, color: SLAB_COLORS[i] } : null }).filter(Boolean)
+          const grandTotal = ordered.reduce((s,r) => s + (r.total||0), 0) || 1
+          const grandValue = ordered.reduce((s,r) => s + (r.total_value||0), 0) || 1
+          const [wMetric, setWMetric] = React.useState('qty')
+          const donutData = ordered.map(r => ({
+            name: r.slab,
+            value: wMetric === 'qty' ? (r.total||0) : (r.total_value||0),
+            color: r.color,
+            pct: wMetric === 'qty' ? +((r.total||0)/grandTotal*100).toFixed(1) : +((r.total_value||0)/grandValue*100).toFixed(1),
+            raw: r,
+          }))
+          const fmtVal = v => v >= 10000000 ? '₹'+(v/10000000).toFixed(1)+'Cr' : v >= 100000 ? '₹'+(v/100000).toFixed(1)+'L' : v >= 1000 ? '₹'+(v/1000).toFixed(0)+'K' : '₹'+v
           return (
             <div style={{ display: secCollapsed['weight'] ? 'none' : 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
-              {/* Chart 1: Volume by slab with % in tooltip */}
+              {/* Left: Donut with toggle */}
               <div style={cardStyle}>
-                <div style={chartTitle}>Shipment Volume by Weight Slab</div>
-                <ResponsiveContainer width="100%" height={220}>
-                  <BarChart data={ordered} margin={{ top: 8, right: 10, left: -10, bottom: 0 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke={C.border} />
-                    <XAxis dataKey="slab" tick={{ fontSize: 10, fill: C.t2 }} />
-                    <YAxis tick={{ fontSize: 10, fill: C.t2 }} />
-                    <Tooltip content={({ active, payload, label }) => {
-                      if (!active || !payload?.length) return null
-                      const row = ordered.find(r => r.slab === label) || {}
-                      const tot = row.total || 0
-                      const delPct = tot ? ((row.delivered||0) / tot * 100).toFixed(1) : '—'
-                      const rtoPct = tot ? ((row.rto||0) / tot * 100).toFixed(1) : '—'
-                      return (
-                        <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 8, padding: '10px 14px', fontSize: 11, color: C.t1 }}>
-                          <div style={{ fontWeight: 700, marginBottom: 6 }}>{label}</div>
-                          <div style={{ color: '#4ADE80' }}>Delivered : <strong>{(row.delivered||0).toLocaleString('en-IN')}</strong> <span style={{ color: C.t3 }}>({delPct}%)</span></div>
-                          <div style={{ color: C.red.tx }}>RTO : <strong>{(row.rto||0).toLocaleString('en-IN')}</strong> <span style={{ color: C.t3 }}>({rtoPct}%)</span></div>
-                          <div style={{ color: '#60A5FA', marginTop: 4 }}>Total : <strong>{tot.toLocaleString('en-IN')}</strong></div>
-                        </div>
-                      )
-                    }} />
-                    <Legend wrapperStyle={{ fontSize: 10 }} />
-                    <Bar dataKey="total" name="Total" fill="#60A5FA" radius={[3,3,0,0]} />
-                    <Bar dataKey="delivered" name="Delivered" fill="#4ADE80" radius={[3,3,0,0]} />
-                    <Bar dataKey="rto" name="RTO" fill={C.red.tx} radius={[3,3,0,0]} />
-                  </BarChart>
-                </ResponsiveContainer>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+                  <div style={chartTitle}>Shipment Allocation by Weight</div>
+                  <div style={{ display: 'flex', background: C.bg, border: `1px solid ${C.border}`, borderRadius: 7, padding: 2 }}>
+                    {[['qty','Qty'],['value','Value']].map(([id,lbl]) => (
+                      <button key={id} onClick={() => setWMetric(id)} style={{ fontSize: 10, padding: '2px 10px', borderRadius: 5, border: 'none', background: wMetric === id ? C.acc : 'transparent', color: wMetric === id ? '#000' : C.t3, cursor: 'pointer', fontWeight: wMetric === id ? 700 : 500, fontFamily: 'var(--font)' }}>{lbl}</button>
+                    ))}
+                  </div>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+                  <ResponsiveContainer width={180} height={200}>
+                    <PieChart>
+                      <Pie data={donutData} cx="50%" cy="50%" innerRadius={55} outerRadius={85} dataKey="value" paddingAngle={2}>
+                        {donutData.map((d,i) => <Cell key={i} fill={d.color} />)}
+                      </Pie>
+                      <Tooltip content={({ active, payload }) => {
+                        if (!active || !payload?.length) return null
+                        const d = payload[0].payload
+                        return (
+                          <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 8, padding: '8px 12px', fontSize: 11, color: C.t1 }}>
+                            <div style={{ fontWeight: 700, marginBottom: 4 }}>{d.name}</div>
+                            <div>{wMetric === 'qty' ? (d.value||0).toLocaleString('en-IN')+' shipments' : fmtVal(d.value||0)}</div>
+                            <div style={{ color: C.t3 }}>Allocation: <strong>{d.pct}%</strong></div>
+                          </div>
+                        )
+                      }} />
+                    </PieChart>
+                  </ResponsiveContainer>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 6, flex: 1 }}>
+                    {donutData.map(d => (
+                      <div key={d.name} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                        <div style={{ width: 10, height: 10, borderRadius: '50%', background: d.color, flexShrink: 0 }} />
+                        <div style={{ fontSize: 10, color: C.t2, flex: 1 }}>{d.name}</div>
+                        <div style={{ fontSize: 10, fontWeight: 700, color: C.t1 }}>{wMetric === 'qty' ? (d.value||0).toLocaleString('en-IN') : fmtVal(d.value||0)}</div>
+                        <div style={{ fontSize: 10, color: C.t3, minWidth: 36, textAlign: 'right' }}>{d.pct}%</div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
               </div>
-              {/* Chart 2: RTO Rate % + Avg TAT dual line */}
+              {/* Right: Del% / RTO% / Avg TAT bar chart */}
               <div style={cardStyle}>
-                <div style={chartTitle}>RTO Rate % & Avg TAT by Weight Slab</div>
+                <div style={chartTitle}>Delivery Performance by Weight Slab</div>
                 <ResponsiveContainer width="100%" height={220}>
-                  <ComposedChart data={ordered} margin={{ top: 8, right: 30, left: -10, bottom: 0 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke={C.border} />
-                    <XAxis dataKey="slab" tick={{ fontSize: 10, fill: C.t2 }} />
-                    <YAxis yAxisId="left" tick={{ fontSize: 10, fill: C.t2 }} unit="%" />
-                    <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 10, fill: C.t2 }} unit="d" />
+                  <ComposedChart data={ordered} layout="vertical" margin={{ top: 4, right: 50, left: 40, bottom: 0 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke={C.border} horizontal={false} />
+                    <XAxis type="number" tick={{ fontSize: 10, fill: C.t2 }} unit="%" domain={[0, 100]} />
+                    <YAxis type="category" dataKey="slab" tick={{ fontSize: 10, fill: C.t2 }} width={48} />
                     <Tooltip content={({ active, payload, label }) => {
                       if (!active || !payload?.length) return null
                       const row = ordered.find(r => r.slab === label) || {}
                       return (
-                        <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 8, padding: '10px 14px', fontSize: 11, color: C.t1 }}>
-                          <div style={{ fontWeight: 700, marginBottom: 6 }}>{label}</div>
-                          <div style={{ color: C.t2, marginBottom: 4 }}>Total : <strong>{(row.total||0).toLocaleString('en-IN')}</strong></div>
-                          {payload.map(p => (
-                            <div key={p.dataKey} style={{ color: p.color }}>
-                              {p.name} : <strong>{p.dataKey === 'avg_tat' ? `${p.value}d` : `${p.value}%`}</strong>
-                            </div>
-                          ))}
+                        <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 8, padding: '8px 12px', fontSize: 11, color: C.t1 }}>
+                          <div style={{ fontWeight: 700, marginBottom: 4 }}>{label}</div>
+                          <div style={{ color: C.t2 }}>Total: <strong>{(row.total||0).toLocaleString('en-IN')}</strong></div>
+                          <div style={{ color: '#4ADE80' }}>Del %: <strong>{row.del_pct??'—'}%</strong></div>
+                          <div style={{ color: C.red.tx }}>RTO %: <strong>{row.rto_pct??'—'}%</strong></div>
+                          <div style={{ color: '#60A5FA' }}>Avg TAT: <strong>{row.avg_tat??'—'}d</strong></div>
                         </div>
                       )
                     }} />
                     <Legend wrapperStyle={{ fontSize: 10 }} />
-                    <Line yAxisId="left" type="monotone" dataKey="rto_pct" name="RTO Rate %" stroke={C.red.tx} strokeWidth={2} dot={{ r: 3 }} />
-                    <Line yAxisId="right" type="monotone" dataKey="avg_tat" name="Avg TAT" stroke="#60A5FA" strokeWidth={2} dot={{ r: 3 }} />
+                    <Bar dataKey="del_pct" name="Del %" fill="#4ADE80" radius={[0,3,3,0]} barSize={10} />
+                    <Bar dataKey="rto_pct" name="RTO %" fill={C.red.tx} radius={[0,3,3,0]} barSize={10} />
                   </ComposedChart>
                 </ResponsiveContainer>
+                {/* Avg TAT legend row */}
+                <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap', marginTop: 6 }}>
+                  {ordered.map(r => (
+                    <div key={r.slab} style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 10, color: C.t2 }}>
+                      <div style={{ width: 8, height: 8, borderRadius: '50%', background: r.color }} />
+                      {r.slab}: <strong style={{ color: C.t1 }}>{r.avg_tat??'—'}d</strong>
+                    </div>
+                  ))}
+                </div>
               </div>
             </div>
           )

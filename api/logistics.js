@@ -494,19 +494,21 @@ by_weight_slab AS (
   SELECT
     CASE
       WHEN weight_g IS NULL THEN 'Unknown'
-      WHEN weight_g <= 500 THEN '0-500g'
-      WHEN weight_g <= 1000 THEN '500g-1kg'
-      WHEN weight_g <= 2000 THEN '1-2kg'
+      WHEN weight_g <= 2000 THEN '0-2kg'
       WHEN weight_g <= 5000 THEN '2-5kg'
-      ELSE '5kg+'
+      WHEN weight_g <= 10000 THEN '5-10kg'
+      WHEN weight_g <= 20000 THEN '10-20kg'
+      WHEN weight_g <= 50000 THEN '20-50kg'
+      ELSE '50kg+'
     END AS slab,
     CASE
       WHEN weight_g IS NULL THEN 0
-      WHEN weight_g <= 500 THEN 1
-      WHEN weight_g <= 1000 THEN 2
-      WHEN weight_g <= 2000 THEN 3
-      WHEN weight_g <= 5000 THEN 4
-      ELSE 5
+      WHEN weight_g <= 2000 THEN 1
+      WHEN weight_g <= 5000 THEN 2
+      WHEN weight_g <= 10000 THEN 3
+      WHEN weight_g <= 20000 THEN 4
+      WHEN weight_g <= 50000 THEN 5
+      ELSE 6
     END AS slab_order,
     COUNT(awb) AS total,
     COUNTIF(unified_status='Delivered') AS delivered,
@@ -514,7 +516,8 @@ by_weight_slab AS (
     COUNTIF(unified_status='Intransit') AS in_transit,
     ROUND(SAFE_DIVIDE(COUNTIF(unified_status='Delivered') * 100.0, COUNT(awb)), 1) AS del_pct,
     ROUND(SAFE_DIVIDE(COUNTIF(unified_status='RTO') * 100.0, COUNT(awb)), 1) AS rto_pct,
-    ROUND(AVG(IF(pickup_ts IS NOT NULL AND delivery_ts IS NOT NULL AND TIMESTAMP_DIFF(delivery_ts, pickup_ts, MINUTE) BETWEEN 0 AND 28800, TIMESTAMP_DIFF(delivery_ts, pickup_ts, MINUTE) / 1440.0, NULL)), 2) AS avg_tat
+    ROUND(AVG(IF(pickup_ts IS NOT NULL AND delivery_ts IS NOT NULL AND TIMESTAMP_DIFF(delivery_ts, pickup_ts, MINUTE) BETWEEN 0 AND 28800, TIMESTAMP_DIFF(delivery_ts, pickup_ts, MINUTE) / 1440.0, NULL)), 2) AS avg_tat,
+    ROUND(SUM(invoice_value), 0) AS total_value
   FROM base
   GROUP BY 1, 2
 ),
