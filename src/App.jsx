@@ -1234,8 +1234,8 @@ function LogisticsPage({ filters }) {
         {(() => {
           const wData = (data.byWeightSlab || []).filter(r => r.slab !== 'Unknown')
           if (!wData.length) return null
-          const SLABS = ['0-2kg','2-5kg','5-10kg','10-20kg','20-50kg','50kg+']
-          const SLAB_COLORS = ['#60A5FA','#34D399','#FBBF24','#F87171','#A78BFA','#FB923C']
+          const SLABS = ['0-500g','500g-1kg','1-2kg','2-5kg','5-10kg','10-20kg','20-50kg','50kg+']
+          const SLAB_COLORS = ['#60A5FA','#38BDF8','#93C5FD','#34D399','#FBBF24','#F87171','#A78BFA','#FB923C']
           const ordered = SLABS.map((s,i) => { const r = wData.find(x => x.slab === s); return r ? { ...r, color: SLAB_COLORS[i] } : null }).filter(Boolean)
           const grandTotal = ordered.reduce((s,r) => s + (r.total||0), 0) || 1
           const grandValue = ordered.reduce((s,r) => s + (r.total_value||0), 0) || 1
