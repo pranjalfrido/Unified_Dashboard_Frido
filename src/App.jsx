@@ -1282,9 +1282,9 @@ function LogisticsPage({ filters }) {
                     {donutData.map(d => (
                       <div key={d.name} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                         <div style={{ width: 10, height: 10, borderRadius: '50%', background: d.color, flexShrink: 0 }} />
-                        <div style={{ fontSize: 10, color: C.t2, flex: 1 }}>{d.name}</div>
-                        <div style={{ fontSize: 10, fontWeight: 700, color: C.t1 }}>{wMetric === 'qty' ? (d.value||0).toLocaleString('en-IN') : fmtVal(d.value||0)}</div>
-                        <div style={{ fontSize: 10, color: C.t3, minWidth: 36, textAlign: 'right' }}>{d.pct}%</div>
+                        <div style={{ fontSize: 12, color: C.t2, flex: 1 }}>{d.name}</div>
+                        <div style={{ fontSize: 12, fontWeight: 700, color: C.t1 }}>{wMetric === 'qty' ? (d.value||0).toLocaleString('en-IN') : fmtVal(d.value||0)}</div>
+                        <div style={{ fontSize: 12, color: C.t3, minWidth: 36, textAlign: 'right' }}>{d.pct}%</div>
                       </div>
                     ))}
                   </div>
@@ -1294,10 +1294,10 @@ function LogisticsPage({ filters }) {
               <div style={cardStyle}>
                 <div style={chartTitle}>Delivery Performance by Weight Slab</div>
                 <ResponsiveContainer width="100%" height={220}>
-                  <ComposedChart data={ordered} layout="vertical" margin={{ top: 4, right: 50, left: 40, bottom: 0 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke={C.border} horizontal={false} />
-                    <XAxis type="number" tick={{ fontSize: 10, fill: C.t2 }} unit="%" domain={[0, 100]} />
-                    <YAxis type="category" dataKey="slab" tick={{ fontSize: 10, fill: C.t2 }} width={48} />
+                  <ComposedChart data={ordered} margin={{ top: 4, right: 10, left: -10, bottom: 0 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke={C.border} vertical={false} />
+                    <XAxis dataKey="slab" tick={{ fontSize: 10, fill: C.t2 }} />
+                    <YAxis tick={{ fontSize: 10, fill: C.t2 }} unit="%" domain={[0, 100]} />
                     <Tooltip content={({ active, payload, label }) => {
                       if (!active || !payload?.length) return null
                       const row = ordered.find(r => r.slab === label) || {}
@@ -1307,19 +1307,19 @@ function LogisticsPage({ filters }) {
                           <div style={{ color: C.t2 }}>Total: <strong>{(row.total||0).toLocaleString('en-IN')}</strong></div>
                           <div style={{ color: '#4ADE80' }}>Del %: <strong>{row.del_pct??'—'}%</strong></div>
                           <div style={{ color: C.red.tx }}>RTO %: <strong>{row.rto_pct??'—'}%</strong></div>
-                          <div style={{ color: '#60A5FA' }}>Avg TAT: <strong>{row.avg_tat??'—'}d</strong></div>
+                          <div style={{ color: '#60A5FA' }}>Intrasit TAT: <strong>{row.avg_tat??'—'}d</strong></div>
                         </div>
                       )
                     }} />
                     <Legend wrapperStyle={{ fontSize: 10 }} />
-                    <Bar dataKey="del_pct" name="Del %" fill="#4ADE80" radius={[0,3,3,0]} barSize={10} />
-                    <Bar dataKey="rto_pct" name="RTO %" fill={C.red.tx} radius={[0,3,3,0]} barSize={10} />
+                    <Bar dataKey="del_pct" name="Del %" fill="#4ADE80" radius={[3,3,0,0]} barSize={14} />
+                    <Bar dataKey="rto_pct" name="RTO %" fill={C.red.tx} radius={[3,3,0,0]} barSize={14} />
                   </ComposedChart>
                 </ResponsiveContainer>
-                {/* Avg TAT legend row */}
+                {/* Intrasit TAT legend row */}
                 <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap', marginTop: 6 }}>
                   {ordered.map(r => (
-                    <div key={r.slab} style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 10, color: C.t2 }}>
+                    <div key={r.slab} style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 12, color: C.t2 }}>
                       <div style={{ width: 8, height: 8, borderRadius: '50%', background: r.color }} />
                       {r.slab}: <strong style={{ color: C.t1 }}>{r.avg_tat??'—'}d</strong>
                     </div>
