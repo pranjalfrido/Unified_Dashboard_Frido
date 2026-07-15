@@ -1115,10 +1115,9 @@ function LogisticsPage({ filters }) {
                             return (
                               <tr key={row.facility} style={{ background: i%2===0?'transparent':`${C.border}33` }}>
                                 <td style={tdL}>{row.facility}</td>
-                                <td style={tdS}>{pctB(row.proc_0_12h, tot)}</td>
-                                <td style={tdS}>{pctB(row.proc_12_24h, tot)}</td>
-                                <td style={tdS}>{pctB(row.proc_24_48h, tot)}</td>
-                                <td style={{ ...tdS, color: (row.proc_48plus/tot)>0.2?'#dc2626':C.t1, fontWeight: (row.proc_48plus/tot)>0.2?700:400 }}>{pctB(row.proc_48plus, tot)}</td>
+                                {[row.proc_0_12h, row.proc_12_24h, row.proc_24_48h, row.proc_48plus].map((v, ci) => (
+                                  <td key={ci} style={{ ...tdS, color: (v/tot)>0.2?'#dc2626':C.t1, fontWeight: (v/tot)>0.2?700:400 }}>{pctB(v, tot)}</td>
+                                ))}
                               </tr>
                             )
                           })}
@@ -1158,10 +1157,9 @@ function LogisticsPage({ filters }) {
                                 <tr key={row.courier_group} style={{ background: i%2===0?'transparent':`${C.border}33` }}>
                                   <td style={tdL}>{row.courier_group}</td>
                                   <td style={tdS}>{tot.toLocaleString('en-IN')}</td>
-                                  <td style={tdS}>{pctB(row.bucket_0_1, tot)}</td>
-                                  <td style={tdS}>{pctB(row.bucket_2_3, tot)}</td>
-                                  <td style={tdS}>{pctB(row.bucket_4_5, tot)}</td>
-                                  <td style={{ ...tdS, color: (row.bucket_5plus/tot)>0.2?'#dc2626':C.t1, fontWeight: (row.bucket_5plus/tot)>0.2?700:400 }}>{pctB(row.bucket_5plus, tot)}</td>
+                                  {[row.bucket_0_1, row.bucket_2_3, row.bucket_4_5, row.bucket_5plus].map((v, ci) => (
+                                    <td key={ci} style={{ ...tdS, color: (v/tot)>0.2?'#dc2626':C.t1, fontWeight: (v/tot)>0.2?700:400 }}>{pctB(v, tot)}</td>
+                                  ))}
                                 </tr>
                               )
                             })}
@@ -1202,10 +1200,9 @@ function LogisticsPage({ filters }) {
                             return (
                               <tr key={row.facility} style={{ background: i%2===0?'transparent':`${C.border}33` }}>
                                 <td style={tdL}>{row.facility}</td>
-                                <td style={tdS}>{pctB(row.ord_0_1, tot)}</td>
-                                <td style={tdS}>{pctB(row.ord_2_3, tot)}</td>
-                                <td style={tdS}>{pctB(row.ord_4_5, tot)}</td>
-                                <td style={{ ...tdS, color: (row.ord_5plus/tot)>0.2?'#dc2626':C.t1, fontWeight: (row.ord_5plus/tot)>0.2?700:400 }}>{pctB(row.ord_5plus, tot)}</td>
+                                {[row.ord_0_1, row.ord_2_3, row.ord_4_5, row.ord_5plus].map((v, ci) => (
+                                  <td key={ci} style={{ ...tdS, color: (v/tot)>0.2?'#dc2626':C.t1, fontWeight: (v/tot)>0.2?700:400 }}>{pctB(v, tot)}</td>
+                                ))}
                               </tr>
                             )
                           })}
