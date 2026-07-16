@@ -1878,251 +1878,366 @@ function HeroKPICard({ label, value, sub, chg, sparkData, dataKey = 'cur', color
 }
 
 // ── Overview Page ─────────────────────────────────────────────
-function OverviewPage({ data, alerts }) {
-  const { totalRev, totalExcRev, gstCollected, nOrders, totalQty, blendedAOV, nDays, chMap, catMap, subCatMap, stateMap, nCusts, repeatCusts, dailyArr, orders, htCount, htRev, multiItemOrders } = data
-  const [selectedCat, setSelectedCat] = useState(null)
+function OverviewPage({ data, alerts, logisticsData }) {
+  const { totalRev, totalExcRev, nOrders, totalQty, blendedAOV, nDays, chMap, catMap, subCatMap, stateMap, nCusts, repeatCusts, dailyArr, prevRev, prevOrders, orderStatusRevMap = {}, rtoRevDirect, returnRev, cirRev, exchangeRev } = data
+  const sh = data.shopify || {}
+  const ads = data.ads || {}
+
+  // ── Revenue deltas ──
+  const revDelta = prevRev > 0 ? ((totalRev - prevRev) / prevRev * 100) : null
+  const ordDelta = (data.prevOrders || 0) > 0 ? ((nOrders - data.prevOrders) / data.prevOrders * 100) : null
+
+  // ── Channel calcs ──
   const shopifyRev = chMap['Shopify']?.rev || 0
-  const d2cPct = totalRev ? (shopifyRev / totalRev * 100).toFixed(1) : '0'
-  const mktPct = (100 - parseFloat(d2cPct)).toFixed(1)
   const qcChs = ['Blinkit', 'Instamart', 'Zepto']
   const qcRev = qcChs.reduce((s, c) => s + (chMap[c]?.rev || 0), 0)
-  const qcOrds = qcChs.reduce((s, c) => s + (chMap[c]?.orders || 0), 0)
-  const qcAOV = qcOrds ? Math.round(qcRev / qcOrds) : 0
-  const repeatRate = nCusts ? (repeatCusts / nCusts * 100).toFixed(1) : '0'
+  const amzRev = chMap['Amazon']?.rev || 0
+  const fkRev = chMap['Flipkart']?.rev || 0
   const sortedCh = Object.entries(chMap).filter(([, v]) => v.rev > 0).sort((a, b) => b[1].rev - a[1].rev)
-  const maxChRev = sortedCh[0]?.[1].rev || 1
-  const bestAOV = sortedCh.reduce((b, [ch, v]) => { const a = v.orders ? v.rev / v.orders : 0; return a > b.aov ? { ch, aov: a } : b }, { ch: '', aov: 0 })
-  const allCats = Object.entries(catMap).map(([k, v]) => ({ name: k, rev: v.rev, orders: v.orders.size, aov: v.orders.size ? v.rev / v.orders.size : 0 })).sort((a, b) => b.rev - a.rev)
-  const channels = Object.keys(C.ch).filter(ch => chMap[ch] && chMap[ch].rev > 0)
-  const voucherOrders = orders.filter(o => o.voucher).length
+
+  // ── Returns health ──
+  const cancelRev = orderStatusRevMap['Cancelled'] || 0
+  const cancelPct = totalRev > 0 ? cancelRev / totalRev * 100 : 0
+  const rtoPct = totalRev > 0 ? ((rtoRevDirect || 0) + (returnRev || 0)) / totalRev * 100 : 0
+  const cirPct = totalRev > 0 ? (cirRev || 0) / totalRev * 100 : 0
+  const exchPct = totalRev > 0 ? (exchangeRev || 0) / totalRev * 100 : 0
+  const totalReturnPct = cancelPct + rtoPct + cirPct
+
+  // ── Ads ──
+  const adsTotals = ads.totals || []
+  const totalAdSpend = adsTotals.reduce((s, x) => s + (x.spend || 0), 0)
+  const shopifyExcRev = chMap['Shopify']?.excRev || 0
+  const allNetRev = shopifyExcRev + (chMap['Amazon']?.excRev || 0) + (chMap['Blinkit']?.excRev || 0) + (chMap['Zepto']?.excRev || 0) + (chMap['Instamart']?.excRev || 0) + (chMap['Myntra']?.excRev || 0) + (chMap['Flipkart']?.excRev || 0)
+  const overallRoas = totalAdSpend > 0 ? allNetRev / totalAdSpend : 0
+  const platformsWithSpend = adsTotals.filter(t => t.spend > 0).sort((a, b) => b.spend - a.spend)
+
+  // ── Categories ──
+  const allCats = Object.entries(catMap).map(([k, v]) => {
+    const shCat = sh.catMap?.[k] || {}
+    return { name: k, rev: v.rev, orders: (v.orders?.size ?? v.orders) || 0, cancelRev: shCat.cancelRev || 0, rtoRev: shCat.rtoRev || 0, cirRev: shCat.cirRev || 0 }
+  }).sort((a, b) => b.rev - a.rev)
+
+  // ── Logistics ──
+  const lkpi = logisticsData?.kpis || {}
+  const lTotal = parseInt(lkpi.total_shipments) || 0
+  const lDelivered = parseInt(lkpi.delivered) || 0
+  const lRto = parseInt(lkpi.rto) || 0
+  const lZRto = parseInt(lkpi.z_rto) || 0
+  const lSla = parseInt(lkpi.sla_breach) || 0
+  const lDelPct = lTotal > 0 ? lDelivered / lTotal * 100 : 0
+  const lRtoPct = lTotal > 0 ? lRto / lTotal * 100 : 0
+  const lZRtoPct = lTotal > 0 ? lZRto / lTotal * 100 : 0
+  const lSlaPct = lTotal > 0 ? lSla / lTotal * 100 : 0
+  const lFasr = lkpi.delivered_1attempt && lkpi.total_ofd_attempts ? (parseInt(lkpi.delivered_1attempt) / (parseInt(lkpi.total_ofd_attempts) || 1) * 100) : null
+  const lAvgFul = parseFloat(lkpi.avg_fulfilment) || null
+  const couriers = (logisticsData?.byCourier || []).filter(c => parseInt(c.total) > 0).sort((a, b) => parseInt(b.total) - parseInt(a.total)).slice(0, 5)
+
+  // ── Geography ──
+  const topStates = Object.entries(stateMap).sort((a, b) => b[1].rev - a[1].rev).slice(0, 5)
+  const stateTotal = topStates.reduce((s, [, v]) => s + v.rev, 0) || 1
+
+  // ── Helpers ──
+  const delta = (v, color = true) => {
+    if (v === null || v === undefined) return null
+    const pos = v >= 0
+    const col = color ? (pos ? '#0D9E68' : '#B91C1C') : C.t3
+    return <span style={{ fontSize: 10, fontWeight: 700, color: col, marginLeft: 4 }}>{pos ? '▲' : '▼'}{Math.abs(v).toFixed(1)}%</span>
+  }
+  const secHdr = (title, note) => (
+    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+      <span style={{ fontSize: 13, fontWeight: 700, color: C.t1 }}>{title}</span>
+      {note && <span style={{ fontSize: 11, color: C.t3 }}>{note}</span>}
+    </div>
+  )
+  const pill = (label, value, color = C.t1, bg = C.bg) => (
+    <div style={{ background: bg, borderRadius: 10, padding: '10px 14px', display: 'flex', flexDirection: 'column', gap: 3 }}>
+      <div style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.05em', color: C.t3 }}>{label}</div>
+      <div style={{ fontSize: 18, fontWeight: 700, color, fontFamily: 'var(--mono)' }}>{value}</div>
+    </div>
+  )
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-      {/* Hero row */}
-      <div className="g-hero">
-        <div className="hero-grad" style={{ borderRadius: 16, padding: '24px 26px', position: 'relative', overflow: 'hidden', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 16, paddingBottom: 24 }}>
+
+      {/* ── SECTION 1: Revenue Hero ── */}
+      <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr 1fr 1fr', gap: 12 }}>
+        <div className="hero-grad" style={{ borderRadius: 14, padding: '20px 22px', position: 'relative', overflow: 'hidden', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
           <div>
-            <div style={{ fontSize: 10.5, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.08em', color: 'rgba(0,0,0,.5)', marginBottom: 8 }}>Gross Revenue · Inc. GST</div>
-            <div className="hero-val" style={{ fontSize: 42, fontWeight: 700, color: '#13121A', letterSpacing: '-.04em', lineHeight: 1, marginBottom: 6 }}>{totalRev >= 1e7 ? `₹${(totalRev / 1e7).toFixed(2)} Cr` : `₹${(totalRev / 1e5).toFixed(1)} L`}</div>
-            <div style={{ fontSize: 12.5, color: 'rgba(0,0,0,.55)', lineHeight: 1.7 }}>Net {fmt(totalExcRev)} · GST {fmt(gstCollected)}<br />{nDays}d · {Object.keys(chMap).length} channels · {fmtN(nOrders)} orders</div>
+            <div style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.08em', color: 'rgba(0,0,0,.45)', marginBottom: 6 }}>Gross Revenue · Inc. GST</div>
+            <div style={{ fontSize: 38, fontWeight: 700, color: '#13121A', letterSpacing: '-.04em', lineHeight: 1, marginBottom: 4 }}>{totalRev >= 1e7 ? `₹${(totalRev / 1e7).toFixed(2)} Cr` : `₹${(totalRev / 1e5).toFixed(1)} L`}</div>
+            <div style={{ fontSize: 11.5, color: 'rgba(0,0,0,.5)' }}>Net {fmt(totalExcRev)} · {nDays}d · {fmtN(nOrders)} orders</div>
           </div>
-          <div style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 11, fontWeight: 600, padding: '3px 9px', borderRadius: 5, background: 'rgba(0,0,0,.1)', color: '#13121A', marginTop: 10, width: 'fit-content' }}>
-            Daily avg {fmt(totalRev / nDays)}
+          <div style={{ display: 'flex', gap: 8, marginTop: 10, alignItems: 'center' }}>
+            <span style={{ fontSize: 11, fontWeight: 600, padding: '3px 9px', borderRadius: 5, background: 'rgba(0,0,0,.1)', color: '#13121A' }}>Daily avg {fmt(totalRev / nDays)}</span>
+            {delta(revDelta)}
           </div>
-          <div style={{ position: 'absolute', right: -10, bottom: -20, fontSize: 100, color: 'rgba(0,0,0,.04)', pointerEvents: 'none' }}>₹</div>
+          <div style={{ position: 'absolute', right: -8, bottom: -16, fontSize: 90, color: 'rgba(0,0,0,.04)', pointerEvents: 'none' }}>₹</div>
         </div>
-        <KPICard center label="Orders" value={fmtN(nOrders)} sub={`${fmtN(totalQty)} units · ${(totalQty / (nOrders || 1)).toFixed(1)}/order`} />
-        <KPICard center label="Blended AOV" value={`₹${Math.round(blendedAOV).toLocaleString('en-IN')}`} sub={`Best: ${bestAOV.ch} ₹${Math.round(bestAOV.aov).toLocaleString('en-IN')}`} />
-        <KPICard center label="Unique Customers" value={fmtN(nCusts)} sub={`${repeatRate}% repeat`} />
+        <KPICard center label="Orders" value={fmtN(nOrders)} sub={<>{fmtN(totalQty)} units{delta(ordDelta)}</>} />
+        <KPICard center label="Blended AOV" value={`₹${Math.round(blendedAOV).toLocaleString('en-IN')}`} sub={`${nDays} day period`} />
+        <KPICard center label="Shopify Customers" value={fmtN(nCusts)} sub={`${nCusts ? (repeatCusts / nCusts * 100).toFixed(1) : 0}% repeat`} />
+        <KPICard center label="Net Revenue" value={fmt(totalExcRev - cancelRev - (rtoRevDirect||0) - (returnRev||0) - (cirRev||0))} sub="After returns & cancel" />
       </div>
 
-      {/* 9 KPIs */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7,1fr)', gap: 10 }}>
-        <KPICard label="Daily avg revenue" value={fmt(totalRev / nDays)} sub={`${nDays} days`} />
-        <KPICard label="D2C Share" value={`${d2cPct}%`} sub={`Shopify ${fmt(shopifyRev)}`} />
-        <KPICard label="Q-commerce Share" value={pct(qcRev, totalRev)} sub={`${fmt(qcRev)} · Blinkit+Instamart+Zepto`} />
-        <KPICard label="Marketplace Share" value={`${(100 - parseFloat(d2cPct) - parseFloat(pct(qcRev, totalRev))).toFixed(1)}%`} sub={`Amazon+Flipkart+others ${fmt(totalRev - shopifyRev - qcRev)}`} />
-        <KPICard label="Multi-item rate" value={pct(multiItemOrders, nOrders)} sub="+AOV premium" />
-        <KPICard label="Voucher penetration" value={pct(voucherOrders, nOrders)} sub={`${fmtN(voucherOrders)} orders`} />
-        <KPICard label="High-ticket ≥₹10K" value={fmtN(htCount)} sub={fmt(htRev)} />
-      </div>
-
-      {/* Trend + Channels */}
-      <div className="g-21">
-        <Card title="Revenue trend · daily" note="₹ stacked by channel">
-          <RevTrendChart dailyArr={dailyArr} channels={channels} />
-          <div style={{ marginTop: 12 }}>
-            <div style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.07em', color: C.t3, marginBottom: 7 }}>D2C vs Q-Commerce vs Marketplace</div>
-            {(() => {
-              const qcP = totalRev ? qcRev / totalRev * 100 : 0
-              const d2cP = parseFloat(d2cPct)
-              const mktP = Math.max(0, 100 - d2cP - qcP)
-              const segs = [
-                { pct: d2cP, bg: C.acc, color: '#13121A', label: `${d2cP.toFixed(1)}% D2C` },
-                { pct: qcP,  bg: '#0D9E68', color: '#fff', label: `${qcP.toFixed(1)}% QC` },
-                { pct: mktP, bg: '#B0ADB8', color: '#13121A', label: `${mktP.toFixed(1)}% Mkt` },
-              ]
-              return (
-                <div>
-                  <div className="spbar">
-                    {segs.map((s, i) => (
-                      <div key={i} style={{ width: `${s.pct}%`, background: s.bg, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 700, color: s.color, overflow: 'hidden', whiteSpace: 'nowrap', minWidth: s.pct > 0 ? 4 : 0 }}>
-                        {s.pct >= 8 ? s.label : ''}
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )
-            })()}
-            <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap', marginTop: 8 }}>
-              {sortedCh.slice(0, 6).map(([ch, v]) => (
-                <div key={ch} style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 11.5, color: C.t2 }}>
-                  <span style={{ width: 8, height: 8, borderRadius: '50%', background: C.ch[ch] || C.acc, display: 'inline-block', border: C.ch[ch] === '#FFD600' ? '1px solid #E6C200' : 'none' }} />
-                  {ch} {fmt(v.rev)}
-                </div>
-              ))}
-            </div>
-          </div>
-        </Card>
-        <Card title="Channel breakdown">
-          {sortedCh.map(([ch, v]) => <HBar key={ch} dot={C.ch[ch] || C.acm} label={ch} width={(v.rev / maxChRev) * 100} value={fmt(v.rev)} pctVal={pct(v.rev, totalRev)} />)}
-        </Card>
-      </div>
-
-      {/* Scorecard row — scorecard + new vs repeat side by side, stretch to same height */}
-      <div style={{ display: 'flex', gap: 12, alignItems: 'stretch' }}>
-        <Card title="Channel scorecard" style={{ flexShrink: 0, width: 'fit-content', minWidth: 520 }}>
-          <DataTable columns={[
-            { key: 'ch', label: 'Channel' },
-            { key: 'rev', label: 'Revenue', align: 'right', mono: true, render: v => fmt(v) },
-            { key: 'orders', label: 'Orders', align: 'right', render: v => fmtN(v) },
-            { key: 'aov', label: 'AOV', align: 'right', mono: true, render: v => `₹${Math.round(v).toLocaleString('en-IN')}` },
-          ]} rows={Object.keys(C.ch).filter(ch => chMap[ch] && chMap[ch].rev > 0).map(ch => { const v = chMap[ch]; return { ch, rev: v.rev, orders: v.orders, aov: v.orders ? v.rev / v.orders : 0 } })} />
-        </Card>
-        <div style={{ flex: 1, background: C.card, border: `1px solid ${C.border}`, borderRadius: 13, padding: '16px 18px', display: 'flex', flexDirection: 'column' }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 11 }}>
-            <span style={{ fontSize: 13, fontWeight: 600, color: C.t1 }}>New vs Repeat Customers</span>
-            <span style={{ fontSize: 11.5, color: C.t3 }}>{fmtN(nCusts)} total</span>
-          </div>
+      {/* ── SECTION 2: Channel Scorecard ── */}
+      <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 13, padding: '16px 18px' }}>
+        {secHdr('Channel Scorecard', `${sortedCh.length} active channels`)}
+        <div style={{ overflowX: 'auto' }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11.5 }}>
+            <thead>
+              <tr>{['Channel','Revenue','Share','Orders','AOV','vs Prev'].map((h, i) => (
+                <th key={h} style={{ fontSize: 9, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.05em', color: C.t3, textAlign: i === 0 ? 'left' : 'right', padding: '3px 8px 7px', borderBottom: `1px solid ${C.border}`, whiteSpace: 'nowrap' }}>{h}</th>
+              ))}</tr>
+            </thead>
+            <tbody>
+              {sortedCh.map(([ch, v], i) => {
+                const aov = v.orders ? v.rev / v.orders : 0
+                const sharePct = totalRev > 0 ? v.rev / totalRev * 100 : 0
+                const prevChRev = data.prevChMap?.[ch] || 0
+                const chDelta = prevChRev > 0 ? (v.rev - prevChRev) / prevChRev * 100 : null
+                return (
+                  <tr key={ch} style={{ borderBottom: i < sortedCh.length - 1 ? `1px solid ${C.border}` : 'none' }}>
+                    <td style={{ padding: '6px 8px', display: 'flex', alignItems: 'center', gap: 7 }}>
+                      <span style={{ width: 9, height: 9, borderRadius: '50%', background: C.ch[ch] || C.acc, flexShrink: 0, display: 'inline-block' }} />
+                      <span style={{ fontWeight: 600, color: C.t1 }}>{ch}</span>
+                    </td>
+                    <td style={{ padding: '6px 8px', textAlign: 'right', fontFamily: 'var(--mono)', color: C.t1 }}>{fmt(v.rev)}</td>
+                    <td style={{ padding: '6px 8px', textAlign: 'right', color: C.t3 }}>{sharePct.toFixed(1)}%</td>
+                    <td style={{ padding: '6px 8px', textAlign: 'right', color: C.t2 }}>{fmtN(v.orders)}</td>
+                    <td style={{ padding: '6px 8px', textAlign: 'right', fontFamily: 'var(--mono)', color: C.t2 }}>₹{Math.round(aov).toLocaleString('en-IN')}</td>
+                    <td style={{ padding: '6px 8px', textAlign: 'right' }}>{chDelta !== null ? delta(chDelta) : <span style={{ color: C.t3, fontSize: 10 }}>—</span>}</td>
+                  </tr>
+                )
+              })}
+            </tbody>
+          </table>
+        </div>
+        {/* D2C / QC / Mkt split bar */}
+        <div style={{ marginTop: 14 }}>
+          <div style={{ fontSize: 9, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.06em', color: C.t3, marginBottom: 5 }}>Revenue Mix</div>
           {(() => {
-            const newCusts = nCusts - repeatCusts
-            const donutData = [
-              { name: 'New', value: newCusts, color: C.acc },
-              { name: 'Repeat', value: repeatCusts, color: '#0D9E68' },
-            ]
-            const totalOrders = dailyArr.map(d => ({ date: d.date, orders: Object.entries(d).filter(([k]) => k.endsWith('_o')).reduce((s, [, v]) => s + (v || 0), 0) }))
-            const newPct = nCusts ? newCusts / nCusts * 100 : 0
-            const repPct = nCusts ? repeatCusts / nCusts * 100 : 0
-            const avgOrdersPerDay = totalOrders.length ? (totalOrders.reduce((s, d) => s + d.orders, 0) / totalOrders.length).toFixed(0) : 0
-            const peakDay = totalOrders.reduce((a, b) => b.orders > a.orders ? b : a, { orders: 0, date: '' })
+            const d2cP = totalRev ? shopifyRev / totalRev * 100 : 0
+            const qcP = totalRev ? qcRev / totalRev * 100 : 0
+            const amzP = totalRev ? amzRev / totalRev * 100 : 0
+            const fkP = totalRev ? fkRev / totalRev * 100 : 0
+            const othP = Math.max(0, 100 - d2cP - qcP - amzP - fkP)
+            const segs = [
+              { pct: d2cP, bg: C.ch.Shopify, label: `Shopify ${d2cP.toFixed(0)}%` },
+              { pct: amzP, bg: C.ch.Amazon, label: `Amazon ${amzP.toFixed(0)}%` },
+              { pct: fkP, bg: C.ch.Flipkart, label: `Flipkart ${fkP.toFixed(0)}%` },
+              { pct: qcP, bg: '#0D9E68', label: `QC ${qcP.toFixed(0)}%` },
+              { pct: othP, bg: '#B0ADB8', label: `Other ${othP.toFixed(0)}%` },
+            ].filter(s => s.pct > 0)
             return (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-                {/* Top: donut + stats */}
-                <div style={{ display: 'flex', alignItems: 'center', gap: 32 }}>
-                  <div style={{ position: 'relative', flexShrink: 0 }}>
-                    <PieChart width={140} height={140}>
-                      <Pie data={donutData} cx={68} cy={68} innerRadius={44} outerRadius={66} dataKey="value" paddingAngle={3}>
-                        {donutData.map((d, i) => <Cell key={i} fill={d.color} />)}
-                      </Pie>
-                    </PieChart>
-                    <div style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%,-50%)', textAlign: 'center', pointerEvents: 'none' }}>
-                      <div style={{ fontSize: 15, fontWeight: 700, color: C.t1, lineHeight: 1 }}>{fmtN(nCusts)}</div>
-                      <div style={{ fontSize: 8.5, color: C.t3, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.04em', marginTop: 2 }}>Total</div>
-                    </div>
+              <div style={{ display: 'flex', height: 22, borderRadius: 6, overflow: 'hidden', gap: 1 }}>
+                {segs.map((s, i) => (
+                  <div key={i} style={{ width: `${s.pct}%`, background: s.bg, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 9.5, fontWeight: 700, color: '#fff', overflow: 'hidden', whiteSpace: 'nowrap', minWidth: s.pct > 5 ? 4 : 0 }}>
+                    {s.pct >= 8 ? s.label : ''}
                   </div>
-                  <div style={{ flex: 1 }}>
-                    <div style={{ display: 'flex', gap: 28, marginBottom: 12 }}>
-                      {donutData.map(d => (
-                        <div key={d.name}>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
-                            <span style={{ width: 8, height: 8, borderRadius: '50%', background: d.color, flexShrink: 0 }} />
-                            <span style={{ fontSize: 11, color: C.t3 }}>{d.name}</span>
-                          </div>
-                          <div style={{ fontSize: 24, fontWeight: 700, color: C.t1, letterSpacing: '-.02em', lineHeight: 1 }}>{fmtN(d.value)}</div>
-                          <div style={{ fontSize: 11, color: C.t3, marginTop: 3 }}>{nCusts ? (d.value / nCusts * 100).toFixed(1) : 0}% of total</div>
-                        </div>
-                      ))}
-                    </div>
-                    {/* New vs Repeat split bar */}
-                    <div style={{ height: 6, borderRadius: 4, overflow: 'hidden', display: 'flex', background: C.border }}>
-                      <div style={{ width: `${newPct}%`, background: C.acc, transition: 'width .5s' }} />
-                      <div style={{ width: `${repPct}%`, background: '#0D9E68', transition: 'width .5s' }} />
-                    </div>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 4 }}>
-                      <span style={{ fontSize: 10, color: C.t3 }}>New {newPct.toFixed(1)}%</span>
-                      <span style={{ fontSize: 10, color: C.t3 }}>Repeat {repPct.toFixed(1)}%</span>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Mini stat row */}
-                <div style={{ display: 'flex', gap: 0, borderTop: `1px solid ${C.border}`, borderBottom: `1px solid ${C.border}`, padding: '10px 0' }}>
-                  {[
-                    { label: 'Avg Orders/Day', value: fmtN(avgOrdersPerDay) },
-                    { label: 'Peak Day', value: peakDay.date ? peakDay.date.slice(5) : '—' },
-                    { label: 'Peak Orders', value: fmtN(peakDay.orders) },
-                    { label: 'Repeat Rate', value: repPct.toFixed(1) + '%' },
-                  ].map((s, i, arr) => (
-                    <div key={s.label} style={{ flex: 1, textAlign: 'center', borderRight: i < arr.length - 1 ? `1px solid ${C.border}` : 'none' }}>
-                      <div style={{ fontSize: 13, fontWeight: 700, color: C.t1 }}>{s.value}</div>
-                      <div style={{ fontSize: 10, color: C.t3, marginTop: 2 }}>{s.label}</div>
-                    </div>
-                  ))}
-                </div>
-
-                {/* Daily orders trend */}
-                <div>
-                  <div style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.05em', color: C.t3, marginBottom: 6 }}>Daily Orders Trend</div>
-                  <ResponsiveContainer width="100%" height={90}>
-                    <AreaChart data={totalOrders} margin={{ top: 2, right: 0, bottom: 0, left: 0 }}>
-                      <defs>
-                        <linearGradient id="ordGrad" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="5%" stopColor={C.acc} stopOpacity={0.25} />
-                          <stop offset="95%" stopColor={C.acc} stopOpacity={0} />
-                        </linearGradient>
-                      </defs>
-                      <CartesianGrid strokeDasharray="3 3" stroke={C.border} vertical={false} />
-                      <XAxis dataKey="date" tick={{ fontSize: 9, fill: C.t3 }} tickFormatter={d => d?.slice(5)} />
-                      <YAxis hide />
-                      <Tooltip content={<ChartTooltip formatter={fmtN} />} />
-                      <Area type="monotone" dataKey="orders" name="Orders" stroke={C.acc} strokeWidth={2} fill="url(#ordGrad)" dot={false} />
-                    </AreaChart>
-                  </ResponsiveContainer>
-                </div>
+                ))}
               </div>
             )
           })()}
         </div>
       </div>
 
-      {/* Category + Sub-category full width row */}
-      <div className="g-2">
-          {/* Category table */}
-          <Card title="Category Revenue" note={selectedCat ? <span style={{ cursor: 'pointer', color: C.acc, fontWeight: 600 }} onClick={() => setSelectedCat(null)}>✕ Clear</span> : `${allCats.length} total`}>
-            <div style={{ overflowX: 'auto' }}>
-              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
-                <thead>
-                  <tr>
-                    {['Category','Revenue','Orders','AOV'].map((h, i) => (
-                      <th key={h} style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.05em', color: C.t3, textAlign: i === 0 ? 'left' : 'right', padding: '3px 5px 7px', borderBottom: `1px solid ${C.border}` }}>{h}</th>
-                    ))}
+      {/* ── SECTION 3 + 4: Returns Health & Ads — side by side ── */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+
+        {/* Returns Health */}
+        <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 13, padding: '16px 18px' }}>
+          {secHdr('Returns & Cancellation Health', 'Revenue-based')}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 8, marginBottom: 14 }}>
+            {[
+              { label: 'Cancel %', val: cancelPct, rev: cancelRev, color: '#B91C1C', bg: '#FDE8E8' },
+              { label: 'RTO %', val: rtoPct, rev: (rtoRevDirect||0)+(returnRev||0), color: '#E24B4A', bg: '#FDE8E8' },
+              { label: 'CIR %', val: cirPct, rev: cirRev||0, color: '#2E74CC', bg: '#E1EFFD' },
+              { label: 'Exchange %', val: exchPct, rev: exchangeRev||0, color: '#9B59B6', bg: '#F3E8FF' },
+            ].map(({ label, val, rev, color, bg }) => (
+              <div key={label} style={{ background: bg, borderRadius: 9, padding: '10px 12px' }}>
+                <div style={{ fontSize: 9.5, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.05em', color, marginBottom: 4 }}>{label}</div>
+                <div style={{ fontSize: 20, fontWeight: 700, color, fontFamily: 'var(--mono)' }}>{val.toFixed(1)}%</div>
+                <div style={{ fontSize: 10, color, opacity: 0.7, marginTop: 2 }}>{fmt(rev)}</div>
+              </div>
+            ))}
+          </div>
+          <div style={{ borderTop: `1px solid ${C.border}`, paddingTop: 12 }}>
+            <div style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.05em', color: C.t3, marginBottom: 8 }}>Shopify Category · Cancel & RTO %</div>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11 }}>
+              <thead><tr>
+                {['Category','Revenue','Cancel %','RTO %'].map((h, i) => <th key={h} style={{ fontSize: 9, fontWeight: 700, textTransform: 'uppercase', color: C.t3, textAlign: i === 0 ? 'left' : 'right', padding: '2px 4px 6px', borderBottom: `1px solid ${C.border}` }}>{h}</th>)}
+              </tr></thead>
+              <tbody>
+                {allCats.slice(0, 6).map((r, i) => (
+                  <tr key={r.name} style={{ borderBottom: i < 5 ? `1px solid ${C.border}` : 'none' }}>
+                    <td style={{ padding: '4px 4px', color: C.t2 }}>{r.name}</td>
+                    <td style={{ padding: '4px 4px', textAlign: 'right', fontFamily: 'var(--mono)', color: C.t1 }}>{fmt(r.rev)}</td>
+                    <td style={{ padding: '4px 4px', textAlign: 'right', color: r.cancelRev/r.rev > 0.05 ? '#B91C1C' : C.t2 }}>{r.rev > 0 ? (r.cancelRev/r.rev*100).toFixed(1) : '—'}%</td>
+                    <td style={{ padding: '4px 4px', textAlign: 'right', color: (r.rtoRev+r.cirRev)/r.rev > 0.1 ? '#E24B4A' : C.t2 }}>{r.rev > 0 ? ((r.rtoRev+r.cirRev)/r.rev*100).toFixed(1) : '—'}%</td>
                   </tr>
-                </thead>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        {/* Ads Summary */}
+        <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 13, padding: '16px 18px' }}>
+          {secHdr('Ads Performance', totalAdSpend > 0 ? `${fmt(totalAdSpend)} total spend` : 'No ad data')}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 8, marginBottom: 14 }}>
+            {[
+              { label: 'Total Spend', val: fmt(totalAdSpend) },
+              { label: 'Overall ROAS', val: totalAdSpend > 0 ? `${overallRoas.toFixed(2)}x` : '—', color: overallRoas >= 2 ? '#0D9E68' : overallRoas >= 1 ? '#D97706' : '#B91C1C' },
+              { label: 'Net Rev / Ad', val: totalAdSpend > 0 ? fmt(allNetRev) : '—' },
+            ].map(({ label, val, color }) => (
+              <div key={label} style={{ background: C.bg, borderRadius: 9, padding: '10px 12px' }}>
+                <div style={{ fontSize: 9.5, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.05em', color: C.t3, marginBottom: 4 }}>{label}</div>
+                <div style={{ fontSize: 18, fontWeight: 700, color: color || C.t1, fontFamily: 'var(--mono)' }}>{val}</div>
+              </div>
+            ))}
+          </div>
+          {platformsWithSpend.length > 0 && (
+            <div style={{ borderTop: `1px solid ${C.border}`, paddingTop: 12 }}>
+              <div style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.05em', color: C.t3, marginBottom: 8 }}>Platform Breakdown</div>
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11 }}>
+                <thead><tr>
+                  {['Platform','Spend','ROAS','Clicks','CTR'].map((h, i) => <th key={h} style={{ fontSize: 9, fontWeight: 700, textTransform: 'uppercase', color: C.t3, textAlign: i === 0 ? 'left' : 'right', padding: '2px 4px 6px', borderBottom: `1px solid ${C.border}` }}>{h}</th>)}
+                </tr></thead>
                 <tbody>
-                  {allCats.map((row, i) => {
-                    const active = selectedCat === row.name
+                  {platformsWithSpend.slice(0, 6).map((t, i) => {
+                    const platRev = (['Meta','Google'].includes(t.platform) ? shopifyExcRev * (t.spend / (platformsWithSpend.filter(x => ['Meta','Google'].includes(x.platform)).reduce((s,x)=>s+x.spend,0)||1)) : chMap[t.platform]?.excRev || 0)
+                    const roas = t.spend > 0 ? platRev / t.spend : 0
+                    const ctr = t.impressions > 0 ? t.clicks / t.impressions * 100 : 0
                     return (
-                      <tr key={row.name} onClick={() => setSelectedCat(s => s === row.name ? null : row.name)}
-                        style={{ cursor: 'pointer', background: active ? C.acl : 'transparent', borderBottom: i < allCats.length - 1 ? `1px solid ${C.border}` : 'none' }}
-                        onMouseEnter={e => { if (!active) e.currentTarget.style.background = '#FFFBE6' }}
-                        onMouseLeave={e => { e.currentTarget.style.background = active ? C.acl : 'transparent' }}>
-                        <td style={{ padding: '5.5px 5px', color: active ? C.t1 : C.t2, fontWeight: active ? 700 : 400 }}>{row.name}</td>
-                        <td style={{ padding: '5.5px 5px', textAlign: 'right', fontFamily: 'var(--mono)', fontSize: 11.5, color: C.t1 }}>{fmt(row.rev)}</td>
-                        <td style={{ padding: '5.5px 5px', textAlign: 'right', color: C.t1 }}>{fmtN(row.orders)}</td>
-                        <td style={{ padding: '5.5px 5px', textAlign: 'right', color: C.t1 }}>₹{Math.round(row.aov).toLocaleString('en-IN')}</td>
+                      <tr key={t.platform} style={{ borderBottom: i < platformsWithSpend.length - 1 ? `1px solid ${C.border}` : 'none' }}>
+                        <td style={{ padding: '4px 4px', color: C.t2, fontWeight: 600 }}>{t.platform}</td>
+                        <td style={{ padding: '4px 4px', textAlign: 'right', fontFamily: 'var(--mono)', color: C.t1 }}>{fmt(t.spend)}</td>
+                        <td style={{ padding: '4px 4px', textAlign: 'right', color: roas >= 2 ? '#0D9E68' : roas >= 1 ? '#D97706' : '#B91C1C' }}>{t.spend > 0 ? `${roas.toFixed(2)}x` : '—'}</td>
+                        <td style={{ padding: '4px 4px', textAlign: 'right', color: C.t2 }}>{fmtN(t.clicks)}</td>
+                        <td style={{ padding: '4px 4px', textAlign: 'right', color: C.t2 }}>{ctr.toFixed(2)}%</td>
                       </tr>
                     )
                   })}
                 </tbody>
               </table>
             </div>
-          </Card>
-          {/* Sub-category table — always visible, filters on click */}
-          {(() => {
-            const subRows = Object.entries(subCatMap || {})
-              .filter(([k]) => !selectedCat || k.startsWith(selectedCat + '::'))
-              .map(([k, v]) => ({ name: k.split('::')[1], cat: k.split('::')[0], rev: v.rev, orders: v.orders.size, aov: v.orders.size ? v.rev / v.orders.size : 0 }))
-              .sort((a, b) => b.rev - a.rev)
-            return (
-              <PaginatedCard title={selectedCat ? `Sub-categories · ${selectedCat}` : 'Sub-categories'} rows={subRows} columns={[
-                { key: 'name', label: 'Sub-category' },
-                { key: 'rev', label: 'Revenue', align: 'right', mono: true, render: v => fmt(v) },
-                { key: 'orders', label: 'Orders', align: 'right', render: v => fmtN(v) },
-                { key: 'aov', label: 'AOV', align: 'right', render: v => `₹${Math.round(v).toLocaleString('en-IN')}` },
-              ]} pageSize={15} />
-            )
-          })()}
+          )}
         </div>
+      </div>
+
+      {/* ── SECTION 5: Logistics Health ── */}
+      <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 13, padding: '16px 18px' }}>
+        {secHdr('Logistics Health', logisticsData ? `${fmtN(lTotal)} shipments` : 'Loading...')}
+        {logisticsData ? (
+          <>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6,1fr)', gap: 10, marginBottom: 16 }}>
+              {[
+                { label: 'Delivery %', val: `${lDelPct.toFixed(1)}%`, color: lDelPct >= 80 ? '#0D9E68' : lDelPct >= 60 ? '#D97706' : '#B91C1C', bg: lDelPct >= 80 ? '#E6F4E0' : lDelPct >= 60 ? '#FEF2DC' : '#FDE8E8' },
+                { label: 'RTO %', val: `${lRtoPct.toFixed(1)}%`, color: lRtoPct <= 10 ? '#0D9E68' : lRtoPct <= 20 ? '#D97706' : '#B91C1C', bg: lRtoPct <= 10 ? '#E6F4E0' : lRtoPct <= 20 ? '#FEF2DC' : '#FDE8E8' },
+                { label: 'SLA Breach %', val: `${lSlaPct.toFixed(1)}%`, color: lSlaPct <= 5 ? '#0D9E68' : lSlaPct <= 15 ? '#D97706' : '#B91C1C', bg: lSlaPct <= 5 ? '#E6F4E0' : lSlaPct <= 15 ? '#FEF2DC' : '#FDE8E8' },
+                { label: 'Z-RTO %', val: `${lZRtoPct.toFixed(1)}%`, color: lZRtoPct <= 3 ? '#0D9E68' : lZRtoPct <= 8 ? '#D97706' : '#B91C1C', bg: lZRtoPct <= 3 ? '#E6F4E0' : lZRtoPct <= 8 ? '#FEF2DC' : '#FDE8E8' },
+                { label: 'FASR %', val: lFasr !== null ? `${lFasr.toFixed(1)}%` : '—', color: C.t1, bg: C.bg },
+                { label: 'Avg Fulfilment', val: lAvgFul !== null ? `${lAvgFul.toFixed(1)}d` : '—', color: lAvgFul <= 3 ? '#0D9E68' : lAvgFul <= 5 ? '#D97706' : '#B91C1C', bg: lAvgFul <= 3 ? '#E6F4E0' : lAvgFul <= 5 ? '#FEF2DC' : '#FDE8E8' },
+              ].map(({ label, val, color, bg }) => (
+                <div key={label} style={{ background: bg, borderRadius: 9, padding: '10px 12px' }}>
+                  <div style={{ fontSize: 9.5, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.05em', color: C.t3, marginBottom: 4 }}>{label}</div>
+                  <div style={{ fontSize: 20, fontWeight: 700, color, fontFamily: 'var(--mono)' }}>{val}</div>
+                </div>
+              ))}
+            </div>
+            {couriers.length > 0 && (
+              <>
+                <div style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.05em', color: C.t3, marginBottom: 8 }}>Courier Partner Performance</div>
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11 }}>
+                  <thead><tr>
+                    {['Courier','Shipments','Delivered %','RTO %','Z-RTO %','Avg Fulfilment'].map((h, i) => <th key={h} style={{ fontSize: 9, fontWeight: 700, textTransform: 'uppercase', color: C.t3, textAlign: i === 0 ? 'left' : 'right', padding: '2px 6px 6px', borderBottom: `1px solid ${C.border}` }}>{h}</th>)}
+                  </tr></thead>
+                  <tbody>
+                    {couriers.map((c, i) => {
+                      const tot = parseInt(c.total) || 1
+                      const del = parseInt(c.delivered) || 0
+                      const rto = parseInt(c.rto) || 0
+                      const zrto = parseInt(c.z_rto) || 0
+                      const delP = del / tot * 100
+                      const rtoP = rto / tot * 100
+                      const zrtoP = zrto / tot * 100
+                      const avgFul = parseFloat(c.avg_fulfilment_days) || null
+                      return (
+                        <tr key={c.courier_group} style={{ borderBottom: i < couriers.length - 1 ? `1px solid ${C.border}` : 'none' }}>
+                          <td style={{ padding: '5px 6px', fontWeight: 600, color: C.t1 }}>{c.courier_group}</td>
+                          <td style={{ padding: '5px 6px', textAlign: 'right', color: C.t2 }}>{fmtN(tot)}</td>
+                          <td style={{ padding: '5px 6px', textAlign: 'right', color: delP >= 80 ? '#0D9E68' : delP >= 60 ? '#D97706' : '#B91C1C' }}>{delP.toFixed(1)}%</td>
+                          <td style={{ padding: '5px 6px', textAlign: 'right', color: rtoP <= 10 ? '#0D9E68' : rtoP <= 20 ? '#D97706' : '#B91C1C' }}>{rtoP.toFixed(1)}%</td>
+                          <td style={{ padding: '5px 6px', textAlign: 'right', color: C.t2 }}>{zrtoP.toFixed(1)}%</td>
+                          <td style={{ padding: '5px 6px', textAlign: 'right', color: avgFul ? (avgFul <= 3 ? '#0D9E68' : avgFul <= 5 ? '#D97706' : '#B91C1C') : C.t3 }}>{avgFul ? `${avgFul.toFixed(1)}d` : '—'}</td>
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
+              </>
+            )}
+          </>
+        ) : (
+          <div style={{ color: C.t3, fontSize: 12, padding: '12px 0' }}>Logistics data loading...</div>
+        )}
+      </div>
+
+      {/* ── SECTION 6: Category Matrix + Geography ── */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1.4fr 1fr', gap: 12 }}>
+        <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 13, padding: '16px 18px' }}>
+          {secHdr('Category Performance', 'All channels')}
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11.5 }}>
+            <thead><tr>
+              {['Category','Revenue','Share','Orders','AOV'].map((h, i) => <th key={h} style={{ fontSize: 9, fontWeight: 700, textTransform: 'uppercase', color: C.t3, textAlign: i === 0 ? 'left' : 'right', padding: '2px 6px 6px', borderBottom: `1px solid ${C.border}` }}>{h}</th>)}
+            </tr></thead>
+            <tbody>
+              {allCats.map((r, i) => {
+                const share = totalRev > 0 ? r.rev / totalRev * 100 : 0
+                const aov = r.orders > 0 ? r.rev / r.orders : 0
+                return (
+                  <tr key={r.name} style={{ borderBottom: i < allCats.length - 1 ? `1px solid ${C.border}` : 'none' }}>
+                    <td style={{ padding: '5px 6px', color: C.t2, fontWeight: 500 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <div style={{ flex: 1 }}>{r.name}</div>
+                        <div style={{ height: 4, width: 60, background: C.border, borderRadius: 2, overflow: 'hidden' }}>
+                          <div style={{ height: '100%', width: `${share}%`, background: C.acc, borderRadius: 2 }} />
+                        </div>
+                      </div>
+                    </td>
+                    <td style={{ padding: '5px 6px', textAlign: 'right', fontFamily: 'var(--mono)', color: C.t1 }}>{fmt(r.rev)}</td>
+                    <td style={{ padding: '5px 6px', textAlign: 'right', color: C.t3 }}>{share.toFixed(1)}%</td>
+                    <td style={{ padding: '5px 6px', textAlign: 'right', color: C.t2 }}>{fmtN(r.orders)}</td>
+                    <td style={{ padding: '5px 6px', textAlign: 'right', fontFamily: 'var(--mono)', color: C.t2 }}>₹{Math.round(aov).toLocaleString('en-IN')}</td>
+                  </tr>
+                )
+              })}
+            </tbody>
+          </table>
+        </div>
+
+        <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 13, padding: '16px 18px' }}>
+          {secHdr('Top States', 'By revenue')}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+            {topStates.map(([state, v]) => {
+              const share = totalRev > 0 ? v.rev / totalRev * 100 : 0
+              return (
+                <div key={state}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 3 }}>
+                    <span style={{ fontSize: 11.5, fontWeight: 600, color: C.t1 }}>{state.charAt(0) + state.slice(1).toLowerCase()}</span>
+                    <span style={{ fontSize: 11, fontFamily: 'var(--mono)', color: C.t1 }}>{fmt(v.rev)} <span style={{ color: C.t3, fontFamily: 'var(--font)' }}>· {share.toFixed(1)}%</span></span>
+                  </div>
+                  <div style={{ height: 5, background: C.border, borderRadius: 3, overflow: 'hidden' }}>
+                    <div style={{ height: '100%', width: `${share}%`, background: C.acc, borderRadius: 3 }} />
+                  </div>
+                  <div style={{ fontSize: 10, color: C.t3, marginTop: 2 }}>{fmtN(v.orders)} orders · {v.cities?.size || 0} cities</div>
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      </div>
+
     </div>
   )
 }
@@ -8357,6 +8472,7 @@ export default function App() {
   const [rawRows, setRawRows] = useState(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
+  const [logisticsData, setLogisticsData] = useState(null)
 
   const API = import.meta.env.VITE_API_URL || ''
   const reqIdRef = useRef(0)
@@ -8421,6 +8537,9 @@ export default function App() {
       if (country) extra.country = country
       if (paymentType) extra.paymentType = paymentType
       fetchData(start, end, extra)
+      // Fetch logistics summary for Overview tab
+      fetch(`${API}/api/logistics`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ start, end, shipmentType: 'forward' }) })
+        .then(r => r.ok ? r.json() : null).then(j => { if (j) setLogisticsData(j) }).catch(() => {})
     }, 600)
     return () => clearTimeout(debounceRef.current)
   }, [filters.start, filters.end, filters.category, filters.subCategory, filters.sku, filters.subChannel, filters.voucher, filters.region, filters.tier, filters.state, filters.city, filters.country, filters.paymentType, fetchData])
@@ -8461,7 +8580,7 @@ export default function App() {
           {loading && !data && page !== 'logistics' && <Skeleton />}
           {page === 'overview' && data && (
             <div className="page-scroll">
-              <OverviewPage data={data} alerts={alerts} />
+              <OverviewPage data={data} alerts={alerts} logisticsData={logisticsData} />
             </div>
           )}
           {page === 'sales' && data && <SalesPage data={data} filters={filters} setFilters={setFilters} activeTab={activeTab} setActiveTab={setActiveTab} fetchData={fetchData} />}
