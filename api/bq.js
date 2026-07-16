@@ -116,8 +116,10 @@ export default async function handler(req, res) {
     bySubCategory: `WITH q AS (${base}) SELECT Category, SubCategory, COUNT(DISTINCT OrderId) AS orders, SUM(SellingPrice_Inc_GST) AS rev, SUM(ItemQty) AS units FROM q GROUP BY Category, SubCategory ORDER BY rev DESC LIMIT 200`,
     prevByCategory: `WITH q AS (${prevBase}) SELECT Category, ROUND(SUM(SellingPrice_Inc_GST),0) AS rev FROM q WHERE Category IS NOT NULL GROUP BY Category`,
     prevBySubCategory: `WITH q AS (${prevBase}) SELECT Category, SubCategory, ROUND(SUM(SellingPrice_Inc_GST),0) AS rev FROM q WHERE Category IS NOT NULL GROUP BY Category, SubCategory`,
-    byCategoryChannel: `WITH q AS (${base}) SELECT Category, Channel, SUM(SellingPrice_Inc_GST) AS rev FROM q GROUP BY Category, Channel`,
-    bySubCategoryChannel: `WITH q AS (${base}) SELECT Category, SubCategory, Channel, SUM(SellingPrice_Inc_GST) AS rev FROM q GROUP BY Category, SubCategory, Channel ORDER BY rev DESC`,
+    byCategoryChannel: `WITH q AS (${base}) SELECT Category, Channel, SUM(SellingPrice_Inc_GST) AS rev FROM q WHERE Channel != 'Flipkart' GROUP BY Category, Channel`,
+    byCategoryChannelFk: `WITH q AS (${fkBase}) SELECT Category, Channel, SUM(SellingPrice_Inc_GST) AS rev FROM q WHERE Channel = 'Flipkart' GROUP BY Category, Channel`,
+    bySubCategoryChannel: `WITH q AS (${base}) SELECT Category, SubCategory, Channel, SUM(SellingPrice_Inc_GST) AS rev FROM q WHERE Channel != 'Flipkart' GROUP BY Category, SubCategory, Channel ORDER BY rev DESC`,
+    bySubCategoryChannelFk: `WITH q AS (${fkBase}) SELECT Category, SubCategory, Channel, SUM(SellingPrice_Inc_GST) AS rev FROM q WHERE Channel = 'Flipkart' GROUP BY Category, SubCategory, Channel ORDER BY rev DESC`,
     byCity: `WITH q AS (${base}) SELECT UPPER(TRIM(City_L2)) AS city, COUNT(DISTINCT OrderId) AS orders, SUM(SellingPrice_Inc_GST) AS rev FROM q WHERE City_L2 IS NOT NULL AND TRIM(City_L2) != '' GROUP BY UPPER(TRIM(City_L2)) ORDER BY rev DESC LIMIT 50`,
     byStatePrev: `WITH q AS (${prevBase}) SELECT CASE WHEN TRIM(State) IS NULL OR TRIM(State) IN ('','-') THEN 'OTHERS' ELSE UPPER(TRIM(State)) END AS state, SUM(SellingPrice_Inc_GST) AS rev FROM q WHERE State IS NOT NULL GROUP BY 1`,
     byStateTotal: `WITH q AS (${base}) SELECT SUM(SellingPrice_Inc_GST) AS total_rev FROM q WHERE State IS NOT NULL AND TRIM(State) != ''`,
@@ -381,14 +383,14 @@ export default async function handler(req, res) {
     ;(r.prevBySubCategory || []).forEach(x => { subCatPrevMap[`${x.Category || 'Unknown'}::${x.SubCategory || 'Unknown'}`] = parseFloat(x.rev) || 0 })
 
     const catChannelMap = {}
-    r.byCategoryChannel.forEach(x => {
+    ;[...(r.byCategoryChannel || []), ...(r.byCategoryChannelFk || [])].forEach(x => {
       const cat = x.Category || 'Unknown'
       if (!catChannelMap[cat]) catChannelMap[cat] = {}
-      catChannelMap[cat][x.Channel] = parseFloat(x.rev) || 0
+      catChannelMap[cat][x.Channel] = (catChannelMap[cat][x.Channel] || 0) + (parseFloat(x.rev) || 0)
     })
 
     const subCatChannelMap = {}
-    ;(r.bySubCategoryChannel || []).forEach(x => {
+    ;[...(r.bySubCategoryChannel || []), ...(r.bySubCategoryChannelFk || [])].forEach(x => {
       const cat = x.Category || 'Unknown'
       const sc = x.SubCategory || 'Unknown'
       const ch = x.Channel
