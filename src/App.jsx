@@ -3271,7 +3271,7 @@ function AllTab({ data }) {
   const subCatRows = selectedCat ? allSubCatRows.filter(r => r.category === selectedCat) : allSubCatRows
   const stateRows = Object.entries(stateMap).map(([k, v]) => ({ state: k, rev: v.rev, orders: v.orders, aov: v.orders ? v.rev / v.orders : 0, cities: v.cities.size, prevRev: statePrevMap[k] || 0 })).sort((a, b) => b.rev - a.rev)
   const bucketData = Object.entries(buckets).map(([k, v]) => ({ name: k, orders: v, rev: bucketRev[k] }))
-  const allCats = catRows.slice(0, 8).map(r => r.name)
+  const allCats = catRows.map(r => r.name)
   const heatData = allCats.map(cat => {
     const row = { cat }
     channels.forEach(ch => { row[ch] = catChannelMap[cat]?.[ch] || 0 })
