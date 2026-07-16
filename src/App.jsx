@@ -3749,12 +3749,15 @@ function ShopifyReturnReasonsTable({ reasons = [] }) {
 
   const sortedReasons = Object.keys(grouped).sort((a, b) => reasonTotal(b) - reasonTotal(a))
 
+  // Column totals for column-wise % on reason rows
+  const colTotals = {}
+  cats.forEach(cat => { colTotals[cat] = Object.keys(grouped).reduce((s, r) => s + (grouped[r].catOrders[cat] || 0), 0) })
+
   const thStyle = { fontSize: 9, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.04em', color: C.t3, padding: '4px 8px 6px', borderBottom: `1px solid ${C.border}`, textAlign: 'right', whiteSpace: 'nowrap', background: C.card }
   const thL = { ...thStyle, textAlign: 'left', minWidth: 180 }
-  const cell = (v, base, bold) => {
-    if (!v) return <span style={{ color: C.t3, fontSize: 10 }}>—</span>
-    const pct = base > 0 ? (v / base * 100).toFixed(1) : null
-    return <span style={{ fontWeight: bold ? 600 : 400 }}>{v.toLocaleString('en-IN')}{pct !== null ? <span style={{ fontSize: 9, color: C.t3, marginLeft: 3 }}>({pct}%)</span> : null}</span>
+  const pctCell = (v, base) => {
+    if (!v || !base) return <span style={{ color: C.t3, fontSize: 10 }}>—</span>
+    return <span>{(v / base * 100).toFixed(1)}%</span>
   }
 
   return (
@@ -3785,7 +3788,7 @@ function ShopifyReturnReasonsTable({ reasons = [] }) {
                     {reason}
                     <span style={{ marginLeft: 8, fontSize: 9, color: C.t3, fontWeight: 400 }}>{rTotal.toLocaleString('en-IN')} · {grandTotal > 0 ? (rTotal / grandTotal * 100).toFixed(1) : 0}%</span>
                   </td>
-                  {cats.map(cat => <td key={cat} style={{ padding: '5px 8px', textAlign: 'right', fontFamily: 'var(--mono)', color: C.t1 }}>{cell(rd.catOrders[cat], rTotal, false)}</td>)}
+                  {cats.map(cat => <td key={cat} style={{ padding: '5px 8px', textAlign: 'right', fontFamily: 'var(--mono)', color: C.t1 }}>{pctCell(rd.catOrders[cat], colTotals[cat])}</td>)}
                 </tr>,
                 ...(isExp ? sortedSubs.map(([subReason, sd]) => {
                   const srTotal = Object.values(sd.catOrders).reduce((s, v) => s + v, 0)
@@ -3793,9 +3796,9 @@ function ShopifyReturnReasonsTable({ reasons = [] }) {
                     <tr key={`sr-${reason}-${subReason}`} style={{ borderBottom: `1px solid ${C.border}`, background: C.acl }}>
                       <td style={{ padding: '4px 8px 4px 28px', color: C.t2, whiteSpace: 'nowrap' }}>
                         ↳ {subReason}
-                        <span style={{ marginLeft: 8, fontSize: 9, color: C.t3 }}>{srTotal.toLocaleString('en-IN')} · {rTotal > 0 ? (srTotal / rTotal * 100).toFixed(1) : 0}%</span>
+                        <span style={{ marginLeft: 8, fontSize: 9, color: C.t3 }}>{srTotal.toLocaleString('en-IN')} · {rTotal > 0 ? (srTotal / rTotal * 100).toFixed(1) : 0}% of reason</span>
                       </td>
-                      {cats.map(cat => <td key={cat} style={{ padding: '4px 8px', textAlign: 'right', fontFamily: 'var(--mono)', color: C.t2 }}>{cell(sd.catOrders[cat], srTotal, false)}</td>)}
+                      {cats.map(cat => <td key={cat} style={{ padding: '4px 8px', textAlign: 'right', fontFamily: 'var(--mono)', color: C.t2 }}>{pctCell(sd.catOrders[cat], rTotal > 0 ? rd.catOrders[cat] : null)}</td>)}
                     </tr>
                   )
                 }) : [])
