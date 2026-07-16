@@ -2672,7 +2672,7 @@ function CategoryChannelMatrix({ heatData, channels, maxHeat, subCatChannelMap =
 
   return (
     <Card title="Category × Channel Revenue Matrix" note="₹ shading = intensity">
-      <div className="tbl-wrap" style={{ maxHeight: 320, overflowY: 'auto' }}>
+      <div className="tbl-wrap">
         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11, minWidth: 700 }}>
           <thead style={{ position: 'sticky', top: 0, background: C.card, zIndex: 1 }}>
             <tr>
