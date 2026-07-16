@@ -154,7 +154,9 @@ SELECT
 FROM \`frido-429506.production.fact_all_platform_sales_report\` u
 LEFT JOIN pincode_master pm ON u.Pincode IS NOT NULL AND TRIM(CAST(u.Pincode AS STRING)) = pm.pincode
 LEFT JOIN city_name_master cm ON pm.pincode IS NULL AND u.Channel IN ('Blinkit','Zepto','Instamart') AND cm.City_L1 = CASE UPPER(TRIM(u.City)) WHEN 'BANGALORE' THEN 'Bengaluru' WHEN 'GURGAON' THEN 'Gurugram' WHEN 'DELHI' THEN 'New Delhi' WHEN 'SAS NAGAR' THEN 'Mohali' ELSE INITCAP(TRIM(u.City)) END
-WHERE u.OrderDate BETWEEN '${s}' AND '${e}' ${whereClause}
+WHERE u.OrderDate BETWEEN '${s}' AND '${e}'
+  AND NOT (u.Channel = 'offline_sales' AND u.Order_Status = 'Credit Note')
+  ${whereClause}
 ORDER BY u.OrderDate DESC`
 }
 
