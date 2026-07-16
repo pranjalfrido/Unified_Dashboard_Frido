@@ -9,7 +9,7 @@ export const C = {
   ch: {
     Shopify: '#FFD600', 'Shopify International': '#B8A000', Amazon: '#E8930A', Flipkart: '#2E74CC',
     Blinkit: '#0D9E68', CRED: '#CC4078', Instamart: '#4AB89A',
-    Zepto: '#858380', Myntra: '#E87858', Firstcry: '#9B56B6', Pharmeasy: '#2ECC71'
+    Zepto: '#858380', Myntra: '#E87858', Firstcry: '#9B56B6', Pharmeasy: '#2ECC71', offline_sales: '#6B7280'
   }
 }
 

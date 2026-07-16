@@ -1879,7 +1879,7 @@ function HeroKPICard({ label, value, sub, chg, sparkData, dataKey = 'cur', color
 
 // ── Overview Page ─────────────────────────────────────────────
 function OverviewPage({ data, alerts, logisticsData }) {
-  const { totalRev, totalExcRev, nOrders, totalQty, blendedAOV, nDays, chMap, catMap, subCatMap, stateMap, nCusts, repeatCusts, dailyArr, prevRev, prevOrders, orderStatusRevMap = {}, rtoRevDirect, returnRev, cirRev, exchangeRev } = data
+  const { totalRev, totalExcRev, nOrders, totalQty, blendedAOV, nDays, chMap, catMap, subCatMap, stateMap, nCusts, repeatCusts, dailyArr, prevRev, prevOrders, orderStatusRevMap = {}, rtoRevDirect, returnRev, cirRev, exchangeRev, netRevenueCalc = 0 } = data
   const sh = data.shopify || {}
   const ads = data.ads || {}
 
@@ -1965,7 +1965,7 @@ function OverviewPage({ data, alerts, logisticsData }) {
           <div>
             <div style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.08em', color: 'rgba(0,0,0,.45)', marginBottom: 6 }}>Gross Revenue · Inc. GST</div>
             <div style={{ fontSize: 38, fontWeight: 700, color: '#13121A', letterSpacing: '-.04em', lineHeight: 1, marginBottom: 4 }}>{totalRev >= 1e7 ? `₹${(totalRev / 1e7).toFixed(2)} Cr` : `₹${(totalRev / 1e5).toFixed(1)} L`}</div>
-            <div style={{ fontSize: 11.5, color: 'rgba(0,0,0,.5)' }}>Net {fmt(totalExcRev)} · {nDays}d · {fmtN(nOrders)} orders</div>
+            <div style={{ fontSize: 11.5, color: 'rgba(0,0,0,.5)' }}>Net {fmt(netRevenueCalc)} · {nDays}d · {fmtN(nOrders)} orders</div>
           </div>
           <div style={{ display: 'flex', gap: 8, marginTop: 10, alignItems: 'center' }}>
             <span style={{ fontSize: 11, fontWeight: 600, padding: '3px 9px', borderRadius: 5, background: 'rgba(0,0,0,.1)', color: '#13121A' }}>Daily avg {fmt(totalRev / nDays)}</span>
@@ -1976,7 +1976,7 @@ function OverviewPage({ data, alerts, logisticsData }) {
         <KPICard center label="Orders" value={fmtN(nOrders)} sub={<>{fmtN(totalQty)} units{delta(ordDelta)}</>} />
         <KPICard center label="Blended AOV" value={`₹${Math.round(blendedAOV).toLocaleString('en-IN')}`} sub={`${nDays} day period`} />
         <KPICard center label="Shopify Customers" value={fmtN(nCusts)} sub={`${nCusts ? (repeatCusts / nCusts * 100).toFixed(1) : 0}% repeat`} />
-        <KPICard center label="Net Revenue" value={fmt(totalExcRev - cancelRev - (rtoRevDirect||0) - (returnRev||0) - (cirRev||0))} sub="After returns & cancel" />
+        <KPICard center label="Net Revenue" value={fmt(netRevenueCalc)} sub="After returns & cancel, exc. GST" />
       </div>
 
       {/* ── SECTION 2: Channel Scorecard ── */}
@@ -1998,8 +1998,10 @@ function OverviewPage({ data, alerts, logisticsData }) {
                 return (
                   <tr key={ch} style={{ borderBottom: i < sortedCh.length - 1 ? `1px solid ${C.border}` : 'none' }}>
                     <td style={{ padding: '6px 8px', display: 'flex', alignItems: 'center', gap: 7 }}>
-                      <span style={{ width: 9, height: 9, borderRadius: '50%', background: C.ch[ch] || C.acc, flexShrink: 0, display: 'inline-block' }} />
-                      <span style={{ fontWeight: 600, color: C.t1 }}>{ch}</span>
+                      {CHANNEL_LOGOS[ch]
+                        ? <img src={CHANNEL_LOGOS[ch]} alt={ch} style={{ width: 18, height: 18, objectFit: 'contain', borderRadius: 4, flexShrink: 0, background: '#f5f5f5' }} />
+                        : <span style={{ width: 18, height: 18, borderRadius: 4, background: C.ch[ch] || C.acc, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 8, fontWeight: 800, color: '#fff' }}>{ch.charAt(0)}</span>}
+                      <span style={{ fontWeight: 600, color: C.t1 }}>{ch === 'offline_sales' ? 'Offline Sales' : ch}</span>
                     </td>
                     <td style={{ padding: '6px 8px', textAlign: 'right', fontFamily: 'var(--mono)', color: C.t1 }}>{fmt(v.rev)}</td>
                     <td style={{ padding: '6px 8px', textAlign: 'right', color: C.t3 }}>{sharePct.toFixed(1)}%</td>
@@ -2256,6 +2258,7 @@ const TABS = [
   { id: 'myntra', label: 'Myntra', ch: 'Myntra', logo: '/logo-myntra.png' },
   { id: 'offline', label: 'Offline Sales', ch: 'offline_sales' },
 ]
+const CHANNEL_LOGOS = Object.fromEntries(TABS.filter(t => t.logo).map(t => [t.ch, t.logo]))
 
 function PaginatedCard({ title, rows, columns, pageSize = 10 }) {
   const [page, setPage] = useState(0)
@@ -3257,7 +3260,7 @@ function RegionTierDonutRow({ regionRows, tierRows }) {
 
 function AllTab({ data }) {
   const { totalRev, totalExcRev, gstCollected, nOrders, totalQty, blendedAOV, nDays, dailyArr, chMap, catMap, subCatMap, catPrevMap = {}, subCatPrevMap = {}, stateMap, statePrevMap = {}, stateTotal = 0, cityRows = [], cityPrevMap = {}, cityTotal = 0, regionRows = [], tierRows = [], buckets, bucketRev, rows, orders, orderStatusRevMap = {}, orderStatusMap = {}, catChannelMap = {}, subCatChannelMap: serverSubCatChannelMap = {}, skuRows: allSkuRows = [], prevRev = 0, prevExcRev = 0, prevOrders = 0, prevQty = 0, prevDailyArr = [], prevChMap = {}, nCusts = 0, repeatCusts = 0, rtoRev = 0, cirRev = 0, cancellRev = 0, netRevenueCalc = 0, momRev = 0, yoyRev = 0, momPeriod = '', yoyPeriod = '', prevRtoOrders = 0, prevCirOrders = 0 } = data
-  const channels = Object.keys(C.ch).filter(ch => chMap[ch] && chMap[ch].rev > 0)
+  const channels = Object.keys(chMap).filter(ch => chMap[ch]?.rev > 0).sort((a, b) => chMap[b].rev - chMap[a].rev)
   const sortedCh = Object.entries(chMap).filter(([, v]) => v.rev > 0).sort((a, b) => b[1].rev - a[1].rev)
   const maxChRev = sortedCh[0]?.[1].rev || 1
   const [selectedCat, setSelectedCat] = useState(null)
@@ -3292,7 +3295,7 @@ function AllTab({ data }) {
   const grossMarginPct = totalRev > 0 ? ((totalRev - totalExcRev) / totalRev * 100) : 0
   const revPerUnit = totalQty > 0 ? totalExcRev / totalQty : 0
   const shopifyOrders = orders.filter(o => o.channel === 'Shopify')
-  const atRiskRev = (orderStatusRevMap['RTO'] || 0) + (orderStatusRevMap['Cancelled'] || 0) + (cirRev || 0)
+  const atRiskRev = (orderStatusRevMap['RTO'] || 0) + (orderStatusRevMap['Return'] || 0) + (orderStatusRevMap['Cancelled'] || 0) + (cirRev || 0)
   const deliveredCount = orders.filter(o => o.orderStatus === 'Delivered').length
   const rtoCount = orders.filter(o => o.orderStatus === 'RTO' || o.isRTO).length
   const cancelCount = orders.filter(o => o.orderStatus === 'Cancelled' || o.isCancelled).length
@@ -3300,9 +3303,9 @@ function AllTab({ data }) {
   const fulfilmentRate = fulfilmentBase > 0 ? (deliveredCount / fulfilmentBase * 100) : 0
   const unitsPerOrder = nOrders > 0 ? totalQty / nOrders : 0
   const rtoOrders = (orderStatusMap['RTO'] || 0) + (orderStatusMap['Return'] || 0)
-  const cirOrderCount = orders.filter(o => o.isCIR).length
+  const cirOrderCount = orderStatusMap['CIR'] || 0
   const returnPct = nOrders > 0 ? ((rtoOrders + cirOrderCount) / nOrders * 100) : 0
-  const asp = totalQty > 0 ? totalExcRev / totalQty : 0
+  const asp = totalQty > 0 ? netRevenueCalc / totalQty : 0
   const deliveredOrders = orderStatusMap['Delivered'] || 0
   const fulfilmentPct = nOrders > 0 ? (deliveredOrders / nOrders * 100) : 0
 
@@ -3361,15 +3364,15 @@ function AllTab({ data }) {
           {/* Row 1 */}
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10, flex: 1 }}>
             {(() => {
-              const excChg = prevExcRev > 0 ? ((totalExcRev - prevExcRev) / prevExcRev * 100) : null
+              const excChg = prevExcRev > 0 ? ((netRevenueCalc - prevExcRev) / prevExcRev * 100) : null
               return (
                 <div className="kpi-card" style={{ display: 'flex', flexDirection: 'column', gap: 4, padding: '10px 13px' }}>
                   <div className="kpi-label">Net (Exc GST)</div>
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                    <div className="kpi-value">{fmt(totalExcRev)}</div>
+                    <div className="kpi-value">{fmt(netRevenueCalc)}</div>
                     {excChg !== null && <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 7px', borderRadius: 5, background: excChg >= 0 ? C.green.bg : C.red.bg, color: excChg >= 0 ? C.green.tx : C.red.tx }}>{excChg >= 0 ? '▲' : '▼'} {Math.abs(excChg).toFixed(1)}%</span>}
                   </div>
-                  <div className="kpi-sub">{totalRev > 0 ? (totalExcRev / totalRev * 100).toFixed(1) : 0}% of gross · GST {fmt(gstCollected)}</div>
+                  <div className="kpi-sub">{totalRev > 0 ? (netRevenueCalc / totalRev * 100).toFixed(1) : 0}% of gross · GST {fmt(gstCollected)}</div>
                 </div>
               )
             })()}
@@ -3416,8 +3419,10 @@ function AllTab({ data }) {
             const chg = prevChRev > 1 ? ((v.rev - prevChRev) / prevChRev * 100) : null
             return (
               <div key={ch} style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '5px 0', borderBottom: `1px solid ${C.border}` }}>
-                <span style={{ width: 8, height: 8, borderRadius: '50%', background: C.ch[ch] || C.acm, flexShrink: 0 }} />
-                <span style={{ fontSize: 12, color: C.t2, width: 90, flexShrink: 0 }}>{ch}</span>
+                {CHANNEL_LOGOS[ch]
+                  ? <img src={CHANNEL_LOGOS[ch]} alt={ch} style={{ width: 18, height: 18, objectFit: 'contain', borderRadius: 4, flexShrink: 0, background: '#f5f5f5' }} />
+                  : <span style={{ width: 18, height: 18, borderRadius: 4, background: C.ch[ch] || C.acm, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 8, fontWeight: 800, color: '#fff' }}>{ch.charAt(0)}</span>}
+                <span style={{ fontSize: 12, color: C.t2, width: 90, flexShrink: 0 }}>{ch === 'offline_sales' ? 'Offline Sales' : ch}</span>
                 <div style={{ flex: 1, height: 5, background: C.bg, borderRadius: 3 }}>
                   <div style={{ height: '100%', borderRadius: 3, background: C.ch[ch] || C.acm, width: `${(v.rev / maxChRev) * 100}%`, transition: 'width .5s' }} />
                 </div>
