@@ -1548,6 +1548,7 @@ function Sidebar({ page, setPage }) {
     { id: 'sales', label: 'Sales', icon: <SvgIcon d={['M18 20V10','M12 20V4','M6 20v-6']} /> },
     { id: 'ads', label: 'Ads', icon: <SvgIcon d={['M15 3h4a2 2 0 012 2v14a2 2 0 01-2 2h-4','M10 17l5-5-5-5','M13.8 12H3']} /> },
     { id: 'logistics', label: 'Logistics', icon: <SvgIcon d={['M1 3h15v13H1z','M16 8h4l3 3v5h-7V8z','M5.5 19a1.5 1.5 0 100-3 1.5 1.5 0 000 3z','M18.5 19a1.5 1.5 0 100-3 1.5 1.5 0 000 3z']} /> },
+    { id: 'customer', label: 'Customer', icon: <SvgIcon d={['M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2','M9 11a4 4 0 100-8 4 4 0 000 8z','M23 21v-2a4 4 0 00-3-3.87','M16 3.13a4 4 0 010 7.75']} /> },
   ]
   const dims = [
     { label: 'P&L', icon: <SvgIcon d={['M12 1v22','M17 5H9.5a3.5 3.5 0 100 7h5a3.5 3.5 0 110 7H6']} /> },
@@ -1833,7 +1834,7 @@ function DateRangePicker({ filters, setFilters }) {
 }
 
 function Topnav({ page, alerts, onRefresh, loading, filters, setFilters, rawRows }) {
-  const titles = { overview: 'Overview', sales: 'Sales Analytics', ads: 'Ads Analytics', intelligence: 'Intelligence', logistics: 'Logistics Performance Analytics' }
+  const titles = { overview: 'Overview', sales: 'Sales Analytics', ads: 'Ads Analytics', intelligence: 'Intelligence', logistics: 'Logistics Performance Analytics', customer: 'Customer Intelligence' }
   const critical = alerts.filter(a => a.type === 'red').length
   return (
     <div className="topnav">
@@ -8469,6 +8470,274 @@ function Skeleton() {
 // ── Main App ──────────────────────────────────────────────────
 const TAB_TO_CHANNEL = { blinkit: 'Blinkit', instamart: 'Instamart', zepto: 'Zepto', cred: 'CRED', firstcry: 'Firstcry' }
 
+function CustomerPage({ data }) {
+  const TODAY = '2026-07-16'
+  const { orders, rows, totalRev, nOrders, chMap } = data
+
+  // --- Shopify only ---
+  const shopOrders = orders.filter(o => o.channel === 'Shopify')
+  const shopRows = rows.filter(r => r.Channel === 'Shopify')
+
+  // --- Frequency map per customer ---
+  const custMap = {}
+  shopOrders.forEach(o => {
+    if (!o.customerId) return
+    if (!custMap[o.customerId]) custMap[o.customerId] = { orders: 0, rev: 0, lastDate: '', firstDate: '', vouchers: 0, prepaid: 0, categories: new Set() }
+    const c = custMap[o.customerId]
+    c.orders++
+    c.rev += o.rev
+    if (!c.lastDate || o.date > c.lastDate) c.lastDate = o.date
+    if (!c.firstDate || o.date < c.firstDate) c.firstDate = o.date
+    if (o.voucher) c.vouchers++
+    if ((o.paymentMode || '').toLowerCase().includes('prepaid')) c.prepaid++
+  })
+  shopRows.forEach(r => {
+    if (!r.CustomerId || !custMap[r.CustomerId] || !r.Category) return
+    custMap[r.CustomerId].categories.add(r.Category)
+  })
+
+  const custList = Object.entries(custMap).map(([id, c]) => {
+    const recencyDays = c.lastDate ? Math.round((new Date(TODAY) - new Date(c.lastDate)) / 86400000) : 999
+    const rScore = recencyDays <= 7 ? 5 : recencyDays <= 14 ? 4 : recencyDays <= 30 ? 3 : recencyDays <= 60 ? 2 : 1
+    const fScore = c.orders >= 5 ? 5 : c.orders >= 4 ? 4 : c.orders >= 3 ? 3 : c.orders >= 2 ? 2 : 1
+    const mScore = c.rev >= 10000 ? 5 : c.rev >= 5000 ? 4 : c.rev >= 2000 ? 3 : c.rev >= 1000 ? 2 : 1
+    const avgScore = (rScore + fScore + mScore) / 3
+    const segment = avgScore >= 4 ? 'Champions' : avgScore >= 3 ? 'Loyal' : avgScore >= 2.5 ? 'Promising' : avgScore >= 2 ? 'At Risk' : 'Lost'
+    return { id, ...c, recencyDays, segment, avgScore }
+  })
+
+  const nUniq = custList.length
+  const nRepeat = custList.filter(c => c.orders >= 2).length
+  const repeatRate = nUniq ? (nRepeat / nUniq * 100) : 0
+  const shopRev = shopOrders.reduce((s, o) => s + o.rev, 0)
+  const avgLTV = nUniq ? shopRev / nUniq : 0
+  const avgOrdersPerCust = nUniq ? shopOrders.length / nUniq : 0
+  const prepaidOrds = shopOrders.filter(o => (o.paymentMode || '').toLowerCase().includes('prepaid')).length
+  const prepaidPct = shopOrders.length ? prepaidOrds / shopOrders.length * 100 : 0
+
+  // Inter-purchase days (only repeat customers)
+  const repeatCustOrders = {}
+  shopOrders.forEach(o => {
+    if (!o.customerId || !custMap[o.customerId] || custMap[o.customerId].orders < 2) return
+    if (!repeatCustOrders[o.customerId]) repeatCustOrders[o.customerId] = []
+    repeatCustOrders[o.customerId].push(o.date)
+  })
+  let totalGap = 0, gapCount = 0
+  Object.values(repeatCustOrders).forEach(dates => {
+    const sorted = [...dates].sort()
+    for (let i = 1; i < sorted.length; i++) {
+      totalGap += Math.round((new Date(sorted[i]) - new Date(sorted[i - 1])) / 86400000)
+      gapCount++
+    }
+  })
+  const avgGap = gapCount ? Math.round(totalGap / gapCount) : 0
+
+  // --- RFM Segments ---
+  const SEG_CFG = {
+    Champions: { color: '#0D9E68', bg: '#E6F4E0' },
+    Loyal:     { color: '#2E74CC', bg: '#E1EFFD' },
+    Promising: { color: '#E8930A', bg: '#FEF2DC' },
+    'At Risk': { color: '#CC4078', bg: '#FDE8E8' },
+    Lost:      { color: '#94939F', bg: '#F2F1EF' },
+  }
+  const segData = {}
+  Object.keys(SEG_CFG).forEach(s => { segData[s] = { count: 0, rev: 0 } })
+  custList.forEach(c => { segData[c.segment].count++; segData[c.segment].rev += c.rev })
+
+  // --- Frequency histogram ---
+  const freqBuckets = { '1x': 0, '2x': 0, '3x': 0, '4x': 0, '5x+': 0 }
+  custList.forEach(c => {
+    const k = c.orders >= 5 ? '5x+' : c.orders === 4 ? '4x' : c.orders === 3 ? '3x' : c.orders === 2 ? '2x' : '1x'
+    freqBuckets[k]++
+  })
+  const maxFreq = Math.max(...Object.values(freqBuckets), 1)
+
+  // --- Voucher dependency ---
+  const vDep = { Always: 0, Sometimes: 0, Never: 0 }
+  custList.forEach(c => {
+    if (c.orders === 0) return
+    const vRate = c.vouchers / c.orders
+    if (vRate === 1) vDep.Always++
+    else if (vRate > 0) vDep.Sometimes++
+    else vDep.Never++
+  })
+
+  // --- Category cross-sell ---
+  const catPairMap = {}
+  custList.forEach(c => {
+    const cats = Array.from(c.categories).sort()
+    for (let i = 0; i < cats.length; i++) {
+      for (let j = i + 1; j < cats.length; j++) {
+        const key = `${cats[i]} + ${cats[j]}`
+        catPairMap[key] = (catPairMap[key] || 0) + 1
+      }
+    }
+  })
+  const crossSell = Object.entries(catPairMap).sort((a, b) => b[1] - a[1]).slice(0, 5)
+
+  // --- Geography repeat rate (by state) ---
+  const stateRepeat = {}
+  custList.forEach(c => {
+    const orders_by_state = shopOrders.filter(o => o.customerId === c.id)
+    const st = (orders_by_state[0]?.state || 'Unknown').toUpperCase().trim()
+    if (!stateRepeat[st]) stateRepeat[st] = { total: 0, repeat: 0 }
+    stateRepeat[st].total++
+    if (c.orders >= 2) stateRepeat[st].repeat++
+  })
+  const stateRepeatRows = Object.entries(stateRepeat)
+    .filter(([, v]) => v.total >= 5)
+    .map(([st, v]) => ({ state: st, total: v.total, repeat: v.repeat, rate: v.total ? v.repeat / v.total * 100 : 0 }))
+    .sort((a, b) => b.total - a.total).slice(0, 6)
+
+  // --- Acquisition bridge ---
+  const newRev = custList.filter(c => c.orders === 1).reduce((s, c) => s + c.rev, 0)
+  const repeatRev = custList.filter(c => c.orders >= 2).reduce((s, c) => s + c.rev, 0)
+  const newPrepaidPct = (() => { const n = custList.filter(c => c.orders === 1); const pp = n.filter(c => c.prepaid >= 1).length; return n.length ? pp / n.length * 100 : 0 })()
+  const repPrepaidPct = (() => { const r = custList.filter(c => c.orders >= 2); const pp = r.filter(c => c.prepaid / c.orders >= 0.5).length; return r.length ? pp / r.length * 100 : 0 })()
+
+  // top 20 by revenue for table
+  const top20 = [...custList].sort((a, b) => b.rev - a.rev).slice(0, 20)
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 16, padding: '0 4px' }}>
+      {/* Banner */}
+      <div style={{ background: C.acl, border: `1px solid ${C.acm || '#E6C200'}`, borderRadius: 9, padding: '9px 14px', fontSize: 12, color: '#7A6000', display: 'flex', alignItems: 'center', gap: 8 }}>
+        <span style={{ fontSize: 15 }}>ℹ</span>
+        <span><strong>Shopify D2C only</strong> — Amazon, Flipkart & quick-commerce channels do not share customer identity. All metrics below are Shopify-only.</span>
+      </div>
+
+      {/* Section 1 — KPIs */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6, 1fr)', gap: 10 }}>
+        <KPICard label="Unique Customers" value={fmtN(nUniq)} sub={`${fmtN(nRepeat)} repeat`} />
+        <KPICard label="Repeat Rate" value={`${repeatRate.toFixed(1)}%`} sub={`${fmtN(nUniq - nRepeat)} first-time`} />
+        <KPICard label="Avg Orders / Cust" value={avgOrdersPerCust.toFixed(2)} sub="Shopify orders" />
+        <KPICard label="Avg LTV (Period)" value={fmt(avgLTV)} sub="Revenue / customer" />
+        <KPICard label="Avg Re-order Gap" value={avgGap ? `${avgGap}d` : '—'} sub="Between purchases" />
+        <KPICard label="Prepaid %" value={`${prepaidPct.toFixed(1)}%`} sub={`${fmtN(prepaidOrds)} orders`} />
+      </div>
+
+      {/* Section 2 — RFM */}
+      <Card title="RFM Segments" note="Recency · Frequency · Monetary — Shopify customers">
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 10, marginBottom: 14 }}>
+          {Object.entries(SEG_CFG).map(([seg, cfg]) => (
+            <div key={seg} style={{ background: cfg.bg, border: `1.5px solid ${cfg.color}30`, borderRadius: 10, padding: '12px 14px' }}>
+              <div style={{ fontSize: 11, fontWeight: 700, color: cfg.color, marginBottom: 4 }}>{seg}</div>
+              <div style={{ fontSize: 20, fontWeight: 700, color: C.t1, fontFamily: 'var(--mono)' }}>{fmtN(segData[seg].count)}</div>
+              <div style={{ fontSize: 11, color: C.t2, marginTop: 2 }}>{fmt(segData[seg].rev)}</div>
+            </div>
+          ))}
+        </div>
+        <div style={{ overflowX: 'auto' }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11 }}>
+            <thead>
+              <tr style={{ borderBottom: `2px solid ${C.border}` }}>
+                {['Customer ID', 'Orders', 'Total Spend', 'Last Order', 'Recency', 'Segment'].map(h => (
+                  <th key={h} style={{ textAlign: h === 'Customer ID' || h === 'Segment' ? 'left' : 'right', padding: '4px 8px', color: C.t3, fontSize: 10, fontWeight: 700, textTransform: 'uppercase' }}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {top20.map((c, i) => {
+                const cfg = SEG_CFG[c.segment]
+                return (
+                  <tr key={c.id} style={{ borderBottom: `1px solid ${C.border}`, background: i % 2 === 0 ? 'transparent' : C.bg }}>
+                    <td style={{ padding: '5px 8px', fontFamily: 'var(--mono)', fontSize: 10.5, color: C.t2 }}>{c.id.slice(0, 12)}…</td>
+                    <td style={{ padding: '5px 8px', textAlign: 'right', fontFamily: 'var(--mono)' }}>{c.orders}</td>
+                    <td style={{ padding: '5px 8px', textAlign: 'right', fontFamily: 'var(--mono)', fontWeight: 600 }}>{fmt(c.rev)}</td>
+                    <td style={{ padding: '5px 8px', textAlign: 'right', color: C.t2 }}>{c.lastDate}</td>
+                    <td style={{ padding: '5px 8px', textAlign: 'right', color: C.t3 }}>{c.recencyDays}d ago</td>
+                    <td style={{ padding: '5px 8px' }}><span style={{ background: cfg.bg, color: cfg.color, border: `1px solid ${cfg.color}40`, borderRadius: 5, padding: '2px 7px', fontSize: 10, fontWeight: 700 }}>{c.segment}</span></td>
+                  </tr>
+                )
+              })}
+            </tbody>
+          </table>
+        </div>
+      </Card>
+
+      {/* Section 3 — Behaviour */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+        <Card title="Purchase Frequency" note="How many times customers buy">
+          {Object.entries(freqBuckets).map(([k, v]) => (
+            <div key={k} style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 7 }}>
+              <div style={{ width: 36, fontSize: 11, fontWeight: 600, color: C.t2, flexShrink: 0 }}>{k}</div>
+              <div style={{ flex: 1, background: C.border, borderRadius: 4, height: 14, overflow: 'hidden' }}>
+                <div style={{ height: '100%', width: `${(v / maxFreq) * 100}%`, background: C.acc, borderRadius: 4, transition: 'width .3s' }} />
+              </div>
+              <div style={{ width: 60, textAlign: 'right', fontSize: 11, fontFamily: 'var(--mono)', color: C.t1 }}>{fmtN(v)} custs</div>
+            </div>
+          ))}
+        </Card>
+        <Card title="Voucher Dependency" note="Per-customer voucher usage pattern">
+          {Object.entries(vDep).map(([k, v]) => {
+            const colors = { Always: C.red.tx, Sometimes: C.amber.tx, Never: C.green.tx }
+            const bgs = { Always: C.red.bg, Sometimes: C.amber.bg, Never: C.green.bg }
+            return (
+              <div key={k} style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 7 }}>
+                <div style={{ width: 72, fontSize: 11, fontWeight: 600, color: colors[k] }}>{k}</div>
+                <div style={{ flex: 1, background: C.border, borderRadius: 4, height: 14, overflow: 'hidden' }}>
+                  <div style={{ height: '100%', width: `${nUniq ? (v / nUniq) * 100 : 0}%`, background: bgs[k] || C.acl, borderRadius: 4 }} />
+                </div>
+                <div style={{ width: 60, textAlign: 'right', fontSize: 11, fontFamily: 'var(--mono)', color: C.t1 }}>{fmtN(v)} ({nUniq ? (v / nUniq * 100).toFixed(0) : 0}%)</div>
+              </div>
+            )
+          })}
+          <div style={{ marginTop: 10, fontSize: 11, color: C.t3 }}>Always = used voucher on every order · Never = full-price buyer</div>
+        </Card>
+      </div>
+
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+        <Card title="Category Cross-sell" note="Customers who bought both categories">
+          {crossSell.length === 0 && <div style={{ color: C.t3, fontSize: 12, padding: 8 }}>Not enough data for cross-sell pairs in this period.</div>}
+          {crossSell.map(([pair, count], i) => (
+            <div key={pair} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '6px 0', borderBottom: i < crossSell.length - 1 ? `1px solid ${C.border}` : 'none' }}>
+              <div style={{ fontSize: 12, color: C.t1, fontWeight: 500 }}>{pair}</div>
+              <div style={{ fontSize: 12, fontFamily: 'var(--mono)', fontWeight: 700, color: C.acc === '#FFD600' ? '#7A6000' : C.t1, background: C.acl, borderRadius: 5, padding: '2px 8px' }}>{fmtN(count)} customers</div>
+            </div>
+          ))}
+        </Card>
+        <Card title="Repeat Rate by State" note="States with ≥5 Shopify customers">
+          {stateRepeatRows.map((r, i) => (
+            <div key={r.state} style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+              <div style={{ width: 120, fontSize: 11, color: C.t2, fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.state}</div>
+              <div style={{ flex: 1, background: C.border, borderRadius: 4, height: 12, overflow: 'hidden' }}>
+                <div style={{ height: '100%', width: `${r.rate}%`, background: r.rate > 20 ? '#0D9E68' : r.rate > 10 ? '#2E74CC' : '#CC4078', borderRadius: 4 }} />
+              </div>
+              <div style={{ width: 72, textAlign: 'right', fontSize: 11, fontFamily: 'var(--mono)' }}>{r.rate.toFixed(1)}% <span style={{ color: C.t3 }}>({fmtN(r.total)})</span></div>
+            </div>
+          ))}
+        </Card>
+      </div>
+
+      {/* Section 4 — Acquisition Bridge */}
+      <Card title="Acquisition Bridge" note="New vs Repeat customer revenue split">
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 14 }}>
+          <div style={{ textAlign: 'center', padding: '12px 0' }}>
+            <div style={{ fontSize: 11, color: C.t3, marginBottom: 4, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.05em' }}>New Customer Rev</div>
+            <div style={{ fontSize: 22, fontWeight: 700, color: C.t1, fontFamily: 'var(--mono)' }}>{fmt(newRev)}</div>
+            <div style={{ fontSize: 11, color: C.t3, marginTop: 3 }}>{shopRev ? (newRev / shopRev * 100).toFixed(0) : 0}% of Shopify rev</div>
+          </div>
+          <div style={{ textAlign: 'center', padding: '12px 0' }}>
+            <div style={{ fontSize: 11, color: C.t3, marginBottom: 4, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.05em' }}>Repeat Customer Rev</div>
+            <div style={{ fontSize: 22, fontWeight: 700, color: '#0D9E68', fontFamily: 'var(--mono)' }}>{fmt(repeatRev)}</div>
+            <div style={{ fontSize: 11, color: C.t3, marginTop: 3 }}>{shopRev ? (repeatRev / shopRev * 100).toFixed(0) : 0}% of Shopify rev</div>
+          </div>
+          <div style={{ textAlign: 'center', padding: '12px 0' }}>
+            <div style={{ fontSize: 11, color: C.t3, marginBottom: 4, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.05em' }}>New Cust Prepaid</div>
+            <div style={{ fontSize: 22, fontWeight: 700, color: C.t1, fontFamily: 'var(--mono)' }}>{newPrepaidPct.toFixed(1)}%</div>
+            <div style={{ fontSize: 11, color: C.t3, marginTop: 3 }}>of first-time buyers</div>
+          </div>
+          <div style={{ textAlign: 'center', padding: '12px 0' }}>
+            <div style={{ fontSize: 11, color: C.t3, marginBottom: 4, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.05em' }}>Repeat Cust Prepaid</div>
+            <div style={{ fontSize: 22, fontWeight: 700, color: '#0D9E68', fontFamily: 'var(--mono)' }}>{repPrepaidPct.toFixed(1)}%</div>
+            <div style={{ fontSize: 11, color: C.t3, marginTop: 3 }}>of repeat buyers</div>
+          </div>
+        </div>
+      </Card>
+    </div>
+  )
+}
+
 export default function App() {
   const [page, setPage] = useState('overview')
   const def = getDefaultDates()
@@ -8602,6 +8871,11 @@ export default function App() {
           {page === 'logistics' && (
             <div style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
               <LogisticsPage filters={filters} />
+            </div>
+          )}
+          {page === 'customer' && data && (
+            <div className="page-scroll">
+              <CustomerPage data={data} />
             </div>
           )}
         </div>
