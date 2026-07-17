@@ -8875,7 +8875,7 @@ function CustomerPage({ filters }) {
                       <div style={{ width: 130, fontSize: 11, color: C.t2, flexShrink: 0, paddingRight: 8 }}>{r.label}</div>
                       <div style={{ flex: 1, background: C.border, borderRadius: 3, height: 28, overflow: 'hidden', position: 'relative' }}>
                         <div style={{ height: '100%', width: `${barPct}%`, background: shade, borderRadius: 3 }} />
-                        <span style={{ position: 'absolute', left: 8, top: '50%', transform: 'translateY(-50%)', fontSize: 11, fontWeight: 700, color: C.t1, fontFamily: 'var(--mono)' }}>{fmtBig(r.customers)}</span>
+                        <span style={{ position: 'absolute', left: barPct > 15 ? 8 : `calc(${barPct}% + 6px)`, top: '50%', transform: 'translateY(-50%)', fontSize: 11, fontWeight: 700, color: barPct > 15 ? C.t1 : C.t2, fontFamily: 'var(--mono)' }}>{fmtBig(r.customers)}</span>
                       </div>
                       <div style={{ width: 38, textAlign: 'right', fontSize: 10, color: C.t3, flexShrink: 0 }}>{pct}%</div>
                     </div>
