@@ -8689,10 +8689,15 @@ function CustomerPage({ filters }) {
       {(() => {
         const [cohortMode, setCohortMode] = [custData._cohortMode || 'customer', v => setCustData(d => ({ ...d, _cohortMode: v }))]
         return (
-        <Card title="Customer Retention Cohort" note={
-          cohortMode === 'customer'
-            ? 'Only customers with ≥1 successful order (excl. Cancel/RTO/CIR)'
-            : 'Net revenue per cohort (Exc. GST, excl. Cancel/RTO/CIR) ÷ Month 0 revenue'
+        <Card title={
+          <div>
+            <div>Customer Retention Cohort</div>
+            <div style={{ fontSize: 11, fontWeight: 400, color: C.t3, marginTop: 2 }}>
+              {cohortMode === 'customer'
+                ? 'Only customers with ≥1 successful order (excl. Cancel / RTO / CIR)'
+                : 'Net revenue per cohort (Exc. GST, excl. Cancel / RTO / CIR) ÷ Month 0 revenue'}
+            </div>
+          </div>
         } action={
           <div style={{ display: 'flex', gap: 5 }}>
             {[['customer','Customer Retention %'],['sales','Sales Retention %']].map(([k,l]) => (
