@@ -8754,7 +8754,7 @@ function CustomerPage({ filters }) {
       })()}
 
       {/* Cross-sell matrix */}
-      <Card title="Purchase Behavior: First vs Second Purchase" action={
+      <Card title={<div><div>Purchase Behavior: First vs Second Purchase</div><div style={{ fontSize: 11, fontWeight: 400, color: C.t3, marginTop: 2 }}>All-time data — not affected by date filter. Shows what customers bought on their 2nd order after their 1st.</div></div>} action={
         <div style={{ display: 'flex', gap: 4 }}>
           {['Sub Category', 'Category'].map(t => (
             <button key={t} onClick={() => setCrossFilter(t)} style={{ fontSize: 10, padding: '3px 9px', borderRadius: 5, border: `1px solid ${C.border}`, background: crossFilter === t ? C.t1 : C.card, color: crossFilter === t ? '#fff' : C.t2, cursor: 'pointer', fontFamily: 'var(--font)', fontWeight: crossFilter === t ? 700 : 400 }}>{t}</button>
