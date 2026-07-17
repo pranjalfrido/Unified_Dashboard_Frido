@@ -1,4 +1,4 @@
-import { getBQ } from './_bq.js'
+﻿import { getBQ } from './_bq.js'
 
 // All queries use fact_all_platform_sales_report filtered to Shopify
 const TBL = '`frido-429506.production.fact_all_platform_sales_report`'
@@ -20,7 +20,7 @@ export default async function handler(req, res) {
 
     const [kpis, monthly, cohort, crossSell, rfm, freqDist, monetaryDist, inactivity, discountDist, adsKpis] = await Promise.all([
 
-      // Q1 — KPIs for the selected period (Shopify only)
+      // Q1 â€” KPIs for the selected period (Shopify only)
       run(`WITH first_dates AS (
   SELECT CustomerId, MIN(DATE(OrderDate)) AS first_date
   FROM ${TBL}
@@ -36,7 +36,7 @@ period AS (
   WHERE o.Channel = 'Shopify'
     AND DATE(o.OrderDate) BETWEEN '${s}' AND '${e}'
     AND o.CustomerId IS NOT NULL
-    AND NOT (o.is_cancelled = 1 OR o.is_rto = 1)
+    AND o.Order_Status NOT IN ('RTO','Cancelled')
 )
 SELECT
   COUNT(DISTINCT CustomerId) AS total_customers,
@@ -49,7 +49,7 @@ SELECT
   COUNT(DISTINCT CASE WHEN voucher_code IS NULL OR TRIM(voucher_code) = '' THEN OrderId END) AS non_discounted_orders
 FROM period`),
 
-      // Q2 — monthly new vs repeat
+      // Q2 â€” monthly new vs repeat
       run(`WITH first_dates AS (
   SELECT CustomerId, MIN(DATE(OrderDate)) AS first_date
   FROM ${TBL}
@@ -64,7 +64,7 @@ period AS (
   WHERE o.Channel = 'Shopify'
     AND DATE(o.OrderDate) BETWEEN '${s}' AND '${e}'
     AND o.CustomerId IS NOT NULL
-    AND NOT (o.is_cancelled = 1 OR o.is_rto = 1)
+    AND o.Order_Status NOT IN ('RTO','Cancelled')
 )
 SELECT
   FORMAT_DATE('%b %y', order_date) AS month,
@@ -77,7 +77,7 @@ FROM period
 GROUP BY month, month_sort
 ORDER BY month_sort`),
 
-      // Q3 — cohort retention (all-time, last 18 months of cohorts)
+      // Q3 â€” cohort retention (all-time, last 18 months of cohorts)
       run(`WITH first_orders AS (
   SELECT CustomerId, DATE_TRUNC(MIN(DATE(OrderDate)), MONTH) AS cohort_month
   FROM ${TBL}
@@ -88,7 +88,7 @@ all_orders AS (
   SELECT DISTINCT CustomerId, DATE_TRUNC(DATE(OrderDate), MONTH) AS order_month
   FROM ${TBL}
   WHERE Channel = 'Shopify' AND CustomerId IS NOT NULL
-    AND NOT (is_cancelled = 1 OR is_rto = 1)
+    AND Order_Status NOT IN ('RTO','Cancelled')
 ),
 cohort_data AS (
   SELECT f.cohort_month,
@@ -105,14 +105,14 @@ SELECT FORMAT_DATE('%Y-%m', cohort_month) AS cohort_month, cohort_index, custome
 FROM cohort_data
 ORDER BY cohort_month, cohort_index`),
 
-      // Q4 — first vs second purchase category cross-sell
+      // Q4 â€” first vs second purchase category cross-sell
       run(`WITH ranked AS (
   SELECT CustomerId, Category,
     ROW_NUMBER() OVER (PARTITION BY CustomerId ORDER BY OrderDate) AS rn
   FROM ${TBL}
   WHERE Channel = 'Shopify' AND CustomerId IS NOT NULL
     AND Category IS NOT NULL AND TRIM(Category) != ''
-    AND NOT (is_cancelled = 1 OR is_rto = 1)
+    AND Order_Status NOT IN ('RTO','Cancelled')
 ),
 fp AS (SELECT CustomerId, Category AS first_category FROM ranked WHERE rn = 1),
 sp AS (SELECT CustomerId, Category AS second_category FROM ranked WHERE rn = 2)
@@ -127,7 +127,7 @@ HAVING COUNT(DISTINCT fp.CustomerId) > 0
 ORDER BY customers DESC
 LIMIT 200`),
 
-      // Q5 — RFM segments (all-time up to end date)
+      // Q5 â€” RFM segments (all-time up to end date)
       run(`WITH customer_stats AS (
   SELECT
     CustomerId,
@@ -137,7 +137,7 @@ LIMIT 200`),
   FROM ${TBL}
   WHERE Channel = 'Shopify' AND CustomerId IS NOT NULL
     AND DATE(OrderDate) <= DATE('${e}')
-    AND NOT (is_cancelled = 1 OR is_rto = 1)
+    AND Order_Status NOT IN ('RTO','Cancelled')
   GROUP BY CustomerId
 ),
 scored AS (
@@ -171,13 +171,13 @@ FROM segmented
 GROUP BY segment
 ORDER BY total_revenue DESC`),
 
-      // Q6 — purchase frequency distribution (all-time)
+      // Q6 â€” purchase frequency distribution (all-time)
       run(`WITH freq AS (
   SELECT CustomerId, COUNT(DISTINCT OrderId) AS orders
   FROM ${TBL}
   WHERE Channel = 'Shopify' AND CustomerId IS NOT NULL
     AND DATE(OrderDate) <= DATE('${e}')
-    AND NOT (is_cancelled = 1 OR is_rto = 1)
+    AND Order_Status NOT IN ('RTO','Cancelled')
   GROUP BY CustomerId
 )
 SELECT
@@ -188,13 +188,13 @@ FROM freq
 GROUP BY frequency_label
 ORDER BY MIN(orders)`),
 
-      // Q7 — monetary distribution (all-time)
+      // Q7 â€” monetary distribution (all-time)
       run(`WITH customer_ltv AS (
   SELECT CustomerId, ROUND(SUM(SellingPrice_Inc_GST), 0) AS monetary
   FROM ${TBL}
   WHERE Channel = 'Shopify' AND CustomerId IS NOT NULL
     AND DATE(OrderDate) <= DATE('${e}')
-    AND NOT (is_cancelled = 1 OR is_rto = 1)
+    AND Order_Status NOT IN ('RTO','Cancelled')
   GROUP BY CustomerId
 )
 SELECT
@@ -206,12 +206,12 @@ FROM customer_ltv
 GROUP BY bucket
 ORDER BY MIN(monetary)`),
 
-      // Q8 — inactivity buckets (all-time)
+      // Q8 â€” inactivity buckets (all-time)
       run(`WITH last_purchase AS (
   SELECT CustomerId, MAX(DATE(OrderDate)) AS last_date
   FROM ${TBL}
   WHERE Channel = 'Shopify' AND CustomerId IS NOT NULL
-    AND NOT (is_cancelled = 1 OR is_rto = 1)
+    AND Order_Status NOT IN ('RTO','Cancelled')
   GROUP BY CustomerId
 )
 SELECT
@@ -221,7 +221,7 @@ FROM last_purchase
 GROUP BY bucket
 ORDER BY MIN(DATE_DIFF(DATE('${e}'), last_date, DAY))`),
 
-      // Q9 — discount distribution (voucher proxy) first vs repeat
+      // Q9 â€” discount distribution (voucher proxy) first vs repeat
       run(`WITH first_dates AS (
   SELECT CustomerId, MIN(DATE(OrderDate)) AS first_date
   FROM ${TBL}
@@ -237,7 +237,7 @@ tagged AS (
   WHERE o.Channel = 'Shopify'
     AND DATE(o.OrderDate) BETWEEN '${s}' AND '${e}'
     AND o.CustomerId IS NOT NULL
-    AND NOT (o.is_cancelled = 1 OR o.is_rto = 1)
+    AND o.Order_Status NOT IN ('RTO','Cancelled')
 )
 SELECT disc_flag AS discount_bucket,
   COUNTIF(order_type = 'First Order') AS first_orders,
@@ -245,7 +245,7 @@ SELECT disc_flag AS discount_bucket,
 FROM tagged
 GROUP BY discount_bucket`),
 
-      // Q10 — ads KPIs
+      // Q10 â€” ads KPIs
       run(`SELECT platform, ROUND(SUM(spend), 0) AS spend, ROUND(SUM(revenue), 0) AS revenue, ROUND(SUM(orders), 0) AS orders
 FROM \`frido-429506.production.fact_all_platform_ads_report\`
 WHERE report_date BETWEEN '${s}' AND '${e}' AND platform IN ('Meta', 'Google')
@@ -330,3 +330,4 @@ GROUP BY platform`),
     res.status(500).json({ error: err.message })
   }
 }
+
