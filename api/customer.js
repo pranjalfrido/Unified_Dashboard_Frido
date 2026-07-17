@@ -90,7 +90,7 @@ cohort_data AS (
   JOIN all_orders a USING (customer_id)
   WHERE f.cohort_month >= DATE_TRUNC(DATE_SUB(DATE('${e}'), INTERVAL 18 MONTH), MONTH)
     AND f.cohort_month <= DATE_TRUNC(DATE('${e}'), MONTH)
-    AND cohort_index BETWEEN 0 AND 14
+    AND DATE_DIFF(a.order_month, f.cohort_month, MONTH) BETWEEN 0 AND 14
   GROUP BY cohort_month, cohort_index
 )
 SELECT FORMAT_DATE('%Y-%m', cohort_month) AS cohort_month, cohort_index, customers
@@ -98,14 +98,8 @@ FROM cohort_data
 ORDER BY cohort_month, cohort_index`),
 
       // Query 4 — crossSell
-      run(`WITH first_purchase AS (
-  SELECT customer_id, MasterSKU AS first_sku,
-    ROW_NUMBER() OVER (PARTITION BY customer_id ORDER BY order_date_ist) AS rn
-  FROM \`frido-429506.production.fact_shopify_myfrido_mobility_all_orders\`
-  WHERE customer_id IS NOT NULL AND financial_status NOT IN ('refunded','voided')
-),
-second_purchase AS (
-  SELECT customer_id, MasterSKU AS second_sku,
+      run(`WITH ranked AS (
+  SELECT customer_id, MasterSKU AS sku,
     ROW_NUMBER() OVER (PARTITION BY customer_id ORDER BY order_date_ist) AS rn
   FROM \`frido-429506.production.fact_shopify_myfrido_mobility_all_orders\`
   WHERE customer_id IS NOT NULL AND financial_status NOT IN ('refunded','voided')
@@ -114,18 +108,19 @@ im AS (
   SELECT DISTINCT TRIM(Sub_category) AS sku, ANY_VALUE(Category_Name) AS category
   FROM \`frido-429506.sharepoint_to_gcp.Frido_Item_Master__frido_item_sku_master\`
   WHERE Sub_category IS NOT NULL GROUP BY TRIM(Sub_category)
-)
+),
+fp AS (SELECT customer_id, sku AS first_sku FROM ranked WHERE rn = 1),
+sp AS (SELECT customer_id, sku AS second_sku FROM ranked WHERE rn = 2)
 SELECT
   COALESCE(im1.category, fp.first_sku) AS first_category,
   COALESCE(im2.category, sp.second_sku) AS second_category,
   COUNT(DISTINCT fp.customer_id) AS customers
-FROM first_purchase fp
-JOIN second_purchase sp ON fp.customer_id = sp.customer_id AND sp.rn = 2
-WHERE fp.rn = 1
+FROM fp
+JOIN sp USING (customer_id)
 LEFT JOIN im im1 ON fp.first_sku = im1.sku
 LEFT JOIN im im2 ON sp.second_sku = im2.sku
 GROUP BY first_category, second_category
-HAVING customers > 0
+HAVING COUNT(DISTINCT fp.customer_id) > 0
 ORDER BY customers DESC`),
 
       // Query 5 — rfm
@@ -155,7 +150,7 @@ segmented AS (
       WHEN r_score >= 3 AND f_score >= 3 THEN 'Loyal Customers'
       WHEN r_score >= 4 AND f_score <= 2 THEN 'Recent Users'
       WHEN r_score >= 3 AND m_score >= 3 THEN 'Potential Loyalists'
-      WHEN r_score <= 2 AND f_score >= 3 THEN 'Can''t Lose Them'
+      WHEN r_score <= 2 AND f_score >= 3 THEN 'Cannot Lose Them'
       WHEN r_score <= 2 AND f_score >= 2 THEN 'Hibernating'
       WHEN monetary >= 5000 THEN 'Others'
       ELSE 'Hibernating'
