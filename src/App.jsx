@@ -8626,9 +8626,21 @@ function CustomerPage({ filters }) {
               <XAxis dataKey="month" tick={{ fontSize: 10, fill: C.t2 }} axisLine={{ stroke: C.border2 }} tickLine={false} interval="preserveStartEnd" />
               <YAxis tick={{ fontSize: 9, fill: C.t3 }} axisLine={{ stroke: C.border2 }} tickLine={false} tickFormatter={tickFmt} width={44} />
               <Tooltip
-                labelFormatter={l => `${xLabel}: ${l}`}
-                formatter={(v) => [selM.fmt(v), selM.label]}
-                contentStyle={{ fontSize: 11, borderRadius: 8, border: `1px solid ${C.border}` }}
+                content={({ active, payload, label }) => {
+                  if (!active || !payload?.length) return null
+                  const d = payload[0]?.payload || {}
+                  return (
+                    <div style={{ background: '#fff', border: `1px solid ${C.border}`, borderRadius: 9, padding: '10px 14px', fontSize: 11.5, boxShadow: '0 2px 10px #0001' }}>
+                      <div style={{ fontWeight: 700, color: C.t1, marginBottom: 7, borderBottom: `1px solid ${C.border}`, paddingBottom: 5 }}>{xLabel}: <span style={{ color: C.acc }}>{label}</span></div>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', gap: 24 }}><span style={{ color: C.t3 }}>Customers Acquired</span><span style={{ fontWeight: 700, color: C.t1 }}>{(d.customersAcquired||0).toLocaleString('en-IN')}</span></div>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', gap: 24 }}><span style={{ color: C.t3 }}>Gross Sales</span><span style={{ fontWeight: 700, color: '#2E74CC' }}>{fmt(d.grossSales||0)}</span></div>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', gap: 24 }}><span style={{ color: C.t3 }}>AOV</span><span style={{ fontWeight: 700, color: '#E8930A' }}>₹{Math.round(d.aov||0).toLocaleString('en-IN')}</span></div>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', gap: 24 }}><span style={{ color: C.t3 }}>Repeat Revenue Rate</span><span style={{ fontWeight: 700, color: '#0D9E68' }}>{((d.repeatRevenueRate||0)*100).toFixed(1)}%</span></div>
+                      </div>
+                    </div>
+                  )
+                }}
               />
               {selM.isBar
                 ? <Bar dataKey={selM.key} fill={selM.color} name={selM.label} radius={[3,3,0,0]} maxBarSize={maxBar}
