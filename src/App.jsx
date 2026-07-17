@@ -8595,10 +8595,10 @@ function CustomerPage({ filters }) {
             <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}><span style={{ width: 20, height: 2, background: '#2E74CC', display: 'inline-block' }} />Total Gross Sales</span>
           </div>
           <ResponsiveContainer width="100%" height={240}>
-            <ComposedChart data={monthly} margin={{ top: 28, right: 20, left: 10, bottom: 0 }}>
+            <ComposedChart data={monthly} margin={{ top: 28, right: 60, left: 10, bottom: 0 }}>
               <XAxis dataKey="month" tick={{ fontSize: 10, fill: C.t2 }} axisLine={false} tickLine={false} interval="preserveStartEnd" />
-              <YAxis yAxisId="left" hide />
-              <YAxis yAxisId="right" orientation="right" hide />
+              <YAxis yAxisId="left" tick={{ fontSize: 9, fill: C.t3 }} axisLine={false} tickLine={false} tickFormatter={v => v >= 1000 ? `${(v/1000).toFixed(0)}K` : v} width={36} />
+              <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 9, fill: '#2E74CC' }} axisLine={false} tickLine={false} tickFormatter={v => v >= 1e7 ? `${(v/1e7).toFixed(1)}Cr` : v >= 1e5 ? `${(v/1e5).toFixed(0)}L` : v >= 1000 ? `${(v/1000).toFixed(0)}K` : v} width={48} />
               <Tooltip
                 formatter={(v, n) => [n === 'Total Gross Sales' ? fmt(v) : fmtN(v), n]}
                 contentStyle={{ fontSize: 11, borderRadius: 8, border: `1px solid ${C.border}` }}
