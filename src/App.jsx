@@ -8764,9 +8764,16 @@ function CustomerPage({ filters }) {
         <div style={{ overflowX: 'auto', width: '100%' }}>
           <table style={{ borderCollapse: 'collapse', fontSize: 10.5, width: '100%' }}>
             <thead>
+              {/* Span header row: "First Purchase →" label above all category columns */}
+              <tr>
+                <th style={{ padding: '2px 8px 0', borderBottom: 'none' }} />
+                <th colSpan={allCrossFirst.length} style={{ padding: '4px 6px 2px', textAlign: 'center', fontSize: 9.5, fontWeight: 700, color: C.blue.tx, background: C.blue.bg, borderRadius: '6px 6px 0 0', letterSpacing: '.04em' }}>
+                  First Purchase {crossFilter} →
+                </th>
+              </tr>
               <tr style={{ borderBottom: `2px solid ${C.border}` }}>
-                <th style={{ padding: '4px 8px', textAlign: 'left', color: C.t3, fontWeight: 700, fontSize: 9.5, whiteSpace: 'nowrap' }}>
-                  Second Purchase {crossFilter}
+                <th style={{ padding: '4px 8px', textAlign: 'left', whiteSpace: 'nowrap', verticalAlign: 'bottom' }}>
+                  <div style={{ fontSize: 8.5, fontWeight: 700, color: C.blue.tx, background: C.blue.bg, display: 'inline-block', padding: '2px 6px', borderRadius: 4, marginBottom: 2 }}>↓ Second Purchase {crossFilter}</div>
                 </th>
                 {allCrossFirst.map(cat => (
                   <th key={cat} style={{ padding: '4px 6px', textAlign: 'right', color: C.t3, fontWeight: 700, fontSize: 9, whiteSpace: 'nowrap' }}>{cat}</th>
