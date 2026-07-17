@@ -1,5 +1,8 @@
 import { getBQ } from './_bq.js'
 
+// All queries use fact_all_platform_sales_report filtered to Shopify
+const TBL = '`frido-429506.production.fact_all_platform_sales_report`'
+
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*')
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS')
@@ -13,81 +16,86 @@ export default async function handler(req, res) {
   try {
     const bq = getBQ()
     const run = q => bq.query({ query: q, maximumBytesBilled: '10000000000' }).then(([rows]) => rows)
-
     const s = start, e = end
 
     const [kpis, monthly, cohort, crossSell, rfm, freqDist, monetaryDist, inactivity, discountDist, adsKpis] = await Promise.all([
-      // Query 1 — kpis
-      run(`WITH orders AS (
-  SELECT
-    o.customer_id,
-    o.order_id,
-    DATE(o.order_date_ist) AS order_date,
-    o.selling_price_excl_shipping_tax AS rev,
-    o.selling_price_incl_tax AS rev_inc,
-    o.total_discounts,
-    MIN(DATE(o.order_date_ist)) OVER (PARTITION BY o.customer_id) AS first_order_date
-  FROM \`frido-429506.production.fact_shopify_myfrido_mobility_all_orders\` o
-  WHERE DATE(o.order_date_ist) BETWEEN '${s}' AND '${e}'
-    AND o.customer_id IS NOT NULL
-    AND o.financial_status NOT IN ('refunded','voided')
-)
-SELECT
-  COUNT(DISTINCT customer_id) AS total_customers,
-  COUNTIF(first_order_date BETWEEN '${s}' AND '${e}') AS new_customers,
-  COUNTIF(first_order_date < '${s}') AS returning_customers,
-  COUNT(DISTINCT order_id) AS total_orders,
-  ROUND(SUM(rev), 0) AS gross_sales,
-  ROUND(SAFE_DIVIDE(SUM(rev), COUNT(DISTINCT order_id)), 0) AS aov,
-  ROUND(SAFE_DIVIDE(SUM(total_discounts), SUM(rev_inc + total_discounts)), 4) AS avg_discount_rate,
-  COUNTIF(total_discounts > 0) AS discounted_orders,
-  COUNT(DISTINCT order_id) - COUNTIF(total_discounts > 0) AS non_discounted_orders
-FROM orders`),
 
-      // Query 2 — monthly
+      // Q1 — KPIs for the selected period (Shopify only)
       run(`WITH first_dates AS (
-  SELECT customer_id, MIN(DATE(order_date_ist)) AS first_date
-  FROM \`frido-429506.production.fact_shopify_myfrido_mobility_all_orders\`
-  WHERE customer_id IS NOT NULL
-  GROUP BY customer_id
+  SELECT CustomerId, MIN(DATE(OrderDate)) AS first_date
+  FROM ${TBL}
+  WHERE Channel = 'Shopify' AND CustomerId IS NOT NULL
+  GROUP BY CustomerId
 ),
-period_orders AS (
-  SELECT o.customer_id, DATE(o.order_date_ist) AS order_date,
-    o.selling_price_excl_shipping_tax AS rev,
-    f.first_date
-  FROM \`frido-429506.production.fact_shopify_myfrido_mobility_all_orders\` o
-  JOIN first_dates f USING (customer_id)
-  WHERE DATE(o.order_date_ist) BETWEEN '${s}' AND '${e}'
-    AND o.customer_id IS NOT NULL
-    AND o.financial_status NOT IN ('refunded','voided')
+period AS (
+  SELECT o.CustomerId, o.OrderId, DATE(o.OrderDate) AS order_date,
+    o.SellingPrice_Inc_GST AS rev_inc, o.SellingPrice_Exc_GST AS rev,
+    o.voucher_code, f.first_date
+  FROM ${TBL} o
+  JOIN first_dates f USING (CustomerId)
+  WHERE o.Channel = 'Shopify'
+    AND DATE(o.OrderDate) BETWEEN '${s}' AND '${e}'
+    AND o.CustomerId IS NOT NULL
+    AND NOT (o.is_cancelled = 1 OR o.is_rto = 1)
 )
 SELECT
-  FORMAT_DATE('%Y-%m', order_date) AS month,
-  COUNT(DISTINCT customer_id) AS customers_acquired,
-  ROUND(SUM(rev), 0) AS gross_sales,
-  COUNT(DISTINCT CASE WHEN first_date BETWEEN DATE('${s}') AND DATE('${e}') THEN customer_id END) AS new_customers,
-  COUNT(DISTINCT CASE WHEN first_date < DATE('${s}') THEN customer_id END) AS repeat_customers
-FROM period_orders
-GROUP BY month
-ORDER BY month`),
+  COUNT(DISTINCT CustomerId) AS total_customers,
+  COUNT(DISTINCT CASE WHEN first_date BETWEEN DATE('${s}') AND DATE('${e}') THEN CustomerId END) AS new_customers,
+  COUNT(DISTINCT CASE WHEN first_date < DATE('${s}') THEN CustomerId END) AS returning_customers,
+  COUNT(DISTINCT OrderId) AS total_orders,
+  ROUND(SUM(rev_inc), 0) AS gross_sales,
+  ROUND(SAFE_DIVIDE(SUM(rev_inc), COUNT(DISTINCT OrderId)), 0) AS aov,
+  COUNT(DISTINCT CASE WHEN voucher_code IS NOT NULL AND TRIM(voucher_code) != '' THEN OrderId END) AS discounted_orders,
+  COUNT(DISTINCT CASE WHEN voucher_code IS NULL OR TRIM(voucher_code) = '' THEN OrderId END) AS non_discounted_orders
+FROM period`),
 
-      // Query 3 — cohort
+      // Q2 — monthly new vs repeat
+      run(`WITH first_dates AS (
+  SELECT CustomerId, MIN(DATE(OrderDate)) AS first_date
+  FROM ${TBL}
+  WHERE Channel = 'Shopify' AND CustomerId IS NOT NULL
+  GROUP BY CustomerId
+),
+period AS (
+  SELECT o.CustomerId, o.OrderId, DATE(o.OrderDate) AS order_date,
+    o.SellingPrice_Inc_GST AS rev, f.first_date
+  FROM ${TBL} o
+  JOIN first_dates f USING (CustomerId)
+  WHERE o.Channel = 'Shopify'
+    AND DATE(o.OrderDate) BETWEEN '${s}' AND '${e}'
+    AND o.CustomerId IS NOT NULL
+    AND NOT (o.is_cancelled = 1 OR o.is_rto = 1)
+)
+SELECT
+  FORMAT_DATE('%b %y', order_date) AS month,
+  FORMAT_DATE('%Y-%m', order_date) AS month_sort,
+  COUNT(DISTINCT CustomerId) AS customers_acquired,
+  ROUND(SUM(rev), 0) AS gross_sales,
+  COUNT(DISTINCT CASE WHEN first_date BETWEEN DATE('${s}') AND DATE('${e}') THEN CustomerId END) AS new_customers,
+  COUNT(DISTINCT CASE WHEN first_date < DATE('${s}') THEN CustomerId END) AS repeat_customers
+FROM period
+GROUP BY month, month_sort
+ORDER BY month_sort`),
+
+      // Q3 — cohort retention (all-time, last 18 months of cohorts)
       run(`WITH first_orders AS (
-  SELECT customer_id, DATE_TRUNC(MIN(DATE(order_date_ist)), MONTH) AS cohort_month
-  FROM \`frido-429506.production.fact_shopify_myfrido_mobility_all_orders\`
-  WHERE customer_id IS NOT NULL
-  GROUP BY customer_id
+  SELECT CustomerId, DATE_TRUNC(MIN(DATE(OrderDate)), MONTH) AS cohort_month
+  FROM ${TBL}
+  WHERE Channel = 'Shopify' AND CustomerId IS NOT NULL
+  GROUP BY CustomerId
 ),
 all_orders AS (
-  SELECT DISTINCT o.customer_id, DATE_TRUNC(DATE(o.order_date_ist), MONTH) AS order_month
-  FROM \`frido-429506.production.fact_shopify_myfrido_mobility_all_orders\` o
-  WHERE customer_id IS NOT NULL AND financial_status NOT IN ('refunded','voided')
+  SELECT DISTINCT CustomerId, DATE_TRUNC(DATE(OrderDate), MONTH) AS order_month
+  FROM ${TBL}
+  WHERE Channel = 'Shopify' AND CustomerId IS NOT NULL
+    AND NOT (is_cancelled = 1 OR is_rto = 1)
 ),
 cohort_data AS (
-  SELECT f.cohort_month, DATE_DIFF(a.order_month, f.cohort_month, MONTH) AS cohort_index,
-    COUNT(DISTINCT a.customer_id) AS customers
+  SELECT f.cohort_month,
+    DATE_DIFF(a.order_month, f.cohort_month, MONTH) AS cohort_index,
+    COUNT(DISTINCT a.CustomerId) AS customers
   FROM first_orders f
-  JOIN all_orders a USING (customer_id)
+  JOIN all_orders a USING (CustomerId)
   WHERE f.cohort_month >= DATE_TRUNC(DATE_SUB(DATE('${e}'), INTERVAL 18 MONTH), MONTH)
     AND f.cohort_month <= DATE_TRUNC(DATE('${e}'), MONTH)
     AND DATE_DIFF(a.order_month, f.cohort_month, MONTH) BETWEEN 0 AND 14
@@ -97,43 +105,40 @@ SELECT FORMAT_DATE('%Y-%m', cohort_month) AS cohort_month, cohort_index, custome
 FROM cohort_data
 ORDER BY cohort_month, cohort_index`),
 
-      // Query 4 — crossSell
+      // Q4 — first vs second purchase category cross-sell
       run(`WITH ranked AS (
-  SELECT customer_id, MasterSKU AS sku,
-    ROW_NUMBER() OVER (PARTITION BY customer_id ORDER BY order_date_ist) AS rn
-  FROM \`frido-429506.production.fact_shopify_myfrido_mobility_all_orders\`
-  WHERE customer_id IS NOT NULL AND financial_status NOT IN ('refunded','voided')
+  SELECT CustomerId, Category,
+    ROW_NUMBER() OVER (PARTITION BY CustomerId ORDER BY OrderDate) AS rn
+  FROM ${TBL}
+  WHERE Channel = 'Shopify' AND CustomerId IS NOT NULL
+    AND Category IS NOT NULL AND TRIM(Category) != ''
+    AND NOT (is_cancelled = 1 OR is_rto = 1)
 ),
-im AS (
-  SELECT DISTINCT TRIM(Sub_category) AS sku, ANY_VALUE(Category_Name) AS category
-  FROM \`frido-429506.sharepoint_to_gcp.Frido_Item_Master__frido_item_sku_master\`
-  WHERE Sub_category IS NOT NULL GROUP BY TRIM(Sub_category)
-),
-fp AS (SELECT customer_id, sku AS first_sku FROM ranked WHERE rn = 1),
-sp AS (SELECT customer_id, sku AS second_sku FROM ranked WHERE rn = 2)
+fp AS (SELECT CustomerId, Category AS first_category FROM ranked WHERE rn = 1),
+sp AS (SELECT CustomerId, Category AS second_category FROM ranked WHERE rn = 2)
 SELECT
-  COALESCE(im1.category, fp.first_sku) AS first_category,
-  COALESCE(im2.category, sp.second_sku) AS second_category,
-  COUNT(DISTINCT fp.customer_id) AS customers
+  fp.first_category,
+  sp.second_category,
+  COUNT(DISTINCT fp.CustomerId) AS customers
 FROM fp
-JOIN sp USING (customer_id)
-LEFT JOIN im im1 ON fp.first_sku = im1.sku
-LEFT JOIN im im2 ON sp.second_sku = im2.sku
+JOIN sp USING (CustomerId)
 GROUP BY first_category, second_category
-HAVING COUNT(DISTINCT fp.customer_id) > 0
-ORDER BY customers DESC`),
+HAVING COUNT(DISTINCT fp.CustomerId) > 0
+ORDER BY customers DESC
+LIMIT 200`),
 
-      // Query 5 — rfm
+      // Q5 — RFM segments (all-time up to end date)
       run(`WITH customer_stats AS (
   SELECT
-    customer_id,
-    DATE_DIFF(DATE('${e}'), MAX(DATE(order_date_ist)), DAY) AS recency_days,
-    COUNT(DISTINCT order_id) AS frequency,
-    ROUND(SUM(selling_price_excl_shipping_tax), 0) AS monetary
-  FROM \`frido-429506.production.fact_shopify_myfrido_mobility_all_orders\`
-  WHERE customer_id IS NOT NULL AND financial_status NOT IN ('refunded','voided')
-    AND DATE(order_date_ist) <= DATE('${e}')
-  GROUP BY customer_id
+    CustomerId,
+    DATE_DIFF(DATE('${e}'), MAX(DATE(OrderDate)), DAY) AS recency_days,
+    COUNT(DISTINCT OrderId) AS frequency,
+    ROUND(SUM(SellingPrice_Inc_GST), 0) AS monetary
+  FROM ${TBL}
+  WHERE Channel = 'Shopify' AND CustomerId IS NOT NULL
+    AND DATE(OrderDate) <= DATE('${e}')
+    AND NOT (is_cancelled = 1 OR is_rto = 1)
+  GROUP BY CustomerId
 ),
 scored AS (
   SELECT *,
@@ -144,7 +149,6 @@ scored AS (
 ),
 segmented AS (
   SELECT *,
-    (r_score + f_score + m_score) / 3.0 AS avg_score,
     CASE
       WHEN r_score >= 4 AND f_score >= 4 THEN 'Champions'
       WHEN r_score >= 3 AND f_score >= 3 THEN 'Loyal Customers'
@@ -167,32 +171,34 @@ FROM segmented
 GROUP BY segment
 ORDER BY total_revenue DESC`),
 
-      // Query 6 — freqDist
+      // Q6 — purchase frequency distribution (all-time)
       run(`WITH freq AS (
-  SELECT customer_id, COUNT(DISTINCT order_id) AS orders
-  FROM \`frido-429506.production.fact_shopify_myfrido_mobility_all_orders\`
-  WHERE customer_id IS NOT NULL AND financial_status NOT IN ('refunded','voided')
-    AND DATE(order_date_ist) <= DATE('${e}')
-  GROUP BY customer_id
+  SELECT CustomerId, COUNT(DISTINCT OrderId) AS orders
+  FROM ${TBL}
+  WHERE Channel = 'Shopify' AND CustomerId IS NOT NULL
+    AND DATE(OrderDate) <= DATE('${e}')
+    AND NOT (is_cancelled = 1 OR is_rto = 1)
+  GROUP BY CustomerId
 )
 SELECT
-  CASE WHEN orders = 1 THEN 'Very Low (1 Order)' WHEN orders = 2 THEN 'Low (2 Orders)' WHEN orders = 3 THEN 'Medium (3 Orders)' WHEN orders BETWEEN 4 AND 5 THEN 'High (4–5 Orders)' ELSE 'Very High (5+ Orders)' END AS frequency_label,
+  CASE WHEN orders = 1 THEN 'Very Low (1 Order)' WHEN orders = 2 THEN 'Low (2 Orders)' WHEN orders = 3 THEN 'Medium (3 Orders)' WHEN orders BETWEEN 4 AND 5 THEN 'High (4-5 Orders)' ELSE 'Very High (5+ Orders)' END AS frequency_label,
   COUNT(*) AS customers,
   ROUND(SUM(orders), 0) AS total_orders
 FROM freq
 GROUP BY frequency_label
 ORDER BY MIN(orders)`),
 
-      // Query 7 — monetaryDist
+      // Q7 — monetary distribution (all-time)
       run(`WITH customer_ltv AS (
-  SELECT customer_id, ROUND(SUM(selling_price_excl_shipping_tax), 0) AS monetary
-  FROM \`frido-429506.production.fact_shopify_myfrido_mobility_all_orders\`
-  WHERE customer_id IS NOT NULL AND financial_status NOT IN ('refunded','voided')
-    AND DATE(order_date_ist) <= DATE('${e}')
-  GROUP BY customer_id
+  SELECT CustomerId, ROUND(SUM(SellingPrice_Inc_GST), 0) AS monetary
+  FROM ${TBL}
+  WHERE Channel = 'Shopify' AND CustomerId IS NOT NULL
+    AND DATE(OrderDate) <= DATE('${e}')
+    AND NOT (is_cancelled = 1 OR is_rto = 1)
+  GROUP BY CustomerId
 )
 SELECT
-  CASE WHEN monetary < 500 THEN 'Very Low (₹0–₹500)' WHEN monetary < 2000 THEN 'Low (₹500–₹2K)' WHEN monetary < 5000 THEN 'Medium (₹2K–₹5K)' WHEN monetary < 10000 THEN 'High (₹5K–₹10K)' ELSE 'Very High (₹10K+)' END AS bucket,
+  CASE WHEN monetary < 500 THEN 'Very Low (0-500)' WHEN monetary < 2000 THEN 'Low (500-2K)' WHEN monetary < 5000 THEN 'Medium (2K-5K)' WHEN monetary < 10000 THEN 'High (5K-10K)' ELSE 'Very High (10K+)' END AS bucket,
   COUNT(*) AS customers,
   ROUND(SUM(monetary), 0) AS total_revenue,
   ROUND(AVG(monetary), 0) AS avg_revenue
@@ -200,58 +206,46 @@ FROM customer_ltv
 GROUP BY bucket
 ORDER BY MIN(monetary)`),
 
-      // Query 8 — inactivity
+      // Q8 — inactivity buckets (all-time)
       run(`WITH last_purchase AS (
-  SELECT customer_id, MAX(DATE(order_date_ist)) AS last_date
-  FROM \`frido-429506.production.fact_shopify_myfrido_mobility_all_orders\`
-  WHERE customer_id IS NOT NULL AND financial_status NOT IN ('refunded','voided')
-  GROUP BY customer_id
-),
-with_days AS (
-  SELECT customer_id, DATE_DIFF(DATE('${e}'), last_date, DAY) AS days_since
-  FROM last_purchase
+  SELECT CustomerId, MAX(DATE(OrderDate)) AS last_date
+  FROM ${TBL}
+  WHERE Channel = 'Shopify' AND CustomerId IS NOT NULL
+    AND NOT (is_cancelled = 1 OR is_rto = 1)
+  GROUP BY CustomerId
 )
 SELECT
-  CASE WHEN days_since < 30 THEN 'Active (<30 Days)' WHEN days_since < 60 THEN 'Inactive 30–59 Days' WHEN days_since < 90 THEN 'Inactive 60–89 Days' ELSE 'Inactive 90+ Days' END AS bucket,
+  CASE WHEN DATE_DIFF(DATE('${e}'), last_date, DAY) < 30 THEN 'Active (<30 Days)' WHEN DATE_DIFF(DATE('${e}'), last_date, DAY) < 60 THEN 'Inactive 30-59 Days' WHEN DATE_DIFF(DATE('${e}'), last_date, DAY) < 90 THEN 'Inactive 60-89 Days' ELSE 'Inactive 90+ Days' END AS bucket,
   COUNT(*) AS customers
-FROM with_days
+FROM last_purchase
 GROUP BY bucket
-ORDER BY MIN(days_since)`),
+ORDER BY MIN(DATE_DIFF(DATE('${e}'), last_date, DAY))`),
 
-      // Query 9 — discountDist
+      // Q9 — discount distribution (voucher proxy) first vs repeat
       run(`WITH first_dates AS (
-  SELECT customer_id, MIN(DATE(order_date_ist)) AS first_date
-  FROM \`frido-429506.production.fact_shopify_myfrido_mobility_all_orders\`
-  WHERE customer_id IS NOT NULL GROUP BY customer_id
+  SELECT CustomerId, MIN(DATE(OrderDate)) AS first_date
+  FROM ${TBL}
+  WHERE Channel = 'Shopify' AND CustomerId IS NOT NULL
+  GROUP BY CustomerId
 ),
 tagged AS (
-  SELECT o.order_id, o.total_discounts, o.selling_price_incl_tax,
-    CASE WHEN DATE(o.order_date_ist) = f.first_date THEN 'First Order' ELSE 'Repeat Order' END AS order_type
-  FROM \`frido-429506.production.fact_shopify_myfrido_mobility_all_orders\` o
-  JOIN first_dates f USING (customer_id)
-  WHERE DATE(o.order_date_ist) BETWEEN '${s}' AND '${e}'
-    AND o.customer_id IS NOT NULL AND o.financial_status NOT IN ('refunded','voided')
-),
-bucketed AS (
-  SELECT order_type,
-    CASE
-      WHEN total_discounts = 0 OR selling_price_incl_tax + total_discounts = 0 THEN '0%'
-      WHEN SAFE_DIVIDE(total_discounts, selling_price_incl_tax + total_discounts) <= 0.10 THEN '1-10%'
-      WHEN SAFE_DIVIDE(total_discounts, selling_price_incl_tax + total_discounts) <= 0.20 THEN '11-20%'
-      WHEN SAFE_DIVIDE(total_discounts, selling_price_incl_tax + total_discounts) <= 0.30 THEN '21-30%'
-      WHEN SAFE_DIVIDE(total_discounts, selling_price_incl_tax + total_discounts) <= 0.40 THEN '31-40%'
-      ELSE '40%+'
-    END AS discount_bucket
-  FROM tagged
+  SELECT o.OrderId,
+    CASE WHEN DATE(o.OrderDate) = f.first_date THEN 'First Order' ELSE 'Repeat Order' END AS order_type,
+    CASE WHEN o.voucher_code IS NOT NULL AND TRIM(o.voucher_code) != '' THEN 'Discounted' ELSE 'No Discount' END AS disc_flag
+  FROM ${TBL} o
+  JOIN first_dates f USING (CustomerId)
+  WHERE o.Channel = 'Shopify'
+    AND DATE(o.OrderDate) BETWEEN '${s}' AND '${e}'
+    AND o.CustomerId IS NOT NULL
+    AND NOT (o.is_cancelled = 1 OR o.is_rto = 1)
 )
-SELECT discount_bucket,
+SELECT disc_flag AS discount_bucket,
   COUNTIF(order_type = 'First Order') AS first_orders,
   COUNTIF(order_type = 'Repeat Order') AS repeat_orders
-FROM bucketed
-GROUP BY discount_bucket
-ORDER BY MIN(CASE discount_bucket WHEN '0%' THEN 0 WHEN '1-10%' THEN 1 WHEN '11-20%' THEN 2 WHEN '21-30%' THEN 3 WHEN '31-40%' THEN 4 ELSE 5 END)`),
+FROM tagged
+GROUP BY discount_bucket`),
 
-      // Query 10 — adsKpis
+      // Q10 — ads KPIs
       run(`SELECT platform, ROUND(SUM(spend), 0) AS spend, ROUND(SUM(revenue), 0) AS revenue, ROUND(SUM(orders), 0) AS orders
 FROM \`frido-429506.production.fact_all_platform_ads_report\`
 WHERE report_date BETWEEN '${s}' AND '${e}' AND platform IN ('Meta', 'Google')
@@ -280,9 +274,7 @@ GROUP BY platform`),
         roas: totalSpend > 0 ? grossSales / totalSpend : 0,
         cac: newCustomers > 0 ? totalSpend / newCustomers : 0,
         aov: parseFloat(k.aov) || 0,
-        cltv: 0,
         acquisitionRate: totalCustomers > 0 ? newCustomers / totalCustomers : 0,
-        repeatRevenueRate: 0,
         discountedOrders: parseInt(k.discounted_orders) || 0,
         nonDiscountedOrders: parseInt(k.non_discounted_orders) || 0,
         totalOrders: parseInt(k.total_orders) || 0,
