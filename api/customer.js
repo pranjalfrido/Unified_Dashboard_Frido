@@ -65,7 +65,7 @@ SELECT
   COUNT(DISTINCT CASE WHEN voucher_code IS NULL OR TRIM(voucher_code) = '' THEN OrderId END) AS non_discounted_orders
 FROM order_agg`),
 
-      // Q2 â€” monthly new vs repeat
+      // Q2 — daily new vs repeat (frontend aggregates to weekly/monthly)
       run(`WITH first_dates AS (
   SELECT CustomerId, MIN(DATE(OrderDate)) AS first_date
   FROM ${TBL}
@@ -82,14 +82,14 @@ period AS (
     AND o.CustomerId IS NOT NULL
 )
 SELECT
-  FORMAT_DATE('%b %y', order_date) AS month,
-  FORMAT_DATE('%Y-%m', order_date) AS month_sort,
+  CAST(order_date AS STRING) AS day,
   COUNT(DISTINCT CustomerId) AS customers_acquired,
   ROUND(SUM(rev), 0) AS gross_sales,
   COUNT(DISTINCT CASE WHEN first_date BETWEEN DATE('${s}') AND DATE('${e}') THEN CustomerId END) AS new_customers,
   COUNT(DISTINCT CASE WHEN first_date < DATE('${s}') THEN CustomerId END) AS repeat_customers
 FROM period
-GROUP BY month, month_sort
+GROUP BY day
+ORDER BY day`)
 ORDER BY month_sort`),
 
       // Q3 â€” cohort retention (all-time, last 18 months of cohorts)
@@ -291,8 +291,8 @@ GROUP BY platform`),
         nonDiscountedOrders: parseInt(k.non_discounted_orders) || 0,
         totalOrders: parseInt(k.total_orders) || 0,
       },
-      monthly: monthly.map(r => ({
-        month: r.month,
+      daily: monthly.map(r => ({
+        day: r.day,
         customersAcquired: parseInt(r.customers_acquired) || 0,
         grossSales: parseFloat(r.gross_sales) || 0,
         newCustomers: parseInt(r.new_customers) || 0,

@@ -8475,6 +8475,7 @@ function CustomerPage({ filters }) {
   const [custError, setCustError] = useState(null)
   const [loading, setLoading] = useState(false)
   const [crossFilter, setCrossFilter] = useState('Category')
+  const [granularity, setGranularity] = useState('monthly')
   const API = import.meta.env.VITE_API_URL || ''
 
   useEffect(() => {
@@ -8493,7 +8494,36 @@ function CustomerPage({ filters }) {
   if (custError) return <div style={{ padding: 40, margin: 16, borderRadius: 10, background: C.red.bg, border: `1px solid ${C.red.bd}`, color: C.red.tx, fontSize: 12 }}><strong>Error loading customer data:</strong> {custError}</div>
   if (!custData) return <div style={{ padding: 60, textAlign: 'center', color: C.t3 }}>Select a date range to load customer analysis</div>
 
-  const { kpis = {}, monthly = [], cohort = [], rfm = [], freqDist = [], monetaryDist = [], inactivity = [], discountDist = [], crossSell = [] } = custData
+  const { kpis = {}, daily: rawDaily = [], cohort = [], rfm = [], freqDist = [], monetaryDist = [], inactivity = [], discountDist = [], crossSell = [] } = custData
+
+  // Aggregate daily rows into the selected granularity
+  const monthly = (() => {
+    const buckets = {}
+    rawDaily.forEach(r => {
+      const d = new Date(r.day)
+      let key, label
+      if (granularity === 'daily') {
+        key = r.day
+        label = d.toLocaleDateString('en-IN', { day: '2-digit', month: 'short' })
+      } else if (granularity === 'weekly') {
+        // ISO week start (Monday)
+        const day = d.getDay()
+        const diff = (day === 0 ? -6 : 1 - day)
+        const mon = new Date(d); mon.setDate(d.getDate() + diff)
+        key = mon.toISOString().slice(0, 10)
+        label = `W${mon.toLocaleDateString('en-IN', { day: '2-digit', month: 'short' })}`
+      } else {
+        key = r.day.slice(0, 7)
+        label = d.toLocaleDateString('en-IN', { month: 'short', year: '2-digit' })
+      }
+      if (!buckets[key]) buckets[key] = { month: label, customersAcquired: 0, grossSales: 0, newCustomers: 0, repeatCustomers: 0 }
+      buckets[key].customersAcquired += r.customersAcquired
+      buckets[key].grossSales += r.grossSales
+      buckets[key].newCustomers += r.newCustomers
+      buckets[key].repeatCustomers += r.repeatCustomers
+    })
+    return Object.entries(buckets).sort(([a], [b]) => a.localeCompare(b)).map(([, v]) => v)
+  })()
 
   // Cohort pivot
   const cohortMap = {}
@@ -8552,24 +8582,31 @@ function CustomerPage({ filters }) {
 
       {/* Row: Monthly chart + New vs Repeat stacked bar */}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
-        <Card title="Customers Acquired vs Gross Sales">
+        <Card title="Customers Acquired vs Gross Sales" action={
+          <select value={granularity} onChange={e => setGranularity(e.target.value)}
+            style={{ fontSize: 11, padding: '2px 8px', borderRadius: 6, border: `1px solid ${C.border}`, background: C.card, color: C.t2, cursor: 'pointer', fontFamily: 'var(--font)' }}>
+            <option value="daily">Daily</option>
+            <option value="weekly">Weekly</option>
+            <option value="monthly">Monthly</option>
+          </select>
+        }>
           <div style={{ display: 'flex', gap: 16, marginBottom: 6, fontSize: 11, color: C.t3 }}>
             <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}><span style={{ width: 12, height: 12, borderRadius: 2, background: C.acc, display: 'inline-block' }} />Customers Acquired</span>
             <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}><span style={{ width: 20, height: 2, background: '#2E74CC', display: 'inline-block' }} />Total Gross Sales</span>
           </div>
           <ResponsiveContainer width="100%" height={240}>
             <ComposedChart data={monthly} margin={{ top: 28, right: 20, left: 10, bottom: 0 }}>
-              <XAxis dataKey="month" tick={{ fontSize: 10, fill: C.t2 }} axisLine={false} tickLine={false} />
+              <XAxis dataKey="month" tick={{ fontSize: 10, fill: C.t2 }} axisLine={false} tickLine={false} interval="preserveStartEnd" />
               <YAxis yAxisId="left" hide />
               <YAxis yAxisId="right" orientation="right" hide />
               <Tooltip
                 formatter={(v, n) => [n === 'Total Gross Sales' ? fmt(v) : fmtN(v), n]}
                 contentStyle={{ fontSize: 11, borderRadius: 8, border: `1px solid ${C.border}` }}
               />
-              <Bar yAxisId="left" dataKey="customersAcquired" fill={C.acc} name="Customers Acquired" radius={[3,3,0,0]} maxBarSize={48}
-                label={{ position: 'top', fontSize: 9.5, fill: C.t2, fontWeight: 600, formatter: v => v >= 1000 ? `${(v/1000).toFixed(0)}K` : v }} />
-              <Line yAxisId="right" type="monotone" dataKey="grossSales" stroke="#2E74CC" strokeWidth={2} dot={{ r: 3, fill: '#2E74CC', strokeWidth: 0 }} name="Total Gross Sales"
-                label={{ position: 'bottom', fontSize: 9, fill: '#2E74CC', fontWeight: 600, formatter: v => v >= 1e7 ? `${(v/1e7).toFixed(1)}Cr` : v >= 1e5 ? `${(v/1e5).toFixed(0)}L` : v >= 1000 ? `${(v/1000).toFixed(0)}K` : v }} />
+              <Bar yAxisId="left" dataKey="customersAcquired" fill={C.acc} name="Customers Acquired" radius={[3,3,0,0]} maxBarSize={granularity === 'daily' ? 18 : granularity === 'weekly' ? 30 : 48}
+                label={monthly.length <= 24 ? { position: 'top', fontSize: 9, fill: C.t2, fontWeight: 600, formatter: v => v >= 1000 ? `${(v/1000).toFixed(0)}K` : v } : false} />
+              <Line yAxisId="right" type="monotone" dataKey="grossSales" stroke="#2E74CC" strokeWidth={2} dot={{ r: monthly.length <= 60 ? 3 : 0, fill: '#2E74CC', strokeWidth: 0 }} name="Total Gross Sales"
+                label={monthly.length <= 24 ? { position: 'bottom', fontSize: 9, fill: '#2E74CC', fontWeight: 600, formatter: v => v >= 1e7 ? `${(v/1e7).toFixed(1)}Cr` : v >= 1e5 ? `${(v/1e5).toFixed(0)}L` : v >= 1000 ? `${(v/1000).toFixed(0)}K` : v } : false} />
             </ComposedChart>
           </ResponsiveContainer>
         </Card>
