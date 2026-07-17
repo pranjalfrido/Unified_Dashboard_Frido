@@ -8624,13 +8624,13 @@ function CustomerPage({ filters }) {
             ))}
           </div>
           <ResponsiveContainer width="100%" height={280}>
-            <ComposedChart data={monthly} margin={{ top: showLabels ? 22 : 8, right: 80, left: 10, bottom: 0 }}>
+            <ComposedChart data={monthly} margin={{ top: showLabels ? 22 : 8, right: 55, left: 10, bottom: 0 }}>
               <CartesianGrid strokeDasharray="3 3" stroke={C.border} vertical={false} />
               <XAxis dataKey="month" tick={{ fontSize: 10, fill: C.t2 }} axisLine={{ stroke: C.border2 }} tickLine={{ stroke: C.border2 }} interval="preserveStartEnd" />
               <YAxis yAxisId="left" tick={{ fontSize: 9, fill: C.t3 }} axisLine={{ stroke: C.border2 }} tickLine={{ stroke: C.border2 }} tickFormatter={v => v >= 1000 ? `${(v/1000).toFixed(0)}K` : v} width={44} label={{ value: 'Customers', angle: -90, position: 'insideLeft', fontSize: 9, fill: C.t3, dy: 40 }} />
-              <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 9, fill: '#2E74CC' }} axisLine={{ stroke: '#2E74CC44' }} tickLine={false} tickFormatter={v => v >= 1e7 ? `${(v/1e7).toFixed(1)}Cr` : v >= 1e5 ? `${(v/1e5).toFixed(0)}L` : v >= 1000 ? `${(v/1000).toFixed(0)}K` : v} width={52} />
-              <YAxis yAxisId="aov" orientation="right" tick={{ fontSize: 9, fill: '#E8930A' }} axisLine={{ stroke: '#E8930A44' }} tickLine={false} tickFormatter={v => `₹${v >= 1000 ? `${(v/1000).toFixed(1)}K` : Math.round(v)}`} width={52} hide />
-              <YAxis yAxisId="rrr" orientation="right" tick={{ fontSize: 9, fill: '#0D9E68' }} axisLine={false} tickLine={false} tickFormatter={v => `${(v*100).toFixed(0)}%`} width={40} hide />
+              <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 9, fill: '#2E74CC' }} axisLine={{ stroke: '#2E74CC44' }} tickLine={false} tickFormatter={v => v >= 1e7 ? `${(v/1e7).toFixed(1)}Cr` : v >= 1e5 ? `${(v/1e5).toFixed(0)}L` : v >= 1000 ? `${(v/1000).toFixed(0)}K` : v} width={46} />
+              <YAxis yAxisId="aov" hide />
+              <YAxis yAxisId="rrr" hide />
               <Tooltip
                 content={({ active, payload, label }) => {
                   if (!active || !payload?.length) return null
