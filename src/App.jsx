@@ -8475,7 +8475,7 @@ function CustomerPage({ filters }) {
   const [custError, setCustError] = useState(null)
   const [loading, setLoading] = useState(false)
   const [crossFilter, setCrossFilter] = useState('Category')
-  const [granularity, setGranularity] = useState('monthly')
+  const [granularity, setGranularity] = useState('daily')
   const API = import.meta.env.VITE_API_URL || ''
 
   useEffect(() => {
@@ -8623,14 +8623,14 @@ function CustomerPage({ filters }) {
               </span>
             ))}
           </div>
-          <ResponsiveContainer width="100%" height={260}>
-            <ComposedChart data={monthly} margin={{ top: showLabels ? 22 : 8, right: 55, left: 10, bottom: 0 }}>
+          <ResponsiveContainer width="100%" height={280}>
+            <ComposedChart data={monthly} margin={{ top: showLabels ? 22 : 8, right: 80, left: 10, bottom: 0 }}>
               <CartesianGrid strokeDasharray="3 3" stroke={C.border} vertical={false} />
-              <XAxis dataKey="month" tick={{ fontSize: 10, fill: C.t2 }} axisLine={{ stroke: C.border2 }} tickLine={false} interval="preserveStartEnd" />
-              <YAxis yAxisId="left" tick={{ fontSize: 9, fill: C.t3 }} axisLine={{ stroke: C.border2 }} tickLine={false} tickFormatter={v => v >= 1000 ? `${(v/1000).toFixed(0)}K` : v} width={44} />
-              <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 9, fill: '#2E74CC' }} axisLine={false} tickLine={false} tickFormatter={v => v >= 1e7 ? `${(v/1e7).toFixed(1)}Cr` : v >= 1e5 ? `${(v/1e5).toFixed(0)}L` : v >= 1000 ? `${(v/1000).toFixed(0)}K` : v} width={48} />
-              <YAxis yAxisId="aov" hide />
-              <YAxis yAxisId="rrr" hide />
+              <XAxis dataKey="month" tick={{ fontSize: 10, fill: C.t2 }} axisLine={{ stroke: C.border2 }} tickLine={{ stroke: C.border2 }} interval="preserveStartEnd" />
+              <YAxis yAxisId="left" tick={{ fontSize: 9, fill: C.t3 }} axisLine={{ stroke: C.border2 }} tickLine={{ stroke: C.border2 }} tickFormatter={v => v >= 1000 ? `${(v/1000).toFixed(0)}K` : v} width={44} label={{ value: 'Customers', angle: -90, position: 'insideLeft', fontSize: 9, fill: C.t3, dy: 40 }} />
+              <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 9, fill: '#2E74CC' }} axisLine={{ stroke: '#2E74CC44' }} tickLine={false} tickFormatter={v => v >= 1e7 ? `${(v/1e7).toFixed(1)}Cr` : v >= 1e5 ? `${(v/1e5).toFixed(0)}L` : v >= 1000 ? `${(v/1000).toFixed(0)}K` : v} width={52} />
+              <YAxis yAxisId="aov" orientation="right" tick={{ fontSize: 9, fill: '#E8930A' }} axisLine={{ stroke: '#E8930A44' }} tickLine={false} tickFormatter={v => `₹${v >= 1000 ? `${(v/1000).toFixed(1)}K` : Math.round(v)}`} width={52} hide />
+              <YAxis yAxisId="rrr" orientation="right" tick={{ fontSize: 9, fill: '#0D9E68' }} axisLine={false} tickLine={false} tickFormatter={v => `${(v*100).toFixed(0)}%`} width={40} hide />
               <Tooltip
                 content={({ active, payload, label }) => {
                   if (!active || !payload?.length) return null
