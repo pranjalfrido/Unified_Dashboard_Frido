@@ -8553,14 +8553,23 @@ function CustomerPage({ filters }) {
       {/* Row: Monthly chart + New vs Repeat stacked bar */}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
         <Card title="Customers Acquired vs Gross Sales">
-          <ResponsiveContainer width="100%" height={220}>
-            <ComposedChart data={monthly} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
-              <XAxis dataKey="month" tick={{ fontSize: 10 }} />
-              <YAxis yAxisId="left" tick={{ fontSize: 10 }} />
-              <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 10 }} />
-              <Tooltip formatter={(v, n) => [fmtN(v), n]} />
-              <Bar yAxisId="left" dataKey="customersAcquired" fill={C.acc} name="Customers Acquired" radius={[3,3,0,0]} />
-              <Line yAxisId="right" type="monotone" dataKey="grossSales" stroke="#2E74CC" strokeWidth={2} dot={false} name="Total Gross Sales" />
+          <div style={{ display: 'flex', gap: 16, marginBottom: 6, fontSize: 11, color: C.t3 }}>
+            <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}><span style={{ width: 12, height: 12, borderRadius: 2, background: C.acc, display: 'inline-block' }} />Customers Acquired</span>
+            <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}><span style={{ width: 20, height: 2, background: '#2E74CC', display: 'inline-block' }} />Total Gross Sales</span>
+          </div>
+          <ResponsiveContainer width="100%" height={240}>
+            <ComposedChart data={monthly} margin={{ top: 28, right: 20, left: 10, bottom: 0 }}>
+              <XAxis dataKey="month" tick={{ fontSize: 10, fill: C.t2 }} axisLine={false} tickLine={false} />
+              <YAxis yAxisId="left" hide />
+              <YAxis yAxisId="right" orientation="right" hide />
+              <Tooltip
+                formatter={(v, n) => [n === 'Total Gross Sales' ? fmt(v) : fmtN(v), n]}
+                contentStyle={{ fontSize: 11, borderRadius: 8, border: `1px solid ${C.border}` }}
+              />
+              <Bar yAxisId="left" dataKey="customersAcquired" fill={C.acc} name="Customers Acquired" radius={[3,3,0,0]} maxBarSize={48}
+                label={{ position: 'top', fontSize: 9.5, fill: C.t2, fontWeight: 600, formatter: v => v >= 1000 ? `${(v/1000).toFixed(0)}K` : v }} />
+              <Line yAxisId="right" type="monotone" dataKey="grossSales" stroke="#2E74CC" strokeWidth={2} dot={{ r: 3, fill: '#2E74CC', strokeWidth: 0 }} name="Total Gross Sales"
+                label={{ position: 'bottom', fontSize: 9, fill: '#2E74CC', fontWeight: 600, formatter: v => v >= 1e7 ? `${(v/1e7).toFixed(1)}Cr` : v >= 1e5 ? `${(v/1e5).toFixed(0)}L` : v >= 1000 ? `${(v/1000).toFixed(0)}K` : v }} />
             </ComposedChart>
           </ResponsiveContainer>
         </Card>
