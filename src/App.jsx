@@ -8534,13 +8534,14 @@ function CustomerPage({ filters }) {
     }))
   })()
 
-  // Cohort pivot
-  const cohortMap = {}
-  const cohort0 = {}
+  // Cohort pivot — customers and revenue
+  const cohortMap = {}      // cohortMap[month][idx] = { customers, revenue }
+  const cohort0 = {}        // base customers at index 0
+  const cohortRev0 = {}     // base revenue at index 0
   cohort.forEach(r => {
     if (!cohortMap[r.cohortMonth]) cohortMap[r.cohortMonth] = {}
-    cohortMap[r.cohortMonth][r.cohortIndex] = r.customers
-    if (r.cohortIndex === 0) cohort0[r.cohortMonth] = r.customers
+    cohortMap[r.cohortMonth][r.cohortIndex] = { customers: r.customers, revenue: r.revenue }
+    if (r.cohortIndex === 0) { cohort0[r.cohortMonth] = r.customers; cohortRev0[r.cohortMonth] = r.revenue }
   })
   const cohortMonths = Object.keys(cohortMap).sort()
   const maxCohortIdx = Math.max(...cohort.map(r => r.cohortIndex), 0)
@@ -8685,41 +8686,58 @@ function CustomerPage({ filters }) {
       })()}
 
       {/* Cohort Retention Grid */}
-      <Card title="Customer Retention Cohort">
-        <div style={{ overflowX: 'auto' }}>
-          <table style={{ borderCollapse: 'collapse', fontSize: 10.5, minWidth: 600 }}>
-            <thead>
-              <tr style={{ borderBottom: `2px solid ${C.border}` }}>
-                <th style={{ padding: '4px 8px', textAlign: 'left', color: C.t3, fontWeight: 700, textTransform: 'uppercase', fontSize: 9.5 }}>Cohort Month</th>
-                {Array.from({ length: maxCohortIdx + 1 }, (_, i) => (
-                  <th key={i} style={{ padding: '4px 8px', textAlign: 'center', color: C.t3, fontWeight: 700, fontSize: 9.5, minWidth: 50 }}>{i}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {cohortMonths.map(cm => {
-                const base = cohort0[cm] || 1
-                return (
-                  <tr key={cm} style={{ borderBottom: `1px solid ${C.border}` }}>
-                    <td style={{ padding: '4px 8px', fontWeight: 600, color: C.t1, fontSize: 10.5, whiteSpace: 'nowrap' }}>{cm}</td>
-                    {Array.from({ length: maxCohortIdx + 1 }, (_, i) => {
-                      const v = cohortMap[cm]?.[i]
-                      const pctVal = v != null ? v / base * 100 : null
-                      const intensity = pctVal != null ? Math.min(pctVal / 10, 1) : 0
-                      const bg = i === 0 ? '#2E74CC' : pctVal != null ? `rgba(46,116,204,${0.1 + intensity * 0.5})` : 'transparent'
-                      return (
-                        <td key={i} style={{ padding: '4px 8px', textAlign: 'center', fontSize: 10, fontFamily: 'var(--mono)', background: bg, color: i === 0 ? '#fff' : C.t1 }}>
-                          {pctVal != null ? `${pctVal.toFixed(1)}%` : ''}
-                        </td>
-                      )
-                    })}
-                  </tr>
-                )
-              })}
-            </tbody>
-          </table>
-        </div>
-      </Card>
+      {(() => {
+        const [cohortMode, setCohortMode] = [custData._cohortMode || 'customer', v => setCustData(d => ({ ...d, _cohortMode: v }))]
+        return (
+        <Card title="Customer Retention Cohort" action={
+          <div style={{ display: 'flex', gap: 5 }}>
+            {[['customer','Customer Retention %'],['sales','Sales Retention %']].map(([k,l]) => (
+              <button key={k} onClick={() => setCohortMode(k)} style={{ fontSize: 10, padding: '3px 10px', borderRadius: 5, border: `1px solid ${cohortMode===k ? '#2E74CC' : C.border}`, background: cohortMode===k ? '#E1EFFD' : C.card, color: cohortMode===k ? '#184078' : C.t2, cursor: 'pointer', fontFamily: 'var(--font)', fontWeight: cohortMode===k ? 700 : 400 }}>{l}</button>
+            ))}
+          </div>
+        }>
+          <div style={{ overflowX: 'auto', width: '100%' }}>
+            <table style={{ borderCollapse: 'collapse', fontSize: 10.5, width: '100%', tableLayout: 'fixed' }}>
+              <thead>
+                <tr style={{ borderBottom: `2px solid ${C.border}` }}>
+                  <th style={{ padding: '5px 8px', textAlign: 'left', color: C.t3, fontWeight: 700, fontSize: 9.5, whiteSpace: 'nowrap', width: 80 }}>Cohort Month</th>
+                  {Array.from({ length: maxCohortIdx + 1 }, (_, i) => (
+                    <th key={i} style={{ padding: '5px 4px', textAlign: 'center', color: C.t3, fontWeight: 700, fontSize: 9.5 }}>{i === 0 ? 'Month 0' : `+${i}M`}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {cohortMonths.map(cm => {
+                  const baseC = cohort0[cm] || 1
+                  const baseR = cohortRev0[cm] || 1
+                  return (
+                    <tr key={cm} style={{ borderBottom: `1px solid ${C.border}` }}>
+                      <td style={{ padding: '4px 8px', fontWeight: 700, color: C.t1, fontSize: 10, whiteSpace: 'nowrap' }}>{cm}</td>
+                      {Array.from({ length: maxCohortIdx + 1 }, (_, i) => {
+                        const cell = cohortMap[cm]?.[i]
+                        const pctVal = cell != null
+                          ? cohortMode === 'customer'
+                            ? cell.customers / baseC * 100
+                            : cell.revenue / baseR * 100
+                          : null
+                        const intensity = pctVal != null ? Math.min(i === 0 ? 1 : pctVal / 15, 1) : 0
+                        const bg = i === 0 ? '#2E74CC' : pctVal != null ? `rgba(46,116,204,${0.08 + intensity * 0.55})` : 'transparent'
+                        const txtColor = i === 0 ? '#fff' : pctVal != null && intensity > 0.5 ? '#fff' : C.t1
+                        return (
+                          <td key={i} title={cell ? `${cohortMode==='customer'?cell.customers+' customers':fmt(cell.revenue)}` : ''} style={{ padding: '4px 4px', textAlign: 'center', fontSize: 9.5, fontFamily: 'var(--mono)', background: bg, color: txtColor, fontWeight: i === 0 ? 700 : 400 }}>
+                            {pctVal != null ? `${pctVal.toFixed(1)}%` : ''}
+                          </td>
+                        )
+                      })}
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
+        </Card>
+        )
+      })()}
 
       {/* Cross-sell matrix */}
       <Card title="Purchase Behavior: First vs Second Purchase" action={

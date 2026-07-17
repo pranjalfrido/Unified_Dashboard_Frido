@@ -100,7 +100,7 @@ FROM period
 GROUP BY day
 ORDER BY day`),
 
-      // Q3 â€” cohort retention (all-time, last 18 months of cohorts)
+      // Q3 — cohort retention (all-time, last 18 months of cohorts) with revenue
       run(`WITH first_orders AS (
   SELECT CustomerId, DATE_TRUNC(MIN(DATE(OrderDate)), MONTH) AS cohort_month
   FROM ${TBL}
@@ -108,14 +108,17 @@ ORDER BY day`),
   GROUP BY CustomerId
 ),
 all_orders AS (
-  SELECT DISTINCT CustomerId, DATE_TRUNC(DATE(OrderDate), MONTH) AS order_month
+  SELECT CustomerId, DATE_TRUNC(DATE(OrderDate), MONTH) AS order_month,
+    SUM(SellingPrice_Inc_GST) AS revenue
   FROM ${TBL}
   WHERE Channel = 'Shopify' AND CustomerId IS NOT NULL
+  GROUP BY CustomerId, order_month
 ),
 cohort_data AS (
   SELECT f.cohort_month,
     DATE_DIFF(a.order_month, f.cohort_month, MONTH) AS cohort_index,
-    COUNT(DISTINCT a.CustomerId) AS customers
+    COUNT(DISTINCT a.CustomerId) AS customers,
+    ROUND(SUM(a.revenue), 0) AS revenue
   FROM first_orders f
   JOIN all_orders a USING (CustomerId)
   WHERE f.cohort_month >= DATE_TRUNC(DATE_SUB(DATE('${e}'), INTERVAL 18 MONTH), MONTH)
@@ -123,7 +126,7 @@ cohort_data AS (
     AND DATE_DIFF(a.order_month, f.cohort_month, MONTH) BETWEEN 0 AND 14
   GROUP BY cohort_month, cohort_index
 )
-SELECT FORMAT_DATE('%Y-%m', cohort_month) AS cohort_month, cohort_index, customers
+SELECT FORMAT_DATE('%Y-%m', cohort_month) AS cohort_month, cohort_index, customers, revenue
 FROM cohort_data
 ORDER BY cohort_month, cohort_index`),
 
@@ -315,6 +318,7 @@ GROUP BY platform`),
         cohortMonth: r.cohort_month,
         cohortIndex: parseInt(r.cohort_index),
         customers: parseInt(r.customers),
+        revenue: parseFloat(r.revenue) || 0,
       })),
       crossSell: crossSell.map(r => ({
         firstCategory: r.first_category,
