@@ -8622,8 +8622,9 @@ function CustomerPage({ filters }) {
         }>
           <ResponsiveContainer width="100%" height={260}>
             <ComposedChart data={monthly} margin={{ top: showLabels ? 22 : 8, right: 55, left: 10, bottom: 0 }}>
-              <XAxis dataKey="month" tick={{ fontSize: 10, fill: C.t2 }} axisLine={false} tickLine={false} interval="preserveStartEnd" />
-              <YAxis tick={{ fontSize: 9, fill: C.t3 }} axisLine={false} tickLine={false} tickFormatter={tickFmt} width={44} />
+              <CartesianGrid strokeDasharray="3 3" stroke={C.border} vertical={false} />
+              <XAxis dataKey="month" tick={{ fontSize: 10, fill: C.t2 }} axisLine={{ stroke: C.border2 }} tickLine={false} interval="preserveStartEnd" />
+              <YAxis tick={{ fontSize: 9, fill: C.t3 }} axisLine={{ stroke: C.border2 }} tickLine={false} tickFormatter={tickFmt} width={44} />
               <Tooltip
                 labelFormatter={l => `${xLabel}: ${l}`}
                 formatter={(v) => [selM.fmt(v), selM.label]}
