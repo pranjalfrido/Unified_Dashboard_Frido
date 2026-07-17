@@ -8588,71 +8588,43 @@ function CustomerPage({ filters }) {
 
       {/* Row: Trend chart + New vs Repeat stacked bar */}
       {(() => {
-        const METRICS = [
-          { key: 'customersAcquired', label: 'Customers Acquired', color: C.acc, fmt: v => v >= 1000 ? `${(v/1000).toFixed(1)}K` : String(v), isBar: true },
-          { key: 'grossSales',        label: 'Gross Sales',        color: '#2E74CC', fmt: v => v >= 1e7 ? `${(v/1e7).toFixed(2)}Cr` : v >= 1e5 ? `${(v/1e5).toFixed(1)}L` : v >= 1000 ? `${(v/1000).toFixed(1)}K` : String(v), isBar: false },
-          { key: 'aov',               label: 'AOV',                color: '#E8930A', fmt: v => `₹${v >= 1000 ? `${(v/1000).toFixed(2)}K` : Math.round(v)}`, isBar: false },
-          { key: 'repeatRevenueRate', label: 'Repeat Revenue Rate', color: '#0D9E68', fmt: v => `${(v*100).toFixed(1)}%`, isBar: false },
-        ]
-        const selM = METRICS.find(m => m.key === (custData._chartMetric || 'customersAcquired')) || METRICS[0]
         const xLabel = granularity === 'monthly' ? 'First Order Date Month' : granularity === 'weekly' ? 'First Order Date Week' : 'First Order Date'
         const maxBar = granularity === 'daily' ? 18 : granularity === 'weekly' ? 30 : 48
-        const showLabels = monthly.length <= 24
-        const fmtTick = v => v >= 1e7 ? `${(v/1e7).toFixed(1)}Cr` : v >= 1e5 ? `${(v/1e5).toFixed(0)}L` : v >= 1000 ? `${(v/1000).toFixed(0)}K` : v >= 1 ? `${(v*100).toFixed(0)}%` : String(v)
-        const isPercent = selM.key === 'repeatRevenueRate'
-        const tickFmt = v => isPercent ? `${(v*100).toFixed(0)}%` : selM.fmt(v)
+        const showLabels = monthly.length <= 20
         return (
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
         <Card title={xLabel} action={
-          <select value={granularity} onChange={e => setGranularity(e.target.value)}
-            style={{ fontSize: 11, padding: '2px 8px', borderRadius: 6, border: `1px solid ${C.border}`, background: C.card, color: C.t2, cursor: 'pointer', fontFamily: 'var(--font)' }}>
-            <option value="daily">Daily</option>
-            <option value="weekly">Weekly</option>
-            <option value="monthly">Monthly</option>
+          <select value={granularity} onChange={e => setGranularity(e.target.value)} style={{ fontSize: 11, fontWeight: 600, padding: '3px 8px', borderRadius: 6, border: `1px solid ${C.border2}`, background: C.card, color: C.t1, cursor: 'pointer', fontFamily: 'var(--font)', outline: 'none' }}>
+            {['daily','weekly','monthly'].map(g => <option key={g} value={g}>{g.charAt(0).toUpperCase()+g.slice(1)}</option>)}
           </select>
         }>
-          {/* Legend */}
-          <div style={{ display: 'flex', gap: 14, marginBottom: 8, fontSize: 11, color: C.t3, flexWrap: 'wrap' }}>
-            {METRICS.map(m => (
-              <span key={m.key} style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-                {m.isBar
-                  ? <span style={{ width: 12, height: 12, borderRadius: 2, background: m.color, display: 'inline-block' }} />
-                  : <span style={{ width: 20, height: 2, background: m.color, display: 'inline-block', borderRadius: 1 }} />
-                }
-                {m.label}
-              </span>
-            ))}
-          </div>
-          <ResponsiveContainer width="100%" height={280}>
-            <ComposedChart data={monthly} margin={{ top: showLabels ? 20 : 4, right: 50, bottom: 0, left: 0 }}>
+          <ResponsiveContainer width="100%" height={260}>
+            <ComposedChart data={monthly} margin={{ top: 20, right: 55, bottom: 0, left: 0 }}>
               <CartesianGrid strokeDasharray="3 3" stroke={C.border} vertical={false} />
-              <XAxis dataKey="month" tick={{ fontSize: 10, fill: C.t3 }} interval="preserveStartEnd" />
-              <YAxis yAxisId="cust" tick={{ fontSize: 10, fill: C.t3 }} tickFormatter={v => v >= 1000 ? `${(v/1000).toFixed(1)}K` : v} width={48} />
-              <YAxis yAxisId="sales" orientation="right" tick={{ fontSize: 10, fill: C.t3 }} tickFormatter={v => v >= 1e7 ? `₹${(v/1e7).toFixed(1)}Cr` : v >= 1e5 ? `₹${(v/1e5).toFixed(0)}L` : v >= 1000 ? `₹${(v/1000).toFixed(0)}K` : `₹${v}`} width={52} />
+              <XAxis dataKey="month" tick={{ fontSize: 10, fill: C.t3 }} />
+              <YAxis yAxisId="cust" tick={{ fontSize: 10, fill: C.t3 }} tickFormatter={v => v >= 1000 ? `${(v/1000).toFixed(1)}K` : v} width={50} />
+              <YAxis yAxisId="sales" orientation="right" tick={{ fontSize: 10, fill: C.t3 }} tickFormatter={v => v >= 1e7 ? `₹${(v/1e7).toFixed(1)}Cr` : v >= 1e5 ? `₹${(v/1e5).toFixed(0)}L` : `₹${(v/1000).toFixed(0)}K`} width={55} />
               <YAxis yAxisId="aov" hide />
               <YAxis yAxisId="rrr" hide />
-              <Tooltip
-                content={({ active, payload, label }) => {
-                  if (!active || !payload?.length) return null
-                  const d = payload[0]?.payload || {}
-                  return (
-                    <div style={{ background: '#fff', border: `1px solid ${C.border}`, borderRadius: 9, padding: '10px 14px', fontSize: 11.5, boxShadow: '0 2px 10px #0001' }}>
-                      <div style={{ fontWeight: 700, color: C.t1, marginBottom: 7, borderBottom: `1px solid ${C.border}`, paddingBottom: 5 }}>{xLabel}: <span style={{ color: C.acc }}>{label}</span></div>
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', gap: 24 }}><span style={{ color: C.t3 }}>Customers Acquired</span><span style={{ fontWeight: 700, color: C.acc }}>{(d.customersAcquired||0).toLocaleString('en-IN')}</span></div>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', gap: 24 }}><span style={{ color: C.t3 }}>Gross Sales</span><span style={{ fontWeight: 700, color: '#2E74CC' }}>{fmt(d.grossSales||0)}</span></div>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', gap: 24 }}><span style={{ color: C.t3 }}>AOV</span><span style={{ fontWeight: 700, color: '#E8930A' }}>₹{Math.round(d.aov||0).toLocaleString('en-IN')}</span></div>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', gap: 24 }}><span style={{ color: C.t3 }}>Repeat Revenue Rate</span><span style={{ fontWeight: 700, color: '#0D9E68' }}>{((d.repeatRevenueRate||0)*100).toFixed(1)}%</span></div>
-                      </div>
-                    </div>
-                  )
-                }}
-              />
-              <Bar yAxisId="cust" dataKey="customersAcquired" fill={C.acc} name="Customers Acquired" radius={[3,3,0,0]} maxBarSize={maxBar}
+              <Tooltip content={({ active, payload, label }) => {
+                if (!active || !payload?.length) return null
+                const d = payload[0]?.payload || {}
+                return (
+                  <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 7, padding: '8px 12px', fontSize: 11 }}>
+                    <div style={{ fontWeight: 700, marginBottom: 5, color: C.t2 }}>{label}</div>
+                    <div style={{ color: C.acc }}>Customers Acquired: {(d.customersAcquired||0).toLocaleString('en-IN')}</div>
+                    <div style={{ color: '#2E74CC' }}>Gross Sales: {fmt(d.grossSales||0)}</div>
+                    <div style={{ color: '#E8930A' }}>AOV: ₹{Math.round(d.aov||0).toLocaleString('en-IN')}</div>
+                    <div style={{ color: '#0D9E68' }}>Repeat Revenue Rate: {((d.repeatRevenueRate||0)*100).toFixed(1)}%</div>
+                  </div>
+                )
+              }} />
+              <Legend wrapperStyle={{ fontSize: 11 }} />
+              <Bar yAxisId="cust" dataKey="customersAcquired" name="Customers Acquired" fill={C.acc} radius={[3,3,0,0]} maxBarSize={maxBar}
                 label={showLabels ? { position: 'top', fontSize: 9, fill: C.t2, fontWeight: 600, formatter: v => v >= 1000 ? `${(v/1000).toFixed(1)}K` : v } : false} />
-              <Line yAxisId="sales" type="monotone" dataKey="grossSales" stroke="#2E74CC" strokeWidth={2} dot={{ r: 3, fill: '#2E74CC', strokeWidth: 0 }} />
-              <Line yAxisId="aov" type="monotone" dataKey="aov" stroke="#E8930A" strokeWidth={2} dot={{ r: 3, fill: '#E8930A', strokeWidth: 0 }} />
-              <Line yAxisId="rrr" type="monotone" dataKey="repeatRevenueRate" stroke="#0D9E68" strokeWidth={2} dot={{ r: 3, fill: '#0D9E68', strokeWidth: 0 }} />
+              <Line yAxisId="sales" type="monotone" dataKey="grossSales" name="Gross Sales" stroke="#2E74CC" strokeWidth={2} dot={false} />
+              <Line yAxisId="aov"   type="monotone" dataKey="aov"   name="AOV"         stroke="#E8930A" strokeWidth={2} dot={false} />
+              <Line yAxisId="rrr"   type="monotone" dataKey="repeatRevenueRate" name="Repeat Revenue Rate" stroke="#0D9E68" strokeWidth={2} dot={false} />
             </ComposedChart>
           </ResponsiveContainer>
         </Card>
