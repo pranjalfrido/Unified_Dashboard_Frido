@@ -89,8 +89,7 @@ SELECT
   COUNT(DISTINCT CASE WHEN first_date < DATE('${s}') THEN CustomerId END) AS repeat_customers
 FROM period
 GROUP BY day
-ORDER BY day`)
-ORDER BY month_sort`),
+ORDER BY day`),
 
       // Q3 â€” cohort retention (all-time, last 18 months of cohorts)
       run(`WITH first_orders AS (
