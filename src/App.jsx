@@ -8472,26 +8472,28 @@ const TAB_TO_CHANNEL = { blinkit: 'Blinkit', instamart: 'Instamart', zepto: 'Zep
 
 function CustomerPage({ filters }) {
   const [custData, setCustData] = useState(null)
+  const [custError, setCustError] = useState(null)
   const [loading, setLoading] = useState(false)
   const [crossFilter, setCrossFilter] = useState('Category')
   const API = import.meta.env.VITE_API_URL || ''
 
   useEffect(() => {
-    setLoading(true)
+    setLoading(true); setCustError(null)
     fetch(`${API}/api/customer`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ start: filters.start, end: filters.end })
     })
       .then(r => r.json())
-      .then(d => { setCustData(d); setLoading(false) })
-      .catch(e => { console.error(e); setLoading(false) })
+      .then(d => { if (d.error) { setCustError(d.error); setCustData(null) } else { setCustData(d) }; setLoading(false) })
+      .catch(e => { setCustError(e.message); setLoading(false) })
   }, [filters.start, filters.end])
 
   if (loading) return <div style={{ padding: 60, textAlign: 'center', color: C.t3 }}>Loading customer data...</div>
+  if (custError) return <div style={{ padding: 40, margin: 16, borderRadius: 10, background: C.red.bg, border: `1px solid ${C.red.bd}`, color: C.red.tx, fontSize: 12 }}><strong>Error loading customer data:</strong> {custError}</div>
   if (!custData) return <div style={{ padding: 60, textAlign: 'center', color: C.t3 }}>Select a date range to load customer analysis</div>
 
-  const { kpis, monthly, cohort, rfm, freqDist, monetaryDist, inactivity, discountDist, crossSell } = custData
+  const { kpis = {}, monthly = [], cohort = [], rfm = [], freqDist = [], monetaryDist = [], inactivity = [], discountDist = [], crossSell = [] } = custData
 
   // Cohort pivot
   const cohortMap = {}

@@ -45,16 +45,29 @@ SELECT
 FROM orders`),
 
       // Query 2 — monthly
-      run(`SELECT
-  FORMAT_DATE('%Y-%m', DATE(order_date_ist)) AS month,
+      run(`WITH first_dates AS (
+  SELECT customer_id, MIN(DATE(order_date_ist)) AS first_date
+  FROM \`frido-429506.production.fact_shopify_myfrido_mobility_all_orders\`
+  WHERE customer_id IS NOT NULL
+  GROUP BY customer_id
+),
+period_orders AS (
+  SELECT o.customer_id, DATE(o.order_date_ist) AS order_date,
+    o.selling_price_excl_shipping_tax AS rev,
+    f.first_date
+  FROM \`frido-429506.production.fact_shopify_myfrido_mobility_all_orders\` o
+  JOIN first_dates f USING (customer_id)
+  WHERE DATE(o.order_date_ist) BETWEEN '${s}' AND '${e}'
+    AND o.customer_id IS NOT NULL
+    AND o.financial_status NOT IN ('refunded','voided')
+)
+SELECT
+  FORMAT_DATE('%Y-%m', order_date) AS month,
   COUNT(DISTINCT customer_id) AS customers_acquired,
-  ROUND(SUM(selling_price_excl_shipping_tax), 0) AS gross_sales,
-  COUNTIF(DATE(order_date_ist) = (SELECT MIN(DATE(o2.order_date_ist)) FROM \`frido-429506.production.fact_shopify_myfrido_mobility_all_orders\` o2 WHERE o2.customer_id = o.customer_id)) AS new_customers,
-  COUNT(DISTINCT CASE WHEN DATE(order_date_ist) > (SELECT MIN(DATE(o3.order_date_ist)) FROM \`frido-429506.production.fact_shopify_myfrido_mobility_all_orders\` o3 WHERE o3.customer_id = o.customer_id) THEN customer_id END) AS repeat_customers
-FROM \`frido-429506.production.fact_shopify_myfrido_mobility_all_orders\` o
-WHERE DATE(order_date_ist) BETWEEN '${s}' AND '${e}'
-  AND customer_id IS NOT NULL
-  AND financial_status NOT IN ('refunded','voided')
+  ROUND(SUM(rev), 0) AS gross_sales,
+  COUNT(DISTINCT CASE WHEN first_date BETWEEN DATE('${s}') AND DATE('${e}') THEN customer_id END) AS new_customers,
+  COUNT(DISTINCT CASE WHEN first_date < DATE('${s}') THEN customer_id END) AS repeat_customers
+FROM period_orders
 GROUP BY month
 ORDER BY month`),
 
@@ -211,25 +224,35 @@ GROUP BY bucket
 ORDER BY MIN(days_since)`),
 
       // Query 9 — discountDist
-      run(`SELECT
-  CASE
-    WHEN total_discounts = 0 OR selling_price_incl_tax + total_discounts = 0 THEN '0%'
-    WHEN SAFE_DIVIDE(total_discounts, selling_price_incl_tax + total_discounts) <= 0.10 THEN '1-10%'
-    WHEN SAFE_DIVIDE(total_discounts, selling_price_incl_tax + total_discounts) <= 0.20 THEN '11-20%'
-    WHEN SAFE_DIVIDE(total_discounts, selling_price_incl_tax + total_discounts) <= 0.30 THEN '21-30%'
-    WHEN SAFE_DIVIDE(total_discounts, selling_price_incl_tax + total_discounts) <= 0.40 THEN '31-40%'
-    ELSE '40%+'
-  END AS discount_bucket,
-  COUNTIF(order_type = 'First Order') AS first_orders,
-  COUNTIF(order_type != 'First Order') AS repeat_orders
-FROM (
+      run(`WITH first_dates AS (
+  SELECT customer_id, MIN(DATE(order_date_ist)) AS first_date
+  FROM \`frido-429506.production.fact_shopify_myfrido_mobility_all_orders\`
+  WHERE customer_id IS NOT NULL GROUP BY customer_id
+),
+tagged AS (
   SELECT o.order_id, o.total_discounts, o.selling_price_incl_tax,
-    CASE WHEN DATE(o.order_date_ist) = MIN(DATE(o2.order_date_ist)) THEN 'First Order' ELSE 'Repeat Order' END AS order_type
+    CASE WHEN DATE(o.order_date_ist) = f.first_date THEN 'First Order' ELSE 'Repeat Order' END AS order_type
   FROM \`frido-429506.production.fact_shopify_myfrido_mobility_all_orders\` o
-  JOIN (SELECT customer_id, MIN(order_date_ist) AS first_date FROM \`frido-429506.production.fact_shopify_myfrido_mobility_all_orders\` WHERE customer_id IS NOT NULL GROUP BY customer_id) o2 ON o.customer_id = o2.customer_id
+  JOIN first_dates f USING (customer_id)
   WHERE DATE(o.order_date_ist) BETWEEN '${s}' AND '${e}'
     AND o.customer_id IS NOT NULL AND o.financial_status NOT IN ('refunded','voided')
-) sub
+),
+bucketed AS (
+  SELECT order_type,
+    CASE
+      WHEN total_discounts = 0 OR selling_price_incl_tax + total_discounts = 0 THEN '0%'
+      WHEN SAFE_DIVIDE(total_discounts, selling_price_incl_tax + total_discounts) <= 0.10 THEN '1-10%'
+      WHEN SAFE_DIVIDE(total_discounts, selling_price_incl_tax + total_discounts) <= 0.20 THEN '11-20%'
+      WHEN SAFE_DIVIDE(total_discounts, selling_price_incl_tax + total_discounts) <= 0.30 THEN '21-30%'
+      WHEN SAFE_DIVIDE(total_discounts, selling_price_incl_tax + total_discounts) <= 0.40 THEN '31-40%'
+      ELSE '40%+'
+    END AS discount_bucket
+  FROM tagged
+)
+SELECT discount_bucket,
+  COUNTIF(order_type = 'First Order') AS first_orders,
+  COUNTIF(order_type = 'Repeat Order') AS repeat_orders
+FROM bucketed
 GROUP BY discount_bucket
 ORDER BY MIN(CASE discount_bucket WHEN '0%' THEN 0 WHEN '1-10%' THEN 1 WHEN '11-20%' THEN 2 WHEN '21-30%' THEN 3 WHEN '31-40%' THEN 4 ELSE 5 END)`),
 
