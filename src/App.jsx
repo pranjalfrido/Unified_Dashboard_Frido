@@ -8856,28 +8856,22 @@ function CustomerPage({ filters }) {
           {(() => {
             const total = freqDist.reduce((s, r) => s + r.customers, 0) || 1
             const maxCusts = Math.max(...freqDist.map(r => r.customers), 1)
-            const pctTicks = [0, 25, 50, 75, 100]
+            const shades = [C.acc, '#F5DC00', '#E6CC00', '#CCB400', '#B8A000']
             return (
-              <div>
-                {/* % axis on top */}
-                <div style={{ display: 'flex', marginLeft: 130, marginBottom: 4, position: 'relative', height: 14 }}>
-                  {pctTicks.map(t => (
-                    <div key={t} style={{ position: 'absolute', left: `${t}%`, fontSize: 9, color: C.t3, transform: 'translateX(-50%)' }}>{t}%</div>
-                  ))}
-                </div>
-                {freqDist.map(r => {
-                  const barPct = r.customers / maxCusts * 100
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3, paddingTop: 8 }}>
+                {freqDist.map((r, i) => {
+                  const widthPct = r.customers / maxCusts * 100
                   const pct = (r.customers / total * 100).toFixed(1)
-                  // Yellow shades: darkest for lowest, brightest for highest frequency
-                  const shade = r.label.includes('Very High') ? '#B8A000' : r.label.includes('High') ? '#CCB400' : r.label.includes('Medium') ? '#E6CC00' : r.label.includes('Low (') ? '#F5DC00' : C.acc
+                  const shade = shades[i] || C.acc
                   return (
-                    <div key={r.label} style={{ display: 'flex', alignItems: 'center', gap: 0, marginBottom: 6 }}>
-                      <div style={{ width: 130, fontSize: 11, color: C.t2, flexShrink: 0, paddingRight: 8 }}>{r.label}</div>
-                      <div style={{ flex: 1, background: C.border, borderRadius: 3, height: 28, overflow: 'hidden', position: 'relative' }}>
-                        <div style={{ height: '100%', width: `${barPct}%`, background: shade, borderRadius: 3 }} />
-                        <span style={{ position: 'absolute', left: barPct > 15 ? 8 : `calc(${barPct}% + 6px)`, top: '50%', transform: 'translateY(-50%)', fontSize: 11, fontWeight: 700, color: barPct > 15 ? C.t1 : C.t2, fontFamily: 'var(--mono)' }}>{fmtBig(r.customers)}</span>
+                    <div key={r.label} style={{ width: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                      <div style={{ width: `${Math.max(widthPct, 8)}%`, background: shade, borderRadius: 4, height: 36, display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative', transition: 'width .3s' }}>
+                        <span style={{ fontSize: 11, fontWeight: 700, color: C.t1, fontFamily: 'var(--mono)' }}>{fmtBig(r.customers)}</span>
                       </div>
-                      <div style={{ width: 38, textAlign: 'right', fontSize: 10, color: C.t3, flexShrink: 0 }}>{pct}%</div>
+                      <div style={{ display: 'flex', gap: 6, alignItems: 'center', marginTop: 2 }}>
+                        <span style={{ fontSize: 10, color: C.t2 }}>{r.label}</span>
+                        <span style={{ fontSize: 10, color: C.t3 }}>{pct}%</span>
+                      </div>
                     </div>
                   )
                 })}
