@@ -8856,16 +8856,33 @@ function CustomerPage({ filters }) {
           {(() => {
             const total = freqDist.reduce((s, r) => s + r.customers, 0) || 1
             const maxCusts = Math.max(...freqDist.map(r => r.customers), 1)
-            return freqDist.map(r => (
-              <div key={r.label} style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
-                <div style={{ width: 140, fontSize: 11, color: C.t2, flexShrink: 0 }}>{r.label}</div>
-                <div style={{ flex: 1, background: C.border, borderRadius: 3, height: 22, overflow: 'hidden', position: 'relative' }}>
-                  <div style={{ height: '100%', width: `${r.customers / maxCusts * 100}%`, background: C.acc, borderRadius: 3 }} />
-                  <span style={{ position: 'absolute', left: 6, top: 3, fontSize: 11, fontWeight: 700, color: C.t1, fontFamily: 'var(--mono)' }}>{fmtBig(r.customers)}</span>
+            const pctTicks = [0, 25, 50, 75, 100]
+            return (
+              <div>
+                {/* % axis on top */}
+                <div style={{ display: 'flex', marginLeft: 130, marginBottom: 4, position: 'relative', height: 14 }}>
+                  {pctTicks.map(t => (
+                    <div key={t} style={{ position: 'absolute', left: `${t}%`, fontSize: 9, color: C.t3, transform: 'translateX(-50%)' }}>{t}%</div>
+                  ))}
                 </div>
-                <div style={{ width: 36, textAlign: 'right', fontSize: 10, color: C.t3 }}>{(r.customers / total * 100).toFixed(1)}%</div>
+                {freqDist.map(r => {
+                  const barPct = r.customers / maxCusts * 100
+                  const pct = (r.customers / total * 100).toFixed(1)
+                  // Yellow shades: darkest for lowest, brightest for highest frequency
+                  const shade = r.label.includes('Very High') ? '#B8A000' : r.label.includes('High') ? '#CCB400' : r.label.includes('Medium') ? '#E6CC00' : r.label.includes('Low (') ? '#F5DC00' : C.acc
+                  return (
+                    <div key={r.label} style={{ display: 'flex', alignItems: 'center', gap: 0, marginBottom: 6 }}>
+                      <div style={{ width: 130, fontSize: 11, color: C.t2, flexShrink: 0, paddingRight: 8 }}>{r.label}</div>
+                      <div style={{ flex: 1, background: C.border, borderRadius: 3, height: 28, overflow: 'hidden', position: 'relative' }}>
+                        <div style={{ height: '100%', width: `${barPct}%`, background: shade, borderRadius: 3 }} />
+                        <span style={{ position: 'absolute', left: 8, top: '50%', transform: 'translateY(-50%)', fontSize: 11, fontWeight: 700, color: C.t1, fontFamily: 'var(--mono)' }}>{fmtBig(r.customers)}</span>
+                      </div>
+                      <div style={{ width: 38, textAlign: 'right', fontSize: 10, color: C.t3, flexShrink: 0 }}>{pct}%</div>
+                    </div>
+                  )
+                })}
               </div>
-            ))
+            )
           })()}
         </Card>
 
