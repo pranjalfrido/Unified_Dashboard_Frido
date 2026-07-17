@@ -109,7 +109,7 @@ ORDER BY day`),
 ),
 all_orders AS (
   SELECT CustomerId, DATE_TRUNC(DATE(OrderDate), MONTH) AS order_month,
-    SUM(SellingPrice_Inc_GST) AS revenue
+    SUM(SellingPrice_Exc_GST) AS revenue
   FROM ${TBL}
   WHERE Channel = 'Shopify' AND CustomerId IS NOT NULL
   GROUP BY CustomerId, order_month
