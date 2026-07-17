@@ -8803,21 +8803,37 @@ function CustomerPage({ filters }) {
 
       {/* RFM + Frequency + Monetary + Inactivity — 2x2 grid */}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
-        {/* RFM Treemap-style */}
+        {/* RFM Segments — horizontal bar list */}
         <Card title="RFM Segments">
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-            {rfm.sort((a, b) => b.totalRevenue - a.totalRevenue).map(seg => {
-              const pctW = rfmTotal > 0 ? (seg.totalRevenue / rfmTotal * 100) : 10
-              const col = RFM_COLORS[seg.segment] || '#8B8000'
-              return (
-                <div key={seg.segment} style={{ background: col, borderRadius: 6, padding: '10px 12px', minWidth: Math.max(pctW * 2, 80), flex: `${pctW} 0 auto`, maxWidth: '48%' }}>
-                  <div style={{ fontSize: 11, fontWeight: 700, color: '#fff', marginBottom: 2 }}>{seg.segment}</div>
-                  <div style={{ fontSize: 13, fontWeight: 700, color: '#fff', fontFamily: 'var(--mono)' }}>{fmtBig(seg.totalRevenue)}</div>
-                  <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.8)', marginTop: 2 }}>{fmtN(seg.customers)} custs</div>
-                </div>
-              )
-            })}
-          </div>
+          {(() => {
+            const sorted = [...rfm].sort((a, b) => b.totalRevenue - a.totalRevenue)
+            const maxRev = sorted[0]?.totalRevenue || 1
+            return (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                {sorted.map(seg => {
+                  const col = RFM_COLORS[seg.segment] || '#8B8000'
+                  const barW = seg.totalRevenue / maxRev * 100
+                  const pct = rfmTotal > 0 ? (seg.totalRevenue / rfmTotal * 100).toFixed(1) : '0'
+                  return (
+                    <div key={seg.segment} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <div style={{ width: 4, height: 34, borderRadius: 2, background: col, flexShrink: 0 }} />
+                      <div style={{ width: 130, flexShrink: 0 }}>
+                        <div style={{ fontSize: 11, fontWeight: 600, color: C.t1 }}>{seg.segment}</div>
+                        <div style={{ fontSize: 10, color: C.t3 }}>{fmtN(seg.customers)} customers</div>
+                      </div>
+                      <div style={{ flex: 1, background: C.border, borderRadius: 3, height: 8, overflow: 'hidden' }}>
+                        <div style={{ height: '100%', width: `${barW}%`, background: col, borderRadius: 3 }} />
+                      </div>
+                      <div style={{ width: 72, textAlign: 'right', flexShrink: 0 }}>
+                        <div style={{ fontSize: 11, fontWeight: 700, color: C.t1, fontFamily: 'var(--mono)' }}>{fmt(seg.totalRevenue)}</div>
+                        <div style={{ fontSize: 10, color: C.t3 }}>{pct}%</div>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            )
+          })()}
         </Card>
 
         {/* Purchase Frequency Distribution */}
