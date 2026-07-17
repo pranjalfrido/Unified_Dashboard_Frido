@@ -8762,7 +8762,7 @@ function CustomerPage({ filters }) {
         </div>
       }>
         <div style={{ overflowX: 'auto', overflowY: 'auto', width: '100%', maxHeight: 420 }}>
-          <table style={{ borderCollapse: 'collapse', fontSize: 10.5, tableLayout: 'auto' }}>
+          <table style={{ borderCollapse: 'collapse', fontSize: 10.5, width: '100%' }}>
             <thead>
               {/* Span header row: "First Purchase →" label above all category columns */}
               <tr>
