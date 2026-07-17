@@ -8599,11 +8599,11 @@ function CustomerPage({ filters }) {
           </select>
         }>
           <ResponsiveContainer width="100%" height={260}>
-            <ComposedChart data={monthly} margin={{ top: 20, right: 55, bottom: 0, left: 0 }}>
+            <ComposedChart data={monthly} margin={{ top: 20, right: 65, bottom: 0, left: 10 }}>
               <CartesianGrid strokeDasharray="3 3" stroke={C.border} vertical={false} />
               <XAxis dataKey="month" tick={{ fontSize: 10, fill: C.t3 }} />
-              <YAxis yAxisId="cust" tick={{ fontSize: 10, fill: C.t3 }} tickFormatter={v => v >= 1000 ? `${(v/1000).toFixed(1)}K` : v} width={50} />
-              <YAxis yAxisId="sales" orientation="right" tick={{ fontSize: 10, fill: C.t3 }} tickFormatter={v => v >= 1e7 ? `₹${(v/1e7).toFixed(1)}Cr` : v >= 1e5 ? `₹${(v/1e5).toFixed(0)}L` : `₹${(v/1000).toFixed(0)}K`} width={55} />
+              <YAxis yAxisId="cust" tick={{ fontSize: 10, fill: C.t3 }} tickFormatter={v => v >= 1000 ? `${(v/1000).toFixed(1)}K` : v} width={42} domain={[0, 'auto']} allowDataOverflow={false} />
+              <YAxis yAxisId="sales" orientation="right" tick={{ fontSize: 10, fill: C.t3 }} tickFormatter={v => v >= 1e7 ? `₹${(v/1e7).toFixed(1)}Cr` : v >= 1e5 ? `₹${(v/1e5).toFixed(0)}L` : `₹${(v/1000).toFixed(0)}K`} width={58} />
               <YAxis yAxisId="aov" hide />
               <YAxis yAxisId="rrr" hide />
               <Tooltip content={({ active, payload, label }) => {
