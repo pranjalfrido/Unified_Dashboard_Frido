@@ -8516,13 +8516,16 @@ function CustomerPage({ filters }) {
         key = r.day.slice(0, 7)
         label = d.toLocaleDateString('en-IN', { month: 'short', year: '2-digit' })
       }
-      if (!buckets[key]) buckets[key] = { month: label, customersAcquired: 0, totalOrders: 0, grossSales: 0, repeatRevenue: 0, newCustomers: 0, repeatCustomers: 0 }
+      if (!buckets[key]) buckets[key] = { month: label, customersAcquired: 0, totalOrders: 0, grossSales: 0, repeatRevenue: 0, newRevenue: 0, newCustomers: 0, repeatCustomers: 0, newOrders: 0, repeatOrders: 0 }
       buckets[key].customersAcquired += r.customersAcquired
       buckets[key].totalOrders += r.totalOrders
       buckets[key].grossSales += r.grossSales
       buckets[key].repeatRevenue += r.repeatRevenue
+      buckets[key].newRevenue += r.newRevenue
       buckets[key].newCustomers += r.newCustomers
       buckets[key].repeatCustomers += r.repeatCustomers
+      buckets[key].newOrders += r.newOrders
+      buckets[key].repeatOrders += r.repeatOrders
     })
     return Object.entries(buckets).sort(([a], [b]) => a.localeCompare(b)).map(([, v]) => ({
       ...v,
@@ -8628,20 +8631,55 @@ function CustomerPage({ filters }) {
             </ComposedChart>
           </ResponsiveContainer>
         </Card>
-        <Card title="New vs Repeat Customers">
-          <div style={{ display: 'flex', gap: 6, marginBottom: 8 }}>
-            {['Orders', 'Sales'].map(m => <button key={m} style={{ fontSize: 11, padding: '3px 10px', borderRadius: 5, border: `1px solid ${C.border}`, background: C.card, cursor: 'pointer', fontFamily: 'var(--font)' }}>{m}</button>)}
-          </div>
-          <ResponsiveContainer width="100%" height={200}>
-            <BarChart data={monthly} margin={{ top: 5, right: 10, left: 0, bottom: 0 }}>
-              <XAxis dataKey="month" tick={{ fontSize: 10 }} interval="preserveStartEnd" />
-              <YAxis tick={{ fontSize: 10 }} tickFormatter={v => v >= 1000 ? `${(v/1000).toFixed(0)}K` : v} />
-              <Tooltip formatter={(v, n) => [fmtN(v), n]} />
-              <Bar dataKey="newCustomers" stackId="a" fill={C.acc} name="New Customers" radius={[0,0,0,0]} />
-              <Bar dataKey="repeatCustomers" stackId="a" fill="#B8A000" name="Repeat Customers" radius={[3,3,0,0]} />
-            </BarChart>
-          </ResponsiveContainer>
-        </Card>
+        {(() => {
+          const [nrMetric, setNrMetric] = [custData._nrMetric || 'customers', v => setCustData(d => ({ ...d, _nrMetric: v }))]
+          const [nrGran, setNrGran] = [custData._nrGran || granularity, v => setCustData(d => ({ ...d, _nrGran: v }))]
+          const nrData = (() => {
+            const buckets = {}
+            rawDaily.forEach(r => {
+              const d = new Date(r.day)
+              let key, label
+              if (nrGran === 'daily') { key = r.day; label = d.toLocaleDateString('en-IN', { day: '2-digit', month: 'short' }) }
+              else if (nrGran === 'weekly') { const day = d.getDay(), diff = (day === 0 ? -6 : 1 - day); const mon = new Date(d); mon.setDate(d.getDate() + diff); key = mon.toISOString().slice(0, 10); label = `W${mon.toLocaleDateString('en-IN', { day: '2-digit', month: 'short' })}` }
+              else { key = r.day.slice(0, 7); label = d.toLocaleDateString('en-IN', { month: 'short', year: '2-digit' }) }
+              if (!buckets[key]) buckets[key] = { month: label, newCustomers: 0, repeatCustomers: 0, newOrders: 0, repeatOrders: 0, newRevenue: 0, repeatRevenue: 0 }
+              buckets[key].newCustomers += r.newCustomers; buckets[key].repeatCustomers += r.repeatCustomers
+              buckets[key].newOrders += r.newOrders; buckets[key].repeatOrders += r.repeatOrders
+              buckets[key].newRevenue += r.newRevenue; buckets[key].repeatRevenue += r.repeatRevenue
+            })
+            return Object.entries(buckets).sort(([a],[b]) => a.localeCompare(b)).map(([,v]) => v)
+          })()
+          const newKey = nrMetric === 'customers' ? 'newCustomers' : nrMetric === 'orders' ? 'newOrders' : 'newRevenue'
+          const repKey = nrMetric === 'customers' ? 'repeatCustomers' : nrMetric === 'orders' ? 'repeatOrders' : 'repeatRevenue'
+          const tickFmt = v => nrMetric === 'revenue' ? (v >= 1e7 ? `₹${(v/1e7).toFixed(1)}Cr` : v >= 1e5 ? `₹${(v/1e5).toFixed(0)}L` : `₹${(v/1000).toFixed(0)}K`) : v.toLocaleString('en-IN')
+          const lblFmt = v => nrMetric === 'revenue' ? (v >= 1e7 ? `₹${(v/1e7).toFixed(1)}Cr` : v >= 1e5 ? `₹${(v/1e5).toFixed(0)}L` : `₹${(v/1000).toFixed(0)}K`) : v.toLocaleString('en-IN')
+          return (
+          <Card title="New vs Repeat Customers" action={
+            <div style={{ display: 'flex', gap: 5, alignItems: 'center' }}>
+              {[['customers','Customers'],['orders','Orders'],['revenue','Sales']].map(([k,l]) => (
+                <button key={k} onClick={() => setNrMetric(k)} style={{ fontSize: 10, padding: '2px 8px', borderRadius: 5, border: `1px solid ${nrMetric===k ? C.acc : C.border}`, background: nrMetric===k ? C.acl : C.card, color: nrMetric===k ? '#7A6000' : C.t2, cursor: 'pointer', fontFamily: 'var(--font)', fontWeight: nrMetric===k ? 700 : 400 }}>{l}</button>
+              ))}
+              <select value={nrGran} onChange={e => setNrGran(e.target.value)} style={{ fontSize: 10, padding: '2px 7px', borderRadius: 5, border: `1px solid ${C.border}`, background: C.card, color: C.t2, cursor: 'pointer', fontFamily: 'var(--font)' }}>
+                {['daily','weekly','monthly'].map(g => <option key={g} value={g}>{g.charAt(0).toUpperCase()+g.slice(1)}</option>)}
+              </select>
+            </div>
+          }>
+            <ResponsiveContainer width="100%" height={240}>
+              <BarChart data={nrData} margin={{ top: 20, right: 10, left: 0, bottom: 0 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke={C.border} vertical={false} />
+                <XAxis dataKey="month" tick={{ fontSize: 10 }} interval="preserveStartEnd" />
+                <YAxis tick={{ fontSize: 10 }} tickFormatter={tickFmt} />
+                <Tooltip formatter={(v, n) => [nrMetric === 'revenue' ? fmt(v) : fmtN(v), n]} />
+                <Legend wrapperStyle={{ fontSize: 11 }} />
+                <Bar dataKey={newKey} stackId="a" fill={C.acc} name="New Customers" radius={[0,0,0,0]}
+                  label={{ position: 'inside', fontSize: 9, fill: '#7A6000', fontWeight: 700, formatter: lblFmt }} />
+                <Bar dataKey={repKey} stackId="a" fill="#B8A000" name="Repeat Customers" radius={[3,3,0,0]}
+                  label={{ position: 'top', fontSize: 9, fill: C.t2, fontWeight: 700, formatter: lblFmt }} />
+              </BarChart>
+            </ResponsiveContainer>
+          </Card>
+          )
+        })()}
       </div>
         )
       })()}

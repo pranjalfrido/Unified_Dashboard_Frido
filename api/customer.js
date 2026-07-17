@@ -91,8 +91,11 @@ SELECT
   COUNT(DISTINCT OrderId) AS total_orders,
   ROUND(SUM(rev), 0) AS gross_sales,
   ROUND(SUM(CASE WHEN first_date < DATE('${s}') THEN rev ELSE 0 END), 0) AS repeat_revenue,
+  ROUND(SUM(CASE WHEN first_date BETWEEN DATE('${s}') AND DATE('${e}') THEN rev ELSE 0 END), 0) AS new_revenue,
   COUNT(DISTINCT CASE WHEN first_date BETWEEN DATE('${s}') AND DATE('${e}') THEN CustomerId END) AS new_customers,
-  COUNT(DISTINCT CASE WHEN first_date < DATE('${s}') THEN CustomerId END) AS repeat_customers
+  COUNT(DISTINCT CASE WHEN first_date < DATE('${s}') THEN CustomerId END) AS repeat_customers,
+  COUNT(DISTINCT CASE WHEN first_date BETWEEN DATE('${s}') AND DATE('${e}') THEN OrderId END) AS new_orders,
+  COUNT(DISTINCT CASE WHEN first_date < DATE('${s}') THEN OrderId END) AS repeat_orders
 FROM period
 GROUP BY day
 ORDER BY day`),
@@ -302,8 +305,11 @@ GROUP BY platform`),
         totalOrders: parseInt(r.total_orders) || 0,
         grossSales: parseFloat(r.gross_sales) || 0,
         repeatRevenue: parseFloat(r.repeat_revenue) || 0,
+        newRevenue: parseFloat(r.new_revenue) || 0,
         newCustomers: parseInt(r.new_customers) || 0,
         repeatCustomers: parseInt(r.repeat_customers) || 0,
+        newOrders: parseInt(r.new_orders) || 0,
+        repeatOrders: parseInt(r.repeat_orders) || 0,
       })),
       cohort: cohort.map(r => ({
         cohortMonth: r.cohort_month,
