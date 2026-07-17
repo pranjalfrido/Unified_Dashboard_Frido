@@ -109,7 +109,8 @@ ORDER BY day`),
 ),
 all_orders AS (
   SELECT CustomerId, DATE_TRUNC(DATE(OrderDate), MONTH) AS order_month,
-    SUM(SellingPrice_Exc_GST) AS revenue
+    -- Net revenue: Exc_GST, exclude cancelled / RTO / CIR rows (same logic as main Sales tab)
+    SUM(CASE WHEN LOWER(Order_Status) NOT IN ('cancelled','cancel','rto','rto initiated','rto delivered','cir return','cir') THEN SellingPrice_Exc_GST ELSE 0 END) AS revenue
   FROM ${TBL}
   WHERE Channel = 'Shopify' AND CustomerId IS NOT NULL
   GROUP BY CustomerId, order_month
