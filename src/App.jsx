@@ -8762,7 +8762,11 @@ function CustomerPage({ filters }) {
         </div>
       }>
         <div style={{ overflowX: 'auto', overflowY: 'auto', width: '100%', maxHeight: 420 }}>
-          <table style={{ borderCollapse: 'collapse', fontSize: 10.5, width: '100%' }}>
+          <table style={{ borderCollapse: 'collapse', fontSize: 10.5, width: '100%', tableLayout: 'fixed' }}>
+            <colgroup>
+              <col style={{ width: '140px' }} />
+              {allCrossFirst.map(cat => <col key={cat} />)}
+            </colgroup>
             <thead>
               {/* Span header row: "First Purchase →" label above all category columns */}
               <tr>
@@ -8772,18 +8776,18 @@ function CustomerPage({ filters }) {
                 </th>
               </tr>
               <tr style={{ borderBottom: `2px solid ${C.border}` }}>
-                <th style={{ padding: '4px 8px', textAlign: 'left', whiteSpace: 'nowrap', verticalAlign: 'bottom' }}>
+                <th style={{ padding: '4px 8px', textAlign: 'left', verticalAlign: 'bottom', overflow: 'hidden' }}>
                   <div style={{ fontSize: 8.5, fontWeight: 700, color: C.blue.tx, background: C.blue.bg, display: 'inline-block', padding: '2px 6px', borderRadius: 4, marginBottom: 2 }}>↓ Second Purchase {crossFilter}</div>
                 </th>
                 {allCrossFirst.map(cat => (
-                  <th key={cat} style={{ padding: '4px 6px', textAlign: 'right', color: C.t3, fontWeight: 700, fontSize: 9, whiteSpace: 'nowrap' }}>{cat}</th>
+                  <th key={cat} style={{ padding: '4px 6px', textAlign: 'right', color: C.t3, fontWeight: 700, fontSize: 9, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{cat}</th>
                 ))}
               </tr>
             </thead>
             <tbody>
               {crossRows.map((sc, i) => (
                 <tr key={sc} style={{ borderBottom: `1px solid ${C.border}`, background: i % 2 === 0 ? 'transparent' : C.bg }}>
-                  <td style={{ padding: '4px 8px', fontWeight: 600, color: C.t1, fontSize: 10.5, whiteSpace: 'nowrap' }}>
+                  <td style={{ padding: '4px 8px', fontWeight: 600, color: C.t1, fontSize: 10.5, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                     <span style={{ color: C.t3, fontSize: 9 }}>⊞</span> {sc}
                   </td>
                   {allCrossFirst.map(fc => {
