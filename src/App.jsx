@@ -8604,27 +8604,31 @@ function CustomerPage({ filters }) {
         return (
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
         <Card title={xLabel} action={
-          <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-            {METRICS.map(m => (
-              <button key={m.key}
-                onClick={() => setCustData(d => ({ ...d, _chartMetric: m.key }))}
-                style={{ fontSize: 10, padding: '2px 8px', borderRadius: 5, border: `1px solid ${(custData._chartMetric||'customersAcquired') === m.key ? m.color : C.border}`, background: (custData._chartMetric||'customersAcquired') === m.key ? m.color + '22' : C.card, color: (custData._chartMetric||'customersAcquired') === m.key ? m.color : C.t2, cursor: 'pointer', fontFamily: 'var(--font)', fontWeight: (custData._chartMetric||'customersAcquired') === m.key ? 700 : 400 }}>
-                  {m.label}
-                </button>
-            ))}
-            <select value={granularity} onChange={e => setGranularity(e.target.value)}
-              style={{ fontSize: 11, padding: '2px 8px', borderRadius: 6, border: `1px solid ${C.border}`, background: C.card, color: C.t2, cursor: 'pointer', fontFamily: 'var(--font)' }}>
-              <option value="daily">Daily</option>
-              <option value="weekly">Weekly</option>
-              <option value="monthly">Monthly</option>
-            </select>
-          </div>
+          <select value={granularity} onChange={e => setGranularity(e.target.value)}
+            style={{ fontSize: 11, padding: '2px 8px', borderRadius: 6, border: `1px solid ${C.border}`, background: C.card, color: C.t2, cursor: 'pointer', fontFamily: 'var(--font)' }}>
+            <option value="daily">Daily</option>
+            <option value="weekly">Weekly</option>
+            <option value="monthly">Monthly</option>
+          </select>
         }>
+          {/* Legend */}
+          <div style={{ display: 'flex', gap: 14, marginBottom: 8, fontSize: 11, color: C.t3, flexWrap: 'wrap' }}>
+            {METRICS.map(m => (
+              <span key={m.key} style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                {m.isBar
+                  ? <span style={{ width: 12, height: 12, borderRadius: 2, background: m.color, display: 'inline-block' }} />
+                  : <span style={{ width: 20, height: 2, background: m.color, display: 'inline-block', borderRadius: 1 }} />
+                }
+                {m.label}
+              </span>
+            ))}
+          </div>
           <ResponsiveContainer width="100%" height={260}>
             <ComposedChart data={monthly} margin={{ top: showLabels ? 22 : 8, right: 55, left: 10, bottom: 0 }}>
               <CartesianGrid strokeDasharray="3 3" stroke={C.border} vertical={false} />
               <XAxis dataKey="month" tick={{ fontSize: 10, fill: C.t2 }} axisLine={{ stroke: C.border2 }} tickLine={false} interval="preserveStartEnd" />
-              <YAxis tick={{ fontSize: 9, fill: C.t3 }} axisLine={{ stroke: C.border2 }} tickLine={false} tickFormatter={tickFmt} width={44} />
+              <YAxis yAxisId="left" tick={{ fontSize: 9, fill: C.t3 }} axisLine={{ stroke: C.border2 }} tickLine={false} tickFormatter={v => v >= 1000 ? `${(v/1000).toFixed(0)}K` : v} width={44} />
+              <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 9, fill: C.t3 }} axisLine={false} tickLine={false} tickFormatter={v => v >= 1e7 ? `${(v/1e7).toFixed(1)}Cr` : v >= 1e5 ? `${(v/1e5).toFixed(0)}L` : v >= 1000 ? `${(v/1000).toFixed(0)}K` : v} width={48} />
               <Tooltip
                 content={({ active, payload, label }) => {
                   if (!active || !payload?.length) return null
@@ -8633,7 +8637,7 @@ function CustomerPage({ filters }) {
                     <div style={{ background: '#fff', border: `1px solid ${C.border}`, borderRadius: 9, padding: '10px 14px', fontSize: 11.5, boxShadow: '0 2px 10px #0001' }}>
                       <div style={{ fontWeight: 700, color: C.t1, marginBottom: 7, borderBottom: `1px solid ${C.border}`, paddingBottom: 5 }}>{xLabel}: <span style={{ color: C.acc }}>{label}</span></div>
                       <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', gap: 24 }}><span style={{ color: C.t3 }}>Customers Acquired</span><span style={{ fontWeight: 700, color: C.t1 }}>{(d.customersAcquired||0).toLocaleString('en-IN')}</span></div>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', gap: 24 }}><span style={{ color: C.t3 }}>Customers Acquired</span><span style={{ fontWeight: 700, color: C.acc }}>{(d.customersAcquired||0).toLocaleString('en-IN')}</span></div>
                         <div style={{ display: 'flex', justifyContent: 'space-between', gap: 24 }}><span style={{ color: C.t3 }}>Gross Sales</span><span style={{ fontWeight: 700, color: '#2E74CC' }}>{fmt(d.grossSales||0)}</span></div>
                         <div style={{ display: 'flex', justifyContent: 'space-between', gap: 24 }}><span style={{ color: C.t3 }}>AOV</span><span style={{ fontWeight: 700, color: '#E8930A' }}>₹{Math.round(d.aov||0).toLocaleString('en-IN')}</span></div>
                         <div style={{ display: 'flex', justifyContent: 'space-between', gap: 24 }}><span style={{ color: C.t3 }}>Repeat Revenue Rate</span><span style={{ fontWeight: 700, color: '#0D9E68' }}>{((d.repeatRevenueRate||0)*100).toFixed(1)}%</span></div>
@@ -8642,12 +8646,11 @@ function CustomerPage({ filters }) {
                   )
                 }}
               />
-              {selM.isBar
-                ? <Bar dataKey={selM.key} fill={selM.color} name={selM.label} radius={[3,3,0,0]} maxBarSize={maxBar}
-                    label={showLabels ? { position: 'top', fontSize: 9, fill: C.t2, fontWeight: 600, formatter: selM.fmt } : false} />
-                : <Line type="monotone" dataKey={selM.key} stroke={selM.color} strokeWidth={2.5} dot={{ r: monthly.length <= 60 ? 3 : 0, fill: selM.color, strokeWidth: 0 }} name={selM.label}
-                    label={showLabels ? { position: 'top', fontSize: 9, fill: selM.color, fontWeight: 600, formatter: selM.fmt } : false} />
-              }
+              <Bar yAxisId="left" dataKey="customersAcquired" fill={C.acc} name="Customers Acquired" radius={[3,3,0,0]} maxBarSize={maxBar}
+                label={showLabels ? { position: 'top', fontSize: 9, fill: C.t2, fontWeight: 600, formatter: v => v >= 1000 ? `${(v/1000).toFixed(0)}K` : v } : false} />
+              <Line yAxisId="right" type="monotone" dataKey="grossSales" stroke="#2E74CC" strokeWidth={2} dot={{ r: monthly.length <= 60 ? 3 : 0, fill: '#2E74CC', strokeWidth: 0 }} />
+              <Line yAxisId="right" type="monotone" dataKey="aov" stroke="#E8930A" strokeWidth={2} dot={{ r: monthly.length <= 60 ? 3 : 0, fill: '#E8930A', strokeWidth: 0 }} strokeDasharray="4 2" />
+              <Line yAxisId="right" type="monotone" dataKey="repeatRevenueRate" stroke="#0D9E68" strokeWidth={2} dot={{ r: monthly.length <= 60 ? 3 : 0, fill: '#0D9E68', strokeWidth: 0 }} strokeDasharray="2 2" />
             </ComposedChart>
           </ResponsiveContainer>
         </Card>
