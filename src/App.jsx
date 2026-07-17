@@ -8470,183 +8470,143 @@ function Skeleton() {
 // ── Main App ──────────────────────────────────────────────────
 const TAB_TO_CHANNEL = { blinkit: 'Blinkit', instamart: 'Instamart', zepto: 'Zepto', cred: 'CRED', firstcry: 'Firstcry' }
 
-function CustomerPage({ data }) {
-  const TODAY = '2026-07-16'
-  const { orders, rows, totalRev, nOrders, chMap } = data
+function CustomerPage({ filters }) {
+  const [custData, setCustData] = useState(null)
+  const [loading, setLoading] = useState(false)
+  const [crossFilter, setCrossFilter] = useState('Category')
+  const API = import.meta.env.VITE_API_URL || ''
 
-  // --- Shopify only ---
-  const shopOrders = orders.filter(o => o.channel === 'Shopify')
-  const shopRows = rows.filter(r => r.Channel === 'Shopify')
+  useEffect(() => {
+    setLoading(true)
+    fetch(`${API}/api/customer`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ start: filters.start, end: filters.end })
+    })
+      .then(r => r.json())
+      .then(d => { setCustData(d); setLoading(false) })
+      .catch(e => { console.error(e); setLoading(false) })
+  }, [filters.start, filters.end])
 
-  // --- Frequency map per customer ---
-  const custMap = {}
-  shopOrders.forEach(o => {
-    if (!o.customerId) return
-    if (!custMap[o.customerId]) custMap[o.customerId] = { orders: 0, rev: 0, lastDate: '', firstDate: '', vouchers: 0, prepaid: 0, categories: new Set() }
-    const c = custMap[o.customerId]
-    c.orders++
-    c.rev += o.rev
-    if (!c.lastDate || o.date > c.lastDate) c.lastDate = o.date
-    if (!c.firstDate || o.date < c.firstDate) c.firstDate = o.date
-    if (o.voucher) c.vouchers++
-    if ((o.paymentMode || '').toLowerCase().includes('prepaid')) c.prepaid++
+  if (loading) return <div style={{ padding: 60, textAlign: 'center', color: C.t3 }}>Loading customer data...</div>
+  if (!custData) return <div style={{ padding: 60, textAlign: 'center', color: C.t3 }}>Select a date range to load customer analysis</div>
+
+  const { kpis, monthly, cohort, rfm, freqDist, monetaryDist, inactivity, discountDist, crossSell } = custData
+
+  // Cohort pivot
+  const cohortMap = {}
+  const cohort0 = {}
+  cohort.forEach(r => {
+    if (!cohortMap[r.cohortMonth]) cohortMap[r.cohortMonth] = {}
+    cohortMap[r.cohortMonth][r.cohortIndex] = r.customers
+    if (r.cohortIndex === 0) cohort0[r.cohortMonth] = r.customers
   })
-  shopRows.forEach(r => {
-    if (!r.CustomerId || !custMap[r.CustomerId] || !r.Category) return
-    custMap[r.CustomerId].categories.add(r.Category)
+  const cohortMonths = Object.keys(cohortMap).sort()
+  const maxCohortIdx = Math.max(...cohort.map(r => r.cohortIndex), 0)
+
+  // RFM treemap data
+  const RFM_COLORS = { 'Champions': '#B8A000', 'Loyal Customers': '#2E74CC', 'Recent Users': '#7A6A00', 'Potential Loyalists': '#8B7000', "Can't Lose Them": '#5B4F00', 'Hibernating': '#A09000', 'Others': '#9B8800', 'Price Sensitive': '#6B5F00' }
+  const rfmTotal = rfm.reduce((s, r) => s + r.totalRevenue, 0)
+
+  // Cross-sell pivot
+  const allCategories = [...new Set([...crossSell.map(r => r.firstCategory), ...crossSell.map(r => r.secondCategory)])].filter(Boolean).sort()
+  const crossMap = {}
+  crossSell.forEach(r => {
+    if (!crossMap[r.secondCategory]) crossMap[r.secondCategory] = {}
+    crossMap[r.secondCategory][r.firstCategory] = r.customers
   })
-
-  const custList = Object.entries(custMap).map(([id, c]) => {
-    const recencyDays = c.lastDate ? Math.round((new Date(TODAY) - new Date(c.lastDate)) / 86400000) : 999
-    const rScore = recencyDays <= 7 ? 5 : recencyDays <= 14 ? 4 : recencyDays <= 30 ? 3 : recencyDays <= 60 ? 2 : 1
-    const fScore = c.orders >= 5 ? 5 : c.orders >= 4 ? 4 : c.orders >= 3 ? 3 : c.orders >= 2 ? 2 : 1
-    const mScore = c.rev >= 10000 ? 5 : c.rev >= 5000 ? 4 : c.rev >= 2000 ? 3 : c.rev >= 1000 ? 2 : 1
-    const avgScore = (rScore + fScore + mScore) / 3
-    const segment = avgScore >= 4 ? 'Champions' : avgScore >= 3 ? 'Loyal' : avgScore >= 2.5 ? 'Promising' : avgScore >= 2 ? 'At Risk' : 'Lost'
-    return { id, ...c, recencyDays, segment, avgScore }
-  })
-
-  const nUniq = custList.length
-  const nRepeat = custList.filter(c => c.orders >= 2).length
-  const repeatRate = nUniq ? (nRepeat / nUniq * 100) : 0
-  const shopRev = shopOrders.reduce((s, o) => s + o.rev, 0)
-  const avgLTV = nUniq ? shopRev / nUniq : 0
-  const avgOrdersPerCust = nUniq ? shopOrders.length / nUniq : 0
-  const prepaidOrds = shopOrders.filter(o => (o.paymentMode || '').toLowerCase().includes('prepaid')).length
-  const prepaidPct = shopOrders.length ? prepaidOrds / shopOrders.length * 100 : 0
-
-  // Inter-purchase days (only repeat customers)
-  const repeatCustOrders = {}
-  shopOrders.forEach(o => {
-    if (!o.customerId || !custMap[o.customerId] || custMap[o.customerId].orders < 2) return
-    if (!repeatCustOrders[o.customerId]) repeatCustOrders[o.customerId] = []
-    repeatCustOrders[o.customerId].push(o.date)
-  })
-  let totalGap = 0, gapCount = 0
-  Object.values(repeatCustOrders).forEach(dates => {
-    const sorted = [...dates].sort()
-    for (let i = 1; i < sorted.length; i++) {
-      totalGap += Math.round((new Date(sorted[i]) - new Date(sorted[i - 1])) / 86400000)
-      gapCount++
-    }
-  })
-  const avgGap = gapCount ? Math.round(totalGap / gapCount) : 0
-
-  // --- RFM Segments ---
-  const SEG_CFG = {
-    Champions: { color: '#0D9E68', bg: '#E6F4E0' },
-    Loyal:     { color: '#2E74CC', bg: '#E1EFFD' },
-    Promising: { color: '#E8930A', bg: '#FEF2DC' },
-    'At Risk': { color: '#CC4078', bg: '#FDE8E8' },
-    Lost:      { color: '#94939F', bg: '#F2F1EF' },
-  }
-  const segData = {}
-  Object.keys(SEG_CFG).forEach(s => { segData[s] = { count: 0, rev: 0 } })
-  custList.forEach(c => { segData[c.segment].count++; segData[c.segment].rev += c.rev })
-
-  // --- Frequency histogram ---
-  const freqBuckets = { '1x': 0, '2x': 0, '3x': 0, '4x': 0, '5x+': 0 }
-  custList.forEach(c => {
-    const k = c.orders >= 5 ? '5x+' : c.orders === 4 ? '4x' : c.orders === 3 ? '3x' : c.orders === 2 ? '2x' : '1x'
-    freqBuckets[k]++
-  })
-  const maxFreq = Math.max(...Object.values(freqBuckets), 1)
-
-  // --- Voucher dependency ---
-  const vDep = { Always: 0, Sometimes: 0, Never: 0 }
-  custList.forEach(c => {
-    if (c.orders === 0) return
-    const vRate = c.vouchers / c.orders
-    if (vRate === 1) vDep.Always++
-    else if (vRate > 0) vDep.Sometimes++
-    else vDep.Never++
-  })
-
-  // --- Category cross-sell ---
-  const catPairMap = {}
-  custList.forEach(c => {
-    const cats = Array.from(c.categories).sort()
-    for (let i = 0; i < cats.length; i++) {
-      for (let j = i + 1; j < cats.length; j++) {
-        const key = `${cats[i]} + ${cats[j]}`
-        catPairMap[key] = (catPairMap[key] || 0) + 1
-      }
-    }
-  })
-  const crossSell = Object.entries(catPairMap).sort((a, b) => b[1] - a[1]).slice(0, 5)
-
-  // --- Geography repeat rate (by state) ---
-  const stateRepeat = {}
-  custList.forEach(c => {
-    const orders_by_state = shopOrders.filter(o => o.customerId === c.id)
-    const st = (orders_by_state[0]?.state || 'Unknown').toUpperCase().trim()
-    if (!stateRepeat[st]) stateRepeat[st] = { total: 0, repeat: 0 }
-    stateRepeat[st].total++
-    if (c.orders >= 2) stateRepeat[st].repeat++
-  })
-  const stateRepeatRows = Object.entries(stateRepeat)
-    .filter(([, v]) => v.total >= 5)
-    .map(([st, v]) => ({ state: st, total: v.total, repeat: v.repeat, rate: v.total ? v.repeat / v.total * 100 : 0 }))
-    .sort((a, b) => b.total - a.total).slice(0, 6)
-
-  // --- Acquisition bridge ---
-  const newRev = custList.filter(c => c.orders === 1).reduce((s, c) => s + c.rev, 0)
-  const repeatRev = custList.filter(c => c.orders >= 2).reduce((s, c) => s + c.rev, 0)
-  const newPrepaidPct = (() => { const n = custList.filter(c => c.orders === 1); const pp = n.filter(c => c.prepaid >= 1).length; return n.length ? pp / n.length * 100 : 0 })()
-  const repPrepaidPct = (() => { const r = custList.filter(c => c.orders >= 2); const pp = r.filter(c => c.prepaid / c.orders >= 0.5).length; return r.length ? pp / r.length * 100 : 0 })()
-
-  // top 20 by revenue for table
-  const top20 = [...custList].sort((a, b) => b.rev - a.rev).slice(0, 20)
+  const crossRows = allCategories.filter(sc => crossMap[sc])
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 16, padding: '0 4px' }}>
-      {/* Banner */}
-      <div style={{ background: C.acl, border: `1px solid ${C.acm || '#E6C200'}`, borderRadius: 9, padding: '9px 14px', fontSize: 12, color: '#7A6000', display: 'flex', alignItems: 'center', gap: 8 }}>
-        <span style={{ fontSize: 15 }}>ℹ</span>
-        <span><strong>Shopify D2C only</strong> — Amazon, Flipkart & quick-commerce channels do not share customer identity. All metrics below are Shopify-only.</span>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 14, padding: '0 4px' }}>
+      {/* Yellow info banner */}
+      <div style={{ background: C.acl, border: `1px solid #E6C200`, borderRadius: 9, padding: '8px 14px', fontSize: 12, color: '#7A6000' }}>
+        <strong>Shopify D2C only</strong> — Amazon, Flipkart & quick-commerce channels do not share customer identity
       </div>
 
-      {/* Section 1 — KPIs */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6, 1fr)', gap: 10 }}>
-        <KPICard label="Unique Customers" value={fmtN(nUniq)} sub={`${fmtN(nRepeat)} repeat`} />
-        <KPICard label="Repeat Rate" value={`${repeatRate.toFixed(1)}%`} sub={`${fmtN(nUniq - nRepeat)} first-time`} />
-        <KPICard label="Avg Orders / Cust" value={avgOrdersPerCust.toFixed(2)} sub="Shopify orders" />
-        <KPICard label="Avg LTV (Period)" value={fmt(avgLTV)} sub="Revenue / customer" />
-        <KPICard label="Avg Re-order Gap" value={avgGap ? `${avgGap}d` : '—'} sub="Between purchases" />
-        <KPICard label="Prepaid %" value={`${prepaidPct.toFixed(1)}%`} sub={`${fmtN(prepaidOrds)} orders`} />
+      {/* KPI Row 1 */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(8, 1fr)', gap: 8 }}>
+        <KPICard label="Gross Sale" value={fmtBig(kpis.grossSales)} />
+        <KPICard label="Total Spend" value={fmtBig(kpis.totalSpend)} />
+        <KPICard label="Meta Spend" value={fmtBig(kpis.metaSpend)} />
+        <KPICard label="Google Spend" value={fmtBig(kpis.googleSpend)} />
+        <KPICard label="Total Customers" value={fmtBig(kpis.totalCustomers)} />
+        <KPICard label="New Customers" value={fmtBig(kpis.newCustomers)} />
+        <KPICard label="Returning Customers" value={fmtBig(kpis.returningCustomers)} />
+        <KPICard label="Repeat Rate" value={`${(kpis.repeatRate * 100).toFixed(2)}%`} />
       </div>
 
-      {/* Section 2 — RFM */}
-      <Card title="RFM Segments" note="Recency · Frequency · Monetary — Shopify customers">
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 10, marginBottom: 14 }}>
-          {Object.entries(SEG_CFG).map(([seg, cfg]) => (
-            <div key={seg} style={{ background: cfg.bg, border: `1.5px solid ${cfg.color}30`, borderRadius: 10, padding: '12px 14px' }}>
-              <div style={{ fontSize: 11, fontWeight: 700, color: cfg.color, marginBottom: 4 }}>{seg}</div>
-              <div style={{ fontSize: 20, fontWeight: 700, color: C.t1, fontFamily: 'var(--mono)' }}>{fmtN(segData[seg].count)}</div>
-              <div style={{ fontSize: 11, color: C.t2, marginTop: 2 }}>{fmt(segData[seg].rev)}</div>
-            </div>
-          ))}
-        </div>
+      {/* KPI Row 2 */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(8, 1fr)', gap: 8 }}>
+        <KPICard label="RoAS" value={kpis.roas.toFixed(2)} />
+        <KPICard label="CAC" value={`₹${Math.round(kpis.cac).toLocaleString('en-IN')}`} />
+        <KPICard label="AOV" value={`₹${Math.round(kpis.aov).toLocaleString('en-IN')}`} />
+        <KPICard label="CLTV" value={`₹${Math.round(kpis.aov * 1.5).toLocaleString('en-IN')}`} />
+        <KPICard label="Acquisition Rate" value={`${(kpis.acquisitionRate * 100).toFixed(2)}%`} />
+        <KPICard label="Repeat Revenue" value={`${(kpis.repeatRate * 100).toFixed(2)}%`} />
+        <KPICard label="Revenue per Cust" value={fmt(kpis.grossSales / (kpis.totalCustomers || 1))} />
+        <KPICard label="Net Revenue %" value="—" />
+      </div>
+
+      {/* Row: Monthly chart + New vs Repeat stacked bar */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+        <Card title="Customers Acquired vs Gross Sales">
+          <ResponsiveContainer width="100%" height={220}>
+            <ComposedChart data={monthly} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
+              <XAxis dataKey="month" tick={{ fontSize: 10 }} />
+              <YAxis yAxisId="left" tick={{ fontSize: 10 }} />
+              <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 10 }} />
+              <Tooltip formatter={(v, n) => [fmtN(v), n]} />
+              <Bar yAxisId="left" dataKey="customersAcquired" fill={C.acc} name="Customers Acquired" radius={[3,3,0,0]} />
+              <Line yAxisId="right" type="monotone" dataKey="grossSales" stroke="#2E74CC" strokeWidth={2} dot={false} name="Total Gross Sales" />
+            </ComposedChart>
+          </ResponsiveContainer>
+        </Card>
+        <Card title="New vs Repeat Customers">
+          <div style={{ display: 'flex', gap: 6, marginBottom: 8 }}>
+            {['Orders', 'Sales'].map(m => <button key={m} style={{ fontSize: 11, padding: '3px 10px', borderRadius: 5, border: `1px solid ${C.border}`, background: C.card, cursor: 'pointer', fontFamily: 'var(--font)' }}>{m}</button>)}
+          </div>
+          <ResponsiveContainer width="100%" height={200}>
+            <BarChart data={monthly} margin={{ top: 5, right: 10, left: 0, bottom: 0 }}>
+              <XAxis dataKey="month" tick={{ fontSize: 10 }} />
+              <YAxis tick={{ fontSize: 10 }} />
+              <Tooltip formatter={(v, n) => [fmtN(v), n]} />
+              <Bar dataKey="newCustomers" stackId="a" fill={C.acc} name="New Customers" radius={[0,0,0,0]} />
+              <Bar dataKey="repeatCustomers" stackId="a" fill="#B8A000" name="Repeat Customers" radius={[3,3,0,0]} />
+            </BarChart>
+          </ResponsiveContainer>
+        </Card>
+      </div>
+
+      {/* Cohort Retention Grid */}
+      <Card title="Customer Retention Cohort">
         <div style={{ overflowX: 'auto' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11 }}>
+          <table style={{ borderCollapse: 'collapse', fontSize: 10.5, minWidth: 600 }}>
             <thead>
               <tr style={{ borderBottom: `2px solid ${C.border}` }}>
-                {['Customer ID', 'Orders', 'Total Spend', 'Last Order', 'Recency', 'Segment'].map(h => (
-                  <th key={h} style={{ textAlign: h === 'Customer ID' || h === 'Segment' ? 'left' : 'right', padding: '4px 8px', color: C.t3, fontSize: 10, fontWeight: 700, textTransform: 'uppercase' }}>{h}</th>
+                <th style={{ padding: '4px 8px', textAlign: 'left', color: C.t3, fontWeight: 700, textTransform: 'uppercase', fontSize: 9.5 }}>Cohort Month</th>
+                {Array.from({ length: maxCohortIdx + 1 }, (_, i) => (
+                  <th key={i} style={{ padding: '4px 8px', textAlign: 'center', color: C.t3, fontWeight: 700, fontSize: 9.5, minWidth: 50 }}>{i}</th>
                 ))}
               </tr>
             </thead>
             <tbody>
-              {top20.map((c, i) => {
-                const cfg = SEG_CFG[c.segment]
+              {cohortMonths.map(cm => {
+                const base = cohort0[cm] || 1
                 return (
-                  <tr key={c.id} style={{ borderBottom: `1px solid ${C.border}`, background: i % 2 === 0 ? 'transparent' : C.bg }}>
-                    <td style={{ padding: '5px 8px', fontFamily: 'var(--mono)', fontSize: 10.5, color: C.t2 }}>{c.id.slice(0, 12)}…</td>
-                    <td style={{ padding: '5px 8px', textAlign: 'right', fontFamily: 'var(--mono)' }}>{c.orders}</td>
-                    <td style={{ padding: '5px 8px', textAlign: 'right', fontFamily: 'var(--mono)', fontWeight: 600 }}>{fmt(c.rev)}</td>
-                    <td style={{ padding: '5px 8px', textAlign: 'right', color: C.t2 }}>{c.lastDate}</td>
-                    <td style={{ padding: '5px 8px', textAlign: 'right', color: C.t3 }}>{c.recencyDays}d ago</td>
-                    <td style={{ padding: '5px 8px' }}><span style={{ background: cfg.bg, color: cfg.color, border: `1px solid ${cfg.color}40`, borderRadius: 5, padding: '2px 7px', fontSize: 10, fontWeight: 700 }}>{c.segment}</span></td>
+                  <tr key={cm} style={{ borderBottom: `1px solid ${C.border}` }}>
+                    <td style={{ padding: '4px 8px', fontWeight: 600, color: C.t1, fontSize: 10.5, whiteSpace: 'nowrap' }}>{cm}</td>
+                    {Array.from({ length: maxCohortIdx + 1 }, (_, i) => {
+                      const v = cohortMap[cm]?.[i]
+                      const pctVal = v != null ? v / base * 100 : null
+                      const intensity = pctVal != null ? Math.min(pctVal / 10, 1) : 0
+                      const bg = i === 0 ? '#2E74CC' : pctVal != null ? `rgba(46,116,204,${0.1 + intensity * 0.5})` : 'transparent'
+                      return (
+                        <td key={i} style={{ padding: '4px 8px', textAlign: 'center', fontSize: 10, fontFamily: 'var(--mono)', background: bg, color: i === 0 ? '#fff' : C.t1 }}>
+                          {pctVal != null ? `${pctVal.toFixed(1)}%` : ''}
+                        </td>
+                      )
+                    })}
                   </tr>
                 )
               })}
@@ -8655,85 +8615,172 @@ function CustomerPage({ data }) {
         </div>
       </Card>
 
-      {/* Section 3 — Behaviour */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
-        <Card title="Purchase Frequency" note="How many times customers buy">
-          {Object.entries(freqBuckets).map(([k, v]) => (
-            <div key={k} style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 7 }}>
-              <div style={{ width: 36, fontSize: 11, fontWeight: 600, color: C.t2, flexShrink: 0 }}>{k}</div>
-              <div style={{ flex: 1, background: C.border, borderRadius: 4, height: 14, overflow: 'hidden' }}>
-                <div style={{ height: '100%', width: `${(v / maxFreq) * 100}%`, background: C.acc, borderRadius: 4, transition: 'width .3s' }} />
-              </div>
-              <div style={{ width: 60, textAlign: 'right', fontSize: 11, fontFamily: 'var(--mono)', color: C.t1 }}>{fmtN(v)} custs</div>
-            </div>
+      {/* Cross-sell matrix */}
+      <Card title="Purchase Behavior: First vs Second Purchase" action={
+        <div style={{ display: 'flex', gap: 4 }}>
+          {['Sub Category', 'Category'].map(t => (
+            <button key={t} onClick={() => setCrossFilter(t)} style={{ fontSize: 10, padding: '3px 9px', borderRadius: 5, border: `1px solid ${C.border}`, background: crossFilter === t ? C.t1 : C.card, color: crossFilter === t ? '#fff' : C.t2, cursor: 'pointer', fontFamily: 'var(--font)', fontWeight: crossFilter === t ? 700 : 400 }}>{t}</button>
           ))}
-        </Card>
-        <Card title="Voucher Dependency" note="Per-customer voucher usage pattern">
-          {Object.entries(vDep).map(([k, v]) => {
-            const colors = { Always: C.red.tx, Sometimes: C.amber.tx, Never: C.green.tx }
-            const bgs = { Always: C.red.bg, Sometimes: C.amber.bg, Never: C.green.bg }
-            return (
-              <div key={k} style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 7 }}>
-                <div style={{ width: 72, fontSize: 11, fontWeight: 600, color: colors[k] }}>{k}</div>
-                <div style={{ flex: 1, background: C.border, borderRadius: 4, height: 14, overflow: 'hidden' }}>
-                  <div style={{ height: '100%', width: `${nUniq ? (v / nUniq) * 100 : 0}%`, background: bgs[k] || C.acl, borderRadius: 4 }} />
-                </div>
-                <div style={{ width: 60, textAlign: 'right', fontSize: 11, fontFamily: 'var(--mono)', color: C.t1 }}>{fmtN(v)} ({nUniq ? (v / nUniq * 100).toFixed(0) : 0}%)</div>
-              </div>
-            )
-          })}
-          <div style={{ marginTop: 10, fontSize: 11, color: C.t3 }}>Always = used voucher on every order · Never = full-price buyer</div>
-        </Card>
-      </div>
-
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
-        <Card title="Category Cross-sell" note="Customers who bought both categories">
-          {crossSell.length === 0 && <div style={{ color: C.t3, fontSize: 12, padding: 8 }}>Not enough data for cross-sell pairs in this period.</div>}
-          {crossSell.map(([pair, count], i) => (
-            <div key={pair} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '6px 0', borderBottom: i < crossSell.length - 1 ? `1px solid ${C.border}` : 'none' }}>
-              <div style={{ fontSize: 12, color: C.t1, fontWeight: 500 }}>{pair}</div>
-              <div style={{ fontSize: 12, fontFamily: 'var(--mono)', fontWeight: 700, color: C.acc === '#FFD600' ? '#7A6000' : C.t1, background: C.acl, borderRadius: 5, padding: '2px 8px' }}>{fmtN(count)} customers</div>
-            </div>
-          ))}
-        </Card>
-        <Card title="Repeat Rate by State" note="States with ≥5 Shopify customers">
-          {stateRepeatRows.map((r, i) => (
-            <div key={r.state} style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
-              <div style={{ width: 120, fontSize: 11, color: C.t2, fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.state}</div>
-              <div style={{ flex: 1, background: C.border, borderRadius: 4, height: 12, overflow: 'hidden' }}>
-                <div style={{ height: '100%', width: `${r.rate}%`, background: r.rate > 20 ? '#0D9E68' : r.rate > 10 ? '#2E74CC' : '#CC4078', borderRadius: 4 }} />
-              </div>
-              <div style={{ width: 72, textAlign: 'right', fontSize: 11, fontFamily: 'var(--mono)' }}>{r.rate.toFixed(1)}% <span style={{ color: C.t3 }}>({fmtN(r.total)})</span></div>
-            </div>
-          ))}
-        </Card>
-      </div>
-
-      {/* Section 4 — Acquisition Bridge */}
-      <Card title="Acquisition Bridge" note="New vs Repeat customer revenue split">
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 14 }}>
-          <div style={{ textAlign: 'center', padding: '12px 0' }}>
-            <div style={{ fontSize: 11, color: C.t3, marginBottom: 4, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.05em' }}>New Customer Rev</div>
-            <div style={{ fontSize: 22, fontWeight: 700, color: C.t1, fontFamily: 'var(--mono)' }}>{fmt(newRev)}</div>
-            <div style={{ fontSize: 11, color: C.t3, marginTop: 3 }}>{shopRev ? (newRev / shopRev * 100).toFixed(0) : 0}% of Shopify rev</div>
-          </div>
-          <div style={{ textAlign: 'center', padding: '12px 0' }}>
-            <div style={{ fontSize: 11, color: C.t3, marginBottom: 4, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.05em' }}>Repeat Customer Rev</div>
-            <div style={{ fontSize: 22, fontWeight: 700, color: '#0D9E68', fontFamily: 'var(--mono)' }}>{fmt(repeatRev)}</div>
-            <div style={{ fontSize: 11, color: C.t3, marginTop: 3 }}>{shopRev ? (repeatRev / shopRev * 100).toFixed(0) : 0}% of Shopify rev</div>
-          </div>
-          <div style={{ textAlign: 'center', padding: '12px 0' }}>
-            <div style={{ fontSize: 11, color: C.t3, marginBottom: 4, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.05em' }}>New Cust Prepaid</div>
-            <div style={{ fontSize: 22, fontWeight: 700, color: C.t1, fontFamily: 'var(--mono)' }}>{newPrepaidPct.toFixed(1)}%</div>
-            <div style={{ fontSize: 11, color: C.t3, marginTop: 3 }}>of first-time buyers</div>
-          </div>
-          <div style={{ textAlign: 'center', padding: '12px 0' }}>
-            <div style={{ fontSize: 11, color: C.t3, marginBottom: 4, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.05em' }}>Repeat Cust Prepaid</div>
-            <div style={{ fontSize: 22, fontWeight: 700, color: '#0D9E68', fontFamily: 'var(--mono)' }}>{repPrepaidPct.toFixed(1)}%</div>
-            <div style={{ fontSize: 11, color: C.t3, marginTop: 3 }}>of repeat buyers</div>
-          </div>
+        </div>
+      }>
+        <div style={{ overflowX: 'auto' }}>
+          <table style={{ borderCollapse: 'collapse', fontSize: 10.5, minWidth: 500 }}>
+            <thead>
+              <tr style={{ borderBottom: `2px solid ${C.border}` }}>
+                <th style={{ padding: '4px 8px', textAlign: 'left', color: C.t3, fontWeight: 700, fontSize: 9.5 }}>Second Purchase Category</th>
+                {allCategories.slice(0, 14).map(cat => (
+                  <th key={cat} style={{ padding: '4px 6px', textAlign: 'right', color: C.t3, fontWeight: 700, fontSize: 9, whiteSpace: 'nowrap', maxWidth: 80, overflow: 'hidden', textOverflow: 'ellipsis' }}>{cat}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {crossRows.slice(0, 15).map((sc, i) => (
+                <tr key={sc} style={{ borderBottom: `1px solid ${C.border}`, background: i % 2 === 0 ? 'transparent' : C.bg }}>
+                  <td style={{ padding: '4px 8px', fontWeight: 600, color: C.t1, fontSize: 10.5 }}>
+                    <span style={{ color: C.t3, fontSize: 9 }}>⊞</span> {sc}
+                  </td>
+                  {allCategories.slice(0, 14).map(fc => {
+                    const v = crossMap[sc]?.[fc]
+                    return <td key={fc} style={{ padding: '4px 6px', textAlign: 'right', fontFamily: 'var(--mono)', fontSize: 10, color: v ? C.t1 : C.t3 }}>{v ? fmtN(v) : ''}</td>
+                  })}
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       </Card>
+
+      {/* RFM + Frequency + Monetary + Inactivity — 2x2 grid */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+        {/* RFM Treemap-style */}
+        <Card title="RFM Segments">
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+            {rfm.sort((a, b) => b.totalRevenue - a.totalRevenue).map(seg => {
+              const pctW = rfmTotal > 0 ? (seg.totalRevenue / rfmTotal * 100) : 10
+              const col = RFM_COLORS[seg.segment] || '#8B8000'
+              return (
+                <div key={seg.segment} style={{ background: col, borderRadius: 6, padding: '10px 12px', minWidth: Math.max(pctW * 2, 80), flex: `${pctW} 0 auto`, maxWidth: '48%' }}>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: '#fff', marginBottom: 2 }}>{seg.segment}</div>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: '#fff', fontFamily: 'var(--mono)' }}>{fmtBig(seg.totalRevenue)}</div>
+                  <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.8)', marginTop: 2 }}>{fmtN(seg.customers)} custs</div>
+                </div>
+              )
+            })}
+          </div>
+        </Card>
+
+        {/* Purchase Frequency Distribution */}
+        <Card title="Purchase Frequency Distribution">
+          {(() => {
+            const total = freqDist.reduce((s, r) => s + r.customers, 0) || 1
+            const maxCusts = Math.max(...freqDist.map(r => r.customers), 1)
+            return freqDist.map(r => (
+              <div key={r.label} style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                <div style={{ width: 140, fontSize: 11, color: C.t2, flexShrink: 0 }}>{r.label}</div>
+                <div style={{ flex: 1, background: C.border, borderRadius: 3, height: 22, overflow: 'hidden', position: 'relative' }}>
+                  <div style={{ height: '100%', width: `${r.customers / maxCusts * 100}%`, background: C.acc, borderRadius: 3 }} />
+                  <span style={{ position: 'absolute', left: 6, top: 3, fontSize: 11, fontWeight: 700, color: C.t1, fontFamily: 'var(--mono)' }}>{fmtBig(r.customers)}</span>
+                </div>
+                <div style={{ width: 36, textAlign: 'right', fontSize: 10, color: C.t3 }}>{(r.customers / total * 100).toFixed(1)}%</div>
+              </div>
+            ))
+          })()}
+        </Card>
+
+        {/* Monetary Distribution */}
+        <Card title="Distribution of Customers Across Monetary Segment">
+          <ResponsiveContainer width="100%" height={200}>
+            <ComposedChart data={monetaryDist} margin={{ top: 10, right: 10, left: 0, bottom: 20 }}>
+              <XAxis dataKey="bucket" tick={{ fontSize: 9 }} angle={-15} textAnchor="end" interval={0} />
+              <YAxis yAxisId="left" tick={{ fontSize: 9 }} />
+              <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 9 }} />
+              <Tooltip formatter={(v, n) => [fmtN(v), n]} />
+              <Bar yAxisId="left" dataKey="customers" fill={C.acc} name="Customers" radius={[3,3,0,0]}>
+                {monetaryDist.map((_, i) => <Cell key={i} fill={i % 2 === 0 ? C.acc : '#B8A000'} />)}
+              </Bar>
+              <Line yAxisId="right" type="monotone" dataKey="totalRevenue" stroke="#2E74CC" strokeWidth={1.5} dot={false} name="Revenue" />
+            </ComposedChart>
+          </ResponsiveContainer>
+        </Card>
+
+        {/* Inactivity Buckets */}
+        <Card title="Inactive Customers (30, 60, 90 Days)">
+          <ResponsiveContainer width="100%" height={200}>
+            <BarChart data={inactivity} margin={{ top: 10, right: 10, left: 0, bottom: 20 }}>
+              <XAxis dataKey="bucket" tick={{ fontSize: 9 }} angle={-10} textAnchor="end" interval={0} />
+              <YAxis tick={{ fontSize: 9 }} />
+              <Tooltip formatter={(v) => [fmtN(v), 'Customers']} />
+              <Bar dataKey="customers" fill={C.acc} name="Customers" radius={[3,3,0,0]}>
+                {inactivity.map((r, i) => <Cell key={i} fill={r.bucket.includes('90+') ? '#CC4078' : r.bucket.includes('60') ? '#E8930A' : r.bucket.includes('30') ? '#E8930A' : '#0D9E68'} />)}
+              </Bar>
+            </BarChart>
+          </ResponsiveContainer>
+        </Card>
+      </div>
+
+      {/* Spend vs Sales */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 14 }}>
+        <Card title="Total Spend vs Gross Sales by Month">
+          <ResponsiveContainer width="100%" height={200}>
+            <ComposedChart data={monthly} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
+              <XAxis dataKey="month" tick={{ fontSize: 10 }} />
+              <YAxis yAxisId="left" tick={{ fontSize: 10 }} />
+              <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 10 }} />
+              <Tooltip formatter={(v, n) => [fmtN(v), n]} />
+              <Bar yAxisId="left" dataKey="grossSales" fill={C.acc} name="Gross Sales" radius={[3,3,0,0]} />
+              <Line yAxisId="right" type="monotone" dataKey="grossSales" stroke="#2E74CC" strokeWidth={2} dot={false} name="Total Gross Sales" />
+            </ComposedChart>
+          </ResponsiveContainer>
+        </Card>
+      </div>
+
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+        {/* Discount distribution First vs Repeat */}
+        <Card title="Order Distribution by Discount % (First vs Repeat)">
+          <ResponsiveContainer width="100%" height={200}>
+            <BarChart data={discountDist} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
+              <XAxis dataKey="bucket" tick={{ fontSize: 10 }} />
+              <YAxis tick={{ fontSize: 10 }} />
+              <Tooltip formatter={(v, n) => [fmtN(v), n]} />
+              <Bar dataKey="firstOrders" stackId="a" fill={C.acc} name="First Order" />
+              <Bar dataKey="repeatOrders" stackId="a" fill="#B8A000" name="Repeat Order" radius={[3,3,0,0]} />
+            </BarChart>
+          </ResponsiveContainer>
+        </Card>
+
+        {/* Discounted vs Non-Discounted donut */}
+        <Card title="Discounted vs Non-Discounted Orders Split">
+          {(() => {
+            const disc = kpis.discountedOrders
+            const nonDisc = kpis.nonDiscountedOrders
+            const total = disc + nonDisc || 1
+            const pieData = [
+              { name: 'Discounted', value: disc, color: C.acc },
+              { name: 'Non-Discounted', value: nonDisc, color: '#B8A000' },
+            ]
+            return (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+                <PieChart width={160} height={160}>
+                  <Pie data={pieData} cx={75} cy={75} innerRadius={45} outerRadius={72} dataKey="value">
+                    {pieData.map((entry, i) => <Cell key={i} fill={entry.color} />)}
+                  </Pie>
+                </PieChart>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  {pieData.map(d => (
+                    <div key={d.name} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <div style={{ width: 12, height: 12, borderRadius: 3, background: d.color, flexShrink: 0 }} />
+                      <div style={{ fontSize: 11, color: C.t2 }}>{d.name}</div>
+                      <div style={{ fontSize: 11, fontWeight: 700, color: C.t1, fontFamily: 'var(--mono)', marginLeft: 4 }}>
+                        {fmtN(d.value)} ({(d.value / total * 100).toFixed(2)}%)
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )
+          })()}
+        </Card>
+      </div>
     </div>
   )
 }
@@ -8875,7 +8922,7 @@ export default function App() {
           )}
           {page === 'customer' && data && (
             <div className="page-scroll">
-              <CustomerPage data={data} />
+              <CustomerPage filters={filters} />
             </div>
           )}
         </div>
