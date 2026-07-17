@@ -8598,13 +8598,12 @@ function CustomerPage({ filters }) {
             {['daily','weekly','monthly'].map(g => <option key={g} value={g}>{g.charAt(0).toUpperCase()+g.slice(1)}</option>)}
           </select>
         }>
-          <div style={{ marginLeft: -18, marginRight: -18 }}>
           <ResponsiveContainer width="100%" height={260}>
-            <ComposedChart data={monthly} margin={{ top: 20, right: 65, bottom: 0, left: 15 }}>
+            <ComposedChart data={monthly} margin={{ top: 20, right: 10, bottom: 0, left: 0 }}>
               <CartesianGrid strokeDasharray="3 3" stroke={C.border} vertical={false} />
-              <XAxis dataKey="month" tick={{ fontSize: 10, fill: C.t3 }} />
-              <YAxis yAxisId="cust" tick={{ fontSize: 10, fill: C.t3 }} tickFormatter={v => v >= 1000 ? `${(v/1000).toFixed(1)}K` : v} width={42} domain={[0, 'auto']} allowDataOverflow={false} />
-              <YAxis yAxisId="sales" orientation="right" tick={{ fontSize: 10, fill: C.t3 }} tickFormatter={v => v >= 1e7 ? `₹${(v/1e7).toFixed(1)}Cr` : v >= 1e5 ? `₹${(v/1e5).toFixed(0)}L` : `₹${(v/1000).toFixed(0)}K`} width={58} />
+              <XAxis dataKey="month" tick={{ fontSize: 10 }} interval="preserveStartEnd" />
+              <YAxis yAxisId="cust" tick={{ fontSize: 10 }} tickFormatter={v => v >= 1000 ? `${(v/1000).toFixed(1)}K` : v} />
+              <YAxis yAxisId="sales" orientation="right" tick={{ fontSize: 10 }} tickFormatter={v => v >= 1e7 ? `₹${(v/1e7).toFixed(1)}Cr` : v >= 1e5 ? `₹${(v/1e5).toFixed(0)}L` : `₹${(v/1000).toFixed(0)}K`} />
               <YAxis yAxisId="aov" hide />
               <YAxis yAxisId="rrr" hide />
               <Tooltip content={({ active, payload, label }) => {
@@ -8628,7 +8627,6 @@ function CustomerPage({ filters }) {
               <Line yAxisId="rrr"   type="monotone" dataKey="repeatRevenueRate" name="Repeat Revenue Rate" stroke="#0D9E68" strokeWidth={2} dot={false} />
             </ComposedChart>
           </ResponsiveContainer>
-          </div>
         </Card>
         <Card title="New vs Repeat Customers">
           <div style={{ display: 'flex', gap: 6, marginBottom: 8 }}>
