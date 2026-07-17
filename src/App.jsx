@@ -8624,11 +8624,14 @@ function CustomerPage({ filters }) {
             ))}
           </div>
           <ResponsiveContainer width="100%" height={280}>
-            <ComposedChart data={monthly} margin={{ top: showLabels ? 22 : 8, right: 55, left: 10, bottom: 0 }}>
+            <ComposedChart data={monthly} margin={{ top: showLabels ? 20 : 8, right: 60, left: 10, bottom: 0 }}>
               <CartesianGrid strokeDasharray="3 3" stroke={C.border} vertical={false} />
               <XAxis dataKey="month" tick={{ fontSize: 10, fill: C.t2 }} axisLine={{ stroke: C.border2 }} tickLine={{ stroke: C.border2 }} interval="preserveStartEnd" />
-              <YAxis yAxisId="left" tick={{ fontSize: 9, fill: C.t3 }} axisLine={{ stroke: C.border2 }} tickLine={{ stroke: C.border2 }} tickFormatter={v => v >= 1000 ? `${(v/1000).toFixed(1)}K` : v} width={48} label={{ value: 'Customers', angle: -90, position: 'insideLeft', fontSize: 9, fill: C.t3, dy: 40 }} />
-              <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 9, fill: '#2E74CC' }} axisLine={{ stroke: '#2E74CC44' }} tickLine={false} tickFormatter={v => v >= 1e7 ? `${(v/1e7).toFixed(1)}Cr` : v >= 1e5 ? `${(v/1e5).toFixed(0)}L` : v >= 1000 ? `${(v/1000).toFixed(0)}K` : v} width={46} />
+              {/* Left Y: Customers count */}
+              <YAxis yAxisId="cust" tick={{ fontSize: 9, fill: C.t3 }} axisLine={{ stroke: C.border2 }} tickLine={{ stroke: C.border2 }} tickFormatter={v => v.toLocaleString('en-IN')} width={52} />
+              {/* Right Y: Gross Sales ₹ */}
+              <YAxis yAxisId="sales" orientation="right" tick={{ fontSize: 9, fill: '#2E74CC' }} axisLine={{ stroke: C.border2 }} tickLine={{ stroke: C.border2 }} tickFormatter={v => v >= 1e7 ? `₹${(v/1e7).toFixed(1)}Cr` : v >= 1e5 ? `₹${(v/1e5).toFixed(0)}L` : v >= 1000 ? `₹${(v/1000).toFixed(0)}K` : `₹${v}`} width={60} />
+              {/* Hidden axes for AOV & RRR so lines scale independently */}
               <YAxis yAxisId="aov" hide />
               <YAxis yAxisId="rrr" hide />
               <Tooltip
@@ -8648,11 +8651,11 @@ function CustomerPage({ filters }) {
                   )
                 }}
               />
-              <Bar yAxisId="left" dataKey="customersAcquired" fill={C.acc} name="Customers Acquired" radius={[3,3,0,0]} maxBarSize={maxBar}
-                label={showLabels ? { position: 'top', fontSize: 9, fill: C.t2, fontWeight: 600, formatter: v => v >= 1000 ? `${(v/1000).toFixed(1)}K` : v } : false} />
-              <Line yAxisId="right" type="monotone" dataKey="grossSales" stroke="#2E74CC" strokeWidth={2} dot={{ r: monthly.length <= 60 ? 3 : 0, fill: '#2E74CC', strokeWidth: 0 }} />
-              <Line yAxisId="aov" type="monotone" dataKey="aov" stroke="#E8930A" strokeWidth={2} dot={{ r: monthly.length <= 60 ? 3 : 0, fill: '#E8930A', strokeWidth: 0 }} />
-              <Line yAxisId="rrr" type="monotone" dataKey="repeatRevenueRate" stroke="#0D9E68" strokeWidth={2} dot={{ r: monthly.length <= 60 ? 3 : 0, fill: '#0D9E68', strokeWidth: 0 }} />
+              <Bar yAxisId="cust" dataKey="customersAcquired" fill={C.acc} name="Customers Acquired" radius={[3,3,0,0]} maxBarSize={maxBar}
+                label={showLabels ? { position: 'top', fontSize: 9, fill: C.t2, fontWeight: 600, formatter: v => v.toLocaleString('en-IN') } : false} />
+              <Line yAxisId="sales" type="monotone" dataKey="grossSales" stroke="#2E74CC" strokeWidth={2} dot={{ r: 3, fill: '#2E74CC', strokeWidth: 0 }} />
+              <Line yAxisId="aov" type="monotone" dataKey="aov" stroke="#E8930A" strokeWidth={2} dot={{ r: 3, fill: '#E8930A', strokeWidth: 0 }} />
+              <Line yAxisId="rrr" type="monotone" dataKey="repeatRevenueRate" stroke="#0D9E68" strokeWidth={2} dot={{ r: 3, fill: '#0D9E68', strokeWidth: 0 }} />
             </ComposedChart>
           </ResponsiveContainer>
         </Card>
