@@ -30,7 +30,11 @@ export default async function handler(req, res) {
 period AS (
   SELECT o.CustomerId, o.OrderId, DATE(o.OrderDate) AS order_date,
     o.SellingPrice_Inc_GST AS rev_inc, o.SellingPrice_Exc_GST AS rev_exc,
-    o.voucher_code, o.is_rto, o.is_CIR_return, o.is_cancelled, f.first_date
+    o.voucher_code,
+    CASE WHEN LOWER(o.Order_Status) IN ('rto','rto initiated','rto delivered') THEN 1 ELSE 0 END AS is_rto,
+    CASE WHEN LOWER(o.Order_Status) IN ('cir return','cir') THEN 1 ELSE 0 END AS is_cir,
+    CASE WHEN LOWER(o.Order_Status) IN ('cancelled','cancel') THEN 1 ELSE 0 END AS is_cancelled,
+    f.first_date
   FROM ${TBL} o
   JOIN first_dates f USING (CustomerId)
   WHERE o.Channel = 'Shopify'
@@ -42,7 +46,7 @@ order_agg AS (
     SUM(rev_inc) AS order_rev_inc,
     SUM(rev_exc) AS order_rev_exc,
     MAX(is_rto) AS is_rto,
-    MAX(is_CIR_return) AS is_cir,
+    MAX(is_cir) AS is_cir,
     MAX(is_cancelled) AS is_cancelled,
     ANY_VALUE(CustomerId) AS CustomerId,
     ANY_VALUE(voucher_code) AS voucher_code
