@@ -88,7 +88,9 @@ period AS (
 SELECT
   CAST(order_date AS STRING) AS day,
   COUNT(DISTINCT CustomerId) AS customers_acquired,
+  COUNT(DISTINCT OrderId) AS total_orders,
   ROUND(SUM(rev), 0) AS gross_sales,
+  ROUND(SUM(CASE WHEN first_date < DATE('${s}') THEN rev ELSE 0 END), 0) AS repeat_revenue,
   COUNT(DISTINCT CASE WHEN first_date BETWEEN DATE('${s}') AND DATE('${e}') THEN CustomerId END) AS new_customers,
   COUNT(DISTINCT CASE WHEN first_date < DATE('${s}') THEN CustomerId END) AS repeat_customers
 FROM period
@@ -297,7 +299,9 @@ GROUP BY platform`),
       daily: monthly.map(r => ({
         day: r.day,
         customersAcquired: parseInt(r.customers_acquired) || 0,
+        totalOrders: parseInt(r.total_orders) || 0,
         grossSales: parseFloat(r.gross_sales) || 0,
+        repeatRevenue: parseFloat(r.repeat_revenue) || 0,
         newCustomers: parseInt(r.new_customers) || 0,
         repeatCustomers: parseInt(r.repeat_customers) || 0,
       })),

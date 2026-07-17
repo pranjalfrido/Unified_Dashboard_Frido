@@ -8516,13 +8516,19 @@ function CustomerPage({ filters }) {
         key = r.day.slice(0, 7)
         label = d.toLocaleDateString('en-IN', { month: 'short', year: '2-digit' })
       }
-      if (!buckets[key]) buckets[key] = { month: label, customersAcquired: 0, grossSales: 0, newCustomers: 0, repeatCustomers: 0 }
+      if (!buckets[key]) buckets[key] = { month: label, customersAcquired: 0, totalOrders: 0, grossSales: 0, repeatRevenue: 0, newCustomers: 0, repeatCustomers: 0 }
       buckets[key].customersAcquired += r.customersAcquired
+      buckets[key].totalOrders += r.totalOrders
       buckets[key].grossSales += r.grossSales
+      buckets[key].repeatRevenue += r.repeatRevenue
       buckets[key].newCustomers += r.newCustomers
       buckets[key].repeatCustomers += r.repeatCustomers
     })
-    return Object.entries(buckets).sort(([a], [b]) => a.localeCompare(b)).map(([, v]) => v)
+    return Object.entries(buckets).sort(([a], [b]) => a.localeCompare(b)).map(([, v]) => ({
+      ...v,
+      aov: v.totalOrders > 0 ? v.grossSales / v.totalOrders : 0,
+      repeatRevenueRate: v.grossSales > 0 ? v.repeatRevenue / v.grossSales : 0,
+    }))
   })()
 
   // Cohort pivot
@@ -8580,33 +8586,55 @@ function CustomerPage({ filters }) {
         <KPICard label="Net Revenue %" value={kpis.netRevenueRate ? `${((kpis.netRevenueRate) * 100).toFixed(2)}%` : '—'} sub={kpis.netRevenue ? fmt(kpis.netRevenue) : ''} />
       </div>
 
-      {/* Row: Monthly chart + New vs Repeat stacked bar */}
+      {/* Row: Trend chart + New vs Repeat stacked bar */}
+      {(() => {
+        const METRICS = [
+          { key: 'customersAcquired', label: 'Customers Acquired', color: C.acc, fmt: v => v >= 1000 ? `${(v/1000).toFixed(1)}K` : String(v), isBar: true },
+          { key: 'grossSales',        label: 'Gross Sales',        color: '#2E74CC', fmt: v => v >= 1e7 ? `${(v/1e7).toFixed(2)}Cr` : v >= 1e5 ? `${(v/1e5).toFixed(1)}L` : v >= 1000 ? `${(v/1000).toFixed(1)}K` : String(v), isBar: false },
+          { key: 'aov',               label: 'AOV',                color: '#E8930A', fmt: v => `₹${v >= 1000 ? `${(v/1000).toFixed(2)}K` : Math.round(v)}`, isBar: false },
+          { key: 'repeatRevenueRate', label: 'Repeat Revenue Rate', color: '#0D9E68', fmt: v => `${(v*100).toFixed(1)}%`, isBar: false },
+        ]
+        const selM = METRICS.find(m => m.key === (custData._chartMetric || 'customersAcquired')) || METRICS[0]
+        const xLabel = granularity === 'monthly' ? 'First Order Date Month' : granularity === 'weekly' ? 'First Order Date Week' : 'First Order Date'
+        const maxBar = granularity === 'daily' ? 18 : granularity === 'weekly' ? 30 : 48
+        const showLabels = monthly.length <= 24
+        const fmtTick = v => v >= 1e7 ? `${(v/1e7).toFixed(1)}Cr` : v >= 1e5 ? `${(v/1e5).toFixed(0)}L` : v >= 1000 ? `${(v/1000).toFixed(0)}K` : v >= 1 ? `${(v*100).toFixed(0)}%` : String(v)
+        const isPercent = selM.key === 'repeatRevenueRate'
+        const tickFmt = v => isPercent ? `${(v*100).toFixed(0)}%` : selM.fmt(v)
+        return (
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
-        <Card title="Customers Acquired vs Gross Sales" action={
-          <select value={granularity} onChange={e => setGranularity(e.target.value)}
-            style={{ fontSize: 11, padding: '2px 8px', borderRadius: 6, border: `1px solid ${C.border}`, background: C.card, color: C.t2, cursor: 'pointer', fontFamily: 'var(--font)' }}>
-            <option value="daily">Daily</option>
-            <option value="weekly">Weekly</option>
-            <option value="monthly">Monthly</option>
-          </select>
-        }>
-          <div style={{ display: 'flex', gap: 16, marginBottom: 6, fontSize: 11, color: C.t3 }}>
-            <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}><span style={{ width: 12, height: 12, borderRadius: 2, background: C.acc, display: 'inline-block' }} />Customers Acquired</span>
-            <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}><span style={{ width: 20, height: 2, background: '#2E74CC', display: 'inline-block' }} />Total Gross Sales</span>
+        <Card title={xLabel} action={
+          <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+            {METRICS.map(m => (
+              <button key={m.key}
+                onClick={() => setCustData(d => ({ ...d, _chartMetric: m.key }))}
+                style={{ fontSize: 10, padding: '2px 8px', borderRadius: 5, border: `1px solid ${(custData._chartMetric||'customersAcquired') === m.key ? m.color : C.border}`, background: (custData._chartMetric||'customersAcquired') === m.key ? m.color + '22' : C.card, color: (custData._chartMetric||'customersAcquired') === m.key ? m.color : C.t2, cursor: 'pointer', fontFamily: 'var(--font)', fontWeight: (custData._chartMetric||'customersAcquired') === m.key ? 700 : 400 }}>
+                  {m.label}
+                </button>
+            ))}
+            <select value={granularity} onChange={e => setGranularity(e.target.value)}
+              style={{ fontSize: 11, padding: '2px 8px', borderRadius: 6, border: `1px solid ${C.border}`, background: C.card, color: C.t2, cursor: 'pointer', fontFamily: 'var(--font)' }}>
+              <option value="daily">Daily</option>
+              <option value="weekly">Weekly</option>
+              <option value="monthly">Monthly</option>
+            </select>
           </div>
-          <ResponsiveContainer width="100%" height={240}>
-            <ComposedChart data={monthly} margin={{ top: 28, right: 60, left: 10, bottom: 0 }}>
+        }>
+          <ResponsiveContainer width="100%" height={260}>
+            <ComposedChart data={monthly} margin={{ top: showLabels ? 22 : 8, right: 55, left: 10, bottom: 0 }}>
               <XAxis dataKey="month" tick={{ fontSize: 10, fill: C.t2 }} axisLine={false} tickLine={false} interval="preserveStartEnd" />
-              <YAxis yAxisId="left" tick={{ fontSize: 9, fill: C.t3 }} axisLine={false} tickLine={false} tickFormatter={v => v >= 1000 ? `${(v/1000).toFixed(0)}K` : v} width={36} />
-              <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 9, fill: '#2E74CC' }} axisLine={false} tickLine={false} tickFormatter={v => v >= 1e7 ? `${(v/1e7).toFixed(1)}Cr` : v >= 1e5 ? `${(v/1e5).toFixed(0)}L` : v >= 1000 ? `${(v/1000).toFixed(0)}K` : v} width={48} />
+              <YAxis tick={{ fontSize: 9, fill: C.t3 }} axisLine={false} tickLine={false} tickFormatter={tickFmt} width={44} />
               <Tooltip
-                formatter={(v, n) => [n === 'Total Gross Sales' ? fmt(v) : fmtN(v), n]}
+                labelFormatter={l => `${xLabel}: ${l}`}
+                formatter={(v) => [selM.fmt(v), selM.label]}
                 contentStyle={{ fontSize: 11, borderRadius: 8, border: `1px solid ${C.border}` }}
               />
-              <Bar yAxisId="left" dataKey="customersAcquired" fill={C.acc} name="Customers Acquired" radius={[3,3,0,0]} maxBarSize={granularity === 'daily' ? 18 : granularity === 'weekly' ? 30 : 48}
-                label={monthly.length <= 24 ? { position: 'top', fontSize: 9, fill: C.t2, fontWeight: 600, formatter: v => v >= 1000 ? `${(v/1000).toFixed(0)}K` : v } : false} />
-              <Line yAxisId="right" type="monotone" dataKey="grossSales" stroke="#2E74CC" strokeWidth={2} dot={{ r: monthly.length <= 60 ? 3 : 0, fill: '#2E74CC', strokeWidth: 0 }} name="Total Gross Sales"
-                label={monthly.length <= 24 ? { position: 'bottom', fontSize: 9, fill: '#2E74CC', fontWeight: 600, formatter: v => v >= 1e7 ? `${(v/1e7).toFixed(1)}Cr` : v >= 1e5 ? `${(v/1e5).toFixed(0)}L` : v >= 1000 ? `${(v/1000).toFixed(0)}K` : v } : false} />
+              {selM.isBar
+                ? <Bar dataKey={selM.key} fill={selM.color} name={selM.label} radius={[3,3,0,0]} maxBarSize={maxBar}
+                    label={showLabels ? { position: 'top', fontSize: 9, fill: C.t2, fontWeight: 600, formatter: selM.fmt } : false} />
+                : <Line type="monotone" dataKey={selM.key} stroke={selM.color} strokeWidth={2.5} dot={{ r: monthly.length <= 60 ? 3 : 0, fill: selM.color, strokeWidth: 0 }} name={selM.label}
+                    label={showLabels ? { position: 'top', fontSize: 9, fill: selM.color, fontWeight: 600, formatter: selM.fmt } : false} />
+              }
             </ComposedChart>
           </ResponsiveContainer>
         </Card>
@@ -8616,8 +8644,8 @@ function CustomerPage({ filters }) {
           </div>
           <ResponsiveContainer width="100%" height={200}>
             <BarChart data={monthly} margin={{ top: 5, right: 10, left: 0, bottom: 0 }}>
-              <XAxis dataKey="month" tick={{ fontSize: 10 }} />
-              <YAxis tick={{ fontSize: 10 }} />
+              <XAxis dataKey="month" tick={{ fontSize: 10 }} interval="preserveStartEnd" />
+              <YAxis tick={{ fontSize: 10 }} tickFormatter={v => v >= 1000 ? `${(v/1000).toFixed(0)}K` : v} />
               <Tooltip formatter={(v, n) => [fmtN(v), n]} />
               <Bar dataKey="newCustomers" stackId="a" fill={C.acc} name="New Customers" radius={[0,0,0,0]} />
               <Bar dataKey="repeatCustomers" stackId="a" fill="#B8A000" name="Repeat Customers" radius={[3,3,0,0]} />
@@ -8625,6 +8653,8 @@ function CustomerPage({ filters }) {
           </ResponsiveContainer>
         </Card>
       </div>
+        )
+      })()}
 
       {/* Cohort Retention Grid */}
       <Card title="Customer Retention Cohort">
