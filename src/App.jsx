@@ -8628,7 +8628,9 @@ function CustomerPage({ filters }) {
               <CartesianGrid strokeDasharray="3 3" stroke={C.border} vertical={false} />
               <XAxis dataKey="month" tick={{ fontSize: 10, fill: C.t2 }} axisLine={{ stroke: C.border2 }} tickLine={false} interval="preserveStartEnd" />
               <YAxis yAxisId="left" tick={{ fontSize: 9, fill: C.t3 }} axisLine={{ stroke: C.border2 }} tickLine={false} tickFormatter={v => v >= 1000 ? `${(v/1000).toFixed(0)}K` : v} width={44} />
-              <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 9, fill: C.t3 }} axisLine={false} tickLine={false} tickFormatter={v => v >= 1e7 ? `${(v/1e7).toFixed(1)}Cr` : v >= 1e5 ? `${(v/1e5).toFixed(0)}L` : v >= 1000 ? `${(v/1000).toFixed(0)}K` : v} width={48} />
+              <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 9, fill: '#2E74CC' }} axisLine={false} tickLine={false} tickFormatter={v => v >= 1e7 ? `${(v/1e7).toFixed(1)}Cr` : v >= 1e5 ? `${(v/1e5).toFixed(0)}L` : v >= 1000 ? `${(v/1000).toFixed(0)}K` : v} width={48} />
+              <YAxis yAxisId="aov" hide />
+              <YAxis yAxisId="rrr" hide />
               <Tooltip
                 content={({ active, payload, label }) => {
                   if (!active || !payload?.length) return null
@@ -8649,8 +8651,8 @@ function CustomerPage({ filters }) {
               <Bar yAxisId="left" dataKey="customersAcquired" fill={C.acc} name="Customers Acquired" radius={[3,3,0,0]} maxBarSize={maxBar}
                 label={showLabels ? { position: 'top', fontSize: 9, fill: C.t2, fontWeight: 600, formatter: v => v >= 1000 ? `${(v/1000).toFixed(0)}K` : v } : false} />
               <Line yAxisId="right" type="monotone" dataKey="grossSales" stroke="#2E74CC" strokeWidth={2} dot={{ r: monthly.length <= 60 ? 3 : 0, fill: '#2E74CC', strokeWidth: 0 }} />
-              <Line yAxisId="right" type="monotone" dataKey="aov" stroke="#E8930A" strokeWidth={2} dot={{ r: monthly.length <= 60 ? 3 : 0, fill: '#E8930A', strokeWidth: 0 }} strokeDasharray="4 2" />
-              <Line yAxisId="right" type="monotone" dataKey="repeatRevenueRate" stroke="#0D9E68" strokeWidth={2} dot={{ r: monthly.length <= 60 ? 3 : 0, fill: '#0D9E68', strokeWidth: 0 }} strokeDasharray="2 2" />
+              <Line yAxisId="aov" type="monotone" dataKey="aov" stroke="#E8930A" strokeWidth={2} dot={{ r: monthly.length <= 60 ? 3 : 0, fill: '#E8930A', strokeWidth: 0 }} />
+              <Line yAxisId="rrr" type="monotone" dataKey="repeatRevenueRate" stroke="#0D9E68" strokeWidth={2} dot={{ r: monthly.length <= 60 ? 3 : 0, fill: '#0D9E68', strokeWidth: 0 }} />
             </ComposedChart>
           </ResponsiveContainer>
         </Card>
