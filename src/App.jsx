@@ -8624,11 +8624,11 @@ function CustomerPage({ filters }) {
             ))}
           </div>
           <ResponsiveContainer width="100%" height={280}>
-            <ComposedChart data={monthly} margin={{ top: showLabels ? 20 : 8, right: 70, left: 60, bottom: 0 }}>
+            <ComposedChart data={monthly} margin={{ top: showLabels ? 20 : 4, right: 50, bottom: 0, left: 0 }}>
               <CartesianGrid strokeDasharray="3 3" stroke={C.border} vertical={false} />
-              <XAxis dataKey="month" tick={{ fontSize: 10, fill: C.t2 }} axisLine={{ stroke: C.t3 }} tickLine={{ stroke: C.t3 }} interval="preserveStartEnd" />
-              <YAxis yAxisId="cust" tick={{ fontSize: 9, fill: C.t3 }} axisLine={{ stroke: C.t3 }} tickLine={{ stroke: C.t3 }} tickFormatter={v => v >= 1000 ? `${(v/1000).toFixed(1)}K` : v} width={45} />
-              <YAxis yAxisId="sales" orientation="right" tick={{ fontSize: 9, fill: '#2E74CC' }} axisLine={{ stroke: '#2E74CC' }} tickLine={{ stroke: '#2E74CC' }} tickFormatter={v => v >= 1e7 ? `₹${(v/1e7).toFixed(1)}Cr` : v >= 1e5 ? `₹${(v/1e5).toFixed(0)}L` : v >= 1000 ? `₹${(v/1000).toFixed(0)}K` : `₹${v}`} width={55} />
+              <XAxis dataKey="month" tick={{ fontSize: 10, fill: C.t3 }} interval="preserveStartEnd" />
+              <YAxis yAxisId="cust" tick={{ fontSize: 10, fill: C.t3 }} tickFormatter={v => v >= 1000 ? `${(v/1000).toFixed(1)}K` : v} width={48} />
+              <YAxis yAxisId="sales" orientation="right" tick={{ fontSize: 10, fill: C.t3 }} tickFormatter={v => v >= 1e7 ? `₹${(v/1e7).toFixed(1)}Cr` : v >= 1e5 ? `₹${(v/1e5).toFixed(0)}L` : v >= 1000 ? `₹${(v/1000).toFixed(0)}K` : `₹${v}`} width={52} />
               <YAxis yAxisId="aov" hide />
               <YAxis yAxisId="rrr" hide />
               <Tooltip
