@@ -8602,7 +8602,7 @@ function CustomerPage({ filters }) {
             <ComposedChart data={monthly} margin={{ top: 20, right: 10, bottom: 0, left: 0 }}>
               <CartesianGrid strokeDasharray="3 3" stroke={C.border} vertical={false} />
               <XAxis dataKey="month" tick={{ fontSize: 10 }} interval="preserveStartEnd" />
-              <YAxis yAxisId="cust" tick={{ fontSize: 10 }} tickFormatter={v => v >= 1000 ? `${(v/1000).toFixed(1)}K` : v} width={45} />
+              <YAxis yAxisId="cust" tick={{ fontSize: 10 }} tickFormatter={v => v.toLocaleString('en-IN')} width={55} />
               <YAxis yAxisId="sales" orientation="right" tick={{ fontSize: 10 }} tickFormatter={v => v >= 1e7 ? `₹${(v/1e7).toFixed(1)}Cr` : v >= 1e5 ? `₹${(v/1e5).toFixed(0)}L` : `₹${(v/1000).toFixed(0)}K`} />
               <YAxis yAxisId="aov" hide />
               <YAxis yAxisId="rrr" hide />
@@ -8621,7 +8621,7 @@ function CustomerPage({ filters }) {
               }} />
               <Legend wrapperStyle={{ fontSize: 11 }} />
               <Bar yAxisId="cust" dataKey="customersAcquired" name="Customers Acquired" fill={C.acc} radius={[3,3,0,0]} maxBarSize={maxBar}
-                label={showLabels ? { position: 'top', fontSize: 9, fill: C.t2, fontWeight: 600, formatter: v => v >= 1000 ? `${(v/1000).toFixed(1)}K` : v } : false} />
+                label={showLabels ? { position: 'top', fontSize: 9, fill: C.t2, fontWeight: 600, formatter: v => v.toLocaleString('en-IN') } : false} />
               <Line yAxisId="sales" type="monotone" dataKey="grossSales" name="Gross Sales" stroke="#2E74CC" strokeWidth={2} dot={false} />
               <Line yAxisId="aov"   type="monotone" dataKey="aov"   name="AOV"         stroke="#E8930A" strokeWidth={2} dot={false} />
               <Line yAxisId="rrr"   type="monotone" dataKey="repeatRevenueRate" name="Repeat Revenue Rate" stroke="#0D9E68" strokeWidth={2} dot={false} />
