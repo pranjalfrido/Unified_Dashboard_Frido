@@ -133,26 +133,62 @@ SELECT FORMAT_DATE('%Y-%m', cohort_month) AS cohort_month, cohort_index, custome
 FROM cohort_data
 ORDER BY cohort_month, cohort_index`),
 
-      // Q4 â€” first vs second purchase category cross-sell
-      run(`WITH ranked AS (
-  SELECT CustomerId, Category,
-    ROW_NUMBER() OVER (PARTITION BY CustomerId ORDER BY OrderDate) AS rn
+      // Q4 — first vs second purchase (order-level, with item master category/subcat lookup)
+      run(`WITH
+item_master AS (
+  SELECT DISTINCT TRIM(Product_Code) AS sku, Category_Name, Sub_category
+  FROM \`frido-429506.sharepoint_to_gcp.Frido_Item_Master__frido_item_sku_master\`
+  WHERE Product_Code IS NOT NULL
+),
+pid_map AS (
+  SELECT DISTINCT TRIM(productid) AS productid, TRIM(masterskucode) AS masterskucode
+  FROM \`frido-429506.sharepoint_to_gcp.Frido_Item_Master__productid_sku_mapping\`
+  WHERE productid IS NOT NULL AND masterskucode IS NOT NULL
+),
+-- Rank at ORDER level (not item level) — use MIN(OrderDate) per order to deduplicate
+order_ranked AS (
+  SELECT
+    CustomerId,
+    OrderId,
+    MIN(OrderDate) AS order_date,
+    -- pick one ProductId per order (any_value) then resolve SKU via pid_map
+    ANY_VALUE(ProductId) AS product_id,
+    ANY_VALUE(masterskucode) AS direct_sku
   FROM ${TBL}
   WHERE Channel = 'Shopify' AND CustomerId IS NOT NULL
-    AND Category IS NOT NULL AND TRIM(Category) != ''
+  GROUP BY CustomerId, OrderId
 ),
-fp AS (SELECT CustomerId, Category AS first_category FROM ranked WHERE rn = 1),
-sp AS (SELECT CustomerId, Category AS second_category FROM ranked WHERE rn = 2)
+order_with_rank AS (
+  SELECT
+    o.CustomerId, o.OrderId, o.order_date,
+    ROW_NUMBER() OVER (PARTITION BY o.CustomerId ORDER BY o.order_date, o.OrderId) AS rn,
+    COALESCE(pm.masterskucode, o.direct_sku) AS masterskucode
+  FROM order_ranked o
+  LEFT JOIN pid_map pm ON TRIM(CAST(o.product_id AS STRING)) = pm.productid
+),
+fp AS (
+  SELECT r.CustomerId, im.Category_Name AS first_category, im.Sub_category AS first_sub_category
+  FROM order_with_rank r
+  LEFT JOIN item_master im ON r.masterskucode = im.sku
+  WHERE r.rn = 1
+),
+sp AS (
+  SELECT r.CustomerId, im.Category_Name AS second_category, im.Sub_category AS second_sub_category
+  FROM order_with_rank r
+  LEFT JOIN item_master im ON r.masterskucode = im.sku
+  WHERE r.rn = 2
+)
 SELECT
-  fp.first_category,
-  sp.second_category,
+  fp.first_category, fp.first_sub_category,
+  sp.second_category, sp.second_sub_category,
   COUNT(DISTINCT fp.CustomerId) AS customers
 FROM fp
 JOIN sp USING (CustomerId)
-GROUP BY first_category, second_category
+WHERE fp.first_category IS NOT NULL AND sp.second_category IS NOT NULL
+GROUP BY first_category, first_sub_category, second_category, second_sub_category
 HAVING COUNT(DISTINCT fp.CustomerId) > 0
 ORDER BY customers DESC
-LIMIT 200`),
+LIMIT 500`),
 
       // Q5 â€” RFM segments (all-time up to end date)
       run(`WITH customer_stats AS (
@@ -325,7 +361,9 @@ GROUP BY platform`),
       })),
       crossSell: crossSell.map(r => ({
         firstCategory: r.first_category,
+        firstSubCategory: r.first_sub_category,
         secondCategory: r.second_category,
+        secondSubCategory: r.second_sub_category,
         customers: parseInt(r.customers),
       })),
       rfm: rfm.map(r => ({

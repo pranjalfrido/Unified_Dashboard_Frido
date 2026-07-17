@@ -8550,14 +8550,19 @@ function CustomerPage({ filters }) {
   const RFM_COLORS = { 'Champions': '#B8A000', 'Loyal Customers': '#2E74CC', 'Recent Users': '#7A6A00', 'Potential Loyalists': '#8B7000', "Can't Lose Them": '#5B4F00', 'Hibernating': '#A09000', 'Others': '#9B8800', 'Price Sensitive': '#6B5F00' }
   const rfmTotal = rfm.reduce((s, r) => s + r.totalRevenue, 0)
 
-  // Cross-sell pivot
-  const allCategories = [...new Set([...crossSell.map(r => r.firstCategory), ...crossSell.map(r => r.secondCategory)])].filter(Boolean).sort()
+  // Cross-sell pivot — supports Category / Sub Category toggle
+  const crossFirstKey = crossFilter === 'Category' ? 'firstCategory' : 'firstSubCategory'
+  const crossSecondKey = crossFilter === 'Category' ? 'secondCategory' : 'secondSubCategory'
+  const allCrossFirst = [...new Set(crossSell.map(r => r[crossFirstKey]).filter(Boolean))].sort()
+  const allCrossSecond = [...new Set(crossSell.map(r => r[crossSecondKey]).filter(Boolean))].sort()
   const crossMap = {}
   crossSell.forEach(r => {
-    if (!crossMap[r.secondCategory]) crossMap[r.secondCategory] = {}
-    crossMap[r.secondCategory][r.firstCategory] = r.customers
+    const sk = r[crossSecondKey], fk = r[crossFirstKey]
+    if (!sk || !fk) return
+    if (!crossMap[sk]) crossMap[sk] = {}
+    crossMap[sk][fk] = (crossMap[sk][fk] || 0) + r.customers
   })
-  const crossRows = allCategories.filter(sc => crossMap[sc])
+  const crossRows = allCrossSecond.filter(sc => crossMap[sc])
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 14, padding: '0 4px' }}>
@@ -8756,23 +8761,25 @@ function CustomerPage({ filters }) {
           ))}
         </div>
       }>
-        <div style={{ overflowX: 'auto' }}>
-          <table style={{ borderCollapse: 'collapse', fontSize: 10.5, minWidth: 500 }}>
+        <div style={{ overflowX: 'auto', width: '100%' }}>
+          <table style={{ borderCollapse: 'collapse', fontSize: 10.5, width: '100%' }}>
             <thead>
               <tr style={{ borderBottom: `2px solid ${C.border}` }}>
-                <th style={{ padding: '4px 8px', textAlign: 'left', color: C.t3, fontWeight: 700, fontSize: 9.5 }}>Second Purchase Category</th>
-                {allCategories.slice(0, 14).map(cat => (
-                  <th key={cat} style={{ padding: '4px 6px', textAlign: 'right', color: C.t3, fontWeight: 700, fontSize: 9, whiteSpace: 'nowrap', maxWidth: 80, overflow: 'hidden', textOverflow: 'ellipsis' }}>{cat}</th>
+                <th style={{ padding: '4px 8px', textAlign: 'left', color: C.t3, fontWeight: 700, fontSize: 9.5, whiteSpace: 'nowrap' }}>
+                  Second Purchase {crossFilter}
+                </th>
+                {allCrossFirst.map(cat => (
+                  <th key={cat} style={{ padding: '4px 6px', textAlign: 'right', color: C.t3, fontWeight: 700, fontSize: 9, whiteSpace: 'nowrap' }}>{cat}</th>
                 ))}
               </tr>
             </thead>
             <tbody>
-              {crossRows.slice(0, 15).map((sc, i) => (
+              {crossRows.map((sc, i) => (
                 <tr key={sc} style={{ borderBottom: `1px solid ${C.border}`, background: i % 2 === 0 ? 'transparent' : C.bg }}>
-                  <td style={{ padding: '4px 8px', fontWeight: 600, color: C.t1, fontSize: 10.5 }}>
+                  <td style={{ padding: '4px 8px', fontWeight: 600, color: C.t1, fontSize: 10.5, whiteSpace: 'nowrap' }}>
                     <span style={{ color: C.t3, fontSize: 9 }}>⊞</span> {sc}
                   </td>
-                  {allCategories.slice(0, 14).map(fc => {
+                  {allCrossFirst.map(fc => {
                     const v = crossMap[sc]?.[fc]
                     return <td key={fc} style={{ padding: '4px 6px', textAlign: 'right', fontFamily: 'var(--mono)', fontSize: 10, color: v ? C.t1 : C.t3 }}>{v ? fmtN(v) : ''}</td>
                   })}
