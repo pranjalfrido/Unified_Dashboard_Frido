@@ -8806,6 +8806,19 @@ function CustomerPage({ filters }) {
         {/* RFM Segments — horizontal bar list */}
         <Card title="RFM Segments">
           {(() => {
+            const RFM_DESC = {
+              'Champions':          'Bought recently, buy often, high spend',
+              'Loyal Customers':    'Buy regularly, decent recency & frequency',
+              'Recent Users':       'Bought recently but only once or twice',
+              'Potential Loyalists':'Recent buyers with good spend potential',
+              'Cannot Lose Them':   'Bought often but not seen in 90–180+ days',
+              'Hibernating':        'Low recency & low frequency — going cold',
+              'Others':             'High spenders not fitting other segments',
+              'Price Sensitive':    'Moderate frequency but low spend per order',
+              'Needs Attention':    'Average recency & frequency — at risk',
+              'About to Sleep':     'Dropping off — haven\'t bought in a while',
+              'Lost Customers':     'Haven\'t purchased in 180+ days',
+            }
             const sorted = [...rfm].sort((a, b) => b.totalRevenue - a.totalRevenue)
             const maxRev = sorted[0]?.totalRevenue || 1
             return (
@@ -8814,13 +8827,15 @@ function CustomerPage({ filters }) {
                   const col = RFM_COLORS[seg.segment] || '#8B8000'
                   const barW = seg.totalRevenue / maxRev * 100
                   const pct = rfmTotal > 0 ? (seg.totalRevenue / rfmTotal * 100).toFixed(1) : '0'
+                  const desc = RFM_DESC[seg.segment] || ''
                   return (
                     <div key={seg.segment} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                       <div style={{ width: 4, height: 34, borderRadius: 2, background: col, flexShrink: 0 }} />
-                      <div style={{ width: 130, flexShrink: 0 }}>
+                      <div style={{ width: 200, flexShrink: 0 }}>
                         <div style={{ fontSize: 11, fontWeight: 600, color: C.t1 }}>{seg.segment}</div>
-                        <div style={{ fontSize: 10, color: C.t3 }}>{fmtN(seg.customers)} customers</div>
+                        <div style={{ fontSize: 9.5, color: C.t3 }}>{desc}</div>
                       </div>
+                      <div style={{ fontSize: 10, color: C.t3, width: 80, flexShrink: 0 }}>{fmtN(seg.customers)} custs</div>
                       <div style={{ flex: 1, background: C.border, borderRadius: 3, height: 8, overflow: 'hidden' }}>
                         <div style={{ height: '100%', width: `${barW}%`, background: col, borderRadius: 3 }} />
                       </div>
