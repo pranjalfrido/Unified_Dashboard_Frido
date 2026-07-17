@@ -36,7 +36,6 @@ period AS (
   WHERE o.Channel = 'Shopify'
     AND DATE(o.OrderDate) BETWEEN '${s}' AND '${e}'
     AND o.CustomerId IS NOT NULL
-    AND o.Order_Status NOT IN ('RTO','Cancelled')
 )
 SELECT
   COUNT(DISTINCT CustomerId) AS total_customers,
@@ -64,7 +63,6 @@ period AS (
   WHERE o.Channel = 'Shopify'
     AND DATE(o.OrderDate) BETWEEN '${s}' AND '${e}'
     AND o.CustomerId IS NOT NULL
-    AND o.Order_Status NOT IN ('RTO','Cancelled')
 )
 SELECT
   FORMAT_DATE('%b %y', order_date) AS month,
@@ -88,7 +86,6 @@ all_orders AS (
   SELECT DISTINCT CustomerId, DATE_TRUNC(DATE(OrderDate), MONTH) AS order_month
   FROM ${TBL}
   WHERE Channel = 'Shopify' AND CustomerId IS NOT NULL
-    AND Order_Status NOT IN ('RTO','Cancelled')
 ),
 cohort_data AS (
   SELECT f.cohort_month,
@@ -112,7 +109,6 @@ ORDER BY cohort_month, cohort_index`),
   FROM ${TBL}
   WHERE Channel = 'Shopify' AND CustomerId IS NOT NULL
     AND Category IS NOT NULL AND TRIM(Category) != ''
-    AND Order_Status NOT IN ('RTO','Cancelled')
 ),
 fp AS (SELECT CustomerId, Category AS first_category FROM ranked WHERE rn = 1),
 sp AS (SELECT CustomerId, Category AS second_category FROM ranked WHERE rn = 2)
@@ -137,7 +133,6 @@ LIMIT 200`),
   FROM ${TBL}
   WHERE Channel = 'Shopify' AND CustomerId IS NOT NULL
     AND DATE(OrderDate) <= DATE('${e}')
-    AND Order_Status NOT IN ('RTO','Cancelled')
   GROUP BY CustomerId
 ),
 scored AS (
@@ -177,7 +172,6 @@ ORDER BY total_revenue DESC`),
   FROM ${TBL}
   WHERE Channel = 'Shopify' AND CustomerId IS NOT NULL
     AND DATE(OrderDate) <= DATE('${e}')
-    AND Order_Status NOT IN ('RTO','Cancelled')
   GROUP BY CustomerId
 )
 SELECT
@@ -194,7 +188,6 @@ ORDER BY MIN(orders)`),
   FROM ${TBL}
   WHERE Channel = 'Shopify' AND CustomerId IS NOT NULL
     AND DATE(OrderDate) <= DATE('${e}')
-    AND Order_Status NOT IN ('RTO','Cancelled')
   GROUP BY CustomerId
 )
 SELECT
@@ -211,7 +204,6 @@ ORDER BY MIN(monetary)`),
   SELECT CustomerId, MAX(DATE(OrderDate)) AS last_date
   FROM ${TBL}
   WHERE Channel = 'Shopify' AND CustomerId IS NOT NULL
-    AND Order_Status NOT IN ('RTO','Cancelled')
   GROUP BY CustomerId
 )
 SELECT
@@ -237,7 +229,6 @@ tagged AS (
   WHERE o.Channel = 'Shopify'
     AND DATE(o.OrderDate) BETWEEN '${s}' AND '${e}'
     AND o.CustomerId IS NOT NULL
-    AND o.Order_Status NOT IN ('RTO','Cancelled')
 )
 SELECT disc_flag AS discount_bucket,
   COUNTIF(order_type = 'First Order') AS first_orders,
@@ -330,4 +321,5 @@ GROUP BY platform`),
     res.status(500).json({ error: err.message })
   }
 }
+
 
