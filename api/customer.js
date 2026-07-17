@@ -20,7 +20,7 @@ export default async function handler(req, res) {
 
     const [kpis, monthly, cohort, crossSell, rfm, freqDist, monetaryDist, inactivity, discountDist, adsKpis] = await Promise.all([
 
-      // Q1 â€” KPIs for the selected period (Shopify only)
+      // Q1 — KPIs for the selected period (Shopify only)
       run(`WITH first_dates AS (
   SELECT CustomerId, MIN(DATE(OrderDate)) AS first_date
   FROM ${TBL}
@@ -29,24 +29,41 @@ export default async function handler(req, res) {
 ),
 period AS (
   SELECT o.CustomerId, o.OrderId, DATE(o.OrderDate) AS order_date,
-    o.SellingPrice_Inc_GST AS rev_inc, o.SellingPrice_Exc_GST AS rev,
-    o.voucher_code, f.first_date
+    o.SellingPrice_Inc_GST AS rev_inc, o.SellingPrice_Exc_GST AS rev_exc,
+    o.voucher_code, o.is_rto, o.is_CIR_return, o.is_cancelled, f.first_date
   FROM ${TBL} o
   JOIN first_dates f USING (CustomerId)
   WHERE o.Channel = 'Shopify'
     AND DATE(o.OrderDate) BETWEEN '${s}' AND '${e}'
     AND o.CustomerId IS NOT NULL
+),
+order_agg AS (
+  SELECT OrderId, first_date,
+    SUM(rev_inc) AS order_rev_inc,
+    SUM(rev_exc) AS order_rev_exc,
+    MAX(is_rto) AS is_rto,
+    MAX(is_CIR_return) AS is_cir,
+    MAX(is_cancelled) AS is_cancelled,
+    ANY_VALUE(CustomerId) AS CustomerId,
+    ANY_VALUE(voucher_code) AS voucher_code
+  FROM period
+  GROUP BY OrderId, first_date
 )
 SELECT
   COUNT(DISTINCT CustomerId) AS total_customers,
   COUNT(DISTINCT CASE WHEN first_date BETWEEN DATE('${s}') AND DATE('${e}') THEN CustomerId END) AS new_customers,
   COUNT(DISTINCT CASE WHEN first_date < DATE('${s}') THEN CustomerId END) AS returning_customers,
   COUNT(DISTINCT OrderId) AS total_orders,
-  ROUND(SUM(rev_inc), 0) AS gross_sales,
-  ROUND(SAFE_DIVIDE(SUM(rev_inc), COUNT(DISTINCT OrderId)), 0) AS aov,
+  ROUND(SUM(order_rev_inc), 0) AS gross_sales,
+  ROUND(SAFE_DIVIDE(SUM(order_rev_inc), COUNT(DISTINCT OrderId)), 0) AS aov,
+  ROUND(SUM(CASE WHEN first_date < DATE('${s}') THEN order_rev_inc ELSE 0 END), 0) AS repeat_revenue,
+  ROUND(SUM(order_rev_exc)
+    - SUM(CASE WHEN is_rto = 1 THEN order_rev_exc ELSE 0 END)
+    - SUM(CASE WHEN is_cir = 1 THEN order_rev_exc ELSE 0 END)
+    - SUM(CASE WHEN is_cancelled = 1 THEN order_rev_exc ELSE 0 END), 0) AS net_revenue,
   COUNT(DISTINCT CASE WHEN voucher_code IS NOT NULL AND TRIM(voucher_code) != '' THEN OrderId END) AS discounted_orders,
   COUNT(DISTINCT CASE WHEN voucher_code IS NULL OR TRIM(voucher_code) = '' THEN OrderId END) AS non_discounted_orders
-FROM period`),
+FROM order_agg`),
 
       // Q2 â€” monthly new vs repeat
       run(`WITH first_dates AS (
@@ -266,6 +283,10 @@ GROUP BY platform`),
         cac: newCustomers > 0 ? totalSpend / newCustomers : 0,
         aov: parseFloat(k.aov) || 0,
         acquisitionRate: totalCustomers > 0 ? newCustomers / totalCustomers : 0,
+        repeatRevenue: parseFloat(k.repeat_revenue) || 0,
+        repeatRevenueRate: grossSales > 0 ? (parseFloat(k.repeat_revenue) || 0) / grossSales : 0,
+        netRevenue: parseFloat(k.net_revenue) || 0,
+        netRevenueRate: grossSales > 0 ? (parseFloat(k.net_revenue) || 0) / grossSales : 0,
         discountedOrders: parseInt(k.discounted_orders) || 0,
         nonDiscountedOrders: parseInt(k.non_discounted_orders) || 0,
         totalOrders: parseInt(k.total_orders) || 0,

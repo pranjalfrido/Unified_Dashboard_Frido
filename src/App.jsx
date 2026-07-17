@@ -8543,11 +8543,11 @@ function CustomerPage({ filters }) {
         <KPICard label="RoAS" value={kpis.roas.toFixed(2)} />
         <KPICard label="CAC" value={`₹${Math.round(kpis.cac).toLocaleString('en-IN')}`} />
         <KPICard label="AOV" value={`₹${Math.round(kpis.aov).toLocaleString('en-IN')}`} />
-        <KPICard label="CLTV" value={`₹${Math.round(kpis.aov * 1.5).toLocaleString('en-IN')}`} />
+        <KPICard label="CLTV" value={fmt((kpis.grossSales || 0) / (kpis.totalCustomers || 1))} sub="Rev / unique customer" />
         <KPICard label="Acquisition Rate" value={`${(kpis.acquisitionRate * 100).toFixed(2)}%`} />
-        <KPICard label="Repeat Revenue" value={`${(kpis.repeatRate * 100).toFixed(2)}%`} />
+        <KPICard label="Repeat Revenue" value={`${((kpis.repeatRevenueRate || 0) * 100).toFixed(2)}%`} sub={fmt(kpis.repeatRevenue || 0)} />
         <KPICard label="Revenue per Cust" value={fmt(kpis.grossSales / (kpis.totalCustomers || 1))} />
-        <KPICard label="Net Revenue %" value="—" />
+        <KPICard label="Net Revenue %" value={kpis.netRevenueRate ? `${((kpis.netRevenueRate) * 100).toFixed(2)}%` : '—'} sub={kpis.netRevenue ? fmt(kpis.netRevenue) : ''} />
       </div>
 
       {/* Row: Monthly chart + New vs Repeat stacked bar */}
