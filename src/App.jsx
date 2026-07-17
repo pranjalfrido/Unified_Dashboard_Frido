@@ -8547,7 +8547,7 @@ function CustomerPage({ filters }) {
   const maxCohortIdx = Math.max(...cohort.map(r => r.cohortIndex), 0)
 
   // RFM treemap data
-  const RFM_COLORS = { 'Champions': '#FFD600', 'Loyal Customers': '#F5C400', 'Recent Users': '#E6B800', 'Potential Loyalists': '#CCa000', 'Cannot Lose Them': '#B8900A', "Can't Lose Them": '#B8900A', 'Hibernating': '#8B6A00', 'Others': '#A07800', 'Price Sensitive': '#6B5000', 'Needs Attention': '#D4AE00', 'About to Sleep': '#9A7200', 'Lost Customers': '#5C3D00' }
+  const RFM_COLORS = { 'Champions': '#FFD600', 'Loyal Customers': '#FFE033', 'Recent Users': '#FAD000', 'Potential Loyalists': '#F5C800', 'Cannot Lose Them': '#EFC000', "Can't Lose Them": '#EFC000', 'Hibernating': '#E8B800', 'Others': '#E0B000', 'Price Sensitive': '#D9A800', 'Needs Attention': '#F2CA00', 'About to Sleep': '#DCAC00', 'Lost Customers': '#D4A400' }
   const rfmTotal = rfm.reduce((s, r) => s + r.totalRevenue, 0)
 
   // Cross-sell pivot — supports Category / Sub Category toggle
