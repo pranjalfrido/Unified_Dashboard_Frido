@@ -8733,7 +8733,7 @@ function CustomerPage({ filters }) {
                         const bg = i === 0 ? '#2E74CC' : pctVal != null ? `rgba(46,116,204,${0.08 + intensity * 0.55})` : 'transparent'
                         const txtColor = i === 0 ? '#fff' : pctVal != null && intensity > 0.5 ? '#fff' : C.t1
                         return (
-                          <td key={i} title={cell ? `${cohortMode==='customer'?cell.customers+' customers':fmt(cell.revenue)}` : ''} style={{ padding: '4px 4px', textAlign: 'center', fontSize: 9.5, fontFamily: 'var(--mono)', background: bg, color: txtColor, fontWeight: i === 0 ? 700 : 400 }}>
+                          <td key={i} title={cell ? `${cohortMode==='customer'?cell.customers+' customers':fmt(cell.revenue)}` : ''} style={{ padding: '4px 4px', textAlign: 'center', fontSize: 9.5, fontFamily: 'var(--mono)', background: bg, color: txtColor, fontWeight: 400 }}>
                             {pctVal != null ? `${pctVal.toFixed(1)}%` : ''}
                           </td>
                         )
