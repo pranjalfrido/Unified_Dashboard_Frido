@@ -8926,13 +8926,14 @@ function CustomerPage({ filters }) {
 
         {/* Inactivity Buckets */}
         <Card title="Inactive Customers (30, 60, 90 Days)">
-          <ResponsiveContainer width="100%" height={200}>
-            <BarChart data={inactivity} margin={{ top: 10, right: 10, left: 0, bottom: 20 }}>
+          <ResponsiveContainer width="100%" height={220}>
+            <BarChart data={inactivity} margin={{ top: 24, right: 10, left: 0, bottom: 20 }}>
               <XAxis dataKey="bucket" tick={{ fontSize: 9 }} angle={-10} textAnchor="end" interval={0} />
-              <YAxis tick={{ fontSize: 9 }} />
+              <YAxis tick={{ fontSize: 9 }} tickFormatter={v => v >= 1e6 ? `${(v/1e6).toFixed(1)}M` : v >= 1000 ? `${(v/1000).toFixed(0)}K` : v} />
               <Tooltip formatter={(v) => [fmtN(v), 'Customers']} />
-              <Bar dataKey="customers" fill={C.acc} name="Customers" radius={[3,3,0,0]}>
-                {inactivity.map((r, i) => <Cell key={i} fill={r.bucket.includes('90+') ? '#CC4078' : r.bucket.includes('60') ? '#E8930A' : r.bucket.includes('30') ? '#E8930A' : '#0D9E68'} />)}
+              <Bar dataKey="customers" fill={C.acc} name="Customers" radius={[3,3,0,0]}
+                label={{ position: 'top', fontSize: 9, fill: C.t2, fontWeight: 600, formatter: v => v >= 1e6 ? `${(v/1e6).toFixed(2)}M` : v >= 1000 ? `${(v/1000).toFixed(2)}K` : v }}>
+                {inactivity.map((r, i) => <Cell key={i} fill={r.bucket.includes('90+') ? C.acc : r.bucket.includes('60') ? '#F5DC00' : r.bucket.includes('30') ? '#E6CC00' : '#CCB400'} />)}
               </Bar>
             </BarChart>
           </ResponsiveContainer>
