@@ -8896,16 +8896,20 @@ function CustomerPage({ filters }) {
 
         {/* Monetary Distribution */}
         <Card title="Distribution of Customers Across Monetary Segment">
-          <ResponsiveContainer width="100%" height={200}>
-            <ComposedChart data={monetaryDist} margin={{ top: 10, right: 10, left: 0, bottom: 20 }}>
-              <XAxis dataKey="bucket" tick={{ fontSize: 9 }} angle={-15} textAnchor="end" interval={0} />
-              <YAxis yAxisId="left" tick={{ fontSize: 9 }} />
-              <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 9 }} />
-              <Tooltip formatter={(v, n) => [fmtN(v), n]} />
-              <Bar yAxisId="left" dataKey="customers" fill={C.acc} name="Customers" radius={[3,3,0,0]}>
-                {monetaryDist.map((_, i) => <Cell key={i} fill={i % 2 === 0 ? C.acc : '#B8A000'} />)}
+          <ResponsiveContainer width="100%" height={260}>
+            <ComposedChart data={monetaryDist} margin={{ top: 24, right: 60, left: 10, bottom: 30 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke={C.border} vertical={false} />
+              <XAxis dataKey="bucket" tick={{ fontSize: 9.5 }} angle={-12} textAnchor="end" interval={0} />
+              <YAxis yAxisId="left" tick={{ fontSize: 9 }} tickFormatter={v => v >= 1e6 ? `${(v/1e6).toFixed(1)}M` : v >= 1000 ? `${(v/1000).toFixed(0)}K` : v} width={48} label={{ value: 'Customers', angle: -90, position: 'insideLeft', offset: 10, style: { fontSize: 9, fill: C.t3 } }} />
+              <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 9 }} tickFormatter={v => v >= 1e9 ? `₹${(v/1e9).toFixed(1)}B` : v >= 1e7 ? `₹${(v/1e7).toFixed(1)}Cr` : v >= 1e5 ? `₹${(v/1e5).toFixed(0)}L` : `₹${(v/1000).toFixed(0)}K`} width={58} label={{ value: 'Revenue', angle: 90, position: 'insideRight', offset: 10, style: { fontSize: 9, fill: C.t3 } }} />
+              <Tooltip formatter={(v, n) => n === 'Revenue' ? [fmt(v), n] : [fmtN(v), n]} />
+              <Legend wrapperStyle={{ fontSize: 10, paddingTop: 8 }} />
+              <Bar yAxisId="left" dataKey="customers" name="Customers" radius={[4,4,0,0]} maxBarSize={60}
+                label={{ position: 'top', fontSize: 9, fill: C.t2, formatter: v => v >= 1e6 ? `${(v/1e6).toFixed(1)}M` : v >= 1000 ? `${(v/1000).toFixed(0)}K` : v }}>
+                {monetaryDist.map((_, i) => <Cell key={i} fill={[C.acc, '#F5DC00', '#E6CC00', '#CCB400', '#B8A000'][i] || C.acc} />)}
               </Bar>
-              <Line yAxisId="right" type="monotone" dataKey="totalRevenue" stroke="#2E74CC" strokeWidth={1.5} dot={false} name="Revenue" />
+              <Line yAxisId="right" type="monotone" dataKey="totalRevenue" name="Revenue" stroke="#2E74CC" strokeWidth={2} dot={{ r: 4, fill: '#2E74CC' }}
+                label={{ position: 'top', fontSize: 9, fill: '#2E74CC', formatter: v => v >= 1e7 ? `${(v/1e7).toFixed(1)}Cr` : v >= 1e5 ? `${(v/1e5).toFixed(0)}L` : `${(v/1000).toFixed(0)}K` }} />
             </ComposedChart>
           </ResponsiveContainer>
         </Card>
