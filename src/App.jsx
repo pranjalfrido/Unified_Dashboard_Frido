@@ -8476,6 +8476,8 @@ function CustomerPage({ filters }) {
   const [loading, setLoading] = useState(false)
   const [crossFilter, setCrossFilter] = useState('Category')
   const [granularity, setGranularity] = useState('daily')
+  const [secCollapsed, setSecCollapsed] = useState({ trends: false, cohort: false, purchase: false, rfm: true, discount: true })
+  const toggleSec = k => setSecCollapsed(s => ({ ...s, [k]: !s[k] }))
   const API = import.meta.env.VITE_API_URL || ''
 
   useEffect(() => {
@@ -8571,7 +8573,8 @@ function CustomerPage({ filters }) {
         <strong>Shopify D2C only</strong> — Amazon, Flipkart & quick-commerce channels do not share customer identity
       </div>
 
-      {/* KPI Row 1 */}
+      {/* Section 1: Overview KPIs — always visible */}
+      <LSectionTitle title="Overview KPIs" />
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(8, 1fr)', gap: 8 }}>
         <KPICard label="Gross Sale" value={fmtBig(kpis.grossSales)} />
         <KPICard label="Total Spend" value={fmtBig(kpis.totalSpend)} />
@@ -8582,8 +8585,6 @@ function CustomerPage({ filters }) {
         <KPICard label="Returning Customers" value={fmtBig(kpis.returningCustomers)} />
         <KPICard label="Repeat Rate" value={`${(kpis.repeatRate * 100).toFixed(2)}%`} />
       </div>
-
-      {/* KPI Row 2 */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(8, 1fr)', gap: 8 }}>
         <KPICard label="RoAS" value={kpis.roas.toFixed(2)} />
         <KPICard label="CAC" value={`₹${Math.round(kpis.cac).toLocaleString('en-IN')}`} />
@@ -8595,8 +8596,9 @@ function CustomerPage({ filters }) {
         <KPICard label="Net Revenue %" value={kpis.netRevenueRate ? `${((kpis.netRevenueRate) * 100).toFixed(2)}%` : '—'} sub={kpis.netRevenue ? fmt(kpis.netRevenue) : ''} />
       </div>
 
-      {/* Row: Trend chart + New vs Repeat stacked bar */}
-      {(() => {
+      {/* Section 2: Acquisition & Revenue Trends */}
+      <LSectionTitle title="Acquisition & Revenue Trends" collapsed={secCollapsed.trends} onToggle={() => toggleSec('trends')} />
+      {!secCollapsed.trends && (() => {
         const xLabel = granularity === 'monthly' ? 'First Order Date Month' : granularity === 'weekly' ? 'First Order Date Week' : 'First Order Date'
         const maxBar = granularity === 'daily' ? 18 : granularity === 'weekly' ? 30 : 48
         const showLabels = monthly.length <= 20
@@ -8690,8 +8692,9 @@ function CustomerPage({ filters }) {
         )
       })()}
 
-      {/* Cohort Retention Grid */}
-      {(() => {
+      {/* Section 3: Customer Retention Cohort */}
+      <LSectionTitle title="Customer Retention Cohort" collapsed={secCollapsed.cohort} onToggle={() => toggleSec('cohort')} />
+      {!secCollapsed.cohort && (() => {
         const [cohortMode, setCohortMode] = [custData._cohortMode || 'customer', v => setCustData(d => ({ ...d, _cohortMode: v }))]
         return (
         <Card title={
@@ -8753,7 +8756,10 @@ function CustomerPage({ filters }) {
         )
       })()}
 
-      {/* Cross-sell matrix */}
+      {/* Section 4: Purchase Behavior */}
+      <LSectionTitle title="Purchase Behavior" collapsed={secCollapsed.purchase} onToggle={() => toggleSec('purchase')} />
+      {!secCollapsed.purchase && (() => {
+        return (
       <Card title={<div><div>Purchase Behavior: First vs Second Purchase</div><div style={{ fontSize: 11, fontWeight: 400, color: C.t3, marginTop: 2 }}>All-time data — not affected by date filter. Shows what customers bought on their 2nd order after their 1st.</div></div>} action={
         <div style={{ display: 'flex', gap: 4 }}>
           {['Sub Category', 'Category'].map(t => (
@@ -8800,8 +8806,12 @@ function CustomerPage({ filters }) {
           </table>
         </div>
       </Card>
+        )
+      })()}
 
-      {/* RFM + Frequency + Monetary + Inactivity — 2x2 grid */}
+      {/* Section 5: RFM & Segmentation */}
+      <LSectionTitle title="RFM & Segmentation" collapsed={secCollapsed.rfm} onToggle={() => toggleSec('rfm')} />
+      {!secCollapsed.rfm && (
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
         {/* RFM Segments — horizontal bar list */}
         <Card title="RFM Segments">
@@ -8928,7 +8938,11 @@ function CustomerPage({ filters }) {
           </ResponsiveContainer>
         </Card>
       </div>
+      )}
 
+      {/* Section 6: Discount & Spend Analysis */}
+      <LSectionTitle title="Discount & Spend Analysis" collapsed={secCollapsed.discount} onToggle={() => toggleSec('discount')} />
+      {!secCollapsed.discount && (<>
       {/* Spend vs Sales */}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 14 }}>
         <Card title="Total Spend vs Gross Sales by Month">
@@ -8992,6 +9006,7 @@ function CustomerPage({ filters }) {
           })()}
         </Card>
       </div>
+      </>)}
     </div>
   )
 }
