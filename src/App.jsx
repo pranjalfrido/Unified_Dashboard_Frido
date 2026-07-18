@@ -8819,6 +8819,19 @@ function CustomerPage({ filters }) {
               'About to Sleep':     'Dropping off — haven\'t bought in a while',
               'Lost Customers':     'Haven\'t purchased in 180+ days',
             }
+            const RFM_TOOLTIP = {
+              'Champions':          'Rule: Last order ≤60 days ago (R≥4) AND ≥4 orders ever (F≥4).\nThese are your best customers — buy often, spend a lot, bought recently. Reward them with early access and loyalty perks.',
+              'Loyal Customers':    'Rule: Last order ≤90 days (R≥3) AND ≥3 orders (F≥3).\nRegular buyers who come back consistently. Nurture with personalised offers to push them to Champions.',
+              'Recent Users':       'Rule: Last order ≤60 days (R≥4) AND ≤2 orders (F≤2).\nNew or recent customers who haven\'t bought much yet. Focus on getting them to a 2nd or 3rd purchase.',
+              'Potential Loyalists':'Rule: Last order ≤90 days (R≥3) AND spend ≥₹2,000 (M≥3).\nSpend decent money and bought recently. With the right nudge they can become Loyal Customers.',
+              'Cannot Lose Them':   'Rule: Last order >180 days (R≤2) AND ≥3 orders (F≥3).\nUsed to buy regularly but have gone quiet. High risk — win them back with a strong re-engagement offer.',
+              'Hibernating':        'Rule: Last order >180 days (R≤2) AND ≤2 orders (F≤2).\nBought once or twice long ago and haven\'t returned. Hard to reactivate — try a big discount or new product launch.',
+              'Others':             'Rule: Lifetime spend ≥₹5,000 but doesn\'t fit any other segment.\nHigh spenders with unusual purchase patterns. Review manually.',
+              'Price Sensitive':    'Rule: ≥3 orders (F≥3) AND spend <₹2,000 (M≤2).\nBuy often but spend very little each time. Upsell or bundle to increase order value.',
+              'Needs Attention':    'Rule: Last order 60–90 days (R=3) AND 2–3 orders (F=2–3).\nMid-range on all metrics — at risk of slipping away. Send a timely re-engagement message.',
+              'About to Sleep':     'Rule: Last order 90–180 days (R=2) AND 2–3 orders (F=2–3).\nActivity is dropping. Act now before they hibernate completely.',
+              'Lost Customers':     'Rule: Last order >180 days (R=1) AND ≤2 orders (F≤2).\nHaven\'t been seen in a long time and barely bought. Very low chance of return without a strong incentive.',
+            }
             const sorted = [...rfm].sort((a, b) => b.totalRevenue - a.totalRevenue)
             const maxRev = sorted[0]?.totalRevenue || 1
             return (
@@ -8828,8 +8841,9 @@ function CustomerPage({ filters }) {
                   const barW = seg.totalRevenue / maxRev * 100
                   const pct = rfmTotal > 0 ? (seg.totalRevenue / rfmTotal * 100).toFixed(1) : '0'
                   const desc = RFM_DESC[seg.segment] || ''
+                  const tooltip = RFM_TOOLTIP[seg.segment] || ''
                   return (
-                    <div key={seg.segment} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <div key={seg.segment} title={tooltip} style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'help' }}>
                       <div style={{ width: 4, height: 34, borderRadius: 2, background: col, flexShrink: 0 }} />
                       <div style={{ width: 200, flexShrink: 0 }}>
                         <div style={{ fontSize: 11, fontWeight: 600, color: C.t1 }}>{seg.segment}</div>
