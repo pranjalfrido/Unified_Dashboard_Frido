@@ -135,8 +135,8 @@ html,body{height:100%;background:var(--bg);font-family:var(--font);color:var(--t
 .h0{color:var(--t3)}
 .h1{color:var(--t2)}
 .h2{color:var(--t2)}
-.h3{color:var(--t1);font-weight:600}
-.h4{color:var(--t1);font-weight:700}
+.h3{color:var(--t1)}
+.h4{color:var(--t1)}
 
 /* ── Misc ──────────────────────────────────── */
 .ins-box{background:var(--acl);border:1px solid var(--acm);border-radius:7px;padding:6px 10px;display:inline-flex;align-items:center;gap:8px}
