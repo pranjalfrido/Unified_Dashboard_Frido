@@ -42,8 +42,8 @@ export default async function handler(req, res) {
   if (pickupState) filters.push(`LOWER(c.pickup_state) = LOWER('${pickupState.replace(/'/g, "\\'")}')`  )
   if (dropState) filters.push(`LOWER(c.drop_state) = LOWER('${dropState.replace(/'/g, "\\'")}')`)
   if (dropCity) filters.push(`LOWER(c.drop_city) = LOWER('${dropCity.replace(/'/g, "\\'")}')`)
-  if (category?.length) filters.push(`im.CategoryName IN (${category.map(v => `'${v.replace(/'/g, "\\'")}'`).join(',')})`)
-  if (subCategory?.length) filters.push(`im.Sub_category IN (${subCategory.map(v => `'${v.replace(/'/g, "\\'")}'`).join(',')})`)
+  if (category?.length) filters.push(`COALESCE(im.Category_Name, 'Others') IN (${category.map(v => `'${v.replace(/'/g, "\\'")}'`).join(',')})`)
+  if (subCategory?.length) filters.push(`COALESCE(im.Sub_category, 'Mixed Shipments') IN (${subCategory.map(v => `'${v.replace(/'/g, "\\'")}'`).join(',')})`)
 
   const whereClause = filters.length ? `AND ${filters.join(' AND ')}` : ''
 
@@ -108,11 +108,14 @@ WITH base AS (
     c.reason_for_last_failed_delivery,
     c.latest_remark,
     c.channel_name,
-    im.CategoryName AS category,
-    im.Sub_category AS sub_category
+    COALESCE(im.Category_Name, 'Others') AS category,
+    COALESCE(im.Sub_category, 'Mixed Shipments') AS sub_category,
+    SAFE_CAST(REGEXP_REPLACE(TRIM(c.shipment_weight), r'[^0-9.]', '') AS FLOAT64) AS weight_g
   FROM \`frido-429506.production.Clickpost_Shipment_Tracking_Report\` c
-  LEFT JOIN \`frido-429506.production.Unicommerce_Item_Master\` im
-    ON TRIM(c.product_sku_code) = TRIM(im.ProductCode)
+  LEFT JOIN \`frido-429506.sharepoint_to_gcp.Frido_Item_Master__productid_sku_mapping\` skm
+    ON TRIM(c.product_sku_code) = TRIM(skm.productid)
+  LEFT JOIN \`frido-429506.sharepoint_to_gcp.Frido_Item_Master__frido_item_sku_master\` im
+    ON TRIM(skm.masterskucode) = TRIM(im.Product_Code)
   WHERE SUBSTR(c.created_at, 1, 10) BETWEEN '${start}' AND '${end}'
   ${whereClause}
 ),
@@ -399,6 +402,131 @@ top_pickup_cities AS (
 by_payment AS (
   SELECT payment_mode, COUNT(awb) AS total FROM base WHERE payment_mode IS NOT NULL GROUP BY 1
 ),
+tat_by_courier AS (
+  SELECT
+    courier_group,
+    COUNT(awb) AS total,
+    COUNTIF(unified_status='Delivered') AS delivered,
+    COUNTIF(pickup_ts IS NOT NULL AND delivery_ts IS NOT NULL AND TIMESTAMP_DIFF(delivery_ts, pickup_ts, MINUTE) BETWEEN 0 AND 2880) AS bucket_0_1,
+    COUNTIF(pickup_ts IS NOT NULL AND delivery_ts IS NOT NULL AND TIMESTAMP_DIFF(delivery_ts, pickup_ts, MINUTE) BETWEEN 2881 AND 5760) AS bucket_2_3,
+    COUNTIF(pickup_ts IS NOT NULL AND delivery_ts IS NOT NULL AND TIMESTAMP_DIFF(delivery_ts, pickup_ts, MINUTE) BETWEEN 5761 AND 7200) AS bucket_4_5,
+    COUNTIF(pickup_ts IS NOT NULL AND delivery_ts IS NOT NULL AND TIMESTAMP_DIFF(delivery_ts, pickup_ts, MINUTE) > 7200) AS bucket_5plus
+  FROM base WHERE unified_status='Delivered' GROUP BY 1
+),
+tat_by_month AS (
+  SELECT
+    FORMAT_DATE('%b-%y', created_date) AS month_label,
+    DATE_TRUNC(created_date, MONTH) AS month_dt,
+    COUNT(awb) AS total,
+    COUNTIF(unified_status='Delivered') AS delivered,
+    COUNTIF(pickup_ts IS NOT NULL AND delivery_ts IS NOT NULL AND TIMESTAMP_DIFF(delivery_ts, pickup_ts, MINUTE) BETWEEN 0 AND 2880) AS bucket_0_1,
+    COUNTIF(pickup_ts IS NOT NULL AND delivery_ts IS NOT NULL AND TIMESTAMP_DIFF(delivery_ts, pickup_ts, MINUTE) BETWEEN 2881 AND 5760) AS bucket_2_3,
+    COUNTIF(pickup_ts IS NOT NULL AND delivery_ts IS NOT NULL AND TIMESTAMP_DIFF(delivery_ts, pickup_ts, MINUTE) BETWEEN 5761 AND 7200) AS bucket_4_5,
+    COUNTIF(pickup_ts IS NOT NULL AND delivery_ts IS NOT NULL AND TIMESTAMP_DIFF(delivery_ts, pickup_ts, MINUTE) > 7200) AS bucket_5plus
+  FROM base WHERE unified_status='Delivered' AND created_date IS NOT NULL GROUP BY 1,2
+),
+tat_by_facility AS (
+  SELECT
+    CASE
+      WHEN UPPER(TRIM(pickup_city)) IN ('DELHI','GURGAON','GURUGRAM','HARYANA') THEN 'Delhi'
+      WHEN UPPER(TRIM(pickup_city)) IN ('MUMBAI','BHIWANDI') THEN 'Mumbai'
+      WHEN UPPER(TRIM(pickup_city)) IN ('PUNE','MAVAL') THEN 'Pune'
+      WHEN UPPER(TRIM(pickup_city)) IN ('BANGALORE','BENGALURU') THEN 'Bengaluru'
+      WHEN UPPER(TRIM(pickup_city)) IN ('KOLKATA','HOWRAH','HOOGHLY') THEN 'Kolkata'
+      WHEN UPPER(TRIM(pickup_city)) = 'CHENNAI' THEN 'Chennai'
+      WHEN UPPER(TRIM(pickup_city)) = 'HYDERABAD' THEN 'Hyderabad'
+      ELSE TRIM(pickup_city)
+    END AS facility,
+    COUNT(awb) AS total,
+    COUNTIF(unified_status='Delivered') AS delivered,
+    -- Processing to Pickup buckets (hours)
+    COUNTIF(pickup_ts IS NOT NULL AND created_ts IS NOT NULL AND TIMESTAMP_DIFF(pickup_ts, created_ts, MINUTE) BETWEEN 0 AND 720) AS proc_0_12h,
+    COUNTIF(pickup_ts IS NOT NULL AND created_ts IS NOT NULL AND TIMESTAMP_DIFF(pickup_ts, created_ts, MINUTE) BETWEEN 721 AND 1440) AS proc_12_24h,
+    COUNTIF(pickup_ts IS NOT NULL AND created_ts IS NOT NULL AND TIMESTAMP_DIFF(pickup_ts, created_ts, MINUTE) BETWEEN 1441 AND 2880) AS proc_24_48h,
+    COUNTIF(pickup_ts IS NOT NULL AND created_ts IS NOT NULL AND TIMESTAMP_DIFF(pickup_ts, created_ts, MINUTE) > 2880) AS proc_48plus,
+    -- Order to Delivery buckets (days)
+    COUNTIF(delivery_date IS NOT NULL AND order_date IS NOT NULL AND DATE_DIFF(delivery_date, order_date, DAY) BETWEEN 0 AND 1) AS ord_0_1,
+    COUNTIF(delivery_date IS NOT NULL AND order_date IS NOT NULL AND DATE_DIFF(delivery_date, order_date, DAY) BETWEEN 2 AND 3) AS ord_2_3,
+    COUNTIF(delivery_date IS NOT NULL AND order_date IS NOT NULL AND DATE_DIFF(delivery_date, order_date, DAY) BETWEEN 4 AND 5) AS ord_4_5,
+    COUNTIF(delivery_date IS NOT NULL AND order_date IS NOT NULL AND DATE_DIFF(delivery_date, order_date, DAY) > 5) AS ord_5plus
+  FROM base WHERE pickup_city IS NOT NULL GROUP BY 1
+),
+failed_delivery_reasons AS (
+  SELECT
+    reason_for_last_failed_delivery AS reason,
+    COUNT(awb) AS total
+  FROM base
+  WHERE reason_for_last_failed_delivery IS NOT NULL
+    AND reason_for_last_failed_delivery != ''
+    AND ofd_attempts > 1
+  GROUP BY 1 ORDER BY 2 DESC
+),
+by_zone_detail AS (
+  SELECT
+    zone,
+    COUNT(awb) AS total,
+    COUNTIF(unified_status='Delivered') AS delivered,
+    COUNTIF(unified_status='RTO') AS rto,
+    COUNTIF(unified_status='Cancelled') AS cancelled,
+    ROUND(AVG(IF(delivery_date IS NOT NULL AND order_date IS NOT NULL AND DATE_DIFF(delivery_date, order_date, DAY) BETWEEN 0 AND 20, DATE_DIFF(delivery_date, order_date, DAY), NULL)), 2) AS avg_fulfilment_days,
+    ROUND(AVG(IF(pickup_ts IS NOT NULL AND delivery_ts IS NOT NULL AND TIMESTAMP_DIFF(delivery_ts, pickup_ts, MINUTE) BETWEEN 0 AND 28800, TIMESTAMP_DIFF(delivery_ts, pickup_ts, MINUTE) / 1440.0, NULL)), 2) AS avg_intransit_days
+  FROM base WHERE zone IS NOT NULL AND zone != '' GROUP BY 1
+),
+all_channels AS (
+  SELECT DISTINCT channel_name AS channel
+  FROM \`frido-429506.production.Clickpost_Shipment_Tracking_Report\`
+  WHERE channel_name IS NOT NULL AND channel_name != ''
+),
+by_channel AS (
+  SELECT
+    ac.channel,
+    COUNT(b.awb) AS total,
+    COUNTIF(b.unified_status='Delivered') AS delivered,
+    COUNTIF(b.unified_status='RTO') AS rto,
+    COUNTIF(b.unified_status='Cancelled') AS cancelled,
+    COUNTIF(b.unified_status='Intransit') AS in_transit,
+    ROUND(AVG(IF(b.delivery_date IS NOT NULL AND b.order_date IS NOT NULL AND DATE_DIFF(b.delivery_date, b.order_date, DAY) BETWEEN 0 AND 20, DATE_DIFF(b.delivery_date, b.order_date, DAY), NULL)), 2) AS avg_fulfilment_days,
+    ROUND(AVG(IF(b.pickup_ts IS NOT NULL AND b.delivery_ts IS NOT NULL AND TIMESTAMP_DIFF(b.delivery_ts, b.pickup_ts, MINUTE) BETWEEN 0 AND 28800, TIMESTAMP_DIFF(b.delivery_ts, b.pickup_ts, MINUTE) / 1440.0, NULL)), 2) AS avg_intransit_days,
+    ROUND(AVG(SAFE_CAST(b.invoice_value AS FLOAT64)), 0) AS avg_gmv
+  FROM all_channels ac
+  LEFT JOIN base b ON b.channel_name = ac.channel
+  GROUP BY 1
+),
+by_weight_slab AS (
+  SELECT
+    CASE
+      WHEN weight_g IS NULL THEN 'Unknown'
+      WHEN weight_g <= 500 THEN '0-500g'
+      WHEN weight_g <= 1000 THEN '500g-1kg'
+      WHEN weight_g <= 2000 THEN '1-2kg'
+      WHEN weight_g <= 5000 THEN '2-5kg'
+      WHEN weight_g <= 10000 THEN '5-10kg'
+      WHEN weight_g <= 20000 THEN '10-20kg'
+      WHEN weight_g <= 50000 THEN '20-50kg'
+      ELSE '50kg+'
+    END AS slab,
+    CASE
+      WHEN weight_g IS NULL THEN 0
+      WHEN weight_g <= 500 THEN 1
+      WHEN weight_g <= 1000 THEN 2
+      WHEN weight_g <= 2000 THEN 3
+      WHEN weight_g <= 5000 THEN 4
+      WHEN weight_g <= 10000 THEN 5
+      WHEN weight_g <= 20000 THEN 6
+      WHEN weight_g <= 50000 THEN 7
+      ELSE 8
+    END AS slab_order,
+    COUNT(awb) AS total,
+    COUNTIF(unified_status='Delivered') AS delivered,
+    COUNTIF(unified_status='RTO') AS rto,
+    COUNTIF(unified_status='Intransit') AS in_transit,
+    ROUND(SAFE_DIVIDE(COUNTIF(unified_status='Delivered') * 100.0, COUNT(awb)), 1) AS del_pct,
+    ROUND(SAFE_DIVIDE(COUNTIF(unified_status='RTO') * 100.0, COUNT(awb)), 1) AS rto_pct,
+    ROUND(AVG(IF(pickup_ts IS NOT NULL AND delivery_ts IS NOT NULL AND TIMESTAMP_DIFF(delivery_ts, pickup_ts, MINUTE) BETWEEN 0 AND 28800, TIMESTAMP_DIFF(delivery_ts, pickup_ts, MINUTE) / 1440.0, NULL)), 2) AS avg_tat,
+    ROUND(SUM(invoice_value), 0) AS total_value
+  FROM base
+  GROUP BY 1, 2
+),
 filter_opts AS (
   SELECT
     ARRAY_AGG(DISTINCT courier_partner IGNORE NULLS ORDER BY courier_partner) AS couriers,
@@ -431,6 +559,13 @@ SELECT
   TO_JSON_STRING(ARRAY(SELECT AS STRUCT * FROM by_payment_day ORDER BY payment_mode, period_dt)) AS by_payment_day,
   TO_JSON_STRING(ARRAY(SELECT AS STRUCT * FROM by_payment_week ORDER BY payment_mode, period_dt)) AS by_payment_week,
   TO_JSON_STRING(ARRAY(SELECT AS STRUCT * FROM by_payment_month ORDER BY payment_mode, period_dt)) AS by_payment_month,
+  TO_JSON_STRING(ARRAY(SELECT AS STRUCT * FROM failed_delivery_reasons)) AS failed_delivery_reasons,
+  TO_JSON_STRING(ARRAY(SELECT AS STRUCT * FROM by_zone_detail ORDER BY total DESC)) AS by_zone_detail,
+  TO_JSON_STRING(ARRAY(SELECT AS STRUCT * FROM by_channel ORDER BY total DESC)) AS by_channel,
+  TO_JSON_STRING(ARRAY(SELECT AS STRUCT * FROM tat_by_courier ORDER BY total DESC)) AS tat_by_courier,
+  TO_JSON_STRING(ARRAY(SELECT AS STRUCT * FROM tat_by_month ORDER BY month_dt)) AS tat_by_month,
+  TO_JSON_STRING(ARRAY(SELECT AS STRUCT * FROM tat_by_facility ORDER BY total DESC)) AS tat_by_facility,
+  TO_JSON_STRING(ARRAY(SELECT AS STRUCT * FROM by_weight_slab ORDER BY slab_order)) AS by_weight_slab,
   TO_JSON_STRING((SELECT AS STRUCT * FROM filter_opts)) AS filter_opts
 `
 
@@ -460,6 +595,13 @@ SELECT
       byPaymentDay: JSON.parse(r.by_payment_day),
       byPaymentWeek: JSON.parse(r.by_payment_week),
       byPaymentMonth: JSON.parse(r.by_payment_month),
+      failedDeliveryReasons: JSON.parse(r.failed_delivery_reasons),
+      byZoneDetail: JSON.parse(r.by_zone_detail),
+      byChannel: JSON.parse(r.by_channel),
+      tatByCourier: JSON.parse(r.tat_by_courier),
+      tatByMonth: JSON.parse(r.tat_by_month),
+      tatByFacility: JSON.parse(r.tat_by_facility),
+      byWeightSlab: JSON.parse(r.by_weight_slab),
       filterOpts: JSON.parse(r.filter_opts),
     })
   } catch (e) {

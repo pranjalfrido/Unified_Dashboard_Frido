@@ -31,3 +31,4 @@ sa_key.json
 *.sw?
 
 .vercel
+.env*

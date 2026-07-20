@@ -141,19 +141,19 @@ function LKpiCard({ label, value, badgeText, badgeVariant, subValue, cur, prev, 
       ) : (
         <>
           <div className="kpi-value" style={{ fontSize: 16, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{value ?? '—'}</div>
-          <div style={{ marginTop: 2, display: 'flex', alignItems: 'center', gap: 6 }}>
-            {chgBadge}
-            {subValue && !hideSubValue && <span style={{ fontSize: 11, fontWeight: 500, color: C.t3 }}>{subValue} of total</span>}
-          </div>
+          {chgBadge && <div style={{ marginTop: 2 }}>{chgBadge}</div>}
+          {subValue && !hideSubValue && <div style={{ fontSize: 11, fontWeight: 500, color: C.t3, marginTop: 2 }}>{subValue}</div>}
         </>
       )}
     </div>
   )
 }
 
-function LSectionTitle({ title }) {
+function LSectionTitle({ title, collapsed, onToggle }) {
+  const clickable = typeof onToggle === 'function'
   return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 10, margin: '6px 0 2px' }}>
+    <div onClick={clickable ? onToggle : undefined} style={{ display: 'flex', alignItems: 'center', gap: 10, margin: '6px 0 2px', cursor: clickable ? 'pointer' : 'default', userSelect: 'none' }}>
+      {clickable && <span style={{ fontSize: 9, color: C.t3, display: 'inline-block', transform: collapsed ? 'rotate(-90deg)' : 'rotate(0deg)', transition: 'transform .2s' }}>▼</span>}
       <span style={{ fontSize: 10, fontWeight: 800, letterSpacing: '.06em', textTransform: 'uppercase', color: C.t1 }}>{title}</span>
       <div style={{ flex: 1, height: 1, background: C.border }} />
     </div>
@@ -163,7 +163,12 @@ function LSectionTitle({ title }) {
 function LogisticsPage({ filters }) {
   const API = import.meta.env.VITE_API_URL || ''
   const [logisticsView, setLogisticsView] = useState('Logistics')
-  const [lFilters, setLFilters] = useState({ couriers: [], shipmentType: 'all', sddNdd: 'all', paymentMode: null, zone: null, pickupState: null, dropState: null, dropCity: null, category: null, subCategory: null })
+  const [lopsTab, setLopsTab] = useState('overview') // kept for compat but toggle removed
+  const [tatCourierView, setTatCourierView] = useState('courier') // 'courier' | 'month'
+  const [secCollapsed, setSecCollapsed] = useState({})
+  const [wMetric, setWMetric] = useState('qty')
+  const toggleSec = key => setSecCollapsed(p => ({ ...p, [key]: !p[key] }))
+  const [lFilters, setLFilters] = useState({ couriers: [], shipmentType: 'forward', sddNdd: 'all', paymentMode: null, zone: null, pickupState: null, dropState: null, dropCity: null, category: null, subCategory: null })
   const [trendGranularity, setTrendGranularity] = useState('Daily')
   const [trendMetric, setTrendMetric] = useState('Qty')
   const [courierTatGran, setCourierTatGran] = useState('Daily')
@@ -281,7 +286,17 @@ function LogisticsPage({ filters }) {
   const STATUS_BG = { Delivered: C.green.bg, RTO: C.red.bg, Intransit: C.blue.bg, 'Pickup Pending': '#f59e0b22', Cancelled: '#a855f722', Lost: '#f9731622', Damaged: '#64748b22' }
 
   const trendRaw = trendGranularity === 'Daily' ? (data?.byDay || []) : trendGranularity === 'Weekly' ? (data?.byWeek || []) : (data?.byMonth || [])
-  const trendData = trendRaw.map(d => ({ ...d, rto_pct: d.rto_pct ?? (d.total ? +((d.rto / d.total) * 100).toFixed(1) : 0), del_pct: d.total ? +((d.delivered / d.total) * 100).toFixed(1) : 0 }))
+  const trendDeduped = Object.values(trendRaw.reduce((acc, d) => {
+    if (!acc[d.label]) { acc[d.label] = { ...d, _n: 1 } }
+    else {
+      acc[d.label].total = (acc[d.label].total || 0) + (d.total || 0)
+      acc[d.label].delivered = (acc[d.label].delivered || 0) + (d.delivered || 0)
+      acc[d.label].rto = (acc[d.label].rto || 0) + (d.rto || 0)
+      acc[d.label]._n++
+    }
+    return acc
+  }, {}))
+  const trendData = trendDeduped.map(d => ({ ...d, rto_pct: d.total ? +((d.rto / d.total) * 100).toFixed(1) : 0, del_pct: d.total ? +((d.delivered / d.total) * 100).toFixed(1) : 0 }))
   const byCourierData = (data?.byCourier || []).map(d => ({ ...d, del_pct: d.total ? +((d.delivered / d.total) * 100).toFixed(1) : 0, rto_pct: d.total ? +((d.rto / d.total) * 100).toFixed(1) : 0 }))
   const maxCourierTotal = byCourierData[0]?.total || 1
 
@@ -315,10 +330,11 @@ function LogisticsPage({ filters }) {
               return (
                 <div key={gi} style={{ display: 'flex', border: `1.5px solid ${C.border2}`, borderRadius: 8, overflow: 'hidden', background: C.card }}>
                   {opts.map((opt, i) => (
-                    <button key={opt} onClick={() => onChange(opt === val ? 'all' : opt)} style={{
+                    <button key={opt} onClick={() => { const v = gi === 0 ? opt.toLowerCase() : opt; onChange(v === val ? 'all' : v) }} style={{
                       flex: 1, padding: '6px 0', border: 'none', borderLeft: i > 0 ? `1.5px solid ${C.border2}` : 'none',
-                      background: val === opt ? C.t1 : 'transparent', color: val === opt ? '#fff' : C.t2,
-                      fontSize: 11.5, fontWeight: val === opt ? 700 : 500, cursor: 'pointer', fontFamily: 'var(--font)',
+                      background: val === (gi === 0 ? opt.toLowerCase() : opt) ? C.t1 : 'transparent',
+                      color: val === (gi === 0 ? opt.toLowerCase() : opt) ? '#fff' : C.t2,
+                      fontSize: 11.5, fontWeight: val === (gi === 0 ? opt.toLowerCase() : opt) ? 700 : 500, cursor: 'pointer', fontFamily: 'var(--font)',
                       textAlign: 'center', transition: 'all .15s'
                     }}>{opt}</button>
                   ))}
@@ -351,6 +367,7 @@ function LogisticsPage({ filters }) {
       <div style={{ flex: 1, overflow: 'auto', padding: '4px 20px 16px', display: 'flex', flexDirection: 'column', gap: 14 }}>
 
 
+
       {error && <div style={{ padding: '10px 14px', borderRadius: 9, background: C.red.bg, border: `1px solid ${C.red.bd}`, color: C.red.tx, fontSize: 12 }}>⚠ {error}</div>}
       {loading && !data && (
         <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 14, color: C.t3, fontSize: 13, minHeight: 300 }}>
@@ -364,21 +381,19 @@ function LogisticsPage({ filters }) {
       {data && <>
 
         {/* ── Volume KPIs ── */}
-        <LSectionTitle title="Volume Overview" />
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(8, 1fr)', gap: 7 }}>
+        <LSectionTitle title="Volume Overview" collapsed={secCollapsed['volume']} onToggle={() => toggleSec('volume')} />
+        <div style={{ display: secCollapsed['volume'] ? 'none' : 'grid', gridTemplateColumns: 'repeat(6, 1fr)', gap: 7 }}>
           <LKpiCard label="Total Shipments" value={n(k.total_shipments)} cur={k.total_shipments} prev={pk.total_shipments} compact={!filterSidebarOpen} />
           <LKpiCard label="Total GMV" value={fmtGMV(k.total_value)} cur={k.total_value} prev={pk.total_value} compact={!filterSidebarOpen} />
           <LKpiCard label="Delivered" value={n(k.delivered)} badgeVariant="G" subValue={pct2(k.delivered, k.total_shipments)} cur={k.delivered} prev={pk.delivered} hideSubValue={filterSidebarOpen} compact={!filterSidebarOpen} />
           <LKpiCard label="RTO" value={n(k.rto)} badgeVariant="R" subValue={pct2(k.rto, k.total_shipments)} cur={k.rto} prev={pk.rto} hideSubValue={filterSidebarOpen} compact={!filterSidebarOpen} />
-          <LKpiCard label="RTO Undelivered" value={n(k.rto_undelivered)} badgeVariant="R" cur={k.rto_undelivered} prev={pk.rto_undelivered} compact={!filterSidebarOpen} />
-          <LKpiCard label="In Transit" value={n(k.in_transit)} badgeVariant="B" cur={k.in_transit} prev={pk.in_transit} compact={!filterSidebarOpen} />
           <LKpiCard label="Pickup Pending" value={n(k.pickup_pending)} badgeVariant="A" cur={k.pickup_pending} prev={pk.pickup_pending} compact={!filterSidebarOpen} />
           <LKpiCard label="Cancelled" value={n(k.cancelled)} badgeVariant="N" subValue={pct2(k.cancelled, k.total_shipments)} cur={k.cancelled} prev={pk.cancelled} hideSubValue={filterSidebarOpen} compact={!filterSidebarOpen} />
         </div>
 
         {/* ── Quality KPIs ── */}
-        <LSectionTitle title="Delivery Quality & SLA" />
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 7 }}>
+        <LSectionTitle title="Delivery Quality & SLA" collapsed={secCollapsed['quality']} onToggle={() => toggleSec('quality')} />
+        <div style={{ display: secCollapsed['quality'] ? 'none' : 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 7 }}>
           <LKpiCard label="On Time Del" value={n(k.on_time)} badgeText={pct2(k.on_time, k.delivered)} badgeVariant="G" cur={k.on_time} prev={pk.on_time} compact={!filterSidebarOpen} />
           <LKpiCard label="SLA Breach" value={n(k.sla_breach)} badgeVariant="R" subValue={pct2(k.sla_breach, k.delivered)} cur={k.sla_breach} prev={pk.sla_breach} hideSubValue={filterSidebarOpen} compact={!filterSidebarOpen} />
           <LKpiCard label="RTO 10+ Days" value={n(k.rto_10plus)} badgeText="Aging" badgeVariant="R" cur={k.rto_10plus} prev={pk.rto_10plus} compact={!filterSidebarOpen} />
@@ -389,8 +404,8 @@ function LogisticsPage({ filters }) {
         </div>
 
         {/* ── TAT KPIs ── */}
-        <LSectionTitle title="Turnaround Time" />
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6, 1fr)', gap: 7 }}>
+        <LSectionTitle title="Turnaround Time" collapsed={secCollapsed['tat']} onToggle={() => toggleSec('tat')} />
+        <div style={{ display: secCollapsed['tat'] ? 'none' : 'grid', gridTemplateColumns: 'repeat(6, 1fr)', gap: 7 }}>
           <LKpiCard label="Avg Processing" value={d1(k.avg_processing)} badgeText="Cr→1st OFD" badgeVariant="N" cur={k.avg_processing} prev={pk.avg_processing} compact={!filterSidebarOpen} />
           <LKpiCard label="Avg Pickup TAT" value={d1(k.avg_pickup)} badgeText="Cr→Pick" badgeVariant="B" cur={k.avg_pickup} prev={pk.avg_pickup} compact={!filterSidebarOpen} />
           <LKpiCard label="Avg In-Transit" value={d1(k.avg_intransit)} badgeText="Pick→Del" badgeVariant="N" cur={k.avg_intransit} prev={pk.avg_intransit} compact={!filterSidebarOpen} />
@@ -400,8 +415,8 @@ function LogisticsPage({ filters }) {
         </div>
 
         {/* ── Monthly Trend + Courier TAT ── */}
-        <LSectionTitle title="Monthly Trend" />
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+        <LSectionTitle title="Monthly Trend" collapsed={secCollapsed['trend']} onToggle={() => toggleSec('trend')} />
+        <div style={{ display: secCollapsed['trend'] ? 'none' : 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
           <div style={{ ...cardStyle, display: 'flex', flexDirection: 'column' }}>
             <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 10, flexShrink: 0 }}>
               <div>
@@ -496,13 +511,25 @@ function LogisticsPage({ filters }) {
             {(() => {
               // use byDay/byWeek/byMonth (overall, not per courier) for date-based X-axis
               const src = courierTatGran === 'Daily' ? (data?.byDay || []) : courierTatGran === 'Weekly' ? (data?.byWeek || []) : (data?.byMonth || [])
-              const tatData = src.map(d => ({
+              // dedupe by label (week boundary issues can produce duplicate week labels)
+              const deduped = Object.values(src.reduce((acc, d) => {
+                if (!acc[d.label]) { acc[d.label] = { ...d, _count: 1 } }
+                else {
+                  acc[d.label].total = (acc[d.label].total || 0) + (d.total || 0)
+                  ;['avg_processing_days','avg_pickup_days','avg_intransit_days','avg_fulfilment_days'].forEach(k => {
+                    if (d[k] != null) { acc[d.label][k] = ((acc[d.label][k] || 0) * acc[d.label]._count + d[k]) / (acc[d.label]._count + 1) }
+                  })
+                  acc[d.label]._count++
+                }
+                return acc
+              }, {}))
+              const tatData = deduped.map(d => ({
                 label: d.label,
                 total: d.total || 0,
-                avg_processing_days: d.avg_processing_days ?? null,
-                avg_pickup_days: d.avg_pickup_days ?? null,
-                avg_intransit_days: d.avg_intransit_days ?? null,
-                avg_fulfilment_days: d.avg_fulfilment_days ?? null,
+                avg_processing_days: d.avg_processing_days != null ? Math.round(d.avg_processing_days * 100) / 100 : null,
+                avg_pickup_days: d.avg_pickup_days != null ? Math.round(d.avg_pickup_days * 100) / 100 : null,
+                avg_intransit_days: d.avg_intransit_days != null ? Math.round(d.avg_intransit_days * 100) / 100 : null,
+                avg_fulfilment_days: d.avg_fulfilment_days != null ? Math.round(d.avg_fulfilment_days * 100) / 100 : null,
               }))
               return (<>
             <ResponsiveContainer width="100%" height={220}>
@@ -532,9 +559,9 @@ function LogisticsPage({ filters }) {
         </div>
 
         {/* ── Courier Performance Table ── */}
-        <LSectionTitle title="Courier Performance" />
+        <LSectionTitle title="Courier Performance" collapsed={secCollapsed['courier']} onToggle={() => toggleSec('courier')} />
 
-<div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 14 }}>
+<div style={{ display: secCollapsed['courier'] ? 'none' : 'grid', gridTemplateColumns: '1fr', gap: 14 }}>
           <div style={cardStyle}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
             <div style={chartTitle}>Courier-wise Breakdown</div>
@@ -985,8 +1012,318 @@ function LogisticsPage({ filters }) {
           )
         })()}
 
+        {/* ── Operations Sections ── */}
+        {(() => {
+        const pct1 = (a, b) => b ? ((a / b) * 100).toFixed(1) + '%' : '—'
+        const d1 = v => v != null ? v.toFixed(1) + 'd' : '—'
+
+        const pickupPending5 = k.pickup_pending || 0
+        const rto10plus = k.rto_10plus || 0
+        const eddBreached = k.edd_breached || 0
+
+        const byCourier = data.byCourier || []
+
+        const tatKpis = [
+          { label: 'Avg Processing Time', value: d1(k.avg_processing), sub: 'Order → Pickup Scan' },
+          { label: 'Avg Pickup TAT', value: d1(k.avg_pickup), sub: 'Order → Picked Up' },
+          { label: 'Avg In-Transit', value: d1(k.avg_intransit), sub: 'Pickup → Delivery' },
+          { label: 'Avg Fulfillment', value: d1(k.avg_fulfilment), sub: 'Order → Delivered' },
+          { label: 'Avg RTO TAT', value: d1(k.avg_rto_tat), sub: 'RTO Mark → RTO Delivered' },
+          { label: 'Avg Scan to Attempt', value: d1(k.avg_s2a), sub: 'Pickup → 1st OFD' },
+          { label: 'Avg Committed SLA', value: d1(k.avg_sla), sub: 'Promised delivery days' },
+        ]
+
+        const qKpis = [
+          { label: '1st Attempt Delivery', value: pct1(k.delivered_1attempt, k.delivered), sub: `${(k.delivered_1attempt||0).toLocaleString('en-IN')} shipments` },
+          { label: 'Multi Attempt Delivery', value: pct1(k.delivered_multi, k.delivered), sub: `${(k.delivered_multi||0).toLocaleString('en-IN')} shipments` },
+          { label: 'Zero Attempt RTO', value: pct1(k.z_rto, k.rto), sub: `${(k.z_rto||0).toLocaleString('en-IN')} shipments` },
+          { label: 'On-Time Delivery', value: pct1(k.on_time, k.delivered), sub: `${(k.on_time||0).toLocaleString('en-IN')} on time` },
+          { label: 'SLA Breach', value: pct1(k.sla_breach, k.total_shipments), sub: `${(k.sla_breach||0).toLocaleString('en-IN')} breached` },
+          { label: 'Lost & Damaged', value: (k.lost_damaged||0).toLocaleString('en-IN'), sub: 'Total count' },
+        ]
+
+        const ageingKpis = [
+          { label: 'Pickup Pending', value: (pickupPending5||0).toLocaleString('en-IN'), sub: 'Currently pending pickup' },
+          { label: 'EDD Breached', value: (eddBreached||0).toLocaleString('en-IN'), sub: 'Past EDD, not delivered' },
+          { label: 'RTO Undelivered 10d+', value: (rto10plus||0).toLocaleString('en-IN'), sub: 'RTO pending > 10 days' },
+          { label: 'Critical Stuck', value: (k.critical_stuck||0).toLocaleString('en-IN'), sub: 'In-transit > EDD+5d' },
+        ]
+
+        const opsCardStyle = { background: C.card, border: `1px solid ${C.border}`, borderRadius: 10, padding: '10px 14px', display: 'flex', flexDirection: 'column', gap: 3 }
+        const opsLabelStyle = { fontSize: 9.5, color: C.t3, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.04em', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }
+        const opsValStyle = { fontSize: 20, fontWeight: 700, color: C.t1, letterSpacing: '-0.5px', lineHeight: 1.1 }
+        const opsSubStyle = { fontSize: 10.5, color: C.t3 }
+
+        const thStyle2 = { fontSize: 10, fontWeight: 700, color: C.t3, textTransform: 'uppercase', letterSpacing: '.04em', padding: '7px 10px', borderBottom: `1px solid ${C.border}`, whiteSpace: 'nowrap', textAlign: 'right' }
+        const thL2 = { ...thStyle2, textAlign: 'left' }
+        const tdStyle2 = { fontSize: 11.5, color: C.t1, padding: '6px 10px', borderBottom: `1px solid ${C.border}`, textAlign: 'right', whiteSpace: 'nowrap' }
+        const tdL2 = { ...tdStyle2, textAlign: 'left', fontWeight: 600 }
+        const tableCard2 = { background: C.card, border: `1px solid ${C.border}`, borderRadius: 10, overflow: 'hidden' }
+        const tableTitle2 = { fontSize: 11, fontWeight: 700, color: C.t2, padding: '10px 12px 8px', borderBottom: `1px solid ${C.border}`, letterSpacing: '.02em' }
+
+        const byZone2 = data.byZoneDetail || []
+
+        return (
+          <>
+            {/* TAT Bucket Analysis */}
+            {(() => {
+              const tatByCourier = data.tatByCourier || []
+              const tatByFacility = (data.tatByFacility || []).filter(r => r.facility && r.facility.trim())
+              const pctB = (v, total) => total ? ((v/total)*100).toFixed(1)+'%' : '—'
+
+              // totals rows
+              const facTotals = tatByFacility.reduce((acc, r) => {
+                acc.total += r.total||0; acc.proc_0_12h += r.proc_0_12h||0; acc.proc_12_24h += r.proc_12_24h||0; acc.proc_24_48h += r.proc_24_48h||0; acc.proc_48plus += r.proc_48plus||0
+                acc.ord_0_1 += r.ord_0_1||0; acc.ord_2_3 += r.ord_2_3||0; acc.ord_4_5 += r.ord_4_5||0; acc.ord_5plus += r.ord_5plus||0
+                return acc
+              }, { total:0, proc_0_12h:0, proc_12_24h:0, proc_24_48h:0, proc_48plus:0, ord_0_1:0, ord_2_3:0, ord_4_5:0, ord_5plus:0 })
+              const courierTotals = tatByCourier.reduce((acc, r) => {
+                acc.total += r.total||0; acc.delivered += r.delivered||0; acc.bucket_0_1 += r.bucket_0_1||0; acc.bucket_2_3 += r.bucket_2_3||0; acc.bucket_4_5 += r.bucket_4_5||0; acc.bucket_5plus += r.bucket_5plus||0
+                return acc
+              }, { total:0, delivered:0, bucket_0_1:0, bucket_2_3:0, bucket_4_5:0, bucket_5plus:0 })
+
+              const BOX_H = 320
+              const thS = { fontSize: 10, fontWeight: 700, color: C.t3, textTransform: 'uppercase', letterSpacing: '.04em', padding: '6px 8px', borderBottom: `1px solid ${C.border}`, whiteSpace: 'nowrap', textAlign: 'right', background: C.card }
+              const thL = { ...thS, textAlign: 'left' }
+              const tdS = { fontSize: 11, color: C.t1, padding: '5px 8px', borderBottom: `1px solid ${C.border}`, textAlign: 'right', whiteSpace: 'nowrap' }
+              const tdL = { ...tdS, textAlign: 'left', fontWeight: 600 }
+              const totalRowS = { fontSize: 11, fontWeight: 700, color: C.t1, padding: '5px 8px', textAlign: 'right', whiteSpace: 'nowrap', background: `${C.border}55` }
+              const totalRowL = { ...totalRowS, textAlign: 'left' }
+
+              return (
+                <>
+                  <LSectionTitle title="TAT Bucket Analysis" collapsed={secCollapsed['tatbucket']} onToggle={() => toggleSec('tatbucket')} />
+                  <div style={{ display: secCollapsed['tatbucket'] ? 'none' : 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 14 }}>
+
+                    {/* Table 1: Order → Pickup by Facility */}
+                    <div style={{ ...tableCard2, alignSelf: 'start' }}>
+                      <div style={tableTitle2}>Order → Pickup <span style={{ fontWeight: 400, color: C.t3 }}>(by Facility)</span></div>
+                      <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                        <thead>
+                          <tr>
+                            <th style={thL}>Facility</th>
+                            <th style={thS}>0-12h</th>
+                            <th style={thS}>12-24h</th>
+                            <th style={thS}>24-48h</th>
+                            <th style={thS}>48h+</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {tatByFacility.map((row, i) => {
+                            const tot = (row.proc_0_12h||0)+(row.proc_12_24h||0)+(row.proc_24_48h||0)+(row.proc_48plus||0)
+                            return (
+                              <tr key={row.facility} style={{ background: i%2===0?'transparent':`${C.border}33` }}>
+                                <td style={tdL}>{row.facility}</td>
+                                {[row.proc_0_12h, row.proc_12_24h, row.proc_24_48h, row.proc_48plus].map((v, ci) => (
+                                  <td key={ci} style={{ ...tdS, color: (v/tot)>0.2?'#dc2626':C.t1, fontWeight: (v/tot)>0.2?700:400 }}>{pctB(v, tot)}</td>
+                                ))}
+                              </tr>
+                            )
+                          })}
+                          {(() => { const t=(facTotals.proc_0_12h+facTotals.proc_12_24h+facTotals.proc_24_48h+facTotals.proc_48plus); return (
+                            <tr style={{ background: `${C.border}55`, borderTop: `2px solid ${C.border2}` }}>
+                              <td style={totalRowL}>Total</td>
+                              <td style={totalRowS}>{pctB(facTotals.proc_0_12h,t)}</td>
+                              <td style={totalRowS}>{pctB(facTotals.proc_12_24h,t)}</td>
+                              <td style={totalRowS}>{pctB(facTotals.proc_24_48h,t)}</td>
+                              <td style={totalRowS}>{pctB(facTotals.proc_48plus,t)}</td>
+                            </tr>
+                          ) })()}
+                        </tbody>
+                      </table>
+                    </div>
+
+                    {/* Table 2: Pickup → Delivery by Courier (scrollable, matches sibling height) */}
+                    <div style={{ ...tableCard2, alignSelf: 'start', display: 'flex', flexDirection: 'column', maxHeight: 281, overflow: 'hidden' }}>
+                      <div style={{ ...tableTitle2, flexShrink: 0 }}>Pickup → Delivery <span style={{ fontWeight: 400, color: C.t3 }}>(by Courier)</span></div>
+                      <div style={{ flex: 1, overflowY: 'auto' }}>
+                        <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed' }}>
+                          <colgroup><col style={{width:'34%'}}/><col style={{width:'13%'}}/><col style={{width:'13%'}}/><col style={{width:'13%'}}/><col style={{width:'13%'}}/><col style={{width:'13%'}}/></colgroup>
+                          <thead style={{ position: 'sticky', top: 0, zIndex: 2, background: C.card }}>
+                            <tr>
+                              <th style={thL}>Courier</th>
+                              <th style={thS}>Del</th>
+                              <th style={thS}>0-1d</th>
+                              <th style={thS}>2-3d</th>
+                              <th style={thS}>4-5d</th>
+                              <th style={thS}>5+d</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {tatByCourier.map((row, i) => {
+                              const tot = row.delivered || 0
+                              return (
+                                <tr key={row.courier_group} style={{ background: i%2===0?'transparent':`${C.border}33` }}>
+                                  <td style={tdL}>{row.courier_group}</td>
+                                  <td style={tdS}>{tot.toLocaleString('en-IN')}</td>
+                                  {[row.bucket_0_1, row.bucket_2_3, row.bucket_4_5, row.bucket_5plus].map((v, ci) => (
+                                    <td key={ci} style={{ ...tdS, color: (v/tot)>0.2?'#dc2626':C.t1, fontWeight: (v/tot)>0.2?700:400 }}>{pctB(v, tot)}</td>
+                                  ))}
+                                </tr>
+                              )
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
+                      <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed', flexShrink: 0, borderTop: `2px solid ${C.border2}` }}>
+                        <colgroup><col style={{width:'34%'}}/><col style={{width:'13%'}}/><col style={{width:'13%'}}/><col style={{width:'13%'}}/><col style={{width:'13%'}}/><col style={{width:'13%'}}/></colgroup>
+                        <tbody>
+                          <tr style={{ background: `${C.border}55` }}>
+                            <td style={totalRowL}>Total</td>
+                            <td style={totalRowS}>{courierTotals.delivered.toLocaleString('en-IN')}</td>
+                            <td style={totalRowS}>{pctB(courierTotals.bucket_0_1, courierTotals.delivered)}</td>
+                            <td style={totalRowS}>{pctB(courierTotals.bucket_2_3, courierTotals.delivered)}</td>
+                            <td style={totalRowS}>{pctB(courierTotals.bucket_4_5, courierTotals.delivered)}</td>
+                            <td style={totalRowS}>{pctB(courierTotals.bucket_5plus, courierTotals.delivered)}</td>
+                          </tr>
+                        </tbody>
+                      </table>
+                    </div>
+
+                    {/* Table 3: Processing → Pickup by Facility */}
+                    <div style={{ ...tableCard2, alignSelf: 'start' }}>
+                      <div style={tableTitle2}>Processing → Pickup <span style={{ fontWeight: 400, color: C.t3 }}>(by Facility)</span></div>
+                      <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                        <thead>
+                          <tr>
+                            <th style={thL}>Facility</th>
+                            <th style={thS}>0-1d</th>
+                            <th style={thS}>2-3d</th>
+                            <th style={thS}>4-5d</th>
+                            <th style={thS}>5+d</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {tatByFacility.map((row, i) => {
+                            const tot = (row.ord_0_1||0)+(row.ord_2_3||0)+(row.ord_4_5||0)+(row.ord_5plus||0)
+                            return (
+                              <tr key={row.facility} style={{ background: i%2===0?'transparent':`${C.border}33` }}>
+                                <td style={tdL}>{row.facility}</td>
+                                {[row.ord_0_1, row.ord_2_3, row.ord_4_5, row.ord_5plus].map((v, ci) => (
+                                  <td key={ci} style={{ ...tdS, color: (v/tot)>0.2?'#dc2626':C.t1, fontWeight: (v/tot)>0.2?700:400 }}>{pctB(v, tot)}</td>
+                                ))}
+                              </tr>
+                            )
+                          })}
+                          {(() => { const t=(facTotals.ord_0_1+facTotals.ord_2_3+facTotals.ord_4_5+facTotals.ord_5plus); return (
+                            <tr style={{ background: `${C.border}55`, borderTop: `2px solid ${C.border2}` }}>
+                              <td style={totalRowL}>Total</td>
+                              <td style={totalRowS}>{pctB(facTotals.ord_0_1,t)}</td>
+                              <td style={totalRowS}>{pctB(facTotals.ord_2_3,t)}</td>
+                              <td style={totalRowS}>{pctB(facTotals.ord_4_5,t)}</td>
+                              <td style={totalRowS}>{pctB(facTotals.ord_5plus,t)}</td>
+                            </tr>
+                          ) })()}
+                        </tbody>
+                      </table>
+                    </div>
+
+                  </div>
+                </>
+              )
+            })()}
+
+          </>
+        )
+        })()}
+
+
+        {/* ── Weight Based Analysis ── */}
+        <LSectionTitle title="Weight Based Analysis" collapsed={secCollapsed['weight']} onToggle={() => toggleSec('weight')} />
+        {(() => {
+          const wData = (data.byWeightSlab || []).filter(r => r.slab !== 'Unknown')
+          if (!wData.length) return null
+          const SLABS = ['0-500g','500g-1kg','1-2kg','2-5kg','5-10kg','10-20kg','20-50kg','50kg+']
+          const SLAB_COLORS = ['#60A5FA','#38BDF8','#93C5FD','#34D399','#FBBF24','#F87171','#A78BFA','#FB923C']
+          const ordered = SLABS.map((s,i) => { const r = wData.find(x => x.slab === s); return r ? { ...r, color: SLAB_COLORS[i] } : null }).filter(Boolean)
+          const grandTotal = ordered.reduce((s,r) => s + (r.total||0), 0) || 1
+          const grandValue = ordered.reduce((s,r) => s + (r.total_value||0), 0) || 1
+          const donutData = ordered.map(r => ({
+            name: r.slab,
+            value: wMetric === 'qty' ? (r.total||0) : (r.total_value||0),
+            color: r.color,
+            pct: wMetric === 'qty' ? +((r.total||0)/grandTotal*100).toFixed(1) : +((r.total_value||0)/grandValue*100).toFixed(1),
+            raw: r,
+          }))
+          const fmtVal = v => v >= 10000000 ? '₹'+(v/10000000).toFixed(1)+'Cr' : v >= 100000 ? '₹'+(v/100000).toFixed(1)+'L' : v >= 1000 ? '₹'+(v/1000).toFixed(0)+'K' : '₹'+v
+          return (
+            <div style={{ display: secCollapsed['weight'] ? 'none' : 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+              {/* Left: Donut with toggle */}
+              <div style={cardStyle}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+                  <div style={chartTitle}>Shipment Allocation by Weight</div>
+                  <div style={{ display: 'flex', background: C.bg, border: `1px solid ${C.border}`, borderRadius: 7, padding: 2 }}>
+                    {[['qty','Qty'],['value','Value']].map(([id,lbl]) => (
+                      <button key={id} onClick={() => setWMetric(id)} style={{ fontSize: 10, padding: '2px 10px', borderRadius: 5, border: 'none', background: wMetric === id ? C.acc : 'transparent', color: wMetric === id ? '#000' : C.t3, cursor: 'pointer', fontWeight: wMetric === id ? 700 : 500, fontFamily: 'var(--font)' }}>{lbl}</button>
+                    ))}
+                  </div>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+                  <ResponsiveContainer width={180} height={200}>
+                    <PieChart>
+                      <Pie data={donutData} cx="50%" cy="50%" innerRadius={55} outerRadius={85} dataKey="value" paddingAngle={2}>
+                        {donutData.map((d,i) => <Cell key={i} fill={d.color} />)}
+                      </Pie>
+                      <Tooltip content={({ active, payload }) => {
+                        if (!active || !payload?.length) return null
+                        const d = payload[0].payload
+                        return (
+                          <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 8, padding: '8px 12px', fontSize: 11, color: C.t1 }}>
+                            <div style={{ fontWeight: 700, marginBottom: 4 }}>{d.name}</div>
+                            <div>{wMetric === 'qty' ? (d.value||0).toLocaleString('en-IN')+' shipments' : fmtVal(d.value||0)}</div>
+                            <div style={{ color: C.t3 }}>Allocation: <strong>{d.pct}%</strong></div>
+                          </div>
+                        )
+                      }} />
+                    </PieChart>
+                  </ResponsiveContainer>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 6, flex: 1 }}>
+                    {donutData.map(d => (
+                      <div key={d.name} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                        <div style={{ width: 10, height: 10, borderRadius: '50%', background: d.color, flexShrink: 0 }} />
+                        <div style={{ fontSize: 12, color: C.t2, flex: 1 }}>{d.name}</div>
+                        <div style={{ fontSize: 12, fontWeight: 700, color: C.t1 }}>{wMetric === 'qty' ? (d.value||0).toLocaleString('en-IN') : fmtVal(d.value||0)}</div>
+                        <div style={{ fontSize: 12, color: C.t3, minWidth: 36, textAlign: 'right' }}>{d.pct}%</div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+              {/* Right: Shipment Qty bars + RTO% & Intrasit TAT lines */}
+              <div style={cardStyle}>
+                <div style={chartTitle}>Delivery Performance by Weight Slab</div>
+                <ResponsiveContainer width="100%" height={220}>
+                  <ComposedChart data={ordered} margin={{ top: 4, right: 40, left: -10, bottom: 0 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke={C.border} vertical={false} />
+                    <XAxis dataKey="slab" tick={{ fontSize: 10, fill: C.t2 }} />
+                    <YAxis yAxisId="qty" tick={{ fontSize: 10, fill: C.t2 }} tickFormatter={v => v >= 1000 ? `${(v/1000).toFixed(0)}K` : v} />
+                    <YAxis yAxisId="pct" orientation="right" tick={{ fontSize: 10, fill: C.t2 }} unit="%" domain={[0, 'dataMax + 5']} />
+                    <Tooltip content={({ active, payload, label }) => {
+                      if (!active || !payload?.length) return null
+                      const row = ordered.find(r => r.slab === label) || {}
+                      return (
+                        <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 8, padding: '8px 12px', fontSize: 11, color: C.t1 }}>
+                          <div style={{ fontWeight: 700, marginBottom: 4 }}>{label}</div>
+                          <div style={{ color: '#5BA4CF' }}>Shipments: <strong>{(row.total||0).toLocaleString('en-IN')}</strong></div>
+                          <div style={{ color: C.red.tx }}>RTO %: <strong>{row.rto_pct??'—'}%</strong></div>
+                          <div style={{ color: '#60A5FA' }}>Intrasit TAT: <strong>{row.avg_tat??'—'}d</strong></div>
+                        </div>
+                      )
+                    }} />
+                    <Bar yAxisId="qty" dataKey="total" name="Shipments" fill="#5BA4CF" radius={[3,3,0,0]} barSize={20} />
+                    <Line yAxisId="pct" type="monotone" dataKey="rto_pct" name="RTO %" stroke={C.red.tx} strokeWidth={2} dot={{ r: 3, fill: C.red.tx }} />
+                    <Line yAxisId="pct" type="monotone" dataKey="avg_tat" name="Intrasit TAT" stroke="#60A5FA" strokeWidth={2} dot={{ r: 3, fill: '#60A5FA' }} />
+                    <Legend wrapperStyle={{ fontSize: 10 }} />
+                  </ComposedChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+          )
+        })()}
+
+
         {/* ── Geographic ── */}
-        <LSectionTitle title="Geographic" />
+        <LSectionTitle title="Geographic" collapsed={secCollapsed['geo']} onToggle={() => toggleSec('geo')} />
         {(() => {
           const geoBar = (rows, labelKey, color) => {
             const grandTotal = rows.reduce((s,r) => s + (r.total||0), 0) || 1
@@ -1011,7 +1348,7 @@ function LogisticsPage({ filters }) {
             )
           }
           return (
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 14 }}>
+            <div style={{ display: secCollapsed['geo'] ? 'none' : 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 14 }}>
               <div style={cardStyle}>
                 <div style={chartTitle}>Total Shipments by Drop City</div>
                 <div style={{ fontSize: 11, color: C.t3, marginBottom: 12, marginTop: 2 }}>Top 10 destination cities</div>
@@ -1032,13 +1369,13 @@ function LogisticsPage({ filters }) {
         })()}
 
         {/* ── RTO Reasons ── */}
-        <LSectionTitle title="RTO Reasons" />
+        <LSectionTitle title="RTO Reasons" collapsed={secCollapsed['rto']} onToggle={() => toggleSec('rto')} />
         {(() => {
           const reasons = (data.rtoReasons || []).filter(r => r.reason && r.total > 0).sort((a, b) => b.total - a.total)
           const totalRto = reasons.reduce((s, r) => s + r.total, 0) || 1
           if (!reasons.length) return <div style={{ color: C.t3, fontSize: 12 }}>No RTO reason data available.</div>
           return (
-            <div style={{ ...cardStyle, padding: '16px 18px' }}>
+            <div style={{ ...cardStyle, padding: '16px 18px', display: secCollapsed['rto'] ? 'none' : undefined }}>
               <div style={{ ...chartTitle, marginBottom: 16 }}>RTO Reasons — Shipment Count & % of Total RTO</div>
               <ResponsiveContainer width="100%" height={280}>
                 <BarChart data={reasons} margin={{ top: 20, right: 10, left: 0, bottom: 80 }}>
@@ -1190,6 +1527,8 @@ function LogisticsPage({ filters }) {
         })()}
 
       </>}
+
+
       </div>
     </div>
   )
@@ -1207,9 +1546,9 @@ function Sidebar({ page, setPage }) {
     { id: 'overview', label: 'Overview', icon: <SvgIcon d={['M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z','M9 22V12h6v10']} /> },
     { id: 'sales', label: 'Sales', icon: <SvgIcon d={['M18 20V10','M12 20V4','M6 20v-6']} /> },
     { id: 'ads', label: 'Ads', icon: <SvgIcon d={['M15 3h4a2 2 0 012 2v14a2 2 0 01-2 2h-4','M10 17l5-5-5-5','M13.8 12H3']} /> },
-    { id: 'intelligence', label: 'Intel', icon: <SvgIcon d={['M12 2a7 7 0 017 7c0 3.5-2 5.5-2 8H7c0-2.5-2-4.5-2-8a7 7 0 017-7z','M9 21h6','M9.5 17.5h5']} /> },
     { id: 'logistics', label: 'Logistics', icon: <SvgIcon d={['M1 3h15v13H1z','M16 8h4l3 3v5h-7V8z','M5.5 19a1.5 1.5 0 100-3 1.5 1.5 0 000 3z','M18.5 19a1.5 1.5 0 100-3 1.5 1.5 0 000 3z']} /> },
     { id: 'inventory', label: 'Inventory', icon: <SvgIcon d={['M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z','M3.27 6.96L12 12.01l8.73-5.05','M12 22.08V12']} /> },
+    { id: 'customer', label: 'Customer', icon: <SvgIcon d={['M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2','M9 11a4 4 0 100-8 4 4 0 000 8z','M23 21v-2a4 4 0 00-3-3.87','M16 3.13a4 4 0 010 7.75']} /> },
   ]
   const dims = [
     { label: 'P&L', icon: <SvgIcon d={['M12 1v22','M17 5H9.5a3.5 3.5 0 100 7h5a3.5 3.5 0 110 7H6']} /> },
@@ -1257,7 +1596,6 @@ function BottomNav({ page, setPage }) {
   const items = [
     { id: 'overview', label: 'Overview', icon: <SvgIcon d={['M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z','M9 22V12h6v10']} size={22} /> },
     { id: 'sales', label: 'Sales', icon: <SvgIcon d={['M18 20V10','M12 20V4','M6 20v-6']} size={22} /> },
-    { id: 'intelligence', label: 'Intel', icon: <SvgIcon d={['M12 2a7 7 0 017 7c0 3.5-2 5.5-2 8H7c0-2.5-2-4.5-2-8a7 7 0 017-7z','M9 21h6','M9.5 17.5h5']} size={22} /> },
   ]
   return (
     <nav className="bottom-nav">
@@ -1298,20 +1636,25 @@ function DateRangePicker({ filters, setFilters }) {
     { label: 'Yesterday', fn: () => { const d = new Date(today); d.setDate(d.getDate()-1); const s = fmt0(d); return { start: s, end: s } } },
     { label: 'Last 7 Days', fn: () => { const s = new Date(today); s.setDate(s.getDate()-6); return { start: fmt0(s), end: fmt0(today) } } },
     { label: 'Last 15 Days', fn: () => { const s = new Date(today); s.setDate(s.getDate()-14); return { start: fmt0(s), end: fmt0(today) } } },
-    { label: 'Last 30 Days', fn: () => { const s = new Date(today); s.setDate(s.getDate()-29); return { start: fmt0(s), end: fmt0(today) } } },
-    { label: 'Last 90 Days', fn: () => { const s = new Date(today); s.setDate(s.getDate()-89); return { start: fmt0(s), end: fmt0(today) } } },
-    { label: 'This Week', fn: () => { const s = new Date(today); s.setDate(s.getDate()-s.getDay()); return { start: fmt0(s), end: fmt0(today) } } },
-    { label: 'Last Week', fn: () => { const s = new Date(today); s.setDate(s.getDate()-s.getDay()-7); const e = new Date(s); e.setDate(e.getDate()+6); return { start: fmt0(s), end: fmt0(e) } } },
-    { label: 'This Month', fn: () => { const s = new Date(today.getFullYear(), today.getMonth(), 1); return { start: fmt0(s), end: fmt0(today) } } },
     { label: 'Last Month', fn: () => { const s = new Date(today.getFullYear(), today.getMonth()-1, 1); const e = new Date(today.getFullYear(), today.getMonth(), 0); return { start: fmt0(s), end: fmt0(e) } } },
-    { label: 'This Quarter', fn: () => { const q = Math.floor(today.getMonth()/3); const s = new Date(today.getFullYear(), q*3, 1); return { start: fmt0(s), end: fmt0(today) } } },
-    { label: 'Last Quarter', fn: () => { const q = Math.floor(today.getMonth()/3); const s = new Date(today.getFullYear(), (q-1)*3, 1); const e = new Date(today.getFullYear(), q*3, 0); return { start: fmt0(s), end: fmt0(e) } } },
+    { label: 'Last Quarter', fn: () => {
+      // Indian FY quarters: Q1=Apr-Jun(3-5), Q2=Jul-Sep(6-8), Q3=Oct-Dec(9-11), Q4=Jan-Mar(0-2)
+      const m = today.getMonth()
+      const fyStart = m >= 3 ? today.getFullYear() : today.getFullYear() - 1
+      const qStarts = [3,6,9,0] // Apr,Jul,Oct,Jan
+      const qYears  = [fyStart, fyStart, fyStart, fyStart+1]
+      const curQ = m >= 3 ? Math.floor((m-3)/3) : 3
+      const prevQ = (curQ + 3) % 4
+      const s = new Date(qYears[prevQ], qStarts[prevQ], 1)
+      const eMonth = qStarts[(prevQ+1)%4]; const eYear = prevQ === 3 ? qYears[prevQ]+1 : qYears[prevQ]
+      const e = new Date(eYear, eMonth === 0 ? 0 : eMonth, 0)
+      return { start: fmt0(s), end: fmt0(e) }
+    } },
     ...(() => {
-      // Current FY starts Apr of this year if month>=3, else Apr of last year
       const fyStart = today.getMonth() >= 3 ? today.getFullYear() : today.getFullYear() - 1
       return [0, 1].map(offset => {
         const fy = fyStart - offset
-        const label = offset === 0 ? 'This FY' : offset === 1 ? 'Last FY' : `FY ${fy}-${String(fy+1).slice(2)}`
+        const label = offset === 0 ? 'YTD' : 'Last FY'
         return { label, fn: () => ({ start: fmt0(new Date(fy, 3, 1)), end: offset === 0 ? fmt0(today) : fmt0(new Date(fy+1, 2, 31)) }) }
       })
     })(),
@@ -1495,7 +1838,7 @@ function DateRangePicker({ filters, setFilters }) {
 }
 
 function Topnav({ page, alerts, onRefresh, loading, filters, setFilters, rawRows }) {
-  const titles = { overview: 'Overview', sales: 'Sales Analytics', ads: 'Ads Analytics', intelligence: 'Intelligence', logistics: 'Logistics Performance Analytics', inventory: 'Inventory, Sales & Allocation' }
+  const titles = { overview: 'Overview', sales: 'Sales Analytics', ads: 'Ads Analytics', intelligence: 'Intelligence', logistics: 'Logistics Performance Analytics', inventory: 'Inventory, Sales & Allocation', customer: 'Customer Intelligence' }
   const critical = alerts.filter(a => a.type === 'red').length
   return (
     <div className="topnav">
@@ -1542,251 +1885,368 @@ function HeroKPICard({ label, value, sub, chg, sparkData, dataKey = 'cur', color
 }
 
 // ── Overview Page ─────────────────────────────────────────────
-function OverviewPage({ data, alerts }) {
-  const { totalRev, totalExcRev, gstCollected, nOrders, totalQty, blendedAOV, nDays, chMap, catMap, subCatMap, stateMap, nCusts, repeatCusts, dailyArr, orders, htCount, htRev, multiItemOrders } = data
-  const [selectedCat, setSelectedCat] = useState(null)
+function OverviewPage({ data, alerts, logisticsData }) {
+  const { totalRev, totalExcRev, nOrders, totalQty, blendedAOV, nDays, chMap, catMap, subCatMap, stateMap, nCusts, repeatCusts, dailyArr, prevRev, prevOrders, orderStatusRevMap = {}, rtoRevDirect, returnRev, cirRev, exchangeRev, netRevenueCalc = 0 } = data
+  const sh = data.shopify || {}
+  const ads = data.ads || {}
+
+  // ── Revenue deltas ──
+  const revDelta = prevRev > 0 ? ((totalRev - prevRev) / prevRev * 100) : null
+  const ordDelta = (data.prevOrders || 0) > 0 ? ((nOrders - data.prevOrders) / data.prevOrders * 100) : null
+
+  // ── Channel calcs ──
   const shopifyRev = chMap['Shopify']?.rev || 0
-  const d2cPct = totalRev ? (shopifyRev / totalRev * 100).toFixed(1) : '0'
-  const mktPct = (100 - parseFloat(d2cPct)).toFixed(1)
   const qcChs = ['Blinkit', 'Instamart', 'Zepto']
   const qcRev = qcChs.reduce((s, c) => s + (chMap[c]?.rev || 0), 0)
-  const qcOrds = qcChs.reduce((s, c) => s + (chMap[c]?.orders || 0), 0)
-  const qcAOV = qcOrds ? Math.round(qcRev / qcOrds) : 0
-  const repeatRate = nCusts ? (repeatCusts / nCusts * 100).toFixed(1) : '0'
+  const amzRev = chMap['Amazon']?.rev || 0
+  const fkRev = chMap['Flipkart']?.rev || 0
   const sortedCh = Object.entries(chMap).filter(([, v]) => v.rev > 0).sort((a, b) => b[1].rev - a[1].rev)
-  const maxChRev = sortedCh[0]?.[1].rev || 1
-  const bestAOV = sortedCh.reduce((b, [ch, v]) => { const a = v.orders ? v.rev / v.orders : 0; return a > b.aov ? { ch, aov: a } : b }, { ch: '', aov: 0 })
-  const allCats = Object.entries(catMap).map(([k, v]) => ({ name: k, rev: v.rev, orders: v.orders.size, aov: v.orders.size ? v.rev / v.orders.size : 0 })).sort((a, b) => b.rev - a.rev)
-  const channels = Object.keys(C.ch).filter(ch => chMap[ch] && chMap[ch].rev > 0)
-  const voucherOrders = orders.filter(o => o.voucher).length
+
+  // ── Returns health ──
+  const cancelRev = orderStatusRevMap['Cancelled'] || 0
+  const cancelPct = totalRev > 0 ? cancelRev / totalRev * 100 : 0
+  const rtoPct = totalRev > 0 ? ((rtoRevDirect || 0) + (returnRev || 0)) / totalRev * 100 : 0
+  const cirPct = totalRev > 0 ? (cirRev || 0) / totalRev * 100 : 0
+  const exchPct = totalRev > 0 ? (exchangeRev || 0) / totalRev * 100 : 0
+  const totalReturnPct = cancelPct + rtoPct + cirPct
+
+  // ── Ads ──
+  const adsTotals = ads.totals || []
+  const totalAdSpend = adsTotals.reduce((s, x) => s + (x.spend || 0), 0)
+  const shopifyExcRev = chMap['Shopify']?.excRev || 0
+  const allNetRev = shopifyExcRev + (chMap['Amazon']?.excRev || 0) + (chMap['Blinkit']?.excRev || 0) + (chMap['Zepto']?.excRev || 0) + (chMap['Instamart']?.excRev || 0) + (chMap['Myntra']?.excRev || 0) + (chMap['Flipkart']?.excRev || 0)
+  const overallRoas = totalAdSpend > 0 ? allNetRev / totalAdSpend : 0
+  const platformsWithSpend = adsTotals.filter(t => t.spend > 0).sort((a, b) => b.spend - a.spend)
+
+  // ── Categories ──
+  const allCats = Object.entries(catMap).map(([k, v]) => {
+    const shCat = sh.catMap?.[k] || {}
+    return { name: k, rev: v.rev, orders: (v.orders?.size ?? v.orders) || 0, cancelRev: shCat.cancelRev || 0, rtoRev: shCat.rtoRev || 0, cirRev: shCat.cirRev || 0 }
+  }).sort((a, b) => b.rev - a.rev)
+
+  // ── Logistics ──
+  const lkpi = logisticsData?.kpis || {}
+  const lTotal = parseInt(lkpi.total_shipments) || 0
+  const lDelivered = parseInt(lkpi.delivered) || 0
+  const lRto = parseInt(lkpi.rto) || 0
+  const lZRto = parseInt(lkpi.z_rto) || 0
+  const lSla = parseInt(lkpi.sla_breach) || 0
+  const lDelPct = lTotal > 0 ? lDelivered / lTotal * 100 : 0
+  const lRtoPct = lTotal > 0 ? lRto / lTotal * 100 : 0
+  const lZRtoPct = lTotal > 0 ? lZRto / lTotal * 100 : 0
+  const lSlaPct = lTotal > 0 ? lSla / lTotal * 100 : 0
+  const lFasr = lkpi.delivered_1attempt && lkpi.total_ofd_attempts ? (parseInt(lkpi.delivered_1attempt) / (parseInt(lkpi.total_ofd_attempts) || 1) * 100) : null
+  const lAvgFul = parseFloat(lkpi.avg_fulfilment) || null
+  const couriers = (logisticsData?.byCourier || []).filter(c => parseInt(c.total) > 0).sort((a, b) => parseInt(b.total) - parseInt(a.total)).slice(0, 5)
+
+  // ── Geography ──
+  const topStates = Object.entries(stateMap).sort((a, b) => b[1].rev - a[1].rev).slice(0, 5)
+  const stateTotal = topStates.reduce((s, [, v]) => s + v.rev, 0) || 1
+
+  // ── Helpers ──
+  const delta = (v, color = true) => {
+    if (v === null || v === undefined) return null
+    const pos = v >= 0
+    const col = color ? (pos ? '#0D9E68' : '#B91C1C') : C.t3
+    return <span style={{ fontSize: 10, fontWeight: 700, color: col, marginLeft: 4 }}>{pos ? '▲' : '▼'}{Math.abs(v).toFixed(1)}%</span>
+  }
+  const secHdr = (title, note) => (
+    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+      <span style={{ fontSize: 13, fontWeight: 700, color: C.t1 }}>{title}</span>
+      {note && <span style={{ fontSize: 11, color: C.t3 }}>{note}</span>}
+    </div>
+  )
+  const pill = (label, value, color = C.t1, bg = C.bg) => (
+    <div style={{ background: bg, borderRadius: 10, padding: '10px 14px', display: 'flex', flexDirection: 'column', gap: 3 }}>
+      <div style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.05em', color: C.t3 }}>{label}</div>
+      <div style={{ fontSize: 18, fontWeight: 700, color, fontFamily: 'var(--mono)' }}>{value}</div>
+    </div>
+  )
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-      {/* Hero row */}
-      <div className="g-hero">
-        <div className="hero-grad" style={{ borderRadius: 16, padding: '24px 26px', position: 'relative', overflow: 'hidden', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 16, paddingBottom: 24 }}>
+
+      {/* ── SECTION 1: Revenue Hero ── */}
+      <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr 1fr 1fr', gap: 12 }}>
+        <div className="hero-grad" style={{ borderRadius: 14, padding: '20px 22px', position: 'relative', overflow: 'hidden', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
           <div>
-            <div style={{ fontSize: 10.5, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.08em', color: 'rgba(0,0,0,.5)', marginBottom: 8 }}>Gross Revenue · Inc. GST</div>
-            <div className="hero-val" style={{ fontSize: 42, fontWeight: 700, color: '#13121A', letterSpacing: '-.04em', lineHeight: 1, marginBottom: 6 }}>{totalRev >= 1e7 ? `₹${(totalRev / 1e7).toFixed(2)} Cr` : `₹${(totalRev / 1e5).toFixed(1)} L`}</div>
-            <div style={{ fontSize: 12.5, color: 'rgba(0,0,0,.55)', lineHeight: 1.7 }}>Net {fmt(totalExcRev)} · GST {fmt(gstCollected)}<br />{nDays}d · {Object.keys(chMap).length} channels · {fmtN(nOrders)} orders</div>
+            <div style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.08em', color: 'rgba(0,0,0,.45)', marginBottom: 6 }}>Gross Revenue (Inc. GST)</div>
+            <div style={{ fontSize: 38, fontWeight: 700, color: '#13121A', letterSpacing: '-.04em', lineHeight: 1, marginBottom: 4 }}>{totalRev >= 1e7 ? `₹${(totalRev / 1e7).toFixed(2)} Cr` : `₹${(totalRev / 1e5).toFixed(1)} L`}</div>
+            <div style={{ fontSize: 11.5, color: 'rgba(0,0,0,.5)' }}>Net {fmt(netRevenueCalc)} · {nDays}d · {fmtN(nOrders)} orders</div>
           </div>
-          <div style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 11, fontWeight: 600, padding: '3px 9px', borderRadius: 5, background: 'rgba(0,0,0,.1)', color: '#13121A', marginTop: 10, width: 'fit-content' }}>
-            Daily avg {fmt(totalRev / nDays)}
+          <div style={{ display: 'flex', gap: 8, marginTop: 10, alignItems: 'center' }}>
+            <span style={{ fontSize: 11, fontWeight: 600, padding: '3px 9px', borderRadius: 5, background: 'rgba(0,0,0,.1)', color: '#13121A' }}>Daily avg {fmt(totalRev / nDays)}</span>
+            {delta(revDelta)}
           </div>
-          <div style={{ position: 'absolute', right: -10, bottom: -20, fontSize: 100, color: 'rgba(0,0,0,.04)', pointerEvents: 'none' }}>₹</div>
+          <div style={{ position: 'absolute', right: -8, bottom: -16, fontSize: 90, color: 'rgba(0,0,0,.04)', pointerEvents: 'none' }}>₹</div>
         </div>
-        <KPICard center label="Orders" value={fmtN(nOrders)} sub={`${fmtN(totalQty)} units · ${(totalQty / (nOrders || 1)).toFixed(1)}/order`} />
-        <KPICard center label="Blended AOV" value={`₹${Math.round(blendedAOV).toLocaleString('en-IN')}`} sub={`Best: ${bestAOV.ch} ₹${Math.round(bestAOV.aov).toLocaleString('en-IN')}`} />
-        <KPICard center label="Unique Customers" value={fmtN(nCusts)} sub={`${repeatRate}% repeat`} />
+        <KPICard center label="Orders" value={fmtN(nOrders)} sub={<>{fmtN(totalQty)} units{delta(ordDelta)}</>} />
+        <KPICard center label="Blended AOV" value={`₹${Math.round(blendedAOV).toLocaleString('en-IN')}`} sub={`${nDays} day period`} />
+        <KPICard center label="Shopify Customers" value={fmtN(nCusts)} sub={`${nCusts ? (repeatCusts / nCusts * 100).toFixed(1) : 0}% repeat`} />
+        <KPICard center label="Net Revenue" value={fmt(netRevenueCalc)} sub="After returns & cancel, exc. GST" />
       </div>
 
-      {/* 9 KPIs */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7,1fr)', gap: 10 }}>
-        <KPICard label="Daily avg revenue" value={fmt(totalRev / nDays)} sub={`${nDays} days`} />
-        <KPICard label="D2C Share" value={`${d2cPct}%`} sub={`Shopify ${fmt(shopifyRev)}`} />
-        <KPICard label="Q-commerce Share" value={pct(qcRev, totalRev)} sub={`${fmt(qcRev)} · Blinkit+Instamart+Zepto`} />
-        <KPICard label="Marketplace Share" value={`${(100 - parseFloat(d2cPct) - parseFloat(pct(qcRev, totalRev))).toFixed(1)}%`} sub={`Amazon+Flipkart+others ${fmt(totalRev - shopifyRev - qcRev)}`} />
-        <KPICard label="Multi-item rate" value={pct(multiItemOrders, nOrders)} sub="+AOV premium" />
-        <KPICard label="Voucher penetration" value={pct(voucherOrders, nOrders)} sub={`${fmtN(voucherOrders)} orders`} />
-        <KPICard label="High-ticket ≥₹10K" value={fmtN(htCount)} sub={fmt(htRev)} />
-      </div>
-
-      {/* Trend + Channels */}
-      <div className="g-21">
-        <Card title="Revenue trend · daily" note="₹ stacked by channel">
-          <RevTrendChart dailyArr={dailyArr} channels={channels} />
-          <div style={{ marginTop: 12 }}>
-            <div style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.07em', color: C.t3, marginBottom: 7 }}>D2C vs Q-Commerce vs Marketplace</div>
-            {(() => {
-              const qcP = totalRev ? qcRev / totalRev * 100 : 0
-              const d2cP = parseFloat(d2cPct)
-              const mktP = Math.max(0, 100 - d2cP - qcP)
-              const segs = [
-                { pct: d2cP, bg: C.acc, color: '#13121A', label: `${d2cP.toFixed(1)}% D2C` },
-                { pct: qcP,  bg: '#0D9E68', color: '#fff', label: `${qcP.toFixed(1)}% QC` },
-                { pct: mktP, bg: '#B0ADB8', color: '#13121A', label: `${mktP.toFixed(1)}% Mkt` },
-              ]
-              return (
-                <div>
-                  <div className="spbar">
-                    {segs.map((s, i) => (
-                      <div key={i} style={{ width: `${s.pct}%`, background: s.bg, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 700, color: s.color, overflow: 'hidden', whiteSpace: 'nowrap', minWidth: s.pct > 0 ? 4 : 0 }}>
-                        {s.pct >= 8 ? s.label : ''}
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )
-            })()}
-            <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap', marginTop: 8 }}>
-              {sortedCh.slice(0, 6).map(([ch, v]) => (
-                <div key={ch} style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 11.5, color: C.t2 }}>
-                  <span style={{ width: 8, height: 8, borderRadius: '50%', background: C.ch[ch] || C.acc, display: 'inline-block', border: C.ch[ch] === '#FFD600' ? '1px solid #E6C200' : 'none' }} />
-                  {ch} {fmt(v.rev)}
-                </div>
-              ))}
-            </div>
-          </div>
-        </Card>
-        <Card title="Channel breakdown">
-          {sortedCh.map(([ch, v]) => <HBar key={ch} dot={C.ch[ch] || C.acm} label={ch} width={(v.rev / maxChRev) * 100} value={fmt(v.rev)} pctVal={pct(v.rev, totalRev)} />)}
-        </Card>
-      </div>
-
-      {/* Scorecard row — scorecard + new vs repeat side by side, stretch to same height */}
-      <div style={{ display: 'flex', gap: 12, alignItems: 'stretch' }}>
-        <Card title="Channel scorecard" style={{ flexShrink: 0, width: 'fit-content', minWidth: 520 }}>
-          <DataTable columns={[
-            { key: 'ch', label: 'Channel' },
-            { key: 'rev', label: 'Revenue', align: 'right', mono: true, render: v => fmt(v) },
-            { key: 'orders', label: 'Orders', align: 'right', render: v => fmtN(v) },
-            { key: 'aov', label: 'AOV', align: 'right', mono: true, render: v => `₹${Math.round(v).toLocaleString('en-IN')}` },
-          ]} rows={Object.keys(C.ch).filter(ch => chMap[ch] && chMap[ch].rev > 0).map(ch => { const v = chMap[ch]; return { ch, rev: v.rev, orders: v.orders, aov: v.orders ? v.rev / v.orders : 0 } })} />
-        </Card>
-        <div style={{ flex: 1, background: C.card, border: `1px solid ${C.border}`, borderRadius: 13, padding: '16px 18px', display: 'flex', flexDirection: 'column' }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 11 }}>
-            <span style={{ fontSize: 13, fontWeight: 600, color: C.t1 }}>New vs Repeat Customers</span>
-            <span style={{ fontSize: 11.5, color: C.t3 }}>{fmtN(nCusts)} total</span>
-          </div>
+      {/* ── SECTION 2: Channel Scorecard ── */}
+      <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 13, padding: '16px 18px' }}>
+        {secHdr('Channel Scorecard', `${sortedCh.length} active channels`)}
+        <div style={{ overflowX: 'auto' }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11.5 }}>
+            <thead>
+              <tr>{['Channel','Revenue','Share','Orders','AOV','vs Prev'].map((h, i) => (
+                <th key={h} style={{ fontSize: 9, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.05em', color: C.t3, textAlign: i === 0 ? 'left' : 'right', padding: '3px 8px 7px', borderBottom: `1px solid ${C.border}`, whiteSpace: 'nowrap' }}>{h}</th>
+              ))}</tr>
+            </thead>
+            <tbody>
+              {sortedCh.map(([ch, v], i) => {
+                const aov = v.orders ? v.rev / v.orders : 0
+                const sharePct = totalRev > 0 ? v.rev / totalRev * 100 : 0
+                const prevChRev = data.prevChMap?.[ch] || 0
+                const chDelta = prevChRev > 0 ? (v.rev - prevChRev) / prevChRev * 100 : null
+                return (
+                  <tr key={ch} style={{ borderBottom: i < sortedCh.length - 1 ? `1px solid ${C.border}` : 'none' }}>
+                    <td style={{ padding: '6px 8px', display: 'flex', alignItems: 'center', gap: 7 }}>
+                      {CHANNEL_LOGOS[ch]
+                        ? <img src={CHANNEL_LOGOS[ch]} alt={ch} style={{ width: 18, height: 18, objectFit: 'contain', borderRadius: 4, flexShrink: 0, background: '#f5f5f5' }} />
+                        : <span style={{ width: 18, height: 18, borderRadius: 4, background: C.ch[ch] || C.acc, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 8, fontWeight: 800, color: '#fff' }}>{ch.charAt(0)}</span>}
+                      <span style={{ fontWeight: 600, color: C.t1 }}>{ch === 'offline_sales' ? 'Offline Sales' : ch}</span>
+                    </td>
+                    <td style={{ padding: '6px 8px', textAlign: 'right', fontFamily: 'var(--mono)', color: C.t1 }}>{fmt(v.rev)}</td>
+                    <td style={{ padding: '6px 8px', textAlign: 'right', color: C.t3 }}>{sharePct.toFixed(1)}%</td>
+                    <td style={{ padding: '6px 8px', textAlign: 'right', color: C.t2 }}>{fmtN(v.orders)}</td>
+                    <td style={{ padding: '6px 8px', textAlign: 'right', fontFamily: 'var(--mono)', color: C.t2 }}>₹{Math.round(aov).toLocaleString('en-IN')}</td>
+                    <td style={{ padding: '6px 8px', textAlign: 'right' }}>{chDelta !== null ? delta(chDelta) : <span style={{ color: C.t3, fontSize: 10 }}>—</span>}</td>
+                  </tr>
+                )
+              })}
+            </tbody>
+          </table>
+        </div>
+        {/* D2C / QC / Mkt split bar */}
+        <div style={{ marginTop: 14 }}>
+          <div style={{ fontSize: 9, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.06em', color: C.t3, marginBottom: 5 }}>Revenue Mix</div>
           {(() => {
-            const newCusts = nCusts - repeatCusts
-            const donutData = [
-              { name: 'New', value: newCusts, color: C.acc },
-              { name: 'Repeat', value: repeatCusts, color: '#0D9E68' },
-            ]
-            const totalOrders = dailyArr.map(d => ({ date: d.date, orders: Object.entries(d).filter(([k]) => k.endsWith('_o')).reduce((s, [, v]) => s + (v || 0), 0) }))
-            const newPct = nCusts ? newCusts / nCusts * 100 : 0
-            const repPct = nCusts ? repeatCusts / nCusts * 100 : 0
-            const avgOrdersPerDay = totalOrders.length ? (totalOrders.reduce((s, d) => s + d.orders, 0) / totalOrders.length).toFixed(0) : 0
-            const peakDay = totalOrders.reduce((a, b) => b.orders > a.orders ? b : a, { orders: 0, date: '' })
+            const d2cP = totalRev ? shopifyRev / totalRev * 100 : 0
+            const qcP = totalRev ? qcRev / totalRev * 100 : 0
+            const amzP = totalRev ? amzRev / totalRev * 100 : 0
+            const fkP = totalRev ? fkRev / totalRev * 100 : 0
+            const othP = Math.max(0, 100 - d2cP - qcP - amzP - fkP)
+            const segs = [
+              { pct: d2cP, bg: C.ch.Shopify, label: `Shopify ${d2cP.toFixed(0)}%` },
+              { pct: amzP, bg: C.ch.Amazon, label: `Amazon ${amzP.toFixed(0)}%` },
+              { pct: fkP, bg: C.ch.Flipkart, label: `Flipkart ${fkP.toFixed(0)}%` },
+              { pct: qcP, bg: '#0D9E68', label: `QC ${qcP.toFixed(0)}%` },
+              { pct: othP, bg: '#B0ADB8', label: `Other ${othP.toFixed(0)}%` },
+            ].filter(s => s.pct > 0)
             return (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-                {/* Top: donut + stats */}
-                <div style={{ display: 'flex', alignItems: 'center', gap: 32 }}>
-                  <div style={{ position: 'relative', flexShrink: 0 }}>
-                    <PieChart width={140} height={140}>
-                      <Pie data={donutData} cx={68} cy={68} innerRadius={44} outerRadius={66} dataKey="value" paddingAngle={3}>
-                        {donutData.map((d, i) => <Cell key={i} fill={d.color} />)}
-                      </Pie>
-                    </PieChart>
-                    <div style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%,-50%)', textAlign: 'center', pointerEvents: 'none' }}>
-                      <div style={{ fontSize: 15, fontWeight: 700, color: C.t1, lineHeight: 1 }}>{fmtN(nCusts)}</div>
-                      <div style={{ fontSize: 8.5, color: C.t3, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.04em', marginTop: 2 }}>Total</div>
-                    </div>
+              <div style={{ display: 'flex', height: 22, borderRadius: 6, overflow: 'hidden', gap: 1 }}>
+                {segs.map((s, i) => (
+                  <div key={i} style={{ width: `${s.pct}%`, background: s.bg, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 9.5, fontWeight: 700, color: '#fff', overflow: 'hidden', whiteSpace: 'nowrap', minWidth: s.pct > 5 ? 4 : 0 }}>
+                    {s.pct >= 8 ? s.label : ''}
                   </div>
-                  <div style={{ flex: 1 }}>
-                    <div style={{ display: 'flex', gap: 28, marginBottom: 12 }}>
-                      {donutData.map(d => (
-                        <div key={d.name}>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
-                            <span style={{ width: 8, height: 8, borderRadius: '50%', background: d.color, flexShrink: 0 }} />
-                            <span style={{ fontSize: 11, color: C.t3 }}>{d.name}</span>
-                          </div>
-                          <div style={{ fontSize: 24, fontWeight: 700, color: C.t1, letterSpacing: '-.02em', lineHeight: 1 }}>{fmtN(d.value)}</div>
-                          <div style={{ fontSize: 11, color: C.t3, marginTop: 3 }}>{nCusts ? (d.value / nCusts * 100).toFixed(1) : 0}% of total</div>
-                        </div>
-                      ))}
-                    </div>
-                    {/* New vs Repeat split bar */}
-                    <div style={{ height: 6, borderRadius: 4, overflow: 'hidden', display: 'flex', background: C.border }}>
-                      <div style={{ width: `${newPct}%`, background: C.acc, transition: 'width .5s' }} />
-                      <div style={{ width: `${repPct}%`, background: '#0D9E68', transition: 'width .5s' }} />
-                    </div>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 4 }}>
-                      <span style={{ fontSize: 10, color: C.t3 }}>New {newPct.toFixed(1)}%</span>
-                      <span style={{ fontSize: 10, color: C.t3 }}>Repeat {repPct.toFixed(1)}%</span>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Mini stat row */}
-                <div style={{ display: 'flex', gap: 0, borderTop: `1px solid ${C.border}`, borderBottom: `1px solid ${C.border}`, padding: '10px 0' }}>
-                  {[
-                    { label: 'Avg Orders/Day', value: fmtN(avgOrdersPerDay) },
-                    { label: 'Peak Day', value: peakDay.date ? peakDay.date.slice(5) : '—' },
-                    { label: 'Peak Orders', value: fmtN(peakDay.orders) },
-                    { label: 'Repeat Rate', value: repPct.toFixed(1) + '%' },
-                  ].map((s, i, arr) => (
-                    <div key={s.label} style={{ flex: 1, textAlign: 'center', borderRight: i < arr.length - 1 ? `1px solid ${C.border}` : 'none' }}>
-                      <div style={{ fontSize: 13, fontWeight: 700, color: C.t1 }}>{s.value}</div>
-                      <div style={{ fontSize: 10, color: C.t3, marginTop: 2 }}>{s.label}</div>
-                    </div>
-                  ))}
-                </div>
-
-                {/* Daily orders trend */}
-                <div>
-                  <div style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.05em', color: C.t3, marginBottom: 6 }}>Daily Orders Trend</div>
-                  <ResponsiveContainer width="100%" height={90}>
-                    <AreaChart data={totalOrders} margin={{ top: 2, right: 0, bottom: 0, left: 0 }}>
-                      <defs>
-                        <linearGradient id="ordGrad" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="5%" stopColor={C.acc} stopOpacity={0.25} />
-                          <stop offset="95%" stopColor={C.acc} stopOpacity={0} />
-                        </linearGradient>
-                      </defs>
-                      <CartesianGrid strokeDasharray="3 3" stroke={C.border} vertical={false} />
-                      <XAxis dataKey="date" tick={{ fontSize: 9, fill: C.t3 }} tickFormatter={d => d?.slice(5)} />
-                      <YAxis hide />
-                      <Tooltip content={<ChartTooltip formatter={fmtN} />} />
-                      <Area type="monotone" dataKey="orders" name="Orders" stroke={C.acc} strokeWidth={2} fill="url(#ordGrad)" dot={false} />
-                    </AreaChart>
-                  </ResponsiveContainer>
-                </div>
+                ))}
               </div>
             )
           })()}
         </div>
       </div>
 
-      {/* Category + Sub-category full width row */}
-      <div className="g-2">
-          {/* Category table */}
-          <Card title="Category Revenue" note={selectedCat ? <span style={{ cursor: 'pointer', color: C.acc, fontWeight: 600 }} onClick={() => setSelectedCat(null)}>✕ Clear</span> : `${allCats.length} total`}>
-            <div style={{ overflowX: 'auto' }}>
-              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
-                <thead>
-                  <tr>
-                    {['Category','Revenue','Orders','AOV'].map((h, i) => (
-                      <th key={h} style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.05em', color: C.t3, textAlign: i === 0 ? 'left' : 'right', padding: '3px 5px 7px', borderBottom: `1px solid ${C.border}` }}>{h}</th>
-                    ))}
+      {/* ── SECTION 3 + 4: Returns Health & Ads — side by side ── */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+
+        {/* Returns Health */}
+        <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 13, padding: '16px 18px' }}>
+          {secHdr('Returns & Cancellation Health', 'Revenue-based')}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 8, marginBottom: 14 }}>
+            {[
+              { label: 'Cancel %', val: cancelPct, rev: cancelRev, color: '#B91C1C', bg: '#FDE8E8' },
+              { label: 'RTO %', val: rtoPct, rev: (rtoRevDirect||0)+(returnRev||0), color: '#E24B4A', bg: '#FDE8E8' },
+              { label: 'CIR %', val: cirPct, rev: cirRev||0, color: '#2E74CC', bg: '#E1EFFD' },
+              { label: 'Exchange %', val: exchPct, rev: exchangeRev||0, color: '#9B59B6', bg: '#F3E8FF' },
+            ].map(({ label, val, rev, color, bg }) => (
+              <div key={label} style={{ background: bg, borderRadius: 9, padding: '10px 12px' }}>
+                <div style={{ fontSize: 9.5, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.05em', color, marginBottom: 4 }}>{label}</div>
+                <div style={{ fontSize: 20, fontWeight: 700, color, fontFamily: 'var(--mono)' }}>{val.toFixed(1)}%</div>
+                <div style={{ fontSize: 10, color, opacity: 0.7, marginTop: 2 }}>{fmt(rev)}</div>
+              </div>
+            ))}
+          </div>
+          <div style={{ borderTop: `1px solid ${C.border}`, paddingTop: 12 }}>
+            <div style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.05em', color: C.t3, marginBottom: 8 }}>Shopify Category · Cancel & RTO %</div>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11 }}>
+              <thead><tr>
+                {['Category','Revenue','Cancel %','RTO %'].map((h, i) => <th key={h} style={{ fontSize: 9, fontWeight: 700, textTransform: 'uppercase', color: C.t3, textAlign: i === 0 ? 'left' : 'right', padding: '2px 4px 6px', borderBottom: `1px solid ${C.border}` }}>{h}</th>)}
+              </tr></thead>
+              <tbody>
+                {allCats.slice(0, 6).map((r, i) => (
+                  <tr key={r.name} style={{ borderBottom: i < 5 ? `1px solid ${C.border}` : 'none' }}>
+                    <td style={{ padding: '4px 4px', color: C.t2 }}>{r.name}</td>
+                    <td style={{ padding: '4px 4px', textAlign: 'right', fontFamily: 'var(--mono)', color: C.t1 }}>{fmt(r.rev)}</td>
+                    <td style={{ padding: '4px 4px', textAlign: 'right', color: r.cancelRev/r.rev > 0.05 ? '#B91C1C' : C.t2 }}>{r.rev > 0 ? (r.cancelRev/r.rev*100).toFixed(1) : '—'}%</td>
+                    <td style={{ padding: '4px 4px', textAlign: 'right', color: (r.rtoRev+r.cirRev)/r.rev > 0.1 ? '#E24B4A' : C.t2 }}>{r.rev > 0 ? ((r.rtoRev+r.cirRev)/r.rev*100).toFixed(1) : '—'}%</td>
                   </tr>
-                </thead>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        {/* Ads Summary */}
+        <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 13, padding: '16px 18px' }}>
+          {secHdr('Ads Performance', totalAdSpend > 0 ? `${fmt(totalAdSpend)} total spend` : 'No ad data')}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 8, marginBottom: 14 }}>
+            {[
+              { label: 'Total Spend', val: fmt(totalAdSpend) },
+              { label: 'Overall ROAS', val: totalAdSpend > 0 ? `${overallRoas.toFixed(2)}x` : '—', color: overallRoas >= 2 ? '#0D9E68' : overallRoas >= 1 ? '#D97706' : '#B91C1C' },
+              { label: 'Net Rev / Ad', val: totalAdSpend > 0 ? fmt(allNetRev) : '—' },
+            ].map(({ label, val, color }) => (
+              <div key={label} style={{ background: C.bg, borderRadius: 9, padding: '10px 12px' }}>
+                <div style={{ fontSize: 9.5, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.05em', color: C.t3, marginBottom: 4 }}>{label}</div>
+                <div style={{ fontSize: 18, fontWeight: 700, color: color || C.t1, fontFamily: 'var(--mono)' }}>{val}</div>
+              </div>
+            ))}
+          </div>
+          {platformsWithSpend.length > 0 && (
+            <div style={{ borderTop: `1px solid ${C.border}`, paddingTop: 12 }}>
+              <div style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.05em', color: C.t3, marginBottom: 8 }}>Platform Breakdown</div>
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11 }}>
+                <thead><tr>
+                  {['Platform','Spend','ROAS','Clicks','CTR'].map((h, i) => <th key={h} style={{ fontSize: 9, fontWeight: 700, textTransform: 'uppercase', color: C.t3, textAlign: i === 0 ? 'left' : 'right', padding: '2px 4px 6px', borderBottom: `1px solid ${C.border}` }}>{h}</th>)}
+                </tr></thead>
                 <tbody>
-                  {allCats.map((row, i) => {
-                    const active = selectedCat === row.name
+                  {platformsWithSpend.slice(0, 6).map((t, i) => {
+                    const platRev = (['Meta','Google'].includes(t.platform) ? shopifyExcRev * (t.spend / (platformsWithSpend.filter(x => ['Meta','Google'].includes(x.platform)).reduce((s,x)=>s+x.spend,0)||1)) : chMap[t.platform]?.excRev || 0)
+                    const roas = t.spend > 0 ? platRev / t.spend : 0
+                    const ctr = t.impressions > 0 ? t.clicks / t.impressions * 100 : 0
                     return (
-                      <tr key={row.name} onClick={() => setSelectedCat(s => s === row.name ? null : row.name)}
-                        style={{ cursor: 'pointer', background: active ? C.acl : 'transparent', borderBottom: i < allCats.length - 1 ? `1px solid ${C.border}` : 'none' }}
-                        onMouseEnter={e => { if (!active) e.currentTarget.style.background = '#FFFBE6' }}
-                        onMouseLeave={e => { e.currentTarget.style.background = active ? C.acl : 'transparent' }}>
-                        <td style={{ padding: '5.5px 5px', color: active ? C.t1 : C.t2, fontWeight: active ? 700 : 400 }}>{row.name}</td>
-                        <td style={{ padding: '5.5px 5px', textAlign: 'right', fontFamily: 'var(--mono)', fontSize: 11.5, color: C.t1 }}>{fmt(row.rev)}</td>
-                        <td style={{ padding: '5.5px 5px', textAlign: 'right', color: C.t1 }}>{fmtN(row.orders)}</td>
-                        <td style={{ padding: '5.5px 5px', textAlign: 'right', color: C.t1 }}>₹{Math.round(row.aov).toLocaleString('en-IN')}</td>
+                      <tr key={t.platform} style={{ borderBottom: i < platformsWithSpend.length - 1 ? `1px solid ${C.border}` : 'none' }}>
+                        <td style={{ padding: '4px 4px', color: C.t2, fontWeight: 600 }}>{t.platform}</td>
+                        <td style={{ padding: '4px 4px', textAlign: 'right', fontFamily: 'var(--mono)', color: C.t1 }}>{fmt(t.spend)}</td>
+                        <td style={{ padding: '4px 4px', textAlign: 'right', color: roas >= 2 ? '#0D9E68' : roas >= 1 ? '#D97706' : '#B91C1C' }}>{t.spend > 0 ? `${roas.toFixed(2)}x` : '—'}</td>
+                        <td style={{ padding: '4px 4px', textAlign: 'right', color: C.t2 }}>{fmtN(t.clicks)}</td>
+                        <td style={{ padding: '4px 4px', textAlign: 'right', color: C.t2 }}>{ctr.toFixed(2)}%</td>
                       </tr>
                     )
                   })}
                 </tbody>
               </table>
             </div>
-          </Card>
-          {/* Sub-category table — always visible, filters on click */}
-          {(() => {
-            const subRows = Object.entries(subCatMap || {})
-              .filter(([k]) => !selectedCat || k.startsWith(selectedCat + '::'))
-              .map(([k, v]) => ({ name: k.split('::')[1], cat: k.split('::')[0], rev: v.rev, orders: v.orders.size, aov: v.orders.size ? v.rev / v.orders.size : 0 }))
-              .sort((a, b) => b.rev - a.rev)
-            return (
-              <PaginatedCard title={selectedCat ? `Sub-categories · ${selectedCat}` : 'Sub-categories'} rows={subRows} columns={[
-                { key: 'name', label: 'Sub-category' },
-                { key: 'rev', label: 'Revenue', align: 'right', mono: true, render: v => fmt(v) },
-                { key: 'orders', label: 'Orders', align: 'right', render: v => fmtN(v) },
-                { key: 'aov', label: 'AOV', align: 'right', render: v => `₹${Math.round(v).toLocaleString('en-IN')}` },
-              ]} pageSize={15} />
-            )
-          })()}
+          )}
         </div>
+      </div>
+
+      {/* ── SECTION 5: Logistics Health ── */}
+      <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 13, padding: '16px 18px' }}>
+        {secHdr('Logistics Health', logisticsData ? `${fmtN(lTotal)} shipments` : 'Loading...')}
+        {logisticsData ? (
+          <>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6,1fr)', gap: 10, marginBottom: 16 }}>
+              {[
+                { label: 'Delivery %', val: `${lDelPct.toFixed(1)}%`, color: lDelPct >= 80 ? '#0D9E68' : lDelPct >= 60 ? '#D97706' : '#B91C1C', bg: lDelPct >= 80 ? '#E6F4E0' : lDelPct >= 60 ? '#FEF2DC' : '#FDE8E8' },
+                { label: 'RTO %', val: `${lRtoPct.toFixed(1)}%`, color: lRtoPct <= 10 ? '#0D9E68' : lRtoPct <= 20 ? '#D97706' : '#B91C1C', bg: lRtoPct <= 10 ? '#E6F4E0' : lRtoPct <= 20 ? '#FEF2DC' : '#FDE8E8' },
+                { label: 'SLA Breach %', val: `${lSlaPct.toFixed(1)}%`, color: lSlaPct <= 5 ? '#0D9E68' : lSlaPct <= 15 ? '#D97706' : '#B91C1C', bg: lSlaPct <= 5 ? '#E6F4E0' : lSlaPct <= 15 ? '#FEF2DC' : '#FDE8E8' },
+                { label: 'Z-RTO %', val: `${lZRtoPct.toFixed(1)}%`, color: lZRtoPct <= 3 ? '#0D9E68' : lZRtoPct <= 8 ? '#D97706' : '#B91C1C', bg: lZRtoPct <= 3 ? '#E6F4E0' : lZRtoPct <= 8 ? '#FEF2DC' : '#FDE8E8' },
+                { label: 'FASR %', val: lFasr !== null ? `${lFasr.toFixed(1)}%` : '—', color: C.t1, bg: C.bg },
+                { label: 'Avg Fulfilment', val: lAvgFul !== null ? `${lAvgFul.toFixed(1)}d` : '—', color: lAvgFul <= 3 ? '#0D9E68' : lAvgFul <= 5 ? '#D97706' : '#B91C1C', bg: lAvgFul <= 3 ? '#E6F4E0' : lAvgFul <= 5 ? '#FEF2DC' : '#FDE8E8' },
+              ].map(({ label, val, color, bg }) => (
+                <div key={label} style={{ background: bg, borderRadius: 9, padding: '10px 12px' }}>
+                  <div style={{ fontSize: 9.5, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.05em', color: C.t3, marginBottom: 4 }}>{label}</div>
+                  <div style={{ fontSize: 20, fontWeight: 700, color, fontFamily: 'var(--mono)' }}>{val}</div>
+                </div>
+              ))}
+            </div>
+            {couriers.length > 0 && (
+              <>
+                <div style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.05em', color: C.t3, marginBottom: 8 }}>Courier Partner Performance</div>
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11 }}>
+                  <thead><tr>
+                    {['Courier','Shipments','Delivered %','RTO %','Z-RTO %','Avg Fulfilment'].map((h, i) => <th key={h} style={{ fontSize: 9, fontWeight: 700, textTransform: 'uppercase', color: C.t3, textAlign: i === 0 ? 'left' : 'right', padding: '2px 6px 6px', borderBottom: `1px solid ${C.border}` }}>{h}</th>)}
+                  </tr></thead>
+                  <tbody>
+                    {couriers.map((c, i) => {
+                      const tot = parseInt(c.total) || 1
+                      const del = parseInt(c.delivered) || 0
+                      const rto = parseInt(c.rto) || 0
+                      const zrto = parseInt(c.z_rto) || 0
+                      const delP = del / tot * 100
+                      const rtoP = rto / tot * 100
+                      const zrtoP = zrto / tot * 100
+                      const avgFul = parseFloat(c.avg_fulfilment_days) || null
+                      return (
+                        <tr key={c.courier_group} style={{ borderBottom: i < couriers.length - 1 ? `1px solid ${C.border}` : 'none' }}>
+                          <td style={{ padding: '5px 6px', fontWeight: 600, color: C.t1 }}>{c.courier_group}</td>
+                          <td style={{ padding: '5px 6px', textAlign: 'right', color: C.t2 }}>{fmtN(tot)}</td>
+                          <td style={{ padding: '5px 6px', textAlign: 'right', color: delP >= 80 ? '#0D9E68' : delP >= 60 ? '#D97706' : '#B91C1C' }}>{delP.toFixed(1)}%</td>
+                          <td style={{ padding: '5px 6px', textAlign: 'right', color: rtoP <= 10 ? '#0D9E68' : rtoP <= 20 ? '#D97706' : '#B91C1C' }}>{rtoP.toFixed(1)}%</td>
+                          <td style={{ padding: '5px 6px', textAlign: 'right', color: C.t2 }}>{zrtoP.toFixed(1)}%</td>
+                          <td style={{ padding: '5px 6px', textAlign: 'right', color: avgFul ? (avgFul <= 3 ? '#0D9E68' : avgFul <= 5 ? '#D97706' : '#B91C1C') : C.t3 }}>{avgFul ? `${avgFul.toFixed(1)}d` : '—'}</td>
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
+              </>
+            )}
+          </>
+        ) : (
+          <div style={{ color: C.t3, fontSize: 12, padding: '12px 0' }}>Logistics data loading...</div>
+        )}
+      </div>
+
+      {/* ── SECTION 6: Category Matrix + Geography ── */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1.4fr 1fr', gap: 12 }}>
+        <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 13, padding: '16px 18px' }}>
+          {secHdr('Category Performance', 'All channels')}
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11.5 }}>
+            <thead><tr>
+              {['Category','Revenue','Share','Orders','AOV'].map((h, i) => <th key={h} style={{ fontSize: 9, fontWeight: 700, textTransform: 'uppercase', color: C.t3, textAlign: i === 0 ? 'left' : 'right', padding: '2px 6px 6px', borderBottom: `1px solid ${C.border}` }}>{h}</th>)}
+            </tr></thead>
+            <tbody>
+              {allCats.map((r, i) => {
+                const share = totalRev > 0 ? r.rev / totalRev * 100 : 0
+                const aov = r.orders > 0 ? r.rev / r.orders : 0
+                return (
+                  <tr key={r.name} style={{ borderBottom: i < allCats.length - 1 ? `1px solid ${C.border}` : 'none' }}>
+                    <td style={{ padding: '5px 6px', color: C.t2, fontWeight: 500 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <div style={{ flex: 1 }}>{r.name}</div>
+                        <div style={{ height: 4, width: 60, background: C.border, borderRadius: 2, overflow: 'hidden' }}>
+                          <div style={{ height: '100%', width: `${share}%`, background: C.acc, borderRadius: 2 }} />
+                        </div>
+                      </div>
+                    </td>
+                    <td style={{ padding: '5px 6px', textAlign: 'right', fontFamily: 'var(--mono)', color: C.t1 }}>{fmt(r.rev)}</td>
+                    <td style={{ padding: '5px 6px', textAlign: 'right', color: C.t3 }}>{share.toFixed(1)}%</td>
+                    <td style={{ padding: '5px 6px', textAlign: 'right', color: C.t2 }}>{fmtN(r.orders)}</td>
+                    <td style={{ padding: '5px 6px', textAlign: 'right', fontFamily: 'var(--mono)', color: C.t2 }}>₹{Math.round(aov).toLocaleString('en-IN')}</td>
+                  </tr>
+                )
+              })}
+            </tbody>
+          </table>
+        </div>
+
+        <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 13, padding: '16px 18px' }}>
+          {secHdr('Top States', 'By revenue')}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+            {topStates.map(([state, v]) => {
+              const share = totalRev > 0 ? v.rev / totalRev * 100 : 0
+              return (
+                <div key={state}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 3 }}>
+                    <span style={{ fontSize: 11.5, fontWeight: 600, color: C.t1 }}>{state.charAt(0) + state.slice(1).toLowerCase()}</span>
+                    <span style={{ fontSize: 11, fontFamily: 'var(--mono)', color: C.t1 }}>{fmt(v.rev)} <span style={{ color: C.t3, fontFamily: 'var(--font)' }}>· {share.toFixed(1)}%</span></span>
+                  </div>
+                  <div style={{ height: 5, background: C.border, borderRadius: 3, overflow: 'hidden' }}>
+                    <div style={{ height: '100%', width: `${share}%`, background: C.acc, borderRadius: 3 }} />
+                  </div>
+                  <div style={{ fontSize: 10, color: C.t3, marginTop: 2 }}>{fmtN(v.orders)} orders · {v.cities?.size || 0} cities</div>
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      </div>
+
     </div>
   )
 }
@@ -1803,8 +2263,9 @@ const TABS = [
   { id: 'instamart', label: 'Instamart', ch: 'Instamart', logo: '/logo-instamart.png' },
   { id: 'zepto', label: 'Zepto', ch: 'Zepto', logo: '/logo-zepto.png' },
   { id: 'myntra', label: 'Myntra', ch: 'Myntra', logo: '/logo-myntra.png' },
-  { id: 'offline', label: 'Offline Sales', ch: 'offline_sales' },
+  { id: 'offline', label: 'Offline Sales', ch: 'offline_sales', logo: '/offline-sales.png' },
 ]
+const CHANNEL_LOGOS = Object.fromEntries(TABS.filter(t => t.logo).map(t => [t.ch, t.logo]))
 
 function PaginatedCard({ title, rows, columns, pageSize = 10 }) {
   const [page, setPage] = useState(0)
@@ -2050,48 +2511,70 @@ const GROUP_OPTS = [
   { id: 'quarterly', label: 'Quarterly' },
 ]
 
+function ordSuffix(n) {
+  const s = ['th','st','nd','rd'], v = n % 100
+  return n + (s[(v - 20) % 10] || s[v] || s[0])
+}
+
+function getWeekBucketKey(date, rangeStart) {
+  const d = new Date(date + 'T00:00:00')
+  const rs = new Date(rangeStart + 'T00:00:00')
+  const diffDays = Math.floor((d - rs) / 86400000)
+  const bucketIdx = Math.floor(diffDays / 7)
+  const bucketStart = new Date(rs); bucketStart.setDate(rs.getDate() + bucketIdx * 7)
+  const bucketEnd = new Date(bucketStart); bucketEnd.setDate(bucketStart.getDate() + 6)
+  const mon = bucketStart.toLocaleString('en-US', { month: 'short' })
+  const yr = String(bucketStart.getFullYear()).slice(2)
+  const endMon = bucketEnd.toLocaleString('en-US', { month: 'short' })
+  const endLabel = bucketStart.getMonth() !== bucketEnd.getMonth()
+    ? `${ordSuffix(bucketEnd.getDate())} ${endMon}`
+    : ordSuffix(bucketEnd.getDate())
+  return { key: `${bucketIdx}`, label: `${mon} '${yr} ${ordSuffix(bucketStart.getDate())}–${endLabel}`, sortKey: bucketStart.toISOString().slice(0, 10) }
+}
+
 function getGroupKey(date, groupBy) {
   if (!date) return '—'
   if (groupBy === 'daily') return date
-  if (groupBy === 'weekly') {
-    const d = new Date(date)
-    const jan1 = new Date(d.getFullYear(), 0, 1)
-    const weekNum = Math.ceil(((d - jan1) / 86400000 + jan1.getDay() + 1) / 7)
-    const mon = d.toLocaleString('en-IN', { month: 'short' })
-    const yr = String(d.getFullYear()).slice(2)
-    return `${mon}-${yr} W${weekNum}`
-  }
   if (groupBy === 'monthly') return date.slice(0, 7)
   if (groupBy === 'quarterly') {
     const [y, m] = date.split('-')
-    const q = Math.ceil(parseInt(m) / 3)
-    return `${y} Q${q}`
+    const mo = parseInt(m) // 1-12
+    // Indian FY: Q1=Apr-Jun, Q2=Jul-Sep, Q3=Oct-Dec, Q4=Jan-Mar
+    const q = mo >= 4 ? Math.floor((mo - 4) / 3) + 1 : 4
+    const fy = mo >= 4 ? parseInt(y) : parseInt(y) - 1
+    return `FY${fy}-${String(fy+1).slice(2)} Q${q}`
   }
   return date
 }
 
-function groupDailyArr(dailyArr, channels, groupBy) {
+function groupDailyArr(dailyArr, channels, groupBy, rangeStart) {
   if (groupBy === 'daily') return dailyArr
-  const map = {}
+  const map = {}, labelMap = {}, sortMap = {}
   dailyArr.forEach(d => {
-    const key = getGroupKey(d.date, groupBy)
-    if (!map[key]) { map[key] = { date: key }; channels.forEach(ch => { map[key][ch] = 0; map[key][ch + '_o'] = 0; map[key][ch + '_u'] = 0 }) }
+    let key
+    if (groupBy === 'weekly' && rangeStart) {
+      const { key: k, label, sortKey } = getWeekBucketKey(d.date, rangeStart)
+      key = k; labelMap[k] = label; sortMap[k] = sortKey
+    } else {
+      key = getGroupKey(d.date, groupBy)
+    }
+    if (!map[key]) { map[key] = { date: labelMap[key] || key, _sort: sortMap[key] || key }; channels.forEach(ch => { map[key][ch] = 0; map[key][ch + '_o'] = 0; map[key][ch + '_u'] = 0 }) }
     channels.forEach(ch => {
       map[key][ch] = (map[key][ch] || 0) + (d[ch] || 0)
       map[key][ch + '_o'] = (map[key][ch + '_o'] || 0) + (d[ch + '_o'] || 0)
       map[key][ch + '_u'] = (map[key][ch + '_u'] || 0) + (d[ch + '_u'] || 0)
     })
   })
-  return Object.values(map)
+  return Object.values(map).sort((a, b) => a._sort.localeCompare(b._sort))
 }
 
-function DailyChannelTable({ dailyArr, channels, nDays = 7 }) {
+function DailyChannelTable({ dailyArr, channels, nDays = 7, rangeStart }) {
   const autoGroup = nDays <= 14 ? 'daily' : nDays <= 90 ? 'weekly' : 'monthly'
   const [metric, setMetric] = useState('rev')
   const [groupBy, setGroupBy] = useState(autoGroup)
   useEffect(() => { setGroupBy(autoGroup) }, [nDays])
   const m = DAILY_METRICS.find(x => x.id === metric)
-  const grouped = groupDailyArr(dailyArr, channels, groupBy)
+  const grouped = groupDailyArr(dailyArr, channels, groupBy, rangeStart)
 
   const getVal = (d, ch) => {
     if (metric === 'rev') return d[ch] || 0
@@ -2161,7 +2644,7 @@ function DailyChannelTable({ dailyArr, channels, nDays = 7 }) {
           </thead>
           <tbody>
             {grouped.map((d, i) => {
-              const isPeak = i === peakIdx
+              const isPeak = grouped.length > 1 && i === peakIdx
               const rowTotal = getTotalVal(d)
               return (
                 <tr key={i} style={{ borderBottom: `1px solid ${C.border}` }} onMouseEnter={e => e.currentTarget.style.background = '#FFFDF0'} onMouseLeave={e => e.currentTarget.style.background = ''}>
@@ -2217,14 +2700,14 @@ function CategoryChannelMatrix({ heatData, channels, maxHeat, subCatChannelMap =
   }
 
   return (
-    <Card title="Category × Channel Revenue Matrix" note="₹ shading = intensity">
-      <div className="tbl-wrap" style={{ maxHeight: 320, overflowY: 'auto' }}>
-        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11, minWidth: 700 }}>
+    <Card title="Category × Channel Revenue Matrix">
+      <div className="tbl-wrap">
+        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12, minWidth: 700 }}>
           <thead style={{ position: 'sticky', top: 0, background: C.card, zIndex: 1 }}>
             <tr>
-              <th style={{ textAlign: 'left', padding: '3px 5px 7px', borderBottom: `1px solid ${C.border}`, color: C.t3, fontSize: 10, fontWeight: 700, textTransform: 'uppercase' }}>Category</th>
-              {channels.map(ch => <th key={ch} style={{ textAlign: 'right', padding: '3px 5px 7px', borderBottom: `1px solid ${C.border}`, color: C.ch[ch], fontSize: 10, fontWeight: 700 }}>{ch}</th>)}
-              <th style={{ textAlign: 'right', padding: '3px 5px 7px', borderBottom: `1px solid ${C.border}`, color: C.t1, fontSize: 10, fontWeight: 700 }}>Total</th>
+              <th style={{ textAlign: 'left', padding: '5px 8px 7px', borderBottom: `2px solid ${C.border}`, color: C.t1, fontSize: 11, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '.05em' }}>Category</th>
+              {channels.map(ch => <th key={ch} style={{ textAlign: 'right', padding: '5px 8px 7px', borderBottom: `2px solid ${C.border}`, borderLeft: `1px solid ${C.border}`, color: C.ch[ch] || C.t2, fontSize: 11, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '.05em', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{ch === 'offline_sales' ? 'Offline' : ch}</th>)}
+              <th style={{ textAlign: 'right', padding: '5px 8px 7px', borderBottom: `2px solid ${C.border}`, borderLeft: `1px solid ${C.border}`, color: C.t1, fontSize: 11, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '.05em' }}>Total</th>
             </tr>
           </thead>
           <tbody>
@@ -2239,22 +2722,23 @@ function CategoryChannelMatrix({ heatData, channels, maxHeat, subCatChannelMap =
               const hasSubCats = subCats.length > 0
               return (
                 <Fragment key={i}>
-                  <tr style={{ borderBottom: `1px solid ${C.border}` }}>
-                    <td style={{ padding: '5px', fontWeight: 600, color: C.t1 }}>
+                  <tr style={{ borderBottom: `1px solid ${C.border}` }} onMouseEnter={e => e.currentTarget.style.background = '#FFFDF0'} onMouseLeave={e => e.currentTarget.style.background = ''}>
+                    <td style={{ padding: '6px 8px', fontWeight: 600, color: C.t2, overflow: 'hidden' }}>
                       <span
                         onClick={() => hasSubCats && toggle(row.cat)}
-                        style={{ cursor: hasSubCats ? 'pointer' : 'default', userSelect: 'none', display: 'inline-flex', alignItems: 'center', gap: 5 }}
+                        title={row.cat}
+                        style={{ cursor: hasSubCats ? 'pointer' : 'default', userSelect: 'none', display: 'flex', alignItems: 'center', gap: 5, overflow: 'hidden' }}
                       >
-                        {hasSubCats && <span style={{ fontSize: 9, color: C.t3, display: 'inline-block', transform: isOpen ? 'rotate(90deg)' : 'rotate(0deg)', transition: 'transform .15s' }}>▶</span>}
-                        {row.cat}
+                        {hasSubCats && <span style={{ fontSize: 9, color: C.t3, flexShrink: 0, display: 'inline-block', transform: isOpen ? 'rotate(90deg)' : 'rotate(0deg)', transition: 'transform .15s' }}>▶</span>}
+                        <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{row.cat}</span>
                       </span>
                     </td>
                     {channels.map(ch => {
                       const v = row[ch] || 0
                       const { cls, content } = renderCell(v, rowTotal)
-                      return <td key={ch} className={cls} style={{ padding: '5px', textAlign: 'right', fontFamily: 'var(--mono)', fontSize: 11 }}>{content}</td>
+                      return <td key={ch} className={cls} style={{ padding: '6px 8px', textAlign: 'right', fontFamily: 'var(--mono)', fontSize: 11.5, borderLeft: `1px solid ${C.border}` }}>{content}</td>
                     })}
-                    <td style={{ padding: '5px', textAlign: 'right', fontWeight: 700, color: C.t1, fontFamily: 'var(--mono)', fontSize: 11 }}>{fmt(rowTotal)}</td>
+                    <td style={{ padding: '6px 8px', textAlign: 'right', fontWeight: 700, color: C.t1, fontFamily: 'var(--mono)', fontSize: 11.5, borderLeft: `1px solid ${C.border}` }}>{fmt(rowTotal)}</td>
                   </tr>
                   {isOpen && subCats.map(([sc, chData]) => {
                     const scTotal = channels.reduce((s, ch) => s + (chData[ch] || 0), 0)
@@ -2269,30 +2753,30 @@ function CategoryChannelMatrix({ heatData, channels, maxHeat, subCatChannelMap =
                     return (
                       <Fragment key={sc}>
                         <tr style={{ borderBottom: `1px solid ${C.border}`, background: '#FAFAF7' }}>
-                          <td style={{ padding: '3px 4px 3px 18px', color: C.t2, fontSize: 10 }}>
-                            <span onClick={() => hasSkus && toggleSC(scKey)} style={{ cursor: hasSkus ? 'pointer' : 'default', userSelect: 'none', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-                              {hasSkus && <span style={{ fontSize: 8, color: C.t3, display: 'inline-block', transform: scOpen ? 'rotate(90deg)' : 'rotate(0deg)', transition: 'transform .15s' }}>▶</span>}
-                              └ {sc}
+                          <td style={{ padding: '3px 4px 3px 18px', color: C.t2, fontSize: 10, overflow: 'hidden' }}>
+                            <span onClick={() => hasSkus && toggleSC(scKey)} title={sc} style={{ cursor: hasSkus ? 'pointer' : 'default', userSelect: 'none', display: 'flex', alignItems: 'center', gap: 4, overflow: 'hidden' }}>
+                              {hasSkus && <span style={{ fontSize: 8, color: C.t3, flexShrink: 0, display: 'inline-block', transform: scOpen ? 'rotate(90deg)' : 'rotate(0deg)', transition: 'transform .15s' }}>▶</span>}
+                              <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>└ {sc}</span>
                             </span>
                           </td>
                           {channels.map(ch => {
                             const v = chData[ch] || 0
                             const { cls, content } = renderCell(v, scTotal)
-                            return <td key={ch} className={cls} style={{ padding: '4px 5px', textAlign: 'right', fontFamily: 'var(--mono)', fontSize: 10.5 }}>{content}</td>
+                            return <td key={ch} className={cls} style={{ padding: '4px 8px', textAlign: 'right', fontFamily: 'var(--mono)', fontSize: 10.5, borderLeft: `1px solid ${C.border}` }}>{content}</td>
                           })}
-                          <td style={{ padding: '4px 5px', textAlign: 'right', fontWeight: 600, color: C.t2, fontFamily: 'var(--mono)', fontSize: 10.5 }}>{fmt(scTotal)}</td>
+                          <td style={{ padding: '4px 8px', textAlign: 'right', fontWeight: 600, color: C.t2, fontFamily: 'var(--mono)', fontSize: 10.5, borderLeft: `1px solid ${C.border}` }}>{fmt(scTotal)}</td>
                         </tr>
                         {scOpen && skus.map(([sku, skuChData]) => {
                           const skuTotal = channels.reduce((s, ch) => s + (skuChData[ch] || 0), 0)
                           return (
                             <tr key={sku} style={{ borderBottom: `1px solid ${C.border}`, background: '#F5F5F0' }}>
-                              <td style={{ padding: '2px 4px 2px 32px', color: C.t3, fontSize: 9.5, fontFamily: 'var(--mono)' }}>└ {sku}</td>
+                              <td style={{ padding: '2px 4px 2px 32px', color: C.t3, fontSize: 9.5, fontFamily: 'var(--mono)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={sku}>└ {sku}</td>
                               {channels.map(ch => {
                                 const v = skuChData[ch] || 0
                                 const { cls, content } = renderCell(v, skuTotal)
-                                return <td key={ch} className={cls} style={{ padding: '3px 5px', textAlign: 'right', fontFamily: 'var(--mono)', fontSize: 10 }}>{content}</td>
+                                return <td key={ch} className={cls} style={{ padding: '3px 8px', textAlign: 'right', fontFamily: 'var(--mono)', fontSize: 10, borderLeft: `1px solid ${C.border}` }}>{content}</td>
                               })}
-                              <td style={{ padding: '3px 5px', textAlign: 'right', fontWeight: 500, color: C.t3, fontFamily: 'var(--mono)', fontSize: 10 }}>{fmt(skuTotal)}</td>
+                              <td style={{ padding: '3px 8px', textAlign: 'right', fontWeight: 500, color: C.t3, fontFamily: 'var(--mono)', fontSize: 10, borderLeft: `1px solid ${C.border}` }}>{fmt(skuTotal)}</td>
                             </tr>
                           )
                         })}
@@ -2304,10 +2788,6 @@ function CategoryChannelMatrix({ heatData, channels, maxHeat, subCatChannelMap =
             })}
           </tbody>
         </table>
-      </div>
-      <div className="ins-box" style={{ marginTop: 10 }}>
-        <span style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.07em', color: '#7A6000', whiteSpace: 'nowrap' }}>⚡ Gap analysis</span>
-        <span style={{ fontSize: 11, color: C.t2 }}>— cells = zero revenue. Find high-performing categories missing on a channel.</span>
       </div>
     </Card>
   )
@@ -2343,7 +2823,7 @@ function AmazonCategoryMatrix({ channels, catChannel, subCatChannel, skuChannel,
   const CH_COLORS = { FBA: '#E8930A', MFN: '#2E74CC', 'Seller Central': '#E8930A', 'Vendor Central': '#2E74CC' }
 
   return (
-    <Card title={title || 'Category × Channel Revenue Matrix'} note="₹ shading = intensity" action={
+    <Card title={title || 'Category × Channel Revenue Matrix'} action={
       <div style={{ display: 'flex', gap: 3 }}>
         {[['rev','Revenue'],['units','Units'],['orders','Orders']].map(([k,l]) => (
           <button key={k} onClick={() => setMetric(k)} style={{ fontSize: 10, fontWeight: metric===k?700:500, padding: '2px 8px', borderRadius: 4, border: `1px solid ${metric===k?C.acm:C.border}`, background: metric===k?C.acc:'transparent', color: C.t1, cursor: 'pointer', fontFamily: 'var(--font)' }}>{l}</button>
@@ -2392,10 +2872,10 @@ function AmazonCategoryMatrix({ channels, catChannel, subCatChannel, skuChannel,
                     return (
                       <Fragment key={sc}>
                         <tr style={{ borderBottom: `1px solid ${C.border}`, background: '#FAFAF7' }}>
-                          <td style={{ padding: '3px 4px 3px 18px', color: C.t2, fontSize: 10 }}>
-                            <span onClick={() => hasSkus && toggleSC(scKey)} style={{ cursor: hasSkus ? 'pointer' : 'default', userSelect: 'none', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-                              {hasSkus && <span style={{ fontSize: 8, color: C.t3, display: 'inline-block', transform: scOpen ? 'rotate(90deg)' : 'rotate(0deg)', transition: 'transform .15s' }}>▶</span>}
-                              └ {sc}
+                          <td style={{ padding: '3px 4px 3px 18px', color: C.t2, fontSize: 10, overflow: 'hidden' }}>
+                            <span onClick={() => hasSkus && toggleSC(scKey)} title={sc} style={{ cursor: hasSkus ? 'pointer' : 'default', userSelect: 'none', display: 'flex', alignItems: 'center', gap: 4, overflow: 'hidden' }}>
+                              {hasSkus && <span style={{ fontSize: 8, color: C.t3, flexShrink: 0, display: 'inline-block', transform: scOpen ? 'rotate(90deg)' : 'rotate(0deg)', transition: 'transform .15s' }}>▶</span>}
+                              <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>└ {sc}</span>
                             </span>
                           </td>
                           {channels.map(ch => {
@@ -2514,15 +2994,15 @@ function FinancialCategoryMatrix({ catData, subCatData, skuData, title, showRetu
     return <span style={{ fontSize: 10, fontWeight: 700, color: positive ? '#0D9E68' : '#B91C1C' }}>{positive ? '↗' : '↘'} {Math.abs(p).toFixed(1)}%</span>
   }
   const returnsRevCell = (rtoRev, cirRev, exchRev, gross, returnRev) => {
-    const total = (returnRev || 0) + (rtoRev || 0) + (cirRev || 0) + (exchRev || 0)
+    const total = (returnRev || 0) + (rtoRev || 0) + (cirRev || 0)
     if (total <= 0) return <span style={{ color: C.t3 }}>—</span>
     const pct = gross > 0 ? (total / gross * 100).toFixed(1) : null
-    return <>{fmt(total)}{pct !== null && <span style={{ fontSize: 8, color: C.t3, marginLeft: 2 }}>({pct}%)</span>}</>
+    return pct !== null ? <>{pct}%</> : <span style={{ color: C.t3 }}>—</span>
   }
   const revPctCell = (val, gross) => {
     if (!val || val <= 0) return <span style={{ color: C.t3 }}>—</span>
     const pct = gross > 0 ? (val / gross * 100).toFixed(1) : null
-    return <>{fmt(val)}{pct !== null && <span style={{ fontSize: 8, color: C.t3, marginLeft: 2 }}>({pct}%)</span>}</>
+    return pct !== null ? <>{pct}%</> : <span style={{ color: C.t3 }}>—</span>
   }
 
   return (
@@ -2705,10 +3185,10 @@ function VCCategoryMatrix({ catData, subCatData, skuData, title }) {
                     return (
                       <Fragment key={sc}>
                         <tr style={{ borderBottom: `1px solid ${C.border}`, background: '#FAFAF7' }}>
-                          <td style={{ padding: '3px 4px 3px 18px', color: C.t2, fontSize: 10 }}>
-                            <span onClick={() => hasSkus && toggleSC(scKey)} style={{ cursor: hasSkus ? 'pointer' : 'default', userSelect: 'none', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-                              {hasSkus && <span style={{ fontSize: 8, color: C.t3, display: 'inline-block', transform: scOpen ? 'rotate(90deg)' : 'rotate(0deg)', transition: 'transform .15s' }}>▶</span>}
-                              └ {sc}
+                          <td style={{ padding: '3px 4px 3px 18px', color: C.t2, fontSize: 10, overflow: 'hidden' }}>
+                            <span onClick={() => hasSkus && toggleSC(scKey)} title={sc} style={{ cursor: hasSkus ? 'pointer' : 'default', userSelect: 'none', display: 'flex', alignItems: 'center', gap: 4, overflow: 'hidden' }}>
+                              {hasSkus && <span style={{ fontSize: 8, color: C.t3, flexShrink: 0, display: 'inline-block', transform: scOpen ? 'rotate(90deg)' : 'rotate(0deg)', transition: 'transform .15s' }}>▶</span>}
+                              <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>└ {sc}</span>
                             </span>
                           </td>
                           <td style={{ padding: '4px 5px', textAlign: 'right', fontFamily: 'var(--mono)', fontSize: 10.5, fontWeight: 400 }}>{sd.units > 0 ? fmtN(sd.units) : '—'}</td>
@@ -2767,7 +3247,7 @@ function RegionTierDonutRow({ regionRows, tierRows }) {
     return (
       <Card title={title} action={
         <div style={{ display: 'flex', gap: 3 }}>
-          {[['rev','Revenue'],['orders','Orders'],['units','Units'],['aov','AOV']].map(([k,l]) => (
+          {[['rev','Revenue'],['orders','Orders'],['units','Units']].map(([k,l]) => (
             <button key={k} onClick={() => setMetric(k)} style={selStyle(metric === k)}>{l}</button>
           ))}
         </div>
@@ -2781,7 +3261,7 @@ function RegionTierDonutRow({ regionRows, tierRows }) {
               <Tooltip content={({ active, payload }) => active && payload?.length ? <div style={{ background: '#fff', border: `1px solid ${C.border}`, borderRadius: 6, padding: '5px 10px', fontSize: 12, color: '#111', fontWeight: 600 }}>{payload[0].name} : {metricFmt(payload[0].value, metric)}</div> : null} />
             </PieChart>
           </ResponsiveContainer>
-          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 6 }}>
+          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 2 }}>
             {data.map((d, i) => (
               <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
                 <span style={{ width: 10, height: 10, borderRadius: '50%', background: d.color, flexShrink: 0 }} />
@@ -2804,9 +3284,9 @@ function RegionTierDonutRow({ regionRows, tierRows }) {
   )
 }
 
-function AllTab({ data }) {
+function AllTab({ data, rangeStart }) {
   const { totalRev, totalExcRev, gstCollected, nOrders, totalQty, blendedAOV, nDays, dailyArr, chMap, catMap, subCatMap, catPrevMap = {}, subCatPrevMap = {}, stateMap, statePrevMap = {}, stateTotal = 0, cityRows = [], cityPrevMap = {}, cityTotal = 0, regionRows = [], tierRows = [], buckets, bucketRev, rows, orders, orderStatusRevMap = {}, orderStatusMap = {}, catChannelMap = {}, subCatChannelMap: serverSubCatChannelMap = {}, skuRows: allSkuRows = [], prevRev = 0, prevExcRev = 0, prevOrders = 0, prevQty = 0, prevDailyArr = [], prevChMap = {}, nCusts = 0, repeatCusts = 0, rtoRev = 0, cirRev = 0, cancellRev = 0, netRevenueCalc = 0, momRev = 0, yoyRev = 0, momPeriod = '', yoyPeriod = '', prevRtoOrders = 0, prevCirOrders = 0 } = data
-  const channels = Object.keys(C.ch).filter(ch => chMap[ch] && chMap[ch].rev > 0)
+  const channels = Object.keys(chMap).filter(ch => chMap[ch]?.rev > 0).sort((a, b) => chMap[b].rev - chMap[a].rev)
   const sortedCh = Object.entries(chMap).filter(([, v]) => v.rev > 0).sort((a, b) => b[1].rev - a[1].rev)
   const maxChRev = sortedCh[0]?.[1].rev || 1
   const [selectedCat, setSelectedCat] = useState(null)
@@ -2817,7 +3297,7 @@ function AllTab({ data }) {
   const subCatRows = selectedCat ? allSubCatRows.filter(r => r.category === selectedCat) : allSubCatRows
   const stateRows = Object.entries(stateMap).map(([k, v]) => ({ state: k, rev: v.rev, orders: v.orders, aov: v.orders ? v.rev / v.orders : 0, cities: v.cities.size, prevRev: statePrevMap[k] || 0 })).sort((a, b) => b.rev - a.rev)
   const bucketData = Object.entries(buckets).map(([k, v]) => ({ name: k, orders: v, rev: bucketRev[k] }))
-  const allCats = catRows.slice(0, 8).map(r => r.name)
+  const allCats = catRows.map(r => r.name)
   const heatData = allCats.map(cat => {
     const row = { cat }
     channels.forEach(ch => { row[ch] = catChannelMap[cat]?.[ch] || 0 })
@@ -2841,7 +3321,7 @@ function AllTab({ data }) {
   const grossMarginPct = totalRev > 0 ? ((totalRev - totalExcRev) / totalRev * 100) : 0
   const revPerUnit = totalQty > 0 ? totalExcRev / totalQty : 0
   const shopifyOrders = orders.filter(o => o.channel === 'Shopify')
-  const atRiskRev = (orderStatusRevMap['RTO'] || 0) + (orderStatusRevMap['Cancelled'] || 0) + (cirRev || 0)
+  const atRiskRev = (orderStatusRevMap['RTO'] || 0) + (orderStatusRevMap['Return'] || 0) + (orderStatusRevMap['Cancelled'] || 0) + (cirRev || 0)
   const deliveredCount = orders.filter(o => o.orderStatus === 'Delivered').length
   const rtoCount = orders.filter(o => o.orderStatus === 'RTO' || o.isRTO).length
   const cancelCount = orders.filter(o => o.orderStatus === 'Cancelled' || o.isCancelled).length
@@ -2849,9 +3329,9 @@ function AllTab({ data }) {
   const fulfilmentRate = fulfilmentBase > 0 ? (deliveredCount / fulfilmentBase * 100) : 0
   const unitsPerOrder = nOrders > 0 ? totalQty / nOrders : 0
   const rtoOrders = (orderStatusMap['RTO'] || 0) + (orderStatusMap['Return'] || 0)
-  const cirOrderCount = orders.filter(o => o.isCIR).length
-  const returnPct = nOrders > 0 ? ((rtoOrders + cirOrderCount) / nOrders * 100) : 0
-  const asp = totalQty > 0 ? totalExcRev / totalQty : 0
+  const cirOrderCount = orderStatusMap['CIR'] || 0
+  const returnPct = totalRev > 0 ? ((rtoRev + cirRev) / totalRev * 100) : 0
+  const asp = totalQty > 0 ? netRevenueCalc / totalQty : 0
   const deliveredOrders = orderStatusMap['Delivered'] || 0
   const fulfilmentPct = nOrders > 0 ? (deliveredOrders / nOrders * 100) : 0
 
@@ -2884,7 +3364,7 @@ function AllTab({ data }) {
       <div style={{ display: 'grid', gridTemplateColumns: '1.5fr 5fr', gap: 10, alignItems: 'stretch' }}>
         {/* Gross Revenue hero — tall left column */}
         <div className="kpi-card" style={{ display: 'flex', flexDirection: 'column', gap: 8, padding: '16px 18px' }}>
-          <div className="kpi-label" style={{ fontSize: 11 }}>Gross Revenue · Inc. GST</div>
+          <div className="kpi-label" style={{ fontSize: 11 }}>Gross Revenue (Inc. GST)</div>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 6 }}>
             <div className="kpi-value" style={{ fontSize: 32, fontWeight: 800 }}>{fmt(totalRev)}</div>
             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4 }}>
@@ -2910,22 +3390,22 @@ function AllTab({ data }) {
           {/* Row 1 */}
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10, flex: 1 }}>
             {(() => {
-              const excChg = prevExcRev > 0 ? ((totalExcRev - prevExcRev) / prevExcRev * 100) : null
+              const excChg = prevExcRev > 0 ? ((netRevenueCalc - prevExcRev) / prevExcRev * 100) : null
               return (
                 <div className="kpi-card" style={{ display: 'flex', flexDirection: 'column', gap: 4, padding: '10px 13px' }}>
-                  <div className="kpi-label">Net (Exc GST)</div>
+                  <div className="kpi-label">Net. Rev. (Exc GST)</div>
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                    <div className="kpi-value">{fmt(totalExcRev)}</div>
+                    <div className="kpi-value">{fmt(netRevenueCalc)}</div>
                     {excChg !== null && <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 7px', borderRadius: 5, background: excChg >= 0 ? C.green.bg : C.red.bg, color: excChg >= 0 ? C.green.tx : C.red.tx }}>{excChg >= 0 ? '▲' : '▼'} {Math.abs(excChg).toFixed(1)}%</span>}
                   </div>
-                  <div className="kpi-sub">{totalRev > 0 ? (totalExcRev / totalRev * 100).toFixed(1) : 0}% of gross · GST {fmt(gstCollected)}</div>
+                  <div className="kpi-sub">{totalRev > 0 ? (netRevenueCalc / totalRev * 100).toFixed(1) : 0}% of gross</div>
                 </div>
               )
             })()}
             {[
-              { label: 'Return %', value: `${returnPct.toFixed(1)}%`, sub: `${fmtN(rtoOrders)} RTO · ${fmtN(cirOrderCount)} CIR`, accent: returnPct > 10 ? '#7A1A1A' : undefined, badge: (() => { if (!prevOrders) return null; const prev = (prevRtoOrders + prevCirOrders) / prevOrders * 100; if (!prev) return null; const p = (returnPct - prev) / prev * 100; return <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 4, background: p >= 0 ? C.red.bg : C.green.bg, color: p >= 0 ? C.red.tx : C.green.tx, flexShrink: 0 }}>{p >= 0 ? '▲' : '▼'} {Math.abs(p).toFixed(1)}%</span> })() },
+              { label: 'Return %', value: `${returnPct.toFixed(1)}%`, sub: `${fmt(rtoRev)} RTO · ${fmt(cirRev)} CIR`, accent: returnPct > 10 ? '#7A1A1A' : undefined, badge: (() => { if (!prevRev) return null; const prevRtoCirRev = (data.prevRtoRev || 0) + (data.prevCirRev || 0); const prev = prevRev > 0 ? prevRtoCirRev / prevRev * 100 : 0; if (!prev) return null; const p = (returnPct - prev) / prev * 100; return <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 4, background: p >= 0 ? C.red.bg : C.green.bg, color: p >= 0 ? C.red.tx : C.green.tx, flexShrink: 0 }}>{p >= 0 ? '▲' : '▼'} {Math.abs(p).toFixed(1)}%</span> })() },
               { label: 'AOV', value: `₹${Math.round(blendedAOV).toLocaleString('en-IN')}`, sub: `Gross rev ÷ orders`, badge: chgBadge(blendedAOV, prevAOV) },
-              { label: 'Daily Avg', value: fmt(totalRev / nDays), sub: `over ${nDays} days`, badge: chgBadge(totalRev / nDays, prevDailyAvg) },
+              { label: 'Avg. Daily Gross Rev', value: fmt(totalRev / nDays), sub: `over ${nDays} days`, badge: chgBadge(totalRev / nDays, prevDailyAvg) },
             ].map(k => (
               <div key={k.label} className="kpi-card" style={{ padding: '10px 13px' }}>
                 <div className="kpi-label">{k.label}</div>
@@ -2960,30 +3440,38 @@ function AllTab({ data }) {
       <div className="g-21">
         <ChannelTrendCard dailyArr={dailyArr} channels={channels} />
         <Card title="Channel Share">
-          {sortedCh.map(([ch, v]) => {
-            const prevChRev = prevChMap[ch] || 0
-            const chg = prevChRev > 1 ? ((v.rev - prevChRev) / prevChRev * 100) : null
-            return (
-              <div key={ch} style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '5px 0', borderBottom: `1px solid ${C.border}` }}>
-                <span style={{ width: 8, height: 8, borderRadius: '50%', background: C.ch[ch] || C.acm, flexShrink: 0 }} />
-                <span style={{ fontSize: 12, color: C.t2, width: 90, flexShrink: 0 }}>{ch}</span>
-                <div style={{ flex: 1, height: 5, background: C.bg, borderRadius: 3 }}>
-                  <div style={{ height: '100%', borderRadius: 3, background: C.ch[ch] || C.acm, width: `${(v.rev / maxChRev) * 100}%`, transition: 'width .5s' }} />
+          {(() => {
+            const maxChExcRev = sortedCh.reduce((m, [, v]) => Math.max(m, v.excRev || 0), 0) || 1
+            const totalChExcRev = sortedCh.reduce((s, [, v]) => s + (v.excRev || 0), 0) || 1
+            return sortedCh.map(([ch, v]) => {
+              const excRev = v.excRev || 0
+              const prevCh = prevChMap[ch]
+              const prevExcRev = (prevCh?.excRev ?? prevCh) || 0
+              const chg = prevExcRev > 1 ? ((excRev - prevExcRev) / prevExcRev * 100) : null
+              return (
+                <div key={ch} style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '5px 0', borderBottom: `1px solid ${C.border}` }}>
+                  {CHANNEL_LOGOS[ch]
+                    ? <img src={CHANNEL_LOGOS[ch]} alt={ch} style={{ width: 18, height: 18, objectFit: 'contain', borderRadius: 4, flexShrink: 0, background: '#f5f5f5' }} />
+                    : <span style={{ width: 18, height: 18, borderRadius: 4, background: C.ch[ch] || C.acm, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 8, fontWeight: 800, color: '#fff' }}>{ch.charAt(0)}</span>}
+                  <span style={{ fontSize: 12, color: C.t2, width: 90, flexShrink: 0 }}>{ch === 'offline_sales' ? 'Offline Sales' : ch}</span>
+                  <div style={{ flex: 1, height: 5, background: C.bg, borderRadius: 3 }}>
+                    <div style={{ height: '100%', borderRadius: 3, background: C.ch[ch] || C.acm, width: `${(excRev / maxChExcRev) * 100}%`, transition: 'width .5s' }} />
+                  </div>
+                  <span style={{ fontSize: 12, fontWeight: 700, color: C.t1, minWidth: 72, textAlign: 'right', fontFamily: 'var(--mono)' }}>{fmt(excRev)}</span>
+                  <span style={{ fontSize: 11, color: C.t3, minWidth: 36, textAlign: 'right' }}>{(excRev / totalChExcRev * 100).toFixed(1)}%</span>
+                  {chg !== null
+                    ? <span style={{ fontSize: 10.5, fontWeight: 700, width: 76, flexShrink: 0, textAlign: 'center', padding: '2px 0', borderRadius: 4, background: chg >= 0 ? '#E6F4E0' : '#FDE8E8', color: chg >= 0 ? '#286010' : '#7A1A1A', display: 'inline-block' }}>{chg >= 0 ? '▲' : '▼'} {Math.abs(chg).toFixed(1)}%</span>
+                    : <span style={{ width: 76, flexShrink: 0 }} />}
                 </div>
-                <span style={{ fontSize: 12, fontWeight: 700, color: C.t1, minWidth: 72, textAlign: 'right', fontFamily: 'var(--mono)' }}>{fmt(v.rev)}</span>
-                <span style={{ fontSize: 11, color: C.t3, minWidth: 36, textAlign: 'right' }}>{pct(v.rev, totalRev)}</span>
-                {chg !== null
-                  ? <span style={{ fontSize: 10.5, fontWeight: 700, width: 76, flexShrink: 0, textAlign: 'center', padding: '2px 0', borderRadius: 4, background: chg >= 0 ? '#E6F4E0' : '#FDE8E8', color: chg >= 0 ? '#286010' : '#7A1A1A', display: 'inline-block' }}>{chg >= 0 ? '▲' : '▼'} {Math.abs(chg).toFixed(1)}%</span>
-                  : <span style={{ width: 76, flexShrink: 0 }} />}
-              </div>
-            )
-          })}
+              )
+            })
+          })()}
         </Card>
       </div>
       {(regionRows.length > 0 || tierRows.length > 0) && (
         <RegionTierDonutRow regionRows={regionRows} tierRows={tierRows} />
       )}
-      <DailyChannelTable dailyArr={dailyArr} channels={channels} nDays={nDays} />
+      <DailyChannelTable dailyArr={dailyArr} channels={channels} nDays={nDays} rangeStart={rangeStart} />
       <CategoryChannelMatrix heatData={heatData} channels={channels} maxHeat={maxHeat} subCatChannelMap={subCatChannelMap} skuChannelMap={skuChannelMap} />
       <div className="g-2" style={{ alignItems: 'stretch' }}>
         {(() => {
@@ -2994,15 +3482,15 @@ function AllTab({ data }) {
             <Card title="Category Revenue" note={selectedCat ? <span style={{ cursor: 'pointer', color: C.acc, fontWeight: 600 }} onClick={() => setSelectedCat(null)}>✕ Clear</span> : `${catRows.length} total`}
               action={<div style={{ display: 'flex', gap: 4 }}>
                 <button style={btnStyle('table')} onClick={() => setCatView('table')}>Table</button>
-                <button style={btnStyle('bar')} onClick={() => setCatView('bar')}>Bar</button>
+                <button style={btnStyle('bar')} onClick={() => setCatView('bar')}>Chart</button>
               </div>}>
               {catView === 'table' && (() => {
                 const totalCatRev = catRows.reduce((s, r) => s + r.rev, 0)
                 return (
                   <div style={{ overflowY: 'auto', maxHeight: FIXED_H }}>
                     <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
-                      <thead style={{ position: 'sticky', top: 0, background: C.card, zIndex: 1 }}><tr>{[{ label: 'Category' }, { label: 'Revenue / % Share', align: 'right' }, { label: 'Units Sold', align: 'right' }, { label: 'ASP', align: 'right' }, { label: 'MoM %', align: 'right' }].map(c => <th key={c.label} style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.05em', color: C.t3, textAlign: c.align || 'left', padding: '3px 5px 7px', borderBottom: `1px solid ${C.border}` }}>{c.label}</th>)}</tr></thead>
-                      <tbody>{catRows.map((r, i) => { const isSelected = selectedCat === r.name; const share = totalCatRev ? (r.rev / totalCatRev * 100).toFixed(1) + '%' : '—'; const momColor = r.mom == null ? C.t3 : r.mom >= 0 ? '#16a34a' : '#dc2626'; return <tr key={r.name} onClick={() => setSelectedCat(isSelected ? null : r.name)} style={{ borderBottom: i < catRows.length - 1 ? `1px solid ${C.border}` : 'none', background: isSelected ? C.acl : '', cursor: 'pointer' }} onMouseEnter={e => { if (!isSelected) e.currentTarget.style.background = '#FFFBE6' }} onMouseLeave={e => { e.currentTarget.style.background = isSelected ? C.acl : '' }}><td style={{ padding: '5.5px 5px', color: C.t2 }}><span style={{ display: 'inline-block', width: 8, height: 8, borderRadius: 2, background: colorOf(r.name), marginRight: 6 }} />{isSelected ? <strong>{r.name}</strong> : r.name}</td><td style={{ padding: '5.5px 5px', textAlign: 'right' }}><span style={{ fontFamily: 'var(--mono)', fontSize: 11.5, color: C.t1 }}>{fmt(r.rev)}</span><span style={{ fontSize: 10, color: C.t3, marginLeft: 5 }}>({share})</span></td><td style={{ padding: '5.5px 5px', textAlign: 'right', color: C.t2 }}>{fmtN(r.units)}</td><td style={{ padding: '5.5px 5px', textAlign: 'right', color: C.t2 }}>₹{Math.round(r.asp).toLocaleString('en-IN')}</td><td style={{ padding: '5.5px 5px', textAlign: 'right', fontWeight: 600, color: momColor }}>{r.mom == null ? '—' : (r.mom >= 0 ? '+' : '') + r.mom.toFixed(1) + '%'}</td></tr> })}</tbody>
+                      <thead style={{ position: 'sticky', top: 0, background: C.card, zIndex: 1 }}><tr>{[{ label: 'Category' }, { label: 'Revenue / % Share', align: 'right' }, { label: 'Units Sold', align: 'right' }, { label: 'ASP', align: 'right' }, { label: 'MoM %', align: 'right' }].map(c => <th key={c.label} style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.05em', color: C.t3, textAlign: c.align || 'left', padding: '3px 5px 7px', borderBottom: `1px solid ${C.border}`, whiteSpace: 'nowrap' }}>{c.label}</th>)}</tr></thead>
+                      <tbody>{catRows.map((r, i) => { const isSelected = selectedCat === r.name; const share = totalCatRev ? (r.rev / totalCatRev * 100).toFixed(1) + '%' : '—'; const momColor = r.mom == null ? C.t3 : r.mom >= 0 ? '#16a34a' : '#dc2626'; return <tr key={r.name} onClick={() => setSelectedCat(isSelected ? null : r.name)} style={{ borderBottom: i < catRows.length - 1 ? `1px solid ${C.border}` : 'none', background: isSelected ? C.acl : '', cursor: 'pointer' }} onMouseEnter={e => { if (!isSelected) e.currentTarget.style.background = '#FFFBE6' }} onMouseLeave={e => { e.currentTarget.style.background = isSelected ? C.acl : '' }}><td style={{ padding: '5.5px 5px', color: C.t2 }}>{isSelected ? <strong>{r.name}</strong> : r.name}</td><td style={{ padding: '5.5px 5px', textAlign: 'right' }}><span style={{ fontFamily: 'var(--mono)', fontSize: 11.5, color: C.t1 }}>{fmt(r.rev)}</span><span style={{ fontSize: 10, color: C.t3, marginLeft: 5 }}>({share})</span></td><td style={{ padding: '5.5px 5px', textAlign: 'right', color: C.t2 }}>{fmtN(r.units)}</td><td style={{ padding: '5.5px 5px', textAlign: 'right', color: C.t2 }}>₹{Math.round(r.asp).toLocaleString('en-IN')}</td><td style={{ padding: '5.5px 5px', textAlign: 'right', fontWeight: 600, color: momColor }}>{r.mom == null ? '—' : (r.mom >= 0 ? '+' : '') + r.mom.toFixed(1) + '%'}</td></tr> })}</tbody>
                     </table>
                   </div>
                 )
@@ -3031,15 +3519,15 @@ function AllTab({ data }) {
             <Card title={selectedCat ? `Sub-categories · ${selectedCat}` : 'Sub-categories'} note={`${subCatRows.length} total`}
               action={<div style={{ display: 'flex', gap: 4 }}>
                 <button style={btnStyle('table')} onClick={() => setSubCatView('table')}>Table</button>
-                <button style={btnStyle('bar')} onClick={() => setSubCatView('bar')}>Bar</button>
+                <button style={btnStyle('bar')} onClick={() => setSubCatView('bar')}>Chart</button>
               </div>}>
               {subCatView === 'table' && (() => {
                 const totalSubRev = subCatRows.reduce((s, r) => s + r.rev, 0)
                 return (
                   <div style={{ overflowY: 'auto', maxHeight: FIXED_H }}>
                     <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
-                      <thead style={{ position: 'sticky', top: 0, background: C.card, zIndex: 1 }}><tr>{[{ label: 'Sub-category' }, { label: 'Revenue / % Share', align: 'right' }, { label: 'Units Sold', align: 'right' }, { label: 'ASP', align: 'right' }, { label: 'MoM %', align: 'right' }].map(c => <th key={c.label} style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.05em', color: C.t3, textAlign: c.align || 'left', padding: '3px 5px 7px', borderBottom: `1px solid ${C.border}` }}>{c.label}</th>)}</tr></thead>
-                      <tbody>{subCatRows.map((r, i) => { const share = totalSubRev ? (r.rev / totalSubRev * 100).toFixed(1) + '%' : '—'; const momColor = r.mom == null ? C.t3 : r.mom >= 0 ? '#16a34a' : '#dc2626'; return <tr key={r.name} style={{ borderBottom: i < subCatRows.length - 1 ? `1px solid ${C.border}` : 'none' }} onMouseEnter={e => e.currentTarget.style.background = '#FFFBE6'} onMouseLeave={e => e.currentTarget.style.background = ''}><td style={{ padding: '5.5px 5px', color: C.t2 }}><span style={{ display: 'inline-block', width: 8, height: 8, borderRadius: 2, background: scColorOf(r.name, i), marginRight: 6 }} />{r.name}</td><td style={{ padding: '5.5px 5px', textAlign: 'right' }}><span style={{ fontFamily: 'var(--mono)', fontSize: 11.5, color: C.t1 }}>{fmt(r.rev)}</span><span style={{ fontSize: 10, color: C.t3, marginLeft: 5 }}>({share})</span></td><td style={{ padding: '5.5px 5px', textAlign: 'right', color: C.t2 }}>{fmtN(r.units)}</td><td style={{ padding: '5.5px 5px', textAlign: 'right', color: C.t2 }}>₹{Math.round(r.asp).toLocaleString('en-IN')}</td><td style={{ padding: '5.5px 5px', textAlign: 'right', fontWeight: 600, color: momColor }}>{r.mom == null ? '—' : (r.mom >= 0 ? '+' : '') + r.mom.toFixed(1) + '%'}</td></tr> })}</tbody>
+                      <thead style={{ position: 'sticky', top: 0, background: C.card, zIndex: 1 }}><tr>{[{ label: 'Sub-category' }, { label: 'Revenue / % Share', align: 'right' }, { label: 'Units Sold', align: 'right' }, { label: 'ASP', align: 'right' }, { label: 'MoM %', align: 'right' }].map(c => <th key={c.label} style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.05em', color: C.t3, textAlign: c.align || 'left', padding: '3px 5px 7px', borderBottom: `1px solid ${C.border}`, whiteSpace: 'nowrap' }}>{c.label}</th>)}</tr></thead>
+                      <tbody>{subCatRows.map((r, i) => { const share = totalSubRev ? (r.rev / totalSubRev * 100).toFixed(1) + '%' : '—'; const momColor = r.mom == null ? C.t3 : r.mom >= 0 ? '#16a34a' : '#dc2626'; return <tr key={r.name} style={{ borderBottom: i < subCatRows.length - 1 ? `1px solid ${C.border}` : 'none' }} onMouseEnter={e => e.currentTarget.style.background = '#FFFBE6'} onMouseLeave={e => e.currentTarget.style.background = ''}><td style={{ padding: '5.5px 5px', color: C.t2 }}>{r.name}</td><td style={{ padding: '5.5px 5px', textAlign: 'right' }}><span style={{ fontFamily: 'var(--mono)', fontSize: 11.5, color: C.t1 }}>{fmt(r.rev)}</span><span style={{ fontSize: 10, color: C.t3, marginLeft: 5 }}>({share})</span></td><td style={{ padding: '5.5px 5px', textAlign: 'right', color: C.t2 }}>{fmtN(r.units)}</td><td style={{ padding: '5.5px 5px', textAlign: 'right', color: C.t2 }}>₹{Math.round(r.asp).toLocaleString('en-IN')}</td><td style={{ padding: '5.5px 5px', textAlign: 'right', fontWeight: 600, color: momColor }}>{r.mom == null ? '—' : (r.mom >= 0 ? '+' : '') + r.mom.toFixed(1) + '%'}</td></tr> })}</tbody>
                     </table>
                   </div>
                 )
@@ -3047,9 +3535,9 @@ function AllTab({ data }) {
               {subCatView === 'bar' && (
                 <div style={{ overflowY: 'auto', maxHeight: FIXED_H }}>
                   <ResponsiveContainer width="100%" height={Math.max(FIXED_H, subCatRows.length * 26)}>
-                    <BarChart data={subCatRows} layout="vertical" margin={{ top: 0, right: 60, bottom: 0, left: 140 }}>
+                    <BarChart data={subCatRows} layout="vertical" margin={{ top: 0, right: 60, bottom: 0, left: 200 }}>
                       <XAxis type="number" tick={{ fontSize: 10, fill: C.t3 }} tickFormatter={v => v >= 1e7 ? `${(v/1e7).toFixed(1)}Cr` : v >= 1e5 ? `${(v/1e5).toFixed(0)}L` : fmt(v)} />
-                      <YAxis type="category" dataKey="name" tick={{ fontSize: 10, fill: C.t2 }} width={135} />
+                      <YAxis type="category" dataKey="name" width={195} tick={({ x, y, payload }) => <text x={x} y={y} dy={4} textAnchor="end" fill={C.t2} fontSize={10}>{payload.value.length > 28 ? payload.value.slice(0, 27) + '…' : payload.value}</text>} />
                       <CartesianGrid strokeDasharray="3 3" stroke={C.border} horizontal={false} />
                       <Tooltip formatter={v => fmt(v)} />
                       <Bar dataKey="rev" name="Revenue" radius={[0,4,4,0]}>{subCatRows.map((r, i) => <Cell key={r.name} fill={scColorOf(r.name, i)} />)}</Bar>
@@ -3158,11 +3646,11 @@ function CatSubCatRow({ catRows, subCatRows, title = 'Category Revenue', selecte
   return (
     <div className="g-2" style={{ alignItems: 'stretch' }}>
       <Card title={title} note={selectedCat ? <span style={{ cursor: 'pointer', color: C.acc, fontWeight: 600 }} onClick={() => setSelectedCat(null)}>✕ Clear</span> : `${catRows.length} total`}
-        action={<div style={{ display: 'flex', gap: 4 }}><button style={btnStyle('table')} onClick={() => setCatView('table')}>Table</button><button style={btnStyle('bar')} onClick={() => setCatView('bar')}>Bar</button></div>}>
+        action={<div style={{ display: 'flex', gap: 4 }}><button style={btnStyle('table')} onClick={() => setCatView('table')}>Table</button><button style={btnStyle('bar')} onClick={() => setCatView('bar')}>Chart</button></div>}>
         {catView === 'table' && (
           <div style={{ overflowY: 'auto', maxHeight: FIXED_H }}>
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
-              <thead style={{ position: 'sticky', top: 0, background: C.card, zIndex: 1 }}><tr>{[{ label: 'Category' }, { label: 'Revenue / % Share', align: 'right' }, { label: 'Orders', align: 'right' }, { label: 'Units', align: 'right' }, { label: 'ASP', align: 'right' }].map(c => <th key={c.label} style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.05em', color: C.t3, textAlign: c.align || 'left', padding: '3px 5px 7px', borderBottom: `1px solid ${C.border}` }}>{c.label}</th>)}</tr></thead>
+              <thead style={{ position: 'sticky', top: 0, background: C.card, zIndex: 1 }}><tr>{[{ label: 'Category' }, { label: 'Revenue / % Share', align: 'right' }, { label: 'Orders', align: 'right' }, { label: 'Units', align: 'right' }, { label: 'ASP', align: 'right' }].map(c => <th key={c.label} style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.05em', color: C.t3, textAlign: c.align || 'left', padding: '3px 5px 7px', borderBottom: `1px solid ${C.border}`, whiteSpace: 'nowrap' }}>{c.label}</th>)}</tr></thead>
               <tbody>{catRows.map((r, i) => { const isSelected = selectedCat === r.name; const share = totalCatRev ? (r.rev / totalCatRev * 100).toFixed(1) + '%' : '—'; return <tr key={r.name} onClick={() => setSelectedCat(isSelected ? null : r.name)} style={{ borderBottom: i < catRows.length - 1 ? `1px solid ${C.border}` : 'none', background: isSelected ? C.acl : '', cursor: 'pointer' }} onMouseEnter={e => { if (!isSelected) e.currentTarget.style.background = '#FFFBE6' }} onMouseLeave={e => { e.currentTarget.style.background = isSelected ? C.acl : '' }}><td style={{ padding: '5.5px 5px', color: C.t2 }}><span style={{ display: 'inline-block', width: 8, height: 8, borderRadius: 2, background: '#FFD600', marginRight: 6 }} />{isSelected ? <strong>{r.name}</strong> : r.name}</td><td style={{ padding: '5.5px 5px', textAlign: 'right' }}><span style={{ fontFamily: 'var(--mono)', fontSize: 11.5, color: C.t1 }}>{fmt(r.rev)}</span><span style={{ fontSize: 10, color: C.t3, marginLeft: 5 }}>({share})</span></td><td style={{ padding: '5.5px 5px', textAlign: 'right', color: C.t2 }}>{fmtN(r.orders)}</td><td style={{ padding: '5.5px 5px', textAlign: 'right', color: C.t2 }}>{fmtN(r.units)}</td><td style={{ padding: '5.5px 5px', textAlign: 'right', color: C.t2 }}>₹{Math.round(r.rev / Math.max(r.units, 1)).toLocaleString('en-IN')}</td></tr> })}</tbody>
             </table>
           </div>
@@ -3182,11 +3670,11 @@ function CatSubCatRow({ catRows, subCatRows, title = 'Category Revenue', selecte
         )}
       </Card>
       <Card title={selectedCat ? `Sub-categories · ${selectedCat}` : 'Sub-categories'} note={selectedSubCat ? <span style={{ cursor: 'pointer', color: C.acc, fontWeight: 600 }} onClick={() => setSelectedSubCat(null)}>✕ Clear</span> : `${filteredSubCat.length} total`}
-        action={<div style={{ display: 'flex', gap: 4 }}><button style={scBtnStyle('table')} onClick={() => setSubCatView('table')}>Table</button><button style={scBtnStyle('bar')} onClick={() => setSubCatView('bar')}>Bar</button></div>}>
+        action={<div style={{ display: 'flex', gap: 4 }}><button style={scBtnStyle('table')} onClick={() => setSubCatView('table')}>Table</button><button style={scBtnStyle('bar')} onClick={() => setSubCatView('bar')}>Chart</button></div>}>
         {subCatView === 'table' && (
           <div style={{ overflowY: 'auto', maxHeight: FIXED_H }}>
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
-              <thead style={{ position: 'sticky', top: 0, background: C.card, zIndex: 1 }}><tr>{[{ label: 'Sub-category' }, { label: 'Revenue / % Share', align: 'right' }, { label: 'Orders', align: 'right' }, { label: 'Units', align: 'right' }, { label: 'ASP', align: 'right' }].map(c => <th key={c.label} style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.05em', color: C.t3, textAlign: c.align || 'left', padding: '3px 5px 7px', borderBottom: `1px solid ${C.border}` }}>{c.label}</th>)}</tr></thead>
+              <thead style={{ position: 'sticky', top: 0, background: C.card, zIndex: 1 }}><tr>{[{ label: 'Sub-category' }, { label: 'Revenue / % Share', align: 'right' }, { label: 'Orders', align: 'right' }, { label: 'Units', align: 'right' }, { label: 'ASP', align: 'right' }].map(c => <th key={c.label} style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.05em', color: C.t3, textAlign: c.align || 'left', padding: '3px 5px 7px', borderBottom: `1px solid ${C.border}`, whiteSpace: 'nowrap' }}>{c.label}</th>)}</tr></thead>
               <tbody>{filteredSubCat.map((r, i) => { const isScSelected = selectedSubCat === r.name && selectedCat === r.category; const share = totalSubRev ? (r.rev / totalSubRev * 100).toFixed(1) + '%' : '—'; return <tr key={r.name + r.category} onClick={() => { if (setSelectedSubCat) { if (!selectedCat || selectedCat !== r.category) setSelectedCat(r.category); setSelectedSubCat(isScSelected ? null : r.name) } }} style={{ borderBottom: i < filteredSubCat.length - 1 ? `1px solid ${C.border}` : 'none', background: isScSelected ? C.acl : '', cursor: setSelectedSubCat ? 'pointer' : 'default' }} onMouseEnter={e => { if (!isScSelected) e.currentTarget.style.background = '#FFFBE6' }} onMouseLeave={e => { e.currentTarget.style.background = isScSelected ? C.acl : '' }}><td style={{ padding: '5.5px 5px', color: C.t2 }}><span style={{ display: 'inline-block', width: 8, height: 8, borderRadius: 2, background: '#FFD600', marginRight: 6 }} />{isScSelected ? <strong>{r.name}</strong> : r.name}</td><td style={{ padding: '5.5px 5px', textAlign: 'right' }}><span style={{ fontFamily: 'var(--mono)', fontSize: 11.5, color: C.t1 }}>{fmt(r.rev)}</span><span style={{ fontSize: 10, color: C.t3, marginLeft: 5 }}>({share})</span></td><td style={{ padding: '5.5px 5px', textAlign: 'right', color: C.t2 }}>{fmtN(r.orders)}</td><td style={{ padding: '5.5px 5px', textAlign: 'right', color: C.t2 }}>{fmtN(r.units)}</td><td style={{ padding: '5.5px 5px', textAlign: 'right', color: C.t2 }}>₹{Math.round(r.rev / Math.max(r.units, 1)).toLocaleString('en-IN')}</td></tr> })}</tbody>
             </table>
           </div>
@@ -3386,6 +3874,93 @@ function ShopifyGeoRichTable({ title, rows, firstKey, firstLabel, formatFirst, r
   )
 }
 
+function ShopifyReturnReasonsTable({ reasons = [] }) {
+  const [expandedReason, setExpandedReason] = useState({})
+
+  if (!reasons || reasons.length === 0) return null
+
+  // Derive all unique categories (columns), sorted by total orders desc
+  const catTotals = {}
+  reasons.forEach(r => { catTotals[r.category] = (catTotals[r.category] || 0) + r.orders })
+  const cats = Object.keys(catTotals).sort((a, b) => catTotals[b] - catTotals[a])
+
+  // Group: reason → { orders per cat, subReasons: { subReason → orders per cat } }
+  const grouped = {}
+  reasons.forEach(r => {
+    if (!grouped[r.reason]) { grouped[r.reason] = { catOrders: {}, subReasons: {} } }
+    grouped[r.reason].catOrders[r.category] = (grouped[r.reason].catOrders[r.category] || 0) + r.orders
+    if (!grouped[r.reason].subReasons[r.subReason]) grouped[r.reason].subReasons[r.subReason] = { catOrders: {} }
+    const sr = grouped[r.reason].subReasons[r.subReason]
+    sr.catOrders[r.category] = (sr.catOrders[r.category] || 0) + r.orders
+  })
+
+  const reasonTotal = reason => Object.values(grouped[reason].catOrders).reduce((s, v) => s + v, 0)
+  const grandTotal = Object.keys(grouped).reduce((s, r) => s + reasonTotal(r), 0)
+
+  const sortedReasons = Object.keys(grouped).sort((a, b) => reasonTotal(b) - reasonTotal(a))
+
+  // Column totals for column-wise % on reason rows
+  const colTotals = {}
+  cats.forEach(cat => { colTotals[cat] = Object.keys(grouped).reduce((s, r) => s + (grouped[r].catOrders[cat] || 0), 0) })
+
+  const thStyle = { fontSize: 9, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.04em', color: C.t3, padding: '4px 8px 6px', borderBottom: `1px solid ${C.border}`, textAlign: 'right', whiteSpace: 'nowrap', background: C.card }
+  const thL = { ...thStyle, textAlign: 'left', minWidth: 180 }
+  const pctCell = (v, base) => {
+    if (!v || !base) return <span style={{ color: C.t3, fontSize: 10 }}>—</span>
+    return <span>{(v / base * 100).toFixed(1)}%</span>
+  }
+
+  return (
+    <Card title="Return Reasons · Shopify" note={`${sortedReasons.length} reasons · ${grandTotal.toLocaleString('en-IN')} orders`}>
+      <div style={{ overflowX: 'auto', overflowY: 'auto', maxHeight: 500 }}>
+        <table style={{ borderCollapse: 'collapse', fontSize: 11, minWidth: '100%' }}>
+          <thead style={{ position: 'sticky', top: 0, zIndex: 2 }}>
+            <tr>
+              <th style={thL}>Reason / Sub-reason</th>
+              {cats.map(cat => <th key={cat} style={thStyle}>{cat}</th>)}
+            </tr>
+          </thead>
+          <tbody>
+            {sortedReasons.map((reason, ri) => {
+              const rd = grouped[reason]
+              const rTotal = reasonTotal(reason)
+              const isExp = expandedReason[reason]
+              const sortedSubs = Object.entries(rd.subReasons).sort((a, b) => {
+                const ta = Object.values(a[1].catOrders).reduce((s, v) => s + v, 0)
+                const tb = Object.values(b[1].catOrders).reduce((s, v) => s + v, 0)
+                return tb - ta
+              })
+              return [
+                <tr key={`r-${reason}`} style={{ borderBottom: `1px solid ${C.border}`, background: ri % 2 === 0 ? C.card : C.bg, cursor: 'pointer' }}
+                  onClick={() => setExpandedReason(p => ({ ...p, [reason]: !p[reason] }))}>
+                  <td style={{ padding: '5px 8px', fontWeight: 600, color: C.t1, whiteSpace: 'nowrap' }}>
+                    <span style={{ marginRight: 6, fontSize: 10, color: C.t3 }}>{isExp ? '▼' : '▶'}</span>
+                    {reason}
+                    <span style={{ marginLeft: 8, fontSize: 9, color: C.t3, fontWeight: 400 }}>{rTotal.toLocaleString('en-IN')} · {grandTotal > 0 ? (rTotal / grandTotal * 100).toFixed(1) : 0}%</span>
+                  </td>
+                  {cats.map(cat => <td key={cat} style={{ padding: '5px 8px', textAlign: 'right', fontFamily: 'var(--mono)', color: C.t1 }}>{pctCell(rd.catOrders[cat], colTotals[cat])}</td>)}
+                </tr>,
+                ...(isExp ? sortedSubs.map(([subReason, sd]) => {
+                  const srTotal = Object.values(sd.catOrders).reduce((s, v) => s + v, 0)
+                  return (
+                    <tr key={`sr-${reason}-${subReason}`} style={{ borderBottom: `1px solid ${C.border}`, background: C.acl }}>
+                      <td style={{ padding: '4px 8px 4px 28px', color: C.t2, whiteSpace: 'nowrap' }}>
+                        ↳ {subReason}
+                        <span style={{ marginLeft: 8, fontSize: 9, color: C.t3 }}>{srTotal.toLocaleString('en-IN')} · {rTotal > 0 ? (srTotal / rTotal * 100).toFixed(1) : 0}% of reason</span>
+                      </td>
+                      {cats.map(cat => <td key={cat} style={{ padding: '4px 8px', textAlign: 'right', fontFamily: 'var(--mono)', color: C.t2 }}>{pctCell(sd.catOrders[cat], rTotal > 0 ? rd.catOrders[cat] : null)}</td>)}
+                    </tr>
+                  )
+                }) : [])
+              ]
+            }).flat()}
+          </tbody>
+        </table>
+      </div>
+    </Card>
+  )
+}
+
 function ShopifyTab({ data, filters, setFilters }) {
   // On mount, default to India scope if no region is set yet
   useEffect(() => {
@@ -3472,7 +4047,7 @@ function ShopifyTab({ data, filters, setFilters }) {
   const deliveredOrders = orderStatusMap['Delivered'] || 0
   const rtoOrders = (orderStatusMap['RTO'] || 0) + (orderStatusMap['Return'] || 0)
   const fulfilmentPct = shNOrders ? (deliveredOrders / shNOrders * 100) : 0
-  const rtoPct = shNOrders ? (rtoOrders / shNOrders * 100) : 0
+  const rtoPct = totalRev > 0 ? ((data.rtoRevDirect || 0) + (data.returnRev || 0)) / totalRev * 100 : 0
   const atRiskRev = (data.rtoRevDirect || 0) + (data.returnRev || 0) + (data.cirRev || 0) + (orderStatusRevMap['Cancelled'] || 0)
   const returnRevPct = totalRev > 0 ? (((data.rtoRevDirect || 0) + (data.returnRev || 0) + (data.cirRev || 0)) / totalRev * 100) : 0
   const repeatRate = nCusts ? (repeatCusts / nCusts * 100).toFixed(1) : '0'
@@ -3685,7 +4260,7 @@ function ShopifyTab({ data, filters, setFilters }) {
       <div style={{ display: 'grid', gridTemplateColumns: '1.5fr 5fr', gap: 10, alignItems: 'stretch' }}>
         {/* Hero card */}
         <div className="kpi-card" style={{ display: 'flex', flexDirection: 'column', gap: 8, padding: '16px 18px' }}>
-          <div className="kpi-label" style={{ fontSize: 11 }}>Gross Revenue · Inc. GST</div>
+          <div className="kpi-label" style={{ fontSize: 11 }}>Gross Revenue (Inc. GST)</div>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 6 }}>
             <div className="kpi-value" style={{ fontSize: 32, fontWeight: 800 }}>{fmt(totalRev)}</div>
             {shRevChg !== null && <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 7px', borderRadius: 4, background: shRevChg >= 0 ? C.green.bg : C.red.bg, color: shRevChg >= 0 ? C.green.tx : C.red.tx }}>{shRevChg >= 0 ? '▲' : '▼'} {Math.abs(shRevChg).toFixed(1)}%</span>}
@@ -3706,10 +4281,11 @@ function ShopifyTab({ data, filters, setFilters }) {
         {(() => {
           const cirOrders = data.cirOrders || 0
           const exchangeOrders = data.exchangeOrders || 0
+          const exchangeRev = data.exchangeRev || 0
           const cancelledOrders = orderStatusMap['Cancelled'] || 0
-          const cancelPct = shNOrders ? (cancelledOrders / shNOrders * 100) : 0
-          const cirPct = shNOrders ? (cirOrders / shNOrders * 100) : 0
-          const exchangePct = shNOrders ? (exchangeOrders / shNOrders * 100) : 0
+          const cancelPct = totalRev > 0 ? (cancelledRev / totalRev * 100) : 0
+          const cirPct = totalRev > 0 ? (data.cirRev || 0) / totalRev * 100 : 0
+          const exchangePct = totalRev > 0 ? (exchangeRev / totalRev * 100) : 0
           const excChg = prevExcRev > 0 ? ((totalExcRev - prevExcRev) / prevExcRev * 100) : null
           const prevGst = prevGrossAfterReturns - prevNetRev
           const row1 = [
@@ -3720,21 +4296,23 @@ function ShopifyTab({ data, filters, setFilters }) {
               badge: excChg !== null ? <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 4, background: excChg >= 0 ? C.green.bg : C.red.bg, color: excChg >= 0 ? C.green.tx : C.red.tx, flexShrink: 0 }}>{excChg >= 0 ? '▲' : '▼'} {Math.abs(excChg).toFixed(1)}%</span> : null,
             },
             { label: 'GST Collected', value: fmt(gst), sub: grossAfterReturns > 0 ? `${((gst / grossAfterReturns) * 100).toFixed(1)}% of net sales` : '—', badge: shChgBadge(gst, prevGst) },
-            { label: 'Daily Avg', value: fmt(dailyAvg), sub: `over ${nDays} days`, badge: shChgBadge(dailyAvg, prevRev > 0 ? prevRev / nDays : 0) },
+            { label: 'Avg. Daily Gross Rev', value: fmt(dailyAvg), sub: `over ${nDays} days`, badge: shChgBadge(dailyAvg, prevRev > 0 ? prevRev / nDays : 0) },
             { label: 'AOV', value: `₹${Math.round(aov).toLocaleString('en-IN')}`, sub: 'Gross rev ÷ orders', badge: shChgBadge(aov, prevOrders > 0 ? prevRev / prevOrders : 0) },
             { label: 'ASP', value: `₹${Math.round(asp).toLocaleString('en-IN')}`, sub: 'Net rev ÷ units sold', badge: shChgBadge(asp, prevUnits > 0 ? prevNetRev / prevUnits : 0) },
           ]
-          const prevCancelPct = prevOrders > 0 ? prevCancelledOrders / prevOrders * 100 : 0
-          const prevExchangePct = prevOrders > 0 ? prevExchangeOrders / prevOrders * 100 : 0
+          const cancelRevPerOrder = cancelledOrders > 0 ? cancelledRev / cancelledOrders : 0
+          const prevCancelPct = prevRev > 0 ? (prevCancelledOrders * cancelRevPerOrder) / prevRev * 100 : 0
+          const exchRevPerOrder = exchangeOrders > 0 ? exchangeRev / exchangeOrders : 0
+          const prevExchangePct = prevRev > 0 ? (prevExchangeOrders * exchRevPerOrder) / prevRev * 100 : 0
           const prevReturnOrderPct = prevOrders > 0 ? (prevRtoOrders + prevCirOrders) / prevOrders * 100 : 0
           const prevReturnRevPct = prevRev > 0 ? ((prevRtoOrders + prevCirOrders) / prevOrders * 100) : 0
           const returnOrderPct = shNOrders ? ((rtoOrders + cirOrders) / shNOrders * 100) : 0
           const row2 = [
-            { label: 'Cancellation %', value: `${cancelPct.toFixed(1)}%`, sub: `${fmtN(cancelledOrders)} cancelled`, accent: cancelPct > 5 ? '#7A1A1A' : undefined, badge: shReturnBadge(cancelPct, prevCancelPct) },
+            { label: 'Cancellation %', value: `${cancelPct.toFixed(1)}%`, sub: `${fmt(cancelledRev)} cancelled rev`, accent: cancelPct > 5 ? '#7A1A1A' : undefined, badge: shReturnBadge(cancelPct, prevCancelPct) },
             { label: 'Return %', value: `${returnRevPct.toFixed(1)}%`, sub: `${fmt((data.rtoRevDirect || 0) + (data.returnRev || 0) + (data.cirRev || 0))} RTO+CIR rev`, accent: returnRevPct > 5 ? '#7A1A1A' : undefined, badge: shReturnBadge(returnRevPct, prevReturnRevPct) },
-            { label: 'Exchange %', value: `${exchangePct.toFixed(1)}%`, sub: `${fmtN(exchangeOrders)} exchange orders`, badge: shReturnBadge(exchangePct, prevExchangePct) },
-            { label: 'RTO %', value: `${rtoPct.toFixed(1)}%`, sub: `${fmtN(rtoOrders)} RTO orders`, accent: rtoPct > 10 ? '#7A1A1A' : undefined },
-            { label: 'CIR %', value: `${cirPct.toFixed(1)}%`, sub: `${fmtN(cirOrders)} CIR orders` },
+            { label: 'Exchange %', value: `${exchangePct.toFixed(1)}%`, sub: `${fmt(exchangeRev)} exchange rev`, badge: shReturnBadge(exchangePct, prevExchangePct) },
+            { label: 'RTO %', value: `${rtoPct.toFixed(1)}%`, sub: `${fmt((data.rtoRevDirect||0)+(data.returnRev||0))} RTO+Return rev`, accent: rtoPct > 10 ? '#7A1A1A' : undefined },
+            { label: 'CIR %', value: `${cirPct.toFixed(1)}%`, sub: `${fmt(data.cirRev||0)} CIR rev` },
           ]
           return (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
@@ -3833,7 +4411,7 @@ function ShopifyTab({ data, filters, setFilters }) {
                   <Tooltip content={({ active, payload, label }) => active && payload?.length ? (
                     <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 7, padding: '7px 11px', fontSize: 11 }}>
                       <div style={{ fontWeight: 700, marginBottom: 4, color: C.t2 }}>{xFmt(label)}</div>
-                      {payload.map(p => <div key={p.name} style={{ color: p.color }}>{p.name}: {(p.yAxisId === 'pct' || p.name.endsWith('%')) ? `${Number(p.value).toFixed(1)}%` : fmt(p.value)}</div>)}
+                      {payload.map(p => <div key={p.name} style={{ color: p.color }}>{p.name}: {(p.yAxisId === 'pct' || p.name.endsWith('%') || ['returnPct','exchPct','cancelPct'].includes(p.dataKey)) ? `${Number(p.value).toFixed(1)}%` : fmt(p.value)}</div>)}
                     </div>
                   ) : null} />
                   <Legend wrapperStyle={{ fontSize: 11 }} />
@@ -3887,13 +4465,13 @@ function ShopifyTab({ data, filters, setFilters }) {
             <Card title="Category Revenue" note={selectedCat ? <span style={{ cursor: 'pointer', color: C.acc, fontWeight: 600 }} onClick={() => { setSelectedCat(null); setFilters(f => ({ ...f, category: [], subCategory: [] })) }}>✕ Clear</span> : `${catRows.length} total`}
               action={<div style={{ display: 'flex', gap: 4 }}>
                 <button style={btnStyle('table')} onClick={() => setShCatView('table')}>Table</button>
-                <button style={btnStyle('bar')} onClick={() => setShCatView('bar')}>Bar</button>
+                <button style={btnStyle('bar')} onClick={() => setShCatView('bar')}>Chart</button>
               </div>}>
               {shCatView === 'table' && (
                 <div style={{ overflowY: 'auto', maxHeight: FIXED_H }}>
                   <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
-                    <thead style={{ position: 'sticky', top: 0, background: C.card, zIndex: 1 }}><tr>{[{ label: 'Category' }, { label: 'Revenue / % Share', align: 'right' }, { label: 'Orders', align: 'right' }, { label: 'Units', align: 'right' }, { label: 'ASP', align: 'right' }].map(c => <th key={c.label} style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.05em', color: C.t3, textAlign: c.align || 'left', padding: '3px 5px 7px', borderBottom: `1px solid ${C.border}` }}>{c.label}</th>)}</tr></thead>
-                    <tbody>{catRows.map((r, i) => { const isSelected = selectedCat === r.name; const share = totalCatRev ? (r.rev / totalCatRev * 100).toFixed(1) + '%' : '—'; return <tr key={r.name} onClick={() => { const next = isSelected ? null : r.name; setSelectedCat(next); setFilters(f => ({ ...f, category: next ? [next] : [], subCategory: [] })) }} style={{ borderBottom: i < catRows.length - 1 ? `1px solid ${C.border}` : 'none', background: isSelected ? C.acl : '', cursor: 'pointer' }} onMouseEnter={e => { if (!isSelected) e.currentTarget.style.background = '#FFFBE6' }} onMouseLeave={e => { e.currentTarget.style.background = isSelected ? C.acl : '' }}><td style={{ padding: '5.5px 5px', color: C.t2 }}><span style={{ display: 'inline-block', width: 8, height: 8, borderRadius: 2, background: colorOf(r.name), marginRight: 6 }} />{isSelected ? <strong>{r.name}</strong> : r.name}</td><td style={{ padding: '5.5px 5px', textAlign: 'right' }}><span style={{ fontFamily: 'var(--mono)', fontSize: 11.5, color: C.t1 }}>{fmt(r.rev)}</span><span style={{ fontSize: 10, color: C.t3, marginLeft: 5 }}>({share})</span></td><td style={{ padding: '5.5px 5px', textAlign: 'right', color: C.t2 }}>{fmtN(r.orders)}</td><td style={{ padding: '5.5px 5px', textAlign: 'right', color: C.t2 }}>{fmtN(r.units)}</td><td style={{ padding: '5.5px 5px', textAlign: 'right', color: C.t2 }}>₹{Math.round(r.asp).toLocaleString('en-IN')}</td></tr> })}</tbody>
+                    <thead style={{ position: 'sticky', top: 0, background: C.card, zIndex: 1 }}><tr>{[{ label: 'Category' }, { label: 'Revenue / % Share', align: 'right' }, { label: 'Orders', align: 'right' }, { label: 'Units', align: 'right' }, { label: 'ASP', align: 'right' }].map(c => <th key={c.label} style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.05em', color: C.t3, textAlign: c.align || 'left', padding: '3px 5px 7px', borderBottom: `1px solid ${C.border}`, whiteSpace: 'nowrap' }}>{c.label}</th>)}</tr></thead>
+                    <tbody>{catRows.map((r, i) => { const isSelected = selectedCat === r.name; const share = totalCatRev ? (r.rev / totalCatRev * 100).toFixed(1) + '%' : '—'; return <tr key={r.name} onClick={() => { const next = isSelected ? null : r.name; setSelectedCat(next); setFilters(f => ({ ...f, category: next ? [next] : [], subCategory: [] })) }} style={{ borderBottom: i < catRows.length - 1 ? `1px solid ${C.border}` : 'none', background: isSelected ? C.acl : '', cursor: 'pointer' }} onMouseEnter={e => { if (!isSelected) e.currentTarget.style.background = '#FFFBE6' }} onMouseLeave={e => { e.currentTarget.style.background = isSelected ? C.acl : '' }}><td style={{ padding: '5.5px 5px', color: C.t2 }}>{isSelected ? <strong>{r.name}</strong> : r.name}</td><td style={{ padding: '5.5px 5px', textAlign: 'right' }}><span style={{ fontFamily: 'var(--mono)', fontSize: 11.5, color: C.t1 }}>{fmt(r.rev)}</span><span style={{ fontSize: 10, color: C.t3, marginLeft: 5 }}>({share})</span></td><td style={{ padding: '5.5px 5px', textAlign: 'right', color: C.t2 }}>{fmtN(r.orders)}</td><td style={{ padding: '5.5px 5px', textAlign: 'right', color: C.t2 }}>{fmtN(r.units)}</td><td style={{ padding: '5.5px 5px', textAlign: 'right', color: C.t2 }}>₹{Math.round(r.asp).toLocaleString('en-IN')}</td></tr> })}</tbody>
                   </table>
                 </div>
               )}
@@ -3922,12 +4500,12 @@ function ShopifyTab({ data, filters, setFilters }) {
             <Card title={selectedCat ? `Sub-categories · ${selectedCat}` : 'Sub-categories'} note={`${subCatRows.length} total`}
               action={<div style={{ display: 'flex', gap: 4 }}>
                 <button style={btnStyle('table')} onClick={() => setShSubCatView('table')}>Table</button>
-                <button style={btnStyle('bar')} onClick={() => setShSubCatView('bar')}>Bar</button>
+                <button style={btnStyle('bar')} onClick={() => setShSubCatView('bar')}>Chart</button>
               </div>}>
               {shSubCatView === 'table' && (
                 <div style={{ overflowY: 'auto', maxHeight: FIXED_H }}>
                   <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
-                    <thead style={{ position: 'sticky', top: 0, background: C.card, zIndex: 1 }}><tr>{[{ label: 'Sub-category' }, { label: 'Revenue / % Share', align: 'right' }, { label: 'Orders', align: 'right' }, { label: 'Units', align: 'right' }, { label: 'ASP', align: 'right' }].map(c => <th key={c.label} style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.05em', color: C.t3, textAlign: c.align || 'left', padding: '3px 5px 7px', borderBottom: `1px solid ${C.border}` }}>{c.label}</th>)}</tr></thead>
+                    <thead style={{ position: 'sticky', top: 0, background: C.card, zIndex: 1 }}><tr>{[{ label: 'Sub-category' }, { label: 'Revenue / % Share', align: 'right' }, { label: 'Orders', align: 'right' }, { label: 'Units', align: 'right' }, { label: 'ASP', align: 'right' }].map(c => <th key={c.label} style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.05em', color: C.t3, textAlign: c.align || 'left', padding: '3px 5px 7px', borderBottom: `1px solid ${C.border}`, whiteSpace: 'nowrap' }}>{c.label}</th>)}</tr></thead>
                     <tbody>{subCatRows.map((r, i) => { const isSelSub = (filters.subCategory || []).includes(r.name); const share = totalSubRev ? (r.rev / totalSubRev * 100).toFixed(1) + '%' : '—'; return <tr key={r.name} onClick={() => { const next = isSelSub ? [] : [r.name]; setFilters(f => ({ ...f, subCategory: next })) }} style={{ borderBottom: i < subCatRows.length - 1 ? `1px solid ${C.border}` : 'none', background: isSelSub ? C.acl : '', cursor: 'pointer' }} onMouseEnter={e => { if (!isSelSub) e.currentTarget.style.background = '#FFFBE6' }} onMouseLeave={e => { e.currentTarget.style.background = isSelSub ? C.acl : '' }}><td style={{ padding: '5.5px 5px', color: C.t2 }}><span style={{ display: 'inline-block', width: 8, height: 8, borderRadius: 2, background: scColorOf(), marginRight: 6 }} />{isSelSub ? <strong>{r.name}</strong> : r.name}</td><td style={{ padding: '5.5px 5px', textAlign: 'right' }}><span style={{ fontFamily: 'var(--mono)', fontSize: 11.5, color: C.t1 }}>{fmt(r.rev)}</span><span style={{ fontSize: 10, color: C.t3, marginLeft: 5 }}>({share})</span></td><td style={{ padding: '5.5px 5px', textAlign: 'right', color: C.t2 }}>{fmtN(r.orders)}</td><td style={{ padding: '5.5px 5px', textAlign: 'right', color: C.t2 }}>{fmtN(r.units)}</td><td style={{ padding: '5.5px 5px', textAlign: 'right', color: C.t2 }}>₹{Math.round(r.asp).toLocaleString('en-IN')}</td></tr> })}</tbody>
                   </table>
                 </div>
@@ -3935,9 +4513,9 @@ function ShopifyTab({ data, filters, setFilters }) {
               {shSubCatView === 'bar' && (
                 <div style={{ overflowY: 'auto', maxHeight: FIXED_H }}>
                   <ResponsiveContainer width="100%" height={Math.max(FIXED_H, subCatRows.length * 26)}>
-                    <BarChart data={subCatRows} layout="vertical" margin={{ top: 0, right: 60, bottom: 0, left: 140 }}>
+                    <BarChart data={subCatRows} layout="vertical" margin={{ top: 0, right: 60, bottom: 0, left: 200 }}>
                       <XAxis type="number" tick={{ fontSize: 10, fill: C.t3 }} tickFormatter={v => v >= 1e7 ? `${(v/1e7).toFixed(1)}Cr` : v >= 1e5 ? `${(v/1e5).toFixed(0)}L` : fmt(v)} />
-                      <YAxis type="category" dataKey="name" tick={{ fontSize: 10, fill: C.t2 }} width={135} />
+                      <YAxis type="category" dataKey="name" width={195} tick={({ x, y, payload }) => <text x={x} y={y} dy={4} textAnchor="end" fill={C.t2} fontSize={10}>{payload.value.length > 28 ? payload.value.slice(0, 27) + '…' : payload.value}</text>} />
                       <CartesianGrid strokeDasharray="3 3" stroke={C.border} horizontal={false} />
                       <Tooltip formatter={v => fmt(v)} />
                       <Bar dataKey="rev" name="Revenue" radius={[0,4,4,0]}>{subCatRows.map((r, i) => <Cell key={r.name} fill={scColorOf(r.name, i)} />)}</Bar>
@@ -3953,6 +4531,7 @@ function ShopifyTab({ data, filters, setFilters }) {
         <ShopifyGeoRichTable title="Top States" rows={stateRows} firstKey="state" firstLabel="State" formatFirst={v => v ? v.charAt(0).toUpperCase() + v.slice(1).toLowerCase() : v} />
         <ShopifyGeoRichTable title="Top Cities" rows={enrichedCityRows} firstKey="city" firstLabel="City" formatFirst={v => v ? v.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' ') : v} />
       </div>
+      <ShopifyReturnReasonsTable reasons={sh.returnReasons || []} />
     </div>
   )
 }
@@ -4124,7 +4703,7 @@ function AmazonTab({ data, region = 'india', setRegion = () => {} }) {
                   </div>
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10, flex: 1 }}>
                     {[
-                      { label: 'Daily Avg', value: fmt((scCatRev + vcCatRev) / (data.nDays || 1)), sub: 'SC + VC per day', badge: selectedCat ? null : amzChgBadge((scTotalRev + vcTotalOrdered) / (data.nDays || 1), amzPrevDailyAvg) },
+                      { label: 'Avg. Daily Gross Rev', value: fmt((scCatRev + vcCatRev) / (data.nDays || 1)), sub: 'SC + VC per day', badge: selectedCat ? null : amzChgBadge((scTotalRev + vcTotalOrdered) / (data.nDays || 1), amzPrevDailyAvg) },
                       { label: 'ASP', value: `₹${scCatUnits ? Math.round(scCatRev / scCatUnits).toLocaleString('en-IN') : 0}`, sub: 'SC avg selling price / unit', badge: selectedCat ? null : amzChgBadge(scTotalUnits ? scTotalRev / scTotalUnits : 0, amzPrevASP) },
                       { label: 'Cancellation Rate', value: `${scCancelRate.toFixed(1)}%`, sub: `${fmtN(scCancelOrders)} cancelled`, accent: scCancelRate > 10 ? '#7A1A1A' : undefined, badge: amzPrevCancelRate ? (() => { const p = (scCancelRate - amzPrevCancelRate) / amzPrevCancelRate * 100; return <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 4, background: p > 0 ? C.red.bg : C.green.bg, color: p > 0 ? C.red.tx : C.green.tx, flexShrink: 0 }}>{p > 0 ? '▲' : '▼'} {Math.abs(p).toFixed(1)}%</span> })() : null },
                       { label: 'Return% (SC)', value: returnRateReliable ? `${(amzSC.returnRate?.pct || 0).toFixed(1)}%` : 'N/A', sub: returnRateReliable ? `${fmt(amzSC.returnRate?.rollReturned || 0)} returned of ${fmt(amzSC.returnRate?.rollOrders || 0)} SC rev` : 'No reliable data', accent: returnRateReliable && (amzSC.returnRate?.pct || 0) > 18 ? '#7A1A1A' : undefined },
@@ -4642,7 +5221,7 @@ function AmazonTab({ data, region = 'india', setRegion = () => {} }) {
             const vcSparkData = (amzVC.daily || []).map((d, i) => ({ i, cur: d.orderedRev || null }))
             const kpis = [
               { label: 'Gross Revenue · Vendor Central', value: fmt(vcTotalOrdered), sub: `${fmtN(vcTotalOrderedUnits)} ordered · ${fmtN(vcTotalShippedUnits)} shipped`, badge: vcChgBadge(vcTotalOrdered, prevVCRev), hero: true },
-              { label: 'Net Revenue (Exc GST)', value: fmt(vcTotalOrderedExcRev), sub: 'Ordered excl. GST', badge: vcChgBadge(vcTotalOrderedExcRev, prevVCExcRev) },
+              { label: 'Net. Rev. (Exc GST)', value: fmt(vcTotalOrderedExcRev), sub: 'Ordered excl. GST', badge: vcChgBadge(vcTotalOrderedExcRev, prevVCExcRev) },
               { label: 'GST Collected', value: fmt(vcGST), sub: 'Gross − Net', badge: vcChgBadge(vcGST, prevVCGST) },
               { label: 'Shipped Units', value: fmtN(vcTotalShippedUnits), sub: 'Units shipped by Amazon', badge: vcChgBadge(vcTotalShippedUnits, prevVCUnits) },
               { label: 'Fill Rate', value: `${vcFillRate.toFixed(1)}%`, sub: 'Shipped / Ordered', accent: vcFillRate < 90 ? '#7A4000' : undefined },
@@ -5115,7 +5694,7 @@ function FlipkartTab({ data }) {
       {/* KPI layout: hero + 2 rows of 4 */}
       <div style={{ display: 'grid', gridTemplateColumns: '1.5fr 5fr', gap: 10, alignItems: 'stretch' }}>
         <div className="kpi-card" style={{ display: 'flex', flexDirection: 'column', gap: 8, padding: '16px 18px' }}>
-          <div className="kpi-label" style={{ fontSize: 11 }}>Gross Revenue · Inc. GST</div>
+          <div className="kpi-label" style={{ fontSize: 11 }}>Gross Revenue (Inc. GST)</div>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 6 }}>
             <div className="kpi-value" style={{ fontSize: 32, fontWeight: 800 }}>{fmt(rev)}</div>
             {fkRevChg !== null && <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 7px', borderRadius: 4, background: fkRevChg >= 0 ? C.green.bg : C.red.bg, color: fkRevChg >= 0 ? C.green.tx : C.red.tx }}>{fkRevChg >= 0 ? '▲' : '▼'} {Math.abs(fkRevChg).toFixed(1)}%</span>}
@@ -5142,7 +5721,7 @@ function FlipkartTab({ data }) {
               <div className="kpi-sub">(Gross − Cancel − Return) × (1 − GST%)</div>
             </div>
             {[
-              { label: 'Daily Avg', value: fmt(rev / nDays), sub: `over ${nDays} days`, badge: fkChgBadge(rev / nDays, fkPrevRev > 0 ? fkPrevRev / nDays : 0) },
+              { label: 'Avg. Daily Gross Rev', value: fmt(rev / nDays), sub: `over ${nDays} days`, badge: fkChgBadge(rev / nDays, fkPrevRev > 0 ? fkPrevRev / nDays : 0) },
               { label: 'AOV', value: `₹${Math.round(aov).toLocaleString('en-IN')}`, sub: 'Avg order value', badge: fkChgBadge(aov, fkPrevOrders > 0 ? fkPrevRev / fkPrevOrders : 0) },
               { label: 'Delivered %', value: `${fkDeliveredPct.pct.toFixed(1)}%`, sub: `${fmtN(fkDeliveredPct.deliveredOrders)} del · ${fmtN(fkDeliveredPct.nonCancelledOrders)} non-cancel`, accent: fkDeliveredPct.pct < 50 ? '#7A1A1A' : undefined },
             ].map(k => (
@@ -5819,8 +6398,10 @@ function AdsTab({ data }) {
                 } else if (gran === 'monthly') {
                   key = r.date.slice(0, 7)
                 } else if (gran === 'quarterly') {
-                  const m = parseInt(r.date.slice(5, 7)); const q = Math.ceil(m / 3)
-                  key = `${r.date.slice(0, 4)}-Q${q}`
+                  const mo = parseInt(r.date.slice(5, 7)); const y = parseInt(r.date.slice(0, 4))
+                  const q = mo >= 4 ? Math.floor((mo - 4) / 3) + 1 : 4
+                  const fy = mo >= 4 ? y : y - 1
+                  key = `FY${fy}-${String(fy+1).slice(2)} Q${q}`
                 } else {
                   key = r.date
                 }
@@ -6285,9 +6866,9 @@ function BlinkitTab({ data }) {
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10, flex: 1 }}>
             {[
-              { label: 'Net Revenue (Exc GST)', value: fmt(excRev), sub: `GST ${fmt(gst)}`, badge: blChgBadge(excRev, blPrevExcRev) },
+              { label: 'Net. Rev. (Exc GST)', value: fmt(excRev), sub: null, badge: blChgBadge(excRev, blPrevExcRev) },
               { label: 'GST Collected', value: fmt(gst), sub: `${rev > 0 ? ((gst/rev)*100).toFixed(1) : 0}% of gross rev`, badge: blChgBadge(gst, blPrevRev - blPrevExcRev) },
-              { label: 'Daily Avg', value: fmt(dailyAvg), sub: `over ${nDays} days`, badge: blChgBadge(dailyAvg, blPrevRev > 0 ? blPrevRev / nDays : 0) },
+              { label: 'Avg. Daily Gross Rev', value: fmt(dailyAvg), sub: `over ${nDays} days`, badge: blChgBadge(dailyAvg, blPrevRev > 0 ? blPrevRev / nDays : 0) },
             ].map(k => (
               <div key={k.label} className="kpi-card" style={{ padding: '10px 13px' }}>
                 <div className="kpi-label">{k.label}</div>
@@ -6430,7 +7011,7 @@ function InstaTab({ data }) {
       )}
       <div style={{ display: 'grid', gridTemplateColumns: '1.5fr 5fr', gap: 10, alignItems: 'stretch' }}>
         <div className="kpi-card" style={{ display: 'flex', flexDirection: 'column', gap: 8, padding: '16px 18px' }}>
-          <div className="kpi-label" style={{ fontSize: 11 }}>Gross Revenue · Inc. GST</div>
+          <div className="kpi-label" style={{ fontSize: 11 }}>Gross Revenue (Inc. GST)</div>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 6 }}>
             <div className="kpi-value" style={{ fontSize: 32, fontWeight: 800 }}>{fmt(rev)}</div>
             {insRevChg !== null && <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 7px', borderRadius: 4, background: insRevChg >= 0 ? C.green.bg : C.red.bg, color: insRevChg >= 0 ? C.green.tx : C.red.tx }}>{insRevChg >= 0 ? '▲' : '▼'} {Math.abs(insRevChg).toFixed(1)}%</span>}
@@ -6450,7 +7031,7 @@ function InstaTab({ data }) {
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10, flex: 1 }}>
             {[
-              { label: 'Net Revenue (Exc GST)', value: fmt(excRev), sub: `GST ${fmt(gst)}`, badge: insChgBadge(excRev, insPrevExcRev) },
+              { label: 'Net. Rev. (Exc GST)', value: fmt(excRev), sub: null, badge: insChgBadge(excRev, insPrevExcRev) },
               { label: 'GST Collected', value: fmt(gst), sub: `${rev > 0 ? ((gst/rev)*100).toFixed(1) : 0}% of gross rev`, badge: insChgBadge(gst, insPrevRev - insPrevExcRev) },
               { label: 'Daily Avg Revenue', value: fmt(dailyAvg), sub: `Inc GST / day`, badge: insChgBadge(dailyAvg, insPrevRev > 0 ? insPrevRev / nDays : 0) },
             ].map(k => (
@@ -6590,7 +7171,7 @@ function ZeptoTab({ data }) {
       )}
       <div style={{ display: 'grid', gridTemplateColumns: '1.5fr 5fr', gap: 10, alignItems: 'stretch' }}>
         <div className="kpi-card" style={{ display: 'flex', flexDirection: 'column', gap: 8, padding: '16px 18px' }}>
-          <div className="kpi-label" style={{ fontSize: 11 }}>Gross Revenue · Inc. GST</div>
+          <div className="kpi-label" style={{ fontSize: 11 }}>Gross Revenue (Inc. GST)</div>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 6 }}>
             <div className="kpi-value" style={{ fontSize: 32, fontWeight: 800 }}>{fmt(rev)}</div>
             {zpRevChg !== null && <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 7px', borderRadius: 4, background: zpRevChg >= 0 ? C.green.bg : C.red.bg, color: zpRevChg >= 0 ? C.green.tx : C.red.tx }}>{zpRevChg >= 0 ? '▲' : '▼'} {Math.abs(zpRevChg).toFixed(1)}%</span>}
@@ -6610,7 +7191,7 @@ function ZeptoTab({ data }) {
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10, flex: 1 }}>
             {[
-              { label: 'Net Revenue (Exc GST)', value: fmt(excRev), sub: `GST ${fmt(gst)}`, badge: zpChgBadge(excRev, zpPrevExcRev) },
+              { label: 'Net. Rev. (Exc GST)', value: fmt(excRev), sub: null, badge: zpChgBadge(excRev, zpPrevExcRev) },
               { label: 'GST Collected', value: fmt(gst), sub: `${rev > 0 ? ((gst/rev)*100).toFixed(1) : 0}% of gross rev`, badge: zpChgBadge(gst, zpPrevRev - zpPrevExcRev) },
               { label: 'Daily Avg Revenue', value: fmt(dailyAvg), sub: 'Inc GST / day', badge: zpChgBadge(dailyAvg, zpPrevRev > 0 ? zpPrevRev / nDays : 0) },
             ].map(k => (
@@ -6772,7 +7353,7 @@ function CredTab({ data }) {
       {/* Hero + 2×2 KPIs */}
       <div style={{ display: 'grid', gridTemplateColumns: '1.5fr 5fr', gap: 10, alignItems: 'stretch' }}>
         <div className="kpi-card" style={{ display: 'flex', flexDirection: 'column', gap: 8, padding: '16px 18px' }}>
-          <div className="kpi-label" style={{ fontSize: 11 }}>Gross Revenue · Inc. GST</div>
+          <div className="kpi-label" style={{ fontSize: 11 }}>Gross Revenue (Inc. GST)</div>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 6 }}>
             <div className="kpi-value" style={{ fontSize: 32, fontWeight: 800 }}>{fmt(rev)}</div>
             {crRevChg !== null && <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 7px', borderRadius: 4, background: crRevChg >= 0 ? C.green.bg : C.red.bg, color: crRevChg >= 0 ? C.green.tx : C.red.tx }}>{crRevChg >= 0 ? '▲' : '▼'} {Math.abs(crRevChg).toFixed(1)}%</span>}
@@ -6792,9 +7373,9 @@ function CredTab({ data }) {
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10 }}>
             {[
-              { label: 'Net Revenue (Exc GST)', value: fmt(excRev), sub: `GST ${fmt(rev - excRev)}`, badge: crChgBadge(excRev, crPrevExcRev) },
+              { label: 'Net. Rev. (Exc GST)', value: fmt(excRev), sub: null, badge: crChgBadge(excRev, crPrevExcRev) },
               { label: 'GST Collected', value: fmt(rev - excRev), sub: `${rev > 0 ? (((rev - excRev)/rev)*100).toFixed(1) : 0}% of gross rev`, badge: crChgBadge(rev - excRev, crPrevRev - crPrevExcRev) },
-              { label: 'Daily Avg', value: fmt(dailyAvg), sub: `over ${nDays} days`, badge: crChgBadge(dailyAvg, crPrevRev > 0 ? crPrevRev / nDays : 0) },
+              { label: 'Avg. Daily Gross Rev', value: fmt(dailyAvg), sub: `over ${nDays} days`, badge: crChgBadge(dailyAvg, crPrevRev > 0 ? crPrevRev / nDays : 0) },
             ].map(k => (
               <div key={k.label} className="kpi-card" style={{ padding: '10px 13px' }}>
                 <div className="kpi-label">{k.label}</div>
@@ -6914,7 +7495,7 @@ function FirstcryTab({ data }) {
     <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
       <div style={{ display: 'grid', gridTemplateColumns: '1.5fr 5fr', gap: 10, alignItems: 'stretch' }}>
         <div className="kpi-card" style={{ display: 'flex', flexDirection: 'column', gap: 8, padding: '16px 18px' }}>
-          <div className="kpi-label" style={{ fontSize: 11 }}>Gross Revenue · Inc. GST</div>
+          <div className="kpi-label" style={{ fontSize: 11 }}>Gross Revenue (Inc. GST)</div>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 6 }}>
             <div className="kpi-value" style={{ fontSize: 32, fontWeight: 800 }}>{fmt(rev)}</div>
             {fcRevChg !== null && <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 7px', borderRadius: 4, background: fcRevChg >= 0 ? C.green.bg : C.red.bg, color: fcRevChg >= 0 ? C.green.tx : C.red.tx }}>{fcRevChg >= 0 ? '▲' : '▼'} {Math.abs(fcRevChg).toFixed(1)}%</span>}
@@ -6934,9 +7515,9 @@ function FirstcryTab({ data }) {
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10 }}>
           {[
-            { label: 'Net Revenue (Exc GST)', value: fmt(excRev), sub: `GST ${fmt(rev - excRev)}`, badge: fcChgBadge(excRev, fcPrevExcRev) },
+            { label: 'Net. Rev. (Exc GST)', value: fmt(excRev), sub: null, badge: fcChgBadge(excRev, fcPrevExcRev) },
             { label: 'GST Collected', value: fmt(rev - excRev), sub: `${rev > 0 ? (((rev - excRev)/rev)*100).toFixed(1) : 0}% of gross rev`, badge: fcChgBadge(rev - excRev, fcPrevRev - fcPrevExcRev) },
-            { label: 'Daily Avg', value: fmt(dailyAvg), sub: `over ${nDays} days`, badge: fcChgBadge(dailyAvg, fcPrevRev > 0 ? fcPrevRev / nDays : 0) },
+            { label: 'Avg. Daily Gross Rev', value: fmt(dailyAvg), sub: `over ${nDays} days`, badge: fcChgBadge(dailyAvg, fcPrevRev > 0 ? fcPrevRev / nDays : 0) },
           ].map(k => (
             <div key={k.label} className="kpi-card" style={{ padding: '10px 13px' }}>
               <div className="kpi-label">{k.label}</div>
@@ -7071,7 +7652,7 @@ function MyntraTab({ data }) {
       {/* KPI Hero + 2×2 grid */}
       <div style={{ display: 'grid', gridTemplateColumns: '1.5fr 5fr', gap: 10, alignItems: 'stretch' }}>
         <div className="kpi-card" style={{ display: 'flex', flexDirection: 'column', gap: 8, padding: '16px 18px' }}>
-          <div className="kpi-label" style={{ fontSize: 11 }}>Gross Revenue · Inc. GST</div>
+          <div className="kpi-label" style={{ fontSize: 11 }}>Gross Revenue (Inc. GST)</div>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 6 }}>
             <div className="kpi-value" style={{ fontSize: 32, fontWeight: 800 }}>{fmt(rev)}</div>
             {revChg !== null && <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 7px', borderRadius: 4, background: revChg >= 0 ? C.green.bg : C.red.bg, color: revChg >= 0 ? C.green.tx : C.red.tx }}>{revChg >= 0 ? '▲' : '▼'} {Math.abs(revChg).toFixed(1)}%</span>}
@@ -7336,7 +7917,7 @@ function OfflineTab({ data }) {
       {/* KPI Hero + 2×2 grid */}
       <div style={{ display: 'grid', gridTemplateColumns: '1.5fr 5fr', gap: 10, alignItems: 'stretch' }}>
         <div className="kpi-card" style={{ display: 'flex', flexDirection: 'column', gap: 8, padding: '16px 18px' }}>
-          <div className="kpi-label" style={{ fontSize: 11 }}>Gross Revenue · Inc. GST</div>
+          <div className="kpi-label" style={{ fontSize: 11 }}>Gross Revenue (Inc. GST)</div>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 6 }}>
             <div className="kpi-value" style={{ fontSize: 32, fontWeight: 800 }}>{fmt(rev)}</div>
             {revChg !== null && <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 7px', borderRadius: 4, background: revChg >= 0 ? C.green.bg : C.red.bg, color: revChg >= 0 ? C.green.tx : C.red.tx }}>{revChg >= 0 ? '▲' : '▼'} {Math.abs(revChg).toFixed(1)}%</span>}
@@ -7362,7 +7943,7 @@ function OfflineTab({ data }) {
             { label: 'ASP', value: `₹${Math.round(asp).toLocaleString('en-IN')}`, sub: 'Net rev ÷ units', badge: chgBadge(asp, prevUnits > 0 ? prevNetRev / prevUnits : 0) },
             { label: 'Units / Order', value: nOrders ? Math.round(qty / nOrders).toLocaleString('en-IN') : '0', sub: 'Avg units per order', badge: chgBadge(nOrders ? qty / nOrders : 0, prevOrders ? prevUnits / prevOrders : 0) },
             { label: 'Units Sold', value: fmtN(qty), sub: `${fmtN(nOrders)} orders`, badge: chgBadge(qty, prevUnits) },
-            { label: 'Daily Avg', value: fmt(netRev / Math.max(nDays, 1)), sub: 'Net rev per day', badge: chgBadge(netRev / Math.max(nDays, 1), prevNetRev / Math.max(nDays, 1)) },
+            { label: 'Avg. Daily Gross Rev', value: fmt(netRev / Math.max(nDays, 1)), sub: 'Net rev per day', badge: chgBadge(netRev / Math.max(nDays, 1), prevNetRev / Math.max(nDays, 1)) },
           ].map(k => (
             <div key={k.label} className="kpi-card" style={{ padding: '10px 13px' }}>
               <div className="kpi-label">{k.label}</div>
@@ -7643,15 +8224,12 @@ function SalesPage({ data, filters, setFilters, activeTab, setActiveTab, fetchDa
           })()}
           <SearchableSelect multi options={skuOpts} value={filters.sku || []} onChange={v => setFilters(f => ({ ...f, sku: v }))} placeholder="All SKUs" dropdownWidth={280} />
           {activeTab === 'shopify' && <VoucherDropdown voucherList={data?.voucherList || []} selected={filters.voucher} onChange={v => setFilters(f => ({ ...f, voucher: v }))} />}
-          <SearchableSelect multi options={['West','South','North','East','Central','Northeast']} value={filters.region || []} onChange={v => setFilters(f => ({ ...f, region: v }))} placeholder="All Regions" />
-          <SearchableSelect multi options={['Tier I','Tier II','Tier III']} value={filters.tier || []} onChange={v => setFilters(f => ({ ...f, tier: v }))} placeholder="All Tiers" />
-          <SearchableSelect multi options={stateOpts} value={filters.state || []} onChange={v => setFilters(f => ({ ...f, state: v }))} placeholder="All States" dropdownWidth={220} />
           <button onClick={() => setFilters(f => ({ ...f, category: [], subCategory: [], sku: [], subChannel: '', voucher: '', region: [], tier: [], state: [], city: '' }))} className="fclr">✕ Clear</button>
         </div>
       </div>
       {/* Content */}
       <div className="page-scroll">
-        {activeTab === 'all' && <AllTab data={filteredData} />}
+        {activeTab === 'all' && <AllTab data={filteredData} rangeStart={filters.start} />}
         {activeTab === 'shopify' && <ChannelTab data={filteredData} channel="Shopify" filters={filters} setFilters={setFilters} />}
         {activeTab === 'amazon' && <ChannelTab data={filteredData} channel="Amazon" amzRegion={amzRegion} setAmzRegion={setAmzRegion} />}
         {activeTab === 'flipkart' && <ChannelTab data={filteredData} channel="Flipkart" />}
@@ -7922,6 +8500,591 @@ function Skeleton() {
 // ── Main App ──────────────────────────────────────────────────
 const TAB_TO_CHANNEL = { blinkit: 'Blinkit', instamart: 'Instamart', zepto: 'Zepto', cred: 'CRED', firstcry: 'Firstcry' }
 
+function CustomerPage({ filters }) {
+  const [custData, setCustData] = useState(null)
+  const [custError, setCustError] = useState(null)
+  const [loading, setLoading] = useState(false)
+  const [crossFilter, setCrossFilter] = useState('Category')
+  const [granularity, setGranularity] = useState('daily')
+  const [secCollapsed, setSecCollapsed] = useState({ trends: false, cohort: false, purchase: false, rfm: false, discount: false })
+  const toggleSec = k => setSecCollapsed(s => ({ ...s, [k]: !s[k] }))
+  const [spendGranularity, setSpendGranularity] = useState('daily')
+  const API = import.meta.env.VITE_API_URL || ''
+
+  useEffect(() => {
+    setLoading(true); setCustError(null)
+    fetch(`${API}/api/customer`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ start: filters.start, end: filters.end })
+    })
+      .then(r => r.json())
+      .then(d => { if (d.error) { setCustError(d.error); setCustData(null) } else { setCustData(d) }; setLoading(false) })
+      .catch(e => { setCustError(e.message); setLoading(false) })
+  }, [filters.start, filters.end])
+
+  if (loading) return <div style={{ padding: 60, textAlign: 'center', color: C.t3 }}>Loading customer data...</div>
+  if (custError) return <div style={{ padding: 40, margin: 16, borderRadius: 10, background: C.red.bg, border: `1px solid ${C.red.bd}`, color: C.red.tx, fontSize: 12 }}><strong>Error loading customer data:</strong> {custError}</div>
+  if (!custData) return <div style={{ padding: 60, textAlign: 'center', color: C.t3 }}>Select a date range to load customer analysis</div>
+
+  const { kpis = {}, prevKpis = {}, daily: rawDaily = [], cohort = [], rfm = [], freqDist = [], monetaryDist = [], inactivity = [], discountDist = [], crossSell = [], dailySpend: rawDailySpend = [] } = custData
+
+  // Aggregate daily rows into the selected granularity
+  const monthly = (() => {
+    const buckets = {}
+    rawDaily.forEach(r => {
+      const d = new Date(r.day)
+      let key, label
+      if (granularity === 'daily') {
+        key = r.day
+        label = d.toLocaleDateString('en-IN', { day: '2-digit', month: 'short' })
+      } else if (granularity === 'weekly') {
+        // ISO week start (Monday)
+        const day = d.getDay()
+        const diff = (day === 0 ? -6 : 1 - day)
+        const mon = new Date(d); mon.setDate(d.getDate() + diff)
+        key = mon.toISOString().slice(0, 10)
+        label = `W${mon.toLocaleDateString('en-IN', { day: '2-digit', month: 'short' })}`
+      } else {
+        key = r.day.slice(0, 7)
+        label = d.toLocaleDateString('en-IN', { month: 'short', year: '2-digit' })
+      }
+      if (!buckets[key]) buckets[key] = { month: label, customersAcquired: 0, totalOrders: 0, grossSales: 0, repeatRevenue: 0, newRevenue: 0, newCustomers: 0, repeatCustomers: 0, newOrders: 0, repeatOrders: 0 }
+      buckets[key].customersAcquired += r.customersAcquired
+      buckets[key].totalOrders += r.totalOrders
+      buckets[key].grossSales += r.grossSales
+      buckets[key].repeatRevenue += r.repeatRevenue
+      buckets[key].newRevenue += r.newRevenue
+      buckets[key].newCustomers += r.newCustomers
+      buckets[key].repeatCustomers += r.repeatCustomers
+      buckets[key].newOrders += r.newOrders
+      buckets[key].repeatOrders += r.repeatOrders
+    })
+    return Object.entries(buckets).sort(([a], [b]) => a.localeCompare(b)).map(([, v]) => ({
+      ...v,
+      aov: v.totalOrders > 0 ? v.grossSales / v.totalOrders : 0,
+      repeatRevenueRate: v.grossSales > 0 ? v.repeatRevenue / v.grossSales : 0,
+    }))
+  })()
+
+  // Cohort pivot — customers and revenue
+  const cohortMap = {}      // cohortMap[month][idx] = { customers, revenue }
+  const cohort0 = {}        // base customers at index 0
+  const cohortRev0 = {}     // base revenue at index 0
+  cohort.forEach(r => {
+    if (!cohortMap[r.cohortMonth]) cohortMap[r.cohortMonth] = {}
+    cohortMap[r.cohortMonth][r.cohortIndex] = { customers: r.customers, revenue: r.revenue }
+    if (r.cohortIndex === 0) { cohort0[r.cohortMonth] = r.customers; cohortRev0[r.cohortMonth] = r.revenue }
+  })
+  const cohortMonths = Object.keys(cohortMap).sort()
+  const maxCohortIdx = Math.max(...cohort.map(r => r.cohortIndex), 0)
+
+  // RFM treemap data
+  const RFM_COLORS = { 'Champions': '#FFD600', 'Loyal Customers': '#FFE033', 'Recent Users': '#FAD000', 'Potential Loyalists': '#F5C800', 'Cannot Lose Them': '#EFC000', "Can't Lose Them": '#EFC000', 'Hibernating': '#E8B800', 'Others': '#E0B000', 'Price Sensitive': '#D9A800', 'Needs Attention': '#F2CA00', 'About to Sleep': '#DCAC00', 'Lost Customers': '#D4A400' }
+  const rfmTotal = rfm.reduce((s, r) => s + r.totalRevenue, 0)
+
+  // Cross-sell pivot — supports Category / Sub Category toggle
+  const crossFirstKey = crossFilter === 'Category' ? 'firstCategory' : 'firstSubCategory'
+  const crossSecondKey = crossFilter === 'Category' ? 'secondCategory' : 'secondSubCategory'
+  const allCrossFirst = [...new Set(crossSell.map(r => r[crossFirstKey]).filter(Boolean))].sort()
+  const allCrossSecond = [...new Set(crossSell.map(r => r[crossSecondKey]).filter(Boolean))].sort()
+  const crossMap = {}
+  crossSell.forEach(r => {
+    const sk = r[crossSecondKey], fk = r[crossFirstKey]
+    if (!sk || !fk) return
+    if (!crossMap[sk]) crossMap[sk] = {}
+    crossMap[sk][fk] = (crossMap[sk][fk] || 0) + r.customers
+  })
+  const crossRows = allCrossSecond.filter(sc => crossMap[sc])
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 14, padding: '0 4px' }}>
+      {/* Yellow info banner */}
+      <div style={{ background: C.acl, border: `1px solid #E6C200`, borderRadius: 9, padding: '8px 14px', fontSize: 12, color: '#7A6000' }}>
+        <strong>Shopify D2C only</strong> — Amazon, Flipkart & quick-commerce channels do not share customer identity
+      </div>
+
+      {/* Section 1: Overview KPIs — always visible */}
+      <LSectionTitle title="Overview KPIs" />
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(8, 1fr)', gap: 8 }}>
+        <LKpiCard label="Gross Sale" value={fmtBig(kpis.grossSales)} cur={kpis.grossSales} prev={prevKpis.grossSales} />
+        <LKpiCard label="Total Spend" value={fmtBig(kpis.totalSpend)} cur={kpis.totalSpend} prev={prevKpis.totalSpend} />
+        <LKpiCard label="Meta Spend" value={fmtBig(kpis.metaSpend)} cur={kpis.metaSpend} prev={prevKpis.metaSpend} />
+        <LKpiCard label="Google Spend" value={fmtBig(kpis.googleSpend)} cur={kpis.googleSpend} prev={prevKpis.googleSpend} />
+        <LKpiCard label="Total Customers" value={fmtBig(kpis.totalCustomers)} cur={kpis.totalCustomers} prev={prevKpis.totalCustomers} />
+        <LKpiCard label="New Customers" value={fmtBig(kpis.newCustomers)} cur={kpis.newCustomers} prev={prevKpis.newCustomers} />
+        <LKpiCard label="Returning Customers" value={fmtBig(kpis.returningCustomers)} cur={kpis.returningCustomers} prev={prevKpis.returningCustomers} />
+        <LKpiCard label="Repeat Rate" value={`${(kpis.repeatRate * 100).toFixed(2)}%`} cur={kpis.repeatRate} prev={prevKpis.repeatRate} />
+      </div>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(8, 1fr)', gap: 8 }}>
+        <LKpiCard label="RoAS" value={kpis.roas.toFixed(2)} cur={kpis.roas} prev={prevKpis.roas} />
+        <LKpiCard label="CAC" value={`₹${Math.round(kpis.cac).toLocaleString('en-IN')}`} cur={kpis.cac} prev={prevKpis.cac} />
+        <LKpiCard label="AOV" value={`₹${Math.round(kpis.aov).toLocaleString('en-IN')}`} cur={kpis.aov} prev={prevKpis.aov} />
+        <LKpiCard label="CLTV" value={fmt((kpis.grossSales || 0) / (kpis.totalCustomers || 1))} cur={kpis.grossSales / (kpis.totalCustomers || 1)} prev={prevKpis.grossSales / (prevKpis.totalCustomers || 1)} subValue="Rev / unique customer" />
+        <LKpiCard label="Acquisition Rate" value={`${(kpis.acquisitionRate * 100).toFixed(2)}%`} cur={kpis.acquisitionRate} prev={prevKpis.acquisitionRate} />
+        <LKpiCard label="Repeat Revenue" value={`${((kpis.repeatRevenueRate || 0) * 100).toFixed(2)}%`} cur={kpis.repeatRevenueRate} prev={prevKpis.repeatRevenueRate} subValue={fmt(kpis.repeatRevenue || 0)} />
+        <LKpiCard label="Revenue per Cust" value={fmt(kpis.grossSales / (kpis.totalCustomers || 1))} cur={kpis.grossSales / (kpis.totalCustomers || 1)} prev={prevKpis.grossSales / (prevKpis.totalCustomers || 1)} />
+        <LKpiCard label="Net Revenue %" value={kpis.netRevenueRate ? `${((kpis.netRevenueRate) * 100).toFixed(2)}%` : '—'} cur={kpis.netRevenueRate} prev={prevKpis.netRevenueRate} subValue={kpis.netRevenue ? fmt(kpis.netRevenue) : ''} />
+      </div>
+
+      {/* Section 2: Acquisition & Revenue Trends */}
+      <LSectionTitle title="Acquisition & Revenue Trends" collapsed={secCollapsed.trends} onToggle={() => toggleSec('trends')} />
+      {!secCollapsed.trends && (() => {
+        const xLabel = granularity === 'monthly' ? 'First Order Date Month' : granularity === 'weekly' ? 'First Order Date Week' : 'First Order Date'
+        const maxBar = granularity === 'daily' ? 18 : granularity === 'weekly' ? 30 : 48
+        const showLabels = monthly.length <= 20
+        return (
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+        <Card title={xLabel} action={
+          <select value={granularity} onChange={e => setGranularity(e.target.value)} style={{ fontSize: 11, fontWeight: 600, padding: '3px 8px', borderRadius: 6, border: `1px solid ${C.border2}`, background: C.card, color: C.t1, cursor: 'pointer', fontFamily: 'var(--font)', outline: 'none' }}>
+            {['daily','weekly','monthly'].map(g => <option key={g} value={g}>{g.charAt(0).toUpperCase()+g.slice(1)}</option>)}
+          </select>
+        }>
+          <ResponsiveContainer width="100%" height={260}>
+            <ComposedChart data={monthly} margin={{ top: 20, right: 10, bottom: 0, left: 0 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke={C.border} vertical={false} />
+              <XAxis dataKey="month" tick={{ fontSize: 10 }} interval="preserveStartEnd" />
+              <YAxis yAxisId="cust" tick={{ fontSize: 10 }} tickFormatter={v => v.toLocaleString('en-IN')} width={55} />
+              <YAxis yAxisId="sales" orientation="right" tick={{ fontSize: 10 }} tickFormatter={v => v >= 1e7 ? `₹${(v/1e7).toFixed(1)}Cr` : v >= 1e5 ? `₹${(v/1e5).toFixed(0)}L` : `₹${(v/1000).toFixed(0)}K`} />
+              <YAxis yAxisId="aov" hide />
+              <YAxis yAxisId="rrr" hide />
+              <Tooltip content={({ active, payload, label }) => {
+                if (!active || !payload?.length) return null
+                const d = payload[0]?.payload || {}
+                return (
+                  <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 7, padding: '8px 12px', fontSize: 11 }}>
+                    <div style={{ fontWeight: 700, marginBottom: 5, color: C.t2 }}>{label}</div>
+                    <div style={{ color: C.acc }}>Customers Acquired: {(d.customersAcquired||0).toLocaleString('en-IN')}</div>
+                    <div style={{ color: '#2E74CC' }}>Gross Sales: {fmt(d.grossSales||0)}</div>
+                    <div style={{ color: '#E8930A' }}>AOV: ₹{Math.round(d.aov||0).toLocaleString('en-IN')}</div>
+                    <div style={{ color: '#0D9E68' }}>Repeat Revenue Rate: {((d.repeatRevenueRate||0)*100).toFixed(1)}%</div>
+                  </div>
+                )
+              }} />
+              <Legend wrapperStyle={{ fontSize: 11 }} />
+              <Bar yAxisId="cust" dataKey="customersAcquired" name="Customers Acquired" fill={C.acc} radius={[3,3,0,0]} maxBarSize={maxBar}
+                label={showLabels ? { position: 'top', fontSize: 9, fill: C.t2, fontWeight: 600, formatter: v => v.toLocaleString('en-IN') } : false} />
+              <Line yAxisId="sales" type="monotone" dataKey="grossSales" name="Gross Sales" stroke="#2E74CC" strokeWidth={2} dot={false} />
+              <Line yAxisId="aov"   type="monotone" dataKey="aov"   name="AOV"         stroke="#E8930A" strokeWidth={2} dot={false} />
+              <Line yAxisId="rrr"   type="monotone" dataKey="repeatRevenueRate" name="Repeat Revenue Rate" stroke="#0D9E68" strokeWidth={2} dot={false} />
+            </ComposedChart>
+          </ResponsiveContainer>
+        </Card>
+        {(() => {
+          const [nrMetric, setNrMetric] = [custData._nrMetric || 'customers', v => setCustData(d => ({ ...d, _nrMetric: v }))]
+          const [nrGran, setNrGran] = [custData._nrGran || granularity, v => setCustData(d => ({ ...d, _nrGran: v }))]
+          const nrData = (() => {
+            const buckets = {}
+            rawDaily.forEach(r => {
+              const d = new Date(r.day)
+              let key, label
+              if (nrGran === 'daily') { key = r.day; label = d.toLocaleDateString('en-IN', { day: '2-digit', month: 'short' }) }
+              else if (nrGran === 'weekly') { const day = d.getDay(), diff = (day === 0 ? -6 : 1 - day); const mon = new Date(d); mon.setDate(d.getDate() + diff); key = mon.toISOString().slice(0, 10); label = `W${mon.toLocaleDateString('en-IN', { day: '2-digit', month: 'short' })}` }
+              else { key = r.day.slice(0, 7); label = d.toLocaleDateString('en-IN', { month: 'short', year: '2-digit' }) }
+              if (!buckets[key]) buckets[key] = { month: label, newCustomers: 0, repeatCustomers: 0, newOrders: 0, repeatOrders: 0, newRevenue: 0, repeatRevenue: 0 }
+              buckets[key].newCustomers += r.newCustomers; buckets[key].repeatCustomers += r.repeatCustomers
+              buckets[key].newOrders += r.newOrders; buckets[key].repeatOrders += r.repeatOrders
+              buckets[key].newRevenue += r.newRevenue; buckets[key].repeatRevenue += r.repeatRevenue
+            })
+            return Object.entries(buckets).sort(([a],[b]) => a.localeCompare(b)).map(([,v]) => v)
+          })()
+          const newKey = nrMetric === 'customers' ? 'newCustomers' : nrMetric === 'orders' ? 'newOrders' : 'newRevenue'
+          const repKey = nrMetric === 'customers' ? 'repeatCustomers' : nrMetric === 'orders' ? 'repeatOrders' : 'repeatRevenue'
+          const tickFmt = v => nrMetric === 'revenue' ? (v >= 1e7 ? `₹${(v/1e7).toFixed(1)}Cr` : v >= 1e5 ? `₹${(v/1e5).toFixed(0)}L` : `₹${(v/1000).toFixed(0)}K`) : v.toLocaleString('en-IN')
+          const lblFmt = v => nrMetric === 'revenue' ? (v >= 1e7 ? `₹${(v/1e7).toFixed(1)}Cr` : v >= 1e5 ? `₹${(v/1e5).toFixed(0)}L` : `₹${(v/1000).toFixed(0)}K`) : v.toLocaleString('en-IN')
+          return (
+          <Card title="New vs Repeat Customers" action={
+            <div style={{ display: 'flex', gap: 5, alignItems: 'center' }}>
+              {[['customers','Customers'],['orders','Orders'],['revenue','Sales']].map(([k,l]) => (
+                <button key={k} onClick={() => setNrMetric(k)} style={{ fontSize: 10, padding: '2px 8px', borderRadius: 5, border: `1px solid ${nrMetric===k ? C.acc : C.border}`, background: nrMetric===k ? C.acl : C.card, color: nrMetric===k ? '#7A6000' : C.t2, cursor: 'pointer', fontFamily: 'var(--font)', fontWeight: nrMetric===k ? 700 : 400 }}>{l}</button>
+              ))}
+              <select value={nrGran} onChange={e => setNrGran(e.target.value)} style={{ fontSize: 10, padding: '2px 7px', borderRadius: 5, border: `1px solid ${C.border}`, background: C.card, color: C.t2, cursor: 'pointer', fontFamily: 'var(--font)' }}>
+                {['daily','weekly','monthly'].map(g => <option key={g} value={g}>{g.charAt(0).toUpperCase()+g.slice(1)}</option>)}
+              </select>
+            </div>
+          }>
+            <ResponsiveContainer width="100%" height={240}>
+              <BarChart data={nrData} margin={{ top: 20, right: 10, left: 0, bottom: 0 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke={C.border} vertical={false} />
+                <XAxis dataKey="month" tick={{ fontSize: 10 }} interval="preserveStartEnd" />
+                <YAxis tick={{ fontSize: 10 }} tickFormatter={tickFmt} />
+                <Tooltip formatter={(v, n) => [nrMetric === 'revenue' ? fmt(v) : fmtN(v), n]} />
+                <Legend wrapperStyle={{ fontSize: 11 }} />
+                <Bar dataKey={newKey} stackId="a" fill={C.acc} name="New Customers" radius={[0,0,0,0]}
+                  label={{ position: 'inside', fontSize: 9, fill: '#7A6000', fontWeight: 700, formatter: lblFmt }} />
+                <Bar dataKey={repKey} stackId="a" fill="#B8A000" name="Repeat Customers" radius={[3,3,0,0]}
+                  label={{ position: 'top', fontSize: 9, fill: C.t2, fontWeight: 700, formatter: lblFmt }} />
+              </BarChart>
+            </ResponsiveContainer>
+          </Card>
+          )
+        })()}
+      </div>
+        )
+      })()}
+
+      {/* Section 3: Customer Retention Cohort */}
+      <LSectionTitle title="Customer Retention Cohort" collapsed={secCollapsed.cohort} onToggle={() => toggleSec('cohort')} />
+      {!secCollapsed.cohort && (() => {
+        const [cohortMode, setCohortMode] = [custData._cohortMode || 'customer', v => setCustData(d => ({ ...d, _cohortMode: v }))]
+        return (
+        <Card title={
+          <div>
+            <div>Customer Retention Cohort</div>
+            <div style={{ fontSize: 11, fontWeight: 400, color: C.t3, marginTop: 2 }}>
+              {cohortMode === 'customer'
+                ? 'Only customers with ≥1 successful order (excl. Cancel / RTO / CIR)'
+                : 'Net revenue per cohort (Exc. GST, excl. Cancel / RTO / CIR) ÷ Month 0 revenue'}
+            </div>
+          </div>
+        } action={
+          <div style={{ display: 'flex', gap: 5 }}>
+            {[['customer','Customer Retention %'],['sales','Sales Retention %']].map(([k,l]) => (
+              <button key={k} onClick={() => setCohortMode(k)} style={{ fontSize: 10, padding: '3px 10px', borderRadius: 5, border: `1px solid ${cohortMode===k ? '#2E74CC' : C.border}`, background: cohortMode===k ? '#E1EFFD' : C.card, color: cohortMode===k ? '#184078' : C.t2, cursor: 'pointer', fontFamily: 'var(--font)', fontWeight: cohortMode===k ? 700 : 400 }}>{l}</button>
+            ))}
+          </div>
+        }>
+          <div style={{ overflowX: 'auto', width: '100%' }}>
+            <table style={{ borderCollapse: 'collapse', fontSize: 10.5, width: '100%', tableLayout: 'fixed' }}>
+              <thead>
+                <tr style={{ borderBottom: `2px solid ${C.border}` }}>
+                  <th style={{ padding: '5px 8px', textAlign: 'left', color: C.t3, fontWeight: 700, fontSize: 9.5, whiteSpace: 'nowrap', width: 80 }}>Cohort Month</th>
+                  {Array.from({ length: maxCohortIdx + 1 }, (_, i) => (
+                    <th key={i} style={{ padding: '5px 4px', textAlign: 'center', color: C.t3, fontWeight: 700, fontSize: 9.5 }}>{i === 0 ? 'Month 0' : `+${i}M`}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {cohortMonths.map(cm => {
+                  const baseC = cohort0[cm] || 1
+                  const baseR = cohortRev0[cm] || 1
+                  return (
+                    <tr key={cm} style={{ borderBottom: `1px solid ${C.border}` }}>
+                      <td style={{ padding: '4px 8px', fontWeight: 700, color: C.t1, fontSize: 10, whiteSpace: 'nowrap' }}>{cm}</td>
+                      {Array.from({ length: maxCohortIdx + 1 }, (_, i) => {
+                        const cell = cohortMap[cm]?.[i]
+                        const pctVal = cell != null
+                          ? cohortMode === 'customer'
+                            ? cell.customers / baseC * 100
+                            : cell.revenue / baseR * 100
+                          : null
+                        const intensity = pctVal != null ? Math.min(i === 0 ? 1 : pctVal / 15, 1) : 0
+                        const bg = i === 0 ? '#2E74CC' : pctVal != null ? `rgba(46,116,204,${0.08 + intensity * 0.55})` : 'transparent'
+                        const txtColor = i === 0 ? '#fff' : pctVal != null && intensity > 0.5 ? '#fff' : C.t1
+                        return (
+                          <td key={i} title={cell ? `${cohortMode==='customer'?cell.customers+' customers':fmt(cell.revenue)}` : ''} style={{ padding: '4px 4px', textAlign: 'center', fontSize: 9.5, fontFamily: 'var(--mono)', background: bg, color: txtColor, fontWeight: 400 }}>
+                            {pctVal != null ? `${pctVal.toFixed(1)}%` : ''}
+                          </td>
+                        )
+                      })}
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
+        </Card>
+        )
+      })()}
+
+      {/* Section 4: Purchase Behavior */}
+      <LSectionTitle title="Purchase Behavior" collapsed={secCollapsed.purchase} onToggle={() => toggleSec('purchase')} />
+      {!secCollapsed.purchase && (() => {
+        return (
+      <Card title={<div><div>Purchase Behavior: First vs Second Purchase</div><div style={{ fontSize: 11, fontWeight: 400, color: C.t3, marginTop: 2 }}>All-time data — not affected by date filter. Shows what customers bought on their 2nd order after their 1st.</div></div>} action={
+        <div style={{ display: 'flex', gap: 4 }}>
+          {['Sub Category', 'Category'].map(t => (
+            <button key={t} onClick={() => setCrossFilter(t)} style={{ fontSize: 10, padding: '3px 9px', borderRadius: 5, border: `1px solid ${C.border}`, background: crossFilter === t ? C.t1 : C.card, color: crossFilter === t ? '#fff' : C.t2, cursor: 'pointer', fontFamily: 'var(--font)', fontWeight: crossFilter === t ? 700 : 400 }}>{t}</button>
+          ))}
+        </div>
+      }>
+        <div style={{ overflowX: 'auto', overflowY: 'auto', width: '100%', maxHeight: 420 }}>
+          <table style={{ borderCollapse: 'collapse', fontSize: 10.5, width: '100%', tableLayout: 'fixed' }}>
+            <colgroup>
+              <col style={{ width: '140px' }} />
+              {allCrossFirst.map(cat => <col key={cat} />)}
+            </colgroup>
+            <thead>
+              {/* Span header row: "First Purchase →" label above all category columns */}
+              <tr>
+                <th style={{ padding: '2px 8px 0', borderBottom: 'none' }} />
+                <th colSpan={allCrossFirst.length} style={{ padding: '4px 6px 2px', textAlign: 'center', fontSize: 9.5, fontWeight: 700, color: C.blue.tx, background: C.blue.bg, borderRadius: '6px 6px 0 0', letterSpacing: '.04em' }}>
+                  First Purchase {crossFilter} →
+                </th>
+              </tr>
+              <tr style={{ borderBottom: `2px solid ${C.border}` }}>
+                <th style={{ padding: '4px 8px', textAlign: 'left', verticalAlign: 'bottom', overflow: 'hidden' }}>
+                  <div style={{ fontSize: 8.5, fontWeight: 700, color: C.blue.tx, background: C.blue.bg, display: 'inline-block', padding: '2px 6px', borderRadius: 4, marginBottom: 2 }}>↓ Second Purchase {crossFilter}</div>
+                </th>
+                {allCrossFirst.map(cat => (
+                  <th key={cat} style={{ padding: '4px 6px', textAlign: 'right', color: C.t3, fontWeight: 700, fontSize: 9, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{cat}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {crossRows.map((sc, i) => (
+                <tr key={sc} style={{ borderBottom: `1px solid ${C.border}`, background: i % 2 === 0 ? 'transparent' : C.bg }}>
+                  <td style={{ padding: '4px 8px', fontWeight: 600, color: C.t1, fontSize: 10.5, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    <span style={{ color: C.t3, fontSize: 9 }}>⊞</span> {sc}
+                  </td>
+                  {allCrossFirst.map(fc => {
+                    const v = crossMap[sc]?.[fc]
+                    return <td key={fc} style={{ padding: '4px 6px', textAlign: 'right', fontFamily: 'var(--mono)', fontSize: 10, color: v ? C.t1 : C.t3 }}>{v ? fmtN(v) : ''}</td>
+                  })}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </Card>
+        )
+      })()}
+
+      {/* Section 5: RFM & Segmentation */}
+      <LSectionTitle title="RFM & Segmentation" collapsed={secCollapsed.rfm} onToggle={() => toggleSec('rfm')} />
+      {!secCollapsed.rfm && (
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+        {/* RFM Segments — horizontal bar list */}
+        <Card title="RFM Segments">
+          {(() => {
+            const RFM_DESC = {
+              'Champions':          'Bought recently, buy often, high spend',
+              'Loyal Customers':    'Buy regularly, decent recency & frequency',
+              'Recent Users':       'Bought recently but only once or twice',
+              'Potential Loyalists':'Recent buyers with good spend potential',
+              'Cannot Lose Them':   'Bought often but not seen in 90–180+ days',
+              'Hibernating':        'Low recency & low frequency — going cold',
+              'Others':             'High spenders not fitting other segments',
+              'Price Sensitive':    'Moderate frequency but low spend per order',
+              'Needs Attention':    'Average recency & frequency — at risk',
+              'About to Sleep':     'Dropping off — haven\'t bought in a while',
+              'Lost Customers':     'Haven\'t purchased in 180+ days',
+            }
+            const RFM_TOOLTIP = {
+              'Champions':          'Rule: Last order ≤60 days ago (R≥4) AND ≥4 orders ever (F≥4).\nThese are your best customers — buy often, spend a lot, bought recently. Reward them with early access and loyalty perks.',
+              'Loyal Customers':    'Rule: Last order ≤90 days (R≥3) AND ≥3 orders (F≥3).\nRegular buyers who come back consistently. Nurture with personalised offers to push them to Champions.',
+              'Recent Users':       'Rule: Last order ≤60 days (R≥4) AND ≤2 orders (F≤2).\nNew or recent customers who haven\'t bought much yet. Focus on getting them to a 2nd or 3rd purchase.',
+              'Potential Loyalists':'Rule: Last order ≤90 days (R≥3) AND spend ≥₹2,000 (M≥3).\nSpend decent money and bought recently. With the right nudge they can become Loyal Customers.',
+              'Cannot Lose Them':   'Rule: Last order >180 days (R≤2) AND ≥3 orders (F≥3).\nUsed to buy regularly but have gone quiet. High risk — win them back with a strong re-engagement offer.',
+              'Hibernating':        'Rule: Last order >180 days (R≤2) AND ≤2 orders (F≤2).\nBought once or twice long ago and haven\'t returned. Hard to reactivate — try a big discount or new product launch.',
+              'Others':             'Rule: Lifetime spend ≥₹5,000 but doesn\'t fit any other segment.\nHigh spenders with unusual purchase patterns. Review manually.',
+              'Price Sensitive':    'Rule: ≥3 orders (F≥3) AND spend <₹2,000 (M≤2).\nBuy often but spend very little each time. Upsell or bundle to increase order value.',
+              'Needs Attention':    'Rule: Last order 60–90 days (R=3) AND 2–3 orders (F=2–3).\nMid-range on all metrics — at risk of slipping away. Send a timely re-engagement message.',
+              'About to Sleep':     'Rule: Last order 90–180 days (R=2) AND 2–3 orders (F=2–3).\nActivity is dropping. Act now before they hibernate completely.',
+              'Lost Customers':     'Rule: Last order >180 days (R=1) AND ≤2 orders (F≤2).\nHaven\'t been seen in a long time and barely bought. Very low chance of return without a strong incentive.',
+            }
+            const sorted = [...rfm].sort((a, b) => b.totalRevenue - a.totalRevenue)
+            const maxRev = sorted[0]?.totalRevenue || 1
+            return (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                {sorted.map(seg => {
+                  const col = RFM_COLORS[seg.segment] || '#8B8000'
+                  const barW = seg.totalRevenue / maxRev * 100
+                  const pct = rfmTotal > 0 ? (seg.totalRevenue / rfmTotal * 100).toFixed(1) : '0'
+                  const desc = RFM_DESC[seg.segment] || ''
+                  const tooltip = RFM_TOOLTIP[seg.segment] || ''
+                  return (
+                    <div key={seg.segment} title={tooltip} style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'help' }}>
+                      <div style={{ width: 4, height: 34, borderRadius: 2, background: col, flexShrink: 0 }} />
+                      <div style={{ width: 200, flexShrink: 0 }}>
+                        <div style={{ fontSize: 11, fontWeight: 600, color: C.t1 }}>{seg.segment}</div>
+                        <div style={{ fontSize: 9.5, color: C.t3 }}>{desc}</div>
+                      </div>
+                      <div style={{ fontSize: 10, color: C.t3, width: 80, flexShrink: 0 }}>{fmtN(seg.customers)} custs</div>
+                      <div style={{ flex: 1, background: C.border, borderRadius: 3, height: 8, overflow: 'hidden' }}>
+                        <div style={{ height: '100%', width: `${barW}%`, background: col, borderRadius: 3 }} />
+                      </div>
+                      <div style={{ width: 72, textAlign: 'right', flexShrink: 0 }}>
+                        <div style={{ fontSize: 11, fontWeight: 700, color: C.t1, fontFamily: 'var(--mono)' }}>{fmt(seg.totalRevenue)}</div>
+                        <div style={{ fontSize: 10, color: C.t3 }}>{pct}%</div>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            )
+          })()}
+        </Card>
+
+        {/* Purchase Frequency Distribution */}
+        <Card title="Purchase Frequency Distribution">
+          {(() => {
+            const total = freqDist.reduce((s, r) => s + r.customers, 0) || 1
+            const maxCusts = Math.max(...freqDist.map(r => r.customers), 1)
+            const shades = [C.acc, '#F5DC00', '#E6CC00', '#CCB400', '#B8A000']
+            return (
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3, paddingTop: 8 }}>
+                {freqDist.map((r, i) => {
+                  const widthPct = r.customers / maxCusts * 100
+                  const pct = (r.customers / total * 100).toFixed(1)
+                  const shade = shades[i] || C.acc
+                  return (
+                    <div key={r.label} style={{ width: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                      <div style={{ width: `${Math.max(widthPct, 8)}%`, background: shade, borderRadius: 4, height: 36, display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative', transition: 'width .3s' }}>
+                        <span style={{ fontSize: 11, fontWeight: 700, color: C.t1, fontFamily: 'var(--mono)' }}>{fmtBig(r.customers)}</span>
+                      </div>
+                      <div style={{ display: 'flex', gap: 6, alignItems: 'center', marginTop: 2 }}>
+                        <span style={{ fontSize: 10, color: C.t2 }}>{r.label}</span>
+                        <span style={{ fontSize: 10, color: C.t3 }}>{pct}%</span>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            )
+          })()}
+        </Card>
+
+        {/* Monetary Distribution */}
+        <Card title="Distribution of Customers Across Monetary Segment">
+          <ResponsiveContainer width="100%" height={260}>
+            <ComposedChart data={monetaryDist} margin={{ top: 24, right: 60, left: 10, bottom: 30 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke={C.border} vertical={false} />
+              <XAxis dataKey="bucket" tick={{ fontSize: 9.5, fill: C.t2 }} angle={-12} textAnchor="end" interval={0} />
+              <YAxis yAxisId="left" tick={{ fontSize: 9 }} tickFormatter={v => v >= 1e6 ? `${(v/1e6).toFixed(1)}M` : v >= 1000 ? `${(v/1000).toFixed(0)}K` : v} width={48} label={{ value: 'Customers', angle: -90, position: 'insideLeft', offset: 10, style: { fontSize: 9, fill: C.t3 } }} />
+              <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 9 }} tickFormatter={v => v >= 1e9 ? `₹${(v/1e9).toFixed(1)}B` : v >= 1e7 ? `₹${(v/1e7).toFixed(1)}Cr` : v >= 1e5 ? `₹${(v/1e5).toFixed(0)}L` : `₹${(v/1000).toFixed(0)}K`} width={58} label={{ value: 'Revenue', angle: 90, position: 'insideRight', offset: 10, style: { fontSize: 9, fill: C.t3 } }} />
+              <Tooltip formatter={(v, n) => n === 'Revenue' ? [fmt(v), n] : [fmtN(v), n]} />
+              <Legend wrapperStyle={{ fontSize: 10, paddingTop: 8 }} />
+              <Bar yAxisId="left" dataKey="customers" name="Customers" radius={[4,4,0,0]} maxBarSize={60}
+                label={{ position: 'top', fontSize: 9, fill: C.t2, formatter: v => v >= 1e6 ? `${(v/1e6).toFixed(1)}M` : v >= 1000 ? `${(v/1000).toFixed(0)}K` : v }}>
+                {monetaryDist.map((_, i) => <Cell key={i} fill={[C.acc, '#F5DC00', '#E6CC00', '#CCB400', '#B8A000'][i] || C.acc} />)}
+              </Bar>
+              <Line yAxisId="right" type="monotone" dataKey="totalRevenue" name="Revenue" stroke="#2E74CC" strokeWidth={2} dot={{ r: 4, fill: '#2E74CC' }}
+                label={{ position: 'top', fontSize: 9, fill: '#2E74CC', formatter: v => v >= 1e7 ? `${(v/1e7).toFixed(1)}Cr` : v >= 1e5 ? `${(v/1e5).toFixed(0)}L` : `${(v/1000).toFixed(0)}K` }} />
+            </ComposedChart>
+          </ResponsiveContainer>
+        </Card>
+
+        {/* Inactivity Buckets */}
+        <Card title="Inactive Customers (30, 60, 90 Days)">
+          <ResponsiveContainer width="100%" height={220}>
+            <BarChart data={inactivity} margin={{ top: 24, right: 10, left: 10, bottom: 20 }}>
+              <XAxis dataKey="bucket" tick={{ fontSize: 9, fill: C.t2 }} angle={-10} textAnchor="end" interval={0} />
+              <YAxis tick={{ fontSize: 9 }} tickFormatter={v => v >= 1e7 ? `${(v/1e7).toFixed(1)} Cr` : v >= 1e5 ? `${(v/1e5).toFixed(1)} L` : v >= 1000 ? `${(v/1000).toFixed(0)}K` : v} width={45} />
+              <Tooltip formatter={(v) => [fmtN(v), 'Customers']} />
+              <Bar dataKey="customers" fill={C.acc} name="Customers" radius={[3,3,0,0]}
+                label={{ position: 'top', fontSize: 9, fill: C.t2, fontWeight: 600, formatter: v => v >= 1e7 ? `${(v/1e7).toFixed(2)} Cr` : v >= 1e5 ? `${(v/1e5).toFixed(2)} L` : v >= 1000 ? `${(v/1000).toFixed(1)}K` : v }}>
+                {inactivity.map((r, i) => <Cell key={i} fill={r.bucket.includes('90+') ? C.acc : r.bucket.includes('60') ? '#F5DC00' : r.bucket.includes('30') ? '#E6CC00' : '#CCB400'} />)}
+              </Bar>
+            </BarChart>
+          </ResponsiveContainer>
+        </Card>
+      </div>
+      )}
+
+      {/* Section 6: Discount & Spend Analysis */}
+      <LSectionTitle title="Discount & Spend Analysis" collapsed={secCollapsed.discount} onToggle={() => toggleSec('discount')} />
+      {!secCollapsed.discount && (<>
+      {/* Spend vs Sales */}
+      {(() => {
+        const fmtAxis = v => v >= 1e7 ? `₹${(v/1e7).toFixed(1)}Cr` : v >= 1e5 ? `₹${(v/1e5).toFixed(0)}L` : v >= 1000 ? `₹${(v/1000).toFixed(0)}K` : `₹${v}`
+        // Build spend lookup by day
+        const spendByDay = {}
+        rawDailySpend.forEach(r => { spendByDay[r.day] = r.totalSpend })
+        // Merge spend into daily rows
+        const mergedDaily = rawDaily.map(r => ({ ...r, totalSpend: spendByDay[r.day] || 0 }))
+        // Aggregate by spendGranularity
+        const buckets = {}
+        mergedDaily.forEach(r => {
+          const key = spendGranularity === 'monthly' ? r.day.slice(0, 7)
+            : spendGranularity === 'weekly' ? (() => { const d = new Date(r.day); const day = d.getDay(); const diff = d.getDate() - day + (day === 0 ? -6 : 1); const mon = new Date(d.setDate(diff)); return mon.toISOString().slice(0, 10) })()
+            : r.day
+          if (!buckets[key]) buckets[key] = { key, grossSales: 0, totalSpend: 0 }
+          buckets[key].grossSales += r.grossSales || 0
+          buckets[key].totalSpend += r.totalSpend || 0
+        })
+        const spendData = Object.values(buckets).sort((a, b) => a.key.localeCompare(b.key))
+        const xLabel = spendGranularity === 'monthly' ? 'Total Spend vs Gross Sales by Month'
+          : spendGranularity === 'weekly' ? 'Total Spend vs Gross Sales by Week'
+          : 'Total Spend vs Gross Sales by Day'
+        return (
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 14 }}>
+          <Card title={xLabel} action={
+            <select value={spendGranularity} onChange={e => setSpendGranularity(e.target.value)} style={{ fontSize: 11, fontWeight: 600, padding: '3px 8px', borderRadius: 6, border: `1px solid ${C.border2}`, background: C.card, color: C.t1, cursor: 'pointer', fontFamily: 'var(--font)', outline: 'none' }}>
+              {['daily','weekly','monthly'].map(g => <option key={g} value={g}>{g.charAt(0).toUpperCase()+g.slice(1)}</option>)}
+            </select>
+          }>
+            <ResponsiveContainer width="100%" height={220}>
+              <ComposedChart data={spendData} margin={{ top: 20, right: 60, left: 10, bottom: 0 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke={C.border} vertical={false} />
+                <XAxis dataKey="key" tick={{ fontSize: 9.5 }} tickFormatter={d => spendGranularity === 'monthly' ? d : d?.slice(5)} interval="preserveStartEnd" />
+                <YAxis yAxisId="spend" tick={{ fontSize: 9 }} tickFormatter={fmtAxis} width={52} />
+                <YAxis yAxisId="sales" orientation="right" tick={{ fontSize: 9 }} tickFormatter={fmtAxis} width={52} />
+                <Tooltip formatter={(v, n) => [fmt(v), n]} labelFormatter={l => spendGranularity === 'monthly' ? l : l} />
+                <Legend wrapperStyle={{ fontSize: 10 }} />
+                <Bar yAxisId="spend" dataKey="totalSpend" name="Total Spend (Meta+Google)" fill={C.acc} radius={[3,3,0,0]} maxBarSize={40}
+                  label={{ position: 'top', fontSize: 9, fill: C.t2, fontWeight: 600, formatter: v => v >= 1e7 ? `₹${(v/1e7).toFixed(1)}Cr` : v >= 1e5 ? `₹${(v/1e5).toFixed(1)}L` : v >= 1000 ? `₹${(v/1000).toFixed(0)}K` : `₹${v}` }} />
+                <Line yAxisId="sales" type="monotone" dataKey="grossSales" name="Gross Sales" stroke="#2E74CC" strokeWidth={2} dot={false} />
+              </ComposedChart>
+            </ResponsiveContainer>
+          </Card>
+        </div>
+        )
+      })()}
+
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+        {/* Discount distribution First vs Repeat */}
+        <Card title="Order Distribution by Discount % (First vs Repeat)">
+          <ResponsiveContainer width="100%" height={240}>
+            <BarChart data={discountDist} margin={{ top: 24, right: 10, left: 0, bottom: 0 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke={C.border} vertical={false} />
+              <XAxis dataKey="bucket" tick={{ fontSize: 10 }} />
+              <YAxis tick={{ fontSize: 9 }} tickFormatter={v => v >= 1e5 ? `${(v/1e5).toFixed(0)}L` : v >= 1000 ? `${(v/1000).toFixed(0)}K` : v} />
+              <Tooltip formatter={(v, n) => [fmtN(v), n]} />
+              <Legend wrapperStyle={{ fontSize: 10 }} />
+              <Bar dataKey="firstOrders" stackId="a" fill={C.acc} name="First Order"
+                label={{ position: 'inside', fontSize: 9, fill: C.t1, fontWeight: 600, formatter: v => v >= 2000 ? (v >= 1000 ? `${(v/1000).toFixed(0)}K` : v) : '' }} />
+              <Bar dataKey="repeatOrders" stackId="a" fill="#CCB400" name="Repeat Order" radius={[3,3,0,0]}
+                label={(props) => {
+                  const { x, y, width, value, index } = props
+                  const row = discountDist[index] || {}
+                  const total = (row.firstOrders || 0) + (row.repeatOrders || 0)
+                  if (!total) return null
+                  const lbl = total >= 1000 ? `${(total/1000).toFixed(0)}K` : total
+                  return <text x={x + width / 2} y={y - 4} textAnchor="middle" fontSize={9} fill={C.t2} fontWeight={600}>{lbl}</text>
+                }} />
+            </BarChart>
+          </ResponsiveContainer>
+        </Card>
+
+        {/* Discounted vs Non-Discounted donut */}
+        <Card title="Discounted vs Non-Discounted Orders Split">
+          {(() => {
+            const disc = kpis.discountedOrders
+            const nonDisc = kpis.nonDiscountedOrders
+            const total = disc + nonDisc || 1
+            const pieData = [
+              { name: 'Discounted', value: disc, color: C.acc },
+              { name: 'Non-Discounted', value: nonDisc, color: '#B8A000' },
+            ]
+            return (
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: 200 }}>
+                <PieChart width={180} height={180}>
+                  <Pie data={pieData} cx={88} cy={88} innerRadius={52} outerRadius={82} dataKey="value">
+                    {pieData.map((entry, i) => <Cell key={i} fill={entry.color} />)}
+                  </Pie>
+                </PieChart>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 12 }}>
+                  {pieData.map(d => (
+                    <div key={d.name} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <div style={{ width: 12, height: 12, borderRadius: 3, background: d.color, flexShrink: 0 }} />
+                      <div style={{ fontSize: 11, color: C.t2 }}>{d.name}</div>
+                      <div style={{ fontSize: 11, fontWeight: 700, color: C.t1, fontFamily: 'var(--mono)', marginLeft: 4 }}>
+                        {fmtN(d.value)} ({(d.value / total * 100).toFixed(2)}%)
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )
+          })()}
+        </Card>
+      </div>
+      </>)}
+    </div>
+  )
+}
+
 export default function App() {
   const [page, setPage] = useState('overview')
   const def = getDefaultDates()
@@ -7930,6 +9093,7 @@ export default function App() {
   const [rawRows, setRawRows] = useState(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
+  const [logisticsData, setLogisticsData] = useState(null)
 
   const API = import.meta.env.VITE_API_URL || ''
   const reqIdRef = useRef(0)
@@ -7994,6 +9158,9 @@ export default function App() {
       if (country) extra.country = country
       if (paymentType) extra.paymentType = paymentType
       fetchData(start, end, extra)
+      // Fetch logistics summary for Overview tab
+      fetch(`${API}/api/logistics`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ start, end, shipmentType: 'forward' }) })
+        .then(r => r.ok ? r.json() : null).then(j => { if (j) setLogisticsData(j) }).catch(() => {})
     }, 600)
     return () => clearTimeout(debounceRef.current)
   }, [filters.start, filters.end, filters.category, filters.subCategory, filters.sku, filters.subChannel, filters.voucher, filters.region, filters.tier, filters.state, filters.city, filters.country, filters.paymentType, fetchData])
@@ -8034,7 +9201,7 @@ export default function App() {
           {loading && !data && page !== 'logistics' && page !== 'inventory' && <Skeleton />}
           {page === 'overview' && data && (
             <div className="page-scroll">
-              <OverviewPage data={data} alerts={alerts} />
+              <OverviewPage data={data} alerts={alerts} logisticsData={logisticsData} />
             </div>
           )}
           {page === 'sales' && data && <SalesPage data={data} filters={filters} setFilters={setFilters} activeTab={activeTab} setActiveTab={setActiveTab} fetchData={fetchData} />}
@@ -8056,6 +9223,11 @@ export default function App() {
           {page === 'inventory' && (
             <div className="page-scroll" style={{ padding: 0 }}>
               <InventoryPage />
+            </div>
+          )}
+          {page === 'customer' && data && (
+            <div className="page-scroll">
+              <CustomerPage filters={filters} />
             </div>
           )}
         </div>

@@ -9,7 +9,7 @@ export const C = {
   ch: {
     Shopify: '#FFD600', 'Shopify International': '#B8A000', Amazon: '#E8930A', Flipkart: '#2E74CC',
     Blinkit: '#0D9E68', CRED: '#CC4078', Instamart: '#4AB89A',
-    Zepto: '#858380', Myntra: '#E87858', Firstcry: '#9B56B6', Pharmeasy: '#2ECC71'
+    Zepto: '#858380', Myntra: '#E87858', Firstcry: '#9B56B6', Pharmeasy: '#2ECC71', offline_sales: '#6B7280'
   }
 }
 
@@ -189,9 +189,13 @@ export function exportCSV(rows) {
   URL.revokeObjectURL(url)
 }
 
+function localDateStr(d) {
+  const y = d.getFullYear(), m = String(d.getMonth() + 1).padStart(2, '0'), day = String(d.getDate()).padStart(2, '0')
+  return `${y}-${m}-${day}`
+}
+
 export function getDefaultDates() {
-  const end = new Date(), start = new Date()
-  end.setDate(end.getDate() - 1)   // yesterday — today's data not yet fully loaded
-  start.setDate(end.getDate() - 6)
-  return { start: start.toISOString().slice(0, 10), end: end.toISOString().slice(0, 10) }
+  const end = new Date()
+  const start = new Date(end.getFullYear(), end.getMonth(), 1)
+  return { start: localDateStr(start), end: localDateStr(end) }
 }
