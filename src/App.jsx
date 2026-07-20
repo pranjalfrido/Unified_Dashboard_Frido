@@ -9028,13 +9028,13 @@ function CustomerPage({ filters }) {
               { name: 'Non-Discounted', value: nonDisc, color: '#B8A000' },
             ]
             return (
-              <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-                <PieChart width={160} height={160}>
-                  <Pie data={pieData} cx={75} cy={75} innerRadius={45} outerRadius={72} dataKey="value">
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: 200 }}>
+                <PieChart width={180} height={180}>
+                  <Pie data={pieData} cx={88} cy={88} innerRadius={52} outerRadius={82} dataKey="value">
                     {pieData.map((entry, i) => <Cell key={i} fill={entry.color} />)}
                   </Pie>
                 </PieChart>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 12 }}>
                   {pieData.map(d => (
                     <div key={d.name} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                       <div style={{ width: 12, height: 12, borderRadius: 3, background: d.color, flexShrink: 0 }} />
