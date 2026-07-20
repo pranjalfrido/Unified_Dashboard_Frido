@@ -1632,7 +1632,19 @@ function DateRangePicker({ filters, setFilters }) {
     { label: 'Last 7 Days', fn: () => { const s = new Date(today); s.setDate(s.getDate()-6); return { start: fmt0(s), end: fmt0(today) } } },
     { label: 'Last 15 Days', fn: () => { const s = new Date(today); s.setDate(s.getDate()-14); return { start: fmt0(s), end: fmt0(today) } } },
     { label: 'Last Month', fn: () => { const s = new Date(today.getFullYear(), today.getMonth()-1, 1); const e = new Date(today.getFullYear(), today.getMonth(), 0); return { start: fmt0(s), end: fmt0(e) } } },
-    { label: 'Last Quarter', fn: () => { const q = Math.floor(today.getMonth()/3); const s = new Date(today.getFullYear(), (q-1)*3, 1); const e = new Date(today.getFullYear(), q*3, 0); return { start: fmt0(s), end: fmt0(e) } } },
+    { label: 'Last Quarter', fn: () => {
+      // Indian FY quarters: Q1=Apr-Jun(3-5), Q2=Jul-Sep(6-8), Q3=Oct-Dec(9-11), Q4=Jan-Mar(0-2)
+      const m = today.getMonth()
+      const fyStart = m >= 3 ? today.getFullYear() : today.getFullYear() - 1
+      const qStarts = [3,6,9,0] // Apr,Jul,Oct,Jan
+      const qYears  = [fyStart, fyStart, fyStart, fyStart+1]
+      const curQ = m >= 3 ? Math.floor((m-3)/3) : 3
+      const prevQ = (curQ + 3) % 4
+      const s = new Date(qYears[prevQ], qStarts[prevQ], 1)
+      const eMonth = qStarts[(prevQ+1)%4]; const eYear = prevQ === 3 ? qYears[prevQ]+1 : qYears[prevQ]
+      const e = new Date(eYear, eMonth === 0 ? 0 : eMonth, 0)
+      return { start: fmt0(s), end: fmt0(e) }
+    } },
     ...(() => {
       const fyStart = today.getMonth() >= 3 ? today.getFullYear() : today.getFullYear() - 1
       return [0, 1].map(offset => {
@@ -2519,8 +2531,11 @@ function getGroupKey(date, groupBy) {
   if (groupBy === 'monthly') return date.slice(0, 7)
   if (groupBy === 'quarterly') {
     const [y, m] = date.split('-')
-    const q = Math.ceil(parseInt(m) / 3)
-    return `${y} Q${q}`
+    const mo = parseInt(m) // 1-12
+    // Indian FY: Q1=Apr-Jun, Q2=Jul-Sep, Q3=Oct-Dec, Q4=Jan-Mar
+    const q = mo >= 4 ? Math.floor((mo - 4) / 3) + 1 : 4
+    const fy = mo >= 4 ? parseInt(y) : parseInt(y) - 1
+    return `FY${fy}-${String(fy+1).slice(2)} Q${q}`
   }
   return date
 }
@@ -6373,8 +6388,10 @@ function AdsTab({ data }) {
                 } else if (gran === 'monthly') {
                   key = r.date.slice(0, 7)
                 } else if (gran === 'quarterly') {
-                  const m = parseInt(r.date.slice(5, 7)); const q = Math.ceil(m / 3)
-                  key = `${r.date.slice(0, 4)}-Q${q}`
+                  const mo = parseInt(r.date.slice(5, 7)); const y = parseInt(r.date.slice(0, 4))
+                  const q = mo >= 4 ? Math.floor((mo - 4) / 3) + 1 : 4
+                  const fy = mo >= 4 ? y : y - 1
+                  key = `FY${fy}-${String(fy+1).slice(2)} Q${q}`
                 } else {
                   key = r.date
                 }
