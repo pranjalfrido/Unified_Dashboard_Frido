@@ -8478,6 +8478,7 @@ function CustomerPage({ filters }) {
   const [granularity, setGranularity] = useState('daily')
   const [secCollapsed, setSecCollapsed] = useState({ trends: false, cohort: false, purchase: false, rfm: true, discount: true })
   const toggleSec = k => setSecCollapsed(s => ({ ...s, [k]: !s[k] }))
+  const [spendGranularity, setSpendGranularity] = useState('daily')
   const API = import.meta.env.VITE_API_URL || ''
 
   useEffect(() => {
@@ -8496,7 +8497,7 @@ function CustomerPage({ filters }) {
   if (custError) return <div style={{ padding: 40, margin: 16, borderRadius: 10, background: C.red.bg, border: `1px solid ${C.red.bd}`, color: C.red.tx, fontSize: 12 }}><strong>Error loading customer data:</strong> {custError}</div>
   if (!custData) return <div style={{ padding: 60, textAlign: 'center', color: C.t3 }}>Select a date range to load customer analysis</div>
 
-  const { kpis = {}, daily: rawDaily = [], cohort = [], rfm = [], freqDist = [], monetaryDist = [], inactivity = [], discountDist = [], crossSell = [] } = custData
+  const { kpis = {}, daily: rawDaily = [], cohort = [], rfm = [], freqDist = [], monetaryDist = [], inactivity = [], discountDist = [], crossSell = [], dailySpend: rawDailySpend = [] } = custData
 
   // Aggregate daily rows into the selected granularity
   const monthly = (() => {
@@ -8945,20 +8946,50 @@ function CustomerPage({ filters }) {
       <LSectionTitle title="Discount & Spend Analysis" collapsed={secCollapsed.discount} onToggle={() => toggleSec('discount')} />
       {!secCollapsed.discount && (<>
       {/* Spend vs Sales */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 14 }}>
-        <Card title="Total Spend vs Gross Sales by Month">
-          <ResponsiveContainer width="100%" height={200}>
-            <ComposedChart data={monthly} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
-              <XAxis dataKey="month" tick={{ fontSize: 10 }} />
-              <YAxis yAxisId="left" tick={{ fontSize: 10 }} />
-              <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 10 }} />
-              <Tooltip formatter={(v, n) => [fmtN(v), n]} />
-              <Bar yAxisId="left" dataKey="grossSales" fill={C.acc} name="Gross Sales" radius={[3,3,0,0]} />
-              <Line yAxisId="right" type="monotone" dataKey="grossSales" stroke="#2E74CC" strokeWidth={2} dot={false} name="Total Gross Sales" />
-            </ComposedChart>
-          </ResponsiveContainer>
-        </Card>
-      </div>
+      {(() => {
+        const fmtAxis = v => v >= 1e7 ? `₹${(v/1e7).toFixed(1)}Cr` : v >= 1e5 ? `₹${(v/1e5).toFixed(0)}L` : v >= 1000 ? `₹${(v/1000).toFixed(0)}K` : `₹${v}`
+        // Build spend lookup by day
+        const spendByDay = {}
+        rawDailySpend.forEach(r => { spendByDay[r.day] = r.totalSpend })
+        // Merge spend into daily rows
+        const mergedDaily = rawDaily.map(r => ({ ...r, totalSpend: spendByDay[r.day] || 0 }))
+        // Aggregate by spendGranularity
+        const buckets = {}
+        mergedDaily.forEach(r => {
+          const key = spendGranularity === 'monthly' ? r.day.slice(0, 7)
+            : spendGranularity === 'weekly' ? (() => { const d = new Date(r.day); const day = d.getDay(); const diff = d.getDate() - day + (day === 0 ? -6 : 1); const mon = new Date(d.setDate(diff)); return mon.toISOString().slice(0, 10) })()
+            : r.day
+          if (!buckets[key]) buckets[key] = { key, grossSales: 0, totalSpend: 0 }
+          buckets[key].grossSales += r.grossSales || 0
+          buckets[key].totalSpend += r.totalSpend || 0
+        })
+        const spendData = Object.values(buckets).sort((a, b) => a.key.localeCompare(b.key))
+        const xLabel = spendGranularity === 'monthly' ? 'Total Spend vs Gross Sales by Month'
+          : spendGranularity === 'weekly' ? 'Total Spend vs Gross Sales by Week'
+          : 'Total Spend vs Gross Sales by Day'
+        return (
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 14 }}>
+          <Card title={xLabel} action={
+            <select value={spendGranularity} onChange={e => setSpendGranularity(e.target.value)} style={{ fontSize: 11, fontWeight: 600, padding: '3px 8px', borderRadius: 6, border: `1px solid ${C.border2}`, background: C.card, color: C.t1, cursor: 'pointer', fontFamily: 'var(--font)', outline: 'none' }}>
+              {['daily','weekly','monthly'].map(g => <option key={g} value={g}>{g.charAt(0).toUpperCase()+g.slice(1)}</option>)}
+            </select>
+          }>
+            <ResponsiveContainer width="100%" height={220}>
+              <ComposedChart data={spendData} margin={{ top: 20, right: 60, left: 10, bottom: 0 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke={C.border} vertical={false} />
+                <XAxis dataKey="key" tick={{ fontSize: 9.5 }} tickFormatter={d => spendGranularity === 'monthly' ? d : d?.slice(5)} interval="preserveStartEnd" />
+                <YAxis yAxisId="spend" tick={{ fontSize: 9 }} tickFormatter={fmtAxis} width={52} />
+                <YAxis yAxisId="sales" orientation="right" tick={{ fontSize: 9 }} tickFormatter={fmtAxis} width={52} />
+                <Tooltip formatter={(v, n) => [fmt(v), n]} labelFormatter={l => spendGranularity === 'monthly' ? l : l} />
+                <Legend wrapperStyle={{ fontSize: 10 }} />
+                <Bar yAxisId="spend" dataKey="totalSpend" name="Total Spend (Meta+Google)" fill={C.acc} radius={[3,3,0,0]} maxBarSize={40} />
+                <Line yAxisId="sales" type="monotone" dataKey="grossSales" name="Gross Sales" stroke="#2E74CC" strokeWidth={2} dot={false} />
+              </ComposedChart>
+            </ResponsiveContainer>
+          </Card>
+        </div>
+        )
+      })()}
 
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
         {/* Discount distribution First vs Repeat */}

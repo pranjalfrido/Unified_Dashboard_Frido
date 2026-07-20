@@ -18,7 +18,7 @@ export default async function handler(req, res) {
     const run = q => bq.query({ query: q, maximumBytesBilled: '10000000000' }).then(([rows]) => rows)
     const s = start, e = end
 
-    const [kpis, monthly, cohort, crossSell, rfm, freqDist, monetaryDist, inactivity, discountDist, adsKpis] = await Promise.all([
+    const [kpis, monthly, cohort, crossSell, rfm, freqDist, monetaryDist, inactivity, discountDist, adsKpis, dailySpend] = await Promise.all([
 
       // Q1 — KPIs for the selected period (Shopify only)
       run(`WITH first_dates AS (
@@ -308,6 +308,12 @@ GROUP BY discount_bucket`),
 FROM \`frido-429506.production.fact_all_platform_ads_report\`
 WHERE report_date BETWEEN '${s}' AND '${e}' AND platform IN ('Meta', 'Google')
 GROUP BY platform`),
+
+      // Q11 — daily ad spend (Meta + Google combined) for trend chart
+      run(`SELECT CAST(report_date AS STRING) AS day, ROUND(SUM(spend), 0) AS total_spend
+FROM \`frido-429506.production.fact_all_platform_ads_report\`
+WHERE report_date BETWEEN '${s}' AND '${e}' AND platform IN ('Meta', 'Google')
+GROUP BY day ORDER BY day`),
     ])
 
     const k = kpis[0] || {}
@@ -393,6 +399,10 @@ GROUP BY platform`),
         bucket: r.discount_bucket,
         firstOrders: parseInt(r.first_orders) || 0,
         repeatOrders: parseInt(r.repeat_orders) || 0,
+      })),
+      dailySpend: dailySpend.map(r => ({
+        day: r.day,
+        totalSpend: parseFloat(r.total_spend) || 0,
       })),
     })
   } catch (err) {
