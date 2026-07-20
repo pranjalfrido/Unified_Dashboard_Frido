@@ -2631,10 +2631,15 @@ function DailyChannelTable({ dailyArr, channels, nDays = 7, rangeStart }) {
         </div>
       </div>
       <div style={{ overflowX: 'auto', overflowY: 'auto', maxHeight: 380 }}>
-        <table style={{ borderCollapse: 'collapse', fontSize: 12, minWidth: 700, width: '100%' }}>
+        <table style={{ borderCollapse: 'collapse', fontSize: 12, minWidth: 700, width: '100%', tableLayout: 'fixed' }}>
+          <colgroup>
+            <col style={{ width: 110 }} />
+            {channels.map(ch => <col key={ch} />)}
+            <col style={{ width: 80 }} />
+          </colgroup>
           <thead style={{ position: 'sticky', top: 0, zIndex: 2 }}>
             <tr>
-              <th style={{ ...thStyle(null), textAlign: 'left', minWidth: 110 }}>Period</th>
+              <th style={{ ...thStyle(null), textAlign: 'left' }}>Period</th>
               {channels.map(ch => <th key={ch} style={thStyle(ch)}>{ch}</th>)}
               <th style={thStyle(null)}>Total</th>
             </tr>
@@ -2699,11 +2704,16 @@ function CategoryChannelMatrix({ heatData, channels, maxHeat, subCatChannelMap =
   return (
     <Card title="Category × Channel Revenue Matrix">
       <div className="tbl-wrap">
-        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11, minWidth: 700 }}>
+        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11, minWidth: 700, tableLayout: 'fixed' }}>
+          <colgroup>
+            <col style={{ width: 110 }} />
+            {channels.map(ch => <col key={ch} />)}
+            <col style={{ width: 80 }} />
+          </colgroup>
           <thead style={{ position: 'sticky', top: 0, background: C.card, zIndex: 1 }}>
             <tr>
-              <th style={{ textAlign: 'left', padding: '3px 5px 7px', borderBottom: `2px solid ${C.border}`, color: C.t3, fontSize: 10, fontWeight: 700, textTransform: 'uppercase', width: 130, maxWidth: 130 }}>Category</th>
-              {channels.map(ch => <th key={ch} style={{ textAlign: 'right', padding: '3px 5px 7px', borderBottom: `2px solid ${C.border}`, borderLeft: `1px solid ${C.border}`, color: C.ch[ch], fontSize: 10, fontWeight: 700, whiteSpace: 'nowrap' }}>{ch === 'offline_sales' ? 'Offline' : ch}</th>)}
+              <th style={{ textAlign: 'left', padding: '3px 5px 7px', borderBottom: `2px solid ${C.border}`, color: C.t3, fontSize: 10, fontWeight: 700, textTransform: 'uppercase' }}>Category</th>
+              {channels.map(ch => <th key={ch} style={{ textAlign: 'right', padding: '3px 5px 7px', borderBottom: `2px solid ${C.border}`, borderLeft: `1px solid ${C.border}`, color: C.ch[ch], fontSize: 10, fontWeight: 700, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{ch === 'offline_sales' ? 'Offline' : ch}</th>)}
               <th style={{ textAlign: 'right', padding: '3px 5px 7px', borderBottom: `2px solid ${C.border}`, borderLeft: `1px solid ${C.border}`, color: C.t1, fontSize: 10, fontWeight: 700 }}>Total</th>
             </tr>
           </thead>
@@ -2720,7 +2730,7 @@ function CategoryChannelMatrix({ heatData, channels, maxHeat, subCatChannelMap =
               return (
                 <Fragment key={i}>
                   <tr style={{ borderBottom: `1px solid ${C.border}` }}>
-                    <td style={{ padding: '5px', fontWeight: 600, color: C.t1, maxWidth: 130, width: 130 }}>
+                    <td style={{ padding: '5px', fontWeight: 600, color: C.t1, overflow: 'hidden' }}>
                       <span
                         onClick={() => hasSubCats && toggle(row.cat)}
                         title={row.cat}
@@ -2750,7 +2760,7 @@ function CategoryChannelMatrix({ heatData, channels, maxHeat, subCatChannelMap =
                     return (
                       <Fragment key={sc}>
                         <tr style={{ borderBottom: `1px solid ${C.border}`, background: '#FAFAF7' }}>
-                          <td style={{ padding: '3px 4px 3px 18px', color: C.t2, fontSize: 10, maxWidth: 130, width: 130 }}>
+                          <td style={{ padding: '3px 4px 3px 18px', color: C.t2, fontSize: 10, overflow: 'hidden' }}>
                             <span onClick={() => hasSkus && toggleSC(scKey)} title={sc} style={{ cursor: hasSkus ? 'pointer' : 'default', userSelect: 'none', display: 'flex', alignItems: 'center', gap: 4, overflow: 'hidden' }}>
                               {hasSkus && <span style={{ fontSize: 8, color: C.t3, flexShrink: 0, display: 'inline-block', transform: scOpen ? 'rotate(90deg)' : 'rotate(0deg)', transition: 'transform .15s' }}>▶</span>}
                               <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>└ {sc}</span>
@@ -2767,7 +2777,7 @@ function CategoryChannelMatrix({ heatData, channels, maxHeat, subCatChannelMap =
                           const skuTotal = channels.reduce((s, ch) => s + (skuChData[ch] || 0), 0)
                           return (
                             <tr key={sku} style={{ borderBottom: `1px solid ${C.border}`, background: '#F5F5F0' }}>
-                              <td style={{ padding: '2px 4px 2px 32px', color: C.t3, fontSize: 9.5, fontFamily: 'var(--mono)', maxWidth: 130, width: 130, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={sku}>└ {sku}</td>
+                              <td style={{ padding: '2px 4px 2px 32px', color: C.t3, fontSize: 9.5, fontFamily: 'var(--mono)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={sku}>└ {sku}</td>
                               {channels.map(ch => {
                                 const v = skuChData[ch] || 0
                                 const { cls, content } = renderCell(v, skuTotal)
@@ -2873,7 +2883,7 @@ function AmazonCategoryMatrix({ channels, catChannel, subCatChannel, skuChannel,
                     return (
                       <Fragment key={sc}>
                         <tr style={{ borderBottom: `1px solid ${C.border}`, background: '#FAFAF7' }}>
-                          <td style={{ padding: '3px 4px 3px 18px', color: C.t2, fontSize: 10, maxWidth: 130, width: 130 }}>
+                          <td style={{ padding: '3px 4px 3px 18px', color: C.t2, fontSize: 10, overflow: 'hidden' }}>
                             <span onClick={() => hasSkus && toggleSC(scKey)} title={sc} style={{ cursor: hasSkus ? 'pointer' : 'default', userSelect: 'none', display: 'flex', alignItems: 'center', gap: 4, overflow: 'hidden' }}>
                               {hasSkus && <span style={{ fontSize: 8, color: C.t3, flexShrink: 0, display: 'inline-block', transform: scOpen ? 'rotate(90deg)' : 'rotate(0deg)', transition: 'transform .15s' }}>▶</span>}
                               <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>└ {sc}</span>
@@ -3186,7 +3196,7 @@ function VCCategoryMatrix({ catData, subCatData, skuData, title }) {
                     return (
                       <Fragment key={sc}>
                         <tr style={{ borderBottom: `1px solid ${C.border}`, background: '#FAFAF7' }}>
-                          <td style={{ padding: '3px 4px 3px 18px', color: C.t2, fontSize: 10, maxWidth: 130, width: 130 }}>
+                          <td style={{ padding: '3px 4px 3px 18px', color: C.t2, fontSize: 10, overflow: 'hidden' }}>
                             <span onClick={() => hasSkus && toggleSC(scKey)} title={sc} style={{ cursor: hasSkus ? 'pointer' : 'default', userSelect: 'none', display: 'flex', alignItems: 'center', gap: 4, overflow: 'hidden' }}>
                               {hasSkus && <span style={{ fontSize: 8, color: C.t3, flexShrink: 0, display: 'inline-block', transform: scOpen ? 'rotate(90deg)' : 'rotate(0deg)', transition: 'transform .15s' }}>▶</span>}
                               <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>└ {sc}</span>
