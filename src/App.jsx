@@ -2260,7 +2260,7 @@ const TABS = [
   { id: 'instamart', label: 'Instamart', ch: 'Instamart', logo: '/logo-instamart.png' },
   { id: 'zepto', label: 'Zepto', ch: 'Zepto', logo: '/logo-zepto.png' },
   { id: 'myntra', label: 'Myntra', ch: 'Myntra', logo: '/logo-myntra.png' },
-  { id: 'offline', label: 'Offline Sales', ch: 'offline_sales', logo: '/OFFLINE SALES.png' },
+  { id: 'offline', label: 'Offline Sales', ch: 'offline_sales', logo: '/offline-sales.png' },
 ]
 const CHANNEL_LOGOS = Object.fromEntries(TABS.filter(t => t.logo).map(t => [t.ch, t.logo]))
 
