@@ -8982,7 +8982,8 @@ function CustomerPage({ filters }) {
                 <YAxis yAxisId="sales" orientation="right" tick={{ fontSize: 9 }} tickFormatter={fmtAxis} width={52} />
                 <Tooltip formatter={(v, n) => [fmt(v), n]} labelFormatter={l => spendGranularity === 'monthly' ? l : l} />
                 <Legend wrapperStyle={{ fontSize: 10 }} />
-                <Bar yAxisId="spend" dataKey="totalSpend" name="Total Spend (Meta+Google)" fill={C.acc} radius={[3,3,0,0]} maxBarSize={40} />
+                <Bar yAxisId="spend" dataKey="totalSpend" name="Total Spend (Meta+Google)" fill={C.acc} radius={[3,3,0,0]} maxBarSize={40}
+                  label={{ position: 'top', fontSize: 9, fill: C.t2, fontWeight: 600, formatter: v => v >= 1e7 ? `₹${(v/1e7).toFixed(1)}Cr` : v >= 1e5 ? `₹${(v/1e5).toFixed(1)}L` : v >= 1000 ? `₹${(v/1000).toFixed(0)}K` : `₹${v}` }} />
                 <Line yAxisId="sales" type="monotone" dataKey="grossSales" name="Gross Sales" stroke="#2E74CC" strokeWidth={2} dot={false} />
               </ComposedChart>
             </ResponsiveContainer>
