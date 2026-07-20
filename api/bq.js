@@ -84,7 +84,9 @@ export default async function handler(req, res) {
     totals: subChannel === 'International'
       ? (() => { const cWhere = country ? ` AND source_system = '${country.replace(/'/g,"''")}'` : ''; return `SELECT COUNT(DISTINCT order_id) AS n_orders, SUM(final_total_incl_tax) AS total_rev, SUM(total_excl_tax) AS total_exc_rev, SUM(qty) AS total_qty, COUNT(DISTINCT order_date) AS n_days, COUNT(DISTINCT customer_id) AS n_custs FROM \`frido-429506.production.fact_shopify_international_orders\` WHERE order_date BETWEEN '${start}' AND '${end}' AND (financial_status IS NULL OR financial_status != 'voided')${cWhere}` })()
       : `WITH q AS (${base}) SELECT COUNT(DISTINCT OrderId) AS n_orders, SUM(SellingPrice_Inc_GST) AS total_rev, SUM(SellingPrice_Exc_GST) AS total_exc_rev, SUM(ItemQty) AS total_qty, COUNT(DISTINCT OrderDate) AS n_days, COUNT(DISTINCT CustomerId) AS n_custs FROM q`,
-    byChannel: `WITH q AS (${base}) SELECT Channel, COUNT(DISTINCT OrderId) AS orders, SUM(SellingPrice_Inc_GST) AS rev, SUM(SellingPrice_Exc_GST) AS exc_rev, SUM(ItemQty) AS qty, SUM(CASE WHEN Order_Status = 'Cancelled' THEN SellingPrice_Exc_GST ELSE 0 END) AS cancel_exc_rev, SUM(CASE WHEN Order_Status IN ('RTO','Return') THEN SellingPrice_Exc_GST ELSE 0 END) AS rto_exc_rev, SUM(CASE WHEN Order_Status = 'CIR' THEN SellingPrice_Exc_GST ELSE 0 END) AS cir_exc_rev FROM q WHERE NOT (Channel = 'Shopify' AND SubChannel = 'Shopify B2B') GROUP BY Channel ORDER BY rev DESC`,
+    byChannel: `WITH q AS (${base}) SELECT Channel, COUNT(DISTINCT OrderId) AS orders, SUM(SellingPrice_Inc_GST) AS rev, SUM(SellingPrice_Exc_GST) AS exc_rev, SUM(ItemQty) AS qty, SUM(CASE WHEN Order_Status = 'Cancelled' THEN SellingPrice_Exc_GST ELSE 0 END) AS cancel_exc_rev, SUM(CASE WHEN Order_Status IN ('RTO','Return') THEN SellingPrice_Exc_GST ELSE 0 END) AS rto_exc_rev, SUM(CASE WHEN Order_Status = 'CIR' THEN SellingPrice_Exc_GST ELSE 0 END) AS cir_exc_rev FROM q WHERE NOT (Channel = 'Shopify' AND SubChannel = 'Shopify B2B') AND NOT (Channel = 'Shopify' AND Country = 'International') GROUP BY Channel ORDER BY rev DESC`,
+    shopifyIntlTotals: subChannel === 'International' ? `SELECT 0 AS intl_rev, 0 AS intl_exc_rev` : `SELECT SUM(final_total_incl_tax) AS intl_rev, SUM(total_excl_tax) AS intl_exc_rev FROM \`frido-429506.production.fact_shopify_international_orders\` WHERE order_date BETWEEN '${start}' AND '${end}' AND (financial_status IS NULL OR financial_status != 'voided')`,
+    prevShopifyIntlTotals: subChannel === 'International' ? `SELECT 0 AS intl_rev, 0 AS intl_exc_rev` : `SELECT SUM(final_total_incl_tax) AS intl_rev, SUM(total_excl_tax) AS intl_exc_rev FROM \`frido-429506.production.fact_shopify_international_orders\` WHERE order_date BETWEEN '${ps}' AND '${pe}' AND (financial_status IS NULL OR financial_status != 'voided')`,
     byDate: `WITH q AS (${base}) SELECT CAST(OrderDate AS STRING) AS date, Channel, SUM(SellingPrice_Inc_GST) AS rev, COUNT(DISTINCT OrderId) AS orders, SUM(ItemQty) AS units FROM q GROUP BY date, Channel ORDER BY date`,
     byCategory: `WITH q AS (${base}) SELECT Category, COUNT(DISTINCT OrderId) AS orders, SUM(SellingPrice_Inc_GST) AS rev, SUM(SellingPrice_Exc_GST) AS exc_rev, SUM(ItemQty) AS units FROM q GROUP BY Category ORDER BY rev DESC`,
     byState: `WITH q AS (${base}) SELECT CASE WHEN TRIM(State) IS NULL OR TRIM(State) IN ('','-') THEN 'OTHERS' ELSE UPPER(TRIM(State)) END AS state, COUNT(DISTINCT OrderId) AS orders, SUM(SellingPrice_Inc_GST) AS rev, COUNT(DISTINCT City) AS cities FROM q WHERE State IS NOT NULL GROUP BY 1 ORDER BY rev DESC LIMIT 30`,
@@ -142,7 +144,7 @@ export default async function handler(req, res) {
     prevTotals: `WITH q AS (${prevBase}) SELECT SUM(SellingPrice_Inc_GST) AS total_rev, SUM(SellingPrice_Exc_GST) AS total_exc_rev, COUNT(DISTINCT OrderId) AS n_orders, SUM(ItemQty) AS total_qty, COUNT(DISTINCT CASE WHEN Order_Status IN ('RTO','Return') THEN OrderId END) AS rto_orders, COUNT(DISTINCT CASE WHEN Order_Status = 'CIR' THEN OrderId END) AS cir_orders FROM q`,
     momTotals: `WITH q AS (${momBase}) SELECT SUM(SellingPrice_Inc_GST) AS total_rev, SUM(SellingPrice_Exc_GST) AS total_exc_rev, COUNT(DISTINCT OrderId) AS n_orders FROM q`,
     yoyTotals: `WITH q AS (${yoyBase}) SELECT SUM(SellingPrice_Inc_GST) AS total_rev, SUM(SellingPrice_Exc_GST) AS total_exc_rev, COUNT(DISTINCT OrderId) AS n_orders FROM q`,
-    prevByChannel: `WITH q AS (${prevBase}) SELECT Channel, SUM(SellingPrice_Inc_GST) AS rev, SUM(SellingPrice_Exc_GST) AS exc_rev, SUM(CASE WHEN Order_Status = 'Cancelled' THEN SellingPrice_Exc_GST ELSE 0 END) AS cancel_exc_rev, SUM(CASE WHEN Order_Status IN ('RTO','Return') THEN SellingPrice_Exc_GST ELSE 0 END) AS rto_exc_rev, SUM(CASE WHEN Order_Status = 'CIR' THEN SellingPrice_Exc_GST ELSE 0 END) AS cir_exc_rev FROM q WHERE NOT (Channel = 'Shopify' AND SubChannel = 'Shopify B2B') GROUP BY Channel`,
+    prevByChannel: `WITH q AS (${prevBase}) SELECT Channel, SUM(SellingPrice_Inc_GST) AS rev, SUM(SellingPrice_Exc_GST) AS exc_rev, SUM(CASE WHEN Order_Status = 'Cancelled' THEN SellingPrice_Exc_GST ELSE 0 END) AS cancel_exc_rev, SUM(CASE WHEN Order_Status IN ('RTO','Return') THEN SellingPrice_Exc_GST ELSE 0 END) AS rto_exc_rev, SUM(CASE WHEN Order_Status = 'CIR' THEN SellingPrice_Exc_GST ELSE 0 END) AS cir_exc_rev FROM q WHERE NOT (Channel = 'Shopify' AND SubChannel = 'Shopify B2B') AND NOT (Channel = 'Shopify' AND Country = 'International') GROUP BY Channel`,
     prevByDate: `WITH q AS (${prevBase}) SELECT CAST(OrderDate AS STRING) AS date, SUM(SellingPrice_Inc_GST) AS rev FROM q GROUP BY date ORDER BY date`,
     prevShopify: subChannel === 'International'
       ? (() => { const cWhere = country ? ` AND source_system = '${country.replace(/'/g,"''")}'` : ''; return `SELECT SUM(final_total_incl_tax) AS rev, SUM(total_excl_tax) AS exc_rev, COUNT(DISTINCT order_id) AS orders, SUM(qty) AS units, 0 AS rto_orders, 0 AS cir_orders, 0 AS exchange_orders FROM \`frido-429506.production.fact_shopify_international_orders\` WHERE order_date BETWEEN '${ps}' AND '${pe}' AND (financial_status IS NULL OR financial_status != 'voided')${cWhere}` })()
@@ -440,6 +442,18 @@ export default async function handler(req, res) {
       const netRev = excRev - cancelExcRev - rtoExcRev - cirExcRev
       chMap[x.Channel] = { rev: parseFloat(x.rev) || 0, excRev, netRev, orders: parseInt(x.orders) || 0, qty: parseInt(x.qty) || 0 }
     })
+    // Add Shopify International net revenue into chMap['Shopify'] so Channel Share shows India + Intl combined
+    const intlExcRev = parseFloat(r.shopifyIntlTotals?.[0]?.intl_exc_rev) || 0
+    const intlRev = parseFloat(r.shopifyIntlTotals?.[0]?.intl_rev) || 0
+    if (intlExcRev > 0) {
+      if (chMap['Shopify']) {
+        chMap['Shopify'].rev += intlRev
+        chMap['Shopify'].excRev += intlExcRev
+        chMap['Shopify'].netRev += intlExcRev  // international has no cancel/RTO/CIR
+      } else {
+        chMap['Shopify'] = { rev: intlRev, excRev: intlExcRev, netRev: intlExcRev, orders: 0, qty: 0 }
+      }
+    }
 
     const orderStatusMap = {}
     const orderStatusRevMap = {}
@@ -570,11 +584,20 @@ export default async function handler(req, res) {
       prevRtoOrders: parseInt(r.prevTotals?.[0]?.rto_orders) || 0,
       prevCirOrders: parseInt(r.prevTotals?.[0]?.cir_orders) || 0,
       prevDailyArr: (r.prevByDate || []).map(x => ({ date: x.date, rev: parseFloat(x.rev) || 0 })),
-      prevChMap: Object.fromEntries((r.prevByChannel || []).map(x => {
-        const excRev = parseFloat(x.exc_rev) || 0
-        const netRev = excRev - (parseFloat(x.cancel_exc_rev) || 0) - (parseFloat(x.rto_exc_rev) || 0) - (parseFloat(x.cir_exc_rev) || 0)
-        return [x.Channel, { rev: parseFloat(x.rev) || 0, excRev, netRev }]
-      })),
+      prevChMap: (() => {
+        const m = Object.fromEntries((r.prevByChannel || []).map(x => {
+          const excRev = parseFloat(x.exc_rev) || 0
+          const netRev = excRev - (parseFloat(x.cancel_exc_rev) || 0) - (parseFloat(x.rto_exc_rev) || 0) - (parseFloat(x.cir_exc_rev) || 0)
+          return [x.Channel, { rev: parseFloat(x.rev) || 0, excRev, netRev }]
+        }))
+        const prevIntlExcRev = parseFloat(r.prevShopifyIntlTotals?.[0]?.intl_exc_rev) || 0
+        const prevIntlRev = parseFloat(r.prevShopifyIntlTotals?.[0]?.intl_rev) || 0
+        if (prevIntlExcRev > 0) {
+          if (m['Shopify']) { m['Shopify'].rev += prevIntlRev; m['Shopify'].excRev += prevIntlExcRev; m['Shopify'].netRev += prevIntlExcRev }
+          else m['Shopify'] = { rev: prevIntlRev, excRev: prevIntlExcRev, netRev: prevIntlExcRev }
+        }
+        return m
+      })(),
       totalRev: adjTotalRev, totalExcRev: adjTotalExcRev, totalQty: adjTotalQty, nOrders: adjNOrders, nDays,
       blendedAOV: adjNOrders ? adjTotalRev / adjNOrders : 0,
       gstCollected: adjTotalRev - adjTotalExcRev,
