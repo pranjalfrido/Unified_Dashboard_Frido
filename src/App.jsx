@@ -1,9 +1,9 @@
-import { useState, useMemo, useCallback, useEffect, useRef, Fragment } from 'react'
+﻿import { useState, useMemo, useCallback, useEffect, useRef, Fragment } from 'react'
 import { C, fmt, fmtN, fmtBig, pct, processData, detectAlerts, exportCSV, getDefaultDates } from './utils.js'
 import { KPICard, AlertCard, HBar, DataTable, Card, Badge, RevTrendChart, AreaTrendChart, MultiLineChart, ChartTooltip, BarChart, Bar, LineChart, Line, AreaChart, Area, ComposedChart, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell, Treemap } from './components.jsx'
 import { ReferenceLine, LabelList } from 'recharts'
 
-// ── Logistics Page ────────────────────────────────────────────
+// â”€â”€ Logistics Page â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 const COURIERS = ['Bluedart','Delhivery','Delhivery NDD','Ekart','ElasticRun','Safexpress','Shadowfax','Shiprocket','Skye Air','Swift','Urbane Bolt']
 const COURIER_COLORS = { Bluedart:'#E8400A', Delhivery:'#E60000', 'Delhivery NDD':'#A00000', Ekart:'#F78F1E', ElasticRun:'#00509E', Safexpress:'#1B4D9E', Shadowfax:'#6B3FA0', Shiprocket:'#E8400A', 'Skye Air':'#00B0F0', Swift:'#13803A', 'Urbane Bolt':'#FFD600' }
 const COURIER_LOGOS = { Bluedart:'/blue-dart.jpg', Delhivery:'/Delhivery.png', 'Delhivery NDD':'/delhivery-ndd.png', Ekart:'/ekart_logistics_logo.jpg', ElasticRun:'/elasticrun_logo.jpg', Safexpress:'/safeexpress.webp', Shadowfax:'/shadow-fax.jpg', Shiprocket:'/shiprocket.jpg', 'Skye Air':'/sky-air.webp', Swift:'/swift-courier.jpg', 'Urbane Bolt':'/urban-bolt.jpg' }
@@ -12,7 +12,7 @@ function LogisticsKPI({ label, value, sub, color, badge }) {
   return (
     <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, padding: '14px 16px', minWidth: 0, display: 'flex', flexDirection: 'column', gap: 4 }}>
       <div style={{ fontSize: 10.5, color: C.t3, fontWeight: 600, letterSpacing: '.04em', textTransform: 'uppercase', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{label}</div>
-      <div style={{ fontSize: 24, fontWeight: 700, color: color || C.t1, letterSpacing: '-0.5px', lineHeight: 1.1 }}>{value ?? '—'}</div>
+      <div style={{ fontSize: 24, fontWeight: 700, color: color || C.t1, letterSpacing: '-0.5px', lineHeight: 1.1 }}>{value ?? 'â€”'}</div>
       {sub && <div style={{ fontSize: 11, color: C.t3 }}>{sub}</div>}
     </div>
   )
@@ -95,13 +95,13 @@ function LDropdown({ label, options, value, onChange, flex }) {
         width: '100%', whiteSpace: 'nowrap'
       }}>
         <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', textAlign: 'left' }}>{value || label}</span>
-        <span style={{ fontSize: 8, color: C.t3, flexShrink: 0, marginLeft: 2 }}>{open ? '▲' : '▼'}</span>
+        <span style={{ fontSize: 8, color: C.t3, flexShrink: 0, marginLeft: 2 }}>{open ? 'â–²' : 'â–¼'}</span>
       </button>
       {open && (
         <div style={{ position: 'absolute', top: 'calc(100% + 4px)', left: 0, zIndex: 400, background: C.card, border: `1px solid ${C.border2}`, borderRadius: 10, boxShadow: '0 8px 28px rgba(0,0,0,.14)', minWidth: 180, maxHeight: 280, display: 'flex', flexDirection: 'column' }}>
           {(options || []).length > 6 && (
             <div style={{ padding: '7px 8px', borderBottom: `1px solid ${C.border}` }}>
-              <input autoFocus value={search} onChange={e => setSearch(e.target.value)} placeholder="Search…" style={{ width: '100%', fontSize: 11.5, padding: '4px 8px', border: `1px solid ${C.border2}`, borderRadius: 6, outline: 'none', fontFamily: 'var(--font)', background: C.bg }} />
+              <input autoFocus value={search} onChange={e => setSearch(e.target.value)} placeholder="Searchâ€¦" style={{ width: '100%', fontSize: 11.5, padding: '4px 8px', border: `1px solid ${C.border2}`, borderRadius: 6, outline: 'none', fontFamily: 'var(--font)', background: C.bg }} />
             </div>
           )}
           <div style={{ overflowY: 'auto', flex: 1 }}>
@@ -124,7 +124,7 @@ function LKpiCard({ label, value, badgeText, badgeVariant, subValue, cur, prev, 
   const bv = badgeVariant || 'N'
   const chg = (cur != null && prev != null && prev !== 0) ? ((cur - prev) / prev * 100) : null
   const chgBadge = chg != null && Math.abs(chg) < 999
-    ? <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 4, background: chg >= 0 ? C.green.bg : C.red.bg, color: chg >= 0 ? C.green.tx : C.red.tx, flexShrink: 0 }}>{chg >= 0 ? '▲' : '▼'} {Math.abs(chg).toFixed(1)}%</span>
+    ? <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 4, background: chg >= 0 ? C.green.bg : C.red.bg, color: chg >= 0 ? C.green.tx : C.red.tx, flexShrink: 0 }}>{chg >= 0 ? 'â–²' : 'â–¼'} {Math.abs(chg).toFixed(1)}%</span>
     : badgeText ? <span className={`bdg bdg-${bv}`} style={{ fontSize: 10, flexShrink: 0 }}>{badgeText}</span> : null
   return (
     <div className="kpi-card" style={{ display: 'flex', flexDirection: 'column', gap: 0, padding: '7px 10px' }}>
@@ -132,14 +132,14 @@ function LKpiCard({ label, value, badgeText, badgeVariant, subValue, cur, prev, 
       {compact ? (
         <>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 4, minWidth: 0 }}>
-            <div className="kpi-value" style={{ fontSize: 16, whiteSpace: 'nowrap', minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis' }}>{value ?? '—'}</div>
+            <div className="kpi-value" style={{ fontSize: 16, whiteSpace: 'nowrap', minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis' }}>{value ?? 'â€”'}</div>
             {chgBadge}
           </div>
           {subValue && <div style={{ fontSize: 11, fontWeight: 500, color: C.t3, marginTop: 1 }}>{subValue} of total</div>}
         </>
       ) : (
         <>
-          <div className="kpi-value" style={{ fontSize: 16, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{value ?? '—'}</div>
+          <div className="kpi-value" style={{ fontSize: 16, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{value ?? 'â€”'}</div>
           {chgBadge && <div style={{ marginTop: 2 }}>{chgBadge}</div>}
           {subValue && !hideSubValue && <div style={{ fontSize: 11, fontWeight: 500, color: C.t3, marginTop: 2 }}>{subValue}</div>}
         </>
@@ -152,7 +152,7 @@ function LSectionTitle({ title, collapsed, onToggle }) {
   const clickable = typeof onToggle === 'function'
   return (
     <div onClick={clickable ? onToggle : undefined} style={{ display: 'flex', alignItems: 'center', gap: 10, margin: '6px 0 2px', cursor: clickable ? 'pointer' : 'default', userSelect: 'none' }}>
-      {clickable && <span style={{ fontSize: 9, color: C.t3, display: 'inline-block', transform: collapsed ? 'rotate(-90deg)' : 'rotate(0deg)', transition: 'transform .2s' }}>▼</span>}
+      {clickable && <span style={{ fontSize: 9, color: C.t3, display: 'inline-block', transform: collapsed ? 'rotate(-90deg)' : 'rotate(0deg)', transition: 'transform .2s' }}>â–¼</span>}
       <span style={{ fontSize: 10, fontWeight: 800, letterSpacing: '.06em', textTransform: 'uppercase', color: C.t1 }}>{title}</span>
       <div style={{ flex: 1, height: 1, background: C.border }} />
     </div>
@@ -234,12 +234,12 @@ function LogisticsPage({ filters }) {
 
   const k = data?.kpis || {}
   const pk = prevData?.kpis || {}
-  const pct2 = (a, b) => b ? ((a / b) * 100).toFixed(1) + '%' : '—'
+  const pct2 = (a, b) => b ? ((a / b) * 100).toFixed(1) + '%' : 'â€”'
   const n = v => (v || 0).toLocaleString('en-IN')
-  const d1 = v => v != null ? (+v).toFixed(1) + 'd' : '—'
-  const fmtGMV = v => v == null ? '—' : v >= 1e7 ? (v/1e7).toFixed(2)+' Cr' : v >= 1e5 ? (v/1e5).toFixed(1)+' L' : v.toLocaleString('en-IN')
+  const d1 = v => v != null ? (+v).toFixed(1) + 'd' : 'â€”'
+  const fmtGMV = v => v == null ? 'â€”' : v >= 1e7 ? (v/1e7).toFixed(2)+' Cr' : v >= 1e5 ? (v/1e5).toFixed(1)+' L' : v.toLocaleString('en-IN')
 
-  // ── Smart Alerts ──
+  // â”€â”€ Smart Alerts â”€â”€
   const alerts = useMemo(() => {
     if (!data) return []
     const flags = []
@@ -251,31 +251,31 @@ function LogisticsPage({ filters }) {
     const zrtoPct = k.z_rto ? (k.z_rto / total) * 100 : 0
     const couriers = data.byCourier || []
 
-    if (rtoPct > 15) flags.push({ level: 'critical', icon: '🔴', title: 'High RTO Rate', msg: `RTO is at ${rtoPct.toFixed(1)}% — above 15% threshold. Immediate action needed.` })
-    else if (rtoPct > 10) flags.push({ level: 'warning', icon: '🟡', title: 'Elevated RTO Rate', msg: `RTO at ${rtoPct.toFixed(1)}% — approaching critical threshold of 15%.` })
+    if (rtoPct > 15) flags.push({ level: 'critical', icon: 'ðŸ”´', title: 'High RTO Rate', msg: `RTO is at ${rtoPct.toFixed(1)}% â€” above 15% threshold. Immediate action needed.` })
+    else if (rtoPct > 10) flags.push({ level: 'warning', icon: 'ðŸŸ¡', title: 'Elevated RTO Rate', msg: `RTO at ${rtoPct.toFixed(1)}% â€” approaching critical threshold of 15%.` })
 
-    if (zrtoPct > 3) flags.push({ level: 'warning', icon: '🟡', title: 'Zero-Attempt RTOs', msg: `${n(k.z_rto)} shipments (${zrtoPct.toFixed(1)}%) returned without any delivery attempt.` })
+    if (zrtoPct > 3) flags.push({ level: 'warning', icon: 'ðŸŸ¡', title: 'Zero-Attempt RTOs', msg: `${n(k.z_rto)} shipments (${zrtoPct.toFixed(1)}%) returned without any delivery attempt.` })
 
-    if (delPct < 60) flags.push({ level: 'critical', icon: '🔴', title: 'Low Delivery Rate', msg: `Delivery rate is ${delPct.toFixed(1)}% — well below 75% benchmark.` })
-    else if (delPct < 70) flags.push({ level: 'warning', icon: '🟡', title: 'Below-target Delivery Rate', msg: `Delivery rate ${delPct.toFixed(1)}% is below the 75% target.` })
+    if (delPct < 60) flags.push({ level: 'critical', icon: 'ðŸ”´', title: 'Low Delivery Rate', msg: `Delivery rate is ${delPct.toFixed(1)}% â€” well below 75% benchmark.` })
+    else if (delPct < 70) flags.push({ level: 'warning', icon: 'ðŸŸ¡', title: 'Below-target Delivery Rate', msg: `Delivery rate ${delPct.toFixed(1)}% is below the 75% target.` })
 
-    if (slaPct > 20) flags.push({ level: 'warning', icon: '🟡', title: 'SLA Breaches', msg: `${n(k.sla_breach)} shipments (${slaPct.toFixed(1)}%) breached committed SLA.` })
+    if (slaPct > 20) flags.push({ level: 'warning', icon: 'ðŸŸ¡', title: 'SLA Breaches', msg: `${n(k.sla_breach)} shipments (${slaPct.toFixed(1)}%) breached committed SLA.` })
 
-    if (ppPct > 10) flags.push({ level: 'warning', icon: '🟡', title: 'High Pickup Pending', msg: `${n(k.pickup_pending)} shipments (${ppPct.toFixed(1)}%) are still pending pickup.` })
+    if (ppPct > 10) flags.push({ level: 'warning', icon: 'ðŸŸ¡', title: 'High Pickup Pending', msg: `${n(k.pickup_pending)} shipments (${ppPct.toFixed(1)}%) are still pending pickup.` })
 
-    if (k.critical_stuck > 0) flags.push({ level: 'critical', icon: '🔴', title: 'Critical Stuck Shipments', msg: `${n(k.critical_stuck)} shipments are past EDD with no delivery — risk of customer escalation.` })
+    if (k.critical_stuck > 0) flags.push({ level: 'critical', icon: 'ðŸ”´', title: 'Critical Stuck Shipments', msg: `${n(k.critical_stuck)} shipments are past EDD with no delivery â€” risk of customer escalation.` })
 
-    if (k.lost_damaged > 0) flags.push({ level: 'info', icon: '🔵', title: 'Lost / Damaged', msg: `${n(k.lost_damaged)} shipments marked Lost or Damaged in the period.` })
+    if (k.lost_damaged > 0) flags.push({ level: 'info', icon: 'ðŸ”µ', title: 'Lost / Damaged', msg: `${n(k.lost_damaged)} shipments marked Lost or Damaged in the period.` })
 
     // Courier-level alerts
     couriers.forEach(c => {
       const cRtoPct = c.total ? (c.rto / c.total) * 100 : 0
       const cDelPct = c.total ? (c.delivered / c.total) * 100 : 0
-      if (c.total > 100 && cRtoPct > 20) flags.push({ level: 'warning', icon: '🟡', title: `${c.courier_group} — High RTO`, msg: `RTO at ${cRtoPct.toFixed(1)}% for ${n(c.total)} shipments.` })
-      if (c.total > 100 && cDelPct < 50) flags.push({ level: 'critical', icon: '🔴', title: `${c.courier_group} — Low Delivery`, msg: `Delivery rate only ${cDelPct.toFixed(1)}% — consider volume reallocation.` })
+      if (c.total > 100 && cRtoPct > 20) flags.push({ level: 'warning', icon: 'ðŸŸ¡', title: `${c.courier_group} â€” High RTO`, msg: `RTO at ${cRtoPct.toFixed(1)}% for ${n(c.total)} shipments.` })
+      if (c.total > 100 && cDelPct < 50) flags.push({ level: 'critical', icon: 'ðŸ”´', title: `${c.courier_group} â€” Low Delivery`, msg: `Delivery rate only ${cDelPct.toFixed(1)}% â€” consider volume reallocation.` })
     })
 
-    if (flags.length === 0) flags.push({ level: 'ok', icon: '🟢', title: 'All metrics within range', msg: 'No critical issues detected for the selected period.' })
+    if (flags.length === 0) flags.push({ level: 'ok', icon: 'ðŸŸ¢', title: 'All metrics within range', msg: 'No critical issues detected for the selected period.' })
     return flags
   }, [data, k])
   const opts = data?.filterOpts || {}
@@ -308,7 +308,7 @@ function LogisticsPage({ filters }) {
   return (
     <div style={{ display: 'flex', height: '100%', overflow: 'hidden' }}>
 
-      {/* ── Filter Sidebar ── */}
+      {/* â”€â”€ Filter Sidebar â”€â”€ */}
       <div style={{ width: filterSidebarOpen ? 220 : 0, minWidth: filterSidebarOpen ? 220 : 0, transition: 'width 0.25s ease, min-width 0.25s ease', overflow: 'hidden', borderRight: `1px solid ${C.border}`, background: C.card, display: 'flex', flexDirection: 'column', flexShrink: 0 }}>
         <div style={{ width: 220, padding: '14px 12px', display: 'flex', flexDirection: 'column', gap: 10, overflowY: 'auto', height: '100%' }}>
           <div style={{ fontSize: 10, fontWeight: 800, color: C.t3, letterSpacing: '.06em', textTransform: 'uppercase' }}>Courier Partner</div>
@@ -317,7 +317,7 @@ function LogisticsPage({ filters }) {
               <LogisticsChip key={c} label={c} logo={COURIER_LOGOS[c]} active={lFilters.couriers.includes(c)} onClick={() => toggleCourier(c)} sidebar />
             ))}
             {lFilters.couriers.length > 0 && (
-              <button onClick={() => setLFilters(f => ({ ...f, couriers: [] }))} style={{ fontSize: 11, color: C.t3, background: 'none', border: `1px solid ${C.border}`, borderRadius: 6, padding: '4px 10px', cursor: 'pointer', fontFamily: 'var(--font)' }}>✕ Clear</button>
+              <button onClick={() => setLFilters(f => ({ ...f, couriers: [] }))} style={{ fontSize: 11, color: C.t3, background: 'none', border: `1px solid ${C.border}`, borderRadius: 6, padding: '4px 10px', cursor: 'pointer', fontFamily: 'var(--font)' }}>âœ• Clear</button>
             )}
           </div>
           <div style={{ height: 1, background: C.border, margin: '4px 0' }} />
@@ -352,34 +352,34 @@ function LogisticsPage({ filters }) {
           <LDropdown label="Sub-category" options={opts.sub_categories} value={lFilters.subCategory} onChange={v => setLFilters(f => ({ ...f, subCategory: v }))} />
           {(lFilters.zone || lFilters.pickupState || lFilters.dropState || lFilters.dropCity || lFilters.paymentMode || lFilters.category || lFilters.subCategory) && (
             <button onClick={() => setLFilters(f => ({ ...f, zone: null, pickupState: null, dropState: null, dropCity: null, paymentMode: null, category: null, subCategory: null }))}
-              style={{ fontSize: 11, color: C.t3, background: 'none', border: `1px solid ${C.border}`, borderRadius: 6, padding: '4px 10px', cursor: 'pointer', fontFamily: 'var(--font)' }}>✕ Clear All</button>
+              style={{ fontSize: 11, color: C.t3, background: 'none', border: `1px solid ${C.border}`, borderRadius: 6, padding: '4px 10px', cursor: 'pointer', fontFamily: 'var(--font)' }}>âœ• Clear All</button>
           )}
         </div>
       </div>
 
-      {/* ── Sidebar Toggle Button ── */}
+      {/* â”€â”€ Sidebar Toggle Button â”€â”€ */}
       <button onClick={() => setFilterSidebarOpen(o => !o)} style={{ width: 16, alignSelf: 'flex-start', marginTop: 20, height: 48, border: `1px solid ${C.border}`, borderLeft: 'none', background: C.card, cursor: 'pointer', borderRadius: '0 6px 6px 0', display: 'flex', alignItems: 'center', justifyContent: 'center', color: C.t3, fontSize: 12, flexShrink: 0, boxShadow: '2px 0 4px rgba(0,0,0,0.06)', padding: 0 }}>
-        {filterSidebarOpen ? '‹' : '›'}
+        {filterSidebarOpen ? 'â€¹' : 'â€º'}
       </button>
 
-      {/* ── Main Content ── */}
+      {/* â”€â”€ Main Content â”€â”€ */}
       <div style={{ flex: 1, overflow: 'auto', padding: '4px 20px 16px', display: 'flex', flexDirection: 'column', gap: 14 }}>
 
 
 
-      {error && <div style={{ padding: '10px 14px', borderRadius: 9, background: C.red.bg, border: `1px solid ${C.red.bd}`, color: C.red.tx, fontSize: 12 }}>⚠ {error}</div>}
+      {error && <div style={{ padding: '10px 14px', borderRadius: 9, background: C.red.bg, border: `1px solid ${C.red.bd}`, color: C.red.tx, fontSize: 12 }}>âš  {error}</div>}
       {loading && !data && (
         <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 14, color: C.t3, fontSize: 13, minHeight: 300 }}>
           <div style={{ width: 160, height: 3, borderRadius: 2, background: C.border, overflow: 'hidden' }}>
             <div style={{ width: '60%', height: '100%', background: C.acc, animation: 'pulse 1.5s ease infinite' }} />
           </div>
-          Loading logistics data…
+          Loading logistics dataâ€¦
         </div>
       )}
 
       {data && <>
 
-        {/* ── Volume KPIs ── */}
+        {/* â”€â”€ Volume KPIs â”€â”€ */}
         <LSectionTitle title="Volume Overview" collapsed={secCollapsed['volume']} onToggle={() => toggleSec('volume')} />
         <div style={{ display: secCollapsed['volume'] ? 'none' : 'grid', gridTemplateColumns: 'repeat(6, 1fr)', gap: 7 }}>
           <LKpiCard label="Total Shipments" value={n(k.total_shipments)} cur={k.total_shipments} prev={pk.total_shipments} compact={!filterSidebarOpen} />
@@ -390,7 +390,7 @@ function LogisticsPage({ filters }) {
           <LKpiCard label="Cancelled" value={n(k.cancelled)} badgeVariant="N" subValue={pct2(k.cancelled, k.total_shipments)} cur={k.cancelled} prev={pk.cancelled} hideSubValue={filterSidebarOpen} compact={!filterSidebarOpen} />
         </div>
 
-        {/* ── Quality KPIs ── */}
+        {/* â”€â”€ Quality KPIs â”€â”€ */}
         <LSectionTitle title="Delivery Quality & SLA" collapsed={secCollapsed['quality']} onToggle={() => toggleSec('quality')} />
         <div style={{ display: secCollapsed['quality'] ? 'none' : 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 7 }}>
           <LKpiCard label="On Time Del" value={n(k.on_time)} badgeText={pct2(k.on_time, k.delivered)} badgeVariant="G" cur={k.on_time} prev={pk.on_time} compact={!filterSidebarOpen} />
@@ -402,18 +402,18 @@ function LogisticsPage({ filters }) {
           <LKpiCard label="Multi-Att Del" value={n(k.delivered_multi)} badgeVariant="B" cur={k.delivered_multi} prev={pk.delivered_multi} compact={!filterSidebarOpen} />
         </div>
 
-        {/* ── TAT KPIs ── */}
+        {/* â”€â”€ TAT KPIs â”€â”€ */}
         <LSectionTitle title="Turnaround Time" collapsed={secCollapsed['tat']} onToggle={() => toggleSec('tat')} />
         <div style={{ display: secCollapsed['tat'] ? 'none' : 'grid', gridTemplateColumns: 'repeat(6, 1fr)', gap: 7 }}>
-          <LKpiCard label="Avg Processing" value={d1(k.avg_processing)} badgeText="Cr→1st OFD" badgeVariant="N" cur={k.avg_processing} prev={pk.avg_processing} compact={!filterSidebarOpen} />
-          <LKpiCard label="Avg Pickup TAT" value={d1(k.avg_pickup)} badgeText="Cr→Pick" badgeVariant="B" cur={k.avg_pickup} prev={pk.avg_pickup} compact={!filterSidebarOpen} />
-          <LKpiCard label="Avg In-Transit" value={d1(k.avg_intransit)} badgeText="Pick→Del" badgeVariant="N" cur={k.avg_intransit} prev={pk.avg_intransit} compact={!filterSidebarOpen} />
-          <LKpiCard label="Avg Fulfilment" value={d1(k.avg_fulfilment)} badgeText="Cr→Del" badgeVariant="G" cur={k.avg_fulfilment} prev={pk.avg_fulfilment} compact={!filterSidebarOpen} />
+          <LKpiCard label="Avg Processing" value={d1(k.avg_processing)} badgeText="Crâ†’1st OFD" badgeVariant="N" cur={k.avg_processing} prev={pk.avg_processing} compact={!filterSidebarOpen} />
+          <LKpiCard label="Avg Pickup TAT" value={d1(k.avg_pickup)} badgeText="Crâ†’Pick" badgeVariant="B" cur={k.avg_pickup} prev={pk.avg_pickup} compact={!filterSidebarOpen} />
+          <LKpiCard label="Avg In-Transit" value={d1(k.avg_intransit)} badgeText="Pickâ†’Del" badgeVariant="N" cur={k.avg_intransit} prev={pk.avg_intransit} compact={!filterSidebarOpen} />
+          <LKpiCard label="Avg Fulfilment" value={d1(k.avg_fulfilment)} badgeText="Crâ†’Del" badgeVariant="G" cur={k.avg_fulfilment} prev={pk.avg_fulfilment} compact={!filterSidebarOpen} />
           <LKpiCard label="Avg RTO TAT" value={d1(k.avg_rto_tat)} badgeText="RTO days" badgeVariant="R" cur={k.avg_rto_tat} prev={pk.avg_rto_tat} compact={!filterSidebarOpen} />
-          <LKpiCard label="Avg S2A Days" value={d1(k.avg_s2a)} badgeText="Ship→OFD" badgeVariant="B" cur={k.avg_s2a} prev={pk.avg_s2a} compact={!filterSidebarOpen} />
+          <LKpiCard label="Avg S2A Days" value={d1(k.avg_s2a)} badgeText="Shipâ†’OFD" badgeVariant="B" cur={k.avg_s2a} prev={pk.avg_s2a} compact={!filterSidebarOpen} />
         </div>
 
-        {/* ── Monthly Trend + Courier TAT ── */}
+        {/* â”€â”€ Monthly Trend + Courier TAT â”€â”€ */}
         <LSectionTitle title="Monthly Trend" collapsed={secCollapsed['trend']} onToggle={() => toggleSec('trend')} />
         <div style={{ display: secCollapsed['trend'] ? 'none' : 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
           <div style={{ ...cardStyle, display: 'flex', flexDirection: 'column' }}>
@@ -421,7 +421,7 @@ function LogisticsPage({ filters }) {
               <div>
                 <div style={chartTitle}>Shipment Trend</div>
                 <div style={{ fontSize: 10, color: C.t3, marginTop: -8 }}>
-                  {trendMetric === 'Qty' ? 'Total = all AWBs created on that date · Raw order volume per day' : 'Invoice value of all AWBs · RTO% by value'}
+                  {trendMetric === 'Qty' ? 'Total = all AWBs created on that date Â· Raw order volume per day' : 'Invoice value of all AWBs Â· RTO% by value'}
                 </div>
               </div>
               <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
@@ -449,7 +449,7 @@ function LogisticsPage({ filters }) {
                 </defs>
                 <CartesianGrid strokeDasharray="3 3" stroke={C.border} />
                 <XAxis dataKey="label" tick={{ fontSize: 10, fill: C.t3 }} />
-                <YAxis yAxisId="left" tick={{ fontSize: 10, fill: C.t3 }} tickFormatter={v => trendMetric === 'Value' ? (v >= 100000 ? '₹'+(v/100000).toFixed(1)+'L' : v >= 1000 ? '₹'+(v/1000).toFixed(0)+'K' : '₹'+v) : (v >= 1000 ? (v/1000).toFixed(0)+'K' : v)} />
+                <YAxis yAxisId="left" tick={{ fontSize: 10, fill: C.t3 }} tickFormatter={v => trendMetric === 'Value' ? (v >= 100000 ? 'â‚¹'+(v/100000).toFixed(1)+'L' : v >= 1000 ? 'â‚¹'+(v/1000).toFixed(0)+'K' : 'â‚¹'+v) : (v >= 1000 ? (v/1000).toFixed(0)+'K' : v)} />
                 <YAxis yAxisId="right" orientation="right" tickFormatter={v => v + '%'} tick={{ fontSize: 10, fill: C.t3 }} />
                 <Tooltip content={({ active, payload, label }) => {
                   if (!active || !payload?.length) return null
@@ -458,13 +458,13 @@ function LogisticsPage({ filters }) {
                     <div style={{ background: C.card, border: `1px solid ${C.border2}`, borderRadius: 8, padding: '10px 14px', fontSize: 12, color: C.t1, minWidth: 140 }}>
                       <div style={{ fontWeight: 700, marginBottom: 6 }}>{label}</div>
                       {trendMetric === 'Qty' ? <>
-                          <div style={{ color: '#E6A800', fontWeight: 600 }}>Del % : {get('del_pct') ?? '—'}%</div>
-                          <div style={{ color: '#b91c1c', fontWeight: 600 }}>RTO % : {get('rto_pct') ?? '—'}%</div>
+                          <div style={{ color: '#E6A800', fontWeight: 600 }}>Del % : {get('del_pct') ?? 'â€”'}%</div>
+                          <div style={{ color: '#b91c1c', fontWeight: 600 }}>RTO % : {get('rto_pct') ?? 'â€”'}%</div>
                           <div style={{ color: C.t2 }}>Total : {Number(get('total') ?? 0).toLocaleString('en-IN')}</div>
                         </> : <>
-                        <div style={{ color: '#E6A800', fontWeight: 600 }}>Del % : {get('del_value_pct') ?? '—'}%</div>
-                        <div style={{ color: '#b91c1c', fontWeight: 600 }}>RTO % : {get('rto_value_pct') ?? '—'}%</div>
-                        <div style={{ color: C.t2 }}>Total Value : ₹{Number(get('total_value') ?? 0).toLocaleString('en-IN')}</div>
+                        <div style={{ color: '#E6A800', fontWeight: 600 }}>Del % : {get('del_value_pct') ?? 'â€”'}%</div>
+                        <div style={{ color: '#b91c1c', fontWeight: 600 }}>RTO % : {get('rto_value_pct') ?? 'â€”'}%</div>
+                        <div style={{ color: C.t2 }}>Total Value : â‚¹{Number(get('total_value') ?? 0).toLocaleString('en-IN')}</div>
                       </>}
                     </div>
                   )
@@ -537,7 +537,7 @@ function LogisticsPage({ filters }) {
                 <XAxis dataKey="label" tick={{ fontSize: 10, fill: C.t3 }} />
                 <YAxis yAxisId="left" tick={{ fontSize: 9, fill: '#5BA4CF' }} tickFormatter={v => v >= 1000 ? (v/1000).toFixed(0)+'K' : v} />
                 <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 9, fill: C.t2 }} tickFormatter={v => v + 'd'} />
-                <Tooltip formatter={(value, name) => name.includes('Days') ? [value != null ? value + 'd' : '—', name] : [Number(value).toLocaleString('en-IN'), name]} />
+                <Tooltip formatter={(value, name) => name.includes('Days') ? [value != null ? value + 'd' : 'â€”', name] : [Number(value).toLocaleString('en-IN'), name]} />
                 <Bar yAxisId="left" dataKey="total" name="Total Shipments" fill="#5BA4CF" opacity={0.8} radius={[3,3,0,0]} />
                 <Line yAxisId="right" type="monotone" dataKey="avg_processing_days" name="Avg Processing Days" stroke="#8B5CF6" strokeWidth={2} dot={{ fill: '#8B5CF6', r: 3 }} />
                 <Line yAxisId="right" type="monotone" dataKey="avg_pickup_days" name="Avg Pickup Days" stroke="#10B981" strokeWidth={2} dot={{ fill: '#10B981', r: 3 }} />
@@ -557,7 +557,7 @@ function LogisticsPage({ filters }) {
           </div>
         </div>
 
-        {/* ── Courier Performance Table ── */}
+        {/* â”€â”€ Courier Performance Table â”€â”€ */}
         <LSectionTitle title="Courier Performance" collapsed={secCollapsed['courier']} onToggle={() => toggleSec('courier')} />
 
 <div style={{ display: secCollapsed['courier'] ? 'none' : 'grid', gridTemplateColumns: '1fr', gap: 14 }}>
@@ -612,8 +612,8 @@ function LogisticsPage({ filters }) {
                 if (typeof av === 'string') return sortDir === 'asc' ? av.localeCompare(bv) : bv.localeCompare(av)
                 return sortDir === 'asc' ? av - bv : bv - av
               }) : enriched
-              const d = (v) => v != null ? (+v).toFixed(2) + 'd' : '—'
-              // ── Month view ──────────────────────────────────
+              const d = (v) => v != null ? (+v).toFixed(2) + 'd' : 'â€”'
+              // â”€â”€ Month view â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
               const byMonthAll = (data?.byMonthAll || [])
               const monthTotalAll = byMonthAll.reduce((s,r) => s + (r.total||0), 0) || 1
               const enrichMonth = byMonthAll.map(r => ({
@@ -660,11 +660,11 @@ function LogisticsPage({ filters }) {
                           <td style={{ padding:'8px 10px', fontWeight:600, fontSize:11, whiteSpace:'nowrap' }}>{cg}</td>
                           {periods.map(p => {
                             const row = periodRows.find(r => r.courier_group === cg && r[periodLabelKey] === p)
-                            const delPct = row?.total ? ((row.delivered/row.total)*100).toFixed(1)+'%' : '—'
-                            const rtoPct = row?.total ? ((row.rto/row.total)*100).toFixed(1)+'%' : '—'
+                            const delPct = row?.total ? ((row.delivered/row.total)*100).toFixed(1)+'%' : 'â€”'
+                            const rtoPct = row?.total ? ((row.rto/row.total)*100).toFixed(1)+'%' : 'â€”'
                             return ['total','del','rto'].map((f,fi) => (
                               <td key={p+f} style={{ padding:'8px 8px', textAlign:'right', fontSize:11, color: fi===1?C.green.tx:fi===2?C.red.tx:C.t1, borderLeft: fi===0?`1px solid ${C.border}`:'none' }}>
-                                {fi===0 ? (row?.total||'—') : fi===1 ? delPct : rtoPct}
+                                {fi===0 ? (row?.total||'â€”') : fi===1 ? delPct : rtoPct}
                               </td>
                             ))
                           })}
@@ -708,8 +708,8 @@ function LogisticsPage({ filters }) {
                             <td style={{ padding:'9px 10px', textAlign:'right', fontWeight:700, color:rtoColor, fontSize:11 }}>{r._rtoPct.toFixed(2)}%</td>
                             <td style={{ padding:'9px 10px', textAlign:'right', color:C.t2, fontSize:11 }}>{r._zrtoPct.toFixed(2)}%</td>
                             <td style={{ padding:'9px 10px', textAlign:'right', color:C.t2, fontSize:11 }}>{r._cancPct.toFixed(2)}%</td>
-                            <td style={{ padding:'9px 10px', textAlign:'right', fontWeight:700, color:'#2563eb', fontSize:11 }}>{r._fasrPct!=null?r._fasrPct.toFixed(2)+'%':'—'}</td>
-                            <td style={{ padding:'9px 10px', textAlign:'right', fontWeight:700, color:'#7c3aed', fontSize:11 }}>{r._rasrPct!=null?r._rasrPct.toFixed(2)+'%':'—'}</td>
+                            <td style={{ padding:'9px 10px', textAlign:'right', fontWeight:700, color:'#2563eb', fontSize:11 }}>{r._fasrPct!=null?r._fasrPct.toFixed(2)+'%':'â€”'}</td>
+                            <td style={{ padding:'9px 10px', textAlign:'right', fontWeight:700, color:'#7c3aed', fontSize:11 }}>{r._rasrPct!=null?r._rasrPct.toFixed(2)+'%':'â€”'}</td>
                             <td style={{ padding:'9px 10px', textAlign:'right', color:tatColor(r.avg_processing_days,2,1), fontSize:11 }}>{d(r.avg_processing_days)}</td>
                             <td style={{ padding:'9px 10px', textAlign:'right', color:tatColor(r.avg_pickup_days,1,0.5), fontSize:11 }}>{d(r.avg_pickup_days)}</td>
                             <td style={{ padding:'9px 10px', textAlign:'right', color:tatColor(r.avg_intransit_days,4,2), fontSize:11 }}>{d(r.avg_intransit_days)}</td>
@@ -729,8 +729,8 @@ function LogisticsPage({ filters }) {
                         <td style={{ padding:'9px 10px', textAlign:'right', color:'#dc2626', fontWeight:700, fontSize:11 }}>{(sumR/tot*100).toFixed(2)}%</td>
                         <td style={{ padding:'9px 10px', textAlign:'right', color:C.t2, fontSize:11 }}>{(sumZ/tot*100).toFixed(2)}%</td>
                         <td style={{ padding:'9px 10px', textAlign:'right', color:C.t2, fontSize:11 }}>{(sumC/tot*100).toFixed(2)}%</td>
-                        <td style={{ padding:'9px 10px', textAlign:'right', color:'#2563eb', fontWeight:700, fontSize:11 }}>{sumOfd?(sumD1/sumOfd*100).toFixed(2)+'%':'—'}</td>
-                        <td style={{ padding:'9px 10px', textAlign:'right', color:'#7c3aed', fontWeight:700, fontSize:11 }}>{sumOfd?(sumRN/sumOfd*100).toFixed(2)+'%':'—'}</td>
+                        <td style={{ padding:'9px 10px', textAlign:'right', color:'#2563eb', fontWeight:700, fontSize:11 }}>{sumOfd?(sumD1/sumOfd*100).toFixed(2)+'%':'â€”'}</td>
+                        <td style={{ padding:'9px 10px', textAlign:'right', color:'#7c3aed', fontWeight:700, fontSize:11 }}>{sumOfd?(sumRN/sumOfd*100).toFixed(2)+'%':'â€”'}</td>
                         <td style={{ padding:'9px 10px', textAlign:'right', color:C.t2, fontSize:11 }}>{wavgM('avg_processing_days').toFixed(2)}d</td>
                         <td style={{ padding:'9px 10px', textAlign:'right', color:C.t2, fontSize:11 }}>{wavgM('avg_pickup_days').toFixed(2)}d</td>
                         <td style={{ padding:'9px 10px', textAlign:'right', color:C.t2, fontSize:11 }}>{wavgM('avg_intransit_days').toFixed(2)}d</td>
@@ -748,7 +748,7 @@ function LogisticsPage({ filters }) {
                     <tr style={{ borderBottom: `1.5px solid ${C.border}` }}>
                       {COLS.map((col) => (
                         <th key={col.key} onClick={() => setSortCol(col.key)} style={{ padding: '9px 10px', textAlign: col.left ? 'left' : 'right', color: sortCol === col.key ? C.t1 : C.t3, fontWeight: 700, fontSize: 9.5, letterSpacing: '.05em', textTransform: 'uppercase', whiteSpace: 'nowrap', cursor: 'pointer', userSelect: 'none' }}>
-                          {col.label}{sortCol === col.key ? (sortDir === 'desc' ? ' ↓' : ' ↑') : ''}
+                          {col.label}{sortCol === col.key ? (sortDir === 'desc' ? ' â†“' : ' â†‘') : ''}
                         </th>
                       ))}
                     </tr>
@@ -765,7 +765,7 @@ function LogisticsPage({ filters }) {
                         <tr style={{ borderBottom: cExpanded[r.courier_group] ? 'none' : `1px solid ${C.border}` }}>
                           <td style={{ padding: '9px 10px', minWidth: 160 }}>
                             <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
-                              <button onClick={() => setCExpanded(e => ({ ...e, [r.courier_group]: !e[r.courier_group] }))} style={{ width:16, height:16, borderRadius:3, border:`1px solid ${C.border2}`, background:C.bg, color:C.t2, fontSize:10, fontWeight:700, cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0, padding:0, lineHeight:1 }}>{cExpanded[r.courier_group]?'−':'+'}</button>
+                              <button onClick={() => setCExpanded(e => ({ ...e, [r.courier_group]: !e[r.courier_group] }))} style={{ width:16, height:16, borderRadius:3, border:`1px solid ${C.border2}`, background:C.bg, color:C.t2, fontSize:10, fontWeight:700, cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0, padding:0, lineHeight:1 }}>{cExpanded[r.courier_group]?'âˆ’':'+'}</button>
                               {logo
                                 ? <img src={logo} alt="" style={{ width: 28, height: 28, objectFit: 'contain', borderRadius: 4, flexShrink: 0, background: '#fff', border: `1px solid ${C.border}` }} onError={e => { e.currentTarget.style.display = 'none' }} />
                                 : <span style={{ width: 28, height: 28, borderRadius: 4, background: color, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, fontWeight: 800, color: '#fff', flexShrink: 0 }}>{r.courier_group.charAt(0)}</span>
@@ -779,8 +779,8 @@ function LogisticsPage({ filters }) {
                           <td style={{ padding: '9px 10px', textAlign: 'right', fontWeight: 700, color: rtoColor, fontSize: 11 }}>{r._rtoPct.toFixed(2)}%</td>
                           <td style={{ padding: '9px 10px', textAlign: 'right', color: C.t2, fontSize: 11 }}>{r._zrtoPct.toFixed(2)}%</td>
                           <td style={{ padding: '9px 10px', textAlign: 'right', color: C.t2, fontSize: 11 }}>{r._cancPct.toFixed(2)}%</td>
-                          <td style={{ padding: '9px 10px', textAlign: 'right', fontWeight: 700, color: '#2563eb', fontSize: 11 }}>{r._fasrPct != null ? r._fasrPct.toFixed(2) + '%' : '—'}</td>
-                          <td style={{ padding: '9px 10px', textAlign: 'right', fontWeight: 700, color: '#7c3aed', fontSize: 11 }}>{r._rasrPct != null ? r._rasrPct.toFixed(2) + '%' : '—'}</td>
+                          <td style={{ padding: '9px 10px', textAlign: 'right', fontWeight: 700, color: '#2563eb', fontSize: 11 }}>{r._fasrPct != null ? r._fasrPct.toFixed(2) + '%' : 'â€”'}</td>
+                          <td style={{ padding: '9px 10px', textAlign: 'right', fontWeight: 700, color: '#7c3aed', fontSize: 11 }}>{r._rasrPct != null ? r._rasrPct.toFixed(2) + '%' : 'â€”'}</td>
                           <td style={{ padding: '9px 10px', textAlign: 'right', color: tatColor(r.avg_processing_days,2,1), fontSize: 11 }}>{d(r.avg_processing_days)}</td>
                           <td style={{ padding: '9px 10px', textAlign: 'right', color: tatColor(r.avg_pickup_days,1,0.5), fontSize: 11 }}>{d(r.avg_pickup_days)}</td>
                           <td style={{ padding: '9px 10px', textAlign: 'right', color: tatColor(r.avg_intransit_days,4,2), fontSize: 11 }}>{d(r.avg_intransit_days)}</td>
@@ -808,8 +808,8 @@ function LogisticsPage({ filters }) {
                               <td style={{ padding:'7px 10px', textAlign:'right', color:rtoColor, fontSize:11 }}>{_rtoPct.toFixed(2)}%</td>
                               <td style={{ padding:'7px 10px', textAlign:'right', color:C.t3, fontSize:11 }}>{_zrtoPct.toFixed(2)}%</td>
                               <td style={{ padding:'7px 10px', textAlign:'right', color:C.t3, fontSize:11 }}>{_cancPct.toFixed(2)}%</td>
-                              <td style={{ padding:'7px 10px', textAlign:'right', color:'#2563eb', fontSize:11 }}>{_fasrPct!=null?_fasrPct.toFixed(2)+'%':'—'}</td>
-                              <td style={{ padding:'7px 10px', textAlign:'right', color:'#7c3aed', fontSize:11 }}>{_rasrPct!=null?_rasrPct.toFixed(2)+'%':'—'}</td>
+                              <td style={{ padding:'7px 10px', textAlign:'right', color:'#2563eb', fontSize:11 }}>{_fasrPct!=null?_fasrPct.toFixed(2)+'%':'â€”'}</td>
+                              <td style={{ padding:'7px 10px', textAlign:'right', color:'#7c3aed', fontSize:11 }}>{_rasrPct!=null?_rasrPct.toFixed(2)+'%':'â€”'}</td>
                               <td style={{ padding:'7px 10px', textAlign:'right', color:tatColor(m.avg_processing_days,2,1), fontSize:11 }}>{d(m.avg_processing_days)}</td>
                               <td style={{ padding:'7px 10px', textAlign:'right', color:tatColor(m.avg_pickup_days,1,0.5), fontSize:11 }}>{d(m.avg_pickup_days)}</td>
                               <td style={{ padding:'7px 10px', textAlign:'right', color:tatColor(m.avg_intransit_days,4,2), fontSize:11 }}>{d(m.avg_intransit_days)}</td>
@@ -843,8 +843,8 @@ function LogisticsPage({ filters }) {
                           <td style={{ padding: '9px 10px', textAlign: 'right', color: '#dc2626', fontWeight: 700, fontSize: 11 }}>{(sumR/tot*100).toFixed(2)}%</td>
                           <td style={{ padding: '9px 10px', textAlign: 'right', color: C.t2, fontSize: 11 }}>{(sumZ/tot*100).toFixed(2)}%</td>
                           <td style={{ padding: '9px 10px', textAlign: 'right', color: C.t2, fontSize: 11 }}>{(sumC/tot*100).toFixed(2)}%</td>
-                          <td style={{ padding: '9px 10px', textAlign: 'right', color: '#2563eb', fontWeight: 700, fontSize: 11 }}>{sumOfd ? (sumD1/sumOfd*100).toFixed(2)+'%' : '—'}</td>
-                          <td style={{ padding: '9px 10px', textAlign: 'right', color: '#7c3aed', fontWeight: 700, fontSize: 11 }}>{sumOfd ? (sumRN/sumOfd*100).toFixed(2)+'%' : '—'}</td>
+                          <td style={{ padding: '9px 10px', textAlign: 'right', color: '#2563eb', fontWeight: 700, fontSize: 11 }}>{sumOfd ? (sumD1/sumOfd*100).toFixed(2)+'%' : 'â€”'}</td>
+                          <td style={{ padding: '9px 10px', textAlign: 'right', color: '#7c3aed', fontWeight: 700, fontSize: 11 }}>{sumOfd ? (sumRN/sumOfd*100).toFixed(2)+'%' : 'â€”'}</td>
                           <td style={{ padding: '9px 10px', textAlign: 'right', color: C.t2, fontSize: 11 }}>{wavg('avg_processing_days').toFixed(2)}d</td>
                           <td style={{ padding: '9px 10px', textAlign: 'right', color: C.t2, fontSize: 11 }}>{wavg('avg_pickup_days').toFixed(2)}d</td>
                           <td style={{ padding: '9px 10px', textAlign: 'right', color: C.t2, fontSize: 11 }}>{wavg('avg_intransit_days').toFixed(2)}d</td>
@@ -862,7 +862,7 @@ function LogisticsPage({ filters }) {
         </div>
         </div>
 
-        {/* ── Payment Analytics — removed ── */}
+        {/* â”€â”€ Payment Analytics â€” removed â”€â”€ */}
         {(() => { return null;
           const pd = (data?.byPaymentDetail || [])
           const PREPAID = pd.find(r => r.payment_mode === 'PREPAID') || {}
@@ -946,7 +946,7 @@ function LogisticsPage({ filters }) {
                     ))}
                   </div>
                 </div>
-                <div style={{ fontSize: 11, color: C.t3, marginBottom: 8 }}>Del % & RTO % by payment mode · Shipments (bars)</div>
+                <div style={{ fontSize: 11, color: C.t3, marginBottom: 8 }}>Del % & RTO % by payment mode Â· Shipments (bars)</div>
                 <ResponsiveContainer width="100%" height={340}>
                   <ComposedChart data={trendData} margin={{ top: 4, right: 44, left: 0, bottom: 0 }}>
                     <defs>
@@ -967,17 +967,17 @@ function LogisticsPage({ filters }) {
                     <Tooltip content={({ active, payload, label }) => {
                       if (!active || !payload?.length) return null
                       const get = key => payload.find(p => p.dataKey===key)?.value
-                      const d = v => v != null ? (+v).toFixed(2)+'d' : '—'
+                      const d = v => v != null ? (+v).toFixed(2)+'d' : 'â€”'
                       return (
                         <div style={{ background: C.card, border: `1px solid ${C.border2}`, borderRadius: 8, padding: '10px 14px', fontSize: 11.5, minWidth: 200 }}>
                           <div style={{ fontWeight: 700, marginBottom: 6 }}>{label}</div>
                           <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
-                            <div style={{ color: '#2563eb', fontWeight: 600 }}>PREPAID · {(get('PREPAID_total')||0).toLocaleString('en-IN')} ships</div>
+                            <div style={{ color: '#2563eb', fontWeight: 600 }}>PREPAID Â· {(get('PREPAID_total')||0).toLocaleString('en-IN')} ships</div>
                             <div style={{ color: '#16a34a', marginLeft: 8 }}>Del %: {get('PREPAID_del')}%</div>
                             <div style={{ color: '#dc2626', marginLeft: 8 }}>RTO %: {get('PREPAID_rto')}%</div>
                             <div style={{ color: '#7c3aed', marginLeft: 8 }}>Avg O2D: {d(get('PREPAID_o2d'))}</div>
                             <div style={{ color: '#0891b2', marginLeft: 8 }}>Avg Processing: {d(get('PREPAID_proc'))}</div>
-                            <div style={{ color: '#F59E0B', fontWeight: 600, marginTop: 4 }}>COD · {(get('COD_total')||0).toLocaleString('en-IN')} ships</div>
+                            <div style={{ color: '#F59E0B', fontWeight: 600, marginTop: 4 }}>COD Â· {(get('COD_total')||0).toLocaleString('en-IN')} ships</div>
                             <div style={{ color: '#16a34a', marginLeft: 8 }}>Del %: {get('COD_del')}%</div>
                             <div style={{ color: '#dc2626', marginLeft: 8 }}>RTO %: {get('COD_rto')}%</div>
                             <div style={{ color: '#a78bfa', marginLeft: 8 }}>Avg O2D: {d(get('COD_o2d'))}</div>
@@ -1011,10 +1011,10 @@ function LogisticsPage({ filters }) {
           )
         })()}
 
-        {/* ── Operations Sections ── */}
+        {/* â”€â”€ Operations Sections â”€â”€ */}
         {(() => {
-        const pct1 = (a, b) => b ? ((a / b) * 100).toFixed(1) + '%' : '—'
-        const d1 = v => v != null ? v.toFixed(1) + 'd' : '—'
+        const pct1 = (a, b) => b ? ((a / b) * 100).toFixed(1) + '%' : 'â€”'
+        const d1 = v => v != null ? v.toFixed(1) + 'd' : 'â€”'
 
         const pickupPending5 = k.pickup_pending || 0
         const rto10plus = k.rto_10plus || 0
@@ -1023,12 +1023,12 @@ function LogisticsPage({ filters }) {
         const byCourier = data.byCourier || []
 
         const tatKpis = [
-          { label: 'Avg Processing Time', value: d1(k.avg_processing), sub: 'Order → Pickup Scan' },
-          { label: 'Avg Pickup TAT', value: d1(k.avg_pickup), sub: 'Order → Picked Up' },
-          { label: 'Avg In-Transit', value: d1(k.avg_intransit), sub: 'Pickup → Delivery' },
-          { label: 'Avg Fulfillment', value: d1(k.avg_fulfilment), sub: 'Order → Delivered' },
-          { label: 'Avg RTO TAT', value: d1(k.avg_rto_tat), sub: 'RTO Mark → RTO Delivered' },
-          { label: 'Avg Scan to Attempt', value: d1(k.avg_s2a), sub: 'Pickup → 1st OFD' },
+          { label: 'Avg Processing Time', value: d1(k.avg_processing), sub: 'Order â†’ Pickup Scan' },
+          { label: 'Avg Pickup TAT', value: d1(k.avg_pickup), sub: 'Order â†’ Picked Up' },
+          { label: 'Avg In-Transit', value: d1(k.avg_intransit), sub: 'Pickup â†’ Delivery' },
+          { label: 'Avg Fulfillment', value: d1(k.avg_fulfilment), sub: 'Order â†’ Delivered' },
+          { label: 'Avg RTO TAT', value: d1(k.avg_rto_tat), sub: 'RTO Mark â†’ RTO Delivered' },
+          { label: 'Avg Scan to Attempt', value: d1(k.avg_s2a), sub: 'Pickup â†’ 1st OFD' },
           { label: 'Avg Committed SLA', value: d1(k.avg_sla), sub: 'Promised delivery days' },
         ]
 
@@ -1068,7 +1068,7 @@ function LogisticsPage({ filters }) {
             {(() => {
               const tatByCourier = data.tatByCourier || []
               const tatByFacility = (data.tatByFacility || []).filter(r => r.facility && r.facility.trim())
-              const pctB = (v, total) => total ? ((v/total)*100).toFixed(1)+'%' : '—'
+              const pctB = (v, total) => total ? ((v/total)*100).toFixed(1)+'%' : 'â€”'
 
               // totals rows
               const facTotals = tatByFacility.reduce((acc, r) => {
@@ -1094,9 +1094,9 @@ function LogisticsPage({ filters }) {
                   <LSectionTitle title="TAT Bucket Analysis" collapsed={secCollapsed['tatbucket']} onToggle={() => toggleSec('tatbucket')} />
                   <div style={{ display: secCollapsed['tatbucket'] ? 'none' : 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 14 }}>
 
-                    {/* Table 1: Order → Pickup by Facility */}
+                    {/* Table 1: Order â†’ Pickup by Facility */}
                     <div style={{ ...tableCard2, alignSelf: 'start' }}>
-                      <div style={tableTitle2}>Order → Pickup <span style={{ fontWeight: 400, color: C.t3 }}>(by Facility)</span></div>
+                      <div style={tableTitle2}>Order â†’ Pickup <span style={{ fontWeight: 400, color: C.t3 }}>(by Facility)</span></div>
                       <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                         <thead>
                           <tr>
@@ -1132,9 +1132,9 @@ function LogisticsPage({ filters }) {
                       </table>
                     </div>
 
-                    {/* Table 2: Pickup → Delivery by Courier (scrollable, matches sibling height) */}
+                    {/* Table 2: Pickup â†’ Delivery by Courier (scrollable, matches sibling height) */}
                     <div style={{ ...tableCard2, alignSelf: 'start', display: 'flex', flexDirection: 'column', maxHeight: 281, overflow: 'hidden' }}>
-                      <div style={{ ...tableTitle2, flexShrink: 0 }}>Pickup → Delivery <span style={{ fontWeight: 400, color: C.t3 }}>(by Courier)</span></div>
+                      <div style={{ ...tableTitle2, flexShrink: 0 }}>Pickup â†’ Delivery <span style={{ fontWeight: 400, color: C.t3 }}>(by Courier)</span></div>
                       <div style={{ flex: 1, overflowY: 'auto' }}>
                         <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed' }}>
                           <colgroup><col style={{width:'34%'}}/><col style={{width:'13%'}}/><col style={{width:'13%'}}/><col style={{width:'13%'}}/><col style={{width:'13%'}}/><col style={{width:'13%'}}/></colgroup>
@@ -1179,9 +1179,9 @@ function LogisticsPage({ filters }) {
                       </table>
                     </div>
 
-                    {/* Table 3: Processing → Pickup by Facility */}
+                    {/* Table 3: Processing â†’ Pickup by Facility */}
                     <div style={{ ...tableCard2, alignSelf: 'start' }}>
-                      <div style={tableTitle2}>Processing → Pickup <span style={{ fontWeight: 400, color: C.t3 }}>(by Facility)</span></div>
+                      <div style={tableTitle2}>Processing â†’ Pickup <span style={{ fontWeight: 400, color: C.t3 }}>(by Facility)</span></div>
                       <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                         <thead>
                           <tr>
@@ -1227,7 +1227,7 @@ function LogisticsPage({ filters }) {
         })()}
 
 
-        {/* ── Weight Based Analysis ── */}
+        {/* â”€â”€ Weight Based Analysis â”€â”€ */}
         <LSectionTitle title="Weight Based Analysis" collapsed={secCollapsed['weight']} onToggle={() => toggleSec('weight')} />
         {(() => {
           const wData = (data.byWeightSlab || []).filter(r => r.slab !== 'Unknown')
@@ -1244,7 +1244,7 @@ function LogisticsPage({ filters }) {
             pct: wMetric === 'qty' ? +((r.total||0)/grandTotal*100).toFixed(1) : +((r.total_value||0)/grandValue*100).toFixed(1),
             raw: r,
           }))
-          const fmtVal = v => v >= 10000000 ? '₹'+(v/10000000).toFixed(1)+'Cr' : v >= 100000 ? '₹'+(v/100000).toFixed(1)+'L' : v >= 1000 ? '₹'+(v/1000).toFixed(0)+'K' : '₹'+v
+          const fmtVal = v => v >= 10000000 ? 'â‚¹'+(v/10000000).toFixed(1)+'Cr' : v >= 100000 ? 'â‚¹'+(v/100000).toFixed(1)+'L' : v >= 1000 ? 'â‚¹'+(v/1000).toFixed(0)+'K' : 'â‚¹'+v
           return (
             <div style={{ display: secCollapsed['weight'] ? 'none' : 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
               {/* Left: Donut with toggle */}
@@ -1304,8 +1304,8 @@ function LogisticsPage({ filters }) {
                         <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 8, padding: '8px 12px', fontSize: 11, color: C.t1 }}>
                           <div style={{ fontWeight: 700, marginBottom: 4 }}>{label}</div>
                           <div style={{ color: '#5BA4CF' }}>Shipments: <strong>{(row.total||0).toLocaleString('en-IN')}</strong></div>
-                          <div style={{ color: C.red.tx }}>RTO %: <strong>{row.rto_pct??'—'}%</strong></div>
-                          <div style={{ color: '#60A5FA' }}>Intrasit TAT: <strong>{row.avg_tat??'—'}d</strong></div>
+                          <div style={{ color: C.red.tx }}>RTO %: <strong>{row.rto_pct??'â€”'}%</strong></div>
+                          <div style={{ color: '#60A5FA' }}>Intrasit TAT: <strong>{row.avg_tat??'â€”'}d</strong></div>
                         </div>
                       )
                     }} />
@@ -1321,7 +1321,7 @@ function LogisticsPage({ filters }) {
         })()}
 
 
-        {/* ── Geographic ── */}
+        {/* â”€â”€ Geographic â”€â”€ */}
         <LSectionTitle title="Geographic" collapsed={secCollapsed['geo']} onToggle={() => toggleSec('geo')} />
         {(() => {
           const geoBar = (rows, labelKey, color) => {
@@ -1367,7 +1367,7 @@ function LogisticsPage({ filters }) {
           )
         })()}
 
-        {/* ── RTO Reasons ── */}
+        {/* â”€â”€ RTO Reasons â”€â”€ */}
         <LSectionTitle title="RTO Reasons" collapsed={secCollapsed['rto']} onToggle={() => toggleSec('rto')} />
         {(() => {
           const reasons = (data.rtoReasons || []).filter(r => r.reason && r.total > 0).sort((a, b) => b.total - a.total)
@@ -1375,7 +1375,7 @@ function LogisticsPage({ filters }) {
           if (!reasons.length) return <div style={{ color: C.t3, fontSize: 12 }}>No RTO reason data available.</div>
           return (
             <div style={{ ...cardStyle, padding: '16px 18px', display: secCollapsed['rto'] ? 'none' : undefined }}>
-              <div style={{ ...chartTitle, marginBottom: 16 }}>RTO Reasons — Shipment Count & % of Total RTO</div>
+              <div style={{ ...chartTitle, marginBottom: 16 }}>RTO Reasons â€” Shipment Count & % of Total RTO</div>
               <ResponsiveContainer width="100%" height={280}>
                 <BarChart data={reasons} margin={{ top: 20, right: 10, left: 0, bottom: 80 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke={C.border} vertical={false} />
@@ -1401,12 +1401,12 @@ function LogisticsPage({ filters }) {
           )
         })()}
 
-        {/* ── Returns & Exchange Analytics (hidden) ── */}
+        {/* â”€â”€ Returns & Exchange Analytics (hidden) â”€â”€ */}
         {false && (() => {
           const rk = retData?.kpis || {}
           const totalReq = rk.total_requests || 1
-          const pickupSuccessPct = rk.pickup_success ? ((rk.pickup_success / totalReq) * 100).toFixed(1) : '—'
-          const refundPct = rk.refund_processed ? ((rk.refund_processed / totalReq) * 100).toFixed(1) : '—'
+          const pickupSuccessPct = rk.pickup_success ? ((rk.pickup_success / totalReq) * 100).toFixed(1) : 'â€”'
+          const refundPct = rk.refund_processed ? ((rk.refund_processed / totalReq) * 100).toFixed(1) : 'â€”'
 
           // Trend data
           const retTrendRaw = retTrendGran === 'Daily' ? (retData?.byDay || []) : retTrendGran === 'Weekly' ? (retData?.byWeek || []) : (retData?.byMonth || [])
@@ -1422,10 +1422,10 @@ function LogisticsPage({ filters }) {
               {/* KPI Cards */}
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 14 }}>
                 {[
-                  { label: 'Total Requests', value: (rk.total_requests||0).toLocaleString('en-IN'), sub: `Returns: ${(rk.total_returns||0).toLocaleString('en-IN')} · Exchange: ${(rk.total_exchanges||0).toLocaleString('en-IN')}`, color: '#2563eb', bg: '#EFF6FF', border: '#BFDBFE' },
+                  { label: 'Total Requests', value: (rk.total_requests||0).toLocaleString('en-IN'), sub: `Returns: ${(rk.total_returns||0).toLocaleString('en-IN')} Â· Exchange: ${(rk.total_exchanges||0).toLocaleString('en-IN')}`, color: '#2563eb', bg: '#EFF6FF', border: '#BFDBFE' },
                   { label: 'Pickup Success %', value: pickupSuccessPct+'%', sub: `${(rk.pickup_success||0).toLocaleString('en-IN')} picked up`, color: '#16a34a', bg: '#F0FDF4', border: '#BBF7D0' },
                   { label: 'Refund Processed %', value: refundPct+'%', sub: `${(rk.refund_processed||0).toLocaleString('en-IN')} processed`, color: '#d97706', bg: '#FFFBEB', border: '#FDE68A' },
-                  { label: 'Avg Refund ₹', value: rk.avg_refund_amount ? '₹'+(rk.avg_refund_amount).toLocaleString('en-IN') : '—', sub: `Total: ₹${((rk.total_refunded||0)/100000).toFixed(1)}L`, color: '#7c3aed', bg: '#F5F3FF', border: '#DDD6FE' },
+                  { label: 'Avg Refund â‚¹', value: rk.avg_refund_amount ? 'â‚¹'+(rk.avg_refund_amount).toLocaleString('en-IN') : 'â€”', sub: `Total: â‚¹${((rk.total_refunded||0)/100000).toFixed(1)}L`, color: '#7c3aed', bg: '#F5F3FF', border: '#DDD6FE' },
                 ].map(m => (
                   <div key={m.label} style={{ background: m.bg, border: `1.5px solid ${m.border}`, borderRadius: 14, padding: '16px 18px' }}>
                     <div style={{ fontSize: 9.5, color: '#94939F', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.04em', marginBottom: 6 }}>{m.label}</div>
@@ -1440,7 +1440,7 @@ function LogisticsPage({ filters }) {
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
                   <div>
                     <div style={chartTitle}>Return Reasons</div>
-                    <div style={{ fontSize: 11, color: C.t3, marginTop: 2 }}>Why customers are returning — {reasonRows.length} reasons</div>
+                    <div style={{ fontSize: 11, color: C.t3, marginTop: 2 }}>Why customers are returning â€” {reasonRows.length} reasons</div>
                   </div>
                   <div style={{ display: 'flex', gap: 4 }}>
                     {[['reason','Main Reason'],['sub','Sub Reason']].map(([v,l]) => (
@@ -1474,14 +1474,14 @@ function LogisticsPage({ filters }) {
                 {/* Trend chart */}
                 <div style={cardStyle}>
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 2 }}>
-                    <div style={chartTitle}>{retTrendTitle} — Returns & Pickup %</div>
+                    <div style={chartTitle}>{retTrendTitle} â€” Returns & Pickup %</div>
                     <div style={{ display: 'flex', gap: 4 }}>
                       {['Daily','Weekly','Monthly'].map(g => (
                         <button key={g} onClick={() => setRetTrendGran(g)} style={{ fontSize: 10.5, padding: '3px 10px', borderRadius: 6, border: `1px solid ${retTrendGran===g ? C.acc : C.border}`, background: retTrendGran===g ? C.acl : 'transparent', color: retTrendGran===g ? C.t1 : C.t2, cursor: 'pointer', fontWeight: retTrendGran===g ? 700 : 500, fontFamily: 'var(--font)', transition: 'all .15s' }}>{g}</button>
                       ))}
                     </div>
                   </div>
-                  <div style={{ fontSize: 11, color: C.t3, marginBottom: 12, marginTop: 2 }}>Returns · Exchanges · Pickup Success % (dashed)</div>
+                  <div style={{ fontSize: 11, color: C.t3, marginBottom: 12, marginTop: 2 }}>Returns Â· Exchanges Â· Pickup Success % (dashed)</div>
                   <ResponsiveContainer width="100%" height={260}>
                     <ComposedChart data={retTrendRaw} margin={{ top: 4, right: 40, left: 0, bottom: 0 }}>
                       <CartesianGrid strokeDasharray="3 3" stroke={C.border} vertical={false} strokeOpacity={0.5} />
@@ -1500,7 +1500,7 @@ function LogisticsPage({ filters }) {
                 {/* Top Products */}
                 <div style={cardStyle}>
                   <div style={chartTitle}>Returned Products</div>
-                  <div style={{ fontSize: 11, color: C.t3, marginBottom: 14, marginTop: 2 }}>{(retData?.byProduct || []).length} products · % share of total returns</div>
+                  <div style={{ fontSize: 11, color: C.t3, marginBottom: 14, marginTop: 2 }}>{(retData?.byProduct || []).length} products Â· % share of total returns</div>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 10, maxHeight: 310, overflowY: 'auto', paddingRight: 4 }}>
                     {(retData?.byProduct || []).map((r, i) => {
                       const maxP = retData.byProduct[0]?.total || 1
@@ -1533,7 +1533,7 @@ function LogisticsPage({ filters }) {
   )
 }
 
-// ── Sidebar ───────────────────────────────────────────────────
+// â”€â”€ Sidebar â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 const SvgIcon = ({ d, size = 18, stroke = 'currentColor', fill = 'none', strokeWidth = 1.6 }) => (
   <svg width={size} height={size} viewBox="0 0 24 24" fill={fill} stroke={stroke} strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round">
     {Array.isArray(d) ? d.map((p, i) => <path key={i} d={p} />) : <path d={d} />}
@@ -1590,7 +1590,7 @@ function Sidebar({ page, setPage }) {
   )
 }
 
-// ── Bottom Nav (mobile) ───────────────────────────────────────
+// â”€â”€ Bottom Nav (mobile) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function BottomNav({ page, setPage }) {
   const items = [
     { id: 'overview', label: 'Overview', icon: <SvgIcon d={['M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z','M9 22V12h6v10']} size={22} /> },
@@ -1610,7 +1610,7 @@ function BottomNav({ page, setPage }) {
   )
 }
 
-// ── Topnav ─────────────────────────────────────────────────────
+// â”€â”€ Topnav â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function DateRangePicker({ filters, setFilters }) {
   const [open, setOpen] = useState(false)
   const [draft, setDraft] = useState({ start: filters.start, end: filters.end })
@@ -1692,7 +1692,7 @@ function DateRangePicker({ filters, setFilters }) {
   const isStart = day => day && fmt0(day) === draft.start
   const isEnd = day => day && fmt0(day) === draft.end
 
-  const fmtDisplay = s => { if (!s) return '—'; const d = parseD(s); if (!d) return s; return d.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }) }
+  const fmtDisplay = s => { if (!s) return 'â€”'; const d = parseD(s); if (!d) return s; return d.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }) }
 
   const MONTH_NAMES = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
 
@@ -1731,7 +1731,7 @@ function DateRangePicker({ filters, setFilters }) {
     )
   }
 
-  const displayLabel = filters.start && filters.end ? `${fmtDisplay(filters.start)}  →  ${fmtDisplay(filters.end)}` : 'Select date range'
+  const displayLabel = filters.start && filters.end ? `${fmtDisplay(filters.start)}  â†’  ${fmtDisplay(filters.end)}` : 'Select date range'
 
   return (
     <div ref={ref} style={{ position: 'relative' }}>
@@ -1767,16 +1767,16 @@ function DateRangePicker({ filters, setFilters }) {
             {/* Selected range display */}
             <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
               <div style={{ flex: 1, padding: '6px 10px', border: `1.5px solid ${selecting === 'start' ? C.acc : C.border}`, borderRadius: 7, fontSize: 12, color: draft.start ? C.t1 : C.t3 }}>{draft.start ? fmtDisplay(draft.start) : 'Start date'}</div>
-              <span style={{ color: C.t3, fontSize: 13 }}>→</span>
+              <span style={{ color: C.t3, fontSize: 13 }}>â†’</span>
               <div style={{ flex: 1, padding: '6px 10px', border: `1.5px solid ${selecting === 'end' ? C.acc : C.border}`, borderRadius: 7, fontSize: 12, color: draft.end ? C.t1 : C.t3 }}>{draft.end ? fmtDisplay(draft.end) : 'End date'}</div>
             </div>
             {monthPickerOpen ? (
-              /* ── Month/Year quick-jump overlay ── */
+              /* â”€â”€ Month/Year quick-jump overlay â”€â”€ */
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10 }}>
-                  <button onClick={() => setYearInput(y => y - 1)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 16, color: C.t2, padding: '2px 8px', fontFamily: 'var(--font)' }}>‹</button>
+                  <button onClick={() => setYearInput(y => y - 1)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 16, color: C.t2, padding: '2px 8px', fontFamily: 'var(--font)' }}>â€¹</button>
                   <span style={{ fontSize: 15, fontWeight: 700, color: C.t1, minWidth: 48, textAlign: 'center' }}>{yearInput}</span>
-                  <button onClick={() => setYearInput(y => y + 1)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 16, color: C.t2, padding: '2px 8px', fontFamily: 'var(--font)' }}>›</button>
+                  <button onClick={() => setYearInput(y => y + 1)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 16, color: C.t2, padding: '2px 8px', fontFamily: 'var(--font)' }}>â€º</button>
                 </div>
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 5 }}>
                   {MONTH_NAMES.map((mn, i) => {
@@ -1796,26 +1796,26 @@ function DateRangePicker({ filters, setFilters }) {
                   })}
                 </div>
                 <div style={{ textAlign: 'center', marginTop: 2 }}>
-                  <button onClick={() => setMonthPickerSide(null)} style={{ padding: '3px 14px', borderRadius: 6, border: `1px solid ${C.border}`, background: 'transparent', color: C.t3, cursor: 'pointer', fontSize: 11, fontFamily: 'var(--font)' }}>← back</button>
+                  <button onClick={() => setMonthPickerSide(null)} style={{ padding: '3px 14px', borderRadius: 6, border: `1px solid ${C.border}`, background: 'transparent', color: C.t3, cursor: 'pointer', fontSize: 11, fontFamily: 'var(--font)' }}>â† back</button>
                 </div>
               </div>
             ) : (
-              /* ── Dual calendar view ── */
+              /* â”€â”€ Dual calendar view â”€â”€ */
               <>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: -4 }}>
-                  <button onClick={() => { setLeftMonth(m => new Date(m.getFullYear(), m.getMonth()-1, 1)); setRightMonth(m => new Date(m.getFullYear(), m.getMonth()-1, 1)) }} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 18, color: C.t2, padding: '2px 8px' }}>‹</button>
+                  <button onClick={() => { setLeftMonth(m => new Date(m.getFullYear(), m.getMonth()-1, 1)); setRightMonth(m => new Date(m.getFullYear(), m.getMonth()-1, 1)) }} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 18, color: C.t2, padding: '2px 8px' }}>â€¹</button>
                   <div style={{ display: 'flex', gap: 8 }}>
                     <button onClick={() => { setYearInput(leftMonth.getFullYear()); setMonthPickerSide('left') }}
                       style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 13, fontWeight: 700, color: C.t1, padding: '2px 6px', borderRadius: 6, display: 'flex', alignItems: 'center', gap: 3 }}>
-                      {leftMonth.toLocaleDateString('en-IN', { month: 'long', year: 'numeric' })} <span style={{ fontSize: 10, color: C.t3 }}>▾</span>
+                      {leftMonth.toLocaleDateString('en-IN', { month: 'long', year: 'numeric' })} <span style={{ fontSize: 10, color: C.t3 }}>â–¾</span>
                     </button>
                     <span style={{ color: C.border2, fontSize: 16 }}>|</span>
                     <button onClick={() => { setYearInput(rightMonth.getFullYear()); setMonthPickerSide('right') }}
                       style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 13, fontWeight: 700, color: C.t1, padding: '2px 6px', borderRadius: 6, display: 'flex', alignItems: 'center', gap: 3 }}>
-                      {rightMonth.toLocaleDateString('en-IN', { month: 'long', year: 'numeric' })} <span style={{ fontSize: 10, color: C.t3 }}>▾</span>
+                      {rightMonth.toLocaleDateString('en-IN', { month: 'long', year: 'numeric' })} <span style={{ fontSize: 10, color: C.t3 }}>â–¾</span>
                     </button>
                   </div>
-                  <button onClick={() => { setLeftMonth(m => new Date(m.getFullYear(), m.getMonth()+1, 1)); setRightMonth(m => new Date(m.getFullYear(), m.getMonth()+1, 1)) }} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 18, color: C.t2, padding: '2px 8px' }}>›</button>
+                  <button onClick={() => { setLeftMonth(m => new Date(m.getFullYear(), m.getMonth()+1, 1)); setRightMonth(m => new Date(m.getFullYear(), m.getMonth()+1, 1)) }} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 18, color: C.t2, padding: '2px 8px' }}>â€º</button>
                 </div>
                 <div style={{ display: 'flex', gap: 24 }}>
                   {renderMonth(leftMonth)}
@@ -1850,21 +1850,21 @@ function Topnav({ page, alerts, onRefresh, loading, filters, setFilters, rawRows
       <div className="tnav-right">
         <DateRangePicker filters={filters} setFilters={setFilters} />
         <button onClick={onRefresh} className="tnav-btn">
-          <span style={{ display: 'inline-block', animation: loading ? 'spin 1s linear infinite' : 'none', fontSize: 14 }}>↻</span> Refresh
+          <span style={{ display: 'inline-block', animation: loading ? 'spin 1s linear infinite' : 'none', fontSize: 14 }}>â†»</span> Refresh
         </button>
       </div>
     </div>
   )
 }
 
-// ── HeroKPICard ───────────────────────────────────────────────
+// â”€â”€ HeroKPICard â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function HeroKPICard({ label, value, sub, chg, sparkData, dataKey = 'cur', color, gradId }) {
   return (
     <div className="kpi-card" style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
       <div className="kpi-label">{label}</div>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
         <div className="kpi-value">{value}</div>
-        {chg !== null && chg !== undefined && <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 7px', borderRadius: 5, background: chg >= 0 ? '#E6F4E0' : '#FDE8E8', color: chg >= 0 ? '#286010' : '#7A1A1A' }}>{chg >= 0 ? '▲' : '▼'} {Math.abs(chg).toFixed(1)}%</span>}
+        {chg !== null && chg !== undefined && <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 7px', borderRadius: 5, background: chg >= 0 ? '#E6F4E0' : '#FDE8E8', color: chg >= 0 ? '#286010' : '#7A1A1A' }}>{chg >= 0 ? 'â–²' : 'â–¼'} {Math.abs(chg).toFixed(1)}%</span>}
       </div>
       {sub && <div className="kpi-sub">{sub}</div>}
       {sparkData?.length > 0 && (
@@ -1873,7 +1873,7 @@ function HeroKPICard({ label, value, sub, chg, sparkData, dataKey = 'cur', color
             <defs><linearGradient id={gradId} x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor={color} stopOpacity={0.25} /><stop offset="95%" stopColor={color} stopOpacity={0} /></linearGradient></defs>
             <Area type="monotone" dataKey={dataKey} name="Current" stroke={color} strokeWidth={1.5} fill={`url(#${gradId})`} dot={false} connectNulls />
             <Area type="monotone" dataKey="prev" name="Prev" stroke="#94939F" strokeWidth={1} fill="none" dot={false} strokeDasharray="3 2" connectNulls />
-            <Tooltip content={({ active, payload }) => active && payload?.length ? <div style={{ background: '#fff', border: '1px solid #E8E6DC', borderRadius: 6, padding: '4px 8px', fontSize: 10 }}>{payload.map(p => <div key={p.name} style={{ color: p.name === 'Current' ? '#13121A' : '#94939F' }}>{p.name}: {p.value != null ? `₹${(p.value >= 1e7 ? (p.value/1e7).toFixed(2)+' Cr' : p.value >= 1e5 ? (p.value/1e5).toFixed(1)+' L' : Math.round(p.value).toLocaleString('en-IN'))}` : '—'}</div>)}</div> : null} />
+            <Tooltip content={({ active, payload }) => active && payload?.length ? <div style={{ background: '#fff', border: '1px solid #E8E6DC', borderRadius: 6, padding: '4px 8px', fontSize: 10 }}>{payload.map(p => <div key={p.name} style={{ color: p.name === 'Current' ? '#13121A' : '#94939F' }}>{p.name}: {p.value != null ? `â‚¹${(p.value >= 1e7 ? (p.value/1e7).toFixed(2)+' Cr' : p.value >= 1e5 ? (p.value/1e5).toFixed(1)+' L' : Math.round(p.value).toLocaleString('en-IN'))}` : 'â€”'}</div>)}</div> : null} />
           </AreaChart>
         </ResponsiveContainer>
       )}
@@ -1881,17 +1881,17 @@ function HeroKPICard({ label, value, sub, chg, sparkData, dataKey = 'cur', color
   )
 }
 
-// ── Overview Page ─────────────────────────────────────────────
+// â”€â”€ Overview Page â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function OverviewPage({ data, alerts, logisticsData }) {
   const { totalRev, totalExcRev, nOrders, totalQty, blendedAOV, nDays, chMap, catMap, subCatMap, stateMap, nCusts, repeatCusts, dailyArr, prevRev, prevOrders, orderStatusRevMap = {}, rtoRevDirect, returnRev, cirRev, exchangeRev, netRevenueCalc = 0 } = data
   const sh = data.shopify || {}
   const ads = data.ads || {}
 
-  // ── Revenue deltas ──
+  // â”€â”€ Revenue deltas â”€â”€
   const revDelta = prevRev > 0 ? ((totalRev - prevRev) / prevRev * 100) : null
   const ordDelta = (data.prevOrders || 0) > 0 ? ((nOrders - data.prevOrders) / data.prevOrders * 100) : null
 
-  // ── Channel calcs ──
+  // â”€â”€ Channel calcs â”€â”€
   const shopifyRev = chMap['Shopify']?.rev || 0
   const qcChs = ['Blinkit', 'Instamart', 'Zepto']
   const qcRev = qcChs.reduce((s, c) => s + (chMap[c]?.rev || 0), 0)
@@ -1899,7 +1899,7 @@ function OverviewPage({ data, alerts, logisticsData }) {
   const fkRev = chMap['Flipkart']?.rev || 0
   const sortedCh = Object.entries(chMap).filter(([, v]) => v.rev > 0).sort((a, b) => b[1].rev - a[1].rev)
 
-  // ── Returns health ──
+  // â”€â”€ Returns health â”€â”€
   const cancelRev = orderStatusRevMap['Cancelled'] || 0
   const cancelPct = totalRev > 0 ? cancelRev / totalRev * 100 : 0
   const rtoPct = totalRev > 0 ? ((rtoRevDirect || 0) + (returnRev || 0)) / totalRev * 100 : 0
@@ -1907,7 +1907,7 @@ function OverviewPage({ data, alerts, logisticsData }) {
   const exchPct = totalRev > 0 ? (exchangeRev || 0) / totalRev * 100 : 0
   const totalReturnPct = cancelPct + rtoPct + cirPct
 
-  // ── Ads ──
+  // â”€â”€ Ads â”€â”€
   const adsTotals = ads.totals || []
   const totalAdSpend = adsTotals.reduce((s, x) => s + (x.spend || 0), 0)
   const shopifyExcRev = chMap['Shopify']?.excRev || 0
@@ -1915,13 +1915,13 @@ function OverviewPage({ data, alerts, logisticsData }) {
   const overallRoas = totalAdSpend > 0 ? allNetRev / totalAdSpend : 0
   const platformsWithSpend = adsTotals.filter(t => t.spend > 0).sort((a, b) => b.spend - a.spend)
 
-  // ── Categories ──
+  // â”€â”€ Categories â”€â”€
   const allCats = Object.entries(catMap).map(([k, v]) => {
     const shCat = sh.catMap?.[k] || {}
     return { name: k, rev: v.rev, orders: (v.orders?.size ?? v.orders) || 0, cancelRev: shCat.cancelRev || 0, rtoRev: shCat.rtoRev || 0, cirRev: shCat.cirRev || 0 }
   }).sort((a, b) => b.rev - a.rev)
 
-  // ── Logistics ──
+  // â”€â”€ Logistics â”€â”€
   const lkpi = logisticsData?.kpis || {}
   const lTotal = parseInt(lkpi.total_shipments) || 0
   const lDelivered = parseInt(lkpi.delivered) || 0
@@ -1936,16 +1936,16 @@ function OverviewPage({ data, alerts, logisticsData }) {
   const lAvgFul = parseFloat(lkpi.avg_fulfilment) || null
   const couriers = (logisticsData?.byCourier || []).filter(c => parseInt(c.total) > 0).sort((a, b) => parseInt(b.total) - parseInt(a.total)).slice(0, 5)
 
-  // ── Geography ──
+  // â”€â”€ Geography â”€â”€
   const topStates = Object.entries(stateMap).sort((a, b) => b[1].rev - a[1].rev).slice(0, 5)
   const stateTotal = topStates.reduce((s, [, v]) => s + v.rev, 0) || 1
 
-  // ── Helpers ──
+  // â”€â”€ Helpers â”€â”€
   const delta = (v, color = true) => {
     if (v === null || v === undefined) return null
     const pos = v >= 0
     const col = color ? (pos ? '#0D9E68' : '#B91C1C') : C.t3
-    return <span style={{ fontSize: 10, fontWeight: 700, color: col, marginLeft: 4 }}>{pos ? '▲' : '▼'}{Math.abs(v).toFixed(1)}%</span>
+    return <span style={{ fontSize: 10, fontWeight: 700, color: col, marginLeft: 4 }}>{pos ? 'â–²' : 'â–¼'}{Math.abs(v).toFixed(1)}%</span>
   }
   const secHdr = (title, note) => (
     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
@@ -1963,27 +1963,27 @@ function OverviewPage({ data, alerts, logisticsData }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16, paddingBottom: 24 }}>
 
-      {/* ── SECTION 1: Revenue Hero ── */}
+      {/* â”€â”€ SECTION 1: Revenue Hero â”€â”€ */}
       <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr 1fr 1fr', gap: 12 }}>
         <div className="hero-grad" style={{ borderRadius: 14, padding: '20px 22px', position: 'relative', overflow: 'hidden', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
           <div>
             <div style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.08em', color: 'rgba(0,0,0,.45)', marginBottom: 6 }}>Gross Revenue (Inc. GST)</div>
-            <div style={{ fontSize: 38, fontWeight: 700, color: '#13121A', letterSpacing: '-.04em', lineHeight: 1, marginBottom: 4 }}>{totalRev >= 1e7 ? `₹${(totalRev / 1e7).toFixed(2)} Cr` : `₹${(totalRev / 1e5).toFixed(1)} L`}</div>
-            <div style={{ fontSize: 11.5, color: 'rgba(0,0,0,.5)' }}>Net {fmt(netRevenueCalc)} · {nDays}d · {fmtN(nOrders)} orders</div>
+            <div style={{ fontSize: 38, fontWeight: 700, color: '#13121A', letterSpacing: '-.04em', lineHeight: 1, marginBottom: 4 }}>{totalRev >= 1e7 ? `â‚¹${(totalRev / 1e7).toFixed(2)} Cr` : `â‚¹${(totalRev / 1e5).toFixed(1)} L`}</div>
+            <div style={{ fontSize: 11.5, color: 'rgba(0,0,0,.5)' }}>Net {fmt(netRevenueCalc)} Â· {nDays}d Â· {fmtN(nOrders)} orders</div>
           </div>
           <div style={{ display: 'flex', gap: 8, marginTop: 10, alignItems: 'center' }}>
             <span style={{ fontSize: 11, fontWeight: 600, padding: '3px 9px', borderRadius: 5, background: 'rgba(0,0,0,.1)', color: '#13121A' }}>Daily avg {fmt(totalRev / nDays)}</span>
             {delta(revDelta)}
           </div>
-          <div style={{ position: 'absolute', right: -8, bottom: -16, fontSize: 90, color: 'rgba(0,0,0,.04)', pointerEvents: 'none' }}>₹</div>
+          <div style={{ position: 'absolute', right: -8, bottom: -16, fontSize: 90, color: 'rgba(0,0,0,.04)', pointerEvents: 'none' }}>â‚¹</div>
         </div>
         <KPICard center label="Orders" value={fmtN(nOrders)} sub={<>{fmtN(totalQty)} units{delta(ordDelta)}</>} />
-        <KPICard center label="Blended AOV" value={`₹${Math.round(blendedAOV).toLocaleString('en-IN')}`} sub={`${nDays} day period`} />
+        <KPICard center label="Blended AOV" value={`â‚¹${Math.round(blendedAOV).toLocaleString('en-IN')}`} sub={`${nDays} day period`} />
         <KPICard center label="Shopify Customers" value={fmtN(nCusts)} sub={`${nCusts ? (repeatCusts / nCusts * 100).toFixed(1) : 0}% repeat`} />
         <KPICard center label="Net Revenue" value={fmt(netRevenueCalc)} sub="After returns & cancel, exc. GST" />
       </div>
 
-      {/* ── SECTION 2: Channel Scorecard ── */}
+      {/* â”€â”€ SECTION 2: Channel Scorecard â”€â”€ */}
       <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 13, padding: '16px 18px' }}>
         {secHdr('Channel Scorecard', `${sortedCh.length} active channels`)}
         <div style={{ overflowX: 'auto' }}>
@@ -2010,8 +2010,8 @@ function OverviewPage({ data, alerts, logisticsData }) {
                     <td style={{ padding: '6px 8px', textAlign: 'right', fontFamily: 'var(--mono)', color: C.t1 }}>{fmt(v.rev)}</td>
                     <td style={{ padding: '6px 8px', textAlign: 'right', color: C.t3 }}>{sharePct.toFixed(1)}%</td>
                     <td style={{ padding: '6px 8px', textAlign: 'right', color: C.t2 }}>{fmtN(v.orders)}</td>
-                    <td style={{ padding: '6px 8px', textAlign: 'right', fontFamily: 'var(--mono)', color: C.t2 }}>₹{Math.round(aov).toLocaleString('en-IN')}</td>
-                    <td style={{ padding: '6px 8px', textAlign: 'right' }}>{chDelta !== null ? delta(chDelta) : <span style={{ color: C.t3, fontSize: 10 }}>—</span>}</td>
+                    <td style={{ padding: '6px 8px', textAlign: 'right', fontFamily: 'var(--mono)', color: C.t2 }}>â‚¹{Math.round(aov).toLocaleString('en-IN')}</td>
+                    <td style={{ padding: '6px 8px', textAlign: 'right' }}>{chDelta !== null ? delta(chDelta) : <span style={{ color: C.t3, fontSize: 10 }}>â€”</span>}</td>
                   </tr>
                 )
               })}
@@ -2047,7 +2047,7 @@ function OverviewPage({ data, alerts, logisticsData }) {
         </div>
       </div>
 
-      {/* ── SECTION 3 + 4: Returns Health & Ads — side by side ── */}
+      {/* â”€â”€ SECTION 3 + 4: Returns Health & Ads â€” side by side â”€â”€ */}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
 
         {/* Returns Health */}
@@ -2068,7 +2068,7 @@ function OverviewPage({ data, alerts, logisticsData }) {
             ))}
           </div>
           <div style={{ borderTop: `1px solid ${C.border}`, paddingTop: 12 }}>
-            <div style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.05em', color: C.t3, marginBottom: 8 }}>Shopify Category · Cancel & RTO %</div>
+            <div style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.05em', color: C.t3, marginBottom: 8 }}>Shopify Category Â· Cancel & RTO %</div>
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11 }}>
               <thead><tr>
                 {['Category','Revenue','Cancel %','RTO %'].map((h, i) => <th key={h} style={{ fontSize: 9, fontWeight: 700, textTransform: 'uppercase', color: C.t3, textAlign: i === 0 ? 'left' : 'right', padding: '2px 4px 6px', borderBottom: `1px solid ${C.border}` }}>{h}</th>)}
@@ -2078,8 +2078,8 @@ function OverviewPage({ data, alerts, logisticsData }) {
                   <tr key={r.name} style={{ borderBottom: i < 5 ? `1px solid ${C.border}` : 'none' }}>
                     <td style={{ padding: '4px 4px', color: C.t2 }}>{r.name}</td>
                     <td style={{ padding: '4px 4px', textAlign: 'right', fontFamily: 'var(--mono)', color: C.t1 }}>{fmt(r.rev)}</td>
-                    <td style={{ padding: '4px 4px', textAlign: 'right', color: r.cancelRev/r.rev > 0.05 ? '#B91C1C' : C.t2 }}>{r.rev > 0 ? (r.cancelRev/r.rev*100).toFixed(1) : '—'}%</td>
-                    <td style={{ padding: '4px 4px', textAlign: 'right', color: (r.rtoRev+r.cirRev)/r.rev > 0.1 ? '#E24B4A' : C.t2 }}>{r.rev > 0 ? ((r.rtoRev+r.cirRev)/r.rev*100).toFixed(1) : '—'}%</td>
+                    <td style={{ padding: '4px 4px', textAlign: 'right', color: r.cancelRev/r.rev > 0.05 ? '#B91C1C' : C.t2 }}>{r.rev > 0 ? (r.cancelRev/r.rev*100).toFixed(1) : 'â€”'}%</td>
+                    <td style={{ padding: '4px 4px', textAlign: 'right', color: (r.rtoRev+r.cirRev)/r.rev > 0.1 ? '#E24B4A' : C.t2 }}>{r.rev > 0 ? ((r.rtoRev+r.cirRev)/r.rev*100).toFixed(1) : 'â€”'}%</td>
                   </tr>
                 ))}
               </tbody>
@@ -2093,8 +2093,8 @@ function OverviewPage({ data, alerts, logisticsData }) {
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 8, marginBottom: 14 }}>
             {[
               { label: 'Total Spend', val: fmt(totalAdSpend) },
-              { label: 'Overall ROAS', val: totalAdSpend > 0 ? `${overallRoas.toFixed(2)}x` : '—', color: overallRoas >= 2 ? '#0D9E68' : overallRoas >= 1 ? '#D97706' : '#B91C1C' },
-              { label: 'Net Rev / Ad', val: totalAdSpend > 0 ? fmt(allNetRev) : '—' },
+              { label: 'Overall ROAS', val: totalAdSpend > 0 ? `${overallRoas.toFixed(2)}x` : 'â€”', color: overallRoas >= 2 ? '#0D9E68' : overallRoas >= 1 ? '#D97706' : '#B91C1C' },
+              { label: 'Net Rev / Ad', val: totalAdSpend > 0 ? fmt(allNetRev) : 'â€”' },
             ].map(({ label, val, color }) => (
               <div key={label} style={{ background: C.bg, borderRadius: 9, padding: '10px 12px' }}>
                 <div style={{ fontSize: 9.5, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.05em', color: C.t3, marginBottom: 4 }}>{label}</div>
@@ -2118,7 +2118,7 @@ function OverviewPage({ data, alerts, logisticsData }) {
                       <tr key={t.platform} style={{ borderBottom: i < platformsWithSpend.length - 1 ? `1px solid ${C.border}` : 'none' }}>
                         <td style={{ padding: '4px 4px', color: C.t2, fontWeight: 600 }}>{t.platform}</td>
                         <td style={{ padding: '4px 4px', textAlign: 'right', fontFamily: 'var(--mono)', color: C.t1 }}>{fmt(t.spend)}</td>
-                        <td style={{ padding: '4px 4px', textAlign: 'right', color: roas >= 2 ? '#0D9E68' : roas >= 1 ? '#D97706' : '#B91C1C' }}>{t.spend > 0 ? `${roas.toFixed(2)}x` : '—'}</td>
+                        <td style={{ padding: '4px 4px', textAlign: 'right', color: roas >= 2 ? '#0D9E68' : roas >= 1 ? '#D97706' : '#B91C1C' }}>{t.spend > 0 ? `${roas.toFixed(2)}x` : 'â€”'}</td>
                         <td style={{ padding: '4px 4px', textAlign: 'right', color: C.t2 }}>{fmtN(t.clicks)}</td>
                         <td style={{ padding: '4px 4px', textAlign: 'right', color: C.t2 }}>{ctr.toFixed(2)}%</td>
                       </tr>
@@ -2131,7 +2131,7 @@ function OverviewPage({ data, alerts, logisticsData }) {
         </div>
       </div>
 
-      {/* ── SECTION 5: Logistics Health ── */}
+      {/* â”€â”€ SECTION 5: Logistics Health â”€â”€ */}
       <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 13, padding: '16px 18px' }}>
         {secHdr('Logistics Health', logisticsData ? `${fmtN(lTotal)} shipments` : 'Loading...')}
         {logisticsData ? (
@@ -2142,8 +2142,8 @@ function OverviewPage({ data, alerts, logisticsData }) {
                 { label: 'RTO %', val: `${lRtoPct.toFixed(1)}%`, color: lRtoPct <= 10 ? '#0D9E68' : lRtoPct <= 20 ? '#D97706' : '#B91C1C', bg: lRtoPct <= 10 ? '#E6F4E0' : lRtoPct <= 20 ? '#FEF2DC' : '#FDE8E8' },
                 { label: 'SLA Breach %', val: `${lSlaPct.toFixed(1)}%`, color: lSlaPct <= 5 ? '#0D9E68' : lSlaPct <= 15 ? '#D97706' : '#B91C1C', bg: lSlaPct <= 5 ? '#E6F4E0' : lSlaPct <= 15 ? '#FEF2DC' : '#FDE8E8' },
                 { label: 'Z-RTO %', val: `${lZRtoPct.toFixed(1)}%`, color: lZRtoPct <= 3 ? '#0D9E68' : lZRtoPct <= 8 ? '#D97706' : '#B91C1C', bg: lZRtoPct <= 3 ? '#E6F4E0' : lZRtoPct <= 8 ? '#FEF2DC' : '#FDE8E8' },
-                { label: 'FASR %', val: lFasr !== null ? `${lFasr.toFixed(1)}%` : '—', color: C.t1, bg: C.bg },
-                { label: 'Avg Fulfilment', val: lAvgFul !== null ? `${lAvgFul.toFixed(1)}d` : '—', color: lAvgFul <= 3 ? '#0D9E68' : lAvgFul <= 5 ? '#D97706' : '#B91C1C', bg: lAvgFul <= 3 ? '#E6F4E0' : lAvgFul <= 5 ? '#FEF2DC' : '#FDE8E8' },
+                { label: 'FASR %', val: lFasr !== null ? `${lFasr.toFixed(1)}%` : 'â€”', color: C.t1, bg: C.bg },
+                { label: 'Avg Fulfilment', val: lAvgFul !== null ? `${lAvgFul.toFixed(1)}d` : 'â€”', color: lAvgFul <= 3 ? '#0D9E68' : lAvgFul <= 5 ? '#D97706' : '#B91C1C', bg: lAvgFul <= 3 ? '#E6F4E0' : lAvgFul <= 5 ? '#FEF2DC' : '#FDE8E8' },
               ].map(({ label, val, color, bg }) => (
                 <div key={label} style={{ background: bg, borderRadius: 9, padding: '10px 12px' }}>
                   <div style={{ fontSize: 9.5, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.05em', color: C.t3, marginBottom: 4 }}>{label}</div>
@@ -2175,7 +2175,7 @@ function OverviewPage({ data, alerts, logisticsData }) {
                           <td style={{ padding: '5px 6px', textAlign: 'right', color: delP >= 80 ? '#0D9E68' : delP >= 60 ? '#D97706' : '#B91C1C' }}>{delP.toFixed(1)}%</td>
                           <td style={{ padding: '5px 6px', textAlign: 'right', color: rtoP <= 10 ? '#0D9E68' : rtoP <= 20 ? '#D97706' : '#B91C1C' }}>{rtoP.toFixed(1)}%</td>
                           <td style={{ padding: '5px 6px', textAlign: 'right', color: C.t2 }}>{zrtoP.toFixed(1)}%</td>
-                          <td style={{ padding: '5px 6px', textAlign: 'right', color: avgFul ? (avgFul <= 3 ? '#0D9E68' : avgFul <= 5 ? '#D97706' : '#B91C1C') : C.t3 }}>{avgFul ? `${avgFul.toFixed(1)}d` : '—'}</td>
+                          <td style={{ padding: '5px 6px', textAlign: 'right', color: avgFul ? (avgFul <= 3 ? '#0D9E68' : avgFul <= 5 ? '#D97706' : '#B91C1C') : C.t3 }}>{avgFul ? `${avgFul.toFixed(1)}d` : 'â€”'}</td>
                         </tr>
                       )
                     })}
@@ -2189,7 +2189,7 @@ function OverviewPage({ data, alerts, logisticsData }) {
         )}
       </div>
 
-      {/* ── SECTION 6: Category Matrix + Geography ── */}
+      {/* â”€â”€ SECTION 6: Category Matrix + Geography â”€â”€ */}
       <div style={{ display: 'grid', gridTemplateColumns: '1.4fr 1fr', gap: 12 }}>
         <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 13, padding: '16px 18px' }}>
           {secHdr('Category Performance', 'All channels')}
@@ -2214,7 +2214,7 @@ function OverviewPage({ data, alerts, logisticsData }) {
                     <td style={{ padding: '5px 6px', textAlign: 'right', fontFamily: 'var(--mono)', color: C.t1 }}>{fmt(r.rev)}</td>
                     <td style={{ padding: '5px 6px', textAlign: 'right', color: C.t3 }}>{share.toFixed(1)}%</td>
                     <td style={{ padding: '5px 6px', textAlign: 'right', color: C.t2 }}>{fmtN(r.orders)}</td>
-                    <td style={{ padding: '5px 6px', textAlign: 'right', fontFamily: 'var(--mono)', color: C.t2 }}>₹{Math.round(aov).toLocaleString('en-IN')}</td>
+                    <td style={{ padding: '5px 6px', textAlign: 'right', fontFamily: 'var(--mono)', color: C.t2 }}>â‚¹{Math.round(aov).toLocaleString('en-IN')}</td>
                   </tr>
                 )
               })}
@@ -2231,12 +2231,12 @@ function OverviewPage({ data, alerts, logisticsData }) {
                 <div key={state}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 3 }}>
                     <span style={{ fontSize: 11.5, fontWeight: 600, color: C.t1 }}>{state.charAt(0) + state.slice(1).toLowerCase()}</span>
-                    <span style={{ fontSize: 11, fontFamily: 'var(--mono)', color: C.t1 }}>{fmt(v.rev)} <span style={{ color: C.t3, fontFamily: 'var(--font)' }}>· {share.toFixed(1)}%</span></span>
+                    <span style={{ fontSize: 11, fontFamily: 'var(--mono)', color: C.t1 }}>{fmt(v.rev)} <span style={{ color: C.t3, fontFamily: 'var(--font)' }}>Â· {share.toFixed(1)}%</span></span>
                   </div>
                   <div style={{ height: 5, background: C.border, borderRadius: 3, overflow: 'hidden' }}>
                     <div style={{ height: '100%', width: `${share}%`, background: C.acc, borderRadius: 3 }} />
                   </div>
-                  <div style={{ fontSize: 10, color: C.t3, marginTop: 2 }}>{fmtN(v.orders)} orders · {v.cities?.size || 0} cities</div>
+                  <div style={{ fontSize: 10, color: C.t3, marginTop: 2 }}>{fmtN(v.orders)} orders Â· {v.cities?.size || 0} cities</div>
                 </div>
               )
             })}
@@ -2248,7 +2248,7 @@ function OverviewPage({ data, alerts, logisticsData }) {
   )
 }
 
-// ── Sales sub-tabs ────────────────────────────────────────────
+// â”€â”€ Sales sub-tabs â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 const TABS = [
   { id: 'all', label: 'All Channels' },
   { id: 'shopify', label: 'Shopify', ch: 'Shopify', logo: '/logo-shopify.png' },
@@ -2274,10 +2274,10 @@ function PaginatedCard({ title, rows, columns, pageSize = 10 }) {
       <DataTable columns={columns} rows={visible} />
       {totalPages > 1 && (
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 10, paddingTop: 8, borderTop: `1px solid ${C.border}` }}>
-          <span style={{ fontSize: 11, color: C.t3 }}>{page * pageSize + 1}–{Math.min((page + 1) * pageSize, rows.length)} of {rows.length}</span>
+          <span style={{ fontSize: 11, color: C.t3 }}>{page * pageSize + 1}â€“{Math.min((page + 1) * pageSize, rows.length)} of {rows.length}</span>
           <div style={{ display: 'flex', gap: 4 }}>
-            <button onClick={() => setPage(p => Math.max(0, p - 1))} disabled={page === 0} style={{ fontSize: 11, padding: '3px 10px', borderRadius: 6, border: `1px solid ${C.border2}`, background: page === 0 ? C.bg : C.card, color: page === 0 ? C.t3 : C.t1, cursor: page === 0 ? 'default' : 'pointer', fontFamily: 'var(--font)' }}>← Prev</button>
-            <button onClick={() => setPage(p => Math.min(totalPages - 1, p + 1))} disabled={page === totalPages - 1} style={{ fontSize: 11, padding: '3px 10px', borderRadius: 6, border: `1px solid ${C.border2}`, background: page === totalPages - 1 ? C.bg : C.card, color: page === totalPages - 1 ? C.t3 : C.t1, cursor: page === totalPages - 1 ? 'default' : 'pointer', fontFamily: 'var(--font)' }}>Next →</button>
+            <button onClick={() => setPage(p => Math.max(0, p - 1))} disabled={page === 0} style={{ fontSize: 11, padding: '3px 10px', borderRadius: 6, border: `1px solid ${C.border2}`, background: page === 0 ? C.bg : C.card, color: page === 0 ? C.t3 : C.t1, cursor: page === 0 ? 'default' : 'pointer', fontFamily: 'var(--font)' }}>â† Prev</button>
+            <button onClick={() => setPage(p => Math.min(totalPages - 1, p + 1))} disabled={page === totalPages - 1} style={{ fontSize: 11, padding: '3px 10px', borderRadius: 6, border: `1px solid ${C.border2}`, background: page === totalPages - 1 ? C.bg : C.card, color: page === totalPages - 1 ? C.t3 : C.t1, cursor: page === totalPages - 1 ? 'default' : 'pointer', fontFamily: 'var(--font)' }}>Next â†’</button>
           </div>
         </div>
       )}
@@ -2286,7 +2286,7 @@ function PaginatedCard({ title, rows, columns, pageSize = 10 }) {
 }
 
 
-// ── Multi-select Voucher Dropdown ────────────────────────────
+// â”€â”€ Multi-select Voucher Dropdown â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function VoucherDropdown({ voucherList, selected, onChange }) {
   const [open, setOpen] = useState(false)
   const [search, setSearch] = useState('')
@@ -2316,19 +2316,19 @@ function VoucherDropdown({ voucherList, selected, onChange }) {
     <div ref={ref} style={{ position: 'relative', flexShrink: 0 }}>
       <div onClick={() => { setPending(null); setOpen(o => !o) }} className="fsel" style={{ display: 'flex', alignItems: 'center', gap: 5, cursor: 'pointer', minWidth: 160, maxWidth: 200, background: selectedArr.length ? '#FFF9CC' : undefined, borderColor: selectedArr.length ? C.acm : undefined }}>
         <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: 11.5 }}>{label}</span>
-        <span style={{ fontSize: 8, color: C.t3, flexShrink: 0 }}>▼</span>
+        <span style={{ fontSize: 8, color: C.t3, flexShrink: 0 }}>â–¼</span>
       </div>
       {open && (
         <div style={{ position: 'absolute', top: '110%', left: 0, zIndex: 200, background: C.card, border: `1px solid ${C.border2}`, borderRadius: 9, boxShadow: '0 8px 28px rgba(0,0,0,.14)', width: 240 }}>
           <div style={{ padding: '7px 8px', borderBottom: `1px solid ${C.border}` }}>
-            <input autoFocus value={search} onChange={e => setSearch(e.target.value)} onMouseDown={e => e.stopPropagation()} placeholder="Search voucher…" style={{ width: '100%', fontSize: 11.5, padding: '4px 8px', border: `1px solid ${C.border2}`, borderRadius: 6, outline: 'none', fontFamily: 'var(--font)', background: C.bg }} />
+            <input autoFocus value={search} onChange={e => setSearch(e.target.value)} onMouseDown={e => e.stopPropagation()} placeholder="Search voucherâ€¦" style={{ width: '100%', fontSize: 11.5, padding: '4px 8px', border: `1px solid ${C.border2}`, borderRadius: 6, outline: 'none', fontFamily: 'var(--font)', background: C.bg }} />
           </div>
           <div style={{ maxHeight: 260, overflowY: 'auto' }}>
             {filtered.map(({ code }) => {
               const checked = staged.includes(code)
               return (
                 <div key={code} onClick={() => toggle(code)} style={{ padding: '5px 10px', fontSize: 11.5, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 7, background: checked ? C.acl : undefined }}>
-                  <span style={{ width: 13, height: 13, borderRadius: 3, border: `1.5px solid ${checked ? C.acm : C.border2}`, background: checked ? C.acc : '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, fontSize: 8, fontWeight: 700 }}>{checked ? '✓' : ''}</span>
+                  <span style={{ width: 13, height: 13, borderRadius: 3, border: `1.5px solid ${checked ? C.acm : C.border2}`, background: checked ? C.acc : '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, fontSize: 8, fontWeight: 700 }}>{checked ? 'âœ“' : ''}</span>
                   <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{code}</span>
                 </div>
               )
@@ -2345,7 +2345,7 @@ function VoucherDropdown({ voucherList, selected, onChange }) {
   )
 }
 
-// ── Searchable single-select dropdown ────────────────────────
+// â”€â”€ Searchable single-select dropdown â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function SearchableSelect({ options, value, onChange, placeholder, dropdownWidth, multi }) {
   const [open, setOpen] = useState(false)
   const [search, setSearch] = useState('')
@@ -2382,19 +2382,19 @@ function SearchableSelect({ options, value, onChange, placeholder, dropdownWidth
     <div ref={ref} style={{ position: 'relative', flexShrink: 0 }}>
       <div onClick={openDropdown} className="fsel" style={{ display: 'flex', alignItems: 'center', gap: 5, cursor: 'pointer', minWidth: 140, background: hasValue ? '#FFF9CC' : undefined, borderColor: hasValue ? C.acm : undefined }}>
         <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: 11.5 }}>{label}</span>
-        <span style={{ fontSize: 8, color: C.t3, flexShrink: 0 }}>▼</span>
+        <span style={{ fontSize: 8, color: C.t3, flexShrink: 0 }}>â–¼</span>
       </div>
       {open && (
         <div style={{ position: 'absolute', top: '110%', left: 0, zIndex: 200, background: C.card, border: `1px solid ${C.border2}`, borderRadius: 9, boxShadow: '0 8px 28px rgba(0,0,0,.14)', width: dropdownWidth || 220 }}>
           <div style={{ padding: '7px 8px', borderBottom: `1px solid ${C.border}` }}>
-            <input autoFocus value={search} onChange={e => setSearch(e.target.value)} onMouseDown={e => e.stopPropagation()} placeholder={`Search ${placeholder?.toLowerCase() || ''}…`} style={{ width: '100%', fontSize: 11.5, padding: '4px 8px', border: `1px solid ${C.border2}`, borderRadius: 6, outline: 'none', fontFamily: 'var(--font)', background: C.bg }} />
+            <input autoFocus value={search} onChange={e => setSearch(e.target.value)} onMouseDown={e => e.stopPropagation()} placeholder={`Search ${placeholder?.toLowerCase() || ''}â€¦`} style={{ width: '100%', fontSize: 11.5, padding: '4px 8px', border: `1px solid ${C.border2}`, borderRadius: 6, outline: 'none', fontFamily: 'var(--font)', background: C.bg }} />
           </div>
           <div style={{ maxHeight: 240, overflowY: 'auto' }}>
             {filtered.map(opt => {
               const active = multi ? staged.includes(opt) : staged === opt
               return (
                 <div key={opt} onClick={() => toggle(opt)} style={{ padding: '5px 10px', fontSize: 11.5, cursor: 'pointer', background: active ? C.acl : undefined, color: active ? C.t1 : C.t2, fontWeight: active ? 600 : 400, whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', gap: 7 }}>
-                  {multi && <span style={{ width: 13, height: 13, borderRadius: 3, border: `1.5px solid ${active ? C.acm : C.border2}`, background: active ? C.acm : 'transparent', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{active && <span style={{ color: '#fff', fontSize: 9, lineHeight: 1 }}>✓</span>}</span>}
+                  {multi && <span style={{ width: 13, height: 13, borderRadius: 3, border: `1.5px solid ${active ? C.acm : C.border2}`, background: active ? C.acm : 'transparent', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{active && <span style={{ color: '#fff', fontSize: 9, lineHeight: 1 }}>âœ“</span>}</span>}
                   {opt}
                 </div>
               )
@@ -2526,11 +2526,11 @@ function getWeekBucketKey(date, rangeStart) {
   const endLabel = bucketStart.getMonth() !== bucketEnd.getMonth()
     ? `${ordSuffix(bucketEnd.getDate())} ${endMon}`
     : ordSuffix(bucketEnd.getDate())
-  return { key: `${bucketIdx}`, label: `${mon} '${yr} ${ordSuffix(bucketStart.getDate())}–${endLabel}`, sortKey: bucketStart.toISOString().slice(0, 10) }
+  return { key: `${bucketIdx}`, label: `${mon} '${yr} ${ordSuffix(bucketStart.getDate())}â€“${endLabel}`, sortKey: bucketStart.toISOString().slice(0, 10) }
 }
 
 function getGroupKey(date, groupBy) {
-  if (!date) return '—'
+  if (!date) return 'â€”'
   if (groupBy === 'daily') return date
   if (groupBy === 'monthly') return date.slice(0, 7)
   if (groupBy === 'quarterly') {
@@ -2583,7 +2583,7 @@ function DailyChannelTable({ dailyArr, channels, nDays = 7, rangeStart }) {
   }
   const fmtVal = v => {
     if (metric === 'rev') return fmt(v)
-    if (metric === 'aov' || metric === 'asp') return v > 0 ? `₹${Math.round(v).toLocaleString('en-IN')}` : '—'
+    if (metric === 'aov' || metric === 'asp') return v > 0 ? `â‚¹${Math.round(v).toLocaleString('en-IN')}` : 'â€”'
     return fmtN(v)
   }
   const getTotalVal = d => {
@@ -2654,7 +2654,7 @@ function DailyChannelTable({ dailyArr, channels, nDays = 7, rangeStart }) {
                     const sharePct = rowTotal && v ? (v / rowTotal * 100).toFixed(1) : null
                     return (
                       <td key={ch} style={{ padding: '6px 8px', textAlign: 'right', fontFamily: 'var(--mono)', fontSize: 11.5, color: v ? C.t1 : C.t3, borderLeft: `1px solid ${C.border}` }}>
-                        {v ? <>{fmtVal(v)}<span style={{ fontSize: 10, color: C.t3, fontWeight: 400, marginLeft: 4 }}>{sharePct}%</span></> : '—'}
+                        {v ? <>{fmtVal(v)}<span style={{ fontSize: 10, color: C.t3, fontWeight: 400, marginLeft: 4 }}>{sharePct}%</span></> : 'â€”'}
                       </td>
                     )
                   })}
@@ -2693,11 +2693,11 @@ function CategoryChannelMatrix({ heatData, channels, maxHeat, subCatChannelMap =
     const intensity = rowTotal > 0 ? v / rowTotal : 0
     const share = rowTotal > 0 ? (v / rowTotal * 100).toFixed(0) : 0
     const cls = intensity === 0 ? 'h0' : intensity < 0.1 ? 'h1' : intensity < 0.3 ? 'h2' : intensity < 0.6 ? 'h3' : 'h4'
-    return { cls, content: v > 0 ? <>{fmt(v)}<span style={{ fontSize: 9, fontWeight: 500, color: 'rgba(0,0,0,0.38)', marginLeft: 3 }}>{share}%</span></> : '—' }
+    return { cls, content: v > 0 ? <>{fmt(v)}<span style={{ fontSize: 9, fontWeight: 500, color: 'rgba(0,0,0,0.38)', marginLeft: 3 }}>{share}%</span></> : 'â€”' }
   }
 
   return (
-    <Card title="Category × Channel Revenue Matrix">
+    <Card title="Category Ã— Channel Revenue Matrix">
       <div className="tbl-wrap">
         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12, minWidth: 700 }}>
           <thead style={{ position: 'sticky', top: 0, background: C.card, zIndex: 1 }}>
@@ -2726,7 +2726,7 @@ function CategoryChannelMatrix({ heatData, channels, maxHeat, subCatChannelMap =
                         title={row.cat}
                         style={{ cursor: hasSubCats ? 'pointer' : 'default', userSelect: 'none', display: 'flex', alignItems: 'center', gap: 5, overflow: 'hidden' }}
                       >
-                        {hasSubCats && <span style={{ fontSize: 9, color: C.t3, flexShrink: 0, display: 'inline-block', transform: isOpen ? 'rotate(90deg)' : 'rotate(0deg)', transition: 'transform .15s' }}>▶</span>}
+                        {hasSubCats && <span style={{ fontSize: 9, color: C.t3, flexShrink: 0, display: 'inline-block', transform: isOpen ? 'rotate(90deg)' : 'rotate(0deg)', transition: 'transform .15s' }}>â–¶</span>}
                         <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{row.cat}</span>
                       </span>
                     </td>
@@ -2752,8 +2752,8 @@ function CategoryChannelMatrix({ heatData, channels, maxHeat, subCatChannelMap =
                         <tr style={{ borderBottom: `1px solid ${C.border}`, background: '#FAFAF7' }}>
                           <td style={{ padding: '3px 4px 3px 18px', color: C.t2, fontSize: 10, overflow: 'hidden' }}>
                             <span onClick={() => hasSkus && toggleSC(scKey)} title={sc} style={{ cursor: hasSkus ? 'pointer' : 'default', userSelect: 'none', display: 'flex', alignItems: 'center', gap: 4, overflow: 'hidden' }}>
-                              {hasSkus && <span style={{ fontSize: 8, color: C.t3, flexShrink: 0, display: 'inline-block', transform: scOpen ? 'rotate(90deg)' : 'rotate(0deg)', transition: 'transform .15s' }}>▶</span>}
-                              <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>└ {sc}</span>
+                              {hasSkus && <span style={{ fontSize: 8, color: C.t3, flexShrink: 0, display: 'inline-block', transform: scOpen ? 'rotate(90deg)' : 'rotate(0deg)', transition: 'transform .15s' }}>â–¶</span>}
+                              <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>â”” {sc}</span>
                             </span>
                           </td>
                           {channels.map(ch => {
@@ -2767,7 +2767,7 @@ function CategoryChannelMatrix({ heatData, channels, maxHeat, subCatChannelMap =
                           const skuTotal = channels.reduce((s, ch) => s + (skuChData[ch] || 0), 0)
                           return (
                             <tr key={sku} style={{ borderBottom: `1px solid ${C.border}`, background: '#F5F5F0' }}>
-                              <td style={{ padding: '2px 4px 2px 32px', color: C.t3, fontSize: 9.5, fontFamily: 'var(--mono)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={sku}>└ {sku}</td>
+                              <td style={{ padding: '2px 4px 2px 32px', color: C.t3, fontSize: 9.5, fontFamily: 'var(--mono)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={sku}>â”” {sku}</td>
                               {channels.map(ch => {
                                 const v = skuChData[ch] || 0
                                 const { cls, content } = renderCell(v, skuTotal)
@@ -2814,13 +2814,13 @@ function AmazonCategoryMatrix({ channels, catChannel, subCatChannel, skuChannel,
     const intensity = rowTotal > 0 ? v / rowTotal : 0
     const share = rowTotal > 0 ? (v / rowTotal * 100).toFixed(0) : 0
     const cls = intensity === 0 ? 'h0' : intensity < 0.1 ? 'h1' : intensity < 0.3 ? 'h2' : intensity < 0.6 ? 'h3' : 'h4'
-    return { cls, content: v > 0 ? <>{fmtVal(v)}<span style={{ fontSize: 9, fontWeight: 500, color: 'rgba(0,0,0,0.38)', marginLeft: 3 }}>{share}%</span></> : '—' }
+    return { cls, content: v > 0 ? <>{fmtVal(v)}<span style={{ fontSize: 9, fontWeight: 500, color: 'rgba(0,0,0,0.38)', marginLeft: 3 }}>{share}%</span></> : 'â€”' }
   }
 
   const CH_COLORS = { FBA: '#E8930A', MFN: '#2E74CC', 'Seller Central': '#E8930A', 'Vendor Central': '#2E74CC' }
 
   return (
-    <Card title={title || 'Category × Channel Revenue Matrix'} action={
+    <Card title={title || 'Category Ã— Channel Revenue Matrix'} action={
       <div style={{ display: 'flex', gap: 3 }}>
         {[['rev','Revenue'],['units','Units'],['orders','Orders']].map(([k,l]) => (
           <button key={k} onClick={() => setMetric(k)} style={{ fontSize: 10, fontWeight: metric===k?700:500, padding: '2px 8px', borderRadius: 4, border: `1px solid ${metric===k?C.acm:C.border}`, background: metric===k?C.acc:'transparent', color: C.t1, cursor: 'pointer', fontFamily: 'var(--font)' }}>{l}</button>
@@ -2848,7 +2848,7 @@ function AmazonCategoryMatrix({ channels, catChannel, subCatChannel, skuChannel,
                   <tr style={{ borderBottom: `1px solid ${C.border}` }}>
                     <td style={{ padding: '5px', color: C.t1 }}>
                       <span onClick={() => hasSubCats && toggle(row.cat)} style={{ cursor: hasSubCats ? 'pointer' : 'default', userSelect: 'none', display: 'inline-flex', alignItems: 'center', gap: 5 }}>
-                        {hasSubCats && <span style={{ fontSize: 9, color: C.t3, display: 'inline-block', transform: isOpen ? 'rotate(90deg)' : 'rotate(0deg)', transition: 'transform .15s' }}>▶</span>}
+                        {hasSubCats && <span style={{ fontSize: 9, color: C.t3, display: 'inline-block', transform: isOpen ? 'rotate(90deg)' : 'rotate(0deg)', transition: 'transform .15s' }}>â–¶</span>}
                         {row.cat}
                       </span>
                     </td>
@@ -2871,8 +2871,8 @@ function AmazonCategoryMatrix({ channels, catChannel, subCatChannel, skuChannel,
                         <tr style={{ borderBottom: `1px solid ${C.border}`, background: '#FAFAF7' }}>
                           <td style={{ padding: '3px 4px 3px 18px', color: C.t2, fontSize: 10, overflow: 'hidden' }}>
                             <span onClick={() => hasSkus && toggleSC(scKey)} title={sc} style={{ cursor: hasSkus ? 'pointer' : 'default', userSelect: 'none', display: 'flex', alignItems: 'center', gap: 4, overflow: 'hidden' }}>
-                              {hasSkus && <span style={{ fontSize: 8, color: C.t3, flexShrink: 0, display: 'inline-block', transform: scOpen ? 'rotate(90deg)' : 'rotate(0deg)', transition: 'transform .15s' }}>▶</span>}
-                              <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>└ {sc}</span>
+                              {hasSkus && <span style={{ fontSize: 8, color: C.t3, flexShrink: 0, display: 'inline-block', transform: scOpen ? 'rotate(90deg)' : 'rotate(0deg)', transition: 'transform .15s' }}>â–¶</span>}
+                              <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>â”” {sc}</span>
                             </span>
                           </td>
                           {channels.map(ch => {
@@ -2884,7 +2884,7 @@ function AmazonCategoryMatrix({ channels, catChannel, subCatChannel, skuChannel,
                         </tr>
                         {scOpen && skus.map(({ sku, chD, total: skuTotal }) => (
                           <tr key={sku} style={{ borderBottom: `1px solid ${C.border}`, background: '#F5F5F0' }}>
-                            <td style={{ padding: '2px 4px 2px 32px', color: C.t3, fontSize: 9.5, fontFamily: 'var(--mono)' }}>└ {sku}</td>
+                            <td style={{ padding: '2px 4px 2px 32px', color: C.t3, fontSize: 9.5, fontFamily: 'var(--mono)' }}>â”” {sku}</td>
                             {channels.map(ch => {
                               const v = getVal(chD[ch])
                               const { cls, content } = renderCell(v, skuTotal)
@@ -2941,7 +2941,7 @@ function FinancialCategoryMatrix({ catData, subCatData, skuData, title, showRetu
     const cirRev = d.cirRev || 0
     // Effective GST ratio observed for this row's gross vs exc-GST revenue
     const gstRatio = gross > 0 ? (gross - excRev) / gross : 0
-    // Net Rev = (Gross − Cancel − RTO − CIR) with GST stripped out at the same effective ratio
+    // Net Rev = (Gross âˆ’ Cancel âˆ’ RTO âˆ’ CIR) with GST stripped out at the same effective ratio
     const grossAfterReturns = gross - cancelRev - rtoRev - cirRev
     const net = grossAfterReturns * (1 - gstRatio)
     const gst = grossAfterReturns - net
@@ -2985,21 +2985,21 @@ function FinancialCategoryMatrix({ catData, subCatData, skuData, title, showRetu
   const cell = (fs = 10) => ({ padding: '4px 3px', textAlign: 'right', fontFamily: 'var(--mono)', fontSize: fs, fontWeight: 400, whiteSpace: 'nowrap' })
   const pctSpan = (n, d) => { if (!d || !n) return null; const p = (n / d * 100).toFixed(1); return <span style={{ fontSize: 8, color: C.t3, marginLeft: 2 }}>({p}%)</span> }
   const momCell = (cur, prev) => {
-    if (!prev || prev === 0) return <span style={{ color: C.t3, fontSize: 10 }}>—</span>
+    if (!prev || prev === 0) return <span style={{ color: C.t3, fontSize: 10 }}>â€”</span>
     const p = ((cur - prev) / prev) * 100
     const positive = p >= 0
-    return <span style={{ fontSize: 10, fontWeight: 700, color: positive ? '#0D9E68' : '#B91C1C' }}>{positive ? '↗' : '↘'} {Math.abs(p).toFixed(1)}%</span>
+    return <span style={{ fontSize: 10, fontWeight: 700, color: positive ? '#0D9E68' : '#B91C1C' }}>{positive ? 'â†—' : 'â†˜'} {Math.abs(p).toFixed(1)}%</span>
   }
   const returnsRevCell = (rtoRev, cirRev, exchRev, gross, returnRev) => {
     const total = (returnRev || 0) + (rtoRev || 0) + (cirRev || 0)
-    if (total <= 0) return <span style={{ color: C.t3 }}>—</span>
+    if (total <= 0) return <span style={{ color: C.t3 }}>â€”</span>
     const pct = gross > 0 ? (total / gross * 100).toFixed(1) : null
-    return pct !== null ? <>{pct}%</> : <span style={{ color: C.t3 }}>—</span>
+    return pct !== null ? <>{pct}%</> : <span style={{ color: C.t3 }}>â€”</span>
   }
   const revPctCell = (val, gross) => {
-    if (!val || val <= 0) return <span style={{ color: C.t3 }}>—</span>
+    if (!val || val <= 0) return <span style={{ color: C.t3 }}>â€”</span>
     const pct = gross > 0 ? (val / gross * 100).toFixed(1) : null
-    return pct !== null ? <>{pct}%</> : <span style={{ color: C.t3 }}>—</span>
+    return pct !== null ? <>{pct}%</> : <span style={{ color: C.t3 }}>â€”</span>
   }
 
   return (
@@ -3033,14 +3033,14 @@ function FinancialCategoryMatrix({ catData, subCatData, skuData, title, showRetu
                   <tr style={{ borderBottom: `1px solid ${C.border}` }}>
                     <td style={{ padding: '4px 4px', color: C.t1, fontSize: 10.5 }}>
                       <span onClick={() => hasSubs && toggle(row.cat)} style={{ cursor: hasSubs ? 'pointer' : 'default', userSelect: 'none', display: 'inline-flex', alignItems: 'center', gap: 5 }}>
-                        {hasSubs && <span style={{ fontSize: 9, color: C.t3, display: 'inline-block', transform: isOpen ? 'rotate(90deg)' : 'rotate(0deg)', transition: 'transform .15s' }}>▶</span>}
+                        {hasSubs && <span style={{ fontSize: 9, color: C.t3, display: 'inline-block', transform: isOpen ? 'rotate(90deg)' : 'rotate(0deg)', transition: 'transform .15s' }}>â–¶</span>}
                         {row.cat}
                       </span>
                     </td>
                     <td style={{ ...cell(), color: grossColor, fontWeight: 600 }}>{fmt(row.gross)}{showShare && tot.gross > 0 ? <span style={{ fontSize: 9.5, color: C.t3, marginLeft: 6, fontWeight: 400 }}>({(row.gross / tot.gross * 100).toFixed(1)}%)</span> : null}</td>
                     <td style={{ ...cell(), color: C.t2 }}>{fmtN(row.units)}</td>
                     {showExtras && <td style={{ ...cell() }}>{momCell(row.gross, row.prevGross)}</td>}
-                    <td style={{ ...cell(), color: C.t3 }}>₹{(row.units > 0 ? Math.round(row.gross / row.units) : 0).toLocaleString('en-IN')}</td>
+                    <td style={{ ...cell(), color: C.t3 }}>â‚¹{(row.units > 0 ? Math.round(row.gross / row.units) : 0).toLocaleString('en-IN')}</td>
                     {hasCancelData && <>
                       {neutral && <td style={{ ...cell(), color: cancelColor }}>{revPctCell(row.cancelRev, row.gross)}</td>}
                       {neutral && <td style={{ ...cell(), color: rtoColor }}>{revPctCell(row.rtoRev, row.gross)}</td>}
@@ -3070,14 +3070,14 @@ function FinancialCategoryMatrix({ catData, subCatData, skuData, title, showRetu
                         <tr style={{ borderBottom: `1px solid ${C.border}`, background: '#FAFAF7' }}>
                           <td style={{ padding: '3px 4px 3px 18px', color: C.t2, fontSize: 10 }}>
                             <span onClick={() => hasSkus && toggleSC(scKey)} style={{ cursor: hasSkus ? 'pointer' : 'default', userSelect: 'none', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-                              {hasSkus && <span style={{ fontSize: 8, color: C.t3, display: 'inline-block', transform: scOpen ? 'rotate(90deg)' : 'rotate(0deg)', transition: 'transform .15s' }}>▶</span>}
-                              └ {sr.sc}
+                              {hasSkus && <span style={{ fontSize: 8, color: C.t3, display: 'inline-block', transform: scOpen ? 'rotate(90deg)' : 'rotate(0deg)', transition: 'transform .15s' }}>â–¶</span>}
+                              â”” {sr.sc}
                             </span>
                           </td>
                           <td style={{ ...cell(10.5), color: grossColor }}>{fmt(sr.gross)}{showShare && tot.gross > 0 ? <span style={{ fontSize: 9, color: C.t3, marginLeft: 5 }}>({(sr.gross / tot.gross * 100).toFixed(1)}%)</span> : null}</td>
                           <td style={{ ...cell(10.5), color: C.t2 }}>{fmtN(sr.units)}</td>
                           {showExtras && <td style={{ ...cell(10.5) }}>{momCell(sr.gross, srPrev)}</td>}
-                          <td style={{ ...cell(10.5), color: C.t3 }}>₹{(sr.units > 0 ? Math.round(sr.gross / sr.units) : 0).toLocaleString('en-IN')}</td>
+                          <td style={{ ...cell(10.5), color: C.t3 }}>â‚¹{(sr.units > 0 ? Math.round(sr.gross / sr.units) : 0).toLocaleString('en-IN')}</td>
                           {hasCancelData && <>
                             {neutral && <td style={{ ...cell(10.5), color: cancelColor }}>{revPctCell(sr.cancelRev, sr.gross)}</td>}
                             {neutral && <td style={{ ...cell(10.5), color: rtoColor }}>{revPctCell(sr.rtoRev, sr.gross)}</td>}
@@ -3089,11 +3089,11 @@ function FinancialCategoryMatrix({ catData, subCatData, skuData, title, showRetu
                         </tr>
                         {scOpen && skus.map(sk => (
                           <tr key={sk.sku} style={{ borderBottom: `1px solid ${C.border}`, background: '#F5F5F0' }}>
-                            <td style={{ padding: '2px 4px 2px 32px', color: C.t3, fontSize: 9.5, fontFamily: 'var(--mono)' }}>└ {sk.sku}</td>
+                            <td style={{ padding: '2px 4px 2px 32px', color: C.t3, fontSize: 9.5, fontFamily: 'var(--mono)' }}>â”” {sk.sku}</td>
                             <td style={{ ...cell(10), color: grossColor }}>{fmt(sk.gross)}{showShare && tot.gross > 0 ? <span style={{ fontSize: 8.5, color: C.t3, marginLeft: 5 }}>({(sk.gross / tot.gross * 100).toFixed(1)}%)</span> : null}</td>
                             <td style={{ ...cell(10), color: C.t2 }}>{fmtN(sk.units)}</td>
                             {showExtras && <td style={{ ...cell(10) }}>{momCell(sk.gross, sk.prevGross)}</td>}
-                            <td style={{ ...cell(10), color: C.t3 }}>₹{(sk.units > 0 ? Math.round(sk.gross / sk.units) : 0).toLocaleString('en-IN')}</td>
+                            <td style={{ ...cell(10), color: C.t3 }}>â‚¹{(sk.units > 0 ? Math.round(sk.gross / sk.units) : 0).toLocaleString('en-IN')}</td>
                             {hasCancelData && <>
                               {neutral && <td style={{ ...cell(10), color: cancelColor }}>{revPctCell(sk.cancelRev, sk.gross)}</td>}
                               {neutral && <td style={{ ...cell(10), color: rtoColor }}>{revPctCell(sk.rtoRev, sk.gross)}</td>}
@@ -3117,7 +3117,7 @@ function FinancialCategoryMatrix({ catData, subCatData, skuData, title, showRetu
               <td style={{ padding: '4px 3px', textAlign: 'right', fontWeight: 700, fontFamily: 'var(--mono)', fontSize: 10.5, color: grossColor }}>{fmt(tot.gross)}{showShare ? <span style={{ fontSize: 9.5, color: C.t3, marginLeft: 6, fontWeight: 400 }}>(100%)</span> : null}</td>
               <td style={{ padding: '4px 3px', textAlign: 'right', fontWeight: 700, fontFamily: 'var(--mono)', fontSize: 10.5, color: C.t2 }}>{fmtN(tot.units)}</td>
               {showExtras && <td style={{ padding: '4px 3px', textAlign: 'right', fontWeight: 700, fontFamily: 'var(--mono)', fontSize: 10.5 }}>{momCell(tot.gross, tot.prevGross)}</td>}
-              <td style={{ padding: '4px 3px', textAlign: 'right', fontWeight: 700, fontFamily: 'var(--mono)', fontSize: 10.5, color: C.t3 }}>₹{tot.units > 0 ? Math.round(tot.gross / tot.units).toLocaleString('en-IN') : '—'}</td>
+              <td style={{ padding: '4px 3px', textAlign: 'right', fontWeight: 700, fontFamily: 'var(--mono)', fontSize: 10.5, color: C.t3 }}>â‚¹{tot.units > 0 ? Math.round(tot.gross / tot.units).toLocaleString('en-IN') : 'â€”'}</td>
               {hasCancelData && <>
                 {neutral && <td style={{ padding: '4px 3px', textAlign: 'right', fontWeight: 700, fontFamily: 'var(--mono)', fontSize: 10.5, color: cancelColor }}>{revPctCell(tot.cancelRev, tot.gross)}</td>}
                 {neutral && <td style={{ padding: '4px 3px', textAlign: 'right', fontWeight: 700, fontFamily: 'var(--mono)', fontSize: 10.5, color: rtoColor }}>{revPctCell(tot.rtoRev, tot.gross)}</td>}
@@ -3147,7 +3147,7 @@ function VCCategoryMatrix({ catData, subCatData, skuData, title }) {
   const intensity = (v, tot) => { if (!tot || !v) return 'h0'; const r = v / tot; return r < 0.1 ? 'h1' : r < 0.3 ? 'h2' : r < 0.6 ? 'h3' : 'h4' }
 
   return (
-    <Card title={title || 'Category Revenue Matrix · Vendor Central'}>
+    <Card title={title || 'Category Revenue Matrix Â· Vendor Central'}>
       <div className="tbl-wrap" style={{ maxHeight: 560, overflowY: 'auto' }}>
         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11, fontWeight: 400 }}>
           <thead style={{ position: 'sticky', top: 0, background: C.card, zIndex: 1 }}>
@@ -3167,12 +3167,12 @@ function VCCategoryMatrix({ catData, subCatData, skuData, title }) {
                   <tr style={{ borderBottom: `1px solid ${C.border}` }}>
                     <td style={{ padding: '5px', color: C.t1 }}>
                       <span onClick={() => hasSC && toggle(cat)} style={{ cursor: hasSC ? 'pointer' : 'default', userSelect: 'none', display: 'inline-flex', alignItems: 'center', gap: 5 }}>
-                        {hasSC && <span style={{ fontSize: 9, color: C.t3, display: 'inline-block', transform: isOpen ? 'rotate(90deg)' : 'rotate(0deg)', transition: 'transform .15s' }}>▶</span>}
+                        {hasSC && <span style={{ fontSize: 9, color: C.t3, display: 'inline-block', transform: isOpen ? 'rotate(90deg)' : 'rotate(0deg)', transition: 'transform .15s' }}>â–¶</span>}
                         {cat}
                       </span>
                     </td>
-                    <td className={intensity(d.units, totUnits)} style={{ padding: '5px', textAlign: 'right', fontFamily: 'var(--mono)', fontSize: 11, fontWeight: 400 }}>{d.units > 0 ? fmtN(d.units) : '—'}</td>
-                    <td className={intensity(d.rev, totRev)} style={{ padding: '5px', textAlign: 'right', fontFamily: 'var(--mono)', fontSize: 11, fontWeight: 400 }}>{d.rev > 0 ? fmt(d.rev) : '—'}</td>
+                    <td className={intensity(d.units, totUnits)} style={{ padding: '5px', textAlign: 'right', fontFamily: 'var(--mono)', fontSize: 11, fontWeight: 400 }}>{d.units > 0 ? fmtN(d.units) : 'â€”'}</td>
+                    <td className={intensity(d.rev, totRev)} style={{ padding: '5px', textAlign: 'right', fontFamily: 'var(--mono)', fontSize: 11, fontWeight: 400 }}>{d.rev > 0 ? fmt(d.rev) : 'â€”'}</td>
                   </tr>
                   {isOpen && scs.map(({ sc, sd }) => {
                     const scKey = `${cat}::${sc}`
@@ -3184,18 +3184,18 @@ function VCCategoryMatrix({ catData, subCatData, skuData, title }) {
                         <tr style={{ borderBottom: `1px solid ${C.border}`, background: '#FAFAF7' }}>
                           <td style={{ padding: '3px 4px 3px 18px', color: C.t2, fontSize: 10, overflow: 'hidden' }}>
                             <span onClick={() => hasSkus && toggleSC(scKey)} title={sc} style={{ cursor: hasSkus ? 'pointer' : 'default', userSelect: 'none', display: 'flex', alignItems: 'center', gap: 4, overflow: 'hidden' }}>
-                              {hasSkus && <span style={{ fontSize: 8, color: C.t3, flexShrink: 0, display: 'inline-block', transform: scOpen ? 'rotate(90deg)' : 'rotate(0deg)', transition: 'transform .15s' }}>▶</span>}
-                              <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>└ {sc}</span>
+                              {hasSkus && <span style={{ fontSize: 8, color: C.t3, flexShrink: 0, display: 'inline-block', transform: scOpen ? 'rotate(90deg)' : 'rotate(0deg)', transition: 'transform .15s' }}>â–¶</span>}
+                              <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>â”” {sc}</span>
                             </span>
                           </td>
-                          <td style={{ padding: '4px 5px', textAlign: 'right', fontFamily: 'var(--mono)', fontSize: 10.5, fontWeight: 400 }}>{sd.units > 0 ? fmtN(sd.units) : '—'}</td>
-                          <td style={{ padding: '4px 5px', textAlign: 'right', fontFamily: 'var(--mono)', fontSize: 10.5, fontWeight: 400 }}>{sd.rev > 0 ? fmt(sd.rev) : '—'}</td>
+                          <td style={{ padding: '4px 5px', textAlign: 'right', fontFamily: 'var(--mono)', fontSize: 10.5, fontWeight: 400 }}>{sd.units > 0 ? fmtN(sd.units) : 'â€”'}</td>
+                          <td style={{ padding: '4px 5px', textAlign: 'right', fontFamily: 'var(--mono)', fontSize: 10.5, fontWeight: 400 }}>{sd.rev > 0 ? fmt(sd.rev) : 'â€”'}</td>
                         </tr>
                         {scOpen && skus.map(({ sku, kd }) => (
                           <tr key={sku} style={{ borderBottom: `1px solid ${C.border}`, background: '#F5F5F0' }}>
-                            <td style={{ padding: '2px 4px 2px 32px', color: C.t3, fontSize: 9.5, fontFamily: 'var(--mono)' }}>└ {sku}</td>
-                            <td style={{ padding: '3px 5px', textAlign: 'right', fontFamily: 'var(--mono)', fontSize: 10, fontWeight: 400 }}>{kd.units > 0 ? fmtN(kd.units) : '—'}</td>
-                            <td style={{ padding: '3px 5px', textAlign: 'right', fontFamily: 'var(--mono)', fontSize: 10, fontWeight: 400 }}>{kd.rev > 0 ? fmt(kd.rev) : '—'}</td>
+                            <td style={{ padding: '2px 4px 2px 32px', color: C.t3, fontSize: 9.5, fontFamily: 'var(--mono)' }}>â”” {sku}</td>
+                            <td style={{ padding: '3px 5px', textAlign: 'right', fontFamily: 'var(--mono)', fontSize: 10, fontWeight: 400 }}>{kd.units > 0 ? fmtN(kd.units) : 'â€”'}</td>
+                            <td style={{ padding: '3px 5px', textAlign: 'right', fontFamily: 'var(--mono)', fontSize: 10, fontWeight: 400 }}>{kd.rev > 0 ? fmt(kd.rev) : 'â€”'}</td>
                           </tr>
                         ))}
                       </Fragment>
@@ -3227,7 +3227,7 @@ function RegionTierDonutRow({ regionRows, tierRows }) {
 
   const metricVal = (r, m) => m === 'rev' ? r.rev : m === 'orders' ? r.orders : m === 'units' ? r.units : (r.orders ? Math.round(r.rev / r.orders) : 0)
   const fmtK = v => v >= 1000 ? (v / 1000).toFixed(1).replace(/\.0$/, '') + 'k' : fmtN(v)
-  const metricFmt = (v, m) => m === 'aov' ? `₹${v.toLocaleString('en-IN')}` : m === 'rev' ? fmt(v) : fmtK(v)
+  const metricFmt = (v, m) => m === 'aov' ? `â‚¹${v.toLocaleString('en-IN')}` : m === 'rev' ? fmt(v) : fmtK(v)
 
   const selStyle = active => ({ fontSize: 11, fontWeight: active ? 700 : 500, padding: '3px 9px', borderRadius: 5, border: `1px solid ${active ? C.acm : C.border}`, background: active ? C.acc : 'transparent', color: C.t1, cursor: 'pointer', fontFamily: 'var(--font)' })
 
@@ -3343,7 +3343,7 @@ function AllTab({ data, rangeStart }) {
     if (!prev || Math.abs(prev) < 1) return null
     const pct = (cur - prev) / prev * 100
     if (Math.abs(pct) > 999) return null
-    return <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 4, background: pct >= 0 ? C.green.bg : C.red.bg, color: pct >= 0 ? C.green.tx : C.red.tx, flexShrink: 0 }}>{pct >= 0 ? '▲' : '▼'} {Math.abs(pct).toFixed(1)}%</span>
+    return <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 4, background: pct >= 0 ? C.green.bg : C.red.bg, color: pct >= 0 ? C.green.tx : C.red.tx, flexShrink: 0 }}>{pct >= 0 ? 'â–²' : 'â–¼'} {Math.abs(pct).toFixed(1)}%</span>
   }
 
   const revChg = prevRev > 0 ? ((totalRev - prevRev) / prevRev * 100) : null
@@ -3359,18 +3359,18 @@ function AllTab({ data, rangeStart }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
       <div style={{ display: 'grid', gridTemplateColumns: '1.5fr 5fr', gap: 10, alignItems: 'stretch' }}>
-        {/* Gross Revenue hero — tall left column */}
+        {/* Gross Revenue hero â€” tall left column */}
         <div className="kpi-card" style={{ display: 'flex', flexDirection: 'column', gap: 8, padding: '16px 18px' }}>
           <div className="kpi-label" style={{ fontSize: 11 }}>Gross Revenue (Inc. GST)</div>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 6 }}>
             <div className="kpi-value" style={{ fontSize: 32, fontWeight: 800 }}>{fmt(totalRev)}</div>
             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4 }}>
-              {revChg !== null && <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 7px', borderRadius: 4, background: revChg >= 0 ? C.green.bg : C.red.bg, color: revChg >= 0 ? C.green.tx : C.red.tx }}>{revChg >= 0 ? '▲' : '▼'} {Math.abs(revChg).toFixed(1)}% <span style={{ fontWeight: 400, opacity: 0.7 }}>WoW</span></span>}
-              {momRev > 0 && (() => { const p = (totalRev - momRev) / momRev * 100; return <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 7px', borderRadius: 4, background: p >= 0 ? C.green.bg : C.red.bg, color: p >= 0 ? C.green.tx : C.red.tx }}>{p >= 0 ? '▲' : '▼'} {Math.abs(p).toFixed(1)}% <span style={{ fontWeight: 400, opacity: 0.7 }}>MoM</span></span> })()}
-              {yoyRev > 0 && (() => { const p = (totalRev - yoyRev) / yoyRev * 100; return <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 7px', borderRadius: 4, background: p >= 0 ? C.green.bg : C.red.bg, color: p >= 0 ? C.green.tx : C.red.tx }}>{p >= 0 ? '▲' : '▼'} {Math.abs(p).toFixed(1)}% <span style={{ fontWeight: 400, opacity: 0.7 }}>YoY</span></span> })()}
+              {revChg !== null && <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 7px', borderRadius: 4, background: revChg >= 0 ? C.green.bg : C.red.bg, color: revChg >= 0 ? C.green.tx : C.red.tx }}>{revChg >= 0 ? 'â–²' : 'â–¼'} {Math.abs(revChg).toFixed(1)}% <span style={{ fontWeight: 400, opacity: 0.7 }}>WoW</span></span>}
+              {momRev > 0 && (() => { const p = (totalRev - momRev) / momRev * 100; return <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 7px', borderRadius: 4, background: p >= 0 ? C.green.bg : C.red.bg, color: p >= 0 ? C.green.tx : C.red.tx }}>{p >= 0 ? 'â–²' : 'â–¼'} {Math.abs(p).toFixed(1)}% <span style={{ fontWeight: 400, opacity: 0.7 }}>MoM</span></span> })()}
+              {yoyRev > 0 && (() => { const p = (totalRev - yoyRev) / yoyRev * 100; return <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 7px', borderRadius: 4, background: p >= 0 ? C.green.bg : C.red.bg, color: p >= 0 ? C.green.tx : C.red.tx }}>{p >= 0 ? 'â–²' : 'â–¼'} {Math.abs(p).toFixed(1)}% <span style={{ fontWeight: 400, opacity: 0.7 }}>YoY</span></span> })()}
             </div>
           </div>
-          <div className="kpi-sub" style={{ fontSize: 13 }}>{nOrders >= 1000 ? (nOrders/1000).toFixed(1).replace(/\.0$/,'')+'k' : fmtN(nOrders)} orders · {totalQty >= 1000 ? (totalQty/1000).toFixed(1).replace(/\.0$/,'')+'k' : fmtN(totalQty)} units</div>
+          <div className="kpi-sub" style={{ fontSize: 13 }}>{nOrders >= 1000 ? (nOrders/1000).toFixed(1).replace(/\.0$/,'')+'k' : fmtN(nOrders)} orders Â· {totalQty >= 1000 ? (totalQty/1000).toFixed(1).replace(/\.0$/,'')+'k' : fmtN(totalQty)} units</div>
           <div style={{ flex: 1, minHeight: 0 }}>
             <ResponsiveContainer width="100%" height="100%">
               <AreaChart data={sparkData} margin={{ top: 4, right: 0, bottom: 0, left: 0 }}>
@@ -3393,15 +3393,15 @@ function AllTab({ data, rangeStart }) {
                   <div className="kpi-label">Net. Rev. (Exc GST)</div>
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                     <div className="kpi-value">{fmt(netRevenueCalc)}</div>
-                    {excChg !== null && <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 7px', borderRadius: 5, background: excChg >= 0 ? C.green.bg : C.red.bg, color: excChg >= 0 ? C.green.tx : C.red.tx }}>{excChg >= 0 ? '▲' : '▼'} {Math.abs(excChg).toFixed(1)}%</span>}
+                    {excChg !== null && <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 7px', borderRadius: 5, background: excChg >= 0 ? C.green.bg : C.red.bg, color: excChg >= 0 ? C.green.tx : C.red.tx }}>{excChg >= 0 ? 'â–²' : 'â–¼'} {Math.abs(excChg).toFixed(1)}%</span>}
                   </div>
                   <div className="kpi-sub">{totalRev > 0 ? (netRevenueCalc / totalRev * 100).toFixed(1) : 0}% of gross</div>
                 </div>
               )
             })()}
             {[
-              { label: 'Return %', value: `${returnPct.toFixed(1)}%`, sub: `${fmt(rtoRev)} RTO · ${fmt(cirRev)} CIR`, accent: returnPct > 10 ? '#7A1A1A' : undefined, badge: (() => { if (!prevRev) return null; const prevRtoCirRev = (data.prevRtoRev || 0) + (data.prevCirRev || 0); const prev = prevRev > 0 ? prevRtoCirRev / prevRev * 100 : 0; if (!prev) return null; const p = (returnPct - prev) / prev * 100; return <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 4, background: p >= 0 ? C.red.bg : C.green.bg, color: p >= 0 ? C.red.tx : C.green.tx, flexShrink: 0 }}>{p >= 0 ? '▲' : '▼'} {Math.abs(p).toFixed(1)}%</span> })() },
-              { label: 'AOV', value: `₹${Math.round(blendedAOV).toLocaleString('en-IN')}`, sub: `Gross rev ÷ orders`, badge: chgBadge(blendedAOV, prevAOV) },
+              { label: 'Return %', value: `${returnPct.toFixed(1)}%`, sub: `${fmt(rtoRev)} RTO Â· ${fmt(cirRev)} CIR`, accent: returnPct > 10 ? '#7A1A1A' : undefined, badge: (() => { if (!prevRev) return null; const prevRtoCirRev = (data.prevRtoRev || 0) + (data.prevCirRev || 0); const prev = prevRev > 0 ? prevRtoCirRev / prevRev * 100 : 0; if (!prev) return null; const p = (returnPct - prev) / prev * 100; return <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 4, background: p >= 0 ? C.red.bg : C.green.bg, color: p >= 0 ? C.red.tx : C.green.tx, flexShrink: 0 }}>{p >= 0 ? 'â–²' : 'â–¼'} {Math.abs(p).toFixed(1)}%</span> })() },
+              { label: 'AOV', value: `â‚¹${Math.round(blendedAOV).toLocaleString('en-IN')}`, sub: `Gross rev Ã· orders`, badge: chgBadge(blendedAOV, prevAOV) },
               { label: 'Avg. Daily Gross Rev', value: fmt(totalRev / nDays), sub: `over ${nDays} days`, badge: chgBadge(totalRev / nDays, prevDailyAvg) },
             ].map(k => (
               <div key={k.label} className="kpi-card" style={{ padding: '10px 13px' }}>
@@ -3417,9 +3417,9 @@ function AllTab({ data, rangeStart }) {
           {/* Row 2 */}
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10, flex: 1 }}>
             {[
-              { label: 'ASP', value: `₹${Math.round(asp).toLocaleString('en-IN')}`, sub: 'Net rev ÷ units sold', badge: chgBadge(asp, prevASP) },
+              { label: 'ASP', value: `â‚¹${Math.round(asp).toLocaleString('en-IN')}`, sub: 'Net rev Ã· units sold', badge: chgBadge(asp, prevASP) },
               { label: 'GST Collected', value: fmt(gstCollected), sub: `${totalRev > 0 ? ((gstCollected / totalRev) * 100).toFixed(1) : 0}% of gross rev`, badge: chgBadge(gstCollected, prevGST) },
-              { label: 'Revenue at Risk', value: fmt(atRiskRev), sub: `${totalRev > 0 ? (atRiskRev / totalRev * 100).toFixed(1) : 0}% of gross · RTO + Cancel + CIR`, accent: atRiskRev > 0 ? '#7A4000' : undefined, badge: (() => { const prevAtRiskEst = prevOrders > 0 ? (prevRtoOrders + prevCirOrders) / prevOrders * prevRev : 0; if (!prevAtRiskEst) return null; const p = (atRiskRev - prevAtRiskEst) / prevAtRiskEst * 100; return <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 4, background: p > 0 ? C.red.bg : C.green.bg, color: p > 0 ? C.red.tx : C.green.tx, flexShrink: 0 }}>{p > 0 ? '▲' : '▼'} {Math.abs(p).toFixed(1)}%</span> })() },
+              { label: 'Revenue at Risk', value: fmt(atRiskRev), sub: `${totalRev > 0 ? (atRiskRev / totalRev * 100).toFixed(1) : 0}% of gross Â· RTO + Cancel + CIR`, accent: atRiskRev > 0 ? '#7A4000' : undefined, badge: (() => { const prevAtRiskEst = prevOrders > 0 ? (prevRtoOrders + prevCirOrders) / prevOrders * prevRev : 0; if (!prevAtRiskEst) return null; const p = (atRiskRev - prevAtRiskEst) / prevAtRiskEst * 100; return <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 4, background: p > 0 ? C.red.bg : C.green.bg, color: p > 0 ? C.red.tx : C.green.tx, flexShrink: 0 }}>{p > 0 ? 'â–²' : 'â–¼'} {Math.abs(p).toFixed(1)}%</span> })() },
               { label: 'Units per Order', value: unitsPerOrder.toFixed(2), sub: 'Avg basket size', badge: chgBadge(unitsPerOrder, prevUPO) },
             ].map(k => (
               <div key={k.label} className="kpi-card" style={{ padding: '10px 13px' }}>
@@ -3452,7 +3452,7 @@ function AllTab({ data, rangeStart }) {
                 <span style={{ fontSize: 12, fontWeight: 700, color: C.t1, minWidth: 72, textAlign: 'right', fontFamily: 'var(--mono)' }}>{fmt(v.rev)}</span>
                 <span style={{ fontSize: 11, color: C.t3, minWidth: 36, textAlign: 'right' }}>{pct(v.rev, totalRev)}</span>
                 {chg !== null
-                  ? <span style={{ fontSize: 10.5, fontWeight: 700, width: 76, flexShrink: 0, textAlign: 'center', padding: '2px 0', borderRadius: 4, background: chg >= 0 ? '#E6F4E0' : '#FDE8E8', color: chg >= 0 ? '#286010' : '#7A1A1A', display: 'inline-block' }}>{chg >= 0 ? '▲' : '▼'} {Math.abs(chg).toFixed(1)}%</span>
+                  ? <span style={{ fontSize: 10.5, fontWeight: 700, width: 76, flexShrink: 0, textAlign: 'center', padding: '2px 0', borderRadius: 4, background: chg >= 0 ? '#E6F4E0' : '#FDE8E8', color: chg >= 0 ? '#286010' : '#7A1A1A', display: 'inline-block' }}>{chg >= 0 ? 'â–²' : 'â–¼'} {Math.abs(chg).toFixed(1)}%</span>
                   : <span style={{ width: 76, flexShrink: 0 }} />}
               </div>
             )
@@ -3470,10 +3470,10 @@ function AllTab({ data, rangeStart }) {
           const btnStyle = v => ({ fontSize: 11, fontWeight: 600, padding: '3px 10px', borderRadius: 5, border: `1.5px solid ${catView === v ? C.t1 : C.border}`, background: catView === v ? C.t1 : 'transparent', color: catView === v ? '#fff' : C.t2, cursor: 'pointer', fontFamily: 'var(--font)' })
           const FIXED_H = 420
           return (
-            <Card title="Category Revenue" note={selectedCat ? <span style={{ cursor: 'pointer', color: C.acc, fontWeight: 600 }} onClick={() => setSelectedCat(null)}>✕ Clear</span> : `${catRows.length} total`}
+            <Card title="Category Revenue" note={selectedCat ? <span style={{ cursor: 'pointer', color: C.acc, fontWeight: 600 }} onClick={() => setSelectedCat(null)}>âœ• Clear</span> : `${catRows.length} total`}
               action={<div style={{ display: 'flex', gap: 4 }}>
                 <button style={btnStyle('table')} onClick={() => setCatView('table')}>Table</button>
-                <button style={btnStyle('bar')} onClick={() => setCatView('bar')}>Bar</button>
+                <button style={btnStyle('bar')} onClick={() => setCatView('bar')}>Chart</button>
               </div>}>
               {catView === 'table' && (() => {
                 const totalCatRev = catRows.reduce((s, r) => s + r.rev, 0)
@@ -3481,7 +3481,7 @@ function AllTab({ data, rangeStart }) {
                   <div style={{ overflowY: 'auto', maxHeight: FIXED_H }}>
                     <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
                       <thead style={{ position: 'sticky', top: 0, background: C.card, zIndex: 1 }}><tr>{[{ label: 'Category' }, { label: 'Revenue / % Share', align: 'right' }, { label: 'Units Sold', align: 'right' }, { label: 'ASP', align: 'right' }, { label: 'MoM %', align: 'right' }].map(c => <th key={c.label} style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.05em', color: C.t3, textAlign: c.align || 'left', padding: '3px 5px 7px', borderBottom: `1px solid ${C.border}` }}>{c.label}</th>)}</tr></thead>
-                      <tbody>{catRows.map((r, i) => { const isSelected = selectedCat === r.name; const share = totalCatRev ? (r.rev / totalCatRev * 100).toFixed(1) + '%' : '—'; const momColor = r.mom == null ? C.t3 : r.mom >= 0 ? '#16a34a' : '#dc2626'; return <tr key={r.name} onClick={() => setSelectedCat(isSelected ? null : r.name)} style={{ borderBottom: i < catRows.length - 1 ? `1px solid ${C.border}` : 'none', background: isSelected ? C.acl : '', cursor: 'pointer' }} onMouseEnter={e => { if (!isSelected) e.currentTarget.style.background = '#FFFBE6' }} onMouseLeave={e => { e.currentTarget.style.background = isSelected ? C.acl : '' }}><td style={{ padding: '5.5px 5px', color: C.t2 }}>{isSelected ? <strong>{r.name}</strong> : r.name}</td><td style={{ padding: '5.5px 5px', textAlign: 'right' }}><span style={{ fontFamily: 'var(--mono)', fontSize: 11.5, color: C.t1 }}>{fmt(r.rev)}</span><span style={{ fontSize: 10, color: C.t3, marginLeft: 5 }}>({share})</span></td><td style={{ padding: '5.5px 5px', textAlign: 'right', color: C.t2 }}>{fmtN(r.units)}</td><td style={{ padding: '5.5px 5px', textAlign: 'right', color: C.t2 }}>₹{Math.round(r.asp).toLocaleString('en-IN')}</td><td style={{ padding: '5.5px 5px', textAlign: 'right', fontWeight: 600, color: momColor }}>{r.mom == null ? '—' : (r.mom >= 0 ? '+' : '') + r.mom.toFixed(1) + '%'}</td></tr> })}</tbody>
+                      <tbody>{catRows.map((r, i) => { const isSelected = selectedCat === r.name; const share = totalCatRev ? (r.rev / totalCatRev * 100).toFixed(1) + '%' : 'â€”'; const momColor = r.mom == null ? C.t3 : r.mom >= 0 ? '#16a34a' : '#dc2626'; return <tr key={r.name} onClick={() => setSelectedCat(isSelected ? null : r.name)} style={{ borderBottom: i < catRows.length - 1 ? `1px solid ${C.border}` : 'none', background: isSelected ? C.acl : '', cursor: 'pointer' }} onMouseEnter={e => { if (!isSelected) e.currentTarget.style.background = '#FFFBE6' }} onMouseLeave={e => { e.currentTarget.style.background = isSelected ? C.acl : '' }}><td style={{ padding: '5.5px 5px', color: C.t2 }}>{isSelected ? <strong>{r.name}</strong> : r.name}</td><td style={{ padding: '5.5px 5px', textAlign: 'right' }}><span style={{ fontFamily: 'var(--mono)', fontSize: 11.5, color: C.t1 }}>{fmt(r.rev)}</span><span style={{ fontSize: 10, color: C.t3, marginLeft: 5 }}>({share})</span></td><td style={{ padding: '5.5px 5px', textAlign: 'right', color: C.t2 }}>{fmtN(r.units)}</td><td style={{ padding: '5.5px 5px', textAlign: 'right', color: C.t2 }}>â‚¹{Math.round(r.asp).toLocaleString('en-IN')}</td><td style={{ padding: '5.5px 5px', textAlign: 'right', fontWeight: 600, color: momColor }}>{r.mom == null ? 'â€”' : (r.mom >= 0 ? '+' : '') + r.mom.toFixed(1) + '%'}</td></tr> })}</tbody>
                     </table>
                   </div>
                 )
@@ -3507,10 +3507,10 @@ function AllTab({ data, rangeStart }) {
           const btnStyle = v => ({ fontSize: 11, fontWeight: 600, padding: '3px 10px', borderRadius: 5, border: `1.5px solid ${subCatView === v ? C.t1 : C.border}`, background: subCatView === v ? C.t1 : 'transparent', color: subCatView === v ? '#fff' : C.t2, cursor: 'pointer', fontFamily: 'var(--font)' })
           const FIXED_H = 420
           return (
-            <Card title={selectedCat ? `Sub-categories · ${selectedCat}` : 'Sub-categories'} note={`${subCatRows.length} total`}
+            <Card title={selectedCat ? `Sub-categories Â· ${selectedCat}` : 'Sub-categories'} note={`${subCatRows.length} total`}
               action={<div style={{ display: 'flex', gap: 4 }}>
                 <button style={btnStyle('table')} onClick={() => setSubCatView('table')}>Table</button>
-                <button style={btnStyle('bar')} onClick={() => setSubCatView('bar')}>Bar</button>
+                <button style={btnStyle('bar')} onClick={() => setSubCatView('bar')}>Chart</button>
               </div>}>
               {subCatView === 'table' && (() => {
                 const totalSubRev = subCatRows.reduce((s, r) => s + r.rev, 0)
@@ -3518,7 +3518,7 @@ function AllTab({ data, rangeStart }) {
                   <div style={{ overflowY: 'auto', maxHeight: FIXED_H }}>
                     <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
                       <thead style={{ position: 'sticky', top: 0, background: C.card, zIndex: 1 }}><tr>{[{ label: 'Sub-category' }, { label: 'Revenue / % Share', align: 'right' }, { label: 'Units Sold', align: 'right' }, { label: 'ASP', align: 'right' }, { label: 'MoM %', align: 'right' }].map(c => <th key={c.label} style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.05em', color: C.t3, textAlign: c.align || 'left', padding: '3px 5px 7px', borderBottom: `1px solid ${C.border}` }}>{c.label}</th>)}</tr></thead>
-                      <tbody>{subCatRows.map((r, i) => { const share = totalSubRev ? (r.rev / totalSubRev * 100).toFixed(1) + '%' : '—'; const momColor = r.mom == null ? C.t3 : r.mom >= 0 ? '#16a34a' : '#dc2626'; return <tr key={r.name} style={{ borderBottom: i < subCatRows.length - 1 ? `1px solid ${C.border}` : 'none' }} onMouseEnter={e => e.currentTarget.style.background = '#FFFBE6'} onMouseLeave={e => e.currentTarget.style.background = ''}><td style={{ padding: '5.5px 5px', color: C.t2 }}>{r.name}</td><td style={{ padding: '5.5px 5px', textAlign: 'right' }}><span style={{ fontFamily: 'var(--mono)', fontSize: 11.5, color: C.t1 }}>{fmt(r.rev)}</span><span style={{ fontSize: 10, color: C.t3, marginLeft: 5 }}>({share})</span></td><td style={{ padding: '5.5px 5px', textAlign: 'right', color: C.t2 }}>{fmtN(r.units)}</td><td style={{ padding: '5.5px 5px', textAlign: 'right', color: C.t2 }}>₹{Math.round(r.asp).toLocaleString('en-IN')}</td><td style={{ padding: '5.5px 5px', textAlign: 'right', fontWeight: 600, color: momColor }}>{r.mom == null ? '—' : (r.mom >= 0 ? '+' : '') + r.mom.toFixed(1) + '%'}</td></tr> })}</tbody>
+                      <tbody>{subCatRows.map((r, i) => { const share = totalSubRev ? (r.rev / totalSubRev * 100).toFixed(1) + '%' : 'â€”'; const momColor = r.mom == null ? C.t3 : r.mom >= 0 ? '#16a34a' : '#dc2626'; return <tr key={r.name} style={{ borderBottom: i < subCatRows.length - 1 ? `1px solid ${C.border}` : 'none' }} onMouseEnter={e => e.currentTarget.style.background = '#FFFBE6'} onMouseLeave={e => e.currentTarget.style.background = ''}><td style={{ padding: '5.5px 5px', color: C.t2 }}>{r.name}</td><td style={{ padding: '5.5px 5px', textAlign: 'right' }}><span style={{ fontFamily: 'var(--mono)', fontSize: 11.5, color: C.t1 }}>{fmt(r.rev)}</span><span style={{ fontSize: 10, color: C.t3, marginLeft: 5 }}>({share})</span></td><td style={{ padding: '5.5px 5px', textAlign: 'right', color: C.t2 }}>{fmtN(r.units)}</td><td style={{ padding: '5.5px 5px', textAlign: 'right', color: C.t2 }}>â‚¹{Math.round(r.asp).toLocaleString('en-IN')}</td><td style={{ padding: '5.5px 5px', textAlign: 'right', fontWeight: 600, color: momColor }}>{r.mom == null ? 'â€”' : (r.mom >= 0 ? '+' : '') + r.mom.toFixed(1) + '%'}</td></tr> })}</tbody>
                     </table>
                   </div>
                 )
@@ -3569,7 +3569,7 @@ function AllTab({ data, rangeStart }) {
 }
 
 const PIE_COLORS = ['#534AB7','#0D9E68','#2E74CC','#CC8A00','#CC4078','#E24B4A','#9B59B6']
-const BUCKET_ORDER = ['<₹500','₹500-1K','₹1K-2.5K','₹2.5K-5K','₹5K-10K','₹10K-25K','₹25K+']
+const BUCKET_ORDER = ['<â‚¹500','â‚¹500-1K','â‚¹1K-2.5K','â‚¹2.5K-5K','â‚¹5K-10K','â‚¹10K-25K','â‚¹25K+']
 
 function OrderValuePieCard({ buckets, bucketRev }) {
   const [metric, setMetric] = useState('orders')
@@ -3636,13 +3636,13 @@ function CatSubCatRow({ catRows, subCatRows, title = 'Category Revenue', selecte
   if (!catRows.length) return null
   return (
     <div className="g-2" style={{ alignItems: 'stretch' }}>
-      <Card title={title} note={selectedCat ? <span style={{ cursor: 'pointer', color: C.acc, fontWeight: 600 }} onClick={() => setSelectedCat(null)}>✕ Clear</span> : `${catRows.length} total`}
-        action={<div style={{ display: 'flex', gap: 4 }}><button style={btnStyle('table')} onClick={() => setCatView('table')}>Table</button><button style={btnStyle('bar')} onClick={() => setCatView('bar')}>Bar</button></div>}>
+      <Card title={title} note={selectedCat ? <span style={{ cursor: 'pointer', color: C.acc, fontWeight: 600 }} onClick={() => setSelectedCat(null)}>âœ• Clear</span> : `${catRows.length} total`}
+        action={<div style={{ display: 'flex', gap: 4 }}><button style={btnStyle('table')} onClick={() => setCatView('table')}>Table</button><button style={btnStyle('bar')} onClick={() => setCatView('bar')}>Chart</button></div>}>
         {catView === 'table' && (
           <div style={{ overflowY: 'auto', maxHeight: FIXED_H }}>
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
               <thead style={{ position: 'sticky', top: 0, background: C.card, zIndex: 1 }}><tr>{[{ label: 'Category' }, { label: 'Revenue / % Share', align: 'right' }, { label: 'Orders', align: 'right' }, { label: 'Units', align: 'right' }, { label: 'ASP', align: 'right' }].map(c => <th key={c.label} style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.05em', color: C.t3, textAlign: c.align || 'left', padding: '3px 5px 7px', borderBottom: `1px solid ${C.border}` }}>{c.label}</th>)}</tr></thead>
-              <tbody>{catRows.map((r, i) => { const isSelected = selectedCat === r.name; const share = totalCatRev ? (r.rev / totalCatRev * 100).toFixed(1) + '%' : '—'; return <tr key={r.name} onClick={() => setSelectedCat(isSelected ? null : r.name)} style={{ borderBottom: i < catRows.length - 1 ? `1px solid ${C.border}` : 'none', background: isSelected ? C.acl : '', cursor: 'pointer' }} onMouseEnter={e => { if (!isSelected) e.currentTarget.style.background = '#FFFBE6' }} onMouseLeave={e => { e.currentTarget.style.background = isSelected ? C.acl : '' }}><td style={{ padding: '5.5px 5px', color: C.t2 }}><span style={{ display: 'inline-block', width: 8, height: 8, borderRadius: 2, background: '#FFD600', marginRight: 6 }} />{isSelected ? <strong>{r.name}</strong> : r.name}</td><td style={{ padding: '5.5px 5px', textAlign: 'right' }}><span style={{ fontFamily: 'var(--mono)', fontSize: 11.5, color: C.t1 }}>{fmt(r.rev)}</span><span style={{ fontSize: 10, color: C.t3, marginLeft: 5 }}>({share})</span></td><td style={{ padding: '5.5px 5px', textAlign: 'right', color: C.t2 }}>{fmtN(r.orders)}</td><td style={{ padding: '5.5px 5px', textAlign: 'right', color: C.t2 }}>{fmtN(r.units)}</td><td style={{ padding: '5.5px 5px', textAlign: 'right', color: C.t2 }}>₹{Math.round(r.rev / Math.max(r.units, 1)).toLocaleString('en-IN')}</td></tr> })}</tbody>
+              <tbody>{catRows.map((r, i) => { const isSelected = selectedCat === r.name; const share = totalCatRev ? (r.rev / totalCatRev * 100).toFixed(1) + '%' : 'â€”'; return <tr key={r.name} onClick={() => setSelectedCat(isSelected ? null : r.name)} style={{ borderBottom: i < catRows.length - 1 ? `1px solid ${C.border}` : 'none', background: isSelected ? C.acl : '', cursor: 'pointer' }} onMouseEnter={e => { if (!isSelected) e.currentTarget.style.background = '#FFFBE6' }} onMouseLeave={e => { e.currentTarget.style.background = isSelected ? C.acl : '' }}><td style={{ padding: '5.5px 5px', color: C.t2 }}><span style={{ display: 'inline-block', width: 8, height: 8, borderRadius: 2, background: '#FFD600', marginRight: 6 }} />{isSelected ? <strong>{r.name}</strong> : r.name}</td><td style={{ padding: '5.5px 5px', textAlign: 'right' }}><span style={{ fontFamily: 'var(--mono)', fontSize: 11.5, color: C.t1 }}>{fmt(r.rev)}</span><span style={{ fontSize: 10, color: C.t3, marginLeft: 5 }}>({share})</span></td><td style={{ padding: '5.5px 5px', textAlign: 'right', color: C.t2 }}>{fmtN(r.orders)}</td><td style={{ padding: '5.5px 5px', textAlign: 'right', color: C.t2 }}>{fmtN(r.units)}</td><td style={{ padding: '5.5px 5px', textAlign: 'right', color: C.t2 }}>â‚¹{Math.round(r.rev / Math.max(r.units, 1)).toLocaleString('en-IN')}</td></tr> })}</tbody>
             </table>
           </div>
         )}
@@ -3660,13 +3660,13 @@ function CatSubCatRow({ catRows, subCatRows, title = 'Category Revenue', selecte
           </ResponsiveContainer>
         )}
       </Card>
-      <Card title={selectedCat ? `Sub-categories · ${selectedCat}` : 'Sub-categories'} note={selectedSubCat ? <span style={{ cursor: 'pointer', color: C.acc, fontWeight: 600 }} onClick={() => setSelectedSubCat(null)}>✕ Clear</span> : `${filteredSubCat.length} total`}
-        action={<div style={{ display: 'flex', gap: 4 }}><button style={scBtnStyle('table')} onClick={() => setSubCatView('table')}>Table</button><button style={scBtnStyle('bar')} onClick={() => setSubCatView('bar')}>Bar</button></div>}>
+      <Card title={selectedCat ? `Sub-categories Â· ${selectedCat}` : 'Sub-categories'} note={selectedSubCat ? <span style={{ cursor: 'pointer', color: C.acc, fontWeight: 600 }} onClick={() => setSelectedSubCat(null)}>âœ• Clear</span> : `${filteredSubCat.length} total`}
+        action={<div style={{ display: 'flex', gap: 4 }}><button style={scBtnStyle('table')} onClick={() => setSubCatView('table')}>Table</button><button style={scBtnStyle('bar')} onClick={() => setSubCatView('bar')}>Chart</button></div>}>
         {subCatView === 'table' && (
           <div style={{ overflowY: 'auto', maxHeight: FIXED_H }}>
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
               <thead style={{ position: 'sticky', top: 0, background: C.card, zIndex: 1 }}><tr>{[{ label: 'Sub-category' }, { label: 'Revenue / % Share', align: 'right' }, { label: 'Orders', align: 'right' }, { label: 'Units', align: 'right' }, { label: 'ASP', align: 'right' }].map(c => <th key={c.label} style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.05em', color: C.t3, textAlign: c.align || 'left', padding: '3px 5px 7px', borderBottom: `1px solid ${C.border}` }}>{c.label}</th>)}</tr></thead>
-              <tbody>{filteredSubCat.map((r, i) => { const isScSelected = selectedSubCat === r.name && selectedCat === r.category; const share = totalSubRev ? (r.rev / totalSubRev * 100).toFixed(1) + '%' : '—'; return <tr key={r.name + r.category} onClick={() => { if (setSelectedSubCat) { if (!selectedCat || selectedCat !== r.category) setSelectedCat(r.category); setSelectedSubCat(isScSelected ? null : r.name) } }} style={{ borderBottom: i < filteredSubCat.length - 1 ? `1px solid ${C.border}` : 'none', background: isScSelected ? C.acl : '', cursor: setSelectedSubCat ? 'pointer' : 'default' }} onMouseEnter={e => { if (!isScSelected) e.currentTarget.style.background = '#FFFBE6' }} onMouseLeave={e => { e.currentTarget.style.background = isScSelected ? C.acl : '' }}><td style={{ padding: '5.5px 5px', color: C.t2 }}><span style={{ display: 'inline-block', width: 8, height: 8, borderRadius: 2, background: '#FFD600', marginRight: 6 }} />{isScSelected ? <strong>{r.name}</strong> : r.name}</td><td style={{ padding: '5.5px 5px', textAlign: 'right' }}><span style={{ fontFamily: 'var(--mono)', fontSize: 11.5, color: C.t1 }}>{fmt(r.rev)}</span><span style={{ fontSize: 10, color: C.t3, marginLeft: 5 }}>({share})</span></td><td style={{ padding: '5.5px 5px', textAlign: 'right', color: C.t2 }}>{fmtN(r.orders)}</td><td style={{ padding: '5.5px 5px', textAlign: 'right', color: C.t2 }}>{fmtN(r.units)}</td><td style={{ padding: '5.5px 5px', textAlign: 'right', color: C.t2 }}>₹{Math.round(r.rev / Math.max(r.units, 1)).toLocaleString('en-IN')}</td></tr> })}</tbody>
+              <tbody>{filteredSubCat.map((r, i) => { const isScSelected = selectedSubCat === r.name && selectedCat === r.category; const share = totalSubRev ? (r.rev / totalSubRev * 100).toFixed(1) + '%' : 'â€”'; return <tr key={r.name + r.category} onClick={() => { if (setSelectedSubCat) { if (!selectedCat || selectedCat !== r.category) setSelectedCat(r.category); setSelectedSubCat(isScSelected ? null : r.name) } }} style={{ borderBottom: i < filteredSubCat.length - 1 ? `1px solid ${C.border}` : 'none', background: isScSelected ? C.acl : '', cursor: setSelectedSubCat ? 'pointer' : 'default' }} onMouseEnter={e => { if (!isScSelected) e.currentTarget.style.background = '#FFFBE6' }} onMouseLeave={e => { e.currentTarget.style.background = isScSelected ? C.acl : '' }}><td style={{ padding: '5.5px 5px', color: C.t2 }}><span style={{ display: 'inline-block', width: 8, height: 8, borderRadius: 2, background: '#FFD600', marginRight: 6 }} />{isScSelected ? <strong>{r.name}</strong> : r.name}</td><td style={{ padding: '5.5px 5px', textAlign: 'right' }}><span style={{ fontFamily: 'var(--mono)', fontSize: 11.5, color: C.t1 }}>{fmt(r.rev)}</span><span style={{ fontSize: 10, color: C.t3, marginLeft: 5 }}>({share})</span></td><td style={{ padding: '5.5px 5px', textAlign: 'right', color: C.t2 }}>{fmtN(r.orders)}</td><td style={{ padding: '5.5px 5px', textAlign: 'right', color: C.t2 }}>{fmtN(r.units)}</td><td style={{ padding: '5.5px 5px', textAlign: 'right', color: C.t2 }}>â‚¹{Math.round(r.rev / Math.max(r.units, 1)).toLocaleString('en-IN')}</td></tr> })}</tbody>
             </table>
           </div>
         )}
@@ -3694,7 +3694,7 @@ function ShopifyGeoDonutRow({ regionRows, tierRows, topStates, allStateRows, use
   const TIER_COLORS = ['#FFD600','#FF6B35','#9B59B6']
   const STATE_COLORS = ['#0D9E68','#2E74CC','#534AB7','#CC8A00','#E24B4A','#9B59B6']
   const metricVal = (r, m) => m === 'rev' ? r.rev : m === 'units' ? (r.units || 0) : m === 'orders' ? r.orders : (r.orders ? Math.round(r.rev / r.orders) : 0)
-  const metricFmt = v => metric === 'rev' ? fmt(v) : metric === 'aov' ? `₹${v.toLocaleString('en-IN')}` : fmtN(v)
+  const metricFmt = v => metric === 'rev' ? fmt(v) : metric === 'aov' ? `â‚¹${v.toLocaleString('en-IN')}` : fmtN(v)
   const selStyle = active => ({ fontSize: 10, fontWeight: active ? 700 : 500, padding: '2px 8px', borderRadius: 4, border: `1px solid ${active ? C.acm : C.border}`, background: active ? C.acc : 'transparent', color: C.t1, cursor: 'pointer', fontFamily: 'var(--font)' })
 
   // Horizontal-bar breakdown: label on left, colored bar in middle, value + % on right.
@@ -3760,7 +3760,7 @@ function TopSubCatBar({ subCatRows }) {
   const chartData = top10.map((r, i) => ({ name: r.name, rev: r.rev, color: BAR_COLORS[i % BAR_COLORS.length] }))
   return (
     <div style={{ flex: 1, minWidth: 0 }}>
-      <Card title="Top 10 Products · Revenue">
+      <Card title="Top 10 Products Â· Revenue">
         {top10.length === 0
           ? <div style={{ fontSize: 12, color: C.t3, textAlign: 'center', padding: '12px 0' }}>No data</div>
           : <ResponsiveContainer width="100%" height={260}>
@@ -3795,9 +3795,9 @@ function ShopifyGeoRichTable({ title, rows, firstKey, firstLabel, formatFirst, r
   const th = { fontSize: 9.5, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.05em', color: C.t3, padding: '4px 6px 8px', borderBottom: `1px solid ${C.border}`, whiteSpace: 'nowrap' }
   const td = { padding: '6px 6px', fontSize: 11, color: C.t1, whiteSpace: 'nowrap' }
   const momCell = m => {
-    if (m === null || m === undefined) return <span style={{ color: C.t3 }}>—</span>
+    if (m === null || m === undefined) return <span style={{ color: C.t3 }}>â€”</span>
     const positive = m >= 0
-    return <span style={{ fontSize: 10, fontWeight: 700, color: positive ? '#0D9E68' : '#B91C1C' }}>{positive ? '↗' : '↘'} {Math.abs(m).toFixed(1)}%</span>
+    return <span style={{ fontSize: 10, fontWeight: 700, color: positive ? '#0D9E68' : '#B91C1C' }}>{positive ? 'â†—' : 'â†˜'} {Math.abs(m).toFixed(1)}%</span>
   }
   const rtoChip = pct => {
     let bg = '#E6F4EA', tx = '#0A6E4A'
@@ -3842,8 +3842,8 @@ function ShopifyGeoRichTable({ title, rows, firstKey, firstLabel, formatFirst, r
                   <td style={{ ...td, textAlign: 'right', fontFamily: 'var(--mono)', color: C.t2 }}>{r.sharePct.toFixed(1)}%</td>
                   <td style={{ ...td, textAlign: 'right', fontFamily: 'var(--mono)', color: C.t2 }}>{r.cumPct.toFixed(1)}%</td>
                   <td style={{ ...td, textAlign: 'right', fontFamily: 'var(--mono)' }}>{fmtN(r.orders)}</td>
-                  {showAOV && <td style={{ ...td, textAlign: 'right', fontFamily: 'var(--mono)' }}>₹{Math.round(r.aov || 0).toLocaleString('en-IN')}</td>}
-                  {showASP && <td style={{ ...td, textAlign: 'right', fontFamily: 'var(--mono)' }}>₹{Math.round(r.asp || 0).toLocaleString('en-IN')}</td>}
+                  {showAOV && <td style={{ ...td, textAlign: 'right', fontFamily: 'var(--mono)' }}>â‚¹{Math.round(r.aov || 0).toLocaleString('en-IN')}</td>}
+                  {showASP && <td style={{ ...td, textAlign: 'right', fontFamily: 'var(--mono)' }}>â‚¹{Math.round(r.asp || 0).toLocaleString('en-IN')}</td>}
                   <td style={{ ...td, textAlign: 'right' }}>{momCell(r.mom)}</td>
                   {showRTO && <td style={{ ...td, textAlign: 'right' }}>{rtoChip(r.rtoPct || 0)}</td>}
                 </tr>
@@ -3854,10 +3854,10 @@ function ShopifyGeoRichTable({ title, rows, firstKey, firstLabel, formatFirst, r
       </div>
       {totalPages > 1 && (
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 8, fontSize: 11, color: C.t3 }}>
-          <div>{page * pageSize + 1}–{Math.min((page + 1) * pageSize, rows.length)} of {rows.length}</div>
+          <div>{page * pageSize + 1}â€“{Math.min((page + 1) * pageSize, rows.length)} of {rows.length}</div>
           <div style={{ display: 'flex', gap: 6 }}>
-            <button onClick={() => setPage(p => Math.max(0, p - 1))} disabled={page === 0} style={{ padding: '3px 10px', fontSize: 11, border: `1px solid ${C.border2}`, background: C.card, color: C.t2, borderRadius: 5, cursor: page === 0 ? 'not-allowed' : 'pointer', opacity: page === 0 ? 0.4 : 1 }}>← Prev</button>
-            <button onClick={() => setPage(p => Math.min(totalPages - 1, p + 1))} disabled={page >= totalPages - 1} style={{ padding: '3px 10px', fontSize: 11, border: `1px solid ${C.border2}`, background: C.card, color: C.t2, borderRadius: 5, cursor: page >= totalPages - 1 ? 'not-allowed' : 'pointer', opacity: page >= totalPages - 1 ? 0.4 : 1 }}>Next →</button>
+            <button onClick={() => setPage(p => Math.max(0, p - 1))} disabled={page === 0} style={{ padding: '3px 10px', fontSize: 11, border: `1px solid ${C.border2}`, background: C.card, color: C.t2, borderRadius: 5, cursor: page === 0 ? 'not-allowed' : 'pointer', opacity: page === 0 ? 0.4 : 1 }}>â† Prev</button>
+            <button onClick={() => setPage(p => Math.min(totalPages - 1, p + 1))} disabled={page >= totalPages - 1} style={{ padding: '3px 10px', fontSize: 11, border: `1px solid ${C.border2}`, background: C.card, color: C.t2, borderRadius: 5, cursor: page >= totalPages - 1 ? 'not-allowed' : 'pointer', opacity: page >= totalPages - 1 ? 0.4 : 1 }}>Next â†’</button>
           </div>
         </div>
       )}
@@ -3875,7 +3875,7 @@ function ShopifyReturnReasonsTable({ reasons = [] }) {
   reasons.forEach(r => { catTotals[r.category] = (catTotals[r.category] || 0) + r.orders })
   const cats = Object.keys(catTotals).sort((a, b) => catTotals[b] - catTotals[a])
 
-  // Group: reason → { orders per cat, subReasons: { subReason → orders per cat } }
+  // Group: reason â†’ { orders per cat, subReasons: { subReason â†’ orders per cat } }
   const grouped = {}
   reasons.forEach(r => {
     if (!grouped[r.reason]) { grouped[r.reason] = { catOrders: {}, subReasons: {} } }
@@ -3897,12 +3897,12 @@ function ShopifyReturnReasonsTable({ reasons = [] }) {
   const thStyle = { fontSize: 9, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.04em', color: C.t3, padding: '4px 8px 6px', borderBottom: `1px solid ${C.border}`, textAlign: 'right', whiteSpace: 'nowrap', background: C.card }
   const thL = { ...thStyle, textAlign: 'left', minWidth: 180 }
   const pctCell = (v, base) => {
-    if (!v || !base) return <span style={{ color: C.t3, fontSize: 10 }}>—</span>
+    if (!v || !base) return <span style={{ color: C.t3, fontSize: 10 }}>â€”</span>
     return <span>{(v / base * 100).toFixed(1)}%</span>
   }
 
   return (
-    <Card title="Return Reasons · Shopify" note={`${sortedReasons.length} reasons · ${grandTotal.toLocaleString('en-IN')} orders`}>
+    <Card title="Return Reasons Â· Shopify" note={`${sortedReasons.length} reasons Â· ${grandTotal.toLocaleString('en-IN')} orders`}>
       <div style={{ overflowX: 'auto', overflowY: 'auto', maxHeight: 500 }}>
         <table style={{ borderCollapse: 'collapse', fontSize: 11, minWidth: '100%' }}>
           <thead style={{ position: 'sticky', top: 0, zIndex: 2 }}>
@@ -3925,9 +3925,9 @@ function ShopifyReturnReasonsTable({ reasons = [] }) {
                 <tr key={`r-${reason}`} style={{ borderBottom: `1px solid ${C.border}`, background: ri % 2 === 0 ? C.card : C.bg, cursor: 'pointer' }}
                   onClick={() => setExpandedReason(p => ({ ...p, [reason]: !p[reason] }))}>
                   <td style={{ padding: '5px 8px', fontWeight: 600, color: C.t1, whiteSpace: 'nowrap' }}>
-                    <span style={{ marginRight: 6, fontSize: 10, color: C.t3 }}>{isExp ? '▼' : '▶'}</span>
+                    <span style={{ marginRight: 6, fontSize: 10, color: C.t3 }}>{isExp ? 'â–¼' : 'â–¶'}</span>
                     {reason}
-                    <span style={{ marginLeft: 8, fontSize: 9, color: C.t3, fontWeight: 400 }}>{rTotal.toLocaleString('en-IN')} · {grandTotal > 0 ? (rTotal / grandTotal * 100).toFixed(1) : 0}%</span>
+                    <span style={{ marginLeft: 8, fontSize: 9, color: C.t3, fontWeight: 400 }}>{rTotal.toLocaleString('en-IN')} Â· {grandTotal > 0 ? (rTotal / grandTotal * 100).toFixed(1) : 0}%</span>
                   </td>
                   {cats.map(cat => <td key={cat} style={{ padding: '5px 8px', textAlign: 'right', fontFamily: 'var(--mono)', color: C.t1 }}>{pctCell(rd.catOrders[cat], colTotals[cat])}</td>)}
                 </tr>,
@@ -3936,8 +3936,8 @@ function ShopifyReturnReasonsTable({ reasons = [] }) {
                   return (
                     <tr key={`sr-${reason}-${subReason}`} style={{ borderBottom: `1px solid ${C.border}`, background: C.acl }}>
                       <td style={{ padding: '4px 8px 4px 28px', color: C.t2, whiteSpace: 'nowrap' }}>
-                        ↳ {subReason}
-                        <span style={{ marginLeft: 8, fontSize: 9, color: C.t3 }}>{srTotal.toLocaleString('en-IN')} · {rTotal > 0 ? (srTotal / rTotal * 100).toFixed(1) : 0}% of reason</span>
+                        â†³ {subReason}
+                        <span style={{ marginLeft: 8, fontSize: 9, color: C.t3 }}>{srTotal.toLocaleString('en-IN')} Â· {rTotal > 0 ? (srTotal / rTotal * 100).toFixed(1) : 0}% of reason</span>
                       </td>
                       {cats.map(cat => <td key={cat} style={{ padding: '4px 8px', textAlign: 'right', fontFamily: 'var(--mono)', color: C.t2 }}>{pctCell(sd.catOrders[cat], rTotal > 0 ? rd.catOrders[cat] : null)}</td>)}
                     </tr>
@@ -3981,7 +3981,7 @@ function ShopifyTab({ data, filters, setFilters }) {
   const totalRev = shCh.rev || 0                          // Gross Revenue (Inc. GST), Shopify India+International EXCLUDING B2B
   const totalExcRevRaw = shCh.excRev || 0
   const totalQty = shCh.qty || 0
-  // Subtract Cancelled + RTO + CIR revenue from Gross, then strip GST → final Net Revenue
+  // Subtract Cancelled + RTO + CIR revenue from Gross, then strip GST â†’ final Net Revenue
   const cancelledRev = data.orderStatusRevMap?.['Cancelled'] || 0
   const rtoRev = data.orderStatusRevMap?.['RTO'] || 0
   const returnStatusRev = data.orderStatusRevMap?.['Return'] || 0
@@ -4017,13 +4017,13 @@ function ShopifyTab({ data, filters, setFilters }) {
   const shChgBadge = (cur, prev) => {
     if (!prev) return null
     const p = (cur - prev) / prev * 100
-    return <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 4, background: p >= 0 ? C.green.bg : C.red.bg, color: p >= 0 ? C.green.tx : C.red.tx, flexShrink: 0 }}>{p >= 0 ? '▲' : '▼'} {Math.abs(p).toFixed(1)}%</span>
+    return <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 4, background: p >= 0 ? C.green.bg : C.red.bg, color: p >= 0 ? C.green.tx : C.red.tx, flexShrink: 0 }}>{p >= 0 ? 'â–²' : 'â–¼'} {Math.abs(p).toFixed(1)}%</span>
   }
   // For return/cancel metrics: higher is worse, so invert colors
   const shReturnBadge = (curPct, prevPct) => {
     if (!prevPct) return null
     const p = (curPct - prevPct) / prevPct * 100
-    return <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 4, background: p > 0 ? C.red.bg : C.green.bg, color: p > 0 ? C.red.tx : C.green.tx, flexShrink: 0 }}>{p > 0 ? '▲' : '▼'} {Math.abs(p).toFixed(1)}%</span>
+    return <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 4, background: p > 0 ? C.red.bg : C.green.bg, color: p > 0 ? C.red.tx : C.green.tx, flexShrink: 0 }}>{p > 0 ? 'â–²' : 'â–¼'} {Math.abs(p).toFixed(1)}%</span>
   }
   const shDailyArr = sh.daily || []
   const shSparkData = Array.from({ length: Math.max(shDailyArr.length, prevDailyArr.length) }, (_, i) => {
@@ -4043,7 +4043,7 @@ function ShopifyTab({ data, filters, setFilters }) {
   const returnRevPct = totalRev > 0 ? (((data.rtoRevDirect || 0) + (data.returnRev || 0) + (data.cirRev || 0)) / totalRev * 100) : 0
   const repeatRate = nCusts ? (repeatCusts / nCusts * 100).toFixed(1) : '0'
 
-  // Sub-channel breakdown — India excludes International, Intl shows only International
+  // Sub-channel breakdown â€” India excludes International, Intl shows only International
   const indiaSubChMap = Object.fromEntries(Object.entries(subChannelMap).filter(([k]) => k !== 'International' && k !== 'Shopify B2B' && k !== 'Shopify International' && k !== 'Unknown'))
   const intlSubChMap = subChannelMap['International'] ? { International: subChannelMap['International'] } : {}
   const activeSubChMap = isIntl ? intlSubChMap : indiaSubChMap
@@ -4123,7 +4123,7 @@ function ShopifyTab({ data, filters, setFilters }) {
       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
         {/* Left: region toggles + sub-channel dropdown */}
         <button style={{ ...toggleStyle(!isIntl), display: 'inline-flex', alignItems: 'center', gap: 5 }} onClick={() => switchRegion(false)}><img src="https://flagcdn.com/w20/in.png" width="18" style={{ borderRadius: 2, flexShrink: 0 }} /> India</button>
-        <button style={toggleStyle(isIntl)} onClick={() => switchRegion(true)}><span style={{ fontFamily: 'sans-serif' }}>🌐</span> International</button>
+        <button style={toggleStyle(isIntl)} onClick={() => switchRegion(true)}><span style={{ fontFamily: 'sans-serif' }}>ðŸŒ</span> International</button>
         {!isIntl && indiaSubChKeys.length > 0 && (() => {
           const sel = filters.subChannel ? filters.subChannel.split(',').map(x => x.trim()).filter(v => v && v !== 'ShopifyIndia' && v !== 'International') : []
           return (
@@ -4133,7 +4133,7 @@ function ShopifyTab({ data, filters, setFilters }) {
                 onClick={() => { setPendingSubCh(sel); setSubChOpen(o => !o) }}
               >
                 {sel.length === 0 ? 'All Sub-channels' : `${sel.length} selected`}
-                <span style={{ fontSize: 10 }}>{subChOpen ? '▲' : '▼'}</span>
+                <span style={{ fontSize: 10 }}>{subChOpen ? 'â–²' : 'â–¼'}</span>
               </button>
               {subChOpen && (
                 <div style={{ position: 'absolute', top: '110%', left: 0, zIndex: 200, background: C.card, border: `1px solid ${C.border2}`, borderRadius: 8, boxShadow: '0 4px 16px rgba(0,0,0,.12)', minWidth: 180, padding: '8px 0' }}>
@@ -4161,7 +4161,7 @@ function ShopifyTab({ data, filters, setFilters }) {
                 onClick={() => { setPendingPayment(sel); setPaymentOpen(o => !o) }}
               >
                 {sel.length === 0 ? 'All Payment Types' : sel.length === 1 ? sel[0] : `${sel.length} selected`}
-                <span style={{ fontSize: 10 }}>{paymentOpen ? '▲' : '▼'}</span>
+                <span style={{ fontSize: 10 }}>{paymentOpen ? 'â–²' : 'â–¼'}</span>
               </button>
               {paymentOpen && (
                 <div style={{ position: 'absolute', top: '110%', left: 0, zIndex: 200, background: C.card, border: `1px solid ${C.border2}`, borderRadius: 8, boxShadow: '0 4px 16px rgba(0,0,0,.12)', minWidth: 200, padding: '8px 0', maxHeight: 320, overflowY: 'auto' }}>
@@ -4182,7 +4182,7 @@ function ShopifyTab({ data, filters, setFilters }) {
         })()}
         {isIntl && (
           <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginLeft: 4, border: `1.5px solid ${C.border2}`, borderRadius: 8, overflow: 'hidden', background: C.card }}>
-            {[{ id: null, label: 'All' }, { id: 'UAE', label: '🇦🇪 UAE' }, { id: 'UK', label: '🇬🇧 UK' }, { id: 'US', label: '🇺🇸 US' }].map(opt => (
+            {[{ id: null, label: 'All' }, { id: 'UAE', label: 'ðŸ‡¦ðŸ‡ª UAE' }, { id: 'UK', label: 'ðŸ‡¬ðŸ‡§ UK' }, { id: 'US', label: 'ðŸ‡ºðŸ‡¸ US' }].map(opt => (
               <button key={String(opt.id)} onClick={() => {
                 setIntlCountry(opt.id)
                 setFilters(f => ({ ...f, country: opt.id || '' }))
@@ -4219,12 +4219,12 @@ function ShopifyTab({ data, filters, setFilters }) {
                   >
                     <span style={{ fontSize: 10, color: isActive ? C.acm : C.t3, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.05em' }}>{k}</span>
                     <span style={{ fontSize: 12, fontWeight: 700, color: C.t1, fontFamily: 'var(--mono)' }}>{fmt(v.rev)}</span>
-                    <span style={{ fontSize: 11, color: isActive ? C.acm : C.t3 }}>{totalSubRev ? pct(v.rev, totalSubRev) : '—'}</span>
+                    <span style={{ fontSize: 11, color: isActive ? C.acm : C.t3 }}>{totalSubRev ? pct(v.rev, totalSubRev) : 'â€”'}</span>
                   </button>
                 )
               })}
               {sel.length > 0 && (
-                <button onClick={() => setFilters(f => ({ ...f, subChannel: '' }))} style={{ fontSize: 11, padding: '6px 10px', borderLeft: `1px solid ${C.border2}`, border: 'none', borderLeft: `1px solid ${C.border2}`, background: 'transparent', color: C.t3, cursor: 'pointer' }}>✕</button>
+                <button onClick={() => setFilters(f => ({ ...f, subChannel: '' }))} style={{ fontSize: 11, padding: '6px 10px', borderLeft: `1px solid ${C.border2}`, border: 'none', borderLeft: `1px solid ${C.border2}`, background: 'transparent', color: C.t3, cursor: 'pointer' }}>âœ•</button>
               )}
             </div>
           )
@@ -4236,13 +4236,13 @@ function ShopifyTab({ data, filters, setFilters }) {
           {filters.category?.length > 0 && (
             <span style={{ display: 'flex', alignItems: 'center', gap: 5, background: C.acc, border: `1px solid ${C.acm}`, borderRadius: 5, padding: '2px 8px', fontWeight: 700, color: C.t1 }}>
               Category: {filters.category.join(', ')}
-              <span style={{ cursor: 'pointer', color: C.t2, marginLeft: 2 }} onClick={() => { setSelectedCat(null); setFilters(f => ({ ...f, category: [], subCategory: [] })) }}>✕</span>
+              <span style={{ cursor: 'pointer', color: C.t2, marginLeft: 2 }} onClick={() => { setSelectedCat(null); setFilters(f => ({ ...f, category: [], subCategory: [] })) }}>âœ•</span>
             </span>
           )}
           {filters.subCategory?.length > 0 && (
             <span style={{ display: 'flex', alignItems: 'center', gap: 5, background: C.acc, border: `1px solid ${C.acm}`, borderRadius: 5, padding: '2px 8px', fontWeight: 700, color: C.t1 }}>
               Sub-cat: {filters.subCategory.join(', ')}
-              <span style={{ cursor: 'pointer', color: C.t2, marginLeft: 2 }} onClick={() => setFilters(f => ({ ...f, subCategory: [] }))}>✕</span>
+              <span style={{ cursor: 'pointer', color: C.t2, marginLeft: 2 }} onClick={() => setFilters(f => ({ ...f, subCategory: [] }))}>âœ•</span>
             </span>
           )}
           <span style={{ marginLeft: 'auto', color: C.t3, fontSize: 11 }}>All KPIs & charts reflect this filter</span>
@@ -4254,9 +4254,9 @@ function ShopifyTab({ data, filters, setFilters }) {
           <div className="kpi-label" style={{ fontSize: 11 }}>Gross Revenue (Inc. GST)</div>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 6 }}>
             <div className="kpi-value" style={{ fontSize: 32, fontWeight: 800 }}>{fmt(totalRev)}</div>
-            {shRevChg !== null && <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 7px', borderRadius: 4, background: shRevChg >= 0 ? C.green.bg : C.red.bg, color: shRevChg >= 0 ? C.green.tx : C.red.tx }}>{shRevChg >= 0 ? '▲' : '▼'} {Math.abs(shRevChg).toFixed(1)}%</span>}
+            {shRevChg !== null && <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 7px', borderRadius: 4, background: shRevChg >= 0 ? C.green.bg : C.red.bg, color: shRevChg >= 0 ? C.green.tx : C.red.tx }}>{shRevChg >= 0 ? 'â–²' : 'â–¼'} {Math.abs(shRevChg).toFixed(1)}%</span>}
           </div>
-          <div className="kpi-sub" style={{ fontSize: 13 }}>{shNOrders >= 1000 ? (shNOrders/1000).toFixed(1).replace(/\.0$/,'')+'k' : fmtN(shNOrders)} orders · {totalQty >= 1000 ? (totalQty/1000).toFixed(1).replace(/\.0$/,'')+'k' : fmtN(totalQty)} units</div>
+          <div className="kpi-sub" style={{ fontSize: 13 }}>{shNOrders >= 1000 ? (shNOrders/1000).toFixed(1).replace(/\.0$/,'')+'k' : fmtN(shNOrders)} orders Â· {totalQty >= 1000 ? (totalQty/1000).toFixed(1).replace(/\.0$/,'')+'k' : fmtN(totalQty)} units</div>
           <div style={{ flex: 1, minHeight: 0 }}>
             <ResponsiveContainer width="100%" height="100%">
               <AreaChart data={shSparkData} margin={{ top: 4, right: 0, bottom: 0, left: 0 }}>
@@ -4283,13 +4283,13 @@ function ShopifyTab({ data, filters, setFilters }) {
             {
               label: 'Net Revenue',
               value: fmt(netRev),
-              sub: 'Gross − Cancel − RTO − Return − CIR − GST',
-              badge: excChg !== null ? <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 4, background: excChg >= 0 ? C.green.bg : C.red.bg, color: excChg >= 0 ? C.green.tx : C.red.tx, flexShrink: 0 }}>{excChg >= 0 ? '▲' : '▼'} {Math.abs(excChg).toFixed(1)}%</span> : null,
+              sub: 'Gross âˆ’ Cancel âˆ’ RTO âˆ’ Return âˆ’ CIR âˆ’ GST',
+              badge: excChg !== null ? <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 4, background: excChg >= 0 ? C.green.bg : C.red.bg, color: excChg >= 0 ? C.green.tx : C.red.tx, flexShrink: 0 }}>{excChg >= 0 ? 'â–²' : 'â–¼'} {Math.abs(excChg).toFixed(1)}%</span> : null,
             },
-            { label: 'GST Collected', value: fmt(gst), sub: grossAfterReturns > 0 ? `${((gst / grossAfterReturns) * 100).toFixed(1)}% of net sales` : '—', badge: shChgBadge(gst, prevGst) },
+            { label: 'GST Collected', value: fmt(gst), sub: grossAfterReturns > 0 ? `${((gst / grossAfterReturns) * 100).toFixed(1)}% of net sales` : 'â€”', badge: shChgBadge(gst, prevGst) },
             { label: 'Avg. Daily Gross Rev', value: fmt(dailyAvg), sub: `over ${nDays} days`, badge: shChgBadge(dailyAvg, prevRev > 0 ? prevRev / nDays : 0) },
-            { label: 'AOV', value: `₹${Math.round(aov).toLocaleString('en-IN')}`, sub: 'Gross rev ÷ orders', badge: shChgBadge(aov, prevOrders > 0 ? prevRev / prevOrders : 0) },
-            { label: 'ASP', value: `₹${Math.round(asp).toLocaleString('en-IN')}`, sub: 'Net rev ÷ units sold', badge: shChgBadge(asp, prevUnits > 0 ? prevNetRev / prevUnits : 0) },
+            { label: 'AOV', value: `â‚¹${Math.round(aov).toLocaleString('en-IN')}`, sub: 'Gross rev Ã· orders', badge: shChgBadge(aov, prevOrders > 0 ? prevRev / prevOrders : 0) },
+            { label: 'ASP', value: `â‚¹${Math.round(asp).toLocaleString('en-IN')}`, sub: 'Net rev Ã· units sold', badge: shChgBadge(asp, prevUnits > 0 ? prevNetRev / prevUnits : 0) },
           ]
           const cancelRevPerOrder = cancelledOrders > 0 ? cancelledRev / cancelledOrders : 0
           const prevCancelPct = prevRev > 0 ? (prevCancelledOrders * cancelRevPerOrder) / prevRev * 100 : 0
@@ -4340,7 +4340,7 @@ function ShopifyTab({ data, filters, setFilters }) {
           const returnTrendMap = {}
           ;(data.dailyReturnTrend || []).forEach(x => { returnTrendMap[x.date] = x })
           // Net Revenue line: apply the same period-level shrink as the KPI
-          // (Gross − Cancel − RTO − Return − CIR, then strip GST)
+          // (Gross âˆ’ Cancel âˆ’ RTO âˆ’ Return âˆ’ CIR, then strip GST)
           const netShrinkFactor = totalRev > 0 ? (grossAfterReturns / totalRev) * (1 - gstRatio) : (1 - gstRatio)
           // Use Shopify-specific daily (EXCLUDES Shopify B2B)
           const rawDaily = (sh.daily || []).map(d => {
@@ -4417,14 +4417,14 @@ function ShopifyTab({ data, filters, setFilters }) {
           )
         })()}
         <Card title="Category Revenue">
-          {catRows.slice(0, 8).map((r, i) => { const dots = ['#534AB7','#0D9E68','#2E74CC','#CC8A00','#CC4078','#E24B4A','#9B59B6','#FF6B35']; const isSelected = (filters.category || []).includes(r.name); return <HBar key={r.name} dot={dots[i % dots.length]} label={r.name} width={(r.rev / (catRows[0]?.rev || 1)) * 100} value={fmt(r.rev)} pctVal={totalRev ? pct(r.rev, totalRev) : '—'} isSelected={isSelected} onClick={() => { const next = isSelected ? [] : [r.name]; setSelectedCat(next[0] || null); setFilters(f => ({ ...f, category: next, subCategory: [] })) }} /> })}
+          {catRows.slice(0, 8).map((r, i) => { const dots = ['#534AB7','#0D9E68','#2E74CC','#CC8A00','#CC4078','#E24B4A','#9B59B6','#FF6B35']; const isSelected = (filters.category || []).includes(r.name); return <HBar key={r.name} dot={dots[i % dots.length]} label={r.name} width={(r.rev / (catRows[0]?.rev || 1)) * 100} value={fmt(r.rev)} pctVal={totalRev ? pct(r.rev, totalRev) : 'â€”'} isSelected={isSelected} onClick={() => { const next = isSelected ? [] : [r.name]; setSelectedCat(next[0] || null); setFilters(f => ({ ...f, category: next, subCategory: [] })) }} /> })}
         </Card>
       </div>
       <div style={{ display: 'flex', gap: 14, alignItems: 'stretch' }}>
         <ShopifyGeoDonutRow regionRows={sh.regionRows || []} tierRows={sh.tierRows || []} topStates={sh.topStates || []} allStateRows={Object.entries(sh.stateMap || {}).map(([k, v]) => ({ name: k, rev: v.rev, orders: v.orders?.size || 0 }))} />
         <TopSubCatBar subCatRows={allSubCatRows} />
       </div>
-      {/* Category Revenue Matrix · Shopify */}
+      {/* Category Revenue Matrix Â· Shopify */}
       {(() => {
         const pick = v => ({ rev: v.rev || 0, excRev: v.excRev || 0, units: v.units || 0, orders: v.orders, cancelled: v.cancelled || 0, rto: v.rto || 0, cir: v.cir || 0, exch: v.exch || 0, cancelRev: v.cancelRev || 0, rtoRev: v.rtoRev || 0, cirRev: v.cirRev || 0, exchRev: v.exchRev || 0 })
         const catData = {}
@@ -4443,7 +4443,7 @@ function ShopifyTab({ data, filters, setFilters }) {
             Object.entries(skuMap_).forEach(([sku, v]) => { skuData[cat][sc][sku] = pick(v) })
           })
         })
-        return <FinancialCategoryMatrix catData={catData} subCatData={subCatData} skuData={skuData} title={`Category Revenue Matrix · Shopify ${isIntl ? 'International' : 'India'}`} neutral={true} showShare={true} catPrevMap={sh.catPrevMap || {}} subCatPrevMap={sh.subCatPrevMap || {}} skuPrevMap={sh.skuPrevMap || {}} />
+        return <FinancialCategoryMatrix catData={catData} subCatData={subCatData} skuData={skuData} title={`Category Revenue Matrix Â· Shopify ${isIntl ? 'International' : 'India'}`} neutral={true} showShare={true} catPrevMap={sh.catPrevMap || {}} subCatPrevMap={sh.subCatPrevMap || {}} skuPrevMap={sh.skuPrevMap || {}} />
       })()}
       {false && <div className="g-2" style={{ alignItems: 'stretch' }}>
         {(() => {
@@ -4453,16 +4453,16 @@ function ShopifyTab({ data, filters, setFilters }) {
           const btnStyle = v => ({ fontSize: 11, fontWeight: 600, padding: '3px 10px', borderRadius: 5, border: `1.5px solid ${shCatView === v ? C.acm : C.border}`, background: shCatView === v ? C.acc : 'transparent', color: shCatView === v ? C.t1 : C.t2, cursor: 'pointer', fontFamily: 'var(--font)' })
           const totalCatRev = catRows.reduce((s, r) => s + r.rev, 0)
           return (
-            <Card title="Category Revenue" note={selectedCat ? <span style={{ cursor: 'pointer', color: C.acc, fontWeight: 600 }} onClick={() => { setSelectedCat(null); setFilters(f => ({ ...f, category: [], subCategory: [] })) }}>✕ Clear</span> : `${catRows.length} total`}
+            <Card title="Category Revenue" note={selectedCat ? <span style={{ cursor: 'pointer', color: C.acc, fontWeight: 600 }} onClick={() => { setSelectedCat(null); setFilters(f => ({ ...f, category: [], subCategory: [] })) }}>âœ• Clear</span> : `${catRows.length} total`}
               action={<div style={{ display: 'flex', gap: 4 }}>
                 <button style={btnStyle('table')} onClick={() => setShCatView('table')}>Table</button>
-                <button style={btnStyle('bar')} onClick={() => setShCatView('bar')}>Bar</button>
+                <button style={btnStyle('bar')} onClick={() => setShCatView('bar')}>Chart</button>
               </div>}>
               {shCatView === 'table' && (
                 <div style={{ overflowY: 'auto', maxHeight: FIXED_H }}>
                   <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
                     <thead style={{ position: 'sticky', top: 0, background: C.card, zIndex: 1 }}><tr>{[{ label: 'Category' }, { label: 'Revenue / % Share', align: 'right' }, { label: 'Orders', align: 'right' }, { label: 'Units', align: 'right' }, { label: 'ASP', align: 'right' }].map(c => <th key={c.label} style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.05em', color: C.t3, textAlign: c.align || 'left', padding: '3px 5px 7px', borderBottom: `1px solid ${C.border}` }}>{c.label}</th>)}</tr></thead>
-                    <tbody>{catRows.map((r, i) => { const isSelected = selectedCat === r.name; const share = totalCatRev ? (r.rev / totalCatRev * 100).toFixed(1) + '%' : '—'; return <tr key={r.name} onClick={() => { const next = isSelected ? null : r.name; setSelectedCat(next); setFilters(f => ({ ...f, category: next ? [next] : [], subCategory: [] })) }} style={{ borderBottom: i < catRows.length - 1 ? `1px solid ${C.border}` : 'none', background: isSelected ? C.acl : '', cursor: 'pointer' }} onMouseEnter={e => { if (!isSelected) e.currentTarget.style.background = '#FFFBE6' }} onMouseLeave={e => { e.currentTarget.style.background = isSelected ? C.acl : '' }}><td style={{ padding: '5.5px 5px', color: C.t2 }}>{isSelected ? <strong>{r.name}</strong> : r.name}</td><td style={{ padding: '5.5px 5px', textAlign: 'right' }}><span style={{ fontFamily: 'var(--mono)', fontSize: 11.5, color: C.t1 }}>{fmt(r.rev)}</span><span style={{ fontSize: 10, color: C.t3, marginLeft: 5 }}>({share})</span></td><td style={{ padding: '5.5px 5px', textAlign: 'right', color: C.t2 }}>{fmtN(r.orders)}</td><td style={{ padding: '5.5px 5px', textAlign: 'right', color: C.t2 }}>{fmtN(r.units)}</td><td style={{ padding: '5.5px 5px', textAlign: 'right', color: C.t2 }}>₹{Math.round(r.asp).toLocaleString('en-IN')}</td></tr> })}</tbody>
+                    <tbody>{catRows.map((r, i) => { const isSelected = selectedCat === r.name; const share = totalCatRev ? (r.rev / totalCatRev * 100).toFixed(1) + '%' : 'â€”'; return <tr key={r.name} onClick={() => { const next = isSelected ? null : r.name; setSelectedCat(next); setFilters(f => ({ ...f, category: next ? [next] : [], subCategory: [] })) }} style={{ borderBottom: i < catRows.length - 1 ? `1px solid ${C.border}` : 'none', background: isSelected ? C.acl : '', cursor: 'pointer' }} onMouseEnter={e => { if (!isSelected) e.currentTarget.style.background = '#FFFBE6' }} onMouseLeave={e => { e.currentTarget.style.background = isSelected ? C.acl : '' }}><td style={{ padding: '5.5px 5px', color: C.t2 }}>{isSelected ? <strong>{r.name}</strong> : r.name}</td><td style={{ padding: '5.5px 5px', textAlign: 'right' }}><span style={{ fontFamily: 'var(--mono)', fontSize: 11.5, color: C.t1 }}>{fmt(r.rev)}</span><span style={{ fontSize: 10, color: C.t3, marginLeft: 5 }}>({share})</span></td><td style={{ padding: '5.5px 5px', textAlign: 'right', color: C.t2 }}>{fmtN(r.orders)}</td><td style={{ padding: '5.5px 5px', textAlign: 'right', color: C.t2 }}>{fmtN(r.units)}</td><td style={{ padding: '5.5px 5px', textAlign: 'right', color: C.t2 }}>â‚¹{Math.round(r.asp).toLocaleString('en-IN')}</td></tr> })}</tbody>
                   </table>
                 </div>
               )}
@@ -4488,16 +4488,16 @@ function ShopifyTab({ data, filters, setFilters }) {
           const btnStyle = v => ({ fontSize: 11, fontWeight: 600, padding: '3px 10px', borderRadius: 5, border: `1.5px solid ${shSubCatView === v ? C.acm : C.border}`, background: shSubCatView === v ? C.acc : 'transparent', color: shSubCatView === v ? C.t1 : C.t2, cursor: 'pointer', fontFamily: 'var(--font)' })
           const totalSubRev = subCatRows.reduce((s, r) => s + r.rev, 0)
           return (
-            <Card title={selectedCat ? `Sub-categories · ${selectedCat}` : 'Sub-categories'} note={`${subCatRows.length} total`}
+            <Card title={selectedCat ? `Sub-categories Â· ${selectedCat}` : 'Sub-categories'} note={`${subCatRows.length} total`}
               action={<div style={{ display: 'flex', gap: 4 }}>
                 <button style={btnStyle('table')} onClick={() => setShSubCatView('table')}>Table</button>
-                <button style={btnStyle('bar')} onClick={() => setShSubCatView('bar')}>Bar</button>
+                <button style={btnStyle('bar')} onClick={() => setShSubCatView('bar')}>Chart</button>
               </div>}>
               {shSubCatView === 'table' && (
                 <div style={{ overflowY: 'auto', maxHeight: FIXED_H }}>
                   <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
                     <thead style={{ position: 'sticky', top: 0, background: C.card, zIndex: 1 }}><tr>{[{ label: 'Sub-category' }, { label: 'Revenue / % Share', align: 'right' }, { label: 'Orders', align: 'right' }, { label: 'Units', align: 'right' }, { label: 'ASP', align: 'right' }].map(c => <th key={c.label} style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.05em', color: C.t3, textAlign: c.align || 'left', padding: '3px 5px 7px', borderBottom: `1px solid ${C.border}` }}>{c.label}</th>)}</tr></thead>
-                    <tbody>{subCatRows.map((r, i) => { const isSelSub = (filters.subCategory || []).includes(r.name); const share = totalSubRev ? (r.rev / totalSubRev * 100).toFixed(1) + '%' : '—'; return <tr key={r.name} onClick={() => { const next = isSelSub ? [] : [r.name]; setFilters(f => ({ ...f, subCategory: next })) }} style={{ borderBottom: i < subCatRows.length - 1 ? `1px solid ${C.border}` : 'none', background: isSelSub ? C.acl : '', cursor: 'pointer' }} onMouseEnter={e => { if (!isSelSub) e.currentTarget.style.background = '#FFFBE6' }} onMouseLeave={e => { e.currentTarget.style.background = isSelSub ? C.acl : '' }}><td style={{ padding: '5.5px 5px', color: C.t2 }}><span style={{ display: 'inline-block', width: 8, height: 8, borderRadius: 2, background: scColorOf(), marginRight: 6 }} />{isSelSub ? <strong>{r.name}</strong> : r.name}</td><td style={{ padding: '5.5px 5px', textAlign: 'right' }}><span style={{ fontFamily: 'var(--mono)', fontSize: 11.5, color: C.t1 }}>{fmt(r.rev)}</span><span style={{ fontSize: 10, color: C.t3, marginLeft: 5 }}>({share})</span></td><td style={{ padding: '5.5px 5px', textAlign: 'right', color: C.t2 }}>{fmtN(r.orders)}</td><td style={{ padding: '5.5px 5px', textAlign: 'right', color: C.t2 }}>{fmtN(r.units)}</td><td style={{ padding: '5.5px 5px', textAlign: 'right', color: C.t2 }}>₹{Math.round(r.asp).toLocaleString('en-IN')}</td></tr> })}</tbody>
+                    <tbody>{subCatRows.map((r, i) => { const isSelSub = (filters.subCategory || []).includes(r.name); const share = totalSubRev ? (r.rev / totalSubRev * 100).toFixed(1) + '%' : 'â€”'; return <tr key={r.name} onClick={() => { const next = isSelSub ? [] : [r.name]; setFilters(f => ({ ...f, subCategory: next })) }} style={{ borderBottom: i < subCatRows.length - 1 ? `1px solid ${C.border}` : 'none', background: isSelSub ? C.acl : '', cursor: 'pointer' }} onMouseEnter={e => { if (!isSelSub) e.currentTarget.style.background = '#FFFBE6' }} onMouseLeave={e => { e.currentTarget.style.background = isSelSub ? C.acl : '' }}><td style={{ padding: '5.5px 5px', color: C.t2 }}><span style={{ display: 'inline-block', width: 8, height: 8, borderRadius: 2, background: scColorOf(), marginRight: 6 }} />{isSelSub ? <strong>{r.name}</strong> : r.name}</td><td style={{ padding: '5.5px 5px', textAlign: 'right' }}><span style={{ fontFamily: 'var(--mono)', fontSize: 11.5, color: C.t1 }}>{fmt(r.rev)}</span><span style={{ fontSize: 10, color: C.t3, marginLeft: 5 }}>({share})</span></td><td style={{ padding: '5.5px 5px', textAlign: 'right', color: C.t2 }}>{fmtN(r.orders)}</td><td style={{ padding: '5.5px 5px', textAlign: 'right', color: C.t2 }}>{fmtN(r.units)}</td><td style={{ padding: '5.5px 5px', textAlign: 'right', color: C.t2 }}>â‚¹{Math.round(r.asp).toLocaleString('en-IN')}</td></tr> })}</tbody>
                   </table>
                 </div>
               )}
@@ -4542,7 +4542,7 @@ function AmazonTab({ data, region = 'india', setRegion = () => {} }) {
 
   const returnRateReliable = (amzSC.returnRate?.rollOrders || 0) > 0
 
-  // ── Seller Central calcs ──
+  // â”€â”€ Seller Central calcs â”€â”€
   const scFBA = amzSC.fulfillment?.find(f => f.type === 'FBA') || { orders: 0, rev: 0, excRev: 0, units: 0 }
   const scMFN = amzSC.fulfillment?.find(f => f.type === 'MFN') || { orders: 0, rev: 0, excRev: 0, units: 0 }
   const scTotalRev = scFBA.rev + scMFN.rev
@@ -4573,7 +4573,7 @@ function AmazonTab({ data, region = 'india', setRegion = () => {} }) {
   const scDailyArr = Object.values(scDailyMap).sort((a, b) => a.date.localeCompare(b.date))
   const maxStateRev = Math.max(...(amzSC.states || []).map(s => s.rev), 1)
 
-  // ── Vendor Central calcs ──
+  // â”€â”€ Vendor Central calcs â”€â”€
   const vcTotalOrdered = amzVC.accounts?.reduce((s, a) => s + a.orderedRev, 0) || 0
   const vcTotalOrderedExcRev = amzVC.accounts?.reduce((s, a) => s + (a.orderedExcRev || 0), 0) || 0
   const vcTotalShipped = amzVC.accounts?.reduce((s, a) => s + a.shippedRev, 0) || 0
@@ -4584,7 +4584,7 @@ function AmazonTab({ data, region = 'india', setRegion = () => {} }) {
   const vcReturnRate = vcTotalShippedUnits ? (vcTotalReturns / vcTotalShippedUnits * 100) : 0
   const vcMaxRev = Math.max(...(amzVC.accounts || []).map(a => a.orderedRev), 1)
 
-  // ── Category filter overrides ──
+  // â”€â”€ Category filter overrides â”€â”€
   const scDailyCatFiltered = selectedCat ? (amzSC.dailyCat || []).filter(x => selectedSubCat ? x.category === selectedCat && x.subcategory === selectedSubCat : x.category === selectedCat) : null
   const vcDailyCatFiltered = selectedCat ? (amzVCMatrix.dailyCat || []).filter(x => selectedSubCat ? x.category === selectedCat && x.subcategory === selectedSubCat : x.category === selectedCat) : null
   const scCatRev = scDailyCatFiltered ? scDailyCatFiltered.reduce((s, x) => s + x.rev, 0) : scTotalRev
@@ -4599,7 +4599,7 @@ function AmazonTab({ data, region = 'india', setRegion = () => {} }) {
     ? (() => { const m = {}; scDailyCatFiltered.forEach(x => { if (!m[x.date]) m[x.date] = { date: x.date, FBA: 0, MFN: 0, FBA_orders: 0, MFN_orders: 0, FBA_units: 0, MFN_units: 0 }; m[x.date][(x.ch||'FBA')] = (m[x.date][(x.ch||'FBA')]||0) + x.rev; m[x.date][(x.ch||'FBA')+'_orders'] = (m[x.date][(x.ch||'FBA')+'_orders']||0) + x.orders; m[x.date][(x.ch||'FBA')+'_units'] = (m[x.date][(x.ch||'FBA')+'_units']||0) + x.units }); return Object.values(m).sort((a,b) => a.date.localeCompare(b.date)) })()
     : scDailyArr
 
-  // ── Amazon prev-period for HeroKPICard ──
+  // â”€â”€ Amazon prev-period for HeroKPICard â”€â”€
   const amzPrevSCRev = amzSC.prevRev || 0
   const amzPrevVCRev = amzVC.prevRev || 0
   const amzPrevTotalRev = amzPrevSCRev + amzPrevVCRev
@@ -4614,7 +4614,7 @@ function AmazonTab({ data, region = 'india', setRegion = () => {} }) {
     return { i, cur: cur ? (cur.FBA || 0) + (cur.MFN || 0) : null, prev: pre?.rev ?? null }
   })
 
-  // ── International calcs ──
+  // â”€â”€ International calcs â”€â”€
   const intlTotalRev = amzIntl.countries?.reduce((s, c) => s + c.rev, 0) || 0
   const intlTotalOrders = amzIntl.countries?.reduce((s, c) => s + c.orders, 0) || 0
   const intlAOV = intlTotalOrders ? intlTotalRev / intlTotalOrders : 0
@@ -4626,13 +4626,13 @@ function AmazonTab({ data, region = 'india', setRegion = () => {} }) {
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
         {/* Pill toggle: India / International */}
         <div style={{ display: 'flex', background: C.bg, borderRadius: 9, padding: 3, border: `1px solid ${C.border}`, gap: 0 }}>
-          {[{ id: 'india', label: 'India', img: 'https://flagcdn.com/w20/in.png' }, { id: 'intl', label: 'International', emoji: '🌍' }].map(opt => (
+          {[{ id: 'india', label: 'India', img: 'https://flagcdn.com/w20/in.png' }, { id: 'intl', label: 'International', emoji: 'ðŸŒ' }].map(opt => (
             <button key={opt.id} onClick={() => { setRegion(opt.id); setSubView('overview') }} style={{ fontSize: 12, fontWeight: region === opt.id ? 700 : 500, padding: '5px 16px', borderRadius: 7, border: 'none', background: region === opt.id ? C.acc : 'transparent', color: C.t1, cursor: 'pointer', fontFamily: 'var(--font)', transition: 'all .15s', boxShadow: region === opt.id ? '0 1px 4px rgba(0,0,0,.10)' : 'none', display: 'flex', alignItems: 'center', gap: 5 }}>{opt.img ? <img src={opt.img} width="18" style={{ verticalAlign: 'middle', borderRadius: 2 }} /> : <span style={{ fontFamily: 'sans-serif' }}>{opt.emoji}</span>}{opt.label}</button>
           ))}
         </div>
         {/* Divider */}
-        {region === 'india' && <span style={{ color: C.border2, fontSize: 18, lineHeight: 1 }}>│</span>}
-        {/* Sub-toggle: SC / VC — India only */}
+        {region === 'india' && <span style={{ color: C.border2, fontSize: 18, lineHeight: 1 }}>â”‚</span>}
+        {/* Sub-toggle: SC / VC â€” India only */}
         {region === 'india' && (
           <div style={{ display: 'flex', gap: 8 }}>
             {[{ id: 'sc', label: 'Seller Central' }, { id: 'vc', label: 'Vendor Central' }].map(opt => (
@@ -4642,12 +4642,12 @@ function AmazonTab({ data, region = 'india', setRegion = () => {} }) {
         )}
       </div>
 
-      {/* ── INDIA · OVERVIEW (SC + VC combined) ── */}
+      {/* â”€â”€ INDIA Â· OVERVIEW (SC + VC combined) â”€â”€ */}
       {region === 'india' && subView === 'overview' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
           {/* KPI layout: hero + 2 rows of 4 */}
           {(() => {
-            const amzChgBadge = (cur, prev) => { if (!prev || Math.abs(prev) < 1) return null; const p = (cur - prev) / prev * 100; if (Math.abs(p) > 999) return null; return <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 4, background: p >= 0 ? C.green.bg : C.red.bg, color: p >= 0 ? C.green.tx : C.red.tx, flexShrink: 0 }}>{p >= 0 ? '▲' : '▼'} {Math.abs(p).toFixed(1)}%</span> }
+            const amzChgBadge = (cur, prev) => { if (!prev || Math.abs(prev) < 1) return null; const p = (cur - prev) / prev * 100; if (Math.abs(p) > 999) return null; return <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 4, background: p >= 0 ? C.green.bg : C.red.bg, color: p >= 0 ? C.green.tx : C.red.tx, flexShrink: 0 }}>{p >= 0 ? 'â–²' : 'â–¼'} {Math.abs(p).toFixed(1)}%</span> }
             const amzPrevOrders = amzSC.prevOrders || 0
             const amzPrevUnits = amzSC.prevUnits || 0
             const amzPrevFbaRev = amzSC.prevFbaRev || 0
@@ -4660,12 +4660,12 @@ function AmazonTab({ data, region = 'india', setRegion = () => {} }) {
             return (
               <div style={{ display: 'grid', gridTemplateColumns: '1.5fr 5fr', gap: 10, alignItems: 'stretch' }}>
                 <div className="kpi-card" style={{ display: 'flex', flexDirection: 'column', gap: 8, padding: '16px 18px' }}>
-                  <div className="kpi-label" style={{ fontSize: 11 }}>Gross Revenue · SC + VC{selectedCat ? ` · ${selectedSubCat || selectedCat}` : ''}</div>
+                  <div className="kpi-label" style={{ fontSize: 11 }}>Gross Revenue Â· SC + VC{selectedCat ? ` Â· ${selectedSubCat || selectedCat}` : ''}</div>
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 6 }}>
                     <div className="kpi-value" style={{ fontSize: 32, fontWeight: 800 }}>{fmt(scCatRev + vcCatRev)}</div>
-                    {amzTotalChg !== null && !selectedCat && <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 7px', borderRadius: 4, background: amzTotalChg >= 0 ? C.green.bg : C.red.bg, color: amzTotalChg >= 0 ? C.green.tx : C.red.tx }}>{amzTotalChg >= 0 ? '▲' : '▼'} {Math.abs(amzTotalChg).toFixed(1)}%</span>}
+                    {amzTotalChg !== null && !selectedCat && <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 7px', borderRadius: 4, background: amzTotalChg >= 0 ? C.green.bg : C.red.bg, color: amzTotalChg >= 0 ? C.green.tx : C.red.tx }}>{amzTotalChg >= 0 ? 'â–²' : 'â–¼'} {Math.abs(amzTotalChg).toFixed(1)}%</span>}
                   </div>
-                  <div className="kpi-sub" style={{ fontSize: 13 }}>{fmtN(scCatOrders + vcCatOrders)} orders · {fmtN(scCatUnits + vcCatUnits)} units</div>
+                  <div className="kpi-sub" style={{ fontSize: 13 }}>{fmtN(scCatOrders + vcCatOrders)} orders Â· {fmtN(scCatUnits + vcCatUnits)} units</div>
                   <div style={{ flex: 1, minHeight: 0 }}>
                     <ResponsiveContainer width="100%" height="100%">
                       <AreaChart data={amzSparkData} margin={{ top: 4, right: 0, bottom: 0, left: 0 }}>
@@ -4682,7 +4682,7 @@ function AmazonTab({ data, region = 'india', setRegion = () => {} }) {
                     {[
                       { label: 'SC Revenue', value: fmt(scCatRev), sub: 'Seller Central', badge: selectedCat ? null : amzChgBadge(scTotalRev, amzPrevSCRev) },
                       { label: 'VC Revenue', value: fmt(vcCatRev), sub: 'Vendor Central', badge: selectedCat ? null : amzChgBadge(vcTotalOrdered, amzPrevVCRev) },
-                      { label: 'Net Revenue', value: fmt(scCatExcRev + vcCatExcRev), sub: 'SC (Gross−Cancel−Returns−GST) + VC excl. GST', badge: selectedCat ? null : amzChgBadge(scTotalExcRev + vcTotalOrderedExcRev, (amzSC.prevExcRev || 0) + (amzVC.prevExcRev || 0)) },
+                      { label: 'Net Revenue', value: fmt(scCatExcRev + vcCatExcRev), sub: 'SC (Grossâˆ’Cancelâˆ’Returnsâˆ’GST) + VC excl. GST', badge: selectedCat ? null : amzChgBadge(scTotalExcRev + vcTotalOrderedExcRev, (amzSC.prevExcRev || 0) + (amzVC.prevExcRev || 0)) },
                       { label: 'GST Collected', value: fmt((scCatRev - scTotalExcRevRaw) + (vcCatRev - vcCatExcRev)), sub: 'SC + VC GST', badge: selectedCat ? null : amzChgBadge((scTotalRev - scTotalExcRevRaw) + (vcTotalOrdered - vcTotalOrderedExcRev), ((amzSC.prevRev || 0) - (amzSC.prevExcRev || 0)) + ((amzVC.prevRev || 0) - (amzVC.prevExcRev || 0))) },
                     ].map(k => (
                       <div key={k.label} className="kpi-card" style={{ padding: '10px 13px' }}>
@@ -4695,8 +4695,8 @@ function AmazonTab({ data, region = 'india', setRegion = () => {} }) {
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10, flex: 1 }}>
                     {[
                       { label: 'Avg. Daily Gross Rev', value: fmt((scCatRev + vcCatRev) / (data.nDays || 1)), sub: 'SC + VC per day', badge: selectedCat ? null : amzChgBadge((scTotalRev + vcTotalOrdered) / (data.nDays || 1), amzPrevDailyAvg) },
-                      { label: 'ASP', value: `₹${scCatUnits ? Math.round(scCatRev / scCatUnits).toLocaleString('en-IN') : 0}`, sub: 'SC avg selling price / unit', badge: selectedCat ? null : amzChgBadge(scTotalUnits ? scTotalRev / scTotalUnits : 0, amzPrevASP) },
-                      { label: 'Cancellation Rate', value: `${scCancelRate.toFixed(1)}%`, sub: `${fmtN(scCancelOrders)} cancelled`, accent: scCancelRate > 10 ? '#7A1A1A' : undefined, badge: amzPrevCancelRate ? (() => { const p = (scCancelRate - amzPrevCancelRate) / amzPrevCancelRate * 100; return <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 4, background: p > 0 ? C.red.bg : C.green.bg, color: p > 0 ? C.red.tx : C.green.tx, flexShrink: 0 }}>{p > 0 ? '▲' : '▼'} {Math.abs(p).toFixed(1)}%</span> })() : null },
+                      { label: 'ASP', value: `â‚¹${scCatUnits ? Math.round(scCatRev / scCatUnits).toLocaleString('en-IN') : 0}`, sub: 'SC avg selling price / unit', badge: selectedCat ? null : amzChgBadge(scTotalUnits ? scTotalRev / scTotalUnits : 0, amzPrevASP) },
+                      { label: 'Cancellation Rate', value: `${scCancelRate.toFixed(1)}%`, sub: `${fmtN(scCancelOrders)} cancelled`, accent: scCancelRate > 10 ? '#7A1A1A' : undefined, badge: amzPrevCancelRate ? (() => { const p = (scCancelRate - amzPrevCancelRate) / amzPrevCancelRate * 100; return <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 4, background: p > 0 ? C.red.bg : C.green.bg, color: p > 0 ? C.red.tx : C.green.tx, flexShrink: 0 }}>{p > 0 ? 'â–²' : 'â–¼'} {Math.abs(p).toFixed(1)}%</span> })() : null },
                       { label: 'Return% (SC)', value: returnRateReliable ? `${(amzSC.returnRate?.pct || 0).toFixed(1)}%` : 'N/A', sub: returnRateReliable ? `${fmt(amzSC.returnRate?.rollReturned || 0)} returned of ${fmt(amzSC.returnRate?.rollOrders || 0)} SC rev` : 'No reliable data', accent: returnRateReliable && (amzSC.returnRate?.pct || 0) > 18 ? '#7A1A1A' : undefined },
                     ].map(k => (
                       <div key={k.label} className="kpi-card" style={{ padding: '10px 13px' }}>
@@ -4795,7 +4795,7 @@ function AmazonTab({ data, region = 'india', setRegion = () => {} }) {
             const statusColors = { Shipped: '#2E74CC', Pending: '#E8930A', Cancelled: '#E24B4A', Shipping: '#9B59B6' }
             return (
               <div style={{ display: 'grid', gridTemplateColumns: '3fr 2fr', gap: 14, alignItems: 'stretch' }}>
-                <Card title="Trend Analysis · SC + VC" action={
+                <Card title="Trend Analysis Â· SC + VC" action={
                   <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
                     <div style={{ display: 'flex', gap: 4 }}>
                       {[{ v: 'rev', label: 'Revenue' }, { v: 'orders', label: 'Orders' }, { v: 'units', label: 'Units' }].map(opt => (
@@ -4830,14 +4830,14 @@ function AmazonTab({ data, region = 'india', setRegion = () => {} }) {
                     </ComposedChart>
                   </ResponsiveContainer>
                 </Card>
-                <Card title="SC vs VC · Revenue Split">
+                <Card title="SC vs VC Â· Revenue Split">
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', gap: 8 }}>
                     <ResponsiveContainer width={140} height={140}>
                       <PieChart>
                         <Pie data={splitData} cx="50%" cy="50%" innerRadius={42} outerRadius={62} dataKey="value" paddingAngle={3}>
                           {splitData.map((e, i) => <Cell key={i} fill={e.color} />)}
                         </Pie>
-                        <Tooltip content={({ active, payload }) => active && payload?.length ? <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 6, padding: '5px 9px', fontSize: 11 }}><div style={{ color: payload[0].payload.color, fontWeight: 600 }}>{payload[0].name}</div><div style={{ color: C.t1 }}>{fmt(payload[0].value)} · {(payload[0].value / (scRevTotal + vcRevTotal) * 100).toFixed(1)}%</div></div> : null} />
+                        <Tooltip content={({ active, payload }) => active && payload?.length ? <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 6, padding: '5px 9px', fontSize: 11 }}><div style={{ color: payload[0].payload.color, fontWeight: 600 }}>{payload[0].name}</div><div style={{ color: C.t1 }}>{fmt(payload[0].value)} Â· {(payload[0].value / (scRevTotal + vcRevTotal) * 100).toFixed(1)}%</div></div> : null} />
                       </PieChart>
                     </ResponsiveContainer>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
@@ -4905,7 +4905,7 @@ function AmazonTab({ data, region = 'india', setRegion = () => {} }) {
             const skuPrevMap = {}
             const skuCats = new Set([...Object.keys(scSkuPrev), ...Object.keys(vcSkuPrev)])
             skuCats.forEach(cat => { skuPrevMap[cat] = {}; const allScs = new Set([...Object.keys(scSkuPrev[cat]||{}), ...Object.keys(vcSkuPrev[cat]||{})]); allScs.forEach(sc => { skuPrevMap[cat][sc] = {}; const allSkus = new Set([...Object.keys(scSkuPrev[cat]?.[sc]||{}), ...Object.keys(vcSkuPrev[cat]?.[sc]||{})]); allSkus.forEach(sku => { skuPrevMap[cat][sc][sku] = (scSkuPrev[cat]?.[sc]?.[sku]||0) + (vcSkuPrev[cat]?.[sc]?.[sku]||0) }) }) })
-            return <FinancialCategoryMatrix catData={catData} subCatData={subCatData} skuData={skuData} title="Category Revenue Matrix · Amazon India" showReturns={true} showMoM={true} catPrevMap={catPrevMap} subCatPrevMap={subCatPrevMap} skuPrevMap={skuPrevMap} />
+            return <FinancialCategoryMatrix catData={catData} subCatData={subCatData} skuData={skuData} title="Category Revenue Matrix Â· Amazon India" showReturns={true} showMoM={true} catPrevMap={catPrevMap} subCatPrevMap={subCatPrevMap} skuPrevMap={skuPrevMap} />
           })()}
           {(() => {
             const pickRet = (...chs) => { for (const c of chs) if (c?.totalOrdersForReturn) return { returned: c.returned||0, totalOrdersForReturn: c.totalOrdersForReturn }; return { returned: 0, totalOrdersForReturn: 0 } }
@@ -4922,7 +4922,7 @@ function AmazonTab({ data, region = 'india', setRegion = () => {} }) {
               const rev = (scD.FBA?.rev||0)+(scD.MFN?.rev||0)+(vc.rev||0); const units = (scD.FBA?.units||0)+(scD.MFN?.units||0)+(vc.units||0); const orders = (scD.FBA?.orders||0)+(scD.MFN?.orders||0)+(vc.orders||0)
               return { name: sc, category: cat, rev, units, orders }
             }).sort((a,b) => b.rev - a.rev)
-            return <CatSubCatRow catRows={catRows} subCatRows={subCatRows} title="Category Revenue · Amazon India" selectedCat={selectedCat} onSelectCat={v => { setSelectedCat(v); setSelectedSubCat(null) }} selectedSubCat={selectedSubCat} onSelectSubCat={setSelectedSubCat} />
+            return <CatSubCatRow catRows={catRows} subCatRows={subCatRows} title="Category Revenue Â· Amazon India" selectedCat={selectedCat} onSelectCat={v => { setSelectedCat(v); setSelectedSubCat(null) }} selectedSubCat={selectedSubCat} onSelectSubCat={setSelectedSubCat} />
           })()}
           {(() => {
             const statePrevMap = amzSC.statePrevMap || {}
@@ -4953,12 +4953,12 @@ function AmazonTab({ data, region = 'india', setRegion = () => {} }) {
         </div>
       )}
 
-      {/* ── INDIA · SELLER CENTRAL ── */}
+      {/* â”€â”€ INDIA Â· SELLER CENTRAL â”€â”€ */}
       {region === 'india' && subView === 'sc' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
           {/* Hero + KPI rows */}
           {(() => {
-            const scChgBadge = (cur, prev) => { if (!prev || Math.abs(prev) < 1) return null; const p = (cur - prev) / prev * 100; if (Math.abs(p) > 999) return null; return <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 4, background: p >= 0 ? C.green.bg : C.red.bg, color: p >= 0 ? C.green.tx : C.red.tx, flexShrink: 0 }}>{p >= 0 ? '▲' : '▼'} {Math.abs(p).toFixed(1)}%</span> }
+            const scChgBadge = (cur, prev) => { if (!prev || Math.abs(prev) < 1) return null; const p = (cur - prev) / prev * 100; if (Math.abs(p) > 999) return null; return <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 4, background: p >= 0 ? C.green.bg : C.red.bg, color: p >= 0 ? C.green.tx : C.red.tx, flexShrink: 0 }}>{p >= 0 ? 'â–²' : 'â–¼'} {Math.abs(p).toFixed(1)}%</span> }
             const prevSCRev = amzSC.prevRev || 0
             const prevSCExcRev = amzSC.prevExcRev || 0
             const prevSCOrders = amzSC.prevOrders || 0
@@ -4976,12 +4976,12 @@ function AmazonTab({ data, region = 'india', setRegion = () => {} }) {
             return (
               <div style={{ display: 'grid', gridTemplateColumns: '1.5fr 5fr', gap: 10, alignItems: 'stretch' }}>
                 <div className="kpi-card" style={{ display: 'flex', flexDirection: 'column', gap: 8, padding: '16px 18px' }}>
-                  <div className="kpi-label" style={{ fontSize: 11 }}>Gross Revenue · Seller Central</div>
+                  <div className="kpi-label" style={{ fontSize: 11 }}>Gross Revenue Â· Seller Central</div>
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 6 }}>
                     <div className="kpi-value" style={{ fontSize: 32, fontWeight: 800 }}>{fmt(scTotalRev)}</div>
                     {scChgBadge(scTotalRev, prevSCRev)}
                   </div>
-                  <div className="kpi-sub" style={{ fontSize: 13 }}>{fmtN(amzSC.totalOrders || 0)} orders · {fmtN(amzSC.totalUnits || 0)} units</div>
+                  <div className="kpi-sub" style={{ fontSize: 13 }}>{fmtN(amzSC.totalOrders || 0)} orders Â· {fmtN(amzSC.totalUnits || 0)} units</div>
                   <div style={{ flex: 1, minHeight: 60 }}>
                     <ResponsiveContainer width="100%" height="100%">
                       <AreaChart data={scSparkData} margin={{ top: 4, right: 0, bottom: 0, left: 0 }}>
@@ -4995,13 +4995,13 @@ function AmazonTab({ data, region = 'india', setRegion = () => {} }) {
                 </div>
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gridAutoRows: '1fr', gap: 10 }}>
                   {[
-                    { label: 'Net Revenue', value: fmt(scNetRev), sub: 'Gross−Cancel−Returns−GST', badge: scChgBadge(scNetRev, prevSCExcRev) },
+                    { label: 'Net Revenue', value: fmt(scNetRev), sub: 'Grossâˆ’Cancelâˆ’Returnsâˆ’GST', badge: scChgBadge(scNetRev, prevSCExcRev) },
                     { label: 'GST Collected', value: fmt(scTotalRev - scTotalExcRevRaw), sub: 'SC GST', badge: scChgBadge(scTotalRev - scTotalExcRevRaw, prevSCRev - prevSCExcRev) },
-                    { label: 'AOV', value: `₹${Math.round(scAOV).toLocaleString('en-IN')}`, sub: 'Revenue / Orders', badge: scChgBadge(scAOV, prevSCAOV) },
-                    { label: 'ASP', value: `₹${scTotalUnits ? Math.round(scTotalRev / scTotalUnits).toLocaleString('en-IN') : 0}`, sub: 'Revenue / Units', badge: scChgBadge(scTotalRev / (scTotalUnits || 1), prevSCASP) },
+                    { label: 'AOV', value: `â‚¹${Math.round(scAOV).toLocaleString('en-IN')}`, sub: 'Revenue / Orders', badge: scChgBadge(scAOV, prevSCAOV) },
+                    { label: 'ASP', value: `â‚¹${scTotalUnits ? Math.round(scTotalRev / scTotalUnits).toLocaleString('en-IN') : 0}`, sub: 'Revenue / Units', badge: scChgBadge(scTotalRev / (scTotalUnits || 1), prevSCASP) },
                     { label: 'Daily Avg Revenue', value: fmt(scTotalRev / (data.nDays || 1)), sub: 'Revenue per day', badge: scChgBadge(scTotalRev / (data.nDays || 1), prevSCDailyAvg) },
-                    { label: 'Order Status', value: (() => { const shipped = amzSC.status?.find(s => s.status === 'Shipped')?.orders || 0; const total = amzSC.totalOrders || 0; return `${total ? (shipped / total * 100).toFixed(1) : 0}% Shipped` })(), sub: `${fmtN(amzSC.totalOrders || 0)} total · ${fmtN(scPending)} pending`, badge: (() => { const shipped = amzSC.status?.find(s => s.status === 'Shipped')?.orders || 0; const total = amzSC.totalOrders || 0; const curPct = total ? shipped / total * 100 : 0; const prevPct = prevSCOrders ? (amzSC.prevShippedOrders || 0) / prevSCOrders * 100 : 0; return scChgBadge(curPct, prevPct) })() },
-                    { label: 'Cancellation Rate', value: `${scCancelRate.toFixed(1)}%`, sub: `${fmtN(scCancelOrders)} cancelled`, accent: scCancelRate > 10 ? '#7A1A1A' : undefined, badge: (amzSC.prevCancelledOrders && prevSCOrders) ? (() => { const prevRate = amzSC.prevCancelledOrders / prevSCOrders * 100; const p = (scCancelRate - prevRate) / prevRate * 100; return <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 4, background: p > 0 ? C.red.bg : C.green.bg, color: p > 0 ? C.red.tx : C.green.tx, flexShrink: 0 }}>{p > 0 ? '▲' : '▼'} {Math.abs(p).toFixed(1)}%</span> })() : null },
+                    { label: 'Order Status', value: (() => { const shipped = amzSC.status?.find(s => s.status === 'Shipped')?.orders || 0; const total = amzSC.totalOrders || 0; return `${total ? (shipped / total * 100).toFixed(1) : 0}% Shipped` })(), sub: `${fmtN(amzSC.totalOrders || 0)} total Â· ${fmtN(scPending)} pending`, badge: (() => { const shipped = amzSC.status?.find(s => s.status === 'Shipped')?.orders || 0; const total = amzSC.totalOrders || 0; const curPct = total ? shipped / total * 100 : 0; const prevPct = prevSCOrders ? (amzSC.prevShippedOrders || 0) / prevSCOrders * 100 : 0; return scChgBadge(curPct, prevPct) })() },
+                    { label: 'Cancellation Rate', value: `${scCancelRate.toFixed(1)}%`, sub: `${fmtN(scCancelOrders)} cancelled`, accent: scCancelRate > 10 ? '#7A1A1A' : undefined, badge: (amzSC.prevCancelledOrders && prevSCOrders) ? (() => { const prevRate = amzSC.prevCancelledOrders / prevSCOrders * 100; const p = (scCancelRate - prevRate) / prevRate * 100; return <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 4, background: p > 0 ? C.red.bg : C.green.bg, color: p > 0 ? C.red.tx : C.green.tx, flexShrink: 0 }}>{p > 0 ? 'â–²' : 'â–¼'} {Math.abs(p).toFixed(1)}%</span> })() : null },
                     { label: 'Return Rate', value: returnRateReliable ? `${(amzSC.returnRate?.pct || 0).toFixed(1)}%` : 'N/A', sub: returnRateReliable ? `${fmt(amzSC.returnRate?.rollReturned || 0)} returned of ${fmt(amzSC.returnRate?.rollOrders || 0)} SC rev` : 'No reliable data', accent: returnRateReliable && (amzSC.returnRate?.pct || 0) > 18 ? '#7A1A1A' : undefined },
                   ].map(k => (
                     <div key={k.label} className="kpi-card" style={{ padding: '10px 13px' }}>
@@ -5075,7 +5075,7 @@ function AmazonTab({ data, region = 'india', setRegion = () => {} }) {
               ? { total: 'totalOrders', totalName: 'Total Orders', sub1: null, fba: 'fbaOrders', fbaName: 'FBA Orders', mfn: 'mfnOrders', mfnName: 'MFN Orders', share: 'fbaOrderShare' }
               : { total: 'totalUnits', totalName: 'Total Units', sub1: null, fba: 'fbaUnits', fbaName: 'FBA Units', mfn: 'mfnUnits', mfnName: 'MFN Units', share: 'fbaUnitShare' }
             return (
-              <Card title="Trend Analysis · Seller Central" action={
+              <Card title="Trend Analysis Â· Seller Central" action={
                 <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
                   <div style={{ display: 'flex', gap: 4 }}>
                     {[{ v: 'rev', label: 'Revenue' }, { v: 'orders', label: 'Orders' }, { v: 'units', label: 'Units' }].map(opt => (
@@ -5140,9 +5140,9 @@ function AmazonTab({ data, region = 'india', setRegion = () => {} }) {
                   })
                 })
               })
-              return <FinancialCategoryMatrix catData={catData} subCatData={subCatData} skuData={skuData} title="Category Revenue Matrix · Seller Central" showReturns={true} showMoM={true} catPrevMap={amzSC.catPrevMap || {}} subCatPrevMap={amzSC.subCatPrevMap || {}} skuPrevMap={amzSC.skuPrevMap || {}} />
+              return <FinancialCategoryMatrix catData={catData} subCatData={subCatData} skuData={skuData} title="Category Revenue Matrix Â· Seller Central" showReturns={true} showMoM={true} catPrevMap={amzSC.catPrevMap || {}} subCatPrevMap={amzSC.subCatPrevMap || {}} skuPrevMap={amzSC.skuPrevMap || {}} />
             })()}
-            <Card title="FBA vs MFN · Seller Central">
+            <Card title="FBA vs MFN Â· Seller Central">
               {[{ label: 'FBA (Fulfilled by Amazon)', ...scFBA }, { label: 'MFN (Merchant Fulfilled)', ...scMFN }].map((r, i) => (
                 <div key={r.label} style={{ padding: '10px 0', borderBottom: i === 0 ? `1px solid ${C.border}` : 'none' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
@@ -5152,7 +5152,7 @@ function AmazonTab({ data, region = 'india', setRegion = () => {} }) {
                   <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
                     <span style={{ fontSize: 11, color: C.t3 }}>Orders: <strong style={{ color: C.t1 }}>{fmtN(r.orders)}</strong></span>
                     <span style={{ fontSize: 11, color: C.t3 }}>Units: <strong style={{ color: C.t1 }}>{fmtN(r.units)}</strong></span>
-                    <span style={{ fontSize: 11, color: C.t3 }}>AOV: <strong style={{ color: C.t1 }}>₹{r.orders ? Math.round(r.rev / r.orders).toLocaleString('en-IN') : 0}</strong></span>
+                    <span style={{ fontSize: 11, color: C.t3 }}>AOV: <strong style={{ color: C.t1 }}>â‚¹{r.orders ? Math.round(r.rev / r.orders).toLocaleString('en-IN') : 0}</strong></span>
                     <span style={{ fontSize: 11, color: C.t3 }}>Share: <strong style={{ color: C.t1 }}>{scTotalRev ? (r.rev / scTotalRev * 100).toFixed(1) : 0}%</strong></span>
                   </div>
                   <div style={{ marginTop: 7, height: 6, background: C.bg, borderRadius: 3 }}>
@@ -5165,7 +5165,7 @@ function AmazonTab({ data, region = 'india', setRegion = () => {} }) {
           {(() => {
             const catRows = Object.entries(amzSC.catChannel || {}).map(([cat, chData]) => ({ name: cat, rev: (chData.FBA?.rev||0)+(chData.MFN?.rev||0), units: (chData.FBA?.units||0)+(chData.MFN?.units||0), orders: (chData.FBA?.orders||0)+(chData.MFN?.orders||0) })).sort((a,b) => b.rev-a.rev)
             const subCatRows = Object.entries(amzSC.subCatChannel || {}).flatMap(([cat, scMap]) => Object.entries(scMap).map(([sc, chData]) => ({ name: sc, category: cat, rev: (chData.FBA?.rev||0)+(chData.MFN?.rev||0), units: (chData.FBA?.units||0)+(chData.MFN?.units||0), orders: (chData.FBA?.orders||0)+(chData.MFN?.orders||0) }))).sort((a,b) => b.rev-a.rev)
-            return <CatSubCatRow catRows={catRows} subCatRows={subCatRows} title="Category Revenue · Seller Central" selectedCat={selectedCat} onSelectCat={v => { setSelectedCat(v); setSelectedSubCat(null) }} selectedSubCat={selectedSubCat} onSelectSubCat={setSelectedSubCat} />
+            return <CatSubCatRow catRows={catRows} subCatRows={subCatRows} title="Category Revenue Â· Seller Central" selectedCat={selectedCat} onSelectCat={v => { setSelectedCat(v); setSelectedSubCat(null) }} selectedSubCat={selectedSubCat} onSelectSubCat={setSelectedSubCat} />
           })()}
           {(() => {
             const statePrevMap = amzSC.statePrevMap || {}
@@ -5196,12 +5196,12 @@ function AmazonTab({ data, region = 'india', setRegion = () => {} }) {
         </div>
       )}
 
-      {/* ── INDIA · VENDOR CENTRAL ── */}
+      {/* â”€â”€ INDIA Â· VENDOR CENTRAL â”€â”€ */}
       {region === 'india' && subView === 'vc' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
           {/* Hero + KPI rows */}
           {(() => {
-            const vcChgBadge = (cur, prev) => { if (!prev) return null; const p = (cur - prev) / prev * 100; return <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 4, background: p >= 0 ? C.green.bg : C.red.bg, color: p >= 0 ? C.green.tx : C.red.tx, flexShrink: 0 }}>{p >= 0 ? '▲' : '▼'} {Math.abs(p).toFixed(1)}%</span> }
+            const vcChgBadge = (cur, prev) => { if (!prev) return null; const p = (cur - prev) / prev * 100; return <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 4, background: p >= 0 ? C.green.bg : C.red.bg, color: p >= 0 ? C.green.tx : C.red.tx, flexShrink: 0 }}>{p >= 0 ? 'â–²' : 'â–¼'} {Math.abs(p).toFixed(1)}%</span> }
             const prevVCRev = amzVC.prevRev || 0
             const prevVCExcRev = amzVC.prevExcRev || 0
             const prevVCUnits = amzVC.prevUnits || 0
@@ -5211,23 +5211,23 @@ function AmazonTab({ data, region = 'india', setRegion = () => {} }) {
             const vcGST = vcTotalOrdered - vcTotalOrderedExcRev
             const vcSparkData = (amzVC.daily || []).map((d, i) => ({ i, cur: d.orderedRev || null }))
             const kpis = [
-              { label: 'Gross Revenue · Vendor Central', value: fmt(vcTotalOrdered), sub: `${fmtN(vcTotalOrderedUnits)} ordered · ${fmtN(vcTotalShippedUnits)} shipped`, badge: vcChgBadge(vcTotalOrdered, prevVCRev), hero: true },
+              { label: 'Gross Revenue Â· Vendor Central', value: fmt(vcTotalOrdered), sub: `${fmtN(vcTotalOrderedUnits)} ordered Â· ${fmtN(vcTotalShippedUnits)} shipped`, badge: vcChgBadge(vcTotalOrdered, prevVCRev), hero: true },
               { label: 'Net. Rev. (Exc GST)', value: fmt(vcTotalOrderedExcRev), sub: 'Ordered excl. GST', badge: vcChgBadge(vcTotalOrderedExcRev, prevVCExcRev) },
-              { label: 'GST Collected', value: fmt(vcGST), sub: 'Gross − Net', badge: vcChgBadge(vcGST, prevVCGST) },
+              { label: 'GST Collected', value: fmt(vcGST), sub: 'Gross âˆ’ Net', badge: vcChgBadge(vcGST, prevVCGST) },
               { label: 'Shipped Units', value: fmtN(vcTotalShippedUnits), sub: 'Units shipped by Amazon', badge: vcChgBadge(vcTotalShippedUnits, prevVCUnits) },
               { label: 'Fill Rate', value: `${vcFillRate.toFixed(1)}%`, sub: 'Shipped / Ordered', accent: vcFillRate < 90 ? '#7A4000' : undefined },
-              { label: 'ASP', value: `₹${vcTotalOrderedUnits ? Math.round(vcTotalOrdered / vcTotalOrderedUnits).toLocaleString('en-IN') : 0}`, sub: 'Ordered rev / units', badge: vcChgBadge(vcTotalOrderedUnits ? vcTotalOrdered / vcTotalOrderedUnits : 0, prevVCASP) },
+              { label: 'ASP', value: `â‚¹${vcTotalOrderedUnits ? Math.round(vcTotalOrdered / vcTotalOrderedUnits).toLocaleString('en-IN') : 0}`, sub: 'Ordered rev / units', badge: vcChgBadge(vcTotalOrderedUnits ? vcTotalOrdered / vcTotalOrderedUnits : 0, prevVCASP) },
               { label: 'Daily Avg Ordered', value: fmt(vcTotalOrdered / (data.nDays || 1)), sub: 'Revenue per day', badge: vcChgBadge(vcTotalOrdered / (data.nDays || 1), prevVCDailyAvg) },
             ]
             return (
               <div style={{ display: 'grid', gridTemplateColumns: '1.5fr 5fr', gap: 10, alignItems: 'stretch' }}>
                 <div className="kpi-card" style={{ display: 'flex', flexDirection: 'column', gap: 8, padding: '16px 18px' }}>
-                  <div className="kpi-label" style={{ fontSize: 11 }}>Gross Revenue · Vendor Central</div>
+                  <div className="kpi-label" style={{ fontSize: 11 }}>Gross Revenue Â· Vendor Central</div>
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 6 }}>
                     <div className="kpi-value" style={{ fontSize: 32, fontWeight: 800 }}>{fmt(vcTotalOrdered)}</div>
                     {vcChgBadge(vcTotalOrdered, prevVCRev)}
                   </div>
-                  <div className="kpi-sub" style={{ fontSize: 13 }}>{fmtN(vcTotalOrderedUnits)} ordered · {fmtN(vcTotalShippedUnits)} shipped</div>
+                  <div className="kpi-sub" style={{ fontSize: 13 }}>{fmtN(vcTotalOrderedUnits)} ordered Â· {fmtN(vcTotalShippedUnits)} shipped</div>
                   <div style={{ flex: 1, minHeight: 60 }}>
                     <ResponsiveContainer width="100%" height="100%">
                       <AreaChart data={vcSparkData} margin={{ top: 4, right: 0, bottom: 0, left: 0 }}>
@@ -5295,7 +5295,7 @@ function AmazonTab({ data, region = 'india', setRegion = () => {} }) {
             const mainFmt = isRev ? (v => v >= 1e5 ? `${(v/1e5).toFixed(1)}L` : fmt(v)) : (v => fmtN(v))
             const tooltipFmt = isRev ? fmt : fmtN
             return (
-              <Card title="Trend Analysis · Vendor Central" action={
+              <Card title="Trend Analysis Â· Vendor Central" action={
                 <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
                   <div style={{ display: 'flex', gap: 4 }}>
                     {[{ v: 'rev', label: 'Revenue' }, { v: 'units', label: 'Units' }].map(opt => (
@@ -5311,7 +5311,7 @@ function AmazonTab({ data, region = 'india', setRegion = () => {} }) {
                   const estDays = rawDaily.filter(d => d.estimated).length
                   return estDays > 0 ? (
                     <div style={{ fontSize: 11, color: '#92600A', background: '#FFF8E1', border: '1px solid #FFE082', borderRadius: 6, padding: '5px 10px', marginBottom: 8 }}>
-                      ⏳ VC data available till {vcLatestDate} · Last {estDays} day{estDays > 1 ? 's' : ''} shown as 7-day rolling avg estimate
+                      â³ VC data available till {vcLatestDate} Â· Last {estDays} day{estDays > 1 ? 's' : ''} shown as 7-day rolling avg estimate
                     </div>
                   ) : null
                 })()}
@@ -5362,17 +5362,17 @@ function AmazonTab({ data, region = 'india', setRegion = () => {} }) {
                 )
               })}
             </Card>
-            <FinancialCategoryMatrix catData={amzVCMatrix.catData} subCatData={amzVCMatrix.subCatData} skuData={amzVCMatrix.skuData} title="Category Revenue Matrix · Vendor Central" showReturns={false} showMoM={true} catPrevMap={amzVCMatrix.catPrevMap || {}} subCatPrevMap={amzVCMatrix.subCatPrevMap || {}} skuPrevMap={amzVCMatrix.skuPrevMap || {}} />
+            <FinancialCategoryMatrix catData={amzVCMatrix.catData} subCatData={amzVCMatrix.subCatData} skuData={amzVCMatrix.skuData} title="Category Revenue Matrix Â· Vendor Central" showReturns={false} showMoM={true} catPrevMap={amzVCMatrix.catPrevMap || {}} subCatPrevMap={amzVCMatrix.subCatPrevMap || {}} skuPrevMap={amzVCMatrix.skuPrevMap || {}} />
           </div>
           {(() => {
             const catRows = Object.entries(amzVCMatrix.catData || {}).map(([cat, v]) => ({ name: cat, rev: v.rev||0, units: v.units||0, orders: v.orders||0 })).sort((a,b) => b.rev-a.rev)
             const subCatRows = Object.entries(amzVCMatrix.subCatData || {}).flatMap(([cat, scMap]) => Object.entries(scMap).map(([sc, v]) => ({ name: sc, category: cat, rev: v.rev||0, units: v.units||0, orders: v.orders||0 }))).sort((a,b) => b.rev-a.rev)
-            return <CatSubCatRow catRows={catRows} subCatRows={subCatRows} title="Category Revenue · Vendor Central" selectedCat={selectedCat} onSelectCat={v => { setSelectedCat(v); setSelectedSubCat(null) }} selectedSubCat={selectedSubCat} onSelectSubCat={setSelectedSubCat} />
+            return <CatSubCatRow catRows={catRows} subCatRows={subCatRows} title="Category Revenue Â· Vendor Central" selectedCat={selectedCat} onSelectCat={v => { setSelectedCat(v); setSelectedSubCat(null) }} selectedSubCat={selectedSubCat} onSelectSubCat={setSelectedSubCat} />
           })()}
         </div>
       )}
 
-      {/* ── INTERNATIONAL · SELLER CENTRAL ── */}
+      {/* â”€â”€ INTERNATIONAL Â· SELLER CENTRAL â”€â”€ */}
       {region === 'intl' && (subView === 'overview' || subView === 'sc') && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
           {(() => {
@@ -5390,7 +5390,7 @@ function AmazonTab({ data, region = 'india', setRegion = () => {} }) {
             const chgBadge = (cur, prev) => {
               if (!prev) return null
               const p = (cur - prev) / prev * 100
-              return <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 4, background: p >= 0 ? C.green.bg : C.red.bg, color: p >= 0 ? C.green.tx : C.red.tx, flexShrink: 0 }}>{p >= 0 ? '▲' : '▼'} {Math.abs(p).toFixed(1)}%</span>
+              return <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 4, background: p >= 0 ? C.green.bg : C.red.bg, color: p >= 0 ? C.green.tx : C.red.tx, flexShrink: 0 }}>{p >= 0 ? 'â–²' : 'â–¼'} {Math.abs(p).toFixed(1)}%</span>
             }
             // sparkline: daily totals
             const intlDailyMap = {}
@@ -5401,12 +5401,12 @@ function AmazonTab({ data, region = 'india', setRegion = () => {} }) {
             return (
               <div style={{ display: 'grid', gridTemplateColumns: '1.5fr 5fr', gap: 10, alignItems: 'stretch' }}>
                 <div className="kpi-card" style={{ display: 'flex', flexDirection: 'column', gap: 8, padding: '16px 18px' }}>
-                  <div className="kpi-label" style={{ fontSize: 11 }}>Gross Revenue · International SC</div>
+                  <div className="kpi-label" style={{ fontSize: 11 }}>Gross Revenue Â· International SC</div>
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 6 }}>
                     <div className="kpi-value" style={{ fontSize: 32, fontWeight: 800 }}>{fmt(intlTotalRev)}</div>
                     {chgBadge(intlTotalRev, prevRev)}
                   </div>
-                  <div className="kpi-sub" style={{ fontSize: 13 }}>{fmtN(intlTotalOrders)} orders · {fmtN(intlTotalUnits)} units</div>
+                  <div className="kpi-sub" style={{ fontSize: 13 }}>{fmtN(intlTotalOrders)} orders Â· {fmtN(intlTotalUnits)} units</div>
                   <div style={{ flex: 1, minHeight: 60 }}>
                     <ResponsiveContainer width="100%" height="100%">
                       <AreaChart data={sparkData} margin={{ top: 4, right: 0, bottom: 0, left: 0 }}>
@@ -5422,8 +5422,8 @@ function AmazonTab({ data, region = 'india', setRegion = () => {} }) {
                     { label: 'Net Revenue', value: fmt(intlTotalNetRev), sub: `Tax: ${fmt(intlTotalTax)}`, badge: chgBadge(intlTotalNetRev, prevNetRev) },
                     { label: 'Total Orders', value: fmtN(intlTotalOrders), sub: `${(amzIntl.countries||[]).length} markets`, badge: chgBadge(intlTotalOrders, prevOrders) },
                     { label: 'Total Units', value: fmtN(intlTotalUnits), sub: 'Units sold', badge: chgBadge(intlTotalUnits, prevUnits) },
-                    { label: 'AOV', value: `₹${Math.round(intlAOV).toLocaleString('en-IN')}`, sub: 'Gross / Orders', badge: chgBadge(intlAOV, prevAOV) },
-                    { label: 'ASP', value: `₹${intlASP.toLocaleString('en-IN')}`, sub: 'Gross / Units', badge: chgBadge(intlASP, prevASP) },
+                    { label: 'AOV', value: `â‚¹${Math.round(intlAOV).toLocaleString('en-IN')}`, sub: 'Gross / Orders', badge: chgBadge(intlAOV, prevAOV) },
+                    { label: 'ASP', value: `â‚¹${intlASP.toLocaleString('en-IN')}`, sub: 'Gross / Units', badge: chgBadge(intlASP, prevASP) },
                     { label: 'Daily Avg Revenue', value: fmt(intlTotalRev / (data.nDays || 1)), sub: 'Gross per day', badge: chgBadge(intlTotalRev / (data.nDays||1), prevDailyAvg) },
                   ].map(k => (
                     <div key={k.label} className="kpi-card" style={{ padding: '10px 13px' }}>
@@ -5436,7 +5436,7 @@ function AmazonTab({ data, region = 'india', setRegion = () => {} }) {
               </div>
             )
           })()}
-          {/* Trend Analysis · International SC */}
+          {/* Trend Analysis Â· International SC */}
           {(() => {
             const intlCountryColors = { UAE: '#E8930A', UK: '#2E74CC', US: '#0D9E68' }
             const intlDailyMap = {}
@@ -5459,7 +5459,7 @@ function AmazonTab({ data, region = 'india', setRegion = () => {} }) {
             const yFmt = v => intlMetric === 'rev' || intlMetric === 'net' ? (v >= 1e5 ? `${(v/1e5).toFixed(1)}L` : v >= 1000 ? `${(v/1000).toFixed(0)}K` : v) : fmtN(v)
             const btnSt = k => ({ fontSize: 10, fontWeight: 600, padding: '2px 8px', borderRadius: 4, border: `1px solid ${intlMetric===k?C.acm:C.border}`, background: intlMetric===k?C.acc:'transparent', color: C.t1, cursor: 'pointer', fontFamily: 'var(--font)' })
             return (
-              <Card title="Trend Analysis · International SC" action={
+              <Card title="Trend Analysis Â· International SC" action={
                 <div style={{ display: 'flex', gap: 3 }}>
                   {[['rev','Gross Rev'],['net','Net Rev'],['orders','Orders'],['units','Units']].map(([k,l]) => <button key={k} style={btnSt(k)} onClick={() => setIntlMetric(k)}>{l}</button>)}
                 </div>
@@ -5503,7 +5503,7 @@ function AmazonTab({ data, region = 'india', setRegion = () => {} }) {
                 </Card>
               )
             })()}
-            {/* Category Revenue Matrix · International */}
+            {/* Category Revenue Matrix Â· International */}
             {(() => {
               const pickRet = (...chs) => { for (const c of chs) if (c?.totalOrdersForReturn) return { returned: c.returned||0, totalOrdersForReturn: c.totalOrdersForReturn }; return { returned: 0, totalOrdersForReturn: 0 } }
               const catData = {}
@@ -5530,7 +5530,7 @@ function AmazonTab({ data, region = 'india', setRegion = () => {} }) {
                   })
                 })
               })
-              return <FinancialCategoryMatrix catData={catData} subCatData={subCatData} skuData={skuData} title="Category Revenue Matrix · International SC" showReturns={false} />
+              return <FinancialCategoryMatrix catData={catData} subCatData={subCatData} skuData={skuData} title="Category Revenue Matrix Â· International SC" showReturns={false} />
             })()}
           </div>
         </div>
@@ -5591,7 +5591,7 @@ function FlipkartTab({ data }) {
   const fkPrevDailyArr = fk.prevDaily || data.prevDailyArr || []
   const fkRevChg = fkPrevRev > 0 ? ((rev - fkPrevRev) / fkPrevRev * 100) : null
   const fkExcChg = fkPrevExcRev > 0 ? ((excRev - fkPrevExcRev) / fkPrevExcRev * 100) : null
-  const fkChgBadge = (cur, prev) => { if (!prev) return null; const p = (cur - prev) / prev * 100; return <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 4, background: p >= 0 ? C.green.bg : C.red.bg, color: p >= 0 ? C.green.tx : C.red.tx, flexShrink: 0 }}>{p >= 0 ? '▲' : '▼'} {Math.abs(p).toFixed(1)}%</span> }
+  const fkChgBadge = (cur, prev) => { if (!prev) return null; const p = (cur - prev) / prev * 100; return <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 4, background: p >= 0 ? C.green.bg : C.red.bg, color: p >= 0 ? C.green.tx : C.red.tx, flexShrink: 0 }}>{p >= 0 ? 'â–²' : 'â–¼'} {Math.abs(p).toFixed(1)}%</span> }
 
   // Return rate
   const fkReturnRate = fk.returnRate || {}
@@ -5674,7 +5674,7 @@ function FlipkartTab({ data }) {
         <div style={{ display: 'flex', background: C.bg, borderRadius: 9, padding: 3, border: `1px solid ${C.border}` }}>
           <button onClick={() => { setSubView('overview'); setSelectedCat(null); setSelectedSubCat(null) }} style={{ fontSize: 12, fontWeight: subView === 'overview' ? 700 : 500, padding: '5px 16px', borderRadius: 7, border: 'none', background: subView === 'overview' ? C.acc : 'transparent', color: C.t1, cursor: 'pointer', fontFamily: 'var(--font)', transition: 'all .15s' }}>Overview</button>
         </div>
-        <span style={{ color: C.border2, fontSize: 18 }}>│</span>
+        <span style={{ color: C.border2, fontSize: 18 }}>â”‚</span>
         <div style={{ display: 'flex', gap: 8 }}>
           {[{ id: 'fbf', label: 'FBF' }, { id: 'nonfbf', label: 'Non-FBF' }].map(opt => (
             <button key={opt.id} onClick={() => { setSubView(opt.id); setSelectedCat(null); setSelectedSubCat(null) }} style={subToggleStyle(subView === opt.id)}>{opt.label}</button>
@@ -5688,9 +5688,9 @@ function FlipkartTab({ data }) {
           <div className="kpi-label" style={{ fontSize: 11 }}>Gross Revenue (Inc. GST)</div>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 6 }}>
             <div className="kpi-value" style={{ fontSize: 32, fontWeight: 800 }}>{fmt(rev)}</div>
-            {fkRevChg !== null && <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 7px', borderRadius: 4, background: fkRevChg >= 0 ? C.green.bg : C.red.bg, color: fkRevChg >= 0 ? C.green.tx : C.red.tx }}>{fkRevChg >= 0 ? '▲' : '▼'} {Math.abs(fkRevChg).toFixed(1)}%</span>}
+            {fkRevChg !== null && <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 7px', borderRadius: 4, background: fkRevChg >= 0 ? C.green.bg : C.red.bg, color: fkRevChg >= 0 ? C.green.tx : C.red.tx }}>{fkRevChg >= 0 ? 'â–²' : 'â–¼'} {Math.abs(fkRevChg).toFixed(1)}%</span>}
           </div>
-          <div className="kpi-sub" style={{ fontSize: 13 }}>{fmtN(nOrders)} orders · {fmtN(qty)} units</div>
+          <div className="kpi-sub" style={{ fontSize: 13 }}>{fmtN(nOrders)} orders Â· {fmtN(qty)} units</div>
           <div style={{ flex: 1, minHeight: 0 }}>
             <ResponsiveContainer width="100%" height="100%">
               <AreaChart data={fkSparkData} margin={{ top: 4, right: 0, bottom: 0, left: 0 }}>
@@ -5709,12 +5709,12 @@ function FlipkartTab({ data }) {
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                 <div className="kpi-value">{fmt(fkNetRev)}</div>
               </div>
-              <div className="kpi-sub">(Gross − Cancel − Return) × (1 − GST%)</div>
+              <div className="kpi-sub">(Gross âˆ’ Cancel âˆ’ Return) Ã— (1 âˆ’ GST%)</div>
             </div>
             {[
               { label: 'Avg. Daily Gross Rev', value: fmt(rev / nDays), sub: `over ${nDays} days`, badge: fkChgBadge(rev / nDays, fkPrevRev > 0 ? fkPrevRev / nDays : 0) },
-              { label: 'AOV', value: `₹${Math.round(aov).toLocaleString('en-IN')}`, sub: 'Avg order value', badge: fkChgBadge(aov, fkPrevOrders > 0 ? fkPrevRev / fkPrevOrders : 0) },
-              { label: 'Delivered %', value: `${fkDeliveredPct.pct.toFixed(1)}%`, sub: `${fmtN(fkDeliveredPct.deliveredOrders)} del · ${fmtN(fkDeliveredPct.nonCancelledOrders)} non-cancel`, accent: fkDeliveredPct.pct < 50 ? '#7A1A1A' : undefined },
+              { label: 'AOV', value: `â‚¹${Math.round(aov).toLocaleString('en-IN')}`, sub: 'Avg order value', badge: fkChgBadge(aov, fkPrevOrders > 0 ? fkPrevRev / fkPrevOrders : 0) },
+              { label: 'Delivered %', value: `${fkDeliveredPct.pct.toFixed(1)}%`, sub: `${fmtN(fkDeliveredPct.deliveredOrders)} del Â· ${fmtN(fkDeliveredPct.nonCancelledOrders)} non-cancel`, accent: fkDeliveredPct.pct < 50 ? '#7A1A1A' : undefined },
             ].map(k => (
               <div key={k.label} className="kpi-card" style={{ padding: '10px 13px' }}>
                 <div className="kpi-label">{k.label}</div>
@@ -5725,10 +5725,10 @@ function FlipkartTab({ data }) {
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10, flex: 1 }}>
             {[
-              { label: 'ASP', value: `₹${Math.round(asp).toLocaleString('en-IN')}`, sub: 'Gross rev ÷ units', badge: fkChgBadge(asp, fkPrevUnits > 0 ? fkPrevRev / fkPrevUnits : 0) },
-              { label: 'GST Collected', value: fmt(rev - excRev), sub: 'Inc GST − Exc GST', badge: fkChgBadge(rev - excRev, fkPrevGST) },
-              { label: 'Cancellation %', value: `${nOrders > 0 ? (cancelOrders / nOrders * 100).toFixed(1) : 0}%`, sub: `${fmtN(cancelOrders)} cancelled · ${fmt(cancelRev)} rev`, accent: nOrders > 0 && cancelOrders / nOrders > 0.1 ? '#7A1A1A' : undefined },
-              { label: 'Return % (Rev)', value: `${fkReturnCur.pct.toFixed(1)}%`, sub: `${fmt(fkReturnCur.returnRev)} ret · ${fmt(fkReturnCur.deliveredRev)} gross`, accent: fkReturnCur.pct > 20 ? '#7A1A1A' : undefined },
+              { label: 'ASP', value: `â‚¹${Math.round(asp).toLocaleString('en-IN')}`, sub: 'Gross rev Ã· units', badge: fkChgBadge(asp, fkPrevUnits > 0 ? fkPrevRev / fkPrevUnits : 0) },
+              { label: 'GST Collected', value: fmt(rev - excRev), sub: 'Inc GST âˆ’ Exc GST', badge: fkChgBadge(rev - excRev, fkPrevGST) },
+              { label: 'Cancellation %', value: `${nOrders > 0 ? (cancelOrders / nOrders * 100).toFixed(1) : 0}%`, sub: `${fmtN(cancelOrders)} cancelled Â· ${fmt(cancelRev)} rev`, accent: nOrders > 0 && cancelOrders / nOrders > 0.1 ? '#7A1A1A' : undefined },
+              { label: 'Return % (Rev)', value: `${fkReturnCur.pct.toFixed(1)}%`, sub: `${fmt(fkReturnCur.returnRev)} ret Â· ${fmt(fkReturnCur.deliveredRev)} gross`, accent: fkReturnCur.pct > 20 ? '#7A1A1A' : undefined },
             ].map(k => (
               <div key={k.label} className="kpi-card" style={{ padding: '10px 13px' }}>
                 <div className="kpi-label">{k.label}</div>
@@ -5769,7 +5769,7 @@ function FlipkartTab({ data }) {
         const yFmt = v => isRev ? (v >= 1e5 ? `${(v/1e5).toFixed(1)}L` : fmt(v)) : fmtN(v)
         const btnSt = k => ({ fontSize: 11, fontWeight: 600, padding: '3px 10px', borderRadius: 5, border: `1.5px solid ${fkTrendMetric===k?C.t1:C.border}`, background: fkTrendMetric===k?C.t1:'transparent', color: fkTrendMetric===k?'#fff':C.t2, cursor: 'pointer', fontFamily: 'var(--font)' })
         return (
-          <Card title={`Trend Analysis · ${subLabel}`} action={
+          <Card title={`Trend Analysis Â· ${subLabel}`} action={
             <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
               <div style={{ display: 'flex', gap: 4 }}>
                 {[['rev','Revenue'],['orders','Orders'],['units','Units']].map(([k,l]) => <button key={k} style={btnSt(k)} onClick={() => setFkTrendMetric(k)}>{l}</button>)}
@@ -5782,7 +5782,7 @@ function FlipkartTab({ data }) {
             <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 8, flexWrap: 'wrap' }}>
               {fkEstimatedDays > 0 && fkTrendGroup === 'daily' && (
                 <div style={{ fontSize: 11, color: '#92600A', background: '#FFF8E1', border: '1px solid #FFE082', borderRadius: 6, padding: '5px 10px' }}>
-                  ⏳ Data available till {fkLatestReal} · Last {fkEstimatedDays} day{fkEstimatedDays > 1 ? 's' : ''} shown as 7-day rolling avg estimate
+                  â³ Data available till {fkLatestReal} Â· Last {fkEstimatedDays} day{fkEstimatedDays > 1 ? 's' : ''} shown as 7-day rolling avg estimate
                 </div>
               )}
               {totalReturns > 0 && (
@@ -5835,7 +5835,7 @@ function FlipkartTab({ data }) {
             </div>
             <div style={{ display: 'flex', gap: 16, marginBottom: 7 }}>
               <span style={{ fontSize: 11, color: C.t3 }}>Orders: <strong style={{ color: C.t1 }}>{fmtN(r.orders)}</strong></span>
-              <span style={{ fontSize: 11, color: C.t3 }}>AOV: <strong style={{ color: C.t1 }}>₹{r.orders ? Math.round(r.rev / r.orders).toLocaleString('en-IN') : 0}</strong></span>
+              <span style={{ fontSize: 11, color: C.t3 }}>AOV: <strong style={{ color: C.t1 }}>â‚¹{r.orders ? Math.round(r.rev / r.orders).toLocaleString('en-IN') : 0}</strong></span>
               <span style={{ fontSize: 11, color: C.t3 }}>Share: <strong style={{ color: C.t1 }}>{allRev ? (r.rev / allRev * 100).toFixed(1) : 0}%</strong></span>
             </div>
             <div style={{ height: 6, background: C.bg, borderRadius: 3 }}>
@@ -5880,7 +5880,7 @@ function FlipkartTab({ data }) {
             })
           })
         })
-        const title = subView === 'overview' ? 'Category Revenue Matrix · Flipkart' : subView === 'fbf' ? 'Category Revenue Matrix · FBF' : 'Category Revenue Matrix · Non-FBF'
+        const title = subView === 'overview' ? 'Category Revenue Matrix Â· Flipkart' : subView === 'fbf' ? 'Category Revenue Matrix Â· FBF' : 'Category Revenue Matrix Â· Non-FBF'
         const subKeys = subView === 'overview' ? ['FBF', 'NON-FBF'] : subView === 'fbf' ? ['FBF'] : ['NON-FBF']
         const catPrevMap = {}
         ;(fk.catPrevMap ? Object.entries(fk.catPrevMap) : []).forEach(([k, v]) => {
@@ -5907,7 +5907,7 @@ function FlipkartTab({ data }) {
       {(() => {
         const catRows = Object.entries((() => { const m = {}; filterSub(fk.categories || []).forEach(x => { if (!m[x.category]) m[x.category] = { rev: 0, units: 0, orders: 0 }; m[x.category].rev += x.rev; m[x.category].units += x.units; m[x.category].orders += x.orders }); return m })()||{}).map(([cat, v]) => ({ name: cat, rev: v.rev, units: v.units, orders: v.orders })).sort((a,b) => b.rev-a.rev)
         const subCatRows = (() => { const m = {}; filterSub(fk.subCategories || []).forEach(x => { const k = x.category+'::'+x.subcategory; if (!m[k]) m[k] = { name: x.subcategory, category: x.category, rev: 0, units: 0, orders: 0 }; m[k].rev += x.rev; m[k].units += x.units; m[k].orders += x.orders }); return Object.values(m).sort((a,b) => b.rev-a.rev) })()
-        const tableTitle = subView === 'overview' ? 'Category Revenue · Flipkart' : subView === 'fbf' ? 'Category Revenue · FBF' : 'Category Revenue · Non-FBF'
+        const tableTitle = subView === 'overview' ? 'Category Revenue Â· Flipkart' : subView === 'fbf' ? 'Category Revenue Â· FBF' : 'Category Revenue Â· Non-FBF'
         return <CatSubCatRow catRows={catRows} subCatRows={subCatRows} title={tableTitle} selectedCat={selectedCat} onSelectCat={v => { setSelectedCat(v); setSelectedSubCat(null) }} selectedSubCat={selectedSubCat} onSelectSubCat={setSelectedSubCat} />
       })()}
 
@@ -6055,7 +6055,7 @@ function AdsTab({ data }) {
   const chgBadge = (cur, prev) => {
     if (!prev) return null
     const p = (cur - prev) / prev * 100
-    return <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 4, background: p >= 0 ? C.green.bg : C.red.bg, color: p >= 0 ? C.green.tx : C.red.tx, flexShrink: 0 }}>{p >= 0 ? '▲' : '▼'} {Math.abs(p).toFixed(1)}%</span>
+    return <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 4, background: p >= 0 ? C.green.bg : C.red.bg, color: p >= 0 ? C.green.tx : C.red.tx, flexShrink: 0 }}>{p >= 0 ? 'â–²' : 'â–¼'} {Math.abs(p).toFixed(1)}%</span>
   }
 
   const isD2C = selPlatform === 'D2C'
@@ -6258,12 +6258,12 @@ function AdsTab({ data }) {
           ]
           const row2Items = [
             { label: 'CTR', value: overallCtr.toFixed(2) + '%', badge: chgBadge(overallCtr, prevCtr), sub: 'Clicks / Impressions' },
-            { label: 'CPC', value: `₹${overallCpc.toFixed(2)}`, badge: chgBadge(overallCpc, prevCpc), sub: 'Spend / Clicks' },
+            { label: 'CPC', value: `â‚¹${overallCpc.toFixed(2)}`, badge: chgBadge(overallCpc, prevCpc), sub: 'Spend / Clicks' },
             { label: 'Orders', value: fmtN(currentOrders), sub: 'Distinct orders', badge: chgBadge(currentOrders, prevOrders) },
-            { label: 'Cost Per Order', value: costPerOrder > 0 ? `₹${Math.round(costPerOrder).toLocaleString('en-IN')}` : '—', sub: 'Spend / Orders', badge: chgBadge(prevCpo, costPerOrder) },
+            { label: 'Cost Per Order', value: costPerOrder > 0 ? `â‚¹${Math.round(costPerOrder).toLocaleString('en-IN')}` : 'â€”', sub: 'Spend / Orders', badge: chgBadge(prevCpo, costPerOrder) },
             ...(!selPlatform || isD2C || selPlatform === 'Meta' || selPlatform === 'Google'
-              ? [{ label: 'CAC (Shopify)', value: cac > 0 ? `₹${Math.round(cac).toLocaleString('en-IN')}` : '—', sub: `Spend / ${fmtN(shopifyNewCustomers)} new custs`, badge: chgBadge(prevCac, cac) }]
-              : [{ label: 'CPM', value: overallCpm > 0 ? `₹${Math.round(overallCpm).toLocaleString('en-IN')}` : '—', sub: 'Cost per 1K impressions', badge: chgBadge(prevCpm, overallCpm) }]),
+              ? [{ label: 'CAC (Shopify)', value: cac > 0 ? `â‚¹${Math.round(cac).toLocaleString('en-IN')}` : 'â€”', sub: `Spend / ${fmtN(shopifyNewCustomers)} new custs`, badge: chgBadge(prevCac, cac) }]
+              : [{ label: 'CPM', value: overallCpm > 0 ? `â‚¹${Math.round(overallCpm).toLocaleString('en-IN')}` : 'â€”', sub: 'Cost per 1K impressions', badge: chgBadge(prevCpm, overallCpm) }]),
             ...(isD2C ? [{ label: 'Google Spend', value: fmt(d2cGoogleSpend), badge: chgBadge(d2cGoogleSpend, d2cPrevGoogleSpend), sub: 'Google ad spend', accentColor: '#34A853' }] : []),
           ]
           return (
@@ -6285,7 +6285,7 @@ function AdsTab({ data }) {
         {/* Spend by Platform Table + Daily Chart */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
 
-          {/* Platform Table — only on All tab */}
+          {/* Platform Table â€” only on All tab */}
           {!selPlatform && (() => {
             const platLogos = {
               Amazon: '/logo-amazon.png',
@@ -6357,16 +6357,16 @@ function AdsTab({ data }) {
                               </div>
                             </td>
                             <td style={tdStyle}>{fmt(t.spend)}</td>
-                            <td style={tdStyle}>{rev > 0 ? fmt(rev) : '—'}</td>
+                            <td style={tdStyle}>{rev > 0 ? fmt(rev) : 'â€”'}</td>
                             <td style={tdStyle}>
                               {roas > 0
                                 ? <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 7px', borderRadius: 4, background: roasBg(roas), color: roasColor(roas) }}>{roas.toFixed(2)}x</span>
-                                : '—'}
+                                : 'â€”'}
                             </td>
-                            <td style={tdStyle}>{t.clicks > 0 ? fmtBig(t.clicks) : '—'}</td>
-                            <td style={tdStyle}>{ctr > 0 ? ctr.toFixed(2) + '%' : '—'}</td>
-                            <td style={tdStyle}>{cpc > 0 ? `₹${cpc.toFixed(0)}` : '—'}</td>
-                            <td style={tdStyle}>{orders > 0 ? fmtN(orders) : '—'}</td>
+                            <td style={tdStyle}>{t.clicks > 0 ? fmtBig(t.clicks) : 'â€”'}</td>
+                            <td style={tdStyle}>{ctr > 0 ? ctr.toFixed(2) + '%' : 'â€”'}</td>
+                            <td style={tdStyle}>{cpc > 0 ? `â‚¹${cpc.toFixed(0)}` : 'â€”'}</td>
+                            <td style={tdStyle}>{orders > 0 ? fmtN(orders) : 'â€”'}</td>
                           </tr>
                         )
                       })}
@@ -6452,7 +6452,7 @@ function AdsTab({ data }) {
           })()}
         </div>
 
-        {/* Category & Product Breakdown — all tabs */}
+        {/* Category & Product Breakdown â€” all tabs */}
         {(() => {
           const platFilter = !selPlatform ? (() => true) : isD2C ? (r => r.platform === 'D2C') : (r => r.platform === selPlatform)
 
@@ -6494,7 +6494,7 @@ function AdsTab({ data }) {
           const catRows = [...allCatRows].sort((a, b) => b.spend - a.spend)
           const prodRows = [...allProdRows].sort((a, b) => b.spend - a.spend)
 
-          // Grand totals — ROAS uses filtPlatSpend (incl. brand) to match KPI
+          // Grand totals â€” ROAS uses filtPlatSpend (incl. brand) to match KPI
           const catTotal = catRows.reduce((a, r) => ({ spend: a.spend+r.spend, clicks: a.clicks+r.clicks, impressions: a.impressions+r.impressions, orders: a.orders+(r.orders||0), salesRevenue: a.salesRevenue+(r.salesRevenue||0) }), { spend:0, clicks:0, impressions:0, orders:0, salesRevenue:0 })
           const prodTotal = prodRows.reduce((a, r) => ({ spend: a.spend+r.spend, clicks: a.clicks+r.clicks, impressions: a.impressions+r.impressions, orders: a.orders+(r.orders||0), salesRevenue: a.salesRevenue+(r.salesRevenue||0) }), { spend:0, clicks:0, impressions:0, orders:0, salesRevenue:0 })
           const prevCatTotal = prevCB.reduce((s, r) => s + r.spend, 0)
@@ -6510,7 +6510,7 @@ function AdsTab({ data }) {
             if (!prev) return null
             const pct = ((curr - prev) / prev * 100).toFixed(1)
             const up = curr >= prev
-            return <span style={{ fontSize: 9, fontWeight: 700, color: up ? '#10B981' : '#EF4444', marginLeft: 3 }}>{up ? '▲' : '▼'}{Math.abs(pct)}%</span>
+            return <span style={{ fontSize: 9, fontWeight: 700, color: up ? '#10B981' : '#EF4444', marginLeft: 3 }}>{up ? 'â–²' : 'â–¼'}{Math.abs(pct)}%</span>
           }
 
           const renderRow = (r, i, key) => {
@@ -6524,10 +6524,10 @@ function AdsTab({ data }) {
                 <td style={key === 'prod' ? { ...tdStyleL, maxWidth: 120 } : tdStyleL} title={label}>{label}</td>
                 <td style={{ ...tdStyle, fontWeight: 600, color: C.t1 }}>{fmt(r.spend)}</td>
                 <td style={tdStyle}><WoW curr={r.spend} prev={prev} /></td>
-                <td style={tdStyle}>{cpc ? `₹${cpc}` : '—'}</td>
-                <td style={tdStyle}>{ctr ? `${ctr}%` : '—'}</td>
-                <td style={tdStyle}>{r.salesRevenue > 0 ? fmt(r.salesRevenue) : '—'}</td>
-                <td style={{ ...tdStyle, fontWeight: 600, color: roas >= 2 ? '#10B981' : roas ? '#F59E0B' : C.t3 }}>{roas ? `${roas}x` : '—'}</td>
+                <td style={tdStyle}>{cpc ? `â‚¹${cpc}` : 'â€”'}</td>
+                <td style={tdStyle}>{ctr ? `${ctr}%` : 'â€”'}</td>
+                <td style={tdStyle}>{r.salesRevenue > 0 ? fmt(r.salesRevenue) : 'â€”'}</td>
+                <td style={{ ...tdStyle, fontWeight: 600, color: roas >= 2 ? '#10B981' : roas ? '#F59E0B' : C.t3 }}>{roas ? `${roas}x` : 'â€”'}</td>
               </tr>
             )
           }
@@ -6542,11 +6542,11 @@ function AdsTab({ data }) {
               <tr style={totalRowStyle}>
                 <td style={{ ...tdStyleL, fontWeight: 700, color: C.t1 }}>Total</td>
                 <td style={{ ...tdStyle, fontWeight: 700, color: C.t1 }}>{fmt(t.spend)}</td>
-                <td style={tdStyle}>{wow ? <span style={{ fontSize: 10, fontWeight: 700, color: wowUp ? '#10B981' : '#EF4444' }}>{wowUp ? '▲' : '▼'}{Math.abs(wow)}%</span> : '—'}</td>
-                <td style={tdStyle}>{cpc ? `₹${cpc}` : '—'}</td>
-                <td style={tdStyle}>{ctr ? `${ctr}%` : '—'}</td>
-                <td style={{ ...tdStyle, fontWeight: 700, color: C.t1 }}>{t.salesRevenue > 0 ? fmt(t.salesRevenue) : '—'}</td>
-                <td style={{ ...tdStyle, fontWeight: 700, color: roas >= 2 ? '#10B981' : roas ? '#F59E0B' : C.t3 }}>{roas ? `${roas}x` : '—'}</td>
+                <td style={tdStyle}>{wow ? <span style={{ fontSize: 10, fontWeight: 700, color: wowUp ? '#10B981' : '#EF4444' }}>{wowUp ? 'â–²' : 'â–¼'}{Math.abs(wow)}%</span> : 'â€”'}</td>
+                <td style={tdStyle}>{cpc ? `â‚¹${cpc}` : 'â€”'}</td>
+                <td style={tdStyle}>{ctr ? `${ctr}%` : 'â€”'}</td>
+                <td style={{ ...tdStyle, fontWeight: 700, color: C.t1 }}>{t.salesRevenue > 0 ? fmt(t.salesRevenue) : 'â€”'}</td>
+                <td style={{ ...tdStyle, fontWeight: 700, color: roas >= 2 ? '#10B981' : roas ? '#F59E0B' : C.t3 }}>{roas ? `${roas}x` : 'â€”'}</td>
               </tr>
             )
           }
@@ -6586,13 +6586,13 @@ function AdsTab({ data }) {
                     <img src="/frido-logo.png" alt="Frido" style={{ width: 18, height: 18, objectFit: 'contain', marginRight: 6, borderRadius: 3 }} />
                     <span style={{ fontSize: 11, fontWeight: 700, color: '#6366F1', marginRight: 14 }}>Brand (Frido)</span>
                     <span style={{ fontSize: 13, fontWeight: 700, color: C.t1 }}>{fmt(brandSpendVal)}</span>
-                    {brandWow && <span style={{ fontSize: 10, fontWeight: 700, color: brandWowUp ? '#10B981' : '#EF4444', marginLeft: 6 }}>{brandWowUp ? '▲' : '▼'}{Math.abs(brandWow)}%</span>}
+                    {brandWow && <span style={{ fontSize: 10, fontWeight: 700, color: brandWowUp ? '#10B981' : '#EF4444', marginLeft: 6 }}>{brandWowUp ? 'â–²' : 'â–¼'}{Math.abs(brandWow)}%</span>}
                     {divider}
                     <span style={{ fontSize: 10, color: C.t3, marginRight: 3 }}>CPC</span>
-                    <span style={{ fontSize: 11, fontWeight: 600, color: C.t1 }}>{brandCpc ? `₹${brandCpc}` : '—'}</span>
+                    <span style={{ fontSize: 11, fontWeight: 600, color: C.t1 }}>{brandCpc ? `â‚¹${brandCpc}` : 'â€”'}</span>
                     {divider}
                     <span style={{ fontSize: 10, color: C.t3, marginRight: 3 }}>CTR</span>
-                    <span style={{ fontSize: 11, fontWeight: 600, color: C.t1 }}>{brandCtr ? `${brandCtr}%` : '—'}</span>
+                    <span style={{ fontSize: 11, fontWeight: 600, color: C.t1 }}>{brandCtr ? `${brandCtr}%` : 'â€”'}</span>
                     {divider}
                     <span style={{ fontSize: 11, color: C.t3 }}>{(brandSpendVal / filtPlatSpend * 100).toFixed(1)}% of total spend</span>
                   </div>
@@ -6656,7 +6656,7 @@ function AdsTab({ data }) {
           )
         })()}
 
-        {/* Zero Order Spend — Google and Flipkart only */}
+        {/* Zero Order Spend â€” Google and Flipkart only */}
         {(selPlatform === 'Google' || selPlatform === 'Flipkart') && (() => {
           const zeroOrderData = ads.zeroOrder || []
           const zeroRows = zeroOrderData
@@ -6701,8 +6701,8 @@ function AdsTab({ data }) {
                       <td style={{ padding: '7px 8px', color: C.t1, textAlign: 'right', fontWeight: 600 }}>{fmt(r.spend)}</td>
                       <td style={{ padding: '7px 8px', color: C.t2, textAlign: 'right' }}>{fmtBig(r.clicks)}</td>
                       <td style={{ padding: '7px 8px', color: C.t2, textAlign: 'right' }}>{fmtBig(r.impressions)}</td>
-                      <td style={{ padding: '7px 8px', color: C.t2, textAlign: 'right' }}>{r.ctr > 0 ? `${r.ctr.toFixed(2)}%` : '—'}</td>
-                      <td style={{ padding: '7px 8px', color: C.t2, textAlign: 'right' }}>{r.cpc > 0 ? `₹${r.cpc.toFixed(0)}` : '—'}</td>
+                      <td style={{ padding: '7px 8px', color: C.t2, textAlign: 'right' }}>{r.ctr > 0 ? `${r.ctr.toFixed(2)}%` : 'â€”'}</td>
+                      <td style={{ padding: '7px 8px', color: C.t2, textAlign: 'right' }}>{r.cpc > 0 ? `â‚¹${r.cpc.toFixed(0)}` : 'â€”'}</td>
                       <td style={{ padding: '7px 8px', textAlign: 'right' }}>
                         <span style={{ background: C.red.bg, color: C.red.tx, border: `1px solid ${C.red.bd}`, borderRadius: 5, padding: '2px 8px', fontWeight: 700, fontSize: 11 }}>0</span>
                       </td>
@@ -6714,13 +6714,13 @@ function AdsTab({ data }) {
           )
         })()}
 
-        {/* Ad Type Breakdown — Amazon, Meta, Zepto only */}
+        {/* Ad Type Breakdown â€” Amazon, Meta, Zepto only */}
         {(selPlatform === 'Amazon' || selPlatform === 'Meta' || selPlatform === 'Zepto') && (() => {
           const adTypes = filtAdTypes.map(x => x.adType).filter((v, i, a) => a.indexOf(v) === i)
           const activeType = selAdType[selPlatform] || adTypes[0]
           const x = filtAdTypes.find(t => t.adType === activeType) || {}
           const isMetaOnly = selPlatform === 'Meta'
-          // Revenue/orders may be 0 per ad_type in BQ — distribute platform totals by spend share
+          // Revenue/orders may be 0 per ad_type in BQ â€” distribute platform totals by spend share
           const platformTotalSpend = filtAdTypes.reduce((s, t) => s + (t.spend || 0), 0)
           const salesRevForPlatform = platformNetRev[selPlatform] || 0
           const platformTotalOrders = currentOrders || filtTotals.reduce((s, t) => s + (t.orders || 0), 0)
@@ -6733,16 +6733,16 @@ function AdsTab({ data }) {
           const adTypeOrders = x.orders > 0 ? x.orders : spendShare * platformTotalOrders
           const kpis = isMetaOnly ? [
             { label: 'Spend', value: fmt(x.spend || 0) },
-            { label: 'CTR', value: x.ctr > 0 ? `${x.ctr.toFixed(2)}%` : '—' },
-            { label: 'CPC', value: x.cpc > 0 ? `₹${x.cpc.toFixed(0)}` : '—' },
+            { label: 'CTR', value: x.ctr > 0 ? `${x.ctr.toFixed(2)}%` : 'â€”' },
+            { label: 'CPC', value: x.cpc > 0 ? `â‚¹${x.cpc.toFixed(0)}` : 'â€”' },
             { label: 'Impressions', value: fmtBig(x.impressions || 0) },
           ] : [
             { label: 'Spend', value: fmt(x.spend || 0) },
             { label: 'Clicks', value: fmtBig(x.clicks || 0) },
             { label: 'Impressions', value: fmtBig(x.impressions || 0) },
-            { label: 'CTR', value: x.ctr > 0 ? `${x.ctr.toFixed(2)}%` : '—' },
-            { label: 'CPC', value: x.cpc > 0 ? `₹${x.cpc.toFixed(0)}` : '—' },
-            { label: 'Orders', value: adTypeOrders > 0 ? `~${fmtN(Math.round(adTypeOrders))}` : '—', sub: 'est. by spend share' },
+            { label: 'CTR', value: x.ctr > 0 ? `${x.ctr.toFixed(2)}%` : 'â€”' },
+            { label: 'CPC', value: x.cpc > 0 ? `â‚¹${x.cpc.toFixed(0)}` : 'â€”' },
+            { label: 'Orders', value: adTypeOrders > 0 ? `~${fmtN(Math.round(adTypeOrders))}` : 'â€”', sub: 'est. by spend share' },
           ]
           return (
             <div className="kpi-card" style={{ padding: '14px 16px' }}>
@@ -6806,7 +6806,7 @@ function BlinkitTab({ data }) {
   const blPrevOrders = bl.prevOrders || 0
   const blPrevDailyArr = bl.prevDaily || []
   const blRevChg = blPrevRev > 0 ? ((rev - blPrevRev) / blPrevRev * 100) : null
-  const blChgBadge = (cur, prev) => { if (!prev) return null; const p = (cur - prev) / prev * 100; return <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 4, background: p >= 0 ? C.green.bg : C.red.bg, color: p >= 0 ? C.green.tx : C.red.tx, flexShrink: 0 }}>{p >= 0 ? '▲' : '▼'} {Math.abs(p).toFixed(1)}%</span> }
+  const blChgBadge = (cur, prev) => { if (!prev) return null; const p = (cur - prev) / prev * 100; return <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 4, background: p >= 0 ? C.green.bg : C.red.bg, color: p >= 0 ? C.green.tx : C.red.tx, flexShrink: 0 }}>{p >= 0 ? 'â–²' : 'â–¼'} {Math.abs(p).toFixed(1)}%</span> }
   const blSparkData = Array.from({ length: Math.max(daily.length, blPrevDailyArr.length) }, (_, i) => ({
     i, cur: daily[i]?.rev ?? null, prev: blPrevDailyArr[i]?.rev ?? null
   }))
@@ -6831,18 +6831,18 @@ function BlinkitTab({ data }) {
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, background: C.bg, border: `1px solid ${C.border}`, borderRadius: 8, padding: '6px 12px', fontSize: 12 }}>
           <span style={{ color: C.t2 }}>Filtered by category:</span>
           <strong style={{ color: C.t1 }}>{selectedCat}</strong>
-          <button onClick={() => setSelectedCat(null)} style={{ marginLeft: 'auto', fontSize: 11, color: C.acc, background: 'none', border: 'none', cursor: 'pointer', fontWeight: 700 }}>✕ Clear</button>
+          <button onClick={() => setSelectedCat(null)} style={{ marginLeft: 'auto', fontSize: 11, color: C.acc, background: 'none', border: 'none', cursor: 'pointer', fontWeight: 700 }}>âœ• Clear</button>
         </div>
       )}
       {/* KPI layout */}
       <div style={{ display: 'grid', gridTemplateColumns: '1.5fr 5fr', gap: 10, alignItems: 'stretch' }}>
         <div className="kpi-card" style={{ display: 'flex', flexDirection: 'column', gap: 8, padding: '16px 18px' }}>
-          <div className="kpi-label" style={{ fontSize: 11 }}>Gross Revenue · MRP</div>
+          <div className="kpi-label" style={{ fontSize: 11 }}>Gross Revenue Â· MRP</div>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 6 }}>
             <div className="kpi-value" style={{ fontSize: 32, fontWeight: 800 }}>{fmt(rev)}</div>
-            {blRevChg !== null && <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 7px', borderRadius: 4, background: blRevChg >= 0 ? C.green.bg : C.red.bg, color: blRevChg >= 0 ? C.green.tx : C.red.tx }}>{blRevChg >= 0 ? '▲' : '▼'} {Math.abs(blRevChg).toFixed(1)}%</span>}
+            {blRevChg !== null && <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 7px', borderRadius: 4, background: blRevChg >= 0 ? C.green.bg : C.red.bg, color: blRevChg >= 0 ? C.green.tx : C.red.tx }}>{blRevChg >= 0 ? 'â–²' : 'â–¼'} {Math.abs(blRevChg).toFixed(1)}%</span>}
           </div>
-          <div className="kpi-sub" style={{ fontSize: 13 }}>{fmtN(units)} units · {fmtN(cities)} cities</div>
+          <div className="kpi-sub" style={{ fontSize: 13 }}>{fmtN(units)} units Â· {fmtN(cities)} cities</div>
           <div style={{ flex: 1, minHeight: 0 }}>
             <ResponsiveContainer width="100%" height="100%">
               <AreaChart data={blSparkData} margin={{ top: 4, right: 0, bottom: 0, left: 0 }}>
@@ -6871,8 +6871,8 @@ function BlinkitTab({ data }) {
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10, flex: 1 }}>
             {[
               { label: 'Orders', value: fmtN(orders), sub: `${fmtN(cities)} cities`, badge: blChgBadge(orders, blPrevOrders) },
-              { label: 'AOV', value: `₹${Math.round(aov).toLocaleString('en-IN')}`, sub: 'Avg order value (inc GST)', badge: blChgBadge(aov, blPrevOrders > 0 ? blPrevRev / blPrevOrders : 0) },
-              { label: 'ASP', value: `₹${Math.round(asp).toLocaleString('en-IN')}`, sub: 'Avg selling price (exc GST)', badge: blChgBadge(asp, blPrevUnits > 0 ? blPrevExcRev / blPrevUnits : 0) },
+              { label: 'AOV', value: `â‚¹${Math.round(aov).toLocaleString('en-IN')}`, sub: 'Avg order value (inc GST)', badge: blChgBadge(aov, blPrevOrders > 0 ? blPrevRev / blPrevOrders : 0) },
+              { label: 'ASP', value: `â‚¹${Math.round(asp).toLocaleString('en-IN')}`, sub: 'Avg selling price (exc GST)', badge: blChgBadge(asp, blPrevUnits > 0 ? blPrevExcRev / blPrevUnits : 0) },
             ].map(k => (
               <div key={k.label} className="kpi-card" style={{ padding: '10px 13px' }}>
                 <div className="kpi-label">{k.label}</div>
@@ -6885,7 +6885,7 @@ function BlinkitTab({ data }) {
       </div>
 
       {/* Trend Analysis */}
-      <TrendAnalysisCard title="Trend Analysis · Blinkit" daily={daily} grossColor="#FFD600" grossGradId="blGrossGrad2" />
+      <TrendAnalysisCard title="Trend Analysis Â· Blinkit" daily={daily} grossColor="#FFD600" grossGradId="blGrossGrad2" />
 
       {/* Geography */}
       {(() => {
@@ -6898,13 +6898,13 @@ function BlinkitTab({ data }) {
       })()}
 
       {/* Category Matrix */}
-      <FinancialCategoryMatrix catData={catMatrixData} subCatData={subCatMatrixData} skuData={bl.skuMatrix || {}} title="Category Revenue Matrix · Blinkit" showMoM={true} catPrevMap={bl.catPrevMap || {}} subCatPrevMap={bl.subCatPrevMap || {}} skuPrevMap={bl.skuPrevMap || {}} />
+      <FinancialCategoryMatrix catData={catMatrixData} subCatData={subCatMatrixData} skuData={bl.skuMatrix || {}} title="Category Revenue Matrix Â· Blinkit" showMoM={true} catPrevMap={bl.catPrevMap || {}} subCatPrevMap={bl.subCatPrevMap || {}} skuPrevMap={bl.skuPrevMap || {}} />
 
       {/* Cat + SubCat table */}
       <CatSubCatRow
         catRows={catRowsForCatSubCat}
         subCatRows={subCatRowsForCatSubCat}
-        title="Category Revenue · Blinkit"
+        title="Category Revenue Â· Blinkit"
         selectedCat={selectedCat}
         onSelectCat={setSelectedCat}
       />
@@ -6989,7 +6989,7 @@ function InstaTab({ data }) {
   const catRowsForCatSubCat = allCats.map(c => ({ name: c.category, rev: c.rev, units: c.units, orders: 0 }))
   const subCatRowsForCatSubCat = allSubCats.map(x => ({ name: x.subcategory, category: x.category, rev: x.rev, units: x.units, orders: 0 }))
 
-  const insChgBadge = (cur, prev) => { if (!prev) return null; const p = (cur - prev) / prev * 100; return <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 4, background: p >= 0 ? C.green.bg : C.red.bg, color: p >= 0 ? C.green.tx : C.red.tx, flexShrink: 0 }}>{p >= 0 ? '▲' : '▼'} {Math.abs(p).toFixed(1)}%</span> }
+  const insChgBadge = (cur, prev) => { if (!prev) return null; const p = (cur - prev) / prev * 100; return <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 4, background: p >= 0 ? C.green.bg : C.red.bg, color: p >= 0 ? C.green.tx : C.red.tx, flexShrink: 0 }}>{p >= 0 ? 'â–²' : 'â–¼'} {Math.abs(p).toFixed(1)}%</span> }
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
@@ -6997,7 +6997,7 @@ function InstaTab({ data }) {
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, background: C.bg, border: `1px solid ${C.border}`, borderRadius: 8, padding: '6px 12px', fontSize: 12 }}>
           <span style={{ color: C.t2 }}>Filtered by category:</span>
           <strong style={{ color: C.t1 }}>{selectedCat}</strong>
-          <button onClick={() => setSelectedCat(null)} style={{ marginLeft: 'auto', fontSize: 11, color: C.acc, background: 'none', border: 'none', cursor: 'pointer', fontWeight: 700 }}>✕ Clear</button>
+          <button onClick={() => setSelectedCat(null)} style={{ marginLeft: 'auto', fontSize: 11, color: C.acc, background: 'none', border: 'none', cursor: 'pointer', fontWeight: 700 }}>âœ• Clear</button>
         </div>
       )}
       <div style={{ display: 'grid', gridTemplateColumns: '1.5fr 5fr', gap: 10, alignItems: 'stretch' }}>
@@ -7005,9 +7005,9 @@ function InstaTab({ data }) {
           <div className="kpi-label" style={{ fontSize: 11 }}>Gross Revenue (Inc. GST)</div>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 6 }}>
             <div className="kpi-value" style={{ fontSize: 32, fontWeight: 800 }}>{fmt(rev)}</div>
-            {insRevChg !== null && <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 7px', borderRadius: 4, background: insRevChg >= 0 ? C.green.bg : C.red.bg, color: insRevChg >= 0 ? C.green.tx : C.red.tx }}>{insRevChg >= 0 ? '▲' : '▼'} {Math.abs(insRevChg).toFixed(1)}%</span>}
+            {insRevChg !== null && <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 7px', borderRadius: 4, background: insRevChg >= 0 ? C.green.bg : C.red.bg, color: insRevChg >= 0 ? C.green.tx : C.red.tx }}>{insRevChg >= 0 ? 'â–²' : 'â–¼'} {Math.abs(insRevChg).toFixed(1)}%</span>}
           </div>
-          <div className="kpi-sub" style={{ fontSize: 13 }}>{nDays} days · {fmtN(units)} units</div>
+          <div className="kpi-sub" style={{ fontSize: 13 }}>{nDays} days Â· {fmtN(units)} units</div>
           <div style={{ flex: 1, minHeight: 0 }}>
             <ResponsiveContainer width="100%" height="100%">
               <AreaChart data={insSparkData} margin={{ top: 4, right: 0, bottom: 0, left: 0 }}>
@@ -7036,8 +7036,8 @@ function InstaTab({ data }) {
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10, flex: 1 }}>
             {[
               { label: 'Orders', value: fmtN(orders), sub: `${fmtN(cities)} cities`, badge: insChgBadge(orders, insPrevOrders) },
-              { label: 'AOV', value: `₹${Math.round(aov).toLocaleString('en-IN')}`, sub: 'Avg order value (inc GST)', badge: insChgBadge(aov, insPrevOrders > 0 ? insPrevRev / insPrevOrders : 0) },
-              { label: 'ASP (Exc GST)', value: `₹${Math.round(asp).toLocaleString('en-IN')}`, sub: 'Avg selling price', badge: insChgBadge(asp, insPrevUnits > 0 ? insPrevExcRev / insPrevUnits : 0) },
+              { label: 'AOV', value: `â‚¹${Math.round(aov).toLocaleString('en-IN')}`, sub: 'Avg order value (inc GST)', badge: insChgBadge(aov, insPrevOrders > 0 ? insPrevRev / insPrevOrders : 0) },
+              { label: 'ASP (Exc GST)', value: `â‚¹${Math.round(asp).toLocaleString('en-IN')}`, sub: 'Avg selling price', badge: insChgBadge(asp, insPrevUnits > 0 ? insPrevExcRev / insPrevUnits : 0) },
             ].map(k => (
               <div key={k.label} className="kpi-card" style={{ padding: '10px 13px' }}>
                 <div className="kpi-label">{k.label}</div>
@@ -7049,7 +7049,7 @@ function InstaTab({ data }) {
         </div>
       </div>
 
-      <TrendAnalysisCard title="Trend Analysis · Instamart" daily={daily} grossColor="#FF6B35" grossGradId="inGrossGrad2" />
+      <TrendAnalysisCard title="Trend Analysis Â· Instamart" daily={daily} grossColor="#FF6B35" grossGradId="inGrossGrad2" />
 
       {(() => {
         const regAgg = {}; cityRows.forEach(c => { if (!c.region) return; if (!regAgg[c.region]) regAgg[c.region] = { name: c.region, region: c.region, rev: 0, orders: 0, units: 0 }; regAgg[c.region].rev += c.rev; regAgg[c.region].orders += c.units; regAgg[c.region].units += c.units })
@@ -7060,12 +7060,12 @@ function InstaTab({ data }) {
         return <ShopifyGeoDonutRow regionRows={regionRows} tierRows={tierRows} topStates={topStates} allStateRows={stateRows} />
       })()}
 
-      <FinancialCategoryMatrix catData={catMatrixData} subCatData={subCatMatrixData} skuData={ins.skuMatrix || {}} title="Category Revenue Matrix · Instamart" showMoM={true} catPrevMap={ins.catPrevMap || {}} subCatPrevMap={ins.subCatPrevMap || {}} skuPrevMap={ins.skuPrevMap || {}} />
+      <FinancialCategoryMatrix catData={catMatrixData} subCatData={subCatMatrixData} skuData={ins.skuMatrix || {}} title="Category Revenue Matrix Â· Instamart" showMoM={true} catPrevMap={ins.catPrevMap || {}} subCatPrevMap={ins.subCatPrevMap || {}} skuPrevMap={ins.skuPrevMap || {}} />
 
       <CatSubCatRow
         catRows={catRowsForCatSubCat}
         subCatRows={subCatRowsForCatSubCat}
-        title="Category Revenue · Instamart"
+        title="Category Revenue Â· Instamart"
         selectedCat={selectedCat}
         onSelectCat={setSelectedCat}
       />
@@ -7149,7 +7149,7 @@ function ZeptoTab({ data }) {
   const catRowsForCatSubCat = allCats.map(c => ({ name: c.category, rev: c.rev, units: c.units, orders: 0 }))
   const subCatRowsForCatSubCat = allSubCats.map(x => ({ name: x.subcategory, category: x.category, rev: x.rev, units: x.units, orders: 0 }))
 
-  const zpChgBadge = (cur, prev) => { if (!prev) return null; const p = (cur - prev) / prev * 100; return <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 4, background: p >= 0 ? C.green.bg : C.red.bg, color: p >= 0 ? C.green.tx : C.red.tx, flexShrink: 0 }}>{p >= 0 ? '▲' : '▼'} {Math.abs(p).toFixed(1)}%</span> }
+  const zpChgBadge = (cur, prev) => { if (!prev) return null; const p = (cur - prev) / prev * 100; return <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 4, background: p >= 0 ? C.green.bg : C.red.bg, color: p >= 0 ? C.green.tx : C.red.tx, flexShrink: 0 }}>{p >= 0 ? 'â–²' : 'â–¼'} {Math.abs(p).toFixed(1)}%</span> }
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
@@ -7157,7 +7157,7 @@ function ZeptoTab({ data }) {
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, background: C.bg, border: `1px solid ${C.border}`, borderRadius: 8, padding: '6px 12px', fontSize: 12 }}>
           <span style={{ color: C.t2 }}>Filtered by category:</span>
           <strong style={{ color: C.t1 }}>{selectedCat}</strong>
-          <button onClick={() => setSelectedCat(null)} style={{ marginLeft: 'auto', fontSize: 11, color: C.acc, background: 'none', border: 'none', cursor: 'pointer', fontWeight: 700 }}>✕ Clear</button>
+          <button onClick={() => setSelectedCat(null)} style={{ marginLeft: 'auto', fontSize: 11, color: C.acc, background: 'none', border: 'none', cursor: 'pointer', fontWeight: 700 }}>âœ• Clear</button>
         </div>
       )}
       <div style={{ display: 'grid', gridTemplateColumns: '1.5fr 5fr', gap: 10, alignItems: 'stretch' }}>
@@ -7165,9 +7165,9 @@ function ZeptoTab({ data }) {
           <div className="kpi-label" style={{ fontSize: 11 }}>Gross Revenue (Inc. GST)</div>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 6 }}>
             <div className="kpi-value" style={{ fontSize: 32, fontWeight: 800 }}>{fmt(rev)}</div>
-            {zpRevChg !== null && <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 7px', borderRadius: 4, background: zpRevChg >= 0 ? C.green.bg : C.red.bg, color: zpRevChg >= 0 ? C.green.tx : C.red.tx }}>{zpRevChg >= 0 ? '▲' : '▼'} {Math.abs(zpRevChg).toFixed(1)}%</span>}
+            {zpRevChg !== null && <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 7px', borderRadius: 4, background: zpRevChg >= 0 ? C.green.bg : C.red.bg, color: zpRevChg >= 0 ? C.green.tx : C.red.tx }}>{zpRevChg >= 0 ? 'â–²' : 'â–¼'} {Math.abs(zpRevChg).toFixed(1)}%</span>}
           </div>
-          <div className="kpi-sub" style={{ fontSize: 13 }}>{nDays} days · {fmtN(orders)} orders · {fmtN(units)} units</div>
+          <div className="kpi-sub" style={{ fontSize: 13 }}>{nDays} days Â· {fmtN(orders)} orders Â· {fmtN(units)} units</div>
           <div style={{ flex: 1, minHeight: 0 }}>
             <ResponsiveContainer width="100%" height="100%">
               <AreaChart data={zpSparkData} margin={{ top: 4, right: 0, bottom: 0, left: 0 }}>
@@ -7196,8 +7196,8 @@ function ZeptoTab({ data }) {
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10, flex: 1 }}>
             {[
               { label: 'Orders', value: fmtN(orders), sub: `${fmtN(cities)} cities`, badge: zpChgBadge(orders, zpPrevOrders) },
-              { label: 'AOV', value: `₹${Math.round(aov).toLocaleString('en-IN')}`, sub: 'Avg order value (inc GST)', badge: zpChgBadge(aov, zpPrevOrders > 0 ? zpPrevRev / zpPrevOrders : 0) },
-              { label: 'ASP (Exc GST)', value: `₹${Math.round(asp).toLocaleString('en-IN')}`, sub: 'Avg selling price', badge: zpChgBadge(asp, zpPrevUnits > 0 ? zpPrevExcRev / zpPrevUnits : 0) },
+              { label: 'AOV', value: `â‚¹${Math.round(aov).toLocaleString('en-IN')}`, sub: 'Avg order value (inc GST)', badge: zpChgBadge(aov, zpPrevOrders > 0 ? zpPrevRev / zpPrevOrders : 0) },
+              { label: 'ASP (Exc GST)', value: `â‚¹${Math.round(asp).toLocaleString('en-IN')}`, sub: 'Avg selling price', badge: zpChgBadge(asp, zpPrevUnits > 0 ? zpPrevExcRev / zpPrevUnits : 0) },
             ].map(k => (
               <div key={k.label} className="kpi-card" style={{ padding: '10px 13px' }}>
                 <div className="kpi-label">{k.label}</div>
@@ -7209,7 +7209,7 @@ function ZeptoTab({ data }) {
         </div>
       </div>
 
-      <TrendAnalysisCard title="Trend Analysis · Zepto" daily={daily} grossColor="#8B5CF6" grossGradId="zpGrossGrad2" />
+      <TrendAnalysisCard title="Trend Analysis Â· Zepto" daily={daily} grossColor="#8B5CF6" grossGradId="zpGrossGrad2" />
 
       {(() => {
         const regAgg = {}; cityRows.forEach(c => { if (!c.region) return; if (!regAgg[c.region]) regAgg[c.region] = { name: c.region, region: c.region, rev: 0, orders: 0, units: 0 }; regAgg[c.region].rev += c.rev; regAgg[c.region].orders += c.units; regAgg[c.region].units += c.units })
@@ -7220,12 +7220,12 @@ function ZeptoTab({ data }) {
         return <ShopifyGeoDonutRow regionRows={regionRows} tierRows={tierRows} topStates={topStates} allStateRows={stateRows} />
       })()}
 
-      <FinancialCategoryMatrix catData={catMatrixData} subCatData={subCatMatrixData} skuData={zp.skuMatrix || {}} title="Category Revenue Matrix · Zepto" showMoM={true} catPrevMap={zp.catPrevMap || {}} subCatPrevMap={zp.subCatPrevMap || {}} skuPrevMap={zp.skuPrevMap || {}} />
+      <FinancialCategoryMatrix catData={catMatrixData} subCatData={subCatMatrixData} skuData={zp.skuMatrix || {}} title="Category Revenue Matrix Â· Zepto" showMoM={true} catPrevMap={zp.catPrevMap || {}} subCatPrevMap={zp.subCatPrevMap || {}} skuPrevMap={zp.skuPrevMap || {}} />
 
       <CatSubCatRow
         catRows={catRowsForCatSubCat}
         subCatRows={subCatRowsForCatSubCat}
-        title="Category Revenue · Zepto"
+        title="Category Revenue Â· Zepto"
         selectedCat={selectedCat}
         onSelectCat={setSelectedCat}
       />
@@ -7286,7 +7286,7 @@ function CredTab({ data }) {
   const stateRows = cr.states || []
   const cityRows = cr.cities || []
 
-  const crChgBadge = (cur, prev) => { if (!prev) return null; const p = (cur - prev) / prev * 100; return <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 4, background: p >= 0 ? C.green.bg : C.red.bg, color: p >= 0 ? C.green.tx : C.red.tx, flexShrink: 0 }}>{p >= 0 ? '▲' : '▼'} {Math.abs(p).toFixed(1)}%</span> }
+  const crChgBadge = (cur, prev) => { if (!prev) return null; const p = (cur - prev) / prev * 100; return <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 4, background: p >= 0 ? C.green.bg : C.red.bg, color: p >= 0 ? C.green.tx : C.red.tx, flexShrink: 0 }}>{p >= 0 ? 'â–²' : 'â–¼'} {Math.abs(p).toFixed(1)}%</span> }
 
   // Trend analysis data
   const trendData = daily.map((d, i) => ({
@@ -7341,15 +7341,15 @@ function CredTab({ data }) {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-      {/* Hero + 2×2 KPIs */}
+      {/* Hero + 2Ã—2 KPIs */}
       <div style={{ display: 'grid', gridTemplateColumns: '1.5fr 5fr', gap: 10, alignItems: 'stretch' }}>
         <div className="kpi-card" style={{ display: 'flex', flexDirection: 'column', gap: 8, padding: '16px 18px' }}>
           <div className="kpi-label" style={{ fontSize: 11 }}>Gross Revenue (Inc. GST)</div>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 6 }}>
             <div className="kpi-value" style={{ fontSize: 32, fontWeight: 800 }}>{fmt(rev)}</div>
-            {crRevChg !== null && <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 7px', borderRadius: 4, background: crRevChg >= 0 ? C.green.bg : C.red.bg, color: crRevChg >= 0 ? C.green.tx : C.red.tx }}>{crRevChg >= 0 ? '▲' : '▼'} {Math.abs(crRevChg).toFixed(1)}%</span>}
+            {crRevChg !== null && <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 7px', borderRadius: 4, background: crRevChg >= 0 ? C.green.bg : C.red.bg, color: crRevChg >= 0 ? C.green.tx : C.red.tx }}>{crRevChg >= 0 ? 'â–²' : 'â–¼'} {Math.abs(crRevChg).toFixed(1)}%</span>}
           </div>
-          <div className="kpi-sub" style={{ fontSize: 13 }}>{nDays} days · {fmtN(orders)} orders · {fmtN(units)} units</div>
+          <div className="kpi-sub" style={{ fontSize: 13 }}>{nDays} days Â· {fmtN(orders)} orders Â· {fmtN(units)} units</div>
           <div style={{ flex: 1, minHeight: 0 }}>
             <ResponsiveContainer width="100%" height="100%">
               <AreaChart data={crSparkData} margin={{ top: 4, right: 0, bottom: 0, left: 0 }}>
@@ -7380,8 +7380,8 @@ function CredTab({ data }) {
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10 }}>
             {[
               { label: 'Orders', value: fmtN(orders), sub: `${fmtN(units)} units`, badge: crChgBadge(orders, crPrevOrders) },
-              { label: 'AOV', value: `₹${Math.round(orders ? rev / orders : 0).toLocaleString('en-IN')}`, sub: 'Avg order value (inc GST)', badge: crChgBadge(orders ? rev / orders : 0, crPrevOrders > 0 ? crPrevRev / crPrevOrders : 0) },
-              { label: 'ASP', value: `₹${Math.round(asp).toLocaleString('en-IN')}`, sub: 'Avg selling price / unit', badge: crChgBadge(asp, crPrevUnits > 0 ? crPrevRev / crPrevUnits : 0) },
+              { label: 'AOV', value: `â‚¹${Math.round(orders ? rev / orders : 0).toLocaleString('en-IN')}`, sub: 'Avg order value (inc GST)', badge: crChgBadge(orders ? rev / orders : 0, crPrevOrders > 0 ? crPrevRev / crPrevOrders : 0) },
+              { label: 'ASP', value: `â‚¹${Math.round(asp).toLocaleString('en-IN')}`, sub: 'Avg selling price / unit', badge: crChgBadge(asp, crPrevUnits > 0 ? crPrevRev / crPrevUnits : 0) },
             ].map(k => (
               <div key={k.label} className="kpi-card" style={{ padding: '10px 13px' }}>
                 <div className="kpi-label">{k.label}</div>
@@ -7396,7 +7396,7 @@ function CredTab({ data }) {
       </div>
 
       {/* Trend Analysis */}
-      <TrendAnalysisCard title="Trend Analysis · CRED" daily={daily} grossColor="#E11D48" grossGradId="crGrossGrad3" />
+      <TrendAnalysisCard title="Trend Analysis Â· CRED" daily={daily} grossColor="#E11D48" grossGradId="crGrossGrad3" />
 
       {/* Geography Breakdown */}
       <ShopifyGeoDonutRow
@@ -7407,13 +7407,13 @@ function CredTab({ data }) {
       />
 
       {/* Category Revenue Matrix */}
-      <FinancialCategoryMatrix catData={catMatrixData} subCatData={subCatMatrixData} skuData={cr.skuMatrix || {}} title="Category Revenue Matrix · CRED" showMoM={true} catPrevMap={catPrevMap} subCatPrevMap={subCatPrevMap} />
+      <FinancialCategoryMatrix catData={catMatrixData} subCatData={subCatMatrixData} skuData={cr.skuMatrix || {}} title="Category Revenue Matrix Â· CRED" showMoM={true} catPrevMap={catPrevMap} subCatPrevMap={subCatPrevMap} />
 
       {/* Category + Sub-category table */}
       <CatSubCatRow
         catRows={catRows}
         subCatRows={subCatRows}
-        title="Category Revenue · CRED"
+        title="Category Revenue Â· CRED"
         selectedCat={selectedCat}
         onSelectCat={v => { setSelectedCat(v); setSelectedSubCat(null) }}
         selectedSubCat={selectedSubCat}
@@ -7455,7 +7455,7 @@ function FirstcryTab({ data }) {
   const stateRows = fc.states || []
   const cityRows = fc.cities || []
 
-  const fcChgBadge = (cur, prev) => { if (!prev) return null; const p = (cur - prev) / prev * 100; return <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 4, background: p >= 0 ? C.green.bg : C.red.bg, color: p >= 0 ? C.green.tx : C.red.tx, flexShrink: 0 }}>{p >= 0 ? '▲' : '▼'} {Math.abs(p).toFixed(1)}%</span> }
+  const fcChgBadge = (cur, prev) => { if (!prev) return null; const p = (cur - prev) / prev * 100; return <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 4, background: p >= 0 ? C.green.bg : C.red.bg, color: p >= 0 ? C.green.tx : C.red.tx, flexShrink: 0 }}>{p >= 0 ? 'â–²' : 'â–¼'} {Math.abs(p).toFixed(1)}%</span> }
 
   const trendData = daily.map((d, i) => ({
     date: d.date,
@@ -7489,9 +7489,9 @@ function FirstcryTab({ data }) {
           <div className="kpi-label" style={{ fontSize: 11 }}>Gross Revenue (Inc. GST)</div>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 6 }}>
             <div className="kpi-value" style={{ fontSize: 32, fontWeight: 800 }}>{fmt(rev)}</div>
-            {fcRevChg !== null && <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 7px', borderRadius: 4, background: fcRevChg >= 0 ? C.green.bg : C.red.bg, color: fcRevChg >= 0 ? C.green.tx : C.red.tx }}>{fcRevChg >= 0 ? '▲' : '▼'} {Math.abs(fcRevChg).toFixed(1)}%</span>}
+            {fcRevChg !== null && <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 7px', borderRadius: 4, background: fcRevChg >= 0 ? C.green.bg : C.red.bg, color: fcRevChg >= 0 ? C.green.tx : C.red.tx }}>{fcRevChg >= 0 ? 'â–²' : 'â–¼'} {Math.abs(fcRevChg).toFixed(1)}%</span>}
           </div>
-          <div className="kpi-sub" style={{ fontSize: 13 }}>{nDays} days · {fmtN(orders)} orders · {fmtN(units)} units</div>
+          <div className="kpi-sub" style={{ fontSize: 13 }}>{nDays} days Â· {fmtN(orders)} orders Â· {fmtN(units)} units</div>
           <div style={{ flex: 1, minHeight: 0 }}>
             <ResponsiveContainer width="100%" height="100%">
               <AreaChart data={fcSparkData} margin={{ top: 4, right: 0, bottom: 0, left: 0 }}>
@@ -7522,8 +7522,8 @@ function FirstcryTab({ data }) {
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10 }}>
           {[
             { label: 'Orders', value: fmtN(orders), sub: `${fmtN(units)} units`, badge: fcChgBadge(orders, fcPrevOrders) },
-            { label: 'AOV', value: `₹${Math.round(orders ? rev / orders : 0).toLocaleString('en-IN')}`, sub: 'Avg order value (inc GST)', badge: fcChgBadge(orders ? rev / orders : 0, fcPrevOrders > 0 ? fcPrevRev / fcPrevOrders : 0) },
-            { label: 'ASP', value: `₹${Math.round(asp).toLocaleString('en-IN')}`, sub: 'Avg selling price / unit', badge: fcChgBadge(asp, fcPrevUnits > 0 ? fcPrevRev / fcPrevUnits : 0) },
+            { label: 'AOV', value: `â‚¹${Math.round(orders ? rev / orders : 0).toLocaleString('en-IN')}`, sub: 'Avg order value (inc GST)', badge: fcChgBadge(orders ? rev / orders : 0, fcPrevOrders > 0 ? fcPrevRev / fcPrevOrders : 0) },
+            { label: 'ASP', value: `â‚¹${Math.round(asp).toLocaleString('en-IN')}`, sub: 'Avg selling price / unit', badge: fcChgBadge(asp, fcPrevUnits > 0 ? fcPrevRev / fcPrevUnits : 0) },
           ].map(k => (
             <div key={k.label} className="kpi-card" style={{ padding: '10px 13px' }}>
               <div className="kpi-label">{k.label}</div>
@@ -7537,7 +7537,7 @@ function FirstcryTab({ data }) {
         </div>
       </div>
 
-      <TrendAnalysisCard title="Trend Analysis · Firstcry" daily={daily} grossColor="#F97316" grossGradId="fcGrossGrad3" />
+      <TrendAnalysisCard title="Trend Analysis Â· Firstcry" daily={daily} grossColor="#F97316" grossGradId="fcGrossGrad3" />
 
       <ShopifyGeoDonutRow
         regionRows={fc.regionRows || []}
@@ -7546,12 +7546,12 @@ function FirstcryTab({ data }) {
         allStateRows={stateRows}
       />
 
-      <FinancialCategoryMatrix catData={catMatrixData} subCatData={subCatMatrixData} skuData={fc.skuMatrix || {}} title="Category Revenue Matrix · Firstcry" />
+      <FinancialCategoryMatrix catData={catMatrixData} subCatData={subCatMatrixData} skuData={fc.skuMatrix || {}} title="Category Revenue Matrix Â· Firstcry" />
 
       <CatSubCatRow
         catRows={catRows}
         subCatRows={subCatRows}
-        title="Category Revenue · Firstcry"
+        title="Category Revenue Â· Firstcry"
         selectedCat={selectedCat}
         onSelectCat={v => { setSelectedCat(v); setSelectedSubCat(null) }}
         selectedSubCat={selectedSubCat}
@@ -7563,13 +7563,13 @@ function FirstcryTab({ data }) {
           { key: 'state', label: 'State' },
           { key: 'rev', label: 'Revenue', align: 'right', mono: true, render: v => fmt(v) },
           { key: 'orders', label: 'Orders', align: 'right', render: v => fmtN(v) },
-          { key: 'aov', label: 'AOV', align: 'right', render: v => `₹${v.toLocaleString('en-IN')}` },
+          { key: 'aov', label: 'AOV', align: 'right', render: v => `â‚¹${v.toLocaleString('en-IN')}` },
         ]} pageSize={15} />
         <PaginatedCard title="Top Cities" rows={cityRows.map(c => ({ ...c, aov: c.orders ? Math.round(c.rev / c.orders) : 0 }))} columns={[
           { key: 'city', label: 'City' },
           { key: 'rev', label: 'Revenue', align: 'right', mono: true, render: v => fmt(v) },
           { key: 'orders', label: 'Orders', align: 'right', render: v => fmtN(v) },
-          { key: 'aov', label: 'AOV', align: 'right', render: v => `₹${v.toLocaleString('en-IN')}` },
+          { key: 'aov', label: 'AOV', align: 'right', render: v => `â‚¹${v.toLocaleString('en-IN')}` },
         ]} pageSize={15} />
       </div>
     </div>
@@ -7599,7 +7599,7 @@ function MyntraTab({ data }) {
     i, cur: dailyArr[i]?.rev ?? null, prev: prevDaily[i]?.rev ?? null
   }))
 
-  const chgBadge = (cur, prev) => { if (!prev) return null; const p = (cur - prev) / prev * 100; return <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 4, background: p >= 0 ? C.green.bg : C.red.bg, color: p >= 0 ? C.green.tx : C.red.tx, flexShrink: 0 }}>{p >= 0 ? '▲' : '▼'} {Math.abs(p).toFixed(1)}%</span> }
+  const chgBadge = (cur, prev) => { if (!prev) return null; const p = (cur - prev) / prev * 100; return <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 4, background: p >= 0 ? C.green.bg : C.red.bg, color: p >= 0 ? C.green.tx : C.red.tx, flexShrink: 0 }}>{p >= 0 ? 'â–²' : 'â–¼'} {Math.abs(p).toFixed(1)}%</span> }
 
   const cityRows = mn.cities || []
   const stateRows = mn.states || []
@@ -7640,15 +7640,15 @@ function MyntraTab({ data }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
 
-      {/* KPI Hero + 2×2 grid */}
+      {/* KPI Hero + 2Ã—2 grid */}
       <div style={{ display: 'grid', gridTemplateColumns: '1.5fr 5fr', gap: 10, alignItems: 'stretch' }}>
         <div className="kpi-card" style={{ display: 'flex', flexDirection: 'column', gap: 8, padding: '16px 18px' }}>
           <div className="kpi-label" style={{ fontSize: 11 }}>Gross Revenue (Inc. GST)</div>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 6 }}>
             <div className="kpi-value" style={{ fontSize: 32, fontWeight: 800 }}>{fmt(rev)}</div>
-            {revChg !== null && <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 7px', borderRadius: 4, background: revChg >= 0 ? C.green.bg : C.red.bg, color: revChg >= 0 ? C.green.tx : C.red.tx }}>{revChg >= 0 ? '▲' : '▼'} {Math.abs(revChg).toFixed(1)}%</span>}
+            {revChg !== null && <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 7px', borderRadius: 4, background: revChg >= 0 ? C.green.bg : C.red.bg, color: revChg >= 0 ? C.green.tx : C.red.tx }}>{revChg >= 0 ? 'â–²' : 'â–¼'} {Math.abs(revChg).toFixed(1)}%</span>}
           </div>
-          <div className="kpi-sub" style={{ fontSize: 13 }}>{nDays} days · {fmtN(nOrders)} orders · {fmtN(qty)} units</div>
+          <div className="kpi-sub" style={{ fontSize: 13 }}>{nDays} days Â· {fmtN(nOrders)} orders Â· {fmtN(qty)} units</div>
           <div style={{ flex: 1, minHeight: 0 }}>
             <ResponsiveContainer width="100%" height="100%">
               <AreaChart data={sparkData} margin={{ top: 4, right: 0, bottom: 0, left: 0 }}>
@@ -7664,7 +7664,7 @@ function MyntraTab({ data }) {
           {[
             { label: 'Net Revenue (Exc. GST)', value: fmt(excRev), sub: `GST: ${fmt(rev - excRev)}`, badge: chgBadge(excRev, prevExcRev) },
             { label: 'Daily Avg Revenue', value: fmt(excRev / nDays), sub: 'Net per day', badge: chgBadge(excRev / nDays, prevExcRev > 0 ? prevExcRev / nDays : 0) },
-            { label: 'ASP', value: `₹${Math.round(asp).toLocaleString('en-IN')}`, sub: 'Avg selling price (exc. GST)', badge: chgBadge(asp, prevOrders > 0 && prevExcRev > 0 ? prevExcRev / prevOrders : 0) },
+            { label: 'ASP', value: `â‚¹${Math.round(asp).toLocaleString('en-IN')}`, sub: 'Avg selling price (exc. GST)', badge: chgBadge(asp, prevOrders > 0 && prevExcRev > 0 ? prevExcRev / prevOrders : 0) },
             { label: 'Active Products', value: fmtN(totals.skus), sub: 'Product types sold' },
           ].map(k => (
             <div key={k.label} className="kpi-card" style={{ padding: '10px 13px' }}>
@@ -7679,7 +7679,7 @@ function MyntraTab({ data }) {
       </div>
 
       {/* Trend Analysis */}
-      <TrendAnalysisCard title="Trend Analysis · Myntra" daily={dailyArr} grossColor="#E87858" grossGradId="mnGrossGrad2" />
+      <TrendAnalysisCard title="Trend Analysis Â· Myntra" daily={dailyArr} grossColor="#E87858" grossGradId="mnGrossGrad2" />
 
       {/* Geography Breakdown */}
       {(() => {
@@ -7692,13 +7692,13 @@ function MyntraTab({ data }) {
       })()}
 
       {/* Category Revenue Matrix */}
-      <FinancialCategoryMatrix catData={catMatrixData} subCatData={subCatMatrixData} skuData={mn.skuMatrix || {}} title="Category Revenue Matrix · Myntra" showMoM={true} catPrevMap={mnCatPrevMap} subCatPrevMap={mnSubCatPrevMap} />
+      <FinancialCategoryMatrix catData={catMatrixData} subCatData={subCatMatrixData} skuData={mn.skuMatrix || {}} title="Category Revenue Matrix Â· Myntra" showMoM={true} catPrevMap={mnCatPrevMap} subCatPrevMap={mnSubCatPrevMap} />
 
       {/* Category + SubCategory table */}
       <CatSubCatRow
         catRows={catRowsForCatSubCat}
         subCatRows={subCatRowsForCatSubCat}
-        title="Category · Myntra"
+        title="Category Â· Myntra"
         selectedCat={selectedCat}
         onSelectCat={v => { setSelectedCat(v); setSelectedSubCat(null) }}
         selectedSubCat={selectedSubCat}
@@ -7707,8 +7707,8 @@ function MyntraTab({ data }) {
 
       {/* Top States + Top Cities side by side */}
       <div className="g-2" style={{ alignItems: 'stretch' }}>
-        <ShopifyGeoRichTable title="Top States · Myntra" rows={mnEnrichedStates} firstKey="state" firstLabel="State" showRTO={false} showAOV={false} showASP={true} />
-        <ShopifyGeoRichTable title="Top Cities · Myntra" rows={mnEnrichedCities} firstKey="city" firstLabel="City" showRTO={false} showAOV={false} showASP={true} />
+        <ShopifyGeoRichTable title="Top States Â· Myntra" rows={mnEnrichedStates} firstKey="state" firstLabel="State" showRTO={false} showAOV={false} showASP={true} />
+        <ShopifyGeoRichTable title="Top Cities Â· Myntra" rows={mnEnrichedCities} firstKey="city" firstLabel="City" showRTO={false} showAOV={false} showASP={true} />
       </div>
     </div>
   )
@@ -7727,7 +7727,7 @@ function OfflineTab({ data }) {
 
   const B2B_SUBS = ['Offline_B2B', 'Shopify B2B']
 
-  // Sub-channel filter helper — returns rows matching current selection (or all when 'all')
+  // Sub-channel filter helper â€” returns rows matching current selection (or all when 'all')
   const filterSub = rows => {
     if (sub === 'all') return rows
     if (sub === 'b2b') return rows.filter(r => B2B_SUBS.includes(r.subChannel))
@@ -7745,7 +7745,7 @@ function OfflineTab({ data }) {
   const cnOrders = filteredTotals.reduce((s, r) => s + (r.cnOrders || 0), 0)
   const cnUnits = Math.abs(filteredTotals.reduce((s, r) => s + (r.cnUnits || 0), 0))
   const excRevSales = filteredTotals.reduce((s, r) => s + (r.excRevSales || 0), 0)
-  // Net Revenue = (Gross − Credit Notes) excluding GST
+  // Net Revenue = (Gross âˆ’ Credit Notes) excluding GST
   const netRev = excRevSales - Math.abs(cnExcRev)
   const gstCollected = grossAfterCN - netRev
   const nOrders = filteredTotals.reduce((s, r) => s + (r.orders || 0), 0)
@@ -7770,7 +7770,7 @@ function OfflineTab({ data }) {
   const prevRev = prevGrossRev
   const prevExcRev = prevNetRev
 
-  // Daily series — filter by sub-channel, aggregate by date.
+  // Daily series â€” filter by sub-channel, aggregate by date.
   // rev/excRev are Sales-only; cnRev/cnExcRev are Credit Notes; net = excRev - |cnExcRev|
   const aggByDate = rows => {
     const m = {}
@@ -7792,9 +7792,9 @@ function OfflineTab({ data }) {
     i, cur: dailyArr[i]?.rev ?? null, prev: prevDailyArr[i]?.rev ?? null
   }))
 
-  const chgBadge = (cur, prev) => { if (!prev) return null; const p = (cur - prev) / prev * 100; return <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 4, background: p >= 0 ? C.green.bg : C.red.bg, color: p >= 0 ? C.green.tx : C.red.tx, flexShrink: 0 }}>{p >= 0 ? '▲' : '▼'} {Math.abs(p).toFixed(1)}%</span> }
+  const chgBadge = (cur, prev) => { if (!prev) return null; const p = (cur - prev) / prev * 100; return <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 4, background: p >= 0 ? C.green.bg : C.red.bg, color: p >= 0 ? C.green.tx : C.red.tx, flexShrink: 0 }}>{p >= 0 ? 'â–²' : 'â–¼'} {Math.abs(p).toFixed(1)}%</span> }
 
-  // Category aggregation — sum across selected sub-channel(s)
+  // Category aggregation â€” sum across selected sub-channel(s)
   const aggCat = rows => {
     const m = {}
     filterSub(rows).forEach(r => {
@@ -7894,7 +7894,7 @@ function OfflineTab({ data }) {
   })
 
   const totalRev = rev
-  const pct = (a, b) => b > 0 ? `${(a / b * 100).toFixed(1)}%` : '—'
+  const pct = (a, b) => b > 0 ? `${(a / b * 100).toFixed(1)}%` : 'â€”'
 
   const subTab = active => ({ fontSize: 12, fontWeight: 700, padding: '5px 16px', borderRadius: 7, border: `1.5px solid ${active ? C.t1 : C.border}`, background: active ? C.t1 : C.card, color: active ? '#fff' : C.t1, cursor: 'pointer', fontFamily: 'var(--font)', transition: 'all .15s' })
 
@@ -7905,15 +7905,15 @@ function OfflineTab({ data }) {
         {SUB_OPTIONS.map(o => <button key={o.id} onClick={() => setSub(o.id)} style={subTab(sub === o.id)}>{o.label}</button>)}
       </div>
 
-      {/* KPI Hero + 2×2 grid */}
+      {/* KPI Hero + 2Ã—2 grid */}
       <div style={{ display: 'grid', gridTemplateColumns: '1.5fr 5fr', gap: 10, alignItems: 'stretch' }}>
         <div className="kpi-card" style={{ display: 'flex', flexDirection: 'column', gap: 8, padding: '16px 18px' }}>
           <div className="kpi-label" style={{ fontSize: 11 }}>Gross Revenue (Inc. GST)</div>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 6 }}>
             <div className="kpi-value" style={{ fontSize: 32, fontWeight: 800 }}>{fmt(rev)}</div>
-            {revChg !== null && <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 7px', borderRadius: 4, background: revChg >= 0 ? C.green.bg : C.red.bg, color: revChg >= 0 ? C.green.tx : C.red.tx }}>{revChg >= 0 ? '▲' : '▼'} {Math.abs(revChg).toFixed(1)}%</span>}
+            {revChg !== null && <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 7px', borderRadius: 4, background: revChg >= 0 ? C.green.bg : C.red.bg, color: revChg >= 0 ? C.green.tx : C.red.tx }}>{revChg >= 0 ? 'â–²' : 'â–¼'} {Math.abs(revChg).toFixed(1)}%</span>}
           </div>
-          <div className="kpi-sub" style={{ fontSize: 13 }}>{nDays} days · {fmtN(nOrders)} orders · {fmtN(qty)} units</div>
+          <div className="kpi-sub" style={{ fontSize: 13 }}>{nDays} days Â· {fmtN(nOrders)} orders Â· {fmtN(qty)} units</div>
           <div style={{ flex: 1, minHeight: 0 }}>
             <ResponsiveContainer width="100%" height="100%">
               <AreaChart data={sparkData} margin={{ top: 4, right: 0, bottom: 0, left: 0 }}>
@@ -7927,11 +7927,11 @@ function OfflineTab({ data }) {
         </div>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10 }}>
           {[
-            { label: 'Credit Notes', value: fmt(cnRevAbs), sub: `${fmtN(cnOrders)} orders · ${fmtN(cnUnits)} units`, badge: chgBadge(cnRevAbs, prevCnRev), accent: '#B91C1C' },
-            { label: 'Net Revenue (Exc. GST)', value: fmt(netRev), sub: 'Gross − Credit Notes − GST', badge: chgBadge(netRev, prevNetRev) },
+            { label: 'Credit Notes', value: fmt(cnRevAbs), sub: `${fmtN(cnOrders)} orders Â· ${fmtN(cnUnits)} units`, badge: chgBadge(cnRevAbs, prevCnRev), accent: '#B91C1C' },
+            { label: 'Net Revenue (Exc. GST)', value: fmt(netRev), sub: 'Gross âˆ’ Credit Notes âˆ’ GST', badge: chgBadge(netRev, prevNetRev) },
             { label: 'GST Collected', value: fmt(gstCollected), sub: 'On net sales', badge: chgBadge(gstCollected, (prevGrossRev - prevCnRev) - prevNetRev) },
-            { label: 'AOV', value: `₹${Math.round(nOrders ? grossRev / nOrders : 0).toLocaleString('en-IN')}`, sub: 'Gross ÷ orders', badge: chgBadge(nOrders ? grossRev / nOrders : 0, prevOrders ? prevGrossRev / prevOrders : 0) },
-            { label: 'ASP', value: `₹${Math.round(asp).toLocaleString('en-IN')}`, sub: 'Net rev ÷ units', badge: chgBadge(asp, prevUnits > 0 ? prevNetRev / prevUnits : 0) },
+            { label: 'AOV', value: `â‚¹${Math.round(nOrders ? grossRev / nOrders : 0).toLocaleString('en-IN')}`, sub: 'Gross Ã· orders', badge: chgBadge(nOrders ? grossRev / nOrders : 0, prevOrders ? prevGrossRev / prevOrders : 0) },
+            { label: 'ASP', value: `â‚¹${Math.round(asp).toLocaleString('en-IN')}`, sub: 'Net rev Ã· units', badge: chgBadge(asp, prevUnits > 0 ? prevNetRev / prevUnits : 0) },
             { label: 'Units / Order', value: nOrders ? Math.round(qty / nOrders).toLocaleString('en-IN') : '0', sub: 'Avg units per order', badge: chgBadge(nOrders ? qty / nOrders : 0, prevOrders ? prevUnits / prevOrders : 0) },
             { label: 'Units Sold', value: fmtN(qty), sub: `${fmtN(nOrders)} orders`, badge: chgBadge(qty, prevUnits) },
             { label: 'Avg. Daily Gross Rev', value: fmt(netRev / Math.max(nDays, 1)), sub: 'Net rev per day', badge: chgBadge(netRev / Math.max(nDays, 1), prevNetRev / Math.max(nDays, 1)) },
@@ -7949,7 +7949,7 @@ function OfflineTab({ data }) {
 
       {/* Trend Analysis + Category Revenue (side by side) */}
       <div style={{ display: 'grid', gridTemplateColumns: '3fr 2fr', gap: 14, alignItems: 'stretch' }}>
-        <Card title={`Trend Analysis · Offline${sub !== 'all' ? ' · ' + (SUB_OPTIONS.find(o => o.id === sub)?.label || sub) : ''}`}>
+        <Card title={`Trend Analysis Â· Offline${sub !== 'all' ? ' Â· ' + (SUB_OPTIONS.find(o => o.id === sub)?.label || sub) : ''}`}>
           <ResponsiveContainer width="100%" height={260}>
             <ComposedChart data={dailyArr} margin={{ top: 4, right: 16, bottom: 0, left: 0 }}>
               <CartesianGrid strokeDasharray="3 3" stroke={C.border} vertical={false} />
@@ -7972,10 +7972,10 @@ function OfflineTab({ data }) {
             </ComposedChart>
           </ResponsiveContainer>
         </Card>
-        <Card title="Category Revenue · Offline">
+        <Card title="Category Revenue Â· Offline">
           {catRows.slice(0, 8).map((r, i) => {
             const dots = ['#534AB7','#0D9E68','#2E74CC','#CC8A00','#CC4078','#E24B4A','#9B59B6','#FF6B35']
-            return <HBar key={r.name} dot={dots[i % dots.length]} label={r.name} width={(r.rev / (catRows[0]?.rev || 1)) * 100} value={fmt(r.rev)} pctVal={totalRev ? pct(r.rev, totalRev) : '—'} isSelected={false} onClick={() => {}} />
+            return <HBar key={r.name} dot={dots[i % dots.length]} label={r.name} width={(r.rev / (catRows[0]?.rev || 1)) * 100} value={fmt(r.rev)} pctVal={totalRev ? pct(r.rev, totalRev) : 'â€”'} isSelected={false} onClick={() => {}} />
           })}
         </Card>
       </div>
@@ -7986,13 +7986,13 @@ function OfflineTab({ data }) {
         <TopSubCatBar subCatRows={allSubCatRows} />
       </div>
 
-      {/* Category Revenue Matrix — Gross / Units / ASP / GST / Net only (no returns/cancel/rto/cir/exch) */}
-      <FinancialCategoryMatrix catData={catMatrixData} subCatData={subCatMatrixData} skuData={skuMatrixData} title={`Category Revenue Matrix · Offline${sub !== 'all' ? ' · ' + (SUB_OPTIONS.find(o => o.id === sub)?.label || sub) : ''}`} showReturns={false} showMoM={true} catPrevMap={catPrevMap} subCatPrevMap={subCatPrevMap} />
+      {/* Category Revenue Matrix â€” Gross / Units / ASP / GST / Net only (no returns/cancel/rto/cir/exch) */}
+      <FinancialCategoryMatrix catData={catMatrixData} subCatData={subCatMatrixData} skuData={skuMatrixData} title={`Category Revenue Matrix Â· Offline${sub !== 'all' ? ' Â· ' + (SUB_OPTIONS.find(o => o.id === sub)?.label || sub) : ''}`} showReturns={false} showMoM={true} catPrevMap={catPrevMap} subCatPrevMap={subCatPrevMap} />
 
       {/* Top States + Top Cities */}
       <div className="g-2" style={{ alignItems: 'stretch' }}>
-        <ShopifyGeoRichTable title={`Top States · Offline${sub !== 'all' ? ' · ' + (SUB_OPTIONS.find(o => o.id === sub)?.label || sub) : ''}`} rows={stateRows} firstKey="state" firstLabel="State" formatFirst={v => v ? v.charAt(0).toUpperCase() + v.slice(1).toLowerCase() : v} showRTO={false} showAOV={false} showASP={true} />
-        <ShopifyGeoRichTable title={`Top Cities · Offline${sub !== 'all' ? ' · ' + (SUB_OPTIONS.find(o => o.id === sub)?.label || sub) : ''}`} rows={cityRows} firstKey="city" firstLabel="City" formatFirst={v => v ? v.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' ') : v} showRTO={false} showAOV={false} showASP={true} />
+        <ShopifyGeoRichTable title={`Top States Â· Offline${sub !== 'all' ? ' Â· ' + (SUB_OPTIONS.find(o => o.id === sub)?.label || sub) : ''}`} rows={stateRows} firstKey="state" firstLabel="State" formatFirst={v => v ? v.charAt(0).toUpperCase() + v.slice(1).toLowerCase() : v} showRTO={false} showAOV={false} showASP={true} />
+        <ShopifyGeoRichTable title={`Top Cities Â· Offline${sub !== 'all' ? ' Â· ' + (SUB_OPTIONS.find(o => o.id === sub)?.label || sub) : ''}`} rows={cityRows} firstKey="city" firstLabel="City" formatFirst={v => v ? v.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' ') : v} showRTO={false} showAOV={false} showASP={true} />
       </div>
     </div>
   )
@@ -8043,12 +8043,12 @@ function ChannelTab({ data, channel, filters, setFilters, amzRegion, setAmzRegio
       <div className="g-kpi5">
         <KPICard label="Revenue" value={fmt(rev)} />
         <KPICard label="Orders" value={fmtN(nOrders)} />
-        <KPICard label="AOV" value={`₹${Math.round(aov).toLocaleString('en-IN')}`} />
+        <KPICard label="AOV" value={`â‚¹${Math.round(aov).toLocaleString('en-IN')}`} />
         <KPICard label="Units" value={fmtN(qty)} />
         <KPICard label="Daily Avg" value={fmt(rev / (data.nDays || 1))} />
       </div>
       <div className="g-kpi3">
-        <KPICard label="Revenue per Unit" value={`₹${Math.round(revPerUnit).toLocaleString('en-IN')}`} sub="Avg price per SKU" />
+        <KPICard label="Revenue per Unit" value={`â‚¹${Math.round(revPerUnit).toLocaleString('en-IN')}`} sub="Avg price per SKU" />
         <KPICard label="Revenue at Risk" value={channel === 'Shopify' ? fmt(chRTORev) : 'N/A'} sub="RTO + Cancelled + CIR" accent={chRTORev > 0 ? '#7A4000' : undefined} />
         <KPICard label="Units per Order" value={upo.toFixed(2)} sub="Avg basket size" />
       </div>
@@ -8071,10 +8071,10 @@ function ChannelTab({ data, channel, filters, setFilters, amzRegion, setAmzRegio
         </Card>
       </div>
       <Card title="Category Breakdown">
-        <DataTable columns={[{ key: 'name', label: 'Category' }, { key: 'rev', label: 'Revenue', align: 'right', mono: true, render: v => fmt(v) }, { key: 'orders', label: 'Orders', align: 'right', render: v => fmtN(v) }, { key: 'aov', label: 'AOV', align: 'right', render: v => `₹${Math.round(v).toLocaleString('en-IN')}` }]} rows={catRows} />
+        <DataTable columns={[{ key: 'name', label: 'Category' }, { key: 'rev', label: 'Revenue', align: 'right', mono: true, render: v => fmt(v) }, { key: 'orders', label: 'Orders', align: 'right', render: v => fmtN(v) }, { key: 'aov', label: 'AOV', align: 'right', render: v => `â‚¹${Math.round(v).toLocaleString('en-IN')}` }]} rows={catRows} />
       </Card>
       <Card title="Daily Performance">
-        <DataTable columns={[{ key: 'date', label: 'Date' }, { key: 'rev', label: 'Revenue', align: 'right', mono: true, render: v => fmt(v) }, { key: 'orders', label: 'Orders', align: 'right', render: v => fmtN(v) }, { key: 'aov', label: 'AOV', align: 'right', render: (_, r) => r.orders ? `₹${Math.round(r.rev / r.orders).toLocaleString('en-IN')}` : '—' }]} rows={dailyArr} />
+        <DataTable columns={[{ key: 'date', label: 'Date' }, { key: 'rev', label: 'Revenue', align: 'right', mono: true, render: v => fmt(v) }, { key: 'orders', label: 'Orders', align: 'right', render: v => fmtN(v) }, { key: 'aov', label: 'AOV', align: 'right', render: (_, r) => r.orders ? `â‚¹${Math.round(r.rev / r.orders).toLocaleString('en-IN')}` : 'â€”' }]} rows={dailyArr} />
       </Card>
     </div>
   )
@@ -8092,7 +8092,7 @@ function QCTab({ data }) {
       <div className="g-kpi5">
         <KPICard label="QC Revenue" value={fmt(qcRev)} />
         <KPICard label="Orders" value={fmtN(nOrds)} />
-        <KPICard label="Blended AOV" value={`₹${Math.round(aov).toLocaleString('en-IN')}`} />
+        <KPICard label="Blended AOV" value={`â‚¹${Math.round(aov).toLocaleString('en-IN')}`} />
         <KPICard label="Best Platform" value={best.ch} sub={fmt(best.rev)} />
         <KPICard label="QC Rev Share" value={pct(qcRev, data.totalRev)} />
       </div>
@@ -8103,7 +8103,7 @@ function QCTab({ data }) {
           const prodMap = {}
           chRows.forEach(r => { const p = r.ProductId || 'Unknown'; if (!prodMap[p]) prodMap[p] = { rev: 0, qty: 0 }; prodMap[p].rev += parseFloat(r.SellingPrice_Inc_GST || 0); prodMap[p].qty += parseInt(r.ItemQty || 0) })
           return (
-            <Card key={ch} title={ch} note={`${fmt(chOrd.rev)} · ${fmtN(chOrd.orders)} orders`}>
+            <Card key={ch} title={ch} note={`${fmt(chOrd.rev)} Â· ${fmtN(chOrd.orders)} orders`}>
               <DataTable columns={[{ key: 'sku', label: 'SKU' }, { key: 'rev', label: 'Revenue', align: 'right', mono: true, render: v => fmt(v) }, { key: 'qty', label: 'Qty', align: 'right', render: v => fmtN(v) }]} rows={Object.entries(prodMap).map(([k, v]) => ({ sku: k, ...v })).sort((a, b) => b.rev - a.rev).slice(0, 15)} maxRows={15} />
             </Card>
           )
@@ -8124,7 +8124,7 @@ function OpsTab({ data }) {
       <div className="g-kpi5">
         <KPICard label="Avg Delivery TAT" value={`${avgTAT.toFixed(1)}d`} />
         <KPICard label="Orders Tracked" value={fmtN(tatArr.length)} />
-        <KPICard label="Delayed >7d" value={fmtN(delayed)} sub={tatArr.length ? pct(delayed, tatArr.length) : '—'} />
+        <KPICard label="Delayed >7d" value={fmtN(delayed)} sub={tatArr.length ? pct(delayed, tatArr.length) : 'â€”'} />
         <KPICard label="Total Orders" value={fmtN(data.nOrders)} />
         <KPICard label="Cities Covered" value={fmtN(Object.values(data.stateMap || {}).reduce((s, v) => s + (v.cities?.size || 0), 0))} />
       </div>
@@ -8161,12 +8161,12 @@ function CXTab({ data }) {
       <div className="g-kpi5">
         <KPICard label="Unique Customers" value={fmtN(nCusts)} />
         <KPICard label="Repeat Rate" value={`${repeatRate}%`} />
-        <KPICard label="2× Buyers" value={fmtN(buyers2x)} />
-        <KPICard label="3×+ Buyers" value={fmtN(buyers3x)} />
+        <KPICard label="2Ã— Buyers" value={fmtN(buyers2x)} />
+        <KPICard label="3Ã—+ Buyers" value={fmtN(buyers3x)} />
         <KPICard label="Voucher Penetration" value={pct(voucherOrders, nOrders)} />
       </div>
       <Card title="Voucher Analysis">
-        <DataTable columns={[{ key: 'type', label: 'Type' }, { key: 'orders', label: 'Orders', align: 'right', render: v => fmtN(v) }, { key: 'rev', label: 'Revenue', align: 'right', mono: true, render: v => fmt(v) }, { key: 'aov', label: 'AOV', align: 'right', render: v => `₹${Math.round(v).toLocaleString('en-IN')}` }]}
+        <DataTable columns={[{ key: 'type', label: 'Type' }, { key: 'orders', label: 'Orders', align: 'right', render: v => fmtN(v) }, { key: 'rev', label: 'Revenue', align: 'right', mono: true, render: v => fmt(v) }, { key: 'aov', label: 'AOV', align: 'right', render: v => `â‚¹${Math.round(v).toLocaleString('en-IN')}` }]}
           rows={Object.entries(voucherMap).map(([k, v]) => ({ type: k, orders: v.orders, rev: v.rev, aov: v.orders ? v.rev / v.orders : 0 })).sort((a, b) => b.rev - a.rev)} />
       </Card>
     </div>
@@ -8215,7 +8215,7 @@ function SalesPage({ data, filters, setFilters, activeTab, setActiveTab, fetchDa
           })()}
           <SearchableSelect multi options={skuOpts} value={filters.sku || []} onChange={v => setFilters(f => ({ ...f, sku: v }))} placeholder="All SKUs" dropdownWidth={280} />
           {activeTab === 'shopify' && <VoucherDropdown voucherList={data?.voucherList || []} selected={filters.voucher} onChange={v => setFilters(f => ({ ...f, voucher: v }))} />}
-          <button onClick={() => setFilters(f => ({ ...f, category: [], subCategory: [], sku: [], subChannel: '', voucher: '', region: [], tier: [], state: [], city: '' }))} className="fclr">✕ Clear</button>
+          <button onClick={() => setFilters(f => ({ ...f, category: [], subCategory: [], sku: [], subChannel: '', voucher: '', region: [], tier: [], state: [], city: '' }))} className="fclr">âœ• Clear</button>
         </div>
       </div>
       {/* Content */}
@@ -8239,7 +8239,7 @@ function SalesPage({ data, filters, setFilters, activeTab, setActiveTab, fetchDa
   )
 }
 
-// ── Intelligence Page ─────────────────────────────────────────
+// â”€â”€ Intelligence Page â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function IntelCard({ color, label, number, sub, insight, bars, table, warning }) {
   const gradients = {
     red: 'linear-gradient(90deg,#E24B4A,#F08080)',
@@ -8261,7 +8261,7 @@ function IntelCard({ color, label, number, sub, insight, bars, table, warning })
       <div style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.07em', color: C.t3, marginBottom: 6 }}>{label}</div>
       <div style={{ fontSize: 32, fontWeight: 700, letterSpacing: '-.03em', marginBottom: 4, color: C.t1 }}>{number}</div>
       <div style={{ fontSize: 12, color: C.t2, lineHeight: 1.6, marginBottom: 10 }}>{sub}</div>
-      {warning && <div style={{ fontSize: 11.5, padding: '6px 10px', borderRadius: 7, background: cc.bg, color: cc.tx, marginBottom: 10, fontWeight: 500 }}>⚠ {warning}</div>}
+      {warning && <div style={{ fontSize: 11.5, padding: '6px 10px', borderRadius: 7, background: cc.bg, color: cc.tx, marginBottom: 10, fontWeight: 500 }}>âš  {warning}</div>}
       {bars && bars.length > 0 && (
         <div style={{ marginBottom: 10 }}>
           {bars.map((b, i) => (
@@ -8278,7 +8278,7 @@ function IntelCard({ color, label, number, sub, insight, bars, table, warning })
       )}
       {insight && (
         <div style={{ background: C.acl, border: `1px solid ${C.acm}`, borderRadius: 8, padding: '9px 11px' }}>
-          <div style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.06em', color: '#7A6000', marginBottom: 4 }}>◈ Insight</div>
+          <div style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.06em', color: '#7A6000', marginBottom: 4 }}>â—ˆ Insight</div>
           <div style={{ fontSize: 11.5, color: C.t2, lineHeight: 1.65 }} dangerouslySetInnerHTML={{ __html: insight }} />
         </div>
       )}
@@ -8289,7 +8289,7 @@ function IntelCard({ color, label, number, sub, insight, bars, table, warning })
 function IntelPage({ data }) {
   if (!data) return (
     <div style={{ padding: 60, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 12 }}>
-      <div style={{ fontSize: 40 }}>◈</div>
+      <div style={{ fontSize: 40 }}>â—ˆ</div>
       <div style={{ fontSize: 14, fontWeight: 600, color: C.t1 }}>Intelligence Engine</div>
       <div style={{ fontSize: 12, color: C.t3 }}>Load a date range to generate insights</div>
     </div>
@@ -8374,7 +8374,7 @@ function IntelPage({ data }) {
           { label: 'Repeat Rate', val: `${repeatRate.toFixed(1)}%`, warn: repeatRate < 10 },
           { label: 'QC Share', val: pct(qcRev, totalRev) },
           { label: 'Voucher Orders', val: pct(voucherOrders.length, nOrders) },
-          { label: 'Trend (½ period)', val: `${trendPct > 0 ? '+' : ''}${trendPct.toFixed(1)}%`, warn: trendPct < -10 },
+          { label: 'Trend (Â½ period)', val: `${trendPct > 0 ? '+' : ''}${trendPct.toFixed(1)}%`, warn: trendPct < -10 },
         ].map((s, i) => (
           <div key={i} style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 11, padding: '11px 13px' }}>
             <div style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.06em', color: C.t3, marginBottom: 5 }}>{s.label}</div>
@@ -8386,57 +8386,57 @@ function IntelPage({ data }) {
       <div className="g-2">
         <IntelCard color="red" label="Customer Retention Crisis"
           number={`${repeatRate.toFixed(1)}%`}
-          sub={`${fmtN(repeatCusts)} of ${fmtN(nCusts)} customers ever reordered · ${fmtN(buyers2x)} bought 2×, ${fmtN(buyers3x)} bought 3×+`}
+          sub={`${fmtN(repeatCusts)} of ${fmtN(nCusts)} customers ever reordered Â· ${fmtN(buyers2x)} bought 2Ã—, ${fmtN(buyers3x)} bought 3Ã—+`}
           warning={repeatRate < 10 ? `Improving to 10% = est. +${fmt(Math.abs(lostRevIfRepeat10))} revenue with zero acquisition cost` : undefined}
           bars={[
-            { label: '1× buyers', value: fmtN(nCusts - repeatCusts), pct: nCusts ? (nCusts - repeatCusts) / nCusts * 100 : 0 },
-            { label: '2× buyers', value: fmtN(buyers2x), pct: nCusts ? buyers2x / nCusts * 100 : 0 },
-            { label: '3×+ buyers', value: fmtN(buyers3x), pct: nCusts ? buyers3x / nCusts * 100 : 0 },
+            { label: '1Ã— buyers', value: fmtN(nCusts - repeatCusts), pct: nCusts ? (nCusts - repeatCusts) / nCusts * 100 : 0 },
+            { label: '2Ã— buyers', value: fmtN(buyers2x), pct: nCusts ? buyers2x / nCusts * 100 : 0 },
+            { label: '3Ã—+ buyers', value: fmtN(buyers3x), pct: nCusts ? buyers3x / nCusts * 100 : 0 },
           ]}
-          insight={`<strong>${(100 - repeatRate).toFixed(1)}%</strong> of customers never came back. Post-purchase email sequence + PLM loyalty codes are the fastest lever. Target: get 1× buyers to 2× within 90 days.`}
+          insight={`<strong>${(100 - repeatRate).toFixed(1)}%</strong> of customers never came back. Post-purchase email sequence + PLM loyalty codes are the fastest lever. Target: get 1Ã— buyers to 2Ã— within 90 days.`}
         />
         <IntelCard color="green" label="Q-Commerce Opportunity"
           number={fmt(qcRev)}
-          sub={`${fmtN(qcOrds)} orders · AOV ₹${Math.round(qcAOV).toLocaleString('en-IN')} vs blended ₹${Math.round(blendedAOV).toLocaleString('en-IN')} — ${(qcAOV / blendedAOV).toFixed(1)}× brand average`}
+          sub={`${fmtN(qcOrds)} orders Â· AOV â‚¹${Math.round(qcAOV).toLocaleString('en-IN')} vs blended â‚¹${Math.round(blendedAOV).toLocaleString('en-IN')} â€” ${(qcAOV / blendedAOV).toFixed(1)}Ã— brand average`}
           bars={qcBars}
-          insight={`Q-commerce AOV is <strong>${(qcAOV / blendedAOV).toFixed(1)}× higher</strong> than blended. ${catGaps.length > 0 ? `<strong>${catGaps.map(g => g.cat).join(', ')}</strong> have zero QC presence — biggest untapped gap.` : 'Expand top SKUs to all 3 platforms.'}`}
+          insight={`Q-commerce AOV is <strong>${(qcAOV / blendedAOV).toFixed(1)}Ã— higher</strong> than blended. ${catGaps.length > 0 ? `<strong>${catGaps.map(g => g.cat).join(', ')}</strong> have zero QC presence â€” biggest untapped gap.` : 'Expand top SKUs to all 3 platforms.'}`}
         />
       </div>
 
       <div className="g-2">
         <IntelCard color="amber" label="Voucher & Discount Drag"
           number={pct(voucherOrders.length, nOrders)}
-          sub={`${fmtN(voucherOrders.length)} orders used vouchers · AOV with voucher ₹${Math.round(voucherAOV).toLocaleString('en-IN')} vs ₹${Math.round(noVoucherAOV).toLocaleString('en-IN')} without`}
-          warning={aovDrag > 0 ? `AOV drag: ₹${Math.round(aovDrag).toLocaleString('en-IN')} per vouchered order` : undefined}
+          sub={`${fmtN(voucherOrders.length)} orders used vouchers Â· AOV with voucher â‚¹${Math.round(voucherAOV).toLocaleString('en-IN')} vs â‚¹${Math.round(noVoucherAOV).toLocaleString('en-IN')} without`}
+          warning={aovDrag > 0 ? `AOV drag: â‚¹${Math.round(aovDrag).toLocaleString('en-IN')} per vouchered order` : undefined}
           bars={voucherBars}
-          insight={`Voucher orders have <strong>₹${Math.round(aovDrag).toLocaleString('en-IN')} lower AOV</strong> than organic. Review PLM loyalty code discount depth — cap at 10% to protect margin.`}
+          insight={`Voucher orders have <strong>â‚¹${Math.round(aovDrag).toLocaleString('en-IN')} lower AOV</strong> than organic. Review PLM loyalty code discount depth â€” cap at 10% to protect margin.`}
         />
-        <IntelCard color="blue" label="Revenue Concentration — Pareto"
+        <IntelCard color="blue" label="Revenue Concentration â€” Pareto"
           number={`${totalRev ? (top1rev / totalRev * 100).toFixed(1) : 0}%`}
-          sub={`Top 1% of orders (${fmtN(top1pct)}) drive this share · High-ticket orders are your most efficient revenue`}
+          sub={`Top 1% of orders (${fmtN(top1pct)}) drive this share Â· High-ticket orders are your most efficient revenue`}
           bars={paretoBars}
           insight={`Top <strong>${fmtN(top1pct)} orders</strong> = ${totalRev ? (top1rev / totalRev * 100).toFixed(1) : 0}% of revenue. Protect these customers with white-glove service and early access to new products.`}
         />
       </div>
 
       <div className="g-2">
-        <IntelCard color="pink" label="Returns & RTO — Shopify Only"
+        <IntelCard color="pink" label="Returns & RTO â€” Shopify Only"
           number={`${rtoRate.toFixed(1)}%`}
-          sub={`RTO rate on ${fmtN(shopifyOrders.length)} Shopify orders · CIR ${cirRate.toFixed(1)}% · Marketplace return data unavailable`}
+          sub={`RTO rate on ${fmtN(shopifyOrders.length)} Shopify orders Â· CIR ${cirRate.toFixed(1)}% Â· Marketplace return data unavailable`}
           bars={returnBars}
           insight={`RTO erodes net revenue by the full order value + reverse logistics cost. Every 1% RTO reduction on ${fmtN(shopifyOrders.length)} orders saves est. <strong>${fmt(shopifyOrders.length * 0.01 * blendedAOV)}</strong>.`}
         />
         <IntelCard color="purple" label="Basket & Multi-item Intelligence"
           number={pct(multiItem.length, nOrders)}
-          sub={`${fmtN(multiItem.length)} multi-item orders · AOV ₹${Math.round(multiItemAOV).toLocaleString('en-IN')} vs ₹${Math.round(singleItemAOV).toLocaleString('en-IN')} single-item — ${multiItemAOV > singleItemAOV ? '+' : ''}${(((multiItemAOV - singleItemAOV) / (singleItemAOV || 1)) * 100).toFixed(0)}% AOV premium`}
+          sub={`${fmtN(multiItem.length)} multi-item orders Â· AOV â‚¹${Math.round(multiItemAOV).toLocaleString('en-IN')} vs â‚¹${Math.round(singleItemAOV).toLocaleString('en-IN')} single-item â€” ${multiItemAOV > singleItemAOV ? '+' : ''}${(((multiItemAOV - singleItemAOV) / (singleItemAOV || 1)) * 100).toFixed(0)}% AOV premium`}
           bars={topStates}
-          insight={`Multi-item orders have <strong>₹${Math.round(multiItemAOV - singleItemAOV).toLocaleString('en-IN')} higher AOV</strong>. Bundle recommendations at checkout (e.g. Pillow + Insole) can shift single-item buyers to multi-item.`}
+          insight={`Multi-item orders have <strong>â‚¹${Math.round(multiItemAOV - singleItemAOV).toLocaleString('en-IN')} higher AOV</strong>. Bundle recommendations at checkout (e.g. Pillow + Insole) can shift single-item buyers to multi-item.`}
         />
       </div>
 
       {catGaps.length > 0 && (
         <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 13, padding: '16px 18px' }}>
-          <div style={{ fontSize: 13, fontWeight: 600, color: C.t1, marginBottom: 4 }}>Category × Channel Gap Analysis</div>
+          <div style={{ fontSize: 13, fontWeight: 600, color: C.t1, marginBottom: 4 }}>Category Ã— Channel Gap Analysis</div>
           <div style={{ fontSize: 11.5, color: C.t3, marginBottom: 12 }}>High-revenue categories with zero Q-commerce presence</div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
             {catGaps.map((g, i) => (
@@ -8447,7 +8447,7 @@ function IntelPage({ data }) {
                 {g.missing.map(m => (
                   <span key={m} style={{ fontSize: 11, fontWeight: 600, padding: '2px 8px', borderRadius: 5, background: '#FDE8E8', color: '#7A1A1A' }}>{m}</span>
                 ))}
-                <span style={{ fontSize: 11, color: C.green.tx, fontWeight: 600 }}>→ est. {fmt(g.rev * 0.05)}/mo opportunity</span>
+                <span style={{ fontSize: 11, color: C.green.tx, fontWeight: 600 }}>â†’ est. {fmt(g.rev * 0.05)}/mo opportunity</span>
               </div>
             ))}
           </div>
@@ -8456,16 +8456,16 @@ function IntelPage({ data }) {
 
       <div style={{ background: C.acl, border: `1px solid ${C.acm}`, borderRadius: 13, padding: '16px 18px', display: 'flex', gap: 20, alignItems: 'center', flexWrap: 'wrap' }}>
         <div>
-          <div style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.07em', color: '#7A6000', marginBottom: 6 }}>◈ Period Trend Signal</div>
+          <div style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.07em', color: '#7A6000', marginBottom: 6 }}>â—ˆ Period Trend Signal</div>
           <div style={{ fontSize: 28, fontWeight: 700, color: trendPct >= 0 ? C.green.tx : C.red.tx, marginBottom: 4 }}>{trendPct > 0 ? '+' : ''}{trendPct.toFixed(1)}%</div>
-          <div style={{ fontSize: 12, color: C.t2 }}>Revenue change: first half {fmt(fhRev)} → second half {fmt(lhRev)}</div>
+          <div style={{ fontSize: 12, color: C.t2 }}>Revenue change: first half {fmt(fhRev)} â†’ second half {fmt(lhRev)}</div>
         </div>
         <div style={{ flex: 1, minWidth: 200, fontSize: 12, color: C.t2, lineHeight: 1.7, borderLeft: `1px solid ${C.acm}`, paddingLeft: 20 }}>
           {trendPct < -10
-            ? `⚠ Revenue declined ${Math.abs(trendPct).toFixed(1)}% in the second half of this period. Check for demand drop, channel issues, or data gaps (CRED batch, feed delays).`
+            ? `âš  Revenue declined ${Math.abs(trendPct).toFixed(1)}% in the second half of this period. Check for demand drop, channel issues, or data gaps (CRED batch, feed delays).`
             : trendPct > 10
-            ? `✅ Strong momentum — revenue grew ${trendPct.toFixed(1)}% in the second half. Identify which channels drove growth and double down.`
-            : `Revenue is relatively stable across the period (${trendPct.toFixed(1)}%). Intra-period volatility is normal — look at daily channel breakdown for specific signals.`
+            ? `âœ… Strong momentum â€” revenue grew ${trendPct.toFixed(1)}% in the second half. Identify which channels drove growth and double down.`
+            : `Revenue is relatively stable across the period (${trendPct.toFixed(1)}%). Intra-period volatility is normal â€” look at daily channel breakdown for specific signals.`
           }
         </div>
       </div>
@@ -8473,7 +8473,7 @@ function IntelPage({ data }) {
   )
 }
 
-// ── Skeleton ──────────────────────────────────────────────────
+// â”€â”€ Skeleton â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function Skeleton() {
   return (
     <div style={{ padding: '18px 20px', display: 'flex', flexDirection: 'column', gap: 14 }}>
@@ -8488,7 +8488,7 @@ function Skeleton() {
   )
 }
 
-// ── Main App ──────────────────────────────────────────────────
+// â”€â”€ Main App â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 const TAB_TO_CHANNEL = { blinkit: 'Blinkit', instamart: 'Instamart', zepto: 'Zepto', cred: 'CRED', firstcry: 'Firstcry' }
 
 function CustomerPage({ filters }) {
@@ -8558,7 +8558,7 @@ function CustomerPage({ filters }) {
     }))
   })()
 
-  // Cohort pivot — customers and revenue
+  // Cohort pivot â€” customers and revenue
   const cohortMap = {}      // cohortMap[month][idx] = { customers, revenue }
   const cohort0 = {}        // base customers at index 0
   const cohortRev0 = {}     // base revenue at index 0
@@ -8574,7 +8574,7 @@ function CustomerPage({ filters }) {
   const RFM_COLORS = { 'Champions': '#FFD600', 'Loyal Customers': '#FFE033', 'Recent Users': '#FAD000', 'Potential Loyalists': '#F5C800', 'Cannot Lose Them': '#EFC000', "Can't Lose Them": '#EFC000', 'Hibernating': '#E8B800', 'Others': '#E0B000', 'Price Sensitive': '#D9A800', 'Needs Attention': '#F2CA00', 'About to Sleep': '#DCAC00', 'Lost Customers': '#D4A400' }
   const rfmTotal = rfm.reduce((s, r) => s + r.totalRevenue, 0)
 
-  // Cross-sell pivot — supports Category / Sub Category toggle
+  // Cross-sell pivot â€” supports Category / Sub Category toggle
   const crossFirstKey = crossFilter === 'Category' ? 'firstCategory' : 'firstSubCategory'
   const crossSecondKey = crossFilter === 'Category' ? 'secondCategory' : 'secondSubCategory'
   const allCrossFirst = [...new Set(crossSell.map(r => r[crossFirstKey]).filter(Boolean))].sort()
@@ -8592,10 +8592,10 @@ function CustomerPage({ filters }) {
     <div style={{ display: 'flex', flexDirection: 'column', gap: 14, padding: '0 4px' }}>
       {/* Yellow info banner */}
       <div style={{ background: C.acl, border: `1px solid #E6C200`, borderRadius: 9, padding: '8px 14px', fontSize: 12, color: '#7A6000' }}>
-        <strong>Shopify D2C only</strong> — Amazon, Flipkart & quick-commerce channels do not share customer identity
+        <strong>Shopify D2C only</strong> â€” Amazon, Flipkart & quick-commerce channels do not share customer identity
       </div>
 
-      {/* Section 1: Overview KPIs — always visible */}
+      {/* Section 1: Overview KPIs â€” always visible */}
       <LSectionTitle title="Overview KPIs" />
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(8, 1fr)', gap: 8 }}>
         <LKpiCard label="Gross Sale" value={fmtBig(kpis.grossSales)} cur={kpis.grossSales} prev={prevKpis.grossSales} />
@@ -8609,13 +8609,13 @@ function CustomerPage({ filters }) {
       </div>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(8, 1fr)', gap: 8 }}>
         <LKpiCard label="RoAS" value={kpis.roas.toFixed(2)} cur={kpis.roas} prev={prevKpis.roas} />
-        <LKpiCard label="CAC" value={`₹${Math.round(kpis.cac).toLocaleString('en-IN')}`} cur={kpis.cac} prev={prevKpis.cac} />
-        <LKpiCard label="AOV" value={`₹${Math.round(kpis.aov).toLocaleString('en-IN')}`} cur={kpis.aov} prev={prevKpis.aov} />
+        <LKpiCard label="CAC" value={`â‚¹${Math.round(kpis.cac).toLocaleString('en-IN')}`} cur={kpis.cac} prev={prevKpis.cac} />
+        <LKpiCard label="AOV" value={`â‚¹${Math.round(kpis.aov).toLocaleString('en-IN')}`} cur={kpis.aov} prev={prevKpis.aov} />
         <LKpiCard label="CLTV" value={fmt((kpis.grossSales || 0) / (kpis.totalCustomers || 1))} cur={kpis.grossSales / (kpis.totalCustomers || 1)} prev={prevKpis.grossSales / (prevKpis.totalCustomers || 1)} subValue="Rev / unique customer" />
         <LKpiCard label="Acquisition Rate" value={`${(kpis.acquisitionRate * 100).toFixed(2)}%`} cur={kpis.acquisitionRate} prev={prevKpis.acquisitionRate} />
         <LKpiCard label="Repeat Revenue" value={`${((kpis.repeatRevenueRate || 0) * 100).toFixed(2)}%`} cur={kpis.repeatRevenueRate} prev={prevKpis.repeatRevenueRate} subValue={fmt(kpis.repeatRevenue || 0)} />
         <LKpiCard label="Revenue per Cust" value={fmt(kpis.grossSales / (kpis.totalCustomers || 1))} cur={kpis.grossSales / (kpis.totalCustomers || 1)} prev={prevKpis.grossSales / (prevKpis.totalCustomers || 1)} />
-        <LKpiCard label="Net Revenue %" value={kpis.netRevenueRate ? `${((kpis.netRevenueRate) * 100).toFixed(2)}%` : '—'} cur={kpis.netRevenueRate} prev={prevKpis.netRevenueRate} subValue={kpis.netRevenue ? fmt(kpis.netRevenue) : ''} />
+        <LKpiCard label="Net Revenue %" value={kpis.netRevenueRate ? `${((kpis.netRevenueRate) * 100).toFixed(2)}%` : 'â€”'} cur={kpis.netRevenueRate} prev={prevKpis.netRevenueRate} subValue={kpis.netRevenue ? fmt(kpis.netRevenue) : ''} />
       </div>
 
       {/* Section 2: Acquisition & Revenue Trends */}
@@ -8636,7 +8636,7 @@ function CustomerPage({ filters }) {
               <CartesianGrid strokeDasharray="3 3" stroke={C.border} vertical={false} />
               <XAxis dataKey="month" tick={{ fontSize: 10 }} interval="preserveStartEnd" />
               <YAxis yAxisId="cust" tick={{ fontSize: 10 }} tickFormatter={v => v.toLocaleString('en-IN')} width={55} />
-              <YAxis yAxisId="sales" orientation="right" tick={{ fontSize: 10 }} tickFormatter={v => v >= 1e7 ? `₹${(v/1e7).toFixed(1)}Cr` : v >= 1e5 ? `₹${(v/1e5).toFixed(0)}L` : `₹${(v/1000).toFixed(0)}K`} />
+              <YAxis yAxisId="sales" orientation="right" tick={{ fontSize: 10 }} tickFormatter={v => v >= 1e7 ? `â‚¹${(v/1e7).toFixed(1)}Cr` : v >= 1e5 ? `â‚¹${(v/1e5).toFixed(0)}L` : `â‚¹${(v/1000).toFixed(0)}K`} />
               <YAxis yAxisId="aov" hide />
               <YAxis yAxisId="rrr" hide />
               <Tooltip content={({ active, payload, label }) => {
@@ -8647,7 +8647,7 @@ function CustomerPage({ filters }) {
                     <div style={{ fontWeight: 700, marginBottom: 5, color: C.t2 }}>{label}</div>
                     <div style={{ color: C.acc }}>Customers Acquired: {(d.customersAcquired||0).toLocaleString('en-IN')}</div>
                     <div style={{ color: '#2E74CC' }}>Gross Sales: {fmt(d.grossSales||0)}</div>
-                    <div style={{ color: '#E8930A' }}>AOV: ₹{Math.round(d.aov||0).toLocaleString('en-IN')}</div>
+                    <div style={{ color: '#E8930A' }}>AOV: â‚¹{Math.round(d.aov||0).toLocaleString('en-IN')}</div>
                     <div style={{ color: '#0D9E68' }}>Repeat Revenue Rate: {((d.repeatRevenueRate||0)*100).toFixed(1)}%</div>
                   </div>
                 )
@@ -8681,8 +8681,8 @@ function CustomerPage({ filters }) {
           })()
           const newKey = nrMetric === 'customers' ? 'newCustomers' : nrMetric === 'orders' ? 'newOrders' : 'newRevenue'
           const repKey = nrMetric === 'customers' ? 'repeatCustomers' : nrMetric === 'orders' ? 'repeatOrders' : 'repeatRevenue'
-          const tickFmt = v => nrMetric === 'revenue' ? (v >= 1e7 ? `₹${(v/1e7).toFixed(1)}Cr` : v >= 1e5 ? `₹${(v/1e5).toFixed(0)}L` : `₹${(v/1000).toFixed(0)}K`) : v.toLocaleString('en-IN')
-          const lblFmt = v => nrMetric === 'revenue' ? (v >= 1e7 ? `₹${(v/1e7).toFixed(1)}Cr` : v >= 1e5 ? `₹${(v/1e5).toFixed(0)}L` : `₹${(v/1000).toFixed(0)}K`) : v.toLocaleString('en-IN')
+          const tickFmt = v => nrMetric === 'revenue' ? (v >= 1e7 ? `â‚¹${(v/1e7).toFixed(1)}Cr` : v >= 1e5 ? `â‚¹${(v/1e5).toFixed(0)}L` : `â‚¹${(v/1000).toFixed(0)}K`) : v.toLocaleString('en-IN')
+          const lblFmt = v => nrMetric === 'revenue' ? (v >= 1e7 ? `â‚¹${(v/1e7).toFixed(1)}Cr` : v >= 1e5 ? `â‚¹${(v/1e5).toFixed(0)}L` : `â‚¹${(v/1000).toFixed(0)}K`) : v.toLocaleString('en-IN')
           return (
           <Card title="New vs Repeat Customers" action={
             <div style={{ display: 'flex', gap: 5, alignItems: 'center' }}>
@@ -8724,8 +8724,8 @@ function CustomerPage({ filters }) {
             <div>Customer Retention Cohort</div>
             <div style={{ fontSize: 11, fontWeight: 400, color: C.t3, marginTop: 2 }}>
               {cohortMode === 'customer'
-                ? 'Only customers with ≥1 successful order (excl. Cancel / RTO / CIR)'
-                : 'Net revenue per cohort (Exc. GST, excl. Cancel / RTO / CIR) ÷ Month 0 revenue'}
+                ? 'Only customers with â‰¥1 successful order (excl. Cancel / RTO / CIR)'
+                : 'Net revenue per cohort (Exc. GST, excl. Cancel / RTO / CIR) Ã· Month 0 revenue'}
             </div>
           </div>
         } action={
@@ -8782,7 +8782,7 @@ function CustomerPage({ filters }) {
       <LSectionTitle title="Purchase Behavior" collapsed={secCollapsed.purchase} onToggle={() => toggleSec('purchase')} />
       {!secCollapsed.purchase && (() => {
         return (
-      <Card title={<div><div>Purchase Behavior: First vs Second Purchase</div><div style={{ fontSize: 11, fontWeight: 400, color: C.t3, marginTop: 2 }}>All-time data — not affected by date filter. Shows what customers bought on their 2nd order after their 1st.</div></div>} action={
+      <Card title={<div><div>Purchase Behavior: First vs Second Purchase</div><div style={{ fontSize: 11, fontWeight: 400, color: C.t3, marginTop: 2 }}>All-time data â€” not affected by date filter. Shows what customers bought on their 2nd order after their 1st.</div></div>} action={
         <div style={{ display: 'flex', gap: 4 }}>
           {['Sub Category', 'Category'].map(t => (
             <button key={t} onClick={() => setCrossFilter(t)} style={{ fontSize: 10, padding: '3px 9px', borderRadius: 5, border: `1px solid ${C.border}`, background: crossFilter === t ? C.t1 : C.card, color: crossFilter === t ? '#fff' : C.t2, cursor: 'pointer', fontFamily: 'var(--font)', fontWeight: crossFilter === t ? 700 : 400 }}>{t}</button>
@@ -8796,16 +8796,16 @@ function CustomerPage({ filters }) {
               {allCrossFirst.map(cat => <col key={cat} />)}
             </colgroup>
             <thead>
-              {/* Span header row: "First Purchase →" label above all category columns */}
+              {/* Span header row: "First Purchase â†’" label above all category columns */}
               <tr>
                 <th style={{ padding: '2px 8px 0', borderBottom: 'none' }} />
                 <th colSpan={allCrossFirst.length} style={{ padding: '4px 6px 2px', textAlign: 'center', fontSize: 9.5, fontWeight: 700, color: C.blue.tx, background: C.blue.bg, borderRadius: '6px 6px 0 0', letterSpacing: '.04em' }}>
-                  First Purchase {crossFilter} →
+                  First Purchase {crossFilter} â†’
                 </th>
               </tr>
               <tr style={{ borderBottom: `2px solid ${C.border}` }}>
                 <th style={{ padding: '4px 8px', textAlign: 'left', verticalAlign: 'bottom', overflow: 'hidden' }}>
-                  <div style={{ fontSize: 8.5, fontWeight: 700, color: C.blue.tx, background: C.blue.bg, display: 'inline-block', padding: '2px 6px', borderRadius: 4, marginBottom: 2 }}>↓ Second Purchase {crossFilter}</div>
+                  <div style={{ fontSize: 8.5, fontWeight: 700, color: C.blue.tx, background: C.blue.bg, display: 'inline-block', padding: '2px 6px', borderRadius: 4, marginBottom: 2 }}>â†“ Second Purchase {crossFilter}</div>
                 </th>
                 {allCrossFirst.map(cat => (
                   <th key={cat} style={{ padding: '4px 6px', textAlign: 'right', color: C.t3, fontWeight: 700, fontSize: 9, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{cat}</th>
@@ -8816,7 +8816,7 @@ function CustomerPage({ filters }) {
               {crossRows.map((sc, i) => (
                 <tr key={sc} style={{ borderBottom: `1px solid ${C.border}`, background: i % 2 === 0 ? 'transparent' : C.bg }}>
                   <td style={{ padding: '4px 8px', fontWeight: 600, color: C.t1, fontSize: 10.5, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                    <span style={{ color: C.t3, fontSize: 9 }}>⊞</span> {sc}
+                    <span style={{ color: C.t3, fontSize: 9 }}>âŠž</span> {sc}
                   </td>
                   {allCrossFirst.map(fc => {
                     const v = crossMap[sc]?.[fc]
@@ -8835,7 +8835,7 @@ function CustomerPage({ filters }) {
       <LSectionTitle title="RFM & Segmentation" collapsed={secCollapsed.rfm} onToggle={() => toggleSec('rfm')} />
       {!secCollapsed.rfm && (
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
-        {/* RFM Segments — horizontal bar list */}
+        {/* RFM Segments â€” horizontal bar list */}
         <Card title="RFM Segments">
           {(() => {
             const RFM_DESC = {
@@ -8843,26 +8843,26 @@ function CustomerPage({ filters }) {
               'Loyal Customers':    'Buy regularly, decent recency & frequency',
               'Recent Users':       'Bought recently but only once or twice',
               'Potential Loyalists':'Recent buyers with good spend potential',
-              'Cannot Lose Them':   'Bought often but not seen in 90–180+ days',
-              'Hibernating':        'Low recency & low frequency — going cold',
+              'Cannot Lose Them':   'Bought often but not seen in 90â€“180+ days',
+              'Hibernating':        'Low recency & low frequency â€” going cold',
               'Others':             'High spenders not fitting other segments',
               'Price Sensitive':    'Moderate frequency but low spend per order',
-              'Needs Attention':    'Average recency & frequency — at risk',
-              'About to Sleep':     'Dropping off — haven\'t bought in a while',
+              'Needs Attention':    'Average recency & frequency â€” at risk',
+              'About to Sleep':     'Dropping off â€” haven\'t bought in a while',
               'Lost Customers':     'Haven\'t purchased in 180+ days',
             }
             const RFM_TOOLTIP = {
-              'Champions':          'Rule: Last order ≤60 days ago (R≥4) AND ≥4 orders ever (F≥4).\nThese are your best customers — buy often, spend a lot, bought recently. Reward them with early access and loyalty perks.',
-              'Loyal Customers':    'Rule: Last order ≤90 days (R≥3) AND ≥3 orders (F≥3).\nRegular buyers who come back consistently. Nurture with personalised offers to push them to Champions.',
-              'Recent Users':       'Rule: Last order ≤60 days (R≥4) AND ≤2 orders (F≤2).\nNew or recent customers who haven\'t bought much yet. Focus on getting them to a 2nd or 3rd purchase.',
-              'Potential Loyalists':'Rule: Last order ≤90 days (R≥3) AND spend ≥₹2,000 (M≥3).\nSpend decent money and bought recently. With the right nudge they can become Loyal Customers.',
-              'Cannot Lose Them':   'Rule: Last order >180 days (R≤2) AND ≥3 orders (F≥3).\nUsed to buy regularly but have gone quiet. High risk — win them back with a strong re-engagement offer.',
-              'Hibernating':        'Rule: Last order >180 days (R≤2) AND ≤2 orders (F≤2).\nBought once or twice long ago and haven\'t returned. Hard to reactivate — try a big discount or new product launch.',
-              'Others':             'Rule: Lifetime spend ≥₹5,000 but doesn\'t fit any other segment.\nHigh spenders with unusual purchase patterns. Review manually.',
-              'Price Sensitive':    'Rule: ≥3 orders (F≥3) AND spend <₹2,000 (M≤2).\nBuy often but spend very little each time. Upsell or bundle to increase order value.',
-              'Needs Attention':    'Rule: Last order 60–90 days (R=3) AND 2–3 orders (F=2–3).\nMid-range on all metrics — at risk of slipping away. Send a timely re-engagement message.',
-              'About to Sleep':     'Rule: Last order 90–180 days (R=2) AND 2–3 orders (F=2–3).\nActivity is dropping. Act now before they hibernate completely.',
-              'Lost Customers':     'Rule: Last order >180 days (R=1) AND ≤2 orders (F≤2).\nHaven\'t been seen in a long time and barely bought. Very low chance of return without a strong incentive.',
+              'Champions':          'Rule: Last order â‰¤60 days ago (Râ‰¥4) AND â‰¥4 orders ever (Fâ‰¥4).\nThese are your best customers â€” buy often, spend a lot, bought recently. Reward them with early access and loyalty perks.',
+              'Loyal Customers':    'Rule: Last order â‰¤90 days (Râ‰¥3) AND â‰¥3 orders (Fâ‰¥3).\nRegular buyers who come back consistently. Nurture with personalised offers to push them to Champions.',
+              'Recent Users':       'Rule: Last order â‰¤60 days (Râ‰¥4) AND â‰¤2 orders (Fâ‰¤2).\nNew or recent customers who haven\'t bought much yet. Focus on getting them to a 2nd or 3rd purchase.',
+              'Potential Loyalists':'Rule: Last order â‰¤90 days (Râ‰¥3) AND spend â‰¥â‚¹2,000 (Mâ‰¥3).\nSpend decent money and bought recently. With the right nudge they can become Loyal Customers.',
+              'Cannot Lose Them':   'Rule: Last order >180 days (Râ‰¤2) AND â‰¥3 orders (Fâ‰¥3).\nUsed to buy regularly but have gone quiet. High risk â€” win them back with a strong re-engagement offer.',
+              'Hibernating':        'Rule: Last order >180 days (Râ‰¤2) AND â‰¤2 orders (Fâ‰¤2).\nBought once or twice long ago and haven\'t returned. Hard to reactivate â€” try a big discount or new product launch.',
+              'Others':             'Rule: Lifetime spend â‰¥â‚¹5,000 but doesn\'t fit any other segment.\nHigh spenders with unusual purchase patterns. Review manually.',
+              'Price Sensitive':    'Rule: â‰¥3 orders (Fâ‰¥3) AND spend <â‚¹2,000 (Mâ‰¤2).\nBuy often but spend very little each time. Upsell or bundle to increase order value.',
+              'Needs Attention':    'Rule: Last order 60â€“90 days (R=3) AND 2â€“3 orders (F=2â€“3).\nMid-range on all metrics â€” at risk of slipping away. Send a timely re-engagement message.',
+              'About to Sleep':     'Rule: Last order 90â€“180 days (R=2) AND 2â€“3 orders (F=2â€“3).\nActivity is dropping. Act now before they hibernate completely.',
+              'Lost Customers':     'Rule: Last order >180 days (R=1) AND â‰¤2 orders (Fâ‰¤2).\nHaven\'t been seen in a long time and barely bought. Very low chance of return without a strong incentive.',
             }
             const sorted = [...rfm].sort((a, b) => b.totalRevenue - a.totalRevenue)
             const maxRev = sorted[0]?.totalRevenue || 1
@@ -8933,7 +8933,7 @@ function CustomerPage({ filters }) {
               <CartesianGrid strokeDasharray="3 3" stroke={C.border} vertical={false} />
               <XAxis dataKey="bucket" tick={{ fontSize: 9.5, fill: C.t2 }} angle={-12} textAnchor="end" interval={0} />
               <YAxis yAxisId="left" tick={{ fontSize: 9 }} tickFormatter={v => v >= 1e6 ? `${(v/1e6).toFixed(1)}M` : v >= 1000 ? `${(v/1000).toFixed(0)}K` : v} width={48} label={{ value: 'Customers', angle: -90, position: 'insideLeft', offset: 10, style: { fontSize: 9, fill: C.t3 } }} />
-              <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 9 }} tickFormatter={v => v >= 1e9 ? `₹${(v/1e9).toFixed(1)}B` : v >= 1e7 ? `₹${(v/1e7).toFixed(1)}Cr` : v >= 1e5 ? `₹${(v/1e5).toFixed(0)}L` : `₹${(v/1000).toFixed(0)}K`} width={58} label={{ value: 'Revenue', angle: 90, position: 'insideRight', offset: 10, style: { fontSize: 9, fill: C.t3 } }} />
+              <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 9 }} tickFormatter={v => v >= 1e9 ? `â‚¹${(v/1e9).toFixed(1)}B` : v >= 1e7 ? `â‚¹${(v/1e7).toFixed(1)}Cr` : v >= 1e5 ? `â‚¹${(v/1e5).toFixed(0)}L` : `â‚¹${(v/1000).toFixed(0)}K`} width={58} label={{ value: 'Revenue', angle: 90, position: 'insideRight', offset: 10, style: { fontSize: 9, fill: C.t3 } }} />
               <Tooltip formatter={(v, n) => n === 'Revenue' ? [fmt(v), n] : [fmtN(v), n]} />
               <Legend wrapperStyle={{ fontSize: 10, paddingTop: 8 }} />
               <Bar yAxisId="left" dataKey="customers" name="Customers" radius={[4,4,0,0]} maxBarSize={60}
@@ -8968,7 +8968,7 @@ function CustomerPage({ filters }) {
       {!secCollapsed.discount && (<>
       {/* Spend vs Sales */}
       {(() => {
-        const fmtAxis = v => v >= 1e7 ? `₹${(v/1e7).toFixed(1)}Cr` : v >= 1e5 ? `₹${(v/1e5).toFixed(0)}L` : v >= 1000 ? `₹${(v/1000).toFixed(0)}K` : `₹${v}`
+        const fmtAxis = v => v >= 1e7 ? `â‚¹${(v/1e7).toFixed(1)}Cr` : v >= 1e5 ? `â‚¹${(v/1e5).toFixed(0)}L` : v >= 1000 ? `â‚¹${(v/1000).toFixed(0)}K` : `â‚¹${v}`
         // Build spend lookup by day
         const spendByDay = {}
         rawDailySpend.forEach(r => { spendByDay[r.day] = r.totalSpend })
@@ -9004,7 +9004,7 @@ function CustomerPage({ filters }) {
                 <Tooltip formatter={(v, n) => [fmt(v), n]} labelFormatter={l => spendGranularity === 'monthly' ? l : l} />
                 <Legend wrapperStyle={{ fontSize: 10 }} />
                 <Bar yAxisId="spend" dataKey="totalSpend" name="Total Spend (Meta+Google)" fill={C.acc} radius={[3,3,0,0]} maxBarSize={40}
-                  label={{ position: 'top', fontSize: 9, fill: C.t2, fontWeight: 600, formatter: v => v >= 1e7 ? `₹${(v/1e7).toFixed(1)}Cr` : v >= 1e5 ? `₹${(v/1e5).toFixed(1)}L` : v >= 1000 ? `₹${(v/1000).toFixed(0)}K` : `₹${v}` }} />
+                  label={{ position: 'top', fontSize: 9, fill: C.t2, fontWeight: 600, formatter: v => v >= 1e7 ? `â‚¹${(v/1e7).toFixed(1)}Cr` : v >= 1e5 ? `â‚¹${(v/1e5).toFixed(1)}L` : v >= 1000 ? `â‚¹${(v/1000).toFixed(0)}K` : `â‚¹${v}` }} />
                 <Line yAxisId="sales" type="monotone" dataKey="grossSales" name="Gross Sales" stroke="#2E74CC" strokeWidth={2} dot={false} />
               </ComposedChart>
             </ResponsiveContainer>
@@ -9090,7 +9090,7 @@ export default function App() {
   const reqIdRef = useRef(0)
   const activeTabRef = useRef(activeTab)
   activeTabRef.current = activeTab
-  // Client-side cache: key → response data. Cleared when dates change.
+  // Client-side cache: key â†’ response data. Cleared when dates change.
   const clientCacheRef = useRef(new Map())
 
   const fetchData = useCallback(async (start, end, extraFilters = {}, keepPrev = false) => {
@@ -9172,19 +9172,19 @@ export default function App() {
         )}
         {error && (
           <div style={{ margin: '12px 16px 0', padding: '10px 13px', borderRadius: 9, background: C.red.bg, border: `1px solid ${C.red.bd}`, color: C.red.tx, fontSize: 12, display: 'flex', alignItems: 'center', gap: 8 }}>
-            <span>⚠ {error}</span>
+            <span>âš  {error}</span>
             <button onClick={() => fetchData(filters.start, filters.end)} style={{ marginLeft: 'auto', fontSize: 11, padding: '3px 8px', borderRadius: 5, border: `1px solid ${C.red.bd}`, background: 'transparent', color: C.red.tx, cursor: 'pointer', fontFamily: 'var(--font)' }}>Retry</button>
           </div>
         )}
         <div style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
           {!data && !loading && !error && (
             <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 16 }}>
-              <div style={{ width: 64, height: 64, borderRadius: 18, background: C.acl, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 28 }}>📊</div>
+              <div style={{ width: 64, height: 64, borderRadius: 18, background: C.acl, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 28 }}>ðŸ“Š</div>
               <div style={{ textAlign: 'center' }}>
                 <div style={{ fontWeight: 600, fontSize: 14, color: C.t1, marginBottom: 4 }}>Frido Intelligence Suite</div>
                 <div style={{ fontSize: 12, color: C.t3, marginBottom: 16 }}>Select a date range to load data</div>
                 <button onClick={() => fetchData(filters.start, filters.end)} style={{ fontSize: 13, padding: '10px 22px', borderRadius: 10, background: C.acc, color: '#13121A', border: 'none', cursor: 'pointer', fontFamily: 'var(--font)', fontWeight: 600 }}>
-                  Load {filters.start} → {filters.end}
+                  Load {filters.start} â†’ {filters.end}
                 </button>
               </div>
             </div>
