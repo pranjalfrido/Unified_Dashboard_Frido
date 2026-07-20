@@ -8497,7 +8497,7 @@ function CustomerPage({ filters }) {
   if (custError) return <div style={{ padding: 40, margin: 16, borderRadius: 10, background: C.red.bg, border: `1px solid ${C.red.bd}`, color: C.red.tx, fontSize: 12 }}><strong>Error loading customer data:</strong> {custError}</div>
   if (!custData) return <div style={{ padding: 60, textAlign: 'center', color: C.t3 }}>Select a date range to load customer analysis</div>
 
-  const { kpis = {}, daily: rawDaily = [], cohort = [], rfm = [], freqDist = [], monetaryDist = [], inactivity = [], discountDist = [], crossSell = [], dailySpend: rawDailySpend = [] } = custData
+  const { kpis = {}, prevKpis = {}, daily: rawDaily = [], cohort = [], rfm = [], freqDist = [], monetaryDist = [], inactivity = [], discountDist = [], crossSell = [], dailySpend: rawDailySpend = [] } = custData
 
   // Aggregate daily rows into the selected granularity
   const monthly = (() => {
@@ -8577,24 +8577,24 @@ function CustomerPage({ filters }) {
       {/* Section 1: Overview KPIs — always visible */}
       <LSectionTitle title="Overview KPIs" />
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(8, 1fr)', gap: 8 }}>
-        <KPICard label="Gross Sale" value={fmtBig(kpis.grossSales)} />
-        <KPICard label="Total Spend" value={fmtBig(kpis.totalSpend)} />
-        <KPICard label="Meta Spend" value={fmtBig(kpis.metaSpend)} />
-        <KPICard label="Google Spend" value={fmtBig(kpis.googleSpend)} />
-        <KPICard label="Total Customers" value={fmtBig(kpis.totalCustomers)} />
-        <KPICard label="New Customers" value={fmtBig(kpis.newCustomers)} />
-        <KPICard label="Returning Customers" value={fmtBig(kpis.returningCustomers)} />
-        <KPICard label="Repeat Rate" value={`${(kpis.repeatRate * 100).toFixed(2)}%`} />
+        <LKpiCard label="Gross Sale" value={fmtBig(kpis.grossSales)} cur={kpis.grossSales} prev={prevKpis.grossSales} />
+        <LKpiCard label="Total Spend" value={fmtBig(kpis.totalSpend)} cur={kpis.totalSpend} prev={prevKpis.totalSpend} />
+        <LKpiCard label="Meta Spend" value={fmtBig(kpis.metaSpend)} cur={kpis.metaSpend} prev={prevKpis.metaSpend} />
+        <LKpiCard label="Google Spend" value={fmtBig(kpis.googleSpend)} cur={kpis.googleSpend} prev={prevKpis.googleSpend} />
+        <LKpiCard label="Total Customers" value={fmtBig(kpis.totalCustomers)} cur={kpis.totalCustomers} prev={prevKpis.totalCustomers} />
+        <LKpiCard label="New Customers" value={fmtBig(kpis.newCustomers)} cur={kpis.newCustomers} prev={prevKpis.newCustomers} />
+        <LKpiCard label="Returning Customers" value={fmtBig(kpis.returningCustomers)} cur={kpis.returningCustomers} prev={prevKpis.returningCustomers} />
+        <LKpiCard label="Repeat Rate" value={`${(kpis.repeatRate * 100).toFixed(2)}%`} cur={kpis.repeatRate} prev={prevKpis.repeatRate} />
       </div>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(8, 1fr)', gap: 8 }}>
-        <KPICard label="RoAS" value={kpis.roas.toFixed(2)} />
-        <KPICard label="CAC" value={`₹${Math.round(kpis.cac).toLocaleString('en-IN')}`} />
-        <KPICard label="AOV" value={`₹${Math.round(kpis.aov).toLocaleString('en-IN')}`} />
-        <KPICard label="CLTV" value={fmt((kpis.grossSales || 0) / (kpis.totalCustomers || 1))} sub="Rev / unique customer" />
-        <KPICard label="Acquisition Rate" value={`${(kpis.acquisitionRate * 100).toFixed(2)}%`} />
-        <KPICard label="Repeat Revenue" value={`${((kpis.repeatRevenueRate || 0) * 100).toFixed(2)}%`} sub={fmt(kpis.repeatRevenue || 0)} />
-        <KPICard label="Revenue per Cust" value={fmt(kpis.grossSales / (kpis.totalCustomers || 1))} />
-        <KPICard label="Net Revenue %" value={kpis.netRevenueRate ? `${((kpis.netRevenueRate) * 100).toFixed(2)}%` : '—'} sub={kpis.netRevenue ? fmt(kpis.netRevenue) : ''} />
+        <LKpiCard label="RoAS" value={kpis.roas.toFixed(2)} cur={kpis.roas} prev={prevKpis.roas} />
+        <LKpiCard label="CAC" value={`₹${Math.round(kpis.cac).toLocaleString('en-IN')}`} cur={kpis.cac} prev={prevKpis.cac} />
+        <LKpiCard label="AOV" value={`₹${Math.round(kpis.aov).toLocaleString('en-IN')}`} cur={kpis.aov} prev={prevKpis.aov} />
+        <LKpiCard label="CLTV" value={fmt((kpis.grossSales || 0) / (kpis.totalCustomers || 1))} cur={kpis.grossSales / (kpis.totalCustomers || 1)} prev={prevKpis.grossSales / (prevKpis.totalCustomers || 1)} subValue="Rev / unique customer" />
+        <LKpiCard label="Acquisition Rate" value={`${(kpis.acquisitionRate * 100).toFixed(2)}%`} cur={kpis.acquisitionRate} prev={prevKpis.acquisitionRate} />
+        <LKpiCard label="Repeat Revenue" value={`${((kpis.repeatRevenueRate || 0) * 100).toFixed(2)}%`} cur={kpis.repeatRevenueRate} prev={prevKpis.repeatRevenueRate} subValue={fmt(kpis.repeatRevenue || 0)} />
+        <LKpiCard label="Revenue per Cust" value={fmt(kpis.grossSales / (kpis.totalCustomers || 1))} cur={kpis.grossSales / (kpis.totalCustomers || 1)} prev={prevKpis.grossSales / (prevKpis.totalCustomers || 1)} />
+        <LKpiCard label="Net Revenue %" value={kpis.netRevenueRate ? `${((kpis.netRevenueRate) * 100).toFixed(2)}%` : '—'} cur={kpis.netRevenueRate} prev={null} subValue={kpis.netRevenue ? fmt(kpis.netRevenue) : ''} />
       </div>
 
       {/* Section 2: Acquisition & Revenue Trends */}

@@ -17,8 +17,13 @@ export default async function handler(req, res) {
     const bq = getBQ()
     const run = q => bq.query({ query: q, maximumBytesBilled: '10000000000' }).then(([rows]) => rows)
     const s = start, e = end
+    // prev period: same duration immediately before
+    const ms = new Date(s).getTime(), me = new Date(e).getTime()
+    const dur = me - ms
+    const ps = new Date(ms - dur - 86400000).toISOString().slice(0, 10)
+    const pe = new Date(ms - 86400000).toISOString().slice(0, 10)
 
-    const [kpis, monthly, cohort, crossSell, rfm, freqDist, monetaryDist, inactivity, discountDist, adsKpis, dailySpend] = await Promise.all([
+    const [kpis, monthly, cohort, crossSell, rfm, freqDist, monetaryDist, inactivity, discountDist, adsKpis, dailySpend, prevKpis, prevAdsKpis] = await Promise.all([
 
       // Q1 — KPIs for the selected period (Shopify only)
       run(`WITH first_dates AS (
@@ -330,6 +335,38 @@ GROUP BY platform`),
 FROM \`frido-429506.production.fact_all_platform_ads_report\`
 WHERE report_date BETWEEN '${s}' AND '${e}' AND platform IN ('Meta', 'Google')
 GROUP BY day ORDER BY day`),
+
+      // Q12 — prev period KPIs
+      run(`WITH first_dates AS (
+  SELECT CustomerId, MIN(DATE(OrderDate)) AS first_date
+  FROM ${TBL} WHERE Channel = 'Shopify' AND CustomerId IS NOT NULL GROUP BY CustomerId
+),
+period AS (
+  SELECT o.CustomerId, o.OrderId, DATE(o.OrderDate) AS order_date,
+    o.SellingPrice_Inc_GST AS rev_inc, o.SellingPrice_Exc_GST AS rev_exc,
+    o.voucher_code, f.first_date
+  FROM ${TBL} o JOIN first_dates f USING (CustomerId)
+  WHERE o.Channel = 'Shopify' AND DATE(o.OrderDate) BETWEEN '${ps}' AND '${pe}' AND o.CustomerId IS NOT NULL
+),
+order_agg AS (
+  SELECT OrderId, first_date, SUM(rev_inc) AS order_rev_inc, ANY_VALUE(CustomerId) AS CustomerId
+  FROM period GROUP BY OrderId, first_date
+)
+SELECT
+  COUNT(DISTINCT CustomerId) AS total_customers,
+  COUNT(DISTINCT CASE WHEN first_date BETWEEN DATE('${ps}') AND DATE('${pe}') THEN CustomerId END) AS new_customers,
+  COUNT(DISTINCT CASE WHEN first_date < DATE('${ps}') THEN CustomerId END) AS returning_customers,
+  COUNT(DISTINCT OrderId) AS total_orders,
+  ROUND(SUM(order_rev_inc), 0) AS gross_sales,
+  ROUND(SAFE_DIVIDE(SUM(order_rev_inc), COUNT(DISTINCT OrderId)), 0) AS aov,
+  ROUND(SUM(CASE WHEN first_date < DATE('${ps}') THEN order_rev_inc ELSE 0 END), 0) AS repeat_revenue
+FROM order_agg`),
+
+      // Q13 — prev period ads
+      run(`SELECT platform, ROUND(SUM(spend), 0) AS spend
+FROM \`frido-429506.production.fact_all_platform_ads_report\`
+WHERE report_date BETWEEN '${ps}' AND '${pe}' AND platform IN ('Meta', 'Google')
+GROUP BY platform`),
     ])
 
     const k = kpis[0] || {}
@@ -340,6 +377,16 @@ GROUP BY day ORDER BY day`),
     const totalCustomers = parseInt(k.total_customers) || 0
     const newCustomers = parseInt(k.new_customers) || 0
     const returningCustomers = parseInt(k.returning_customers) || 0
+
+    const pk = prevKpis[0] || {}
+    const pMeta = prevAdsKpis.find(r => r.platform === 'Meta') || {}
+    const pGoogle = prevAdsKpis.find(r => r.platform === 'Google') || {}
+    const pTotalSpend = (parseFloat(pMeta.spend) || 0) + (parseFloat(pGoogle.spend) || 0)
+    const pGrossSales = parseFloat(pk.gross_sales) || 0
+    const pTotalCustomers = parseInt(pk.total_customers) || 0
+    const pNewCustomers = parseInt(pk.new_customers) || 0
+    const pReturningCustomers = parseInt(pk.returning_customers) || 0
+    const pRepeatRevenue = parseFloat(pk.repeat_revenue) || 0
 
     res.json({
       kpis: {
@@ -362,6 +409,23 @@ GROUP BY day ORDER BY day`),
         discountedOrders: parseInt(k.discounted_orders) || 0,
         nonDiscountedOrders: parseInt(k.non_discounted_orders) || 0,
         totalOrders: parseInt(k.total_orders) || 0,
+      },
+      prevKpis: {
+        grossSales: pGrossSales,
+        totalSpend: pTotalSpend,
+        metaSpend: parseFloat(pMeta.spend) || 0,
+        googleSpend: parseFloat(pGoogle.spend) || 0,
+        totalCustomers: pTotalCustomers,
+        newCustomers: pNewCustomers,
+        returningCustomers: pReturningCustomers,
+        repeatRate: pTotalCustomers > 0 ? pReturningCustomers / pTotalCustomers : 0,
+        roas: pTotalSpend > 0 ? pGrossSales / pTotalSpend : 0,
+        cac: pNewCustomers > 0 ? pTotalSpend / pNewCustomers : 0,
+        aov: parseFloat(pk.aov) || 0,
+        acquisitionRate: pTotalCustomers > 0 ? pNewCustomers / pTotalCustomers : 0,
+        repeatRevenue: pRepeatRevenue,
+        repeatRevenueRate: pGrossSales > 0 ? pRepeatRevenue / pGrossSales : 0,
+        totalOrders: parseInt(pk.total_orders) || 0,
       },
       daily: monthly.map(r => ({
         day: r.day,
