@@ -1556,10 +1556,6 @@ function Sidebar({ page, setPage }) {
   ]
   return (
     <nav className="sidebar">
-      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', marginBottom: 14, gap: 2 }}>
-        <img src="/frido-logo.png" alt="Frido" style={{ width: 36, height: 36, borderRadius: 10, objectFit: 'cover' }} />
-        <span style={{ fontSize: 7.5, fontWeight: 600, color: C.t3, letterSpacing: '.04em', textTransform: 'uppercase', lineHeight: 1, textAlign: 'center' }}>Analytics</span>
-      </div>
       {items.map(item => (
         <div key={item.id} onClick={() => setPage(item.id)}
           className={`sb-item${page === item.id ? ' active' : ''}`}>
