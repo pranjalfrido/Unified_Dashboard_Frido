@@ -3371,7 +3371,7 @@ function AllTab({ data }) {
                     <div className="kpi-value">{fmt(netRevenueCalc)}</div>
                     {excChg !== null && <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 7px', borderRadius: 5, background: excChg >= 0 ? C.green.bg : C.red.bg, color: excChg >= 0 ? C.green.tx : C.red.tx }}>{excChg >= 0 ? '▲' : '▼'} {Math.abs(excChg).toFixed(1)}%</span>}
                   </div>
-                  <div className="kpi-sub">{totalRev > 0 ? (netRevenueCalc / totalRev * 100).toFixed(1) : 0}% of gross · GST {fmt(gstCollected)}</div>
+                  <div className="kpi-sub">{totalRev > 0 ? (netRevenueCalc / totalRev * 100).toFixed(1) : 0}% of gross</div>
                 </div>
               )
             })()}
@@ -6831,7 +6831,7 @@ function BlinkitTab({ data }) {
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10, flex: 1 }}>
             {[
-              { label: 'Net. Rev. (Exc GST)', value: fmt(excRev), sub: `GST ${fmt(gst)}`, badge: blChgBadge(excRev, blPrevExcRev) },
+              { label: 'Net. Rev. (Exc GST)', value: fmt(excRev), sub: null, badge: blChgBadge(excRev, blPrevExcRev) },
               { label: 'GST Collected', value: fmt(gst), sub: `${rev > 0 ? ((gst/rev)*100).toFixed(1) : 0}% of gross rev`, badge: blChgBadge(gst, blPrevRev - blPrevExcRev) },
               { label: 'Avg. Daily Gross Rev', value: fmt(dailyAvg), sub: `over ${nDays} days`, badge: blChgBadge(dailyAvg, blPrevRev > 0 ? blPrevRev / nDays : 0) },
             ].map(k => (
@@ -6996,7 +6996,7 @@ function InstaTab({ data }) {
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10, flex: 1 }}>
             {[
-              { label: 'Net. Rev. (Exc GST)', value: fmt(excRev), sub: `GST ${fmt(gst)}`, badge: insChgBadge(excRev, insPrevExcRev) },
+              { label: 'Net. Rev. (Exc GST)', value: fmt(excRev), sub: null, badge: insChgBadge(excRev, insPrevExcRev) },
               { label: 'GST Collected', value: fmt(gst), sub: `${rev > 0 ? ((gst/rev)*100).toFixed(1) : 0}% of gross rev`, badge: insChgBadge(gst, insPrevRev - insPrevExcRev) },
               { label: 'Daily Avg Revenue', value: fmt(dailyAvg), sub: `Inc GST / day`, badge: insChgBadge(dailyAvg, insPrevRev > 0 ? insPrevRev / nDays : 0) },
             ].map(k => (
@@ -7156,7 +7156,7 @@ function ZeptoTab({ data }) {
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10, flex: 1 }}>
             {[
-              { label: 'Net. Rev. (Exc GST)', value: fmt(excRev), sub: `GST ${fmt(gst)}`, badge: zpChgBadge(excRev, zpPrevExcRev) },
+              { label: 'Net. Rev. (Exc GST)', value: fmt(excRev), sub: null, badge: zpChgBadge(excRev, zpPrevExcRev) },
               { label: 'GST Collected', value: fmt(gst), sub: `${rev > 0 ? ((gst/rev)*100).toFixed(1) : 0}% of gross rev`, badge: zpChgBadge(gst, zpPrevRev - zpPrevExcRev) },
               { label: 'Daily Avg Revenue', value: fmt(dailyAvg), sub: 'Inc GST / day', badge: zpChgBadge(dailyAvg, zpPrevRev > 0 ? zpPrevRev / nDays : 0) },
             ].map(k => (
@@ -7338,7 +7338,7 @@ function CredTab({ data }) {
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10 }}>
             {[
-              { label: 'Net. Rev. (Exc GST)', value: fmt(excRev), sub: `GST ${fmt(rev - excRev)}`, badge: crChgBadge(excRev, crPrevExcRev) },
+              { label: 'Net. Rev. (Exc GST)', value: fmt(excRev), sub: null, badge: crChgBadge(excRev, crPrevExcRev) },
               { label: 'GST Collected', value: fmt(rev - excRev), sub: `${rev > 0 ? (((rev - excRev)/rev)*100).toFixed(1) : 0}% of gross rev`, badge: crChgBadge(rev - excRev, crPrevRev - crPrevExcRev) },
               { label: 'Avg. Daily Gross Rev', value: fmt(dailyAvg), sub: `over ${nDays} days`, badge: crChgBadge(dailyAvg, crPrevRev > 0 ? crPrevRev / nDays : 0) },
             ].map(k => (
@@ -7480,7 +7480,7 @@ function FirstcryTab({ data }) {
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10 }}>
           {[
-            { label: 'Net. Rev. (Exc GST)', value: fmt(excRev), sub: `GST ${fmt(rev - excRev)}`, badge: fcChgBadge(excRev, fcPrevExcRev) },
+            { label: 'Net. Rev. (Exc GST)', value: fmt(excRev), sub: null, badge: fcChgBadge(excRev, fcPrevExcRev) },
             { label: 'GST Collected', value: fmt(rev - excRev), sub: `${rev > 0 ? (((rev - excRev)/rev)*100).toFixed(1) : 0}% of gross rev`, badge: fcChgBadge(rev - excRev, fcPrevRev - fcPrevExcRev) },
             { label: 'Avg. Daily Gross Rev', value: fmt(dailyAvg), sub: `over ${nDays} days`, badge: fcChgBadge(dailyAvg, fcPrevRev > 0 ? fcPrevRev / nDays : 0) },
           ].map(k => (
