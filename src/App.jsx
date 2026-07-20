@@ -2697,7 +2697,7 @@ function CategoryChannelMatrix({ heatData, channels, maxHeat, subCatChannelMap =
   }
 
   return (
-    <Card title="Category × Channel Revenue Matrix" note="₹ shading = intensity">
+    <Card title="Category × Channel Revenue Matrix">
       <div className="tbl-wrap">
         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11, minWidth: 700 }}>
           <thead style={{ position: 'sticky', top: 0, background: C.card, zIndex: 1 }}>
@@ -2823,7 +2823,7 @@ function AmazonCategoryMatrix({ channels, catChannel, subCatChannel, skuChannel,
   const CH_COLORS = { FBA: '#E8930A', MFN: '#2E74CC', 'Seller Central': '#E8930A', 'Vendor Central': '#2E74CC' }
 
   return (
-    <Card title={title || 'Category × Channel Revenue Matrix'} note="₹ shading = intensity" action={
+    <Card title={title || 'Category × Channel Revenue Matrix'} action={
       <div style={{ display: 'flex', gap: 3 }}>
         {[['rev','Revenue'],['units','Units'],['orders','Orders']].map(([k,l]) => (
           <button key={k} onClick={() => setMetric(k)} style={{ fontSize: 10, fontWeight: metric===k?700:500, padding: '2px 8px', borderRadius: 4, border: `1px solid ${metric===k?C.acm:C.border}`, background: metric===k?C.acc:'transparent', color: C.t1, cursor: 'pointer', fontFamily: 'var(--font)' }}>{l}</button>
