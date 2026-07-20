@@ -189,8 +189,13 @@ export function exportCSV(rows) {
   URL.revokeObjectURL(url)
 }
 
+function localDateStr(d) {
+  const y = d.getFullYear(), m = String(d.getMonth() + 1).padStart(2, '0'), day = String(d.getDate()).padStart(2, '0')
+  return `${y}-${m}-${day}`
+}
+
 export function getDefaultDates() {
   const end = new Date()
   const start = new Date(end.getFullYear(), end.getMonth(), 1)
-  return { start: start.toISOString().slice(0, 10), end: end.toISOString().slice(0, 10) }
+  return { start: localDateStr(start), end: localDateStr(end) }
 }
