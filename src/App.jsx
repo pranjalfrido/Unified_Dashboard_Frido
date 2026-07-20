@@ -3244,7 +3244,7 @@ function RegionTierDonutRow({ regionRows, tierRows }) {
     return (
       <Card title={title} action={
         <div style={{ display: 'flex', gap: 3 }}>
-          {[['rev','Revenue'],['orders','Orders'],['units','Units'],['aov','AOV']].map(([k,l]) => (
+          {[['rev','Revenue'],['orders','Orders'],['units','Units']].map(([k,l]) => (
             <button key={k} onClick={() => setMetric(k)} style={selStyle(metric === k)}>{l}</button>
           ))}
         </div>
