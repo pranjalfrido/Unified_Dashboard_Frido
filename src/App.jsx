@@ -3526,9 +3526,9 @@ function AllTab({ data, rangeStart }) {
               {subCatView === 'bar' && (
                 <div style={{ overflowY: 'auto', maxHeight: FIXED_H }}>
                   <ResponsiveContainer width="100%" height={Math.max(FIXED_H, subCatRows.length * 26)}>
-                    <BarChart data={subCatRows} layout="vertical" margin={{ top: 0, right: 60, bottom: 0, left: 140 }}>
+                    <BarChart data={subCatRows} layout="vertical" margin={{ top: 0, right: 60, bottom: 0, left: 200 }}>
                       <XAxis type="number" tick={{ fontSize: 10, fill: C.t3 }} tickFormatter={v => v >= 1e7 ? `${(v/1e7).toFixed(1)}Cr` : v >= 1e5 ? `${(v/1e5).toFixed(0)}L` : fmt(v)} />
-                      <YAxis type="category" dataKey="name" tick={{ fontSize: 10, fill: C.t2 }} width={135} />
+                      <YAxis type="category" dataKey="name" width={195} tick={({ x, y, payload }) => <text x={x} y={y} dy={4} textAnchor="end" fill={C.t2} fontSize={10}>{payload.value.length > 28 ? payload.value.slice(0, 27) + '…' : payload.value}</text>} />
                       <CartesianGrid strokeDasharray="3 3" stroke={C.border} horizontal={false} />
                       <Tooltip formatter={v => fmt(v)} />
                       <Bar dataKey="rev" name="Revenue" radius={[0,4,4,0]}>{subCatRows.map((r, i) => <Cell key={r.name} fill={scColorOf(r.name, i)} />)}</Bar>
@@ -4504,9 +4504,9 @@ function ShopifyTab({ data, filters, setFilters }) {
               {shSubCatView === 'bar' && (
                 <div style={{ overflowY: 'auto', maxHeight: FIXED_H }}>
                   <ResponsiveContainer width="100%" height={Math.max(FIXED_H, subCatRows.length * 26)}>
-                    <BarChart data={subCatRows} layout="vertical" margin={{ top: 0, right: 60, bottom: 0, left: 140 }}>
+                    <BarChart data={subCatRows} layout="vertical" margin={{ top: 0, right: 60, bottom: 0, left: 200 }}>
                       <XAxis type="number" tick={{ fontSize: 10, fill: C.t3 }} tickFormatter={v => v >= 1e7 ? `${(v/1e7).toFixed(1)}Cr` : v >= 1e5 ? `${(v/1e5).toFixed(0)}L` : fmt(v)} />
-                      <YAxis type="category" dataKey="name" tick={{ fontSize: 10, fill: C.t2 }} width={135} />
+                      <YAxis type="category" dataKey="name" width={195} tick={({ x, y, payload }) => <text x={x} y={y} dy={4} textAnchor="end" fill={C.t2} fontSize={10}>{payload.value.length > 28 ? payload.value.slice(0, 27) + '…' : payload.value}</text>} />
                       <CartesianGrid strokeDasharray="3 3" stroke={C.border} horizontal={false} />
                       <Tooltip formatter={v => fmt(v)} />
                       <Bar dataKey="rev" name="Revenue" radius={[0,4,4,0]}>{subCatRows.map((r, i) => <Cell key={r.name} fill={scColorOf(r.name, i)} />)}</Bar>
