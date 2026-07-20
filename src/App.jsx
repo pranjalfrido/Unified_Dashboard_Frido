@@ -3258,7 +3258,7 @@ function RegionTierDonutRow({ regionRows, tierRows }) {
               <Tooltip content={({ active, payload }) => active && payload?.length ? <div style={{ background: '#fff', border: `1px solid ${C.border}`, borderRadius: 6, padding: '5px 10px', fontSize: 12, color: '#111', fontWeight: 600 }}>{payload[0].name} : {metricFmt(payload[0].value, metric)}</div> : null} />
             </PieChart>
           </ResponsiveContainer>
-          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 6 }}>
+          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 2 }}>
             {data.map((d, i) => (
               <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
                 <span style={{ width: 10, height: 10, borderRadius: '50%', background: d.color, flexShrink: 0 }} />
