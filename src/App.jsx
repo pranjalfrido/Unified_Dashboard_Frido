@@ -3280,7 +3280,7 @@ function RegionTierDonutRow({ regionRows, tierRows }) {
   )
 }
 
-function AllTab({ data }) {
+function AllTab({ data, rangeStart }) {
   const { totalRev, totalExcRev, gstCollected, nOrders, totalQty, blendedAOV, nDays, dailyArr, chMap, catMap, subCatMap, catPrevMap = {}, subCatPrevMap = {}, stateMap, statePrevMap = {}, stateTotal = 0, cityRows = [], cityPrevMap = {}, cityTotal = 0, regionRows = [], tierRows = [], buckets, bucketRev, rows, orders, orderStatusRevMap = {}, orderStatusMap = {}, catChannelMap = {}, subCatChannelMap: serverSubCatChannelMap = {}, skuRows: allSkuRows = [], prevRev = 0, prevExcRev = 0, prevOrders = 0, prevQty = 0, prevDailyArr = [], prevChMap = {}, nCusts = 0, repeatCusts = 0, rtoRev = 0, cirRev = 0, cancellRev = 0, netRevenueCalc = 0, momRev = 0, yoyRev = 0, momPeriod = '', yoyPeriod = '', prevRtoOrders = 0, prevCirOrders = 0 } = data
   const channels = Object.keys(chMap).filter(ch => chMap[ch]?.rev > 0).sort((a, b) => chMap[b].rev - chMap[a].rev)
   const sortedCh = Object.entries(chMap).filter(([, v]) => v.rev > 0).sort((a, b) => b[1].rev - a[1].rev)
@@ -3461,7 +3461,7 @@ function AllTab({ data }) {
       {(regionRows.length > 0 || tierRows.length > 0) && (
         <RegionTierDonutRow regionRows={regionRows} tierRows={tierRows} />
       )}
-      <DailyChannelTable dailyArr={dailyArr} channels={channels} nDays={nDays} rangeStart={filters.start} />
+      <DailyChannelTable dailyArr={dailyArr} channels={channels} nDays={nDays} rangeStart={rangeStart} />
       <CategoryChannelMatrix heatData={heatData} channels={channels} maxHeat={maxHeat} subCatChannelMap={subCatChannelMap} skuChannelMap={skuChannelMap} />
       <div className="g-2" style={{ alignItems: 'stretch' }}>
         {(() => {
@@ -8219,7 +8219,7 @@ function SalesPage({ data, filters, setFilters, activeTab, setActiveTab, fetchDa
       </div>
       {/* Content */}
       <div className="page-scroll">
-        {activeTab === 'all' && <AllTab data={filteredData} />}
+        {activeTab === 'all' && <AllTab data={filteredData} rangeStart={filters.start} />}
         {activeTab === 'shopify' && <ChannelTab data={filteredData} channel="Shopify" filters={filters} setFilters={setFilters} />}
         {activeTab === 'amazon' && <ChannelTab data={filteredData} channel="Amazon" amzRegion={amzRegion} setAmzRegion={setAmzRegion} />}
         {activeTab === 'flipkart' && <ChannelTab data={filteredData} channel="Flipkart" />}
