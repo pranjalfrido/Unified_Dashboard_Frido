@@ -2492,17 +2492,30 @@ const GROUP_OPTS = [
   { id: 'quarterly', label: 'Quarterly' },
 ]
 
+function ordSuffix(n) {
+  const s = ['th','st','nd','rd'], v = n % 100
+  return n + (s[(v - 20) % 10] || s[v] || s[0])
+}
+
+function getWeekBucketKey(date, rangeStart) {
+  const d = new Date(date + 'T00:00:00')
+  const rs = new Date(rangeStart + 'T00:00:00')
+  const diffDays = Math.floor((d - rs) / 86400000)
+  const bucketIdx = Math.floor(diffDays / 7)
+  const bucketStart = new Date(rs); bucketStart.setDate(rs.getDate() + bucketIdx * 7)
+  const bucketEnd = new Date(bucketStart); bucketEnd.setDate(bucketStart.getDate() + 6)
+  const mon = bucketStart.toLocaleString('en-US', { month: 'short' })
+  const yr = String(bucketStart.getFullYear()).slice(2)
+  const endMon = bucketEnd.toLocaleString('en-US', { month: 'short' })
+  const endLabel = bucketStart.getMonth() !== bucketEnd.getMonth()
+    ? `${ordSuffix(bucketEnd.getDate())} ${endMon}`
+    : ordSuffix(bucketEnd.getDate())
+  return { key: `${bucketIdx}`, label: `${mon} '${yr} ${ordSuffix(bucketStart.getDate())}–${endLabel}`, sortKey: bucketStart.toISOString().slice(0, 10) }
+}
+
 function getGroupKey(date, groupBy) {
   if (!date) return '—'
   if (groupBy === 'daily') return date
-  if (groupBy === 'weekly') {
-    const d = new Date(date)
-    const jan1 = new Date(d.getFullYear(), 0, 1)
-    const weekNum = Math.ceil(((d - jan1) / 86400000 + jan1.getDay() + 1) / 7)
-    const mon = d.toLocaleString('en-IN', { month: 'short' })
-    const yr = String(d.getFullYear()).slice(2)
-    return `${mon}-${yr} W${weekNum}`
-  }
   if (groupBy === 'monthly') return date.slice(0, 7)
   if (groupBy === 'quarterly') {
     const [y, m] = date.split('-')
@@ -2512,28 +2525,34 @@ function getGroupKey(date, groupBy) {
   return date
 }
 
-function groupDailyArr(dailyArr, channels, groupBy) {
+function groupDailyArr(dailyArr, channels, groupBy, rangeStart) {
   if (groupBy === 'daily') return dailyArr
-  const map = {}
+  const map = {}, labelMap = {}, sortMap = {}
   dailyArr.forEach(d => {
-    const key = getGroupKey(d.date, groupBy)
-    if (!map[key]) { map[key] = { date: key }; channels.forEach(ch => { map[key][ch] = 0; map[key][ch + '_o'] = 0; map[key][ch + '_u'] = 0 }) }
+    let key
+    if (groupBy === 'weekly' && rangeStart) {
+      const { key: k, label, sortKey } = getWeekBucketKey(d.date, rangeStart)
+      key = k; labelMap[k] = label; sortMap[k] = sortKey
+    } else {
+      key = getGroupKey(d.date, groupBy)
+    }
+    if (!map[key]) { map[key] = { date: labelMap[key] || key, _sort: sortMap[key] || key }; channels.forEach(ch => { map[key][ch] = 0; map[key][ch + '_o'] = 0; map[key][ch + '_u'] = 0 }) }
     channels.forEach(ch => {
       map[key][ch] = (map[key][ch] || 0) + (d[ch] || 0)
       map[key][ch + '_o'] = (map[key][ch + '_o'] || 0) + (d[ch + '_o'] || 0)
       map[key][ch + '_u'] = (map[key][ch + '_u'] || 0) + (d[ch + '_u'] || 0)
     })
   })
-  return Object.values(map)
+  return Object.values(map).sort((a, b) => a._sort.localeCompare(b._sort))
 }
 
-function DailyChannelTable({ dailyArr, channels, nDays = 7 }) {
+function DailyChannelTable({ dailyArr, channels, nDays = 7, rangeStart }) {
   const autoGroup = nDays <= 14 ? 'daily' : nDays <= 90 ? 'weekly' : 'monthly'
   const [metric, setMetric] = useState('rev')
   const [groupBy, setGroupBy] = useState(autoGroup)
   useEffect(() => { setGroupBy(autoGroup) }, [nDays])
   const m = DAILY_METRICS.find(x => x.id === metric)
-  const grouped = groupDailyArr(dailyArr, channels, groupBy)
+  const grouped = groupDailyArr(dailyArr, channels, groupBy, rangeStart)
 
   const getVal = (d, ch) => {
     if (metric === 'rev') return d[ch] || 0
@@ -3427,7 +3446,7 @@ function AllTab({ data }) {
       {(regionRows.length > 0 || tierRows.length > 0) && (
         <RegionTierDonutRow regionRows={regionRows} tierRows={tierRows} />
       )}
-      <DailyChannelTable dailyArr={dailyArr} channels={channels} nDays={nDays} />
+      <DailyChannelTable dailyArr={dailyArr} channels={channels} nDays={nDays} rangeStart={filters.start} />
       <CategoryChannelMatrix heatData={heatData} channels={channels} maxHeat={maxHeat} subCatChannelMap={subCatChannelMap} skuChannelMap={skuChannelMap} />
       <div className="g-2" style={{ alignItems: 'stretch' }}>
         {(() => {
