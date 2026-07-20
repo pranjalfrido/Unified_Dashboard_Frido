@@ -2631,15 +2631,10 @@ function DailyChannelTable({ dailyArr, channels, nDays = 7, rangeStart }) {
         </div>
       </div>
       <div style={{ overflowX: 'auto', overflowY: 'auto', maxHeight: 380 }}>
-        <table style={{ borderCollapse: 'collapse', fontSize: 12, minWidth: 700, width: '100%', tableLayout: 'fixed' }}>
-          <colgroup>
-            <col style={{ width: 110 }} />
-            {channels.map(ch => <col key={ch} />)}
-            <col style={{ width: 80 }} />
-          </colgroup>
+        <table style={{ borderCollapse: 'collapse', fontSize: 12, minWidth: 700, width: '100%' }}>
           <thead style={{ position: 'sticky', top: 0, zIndex: 2 }}>
             <tr>
-              <th style={{ ...thStyle(null), textAlign: 'left' }}>Period</th>
+              <th style={{ ...thStyle(null), textAlign: 'left', minWidth: 110 }}>Period</th>
               {channels.map(ch => <th key={ch} style={thStyle(ch)}>{ch}</th>)}
               <th style={thStyle(null)}>Total</th>
             </tr>
