@@ -8994,13 +8994,17 @@ function CustomerPage({ filters }) {
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
         {/* Discount distribution First vs Repeat */}
         <Card title="Order Distribution by Discount % (First vs Repeat)">
-          <ResponsiveContainer width="100%" height={200}>
-            <BarChart data={discountDist} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
+          <ResponsiveContainer width="100%" height={240}>
+            <BarChart data={discountDist} margin={{ top: 24, right: 10, left: 0, bottom: 0 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke={C.border} vertical={false} />
               <XAxis dataKey="bucket" tick={{ fontSize: 10 }} />
-              <YAxis tick={{ fontSize: 10 }} />
+              <YAxis tick={{ fontSize: 9 }} tickFormatter={v => v >= 1e5 ? `${(v/1e5).toFixed(0)}L` : v >= 1000 ? `${(v/1000).toFixed(0)}K` : v} />
               <Tooltip formatter={(v, n) => [fmtN(v), n]} />
-              <Bar dataKey="firstOrders" stackId="a" fill={C.acc} name="First Order" />
-              <Bar dataKey="repeatOrders" stackId="a" fill="#B8A000" name="Repeat Order" radius={[3,3,0,0]} />
+              <Legend wrapperStyle={{ fontSize: 10 }} />
+              <Bar dataKey="firstOrders" stackId="a" fill={C.acc} name="First Order"
+                label={{ position: 'inside', fontSize: 9, fill: C.t1, fontWeight: 600, formatter: v => v > 0 ? (v >= 1000 ? `${(v/1000).toFixed(0)}K` : v) : '' }} />
+              <Bar dataKey="repeatOrders" stackId="a" fill="#CCB400" name="Repeat Order" radius={[3,3,0,0]}
+                label={{ position: 'top', fontSize: 9, fill: C.t2, fontWeight: 600, formatter: v => v > 0 ? (v >= 1000 ? `${(v/1000).toFixed(0)}K` : v) : '' }} />
             </BarChart>
           </ResponsiveContainer>
         </Card>
