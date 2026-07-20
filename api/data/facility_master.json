@@ -1,0 +1,546 @@
+[
+  {
+    "Facility": "Gurgaon_Hexalog",
+    "Facility2": "Hexalog Gurgaon",
+    "Location": "GGN",
+    "FCs Status for Invt": "Live",
+    "FacilityType": "Regular",
+    "Store Location": null
+  },
+  {
+    "Facility": "myfrido-RTD",
+    "Facility2": "Vadgaon",
+    "Location": "PNQ",
+    "FCs Status for Invt": "Live",
+    "FacilityType": "Regular",
+    "Store Location": null
+  },
+  {
+    "Facility": "myfrido-Vadgaon_ITEM",
+    "Facility2": "Vadgaon",
+    "Location": "PNQ",
+    "FCs Status for Invt": "Live",
+    "FacilityType": "Regular",
+    "Store Location": null
+  },
+  {
+    "Facility": "WareIQ_Frido_Bangalore",
+    "Facility2": "WareIQ Bangalore",
+    "Location": "BLR",
+    "FCs Status for Invt": "Not Live",
+    "FacilityType": "Regular",
+    "Store Location": null
+  },
+  {
+    "Facility": "WareIQ_Frido_Chennai",
+    "Facility2": "WareIQ Chennai",
+    "Location": "CHN",
+    "FCs Status for Invt": "Not Live",
+    "FacilityType": "Regular",
+    "Store Location": null
+  },
+  {
+    "Facility": "WareIQ_Frido_Gurgaon",
+    "Facility2": "WareIQ Gurgaon",
+    "Location": "GGN",
+    "FCs Status for Invt": "Not Live",
+    "FacilityType": "Regular",
+    "Store Location": null
+  },
+  {
+    "Facility": "WareIQ_Frido_Kolkata",
+    "Facility2": "WareIQ Kolkata",
+    "Location": "KOL",
+    "FCs Status for Invt": "Not Live",
+    "FacilityType": "Regular",
+    "Store Location": null
+  },
+  {
+    "Facility": "WareIQ_Frido_Mumbai",
+    "Facility2": "WareIQ Mumbai",
+    "Location": "MUM",
+    "FCs Status for Invt": "Not Live",
+    "FacilityType": "Regular",
+    "Store Location": null
+  },
+  {
+    "Facility": "AMAZON_FBA_BLR7",
+    "Facility2": "AMAZON_FBA_BLR7",
+    "Location": "BLR",
+    "FCs Status for Invt": "Not Live",
+    "FacilityType": "FBA Facility",
+    "Store Location": null
+  },
+  {
+    "Facility": "AMAZON_FBA_BLR8",
+    "Facility2": "AMAZON_FBA_BLR8",
+    "Location": "BLR",
+    "FCs Status for Invt": "Not Live",
+    "FacilityType": "FBA Facility",
+    "Store Location": null
+  },
+  {
+    "Facility": "AMAZON_FBA_BOM5",
+    "Facility2": "AMAZON_FBA_BOM5",
+    "Location": "MUM",
+    "FCs Status for Invt": "Not Live",
+    "FacilityType": "FBA Facility",
+    "Store Location": null
+  },
+  {
+    "Facility": "AMAZON_FBA_BOM7",
+    "Facility2": "AMAZON_FBA_BOM7",
+    "Location": "MUM",
+    "FCs Status for Invt": "Not Live",
+    "FacilityType": "FBA Facility",
+    "Store Location": null
+  },
+  {
+    "Facility": "AMAZON_FBA_PNQ3",
+    "Facility2": "AMAZON_FBA_PNQ3",
+    "Location": "PNQ",
+    "FCs Status for Invt": "Not Live",
+    "FacilityType": "FBA Facility",
+    "Store Location": null
+  },
+  {
+    "Facility": "Arcatron Mobility Pvt. Ltd. Plant - Chakan",
+    "Facility2": "Chakan",
+    "Location": "PNQ",
+    "FCs Status for Invt": "Not Live",
+    "FacilityType": "Regular",
+    "Store Location": null
+  },
+  {
+    "Facility": "Arcatron Mobility WORKSHOP - Talawade",
+    "Facility2": "Talawade",
+    "Location": "PNQ",
+    "FCs Status for Invt": "Not Live",
+    "FacilityType": "Regular",
+    "Store Location": null
+  },
+  {
+    "Facility": "Frido-Vadgaon-FC",
+    "Facility2": "Vadgaon",
+    "Location": "PNQ",
+    "FCs Status for Invt": "Not Live",
+    "FacilityType": "Regular",
+    "Store Location": null
+  },
+  {
+    "Facility": "Frido-Vadgaon-FC Heavy surface",
+    "Facility2": "Vadgaon",
+    "Location": "PNQ",
+    "FCs Status for Invt": "Not Live",
+    "FacilityType": "Regular",
+    "Store Location": null
+  },
+  {
+    "Facility": "myfrido-b2b",
+    "Facility2": "Vadgaon",
+    "Location": "PNQ",
+    "FCs Status for Invt": "Not Live",
+    "FacilityType": "Regular",
+    "Store Location": null
+  },
+  {
+    "Facility": "myfrido-Vadgaon_Traceability",
+    "Facility2": "Vadgaon",
+    "Location": "PNQ",
+    "FCs Status for Invt": "Not Live",
+    "FacilityType": "Regular",
+    "Store Location": null
+  },
+  {
+    "Facility": "Zippee NCR",
+    "Facility2": "Zippee NCR",
+    "Location": "GGN",
+    "FCs Status for Invt": "Not Live",
+    "FacilityType": "Regular",
+    "Store Location": null
+  },
+  {
+    "Facility": "Zippee-BLR-KalyanNagar",
+    "Facility2": "Zippee-BLR-KalyanNagar",
+    "Location": "BLR",
+    "FCs Status for Invt": "Not Live",
+    "FacilityType": "Regular",
+    "Store Location": null
+  },
+  {
+    "Facility": "Zippee-Kolkata",
+    "Facility2": "Zippee-Kolkata",
+    "Location": "KOL",
+    "FCs Status for Invt": "Not Live",
+    "FacilityType": "Regular",
+    "Store Location": null
+  },
+  {
+    "Facility": "Zippee-Mumbai",
+    "Facility2": "Zippee-Mumbai",
+    "Location": "MUM",
+    "FCs Status for Invt": "Not Live",
+    "FacilityType": "Regular",
+    "Store Location": null
+  },
+  {
+    "Facility": "Zippee-Pune",
+    "Facility2": "Zippee-Pune",
+    "Location": "PNQ",
+    "FCs Status for Invt": "Not Live",
+    "FacilityType": "Regular",
+    "Store Location": null
+  },
+  {
+    "Facility": "AMAZON_FBA_BLR5",
+    "Facility2": "AMAZON_FBA_BLR5",
+    "Location": "BLR",
+    "FCs Status for Invt": "Not Live",
+    "FacilityType": "FBA Facility",
+    "Store Location": null
+  },
+  {
+    "Facility": "Frido_store1",
+    "Facility2": "Frido_store1",
+    "Location": "PNQ",
+    "FCs Status for Invt": "Live",
+    "FacilityType": "Frido Store",
+    "Store Location": "Phoenix Market, PNQ"
+  },
+  {
+    "Facility": "myfrido-BLR_Hexalog",
+    "Facility2": "Hexalog Bangalore",
+    "Location": "BLR",
+    "FCs Status for Invt": "Live",
+    "FacilityType": "Regular",
+    "Store Location": null
+  },
+  {
+    "Facility": "Myfrido-Vadgaon",
+    "Facility2": "Vadgaon",
+    "Location": "PNQ",
+    "FCs Status for Invt": "Not Live",
+    "FacilityType": "Regular",
+    "Store Location": null
+  },
+  {
+    "Facility": "Wareiq_CHN_item",
+    "Facility2": "WareIQ Chennai",
+    "Location": "CHN",
+    "FCs Status for Invt": "Live",
+    "FacilityType": "Regular",
+    "Store Location": null
+  },
+  {
+    "Facility": "Wareiq_HYD_item",
+    "Facility2": "WareIQ Hyderabad",
+    "Location": "HYD",
+    "FCs Status for Invt": "Live",
+    "FacilityType": "Regular",
+    "Store Location": null
+  },
+  {
+    "Facility": "Wareiq_KOL_item",
+    "Facility2": "WareIQ Kolkata",
+    "Location": "KOL",
+    "FCs Status for Invt": "Not Live",
+    "FacilityType": "Regular",
+    "Store Location": null
+  },
+  {
+    "Facility": "Wareiq_MUM_item",
+    "Facility2": "WareIQ Mumbai",
+    "Location": "MUM",
+    "FCs Status for Invt": "Not Live",
+    "FacilityType": "Regular",
+    "Store Location": null
+  },
+  {
+    "Facility": "Vadgaon_FC",
+    "Facility2": "Vadgaon",
+    "Location": "PNQ",
+    "FCs Status for Invt": "Not Live",
+    "FacilityType": "Regular",
+    "Store Location": null
+  },
+  {
+    "Facility": "Frido_0002",
+    "Facility2": "Frido_0002",
+    "Location": "PNQ",
+    "FCs Status for Invt": "Live",
+    "FacilityType": "Frido Store",
+    "Store Location": "Amanora Mall, PNQ"
+  },
+  {
+    "Facility": "Frido_0004",
+    "Facility2": "Frido_0004",
+    "Location": "PNQ",
+    "FCs Status for Invt": "Live",
+    "FacilityType": "Frido Store",
+    "Store Location": "Elpro city square, PNQ"
+  },
+  {
+    "Facility": "Frido_Sudhawadi",
+    "Facility2": "Vadgaon",
+    "Location": "PNQ",
+    "FCs Status for Invt": "Live",
+    "FacilityType": "Regular",
+    "Store Location": null
+  },
+  {
+    "Facility": "Frido_0006",
+    "Facility2": "Frido_0006",
+    "Location": "PNQ",
+    "FCs Status for Invt": "Live",
+    "FacilityType": "Frido Store",
+    "Store Location": "Kopa Mall, PNQ"
+  },
+  {
+    "Facility": "Aaj_Kol_Item",
+    "Facility2": "AAJ Kolkata",
+    "Location": "KOL",
+    "FCs Status for Invt": "Live",
+    "FacilityType": "Regular",
+    "Store Location": null
+  },
+  {
+    "Facility": "Losung_Hyderabad",
+    "Facility2": "Losung Hyderabad",
+    "Location": "HYD",
+    "FCs Status for Invt": "Live",
+    "FacilityType": "Regular",
+    "Store Location": null
+  },
+  {
+    "Facility": "Frido_0005",
+    "Facility2": "Frido_0005",
+    "Location": "PNQ",
+    "FCs Status for Invt": "Live",
+    "FacilityType": "Frido Store",
+    "Store Location": "Nexus Westend Mall, PNQ"
+  },
+  {
+    "Facility": "Beyond_Mum",
+    "Facility2": "Beyond Mumbai",
+    "Location": "MUM",
+    "FCs Status for Invt": "Live",
+    "FacilityType": "Regular",
+    "Store Location": null
+  },
+  {
+    "Facility": "Frido_0003",
+    "Facility2": "Frido_0003",
+    "Location": "PNQ",
+    "FCs Status for Invt": "Live",
+    "FacilityType": "Frido Store",
+    "Store Location": "Amar Tech Park, PNQ"
+  },
+  {
+    "Facility": "Frido_Returns",
+    "Facility2": "Frido_Returns",
+    "Location": "PNQ",
+    "FCs Status for Invt": "Not Live",
+    "FacilityType": "Regular",
+    "Store Location": null
+  },
+  {
+    "Facility": "Frido_0007",
+    "Facility2": "Frido_0007",
+    "Location": "BLR",
+    "FCs Status for Invt": "Live",
+    "FacilityType": "Frido Store",
+    "Store Location": "Mall of Asia, BLR"
+  },
+  {
+    "Facility": "Frido_0008",
+    "Facility2": "Frido_0008",
+    "Location": "HYD",
+    "FCs Status for Invt": "Live",
+    "FacilityType": "Frido Store",
+    "Store Location": "Kukatpalli, HYD"
+  },
+  {
+    "Facility": "Frido_0009",
+    "Facility2": "Frido_0009",
+    "Location": "MUM",
+    "FCs Status for Invt": "Live",
+    "FacilityType": "Frido Store",
+    "Store Location": "Sky city, MUM"
+  },
+  {
+    "Facility": "Frido_00010",
+    "Facility2": "Frido_00010",
+    "Location": "HYD",
+    "FCs Status for Invt": "Live",
+    "FacilityType": "Frido Store",
+    "Store Location": "Gachibowli, HYD"
+  },
+  {
+    "Facility": "Frido_00011",
+    "Facility2": "Frido_00011",
+    "Location": "HYD",
+    "FCs Status for Invt": "Live",
+    "FacilityType": "Frido Store",
+    "Store Location": "Banjara Hills, HYD"
+  },
+  {
+    "Facility": "Frido_00012",
+    "Facility2": "Frido_00012",
+    "Location": "GGN",
+    "FCs Status for Invt": "Live",
+    "FacilityType": "Frido Store",
+    "Store Location": "Haryana, GGN"
+  },
+  {
+    "Facility": "Bangalore-Rtnagar-DS",
+    "Facility2": "Bangalore-Rtnagar-DS",
+    "Location": "BLR",
+    "FCs Status for Invt": "Live",
+    "FacilityType": "Dark Store",
+    "Store Location": null
+  },
+  {
+    "Facility": "Bangalore-Whitefield-DS",
+    "Facility2": "Bangalore-Whitefield-DS",
+    "Location": "BLR",
+    "FCs Status for Invt": "Live",
+    "FacilityType": "Dark Store",
+    "Store Location": null
+  },
+  {
+    "Facility": "Bangalore-Nayandahalli-DS",
+    "Facility2": "Bangalore-Nayandahalli-DS",
+    "Location": "BLR",
+    "FCs Status for Invt": "Live",
+    "FacilityType": "Dark Store",
+    "Store Location": null
+  },
+  {
+    "Facility": "Bangalore-Hulimavu-DS",
+    "Facility2": "Bangalore-Hulimavu-DS",
+    "Location": "BLR",
+    "FCs Status for Invt": "Live",
+    "FacilityType": "Dark Store",
+    "Store Location": null
+  },
+  {
+    "Facility": "Bangalore_Kallumantapa_DS",
+    "Facility2": "Bangalore_Kallumantapa_DS",
+    "Location": "BLR",
+    "FCs Status for Invt": "Live",
+    "FacilityType": "Dark Store",
+    "Store Location": null
+  },
+  {
+    "Facility": "Bangalore_Banashankari_DS",
+    "Facility2": "Bangalore_Banashankari_DS",
+    "Location": "BLR",
+    "FCs Status for Invt": "Live",
+    "FacilityType": "Dark Store",
+    "Store Location": null
+  },
+  {
+    "Facility": "Bangalore_Yashwantpur_DS",
+    "Facility2": "Bangalore_Yashwantpur_DS",
+    "Location": "BLR",
+    "FCs Status for Invt": "Live",
+    "FacilityType": "Dark Store",
+    "Store Location": null
+  },
+  {
+    "Facility": "Bangalore_HSR1_DS",
+    "Facility2": "Bangalore_HSR1_DS",
+    "Location": "BLR",
+    "FCs Status for Invt": "Live",
+    "FacilityType": "Dark Store",
+    "Store Location": null
+  },
+  {
+    "Facility": "Bangalore_ECity_DS",
+    "Facility2": "Bangalore_ECity_DS",
+    "Location": "BLR",
+    "FCs Status for Invt": "Live",
+    "FacilityType": "Dark Store",
+    "Store Location": null
+  },
+  {
+    "Facility": "Bangalore_Domlur_DS",
+    "Facility2": "Bangalore_Domlur_DS",
+    "Location": "BLR",
+    "FCs Status for Invt": "Live",
+    "FacilityType": "Dark Store",
+    "Store Location": null
+  },
+  {
+    "Facility": "Bangalore_Sampigehalli_DS",
+    "Facility2": "Bangalore_Sampigehalli_DS",
+    "Location": "BLR",
+    "FCs Status for Invt": "Live",
+    "FacilityType": "Dark Store",
+    "Store Location": null
+  },
+  {
+    "Facility": "Bangalore_Doddakanelli_DS",
+    "Facility2": "Bangalore_Doddakanelli_DS",
+    "Location": "BLR",
+    "FCs Status for Invt": "Live",
+    "FacilityType": "Dark Store",
+    "Store Location": null
+  },
+  {
+    "Facility": "Bangalore_Kadubesanhli_DS",
+    "Facility2": "Bangalore_Kadubesanhli_DS",
+    "Location": "BLR",
+    "FCs Status for Invt": "Live",
+    "FacilityType": "Dark Store",
+    "Store Location": null
+  },
+  {
+    "Facility": "Frido_00013",
+    "Facility2": "Frido_00013",
+    "Location": "BLR",
+    "FCs Status for Invt": "Live",
+    "FacilityType": "Frido Store",
+    "Store Location": "Bhartiya City, BLR"
+  },
+  {
+    "Facility": "Frido_DOP",
+    "Facility2": "Frido_DOP",
+    "Location": "PNQ",
+    "FCs Status for Invt": "Not Live",
+    "FacilityType": "Regular",
+    "Store Location": null
+  },
+  {
+    "Facility": "Frido_00014",
+    "Facility2": "Frido_00014",
+    "Location": "HYD",
+    "FCs Status for Invt": "Live",
+    "FacilityType": "Frido Store",
+    "Store Location": "Kampolly, HYD"
+  },
+  {
+    "Facility": "AMAZON_FBA_ISK3",
+    "Facility2": "AMAZON_FBA_ISK3",
+    "Location": "MUM",
+    "FCs Status for Invt": "Not Live",
+    "FacilityType": "FBA Facility",
+    "Store Location": null
+  },
+  {
+    "Facility": "AMAZON_FBA_BOM4",
+    "Facility2": "AMAZON_FBA_BOM4",
+    "Location": "GGN",
+    "FCs Status for Invt": "Not Live",
+    "FacilityType": "FBA Facility",
+    "Store Location": null
+  },
+  {
+    "Facility": "Hexalog_GGN2",
+    "Facility2": "Hexalog Gurgaon",
+    "Location": "GGN",
+    "FCs Status for Invt": "Live",
+    "FacilityType": "Regular",
+    "Store Location": null
+  }
+]
