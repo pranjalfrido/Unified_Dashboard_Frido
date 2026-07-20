@@ -375,11 +375,8 @@ GROUP BY day ORDER BY day`),
         bucket: r.bucket,
         customers: parseInt(r.customers) || 0,
       })),
-      discountDist: discountDist.map(r => ({
-        bucket: r.discount_bucket,
-        firstOrders: parseInt(r.first_orders) || 0,
-        repeatOrders: parseInt(r.repeat_orders) || 0,
-      })),
+      discountColumns: discountDist.map(r => r.column_name),
+      discountDist: [],
       dailySpend: dailySpend.map(r => ({
         day: r.day,
         totalSpend: parseFloat(r.total_spend) || 0,
