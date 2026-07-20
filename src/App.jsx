@@ -1,6 +1,7 @@
 import { useState, useMemo, useCallback, useEffect, useRef, Fragment } from 'react'
 import { C, fmt, fmtN, fmtBig, pct, processData, detectAlerts, exportCSV, getDefaultDates } from './utils.js'
 import { KPICard, AlertCard, HBar, DataTable, Card, Badge, RevTrendChart, AreaTrendChart, MultiLineChart, ChartTooltip, BarChart, Bar, LineChart, Line, AreaChart, Area, ComposedChart, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell, Treemap } from './components.jsx'
+import InventoryPage from './InventoryPage.jsx'
 import { ReferenceLine, LabelList } from 'recharts'
 
 // ── Logistics Page ────────────────────────────────────────────
@@ -1208,10 +1209,10 @@ function Sidebar({ page, setPage }) {
     { id: 'ads', label: 'Ads', icon: <SvgIcon d={['M15 3h4a2 2 0 012 2v14a2 2 0 01-2 2h-4','M10 17l5-5-5-5','M13.8 12H3']} /> },
     { id: 'intelligence', label: 'Intel', icon: <SvgIcon d={['M12 2a7 7 0 017 7c0 3.5-2 5.5-2 8H7c0-2.5-2-4.5-2-8a7 7 0 017-7z','M9 21h6','M9.5 17.5h5']} /> },
     { id: 'logistics', label: 'Logistics', icon: <SvgIcon d={['M1 3h15v13H1z','M16 8h4l3 3v5h-7V8z','M5.5 19a1.5 1.5 0 100-3 1.5 1.5 0 000 3z','M18.5 19a1.5 1.5 0 100-3 1.5 1.5 0 000 3z']} /> },
+    { id: 'inventory', label: 'Inventory', icon: <SvgIcon d={['M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z','M3.27 6.96L12 12.01l8.73-5.05','M12 22.08V12']} /> },
   ]
   const dims = [
     { label: 'P&L', icon: <SvgIcon d={['M12 1v22','M17 5H9.5a3.5 3.5 0 100 7h5a3.5 3.5 0 110 7H6']} /> },
-    { label: 'Inventory', icon: <SvgIcon d={['M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z','M3.27 6.96L12 12.01l8.73-5.05','M12 22.08V12']} /> },
     { label: 'Courier', icon: <SvgIcon d={['M1 3h15v13H1z','M16 8h4l3 3v5h-7V8z','M5.5 19a1.5 1.5 0 100-3 1.5 1.5 0 000 3z','M18.5 19a1.5 1.5 0 100-3 1.5 1.5 0 000 3z']} /> },
     { label: 'Marketing', icon: <SvgIcon d={['M22 12h-4l-3 9L9 3l-3 9H2']} /> },
   ]
@@ -1494,7 +1495,7 @@ function DateRangePicker({ filters, setFilters }) {
 }
 
 function Topnav({ page, alerts, onRefresh, loading, filters, setFilters, rawRows }) {
-  const titles = { overview: 'Overview', sales: 'Sales Analytics', ads: 'Ads Analytics', intelligence: 'Intelligence', logistics: 'Logistics Performance Analytics' }
+  const titles = { overview: 'Overview', sales: 'Sales Analytics', ads: 'Ads Analytics', intelligence: 'Intelligence', logistics: 'Logistics Performance Analytics', inventory: 'Inventory, Sales & Allocation' }
   const critical = alerts.filter(a => a.type === 'red').length
   return (
     <div className="topnav">
@@ -1504,12 +1505,14 @@ function Topnav({ page, alerts, onRefresh, loading, filters, setFilters, rawRows
       </div>
       <div className="tnav-sep" />
       <span className="tnav-title">{titles[page]}</span>
-      <div className="tnav-right">
-        <DateRangePicker filters={filters} setFilters={setFilters} />
-        <button onClick={onRefresh} className="tnav-btn">
-          <span style={{ display: 'inline-block', animation: loading ? 'spin 1s linear infinite' : 'none', fontSize: 14 }}>↻</span> Refresh
-        </button>
-      </div>
+      {page !== 'inventory' && (
+        <div className="tnav-right">
+          <DateRangePicker filters={filters} setFilters={setFilters} />
+          <button onClick={onRefresh} className="tnav-btn">
+            <span style={{ display: 'inline-block', animation: loading ? 'spin 1s linear infinite' : 'none', fontSize: 14 }}>↻</span> Refresh
+          </button>
+        </div>
+      )}
     </div>
   )
 }
@@ -8016,7 +8019,7 @@ export default function App() {
           </div>
         )}
         <div style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
-          {!data && !loading && !error && (
+          {!data && !loading && !error && page !== 'logistics' && page !== 'inventory' && (
             <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 16 }}>
               <div style={{ width: 64, height: 64, borderRadius: 18, background: C.acl, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 28 }}>📊</div>
               <div style={{ textAlign: 'center' }}>
@@ -8028,7 +8031,7 @@ export default function App() {
               </div>
             </div>
           )}
-          {loading && !data && page !== 'logistics' && <Skeleton />}
+          {loading && !data && page !== 'logistics' && page !== 'inventory' && <Skeleton />}
           {page === 'overview' && data && (
             <div className="page-scroll">
               <OverviewPage data={data} alerts={alerts} />
@@ -8048,6 +8051,11 @@ export default function App() {
           {page === 'logistics' && (
             <div style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
               <LogisticsPage filters={filters} />
+            </div>
+          )}
+          {page === 'inventory' && (
+            <div className="page-scroll" style={{ padding: 0 }}>
+              <InventoryPage />
             </div>
           )}
         </div>

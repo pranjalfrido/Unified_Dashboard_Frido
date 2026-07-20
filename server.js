@@ -9,6 +9,8 @@ import * as XLSX from 'xlsx'
 import { writeFileSync } from 'fs'
 import { buildQuery as buildUnifiedQuery } from './api/_bq.js'
 import bqHandler from './api/bq.js'
+import inventoryHandler from './api/inventory.js'
+import salesAllocationHandler from './api/sales-allocation.js'
 
 config()
 
@@ -252,6 +254,8 @@ async function hasDataInPG(start, end) {
 
 // ── API: main data endpoint — delegates to api/bq.js (BigQuery) ─
 app.post('/api/bq', (req, res) => bqHandler(req, res))
+app.post('/api/inventory', (req, res) => inventoryHandler(req, res))
+app.post('/api/sales-allocation', (req, res) => salesAllocationHandler(req, res))
 
 // ── API: Logistics / Clickpost data ──────────────────────────
 app.post('/api/logistics', async (req, res) => {
@@ -299,12 +303,12 @@ WITH base AS (
     SAFE_CAST(c.invoice_value AS FLOAT64) AS invoice_value,
     SAFE_CAST(c.committed_sla AS FLOAT64) AS committed_sla,
     SAFE_CAST(c.out_for_delivery_attempts AS INT64) AS ofd_attempts,
-    DATE(PARSE_TIMESTAMP('%Y-%m-%dT%H:%M:%E*S%Ez', c.created_at)) AS created_date,
-    DATE(PARSE_TIMESTAMP('%Y-%m-%dT%H:%M:%E*S%Ez', c.delivery_date)) AS delivery_date,
-    DATE(PARSE_TIMESTAMP('%Y-%m-%dT%H:%M:%E*S%Ez', c.expected_delivery_date_by_courier_partner)) AS edd,
-    DATE(PARSE_TIMESTAMP('%Y-%m-%dT%H:%M:%E*S%Ez', c.pickup_date)) AS pickup_date,
-    DATE(PARSE_TIMESTAMP('%Y-%m-%dT%H:%M:%E*S%Ez', c.rto_mark_date)) AS rto_mark_date,
-    DATE(PARSE_TIMESTAMP('%Y-%m-%dT%H:%M:%E*S%Ez', c.out_for_delivery_1st_attempt)) AS ofd1_date,
+    DATE(SAFE.PARSE_TIMESTAMP('%Y-%m-%d %H:%M:%S', SUBSTR(c.created_at, 1, 19))) AS created_date,
+    DATE(SAFE.PARSE_TIMESTAMP('%Y-%m-%d %H:%M:%S', SUBSTR(c.delivery_date, 1, 19))) AS delivery_date,
+    DATE(SAFE.PARSE_TIMESTAMP('%Y-%m-%d %H:%M:%S', SUBSTR(c.expected_delivery_date_by_courier_partner, 1, 19))) AS edd,
+    DATE(SAFE.PARSE_TIMESTAMP('%Y-%m-%d %H:%M:%S', SUBSTR(c.pickup_date, 1, 19))) AS pickup_date,
+    DATE(SAFE.PARSE_TIMESTAMP('%Y-%m-%d %H:%M:%S', SUBSTR(c.rto_mark_date, 1, 19))) AS rto_mark_date,
+    DATE(SAFE.PARSE_TIMESTAMP('%Y-%m-%d %H:%M:%S', SUBSTR(c.out_for_delivery_1st_attempt, 1, 19))) AS ofd1_date,
     c.reason_for_last_failed_delivery,
     c.channel_name,
     im.CategoryName AS category,
@@ -312,7 +316,7 @@ WITH base AS (
   FROM \`frido-429506.production.Clickpost_Shipment_Tracking_Report\` c
   LEFT JOIN \`frido-429506.production.Unicommerce_Item_Master\` im
     ON TRIM(c.product_sku_code) = TRIM(im.ProductCode)
-  WHERE DATE(PARSE_TIMESTAMP('%Y-%m-%dT%H:%M:%E*S%Ez', c.created_at)) BETWEEN '${start}' AND '${end}'
+  WHERE DATE(SAFE.PARSE_TIMESTAMP('%Y-%m-%d %H:%M:%S', SUBSTR(c.created_at, 1, 19))) BETWEEN '${start}' AND '${end}'
   ${whereClause}
 ),
 kpis AS (

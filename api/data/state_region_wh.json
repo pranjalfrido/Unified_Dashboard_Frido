@@ -1,0 +1,187 @@
+[
+  {
+    "shipping_address_state": "Andaman & Nicobar Islands",
+    "region": "South",
+    "nearest_wh": "CHN"
+  },
+  {
+    "shipping_address_state": "Andhra Pradesh",
+    "region": "South",
+    "nearest_wh": "HYD"
+  },
+  {
+    "shipping_address_state": "Arunachal Pradesh",
+    "region": "North-East",
+    "nearest_wh": "KOL"
+  },
+  {
+    "shipping_address_state": "Assam",
+    "region": "North-East",
+    "nearest_wh": "KOL"
+  },
+  {
+    "shipping_address_state": "Bihar",
+    "region": "East",
+    "nearest_wh": "KOL"
+  },
+  {
+    "shipping_address_state": "Chandigarh",
+    "region": "North",
+    "nearest_wh": "GGN"
+  },
+  {
+    "shipping_address_state": "Chhattisgarh",
+    "region": "Central",
+    "nearest_wh": "HYD"
+  },
+  {
+    "shipping_address_state": "Dadra and Nagar Haveli and Daman and Diu",
+    "region": "West",
+    "nearest_wh": "MUM"
+  },
+  {
+    "shipping_address_state": "Daman & Diu",
+    "region": "West",
+    "nearest_wh": "MUM"
+  },
+  {
+    "shipping_address_state": "Delhi",
+    "region": "North",
+    "nearest_wh": "GGN"
+  },
+  {
+    "shipping_address_state": "Goa",
+    "region": "West",
+    "nearest_wh": "MUM"
+  },
+  {
+    "shipping_address_state": "Gujarat",
+    "region": "West",
+    "nearest_wh": "MUM"
+  },
+  {
+    "shipping_address_state": "Haryana",
+    "region": "North",
+    "nearest_wh": "GGN"
+  },
+  {
+    "shipping_address_state": "Himachal Pradesh",
+    "region": "North",
+    "nearest_wh": "GGN"
+  },
+  {
+    "shipping_address_state": "Jammu & Kashmir",
+    "region": "North",
+    "nearest_wh": "GGN"
+  },
+  {
+    "shipping_address_state": "Jharkhand",
+    "region": "East",
+    "nearest_wh": "KOL"
+  },
+  {
+    "shipping_address_state": "Karnataka",
+    "region": "South",
+    "nearest_wh": "BLR"
+  },
+  {
+    "shipping_address_state": "Kerala",
+    "region": "South",
+    "nearest_wh": "BLR"
+  },
+  {
+    "shipping_address_state": "Ladakh",
+    "region": "North",
+    "nearest_wh": "GGN"
+  },
+  {
+    "shipping_address_state": "Lakshadweep",
+    "region": "South",
+    "nearest_wh": "BLR"
+  },
+  {
+    "shipping_address_state": "Madhya Pradesh",
+    "region": "Central",
+    "nearest_wh": "GGN"
+  },
+  {
+    "shipping_address_state": "Maharashtra",
+    "region": "West",
+    "nearest_wh": "PNQ"
+  },
+  {
+    "shipping_address_state": "Manipur",
+    "region": "North-East",
+    "nearest_wh": "KOL"
+  },
+  {
+    "shipping_address_state": "Meghalaya",
+    "region": "North-East",
+    "nearest_wh": "KOL"
+  },
+  {
+    "shipping_address_state": "Mizoram",
+    "region": "North-East",
+    "nearest_wh": "KOL"
+  },
+  {
+    "shipping_address_state": "Nagaland",
+    "region": "North-East",
+    "nearest_wh": "KOL"
+  },
+  {
+    "shipping_address_state": "Odisha",
+    "region": "East",
+    "nearest_wh": "KOL"
+  },
+  {
+    "shipping_address_state": "Puducherry",
+    "region": "South",
+    "nearest_wh": "CHN"
+  },
+  {
+    "shipping_address_state": "Punjab",
+    "region": "North",
+    "nearest_wh": "GGN"
+  },
+  {
+    "shipping_address_state": "Rajasthan",
+    "region": "North",
+    "nearest_wh": "GGN"
+  },
+  {
+    "shipping_address_state": "Sikkim",
+    "region": "North-East",
+    "nearest_wh": "KOL"
+  },
+  {
+    "shipping_address_state": "Tamil Nadu",
+    "region": "South",
+    "nearest_wh": "CHN"
+  },
+  {
+    "shipping_address_state": "Telangana",
+    "region": "South",
+    "nearest_wh": "HYD"
+  },
+  {
+    "shipping_address_state": "Tripura",
+    "region": "North-East",
+    "nearest_wh": "KOL"
+  },
+  {
+    "shipping_address_state": "Uttar Pradesh",
+    "region": "North",
+    "nearest_wh": "GGN"
+  },
+  {
+    "shipping_address_state": "Uttarakhand",
+    "region": "North",
+    "nearest_wh": "GGN"
+  },
+  {
+    "shipping_address_state": "West Bengal",
+    "region": "East",
+    "nearest_wh": "KOL"
+  }
+]

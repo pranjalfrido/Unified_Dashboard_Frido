@@ -7,6 +7,9 @@ export default defineConfig({
   server: {
     proxy: {
       '/api': 'http://localhost:3001'
+    },
+    watch: {
+      ignored: ['**/*.pbix', '**/*.docx', '**/*.xlsx', '**/*.doc', '**/*.pdf']
     }
   }
 })

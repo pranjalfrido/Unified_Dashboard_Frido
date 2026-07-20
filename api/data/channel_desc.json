@@ -1,0 +1,723 @@
+[
+  {
+    "uniware_channels": "BLINKIT",
+    "unified_channel": "BLINKIT",
+    "unified_channel2": "Others",
+    "channel_description": "Purchase Order",
+    "Flex Location": null
+  },
+  {
+    "uniware_channels": "ZIPPEE_PUN",
+    "unified_channel": "ZIPPEE",
+    "unified_channel2": null,
+    "channel_description": "Stock transfer",
+    "Flex Location": null
+  },
+  {
+    "uniware_channels": "ZIPPEE_PUNE",
+    "unified_channel": "ZIPPEE",
+    "unified_channel2": null,
+    "channel_description": "Stock transfer",
+    "Flex Location": null
+  },
+  {
+    "uniware_channels": "ZIPPEE_BLR",
+    "unified_channel": "ZIPPEE",
+    "unified_channel2": null,
+    "channel_description": "Stock transfer",
+    "Flex Location": null
+  },
+  {
+    "uniware_channels": "ZIPPEE_NCR",
+    "unified_channel": "ZIPPEE",
+    "unified_channel2": null,
+    "channel_description": "Stock transfer",
+    "Flex Location": null
+  },
+  {
+    "uniware_channels": "ZIPPEE_KOL",
+    "unified_channel": "ZIPPEE",
+    "unified_channel2": null,
+    "channel_description": "Stock transfer",
+    "Flex Location": null
+  },
+  {
+    "uniware_channels": "FLIPKART_VADGAON",
+    "unified_channel": "Flipkart",
+    "unified_channel2": "Flipkart",
+    "channel_description": "B2C Order",
+    "Flex Location": null
+  },
+  {
+    "uniware_channels": "B2B",
+    "unified_channel": "B2B",
+    "unified_channel2": "B2B",
+    "channel_description": "B2B Order",
+    "Flex Location": null
+  },
+  {
+    "uniware_channels": "RESHIPMENT",
+    "unified_channel": "RESHIPMENT",
+    "unified_channel2": null,
+    "channel_description": "Ignore",
+    "Flex Location": null
+  },
+  {
+    "uniware_channels": "PEPPERFRY",
+    "unified_channel": "PEPPERFRY",
+    "unified_channel2": "Others",
+    "channel_description": "B2C Order",
+    "Flex Location": null
+  },
+  {
+    "uniware_channels": "MARKETING",
+    "unified_channel": "MARKETING",
+    "unified_channel2": null,
+    "channel_description": "Ignore",
+    "Flex Location": null
+  },
+  {
+    "uniware_channels": "FLIPKART_BHIWANDI",
+    "unified_channel": "Flipkart",
+    "unified_channel2": "Flipkart",
+    "channel_description": "B2C Order",
+    "Flex Location": null
+  },
+  {
+    "uniware_channels": "VAS",
+    "unified_channel": "VAS",
+    "unified_channel2": null,
+    "channel_description": "Ignore",
+    "Flex Location": null
+  },
+  {
+    "uniware_channels": "ZIPPEE_MUM",
+    "unified_channel": "ZIPPEE",
+    "unified_channel2": null,
+    "channel_description": "Stock transfer",
+    "Flex Location": null
+  },
+  {
+    "uniware_channels": "ZEPTO",
+    "unified_channel": "ZEPTO",
+    "unified_channel2": null,
+    "channel_description": "Purchase Order",
+    "Flex Location": null
+  },
+  {
+    "uniware_channels": "EXPORT",
+    "unified_channel": "EXPORT",
+    "unified_channel2": null,
+    "channel_description": "Purchase Order",
+    "Flex Location": null
+  },
+  {
+    "uniware_channels": "3PL_WAREIQ",
+    "unified_channel": "WareIQ",
+    "unified_channel2": null,
+    "channel_description": "Stock transfer",
+    "Flex Location": null
+  },
+  {
+    "uniware_channels": "INSTAMART",
+    "unified_channel": "INSTAMART",
+    "unified_channel2": "Others",
+    "channel_description": "Purchase Order",
+    "Flex Location": null
+  },
+  {
+    "uniware_channels": "HEXALOG_GGN",
+    "unified_channel": "HEXALOG_GGN",
+    "unified_channel2": null,
+    "channel_description": "Stock transfer",
+    "Flex Location": null
+  },
+  {
+    "uniware_channels": "FLIPKART_HEXALOG_GGN",
+    "unified_channel": "Flipkart",
+    "unified_channel2": "Flipkart",
+    "channel_description": "B2C Order",
+    "Flex Location": null
+  },
+  {
+    "uniware_channels": "AMAZON_VENDOR_CENTRAL",
+    "unified_channel": "AMAZON_VENDOR_CENTRAL",
+    "unified_channel2": "Amazon",
+    "channel_description": "Purchase Order",
+    "Flex Location": null
+  },
+  {
+    "uniware_channels": "FLIPKART",
+    "unified_channel": "Flipkart",
+    "unified_channel2": "Flipkart",
+    "channel_description": "B2C Order",
+    "Flex Location": null
+  },
+  {
+    "uniware_channels": "FLIPKART_411044",
+    "unified_channel": "Flipkart",
+    "unified_channel2": "Flipkart",
+    "channel_description": "B2C Order",
+    "Flex Location": null
+  },
+  {
+    "uniware_channels": "FLIPKART_412114",
+    "unified_channel": "Flipkart",
+    "unified_channel2": "Flipkart",
+    "channel_description": "B2C Order",
+    "Flex Location": null
+  },
+  {
+    "uniware_channels": "CUSTOM",
+    "unified_channel": "CUSTOM",
+    "unified_channel2": null,
+    "channel_description": "Custom",
+    "Flex Location": null
+  },
+  {
+    "uniware_channels": "FLIPKART_BLR",
+    "unified_channel": "Flipkart",
+    "unified_channel2": "Flipkart",
+    "channel_description": "B2C Order",
+    "Flex Location": null
+  },
+  {
+    "uniware_channels": "FLIPKART_GURGAON",
+    "unified_channel": "Flipkart",
+    "unified_channel2": "Flipkart",
+    "channel_description": "B2C Order",
+    "Flex Location": null
+  },
+  {
+    "uniware_channels": "FLIPKART_KOL",
+    "unified_channel": "Flipkart",
+    "unified_channel2": "Flipkart",
+    "channel_description": "B2C Order",
+    "Flex Location": null
+  },
+  {
+    "uniware_channels": "FBA",
+    "unified_channel": "FBA",
+    "unified_channel2": null,
+    "channel_description": "Purchase Order",
+    "Flex Location": null
+  },
+  {
+    "uniware_channels": "FBF",
+    "unified_channel": "FBF",
+    "unified_channel2": null,
+    "channel_description": "Purchase Order",
+    "Flex Location": null
+  },
+  {
+    "uniware_channels": "WAREIQ_MUM",
+    "unified_channel": "WareIQ",
+    "unified_channel2": null,
+    "channel_description": "Stock transfer",
+    "Flex Location": null
+  },
+  {
+    "uniware_channels": "WAREIQ_BLR",
+    "unified_channel": "WareIQ",
+    "unified_channel2": null,
+    "channel_description": "Stock transfer",
+    "Flex Location": null
+  },
+  {
+    "uniware_channels": "WAREIQ_GURGAON",
+    "unified_channel": "WareIQ",
+    "unified_channel2": null,
+    "channel_description": "Stock transfer",
+    "Flex Location": null
+  },
+  {
+    "uniware_channels": "WAREIQ_KOL",
+    "unified_channel": "WareIQ",
+    "unified_channel2": null,
+    "channel_description": "Stock transfer",
+    "Flex Location": null
+  },
+  {
+    "uniware_channels": "MYNTRAPPMP_FRIDO_PUNE",
+    "unified_channel": "Myntra",
+    "unified_channel2": "Myntra",
+    "channel_description": "B2C Order",
+    "Flex Location": null
+  },
+  {
+    "uniware_channels": "SNAPDEAL_PUNE",
+    "unified_channel": "SNAPDEAL_PUNE",
+    "unified_channel2": "Others",
+    "channel_description": "B2C Order",
+    "Flex Location": null
+  },
+  {
+    "uniware_channels": "AMAZON_FLEX_API_XKZF",
+    "unified_channel": "Amazon Flex",
+    "unified_channel2": "Amazon",
+    "channel_description": "B2C Order",
+    "Flex Location": "PNQ"
+  },
+  {
+    "uniware_channels": "AMAZON_FLEX_API_XZCS",
+    "unified_channel": "Amazon Flex",
+    "unified_channel2": "Amazon",
+    "channel_description": "B2C Order",
+    "Flex Location": "GGN"
+  },
+  {
+    "uniware_channels": "AMAZON_FLEX_API_XZNZ",
+    "unified_channel": "Amazon Flex",
+    "unified_channel2": "Amazon",
+    "channel_description": "B2C Order",
+    "Flex Location": "BLR"
+  },
+  {
+    "uniware_channels": "AMAZON_FLEX_API_XIYR",
+    "unified_channel": "Amazon Flex",
+    "unified_channel2": "Amazon",
+    "channel_description": "B2C Order",
+    "Flex Location": "PNQ"
+  },
+  {
+    "uniware_channels": "AMAZON_IN_API",
+    "unified_channel": "Amazon Self Ship",
+    "unified_channel2": "Amazon",
+    "channel_description": "B2C Order",
+    "Flex Location": null
+  },
+  {
+    "uniware_channels": "SNAPDEAL",
+    "unified_channel": "SNAPDEAL",
+    "unified_channel2": "Others",
+    "channel_description": "B2C Order",
+    "Flex Location": null
+  },
+  {
+    "uniware_channels": "AMAZON_FBA_PNQ3",
+    "unified_channel": "AMAZON_FBA",
+    "unified_channel2": "Amazon",
+    "channel_description": "B2C Order",
+    "Flex Location": null
+  },
+  {
+    "uniware_channels": "AMAZON_FBA_IN",
+    "unified_channel": "AMAZON_FBA",
+    "unified_channel2": "Amazon",
+    "channel_description": "B2C Order",
+    "Flex Location": null
+  },
+  {
+    "uniware_channels": "AMAZON_FBA_BLR7",
+    "unified_channel": "AMAZON_FBA",
+    "unified_channel2": "Amazon",
+    "channel_description": "B2C Order",
+    "Flex Location": null
+  },
+  {
+    "uniware_channels": "AMAZON_FBA_BLR5",
+    "unified_channel": "AMAZON_FBA",
+    "unified_channel2": "Amazon",
+    "channel_description": "B2C Order",
+    "Flex Location": null
+  },
+  {
+    "uniware_channels": "AMAZON_FBA_BLR8",
+    "unified_channel": "AMAZON_FBA",
+    "unified_channel2": "Amazon",
+    "channel_description": "B2C Order",
+    "Flex Location": null
+  },
+  {
+    "uniware_channels": "AMAZON_FBA_BOM4",
+    "unified_channel": "AMAZON_FBA",
+    "unified_channel2": "Amazon",
+    "channel_description": "B2C Order",
+    "Flex Location": null
+  },
+  {
+    "uniware_channels": "AMAZON_FBA_BOM5",
+    "unified_channel": "AMAZON_FBA",
+    "unified_channel2": "Amazon",
+    "channel_description": "B2C Order",
+    "Flex Location": null
+  },
+  {
+    "uniware_channels": "AMAZON_FBA_BOM7",
+    "unified_channel": "AMAZON_FBA",
+    "unified_channel2": "Amazon",
+    "channel_description": "B2C Order",
+    "Flex Location": null
+  },
+  {
+    "uniware_channels": "SHOPIFY_MOBILITY",
+    "unified_channel": "SHOPIFY_MOBILITY",
+    "unified_channel2": "Shopify",
+    "channel_description": "B2C Order",
+    "Flex Location": null
+  },
+  {
+    "uniware_channels": "SHOPIFY",
+    "unified_channel": "SHOPIFY",
+    "unified_channel2": "Shopify",
+    "channel_description": "B2C Order",
+    "Flex Location": null
+  },
+  {
+    "uniware_channels": "PHARMEASY",
+    "unified_channel": "PHARMEASY",
+    "unified_channel2": "Others",
+    "channel_description": "B2C Order",
+    "Flex Location": null
+  },
+  {
+    "uniware_channels": "CRED_HEXALOG_GGN",
+    "unified_channel": "CRED",
+    "unified_channel2": "CRED",
+    "channel_description": "B2C Order",
+    "Flex Location": null
+  },
+  {
+    "uniware_channels": "CRED_HEXALOG_GGN2",
+    "unified_channel": "CRED",
+    "unified_channel2": "CRED",
+    "channel_description": "B2C Order",
+    "Flex Location": null
+  },
+  {
+    "uniware_channels": "CRED",
+    "unified_channel": "CRED",
+    "unified_channel2": "CRED",
+    "channel_description": "B2C Order",
+    "Flex Location": null
+  },
+  {
+    "uniware_channels": "CRED_WAREIQ_MUM",
+    "unified_channel": "CRED",
+    "unified_channel2": "CRED",
+    "channel_description": "B2C Order",
+    "Flex Location": null
+  },
+  {
+    "uniware_channels": "CRED_WAREIQ_BLR",
+    "unified_channel": "CRED",
+    "unified_channel2": "CRED",
+    "channel_description": "B2C Order",
+    "Flex Location": null
+  },
+  {
+    "uniware_channels": "CRED_WAREIQ_GURUGRAM",
+    "unified_channel": "CRED",
+    "unified_channel2": "CRED",
+    "channel_description": "B2C Order",
+    "Flex Location": null
+  },
+  {
+    "uniware_channels": "CRED_WAREIQ_KOL",
+    "unified_channel": "CRED",
+    "unified_channel2": "CRED",
+    "channel_description": "B2C Order",
+    "Flex Location": null
+  },
+  {
+    "uniware_channels": "AMAZON_API_NEW",
+    "unified_channel": "Amazon Self Ship",
+    "unified_channel2": "Amazon",
+    "channel_description": "B2C Order",
+    "Flex Location": null
+  },
+  {
+    "uniware_channels": "AMAZON_FLEX_API_XJBW_BLR",
+    "unified_channel": "Amazon Flex",
+    "unified_channel2": "Amazon",
+    "channel_description": "B2C Order",
+    "Flex Location": "BLR"
+  },
+  {
+    "uniware_channels": "AMAZON_FLEX_API_XJBX_GGN",
+    "unified_channel": "Amazon Flex",
+    "unified_channel2": "Amazon",
+    "channel_description": "B2C Order",
+    "Flex Location": "GGN"
+  },
+  {
+    "uniware_channels": "AMAZON_FLEX_API_XJBY_CHN",
+    "unified_channel": "Amazon Flex",
+    "unified_channel2": "Amazon",
+    "channel_description": "B2C Order",
+    "Flex Location": "CHN"
+  },
+  {
+    "uniware_channels": "AMAZON_FLEX_API_XJBZ_KOL",
+    "unified_channel": "Amazon Flex",
+    "unified_channel2": "Amazon",
+    "channel_description": "B2C Order",
+    "Flex Location": "KOL"
+  },
+  {
+    "uniware_channels": "AMAZON_FLEX_API_XSLN_KOL",
+    "unified_channel": "Amazon Flex",
+    "unified_channel2": "Amazon",
+    "channel_description": "B2C Order",
+    "Flex Location": "KOL"
+  },
+  {
+    "uniware_channels": "AMAZON_FLEX_API_XTXT_BLR",
+    "unified_channel": "Amazon Flex",
+    "unified_channel2": "Amazon",
+    "channel_description": "B2C Order",
+    "Flex Location": "BLR"
+  },
+  {
+    "uniware_channels": "AMAZON_FLEX_API_XXPZ",
+    "unified_channel": "Amazon Flex",
+    "unified_channel2": "Amazon",
+    "channel_description": "B2C Order",
+    "Flex Location": "CHN"
+  },
+  {
+    "uniware_channels": "BLINKIT_FRIDO",
+    "unified_channel": "BLINKIT",
+    "unified_channel2": null,
+    "channel_description": "Purchase Order",
+    "Flex Location": null
+  },
+  {
+    "uniware_channels": "CRED_HEXALOG_BLR",
+    "unified_channel": "CRED",
+    "unified_channel2": "CRED",
+    "channel_description": "B2C Order",
+    "Flex Location": null
+  },
+  {
+    "uniware_channels": "ETRADE",
+    "unified_channel": "Amazon_Etrade",
+    "unified_channel2": "Amazon",
+    "channel_description": "B2C Order",
+    "Flex Location": null
+  },
+  {
+    "uniware_channels": "FLIPKART_HEXA_BLR",
+    "unified_channel": "Flipkart",
+    "unified_channel2": "Flipkart",
+    "channel_description": "B2C Order",
+    "Flex Location": null
+  },
+  {
+    "uniware_channels": "GGN_GOAH",
+    "unified_channel": "Amazon_Etrade",
+    "unified_channel2": "Amazon",
+    "channel_description": "B2C Order",
+    "Flex Location": null
+  },
+  {
+    "uniware_channels": "MYNTRAPPMP_Frido pune",
+    "unified_channel": "Myntra",
+    "unified_channel2": "Myntra",
+    "channel_description": "B2C Order",
+    "Flex Location": null
+  },
+  {
+    "uniware_channels": "retailEZ",
+    "unified_channel": "retailEZ",
+    "unified_channel2": null,
+    "channel_description": "Purchase Order",
+    "Flex Location": null
+  },
+  {
+    "uniware_channels": "AMAZON_FLEX_API_XJBW",
+    "unified_channel": "Amazon Flex",
+    "unified_channel2": "Amazon",
+    "channel_description": "B2C Order",
+    "Flex Location": "BLR"
+  },
+  {
+    "uniware_channels": "AMAZON_FLEX_API_XJBZ",
+    "unified_channel": "Amazon Flex",
+    "unified_channel2": "Amazon",
+    "channel_description": "B2C Order",
+    "Flex Location": "KOL"
+  },
+  {
+    "uniware_channels": "AMAZON_FLEX_API_XJBY",
+    "unified_channel": "Amazon Flex",
+    "unified_channel2": "Amazon",
+    "channel_description": "B2C Order",
+    "Flex Location": "CHN"
+  },
+  {
+    "uniware_channels": "AMAZON_FLEX_API_XJBX",
+    "unified_channel": "Amazon Flex",
+    "unified_channel2": "Amazon",
+    "channel_description": "B2C Order",
+    "Flex Location": "GGN"
+  },
+  {
+    "uniware_channels": "AMAZON_FLEX_API_XTXT",
+    "unified_channel": "Amazon Flex",
+    "unified_channel2": "Amazon",
+    "channel_description": "B2C Order",
+    "Flex Location": "BLR"
+  },
+  {
+    "uniware_channels": "AMAZON_FLEX_API_XSLN",
+    "unified_channel": "Amazon Flex",
+    "unified_channel2": "Amazon",
+    "channel_description": "B2C Order",
+    "Flex Location": "KOL"
+  },
+  {
+    "uniware_channels": "CUSTOM_B2B",
+    "unified_channel": "CUSTOM",
+    "unified_channel2": null,
+    "channel_description": "Custom",
+    "Flex Location": null
+  },
+  {
+    "uniware_channels": "Etrade_BLR",
+    "unified_channel": "Amazon_Etrade",
+    "unified_channel2": "Amazon",
+    "channel_description": "B2C Order",
+    "Flex Location": null
+  },
+  {
+    "uniware_channels": "Etrade_CHN",
+    "unified_channel": "Amazon_Etrade",
+    "unified_channel2": "Amazon",
+    "channel_description": "B2C Order",
+    "Flex Location": null
+  },
+  {
+    "uniware_channels": "Etrade_HYD",
+    "unified_channel": "Amazon_Etrade",
+    "unified_channel2": "Amazon",
+    "channel_description": "B2C Order",
+    "Flex Location": null
+  },
+  {
+    "uniware_channels": "Etrade_KOL",
+    "unified_channel": "Amazon_Etrade",
+    "unified_channel2": "Amazon",
+    "channel_description": "B2C Order",
+    "Flex Location": null
+  },
+  {
+    "uniware_channels": "FIRSTCRY_Pune",
+    "unified_channel": "Firstcry",
+    "unified_channel2": "Firstcry",
+    "channel_description": "B2C Order",
+    "Flex Location": null
+  },
+  {
+    "uniware_channels": "FLIPKART_HYD",
+    "unified_channel": "Flipkart",
+    "unified_channel2": "Flipkart",
+    "channel_description": "B2C Order",
+    "Flex Location": null
+  },
+  {
+    "uniware_channels": "MYNTRAPPMP_HRX",
+    "unified_channel": "Myntra",
+    "unified_channel2": "Myntra",
+    "channel_description": "B2C Order",
+    "Flex Location": null
+  },
+  {
+    "uniware_channels": "SHOPIFY_B2B",
+    "unified_channel": "Shopify",
+    "unified_channel2": "Shopify",
+    "channel_description": "B2C Order",
+    "Flex Location": null
+  },
+  {
+    "uniware_channels": "FLIPKART_NDR storehouse",
+    "unified_channel": "Flipkart",
+    "unified_channel2": "Flipkart",
+    "channel_description": "B2C Order",
+    "Flex Location": null
+  },
+  {
+    "uniware_channels": "3PL-WAREIQ",
+    "unified_channel": "WareIQ",
+    "unified_channel2": null,
+    "channel_description": "Stock transfer",
+    "Flex Location": null
+  },
+  {
+    "uniware_channels": "FLIPKART-412114",
+    "unified_channel": "Flipkart",
+    "unified_channel2": "Flipkart",
+    "channel_description": "B2C Order",
+    "Flex Location": null
+  },
+  {
+    "uniware_channels": "FLIPKART_CHN",
+    "unified_channel": "Flipkart",
+    "unified_channel2": "Flipkart",
+    "channel_description": "B2C Order",
+    "Flex Location": null
+  },
+  {
+    "uniware_channels": "Scapia",
+    "unified_channel": "Scapia",
+    "unified_channel2": null,
+    "channel_description": "Purchase Order",
+    "Flex Location": null
+  },
+  {
+    "uniware_channels": "FLIPKART_Sudhavadi",
+    "unified_channel": "Flipkart",
+    "unified_channel2": "Flipkart",
+    "channel_description": "B2C Order",
+    "Flex Location": null
+  },
+  {
+    "uniware_channels": "MYNTRAPPMP_BLR",
+    "unified_channel": "Myntra",
+    "unified_channel2": "Myntra",
+    "channel_description": "B2C Order",
+    "Flex Location": null
+  },
+  {
+    "uniware_channels": "POSX",
+    "unified_channel": "POSX",
+    "unified_channel2": null,
+    "channel_description": "Ignore",
+    "Flex Location": null
+  },
+  {
+    "uniware_channels": "SHOPIFY_demo",
+    "unified_channel": "SHOPIFY_demo",
+    "unified_channel2": null,
+    "channel_description": "Ignore",
+    "Flex Location": null
+  },
+  {
+    "uniware_channels": "MYNTRAPPMP_MUM",
+    "unified_channel": "Myntra",
+    "unified_channel2": "Myntra",
+    "channel_description": "B2C Order",
+    "Flex Location": null
+  },
+  {
+    "uniware_channels": "MYNTRAPPMP_KOL",
+    "unified_channel": "Myntra",
+    "unified_channel2": "Myntra",
+    "channel_description": "B2C Order",
+    "Flex Location": null
+  },
+  {
+    "uniware_channels": "MYNTRAPPMP_CHN",
+    "unified_channel": "Myntra",
+    "unified_channel2": "Myntra",
+    "channel_description": "B2C Order",
+    "Flex Location": null
+  },
+  {
+    "uniware_channels": "MYNTRAPPMP_HYD",
+    "unified_channel": "Myntra",
+    "unified_channel2": "Myntra",
+    "channel_description": "B2C Order",
+    "Flex Location": null
+  }
+]
