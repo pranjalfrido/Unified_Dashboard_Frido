@@ -2699,12 +2699,12 @@ function CategoryChannelMatrix({ heatData, channels, maxHeat, subCatChannelMap =
   return (
     <Card title="Category × Channel Revenue Matrix">
       <div className="tbl-wrap">
-        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11, minWidth: 700 }}>
+        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12, minWidth: 700 }}>
           <thead style={{ position: 'sticky', top: 0, background: C.card, zIndex: 1 }}>
             <tr>
-              <th style={{ textAlign: 'left', padding: '3px 5px 7px', borderBottom: `2px solid ${C.border}`, color: C.t3, fontSize: 10, fontWeight: 700, textTransform: 'uppercase' }}>Category</th>
-              {channels.map(ch => <th key={ch} style={{ textAlign: 'right', padding: '3px 5px 7px', borderBottom: `2px solid ${C.border}`, borderLeft: `1px solid ${C.border}`, color: C.ch[ch], fontSize: 10, fontWeight: 700, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{ch === 'offline_sales' ? 'Offline' : ch}</th>)}
-              <th style={{ textAlign: 'right', padding: '3px 5px 7px', borderBottom: `2px solid ${C.border}`, borderLeft: `1px solid ${C.border}`, color: C.t1, fontSize: 10, fontWeight: 700 }}>Total</th>
+              <th style={{ textAlign: 'left', padding: '5px 8px 7px', borderBottom: `2px solid ${C.border}`, color: C.t1, fontSize: 11, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '.05em' }}>Category</th>
+              {channels.map(ch => <th key={ch} style={{ textAlign: 'right', padding: '5px 8px 7px', borderBottom: `2px solid ${C.border}`, borderLeft: `1px solid ${C.border}`, color: C.ch[ch] || C.t2, fontSize: 11, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '.05em', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{ch === 'offline_sales' ? 'Offline' : ch}</th>)}
+              <th style={{ textAlign: 'right', padding: '5px 8px 7px', borderBottom: `2px solid ${C.border}`, borderLeft: `1px solid ${C.border}`, color: C.t1, fontSize: 11, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '.05em' }}>Total</th>
             </tr>
           </thead>
           <tbody>
@@ -2719,8 +2719,8 @@ function CategoryChannelMatrix({ heatData, channels, maxHeat, subCatChannelMap =
               const hasSubCats = subCats.length > 0
               return (
                 <Fragment key={i}>
-                  <tr style={{ borderBottom: `1px solid ${C.border}` }}>
-                    <td style={{ padding: '5px', fontWeight: 600, color: C.t1, overflow: 'hidden' }}>
+                  <tr style={{ borderBottom: `1px solid ${C.border}` }} onMouseEnter={e => e.currentTarget.style.background = '#FFFDF0'} onMouseLeave={e => e.currentTarget.style.background = ''}>
+                    <td style={{ padding: '6px 8px', fontWeight: 600, color: C.t2, overflow: 'hidden' }}>
                       <span
                         onClick={() => hasSubCats && toggle(row.cat)}
                         title={row.cat}
@@ -2733,9 +2733,9 @@ function CategoryChannelMatrix({ heatData, channels, maxHeat, subCatChannelMap =
                     {channels.map(ch => {
                       const v = row[ch] || 0
                       const { cls, content } = renderCell(v, rowTotal)
-                      return <td key={ch} className={cls} style={{ padding: '5px 8px', textAlign: 'right', fontFamily: 'var(--mono)', fontSize: 11, borderLeft: `1px solid ${C.border}` }}>{content}</td>
+                      return <td key={ch} className={cls} style={{ padding: '6px 8px', textAlign: 'right', fontFamily: 'var(--mono)', fontSize: 11.5, borderLeft: `1px solid ${C.border}` }}>{content}</td>
                     })}
-                    <td style={{ padding: '5px 8px', textAlign: 'right', fontWeight: 700, color: C.t1, fontFamily: 'var(--mono)', fontSize: 11, borderLeft: `1px solid ${C.border}` }}>{fmt(rowTotal)}</td>
+                    <td style={{ padding: '6px 8px', textAlign: 'right', fontWeight: 700, color: C.t1, fontFamily: 'var(--mono)', fontSize: 11.5, borderLeft: `1px solid ${C.border}` }}>{fmt(rowTotal)}</td>
                   </tr>
                   {isOpen && subCats.map(([sc, chData]) => {
                     const scTotal = channels.reduce((s, ch) => s + (chData[ch] || 0), 0)
