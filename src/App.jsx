@@ -2641,7 +2641,7 @@ function DailyChannelTable({ dailyArr, channels, nDays = 7, rangeStart }) {
           </thead>
           <tbody>
             {grouped.map((d, i) => {
-              const isPeak = i === peakIdx
+              const isPeak = grouped.length > 1 && i === peakIdx
               const rowTotal = getTotalVal(d)
               return (
                 <tr key={i} style={{ borderBottom: `1px solid ${C.border}` }} onMouseEnter={e => e.currentTarget.style.background = '#FFFDF0'} onMouseLeave={e => e.currentTarget.style.background = ''}>
