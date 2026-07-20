@@ -280,47 +280,8 @@ FROM last_purchase
 GROUP BY bucket
 ORDER BY MIN(DATE_DIFF(DATE('${e}'), last_date, DAY))`),
 
-      // Q9 — discount % distribution (first vs repeat) using fact_shopify_myfrido_mobility_all_orders
-      run(`WITH
-raw AS (
-  SELECT order_id, customer_id, order_date_ist, sku,
-    \`Order Discount %\` AS discount_pct
-  FROM \`frido-429506.production.fact_shopify_myfrido_mobility_all_orders\`
-),
-SHOPIFY_TBL AS (
-  SELECT DISTINCT order_id, customer_id, order_date_ist, discount_pct
-  FROM raw
-  WHERE customer_id IS NOT NULL
-    AND order_date_ist BETWEEN '${s}' AND '${e}'
-    AND LOWER(sku) NOT LIKE '%coup%'
-    AND LOWER(sku) NOT LIKE '%dfa%'
-),
-order_rank AS (
-  SELECT *,
-    ROW_NUMBER() OVER (PARTITION BY customer_id ORDER BY order_date_ist, order_id) AS rn
-  FROM (SELECT DISTINCT order_id, customer_id, order_date_ist, discount_pct FROM SHOPIFY_TBL)
-),
-tagged AS (
-  SELECT
-    order_id,
-    CASE WHEN rn = 1 THEN 'First Order' ELSE 'Repeat Order' END AS order_type,
-    CASE
-      WHEN discount_pct = 0 THEN '0%'
-      WHEN discount_pct <= 0.10 THEN '1-10%'
-      WHEN discount_pct <= 0.20 THEN '11-20%'
-      WHEN discount_pct <= 0.30 THEN '21-30%'
-      WHEN discount_pct <= 0.40 THEN '31-40%'
-      ELSE '40%+'
-    END AS discount_bucket
-  FROM order_rank
-)
-SELECT
-  discount_bucket,
-  COUNTIF(order_type = 'First Order') AS first_orders,
-  COUNTIF(order_type = 'Repeat Order') AS repeat_orders
-FROM tagged
-GROUP BY discount_bucket
-ORDER BY MIN(CASE discount_bucket WHEN '0%' THEN 0 WHEN '1-10%' THEN 1 WHEN '11-20%' THEN 2 WHEN '21-30%' THEN 3 WHEN '31-40%' THEN 4 ELSE 5 END)`),
+      // Q9 — schema probe to find discount column name
+      run(`SELECT column_name FROM \`frido-429506.production.INFORMATION_SCHEMA.COLUMNS\` WHERE table_name = 'fact_shopify_myfrido_mobility_all_orders' AND LOWER(column_name) LIKE '%discount%'`),
 
       // Q10 â€” ads KPIs
       run(`SELECT platform, ROUND(SUM(spend), 0) AS spend, ROUND(SUM(revenue), 0) AS revenue, ROUND(SUM(orders), 0) AS orders
