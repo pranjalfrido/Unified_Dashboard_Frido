@@ -344,12 +344,18 @@ GROUP BY day ORDER BY day`),
 period AS (
   SELECT o.CustomerId, o.OrderId, DATE(o.OrderDate) AS order_date,
     o.SellingPrice_Inc_GST AS rev_inc, o.SellingPrice_Exc_GST AS rev_exc,
-    o.voucher_code, f.first_date
+    f.first_date,
+    CASE WHEN LOWER(o.Order_Status) IN ('rto','rto initiated','rto delivered') THEN 1 ELSE 0 END AS is_rto,
+    CASE WHEN LOWER(o.Order_Status) IN ('cir return','cir') THEN 1 ELSE 0 END AS is_cir,
+    CASE WHEN LOWER(o.Order_Status) IN ('cancelled','cancel') THEN 1 ELSE 0 END AS is_cancelled
   FROM ${TBL} o JOIN first_dates f USING (CustomerId)
   WHERE o.Channel = 'Shopify' AND DATE(o.OrderDate) BETWEEN '${ps}' AND '${pe}' AND o.CustomerId IS NOT NULL
 ),
 order_agg AS (
-  SELECT OrderId, first_date, SUM(rev_inc) AS order_rev_inc, ANY_VALUE(CustomerId) AS CustomerId
+  SELECT OrderId, first_date,
+    SUM(rev_inc) AS order_rev_inc, SUM(rev_exc) AS order_rev_exc,
+    MAX(is_rto) AS is_rto, MAX(is_cir) AS is_cir, MAX(is_cancelled) AS is_cancelled,
+    ANY_VALUE(CustomerId) AS CustomerId
   FROM period GROUP BY OrderId, first_date
 )
 SELECT
@@ -359,7 +365,11 @@ SELECT
   COUNT(DISTINCT OrderId) AS total_orders,
   ROUND(SUM(order_rev_inc), 0) AS gross_sales,
   ROUND(SAFE_DIVIDE(SUM(order_rev_inc), COUNT(DISTINCT OrderId)), 0) AS aov,
-  ROUND(SUM(CASE WHEN first_date < DATE('${ps}') THEN order_rev_inc ELSE 0 END), 0) AS repeat_revenue
+  ROUND(SUM(CASE WHEN first_date < DATE('${ps}') THEN order_rev_inc ELSE 0 END), 0) AS repeat_revenue,
+  ROUND(SUM(order_rev_exc)
+    - SUM(CASE WHEN is_rto = 1 THEN order_rev_exc ELSE 0 END)
+    - SUM(CASE WHEN is_cir = 1 THEN order_rev_exc ELSE 0 END)
+    - SUM(CASE WHEN is_cancelled = 1 THEN order_rev_exc ELSE 0 END), 0) AS net_revenue
 FROM order_agg`),
 
       // Q13 — prev period ads
@@ -387,6 +397,7 @@ GROUP BY platform`),
     const pNewCustomers = parseInt(pk.new_customers) || 0
     const pReturningCustomers = parseInt(pk.returning_customers) || 0
     const pRepeatRevenue = parseFloat(pk.repeat_revenue) || 0
+    const pNetRevenue = parseFloat(pk.net_revenue) || 0
 
     res.json({
       kpis: {
@@ -425,6 +436,7 @@ GROUP BY platform`),
         acquisitionRate: pTotalCustomers > 0 ? pNewCustomers / pTotalCustomers : 0,
         repeatRevenue: pRepeatRevenue,
         repeatRevenueRate: pGrossSales > 0 ? pRepeatRevenue / pGrossSales : 0,
+        netRevenueRate: pGrossSales > 0 ? pNetRevenue / pGrossSales : 0,
         totalOrders: parseInt(pk.total_orders) || 0,
       },
       daily: monthly.map(r => ({

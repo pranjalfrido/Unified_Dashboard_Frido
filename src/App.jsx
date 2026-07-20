@@ -140,10 +140,8 @@ function LKpiCard({ label, value, badgeText, badgeVariant, subValue, cur, prev, 
       ) : (
         <>
           <div className="kpi-value" style={{ fontSize: 16, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{value ?? '—'}</div>
-          <div style={{ marginTop: 2, display: 'flex', alignItems: 'center', gap: 6 }}>
-            {chgBadge}
-            {subValue && !hideSubValue && <span style={{ fontSize: 11, fontWeight: 500, color: C.t3 }}>{subValue} of total</span>}
-          </div>
+          {chgBadge && <div style={{ marginTop: 2 }}>{chgBadge}</div>}
+          {subValue && !hideSubValue && <div style={{ fontSize: 11, fontWeight: 500, color: C.t3, marginTop: 2 }}>{subValue}</div>}
         </>
       )}
     </div>
@@ -8594,7 +8592,7 @@ function CustomerPage({ filters }) {
         <LKpiCard label="Acquisition Rate" value={`${(kpis.acquisitionRate * 100).toFixed(2)}%`} cur={kpis.acquisitionRate} prev={prevKpis.acquisitionRate} />
         <LKpiCard label="Repeat Revenue" value={`${((kpis.repeatRevenueRate || 0) * 100).toFixed(2)}%`} cur={kpis.repeatRevenueRate} prev={prevKpis.repeatRevenueRate} subValue={fmt(kpis.repeatRevenue || 0)} />
         <LKpiCard label="Revenue per Cust" value={fmt(kpis.grossSales / (kpis.totalCustomers || 1))} cur={kpis.grossSales / (kpis.totalCustomers || 1)} prev={prevKpis.grossSales / (prevKpis.totalCustomers || 1)} />
-        <LKpiCard label="Net Revenue %" value={kpis.netRevenueRate ? `${((kpis.netRevenueRate) * 100).toFixed(2)}%` : '—'} cur={kpis.netRevenueRate} prev={null} subValue={kpis.netRevenue ? fmt(kpis.netRevenue) : ''} />
+        <LKpiCard label="Net Revenue %" value={kpis.netRevenueRate ? `${((kpis.netRevenueRate) * 100).toFixed(2)}%` : '—'} cur={kpis.netRevenueRate} prev={prevKpis.netRevenueRate} subValue={kpis.netRevenue ? fmt(kpis.netRevenue) : ''} />
       </div>
 
       {/* Section 2: Acquisition & Revenue Trends */}
