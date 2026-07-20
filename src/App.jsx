@@ -8476,7 +8476,7 @@ function CustomerPage({ filters }) {
   const [loading, setLoading] = useState(false)
   const [crossFilter, setCrossFilter] = useState('Category')
   const [granularity, setGranularity] = useState('daily')
-  const [secCollapsed, setSecCollapsed] = useState({ trends: false, cohort: false, purchase: false, rfm: true, discount: true })
+  const [secCollapsed, setSecCollapsed] = useState({ trends: false, cohort: false, purchase: false, rfm: false, discount: false })
   const toggleSec = k => setSecCollapsed(s => ({ ...s, [k]: !s[k] }))
   const [spendGranularity, setSpendGranularity] = useState('daily')
   const API = import.meta.env.VITE_API_URL || ''
