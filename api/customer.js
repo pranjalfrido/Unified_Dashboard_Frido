@@ -282,11 +282,14 @@ ORDER BY MIN(DATE_DIFF(DATE('${e}'), last_date, DAY))`),
 
       // Q9 — discount % distribution (first vs repeat) using fact_shopify_myfrido_mobility_all_orders
       run(`WITH
+raw AS (
+  SELECT order_id, customer_id, order_date_ist, sku,
+    \`Order Discount %\` AS discount_pct
+  FROM \`frido-429506.production.fact_shopify_myfrido_mobility_all_orders\`
+),
 SHOPIFY_TBL AS (
-  SELECT DISTINCT
-    order_id, customer_id, order_date_ist,
-    SAFE_CAST(JSON_VALUE(TO_JSON_STRING(t), '$["Order Discount %"]') AS FLOAT64) AS discount_pct
-  FROM \`frido-429506.production.fact_shopify_myfrido_mobility_all_orders\` t
+  SELECT DISTINCT order_id, customer_id, order_date_ist, discount_pct
+  FROM raw
   WHERE customer_id IS NOT NULL
     AND order_date_ist BETWEEN '${s}' AND '${e}'
     AND LOWER(sku) NOT LIKE '%coup%'
