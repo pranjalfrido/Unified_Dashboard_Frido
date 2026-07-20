@@ -3441,13 +3441,13 @@ function AllTab({ data, rangeStart }) {
         <ChannelTrendCard dailyArr={dailyArr} channels={channels} />
         <Card title="Channel Share">
           {(() => {
-            const maxChExcRev = sortedCh.reduce((m, [, v]) => Math.max(m, v.excRev || 0), 0) || 1
-            const totalChExcRev = sortedCh.reduce((s, [, v]) => s + (v.excRev || 0), 0) || 1
+            const maxChNetRev = sortedCh.reduce((m, [, v]) => Math.max(m, v.netRev ?? v.excRev ?? 0), 0) || 1
+            const totalChNetRev = sortedCh.reduce((s, [, v]) => s + (v.netRev ?? v.excRev ?? 0), 0) || 1
             return sortedCh.map(([ch, v]) => {
-              const excRev = v.excRev || 0
+              const netRev = v.netRev ?? v.excRev ?? 0
               const prevCh = prevChMap[ch]
-              const prevExcRev = (prevCh?.excRev ?? prevCh) || 0
-              const chg = prevExcRev > 1 ? ((excRev - prevExcRev) / prevExcRev * 100) : null
+              const prevNetRev = prevCh?.netRev ?? prevCh?.excRev ?? prevCh ?? 0
+              const chg = prevNetRev > 1 ? ((netRev - prevNetRev) / prevNetRev * 100) : null
               return (
                 <div key={ch} style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '5px 0', borderBottom: `1px solid ${C.border}` }}>
                   {CHANNEL_LOGOS[ch]
@@ -3455,10 +3455,10 @@ function AllTab({ data, rangeStart }) {
                     : <span style={{ width: 18, height: 18, borderRadius: 4, background: C.ch[ch] || C.acm, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 8, fontWeight: 800, color: '#fff' }}>{ch.charAt(0)}</span>}
                   <span style={{ fontSize: 12, color: C.t2, width: 90, flexShrink: 0 }}>{ch === 'offline_sales' ? 'Offline Sales' : ch}</span>
                   <div style={{ flex: 1, height: 5, background: C.bg, borderRadius: 3 }}>
-                    <div style={{ height: '100%', borderRadius: 3, background: C.ch[ch] || C.acm, width: `${(excRev / maxChExcRev) * 100}%`, transition: 'width .5s' }} />
+                    <div style={{ height: '100%', borderRadius: 3, background: C.ch[ch] || C.acm, width: `${(netRev / maxChNetRev) * 100}%`, transition: 'width .5s' }} />
                   </div>
-                  <span style={{ fontSize: 12, fontWeight: 700, color: C.t1, minWidth: 72, textAlign: 'right', fontFamily: 'var(--mono)' }}>{fmt(excRev)}</span>
-                  <span style={{ fontSize: 11, color: C.t3, minWidth: 36, textAlign: 'right' }}>{(excRev / totalChExcRev * 100).toFixed(1)}%</span>
+                  <span style={{ fontSize: 12, fontWeight: 700, color: C.t1, minWidth: 72, textAlign: 'right', fontFamily: 'var(--mono)' }}>{fmt(netRev)}</span>
+                  <span style={{ fontSize: 11, color: C.t3, minWidth: 36, textAlign: 'right' }}>{(netRev / totalChNetRev * 100).toFixed(1)}%</span>
                   {chg !== null
                     ? <span style={{ fontSize: 10.5, fontWeight: 700, width: 76, flexShrink: 0, textAlign: 'center', padding: '2px 0', borderRadius: 4, background: chg >= 0 ? '#E6F4E0' : '#FDE8E8', color: chg >= 0 ? '#286010' : '#7A1A1A', display: 'inline-block' }}>{chg >= 0 ? '▲' : '▼'} {Math.abs(chg).toFixed(1)}%</span>
                     : <span style={{ width: 76, flexShrink: 0 }} />}
