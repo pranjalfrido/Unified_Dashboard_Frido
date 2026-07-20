@@ -9002,9 +9002,16 @@ function CustomerPage({ filters }) {
               <Tooltip formatter={(v, n) => [fmtN(v), n]} />
               <Legend wrapperStyle={{ fontSize: 10 }} />
               <Bar dataKey="firstOrders" stackId="a" fill={C.acc} name="First Order"
-                label={{ position: 'inside', fontSize: 9, fill: C.t1, fontWeight: 600, formatter: v => v > 0 ? (v >= 1000 ? `${(v/1000).toFixed(0)}K` : v) : '' }} />
+                label={{ position: 'inside', fontSize: 9, fill: C.t1, fontWeight: 600, formatter: v => v >= 2000 ? (v >= 1000 ? `${(v/1000).toFixed(0)}K` : v) : '' }} />
               <Bar dataKey="repeatOrders" stackId="a" fill="#CCB400" name="Repeat Order" radius={[3,3,0,0]}
-                label={{ position: 'top', fontSize: 9, fill: C.t2, fontWeight: 600, formatter: v => v > 0 ? (v >= 1000 ? `${(v/1000).toFixed(0)}K` : v) : '' }} />
+                label={(props) => {
+                  const { x, y, width, value, index } = props
+                  const row = discountDist[index] || {}
+                  const total = (row.firstOrders || 0) + (row.repeatOrders || 0)
+                  if (!total) return null
+                  const lbl = total >= 1000 ? `${(total/1000).toFixed(0)}K` : total
+                  return <text x={x + width / 2} y={y - 4} textAnchor="middle" fontSize={9} fill={C.t2} fontWeight={600}>{lbl}</text>
+                }} />
             </BarChart>
           </ResponsiveContainer>
         </Card>
