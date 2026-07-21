@@ -2611,7 +2611,7 @@ function DailyChannelTable({ dailyArr, channels, nDays = 7, rangeStart, rangeEnd
     return 0
   }
   const fmtVal = v => {
-    if (metric === 'rev') return fmt(v)
+    if (metric === 'net_rev' || metric === 'rev') return fmt(v)
     if (metric === 'aov' || metric === 'asp') return v > 0 ? `₹${Math.round(v).toLocaleString('en-IN')}` : '—'
     return fmtN(v)
   }
