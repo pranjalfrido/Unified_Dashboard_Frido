@@ -588,7 +588,8 @@ export default async function handler(req, res) {
       const fkReturnRev = parseFloat(fkNC.total_return_rev) || 0
       if (fkGross > 0) {
         const fkGstRatio = (fkGross - fkExcRev) / fkGross
-        chMap['Flipkart'].netRev = Math.max(fkGross - fkCancelRev - fkReturnRev, 0) * (1 - fkGstRatio)
+        // Real data net + estimated days net (estimated rev assumed no new returns, same GST ratio)
+        chMap['Flipkart'].netRev = Math.max(fkGross - fkCancelRev - fkReturnRev, 0) * (1 - fkGstRatio) + fkBlock.estTotalRev * (1 - fkGstRatio)
       }
     }
     // Patch dailyArr for all-channels chart
