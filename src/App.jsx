@@ -2739,16 +2739,15 @@ function CategoryChannelMatrix({ heatData, channels, maxHeat, subCatChannelMap =
   }
 
   return (
-    <Card title="Category × Channel Revenue Matrix">
-      <div style={{ padding: '8px 8px 4px' }}>
-        <input
-          type="text"
-          value={search}
-          onChange={e => setSearch(e.target.value)}
-          placeholder="Search category, sub-category or SKU…"
-          style={{ width: '100%', boxSizing: 'border-box', padding: '6px 10px', border: `1px solid ${C.border}`, borderRadius: 6, fontSize: 12, color: C.t1, background: C.bg, outline: 'none' }}
-        />
-      </div>
+    <Card title="Category × Channel Revenue Matrix" action={
+      <input
+        type="text"
+        value={search}
+        onChange={e => setSearch(e.target.value)}
+        placeholder="Search category, sub-category or SKU…"
+        style={{ width: 260, padding: '4px 10px', border: `1px solid ${C.border}`, borderRadius: 6, fontSize: 11.5, color: C.t1, background: C.bg, outline: 'none' }}
+      />
+    }>
       <div className="tbl-wrap">
         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12, minWidth: 700 }}>
           <thead style={{ position: 'sticky', top: 0, background: C.card, zIndex: 1 }}>
