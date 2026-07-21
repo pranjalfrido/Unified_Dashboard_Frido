@@ -1886,7 +1886,7 @@ function HeroKPICard({ label, value, sub, chg, sparkData, dataKey = 'cur', color
 
 // ── Overview Page ─────────────────────────────────────────────
 function OverviewPage({ data, alerts, logisticsData }) {
-  const { totalRev, totalExcRev, nOrders, totalQty, blendedAOV, nDays, chMap, catMap, subCatMap, stateMap, nCusts, repeatCusts, dailyArr, prevRev, prevOrders, orderStatusRevMap = {}, rtoRevDirect, returnRev, cirRev, exchangeRev, netRevenueCalc = 0 } = data
+  const { totalRev, totalExcRev, nOrders, totalQty, totalAspQty, blendedAOV, nDays, chMap, catMap, subCatMap, stateMap, nCusts, repeatCusts, dailyArr, prevRev, prevOrders, orderStatusRevMap = {}, rtoRevDirect, returnRev, cirRev, exchangeRev, netRevenueCalc = 0 } = data
   const sh = data.shopify || {}
   const ads = data.ads || {}
 
