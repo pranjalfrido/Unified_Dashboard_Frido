@@ -2642,7 +2642,7 @@ function DailyChannelTable({ dailyArr, channels, nDays = 7, rangeStart, rangeEnd
     return dt.toLocaleDateString('en-IN', { weekday: 'short', month: 'short', day: 'numeric' })
   }
 
-  const thStyle = (ch) => ({ fontSize: 11, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '.05em', color: ch ? (C.ch[ch] || C.t2) : C.t1, textAlign: 'right', padding: '5px 8px 7px', borderBottom: `2px solid ${ch ? (C.ch[ch] || C.border) : C.border}`, whiteSpace: 'nowrap', background: C.card })
+  const thStyle = (ch) => ({ fontSize: 11, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '.05em', color: C.t1, textAlign: 'right', padding: '5px 8px 7px', borderBottom: `2px solid ${C.border}`, whiteSpace: 'nowrap', background: C.card })
 
   return (
     <Card>
@@ -2780,7 +2780,7 @@ function CategoryChannelMatrix({ heatData, channels, maxHeat, subCatChannelMap =
           <thead style={{ position: 'sticky', top: 0, background: C.card, zIndex: 1 }}>
             <tr>
               <th style={{ textAlign: 'left', padding: '5px 8px 7px', borderBottom: `2px solid ${C.border}`, color: C.t1, fontSize: 11, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '.05em' }}>Category</th>
-              {channels.map(ch => <th key={ch} style={{ textAlign: 'right', padding: '5px 8px 7px', borderBottom: `2px solid ${C.border}`, borderLeft: `1px solid ${C.border}`, color: C.ch[ch] || C.t2, fontSize: 11, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '.05em', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{ch === 'offline_sales' ? 'Offline Sales' : ch}</th>)}
+              {channels.map(ch => <th key={ch} style={{ textAlign: 'right', padding: '5px 8px 7px', borderBottom: `2px solid ${C.border}`, borderLeft: `1px solid ${C.border}`, color: C.t1, fontSize: 11, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '.05em', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{ch === 'offline_sales' ? 'Offline Sales' : ch}</th>)}
               <th style={{ textAlign: 'right', padding: '5px 8px 7px', borderBottom: `2px solid ${C.border}`, borderLeft: `1px solid ${C.border}`, color: C.t1, fontSize: 11, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '.05em' }}>Total</th>
             </tr>
           </thead>
@@ -2952,7 +2952,7 @@ function AmazonCategoryMatrix({ channels, catChannel, subCatChannel, skuChannel,
           <thead style={{ position: 'sticky', top: 0, background: C.card, zIndex: 1 }}>
             <tr>
               <th style={{ textAlign: 'left', padding: '3px 5px 7px', borderBottom: `1px solid ${C.border}`, color: C.t3, fontSize: 10, fontWeight: 700, textTransform: 'uppercase' }}>Category</th>
-              {channels.map(ch => <th key={ch} style={{ textAlign: 'right', padding: '3px 5px 7px', borderBottom: `1px solid ${C.border}`, color: CH_COLORS[ch] || C.t2, fontSize: 10, fontWeight: 700 }}>{ch}</th>)}
+              {channels.map(ch => <th key={ch} style={{ textAlign: 'right', padding: '3px 5px 7px', borderBottom: `1px solid ${C.border}`, color: C.t1, fontSize: 10, fontWeight: 700 }}>{ch}</th>)}
               <th style={{ textAlign: 'right', padding: '3px 5px 7px', borderBottom: `1px solid ${C.border}`, color: C.t1, fontSize: 10, fontWeight: 700 }}>Total</th>
             </tr>
           </thead>
