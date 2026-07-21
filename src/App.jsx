@@ -2854,11 +2854,21 @@ function AmazonCategoryMatrix({ channels, catChannel, subCatChannel, skuChannel,
   const [expanded, setExpanded] = useState({})
   const [expandedSC, setExpandedSC] = useState({})
   const [metric, setMetric] = useState('rev')
+  const [search, setSearch] = useState('')
   const toggle = cat => setExpanded(prev => ({ ...prev, [cat]: !prev[cat] }))
   const toggleSC = key => setExpandedSC(prev => ({ ...prev, [key]: !prev[key] }))
 
   const fmtVal = v => metric === 'rev' ? fmt(v) : fmtN(v)
   const getVal = obj => obj ? (metric === 'rev' ? obj.rev : metric === 'units' ? obj.units : obj.orders) : 0
+
+  const q = search.trim().toLowerCase()
+  const hlAm = text => {
+    if (!q) return text
+    const idx = String(text).toLowerCase().indexOf(q)
+    if (idx === -1) return text
+    const s = String(text)
+    return <>{s.slice(0, idx)}<mark style={{ background: '#FFF176', padding: 0, borderRadius: 2 }}>{s.slice(idx, idx + q.length)}</mark>{s.slice(idx + q.length)}</>
+  }
 
   // Build sorted category list
   const cats = Object.entries(catChannel || {}).map(([cat, chData]) => {
@@ -2869,6 +2879,26 @@ function AmazonCategoryMatrix({ channels, catChannel, subCatChannel, skuChannel,
   const colTotals = {}
   channels.forEach(ch => { colTotals[ch] = cats.reduce((s, r) => s + getVal(r.chData[ch]), 0) })
   const grandTotal = channels.reduce((s, ch) => s + (colTotals[ch] || 0), 0)
+
+  const filteredCatsAm = q ? cats.filter(row => {
+    if (row.cat.toLowerCase().includes(q)) return true
+    const subCats = subCatChannel?.[row.cat] || {}
+    for (const sc of Object.keys(subCats)) {
+      if (sc.toLowerCase().includes(q)) return true
+      const skus = skuChannel?.[row.cat]?.[sc] || {}
+      if (Object.keys(skus).some(sku => sku.toLowerCase().includes(q))) return true
+    }
+    return false
+  }) : cats
+  const amAutoExp = q ? new Set(filteredCatsAm.map(r => r.cat)) : null
+  const amAutoExpSC = q ? new Set(filteredCatsAm.flatMap(row =>
+    Object.keys(subCatChannel?.[row.cat] || {}).filter(sc => {
+      if (sc.toLowerCase().includes(q)) return true
+      return Object.keys(skuChannel?.[row.cat]?.[sc] || {}).some(sku => sku.toLowerCase().includes(q))
+    }).map(sc => `${row.cat}::${sc}`)
+  )) : null
+  const amIsOpen = cat => q ? amAutoExp?.has(cat) : expanded[cat]
+  const amIsScOpen = key => q ? amAutoExpSC?.has(key) : expandedSC[key]
 
   const renderCell = (v, rowTotal) => {
     const intensity = rowTotal > 0 ? v / rowTotal : 0
@@ -2881,10 +2911,13 @@ function AmazonCategoryMatrix({ channels, catChannel, subCatChannel, skuChannel,
 
   return (
     <Card title={title || 'Category × Channel Revenue Matrix'} action={
-      <div style={{ display: 'flex', gap: 3 }}>
-        {[['rev','Revenue'],['units','Units'],['orders','Orders']].map(([k,l]) => (
-          <button key={k} onClick={() => setMetric(k)} style={{ fontSize: 10, fontWeight: metric===k?700:500, padding: '2px 8px', borderRadius: 4, border: `1px solid ${metric===k?C.acm:C.border}`, background: metric===k?C.acc:'transparent', color: C.t1, cursor: 'pointer', fontFamily: 'var(--font)' }}>{l}</button>
-        ))}
+      <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+        <input type="text" value={search} onChange={e => setSearch(e.target.value)} placeholder="Search…" style={{ width: 180, padding: '3px 8px', border: `1px solid ${C.border}`, borderRadius: 6, fontSize: 11, color: C.t1, background: C.bg, outline: 'none' }} />
+        <div style={{ display: 'flex', gap: 3 }}>
+          {[['rev','Revenue'],['units','Units'],['orders','Orders']].map(([k,l]) => (
+            <button key={k} onClick={() => setMetric(k)} style={{ fontSize: 10, fontWeight: metric===k?700:500, padding: '2px 8px', borderRadius: 4, border: `1px solid ${metric===k?C.acm:C.border}`, background: metric===k?C.acc:'transparent', color: C.t1, cursor: 'pointer', fontFamily: 'var(--font)' }}>{l}</button>
+          ))}
+        </div>
       </div>
     }>
       <div className="tbl-wrap" style={{ maxHeight: 560, overflowY: 'auto' }}>
@@ -2897,19 +2930,23 @@ function AmazonCategoryMatrix({ channels, catChannel, subCatChannel, skuChannel,
             </tr>
           </thead>
           <tbody>
-            {cats.map((row, i) => {
-              const isOpen = expanded[row.cat]
+            {filteredCatsAm.map((row, i) => {
+              const catOpen = amIsOpen(row.cat)
               const subCats = Object.entries(subCatChannel?.[row.cat] || {}).map(([sc, chData]) => ({
                 sc, chData, total: channels.reduce((s, ch) => s + getVal(chData[ch]), 0)
-              })).sort((a, b) => b.total - a.total)
-              const hasSubCats = subCats.length > 0
+              })).filter(({ sc }) => {
+                if (!q || row.cat.toLowerCase().includes(q)) return true
+                if (sc.toLowerCase().includes(q)) return true
+                return Object.keys(skuChannel?.[row.cat]?.[sc] || {}).some(sku => sku.toLowerCase().includes(q))
+              }).sort((a, b) => b.total - a.total)
+              const hasSubCats = Object.keys(subCatChannel?.[row.cat] || {}).length > 0
               return (
                 <Fragment key={row.cat}>
                   <tr style={{ borderBottom: `1px solid ${C.border}` }}>
                     <td style={{ padding: '5px', color: C.t1 }}>
-                      <span onClick={() => hasSubCats && toggle(row.cat)} style={{ cursor: hasSubCats ? 'pointer' : 'default', userSelect: 'none', display: 'inline-flex', alignItems: 'center', gap: 5 }}>
-                        {hasSubCats && <span style={{ fontSize: 9, color: C.t3, display: 'inline-block', transform: isOpen ? 'rotate(90deg)' : 'rotate(0deg)', transition: 'transform .15s' }}>▶</span>}
-                        {row.cat}
+                      <span onClick={() => hasSubCats && !q && toggle(row.cat)} style={{ cursor: hasSubCats && !q ? 'pointer' : 'default', userSelect: 'none', display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+                        {hasSubCats && <span style={{ fontSize: 9, color: C.t3, display: 'inline-block', transform: catOpen ? 'rotate(90deg)' : 'rotate(0deg)', transition: 'transform .15s' }}>▶</span>}
+                        {hlAm(row.cat)}
                       </span>
                     </td>
                     {channels.map(ch => {
@@ -2919,20 +2956,23 @@ function AmazonCategoryMatrix({ channels, catChannel, subCatChannel, skuChannel,
                     })}
                     <td style={{ padding: '5px', textAlign: 'right', fontWeight: 600, color: C.t1, fontFamily: 'var(--mono)', fontSize: 11 }}>{fmtVal(row.total)}</td>
                   </tr>
-                  {isOpen && subCats.map(({ sc, chData, total: scTotal }) => {
+                  {catOpen && subCats.map(({ sc, chData, total: scTotal }) => {
                     const scKey = `${row.cat}::${sc}`
                     const skus = Object.entries(skuChannel?.[row.cat]?.[sc] || {}).map(([sku, chD]) => ({
                       sku, chD, total: channels.reduce((s, ch) => s + getVal(chD[ch]), 0)
-                    })).sort((a, b) => b.total - a.total)
-                    const hasSkus = skus.length > 0
-                    const scOpen = expandedSC[scKey]
+                    })).filter(({ sku }) => {
+                      if (!q || row.cat.toLowerCase().includes(q) || sc.toLowerCase().includes(q)) return true
+                      return sku.toLowerCase().includes(q)
+                    }).sort((a, b) => b.total - a.total)
+                    const hasSkus = Object.keys(skuChannel?.[row.cat]?.[sc] || {}).length > 0
+                    const scOpen = amIsScOpen(scKey)
                     return (
                       <Fragment key={sc}>
                         <tr style={{ borderBottom: `1px solid ${C.border}`, background: '#FAFAF7' }}>
                           <td style={{ padding: '3px 4px 3px 18px', color: C.t2, fontSize: 10, overflow: 'hidden' }}>
-                            <span onClick={() => hasSkus && toggleSC(scKey)} title={sc} style={{ cursor: hasSkus ? 'pointer' : 'default', userSelect: 'none', display: 'flex', alignItems: 'center', gap: 4, overflow: 'hidden' }}>
+                            <span onClick={() => hasSkus && !q && toggleSC(scKey)} title={sc} style={{ cursor: hasSkus && !q ? 'pointer' : 'default', userSelect: 'none', display: 'flex', alignItems: 'center', gap: 4, overflow: 'hidden' }}>
                               {hasSkus && <span style={{ fontSize: 8, color: C.t3, flexShrink: 0, display: 'inline-block', transform: scOpen ? 'rotate(90deg)' : 'rotate(0deg)', transition: 'transform .15s' }}>▶</span>}
-                              <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>└ {sc}</span>
+                              <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>└ {hlAm(sc)}</span>
                             </span>
                           </td>
                           {channels.map(ch => {
@@ -2944,7 +2984,7 @@ function AmazonCategoryMatrix({ channels, catChannel, subCatChannel, skuChannel,
                         </tr>
                         {scOpen && skus.map(({ sku, chD, total: skuTotal }) => (
                           <tr key={sku} style={{ borderBottom: `1px solid ${C.border}`, background: '#F5F5F0' }}>
-                            <td style={{ padding: '2px 4px 2px 32px', color: C.t3, fontSize: 9.5, fontFamily: 'var(--mono)' }}>└ {sku}</td>
+                            <td style={{ padding: '2px 4px 2px 32px', color: C.t3, fontSize: 9.5, fontFamily: 'var(--mono)' }}>└ {hlAm(sku)}</td>
                             {channels.map(ch => {
                               const v = getVal(chD[ch])
                               const { cls, content } = renderCell(v, skuTotal)
@@ -2990,8 +3030,18 @@ function FinancialCategoryMatrix({ catData, subCatData, skuData, title, showRetu
   const returnColor = neutral ? C.t1 : '#7A1A1A'
   const [expanded, setExpanded] = useState({})
   const [expandedSC, setExpandedSC] = useState({})
+  const [search, setSearch] = useState('')
   const toggle = cat => setExpanded(prev => ({ ...prev, [cat]: !prev[cat] }))
   const toggleSC = key => setExpandedSC(prev => ({ ...prev, [key]: !prev[key] }))
+
+  const q = search.trim().toLowerCase()
+  const hlFin = text => {
+    if (!q) return text
+    const idx = String(text).toLowerCase().indexOf(q)
+    if (idx === -1) return text
+    const s = String(text)
+    return <>{s.slice(0, idx)}<mark style={{ background: '#FFF176', padding: 0, borderRadius: 2 }}>{s.slice(idx, idx + q.length)}</mark>{s.slice(idx + q.length)}</>
+  }
 
   const mapRow = (d) => {
     const gross = d.rev || 0
@@ -3023,7 +3073,25 @@ function FinancialCategoryMatrix({ catData, subCatData, skuData, title, showRetu
     }
   }
 
-  const cats = Object.entries(catData || {}).map(([cat, d]) => ({ cat, prevGross: catPrevMap[cat] || 0, ...mapRow(d) })).sort((a, b) => b.gross - a.gross)
+  const allCats = Object.entries(catData || {}).map(([cat, d]) => ({ cat, prevGross: catPrevMap[cat] || 0, ...mapRow(d) })).sort((a, b) => b.gross - a.gross)
+  const cats = q ? allCats.filter(row => {
+    if (row.cat.toLowerCase().includes(q)) return true
+    const subCats = subCatData?.[row.cat] || {}
+    for (const sc of Object.keys(subCats)) {
+      if (sc.toLowerCase().includes(q)) return true
+      if (Object.keys(skuData?.[row.cat]?.[sc] || {}).some(sku => sku.toLowerCase().includes(q))) return true
+    }
+    return false
+  }) : allCats
+  const finAutoExp = q ? new Set(cats.map(r => r.cat)) : null
+  const finAutoExpSC = q ? new Set(cats.flatMap(row =>
+    Object.keys(subCatData?.[row.cat] || {}).filter(sc => {
+      if (sc.toLowerCase().includes(q)) return true
+      return Object.keys(skuData?.[row.cat]?.[sc] || {}).some(sku => sku.toLowerCase().includes(q))
+    }).map(sc => `${row.cat}::${sc}`)
+  )) : null
+  const finIsOpen = cat => q ? finAutoExp?.has(cat) : expanded[cat]
+  const finIsScOpen = key => q ? finAutoExpSC?.has(key) : expandedSC[key]
 
   const tot = cats.reduce((s, r) => ({
     gross: s.gross + r.gross, prevGross: s.prevGross + r.prevGross, net: s.net + r.net, gst: s.gst + r.gst,
@@ -3063,7 +3131,9 @@ function FinancialCategoryMatrix({ catData, subCatData, skuData, title, showRetu
   }
 
   return (
-    <Card title={title || 'Category Revenue Matrix'}>
+    <Card title={title || 'Category Revenue Matrix'} action={
+      <input type="text" value={search} onChange={e => setSearch(e.target.value)} placeholder="Search…" style={{ width: 200, padding: '3px 8px', border: `1px solid ${C.border}`, borderRadius: 6, fontSize: 11, color: C.t1, background: C.bg, outline: 'none' }} />
+    }>
       <div className="tbl-wrap" style={{ maxHeight: 560, overflowY: 'auto' }}>
         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 10, fontWeight: 400, tableLayout: 'auto' }}>
           <thead style={{ position: 'sticky', top: 0, background: C.card, zIndex: 1 }}>
@@ -3085,16 +3155,21 @@ function FinancialCategoryMatrix({ catData, subCatData, skuData, title, showRetu
           </thead>
           <tbody>
             {cats.map(row => {
-              const isOpen = expanded[row.cat]
-              const subCats = Object.entries(subCatData?.[row.cat] || {}).map(([sc, d]) => ({ sc, ...mapRow(d) })).sort((a, b) => b.gross - a.gross)
-              const hasSubs = subCats.length > 0
+              const catOpen = finIsOpen(row.cat)
+              const allSubCats = Object.entries(subCatData?.[row.cat] || {}).map(([sc, d]) => ({ sc, ...mapRow(d) })).sort((a, b) => b.gross - a.gross)
+              const subCats = q ? allSubCats.filter(({ sc }) => {
+                if (row.cat.toLowerCase().includes(q)) return true
+                if (sc.toLowerCase().includes(q)) return true
+                return Object.keys(skuData?.[row.cat]?.[sc] || {}).some(sku => sku.toLowerCase().includes(q))
+              }) : allSubCats
+              const hasSubs = allSubCats.length > 0
               return (
                 <Fragment key={row.cat}>
                   <tr style={{ borderBottom: `1px solid ${C.border}` }}>
                     <td style={{ padding: '4px 4px', color: C.t1, fontSize: 10.5 }}>
-                      <span onClick={() => hasSubs && toggle(row.cat)} style={{ cursor: hasSubs ? 'pointer' : 'default', userSelect: 'none', display: 'inline-flex', alignItems: 'center', gap: 5 }}>
-                        {hasSubs && <span style={{ fontSize: 9, color: C.t3, display: 'inline-block', transform: isOpen ? 'rotate(90deg)' : 'rotate(0deg)', transition: 'transform .15s' }}>▶</span>}
-                        {row.cat}
+                      <span onClick={() => hasSubs && !q && toggle(row.cat)} style={{ cursor: hasSubs && !q ? 'pointer' : 'default', userSelect: 'none', display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+                        {hasSubs && <span style={{ fontSize: 9, color: C.t3, display: 'inline-block', transform: catOpen ? 'rotate(90deg)' : 'rotate(0deg)', transition: 'transform .15s' }}>▶</span>}
+                        {hlFin(row.cat)}
                       </span>
                     </td>
                     <td style={{ ...cell(), color: grossColor, fontWeight: 600 }}>{fmt(row.gross)}{showShare && tot.gross > 0 ? <span style={{ fontSize: 9.5, color: C.t3, marginLeft: 6, fontWeight: 400 }}>({(row.gross / tot.gross * 100).toFixed(1)}%)</span> : null}</td>
@@ -3110,28 +3185,32 @@ function FinancialCategoryMatrix({ catData, subCatData, skuData, title, showRetu
                     </>}
                     <td style={{ ...cell(), color: netColor, fontWeight: 600 }}>{fmt(row.net)}</td>
                   </tr>
-                  {isOpen && (() => {
+                  {catOpen && (() => {
                     // Compute per-sub-cat cum % within this parent category
                     let scCum = 0
                     subCats.forEach(sr => { sr.sharePct = row.gross > 0 ? (sr.gross / row.gross * 100) : 0; scCum += sr.sharePct; sr.cumPct = scCum })
                     return null
                   })()}
-                  {isOpen && subCats.map(sr => {
+                  {catOpen && subCats.map(sr => {
                     const scKey = `${row.cat}::${sr.sc}`
-                    const scOpen = expandedSC[scKey]
-                    const skus = Object.entries(skuData?.[row.cat]?.[sr.sc] || {}).map(([sku, d]) => ({ sku, ...mapRow(d), prevGross: skuPrevMap?.[row.cat]?.[sr.sc]?.[sku] || 0 })).sort((a, b) => b.gross - a.gross)
+                    const scOpen = finIsScOpen(scKey)
+                    const allSkus = Object.entries(skuData?.[row.cat]?.[sr.sc] || {}).map(([sku, d]) => ({ sku, ...mapRow(d), prevGross: skuPrevMap?.[row.cat]?.[sr.sc]?.[sku] || 0 })).sort((a, b) => b.gross - a.gross)
+                    const skus = q ? allSkus.filter(({ sku }) => {
+                      if (row.cat.toLowerCase().includes(q) || sr.sc.toLowerCase().includes(q)) return true
+                      return sku.toLowerCase().includes(q)
+                    }) : allSkus
                     // Compute SKU cum% within this sub-cat
                     let skuCum = 0
                     skus.forEach(sk => { sk.sharePct = sr.gross > 0 ? (sk.gross / sr.gross * 100) : 0; skuCum += sk.sharePct; sk.cumPct = skuCum })
-                    const hasSkus = skus.length > 0
+                    const hasSkus = allSkus.length > 0
                     const srPrev = subCatPrevMap[`${row.cat}::${sr.sc}`] || 0
                     return (
                       <Fragment key={sr.sc}>
                         <tr style={{ borderBottom: `1px solid ${C.border}`, background: '#FAFAF7' }}>
                           <td style={{ padding: '3px 4px 3px 18px', color: C.t2, fontSize: 10 }}>
-                            <span onClick={() => hasSkus && toggleSC(scKey)} style={{ cursor: hasSkus ? 'pointer' : 'default', userSelect: 'none', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                            <span onClick={() => hasSkus && !q && toggleSC(scKey)} style={{ cursor: hasSkus && !q ? 'pointer' : 'default', userSelect: 'none', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
                               {hasSkus && <span style={{ fontSize: 8, color: C.t3, display: 'inline-block', transform: scOpen ? 'rotate(90deg)' : 'rotate(0deg)', transition: 'transform .15s' }}>▶</span>}
-                              └ {sr.sc}
+                              └ {hlFin(sr.sc)}
                             </span>
                           </td>
                           <td style={{ ...cell(10.5), color: grossColor }}>{fmt(sr.gross)}{showShare && tot.gross > 0 ? <span style={{ fontSize: 9, color: C.t3, marginLeft: 5 }}>({(sr.gross / tot.gross * 100).toFixed(1)}%)</span> : null}</td>
@@ -3149,7 +3228,7 @@ function FinancialCategoryMatrix({ catData, subCatData, skuData, title, showRetu
                         </tr>
                         {scOpen && skus.map(sk => (
                           <tr key={sk.sku} style={{ borderBottom: `1px solid ${C.border}`, background: '#F5F5F0' }}>
-                            <td style={{ padding: '2px 4px 2px 32px', color: C.t3, fontSize: 9.5, fontFamily: 'var(--mono)' }}>└ {sk.sku}</td>
+                            <td style={{ padding: '2px 4px 2px 32px', color: C.t3, fontSize: 9.5, fontFamily: 'var(--mono)' }}>└ {hlFin(sk.sku)}</td>
                             <td style={{ ...cell(10), color: grossColor }}>{fmt(sk.gross)}{showShare && tot.gross > 0 ? <span style={{ fontSize: 8.5, color: C.t3, marginLeft: 5 }}>({(sk.gross / tot.gross * 100).toFixed(1)}%)</span> : null}</td>
                             <td style={{ ...cell(10), color: C.t2 }}>{fmtN(sk.units)}</td>
                             {showExtras && <td style={{ ...cell(10) }}>{momCell(sk.gross, sk.prevGross)}</td>}
@@ -3197,17 +3276,47 @@ function FinancialCategoryMatrix({ catData, subCatData, skuData, title, showRetu
 function VCCategoryMatrix({ catData, subCatData, skuData, title }) {
   const [expanded, setExpanded] = useState({})
   const [expandedSC, setExpandedSC] = useState({})
+  const [search, setSearch] = useState('')
   const toggle = cat => setExpanded(prev => ({ ...prev, [cat]: !prev[cat] }))
   const toggleSC = key => setExpandedSC(prev => ({ ...prev, [key]: !prev[key] }))
 
-  const cats = Object.entries(catData || {}).map(([cat, d]) => ({ cat, d, total: d.rev || 0 })).sort((a, b) => b.total - a.total)
+  const q = search.trim().toLowerCase()
+  const hlVC = text => {
+    if (!q) return text
+    const idx = String(text).toLowerCase().indexOf(q)
+    if (idx === -1) return text
+    const s = String(text)
+    return <>{s.slice(0, idx)}<mark style={{ background: '#FFF176', padding: 0, borderRadius: 2 }}>{s.slice(idx, idx + q.length)}</mark>{s.slice(idx + q.length)}</>
+  }
+
+  const allCatsVC = Object.entries(catData || {}).map(([cat, d]) => ({ cat, d, total: d.rev || 0 })).sort((a, b) => b.total - a.total)
+  const cats = q ? allCatsVC.filter(({ cat, d }) => {
+    if (cat.toLowerCase().includes(q)) return true
+    const subCats = subCatData?.[cat] || {}
+    for (const sc of Object.keys(subCats)) {
+      if (sc.toLowerCase().includes(q)) return true
+      if (Object.keys(skuData?.[cat]?.[sc] || {}).some(sku => sku.toLowerCase().includes(q))) return true
+    }
+    return false
+  }) : allCatsVC
+  const vcAutoExp = q ? new Set(cats.map(r => r.cat)) : null
+  const vcAutoExpSC = q ? new Set(cats.flatMap(({ cat }) =>
+    Object.keys(subCatData?.[cat] || {}).filter(sc => {
+      if (sc.toLowerCase().includes(q)) return true
+      return Object.keys(skuData?.[cat]?.[sc] || {}).some(sku => sku.toLowerCase().includes(q))
+    }).map(sc => `${cat}::${sc}`)
+  )) : null
+  const vcIsOpen = cat => q ? vcAutoExp?.has(cat) : expanded[cat]
+  const vcIsScOpen = key => q ? vcAutoExpSC?.has(key) : expandedSC[key]
   const totUnits = cats.reduce((s, r) => s + (r.d.units || 0), 0)
   const totRev = cats.reduce((s, r) => s + (r.d.rev || 0), 0)
 
   const intensity = (v, tot) => { if (!tot || !v) return 'h0'; const r = v / tot; return r < 0.1 ? 'h1' : r < 0.3 ? 'h2' : r < 0.6 ? 'h3' : 'h4' }
 
   return (
-    <Card title={title || 'Category Revenue Matrix · Vendor Central'}>
+    <Card title={title || 'Category Revenue Matrix · Vendor Central'} action={
+      <input type="text" value={search} onChange={e => setSearch(e.target.value)} placeholder="Search…" style={{ width: 200, padding: '3px 8px', border: `1px solid ${C.border}`, borderRadius: 6, fontSize: 11, color: C.t1, background: C.bg, outline: 'none' }} />
+    }>
       <div className="tbl-wrap" style={{ maxHeight: 560, overflowY: 'auto' }}>
         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11, fontWeight: 400 }}>
           <thead style={{ position: 'sticky', top: 0, background: C.card, zIndex: 1 }}>
@@ -3219,33 +3328,42 @@ function VCCategoryMatrix({ catData, subCatData, skuData, title }) {
           </thead>
           <tbody>
             {cats.map(({ cat, d }) => {
-              const isOpen = expanded[cat]
-              const scs = Object.entries(subCatData?.[cat] || {}).map(([sc, sd]) => ({ sc, sd })).sort((a, b) => (b.sd.rev||0) - (a.sd.rev||0))
-              const hasSC = scs.length > 0
+              const catOpen = vcIsOpen(cat)
+              const allSCs = Object.entries(subCatData?.[cat] || {}).map(([sc, sd]) => ({ sc, sd })).sort((a, b) => (b.sd.rev||0) - (a.sd.rev||0))
+              const scs = q ? allSCs.filter(({ sc }) => {
+                if (cat.toLowerCase().includes(q)) return true
+                if (sc.toLowerCase().includes(q)) return true
+                return Object.keys(skuData?.[cat]?.[sc] || {}).some(sku => sku.toLowerCase().includes(q))
+              }) : allSCs
+              const hasSC = allSCs.length > 0
               return (
                 <Fragment key={cat}>
                   <tr style={{ borderBottom: `1px solid ${C.border}` }}>
                     <td style={{ padding: '5px', color: C.t1 }}>
-                      <span onClick={() => hasSC && toggle(cat)} style={{ cursor: hasSC ? 'pointer' : 'default', userSelect: 'none', display: 'inline-flex', alignItems: 'center', gap: 5 }}>
-                        {hasSC && <span style={{ fontSize: 9, color: C.t3, display: 'inline-block', transform: isOpen ? 'rotate(90deg)' : 'rotate(0deg)', transition: 'transform .15s' }}>▶</span>}
-                        {cat}
+                      <span onClick={() => hasSC && !q && toggle(cat)} style={{ cursor: hasSC && !q ? 'pointer' : 'default', userSelect: 'none', display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+                        {hasSC && <span style={{ fontSize: 9, color: C.t3, display: 'inline-block', transform: catOpen ? 'rotate(90deg)' : 'rotate(0deg)', transition: 'transform .15s' }}>▶</span>}
+                        {hlVC(cat)}
                       </span>
                     </td>
                     <td className={intensity(d.units, totUnits)} style={{ padding: '5px', textAlign: 'right', fontFamily: 'var(--mono)', fontSize: 11, fontWeight: 400 }}>{d.units > 0 ? fmtN(d.units) : '—'}</td>
                     <td className={intensity(d.rev, totRev)} style={{ padding: '5px', textAlign: 'right', fontFamily: 'var(--mono)', fontSize: 11, fontWeight: 400 }}>{d.rev > 0 ? fmt(d.rev) : '—'}</td>
                   </tr>
-                  {isOpen && scs.map(({ sc, sd }) => {
+                  {catOpen && scs.map(({ sc, sd }) => {
                     const scKey = `${cat}::${sc}`
-                    const skus = Object.entries(skuData?.[cat]?.[sc] || {}).map(([sku, kd]) => ({ sku, kd })).sort((a, b) => (b.kd.rev||0) - (a.kd.rev||0))
-                    const hasSkus = skus.length > 0
-                    const scOpen = expandedSC[scKey]
+                    const allSkusVC = Object.entries(skuData?.[cat]?.[sc] || {}).map(([sku, kd]) => ({ sku, kd })).sort((a, b) => (b.kd.rev||0) - (a.kd.rev||0))
+                    const skus = q ? allSkusVC.filter(({ sku }) => {
+                      if (cat.toLowerCase().includes(q) || sc.toLowerCase().includes(q)) return true
+                      return sku.toLowerCase().includes(q)
+                    }) : allSkusVC
+                    const hasSkus = allSkusVC.length > 0
+                    const scOpen = vcIsScOpen(scKey)
                     return (
                       <Fragment key={sc}>
                         <tr style={{ borderBottom: `1px solid ${C.border}`, background: '#FAFAF7' }}>
                           <td style={{ padding: '3px 4px 3px 18px', color: C.t2, fontSize: 10, overflow: 'hidden' }}>
-                            <span onClick={() => hasSkus && toggleSC(scKey)} title={sc} style={{ cursor: hasSkus ? 'pointer' : 'default', userSelect: 'none', display: 'flex', alignItems: 'center', gap: 4, overflow: 'hidden' }}>
+                            <span onClick={() => hasSkus && !q && toggleSC(scKey)} title={sc} style={{ cursor: hasSkus && !q ? 'pointer' : 'default', userSelect: 'none', display: 'flex', alignItems: 'center', gap: 4, overflow: 'hidden' }}>
                               {hasSkus && <span style={{ fontSize: 8, color: C.t3, flexShrink: 0, display: 'inline-block', transform: scOpen ? 'rotate(90deg)' : 'rotate(0deg)', transition: 'transform .15s' }}>▶</span>}
-                              <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>└ {sc}</span>
+                              <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>└ {hlVC(sc)}</span>
                             </span>
                           </td>
                           <td style={{ padding: '4px 5px', textAlign: 'right', fontFamily: 'var(--mono)', fontSize: 10.5, fontWeight: 400 }}>{sd.units > 0 ? fmtN(sd.units) : '—'}</td>
@@ -3253,7 +3371,7 @@ function VCCategoryMatrix({ catData, subCatData, skuData, title }) {
                         </tr>
                         {scOpen && skus.map(({ sku, kd }) => (
                           <tr key={sku} style={{ borderBottom: `1px solid ${C.border}`, background: '#F5F5F0' }}>
-                            <td style={{ padding: '2px 4px 2px 32px', color: C.t3, fontSize: 9.5, fontFamily: 'var(--mono)' }}>└ {sku}</td>
+                            <td style={{ padding: '2px 4px 2px 32px', color: C.t3, fontSize: 9.5, fontFamily: 'var(--mono)' }}>└ {hlVC(sku)}</td>
                             <td style={{ padding: '3px 5px', textAlign: 'right', fontFamily: 'var(--mono)', fontSize: 10, fontWeight: 400 }}>{kd.units > 0 ? fmtN(kd.units) : '—'}</td>
                             <td style={{ padding: '3px 5px', textAlign: 'right', fontFamily: 'var(--mono)', fontSize: 10, fontWeight: 400 }}>{kd.rev > 0 ? fmt(kd.rev) : '—'}</td>
                           </tr>
