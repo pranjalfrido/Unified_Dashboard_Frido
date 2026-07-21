@@ -2006,7 +2006,7 @@ function OverviewPage({ data, alerts, logisticsData }) {
                   <tr key={ch} style={{ borderBottom: i < sortedCh.length - 1 ? `1px solid ${C.border}` : 'none' }}>
                     <td style={{ padding: '6px 8px', display: 'flex', alignItems: 'center', gap: 7 }}>
                       {CHANNEL_LOGOS[ch]
-                        ? <img src={CHANNEL_LOGOS[ch]} alt={ch} style={{ width: 18, height: 18, objectFit: 'contain', borderRadius: 4, flexShrink: 0, background: '#f5f5f5' }} />
+                        ? <img src={CHANNEL_LOGOS[ch]} alt={ch} style={{ width: ch === 'offline_sales' ? 22 : 18, height: ch === 'offline_sales' ? 22 : 18, objectFit: 'contain', borderRadius: 4, flexShrink: 0, background: ch === 'CRED' ? '#1a1a1a' : '#f5f5f5', padding: ch === 'CRED' ? 2 : 0 }} />
                         : <span style={{ width: 18, height: 18, borderRadius: 4, background: C.ch[ch] || C.acc, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 8, fontWeight: 800, color: '#fff' }}>{ch.charAt(0)}</span>}
                       <span style={{ fontWeight: 600, color: C.t1 }}>{ch === 'offline_sales' ? 'Offline Sales' : ch}</span>
                     </td>
@@ -3658,7 +3658,7 @@ function AllTab({ data, rangeStart, rangeEnd }) {
               return (
                 <div key={ch} style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '5px 0', borderBottom: `1px solid ${C.border}` }}>
                   {CHANNEL_LOGOS[ch]
-                    ? <img src={CHANNEL_LOGOS[ch]} alt={ch} style={{ width: 18, height: 18, objectFit: 'contain', borderRadius: 4, flexShrink: 0, background: '#f5f5f5' }} />
+                    ? <img src={CHANNEL_LOGOS[ch]} alt={ch} style={{ width: ch === 'offline_sales' ? 22 : 18, height: ch === 'offline_sales' ? 22 : 18, objectFit: 'contain', borderRadius: 4, flexShrink: 0, background: ch === 'CRED' ? '#1a1a1a' : '#f5f5f5', padding: ch === 'CRED' ? 2 : 0 }} />
                     : <span style={{ width: 18, height: 18, borderRadius: 4, background: C.ch[ch] || C.acm, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 8, fontWeight: 800, color: '#fff' }}>{ch.charAt(0)}</span>}
                   <span style={{ fontSize: 12, color: C.t2, width: 90, flexShrink: 0 }}>{ch === 'offline_sales' ? 'Offline Sales' : ch}</span>
                   <div style={{ flex: 1, height: 5, background: C.bg, borderRadius: 3 }}>
