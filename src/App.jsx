@@ -3172,18 +3172,18 @@ function FinancialCategoryMatrix({ catData, subCatData, skuData, title, showRetu
                         {hlFin(row.cat)}
                       </span>
                     </td>
-                    <td style={{ ...cell(), color: grossColor }}>{fmt(row.gross)}{showShare && tot.gross > 0 ? <span style={{ color: C.t3, marginLeft: 6 }}>({(row.gross / tot.gross * 100).toFixed(1)}%)</span> : null}</td>
-                    <td style={{ ...cell(), color: C.t2 }}>{fmtN(row.units)}</td>
+                    <td style={{ ...cell() }}>{fmt(row.gross)}{showShare && tot.gross > 0 ? <span style={{ color: C.t3, marginLeft: 6 }}>({(row.gross / tot.gross * 100).toFixed(1)}%)</span> : null}</td>
+                    <td style={{ ...cell() }}>{fmtN(row.units)}</td>
                     {showExtras && <td style={{ ...cell() }}>{momCell(row.gross, row.prevGross)}</td>}
-                    <td style={{ ...cell(), color: C.t3 }}>₹{(row.units > 0 ? Math.round(row.gross / row.units) : 0).toLocaleString('en-IN')}</td>
+                    <td style={{ ...cell() }}>₹{(row.units > 0 ? Math.round(row.gross / row.units) : 0).toLocaleString('en-IN')}</td>
                     {hasCancelData && <>
-                      {neutral && <td style={{ ...cell(), color: cancelColor }}>{revPctCell(row.cancelRev, row.gross)}</td>}
-                      {neutral && <td style={{ ...cell(), color: rtoColor }}>{revPctCell(row.rtoRev, row.gross)}</td>}
-                      {neutral && <td style={{ ...cell(), color: cirColor }}>{revPctCell(row.cirRev, row.gross)}</td>}
-                      {neutral && <td style={{ ...cell(), color: exchColor }}>{revPctCell(row.exchRev, row.gross)}</td>}
-                      <td style={{ ...cell(), color: returnColor }}>{returnsRevCell(row.rtoRev, row.cirRev, row.exchRev, row.gross, row.returnRev)}</td>
+                      {neutral && <td style={{ ...cell() }}>{revPctCell(row.cancelRev, row.gross)}</td>}
+                      {neutral && <td style={{ ...cell() }}>{revPctCell(row.rtoRev, row.gross)}</td>}
+                      {neutral && <td style={{ ...cell() }}>{revPctCell(row.cirRev, row.gross)}</td>}
+                      {neutral && <td style={{ ...cell() }}>{revPctCell(row.exchRev, row.gross)}</td>}
+                      <td style={{ ...cell() }}>{returnsRevCell(row.rtoRev, row.cirRev, row.exchRev, row.gross, row.returnRev)}</td>
                     </>}
-                    <td style={{ ...cell(), color: netColor }}>{fmt(row.net)}</td>
+                    <td style={{ ...cell() }}>{fmt(row.net)}</td>
                   </tr>
                   {catOpen && (() => {
                     // Compute per-sub-cat cum % within this parent category
@@ -3213,34 +3213,34 @@ function FinancialCategoryMatrix({ catData, subCatData, skuData, title, showRetu
                               └ {hlFin(sr.sc)}
                             </span>
                           </td>
-                          <td style={{ ...cell(10.5), color: grossColor }}>{fmt(sr.gross)}{showShare && tot.gross > 0 ? <span style={{ color: C.t3, marginLeft: 5 }}>({(sr.gross / tot.gross * 100).toFixed(1)}%)</span> : null}</td>
-                          <td style={{ ...cell(10.5), color: C.t2 }}>{fmtN(sr.units)}</td>
+                          <td style={{ ...cell(10.5) }}>{fmt(sr.gross)}{showShare && tot.gross > 0 ? <span style={{ color: C.t3, marginLeft: 5 }}>({(sr.gross / tot.gross * 100).toFixed(1)}%)</span> : null}</td>
+                          <td style={{ ...cell(10.5) }}>{fmtN(sr.units)}</td>
                           {showExtras && <td style={{ ...cell(10.5) }}>{momCell(sr.gross, srPrev)}</td>}
-                          <td style={{ ...cell(10.5), color: C.t3 }}>₹{(sr.units > 0 ? Math.round(sr.gross / sr.units) : 0).toLocaleString('en-IN')}</td>
+                          <td style={{ ...cell(10.5) }}>₹{(sr.units > 0 ? Math.round(sr.gross / sr.units) : 0).toLocaleString('en-IN')}</td>
                           {hasCancelData && <>
-                            {neutral && <td style={{ ...cell(10.5), color: cancelColor }}>{revPctCell(sr.cancelRev, sr.gross)}</td>}
-                            {neutral && <td style={{ ...cell(10.5), color: rtoColor }}>{revPctCell(sr.rtoRev, sr.gross)}</td>}
-                            {neutral && <td style={{ ...cell(10.5), color: cirColor }}>{revPctCell(sr.cirRev, sr.gross)}</td>}
-                            {neutral && <td style={{ ...cell(10.5), color: exchColor }}>{revPctCell(sr.exchRev, sr.gross)}</td>}
-                            <td style={{ ...cell(10.5), color: returnColor }}>{returnsRevCell(sr.rtoRev, sr.cirRev, sr.exchRev, sr.gross, sr.returnRev)}</td>
+                            {neutral && <td style={{ ...cell(10.5) }}>{revPctCell(sr.cancelRev, sr.gross)}</td>}
+                            {neutral && <td style={{ ...cell(10.5) }}>{revPctCell(sr.rtoRev, sr.gross)}</td>}
+                            {neutral && <td style={{ ...cell(10.5) }}>{revPctCell(sr.cirRev, sr.gross)}</td>}
+                            {neutral && <td style={{ ...cell(10.5) }}>{revPctCell(sr.exchRev, sr.gross)}</td>}
+                            <td style={{ ...cell(10.5) }}>{returnsRevCell(sr.rtoRev, sr.cirRev, sr.exchRev, sr.gross, sr.returnRev)}</td>
                           </>}
-                          <td style={{ ...cell(10.5), color: netColor }}>{fmt(sr.net)}</td>
+                          <td style={{ ...cell(10.5) }}>{fmt(sr.net)}</td>
                         </tr>
                         {scOpen && skus.map(sk => (
                           <tr key={sk.sku} style={{ borderBottom: `1px solid ${C.border}`, background: '#F5F5F0' }}>
                             <td style={{ padding: '2px 4px 2px 32px', color: C.t3, fontSize: 9.5, fontFamily: 'var(--mono)' }}>└ {hlFin(sk.sku)}</td>
-                            <td style={{ ...cell(10), color: grossColor }}>{fmt(sk.gross)}{showShare && tot.gross > 0 ? <span style={{ color: C.t3, marginLeft: 5 }}>({(sk.gross / tot.gross * 100).toFixed(1)}%)</span> : null}</td>
-                            <td style={{ ...cell(10), color: C.t2 }}>{fmtN(sk.units)}</td>
+                            <td style={{ ...cell(10) }}>{fmt(sk.gross)}{showShare && tot.gross > 0 ? <span style={{ color: C.t3, marginLeft: 5 }}>({(sk.gross / tot.gross * 100).toFixed(1)}%)</span> : null}</td>
+                            <td style={{ ...cell(10) }}>{fmtN(sk.units)}</td>
                             {showExtras && <td style={{ ...cell(10) }}>{momCell(sk.gross, sk.prevGross)}</td>}
-                            <td style={{ ...cell(10), color: C.t3 }}>₹{(sk.units > 0 ? Math.round(sk.gross / sk.units) : 0).toLocaleString('en-IN')}</td>
+                            <td style={{ ...cell(10) }}>₹{(sk.units > 0 ? Math.round(sk.gross / sk.units) : 0).toLocaleString('en-IN')}</td>
                             {hasCancelData && <>
-                              {neutral && <td style={{ ...cell(10), color: cancelColor }}>{revPctCell(sk.cancelRev, sk.gross)}</td>}
-                              {neutral && <td style={{ ...cell(10), color: rtoColor }}>{revPctCell(sk.rtoRev, sk.gross)}</td>}
-                              {neutral && <td style={{ ...cell(10), color: cirColor }}>{revPctCell(sk.cirRev, sk.gross)}</td>}
-                              {neutral && <td style={{ ...cell(10), color: exchColor }}>{revPctCell(sk.exchRev, sk.gross)}</td>}
-                              <td style={{ ...cell(10), color: returnColor }}>{returnsRevCell(sk.rtoRev, sk.cirRev, sk.exchRev, sk.gross, sk.returnRev)}</td>
+                              {neutral && <td style={{ ...cell(10) }}>{revPctCell(sk.cancelRev, sk.gross)}</td>}
+                              {neutral && <td style={{ ...cell(10) }}>{revPctCell(sk.rtoRev, sk.gross)}</td>}
+                              {neutral && <td style={{ ...cell(10) }}>{revPctCell(sk.cirRev, sk.gross)}</td>}
+                              {neutral && <td style={{ ...cell(10) }}>{revPctCell(sk.exchRev, sk.gross)}</td>}
+                              <td style={{ ...cell(10) }}>{returnsRevCell(sk.rtoRev, sk.cirRev, sk.exchRev, sk.gross, sk.returnRev)}</td>
                             </>}
-                            <td style={{ ...cell(10), color: netColor }}>{fmt(sk.net)}</td>
+                            <td style={{ ...cell(10) }}>{fmt(sk.net)}</td>
                           </tr>
                         ))}
                       </Fragment>
@@ -3253,18 +3253,18 @@ function FinancialCategoryMatrix({ catData, subCatData, skuData, title, showRetu
           <tfoot>
             <tr style={{ borderTop: `2px solid ${C.border}`, background: C.bg }}>
               <td style={{ padding: '6px 8px', fontSize: 11.5, fontWeight: 700, color: C.t1 }}>Total</td>
-              <td style={{ padding: '6px 8px', textAlign: 'right', fontWeight: 700, fontFamily: 'var(--mono)', fontSize: 11.5, color: grossColor }}>{fmt(tot.gross)}{showShare ? <span style={{ fontSize: 9.5, color: C.t3, marginLeft: 6, fontWeight: 400 }}>(100%)</span> : null}</td>
-              <td style={{ padding: '6px 8px', textAlign: 'right', fontWeight: 700, fontFamily: 'var(--mono)', fontSize: 11.5, color: C.t2 }}>{fmtN(tot.units)}</td>
+              <td style={{ padding: '6px 8px', textAlign: 'right', fontWeight: 700, fontFamily: 'var(--mono)', fontSize: 11.5 }}>{fmt(tot.gross)}{showShare ? <span style={{ color: C.t3, marginLeft: 6, fontWeight: 400 }}>(100%)</span> : null}</td>
+              <td style={{ padding: '6px 8px', textAlign: 'right', fontWeight: 700, fontFamily: 'var(--mono)', fontSize: 11.5 }}>{fmtN(tot.units)}</td>
               {showExtras && <td style={{ padding: '6px 8px', textAlign: 'right', fontWeight: 700, fontFamily: 'var(--mono)', fontSize: 11.5 }}>{momCell(tot.gross, tot.prevGross)}</td>}
-              <td style={{ padding: '6px 8px', textAlign: 'right', fontWeight: 700, fontFamily: 'var(--mono)', fontSize: 11.5, color: C.t3 }}>₹{tot.units > 0 ? Math.round(tot.gross / tot.units).toLocaleString('en-IN') : '—'}</td>
+              <td style={{ padding: '6px 8px', textAlign: 'right', fontWeight: 700, fontFamily: 'var(--mono)', fontSize: 11.5 }}>₹{tot.units > 0 ? Math.round(tot.gross / tot.units).toLocaleString('en-IN') : '—'}</td>
               {hasCancelData && <>
-                {neutral && <td style={{ padding: '6px 8px', textAlign: 'right', fontWeight: 700, fontFamily: 'var(--mono)', fontSize: 11.5, color: cancelColor }}>{revPctCell(tot.cancelRev, tot.gross)}</td>}
-                {neutral && <td style={{ padding: '6px 8px', textAlign: 'right', fontWeight: 700, fontFamily: 'var(--mono)', fontSize: 11.5, color: rtoColor }}>{revPctCell(tot.rtoRev, tot.gross)}</td>}
-                {neutral && <td style={{ padding: '6px 8px', textAlign: 'right', fontWeight: 700, fontFamily: 'var(--mono)', fontSize: 11.5, color: cirColor }}>{revPctCell(tot.cirRev, tot.gross)}</td>}
-                {neutral && <td style={{ padding: '6px 8px', textAlign: 'right', fontWeight: 700, fontFamily: 'var(--mono)', fontSize: 11.5, color: exchColor }}>{revPctCell(tot.exchRev, tot.gross)}</td>}
-                <td style={{ padding: '6px 8px', textAlign: 'right', fontWeight: 700, fontFamily: 'var(--mono)', fontSize: 11.5, color: returnColor }}>{returnsRevCell(tot.rtoRev, tot.cirRev, tot.exchRev, tot.gross, tot.returnRev)}</td>
+                {neutral && <td style={{ padding: '6px 8px', textAlign: 'right', fontWeight: 700, fontFamily: 'var(--mono)', fontSize: 11.5 }}>{revPctCell(tot.cancelRev, tot.gross)}</td>}
+                {neutral && <td style={{ padding: '6px 8px', textAlign: 'right', fontWeight: 700, fontFamily: 'var(--mono)', fontSize: 11.5 }}>{revPctCell(tot.rtoRev, tot.gross)}</td>}
+                {neutral && <td style={{ padding: '6px 8px', textAlign: 'right', fontWeight: 700, fontFamily: 'var(--mono)', fontSize: 11.5 }}>{revPctCell(tot.cirRev, tot.gross)}</td>}
+                {neutral && <td style={{ padding: '6px 8px', textAlign: 'right', fontWeight: 700, fontFamily: 'var(--mono)', fontSize: 11.5 }}>{revPctCell(tot.exchRev, tot.gross)}</td>}
+                <td style={{ padding: '6px 8px', textAlign: 'right', fontWeight: 700, fontFamily: 'var(--mono)', fontSize: 11.5 }}>{returnsRevCell(tot.rtoRev, tot.cirRev, tot.exchRev, tot.gross, tot.returnRev)}</td>
               </>}
-              <td style={{ padding: '6px 8px', textAlign: 'right', fontWeight: 700, fontFamily: 'var(--mono)', fontSize: 11.5, color: netColor }}>{fmt(tot.net)}</td>
+              <td style={{ padding: '6px 8px', textAlign: 'right', fontWeight: 700, fontFamily: 'var(--mono)', fontSize: 11.5 }}>{fmt(tot.net)}</td>
             </tr>
           </tfoot>
         </table>
