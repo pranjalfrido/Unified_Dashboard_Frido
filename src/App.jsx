@@ -5812,6 +5812,11 @@ function FlipkartTab({ data }) {
   const fkPrevUnits = fk.prevUnits || 0
   const fkPrevFbfRev = fk.prevFbfRev || 0
   const fkPrevNonFbfRev = fk.prevNonFbfRev || 0
+  const fkPrevCancelOrders = fk.prevCancelOrders || 0
+  const fkPrevReturnRev = fk.prevReturnRev || 0
+  const fkPrevDeliveredRev = fk.prevDeliveredRev || 0
+  const fkPrevCancelPct = fkPrevOrders > 0 ? fkPrevCancelOrders / fkPrevOrders * 100 : 0
+  const fkPrevReturnPct = fkPrevDeliveredRev > 0 ? fkPrevReturnRev / fkPrevDeliveredRev * 100 : 0
   const fkPrevGST = fkPrevRev - fkPrevExcRev
   const fkPrevDailyArr = fk.prevDaily || data.prevDailyArr || []
   const fkRevChg = fkPrevRev > 0 ? ((rev - fkPrevRev) / fkPrevRev * 100) : null
@@ -5953,8 +5958,8 @@ function FlipkartTab({ data }) {
             {[
               { label: 'ASP', value: `₹${Math.round(asp).toLocaleString('en-IN')}`, sub: 'Gross rev ÷ units', badge: fkChgBadge(asp, fkPrevUnits > 0 ? fkPrevRev / fkPrevUnits : 0) },
               { label: 'GST Collected', value: fmt(rev - excRev), sub: 'Inc GST − Exc GST', badge: fkChgBadge(rev - excRev, fkPrevGST) },
-              { label: 'Cancellation %', value: `${nOrders > 0 ? (cancelOrders / nOrders * 100).toFixed(1) : 0}%`, sub: `${fmtN(cancelOrders)} cancelled · ${fmt(cancelRev)} rev`, accent: nOrders > 0 && cancelOrders / nOrders > 0.1 ? '#7A1A1A' : undefined },
-              { label: 'Return % (Rev)', value: `${fkReturnCur.pct.toFixed(1)}%`, sub: `${fmt(fkReturnCur.returnRev)} ret · ${fmt(fkReturnCur.deliveredRev)} gross`, accent: fkReturnCur.pct > 20 ? '#7A1A1A' : undefined },
+              { label: 'Cancellation %', value: `${nOrders > 0 ? (cancelOrders / nOrders * 100).toFixed(1) : 0}%`, sub: `${fmtN(cancelOrders)} cancelled · ${fmt(cancelRev)} rev`, accent: nOrders > 0 && cancelOrders / nOrders > 0.1 ? '#7A1A1A' : undefined, badge: fkPrevCancelPct > 0 ? (() => { const cur = nOrders > 0 ? cancelOrders / nOrders * 100 : 0; const p = (cur - fkPrevCancelPct) / fkPrevCancelPct * 100; return <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 4, background: p > 0 ? C.red.bg : C.green.bg, color: p > 0 ? C.red.tx : C.green.tx, flexShrink: 0 }}>{p > 0 ? '▲' : '▼'} {Math.abs(p).toFixed(1)}%</span> })() : null },
+              { label: 'Return % (Rev)', value: `${fkReturnCur.pct.toFixed(1)}%`, sub: `${fmt(fkReturnCur.returnRev)} ret · ${fmt(fkReturnCur.deliveredRev)} gross`, accent: fkReturnCur.pct > 20 ? '#7A1A1A' : undefined, badge: fkPrevReturnPct > 0 ? (() => { const p = (fkReturnCur.pct - fkPrevReturnPct) / fkPrevReturnPct * 100; return <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 4, background: p > 0 ? C.red.bg : C.green.bg, color: p > 0 ? C.red.tx : C.green.tx, flexShrink: 0 }}>{p > 0 ? '▲' : '▼'} {Math.abs(p).toFixed(1)}%</span> })() : null },
             ].map(k => (
               <div key={k.label} className="kpi-card" style={{ padding: '10px 13px' }}>
                 <div className="kpi-label">{k.label}</div>
