@@ -3109,8 +3109,8 @@ function FinancialCategoryMatrix({ catData, subCatData, skuData, title, showRetu
   const hasCancelData = neutral || cats.some(r => r.cancelled > 0 || r.rto > 0 || r.cir > 0 || r.exch > 0 || r.cancelRev > 0 || r.rtoRev > 0 || r.cirRev > 0 || r.exchRev > 0 || r.returnRev > 0)
   const showExtras = neutral || showMoM
 
-  const colHdr = { textAlign: 'right', padding: '3px 3px 6px', borderBottom: `1px solid ${C.border}`, fontSize: 8.5, fontWeight: 700, textTransform: 'uppercase', whiteSpace: 'nowrap', letterSpacing: '.01em' }
-  const cell = (fs = 10) => ({ padding: '4px 3px', textAlign: 'right', fontFamily: 'var(--mono)', fontSize: fs, fontWeight: 400, whiteSpace: 'nowrap' })
+  const colHdr = { textAlign: 'right', padding: '5px 8px 7px', borderBottom: `2px solid ${C.border}`, fontSize: 11, fontWeight: 800, textTransform: 'uppercase', whiteSpace: 'nowrap', letterSpacing: '.05em' }
+  const cell = (fs = 11.5) => ({ padding: '6px 8px', textAlign: 'right', fontFamily: 'var(--mono)', fontSize: fs, fontWeight: 400, whiteSpace: 'nowrap' })
   const pctSpan = (n, d) => { if (!d || !n) return null; const p = (n / d * 100).toFixed(1); return <span style={{ fontSize: 8, color: C.t3, marginLeft: 2 }}>({p}%)</span> }
   const momCell = (cur, prev) => {
     if (!prev || prev === 0) return <span style={{ color: C.t3, fontSize: 10 }}>—</span>
@@ -3138,7 +3138,7 @@ function FinancialCategoryMatrix({ catData, subCatData, skuData, title, showRetu
         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 10, fontWeight: 400, tableLayout: 'auto' }}>
           <thead style={{ position: 'sticky', top: 0, background: C.card, zIndex: 1 }}>
             <tr>
-              <th style={{ textAlign: 'left', padding: '3px 4px 6px', borderBottom: `1px solid ${C.border}`, color: C.t3, fontSize: 8.5, fontWeight: 700, textTransform: 'uppercase' }}>Category</th>
+              <th style={{ textAlign: 'left', padding: '5px 8px 7px', borderBottom: `2px solid ${C.border}`, color: C.t1, fontSize: 11, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '.05em' }}>Category</th>
               <th style={{ ...colHdr, color: grossColor }}>Gross Rev{showShare ? ' / Share' : ''}</th>
               <th style={{ ...colHdr, color: C.t2 }}>Units</th>
               {showExtras && <th style={{ ...colHdr, color: C.t3 }}>MoM</th>}
@@ -3166,7 +3166,7 @@ function FinancialCategoryMatrix({ catData, subCatData, skuData, title, showRetu
               return (
                 <Fragment key={row.cat}>
                   <tr style={{ borderBottom: `1px solid ${C.border}` }}>
-                    <td style={{ padding: '4px 4px', color: C.t1, fontSize: 10.5 }}>
+                    <td style={{ padding: '6px 8px', color: C.t2, fontSize: 12, fontWeight: 600 }}>
                       <span onClick={() => hasSubs && !q && toggle(row.cat)} style={{ cursor: hasSubs && !q ? 'pointer' : 'default', userSelect: 'none', display: 'inline-flex', alignItems: 'center', gap: 5 }}>
                         {hasSubs && <span style={{ fontSize: 9, color: C.t3, display: 'inline-block', transform: catOpen ? 'rotate(90deg)' : 'rotate(0deg)', transition: 'transform .15s' }}>▶</span>}
                         {hlFin(row.cat)}
@@ -3252,19 +3252,19 @@ function FinancialCategoryMatrix({ catData, subCatData, skuData, title, showRetu
           </tbody>
           <tfoot>
             <tr style={{ borderTop: `2px solid ${C.border}`, background: C.bg }}>
-              <td style={{ padding: '5px 6px', fontSize: 10.5, fontWeight: 700, color: C.t1 }}>Total</td>
-              <td style={{ padding: '4px 3px', textAlign: 'right', fontWeight: 700, fontFamily: 'var(--mono)', fontSize: 10.5, color: grossColor }}>{fmt(tot.gross)}{showShare ? <span style={{ fontSize: 9.5, color: C.t3, marginLeft: 6, fontWeight: 400 }}>(100%)</span> : null}</td>
-              <td style={{ padding: '4px 3px', textAlign: 'right', fontWeight: 700, fontFamily: 'var(--mono)', fontSize: 10.5, color: C.t2 }}>{fmtN(tot.units)}</td>
-              {showExtras && <td style={{ padding: '4px 3px', textAlign: 'right', fontWeight: 700, fontFamily: 'var(--mono)', fontSize: 10.5 }}>{momCell(tot.gross, tot.prevGross)}</td>}
-              <td style={{ padding: '4px 3px', textAlign: 'right', fontWeight: 700, fontFamily: 'var(--mono)', fontSize: 10.5, color: C.t3 }}>₹{tot.units > 0 ? Math.round(tot.gross / tot.units).toLocaleString('en-IN') : '—'}</td>
+              <td style={{ padding: '6px 8px', fontSize: 11.5, fontWeight: 700, color: C.t1 }}>Total</td>
+              <td style={{ padding: '6px 8px', textAlign: 'right', fontWeight: 700, fontFamily: 'var(--mono)', fontSize: 11.5, color: grossColor }}>{fmt(tot.gross)}{showShare ? <span style={{ fontSize: 9.5, color: C.t3, marginLeft: 6, fontWeight: 400 }}>(100%)</span> : null}</td>
+              <td style={{ padding: '6px 8px', textAlign: 'right', fontWeight: 700, fontFamily: 'var(--mono)', fontSize: 11.5, color: C.t2 }}>{fmtN(tot.units)}</td>
+              {showExtras && <td style={{ padding: '6px 8px', textAlign: 'right', fontWeight: 700, fontFamily: 'var(--mono)', fontSize: 11.5 }}>{momCell(tot.gross, tot.prevGross)}</td>}
+              <td style={{ padding: '6px 8px', textAlign: 'right', fontWeight: 700, fontFamily: 'var(--mono)', fontSize: 11.5, color: C.t3 }}>₹{tot.units > 0 ? Math.round(tot.gross / tot.units).toLocaleString('en-IN') : '—'}</td>
               {hasCancelData && <>
-                {neutral && <td style={{ padding: '4px 3px', textAlign: 'right', fontWeight: 700, fontFamily: 'var(--mono)', fontSize: 10.5, color: cancelColor }}>{revPctCell(tot.cancelRev, tot.gross)}</td>}
-                {neutral && <td style={{ padding: '4px 3px', textAlign: 'right', fontWeight: 700, fontFamily: 'var(--mono)', fontSize: 10.5, color: rtoColor }}>{revPctCell(tot.rtoRev, tot.gross)}</td>}
-                {neutral && <td style={{ padding: '4px 3px', textAlign: 'right', fontWeight: 700, fontFamily: 'var(--mono)', fontSize: 10.5, color: cirColor }}>{revPctCell(tot.cirRev, tot.gross)}</td>}
-                {neutral && <td style={{ padding: '4px 3px', textAlign: 'right', fontWeight: 700, fontFamily: 'var(--mono)', fontSize: 10.5, color: exchColor }}>{revPctCell(tot.exchRev, tot.gross)}</td>}
-                <td style={{ padding: '4px 3px', textAlign: 'right', fontWeight: 700, fontFamily: 'var(--mono)', fontSize: 10.5, color: returnColor }}>{returnsRevCell(tot.rtoRev, tot.cirRev, tot.exchRev, tot.gross, tot.returnRev)}</td>
+                {neutral && <td style={{ padding: '6px 8px', textAlign: 'right', fontWeight: 700, fontFamily: 'var(--mono)', fontSize: 11.5, color: cancelColor }}>{revPctCell(tot.cancelRev, tot.gross)}</td>}
+                {neutral && <td style={{ padding: '6px 8px', textAlign: 'right', fontWeight: 700, fontFamily: 'var(--mono)', fontSize: 11.5, color: rtoColor }}>{revPctCell(tot.rtoRev, tot.gross)}</td>}
+                {neutral && <td style={{ padding: '6px 8px', textAlign: 'right', fontWeight: 700, fontFamily: 'var(--mono)', fontSize: 11.5, color: cirColor }}>{revPctCell(tot.cirRev, tot.gross)}</td>}
+                {neutral && <td style={{ padding: '6px 8px', textAlign: 'right', fontWeight: 700, fontFamily: 'var(--mono)', fontSize: 11.5, color: exchColor }}>{revPctCell(tot.exchRev, tot.gross)}</td>}
+                <td style={{ padding: '6px 8px', textAlign: 'right', fontWeight: 700, fontFamily: 'var(--mono)', fontSize: 11.5, color: returnColor }}>{returnsRevCell(tot.rtoRev, tot.cirRev, tot.exchRev, tot.gross, tot.returnRev)}</td>
               </>}
-              <td style={{ padding: '4px 3px', textAlign: 'right', fontWeight: 700, fontFamily: 'var(--mono)', fontSize: 10.5, color: netColor }}>{fmt(tot.net)}</td>
+              <td style={{ padding: '6px 8px', textAlign: 'right', fontWeight: 700, fontFamily: 'var(--mono)', fontSize: 11.5, color: netColor }}>{fmt(tot.net)}</td>
             </tr>
           </tfoot>
         </table>
