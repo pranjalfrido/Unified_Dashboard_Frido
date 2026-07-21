@@ -2428,7 +2428,7 @@ const CHART_TYPES = [
   { id: 'area', label: 'Area' },
 ]
 
-function ChannelTrendCard({ dailyArr, channels, rangeStart }) {
+function ChannelTrendCard({ dailyArr, channels, rangeStart, rangeEnd }) {
   const [metric, setMetric] = useState('net_rev')
   const chartType = 'line'
   const m = CHART_METRICS.find(x => x.id === metric)
@@ -2440,7 +2440,7 @@ function ChannelTrendCard({ dailyArr, channels, rangeStart }) {
   const autoGroup = nDays <= 14 ? 'daily' : nDays <= 90 ? 'weekly' : 'monthly'
   const [groupBy, setGroupBy] = useState(autoGroup)
 
-  const grouped = groupDailyArr(dailyArr, channels, groupBy, rangeStart)
+  const grouped = groupDailyArr(dailyArr, channels, groupBy, rangeStart, rangeEnd)
   const enrichedDaily = grouped.map(row => {
     const total = channels.reduce((s, ch) => s + (row[dataKey(ch)] || 0), 0)
     return { ...row, _total: total }
@@ -2549,15 +2549,15 @@ function getGroupKey(date, groupBy) {
   return date
 }
 
-function groupDailyArr(dailyArr, channels, groupBy, rangeStart) {
+function groupDailyArr(dailyArr, channels, groupBy, rangeStart, rangeEnd) {
   if (groupBy === 'daily') {
     if (!rangeStart || dailyArr.length === 0) return dailyArr
-    const last = dailyArr[dailyArr.length - 1]?.date
-    if (!last) return dailyArr
+    const endDate = rangeEnd || dailyArr[dailyArr.length - 1]?.date
+    if (!endDate) return dailyArr
     const map = Object.fromEntries(dailyArr.map(d => [d.date, d]))
     const result = []
     const cur = new Date(rangeStart + 'T00:00:00')
-    const end = new Date(last + 'T00:00:00')
+    const end = new Date(endDate + 'T00:00:00')
     while (cur <= end) {
       const key = cur.toISOString().slice(0, 10)
       const empty = { date: key }
@@ -2587,12 +2587,12 @@ function groupDailyArr(dailyArr, channels, groupBy, rangeStart) {
   return Object.values(map).sort((a, b) => a._sort.localeCompare(b._sort))
 }
 
-function DailyChannelTable({ dailyArr, channels, nDays = 7, rangeStart }) {
+function DailyChannelTable({ dailyArr, channels, nDays = 7, rangeStart, rangeEnd }) {
   const autoGroup = nDays <= 14 ? 'daily' : nDays <= 90 ? 'weekly' : 'monthly'
   const [metric, setMetric] = useState('net_rev')
   const [groupBy, setGroupBy] = useState(autoGroup)
   const m = DAILY_METRICS.find(x => x.id === metric)
-  const grouped = groupDailyArr(dailyArr, channels, groupBy, rangeStart)
+  const grouped = groupDailyArr(dailyArr, channels, groupBy, rangeStart, rangeEnd)
 
   const getVal = (d, ch) => {
     if (metric === 'net_rev') return d[ch + '_net'] ?? d[ch] ?? 0
@@ -3479,7 +3479,7 @@ function RegionTierDonutRow({ regionRows, tierRows }) {
   )
 }
 
-function AllTab({ data, rangeStart }) {
+function AllTab({ data, rangeStart, rangeEnd }) {
   const { totalRev, totalExcRev, gstCollected, nOrders, totalQty, blendedAOV, nDays, dailyArr, chMap, catMap, subCatMap, catPrevMap = {}, subCatPrevMap = {}, stateMap, statePrevMap = {}, stateTotal = 0, cityRows = [], cityPrevMap = {}, cityTotal = 0, regionRows = [], tierRows = [], buckets, bucketRev, rows, orders, orderStatusRevMap = {}, orderStatusMap = {}, catChannelMap = {}, subCatChannelMap: serverSubCatChannelMap = {}, skuRows: allSkuRows = [], prevRev = 0, prevExcRev = 0, prevOrders = 0, prevQty = 0, prevDailyArr = [], prevChMap = {}, nCusts = 0, repeatCusts = 0, rtoRev = 0, cirRev = 0, cancellRev = 0, momRev = 0, yoyRev = 0, momPeriod = '', yoyPeriod = '', prevRtoOrders = 0, prevCirOrders = 0 } = data
   const netRevenueCalc = Object.values(chMap).reduce((s, v) => s + (v.netRev || 0), 0)
   const channels = Object.keys(chMap).filter(ch => chMap[ch]?.rev > 0).sort((a, b) => {
@@ -3638,7 +3638,7 @@ function AllTab({ data, rangeStart }) {
         </div>
       </div>
       <div className="g-21">
-        <ChannelTrendCard dailyArr={dailyArr} channels={channels} rangeStart={rangeStart} />
+        <ChannelTrendCard dailyArr={dailyArr} channels={channels} rangeStart={rangeStart} rangeEnd={rangeEnd} />
         <Card title="Channel Share">
           {(() => {
             const maxChNetRev = sortedCh.reduce((m, [, v]) => Math.max(m, v.netRev ?? v.excRev ?? 0), 0) || 1
@@ -3671,7 +3671,7 @@ function AllTab({ data, rangeStart }) {
       {(regionRows.length > 0 || tierRows.length > 0) && (
         <RegionTierDonutRow regionRows={regionRows} tierRows={tierRows} />
       )}
-      <DailyChannelTable dailyArr={dailyArr} channels={channels} nDays={nDays} rangeStart={rangeStart} />
+      <DailyChannelTable dailyArr={dailyArr} channels={channels} nDays={nDays} rangeStart={rangeStart} rangeEnd={rangeEnd} />
       <CategoryChannelMatrix heatData={heatData} channels={channels} maxHeat={maxHeat} subCatChannelMap={subCatChannelMap} skuChannelMap={skuChannelMap} />
       <div className="g-2" style={{ alignItems: 'stretch' }}>
         {(() => {
@@ -8438,7 +8438,7 @@ function SalesPage({ data, filters, setFilters, activeTab, setActiveTab, fetchDa
       </div>
       {/* Content */}
       <div className="page-scroll">
-        {activeTab === 'all' && <AllTab data={filteredData} rangeStart={filters.start} />}
+        {activeTab === 'all' && <AllTab data={filteredData} rangeStart={filters.start} rangeEnd={filters.end} />}
         {activeTab === 'shopify' && <ChannelTab data={filteredData} channel="Shopify" filters={filters} setFilters={setFilters} />}
         {activeTab === 'amazon' && <ChannelTab data={filteredData} channel="Amazon" amzRegion={amzRegion} setAmzRegion={setAmzRegion} />}
         {activeTab === 'flipkart' && <ChannelTab data={filteredData} channel="Flipkart" />}
