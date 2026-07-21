@@ -8418,7 +8418,7 @@ function SalesPage({ data, filters, setFilters, activeTab, setActiveTab, fetchDa
       {/* Tab bar */}
       <div className="sales-tabs">
         {TABS.map(tab => (
-          <button key={tab.id} onClick={() => { setActiveTab(tab.id); setFilters(f => ({ ...f, subChannel: '', voucher: '', channelGroup: '' })) }} className={`stab${activeTab === tab.id ? ' active' : ''}`} style={tab.id === 'all' ? { fontWeight: activeTab === 'all' ? 800 : 700, fontSize: 13 } : {}}>
+          <button key={tab.id} onClick={() => { setActiveTab(tab.id); setFilters(f => ({ ...f, subChannel: '', voucher: '', channelGroup: [] })) }} className={`stab${activeTab === tab.id ? ' active' : ''}`} style={tab.id === 'all' ? { fontWeight: activeTab === 'all' ? 800 : 700, fontSize: 13 } : {}}>
             {tab.logo && <img src={tab.logo} alt="" style={{ width: 14, height: 14, borderRadius: 3, flexShrink: 0, objectFit: 'contain', filter: tab.id === 'cred' ? 'invert(1)' : 'none' }} />}
             {tab.label}
           </button>
@@ -8441,17 +8441,18 @@ function SalesPage({ data, filters, setFilters, activeTab, setActiveTab, fetchDa
           <SearchableSelect multi options={skuOpts} value={filters.sku || []} onChange={v => setFilters(f => ({ ...f, sku: v }))} placeholder="All SKUs" dropdownWidth={280} />
           {activeTab === 'shopify' && <VoucherDropdown voucherList={data?.voucherList || []} selected={filters.voucher} onChange={v => setFilters(f => ({ ...f, voucher: v }))} />}
           {activeTab === 'all' && (
-            <select value={filters.channelGroup || ''} onChange={e => setFilters(f => ({ ...f, channelGroup: e.target.value }))}
-              style={{ fontSize: 12, padding: '5px 10px', borderRadius: 7, border: `1px solid ${filters.channelGroup ? C.acm : C.border}`, background: filters.channelGroup ? C.acl : C.card, color: C.t1, outline: 'none', fontFamily: 'var(--font)', cursor: 'pointer', fontWeight: filters.channelGroup ? 700 : 400 }}>
-              <option value="">All Channel Groups</option>
-              <option value="d2c">D2C</option>
-              <option value="ebo">EBO</option>
-              <option value="marketplace">Marketplace</option>
-              <option value="quick_commerce">Quick Commerce</option>
-              <option value="offline">Offline Sales</option>
-            </select>
+            <SearchableSelect multi
+              options={['D2C', 'EBO', 'Marketplace', 'Quick Commerce', 'Offline Sales']}
+              value={(filters.channelGroup || []).map(v => ({ d2c:'D2C', ebo:'EBO', marketplace:'Marketplace', quick_commerce:'Quick Commerce', offline:'Offline Sales' }[v] || v))}
+              onChange={v => {
+                const labelToKey = { 'D2C':'d2c', 'EBO':'ebo', 'Marketplace':'marketplace', 'Quick Commerce':'quick_commerce', 'Offline Sales':'offline' }
+                setFilters(f => ({ ...f, channelGroup: v.map(l => labelToKey[l] || l) }))
+              }}
+              placeholder="All Channel Groups"
+              dropdownWidth={220}
+            />
           )}
-          <button onClick={() => setFilters(f => ({ ...f, category: [], subCategory: [], sku: [], subChannel: '', voucher: '', region: [], tier: [], state: [], city: '', channelGroup: '' }))} className="fclr">✕ Clear</button>
+          <button onClick={() => setFilters(f => ({ ...f, category: [], subCategory: [], sku: [], subChannel: '', voucher: '', region: [], tier: [], state: [], city: '', channelGroup: [] }))} className="fclr">✕ Clear</button>
         </div>
       </div>
       {/* Content */}
@@ -9315,7 +9316,7 @@ function CustomerPage({ filters }) {
 export default function App() {
   const [page, setPage] = useState('overview')
   const def = getDefaultDates()
-  const [filters, setFilters] = useState({ start: def.start, end: def.end, category: [], subCategory: [], sku: [], subChannel: '', voucher: '', region: [], tier: [], state: [], city: '', channelGroup: '' })
+  const [filters, setFilters] = useState({ start: def.start, end: def.end, category: [], subCategory: [], sku: [], subChannel: '', voucher: '', region: [], tier: [], state: [], city: '', channelGroup: [] })
   const [activeTab, setActiveTab] = useState('all')
   const [rawRows, setRawRows] = useState(null)
   const [loading, setLoading] = useState(false)
@@ -9384,7 +9385,7 @@ export default function App() {
       if (city) extra.city = city
       if (country) extra.country = country
       if (paymentType) extra.paymentType = paymentType
-      if (channelGroup) extra.channelGroup = channelGroup
+      if (channelGroup?.length) extra.channelGroup = channelGroup.join(',')
       fetchData(start, end, extra)
       // Fetch logistics summary for Overview tab
       fetch(`${API}/api/logistics`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ start, end, shipmentType: 'forward' }) })

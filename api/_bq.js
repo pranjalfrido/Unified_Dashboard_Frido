@@ -33,14 +33,19 @@ export function buildQuery(s, e, filters = {}) {
   // Region/Tier still come from pincode_city_master join (pm/cm).
   const whereClauses = []
 
-  if (channelGroup && CHANNEL_GROUPS[channelGroup]) {
-    const g = CHANNEL_GROUPS[channelGroup]
-    const chList = g.channels.map(c => `'${c}'`).join(',')
-    if (g.subChannels) {
-      const scList = g.subChannels.map(c => `'${c}'`).join(',')
-      whereClauses.push(`(u.Channel IN (${chList}) AND u.SubChannel IN (${scList}))`)
-    } else {
-      whereClauses.push(`u.Channel IN (${chList})`)
+  if (channelGroup) {
+    const groups = channelGroup.split(',').map(g => g.trim()).filter(g => CHANNEL_GROUPS[g])
+    if (groups.length > 0) {
+      const parts = groups.map(g => {
+        const def = CHANNEL_GROUPS[g]
+        const chList = def.channels.map(c => `'${c}'`).join(',')
+        if (def.subChannels) {
+          const scList = def.subChannels.map(c => `'${c}'`).join(',')
+          return `(u.Channel IN (${chList}) AND u.SubChannel IN (${scList}))`
+        }
+        return `u.Channel IN (${chList})`
+      })
+      whereClauses.push(parts.length === 1 ? parts[0] : `(${parts.join(' OR ')})`)
     }
   }
   if (category) {
