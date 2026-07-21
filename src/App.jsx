@@ -1886,7 +1886,7 @@ function HeroKPICard({ label, value, sub, chg, sparkData, dataKey = 'cur', color
 
 // ── Overview Page ─────────────────────────────────────────────
 function OverviewPage({ data, alerts, logisticsData }) {
-  const { totalRev, totalExcRev, nOrders, totalQty, totalAspQty = 0, blendedAOV, nDays, chMap, catMap, subCatMap, stateMap, nCusts, repeatCusts, dailyArr, prevRev, prevOrders, orderStatusRevMap = {}, rtoRevDirect, returnRev, cirRev, exchangeRev, netRevenueCalc = 0 } = data
+  const { totalRev, totalExcRev, nOrders, totalQty, blendedAOV, nDays, chMap, catMap, subCatMap, stateMap, nCusts, repeatCusts, dailyArr, prevRev, prevOrders, orderStatusRevMap = {}, rtoRevDirect, returnRev, cirRev, exchangeRev, netRevenueCalc = 0 } = data
   const sh = data.shopify || {}
   const ads = data.ads || {}
 
@@ -3538,7 +3538,8 @@ function AllTab({ data, rangeStart, rangeEnd }) {
   const rtoOrders = (orderStatusMap['RTO'] || 0) + (orderStatusMap['Return'] || 0)
   const cirOrderCount = orderStatusMap['CIR'] || 0
   const returnPct = totalRev > 0 ? ((rtoRev + cirRev) / totalRev * 100) : 0
-  const asp = (totalAspQty || totalQty) > 0 ? totalRev / (totalAspQty || totalQty) : 0
+  const aspQtyAll = (data.orders || []).reduce((s, o) => s + (o.aspQty ?? o.qty ?? 0), 0)
+  const asp = (aspQtyAll || totalQty) > 0 ? totalRev / (aspQtyAll || totalQty) : 0
   const deliveredOrders = orderStatusMap['Delivered'] || 0
   const fulfilmentPct = nOrders > 0 ? (deliveredOrders / nOrders * 100) : 0
 
