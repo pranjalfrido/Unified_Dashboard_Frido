@@ -2490,7 +2490,14 @@ function ChannelTrendCard({ dailyArr, channels, rangeStart, rangeEnd }) {
             </linearGradient>
           </defs>
           <CartesianGrid strokeDasharray="3 3" stroke={C.border} vertical={false} />
-          <XAxis dataKey="date" tick={{ fontSize: 10, fill: C.t3 }} tickFormatter={d => groupBy === 'daily' ? d?.slice(5) : d} />
+          <XAxis dataKey="date" tick={{ fontSize: 10, fill: C.t3 }} tickFormatter={d => {
+            if (groupBy === 'daily') return d?.slice(5)
+            if (groupBy === 'monthly' && d?.match(/^\d{4}-\d{2}$/)) {
+              const [y, m] = d.split('-')
+              return new Date(+y, +m - 1).toLocaleString('en-US', { month: 'short' }) + " '" + y.slice(2)
+            }
+            return d
+          }} />
           <YAxis tick={{ fontSize: 10, fill: C.t3 }} tickFormatter={fmtTick} width={40} />
           <Tooltip content={totalTooltip} />
           <Area type="monotone" dataKey="_total" name="Total" stroke={C.acm} strokeWidth={2.5} fill="url(#chTotalGrad)" dot={false} />

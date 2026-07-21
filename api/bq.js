@@ -481,6 +481,20 @@ export default async function handler(req, res) {
     const orderStatusRevMap = {}
     r.byOrderStatus.forEach(x => { orderStatusMap[x.order_status || 'Unknown'] = parseInt(x.cnt) || 0; orderStatusRevMap[x.order_status || 'Unknown'] = parseFloat(x.rev) || 0 })
 
+    // Patch dailyArr _net using each channel's overall netRev/rev ratio from chMap
+    // This ensures QC channels (Blinkit/Zepto/Instamart) with missing exc_rev get correct net
+    dailyArr.forEach(entry => {
+      Object.keys(entry).forEach(k => {
+        if (k === 'date' || k.endsWith('_net') || k.endsWith('_o') || k.endsWith('_u')) return
+        const ch = k
+        const gross = entry[ch] || 0
+        if (gross > 0 && chMap[ch]) {
+          const ratio = chMap[ch].rev > 0 ? chMap[ch].netRev / chMap[ch].rev : 0
+          entry[ch + '_net'] = gross * ratio
+        }
+      })
+    })
+
     const bucketOrder = ['<₹500','₹500-1K','₹1K-2.5K','₹2.5K-5K','₹5K-10K','₹10K-25K','₹25K+']
     const buckets = Object.fromEntries(bucketOrder.map(k => [k, 0]))
     const bucketRev = Object.fromEntries(bucketOrder.map(k => [k, 0]))
