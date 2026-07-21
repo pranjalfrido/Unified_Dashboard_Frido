@@ -3113,10 +3113,10 @@ function FinancialCategoryMatrix({ catData, subCatData, skuData, title, showRetu
   const cell = (fs = 11.5) => ({ padding: '6px 8px', textAlign: 'right', fontFamily: 'var(--mono)', fontSize: fs, fontWeight: 400, whiteSpace: 'nowrap' })
   const pctSpan = (n, d) => { if (!d || !n) return null; const p = (n / d * 100).toFixed(1); return <span style={{ fontSize: 8, color: C.t3, marginLeft: 2 }}>({p}%)</span> }
   const momCell = (cur, prev) => {
-    if (!prev || prev === 0) return <span style={{ color: C.t3, fontSize: 10 }}>—</span>
+    if (!prev || prev === 0) return <span style={{ color: C.t3 }}>—</span>
     const p = ((cur - prev) / prev) * 100
     const positive = p >= 0
-    return <span style={{ fontSize: 10, fontWeight: 400, color: positive ? '#0D9E68' : '#B91C1C' }}>{positive ? '↗' : '↘'} {Math.abs(p).toFixed(1)}%</span>
+    return <span style={{ fontWeight: 400, color: positive ? '#0D9E68' : '#B91C1C' }}>{positive ? '↗' : '↘'} {Math.abs(p).toFixed(1)}%</span>
   }
   const returnsRevCell = (rtoRev, cirRev, exchRev, gross, returnRev) => {
     const total = (returnRev || 0) + (rtoRev || 0) + (cirRev || 0)
