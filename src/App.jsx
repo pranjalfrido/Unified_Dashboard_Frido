@@ -3538,14 +3538,14 @@ function AllTab({ data, rangeStart, rangeEnd }) {
   const rtoOrders = (orderStatusMap['RTO'] || 0) + (orderStatusMap['Return'] || 0)
   const cirOrderCount = orderStatusMap['CIR'] || 0
   const returnPct = totalRev > 0 ? ((rtoRev + cirRev) / totalRev * 100) : 0
-  const asp = totalQty > 0 ? netRevenueCalc / totalQty : 0
+  const asp = totalQty > 0 ? totalRev / totalQty : 0
   const deliveredOrders = orderStatusMap['Delivered'] || 0
   const fulfilmentPct = nOrders > 0 ? (deliveredOrders / nOrders * 100) : 0
 
   // prev period derived values
   const prevAOV = prevOrders > 0 ? prevRev / prevOrders : 0
   const prevDailyAvg = prevRev > 0 ? prevRev / nDays : 0
-  const prevASP = prevQty > 0 ? prevExcRev / prevQty : 0
+  const prevASP = prevQty > 0 ? prevRev / prevQty : 0
   const prevGST = prevRev - prevExcRev
   const prevUPO = prevOrders > 0 && prevQty > 0 ? prevQty / prevOrders : 0
   const prevAtRisk = 0 // not tracked in prev period
@@ -3627,7 +3627,7 @@ function AllTab({ data, rangeStart, rangeEnd }) {
           {/* Row 2 */}
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10, flex: 1 }}>
             {[
-              { label: 'ASP', value: `₹${Math.round(asp).toLocaleString('en-IN')}`, sub: 'Net rev ÷ units sold', badge: chgBadge(asp, prevASP) },
+              { label: 'ASP', value: `₹${Math.round(asp).toLocaleString('en-IN')}`, sub: 'Gross rev ÷ units sold', badge: chgBadge(asp, prevASP) },
               { label: 'GST Collected', value: fmt(gstCollected), sub: `${totalRev > 0 ? ((gstCollected / totalRev) * 100).toFixed(1) : 0}% of gross rev`, badge: chgBadge(gstCollected, prevGST) },
               { label: 'Revenue at Risk', value: fmt(atRiskRev), sub: `${totalRev > 0 ? (atRiskRev / totalRev * 100).toFixed(1) : 0}% of gross · RTO + Cancel + CIR`, accent: atRiskRev > 0 ? '#7A4000' : undefined, badge: (() => { const prevAtRiskEst = prevOrders > 0 ? (prevRtoOrders + prevCirOrders) / prevOrders * prevRev : 0; if (!prevAtRiskEst) return null; const p = (atRiskRev - prevAtRiskEst) / prevAtRiskEst * 100; return <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 4, background: p > 0 ? C.red.bg : C.green.bg, color: p > 0 ? C.red.tx : C.green.tx, flexShrink: 0 }}>{p > 0 ? '▲' : '▼'} {Math.abs(p).toFixed(1)}%</span> })() },
               { label: 'Units per Order', value: unitsPerOrder.toFixed(2), sub: 'Avg basket size', badge: chgBadge(unitsPerOrder, prevUPO) },
@@ -4247,7 +4247,7 @@ function ShopifyTab({ data, filters, setFilters }) {
   const nDays = sh.nDays || data.nDays || 1
   const dailyAvg = nDays ? totalRev / nDays : 0
   const aov = shNOrders ? totalRev / shNOrders : 0
-  const asp = totalQty ? totalExcRev / totalQty : 0
+  const asp = totalQty ? totalRev / totalQty : 0
   const deliveredOrders = orderStatusMap['Delivered'] || 0
   const rtoOrders = (orderStatusMap['RTO'] || 0) + (orderStatusMap['Return'] || 0)
   const fulfilmentPct = shNOrders ? (deliveredOrders / shNOrders * 100) : 0
@@ -4506,7 +4506,7 @@ function ShopifyTab({ data, filters, setFilters }) {
             { label: 'GST Collected', value: fmt(gst), sub: grossAfterReturns > 0 ? `${((gst / grossAfterReturns) * 100).toFixed(1)}% of net sales` : '—', badge: shChgBadge(gst, prevGst) },
             { label: 'Avg. Daily Gross Rev', value: fmt(dailyAvg), sub: `over ${nDays} days`, badge: shChgBadge(dailyAvg, prevRev > 0 ? prevRev / nDays : 0) },
             { label: 'AOV', value: `₹${Math.round(aov).toLocaleString('en-IN')}`, sub: 'Gross rev ÷ orders', badge: shChgBadge(aov, prevOrders > 0 ? prevRev / prevOrders : 0) },
-            { label: 'ASP', value: `₹${Math.round(asp).toLocaleString('en-IN')}`, sub: 'Net rev ÷ units sold', badge: shChgBadge(asp, prevUnits > 0 ? prevNetRev / prevUnits : 0) },
+            { label: 'ASP', value: `₹${Math.round(asp).toLocaleString('en-IN')}`, sub: 'Gross rev ÷ units sold', badge: shChgBadge(asp, prevUnits > 0 ? prevRev / prevUnits : 0) },
           ]
           const cancelRevPerOrder = cancelledOrders > 0 ? cancelledRev / cancelledOrders : 0
           const prevCancelPct = prevRev > 0 ? (prevCancelledOrders * cancelRevPerOrder) / prevRev * 100 : 0
@@ -4920,7 +4920,7 @@ function AmazonTab({ data, region = 'india', setRegion = () => {} }) {
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10, flex: 1 }}>
                     {[
                       { label: 'Avg. Daily Gross Rev', value: fmt((scCatRev + vcCatRev) / (data.nDays || 1)), sub: 'SC + VC per day', badge: selectedCat ? null : amzChgBadge((scTotalRev + vcTotalOrdered) / (data.nDays || 1), amzPrevDailyAvg) },
-                      { label: 'ASP', value: `₹${scCatUnits ? Math.round(scCatRev / scCatUnits).toLocaleString('en-IN') : 0}`, sub: 'SC avg selling price / unit', badge: selectedCat ? null : amzChgBadge(scTotalUnits ? scTotalRev / scTotalUnits : 0, amzPrevASP) },
+                      { label: 'ASP', value: `₹${scCatUnits ? Math.round(scCatRev / scCatUnits).toLocaleString('en-IN') : 0}`, sub: 'Gross rev ÷ units', badge: selectedCat ? null : amzChgBadge(scTotalUnits ? scTotalRev / scTotalUnits : 0, amzPrevASP) },
                       { label: 'Cancellation Rate', value: `${scCancelRate.toFixed(1)}%`, sub: `${fmtN(scCancelOrders)} cancelled`, accent: scCancelRate > 10 ? '#7A1A1A' : undefined, badge: amzPrevCancelRate ? (() => { const p = (scCancelRate - amzPrevCancelRate) / amzPrevCancelRate * 100; return <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 4, background: p > 0 ? C.red.bg : C.green.bg, color: p > 0 ? C.red.tx : C.green.tx, flexShrink: 0 }}>{p > 0 ? '▲' : '▼'} {Math.abs(p).toFixed(1)}%</span> })() : null },
                       { label: 'Return% (SC)', value: returnRateReliable ? `${(amzSC.returnRate?.pct || 0).toFixed(1)}%` : 'N/A', sub: returnRateReliable ? `${fmt(amzSC.returnRate?.rollReturned || 0)} returned of ${fmt(amzSC.returnRate?.rollOrders || 0)} SC rev` : 'No reliable data', accent: returnRateReliable && (amzSC.returnRate?.pct || 0) > 18 ? '#7A1A1A' : undefined },
                     ].map(k => (
@@ -5222,8 +5222,8 @@ function AmazonTab({ data, region = 'india', setRegion = () => {} }) {
                   {[
                     { label: 'Net Revenue', value: fmt(scNetRev), sub: 'Gross−Cancel−Returns−GST', badge: scChgBadge(scNetRev, prevSCExcRev) },
                     { label: 'GST Collected', value: fmt(scTotalRev - scTotalExcRevRaw), sub: 'SC GST', badge: scChgBadge(scTotalRev - scTotalExcRevRaw, prevSCRev - prevSCExcRev) },
-                    { label: 'AOV', value: `₹${Math.round(scAOV).toLocaleString('en-IN')}`, sub: 'Revenue / Orders', badge: scChgBadge(scAOV, prevSCAOV) },
-                    { label: 'ASP', value: `₹${scTotalUnits ? Math.round(scTotalRev / scTotalUnits).toLocaleString('en-IN') : 0}`, sub: 'Revenue / Units', badge: scChgBadge(scTotalRev / (scTotalUnits || 1), prevSCASP) },
+                    { label: 'AOV', value: `₹${Math.round(scAOV).toLocaleString('en-IN')}`, sub: 'Gross rev ÷ orders', badge: scChgBadge(scAOV, prevSCAOV) },
+                    { label: 'ASP', value: `₹${scTotalUnits ? Math.round(scTotalRev / scTotalUnits).toLocaleString('en-IN') : 0}`, sub: 'Gross rev ÷ units', badge: scChgBadge(scTotalRev / (scTotalUnits || 1), prevSCASP) },
                     { label: 'Daily Avg Revenue', value: fmt(scTotalRev / (data.nDays || 1)), sub: 'Revenue per day', badge: scChgBadge(scTotalRev / (data.nDays || 1), prevSCDailyAvg) },
                     { label: 'Order Status', value: (() => { const shipped = amzSC.status?.find(s => s.status === 'Shipped')?.orders || 0; const total = amzSC.totalOrders || 0; return `${total ? (shipped / total * 100).toFixed(1) : 0}% Shipped` })(), sub: `${fmtN(amzSC.totalOrders || 0)} total · ${fmtN(scPending)} pending`, badge: (() => { const shipped = amzSC.status?.find(s => s.status === 'Shipped')?.orders || 0; const total = amzSC.totalOrders || 0; const curPct = total ? shipped / total * 100 : 0; const prevPct = prevSCOrders ? (amzSC.prevShippedOrders || 0) / prevSCOrders * 100 : 0; return scChgBadge(curPct, prevPct) })() },
                     { label: 'Cancellation Rate', value: `${scCancelRate.toFixed(1)}%`, sub: `${fmtN(scCancelOrders)} cancelled`, accent: scCancelRate > 10 ? '#7A1A1A' : undefined, badge: (amzSC.prevCancelledOrders && prevSCOrders) ? (() => { const prevRate = amzSC.prevCancelledOrders / prevSCOrders * 100; const p = (scCancelRate - prevRate) / prevRate * 100; return <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 4, background: p > 0 ? C.red.bg : C.green.bg, color: p > 0 ? C.red.tx : C.green.tx, flexShrink: 0 }}>{p > 0 ? '▲' : '▼'} {Math.abs(p).toFixed(1)}%</span> })() : null },
@@ -5441,7 +5441,7 @@ function AmazonTab({ data, region = 'india', setRegion = () => {} }) {
               { label: 'GST Collected', value: fmt(vcGST), sub: 'Gross − Net', badge: vcChgBadge(vcGST, prevVCGST) },
               { label: 'Shipped Units', value: fmtN(vcTotalShippedUnits), sub: 'Units shipped by Amazon', badge: vcChgBadge(vcTotalShippedUnits, prevVCUnits) },
               { label: 'Fill Rate', value: `${vcFillRate.toFixed(1)}%`, sub: 'Shipped / Ordered', accent: vcFillRate < 90 ? '#7A4000' : undefined },
-              { label: 'ASP', value: `₹${vcTotalOrderedUnits ? Math.round(vcTotalOrdered / vcTotalOrderedUnits).toLocaleString('en-IN') : 0}`, sub: 'Ordered rev / units', badge: vcChgBadge(vcTotalOrderedUnits ? vcTotalOrdered / vcTotalOrderedUnits : 0, prevVCASP) },
+              { label: 'ASP', value: `₹${vcTotalOrderedUnits ? Math.round(vcTotalOrdered / vcTotalOrderedUnits).toLocaleString('en-IN') : 0}`, sub: 'Gross rev ÷ units', badge: vcChgBadge(vcTotalOrderedUnits ? vcTotalOrdered / vcTotalOrderedUnits : 0, prevVCASP) },
               { label: 'Daily Avg Ordered', value: fmt(vcTotalOrdered / (data.nDays || 1)), sub: 'Revenue per day', badge: vcChgBadge(vcTotalOrdered / (data.nDays || 1), prevVCDailyAvg) },
             ]
             return (
@@ -5938,7 +5938,7 @@ function FlipkartTab({ data }) {
             </div>
             {[
               { label: 'Avg. Daily Gross Rev', value: fmt(rev / nDays), sub: `over ${nDays} days`, badge: fkChgBadge(rev / nDays, fkPrevRev > 0 ? fkPrevRev / nDays : 0) },
-              { label: 'AOV', value: `₹${Math.round(aov).toLocaleString('en-IN')}`, sub: 'Avg order value', badge: fkChgBadge(aov, fkPrevOrders > 0 ? fkPrevRev / fkPrevOrders : 0) },
+              { label: 'AOV', value: `₹${Math.round(aov).toLocaleString('en-IN')}`, sub: 'Gross rev ÷ orders', badge: fkChgBadge(aov, fkPrevOrders > 0 ? fkPrevRev / fkPrevOrders : 0) },
               { label: 'Delivered %', value: `${fkDeliveredPct.pct.toFixed(1)}%`, sub: `${fmtN(fkDeliveredPct.deliveredOrders)} del · ${fmtN(fkDeliveredPct.nonCancelledOrders)} non-cancel`, accent: fkDeliveredPct.pct < 50 ? '#7A1A1A' : undefined },
             ].map(k => (
               <div key={k.label} className="kpi-card" style={{ padding: '10px 13px' }}>
@@ -7017,7 +7017,7 @@ function BlinkitTab({ data }) {
   const skus = t.skus || 0
   const cities = t.cities || 0
   const orders = t.orders || 0
-  const asp = units ? excRev / units : 0
+  const asp = units ? rev / units : 0
   const aov = orders ? rev / orders : 0
   const gst = rev - excRev
   const dailyAvg = nDays ? rev / nDays : 0
@@ -7096,8 +7096,8 @@ function BlinkitTab({ data }) {
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10, flex: 1 }}>
             {[
               { label: 'Orders', value: fmtN(orders), sub: `${fmtN(cities)} cities`, badge: blChgBadge(orders, blPrevOrders) },
-              { label: 'AOV', value: `₹${Math.round(aov).toLocaleString('en-IN')}`, sub: 'Avg order value (inc GST)', badge: blChgBadge(aov, blPrevOrders > 0 ? blPrevRev / blPrevOrders : 0) },
-              { label: 'ASP', value: `₹${Math.round(asp).toLocaleString('en-IN')}`, sub: 'Avg selling price (exc GST)', badge: blChgBadge(asp, blPrevUnits > 0 ? blPrevExcRev / blPrevUnits : 0) },
+              { label: 'AOV', value: `₹${Math.round(aov).toLocaleString('en-IN')}`, sub: 'Gross rev ÷ orders', badge: blChgBadge(aov, blPrevOrders > 0 ? blPrevRev / blPrevOrders : 0) },
+              { label: 'ASP', value: `₹${Math.round(asp).toLocaleString('en-IN')}`, sub: 'Gross rev ÷ units', badge: blChgBadge(asp, blPrevUnits > 0 ? blPrevRev / blPrevUnits : 0) },
             ].map(k => (
               <div key={k.label} className="kpi-card" style={{ padding: '10px 13px' }}>
                 <div className="kpi-label">{k.label}</div>
@@ -7182,7 +7182,7 @@ function InstaTab({ data }) {
   const skus = t.skus || 0
   const cities = t.cities || 0
   const orders = t.orders || 0
-  const asp = units ? excRev / units : 0
+  const asp = units ? rev / units : 0
   const aov = orders ? rev / orders : 0
   const gst = rev - excRev
   const dailyAvg = nDays ? rev / nDays : 0
@@ -7261,8 +7261,8 @@ function InstaTab({ data }) {
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10, flex: 1 }}>
             {[
               { label: 'Orders', value: fmtN(orders), sub: `${fmtN(cities)} cities`, badge: insChgBadge(orders, insPrevOrders) },
-              { label: 'AOV', value: `₹${Math.round(aov).toLocaleString('en-IN')}`, sub: 'Avg order value (inc GST)', badge: insChgBadge(aov, insPrevOrders > 0 ? insPrevRev / insPrevOrders : 0) },
-              { label: 'ASP (Exc GST)', value: `₹${Math.round(asp).toLocaleString('en-IN')}`, sub: 'Avg selling price', badge: insChgBadge(asp, insPrevUnits > 0 ? insPrevExcRev / insPrevUnits : 0) },
+              { label: 'AOV', value: `₹${Math.round(aov).toLocaleString('en-IN')}`, sub: 'Gross rev ÷ orders', badge: insChgBadge(aov, insPrevOrders > 0 ? insPrevRev / insPrevOrders : 0) },
+              { label: 'ASP', value: `₹${Math.round(asp).toLocaleString('en-IN')}`, sub: 'Gross rev ÷ units', badge: insChgBadge(asp, insPrevUnits > 0 ? insPrevRev / insPrevUnits : 0) },
             ].map(k => (
               <div key={k.label} className="kpi-card" style={{ padding: '10px 13px' }}>
                 <div className="kpi-label">{k.label}</div>
@@ -7342,7 +7342,7 @@ function ZeptoTab({ data }) {
   const units = filtCats.reduce((s, c) => s + c.units, 0) || t.units || 0
   const skus = t.skus || 0
   const cities = t.cities || 0
-  const asp = units ? excRev / units : 0
+  const asp = units ? rev / units : 0
   const aov = orders ? rev / orders : 0
   const gst = rev - excRev
   const dailyAvg = nDays ? rev / nDays : 0
@@ -7421,8 +7421,8 @@ function ZeptoTab({ data }) {
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10, flex: 1 }}>
             {[
               { label: 'Orders', value: fmtN(orders), sub: `${fmtN(cities)} cities`, badge: zpChgBadge(orders, zpPrevOrders) },
-              { label: 'AOV', value: `₹${Math.round(aov).toLocaleString('en-IN')}`, sub: 'Avg order value (inc GST)', badge: zpChgBadge(aov, zpPrevOrders > 0 ? zpPrevRev / zpPrevOrders : 0) },
-              { label: 'ASP (Exc GST)', value: `₹${Math.round(asp).toLocaleString('en-IN')}`, sub: 'Avg selling price', badge: zpChgBadge(asp, zpPrevUnits > 0 ? zpPrevExcRev / zpPrevUnits : 0) },
+              { label: 'AOV', value: `₹${Math.round(aov).toLocaleString('en-IN')}`, sub: 'Gross rev ÷ orders', badge: zpChgBadge(aov, zpPrevOrders > 0 ? zpPrevRev / zpPrevOrders : 0) },
+              { label: 'ASP', value: `₹${Math.round(asp).toLocaleString('en-IN')}`, sub: 'Gross rev ÷ units', badge: zpChgBadge(asp, zpPrevUnits > 0 ? zpPrevRev / zpPrevUnits : 0) },
             ].map(k => (
               <div key={k.label} className="kpi-card" style={{ padding: '10px 13px' }}>
                 <div className="kpi-label">{k.label}</div>
@@ -7605,8 +7605,8 @@ function CredTab({ data }) {
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10 }}>
             {[
               { label: 'Orders', value: fmtN(orders), sub: `${fmtN(units)} units`, badge: crChgBadge(orders, crPrevOrders) },
-              { label: 'AOV', value: `₹${Math.round(orders ? rev / orders : 0).toLocaleString('en-IN')}`, sub: 'Avg order value (inc GST)', badge: crChgBadge(orders ? rev / orders : 0, crPrevOrders > 0 ? crPrevRev / crPrevOrders : 0) },
-              { label: 'ASP', value: `₹${Math.round(asp).toLocaleString('en-IN')}`, sub: 'Avg selling price / unit', badge: crChgBadge(asp, crPrevUnits > 0 ? crPrevRev / crPrevUnits : 0) },
+              { label: 'AOV', value: `₹${Math.round(orders ? rev / orders : 0).toLocaleString('en-IN')}`, sub: 'Gross rev ÷ orders', badge: crChgBadge(orders ? rev / orders : 0, crPrevOrders > 0 ? crPrevRev / crPrevOrders : 0) },
+              { label: 'ASP', value: `₹${Math.round(asp).toLocaleString('en-IN')}`, sub: 'Gross rev ÷ units', badge: crChgBadge(asp, crPrevUnits > 0 ? crPrevRev / crPrevUnits : 0) },
             ].map(k => (
               <div key={k.label} className="kpi-card" style={{ padding: '10px 13px' }}>
                 <div className="kpi-label">{k.label}</div>
@@ -7747,8 +7747,8 @@ function FirstcryTab({ data }) {
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10 }}>
           {[
             { label: 'Orders', value: fmtN(orders), sub: `${fmtN(units)} units`, badge: fcChgBadge(orders, fcPrevOrders) },
-            { label: 'AOV', value: `₹${Math.round(orders ? rev / orders : 0).toLocaleString('en-IN')}`, sub: 'Avg order value (inc GST)', badge: fcChgBadge(orders ? rev / orders : 0, fcPrevOrders > 0 ? fcPrevRev / fcPrevOrders : 0) },
-            { label: 'ASP', value: `₹${Math.round(asp).toLocaleString('en-IN')}`, sub: 'Avg selling price / unit', badge: fcChgBadge(asp, fcPrevUnits > 0 ? fcPrevRev / fcPrevUnits : 0) },
+            { label: 'AOV', value: `₹${Math.round(orders ? rev / orders : 0).toLocaleString('en-IN')}`, sub: 'Gross rev ÷ orders', badge: fcChgBadge(orders ? rev / orders : 0, fcPrevOrders > 0 ? fcPrevRev / fcPrevOrders : 0) },
+            { label: 'ASP', value: `₹${Math.round(asp).toLocaleString('en-IN')}`, sub: 'Gross rev ÷ units', badge: fcChgBadge(asp, fcPrevUnits > 0 ? fcPrevRev / fcPrevUnits : 0) },
           ].map(k => (
             <div key={k.label} className="kpi-card" style={{ padding: '10px 13px' }}>
               <div className="kpi-label">{k.label}</div>
@@ -7809,7 +7809,7 @@ function MyntraTab({ data }) {
   const excRev = totals.excRev || 0
   const nOrders = totals.orders || 0
   const qty = totals.units || 0
-  const asp = qty ? excRev / qty : 0
+  const asp = qty ? rev / qty : 0
 
   const prevRev = mn.prevRev || 0
   const prevExcRev = mn.prevExcRev || 0
@@ -7889,7 +7889,7 @@ function MyntraTab({ data }) {
           {[
             { label: 'Net Revenue (Exc. GST)', value: fmt(excRev), sub: `GST: ${fmt(rev - excRev)}`, badge: chgBadge(excRev, prevExcRev) },
             { label: 'Daily Avg Revenue', value: fmt(excRev / nDays), sub: 'Net per day', badge: chgBadge(excRev / nDays, prevExcRev > 0 ? prevExcRev / nDays : 0) },
-            { label: 'ASP', value: `₹${Math.round(asp).toLocaleString('en-IN')}`, sub: 'Avg selling price (exc. GST)', badge: chgBadge(asp, prevOrders > 0 && prevExcRev > 0 ? prevExcRev / prevOrders : 0) },
+            { label: 'ASP', value: `₹${Math.round(asp).toLocaleString('en-IN')}`, sub: 'Gross rev ÷ units', badge: chgBadge(asp, mn.prevUnits > 0 ? prevRev / mn.prevUnits : 0) },
             { label: 'Active Products', value: fmtN(totals.skus), sub: 'Product types sold' },
           ].map(k => (
             <div key={k.label} className="kpi-card" style={{ padding: '10px 13px' }}>
@@ -7975,7 +7975,7 @@ function OfflineTab({ data }) {
   const gstCollected = grossAfterCN - netRev
   const nOrders = filteredTotals.reduce((s, r) => s + (r.orders || 0), 0)
   const qty = filteredTotals.reduce((s, r) => s + (r.units || 0), 0)
-  const asp = qty ? netRev / qty : 0
+  const asp = qty ? grossRev / qty : 0
   const nDays = data.nDays || 1
 
   const prevBySub = off.prevBySub || []
@@ -8156,7 +8156,7 @@ function OfflineTab({ data }) {
             { label: 'Net Revenue (Exc. GST)', value: fmt(netRev), sub: 'Gross − Credit Notes − GST', badge: chgBadge(netRev, prevNetRev) },
             { label: 'GST Collected', value: fmt(gstCollected), sub: 'On net sales', badge: chgBadge(gstCollected, (prevGrossRev - prevCnRev) - prevNetRev) },
             { label: 'AOV', value: `₹${Math.round(nOrders ? grossRev / nOrders : 0).toLocaleString('en-IN')}`, sub: 'Gross ÷ orders', badge: chgBadge(nOrders ? grossRev / nOrders : 0, prevOrders ? prevGrossRev / prevOrders : 0) },
-            { label: 'ASP', value: `₹${Math.round(asp).toLocaleString('en-IN')}`, sub: 'Net rev ÷ units', badge: chgBadge(asp, prevUnits > 0 ? prevNetRev / prevUnits : 0) },
+            { label: 'ASP', value: `₹${Math.round(asp).toLocaleString('en-IN')}`, sub: 'Gross rev ÷ units', badge: chgBadge(asp, prevUnits > 0 ? prevGrossRev / prevUnits : 0) },
             { label: 'Units / Order', value: nOrders ? Math.round(qty / nOrders).toLocaleString('en-IN') : '0', sub: 'Avg units per order', badge: chgBadge(nOrders ? qty / nOrders : 0, prevOrders ? prevUnits / prevOrders : 0) },
             { label: 'Units Sold', value: fmtN(qty), sub: `${fmtN(nOrders)} orders`, badge: chgBadge(qty, prevUnits) },
             { label: 'Avg. Daily Gross Rev', value: fmt(netRev / Math.max(nDays, 1)), sub: 'Net rev per day', badge: chgBadge(netRev / Math.max(nDays, 1), prevNetRev / Math.max(nDays, 1)) },
