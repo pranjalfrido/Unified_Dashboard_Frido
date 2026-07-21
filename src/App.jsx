@@ -3021,13 +3021,13 @@ function AmazonCategoryMatrix({ channels, catChannel, subCatChannel, skuChannel,
 // FinancialCategoryMatrix: Gross Rev, Units, ASP, GST, Cancel, RTO, CIR, Exch, Returns, Net Rev
 // With optional extras when neutral=true: Prev Rev, MoM %, Cum %, Cancel/RTO/CIR/Exch % chips
 function FinancialCategoryMatrix({ catData, subCatData, skuData, title, showReturns = true, neutral = false, showShare = false, showMoM = false, catPrevMap = {}, subCatPrevMap = {}, skuPrevMap = {} }) {
-  const grossColor = neutral ? C.t1 : '#286010'
-  const netColor = neutral ? C.t1 : '#2E74CC'
-  const cancelColor = neutral ? C.t1 : '#B91C1C'
-  const rtoColor = neutral ? C.t1 : '#E24B4A'
-  const cirColor = neutral ? C.t1 : '#2E74CC'
-  const exchColor = neutral ? C.t1 : '#9B59B6'
-  const returnColor = neutral ? C.t1 : '#7A1A1A'
+  const grossColor = C.t1
+  const netColor = C.t1
+  const cancelColor = C.t2
+  const rtoColor = C.t2
+  const cirColor = C.t2
+  const exchColor = C.t2
+  const returnColor = C.t2
   const [expanded, setExpanded] = useState({})
   const [expandedSC, setExpandedSC] = useState({})
   const [search, setSearch] = useState('')
