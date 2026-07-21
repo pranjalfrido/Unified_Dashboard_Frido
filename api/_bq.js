@@ -69,22 +69,22 @@ export function buildQuery(s, e, filters = {}) {
   }
   if (subChannel) {
     const vals = subChannel.split(',').map(v => v.trim()).filter(Boolean)
-    // Special case: 'International' isn't a SubChannel in the dbt model
-    // (SubChannel is NULL for Shopify International). It's tracked via Country instead.
+    // 'International' maps to SubChannel = 'Shopify International' in the main table.
+    // 'ShopifyIndia' means Shopify but NOT international.
     if (vals.length === 1 && vals[0] === 'International') {
-      whereClauses.push(`(u.Channel != 'Shopify' OR u.Country = 'International')`)
+      whereClauses.push(`u.SubChannel = 'Shopify International'`)
     } else if (vals.length === 1 && vals[0] === 'ShopifyIndia') {
-      whereClauses.push(`(u.Channel != 'Shopify' OR u.Country != 'International')`)
+      whereClauses.push(`(u.Channel != 'Shopify' OR u.SubChannel != 'Shopify International')`)
     } else if (vals.length === 1) {
       whereClauses.push(`u.SubChannel = '${vals[0].replace(/'/g, "''")}'`)
     } else if (vals.length > 1) {
       const hasIntl = vals.includes('International')
       const otherVals = vals.filter(v => v !== 'International')
       if (hasIntl && otherVals.length === 0) {
-        whereClauses.push(`u.Country = 'International'`)
+        whereClauses.push(`u.SubChannel = 'Shopify International'`)
       } else if (hasIntl) {
         const subChList = otherVals.map(v => `'${v.replace(/'/g, "''")}'`).join(', ')
-        whereClauses.push(`(u.SubChannel IN (${subChList}) OR u.Country = 'International')`)
+        whereClauses.push(`(u.SubChannel IN (${subChList}) OR u.SubChannel = 'Shopify International')`)
       } else {
         whereClauses.push(`u.SubChannel IN (${vals.map(v => `'${v.replace(/'/g, "''")}'`).join(', ')})`)
       }
@@ -92,8 +92,11 @@ export function buildQuery(s, e, filters = {}) {
   }
   if (country) {
     const vals = country.split(',').map(v => v.trim()).filter(Boolean)
-    if (vals.length === 1) whereClauses.push(`u.ChannelAccount = '${vals[0].replace(/'/g, "''")}'`)
-    else if (vals.length > 1) whereClauses.push(`u.ChannelAccount IN (${vals.map(v => `'${v.replace(/'/g, "''")}'`).join(', ')})`)
+    // For International subChannel, country filter targets the Country column (UAE/UK/US).
+    // Otherwise it targets ChannelAccount (marketplace/storefront).
+    const col = subChannel === 'International' ? 'u.Country' : 'u.ChannelAccount'
+    if (vals.length === 1) whereClauses.push(`${col} = '${vals[0].replace(/'/g, "''")}'`)
+    else if (vals.length > 1) whereClauses.push(`${col} IN (${vals.map(v => `'${v.replace(/'/g, "''")}'`).join(', ')})`)
   }
   if (voucher) {
     const codes = voucher.split(',').map(v => v.trim()).filter(Boolean)
