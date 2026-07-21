@@ -3538,7 +3538,7 @@ function AllTab({ data, rangeStart, rangeEnd }) {
   const rtoOrders = (orderStatusMap['RTO'] || 0) + (orderStatusMap['Return'] || 0)
   const cirOrderCount = orderStatusMap['CIR'] || 0
   const returnPct = totalRev > 0 ? ((rtoRev + cirRev) / totalRev * 100) : 0
-  const asp = totalQty > 0 ? totalRev / totalQty : 0
+  const asp = totalAspQty > 0 ? totalRev / totalAspQty : 0
   const deliveredOrders = orderStatusMap['Delivered'] || 0
   const fulfilmentPct = nOrders > 0 ? (deliveredOrders / nOrders * 100) : 0
 
@@ -4167,6 +4167,7 @@ function ShopifyTab({ data, filters, setFilters }) {
   const totalRev = shCh.rev || 0
   const totalExcRevRaw = shCh.excRev || 0
   const totalQty = shCh.qty || 0
+  const shAspQty = (data.orders || []).filter(o => o.channel === 'Shopify').reduce((s, o) => s + (o.aspQty || 0), 0)
   // Use shNetCalc (Shopify-only deductions) — same formula, correct channel scope
   const cancelledRev = sh.netCalc?.cancelRev || 0
   const rtoRev = sh.netCalc?.rtoRev || 0
@@ -4218,7 +4219,7 @@ function ShopifyTab({ data, filters, setFilters }) {
   const nDays = sh.nDays || data.nDays || 1
   const dailyAvg = nDays ? totalRev / nDays : 0
   const aov = shNOrders ? totalRev / shNOrders : 0
-  const asp = totalQty ? totalRev / totalQty : 0
+  const asp = shAspQty > 0 ? totalRev / shAspQty : 0
   const deliveredOrders = orderStatusMap['Delivered'] || 0
   const rtoOrders = (orderStatusMap['RTO'] || 0) + (orderStatusMap['Return'] || 0)
   const fulfilmentPct = shNOrders ? (deliveredOrders / shNOrders * 100) : 0
