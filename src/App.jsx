@@ -3116,7 +3116,7 @@ function FinancialCategoryMatrix({ catData, subCatData, skuData, title, showRetu
     if (!prev || prev === 0) return <span style={{ color: C.t3, fontSize: 10 }}>—</span>
     const p = ((cur - prev) / prev) * 100
     const positive = p >= 0
-    return <span style={{ fontSize: 10, fontWeight: 700, color: positive ? '#0D9E68' : '#B91C1C' }}>{positive ? '↗' : '↘'} {Math.abs(p).toFixed(1)}%</span>
+    return <span style={{ fontSize: 10, fontWeight: 400, color: positive ? '#0D9E68' : '#B91C1C' }}>{positive ? '↗' : '↘'} {Math.abs(p).toFixed(1)}%</span>
   }
   const returnsRevCell = (rtoRev, cirRev, exchRev, gross, returnRev) => {
     const total = (returnRev || 0) + (rtoRev || 0) + (cirRev || 0)
@@ -3172,7 +3172,7 @@ function FinancialCategoryMatrix({ catData, subCatData, skuData, title, showRetu
                         {hlFin(row.cat)}
                       </span>
                     </td>
-                    <td style={{ ...cell(), color: grossColor, fontWeight: 600 }}>{fmt(row.gross)}{showShare && tot.gross > 0 ? <span style={{ fontSize: 9.5, color: C.t3, marginLeft: 6, fontWeight: 400 }}>({(row.gross / tot.gross * 100).toFixed(1)}%)</span> : null}</td>
+                    <td style={{ ...cell(), color: grossColor }}>{fmt(row.gross)}{showShare && tot.gross > 0 ? <span style={{ fontSize: 9.5, color: C.t3, marginLeft: 6 }}>({(row.gross / tot.gross * 100).toFixed(1)}%)</span> : null}</td>
                     <td style={{ ...cell(), color: C.t2 }}>{fmtN(row.units)}</td>
                     {showExtras && <td style={{ ...cell() }}>{momCell(row.gross, row.prevGross)}</td>}
                     <td style={{ ...cell(), color: C.t3 }}>₹{(row.units > 0 ? Math.round(row.gross / row.units) : 0).toLocaleString('en-IN')}</td>
@@ -3181,9 +3181,9 @@ function FinancialCategoryMatrix({ catData, subCatData, skuData, title, showRetu
                       {neutral && <td style={{ ...cell(), color: rtoColor }}>{revPctCell(row.rtoRev, row.gross)}</td>}
                       {neutral && <td style={{ ...cell(), color: cirColor }}>{revPctCell(row.cirRev, row.gross)}</td>}
                       {neutral && <td style={{ ...cell(), color: exchColor }}>{revPctCell(row.exchRev, row.gross)}</td>}
-                      <td style={{ ...cell(), color: returnColor, fontWeight: 600 }}>{returnsRevCell(row.rtoRev, row.cirRev, row.exchRev, row.gross, row.returnRev)}</td>
+                      <td style={{ ...cell(), color: returnColor }}>{returnsRevCell(row.rtoRev, row.cirRev, row.exchRev, row.gross, row.returnRev)}</td>
                     </>}
-                    <td style={{ ...cell(), color: netColor, fontWeight: 600 }}>{fmt(row.net)}</td>
+                    <td style={{ ...cell(), color: netColor }}>{fmt(row.net)}</td>
                   </tr>
                   {catOpen && (() => {
                     // Compute per-sub-cat cum % within this parent category
@@ -3222,7 +3222,7 @@ function FinancialCategoryMatrix({ catData, subCatData, skuData, title, showRetu
                             {neutral && <td style={{ ...cell(10.5), color: rtoColor }}>{revPctCell(sr.rtoRev, sr.gross)}</td>}
                             {neutral && <td style={{ ...cell(10.5), color: cirColor }}>{revPctCell(sr.cirRev, sr.gross)}</td>}
                             {neutral && <td style={{ ...cell(10.5), color: exchColor }}>{revPctCell(sr.exchRev, sr.gross)}</td>}
-                            <td style={{ ...cell(10.5), color: returnColor, fontWeight: 600 }}>{returnsRevCell(sr.rtoRev, sr.cirRev, sr.exchRev, sr.gross, sr.returnRev)}</td>
+                            <td style={{ ...cell(10.5), color: returnColor }}>{returnsRevCell(sr.rtoRev, sr.cirRev, sr.exchRev, sr.gross, sr.returnRev)}</td>
                           </>}
                           <td style={{ ...cell(10.5), color: netColor }}>{fmt(sr.net)}</td>
                         </tr>
@@ -3238,7 +3238,7 @@ function FinancialCategoryMatrix({ catData, subCatData, skuData, title, showRetu
                               {neutral && <td style={{ ...cell(10), color: rtoColor }}>{revPctCell(sk.rtoRev, sk.gross)}</td>}
                               {neutral && <td style={{ ...cell(10), color: cirColor }}>{revPctCell(sk.cirRev, sk.gross)}</td>}
                               {neutral && <td style={{ ...cell(10), color: exchColor }}>{revPctCell(sk.exchRev, sk.gross)}</td>}
-                              <td style={{ ...cell(10), color: returnColor, fontWeight: 600 }}>{returnsRevCell(sk.rtoRev, sk.cirRev, sk.exchRev, sk.gross, sk.returnRev)}</td>
+                              <td style={{ ...cell(10), color: returnColor }}>{returnsRevCell(sk.rtoRev, sk.cirRev, sk.exchRev, sk.gross, sk.returnRev)}</td>
                             </>}
                             <td style={{ ...cell(10), color: netColor }}>{fmt(sk.net)}</td>
                           </tr>
