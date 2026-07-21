@@ -639,6 +639,18 @@ export default async function handler(req, res) {
       orders, skuRows, rows: [],
       masterSkuList: (r.masterSkuList || []).map(x => x.sku).filter(Boolean),
       shopify: {
+        netCalc: (() => {
+          const sc = r.shNetCalc?.[0] || {}
+          const gross = parseFloat(sc.gross) || 0
+          const excRev = parseFloat(sc.exc_rev) || 0
+          const cancelRev = parseFloat(sc.cancel_rev) || 0
+          const rtoRev = parseFloat(sc.rto_rev) || 0
+          const returnRev = parseFloat(sc.return_rev) || 0
+          const cirRev = parseFloat(sc.cir_rev) || 0
+          const gar = gross - cancelRev - rtoRev - returnRev - cirRev
+          const gstRatio = gross > 0 ? (gross - excRev) / gross : 0
+          return { gross, excRev, cancelRev, rtoRev, returnRev, cirRev, netRev: gar * (1 - gstRatio) }
+        })(),
         totals: r.shTotals?.[0] ? { rev: parseFloat(r.shTotals[0].rev)||0, excRev: parseFloat(r.shTotals[0].exc_rev)||0, orders: parseInt(r.shTotals[0].orders)||0, qty: parseInt(r.shTotals[0].qty)||0 } : {},
         daily: (r.shDaily || []).map(x => ({ date: x.date, rev: parseFloat(x.rev)||0, excRev: parseFloat(x.exc_rev)||0, orders: parseInt(x.orders)||0, units: parseInt(x.units)||0 })),
         prevRev: parseFloat(r.prevShopify?.[0]?.rev) || 0,

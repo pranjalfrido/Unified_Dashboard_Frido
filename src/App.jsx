@@ -3985,22 +3985,19 @@ function ShopifyTab({ data, filters, setFilters }) {
   const cityPrevMap = sh.cityPrevMap || {}
   const paymentTypes = sh.paymentTypes || []
 
-  // Use Shopify-specific totals that EXCLUDE Shopify B2B sub-channel
   const shCh = sh.totals || {}
-  const totalRev = shCh.rev || 0                          // Gross Revenue (Inc. GST), Shopify India+International EXCLUDING B2B
+  const totalRev = shCh.rev || 0
   const totalExcRevRaw = shCh.excRev || 0
   const totalQty = shCh.qty || 0
-  // Subtract Cancelled + RTO + CIR revenue from Gross, then strip GST → final Net Revenue
-  const cancelledRev = data.orderStatusRevMap?.['Cancelled'] || 0
-  const rtoRev = data.orderStatusRevMap?.['RTO'] || 0
-  const returnStatusRev = data.orderStatusRevMap?.['Return'] || 0
-  const cirRev = data.cirRev || 0
+  // Use shNetCalc (Shopify-only deductions) — same formula, correct channel scope
+  const cancelledRev = sh.netCalc?.cancelRev || 0
+  const rtoRev = sh.netCalc?.rtoRev || 0
+  const returnStatusRev = sh.netCalc?.returnRev || 0
+  const cirRev = sh.netCalc?.cirRev || 0
   const grossAfterReturns = totalRev - cancelledRev - rtoRev - returnStatusRev - cirRev
-  // Use the effective GST ratio observed across all Shopify orders to strip GST from the trimmed total
   const gstRatio = totalRev > 0 ? (totalRev - totalExcRevRaw) / totalRev : 0
-  const netRev = grossAfterReturns * (1 - gstRatio)
+  const netRev = sh.netCalc?.netRev ?? (grossAfterReturns * (1 - gstRatio))
   const gst = grossAfterReturns - netRev
-  // Keep `totalExcRev` available as alias for backward-compat; it now equals true Net Revenue
   const totalExcRev = netRev
 
   const prevRev = sh.prevRev || 0
