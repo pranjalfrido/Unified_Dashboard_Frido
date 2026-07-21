@@ -33,7 +33,7 @@ export function processData(rows) {
   rows.forEach(r => {
     if (!orderMap[r.OrderId]) {
       orderMap[r.OrderId] = {
-        orderId: r.OrderId, rev: 0, excRev: 0, qty: 0, aspQty: 0, items: 0,
+        orderId: r.OrderId, rev: 0, excRev: 0, qty: 0, items: 0,
         channel: r.Channel, subChannel: r.SubChannel, channelAccount: r.ChannelAccount,
         date: r.OrderDate?.slice(0, 10), state: r.State, city: r.City,
         customerId: r.CustomerId, voucher: r.voucher_code,
@@ -45,10 +45,7 @@ export function processData(rows) {
     const o = orderMap[r.OrderId]
     o.rev += parseFloat(r.SellingPrice_Inc_GST || 0)
     o.excRev += parseFloat(r.SellingPrice_Exc_GST || 0)
-    const itemQty = parseInt(r.ItemQty || 0)
-    o.qty += itemQty
-    const sku = (r.MasterSKU || '').toUpperCase()
-    if (!sku.includes('COUP') && !sku.includes('DFA')) o.aspQty += itemQty
+    o.qty += parseInt(r.ItemQty || 0)
     o.items += 1
     if (r.is_rto == 1) o.isRTO = true
     if (r.is_CIR_return == 1) o.isCIR = true
@@ -59,7 +56,6 @@ export function processData(rows) {
   const totalRev = orders.reduce((s, o) => s + o.rev, 0)
   const totalExcRev = orders.reduce((s, o) => s + o.excRev, 0)
   const totalQty = orders.reduce((s, o) => s + o.qty, 0)
-  const totalAspQty = orders.reduce((s, o) => s + o.aspQty, 0)
   const nOrders = orders.length
   const blendedAOV = nOrders ? totalRev / nOrders : 0
   const uniqueDates = [...new Set(orders.map(o => o.date).filter(Boolean))].sort()
@@ -153,7 +149,7 @@ export function processData(rows) {
   const cancellRev = orders.filter(o => o.isCancelled).reduce((s, o) => s + o.rev, 0)
   const netRevenueCalc = totalRev - (totalRev - totalExcRev) - rtoRev - cirRev - cancellRev
 
-  return { totalRev, totalExcRev, totalQty, totalAspQty, nOrders, blendedAOV, nDays, gstCollected: totalRev - totalExcRev, dailyArr, catMap, subCatMap, chMap, stateMap, nCusts, repeatCusts, tatOrders, buckets, bucketRev, voucherMap, gstMap, orders, rows, uniqueDates, rtoRev, cirRev, cancellRev, netRevenueCalc }
+  return { totalRev, totalExcRev, totalQty, nOrders, blendedAOV, nDays, gstCollected: totalRev - totalExcRev, dailyArr, catMap, subCatMap, chMap, stateMap, nCusts, repeatCusts, tatOrders, buckets, bucketRev, voucherMap, gstMap, orders, rows, uniqueDates, rtoRev, cirRev, cancellRev, netRevenueCalc }
 }
 
 export function detectAlerts(data) {
