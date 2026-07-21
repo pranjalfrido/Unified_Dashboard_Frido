@@ -87,6 +87,8 @@ export default async function handler(req, res) {
     byChannel: `WITH q AS (${base}) SELECT Channel, COUNT(DISTINCT OrderId) AS orders, SUM(SellingPrice_Inc_GST) AS rev, SUM(SellingPrice_Exc_GST) AS exc_rev, SUM(ItemQty) AS qty, SUM(CASE WHEN Order_Status = 'Cancelled' THEN SellingPrice_Inc_GST ELSE 0 END) AS cancel_rev, SUM(CASE WHEN Order_Status = 'RTO' THEN SellingPrice_Inc_GST ELSE 0 END) AS rto_rev, SUM(CASE WHEN Order_Status = 'Return' THEN SellingPrice_Inc_GST ELSE 0 END) AS return_rev, SUM(CASE WHEN Order_Status = 'CIR' THEN SellingPrice_Inc_GST ELSE 0 END) AS cir_rev FROM q WHERE NOT (Channel = 'Shopify' AND Country = 'International') GROUP BY Channel ORDER BY rev DESC`,
     shopifyIntlTotals: subChannel === 'International' ? `SELECT 0 AS intl_rev, 0 AS intl_exc_rev` : `SELECT SUM(final_total_incl_tax) AS intl_rev, SUM(total_excl_tax) AS intl_exc_rev FROM \`frido-429506.production.fact_shopify_international_orders\` WHERE order_date BETWEEN '${start}' AND '${end}' AND (financial_status IS NULL OR financial_status != 'voided')`,
     prevShopifyIntlTotals: subChannel === 'International' ? `SELECT 0 AS intl_rev, 0 AS intl_exc_rev` : `SELECT SUM(final_total_incl_tax) AS intl_rev, SUM(total_excl_tax) AS intl_exc_rev FROM \`frido-429506.production.fact_shopify_international_orders\` WHERE order_date BETWEEN '${ps}' AND '${pe}' AND (financial_status IS NULL OR financial_status != 'voided')`,
+    shNetCalc: `WITH q AS (${base}) SELECT SUM(SellingPrice_Inc_GST) AS gross, SUM(SellingPrice_Exc_GST) AS exc_rev, SUM(CASE WHEN Order_Status='Cancelled' THEN SellingPrice_Inc_GST ELSE 0 END) AS cancel_rev, SUM(CASE WHEN Order_Status='RTO' THEN SellingPrice_Inc_GST ELSE 0 END) AS rto_rev, SUM(CASE WHEN Order_Status='Return' THEN SellingPrice_Inc_GST ELSE 0 END) AS return_rev, SUM(CASE WHEN Order_Status='CIR' THEN SellingPrice_Inc_GST ELSE 0 END) AS cir_rev FROM q WHERE Channel='Shopify' AND Country != 'International'`,
+    prevShNetCalc: `WITH q AS (${prevBase}) SELECT SUM(SellingPrice_Inc_GST) AS gross, SUM(SellingPrice_Exc_GST) AS exc_rev, SUM(CASE WHEN Order_Status='Cancelled' THEN SellingPrice_Inc_GST ELSE 0 END) AS cancel_rev, SUM(CASE WHEN Order_Status='RTO' THEN SellingPrice_Inc_GST ELSE 0 END) AS rto_rev, SUM(CASE WHEN Order_Status='Return' THEN SellingPrice_Inc_GST ELSE 0 END) AS return_rev, SUM(CASE WHEN Order_Status='CIR' THEN SellingPrice_Inc_GST ELSE 0 END) AS cir_rev FROM q WHERE Channel='Shopify' AND Country != 'International'`,
     byDate: `WITH q AS (${base}) SELECT CAST(OrderDate AS STRING) AS date, Channel, SUM(SellingPrice_Inc_GST) AS rev, COUNT(DISTINCT OrderId) AS orders, SUM(ItemQty) AS units FROM q GROUP BY date, Channel ORDER BY date`,
     byCategory: `WITH q AS (${base}) SELECT Category, COUNT(DISTINCT OrderId) AS orders, SUM(SellingPrice_Inc_GST) AS rev, SUM(SellingPrice_Exc_GST) AS exc_rev, SUM(ItemQty) AS units FROM q GROUP BY Category ORDER BY rev DESC`,
     byState: `WITH q AS (${base}) SELECT CASE WHEN TRIM(State) IS NULL OR TRIM(State) IN ('','-') THEN 'OTHERS' ELSE UPPER(TRIM(State)) END AS state, COUNT(DISTINCT OrderId) AS orders, SUM(SellingPrice_Inc_GST) AS rev, COUNT(DISTINCT City) AS cities FROM q WHERE State IS NOT NULL GROUP BY 1 ORDER BY rev DESC LIMIT 30`,
@@ -446,16 +448,23 @@ export default async function handler(req, res) {
       const netRev = grossAfterReturns * (1 - gstRatio)
       chMap[x.Channel] = { rev: gross, excRev, netRev, orders: parseInt(x.orders) || 0, qty: parseInt(x.qty) || 0 }
     })
-    // Add Shopify International net revenue into chMap['Shopify'] so Channel Share shows India + Intl combined
-    const intlExcRev = parseFloat(r.shopifyIntlTotals?.[0]?.intl_exc_rev) || 0
-    const intlRev = parseFloat(r.shopifyIntlTotals?.[0]?.intl_rev) || 0
-    if (intlExcRev > 0) {
+    // Override chMap['Shopify'] netRev using exact same formula as Shopify tab (India only from shNetCalc)
+    // then add International net rev on top
+    const shCalc = r.shNetCalc?.[0] || {}
+    const shGross = parseFloat(shCalc.gross) || 0
+    const shExcRev = parseFloat(shCalc.exc_rev) || 0
+    if (shGross > 0) {
+      const shGrossAfterReturns = shGross - (parseFloat(shCalc.cancel_rev)||0) - (parseFloat(shCalc.rto_rev)||0) - (parseFloat(shCalc.return_rev)||0) - (parseFloat(shCalc.cir_rev)||0)
+      const shGstRatio = (shGross - shExcRev) / shGross
+      const shNetRev = shGrossAfterReturns * (1 - shGstRatio)
+      const intlExcRev = parseFloat(r.shopifyIntlTotals?.[0]?.intl_exc_rev) || 0
+      const intlRev = parseFloat(r.shopifyIntlTotals?.[0]?.intl_rev) || 0
       if (chMap['Shopify']) {
-        chMap['Shopify'].rev += intlRev
-        chMap['Shopify'].excRev += intlExcRev
-        chMap['Shopify'].netRev += intlExcRev  // international has no cancel/RTO/CIR
+        chMap['Shopify'].netRev = shNetRev + intlExcRev
+        chMap['Shopify'].rev = shGross + intlRev
+        chMap['Shopify'].excRev = shExcRev + intlExcRev
       } else {
-        chMap['Shopify'] = { rev: intlRev, excRev: intlExcRev, netRev: intlExcRev, orders: 0, qty: 0 }
+        chMap['Shopify'] = { rev: shGross + intlRev, excRev: shExcRev + intlExcRev, netRev: shNetRev + intlExcRev, orders: 0, qty: 0 }
       }
     }
 
@@ -597,11 +606,17 @@ export default async function handler(req, res) {
           const netRev = grossAfterReturns * (1 - gstRatio)
           return [x.Channel, { rev: gross, excRev, netRev }]
         }))
+        const prevShCalc = r.prevShNetCalc?.[0] || {}
+        const prevShGross = parseFloat(prevShCalc.gross) || 0
+        const prevShExcRev = parseFloat(prevShCalc.exc_rev) || 0
         const prevIntlExcRev = parseFloat(r.prevShopifyIntlTotals?.[0]?.intl_exc_rev) || 0
         const prevIntlRev = parseFloat(r.prevShopifyIntlTotals?.[0]?.intl_rev) || 0
-        if (prevIntlExcRev > 0) {
-          if (m['Shopify']) { m['Shopify'].rev += prevIntlRev; m['Shopify'].excRev += prevIntlExcRev; m['Shopify'].netRev += prevIntlExcRev }
-          else m['Shopify'] = { rev: prevIntlRev, excRev: prevIntlExcRev, netRev: prevIntlExcRev }
+        if (prevShGross > 0) {
+          const prevShGAR = prevShGross - (parseFloat(prevShCalc.cancel_rev)||0) - (parseFloat(prevShCalc.rto_rev)||0) - (parseFloat(prevShCalc.return_rev)||0) - (parseFloat(prevShCalc.cir_rev)||0)
+          const prevShGstRatio = (prevShGross - prevShExcRev) / prevShGross
+          const prevShNetRev = prevShGAR * (1 - prevShGstRatio)
+          if (m['Shopify']) { m['Shopify'].rev = prevShGross + prevIntlRev; m['Shopify'].excRev = prevShExcRev + prevIntlExcRev; m['Shopify'].netRev = prevShNetRev + prevIntlExcRev }
+          else m['Shopify'] = { rev: prevShGross + prevIntlRev, excRev: prevShExcRev + prevIntlExcRev, netRev: prevShNetRev + prevIntlExcRev }
         }
         return m
       })(),
