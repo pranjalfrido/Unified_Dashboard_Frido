@@ -469,6 +469,9 @@ export default async function handler(req, res) {
       }
     }
 
+    // Myntra tab shows excRev directly as net (platform already reports net of returns)
+    if (chMap['Myntra']) chMap['Myntra'].netRev = chMap['Myntra'].excRev
+
     const orderStatusMap = {}
     const orderStatusRevMap = {}
     r.byOrderStatus.forEach(x => { orderStatusMap[x.order_status || 'Unknown'] = parseInt(x.cnt) || 0; orderStatusRevMap[x.order_status || 'Unknown'] = parseFloat(x.rev) || 0 })
