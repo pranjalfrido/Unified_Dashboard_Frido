@@ -4519,8 +4519,8 @@ function ShopifyTab({ data, filters, setFilters }) {
             { label: 'Cancellation %', value: `${cancelPct.toFixed(1)}%`, sub: `${fmt(cancelledRev)} cancelled rev`, accent: cancelPct > 5 ? '#7A1A1A' : undefined, badge: shReturnBadge(cancelPct, prevCancelPct) },
             { label: 'Return %', value: `${returnRevPct.toFixed(1)}%`, sub: `${fmt(shRtoRev + shReturnRev + shCirRev)} RTO+CIR rev`, accent: returnRevPct > 5 ? '#7A1A1A' : undefined, badge: shReturnBadge(returnRevPct, prevReturnRevPct) },
             { label: 'Exchange %', value: `${exchangePct.toFixed(1)}%`, sub: `${fmt(exchangeRev)} exchange rev`, badge: shReturnBadge(exchangePct, prevExchangePct) },
-            { label: 'RTO %', value: `${rtoPct.toFixed(1)}%`, sub: `${fmt(shRtoRev + shReturnRev)} RTO+Return rev`, accent: rtoPct > 10 ? '#7A1A1A' : undefined },
-            { label: 'CIR %', value: `${cirPct.toFixed(1)}%`, sub: `${fmt(shCirRev)} CIR rev` },
+            { label: 'RTO %', value: `${rtoPct.toFixed(1)}%`, sub: `${fmt(shRtoRev + shReturnRev)} RTO+Return rev`, accent: rtoPct > 10 ? '#7A1A1A' : undefined, badge: shReturnBadge(rtoPct, prevOrders > 0 ? prevRtoOrders / prevOrders * 100 : 0) },
+            { label: 'CIR %', value: `${cirPct.toFixed(1)}%`, sub: `${fmt(shCirRev)} CIR rev`, badge: shReturnBadge(cirPct, prevOrders > 0 ? prevCirOrders / prevOrders * 100 : 0) },
           ]
           return (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
@@ -5931,15 +5931,16 @@ function FlipkartTab({ data }) {
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10, flex: 1 }}>
             <div className="kpi-card" style={{ display: 'flex', flexDirection: 'column', gap: 4, padding: '10px 13px' }}>
               <div className="kpi-label">Net Revenue</div>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 4 }}>
                 <div className="kpi-value">{fmt(fkNetRev)}</div>
+                {fkChgBadge(fkNetRev, fkPrevExcRev)}
               </div>
               <div className="kpi-sub">(Gross − Cancel − Return) × (1 − GST%)</div>
             </div>
             {[
               { label: 'Avg. Daily Gross Rev', value: fmt(rev / nDays), sub: `over ${nDays} days`, badge: fkChgBadge(rev / nDays, fkPrevRev > 0 ? fkPrevRev / nDays : 0) },
               { label: 'AOV', value: `₹${Math.round(aov).toLocaleString('en-IN')}`, sub: 'Gross rev ÷ orders', badge: fkChgBadge(aov, fkPrevOrders > 0 ? fkPrevRev / fkPrevOrders : 0) },
-              { label: 'Delivered %', value: `${fkDeliveredPct.pct.toFixed(1)}%`, sub: `${fmtN(fkDeliveredPct.deliveredOrders)} del · ${fmtN(fkDeliveredPct.nonCancelledOrders)} non-cancel`, accent: fkDeliveredPct.pct < 50 ? '#7A1A1A' : undefined },
+              { label: 'Delivered %', value: `${fkDeliveredPct.pct.toFixed(1)}%`, sub: `${fmtN(fkDeliveredPct.deliveredOrders)} del · ${fmtN(fkDeliveredPct.nonCancelledOrders)} non-cancel`, accent: fkDeliveredPct.pct < 50 ? '#7A1A1A' : undefined, badge: null },
             ].map(k => (
               <div key={k.label} className="kpi-card" style={{ padding: '10px 13px' }}>
                 <div className="kpi-label">{k.label}</div>
