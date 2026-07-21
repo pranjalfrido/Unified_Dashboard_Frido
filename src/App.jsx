@@ -2689,8 +2689,47 @@ function DailyChannelTable({ dailyArr, channels, nDays = 7, rangeStart }) {
 function CategoryChannelMatrix({ heatData, channels, maxHeat, subCatChannelMap = {}, skuChannelMap = {} }) {
   const [expanded, setExpanded] = useState({})
   const [expandedSC, setExpandedSC] = useState({})
+  const [search, setSearch] = useState('')
   const toggle = cat => setExpanded(prev => ({ ...prev, [cat]: !prev[cat] }))
   const toggleSC = key => setExpandedSC(prev => ({ ...prev, [key]: !prev[key] }))
+
+  const q = search.trim().toLowerCase()
+
+  const highlight = text => {
+    if (!q) return text
+    const idx = String(text).toLowerCase().indexOf(q)
+    if (idx === -1) return text
+    const s = String(text)
+    return <>{s.slice(0, idx)}<mark style={{ background: '#FFF176', padding: 0, borderRadius: 2 }}>{s.slice(idx, idx + q.length)}</mark>{s.slice(idx + q.length)}</>
+  }
+
+  const filteredHeatData = q ? heatData.filter(row => {
+    if (row.cat.toLowerCase().includes(q)) return true
+    const subCats = subCatChannelMap[row.cat] || {}
+    for (const sc of Object.keys(subCats)) {
+      if (sc.toLowerCase().includes(q)) return true
+      const skus = skuChannelMap[row.cat]?.[sc] || {}
+      for (const sku of Object.keys(skus)) {
+        if (sku.toLowerCase().includes(q)) return true
+      }
+    }
+    return false
+  }) : heatData
+
+  const autoExpanded = q ? new Set(filteredHeatData.map(r => r.cat)) : null
+  const autoExpandedSC = q ? new Set(
+    filteredHeatData.flatMap(row => {
+      const subCats = subCatChannelMap[row.cat] || {}
+      return Object.keys(subCats).filter(sc => {
+        if (sc.toLowerCase().includes(q)) return true
+        const skus = skuChannelMap[row.cat]?.[sc] || {}
+        return Object.keys(skus).some(sku => sku.toLowerCase().includes(q))
+      }).map(sc => `${row.cat}::${sc}`)
+    })
+  ) : null
+
+  const isOpen = cat => q ? autoExpanded?.has(cat) : expanded[cat]
+  const isScOpen = key => q ? autoExpandedSC?.has(key) : expandedSC[key]
 
   const renderCell = (v, rowTotal) => {
     const intensity = rowTotal > 0 ? v / rowTotal : 0
@@ -2701,6 +2740,15 @@ function CategoryChannelMatrix({ heatData, channels, maxHeat, subCatChannelMap =
 
   return (
     <Card title="Category × Channel Revenue Matrix">
+      <div style={{ padding: '8px 8px 4px' }}>
+        <input
+          type="text"
+          value={search}
+          onChange={e => setSearch(e.target.value)}
+          placeholder="Search category, sub-category or SKU…"
+          style={{ width: '100%', boxSizing: 'border-box', padding: '6px 10px', border: `1px solid ${C.border}`, borderRadius: 6, fontSize: 12, color: C.t1, background: C.bg, outline: 'none' }}
+        />
+      </div>
       <div className="tbl-wrap">
         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12, minWidth: 700 }}>
           <thead style={{ position: 'sticky', top: 0, background: C.card, zIndex: 1 }}>
@@ -2711,10 +2759,16 @@ function CategoryChannelMatrix({ heatData, channels, maxHeat, subCatChannelMap =
             </tr>
           </thead>
           <tbody>
-            {heatData.map((row, i) => {
+            {filteredHeatData.map((row, i) => {
               const rowTotal = channels.reduce((s, ch) => s + (row[ch] || 0), 0)
-              const isOpen = expanded[row.cat]
-              const subCats = Object.entries(subCatChannelMap[row.cat] || {}).sort((a, b) => {
+              const catOpen = isOpen(row.cat)
+              const subCats = Object.entries(subCatChannelMap[row.cat] || {}).filter(([sc]) => {
+                if (!q) return true
+                if (row.cat.toLowerCase().includes(q)) return true
+                if (sc.toLowerCase().includes(q)) return true
+                const skus = skuChannelMap[row.cat]?.[sc] || {}
+                return Object.keys(skus).some(sku => sku.toLowerCase().includes(q))
+              }).sort((a, b) => {
                 const ta = channels.reduce((s, ch) => s + (b[1][ch] || 0), 0)
                 const tb = channels.reduce((s, ch) => s + (a[1][ch] || 0), 0)
                 return ta - tb
@@ -2725,12 +2779,12 @@ function CategoryChannelMatrix({ heatData, channels, maxHeat, subCatChannelMap =
                   <tr style={{ borderBottom: `1px solid ${C.border}` }} onMouseEnter={e => e.currentTarget.style.background = '#FFFDF0'} onMouseLeave={e => e.currentTarget.style.background = ''}>
                     <td style={{ padding: '6px 8px', fontWeight: 600, color: C.t2, overflow: 'hidden' }}>
                       <span
-                        onClick={() => hasSubCats && toggle(row.cat)}
+                        onClick={() => hasSubCats && !q && toggle(row.cat)}
                         title={row.cat}
-                        style={{ cursor: hasSubCats ? 'pointer' : 'default', userSelect: 'none', display: 'flex', alignItems: 'center', gap: 5, overflow: 'hidden' }}
+                        style={{ cursor: hasSubCats && !q ? 'pointer' : 'default', userSelect: 'none', display: 'flex', alignItems: 'center', gap: 5, overflow: 'hidden' }}
                       >
-                        {hasSubCats && <span style={{ fontSize: 9, color: C.t3, flexShrink: 0, display: 'inline-block', transform: isOpen ? 'rotate(90deg)' : 'rotate(0deg)', transition: 'transform .15s' }}>▶</span>}
-                        <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{row.cat}</span>
+                        {hasSubCats && <span style={{ fontSize: 9, color: C.t3, flexShrink: 0, display: 'inline-block', transform: catOpen ? 'rotate(90deg)' : 'rotate(0deg)', transition: 'transform .15s' }}>▶</span>}
+                        <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{highlight(row.cat)}</span>
                       </span>
                     </td>
                     {channels.map(ch => {
@@ -2740,23 +2794,27 @@ function CategoryChannelMatrix({ heatData, channels, maxHeat, subCatChannelMap =
                     })}
                     <td style={{ padding: '6px 8px', textAlign: 'right', fontWeight: 700, color: C.t1, fontFamily: 'var(--mono)', fontSize: 11.5, borderLeft: `1px solid ${C.border}` }}>{fmt(rowTotal)}</td>
                   </tr>
-                  {isOpen && subCats.map(([sc, chData]) => {
+                  {catOpen && subCats.map(([sc, chData]) => {
                     const scTotal = channels.reduce((s, ch) => s + (chData[ch] || 0), 0)
                     const scKey = `${row.cat}::${sc}`
-                    const skus = Object.entries(skuChannelMap[row.cat]?.[sc] || {}).sort((a, b) => {
+                    const skus = Object.entries(skuChannelMap[row.cat]?.[sc] || {}).filter(([sku]) => {
+                      if (!q) return true
+                      if (row.cat.toLowerCase().includes(q) || sc.toLowerCase().includes(q)) return true
+                      return sku.toLowerCase().includes(q)
+                    }).sort((a, b) => {
                       const ta = channels.reduce((s, ch) => s + (b[1][ch] || 0), 0)
                       const tb = channels.reduce((s, ch) => s + (a[1][ch] || 0), 0)
                       return ta - tb
                     })
                     const hasSkus = skus.length > 0
-                    const scOpen = expandedSC[scKey]
+                    const scOpen = isScOpen(scKey)
                     return (
                       <Fragment key={sc}>
                         <tr style={{ borderBottom: `1px solid ${C.border}`, background: '#FAFAF7' }}>
                           <td style={{ padding: '3px 4px 3px 18px', color: C.t2, fontSize: 10, overflow: 'hidden' }}>
-                            <span onClick={() => hasSkus && toggleSC(scKey)} title={sc} style={{ cursor: hasSkus ? 'pointer' : 'default', userSelect: 'none', display: 'flex', alignItems: 'center', gap: 4, overflow: 'hidden' }}>
+                            <span onClick={() => hasSkus && !q && toggleSC(scKey)} title={sc} style={{ cursor: hasSkus && !q ? 'pointer' : 'default', userSelect: 'none', display: 'flex', alignItems: 'center', gap: 4, overflow: 'hidden' }}>
                               {hasSkus && <span style={{ fontSize: 8, color: C.t3, flexShrink: 0, display: 'inline-block', transform: scOpen ? 'rotate(90deg)' : 'rotate(0deg)', transition: 'transform .15s' }}>▶</span>}
-                              <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>└ {sc}</span>
+                              <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>└ {highlight(sc)}</span>
                             </span>
                           </td>
                           {channels.map(ch => {
@@ -2770,7 +2828,7 @@ function CategoryChannelMatrix({ heatData, channels, maxHeat, subCatChannelMap =
                           const skuTotal = channels.reduce((s, ch) => s + (skuChData[ch] || 0), 0)
                           return (
                             <tr key={sku} style={{ borderBottom: `1px solid ${C.border}`, background: '#F5F5F0' }}>
-                              <td style={{ padding: '2px 4px 2px 32px', color: C.t3, fontSize: 9.5, fontFamily: 'var(--mono)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={sku}>└ {sku}</td>
+                              <td style={{ padding: '2px 4px 2px 32px', color: C.t3, fontSize: 9.5, fontFamily: 'var(--mono)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={sku}>└ {highlight(sku)}</td>
                               {channels.map(ch => {
                                 const v = skuChData[ch] || 0
                                 const { cls, content } = renderCell(v, skuTotal)
