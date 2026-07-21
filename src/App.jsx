@@ -2428,7 +2428,7 @@ const CHART_TYPES = [
   { id: 'area', label: 'Area' },
 ]
 
-function ChannelTrendCard({ dailyArr, channels }) {
+function ChannelTrendCard({ dailyArr, channels, rangeStart }) {
   const [metric, setMetric] = useState('net_rev')
   const chartType = 'line'
   const m = CHART_METRICS.find(x => x.id === metric)
@@ -2440,7 +2440,7 @@ function ChannelTrendCard({ dailyArr, channels }) {
   const autoGroup = nDays <= 14 ? 'daily' : nDays <= 90 ? 'weekly' : 'monthly'
   const [groupBy, setGroupBy] = useState(autoGroup)
 
-  const grouped = groupDailyArr(dailyArr, channels, groupBy)
+  const grouped = groupDailyArr(dailyArr, channels, groupBy, rangeStart)
   const enrichedDaily = grouped.map(row => {
     const total = channels.reduce((s, ch) => s + (row[dataKey(ch)] || 0), 0)
     return { ...row, _total: total }
@@ -2490,7 +2490,7 @@ function ChannelTrendCard({ dailyArr, channels }) {
             </linearGradient>
           </defs>
           <CartesianGrid strokeDasharray="3 3" stroke={C.border} vertical={false} />
-          <XAxis dataKey="date" tick={{ fontSize: 10, fill: C.t3 }} tickFormatter={d => d?.slice(5)} />
+          <XAxis dataKey="date" tick={{ fontSize: 10, fill: C.t3 }} tickFormatter={d => groupBy === 'daily' ? d?.slice(5) : d} />
           <YAxis tick={{ fontSize: 10, fill: C.t3 }} tickFormatter={fmtTick} width={40} />
           <Tooltip content={totalTooltip} />
           <Area type="monotone" dataKey="_total" name="Total" stroke={C.acm} strokeWidth={2.5} fill="url(#chTotalGrad)" dot={false} />
@@ -2550,7 +2550,23 @@ function getGroupKey(date, groupBy) {
 }
 
 function groupDailyArr(dailyArr, channels, groupBy, rangeStart) {
-  if (groupBy === 'daily') return dailyArr
+  if (groupBy === 'daily') {
+    if (!rangeStart || dailyArr.length === 0) return dailyArr
+    const last = dailyArr[dailyArr.length - 1]?.date
+    if (!last) return dailyArr
+    const map = Object.fromEntries(dailyArr.map(d => [d.date, d]))
+    const result = []
+    const cur = new Date(rangeStart + 'T00:00:00')
+    const end = new Date(last + 'T00:00:00')
+    while (cur <= end) {
+      const key = cur.toISOString().slice(0, 10)
+      const empty = { date: key }
+      channels.forEach(ch => { empty[ch] = 0; empty[ch + '_net'] = 0; empty[ch + '_o'] = 0; empty[ch + '_u'] = 0 })
+      result.push(map[key] || empty)
+      cur.setDate(cur.getDate() + 1)
+    }
+    return result
+  }
   const map = {}, labelMap = {}, sortMap = {}
   dailyArr.forEach(d => {
     let key
@@ -3622,7 +3638,7 @@ function AllTab({ data, rangeStart }) {
         </div>
       </div>
       <div className="g-21">
-        <ChannelTrendCard dailyArr={dailyArr} channels={channels} />
+        <ChannelTrendCard dailyArr={dailyArr} channels={channels} rangeStart={rangeStart} />
         <Card title="Channel Share">
           {(() => {
             const maxChNetRev = sortedCh.reduce((m, [, v]) => Math.max(m, v.netRev ?? v.excRev ?? 0), 0) || 1
