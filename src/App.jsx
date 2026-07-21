@@ -2459,7 +2459,7 @@ function ChannelTrendCard({ dailyArr, channels }) {
         </div>
         {chEntries.map(({ ch, val }) => (
           <div key={ch} style={{ display: 'flex', justifyContent: 'space-between', gap: 16, color: C.t2, marginBottom: 2 }}>
-            <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}><span style={{ width: 8, height: 8, borderRadius: '50%', background: C.ch[ch] || C.acc, display: 'inline-block', flexShrink: 0 }} />{ch}</span>
+            <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}><span style={{ width: 8, height: 8, borderRadius: '50%', background: C.ch[ch] || C.acc, display: 'inline-block', flexShrink: 0 }} />{ch === 'offline_sales' ? 'Offline Sales' : ch}</span>
             <span style={{ fontFamily: 'var(--mono)', color: C.t1 }}>{fmtV(val)}</span>
           </div>
         ))}
@@ -2638,7 +2638,7 @@ function DailyChannelTable({ dailyArr, channels, nDays = 7, rangeStart }) {
           <thead style={{ position: 'sticky', top: 0, zIndex: 2 }}>
             <tr>
               <th style={{ ...thStyle(null), textAlign: 'left', minWidth: 110 }}>Period</th>
-              {channels.map(ch => <th key={ch} style={thStyle(ch)}>{ch}</th>)}
+              {channels.map(ch => <th key={ch} style={thStyle(ch)}>{ch === 'offline_sales' ? 'Offline Sales' : ch}</th>)}
               <th style={thStyle(null)}>Total</th>
             </tr>
           </thead>
@@ -2753,7 +2753,7 @@ function CategoryChannelMatrix({ heatData, channels, maxHeat, subCatChannelMap =
           <thead style={{ position: 'sticky', top: 0, background: C.card, zIndex: 1 }}>
             <tr>
               <th style={{ textAlign: 'left', padding: '5px 8px 7px', borderBottom: `2px solid ${C.border}`, color: C.t1, fontSize: 11, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '.05em' }}>Category</th>
-              {channels.map(ch => <th key={ch} style={{ textAlign: 'right', padding: '5px 8px 7px', borderBottom: `2px solid ${C.border}`, borderLeft: `1px solid ${C.border}`, color: C.ch[ch] || C.t2, fontSize: 11, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '.05em', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{ch === 'offline_sales' ? 'Offline' : ch}</th>)}
+              {channels.map(ch => <th key={ch} style={{ textAlign: 'right', padding: '5px 8px 7px', borderBottom: `2px solid ${C.border}`, borderLeft: `1px solid ${C.border}`, color: C.ch[ch] || C.t2, fontSize: 11, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '.05em', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{ch === 'offline_sales' ? 'Offline Sales' : ch}</th>)}
               <th style={{ textAlign: 'right', padding: '5px 8px 7px', borderBottom: `2px solid ${C.border}`, borderLeft: `1px solid ${C.border}`, color: C.t1, fontSize: 11, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '.05em' }}>Total</th>
             </tr>
           </thead>
@@ -3461,7 +3461,11 @@ function RegionTierDonutRow({ regionRows, tierRows }) {
 
 function AllTab({ data, rangeStart }) {
   const { totalRev, totalExcRev, gstCollected, nOrders, totalQty, blendedAOV, nDays, dailyArr, chMap, catMap, subCatMap, catPrevMap = {}, subCatPrevMap = {}, stateMap, statePrevMap = {}, stateTotal = 0, cityRows = [], cityPrevMap = {}, cityTotal = 0, regionRows = [], tierRows = [], buckets, bucketRev, rows, orders, orderStatusRevMap = {}, orderStatusMap = {}, catChannelMap = {}, subCatChannelMap: serverSubCatChannelMap = {}, skuRows: allSkuRows = [], prevRev = 0, prevExcRev = 0, prevOrders = 0, prevQty = 0, prevDailyArr = [], prevChMap = {}, nCusts = 0, repeatCusts = 0, rtoRev = 0, cirRev = 0, cancellRev = 0, netRevenueCalc = 0, momRev = 0, yoyRev = 0, momPeriod = '', yoyPeriod = '', prevRtoOrders = 0, prevCirOrders = 0 } = data
-  const channels = Object.keys(chMap).filter(ch => chMap[ch]?.rev > 0).sort((a, b) => chMap[b].rev - chMap[a].rev)
+  const channels = Object.keys(chMap).filter(ch => chMap[ch]?.rev > 0).sort((a, b) => {
+    if (a === 'offline_sales') return 1
+    if (b === 'offline_sales') return -1
+    return chMap[b].rev - chMap[a].rev
+  })
   const sortedCh = Object.entries(chMap).filter(([, v]) => v.rev > 0).sort((a, b) => b[1].rev - a[1].rev)
   const maxChRev = sortedCh[0]?.[1].rev || 1
   const [selectedCat, setSelectedCat] = useState(null)
