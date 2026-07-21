@@ -5,8 +5,8 @@ const cache = new Map()
 const CACHE_TTL = 5 * 60 * 1000
 
 function getCacheKey(body) {
-  const { start, end, category, subCategory, sku, subChannel, voucher, channel, region, tier, state, city, country, paymentType } = body
-  return JSON.stringify({ start, end, category, subCategory, sku, subChannel, voucher, channel, region, tier, state, city, country, paymentType })
+  const { start, end, category, subCategory, sku, subChannel, voucher, channel, region, tier, state, city, country, paymentType, channelGroup } = body
+  return JSON.stringify({ start, end, category, subCategory, sku, subChannel, voucher, channel, region, tier, state, city, country, paymentType, channelGroup })
 }
 
 function getFromCache(key) {
