@@ -4044,9 +4044,13 @@ function ShopifyTab({ data, filters, setFilters }) {
   const deliveredOrders = orderStatusMap['Delivered'] || 0
   const rtoOrders = (orderStatusMap['RTO'] || 0) + (orderStatusMap['Return'] || 0)
   const fulfilmentPct = shNOrders ? (deliveredOrders / shNOrders * 100) : 0
-  const rtoPct = totalRev > 0 ? ((data.rtoRevDirect || 0) + (data.returnRev || 0)) / totalRev * 100 : 0
-  const atRiskRev = (data.rtoRevDirect || 0) + (data.returnRev || 0) + (data.cirRev || 0) + (orderStatusRevMap['Cancelled'] || 0)
-  const returnRevPct = totalRev > 0 ? (((data.rtoRevDirect || 0) + (data.returnRev || 0) + (data.cirRev || 0)) / totalRev * 100) : 0
+  const shRtoRev = sh.netCalc?.rtoRev || 0
+  const shReturnRev = sh.netCalc?.returnRev || 0
+  const shCirRev = sh.netCalc?.cirRev || 0
+  const shCancelRev = sh.netCalc?.cancelRev || 0
+  const rtoPct = totalRev > 0 ? (shRtoRev + shReturnRev) / totalRev * 100 : 0
+  const atRiskRev = shRtoRev + shReturnRev + shCirRev + shCancelRev
+  const returnRevPct = totalRev > 0 ? ((shRtoRev + shReturnRev + shCirRev) / totalRev * 100) : 0
   const repeatRate = nCusts ? (repeatCusts / nCusts * 100).toFixed(1) : '0'
 
   // Sub-channel breakdown — India excludes International, Intl shows only International
@@ -4281,7 +4285,7 @@ function ShopifyTab({ data, filters, setFilters }) {
           const exchangeRev = data.exchangeRev || 0
           const cancelledOrders = orderStatusMap['Cancelled'] || 0
           const cancelPct = totalRev > 0 ? (cancelledRev / totalRev * 100) : 0
-          const cirPct = totalRev > 0 ? (data.cirRev || 0) / totalRev * 100 : 0
+          const cirPct = totalRev > 0 ? shCirRev / totalRev * 100 : 0
           const exchangePct = totalRev > 0 ? (exchangeRev / totalRev * 100) : 0
           const excChg = prevExcRev > 0 ? ((totalExcRev - prevExcRev) / prevExcRev * 100) : null
           const prevGst = prevGrossAfterReturns - prevNetRev
@@ -4306,10 +4310,10 @@ function ShopifyTab({ data, filters, setFilters }) {
           const returnOrderPct = shNOrders ? ((rtoOrders + cirOrders) / shNOrders * 100) : 0
           const row2 = [
             { label: 'Cancellation %', value: `${cancelPct.toFixed(1)}%`, sub: `${fmt(cancelledRev)} cancelled rev`, accent: cancelPct > 5 ? '#7A1A1A' : undefined, badge: shReturnBadge(cancelPct, prevCancelPct) },
-            { label: 'Return %', value: `${returnRevPct.toFixed(1)}%`, sub: `${fmt((data.rtoRevDirect || 0) + (data.returnRev || 0) + (data.cirRev || 0))} RTO+CIR rev`, accent: returnRevPct > 5 ? '#7A1A1A' : undefined, badge: shReturnBadge(returnRevPct, prevReturnRevPct) },
+            { label: 'Return %', value: `${returnRevPct.toFixed(1)}%`, sub: `${fmt(shRtoRev + shReturnRev + shCirRev)} RTO+CIR rev`, accent: returnRevPct > 5 ? '#7A1A1A' : undefined, badge: shReturnBadge(returnRevPct, prevReturnRevPct) },
             { label: 'Exchange %', value: `${exchangePct.toFixed(1)}%`, sub: `${fmt(exchangeRev)} exchange rev`, badge: shReturnBadge(exchangePct, prevExchangePct) },
-            { label: 'RTO %', value: `${rtoPct.toFixed(1)}%`, sub: `${fmt((data.rtoRevDirect||0)+(data.returnRev||0))} RTO+Return rev`, accent: rtoPct > 10 ? '#7A1A1A' : undefined },
-            { label: 'CIR %', value: `${cirPct.toFixed(1)}%`, sub: `${fmt(data.cirRev||0)} CIR rev` },
+            { label: 'RTO %', value: `${rtoPct.toFixed(1)}%`, sub: `${fmt(shRtoRev + shReturnRev)} RTO+Return rev`, accent: rtoPct > 10 ? '#7A1A1A' : undefined },
+            { label: 'CIR %', value: `${cirPct.toFixed(1)}%`, sub: `${fmt(shCirRev)} CIR rev` },
           ]
           return (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
