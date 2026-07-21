@@ -8418,7 +8418,7 @@ function SalesPage({ data, filters, setFilters, activeTab, setActiveTab, fetchDa
       {/* Tab bar */}
       <div className="sales-tabs">
         {TABS.map(tab => (
-          <button key={tab.id} onClick={() => { setActiveTab(tab.id); setFilters(f => ({ ...f, subChannel: '', voucher: '' })) }} className={`stab${activeTab === tab.id ? ' active' : ''}`} style={tab.id === 'all' ? { fontWeight: activeTab === 'all' ? 800 : 700, fontSize: 13 } : {}}>
+          <button key={tab.id} onClick={() => { setActiveTab(tab.id); setFilters(f => ({ ...f, subChannel: '', voucher: '', channelGroup: '' })) }} className={`stab${activeTab === tab.id ? ' active' : ''}`} style={tab.id === 'all' ? { fontWeight: activeTab === 'all' ? 800 : 700, fontSize: 13 } : {}}>
             {tab.logo && <img src={tab.logo} alt="" style={{ width: 14, height: 14, borderRadius: 3, flexShrink: 0, objectFit: 'contain', filter: tab.id === 'cred' ? 'invert(1)' : 'none' }} />}
             {tab.label}
           </button>
@@ -8440,7 +8440,18 @@ function SalesPage({ data, filters, setFilters, activeTab, setActiveTab, fetchDa
           })()}
           <SearchableSelect multi options={skuOpts} value={filters.sku || []} onChange={v => setFilters(f => ({ ...f, sku: v }))} placeholder="All SKUs" dropdownWidth={280} />
           {activeTab === 'shopify' && <VoucherDropdown voucherList={data?.voucherList || []} selected={filters.voucher} onChange={v => setFilters(f => ({ ...f, voucher: v }))} />}
-          <button onClick={() => setFilters(f => ({ ...f, category: [], subCategory: [], sku: [], subChannel: '', voucher: '', region: [], tier: [], state: [], city: '' }))} className="fclr">✕ Clear</button>
+          {activeTab === 'all' && (
+            <select value={filters.channelGroup || ''} onChange={e => setFilters(f => ({ ...f, channelGroup: e.target.value }))}
+              style={{ fontSize: 12, padding: '5px 10px', borderRadius: 7, border: `1px solid ${filters.channelGroup ? C.acm : C.border}`, background: filters.channelGroup ? C.acl : C.card, color: C.t1, outline: 'none', fontFamily: 'var(--font)', cursor: 'pointer', fontWeight: filters.channelGroup ? 700 : 400 }}>
+              <option value="">All Channel Groups</option>
+              <option value="d2c">D2C</option>
+              <option value="ebo">EBO</option>
+              <option value="marketplace">Marketplace</option>
+              <option value="quick_commerce">Quick Commerce</option>
+              <option value="offline">Offline Sales</option>
+            </select>
+          )}
+          <button onClick={() => setFilters(f => ({ ...f, category: [], subCategory: [], sku: [], subChannel: '', voucher: '', region: [], tier: [], state: [], city: '', channelGroup: '' }))} className="fclr">✕ Clear</button>
         </div>
       </div>
       {/* Content */}
@@ -9304,7 +9315,7 @@ function CustomerPage({ filters }) {
 export default function App() {
   const [page, setPage] = useState('overview')
   const def = getDefaultDates()
-  const [filters, setFilters] = useState({ start: def.start, end: def.end, category: [], subCategory: [], sku: [], subChannel: '', voucher: '', region: [], tier: [], state: [], city: '' })
+  const [filters, setFilters] = useState({ start: def.start, end: def.end, category: [], subCategory: [], sku: [], subChannel: '', voucher: '', region: [], tier: [], state: [], city: '', channelGroup: '' })
   const [activeTab, setActiveTab] = useState('all')
   const [rawRows, setRawRows] = useState(null)
   const [loading, setLoading] = useState(false)
@@ -9360,7 +9371,7 @@ export default function App() {
     const dateChanged = filters.start !== prevDateRef.current.start || filters.end !== prevDateRef.current.end
     if (dateChanged) { prevDateRef.current = { start: filters.start, end: filters.end }; setRawRows(null) }
     debounceRef.current = setTimeout(() => {
-      const { start, end, category, subCategory, sku, subChannel, voucher, region, tier, state, city, country, paymentType } = filtersRef.current
+      const { start, end, category, subCategory, sku, subChannel, voucher, region, tier, state, city, country, paymentType, channelGroup } = filtersRef.current
       const extra = {}
       if (category?.length) extra.category = category.join(',')
       if (subCategory?.length) extra.subCategory = subCategory.join(',')
@@ -9373,13 +9384,14 @@ export default function App() {
       if (city) extra.city = city
       if (country) extra.country = country
       if (paymentType) extra.paymentType = paymentType
+      if (channelGroup) extra.channelGroup = channelGroup
       fetchData(start, end, extra)
       // Fetch logistics summary for Overview tab
       fetch(`${API}/api/logistics`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ start, end, shipmentType: 'forward' }) })
         .then(r => r.ok ? r.json() : null).then(j => { if (j) setLogisticsData(j) }).catch(() => {})
     }, 600)
     return () => clearTimeout(debounceRef.current)
-  }, [filters.start, filters.end, filters.category, filters.subCategory, filters.sku, filters.subChannel, filters.voucher, filters.region, filters.tier, filters.state, filters.city, filters.country, filters.paymentType, fetchData])
+  }, [filters.start, filters.end, filters.category, filters.subCategory, filters.sku, filters.subChannel, filters.voucher, filters.region, filters.tier, filters.state, filters.city, filters.country, filters.paymentType, filters.channelGroup, fetchData])
 
   const data = useMemo(() => { if (!rawRows) return null; if (rawRows.source === 'postgres-aggregated' || rawRows.totalRev !== undefined) return rawRows; return processData(rawRows) }, [rawRows])
   const alerts = useMemo(() => data ? detectAlerts(data) : [], [data])

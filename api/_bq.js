@@ -19,11 +19,30 @@ export function getBQ() {
   return bq
 }
 
+const CHANNEL_GROUPS = {
+  d2c:           { channels: ['Shopify'], subChannels: ['MyFrido', 'Mobility', 'Shopify International'] },
+  ebo:           { channels: ['Shopify'], subChannels: ['Retail Store'] },
+  marketplace:   { channels: ['Amazon', 'Flipkart', 'CRED', 'Myntra', 'Firstcry'] },
+  quick_commerce:{ channels: ['Blinkit', 'Zepto', 'Instamart'] },
+  offline:       { channels: ['offline_sales'] },
+}
+
 export function buildQuery(s, e, filters = {}) {
-  const { category, subCategory, state, sku, subChannel, voucher, region, tier, city, country, paymentType } = filters
+  const { category, subCategory, state, sku, subChannel, voucher, region, tier, city, country, paymentType, channelGroup } = filters
   // Filters now reference the dbt fact table columns directly (u.Category, u.SubCategory, u.masterskucode).
   // Region/Tier still come from pincode_city_master join (pm/cm).
   const whereClauses = []
+
+  if (channelGroup && CHANNEL_GROUPS[channelGroup]) {
+    const g = CHANNEL_GROUPS[channelGroup]
+    const chList = g.channels.map(c => `'${c}'`).join(',')
+    if (g.subChannels) {
+      const scList = g.subChannels.map(c => `'${c}'`).join(',')
+      whereClauses.push(`(u.Channel IN (${chList}) AND u.SubChannel IN (${scList}))`)
+    } else {
+      whereClauses.push(`u.Channel IN (${chList})`)
+    }
+  }
   if (category) {
     const cats = category.split(',').map(c => c.trim()).filter(Boolean)
     if (cats.length === 1) whereClauses.push(`u.Category = '${cats[0].replace(/'/g, "''")}'`)

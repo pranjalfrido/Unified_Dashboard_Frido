@@ -32,7 +32,7 @@ export default async function handler(req, res) {
   if (req.method === 'OPTIONS') return res.status(200).end()
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' })
 
-  const { start, end, category, subCategory, sku, subChannel, voucher, channel: activeChannel, region, tier, state, city, country, paymentType } = req.body
+  const { start, end, category, subCategory, sku, subChannel, voucher, channel: activeChannel, region, tier, state, city, country, paymentType, channelGroup } = req.body
   if (!start || !end) return res.status(400).json({ error: 'Missing start or end date' })
 
   const cacheKey = getCacheKey(req.body)
@@ -62,10 +62,10 @@ export default async function handler(req, res) {
   const yoys = yoyStartD.toISOString().slice(0, 10), yoye = yoyEndD.toISOString().slice(0, 10)
 
   // Run all aggregation queries in parallel directly on BigQuery
-  const base = buildQuery(start, end, { category, subCategory, sku, subChannel, voucher, region, tier, state, city, country, paymentType })
-  const prevBase = buildQuery(ps, pe, { category, subCategory, sku, subChannel, voucher, region, tier, state, city, country, paymentType })
-  const momBase = buildQuery(moms, mome, { category, subCategory, sku, subChannel, voucher, region, tier, state, city, country, paymentType })
-  const yoyBase = buildQuery(yoys, yoye, { category, subCategory, sku, subChannel, voucher, region, tier, state, city, country, paymentType })
+  const base = buildQuery(start, end, { category, subCategory, sku, subChannel, voucher, region, tier, state, city, country, paymentType, channelGroup })
+  const prevBase = buildQuery(ps, pe, { category, subCategory, sku, subChannel, voucher, region, tier, state, city, country, paymentType, channelGroup })
+  const momBase = buildQuery(moms, mome, { category, subCategory, sku, subChannel, voucher, region, tier, state, city, country, paymentType, channelGroup })
+  const yoyBase = buildQuery(yoys, yoye, { category, subCategory, sku, subChannel, voucher, region, tier, state, city, country, paymentType, channelGroup })
 
   // Detect if selected range is entirely after latest FK data — if so, shift FK queries to last available window
   const [[fkLatestRow]] = await bq.query({ query: `SELECT MAX(OrderDate) AS latest FROM \`frido-429506.production.fact_all_platform_sales_report\` WHERE Channel='Flipkart'`, maximumBytesBilled: '1000000000' })
@@ -78,7 +78,7 @@ export default async function handler(req, res) {
     fkStart = fkStartD.toISOString().slice(0, 10)
     fkEnd = fkLatestDate
   }
-  const fkBase = buildQuery(fkStart, fkEnd, { category, subCategory, sku, subChannel, voucher, region, tier, state, city, country, paymentType })
+  const fkBase = buildQuery(fkStart, fkEnd, { category, subCategory, sku, subChannel, voucher, region, tier, state, city, country, paymentType, channelGroup })
 
   const queries = {
     totals: subChannel === 'International'
