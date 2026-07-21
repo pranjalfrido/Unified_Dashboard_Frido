@@ -4602,15 +4602,23 @@ function ShopifyTab({ data, filters, setFilters }) {
           )
         })()}
         <Card title="Category Revenue">
-          {catRows.slice(0, 8).map((r, i) => { const dots = ['#534AB7','#0D9E68','#2E74CC','#CC8A00','#CC4078','#E24B4A','#9B59B6','#FF6B35']; const isSelected = (filters.category || []).includes(r.name); return <HBar key={r.name} dot={dots[i % dots.length]} label={r.name} width={(r.rev / (catRows[0]?.rev || 1)) * 100} value={fmt(r.rev)} pctVal={totalRev ? pct(r.rev, totalRev) : '—'} isSelected={isSelected} onClick={() => { const next = isSelected ? [] : [r.name]; setSelectedCat(next[0] || null); setFilters(f => ({ ...f, category: next, subCategory: [] })) }} /> })}
+          {isIntl
+            ? <div style={{ fontSize: 12, color: C.t3, padding: '10px 0', textAlign: 'center' }}>Category data not available for International orders</div>
+            : catRows.slice(0, 8).map((r, i) => { const dots = ['#534AB7','#0D9E68','#2E74CC','#CC8A00','#CC4078','#E24B4A','#9B59B6','#FF6B35']; const isSelected = (filters.category || []).includes(r.name); return <HBar key={r.name} dot={dots[i % dots.length]} label={r.name} width={(r.rev / (catRows[0]?.rev || 1)) * 100} value={fmt(r.rev)} pctVal={totalRev ? pct(r.rev, totalRev) : '—'} isSelected={isSelected} onClick={() => { const next = isSelected ? [] : [r.name]; setSelectedCat(next[0] || null); setFilters(f => ({ ...f, category: next, subCategory: [] })) }} /> })}
         </Card>
       </div>
       <div style={{ display: 'flex', gap: 14, alignItems: 'stretch' }}>
-        <ShopifyGeoDonutRow regionRows={sh.regionRows || []} tierRows={sh.tierRows || []} topStates={sh.topStates || []} allStateRows={Object.entries(sh.stateMap || {}).map(([k, v]) => ({ name: k, rev: v.rev, orders: v.orders?.size || 0 }))} />
-        <TopSubCatBar subCatRows={allSubCatRows} />
+        {isIntl
+          ? <div style={{ flex: 1, minWidth: 0 }}><Card title="Geography Breakdown"><div style={{ fontSize: 12, color: C.t3, padding: '10px 0', textAlign: 'center' }}>Geographic data not available for International orders</div></Card></div>
+          : <ShopifyGeoDonutRow regionRows={sh.regionRows || []} tierRows={sh.tierRows || []} topStates={sh.topStates || []} allStateRows={Object.entries(sh.stateMap || {}).map(([k, v]) => ({ name: k, rev: v.rev, orders: v.orders?.size || 0 }))} />}
+        {isIntl
+          ? <div style={{ flex: 1, minWidth: 0 }}><Card title="Top 10 Products · Revenue"><div style={{ fontSize: 12, color: C.t3, padding: '10px 0', textAlign: 'center' }}>Product breakdown not available for International orders</div></Card></div>
+          : <TopSubCatBar subCatRows={allSubCatRows} />}
       </div>
       {/* Category Revenue Matrix · Shopify */}
-      {(() => {
+      {isIntl
+        ? <Card title="Category Revenue Matrix · Shopify International"><div style={{ fontSize: 12, color: C.t3, padding: '10px 0', textAlign: 'center' }}>Category breakdown not available — International orders are stored without product category information</div></Card>
+        : (() => {
         const pick = v => ({ rev: v.rev || 0, excRev: v.excRev || 0, units: v.units || 0, orders: v.orders, cancelled: v.cancelled || 0, rto: v.rto || 0, cir: v.cir || 0, exch: v.exch || 0, cancelRev: v.cancelRev || 0, rtoRev: v.rtoRev || 0, cirRev: v.cirRev || 0, exchRev: v.exchRev || 0 })
         const catData = {}
         Object.entries(sh.catMap || {}).forEach(([cat, v]) => { catData[cat] = pick(v) })
@@ -4628,7 +4636,7 @@ function ShopifyTab({ data, filters, setFilters }) {
             Object.entries(skuMap_).forEach(([sku, v]) => { skuData[cat][sc][sku] = pick(v) })
           })
         })
-        return <FinancialCategoryMatrix catData={catData} subCatData={subCatData} skuData={skuData} title={`Category Revenue Matrix · Shopify ${isIntl ? 'International' : 'India'}`} neutral={true} showShare={true} catPrevMap={sh.catPrevMap || {}} subCatPrevMap={sh.subCatPrevMap || {}} skuPrevMap={sh.skuPrevMap || {}} />
+        return <FinancialCategoryMatrix catData={catData} subCatData={subCatData} skuData={skuData} title="Category Revenue Matrix · Shopify India" neutral={true} showShare={true} catPrevMap={sh.catPrevMap || {}} subCatPrevMap={sh.subCatPrevMap || {}} skuPrevMap={sh.skuPrevMap || {}} />
       })()}
       {false && <div className="g-2" style={{ alignItems: 'stretch' }}>
         {(() => {
@@ -4703,10 +4711,10 @@ function ShopifyTab({ data, filters, setFilters }) {
           )
         })()}
       </div>}
-      <div className="g-2" style={{ alignItems: 'stretch' }}>
+      {!isIntl && <div className="g-2" style={{ alignItems: 'stretch' }}>
         <ShopifyGeoRichTable title="Top States" rows={stateRows} firstKey="state" firstLabel="State" formatFirst={v => v ? v.charAt(0).toUpperCase() + v.slice(1).toLowerCase() : v} />
         <ShopifyGeoRichTable title="Top Cities" rows={enrichedCityRows} firstKey="city" firstLabel="City" formatFirst={v => v ? v.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' ') : v} />
-      </div>
+      </div>}
       <ShopifyReturnReasonsTable reasons={sh.returnReasons || []} />
     </div>
   )
