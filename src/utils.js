@@ -45,7 +45,8 @@ export function processData(rows) {
     const o = orderMap[r.OrderId]
     o.rev += parseFloat(r.SellingPrice_Inc_GST || 0)
     o.excRev += parseFloat(r.SellingPrice_Exc_GST || 0)
-    o.qty += parseInt(r.ItemQty || 0)
+    const sku = (r.MasterSKU || '').toUpperCase()
+    if (!sku.includes('COUP') && !sku.includes('DFA')) o.qty += parseInt(r.ItemQty || 0)
     o.items += 1
     if (r.is_rto == 1) o.isRTO = true
     if (r.is_CIR_return == 1) o.isCIR = true
@@ -89,7 +90,8 @@ export function processData(rows) {
     catMap[cat].rev += parseFloat(r.SellingPrice_Inc_GST || 0)
     catMap[cat].excRev += parseFloat(r.SellingPrice_Exc_GST || 0)
     catMap[cat].orders.add(r.OrderId)
-    catMap[cat].units += parseInt(r.ItemQty || 0)
+    const catSku = (r.MasterSKU || '').toUpperCase()
+    if (!catSku.includes('COUP') && !catSku.includes('DFA')) catMap[cat].units += parseInt(r.ItemQty || 0)
   })
 
   const subCatMap = {}
