@@ -2733,7 +2733,7 @@ function CategoryChannelMatrix({ heatData, channels, maxHeat, subCatChannelMap =
 
   const renderCell = (v, rowTotal) => {
     const intensity = rowTotal > 0 ? v / rowTotal : 0
-    const share = rowTotal > 0 ? (v / rowTotal * 100).toFixed(0) : 0
+    const share = rowTotal > 0 ? (v / rowTotal * 100).toFixed(2) : 0
     const cls = intensity === 0 ? 'h0' : intensity < 0.1 ? 'h1' : intensity < 0.3 ? 'h2' : intensity < 0.6 ? 'h3' : 'h4'
     return { cls, content: v > 0 ? <>{fmt(v)}<span style={{ fontSize: 9, fontWeight: 500, color: 'rgba(0,0,0,0.38)', marginLeft: 3 }}>{share}%</span></> : '—' }
   }
@@ -2902,7 +2902,7 @@ function AmazonCategoryMatrix({ channels, catChannel, subCatChannel, skuChannel,
 
   const renderCell = (v, rowTotal) => {
     const intensity = rowTotal > 0 ? v / rowTotal : 0
-    const share = rowTotal > 0 ? (v / rowTotal * 100).toFixed(0) : 0
+    const share = rowTotal > 0 ? (v / rowTotal * 100).toFixed(2) : 0
     const cls = intensity === 0 ? 'h0' : intensity < 0.1 ? 'h1' : intensity < 0.3 ? 'h2' : intensity < 0.6 ? 'h3' : 'h4'
     return { cls, content: v > 0 ? <>{fmtVal(v)}<span style={{ fontSize: 9, fontWeight: 500, color: 'rgba(0,0,0,0.38)', marginLeft: 3 }}>{share}%</span></> : '—' }
   }
@@ -3111,7 +3111,7 @@ function FinancialCategoryMatrix({ catData, subCatData, skuData, title, showRetu
 
   const colHdr = { textAlign: 'right', padding: '5px 8px 7px', borderBottom: `2px solid ${C.border}`, fontSize: 11, fontWeight: 800, textTransform: 'uppercase', whiteSpace: 'nowrap', letterSpacing: '.05em' }
   const cell = (fs = 11.5) => ({ padding: '6px 8px', textAlign: 'right', fontFamily: 'var(--mono)', fontSize: fs, fontWeight: 400, whiteSpace: 'nowrap' })
-  const pctSpan = (n, d) => { if (!d || !n) return null; const p = (n / d * 100).toFixed(1); return <span style={{ fontSize: 8, color: C.t3, marginLeft: 2 }}>({p}%)</span> }
+  const pctSpan = (n, d) => { if (!d || !n) return null; const p = (n / d * 100).toFixed(2); return <span style={{ fontSize: 8, color: C.t3, marginLeft: 2 }}>({p}%)</span> }
   const momCell = (cur, prev) => {
     if (!prev || prev === 0) return <span style={{ color: C.t3 }}>—</span>
     const p = ((cur - prev) / prev) * 100
@@ -3121,12 +3121,12 @@ function FinancialCategoryMatrix({ catData, subCatData, skuData, title, showRetu
   const returnsRevCell = (rtoRev, cirRev, exchRev, gross, returnRev) => {
     const total = (returnRev || 0) + (rtoRev || 0) + (cirRev || 0)
     if (total <= 0) return <span style={{ color: C.t3 }}>—</span>
-    const pct = gross > 0 ? (total / gross * 100).toFixed(1) : null
+    const pct = gross > 0 ? (total / gross * 100).toFixed(2) : null
     return pct !== null ? <>{pct}%</> : <span style={{ color: C.t3 }}>—</span>
   }
   const revPctCell = (val, gross) => {
     if (!val || val <= 0) return <span style={{ color: C.t3 }}>—</span>
-    const pct = gross > 0 ? (val / gross * 100).toFixed(1) : null
+    const pct = gross > 0 ? (val / gross * 100).toFixed(2) : null
     return pct !== null ? <>{pct}%</> : <span style={{ color: C.t3 }}>—</span>
   }
 
