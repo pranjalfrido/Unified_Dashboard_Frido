@@ -2418,7 +2418,8 @@ function SearchableSelect({ options, value, onChange, placeholder, dropdownWidth
 }
 
 const CHART_METRICS = [
-  { id: 'rev', label: 'Revenue', key: ch => ch },
+  { id: 'net_rev', label: 'Net Revenue', key: ch => ch + '_net' },
+  { id: 'rev', label: 'Gross Revenue', key: ch => ch },
   { id: 'units', label: 'Units', key: ch => ch + '_u' },
 ]
 const CHART_TYPES = [
@@ -2428,7 +2429,7 @@ const CHART_TYPES = [
 ]
 
 function ChannelTrendCard({ dailyArr, channels }) {
-  const [metric, setMetric] = useState('rev')
+  const [metric, setMetric] = useState('net_rev')
   const chartType = 'line'
   const m = CHART_METRICS.find(x => x.id === metric)
   const dataKey = m.key
@@ -2500,7 +2501,8 @@ function ChannelTrendCard({ dailyArr, channels }) {
 }
 
 const DAILY_METRICS = [
-  { id: 'rev', label: 'Revenue' },
+  { id: 'net_rev', label: 'Net Revenue' },
+  { id: 'rev', label: 'Gross Revenue' },
   { id: 'units', label: 'Units' },
 ]
 
@@ -2558,9 +2560,10 @@ function groupDailyArr(dailyArr, channels, groupBy, rangeStart) {
     } else {
       key = getGroupKey(d.date, groupBy)
     }
-    if (!map[key]) { map[key] = { date: labelMap[key] || key, _sort: sortMap[key] || key }; channels.forEach(ch => { map[key][ch] = 0; map[key][ch + '_o'] = 0; map[key][ch + '_u'] = 0 }) }
+    if (!map[key]) { map[key] = { date: labelMap[key] || key, _sort: sortMap[key] || key }; channels.forEach(ch => { map[key][ch] = 0; map[key][ch + '_net'] = 0; map[key][ch + '_o'] = 0; map[key][ch + '_u'] = 0 }) }
     channels.forEach(ch => {
       map[key][ch] = (map[key][ch] || 0) + (d[ch] || 0)
+      map[key][ch + '_net'] = (map[key][ch + '_net'] || 0) + (d[ch + '_net'] ?? d[ch] ?? 0)
       map[key][ch + '_o'] = (map[key][ch + '_o'] || 0) + (d[ch + '_o'] || 0)
       map[key][ch + '_u'] = (map[key][ch + '_u'] || 0) + (d[ch + '_u'] || 0)
     })
@@ -2570,13 +2573,14 @@ function groupDailyArr(dailyArr, channels, groupBy, rangeStart) {
 
 function DailyChannelTable({ dailyArr, channels, nDays = 7, rangeStart }) {
   const autoGroup = nDays <= 14 ? 'daily' : nDays <= 90 ? 'weekly' : 'monthly'
-  const [metric, setMetric] = useState('rev')
+  const [metric, setMetric] = useState('net_rev')
   const [groupBy, setGroupBy] = useState(autoGroup)
   useEffect(() => { setGroupBy(autoGroup) }, [nDays])
   const m = DAILY_METRICS.find(x => x.id === metric)
   const grouped = groupDailyArr(dailyArr, channels, groupBy, rangeStart)
 
   const getVal = (d, ch) => {
+    if (metric === 'net_rev') return d[ch + '_net'] ?? d[ch] ?? 0
     if (metric === 'rev') return d[ch] || 0
     if (metric === 'orders') return d[ch + '_o'] || 0
     if (metric === 'units') return d[ch + '_u'] || 0
@@ -2590,6 +2594,7 @@ function DailyChannelTable({ dailyArr, channels, nDays = 7, rangeStart }) {
     return fmtN(v)
   }
   const getTotalVal = d => {
+    if (metric === 'net_rev') return channels.reduce((s, ch) => s + (d[ch + '_net'] ?? d[ch] ?? 0), 0)
     if (metric === 'rev') return channels.reduce((s, ch) => s + (d[ch] || 0), 0)
     if (metric === 'orders') return channels.reduce((s, ch) => s + (d[ch + '_o'] || 0), 0)
     if (metric === 'units') return channels.reduce((s, ch) => s + (d[ch + '_u'] || 0), 0)
