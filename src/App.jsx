@@ -4465,8 +4465,8 @@ function ShopifyTab({ data, filters, setFilters }) {
         {/* Right: 2 rows of 5 KPIs */}
         {(() => {
           const cirOrders = data.cirOrders || 0
-          const exchangeOrders = data.exchangeOrders || 0
-          const exchangeRev = data.exchangeRev || 0
+          const exchangeOrders = sh.netCalc?.exchOrders ?? data.exchangeOrders ?? 0
+          const exchangeRev = sh.netCalc?.exchRev ?? data.exchangeRev ?? 0
           const cancelledOrders = orderStatusMap['Cancelled'] || 0
           const cancelPct = totalRev > 0 ? (cancelledRev / totalRev * 100) : 0
           const cirPct = totalRev > 0 ? shCirRev / totalRev * 100 : 0
