@@ -4832,7 +4832,12 @@ function EBOTab({ data, rangeStart, rangeEnd }) {
   const rawDaily = shDailyArr.map(d => {
     const grossR = d.rev || 0
     const rt = returnTrendMap[d.date] || {}
-    return { date: d.date, grossRev: grossR, netRev: grossR > 0 ? grossR * netShrinkFactor : 0, returnPct: (rt.rtoPct || 0) + (rt.cirPct || 0), exchPct: rt.exchPct || 0, cancelPct: rt.cancelPct || 0 }
+    const tot = rt.total_orders || 1
+    const rtoPct = (rt.rto_orders || 0) / tot * 100
+    const cirPct = (rt.cir_orders || 0) / tot * 100
+    const exchPct = (rt.exch_orders || 0) / tot * 100
+    const cancelPct = (rt.cancel_orders || 0) / tot * 100
+    return { date: d.date, grossRev: grossR, netRev: grossR > 0 ? grossR * netShrinkFactor : 0, returnPct: rtoPct + cirPct, exchPct, cancelPct }
   }).filter(d => d.grossRev > 0)
 
   const groupedDaily = (() => {
@@ -4918,22 +4923,38 @@ function EBOTab({ data, rangeStart, rangeEnd }) {
       <div className="card" style={{ padding: '14px 18px' }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
           <span style={{ fontSize: 13, fontWeight: 700, color: C.t1 }}>Revenue &amp; Returns Trend</span>
-          <div style={{ display: 'flex', gap: 6 }}>
-            {['daily', 'weekly', 'monthly'].map(g => <button key={g} style={toggleStyle(trendGroup === g)} onClick={() => setTrendGroup(g)}>{g.charAt(0).toUpperCase() + g.slice(1)}</button>)}
-          </div>
+          <select value={trendGroup} onChange={e => setTrendGroup(e.target.value)} style={{ fontSize: 11, fontWeight: 600, padding: '3px 8px', borderRadius: 6, border: `1px solid ${C.border2}`, background: C.card, color: C.t1, cursor: 'pointer', fontFamily: 'var(--font)', outline: 'none' }}>
+            {['daily','weekly','monthly'].map(g => <option key={g} value={g}>{g.charAt(0).toUpperCase() + g.slice(1)}</option>)}
+          </select>
         </div>
-        <ResponsiveContainer width="100%" height={260}>
-          <ComposedChart data={groupedDaily} margin={{ top: 4, right: 30, bottom: 0, left: 0 }}>
-            <CartesianGrid strokeDasharray="3 3" stroke={C.border} />
-            <XAxis dataKey="date" tick={{ fontSize: 10 }} tickFormatter={v => v?.slice(5)} />
-            <YAxis yAxisId="rev" tickFormatter={v => fmtBig(v)} tick={{ fontSize: 10 }} />
-            <YAxis yAxisId="pct" orientation="right" tickFormatter={v => `${v.toFixed(0)}%`} tick={{ fontSize: 10 }} domain={[0, 'auto']} />
-            <Tooltip formatter={(v, n) => n.includes('%') ? `${v.toFixed(1)}%` : fmt(v)} labelFormatter={v => v} />
-            <Legend />
-            <Bar yAxisId="rev" dataKey="grossRev" name="Gross Rev" fill={EBO_ACCENT} fillOpacity={0.85} radius={[3, 3, 0, 0]} />
-            <Line yAxisId="rev" type="monotone" dataKey="netRev" name="Net Rev" stroke="#1A7A3C" strokeWidth={2} dot={false} />
-            <Line yAxisId="pct" type="monotone" dataKey="returnPct" name="Return %" stroke={C.red.tx} strokeWidth={1.5} dot={false} strokeDasharray="4 2" />
-            <Line yAxisId="pct" type="monotone" dataKey="cancelPct" name="Cancel %" stroke={C.amber.tx} strokeWidth={1.5} dot={false} strokeDasharray="4 2" />
+        <ResponsiveContainer width="100%" height={240}>
+          <ComposedChart data={groupedDaily} margin={{ top: 4, right: 50, bottom: 0, left: 0 }}>
+            <defs>
+              <linearGradient id="eboGrossGrad" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="5%" stopColor={EBO_ACCENT} stopOpacity={0.45} />
+                <stop offset="95%" stopColor={EBO_ACCENT} stopOpacity={0.02} />
+              </linearGradient>
+              <linearGradient id="eboNetGrad" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="5%" stopColor="#0D9E68" stopOpacity={0.32} />
+                <stop offset="95%" stopColor="#0D9E68" stopOpacity={0.02} />
+              </linearGradient>
+            </defs>
+            <CartesianGrid strokeDasharray="3 3" stroke={C.border} vertical={false} />
+            <XAxis dataKey="date" tick={{ fontSize: 10, fill: C.t3 }} tickFormatter={v => v?.slice(5)} />
+            <YAxis yAxisId="rev" tick={{ fontSize: 10, fill: C.t3 }} tickFormatter={v => fmt(v)} width={60} />
+            <YAxis yAxisId="pct" orientation="right" tick={{ fontSize: 10, fill: C.t3 }} tickFormatter={v => `${v.toFixed(1)}%`} width={40} />
+            <Tooltip content={({ active, payload, label }) => active && payload?.length ? (
+              <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 7, padding: '7px 11px', fontSize: 11 }}>
+                <div style={{ fontWeight: 700, marginBottom: 4, color: C.t2 }}>{label?.slice(5)}</div>
+                {payload.map(p => <div key={p.name} style={{ color: p.color }}>{p.name}: {(p.yAxisId === 'pct' || ['returnPct','exchPct','cancelPct'].includes(p.dataKey)) ? `${Number(p.value).toFixed(1)}%` : fmt(p.value)}</div>)}
+              </div>
+            ) : null} />
+            <Legend wrapperStyle={{ fontSize: 11 }} />
+            <Area yAxisId="rev" type="monotone" dataKey="grossRev" name="Gross Revenue" stroke={EBO_ACCENT} fill="url(#eboGrossGrad)" strokeWidth={2.5} dot={false} />
+            <Area yAxisId="rev" type="monotone" dataKey="netRev" name="Net Revenue" stroke="#0D9E68" fill="url(#eboNetGrad)" strokeWidth={2} dot={false} strokeDasharray="4 2" />
+            <Line yAxisId="pct" type="monotone" dataKey="returnPct" name="Return % (RTO+CIR)" stroke="#E24B4A" strokeWidth={1.5} dot={false} />
+            <Line yAxisId="pct" type="monotone" dataKey="exchPct" name="Exchange %" stroke="#9B59B6" strokeWidth={1.5} dot={false} strokeDasharray="3 2" />
+            <Line yAxisId="pct" type="monotone" dataKey="cancelPct" name="Cancellation %" stroke="#B91C1C" strokeWidth={1.5} dot={false} strokeDasharray="6 2" />
           </ComposedChart>
         </ResponsiveContainer>
       </div>
