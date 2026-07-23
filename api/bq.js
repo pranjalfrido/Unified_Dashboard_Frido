@@ -157,7 +157,7 @@ export default async function handler(req, res) {
       : `WITH q AS (${prevBase}) SELECT SUM(SellingPrice_Inc_GST) AS rev, SUM(SellingPrice_Exc_GST) AS exc_rev, COUNT(DISTINCT OrderId) AS orders, SUM(ItemQty) AS units, COUNT(DISTINCT CASE WHEN Order_Status IN ('RTO','Return') THEN OrderId END) AS rto_orders, COUNT(DISTINCT CASE WHEN Order_Status = 'CIR' THEN OrderId END) AS cir_orders, COUNT(DISTINCT CASE WHEN Order_Status='Exchange' THEN OrderId END) AS exchange_orders FROM q WHERE Channel='Shopify' AND SubChannel != 'Shopify International'`,
     shTotals: subChannel === 'International'
       ? (() => { const cWhere = country ? ` AND source_system = '${country.replace(/'/g,"''")}'` : ''; return `SELECT SUM(final_total_incl_tax) AS rev, SUM(total_excl_tax) AS exc_rev, COUNT(DISTINCT order_id) AS orders, SUM(qty) AS qty FROM \`frido-429506.production.fact_shopify_international_orders\` WHERE order_date BETWEEN '${start}' AND '${end}' AND (financial_status IS NULL OR financial_status != 'voided')${cWhere}` })()
-      : `WITH q AS (${base}) SELECT SUM(SellingPrice_Inc_GST) AS rev, SUM(SellingPrice_Exc_GST) AS exc_rev, COUNT(DISTINCT OrderId) AS orders, SUM(ItemQty) AS qty FROM q WHERE Channel='Shopify' AND SubChannel != 'Shopify International'`,
+      : `WITH q AS (${base}) SELECT SUM(SellingPrice_Inc_GST) AS rev, SUM(SellingPrice_Exc_GST) AS exc_rev, COUNT(DISTINCT OrderId) AS orders, SUM(ItemQty) AS qty, SUM(CASE WHEN UPPER(COALESCE(MasterSKU,'')) NOT LIKE '%COUP%' AND UPPER(COALESCE(MasterSKU,'')) NOT LIKE '%DFA%' THEN ItemQty ELSE 0 END) AS asp_qty FROM q WHERE Channel='Shopify' AND SubChannel != 'Shopify International'`,
     shDaily: subChannel === 'International'
       ? (() => { const cWhere = country ? ` AND source_system = '${country.replace(/'/g,"''")}'` : ''; return `SELECT CAST(order_date AS STRING) AS date, SUM(final_total_incl_tax) AS rev, SUM(total_excl_tax) AS exc_rev, COUNT(DISTINCT order_id) AS orders, SUM(qty) AS units FROM \`frido-429506.production.fact_shopify_international_orders\` WHERE order_date BETWEEN '${start}' AND '${end}' AND (financial_status IS NULL OR financial_status != 'voided')${cWhere} GROUP BY date ORDER BY date` })()
       : `WITH q AS (${base}) SELECT CAST(OrderDate AS STRING) AS date, SUM(SellingPrice_Inc_GST) AS rev, SUM(SellingPrice_Exc_GST) AS exc_rev, COUNT(DISTINCT OrderId) AS orders, SUM(ItemQty) AS units FROM q WHERE Channel='Shopify' AND SubChannel != 'Shopify International' GROUP BY date ORDER BY date`,
@@ -689,7 +689,7 @@ export default async function handler(req, res) {
           const gstRatio = gross > 0 ? (gross - excRev) / gross : 0
           return { gross, excRev, cancelRev, rtoRev, returnRev, cirRev, netRev: gar * (1 - gstRatio) }
         })(),
-        totals: r.shTotals?.[0] ? { rev: parseFloat(r.shTotals[0].rev)||0, excRev: parseFloat(r.shTotals[0].exc_rev)||0, orders: parseInt(r.shTotals[0].orders)||0, qty: parseInt(r.shTotals[0].qty)||0 } : {},
+        totals: r.shTotals?.[0] ? { rev: parseFloat(r.shTotals[0].rev)||0, excRev: parseFloat(r.shTotals[0].exc_rev)||0, orders: parseInt(r.shTotals[0].orders)||0, qty: parseInt(r.shTotals[0].qty)||0, aspQty: parseInt(r.shTotals[0].asp_qty)||parseInt(r.shTotals[0].qty)||0 } : {},
         daily: (r.shDaily || []).map(x => ({ date: x.date, rev: parseFloat(x.rev)||0, excRev: parseFloat(x.exc_rev)||0, orders: parseInt(x.orders)||0, units: parseInt(x.units)||0 })),
         prevRev: parseFloat(r.prevShopify?.[0]?.rev) || 0,
         prevExcRev: parseFloat(r.prevShopify?.[0]?.exc_rev) || 0,

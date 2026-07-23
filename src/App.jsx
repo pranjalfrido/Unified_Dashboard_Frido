@@ -4168,7 +4168,7 @@ function ShopifyTab({ data, filters, setFilters }) {
   const totalRev = shCh.rev || 0
   const totalExcRevRaw = shCh.excRev || 0
   const totalQty = shCh.qty || 0
-  const shAspQty = (data.orders || []).filter(o => o.channel === 'Shopify').reduce((s, o) => s + (o.qty || 0), 0)
+  const shAspQty = shCh.aspQty || totalQty
   // Use shNetCalc (Shopify-only deductions) — same formula, correct channel scope
   const cancelledRev = sh.netCalc?.cancelRev || 0
   const rtoRev = sh.netCalc?.rtoRev || 0
