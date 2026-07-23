@@ -4979,14 +4979,14 @@ function EBOTab({ data, rangeStart, rangeEnd }) {
           })}
         </Card>
       </div>
+      {/* Region / Tier donuts */}
+      {(regionRows.length > 0 || tierRows.length > 0) && <RegionTierDonutRow regionRows={regionRows} tierRows={tierRows} />}
       <FinancialCategoryMatrix catData={catDataForMatrix} subCatData={subCatDataForMatrix} skuData={skuDataForMatrix} title="EBO Category · Sub-Category · SKU" showReturns showShare showMoM catPrevMap={ebo.catPrevMap || {}} subCatPrevMap={ebo.subCatPrevMap || {}} />
       {/* Geo tables */}
       <div className="g-2" style={{ alignItems: 'stretch' }}>
         <ShopifyGeoRichTable title="Top States" rows={stateRows} firstKey="state" firstLabel="State" formatFirst={v => v ? v.charAt(0).toUpperCase() + v.slice(1).toLowerCase() : v} />
         <ShopifyGeoRichTable title="Top Cities" rows={enrichedCityRows} firstKey="city" firstLabel="City" formatFirst={v => v ? v.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' ') : v} />
       </div>
-      {/* Region / Tier donuts */}
-      {(regionRows.length > 0 || tierRows.length > 0) && <RegionTierDonutRow regionRows={regionRows} tierRows={tierRows} />}
       {/* Return reasons */}
       <ShopifyReturnReasonsTable reasons={ebo.returnReasons || []} />
     </div>
