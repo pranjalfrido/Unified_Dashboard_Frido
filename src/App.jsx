@@ -4738,8 +4738,9 @@ function EBOTab({ data, rangeStart, rangeEnd }) {
   const returnRev = ebo.netCalc?.returnRev || 0
   const cirRev = ebo.netCalc?.cirRev || 0
   const grossAfterReturns = totalRev - cancelRev - rtoRev - returnRev - cirRev
-  const totalExcRev = totals.excRev || 0
-  const gstRatio = totalRev > 0 ? (totalRev - totalExcRev) / totalRev : 0
+  const ncGross = ebo.netCalc?.gross || totalRev
+  const ncExcRev = ebo.netCalc?.excRev || totals.excRev || 0
+  const gstRatio = ncGross > 0 ? (ncGross - ncExcRev) / ncGross : 0
   const netRev = ebo.netCalc?.netRev ?? (grossAfterReturns * (1 - gstRatio))
   const gstCollected = grossAfterReturns * gstRatio
 
