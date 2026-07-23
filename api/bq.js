@@ -83,7 +83,7 @@ export default async function handler(req, res) {
   const queries = {
     totals: subChannel === 'International'
       ? (() => { const cWhere = country ? ` AND source_system = '${country.replace(/'/g,"''")}'` : ''; return `SELECT COUNT(DISTINCT order_id) AS n_orders, SUM(final_total_incl_tax) AS total_rev, SUM(total_excl_tax) AS total_exc_rev, SUM(qty) AS total_qty, COUNT(DISTINCT order_date) AS n_days, COUNT(DISTINCT customer_id) AS n_custs FROM \`frido-429506.production.fact_shopify_international_orders\` WHERE order_date BETWEEN '${start}' AND '${end}' AND (financial_status IS NULL OR financial_status != 'voided')${cWhere}` })()
-      : `WITH q AS (${base}) SELECT COUNT(DISTINCT OrderId) AS n_orders, SUM(SellingPrice_Inc_GST) AS total_rev, SUM(SellingPrice_Exc_GST) AS total_exc_rev, SUM(ItemQty) AS total_qty, SUM(CASE WHEN UPPER(COALESCE(MasterSKU,'')) NOT LIKE '%COUP%' AND UPPER(COALESCE(MasterSKU,'')) NOT LIKE '%DFA%' THEN ItemQty ELSE 0 END) AS asp_qty, COUNT(DISTINCT OrderDate) AS n_days, COUNT(DISTINCT CustomerId) AS n_custs FROM q`,
+      : `WITH q AS (${base}) SELECT COUNT(DISTINCT OrderId) AS n_orders, SUM(SellingPrice_Inc_GST) AS total_rev, SUM(SellingPrice_Exc_GST) AS total_exc_rev, SUM(ItemQty) AS total_qty, SUM(CASE WHEN UPPER(COALESCE(MasterSKU,'')) NOT LIKE '%COUP%' AND UPPER(COALESCE(MasterSKU,'')) NOT LIKE '%DFA%' THEN ItemQty ELSE 0 END) AS asp_qty, COUNT(DISTINCT OrderDate) AS n_days, COUNT(DISTINCT CustomerId) AS n_custs, SUM(CASE WHEN Channel IN ('Amazon','Flipkart','Myntra') OR (Channel='Shopify' AND SubChannel != 'Shopify International') THEN SellingPrice_Inc_GST ELSE 0 END) AS return_trackable_rev FROM q`,
     byChannel: `WITH q AS (${base}) SELECT Channel, COUNT(DISTINCT OrderId) AS orders, SUM(SellingPrice_Inc_GST) AS rev, SUM(SellingPrice_Exc_GST) AS exc_rev, SUM(ItemQty) AS qty, SUM(CASE WHEN Order_Status = 'Cancelled' THEN SellingPrice_Inc_GST ELSE 0 END) AS cancel_rev, SUM(CASE WHEN Order_Status = 'RTO' THEN SellingPrice_Inc_GST ELSE 0 END) AS rto_rev, SUM(CASE WHEN Order_Status = 'Return' THEN SellingPrice_Inc_GST ELSE 0 END) AS return_rev, SUM(CASE WHEN Order_Status = 'CIR' THEN SellingPrice_Inc_GST ELSE 0 END) AS cir_rev FROM q WHERE NOT (Channel = 'Shopify' AND SubChannel = 'Shopify International') GROUP BY Channel ORDER BY rev DESC`,
     shopifyIntlTotals: subChannel === 'International' ? `SELECT 0 AS intl_rev, 0 AS intl_exc_rev` : `SELECT SUM(final_total_incl_tax) AS intl_rev, SUM(total_excl_tax) AS intl_exc_rev FROM \`frido-429506.production.fact_shopify_international_orders\` WHERE order_date BETWEEN '${start}' AND '${end}' AND (financial_status IS NULL OR financial_status != 'voided')`,
     prevShopifyIntlTotals: subChannel === 'International' ? `SELECT 0 AS intl_rev, 0 AS intl_exc_rev` : `SELECT SUM(final_total_incl_tax) AS intl_rev, SUM(total_excl_tax) AS intl_exc_rev FROM \`frido-429506.production.fact_shopify_international_orders\` WHERE order_date BETWEEN '${ps}' AND '${pe}' AND (financial_status IS NULL OR financial_status != 'voided')`,
@@ -515,6 +515,7 @@ export default async function handler(req, res) {
     const totalQty = parseInt(t.total_qty) || 0
     const aspQtyRaw = parseFloat(t.asp_qty)
     const aspQty = (!isNaN(aspQtyRaw) && aspQtyRaw > 0) ? aspQtyRaw : totalQty
+    const returnTrackableRev = parseFloat(t.return_trackable_rev) || 0
     const nDays = parseInt(t.n_days) || 1
     const nCusts = parseInt(r.repeatRate[0]?.n_custs) || parseInt(t.n_custs) || 0
     const repeatCusts = parseInt(r.repeatRate[0]?.repeat_custs) || 0
@@ -662,7 +663,7 @@ export default async function handler(req, res) {
       totalRev: adjTotalRev, totalExcRev: adjTotalExcRev, totalQty: adjTotalQty, aspQty: adjAspQty, nOrders: adjNOrders, nDays,
       blendedAOV: adjNOrders ? adjTotalRev / adjNOrders : 0,
       gstCollected: adjTotalRev - adjTotalExcRev,
-      rtoRev, returnRev, cancellRev, cirRev, rtoRevDirect, netRevenueCalc,
+      rtoRev, returnRev, cancellRev, cirRev, rtoRevDirect, netRevenueCalc, returnTrackableRev,
       cirOrders: parseInt(r.byCIR?.[0]?.cir_orders) || 0,
       exchangeOrders: parseInt(r.byExchange?.[0]?.exchange_orders) || 0,
       exchangeRev: parseFloat(r.byExchange?.[0]?.exchange_rev) || 0,

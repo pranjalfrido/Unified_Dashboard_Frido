@@ -3539,7 +3539,8 @@ function AllTab({ data, rangeStart, rangeEnd }) {
   const rtoOrders = (orderStatusMap['RTO'] || 0) + (orderStatusMap['Return'] || 0)
   const cirOrderCount = orderStatusMap['CIR'] || 0
   const returnRevAll = data.returnRev || 0
-  const returnPct = totalRev > 0 ? ((rtoRev + returnRevAll + cirRev) / totalRev * 100) : 0
+  const returnTrackableRev = data.returnTrackableRev || totalRev
+  const returnPct = returnTrackableRev > 0 ? ((rtoRev + returnRevAll + cirRev) / returnTrackableRev * 100) : 0
   const aspUnits = (typeof data.aspQty === 'number' && data.aspQty > 1000) ? data.aspQty : totalQty
   const asp = aspUnits > 0 ? totalRev / aspUnits : 0
   const deliveredOrders = orderStatusMap['Delivered'] || 0
