@@ -7693,6 +7693,9 @@ function MyntraTab({ data }) {
   const nOrders = totals.orders || 0
   const qty = totals.units || 0
   const asp = qty ? rev / qty : 0
+  const mnReturnRev = totals.returnRev || 0
+  const mnReturnOrders = totals.returnOrders || 0
+  const mnReturnPct = rev > 0 ? (mnReturnRev / rev * 100) : 0
 
   const prevRev = mn.prevRev || 0
   const prevExcRev = mn.prevExcRev || 0
@@ -7768,12 +7771,14 @@ function MyntraTab({ data }) {
             </ResponsiveContainer>
           </div>
         </div>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 10 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10 }}>
           {[
             { label: 'Net Revenue (Exc. GST)', value: fmt(excRev), sub: `GST: ${fmt(rev - excRev)}`, badge: chgBadge(excRev, prevExcRev) },
             { label: 'Daily Avg Revenue', value: fmt(excRev / nDays), sub: 'Net per day', badge: chgBadge(excRev / nDays, prevExcRev > 0 ? prevExcRev / nDays : 0) },
-            { label: 'ASP', value: `₹${Math.round(asp).toLocaleString('en-IN')}`, sub: 'Gross rev ÷ units', badge: chgBadge(asp, mn.prevUnits > 0 ? prevRev / mn.prevUnits : 0) },
             { label: 'Active Products', value: fmtN(totals.skus), sub: 'Product types sold' },
+            { label: 'ASP', value: `₹${Math.round(asp).toLocaleString('en-IN')}`, sub: 'Gross rev ÷ units', badge: chgBadge(asp, mn.prevUnits > 0 ? prevRev / mn.prevUnits : 0) },
+            { label: 'Return %', value: `${mnReturnPct.toFixed(1)}%`, sub: `${fmt(mnReturnRev)} ret rev · ${fmtN(mnReturnOrders)} orders`, accent: mnReturnPct > 15 ? '#7A1A1A' : undefined },
+            { label: 'AOV', value: `₹${Math.round(nOrders ? rev / nOrders : 0).toLocaleString('en-IN')}`, sub: 'Gross rev ÷ orders', badge: chgBadge(nOrders ? rev / nOrders : 0, mn.prevOrders > 0 ? prevRev / mn.prevOrders : 0) },
           ].map(k => (
             <div key={k.label} className="kpi-card" style={{ padding: '10px 13px', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
               <div className="kpi-label">{k.label}</div>
