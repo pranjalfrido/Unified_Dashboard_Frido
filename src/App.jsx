@@ -4783,11 +4783,13 @@ function EBOTab({ data, rangeStart, rangeEnd }) {
   const chgBadge = (cur, prev) => {
     if (!prev) return null
     const p = (cur - prev) / prev * 100
+    if (Math.abs(p) > 500) return null
     return <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 4, background: p >= 0 ? C.green.bg : C.red.bg, color: p >= 0 ? C.green.tx : C.red.tx, flexShrink: 0 }}>{p >= 0 ? '▲' : '▼'} {Math.abs(p).toFixed(1)}%</span>
   }
   const retBadge = (curPct, prevPct) => {
     if (!prevPct) return null
     const p = (curPct - prevPct) / prevPct * 100
+    if (Math.abs(p) > 500) return null
     return <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 4, background: p > 0 ? C.red.bg : C.green.bg, color: p > 0 ? C.red.tx : C.green.tx, flexShrink: 0 }}>{p > 0 ? '▲' : '▼'} {Math.abs(p).toFixed(1)}%</span>
   }
 
