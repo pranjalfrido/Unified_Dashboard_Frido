@@ -4833,11 +4833,10 @@ function EBOTab({ data, rangeStart, rangeEnd }) {
   const rawDaily = shDailyArr.map(d => {
     const grossR = d.rev || 0
     const rt = returnTrendMap[d.date] || {}
-    const tot = rt.total_orders || 1
-    const rtoPct = (rt.rto_orders || 0) / tot * 100
-    const cirPct = (rt.cir_orders || 0) / tot * 100
-    const exchPct = (rt.exch_orders || 0) / tot * 100
-    const cancelPct = (rt.cancel_orders || 0) / tot * 100
+    const rtoPct = rt.rtoPct || 0
+    const cirPct = rt.cirPct || 0
+    const exchPct = rt.exchPct || 0
+    const cancelPct = rt.cancelPct || 0
     return { date: d.date, grossRev: grossR, netRev: grossR > 0 ? grossR * netShrinkFactor : 0, returnPct: rtoPct + cirPct, exchPct, cancelPct }
   }).filter(d => d.grossRev > 0)
 
