@@ -783,7 +783,8 @@ export default async function handler(req, res) {
         const exchOrders = parseInt(nc.exch_orders) || 0
         const gar = gross - cancelRev - rtoRev - returnRev - cirRev
         const gstRatio = gross > 0 ? (gross - excRev) / gross : 0
-        const netCalc = { gross, excRev, cancelRev, rtoRev, returnRev, cirRev, exchRev, exchOrders, netRev: gar * (1 - gstRatio) }
+        const garExcRev = gar * (1 - gstRatio)
+        const netCalc = { gross, excRev, cancelRev, rtoRev, returnRev, cirRev, exchRev, exchOrders, netRev: garExcRev, gstCollected: gar - garExcRev }
         const pnc = r.prevEboNetCalc?.[0] || {}
         const prevNetCalc = { gross: parseFloat(pnc.gross)||0, excRev: parseFloat(pnc.exc_rev)||0, cancelRev: parseFloat(pnc.cancel_rev)||0, rtoRev: parseFloat(pnc.rto_rev)||0, returnRev: parseFloat(pnc.return_rev)||0, cirRev: parseFloat(pnc.cir_rev)||0 }
         return {

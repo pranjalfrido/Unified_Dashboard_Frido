@@ -4742,7 +4742,7 @@ function EBOTab({ data, rangeStart, rangeEnd }) {
   const ncExcRev = ebo.netCalc?.excRev || totals.excRev || 0
   const gstRatio = ncGross > 0 ? (ncGross - ncExcRev) / ncGross : 0
   const netRev = ebo.netCalc?.netRev ?? (grossAfterReturns * (1 - gstRatio))
-  const gstCollected = grossAfterReturns - netRev
+  const gstCollected = ebo.netCalc?.gstCollected ?? (grossAfterReturns - netRev)
 
   const prevRev = ebo.prevRev || 0
   const prevExcRev = ebo.prevExcRev || 0
