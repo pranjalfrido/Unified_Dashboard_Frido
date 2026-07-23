@@ -4854,11 +4854,23 @@ function EBOTab({ data, rangeStart, rangeEnd }) {
     return Object.values(buckets).map(b => ({ ...b, returnPct: b._n ? b.returnPct / b._n : 0, exchPct: b._n ? b.exchPct / b._n : 0, cancelPct: b._n ? b.cancelPct / b._n : 0 })).sort((a, b) => a.date.localeCompare(b.date))
   })()
 
-  const catSkuData = Object.entries(skuMap).map(([cat, scMap]) => ({ cat, subCats: Object.entries(scMap).map(([sc, skus]) => ({ sc, skus: Object.entries(skus).map(([sku, v]) => ({ sku, ...v })).sort((a, b) => b.rev - a.rev) })).sort((a, b) => { const ra = b.skus.reduce((s, x) => s + x.rev, 0), rb = b.skus.reduce((s, x) => s + x.rev, 0); return rb - ra }) })).sort((a, b) => { const ra = Object.values(skuMap[a.cat] || {}).flatMap(x => Object.values(x)).reduce((s, x) => s + x.rev, 0); const rb = Object.values(skuMap[b.cat] || {}).flatMap(x => Object.values(x)).reduce((s, x) => s + x.rev, 0); return rb - ra })
-
-  const catDataForMatrix = catRows.map(r => ({ name: r.name, rev: r.rev, excRev: r.excRev, orders: r.orders, units: r.units, aov: r.aov, asp: r.asp, cancelRev: catMap[r.name]?.cancelRev || 0, rtoRev: catMap[r.name]?.rtoRev || 0, cirRev: catMap[r.name]?.cirRev || 0, exchRev: catMap[r.name]?.exchRev || 0 }))
-  const subCatDataForMatrix = allSubCatRows.map(r => { const key = `${r.category}::${r.name}`; const v = subCatMap[key] || {}; return { name: r.name, category: r.category, rev: r.rev, excRev: r.excRev || 0, orders: r.orders, units: r.units, aov: r.aov, asp: r.asp, cancelRev: v.cancelRev || 0, rtoRev: v.rtoRev || 0, cirRev: v.cirRev || 0, exchRev: v.exchRev || 0 } })
-  const skuDataForMatrix = catSkuData.flatMap(c => c.subCats.flatMap(sc => sc.skus.map(s => ({ sku: s.sku, category: c.cat, subCategory: sc.sc, rev: s.rev, excRev: s.excRev || 0, orders: s.orders, units: s.units, cancelRev: s.cancelRev || 0, rtoRev: s.rtoRev || 0, cirRev: s.cirRev || 0, exchRev: s.exchRev || 0 }))))
+  const pick = v => ({ rev: v.rev || 0, excRev: v.excRev || 0, units: v.aspUnits || v.units || 0, orders: v.orders, cancelled: v.cancelled || 0, rto: v.rto || 0, cir: v.cir || 0, exch: v.exch || 0, cancelRev: v.cancelRev || 0, rtoRev: v.rtoRev || 0, cirRev: v.cirRev || 0, exchRev: v.exchRev || 0 })
+  const catDataForMatrix = {}
+  Object.entries(catMap).forEach(([cat, v]) => { catDataForMatrix[cat] = pick(v) })
+  const subCatDataForMatrix = {}
+  Object.entries(subCatMap).forEach(([key, v]) => {
+    const [cat, sc] = key.split('::')
+    if (!subCatDataForMatrix[cat]) subCatDataForMatrix[cat] = {}
+    subCatDataForMatrix[cat][sc] = pick(v)
+  })
+  const skuDataForMatrix = {}
+  Object.entries(skuMap).forEach(([cat, scMap]) => {
+    skuDataForMatrix[cat] = {}
+    Object.entries(scMap).forEach(([sc, skuMap_]) => {
+      skuDataForMatrix[cat][sc] = {}
+      Object.entries(skuMap_).forEach(([sku, v]) => { skuDataForMatrix[cat][sc][sku] = pick(v) })
+    })
+  })
 
   const toggleStyle = active => ({ fontSize: 12, fontWeight: active ? 700 : 500, padding: '4px 14px', borderRadius: 6, border: `1.5px solid ${active ? EBO_ACCENT : C.border2}`, background: active ? EBO_ACCENT : C.card, color: active ? '#fff' : C.t1, cursor: 'pointer', fontFamily: 'var(--font)', transition: 'all .12s' })
 
@@ -4958,7 +4970,15 @@ function EBOTab({ data, rangeStart, rangeEnd }) {
           </ComposedChart>
         </ResponsiveContainer>
       </div>
-      {/* Category Matrix */}
+      {/* Category Revenue bar + matrix */}
+      {catRows.length > 0 && (
+        <Card title="Category Revenue">
+          {catRows.slice(0, 8).map((r, i) => {
+            const dots = ['#534AB7','#0D9E68','#2E74CC','#CC8A00','#CC4078','#E24B4A','#9B59B6','#FF6B35']
+            return <HBar key={r.name} dot={dots[i % dots.length]} label={r.name} width={(r.rev / (catRows[0]?.rev || 1)) * 100} value={fmt(r.rev)} pctVal={totalRev > 0 ? `${(r.rev / totalRev * 100).toFixed(1)}%` : '—'} />
+          })}
+        </Card>
+      )}
       <FinancialCategoryMatrix catData={catDataForMatrix} subCatData={subCatDataForMatrix} skuData={skuDataForMatrix} title="EBO Category · Sub-Category · SKU" showReturns showShare showMoM catPrevMap={ebo.catPrevMap || {}} subCatPrevMap={ebo.subCatPrevMap || {}} />
       {/* Geo tables */}
       <div className="g-2" style={{ alignItems: 'stretch' }}>
