@@ -2255,6 +2255,7 @@ function OverviewPage({ data, alerts, logisticsData }) {
 const TABS = [
   { id: 'all', label: 'All Channels' },
   { id: 'shopify', label: 'Shopify', ch: 'Shopify', logo: '/logo-shopify.png' },
+  { id: 'ebo', label: 'EBO', ch: 'EBO', logo: '/logo-shopify.png' },
   { id: 'amazon', label: 'Amazon', ch: 'Amazon', logo: '/logo-amazon.png' },
   { id: 'flipkart', label: 'Flipkart', ch: 'Flipkart', logo: '/logo-flipkart.png' },
   { id: 'blinkit', label: 'Blinkit', ch: 'Blinkit', logo: '/logo-blinkit.png' },
@@ -4237,7 +4238,7 @@ function ShopifyTab({ data, filters, setFilters }) {
   const repeatRate = nCusts ? (repeatCusts / nCusts * 100).toFixed(1) : '0'
 
   // Sub-channel breakdown — India excludes International, Intl shows only International
-  const indiaSubChMap = Object.fromEntries(Object.entries(subChannelMap).filter(([k]) => k !== 'International' && k !== 'Shopify B2B' && k !== 'Shopify International' && k !== 'Unknown'))
+  const indiaSubChMap = Object.fromEntries(Object.entries(subChannelMap).filter(([k]) => k !== 'International' && k !== 'Shopify B2B' && k !== 'Shopify International' && k !== 'Unknown' && k !== 'Retail Store'))
   const intlSubChMap = subChannelMap['International'] ? { International: subChannelMap['International'] } : {}
   const activeSubChMap = isIntl ? intlSubChMap : indiaSubChMap
   const activeSubChKeys = Object.keys(activeSubChMap).sort((a, b) => activeSubChMap[b].rev - activeSubChMap[a].rev)
@@ -4710,6 +4711,243 @@ function ShopifyTab({ data, filters, setFilters }) {
         <ShopifyGeoRichTable title="Top Cities" rows={enrichedCityRows} firstKey="city" firstLabel="City" formatFirst={v => v ? v.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' ') : v} />
       </div>}
       <ShopifyReturnReasonsTable reasons={sh.returnReasons || []} />
+    </div>
+  )
+}
+
+function EBOTab({ data, rangeStart, rangeEnd }) {
+  const EBO_ACCENT = '#8B5E3C'
+  const ebo = data.ebo || {}
+  const catMap = ebo.catMap || {}
+  const subCatMap = ebo.subCatMap || {}
+  const skuMap = ebo.skuMap || {}
+  const stateMap = ebo.stateMap || {}
+  const statePrevMap = ebo.statePrevMap || {}
+  const cityRows = ebo.cityRows || []
+  const cityPrevMap = ebo.cityPrevMap || {}
+  const regionRows = ebo.regionRows || []
+  const tierRows = ebo.tierRows || []
+
+  const totals = ebo.totals || {}
+  const totalRev = totals.rev || 0
+  const totalQty = totals.qty || 0
+  const nOrders = totals.orders || 0
+
+  const cancelRev = ebo.netCalc?.cancelRev || 0
+  const rtoRev = ebo.netCalc?.rtoRev || 0
+  const returnRev = ebo.netCalc?.returnRev || 0
+  const cirRev = ebo.netCalc?.cirRev || 0
+  const grossAfterReturns = totalRev - cancelRev - rtoRev - returnRev - cirRev
+  const totalExcRev = totals.excRev || 0
+  const gstRatio = totalRev > 0 ? (totalRev - totalExcRev) / totalRev : 0
+  const netRev = ebo.netCalc?.netRev ?? (grossAfterReturns * (1 - gstRatio))
+  const gstCollected = grossAfterReturns - netRev
+
+  const prevRev = ebo.prevRev || 0
+  const prevExcRev = ebo.prevExcRev || 0
+  const prevOrders = ebo.prevOrders || 0
+  const prevUnits = ebo.prevUnits || 0
+  const prevDailyArr = ebo.prevDaily || []
+  const prevRtoOrders = ebo.prevRtoOrders || 0
+  const prevCirOrders = ebo.prevCirOrders || 0
+  const prevExchangeOrders = ebo.prevExchangeOrders || 0
+
+  const prevGstRatio = prevRev > 0 ? (prevRev - prevExcRev) / prevRev : gstRatio
+  const prevReturnsShrink = totalRev > 0 ? (cancelRev + rtoRev + cirRev) / totalRev : 0
+  const prevGrossAfterReturns = prevRev * (1 - prevReturnsShrink)
+  const prevNetRev = prevGrossAfterReturns * (1 - prevGstRatio)
+
+  const shDailyArr = ebo.daily || []
+  const nDays = shDailyArr.length || 1
+  const dailyAvg = nDays ? totalRev / nDays : 0
+  const aov = nOrders ? totalRev / nOrders : 0
+  const asp = totalQty > 0 ? totalRev / totalQty : 0
+
+  const exchangeOrders = ebo.exchange?.exchangeOrders || 0
+  const exchangeRev = ebo.exchange?.exchangeRev || 0
+  const cancelPct = totalRev > 0 ? (cancelRev / totalRev * 100) : 0
+  const returnRevPct = totalRev > 0 ? ((rtoRev + returnRev + cirRev) / totalRev * 100) : 0
+  const rtoPct = totalRev > 0 ? ((rtoRev + returnRev) / totalRev * 100) : 0
+  const cirPct = totalRev > 0 ? (cirRev / totalRev * 100) : 0
+  const exchangePct = totalRev > 0 ? (exchangeRev / totalRev * 100) : 0
+
+  const shRevChg = prevRev > 0 ? ((totalRev - prevRev) / prevRev * 100) : null
+  const excChg = prevNetRev > 0 ? ((netRev - prevNetRev) / prevNetRev * 100) : null
+
+  const shSparkData = Array.from({ length: Math.max(shDailyArr.length, prevDailyArr.length) }, (_, i) => {
+    const cur = shDailyArr[i]; const pre = prevDailyArr[i]
+    return { i, cur: cur ? cur.rev : null, prev: pre?.rev ?? null }
+  })
+
+  const chgBadge = (cur, prev) => {
+    if (!prev) return null
+    const p = (cur - prev) / prev * 100
+    return <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 4, background: p >= 0 ? C.green.bg : C.red.bg, color: p >= 0 ? C.green.tx : C.red.tx, flexShrink: 0 }}>{p >= 0 ? '▲' : '▼'} {Math.abs(p).toFixed(1)}%</span>
+  }
+  const retBadge = (curPct, prevPct) => {
+    if (!prevPct) return null
+    const p = (curPct - prevPct) / prevPct * 100
+    return <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 4, background: p > 0 ? C.red.bg : C.green.bg, color: p > 0 ? C.red.tx : C.green.tx, flexShrink: 0 }}>{p > 0 ? '▲' : '▼'} {Math.abs(p).toFixed(1)}%</span>
+  }
+
+  const [selectedCat, setSelectedCat] = useState(null)
+  const [trendGroup, setTrendGroup] = useState('daily')
+
+  const catRows = Object.entries(catMap).map(([k, v]) => {
+    const orders = v.orders?.size ?? v.orders ?? 0
+    const aspU = v.aspUnits || v.units || 0
+    return { name: k, rev: v.rev, excRev: v.excRev || 0, orders, units: aspU, aov: orders ? v.rev / orders : 0, asp: aspU ? v.rev / aspU : 0 }
+  }).sort((a, b) => b.rev - a.rev)
+
+  const allSubCatRows = Object.entries(subCatMap).map(([k, v]) => {
+    const orders = v.orders?.size ?? v.orders ?? 0
+    const aspU = v.aspUnits || v.units || 0
+    return { name: k.split('::')[1] || k, category: k.split('::')[0] || '', rev: v.rev, orders, units: aspU, aov: orders ? v.rev / orders : 0, asp: aspU ? v.rev / aspU : 0 }
+  }).sort((a, b) => b.rev - a.rev)
+  const subCatRows = selectedCat ? allSubCatRows.filter(r => r.category === selectedCat) : allSubCatRows
+
+  const stateRows = (() => {
+    const totalRevAll = ebo.stateTotal?.rev || Object.values(stateMap).reduce((s, v) => s + (v.rev || 0), 0)
+    const sorted = Object.entries(stateMap).map(([k, v]) => {
+      const ord = v.orders instanceof Set ? v.orders.size : v.orders
+      const prev = statePrevMap[k] || { rev: 0, orders: 0 }
+      return { state: k, rev: v.rev, orders: ord, aov: ord ? v.rev / ord : 0, cities: v.cities?.size || 0, rtoOrders: v.rtoOrders || 0, rtoPct: ord ? ((v.rtoOrders || 0) / ord * 100) : 0, prevRev: prev.rev, prevOrders: prev.orders, mom: prev.rev > 0 ? ((v.rev - prev.rev) / prev.rev * 100) : null, sharePct: totalRevAll > 0 ? (v.rev / totalRevAll * 100) : 0 }
+    }).sort((a, b) => b.rev - a.rev)
+    let cum = 0; sorted.forEach(r => { cum += r.sharePct; r.cumPct = cum }); return sorted
+  })()
+
+  const enrichedCityRows = (() => {
+    const totalRevAll = ebo.cityTotal?.rev || cityRows.reduce((s, c) => s + (c.rev || 0), 0)
+    const sorted = cityRows.map(c => {
+      const key = `${c.city}|${c.state || ''}`
+      const prev = cityPrevMap[key] || { rev: 0, orders: 0 }
+      return { ...c, aov: c.orders ? c.rev / c.orders : 0, rtoPct: c.orders ? ((c.rtoOrders || 0) / c.orders * 100) : 0, prevRev: prev.rev, prevOrders: prev.orders, mom: prev.rev > 0 ? ((c.rev - prev.rev) / prev.rev * 100) : null, sharePct: totalRevAll > 0 ? (c.rev / totalRevAll * 100) : 0 }
+    }).sort((a, b) => b.rev - a.rev)
+    let cum = 0; sorted.forEach(r => { cum += r.sharePct; r.cumPct = cum }); return sorted
+  })()
+
+  const returnTrendMap = {}
+  ;(ebo.dailyReturnTrend || []).forEach(x => { returnTrendMap[x.date] = x })
+  const netShrinkFactor = totalRev > 0 ? (grossAfterReturns / totalRev) * (1 - gstRatio) : (1 - gstRatio)
+  const rawDaily = shDailyArr.map(d => {
+    const grossR = d.rev || 0
+    const rt = returnTrendMap[d.date] || {}
+    return { date: d.date, grossRev: grossR, netRev: grossR > 0 ? grossR * netShrinkFactor : 0, returnPct: (rt.rtoPct || 0) + (rt.cirPct || 0), exchPct: rt.exchPct || 0, cancelPct: rt.cancelPct || 0 }
+  }).filter(d => d.grossRev > 0)
+
+  const groupedDaily = (() => {
+    if (trendGroup === 'daily') return rawDaily
+    const buckets = {}
+    rawDaily.forEach(d => {
+      const dt = new Date(d.date); let key
+      if (trendGroup === 'weekly') { const day = dt.getDay(), diff = dt.getDate() - day + (day === 0 ? -6 : 1); key = new Date(dt.setDate(diff)).toISOString().slice(0, 10) }
+      else { key = d.date.slice(0, 7) }
+      if (!buckets[key]) buckets[key] = { date: key, grossRev: 0, netRev: 0, returnPct: 0, exchPct: 0, cancelPct: 0, _n: 0 }
+      buckets[key].grossRev += d.grossRev; buckets[key].netRev += d.netRev
+      buckets[key].returnPct += d.returnPct; buckets[key].exchPct += d.exchPct; buckets[key].cancelPct += d.cancelPct; buckets[key]._n++
+    })
+    return Object.values(buckets).map(b => ({ ...b, returnPct: b._n ? b.returnPct / b._n : 0, exchPct: b._n ? b.exchPct / b._n : 0, cancelPct: b._n ? b.cancelPct / b._n : 0 })).sort((a, b) => a.date.localeCompare(b.date))
+  })()
+
+  const catSkuData = Object.entries(skuMap).map(([cat, scMap]) => ({ cat, subCats: Object.entries(scMap).map(([sc, skus]) => ({ sc, skus: Object.entries(skus).map(([sku, v]) => ({ sku, ...v })).sort((a, b) => b.rev - a.rev) })).sort((a, b) => { const ra = b.skus.reduce((s, x) => s + x.rev, 0), rb = b.skus.reduce((s, x) => s + x.rev, 0); return rb - ra }) })).sort((a, b) => { const ra = Object.values(skuMap[a.cat] || {}).flatMap(x => Object.values(x)).reduce((s, x) => s + x.rev, 0); const rb = Object.values(skuMap[b.cat] || {}).flatMap(x => Object.values(x)).reduce((s, x) => s + x.rev, 0); return rb - ra })
+
+  const catDataForMatrix = catRows.map(r => ({ name: r.name, rev: r.rev, excRev: r.excRev, orders: r.orders, units: r.units, aov: r.aov, asp: r.asp, cancelRev: catMap[r.name]?.cancelRev || 0, rtoRev: catMap[r.name]?.rtoRev || 0, cirRev: catMap[r.name]?.cirRev || 0, exchRev: catMap[r.name]?.exchRev || 0 }))
+  const subCatDataForMatrix = allSubCatRows.map(r => { const key = `${r.category}::${r.name}`; const v = subCatMap[key] || {}; return { name: r.name, category: r.category, rev: r.rev, excRev: r.excRev || 0, orders: r.orders, units: r.units, aov: r.aov, asp: r.asp, cancelRev: v.cancelRev || 0, rtoRev: v.rtoRev || 0, cirRev: v.cirRev || 0, exchRev: v.exchRev || 0 } })
+  const skuDataForMatrix = catSkuData.flatMap(c => c.subCats.flatMap(sc => sc.skus.map(s => ({ sku: s.sku, category: c.cat, subCategory: sc.sc, rev: s.rev, excRev: s.excRev || 0, orders: s.orders, units: s.units, cancelRev: s.cancelRev || 0, rtoRev: s.rtoRev || 0, cirRev: s.cirRev || 0, exchRev: s.exchRev || 0 }))))
+
+  const toggleStyle = active => ({ fontSize: 12, fontWeight: active ? 700 : 500, padding: '4px 14px', borderRadius: 6, border: `1.5px solid ${active ? EBO_ACCENT : C.border2}`, background: active ? EBO_ACCENT : C.card, color: active ? '#fff' : C.t1, cursor: 'pointer', fontFamily: 'var(--font)', transition: 'all .12s' })
+
+  const prevCancelPct = prevOrders > 0 ? (prevOrders * (cancelPct / 100) * (nOrders > 0 ? cancelRev / nOrders : 0)) / prevRev * 100 : 0
+  const prevReturnRevPct = prevRev > 0 ? ((prevRtoOrders + prevCirOrders) / Math.max(prevOrders, 1) * 100) : 0
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+      {/* Title */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+        <div style={{ width: 6, height: 24, borderRadius: 3, background: EBO_ACCENT }} />
+        <span style={{ fontSize: 16, fontWeight: 800, color: C.t1 }}>EBO · Retail Store</span>
+        {rangeStart && rangeEnd && <span style={{ fontSize: 12, color: C.t3, marginLeft: 4 }}>{rangeStart} → {rangeEnd}</span>}
+      </div>
+      {/* KPI Grid */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1.5fr 5fr', gap: 10, alignItems: 'stretch' }}>
+        {/* Hero card */}
+        <div className="kpi-card" style={{ display: 'flex', flexDirection: 'column', gap: 8, padding: '16px 18px' }}>
+          <div className="kpi-label" style={{ fontSize: 11 }}>Gross Revenue (Inc. GST)</div>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 6 }}>
+            <div className="kpi-value" style={{ fontSize: 32, fontWeight: 800 }}>{fmt(totalRev)}</div>
+            {shRevChg !== null && <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 7px', borderRadius: 4, background: shRevChg >= 0 ? C.green.bg : C.red.bg, color: shRevChg >= 0 ? C.green.tx : C.red.tx }}>{shRevChg >= 0 ? '▲' : '▼'} {Math.abs(shRevChg).toFixed(1)}%</span>}
+          </div>
+          <div className="kpi-sub" style={{ fontSize: 13 }}>{fmtN(nOrders)} orders · {fmtN(totalQty)} units</div>
+          <div style={{ flex: 1, minHeight: 60 }}>
+            <ResponsiveContainer width="100%" height="100%">
+              <AreaChart data={shSparkData} margin={{ top: 4, right: 0, bottom: 0, left: 0 }}>
+                <defs><linearGradient id="eboGrad" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor={EBO_ACCENT} stopOpacity={0.25} /><stop offset="95%" stopColor={EBO_ACCENT} stopOpacity={0} /></linearGradient></defs>
+                <Area type="monotone" dataKey="cur" stroke={EBO_ACCENT} strokeWidth={2} fill="url(#eboGrad)" dot={false} connectNulls />
+                <Area type="monotone" dataKey="prev" stroke={C.t3} strokeWidth={1} fill="none" dot={false} strokeDasharray="3 2" connectNulls />
+                <Tooltip content={({ active, payload }) => active && payload?.length ? <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 6, padding: '4px 8px', fontSize: 10 }}>{payload.map(p => <div key={p.name} style={{ color: C.t1 }}>{fmt(p.value)}</div>)}</div> : null} />
+              </AreaChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+        {/* Right KPI grid */}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gridTemplateRows: 'repeat(2, 1fr)', gap: 10 }}>
+          {[
+            { label: 'Net Revenue', value: fmt(netRev), sub: 'Gross − Cancel − RTO − Return − CIR − GST', badge: chgBadge(netRev, prevNetRev) },
+            { label: 'GST Collected', value: fmt(gstCollected), sub: grossAfterReturns > 0 ? `${((gstCollected / grossAfterReturns) * 100).toFixed(1)}% of net sales` : '—', badge: null },
+            { label: 'Avg. Daily Gross Rev', value: fmt(dailyAvg), sub: `over ${nDays} days`, badge: chgBadge(dailyAvg, prevRev > 0 ? prevRev / nDays : 0) },
+            { label: 'AOV', value: `₹${Math.round(aov).toLocaleString('en-IN')}`, sub: 'Gross rev ÷ orders', badge: chgBadge(aov, prevOrders > 0 ? prevRev / prevOrders : 0) },
+            { label: 'ASP', value: `₹${Math.round(asp).toLocaleString('en-IN')}`, sub: 'Gross rev ÷ units', badge: chgBadge(asp, prevUnits > 0 ? prevRev / prevUnits : 0) },
+            { label: 'Cancellation %', value: `${cancelPct.toFixed(1)}%`, sub: `${fmt(cancelRev)} cancelled rev`, accent: cancelPct > 5 ? '#7A1A1A' : undefined, badge: retBadge(cancelPct, prevCancelPct) },
+            { label: 'Return %', value: `${returnRevPct.toFixed(1)}%`, sub: `${fmt(rtoRev + returnRev + cirRev)} RTO+CIR rev`, accent: returnRevPct > 5 ? '#7A1A1A' : undefined, badge: retBadge(returnRevPct, prevReturnRevPct) },
+            { label: 'Exchange %', value: `${exchangePct.toFixed(1)}%`, sub: `${fmt(exchangeRev)} exchange rev`, badge: retBadge(exchangePct, prevOrders > 0 ? prevExchangeOrders / prevOrders * 100 : 0) },
+            { label: 'RTO %', value: `${rtoPct.toFixed(1)}%`, sub: `${fmt(rtoRev + returnRev)} RTO+Return rev`, accent: rtoPct > 10 ? '#7A1A1A' : undefined, badge: retBadge(rtoPct, prevOrders > 0 ? prevRtoOrders / prevOrders * 100 : 0) },
+            { label: 'CIR %', value: `${cirPct.toFixed(1)}%`, sub: `${fmt(cirRev)} CIR rev`, badge: retBadge(cirPct, prevOrders > 0 ? prevCirOrders / prevOrders * 100 : 0) },
+          ].map(k => (
+            <div key={k.label} className="kpi-card" style={{ padding: '10px 13px', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+              <div className="kpi-label">{k.label}</div>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 4 }}>
+                <div className="kpi-value" style={{ fontSize: 17, ...(k.accent ? { color: k.accent } : {}) }}>{k.value}</div>
+                {k.badge}
+              </div>
+              {k.sub && <div className="kpi-sub">{k.sub}</div>}
+            </div>
+          ))}
+        </div>
+      </div>
+      {/* Revenue & Returns Trend */}
+      <div className="card" style={{ padding: '14px 18px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+          <span style={{ fontSize: 13, fontWeight: 700, color: C.t1 }}>Revenue &amp; Returns Trend</span>
+          <div style={{ display: 'flex', gap: 6 }}>
+            {['daily', 'weekly', 'monthly'].map(g => <button key={g} style={toggleStyle(trendGroup === g)} onClick={() => setTrendGroup(g)}>{g.charAt(0).toUpperCase() + g.slice(1)}</button>)}
+          </div>
+        </div>
+        <ResponsiveContainer width="100%" height={260}>
+          <ComposedChart data={groupedDaily} margin={{ top: 4, right: 30, bottom: 0, left: 0 }}>
+            <CartesianGrid strokeDasharray="3 3" stroke={C.border} />
+            <XAxis dataKey="date" tick={{ fontSize: 10 }} tickFormatter={v => v?.slice(5)} />
+            <YAxis yAxisId="rev" tickFormatter={v => fmtBig(v)} tick={{ fontSize: 10 }} />
+            <YAxis yAxisId="pct" orientation="right" tickFormatter={v => `${v.toFixed(0)}%`} tick={{ fontSize: 10 }} domain={[0, 'auto']} />
+            <Tooltip formatter={(v, n) => n.includes('%') ? `${v.toFixed(1)}%` : fmt(v)} labelFormatter={v => v} />
+            <Legend />
+            <Bar yAxisId="rev" dataKey="grossRev" name="Gross Rev" fill={EBO_ACCENT} fillOpacity={0.85} radius={[3, 3, 0, 0]} />
+            <Line yAxisId="rev" type="monotone" dataKey="netRev" name="Net Rev" stroke="#1A7A3C" strokeWidth={2} dot={false} />
+            <Line yAxisId="pct" type="monotone" dataKey="returnPct" name="Return %" stroke={C.red.tx} strokeWidth={1.5} dot={false} strokeDasharray="4 2" />
+            <Line yAxisId="pct" type="monotone" dataKey="cancelPct" name="Cancel %" stroke={C.amber.tx} strokeWidth={1.5} dot={false} strokeDasharray="4 2" />
+          </ComposedChart>
+        </ResponsiveContainer>
+      </div>
+      {/* Category Matrix */}
+      <FinancialCategoryMatrix catData={catDataForMatrix} subCatData={subCatDataForMatrix} skuData={skuDataForMatrix} title="EBO Category · Sub-Category · SKU" showReturns showShare showMoM catPrevMap={ebo.catPrevMap || {}} subCatPrevMap={ebo.subCatPrevMap || {}} />
+      {/* Geo tables */}
+      <div className="g-2" style={{ alignItems: 'stretch' }}>
+        <ShopifyGeoRichTable title="Top States" rows={stateRows} firstKey="state" firstLabel="State" formatFirst={v => v ? v.charAt(0).toUpperCase() + v.slice(1).toLowerCase() : v} />
+        <ShopifyGeoRichTable title="Top Cities" rows={enrichedCityRows} firstKey="city" firstLabel="City" formatFirst={v => v ? v.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' ') : v} />
+      </div>
+      {/* Region / Tier donuts */}
+      {(regionRows.length > 0 || tierRows.length > 0) && <RegionTierDonutRow regionRows={regionRows} tierRows={tierRows} />}
+      {/* Return reasons */}
+      <ShopifyReturnReasonsTable reasons={ebo.returnReasons || []} />
     </div>
   )
 }
@@ -8350,6 +8588,7 @@ function SalesPage({ data, filters, setFilters, activeTab, setActiveTab, fetchDa
       <div className="page-scroll">
         {activeTab === 'all' && <AllTab data={filteredData} rangeStart={filters.start} rangeEnd={filters.end} />}
         {activeTab === 'shopify' && <ChannelTab data={filteredData} channel="Shopify" filters={filters} setFilters={setFilters} />}
+        {activeTab === 'ebo' && <EBOTab data={filteredData} rangeStart={filters.start} rangeEnd={filters.end} />}
         {activeTab === 'amazon' && <ChannelTab data={filteredData} channel="Amazon" amzRegion={amzRegion} setAmzRegion={setAmzRegion} />}
         {activeTab === 'flipkart' && <ChannelTab data={filteredData} channel="Flipkart" />}
         {activeTab === 'blinkit' && <ChannelTab data={filteredData} channel="Blinkit" />}
