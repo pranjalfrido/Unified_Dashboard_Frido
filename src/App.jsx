@@ -4883,7 +4883,6 @@ function EBOTab({ data, rangeStart, rangeEnd }) {
       <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
         <div style={{ width: 6, height: 24, borderRadius: 3, background: EBO_ACCENT }} />
         <span style={{ fontSize: 16, fontWeight: 800, color: C.t1 }}>EBO · Retail Store</span>
-        {rangeStart && rangeEnd && <span style={{ fontSize: 12, color: C.t3, marginLeft: 4 }}>{rangeStart} → {rangeEnd}</span>}
       </div>
       {/* KPI Grid */}
       <div style={{ display: 'grid', gridTemplateColumns: '1.5fr 5fr', gap: 10, alignItems: 'stretch' }}>
