@@ -4944,8 +4944,8 @@ function EBOTab({ data, rangeStart, rangeEnd }) {
             <ComposedChart data={groupedDaily} margin={{ top: 4, right: 50, bottom: 0, left: 0 }}>
               <defs>
                 <linearGradient id="eboGrossGrad" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor={EBO_ACCENT} stopOpacity={0.45} />
-                  <stop offset="95%" stopColor={EBO_ACCENT} stopOpacity={0.02} />
+                  <stop offset="5%" stopColor="#FFD600" stopOpacity={0.45} />
+                  <stop offset="95%" stopColor="#FFD600" stopOpacity={0.02} />
                 </linearGradient>
                 <linearGradient id="eboNetGrad" x1="0" y1="0" x2="0" y2="1">
                   <stop offset="5%" stopColor="#0D9E68" stopOpacity={0.32} />
@@ -4963,7 +4963,7 @@ function EBOTab({ data, rangeStart, rangeEnd }) {
                 </div>
               ) : null} />
               <Legend wrapperStyle={{ fontSize: 11 }} />
-              <Area yAxisId="rev" type="monotone" dataKey="grossRev" name="Gross Revenue" stroke={EBO_ACCENT} fill="url(#eboGrossGrad)" strokeWidth={2.5} dot={false} />
+              <Area yAxisId="rev" type="monotone" dataKey="grossRev" name="Gross Revenue" stroke="#E0B800" fill="url(#eboGrossGrad)" strokeWidth={2.5} dot={false} />
               <Area yAxisId="rev" type="monotone" dataKey="netRev" name="Net Revenue" stroke="#0D9E68" fill="url(#eboNetGrad)" strokeWidth={2} dot={false} strokeDasharray="4 2" />
               <Line yAxisId="pct" type="monotone" dataKey="returnPct" name="Return % (RTO+CIR)" stroke="#E24B4A" strokeWidth={1.5} dot={false} />
               <Line yAxisId="pct" type="monotone" dataKey="exchPct" name="Exchange %" stroke="#9B59B6" strokeWidth={1.5} dot={false} strokeDasharray="3 2" />
