@@ -3538,7 +3538,8 @@ function AllTab({ data, rangeStart, rangeEnd }) {
   const unitsPerOrder = nOrders > 0 ? aspQtyAll / nOrders : 0
   const rtoOrders = (orderStatusMap['RTO'] || 0) + (orderStatusMap['Return'] || 0)
   const cirOrderCount = orderStatusMap['CIR'] || 0
-  const returnPct = totalRev > 0 ? ((rtoRev + cirRev) / totalRev * 100) : 0
+  const returnRevAll = data.returnRev || 0
+  const returnPct = totalRev > 0 ? ((rtoRev + returnRevAll + cirRev) / totalRev * 100) : 0
   const aspUnits = (typeof data.aspQty === 'number' && data.aspQty > 1000) ? data.aspQty : totalQty
   const asp = aspUnits > 0 ? totalRev / aspUnits : 0
   const deliveredOrders = orderStatusMap['Delivered'] || 0
@@ -3598,7 +3599,7 @@ function AllTab({ data, rangeStart, rangeEnd }) {
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gridTemplateRows: 'repeat(2, 1fr)', gap: 10, alignItems: 'stretch' }}>
           {[
             { label: 'Net. Rev. (Exc GST)', value: fmt(netRevenueCalc), sub: `${totalRev > 0 ? (netRevenueCalc / totalRev * 100).toFixed(1) : 0}% of gross`, badge: (() => { const excChg = prevExcRev > 0 ? ((netRevenueCalc - prevExcRev) / prevExcRev * 100) : null; if (excChg === null) return null; return <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 4, background: excChg >= 0 ? C.green.bg : C.red.bg, color: excChg >= 0 ? C.green.tx : C.red.tx, flexShrink: 0 }}>{excChg >= 0 ? '▲' : '▼'} {Math.abs(excChg).toFixed(1)}%</span> })() },
-            { label: 'Return %', value: `${returnPct.toFixed(1)}%`, sub: `${fmt(rtoRev)} RTO · ${fmt(cirRev)} CIR`, accent: returnPct > 10 ? '#7A1A1A' : undefined, badge: (() => { if (!prevRev) return null; const prevRtoCirRev = (data.prevRtoRev || 0) + (data.prevCirRev || 0); const prev = prevRev > 0 ? prevRtoCirRev / prevRev * 100 : 0; if (!prev) return null; const p = (returnPct - prev) / prev * 100; return <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 4, background: p >= 0 ? C.red.bg : C.green.bg, color: p >= 0 ? C.red.tx : C.green.tx, flexShrink: 0 }}>{p >= 0 ? '▲' : '▼'} {Math.abs(p).toFixed(1)}%</span> })() },
+            { label: 'Return %', value: `${returnPct.toFixed(1)}%`, sub: `${fmt(rtoRev)} RTO · ${fmt(returnRevAll)} Return · ${fmt(cirRev)} CIR`, accent: returnPct > 10 ? '#7A1A1A' : undefined, badge: (() => { if (!prevRev) return null; const prevRtoCirRev = (data.prevRtoRev || 0) + (data.prevCirRev || 0); const prev = prevRev > 0 ? prevRtoCirRev / prevRev * 100 : 0; if (!prev) return null; const p = (returnPct - prev) / prev * 100; return <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 4, background: p >= 0 ? C.red.bg : C.green.bg, color: p >= 0 ? C.red.tx : C.green.tx, flexShrink: 0 }}>{p >= 0 ? '▲' : '▼'} {Math.abs(p).toFixed(1)}%</span> })() },
             { label: 'AOV', value: `₹${Math.round(blendedAOV).toLocaleString('en-IN')}`, sub: `Gross rev ÷ orders`, badge: chgBadge(blendedAOV, prevAOV) },
             { label: 'Avg. Daily Gross Rev', value: fmt(totalRev / nDays), sub: `over ${nDays} days`, badge: chgBadge(totalRev / nDays, prevDailyAvg) },
             { label: 'ASP', value: `₹${Math.round(asp).toLocaleString('en-IN')}`, sub: 'Gross rev ÷ units sold (excl. COUP/DFA)', badge: chgBadge(asp, prevASP) },
@@ -5175,7 +5176,7 @@ function AmazonTab({ data, region = 'india', setRegion = () => {} }) {
                     { label: 'Daily Avg Revenue', value: fmt(scTotalRev / (data.nDays || 1)), sub: 'Revenue per day', badge: scChgBadge(scTotalRev / (data.nDays || 1), prevSCDailyAvg) },
                     { label: 'Order Status', value: (() => { const shipped = amzSC.status?.find(s => s.status === 'Shipped')?.orders || 0; const total = amzSC.totalOrders || 0; return `${total ? (shipped / total * 100).toFixed(1) : 0}% Shipped` })(), sub: `${fmtN(amzSC.totalOrders || 0)} total · ${fmtN(scPending)} pending`, badge: (() => { const shipped = amzSC.status?.find(s => s.status === 'Shipped')?.orders || 0; const total = amzSC.totalOrders || 0; const curPct = total ? shipped / total * 100 : 0; const prevPct = prevSCOrders ? (amzSC.prevShippedOrders || 0) / prevSCOrders * 100 : 0; return scChgBadge(curPct, prevPct) })() },
                     { label: 'Cancellation Rate', value: `${scCancelRate.toFixed(1)}%`, sub: `${fmtN(scCancelOrders)} cancelled`, accent: scCancelRate > 10 ? '#7A1A1A' : undefined, badge: (amzSC.prevCancelledOrders && prevSCOrders) ? (() => { const prevRate = amzSC.prevCancelledOrders / prevSCOrders * 100; const p = (scCancelRate - prevRate) / prevRate * 100; return <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 4, background: p > 0 ? C.red.bg : C.green.bg, color: p > 0 ? C.red.tx : C.green.tx, flexShrink: 0 }}>{p > 0 ? '▲' : '▼'} {Math.abs(p).toFixed(1)}%</span> })() : null },
-                    { label: 'Return Rate', value: returnRateReliable ? `${(amzSC.returnRate?.pct || 0).toFixed(1)}%` : 'N/A', sub: returnRateReliable ? `${fmt(amzSC.returnRate?.rollReturned || 0)} returned of ${fmt(amzSC.returnRate?.rollOrders || 0)} SC rev` : 'No reliable data', accent: returnRateReliable && (amzSC.returnRate?.pct || 0) > 18 ? '#7A1A1A' : undefined },
+                    { label: 'Return %', value: `${(amzSC.returnRate?.pct || 0).toFixed(1)}%`, sub: `${fmt(amzSC.returnRate?.rollReturned || 0)} return rev · ${fmt(amzSC.returnRate?.rollOrders || 0)} SC gross`, accent: (amzSC.returnRate?.pct || 0) > 18 ? '#7A1A1A' : undefined },
                   ].map(k => (
                     <div key={k.label} className="kpi-card" style={{ padding: '10px 13px', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
                       <div className="kpi-label">{k.label}</div>
@@ -5598,6 +5599,7 @@ function AmazonTab({ data, region = 'india', setRegion = () => {} }) {
                     { label: 'AOV', value: `₹${Math.round(intlAOV).toLocaleString('en-IN')}`, sub: 'Gross / Orders', badge: chgBadge(intlAOV, prevAOV) },
                     { label: 'ASP', value: `₹${intlASP.toLocaleString('en-IN')}`, sub: 'Gross / Units', badge: chgBadge(intlASP, prevASP) },
                     { label: 'Daily Avg Revenue', value: fmt(intlTotalRev / (data.nDays || 1)), sub: 'Gross per day', badge: chgBadge(intlTotalRev / (data.nDays||1), prevDailyAvg) },
+                    { label: 'Return %', value: `${(amzIntl.returnRate?.pct || 0).toFixed(1)}%`, sub: `${fmt(amzIntl.returnRate?.returnRev || 0)} return rev · ${fmt(amzIntl.returnRate?.totalRev || 0)} gross`, accent: (amzIntl.returnRate?.pct || 0) > 18 ? '#7A1A1A' : undefined },
                   ].map(k => (
                     <div key={k.label} className="kpi-card" style={{ padding: '10px 13px', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
                       <div className="kpi-label">{k.label}</div>
