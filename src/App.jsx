@@ -3499,8 +3499,8 @@ function AllTab({ data, rangeStart, rangeEnd }) {
   const [selectedCat, setSelectedCat] = useState(null)
   const [catView, setCatView] = useState('table')
   const [subCatView, setSubCatView] = useState('table')
-  const catRows = Object.entries(catMap).map(([k, v]) => { const orders = v.orders?.size ?? v.orders ?? 0; const prev = catPrevMap[k] || 0; return { name: k, rev: v.rev, excRev: v.excRev || 0, orders, units: v.units || 0, aov: orders ? v.rev / orders : 0, asp: (v.units || 0) ? v.rev / v.units : 0, mom: prev > 0 ? (v.rev - prev) / prev * 100 : null } }).sort((a, b) => b.rev - a.rev)
-  const allSubCatRows = Object.entries(subCatMap).map(([k, v]) => { const orders = v.orders?.size ?? v.orders ?? 0; const prev = subCatPrevMap[k] || 0; return { name: k.split('::')[1] || k, category: k.split('::')[0] || '', rev: v.rev, orders, units: v.units || 0, aov: orders ? v.rev / orders : 0, asp: (v.units || 0) ? v.rev / v.units : 0, mom: prev > 0 ? (v.rev - prev) / prev * 100 : null } }).sort((a, b) => b.rev - a.rev)
+  const catRows = Object.entries(catMap).map(([k, v]) => { const orders = v.orders?.size ?? v.orders ?? 0; const prev = catPrevMap[k] || 0; const aspU = v.aspUnits || v.units || 0; return { name: k, rev: v.rev, excRev: v.excRev || 0, orders, units: aspU, aov: orders ? v.rev / orders : 0, asp: aspU ? v.rev / aspU : 0, mom: prev > 0 ? (v.rev - prev) / prev * 100 : null } }).sort((a, b) => b.rev - a.rev)
+  const allSubCatRows = Object.entries(subCatMap).map(([k, v]) => { const orders = v.orders?.size ?? v.orders ?? 0; const prev = subCatPrevMap[k] || 0; const aspU = v.aspUnits || v.units || 0; return { name: k.split('::')[1] || k, category: k.split('::')[0] || '', rev: v.rev, orders, units: aspU, aov: orders ? v.rev / orders : 0, asp: aspU ? v.rev / aspU : 0, mom: prev > 0 ? (v.rev - prev) / prev * 100 : null } }).sort((a, b) => b.rev - a.rev)
   const subCatRows = selectedCat ? allSubCatRows.filter(r => r.category === selectedCat) : allSubCatRows
   const stateRows = Object.entries(stateMap).map(([k, v]) => ({ state: k, rev: v.rev, orders: v.orders, aov: v.orders ? v.rev / v.orders : 0, cities: v.cities.size, prevRev: statePrevMap[k] || 0 })).sort((a, b) => b.rev - a.rev)
   const bucketData = Object.entries(buckets).map(([k, v]) => ({ name: k, orders: v, rev: bucketRev[k] }))
@@ -3534,7 +3534,8 @@ function AllTab({ data, rangeStart, rangeEnd }) {
   const cancelCount = orders.filter(o => o.orderStatus === 'Cancelled' || o.isCancelled).length
   const fulfilmentBase = deliveredCount + rtoCount + cancelCount
   const fulfilmentRate = fulfilmentBase > 0 ? (deliveredCount / fulfilmentBase * 100) : 0
-  const unitsPerOrder = nOrders > 0 ? totalQty / nOrders : 0
+  const aspQtyAll = (typeof data.aspQty === 'number' && data.aspQty > 0) ? data.aspQty : totalQty
+  const unitsPerOrder = nOrders > 0 ? aspQtyAll / nOrders : 0
   const rtoOrders = (orderStatusMap['RTO'] || 0) + (orderStatusMap['Return'] || 0)
   const cirOrderCount = orderStatusMap['CIR'] || 0
   const returnPct = totalRev > 0 ? ((rtoRev + cirRev) / totalRev * 100) : 0
@@ -3581,7 +3582,7 @@ function AllTab({ data, rangeStart, rangeEnd }) {
               {yoyRev > 0 && (() => { const p = (totalRev - yoyRev) / yoyRev * 100; return <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 7px', borderRadius: 4, background: p >= 0 ? C.green.bg : C.red.bg, color: p >= 0 ? C.green.tx : C.red.tx }}>{p >= 0 ? '▲' : '▼'} {Math.abs(p).toFixed(1)}% <span style={{ fontWeight: 400, opacity: 0.7 }}>YoY</span></span> })()}
             </div>
           </div>
-          <div className="kpi-sub" style={{ fontSize: 13 }}>{nOrders >= 1000 ? (nOrders/1000).toFixed(1).replace(/\.0$/,'')+'k' : fmtN(nOrders)} orders · {totalQty >= 1000 ? (totalQty/1000).toFixed(1).replace(/\.0$/,'')+'k' : fmtN(totalQty)} units</div>
+          <div className="kpi-sub" style={{ fontSize: 13 }}>{nOrders >= 1000 ? (nOrders/1000).toFixed(1).replace(/\.0$/,'')+'k' : fmtN(nOrders)} orders · {aspQtyAll >= 1000 ? (aspQtyAll/1000).toFixed(1).replace(/\.0$/,'')+'k' : fmtN(aspQtyAll)} units</div>
           <div style={{ flex: 1, minHeight: 0 }}>
             <ResponsiveContainer width="100%" height="100%">
               <AreaChart data={sparkData} margin={{ top: 4, right: 0, bottom: 0, left: 0 }}>
@@ -3600,7 +3601,7 @@ function AllTab({ data, rangeStart, rangeEnd }) {
             { label: 'Return %', value: `${returnPct.toFixed(1)}%`, sub: `${fmt(rtoRev)} RTO · ${fmt(cirRev)} CIR`, accent: returnPct > 10 ? '#7A1A1A' : undefined, badge: (() => { if (!prevRev) return null; const prevRtoCirRev = (data.prevRtoRev || 0) + (data.prevCirRev || 0); const prev = prevRev > 0 ? prevRtoCirRev / prevRev * 100 : 0; if (!prev) return null; const p = (returnPct - prev) / prev * 100; return <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 4, background: p >= 0 ? C.red.bg : C.green.bg, color: p >= 0 ? C.red.tx : C.green.tx, flexShrink: 0 }}>{p >= 0 ? '▲' : '▼'} {Math.abs(p).toFixed(1)}%</span> })() },
             { label: 'AOV', value: `₹${Math.round(blendedAOV).toLocaleString('en-IN')}`, sub: `Gross rev ÷ orders`, badge: chgBadge(blendedAOV, prevAOV) },
             { label: 'Avg. Daily Gross Rev', value: fmt(totalRev / nDays), sub: `over ${nDays} days`, badge: chgBadge(totalRev / nDays, prevDailyAvg) },
-            { label: 'ASP', value: `₹${Math.round(asp).toLocaleString('en-IN')}`, sub: 'Gross rev ÷ units sold', badge: chgBadge(asp, prevASP) },
+            { label: 'ASP', value: `₹${Math.round(asp).toLocaleString('en-IN')}`, sub: 'Gross rev ÷ units sold (excl. COUP/DFA)', badge: chgBadge(asp, prevASP) },
             { label: 'GST Collected', value: fmt(gstCollected), sub: `${totalRev > 0 ? ((gstCollected / totalRev) * 100).toFixed(1) : 0}% of gross rev`, badge: chgBadge(gstCollected, prevGST) },
             { label: 'Revenue at Risk', value: fmt(atRiskRev), sub: `${totalRev > 0 ? (atRiskRev / totalRev * 100).toFixed(1) : 0}% of gross · RTO + Cancel + CIR`, accent: atRiskRev > 0 ? '#7A4000' : undefined, badge: (() => { const prevAtRiskEst = prevOrders > 0 ? (prevRtoOrders + prevCirOrders) / prevOrders * prevRev : 0; if (!prevAtRiskEst) return null; const p = (atRiskRev - prevAtRiskEst) / prevAtRiskEst * 100; return <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 4, background: p > 0 ? C.red.bg : C.green.bg, color: p > 0 ? C.red.tx : C.green.tx, flexShrink: 0 }}>{p > 0 ? '▲' : '▼'} {Math.abs(p).toFixed(1)}%</span> })() },
             { label: 'Units per Order', value: unitsPerOrder.toFixed(2), sub: 'Avg basket size', badge: chgBadge(unitsPerOrder, prevUPO) },
@@ -4252,8 +4253,8 @@ function ShopifyTab({ data, filters, setFilters }) {
   const [shTrendGroup, setShTrendGroup] = useState('daily')
   const [shCatView, setShCatView] = useState('table')
   const [shSubCatView, setShSubCatView] = useState('table')
-  const catRows = Object.entries(catMap).map(([k, v]) => { const orders = v.orders?.size ?? v.orders ?? 0; return { name: k, rev: v.rev, excRev: v.excRev || 0, orders, units: v.units || 0, aov: orders ? v.rev / orders : 0, asp: (v.units || 0) ? v.rev / v.units : 0 } }).sort((a, b) => b.rev - a.rev)
-  const allSubCatRows = Object.entries(subCatMap).map(([k, v]) => { const orders = v.orders?.size ?? v.orders ?? 0; return { name: k.split('::')[1] || k, category: k.split('::')[0] || '', rev: v.rev, orders, units: v.units || 0, aov: orders ? v.rev / orders : 0, asp: (v.units || 0) ? v.rev / v.units : 0 } }).sort((a, b) => b.rev - a.rev)
+  const catRows = Object.entries(catMap).map(([k, v]) => { const orders = v.orders?.size ?? v.orders ?? 0; const aspU = v.aspUnits || v.units || 0; return { name: k, rev: v.rev, excRev: v.excRev || 0, orders, units: aspU, aov: orders ? v.rev / orders : 0, asp: aspU ? v.rev / aspU : 0 } }).sort((a, b) => b.rev - a.rev)
+  const allSubCatRows = Object.entries(subCatMap).map(([k, v]) => { const orders = v.orders?.size ?? v.orders ?? 0; const aspU = v.aspUnits || v.units || 0; return { name: k.split('::')[1] || k, category: k.split('::')[0] || '', rev: v.rev, orders, units: aspU, aov: orders ? v.rev / orders : 0, asp: aspU ? v.rev / aspU : 0 } }).sort((a, b) => b.rev - a.rev)
   const subCatRows = selectedCat ? allSubCatRows.filter(r => r.category === selectedCat) : allSubCatRows
   const stateRows = (() => {
     const totalRevAll = sh.stateTotal?.rev || Object.values(stateMap).reduce((s, v) => s + (v.rev || 0), 0)
@@ -4446,7 +4447,7 @@ function ShopifyTab({ data, filters, setFilters }) {
             <div className="kpi-value" style={{ fontSize: 32, fontWeight: 800 }}>{fmt(totalRev)}</div>
             {shRevChg !== null && <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 7px', borderRadius: 4, background: shRevChg >= 0 ? C.green.bg : C.red.bg, color: shRevChg >= 0 ? C.green.tx : C.red.tx }}>{shRevChg >= 0 ? '▲' : '▼'} {Math.abs(shRevChg).toFixed(1)}%</span>}
           </div>
-          <div className="kpi-sub" style={{ fontSize: 13 }}>{shNOrders >= 1000 ? (shNOrders/1000).toFixed(1).replace(/\.0$/,'')+'k' : fmtN(shNOrders)} orders · {totalQty >= 1000 ? (totalQty/1000).toFixed(1).replace(/\.0$/,'')+'k' : fmtN(totalQty)} units</div>
+          <div className="kpi-sub" style={{ fontSize: 13 }}>{shNOrders >= 1000 ? (shNOrders/1000).toFixed(1).replace(/\.0$/,'')+'k' : fmtN(shNOrders)} orders · {shAspQty >= 1000 ? (shAspQty/1000).toFixed(1).replace(/\.0$/,'')+'k' : fmtN(shAspQty)} units</div>
           <div style={{ flex: 1, minHeight: 0 }}>
             <ResponsiveContainer width="100%" height="100%">
               <AreaChart data={shSparkData} margin={{ top: 4, right: 0, bottom: 0, left: 0 }}>
@@ -4479,7 +4480,7 @@ function ShopifyTab({ data, filters, setFilters }) {
             { label: 'GST Collected', value: fmt(gst), sub: grossAfterReturns > 0 ? `${((gst / grossAfterReturns) * 100).toFixed(1)}% of net sales` : '—', badge: shChgBadge(gst, prevGst) },
             { label: 'Avg. Daily Gross Rev', value: fmt(dailyAvg), sub: `over ${nDays} days`, badge: shChgBadge(dailyAvg, prevRev > 0 ? prevRev / nDays : 0) },
             { label: 'AOV', value: `₹${Math.round(aov).toLocaleString('en-IN')}`, sub: 'Gross rev ÷ orders', badge: shChgBadge(aov, prevOrders > 0 ? prevRev / prevOrders : 0) },
-            { label: 'ASP', value: `₹${Math.round(asp).toLocaleString('en-IN')}`, sub: 'Gross rev ÷ units sold', badge: shChgBadge(asp, prevUnits > 0 ? prevRev / prevUnits : 0) },
+            { label: 'ASP', value: `₹${Math.round(asp).toLocaleString('en-IN')}`, sub: 'Gross rev ÷ units sold (excl. COUP/DFA)', badge: shChgBadge(asp, prevUnits > 0 ? prevRev / prevUnits : 0) },
           ]
           const cancelRevPerOrder = cancelledOrders > 0 ? cancelledRev / cancelledOrders : 0
           const prevCancelPct = prevRev > 0 ? (prevCancelledOrders * cancelRevPerOrder) / prevRev * 100 : 0
