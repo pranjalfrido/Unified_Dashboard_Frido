@@ -1982,7 +1982,7 @@ function OverviewPage({ data, alerts, logisticsData }) {
         </div>
         <KPICard center label="Orders" value={fmtN(nOrders)} sub={<>{fmtN(totalQty)} units{delta(ordDelta)}</>} />
         <KPICard center label="Blended AOV" value={`₹${Math.round(blendedAOV).toLocaleString('en-IN')}`} sub={`${nDays} day period`} />
-        <KPICard center label="Shopify Customers" value={fmtN(nCusts)} sub={`${nCusts ? (repeatCusts / nCusts * 100).toFixed(1) : 0}% repeat`} />
+        <KPICard center label="D2C Customers" value={fmtN(nCusts)} sub={`${nCusts ? (repeatCusts / nCusts * 100).toFixed(1) : 0}% repeat`} />
         <KPICard center label="Net Revenue" value={fmt(netRevenueCalc)} sub="After returns & cancel, exc. GST" />
       </div>
 
@@ -2008,7 +2008,7 @@ function OverviewPage({ data, alerts, logisticsData }) {
                       {CHANNEL_LOGOS[ch]
                         ? <img src={CHANNEL_LOGOS[ch]} alt={ch} style={{ width: ch === 'offline_sales' ? 22 : 18, height: ch === 'offline_sales' ? 22 : 18, objectFit: 'contain', borderRadius: 4, flexShrink: 0, background: ch === 'CRED' ? '#1a1a1a' : '#f5f5f5', padding: ch === 'CRED' ? 2 : 0 }} />
                         : <span style={{ width: 18, height: 18, borderRadius: 4, background: C.ch[ch] || C.acc, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 8, fontWeight: 800, color: '#fff' }}>{ch.charAt(0)}</span>}
-                      <span style={{ fontWeight: 600, color: C.t1 }}>{ch === 'offline_sales' ? 'Offline Sales' : ch}</span>
+                      <span style={{ fontWeight: 600, color: C.t1 }}>{ch === 'offline_sales' ? 'Offline Sales' : ch === 'Shopify' ? 'D2C' : ch}</span>
                     </td>
                     <td style={{ padding: '6px 8px', textAlign: 'right', fontFamily: 'var(--mono)', color: C.t1 }}>{fmt(v.rev)}</td>
                     <td style={{ padding: '6px 8px', textAlign: 'right', color: C.t3 }}>{sharePct.toFixed(1)}%</td>
@@ -2031,7 +2031,7 @@ function OverviewPage({ data, alerts, logisticsData }) {
             const fkP = totalRev ? fkRev / totalRev * 100 : 0
             const othP = Math.max(0, 100 - d2cP - qcP - amzP - fkP)
             const segs = [
-              { pct: d2cP, bg: C.ch.Shopify, label: `Shopify ${d2cP.toFixed(0)}%` },
+              { pct: d2cP, bg: C.ch.Shopify, label: `D2C ${d2cP.toFixed(0)}%` },
               { pct: amzP, bg: C.ch.Amazon, label: `Amazon ${amzP.toFixed(0)}%` },
               { pct: fkP, bg: C.ch.Flipkart, label: `Flipkart ${fkP.toFixed(0)}%` },
               { pct: qcP, bg: '#0D9E68', label: `QC ${qcP.toFixed(0)}%` },
@@ -2071,7 +2071,7 @@ function OverviewPage({ data, alerts, logisticsData }) {
             ))}
           </div>
           <div style={{ borderTop: `1px solid ${C.border}`, paddingTop: 12 }}>
-            <div style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.05em', color: C.t3, marginBottom: 8 }}>Shopify Category · Cancel & RTO %</div>
+            <div style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.05em', color: C.t3, marginBottom: 8 }}>D2C Category · Cancel & RTO %</div>
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11 }}>
               <thead><tr>
                 {['Category','Revenue','Cancel %','RTO %'].map((h, i) => <th key={h} style={{ fontSize: 9, fontWeight: 700, textTransform: 'uppercase', color: C.t3, textAlign: i === 0 ? 'left' : 'right', padding: '2px 4px 6px', borderBottom: `1px solid ${C.border}` }}>{h}</th>)}
@@ -2254,7 +2254,7 @@ function OverviewPage({ data, alerts, logisticsData }) {
 // ── Sales sub-tabs ────────────────────────────────────────────
 const TABS = [
   { id: 'all', label: 'All Channels' },
-  { id: 'shopify', label: 'Shopify', ch: 'Shopify', logo: '/logo-shopify.png' },
+  { id: 'shopify', label: 'D2C', ch: 'Shopify', logo: '/logo-shopify.png' },
   { id: 'ebo', label: 'EBO', ch: 'EBO', logo: '/logo-shopify.png' },
   { id: 'amazon', label: 'Amazon', ch: 'Amazon', logo: '/logo-amazon.png' },
   { id: 'flipkart', label: 'Flipkart', ch: 'Flipkart', logo: '/logo-flipkart.png' },
@@ -2461,7 +2461,7 @@ function ChannelTrendCard({ dailyArr, channels, rangeStart, rangeEnd }) {
         </div>
         {chEntries.map(({ ch, val }) => (
           <div key={ch} style={{ display: 'flex', justifyContent: 'space-between', gap: 16, color: C.t2, marginBottom: 2 }}>
-            <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}><span style={{ width: 8, height: 8, borderRadius: '50%', background: C.ch[ch] || C.acc, display: 'inline-block', flexShrink: 0 }} />{ch === 'offline_sales' ? 'Offline Sales' : ch}</span>
+            <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}><span style={{ width: 8, height: 8, borderRadius: '50%', background: C.ch[ch] || C.acc, display: 'inline-block', flexShrink: 0 }} />{ch === 'offline_sales' ? 'Offline Sales' : ch === 'Shopify' ? 'D2C' : ch}</span>
             <span style={{ fontFamily: 'var(--mono)', color: C.t1 }}>{fmtV(val)}</span>
           </div>
         ))}
@@ -2666,7 +2666,7 @@ function DailyChannelTable({ dailyArr, channels, nDays = 7, rangeStart, rangeEnd
           <thead style={{ position: 'sticky', top: 0, zIndex: 2 }}>
             <tr>
               <th style={{ ...thStyle(null), textAlign: 'left', minWidth: 110 }}>Period</th>
-              {channels.map(ch => <th key={ch} style={thStyle(ch)}>{ch === 'offline_sales' ? 'Offline Sales' : ch}</th>)}
+              {channels.map(ch => <th key={ch} style={thStyle(ch)}>{ch === 'offline_sales' ? 'Offline Sales' : ch === 'Shopify' ? 'D2C' : ch}</th>)}
               <th style={thStyle(null)}>Total</th>
             </tr>
           </thead>
@@ -2781,7 +2781,7 @@ function CategoryChannelMatrix({ heatData, channels, maxHeat, subCatChannelMap =
           <thead style={{ position: 'sticky', top: 0, background: C.card, zIndex: 1 }}>
             <tr>
               <th style={{ textAlign: 'left', padding: '5px 8px 7px', borderBottom: `2px solid ${C.border}`, color: C.t1, fontSize: 11, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '.05em' }}>Category</th>
-              {channels.map(ch => <th key={ch} style={{ textAlign: 'right', padding: '5px 8px 7px', borderBottom: `2px solid ${C.border}`, borderLeft: `1px solid ${C.border}`, color: C.t1, fontSize: 11, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '.05em', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{ch === 'offline_sales' ? 'Offline Sales' : ch}</th>)}
+              {channels.map(ch => <th key={ch} style={{ textAlign: 'right', padding: '5px 8px 7px', borderBottom: `2px solid ${C.border}`, borderLeft: `1px solid ${C.border}`, color: C.t1, fontSize: 11, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '.05em', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{ch === 'offline_sales' ? 'Offline Sales' : ch === 'Shopify' ? 'D2C' : ch}</th>)}
               <th style={{ textAlign: 'right', padding: '5px 8px 7px', borderBottom: `2px solid ${C.border}`, borderLeft: `1px solid ${C.border}`, color: C.t1, fontSize: 11, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '.05em' }}>Total</th>
             </tr>
           </thead>
@@ -3636,7 +3636,7 @@ function AllTab({ data, rangeStart, rangeEnd }) {
                   {CHANNEL_LOGOS[ch]
                     ? <img src={CHANNEL_LOGOS[ch]} alt={ch} style={{ width: ch === 'offline_sales' ? 22 : 18, height: ch === 'offline_sales' ? 22 : 18, objectFit: 'contain', borderRadius: 4, flexShrink: 0, background: ch === 'CRED' ? '#1a1a1a' : '#f5f5f5', padding: ch === 'CRED' ? 2 : 0 }} />
                     : <span style={{ width: 18, height: 18, borderRadius: 4, background: C.ch[ch] || C.acm, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 8, fontWeight: 800, color: '#fff' }}>{ch.charAt(0)}</span>}
-                  <span style={{ fontSize: 12, color: C.t2, width: 90, flexShrink: 0 }}>{ch === 'offline_sales' ? 'Offline Sales' : ch}</span>
+                  <span style={{ fontSize: 12, color: C.t2, width: 90, flexShrink: 0 }}>{ch === 'offline_sales' ? 'Offline Sales' : ch === 'Shopify' ? 'D2C' : ch}</span>
                   <div style={{ flex: 1, height: 5, background: C.bg, borderRadius: 3 }}>
                     <div style={{ height: '100%', borderRadius: 3, background: C.ch[ch] || C.acm, width: `${(netRev / maxChNetRev) * 100}%`, transition: 'width .5s' }} />
                   </div>
@@ -4094,7 +4094,7 @@ function ShopifyReturnReasonsTable({ reasons = [] }) {
   }
 
   return (
-    <Card title="Return Reasons · Shopify" note={`${sortedReasons.length} reasons · ${grandTotal.toLocaleString('en-IN')} orders`}>
+    <Card title="Return Reasons · D2C" note={`${sortedReasons.length} reasons · ${grandTotal.toLocaleString('en-IN')} orders`}>
       <div style={{ overflowX: 'auto', overflowY: 'auto', maxHeight: 500 }}>
         <table style={{ borderCollapse: 'collapse', fontSize: 11, minWidth: '100%' }}>
           <thead style={{ position: 'sticky', top: 0, zIndex: 2 }}>
@@ -4612,7 +4612,7 @@ function ShopifyTab({ data, filters, setFilters }) {
       </div>
       {/* Category Revenue Matrix · Shopify */}
       {isIntl
-        ? <Card title="Category Revenue Matrix · Shopify International"><div style={{ fontSize: 12, color: C.t3, padding: '10px 0', textAlign: 'center' }}>Category breakdown not available for International orders</div></Card>
+        ? <Card title="Category Revenue Matrix · D2C International"><div style={{ fontSize: 12, color: C.t3, padding: '10px 0', textAlign: 'center' }}>Category breakdown not available for International orders</div></Card>
         : (() => {
         const pick = v => ({ rev: v.rev || 0, excRev: v.excRev || 0, units: v.units || 0, orders: v.orders, cancelled: v.cancelled || 0, rto: v.rto || 0, cir: v.cir || 0, exch: v.exch || 0, cancelRev: v.cancelRev || 0, rtoRev: v.rtoRev || 0, cirRev: v.cirRev || 0, exchRev: v.exchRev || 0 })
         const catData = {}
@@ -4631,7 +4631,7 @@ function ShopifyTab({ data, filters, setFilters }) {
             Object.entries(skuMap_).forEach(([sku, v]) => { skuData[cat][sc][sku] = pick(v) })
           })
         })
-        return <FinancialCategoryMatrix catData={catData} subCatData={subCatData} skuData={skuData} title="Category Revenue Matrix · Shopify India" neutral={true} showShare={true} catPrevMap={sh.catPrevMap || {}} subCatPrevMap={sh.subCatPrevMap || {}} skuPrevMap={sh.skuPrevMap || {}} />
+        return <FinancialCategoryMatrix catData={catData} subCatData={subCatData} skuData={skuData} title="Category Revenue Matrix · D2C India" neutral={true} showShare={true} catPrevMap={sh.catPrevMap || {}} subCatPrevMap={sh.subCatPrevMap || {}} skuPrevMap={sh.skuPrevMap || {}} />
       })()}
       {false && <div className="g-2" style={{ alignItems: 'stretch' }}>
         {(() => {
@@ -6695,7 +6695,7 @@ function AdsTab({ data }) {
           const cols = isD2C ? 6 : 5
           const row1Items = [
             { label: 'Total Spend', value: fmt(totalSpend), badge: chgBadge(totalSpend, prevSpend), sub: 'Ad spend incl. all platforms' },
-            { label: 'Net Revenue', value: fmt(totalRevenue), badge: chgBadge(totalRevenue, prevRevenue), sub: isD2C ? 'Shopify net exc. GST (Meta+Google)' : selPlatform ? `${selPlatform === 'Meta' || selPlatform === 'Google' ? 'Shopify (spend-split)' : selPlatform} net exc. GST` : 'All channels net exc. GST' },
+            { label: 'Net Revenue', value: fmt(totalRevenue), badge: chgBadge(totalRevenue, prevRevenue), sub: isD2C ? 'D2C net exc. GST (Meta+Google)' : selPlatform ? `${selPlatform === 'Meta' || selPlatform === 'Google' ? 'D2C (spend-split)' : selPlatform} net exc. GST` : 'All channels net exc. GST' },
             { label: 'Overall ROAS', value: `${overallRoas.toFixed(2)}x`, badge: chgBadge(overallRoas, prevRoas), sub: 'Net rev / Spend', roasVal: overallRoas },
             { label: 'Total Clicks', value: fmtBig(totalClicks), badge: chgBadge(totalClicks, prevClicks), sub: 'Across all platforms' },
             { label: 'Impressions', value: fmtBig(totalImpressions), badge: chgBadge(totalImpressions, prevImpressions), sub: 'Total ad impressions' },
@@ -6707,7 +6707,7 @@ function AdsTab({ data }) {
             { label: 'Orders', value: fmtN(currentOrders), sub: 'Distinct orders', badge: chgBadge(currentOrders, prevOrders) },
             { label: 'Cost Per Order', value: costPerOrder > 0 ? `₹${Math.round(costPerOrder).toLocaleString('en-IN')}` : '—', sub: 'Spend / Orders', badge: chgBadge(prevCpo, costPerOrder) },
             ...(!selPlatform || isD2C || selPlatform === 'Meta' || selPlatform === 'Google'
-              ? [{ label: 'CAC (Shopify)', value: cac > 0 ? `₹${Math.round(cac).toLocaleString('en-IN')}` : '—', sub: `Spend / ${fmtN(shopifyNewCustomers)} new custs`, badge: chgBadge(prevCac, cac) }]
+              ? [{ label: 'CAC (D2C)', value: cac > 0 ? `₹${Math.round(cac).toLocaleString('en-IN')}` : '—', sub: `Spend / ${fmtN(shopifyNewCustomers)} new custs`, badge: chgBadge(prevCac, cac) }]
               : [{ label: 'CPM', value: overallCpm > 0 ? `₹${Math.round(overallCpm).toLocaleString('en-IN')}` : '—', sub: 'Cost per 1K impressions', badge: chgBadge(prevCpm, overallCpm) }]),
             ...(isD2C ? [{ label: 'Google Spend', value: fmt(d2cGoogleSpend), badge: chgBadge(d2cGoogleSpend, d2cPrevGoogleSpend), sub: 'Google ad spend', accentColor: '#34A853' }] : []),
           ]
