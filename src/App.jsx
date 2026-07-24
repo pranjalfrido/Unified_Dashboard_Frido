@@ -3466,11 +3466,11 @@ function RegionTierDonutRow({ regionRows, tierRows }) {
           </ResponsiveContainer>
           <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 0 }}>
             {data.map((d, i) => (
-              <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '2px 0' }}>
-                <span style={{ width: 8, height: 8, borderRadius: '50%', background: d.color, flexShrink: 0 }} />
-                <span style={{ fontSize: 11, color: C.t2, flex: 1 }}>{d.name}</span>
-                <span style={{ fontSize: 11, fontWeight: 700, color: C.t1, fontFamily: 'var(--mono)' }}>{metricFmt(d.value, metric)}</span>
-                <span style={{ fontSize: 10, color: C.t3, minWidth: 34, textAlign: 'right' }}>{total ? (d.value / total * 100).toFixed(1) : 0}%</span>
+              <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '1px 0' }}>
+                <span style={{ width: 7, height: 7, borderRadius: '50%', background: d.color, flexShrink: 0 }} />
+                <span style={{ fontSize: 10.5, color: C.t2, flex: 1 }}>{d.name}</span>
+                <span style={{ fontSize: 10.5, fontWeight: 700, color: C.t1, fontFamily: 'var(--mono)' }}>{metricFmt(d.value, metric)}</span>
+                <span style={{ fontSize: 9.5, color: C.t3, minWidth: 32, textAlign: 'right' }}>{total ? (d.value / total * 100).toFixed(1) : 0}%</span>
               </div>
             ))}
           </div>
