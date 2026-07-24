@@ -2255,7 +2255,7 @@ function OverviewPage({ data, alerts, logisticsData }) {
 const TABS = [
   { id: 'all', label: 'All Channels' },
   { id: 'shopify', label: 'D2C', ch: 'Shopify', logo: '/logo-shopify.png' },
-  { id: 'ebo', label: 'EBO', ch: 'EBO', logo: '/logo-shopify.png' },
+  { id: 'ebo', label: 'EBO', ch: 'EBO', logo: '/ebo.png' },
   { id: 'amazon', label: 'Amazon', ch: 'Amazon', logo: '/logo-amazon.png' },
   { id: 'flipkart', label: 'Flipkart', ch: 'Flipkart', logo: '/logo-flipkart.png' },
   { id: 'blinkit', label: 'Blinkit', ch: 'Blinkit', logo: '/logo-blinkit.png' },
