@@ -93,7 +93,7 @@ export default async function handler(req, res) {
     prevShNetCalc: subChannel === 'International'
       ? (() => { const cWhere = country ? ` AND source_system = '${country.replace(/'/g,"''")}'` : ''; return `SELECT SUM(final_total_incl_tax) AS gross, SUM(total_excl_tax) AS exc_rev, 0 AS cancel_rev, 0 AS rto_rev, 0 AS return_rev, 0 AS cir_rev, 0 AS exch_rev, 0 AS exch_orders FROM \`frido-429506.production.fact_shopify_international_orders\` WHERE order_date BETWEEN '${ps}' AND '${pe}' AND (financial_status IS NULL OR financial_status != 'voided')${cWhere}` })()
       : `WITH q AS (${prevBase}) SELECT SUM(SellingPrice_Inc_GST) AS gross, SUM(SellingPrice_Exc_GST) AS exc_rev, SUM(CASE WHEN Order_Status='Cancelled' THEN SellingPrice_Inc_GST ELSE 0 END) AS cancel_rev, SUM(CASE WHEN Order_Status='RTO' THEN SellingPrice_Inc_GST ELSE 0 END) AS rto_rev, SUM(CASE WHEN Order_Status='Return' THEN SellingPrice_Inc_GST ELSE 0 END) AS return_rev, SUM(CASE WHEN Order_Status='CIR' THEN SellingPrice_Inc_GST ELSE 0 END) AS cir_rev, SUM(CASE WHEN Order_Status='Exchange' THEN SellingPrice_Inc_GST ELSE 0 END) AS exch_rev, COUNT(DISTINCT CASE WHEN Order_Status='Exchange' THEN OrderId END) AS exch_orders FROM q WHERE Channel='Shopify' AND SubChannel != 'Shopify International' AND SubChannel != 'Retail Store'`,
-    byDate: `WITH q AS (${base}) SELECT CAST(OrderDate AS STRING) AS date, Channel, SUM(SellingPrice_Inc_GST) AS rev, COUNT(DISTINCT OrderId) AS orders, SUM(ItemQty) AS units, SUM(CASE WHEN Order_Status NOT IN ('Cancelled','RTO','Return','CIR') THEN SellingPrice_Exc_GST ELSE 0 END) AS net_exc_rev FROM q GROUP BY date, Channel ORDER BY date`,
+    byDate: `WITH q AS (${base}) SELECT CAST(OrderDate AS STRING) AS date, Channel, SubChannel, SUM(SellingPrice_Inc_GST) AS rev, COUNT(DISTINCT OrderId) AS orders, SUM(ItemQty) AS units, SUM(CASE WHEN Order_Status NOT IN ('Cancelled','RTO','Return','CIR') THEN SellingPrice_Exc_GST ELSE 0 END) AS net_exc_rev FROM q GROUP BY date, Channel, SubChannel ORDER BY date`,
     byCategory: `WITH q AS (${base}) SELECT Category, COUNT(DISTINCT OrderId) AS orders, SUM(SellingPrice_Inc_GST) AS rev, SUM(SellingPrice_Exc_GST) AS exc_rev, SUM(ItemQty) AS units, SUM(CASE WHEN UPPER(COALESCE(MasterSKU,'')) NOT LIKE '%COUP%' AND UPPER(COALESCE(MasterSKU,'')) NOT LIKE '%DFA%' THEN ItemQty ELSE 0 END) AS asp_units FROM q GROUP BY Category ORDER BY rev DESC`,
     byState: `WITH q AS (${base}) SELECT CASE WHEN TRIM(State) IS NULL OR TRIM(State) IN ('','-') THEN 'OTHERS' ELSE UPPER(TRIM(State)) END AS state, COUNT(DISTINCT OrderId) AS orders, SUM(SellingPrice_Inc_GST) AS rev, COUNT(DISTINCT City) AS cities FROM q WHERE State IS NOT NULL GROUP BY 1 ORDER BY rev DESC LIMIT 30`,
     shCategory: `WITH q AS (${base}) SELECT Category, COUNT(DISTINCT OrderId) AS orders, SUM(SellingPrice_Inc_GST) AS rev, SUM(SellingPrice_Exc_GST) AS exc_rev, SUM(ItemQty) AS units, SUM(CASE WHEN UPPER(COALESCE(MasterSKU,'')) NOT LIKE '%COUP%' AND UPPER(COALESCE(MasterSKU,'')) NOT LIKE '%DFA%' THEN ItemQty ELSE 0 END) AS asp_units, COUNT(DISTINCT CASE WHEN Order_Status='Cancelled' THEN OrderId END) AS cancelled, COUNT(DISTINCT CASE WHEN Order_Status IN ('RTO','Return') THEN OrderId END) AS rto, COUNT(DISTINCT CASE WHEN Order_Status='CIR' THEN OrderId END) AS cir, COUNT(DISTINCT CASE WHEN Order_Status='Exchange' THEN OrderId END) AS exch, SUM(CASE WHEN Order_Status='Cancelled' THEN SellingPrice_Inc_GST ELSE 0 END) AS cancel_rev, SUM(CASE WHEN Order_Status IN ('RTO','Return') THEN SellingPrice_Inc_GST ELSE 0 END) AS rto_rev, SUM(CASE WHEN Order_Status='CIR' THEN SellingPrice_Inc_GST ELSE 0 END) AS cir_rev, SUM(CASE WHEN Order_Status='Exchange' THEN SellingPrice_Inc_GST ELSE 0 END) AS exch_rev FROM q WHERE Channel='Shopify' AND SubChannel != 'Retail Store' GROUP BY Category ORDER BY rev DESC`,
@@ -408,10 +408,15 @@ export default async function handler(req, res) {
     const dailyArr = dateSet.map(date => {
       const entry = { date }
       r.byDate.filter(x => x.date === date).forEach(x => {
-        entry[x.Channel] = parseFloat(x.rev) || 0
-        entry[x.Channel + '_net'] = parseFloat(x.net_exc_rev) || 0
-        entry[x.Channel + '_o'] = parseInt(x.orders) || 0
-        entry[x.Channel + '_u'] = parseInt(x.units) || 0
+        const key = (x.Channel === 'Shopify' && x.SubChannel === 'Retail Store') ? 'EBO' : x.Channel
+        const rev = parseFloat(x.rev) || 0
+        const net = parseFloat(x.net_exc_rev) || 0
+        const ord = parseInt(x.orders) || 0
+        const uni = parseInt(x.units) || 0
+        entry[key] = (entry[key] || 0) + rev
+        entry[key + '_net'] = (entry[key + '_net'] || 0) + net
+        entry[key + '_o'] = (entry[key + '_o'] || 0) + ord
+        entry[key + '_u'] = (entry[key + '_u'] || 0) + uni
       })
       return entry
     })
