@@ -3445,11 +3445,13 @@ function RegionTierDonutRow({ regionRows, tierRows }) {
 
   const regionData = regionRows.map((r, i) => ({ name: r.region, value: metricVal(r, regionMetric), color: REGION_COLORS[i % REGION_COLORS.length], raw: r }))
   const TIER_NAMES = { '1': 'Tier I', '2': 'Tier II', '3': 'Tier III', 'I': 'Tier I', 'II': 'Tier II', 'III': 'Tier III' }
-  const tierData = tierRows.map((r, i) => {
+  const TIER_ORDER = { 'Tier I': 0, 'Tier II': 1, 'Tier III': 2 }
+  const tierData = tierRows.map(r => {
     const key = String(r.tier).replace(/^tier\s*/i, '').trim()
     const name = TIER_NAMES[key] || r.label || `Tier ${key}`
-    return { name, value: metricVal(r, tierMetric), color: TIER_COLORS[i % TIER_COLORS.length], raw: r }
-  })
+    return { name, value: metricVal(r, tierMetric), raw: r }
+  }).sort((a, b) => (TIER_ORDER[a.name] ?? 9) - (TIER_ORDER[b.name] ?? 9))
+    .map((d, i) => ({ ...d, color: TIER_COLORS[i % TIER_COLORS.length] }))
 
   const DonutCard = ({ title, data, metric, setMetric }) => {
     const total = data.reduce((s, d) => s + d.value, 0)
@@ -3934,8 +3936,9 @@ function ShopifyGeoDonutRow({ regionRows, tierRows, topStates, allStateRows, use
   }
 
   const TIER_NAMES = { '1': 'Tier I', '2': 'Tier II', '3': 'Tier III', 'I': 'Tier I', 'II': 'Tier II', 'III': 'Tier III' }
+  const TIER_ORDER2 = { 'Tier I': 0, 'Tier II': 1, 'Tier III': 2 }
   const regionData = regionRows.map((r, i) => ({ name: r.region, value: metricVal(r, metric) }))
-  const tierData = tierRows.map(r => { const key = String(r.tier).replace(/^tier\s*/i, '').trim(); return { name: TIER_NAMES[key] || r.label || `Tier ${key}`, value: metricVal(r, metric) } })
+  const tierData = tierRows.map(r => { const key = String(r.tier).replace(/^tier\s*/i, '').trim(); return { name: TIER_NAMES[key] || r.label || `Tier ${key}`, value: metricVal(r, metric) } }).sort((a, b) => (TIER_ORDER2[a.name] ?? 9) - (TIER_ORDER2[b.name] ?? 9))
   const stateData = topStates.map(r => ({ name: r.name ? r.name.charAt(0).toUpperCase() + r.name.slice(1).toLowerCase() : r.name, value: metricVal(r, metric) }))
   const allStateGrandTotal = (allStateRows || []).reduce((s, r) => s + metricVal(r, metric), 0) || null
 
