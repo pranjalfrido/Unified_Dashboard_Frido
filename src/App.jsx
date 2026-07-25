@@ -3500,12 +3500,16 @@ function AllTab({ data, rangeStart, rangeEnd }) {
   const [selectedCat, setSelectedCat] = useState(null)
   const [catView, setCatView] = useState('table')
   const [subCatView, setSubCatView] = useState('table')
-  const catRows = Object.entries(catMap).map(([k, v]) => { const orders = v.orders?.size ?? v.orders ?? 0; const prev = catPrevMap[k] || 0; const aspU = v.aspUnits || v.units || 0; return { name: k, rev: v.rev, excRev: v.excRev || 0, orders, units: aspU, aov: orders ? v.rev / orders : 0, asp: aspU ? v.rev / aspU : 0, mom: prev > 0 ? (v.rev - prev) / prev * 100 : null } }).sort((a, b) => b.rev - a.rev)
-  const allSubCatRows = Object.entries(subCatMap).map(([k, v]) => { const orders = v.orders?.size ?? v.orders ?? 0; const prev = subCatPrevMap[k] || 0; const aspU = v.aspUnits || v.units || 0; return { name: k.split('::')[1] || k, category: k.split('::')[0] || '', rev: v.rev, orders, units: aspU, aov: orders ? v.rev / orders : 0, asp: aspU ? v.rev / aspU : 0, mom: prev > 0 ? (v.rev - prev) / prev * 100 : null } }).sort((a, b) => b.rev - a.rev)
-  const subCatRows = selectedCat ? allSubCatRows.filter(r => r.category === selectedCat) : allSubCatRows
+  const [catSearch, setCatSearch] = useState('')
+  const [subCatSearch, setSubCatSearch] = useState('')
+  const allCatRows = Object.entries(catMap).map(([k, v]) => { const orders = v.orders?.size ?? v.orders ?? 0; const prev = catPrevMap[k] || 0; const aspU = v.aspUnits || v.units || 0; return { name: k, rev: v.rev, excRev: v.excRev || 0, orders, units: aspU, aov: orders ? v.rev / orders : 0, asp: aspU ? v.rev / aspU : 0, mom: prev > 0 ? (v.rev - prev) / prev * 100 : null } }).sort((a, b) => b.rev - a.rev)
+  const catRows = catSearch ? allCatRows.filter(r => r.name.toLowerCase().includes(catSearch.toLowerCase())) : allCatRows
+  const allSubCatRowsRaw = Object.entries(subCatMap).map(([k, v]) => { const orders = v.orders?.size ?? v.orders ?? 0; const prev = subCatPrevMap[k] || 0; const aspU = v.aspUnits || v.units || 0; return { name: k.split('::')[1] || k, category: k.split('::')[0] || '', rev: v.rev, orders, units: aspU, aov: orders ? v.rev / orders : 0, asp: aspU ? v.rev / aspU : 0, mom: prev > 0 ? (v.rev - prev) / prev * 100 : null } }).sort((a, b) => b.rev - a.rev)
+  const allSubCatRows = selectedCat ? allSubCatRowsRaw.filter(r => r.category === selectedCat) : allSubCatRowsRaw
+  const subCatRows = subCatSearch ? allSubCatRows.filter(r => r.name.toLowerCase().includes(subCatSearch.toLowerCase())) : allSubCatRows
   const stateRows = Object.entries(stateMap).map(([k, v]) => ({ state: k, rev: v.rev, orders: v.orders, aov: v.orders ? v.rev / v.orders : 0, cities: v.cities.size, prevRev: statePrevMap[k] || 0 })).sort((a, b) => b.rev - a.rev)
   const bucketData = Object.entries(buckets).map(([k, v]) => ({ name: k, orders: v, rev: bucketRev[k] }))
-  const allCats = catRows.map(r => r.name)
+  const allCats = allCatRows.map(r => r.name)
   const heatData = allCats.map(cat => {
     const row = { cat }
     channels.forEach(ch => { row[ch] = catChannelMap[cat]?.[ch] || 0 })
@@ -3663,7 +3667,8 @@ function AllTab({ data, rangeStart, rangeEnd }) {
           const FIXED_H = 420
           return (
             <Card title="Category Revenue" note={selectedCat ? <span style={{ cursor: 'pointer', color: C.acc, fontWeight: 600 }} onClick={() => setSelectedCat(null)}>✕ Clear</span> : `${catRows.length} total`}
-              action={<div style={{ display: 'flex', gap: 4 }}>
+              action={<div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                <input value={catSearch} onChange={e => setCatSearch(e.target.value)} placeholder="Search…" style={{ width: 110, padding: '3px 8px', border: `1px solid ${C.border}`, borderRadius: 6, fontSize: 11, color: C.t1, background: C.bg, outline: 'none' }} />
                 <button style={btnStyle('table')} onClick={() => setCatView('table')}>Table</button>
                 <button style={btnStyle('bar')} onClick={() => setCatView('bar')}>Chart</button>
               </div>}>
@@ -3700,7 +3705,8 @@ function AllTab({ data, rangeStart, rangeEnd }) {
           const FIXED_H = 420
           return (
             <Card title={selectedCat ? `Sub-categories · ${selectedCat}` : 'Sub-categories'} note={`${subCatRows.length} total`}
-              action={<div style={{ display: 'flex', gap: 4 }}>
+              action={<div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                <input value={subCatSearch} onChange={e => setSubCatSearch(e.target.value)} placeholder="Search…" style={{ width: 110, padding: '3px 8px', border: `1px solid ${C.border}`, borderRadius: 6, fontSize: 11, color: C.t1, background: C.bg, outline: 'none' }} />
                 <button style={btnStyle('table')} onClick={() => setSubCatView('table')}>Table</button>
                 <button style={btnStyle('bar')} onClick={() => setSubCatView('bar')}>Chart</button>
               </div>}>
