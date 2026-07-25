@@ -2718,10 +2718,31 @@ function CategoryChannelMatrix({ heatData, channels, maxHeat, subCatChannelMap =
   const [expanded, setExpanded] = useState({})
   const [expandedSC, setExpandedSC] = useState({})
   const [search, setSearch] = useState('')
-  const toggle = cat => setExpanded(prev => ({ ...prev, [cat]: !prev[cat] }))
-  const toggleSC = key => setExpandedSC(prev => ({ ...prev, [key]: !prev[key] }))
 
   const q = search.trim().toLowerCase()
+
+  const autoExpanded = q ? new Set(
+    (q ? heatData.filter(row => {
+      if (row.cat.toLowerCase().includes(q)) return true
+      const subCats = subCatChannelMap[row.cat] || {}
+      for (const sc of Object.keys(subCats)) {
+        if (sc.toLowerCase().includes(q)) return true
+        const skus = skuChannelMap[row.cat]?.[sc] || {}
+        for (const sku of Object.keys(skus)) { if (sku.toLowerCase().includes(q)) return true }
+      }
+      return false
+    }) : heatData).map(r => r.cat)
+  ) : null
+
+  const isOpen = cat => q ? (expanded[cat] === false ? false : autoExpanded?.has(cat)) : expanded[cat]
+  const isScOpen = key => {
+    if (!q) return expandedSC[key]
+    if (expandedSC[key] === false) return false
+    return true
+  }
+
+  const toggle = cat => setExpanded(prev => ({ ...prev, [cat]: !isOpen(cat) }))
+  const toggleSC = key => setExpandedSC(prev => ({ ...prev, [key]: !isScOpen(key) }))
 
   const highlight = text => {
     if (!q) return text
@@ -2743,21 +2764,6 @@ function CategoryChannelMatrix({ heatData, channels, maxHeat, subCatChannelMap =
     }
     return false
   }) : heatData
-
-  const autoExpanded = q ? new Set(filteredHeatData.map(r => r.cat)) : null
-  const autoExpandedSC = q ? new Set(
-    filteredHeatData.flatMap(row => {
-      const subCats = subCatChannelMap[row.cat] || {}
-      return Object.keys(subCats).filter(sc => {
-        if (sc.toLowerCase().includes(q)) return true
-        const skus = skuChannelMap[row.cat]?.[sc] || {}
-        return Object.keys(skus).some(sku => sku.toLowerCase().includes(q))
-      }).map(sc => `${row.cat}::${sc}`)
-    })
-  ) : null
-
-  const isOpen = cat => q ? autoExpanded?.has(cat) : expanded[cat]
-  const isScOpen = key => q ? autoExpandedSC?.has(key) : expandedSC[key]
 
   const renderCell = (v, rowTotal) => {
     const intensity = rowTotal > 0 ? v / rowTotal : 0
