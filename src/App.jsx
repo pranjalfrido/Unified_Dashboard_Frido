@@ -3904,10 +3904,10 @@ function ShopifyGeoDonutRow({ regionRows, tierRows, topStates, allStateRows, use
   const selStyle = active => ({ fontSize: 10, fontWeight: active ? 700 : 500, padding: '2px 8px', borderRadius: 4, border: `1px solid ${active ? C.acm : C.border}`, background: active ? C.acc : 'transparent', color: C.t1, cursor: 'pointer', fontFamily: 'var(--font)' })
 
   // Horizontal-bar breakdown: label on left, colored bar in middle, value + % on right.
-  const HBarBreakdown = ({ title, data, colors, grandTotal }) => {
+  const HBarBreakdown = ({ title, data, colors, grandTotal, noSort }) => {
     const total = grandTotal || data.reduce((s, d) => s + d.value, 0)
-    const sorted = [...data].sort((a, b) => b.value - a.value)
-    const maxVal = sorted[0]?.value || 1
+    const sorted = noSort ? [...data] : [...data].sort((a, b) => b.value - a.value)
+    const maxVal = Math.max(...sorted.map(d => d.value), 1)
     const labelWidth = 72
     return (
       <div style={{ flex: 1, minWidth: 0 }}>
@@ -3953,7 +3953,7 @@ function ShopifyGeoDonutRow({ regionRows, tierRows, topStates, allStateRows, use
       }>
         <div style={{ display: 'flex', gap: 24 }}>
           {regionData.length > 0 && <HBarBreakdown title="By Region" data={regionData} colors={REGION_COLORS} />}
-          {tierData.length > 0 && <HBarBreakdown title="By City Tier" data={tierData} colors={TIER_COLORS} />}
+          {tierData.length > 0 && <HBarBreakdown title="By City Tier" data={tierData} colors={TIER_COLORS} noSort />}
         </div>
       </Card>
     </div>
