@@ -2721,24 +2721,35 @@ function CategoryChannelMatrix({ heatData, channels, maxHeat, subCatChannelMap =
 
   const q = search.trim().toLowerCase()
 
-  const autoExpanded = q ? new Set(
-    (q ? heatData.filter(row => {
-      if (row.cat.toLowerCase().includes(q)) return true
-      const subCats = subCatChannelMap[row.cat] || {}
-      for (const sc of Object.keys(subCats)) {
-        if (sc.toLowerCase().includes(q)) return true
-        const skus = skuChannelMap[row.cat]?.[sc] || {}
-        for (const sku of Object.keys(skus)) { if (sku.toLowerCase().includes(q)) return true }
-      }
-      return false
-    }) : heatData).map(r => r.cat)
-  ) : null
+  // Compute which cats/subCats should auto-open due to search match
+  const autoOpenCats = q ? new Set(heatData.filter(row => {
+    if (row.cat.toLowerCase().includes(q)) return true
+    const subCats = subCatChannelMap[row.cat] || {}
+    for (const sc of Object.keys(subCats)) {
+      if (sc.toLowerCase().includes(q)) return true
+      const skus = skuChannelMap[row.cat]?.[sc] || {}
+      for (const sku of Object.keys(skus)) { if (sku.toLowerCase().includes(q)) return true }
+    }
+    return false
+  }).map(r => r.cat)) : null
 
-  const isOpen = cat => q ? (expanded[cat] === false ? false : autoExpanded?.has(cat)) : expanded[cat]
+  const autoOpenSCs = q ? new Set(heatData.flatMap(row =>
+    Object.keys(subCatChannelMap[row.cat] || {}).filter(sc => {
+      if (sc.toLowerCase().includes(q)) return true
+      return Object.keys(skuChannelMap[row.cat]?.[sc] || {}).some(sku => sku.toLowerCase().includes(q))
+    }).map(sc => `${row.cat}::${sc}`)
+  )) : null
+
+  // expanded[cat]: undefined = follow auto, true = forced open, false = forced closed
+  const isOpen = cat => {
+    if (expanded[cat] === true) return true
+    if (expanded[cat] === false) return false
+    return q ? autoOpenCats?.has(cat) : false
+  }
   const isScOpen = key => {
-    if (!q) return expandedSC[key]
+    if (expandedSC[key] === true) return true
     if (expandedSC[key] === false) return false
-    return true
+    return q ? autoOpenSCs?.has(key) : false
   }
 
   const toggle = cat => setExpanded(prev => ({ ...prev, [cat]: !isOpen(cat) }))
