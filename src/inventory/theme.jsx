@@ -1,19 +1,29 @@
-// Shared dark/green theme tokens + helpers for the Inventory & Sales pages.
+// Shared theme tokens + helpers for the Inventory & Sales pages — matches the light theme
+// used by the rest of the app shell (Logistics/Sales/Overview, see utils.js's `C`).
 import { useState, useRef, useEffect, useLayoutEffect } from 'react'
 import { createPortal } from 'react-dom'
 
 export const IC = {
-  page: '#0a0f0c',
-  surface: '#101712',
-  surfaceHi: '#141d17',
-  border: 'rgba(255,255,255,0.08)',
-  border2: 'rgba(255,255,255,0.14)',
-  t1: '#dde3df',
-  t2: '#a4afa9',
-  t3: '#71807a',
-  acc: '#34d399',
-  accDim: 'rgba(52,211,153,0.14)',
-  accBorder: 'rgba(52,211,153,0.35)',
+  page: '#F2F1EF',
+  surface: '#fff',
+  surfaceHi: '#fff',
+  border: '#E4E4E7',
+  border2: '#C7C7CE',
+  // Subtle hover fill for slicer/toggle controls — a touch darker than `surface` (white) so
+  // hovering a dropdown or tile gives visible feedback without looking like an active/
+  // selected state (that's still accDim/accBorder).
+  hoverBg: '#F5F5F6',
+  t1: '#1F1F23',
+  t2: '#5B5B62',
+  t3: '#8B8B92',
+  acc: '#FFD600',
+  accDim: '#FFF9CC',
+  accBorder: '#E6C200',
+  // Positive/negative delta color — separate from `acc` (the yellow brand accent used for
+  // active-toggle highlighting) since yellow doesn't read as "good" the way the app shell's
+  // green/red delta badges do (see App.jsx's HeroKPICard `chg` badge).
+  positive: '#286010',
+  negative: '#7A1A1A',
   status: {
     'Critical':       { c: '#d03b3b', label: 'Critical' },
     'Low':            { c: '#c98500', label: 'Low' },
@@ -23,16 +33,14 @@ export const IC = {
     'No Demand':      { c: '#9085e9', label: 'No Demand' },
     'Out of Stock':   { c: '#6f7d75', label: 'Out of Stock' },
   },
-  // Fixed categorical order (never cycled) — from the dataviz skill's validated dark set.
+  // Fixed categorical order (never cycled) — from the dataviz skill's validated set.
   categorical: ['#3987e5', '#199e70', '#c98500', '#008300', '#9085e9', '#e66767', '#d55181', '#d95926'],
 }
 
-export const PAGE_BACKGROUND = `
-  linear-gradient(135deg, #0d1f16 0%, #0a0f0c 45%, #060907 100%)
-`
+export const PAGE_BACKGROUND = '#F2F1EF'
 
 export function fmtNum(n) {
-  if (n == null || Number.isNaN(n)) return '—'
+  if (n == null || Number.isNaN(n) || n === 0) return '—'
   const abs = Math.abs(n)
   const sign = n < 0 ? '-' : ''
   if (abs >= 1e7) return sign + (abs / 1e7).toFixed(2) + 'Cr'
@@ -42,8 +50,17 @@ export function fmtNum(n) {
 }
 
 // Full comma-separated number, no K/L/Cr abbreviation — used inside tables where
-// exact counts matter (e.g. 2,356 instead of 2.3K).
+// exact counts matter (e.g. 2,356 instead of 2.3K). Zero renders as '—' (a dash reads as
+// "nothing here" faster than scanning a "0" among real quantities in a dense table).
 export function fmtInt(n) {
+  if (n == null || Number.isNaN(n) || n === 0) return '—'
+  return Math.round(n).toLocaleString('en-IN')
+}
+
+// Day-count formatter (DOI etc.) — comma-separates large values like fmtInt, but does NOT
+// collapse 0 to '—': "0 days of inventory" is a real, meaningful (and urgent) reading, unlike
+// a quantity of 0 which reads as "nothing here."
+export function fmtDays(n) {
   if (n == null || Number.isNaN(n)) return '—'
   return Math.round(n).toLocaleString('en-IN')
 }
@@ -64,11 +81,11 @@ export function getDefaultDates() {
 export function GlassCard({ title, note, action, children, style }) {
   return (
     <div style={{
-      background: `linear-gradient(180deg, ${IC.surfaceHi} 0%, ${IC.surface} 100%)`,
+      background: IC.surface,
       border: `1px solid ${IC.border}`,
       borderRadius: 16,
       padding: '18px 20px',
-      boxShadow: '0 1px 0 rgba(255,255,255,0.03) inset, 0 8px 24px rgba(0,0,0,0.25)',
+      boxShadow: '0 4px 10px rgba(0,0,0,0.08), 0 16px 40px rgba(0,0,0,0.14)',
       ...style,
     }}>
       {(title || note || action) && (
@@ -86,22 +103,23 @@ export function GlassCard({ title, note, action, children, style }) {
 }
 
 export function KpiTile({ label, value, unit, sub, accent, icon, compact }) {
-  const pad = compact ? '10px 12px' : '16px 18px'
+  const pad = compact ? '10px 12px' : '12px 16px'
   const labelSize = compact ? 9.5 : 10.5
-  const valueSize = compact ? 20 : 26
+  const valueSize = compact ? 20 : 24
   const unitSize = compact ? 11 : 12
-  const iconSize = compact ? 22 : 26
+  const iconSize = compact ? 22 : 24
   const radius = compact ? 12 : 16
   return (
     <div style={{
-      background: `linear-gradient(180deg, ${IC.surfaceHi} 0%, ${IC.surface} 100%)`,
+      background: IC.surface,
       border: `1px solid ${IC.border}`,
       borderRadius: radius,
       padding: pad,
-      display: 'flex', flexDirection: 'column', gap: compact ? 5 : 8,
+      display: 'flex', flexDirection: 'column', gap: compact ? 5 : 5,
       position: 'relative', overflow: 'hidden',
       minHeight: compact ? 78 : undefined,
       height: compact ? '100%' : undefined,
+      boxShadow: '0 4px 10px rgba(0,0,0,0.08), 0 16px 40px rgba(0,0,0,0.14)',
     }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 6 }}>
         <span style={{ fontSize: labelSize, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.06em', color: IC.t3, lineHeight: 1.2 }}>{label}</span>
@@ -142,10 +160,10 @@ export function DoiBar({ doi, reorderPoint }) {
   const reorderPct = reorderPoint != null ? Math.min(100, (reorderPoint / 60) * 100) : null
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 110 }}>
-      <div style={{ flex: 1, height: 5, borderRadius: 3, background: 'rgba(255,255,255,0.06)', overflow: 'hidden', position: 'relative' }}>
+      <div style={{ flex: 1, height: 5, borderRadius: 3, background: 'rgba(0,0,0,0.08)', overflow: 'hidden', position: 'relative' }}>
         <div style={{ width: `${pct}%`, height: '100%', background: color, borderRadius: 3 }} />
         {reorderPct != null && (
-          <div title={`Reorder point: ${reorderPoint}d`} style={{ position: 'absolute', left: `${reorderPct}%`, top: -1, bottom: -1, width: 2, background: 'rgba(255,255,255,0.5)' }} />
+          <div title={`Reorder point: ${reorderPoint}d`} style={{ position: 'absolute', left: `${reorderPct}%`, top: -1, bottom: -1, width: 2, background: 'rgba(0,0,0,0.4)' }} />
         )}
       </div>
       <span style={{ fontSize: 12, fontWeight: 700, color: IC.t1, fontVariantNumeric: 'tabular-nums', minWidth: 26, textAlign: 'right' }}>{doi}d</span>
@@ -277,7 +295,7 @@ export function SearchableMultiSelect({ label, options, selected, onChange, getK
   const panel = open && pos && createPortal(
     <div data-smsel-panel ref={ref} style={{
       position: 'fixed', left: pos.left, top: pos.top, bottom: pos.bottom, zIndex: 400, width: panelWidth,
-      background: IC.surfaceHi, border: `1px solid ${IC.border2}`, borderRadius: 10, boxShadow: '0 12px 28px rgba(0,0,0,0.4)',
+      background: IC.surfaceHi, border: `1px solid ${IC.border2}`, borderRadius: 10, boxShadow: '0 8px 20px rgba(0,0,0,0.12)',
       display: 'flex', flexDirection: 'column', maxHeight: pos.maxHeight,
     }}>
       <div style={{ padding: 8, borderBottom: `1px solid ${IC.border}` }}>
@@ -287,7 +305,7 @@ export function SearchableMultiSelect({ label, options, selected, onChange, getK
       {filtered.length > 0 && (
         <div onClick={toggleSelectAll}
           style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '7px 12px', cursor: 'pointer', fontSize: 11.5, fontWeight: 600, color: IC.t2, borderBottom: `1px solid ${IC.border}` }}
-          onMouseEnter={e => e.currentTarget.style.background = 'rgba(255,255,255,0.04)'}
+          onMouseEnter={e => e.currentTarget.style.background = 'rgba(0,0,0,0.04)'}
           onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
           <span style={{
             width: 14, height: 14, borderRadius: 3, border: `1.5px solid ${allFilteredSelected ? IC.acc : IC.border2}`,
@@ -304,7 +322,7 @@ export function SearchableMultiSelect({ label, options, selected, onChange, getK
           return (
             <div key={k} onClick={() => toggle(k)}
               style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '5px 8px', borderRadius: 6, cursor: 'pointer', fontSize: 12, color: isSel ? IC.t1 : IC.t2 }}
-              onMouseEnter={e => e.currentTarget.style.background = 'rgba(255,255,255,0.04)'}
+              onMouseEnter={e => e.currentTarget.style.background = 'rgba(0,0,0,0.04)'}
               onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
               <span style={{
                 width: 14, height: 14, borderRadius: 3, border: `1.5px solid ${isSel ? IC.acc : IC.border2}`,
@@ -321,7 +339,7 @@ export function SearchableMultiSelect({ label, options, selected, onChange, getK
           Clear
         </button>
         <button onClick={apply}
-          style={{ fontSize: 11, fontWeight: 700, color: IC.acc, background: IC.accDim, border: `1px solid ${IC.accBorder}`, borderRadius: 6, padding: '5px 12px', cursor: 'pointer' }}>
+          style={{ fontSize: 11, fontWeight: 700, color: IC.t1, background: IC.accDim, border: `1px solid ${IC.accBorder}`, borderRadius: 6, padding: '5px 12px', cursor: 'pointer' }}>
           Apply{draft.length > 0 ? ` (${draft.length})` : ''}
         </button>
       </div>
@@ -329,16 +347,25 @@ export function SearchableMultiSelect({ label, options, selected, onChange, getK
     document.body
   )
 
+  // Selecting every available option is functionally identical to selecting none (no
+  // filtering actually happens either way) — so it should look like the default,
+  // unfiltered state too, rather than showing "N selected" and forcing the user to hit
+  // Clear just to get back to a slicer that LOOKS unfiltered.
+  const isAllSelected = options.length > 0 && selected.length === options.length
+  const isFiltered = selected.length > 0 && !isAllSelected
+
   return (
     <div style={{ position: 'relative', width, flexShrink: 0 }}>
       <button ref={btnRef} onClick={() => open ? closeMenu() : openMenu()}
+        onMouseEnter={e => e.currentTarget.style.background = IC.hoverBg}
+        onMouseLeave={e => e.currentTarget.style.background = IC.surface}
         style={{
-          width: '100%', height, boxSizing: 'border-box', textAlign: 'left', background: IC.surface, border: `1px solid ${selected.length ? IC.accBorder : IC.border2}`,
-          borderRadius: 8, padding: '0 10px', color: selected.length ? IC.t1 : IC.t3, fontSize: 12, cursor: 'pointer',
-          display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 6,
+          width: '100%', height, boxSizing: 'border-box', textAlign: 'left', background: IC.surface, border: `1px solid ${isFiltered ? IC.accBorder : IC.border2}`,
+          borderRadius: 8, padding: '0 10px', color: isFiltered ? IC.t1 : IC.t3, fontSize: 12, cursor: 'pointer',
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 6, transition: 'background .12s',
         }}>
         <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-          {selected.length === 0 ? label
+          {!isFiltered ? label
             : selected.length === 1 ? (() => {
               const match = options.find(o => key(o) === selected[0])
               return match ? disp(match) : label
@@ -374,7 +401,7 @@ export function SortableTh({ label, sortKey, sortState, onSort, width, onResize,
       onClick={() => onSort && onSort(sortKey)}
       style={{
         textAlign: align, fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.05em',
-        color: active ? IC.acc : IC.t3, padding: '6px 10px', borderBottom: `1px solid ${IC.border2}`,
+        color: active ? IC.t1 : IC.t3, padding: '6px 10px', borderBottom: `1px solid ${IC.border2}`,
         whiteSpace: 'nowrap', width, minWidth: 50, boxSizing: 'border-box', position: 'relative',
         cursor: onSort ? 'pointer' : 'default', userSelect: 'none', background: IC.surfaceHi,
       }}>
@@ -390,21 +417,45 @@ export function SortableTh({ label, sortKey, sortState, onSort, width, onResize,
 // ── Draggable + sortable + resizable header cell — drag to reorder columns ────
 // (reordering only makes sense within a same-group column set; callers enforce that
 // by only allowing a drop when dragged.group === target.group).
+// Column width IS its hide state, matching Excel's own model: dragging the resize handle
+// past a small threshold (rather than clamping at some minimum) sets width to 0, which
+// hides the column entirely; what remains is a thin colored "seam" in its place (like
+// Excel's double-line marker between two adjacent headers) that's still draggable to pull
+// the column back open. `onHide`/`MIN_VISIBLE_WIDTH` let a caller tune where the snap-to-zero
+// threshold sits; default is generous enough that a normal resize doesn't accidentally hide.
+const MIN_VISIBLE_WIDTH = 40
+const HIDE_SNAP_THRESHOLD = 20
 export function DraggableTh({ label, sortKey, sortState, onSort, width, onResize, align = 'right', group, onReorder, dragState, setDragState }) {
   const active = sortState?.key === sortKey
   const arrow = active ? (sortState.dir === 'asc' ? ' ▲' : ' ▼') : ''
   const isDragging = dragState?.key === sortKey
   const isDropTarget = dragState && dragState.key !== sortKey && dragState.group === group
+  const isHidden = width === 0
 
   const startResize = e => {
     e.stopPropagation()
     e.preventDefault()
     const startX = e.clientX
-    const startWidth = width
-    const onMove = ev => onResize(Math.max(50, startWidth + (ev.clientX - startX)))
+    const startWidth = isHidden ? 0 : width
+    const onMove = ev => {
+      const raw = startWidth + (ev.clientX - startX)
+      onResize(raw < HIDE_SNAP_THRESHOLD ? 0 : Math.max(MIN_VISIBLE_WIDTH, raw))
+    }
     const onUp = () => { document.removeEventListener('mousemove', onMove); document.removeEventListener('mouseup', onUp) }
     document.addEventListener('mousemove', onMove)
     document.addEventListener('mouseup', onUp)
+  }
+
+  // Hidden column renders as a thin grabbable seam instead of a normal header — no label,
+  // no sort/drag-to-reorder (there's nothing meaningful to reorder when it has no width),
+  // just the resize handle so dragging it rightward restores the column.
+  if (isHidden) {
+    return (
+      <th title="Drag to restore this column" style={{ width: 0, minWidth: 0, padding: 0, position: 'relative', borderBottom: `1px solid ${IC.border2}`, background: IC.surfaceHi }}>
+        <span onMouseDown={startResize}
+          style={{ position: 'absolute', left: -3, top: 0, bottom: 0, width: 6, cursor: 'col-resize', background: IC.accBorder }} />
+      </th>
+    )
   }
 
   return (
@@ -419,11 +470,11 @@ export function DraggableTh({ label, sortKey, sortState, onSort, width, onResize
         setDragState(null)
       }}
       onClick={() => onSort && onSort(sortKey)}
-      title="Drag to reorder · click to sort"
+      title="Drag to reorder · click to sort · drag right edge to resize (drag to 0 to hide)"
       style={{
         textAlign: align, fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.05em',
-        color: active ? IC.acc : IC.t3, padding: '6px 10px', borderBottom: `1px solid ${IC.border2}`,
-        whiteSpace: 'nowrap', width, minWidth: 50, boxSizing: 'border-box', position: 'relative',
+        color: active ? IC.t1 : IC.t3, padding: '6px 10px', borderBottom: `1px solid ${IC.border2}`,
+        whiteSpace: 'nowrap', width, minWidth: MIN_VISIBLE_WIDTH, boxSizing: 'border-box', position: 'relative',
         cursor: 'grab', userSelect: 'none', background: isDropTarget ? 'rgba(52,211,153,0.10)' : IC.surfaceHi,
         opacity: isDragging ? 0.4 : 1,
         outline: isDropTarget ? `1px dashed ${IC.accBorder}` : 'none',
@@ -487,14 +538,15 @@ export function DateRangeControl({ filters, setFilters, onRefresh }) {
     <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
       <DatePresetPicker setFilters={setFilters} />
       <input type="date" value={filters.start} onChange={e => setFilters(f => ({ ...f, start: e.target.value }))}
-        style={{ background: IC.surface, border: `1px solid ${IC.border2}`, borderRadius: 8, padding: '6px 10px', color: IC.t1, fontSize: 12, colorScheme: 'dark' }} />
+        style={{ background: IC.surface, border: `1px solid ${IC.border2}`, borderRadius: 8, padding: '6px 10px', color: IC.t1, fontSize: 12, colorScheme: 'light' }} />
       <span style={{ color: IC.t3, fontSize: 12 }}>→</span>
       <input type="date" value={filters.end} onChange={e => setFilters(f => ({ ...f, end: e.target.value }))}
-        style={{ background: IC.surface, border: `1px solid ${IC.border2}`, borderRadius: 8, padding: '6px 10px', color: IC.t1, fontSize: 12, colorScheme: 'dark' }} />
+        style={{ background: IC.surface, border: `1px solid ${IC.border2}`, borderRadius: 8, padding: '6px 10px', color: IC.t1, fontSize: 12, colorScheme: 'light' }} />
       <button onClick={onRefresh}
-        style={{ background: IC.accDim, border: `1px solid ${IC.accBorder}`, borderRadius: 8, padding: '6px 14px', color: IC.acc, fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
+        style={{ background: IC.acc, border: `1px solid ${IC.acc}`, borderRadius: 8, padding: '6px 14px', color: IC.t1, fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
         Refresh
       </button>
     </div>
   )
 }
+

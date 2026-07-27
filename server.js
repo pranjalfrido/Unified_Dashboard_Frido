@@ -11,6 +11,7 @@ import { buildQuery as buildUnifiedQuery } from './api/_bq.js'
 import bqHandler from './api/bq.js'
 import inventoryHandler from './api/inventory.js'
 import salesAllocationHandler from './api/sales-allocation.js'
+import inwardHandler from './api/inward.js'
 
 config()
 
@@ -256,6 +257,7 @@ async function hasDataInPG(start, end) {
 app.post('/api/bq', (req, res) => bqHandler(req, res))
 app.post('/api/inventory', (req, res) => inventoryHandler(req, res))
 app.post('/api/sales-allocation', (req, res) => salesAllocationHandler(req, res))
+app.post('/api/inward', (req, res) => inwardHandler(req, res))
 
 // ── API: Logistics / Clickpost data ──────────────────────────
 app.post('/api/logistics', async (req, res) => {

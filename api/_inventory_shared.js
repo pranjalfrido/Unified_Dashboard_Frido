@@ -66,27 +66,54 @@ export function buildFacilityMaps() {
   }
   // channel code -> unified channel name
   const channelToUnified = new Map()
+  // channel code -> unified_channel2 (coarser grouping — e.g. Amazon/Others/Flipkart/B2B —
+  // used for the channel-wise sales bar chart, distinct from the finer unified_channel)
+  const channelToUnified2 = new Map()
   // channel code -> channel_description (Purchase Order / Stock transfer / B2C Order / B2B Order / Ignore / Custom)
   const channelToDescription = new Map()
   for (const r of channelRows) {
     if (!r.uniware_channels) continue
     channelToUnified.set(norm(r.uniware_channels), r.unified_channel || r.uniware_channels)
+    channelToUnified2.set(norm(r.uniware_channels), r.unified_channel2 || null)
     channelToDescription.set(norm(r.uniware_channels), r.channel_description || null)
   }
-  return { facilityToLocation, facilityToType, facilityToStatus, facilityToDisplayName, locationToFacilities, stateToNearestWH, stateToRegion, locationToRegion, channelToUnified, channelToDescription }
+  return { facilityToLocation, facilityToType, facilityToStatus, facilityToDisplayName, locationToFacilities, stateToNearestWH, stateToRegion, locationToRegion, channelToUnified, channelToUnified2, channelToDescription }
 }
 
-// A sales row counts toward "B2C" avg sale only if its channel_description is
-// exactly "B2C Order". Unmatched/unknown channels (~0.3% of rows) are excluded
-// from B2C, not counted as B2C-by-default.
-export const isB2CChannel = (channel, channelToDescription) => channelToDescription.get(norm(channel)) === 'B2C Order'
+// A sales row counts toward "B2C" avg sale if its channel_description is exactly
+// "B2C Order" — OR if the channel doesn't appear in the channel_desc reference sheet at
+// all (~7% of rows: real marketplace/D2C channels like AVC, Amazon Easyship/Flex/Now,
+// Flipkart, Myntra that just haven't been added to the mapping sheet yet). Excluding
+// them entirely understated Avg Sale; since these are genuine sales, not test/internal
+// data, counting them in is the safer default. Only channels EXPLICITLY mapped to a
+// non-B2C description (B2B Order, Purchase Order, Stock transfer, Ignore, Custom) are
+// excluded from B2C.
+export const isB2CChannel = (channel, channelToDescription) => {
+  const desc = channelToDescription.get(norm(channel))
+  return desc === 'B2C Order' || desc === undefined
+}
 
 // "Total Avg Sale" (the all-channel KPI, distinct from the B2C-only figure that drives
-// DOI) only counts real demand channels — B2C Order, B2B Order, Purchase Order. Channels
-// like Stock transfer/Ignore/Custom (e.g. VAS, which maps to "Ignore") aren't actual sales
-// and must not inflate this number.
+// DOI) counts real demand channels — B2C Order, B2B Order, Purchase Order — plus any
+// channel unmapped in the reference sheet (same reasoning as isB2CChannel above).
+// Channels explicitly mapped to Stock transfer/Ignore/Custom (e.g. VAS, which maps to
+// "Ignore") are still excluded — those are known non-sale channels, not just unmapped.
+// Sales Type classification (B2C / B2B / Purchase Order) — same "unmapped = B2C" default
+// as isB2CChannel above, but returns the actual bucket label instead of a boolean, for use
+// as both a filter value and a row classifier. Stock transfer/Ignore/Custom channels
+// return null — not a sale, excluded from every sales calculation regardless of filter.
+const SALES_TYPE_LABELS = new Set(['B2C Order', 'B2B Order', 'Purchase Order'])
+export const salesTypeFor = (channel, channelToDescription) => {
+  const desc = channelToDescription.get(norm(channel))
+  if (desc === undefined) return 'B2C Order'
+  return SALES_TYPE_LABELS.has(desc) ? desc : null
+}
+
 const TOTAL_AVG_SALE_CHANNEL_DESCRIPTIONS = new Set(['B2C Order', 'B2B Order', 'Purchase Order'])
-export const isTotalAvgSaleChannel = (channel, channelToDescription) => TOTAL_AVG_SALE_CHANNEL_DESCRIPTIONS.has(channelToDescription.get(norm(channel)))
+export const isTotalAvgSaleChannel = (channel, channelToDescription) => {
+  const desc = channelToDescription.get(norm(channel))
+  return TOTAL_AVG_SALE_CHANNEL_DESCRIPTIONS.has(desc) || desc === undefined
+}
 
 export const norm = s => (s == null ? '' : String(s).trim().toUpperCase())
 export const normSku = s => norm(s).replace(/[\s_]+/g, '')

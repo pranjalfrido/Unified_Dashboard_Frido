@@ -2,6 +2,17 @@ import { useState, useMemo, useCallback, useEffect, useRef, Fragment } from 'rea
 import { C, fmt, fmtN, fmtBig, pct, processData, detectAlerts, exportCSV, getDefaultDates } from './utils.js'
 import { KPICard, AlertCard, HBar, DataTable, Card, Badge, RevTrendChart, AreaTrendChart, MultiLineChart, ChartTooltip, BarChart, Bar, LineChart, Line, AreaChart, Area, ComposedChart, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell, Treemap } from './components.jsx'
 import InventoryPage from './InventoryPage.jsx'
+import { IC } from './inventory/theme.jsx'
+
+// Maps the Inventory dashboard's dark IC palette onto the {t1,t2,t3,acc,acl,border,border2,
+// bg,card} shape DateRangePicker expects (that shape mirrors the light C theme it was built
+// for) — lets the calendar dropdown render in dark colors without forking its ~200 lines of
+// layout/behavior.
+const INVENTORY_DATE_THEME = {
+  acc: IC.acc, acl: IC.accDim, acm: IC.accBorder,
+  bg: IC.page, card: IC.surfaceHi, border: IC.border, border2: IC.border2,
+  t1: IC.t1, t2: IC.t2, t3: IC.t3,
+}
 import { ReferenceLine, LabelList } from 'recharts'
 
 // ── Logistics Page ────────────────────────────────────────────
@@ -1612,7 +1623,11 @@ function BottomNav({ page, setPage }) {
 }
 
 // ── Topnav ─────────────────────────────────────────────────────
-function DateRangePicker({ filters, setFilters }) {
+// `theme` lets callers outside the light-themed app shell (e.g. the dark Inventory
+// dashboard) reuse this same calendar UI with their own palette instead of forking it —
+// only colors are parameterized, all layout/behavior stays identical. Defaults to the
+// app shell's own light theme so every existing call site is unaffected.
+function DateRangePicker({ filters, setFilters, theme: T = C }) {
   const [open, setOpen] = useState(false)
   const [draft, setDraft] = useState({ start: filters.start, end: filters.end })
   const [selecting, setSelecting] = useState('start')
@@ -1702,7 +1717,7 @@ function DateRangePicker({ filters, setFilters }) {
     return (
       <div style={{ flex: 1 }}>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7,1fr)', gap: 2, marginBottom: 4 }}>
-          {['Su','Mo','Tu','We','Th','Fr','Sa'].map(d => <div key={d} style={{ fontSize: 10, fontWeight: 600, color: C.t3, textAlign: 'center', padding: '2px 0' }}>{d}</div>)}
+          {['Su','Mo','Tu','We','Th','Fr','Sa'].map(d => <div key={d} style={{ fontSize: 10, fontWeight: 600, color: T.t3, textAlign: 'center', padding: '2px 0' }}>{d}</div>)}
         </div>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7,1fr)', gap: 2 }}>
           {days.map((day, i) => {
@@ -1722,7 +1737,7 @@ function DateRangePicker({ filters, setFilters }) {
               }}
               onMouseEnter={() => selecting === 'end' && setHover(ds)}
               onMouseLeave={() => setHover(null)}
-              style={{ textAlign: 'center', padding: '4px 1px', borderRadius: 5, fontSize: 12, cursor: 'pointer', fontWeight: sel ? 700 : isToday ? 600 : 400, background: sel ? C.acc : inR ? '#FFF9CC' : 'transparent', color: sel ? '#13121A' : isToday ? C.acc : C.t1, border: isToday && !sel ? `1px solid ${C.acc}` : '1px solid transparent' }}>
+              style={{ textAlign: 'center', padding: '4px 1px', borderRadius: 5, fontSize: 12, cursor: 'pointer', fontWeight: sel ? 700 : isToday ? 600 : 400, background: sel ? T.acc : inR ? '#FFF9CC' : 'transparent', color: sel ? '#13121A' : isToday ? T.acc : T.t1, border: isToday && !sel ? `1px solid ${T.acc}` : '1px solid transparent' }}>
                 {day.getDate()}
               </div>
             )
@@ -1737,27 +1752,27 @@ function DateRangePicker({ filters, setFilters }) {
   return (
     <div ref={ref} style={{ position: 'relative' }}>
       <button ref={btnRef} onClick={() => { const r = btnRef.current?.getBoundingClientRect(); if (r) setDropPos({ top: r.bottom + 6, right: window.innerWidth - r.right }); setDraft({ start: filters.start, end: filters.end }); setSelecting('start'); setOpen(o => !o) }}
-        style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '6px 12px', borderRadius: 8, border: `1px solid ${C.border2}`, background: C.card, color: C.t1, cursor: 'pointer', fontSize: 12, fontFamily: 'var(--font)', whiteSpace: 'nowrap' }}>
+        style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '6px 12px', borderRadius: 8, border: `1px solid ${T.border2}`, background: T.card, color: T.t1, cursor: 'pointer', fontSize: 12, fontFamily: 'var(--font)', whiteSpace: 'nowrap' }}>
         <svg width="13" height="13" viewBox="0 0 16 16" fill="none" style={{ flexShrink: 0 }}>
-          <rect x="1" y="2.5" width="14" height="12.5" rx="2" stroke={C.t2} strokeWidth="1.4" fill="none"/>
-          <path d="M1 6h14" stroke={C.t2} strokeWidth="1.4"/>
-          <path d="M5 1v3M11 1v3" stroke={C.t2} strokeWidth="1.4" strokeLinecap="round"/>
-          <rect x="4" y="8.5" width="2" height="2" rx=".4" fill={C.t2}/>
-          <rect x="7.5" y="8.5" width="2" height="2" rx=".4" fill={C.t2}/>
-          <rect x="11" y="8.5" width="2" height="2" rx=".4" fill={C.t2}/>
-          <rect x="4" y="11.5" width="2" height="2" rx=".4" fill={C.t2}/>
-          <rect x="7.5" y="11.5" width="2" height="2" rx=".4" fill={C.t2}/>
+          <rect x="1" y="2.5" width="14" height="12.5" rx="2" stroke={T.t2} strokeWidth="1.4" fill="none"/>
+          <path d="M1 6h14" stroke={T.t2} strokeWidth="1.4"/>
+          <path d="M5 1v3M11 1v3" stroke={T.t2} strokeWidth="1.4" strokeLinecap="round"/>
+          <rect x="4" y="8.5" width="2" height="2" rx=".4" fill={T.t2}/>
+          <rect x="7.5" y="8.5" width="2" height="2" rx=".4" fill={T.t2}/>
+          <rect x="11" y="8.5" width="2" height="2" rx=".4" fill={T.t2}/>
+          <rect x="4" y="11.5" width="2" height="2" rx=".4" fill={T.t2}/>
+          <rect x="7.5" y="11.5" width="2" height="2" rx=".4" fill={T.t2}/>
         </svg>
         {displayLabel}
       </button>
       {open && (
-        <div style={{ position: 'fixed', top: dropPos.top, right: dropPos.right, zIndex: 9999, background: C.card, border: `1px solid ${C.border2}`, borderRadius: 12, boxShadow: '0 8px 32px rgba(0,0,0,.15)', display: 'flex', minWidth: 680 }}>
+        <div style={{ position: 'fixed', top: dropPos.top, right: dropPos.right, zIndex: 9999, background: T.card, border: `1px solid ${T.border2}`, borderRadius: 12, boxShadow: '0 8px 32px rgba(0,0,0,.15)', display: 'flex', minWidth: 680 }}>
           {/* Preset list */}
-          <div style={{ width: 140, borderRight: `1px solid ${C.border}`, padding: '8px 0', flexShrink: 0 }}>
+          <div style={{ width: 140, borderRight: `1px solid ${T.border}`, padding: '8px 0', flexShrink: 0 }}>
             {PRESETS.map(p => (
               <div key={p.label} onClick={() => { const r = p.fn(); setDraft(r); apply(r.start, r.end) }}
-                style={{ padding: '5px 14px', fontSize: 12, color: C.t2, cursor: 'pointer', whiteSpace: 'nowrap' }}
-                onMouseEnter={e => e.currentTarget.style.background = C.bg}
+                style={{ padding: '5px 14px', fontSize: 12, color: T.t2, cursor: 'pointer', whiteSpace: 'nowrap' }}
+                onMouseEnter={e => e.currentTarget.style.background = T.bg}
                 onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
                 {p.label}
               </div>
@@ -1767,17 +1782,17 @@ function DateRangePicker({ filters, setFilters }) {
           <div style={{ flex: 1, padding: '12px 14px', display: 'flex', flexDirection: 'column', gap: 10 }}>
             {/* Selected range display */}
             <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-              <div style={{ flex: 1, padding: '6px 10px', border: `1.5px solid ${selecting === 'start' ? C.acc : C.border}`, borderRadius: 7, fontSize: 12, color: draft.start ? C.t1 : C.t3 }}>{draft.start ? fmtDisplay(draft.start) : 'Start date'}</div>
-              <span style={{ color: C.t3, fontSize: 13 }}>→</span>
-              <div style={{ flex: 1, padding: '6px 10px', border: `1.5px solid ${selecting === 'end' ? C.acc : C.border}`, borderRadius: 7, fontSize: 12, color: draft.end ? C.t1 : C.t3 }}>{draft.end ? fmtDisplay(draft.end) : 'End date'}</div>
+              <div style={{ flex: 1, padding: '6px 10px', border: `1.5px solid ${selecting === 'start' ? T.acc : T.border}`, borderRadius: 7, fontSize: 12, color: draft.start ? T.t1 : T.t3 }}>{draft.start ? fmtDisplay(draft.start) : 'Start date'}</div>
+              <span style={{ color: T.t3, fontSize: 13 }}>→</span>
+              <div style={{ flex: 1, padding: '6px 10px', border: `1.5px solid ${selecting === 'end' ? T.acc : T.border}`, borderRadius: 7, fontSize: 12, color: draft.end ? T.t1 : T.t3 }}>{draft.end ? fmtDisplay(draft.end) : 'End date'}</div>
             </div>
             {monthPickerOpen ? (
               /* ── Month/Year quick-jump overlay ── */
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10 }}>
-                  <button onClick={() => setYearInput(y => y - 1)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 16, color: C.t2, padding: '2px 8px', fontFamily: 'var(--font)' }}>‹</button>
-                  <span style={{ fontSize: 15, fontWeight: 700, color: C.t1, minWidth: 48, textAlign: 'center' }}>{yearInput}</span>
-                  <button onClick={() => setYearInput(y => y + 1)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 16, color: C.t2, padding: '2px 8px', fontFamily: 'var(--font)' }}>›</button>
+                  <button onClick={() => setYearInput(y => y - 1)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 16, color: T.t2, padding: '2px 8px', fontFamily: 'var(--font)' }}>‹</button>
+                  <span style={{ fontSize: 15, fontWeight: 700, color: T.t1, minWidth: 48, textAlign: 'center' }}>{yearInput}</span>
+                  <button onClick={() => setYearInput(y => y + 1)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 16, color: T.t2, padding: '2px 8px', fontFamily: 'var(--font)' }}>›</button>
                 </div>
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 5 }}>
                   {MONTH_NAMES.map((mn, i) => {
@@ -1790,45 +1805,45 @@ function DateRangePicker({ filters, setFilters }) {
                         else setLeftMonth(picked)
                         setMonthPickerSide(null)
                       }}
-                        style={{ padding: '6px 4px', borderRadius: 6, border: isCurrent ? `2px solid ${C.acc}` : `1px solid ${C.border}`, background: isCurrent ? C.acl : 'transparent', color: C.t1, cursor: 'pointer', fontSize: 12, fontWeight: isCurrent ? 700 : 400, fontFamily: 'var(--font)' }}>
+                        style={{ padding: '6px 4px', borderRadius: 6, border: isCurrent ? `2px solid ${T.acc}` : `1px solid ${T.border}`, background: isCurrent ? T.acl : 'transparent', color: T.t1, cursor: 'pointer', fontSize: 12, fontWeight: isCurrent ? 700 : 400, fontFamily: 'var(--font)' }}>
                         {mn}
                       </button>
                     )
                   })}
                 </div>
                 <div style={{ textAlign: 'center', marginTop: 2 }}>
-                  <button onClick={() => setMonthPickerSide(null)} style={{ padding: '3px 14px', borderRadius: 6, border: `1px solid ${C.border}`, background: 'transparent', color: C.t3, cursor: 'pointer', fontSize: 11, fontFamily: 'var(--font)' }}>← back</button>
+                  <button onClick={() => setMonthPickerSide(null)} style={{ padding: '3px 14px', borderRadius: 6, border: `1px solid ${T.border}`, background: 'transparent', color: T.t3, cursor: 'pointer', fontSize: 11, fontFamily: 'var(--font)' }}>← back</button>
                 </div>
               </div>
             ) : (
               /* ── Dual calendar view ── */
               <>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: -4 }}>
-                  <button onClick={() => { setLeftMonth(m => new Date(m.getFullYear(), m.getMonth()-1, 1)); setRightMonth(m => new Date(m.getFullYear(), m.getMonth()-1, 1)) }} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 18, color: C.t2, padding: '2px 8px' }}>‹</button>
+                  <button onClick={() => { setLeftMonth(m => new Date(m.getFullYear(), m.getMonth()-1, 1)); setRightMonth(m => new Date(m.getFullYear(), m.getMonth()-1, 1)) }} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 18, color: T.t2, padding: '2px 8px' }}>‹</button>
                   <div style={{ display: 'flex', gap: 8 }}>
                     <button onClick={() => { setYearInput(leftMonth.getFullYear()); setMonthPickerSide('left') }}
-                      style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 13, fontWeight: 700, color: C.t1, padding: '2px 6px', borderRadius: 6, display: 'flex', alignItems: 'center', gap: 3 }}>
-                      {leftMonth.toLocaleDateString('en-IN', { month: 'long', year: 'numeric' })} <span style={{ fontSize: 10, color: C.t3 }}>▾</span>
+                      style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 13, fontWeight: 700, color: T.t1, padding: '2px 6px', borderRadius: 6, display: 'flex', alignItems: 'center', gap: 3 }}>
+                      {leftMonth.toLocaleDateString('en-IN', { month: 'long', year: 'numeric' })} <span style={{ fontSize: 10, color: T.t3 }}>▾</span>
                     </button>
-                    <span style={{ color: C.border2, fontSize: 16 }}>|</span>
+                    <span style={{ color: T.border2, fontSize: 16 }}>|</span>
                     <button onClick={() => { setYearInput(rightMonth.getFullYear()); setMonthPickerSide('right') }}
-                      style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 13, fontWeight: 700, color: C.t1, padding: '2px 6px', borderRadius: 6, display: 'flex', alignItems: 'center', gap: 3 }}>
-                      {rightMonth.toLocaleDateString('en-IN', { month: 'long', year: 'numeric' })} <span style={{ fontSize: 10, color: C.t3 }}>▾</span>
+                      style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 13, fontWeight: 700, color: T.t1, padding: '2px 6px', borderRadius: 6, display: 'flex', alignItems: 'center', gap: 3 }}>
+                      {rightMonth.toLocaleDateString('en-IN', { month: 'long', year: 'numeric' })} <span style={{ fontSize: 10, color: T.t3 }}>▾</span>
                     </button>
                   </div>
-                  <button onClick={() => { setLeftMonth(m => new Date(m.getFullYear(), m.getMonth()+1, 1)); setRightMonth(m => new Date(m.getFullYear(), m.getMonth()+1, 1)) }} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 18, color: C.t2, padding: '2px 8px' }}>›</button>
+                  <button onClick={() => { setLeftMonth(m => new Date(m.getFullYear(), m.getMonth()+1, 1)); setRightMonth(m => new Date(m.getFullYear(), m.getMonth()+1, 1)) }} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 18, color: T.t2, padding: '2px 8px' }}>›</button>
                 </div>
                 <div style={{ display: 'flex', gap: 24 }}>
                   {renderMonth(leftMonth)}
-                  <div style={{ width: 1, background: C.border }} />
+                  <div style={{ width: 1, background: T.border }} />
                   {renderMonth(rightMonth)}
                 </div>
               </>
             )}
             {/* Footer */}
-            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, paddingTop: 6, borderTop: `1px solid ${C.border}`, marginTop: 'auto' }}>
-              <button onClick={() => setOpen(false)} style={{ padding: '6px 16px', borderRadius: 7, border: `1px solid ${C.border2}`, background: 'transparent', color: C.t2, cursor: 'pointer', fontSize: 12, fontFamily: 'var(--font)' }}>Cancel</button>
-              <button onClick={() => apply()} disabled={!draft.start || !draft.end} style={{ padding: '6px 16px', borderRadius: 7, border: 'none', background: draft.start && draft.end ? C.acc : C.border, color: '#13121A', cursor: draft.start && draft.end ? 'pointer' : 'default', fontSize: 12, fontWeight: 600, fontFamily: 'var(--font)' }}>Apply</button>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, paddingTop: 6, borderTop: `1px solid ${T.border}`, marginTop: 'auto' }}>
+              <button onClick={() => setOpen(false)} style={{ padding: '6px 16px', borderRadius: 7, border: `1px solid ${T.border2}`, background: 'transparent', color: T.t2, cursor: 'pointer', fontSize: 12, fontFamily: 'var(--font)' }}>Cancel</button>
+              <button onClick={() => apply()} disabled={!draft.start || !draft.end} style={{ padding: '6px 16px', borderRadius: 7, border: 'none', background: draft.start && draft.end ? T.acc : T.border, color: '#13121A', cursor: draft.start && draft.end ? 'pointer' : 'default', fontSize: 12, fontWeight: 600, fontFamily: 'var(--font)' }}>Apply</button>
             </div>
           </div>
         </div>
@@ -1837,7 +1852,7 @@ function DateRangePicker({ filters, setFilters }) {
   )
 }
 
-function Topnav({ page, alerts, onRefresh, loading, filters, setFilters, rawRows }) {
+function Topnav({ page, alerts, onRefresh, loading, filters, setFilters, rawRows, inventoryDateControl }) {
   const titles = { overview: 'Overview', sales: 'Sales Analytics', ads: 'Ads Analytics', intelligence: 'Intelligence', logistics: 'Logistics Performance Analytics', inventory: 'Inventory, Sales & Allocation', customer: 'Customer Intelligence' }
   const critical = alerts.filter(a => a.type === 'red').length
   return (
@@ -1853,6 +1868,14 @@ function Topnav({ page, alerts, onRefresh, loading, filters, setFilters, rawRows
           <DateRangePicker filters={filters} setFilters={setFilters} />
           <button onClick={onRefresh} className="tnav-btn">
             <span style={{ display: 'inline-block', animation: loading ? 'spin 1s linear infinite' : 'none', fontSize: 14 }}>↻</span> Refresh
+          </button>
+        </div>
+      )}
+      {page === 'inventory' && inventoryDateControl && (
+        <div className="tnav-right">
+          <DateRangePicker filters={inventoryDateControl.filters} setFilters={inventoryDateControl.setFilters} theme={INVENTORY_DATE_THEME} />
+          <button onClick={inventoryDateControl.onRefresh} className="tnav-btn">
+            <span style={{ display: 'inline-block', fontSize: 14 }}>↻</span> Refresh
           </button>
         </div>
       )}
@@ -9094,6 +9117,7 @@ export default function App() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
   const [logisticsData, setLogisticsData] = useState(null)
+  const [inventoryDateControl, setInventoryDateControl] = useState(null)
 
   const API = import.meta.env.VITE_API_URL || ''
   const reqIdRef = useRef(0)
@@ -9173,7 +9197,7 @@ export default function App() {
     <div className="app-shell">
       <Sidebar page={page} setPage={setPage} />
       <div className="app-main">
-        <Topnav page={page} alerts={alerts} onRefresh={() => { const { start, end, category, subCategory, sku, subChannel, voucher, region, tier, state, city, country } = filters; const e = {}; if (category?.length) e.category = category.join(','); if (subCategory?.length) e.subCategory = subCategory.join(','); if (sku?.length) e.sku = sku.join(','); if (subChannel) e.subChannel = subChannel; if (voucher) e.voucher = voucher; if (region?.length) e.region = region.join(','); if (tier?.length) e.tier = tier.join(','); if (state?.length) e.state = state.join(','); if (city) e.city = city; if (country) e.country = country; fetchData(start, end, e) }} loading={loading} filters={filters} setFilters={setFilters} rawRows={rawRows} />
+        <Topnav page={page} alerts={alerts} onRefresh={() => { const { start, end, category, subCategory, sku, subChannel, voucher, region, tier, state, city, country } = filters; const e = {}; if (category?.length) e.category = category.join(','); if (subCategory?.length) e.subCategory = subCategory.join(','); if (sku?.length) e.sku = sku.join(','); if (subChannel) e.subChannel = subChannel; if (voucher) e.voucher = voucher; if (region?.length) e.region = region.join(','); if (tier?.length) e.tier = tier.join(','); if (state?.length) e.state = state.join(','); if (city) e.city = city; if (country) e.country = country; fetchData(start, end, e) }} loading={loading} filters={filters} setFilters={setFilters} rawRows={rawRows} inventoryDateControl={inventoryDateControl} />
         {loading && (
           <div style={{ height: 2, background: C.border, flexShrink: 0 }}>
             <div className="progress-bar" style={{ height: '100%', background: C.acc }} />
@@ -9222,7 +9246,7 @@ export default function App() {
           )}
           {page === 'inventory' && (
             <div className="page-scroll" style={{ padding: 0 }}>
-              <InventoryPage />
+              <InventoryPage onTopbarDateControl={setInventoryDateControl} />
             </div>
           )}
           {page === 'customer' && data && (
