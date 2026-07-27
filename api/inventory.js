@@ -36,10 +36,12 @@ export default async function inventoryHandler(req, res) {
     stockStatus: stockStatusFilter, productId, rtdLevel: rtdLevelFilter, avgSaleWindowDays,
   } = req.body
   if (!start || !end) return res.status(400).json({ error: 'Missing start or end date' })
-  // Avg Sale's lookback window is independently selectable (7/15/30d) from the sidebar,
-  // decoupled from `daysInRange` (the fetched date range, fixed at 7d on this tab) — this
-  // is the number of FULL days averaged once the latest/possibly-partial sales date is
-  // excluded (see the anchoring logic below).
+  // Avg Sale / Allocation % now average over the literal [start, end] request range (see
+  // `daysInRange` below) so they're directly comparable to Sales & Allocation's own Fill %,
+  // which is computed the same way. avgSaleWindowDaysVal no longer sizes that averaging
+  // window — it only pads how far back the sales fetch reaches, so the sidebar's 7/15/30d
+  // toggle still has SOME effect (a larger value fetches more history) but no longer
+  // controls the averaging period itself.
   const avgSaleWindowDaysVal = Math.max(1, Math.min(90, parseInt(avgSaleWindowDays, 10) || 7))
 
   try {
@@ -56,7 +58,7 @@ export default async function inventoryHandler(req, res) {
     const salesFetchStart = new Date(start); salesFetchStart.setDate(salesFetchStart.getDate() - salesFetchLookbackDays)
     const salesFetchStartStr = salesFetchStart.toISOString().slice(0, 10)
 
-    const [[invRows], [salesRows], [lastSaleRows], [itemMasterRows], [skuMappingRows]] = await Promise.all([
+    const [[invRows], [salesRows], [lastSaleRows], [itemMasterRows], [skuMappingRows], [shopifyInvRows]] = await Promise.all([
       // The raw snapshot table accumulates one row per sync run (hundreds of duplicate
       // rows per SKU+Facility over time) — dedupe to the latest per (ItemSkuCode, Facility),
       // same logic the original Power BI source query used. Note: that query read the
@@ -85,7 +87,7 @@ export default async function inventoryHandler(req, res) {
       // is a couple of days behind — see anchoredSalesRange.
       bq.query({
         query: `SELECT final_sku, Facility, state, channel, order_date, SUM(total_quantity) AS qty
-                FROM \`frido-429506.production.aggregated_uniware_sales_report\`
+                FROM \`frido-429506.production.Aggregated_uniware_sales_report\`
                 WHERE order_date BETWEEN '${salesFetchStartStr}' AND '${end}'
                 GROUP BY final_sku, Facility, state, channel, order_date`,
         maximumBytesBilled: '5000000000',
@@ -93,7 +95,7 @@ export default async function inventoryHandler(req, res) {
       // Independent of the selected range — always the trailing 90d window, for dead-stock detection.
       bq.query({
         query: `SELECT final_sku, MAX(order_date) AS last_sale_date, SUM(total_quantity) AS qty_90d
-                FROM \`frido-429506.production.aggregated_uniware_sales_report\`
+                FROM \`frido-429506.production.Aggregated_uniware_sales_report\`
                 WHERE order_date BETWEEN '${deadStockCutoffStr}' AND '${end}'
                 GROUP BY final_sku`,
         maximumBytesBilled: '5000000000',
@@ -112,9 +114,26 @@ export default async function inventoryHandler(req, res) {
                 WHERE TRIM(masterskucode) NOT IN ('', 'not found')`,
         maximumBytesBilled: '1000000000',
       }),
+      // Website Status — live/stock-out per SKU on Shopify (both the retail "myfrido" and
+      // "myfrido_mobility" stores). A SKU is Live if EITHER store shows available > 0.
+      bq.query({
+        query: `SELECT sku, SUM(available) AS available
+                FROM \`frido-429506.production.fact_shopify_inventory\`
+                WHERE available > 0
+                GROUP BY sku`,
+        maximumBytesBilled: '1000000000',
+      }),
     ])
 
     const skuMap = buildSkuMap(skuMappingRows)
+
+    // ── Website Status lookup — normalized SKU -> live on Shopify (available > 0 in
+    // at least one store), keyed the same way as the item master/SKU rollup below. ──
+    const liveOnWebsite = new Set()
+    for (const r of shopifyInvRows) {
+      if (!r.sku) continue
+      liveOnWebsite.add(normSku(r.sku))
+    }
 
     // ── Item master lookup, keyed by normalized SKU ──────────────────────────
     const itemMaster = new Map()
@@ -146,6 +165,7 @@ export default async function inventoryHandler(req, res) {
     // Merged (not overwritten) across raw codes that resolve to the same master SKU.
     const lastSaleBySkuKey = new Map()
     for (const r of lastSaleRows) {
+      if (isPseudoSku(r.final_sku)) continue
       const { key } = resolveMasterSkuKey(r.final_sku, skuMap)
       if (!key) continue
       const rowDate = r.last_sale_date?.value || r.last_sale_date
@@ -174,29 +194,22 @@ export default async function inventoryHandler(req, res) {
     })
     const cleanSalesRowsUnanchored = salesRows.filter(row => !isPseudoSku(row.final_sku))
 
-    // ── Anchor Avg Sale to the latest date that actually has sales data ──────────
-    // The pipeline can lag by a day (or more) behind "today," and a same-day row that's
-    // only partially landed would otherwise silently drag the average down. So: find the
-    // max order_date present anywhere in the fetched window, always exclude that date
-    // itself (treat it as potentially partial), then use the `avgSaleWindowDaysVal` days
-    // immediately before it. If even that latest date is stale by multiple days (e.g. a
-    // 2-day pipeline gap), the window simply shifts back with it — exactly the same rule,
-    // no special-casing for "how many days behind."
     let maxSalesDate = null
     for (const row of cleanSalesRowsUnanchored) {
       const d = row.order_date?.value || row.order_date
       if (d && (!maxSalesDate || d > maxSalesDate)) maxSalesDate = d
     }
-    let avgSaleWindowStartStr = start, avgSaleWindowEndStr = end
-    if (maxSalesDate) {
-      const anchorEnd = new Date(maxSalesDate); anchorEnd.setDate(anchorEnd.getDate() - 1)
-      const anchorStart = new Date(anchorEnd); anchorStart.setDate(anchorStart.getDate() - (avgSaleWindowDaysVal - 1))
-      avgSaleWindowEndStr = anchorEnd.toISOString().slice(0, 10)
-      avgSaleWindowStartStr = anchorStart.toISOString().slice(0, 10)
-    }
+
+    // ── Avg Sale window ───────────────────────────────────────────────────────
+    // Uses the literal requested [start, end] range directly — this is what makes
+    // Warehouse Health's Allocation %/Avg Sale numbers comparable to Sales & Allocation's
+    // own Fill % (both now computed over the same selected date range, kept in sync from
+    // the frontend — see InventoryPage.jsx). Trade-off: if the range includes a day the
+    // pipeline hasn't fully landed yet, that partial day can drag the average down — no
+    // longer auto-excluded via anchoring to the latest complete sales date, as before.
     const cleanSalesRows = cleanSalesRowsUnanchored.filter(row => {
       const d = row.order_date?.value || row.order_date
-      return d >= avgSaleWindowStartStr && d <= avgSaleWindowEndStr
+      return d >= start && d <= end
     })
 
     const locationFilterVals = splitCsv(location)
@@ -251,8 +264,12 @@ export default async function inventoryHandler(req, res) {
           if (isB2C) avgSaleBySkuLoc.set(mapKey, (avgSaleBySkuLoc.get(mapKey) || 0) + qty)
         }
 
+        // Gated by countsTowardTotal (real B2C/B2B/PO demand only) so this matches Sales &
+        // Allocation's facilityAllocation.qty exactly — previously ungated, so Stock
+        // transfer/Ignore/Custom rows (e.g. inter-warehouse transfers) inflated a
+        // receiving location's allocation far beyond its actual customer-order fulfillment.
         const facilityLocation = facilityToLocation.get(row.Facility)
-        if (facilityLocation && (!respectLocationFilter || !locationFilterVals || locationFilterVals.includes(facilityLocation))) {
+        if (countsTowardTotal && facilityLocation && (!respectLocationFilter || !locationFilterVals || locationFilterVals.includes(facilityLocation))) {
           const mapKey = `${key}|${facilityLocation}`
           allocBySkuLoc.set(mapKey, (allocBySkuLoc.get(mapKey) || 0) + qty)
         }
@@ -276,10 +293,10 @@ export default async function inventoryHandler(req, res) {
         // per-location averages — summing rounded values compounds ceil() error upward
         // (e.g. 7 locations each rounded up by <1 unit adds up to +7, not +1).
         const rawQty = avgSaleBySkuLoc.get(mapKey) || 0
-        const avgSale = Math.ceil(rawQty / avgSaleWindowDaysVal)
+        const avgSale = Math.ceil(rawQty / daysInRange)
         const rawTotalQty = totalAvgSaleBySkuLoc.get(mapKey) || 0
-        const totalAvgSale = Math.ceil(rawTotalQty / avgSaleWindowDaysVal)
-        const orderAllocation = (allocBySkuLoc.get(mapKey) || 0) / avgSaleWindowDaysVal
+        const totalAvgSale = Math.ceil(rawTotalQty / daysInRange)
+        const orderAllocation = (allocBySkuLoc.get(mapKey) || 0) / daysInRange
         const denominator = Math.ceil(Math.max(avgSale, orderAllocation))
         const doi = totalInvt > 0 && denominator === 0 ? null : (denominator > 0 ? Math.floor(totalInvt / denominator) : 0)
         const thirtyDayReq = Math.round(avgSale * 30)
@@ -343,8 +360,8 @@ export default async function inventoryHandler(req, res) {
       }
 
       let rolled = [...rolledSkuMap.values()].map(s => {
-        const avgSale = Math.ceil(s.rawAvgSaleQty / avgSaleWindowDaysVal)
-        const totalAvgSale = Math.ceil(s.rawTotalAvgSaleQty / avgSaleWindowDaysVal)
+        const avgSale = Math.ceil(s.rawAvgSaleQty / daysInRange)
+        const totalAvgSale = Math.ceil(s.rawTotalAvgSaleQty / daysInRange)
         const denominator = Math.ceil(Math.max(avgSale, s.orderAllocation))
         const doi = s.totalInvt > 0 && denominator === 0 ? null : (denominator > 0 ? Math.floor(s.totalInvt / denominator) : 0)
         const isDead = s.totalInvt > 0 && !s.locations.some(l => l.stockStatus !== 'Dead / No Sale' && l.stockStatus !== 'Out of Stock') && s.locations.some(l => l.stockStatus === 'Dead / No Sale')
@@ -363,6 +380,9 @@ export default async function inventoryHandler(req, res) {
           rtdLevel: rtdLevel(s.rtdInvt, avgSale),
           requiredStock: Math.round(requiredStock(avgSale, s.leadTime, s.productSource, s.totalInvt)),
           locations: sortByLocationOrder(s.locations, l => l.location),
+          // Website Status — Live if this SKU shows available > 0 on Shopify (either
+          // store); Stock Out otherwise, including SKUs Shopify doesn't carry at all.
+          websiteStatus: liveOnWebsite.has(normSku(s.sku)) ? 'Live' : 'Stock Out',
         }
       }).sort((a, b) => b.totalInvt - a.totalInvt)
 
@@ -446,12 +466,14 @@ export default async function inventoryHandler(req, res) {
       acc.orderAllocation += r.orderAllocation
     }
     const locations = sortByLocationOrder([...locationMap.values()].filter(l => l.location !== 'Unmapped').map(l => {
-      const avgSale = Math.ceil(l.rawAvgSaleQty / avgSaleWindowDaysVal)
-      const totalAvgSale = Math.ceil(l.rawTotalAvgSaleQty / avgSaleWindowDaysVal)
+      const avgSale = Math.ceil(l.rawAvgSaleQty / daysInRange)
+      const totalAvgSale = Math.ceil(l.rawTotalAvgSaleQty / daysInRange)
       const denominator = Math.ceil(Math.max(avgSale, l.orderAllocation))
       const doi = l.totalInvt > 0 && denominator === 0 ? null : (denominator > 0 ? Math.floor(l.totalInvt / denominator) : 0)
-      // Allocation % — actual order allocation to this facility ÷ actual regional (B2C) sale.
-      const allocationPct = avgSale > 0 ? (l.orderAllocation / avgSale) * 100 : null
+      // Allocation % — actual order allocation to this facility ÷ regional demand across ALL
+      // sales types (matches Sales & Allocation page's Fill % = allocation ÷ sales, which also
+      // counts B2C+B2B+PO demand, not B2C-only).
+      const allocationPct = totalAvgSale > 0 ? (l.orderAllocation / totalAvgSale) * 100 : null
       return { ...l, avgSale, totalAvgSale, doi, allocationPct, stockStatus: doi == null ? stockStatus(0, avgSale, l.totalInvt, {}) : stockStatus(doi, avgSale, l.totalInvt, {}) }
     }), l => l.location)
 
@@ -470,7 +492,7 @@ export default async function inventoryHandler(req, res) {
     // and the row automatically qualifies for both lists (an unsold SKU is both slow-moving
     // and dead stock candidate) as long as it clears the qty floor.
     const SLOW_MOVING_DOI = 45
-    const DEAD_STOCK_DOI = 100
+    const DEAD_STOCK_DOI = 200
     const SUBCAT_QTY_FLOOR = 50
 
     const subCatMap = new Map() // key: category|subCategory
@@ -484,6 +506,9 @@ export default async function inventoryHandler(req, res) {
     }
     const subCatRows = [...subCatMap.values()]
       .filter(sc => sc.totalInvt > SUBCAT_QTY_FLOOR)
+      // Sparepart sub-categories aren't real sellable stock (chair/mobility spare parts) —
+      // excluded from Slow-Moving/Dead Stock only, not the main Inventory Detail table.
+      .filter(sc => !sc.subCategory?.toLowerCase().startsWith('sparepart'))
       .map(sc => {
         const notBeingSold = sc.avgSale <= 0
         const doi = notBeingSold ? Math.round(sc.totalInvt) : Math.floor(sc.totalInvt / sc.avgSale)
@@ -503,8 +528,12 @@ export default async function inventoryHandler(req, res) {
     const slowMoving = subCatRows
       .filter(sc => sc.notBeingSold || sc.doi > SLOW_MOVING_DOI)
       .sort((a, b) => b.totalInvt - a.totalInvt)
+    // Dead stock: either selling so slowly that 200+ days of stock remain, OR completely
+    // stalled (zero sales) with stock above the same 200-unit threshold — both paths use
+    // the same DEAD_STOCK_DOI number so a "not being sold" row can't qualify with a much
+    // smaller stock level than a merely-slow-moving one would need.
     const deadStock = subCatRows
-      .filter(sc => sc.notBeingSold || sc.doi > DEAD_STOCK_DOI)
+      .filter(sc => (sc.notBeingSold && sc.totalInvt > DEAD_STOCK_DOI) || sc.doi > DEAD_STOCK_DOI)
       .sort((a, b) => b.totalInvt - a.totalInvt)
 
     // ── Pivot: Category > Sub-category > SKU rows, Location columns ──────────
@@ -530,7 +559,7 @@ export default async function inventoryHandler(req, res) {
       asOf: lastSnapshotUpdated,
       lastSalesDate: maxSalesDate,
       avgSaleWindowDays: avgSaleWindowDaysVal,
-      avgSaleWindow: { start: avgSaleWindowStartStr, end: avgSaleWindowEndStr },
+      avgSaleWindow: { start, end },
       dateRange: { start, end, days: daysInRange },
       deadStockWindowDays: DEAD_STOCK_WINDOW_DAYS,
       reorderPointDoi: REORDER_POINT_DOI,
