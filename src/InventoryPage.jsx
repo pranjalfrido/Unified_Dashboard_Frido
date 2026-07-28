@@ -364,10 +364,11 @@ export default function InventoryPage({ onTopbarDateControl }) {
     onTopbarDateControl({
       filters: sales.dateFilters, setFilters: sales.setDateFilters,
       onRefresh: () => sales.fetchData({ ...sales.dateFilters, ...salesFilterBody }),
+      loading: sales.loading,
     })
     return () => onTopbarDateControl(null)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tab, sales.dateFilters, sales.setDateFilters, sales.fetchData, onTopbarDateControl])
+  }, [tab, sales.dateFilters, sales.setDateFilters, sales.fetchData, sales.loading, onTopbarDateControl])
 
   // Rendered at the top of each sub-page's own FilterSidebar (see SubTabSwitcher comment) —
   // holds the Health/Sales/Inward switcher plus whatever per-tab info/date-control used to
@@ -547,7 +548,7 @@ export default function InventoryPage({ onTopbarDateControl }) {
         )}
 
         {tab === 'health' && <InventoryHealthPage data={invData} filters={healthFilters} setFilters={setHealthFilters} sidebarTop={sidebarTop} />}
-        {tab === 'sales' && <SalesAllocationPage data={sales.data} loading={sales.loading} filters={salesFilters} setFilters={setSalesFilters} sidebarTop={sidebarTop} />}
+        {tab === 'sales' && <SalesAllocationPage data={sales.data} filters={salesFilters} setFilters={setSalesFilters} sidebarTop={sidebarTop} />}
         {tab === 'inward' && <InwardPage data={inward.data} filters={inwardFilters} setFilters={setInwardFilters} sidebarTop={sidebarTop} />}
       </div>
     </div>
