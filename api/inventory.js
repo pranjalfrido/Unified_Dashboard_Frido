@@ -6,6 +6,12 @@ import {
 } from './_inventory_shared.js'
 
 const DEAD_STOCK_WINDOW_DAYS = 90
+
+// Module-level cache for the inventory snapshot — this table is large and date-independent
+// (always "latest stock now"). Cache for 30 minutes so repeated date-range changes reuse it.
+let _invCache = null
+let _invCacheAt = 0
+const INV_CACHE_TTL_MS = 30 * 60 * 1000
 // Avg Sale anchors to the latest date that actually has sales data, not the requested
 // `end` — the pipeline can lag by a day or more, and a same-day/partial row would
 // otherwise silently drag the average down. Extra days are fetched beyond the requested
@@ -58,26 +64,28 @@ export default async function inventoryHandler(req, res) {
     const salesFetchStart = new Date(start); salesFetchStart.setDate(salesFetchStart.getDate() - salesFetchLookbackDays)
     const salesFetchStartStr = salesFetchStart.toISOString().slice(0, 10)
 
-    const [[invRows], [salesRows], [lastSaleRows], [itemMasterRows], [skuMappingRows], [shopifyInvRows]] = await Promise.all([
-      // The raw snapshot table accumulates one row per sync run (hundreds of duplicate
-      // rows per SKU+Facility over time) — dedupe to the latest per (ItemSkuCode, Facility),
-      // same logic the original Power BI source query used. Note: that query read the
-      // "_in"-suffixed columns, but those are now 100% NULL in this table (the pipeline's
-      // column convention has since drifted) — "_st" is where live data actually is today,
-      // confirmed by direct inspection, so we read that instead.
-      bq.query({
+    // Inventory snapshot is date-independent (always latest stock) — serve from module cache
+    // for 30 min so changing the date range doesn't re-scan the full table each time.
+    const now = Date.now()
+    if (!_invCache || now - _invCacheAt > INV_CACHE_TTL_MS) {
+      const [rows] = await bq.query({
         query: `SELECT
                   ItemSkuCode, Facility, Updated,
                   SAFE_CAST(Inventory_st AS FLOAT64) AS Inventory,
                   SAFE_CAST(InventoryBlocked_st AS FLOAT64) AS InventoryBlocked
                 FROM \`frido-429506.Frido_BigQuery.Frido_Unicommerce_3_Inventory_Snapshot_Inventory_Snapshot\`
-                WHERE _daton_batch_runtime >= UNIX_SECONDS(TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL 90 DAY))
                 QUALIFY ROW_NUMBER() OVER (
                   PARTITION BY ItemSkuCode, Facility
                   ORDER BY Updated DESC, _daton_batch_runtime DESC
                 ) = 1`,
         maximumBytesBilled: '5000000000',
-      }),
+      })
+      _invCache = rows
+      _invCacheAt = now
+    }
+    const invRows = _invCache
+
+    const [[salesRows], [lastSaleRows], [itemMasterRows], [skuMappingRows], [shopifyInvRows]] = await Promise.all([
       // Pulls a few extra lookback days beyond the requested range (SALES_LOOKBACK_BUFFER_DAYS)
       // so the "true anchor date" logic below always has enough history even when the pipeline
       // is a couple of days behind — see anchoredSalesRange.
