@@ -289,6 +289,20 @@ const filterOptions = {
   skus: [...new Set(finishedGoods.map(r => r.sku))].sort(),
 }
 
+// Enriched raw rows for client-side filtering in the browser
+const rawRows = finishedGoods.map(r => ({
+  sku: r.sku, skuKey: r.skuKey,
+  category: r.category, subCategory: r.subCategory,
+  facility: r.facility, location: r.location,
+  vendor: r.vendorName,
+  date: r.date,
+  qtyReceived: Math.round(r.qtyReceived),
+  qtyRejected: Math.round(r.qtyRejected),
+  rejectionReason: r.rejectionReason || null,
+  leadTimeHours: r.leadTimeHours != null ? Math.round(r.leadTimeHours * 10) / 10 : null,
+  grnCode: r.grnCode,
+})).filter(r => r.date)
+
 const payload = {
   asOf: new Date().toISOString(),
   dateRange: { start: startStr, end: endStr, days: 30 },
@@ -312,6 +326,7 @@ const payload = {
   facilityBreakdown,
   rejectionReasons,
   skuTable,
+  rawRows,
 }
 
 const json = JSON.stringify(payload)
