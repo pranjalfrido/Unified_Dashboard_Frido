@@ -159,8 +159,9 @@ function useStaticInv(enabled = true) {
 
   useEffect(() => {
     if (!enabled) return
+    if (data) return  // already loaded, don't re-fetch on tab switch
     fetchData()
-  }, [enabled, fetchData])
+  }, [enabled, data, fetchData])
 
   return { dateFilters, setDateFilters, data, loading, error, fetchData }
 }
