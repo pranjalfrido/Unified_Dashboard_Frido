@@ -285,7 +285,7 @@ function DrasticMoversTable({ rows, metric, level }) {
   )
 }
 
-export default function SalesAllocationPage({ data, filters, setFilters, sidebarTop }) {
+export default function SalesAllocationPage({ data, loading, filters, setFilters, sidebarTop }) {
   const [trendGranularity, setTrendGranularity] = useState('daily') // 'daily' | 'weekly' | 'monthly'
   const [sidebarOpen, setSidebarOpen] = useState(true)
   const [channelMetric, setChannelMetric] = useState('rev') // 'rev' | 'qty' — Channel-Wise Sales bar list
@@ -518,7 +518,18 @@ export default function SalesAllocationPage({ data, filters, setFilters, sidebar
   })()
 
   return (
-    <div style={{ display: 'flex', gap: 0 }}>
+    <div style={{ display: 'flex', gap: 0, position: 'relative' }}>
+      {loading && data && (
+        <div style={{
+          position: 'absolute', inset: 0, zIndex: 10, background: 'rgba(255,255,255,0.55)',
+          display: 'flex', alignItems: 'flex-start', justifyContent: 'center', paddingTop: 48,
+          backdropFilter: 'blur(2px)', borderRadius: 8,
+        }}>
+          <div style={{ background: IC.surfaceHi, border: `1px solid ${IC.border2}`, borderRadius: 10, padding: '10px 20px', fontSize: 13, color: IC.t2, fontWeight: 600, boxShadow: '0 4px 16px rgba(0,0,0,0.1)' }}>
+            Updating…
+          </div>
+        </div>
+      )}
       <FilterSidebar data={data} filters={filters} setFilters={setFilters} open={sidebarOpen} sidebarTop={sidebarTop} />
       <button onClick={() => setSidebarOpen(o => !o)} style={{
         width: 16, alignSelf: 'flex-start', marginTop: 4, height: 48, border: `1px solid ${IC.border}`, borderLeft: 'none',

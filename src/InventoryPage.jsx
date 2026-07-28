@@ -221,8 +221,9 @@ function useStatic(staticPath, fallbackApiPath, fallbackBody = {}, enabled = tru
     fetchFromAPI(start, end)
   }, [enabled, dateFilters.start, dateFilters.end, fetchFromAPI]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // When sidebar filters change: hit API if any filter is active, restore cache when all cleared
+  // When sidebar filters change: debounce 600ms so multi-select clicks batch into one API call
   const prevFiltersRef = useRef(null)
+  const filterTimerRef = useRef(null)
   useEffect(() => {
     if (!enabled || !initialFetchedRef.current) return
     const bodyStr = JSON.stringify(fallbackBody)
@@ -231,15 +232,18 @@ function useStatic(staticPath, fallbackApiPath, fallbackBody = {}, enabled = tru
     const cached = cachedRangeRef.current
     const { start, end } = dateFilters
     if (!hasActiveFilters(fallbackBody)) {
-      // All filters cleared — restore static cache if on the cached date range, else re-fetch API
+      // All filters cleared — restore static cache instantly if on the cached date range
       if (cached && cached.start === start && cached.end === end && cachedDataRef.current) {
+        clearTimeout(filterTimerRef.current)
         setData(cachedDataRef.current)
         return
       }
     }
-    // Filter added/changed, or date range differs — always hit API
-    if (!cached) return // still on initial load, let fetchData handle it
-    fetchFromAPI(start, end)
+    if (!cached) return // still on initial load
+    // Debounce: wait 600ms after last filter change before hitting BQ
+    clearTimeout(filterTimerRef.current)
+    filterTimerRef.current = setTimeout(() => fetchFromAPI(start, end), 600)
+    return () => clearTimeout(filterTimerRef.current)
   }, [enabled, JSON.stringify(fallbackBody), fetchFromAPI]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Refresh button
@@ -543,7 +547,7 @@ export default function InventoryPage({ onTopbarDateControl }) {
         )}
 
         {tab === 'health' && <InventoryHealthPage data={invData} filters={healthFilters} setFilters={setHealthFilters} sidebarTop={sidebarTop} />}
-        {tab === 'sales' && <SalesAllocationPage data={sales.data} filters={salesFilters} setFilters={setSalesFilters} sidebarTop={sidebarTop} />}
+        {tab === 'sales' && <SalesAllocationPage data={sales.data} loading={sales.loading} filters={salesFilters} setFilters={setSalesFilters} sidebarTop={sidebarTop} />}
         {tab === 'inward' && <InwardPage data={inward.data} filters={inwardFilters} setFilters={setInwardFilters} sidebarTop={sidebarTop} />}
       </div>
     </div>
