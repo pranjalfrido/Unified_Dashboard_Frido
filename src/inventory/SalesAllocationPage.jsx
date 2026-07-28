@@ -398,9 +398,33 @@ export default function SalesAllocationPage({ data, filters, setFilters, sidebar
       return { location, qty: Math.round(qty), qtyPerDay: Math.round(qty / days), rev: Math.round(rev), revPerDay: Math.round(rev / days), asp: qty > 0 ? Math.round(rev / qty) : null, sharePct: totalQty > 0 ? qty / totalQty : null, allocationPct: demand > 0 ? Math.min(1, qty / demand) : null, skuCount: 0, region: null }
     })
 
+    // Re-derive Product-Wise Sales Matrix from filtered rows
+    const MSEP = '\x1f'
+    const matrixCells = new Map()
+    const matrixDatesSet = new Set()
+    const matrixSkuMetaMap = new Map()
+    for (const r of rows) {
+      matrixDatesSet.add(r.date)
+      if (!matrixSkuMetaMap.has(r.sku)) matrixSkuMetaMap.set(r.sku, { sku: r.sku, category: r.category, subCategory: r.subCategory })
+      const addCell = (cat, sub, skuKey) => {
+        const cellKey = `${cat}${MSEP}${sub}${MSEP}${skuKey}${MSEP}${r.date}`
+        if (!matrixCells.has(cellKey)) matrixCells.set(cellKey, { qty: 0, rev: 0 })
+        const c = matrixCells.get(cellKey); c.qty += r.qty; c.rev += r.rev
+      }
+      addCell(r.category, '', '')
+      addCell(r.category, r.subCategory, '')
+      addCell(r.category, r.subCategory, r.sku)
+    }
+    const matrixCellRows = [...matrixCells.entries()].map(([k, v]) => {
+      const [cat, sub, skuKey, date] = k.split(MSEP)
+      return { path: `${cat}${MSEP}${sub}${MSEP}${skuKey}`, date, qty: Math.round(v.qty), rev: Math.round(v.rev) }
+    })
+    const matrixSkuList = [...matrixSkuMetaMap.entries()].map(([key, meta]) => ({ skuKey: key, ...meta }))
+    const matrixDates = [...matrixDatesSet].sort()
+
     return {
       ...data,
-      rawRows: data.rawRows, // keep for subsequent filter changes
+      rawRows: data.rawRows,
       summary: {
         ...data.summary,
         totalUnits: Math.round(totalQty),
@@ -421,6 +445,9 @@ export default function SalesAllocationPage({ data, filters, setFilters, sidebar
       productSales: [...skuMap2.values()].sort((a, b) => b.rev - a.rev),
       fillRateByWarehouse,
       facilityAllocation,
+      matrixCellRows,
+      matrixSkuList,
+      matrixDates,
     }
   }, [data, filters.category, filters.subCategory, filters.sku, filters.channel, filters.salesType, filters.facility, filters.region])
 
