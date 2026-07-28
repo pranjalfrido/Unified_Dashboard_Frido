@@ -251,14 +251,30 @@ const locations = sortByLocationOrder([...locationMap.values()].filter(l => l.lo
   return { ...l, avgSale, totalAvgSale, doi, allocationPct: totalAvgSale>0?(l.orderAllocation/totalAvgSale)*100:null, stockStatus: doi==null?stockStatus(0,avgSale,l.totalInvt,{}):stockStatus(doi,avgSale,l.totalInvt,{}) }
 }), l => l.location)
 
-// Dead/slow stock
+// Dead/slow stock — sub-category rollup (same structure as api/inventory.js)
 const DEAD_STOCK_DOI = 200, SLOW_MOVING_DOI = 45, SUBCAT_QTY_FLOOR = 50
-const deadStock = skus.filter(s => s.isDead || (s.doi != null && s.doi >= DEAD_STOCK_DOI && s.totalInvt > 0))
-  .map(s => ({ sku: s.sku, category: s.category, subCategory: s.subCategory, totalInvt: s.totalInvt, avgSale: s.avgSale, doi: s.doi, stockStatus: s.stockStatus, daysSinceLastSale: s.daysSinceLastSale }))
-  .sort((a,b) => b.totalInvt - a.totalInvt).slice(0, 50)
-const slowMoving = skus.filter(s => !s.isDead && s.totalInvt > 0 && s.doi != null && s.doi >= SLOW_MOVING_DOI && s.doi < DEAD_STOCK_DOI)
-  .map(s => ({ sku: s.sku, category: s.category, subCategory: s.subCategory, totalInvt: s.totalInvt, avgSale: s.avgSale, doi: s.doi, stockStatus: s.stockStatus }))
-  .sort((a,b) => b.doi - a.doi).slice(0, 50)
+const subCatMap = new Map()
+for (const s of skus) {
+  const key = `${s.category}|${s.subCategory}`
+  if (!subCatMap.has(key)) subCatMap.set(key, { category: s.category, subCategory: s.subCategory, totalInvt: 0, avgSale: 0, skuList: [] })
+  const acc = subCatMap.get(key)
+  acc.totalInvt += s.totalInvt; acc.avgSale += s.avgSale; acc.skuList.push(s)
+}
+const subCatRows = [...subCatMap.values()]
+  .filter(sc => sc.totalInvt > SUBCAT_QTY_FLOOR && !sc.subCategory?.toLowerCase().startsWith('sparepart'))
+  .map(sc => {
+    const notBeingSold = sc.avgSale <= 0
+    const doi = notBeingSold ? Math.round(sc.totalInvt) : Math.floor(sc.totalInvt / sc.avgSale)
+    return {
+      category: sc.category, subCategory: sc.subCategory,
+      totalInvt: Math.round(sc.totalInvt), avgSale: +sc.avgSale.toFixed(2), doi, notBeingSold,
+      skus: sc.skuList.filter(s => s.totalInvt > 0)
+        .map(s => ({ sku: s.sku, totalInvt: Math.round(s.totalInvt), avgSale: +s.avgSale.toFixed(2), doi: s.avgSale > 0 ? s.doi : Math.round(s.totalInvt) }))
+        .sort((a,b) => b.totalInvt - a.totalInvt),
+    }
+  })
+const deadStock = subCatRows.filter(sc => (sc.notBeingSold && sc.totalInvt > DEAD_STOCK_DOI) || sc.doi > DEAD_STOCK_DOI).sort((a,b) => b.totalInvt - a.totalInvt)
+const slowMoving = subCatRows.filter(sc => sc.notBeingSold || sc.doi > SLOW_MOVING_DOI).sort((a,b) => b.totalInvt - a.totalInvt)
 
 // Lead time risk
 const leadTimeRisk = skus.filter(s => s.productSource && s.productSource !== 'Inhouse' && s.leadTime>0 && s.doi!=null && s.totalInvt>0)
