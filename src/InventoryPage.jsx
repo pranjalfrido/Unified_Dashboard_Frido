@@ -267,20 +267,33 @@ export default function InventoryPage({ onTopbarDateControl }) {
   const invData = (() => {
     const raw = inv.data
     if (!raw) return raw
-    const { category, subCategory, stockStatus: stockStatusF, rtdLevel: rtdLevelF, productId, location: locationF } = healthFilters
+    const { category, subCategory, stockStatus: stockStatusF, rtdLevel: rtdLevelF, productId, location: locationF, facility: facilityF, facilityType: facilityTypeF } = healthFilters
     const matchCsv = (val, filterArr) => !filterArr?.length || filterArr.includes(val)
+
+    // Resolve facility/facilityType filters → effective location set
+    const facilitiesLookup = raw.filterOptions?.facilities || []
+    let effectiveLocations = locationF?.length ? [...locationF] : null
+    if (facilityF?.length) {
+      const locsFromFacility = [...new Set(facilitiesLookup.filter(f => facilityF.includes(f.facility)).map(f => f.location))]
+      effectiveLocations = effectiveLocations ? effectiveLocations.filter(l => locsFromFacility.includes(l)) : locsFromFacility
+    }
+    if (facilityTypeF?.length) {
+      const locsFromType = [...new Set(facilitiesLookup.filter(f => facilityTypeF.includes(f.facilityType)).map(f => f.location))]
+      effectiveLocations = effectiveLocations ? effectiveLocations.filter(l => locsFromType.includes(l)) : locsFromType
+    }
+
     let skus = raw.skus
     if (category?.length) skus = skus.filter(s => matchCsv(s.category, category))
     if (subCategory?.length) skus = skus.filter(s => matchCsv(s.subCategory, subCategory))
     if (stockStatusF?.length) skus = skus.filter(s => matchCsv(s.stockStatus, stockStatusF))
     if (rtdLevelF?.length) skus = skus.filter(s => matchCsv(s.rtdLevel, rtdLevelF))
     if (productId?.length) skus = skus.filter(s => matchCsv(s.sku, productId))
-    if (locationF?.length) {
+    if (effectiveLocations?.length) {
       skus = skus
-        .filter(s => s.locations?.some(l => locationF.includes(l.location)))
+        .filter(s => s.locations?.some(l => effectiveLocations.includes(l.location)))
         .map(s => {
           // Restrict each SKU's numbers to only the selected location(s)
-          const locs = (s.locations || []).filter(l => locationF.includes(l.location))
+          const locs = (s.locations || []).filter(l => effectiveLocations.includes(l.location))
           const totalInvt = locs.reduce((a, l) => a + (l.totalInvt || 0), 0)
           const rawInvt = locs.reduce((a, l) => a + (l.rawInvt || 0), 0)
           const rawBlockedInvt = locs.reduce((a, l) => a + (l.rawBlockedInvt || 0), 0)
@@ -319,7 +332,7 @@ export default function InventoryPage({ onTopbarDateControl }) {
       }
     }
     const locations = (raw.locations || [])
-      .filter(origLoc => !locationF?.length || locationF.includes(origLoc.location))
+      .filter(origLoc => !effectiveLocations?.length || effectiveLocations.includes(origLoc.location))
       .map(origLoc => {
         const l = locMap.get(origLoc.location)
         if (!l || l.totalInvt === 0) return null
