@@ -117,7 +117,7 @@ function useEndpoint(path, extraFilters, enabled = true) {
 
 // Fetches pre-computed inventory JSON from Vercel CDN (~100-200ms, no cold start).
 // Falls back to POST /api/inventory if the static file is missing or stale (>2h).
-function useStaticInv(enabled = true) {
+function useStaticInv(enabled = true, windowDays = 7) {
   const def = getDefaultDates()
   const [dateFilters, setDateFilters] = useState({ start: def.start, end: def.end })
   const [data, setData] = useState(null)
@@ -126,27 +126,26 @@ function useStaticInv(enabled = true) {
   const reqIdRef = useRef(0)
   const API = import.meta.env.VITE_API_URL || ''
 
-  const fetchData = useCallback(async () => {
+  const fetchData = useCallback(async (windowDays = 7) => {
     const reqId = ++reqIdRef.current
     setLoading(true)
     setError(null)
     try {
-      const res = await fetch('/inv-data.json')
+      const res = await fetch(`/inv-data-${windowDays}d.json`)
       if (!res.ok) throw new Error(`static file missing (${res.status})`)
       const json = await res.json()
       if (reqId !== reqIdRef.current) return
-      // If the file is older than 2 hours, fall back to live API
       const ageMs = json.asOf ? Date.now() - new Date(json.asOf).getTime() : Infinity
       if (ageMs > 2 * 60 * 60 * 1000) throw new Error('static file stale')
       setData(json)
       if (json.avgSaleWindow) setDateFilters({ start: json.avgSaleWindow.start, end: json.avgSaleWindow.end })
     } catch {
-      // fallback: hit live API with default trailing-7-day window
+      // fallback: hit live API
       try {
         const { start, end } = getDefaultDates()
         const res2 = await fetch(`${API}/api/inventory`, {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ start, end, avgSaleWindowDays: 7 }),
+          body: JSON.stringify({ start, end, avgSaleWindowDays: windowDays }),
         })
         if (!res2.ok) throw new Error(`API error ${res2.status}`)
         const json2 = await res2.json()
@@ -157,11 +156,14 @@ function useStaticInv(enabled = true) {
     } finally { if (reqId === reqIdRef.current) setLoading(false) }
   }, [API])
 
+  const windowDaysRef = useRef(null)
   useEffect(() => {
     if (!enabled) return
-    if (data) return  // already loaded, don't re-fetch on tab switch
-    fetchData()
-  }, [enabled, data, fetchData])
+    const w = windowDays || 7
+    if (data && windowDaysRef.current === w) return  // already loaded for this window
+    windowDaysRef.current = w
+    fetchData(w)
+  }, [enabled, data, windowDays, fetchData])
 
   return { dateFilters, setDateFilters, data, loading, error, fetchData }
 }
@@ -192,7 +194,7 @@ export default function InventoryPage({ onTopbarDateControl }) {
   // Sales & Allocation is the one exception: it must always be enabled even on other tabs
   // because Health's date-sync effect below needs its (possibly auto-corrected)
   // dateFilters to exist before Health can sync to them.
-  const inv = useStaticInv(tab === 'health')
+  const inv = useStaticInv(tab === 'health', healthFilters.avgSaleWindowDays || 7)
   const sales = useEndpoint('/api/sales-allocation', salesFilterBody, true)
   const inward = useEndpoint('/api/inward', inwardFilterBody, tab === 'inward')
   const active = tab === 'health' ? inv : tab === 'sales' ? sales : inward
