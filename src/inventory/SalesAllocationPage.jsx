@@ -302,9 +302,131 @@ export default function SalesAllocationPage({ data, filters, setFilters, sidebar
   const [top20Metric, setTop20Metric] = useState('rev') // 'qty' | 'rev' — Top Products list, beside Drastic Sales Change
   const [top20Level, setTop20Level] = useState('subCategory') // 'sku' | 'subCategory' | 'category'
 
+  // Client-side filter: when static file has rawRows, filter instantly without API call
+  const filteredData = useMemo(() => {
+    if (!data?.rawRows) return data
+    const hasFilter = (arr) => arr?.length > 0
+    const anyActive = hasFilter(filters.category) || hasFilter(filters.subCategory) ||
+      hasFilter(filters.sku) || hasFilter(filters.channel) || hasFilter(filters.salesType) ||
+      hasFilter(filters.facility) || hasFilter(filters.region)
+    if (!anyActive) return data
+
+    const rows = data.rawRows.filter(r => {
+      if (hasFilter(filters.category) && !filters.category.includes(r.category)) return false
+      if (hasFilter(filters.subCategory) && !filters.subCategory.includes(r.subCategory)) return false
+      if (hasFilter(filters.sku) && !filters.sku.includes(r.sku)) return false
+      if (hasFilter(filters.channel) && !filters.channel.includes(r.channel) && !filters.channel.includes(r.channel2)) return false
+      if (hasFilter(filters.salesType) && !filters.salesType.includes(r.salesType)) return false
+      if (hasFilter(filters.facility) && !filters.facility.includes(r.facility)) return false
+      if (hasFilter(filters.region) && !filters.region.includes(r.region)) return false
+      return true
+    })
+
+    // Re-aggregate from filtered rows
+    const dailyMap = new Map()
+    const catMap = new Map()
+    const subCatMap = new Map()
+    const chMap = new Map()
+    const ch2Map = new Map()
+    const typeMap = new Map()
+    const skuMap2 = new Map()
+    const whDemand = new Map(), whCorrect = new Map()
+    const facMap = new Map(), facRevMap = new Map()
+    let totalQty = 0, totalRev = 0
+
+    for (const r of rows) {
+      totalQty += r.qty; totalRev += r.rev
+      // daily
+      if (!dailyMap.has(r.date)) dailyMap.set(r.date, { date: r.date, qty: 0, rev: 0 })
+      const d = dailyMap.get(r.date); d.qty += r.qty; d.rev += r.rev
+      // category
+      if (!catMap.has(r.category)) catMap.set(r.category, { category: r.category, qty: 0, rev: 0 })
+      const c = catMap.get(r.category); c.qty += r.qty; c.rev += r.rev
+      // subCategory
+      const sk = `${r.category}|${r.subCategory}`
+      if (!subCatMap.has(sk)) subCatMap.set(sk, { category: r.category, subCategory: r.subCategory, qty: 0, rev: 0 })
+      const sc = subCatMap.get(sk); sc.qty += r.qty; sc.rev += r.rev
+      // channel
+      if (!chMap.has(r.channel)) chMap.set(r.channel, { channel: r.channel, qty: 0, rev: 0 })
+      const ch = chMap.get(r.channel); ch.qty += r.qty; ch.rev += r.rev
+      // channel2
+      if (!ch2Map.has(r.channel2)) ch2Map.set(r.channel2, { channel: r.channel2, qty: 0, rev: 0 })
+      const c2 = ch2Map.get(r.channel2); c2.qty += r.qty; c2.rev += r.rev
+      // salesType
+      if (!typeMap.has(r.salesType)) typeMap.set(r.salesType, { type: r.salesType, qty: 0, rev: 0 })
+      const ct = typeMap.get(r.salesType); ct.qty += r.qty; ct.rev += r.rev
+      // sku
+      if (!skuMap2.has(r.sku)) skuMap2.set(r.sku, { sku: r.sku, category: r.category, subCategory: r.subCategory, qty: 0, rev: 0 })
+      const s = skuMap2.get(r.sku); s.qty += r.qty; s.rev += r.rev
+      // fillRate
+      if (r.nearestWH) {
+        whDemand.set(r.nearestWH, (whDemand.get(r.nearestWH) || 0) + r.qty)
+        if (r.location === r.nearestWH) whCorrect.set(r.nearestWH, (whCorrect.get(r.nearestWH) || 0) + r.qty)
+      }
+      // facility allocation
+      if (r.location && r.location !== 'Unmapped') {
+        facMap.set(r.location, (facMap.get(r.location) || 0) + r.qty)
+        facRevMap.set(r.location, (facRevMap.get(r.location) || 0) + r.rev)
+      }
+    }
+
+    const daily = [...dailyMap.values()].sort((a, b) => a.date.localeCompare(b.date))
+    const days = daily.length || 1
+    const exactTotal = rows.reduce((s, r) => s + r.qty, 0)
+    const exactCorrect = rows.filter(r => r.nearestWH && r.location === r.nearestWH).reduce((s, r) => s + r.qty, 0)
+
+    // weekly/monthly rollup
+    const weekKey = d => { const dt = new Date(d + 'T00:00:00Z'); const day = (dt.getUTCDay() + 6) % 7; dt.setUTCDate(dt.getUTCDate() - day); return dt.toISOString().slice(0, 10) }
+    const rollup = (keyFn) => {
+      const m = new Map()
+      for (const d of daily) {
+        const k = keyFn(d.date)
+        if (!m.has(k)) m.set(k, { date: k, qty: 0, rev: 0 })
+        const a = m.get(k); a.qty += d.qty; a.rev += d.rev
+      }
+      return [...m.values()].sort((a, b) => a.date.localeCompare(b.date))
+    }
+
+    const fillRateByWarehouse = [...whDemand.entries()].map(([wh, demand]) => {
+      const correct = whCorrect.get(wh) || 0
+      return { warehouse: wh, demandQty: Math.round(demand), demandQtyPerDay: Math.round(demand / days), correctQty: Math.round(correct), correctQtyPerDay: Math.round(correct / days), fillRate: demand > 0 ? correct / demand : null }
+    })
+
+    const facilityAllocation = [...facMap.entries()].map(([location, qty]) => {
+      const rev = facRevMap.get(location) || 0
+      const demand = [...whDemand.entries()].find(([wh]) => wh === location)?.[1] || 0
+      return { location, qty: Math.round(qty), qtyPerDay: Math.round(qty / days), rev: Math.round(rev), revPerDay: Math.round(rev / days), asp: qty > 0 ? Math.round(rev / qty) : null, sharePct: totalQty > 0 ? qty / totalQty : null, allocationPct: demand > 0 ? Math.min(1, qty / demand) : null, skuCount: 0, region: null }
+    })
+
+    return {
+      ...data,
+      rawRows: data.rawRows, // keep for subsequent filter changes
+      summary: {
+        ...data.summary,
+        totalUnits: Math.round(totalQty),
+        totalRevenue: Math.round(totalRev),
+        avgDailyRevenue: Math.round(totalRev / days),
+        avgDailyUnits: Math.round(totalQty / days),
+        avgSellingPrice: totalQty > 0 ? Math.round(totalRev / totalQty) : 0,
+        exactFillRate: exactTotal > 0 ? exactCorrect / exactTotal : null,
+      },
+      daily,
+      weekly: rollup(weekKey),
+      monthly: rollup(d => d.slice(0, 7)),
+      categorySales: [...catMap.values()].sort((a, b) => b.rev - a.rev),
+      subCategorySales: [...subCatMap.values()].sort((a, b) => b.rev - a.rev),
+      channelSales: [...chMap.values()].sort((a, b) => b.rev - a.rev),
+      channelSales2: [...ch2Map.values()].sort((a, b) => b.rev - a.rev),
+      channelTypeSales: [...typeMap.values()].sort((a, b) => b.rev - a.rev),
+      productSales: [...skuMap2.values()].sort((a, b) => b.rev - a.rev),
+      fillRateByWarehouse,
+      facilityAllocation,
+    }
+  }, [data, filters.category, filters.subCategory, filters.sku, filters.channel, filters.salesType, filters.facility, filters.region])
+
   const dailyChart = useMemo(() => {
-    if (!data) return []
-    const series = data[trendGranularity] || data.daily
+    if (!filteredData) return []
+    const series = filteredData[trendGranularity] || filteredData.daily
     return series.map(d => {
       const label = trendGranularity === 'monthly' ? d.date : d.date.slice(5)
       return { date: label, qty: d.qty, rev: d.rev, asp: d.qty > 0 ? Math.round(d.rev / d.qty) : null }
@@ -312,9 +434,9 @@ export default function SalesAllocationPage({ data, filters, setFilters, sidebar
   }, [data, trendGranularity])
 
   const categoryRollup = useMemo(() => {
-    if (!data) return []
-    return data.categorySales.slice(0, 12).map(c => ({ name: c.category, qty: c.qty, rev: c.rev }))
-  }, [data])
+    if (!filteredData) return []
+    return filteredData.categorySales.slice(0, 12).map(c => ({ name: c.category, qty: c.qty, rev: c.rev }))
+  }, [filteredData])
 
   // Ranked by whichever metric is active — a single-series bar list reads share/rank far
   // more clearly than a donut's angle comparisons, especially past ~6 slices.
@@ -326,9 +448,9 @@ export default function SalesAllocationPage({ data, filters, setFilters, sidebar
   // Channel-wise sales (unified_channel2 grouping — B2C/B2B/Purchase-Order only, coarser
   // than the Channel-Wise Sales table further down which uses unified_channel).
   const channelDonutSorted = useMemo(() => {
-    if (!data) return []
-    return [...data.channelSales2].map(c => ({ name: c.channel, value: c[channelMetric] })).sort((a, b) => b.value - a.value)
-  }, [data, channelMetric])
+    if (!filteredData) return []
+    return [...filteredData.channelSales2].map(c => ({ name: c.channel, value: c[channelMetric] })).sort((a, b) => b.value - a.value)
+  }, [filteredData, channelMetric])
   const channelDonutTotal = useMemo(() => channelDonutSorted.reduce((s, c) => s + c.value, 0), [channelDonutSorted])
 
   // Location-Wise Sales vs Allocation — Sales = demand from the STATE side: units ordered
@@ -337,10 +459,10 @@ export default function SalesAllocationPage({ data, filters, setFilters, sidebar
   // units actually shipped from facilities mapped to this location (facilityAllocation.qty).
   // Same location order both come from (sortByLocationOrder, applied server-side already).
   const locationStackedRows = useMemo(() => {
-    if (!data) return []
-    const demandByLoc = new Map(data.fillRateByWarehouse.map(w => [w.warehouse, w.demandQty]))
-    return data.facilityAllocation.map(f => ({ location: f.location, sales: demandByLoc.get(f.location) || 0, allocation: f.qty }))
-  }, [data])
+    if (!filteredData) return []
+    const demandByLoc = new Map(filteredData.fillRateByWarehouse.map(w => [w.warehouse, w.demandQty]))
+    return filteredData.facilityAllocation.map(f => ({ location: f.location, sales: demandByLoc.get(f.location) || 0, allocation: f.qty }))
+  }, [filteredData])
 
   // Product-Wise Sales Matrix — server sends day-granularity cells only; week/month/
   // quarter/year are re-bucketed here so switching granularity is instant, no refetch.
@@ -362,16 +484,16 @@ export default function SalesAllocationPage({ data, filters, setFilters, sidebar
   }
 
   const matrixColumns = useMemo(() => {
-    if (!data) return []
-    return [...new Set(data.matrixDates.map(d => matrixBucketKeyFor(matrixGranularity, d)))].sort()
-  }, [data, matrixGranularity])
+    if (!filteredData) return []
+    return [...new Set(filteredData.matrixDates.map(d => matrixBucketKeyFor(matrixGranularity, d)))].sort()
+  }, [filteredData, matrixGranularity])
 
   // cellsByPath: "cat|sub|skuKey" -> Map(bucketKey -> {qty, rev}), re-bucketed from the raw
   // daily cells whenever granularity changes.
   const matrixCellsByPath = useMemo(() => {
-    if (!data) return new Map()
+    if (!filteredData) return new Map()
     const m = new Map()
-    for (const c of data.matrixCellRows) {
+    for (const c of filteredData.matrixCellRows) {
       const bucketKey = matrixBucketKeyFor(matrixGranularity, c.date)
       if (!m.has(c.path)) m.set(c.path, new Map())
       const perBucket = m.get(c.path)
@@ -381,12 +503,12 @@ export default function SalesAllocationPage({ data, filters, setFilters, sidebar
       cell.rev += c.rev
     }
     return m
-  }, [data, matrixGranularity])
+  }, [filteredData, matrixGranularity])
 
   // Row total (sum across all visible bucket columns) per path — used for the Total column
   // and for "sort by Total".
   const matrixRowTotal = useMemo(() => {
-    if (!data) return new Map()
+    if (!filteredData) return new Map()
     const totals = new Map() // path -> {qty, rev}
     for (const [path, perBucket] of matrixCellsByPath) {
       let qty = 0, rev = 0
@@ -398,10 +520,10 @@ export default function SalesAllocationPage({ data, filters, setFilters, sidebar
 
   // Grand-total row: sum across ALL products for each bucket column, plus the overall total.
   const matrixGrandTotal = useMemo(() => {
-    if (!data) return { perBucket: new Map(), total: { qty: 0, rev: 0 } }
+    if (!filteredData) return { perBucket: new Map(), total: { qty: 0, rev: 0 } }
     const perBucket = new Map()
     let qty = 0, rev = 0
-    for (const cat of data.matrixSkuList.length ? [...new Set(data.matrixSkuList.map(s => s.category))] : []) {
+    for (const cat of filteredData.matrixSkuList.length ? [...new Set(filteredData.matrixSkuList.map(s => s.category))] : []) {
       const cells = matrixCellsByPath.get(`${cat}${MSEP}${MSEP}`)
       if (!cells) continue
       for (const [bucketKey, c] of cells) {
@@ -414,7 +536,7 @@ export default function SalesAllocationPage({ data, filters, setFilters, sidebar
       }
     }
     return { perBucket, total: { qty, rev } }
-  }, [data, matrixCellsByPath])
+  }, [filteredData, matrixCellsByPath])
 
   // Sort comparator shared by all 3 levels — sorts by a specific bucket column, the Total
   // column, or the name itself. Metric (qty vs rev) follows the active matrixMetric toggle.
@@ -438,10 +560,10 @@ export default function SalesAllocationPage({ data, filters, setFilters, sidebar
   // sorted independently by the active matrixSort, so expanding a category re-sorts its
   // sub-categories the same way the top-level categories are sorted.
   const matrixCategoryTree = useMemo(() => {
-    if (!data) return []
+    if (!filteredData) return []
     const q = matrixSearch.trim().toLowerCase()
     const cats = new Map() // category -> Map(subCategory -> Set(skuKey))
-    for (const s of data.matrixSkuList) {
+    for (const s of filteredData.matrixSkuList) {
       if (!cats.has(s.category)) cats.set(s.category, new Map())
       const subs = cats.get(s.category)
       if (!subs.has(s.subCategory)) subs.set(s.subCategory, [])
@@ -473,7 +595,7 @@ export default function SalesAllocationPage({ data, filters, setFilters, sidebar
         .filter(Boolean)
     }
     return sortMatrixItems(tree, c => `${c.category}${MSEP}${MSEP}`, c => c.category)
-  }, [data, matrixSort, matrixMetric, matrixCellsByPath, matrixRowTotal, matrixSearch])
+  }, [filteredData, matrixSort, matrixMetric, matrixCellsByPath, matrixRowTotal, matrixSearch])
 
   // Auto-expand every category/sub-category row while searching so matches are visible
   // without the user needing to manually click into each branch.
@@ -495,25 +617,25 @@ export default function SalesAllocationPage({ data, filters, setFilters, sidebar
     return next
   })
 
-  const drasticBucket = data?.topMovers?.[drasticLevel]?.[drasticMode]?.[drasticMetric]
+  const drasticBucket = filteredData?.topMovers?.[drasticLevel]?.[drasticMode]?.[drasticMetric]
   const drasticRows = drasticBucket ? (drasticDirection === 'risers' ? drasticBucket.risers : drasticBucket.fallers) : []
 
   // Top Products — full leaderboard (no cap) for the selected range, sits beside Drastic
   // Sales Change. Level toggle picks which server-computed rollup to rank: SKU-level uses
   // productSales (name = sku), Sub-category/Category reuse the same rollups already powering
   // Category Contribution / the Matrix — re-sorted here so both metrics rank correctly.
-  const topProductsSource = !data ? [] : top20Level === 'sku' ? data.productSales.map(r => ({ name: r.sku, qty: r.qty, rev: r.rev }))
-    : top20Level === 'subCategory' ? data.subCategorySales.map(r => ({ name: r.subCategory, qty: r.qty, rev: r.rev }))
-    : data.categorySales.map(r => ({ name: r.category, qty: r.qty, rev: r.rev }))
+  const topProductsSource = !filteredData ? [] : top20Level === 'sku' ? filteredData.productSales.map(r => ({ name: r.sku, qty: r.qty, rev: r.rev }))
+    : top20Level === 'subCategory' ? filteredData.subCategorySales.map(r => ({ name: r.subCategory, qty: r.qty, rev: r.rev }))
+    : filteredData.categorySales.map(r => ({ name: r.category, qty: r.qty, rev: r.rev }))
   const topProductsRows = [...topProductsSource].sort((a, b) => b[top20Metric] - a[top20Metric])
 
   if (!data) return null
-  const revenueAvailable = data.summary.totalRevenue > 0
+  const revenueAvailable = filteredData.summary.totalRevenue > 0
   const salesTypeMix = (() => {
     const metricKey = revenueAvailable ? 'rev' : 'qty'
-    const total = data.channelTypeSales.reduce((s, t) => s + t[metricKey], 0)
+    const total = filteredData.channelTypeSales.reduce((s, t) => s + t[metricKey], 0)
     if (total <= 0) return null
-    const pct = type => Math.round(((data.channelTypeSales.find(t => t.type === type)?.[metricKey] || 0) / total) * 100)
+    const pct = type => Math.round(((filteredData.channelTypeSales.find(t => t.type === type)?.[metricKey] || 0) / total) * 100)
     return { b2c: pct('B2C Order'), b2b: pct('B2B Order'), po: pct('Purchase Order') }
   })()
 
@@ -532,20 +654,20 @@ export default function SalesAllocationPage({ data, filters, setFilters, sidebar
 
         {/* KPI row */}
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 12 }}>
-          <KpiTile label="Revenue" value={revenueAvailable ? fmtCurrency(data.summary.totalRevenue) : '—'}
-            sub={revenueAvailable ? `Avg ${fmtCurrency(data.summary.avgDailyRevenue)}/day` : 'Pending pipeline sync for recent dates'} icon="₹" />
-          <KpiTile label="Units Sold" value={fmtNum(data.summary.totalUnits)} unit="units"
-            sub={`Avg ${fmtNum(data.summary.avgDailyUnits)}/day`} icon="📦" />
-          <KpiTile label="Avg Selling Price" value={revenueAvailable ? fmtCurrency(data.summary.avgSellingPrice) : '—'} icon="🏷" />
-          <KpiTile label="Fill Rate" value={data.summary.exactFillRate != null ? `${Math.round(data.summary.exactFillRate * 100)}%` : '—'} sub="nearest-WH-correct units ÷ total units" accent={data.summary.exactFillRate >= 0.9 ? IC.positive : IC.status.Low.c} icon="⚖" />
-          <KpiTile label="Momentum" value={data.summary.momentumPct != null ? `${data.summary.momentumPct > 0 ? '+' : ''}${data.summary.momentumPct.toFixed(0)}%` : '—'} sub="first vs last day" accent={data.summary.momentumPct >= 0 ? IC.positive : IC.status.Critical.c} icon={data.summary.momentumPct >= 0 ? '↗' : '↘'} />
+          <KpiTile label="Revenue" value={revenueAvailable ? fmtCurrency(filteredData.summary.totalRevenue) : '—'}
+            sub={revenueAvailable ? `Avg ${fmtCurrency(filteredData.summary.avgDailyRevenue)}/day` : 'Pending pipeline sync for recent dates'} icon="₹" />
+          <KpiTile label="Units Sold" value={fmtNum(filteredData.summary.totalUnits)} unit="units"
+            sub={`Avg ${fmtNum(filteredData.summary.avgDailyUnits)}/day`} icon="📦" />
+          <KpiTile label="Avg Selling Price" value={revenueAvailable ? fmtCurrency(filteredData.summary.avgSellingPrice) : '—'} icon="🏷" />
+          <KpiTile label="Fill Rate" value={filteredData.summary.exactFillRate != null ? `${Math.round(filteredData.summary.exactFillRate * 100)}%` : '—'} sub="nearest-WH-correct units ÷ total units" accent={filteredData.summary.exactFillRate >= 0.9 ? IC.positive : IC.status.Low.c} icon="⚖" />
+          <KpiTile label="Momentum" value={filteredData.summary.momentumPct != null ? `${filteredData.summary.momentumPct > 0 ? '+' : ''}${filteredData.summary.momentumPct.toFixed(0)}%` : '—'} sub="first vs last day" accent={filteredData.summary.momentumPct >= 0 ? IC.positive : IC.status.Critical.c} icon={filteredData.summary.momentumPct >= 0 ? '↗' : '↘'} />
           <KpiTile label="Sales Type Mix" value={salesTypeMix ? `${salesTypeMix.b2c}% B2C` : '—'}
             sub={salesTypeMix ? `${salesTypeMix.b2b}% B2B · ${salesTypeMix.po}% PO` : 'No sales in range'} icon="🔀" />
         </div>
-        {data.previousPeriod && (
+        {filteredData.previousPeriod && (
           <div style={{ display: 'flex', gap: 16, fontSize: 11, color: IC.t3, marginTop: -6 }}>
-            <span>Revenue vs previous period: <ChangeBadge pct={data.previousPeriod.revenueChangePct} /></span>
-            <span>Units vs previous period: <ChangeBadge pct={data.previousPeriod.unitsChangePct} /></span>
+            <span>Revenue vs previous period: <ChangeBadge pct={filteredData.previousPeriod.revenueChangePct} /></span>
+            <span>Units vs previous period: <ChangeBadge pct={filteredData.previousPeriod.unitsChangePct} /></span>
           </div>
         )}
 
@@ -561,7 +683,7 @@ export default function SalesAllocationPage({ data, filters, setFilters, sidebar
                   </button>
                 ))}
               </div>
-              <ExportButton filename="sales_trend.csv" rows={data[trendGranularity]} columns={[{ label: 'Date', key: 'date' }, { label: 'Units', key: 'qty' }, { label: 'Revenue', key: 'rev' }]} />
+              <ExportButton filename="sales_trend.csv" rows={filteredData[trendGranularity]} columns={[{ label: 'Date', key: 'date' }, { label: 'Units', key: 'qty' }, { label: 'Revenue', key: 'rev' }]} />
             </div>
           }>
           <ResponsiveContainer width="100%" height={220}>
@@ -659,7 +781,7 @@ export default function SalesAllocationPage({ data, filters, setFilters, sidebar
             }>
             <div style={{ flex: 1, minHeight: 0, overflow: 'hidden' }}>
               <TopProductsBarList rows={topProductsRows} metric={top20Metric}
-                grandTotal={top20Metric === 'rev' ? data.summary.totalRevenue : data.summary.totalUnits}
+                grandTotal={top20Metric === 'rev' ? filteredData.summary.totalRevenue : filteredData.summary.totalUnits}
                 nameWidth={top20Level === 'sku' ? 150 : 220} />
             </div>
           </GlassCard>

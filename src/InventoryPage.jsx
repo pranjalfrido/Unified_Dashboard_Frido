@@ -240,7 +240,8 @@ function useStatic(staticPath, fallbackApiPath, fallbackBody = {}, enabled = tru
       }
     }
     if (!cached) return // still on initial load
-    // Debounce: wait 600ms after last filter change before hitting BQ
+    // If static file has rawRows, client-side filtering handles it instantly
+    if (cachedDataRef.current?.rawRows) return
     clearTimeout(filterTimerRef.current)
     filterTimerRef.current = setTimeout(() => fetchFromAPI(start, end), 600)
     return () => clearTimeout(filterTimerRef.current)

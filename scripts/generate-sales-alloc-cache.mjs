@@ -129,6 +129,29 @@ const rangeRows = salesRows.filter(r => {
 })
 const lookbackRows = salesRows.filter(passesFilters)
 
+// Enriched raw rows for client-side filtering in the browser
+const rawRows = rangeRows.map(r => {
+  const date = r.order_date?.value || r.order_date
+  const { key } = resolveMasterSkuKey(r.final_sku, skuMap)
+  const master = itemMaster.get(key)
+  const location = facilityToLocation.get(r.Facility) || 'Unmapped'
+  return {
+    sku: key,
+    category: master?.category || 'Uncategorized',
+    subCategory: master?.subCategory || 'Uncategorized',
+    salesType: salesTypeFor(r.channel, channelToDescription) || 'B2C Order',
+    channel: norm(channelToUnified.get(norm(r.channel)) || r.channel || 'Unknown'),
+    channel2: channelToUnified2.get(norm(r.channel)) || 'Purchase Order',
+    facility: r.Facility || '',
+    location,
+    region: locationToRegion.get(location) || null,
+    nearestWH: stateToNearestWH.get(norm(r.state)) || null,
+    date,
+    qty: Number(r.qty || 0),
+    rev: Math.round(num(r.rev)),
+  }
+}).filter(r => r.date && r.sku)
+
 // ── Daily trend ──────────────────────────────────────────────────────────────
 const dailyMap = new Map()
 for (const r of rangeRows) {
@@ -531,6 +554,7 @@ const payload = {
   matrixCellRows, matrixSkuList, matrixDates,
   topMoversByQty, topMoversByRevenue,
   deadStock,
+  rawRows,
 }
 
 const json = JSON.stringify(payload)
