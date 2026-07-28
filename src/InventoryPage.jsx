@@ -116,8 +116,8 @@ function useEndpoint(path, extraFilters, enabled = true) {
 }
 
 // Fetches a pre-computed static JSON from Vercel CDN (~100-200ms, no cold start).
-// Falls back to live API POST when: file is stale/missing, OR user picks a date
-// range that doesn't match the cached 30-day window.
+// Falls back to live API POST when: file is stale/missing, user picks a different date
+// range, OR any sidebar filter is active (static file holds unfiltered data only).
 function useStatic(staticPath, fallbackApiPath, fallbackBody = {}, enabled = true) {
   const def = getDefaultDates()
   const [dateFilters, setDateFilters] = useState({ start: def.start, end: def.end })
@@ -126,16 +126,30 @@ function useStatic(staticPath, fallbackApiPath, fallbackBody = {}, enabled = tru
   const [error, setError] = useState(null)
   const reqIdRef = useRef(0)
   const cachedRangeRef = useRef(null) // { start, end } of the static file's date range
+  const cachedDataRef = useRef(null)  // the raw static JSON, so we can restore it when filters are cleared
+  const fallbackBodyRef = useRef(fallbackBody)
   const API = import.meta.env.VITE_API_URL || ''
 
-  // Hits the live API directly with whatever date range is provided
-  const fetchFromAPI = useCallback(async (start, end, extraBody = {}) => {
+  // Always keep ref current so fetchFromAPI sees latest filters without stale closure
+  fallbackBodyRef.current = fallbackBody
+
+  // True when ANY sidebar filter value is non-empty. `alwaysPresentKeys` are structural
+  // params (momentumWindow, topN, etc.) that are always sent regardless of user selection
+  // and must not count as "active filters" that bypass the cache.
+  const alwaysPresentKeys = new Set(['momentumWindow', 'topN'])
+  const hasActiveFilters = (body) => Object.entries(body).some(([k, v]) => {
+    if (alwaysPresentKeys.has(k)) return false
+    return Array.isArray(v) ? v.length > 0 : v != null && v !== false && v !== ''
+  })
+
+  // Hits the live API directly with the current date range + all active filters
+  const fetchFromAPI = useCallback(async (start, end) => {
     const reqId = ++reqIdRef.current
     setLoading(true); setError(null)
     try {
       const res = await fetch(`${API}${fallbackApiPath}`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ start, end, ...fallbackBody, ...extraBody }),
+        body: JSON.stringify({ start, end, ...fallbackBodyRef.current }),
       })
       if (!res.ok) throw new Error(`API error ${res.status}`)
       const json = await res.json()
@@ -143,7 +157,6 @@ function useStatic(staticPath, fallbackApiPath, fallbackBody = {}, enabled = tru
       setData(json)
       setDateFilters({ start, end })
       if (json.lastSalesDateConsidered) {
-        // auto-correct end to last complete day, same as useEndpoint
         const correctedEnd = json.lastSalesDateConsidered
         const rangeDays = Math.round((new Date(end) - new Date(start)) / 86400000)
         const correctedStart = new Date(correctedEnd)
@@ -152,10 +165,10 @@ function useStatic(staticPath, fallbackApiPath, fallbackBody = {}, enabled = tru
       }
     } catch (e2) { if (reqId === reqIdRef.current) setError(e2.message) }
     finally { if (reqId === reqIdRef.current) setLoading(false) }
-  }, [API, fallbackApiPath]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [API, fallbackApiPath])
 
   // Initial load: try static file first
-  const fetchData = useCallback(async (body = {}) => {
+  const fetchData = useCallback(async () => {
     const reqId = ++reqIdRef.current
     setLoading(true); setError(null)
     try {
@@ -165,6 +178,7 @@ function useStatic(staticPath, fallbackApiPath, fallbackBody = {}, enabled = tru
       if (reqId !== reqIdRef.current) return
       const ageMs = json.asOf ? Date.now() - new Date(json.asOf).getTime() : Infinity
       if (ageMs > 2 * 60 * 60 * 1000 || json._placeholder) throw new Error('static file stale or placeholder')
+      cachedDataRef.current = json
       setData(json)
       const range = json.dateRange || null
       if (range) {
@@ -172,11 +186,10 @@ function useStatic(staticPath, fallbackApiPath, fallbackBody = {}, enabled = tru
         setDateFilters({ start: range.start, end: range.end })
       }
     } catch {
-      // Static unavailable — fall back to live API with default 30d range
       const { start, end } = getDefaultDates()
       if (reqId !== reqIdRef.current) return
       setLoading(false)
-      fetchFromAPI(start, end, body)
+      fetchFromAPI(start, end)
       return
     }
     if (reqId === reqIdRef.current) setLoading(false)
@@ -190,7 +203,7 @@ function useStatic(staticPath, fallbackApiPath, fallbackBody = {}, enabled = tru
     fetchData()
   }, [enabled, fetchData])
 
-  // When user changes date range via picker: serve from cache if it matches, else hit live API
+  // When date range changes: restore cache if back to cached range (and no filters), else hit API
   const prevDateRef = useRef(null)
   useEffect(() => {
     if (!enabled || !initialFetchedRef.current) return
@@ -199,12 +212,37 @@ function useStatic(staticPath, fallbackApiPath, fallbackBody = {}, enabled = tru
     if (prev && prev.start === start && prev.end === end) return
     prevDateRef.current = { start, end }
     const cached = cachedRangeRef.current
-    if (!cached) return // still on initial load
-    if (cached.start === start && cached.end === end) return // already showing cached range
+    if (!cached) return
+    if (cached.start === start && cached.end === end && !hasActiveFilters(fallbackBodyRef.current)) {
+      // Back to the cached range with no filters — restore static data instantly
+      if (cachedDataRef.current) setData(cachedDataRef.current)
+      return
+    }
     fetchFromAPI(start, end)
   }, [enabled, dateFilters.start, dateFilters.end, fetchFromAPI]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Refresh button: re-fetch current date range from API
+  // When sidebar filters change: hit API if any filter is active, restore cache when all cleared
+  const prevFiltersRef = useRef(null)
+  useEffect(() => {
+    if (!enabled || !initialFetchedRef.current) return
+    const bodyStr = JSON.stringify(fallbackBody)
+    if (prevFiltersRef.current === bodyStr) return
+    prevFiltersRef.current = bodyStr
+    const cached = cachedRangeRef.current
+    const { start, end } = dateFilters
+    if (!hasActiveFilters(fallbackBody)) {
+      // All filters cleared — restore static cache if on the cached date range, else re-fetch API
+      if (cached && cached.start === start && cached.end === end && cachedDataRef.current) {
+        setData(cachedDataRef.current)
+        return
+      }
+    }
+    // Filter added/changed, or date range differs — always hit API
+    if (!cached) return // still on initial load, let fetchData handle it
+    fetchFromAPI(start, end)
+  }, [enabled, JSON.stringify(fallbackBody), fetchFromAPI]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Refresh button
   const refetch = useCallback(() => {
     fetchFromAPI(dateFilters.start, dateFilters.end)
   }, [dateFilters.start, dateFilters.end, fetchFromAPI])
