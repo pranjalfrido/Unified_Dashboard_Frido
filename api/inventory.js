@@ -65,27 +65,25 @@ export default async function inventoryHandler(req, res) {
 
     const daysInRange = Math.max(1, Math.round((new Date(end) - new Date(start)) / 86400000) + 1)
     const endDate = new Date(end)
-    const deadStockCutoff = new Date(endDate); deadStockCutoff.setDate(deadStockCutoff.getDate() - DEAD_STOCK_WINDOW_DAYS)
-    const deadStockCutoffStr = deadStockCutoff.toISOString().slice(0, 10)
-    const salesFetchLookbackDays = Math.max(SALES_LOOKBACK_BUFFER_DAYS, avgSaleWindowDaysVal + 1)
-    const salesFetchStart = new Date(start); salesFetchStart.setDate(salesFetchStart.getDate() - salesFetchLookbackDays)
-    const salesFetchStartStr = salesFetchStart.toISOString().slice(0, 10)
 
-    const [[invRows], [salesRows], [itemMasterRows], [skuMappingRows], [shopifyInvRows]] = await Promise.all([
+    const [[invRows], [salesRows], [lastSaleRows], [itemMasterRows], [skuMappingRows], [shopifyInvRows]] = await Promise.all([
+      // Pre-computed hourly table — replaces full raw snapshot scan (~25s → ~1s)
       bq.query({
         query: `SELECT ItemSkuCode, Facility, Updated, Inventory, InventoryBlocked
                 FROM \`frido-429506.production.unicommerce_inventory_snapshot_hourly\``,
-        maximumBytesBilled: '5000000000',
+        maximumBytesBilled: '1000000000',
       }),
-      // Single scan of aggregated_uniware_sales_report covering the wider 90d window —
-      // sales rows within [salesFetchStartStr, end] are used for Avg Sale;
-      // all rows are used for dead-stock last-sale detection (90d window).
+      // Pre-computed hourly table — last 15 days for Avg Sale / DOI / allocation
       bq.query({
-        query: `SELECT final_sku, Facility, state, channel, order_date, SUM(total_quantity) AS qty
-                FROM \`frido-429506.production.aggregated_uniware_sales_report\`
-                WHERE order_date BETWEEN '${deadStockCutoffStr}' AND '${end}'
-                GROUP BY final_sku, Facility, state, channel, order_date`,
-        maximumBytesBilled: '5000000000',
+        query: `SELECT final_sku, Facility, state, channel, order_date, qty
+                FROM \`frido-429506.production.inventory_sales_window\``,
+        maximumBytesBilled: '1000000000',
+      }),
+      // Pre-computed hourly table — 90d aggregated for dead stock detection
+      bq.query({
+        query: `SELECT final_sku, last_sale_date, qty_90d
+                FROM \`frido-429506.production.inventory_sales_90d\``,
+        maximumBytesBilled: '1000000000',
       }),
       bq.query({
         query: `SELECT Product_Code, Category_Name, Sub_category, Lead_Time, Product_Source, SKU_First_Sales_Date, Type
@@ -149,14 +147,14 @@ export default async function inventoryHandler(req, res) {
     }
 
     // ── Last-sale-in-90d lookup (dead stock detection, independent of selected range) ──
-    // Derived from the same salesRows (already covers 90d window) — no separate BQ query needed.
+    // Dead stock detection from pre-computed 90d table
     const lastSaleBySkuKey = new Map()
-    for (const r of salesRows) {
+    for (const r of lastSaleRows) {
       if (isPseudoSku(r.final_sku)) continue
       const { key } = resolveMasterSkuKey(r.final_sku, skuMap)
       if (!key) continue
-      const rowDate = r.order_date?.value || r.order_date
-      const rowQty = Number(r.qty || 0)
+      const rowDate = r.last_sale_date?.value || r.last_sale_date
+      const rowQty = Number(r.qty_90d || 0)
       const existing = lastSaleBySkuKey.get(key)
       if (!existing) {
         lastSaleBySkuKey.set(key, { lastSaleDate: rowDate, qty90d: rowQty })
