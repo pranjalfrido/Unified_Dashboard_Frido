@@ -198,29 +198,44 @@ function LogisticsPage({ filters }) {
   const [retTrendGran, setRetTrendGran] = useState('Daily')
   const [retReasonView, setRetReasonView] = useState('reason') // 'reason' | 'sub'
 
-  // called once per date range — no filters sent, always fetches full data
+  // called once — tries static CDN file first, falls back to live BQ API
   const fetchLogistics = useCallback(async () => {
     if (!filters.start || !filters.end) return
     setLoading(true); setError(null)
     try {
-      const body = { start: filters.start, end: filters.end }
-      if (lFilters.shipmentType !== 'all') body.shipmentType = lFilters.shipmentType
+      // Try static file first — served from Vercel CDN in ~14ms
+      let usedStatic = false
+      try {
+        const res = await fetch('/logistics-data.json')
+        if (res.ok) {
+          const json = await res.json()
+          const ageMs = json.asOf ? Date.now() - new Date(json.asOf).getTime() : Infinity
+          if (ageMs <= 2 * 60 * 60 * 1000 && !json._placeholder && json.current) {
+            setRawData(json.current)
+            setRawPrevData(json.previous || null)
+            usedStatic = true
+          }
+        }
+      } catch { /* fall through to live API */ }
 
-      const s = new Date(filters.start), e = new Date(filters.end)
-      const days = Math.round((e - s) / 86400000) + 1
-      const prevEnd = new Date(s); prevEnd.setDate(prevEnd.getDate() - 1)
-      const prevStart = new Date(prevEnd); prevStart.setDate(prevStart.getDate() - days + 1)
-      const fmt = d => d.toISOString().slice(0, 10)
-      const prevBody = { ...body, start: fmt(prevStart), end: fmt(prevEnd) }
-
-      const [r, rPrev] = await Promise.all([
-        fetch(`${API}/api/logistics`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }),
-        fetch(`${API}/api/logistics`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(prevBody) }),
-      ])
-      if (!r.ok) throw new Error(await r.text())
-      const [cur, prev] = await Promise.all([r.json(), rPrev.ok ? rPrev.json() : Promise.resolve(null)])
-      setRawData(cur)
-      setRawPrevData(prev)
+      if (!usedStatic) {
+        const body = { start: filters.start, end: filters.end }
+        if (lFilters.shipmentType !== 'all') body.shipmentType = lFilters.shipmentType
+        const s = new Date(filters.start), e = new Date(filters.end)
+        const days = Math.round((e - s) / 86400000) + 1
+        const prevEnd = new Date(s); prevEnd.setDate(prevEnd.getDate() - 1)
+        const prevStart = new Date(prevEnd); prevStart.setDate(prevStart.getDate() - days + 1)
+        const fmt = d => d.toISOString().slice(0, 10)
+        const prevBody = { ...body, start: fmt(prevStart), end: fmt(prevEnd) }
+        const [r, rPrev] = await Promise.all([
+          fetch(`${API}/api/logistics`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }),
+          fetch(`${API}/api/logistics`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(prevBody) }),
+        ])
+        if (!r.ok) throw new Error(await r.text())
+        const [cur, prev] = await Promise.all([r.json(), rPrev.ok ? rPrev.json() : Promise.resolve(null)])
+        setRawData(cur)
+        setRawPrevData(prev)
+      }
     } catch (e) { setError(e.message) }
     finally { setLoading(false) }
   }, [filters.start, filters.end, lFilters.shipmentType])

@@ -8,7 +8,7 @@ on:
 jobs:
   precompute:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 25
 
     steps:
       - uses: actions/checkout@v4
@@ -28,15 +28,25 @@ jobs:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
         run: node export_to_supabase.mjs
 
-      - name: Generate static inventory JSON
+      - name: Generate static inventory JSON (7d / 15d / 30d)
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
         run: node scripts/generate-inv-cache.mjs
 
-      - name: Commit and push inv-data files
+      - name: Generate static sales & allocation JSON
+        run: node scripts/generate-sales-alloc-cache.mjs
+
+      - name: Generate static inward JSON
+        run: node scripts/generate-inward-cache.mjs
+
+      - name: Generate static logistics JSON
+        run: node scripts/generate-logistics-cache.mjs
+
+      - name: Commit and push static data files
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add public/inv-data-7d.json public/inv-data-15d.json public/inv-data-30d.json
-          git diff --cached --quiet && echo "No changes" || git commit -m "chore: update inv-data [skip ci]"
+          git add public/inv-data-7d.json public/inv-data-15d.json public/inv-data-30d.json \
+                  public/sales-alloc-data.json public/inward-data.json public/logistics-data.json
+          git diff --cached --quiet && echo "No changes" || git commit -m "chore: update static data cache [skip ci]"
           git push

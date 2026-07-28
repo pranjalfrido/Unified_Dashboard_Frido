@@ -115,8 +115,61 @@ function useEndpoint(path, extraFilters, enabled = true) {
   return { dateFilters, setDateFilters, data, loading, error, fetchData }
 }
 
-// Fetches pre-computed inventory JSON from Vercel CDN (~100-200ms, no cold start).
-// Falls back to POST /api/inventory if the static file is missing or stale (>2h).
+// Fetches a pre-computed static JSON from Vercel CDN (~100-200ms, no cold start).
+// Falls back to a live API POST if the file is missing or stale (>2h).
+function useStatic(staticPath, fallbackApiPath, fallbackBody = {}, enabled = true) {
+  const def = getDefaultDates()
+  const [dateFilters, setDateFilters] = useState({ start: def.start, end: def.end })
+  const [data, setData] = useState(null)
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState(null)
+  const reqIdRef = useRef(0)
+  const hasFetchedRef = useRef(false)
+  const API = import.meta.env.VITE_API_URL || ''
+
+  const fetchData = useCallback(async (body = {}) => {
+    const reqId = ++reqIdRef.current
+    setLoading(true)
+    setError(null)
+    try {
+      const res = await fetch(staticPath)
+      if (!res.ok) throw new Error(`static file missing (${res.status})`)
+      const json = await res.json()
+      if (reqId !== reqIdRef.current) return
+      const ageMs = json.asOf ? Date.now() - new Date(json.asOf).getTime() : Infinity
+      if (ageMs > 2 * 60 * 60 * 1000 || json._placeholder) throw new Error('static file stale or placeholder')
+      setData(json)
+      if (json.avgSaleWindow) setDateFilters({ start: json.avgSaleWindow.start, end: json.avgSaleWindow.end })
+      else if (json.dateRange) setDateFilters({ start: json.dateRange.start, end: json.dateRange.end })
+    } catch {
+      try {
+        const { start, end } = getDefaultDates()
+        const res2 = await fetch(`${API}${fallbackApiPath}`, {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ start, end, ...fallbackBody, ...body }),
+        })
+        if (!res2.ok) throw new Error(`API error ${res2.status}`)
+        const json2 = await res2.json()
+        if (reqId !== reqIdRef.current) return
+        setData(json2)
+        if (json2.avgSaleWindow) setDateFilters({ start: json2.avgSaleWindow.start, end: json2.avgSaleWindow.end })
+        else if (json2.dateRange) setDateFilters({ start: json2.dateRange.start, end: json2.dateRange.end })
+      } catch (e2) { if (reqId === reqIdRef.current) setError(e2.message) }
+    } finally { if (reqId === reqIdRef.current) setLoading(false) }
+  }, [API, staticPath, fallbackApiPath]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    if (!enabled) return
+    if (hasFetchedRef.current) return
+    hasFetchedRef.current = true
+    fetchData()
+  }, [enabled, fetchData])
+
+  return { dateFilters, setDateFilters, data, loading, error, fetchData }
+}
+
+// Inventory Health uses 3 separate static files (one per avg-sale window).
+// Falls back to POST /api/inventory if the file is missing or stale (>2h).
 function useStaticInv(enabled = true, windowDays = 7) {
   const def = getDefaultDates()
   const [dateFilters, setDateFilters] = useState({ start: def.start, end: def.end })
@@ -195,8 +248,8 @@ export default function InventoryPage({ onTopbarDateControl }) {
   // because Health's date-sync effect below needs its (possibly auto-corrected)
   // dateFilters to exist before Health can sync to them.
   const inv = useStaticInv(tab === 'health', healthFilters.avgSaleWindowDays || 7)
-  const sales = useEndpoint('/api/sales-allocation', salesFilterBody, true)
-  const inward = useEndpoint('/api/inward', inwardFilterBody, tab === 'inward')
+  const sales = useStatic('/sales-alloc-data.json', '/api/sales-allocation', salesFilterBody, true)
+  const inward = useStatic('/inward-data.json', '/api/inward', inwardFilterBody, tab === 'inward')
   const active = tab === 'health' ? inv : tab === 'sales' ? sales : inward
 
   // Inventory Health's Warehouse Health cards (Avg Sale / Allocation %) previously always
