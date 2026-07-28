@@ -275,7 +275,22 @@ export default function InventoryPage({ onTopbarDateControl }) {
     if (stockStatusF?.length) skus = skus.filter(s => matchCsv(s.stockStatus, stockStatusF))
     if (rtdLevelF?.length) skus = skus.filter(s => matchCsv(s.rtdLevel, rtdLevelF))
     if (productId?.length) skus = skus.filter(s => matchCsv(s.sku, productId))
-    if (locationF?.length) skus = skus.filter(s => s.locations?.some(l => locationF.includes(l.location)))
+    if (locationF?.length) {
+      skus = skus
+        .filter(s => s.locations?.some(l => locationF.includes(l.location)))
+        .map(s => {
+          // Restrict each SKU's numbers to only the selected location(s)
+          const locs = (s.locations || []).filter(l => locationF.includes(l.location))
+          const totalInvt = locs.reduce((a, l) => a + (l.totalInvt || 0), 0)
+          const rawInvt = locs.reduce((a, l) => a + (l.rawInvt || 0), 0)
+          const rawBlockedInvt = locs.reduce((a, l) => a + (l.rawBlockedInvt || 0), 0)
+          const rtdInvt = locs.reduce((a, l) => a + (l.rtdInvt || 0), 0)
+          const avgSale = locs.reduce((a, l) => a + (l.avgSale || 0), 0)
+          const doi = locs.length === 1 ? locs[0].doi : (avgSale > 0 ? Math.floor(totalInvt / avgSale) : 0)
+          const status = locs.length === 1 ? locs[0].stockStatus : s.stockStatus
+          return { ...s, totalInvt, rawInvt, rawBlockedInvt, rtdInvt, avgSale, doi, stockStatus: status, locations: locs }
+        })
+    }
     if (skus === raw.skus) return raw // nothing filtered, return as-is
 
     // Recompute summary KPIs from filtered skus
@@ -297,20 +312,21 @@ export default function InventoryPage({ onTopbarDateControl }) {
     const locMap = new Map()
     for (const s of skus) {
       for (const loc of (s.locations || [])) {
-        if (!locMap.has(loc.location)) locMap.set(loc.location, { location: loc.location, totalInvt: 0, rawInvt: 0, rawBlockedInvt: 0, rtdInvt: 0, rawAvgSaleQty: 0, rawTotalAvgSaleQty: 0, orderAllocation: 0 })
+        if (!locMap.has(loc.location)) locMap.set(loc.location, { location: loc.location, totalInvt: 0, rawInvt: 0, rawBlockedInvt: 0, rtdInvt: 0, avgSale: 0, orderAllocation: 0 })
         const a = locMap.get(loc.location)
         a.totalInvt += loc.totalInvt; a.rawInvt += (loc.rawInvt || 0); a.rawBlockedInvt += (loc.rawBlockedInvt || 0)
-        a.rtdInvt += loc.rtdInvt; a.rawAvgSaleQty += (s.rawAvgSaleQty || 0) * ((loc.totalInvt || 0) / (s.totalInvt || 1))
-        a.rawTotalAvgSaleQty += (s.rawTotalAvgSaleQty || 0) * ((loc.totalInvt || 0) / (s.totalInvt || 1))
-        a.orderAllocation += loc.orderAllocation || 0
+        a.rtdInvt += (loc.rtdInvt || 0); a.avgSale += (loc.avgSale || 0); a.orderAllocation += (loc.orderAllocation || 0)
       }
     }
-    // Reuse daysInRange from raw summary context — approximate from doi and avgSale
-    const locations = (raw.locations || []).map(origLoc => {
-      const l = locMap.get(origLoc.location)
-      if (!l) return { ...origLoc, totalInvt: 0, rawInvt: 0, rawBlockedInvt: 0, rtdInvt: 0, avgSale: 0, totalAvgSale: 0, doi: 0, allocationPct: null, stockStatus: 'No Demand' }
-      return { ...origLoc, totalInvt: l.totalInvt, rawInvt: l.rawInvt, rawBlockedInvt: l.rawBlockedInvt, rtdInvt: l.rtdInvt, avgSale: origLoc.avgSale, totalAvgSale: origLoc.totalAvgSale, orderAllocation: l.orderAllocation, allocationPct: origLoc.allocationPct }
-    }).filter(l => l.totalInvt > 0)
+    const locations = (raw.locations || [])
+      .filter(origLoc => !locationF?.length || locationF.includes(origLoc.location))
+      .map(origLoc => {
+        const l = locMap.get(origLoc.location)
+        if (!l || l.totalInvt === 0) return null
+        const locAvgSale = l.avgSale
+        const locDoi = locAvgSale > 0 ? Math.floor(l.totalInvt / locAvgSale) : 0
+        return { ...origLoc, totalInvt: l.totalInvt, rawInvt: l.rawInvt, rawBlockedInvt: l.rawBlockedInvt, rtdInvt: l.rtdInvt, avgSale: locAvgSale, doi: locDoi, orderAllocation: l.orderAllocation }
+      }).filter(Boolean)
 
     return {
       ...raw, skus,
