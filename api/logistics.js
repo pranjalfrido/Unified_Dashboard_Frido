@@ -116,7 +116,7 @@ WITH base AS (
     ON TRIM(c.product_sku_code) = TRIM(skm.productid)
   LEFT JOIN \`frido-429506.sharepoint_to_gcp.Frido_Item_Master__frido_item_sku_master\` im
     ON TRIM(skm.masterskucode) = TRIM(im.Product_Code)
-  WHERE SUBSTR(c.created_at, 1, 10) BETWEEN '${start}' AND '${end}'
+  WHERE DATE(c.created_at) BETWEEN '${start}' AND '${end}'
   ${whereClause}
 ),
 kpis AS (
@@ -472,24 +472,19 @@ by_zone_detail AS (
     ROUND(AVG(IF(pickup_ts IS NOT NULL AND delivery_ts IS NOT NULL AND TIMESTAMP_DIFF(delivery_ts, pickup_ts, MINUTE) BETWEEN 0 AND 28800, TIMESTAMP_DIFF(delivery_ts, pickup_ts, MINUTE) / 1440.0, NULL)), 2) AS avg_intransit_days
   FROM base WHERE zone IS NOT NULL AND zone != '' GROUP BY 1
 ),
-all_channels AS (
-  SELECT DISTINCT channel_name AS channel
-  FROM \`frido-429506.production.Clickpost_Shipment_Tracking_Report\`
-  WHERE channel_name IS NOT NULL AND channel_name != ''
-),
 by_channel AS (
   SELECT
-    ac.channel,
-    COUNT(b.awb) AS total,
-    COUNTIF(b.unified_status='Delivered') AS delivered,
-    COUNTIF(b.unified_status='RTO') AS rto,
-    COUNTIF(b.unified_status='Cancelled') AS cancelled,
-    COUNTIF(b.unified_status='Intransit') AS in_transit,
-    ROUND(AVG(IF(b.delivery_date IS NOT NULL AND b.order_date IS NOT NULL AND DATE_DIFF(b.delivery_date, b.order_date, DAY) BETWEEN 0 AND 20, DATE_DIFF(b.delivery_date, b.order_date, DAY), NULL)), 2) AS avg_fulfilment_days,
-    ROUND(AVG(IF(b.pickup_ts IS NOT NULL AND b.delivery_ts IS NOT NULL AND TIMESTAMP_DIFF(b.delivery_ts, b.pickup_ts, MINUTE) BETWEEN 0 AND 28800, TIMESTAMP_DIFF(b.delivery_ts, b.pickup_ts, MINUTE) / 1440.0, NULL)), 2) AS avg_intransit_days,
-    ROUND(AVG(SAFE_CAST(b.invoice_value AS FLOAT64)), 0) AS avg_gmv
-  FROM all_channels ac
-  LEFT JOIN base b ON b.channel_name = ac.channel
+    channel_name AS channel,
+    COUNT(awb) AS total,
+    COUNTIF(unified_status='Delivered') AS delivered,
+    COUNTIF(unified_status='RTO') AS rto,
+    COUNTIF(unified_status='Cancelled') AS cancelled,
+    COUNTIF(unified_status='Intransit') AS in_transit,
+    ROUND(AVG(IF(delivery_date IS NOT NULL AND order_date IS NOT NULL AND DATE_DIFF(delivery_date, order_date, DAY) BETWEEN 0 AND 20, DATE_DIFF(delivery_date, order_date, DAY), NULL)), 2) AS avg_fulfilment_days,
+    ROUND(AVG(IF(pickup_ts IS NOT NULL AND delivery_ts IS NOT NULL AND TIMESTAMP_DIFF(delivery_ts, pickup_ts, MINUTE) BETWEEN 0 AND 28800, TIMESTAMP_DIFF(delivery_ts, pickup_ts, MINUTE) / 1440.0, NULL)), 2) AS avg_intransit_days,
+    ROUND(AVG(SAFE_CAST(invoice_value AS FLOAT64)), 0) AS avg_gmv
+  FROM base
+  WHERE channel_name IS NOT NULL AND channel_name != ''
   GROUP BY 1
 ),
 by_weight_slab AS (
