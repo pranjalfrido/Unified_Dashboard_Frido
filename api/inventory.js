@@ -74,7 +74,10 @@ export default async function inventoryHandler(req, res) {
   // Cache key covers everything that affects computation (attribute filters are re-applied from cached skus)
   const cacheKey = `inv|${start}|${end}|${location||''}|${facility||''}|${facilityType||''}|${avgSaleWindowDays||7}`
   const cached = await getInvCache(db, cacheKey)
-  if (cached) return res.json(cached)
+  if (cached) {
+    const slimLoc = l => ({ location: l.location, totalInvt: l.totalInvt, rawInvt: l.rawInvt, rawBlockedInvt: l.rawBlockedInvt, rtdInvt: l.rtdInvt, avgSale: l.avgSale, doi: l.doi, stockStatus: l.stockStatus })
+    return res.json({ ...cached, skus: cached.skus.map(s => ({ ...s, locations: s.locations?.map(slimLoc) })) })
+  }
   // Avg Sale / Allocation % now average over the literal [start, end] request range (see
   // `daysInRange` below) so they're directly comparable to Sales & Allocation's own Fill %,
   // which is computed the same way. avgSaleWindowDaysVal no longer sizes that averaging
@@ -329,9 +332,7 @@ export default async function inventoryHandler(req, res) {
         acc.orderAllocation += r.orderAllocation
         acc.locations.push({
           location: r.location, totalInvt: r.totalInvt, rawInvt: r.rawInvt, rawBlockedInvt: r.rawBlockedInvt, rtdInvt: r.rtdInvt,
-          avgSale: r.avgSale, totalAvgSale: r.totalAvgSale, orderAllocation: r.orderAllocation, allocationPct: r.allocationPct,
-          doi: r.doi, stockStatus: r.stockStatus, rtdLevel: r.rtdLevel,
-          thirtyDayReq: r.thirtyDayReq, inventoryShort: r.inventoryShort, requiredStock: r.requiredStock,
+          avgSale: r.avgSale, doi: r.doi, stockStatus: r.stockStatus,
         })
       }
 
@@ -565,9 +566,10 @@ export default async function inventoryHandler(req, res) {
       pivot: { locations: pivotLocations, rows: pivotRows },
       skus,
     }
-    // Store unfiltered result in Supabase cache (fire-and-forget)
+    // Cache full data; send slimmed sku.locations over the wire (saves ~850KB)
     setInvCache(db, cacheKey, { ...payload, skus: allSkus })
-    res.json(payload)
+    const slimLoc = l => ({ location: l.location, totalInvt: l.totalInvt, rawInvt: l.rawInvt, rawBlockedInvt: l.rawBlockedInvt, rtdInvt: l.rtdInvt, avgSale: l.avgSale, doi: l.doi, stockStatus: l.stockStatus })
+    res.json({ ...payload, skus: skus.map(s => ({ ...s, locations: s.locations?.map(slimLoc) })) })
   } catch (e) {
     console.error('[inventory]', e.message)
     res.status(500).json({ error: e.message })

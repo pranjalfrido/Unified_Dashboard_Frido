@@ -115,6 +115,56 @@ function useEndpoint(path, extraFilters, enabled = true) {
   return { dateFilters, setDateFilters, data, loading, error, fetchData }
 }
 
+// Fetches pre-computed inventory JSON from Vercel CDN (~100-200ms, no cold start).
+// Falls back to POST /api/inventory if the static file is missing or stale (>2h).
+function useStaticInv(enabled = true) {
+  const def = getDefaultDates()
+  const [dateFilters, setDateFilters] = useState({ start: def.start, end: def.end })
+  const [data, setData] = useState(null)
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState(null)
+  const reqIdRef = useRef(0)
+  const API = import.meta.env.VITE_API_URL || ''
+
+  const fetchData = useCallback(async () => {
+    const reqId = ++reqIdRef.current
+    setLoading(true)
+    setError(null)
+    try {
+      const res = await fetch('/inv-data.json')
+      if (!res.ok) throw new Error(`static file missing (${res.status})`)
+      const json = await res.json()
+      if (reqId !== reqIdRef.current) return
+      // If the file is older than 2 hours, fall back to live API
+      const ageMs = json.asOf ? Date.now() - new Date(json.asOf).getTime() : Infinity
+      if (ageMs > 2 * 60 * 60 * 1000) throw new Error('static file stale')
+      setData(json)
+      if (json.avgSaleWindow) setDateFilters({ start: json.avgSaleWindow.start, end: json.avgSaleWindow.end })
+    } catch {
+      // fallback: hit live API with default trailing-7-day window
+      try {
+        const { start, end } = getDefaultDates()
+        const res2 = await fetch(`${API}/api/inventory`, {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ start, end, avgSaleWindowDays: 7 }),
+        })
+        if (!res2.ok) throw new Error(`API error ${res2.status}`)
+        const json2 = await res2.json()
+        if (reqId !== reqIdRef.current) return
+        setData(json2)
+        if (json2.avgSaleWindow) setDateFilters({ start: json2.avgSaleWindow.start, end: json2.avgSaleWindow.end })
+      } catch (e2) { if (reqId === reqIdRef.current) setError(e2.message) }
+    } finally { if (reqId === reqIdRef.current) setLoading(false) }
+  }, [API])
+
+  useEffect(() => {
+    if (!enabled) return
+    fetchData()
+  }, [enabled, fetchData])
+
+  return { dateFilters, setDateFilters, data, loading, error, fetchData }
+}
+
 export default function InventoryPage({ onTopbarDateControl }) {
   const [tab, setTab] = useState('health')
   const [healthFilters, setHealthFilters] = useState({})
@@ -122,13 +172,6 @@ export default function InventoryPage({ onTopbarDateControl }) {
   const [inwardFilters, setInwardFilters] = useState({})
 
   const csv = arr => (arr && arr.length ? arr.join(',') : undefined)
-  // Only params that affect inventory math go to the API. Display-only filters
-  // (category/subCategory/stockStatus/rtdLevel/productId) are applied client-side.
-  const invFilterBody = {
-    location: csv(healthFilters.location), facility: csv(healthFilters.facility),
-    facilityType: csv(healthFilters.facilityType),
-    avgSaleWindowDays: healthFilters.avgSaleWindowDays || 7,
-  }
   const salesFilterBody = {
     category: csv(salesFilters.category), subCategory: csv(salesFilters.subCategory), sku: csv(salesFilters.sku),
     channel: csv(salesFilters.channel), salesType: csv(salesFilters.salesType), facility: csv(salesFilters.facility),
@@ -148,7 +191,7 @@ export default function InventoryPage({ onTopbarDateControl }) {
   // Sales & Allocation is the one exception: it must always be enabled even on other tabs
   // because Health's date-sync effect below needs its (possibly auto-corrected)
   // dateFilters to exist before Health can sync to them.
-  const inv = useEndpoint('/api/inventory', invFilterBody, tab === 'health')
+  const inv = useStaticInv(tab === 'health')
   const sales = useEndpoint('/api/sales-allocation', salesFilterBody, true)
   const inward = useEndpoint('/api/inward', inwardFilterBody, tab === 'inward')
   const active = tab === 'health' ? inv : tab === 'sales' ? sales : inward
@@ -223,7 +266,7 @@ export default function InventoryPage({ onTopbarDateControl }) {
   const invData = (() => {
     const raw = inv.data
     if (!raw) return raw
-    const { category, subCategory, stockStatus: stockStatusF, rtdLevel: rtdLevelF, productId } = healthFilters
+    const { category, subCategory, stockStatus: stockStatusF, rtdLevel: rtdLevelF, productId, location: locationF } = healthFilters
     const matchCsv = (val, filterArr) => !filterArr?.length || filterArr.includes(val)
     let skus = raw.skus
     if (category?.length) skus = skus.filter(s => matchCsv(s.category, category))
@@ -231,6 +274,7 @@ export default function InventoryPage({ onTopbarDateControl }) {
     if (stockStatusF?.length) skus = skus.filter(s => matchCsv(s.stockStatus, stockStatusF))
     if (rtdLevelF?.length) skus = skus.filter(s => matchCsv(s.rtdLevel, rtdLevelF))
     if (productId?.length) skus = skus.filter(s => matchCsv(s.sku, productId))
+    if (locationF?.length) skus = skus.filter(s => s.locations?.some(l => locationF.includes(l.location)))
     if (skus === raw.skus) return raw // nothing filtered, return as-is
 
     // Recompute summary KPIs from filtered skus

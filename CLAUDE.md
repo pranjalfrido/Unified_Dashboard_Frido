@@ -16,7 +16,7 @@ Local dev with API: Vite serves the frontend; Vercel CLI (`vercel dev`) is neede
 ## Architecture
 
 ### Overview
-Full-stack React + Vercel Serverless. Frontend is a single-page React app (Vite). Backend is Vercel serverless functions in `api/`. **All data comes from BigQuery** — there is no longer a Supabase/Postgres dependency for dashboard data (the `_db.js` helper exists but is unused by current API routes).
+Full-stack React + Vercel Serverless. Frontend is a single-page React app (Vite). Backend is Vercel serverless functions in `api/`. Most data comes from BigQuery; the Inventory Health tab uses a pre-computed static JSON file served from Vercel CDN (see below).
 
 ### Data Flow
 ```
@@ -31,7 +31,7 @@ Each dashboard tab has its own API endpoint. The frontend sends `{ start, end, .
 - `_inventory_shared.js` — Pure JS utility functions for inventory calculations (DOI, stock status, dead stock). No BQ calls.
 - `bq.js` — Sales & Ads tab. Sends courier/shipmentType/category filters to BQ; zone/payment/state/city are filtered client-side in `App.jsx`.
 - `logistics.js` — Single massive BQ query with ~28 CTEs. Date filter uses `DATE(created_at)`. The `all_channels` CTE was removed — channels now come from `base` to avoid a second full table scan.
-- `inventory.js` — 6 parallel BQ queries via `Promise.all()`.
+- `inventory.js` — 6 parallel Supabase queries. All 6 source tables are synced from BigQuery to Supabase hourly by `export_to_supabase.mjs`. Normally this endpoint is NOT called by the frontend — `public/inv-data.json` (pre-computed static JSON, served from CDN) is used instead. This endpoint is the fallback when the static file is missing or older than 2 hours.
 - `inward.js`, `returns.js`, `customer.js`, `sales-allocation.js` — Each fires one BQ query.
 - `admin.js` — Admin/sync utilities.
 
@@ -59,5 +59,5 @@ Deployed on Vercel Hobby plan. `vercel.json` sets `maxDuration: 300` for all `ap
 
 ### Performance notes
 - Logistics slicer filters for **courier, shipmentType, sddNdd, category** trigger a BQ re-fetch (accurate KPIs). Filters for **zone, payment, state, city** are applied client-side from cached response data.
-- Inventory fires 6 parallel BQ queries on load — the bottleneck is the largest query (inventory snapshot dedup, no WHERE clause).
+- Inventory Health fetches `public/inv-data.json` from Vercel CDN (~100-200ms). A GitHub Actions cron (`.github/workflows/precompute-inventory.yml`) runs hourly: syncs BQ→Supabase via `export_to_supabase.mjs`, then runs `scripts/generate-inv-cache.mjs` to regenerate `public/inv-data.json` and commits it. All slicer filters (category, location, stock status, etc.) are applied client-side — no re-fetch on filter change.
 - GST rate lookups must use `GST_Tax_Type_Code` from the item master, not other GST columns.
