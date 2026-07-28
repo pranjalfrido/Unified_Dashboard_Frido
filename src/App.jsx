@@ -300,6 +300,31 @@ function LogisticsPage({ filters }) {
         topDropCities: dropCity ? (raw.topDropCities || []).filter(x => x.city?.toLowerCase() === dropCity.toLowerCase()) : raw.topDropCities,
         topPickupCities: pickupState ? (raw.topPickupCities || []).filter(x => x.pickup_state?.toLowerCase() === pickupState.toLowerCase()) : raw.topPickupCities,
         byChannel: hasCourier ? (raw.byChannel || []).filter(x => couriers.some(c => x.channel?.toLowerCase().includes(c.toLowerCase()))) : raw.byChannel,
+        byStatus: hasCourier
+          ? (() => {
+              const statusMap = {}
+              filteredCouriers.forEach(x => {
+                const add = (k, v) => { statusMap[k] = (statusMap[k] || 0) + (x[v] || 0) }
+                add('Delivered', 'delivered'); add('RTO', 'rto')
+                add('Intransit', 'in_transit'); add('Pickup Pending', 'pickup_pending')
+                add('Cancelled', 'cancelled')
+              })
+              return Object.entries(statusMap).map(([unified_status, total]) => ({ unified_status, total }))
+            })()
+          : raw.byStatus,
+        byDay: hasCourier ? Object.values(
+            (raw.byCourierDay || []).filter(x => couriers.includes(x.courier_group))
+              .reduce((acc, x) => {
+                const key = x.period_label
+                if (!acc[key]) acc[key] = { label: x.period_label, dt: x.period_dt, total: 0, delivered: 0, rto: 0 }
+                acc[key].total += x.total || 0; acc[key].delivered += x.delivered || 0; acc[key].rto += x.rto || 0
+                return acc
+              }, {})
+          ).sort((a, b) => a.dt < b.dt ? -1 : 1) : raw.byDay,
+        byWeightSlab: raw.byWeightSlab,
+        tatByFacility: raw.tatByFacility,
+        rtoReasons: raw.rtoReasons,
+        failedDeliveryReasons: raw.failedDeliveryReasons,
       }
     }
     setData(applyFilters(rawData))
