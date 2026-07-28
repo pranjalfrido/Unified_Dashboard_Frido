@@ -196,23 +196,17 @@ function LogisticsPage({ filters }) {
   const [retTrendGran, setRetTrendGran] = useState('Daily')
   const [retReasonView, setRetReasonView] = useState('reason') // 'reason' | 'sub'
 
+  const [rawData, setRawData] = useState(null)
+  const [rawPrevData, setRawPrevData] = useState(null)
+
   const fetchLogistics = useCallback(async () => {
     if (!filters.start || !filters.end) return
     setLoading(true); setError(null)
     try {
+      // always fetch unfiltered — slicers filter client-side, no extra BQ calls
       const body = { start: filters.start, end: filters.end }
-      if (lFilters.couriers.length) body.courier = lFilters.couriers
       if (lFilters.shipmentType !== 'all') body.shipmentType = lFilters.shipmentType
-      if (lFilters.sddNdd !== 'all') body.sddNdd = lFilters.sddNdd
-      if (lFilters.paymentMode) body.paymentMode = lFilters.paymentMode
-      if (lFilters.zone) body.zone = lFilters.zone
-      if (lFilters.pickupState) body.pickupState = lFilters.pickupState
-      if (lFilters.dropState) body.dropState = lFilters.dropState
-      if (lFilters.dropCity) body.dropCity = lFilters.dropCity
-      if (lFilters.category) body.category = [lFilters.category]
-      if (lFilters.subCategory) body.subCategory = [lFilters.subCategory]
 
-      // calc prev period (same # of days, ending day before start)
       const s = new Date(filters.start), e = new Date(filters.end)
       const days = Math.round((e - s) / 86400000) + 1
       const prevEnd = new Date(s); prevEnd.setDate(prevEnd.getDate() - 1)
@@ -226,13 +220,61 @@ function LogisticsPage({ filters }) {
       ])
       if (!r.ok) throw new Error(await r.text())
       const [cur, prev] = await Promise.all([r.json(), rPrev.ok ? rPrev.json() : Promise.resolve(null)])
-      setData(cur)
-      setPrevData(prev)
+      setRawData(cur)
+      setRawPrevData(prev)
     } catch (e) { setError(e.message) }
     finally { setLoading(false) }
-  }, [filters.start, filters.end, lFilters])
+  }, [filters.start, filters.end, lFilters.shipmentType])
 
   useEffect(() => { fetchLogistics() }, [fetchLogistics])
+
+  // client-side filter applied to rawData — instant, no BQ call
+  const applyLFilters = useCallback((raw) => {
+    if (!raw) return null
+    const { couriers, zone, paymentMode, pickupState, dropState, dropCity, category, subCategory, sddNdd } = lFilters
+    const hasCourier = couriers.length > 0
+    const fn = arr => {
+      if (!arr) return arr
+      return arr.filter(r => {
+        if (hasCourier && r.courier_group && !couriers.includes(r.courier_group)) return false
+        if (zone && r.zone && r.zone !== zone) return false
+        if (paymentMode && r.payment_mode && r.payment_mode.toLowerCase() !== paymentMode.toLowerCase()) return false
+        if (pickupState && r.pickup_state && r.pickup_state.toLowerCase() !== pickupState.toLowerCase()) return false
+        if (dropState && r.drop_state && r.drop_state.toLowerCase() !== dropState.toLowerCase()) return false
+        if (dropCity && r.drop_city && r.drop_city.toLowerCase() !== dropCity.toLowerCase()) return false
+        if (category && r.category && r.category !== category) return false
+        if (subCategory && r.sub_category && r.sub_category !== subCategory) return false
+        return true
+      })
+    }
+    // for top-level kpis we sum from byCourier if courier filter active, else use raw kpis
+    let kpis = raw.kpis
+    if (hasCourier) {
+      const rows = (raw.byCourier || []).filter(r => couriers.includes(r.courier_group))
+      kpis = rows.reduce((acc, r) => {
+        Object.keys(r).forEach(k => { if (typeof r[k] === 'number' && k !== 'avg_tat' && k !== 'avg_intransit_days' && k !== 'avg_fulfilment_days' && k !== 'avg_pickup_days' && k !== 'avg_processing_days' && k !== 'avg_s2a_days' && k !== 'avg_rto_tat_days') acc[k] = (acc[k] || 0) + r[k] })
+        return acc
+      }, { ...raw.kpis })
+    }
+    return {
+      ...raw,
+      kpis,
+      byCourier: hasCourier ? (raw.byCourier || []).filter(r => couriers.includes(r.courier_group)) : raw.byCourier,
+      byZone: zone ? (raw.byZone || []).filter(r => r.zone === zone) : raw.byZone,
+      byZoneDetail: zone ? (raw.byZoneDetail || []).filter(r => r.zone === zone) : raw.byZoneDetail,
+      byPayment: paymentMode ? (raw.byPayment || []).filter(r => r.payment_mode?.toLowerCase() === paymentMode.toLowerCase()) : raw.byPayment,
+      byPaymentDetail: paymentMode ? (raw.byPaymentDetail || []).filter(r => r.payment_mode?.toLowerCase() === paymentMode.toLowerCase()) : raw.byPaymentDetail,
+      byPaymentDay: paymentMode ? (raw.byPaymentDay || []).filter(r => r.payment_mode?.toLowerCase() === paymentMode.toLowerCase()) : raw.byPaymentDay,
+      byPaymentWeek: paymentMode ? (raw.byPaymentWeek || []).filter(r => r.payment_mode?.toLowerCase() === paymentMode.toLowerCase()) : raw.byPaymentWeek,
+      byPaymentMonth: paymentMode ? (raw.byPaymentMonth || []).filter(r => r.payment_mode?.toLowerCase() === paymentMode.toLowerCase()) : raw.byPaymentMonth,
+      byCourierDay: hasCourier ? (raw.byCourierDay || []).filter(r => couriers.includes(r.courier_group)) : raw.byCourierDay,
+      byCourierWeek: hasCourier ? (raw.byCourierWeek || []).filter(r => couriers.includes(r.courier_group)) : raw.byCourierWeek,
+      byCourierMonth: hasCourier ? (raw.byCourierMonth || []).filter(r => couriers.includes(r.courier_group)) : raw.byCourierMonth,
+      tatByCourier: hasCourier ? (raw.tatByCourier || []).filter(r => couriers.includes(r.courier_group)) : raw.tatByCourier,
+    }
+  }, [lFilters])
+
+  useEffect(() => { setData(applyLFilters(rawData)); setPrevData(applyLFilters(rawPrevData)) }, [rawData, rawPrevData, applyLFilters])
 
   const fetchReturns = useCallback(async () => {
     if (!filters.start || !filters.end) return
