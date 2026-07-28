@@ -116,7 +116,8 @@ function useEndpoint(path, extraFilters, enabled = true) {
 }
 
 // Fetches a pre-computed static JSON from Vercel CDN (~100-200ms, no cold start).
-// Falls back to a live API POST if the file is missing or stale (>2h).
+// Falls back to live API POST when: file is stale/missing, OR user picks a date
+// range that doesn't match the cached 30-day window.
 function useStatic(staticPath, fallbackApiPath, fallbackBody = {}, enabled = true) {
   const def = getDefaultDates()
   const [dateFilters, setDateFilters] = useState({ start: def.start, end: def.end })
@@ -124,13 +125,39 @@ function useStatic(staticPath, fallbackApiPath, fallbackBody = {}, enabled = tru
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
   const reqIdRef = useRef(0)
-  const hasFetchedRef = useRef(false)
+  const cachedRangeRef = useRef(null) // { start, end } of the static file's date range
   const API = import.meta.env.VITE_API_URL || ''
 
+  // Hits the live API directly with whatever date range is provided
+  const fetchFromAPI = useCallback(async (start, end, extraBody = {}) => {
+    const reqId = ++reqIdRef.current
+    setLoading(true); setError(null)
+    try {
+      const res = await fetch(`${API}${fallbackApiPath}`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ start, end, ...fallbackBody, ...extraBody }),
+      })
+      if (!res.ok) throw new Error(`API error ${res.status}`)
+      const json = await res.json()
+      if (reqId !== reqIdRef.current) return
+      setData(json)
+      setDateFilters({ start, end })
+      if (json.lastSalesDateConsidered) {
+        // auto-correct end to last complete day, same as useEndpoint
+        const correctedEnd = json.lastSalesDateConsidered
+        const rangeDays = Math.round((new Date(end) - new Date(start)) / 86400000)
+        const correctedStart = new Date(correctedEnd)
+        correctedStart.setDate(correctedStart.getDate() - rangeDays)
+        setDateFilters({ start: correctedStart.toISOString().slice(0, 10), end: correctedEnd })
+      }
+    } catch (e2) { if (reqId === reqIdRef.current) setError(e2.message) }
+    finally { if (reqId === reqIdRef.current) setLoading(false) }
+  }, [API, fallbackApiPath]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Initial load: try static file first
   const fetchData = useCallback(async (body = {}) => {
     const reqId = ++reqIdRef.current
-    setLoading(true)
-    setError(null)
+    setLoading(true); setError(null)
     try {
       const res = await fetch(staticPath)
       if (!res.ok) throw new Error(`static file missing (${res.status})`)
@@ -139,33 +166,50 @@ function useStatic(staticPath, fallbackApiPath, fallbackBody = {}, enabled = tru
       const ageMs = json.asOf ? Date.now() - new Date(json.asOf).getTime() : Infinity
       if (ageMs > 2 * 60 * 60 * 1000 || json._placeholder) throw new Error('static file stale or placeholder')
       setData(json)
-      if (json.avgSaleWindow) setDateFilters({ start: json.avgSaleWindow.start, end: json.avgSaleWindow.end })
-      else if (json.dateRange) setDateFilters({ start: json.dateRange.start, end: json.dateRange.end })
+      const range = json.dateRange || null
+      if (range) {
+        cachedRangeRef.current = { start: range.start, end: range.end }
+        setDateFilters({ start: range.start, end: range.end })
+      }
     } catch {
-      try {
-        const { start, end } = getDefaultDates()
-        const res2 = await fetch(`${API}${fallbackApiPath}`, {
-          method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ start, end, ...fallbackBody, ...body }),
-        })
-        if (!res2.ok) throw new Error(`API error ${res2.status}`)
-        const json2 = await res2.json()
-        if (reqId !== reqIdRef.current) return
-        setData(json2)
-        if (json2.avgSaleWindow) setDateFilters({ start: json2.avgSaleWindow.start, end: json2.avgSaleWindow.end })
-        else if (json2.dateRange) setDateFilters({ start: json2.dateRange.start, end: json2.dateRange.end })
-      } catch (e2) { if (reqId === reqIdRef.current) setError(e2.message) }
-    } finally { if (reqId === reqIdRef.current) setLoading(false) }
-  }, [API, staticPath, fallbackApiPath]) // eslint-disable-line react-hooks/exhaustive-deps
+      // Static unavailable — fall back to live API with default 30d range
+      const { start, end } = getDefaultDates()
+      if (reqId !== reqIdRef.current) return
+      setLoading(false)
+      fetchFromAPI(start, end, body)
+      return
+    }
+    if (reqId === reqIdRef.current) setLoading(false)
+  }, [staticPath, fetchFromAPI])
 
+  const initialFetchedRef = useRef(false)
   useEffect(() => {
     if (!enabled) return
-    if (hasFetchedRef.current) return
-    hasFetchedRef.current = true
+    if (initialFetchedRef.current) return
+    initialFetchedRef.current = true
     fetchData()
   }, [enabled, fetchData])
 
-  return { dateFilters, setDateFilters, data, loading, error, fetchData }
+  // When user changes date range via picker: serve from cache if it matches, else hit live API
+  const prevDateRef = useRef(null)
+  useEffect(() => {
+    if (!enabled || !initialFetchedRef.current) return
+    const { start, end } = dateFilters
+    const prev = prevDateRef.current
+    if (prev && prev.start === start && prev.end === end) return
+    prevDateRef.current = { start, end }
+    const cached = cachedRangeRef.current
+    if (!cached) return // still on initial load
+    if (cached.start === start && cached.end === end) return // already showing cached range
+    fetchFromAPI(start, end)
+  }, [enabled, dateFilters.start, dateFilters.end, fetchFromAPI]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Refresh button: re-fetch current date range from API
+  const refetch = useCallback(() => {
+    fetchFromAPI(dateFilters.start, dateFilters.end)
+  }, [dateFilters.start, dateFilters.end, fetchFromAPI])
+
+  return { dateFilters, setDateFilters, data, loading, error, fetchData: refetch }
 }
 
 // Inventory Health uses 3 separate static files (one per avg-sale window).
