@@ -398,27 +398,27 @@ by_month AS (
   FROM base WHERE created_date IS NOT NULL GROUP BY 1,2 ORDER BY 2
 ),
 rto_reasons AS (
-  SELECT reason_for_last_failed_delivery AS reason, COUNT(awb) AS total
+  SELECT courier_group, reason_for_last_failed_delivery AS reason, COUNT(awb) AS total
   FROM base WHERE reason_for_last_failed_delivery IS NOT NULL AND unified_status='RTO'
-  GROUP BY 1 ORDER BY 2 DESC
+  GROUP BY 1, 2
 ),
 top_drop_states AS (
-  SELECT
+  SELECT courier_group,
     CONCAT(UPPER(SUBSTR(drop_state,1,1)), LOWER(SUBSTR(drop_state,2))) AS state,
     COUNT(awb) AS total
-  FROM base WHERE drop_state IS NOT NULL AND drop_state != '' GROUP BY 1 ORDER BY 2 DESC LIMIT 10
+  FROM base WHERE drop_state IS NOT NULL AND drop_state != '' GROUP BY 1, 2
 ),
 top_drop_cities AS (
-  SELECT
+  SELECT courier_group,
     CONCAT(UPPER(SUBSTR(drop_city,1,1)), LOWER(SUBSTR(drop_city,2))) AS city,
     COUNT(awb) AS total
-  FROM base WHERE drop_city IS NOT NULL AND drop_city != '' GROUP BY 1 ORDER BY 2 DESC LIMIT 10
+  FROM base WHERE drop_city IS NOT NULL AND drop_city != '' GROUP BY 1, 2
 ),
 top_pickup_cities AS (
-  SELECT
+  SELECT courier_group,
     CONCAT(UPPER(SUBSTR(pickup_city,1,1)), LOWER(SUBSTR(pickup_city,2))) AS city,
     COUNT(awb) AS total
-  FROM base WHERE pickup_city IS NOT NULL AND pickup_city != '' GROUP BY 1 ORDER BY 2 DESC LIMIT 10
+  FROM base WHERE pickup_city IS NOT NULL AND pickup_city != '' GROUP BY 1, 2
 ),
 by_payment AS (
   SELECT payment_mode, COUNT(awb) AS total FROM base WHERE payment_mode IS NOT NULL GROUP BY 1
@@ -448,6 +448,7 @@ tat_by_month AS (
 ),
 tat_by_facility AS (
   SELECT
+    courier_group,
     CASE
       WHEN UPPER(TRIM(pickup_city)) IN ('DELHI','GURGAON','GURUGRAM','HARYANA') THEN 'Delhi'
       WHEN UPPER(TRIM(pickup_city)) IN ('MUMBAI','BHIWANDI') THEN 'Mumbai'
@@ -460,27 +461,25 @@ tat_by_facility AS (
     END AS facility,
     COUNT(awb) AS total,
     COUNTIF(unified_status='Delivered') AS delivered,
-    -- Processing to Pickup buckets (hours)
     COUNTIF(pickup_ts IS NOT NULL AND created_ts IS NOT NULL AND TIMESTAMP_DIFF(pickup_ts, created_ts, MINUTE) BETWEEN 0 AND 720) AS proc_0_12h,
     COUNTIF(pickup_ts IS NOT NULL AND created_ts IS NOT NULL AND TIMESTAMP_DIFF(pickup_ts, created_ts, MINUTE) BETWEEN 721 AND 1440) AS proc_12_24h,
     COUNTIF(pickup_ts IS NOT NULL AND created_ts IS NOT NULL AND TIMESTAMP_DIFF(pickup_ts, created_ts, MINUTE) BETWEEN 1441 AND 2880) AS proc_24_48h,
     COUNTIF(pickup_ts IS NOT NULL AND created_ts IS NOT NULL AND TIMESTAMP_DIFF(pickup_ts, created_ts, MINUTE) > 2880) AS proc_48plus,
-    -- Order to Delivery buckets (days)
     COUNTIF(delivery_date IS NOT NULL AND order_date IS NOT NULL AND DATE_DIFF(delivery_date, order_date, DAY) BETWEEN 0 AND 1) AS ord_0_1,
     COUNTIF(delivery_date IS NOT NULL AND order_date IS NOT NULL AND DATE_DIFF(delivery_date, order_date, DAY) BETWEEN 2 AND 3) AS ord_2_3,
     COUNTIF(delivery_date IS NOT NULL AND order_date IS NOT NULL AND DATE_DIFF(delivery_date, order_date, DAY) BETWEEN 4 AND 5) AS ord_4_5,
     COUNTIF(delivery_date IS NOT NULL AND order_date IS NOT NULL AND DATE_DIFF(delivery_date, order_date, DAY) > 5) AS ord_5plus
-  FROM base WHERE pickup_city IS NOT NULL GROUP BY 1
+  FROM base WHERE pickup_city IS NOT NULL GROUP BY 1, 2
 ),
 failed_delivery_reasons AS (
-  SELECT
+  SELECT courier_group,
     reason_for_last_failed_delivery AS reason,
     COUNT(awb) AS total
   FROM base
   WHERE reason_for_last_failed_delivery IS NOT NULL
     AND reason_for_last_failed_delivery != ''
     AND ofd_attempts > 1
-  GROUP BY 1 ORDER BY 2 DESC
+  GROUP BY 1, 2
 ),
 by_zone_detail AS (
   SELECT
@@ -510,6 +509,7 @@ by_channel AS (
 ),
 by_weight_slab AS (
   SELECT
+    courier_group,
     CASE
       WHEN weight_g IS NULL THEN 'Unknown'
       WHEN weight_g <= 500 THEN '0-500g'
@@ -541,7 +541,7 @@ by_weight_slab AS (
     ROUND(AVG(IF(pickup_ts IS NOT NULL AND delivery_ts IS NOT NULL AND TIMESTAMP_DIFF(delivery_ts, pickup_ts, MINUTE) BETWEEN 0 AND 28800, TIMESTAMP_DIFF(delivery_ts, pickup_ts, MINUTE) / 1440.0, NULL)), 2) AS avg_tat,
     ROUND(SUM(invoice_value), 0) AS total_value
   FROM base
-  GROUP BY 1, 2
+  GROUP BY 1, 2, 3
 ),
 filter_opts AS (
   SELECT
