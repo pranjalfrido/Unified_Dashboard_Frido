@@ -321,6 +321,24 @@ function LogisticsPage({ filters }) {
                 return acc
               }, {})
           ).sort((a, b) => a.dt < b.dt ? -1 : 1) : raw.byDay,
+        byWeek: hasCourier ? Object.values(
+            (raw.byCourierWeek || []).filter(x => couriers.includes(x.courier_group))
+              .reduce((acc, x) => {
+                const key = x.period_label
+                if (!acc[key]) acc[key] = { label: x.period_label, dt: x.period_dt, total: 0, delivered: 0, rto: 0 }
+                acc[key].total += x.total || 0; acc[key].delivered += x.delivered || 0; acc[key].rto += x.rto || 0
+                return acc
+              }, {})
+          ).sort((a, b) => a.dt < b.dt ? -1 : 1) : raw.byWeek,
+        byMonth: hasCourier ? Object.values(
+            (raw.byCourierMonth || []).filter(x => couriers.includes(x.courier_group))
+              .reduce((acc, x) => {
+                const key = x.month_label
+                if (!acc[key]) acc[key] = { label: x.month_label, dt: x.month_dt, total: 0, delivered: 0, rto: 0 }
+                acc[key].total += x.total || 0; acc[key].delivered += x.delivered || 0; acc[key].rto += x.rto || 0
+                return acc
+              }, {})
+          ).sort((a, b) => a.dt < b.dt ? -1 : 1) : raw.byMonth,
         byWeightSlab: (() => {
             const m = {}
             const rows = hasCourier ? (raw.byWeightSlab || []).filter(x => couriers.includes(x.courier_group)) : (raw.byWeightSlab || [])
