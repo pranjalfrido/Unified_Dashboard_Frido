@@ -66,20 +66,16 @@ export default async function inventoryHandler(req, res) {
       // column convention has since drifted) — "_st" is where live data actually is today,
       // confirmed by direct inspection, so we read that instead.
       bq.query({
-        query: `WITH deduplicated_inventory AS (
-                  SELECT *,
-                    ROW_NUMBER() OVER (
-                      PARTITION BY ItemSkuCode, Facility
-                      ORDER BY Updated DESC, _daton_batch_runtime DESC
-                    ) AS rn
-                  FROM \`frido-429506.Frido_BigQuery.Frido_Unicommerce_3_Inventory_Snapshot_Inventory_Snapshot\`
-                )
-                SELECT
+        query: `SELECT
                   ItemSkuCode, Facility, Updated,
                   SAFE_CAST(Inventory_st AS FLOAT64) AS Inventory,
                   SAFE_CAST(InventoryBlocked_st AS FLOAT64) AS InventoryBlocked
-                FROM deduplicated_inventory
-                WHERE rn = 1`,
+                FROM \`frido-429506.Frido_BigQuery.Frido_Unicommerce_3_Inventory_Snapshot_Inventory_Snapshot\`
+                WHERE _daton_batch_runtime >= TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL 90 DAY)
+                QUALIFY ROW_NUMBER() OVER (
+                  PARTITION BY ItemSkuCode, Facility
+                  ORDER BY Updated DESC, _daton_batch_runtime DESC
+                ) = 1`,
         maximumBytesBilled: '5000000000',
       }),
       // Pulls a few extra lookback days beyond the requested range (SALES_LOOKBACK_BUFFER_DAYS)
@@ -392,9 +388,12 @@ export default async function inventoryHandler(req, res) {
       return { skus: rolled, skuLocRows, lastUpdated }
     }
 
-    const scoped = aggregate({ respectLocationFilter: true })
-    let skus = scoped.skus
-    const skuLocRows = scoped.skuLocRows
+    // Run aggregate once (without location filter) — pivot needs all locations and
+    // the location slicer is rarely used. skuLocRows carry per-location data so the
+    // location-filtered KPIs/locations grid are derived from them below without a second pass.
+    const unscoped = aggregate({ respectLocationFilter: false })
+    let skus = unscoped.skus
+    const skuLocRows = unscoped.skuLocRows
 
     // ── Filter option lists, computed BEFORE attribute filters are applied, so dropdowns don't shrink ──
     const liveFacilities = [...facilityToStatus.entries()].filter(([, status]) => status === 'Live').map(([f]) => f)
@@ -425,9 +424,13 @@ export default async function inventoryHandler(req, res) {
     if (productId) skus = skus.filter(s => matchesMulti(s.sku, productId))
 
     // Every downstream view (Location tiles, Warehouse Health, status breakdown) must
-    // reflect these same attribute filters — scope skuLocRows to the SKUs that survived.
+    // reflect these same attribute filters — scope skuLocRows to the SKUs that survived
+    // and apply the location filter in JS (aggregate now runs once without it).
     const survivingSkuKeys = new Set(skus.map(s => s.skuKey))
-    const scopedSkuLocRows = skuLocRows.filter(r => survivingSkuKeys.has(r.skuKey))
+    const scopedSkuLocRows = skuLocRows.filter(r =>
+      survivingSkuKeys.has(r.skuKey) &&
+      (!locationFilterVals || locationFilterVals.includes(r.location))
+    )
 
     // ── Summary KPIs ──────────────────────────────────────────────────────────
     const totalInvt = skus.reduce((sum, s) => sum + s.totalInvt, 0)
@@ -541,7 +544,7 @@ export default async function inventoryHandler(req, res) {
     // second aggregation pass that skips the location filter but keeps every other one
     // (facility, facilityType, category, subCategory, productId, stockStatus, rtdLevel)
     // in sync with the main table.
-    let pivotSkus = aggregate({ respectLocationFilter: false }).skus
+    let pivotSkus = unscoped.skus
     if (category) pivotSkus = pivotSkus.filter(s => matchesMulti(s.category, category))
     if (subCategory) pivotSkus = pivotSkus.filter(s => matchesMulti(s.subCategory, subCategory))
     if (stockStatusFilter) pivotSkus = pivotSkus.filter(s => matchesMulti(s.stockStatus, stockStatusFilter))
