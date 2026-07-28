@@ -122,11 +122,11 @@ export default function InventoryPage({ onTopbarDateControl }) {
   const [inwardFilters, setInwardFilters] = useState({})
 
   const csv = arr => (arr && arr.length ? arr.join(',') : undefined)
+  // Only params that affect inventory math go to the API. Display-only filters
+  // (category/subCategory/stockStatus/rtdLevel/productId) are applied client-side.
   const invFilterBody = {
-    category: csv(healthFilters.category), subCategory: csv(healthFilters.subCategory),
     location: csv(healthFilters.location), facility: csv(healthFilters.facility),
-    facilityType: csv(healthFilters.facilityType), stockStatus: csv(healthFilters.stockStatus),
-    productId: csv(healthFilters.productId), rtdLevel: csv(healthFilters.rtdLevel),
+    facilityType: csv(healthFilters.facilityType),
     avgSaleWindowDays: healthFilters.avgSaleWindowDays || 7,
   }
   const salesFilterBody = {
@@ -196,7 +196,7 @@ export default function InventoryPage({ onTopbarDateControl }) {
           <span style={{ fontSize: 11, color: IC.t3 }}>
             {inv.data?.asOf
               ? `Snapshot updated ${new Date(inv.data.asOf).toLocaleString('en-IN', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}`
-              : 'Loading snapshot time…'}
+              : inv.loading ? 'Loading snapshot time…' : ''}
           </span>
           {inv.data?.avgSaleWindow?.end && (
             <span style={{ fontSize: 11, color: IC.t3 }}>
@@ -219,6 +219,62 @@ export default function InventoryPage({ onTopbarDateControl }) {
     </div>
   )
 
+  // Apply display-only filters client-side — no API call needed for these
+  const invData = (() => {
+    const raw = inv.data
+    if (!raw) return raw
+    const { category, subCategory, stockStatus: stockStatusF, rtdLevel: rtdLevelF, productId } = healthFilters
+    const matchCsv = (val, filterArr) => !filterArr?.length || filterArr.includes(val)
+    let skus = raw.skus
+    if (category?.length) skus = skus.filter(s => matchCsv(s.category, category))
+    if (subCategory?.length) skus = skus.filter(s => matchCsv(s.subCategory, subCategory))
+    if (stockStatusF?.length) skus = skus.filter(s => matchCsv(s.stockStatus, stockStatusF))
+    if (rtdLevelF?.length) skus = skus.filter(s => matchCsv(s.rtdLevel, rtdLevelF))
+    if (productId?.length) skus = skus.filter(s => matchCsv(s.sku, productId))
+    if (skus === raw.skus) return raw // nothing filtered, return as-is
+
+    // Recompute summary KPIs from filtered skus
+    const totalInvt = skus.reduce((s, r) => s + r.totalInvt, 0)
+    const rawInvt = skus.reduce((s, r) => s + r.rawInvt, 0)
+    const rawBlockedInvt = skus.reduce((s, r) => s + r.rawBlockedInvt, 0)
+    const rtdInvt = skus.reduce((s, r) => s + r.rtdInvt, 0)
+    const avgSale = skus.reduce((s, r) => s + r.avgSale, 0)
+    const totalAvgSale = skus.reduce((s, r) => s + r.totalAvgSale, 0)
+    const totalAlloc = skus.reduce((s, r) => s + r.orderAllocation, 0)
+    const denom = Math.ceil(Math.max(avgSale, totalAlloc))
+    const doi = denom > 0 ? Math.floor(totalInvt / denom) : 0
+    const statusCounts = {}
+    for (const s of skus) statusCounts[s.stockStatus] = (statusCounts[s.stockStatus] || 0) + 1
+    let dominantStatus = null, dominantCount = -1
+    for (const [st, cnt] of Object.entries(statusCounts)) { if (cnt > dominantCount) { dominantStatus = st; dominantCount = cnt } }
+
+    // Recompute per-location totals from filtered skus
+    const locMap = new Map()
+    for (const s of skus) {
+      for (const loc of (s.locations || [])) {
+        if (!locMap.has(loc.location)) locMap.set(loc.location, { location: loc.location, totalInvt: 0, rawInvt: 0, rawBlockedInvt: 0, rtdInvt: 0, rawAvgSaleQty: 0, rawTotalAvgSaleQty: 0, orderAllocation: 0 })
+        const a = locMap.get(loc.location)
+        a.totalInvt += loc.totalInvt; a.rawInvt += (loc.rawInvt || 0); a.rawBlockedInvt += (loc.rawBlockedInvt || 0)
+        a.rtdInvt += loc.rtdInvt; a.rawAvgSaleQty += (s.rawAvgSaleQty || 0) * ((loc.totalInvt || 0) / (s.totalInvt || 1))
+        a.rawTotalAvgSaleQty += (s.rawTotalAvgSaleQty || 0) * ((loc.totalInvt || 0) / (s.totalInvt || 1))
+        a.orderAllocation += loc.orderAllocation || 0
+      }
+    }
+    // Reuse daysInRange from raw summary context — approximate from doi and avgSale
+    const locations = (raw.locations || []).map(origLoc => {
+      const l = locMap.get(origLoc.location)
+      if (!l) return { ...origLoc, totalInvt: 0, rawInvt: 0, rawBlockedInvt: 0, rtdInvt: 0, avgSale: 0, totalAvgSale: 0, doi: 0, allocationPct: null, stockStatus: 'No Demand' }
+      return { ...origLoc, totalInvt: l.totalInvt, rawInvt: l.rawInvt, rawBlockedInvt: l.rawBlockedInvt, rtdInvt: l.rtdInvt, avgSale: origLoc.avgSale, totalAvgSale: origLoc.totalAvgSale, orderAllocation: l.orderAllocation, allocationPct: origLoc.allocationPct }
+    }).filter(l => l.totalInvt > 0)
+
+    return {
+      ...raw, skus,
+      summary: { ...raw.summary, totalInvt: Math.round(totalInvt), rawInvt: Math.round(rawInvt), rawBlockedInvt: Math.round(rawBlockedInvt), rtdInvt: Math.round(rtdInvt), avgSale: Math.round(avgSale), avgSaleB2C: Math.round(avgSale), totalAvgSale: Math.round(totalAvgSale), doi, stockStatus: dominantStatus, skuCount: skus.length, criticalLowCount: skus.filter(s => s.stockStatus === 'Critical' || s.stockStatus === 'Low').length, deadStockCount: skus.filter(s => s.isDead).length, deadStockUnits: skus.filter(s => s.isDead).reduce((s, r) => s + r.totalInvt, 0) },
+      statusBreakdown: Object.entries(statusCounts).map(([status, count]) => ({ status, count })),
+      locations,
+    }
+  })()
+
   return (
     <div style={{ background: PAGE_BACKGROUND, minHeight: '100%', color: IC.t1, fontFamily: 'Inter, sans-serif' }}>
       {/* No horizontal padding here — each sub-page's own FilterSidebar needs to sit flush
@@ -237,7 +293,7 @@ export default function InventoryPage({ onTopbarDateControl }) {
           </div>
         )}
 
-        {tab === 'health' && <InventoryHealthPage data={inv.data} filters={healthFilters} setFilters={setHealthFilters} sidebarTop={sidebarTop} />}
+        {tab === 'health' && <InventoryHealthPage data={invData} filters={healthFilters} setFilters={setHealthFilters} sidebarTop={sidebarTop} />}
         {tab === 'sales' && <SalesAllocationPage data={sales.data} filters={salesFilters} setFilters={setSalesFilters} sidebarTop={sidebarTop} />}
         {tab === 'inward' && <InwardPage data={inward.data} filters={inwardFilters} setFilters={setInwardFilters} sidebarTop={sidebarTop} />}
       </div>

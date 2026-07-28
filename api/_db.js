@@ -9,7 +9,7 @@ export function getPool() {
     pool = new Pool({
       connectionString: connStr,
       ssl: { rejectUnauthorized: false },
-      max: 5,
+      max: 10,
     })
   }
   return pool

@@ -1,4 +1,5 @@
 import { getBQ } from './_bq.js'
+import { getPool } from './_db.js'
 import {
   buildFacilityMaps, norm, normSku, cleanLabel, computeRowInventory,
   stockStatus, requiredStock, rtdLevel, parseLaunchDate, isNewLaunch, isPseudoSku, REORDER_POINT_DOI,
@@ -39,6 +40,23 @@ function splitCsv(v) {
   return v ? v.split(',').map(x => x.trim()).filter(Boolean) : null
 }
 
+const INV_CACHE_TTL_MS = 55 * 60 * 1000 // 55 minutes
+
+async function getInvCache(db, key) {
+  try {
+    const { rows } = await db.query(`SELECT payload, created_at FROM inv_cache WHERE cache_key = $1`, [key])
+    if (!rows.length) return null
+    if (Date.now() - new Date(rows[0].created_at).getTime() > INV_CACHE_TTL_MS) return null
+    return rows[0].payload
+  } catch { return null }
+}
+
+async function setInvCache(db, key, payload) {
+  try {
+    await db.query(`INSERT INTO inv_cache(cache_key, payload, created_at) VALUES($1,$2,NOW()) ON CONFLICT(cache_key) DO UPDATE SET payload=EXCLUDED.payload, created_at=NOW()`, [key, JSON.stringify(payload)])
+  } catch (e) { console.warn('inv_cache write failed:', e.message) }
+}
+
 export default async function inventoryHandler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*')
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS')
@@ -51,6 +69,12 @@ export default async function inventoryHandler(req, res) {
     stockStatus: stockStatusFilter, productId, rtdLevel: rtdLevelFilter, avgSaleWindowDays,
   } = req.body
   if (!start || !end) return res.status(400).json({ error: 'Missing start or end date' })
+
+  const db = getPool()
+  // Cache key covers everything that affects computation (attribute filters are re-applied from cached skus)
+  const cacheKey = `inv|${start}|${end}|${location||''}|${facility||''}|${facilityType||''}|${avgSaleWindowDays||7}`
+  const cached = await getInvCache(db, cacheKey)
+  if (cached) return res.json(cached)
   // Avg Sale / Allocation % now average over the literal [start, end] request range (see
   // `daysInRange` below) so they're directly comparable to Sales & Allocation's own Fill %,
   // which is computed the same way. avgSaleWindowDaysVal no longer sizes that averaging
@@ -60,19 +84,18 @@ export default async function inventoryHandler(req, res) {
   const avgSaleWindowDaysVal = Math.max(1, Math.min(90, parseInt(avgSaleWindowDays, 10) || 7))
 
   try {
-    const bq = getBQ()
     const { facilityToLocation, facilityToType, facilityToStatus, facilityToDisplayName, stateToNearestWH, channelToDescription } = buildFacilityMaps()
 
     const daysInRange = Math.max(1, Math.round((new Date(end) - new Date(start)) / 86400000) + 1)
     const endDate = new Date(end)
 
     const [invRows, salesRows, lastSaleRows, itemMasterRows, skuMappingRows, shopifyInvRows] = await Promise.all([
-      cachedQuery('inv',     TTL_1H,  async () => { const [r] = await bq.query({ query: `SELECT ItemSkuCode, Facility, Updated, Inventory, InventoryBlocked FROM \`frido-429506.production.unicommerce_inventory_snapshot_hourly\``, maximumBytesBilled: '1000000000' }); return r }),
-      cachedQuery('sales',   TTL_1H,  async () => { const [r] = await bq.query({ query: `SELECT final_sku, Facility, state, channel, order_date, qty FROM \`frido-429506.production.inventory_sales_window\``, maximumBytesBilled: '1000000000' }); return r }),
-      cachedQuery('last90',  TTL_1H,  async () => { const [r] = await bq.query({ query: `SELECT final_sku, last_sale_date, qty_90d FROM \`frido-429506.production.inventory_sales_90d\``, maximumBytesBilled: '1000000000' }); return r }),
-      cachedQuery('master',  TTL_24H, async () => { const [r] = await bq.query({ query: `SELECT Product_Code, Category_Name, Sub_category, Lead_Time, Product_Source, SKU_First_Sales_Date, Type FROM \`frido-429506.sharepoint_to_gcp.Frido_Item_Master__frido_item_sku_master\``, maximumBytesBilled: '1000000000' }); return r }),
-      cachedQuery('skumap',  TTL_24H, async () => { const [r] = await bq.query({ query: `SELECT DISTINCT TRIM(productid) AS productid, TRIM(masterskucode) AS masterskucode FROM \`frido-429506.sharepoint_to_gcp.Frido_Item_Master__productid_sku_mapping\` WHERE TRIM(masterskucode) NOT IN ('', 'not found')`, maximumBytesBilled: '1000000000' }); return r }),
-      cachedQuery('shopify', TTL_24H, async () => { const [r] = await bq.query({ query: `SELECT sku, SUM(available) AS available FROM \`frido-429506.production.fact_shopify_inventory\` WHERE available > 0 GROUP BY sku`, maximumBytesBilled: '1000000000' }); return r }),
+      cachedQuery('inv',     TTL_1H,  async () => { const { rows } = await db.query(`SELECT item_sku_code AS "ItemSkuCode", facility AS "Facility", updated AS "Updated", inventory AS "Inventory", inventory_blocked AS "InventoryBlocked" FROM inv_snapshot WHERE inventory > 0 OR inventory_blocked > 0`); return rows }),
+      cachedQuery('sales',   TTL_1H,  async () => { const { rows } = await db.query(`SELECT final_sku, facility AS "Facility", state, channel, order_date, qty FROM sales_window`); return rows }),
+      cachedQuery('last90',  TTL_1H,  async () => { const { rows } = await db.query(`SELECT final_sku, last_sale_date, qty_90d FROM sales_90d`); return rows }),
+      cachedQuery('master',  TTL_24H, async () => { const { rows } = await db.query(`SELECT product_code AS "Product_Code", category_name AS "Category_Name", sub_category AS "Sub_category", lead_time AS "Lead_Time", product_source AS "Product_Source", sku_first_sales_date AS "SKU_First_Sales_Date", type AS "Type" FROM item_master`); return rows }),
+      cachedQuery('skumap',  TTL_24H, async () => { const { rows } = await db.query(`SELECT productid, masterskucode FROM sku_mapping`); return rows }),
+      cachedQuery('shopify', TTL_24H, async () => { const { rows } = await db.query(`SELECT sku, available FROM shopify_inv`); return rows }),
     ])
 
     const skuMap = buildSkuMap(skuMappingRows)
@@ -118,7 +141,8 @@ export default async function inventoryHandler(req, res) {
       if (isPseudoSku(r.final_sku)) continue
       const { key } = resolveMasterSkuKey(r.final_sku, skuMap)
       if (!key) continue
-      const rowDate = r.last_sale_date?.value || r.last_sale_date
+      const _ld = r.last_sale_date?.value || r.last_sale_date
+      const rowDate = _ld instanceof Date ? _ld.toISOString().slice(0, 10) : (_ld ? String(_ld).slice(0, 10) : null)
       const rowQty = Number(r.qty_90d || 0)
       const existing = lastSaleBySkuKey.get(key)
       if (!existing) {
@@ -147,7 +171,8 @@ export default async function inventoryHandler(req, res) {
     let maxSalesDate = null
     for (const row of cleanSalesRowsUnanchored) {
       const d = row.order_date?.value || row.order_date
-      if (d && (!maxSalesDate || d > maxSalesDate)) maxSalesDate = d
+      const ds = d instanceof Date ? d.toISOString().slice(0, 10) : String(d).slice(0, 10)
+      if (ds && (!maxSalesDate || ds > maxSalesDate)) maxSalesDate = ds
     }
 
     // ── Avg Sale window ───────────────────────────────────────────────────────
@@ -159,7 +184,8 @@ export default async function inventoryHandler(req, res) {
     // longer auto-excluded via anchoring to the latest complete sales date, as before.
     const cleanSalesRows = cleanSalesRowsUnanchored.filter(row => {
       const d = row.order_date?.value || row.order_date
-      return d >= start && d <= end
+      const ds = d instanceof Date ? d.toISOString().slice(0, 10) : String(d).slice(0, 10)
+      return ds >= start && ds <= end
     })
 
     const locationFilterVals = splitCsv(location)
@@ -370,12 +396,7 @@ export default async function inventoryHandler(req, res) {
       productIds: skus.map(s => ({ sku: s.sku, category: s.category })).sort((a, b) => a.sku.localeCompare(b.sku)),
     }
 
-    // ── Apply attribute filters (server-side, so the payload itself shrinks) ───────────
-    if (category) skus = skus.filter(s => matchesMulti(s.category, category))
-    if (subCategory) skus = skus.filter(s => matchesMulti(s.subCategory, subCategory))
-    if (stockStatusFilter) skus = skus.filter(s => matchesMulti(s.stockStatus, stockStatusFilter))
-    if (rtdLevelFilter) skus = skus.filter(s => matchesMulti(s.rtdLevel, rtdLevelFilter))
-    if (productId) skus = skus.filter(s => matchesMulti(s.sku, productId))
+    const allSkus = skus
 
     // Every downstream view (Location tiles, Warehouse Health, status breakdown) must
     // reflect these same attribute filters — scope skuLocRows to the SKUs that survived
@@ -544,6 +565,8 @@ export default async function inventoryHandler(req, res) {
       pivot: { locations: pivotLocations, rows: pivotRows },
       skus,
     }
+    // Store unfiltered result in Supabase cache (fire-and-forget)
+    setInvCache(db, cacheKey, { ...payload, skus: allSkus })
     res.json(payload)
   } catch (e) {
     console.error('[inventory]', e.message)
