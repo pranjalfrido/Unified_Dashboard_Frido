@@ -321,59 +321,53 @@ function LogisticsPage({ filters }) {
                 return acc
               }, {})
           ).sort((a, b) => a.dt < b.dt ? -1 : 1) : raw.byDay,
-        byWeightSlab: hasCourier
-          ? (() => {
-              const m = {}
-              ;(raw.byWeightSlab || []).filter(x => couriers.includes(x.courier_group)).forEach(x => {
-                if (!m[x.slab]) m[x.slab] = { slab: x.slab, slab_order: x.slab_order, total: 0, delivered: 0, rto: 0, in_transit: 0, total_value: 0, _tat_w: 0, _tat_sum: 0 }
-                m[x.slab].total += x.total || 0; m[x.slab].delivered += x.delivered || 0
-                m[x.slab].rto += x.rto || 0; m[x.slab].in_transit += x.in_transit || 0
-                m[x.slab].total_value += x.total_value || 0
-                m[x.slab]._tat_w += x.total || 0; m[x.slab]._tat_sum += (x.avg_tat || 0) * (x.total || 0)
-              })
-              return Object.values(m).map(x => ({ ...x, del_pct: +((x.delivered / Math.max(x.total,1)) * 100).toFixed(1), rto_pct: +((x.rto / Math.max(x.total,1)) * 100).toFixed(1), avg_tat: +(x._tat_sum / Math.max(x._tat_w,1)).toFixed(2) })).sort((a,b) => a.slab_order - b.slab_order)
-            })()
-          : raw.byWeightSlab,
-        tatByFacility: hasCourier
-          ? (() => {
-              const m = {}
-              ;(raw.tatByFacility || []).filter(x => couriers.includes(x.courier_group)).forEach(x => {
-                if (!m[x.facility]) m[x.facility] = { facility: x.facility, total: 0, delivered: 0, proc_0_12h: 0, proc_12_24h: 0, proc_24_48h: 0, proc_48plus: 0, ord_0_1: 0, ord_2_3: 0, ord_4_5: 0, ord_5plus: 0 }
-                const f = m[x.facility]
-                ;['total','delivered','proc_0_12h','proc_12_24h','proc_24_48h','proc_48plus','ord_0_1','ord_2_3','ord_4_5','ord_5plus'].forEach(k => f[k] += x[k] || 0)
-              })
-              return Object.values(m).sort((a,b) => b.total - a.total)
-            })()
-          : raw.tatByFacility,
-        rtoReasons: hasCourier
-          ? (() => {
-              const m = {}
-              ;(raw.rtoReasons || []).filter(x => couriers.includes(x.courier_group)).forEach(x => { m[x.reason] = (m[x.reason] || 0) + (x.total || 0) })
-              return Object.entries(m).map(([reason, total]) => ({ reason, total })).sort((a,b) => b.total - a.total)
-            })()
-          : raw.rtoReasons,
-        failedDeliveryReasons: hasCourier
-          ? (() => {
-              const m = {}
-              ;(raw.failedDeliveryReasons || []).filter(x => couriers.includes(x.courier_group)).forEach(x => { m[x.reason] = (m[x.reason] || 0) + (x.total || 0) })
-              return Object.entries(m).map(([reason, total]) => ({ reason, total })).sort((a,b) => b.total - a.total)
-            })()
-          : raw.failedDeliveryReasons,
+        byWeightSlab: (() => {
+            const m = {}
+            const rows = hasCourier ? (raw.byWeightSlab || []).filter(x => couriers.includes(x.courier_group)) : (raw.byWeightSlab || [])
+            rows.forEach(x => {
+              if (!m[x.slab]) m[x.slab] = { slab: x.slab, slab_order: x.slab_order, total: 0, delivered: 0, rto: 0, in_transit: 0, total_value: 0, _tat_w: 0, _tat_sum: 0 }
+              m[x.slab].total += x.total || 0; m[x.slab].delivered += x.delivered || 0
+              m[x.slab].rto += x.rto || 0; m[x.slab].in_transit += x.in_transit || 0
+              m[x.slab].total_value += x.total_value || 0
+              m[x.slab]._tat_w += x.total || 0; m[x.slab]._tat_sum += (x.avg_tat || 0) * (x.total || 0)
+            })
+            return Object.values(m).map(x => ({ ...x, del_pct: +((x.delivered / Math.max(x.total,1)) * 100).toFixed(1), rto_pct: +((x.rto / Math.max(x.total,1)) * 100).toFixed(1), avg_tat: +(x._tat_sum / Math.max(x._tat_w,1)).toFixed(2) })).sort((a,b) => a.slab_order - b.slab_order)
+          })(),
+        tatByFacility: (() => {
+            const m = {}
+            const rows = hasCourier ? (raw.tatByFacility || []).filter(x => couriers.includes(x.courier_group)) : (raw.tatByFacility || [])
+            rows.forEach(x => {
+              if (!m[x.facility]) m[x.facility] = { facility: x.facility, total: 0, delivered: 0, proc_0_12h: 0, proc_12_24h: 0, proc_24_48h: 0, proc_48plus: 0, ord_0_1: 0, ord_2_3: 0, ord_4_5: 0, ord_5plus: 0 }
+              const f = m[x.facility]
+              ;['total','delivered','proc_0_12h','proc_12_24h','proc_24_48h','proc_48plus','ord_0_1','ord_2_3','ord_4_5','ord_5plus'].forEach(k => f[k] += x[k] || 0)
+            })
+            return Object.values(m).sort((a,b) => b.total - a.total)
+          })(),
+        rtoReasons: (() => {
+            const rows = hasCourier ? (raw.rtoReasons || []).filter(x => couriers.includes(x.courier_group)) : (raw.rtoReasons || [])
+            const m = {}; rows.forEach(x => { m[x.reason] = (m[x.reason] || 0) + (x.total || 0) })
+            return Object.entries(m).map(([reason, total]) => ({ reason, total })).sort((a,b) => b.total - a.total)
+          })(),
+        failedDeliveryReasons: (() => {
+            const rows = hasCourier ? (raw.failedDeliveryReasons || []).filter(x => couriers.includes(x.courier_group)) : (raw.failedDeliveryReasons || [])
+            const m = {}; rows.forEach(x => { m[x.reason] = (m[x.reason] || 0) + (x.total || 0) })
+            return Object.entries(m).map(([reason, total]) => ({ reason, total })).sort((a,b) => b.total - a.total)
+          })(),
         topDropStates: (() => {
-          const filtered = hasCourier ? (raw.topDropStates || []).filter(x => couriers.includes(x.courier_group)) : raw.topDropStates || []
-          const f2 = dropState ? filtered.filter(x => x.state?.toLowerCase() === dropState.toLowerCase()) : filtered
+          const rows = hasCourier ? (raw.topDropStates || []).filter(x => couriers.includes(x.courier_group)) : (raw.topDropStates || [])
+          const f2 = dropState ? rows.filter(x => x.state?.toLowerCase() === dropState.toLowerCase()) : rows
           const m = {}; f2.forEach(x => { m[x.state] = (m[x.state] || 0) + (x.total || 0) })
           return Object.entries(m).map(([state, total]) => ({ state, total })).sort((a,b) => b.total - a.total).slice(0, 10)
         })(),
         topDropCities: (() => {
-          const filtered = hasCourier ? (raw.topDropCities || []).filter(x => couriers.includes(x.courier_group)) : raw.topDropCities || []
-          const f2 = dropCity ? filtered.filter(x => x.city?.toLowerCase() === dropCity.toLowerCase()) : filtered
+          const rows = hasCourier ? (raw.topDropCities || []).filter(x => couriers.includes(x.courier_group)) : (raw.topDropCities || [])
+          const f2 = dropCity ? rows.filter(x => x.city?.toLowerCase() === dropCity.toLowerCase()) : rows
           const m = {}; f2.forEach(x => { m[x.city] = (m[x.city] || 0) + (x.total || 0) })
           return Object.entries(m).map(([city, total]) => ({ city, total })).sort((a,b) => b.total - a.total).slice(0, 10)
         })(),
         topPickupCities: (() => {
-          const filtered = hasCourier ? (raw.topPickupCities || []).filter(x => couriers.includes(x.courier_group)) : raw.topPickupCities || []
-          const f2 = pickupState ? filtered.filter(x => x.pickup_state?.toLowerCase() === pickupState.toLowerCase()) : filtered
+          const rows = hasCourier ? (raw.topPickupCities || []).filter(x => couriers.includes(x.courier_group)) : (raw.topPickupCities || [])
+          const f2 = pickupState ? rows.filter(x => x.pickup_state?.toLowerCase() === pickupState.toLowerCase()) : rows
           const m = {}; f2.forEach(x => { m[x.city] = (m[x.city] || 0) + (x.total || 0) })
           return Object.entries(m).map(([city, total]) => ({ city, total })).sort((a,b) => b.total - a.total).slice(0, 10)
         })(),
