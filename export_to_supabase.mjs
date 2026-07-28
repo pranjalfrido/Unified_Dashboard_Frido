@@ -16,7 +16,7 @@ async function bulkLoad(db, tableName, rows, cols, params, batchSize = 500) {
     const n = cols.length
     const values = batch.map((_, j) => `(${cols.map((_, k) => `$${j*n+k+1}`).join(',')})`).join(',')
     const flat = batch.flatMap(params)
-    await db.query(`INSERT INTO ${tableName} VALUES ${values}`, flat)
+    await db.query(`INSERT INTO ${tableName} VALUES ${values} ON CONFLICT DO NOTHING`, flat)
     console.log(`  ${tableName}: ${Math.min(i+batchSize, rows.length)}/${rows.length}`)
   }
   console.log(`${tableName} loaded ✅`)
