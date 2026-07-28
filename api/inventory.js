@@ -11,7 +11,7 @@ const DEAD_STOCK_WINDOW_DAYS = 90
 // Inventory Health has no date picker — the same request fires repeatedly, so cache
 // the entire result for 30 minutes to avoid re-scanning BQ on every tab visit.
 const _responseCache = new Map()
-const CACHE_TTL_MS = 30 * 60 * 1000
+const CACHE_TTL_MS = 60 * 60 * 1000
 // Avg Sale anchors to the latest date that actually has sales data, not the requested
 // `end` — the pipeline can lag by a day or more, and a same-day/partial row would
 // otherwise silently drag the average down. Extra days are fetched beyond the requested
