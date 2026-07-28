@@ -7,11 +7,20 @@ import {
 
 const DEAD_STOCK_WINDOW_DAYS = 90
 
-// Module-level cache for the full inventory response, keyed by request body JSON.
-// Inventory Health has no date picker — the same request fires repeatedly, so cache
-// the entire result for 30 minutes to avoid re-scanning BQ on every tab visit.
-const _responseCache = new Map()
-const CACHE_TTL_MS = 60 * 60 * 1000
+// Module-level caches — survive across requests on the same warm Vercel instance.
+// Static reference tables (item master, SKU mapping, Shopify) cached 24h.
+// Dynamic hourly tables (snapshot, sales) cached 60 min to match BQ scheduled refresh.
+const _cache = {}
+const TTL_1H  = 60 * 60 * 1000
+const TTL_24H = 24 * 60 * 60 * 1000
+
+async function cachedQuery(key, ttl, fn) {
+  const now = Date.now()
+  if (_cache[key] && now - _cache[key].at < ttl) return _cache[key].data
+  const data = await fn()
+  _cache[key] = { data, at: now }
+  return data
+}
 // Avg Sale anchors to the latest date that actually has sales data, not the requested
 // `end` — the pipeline can lag by a day or more, and a same-day/partial row would
 // otherwise silently drag the average down. Extra days are fetched beyond the requested
@@ -50,15 +59,6 @@ export default async function inventoryHandler(req, res) {
   // controls the averaging period itself.
   const avgSaleWindowDaysVal = Math.max(1, Math.min(90, parseInt(avgSaleWindowDays, 10) || 7))
 
-  // Cache the full response keyed by request body — inventory has no date picker so
-  // the same request fires on every tab visit. Serve from cache for 30 min.
-  const cacheKey = JSON.stringify(req.body)
-  const now = Date.now()
-  const cached = _responseCache.get(cacheKey)
-  if (cached && now - cached.at < CACHE_TTL_MS) {
-    return res.json(cached.data)
-  }
-
   try {
     const bq = getBQ()
     const { facilityToLocation, facilityToType, facilityToStatus, facilityToDisplayName, stateToNearestWH, channelToDescription } = buildFacilityMaps()
@@ -66,13 +66,13 @@ export default async function inventoryHandler(req, res) {
     const daysInRange = Math.max(1, Math.round((new Date(end) - new Date(start)) / 86400000) + 1)
     const endDate = new Date(end)
 
-    const [[invRows], [salesRows], [lastSaleRows], [itemMasterRows], [skuMappingRows], [shopifyInvRows]] = await Promise.all([
-      bq.query({ query: `SELECT ItemSkuCode, Facility, Updated, Inventory, InventoryBlocked FROM \`frido-429506.production.unicommerce_inventory_snapshot_hourly\``, maximumBytesBilled: '1000000000' }),
-      bq.query({ query: `SELECT final_sku, Facility, state, channel, order_date, qty FROM \`frido-429506.production.inventory_sales_window\``, maximumBytesBilled: '1000000000' }),
-      bq.query({ query: `SELECT final_sku, last_sale_date, qty_90d FROM \`frido-429506.production.inventory_sales_90d\``, maximumBytesBilled: '1000000000' }),
-      bq.query({ query: `SELECT Product_Code, Category_Name, Sub_category, Lead_Time, Product_Source, SKU_First_Sales_Date, Type FROM \`frido-429506.sharepoint_to_gcp.Frido_Item_Master__frido_item_sku_master\``, maximumBytesBilled: '1000000000' }),
-      bq.query({ query: `SELECT DISTINCT TRIM(productid) AS productid, TRIM(masterskucode) AS masterskucode FROM \`frido-429506.sharepoint_to_gcp.Frido_Item_Master__productid_sku_mapping\` WHERE TRIM(masterskucode) NOT IN ('', 'not found')`, maximumBytesBilled: '1000000000' }),
-      bq.query({ query: `SELECT sku, SUM(available) AS available FROM \`frido-429506.production.fact_shopify_inventory\` WHERE available > 0 GROUP BY sku`, maximumBytesBilled: '1000000000' }),
+    const [invRows, salesRows, lastSaleRows, itemMasterRows, skuMappingRows, shopifyInvRows] = await Promise.all([
+      cachedQuery('inv',     TTL_1H,  async () => { const [r] = await bq.query({ query: `SELECT ItemSkuCode, Facility, Updated, Inventory, InventoryBlocked FROM \`frido-429506.production.unicommerce_inventory_snapshot_hourly\``, maximumBytesBilled: '1000000000' }); return r }),
+      cachedQuery('sales',   TTL_1H,  async () => { const [r] = await bq.query({ query: `SELECT final_sku, Facility, state, channel, order_date, qty FROM \`frido-429506.production.inventory_sales_window\``, maximumBytesBilled: '1000000000' }); return r }),
+      cachedQuery('last90',  TTL_1H,  async () => { const [r] = await bq.query({ query: `SELECT final_sku, last_sale_date, qty_90d FROM \`frido-429506.production.inventory_sales_90d\``, maximumBytesBilled: '1000000000' }); return r }),
+      cachedQuery('master',  TTL_24H, async () => { const [r] = await bq.query({ query: `SELECT Product_Code, Category_Name, Sub_category, Lead_Time, Product_Source, SKU_First_Sales_Date, Type FROM \`frido-429506.sharepoint_to_gcp.Frido_Item_Master__frido_item_sku_master\``, maximumBytesBilled: '1000000000' }); return r }),
+      cachedQuery('skumap',  TTL_24H, async () => { const [r] = await bq.query({ query: `SELECT DISTINCT TRIM(productid) AS productid, TRIM(masterskucode) AS masterskucode FROM \`frido-429506.sharepoint_to_gcp.Frido_Item_Master__productid_sku_mapping\` WHERE TRIM(masterskucode) NOT IN ('', 'not found')`, maximumBytesBilled: '1000000000' }); return r }),
+      cachedQuery('shopify', TTL_24H, async () => { const [r] = await bq.query({ query: `SELECT sku, SUM(available) AS available FROM \`frido-429506.production.fact_shopify_inventory\` WHERE available > 0 GROUP BY sku`, maximumBytesBilled: '1000000000' }); return r }),
     ])
 
     const skuMap = buildSkuMap(skuMappingRows)
@@ -544,7 +544,6 @@ export default async function inventoryHandler(req, res) {
       pivot: { locations: pivotLocations, rows: pivotRows },
       skus,
     }
-    _responseCache.set(cacheKey, { data: payload, at: Date.now() })
     res.json(payload)
   } catch (e) {
     console.error('[inventory]', e.message)
