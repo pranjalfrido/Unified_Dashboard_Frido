@@ -73,15 +73,8 @@ export default async function inventoryHandler(req, res) {
 
     const [[invRows], [salesRows], [lastSaleRows], [itemMasterRows], [skuMappingRows], [shopifyInvRows]] = await Promise.all([
       bq.query({
-        query: `SELECT
-                  ItemSkuCode, Facility, Updated,
-                  SAFE_CAST(Inventory_st AS FLOAT64) AS Inventory,
-                  SAFE_CAST(InventoryBlocked_st AS FLOAT64) AS InventoryBlocked
-                FROM \`frido-429506.Frido_BigQuery.Frido_Unicommerce_3_Inventory_Snapshot_Inventory_Snapshot\`
-                QUALIFY ROW_NUMBER() OVER (
-                  PARTITION BY ItemSkuCode, Facility
-                  ORDER BY Updated DESC, _daton_batch_runtime DESC
-                ) = 1`,
+        query: `SELECT ItemSkuCode, Facility, Updated, Inventory, InventoryBlocked
+                FROM \`frido-429506.production.unicommerce_inventory_snapshot_hourly\``,
         maximumBytesBilled: '5000000000',
       }),
       // Pulls a few extra lookback days beyond the requested range (SALES_LOOKBACK_BUFFER_DAYS)
