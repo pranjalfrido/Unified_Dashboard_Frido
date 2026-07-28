@@ -64,7 +64,7 @@ function FilterSidebar({ data, filters, setFilters, open, sidebarTop }) {
         width: SIDEBAR_WIDTH, padding: '12px', boxSizing: 'border-box', display: 'flex', flexDirection: 'column', gap: 10,
         background: IC.surface,
         ...(left != null ? {
-          position: 'fixed', top: 'var(--nav)', left,
+          position: 'fixed', top: 'var(--nav)', left, zIndex: 50,
           height: 'calc(100vh - var(--nav))', overflowY: 'auto',
         } : {}),
       }}>
