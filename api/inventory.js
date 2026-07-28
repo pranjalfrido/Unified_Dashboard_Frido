@@ -7,11 +7,11 @@ import {
 
 const DEAD_STOCK_WINDOW_DAYS = 90
 
-// Module-level cache for the inventory snapshot — this table is large and date-independent
-// (always "latest stock now"). Cache for 30 minutes so repeated date-range changes reuse it.
-let _invCache = null
-let _invCacheAt = 0
-const INV_CACHE_TTL_MS = 30 * 60 * 1000
+// Module-level cache for the full inventory response, keyed by request body JSON.
+// Inventory Health has no date picker — the same request fires repeatedly, so cache
+// the entire result for 30 minutes to avoid re-scanning BQ on every tab visit.
+const _responseCache = new Map()
+const CACHE_TTL_MS = 30 * 60 * 1000
 // Avg Sale anchors to the latest date that actually has sales data, not the requested
 // `end` — the pipeline can lag by a day or more, and a same-day/partial row would
 // otherwise silently drag the average down. Extra days are fetched beyond the requested
@@ -50,6 +50,15 @@ export default async function inventoryHandler(req, res) {
   // controls the averaging period itself.
   const avgSaleWindowDaysVal = Math.max(1, Math.min(90, parseInt(avgSaleWindowDays, 10) || 7))
 
+  // Cache the full response keyed by request body — inventory has no date picker so
+  // the same request fires on every tab visit. Serve from cache for 30 min.
+  const cacheKey = JSON.stringify(req.body)
+  const now = Date.now()
+  const cached = _responseCache.get(cacheKey)
+  if (cached && now - cached.at < CACHE_TTL_MS) {
+    return res.json(cached.data)
+  }
+
   try {
     const bq = getBQ()
     const { facilityToLocation, facilityToType, facilityToStatus, facilityToDisplayName, stateToNearestWH, channelToDescription } = buildFacilityMaps()
@@ -58,17 +67,12 @@ export default async function inventoryHandler(req, res) {
     const endDate = new Date(end)
     const deadStockCutoff = new Date(endDate); deadStockCutoff.setDate(deadStockCutoff.getDate() - DEAD_STOCK_WINDOW_DAYS)
     const deadStockCutoffStr = deadStockCutoff.toISOString().slice(0, 10)
-    // Widen the sales fetch to cover the largest of: the default lookback buffer, or the
-    // requested Avg Sale window (+1 day for the excluded/possibly-partial anchor date).
     const salesFetchLookbackDays = Math.max(SALES_LOOKBACK_BUFFER_DAYS, avgSaleWindowDaysVal + 1)
     const salesFetchStart = new Date(start); salesFetchStart.setDate(salesFetchStart.getDate() - salesFetchLookbackDays)
     const salesFetchStartStr = salesFetchStart.toISOString().slice(0, 10)
 
-    // Inventory snapshot is date-independent (always latest stock) — serve from module cache
-    // for 30 min so changing the date range doesn't re-scan the full table each time.
-    const now = Date.now()
-    if (!_invCache || now - _invCacheAt > INV_CACHE_TTL_MS) {
-      const [rows] = await bq.query({
+    const [[invRows], [salesRows], [lastSaleRows], [itemMasterRows], [skuMappingRows], [shopifyInvRows]] = await Promise.all([
+      bq.query({
         query: `SELECT
                   ItemSkuCode, Facility, Updated,
                   SAFE_CAST(Inventory_st AS FLOAT64) AS Inventory,
@@ -79,13 +83,7 @@ export default async function inventoryHandler(req, res) {
                   ORDER BY Updated DESC, _daton_batch_runtime DESC
                 ) = 1`,
         maximumBytesBilled: '5000000000',
-      })
-      _invCache = rows
-      _invCacheAt = now
-    }
-    const invRows = _invCache
-
-    const [[salesRows], [lastSaleRows], [itemMasterRows], [skuMappingRows], [shopifyInvRows]] = await Promise.all([
+      }),
       // Pulls a few extra lookback days beyond the requested range (SALES_LOOKBACK_BUFFER_DAYS)
       // so the "true anchor date" logic below always has enough history even when the pipeline
       // is a couple of days behind — see anchoredSalesRange.
@@ -566,7 +564,7 @@ export default async function inventoryHandler(req, res) {
       byLocation: Object.fromEntries(s.locations.map(l => [l.location, { totalInvt: Math.round(l.totalInvt), avgSale: l.avgSale }])),
     }))
 
-    res.json({
+    const payload = {
       asOf: lastSnapshotUpdated,
       lastSalesDate: maxSalesDate,
       avgSaleWindowDays: avgSaleWindowDaysVal,
@@ -597,7 +595,9 @@ export default async function inventoryHandler(req, res) {
       slowMoving,
       pivot: { locations: pivotLocations, rows: pivotRows },
       skus,
-    })
+    }
+    _responseCache.set(cacheKey, { data: payload, at: Date.now() })
+    res.json(payload)
   } catch (e) {
     console.error('[inventory]', e.message)
     res.status(500).json({ error: e.message })
