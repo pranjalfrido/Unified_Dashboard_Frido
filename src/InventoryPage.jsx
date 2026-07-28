@@ -239,7 +239,7 @@ export default function InventoryPage({ onTopbarDateControl }) {
         <div style={{ display: 'flex', flexDirection: 'column', gap: 2, marginBottom: 10 }}>
           <span style={{ fontSize: 11, color: IC.t3 }}>
             {inv.data?.asOf
-              ? `Snapshot updated ${new Date(inv.data.asOf).toLocaleString('en-IN', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}`
+              ? `Data refreshed at ${new Date(inv.data.asOf).toLocaleString('en-IN', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })} IST`
               : inv.loading ? 'Loading snapshot time…' : ''}
           </span>
           {inv.data?.avgSaleWindow?.end && (
