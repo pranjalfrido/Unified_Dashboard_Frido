@@ -71,28 +71,20 @@ export default async function inventoryHandler(req, res) {
     const salesFetchStart = new Date(start); salesFetchStart.setDate(salesFetchStart.getDate() - salesFetchLookbackDays)
     const salesFetchStartStr = salesFetchStart.toISOString().slice(0, 10)
 
-    const [[invRows], [salesRows], [lastSaleRows], [itemMasterRows], [skuMappingRows], [shopifyInvRows]] = await Promise.all([
+    const [[invRows], [salesRows], [itemMasterRows], [skuMappingRows], [shopifyInvRows]] = await Promise.all([
       bq.query({
         query: `SELECT ItemSkuCode, Facility, Updated, Inventory, InventoryBlocked
                 FROM \`frido-429506.production.unicommerce_inventory_snapshot_hourly\``,
         maximumBytesBilled: '5000000000',
       }),
-      // Pulls a few extra lookback days beyond the requested range (SALES_LOOKBACK_BUFFER_DAYS)
-      // so the "true anchor date" logic below always has enough history even when the pipeline
-      // is a couple of days behind — see anchoredSalesRange.
+      // Single scan of aggregated_uniware_sales_report covering the wider 90d window —
+      // sales rows within [salesFetchStartStr, end] are used for Avg Sale;
+      // all rows are used for dead-stock last-sale detection (90d window).
       bq.query({
         query: `SELECT final_sku, Facility, state, channel, order_date, SUM(total_quantity) AS qty
                 FROM \`frido-429506.production.aggregated_uniware_sales_report\`
-                WHERE order_date BETWEEN '${salesFetchStartStr}' AND '${end}'
-                GROUP BY final_sku, Facility, state, channel, order_date`,
-        maximumBytesBilled: '5000000000',
-      }),
-      // Independent of the selected range — always the trailing 90d window, for dead-stock detection.
-      bq.query({
-        query: `SELECT final_sku, MAX(order_date) AS last_sale_date, SUM(total_quantity) AS qty_90d
-                FROM \`frido-429506.production.aggregated_uniware_sales_report\`
                 WHERE order_date BETWEEN '${deadStockCutoffStr}' AND '${end}'
-                GROUP BY final_sku`,
+                GROUP BY final_sku, Facility, state, channel, order_date`,
         maximumBytesBilled: '5000000000',
       }),
       bq.query({
@@ -157,14 +149,14 @@ export default async function inventoryHandler(req, res) {
     }
 
     // ── Last-sale-in-90d lookup (dead stock detection, independent of selected range) ──
-    // Merged (not overwritten) across raw codes that resolve to the same master SKU.
+    // Derived from the same salesRows (already covers 90d window) — no separate BQ query needed.
     const lastSaleBySkuKey = new Map()
-    for (const r of lastSaleRows) {
+    for (const r of salesRows) {
       if (isPseudoSku(r.final_sku)) continue
       const { key } = resolveMasterSkuKey(r.final_sku, skuMap)
       if (!key) continue
-      const rowDate = r.last_sale_date?.value || r.last_sale_date
-      const rowQty = Number(r.qty_90d || 0)
+      const rowDate = r.order_date?.value || r.order_date
+      const rowQty = Number(r.qty || 0)
       const existing = lastSaleBySkuKey.get(key)
       if (!existing) {
         lastSaleBySkuKey.set(key, { lastSaleDate: rowDate, qty90d: rowQty })
