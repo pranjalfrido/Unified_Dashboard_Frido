@@ -221,26 +221,8 @@ function LogisticsPage({ filters }) {
       if (!r.ok) throw new Error(await r.text())
       const [cur, prev] = await Promise.all([r.json(), rPrev.ok ? rPrev.json() : Promise.resolve(null)])
       // client-side filter for zone/paymentMode/state/city — instant, no BQ re-call
-      const applyLocal = (raw) => {
-        if (!raw) return null
-        const { zone, paymentMode, pickupState, dropState, dropCity } = lFilters
-        if (!zone && !paymentMode && !pickupState && !dropState && !dropCity) return raw
-        return {
-          ...raw,
-          byZone: zone ? (raw.byZone || []).filter(r => r.zone === zone) : raw.byZone,
-          byZoneDetail: zone ? (raw.byZoneDetail || []).filter(r => r.zone === zone) : raw.byZoneDetail,
-          byPayment: paymentMode ? (raw.byPayment || []).filter(r => r.payment_mode?.toLowerCase() === paymentMode.toLowerCase()) : raw.byPayment,
-          byPaymentDetail: paymentMode ? (raw.byPaymentDetail || []).filter(r => r.payment_mode?.toLowerCase() === paymentMode.toLowerCase()) : raw.byPaymentDetail,
-          byPaymentDay: paymentMode ? (raw.byPaymentDay || []).filter(r => r.payment_mode?.toLowerCase() === paymentMode.toLowerCase()) : raw.byPaymentDay,
-          byPaymentWeek: paymentMode ? (raw.byPaymentWeek || []).filter(r => r.payment_mode?.toLowerCase() === paymentMode.toLowerCase()) : raw.byPaymentWeek,
-          byPaymentMonth: paymentMode ? (raw.byPaymentMonth || []).filter(r => r.payment_mode?.toLowerCase() === paymentMode.toLowerCase()) : raw.byPaymentMonth,
-          topDropStates: dropState ? (raw.topDropStates || []).filter(r => r.state?.toLowerCase() === dropState.toLowerCase()) : raw.topDropStates,
-          topDropCities: dropCity ? (raw.topDropCities || []).filter(r => r.city?.toLowerCase() === dropCity.toLowerCase()) : raw.topDropCities,
-          topPickupCities: pickupState ? (raw.topPickupCities || []).filter(r => r.pickup_state?.toLowerCase() === pickupState.toLowerCase()) : raw.topPickupCities,
-        }
-      }
-      setData(applyLocal(cur))
-      setPrevData(applyLocal(prev))
+      setData(cur)
+      setPrevData(prev)
     } catch (e) { setError(e.message) }
     finally { setLoading(false) }
   }, [filters.start, filters.end, lFilters])
