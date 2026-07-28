@@ -71,7 +71,7 @@ export default async function inventoryHandler(req, res) {
                   SAFE_CAST(Inventory_st AS FLOAT64) AS Inventory,
                   SAFE_CAST(InventoryBlocked_st AS FLOAT64) AS InventoryBlocked
                 FROM \`frido-429506.Frido_BigQuery.Frido_Unicommerce_3_Inventory_Snapshot_Inventory_Snapshot\`
-                WHERE _daton_batch_runtime >= TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL 90 DAY)
+                WHERE _daton_batch_runtime >= UNIX_SECONDS(TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL 90 DAY))
                 QUALIFY ROW_NUMBER() OVER (
                   PARTITION BY ItemSkuCode, Facility
                   ORDER BY Updated DESC, _daton_batch_runtime DESC
