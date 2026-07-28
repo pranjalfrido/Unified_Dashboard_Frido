@@ -103,7 +103,7 @@ export default async function inwardHandler(req, res) {
       // Total Sold Qty / Inward Coverage Ratio KPIs) in one fetch.
       bq.query({
         query: `SELECT final_sku, state, channel, order_date, SUM(total_quantity) AS qty
-                FROM \`frido-429506.production.Aggregated_uniware_sales_report\`
+                FROM \`frido-429506.production.aggregated_uniware_sales_report\`
                 WHERE order_date BETWEEN '${salesFetchStartStr}' AND '${salesFetchEndStr}'
                 GROUP BY final_sku, state, channel, order_date`,
         maximumBytesBilled: '5000000000',

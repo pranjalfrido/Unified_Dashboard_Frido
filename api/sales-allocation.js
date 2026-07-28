@@ -70,7 +70,7 @@ export default async function salesAllocationHandler(req, res) {
     const queries = [
       bq.query({
         query: `SELECT final_sku, Facility, state, channel, order_date, SUM(total_quantity) AS qty, SUM(total_revenue) AS rev
-                FROM \`frido-429506.production.Aggregated_uniware_sales_report\`
+                FROM \`frido-429506.production.aggregated_uniware_sales_report\`
                 WHERE order_date BETWEEN '${fetchStartStr}' AND '${end}'
                 GROUP BY final_sku, Facility, state, channel, order_date`,
         maximumBytesBilled: '5000000000',
@@ -110,7 +110,7 @@ export default async function salesAllocationHandler(req, res) {
     if (comparePrevious) {
       queries.push(bq.query({
         query: `SELECT SUM(total_quantity) AS qty, SUM(total_revenue) AS rev
-                FROM \`frido-429506.production.Aggregated_uniware_sales_report\`
+                FROM \`frido-429506.production.aggregated_uniware_sales_report\`
                 WHERE order_date BETWEEN '${prevStartStr}' AND '${prevEndStr}'`,
         maximumBytesBilled: '5000000000',
       }))

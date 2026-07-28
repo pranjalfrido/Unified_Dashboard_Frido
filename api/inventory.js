@@ -87,7 +87,7 @@ export default async function inventoryHandler(req, res) {
       // is a couple of days behind — see anchoredSalesRange.
       bq.query({
         query: `SELECT final_sku, Facility, state, channel, order_date, SUM(total_quantity) AS qty
-                FROM \`frido-429506.production.Aggregated_uniware_sales_report\`
+                FROM \`frido-429506.production.aggregated_uniware_sales_report\`
                 WHERE order_date BETWEEN '${salesFetchStartStr}' AND '${end}'
                 GROUP BY final_sku, Facility, state, channel, order_date`,
         maximumBytesBilled: '5000000000',
@@ -95,7 +95,7 @@ export default async function inventoryHandler(req, res) {
       // Independent of the selected range — always the trailing 90d window, for dead-stock detection.
       bq.query({
         query: `SELECT final_sku, MAX(order_date) AS last_sale_date, SUM(total_quantity) AS qty_90d
-                FROM \`frido-429506.production.Aggregated_uniware_sales_report\`
+                FROM \`frido-429506.production.aggregated_uniware_sales_report\`
                 WHERE order_date BETWEEN '${deadStockCutoffStr}' AND '${end}'
                 GROUP BY final_sku`,
         maximumBytesBilled: '5000000000',
