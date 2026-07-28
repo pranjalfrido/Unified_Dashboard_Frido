@@ -457,7 +457,7 @@ tat_by_facility AS (
       WHEN UPPER(TRIM(pickup_city)) IN ('KOLKATA','HOWRAH','HOOGHLY') THEN 'Kolkata'
       WHEN UPPER(TRIM(pickup_city)) = 'CHENNAI' THEN 'Chennai'
       WHEN UPPER(TRIM(pickup_city)) = 'HYDERABAD' THEN 'Hyderabad'
-      ELSE TRIM(pickup_city)
+      ELSE NULL
     END AS facility,
     COUNT(awb) AS total,
     COUNTIF(unified_status='Delivered') AS delivered,
@@ -469,7 +469,7 @@ tat_by_facility AS (
     COUNTIF(delivery_date IS NOT NULL AND order_date IS NOT NULL AND DATE_DIFF(delivery_date, order_date, DAY) BETWEEN 2 AND 3) AS ord_2_3,
     COUNTIF(delivery_date IS NOT NULL AND order_date IS NOT NULL AND DATE_DIFF(delivery_date, order_date, DAY) BETWEEN 4 AND 5) AS ord_4_5,
     COUNTIF(delivery_date IS NOT NULL AND order_date IS NOT NULL AND DATE_DIFF(delivery_date, order_date, DAY) > 5) AS ord_5plus
-  FROM base WHERE pickup_city IS NOT NULL GROUP BY 1, 2
+  FROM base WHERE pickup_city IS NOT NULL GROUP BY 1, 2 HAVING facility IS NOT NULL
 ),
 failed_delivery_reasons AS (
   SELECT courier_group,
