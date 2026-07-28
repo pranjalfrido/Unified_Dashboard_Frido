@@ -204,9 +204,15 @@ function LogisticsPage({ filters }) {
       if (lFilters.couriers.length) body.courier = lFilters.couriers
       if (lFilters.shipmentType !== 'all') body.shipmentType = lFilters.shipmentType
       if (lFilters.sddNdd !== 'all') body.sddNdd = lFilters.sddNdd
+      if (lFilters.paymentMode) body.paymentMode = lFilters.paymentMode
+      if (lFilters.zone) body.zone = lFilters.zone
+      if (lFilters.pickupState) body.pickupState = lFilters.pickupState
+      if (lFilters.dropState) body.dropState = lFilters.dropState
+      if (lFilters.dropCity) body.dropCity = lFilters.dropCity
       if (lFilters.category) body.category = [lFilters.category]
       if (lFilters.subCategory) body.subCategory = [lFilters.subCategory]
 
+      // calc prev period (same # of days, ending day before start)
       const s = new Date(filters.start), e = new Date(filters.end)
       const days = Math.round((e - s) / 86400000) + 1
       const prevEnd = new Date(s); prevEnd.setDate(prevEnd.getDate() - 1)
@@ -220,12 +226,13 @@ function LogisticsPage({ filters }) {
       ])
       if (!r.ok) throw new Error(await r.text())
       const [cur, prev] = await Promise.all([r.json(), rPrev.ok ? rPrev.json() : Promise.resolve(null)])
-      // client-side filter for zone/paymentMode/state/city — instant, no BQ re-call
       setData(cur)
       setPrevData(prev)
     } catch (e) { setError(e.message) }
     finally { setLoading(false) }
   }, [filters.start, filters.end, lFilters])
+
+  useEffect(() => { fetchLogistics() }, [fetchLogistics])
 
   const fetchReturns = useCallback(async () => {
     if (!filters.start || !filters.end) return
