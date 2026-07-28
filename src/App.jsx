@@ -188,6 +188,8 @@ function LogisticsPage({ filters }) {
   const [payTrendGran, setPayTrendGran] = useState('Daily')
   const [filterSidebarOpen, setFilterSidebarOpen] = useState(true)
   const [cExpanded, setCExpanded] = useState({})
+  const [rawData, setRawData] = useState(null)
+  const [rawPrevData, setRawPrevData] = useState(null)
   const [data, setData] = useState(null)
   const [prevData, setPrevData] = useState(null)
   const [loading, setLoading] = useState(false)
@@ -196,23 +198,14 @@ function LogisticsPage({ filters }) {
   const [retTrendGran, setRetTrendGran] = useState('Daily')
   const [retReasonView, setRetReasonView] = useState('reason') // 'reason' | 'sub'
 
+  // called once per date range — no filters sent, always fetches full data
   const fetchLogistics = useCallback(async () => {
     if (!filters.start || !filters.end) return
     setLoading(true); setError(null)
     try {
       const body = { start: filters.start, end: filters.end }
-      if (lFilters.couriers.length) body.courier = lFilters.couriers
       if (lFilters.shipmentType !== 'all') body.shipmentType = lFilters.shipmentType
-      if (lFilters.sddNdd !== 'all') body.sddNdd = lFilters.sddNdd
-      if (lFilters.paymentMode) body.paymentMode = lFilters.paymentMode
-      if (lFilters.zone) body.zone = lFilters.zone
-      if (lFilters.pickupState) body.pickupState = lFilters.pickupState
-      if (lFilters.dropState) body.dropState = lFilters.dropState
-      if (lFilters.dropCity) body.dropCity = lFilters.dropCity
-      if (lFilters.category) body.category = [lFilters.category]
-      if (lFilters.subCategory) body.subCategory = [lFilters.subCategory]
 
-      // calc prev period (same # of days, ending day before start)
       const s = new Date(filters.start), e = new Date(filters.end)
       const days = Math.round((e - s) / 86400000) + 1
       const prevEnd = new Date(s); prevEnd.setDate(prevEnd.getDate() - 1)
@@ -226,13 +219,92 @@ function LogisticsPage({ filters }) {
       ])
       if (!r.ok) throw new Error(await r.text())
       const [cur, prev] = await Promise.all([r.json(), rPrev.ok ? rPrev.json() : Promise.resolve(null)])
-      setData(cur)
-      setPrevData(prev)
+      setRawData(cur)
+      setRawPrevData(prev)
     } catch (e) { setError(e.message) }
     finally { setLoading(false) }
-  }, [filters.start, filters.end, lFilters])
+  }, [filters.start, filters.end, lFilters.shipmentType])
 
   useEffect(() => { fetchLogistics() }, [fetchLogistics])
+
+  // instant client-side filter — runs on every slicer change, no BQ call
+  useEffect(() => {
+    const applyFilters = (raw) => {
+      if (!raw) return null
+      const { couriers, zone, paymentMode, pickupState, dropState, dropCity, category, subCategory, sddNdd } = lFilters
+      const hasCourier = couriers.length > 0
+
+      // build filtered byCourier rows
+      const filteredCouriers = hasCourier ? (raw.byCourier || []).filter(x => couriers.includes(x.courier_group)) : (raw.byCourier || [])
+
+      // derive kpis from byCourier rows (all fields now present in each courier row)
+      const kpis = hasCourier
+        ? filteredCouriers.reduce((acc, x) => {
+            const n = k => typeof x[k] === 'number' ? x[k] : 0
+            acc.total_shipments = (acc.total_shipments || 0) + n('total')
+            acc.total_value = (acc.total_value || 0) + n('total_value')
+            acc.delivered = (acc.delivered || 0) + n('delivered')
+            acc.rto = (acc.rto || 0) + n('rto')
+            acc.in_transit = (acc.in_transit || 0) + n('in_transit')
+            acc.pickup_pending = (acc.pickup_pending || 0) + n('pickup_pending')
+            acc.cancelled = (acc.cancelled || 0) + n('cancelled')
+            acc.lost_damaged = (acc.lost_damaged || 0) + n('lost_damaged')
+            acc.z_rto = (acc.z_rto || 0) + n('z_rto')
+            acc.delivered_1attempt = (acc.delivered_1attempt || 0) + n('delivered_1attempt')
+            acc.delivered_multi = (acc.delivered_multi || 0) + n('delivered_multi')
+            acc.total_ofd_attempts = (acc.total_ofd_attempts || 0) + n('total_ofd_attempts')
+            acc.rto_undelivered = (acc.rto_undelivered || 0) + n('rto_undelivered')
+            acc.delivered_2attempt_rto = (acc.delivered_2attempt_rto || 0) + n('delivered_2attempt_rto')
+            acc.on_time = (acc.on_time || 0) + n('on_time')
+            acc.sla_breach = (acc.sla_breach || 0) + n('sla_breach')
+            acc.critical_stuck = (acc.critical_stuck || 0) + n('critical_stuck')
+            acc.rto_10plus = (acc.rto_10plus || 0) + n('rto_10plus')
+            acc.edd_breached = (acc.edd_breached || 0) + n('edd_breached')
+            // weighted avg for TAT metrics
+            acc._wt = (acc._wt || 0) + n('total')
+            acc._avg_intransit = (acc._avg_intransit || 0) + n('avg_intransit') * n('delivered')
+            acc._avg_fulfilment = (acc._avg_fulfilment || 0) + n('avg_fulfilment') * n('delivered')
+            acc._avg_pickup = (acc._avg_pickup || 0) + n('avg_pickup') * n('total')
+            acc._avg_processing = (acc._avg_processing || 0) + n('avg_processing') * n('total')
+            acc._avg_s2a = (acc._avg_s2a || 0) + n('avg_s2a') * n('total')
+            acc._avg_rto_tat = (acc._avg_rto_tat || 0) + n('avg_rto_tat') * n('rto')
+            return acc
+          }, {})
+        : raw.kpis
+
+      if (hasCourier && kpis._wt) {
+        kpis.avg_intransit = +(kpis._avg_intransit / Math.max(kpis.delivered, 1)).toFixed(2)
+        kpis.avg_fulfilment = +(kpis._avg_fulfilment / Math.max(kpis.delivered, 1)).toFixed(1)
+        kpis.avg_pickup = +(kpis._avg_pickup / Math.max(kpis._wt, 1)).toFixed(2)
+        kpis.avg_processing = +(kpis._avg_processing / Math.max(kpis._wt, 1)).toFixed(1)
+        kpis.avg_s2a = +(kpis._avg_s2a / Math.max(kpis._wt, 1)).toFixed(1)
+        kpis.avg_rto_tat = +(kpis._avg_rto_tat / Math.max(kpis.rto, 1)).toFixed(1)
+      }
+
+      return {
+        ...raw,
+        kpis,
+        byCourier: filteredCouriers,
+        byCourierDay: hasCourier ? (raw.byCourierDay || []).filter(x => couriers.includes(x.courier_group)) : raw.byCourierDay,
+        byCourierWeek: hasCourier ? (raw.byCourierWeek || []).filter(x => couriers.includes(x.courier_group)) : raw.byCourierWeek,
+        byCourierMonth: hasCourier ? (raw.byCourierMonth || []).filter(x => couriers.includes(x.courier_group)) : raw.byCourierMonth,
+        tatByCourier: hasCourier ? (raw.tatByCourier || []).filter(x => couriers.includes(x.courier_group)) : raw.tatByCourier,
+        byZone: zone ? (raw.byZone || []).filter(x => x.zone === zone) : raw.byZone,
+        byZoneDetail: zone ? (raw.byZoneDetail || []).filter(x => x.zone === zone) : raw.byZoneDetail,
+        byPayment: paymentMode ? (raw.byPayment || []).filter(x => x.payment_mode?.toLowerCase() === paymentMode.toLowerCase()) : raw.byPayment,
+        byPaymentDetail: paymentMode ? (raw.byPaymentDetail || []).filter(x => x.payment_mode?.toLowerCase() === paymentMode.toLowerCase()) : raw.byPaymentDetail,
+        byPaymentDay: paymentMode ? (raw.byPaymentDay || []).filter(x => x.payment_mode?.toLowerCase() === paymentMode.toLowerCase()) : raw.byPaymentDay,
+        byPaymentWeek: paymentMode ? (raw.byPaymentWeek || []).filter(x => x.payment_mode?.toLowerCase() === paymentMode.toLowerCase()) : raw.byPaymentWeek,
+        byPaymentMonth: paymentMode ? (raw.byPaymentMonth || []).filter(x => x.payment_mode?.toLowerCase() === paymentMode.toLowerCase()) : raw.byPaymentMonth,
+        topDropStates: dropState ? (raw.topDropStates || []).filter(x => x.state?.toLowerCase() === dropState.toLowerCase()) : raw.topDropStates,
+        topDropCities: dropCity ? (raw.topDropCities || []).filter(x => x.city?.toLowerCase() === dropCity.toLowerCase()) : raw.topDropCities,
+        topPickupCities: pickupState ? (raw.topPickupCities || []).filter(x => x.pickup_state?.toLowerCase() === pickupState.toLowerCase()) : raw.topPickupCities,
+        byChannel: hasCourier ? (raw.byChannel || []).filter(x => couriers.some(c => x.channel?.toLowerCase().includes(c.toLowerCase()))) : raw.byChannel,
+      }
+    }
+    setData(applyFilters(rawData))
+    setPrevData(applyFilters(rawPrevData))
+  }, [rawData, rawPrevData, lFilters])
 
   const fetchReturns = useCallback(async () => {
     if (!filters.start || !filters.end) return
