@@ -66,49 +66,54 @@ export default async function inventoryHandler(req, res) {
     const daysInRange = Math.max(1, Math.round((new Date(end) - new Date(start)) / 86400000) + 1)
     const endDate = new Date(end)
 
-    const [[invRows], [salesRows], [lastSaleRows], [itemMasterRows], [skuMappingRows], [shopifyInvRows]] = await Promise.all([
-      // Pre-computed hourly table — replaces full raw snapshot scan (~25s → ~1s)
-      bq.query({
-        query: `SELECT ItemSkuCode, Facility, Updated, Inventory, InventoryBlocked
-                FROM \`frido-429506.production.unicommerce_inventory_snapshot_hourly\``,
-        maximumBytesBilled: '1000000000',
-      }),
-      // Pre-computed hourly table — last 15 days for Avg Sale / DOI / allocation
-      bq.query({
-        query: `SELECT final_sku, Facility, state, channel, order_date, qty
-                FROM \`frido-429506.production.inventory_sales_window\``,
-        maximumBytesBilled: '1000000000',
-      }),
-      // Pre-computed hourly table — 90d aggregated for dead stock detection
-      bq.query({
-        query: `SELECT final_sku, last_sale_date, qty_90d
-                FROM \`frido-429506.production.inventory_sales_90d\``,
-        maximumBytesBilled: '1000000000',
-      }),
-      bq.query({
-        query: `SELECT Product_Code, Category_Name, Sub_category, Lead_Time, Product_Source, SKU_First_Sales_Date, Type
-                FROM \`frido-429506.sharepoint_to_gcp.Frido_Item_Master__frido_item_sku_master\``,
-        maximumBytesBilled: '1000000000',
-      }),
-      // ProductId -> Master SKU — duplicate/alias SKUs created at inward time (e.g. a
-      // stand-in code used for the same physical product) collapse to one master SKU
-      // here, BEFORE the item-master lookup below. See resolveMasterSkuKey.
-      bq.query({
-        query: `SELECT DISTINCT TRIM(productid) AS productid, TRIM(masterskucode) AS masterskucode
-                FROM \`frido-429506.sharepoint_to_gcp.Frido_Item_Master__productid_sku_mapping\`
-                WHERE TRIM(masterskucode) NOT IN ('', 'not found')`,
-        maximumBytesBilled: '1000000000',
-      }),
-      // Website Status — live/stock-out per SKU on Shopify (both the retail "myfrido" and
-      // "myfrido_mobility" stores). A SKU is Live if EITHER store shows available > 0.
-      bq.query({
-        query: `SELECT sku, SUM(available) AS available
-                FROM \`frido-429506.production.fact_shopify_inventory\`
-                WHERE available > 0
-                GROUP BY sku`,
-        maximumBytesBilled: '1000000000',
-      }),
-    ])
+    // Single BQ job returning all 6 datasets tagged by _src — eliminates 5 extra
+    // job-startup round-trips (~3-5s each) that made parallel queries still slow.
+    const [allRows] = await bq.query({
+      query: `
+        SELECT 'inv' AS _src, ItemSkuCode AS c1, Facility AS c2, CAST(Updated AS STRING) AS c3, CAST(Inventory AS STRING) AS c4, CAST(InventoryBlocked AS STRING) AS c5, NULL AS c6, NULL AS c7
+        FROM \`frido-429506.production.unicommerce_inventory_snapshot_hourly\`
+        UNION ALL
+        SELECT 'sales', final_sku, Facility, state, channel, CAST(order_date AS STRING), CAST(qty AS STRING), NULL
+        FROM \`frido-429506.production.inventory_sales_window\`
+        UNION ALL
+        SELECT 'last', final_sku, NULL, CAST(last_sale_date AS STRING), CAST(qty_90d AS STRING), NULL, NULL, NULL
+        FROM \`frido-429506.production.inventory_sales_90d\`
+        UNION ALL
+        SELECT 'item', Product_Code, Category_Name, Sub_category, Lead_Time, Product_Source, SKU_First_Sales_Date, Type
+        FROM \`frido-429506.sharepoint_to_gcp.Frido_Item_Master__frido_item_sku_master\`
+        UNION ALL
+        SELECT 'sku', TRIM(productid), TRIM(masterskucode), NULL, NULL, NULL, NULL, NULL
+        FROM \`frido-429506.sharepoint_to_gcp.Frido_Item_Master__productid_sku_mapping\`
+        WHERE TRIM(masterskucode) NOT IN ('', 'not found')
+        UNION ALL
+        SELECT 'shopify', sku, CAST(SUM(available) AS STRING), NULL, NULL, NULL, NULL, NULL
+        FROM \`frido-429506.production.fact_shopify_inventory\`
+        WHERE available > 0
+        GROUP BY sku
+      `,
+      maximumBytesBilled: '5000000000',
+    })
+
+    const invRows = allRows.filter(r => r._src === 'inv').map(r => ({
+      ItemSkuCode: r.c1, Facility: r.c2, Updated: r.c3,
+      Inventory: r.c4 != null ? Number(r.c4) : null,
+      InventoryBlocked: r.c5 != null ? Number(r.c5) : null,
+    }))
+    const salesRows = allRows.filter(r => r._src === 'sales').map(r => ({
+      final_sku: r.c1, Facility: r.c2, state: r.c3, channel: r.c4, order_date: r.c5, qty: Number(r.c6 || 0),
+    }))
+    const lastSaleRows = allRows.filter(r => r._src === 'last').map(r => ({
+      final_sku: r.c1, last_sale_date: r.c3, qty_90d: Number(r.c4 || 0),
+    }))
+    const itemMasterRows = allRows.filter(r => r._src === 'item').map(r => ({
+      Product_Code: r.c1, Category_Name: r.c2, Sub_category: r.c3, Lead_Time: r.c4, Product_Source: r.c5, SKU_First_Sales_Date: r.c6, Type: r.c7,
+    }))
+    const skuMappingRows = allRows.filter(r => r._src === 'sku').map(r => ({
+      productid: r.c1, masterskucode: r.c2,
+    }))
+    const shopifyInvRows = allRows.filter(r => r._src === 'shopify').map(r => ({
+      sku: r.c1, available: Number(r.c2 || 0),
+    }))
 
     const skuMap = buildSkuMap(skuMappingRows)
 
