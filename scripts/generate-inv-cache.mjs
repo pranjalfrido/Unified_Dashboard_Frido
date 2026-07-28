@@ -21,18 +21,22 @@ const pool = new Pool({
 const DEAD_STOCK_WINDOW_DAYS = 90
 const STOCK_STATUS_VALUES = ['Critical', 'Low', 'Sufficient', 'Excess', 'Out of Stock', 'Dead / No Sale', 'No Demand']
 
-// Default trailing 7 days (matches what the frontend requests by default)
-const endDate = new Date()
-endDate.setHours(0, 0, 0, 0)
+const db = await pool.connect()
+
+// Determine end date as d-1 of the latest sales date (today's data is partial)
+const { rows: maxDateRows } = await db.query(`SELECT MAX(order_date) AS max_date FROM sales_window`)
+const rawMax = maxDateRows[0]?.max_date
+const maxSalesDateFull = rawMax instanceof Date ? rawMax.toISOString().slice(0, 10) : String(rawMax).slice(0, 10)
+// Step back one day — latest date in BQ is always partial
+const endDate = new Date(maxSalesDateFull)
+endDate.setDate(endDate.getDate() - 1)
 const startDate = new Date(endDate)
 startDate.setDate(startDate.getDate() - 6)
 const start = startDate.toISOString().slice(0, 10)
 const end = endDate.toISOString().slice(0, 10)
 const daysInRange = 7
 
-console.log(`Computing inventory for ${start} → ${end}`)
-
-const db = await pool.connect()
+console.log(`Latest sales date in DB: ${maxSalesDateFull} → using ${start} → ${end} (d-1)`)
 
 console.log('Fetching all tables from Supabase in parallel...')
 const t0 = Date.now()
@@ -303,7 +307,7 @@ const pivotRows = skus.map(s => ({
 const payload = {
   asOf: new Date().toISOString(),
   avgSaleWindow: { start, end },
-  lastSalesDateConsidered: maxSalesDate,
+  lastSalesDateConsidered: maxSalesDateFull,
   lastSnapshotUpdated,
   summary: {
     totalInvt: Math.round(totalInvt), rawInvt: Math.round(totalRaw), rawBlockedInvt: Math.round(totalRawBlocked),
