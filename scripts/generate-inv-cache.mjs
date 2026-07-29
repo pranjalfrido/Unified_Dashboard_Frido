@@ -36,7 +36,7 @@ console.log('Fetching all tables from Supabase in parallel...')
 const t0 = Date.now()
 const [c1,c2,c3,c4,c5,c6] = await Promise.all([1,2,3,4,5,6].map(() => pool.connect()))
 const [r1,r2,r3,r4,r5,r6] = await Promise.all([
-  c1.query(`SELECT item_sku_code AS "ItemSkuCode", facility AS "Facility", updated AS "Updated", inventory AS "Inventory", inventory_blocked AS "InventoryBlocked" FROM inv_snapshot WHERE inventory > 0 OR inventory_blocked > 0`),
+  c1.query(`SELECT item_sku_code AS "ItemSkuCode", facility AS "Facility", updated AS "Updated", inventory AS "Inventory", inventory_blocked AS "InventoryBlocked" FROM inv_snapshot`),
   c2.query(`SELECT final_sku, facility AS "Facility", state, channel, order_date, qty FROM sales_window`),
   c3.query(`SELECT final_sku, last_sale_date, qty_90d FROM sales_90d`),
   c4.query(`SELECT product_code AS "Product_Code", category_name AS "Category_Name", sub_category AS "Sub_category", lead_time AS "Lead_Time", product_source AS "Product_Source", sku_first_sales_date AS "SKU_First_Sales_Date", type AS "Type" FROM item_master`),

@@ -93,7 +93,7 @@ export default async function inventoryHandler(req, res) {
     const endDate = new Date(end)
 
     const [invRows, salesRows, lastSaleRows, itemMasterRows, skuMappingRows, shopifyInvRows] = await Promise.all([
-      cachedQuery('inv',     TTL_1H,  async () => { const { rows } = await db.query(`SELECT item_sku_code AS "ItemSkuCode", facility AS "Facility", updated AS "Updated", inventory AS "Inventory", inventory_blocked AS "InventoryBlocked" FROM inv_snapshot WHERE inventory > 0 OR inventory_blocked > 0`); return rows }),
+      cachedQuery('inv',     TTL_1H,  async () => { const { rows } = await db.query(`SELECT item_sku_code AS "ItemSkuCode", facility AS "Facility", updated AS "Updated", inventory AS "Inventory", inventory_blocked AS "InventoryBlocked" FROM inv_snapshot`); return rows }),
       cachedQuery('sales',   TTL_1H,  async () => { const { rows } = await db.query(`SELECT final_sku, facility AS "Facility", state, channel, order_date, qty FROM sales_window`); return rows }),
       cachedQuery('last90',  TTL_1H,  async () => { const { rows } = await db.query(`SELECT final_sku, last_sale_date, qty_90d FROM sales_90d`); return rows }),
       cachedQuery('master',  TTL_24H, async () => { const { rows } = await db.query(`SELECT product_code AS "Product_Code", category_name AS "Category_Name", sub_category AS "Sub_category", lead_time AS "Lead_Time", product_source AS "Product_Source", sku_first_sales_date AS "SKU_First_Sales_Date", type AS "Type" FROM item_master`); return rows }),
