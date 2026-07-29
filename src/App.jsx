@@ -198,7 +198,7 @@ function LogisticsPage({ filters }) {
   const [retTrendGran, setRetTrendGran] = useState('Daily')
   const [retReasonView, setRetReasonView] = useState('reason') // 'reason' | 'sub'
 
-  // called once — tries static CDN file first, falls back to live BQ API
+  // tries static CDN file first if date range matches, falls back to live BQ API
   const fetchLogistics = useCallback(async () => {
     if (!filters.start || !filters.end) return
     setLoading(true); setError(null)
@@ -210,7 +210,8 @@ function LogisticsPage({ filters }) {
         if (res.ok) {
           const json = await res.json()
           const ageMs = json.asOf ? Date.now() - new Date(json.asOf).getTime() : Infinity
-          if (ageMs <= 2 * 60 * 60 * 1000 && !json._placeholder && json.current) {
+          const dateMatches = json.dateRange && json.dateRange.start === filters.start && json.dateRange.end === filters.end
+          if (ageMs <= 2 * 60 * 60 * 1000 && !json._placeholder && json.current && dateMatches) {
             setRawData(json.current)
             setRawPrevData(json.previous || null)
             usedStatic = true
