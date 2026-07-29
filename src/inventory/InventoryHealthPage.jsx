@@ -478,7 +478,7 @@ function PivotTable({ pivot, search }) {
               )
             })}
           </tbody>
-          <tfoot>
+          <tfoot style={{ position: 'sticky', bottom: 0, zIndex: 2 }}>
             <tr style={{ background: IC.surfaceHi, borderTop: `2px solid ${IC.border2}` }}>
               <td style={{ padding: '7px 10px', fontWeight: 700, color: IC.t1, position: 'sticky', left: 0, background: IC.surfaceHi, borderRight: `1px solid ${IC.border}` }}>Grand Total</td>
               {pivot.locations.map(loc => locCell(grandTotal.byLoc, loc, IC.t1))}
