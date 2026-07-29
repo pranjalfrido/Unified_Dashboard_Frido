@@ -211,7 +211,8 @@ function LogisticsPage({ filters }) {
           const json = await res.json()
           const ageMs = json.asOf ? Date.now() - new Date(json.asOf).getTime() : Infinity
           const dateMatches = json.dateRange && json.dateRange.start === filters.start && json.dateRange.end === filters.end
-          if (ageMs <= 2 * 60 * 60 * 1000 && !json._placeholder && json.current && dateMatches) {
+          const noExtraFilters = (!lFilters.sddNdd || lFilters.sddNdd === 'all') && !lFilters.category && !lFilters.subCategory && lFilters.shipmentType === 'forward'
+          if (ageMs <= 2 * 60 * 60 * 1000 && !json._placeholder && json.current && dateMatches && noExtraFilters) {
             setRawData(json.current)
             setRawPrevData(json.previous || null)
             usedStatic = true
@@ -222,6 +223,9 @@ function LogisticsPage({ filters }) {
       if (!usedStatic) {
         const body = { start: filters.start, end: filters.end }
         if (lFilters.shipmentType !== 'all') body.shipmentType = lFilters.shipmentType
+        if (lFilters.sddNdd && lFilters.sddNdd !== 'all') body.sddNdd = lFilters.sddNdd
+        if (lFilters.category) body.category = [lFilters.category]
+        if (lFilters.subCategory) body.subCategory = [lFilters.subCategory]
         const s = new Date(filters.start), e = new Date(filters.end)
         const days = Math.round((e - s) / 86400000) + 1
         const prevEnd = new Date(s); prevEnd.setDate(prevEnd.getDate() - 1)
@@ -239,7 +243,7 @@ function LogisticsPage({ filters }) {
       }
     } catch (e) { setError(e.message) }
     finally { setLoading(false) }
-  }, [filters.start, filters.end, lFilters.shipmentType])
+  }, [filters.start, filters.end, lFilters.shipmentType, lFilters.sddNdd, lFilters.category, lFilters.subCategory])
 
   useEffect(() => { fetchLogistics() }, [fetchLogistics])
 
