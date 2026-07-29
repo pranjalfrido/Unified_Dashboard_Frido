@@ -258,7 +258,7 @@ function LogisticsPage({ filters }) {
         ? (sddNdd === 'SDD/NDD' ? cg => isNdd(cg) : cg => !isNdd(cg))
         : () => true
       const hasShipmentType = shipmentType && shipmentType !== 'all'
-      const shipmentTypeFilter = x => !hasShipmentType || (x.shipment_type?.toLowerCase() === shipmentType.toLowerCase())
+      const shipmentTypeFilter = x => !hasShipmentType || !x.shipment_type || (x.shipment_type?.toLowerCase() === shipmentType.toLowerCase())
       const courierFilter = x => (!hasCourier || couriers.includes(x.courier_group)) && sddNddFilter(x.courier_group) && shipmentTypeFilter(x)
 
       // build filtered byCourier rows
