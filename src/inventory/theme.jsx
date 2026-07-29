@@ -126,8 +126,12 @@ export function KpiTile({ label, value, unit, sub, accent, icon, compact }) {
         {icon && (
           <span style={{
             width: iconSize, height: iconSize, borderRadius: compact ? 6 : 8, background: IC.accDim, border: `1px solid ${IC.accBorder}`,
-            display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: compact ? 11 : 13, color: IC.acc, flexShrink: 0,
-          }}>{icon}</span>
+            display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: compact ? 11 : 13, color: IC.acc, flexShrink: 0, overflow: 'hidden',
+          }}>
+            {typeof icon === 'string' && icon.startsWith('/')
+              ? <img src={icon} alt="" style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
+              : icon}
+          </span>
         )}
       </div>
       <div style={{ display: 'flex', alignItems: 'baseline', gap: 4, flex: 1 }}>

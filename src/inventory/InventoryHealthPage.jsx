@@ -641,13 +641,13 @@ export default function InventoryHealthPage({ data, filters, setFilters, sidebar
 
         {/* KPI row */}
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, minmax(0, 1fr))', gap: 10, alignItems: 'stretch' }}>
-          <KpiTile compact label="Total Inventory" value={fmtNum(data.summary.totalInvt)} unit="units" icon="📦" />
-          <KpiTile compact label="RTD Inventory" value={fmtNum(data.summary.rtdInvt)} unit="units" icon="✓" />
-          <KpiTile compact label="RAW Inventory" value={fmtNum(data.summary.rawInvt)} unit="units" icon="◧" />
-          <KpiTile compact label="Blocked RAW" value={fmtNum(data.summary.rawBlockedInvt)} unit="units" accent={IC.status.Low.c} icon="⛔" />
-          <KpiTile compact label="Avg Sale (B2C)" value={fmtNum(data.summary.avgSaleB2C)} unit="units/day" icon="📈" />
-          <KpiTile compact label="Total Avg Sale" value={fmtNum(data.summary.totalAvgSale)} unit="units/day" icon="Σ" />
-          <KpiTile compact label="Days of Inventory" value={data.summary.doi} unit="days" accent={data.summary.doi <= 15 ? IC.status.Critical.c : IC.positive} icon="⏱" />
+          <KpiTile compact label="Total Inventory" value={fmtNum(data.summary.totalInvt)} unit="units" icon="/inv-icon-total.png" />
+          <KpiTile compact label="RTD Inventory" value={fmtNum(data.summary.rtdInvt)} unit="units" icon="/inv-icon-rtd.jpg" />
+          <KpiTile compact label="RAW Inventory" value={fmtNum(data.summary.rawInvt)} unit="units" icon="/inv-icon-raw.png" />
+          <KpiTile compact label="Blocked RAW" value={fmtNum(data.summary.rawBlockedInvt)} unit="units" accent={IC.status.Low.c} icon="/inv-icon-blocked.png" />
+          <KpiTile compact label="Avg Sale (B2C)" value={fmtNum(data.summary.avgSaleB2C)} unit="units/day" icon="/inv-icon-avgsale.png" />
+          <KpiTile compact label="Total Avg Sale" value={fmtNum(data.summary.totalAvgSale)} unit="units/day" icon="/inv-icon-totalavgsale.png" />
+          <KpiTile compact label="Days of Inventory" value={data.summary.doi} unit="days" accent={data.summary.doi <= 15 ? IC.status.Critical.c : IC.positive} icon="/inv-icon-doi.png" />
         </div>
 
         {/* Warehouse grid — always one row; cards shrink to fit rather than wrapping to a 2nd line */}
