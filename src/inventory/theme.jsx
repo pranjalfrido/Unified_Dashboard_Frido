@@ -107,7 +107,7 @@ export function KpiTile({ label, value, unit, sub, accent, icon, compact }) {
   const labelSize = compact ? 9.5 : 10.5
   const valueSize = compact ? 20 : 24
   const unitSize = compact ? 11 : 12
-  const iconSize = compact ? 22 : 24
+  const iconSize = compact ? 24 : 26
   const radius = compact ? 12 : 16
   return (
     <div style={{
@@ -125,7 +125,7 @@ export function KpiTile({ label, value, unit, sub, accent, icon, compact }) {
         <span style={{ fontSize: labelSize, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.06em', color: IC.t3, lineHeight: 1.2 }}>{label}</span>
         {icon && (
           typeof icon === 'string' && icon.startsWith('/')
-            ? <img src={icon} alt="" style={{ width: iconSize, height: iconSize, objectFit: 'contain', flexShrink: 0 }} />
+            ? <img src={icon} alt="" style={{ width: iconSize, height: iconSize, objectFit: 'contain', flexShrink: 0, mixBlendMode: 'multiply' }} />
             : <span style={{
                 width: iconSize, height: iconSize, borderRadius: compact ? 6 : 8, background: IC.accDim, border: `1px solid ${IC.accBorder}`,
                 display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: compact ? 11 : 13, color: IC.acc, flexShrink: 0,
@@ -136,7 +136,7 @@ export function KpiTile({ label, value, unit, sub, accent, icon, compact }) {
         <span style={{ fontSize: valueSize, fontWeight: 700, letterSpacing: '-.02em', color: accent || IC.t1, fontVariantNumeric: 'tabular-nums', lineHeight: 1.1 }}>{value}</span>
         {unit && <span style={{ fontSize: unitSize, color: IC.t3 }}>{unit}</span>}
       </div>
-      {!compact && sub && <span style={{ fontSize: 11.5, color: IC.t3 }}>{sub}</span>}
+      {sub && <span style={{ fontSize: compact ? 10.5 : 11.5, color: IC.t3 }}>{sub}</span>}
     </div>
   )
 }

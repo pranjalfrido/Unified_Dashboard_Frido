@@ -1777,7 +1777,9 @@ const SvgIcon = ({ d, size = 18, stroke = 'currentColor', fill = 'none', strokeW
   </svg>
 )
 
-function Sidebar({ page, setPage }) {
+function Sidebar({ page, setPage, invTab, setInvTab }) {
+  const [invHover, setInvHover] = useState(false)
+  const hoverTimerRef = useRef(null)
   const items = [
     { id: 'overview', label: 'Overview', icon: <SvgIcon d={['M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z','M9 22V12h6v10']} /> },
     { id: 'sales', label: 'Sales', icon: <SvgIcon d={['M18 20V10','M12 20V4','M6 20v-6']} /> },
@@ -1797,13 +1799,55 @@ function Sidebar({ page, setPage }) {
         <img src="/frido-logo.png" alt="Frido" style={{ width: 36, height: 36, borderRadius: 10, objectFit: 'cover' }} />
         <span style={{ fontSize: 7.5, fontWeight: 600, color: C.t3, letterSpacing: '.04em', textTransform: 'uppercase', lineHeight: 1, textAlign: 'center' }}>Analytics</span>
       </div>
-      {items.map(item => (
-        <div key={item.id} onClick={() => setPage(item.id)}
-          className={`sb-item${page === item.id ? ' active' : ''}`}>
-          <span className="sb-icon">{item.icon}</span>
-          <span className="sb-label">{item.label}</span>
-        </div>
-      ))}
+      {items.map(item => {
+        if (item.id === 'inventory') {
+          const subTabs = [
+            { id: 'health', label: 'Inventory Health' },
+            { id: 'sales', label: 'Sales & Allocation' },
+            { id: 'inward', label: 'Inward' },
+          ]
+          return (
+            <div key="inventory" style={{ position: 'relative' }}
+              onMouseEnter={() => { clearTimeout(hoverTimerRef.current); setInvHover(true) }}
+              onMouseLeave={() => { hoverTimerRef.current = setTimeout(() => setInvHover(false), 200) }}>
+              <div onClick={() => setPage('inventory')}
+                className={`sb-item${page === 'inventory' ? ' active' : ''}`}>
+                <span className="sb-icon">{item.icon}</span>
+                <span className="sb-label">{item.label}</span>
+              </div>
+              {invHover && (
+                <div style={{
+                  position: 'absolute', left: '100%', top: 0, marginLeft: 6, zIndex: 999,
+                  background: C.card, border: `1px solid ${C.border2}`, borderRadius: 10,
+                  boxShadow: '0 8px 24px rgba(0,0,0,0.18)', padding: '6px', minWidth: 170,
+                  display: 'flex', flexDirection: 'column', gap: 2,
+                }}>
+                  <div style={{ fontSize: 9, fontWeight: 700, color: C.t3, letterSpacing: '.06em', textTransform: 'uppercase', padding: '2px 8px 4px' }}>Inventory</div>
+                  {subTabs.map(sub => (
+                    <div key={sub.id} onClick={() => { setPage('inventory'); setInvTab(sub.id); setInvHover(false) }}
+                      style={{
+                        padding: '8px 12px', borderRadius: 7, cursor: 'pointer', fontSize: 12, fontWeight: invTab === sub.id && page === 'inventory' ? 700 : 500,
+                        color: invTab === sub.id && page === 'inventory' ? C.t1 : C.t2,
+                        background: invTab === sub.id && page === 'inventory' ? C.acl : 'transparent',
+                      }}
+                      onMouseEnter={e => { if (!(invTab === sub.id && page === 'inventory')) e.currentTarget.style.background = C.bg }}
+                      onMouseLeave={e => { if (!(invTab === sub.id && page === 'inventory')) e.currentTarget.style.background = 'transparent' }}>
+                      {sub.label}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )
+        }
+        return (
+          <div key={item.id} onClick={() => setPage(item.id)}
+            className={`sb-item${page === item.id ? ' active' : ''}`}>
+            <span className="sb-icon">{item.icon}</span>
+            <span className="sb-label">{item.label}</span>
+          </div>
+        )
+      })}
       <div className="sb-div" />
       {dims.map(d => (
         <div key={d.label} className="sb-item dim">
@@ -9760,6 +9804,7 @@ function CustomerPage({ filters }) {
 
 export default function App() {
   const [page, setPage] = useState('overview')
+  const [invTab, setInvTab] = useState('health')
   const def = getDefaultDates()
   const [filters, setFilters] = useState({ start: def.start, end: def.end, category: [], subCategory: [], sku: [], subChannel: '', voucher: '', region: [], tier: [], state: [], city: '', channelGroup: [] })
   const [activeTab, setActiveTab] = useState('all')
@@ -9846,7 +9891,7 @@ export default function App() {
 
   return (
     <div className="app-shell">
-      <Sidebar page={page} setPage={setPage} />
+      <Sidebar page={page} setPage={setPage} invTab={invTab} setInvTab={setInvTab} />
       <div className="app-main">
         <Topnav page={page} alerts={alerts} onRefresh={() => { const { start, end, category, subCategory, sku, subChannel, voucher, region, tier, state, city, country } = filters; const e = {}; if (category?.length) e.category = category.join(','); if (subCategory?.length) e.subCategory = subCategory.join(','); if (sku?.length) e.sku = sku.join(','); if (subChannel) e.subChannel = subChannel; if (voucher) e.voucher = voucher; if (region?.length) e.region = region.join(','); if (tier?.length) e.tier = tier.join(','); if (state?.length) e.state = state.join(','); if (city) e.city = city; if (country) e.country = country; fetchData(start, end, e) }} loading={loading} filters={filters} setFilters={setFilters} rawRows={rawRows} inventoryDateControl={inventoryDateControl} />
         {(loading || inventoryDateControl?.loading) && (
@@ -9897,7 +9942,7 @@ export default function App() {
           )}
           {page === 'inventory' && (
             <div className="page-scroll" style={{ padding: 0 }}>
-              <InventoryPage onTopbarDateControl={setInventoryDateControl} />
+              <InventoryPage onTopbarDateControl={setInventoryDateControl} tab={invTab} setTab={setInvTab} />
             </div>
           )}
           {page === 'customer' && data && (

@@ -93,8 +93,8 @@ function FilterSidebar({ data, filters, setFilters, open, sidebarTop }) {
 
   return (
     <div ref={anchorRef} style={{
-      width: open ? SIDEBAR_WIDTH : 0, minWidth: open ? SIDEBAR_WIDTH : 0, transition: 'width .2s ease, min-width .2s ease',
-      overflow: 'hidden', borderRight: `1px solid ${IC.border}`, flexShrink: 0,
+      width: open ? SIDEBAR_WIDTH : 0, minWidth: open ? SIDEBAR_WIDTH : 0,
+      overflow: 'hidden', borderRight: open ? `1px solid ${IC.border}` : 'none', flexShrink: 0,
       // Matches the fixed inner panel's own background — this outer anchor div only reserves
       // width in the flex row (its child becomes position:fixed once measured), but it still
       // occupies real vertical space at its own top offset (pushed down by the page's own
@@ -231,7 +231,7 @@ function LocationClusteredBarList({ rows, height, nameWidth = 90 }) {
         const pctColor = pct == null ? IC.t3 : pct < 0.7 ? IC.status.Critical.c : pct < 0.9 ? IC.status.Low.c : IC.positive
         const pctOfTotal = totalAllocation > 0 ? (r.allocation / totalAllocation) * 100 : 0
         return (
-          <div key={r.location} style={{ display: 'grid', gridTemplateColumns: `${nameWidth}px 1fr 90px 56px 56px`, alignItems: 'center', gap: 8 }}>
+          <div key={r.location} style={{ display: 'grid', gridTemplateColumns: `${nameWidth}px 1fr 90px 56px`, alignItems: 'center', gap: 8 }}>
             <span style={{ fontSize: 11, color: IC.t2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.location}</span>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 2, justifyContent: 'center' }}>
               <div style={{ height: 6, borderRadius: 3, background: 'rgba(0,0,0,0.06)', overflow: 'hidden' }}>
@@ -241,8 +241,7 @@ function LocationClusteredBarList({ rows, height, nameWidth = 90 }) {
                 <div style={{ width: `${(r.allocation / maxVal) * 100}%`, height: '100%', background: IC.categorical[0], borderRadius: 3 }} />
               </div>
             </div>
-            <span style={{ fontSize: 10.5, fontWeight: 700, color: IC.t1, textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{fmtInt(r.sales)} / {fmtInt(r.allocation)}</span>
-            <span style={{ fontSize: 11, fontWeight: 700, color: pctColor, textAlign: 'right' }}>{pct != null ? `${Math.round(pct * 100)}%` : '—'}</span>
+            <span style={{ fontSize: 10.5, fontWeight: 700, color: IC.t1, textAlign: 'right', fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}>{fmtInt(r.sales)} / {fmtInt(r.allocation)}</span>
             <span style={{ fontSize: 10.5, fontWeight: 600, color: IC.t3, textAlign: 'right' }}>{pctOfTotal.toFixed(1)}%</span>
           </div>
         )
@@ -677,19 +676,19 @@ export default function SalesAllocationPage({ data, filters, setFilters, sidebar
         {sidebarOpen ? '‹' : '›'}
       </button>
 
-      <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 18, paddingLeft: 16, paddingRight: 24 }}>
+      <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 18, padding: '18px 24px 40px 16px' }}>
 
         {/* KPI row */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 12 }}>
-          <KpiTile label="Revenue" value={revenueAvailable ? fmtCurrency(filteredData.summary.totalRevenue) : '—'}
-            sub={revenueAvailable ? `Avg ${fmtCurrency(filteredData.summary.avgDailyRevenue)}/day` : 'Pending pipeline sync for recent dates'} icon="₹" />
-          <KpiTile label="Units Sold" value={fmtNum(filteredData.summary.totalUnits)} unit="units"
-            sub={`Avg ${fmtNum(filteredData.summary.avgDailyUnits)}/day`} icon="📦" />
-          <KpiTile label="Avg Selling Price" value={revenueAvailable ? fmtCurrency(filteredData.summary.avgSellingPrice) : '—'} icon="🏷" />
-          <KpiTile label="Fill Rate" value={filteredData.summary.exactFillRate != null ? `${Math.round(filteredData.summary.exactFillRate * 100)}%` : '—'} sub="nearest-WH-correct units ÷ total units" accent={filteredData.summary.exactFillRate >= 0.9 ? IC.positive : IC.status.Low.c} icon="⚖" />
-          <KpiTile label="Momentum" value={filteredData.summary.momentumPct != null ? `${filteredData.summary.momentumPct > 0 ? '+' : ''}${filteredData.summary.momentumPct.toFixed(0)}%` : '—'} sub="first vs last day" accent={filteredData.summary.momentumPct >= 0 ? IC.positive : IC.status.Critical.c} icon={filteredData.summary.momentumPct >= 0 ? '↗' : '↘'} />
-          <KpiTile label="Sales Type Mix" value={salesTypeMix ? `${salesTypeMix.b2c}% B2C` : '—'}
-            sub={salesTypeMix ? `${salesTypeMix.b2b}% B2B · ${salesTypeMix.po}% PO` : 'No sales in range'} icon="🔀" />
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6, minmax(0, 1fr))', gap: 10, alignItems: 'stretch' }}>
+          <KpiTile compact label="Revenue" value={revenueAvailable ? fmtCurrency(filteredData.summary.totalRevenue) : '—'}
+            sub={revenueAvailable ? `Avg ${fmtCurrency(filteredData.summary.avgDailyRevenue)}/day` : 'Pending pipeline sync for recent dates'} icon="/sa-icon-revenue.jpg" />
+          <KpiTile compact label="Units Sold" value={fmtNum(filteredData.summary.totalUnits)} unit="units"
+            sub={`Avg ${fmtNum(filteredData.summary.avgDailyUnits)}/day`} icon="/sa-icon-units.png" />
+          <KpiTile compact label="Avg Selling Price" value={revenueAvailable ? fmtCurrency(filteredData.summary.avgSellingPrice) : '—'} icon="/sa-icon-asp.png" />
+          <KpiTile compact label="Fill Rate" value={filteredData.summary.exactFillRate != null ? `${Math.round(filteredData.summary.exactFillRate * 100)}%` : '—'} sub="nearest-WH-correct units ÷ total units" accent={filteredData.summary.exactFillRate >= 0.9 ? IC.positive : IC.status.Low.c} icon="/sa-icon-fillrate.png" />
+          <KpiTile compact label="Momentum" value={filteredData.summary.momentumPct != null ? `${filteredData.summary.momentumPct > 0 ? '+' : ''}${filteredData.summary.momentumPct.toFixed(0)}%` : '—'} sub="first vs last day" accent={filteredData.summary.momentumPct >= 0 ? IC.positive : IC.status.Critical.c} icon="/sa-icon-momentum.png" />
+          <KpiTile compact label="Sales Type Mix" value={salesTypeMix ? `${salesTypeMix.b2c}% B2C` : '—'}
+            sub={salesTypeMix ? `${salesTypeMix.b2b}% B2B · ${salesTypeMix.po}% PO` : 'No sales in range'} icon="/sa-icon-salesmix.png" />
         </div>
         {filteredData.previousPeriod && (
           <div style={{ display: 'flex', gap: 16, fontSize: 11, color: IC.t3, marginTop: -6 }}>
@@ -733,9 +732,8 @@ export default function SalesAllocationPage({ data, filters, setFilters, sidebar
           <GlassCard title="Location-Wise Sales vs Allocation"
             style={{ display: 'flex', flexDirection: 'column' }}
             action={
-              <div style={{ display: 'grid', gridTemplateColumns: `90px 56px`, gap: 8 }}>
-                <span style={{ fontSize: 9, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.03em', color: IC.t3, textAlign: 'right' }}>Allocation %</span>
-                <span style={{ fontSize: 9, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.03em', color: IC.t3, textAlign: 'right' }}>% of total</span>
+              <div style={{ display: 'grid', gridTemplateColumns: `56px`, gap: 8 }}>
+                <span style={{ fontSize: 9, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.03em', color: IC.t3, textAlign: 'right', whiteSpace: 'nowrap' }}>% of total</span>
               </div>
             }>
             <LocationClusteredBarList rows={locationStackedRows} height={MOVERS_CARD_HEIGHT} />
@@ -745,7 +743,7 @@ export default function SalesAllocationPage({ data, filters, setFilters, sidebar
             </div>
           </GlassCard>
 
-          <GlassCard title="Channel-Wise Sales" note={`ranked by ${channelMetric === 'rev' ? 'revenue' : 'units'} share`}
+          <GlassCard title="Channel-Wise Sales"
             style={{ display: 'flex', flexDirection: 'column' }}
             action={
               <div style={{ display: 'flex', gap: 4 }}>
@@ -760,7 +758,7 @@ export default function SalesAllocationPage({ data, filters, setFilters, sidebar
             <RankedBarList rows={channelDonutSorted} total={channelDonutTotal} height={MOVERS_CARD_HEIGHT} metric={channelMetric} />
           </GlassCard>
 
-          <GlassCard title="Category Contribution" note={`ranked by ${categoryMetric === 'rev' ? 'revenue' : 'units'} share`}
+          <GlassCard title="Category Contribution"
             style={{ display: 'flex', flexDirection: 'column' }}
             action={
               <div style={{ display: 'flex', gap: 4 }}>

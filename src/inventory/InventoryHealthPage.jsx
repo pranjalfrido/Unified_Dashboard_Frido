@@ -273,8 +273,8 @@ function FilterSidebar({ data, filters, setFilters, open, sidebarTop }) {
 
   return (
     <div style={{
-      width: open ? SIDEBAR_WIDTH : 0, minWidth: open ? SIDEBAR_WIDTH : 0, transition: 'width .2s ease, min-width .2s ease',
-      overflow: 'hidden', borderRight: `1px solid ${IC.border}`, flexShrink: 0,
+      width: open ? SIDEBAR_WIDTH : 0, minWidth: open ? SIDEBAR_WIDTH : 0,
+      overflow: 'hidden', borderRight: open ? `1px solid ${IC.border}` : 'none', flexShrink: 0,
       background: IC.surface, height: '100%',
     }}>
       <div style={{
@@ -504,7 +504,7 @@ function PivotTable({ pivot, search }) {
   )
 }
 
-export default function InventoryHealthPage({ data, filters, setFilters, sidebarTop }) {
+const InventoryHealthInner = React.memo(function InventoryHealthInner({ data, filters, setFilters, sidebarTop, sidebarOpen, setSidebarOpen }) {
   const [search, setSearch] = useState('')
   const [expandedSku, setExpandedSku] = useState(null)
   const [colWidths, setColWidths] = useState(DEFAULT_COL_WIDTHS)
@@ -517,7 +517,6 @@ export default function InventoryHealthPage({ data, filters, setFilters, sidebar
   const hiddenCols = useMemo(() => new Set(colOrder.filter(k => (colWidths[k] ?? DEFAULT_COL_WIDTHS[k]) === 0)), [colOrder, colWidths])
   const [dragCol, setDragCol] = useState(null)
   const [sort, setSort] = useState({ key: 'avgSale', dir: 'desc' })
-  const [sidebarOpen, setSidebarOpen] = useState(false)
   const [pivotSearch, setPivotSearch] = useState('')
 
   // Facility Type defaults to "Regular" on first load (once options are known).
@@ -637,18 +636,7 @@ export default function InventoryHealthPage({ data, filters, setFilters, sidebar
   if (!data) return null
 
   return (
-    <div style={{ display: 'flex', gap: 0, height: '100%', overflow: 'hidden' }}>
-      <FilterSidebar data={data} filters={filters} setFilters={setFilters} open={sidebarOpen} sidebarTop={sidebarTop} />
-      <button onClick={() => setSidebarOpen(o => !o)} style={{
-        width: 16, alignSelf: 'flex-start', marginTop: 4, height: 48, border: `1px solid ${IC.border}`, borderLeft: 'none',
-        background: IC.surface, cursor: 'pointer', borderRadius: '0 8px 8px 0', display: 'flex', alignItems: 'center',
-        justifyContent: 'center', color: IC.t3, fontSize: 12, flexShrink: 0,
-        position: 'sticky', top: 4,
-      }}>
-        {sidebarOpen ? '‹' : '›'}
-      </button>
-
-      <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 18, padding: '18px 24px 40px 16px', overflowY: 'auto', height: '100%' }}>
+    <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 18, padding: '18px 24px 40px 16px', overflowY: 'auto', height: '100%' }}>
 
         {/* KPI row */}
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, minmax(0, 1fr))', gap: 10, alignItems: 'stretch' }}>
@@ -833,6 +821,27 @@ export default function InventoryHealthPage({ data, filters, setFilters, sidebar
       </div>
 
       </div>
+  )
+})
+
+export default function InventoryHealthPage({ data, filters, setFilters, sidebarTop }) {
+  const [sidebarOpen, setSidebarOpen] = useState(false)
+  if (!data) return null
+  return (
+    <div style={{ display: 'flex', gap: 0, height: '100%', overflow: 'hidden' }}>
+      <FilterSidebar data={data} filters={filters} setFilters={setFilters} open={sidebarOpen} sidebarTop={sidebarTop} />
+      <button onClick={() => setSidebarOpen(o => !o)} style={{
+        width: 16, alignSelf: 'flex-start', marginTop: 4, height: 48, border: `1px solid ${IC.border}`, borderLeft: 'none',
+        background: IC.surface, cursor: 'pointer', borderRadius: '0 8px 8px 0', display: 'flex', alignItems: 'center',
+        justifyContent: 'center', color: IC.t3, fontSize: 12, flexShrink: 0,
+        position: 'sticky', top: 4,
+      }}>
+        {sidebarOpen ? '‹' : '›'}
+      </button>
+      <InventoryHealthInner
+        data={data} filters={filters} setFilters={setFilters}
+        sidebarTop={sidebarTop} sidebarOpen={sidebarOpen} setSidebarOpen={setSidebarOpen}
+      />
     </div>
   )
 }

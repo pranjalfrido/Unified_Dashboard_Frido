@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from 'react'
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { createPortal } from 'react-dom'
 import { IC, PAGE_BACKGROUND, getDefaultDates, DateRangeControl } from './inventory/theme.jsx'
 import InventoryHealthPage from './inventory/InventoryHealthPage.jsx'
@@ -308,8 +308,7 @@ function useStaticInv(enabled = true, windowDays = 7) {
   return { dateFilters, setDateFilters, data, loading, error, fetchData }
 }
 
-export default function InventoryPage({ onTopbarDateControl }) {
-  const [tab, setTab] = useState('health')
+export default function InventoryPage({ onTopbarDateControl, tab = 'health', setTab = () => {} }) {
   const [healthFilters, setHealthFilters] = useState({})
   const [salesFilters, setSalesFilters] = useState({})
   const [inwardFilters, setInwardFilters] = useState({})
@@ -377,7 +376,6 @@ export default function InventoryPage({ onTopbarDateControl }) {
   // date range now lives in App.jsx's actual top bar instead, see onTopbarDateControl above).
   const sidebarTop = (
     <div style={{ marginBottom: 4 }}>
-      <SubTabSwitcher tab={tab} setTab={setTab} />
       {tab === 'health' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 2, marginBottom: 10 }}>
           <span style={{ fontSize: 11, color: IC.t3 }}>
@@ -407,7 +405,8 @@ export default function InventoryPage({ onTopbarDateControl }) {
   )
 
   // Apply display-only filters client-side — no API call needed for these
-  const invData = (() => {
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const invData = useMemo(() => {
     const raw = inv.data
     if (!raw) return raw
     const { category, subCategory, stockStatus: stockStatusF, rtdLevel: rtdLevelF, productId, location: locationF, facility: facilityF, facilityType: facilityTypeF } = healthFilters
@@ -529,7 +528,8 @@ export default function InventoryPage({ onTopbarDateControl }) {
       locations, allLocations, deadStock, slowMoving, leadTimeRisk,
       pivot: { locations: pivotLocations, rows: pivotRows },
     }
-  })()
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [inv.data, healthFilters])
 
   return (
     <div style={{ background: PAGE_BACKGROUND, height: '100%', display: 'flex', flexDirection: 'column', color: IC.t1, fontFamily: 'Inter, sans-serif' }}>
@@ -544,9 +544,9 @@ export default function InventoryPage({ onTopbarDateControl }) {
           </div>
         )}
 
-        {tab === 'health' && <InventoryHealthPage data={invData} filters={healthFilters} setFilters={setHealthFilters} sidebarTop={sidebarTop} />}
-        {tab === 'sales' && <SalesAllocationPage data={sales.data} filters={salesFilters} setFilters={setSalesFilters} sidebarTop={sidebarTop} />}
-        {tab === 'inward' && <InwardPage data={inward.data} filters={inwardFilters} setFilters={setInwardFilters} sidebarTop={sidebarTop} />}
+        <div style={{ display: tab === 'health' ? 'contents' : 'none' }}><InventoryHealthPage data={invData} filters={healthFilters} setFilters={setHealthFilters} sidebarTop={sidebarTop} /></div>
+        <div style={{ display: tab === 'sales' ? 'contents' : 'none' }}><SalesAllocationPage data={sales.data} filters={salesFilters} setFilters={setSalesFilters} sidebarTop={sidebarTop} /></div>
+        <div style={{ display: tab === 'inward' ? 'contents' : 'none' }}><InwardPage data={inward.data} filters={inwardFilters} setFilters={setInwardFilters} sidebarTop={sidebarTop} /></div>
       </div>
     </div>
   )
