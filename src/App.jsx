@@ -211,7 +211,7 @@ function LogisticsPage({ filters }) {
           const json = await res.json()
           const ageMs = json.asOf ? Date.now() - new Date(json.asOf).getTime() : Infinity
           const dateMatches = json.dateRange && json.dateRange.start === filters.start && json.dateRange.end === filters.end
-          const noExtraFilters = !lFilters.category && !lFilters.subCategory
+          const noExtraFilters = !lFilters.category && !lFilters.subCategory && (!lFilters.shipmentType || lFilters.shipmentType === 'forward')
           if (ageMs <= 2 * 60 * 60 * 1000 && !json._placeholder && json.current && dateMatches && noExtraFilters) {
             setRawData(json.current)
             setRawPrevData(json.previous || null)
@@ -224,6 +224,7 @@ function LogisticsPage({ filters }) {
         const body = { start: filters.start, end: filters.end }
         if (lFilters.category) body.category = [lFilters.category]
         if (lFilters.subCategory) body.subCategory = [lFilters.subCategory]
+        if (lFilters.shipmentType && lFilters.shipmentType !== 'all') body.shipmentType = lFilters.shipmentType
         const s = new Date(filters.start), e = new Date(filters.end)
         const days = Math.round((e - s) / 86400000) + 1
         const prevEnd = new Date(s); prevEnd.setDate(prevEnd.getDate() - 1)
@@ -241,7 +242,7 @@ function LogisticsPage({ filters }) {
       }
     } catch (e) { setError(e.message) }
     finally { setLoading(false) }
-  }, [filters.start, filters.end, lFilters.category, lFilters.subCategory])
+  }, [filters.start, filters.end, lFilters.category, lFilters.subCategory, lFilters.shipmentType])
 
   useEffect(() => { fetchLogistics() }, [fetchLogistics])
 
@@ -257,8 +258,8 @@ function LogisticsPage({ filters }) {
       const sddNddFilter = hasSddNdd
         ? (sddNdd === 'SDD/NDD' ? cg => isNdd(cg) : cg => !isNdd(cg))
         : () => true
-      const hasShipmentType = shipmentType && shipmentType !== 'all'
-      const shipmentTypeFilter = x => !hasShipmentType || !x.shipment_type || (x.shipment_type?.toLowerCase() === shipmentType.toLowerCase())
+      const hasShipmentType = false // handled by BQ refetch, not client-side
+      const shipmentTypeFilter = () => true
       const courierFilter = x => (!hasCourier || couriers.includes(x.courier_group)) && sddNddFilter(x.courier_group) && shipmentTypeFilter(x)
 
       // build filtered byCourier rows
