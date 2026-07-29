@@ -145,8 +145,14 @@ function SubCatStockTable({ rows, emptyLabel }) {
   )
 
   return (
-    <div style={{ maxHeight: 460, overflowY: 'auto', overflowX: 'auto' }}>
-      <table style={{ width: '100%', minWidth: 360, borderCollapse: 'collapse', fontSize: 12 }}>
+    <div style={{ maxHeight: 460, overflowY: 'auto' }}>
+      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12, tableLayout: 'fixed' }}>
+        <colgroup>
+          <col style={{ width: 'auto' }} />
+          <col style={{ width: 90 }} />
+          <col style={{ width: 80 }} />
+          <col style={{ width: 70 }} />
+        </colgroup>
         <thead style={{ position: 'sticky', top: 0, background: IC.surfaceHi, zIndex: 1 }}>
           <tr>
             {th('Sub-category', 'subCategory', 'left')}
@@ -165,7 +171,7 @@ function SubCatStockTable({ rows, emptyLabel }) {
                   style={{ borderBottom: `1px solid ${IC.border}`, cursor: 'pointer', height: 30 }}
                   onMouseEnter={e => e.currentTarget.style.background = 'rgba(0,0,0,0.025)'}
                   onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
-                  <td style={{ padding: '6px 8px', fontWeight: 600, color: IC.t1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', minWidth: 160 }}>
+                  <td style={{ padding: '6px 8px', fontWeight: 600, color: IC.t1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                     <span style={{ color: IC.t3, marginRight: 6, display: 'inline-block', transform: isOpen ? 'rotate(90deg)' : 'none', transition: 'transform .15s' }}>›</span>
                     {r.subCategory}
                     <span style={{ marginLeft: 6, fontSize: 10.5, color: IC.t3, fontWeight: 500 }}>({r.category})</span>
