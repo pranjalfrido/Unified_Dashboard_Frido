@@ -394,12 +394,12 @@ function PivotTable({ pivot, search }) {
     return g
   }, [tree, pivot.locations])
 
-  const SUBCOL_W = 64
+  const SUBCOL_W = 52
   const locCell = (obj, loc, color) => {
     const v = obj[loc] || { totalInvt: 0, avgSale: 0 }
     return (
-      <td key={loc} style={{ padding: '6px 10px', borderRight: `1px solid ${IC.border}` }}>
-        <div style={{ display: 'flex', justifyContent: 'center', gap: 10, fontVariantNumeric: 'tabular-nums' }}>
+      <td key={loc} style={{ padding: '6px 6px', borderRight: `1px solid ${IC.border}` }}>
+        <div style={{ display: 'flex', justifyContent: 'center', gap: 6, fontVariantNumeric: 'tabular-nums' }}>
           <span style={{ color, width: SUBCOL_W, textAlign: 'right' }}>{fmtInt(v.totalInvt)}</span>
           <span style={{ color: IC.t3, width: SUBCOL_W, textAlign: 'right' }}>{fmtInt(v.avgSale)}</span>
         </div>
@@ -408,21 +408,21 @@ function PivotTable({ pivot, search }) {
   }
 
   return (
-    <div style={{ minWidth: 0, margin: '0 -20px' }}>
+    <div style={{ minWidth: 0 }}>
       <div style={{ maxHeight: TABLE_SCROLL_HEIGHT, overflow: 'auto' }}>
         <table style={{ width: 'max-content', minWidth: '100%', borderCollapse: 'collapse', fontSize: 11.5 }}>
           <thead style={{ position: 'sticky', top: 0, zIndex: 2 }}>
             <tr>
               <th rowSpan={2} style={{ textAlign: 'left', fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.05em', color: IC.t3, padding: '6px 10px', borderBottom: `1px solid ${IC.border2}`, borderRight: `1px solid ${IC.border}`, position: 'sticky', left: 0, background: IC.surfaceHi, zIndex: 3 }}>Category / Sub-category / SKU</th>
               {pivot.locations.map(loc => (
-                <th key={loc} style={{ textAlign: 'center', fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.05em', color: IC.t3, padding: '6px 10px 2px', borderRight: `1px solid ${IC.border}`, background: IC.surfaceHi }}>{loc}</th>
+                <th key={loc} style={{ textAlign: 'center', fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.05em', color: IC.t3, padding: '6px 6px 2px', borderRight: `1px solid ${IC.border}`, background: IC.surfaceHi }}>{loc}</th>
               ))}
-              <th rowSpan={2} style={{ textAlign: 'center', fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.05em', color: IC.t3, padding: '6px 10px', borderBottom: `1px solid ${IC.border2}`, background: IC.surfaceHi }}>Total<br />Inventory / Avg Sale</th>
+              <th rowSpan={2} style={{ textAlign: 'center', fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.05em', color: IC.t3, padding: '6px 6px', borderBottom: `1px solid ${IC.border2}`, background: IC.surfaceHi }}>Total<br />Invt / Sale</th>
             </tr>
             <tr>
               {pivot.locations.map(loc => (
-                <th key={loc} style={{ fontSize: 9, fontWeight: 600, color: IC.t3, padding: '0 10px 6px', borderBottom: `1px solid ${IC.border2}`, borderRight: `1px solid ${IC.border}`, background: IC.surfaceHi }}>
-                  <span style={{ display: 'flex', justifyContent: 'center', gap: 10 }}><span style={{ width: SUBCOL_W, textAlign: 'right' }}>Inventory</span><span style={{ width: SUBCOL_W, textAlign: 'right' }}>Avg Sale</span></span>
+                <th key={loc} style={{ fontSize: 9, fontWeight: 600, color: IC.t3, padding: '0 6px 6px', borderBottom: `1px solid ${IC.border2}`, borderRight: `1px solid ${IC.border}`, background: IC.surfaceHi }}>
+                  <span style={{ display: 'flex', justifyContent: 'center', gap: 6 }}><span style={{ width: SUBCOL_W, textAlign: 'right' }}>Inventory</span><span style={{ width: SUBCOL_W, textAlign: 'right' }}>Avg Sale</span></span>
                 </th>
               ))}
             </tr>
@@ -790,7 +790,7 @@ export default function InventoryHealthPage({ data, filters, setFilters, sidebar
       </GlassCard>
 
       {/* Location-wise pivot table */}
-      <GlassCard title="Location-Wise Inventory & Avg Sale" style={{ paddingBottom: 0, overflow: 'hidden' }}
+      <GlassCard title="Location-Wise Inventory & Avg Sale"
         action={
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <input type="text" value={pivotSearch} onChange={e => setPivotSearch(e.target.value)}
