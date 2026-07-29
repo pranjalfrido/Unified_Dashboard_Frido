@@ -408,7 +408,7 @@ function PivotTable({ pivot, search }) {
   }
 
   return (
-    <div style={{ minWidth: 0, overflow: 'hidden' }}>
+    <div style={{ minWidth: 0, margin: '0 -20px' }}>
       <div style={{ maxHeight: TABLE_SCROLL_HEIGHT, overflow: 'auto' }}>
         <table style={{ width: 'max-content', minWidth: '100%', borderCollapse: 'collapse', fontSize: 11.5 }}>
           <thead style={{ position: 'sticky', top: 0, zIndex: 2 }}>
@@ -790,7 +790,7 @@ export default function InventoryHealthPage({ data, filters, setFilters, sidebar
       </GlassCard>
 
       {/* Location-wise pivot table */}
-      <GlassCard title="Location-Wise Inventory & Avg Sale"
+      <GlassCard title="Location-Wise Inventory & Avg Sale" style={{ paddingBottom: 0, overflow: 'hidden' }}
         action={
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <input type="text" value={pivotSearch} onChange={e => setPivotSearch(e.target.value)}
