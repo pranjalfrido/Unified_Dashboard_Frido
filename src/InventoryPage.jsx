@@ -382,7 +382,7 @@ export default function InventoryPage({ onTopbarDateControl }) {
         <div style={{ display: 'flex', flexDirection: 'column', gap: 2, marginBottom: 10 }}>
           <span style={{ fontSize: 11, color: IC.t3 }}>
             {inv.data?.lastSnapshotUpdated
-              ? `Snapshot updated ${new Date(inv.data.lastSnapshotUpdated).toLocaleString('en-IN', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}`
+              ? `Snapshot updated ${new Date(inv.data.lastSnapshotUpdated.replace('Z','') + '+05:30').toLocaleString('en-IN', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Kolkata' })}`
               : inv.loading ? 'Loading snapshot time…' : ''}
           </span>
           {inv.data?.avgSaleWindow?.end && (
