@@ -34,8 +34,16 @@ export default async function handler(req, res) {
   }
   if (shipmentType && shipmentType !== 'all') filters.push(`LOWER(TRIM(c.shipment_type)) = '${shipmentType.toLowerCase()}'`)
   if (sddNdd && sddNdd !== 'all') {
-    if (sddNdd === 'SDD/NDD') filters.push(`SAFE_CAST(c.committed_sla AS INT64) <= 1`)
-    else filters.push(`(c.committed_sla IS NULL OR SAFE_CAST(c.committed_sla AS INT64) > 1)`)
+    // committed_sla is always NULL — identify NDD by courier/AWB instead
+    const nddClause = `(
+      (LOWER(c.courier_partner) LIKE '%delhivery%' AND LEFT(c.awb, 4) = '5448')
+      OR LOWER(c.courier_partner) LIKE '%skye air%'
+      OR LOWER(c.courier_partner) LIKE '%urbane bolt%'
+      OR LOWER(c.courier_partner) LIKE '%urbanbolt%'
+      OR LOWER(c.courier_partner) LIKE '%elastic%'
+    )`
+    if (sddNdd === 'SDD/NDD') filters.push(nddClause)
+    else filters.push(`NOT ${nddClause}`)
   }
   if (paymentMode) filters.push(`LOWER(c.payment_mode) = '${paymentMode.toLowerCase()}'`)
   if (zone) filters.push(`c.zone = '${zone.replace(/'/g, "\\'")}'`)
