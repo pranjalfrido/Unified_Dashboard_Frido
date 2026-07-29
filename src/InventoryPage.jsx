@@ -532,14 +532,9 @@ export default function InventoryPage({ onTopbarDateControl }) {
   })()
 
   return (
-    <div style={{ background: PAGE_BACKGROUND, minHeight: '100%', color: IC.t1, fontFamily: 'Inter, sans-serif' }}>
-      {/* No horizontal padding here — each sub-page's own FilterSidebar needs to sit flush
-          against the viewport's left edge (it's position:fixed, positioned independent of
-          this wrapper's padding) or a gap of the page's own background shows between the
-          left nav rail and the sidebar's white panel. Each sub-page applies its own left
-          padding to its actual content (KPIs/tables) instead, via paddingLeft on the content
-          column next to the sidebar. */}
-      <div style={{ padding: '18px 0 40px', display: 'flex', flexDirection: 'column', gap: 18 }}>
+    <div style={{ background: PAGE_BACKGROUND, height: '100%', display: 'flex', flexDirection: 'column', color: IC.t1, fontFamily: 'Inter, sans-serif' }}>
+      {/* No horizontal padding here — each sub-page applies its own paddingLeft to content. */}
+      <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
         {active.loading && !active.data && (
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: 300, color: IC.t3, fontSize: 13, margin: '0 24px' }}>Loading…</div>
         )}

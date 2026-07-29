@@ -264,50 +264,16 @@ function FilterSidebar({ data, filters, setFilters, open, sidebarTop }) {
   const anyActive = ['category', 'subCategory', 'facility', 'facilityType', 'productId', 'location', 'stockStatus']
     .some(k => filters[k]?.length)
 
-  // position: fixed, positioned using the app shell's own known top-bar height (--nav,
-  // 52px in index.css) rather than a live getBoundingClientRect() measurement — measuring
-  // the anchor's live position was unreliable: if the page had already been scrolled when
-  // this component mounted (or before sidebarTop's data-dependent content, e.g. the
-  // snapshot-timestamp line that only appears once data arrives, finished growing to full
-  // height), the captured top/left baked in a stale, already-scrolled offset that never
-  // corrected itself, leaving the fixed sidebar pinned in the wrong place with its top
-  // content clipped.
-  const anchorRef = useRef(null)
-  const [left, setLeft] = useState(null)
-  useLayoutEffect(() => {
-    if (!open) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect -- measuring DOM layout is exactly what useLayoutEffect is for
-      setLeft(null)
-      return
-    }
-    const measure = () => {
-      const el = anchorRef.current
-      if (!el) return
-      setLeft(el.getBoundingClientRect().left)
-    }
-    measure()
-    window.addEventListener('resize', measure)
-    return () => window.removeEventListener('resize', measure)
-  }, [open])
 
   return (
-    <div ref={anchorRef} style={{
+    <div style={{
       width: open ? SIDEBAR_WIDTH : 0, minWidth: open ? SIDEBAR_WIDTH : 0, transition: 'width .2s ease, min-width .2s ease',
       overflow: 'hidden', borderRight: `1px solid ${IC.border}`, flexShrink: 0,
-      // Matches the fixed inner panel's own background — this outer anchor div only reserves
-      // width in the flex row (its child becomes position:fixed once measured), but it still
-      // occupies real vertical space at its own top offset (pushed down by the page's own
-      // padding). Without a matching background here, the app shell's grey shows through as
-      // a gap above/around where the fixed white sidebar visually begins.
-      background: IC.surface,
+      background: IC.surface, height: '100%',
     }}>
       <div style={{
         width: SIDEBAR_WIDTH, padding: '12px', boxSizing: 'border-box', display: 'flex', flexDirection: 'column', gap: 10,
-        background: IC.surface,
-        ...(left != null ? {
-          position: 'fixed', top: 'var(--nav)', left,
-          height: 'calc(100vh - var(--nav))', overflowY: 'auto',
-        } : {}),
+        background: IC.surface, height: '100%', overflowY: 'auto',
       }}>
         {sidebarTop}
         <SidebarSectionTitle title="Location" />
@@ -660,7 +626,7 @@ export default function InventoryHealthPage({ data, filters, setFilters, sidebar
   if (!data) return null
 
   return (
-    <div style={{ display: 'flex', gap: 0 }}>
+    <div style={{ display: 'flex', gap: 0, height: '100%', overflow: 'hidden' }}>
       <FilterSidebar data={data} filters={filters} setFilters={setFilters} open={sidebarOpen} sidebarTop={sidebarTop} />
       <button onClick={() => setSidebarOpen(o => !o)} style={{
         width: 16, alignSelf: 'flex-start', marginTop: 4, height: 48, border: `1px solid ${IC.border}`, borderLeft: 'none',
@@ -671,7 +637,7 @@ export default function InventoryHealthPage({ data, filters, setFilters, sidebar
         {sidebarOpen ? '‹' : '›'}
       </button>
 
-      <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 18, paddingLeft: 16, paddingRight: 24 }}>
+      <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 18, padding: '18px 24px 40px 16px', overflowY: 'auto', height: '100%' }}>
 
         {/* KPI row */}
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, minmax(0, 1fr))', gap: 10, alignItems: 'stretch' }}>
