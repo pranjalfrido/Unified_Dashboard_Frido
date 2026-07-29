@@ -191,14 +191,17 @@ function SubCatStockTable({ rows, emptyLabel }) {
   )
 }
 
-function WarehouseCard({ loc }) {
+function WarehouseCard({ loc, selected }) {
   const rtdPct = loc.totalInvt > 0 ? (loc.rtdInvt / loc.totalInvt) * 100 : 0
   const borderColor = IC.status[loc.stockStatus]?.c || IC.border
   const allocColor = allocationColor(loc.allocationPct)
   return (
     <div style={{
-      background: IC.surface, border: `1px solid ${IC.border}`, borderRadius: 12, padding: '10px 11px', minWidth: 0,
+      background: selected ? 'rgba(0,0,0,0.055)' : IC.surface,
+      border: selected ? `1.5px solid ${IC.t2}` : `1px solid ${IC.border}`,
+      borderRadius: 12, padding: '10px 11px', minWidth: 0,
       display: 'flex', flexDirection: 'column', gap: 6, borderTop: `3px solid ${borderColor}`,
+      transition: 'background 0.15s, border 0.15s',
     }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 4 }}>
         <span style={{ fontSize: 12.5, fontWeight: 700, color: IC.t1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{loc.location}</span>
@@ -684,7 +687,7 @@ export default function InventoryHealthPage({ data, filters, setFilters, sidebar
         {/* Warehouse grid — always one row; cards shrink to fit rather than wrapping to a 2nd line */}
         <GlassCard title="Warehouse Health" note={`${data.locations.length} locations`}>
           <div style={{ display: 'grid', gridTemplateColumns: `repeat(${Math.max(data.locations.length, 1)}, 1fr)`, gap: 8 }}>
-            {data.locations.map(loc => <WarehouseCard key={loc.location} loc={loc} />)}
+            {data.locations.map(loc => <WarehouseCard key={loc.location} loc={loc} selected={filters.location?.length > 0 && filters.location.includes(loc.location)} />)}
           </div>
         </GlassCard>
 
