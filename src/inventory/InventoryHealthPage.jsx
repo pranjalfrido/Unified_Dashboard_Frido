@@ -400,14 +400,14 @@ function PivotTable({ pivot, search }) {
     return g
   }, [tree, pivot.locations])
 
-  const SUBCOL_W = 52
+  const SUBCOL_W = 48
   const locCell = (obj, loc, color) => {
     const v = obj[loc] || { totalInvt: 0, avgSale: 0 }
     return (
-      <td key={loc} style={{ padding: '6px 6px', borderRight: `1px solid ${IC.border}` }}>
-        <div style={{ display: 'flex', justifyContent: 'center', gap: 6, fontVariantNumeric: 'tabular-nums' }}>
-          <span style={{ color, width: SUBCOL_W, textAlign: 'right' }}>{fmtInt(v.totalInvt)}</span>
-          <span style={{ color: IC.t3, width: SUBCOL_W, textAlign: 'right' }}>{fmtInt(v.avgSale)}</span>
+      <td key={loc} style={{ padding: '6px 4px', borderRight: `1px solid ${IC.border}` }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', fontVariantNumeric: 'tabular-nums' }}>
+          <span style={{ color, flex: 1, textAlign: 'right', paddingRight: 4 }}>{fmtInt(v.totalInvt)}</span>
+          <span style={{ color: IC.t3, flex: 1, textAlign: 'right' }}>{fmtInt(v.avgSale)}</span>
         </div>
       </td>
     )
@@ -416,7 +416,12 @@ function PivotTable({ pivot, search }) {
   return (
     <div style={{ minWidth: 0 }}>
       <div style={{ maxHeight: TABLE_SCROLL_HEIGHT, overflow: 'auto' }}>
-        <table style={{ width: 'max-content', minWidth: '100%', borderCollapse: 'collapse', fontSize: 11.5 }}>
+        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11, tableLayout: 'fixed' }}>
+          <colgroup>
+            <col style={{ width: 160 }} />
+            {pivot.locations.map(loc => <col key={loc} style={{ width: 110 }} />)}
+            <col style={{ width: 120 }} />
+          </colgroup>
           <thead style={{ position: 'sticky', top: 0, zIndex: 2 }}>
             <tr>
               <th rowSpan={2} style={{ textAlign: 'left', fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.05em', color: IC.t3, padding: '6px 10px', borderBottom: `1px solid ${IC.border2}`, borderRight: `1px solid ${IC.border}`, position: 'sticky', left: 0, background: IC.surfaceHi, zIndex: 3 }}>Category / Sub-category / SKU</th>
@@ -428,7 +433,7 @@ function PivotTable({ pivot, search }) {
             <tr>
               {pivot.locations.map(loc => (
                 <th key={loc} style={{ fontSize: 9, fontWeight: 600, color: IC.t3, padding: '0 6px 6px', borderBottom: `1px solid ${IC.border2}`, borderRight: `1px solid ${IC.border}`, background: IC.surfaceHi }}>
-                  <span style={{ display: 'flex', justifyContent: 'center', gap: 6 }}><span style={{ width: SUBCOL_W, textAlign: 'right' }}>Inventory</span><span style={{ width: SUBCOL_W, textAlign: 'right' }}>Avg Sale</span></span>
+                  <span style={{ display: 'flex', justifyContent: 'space-between' }}><span style={{ flex: 1, textAlign: 'right', paddingRight: 4 }}>Inventory</span><span style={{ flex: 1, textAlign: 'right' }}>Avg Sale</span></span>
                 </th>
               ))}
             </tr>
