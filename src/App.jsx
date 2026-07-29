@@ -211,7 +211,7 @@ function LogisticsPage({ filters }) {
           const json = await res.json()
           const ageMs = json.asOf ? Date.now() - new Date(json.asOf).getTime() : Infinity
           const dateMatches = json.dateRange && json.dateRange.start === filters.start && json.dateRange.end === filters.end
-          const noExtraFilters = !lFilters.category && !lFilters.subCategory && lFilters.shipmentType === 'forward'
+          const noExtraFilters = !lFilters.category && !lFilters.subCategory
           if (ageMs <= 2 * 60 * 60 * 1000 && !json._placeholder && json.current && dateMatches && noExtraFilters) {
             setRawData(json.current)
             setRawPrevData(json.previous || null)
@@ -222,7 +222,6 @@ function LogisticsPage({ filters }) {
 
       if (!usedStatic) {
         const body = { start: filters.start, end: filters.end }
-        if (lFilters.shipmentType !== 'all') body.shipmentType = lFilters.shipmentType
         if (lFilters.category) body.category = [lFilters.category]
         if (lFilters.subCategory) body.subCategory = [lFilters.subCategory]
         const s = new Date(filters.start), e = new Date(filters.end)
@@ -242,7 +241,7 @@ function LogisticsPage({ filters }) {
       }
     } catch (e) { setError(e.message) }
     finally { setLoading(false) }
-  }, [filters.start, filters.end, lFilters.shipmentType, lFilters.category, lFilters.subCategory])
+  }, [filters.start, filters.end, lFilters.category, lFilters.subCategory])
 
   useEffect(() => { fetchLogistics() }, [fetchLogistics])
 
@@ -250,7 +249,7 @@ function LogisticsPage({ filters }) {
   useEffect(() => {
     const applyFilters = (raw) => {
       if (!raw) return null
-      const { couriers, zone, paymentMode, pickupState, dropState, dropCity, category, subCategory, sddNdd } = lFilters
+      const { couriers, zone, paymentMode, pickupState, dropState, dropCity, category, subCategory, sddNdd, shipmentType } = lFilters
       const hasCourier = couriers.length > 0
       const NDD_COURIERS = ['Delhivery NDD', 'Skye Air', 'Urbane Bolt', 'ElasticRun']
       const isNdd = cg => NDD_COURIERS.includes(cg)
@@ -258,7 +257,9 @@ function LogisticsPage({ filters }) {
       const sddNddFilter = hasSddNdd
         ? (sddNdd === 'SDD/NDD' ? cg => isNdd(cg) : cg => !isNdd(cg))
         : () => true
-      const courierFilter = x => (!hasCourier || couriers.includes(x.courier_group)) && sddNddFilter(x.courier_group)
+      const hasShipmentType = shipmentType && shipmentType !== 'all'
+      const shipmentTypeFilter = x => !hasShipmentType || (x.shipment_type?.toLowerCase() === shipmentType.toLowerCase())
+      const courierFilter = x => (!hasCourier || couriers.includes(x.courier_group)) && sddNddFilter(x.courier_group) && shipmentTypeFilter(x)
 
       // build filtered byCourier rows
       const filteredCouriers = (raw.byCourier || []).filter(courierFilter)
@@ -326,7 +327,7 @@ function LogisticsPage({ filters }) {
         topDropCities: dropCity ? (raw.topDropCities || []).filter(x => x.city?.toLowerCase() === dropCity.toLowerCase()) : raw.topDropCities,
         topPickupCities: pickupState ? (raw.topPickupCities || []).filter(x => x.pickup_state?.toLowerCase() === pickupState.toLowerCase()) : raw.topPickupCities,
         byChannel: hasCourier ? (raw.byChannel || []).filter(x => couriers.some(c => x.channel?.toLowerCase().includes(c.toLowerCase()))) : raw.byChannel,
-        byStatus: (hasCourier || hasSddNdd)
+        byStatus: (hasCourier || hasSddNdd || hasShipmentType)
           ? (() => {
               const statusMap = {}
               filteredCouriers.forEach(x => {
@@ -338,7 +339,7 @@ function LogisticsPage({ filters }) {
               return Object.entries(statusMap).map(([unified_status, total]) => ({ unified_status, total }))
             })()
           : raw.byStatus,
-        byDay: (hasCourier || hasSddNdd) ? Object.values(
+        byDay: (hasCourier || hasSddNdd || hasShipmentType) ? Object.values(
             (raw.byCourierDay || []).filter(courierFilter)
               .reduce((acc, x) => {
                 const key = x.period_label
@@ -347,7 +348,7 @@ function LogisticsPage({ filters }) {
                 return acc
               }, {})
           ).sort((a, b) => a.dt < b.dt ? -1 : 1) : raw.byDay,
-        byWeek: (hasCourier || hasSddNdd) ? Object.values(
+        byWeek: (hasCourier || hasSddNdd || hasShipmentType) ? Object.values(
             (raw.byCourierWeek || []).filter(courierFilter)
               .reduce((acc, x) => {
                 const key = x.period_label
@@ -356,7 +357,7 @@ function LogisticsPage({ filters }) {
                 return acc
               }, {})
           ).sort((a, b) => a.dt < b.dt ? -1 : 1) : raw.byWeek,
-        byMonth: (hasCourier || hasSddNdd) ? Object.values(
+        byMonth: (hasCourier || hasSddNdd || hasShipmentType) ? Object.values(
             (raw.byCourierMonth || []).filter(courierFilter)
               .reduce((acc, x) => {
                 const key = x.month_label

@@ -128,6 +128,7 @@ kpis AS (
 by_courier AS (
   SELECT
     courier_group,
+    shipment_type,
     COUNT(awb) AS total,
     SUM(invoice_value) AS total_value,
     COUNTIF(unified_status='Delivered') AS delivered,
@@ -164,10 +165,10 @@ by_courier AS (
     ROUND(AVG(IF(clickpost_unified_status='RTO-Delivered' AND rto_mark_date IS NOT NULL AND latest_ts_date IS NOT NULL AND DATE_DIFF(latest_ts_date, rto_mark_date, DAY) BETWEEN 0 AND 20, DATE_DIFF(latest_ts_date, rto_mark_date, DAY), NULL)), 2) AS avg_rto_tat,
     ROUND(AVG(IF(clickpost_unified_status='RTO-Delivered' AND rto_mark_date IS NOT NULL AND latest_ts_date IS NOT NULL AND DATE_DIFF(latest_ts_date, rto_mark_date, DAY) BETWEEN 0 AND 20, DATE_DIFF(latest_ts_date, rto_mark_date, DAY), NULL)), 2) AS avg_rto_tat_days,
     ROUND(AVG(committed_sla), 1) AS avg_sla
-  FROM base GROUP BY 1
+  FROM base GROUP BY 1, 2
 ),
 by_courier_day AS (
-  SELECT courier_group, FORMAT_DATE('%d %b', created_date) AS period_label, created_date AS period_dt,
+  SELECT courier_group, shipment_type, FORMAT_DATE('%d %b', created_date) AS period_label, created_date AS period_dt,
     COUNT(awb) AS total, COUNTIF(unified_status='Delivered') AS delivered, COUNTIF(unified_status='RTO') AS rto,
     COUNTIF(unified_status='Cancelled') AS cancelled, COUNTIF(unified_status='RTO' AND COALESCE(ofd_attempts,0)=0) AS z_rto,
     COUNTIF(ofd_attempts=1 AND unified_status='Delivered') AS d1, COUNTIF(ofd_attempts > 1 AND unified_status='Delivered') AS rasr_num,
@@ -178,10 +179,10 @@ by_courier_day AS (
     ROUND(AVG(IF(created_date IS NOT NULL AND order_date IS NOT NULL AND DATE_DIFF(created_date, order_date, DAY) BETWEEN 0 AND 10, DATE_DIFF(created_date, order_date, DAY), NULL)), 2) AS avg_processing_days,
     ROUND(AVG(IF(ofd1_date IS NOT NULL AND pickup_date IS NOT NULL, DATE_DIFF(ofd1_date, pickup_date, DAY), NULL)), 2) AS avg_s2a_days,
     ROUND(AVG(IF(clickpost_unified_status='RTO-Delivered' AND rto_mark_date IS NOT NULL AND latest_ts_date IS NOT NULL AND DATE_DIFF(latest_ts_date, rto_mark_date, DAY) BETWEEN 0 AND 20, DATE_DIFF(latest_ts_date, rto_mark_date, DAY), NULL)), 2) AS avg_rto_tat_days
-  FROM base WHERE created_date IS NOT NULL GROUP BY 1,2,3
+  FROM base WHERE created_date IS NOT NULL GROUP BY 1,2,3,4
 ),
 by_courier_week AS (
-  SELECT courier_group, FORMAT_DATE('W%V %Y', created_date) AS period_label, DATE_TRUNC(created_date, WEEK) AS period_dt,
+  SELECT courier_group, shipment_type, FORMAT_DATE('W%V %Y', created_date) AS period_label, DATE_TRUNC(created_date, WEEK) AS period_dt,
     COUNT(awb) AS total, COUNTIF(unified_status='Delivered') AS delivered, COUNTIF(unified_status='RTO') AS rto,
     COUNTIF(unified_status='Cancelled') AS cancelled, COUNTIF(unified_status='RTO' AND COALESCE(ofd_attempts,0)=0) AS z_rto,
     COUNTIF(ofd_attempts=1 AND unified_status='Delivered') AS d1, COUNTIF(ofd_attempts > 1 AND unified_status='Delivered') AS rasr_num,
@@ -192,10 +193,10 @@ by_courier_week AS (
     ROUND(AVG(IF(created_date IS NOT NULL AND order_date IS NOT NULL AND DATE_DIFF(created_date, order_date, DAY) BETWEEN 0 AND 10, DATE_DIFF(created_date, order_date, DAY), NULL)), 2) AS avg_processing_days,
     ROUND(AVG(IF(ofd1_date IS NOT NULL AND pickup_date IS NOT NULL, DATE_DIFF(ofd1_date, pickup_date, DAY), NULL)), 2) AS avg_s2a_days,
     ROUND(AVG(IF(clickpost_unified_status='RTO-Delivered' AND rto_mark_date IS NOT NULL AND latest_ts_date IS NOT NULL AND DATE_DIFF(latest_ts_date, rto_mark_date, DAY) BETWEEN 0 AND 20, DATE_DIFF(latest_ts_date, rto_mark_date, DAY), NULL)), 2) AS avg_rto_tat_days
-  FROM base WHERE created_date IS NOT NULL GROUP BY 1,2,3
+  FROM base WHERE created_date IS NOT NULL GROUP BY 1,2,3,4
 ),
 by_courier_month AS (
-  SELECT courier_group, FORMAT_DATE('%b-%y', created_date) AS month_label, DATE_TRUNC(created_date, MONTH) AS month_dt,
+  SELECT courier_group, shipment_type, FORMAT_DATE('%b-%y', created_date) AS month_label, DATE_TRUNC(created_date, MONTH) AS month_dt,
     COUNT(awb) AS total, COUNTIF(unified_status='Delivered') AS delivered, COUNTIF(unified_status='RTO') AS rto,
     COUNTIF(unified_status='Cancelled') AS cancelled, COUNTIF(unified_status='RTO' AND COALESCE(ofd_attempts,0)=0) AS z_rto,
     COUNTIF(ofd_attempts=1 AND unified_status='Delivered') AS d1, COUNTIF(ofd_attempts > 1 AND unified_status='Delivered') AS rasr_num,
@@ -206,7 +207,7 @@ by_courier_month AS (
     ROUND(AVG(IF(created_date IS NOT NULL AND order_date IS NOT NULL AND DATE_DIFF(created_date, order_date, DAY) BETWEEN 0 AND 10, DATE_DIFF(created_date, order_date, DAY), NULL)), 2) AS avg_processing_days,
     ROUND(AVG(IF(ofd1_date IS NOT NULL AND pickup_date IS NOT NULL, DATE_DIFF(ofd1_date, pickup_date, DAY), NULL)), 2) AS avg_s2a_days,
     ROUND(AVG(IF(clickpost_unified_status='RTO-Delivered' AND rto_mark_date IS NOT NULL AND latest_ts_date IS NOT NULL AND DATE_DIFF(latest_ts_date, rto_mark_date, DAY) BETWEEN 0 AND 20, DATE_DIFF(latest_ts_date, rto_mark_date, DAY), NULL)), 2) AS avg_rto_tat_days
-  FROM base WHERE created_date IS NOT NULL GROUP BY 1,2,3
+  FROM base WHERE created_date IS NOT NULL GROUP BY 1,2,3,4
 ),
 by_month_all AS (
   SELECT FORMAT_DATE('%b-%y', created_date) AS month_label, DATE_TRUNC(created_date, MONTH) AS month_dt,
@@ -311,8 +312,8 @@ by_month AS (
   FROM base WHERE created_date IS NOT NULL GROUP BY 1,2 ORDER BY 2
 ),
 rto_reasons AS (
-  SELECT courier_group, reason_for_last_failed_delivery AS reason, COUNT(awb) AS total
-  FROM base WHERE reason_for_last_failed_delivery IS NOT NULL AND unified_status='RTO' GROUP BY 1, 2
+  SELECT courier_group, shipment_type, reason_for_last_failed_delivery AS reason, COUNT(awb) AS total
+  FROM base WHERE reason_for_last_failed_delivery IS NOT NULL AND unified_status='RTO' GROUP BY 1, 2, 3
 ),
 top_drop_states AS (
   SELECT courier_group, CONCAT(UPPER(SUBSTR(drop_state,1,1)), LOWER(SUBSTR(drop_state,2))) AS state, COUNT(awb) AS total
@@ -328,12 +329,12 @@ top_pickup_cities AS (
 ),
 by_payment AS (SELECT payment_mode, COUNT(awb) AS total FROM base WHERE payment_mode IS NOT NULL GROUP BY 1),
 tat_by_courier AS (
-  SELECT courier_group, COUNT(awb) AS total, COUNTIF(unified_status='Delivered') AS delivered,
+  SELECT courier_group, shipment_type, COUNT(awb) AS total, COUNTIF(unified_status='Delivered') AS delivered,
     COUNTIF(pickup_ts IS NOT NULL AND delivery_ts IS NOT NULL AND TIMESTAMP_DIFF(delivery_ts, pickup_ts, MINUTE) BETWEEN 0 AND 2880) AS bucket_0_1,
     COUNTIF(pickup_ts IS NOT NULL AND delivery_ts IS NOT NULL AND TIMESTAMP_DIFF(delivery_ts, pickup_ts, MINUTE) BETWEEN 2881 AND 5760) AS bucket_2_3,
     COUNTIF(pickup_ts IS NOT NULL AND delivery_ts IS NOT NULL AND TIMESTAMP_DIFF(delivery_ts, pickup_ts, MINUTE) BETWEEN 5761 AND 7200) AS bucket_4_5,
     COUNTIF(pickup_ts IS NOT NULL AND delivery_ts IS NOT NULL AND TIMESTAMP_DIFF(delivery_ts, pickup_ts, MINUTE) > 7200) AS bucket_5plus
-  FROM base WHERE unified_status='Delivered' GROUP BY 1
+  FROM base WHERE unified_status='Delivered' GROUP BY 1, 2
 ),
 tat_by_month AS (
   SELECT FORMAT_DATE('%b-%y', created_date) AS month_label, DATE_TRUNC(created_date, MONTH) AS month_dt,
@@ -346,7 +347,7 @@ tat_by_month AS (
 ),
 tat_by_facility AS (
   SELECT * FROM (
-    SELECT courier_group,
+    SELECT courier_group, shipment_type,
       CASE
         WHEN UPPER(TRIM(pickup_city)) IN ('DELHI','GURGAON','GURUGRAM','HARYANA') THEN 'Delhi'
         WHEN UPPER(TRIM(pickup_city)) IN ('MUMBAI','BHIWANDI') THEN 'Mumbai'
@@ -366,14 +367,14 @@ tat_by_facility AS (
       COUNTIF(delivery_date IS NOT NULL AND order_date IS NOT NULL AND DATE_DIFF(delivery_date, order_date, DAY) BETWEEN 2 AND 3) AS ord_2_3,
       COUNTIF(delivery_date IS NOT NULL AND order_date IS NOT NULL AND DATE_DIFF(delivery_date, order_date, DAY) BETWEEN 4 AND 5) AS ord_4_5,
       COUNTIF(delivery_date IS NOT NULL AND order_date IS NOT NULL AND DATE_DIFF(delivery_date, order_date, DAY) > 5) AS ord_5plus
-    FROM base WHERE pickup_city IS NOT NULL GROUP BY 1, 2
+    FROM base WHERE pickup_city IS NOT NULL GROUP BY 1, 2, 3
   ) WHERE facility IS NOT NULL
 ),
 failed_delivery_reasons AS (
-  SELECT courier_group, reason_for_last_failed_delivery AS reason, COUNT(awb) AS total
+  SELECT courier_group, shipment_type, reason_for_last_failed_delivery AS reason, COUNT(awb) AS total
   FROM base
   WHERE reason_for_last_failed_delivery IS NOT NULL AND reason_for_last_failed_delivery != '' AND ofd_attempts > 1
-  GROUP BY 1, 2
+  GROUP BY 1, 2, 3
 ),
 by_zone_detail AS (
   SELECT zone, COUNT(awb) AS total, COUNTIF(unified_status='Delivered') AS delivered, COUNTIF(unified_status='RTO') AS rto,
@@ -391,7 +392,7 @@ by_channel AS (
   FROM base WHERE channel_name IS NOT NULL AND channel_name != '' GROUP BY 1
 ),
 by_weight_slab AS (
-  SELECT courier_group,
+  SELECT courier_group, shipment_type,
     CASE
       WHEN weight_g IS NULL THEN 'Unknown' WHEN weight_g <= 500 THEN '0-500g' WHEN weight_g <= 1000 THEN '500g-1kg'
       WHEN weight_g <= 2000 THEN '1-2kg' WHEN weight_g <= 5000 THEN '2-5kg' WHEN weight_g <= 10000 THEN '5-10kg'
@@ -408,7 +409,7 @@ by_weight_slab AS (
     ROUND(SAFE_DIVIDE(COUNTIF(unified_status='RTO') * 100.0, COUNT(awb)), 1) AS rto_pct,
     ROUND(AVG(IF(pickup_ts IS NOT NULL AND delivery_ts IS NOT NULL AND TIMESTAMP_DIFF(delivery_ts, pickup_ts, MINUTE) BETWEEN 0 AND 28800, TIMESTAMP_DIFF(delivery_ts, pickup_ts, MINUTE) / 1440.0, NULL)), 2) AS avg_tat,
     ROUND(SUM(invoice_value), 0) AS total_value
-  FROM base GROUP BY 1, 2, 3
+  FROM base GROUP BY 1, 2, 3, 4
 ),
 filter_opts AS (
   SELECT
