@@ -171,6 +171,27 @@ function LSectionTitle({ title, collapsed, onToggle }) {
   )
 }
 
+function LogisticsSkeleton() {
+  const sk = (w, h, r = 8) => ({ width: w, height: h, borderRadius: r, background: C.border, animation: 'pulse 1.5s ease infinite', flexShrink: 0 })
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+      {/* KPI row */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 10 }}>
+        {[...Array(5)].map((_, i) => <div key={i} style={sk('100%', 88)} />)}
+      </div>
+      {/* Trend chart */}
+      <div style={sk('100%', 220)} />
+      {/* Two side-by-side */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+        <div style={sk('100%', 200)} />
+        <div style={sk('100%', 200)} />
+      </div>
+      {/* Table */}
+      <div style={sk('100%', 180)} />
+    </div>
+  )
+}
+
 function LogisticsPage({ filters }) {
   const API = import.meta.env.VITE_API_URL || ''
   const [logisticsView, setLogisticsView] = useState('Logistics')
@@ -194,6 +215,9 @@ function LogisticsPage({ filters }) {
   const [prevData, setPrevData] = useState(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
+  const [staleData, setStaleData] = useState(() => {
+    try { const s = localStorage.getItem('logistics_stale'); return s ? JSON.parse(s) : null } catch { return null }
+  })
   const [retData, setRetData] = useState(null)
   const [retTrendGran, setRetTrendGran] = useState('Daily')
   const [retReasonView, setRetReasonView] = useState('reason') // 'reason' | 'sub'
@@ -215,6 +239,7 @@ function LogisticsPage({ filters }) {
           if (ageMs <= 2 * 60 * 60 * 1000 && !json._placeholder && json.current && dateMatches && noExtraFilters) {
             setRawData(json.current)
             setRawPrevData(json.previous || null)
+            try { localStorage.setItem('logistics_stale', JSON.stringify({ current: json.current, previous: json.previous || null, dateRange: json.dateRange, savedAt: Date.now() })) } catch {}
             usedStatic = true
           }
         }
@@ -239,6 +264,7 @@ function LogisticsPage({ filters }) {
         const [cur, prev] = await Promise.all([r.json(), rPrev.ok ? rPrev.json() : Promise.resolve(null)])
         setRawData(cur)
         setRawPrevData(prev)
+        try { localStorage.setItem('logistics_stale', JSON.stringify({ current: cur, previous: prev, dateRange: { start: filters.start, end: filters.end }, savedAt: Date.now() })) } catch {}
       }
     } catch (e) { setError(e.message) }
     finally { setLoading(false) }
@@ -419,9 +445,11 @@ function LogisticsPage({ filters }) {
         })(),
       }
     }
-    setData(applyFilters(rawData))
-    setPrevData(applyFilters(rawPrevData))
-  }, [rawData, rawPrevData, lFilters])
+    const effectiveRaw = rawData || (staleData?.current ?? null)
+    const effectivePrev = rawPrevData || (staleData?.previous ?? null)
+    setData(applyFilters(effectiveRaw))
+    setPrevData(applyFilters(effectivePrev))
+  }, [rawData, rawPrevData, staleData, lFilters])
 
   const fetchReturns = useCallback(async () => {
     if (!filters.start || !filters.end) return
@@ -575,12 +603,13 @@ function LogisticsPage({ filters }) {
 
 
       {error && <div style={{ padding: '10px 14px', borderRadius: 9, background: C.red.bg, border: `1px solid ${C.red.bd}`, color: C.red.tx, fontSize: 12 }}>⚠ {error}</div>}
-      {loading && !data && (
-        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 14, color: C.t3, fontSize: 13, minHeight: 300 }}>
-          <div style={{ width: 160, height: 3, borderRadius: 2, background: C.border, overflow: 'hidden' }}>
-            <div style={{ width: '60%', height: '100%', background: C.acc, animation: 'pulse 1.5s ease infinite' }} />
-          </div>
-          Loading logistics data…
+      {loading && !rawData && !staleData && (
+        <LogisticsSkeleton />
+      )}
+      {loading && !rawData && staleData && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '6px 10px', borderRadius: 8, background: C.acl, border: `1px solid ${C.acc}44`, alignSelf: 'flex-start', fontSize: 11.5, color: C.t2, fontWeight: 500 }}>
+          <span style={{ width: 7, height: 7, borderRadius: '50%', background: C.acc, display: 'inline-block', animation: 'pulse 1.2s ease infinite', flexShrink: 0 }} />
+          Refreshing data…
         </div>
       )}
 
