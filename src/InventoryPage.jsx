@@ -474,15 +474,18 @@ export default function InventoryPage({ onTopbarDateControl }) {
         a.rtdInvt += (loc.rtdInvt || 0); a.avgSale += (loc.avgSale || 0); a.orderAllocation += (loc.orderAllocation || 0)
       }
     }
-    const locations = (raw.locations || [])
-      .filter(origLoc => !effectiveLocations?.length || effectiveLocations.includes(origLoc.location))
-      .map(origLoc => {
-        const l = locMap.get(origLoc.location)
-        if (!l || l.totalInvt === 0) return null
-        const locAvgSale = l.avgSale
-        const locDoi = locAvgSale > 0 ? Math.floor(l.totalInvt / locAvgSale) : 0
-        return { ...origLoc, totalInvt: l.totalInvt, rawInvt: l.rawInvt, rawBlockedInvt: l.rawBlockedInvt, rtdInvt: l.rtdInvt, avgSale: locAvgSale, doi: locDoi, orderAllocation: l.orderAllocation }
-      }).filter(Boolean)
+    const mapLoc = origLoc => {
+      const l = locMap.get(origLoc.location)
+      if (!l || l.totalInvt === 0) return null
+      const locAvgSale = l.avgSale
+      const locDoi = locAvgSale > 0 ? Math.floor(l.totalInvt / locAvgSale) : 0
+      return { ...origLoc, totalInvt: l.totalInvt, rawInvt: l.rawInvt, rawBlockedInvt: l.rawBlockedInvt, rtdInvt: l.rtdInvt, avgSale: locAvgSale, doi: locDoi, orderAllocation: l.orderAllocation }
+    }
+    // allLocations — always all 7 warehouses, used for Warehouse Health cards (never filtered)
+    const allLocations = (raw.locations || []).map(mapLoc).filter(Boolean)
+    const locations = effectiveLocations?.length
+      ? allLocations.filter(l => effectiveLocations.includes(l.location))
+      : allLocations
 
     // Recompute pivot table from filtered skus
     const pivotLocations = locations.map(l => l.location)
@@ -525,7 +528,7 @@ export default function InventoryPage({ onTopbarDateControl }) {
       ...raw, skus,
       summary: { ...raw.summary, totalInvt: Math.round(totalInvt), rawInvt: Math.round(rawInvt), rawBlockedInvt: Math.round(rawBlockedInvt), rtdInvt: Math.round(rtdInvt), avgSale: Math.round(avgSale), avgSaleB2C: Math.round(avgSale), totalAvgSale: Math.round(totalAvgSale), doi, stockStatus: dominantStatus, skuCount: skus.length, criticalLowCount: skus.filter(s => s.stockStatus === 'Critical' || s.stockStatus === 'Low').length, deadStockCount: skus.filter(s => s.isDead).length, deadStockUnits: skus.filter(s => s.isDead).reduce((s, r) => s + r.totalInvt, 0) },
       statusBreakdown: Object.entries(statusCounts).map(([status, count]) => ({ status, count })),
-      locations, deadStock, slowMoving, leadTimeRisk,
+      locations, allLocations, deadStock, slowMoving, leadTimeRisk,
       pivot: { locations: pivotLocations, rows: pivotRows },
     }
   })()

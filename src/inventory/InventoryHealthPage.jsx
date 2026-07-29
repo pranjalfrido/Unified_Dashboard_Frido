@@ -685,9 +685,9 @@ export default function InventoryHealthPage({ data, filters, setFilters, sidebar
         </div>
 
         {/* Warehouse grid — always one row; cards shrink to fit rather than wrapping to a 2nd line */}
-        <GlassCard title="Warehouse Health" note={`${data.locations.length} locations`}>
-          <div style={{ display: 'grid', gridTemplateColumns: `repeat(${Math.max(data.locations.length, 1)}, 1fr)`, gap: 8 }}>
-            {data.locations.map(loc => <WarehouseCard key={loc.location} loc={loc} selected={filters.location?.length > 0 && filters.location.includes(loc.location)} />)}
+        <GlassCard title="Warehouse Health" note={`${(data.allLocations || data.locations).length} locations`}>
+          <div style={{ display: 'grid', gridTemplateColumns: `repeat(${Math.max((data.allLocations || data.locations).length, 1)}, 1fr)`, gap: 8 }}>
+            {(data.allLocations || data.locations).map(loc => <WarehouseCard key={loc.location} loc={loc} selected={filters.location?.length > 0 && filters.location.includes(loc.location)} />)}
           </div>
         </GlassCard>
 
