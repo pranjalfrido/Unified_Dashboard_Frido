@@ -408,7 +408,7 @@ function PivotTable({ pivot, search }) {
   }
 
   return (
-    <div>
+    <div style={{ minWidth: 0, overflow: 'hidden' }}>
       <div style={{ maxHeight: TABLE_SCROLL_HEIGHT, overflow: 'auto' }}>
         <table style={{ width: 'max-content', minWidth: '100%', borderCollapse: 'collapse', fontSize: 11.5 }}>
           <thead style={{ position: 'sticky', top: 0, zIndex: 2 }}>
