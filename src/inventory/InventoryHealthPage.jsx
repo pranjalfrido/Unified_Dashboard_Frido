@@ -441,7 +441,7 @@ function PivotTable({ pivot, search }) {
   return (
     <div>
       <div style={{ maxHeight: TABLE_SCROLL_HEIGHT, overflow: 'auto' }}>
-        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11.5 }}>
+        <table style={{ width: 'max-content', minWidth: '100%', borderCollapse: 'collapse', fontSize: 11.5 }}>
           <thead style={{ position: 'sticky', top: 0, zIndex: 2 }}>
             <tr>
               <th rowSpan={2} style={{ textAlign: 'left', fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.05em', color: IC.t3, padding: '6px 10px', borderBottom: `1px solid ${IC.border2}`, borderRight: `1px solid ${IC.border}`, position: 'sticky', left: 0, background: IC.surfaceHi, zIndex: 3 }}>Category / Sub-category / SKU</th>
