@@ -287,7 +287,7 @@ function DrasticMoversTable({ rows, metric, level }) {
 
 export default function SalesAllocationPage({ data, filters, setFilters, sidebarTop }) {
   const [trendGranularity, setTrendGranularity] = useState('daily') // 'daily' | 'weekly' | 'monthly'
-  const [sidebarOpen, setSidebarOpen] = useState(true)
+  const [sidebarOpen, setSidebarOpen] = useState(false)
   const [channelMetric, setChannelMetric] = useState('rev') // 'rev' | 'qty' — Channel-Wise Sales bar list
   const [categoryMetric, setCategoryMetric] = useState('rev') // 'rev' | 'qty' — Category Contribution bar list, independent of channelMetric
   const [drasticLevel, setDrasticLevel] = useState('subCategory') // 'sku' | 'subCategory' | 'category'
