@@ -481,11 +481,9 @@ export default function InventoryPage({ onTopbarDateControl }) {
       const locDoi = locAvgSale > 0 ? Math.floor(l.totalInvt / locAvgSale) : 0
       return { ...origLoc, totalInvt: l.totalInvt, rawInvt: l.rawInvt, rawBlockedInvt: l.rawBlockedInvt, rtdInvt: l.rtdInvt, avgSale: locAvgSale, doi: locDoi, orderAllocation: l.orderAllocation }
     }
-    // allLocations — always all 7 warehouses, used for Warehouse Health cards (never filtered)
-    const allLocations = (raw.locations || []).map(mapLoc).filter(Boolean)
-    const locations = effectiveLocations?.length
-      ? allLocations.filter(l => effectiveLocations.includes(l.location))
-      : allLocations
+    // allLocations — always all 7 warehouses from raw (never filtered), used for Warehouse Health cards
+    const allLocations = (raw.locations || []).filter(l => l.totalInvt > 0 || l.avgSale > 0)
+    const locations = (raw.locations || []).map(mapLoc).filter(Boolean)
 
     // Recompute pivot table from filtered skus
     const pivotLocations = locations.map(l => l.location)
