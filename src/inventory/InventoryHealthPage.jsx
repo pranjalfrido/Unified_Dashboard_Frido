@@ -537,7 +537,7 @@ export default function InventoryHealthPage({ data, filters, setFilters, sidebar
   const hiddenCols = useMemo(() => new Set(colOrder.filter(k => (colWidths[k] ?? DEFAULT_COL_WIDTHS[k]) === 0)), [colOrder, colWidths])
   const [dragCol, setDragCol] = useState(null)
   const [sort, setSort] = useState({ key: 'avgSale', dir: 'desc' })
-  const [sidebarOpen, setSidebarOpen] = useState(true)
+  const [sidebarOpen, setSidebarOpen] = useState(false)
   const [pivotSearch, setPivotSearch] = useState('')
 
   // Facility Type defaults to "Regular" on first load (once options are known).
