@@ -507,7 +507,13 @@ function LogisticsPage({ filters }) {
   const chartTitle = { fontSize: 11, fontWeight: 700, color: C.t2, letterSpacing: '.06em', textTransform: 'uppercase', marginBottom: 14 }
 
   return (
-    <div style={{ display: 'flex', height: '100%', overflow: 'hidden' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
+      {loading && (
+        <div style={{ height: 2, background: C.border, flexShrink: 0 }}>
+          <div className="progress-bar" style={{ height: '100%', background: C.acc }} />
+        </div>
+      )}
+    <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
 
       {/* ── Filter Sidebar ── */}
       <div style={{ width: filterSidebarOpen ? 220 : 0, minWidth: filterSidebarOpen ? 220 : 0, transition: 'width 0.25s ease, min-width 0.25s ease', overflow: 'hidden', borderRight: `1px solid ${C.border}`, background: C.card, display: 'flex', flexDirection: 'column', flexShrink: 0 }}>
@@ -1730,6 +1736,7 @@ function LogisticsPage({ filters }) {
 
 
       </div>
+    </div>
     </div>
   )
 }
