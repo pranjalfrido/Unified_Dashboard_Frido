@@ -841,7 +841,7 @@ export default function InventoryHealthPage({ data, filters, setFilters, sidebar
       </GlassCard>
 
       {/* Slow-moving + Dead stock */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr) minmax(0,1fr)', gap: 14 }}>
         <GlassCard title="Slow-Moving Sub-categories" note="DOI > 45d or not being sold, sub-cat stock > 50 units"
           action={<ExportButton filename="slow_moving.csv" rows={slowMovingExportRows}
             columns={[{ label: 'Category', key: 'category' }, { label: 'Sub-category', key: 'subCategory' }, { label: 'Product ID', key: 'sku' }, { label: 'Total Invt', key: 'totalInvt' }, { label: 'Avg Sale', key: 'avgSale' }, { label: 'DOI', key: 'doi' }]} />}>
