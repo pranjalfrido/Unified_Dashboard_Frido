@@ -36,12 +36,13 @@ export default async function handler(req, res) {
 
       const userId = data.user.id
 
-      await anonClient.from('user_profiles').insert({
+      const { error: profileErr } = await admin.from('user_profiles').insert({
         user_id: userId, name, email, is_admin: !!is_admin, is_active: true,
       })
+      if (profileErr) return res.status(500).json({ error: 'User created but profile insert failed: ' + profileErr.message })
 
       if (!is_admin && tabs?.length > 0) {
-        await anonClient.from('user_permissions').insert(tabs.map(tab => ({ user_id: userId, tab })))
+        await admin.from('user_permissions').insert(tabs.map(tab => ({ user_id: userId, tab })))
       }
 
       return res.status(200).json({ success: true, user_id: userId })
