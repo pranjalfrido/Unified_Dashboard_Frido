@@ -51,7 +51,7 @@ function ForgotPassword({ prefillEmail, onBack }) {
       <button onClick={onBack} style={s.backBtn}>← Back to sign in</button>
       <div style={s.eyebrow}>Reset password</div>
       <h2 style={s.h2}>Request sent!</h2>
-      <p style={s.sub}>Your admin has been notified. They will share your new password shortly via Teams.</p>
+      <p style={s.sub}>Your admin has been notified. They will share your new password shortly.</p>
     </div>
   )
 
