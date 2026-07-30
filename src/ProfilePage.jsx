@@ -7,6 +7,7 @@ const ALL_TABS = [
   { key: 'logistics', label: 'Logistics' },
   { key: 'inventory', label: 'Inventory' },
   { key: 'customer', label: 'Customer' },
+  { key: 'documents', label: 'Documents' },
 ]
 
 const API = import.meta.env.VITE_API_URL || ''
