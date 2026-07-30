@@ -13,15 +13,15 @@ export default async function handler(req, res) {
   const { action, callerToken, ...payload } = req.body
   if (!callerToken) return res.status(401).json({ error: 'Unauthorized' })
 
-  // Verify the caller is an active admin
-  const anonClient = createClient(process.env.SUPABASE_PROJECT_URL, process.env.SUPABASE_ANON_KEY)
-  const { data: { user }, error: userErr } = await anonClient.auth.getUser(callerToken)
+  // Verify the caller is an active admin using the admin client (bypasses RLS)
+  const admin = getAdminClient()
+  const { data: { user }, error: userErr } = await admin.auth.getUser(callerToken)
   if (userErr || !user) return res.status(401).json({ error: 'Invalid session' })
 
-  const { data: callerProfile } = await anonClient.from('user_profiles').select('is_admin, is_active').eq('user_id', user.id).single()
+  const { data: callerProfile } = await admin.from('user_profiles').select('is_admin, is_active').eq('user_id', user.id).single()
   if (!callerProfile?.is_admin || !callerProfile?.is_active) return res.status(403).json({ error: 'Admin access required' })
 
-  const admin = getAdminClient()
+  const anonClient = createClient(process.env.SUPABASE_PROJECT_URL, process.env.SUPABASE_ANON_KEY)
 
   try {
     // ── Create user ──────────────────────────────────────────────────────────
