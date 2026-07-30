@@ -9819,7 +9819,7 @@ export default function App() {
       return
     }
     supabase.auth.getSession().then(({ data }) => setSession(data.session || null))
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, s) => setSession(s || null))
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, s) => { if (!window._suppressAuth) setSession(s || null) })
     return () => subscription.unsubscribe()
   }, [])
 

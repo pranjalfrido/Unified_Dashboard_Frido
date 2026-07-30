@@ -30,10 +30,9 @@ function ForgotPassword({ prefillEmail, onBack }) {
     if (!oldPw) { setErr('Enter your current password.'); return }
     setLoading(true)
     setErr('')
+    window._suppressAuth = true
     const { error } = await supabase.auth.signInWithPassword({ email: email.trim().toLowerCase(), password: oldPw })
-    if (error) { setErr('Current password is incorrect.'); setLoading(false); return }
-    // Sign out immediately — we just used this to verify identity
-    await supabase.auth.signOut()
+    if (error) { window._suppressAuth = false; setErr('Current password is incorrect.'); setLoading(false); return }
     setLoading(false)
     setStep(3)
   }
@@ -44,18 +43,10 @@ function ForgotPassword({ prefillEmail, onBack }) {
     if (newPw !== confirmPw) { setErr('Passwords do not match.'); return }
     setLoading(true)
     setErr('')
-    // Sign in again to get a session, then update password
-    const { error: signInErr } = await supabase.auth.signInWithPassword({ email: email.trim().toLowerCase(), password: oldPw })
-    if (signInErr) {
-      // old password no longer works — shouldn't happen but handle gracefully
-      setErr('Session expired. Please start again.')
-      setLoading(false)
-      setStep(1)
-      return
-    }
     const { error } = await supabase.auth.updateUser({ password: newPw })
-    await supabase.auth.signOut()
     if (error) { setErr(error.message); setLoading(false); return }
+    await supabase.auth.signOut()
+    window._suppressAuth = false
     setDone(true)
     setLoading(false)
   }
