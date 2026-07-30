@@ -158,7 +158,7 @@ export default function LoginPage({ onLogin }) {
 
         {/* Right form panel */}
         <div style={s.formSide}>
-          <div style={{ fontSize: 12.5, color: '#7A8079', marginBottom: 40 }}>Frido Dashboard</div>
+          <div style={{ fontSize: 12.5, color: '#7A8079', marginBottom: 40 }}></div>
 
           {forgotMode ? (
             <ForgotPassword prefillEmail={email} onBack={() => setForgotMode(false)} />
@@ -204,9 +204,6 @@ export default function LoginPage({ onLogin }) {
                 </button>
               </form>
 
-              <p style={{ marginTop: 28, textAlign: 'center', fontSize: 13, color: '#7A8079' }}>
-                Don't have access? <span style={{ color: '#2F6A45', fontWeight: 700 }}>Contact your admin</span>
-              </p>
             </>
           )}
         </div>
