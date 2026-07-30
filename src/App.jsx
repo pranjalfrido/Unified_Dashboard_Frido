@@ -1792,7 +1792,7 @@ function Sidebar({ page, setPage, invTab, setInvTab, allowedTabs, profile }) {
     { id: 'logistics', label: 'Logistics', icon: <SvgIcon d={['M1 3h15v13H1z','M16 8h4l3 3v5h-7V8z','M5.5 19a1.5 1.5 0 100-3 1.5 1.5 0 000 3z','M18.5 19a1.5 1.5 0 100-3 1.5 1.5 0 000 3z']} /> },
     { id: 'inventory', label: 'Inventory', icon: <SvgIcon d={['M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z','M3.27 6.96L12 12.01l8.73-5.05','M12 22.08V12']} /> },
     { id: 'customer', label: 'Customer', icon: <SvgIcon d={['M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2','M9 11a4 4 0 100-8 4 4 0 000 8z','M23 21v-2a4 4 0 00-3-3.87','M16 3.13a4 4 0 010 7.75']} /> },
-    { id: 'cogs', label: 'COGS', icon: <SvgIcon d={['M12 1v22','M17 5H9.5a3.5 3.5 0 100 7h5a3.5 3.5 0 110 7H6']} /> },
+    { id: 'documents', label: 'Documents', icon: <SvgIcon d={['M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z','M14 2v6h6','M16 13H8','M16 17H8','M10 9H8']} /> },
   ]
   const items = allowedTabs ? allItems.filter(i => allowedTabs.includes(i.id)) : allItems
   const dims = [
@@ -2128,7 +2128,7 @@ function DateRangePicker({ filters, setFilters, theme: T = C }) {
 }
 
 function Topnav({ page, alerts, onRefresh, loading, filters, setFilters, rawRows, inventoryDateControl }) {
-  const titles = { overview: 'Overview', sales: 'Sales Analytics', ads: 'Ads Analytics', intelligence: 'Intelligence', logistics: 'Logistics Performance Analytics', inventory: 'Inventory, Sales & Allocation', customer: 'Customer Intelligence', cogs: 'COGS Ledger' }
+  const titles = { overview: 'Overview', sales: 'Sales Analytics', ads: 'Ads Analytics', intelligence: 'Intelligence', logistics: 'Logistics Performance Analytics', inventory: 'Inventory, Sales & Allocation', customer: 'Customer Intelligence', documents: 'Documents', cogs: 'COGS Ledger' }
   const critical = alerts.filter(a => a.type === 'red').length
   return (
     <div className="topnav">
@@ -9851,6 +9851,37 @@ export default function App() {
   return <Dashboard session={session} profile={profile} allowedTabs={effectiveTabs} onSignOut={() => setSession(null)} onProfileUpdated={() => supabase.from('user_profiles').select('*').eq('user_id', session.user.id).single().then(({ data }) => { if (data) setProfile(data) })} />
 }
 
+function DocumentsPage({ setPage }) {
+  const docs = [
+    {
+      id: 'cogs',
+      title: 'COGS Ledger',
+      description: 'Manage cost of goods sold by SKU and month.',
+      icon: '💰',
+    },
+  ]
+  return (
+    <div style={{ padding: '32px 40px', maxWidth: 900 }}>
+      <div style={{ fontSize: 13, fontWeight: 600, color: '#7A8079', letterSpacing: '.06em', textTransform: 'uppercase', marginBottom: 8 }}>Documents</div>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 20, marginTop: 24 }}>
+        {docs.map(doc => (
+          <div key={doc.id} onClick={() => setPage(doc.id)}
+            style={{ background: '#fff', border: '1.5px solid #E8E4DA', borderRadius: 16, padding: '28px 24px', cursor: 'pointer', transition: 'box-shadow .15s, border-color .15s', display: 'flex', flexDirection: 'column', gap: 12 }}
+            onMouseEnter={e => { e.currentTarget.style.boxShadow = '0 4px 20px rgba(0,0,0,0.08)'; e.currentTarget.style.borderColor = '#2F6A45' }}
+            onMouseLeave={e => { e.currentTarget.style.boxShadow = 'none'; e.currentTarget.style.borderColor = '#E8E4DA' }}
+          >
+            <div style={{ fontSize: 32 }}>{doc.icon}</div>
+            <div>
+              <div style={{ fontWeight: 700, fontSize: 15, color: '#1A2B22', marginBottom: 4 }}>{doc.title}</div>
+              <div style={{ fontSize: 12.5, color: '#7A8079', lineHeight: 1.5 }}>{doc.description}</div>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
 function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated }) {
   const [page, setPage] = useState('overview')
   const [invTab, setInvTab] = useState('health')
@@ -9997,6 +10028,11 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
           {page === 'customer' && data && (!allowedTabs || allowedTabs.includes('customer')) && (
             <div className="page-scroll">
               <CustomerPage filters={filters} />
+            </div>
+          )}
+          {page === 'documents' && (
+            <div className="page-scroll">
+              <DocumentsPage setPage={setPage} />
             </div>
           )}
           {page === 'cogs' && (
