@@ -2138,7 +2138,7 @@ function Topnav({ page, alerts, onRefresh, loading, filters, setFilters, rawRows
       </div>
       <div className="tnav-sep" />
       <span className="tnav-title">{titles[page]}</span>
-      {page !== 'inventory' && (
+      {page !== 'inventory' && page !== 'cogs' && page !== 'documents' && page !== 'profile' && (
         <div className="tnav-right">
           <DateRangePicker filters={filters} setFilters={setFilters} />
           <button onClick={onRefresh} className="tnav-btn">
