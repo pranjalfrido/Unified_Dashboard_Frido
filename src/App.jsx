@@ -1855,13 +1855,17 @@ function Sidebar({ page, setPage, invTab, setInvTab, allowedTabs, profile }) {
           </div>
         )
       })}
-      <div className="sb-div" />
-      {dims.map(d => (
-        <div key={d.label} className="sb-item dim">
-          <span className="sb-icon">{d.icon}</span>
-          <span className="sb-label">{d.label}</span>
-        </div>
-      ))}
+      {!allowedTabs && (
+        <>
+          <div className="sb-div" />
+          {dims.map(d => (
+            <div key={d.label} className="sb-item dim">
+              <span className="sb-icon">{d.icon}</span>
+              <span className="sb-label">{d.label}</span>
+            </div>
+          ))}
+        </>
+      )}
       <div style={{ marginTop: 'auto', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
         <div className="sb-div" />
         <div onClick={() => setPage('profile')} className={`sb-item${page === 'profile' ? ' active' : ''}`}
