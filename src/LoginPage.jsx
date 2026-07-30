@@ -1,52 +1,47 @@
 import { useState } from 'react'
 import { supabase } from './supabase.js'
 
-// ── Forgot Password (in-app, no email) ───────────────────────────────────────
+const TEAMS_WEBHOOK = 'https://default7e5ccb3af1894e3a95b25cfcc0e30f.90.environment.api.powerplatform.com:443/powerautomate/automations/direct/cu/31/workflows/0715b36892204da98ca1b3cf28e07959/triggers/manual/paths/invoke?api-version=1&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=hiUQCNVPEUhpc3ngXgLLnSSHj0_iunK4D9mTEgN3ee8'
+
+// ── Forgot Password ───────────────────────────────────────────────────────────
 function ForgotPassword({ prefillEmail, onBack }) {
-  const [step, setStep] = useState(1) // 1=email, 2=verify old pw, 3=set new pw
   const [email, setEmail] = useState(prefillEmail || '')
-  const [oldPw, setOldPw] = useState('')
-  const [newPw, setNewPw] = useState('')
-  const [confirmPw, setConfirmPw] = useState('')
-  const [showOld, setShowOld] = useState(false)
-  const [showNew, setShowNew] = useState(false)
   const [loading, setLoading] = useState(false)
   const [err, setErr] = useState('')
   const [done, setDone] = useState(false)
 
-  async function handleEmailSubmit(e) {
+  async function handleSubmit(e) {
     e.preventDefault()
     if (!email.trim()) { setErr('Enter your email.'); return }
-    // Check email exists in user_profiles
-    const { data } = await supabase.from('user_profiles').select('user_id, is_active').eq('email', email.trim().toLowerCase()).single()
-    if (!data) { setErr('No account found with this email.'); return }
-    if (!data.is_active) { setErr('Your account has been revoked. Contact your admin.'); return }
-    setErr('')
-    setStep(2)
-  }
-
-  async function handleOldPwSubmit(e) {
-    e.preventDefault()
-    if (!oldPw) { setErr('Enter your current password.'); return }
     setLoading(true)
     setErr('')
-    window._suppressAuth = true
-    const { error } = await supabase.auth.signInWithPassword({ email: email.trim().toLowerCase(), password: oldPw })
-    if (error) { window._suppressAuth = false; setErr('Current password is incorrect.'); setLoading(false); return }
-    setLoading(false)
-    setStep(3)
-  }
+    const { data } = await supabase.from('user_profiles').select('name, is_active').eq('email', email.trim().toLowerCase()).single()
+    if (!data) { setErr('No account found with this email.'); setLoading(false); return }
+    if (!data.is_active) { setErr('Your account has been revoked. Contact your admin.'); setLoading(false); return }
 
-  async function handleNewPwSubmit(e) {
-    e.preventDefault()
-    if (newPw.length < 8) { setErr('New password must be at least 8 characters.'); return }
-    if (newPw !== confirmPw) { setErr('Passwords do not match.'); return }
-    setLoading(true)
-    setErr('')
-    const { error } = await supabase.auth.updateUser({ password: newPw })
-    if (error) { setErr(error.message); setLoading(false); return }
-    await supabase.auth.signOut()
-    window._suppressAuth = false
+    // Notify admin via Teams
+    try {
+      await fetch(TEAMS_WEBHOOK, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          type: 'message',
+          attachments: [{
+            contentType: 'application/vnd.microsoft.card.adaptive',
+            content: {
+              type: 'AdaptiveCard',
+              version: '1.2',
+              body: [
+                { type: 'TextBlock', text: '🔐 Password Reset Request', weight: 'Bolder', size: 'Medium' },
+                { type: 'TextBlock', text: `**${data.name}** (${email.trim().toLowerCase()}) has requested a password reset on the Frido Dashboard.`, wrap: true },
+                { type: 'TextBlock', text: 'Please reset their password from Profile → Team Members → Reset pw and share it with them.', wrap: true, color: 'Accent' },
+              ]
+            }
+          }]
+        })
+      })
+    } catch (_) {}
+
     setDone(true)
     setLoading(false)
   }
@@ -54,7 +49,9 @@ function ForgotPassword({ prefillEmail, onBack }) {
   if (done) return (
     <div>
       <button onClick={onBack} style={s.backBtn}>← Back to sign in</button>
-      <div style={s.successBox}>✓ Password updated successfully! You can now sign in with your new password.</div>
+      <div style={s.eyebrow}>Reset password</div>
+      <h2 style={s.h2}>Request sent!</h2>
+      <p style={s.sub}>Your admin has been notified. They will share your new password shortly via Teams.</p>
     </div>
   )
 
@@ -62,52 +59,16 @@ function ForgotPassword({ prefillEmail, onBack }) {
     <div>
       <button onClick={onBack} style={s.backBtn}>← Back to sign in</button>
       <div style={s.eyebrow}>Reset password</div>
-      <h2 style={s.h2}>{step === 1 ? 'Forgot your password?' : step === 2 ? 'Verify your identity' : 'Set new password'}</h2>
-      <p style={s.sub}>
-        {step === 1 ? 'Enter your work email to continue.' : step === 2 ? 'Enter your current password to verify it\'s you.' : 'Choose a new password for your account.'}
-      </p>
-
+      <h2 style={s.h2}>Forgot your password?</h2>
+      <p style={s.sub}>Enter your work email and we'll notify your admin.</p>
       {err && <div style={s.errorBox}>{err}</div>}
-
-      {step === 1 && (
-        <form onSubmit={handleEmailSubmit} style={s.form}>
-          <div style={s.field}>
-            <label style={s.label}>Work email</label>
-            <input style={s.input} type="email" placeholder="you@myfrido.com" value={email} onChange={e => { setEmail(e.target.value); setErr('') }} autoFocus />
-          </div>
-          <button type="submit" style={s.btn}>Continue →</button>
-        </form>
-      )}
-
-      {step === 2 && (
-        <form onSubmit={handleOldPwSubmit} style={s.form}>
-          <div style={s.field}>
-            <label style={s.label}>Current password</label>
-            <div style={{ position: 'relative' }}>
-              <input style={{ ...s.input, paddingRight: 60 }} type={showOld ? 'text' : 'password'} placeholder="Enter current password" value={oldPw} onChange={e => { setOldPw(e.target.value); setErr('') }} autoFocus />
-              <button type="button" style={s.toggle} onClick={() => setShowOld(v => !v)}>{showOld ? 'HIDE' : 'SHOW'}</button>
-            </div>
-          </div>
-          <button type="submit" style={{ ...s.btn, opacity: loading ? 0.7 : 1 }} disabled={loading}>{loading ? 'Verifying…' : 'Verify →'}</button>
-        </form>
-      )}
-
-      {step === 3 && (
-        <form onSubmit={handleNewPwSubmit} style={s.form}>
-          <div style={s.field}>
-            <label style={s.label}>New password</label>
-            <div style={{ position: 'relative' }}>
-              <input style={{ ...s.input, paddingRight: 60 }} type={showNew ? 'text' : 'password'} placeholder="Min 8 characters" value={newPw} onChange={e => { setNewPw(e.target.value); setErr('') }} autoFocus />
-              <button type="button" style={s.toggle} onClick={() => setShowNew(v => !v)}>{showNew ? 'HIDE' : 'SHOW'}</button>
-            </div>
-          </div>
-          <div style={s.field}>
-            <label style={s.label}>Confirm new password</label>
-            <input style={s.input} type={showNew ? 'text' : 'password'} placeholder="Repeat new password" value={confirmPw} onChange={e => { setConfirmPw(e.target.value); setErr('') }} />
-          </div>
-          <button type="submit" style={{ ...s.btn, opacity: loading ? 0.7 : 1 }} disabled={loading}>{loading ? 'Updating…' : 'Update password'}</button>
-        </form>
-      )}
+      <form onSubmit={handleSubmit} style={s.form}>
+        <div style={s.field}>
+          <label style={s.label}>Work email</label>
+          <input style={s.input} type="email" placeholder="you@myfrido.com" value={email} onChange={e => { setEmail(e.target.value); setErr('') }} autoFocus />
+        </div>
+        <button type="submit" style={{ ...s.btn, opacity: loading ? 0.7 : 1 }} disabled={loading}>{loading ? 'Sending…' : 'Request password reset'}</button>
+      </form>
     </div>
   )
 }
