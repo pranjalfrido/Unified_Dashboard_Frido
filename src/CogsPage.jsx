@@ -354,10 +354,6 @@ export default function CogsPage() {
     <div style={S.page}>
       <style>{globalCSS}</style>
       <header style={S.header}>
-        <div>
-          <div style={S.eyebrow}>Product-wise · monthly</div>
-          <h1 style={S.h1}>COGS Ledger</h1>
-        </div>
         <div style={S.actions}>
           {dbError && <span style={{ fontSize: 12, color: "#C4483A", maxWidth: 240 }}>⚠ {dbError}</span>}
           <div style={S.searchWrap}>

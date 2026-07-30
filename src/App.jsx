@@ -1870,7 +1870,7 @@ function Sidebar({ page, setPage, invTab, setInvTab, allowedTabs, profile }) {
             ? <img src={profile.avatar_url} alt="" style={{ width: 22, height: 22, borderRadius: '50%', objectFit: 'cover' }} />
             : <SvgIcon d={['M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2', 'M12 11a4 4 0 100-8 4 4 0 000 8z']} />
           }
-          <span className="sb-label">Profile</span>
+          <span className="sb-label">{profile?.name?.split(' ')[0] || 'Profile'}</span>
         </div>
       </div>
     </nav>
@@ -2128,7 +2128,7 @@ function DateRangePicker({ filters, setFilters, theme: T = C }) {
 }
 
 function Topnav({ page, alerts, onRefresh, loading, filters, setFilters, rawRows, inventoryDateControl }) {
-  const titles = { overview: 'Overview', sales: 'Sales Analytics', ads: 'Ads Analytics', intelligence: 'Intelligence', logistics: 'Logistics Performance Analytics', inventory: 'Inventory, Sales & Allocation', customer: 'Customer Intelligence' }
+  const titles = { overview: 'Overview', sales: 'Sales Analytics', ads: 'Ads Analytics', intelligence: 'Intelligence', logistics: 'Logistics Performance Analytics', inventory: 'Inventory, Sales & Allocation', customer: 'Customer Intelligence', cogs: 'COGS Ledger' }
   const critical = alerts.filter(a => a.type === 'red').length
   return (
     <div className="topnav">
