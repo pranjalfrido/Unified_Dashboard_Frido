@@ -9848,10 +9848,10 @@ export default function App() {
   const isAdmin = profile.is_admin === true
   const effectiveTabs = isAdmin ? null : allowedTabs // null means all tabs visible
 
-  return <Dashboard session={session} profile={profile} allowedTabs={effectiveTabs} onSignOut={() => setSession(null)} />
+  return <Dashboard session={session} profile={profile} allowedTabs={effectiveTabs} onSignOut={() => setSession(null)} onProfileUpdated={() => supabase.from('user_profiles').select('*').eq('user_id', session.user.id).single().then(({ data }) => { if (data) setProfile(data) })} />
 }
 
-function Dashboard({ session, profile, allowedTabs, onSignOut }) {
+function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated }) {
   const [page, setPage] = useState('overview')
   const [invTab, setInvTab] = useState('health')
   const def = getDefaultDates()
@@ -10006,9 +10006,7 @@ function Dashboard({ session, profile, allowedTabs, onSignOut }) {
           )}
           {page === 'profile' && (
             <div className="page-scroll">
-              <ProfilePage session={session} profile={profile} onSignOut={onSignOut} onProfileUpdated={() => {
-                supabase.from('user_profiles').select('*').eq('user_id', session.user.id).single().then(({ data }) => setProfile(data))
-              }} />
+              <ProfilePage session={session} profile={profile} onSignOut={onSignOut} onProfileUpdated={onProfileUpdated} />
             </div>
           )}
         </div>
