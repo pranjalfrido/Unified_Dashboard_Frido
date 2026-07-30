@@ -9887,7 +9887,7 @@ function DocumentsPage({ setPage }) {
 }
 
 function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated }) {
-  const [page, setPage] = useState('overview')
+  const [page, setPage] = useState(allowedTabs?.length ? allowedTabs[0] : 'overview')
   const [invTab, setInvTab] = useState('health')
   const def = getDefaultDates()
   const [filters, setFilters] = useState({ start: def.start, end: def.end, category: [], subCategory: [], sku: [], subChannel: '', voucher: '', region: [], tier: [], state: [], city: '', channelGroup: [] })
