@@ -3,6 +3,11 @@ import { C, fmt, fmtN, fmtBig, pct, processData, detectAlerts, exportCSV, getDef
 import { KPICard, AlertCard, HBar, DataTable, Card, Badge, RevTrendChart, AreaTrendChart, MultiLineChart, ChartTooltip, BarChart, Bar, LineChart, Line, AreaChart, Area, ComposedChart, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell, Treemap } from './components.jsx'
 import InventoryPage from './InventoryPage.jsx'
 import { IC } from './inventory/theme.jsx'
+import LoginPage from './LoginPage.jsx'
+import ResetPasswordPage from './ResetPasswordPage.jsx'
+import ProfilePage from './ProfilePage.jsx'
+import CogsPage from './CogsPage.jsx'
+import { supabase } from './supabase.js'
 
 // Maps the Inventory dashboard's dark IC palette onto the {t1,t2,t3,acc,acl,border,border2,
 // bg,card} shape DateRangePicker expects (that shape mirrors the light C theme it was built
@@ -1777,17 +1782,19 @@ const SvgIcon = ({ d, size = 18, stroke = 'currentColor', fill = 'none', strokeW
   </svg>
 )
 
-function Sidebar({ page, setPage, invTab, setInvTab }) {
+function Sidebar({ page, setPage, invTab, setInvTab, allowedTabs, profile }) {
   const [invHover, setInvHover] = useState(false)
   const hoverTimerRef = useRef(null)
-  const items = [
+  const allItems = [
     { id: 'overview', label: 'Overview', icon: <SvgIcon d={['M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z','M9 22V12h6v10']} /> },
     { id: 'sales', label: 'Sales', icon: <SvgIcon d={['M18 20V10','M12 20V4','M6 20v-6']} /> },
     { id: 'ads', label: 'Ads', icon: <SvgIcon d={['M15 3h4a2 2 0 012 2v14a2 2 0 01-2 2h-4','M10 17l5-5-5-5','M13.8 12H3']} /> },
     { id: 'logistics', label: 'Logistics', icon: <SvgIcon d={['M1 3h15v13H1z','M16 8h4l3 3v5h-7V8z','M5.5 19a1.5 1.5 0 100-3 1.5 1.5 0 000 3z','M18.5 19a1.5 1.5 0 100-3 1.5 1.5 0 000 3z']} /> },
     { id: 'inventory', label: 'Inventory', icon: <SvgIcon d={['M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z','M3.27 6.96L12 12.01l8.73-5.05','M12 22.08V12']} /> },
     { id: 'customer', label: 'Customer', icon: <SvgIcon d={['M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2','M9 11a4 4 0 100-8 4 4 0 000 8z','M23 21v-2a4 4 0 00-3-3.87','M16 3.13a4 4 0 010 7.75']} /> },
+    { id: 'cogs', label: 'COGS', icon: <SvgIcon d={['M12 1v22','M17 5H9.5a3.5 3.5 0 100 7h5a3.5 3.5 0 110 7H6']} /> },
   ]
+  const items = allowedTabs ? allItems.filter(i => allowedTabs.includes(i.id)) : allItems
   const dims = [
     { label: 'P&L', icon: <SvgIcon d={['M12 1v22','M17 5H9.5a3.5 3.5 0 100 7h5a3.5 3.5 0 110 7H6']} /> },
     { label: 'Courier', icon: <SvgIcon d={['M1 3h15v13H1z','M16 8h4l3 3v5h-7V8z','M5.5 19a1.5 1.5 0 100-3 1.5 1.5 0 000 3z','M18.5 19a1.5 1.5 0 100-3 1.5 1.5 0 000 3z']} /> },
@@ -1857,15 +1864,14 @@ function Sidebar({ page, setPage, invTab, setInvTab }) {
       ))}
       <div style={{ marginTop: 'auto', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
         <div className="sb-div" />
-        {[
-          { label: 'Settings', icon: <SvgIcon d={['M12 15a3 3 0 100-6 3 3 0 000 6z', 'M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z']} /> },
-          { label: 'Profile', icon: <SvgIcon d={['M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2', 'M12 11a4 4 0 100-8 4 4 0 000 8z']} /> },
-        ].map(b => (
-          <div key={b.label} className="sb-item">
-            <span className="sb-icon">{b.icon}</span>
-            <span className="sb-label">{b.label}</span>
-          </div>
-        ))}
+        <div onClick={() => setPage('profile')} className={`sb-item${page === 'profile' ? ' active' : ''}`}
+          style={{ position: 'relative' }}>
+          {profile?.avatar_url
+            ? <img src={profile.avatar_url} alt="" style={{ width: 22, height: 22, borderRadius: '50%', objectFit: 'cover' }} />
+            : <SvgIcon d={['M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2', 'M12 11a4 4 0 100-8 4 4 0 000 8z']} />
+          }
+          <span className="sb-label">Profile</span>
+        </div>
       </div>
     </nav>
   )
@@ -9803,6 +9809,49 @@ function CustomerPage({ filters }) {
 }
 
 export default function App() {
+  const [session, setSession] = useState(undefined) // undefined = loading, null = no session
+  const [profile, setProfile] = useState(null)
+  const [allowedTabs, setAllowedTabs] = useState(null)
+
+  useEffect(() => {
+    if (window.location.hash.includes('type=recovery')) {
+      setSession('recovery')
+      return
+    }
+    supabase.auth.getSession().then(({ data }) => setSession(data.session || null))
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, s) => setSession(s || null))
+    return () => subscription.unsubscribe()
+  }, [])
+
+  useEffect(() => {
+    if (!session || session === 'recovery') return
+    supabase.from('user_profiles').select('*').eq('user_id', session.user.id).single()
+      .then(({ data, error }) => {
+        if (error) console.error('profile fetch error:', error)
+        setProfile(data || { is_admin: false })
+      })
+    supabase.from('user_permissions').select('tab').eq('user_id', session.user.id)
+      .then(({ data }) => setAllowedTabs(data ? data.map(r => r.tab) : []))
+  }, [session])
+
+  if (session === undefined) return (
+    <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#F5F1E8', fontFamily: 'sans-serif', color: '#7A8079' }}>Loading…</div>
+  )
+  if (session === 'recovery') return <ResetPasswordPage />
+  if (!session) return <LoginPage onLogin={s => setSession(s)} />
+
+  // Wait for profile to load before rendering Dashboard so isAdmin check is accurate
+  if (!profile) return (
+    <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#F5F1E8', fontFamily: 'sans-serif', color: '#7A8079' }}>Loading…</div>
+  )
+
+  const isAdmin = profile.is_admin === true
+  const effectiveTabs = isAdmin ? null : allowedTabs // null means all tabs visible
+
+  return <Dashboard session={session} profile={profile} allowedTabs={effectiveTabs} onSignOut={() => setSession(null)} />
+}
+
+function Dashboard({ session, profile, allowedTabs, onSignOut }) {
   const [page, setPage] = useState('overview')
   const [invTab, setInvTab] = useState('health')
   const def = getDefaultDates()
@@ -9891,7 +9940,7 @@ export default function App() {
 
   return (
     <div className="app-shell">
-      <Sidebar page={page} setPage={setPage} invTab={invTab} setInvTab={setInvTab} />
+      <Sidebar page={page} setPage={setPage} invTab={invTab} setInvTab={setInvTab} allowedTabs={allowedTabs} profile={profile} />
       <div className="app-main">
         <Topnav page={page} alerts={alerts} onRefresh={() => { const { start, end, category, subCategory, sku, subChannel, voucher, region, tier, state, city, country } = filters; const e = {}; if (category?.length) e.category = category.join(','); if (subCategory?.length) e.subCategory = subCategory.join(','); if (sku?.length) e.sku = sku.join(','); if (subChannel) e.subChannel = subChannel; if (voucher) e.voucher = voucher; if (region?.length) e.region = region.join(','); if (tier?.length) e.tier = tier.join(','); if (state?.length) e.state = state.join(','); if (city) e.city = city; if (country) e.country = country; fetchData(start, end, e) }} loading={loading} filters={filters} setFilters={setFilters} rawRows={rawRows} inventoryDateControl={inventoryDateControl} />
         {(loading || inventoryDateControl?.loading) && (
@@ -9919,13 +9968,13 @@ export default function App() {
             </div>
           )}
           {loading && !data && page !== 'logistics' && page !== 'inventory' && <Skeleton />}
-          {page === 'overview' && data && (
+          {page === 'overview' && data && (!allowedTabs || allowedTabs.includes('overview')) && (
             <div className="page-scroll">
               <OverviewPage data={data} alerts={alerts} logisticsData={logisticsData} />
             </div>
           )}
-          {page === 'sales' && data && <SalesPage data={data} filters={filters} setFilters={setFilters} activeTab={activeTab} setActiveTab={setActiveTab} fetchData={fetchData} />}
-          {page === 'ads' && data && (
+          {page === 'sales' && data && (!allowedTabs || allowedTabs.includes('sales')) && <SalesPage data={data} filters={filters} setFilters={setFilters} activeTab={activeTab} setActiveTab={setActiveTab} fetchData={fetchData} />}
+          {page === 'ads' && data && (!allowedTabs || allowedTabs.includes('ads')) && (
             <div className="page-scroll">
               <AdsTab data={data} />
             </div>
@@ -9935,19 +9984,31 @@ export default function App() {
               <IntelPage data={data} />
             </div>
           )}
-          {page === 'logistics' && (
+          {page === 'logistics' && (!allowedTabs || allowedTabs.includes('logistics')) && (
             <div style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
               <LogisticsPage filters={filters} />
             </div>
           )}
-          {page === 'inventory' && (
+          {page === 'inventory' && (!allowedTabs || allowedTabs.includes('inventory')) && (
             <div className="page-scroll" style={{ padding: 0 }}>
               <InventoryPage onTopbarDateControl={setInventoryDateControl} tab={invTab} setTab={setInvTab} />
             </div>
           )}
-          {page === 'customer' && data && (
+          {page === 'customer' && data && (!allowedTabs || allowedTabs.includes('customer')) && (
             <div className="page-scroll">
               <CustomerPage filters={filters} />
+            </div>
+          )}
+          {page === 'cogs' && (
+            <div className="page-scroll">
+              <CogsPage />
+            </div>
+          )}
+          {page === 'profile' && (
+            <div className="page-scroll">
+              <ProfilePage session={session} profile={profile} onSignOut={onSignOut} onProfileUpdated={() => {
+                supabase.from('user_profiles').select('*').eq('user_id', session.user.id).single().then(({ data }) => setProfile(data))
+              }} />
             </div>
           )}
         </div>
