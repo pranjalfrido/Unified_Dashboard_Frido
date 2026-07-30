@@ -15,11 +15,12 @@ export default async function handler(req, res) {
 
   // Verify the caller is an active admin using the admin client (bypasses RLS)
   const admin = getAdminClient()
-  const { data: { user }, error: userErr } = await admin.auth.getUser(callerToken)
-  if (userErr || !user) return res.status(401).json({ error: 'Invalid session' })
+  const { data: userData, error: userErr } = await admin.auth.getUser(callerToken)
+  const user = userData?.user
+  if (userErr || !user) return res.status(401).json({ error: 'Invalid session', detail: userErr?.message })
 
-  const { data: callerProfile } = await admin.from('user_profiles').select('is_admin, is_active').eq('user_id', user.id).single()
-  if (!callerProfile?.is_admin || !callerProfile?.is_active) return res.status(403).json({ error: 'Admin access required' })
+  const { data: callerProfile, error: profileErr } = await admin.from('user_profiles').select('is_admin, is_active').eq('user_id', user.id).single()
+  if (profileErr || !callerProfile?.is_admin || !callerProfile?.is_active) return res.status(403).json({ error: 'Admin access required', detail: profileErr?.message, profile: callerProfile })
 
   const anonClient = createClient(process.env.SUPABASE_PROJECT_URL, process.env.SUPABASE_ANON_KEY)
 
