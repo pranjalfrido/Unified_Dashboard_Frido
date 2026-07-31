@@ -145,7 +145,7 @@ export default async function handler(req, res) {
     byCIR: subChannel === 'International' ? `SELECT 0 AS cir_rev, 0 AS cir_exc_rev, 0 AS cir_orders` : `WITH q AS (${base}) SELECT SUM(SellingPrice_Inc_GST) AS cir_rev, SUM(SellingPrice_Exc_GST) AS cir_exc_rev, COUNT(DISTINCT OrderId) AS cir_orders FROM q WHERE Order_Status = 'CIR'`,
     byReturn: subChannel === 'International' ? `SELECT 0 AS return_rev, 0 AS return_exc_rev, 0 AS return_orders` : `WITH q AS (${base}) SELECT SUM(SellingPrice_Inc_GST) AS return_rev, SUM(SellingPrice_Exc_GST) AS return_exc_rev, COUNT(DISTINCT OrderId) AS return_orders FROM q WHERE Order_Status = 'Return'`,
     byExchange: subChannel === 'International' ? `SELECT 0 AS exchange_orders, 0 AS exchange_rev` : `WITH q AS (${base}) SELECT COUNT(DISTINCT OrderId) AS exchange_orders, SUM(SellingPrice_Inc_GST) AS exchange_rev FROM q WHERE Order_Status = 'Exchange'`,
-    shReturnReasons: `SELECT COALESCE(NULLIF(TRIM(Customer_Return_Reason),''), 'Unknown') AS reason, COALESCE(NULLIF(TRIM(Customer_Sub_Reason),''), 'Unknown') AS sub_reason, COALESCE(NULLIF(TRIM(Category),''), 'Unknown') AS category, COALESCE(NULLIF(TRIM(SubCategory),''), 'Unknown') AS sub_category, COUNT(DISTINCT OrderId) AS orders, SUM(SellingPrice_Inc_GST) AS rev FROM \`frido-429506.production.fact_all_platform_sales_report\` WHERE OrderDate BETWEEN '${start}' AND '${end}' AND Channel = 'Shopify' AND SubChannel != 'Retail Store' AND Order_Status IN ('RTO','Return','CIR') AND Customer_Return_Reason IS NOT NULL AND TRIM(Customer_Return_Reason) != ''${subChannel === 'ShopifyIndia' ? ` AND SubChannel != 'Shopify International'` : ''} GROUP BY 1,2,3,4 ORDER BY orders DESC`,
+    shReturnReasons: `SELECT COALESCE(NULLIF(TRIM(Customer_Return_Reason),''), 'Unknown') AS reason, COALESCE(NULLIF(TRIM(Customer_Sub_Reason),''), 'Unknown') AS sub_reason, COALESCE(NULLIF(TRIM(Category),''), 'Others') AS category, COALESCE(NULLIF(TRIM(SubCategory),''), 'Others') AS sub_category, COUNT(DISTINCT OrderId) AS orders, SUM(SellingPrice_Inc_GST) AS rev FROM \`frido-429506.production.fact_all_platform_sales_report\` WHERE OrderDate BETWEEN '${start}' AND '${end}' AND Channel = 'Shopify' AND SubChannel != 'Retail Store' AND Order_Status IN ('RTO','Return','CIR') AND Customer_Return_Reason IS NOT NULL AND TRIM(Customer_Return_Reason) != ''${subChannel === 'ShopifyIndia' ? ` AND SubChannel != 'Shopify International'` : ''} GROUP BY 1,2,3,4 ORDER BY orders DESC`,
     byRTO: subChannel === 'International' ? `SELECT 0 AS rto_rev, 0 AS rto_exc_rev, 0 AS rto_orders` : `WITH q AS (${base}) SELECT SUM(SellingPrice_Inc_GST) AS rto_rev, SUM(SellingPrice_Exc_GST) AS rto_exc_rev, COUNT(DISTINCT OrderId) AS rto_orders FROM q WHERE Order_Status = 'RTO'`,
     prevTotals: `WITH q AS (${prevBase}) SELECT SUM(SellingPrice_Inc_GST) AS total_rev, SUM(SellingPrice_Exc_GST) AS total_exc_rev, COUNT(DISTINCT OrderId) AS n_orders, SUM(ItemQty) AS total_qty, COUNT(DISTINCT CASE WHEN Order_Status IN ('RTO','Return') THEN OrderId END) AS rto_orders, COUNT(DISTINCT CASE WHEN Order_Status = 'CIR' THEN OrderId END) AS cir_orders FROM q`,
     momTotals: `WITH q AS (${momBase}) SELECT SUM(SellingPrice_Inc_GST) AS total_rev, SUM(SellingPrice_Exc_GST) AS total_exc_rev, COUNT(DISTINCT OrderId) AS n_orders FROM q`,
@@ -362,12 +362,30 @@ export default async function handler(req, res) {
     adsCampaigns: `SELECT platform, ad_type, campaign_name, ROUND(SUM(spend),0) AS spend, ROUND(SUM(revenue),0) AS revenue, ROUND(SUM(impressions),0) AS impressions, ROUND(SUM(clicks),0) AS clicks, ROUND(SUM(orders),0) AS orders, ROUND(SAFE_DIVIDE(SUM(clicks),SUM(impressions))*100,2) AS ctr, ROUND(SAFE_DIVIDE(SUM(spend),SUM(clicks)),2) AS cpc, ROUND(SAFE_DIVIDE(SUM(revenue),SUM(spend)),2) AS roas FROM \`frido-429506.production.fact_all_platform_ads_report\` WHERE report_date BETWEEN '${start}' AND '${end}' GROUP BY platform, ad_type, campaign_name ORDER BY spend DESC LIMIT 100`,
     adsByCategory: `SELECT platform, category, ROUND(SUM(spend),0) AS spend, ROUND(SUM(revenue),0) AS revenue, ROUND(SUM(impressions),0) AS impressions, ROUND(SUM(clicks),0) AS clicks, ROUND(SUM(orders),0) AS orders, ROUND(SAFE_DIVIDE(SUM(revenue),SUM(spend)),2) AS roas FROM \`frido-429506.production.fact_all_platform_ads_report\` WHERE report_date BETWEEN '${start}' AND '${end}' AND category IS NOT NULL AND TRIM(category) != '' GROUP BY platform, category ORDER BY spend DESC`,
     adsBySku: `SELECT platform, category, product_name, ROUND(SUM(spend),0) AS spend, ROUND(SUM(revenue),0) AS revenue, ROUND(SUM(impressions),0) AS impressions, ROUND(SUM(clicks),0) AS clicks, ROUND(SUM(orders),0) AS orders, ROUND(SAFE_DIVIDE(SUM(revenue),SUM(spend)),2) AS roas FROM \`frido-429506.production.fact_all_platform_ads_report\` WHERE report_date BETWEEN '${start}' AND '${end}' AND product_name IS NOT NULL AND TRIM(product_name) != '' GROUP BY platform, category, product_name ORDER BY spend DESC LIMIT 200`,
-    adsCategoryBreakdown: `WITH im_sub AS (SELECT LOWER(TRIM(Sub_category)) AS sub_key, ANY_VALUE(Category_Name) AS Category_Name FROM \`frido-429506.sharepoint_to_gcp.Frido_Item_Master__frido_item_sku_master\` WHERE Sub_category IS NOT NULL GROUP BY sub_key), im_cat AS (SELECT LOWER(TRIM(Category_Name)) AS cat_key, ANY_VALUE(Category_Name) AS Category_Name FROM \`frido-429506.sharepoint_to_gcp.Frido_Item_Master__frido_item_sku_master\` WHERE Category_Name IS NOT NULL GROUP BY cat_key), camp_map AS (SELECT LOWER(TRIM(campaign_name)) AS camp_key, ANY_VALUE(product_name) AS product_name, ANY_VALUE(category) AS category, ANY_VALUE(target_type) AS target_type FROM \`frido-429506.ads_campaign_mapping.master_campaign_mapping_sheet_all_platforms\` WHERE campaign_name IS NOT NULL GROUP BY camp_key), mapped AS (SELECT a.platform, COALESCE(m.target_type, a.target_type) AS target_type, COALESCE(m.product_name, a.product_name) AS product_name, COALESCE(m.category, CASE WHEN a.target_type = 'product' THEN COALESCE(i_prod.Category_Name, 'Unknown') WHEN a.target_type = 'category' THEN COALESCE(i_cat.Category_Name, a.product_name) ELSE 'Unknown' END) AS category, a.spend, a.orders, a.revenue, a.clicks, a.impressions FROM \`frido-429506.production.fact_all_platform_ads_report\` a LEFT JOIN camp_map m ON LOWER(TRIM(a.campaign_name)) = m.camp_key AND (a.product_name IS NULL OR TRIM(a.product_name) = '') LEFT JOIN im_sub i_prod ON a.target_type = 'product' AND LOWER(TRIM(a.product_name)) = i_prod.sub_key LEFT JOIN im_cat i_cat ON a.target_type = 'category' AND LOWER(TRIM(a.product_name)) = i_cat.cat_key WHERE a.report_date BETWEEN '${start}' AND '${end}' AND a.target_type != 'all' AND (a.product_name IS NOT NULL AND TRIM(a.product_name) != '' OR m.product_name IS NOT NULL)) SELECT platform, target_type, product_name, category, ROUND(SUM(spend),0) AS spend, ROUND(SUM(orders),0) AS orders, ROUND(SUM(revenue),0) AS revenue, ROUND(SUM(clicks),0) AS clicks, ROUND(SUM(impressions),0) AS impressions, ROUND(SAFE_DIVIDE(SUM(clicks),SUM(impressions))*100,2) AS ctr, ROUND(SAFE_DIVIDE(SUM(spend),SUM(clicks)),2) AS cpc, ROUND(SAFE_DIVIDE(SUM(revenue),SUM(spend)),2) AS roas FROM mapped GROUP BY platform, target_type, product_name, category ORDER BY platform, spend DESC LIMIT 500`,
+    adsCategoryBreakdown: `WITH im AS (SELECT DISTINCT LOWER(TRIM(Category_Name)) AS cat_key, Category_Name, LOWER(TRIM(Sub_category)) AS subcat_key, Sub_category FROM \`frido-429506.sharepoint_to_gcp.Frido_Item_Master__frido_item_sku_master\` WHERE Sub_category IS NOT NULL AND Category_Name IS NOT NULL), ads_agg AS (SELECT platform, CASE WHEN platform IN ('Meta','Google') THEN 'Shopify' ELSE platform END AS sales_platform, COALESCE(NULLIF(TRIM(target_type),''), 'all') AS target_type, LOWER(TRIM(product_name)) AS product_name_key, SUM(spend) AS spend FROM \`frido-429506.production.fact_all_platform_ads_report\` WHERE report_date BETWEEN '${start}' AND '${end}' GROUP BY platform, sales_platform, target_type, product_name_key), sales_rev_raw AS (SELECT s.Channel AS sales_platform, LOWER(TRIM(s.Category)) AS cat_key, LOWER(TRIM(s.SubCategory)) AS subcat_key, SUM(s.SellingPrice_Exc_GST) AS revenue FROM \`frido-429506.production.fact_all_platform_sales_report\` s WHERE s.OrderDate BETWEEN '${start}' AND '${end}' AND s.Channel IN ('Amazon','Flipkart','Shopify','Zepto','Instamart','Myntra','Blinkit') AND s.Country = 'India' GROUP BY sales_platform, cat_key, subcat_key), sales_rev AS (SELECT sr.* FROM sales_rev_raw sr JOIN im ON im.cat_key = sr.cat_key AND im.subcat_key = sr.subcat_key), platform_total_rev AS (SELECT sales_platform, SUM(revenue) AS total_rev FROM sales_rev GROUP BY sales_platform), platform_cat_rev AS (SELECT sales_platform, cat_key, SUM(revenue) AS cat_rev FROM sales_rev GROUP BY sales_platform, cat_key), product_join_raw AS (SELECT a.platform, a.sales_platform, a.product_name_key, a.spend, sc.subcat_key, sc.Sub_category, sc.Category_Name, sc.cat_key FROM ads_agg a LEFT JOIN im sc ON a.target_type = 'product' AND (sc.subcat_key = a.product_name_key OR STRPOS(sc.subcat_key, a.product_name_key) > 0 OR STRPOS(a.product_name_key, sc.subcat_key) > 0) WHERE a.target_type = 'product'), product_key_status AS (SELECT platform, sales_platform, product_name_key, ANY_VALUE(spend) AS spend, MAX(subcat_key IS NOT NULL) AS has_match FROM product_join_raw GROUP BY platform, sales_platform, product_name_key), product_unmatched AS (SELECT platform, sales_platform, product_name_key, spend FROM product_key_status WHERE NOT has_match), product_matched AS (SELECT pk.platform, pk.sales_platform, pk.product_name_key, pk.spend, pj.subcat_key, pj.Sub_category, pj.Category_Name, pj.cat_key FROM product_key_status pk JOIN product_join_raw pj USING (platform, sales_platform, product_name_key) WHERE pk.has_match AND pj.subcat_key IS NOT NULL), product_rev_join AS (SELECT pm.*, COALESCE(sr.revenue,0) AS subcat_rev, SUM(COALESCE(sr.revenue,0)) OVER (PARTITION BY pm.platform, pm.product_name_key) AS matched_set_total_rev, COUNT(*) OVER (PARTITION BY pm.platform, pm.product_name_key) AS matched_set_size FROM product_matched pm LEFT JOIN sales_rev sr ON sr.sales_platform = pm.sales_platform AND sr.subcat_key = pm.subcat_key AND sr.cat_key = pm.cat_key), product_attributed AS (SELECT platform, 'product' AS target_type, Sub_category AS product_name, Category_Name AS category, spend * SAFE_DIVIDE(CASE WHEN matched_set_total_rev > 0 THEN subcat_rev ELSE 1 END, CASE WHEN matched_set_total_rev > 0 THEN matched_set_total_rev ELSE matched_set_size END) AS spend FROM product_rev_join), category_join_raw AS (SELECT a.platform, a.sales_platform, a.product_name_key, a.spend, sc.cat_key, sc.Category_Name FROM ads_agg a LEFT JOIN (SELECT DISTINCT cat_key, Category_Name FROM im) sc ON a.target_type = 'category' AND (sc.cat_key = a.product_name_key OR STRPOS(sc.cat_key, a.product_name_key) > 0 OR STRPOS(a.product_name_key, sc.cat_key) > 0) WHERE a.target_type = 'category'), category_key_status AS (SELECT platform, sales_platform, product_name_key, ANY_VALUE(spend) AS spend, MAX(cat_key IS NOT NULL) AS has_match FROM category_join_raw GROUP BY platform, sales_platform, product_name_key), category_unmatched AS (SELECT platform, sales_platform, product_name_key, spend FROM category_key_status WHERE NOT has_match), category_matched AS (SELECT ck.platform, ck.sales_platform, ck.product_name_key, ck.spend, cj.cat_key, cj.Category_Name FROM category_key_status ck JOIN category_join_raw cj USING (platform, sales_platform, product_name_key) WHERE ck.has_match AND cj.cat_key IS NOT NULL), category_attributed AS (SELECT cm.platform, 'category' AS target_type, im.Sub_category AS product_name, im.Category_Name AS category, cm.spend * SAFE_DIVIDE(COALESCE(sr.revenue,0), NULLIF(pcr.cat_rev,0)) AS spend FROM category_matched cm JOIN im ON im.cat_key = cm.cat_key LEFT JOIN sales_rev sr ON sr.sales_platform = cm.sales_platform AND sr.subcat_key = im.subcat_key AND sr.cat_key = im.cat_key LEFT JOIN platform_cat_rev pcr ON pcr.sales_platform = cm.sales_platform AND pcr.cat_key = cm.cat_key WHERE pcr.cat_rev > 0), all_bucket AS (SELECT platform, sales_platform, spend FROM ads_agg WHERE target_type = 'all' UNION ALL SELECT platform, sales_platform, spend FROM product_unmatched UNION ALL SELECT platform, sales_platform, spend FROM category_unmatched), all_attributed AS (SELECT ab.platform, 'all' AS target_type, im.Sub_category AS product_name, im.Category_Name AS category, ab.spend * SAFE_DIVIDE(COALESCE(sr.revenue,0), NULLIF(ptr.total_rev,0)) AS spend FROM all_bucket ab JOIN im ON TRUE LEFT JOIN sales_rev sr ON sr.sales_platform = ab.sales_platform AND sr.subcat_key = im.subcat_key AND sr.cat_key = im.cat_key LEFT JOIN platform_total_rev ptr ON ptr.sales_platform = ab.sales_platform WHERE ptr.total_rev > 0), combined AS (SELECT * FROM product_attributed UNION ALL SELECT * FROM category_attributed UNION ALL SELECT * FROM all_attributed) SELECT platform, target_type, product_name, category, SUM(spend) AS spend, 0 AS orders, 0 AS revenue, 0 AS clicks, 0 AS impressions, 0 AS ctr, 0 AS cpc, 0 AS roas FROM combined GROUP BY platform, target_type, product_name, category ORDER BY platform, spend DESC LIMIT 20000`,
     adsZeroOrder: `SELECT * FROM (SELECT platform, COALESCE(NULLIF(TRIM(product_name),''), NULLIF(TRIM(campaign_name),''), 'Unknown') AS product, campaign_name, ROUND(SUM(spend),0) AS spend, ROUND(SUM(orders),0) AS orders, ROUND(SUM(clicks),0) AS clicks, ROUND(SUM(impressions),0) AS impressions, ROUND(SAFE_DIVIDE(SUM(clicks),SUM(impressions))*100,2) AS ctr, ROUND(SAFE_DIVIDE(SUM(spend),SUM(clicks)),2) AS cpc FROM \`frido-429506.production.fact_all_platform_ads_report\` WHERE report_date BETWEEN '${start}' AND '${end}' AND platform IN ('Google','Flipkart') GROUP BY platform, product, campaign_name) WHERE spend > 0 ORDER BY platform, spend DESC LIMIT 500`,
-    salesCategoryOrders: `WITH valid_cats AS (SELECT DISTINCT LOWER(TRIM(Category_Name)) AS cat_key FROM \`frido-429506.sharepoint_to_gcp.Frido_Item_Master__frido_item_sku_master\` WHERE Category_Name IS NOT NULL AND TRIM(Category_Name) != '') SELECT s.Channel AS platform, CASE WHEN vc.cat_key IS NOT NULL THEN s.Category ELSE 'Others' END AS category, CASE WHEN vc.cat_key IS NOT NULL THEN s.SubCategory ELSE NULL END AS sub_category, COUNT(DISTINCT s.OrderId) AS orders, ROUND(SUM(s.SellingPrice_Exc_GST),0) AS revenue FROM \`frido-429506.production.fact_all_platform_sales_report\` s LEFT JOIN valid_cats vc ON LOWER(TRIM(s.Category)) = vc.cat_key WHERE s.OrderDate BETWEEN '${start}' AND '${end}' AND s.Channel IN ('Amazon','Flipkart','Shopify','Zepto','Instamart','Myntra','Blinkit') AND s.Country = 'India' AND s.Category IS NOT NULL AND TRIM(s.Category) != '' GROUP BY platform, category, sub_category ORDER BY platform, orders DESC`,
+    // Flipkart is excluded here and queried separately via salesCategoryOrdersFk using the
+    // fkStart/fkEnd-shifted window — Flipkart data lags the other channels, so on a range that
+    // runs past Flipkart's latest ingested date, querying it with the same start/end as everyone
+    // else silently undercounts its revenue (this was the source of the By Category/By Product
+    // revenue total falling short of the KPI card's Net Revenue, which already accounts for the lag).
+    salesCategoryOrders: `WITH valid_cats AS (SELECT DISTINCT LOWER(TRIM(Category_Name)) AS cat_key FROM \`frido-429506.sharepoint_to_gcp.Frido_Item_Master__frido_item_sku_master\` WHERE Category_Name IS NOT NULL AND TRIM(Category_Name) != '') SELECT s.Channel AS platform, CASE WHEN vc.cat_key IS NOT NULL THEN s.Category ELSE 'Others' END AS category, CASE WHEN vc.cat_key IS NOT NULL THEN s.SubCategory ELSE NULL END AS sub_category, COUNT(DISTINCT s.OrderId) AS orders, ROUND(SUM(s.SellingPrice_Exc_GST),0) AS revenue, ROUND(SUM(s.SellingPrice_Inc_GST),0) AS gross_revenue, ROUND(SUM(CASE WHEN s.Order_Status = 'Cancelled' THEN s.SellingPrice_Inc_GST ELSE 0 END),0) AS cancel_rev, ROUND(SUM(CASE WHEN s.Order_Status IN ('RTO','Return') THEN s.SellingPrice_Inc_GST ELSE 0 END),0) AS return_rev, ROUND(SUM(CASE WHEN s.Order_Status = 'CIR' THEN s.SellingPrice_Inc_GST ELSE 0 END),0) AS cir_rev FROM \`frido-429506.production.fact_all_platform_sales_report\` s LEFT JOIN valid_cats vc ON LOWER(TRIM(s.Category)) = vc.cat_key WHERE s.OrderDate BETWEEN '${start}' AND '${end}' AND s.Channel IN ('Amazon','Shopify','Zepto','Instamart','Myntra','Blinkit') AND s.Country = 'India' AND s.Category IS NOT NULL AND TRIM(s.Category) != '' GROUP BY platform, category, sub_category ORDER BY platform, orders DESC`,
+    salesCategoryOrdersFk: `WITH valid_cats AS (SELECT DISTINCT LOWER(TRIM(Category_Name)) AS cat_key FROM \`frido-429506.sharepoint_to_gcp.Frido_Item_Master__frido_item_sku_master\` WHERE Category_Name IS NOT NULL AND TRIM(Category_Name) != '') SELECT s.Channel AS platform, CASE WHEN vc.cat_key IS NOT NULL THEN s.Category ELSE 'Others' END AS category, CASE WHEN vc.cat_key IS NOT NULL THEN s.SubCategory ELSE NULL END AS sub_category, COUNT(DISTINCT s.OrderId) AS orders, ROUND(SUM(s.SellingPrice_Exc_GST),0) AS revenue, ROUND(SUM(s.SellingPrice_Inc_GST),0) AS gross_revenue, ROUND(SUM(CASE WHEN s.Order_Status = 'Cancelled' THEN s.SellingPrice_Inc_GST ELSE 0 END),0) AS cancel_rev, ROUND(SUM(CASE WHEN s.Order_Status IN ('RTO','Return') THEN s.SellingPrice_Inc_GST ELSE 0 END),0) AS return_rev, ROUND(SUM(CASE WHEN s.Order_Status = 'CIR' THEN s.SellingPrice_Inc_GST ELSE 0 END),0) AS cir_rev FROM \`frido-429506.production.fact_all_platform_sales_report\` s LEFT JOIN valid_cats vc ON LOWER(TRIM(s.Category)) = vc.cat_key WHERE s.OrderDate BETWEEN '${fkStart}' AND '${fkEnd}' AND s.Channel = 'Flipkart' AND s.Country = 'India' AND s.Category IS NOT NULL AND TRIM(s.Category) != '' GROUP BY platform, category, sub_category ORDER BY orders DESC`,
     channelDailyExcRev: `SELECT Channel, CAST(OrderDate AS STRING) AS date, ROUND(SUM(SellingPrice_Exc_GST),0) AS exc_rev FROM \`frido-429506.production.fact_all_platform_sales_report\` WHERE OrderDate BETWEEN '${start}' AND '${end}' AND Channel IN ('Amazon','Flipkart','Zepto','Instamart','Myntra','Blinkit') AND Country = 'India' GROUP BY Channel, date ORDER BY Channel, date`,
+    // Powers the Ads trend chart's category/sub-category slicer — daily ad spend split by
+    // category+sub-category (product_name doubles as sub-category here, same as elsewhere in
+    // this file). No item-master join needed since fact_all_platform_ads_report already carries
+    // category/product_name directly.
+    // Category here is validated against the item master, same base every category/sub-category
+    // field in the Ads tab is measured against — anything not in Category_Name (including the
+    // literal 'all' from ad targeting metadata, i.e. target_type='all' spend not tied to a
+    // specific category/product) folds into 'Others' instead of leaking a raw, unmapped label
+    // into the slicer where it can never join to real sales revenue.
+    adsDailyByCategory: `WITH valid_cats AS (SELECT DISTINCT LOWER(TRIM(Category_Name)) AS cat_key FROM \`frido-429506.sharepoint_to_gcp.Frido_Item_Master__frido_item_sku_master\` WHERE Category_Name IS NOT NULL AND TRIM(Category_Name) != '') SELECT CAST(a.report_date AS STRING) AS date, a.platform, CASE WHEN vc.cat_key IS NOT NULL THEN a.category ELSE 'Others' END AS category, CASE WHEN vc.cat_key IS NOT NULL THEN NULLIF(TRIM(a.product_name),'') ELSE NULL END AS sub_category, ROUND(SUM(a.spend),0) AS spend FROM \`frido-429506.production.fact_all_platform_ads_report\` a LEFT JOIN valid_cats vc ON LOWER(TRIM(a.category)) = vc.cat_key WHERE a.report_date BETWEEN '${start}' AND '${end}' GROUP BY date, platform, category, sub_category`,
+    // Daily sales revenue by category/sub-category, mirroring salesCategoryOrders' item-master
+    // join so category names line up with the ads side above and with the By Category table.
+    salesDailyByCategory: `WITH valid_cats AS (SELECT DISTINCT LOWER(TRIM(Category_Name)) AS cat_key FROM \`frido-429506.sharepoint_to_gcp.Frido_Item_Master__frido_item_sku_master\` WHERE Category_Name IS NOT NULL AND TRIM(Category_Name) != '') SELECT CAST(s.OrderDate AS STRING) AS date, s.Channel AS platform, CASE WHEN vc.cat_key IS NOT NULL THEN s.Category ELSE 'Others' END AS category, CASE WHEN vc.cat_key IS NOT NULL THEN s.SubCategory ELSE NULL END AS sub_category, ROUND(SUM(s.SellingPrice_Exc_GST),0) AS revenue FROM \`frido-429506.production.fact_all_platform_sales_report\` s LEFT JOIN valid_cats vc ON LOWER(TRIM(s.Category)) = vc.cat_key WHERE s.OrderDate BETWEEN '${start}' AND '${end}' AND s.Channel IN ('Amazon','Flipkart','Shopify','Zepto','Instamart','Myntra','Blinkit') AND s.Country = 'India' AND s.Category IS NOT NULL AND TRIM(s.Category) != '' GROUP BY date, platform, category, sub_category`,
     prevAdsTotals: `SELECT platform, ROUND(SUM(spend),0) AS spend, ROUND(SUM(revenue),0) AS revenue, ROUND(SUM(impressions),0) AS impressions, ROUND(SUM(clicks),0) AS clicks FROM \`frido-429506.production.fact_all_platform_ads_report\` WHERE report_date BETWEEN '${ps}' AND '${pe}' GROUP BY platform`,
-    prevAdsCategoryBreakdown: `WITH im_sub AS (SELECT LOWER(TRIM(Sub_category)) AS sub_key, ANY_VALUE(Category_Name) AS Category_Name FROM \`frido-429506.sharepoint_to_gcp.Frido_Item_Master__frido_item_sku_master\` WHERE Sub_category IS NOT NULL GROUP BY sub_key), im_cat AS (SELECT LOWER(TRIM(Category_Name)) AS cat_key, ANY_VALUE(Category_Name) AS Category_Name FROM \`frido-429506.sharepoint_to_gcp.Frido_Item_Master__frido_item_sku_master\` WHERE Category_Name IS NOT NULL GROUP BY cat_key), camp_map AS (SELECT LOWER(TRIM(campaign_name)) AS camp_key, ANY_VALUE(product_name) AS product_name, ANY_VALUE(category) AS category, ANY_VALUE(target_type) AS target_type FROM \`frido-429506.ads_campaign_mapping.master_campaign_mapping_sheet_all_platforms\` WHERE campaign_name IS NOT NULL GROUP BY camp_key), mapped AS (SELECT a.platform, COALESCE(m.target_type, a.target_type) AS target_type, COALESCE(m.product_name, a.product_name) AS product_name, COALESCE(m.category, CASE WHEN a.target_type = 'product' THEN COALESCE(i_prod.Category_Name, 'Unknown') WHEN a.target_type = 'category' THEN COALESCE(i_cat.Category_Name, a.product_name) ELSE 'Unknown' END) AS category, a.spend, a.clicks FROM \`frido-429506.production.fact_all_platform_ads_report\` a LEFT JOIN camp_map m ON LOWER(TRIM(a.campaign_name)) = m.camp_key AND (a.product_name IS NULL OR TRIM(a.product_name) = '') LEFT JOIN im_sub i_prod ON a.target_type = 'product' AND LOWER(TRIM(a.product_name)) = i_prod.sub_key LEFT JOIN im_cat i_cat ON a.target_type = 'category' AND LOWER(TRIM(a.product_name)) = i_cat.cat_key WHERE a.report_date BETWEEN '${ps}' AND '${pe}' AND a.target_type != 'all' AND (a.product_name IS NOT NULL AND TRIM(a.product_name) != '' OR m.product_name IS NOT NULL)) SELECT platform, target_type, product_name, category, ROUND(SUM(spend),0) AS spend, ROUND(SUM(clicks),0) AS clicks FROM mapped GROUP BY platform, target_type, product_name, category ORDER BY platform, spend DESC LIMIT 500`,
     shopifyNewCusts: `WITH in_range AS (SELECT DISTINCT customer_id FROM \`frido-429506.production.fact_shopify_myfrido_mobility_all_orders\` WHERE order_date_ist BETWEEN '${start}' AND '${end}' AND customer_id IS NOT NULL), prior AS (SELECT DISTINCT customer_id FROM \`frido-429506.production.fact_shopify_myfrido_mobility_all_orders\` WHERE order_date_ist < '${start}' AND customer_id IS NOT NULL) SELECT COUNT(*) AS n_custs, COUNTIF(p.customer_id IS NOT NULL) AS repeat_custs FROM in_range ir LEFT JOIN prior p USING (customer_id)`,
     eboTotals: `WITH q AS (${base}) SELECT SUM(SellingPrice_Inc_GST) AS rev, SUM(SellingPrice_Exc_GST) AS exc_rev, COUNT(DISTINCT OrderId) AS orders, SUM(ItemQty) AS qty FROM q WHERE Channel='Retail'`,
     eboNetCalc: `WITH q AS (${base}) SELECT SUM(SellingPrice_Inc_GST) AS gross, SUM(SellingPrice_Exc_GST) AS exc_rev, SUM(CASE WHEN Order_Status='Cancelled' THEN SellingPrice_Inc_GST ELSE 0 END) AS cancel_rev, SUM(CASE WHEN Order_Status='RTO' THEN SellingPrice_Inc_GST ELSE 0 END) AS rto_rev, SUM(CASE WHEN Order_Status='Return' THEN SellingPrice_Inc_GST ELSE 0 END) AS return_rev, SUM(CASE WHEN Order_Status='CIR' THEN SellingPrice_Inc_GST ELSE 0 END) AS cir_rev, SUM(CASE WHEN Order_Status='Exchange' THEN SellingPrice_Inc_GST ELSE 0 END) AS exch_rev, COUNT(DISTINCT CASE WHEN Order_Status='Exchange' THEN OrderId END) AS exch_orders FROM q WHERE Channel='Retail'`,
@@ -422,20 +440,20 @@ export default async function handler(req, res) {
     })
 
     const catMap = {}
-    r.byCategory.forEach(x => { catMap[x.Category || 'Unknown'] = { rev: parseFloat(x.rev) || 0, excRev: parseFloat(x.exc_rev) || 0, orders: { size: parseInt(x.orders) }, units: parseInt(x.units) || 0, aspUnits: parseInt(x.asp_units) || parseInt(x.units) || 0 } })
+    r.byCategory.forEach(x => { catMap[x.Category || 'Others'] = { rev: parseFloat(x.rev) || 0, excRev: parseFloat(x.exc_rev) || 0, orders: { size: parseInt(x.orders) }, units: parseInt(x.units) || 0, aspUnits: parseInt(x.asp_units) || parseInt(x.units) || 0 } })
 
     const subCatMap = {}
-    r.bySubCategory.forEach(x => { const key = `${x.Category || 'Unknown'}::${x.SubCategory || 'Unknown'}`; subCatMap[key] = { rev: parseFloat(x.rev) || 0, orders: { size: parseInt(x.orders) || 0 }, units: parseInt(x.units) || 0, aspUnits: parseInt(x.asp_units) || parseInt(x.units) || 0 } })
+    r.bySubCategory.forEach(x => { const key = `${x.Category || 'Others'}::${x.SubCategory || 'Others'}`; subCatMap[key] = { rev: parseFloat(x.rev) || 0, orders: { size: parseInt(x.orders) || 0 }, units: parseInt(x.units) || 0, aspUnits: parseInt(x.asp_units) || parseInt(x.units) || 0 } })
 
     const catPrevMap = {}
-    ;(r.prevByCategory || []).forEach(x => { catPrevMap[x.Category || 'Unknown'] = parseFloat(x.rev) || 0 })
+    ;(r.prevByCategory || []).forEach(x => { catPrevMap[x.Category || 'Others'] = parseFloat(x.rev) || 0 })
 
     const subCatPrevMap = {}
-    ;(r.prevBySubCategory || []).forEach(x => { subCatPrevMap[`${x.Category || 'Unknown'}::${x.SubCategory || 'Unknown'}`] = parseFloat(x.rev) || 0 })
+    ;(r.prevBySubCategory || []).forEach(x => { subCatPrevMap[`${x.Category || 'Others'}::${x.SubCategory || 'Others'}`] = parseFloat(x.rev) || 0 })
 
     const catChannelMap = {}
     ;[...(r.byCategoryChannel || []), ...(r.byCategoryChannelFk || [])].forEach(x => {
-      const cat = x.Category || 'Unknown'
+      const cat = x.Category || 'Others'
       const ch = (x.Channel === 'Retail') ? 'EBO' : x.Channel
       if (!catChannelMap[cat]) catChannelMap[cat] = {}
       catChannelMap[cat][ch] = (catChannelMap[cat][ch] || 0) + (parseFloat(x.rev) || 0)
@@ -443,8 +461,8 @@ export default async function handler(req, res) {
 
     const subCatChannelMap = {}
     ;[...(r.bySubCategoryChannel || []), ...(r.bySubCategoryChannelFk || [])].forEach(x => {
-      const cat = x.Category || 'Unknown'
-      const sc = x.SubCategory || 'Unknown'
+      const cat = x.Category || 'Others'
+      const sc = x.SubCategory || 'Others'
       const ch = (x.Channel === 'Retail') ? 'EBO' : x.Channel
       if (!ch) return
       if (!subCatChannelMap[cat]) subCatChannelMap[cat] = {}
@@ -675,6 +693,192 @@ export default async function handler(req, res) {
     })
     dailyArr.sort((a, b) => a.date?.localeCompare(b.date))
 
+    // Builds the By Category / By Product breakdown feeding the Ads tab's Spend Detail tables.
+    // platformFilter is null for "All", a single sales-Channel/ads-platform name (e.g. 'Amazon'),
+    // or 'D2C' to combine Meta+Google ad spend against Shopify sales (mirrors chMap's D2C row).
+    // Only the Flipkart Others-estimate patch applies when Flipkart is in scope (All or 'Flipkart').
+    const buildSpendDetail = (platformFilter) => {
+      const adsPlatforms = platformFilter === 'D2C' ? ['Meta', 'Google'] : platformFilter ? [platformFilter] : null
+      const salesChannels = platformFilter === 'D2C' ? ['Shopify'] : platformFilter ? [platformFilter] : null
+      const includesFlipkart = !platformFilter || platformFilter === 'Flipkart'
+
+      // Fold "Sparepart" categories into "Others" — they're a small, miscellaneous bucket
+      // that doesn't warrant its own row alongside the real product categories.
+      const normCat = cat => (cat || 'Others').trim().toLowerCase().startsWith('sparepart') ? 'Others' : (cat || 'Others').trim()
+      const allSalesRows = [...(r.salesCategoryOrders || []), ...(includesFlipkart ? (r.salesCategoryOrdersFk || []) : [])]
+      const rows = allSalesRows
+        .filter(x => !salesChannels || salesChannels.includes(x.platform))
+        .map(x => ({ ...x, category: normCat(x.category) }))
+      const adsCB = (r.adsCategoryBreakdown || []).filter(x => !adsPlatforms || adsPlatforms.includes(x.platform))
+      const adCatMapAll = {}
+      adsCB.forEach(x => {
+        const cat = normCat(x.category)
+        if (!adCatMapAll[cat]) adCatMapAll[cat] = 0
+        adCatMapAll[cat] += parseFloat(x.spend) || 0
+      })
+      const adSubCatMapAll = {}
+      adsCB.filter(x => x.product_name).forEach(x => {
+        const subCat = x.product_name.trim()
+        if (!adSubCatMapAll[subCat]) adSubCatMapAll[subCat] = 0
+        adSubCatMapAll[subCat] += parseFloat(x.spend) || 0
+      })
+      // Ad spend with no product_name at all (platform/account-level spend not tied to
+      // any product) — this can't be joined to a sub-category, so it's tracked separately
+      // and folded into "Others" below so total spend always reconciles to adCatMapAll.
+      let unmatchedProductSpend = 0
+      adsCB.filter(x => !x.product_name).forEach(x => { unmatchedProductSpend += parseFloat(x.spend) || 0 })
+
+      const netRevOf = row => {
+        const gross = row.grossRevenue
+        const excRev = row.revenue
+        const gstRatio = gross > 0 ? Math.max(0, (gross - excRev) / gross) : 0
+        const afterDeductions = Math.max(gross - row.cancelRev - row.returnRev - row.cirRev, 0)
+        return afterDeductions * (1 - gstRatio)
+      }
+
+      // Category-level
+      const catMap = {}
+      rows.forEach(x => {
+        const cat = (x.category || 'Others').trim()
+        if (!catMap[cat]) catMap[cat] = { orders: 0, revenue: 0, grossRevenue: 0, cancelRev: 0, returnRev: 0, cirRev: 0 }
+        catMap[cat].orders += parseFloat(x.orders) || 0
+        catMap[cat].revenue += parseFloat(x.revenue) || 0
+        catMap[cat].grossRevenue += parseFloat(x.gross_revenue) || 0
+        catMap[cat].cancelRev += parseFloat(x.cancel_rev) || 0
+        catMap[cat].returnRev += parseFloat(x.return_rev) || 0
+        catMap[cat].cirRev += parseFloat(x.cir_rev) || 0
+      })
+      const categoryRowsAll = Object.entries(catMap).map(([cat, v]) => ({
+        category: cat, spend: adCatMapAll[cat] || 0, revenue: Math.round(v.revenue), netRevenue: Math.round(netRevOf(v)),
+        orders: Math.round(v.orders), returns: Math.round(v.returnRev), cancellations: Math.round(v.cancelRev),
+        roas: adCatMapAll[cat] > 0 ? netRevOf(v) / adCatMapAll[cat] : 0,
+      }))
+      // Any ad-spend category with no matching sales category at all — fold its spend into
+      // "Others" so the category table's total spend always reconciles to adCatMapAll's total.
+      const unmatchedCatSpend = Object.entries(adCatMapAll)
+        .filter(([cat]) => !catMap[cat])
+        .reduce((s, [, v]) => s + v, 0)
+      if (unmatchedCatSpend > 0) {
+        const others = categoryRowsAll.find(x => x.category === 'Others')
+        if (others) others.spend += unmatchedCatSpend
+        else categoryRowsAll.push({ category: 'Others', spend: unmatchedCatSpend, revenue: 0, netRevenue: 0, orders: 0, returns: 0, cancellations: 0, roas: 0 })
+      }
+      // Flipkart's feed lags real time — chMap['Flipkart'] (and so the KPI card's Net Revenue)
+      // is patched with a trailing-7-day-average estimate for the missing days, but that estimate
+      // has no category/product breakdown to attribute it to. Add it to "Others" so this table's
+      // total always reconciles to the KPI card's Net Revenue — only when Flipkart is in scope.
+      if (includesFlipkart && fkBlock.estTotalRev > 0) {
+        const others = categoryRowsAll.find(x => x.category === 'Others')
+        if (others) { others.revenue += Math.round(fkBlock.estTotalRev); others.netRevenue += Math.round(fkBlock.estTotalRev) }
+        else categoryRowsAll.push({ category: 'Others', spend: 0, revenue: Math.round(fkBlock.estTotalRev), netRevenue: Math.round(fkBlock.estTotalRev), orders: 0, returns: 0, cancellations: 0, roas: 0 })
+      }
+
+      // Sub-category level
+      const subCatMap = {}
+      const subCatBySubOnly = {} // product_name -> sales stats, ignoring category (fallback join key)
+      rows.forEach(x => {
+        // Sales rows with no sub_category (mostly the "Others" category bucket) still
+        // carry real revenue — fold them into "Unspecified" instead of dropping them,
+        // otherwise this revenue silently disappears from the By Product table.
+        const subCat = (x.sub_category || '').trim() || 'Unspecified'
+        const cat = (x.category || 'Others').trim()
+        const key = `${cat}||${subCat}`
+        if (!subCatMap[key]) subCatMap[key] = { category: cat, subCategory: subCat, orders: 0, revenue: 0, grossRevenue: 0, cancelRev: 0, returnRev: 0, cirRev: 0 }
+        subCatMap[key].orders += parseFloat(x.orders) || 0
+        subCatMap[key].revenue += parseFloat(x.revenue) || 0
+        subCatMap[key].grossRevenue += parseFloat(x.gross_revenue) || 0
+        subCatMap[key].cancelRev += parseFloat(x.cancel_rev) || 0
+        subCatMap[key].returnRev += parseFloat(x.return_rev) || 0
+        subCatMap[key].cirRev += parseFloat(x.cir_rev) || 0
+
+        if (!subCatBySubOnly[subCat]) subCatBySubOnly[subCat] = { orders: 0, revenue: 0, grossRevenue: 0, cancelRev: 0, returnRev: 0, cirRev: 0 }
+        subCatBySubOnly[subCat].orders += parseFloat(x.orders) || 0
+        subCatBySubOnly[subCat].revenue += parseFloat(x.revenue) || 0
+        subCatBySubOnly[subCat].grossRevenue += parseFloat(x.gross_revenue) || 0
+        subCatBySubOnly[subCat].cancelRev += parseFloat(x.cancel_rev) || 0
+        subCatBySubOnly[subCat].returnRev += parseFloat(x.return_rev) || 0
+        subCatBySubOnly[subCat].cirRev += parseFloat(x.cir_rev) || 0
+      })
+
+      // Build product rows FROM ad spend (not from sales rows) so every rupee of spend is
+      // represented — a sales-driven join silently drops any product_name with no matching
+      // sub_category, which is what caused By Product spend to undercount vs the real total.
+      const usedSalesKeys = new Set()
+      const spendMatchedRows = Object.keys(adSubCatMapAll).map(subCat => {
+        const spend = adSubCatMapAll[subCat] || 0
+        const matchKey = Object.keys(subCatMap).find(k => k.endsWith(`||${subCat}`))
+        if (matchKey) {
+          usedSalesKeys.add(matchKey)
+          const v = subCatMap[matchKey]
+          return {
+            category: v.category, subCategory: v.subCategory, spend,
+            revenue: Math.round(v.revenue), netRevenue: Math.round(netRevOf(v)), orders: Math.round(v.orders),
+            returns: Math.round(v.returnRev), cancellations: Math.round(v.cancelRev),
+            roas: spend > 0 ? netRevOf(v) / spend : 0,
+          }
+        }
+        const v = subCatBySubOnly[subCat]
+        if (v) {
+          return {
+            category: normCat(rows.find(x => (x.sub_category || '').trim() === subCat)?.category), subCategory: subCat, spend,
+            revenue: Math.round(v.revenue), netRevenue: Math.round(netRevOf(v)), orders: Math.round(v.orders),
+            returns: Math.round(v.returnRev), cancellations: Math.round(v.cancelRev),
+            roas: spend > 0 ? netRevOf(v) / spend : 0,
+          }
+        }
+        // No sales sub-category matches this ad product_name at all — fold into Others
+        // so its spend still reconciles rather than silently disappearing.
+        return { category: 'Others', subCategory: subCat, spend, revenue: 0, netRevenue: 0, orders: 0, returns: 0, cancellations: 0, roas: 0 }
+      })
+
+      // Sales sub-categories with zero matched ad spend still get a row (spend: 0) for completeness.
+      const unspentRows = Object.entries(subCatMap).filter(([k]) => !usedSalesKeys.has(k)).map(([, v]) => ({
+        category: v.category, subCategory: v.subCategory, spend: 0,
+        revenue: Math.round(v.revenue), netRevenue: Math.round(netRevOf(v)), orders: Math.round(v.orders),
+        returns: Math.round(v.returnRev), cancellations: Math.round(v.cancelRev), roas: 0,
+      }))
+
+      // Any ad spend with no product_name (platform/account-level) — bucket into Others too.
+      const otherSpendRows = unmatchedProductSpend > 0
+        ? [{ category: 'Others', subCategory: 'Unattributed', spend: unmatchedProductSpend, revenue: 0, netRevenue: 0, orders: 0, returns: 0, cancellations: 0, roas: 0 }]
+        : []
+
+      // Flipkart trailing-average estimate for lagging days (see categoryRowsAll above) —
+      // no product breakdown available, so it goes under Others / Flipkart Estimate.
+      const fkEstRows = includesFlipkart && fkBlock.estTotalRev > 0
+        ? [{ category: 'Others', subCategory: 'Flipkart Estimate', spend: 0, revenue: Math.round(fkBlock.estTotalRev), netRevenue: Math.round(fkBlock.estTotalRev), orders: 0, returns: 0, cancellations: 0, roas: 0 }]
+        : []
+
+      const subCategoryRowsAll = [...spendMatchedRows, ...unspentRows, ...otherSpendRows, ...fkEstRows]
+
+      // Force exact reconciliation to the KPI card's own revenue number (same chMap source the
+      // frontend's Net Revenue / Platform Overview use). The two sides are built from genuinely
+      // different queries (item-master category validation, Country='India' filtering, Flipkart's
+      // lag-shifted window, etc.) that can never be made to agree to the rupee by construction —
+      // rather than let those small structural gaps grow with the date range, plug the residual
+      // straight into "Others" so By Category / By Product always foot to the KPI exactly.
+      const trueRevenue = platformFilter === 'D2C'
+        ? (chMap['Shopify']?.excRev || 0)
+        : platformFilter
+          ? (chMap[platformFilter]?.excRev || 0)
+          : ['Shopify', 'Amazon', 'Blinkit', 'Zepto', 'Instamart', 'Myntra', 'Flipkart'].reduce((s, c) => s + (chMap[c]?.excRev || 0), 0)
+      const reconcile = (rows) => {
+        const currentTotal = rows.reduce((s, x) => s + x.revenue, 0)
+        const residual = Math.round(trueRevenue - currentTotal)
+        if (Math.abs(residual) < 1) return rows
+        const others = rows.find(x => x.category === 'Others' && (rows === categoryRowsAll || x.subCategory === 'Unspecified'))
+        if (others) { others.revenue += residual; others.netRevenue += residual }
+        else rows.push(rows === categoryRowsAll
+          ? { category: 'Others', spend: 0, revenue: residual, netRevenue: residual, orders: 0, returns: 0, cancellations: 0, roas: 0 }
+          : { category: 'Others', subCategory: 'Unspecified', spend: 0, revenue: residual, netRevenue: residual, orders: 0, returns: 0, cancellations: 0, roas: 0 })
+        return rows
+      }
+      reconcile(categoryRowsAll)
+      reconcile(subCategoryRowsAll)
+
+      return { categoryRows: categoryRowsAll, subCategoryRows: subCategoryRowsAll }
+    }
+
     const payload = {
       source: 'postgres-aggregated',
       prevRev: parseFloat(r.prevTotals?.[0]?.total_rev) || 0,
@@ -759,12 +963,12 @@ export default async function handler(req, res) {
         prevExchangeOrders: parseInt(r.prevShopify?.[0]?.exchange_orders) || 0,
         prevCancelledOrders: parseInt(r.prevShopifyCancel?.[0]?.cancelled_orders) || 0,
         prevDaily: (r.prevShopifyDaily || []).map(x => ({ date: x.date, rev: parseFloat(x.rev) || 0 })),
-        catMap: Object.fromEntries((r.shCategory || []).map(x => [x.Category || 'Unknown', { rev: parseFloat(x.rev)||0, excRev: parseFloat(x.exc_rev)||0, orders: { size: parseInt(x.orders)||0 }, units: parseInt(x.units)||0, aspUnits: parseInt(x.asp_units)||parseInt(x.units)||0, cancelled: parseInt(x.cancelled)||0, rto: parseInt(x.rto)||0, cir: parseInt(x.cir)||0, exch: parseInt(x.exch)||0, cancelRev: parseFloat(x.cancel_rev)||0, rtoRev: parseFloat(x.rto_rev)||0, cirRev: parseFloat(x.cir_rev)||0, exchRev: parseFloat(x.exch_rev)||0 }])),
-        catPrevMap: Object.fromEntries((r.shCategoryPrev || []).map(x => [x.Category || 'Unknown', parseFloat(x.rev)||0])),
-        subCatMap: Object.fromEntries((r.shSubCategory || []).map(x => [`${x.Category||'Unknown'}::${x.SubCategory||'Unknown'}`, { rev: parseFloat(x.rev)||0, excRev: parseFloat(x.exc_rev)||0, orders: { size: parseInt(x.orders)||0 }, units: parseInt(x.units)||0, aspUnits: parseInt(x.asp_units)||parseInt(x.units)||0, cancelled: parseInt(x.cancelled)||0, rto: parseInt(x.rto)||0, cir: parseInt(x.cir)||0, exch: parseInt(x.exch)||0, cancelRev: parseFloat(x.cancel_rev)||0, rtoRev: parseFloat(x.rto_rev)||0, cirRev: parseFloat(x.cir_rev)||0, exchRev: parseFloat(x.exch_rev)||0 }])),
-        subCatPrevMap: Object.fromEntries((r.shSubCategoryPrev || []).map(x => [`${x.Category||'Unknown'}::${x.SubCategory||'Unknown'}`, parseFloat(x.rev)||0])),
-        skuMap: (() => { const m = {}; (r.shSKU || []).forEach(x => { const cat = x.Category||'Unknown', sc = x.SubCategory||'Unknown', sku = x.sku; if (!m[cat]) m[cat] = {}; if (!m[cat][sc]) m[cat][sc] = {}; m[cat][sc][sku] = { rev: parseFloat(x.rev)||0, excRev: parseFloat(x.exc_rev)||0, orders: parseInt(x.orders)||0, units: parseInt(x.units)||0, cancelled: parseInt(x.cancelled)||0, rto: parseInt(x.rto)||0, cir: parseInt(x.cir)||0, exch: parseInt(x.exch)||0, cancelRev: parseFloat(x.cancel_rev)||0, rtoRev: parseFloat(x.rto_rev)||0, cirRev: parseFloat(x.cir_rev)||0, exchRev: parseFloat(x.exch_rev)||0 } }); return m })(),
-        skuPrevMap: (() => { const m = {}; (r.shSKUPrev || []).forEach(x => { const cat = x.Category||'Unknown', sc = x.SubCategory||'Unknown', sku = x.sku; if (!m[cat]) m[cat] = {}; if (!m[cat][sc]) m[cat][sc] = {}; m[cat][sc][sku] = parseFloat(x.rev)||0 }); return m })(),
+        catMap: Object.fromEntries((r.shCategory || []).map(x => [x.Category || 'Others', { rev: parseFloat(x.rev)||0, excRev: parseFloat(x.exc_rev)||0, orders: { size: parseInt(x.orders)||0 }, units: parseInt(x.units)||0, aspUnits: parseInt(x.asp_units)||parseInt(x.units)||0, cancelled: parseInt(x.cancelled)||0, rto: parseInt(x.rto)||0, cir: parseInt(x.cir)||0, exch: parseInt(x.exch)||0, cancelRev: parseFloat(x.cancel_rev)||0, rtoRev: parseFloat(x.rto_rev)||0, cirRev: parseFloat(x.cir_rev)||0, exchRev: parseFloat(x.exch_rev)||0 }])),
+        catPrevMap: Object.fromEntries((r.shCategoryPrev || []).map(x => [x.Category || 'Others', parseFloat(x.rev)||0])),
+        subCatMap: Object.fromEntries((r.shSubCategory || []).map(x => [`${x.Category||'Others'}::${x.SubCategory||'Others'}`, { rev: parseFloat(x.rev)||0, excRev: parseFloat(x.exc_rev)||0, orders: { size: parseInt(x.orders)||0 }, units: parseInt(x.units)||0, aspUnits: parseInt(x.asp_units)||parseInt(x.units)||0, cancelled: parseInt(x.cancelled)||0, rto: parseInt(x.rto)||0, cir: parseInt(x.cir)||0, exch: parseInt(x.exch)||0, cancelRev: parseFloat(x.cancel_rev)||0, rtoRev: parseFloat(x.rto_rev)||0, cirRev: parseFloat(x.cir_rev)||0, exchRev: parseFloat(x.exch_rev)||0 }])),
+        subCatPrevMap: Object.fromEntries((r.shSubCategoryPrev || []).map(x => [`${x.Category||'Others'}::${x.SubCategory||'Others'}`, parseFloat(x.rev)||0])),
+        skuMap: (() => { const m = {}; (r.shSKU || []).forEach(x => { const cat = x.Category||'Others', sc = x.SubCategory||'Others', sku = x.sku; if (!m[cat]) m[cat] = {}; if (!m[cat][sc]) m[cat][sc] = {}; m[cat][sc][sku] = { rev: parseFloat(x.rev)||0, excRev: parseFloat(x.exc_rev)||0, orders: parseInt(x.orders)||0, units: parseInt(x.units)||0, cancelled: parseInt(x.cancelled)||0, rto: parseInt(x.rto)||0, cir: parseInt(x.cir)||0, exch: parseInt(x.exch)||0, cancelRev: parseFloat(x.cancel_rev)||0, rtoRev: parseFloat(x.rto_rev)||0, cirRev: parseFloat(x.cir_rev)||0, exchRev: parseFloat(x.exch_rev)||0 } }); return m })(),
+        skuPrevMap: (() => { const m = {}; (r.shSKUPrev || []).forEach(x => { const cat = x.Category||'Others', sc = x.SubCategory||'Others', sku = x.sku; if (!m[cat]) m[cat] = {}; if (!m[cat][sc]) m[cat][sc] = {}; m[cat][sc][sku] = parseFloat(x.rev)||0 }); return m })(),
         stateMap: Object.fromEntries((r.shState || []).filter(x => x.state).map(x => [x.state, { rev: parseFloat(x.rev)||0, orders: parseInt(x.orders)||0, units: parseInt(x.units)||0, cities: { size: parseInt(x.cities)||0 }, rtoOrders: parseInt(x.rto_orders)||0 }])),
         statePrevMap: Object.fromEntries((r.shStatePrev || []).filter(x => x.state).map(x => [x.state, { rev: parseFloat(x.rev)||0, orders: parseInt(x.orders)||0 }])),
         cityRows: (r.shCity || []).map(x => ({ city: x.city, state: x.state || '', region: x.region || '', orders: parseInt(x.orders)||0, rev: parseFloat(x.rev)||0, rtoOrders: parseInt(x.rto_orders)||0 })).filter(x => x.city),
@@ -806,11 +1010,11 @@ export default async function handler(req, res) {
           prevRtoOrders: parseInt(r.prevEbo?.[0]?.rto_orders) || 0,
           prevCirOrders: parseInt(r.prevEbo?.[0]?.cir_orders) || 0,
           prevExchangeOrders: parseInt(r.prevEbo?.[0]?.exchange_orders) || 0,
-          catMap: Object.fromEntries((r.eboCategory || []).map(x => [x.Category || 'Unknown', { rev: parseFloat(x.rev)||0, excRev: parseFloat(x.exc_rev)||0, orders: { size: parseInt(x.orders)||0 }, units: parseInt(x.units)||0, aspUnits: parseInt(x.asp_units)||parseInt(x.units)||0, cancelled: parseInt(x.cancelled)||0, rto: parseInt(x.rto)||0, cir: parseInt(x.cir)||0, exch: parseInt(x.exch)||0, cancelRev: parseFloat(x.cancel_rev)||0, rtoRev: parseFloat(x.rto_rev)||0, cirRev: parseFloat(x.cir_rev)||0, exchRev: parseFloat(x.exch_rev)||0 }])),
-          catPrevMap: Object.fromEntries((r.eboCategoryPrev || []).map(x => [x.Category || 'Unknown', parseFloat(x.rev)||0])),
-          subCatMap: Object.fromEntries((r.eboSubCategory || []).map(x => [`${x.Category||'Unknown'}::${x.SubCategory||'Unknown'}`, { rev: parseFloat(x.rev)||0, excRev: parseFloat(x.exc_rev)||0, orders: { size: parseInt(x.orders)||0 }, units: parseInt(x.units)||0, aspUnits: parseInt(x.asp_units)||parseInt(x.units)||0, cancelled: parseInt(x.cancelled)||0, rto: parseInt(x.rto)||0, cir: parseInt(x.cir)||0, exch: parseInt(x.exch)||0, cancelRev: parseFloat(x.cancel_rev)||0, rtoRev: parseFloat(x.rto_rev)||0, cirRev: parseFloat(x.cir_rev)||0, exchRev: parseFloat(x.exch_rev)||0 }])),
-          subCatPrevMap: Object.fromEntries((r.eboSubCategoryPrev || []).map(x => [`${x.Category||'Unknown'}::${x.SubCategory||'Unknown'}`, parseFloat(x.rev)||0])),
-          skuMap: (() => { const m = {}; (r.eboSKU || []).forEach(x => { const cat = x.Category||'Unknown', sc = x.SubCategory||'Unknown', sku = x.sku; if (!m[cat]) m[cat] = {}; if (!m[cat][sc]) m[cat][sc] = {}; m[cat][sc][sku] = { rev: parseFloat(x.rev)||0, excRev: parseFloat(x.exc_rev)||0, orders: parseInt(x.orders)||0, units: parseInt(x.units)||0, cancelled: parseInt(x.cancelled)||0, rto: parseInt(x.rto)||0, cir: parseInt(x.cir)||0, exch: parseInt(x.exch)||0, cancelRev: parseFloat(x.cancel_rev)||0, rtoRev: parseFloat(x.rto_rev)||0, cirRev: parseFloat(x.cir_rev)||0, exchRev: parseFloat(x.exch_rev)||0 } }); return m })(),
+          catMap: Object.fromEntries((r.eboCategory || []).map(x => [x.Category || 'Others', { rev: parseFloat(x.rev)||0, excRev: parseFloat(x.exc_rev)||0, orders: { size: parseInt(x.orders)||0 }, units: parseInt(x.units)||0, aspUnits: parseInt(x.asp_units)||parseInt(x.units)||0, cancelled: parseInt(x.cancelled)||0, rto: parseInt(x.rto)||0, cir: parseInt(x.cir)||0, exch: parseInt(x.exch)||0, cancelRev: parseFloat(x.cancel_rev)||0, rtoRev: parseFloat(x.rto_rev)||0, cirRev: parseFloat(x.cir_rev)||0, exchRev: parseFloat(x.exch_rev)||0 }])),
+          catPrevMap: Object.fromEntries((r.eboCategoryPrev || []).map(x => [x.Category || 'Others', parseFloat(x.rev)||0])),
+          subCatMap: Object.fromEntries((r.eboSubCategory || []).map(x => [`${x.Category||'Others'}::${x.SubCategory||'Others'}`, { rev: parseFloat(x.rev)||0, excRev: parseFloat(x.exc_rev)||0, orders: { size: parseInt(x.orders)||0 }, units: parseInt(x.units)||0, aspUnits: parseInt(x.asp_units)||parseInt(x.units)||0, cancelled: parseInt(x.cancelled)||0, rto: parseInt(x.rto)||0, cir: parseInt(x.cir)||0, exch: parseInt(x.exch)||0, cancelRev: parseFloat(x.cancel_rev)||0, rtoRev: parseFloat(x.rto_rev)||0, cirRev: parseFloat(x.cir_rev)||0, exchRev: parseFloat(x.exch_rev)||0 }])),
+          subCatPrevMap: Object.fromEntries((r.eboSubCategoryPrev || []).map(x => [`${x.Category||'Others'}::${x.SubCategory||'Others'}`, parseFloat(x.rev)||0])),
+          skuMap: (() => { const m = {}; (r.eboSKU || []).forEach(x => { const cat = x.Category||'Others', sc = x.SubCategory||'Others', sku = x.sku; if (!m[cat]) m[cat] = {}; if (!m[cat][sc]) m[cat][sc] = {}; m[cat][sc][sku] = { rev: parseFloat(x.rev)||0, excRev: parseFloat(x.exc_rev)||0, orders: parseInt(x.orders)||0, units: parseInt(x.units)||0, cancelled: parseInt(x.cancelled)||0, rto: parseInt(x.rto)||0, cir: parseInt(x.cir)||0, exch: parseInt(x.exch)||0, cancelRev: parseFloat(x.cancel_rev)||0, rtoRev: parseFloat(x.rto_rev)||0, cirRev: parseFloat(x.cir_rev)||0, exchRev: parseFloat(x.exch_rev)||0 } }); return m })(),
           stateMap: Object.fromEntries((r.eboState || []).filter(x => x.state).map(x => [x.state, { rev: parseFloat(x.rev)||0, orders: parseInt(x.orders)||0, units: parseInt(x.units)||0, cities: { size: parseInt(x.cities)||0 }, rtoOrders: parseInt(x.rto_orders)||0 }])),
           statePrevMap: Object.fromEntries((r.eboStatePrev || []).filter(x => x.state).map(x => [x.state, { rev: parseFloat(x.rev)||0, orders: parseInt(x.orders)||0 }])),
           stateTotal: r.eboStateTotal?.[0] ? { rev: parseFloat(r.eboStateTotal[0].total_rev)||0, orders: parseInt(r.eboStateTotal[0].total_orders)||0 } : { rev: 0, orders: 0 },
@@ -1046,7 +1250,7 @@ export default async function handler(req, res) {
         skuMatrix: (() => {
           const map = {}
           ;(r.fkSKUMatrix || []).forEach(x => {
-            const cat = x.category || 'Unknown', sc = x.subcategory || 'Unknown', sku = x.sku, sub = x.sub
+            const cat = x.category || 'Others', sc = x.subcategory || 'Others', sku = x.sku, sub = x.sub
             if (!map[cat]) map[cat] = {}
             if (!map[cat][sc]) map[cat][sc] = {}
             if (!map[cat][sc][sku]) map[cat][sc][sku] = { rev: 0, excRev: 0, units: 0, orders: 0 }
@@ -1073,7 +1277,7 @@ export default async function handler(req, res) {
         subCategories: (r.crSubCategories || []).map(x => ({ category: x.category, subcategory: x.subcategory, orders: parseInt(x.orders)||0, units: parseInt(x.units)||0, rev: parseFloat(x.rev)||0, excRev: parseFloat(x.exc_rev)||0 })),
         catPrevMap: Object.fromEntries((r.crCatPrev || []).map(x => [x.category, parseFloat(x.rev)||0])),
         subCatPrevMap: (r.crSubCatPrev || []).reduce((m,x) => { m[`${x.category}::${x.subcategory}`] = parseFloat(x.rev)||0; return m }, {}),
-        skuMatrix: (() => { const m = {}; (r.crSKUMatrix||[]).forEach(x => { const cat=x.category||'Unknown', sc=x.subcategory||'Unknown', sku=x.sku; if(!m[cat])m[cat]={}; if(!m[cat][sc])m[cat][sc]={}; m[cat][sc][sku]={rev:parseFloat(x.rev)||0,excRev:parseFloat(x.exc_rev)||0,units:parseInt(x.units)||0,orders:parseInt(x.orders)||0} }); return m })(),
+        skuMatrix: (() => { const m = {}; (r.crSKUMatrix||[]).forEach(x => { const cat=x.category||'Others', sc=x.subcategory||'Others', sku=x.sku; if(!m[cat])m[cat]={}; if(!m[cat][sc])m[cat][sc]={}; m[cat][sc][sku]={rev:parseFloat(x.rev)||0,excRev:parseFloat(x.exc_rev)||0,units:parseInt(x.units)||0,orders:parseInt(x.orders)||0} }); return m })(),
         states: (r.crStates || []).map(x => ({ state: x.state, orders: parseInt(x.orders)||0, rev: parseFloat(x.rev)||0 })),
         statePrevMap: Object.fromEntries((r.crStatesPrev || []).map(x => [x.state, parseFloat(x.rev)||0])),
         stateTotal: parseFloat(r.crStateTotal?.[0]?.total_rev) || 0,
@@ -1097,7 +1301,7 @@ export default async function handler(req, res) {
         skus: (r.fcSKUs || []).map(x => ({ sku: x.sku, name: x.sku_name, orders: parseInt(x.orders)||0, units: parseInt(x.units)||0, rev: parseFloat(x.rev)||0 })),
         categories: (r.fcCategories || []).map(x => ({ category: x.category, orders: parseInt(x.orders)||0, units: parseInt(x.units)||0, rev: parseFloat(x.rev)||0, excRev: parseFloat(x.exc_rev)||0 })),
         subCategories: (r.fcSubCategories || []).map(x => ({ category: x.category, subcategory: x.subcategory, orders: parseInt(x.orders)||0, units: parseInt(x.units)||0, rev: parseFloat(x.rev)||0, excRev: parseFloat(x.exc_rev)||0 })),
-        skuMatrix: (() => { const m = {}; (r.fcSKUMatrix||[]).forEach(x => { const cat=x.category||'Unknown', sc=x.subcategory||'Unknown', sku=x.sku; if(!m[cat])m[cat]={}; if(!m[cat][sc])m[cat][sc]={}; m[cat][sc][sku]={rev:parseFloat(x.rev)||0,excRev:parseFloat(x.exc_rev)||0,units:parseInt(x.units)||0,orders:parseInt(x.orders)||0} }); return m })(),
+        skuMatrix: (() => { const m = {}; (r.fcSKUMatrix||[]).forEach(x => { const cat=x.category||'Others', sc=x.subcategory||'Others', sku=x.sku; if(!m[cat])m[cat]={}; if(!m[cat][sc])m[cat][sc]={}; m[cat][sc][sku]={rev:parseFloat(x.rev)||0,excRev:parseFloat(x.exc_rev)||0,units:parseInt(x.units)||0,orders:parseInt(x.orders)||0} }); return m })(),
         states: (r.fcStates || []).map(x => ({ state: x.state, orders: parseInt(x.orders)||0, rev: parseFloat(x.rev)||0 })),
         status: (r.fcStatus || []).map(x => ({ status: x.status, orders: parseInt(x.orders)||0, rev: parseFloat(x.rev)||0 })),
         cities: (r.fcCities || []).map(x => ({ city: x.city, orders: parseInt(x.orders)||0, rev: parseFloat(x.rev)||0 })),
@@ -1117,7 +1321,7 @@ export default async function handler(req, res) {
         categories: (r.zpCategories || []).map(x => ({ category: x.category, units: parseInt(x.units)||0, rev: parseFloat(x.rev)||0, excRev: parseFloat(x.exc_rev)||0, skus: parseInt(x.skus)||0 })),
         subCategories: (r.zpSubCategories || []).map(x => ({ category: x.category, subcategory: x.subcategory, units: parseInt(x.units)||0, rev: parseFloat(x.rev)||0, excRev: parseFloat(x.exc_rev)||0 })),
         skus: (r.zpSKUs || []).map(x => ({ itemId: x.item_id, name: x.item_name, units: parseInt(x.units)||0, rev: parseFloat(x.rev)||0, cities: parseInt(x.cities)||0 })),
-        skuMatrix: (() => { const m = {}; (r.zpSKUMatrix||[]).forEach(x => { const cat=x.category||'Unknown', sc=x.subcategory||'Unknown', sku=x.sku; if(!m[cat])m[cat]={}; if(!m[cat][sc])m[cat][sc]={}; if(!m[cat][sc][sku])m[cat][sc][sku]={rev:0,excRev:0,units:0}; m[cat][sc][sku].rev+=parseFloat(x.rev)||0; m[cat][sc][sku].excRev+=parseFloat(x.exc_rev)||0; m[cat][sc][sku].units+=parseInt(x.units)||0 }); return m })(),
+        skuMatrix: (() => { const m = {}; (r.zpSKUMatrix||[]).forEach(x => { const cat=x.category||'Others', sc=x.subcategory||'Others', sku=x.sku; if(!m[cat])m[cat]={}; if(!m[cat][sc])m[cat][sc]={}; if(!m[cat][sc][sku])m[cat][sc][sku]={rev:0,excRev:0,units:0}; m[cat][sc][sku].rev+=parseFloat(x.rev)||0; m[cat][sc][sku].excRev+=parseFloat(x.exc_rev)||0; m[cat][sc][sku].units+=parseInt(x.units)||0 }); return m })(),
         cities: (r.zpCities || []).map(x => ({ city: x.city_name, region: x.region || '', cityTier: x.city_tier || '', units: parseInt(x.units)||0, orders: parseInt(x.orders)||0, rev: parseFloat(x.rev)||0, skus: parseInt(x.skus)||0 })),
         states: (r.zpStates || []).map(x => ({ state: x.state?.charAt(0).toUpperCase()+x.state?.slice(1).toLowerCase(), units: parseInt(x.units)||0, orders: parseInt(x.orders)||0, rev: parseFloat(x.rev)||0 })),
         statePrevMap: (r.zpStatesPrev||[]).reduce((m,x) => { const s = x.state?.charAt(0).toUpperCase()+x.state?.slice(1).toLowerCase(); m[s] = parseFloat(x.rev)||0; return m }, {}),
@@ -1141,7 +1345,7 @@ export default async function handler(req, res) {
         categories: (r.inCategories || []).map(x => ({ category: x.category, units: parseInt(x.units)||0, rev: parseFloat(x.rev)||0, excRev: parseFloat(x.exc_rev)||0, skus: parseInt(x.skus)||0 })),
         subCategories: (r.inSubCategories || []).map(x => ({ category: x.category, subcategory: x.subcategory, units: parseInt(x.units)||0, rev: parseFloat(x.rev)||0, excRev: parseFloat(x.exc_rev)||0 })),
         skus: (r.inSKUs || []).map(x => ({ itemId: x.item_id, name: x.item_name, units: parseInt(x.units)||0, rev: parseFloat(x.rev)||0, cities: parseInt(x.cities)||0 })),
-        skuMatrix: (() => { const m = {}; (r.inSKUMatrix||[]).forEach(x => { const cat=x.category||'Unknown', sc=x.subcategory||'Unknown', sku=x.sku; if(!m[cat])m[cat]={}; if(!m[cat][sc])m[cat][sc]={}; if(!m[cat][sc][sku])m[cat][sc][sku]={rev:0,excRev:0,units:0}; m[cat][sc][sku].rev+=parseFloat(x.rev)||0; m[cat][sc][sku].excRev+=parseFloat(x.exc_rev)||0; m[cat][sc][sku].units+=parseInt(x.units)||0 }); return m })(),
+        skuMatrix: (() => { const m = {}; (r.inSKUMatrix||[]).forEach(x => { const cat=x.category||'Others', sc=x.subcategory||'Others', sku=x.sku; if(!m[cat])m[cat]={}; if(!m[cat][sc])m[cat][sc]={}; if(!m[cat][sc][sku])m[cat][sc][sku]={rev:0,excRev:0,units:0}; m[cat][sc][sku].rev+=parseFloat(x.rev)||0; m[cat][sc][sku].excRev+=parseFloat(x.exc_rev)||0; m[cat][sc][sku].units+=parseInt(x.units)||0 }); return m })(),
         cities: (r.inCities || []).map(x => ({ city: x.city_name, region: x.region || '', cityTier: x.city_tier || '', units: parseInt(x.units)||0, orders: parseInt(x.orders)||0, rev: parseFloat(x.rev)||0, skus: parseInt(x.skus)||0 })),
         states: (r.inStates || []).map(x => ({ state: x.state?.charAt(0).toUpperCase()+x.state?.slice(1).toLowerCase(), units: parseInt(x.units)||0, orders: parseInt(x.orders)||0, rev: parseFloat(x.rev)||0 })),
         statePrevMap: (r.inStatesPrev||[]).reduce((m,x) => { const s = x.state?.charAt(0).toUpperCase()+x.state?.slice(1).toLowerCase(); m[s] = parseFloat(x.rev)||0; return m }, {}),
@@ -1164,7 +1368,7 @@ export default async function handler(req, res) {
         subCategories: (r.mnSubCategories || []).map(x => ({ category: x.category, subcategory: x.subcategory, orders: parseInt(x.orders)||0, units: parseInt(x.units)||0, rev: parseFloat(x.rev)||0, excRev: parseFloat(x.exc_rev)||0 })),
         catPrevMap: Object.fromEntries((r.mnCatPrev || []).map(x => [x.category, parseFloat(x.rev)||0])),
         subCatPrevMap: (r.mnSubCatPrev || []).reduce((m,x) => { m[`${x.category}::${x.subcategory}`] = parseFloat(x.rev)||0; return m }, {}),
-        skuMatrix: (() => { const m = {}; (r.mnSKUMatrix||[]).forEach(x => { const cat=x.category||'Unknown', sc=x.subcategory||'Unknown', sku=x.sku; if(!m[cat])m[cat]={}; if(!m[cat][sc])m[cat][sc]={}; m[cat][sc][sku]={rev:parseFloat(x.rev)||0,excRev:parseFloat(x.exc_rev)||0,units:parseInt(x.units)||0,orders:parseInt(x.orders)||0} }); return m })(),
+        skuMatrix: (() => { const m = {}; (r.mnSKUMatrix||[]).forEach(x => { const cat=x.category||'Others', sc=x.subcategory||'Others', sku=x.sku; if(!m[cat])m[cat]={}; if(!m[cat][sc])m[cat][sc]={}; m[cat][sc][sku]={rev:parseFloat(x.rev)||0,excRev:parseFloat(x.exc_rev)||0,units:parseInt(x.units)||0,orders:parseInt(x.orders)||0} }); return m })(),
         skus: (r.mnSKUs || []).map(x => ({ sku: x.sku, category: x.category || '', orders: parseInt(x.orders)||0, units: parseInt(x.units)||0, rev: parseFloat(x.rev)||0, excRev: parseFloat(x.exc_rev)||0 })),
         states: (r.mnStates || []).map(x => ({ state: x.state, orders: parseInt(x.orders)||0, rev: parseFloat(x.rev)||0 })),
         statePrevMap: Object.fromEntries((r.mnStatesPrev || []).map(x => [x.state, parseFloat(x.rev)||0])),
@@ -1185,7 +1389,7 @@ export default async function handler(req, res) {
         categories: (r.blCategories || []).map(x => ({ category: x.category, units: parseInt(x.units)||0, rev: parseFloat(x.rev)||0, excRev: parseFloat(x.exc_rev)||0, skus: parseInt(x.skus)||0 })),
         subCategories: (r.blSubCategories || []).map(x => ({ category: x.category, subcategory: x.subcategory, units: parseInt(x.units)||0, rev: parseFloat(x.rev)||0, excRev: parseFloat(x.exc_rev)||0 })),
         skus: (r.blSKUs || []).map(x => ({ itemId: x.item_id, name: x.item_name, units: parseInt(x.units)||0, rev: parseFloat(x.rev)||0, mrp: parseFloat(x.mrp)||0, cities: parseInt(x.cities)||0 })),
-        skuMatrix: (() => { const m = {}; (r.blSKUMatrix||[]).forEach(x => { const cat=x.category||'Unknown', sc=x.subcategory||'Unknown', sku=x.sku; if(!m[cat])m[cat]={}; if(!m[cat][sc])m[cat][sc]={}; if(!m[cat][sc][sku])m[cat][sc][sku]={rev:0,excRev:0,units:0}; m[cat][sc][sku].rev+=parseFloat(x.rev)||0; m[cat][sc][sku].excRev+=parseFloat(x.exc_rev)||0; m[cat][sc][sku].units+=parseInt(x.units)||0 }); return m })(),
+        skuMatrix: (() => { const m = {}; (r.blSKUMatrix||[]).forEach(x => { const cat=x.category||'Others', sc=x.subcategory||'Others', sku=x.sku; if(!m[cat])m[cat]={}; if(!m[cat][sc])m[cat][sc]={}; if(!m[cat][sc][sku])m[cat][sc][sku]={rev:0,excRev:0,units:0}; m[cat][sc][sku].rev+=parseFloat(x.rev)||0; m[cat][sc][sku].excRev+=parseFloat(x.exc_rev)||0; m[cat][sc][sku].units+=parseInt(x.units)||0 }); return m })(),
         cities: (r.blCities || []).map(x => ({ city: x.city_name, region: x.region || '', cityTier: x.city_tier || '', units: parseInt(x.units)||0, orders: parseInt(x.orders)||0, rev: parseFloat(x.rev)||0, skus: parseInt(x.skus)||0 })),
         states: (r.blStates || []).map(x => ({ state: x.state?.charAt(0).toUpperCase()+x.state?.slice(1).toLowerCase(), units: parseInt(x.units)||0, orders: parseInt(x.orders)||0, rev: parseFloat(x.rev)||0 })),
         statePrevMap: (r.blStatesPrev||[]).reduce((m,x) => { const s = x.state?.charAt(0).toUpperCase()+x.state?.slice(1).toLowerCase(); m[s] = parseFloat(x.rev)||0; return m }, {}),
@@ -1202,9 +1406,9 @@ export default async function handler(req, res) {
         prevDaily: (r.prevOfflineDaily || []).map(x => ({ date: x.date, subChannel: x.SubChannel, rev: parseFloat(x.rev) || 0 })),
         daily: (r.offlineDaily || []).map(x => ({ date: x.date, subChannel: x.SubChannel, orders: parseInt(x.orders)||0, units: parseInt(x.units)||0, rev: parseFloat(x.rev)||0, excRev: parseFloat(x.exc_rev)||0, cnRev: parseFloat(x.cn_rev)||0, cnExcRev: parseFloat(x.cn_exc_rev)||0 })),
         subChannelRows: (r.offlineSubChannel || []).map(x => ({ subChannel: x.SubChannel, orders: parseInt(x.orders)||0, units: parseInt(x.units)||0, rev: parseFloat(x.rev)||0, excRev: parseFloat(x.exc_rev)||0 })),
-        categoryRows: (r.offlineCategory || []).map(x => ({ subChannel: x.SubChannel, category: x.Category || 'Unknown', rev: parseFloat(x.rev)||0, excRev: parseFloat(x.exc_rev)||0, orders: parseInt(x.orders)||0, units: parseInt(x.units)||0, cnRev: parseFloat(x.cn_rev)||0 })),
-        subCategoryRows: (r.offlineSubCategory || []).map(x => ({ subChannel: x.SubChannel, category: x.Category || 'Unknown', subCategory: x.SubCategory || 'Unknown', rev: parseFloat(x.rev)||0, excRev: parseFloat(x.exc_rev)||0, orders: parseInt(x.orders)||0, units: parseInt(x.units)||0 })),
-        skuRows: (r.offlineSKU || []).map(x => ({ subChannel: x.SubChannel, category: x.Category || 'Unknown', subCategory: x.SubCategory || 'Unknown', sku: x.sku, rev: parseFloat(x.rev)||0, excRev: parseFloat(x.exc_rev)||0, orders: parseInt(x.orders)||0, units: parseInt(x.units)||0 })),
+        categoryRows: (r.offlineCategory || []).map(x => ({ subChannel: x.SubChannel, category: x.Category || 'Others', rev: parseFloat(x.rev)||0, excRev: parseFloat(x.exc_rev)||0, orders: parseInt(x.orders)||0, units: parseInt(x.units)||0, cnRev: parseFloat(x.cn_rev)||0 })),
+        subCategoryRows: (r.offlineSubCategory || []).map(x => ({ subChannel: x.SubChannel, category: x.Category || 'Others', subCategory: x.SubCategory || 'Others', rev: parseFloat(x.rev)||0, excRev: parseFloat(x.exc_rev)||0, orders: parseInt(x.orders)||0, units: parseInt(x.units)||0 })),
+        skuRows: (r.offlineSKU || []).map(x => ({ subChannel: x.SubChannel, category: x.Category || 'Others', subCategory: x.SubCategory || 'Others', sku: x.sku, rev: parseFloat(x.rev)||0, excRev: parseFloat(x.exc_rev)||0, orders: parseInt(x.orders)||0, units: parseInt(x.units)||0 })),
         stateRows: (r.offlineState || []).filter(x => x.state).map(x => ({ subChannel: x.SubChannel, state: x.state, rev: parseFloat(x.rev)||0, orders: parseInt(x.orders)||0, cities: parseInt(x.cities)||0 })),
         cityRows: (r.offlineCity || []).map(x => ({ subChannel: x.SubChannel, city: x.city, state: x.state || '', region: x.region || '', orders: parseInt(x.orders)||0, rev: parseFloat(x.rev)||0 })).filter(x => x.city),
         catPrevRows: (r.offCatPrev || []).map(x => ({ subChannel: x.SubChannel, category: x.category, rev: parseFloat(x.rev)||0 })),
@@ -1218,6 +1422,12 @@ export default async function handler(req, res) {
       },
       ads: {
         totals: (r.adsTotals || []).map(x => ({ platform: x.platform, spend: parseFloat(x.spend)||0, revenue: parseFloat(x.revenue)||0, impressions: parseFloat(x.impressions)||0, clicks: parseFloat(x.clicks)||0, orders: parseFloat(x.orders)||0, ctr: parseFloat(x.ctr)||0, cpc: parseFloat(x.cpc)||0, roas: parseFloat(x.roas)||0 })),
+        // Flipkart's data feed lags recent days — chMap['Flipkart'].excRev (feeding the Net
+        // Revenue KPI) includes a 7-day-trailing-average estimate for those missing days, but
+        // the category/product breakdown below only sums rows actually present in the sales
+        // table. Exposed here so the frontend can add the same estimate into Flipkart's
+        // "Others" bucket, keeping the KPI and the breakdown tables' totals consistent.
+        flipkartEstRev: fkBlock.estTotalRev || 0,
         daily: (r.adsDaily || []).map(x => ({ date: x.date, platform: x.platform, spend: parseFloat(x.spend)||0, revenue: parseFloat(x.revenue)||0, impressions: parseFloat(x.impressions)||0, clicks: parseFloat(x.clicks)||0 })),
         channelDailyExcRev: (() => {
           const map = {}
@@ -1232,6 +1442,11 @@ export default async function handler(req, res) {
           ;(r.byChannel || []).forEach(x => { m[x.Channel] = parseInt(x.orders) || 0 })
           return m
         })(),
+        // Powers the Ads trend chart's category/sub-category slicer (see adsDailyByCategory /
+        // salesDailyByCategory above). Left as raw normalized rows — the frontend aggregates by
+        // date after filtering to the selected category/sub-category and current platform tab.
+        adsDailyByCategory: (r.adsDailyByCategory || []).map(x => ({ date: x.date, platform: x.platform, category: x.category, subCategory: x.sub_category || null, spend: parseFloat(x.spend) || 0 })),
+        salesDailyByCategory: (r.salesDailyByCategory || []).map(x => ({ date: x.date, platform: x.platform, category: x.category, subCategory: x.sub_category || null, revenue: parseFloat(x.revenue) || 0 })),
         byAdType: (r.adsByAdType || []).map(x => ({ platform: x.platform, adType: x.ad_type, spend: parseFloat(x.spend)||0, revenue: parseFloat(x.revenue)||0, impressions: parseFloat(x.impressions)||0, clicks: parseFloat(x.clicks)||0, orders: parseFloat(x.orders)||0, ctr: parseFloat(x.ctr)||0, cpc: parseFloat(x.cpc)||0, roas: parseFloat(x.roas)||0 })),
         campaigns: (r.adsCampaigns || []).map(x => ({ platform: x.platform, adType: x.ad_type, campaign: x.campaign_name, spend: parseFloat(x.spend)||0, revenue: parseFloat(x.revenue)||0, impressions: parseFloat(x.impressions)||0, clicks: parseFloat(x.clicks)||0, orders: parseFloat(x.orders)||0, ctr: parseFloat(x.ctr)||0, cpc: parseFloat(x.cpc)||0, roas: parseFloat(x.roas)||0 })),
         byCategory: (r.adsByCategory || []).map(x => ({ platform: x.platform, category: x.category, spend: parseFloat(x.spend)||0, revenue: parseFloat(x.revenue)||0, impressions: parseFloat(x.impressions)||0, clicks: parseFloat(x.clicks)||0, orders: parseFloat(x.orders)||0, roas: parseFloat(x.roas)||0 })),
@@ -1252,17 +1467,20 @@ export default async function handler(req, res) {
           // ad spend by platform+category (for category table)
           const adCatMap = {}
           adsCB.forEach(x => {
-            const key = `${x.platform}||${(x.category || 'Unknown').trim()}`
+            const key = `${x.platform}||${(x.category || 'Others').trim()}`
             if (!adCatMap[key]) adCatMap[key] = { spend: 0, clicks: 0, impressions: 0 }
             adCatMap[key].spend += parseFloat(x.spend) || 0
             adCatMap[key].clicks += parseFloat(x.clicks) || 0
             adCatMap[key].impressions += parseFloat(x.impressions) || 0
           })
-          // ad spend by platform+subCategory (for product table)
+          // ad spend by platform+subCategory (for product table) — every row from adsCategoryBreakdown
+          // is already resolved down to a specific sub-category/product regardless of the original
+          // target_type (product/category/all), since category- and all-level spend is now split
+          // across matched sub-categories by revenue share before this point.
           const adProdMap = {}
-          adsCB.filter(x => x.target_type === 'product' && x.product_name).forEach(x => {
+          adsCB.filter(x => x.product_name).forEach(x => {
             const key = `${x.platform}||${x.product_name.trim()}`
-            if (!adProdMap[key]) adProdMap[key] = { spend: 0, clicks: 0, impressions: 0, category: x.category || 'Unknown' }
+            if (!adProdMap[key]) adProdMap[key] = { spend: 0, clicks: 0, impressions: 0, category: x.category || 'Others' }
             adProdMap[key].spend += parseFloat(x.spend) || 0
             adProdMap[key].clicks += parseFloat(x.clicks) || 0
             adProdMap[key].impressions += parseFloat(x.impressions) || 0
@@ -1272,7 +1490,7 @@ export default async function handler(req, res) {
           // For D2C (Meta+Google) use Shopify sales split by spend share
           const catSalesMap = {}
           shopifySales.forEach(s => {
-            const cat = (s.category || 'Unknown').trim()
+            const cat = (s.category || 'Others').trim()
             if (!catSalesMap[cat]) catSalesMap[cat] = { revenue: 0, orders: 0 }
             catSalesMap[cat].revenue += parseFloat(s.revenue) || 0
             catSalesMap[cat].orders += parseFloat(s.orders) || 0
@@ -1291,7 +1509,7 @@ export default async function handler(req, res) {
           const subCatSalesMap = {}
           shopifySales.forEach(s => {
             const subCat = (s.sub_category || '').trim()
-            const cat = (s.category || 'Unknown').trim()
+            const cat = (s.category || 'Others').trim()
             const key = subCat || `__nosubcat__${cat}`
             if (!subCatSalesMap[key]) subCatSalesMap[key] = { subCategory: subCat || null, category: cat, revenue: 0, orders: 0 }
             subCatSalesMap[key].revenue += parseFloat(s.revenue) || 0
@@ -1300,9 +1518,13 @@ export default async function handler(req, res) {
 
           // Track which subCats are matched by ads
           const matchedSubCats = new Set()
+          // Sales rows with no sub-category (blank/unmapped SKUs) still carry real revenue —
+          // fold them into Others instead of dropping them, so this table's total matches the
+          // category table's total (and the Net Revenue KPI) rather than silently running short.
+          let noSubCatRevenue = 0, noSubCatOrders = 0
           const productRows = Object.values(subCatSalesMap).map(s => {
             const subCat = s.subCategory
-            if (!subCat) return null
+            if (!subCat) { noSubCatRevenue += s.revenue; noSubCatOrders += s.orders; return null }
             const metaKey = `Meta||${subCat}`
             const googleKey = `Google||${subCat}`
             const metaAd = adProdMap[metaKey] || {}
@@ -1314,9 +1536,9 @@ export default async function handler(req, res) {
             return { platform: 'D2C', category: s.category, subCategory: subCat, spend, clicks, impressions, salesRevenue: Math.round(s.revenue), orders: Math.round(s.orders) }
           }).filter(Boolean)
 
-          // Others: subCats with sales but no ad spend — aggregate into one Others row
-          const othersRevenue = productRows.filter(r => r.spend === 0).reduce((s, r) => s + r.salesRevenue, 0)
-          const othersOrders = productRows.filter(r => r.spend === 0).reduce((s, r) => s + r.orders, 0)
+          // Others: subCats with sales but no ad spend, plus no-sub-category revenue — aggregate into one Others row
+          const othersRevenue = productRows.filter(r => r.spend === 0).reduce((s, r) => s + r.salesRevenue, 0) + Math.round(noSubCatRevenue)
+          const othersOrders = productRows.filter(r => r.spend === 0).reduce((s, r) => s + r.orders, 0) + Math.round(noSubCatOrders)
           const advertisedProducts = productRows.filter(r => r.spend > 0)
           if (othersRevenue > 0) {
             advertisedProducts.push({ platform: 'D2C', category: 'Others', subCategory: 'Others', spend: 0, clicks: 0, impressions: 0, salesRevenue: othersRevenue, orders: othersOrders })
@@ -1331,7 +1553,7 @@ export default async function handler(req, res) {
             // Category rows for this platform
             const platCatSales = {}
             platSales.forEach(s => {
-              const cat = (s.category || 'Unknown').trim()
+              const cat = (s.category || 'Others').trim()
               if (!platCatSales[cat]) platCatSales[cat] = { revenue: 0, orders: 0 }
               platCatSales[cat].revenue += parseFloat(s.revenue) || 0
               platCatSales[cat].orders += parseFloat(s.orders) || 0
@@ -1340,18 +1562,27 @@ export default async function handler(req, res) {
               const adEntry = adCatMap[`${plat}||${cat}`] || {}
               categoryRows.push({ platform: plat, category: cat, subCategory: null, spend: adEntry.spend || 0, clicks: adEntry.clicks || 0, impressions: adEntry.impressions || 0, salesRevenue: Math.round(sales.revenue), orders: Math.round(sales.orders) })
             })
+            // Flipkart's data feed lags recent days — the Net Revenue KPI includes a
+            // trailing-average estimate for those missing days (see chMap['Flipkart'] patch
+            // above); add the same estimate here as an uncategorized row so this table's total
+            // stays consistent with the KPI instead of silently running short.
+            if (plat === 'Flipkart' && fkBlock.estTotalRev > 0) {
+              categoryRows.push({ platform: plat, category: 'Others (est.)', subCategory: null, spend: 0, clicks: 0, impressions: 0, salesRevenue: Math.round(fkBlock.estTotalRev), orders: 0 })
+            }
 
             // Product rows for this platform
             const platSubCatSales = {}
+            let platNoSubCatRev = 0, platNoSubCatOrders = 0
             platSales.forEach(s => {
               const subCat = (s.sub_category || '').trim()
-              const cat = (s.category || 'Unknown').trim()
-              if (!subCat) return
+              const cat = (s.category || 'Others').trim()
+              if (!subCat) { platNoSubCatRev += parseFloat(s.revenue) || 0; platNoSubCatOrders += parseFloat(s.orders) || 0; return }
               if (!platSubCatSales[subCat]) platSubCatSales[subCat] = { category: cat, revenue: 0, orders: 0 }
               platSubCatSales[subCat].revenue += parseFloat(s.revenue) || 0
               platSubCatSales[subCat].orders += parseFloat(s.orders) || 0
             })
-            let platOthersRev = 0, platOthersOrders = 0
+            // No-sub-category revenue (blank/unmapped SKUs) folds into Others below, same as D2C.
+            let platOthersRev = platNoSubCatRev, platOthersOrders = platNoSubCatOrders
             Object.entries(platSubCatSales).forEach(([subCat, s]) => {
               const adEntry = adProdMap[`${plat}||${subCat}`] || {}
               if (adEntry.spend > 0) {
@@ -1364,13 +1595,74 @@ export default async function handler(req, res) {
             if (platOthersRev > 0) {
               advertisedProducts.push({ platform: plat, category: 'Others', subCategory: 'Others', spend: 0, clicks: 0, impressions: 0, salesRevenue: Math.round(platOthersRev), orders: Math.round(platOthersOrders) })
             }
+            // Same Flipkart lag-estimate reconciliation as the category table above.
+            if (plat === 'Flipkart' && fkBlock.estTotalRev > 0) {
+              advertisedProducts.push({ platform: plat, category: 'Others (est.)', subCategory: 'Others (est.)', spend: 0, clicks: 0, impressions: 0, salesRevenue: Math.round(fkBlock.estTotalRev), orders: 0 })
+            }
+          })
+
+          // Reconcile: any platform+category (or platform+subCategory) with ad spend but no matching
+          // sales row in this period would otherwise be silently dropped, since categoryRows/
+          // advertisedProducts are built by iterating SALES data and looking up ad spend — not the
+          // other way around. Add zero-sales rows for these so every rupee of ad spend still shows up.
+          const d2cCatKeys = new Set(categoryRows.filter(r => r.platform === 'D2C').map(r => r.category))
+          const mktCatKeys = new Set()
+          categoryRows.filter(r => r.platform !== 'D2C').forEach(r => mktCatKeys.add(`${r.platform}||${r.category}`))
+          Object.entries(adCatMap).forEach(([key, ad]) => {
+            if (!ad.spend) return
+            const [plat, cat] = key.split('||')
+            if (plat === 'Meta' || plat === 'Google') {
+              if (!d2cCatKeys.has(cat)) {
+                d2cCatKeys.add(cat)
+                categoryRows.push({ platform: 'D2C', category: cat, subCategory: null, spend: (adCatMap[`Meta||${cat}`]?.spend || 0) + (adCatMap[`Google||${cat}`]?.spend || 0), clicks: (adCatMap[`Meta||${cat}`]?.clicks || 0) + (adCatMap[`Google||${cat}`]?.clicks || 0), impressions: (adCatMap[`Meta||${cat}`]?.impressions || 0) + (adCatMap[`Google||${cat}`]?.impressions || 0), salesRevenue: 0, orders: 0 })
+              }
+            } else if (mktPlatforms.includes(plat) && !mktCatKeys.has(key)) {
+              mktCatKeys.add(key)
+              categoryRows.push({ platform: plat, category: cat, subCategory: null, spend: ad.spend || 0, clicks: ad.clicks || 0, impressions: ad.impressions || 0, salesRevenue: 0, orders: 0 })
+            }
+          })
+          const d2cSubCatKeys = new Set(advertisedProducts.filter(r => r.platform === 'D2C').map(r => r.subCategory))
+          const mktSubCatKeys = new Set()
+          advertisedProducts.filter(r => r.platform !== 'D2C').forEach(r => mktSubCatKeys.add(`${r.platform}||${r.subCategory}`))
+          Object.entries(adProdMap).forEach(([key, ad]) => {
+            if (!ad.spend) return
+            const [plat, subCat] = key.split('||')
+            if (plat === 'Meta' || plat === 'Google') {
+              if (!d2cSubCatKeys.has(subCat)) {
+                d2cSubCatKeys.add(subCat)
+                advertisedProducts.push({ platform: 'D2C', category: ad.category || 'Others', subCategory: subCat, spend: (adProdMap[`Meta||${subCat}`]?.spend || 0) + (adProdMap[`Google||${subCat}`]?.spend || 0), clicks: (adProdMap[`Meta||${subCat}`]?.clicks || 0) + (adProdMap[`Google||${subCat}`]?.clicks || 0), impressions: (adProdMap[`Meta||${subCat}`]?.impressions || 0) + (adProdMap[`Google||${subCat}`]?.impressions || 0), salesRevenue: 0, orders: 0 })
+              }
+            } else if (mktPlatforms.includes(plat) && !mktSubCatKeys.has(key)) {
+              mktSubCatKeys.add(key)
+              advertisedProducts.push({ platform: plat, category: ad.category || 'Others', subCategory: subCat, spend: ad.spend || 0, clicks: ad.clicks || 0, impressions: ad.impressions || 0, salesRevenue: 0, orders: 0 })
+            }
           })
 
           return { categoryRows, productRows: advertisedProducts }
         })(),
+        // Consolidated Spend Detail table (Ads tab, "All" sub-tab only) — one row per
+        // category+sub-category, summed across every platform, with gross/net revenue and
+        // returns/cancellations broken out (unlike categoryBreakdown above, which is
+        // platform-split and gross-revenue-only). Net Revenue uses the same
+        // (gross − cancel − return/RTO − CIR) × (1 − GST ratio) formula used throughout
+        // the rest of the app (chMap, Shopify/Flipkart tabs, etc).
+        // Category/product spend+revenue breakdown, buildable for "all platforms" or scoped to
+        // one platform (or a set, e.g. D2C = Meta+Google) so every Ads sub-tab can render the
+        // exact same table component. Ad spend drives both category and product rows (not sales
+        // data) so every rupee of spend is represented even when it has no sales-side match —
+        // a sales-driven join would silently drop unmatched spend, which is what originally
+        // caused By Product spend to undercount the true total.
+        allSpendDetail: buildSpendDetail(null),
+        spendDetailByPlatform: Object.fromEntries(
+          ['Meta', 'Google', 'D2C', 'Amazon', 'Flipkart', 'Myntra', 'Zepto', 'Instamart', 'Blinkit'].map(p => [p, buildSpendDetail(p)])
+        ),
         zeroOrder: (r.adsZeroOrder || []).map(x => ({ platform: x.platform, product: x.product, campaign: x.campaign_name, spend: parseFloat(x.spend)||0, orders: parseFloat(x.orders)||0, clicks: parseFloat(x.clicks)||0, impressions: parseFloat(x.impressions)||0, ctr: parseFloat(x.ctr)||0, cpc: parseFloat(x.cpc)||0 })),
         prevTotals: (r.prevAdsTotals || []).reduce((m, x) => { m[x.platform] = { spend: parseFloat(x.spend)||0, revenue: parseFloat(x.revenue)||0, impressions: parseFloat(x.impressions)||0, clicks: parseFloat(x.clicks)||0 }; return m }, {}),
-        prevCategoryBreakdown: (r.prevAdsCategoryBreakdown || []).map(x => ({ platform: x.platform, targetType: x.target_type, category: x.category || 'Unknown', subCategory: x.target_type === 'product' ? x.product_name : null, spend: parseFloat(x.spend)||0, clicks: parseFloat(x.clicks)||0 })),
+        // prevAdsCategoryBreakdown query dropped — it duplicated the full ~3s attribution
+        // pipeline just to power WoW% badges on the per-platform Category/Product tables.
+        // Those badges now simply show no delta (prevCategoryBreakdown is empty) rather than
+        // paying that cost on every request.
+        prevCategoryBreakdown: [],
         nCusts: parseInt(r.shopifyNewCusts?.[0]?.n_custs) || 0,
         repeatCusts: parseInt(r.shopifyNewCusts?.[0]?.repeat_custs) || 0,
       },

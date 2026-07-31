@@ -16,14 +16,16 @@ export const C = {
 export const fmt = v => {
   if (v == null || isNaN(v)) return '₹0'
   if (v >= 1e7) return `₹${(v / 1e7).toFixed(2)} Cr`
-  if (v >= 1e5) return `₹${(v / 1e5).toFixed(1)} L`
+  if (v >= 1e5) return `₹${(v / 1e5).toFixed(2)} L`
+  if (v >= 1e3) return `₹${(v / 1e3).toFixed(2)} K`
   return `₹${Math.round(v).toLocaleString('en-IN')}`
 }
 export const fmtN = v => (v || 0).toLocaleString('en-IN')
 export const fmtBig = v => {
   if (v == null || isNaN(v)) return '0'
   if (v >= 1e7) return `${(v / 1e7).toFixed(2)} Cr`
-  if (v >= 1e5) return `${(v / 1e5).toFixed(1)} L`
+  if (v >= 1e5) return `${(v / 1e5).toFixed(2)} L`
+  if (v >= 1e3) return `${(v / 1e3).toFixed(2)} K`
   return Math.round(v).toLocaleString('en-IN')
 }
 export const pct = (a, b) => b ? ((a / b) * 100).toFixed(1) + '%' : '0%'
@@ -179,13 +181,13 @@ export function detectAlerts(data) {
   return alerts
 }
 
-export function exportCSV(rows) {
+export function exportCSV(rows, filename = 'frido_export.csv') {
   if (!rows?.length) return
   const cols = Object.keys(rows[0])
   const csv = [cols.join(','), ...rows.map(r => cols.map(c => JSON.stringify(r[c] ?? '')).join(','))].join('\n')
   const blob = new Blob([csv], { type: 'text/csv' })
   const url = URL.createObjectURL(blob)
-  const a = document.createElement('a'); a.href = url; a.download = 'frido_export.csv'; a.click()
+  const a = document.createElement('a'); a.href = url; a.download = filename; a.click()
   URL.revokeObjectURL(url)
 }
 

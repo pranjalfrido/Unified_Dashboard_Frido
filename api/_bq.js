@@ -50,13 +50,13 @@ export function buildQuery(s, e, filters = {}) {
   }
   if (category) {
     const cats = category.split(',').map(c => c.trim()).filter(Boolean)
-    if (cats.length === 1) whereClauses.push(`u.Category = '${cats[0].replace(/'/g, "''")}'`)
-    else if (cats.length > 1) whereClauses.push(`u.Category IN (${cats.map(c => `'${c.replace(/'/g, "''")}'`).join(',')})`)
+    if (cats.length === 1) whereClauses.push(`im.Category_Name = '${cats[0].replace(/'/g, "''")}'`)
+    else if (cats.length > 1) whereClauses.push(`im.Category_Name IN (${cats.map(c => `'${c.replace(/'/g, "''")}'`).join(',')})`)
   }
   if (subCategory) {
     const subs = subCategory.split(',').map(c => c.trim()).filter(Boolean)
-    if (subs.length === 1) whereClauses.push(`u.SubCategory = '${subs[0].replace(/'/g, "''")}'`)
-    else if (subs.length > 1) whereClauses.push(`u.SubCategory IN (${subs.map(c => `'${c.replace(/'/g, "''")}'`).join(',')})`)
+    if (subs.length === 1) whereClauses.push(`im.Sub_category = '${subs[0].replace(/'/g, "''")}'`)
+    else if (subs.length > 1) whereClauses.push(`im.Sub_category IN (${subs.map(c => `'${c.replace(/'/g, "''")}'`).join(',')})`)
   }
   if (state) {
     const vals = state.split(',').map(s => s.trim()).filter(Boolean)
@@ -151,8 +151,29 @@ pincode_master AS (
   FROM \`frido-429506.production.pincode_city_master\`
 ),
 city_name_master AS (
-  SELECT DISTINCT City_L1, City_L2, State, Region, City_Tier, Tier_Label, Is_Metro_City
+  -- City_L1 alone is not unique in pincode_city_master (the same city name can appear with
+  -- several distinct City_L2/State/Region combos across pincodes), so a plain SELECT DISTINCT
+  -- still yields multiple rows per City_L1. That fanned out the Blinkit/Zepto/Instamart join
+  -- below (which matches on City_L1 only), silently inflating their revenue. Collapse to one
+  -- representative row per City_L1 so the join can never multiply a sales row.
+  SELECT City_L1, ANY_VALUE(City_L2) AS City_L2, ANY_VALUE(State) AS State, ANY_VALUE(Region) AS Region,
+         ANY_VALUE(City_Tier) AS City_Tier, ANY_VALUE(Tier_Label) AS Tier_Label, ANY_VALUE(Is_Metro_City) AS Is_Metro_City
   FROM \`frido-429506.production.pincode_city_master\`
+  GROUP BY City_L1
+),
+item_master AS (
+  -- Product_Code is the item master's SKU key. Normalize both sides (uppercase, trim, strip
+  -- everything but A-Z/0-9/hyphen) so invisible unicode chars, en-dashes, and stray whitespace
+  -- in either source don't silently break the join. Category/SubCategory now come from here —
+  -- the fact table's own Category/SubCategory columns are a dbt-side default and can be wrong
+  -- (e.g. placeholder "Frido"/"Frido" for SKUs dbt couldn't map) — item master is the source of truth.
+  SELECT
+    REGEXP_REPLACE(UPPER(TRIM(Product_Code)), r'[^A-Z0-9-]', '') AS sku_key,
+    ANY_VALUE(Category_Name) AS Category_Name,
+    ANY_VALUE(Sub_category) AS Sub_category
+  FROM \`frido-429506.sharepoint_to_gcp.Frido_Item_Master__frido_item_sku_master\`
+  WHERE Product_Code IS NOT NULL AND TRIM(Product_Code) != ''
+  GROUP BY sku_key
 )
 SELECT
   u.Country, u.OrderId, u.Channel, u.SubChannel, u.ChannelAccount, u.OrderDate,
@@ -173,7 +194,9 @@ SELECT
   u.fulfillment_channel, u.RefundStatus,
   u.payment_type AS PaymentMode,
   u.CustomerId, u.voucher_code,
-  u.Category, u.SubCategory, u.GST_Tax_Type_Code,
+  COALESCE(im.Category_Name, 'Others') AS Category,
+  COALESCE(im.Sub_category, 'Others') AS SubCategory,
+  u.GST_Tax_Type_Code,
   u.masterskucode AS MasterSKU,
   CASE WHEN u.RefundStatus = 'true' OR u.RefundStatus = '1' THEN 1 ELSE 0 END AS is_refund,
   u.Clickpost_Status, u.Unicommerce_Status, u.Order_Status,
@@ -181,6 +204,7 @@ SELECT
 FROM \`frido-429506.production.fact_all_platform_sales_report\` u
 LEFT JOIN pincode_master pm ON u.Pincode IS NOT NULL AND TRIM(CAST(u.Pincode AS STRING)) = pm.pincode
 LEFT JOIN city_name_master cm ON pm.pincode IS NULL AND u.Channel IN ('Blinkit','Zepto','Instamart') AND cm.City_L1 = CASE UPPER(TRIM(u.City)) WHEN 'BANGALORE' THEN 'Bengaluru' WHEN 'GURGAON' THEN 'Gurugram' WHEN 'DELHI' THEN 'New Delhi' WHEN 'SAS NAGAR' THEN 'Mohali' ELSE INITCAP(TRIM(u.City)) END
+LEFT JOIN item_master im ON REGEXP_REPLACE(UPPER(TRIM(u.masterskucode)), r'[^A-Z0-9-]', '') = im.sku_key
 WHERE u.OrderDate BETWEEN '${s}' AND '${e}'
   AND NOT (u.Channel = 'offline_sales' AND u.Order_Status = 'Credit Note')
   ${whereClause}

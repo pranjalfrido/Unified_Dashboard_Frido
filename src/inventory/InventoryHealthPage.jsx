@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useRef, useLayoutEffect, useEffect } from 'react'
+import React, { useState, useMemo, useRef, useEffect } from 'react'
 import {
   IC, fmtNum, fmtInt, fmtDays, GlassCard, KpiTile, StatusChip, SearchableMultiSelect, DraggableTh, ExportButton,
 } from './theme.jsx'
@@ -261,48 +261,30 @@ function FilterSidebar({ data, filters, setFilters, open, sidebarTop }) {
   const anyActive = ['category', 'subCategory', 'facility', 'facilityType', 'productId', 'location', 'stockStatus']
     .some(k => filters[k]?.length)
 
-  // position: fixed, positioned using the app shell's own known top-bar height (--nav,
-  // 52px in index.css) rather than a live getBoundingClientRect() measurement — measuring
-  // the anchor's live position was unreliable: if the page had already been scrolled when
-  // this component mounted (or before sidebarTop's data-dependent content, e.g. the
-  // snapshot-timestamp line that only appears once data arrives, finished growing to full
-  // height), the captured top/left baked in a stale, already-scrolled offset that never
-  // corrected itself, leaving the fixed sidebar pinned in the wrong place with its top
-  // content clipped.
-  const anchorRef = useRef(null)
-  const [left, setLeft] = useState(null)
-  useLayoutEffect(() => {
-    if (!open) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect -- measuring DOM layout is exactly what useLayoutEffect is for
-      setLeft(null)
-      return
-    }
-    const measure = () => {
-      const el = anchorRef.current
-      if (!el) return
-      setLeft(el.getBoundingClientRect().left)
-    }
-    measure()
-    window.addEventListener('resize', measure)
-    return () => window.removeEventListener('resize', measure)
-  }, [open])
-
+  // position: fixed, positioned using the app shell's own known CSS variables (--sb for the
+  // left icon rail's width, --nav for the top bar's height, both defined in index.css)
+  // instead of a live getBoundingClientRect() measurement. The measured approach was
+  // fundamentally fragile: it only re-ran on mount and window `resize`, so anything else
+  // that shifted the sidebar's layout slot afterward (a scrollbar appearing on the main
+  // content, a reflow with no resize event, etc.) left `left` stale — the fixed panel then
+  // visually detached from its slot, showing the sidebar and main content scrolled to
+  // completely different positions. --sb/--nav are static, so this can't drift.
   return (
-    <div ref={anchorRef} style={{
+    <div style={{
       width: open ? SIDEBAR_WIDTH : 0, minWidth: open ? SIDEBAR_WIDTH : 0, transition: 'width .2s ease, min-width .2s ease',
       overflow: 'hidden', borderRight: `1px solid ${IC.border}`, flexShrink: 0,
-      // Matches the fixed inner panel's own background — this outer anchor div only reserves
-      // width in the flex row (its child becomes position:fixed once measured), but it still
-      // occupies real vertical space at its own top offset (pushed down by the page's own
-      // padding). Without a matching background here, the app shell's grey shows through as
-      // a gap above/around where the fixed white sidebar visually begins.
+      // Matches the fixed inner panel's own background — this outer div only reserves width
+      // in the flex row (its child is position:fixed), but it still occupies real vertical
+      // space at its own top offset (pushed down by the page's own padding). Without a
+      // matching background here, the app shell's grey shows through as a gap above/around
+      // where the fixed white sidebar visually begins.
       background: IC.surface,
     }}>
       <div style={{
         width: SIDEBAR_WIDTH, padding: '12px', boxSizing: 'border-box', display: 'flex', flexDirection: 'column', gap: 10,
         background: IC.surface,
-        ...(left != null ? {
-          position: 'fixed', top: 'var(--nav)', left,
+        ...(open ? {
+          position: 'fixed', top: 'var(--nav)', left: 'var(--sb)',
           height: 'calc(100vh - var(--nav))', overflowY: 'auto',
         } : {}),
       }}>
@@ -656,19 +638,30 @@ export default function InventoryHealthPage({ data, filters, setFilters, sidebar
 
   if (!data) return null
 
+  // The collapse-toggle button used to sit in normal document flow right after the fixed
+  // sidebar, assuming it would land flush against the sidebar's edge — but a position:fixed
+  // sibling doesn't participate in flow at all, so this button's actual position depended on
+  // where its own flow-placeholder happened to land, not on the sidebar's real edge. Fixing
+  // the button's own position relative to the same --sb CSS variable the sidebar uses keeps
+  // them locked together.
   return (
     <div style={{ display: 'flex', gap: 0 }}>
       <FilterSidebar data={data} filters={filters} setFilters={setFilters} open={sidebarOpen} sidebarTop={sidebarTop} />
       <button onClick={() => setSidebarOpen(o => !o)} style={{
-        width: 16, alignSelf: 'flex-start', marginTop: 4, height: 48, border: `1px solid ${IC.border}`, borderLeft: 'none',
+        width: 16, height: 48, border: `1px solid ${IC.border}`, borderLeft: 'none',
         background: IC.surface, cursor: 'pointer', borderRadius: '0 8px 8px 0', display: 'flex', alignItems: 'center',
         justifyContent: 'center', color: IC.t3, fontSize: 12, flexShrink: 0,
-        position: 'sticky', top: 4,
+        position: 'fixed', top: 'calc(var(--nav) + 4px)',
+        left: sidebarOpen ? `calc(var(--sb) + ${SIDEBAR_WIDTH}px)` : 'var(--sb)',
+        zIndex: 30, transition: 'left .2s ease',
       }}>
         {sidebarOpen ? '‹' : '›'}
       </button>
 
-      <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 18, paddingLeft: 16, paddingRight: 24 }}>
+      {/* +16 accounts for the collapse-toggle button's own width — it's position:fixed
+          (out of flow) now, so this padding is the only thing keeping content from
+          starting underneath it. */}
+      <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 18, paddingLeft: 32, paddingRight: 24 }}>
 
         {/* KPI row */}
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, minmax(0, 1fr))', gap: 10, alignItems: 'stretch' }}>
@@ -837,21 +830,29 @@ export default function InventoryHealthPage({ data, filters, setFilters, sidebar
         <PivotTable pivot={data.pivot} search={pivotSearch} />
       </GlassCard>
 
-      {/* Slow-moving + Dead stock */}
+      {/* Slow-moving + Dead stock — each card sits in its own minWidth:0 wrapper div,
+          on top of GlassCard's own minWidth:0, so this two-card row can't be pushed wider
+          than its grid track by anything inside (e.g. SubCatStockTable's own scroll area)
+          — the actual cause of the page-wide horizontal scroll/misalignment bug reported
+          earlier. Belt-and-suspenders: the constraint is enforced at both the grid-item
+          wrapper level and the card level, not relying on either alone. */}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+        <div style={{ minWidth: 0 }}>
         <GlassCard title="Slow-Moving Sub-categories" note="DOI > 45d or not being sold, sub-cat stock > 50 units"
           action={<ExportButton filename="slow_moving.csv" rows={slowMovingExportRows}
             columns={[{ label: 'Category', key: 'category' }, { label: 'Sub-category', key: 'subCategory' }, { label: 'Product ID', key: 'sku' }, { label: 'Total Invt', key: 'totalInvt' }, { label: 'Avg Sale', key: 'avgSale' }, { label: 'DOI', key: 'doi' }]} />}>
           <SubCatStockTable rows={data.slowMoving} emptyLabel="No slow-moving sub-categories flagged." />
         </GlassCard>
+        </div>
 
+        <div style={{ minWidth: 0 }}>
         <GlassCard title="Dead Stock Sub-categories" note="DOI > 200d, or not being sold with stock > 200 units"
           action={<ExportButton filename="dead_stock.csv" rows={deadStockExportRows}
             columns={[{ label: 'Category', key: 'category' }, { label: 'Sub-category', key: 'subCategory' }, { label: 'Product ID', key: 'sku' }, { label: 'Total Invt', key: 'totalInvt' }, { label: 'Avg Sale', key: 'avgSale' }, { label: 'DOI', key: 'doi' }]} />}>
           <SubCatStockTable rows={data.deadStock} emptyLabel="No dead stock right now." />
         </GlassCard>
+        </div>
       </div>
-
       </div>
     </div>
   )
