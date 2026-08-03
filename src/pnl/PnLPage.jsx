@@ -71,22 +71,22 @@ export default function PnLPage({ data, filters, setFilters }) {
     if (!sndRates || !rows?.length) return {}
     const bySku = {}
     rows.forEach(row => {
-      const { sku, orderStatus, weightSlab, totalQty, grossIncGst } = row
+      const { sku, orderStatus, weightSlab, lineCount, totalQty, grossIncGst } = row
       if (!sku) return
       const rate = rateForSlab(sndRates, weightSlab)
+      // Logistics & fulfilment apply once per line item (lineCount), not per unit
       let logistics = 0
-      let fulfilment = rate ? rate.fulfilment * totalQty : 0
+      let fulfilment = rate ? rate.fulfilment * lineCount : 0
       if (rate) {
         const st = (orderStatus || '').toLowerCase()
         if (st === 'cancelled') {
           logistics = 0
         } else if (st === 'rto') {
-          logistics = (rate.forward + rate.rto) * totalQty
+          logistics = (rate.forward + rate.rto) * lineCount
         } else if (st === 'cir' || st === 'exchange' || st === 'return') {
-          logistics = (rate.forward + rate.reverse) * totalQty
+          logistics = (rate.forward + rate.reverse) * lineCount
         } else {
-          // Delivered, Dispatched, blank/unknown
-          logistics = rate.forward * totalQty
+          logistics = rate.forward * lineCount
         }
       }
       const paymentGw = grossIncGst * 0.011

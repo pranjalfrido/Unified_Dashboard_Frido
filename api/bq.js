@@ -124,22 +124,32 @@ export default async function handler(req, res) {
     // Client applies snd-rates.json lookup per slab + status to get logistics & fulfilment costs.
     // Fulfilment is charged on ALL statuses including Cancelled; logistics is status-dependent.
     // Payment gateway (1.1% of gross) and software fee (₹15/unit) are also summed here for D2C.
-    shSkuCosts: `WITH q AS (${base})
+    shSkuCosts: `WITH q AS (${base}),
+    lined AS (
+      SELECT
+        MasterSKU AS sku,
+        COALESCE(Order_Status, 'Delivered') AS order_status,
+        ItemQty AS qty,
+        SellingPrice_Inc_GST AS gross_inc_gst,
+        CASE
+          WHEN Weight_gms IS NULL THEN NULL
+          WHEN (Weight_gms * ItemQty) <= 500 THEN 500
+          ELSE CAST(CEIL((Weight_gms * ItemQty) / 1000.0) * 1000 AS INT64)
+        END AS weight_slab
+      FROM q
+      WHERE Channel = 'Shopify'
+        AND SubChannel NOT IN ('Shopify International', 'Retail Store')
+        AND MasterSKU IS NOT NULL AND TRIM(MasterSKU) != ''
+    )
     SELECT
-      MasterSKU AS sku,
-      COALESCE(Order_Status, 'Delivered') AS order_status,
-      CASE
-        WHEN Weight_gms IS NULL THEN NULL
-        WHEN Weight_gms <= 500 THEN 500
-        ELSE CAST(CEIL(Weight_gms / 1000.0) * 1000 AS INT64)
-      END AS weight_slab,
-      SUM(ItemQty) AS total_qty,
-      SUM(SellingPrice_Inc_GST) AS gross_inc_gst
-    FROM q
-    WHERE Channel = 'Shopify'
-      AND SubChannel NOT IN ('Shopify International', 'Retail Store')
-      AND MasterSKU IS NOT NULL AND TRIM(MasterSKU) != ''
-    GROUP BY MasterSKU, order_status, weight_slab`,
+      sku,
+      order_status,
+      weight_slab,
+      COUNT(*) AS line_count,
+      SUM(qty) AS total_qty,
+      SUM(gross_inc_gst) AS gross_inc_gst
+    FROM lined
+    GROUP BY sku, order_status, weight_slab`,
     shState: `WITH q AS (${base}) SELECT UPPER(TRIM(State)) AS state, COUNT(DISTINCT OrderId) AS orders, SUM(SellingPrice_Inc_GST) AS rev, SUM(ItemQty) AS units, COUNT(DISTINCT City) AS cities, COUNT(DISTINCT CASE WHEN Order_Status IN ('RTO','Return','CIR') THEN OrderId END) AS rto_orders, SUM(CASE WHEN Order_Status IN ('RTO','Return','CIR') THEN SellingPrice_Inc_GST ELSE 0 END) AS return_rev FROM q WHERE Channel='Shopify' AND State IS NOT NULL AND TRIM(State) != '' GROUP BY UPPER(TRIM(State)) ORDER BY rev DESC LIMIT 30`,
     shStateTotal: `WITH q AS (${base}) SELECT SUM(SellingPrice_Inc_GST) AS total_rev, COUNT(DISTINCT OrderId) AS total_orders FROM q WHERE Channel='Shopify' AND State IS NOT NULL AND TRIM(State) != ''`,
     shStatePrev: `WITH q AS (${prevBase}) SELECT UPPER(TRIM(State)) AS state, SUM(SellingPrice_Inc_GST) AS rev, COUNT(DISTINCT OrderId) AS orders FROM q WHERE Channel='Shopify' AND State IS NOT NULL AND TRIM(State) != '' GROUP BY UPPER(TRIM(State))`,
@@ -1091,6 +1101,7 @@ export default async function handler(req, res) {
           sku: x.sku,
           orderStatus: x.order_status || 'Delivered',
           weightSlab: x.weight_slab != null ? parseInt(x.weight_slab) : null,
+          lineCount: parseInt(x.line_count) || 0,
           totalQty: parseInt(x.total_qty) || 0,
           grossIncGst: parseFloat(x.gross_inc_gst) || 0,
         })),
