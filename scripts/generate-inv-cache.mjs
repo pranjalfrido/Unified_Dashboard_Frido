@@ -97,17 +97,30 @@ const baseLiveInvRows = invRows.filter(row => {
 
 const toDateStr = d => { if (!d) return null; if (d instanceof Date) return d.toISOString().slice(0,10); return String(d).slice(0,10) }
 
-// Inventory aggregation (same for all windows — snapshot doesn't change)
-const invBySkuLoc = new Map()
+// Inventory aggregation keyed by (SKU, Facility) so facilityType filter works correctly.
+// Rolled up to (SKU, Location) for display — but per-facility breakdowns are kept so the
+// client can re-aggregate when a facilityType filter is active on the static JSON.
+const invBySkuFacility = new Map()
 for (const row of baseLiveInvRows) {
   const { key, finalSku } = resolveMasterSkuKey(row.ItemSkuCode, skuMap)
   if (!key) continue
   const loc = facilityToLocation.get(row.Facility) || 'Unmapped'
+  const facilityType = facilityToType.get(row.Facility) || 'Regular'
   const { totalInventory, rawInvt, rawBlockedInvt, rtdInvt } = computeRowInventory(row)
-  const mapKey = `${key}|${loc}`
-  if (!invBySkuLoc.has(mapKey)) invBySkuLoc.set(mapKey, { sku: finalSku, skuKey: key, location: loc, totalInvt: 0, rawInvt: 0, rawBlockedInvt: 0, rtdInvt: 0 })
-  const acc = invBySkuLoc.get(mapKey)
+  const mapKey = `${key}|${row.Facility}`
+  if (!invBySkuFacility.has(mapKey)) invBySkuFacility.set(mapKey, { sku: finalSku, skuKey: key, facility: row.Facility, facilityType, location: loc, totalInvt: 0, rawInvt: 0, rawBlockedInvt: 0, rtdInvt: 0 })
+  const acc = invBySkuFacility.get(mapKey)
   acc.totalInvt += totalInventory; acc.rawInvt += rawInvt; acc.rawBlockedInvt += rawBlockedInvt; acc.rtdInvt += rtdInvt
+}
+
+// Roll up to (SKU, Location) for the main aggregation path
+const invBySkuLoc = new Map()
+for (const [, entry] of invBySkuFacility) {
+  const mapKey = `${entry.skuKey}|${entry.location}`
+  if (!invBySkuLoc.has(mapKey)) invBySkuLoc.set(mapKey, { sku: entry.sku, skuKey: entry.skuKey, location: entry.location, totalInvt: 0, rawInvt: 0, rawBlockedInvt: 0, rtdInvt: 0, facilities: [] })
+  const acc = invBySkuLoc.get(mapKey)
+  acc.totalInvt += entry.totalInvt; acc.rawInvt += entry.rawInvt; acc.rawBlockedInvt += entry.rawBlockedInvt; acc.rtdInvt += entry.rtdInvt
+  acc.facilities.push({ facility: entry.facility, facilityType: entry.facilityType, totalInvt: entry.totalInvt, rawInvt: entry.rawInvt, rawBlockedInvt: entry.rawBlockedInvt, rtdInvt: entry.rtdInvt })
 }
 
 const cleanSalesRowsAll = salesRows.filter(row => !isPseudoSku(row.final_sku))
@@ -172,6 +185,7 @@ function computePayload(windowDays) {
       category: master?.category || 'Uncategorized',
       subCategory: master?.subCategory || 'Uncategorized',
       totalInvt, rawInvt, rawBlockedInvt, rtdInvt,
+      facilities: invEntry?.facilities || [],
       avgSale, rawAvgSaleQty: rawQty, totalAvgSale, rawTotalAvgSaleQty: rawTotalQty,
       orderAllocation, allocationPct: avgSale > 0 ? (orderAllocation/avgSale)*100 : null,
       doi, thirtyDayReq: Math.round(avgSale*30), inventoryShort: Math.round(avgSale*30 - totalInvt),
@@ -195,7 +209,7 @@ function computePayload(windowDays) {
     const acc = rolledSkuMap.get(r.skuKey)
     acc.totalInvt += r.totalInvt; acc.rawInvt += r.rawInvt; acc.rawBlockedInvt += r.rawBlockedInvt; acc.rtdInvt += r.rtdInvt
     acc.rawAvgSaleQty += r.rawAvgSaleQty; acc.rawTotalAvgSaleQty += r.rawTotalAvgSaleQty; acc.orderAllocation += r.orderAllocation
-    acc.locations.push({ location: r.location, totalInvt: r.totalInvt, rawInvt: r.rawInvt, rawBlockedInvt: r.rawBlockedInvt, rtdInvt: r.rtdInvt, avgSale: r.avgSale, doi: r.doi, stockStatus: r.stockStatus })
+    acc.locations.push({ location: r.location, totalInvt: r.totalInvt, rawInvt: r.rawInvt, rawBlockedInvt: r.rawBlockedInvt, rtdInvt: r.rtdInvt, avgSale: r.avgSale, doi: r.doi, stockStatus: r.stockStatus, facilities: r.facilities })
   }
 
   let skus = [...rolledSkuMap.values()].map(s => {

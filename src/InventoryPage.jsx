@@ -412,16 +412,39 @@ export default function InventoryPage({ onTopbarDateControl, tab = 'health', set
     const { category, subCategory, stockStatus: stockStatusF, rtdLevel: rtdLevelF, productId, location: locationF, facility: facilityF, facilityType: facilityTypeF } = healthFilters
     const matchCsv = (val, filterArr) => !filterArr?.length || filterArr.includes(val)
 
-    // Resolve facility/facilityType filters → effective location set
+    // Resolve facility/facilityType/location filters — keyed at facility grain so that
+    // a location with mixed facility types (e.g. one warehouse + one dark store both at
+    // the same location) is filtered correctly rather than including the whole location
+    // when only one facility type is selected.
     const facilitiesLookup = raw.filterOptions?.facilities || []
-    let effectiveLocations = locationF?.length ? [...locationF] : null
-    if (facilityF?.length) {
-      const locsFromFacility = [...new Set(facilitiesLookup.filter(f => facilityF.includes(f.facility)).map(f => f.location))]
-      effectiveLocations = effectiveLocations ? effectiveLocations.filter(l => locsFromFacility.includes(l)) : locsFromFacility
+    const effectiveFacilitySet = facilityF?.length ? new Set(facilityF) : null
+    // facilityType filter → set of matching facility codes
+    const facilityTypeSet = facilityTypeF?.length
+      ? new Set(facilitiesLookup.filter(f => facilityTypeF.includes(f.facilityType)).map(f => f.facility))
+      : null
+    const effectiveLocationSet = locationF?.length ? new Set(locationF) : null
+
+    // Returns true if the given facility passes all active facility-level filters
+    const facilityPassesFilter = (facilityCode) => {
+      if (effectiveFacilitySet && !effectiveFacilitySet.has(facilityCode)) return false
+      if (facilityTypeSet && !facilityTypeSet.has(facilityCode)) return false
+      return true
     }
-    if (facilityTypeF?.length) {
-      const locsFromType = [...new Set(facilitiesLookup.filter(f => facilityTypeF.includes(f.facilityType)).map(f => f.location))]
-      effectiveLocations = effectiveLocations ? effectiveLocations.filter(l => locsFromType.includes(l)) : locsFromType
+
+    // When facility-level filters are active, restrict each location entry's inventory to
+    // only the matching facilities, then re-sum. Pure location filter falls through to the
+    // existing location-key logic.
+    const hasFacilityLevelFilter = !!(facilityF?.length || facilityTypeF?.length)
+
+    const filterLocationEntry = (locEntry) => {
+      if (!hasFacilityLevelFilter) return locEntry
+      const matchingFacilities = (locEntry.facilities || []).filter(f => facilityPassesFilter(f.facility))
+      if (!matchingFacilities.length) return null
+      const totalInvt = matchingFacilities.reduce((a, f) => a + (f.totalInvt || 0), 0)
+      const rawInvt = matchingFacilities.reduce((a, f) => a + (f.rawInvt || 0), 0)
+      const rawBlockedInvt = matchingFacilities.reduce((a, f) => a + (f.rawBlockedInvt || 0), 0)
+      const rtdInvt = matchingFacilities.reduce((a, f) => a + (f.rtdInvt || 0), 0)
+      return { ...locEntry, totalInvt, rawInvt, rawBlockedInvt, rtdInvt, facilities: matchingFacilities }
     }
 
     let skus = raw.skus
@@ -430,12 +453,15 @@ export default function InventoryPage({ onTopbarDateControl, tab = 'health', set
     if (stockStatusF?.length) skus = skus.filter(s => matchCsv(s.stockStatus, stockStatusF))
     if (rtdLevelF?.length) skus = skus.filter(s => matchCsv(s.rtdLevel, rtdLevelF))
     if (productId?.length) skus = skus.filter(s => matchCsv(s.sku, productId))
-    if (effectiveLocations?.length) {
+    if (hasFacilityLevelFilter || effectiveLocationSet) {
       skus = skus
-        .filter(s => s.locations?.some(l => effectiveLocations.includes(l.location)))
         .map(s => {
-          // Restrict each SKU's numbers to only the selected location(s)
-          const locs = (s.locations || []).filter(l => effectiveLocations.includes(l.location))
+          let locs = (s.locations || [])
+          // Apply location filter first (coarse)
+          if (effectiveLocationSet) locs = locs.filter(l => effectiveLocationSet.has(l.location))
+          // Apply facility-level filter within each location, re-summing inventory
+          if (hasFacilityLevelFilter) locs = locs.map(filterLocationEntry).filter(Boolean)
+          if (!locs.length) return null
           const totalInvt = locs.reduce((a, l) => a + (l.totalInvt || 0), 0)
           const rawInvt = locs.reduce((a, l) => a + (l.rawInvt || 0), 0)
           const rawBlockedInvt = locs.reduce((a, l) => a + (l.rawBlockedInvt || 0), 0)
@@ -445,6 +471,7 @@ export default function InventoryPage({ onTopbarDateControl, tab = 'health', set
           const status = locs.length === 1 ? locs[0].stockStatus : s.stockStatus
           return { ...s, totalInvt, rawInvt, rawBlockedInvt, rtdInvt, avgSale, doi, stockStatus: status, locations: locs }
         })
+        .filter(Boolean)
     }
     if (skus === raw.skus) return raw // nothing filtered, return as-is
 

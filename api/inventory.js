@@ -200,24 +200,42 @@ export default async function inventoryHandler(req, res) {
         ? baseLiveInvRows.filter(row => locationFilterVals.includes(facilityToLocation.get(row.Facility) || 'Unmapped'))
         : baseLiveInvRows
 
-      const invBySkuLoc = new Map()
+      // Key by (SKU, Facility) so facilityType filter is applied at the right grain,
+      // then roll up to (SKU, Location) for display. Per-facility data is kept on
+      // each location entry so the client can re-aggregate when filtering by facilityType.
+      const invBySkuFacility = new Map()
       let lastUpdated = null
       for (const row of liveInvRows) {
         const { key, finalSku } = resolveMasterSkuKey(row.ItemSkuCode, skuMap)
         if (!key) continue
         const loc = facilityToLocation.get(row.Facility) || 'Unmapped'
+        const facilityType = facilityToType.get(row.Facility) || 'Regular'
         const { totalInventory, rawInvt, rawBlockedInvt, rtdInvt } = computeRowInventory(row)
-        const mapKey = `${key}|${loc}`
-        if (!invBySkuLoc.has(mapKey)) {
-          invBySkuLoc.set(mapKey, { sku: finalSku, skuKey: key, location: loc, totalInvt: 0, rawInvt: 0, rawBlockedInvt: 0, rtdInvt: 0 })
+        const mapKey = `${key}|${row.Facility}`
+        if (!invBySkuFacility.has(mapKey)) {
+          invBySkuFacility.set(mapKey, { sku: finalSku, skuKey: key, facility: row.Facility, facilityType, location: loc, totalInvt: 0, rawInvt: 0, rawBlockedInvt: 0, rtdInvt: 0 })
         }
-        const acc = invBySkuLoc.get(mapKey)
+        const acc = invBySkuFacility.get(mapKey)
         acc.totalInvt += totalInventory
         acc.rawInvt += rawInvt
         acc.rawBlockedInvt += rawBlockedInvt
         acc.rtdInvt += rtdInvt
         const upd = row.Updated?.value || row.Updated
         if (upd && (!lastUpdated || upd > lastUpdated)) lastUpdated = upd
+      }
+
+      const invBySkuLoc = new Map()
+      for (const [, entry] of invBySkuFacility) {
+        const mapKey = `${entry.skuKey}|${entry.location}`
+        if (!invBySkuLoc.has(mapKey)) {
+          invBySkuLoc.set(mapKey, { sku: entry.sku, skuKey: entry.skuKey, location: entry.location, totalInvt: 0, rawInvt: 0, rawBlockedInvt: 0, rtdInvt: 0, facilities: [] })
+        }
+        const acc = invBySkuLoc.get(mapKey)
+        acc.totalInvt += entry.totalInvt
+        acc.rawInvt += entry.rawInvt
+        acc.rawBlockedInvt += entry.rawBlockedInvt
+        acc.rtdInvt += entry.rtdInvt
+        acc.facilities.push({ facility: entry.facility, facilityType: entry.facilityType, totalInvt: entry.totalInvt, rawInvt: entry.rawInvt, rawBlockedInvt: entry.rawBlockedInvt, rtdInvt: entry.rtdInvt })
       }
 
       // ── Sales: Avg_Sale (region-based, B2C-only — drives every downstream calc) ──
@@ -298,6 +316,7 @@ export default async function inventoryHandler(req, res) {
           category: master?.category || 'Uncategorized',
           subCategory: master?.subCategory || 'Uncategorized',
           totalInvt, rawInvt, rawBlockedInvt, rtdInvt,
+          facilities: invEntry?.facilities || [],
           avgSale, rawAvgSaleQty: rawQty, totalAvgSale, rawTotalAvgSaleQty: rawTotalQty, orderAllocation, allocationPct,
           doi, thirtyDayReq, inventoryShort,
           rtdLevel: rtdLevel(rtdInvt, avgSale),
@@ -332,7 +351,7 @@ export default async function inventoryHandler(req, res) {
         acc.orderAllocation += r.orderAllocation
         acc.locations.push({
           location: r.location, totalInvt: r.totalInvt, rawInvt: r.rawInvt, rawBlockedInvt: r.rawBlockedInvt, rtdInvt: r.rtdInvt,
-          avgSale: r.avgSale, doi: r.doi, stockStatus: r.stockStatus,
+          avgSale: r.avgSale, doi: r.doi, stockStatus: r.stockStatus, facilities: r.facilities,
         })
       }
 
