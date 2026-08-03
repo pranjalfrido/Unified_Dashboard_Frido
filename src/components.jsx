@@ -308,10 +308,11 @@ export function useSortableTable(defaultKey = null, defaultDir = 'desc') {
       return sign * ((av ?? -Infinity) - (bv ?? -Infinity))
     })
   }
-  const Th = ({ label, sortKey, style, align = 'right' }) => (
+  const Th = ({ label, sortKey, style, align = 'right', children }) => (
     <th onClick={() => onSort(sortKey)}
-      style={{ ...style, textAlign: align, cursor: 'pointer', userSelect: 'none', whiteSpace: 'nowrap', color: sort?.key === sortKey ? C.t1 : style?.color }}>
+      style={{ ...style, textAlign: align, cursor: 'pointer', userSelect: 'none', whiteSpace: 'nowrap', color: sort?.key === sortKey ? C.t1 : style?.color, position: style?.position || 'relative' }}>
       {label}{sort?.key === sortKey ? (sort.dir === 'asc' ? ' ▲' : ' ▼') : ''}
+      {children}
     </th>
   )
   return { sort, onSort, sortRows, Th }

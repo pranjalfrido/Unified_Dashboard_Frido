@@ -1,4 +1,4 @@
-import { useState, useEffect, Fragment } from 'react'
+import { useState, useEffect, useRef, useCallback, Fragment } from 'react'
 import { C, fmt, fmtN, exportCSV } from '../utils.js'
 import { useSortableTable } from '../components.jsx'
 
@@ -29,6 +29,41 @@ export default function PnLFinancialTable({ subCatData, skuData, adSpendMap = {}
   const toggleSku = key => setExpandedSku(prev => ({ ...prev, [key]: !prev[key] }))
   const table = useSortableTable('gross')
   const { Th } = table
+
+  // Column widths — keyed by column id. Default widths in px.
+  const DEFAULT_COL_WIDTHS = { cat: 120, sc: 220, gross: 110, excRev: 110, units: 70, returnPct: 80, net: 110, cogs: 100, cogsPct: 75, gm: 100, gmPct: 75, snd: 100, sndPct: 75, cm1: 100, cm1Pct: 75, spend: 100, spendPct: 80 }
+  const [colWidths, setColWidths] = useState(DEFAULT_COL_WIDTHS)
+  const dragRef = useRef(null)
+
+  const startResize = useCallback((colId, e) => {
+    e.preventDefault()
+    const startX = e.clientX
+    const startW = colWidths[colId] || DEFAULT_COL_WIDTHS[colId] || 100
+    const onMove = mv => {
+      const newW = Math.max(50, startW + mv.clientX - startX)
+      setColWidths(prev => ({ ...prev, [colId]: newW }))
+    }
+    const onUp = () => {
+      window.removeEventListener('mousemove', onMove)
+      window.removeEventListener('mouseup', onUp)
+      document.body.style.cursor = ''
+      document.body.style.userSelect = ''
+    }
+    document.body.style.cursor = 'col-resize'
+    document.body.style.userSelect = 'none'
+    window.addEventListener('mousemove', onMove)
+    window.addEventListener('mouseup', onUp)
+    dragRef.current = onUp
+  }, [colWidths])
+
+  // Resize handle shown on right edge of each header cell
+  const ResizeHandle = ({ colId }) => (
+    <span
+      onMouseDown={e => startResize(colId, e)}
+      style={{ position: 'absolute', right: 0, top: 0, bottom: 0, width: 5, cursor: 'col-resize', zIndex: 10, background: 'transparent' }}
+      title="Drag to resize"
+    />
+  )
 
   useEffect(() => {
     fetch('/cogs-data.json').then(r => r.ok ? r.json() : {}).then(setCogsMap).catch(() => setCogsMap({}))
@@ -139,9 +174,11 @@ export default function PnLFinancialTable({ subCatData, skuData, adSpendMap = {}
   const thStyleL = { ...thStyle, textAlign: 'left' }
   const tdStyle = { fontSize: 11, padding: '4px 7px', textAlign: 'right', color: C.t1, borderBottom: `1px solid ${C.border}`, fontFamily: 'var(--mono)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }
   const tdStyleL = { ...tdStyle, textAlign: 'left', fontFamily: 'inherit' }
-  // Sticky left column styles — Category fixed at 0, Product fixed at 120px
-  const stickyCat = { position: 'sticky', left: 0, background: C.bg, zIndex: 1, minWidth: 120, maxWidth: 120 }
-  const stickyProd = { position: 'sticky', left: 120, background: C.bg, zIndex: 1, minWidth: 220, maxWidth: 220, boxShadow: '2px 0 4px rgba(0,0,0,0.06)' }
+  // Sticky left column styles — Category fixed at 0, Product fixed at colWidths.cat px
+  const catW = colWidths.cat, scW = colWidths.sc
+  const stickyCat = { position: 'sticky', left: 0, background: C.bg, zIndex: 1, width: catW, minWidth: catW, maxWidth: catW }
+  const stickyProd = { position: 'sticky', left: catW, background: C.bg, zIndex: 1, width: scW, minWidth: scW, maxWidth: scW, boxShadow: '2px 0 4px rgba(0,0,0,0.06)' }
+  const w = id => ({ width: colWidths[id], minWidth: colWidths[id], maxWidth: colWidths[id] })
   const totalTdStyle = { ...tdStyle, padding: '6px 7px', fontWeight: 700, color: C.t1, borderBottom: 'none' }
   const pendingCell = <span style={{ color: C.t3 }} title="Pending data — see PNL_TAB_ROADMAP.md">—</span>
   const noCostCell = <span style={{ color: C.t3 }} title="No cost entry for this SKU/product yet">—</span>
@@ -196,26 +233,26 @@ export default function PnLFinancialTable({ subCatData, skuData, adSpendMap = {}
         </div>
       </div>
       <div style={{ overflowX: 'auto', overflowY: 'auto', maxHeight: 560 }}>
-        <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'auto', minWidth: 2200 }}>
+        <table style={{ borderCollapse: 'collapse', tableLayout: 'fixed', width: Object.values(colWidths).reduce((a, b) => a + b, 0) }}>
           <thead>
             <tr style={{ background: C.bg }}>
-              <Th label="Category" sortKey="cat" style={{ ...thStyleL, ...stickyCat, top: 0, zIndex: 3 }} align="left" />
-              <Th label="Product" sortKey="sc" style={{ ...thStyleL, ...stickyProd, top: 0, zIndex: 3 }} align="left" />
-              <Th label="Gross (Inc GST)" sortKey="gross" style={{ ...thStyle, position: 'sticky', top: 0, background: C.bg, zIndex: 1 }} />
-              <Th label="Gross (Ex GST)" sortKey="excRev" style={{ ...thStyle, position: 'sticky', top: 0, background: C.bg, zIndex: 1 }} />
-              <Th label="Units" sortKey="units" style={{ ...thStyle, position: 'sticky', top: 0, background: C.bg, zIndex: 1 }} />
-              <Th label="Returns %" sortKey="returnPct" style={{ ...thStyle, position: 'sticky', top: 0, background: C.bg, zIndex: 1 }} />
-              <Th label="Net Rev" sortKey="net" style={{ ...thStyle, position: 'sticky', top: 0, background: C.bg, zIndex: 1 }} />
-              <Th label="COGS" sortKey="cogs" style={{ ...thStyle, position: 'sticky', top: 0, background: C.bg, zIndex: 1 }} />
-              <th style={{ ...thStyle, position: 'sticky', top: 0, background: C.bg, zIndex: 1, cursor: 'default' }}>COGS %</th>
-              <Th label="GM" sortKey="gm" style={{ ...thStyle, position: 'sticky', top: 0, background: C.bg, zIndex: 1 }} />
-              <th style={{ ...thStyle, position: 'sticky', top: 0, background: C.bg, zIndex: 1, cursor: 'default' }}>GM %</th>
-              <Th label="SND" sortKey="snd" style={{ ...thStyle, position: 'sticky', top: 0, background: C.bg, zIndex: 1 }} />
-              <th style={{ ...thStyle, position: 'sticky', top: 0, background: C.bg, zIndex: 1, cursor: 'default' }}>SND %</th>
-              <Th label="CM1" sortKey="cm1" style={{ ...thStyle, position: 'sticky', top: 0, background: C.bg, zIndex: 1 }} />
-              <th style={{ ...thStyle, position: 'sticky', top: 0, background: C.bg, zIndex: 1, cursor: 'default' }}>CM1 %</th>
-              <Th label="Mktg Spend" sortKey="spend" style={{ ...thStyle, position: 'sticky', top: 0, background: C.bg, zIndex: 1 }} />
-              <Th label="Spend %" sortKey="spendPct" style={{ ...thStyle, position: 'sticky', top: 0, background: C.bg, zIndex: 1 }} />
+              <Th label="Category" sortKey="cat" style={{ ...thStyleL, ...stickyCat, top: 0, zIndex: 3, position: 'sticky', overflow: 'hidden' }} align="left"><ResizeHandle colId="cat" /></Th>
+              <Th label="Product" sortKey="sc" style={{ ...thStyleL, ...stickyProd, top: 0, zIndex: 3, position: 'sticky', overflow: 'hidden' }} align="left"><ResizeHandle colId="sc" /></Th>
+              <Th label="Gross (Inc GST)" sortKey="gross" style={{ ...thStyle, ...w('gross'), position: 'sticky', top: 0, background: C.bg, zIndex: 1, overflow: 'hidden' }}><ResizeHandle colId="gross" /></Th>
+              <Th label="Gross (Ex GST)" sortKey="excRev" style={{ ...thStyle, ...w('excRev'), position: 'sticky', top: 0, background: C.bg, zIndex: 1, overflow: 'hidden' }}><ResizeHandle colId="excRev" /></Th>
+              <Th label="Units" sortKey="units" style={{ ...thStyle, ...w('units'), position: 'sticky', top: 0, background: C.bg, zIndex: 1, overflow: 'hidden' }}><ResizeHandle colId="units" /></Th>
+              <Th label="Returns %" sortKey="returnPct" style={{ ...thStyle, ...w('returnPct'), position: 'sticky', top: 0, background: C.bg, zIndex: 1, overflow: 'hidden' }}><ResizeHandle colId="returnPct" /></Th>
+              <Th label="Net Rev" sortKey="net" style={{ ...thStyle, ...w('net'), position: 'sticky', top: 0, background: C.bg, zIndex: 1, overflow: 'hidden' }}><ResizeHandle colId="net" /></Th>
+              <Th label="COGS" sortKey="cogs" style={{ ...thStyle, ...w('cogs'), position: 'sticky', top: 0, background: C.bg, zIndex: 1, overflow: 'hidden' }}><ResizeHandle colId="cogs" /></Th>
+              <th style={{ ...thStyle, ...w('cogsPct'), position: 'sticky', top: 0, background: C.bg, zIndex: 1, cursor: 'default', overflow: 'hidden' }}>COGS %<ResizeHandle colId="cogsPct" /></th>
+              <Th label="GM" sortKey="gm" style={{ ...thStyle, ...w('gm'), position: 'sticky', top: 0, background: C.bg, zIndex: 1, overflow: 'hidden' }}><ResizeHandle colId="gm" /></Th>
+              <th style={{ ...thStyle, ...w('gmPct'), position: 'sticky', top: 0, background: C.bg, zIndex: 1, cursor: 'default', overflow: 'hidden' }}>GM %<ResizeHandle colId="gmPct" /></th>
+              <Th label="SND" sortKey="snd" style={{ ...thStyle, ...w('snd'), position: 'sticky', top: 0, background: C.bg, zIndex: 1, overflow: 'hidden' }}><ResizeHandle colId="snd" /></Th>
+              <th style={{ ...thStyle, ...w('sndPct'), position: 'sticky', top: 0, background: C.bg, zIndex: 1, cursor: 'default', overflow: 'hidden' }}>SND %<ResizeHandle colId="sndPct" /></th>
+              <Th label="CM1" sortKey="cm1" style={{ ...thStyle, ...w('cm1'), position: 'sticky', top: 0, background: C.bg, zIndex: 1, overflow: 'hidden' }}><ResizeHandle colId="cm1" /></Th>
+              <th style={{ ...thStyle, ...w('cm1Pct'), position: 'sticky', top: 0, background: C.bg, zIndex: 1, cursor: 'default', overflow: 'hidden' }}>CM1 %<ResizeHandle colId="cm1Pct" /></th>
+              <Th label="Mktg Spend" sortKey="spend" style={{ ...thStyle, ...w('spend'), position: 'sticky', top: 0, background: C.bg, zIndex: 1, overflow: 'hidden' }}><ResizeHandle colId="spend" /></Th>
+              <Th label="Spend %" sortKey="spendPct" style={{ ...thStyle, ...w('spendPct'), position: 'sticky', top: 0, background: C.bg, zIndex: 1, overflow: 'hidden' }}><ResizeHandle colId="spendPct" /></Th>
             </tr>
           </thead>
           <tbody>
