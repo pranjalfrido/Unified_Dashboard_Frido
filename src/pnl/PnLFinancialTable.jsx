@@ -176,7 +176,7 @@ export default function PnLFinancialTable({ subCatData, skuData, adSpendMap = {}
   const tdStyleL = { ...tdStyle, textAlign: 'left', fontFamily: 'inherit' }
   // Sticky left column styles — Category fixed at 0, Product fixed at colWidths.cat px
   const catW = colWidths.cat, scW = colWidths.sc
-  const stickyCat = { position: 'sticky', left: 0, background: C.bg, zIndex: 1, width: catW, minWidth: catW, maxWidth: catW }
+  const stickyCat = { position: 'sticky', left: 0, background: C.card, zIndex: 1, width: catW, minWidth: catW, maxWidth: catW }
   const stickyProd = { position: 'sticky', left: catW, background: C.bg, zIndex: 1, width: scW, minWidth: scW, maxWidth: scW, boxShadow: '2px 0 4px rgba(0,0,0,0.06)' }
   const w = id => ({ width: colWidths[id], minWidth: colWidths[id], maxWidth: colWidths[id] })
   const totalTdStyle = { ...tdStyle, padding: '6px 7px', fontWeight: 700, color: C.t1, borderBottom: 'none' }
@@ -265,10 +265,10 @@ export default function PnLFinancialTable({ subCatData, skuData, adSpendMap = {}
               return (
                 <Fragment key={skuKey}>
                   <tr style={{ cursor: 'default' }}
-                    onMouseEnter={e => e.currentTarget.style.background = '#FFFBE6'}
-                    onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
-                    <td style={{ ...tdStyleL, ...stickyCat }}>{r.cat}</td>
-                    <td style={{ ...tdStyleL, ...stickyProd }}>
+                    onMouseEnter={e => { e.currentTarget.style.background = '#FFFBE6'; Array.from(e.currentTarget.querySelectorAll('td[data-sticky]')).forEach(td => td.style.background = '#FFFBE6') }}
+                    onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; Array.from(e.currentTarget.querySelectorAll('td[data-sticky]')).forEach(td => td.style.background = C.card) }}>
+                    <td data-sticky="1" style={{ ...tdStyleL, ...stickyCat }}>{r.cat}</td>
+                    <td data-sticky="1" style={{ ...tdStyleL, ...stickyProd }}>
                       <span onClick={() => hasSkus && toggleSku(skuKey)} style={{ cursor: hasSkus ? 'pointer' : 'default', userSelect: 'none', display: 'inline-flex', alignItems: 'center', gap: 5 }}>
                         {hasSkus && <span style={{ fontSize: 9, color: C.t3, display: 'inline-block', transform: isOpen ? 'rotate(90deg)' : 'rotate(0deg)', transition: 'transform .15s' }}>▶</span>}
                         {r.sc}
@@ -300,10 +300,10 @@ export default function PnLFinancialTable({ subCatData, skuData, adSpendMap = {}
                     const skCm1 = skSnd != null ? skGm - skSnd : null
                     return (
                       <tr key={sk.sku} style={{ background: C.bg, cursor: 'default' }}
-                        onMouseEnter={e => e.currentTarget.style.background = '#FFFBE6'}
-                        onMouseLeave={e => e.currentTarget.style.background = C.bg}>
-                        <td style={{ ...tdStyleL, ...stickyCat, borderBottom: `1px solid ${C.border}` }}></td>
-                        <td style={{ ...tdStyleL, ...stickyProd, borderBottom: `1px solid ${C.border}`, fontFamily: 'var(--mono)', fontSize: 11, color: C.t2, paddingLeft: 22 }}>└ {sk.sku}</td>
+                        onMouseEnter={e => { e.currentTarget.style.background = '#FFFBE6'; Array.from(e.currentTarget.querySelectorAll('td[data-sticky]')).forEach(td => td.style.background = '#FFFBE6') }}
+                        onMouseLeave={e => { e.currentTarget.style.background = C.card; Array.from(e.currentTarget.querySelectorAll('td[data-sticky]')).forEach(td => td.style.background = C.card) }}>
+                        <td data-sticky="1" style={{ ...tdStyleL, ...stickyCat, borderBottom: `1px solid ${C.border}` }}></td>
+                        <td data-sticky="1" style={{ ...tdStyleL, ...stickyProd, borderBottom: `1px solid ${C.border}`, fontFamily: 'var(--mono)', fontSize: 11, color: C.t2, paddingLeft: 22 }}>└ {sk.sku}</td>
                         <td style={{ ...tdStyle, fontSize: 11 }}>{fmt(sk.gross)}</td>
                         <td style={{ ...tdStyle, fontSize: 11 }}>{fmt(sk.excRev)}</td>
                         <td style={{ ...tdStyle, fontSize: 11 }}>{fmtN(sk.units)}</td>
