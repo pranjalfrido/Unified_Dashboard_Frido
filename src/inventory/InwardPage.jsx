@@ -1,4 +1,4 @@
-import { useMemo, useState, useRef, useLayoutEffect } from 'react'
+import { useMemo, useState } from 'react'
 import {
   ResponsiveContainer, ComposedChart, Area, Line, XAxis, YAxis, CartesianGrid, Tooltip,
   BarChart, Bar,
@@ -30,41 +30,22 @@ function FilterSidebar({ data, filters, setFilters, open, sidebarTop }) {
   const set = (key, arr) => setFilters(f => ({ ...f, [key]: arr }))
   const anyActive = ['category', 'subCategory', 'sku', 'facility', 'vendor'].some(k => filters[k]?.length)
 
-  // position: fixed, positioned using the app shell's own known top-bar height (--nav,
-  // 52px in index.css) rather than a live getBoundingClientRect() measurement — measuring
-  // the anchor's live position was unreliable across scroll timing / late-arriving
-  // sidebarTop content (see SalesAllocationPage.jsx's FilterSidebar for the full writeup).
-  const anchorRef = useRef(null)
-  const [left, setLeft] = useState(null)
-  useLayoutEffect(() => {
-    if (!open) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect -- measuring DOM layout is exactly what useLayoutEffect is for
-      setLeft(null)
-      return
-    }
-    const measure = () => {
-      const el = anchorRef.current
-      if (!el) return
-      setLeft(el.getBoundingClientRect().left)
-    }
-    measure()
-    window.addEventListener('resize', measure)
-    return () => window.removeEventListener('resize', measure)
-  }, [open])
-
+  // position: fixed, positioned using the app shell's own known CSS variables (--sb, --nav)
+  // instead of a live getBoundingClientRect() measurement (see InventoryHealthPage.jsx's
+  // FilterSidebar for the full writeup on why the measured approach could drift).
   return (
-    <div ref={anchorRef} style={{
+    <div style={{
       width: open ? SIDEBAR_WIDTH : 0, minWidth: open ? SIDEBAR_WIDTH : 0, transition: 'width .2s ease, min-width .2s ease',
       overflow: 'hidden', borderRight: `1px solid ${IC.border}`, flexShrink: 0,
       // Matches the fixed inner panel's own background — without this, the app shell's grey
-      // shows through where the anchor's own box sits before the fixed panel visually begins.
+      // shows through where this outer div's own box sits before the fixed panel visually begins.
       background: IC.surface,
     }}>
       <div style={{
         width: SIDEBAR_WIDTH, padding: '12px', boxSizing: 'border-box', display: 'flex', flexDirection: 'column', gap: 10,
         background: IC.surface,
-        ...(left != null ? {
-          position: 'fixed', top: 'var(--nav)', left, zIndex: 50,
+        ...(open ? {
+          position: 'fixed', top: 'var(--nav)', left: 'var(--sb)', zIndex: 50,
           height: 'calc(100vh - var(--nav))', overflowY: 'auto',
         } : {}),
       }}>
@@ -240,18 +221,24 @@ export default function InwardPage({ data, filters, setFilters, sidebarTop }) {
   const maxSubCatQty = Math.max(1, ...filteredData.subCategoryBreakdown.map(sc => sc.qtyReceived))
   const maxReasonQty = Math.max(1, ...filteredData.rejectionReasons.map(r => r.qty))
 
+  // See InventoryHealthPage.jsx's collapse-toggle button for why this is position:fixed and
+  // keyed off --sb instead of assuming flow-adjacency to the (also position:fixed) sidebar.
   return (
     <div style={{ display: 'flex', gap: 0 }}>
       <FilterSidebar data={data} filters={filters} setFilters={setFilters} open={sidebarOpen} sidebarTop={sidebarTop} />
       <button onClick={() => setSidebarOpen(o => !o)} style={{
-        width: 16, alignSelf: 'flex-start', marginTop: 4, height: 48, border: `1px solid ${IC.border}`, borderLeft: 'none',
+        width: 16, height: 48, border: `1px solid ${IC.border}`, borderLeft: 'none',
         background: IC.surface, cursor: 'pointer', borderRadius: '0 8px 8px 0', display: 'flex', alignItems: 'center',
-        justifyContent: 'center', color: IC.t3, fontSize: 12, flexShrink: 0, position: 'sticky', top: 4,
+        justifyContent: 'center', color: IC.t3, fontSize: 12, flexShrink: 0,
+        position: 'fixed', top: 'calc(var(--nav) + 4px)',
+        left: sidebarOpen ? `calc(var(--sb) + ${SIDEBAR_WIDTH}px)` : 'var(--sb)',
+        zIndex: 30, transition: 'left .2s ease',
       }}>
         {sidebarOpen ? '‹' : '›'}
       </button>
 
-      <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 18, paddingLeft: 16, paddingRight: 24 }}>
+      {/* +16 accounts for the collapse-toggle button's own width (position:fixed, out of flow). */}
+      <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 18, paddingLeft: 32, paddingRight: 24 }}>
 
         {/* KPI row */}
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 12 }}>

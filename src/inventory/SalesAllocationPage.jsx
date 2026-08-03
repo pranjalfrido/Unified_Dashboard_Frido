@@ -1,4 +1,4 @@
-import { useMemo, useState, useEffect, useRef, useLayoutEffect, Fragment } from 'react'
+import { useMemo, useState, useEffect, Fragment } from 'react'
 import {
   ResponsiveContainer, ComposedChart, Area, Line, XAxis, YAxis, CartesianGrid, Tooltip,
 } from 'recharts'
@@ -66,47 +66,27 @@ function FilterSidebar({ data, filters, setFilters, open, sidebarTop }) {
   const anyActive = ['category', 'subCategory', 'sku', 'channel', 'salesType', 'facility', 'region']
     .some(k => filters[k]?.length)
 
-  // position: fixed, positioned using the app shell's own known top-bar height (--nav,
-  // 52px in index.css) rather than a live getBoundingClientRect() measurement — measuring
-  // the anchor's live position was unreliable: if the page had already been scrolled when
-  // this component mounted (or before its content, e.g. sidebarTop's "Latest sales" line
-  // which only appears once data arrives, finished growing to full height), the captured
-  // top/left baked in a stale, already-scrolled offset that never corrected itself,
-  // leaving the fixed sidebar pinned in the wrong place with its top content clipped.
-  const anchorRef = useRef(null)
-  const [left, setLeft] = useState(null)
-  useLayoutEffect(() => {
-    if (!open) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect -- measuring DOM layout is exactly what useLayoutEffect is for
-      setLeft(null)
-      return
-    }
-    const measure = () => {
-      const el = anchorRef.current
-      if (!el) return
-      setLeft(el.getBoundingClientRect().left)
-    }
-    measure()
-    window.addEventListener('resize', measure)
-    return () => window.removeEventListener('resize', measure)
-  }, [open])
-
+  // position: fixed, positioned using the app shell's own known CSS variables (--sb for the
+  // left icon rail's width, --nav for the top bar's height) instead of a live
+  // getBoundingClientRect() measurement — see InventoryHealthPage.jsx's FilterSidebar for
+  // the full writeup on why the measured approach could drift and detach the fixed sidebar
+  // from its actual layout slot.
   return (
-    <div ref={anchorRef} style={{
-      width: open ? SIDEBAR_WIDTH : 0, minWidth: open ? SIDEBAR_WIDTH : 0,
-      overflow: 'hidden', borderRight: open ? `1px solid ${IC.border}` : 'none', flexShrink: 0,
-      // Matches the fixed inner panel's own background — this outer anchor div only reserves
-      // width in the flex row (its child becomes position:fixed once measured), but it still
-      // occupies real vertical space at its own top offset (pushed down by the page's own
-      // padding). Without a matching background here, that offset shows through as a grey
-      // gap between the top bar and where the fixed white sidebar visually begins.
+    <div style={{
+      width: open ? SIDEBAR_WIDTH : 0, minWidth: open ? SIDEBAR_WIDTH : 0, transition: 'width .2s ease, min-width .2s ease',
+      overflow: 'hidden', borderRight: `1px solid ${IC.border}`, flexShrink: 0,
+      // Matches the fixed inner panel's own background — this outer div only reserves width
+      // in the flex row (its child is position:fixed), but it still occupies real vertical
+      // space at its own top offset. Without a matching background here, that offset shows
+      // through as a grey gap between the top bar and where the fixed white sidebar
+      // visually begins.
       background: IC.surface,
     }}>
       <div style={{
         width: SIDEBAR_WIDTH, padding: '12px', boxSizing: 'border-box', display: 'flex', flexDirection: 'column', gap: 10,
         background: IC.surface,
-        ...(left != null ? {
-          position: 'fixed', top: 'var(--nav)', left,
+        ...(open ? {
+          position: 'fixed', top: 'var(--nav)', left: 'var(--sb)',
           height: 'calc(100vh - var(--nav))', overflowY: 'auto',
         } : {}),
       }}>
@@ -665,18 +645,24 @@ export default function SalesAllocationPage({ data, filters, setFilters, sidebar
     return { b2c: pct('B2C Order'), b2b: pct('B2B Order'), po: pct('Purchase Order') }
   })()
 
+  // See InventoryHealthPage.jsx's collapse-toggle button for why this is position:fixed and
+  // keyed off --sb instead of assuming flow-adjacency to the (also position:fixed) sidebar.
   return (
     <div style={{ display: 'flex', gap: 0 }}>
       <FilterSidebar data={data} filters={filters} setFilters={setFilters} open={sidebarOpen} sidebarTop={sidebarTop} />
       <button onClick={() => setSidebarOpen(o => !o)} style={{
-        width: 16, alignSelf: 'flex-start', marginTop: 4, height: 48, border: `1px solid ${IC.border}`, borderLeft: 'none',
+        width: 16, height: 48, border: `1px solid ${IC.border}`, borderLeft: 'none',
         background: IC.surface, cursor: 'pointer', borderRadius: '0 8px 8px 0', display: 'flex', alignItems: 'center',
-        justifyContent: 'center', color: IC.t3, fontSize: 12, flexShrink: 0, position: 'sticky', top: 4,
+        justifyContent: 'center', color: IC.t3, fontSize: 12, flexShrink: 0,
+        position: 'fixed', top: 'calc(var(--nav) + 4px)',
+        left: sidebarOpen ? `calc(var(--sb) + ${SIDEBAR_WIDTH}px)` : 'var(--sb)',
+        zIndex: 30, transition: 'left .2s ease',
       }}>
         {sidebarOpen ? '‹' : '›'}
       </button>
 
-      <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 18, padding: '18px 24px 40px 16px' }}>
+      {/* +16 accounts for the collapse-toggle button's own width (position:fixed, out of flow). */}
+      <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 18, paddingLeft: 32, paddingRight: 24 }}>
 
         {/* KPI row */}
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6, minmax(0, 1fr))', gap: 10, alignItems: 'stretch' }}>

@@ -39,6 +39,41 @@ export const IC = {
 
 export const PAGE_BACKGROUND = '#F2F1EF'
 
+// ── Laptop-width scaling ──────────────────────────────────────────────────────
+// The Inventory tab was built and tuned against a large desktop monitor. On a laptop screen
+// (1366-1440px-class, common corporate laptop resolutions) the request is specifically for
+// the WHOLE tab — every box, font, heading, the sidebar, everything — to shrink together in
+// exact proportion, the same way remote-desktop's own screen scaling or a browser zoom-out
+// looks: nothing reflows or resizes independently, the entire page is just uniformly
+// smaller. CSS `zoom` on one top-level wrapper does exactly this in one step (unlike
+// `transform: scale`, it doesn't require manual overflow/dimension compensation and doesn't
+// break `position: fixed` descendants like the sidebar) — far more reliable than manually
+// multiplying hundreds of individual pixel values across every component, which risks
+// missing spots and drifting out of proportion with each other.
+const ZOOM_BREAKPOINTS = [
+  { minWidth: 1600, zoom: 1 },
+  { minWidth: 1440, zoom: 0.9 },
+  { minWidth: 1280, zoom: 0.8 },
+  { minWidth: 0, zoom: 0.72 },
+]
+function zoomForWidth(width) {
+  for (const bp of ZOOM_BREAKPOINTS) if (width >= bp.minWidth) return bp.zoom
+  return 1
+}
+
+// Hook: returns the current zoom factor, updating on window resize. Used once at the top of
+// the Inventory tab (InventoryPage.jsx) to set `zoom` on the whole page's outer container.
+export function useUIScale() {
+  const [zoom, setZoomState] = useState(() => (typeof window === 'undefined' ? 1 : zoomForWidth(window.innerWidth)))
+  useEffect(() => {
+    const onResize = () => setZoomState(zoomForWidth(window.innerWidth))
+    onResize()
+    window.addEventListener('resize', onResize)
+    return () => window.removeEventListener('resize', onResize)
+  }, [])
+  return zoom
+}
+
 export function fmtNum(n) {
   if (n == null || Number.isNaN(n) || n === 0) return '—'
   const abs = Math.abs(n)
@@ -86,6 +121,13 @@ export function GlassCard({ title, note, action, children, style }) {
       borderRadius: 16,
       padding: '18px 20px',
       boxShadow: '0 4px 10px rgba(0,0,0,0.08), 0 16px 40px rgba(0,0,0,0.14)',
+      // A wide table/chart inside can otherwise grow this card past its allotted flex
+      // width instead of respecting it — the card's own overflow:auto wrapper around such
+      // content only actually clips/scrolls if THIS box is itself constrained; without
+      // minWidth:0 here, a flex/grid parent lets this card size to its content instead of
+      // shrinking to fit, and the resulting overflow pushes the whole page wider than the
+      // viewport (visible as the entire window gaining horizontal scroll).
+      minWidth: 0,
       ...style,
     }}>
       {(title || note || action) && (
@@ -115,7 +157,7 @@ export function KpiTile({ label, value, unit, sub, accent, icon, compact }) {
       border: `1px solid ${IC.border}`,
       borderRadius: radius,
       padding: pad,
-      display: 'flex', flexDirection: 'column', gap: compact ? 5 : 5,
+      display: 'flex', flexDirection: 'column', gap: 5,
       position: 'relative', overflow: 'hidden',
       minHeight: compact ? 78 : undefined,
       height: compact ? '100%' : undefined,
