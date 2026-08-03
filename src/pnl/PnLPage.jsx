@@ -24,7 +24,7 @@ const PNL_TABS = [
 
 // Same shared per-row pick used by every existing FlatCategoryProductMatrix caller — kept
 // local (not imported) since it's a 2-line pure function, not worth a shared-module trip.
-const pick = v => ({ rev: v.rev || 0, excRev: v.excRev || 0, units: v.units || v.aspUnits || 0, cancelRev: v.cancelRev || 0, rtoRev: v.rtoRev || 0, cirRev: v.cirRev || 0, exchRev: v.exchRev || 0, returnRev: v.returnRev || 0 })
+const pick = v => ({ rev: v.rev || 0, excRev: v.excRev || 0, units: v.units || v.aspUnits || 0, returnUnits: v.returnUnits || 0, cancelRev: v.cancelRev || 0, rtoRev: v.rtoRev || 0, cirRev: v.cirRev || 0, exchRev: v.exchRev || 0, returnRev: v.returnRev || 0 })
 
 function netOf(subCatData) {
   let gross = 0, excRev = 0, net = 0, returnRev = 0, units = 0
@@ -145,10 +145,11 @@ export default function PnLPage({ data, filters, setFilters }) {
       shSalesCatRows.filter(filterD2CRow).forEach(r => {
         const cat = r.category || 'Others', sc = r.sub_category || 'Others'
         if (!shSubCatData[cat]) shSubCatData[cat] = {}
-        if (!shSubCatData[cat][sc]) shSubCatData[cat][sc] = { rev: 0, excRev: 0, units: 0, cancelRev: 0, rtoRev: 0, cirRev: 0, returnRev: 0 }
+        if (!shSubCatData[cat][sc]) shSubCatData[cat][sc] = { rev: 0, excRev: 0, units: 0, returnUnits: 0, cancelRev: 0, rtoRev: 0, cirRev: 0, returnRev: 0 }
         shSubCatData[cat][sc].rev += parseFloat(r.gross_revenue) || 0
         shSubCatData[cat][sc].excRev += parseFloat(r.revenue) || 0
         shSubCatData[cat][sc].units = (shSubCatData[cat][sc].units || 0) + (parseInt(r.units) || 0)
+        shSubCatData[cat][sc].returnUnits = (shSubCatData[cat][sc].returnUnits || 0) + (parseInt(r.return_units) || 0)
         shSubCatData[cat][sc].cancelRev += parseFloat(r.cancel_rev) || 0
         shSubCatData[cat][sc].rtoRev += parseFloat(r.return_rev) || 0
         shSubCatData[cat][sc].cirRev += parseFloat(r.cir_rev) || 0

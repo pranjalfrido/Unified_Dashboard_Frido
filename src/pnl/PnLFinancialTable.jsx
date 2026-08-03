@@ -74,6 +74,7 @@ export default function PnLFinancialTable({ subCatData, skuData, adSpendMap = {}
   const mapRow = d => {
     const gross = d.rev || 0
     const excRev = d.excRev || 0
+    const returnUnits = d.returnUnits || 0
     const cancelRev = d.cancelRev || 0
     const rtoRev = d.rtoRev || 0
     const cirRev = d.cirRev || 0
@@ -83,7 +84,8 @@ export default function PnLFinancialTable({ subCatData, skuData, adSpendMap = {}
     const gstRatio = gross > 0 ? (gross - excRev) / gross : 0
     const grossAfterReturns = gross - totalReturnRev
     const net = grossAfterReturns * (1 - gstRatio)
-    return { gross, excRev, net, units: d.units || 0, totalReturnRev }
+    const netUnits = Math.max(0, (d.units || 0) - returnUnits)
+    return { gross, excRev, net, units: d.units || 0, netUnits, totalReturnRev }
   }
   const pctOf = (n, d) => d > 0 ? (n / d * 100) : 0
 
@@ -103,7 +105,7 @@ export default function PnLFinancialTable({ subCatData, skuData, adSpendMap = {}
       const entry = cogsMap?.[sku]
       const r = mapRow(d)
       if (entry && entry.cogs != null) {
-        cogs += entry.cogs * r.units
+        cogs += entry.cogs * r.netUnits
       } else {
         // fallback: % of net rev based on ASP
         cogs += fallbackCogs(r.gross, r.units, r.net)
@@ -207,7 +209,7 @@ export default function PnLFinancialTable({ subCatData, skuData, adSpendMap = {}
         const sk = mapRow(d)
         const entry = cogsMap?.[sku]
         const costed = entry && entry.cogs != null
-        const skCogs = costed ? entry.cogs * sk.units : fallbackCogs(sk.gross, sk.units, sk.net)
+        const skCogs = costed ? entry.cogs * sk.netUnits : fallbackCogs(sk.gross, sk.units, sk.net)
         const skGm = sk.net - skCogs
         const skC = skuCosts?.[sku]
         const skSndCsv = skC ? skC.logistics + skC.fulfilment + skC.paymentGw + skC.softwareFee : null
@@ -296,7 +298,7 @@ export default function PnLFinancialTable({ subCatData, skuData, adSpendMap = {}
                   {isOpen && skus.map(sk => {
                     const entry = cogsMap?.[sk.sku]
                     const costed = entry && entry.cogs != null
-                    const skCogs = costed ? entry.cogs * sk.units : fallbackCogs(sk.gross, sk.units, sk.net)
+                    const skCogs = costed ? entry.cogs * sk.netUnits : fallbackCogs(sk.gross, sk.units, sk.net)
                     const skGm = sk.net - skCogs
                     const skC = skuCosts?.[sk.sku]
                     const skSnd = skC ? skC.logistics + skC.fulfilment + skC.paymentGw + skC.softwareFee : null
