@@ -142,6 +142,7 @@ export default function PnLPage({ data, filters, setFilters }) {
         if (!shSubCatData[cat][sc]) shSubCatData[cat][sc] = { rev: 0, excRev: 0, units: 0, cancelRev: 0, rtoRev: 0, cirRev: 0, returnRev: 0 }
         shSubCatData[cat][sc].rev += parseFloat(r.gross_revenue) || 0
         shSubCatData[cat][sc].excRev += parseFloat(r.revenue) || 0
+        shSubCatData[cat][sc].units = (shSubCatData[cat][sc].units || 0) + (parseInt(r.units) || 0)
         shSubCatData[cat][sc].cancelRev += parseFloat(r.cancel_rev) || 0
         shSubCatData[cat][sc].rtoRev += parseFloat(r.return_rev) || 0
         shSubCatData[cat][sc].cirRev += parseFloat(r.cir_rev) || 0
