@@ -176,14 +176,7 @@ export default function PnLFinancialTable({ subCatData, skuData, adSpendMap = {}
         </div>
       </div>
       <div style={{ overflowX: 'auto', overflowY: 'auto', maxHeight: 560 }}>
-        <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed', minWidth: 1500 }}>
-          <colgroup>
-            <col style={{ width: '11%' }} /><col style={{ width: '13%' }} />
-            <col style={{ width: '7%' }} /><col style={{ width: '7%' }} /><col style={{ width: '6%' }} /><col style={{ width: '7%' }} /><col style={{ width: '5%' }} />
-            <col style={{ width: '5%' }} /><col style={{ width: '5%' }} /><col style={{ width: '5%' }} /><col style={{ width: '5%' }} />
-            <col style={{ width: '5%' }} /><col style={{ width: '5%' }} /><col style={{ width: '5%' }} /><col style={{ width: '5%' }} />
-            <col style={{ width: '7%' }} /><col style={{ width: '5%' }} /><col style={{ width: '5%' }} /><col style={{ width: '5%' }} />
-          </colgroup>
+        <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'auto', minWidth: 1800 }}>
           <thead>
             <tr style={{ background: C.bg }}>
               <Th label="Category" sortKey="cat" style={{ ...thStyleL, position: 'sticky', top: 0, background: C.bg, zIndex: 1 }} align="left" />
