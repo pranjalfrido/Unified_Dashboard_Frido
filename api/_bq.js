@@ -19,6 +19,66 @@ export function getBQ() {
   return bq
 }
 
+// ============================================================================
+// Shared "measures" layer — every sub-tab (Shopify, Amazon, EBO, Offline, ...)
+// must compute Net Revenue / GST / return-rate KPIs identically. Two pieces:
+//
+//   1. netRevenueSelectFragment(tableAlias) — a SQL SELECT fragment to drop into
+//      any `WITH q AS (${base}) SELECT ${netRevenueSelectFragment('q')} FROM q
+//      WHERE ...` query. Returns the 6 raw sums every measure is built from.
+//   2. computeNetRevenueMeasures(row) — takes that SQL row (or an equivalent
+//      object) and derives CIR%/RTO%/Return%/Cancellation%/Net Revenue/GST Amount
+//      with one formula, so no tab re-derives this math with slightly different
+//      variable names.
+//
+// Formula (confirmed 2026-07-31): all % rates are share-of-Gross-Inc-GST,
+// computed in whatever filter/slicer context surrounds the query (so they stay
+// "slicer-friendly" — a category/SKU/date filter changes the numerator AND
+// denominator together, same as a DAX measure). Order matters:
+//   retainedShare    = 1 − cirPct − rtoPct − returnPct − cancelPct
+//   netRevenueExcGst = grossExcGst × retainedShare
+//   gstAmount        = (grossIncGst − grossExcGst) × retainedShare
+// i.e. GST is removed from the SAME retained portion Net Revenue is computed
+// from — not derived separately from a different base.
+// ============================================================================
+export function netRevenueSelectFragment(alias = '') {
+  const p = alias ? `${alias}.` : ''
+  return `SUM(${p}SellingPrice_Inc_GST) AS gross_inc_gst,
+    SUM(${p}SellingPrice_Exc_GST) AS gross_exc_gst,
+    SUM(CASE WHEN ${p}Order_Status = 'CIR' THEN ${p}SellingPrice_Inc_GST ELSE 0 END) AS cir_rev,
+    SUM(CASE WHEN ${p}Order_Status = 'RTO' THEN ${p}SellingPrice_Inc_GST ELSE 0 END) AS rto_rev,
+    SUM(CASE WHEN ${p}Order_Status = 'Return' THEN ${p}SellingPrice_Inc_GST ELSE 0 END) AS return_rev,
+    SUM(CASE WHEN ${p}Order_Status = 'Cancelled' THEN ${p}SellingPrice_Inc_GST ELSE 0 END) AS cancel_rev`
+}
+
+export function computeNetRevenueMeasures(row = {}) {
+  const grossIncGst = parseFloat(row.gross_inc_gst) || 0
+  const grossExcGst = parseFloat(row.gross_exc_gst) || 0
+  const cirRev = parseFloat(row.cir_rev) || 0
+  const rtoRev = parseFloat(row.rto_rev) || 0
+  const returnRev = parseFloat(row.return_rev) || 0
+  const cancelRev = parseFloat(row.cancel_rev) || 0
+
+  const cirPct = grossIncGst > 0 ? cirRev / grossIncGst : 0
+  const rtoPct = grossIncGst > 0 ? rtoRev / grossIncGst : 0
+  const returnPct = grossIncGst > 0 ? returnRev / grossIncGst : 0
+  const cancelPct = grossIncGst > 0 ? cancelRev / grossIncGst : 0
+  const retainedShare = Math.max(0, 1 - cirPct - rtoPct - returnPct - cancelPct)
+
+  const netRevenueExcGst = grossExcGst * retainedShare
+  const gstAmount = (grossIncGst - grossExcGst) * retainedShare
+  const netRevenueIncGst = netRevenueExcGst + gstAmount
+
+  return {
+    grossIncGst, grossExcGst,
+    cirRev, rtoRev, returnRev, cancelRev,
+    cirPct, rtoPct, returnPct, cancelPct,
+    totalReturnPct: cirPct + rtoPct + returnPct + cancelPct,
+    retainedShare,
+    netRevenueExcGst, netRevenueIncGst, gstAmount,
+  }
+}
+
 const CHANNEL_GROUPS = {
   d2c:           { channels: ['Shopify'], subChannels: ['MyFrido', 'Mobility', 'Shopify International'] },
   ebo:           { channels: ['Shopify'], subChannels: ['Retail Store'] },
@@ -167,10 +227,16 @@ item_master AS (
   -- in either source don't silently break the join. Category/SubCategory now come from here —
   -- the fact table's own Category/SubCategory columns are a dbt-side default and can be wrong
   -- (e.g. placeholder "Frido"/"Frido" for SKUs dbt couldn't map) — item master is the source of truth.
+  -- Spare-part categories (e.g. "Sparepart (Chair & Mobility)") are folded into "Others" too —
+  -- they're a small, miscellaneous bucket that doesn't warrant its own row alongside real products.
   SELECT
     REGEXP_REPLACE(UPPER(TRIM(Product_Code)), r'[^A-Z0-9-]', '') AS sku_key,
-    ANY_VALUE(Category_Name) AS Category_Name,
-    ANY_VALUE(Sub_category) AS Sub_category
+    CASE WHEN LOWER(ANY_VALUE(Category_Name)) LIKE '%spare%' THEN 'Others' ELSE ANY_VALUE(Category_Name) END AS Category_Name,
+    CASE WHEN LOWER(ANY_VALUE(Category_Name)) LIKE '%spare%' THEN 'Others' ELSE ANY_VALUE(Sub_category) END AS Sub_category,
+    SAFE_CAST(NULLIF(TRIM(ANY_VALUE(GST_Tax_Type_Code)), '') AS FLOAT64) AS GST_Rate,
+    -- Per-unit weight in grams, used by the PnL tab's SnD (Shipping & Distribution) cost —
+    -- see PNL_TAB_ROADMAP.md. Line-item weight = Weight_gms * ItemQty.
+    SAFE_CAST(NULLIF(TRIM(ANY_VALUE(Weight_gms)), '') AS FLOAT64) AS Weight_gms
   FROM \`frido-429506.sharepoint_to_gcp.Frido_Item_Master__frido_item_sku_master\`
   WHERE Product_Code IS NOT NULL AND TRIM(Product_Code) != ''
   GROUP BY sku_key
@@ -196,9 +262,21 @@ SELECT
   u.CustomerId, u.voucher_code,
   COALESCE(im.Category_Name, 'Others') AS Category,
   COALESCE(im.Sub_category, 'Others') AS SubCategory,
-  u.GST_Tax_Type_Code,
+  COALESCE(im.GST_Rate, SAFE_CAST(NULLIF(TRIM(u.GST_Tax_Type_Code), '') AS FLOAT64)) AS GST_Tax_Type_Code,
+  im.Weight_gms,
+  -- Per-line GST amount, back-calculated from the SKU's real GST slab (item master GST_Tax_Type_Code,
+  -- falling back to the fact table's own rate when the SKU isn't in item master) applied to the
+  -- GST-inclusive selling price. Only meaningful for non-cancelled/RTO/Return/CIR lines — callers
+  -- that want "GST on completed orders only" should filter Order_Status before summing this.
+  ROUND(u.SellingPrice_Inc_GST * SAFE_DIVIDE(
+    COALESCE(im.GST_Rate, SAFE_CAST(NULLIF(TRIM(u.GST_Tax_Type_Code), '') AS FLOAT64)),
+    100 + COALESCE(im.GST_Rate, SAFE_CAST(NULLIF(TRIM(u.GST_Tax_Type_Code), '') AS FLOAT64))
+  ), 2) AS GST_Amount,
   u.masterskucode AS MasterSKU,
-  CASE WHEN u.RefundStatus = 'true' OR u.RefundStatus = '1' THEN 1 ELSE 0 END AS is_refund,
+  -- RefundStatus is BOOL in the source table as of the current schema, but was a STRING
+  -- ('true'/'1') at some point historically — CAST to STRING so this keeps working across
+  -- either representation instead of erroring on a BOOL/STRING type mismatch.
+  CASE WHEN CAST(u.RefundStatus AS STRING) IN ('true', '1') THEN 1 ELSE 0 END AS is_refund,
   u.Clickpost_Status, u.Unicommerce_Status, u.Order_Status,
   u.Dispatch_Date, u.Delivered_Date
 FROM \`frido-429506.production.fact_all_platform_sales_report\` u
@@ -206,7 +284,7 @@ LEFT JOIN pincode_master pm ON u.Pincode IS NOT NULL AND TRIM(CAST(u.Pincode AS 
 LEFT JOIN city_name_master cm ON pm.pincode IS NULL AND u.Channel IN ('Blinkit','Zepto','Instamart') AND cm.City_L1 = CASE UPPER(TRIM(u.City)) WHEN 'BANGALORE' THEN 'Bengaluru' WHEN 'GURGAON' THEN 'Gurugram' WHEN 'DELHI' THEN 'New Delhi' WHEN 'SAS NAGAR' THEN 'Mohali' ELSE INITCAP(TRIM(u.City)) END
 LEFT JOIN item_master im ON REGEXP_REPLACE(UPPER(TRIM(u.masterskucode)), r'[^A-Z0-9-]', '') = im.sku_key
 WHERE u.OrderDate BETWEEN '${s}' AND '${e}'
-  AND NOT (u.Channel = 'offline_sales' AND u.Order_Status = 'Credit Note')
+  ${filters.includeCreditNotes ? '' : `AND NOT (u.Channel = 'offline_sales' AND u.Order_Status = 'Credit Note')`}
   ${whereClause}
 ORDER BY u.OrderDate DESC`
 }

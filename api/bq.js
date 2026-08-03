@@ -1,4 +1,4 @@
-import { getBQ, buildQuery } from './_bq.js'
+import { getBQ, buildQuery, netRevenueSelectFragment, computeNetRevenueMeasures } from './_bq.js'
 
 // Server-side in-memory cache with 5-minute TTL
 const cache = new Map()
@@ -63,6 +63,15 @@ export default async function handler(req, res) {
 
   // Run all aggregation queries in parallel directly on BigQuery
   const base = buildQuery(start, end, { category, subCategory, sku, subChannel, voucher, region, tier, state, city, country, paymentType, channelGroup })
+  // Sub-channel-agnostic base — used only to list all available D2C sub-channels for the
+  // toggle itself, so the option list doesn't collapse to just the currently-selected one.
+  const baseNoSubCh = buildQuery(start, end, { category, subCategory, sku, voucher, region, tier, state, city, country, paymentType, channelGroup })
+  // Offline Credit Notes are excluded from `base` by default (every other query in this file sums
+  // SellingPrice_Inc_GST with no Order_Status filter, so leaving Credit Notes in would silently
+  // inflate revenue). Only the offline-specific queries — which explicitly CASE on Order_Status —
+  // need Credit Note rows present, so they alone use this variant.
+  const baseWithCN = buildQuery(start, end, { category, subCategory, sku, subChannel, voucher, region, tier, state, city, country, paymentType, channelGroup, includeCreditNotes: true })
+  const prevBaseWithCN = buildQuery(ps, pe, { category, subCategory, sku, subChannel, voucher, region, tier, state, city, country, paymentType, channelGroup, includeCreditNotes: true })
   const prevBase = buildQuery(ps, pe, { category, subCategory, sku, subChannel, voucher, region, tier, state, city, country, paymentType, channelGroup })
   const momBase = buildQuery(moms, mome, { category, subCategory, sku, subChannel, voucher, region, tier, state, city, country, paymentType, channelGroup })
   const yoyBase = buildQuery(yoys, yoye, { category, subCategory, sku, subChannel, voucher, region, tier, state, city, country, paymentType, channelGroup })
@@ -85,14 +94,22 @@ export default async function handler(req, res) {
       ? (() => { const cWhere = country ? ` AND source_system = '${country.replace(/'/g,"''")}'` : ''; return `SELECT COUNT(DISTINCT order_id) AS n_orders, SUM(final_total_incl_tax) AS total_rev, SUM(total_excl_tax) AS total_exc_rev, SUM(qty) AS total_qty, COUNT(DISTINCT order_date) AS n_days, COUNT(DISTINCT customer_id) AS n_custs FROM \`frido-429506.production.fact_shopify_international_orders\` WHERE order_date BETWEEN '${start}' AND '${end}' AND (financial_status IS NULL OR financial_status != 'voided')${cWhere}` })()
       : `WITH q AS (${base}) SELECT COUNT(DISTINCT OrderId) AS n_orders, SUM(SellingPrice_Inc_GST) AS total_rev, SUM(SellingPrice_Exc_GST) AS total_exc_rev, SUM(ItemQty) AS total_qty, SUM(CASE WHEN UPPER(COALESCE(MasterSKU,'')) NOT LIKE '%COUP%' AND UPPER(COALESCE(MasterSKU,'')) NOT LIKE '%DFA%' THEN ItemQty ELSE 0 END) AS asp_qty, COUNT(DISTINCT OrderDate) AS n_days, COUNT(DISTINCT CustomerId) AS n_custs, SUM(CASE WHEN (Channel='Amazon' AND SubChannel IN ('Amazon Seller Central','Amazon International')) OR Channel='Flipkart' OR Channel='Myntra' OR (Channel='Shopify' AND SubChannel != 'Shopify International') THEN SellingPrice_Inc_GST ELSE 0 END) AS return_trackable_rev FROM q`,
     byChannel: `WITH q AS (${base}) SELECT Channel, SubChannel, COUNT(DISTINCT OrderId) AS orders, SUM(SellingPrice_Inc_GST) AS rev, SUM(SellingPrice_Exc_GST) AS exc_rev, SUM(ItemQty) AS qty, SUM(CASE WHEN Order_Status = 'Cancelled' THEN SellingPrice_Inc_GST ELSE 0 END) AS cancel_rev, SUM(CASE WHEN Order_Status = 'RTO' THEN SellingPrice_Inc_GST ELSE 0 END) AS rto_rev, SUM(CASE WHEN Order_Status = 'Return' THEN SellingPrice_Inc_GST ELSE 0 END) AS return_rev, SUM(CASE WHEN Order_Status = 'CIR' THEN SellingPrice_Inc_GST ELSE 0 END) AS cir_rev FROM q WHERE NOT (Channel = 'Shopify' AND SubChannel = 'Shopify International') GROUP BY Channel, SubChannel ORDER BY rev DESC`,
+    // AOV/ASP scope: All-tab blended AOV/ASP should only reflect channels with reliable per-order
+    // economics — Shopify, Amazon Seller Central, Myntra, Flipkart, Firstcry, CRED — excluding
+    // Amazon Vendor Central, quick-commerce (Blinkit/Zepto/Instamart, no order-level AOV concept),
+    // and Offline (B2B/distributor bulk orders skew AOV/ASP heavily).
+    aspAovTotals: `WITH q AS (${base}) SELECT COUNT(DISTINCT OrderId) AS orders, SUM(SellingPrice_Inc_GST) AS rev, SUM(CASE WHEN UPPER(COALESCE(MasterSKU,'')) NOT LIKE '%COUP%' AND UPPER(COALESCE(MasterSKU,'')) NOT LIKE '%DFA%' THEN ItemQty ELSE 0 END) AS asp_qty FROM q WHERE (Channel='Shopify' AND SubChannel != 'Shopify International') OR (Channel='Amazon' AND SubChannel='Amazon Seller Central') OR Channel IN ('Myntra','Flipkart','Firstcry','CRED')`,
     shopifyIntlTotals: subChannel === 'International' ? `SELECT 0 AS intl_rev, 0 AS intl_exc_rev` : `SELECT SUM(final_total_incl_tax) AS intl_rev, SUM(total_excl_tax) AS intl_exc_rev FROM \`frido-429506.production.fact_shopify_international_orders\` WHERE order_date BETWEEN '${start}' AND '${end}' AND (financial_status IS NULL OR financial_status != 'voided')`,
     prevShopifyIntlTotals: subChannel === 'International' ? `SELECT 0 AS intl_rev, 0 AS intl_exc_rev` : `SELECT SUM(final_total_incl_tax) AS intl_rev, SUM(total_excl_tax) AS intl_exc_rev FROM \`frido-429506.production.fact_shopify_international_orders\` WHERE order_date BETWEEN '${ps}' AND '${pe}' AND (financial_status IS NULL OR financial_status != 'voided')`,
+    // shNetCalc / prevShNetCalc feed the shared measures layer (netRevenueSelectFragment +
+    // computeNetRevenueMeasures in _bq.js) — the same fragment every tab uses, so Net Revenue/
+    // GST/return-rate math can never drift between Shopify, other channels, and the All tab.
     shNetCalc: subChannel === 'International'
-      ? (() => { const cWhere = country ? ` AND source_system = '${country.replace(/'/g,"''")}'` : ''; return `SELECT SUM(final_total_incl_tax) AS gross, SUM(total_excl_tax) AS exc_rev, 0 AS cancel_rev, 0 AS rto_rev, 0 AS return_rev, 0 AS cir_rev FROM \`frido-429506.production.fact_shopify_international_orders\` WHERE order_date BETWEEN '${start}' AND '${end}' AND (financial_status IS NULL OR financial_status != 'voided')${cWhere}` })()
-      : `WITH q AS (${base}) SELECT SUM(SellingPrice_Inc_GST) AS gross, SUM(SellingPrice_Exc_GST) AS exc_rev, SUM(CASE WHEN Order_Status='Cancelled' THEN SellingPrice_Inc_GST ELSE 0 END) AS cancel_rev, SUM(CASE WHEN Order_Status='RTO' THEN SellingPrice_Inc_GST ELSE 0 END) AS rto_rev, SUM(CASE WHEN Order_Status='Return' THEN SellingPrice_Inc_GST ELSE 0 END) AS return_rev, SUM(CASE WHEN Order_Status='CIR' THEN SellingPrice_Inc_GST ELSE 0 END) AS cir_rev, SUM(CASE WHEN Order_Status='Exchange' THEN SellingPrice_Inc_GST ELSE 0 END) AS exch_rev, COUNT(DISTINCT CASE WHEN Order_Status='Exchange' THEN OrderId END) AS exch_orders FROM q WHERE Channel='Shopify' AND SubChannel != 'Shopify International' AND SubChannel != 'Retail Store'`,
+      ? (() => { const cWhere = country ? ` AND source_system = '${country.replace(/'/g,"''")}'` : ''; return `SELECT SUM(final_total_incl_tax) AS gross_inc_gst, SUM(total_excl_tax) AS gross_exc_gst, 0 AS cancel_rev, 0 AS rto_rev, 0 AS return_rev, 0 AS cir_rev, 0 AS exch_rev, 0 AS exch_orders FROM \`frido-429506.production.fact_shopify_international_orders\` WHERE order_date BETWEEN '${start}' AND '${end}' AND (financial_status IS NULL OR financial_status != 'voided')${cWhere}` })()
+      : `WITH q AS (${base}) SELECT ${netRevenueSelectFragment()}, SUM(CASE WHEN Order_Status='Exchange' THEN SellingPrice_Inc_GST ELSE 0 END) AS exch_rev, COUNT(DISTINCT CASE WHEN Order_Status='Exchange' THEN OrderId END) AS exch_orders FROM q WHERE Channel='Shopify' AND SubChannel != 'Shopify International' AND SubChannel != 'Retail Store'`,
     prevShNetCalc: subChannel === 'International'
-      ? (() => { const cWhere = country ? ` AND source_system = '${country.replace(/'/g,"''")}'` : ''; return `SELECT SUM(final_total_incl_tax) AS gross, SUM(total_excl_tax) AS exc_rev, 0 AS cancel_rev, 0 AS rto_rev, 0 AS return_rev, 0 AS cir_rev, 0 AS exch_rev, 0 AS exch_orders FROM \`frido-429506.production.fact_shopify_international_orders\` WHERE order_date BETWEEN '${ps}' AND '${pe}' AND (financial_status IS NULL OR financial_status != 'voided')${cWhere}` })()
-      : `WITH q AS (${prevBase}) SELECT SUM(SellingPrice_Inc_GST) AS gross, SUM(SellingPrice_Exc_GST) AS exc_rev, SUM(CASE WHEN Order_Status='Cancelled' THEN SellingPrice_Inc_GST ELSE 0 END) AS cancel_rev, SUM(CASE WHEN Order_Status='RTO' THEN SellingPrice_Inc_GST ELSE 0 END) AS rto_rev, SUM(CASE WHEN Order_Status='Return' THEN SellingPrice_Inc_GST ELSE 0 END) AS return_rev, SUM(CASE WHEN Order_Status='CIR' THEN SellingPrice_Inc_GST ELSE 0 END) AS cir_rev, SUM(CASE WHEN Order_Status='Exchange' THEN SellingPrice_Inc_GST ELSE 0 END) AS exch_rev, COUNT(DISTINCT CASE WHEN Order_Status='Exchange' THEN OrderId END) AS exch_orders FROM q WHERE Channel='Shopify' AND SubChannel != 'Shopify International' AND SubChannel != 'Retail Store'`,
+      ? (() => { const cWhere = country ? ` AND source_system = '${country.replace(/'/g,"''")}'` : ''; return `SELECT SUM(final_total_incl_tax) AS gross_inc_gst, SUM(total_excl_tax) AS gross_exc_gst, 0 AS cancel_rev, 0 AS rto_rev, 0 AS return_rev, 0 AS cir_rev, 0 AS exch_rev, 0 AS exch_orders FROM \`frido-429506.production.fact_shopify_international_orders\` WHERE order_date BETWEEN '${ps}' AND '${pe}' AND (financial_status IS NULL OR financial_status != 'voided')${cWhere}` })()
+      : `WITH q AS (${prevBase}) SELECT ${netRevenueSelectFragment()}, SUM(CASE WHEN Order_Status='Exchange' THEN SellingPrice_Inc_GST ELSE 0 END) AS exch_rev, COUNT(DISTINCT CASE WHEN Order_Status='Exchange' THEN OrderId END) AS exch_orders FROM q WHERE Channel='Shopify' AND SubChannel != 'Shopify International' AND SubChannel != 'Retail Store'`,
     byDate: `WITH q AS (${base}) SELECT CAST(OrderDate AS STRING) AS date, Channel, SubChannel, SUM(SellingPrice_Inc_GST) AS rev, COUNT(DISTINCT OrderId) AS orders, SUM(ItemQty) AS units, SUM(CASE WHEN Order_Status NOT IN ('Cancelled','RTO','Return','CIR') THEN SellingPrice_Exc_GST ELSE 0 END) AS net_exc_rev FROM q GROUP BY date, Channel, SubChannel ORDER BY date`,
     byCategory: `WITH q AS (${base}) SELECT Category, COUNT(DISTINCT OrderId) AS orders, SUM(SellingPrice_Inc_GST) AS rev, SUM(SellingPrice_Exc_GST) AS exc_rev, SUM(ItemQty) AS units, SUM(CASE WHEN UPPER(COALESCE(MasterSKU,'')) NOT LIKE '%COUP%' AND UPPER(COALESCE(MasterSKU,'')) NOT LIKE '%DFA%' THEN ItemQty ELSE 0 END) AS asp_units FROM q GROUP BY Category ORDER BY rev DESC`,
     byState: `WITH q AS (${base}) SELECT CASE WHEN TRIM(State) IS NULL OR TRIM(State) IN ('','-') THEN 'OTHERS' ELSE UPPER(TRIM(State)) END AS state, COUNT(DISTINCT OrderId) AS orders, SUM(SellingPrice_Inc_GST) AS rev, COUNT(DISTINCT City) AS cities FROM q WHERE State IS NOT NULL GROUP BY 1 ORDER BY rev DESC LIMIT 30`,
@@ -100,14 +117,38 @@ export default async function handler(req, res) {
     shCategoryPrev: `WITH q AS (${prevBase}) SELECT Category, SUM(SellingPrice_Inc_GST) AS rev FROM q WHERE Channel='Shopify' GROUP BY Category`,
     shSubCategory: `WITH q AS (${base}) SELECT Category, SubCategory, COUNT(DISTINCT OrderId) AS orders, SUM(SellingPrice_Inc_GST) AS rev, SUM(SellingPrice_Exc_GST) AS exc_rev, SUM(ItemQty) AS units, SUM(CASE WHEN UPPER(COALESCE(MasterSKU,'')) NOT LIKE '%COUP%' AND UPPER(COALESCE(MasterSKU,'')) NOT LIKE '%DFA%' THEN ItemQty ELSE 0 END) AS asp_units, COUNT(DISTINCT CASE WHEN Order_Status='Cancelled' THEN OrderId END) AS cancelled, COUNT(DISTINCT CASE WHEN Order_Status IN ('RTO','Return') THEN OrderId END) AS rto, COUNT(DISTINCT CASE WHEN Order_Status='CIR' THEN OrderId END) AS cir, COUNT(DISTINCT CASE WHEN Order_Status='Exchange' THEN OrderId END) AS exch, SUM(CASE WHEN Order_Status='Cancelled' THEN SellingPrice_Inc_GST ELSE 0 END) AS cancel_rev, SUM(CASE WHEN Order_Status IN ('RTO','Return') THEN SellingPrice_Inc_GST ELSE 0 END) AS rto_rev, SUM(CASE WHEN Order_Status='CIR' THEN SellingPrice_Inc_GST ELSE 0 END) AS cir_rev, SUM(CASE WHEN Order_Status='Exchange' THEN SellingPrice_Inc_GST ELSE 0 END) AS exch_rev FROM q WHERE Channel='Shopify' GROUP BY Category, SubCategory ORDER BY rev DESC`,
     shSubCategoryPrev: `WITH q AS (${prevBase}) SELECT Category, SubCategory, SUM(SellingPrice_Inc_GST) AS rev FROM q WHERE Channel='Shopify' GROUP BY Category, SubCategory`,
-    shSKU: `WITH q AS (${base}) SELECT Category, SubCategory, MasterSKU AS sku, COUNT(DISTINCT OrderId) AS orders, SUM(SellingPrice_Inc_GST) AS rev, SUM(SellingPrice_Exc_GST) AS exc_rev, SUM(ItemQty) AS units, COUNT(DISTINCT CASE WHEN Order_Status='Cancelled' THEN OrderId END) AS cancelled, COUNT(DISTINCT CASE WHEN Order_Status IN ('RTO','Return') THEN OrderId END) AS rto, COUNT(DISTINCT CASE WHEN Order_Status='CIR' THEN OrderId END) AS cir, COUNT(DISTINCT CASE WHEN Order_Status='Exchange' THEN OrderId END) AS exch, SUM(CASE WHEN Order_Status='Cancelled' THEN SellingPrice_Inc_GST ELSE 0 END) AS cancel_rev, SUM(CASE WHEN Order_Status IN ('RTO','Return') THEN SellingPrice_Inc_GST ELSE 0 END) AS rto_rev, SUM(CASE WHEN Order_Status='CIR' THEN SellingPrice_Inc_GST ELSE 0 END) AS cir_rev, SUM(CASE WHEN Order_Status='Exchange' THEN SellingPrice_Inc_GST ELSE 0 END) AS exch_rev FROM q WHERE Channel='Shopify' AND MasterSKU IS NOT NULL AND TRIM(MasterSKU) != '' GROUP BY Category, SubCategory, MasterSKU ORDER BY rev DESC LIMIT 300`,
+    shSKU: `WITH q AS (${base}) SELECT Category, SubCategory, MasterSKU AS sku, COUNT(DISTINCT OrderId) AS orders, SUM(SellingPrice_Inc_GST) AS rev, SUM(SellingPrice_Exc_GST) AS exc_rev, SUM(ItemQty) AS units, COUNT(DISTINCT CASE WHEN Order_Status='Cancelled' THEN OrderId END) AS cancelled, COUNT(DISTINCT CASE WHEN Order_Status IN ('RTO','Return') THEN OrderId END) AS rto, COUNT(DISTINCT CASE WHEN Order_Status='CIR' THEN OrderId END) AS cir, COUNT(DISTINCT CASE WHEN Order_Status='Exchange' THEN OrderId END) AS exch, SUM(CASE WHEN Order_Status='Cancelled' THEN SellingPrice_Inc_GST ELSE 0 END) AS cancel_rev, SUM(CASE WHEN Order_Status IN ('RTO','Return') THEN SellingPrice_Inc_GST ELSE 0 END) AS rto_rev, SUM(CASE WHEN Order_Status='CIR' THEN SellingPrice_Inc_GST ELSE 0 END) AS cir_rev, SUM(CASE WHEN Order_Status='Exchange' THEN SellingPrice_Inc_GST ELSE 0 END) AS exch_rev FROM q WHERE Channel='Shopify' AND MasterSKU IS NOT NULL AND TRIM(MasterSKU) != '' GROUP BY Category, SubCategory, MasterSKU ORDER BY rev DESC`,
     shSKUPrev: `WITH q AS (${prevBase}) SELECT Category, SubCategory, MasterSKU AS sku, SUM(SellingPrice_Inc_GST) AS rev FROM q WHERE Channel='Shopify' AND MasterSKU IS NOT NULL AND TRIM(MasterSKU) != '' GROUP BY Category, SubCategory, MasterSKU`,
-    shState: `WITH q AS (${base}) SELECT UPPER(TRIM(State)) AS state, COUNT(DISTINCT OrderId) AS orders, SUM(SellingPrice_Inc_GST) AS rev, SUM(ItemQty) AS units, COUNT(DISTINCT City) AS cities, COUNT(DISTINCT CASE WHEN Order_Status IN ('RTO','Return','CIR') THEN OrderId END) AS rto_orders FROM q WHERE Channel='Shopify' AND State IS NOT NULL AND TRIM(State) != '' GROUP BY UPPER(TRIM(State)) ORDER BY rev DESC LIMIT 30`,
+    // PnL SnD (Shipping & Distribution) cost — one row per Category/SubCategory/SKU with the
+    // SUMS needed to allocate an order-level weight-slab rate down to line-item grain in JS:
+    // line_weight (this SKU's ItemQty * Weight_gms, summed) and, via the window function, each
+    // line's share of its own order's total weight. Grouping after the window function collapses
+    // per-line rows to per-SKU sums of (line_weight) and (line_weight / order_weight) — the latter
+    // is the fraction of each order's slab rate this SKU should absorb, summed across all its
+    // orders, so the client only needs SUM(weight_share) * rate to get this SKU's total SnD cost
+    // once it looks up each distinct order_weight's slab rate from public/snd-rates.json. Only
+    // SKUs with a real Weight_gms entry contribute — orders where every line is unweighed can't be
+    // bucketed at all, so weight_share stays 0 for those SKUs (rendered as "no cost data" downstream).
+    shOrderLineWeights: `WITH q AS (${base}), lined AS (
+      SELECT OrderId, Category, SubCategory, MasterSKU AS sku, ItemQty, Weight_gms,
+        (ItemQty * Weight_gms) AS line_weight,
+        SUM(ItemQty * Weight_gms) OVER (PARTITION BY OrderId) AS order_weight
+      FROM q
+      WHERE Channel='Shopify' AND MasterSKU IS NOT NULL AND TRIM(MasterSKU) != '' AND Weight_gms IS NOT NULL AND Weight_gms > 0
+        AND Order_Status NOT IN ('Cancelled','RTO','Return','CIR')
+    )
+    SELECT Category, SubCategory, sku, order_weight,
+      SUM(line_weight) AS total_line_weight,
+      SAFE_DIVIDE(SUM(line_weight), ANY_VALUE(order_weight)) AS weight_share
+    FROM lined
+    WHERE order_weight > 0
+    GROUP BY Category, SubCategory, sku, order_weight`,
+    shState: `WITH q AS (${base}) SELECT UPPER(TRIM(State)) AS state, COUNT(DISTINCT OrderId) AS orders, SUM(SellingPrice_Inc_GST) AS rev, SUM(ItemQty) AS units, COUNT(DISTINCT City) AS cities, COUNT(DISTINCT CASE WHEN Order_Status IN ('RTO','Return','CIR') THEN OrderId END) AS rto_orders, SUM(CASE WHEN Order_Status IN ('RTO','Return','CIR') THEN SellingPrice_Inc_GST ELSE 0 END) AS return_rev FROM q WHERE Channel='Shopify' AND State IS NOT NULL AND TRIM(State) != '' GROUP BY UPPER(TRIM(State)) ORDER BY rev DESC LIMIT 30`,
     shStateTotal: `WITH q AS (${base}) SELECT SUM(SellingPrice_Inc_GST) AS total_rev, COUNT(DISTINCT OrderId) AS total_orders FROM q WHERE Channel='Shopify' AND State IS NOT NULL AND TRIM(State) != ''`,
     shStatePrev: `WITH q AS (${prevBase}) SELECT UPPER(TRIM(State)) AS state, SUM(SellingPrice_Inc_GST) AS rev, COUNT(DISTINCT OrderId) AS orders FROM q WHERE Channel='Shopify' AND State IS NOT NULL AND TRIM(State) != '' GROUP BY UPPER(TRIM(State))`,
     shRegion: `WITH q AS (${base}) SELECT Region AS region, COUNT(DISTINCT OrderId) AS orders, SUM(SellingPrice_Inc_GST) AS rev, SUM(ItemQty) AS units FROM q WHERE Channel='Shopify' AND Region IS NOT NULL GROUP BY Region ORDER BY rev DESC`,
     shTier: `WITH q AS (${base}) SELECT City_Tier AS city_tier, Tier_Label AS tier_label, COUNT(DISTINCT OrderId) AS orders, SUM(SellingPrice_Inc_GST) AS rev, SUM(ItemQty) AS units FROM q WHERE Channel='Shopify' AND City_Tier IS NOT NULL GROUP BY City_Tier, Tier_Label ORDER BY City_Tier`,
-    shCity: `WITH q AS (${base}) SELECT INITCAP(TRIM(City)) AS city, INITCAP(TRIM(State)) AS state, MAX(Region) AS region, COUNT(DISTINCT OrderId) AS orders, SUM(SellingPrice_Inc_GST) AS rev, COUNT(DISTINCT CASE WHEN Order_Status IN ('RTO','Return','CIR') THEN OrderId END) AS rto_orders FROM q WHERE Channel='Shopify' AND City IS NOT NULL AND TRIM(City) != '' GROUP BY INITCAP(TRIM(City)), INITCAP(TRIM(State)) ORDER BY rev DESC LIMIT 50`,
+    shCity: `WITH q AS (${base}) SELECT INITCAP(TRIM(City)) AS city, INITCAP(TRIM(State)) AS state, MAX(Region) AS region, COUNT(DISTINCT OrderId) AS orders, SUM(SellingPrice_Inc_GST) AS rev, COUNT(DISTINCT CASE WHEN Order_Status IN ('RTO','Return','CIR') THEN OrderId END) AS rto_orders, SUM(CASE WHEN Order_Status IN ('RTO','Return','CIR') THEN SellingPrice_Inc_GST ELSE 0 END) AS return_rev FROM q WHERE Channel='Shopify' AND City IS NOT NULL AND TRIM(City) != '' GROUP BY INITCAP(TRIM(City)), INITCAP(TRIM(State)) ORDER BY rev DESC LIMIT 50`,
     shCityTotal: `WITH q AS (${base}) SELECT SUM(SellingPrice_Inc_GST) AS total_rev, COUNT(DISTINCT OrderId) AS total_orders FROM q WHERE Channel='Shopify' AND City IS NOT NULL AND TRIM(City) != ''`,
     shCityPrev: `WITH q AS (${prevBase}) SELECT INITCAP(TRIM(City)) AS city, INITCAP(TRIM(State)) AS state, SUM(SellingPrice_Inc_GST) AS rev, COUNT(DISTINCT OrderId) AS orders FROM q WHERE Channel='Shopify' AND City IS NOT NULL AND TRIM(City) != '' GROUP BY INITCAP(TRIM(City)), INITCAP(TRIM(State))`,
     byRegion: `WITH q AS (${base}) SELECT Region AS region, COUNT(DISTINCT OrderId) AS orders, SUM(SellingPrice_Inc_GST) AS rev, SUM(ItemQty) AS units FROM q WHERE Region IS NOT NULL GROUP BY Region ORDER BY rev DESC`,
@@ -115,6 +156,9 @@ export default async function handler(req, res) {
     byOrderValue: `WITH q AS (${base}), ot AS (SELECT OrderId, SUM(SellingPrice_Inc_GST) AS order_rev FROM q GROUP BY OrderId) SELECT CASE WHEN order_rev < 500 THEN '<₹500' WHEN order_rev < 1000 THEN '₹500-1K' WHEN order_rev < 2500 THEN '₹1K-2.5K' WHEN order_rev < 5000 THEN '₹2.5K-5K' WHEN order_rev < 10000 THEN '₹5K-10K' WHEN order_rev < 25000 THEN '₹10K-25K' ELSE '₹25K+' END AS bucket, COUNT(*) AS cnt, SUM(order_rev) AS rev FROM ot GROUP BY 1`,
     byVoucher: `WITH q AS (${base}) SELECT CASE WHEN voucher_code IS NULL OR TRIM(voucher_code) = '' THEN 'No voucher' WHEN UPPER(voucher_code) LIKE '%PREPAID%' THEN 'Prepaid Disc' WHEN UPPER(voucher_code) LIKE '%PLM%' THEN 'Loyalty (PLM)' WHEN UPPER(voucher_code) LIKE '%FRV%' THEN 'Repeat (FRV)' WHEN REGEXP_CONTAINS(voucher_code, r'^[0-9]') OR LOWER(voucher_code) IN ('custom discount','custom_discount','simpl discount','simpldiscount','percentage','discount-3') OR LOWER(voucher_code) LIKE '%total pos%' OR LOWER(voucher_code) LIKE 'clickpost%' THEN 'POS/Manual' WHEN UPPER(voucher_code) LIKE '%HDFC%' OR UPPER(voucher_code) LIKE '%APAY%' OR UPPER(voucher_code) LIKE '%NOCOST%' OR UPPER(voucher_code) LIKE '%EMI%' OR UPPER(voucher_code) LIKE '%ONECARD%' OR UPPER(voucher_code) LIKE '%SIMPL%' THEN 'Bank/EMI' WHEN UPPER(voucher_code) LIKE 'IST-%' OR UPPER(voucher_code) LIKE '%INFLUENCER%' OR UPPER(voucher_code) LIKE 'AC-%' OR UPPER(voucher_code) LIKE 'GC-%' OR UPPER(voucher_code) LIKE 'DC-%' THEN 'Influencer/Aff' WHEN UPPER(voucher_code) LIKE '%SUMMER%' OR UPPER(voucher_code) LIKE '%BFS%' OR UPPER(voucher_code) LIKE '%LOVE%' THEN 'Sale Campaign' WHEN UPPER(voucher_code) LIKE '%FGP500%' OR UPPER(voucher_code) LIKE '%TECBXAY2%' OR UPPER(voucher_code) LIKE '%FREE GIFT COUPON%' OR LOWER(voucher_code) LIKE '%free-gift-coupon-500%' THEN 'Free Gift ₹500' WHEN UPPER(voucher_code) LIKE '%FGP1000%' OR UPPER(voucher_code) LIKE '%TECBXAY4%' THEN 'Free Gift ₹1000' WHEN UPPER(voucher_code) LIKE '%CARCOMFORT%' OR UPPER(voucher_code) LIKE '%BUNDLE%' OR UPPER(voucher_code) LIKE '%PACK%' OR UPPER(voucher_code) LIKE '%-PACK' OR UPPER(voucher_code) LIKE 'P2-%' OR UPPER(voucher_code) LIKE '%OFF-2%' OR UPPER(voucher_code) LIKE '%PACKOFF%' THEN 'Bundle/Pack' WHEN UPPER(voucher_code) IN ('FIRST50','ARCH10','FRIDO5','COMFY15','COMFY10','COMFY20','FIXPOSTURE200','FIXYOURPOSTURESALE','MYFRIDO10','FLAT100','PD20','OFF-2-PACK','WEDGEPL-59','SUMMER65') OR UPPER(voucher_code) LIKE 'COMFY%' OR UPPER(voucher_code) LIKE 'FIRST%' OR UPPER(voucher_code) LIKE 'FRIDO%' OR UPPER(voucher_code) LIKE 'ARCH%' OR UPPER(voucher_code) LIKE 'FLAT%' OR UPPER(voucher_code) LIKE 'FIXPOSTURE%' THEN 'Campaign' ELSE 'Other' END AS voucher_type, COUNT(DISTINCT OrderId) AS orders, SUM(SellingPrice_Inc_GST) AS rev FROM q WHERE Channel = 'Shopify' AND SubChannel != 'Retail Store' GROUP BY 1`,
     bySubChannel: `WITH q AS (${base}) SELECT SubChannel, COUNT(DISTINCT OrderId) AS orders, SUM(SellingPrice_Inc_GST) AS rev, SUM(SellingPrice_Exc_GST) AS exc_rev, SUM(ItemQty) AS qty FROM q WHERE Channel = 'Shopify' AND SubChannel != 'Retail Store' GROUP BY SubChannel ORDER BY rev DESC`,
+    // Sub-channel-agnostic — always lists every D2C sub-channel regardless of which one is
+    // currently selected, so the toggle's own option list never collapses to just the active pick.
+    allSubChannels: `WITH q AS (${baseNoSubCh}) SELECT SubChannel FROM q WHERE Channel = 'Shopify' AND SubChannel NOT IN ('Retail Store', 'International', 'Shopify B2B', 'Shopify International') AND SubChannel IS NOT NULL GROUP BY SubChannel ORDER BY SubChannel`,
     byPaymentMode: `WITH q AS (${base}) SELECT CASE WHEN PaymentMode IS NULL OR TRIM(PaymentMode) = '' THEN 'Unknown' WHEN LOWER(PaymentMode) LIKE '%cod%' OR LOWER(PaymentMode) LIKE '%cash%' THEN 'COD' ELSE 'Prepaid' END AS payment_mode, COUNT(DISTINCT OrderId) AS orders, SUM(SellingPrice_Inc_GST) AS rev FROM q WHERE Channel = 'Shopify' AND SubChannel != 'Retail Store' GROUP BY 1`,
     shPaymentTypes: `WITH q AS (${base}) SELECT PaymentMode AS payment_type, COUNT(DISTINCT OrderId) AS orders FROM q WHERE Channel = 'Shopify' AND SubChannel != 'Retail Store' AND PaymentMode IS NOT NULL AND TRIM(PaymentMode) != '' GROUP BY PaymentMode ORDER BY orders DESC LIMIT 50`,
     byOrderStatus: subChannel === 'International' ? `SELECT 'Unknown' AS order_status, 0 AS cnt, 0 AS rev, 0 AS exc_rev` : `WITH q AS (${base}) SELECT Order_Status AS order_status, COUNT(DISTINCT OrderId) AS cnt, SUM(SellingPrice_Inc_GST) AS rev, SUM(SellingPrice_Exc_GST) AS exc_rev FROM q GROUP BY Order_Status`,
@@ -135,10 +179,14 @@ export default async function handler(req, res) {
     byStateTotal: `WITH q AS (${base}) SELECT SUM(SellingPrice_Inc_GST) AS total_rev FROM q WHERE State IS NOT NULL AND TRIM(State) != ''`,
     byCityPrev: `WITH q AS (${prevBase}) SELECT UPPER(TRIM(City_L2)) AS city, SUM(SellingPrice_Inc_GST) AS rev FROM q WHERE City_L2 IS NOT NULL AND TRIM(City_L2) != '' GROUP BY UPPER(TRIM(City_L2))`,
     byCityTotal: `WITH q AS (${base}) SELECT SUM(SellingPrice_Inc_GST) AS total_rev FROM q WHERE City_L2 IS NOT NULL AND TRIM(City_L2) != ''`,
-    bySKU: `WITH q AS (${base}) SELECT MasterSKU AS sku, Category AS category, SubCategory AS subcategory, Channel AS channel, SUM(ItemQty) AS units, COUNT(DISTINCT OrderId) AS orders, SUM(SellingPrice_Inc_GST) AS rev FROM q WHERE MasterSKU IS NOT NULL AND TRIM(MasterSKU) != '' GROUP BY MasterSKU, Category, SubCategory, Channel ORDER BY rev DESC LIMIT 500`,
+    // No LIMIT here — this feeds skuChannelMap (AllTab's Category×Channel drill-down), and a cap
+    // silently drops sub-categories from the tree entirely (their expand arrow just disappears)
+    // once total SKU×category×channel combos exceed the limit. Already aggregated (SUM/COUNT),
+    // not raw rows, so the result set stays small even at full SKU catalog size.
+    bySKU: `WITH q AS (${base}) SELECT MasterSKU AS sku, Category AS category, SubCategory AS subcategory, Channel AS channel, SUM(ItemQty) AS units, COUNT(DISTINCT OrderId) AS orders, SUM(SellingPrice_Inc_GST) AS rev FROM q WHERE MasterSKU IS NOT NULL AND TRIM(MasterSKU) != '' GROUP BY MasterSKU, Category, SubCategory, Channel ORDER BY rev DESC`,
     byFinancialStatus: `WITH q AS (${base}) SELECT FinancialStatus AS financial_status, COUNT(DISTINCT OrderId) AS orders, SUM(SellingPrice_Inc_GST) AS rev FROM q WHERE Channel = 'Shopify' AND SubChannel != 'Retail Store' AND FinancialStatus IS NOT NULL GROUP BY FinancialStatus ORDER BY orders DESC`,
     byFulfilmentStatus: `WITH q AS (${base}) SELECT FulfilmentStatus AS fulfil_status, COUNT(DISTINCT OrderId) AS orders FROM q WHERE Channel = 'Shopify' AND SubChannel != 'Retail Store' AND FulfilmentStatus IS NOT NULL GROUP BY FulfilmentStatus ORDER BY orders DESC`,
-    byRefundTrend: `WITH q AS (${base}) SELECT CAST(OrderDate AS STRING) AS date, COUNT(DISTINCT OrderId) AS total_orders, COUNTIF(RefundStatus = 'true') AS refund_lines FROM q WHERE Channel = 'Shopify' AND SubChannel != 'Retail Store' GROUP BY date ORDER BY date`,
+    byRefundTrend: `WITH q AS (${base}) SELECT CAST(OrderDate AS STRING) AS date, COUNT(DISTINCT OrderId) AS total_orders, COUNTIF(is_refund = 1) AS refund_lines FROM q WHERE Channel = 'Shopify' AND SubChannel != 'Retail Store' GROUP BY date ORDER BY date`,
     byDailyReturnTrend: `WITH q AS (${base}) SELECT CAST(OrderDate AS STRING) AS date, COUNT(DISTINCT OrderId) AS total_orders, COUNT(DISTINCT CASE WHEN Order_Status='RTO' THEN OrderId END) AS rto_orders, COUNT(DISTINCT CASE WHEN Order_Status='Return' THEN OrderId END) AS return_orders, COUNT(DISTINCT CASE WHEN Order_Status='Exchange' THEN OrderId END) AS exch_orders, COUNT(DISTINCT CASE WHEN Order_Status='CIR' THEN OrderId END) AS cir_orders, COUNT(DISTINCT CASE WHEN Order_Status='Cancelled' THEN OrderId END) AS cancel_orders FROM q WHERE Channel = 'Shopify' AND SubChannel != 'Retail Store' GROUP BY date ORDER BY date`,
     topOrders: `WITH q AS (${base}), ot AS (SELECT OrderId, CAST(OrderDate AS STRING) AS order_date, Channel, State, City, SUM(SellingPrice_Inc_GST) AS rev, SUM(ItemQty) AS qty, MAX(FulfilmentStatus) AS order_status, MAX(CustomerId) AS customer_id, MAX(voucher_code) AS voucher_code, STRING_AGG(DISTINCT ChannelSKUCode, ', ' ORDER BY ChannelSKUCode LIMIT 5) AS skus FROM q GROUP BY OrderId, OrderDate, Channel, State, City) SELECT * FROM ot ORDER BY rev DESC LIMIT 20`,
     byVoucherRaw: `WITH q AS (${base}) SELECT TRIM(voucher_code) AS voucher_code, COUNT(DISTINCT OrderId) AS orders FROM q WHERE Channel = 'Shopify' AND SubChannel != 'Retail Store' AND voucher_code IS NOT NULL AND TRIM(voucher_code) != '' GROUP BY TRIM(voucher_code) ORDER BY orders DESC LIMIT 300`,
@@ -148,6 +196,7 @@ export default async function handler(req, res) {
     shReturnReasons: `SELECT COALESCE(NULLIF(TRIM(Customer_Return_Reason),''), 'Unknown') AS reason, COALESCE(NULLIF(TRIM(Customer_Sub_Reason),''), 'Unknown') AS sub_reason, COALESCE(NULLIF(TRIM(Category),''), 'Others') AS category, COALESCE(NULLIF(TRIM(SubCategory),''), 'Others') AS sub_category, COUNT(DISTINCT OrderId) AS orders, SUM(SellingPrice_Inc_GST) AS rev FROM \`frido-429506.production.fact_all_platform_sales_report\` WHERE OrderDate BETWEEN '${start}' AND '${end}' AND Channel = 'Shopify' AND SubChannel != 'Retail Store' AND Order_Status IN ('RTO','Return','CIR') AND Customer_Return_Reason IS NOT NULL AND TRIM(Customer_Return_Reason) != ''${subChannel === 'ShopifyIndia' ? ` AND SubChannel != 'Shopify International'` : ''} GROUP BY 1,2,3,4 ORDER BY orders DESC`,
     byRTO: subChannel === 'International' ? `SELECT 0 AS rto_rev, 0 AS rto_exc_rev, 0 AS rto_orders` : `WITH q AS (${base}) SELECT SUM(SellingPrice_Inc_GST) AS rto_rev, SUM(SellingPrice_Exc_GST) AS rto_exc_rev, COUNT(DISTINCT OrderId) AS rto_orders FROM q WHERE Order_Status = 'RTO'`,
     prevTotals: `WITH q AS (${prevBase}) SELECT SUM(SellingPrice_Inc_GST) AS total_rev, SUM(SellingPrice_Exc_GST) AS total_exc_rev, COUNT(DISTINCT OrderId) AS n_orders, SUM(ItemQty) AS total_qty, COUNT(DISTINCT CASE WHEN Order_Status IN ('RTO','Return') THEN OrderId END) AS rto_orders, COUNT(DISTINCT CASE WHEN Order_Status = 'CIR' THEN OrderId END) AS cir_orders FROM q`,
+    prevAspAovTotals: `WITH q AS (${prevBase}) SELECT COUNT(DISTINCT OrderId) AS orders, SUM(SellingPrice_Inc_GST) AS rev, SUM(CASE WHEN UPPER(COALESCE(MasterSKU,'')) NOT LIKE '%COUP%' AND UPPER(COALESCE(MasterSKU,'')) NOT LIKE '%DFA%' THEN ItemQty ELSE 0 END) AS asp_qty FROM q WHERE (Channel='Shopify' AND SubChannel != 'Shopify International') OR (Channel='Amazon' AND SubChannel='Amazon Seller Central') OR Channel IN ('Myntra','Flipkart','Firstcry','CRED')`,
     momTotals: `WITH q AS (${momBase}) SELECT SUM(SellingPrice_Inc_GST) AS total_rev, SUM(SellingPrice_Exc_GST) AS total_exc_rev, COUNT(DISTINCT OrderId) AS n_orders FROM q`,
     yoyTotals: `WITH q AS (${yoyBase}) SELECT SUM(SellingPrice_Inc_GST) AS total_rev, SUM(SellingPrice_Exc_GST) AS total_exc_rev, COUNT(DISTINCT OrderId) AS n_orders FROM q`,
     prevByChannel: `WITH q AS (${prevBase}) SELECT Channel, SubChannel, SUM(SellingPrice_Inc_GST) AS rev, SUM(SellingPrice_Exc_GST) AS exc_rev, SUM(CASE WHEN Order_Status = 'Cancelled' THEN SellingPrice_Inc_GST ELSE 0 END) AS cancel_rev, SUM(CASE WHEN Order_Status = 'RTO' THEN SellingPrice_Inc_GST ELSE 0 END) AS rto_rev, SUM(CASE WHEN Order_Status = 'Return' THEN SellingPrice_Inc_GST ELSE 0 END) AS return_rev, SUM(CASE WHEN Order_Status = 'CIR' THEN SellingPrice_Inc_GST ELSE 0 END) AS cir_rev FROM q WHERE NOT (Channel = 'Shopify' AND SubChannel = 'Shopify International') GROUP BY Channel, SubChannel`,
@@ -177,16 +226,22 @@ export default async function handler(req, res) {
     prevZp: `WITH q AS (${prevBase}) SELECT SUM(SellingPrice_Inc_GST) AS rev, SUM(SellingPrice_Exc_GST) AS exc_rev, SUM(ItemQty) AS units, COUNT(DISTINCT SubCategory) AS skus, COUNT(DISTINCT City) AS cities, COUNT(DISTINCT OrderId) AS orders FROM q WHERE Channel='Zepto'`,
     prevZpDaily: `WITH q AS (${prevBase}) SELECT CAST(OrderDate AS STRING) AS date, SUM(SellingPrice_Inc_GST) AS rev FROM q WHERE Channel='Zepto' GROUP BY date ORDER BY date`,
     prevCr: `WITH q AS (${prevBase}) SELECT SUM(SellingPrice_Inc_GST) AS rev, SUM(SellingPrice_Exc_GST) AS exc_rev, COUNT(DISTINCT OrderId) AS orders, SUM(ItemQty) AS units, COUNT(DISTINCT SubCategory) AS skus, COUNT(DISTINCT City) AS cities FROM q WHERE Channel='CRED'`,
+    prevCrNetCalc: `WITH q AS (${prevBase}) SELECT ${netRevenueSelectFragment()} FROM q WHERE Channel='CRED'`,
     prevCrDaily: `WITH q AS (${prevBase}) SELECT CAST(OrderDate AS STRING) AS date, SUM(SellingPrice_Inc_GST) AS rev FROM q WHERE Channel='CRED' GROUP BY date ORDER BY date`,
     prevFc: `WITH q AS (${prevBase}) SELECT SUM(SellingPrice_Inc_GST) AS rev, SUM(SellingPrice_Exc_GST) AS exc_rev, COUNT(DISTINCT OrderId) AS orders, SUM(ItemQty) AS units, COUNT(DISTINCT SubCategory) AS skus, COUNT(DISTINCT City) AS cities FROM q WHERE Channel='Firstcry'`,
+    prevFcNetCalc: `WITH q AS (${prevBase}) SELECT ${netRevenueSelectFragment()} FROM q WHERE Channel='Firstcry'`,
     prevFcDaily: `WITH q AS (${prevBase}) SELECT CAST(OrderDate AS STRING) AS date, SUM(SellingPrice_Inc_GST) AS rev FROM q WHERE Channel='Firstcry' GROUP BY date ORDER BY date`,
     amzSCTotals: `WITH q AS (${base}) SELECT COUNT(DISTINCT OrderId) AS orders, SUM(ItemQty) AS units FROM q WHERE SubChannel = 'Amazon Seller Central' AND FinancialStatus != 'Cancelled'`,
-    amzSCNetCalc: `WITH q AS (${base}) SELECT ROUND(SUM(CASE WHEN FulfilmentStatus != 'Cancelled' AND SellingPrice_Inc_GST > 0 THEN SellingPrice_Inc_GST ELSE 0 END),2) AS gross_rev, ROUND(SUM(CASE WHEN FulfilmentStatus != 'Cancelled' AND SellingPrice_Inc_GST > 0 THEN SellingPrice_Exc_GST ELSE 0 END),2) AS gross_exc_rev, ROUND(SUM(CASE WHEN Order_Status IN ('Return','RTO') THEN ABS(SellingPrice_Inc_GST) ELSE 0 END),2) AS return_rev, ROUND(SUM(CASE WHEN FinancialStatus = 'Cancelled' THEN ABS(SellingPrice_Inc_GST) ELSE 0 END),2) AS cancel_rev FROM q WHERE SubChannel = 'Amazon Seller Central'`,
+    // Gross here is ALL orders (not pre-filtering out Cancelled) so cancel_rev/return_rev read as a
+    // true share-of-gross, consistent with the shared measures formula (computeNetRevenueMeasures).
+    // Amazon SC doesn't distinguish RTO from Return (combined as return_rev) and has no CIR status;
+    // cancellation comes from FinancialStatus, not Order_Status/FulfilmentStatus, on this channel.
+    amzSCNetCalc: `WITH q AS (${base}) SELECT ROUND(SUM(CASE WHEN SellingPrice_Inc_GST > 0 THEN SellingPrice_Inc_GST ELSE 0 END),2) AS gross_inc_gst, ROUND(SUM(CASE WHEN SellingPrice_Inc_GST > 0 THEN SellingPrice_Exc_GST ELSE 0 END),2) AS gross_exc_gst, ROUND(SUM(CASE WHEN Order_Status IN ('Return','RTO') THEN ABS(SellingPrice_Inc_GST) ELSE 0 END),2) AS return_rev, ROUND(SUM(CASE WHEN FinancialStatus = 'Cancelled' THEN ABS(SellingPrice_Inc_GST) ELSE 0 END),2) AS cancel_rev, 0 AS rto_rev, 0 AS cir_rev FROM q WHERE SubChannel = 'Amazon Seller Central'`,
     amzSCFulfillment: `WITH q AS (${base}) SELECT fulfillment_channel, COUNT(DISTINCT OrderId) AS orders, ROUND(SUM(SellingPrice_Inc_GST),0) AS rev, ROUND(SUM(SellingPrice_Exc_GST),0) AS exc_rev, SUM(ItemQty) AS units FROM q WHERE SubChannel = 'Amazon Seller Central' AND FulfilmentStatus != 'Cancelled' AND SellingPrice_Inc_GST > 0 GROUP BY fulfillment_channel`,
     amzSCStatus: `WITH q AS (${base}) SELECT FinancialStatus AS order_status, COUNT(DISTINCT OrderId) AS orders FROM q WHERE SubChannel = 'Amazon Seller Central' GROUP BY order_status ORDER BY orders DESC`,
     amzSCOrderStatusDebug: `WITH q AS (${base}) SELECT Order_Status, COUNT(DISTINCT OrderId) AS orders, ROUND(SUM(SellingPrice_Inc_GST),0) AS rev FROM q WHERE SubChannel = 'Amazon Seller Central' GROUP BY Order_Status ORDER BY orders DESC`,
-    amzSCStates: `WITH q AS (${base}), base AS (SELECT UPPER(TRIM(State)) AS ship_state, OrderId, Order_Status, SellingPrice_Inc_GST, FulfilmentStatus FROM q WHERE SubChannel = 'Amazon Seller Central') SELECT ship_state, COUNT(DISTINCT CASE WHEN FulfilmentStatus != 'Cancelled' AND SellingPrice_Inc_GST > 0 THEN OrderId END) AS orders, ROUND(SUM(CASE WHEN FulfilmentStatus != 'Cancelled' AND SellingPrice_Inc_GST > 0 THEN SellingPrice_Inc_GST ELSE 0 END),0) AS rev, COUNT(DISTINCT CASE WHEN Order_Status IN ('Return','RTO') THEN OrderId END) AS rto_orders FROM base GROUP BY ship_state ORDER BY rev DESC`,
-    amzSCCities: `WITH q AS (${base}), base AS (SELECT UPPER(TRIM(City_L2)) AS city, OrderId, Order_Status, SellingPrice_Inc_GST, FinancialStatus FROM q WHERE SubChannel = 'Amazon Seller Central' AND City_L2 IS NOT NULL AND TRIM(City_L2) != '') SELECT city, COUNT(DISTINCT CASE WHEN FinancialStatus != 'Cancelled' AND SellingPrice_Inc_GST > 0 THEN OrderId END) AS orders, ROUND(SUM(CASE WHEN FinancialStatus != 'Cancelled' AND SellingPrice_Inc_GST > 0 THEN SellingPrice_Inc_GST ELSE 0 END),0) AS rev, COUNT(DISTINCT CASE WHEN Order_Status IN ('Return','RTO') THEN OrderId END) AS rto_orders FROM base GROUP BY city ORDER BY rev DESC LIMIT 50`,
+    amzSCStates: `WITH q AS (${base}), base AS (SELECT UPPER(TRIM(State)) AS ship_state, OrderId, Order_Status, SellingPrice_Inc_GST, FulfilmentStatus FROM q WHERE SubChannel = 'Amazon Seller Central') SELECT ship_state, COUNT(DISTINCT CASE WHEN FulfilmentStatus != 'Cancelled' AND SellingPrice_Inc_GST > 0 THEN OrderId END) AS orders, ROUND(SUM(CASE WHEN FulfilmentStatus != 'Cancelled' AND SellingPrice_Inc_GST > 0 THEN SellingPrice_Inc_GST ELSE 0 END),0) AS rev, COUNT(DISTINCT CASE WHEN Order_Status IN ('Return','RTO') THEN OrderId END) AS rto_orders, ROUND(SUM(CASE WHEN Order_Status IN ('Return','RTO') THEN ABS(SellingPrice_Inc_GST) ELSE 0 END),0) AS return_rev FROM base GROUP BY ship_state ORDER BY rev DESC`,
+    amzSCCities: `WITH q AS (${base}), base AS (SELECT UPPER(TRIM(City_L2)) AS city, OrderId, Order_Status, SellingPrice_Inc_GST, FinancialStatus FROM q WHERE SubChannel = 'Amazon Seller Central' AND City_L2 IS NOT NULL AND TRIM(City_L2) != '') SELECT city, COUNT(DISTINCT CASE WHEN FinancialStatus != 'Cancelled' AND SellingPrice_Inc_GST > 0 THEN OrderId END) AS orders, ROUND(SUM(CASE WHEN FinancialStatus != 'Cancelled' AND SellingPrice_Inc_GST > 0 THEN SellingPrice_Inc_GST ELSE 0 END),0) AS rev, COUNT(DISTINCT CASE WHEN Order_Status IN ('Return','RTO') THEN OrderId END) AS rto_orders, ROUND(SUM(CASE WHEN Order_Status IN ('Return','RTO') THEN ABS(SellingPrice_Inc_GST) ELSE 0 END),0) AS return_rev FROM base GROUP BY city ORDER BY rev DESC LIMIT 50`,
     amzSCStatesPrev: `WITH q AS (${prevBase}) SELECT UPPER(TRIM(State)) AS ship_state, ROUND(SUM(SellingPrice_Inc_GST),0) AS rev FROM q WHERE SubChannel = 'Amazon Seller Central' AND FulfilmentStatus != 'Cancelled' AND SellingPrice_Inc_GST > 0 GROUP BY ship_state`,
     amzSCCitiesPrev: `WITH q AS (${prevBase}) SELECT UPPER(TRIM(City_L2)) AS city, ROUND(SUM(SellingPrice_Inc_GST),0) AS rev FROM q WHERE SubChannel = 'Amazon Seller Central' AND FinancialStatus != 'Cancelled' AND City_L2 IS NOT NULL AND TRIM(City_L2) != '' GROUP BY city`,
     amzSCStateTotal: `WITH q AS (${base}) SELECT ROUND(SUM(SellingPrice_Inc_GST),0) AS total_rev FROM q WHERE SubChannel = 'Amazon Seller Central' AND FulfilmentStatus != 'Cancelled' AND SellingPrice_Inc_GST > 0 AND State IS NOT NULL AND TRIM(State) != ''`,
@@ -199,13 +254,13 @@ export default async function handler(req, res) {
     amzSCReturnSKU: `WITH q AS (${base}), ret AS (SELECT DISTINCT order_id FROM \`frido-429506.production.fact_all_settlement_report\` WHERE transaction_type = 'Refund' AND settlement_region = 'India') SELECT q.Category, q.SubCategory, q.MasterSKU AS sku, COUNT(DISTINCT q.OrderId) AS orders, COUNT(DISTINCT CASE WHEN ret.order_id IS NOT NULL THEN q.OrderId END) AS returned FROM q LEFT JOIN ret ON q.OrderId = ret.order_id WHERE q.SubChannel = 'Amazon Seller Central' AND q.FinancialStatus != 'Cancelled' AND q.MasterSKU IS NOT NULL GROUP BY q.Category, q.SubCategory, q.MasterSKU`,
     amzSCCatChannel: `WITH q AS (${base}) SELECT Category, CASE WHEN fulfillment_channel='Amazon' THEN 'FBA' ELSE 'MFN' END AS ch, COUNT(DISTINCT OrderId) AS orders, SUM(ItemQty) AS units, ROUND(SUM(SellingPrice_Inc_GST),0) AS rev, ROUND(SUM(SellingPrice_Exc_GST),0) AS exc_rev, ROUND(SUM(CASE WHEN Order_Status='Cancelled' THEN SellingPrice_Inc_GST ELSE 0 END),0) AS cancel_rev, ROUND(SUM(CASE WHEN Order_Status='RTO' THEN SellingPrice_Inc_GST ELSE 0 END),0) AS rto_rev, ROUND(SUM(CASE WHEN Order_Status='CIR' THEN SellingPrice_Inc_GST ELSE 0 END),0) AS cir_rev, ROUND(SUM(CASE WHEN Order_Status='Exchange' THEN SellingPrice_Inc_GST ELSE 0 END),0) AS exch_rev, ROUND(SUM(CASE WHEN Order_Status='Return' THEN SellingPrice_Inc_GST ELSE 0 END),0) AS return_rev FROM q WHERE SubChannel = 'Amazon Seller Central' AND Category IS NOT NULL GROUP BY Category, ch ORDER BY rev DESC`,
     amzSCSubCatChannel: `WITH q AS (${base}) SELECT Category, SubCategory, CASE WHEN fulfillment_channel='Amazon' THEN 'FBA' ELSE 'MFN' END AS ch, COUNT(DISTINCT OrderId) AS orders, SUM(ItemQty) AS units, ROUND(SUM(SellingPrice_Inc_GST),0) AS rev, ROUND(SUM(SellingPrice_Exc_GST),0) AS exc_rev, ROUND(SUM(CASE WHEN Order_Status='Cancelled' THEN SellingPrice_Inc_GST ELSE 0 END),0) AS cancel_rev, ROUND(SUM(CASE WHEN Order_Status='RTO' THEN SellingPrice_Inc_GST ELSE 0 END),0) AS rto_rev, ROUND(SUM(CASE WHEN Order_Status='CIR' THEN SellingPrice_Inc_GST ELSE 0 END),0) AS cir_rev, ROUND(SUM(CASE WHEN Order_Status='Exchange' THEN SellingPrice_Inc_GST ELSE 0 END),0) AS exch_rev, ROUND(SUM(CASE WHEN Order_Status='Return' THEN SellingPrice_Inc_GST ELSE 0 END),0) AS return_rev FROM q WHERE SubChannel = 'Amazon Seller Central' AND Category IS NOT NULL GROUP BY Category, SubCategory, ch ORDER BY rev DESC`,
-    amzSCSKUChannel: `WITH q AS (${base}) SELECT Category, SubCategory, MasterSKU AS sku, CASE WHEN fulfillment_channel='Amazon' THEN 'FBA' ELSE 'MFN' END AS ch, COUNT(DISTINCT OrderId) AS orders, SUM(ItemQty) AS units, ROUND(SUM(SellingPrice_Inc_GST),0) AS rev, ROUND(SUM(SellingPrice_Exc_GST),0) AS exc_rev, ROUND(SUM(CASE WHEN Order_Status='Cancelled' THEN SellingPrice_Inc_GST ELSE 0 END),0) AS cancel_rev, ROUND(SUM(CASE WHEN Order_Status='RTO' THEN SellingPrice_Inc_GST ELSE 0 END),0) AS rto_rev, ROUND(SUM(CASE WHEN Order_Status='CIR' THEN SellingPrice_Inc_GST ELSE 0 END),0) AS cir_rev, ROUND(SUM(CASE WHEN Order_Status='Exchange' THEN SellingPrice_Inc_GST ELSE 0 END),0) AS exch_rev, ROUND(SUM(CASE WHEN Order_Status='Return' THEN SellingPrice_Inc_GST ELSE 0 END),0) AS return_rev FROM q WHERE SubChannel = 'Amazon Seller Central' AND MasterSKU IS NOT NULL GROUP BY Category, SubCategory, sku, ch ORDER BY rev DESC LIMIT 500`,
+    amzSCSKUChannel: `WITH q AS (${base}) SELECT Category, SubCategory, MasterSKU AS sku, CASE WHEN fulfillment_channel='Amazon' THEN 'FBA' ELSE 'MFN' END AS ch, COUNT(DISTINCT OrderId) AS orders, SUM(ItemQty) AS units, ROUND(SUM(SellingPrice_Inc_GST),0) AS rev, ROUND(SUM(SellingPrice_Exc_GST),0) AS exc_rev, ROUND(SUM(CASE WHEN Order_Status='Cancelled' THEN SellingPrice_Inc_GST ELSE 0 END),0) AS cancel_rev, ROUND(SUM(CASE WHEN Order_Status='RTO' THEN SellingPrice_Inc_GST ELSE 0 END),0) AS rto_rev, ROUND(SUM(CASE WHEN Order_Status='CIR' THEN SellingPrice_Inc_GST ELSE 0 END),0) AS cir_rev, ROUND(SUM(CASE WHEN Order_Status='Exchange' THEN SellingPrice_Inc_GST ELSE 0 END),0) AS exch_rev, ROUND(SUM(CASE WHEN Order_Status='Return' THEN SellingPrice_Inc_GST ELSE 0 END),0) AS return_rev FROM q WHERE SubChannel = 'Amazon Seller Central' AND MasterSKU IS NOT NULL GROUP BY Category, SubCategory, sku, ch ORDER BY rev DESC`,
     amzSCCatChannelPrev: `WITH q AS (${prevBase}) SELECT Category, ROUND(SUM(SellingPrice_Inc_GST),0) AS rev FROM q WHERE SubChannel = 'Amazon Seller Central' AND Category IS NOT NULL GROUP BY Category`,
     amzSCSubCatChannelPrev: `WITH q AS (${prevBase}) SELECT Category, SubCategory, ROUND(SUM(SellingPrice_Inc_GST),0) AS rev FROM q WHERE SubChannel = 'Amazon Seller Central' AND Category IS NOT NULL GROUP BY Category, SubCategory`,
     amzSCSKUChannelPrev: `WITH q AS (${prevBase}) SELECT Category, SubCategory, MasterSKU AS sku, ROUND(SUM(SellingPrice_Inc_GST),0) AS rev FROM q WHERE SubChannel = 'Amazon Seller Central' AND MasterSKU IS NOT NULL GROUP BY Category, SubCategory, sku`,
     amzVCCat: `WITH q AS (${base}) SELECT Category, COUNT(DISTINCT OrderId) AS orders, SUM(ItemQty) AS units, ROUND(SUM(SellingPrice_Inc_GST),0) AS rev, ROUND(SUM(SellingPrice_Exc_GST),0) AS exc_rev FROM q WHERE SubChannel = 'Amazon Vendor Central' AND Category IS NOT NULL GROUP BY Category ORDER BY rev DESC`,
     amzVCSubCat: `WITH q AS (${base}) SELECT Category, SubCategory, COUNT(DISTINCT OrderId) AS orders, SUM(ItemQty) AS units, ROUND(SUM(SellingPrice_Inc_GST),0) AS rev, ROUND(SUM(SellingPrice_Exc_GST),0) AS exc_rev FROM q WHERE SubChannel = 'Amazon Vendor Central' AND Category IS NOT NULL GROUP BY Category, SubCategory ORDER BY rev DESC`,
-    amzVCSKU: `WITH q AS (${base}) SELECT Category, SubCategory, MasterSKU AS sku, COUNT(DISTINCT OrderId) AS orders, SUM(ItemQty) AS units, ROUND(SUM(SellingPrice_Inc_GST),0) AS rev, ROUND(SUM(SellingPrice_Exc_GST),0) AS exc_rev FROM q WHERE SubChannel = 'Amazon Vendor Central' AND MasterSKU IS NOT NULL GROUP BY Category, SubCategory, sku ORDER BY rev DESC LIMIT 500`,
+    amzVCSKU: `WITH q AS (${base}) SELECT Category, SubCategory, MasterSKU AS sku, COUNT(DISTINCT OrderId) AS orders, SUM(ItemQty) AS units, ROUND(SUM(SellingPrice_Inc_GST),0) AS rev, ROUND(SUM(SellingPrice_Exc_GST),0) AS exc_rev FROM q WHERE SubChannel = 'Amazon Vendor Central' AND MasterSKU IS NOT NULL GROUP BY Category, SubCategory, sku ORDER BY rev DESC`,
     amzVCCatPrev: `WITH q AS (${prevBase}) SELECT Category, ROUND(SUM(SellingPrice_Inc_GST),0) AS rev FROM q WHERE SubChannel = 'Amazon Vendor Central' AND Category IS NOT NULL GROUP BY Category`,
     amzVCSubCatPrev: `WITH q AS (${prevBase}) SELECT Category, SubCategory, ROUND(SUM(SellingPrice_Inc_GST),0) AS rev FROM q WHERE SubChannel = 'Amazon Vendor Central' AND Category IS NOT NULL GROUP BY Category, SubCategory`,
     amzVCSKUPrev: `WITH q AS (${prevBase}) SELECT Category, SubCategory, MasterSKU AS sku, ROUND(SUM(SellingPrice_Inc_GST),0) AS rev FROM q WHERE SubChannel = 'Amazon Vendor Central' AND MasterSKU IS NOT NULL GROUP BY Category, SubCategory, sku`,
@@ -222,10 +277,13 @@ export default async function handler(req, res) {
     amzIntlCountries: `SELECT Country, COUNT(DISTINCT amazon_order_id) AS orders, ROUND(SUM(CAST(item_price AS FLOAT64)),0) AS rev, ROUND(SUM(CAST(item_price AS FLOAT64) - CAST(item_tax AS FLOAT64)),0) AS net_rev, ROUND(SUM(CAST(item_tax AS FLOAT64)),0) AS tax, SUM(CAST(quantity AS INT64)) AS units FROM \`frido-429506.production.amazon_seller_central_uk_uae_all_orders\` WHERE purchase_date_ist BETWEEN '${start}' AND '${end}' AND item_status != 'Cancelled' GROUP BY Country ORDER BY rev DESC`,
     amzIntlCatChannel: `WITH q AS (${base}) SELECT Category, Country AS ch, COUNT(DISTINCT OrderId) AS orders, SUM(ItemQty) AS units, ROUND(SUM(SellingPrice_Inc_GST),0) AS rev, ROUND(SUM(SellingPrice_Exc_GST),0) AS exc_rev FROM q WHERE SubChannel = 'Amazon International' AND FinancialStatus != 'Cancelled' AND Category IS NOT NULL GROUP BY Category, Country ORDER BY rev DESC`,
     amzIntlSubCatChannel: `WITH q AS (${base}) SELECT Category, SubCategory, Country AS ch, COUNT(DISTINCT OrderId) AS orders, SUM(ItemQty) AS units, ROUND(SUM(SellingPrice_Inc_GST),0) AS rev, ROUND(SUM(SellingPrice_Exc_GST),0) AS exc_rev FROM q WHERE SubChannel = 'Amazon International' AND FinancialStatus != 'Cancelled' AND Category IS NOT NULL GROUP BY Category, SubCategory, Country ORDER BY rev DESC`,
-    amzIntlSKUChannel: `WITH q AS (${base}) SELECT Category, SubCategory, MasterSKU AS sku, Country AS ch, COUNT(DISTINCT OrderId) AS orders, SUM(ItemQty) AS units, ROUND(SUM(SellingPrice_Inc_GST),0) AS rev, ROUND(SUM(SellingPrice_Exc_GST),0) AS exc_rev FROM q WHERE SubChannel = 'Amazon International' AND FinancialStatus != 'Cancelled' AND MasterSKU IS NOT NULL GROUP BY Category, SubCategory, sku, Country ORDER BY rev DESC LIMIT 500`,
+    amzIntlSKUChannel: `WITH q AS (${base}) SELECT Category, SubCategory, MasterSKU AS sku, Country AS ch, COUNT(DISTINCT OrderId) AS orders, SUM(ItemQty) AS units, ROUND(SUM(SellingPrice_Inc_GST),0) AS rev, ROUND(SUM(SellingPrice_Exc_GST),0) AS exc_rev FROM q WHERE SubChannel = 'Amazon International' AND FinancialStatus != 'Cancelled' AND MasterSKU IS NOT NULL GROUP BY Category, SubCategory, sku, Country ORDER BY rev DESC`,
     amzIntlSKUs: `SELECT sku, Country, COUNT(DISTINCT amazon_order_id) AS orders, SUM(CAST(quantity AS INT64)) AS units, ROUND(SUM(CAST(item_price AS FLOAT64)),0) AS rev, ROUND(SUM(CAST(item_price AS FLOAT64) - CAST(item_tax AS FLOAT64)),0) AS net_rev FROM \`frido-429506.production.amazon_seller_central_uk_uae_all_orders\` WHERE purchase_date_ist BETWEEN '${start}' AND '${end}' AND item_status != 'Cancelled' GROUP BY sku, Country ORDER BY rev DESC LIMIT 20`,
     amzIntlDaily: `WITH q AS (${base}) SELECT CAST(OrderDate AS STRING) AS date, Country, COUNT(DISTINCT OrderId) AS orders, SUM(ItemQty) AS units, ROUND(SUM(SellingPrice_Inc_GST),0) AS rev, ROUND(SUM(SellingPrice_Exc_GST),0) AS net_rev FROM q WHERE SubChannel = 'Amazon International' AND FinancialStatus != 'Cancelled' GROUP BY date, Country ORDER BY date`,
-    fkNetCalc: `WITH q AS (${fkBase}) SELECT SUM(SellingPrice_Inc_GST) AS gross, SUM(SellingPrice_Exc_GST) AS exc_rev, SUM(CASE WHEN FulfilmentStatus='Cancelled' THEN SellingPrice_Inc_GST ELSE 0 END) AS cancel_rev, SUM(CASE WHEN Order_Status IN ('Return','RTO') THEN ABS(SellingPrice_Inc_GST) ELSE 0 END) AS total_return_rev FROM q WHERE Channel='Flipkart'`,
+    // Flipkart doesn't distinguish RTO from Return (combined here as return_rev, rto_rev always 0)
+    // and has no CIR status; cancellation comes from FulfilmentStatus, not Order_Status, on this
+    // channel. Field names match netRevenueSelectFragment's output so computeNetRevenueMeasures works.
+    fkNetCalc: `WITH q AS (${fkBase}) SELECT SUM(SellingPrice_Inc_GST) AS gross_inc_gst, SUM(SellingPrice_Exc_GST) AS gross_exc_gst, SUM(CASE WHEN FulfilmentStatus='Cancelled' THEN SellingPrice_Inc_GST ELSE 0 END) AS cancel_rev, SUM(CASE WHEN Order_Status IN ('Return','RTO') THEN ABS(SellingPrice_Inc_GST) ELSE 0 END) AS return_rev, 0 AS rto_rev, 0 AS cir_rev FROM q WHERE Channel='Flipkart'`,
     fkTotals: `WITH q AS (${fkBase}) SELECT CASE WHEN SubChannel='Flipkart FBF' THEN 'FBF' ELSE 'NON-FBF' END AS sub, COUNT(DISTINCT OrderId) AS orders, ROUND(SUM(SellingPrice_Inc_GST),0) AS rev, ROUND(SUM(SellingPrice_Exc_GST),0) AS exc_rev, SUM(ItemQty) AS units, COUNT(DISTINCT CASE WHEN Order_Status='Return' THEN OrderId END) AS returns, ROUND(SUM(CASE WHEN Order_Status='Return' THEN ABS(SellingPrice_Inc_GST) ELSE 0 END),0) AS return_rev, ROUND(SUM(CASE WHEN Order_Status IN ('Return','RTO') THEN ABS(SellingPrice_Inc_GST) ELSE 0 END),0) AS total_return_rev, COUNT(DISTINCT CASE WHEN FulfilmentStatus='Cancelled' THEN OrderId END) AS cancel_orders, ROUND(SUM(CASE WHEN FulfilmentStatus='Cancelled' THEN SellingPrice_Inc_GST ELSE 0 END),0) AS cancel_rev FROM q WHERE Channel='Flipkart' GROUP BY sub`,
     fkDaily: `WITH q AS (${fkBase}) SELECT CAST(OrderDate AS STRING) AS date, CASE WHEN SubChannel='Flipkart FBF' THEN 'FBF' ELSE 'NON-FBF' END AS sub, COUNT(DISTINCT OrderId) AS orders, SUM(ItemQty) AS units, ROUND(SUM(SellingPrice_Inc_GST),0) AS rev, COUNT(DISTINCT CASE WHEN Order_Status='Return' THEN OrderId END) AS returns, ROUND(SUM(CASE WHEN Order_Status IN ('Return','RTO') THEN ABS(SellingPrice_Inc_GST) ELSE 0 END),0) AS return_rev FROM q WHERE Channel='Flipkart' GROUP BY date, sub ORDER BY date`,
     fkStatus: `WITH q AS (${fkBase}) SELECT FulfilmentStatus AS status, CASE WHEN SubChannel='Flipkart FBF' THEN 'FBF' ELSE 'NON-FBF' END AS sub, COUNT(DISTINCT OrderId) AS orders FROM q WHERE Channel='Flipkart' AND FulfilmentStatus IS NOT NULL GROUP BY status, sub ORDER BY orders DESC`,
@@ -240,7 +298,7 @@ export default async function handler(req, res) {
     fkCityTotal: `WITH q AS (${fkBase}) SELECT ROUND(SUM(SellingPrice_Inc_GST),0) AS total_rev, CASE WHEN SubChannel='Flipkart FBF' THEN 'FBF' ELSE 'NON-FBF' END AS sub FROM q WHERE Channel='Flipkart' AND City_L2 IS NOT NULL AND TRIM(City_L2) != '' GROUP BY sub`,
     fkRegions: `WITH q AS (${fkBase}) SELECT Region AS region, CASE WHEN SubChannel='Flipkart FBF' THEN 'FBF' ELSE 'NON-FBF' END AS sub, COUNT(DISTINCT OrderId) AS orders, ROUND(SUM(SellingPrice_Inc_GST),0) AS rev FROM q WHERE Channel='Flipkart' AND Region IS NOT NULL GROUP BY region, sub ORDER BY rev DESC`,
     fkSubCategory: `WITH q AS (${fkBase}) SELECT Category AS category, SubCategory AS subcategory, CASE WHEN SubChannel='Flipkart FBF' THEN 'FBF' ELSE 'NON-FBF' END AS sub, COUNT(DISTINCT OrderId) AS orders, ROUND(SUM(SellingPrice_Inc_GST),0) AS rev, ROUND(SUM(SellingPrice_Exc_GST),0) AS exc_rev, SUM(ItemQty) AS units, COUNT(DISTINCT CASE WHEN Order_Status='Return' THEN OrderId END) AS returns, ROUND(SUM(CASE WHEN Order_Status IN ('Return','RTO') THEN ABS(SellingPrice_Inc_GST) ELSE 0 END),0) AS return_rev, ROUND(SUM(CASE WHEN FulfilmentStatus != 'Cancelled' AND SellingPrice_Inc_GST > 0 THEN SellingPrice_Inc_GST ELSE 0 END),0) AS delivered_rev FROM q WHERE Channel='Flipkart' AND Category IS NOT NULL GROUP BY category, subcategory, sub ORDER BY rev DESC`,
-    fkSKUMatrix: `WITH q AS (${fkBase}) SELECT Category AS category, SubCategory AS subcategory, MasterSKU AS sku, CASE WHEN SubChannel='Flipkart FBF' THEN 'FBF' ELSE 'NON-FBF' END AS sub, COUNT(DISTINCT OrderId) AS orders, ROUND(SUM(SellingPrice_Inc_GST),0) AS rev, ROUND(SUM(SellingPrice_Exc_GST),0) AS exc_rev, SUM(ItemQty) AS units FROM q WHERE Channel='Flipkart' AND MasterSKU IS NOT NULL AND TRIM(MasterSKU) != '' GROUP BY category, subcategory, sku, sub ORDER BY rev DESC LIMIT 300`,
+    fkSKUMatrix: `WITH q AS (${fkBase}) SELECT Category AS category, SubCategory AS subcategory, MasterSKU AS sku, CASE WHEN SubChannel='Flipkart FBF' THEN 'FBF' ELSE 'NON-FBF' END AS sub, COUNT(DISTINCT OrderId) AS orders, ROUND(SUM(SellingPrice_Inc_GST),0) AS rev, ROUND(SUM(SellingPrice_Exc_GST),0) AS exc_rev, SUM(ItemQty) AS units FROM q WHERE Channel='Flipkart' AND MasterSKU IS NOT NULL AND TRIM(MasterSKU) != '' GROUP BY category, subcategory, sku, sub ORDER BY rev DESC`,
     fkDailyCat: `WITH q AS (${fkBase}) SELECT CAST(OrderDate AS STRING) AS date, Category AS category, SubCategory AS subcategory, CASE WHEN SubChannel='Flipkart FBF' THEN 'FBF' ELSE 'NON-FBF' END AS sub, COUNT(DISTINCT OrderId) AS orders, SUM(ItemQty) AS units, ROUND(SUM(SellingPrice_Inc_GST),0) AS rev, ROUND(SUM(SellingPrice_Exc_GST),0) AS exc_rev FROM q WHERE Channel='Flipkart' AND Category IS NOT NULL GROUP BY date, category, subcategory, sub ORDER BY date`,
     fkCatPrev: `WITH q AS (${prevBase}) SELECT Category AS category, CASE WHEN SubChannel='Flipkart FBF' THEN 'FBF' ELSE 'NON-FBF' END AS sub, ROUND(SUM(SellingPrice_Inc_GST),0) AS rev FROM q WHERE Channel='Flipkart' AND Category IS NOT NULL GROUP BY category, sub`,
     fkSubCatPrev: `WITH q AS (${prevBase}) SELECT Category AS category, SubCategory AS subcategory, CASE WHEN SubChannel='Flipkart FBF' THEN 'FBF' ELSE 'NON-FBF' END AS sub, ROUND(SUM(SellingPrice_Inc_GST),0) AS rev FROM q WHERE Channel='Flipkart' AND Category IS NOT NULL GROUP BY category, subcategory, sub`,
@@ -255,7 +313,7 @@ export default async function handler(req, res) {
     blStatesPrev: `WITH q AS (${prevBase}) SELECT COALESCE(NULLIF(TRIM(UPPER(State)),'-'),'OTHERS') AS state, ROUND(SUM(SellingPrice_Inc_GST),0) AS rev FROM q WHERE Channel='Blinkit' AND State IS NOT NULL GROUP BY state`,
     blStateTotal: `WITH q AS (${base}) SELECT ROUND(SUM(SellingPrice_Inc_GST),0) AS total_rev FROM q WHERE Channel='Blinkit' AND State IS NOT NULL`,
     blSKUs: `WITH q AS (${base}), names AS (SELECT DISTINCT TRIM(CAST(item_id AS STRING)) AS item_id, item_name FROM \`frido-429506.partnerbizz_reports_v2.sales\`) SELECT q.ChannelSKUCode AS item_id, COALESCE(MAX(n.item_name), q.ChannelSKUCode) AS item_name, SUM(q.ItemQty) AS units, ROUND(SUM(q.SellingPrice_Inc_GST),0) AS rev, COUNT(DISTINCT q.City) AS cities FROM q LEFT JOIN names n ON q.ChannelSKUCode = n.item_id WHERE q.Channel='Blinkit' GROUP BY item_id ORDER BY rev DESC`,
-    blSKUMatrix: `WITH q AS (${base}) SELECT Category AS category, SubCategory AS subcategory, MasterSKU AS sku, SUM(ItemQty) AS units, ROUND(SUM(SellingPrice_Inc_GST),0) AS rev, ROUND(SUM(SellingPrice_Exc_GST),0) AS exc_rev FROM q WHERE Channel='Blinkit' AND MasterSKU IS NOT NULL AND TRIM(MasterSKU) != '' GROUP BY category, subcategory, sku ORDER BY rev DESC LIMIT 300`,
+    blSKUMatrix: `WITH q AS (${base}) SELECT Category AS category, SubCategory AS subcategory, MasterSKU AS sku, SUM(ItemQty) AS units, ROUND(SUM(SellingPrice_Inc_GST),0) AS rev, ROUND(SUM(SellingPrice_Exc_GST),0) AS exc_rev FROM q WHERE Channel='Blinkit' AND MasterSKU IS NOT NULL AND TRIM(MasterSKU) != '' GROUP BY category, subcategory, sku ORDER BY rev DESC`,
     blCities: `WITH q AS (${base}) SELECT City AS city_name, Region AS region, City_Tier AS city_tier, SUM(ItemQty) AS units, COUNT(DISTINCT OrderId) AS orders, ROUND(SUM(SellingPrice_Inc_GST),0) AS rev, COUNT(DISTINCT ChannelSKUCode) AS skus FROM q WHERE Channel='Blinkit' AND City IS NOT NULL GROUP BY city_name, region, city_tier ORDER BY rev DESC`,
     blCitiesPrev: `WITH q AS (${prevBase}) SELECT City AS city_name, ROUND(SUM(SellingPrice_Inc_GST),0) AS rev FROM q WHERE Channel='Blinkit' AND City IS NOT NULL GROUP BY city_name`,
     blCityTotal: `WITH q AS (${base}) SELECT ROUND(SUM(SellingPrice_Inc_GST),0) AS total_rev FROM q WHERE Channel='Blinkit' AND City IS NOT NULL`,
@@ -270,7 +328,7 @@ export default async function handler(req, res) {
     inStatesPrev: `WITH q AS (${prevBase}) SELECT COALESCE(NULLIF(TRIM(UPPER(State)),'-'),'OTHERS') AS state, ROUND(SUM(SellingPrice_Inc_GST),0) AS rev FROM q WHERE Channel='Instamart' AND State IS NOT NULL GROUP BY state`,
     inStateTotal: `WITH q AS (${base}) SELECT ROUND(SUM(SellingPrice_Inc_GST),0) AS total_rev FROM q WHERE Channel='Instamart' AND State IS NOT NULL`,
     inSKUs: `WITH q AS (${base}), names AS (SELECT DISTINCT TRIM(productid) AS productid, channelproductname FROM \`frido-429506.sharepoint_to_gcp.Frido_Item_Master__productid_sku_mapping\` WHERE TRIM(channelname)='Instamart') SELECT q.ChannelSKUCode AS item_id, COALESCE(MAX(n.channelproductname), q.ChannelSKUCode) AS item_name, SUM(q.ItemQty) AS units, ROUND(SUM(q.SellingPrice_Inc_GST),0) AS rev, COUNT(DISTINCT q.City) AS cities FROM q LEFT JOIN names n ON q.ChannelSKUCode = n.productid WHERE q.Channel='Instamart' AND q.ChannelSKUCode IS NOT NULL GROUP BY item_id ORDER BY rev DESC`,
-    inSKUMatrix: `WITH q AS (${base}) SELECT Category AS category, SubCategory AS subcategory, MasterSKU AS sku, SUM(ItemQty) AS units, ROUND(SUM(SellingPrice_Inc_GST),0) AS rev, ROUND(SUM(SellingPrice_Exc_GST),0) AS exc_rev FROM q WHERE Channel='Instamart' AND MasterSKU IS NOT NULL AND TRIM(MasterSKU) != '' GROUP BY category, subcategory, sku ORDER BY rev DESC LIMIT 300`,
+    inSKUMatrix: `WITH q AS (${base}) SELECT Category AS category, SubCategory AS subcategory, MasterSKU AS sku, SUM(ItemQty) AS units, ROUND(SUM(SellingPrice_Inc_GST),0) AS rev, ROUND(SUM(SellingPrice_Exc_GST),0) AS exc_rev FROM q WHERE Channel='Instamart' AND MasterSKU IS NOT NULL AND TRIM(MasterSKU) != '' GROUP BY category, subcategory, sku ORDER BY rev DESC`,
     inCities: `WITH q AS (${base}) SELECT City AS city_name, Region AS region, City_Tier AS city_tier, SUM(ItemQty) AS units, COUNT(DISTINCT OrderId) AS orders, ROUND(SUM(SellingPrice_Inc_GST),0) AS rev, COUNT(DISTINCT ChannelSKUCode) AS skus FROM q WHERE Channel='Instamart' AND City IS NOT NULL GROUP BY city_name, region, city_tier ORDER BY rev DESC`,
     inCitiesPrev: `WITH q AS (${prevBase}) SELECT City AS city_name, ROUND(SUM(SellingPrice_Inc_GST),0) AS rev FROM q WHERE Channel='Instamart' AND City IS NOT NULL GROUP BY city_name`,
     inCityTotal: `WITH q AS (${base}) SELECT ROUND(SUM(SellingPrice_Inc_GST),0) AS total_rev FROM q WHERE Channel='Instamart' AND City IS NOT NULL`,
@@ -285,7 +343,7 @@ export default async function handler(req, res) {
     zpStatesPrev: `WITH q AS (${prevBase}) SELECT COALESCE(NULLIF(TRIM(UPPER(State)),'-'),'OTHERS') AS state, ROUND(SUM(SellingPrice_Inc_GST),0) AS rev FROM q WHERE Channel='Zepto' AND State IS NOT NULL GROUP BY state`,
     zpStateTotal: `WITH q AS (${base}) SELECT ROUND(SUM(SellingPrice_Inc_GST),0) AS total_rev FROM q WHERE Channel='Zepto' AND State IS NOT NULL`,
     zpSKUs: `WITH q AS (${base}), names AS (SELECT DISTINCT TRIM(sku_number) AS sku_number, sku_name FROM \`frido-429506.production.zepto_sales_report\`) SELECT q.ChannelSKUCode AS item_id, COALESCE(MAX(n.sku_name), q.ChannelSKUCode) AS item_name, SUM(q.ItemQty) AS units, ROUND(SUM(q.SellingPrice_Inc_GST),0) AS rev, COUNT(DISTINCT q.City) AS cities FROM q LEFT JOIN names n ON q.ChannelSKUCode = n.sku_number WHERE q.Channel='Zepto' AND q.ChannelSKUCode IS NOT NULL GROUP BY item_id ORDER BY rev DESC`,
-    zpSKUMatrix: `WITH q AS (${base}) SELECT Category AS category, SubCategory AS subcategory, MasterSKU AS sku, SUM(ItemQty) AS units, ROUND(SUM(SellingPrice_Inc_GST),0) AS rev, ROUND(SUM(SellingPrice_Exc_GST),0) AS exc_rev FROM q WHERE Channel='Zepto' AND MasterSKU IS NOT NULL AND TRIM(MasterSKU) != '' GROUP BY category, subcategory, sku ORDER BY rev DESC LIMIT 300`,
+    zpSKUMatrix: `WITH q AS (${base}) SELECT Category AS category, SubCategory AS subcategory, MasterSKU AS sku, SUM(ItemQty) AS units, ROUND(SUM(SellingPrice_Inc_GST),0) AS rev, ROUND(SUM(SellingPrice_Exc_GST),0) AS exc_rev FROM q WHERE Channel='Zepto' AND MasterSKU IS NOT NULL AND TRIM(MasterSKU) != '' GROUP BY category, subcategory, sku ORDER BY rev DESC`,
     zpCities: `WITH q AS (${base}) SELECT City AS city_name, Region AS region, City_Tier AS city_tier, SUM(ItemQty) AS units, COUNT(DISTINCT OrderId) AS orders, ROUND(SUM(SellingPrice_Inc_GST),0) AS rev, COUNT(DISTINCT ChannelSKUCode) AS skus FROM q WHERE Channel='Zepto' AND City IS NOT NULL GROUP BY city_name, region, city_tier ORDER BY rev DESC`,
     zpCitiesPrev: `WITH q AS (${prevBase}) SELECT City AS city_name, ROUND(SUM(SellingPrice_Inc_GST),0) AS rev FROM q WHERE Channel='Zepto' AND City IS NOT NULL GROUP BY city_name`,
     zpCityTotal: `WITH q AS (${base}) SELECT ROUND(SUM(SellingPrice_Inc_GST),0) AS total_rev FROM q WHERE Channel='Zepto' AND City IS NOT NULL`,
@@ -293,57 +351,71 @@ export default async function handler(req, res) {
     zpSubCatPrev: `WITH q AS (${prevBase}) SELECT Category AS category, SubCategory AS subcategory, ROUND(SUM(SellingPrice_Inc_GST),0) AS rev FROM q WHERE Channel='Zepto' AND Category IS NOT NULL GROUP BY category, subcategory`,
     zpSKUPrev: `WITH q AS (${prevBase}) SELECT Category AS category, SubCategory AS subcategory, MasterSKU AS sku, ROUND(SUM(SellingPrice_Inc_GST),0) AS rev FROM q WHERE Channel='Zepto' AND MasterSKU IS NOT NULL AND TRIM(MasterSKU) != '' GROUP BY category, subcategory, sku`,
     crTotals: `WITH q AS (${base}) SELECT COUNT(DISTINCT OrderId) AS orders, SUM(ItemQty) AS units, ROUND(SUM(SellingPrice_Inc_GST),0) AS rev, ROUND(SUM(SellingPrice_Exc_GST),0) AS exc_rev, COUNT(DISTINCT SubCategory) AS skus, COUNT(DISTINCT City) AS cities, COUNT(DISTINCT OrderDate) AS days FROM q WHERE Channel='CRED'`,
+    // Feeds the shared measures layer (computeNetRevenueMeasures) — CRED has Return/Cancelled
+    // status (no RTO/CIR distinction), so those map to rto_rev: 0 / cir_rev: 0.
+    crNetCalc: `WITH q AS (${base}) SELECT ${netRevenueSelectFragment()} FROM q WHERE Channel='CRED'`,
     crDaily: `WITH q AS (${base}) SELECT CAST(OrderDate AS STRING) AS date, COUNT(DISTINCT OrderId) AS orders, SUM(ItemQty) AS units, ROUND(SUM(SellingPrice_Inc_GST),0) AS rev, ROUND(SUM(SellingPrice_Exc_GST),0) AS exc_rev FROM q WHERE Channel='CRED' GROUP BY date ORDER BY date`,
     crSKUs: `WITH q AS (${base}) SELECT ChannelSKUCode AS sku, MAX(COALESCE(NULLIF(TRIM(ChannelSKUCode),''), ChannelSKUCode)) AS sku_name, COUNT(DISTINCT OrderId) AS orders, SUM(ItemQty) AS units, ROUND(SUM(SellingPrice_Inc_GST),0) AS rev FROM q WHERE Channel='CRED' AND ChannelSKUCode IS NOT NULL GROUP BY sku ORDER BY rev DESC LIMIT 30`,
     crCategories: `WITH q AS (${base}) SELECT Category AS category, COUNT(DISTINCT OrderId) AS orders, SUM(ItemQty) AS units, ROUND(SUM(SellingPrice_Inc_GST),0) AS rev, ROUND(SUM(SellingPrice_Exc_GST),0) AS exc_rev FROM q WHERE Channel='CRED' GROUP BY category ORDER BY rev DESC`,
     crSubCategories: `WITH q AS (${base}) SELECT Category AS category, SubCategory AS subcategory, COUNT(DISTINCT OrderId) AS orders, SUM(ItemQty) AS units, ROUND(SUM(SellingPrice_Inc_GST),0) AS rev, ROUND(SUM(SellingPrice_Exc_GST),0) AS exc_rev FROM q WHERE Channel='CRED' GROUP BY category, subcategory ORDER BY rev DESC`,
-    crSKUMatrix: `WITH q AS (${base}) SELECT Category AS category, SubCategory AS subcategory, MasterSKU AS sku, COUNT(DISTINCT OrderId) AS orders, SUM(ItemQty) AS units, ROUND(SUM(SellingPrice_Inc_GST),0) AS rev, ROUND(SUM(SellingPrice_Exc_GST),0) AS exc_rev FROM q WHERE Channel='CRED' AND MasterSKU IS NOT NULL AND TRIM(MasterSKU) != '' GROUP BY category, subcategory, sku ORDER BY rev DESC LIMIT 300`,
+    crSKUMatrix: `WITH q AS (${base}) SELECT Category AS category, SubCategory AS subcategory, MasterSKU AS sku, COUNT(DISTINCT OrderId) AS orders, SUM(ItemQty) AS units, ROUND(SUM(SellingPrice_Inc_GST),0) AS rev, ROUND(SUM(SellingPrice_Exc_GST),0) AS exc_rev FROM q WHERE Channel='CRED' AND MasterSKU IS NOT NULL AND TRIM(MasterSKU) != '' GROUP BY category, subcategory, sku ORDER BY rev DESC`,
     crCatPrev: `WITH q AS (${prevBase}) SELECT Category AS category, ROUND(SUM(SellingPrice_Inc_GST),0) AS rev FROM q WHERE Channel='CRED' GROUP BY category`,
     crSubCatPrev: `WITH q AS (${prevBase}) SELECT Category AS category, SubCategory AS subcategory, ROUND(SUM(SellingPrice_Inc_GST),0) AS rev FROM q WHERE Channel='CRED' GROUP BY category, subcategory`,
-    crStates: `WITH q AS (${base}) SELECT INITCAP(TRIM(State)) AS state, COUNT(DISTINCT OrderId) AS orders, ROUND(SUM(SellingPrice_Inc_GST),0) AS rev FROM q WHERE Channel='CRED' AND State IS NOT NULL GROUP BY state ORDER BY rev DESC`,
+    crStates: `WITH q AS (${base}) SELECT INITCAP(TRIM(State)) AS state, COUNT(DISTINCT OrderId) AS orders, ROUND(SUM(SellingPrice_Inc_GST),0) AS rev, ROUND(SUM(CASE WHEN Order_Status IN ('Return','RTO','CIR') THEN SellingPrice_Inc_GST ELSE 0 END),0) AS return_rev FROM q WHERE Channel='CRED' AND State IS NOT NULL GROUP BY state ORDER BY rev DESC`,
     crStatesPrev: `WITH q AS (${prevBase}) SELECT INITCAP(TRIM(State)) AS state, ROUND(SUM(SellingPrice_Inc_GST),0) AS rev FROM q WHERE Channel='CRED' AND State IS NOT NULL GROUP BY state`,
     crStateTotal: `WITH q AS (${base}) SELECT ROUND(SUM(SellingPrice_Inc_GST),0) AS total_rev FROM q WHERE Channel='CRED' AND State IS NOT NULL`,
     crCityTotal: `WITH q AS (${base}) SELECT ROUND(SUM(SellingPrice_Inc_GST),0) AS total_rev FROM q WHERE Channel='CRED' AND City IS NOT NULL AND TRIM(City) != ''`,
     crRegion: `WITH q AS (${base}), sm AS (SELECT DISTINCT State, Region FROM \`frido-429506.production.pincode_city_master\` WHERE State IS NOT NULL AND Region IS NOT NULL) SELECT sm.Region AS region, COUNT(DISTINCT q.OrderId) AS orders, ROUND(SUM(q.SellingPrice_Inc_GST),0) AS rev, SUM(q.ItemQty) AS units FROM q JOIN sm ON UPPER(TRIM(q.State)) = UPPER(TRIM(sm.State)) WHERE q.Channel='CRED' GROUP BY region ORDER BY rev DESC`,
     crTier: `WITH q AS (${base}), tm AS (SELECT DISTINCT State, City_Tier, Tier_Label FROM \`frido-429506.production.pincode_city_master\` WHERE State IS NOT NULL AND City_Tier IS NOT NULL) SELECT tm.City_Tier AS city_tier, tm.Tier_Label AS tier_label, COUNT(DISTINCT q.OrderId) AS orders, ROUND(SUM(q.SellingPrice_Inc_GST),0) AS rev, SUM(q.ItemQty) AS units FROM q JOIN tm ON UPPER(TRIM(q.State)) = UPPER(TRIM(tm.State)) WHERE q.Channel='CRED' GROUP BY city_tier, tier_label ORDER BY city_tier`,
     crStatus: `WITH q AS (${base}) SELECT FulfilmentStatus AS status, COUNT(DISTINCT OrderId) AS orders, ROUND(SUM(SellingPrice_Inc_GST),0) AS rev FROM q WHERE Channel='CRED' AND FulfilmentStatus IS NOT NULL GROUP BY status ORDER BY orders DESC`,
-    crCities: `WITH q AS (${base}) SELECT INITCAP(TRIM(City)) AS city, COUNT(DISTINCT OrderId) AS orders, ROUND(SUM(SellingPrice_Inc_GST),0) AS rev FROM q WHERE Channel='CRED' AND City IS NOT NULL AND TRIM(City) != '' GROUP BY city ORDER BY rev DESC`,
+    crCities: `WITH q AS (${base}) SELECT INITCAP(TRIM(City)) AS city, COUNT(DISTINCT OrderId) AS orders, ROUND(SUM(SellingPrice_Inc_GST),0) AS rev, ROUND(SUM(CASE WHEN Order_Status IN ('Return','RTO','CIR') THEN SellingPrice_Inc_GST ELSE 0 END),0) AS return_rev FROM q WHERE Channel='CRED' AND City IS NOT NULL AND TRIM(City) != '' GROUP BY city ORDER BY rev DESC`,
     crCitiesPrev: `WITH q AS (${prevBase}) SELECT INITCAP(TRIM(City)) AS city, ROUND(SUM(SellingPrice_Inc_GST),0) AS rev FROM q WHERE Channel='CRED' AND City IS NOT NULL AND TRIM(City) != '' GROUP BY city`,
     fcTotals: `WITH q AS (${base}) SELECT COUNT(DISTINCT OrderId) AS orders, SUM(ItemQty) AS units, ROUND(SUM(SellingPrice_Inc_GST),0) AS rev, ROUND(SUM(SellingPrice_Exc_GST),0) AS exc_rev, COUNT(DISTINCT SubCategory) AS skus, COUNT(DISTINCT City) AS cities, COUNT(DISTINCT OrderDate) AS days FROM q WHERE Channel='Firstcry'`,
+    // Feeds the shared measures layer (computeNetRevenueMeasures)
+    fcNetCalc: `WITH q AS (${base}) SELECT ${netRevenueSelectFragment()} FROM q WHERE Channel='Firstcry'`,
     fcDaily: `WITH q AS (${base}) SELECT CAST(OrderDate AS STRING) AS date, COUNT(DISTINCT OrderId) AS orders, SUM(ItemQty) AS units, ROUND(SUM(SellingPrice_Inc_GST),0) AS rev, ROUND(SUM(SellingPrice_Exc_GST),0) AS exc_rev FROM q WHERE Channel='Firstcry' GROUP BY date ORDER BY date`,
     fcSKUs: `WITH q AS (${base}) SELECT ChannelSKUCode AS sku, MAX(COALESCE(NULLIF(TRIM(ChannelSKUCode),''), ChannelSKUCode)) AS sku_name, COUNT(DISTINCT OrderId) AS orders, SUM(ItemQty) AS units, ROUND(SUM(SellingPrice_Inc_GST),0) AS rev FROM q WHERE Channel='Firstcry' AND ChannelSKUCode IS NOT NULL GROUP BY sku ORDER BY rev DESC LIMIT 30`,
     fcCategories: `WITH q AS (${base}) SELECT Category AS category, COUNT(DISTINCT OrderId) AS orders, SUM(ItemQty) AS units, ROUND(SUM(SellingPrice_Inc_GST),0) AS rev, ROUND(SUM(SellingPrice_Exc_GST),0) AS exc_rev FROM q WHERE Channel='Firstcry' GROUP BY category ORDER BY rev DESC`,
     fcSubCategories: `WITH q AS (${base}) SELECT Category AS category, SubCategory AS subcategory, COUNT(DISTINCT OrderId) AS orders, SUM(ItemQty) AS units, ROUND(SUM(SellingPrice_Inc_GST),0) AS rev, ROUND(SUM(SellingPrice_Exc_GST),0) AS exc_rev FROM q WHERE Channel='Firstcry' GROUP BY category, subcategory ORDER BY rev DESC`,
-    fcSKUMatrix: `WITH q AS (${base}) SELECT Category AS category, SubCategory AS subcategory, MasterSKU AS sku, COUNT(DISTINCT OrderId) AS orders, SUM(ItemQty) AS units, ROUND(SUM(SellingPrice_Inc_GST),0) AS rev, ROUND(SUM(SellingPrice_Exc_GST),0) AS exc_rev FROM q WHERE Channel='Firstcry' AND MasterSKU IS NOT NULL AND TRIM(MasterSKU) != '' GROUP BY category, subcategory, sku ORDER BY rev DESC LIMIT 300`,
-    fcStates: `WITH q AS (${base}) SELECT INITCAP(TRIM(State)) AS state, COUNT(DISTINCT OrderId) AS orders, ROUND(SUM(SellingPrice_Inc_GST),0) AS rev FROM q WHERE Channel='Firstcry' AND State IS NOT NULL GROUP BY state ORDER BY rev DESC`,
+    fcSKUMatrix: `WITH q AS (${base}) SELECT Category AS category, SubCategory AS subcategory, MasterSKU AS sku, COUNT(DISTINCT OrderId) AS orders, SUM(ItemQty) AS units, ROUND(SUM(SellingPrice_Inc_GST),0) AS rev, ROUND(SUM(SellingPrice_Exc_GST),0) AS exc_rev FROM q WHERE Channel='Firstcry' AND MasterSKU IS NOT NULL AND TRIM(MasterSKU) != '' GROUP BY category, subcategory, sku ORDER BY rev DESC`,
+    fcStates: `WITH q AS (${base}) SELECT INITCAP(TRIM(State)) AS state, COUNT(DISTINCT OrderId) AS orders, ROUND(SUM(SellingPrice_Inc_GST),0) AS rev, ROUND(SUM(CASE WHEN Order_Status IN ('Return','RTO','CIR') THEN SellingPrice_Inc_GST ELSE 0 END),0) AS return_rev FROM q WHERE Channel='Firstcry' AND State IS NOT NULL GROUP BY state ORDER BY rev DESC`,
+    fcStatesPrev: `WITH q AS (${prevBase}) SELECT INITCAP(TRIM(State)) AS state, ROUND(SUM(SellingPrice_Inc_GST),0) AS rev FROM q WHERE Channel='Firstcry' AND State IS NOT NULL GROUP BY state`,
+    fcStateTotal: `WITH q AS (${base}) SELECT ROUND(SUM(SellingPrice_Inc_GST),0) AS total_rev FROM q WHERE Channel='Firstcry' AND State IS NOT NULL`,
+    fcCityTotal: `WITH q AS (${base}) SELECT ROUND(SUM(SellingPrice_Inc_GST),0) AS total_rev FROM q WHERE Channel='Firstcry' AND City IS NOT NULL AND TRIM(City) != ''`,
+    fcCatPrev: `WITH q AS (${prevBase}) SELECT Category AS category, ROUND(SUM(SellingPrice_Inc_GST),0) AS rev FROM q WHERE Channel='Firstcry' GROUP BY category`,
+    fcSubCatPrev: `WITH q AS (${prevBase}) SELECT Category AS category, SubCategory AS subcategory, ROUND(SUM(SellingPrice_Inc_GST),0) AS rev FROM q WHERE Channel='Firstcry' GROUP BY category, subcategory`,
     fcRegion: `WITH q AS (${base}), sm AS (SELECT DISTINCT State, Region FROM \`frido-429506.production.pincode_city_master\` WHERE State IS NOT NULL AND Region IS NOT NULL) SELECT sm.Region AS region, COUNT(DISTINCT q.OrderId) AS orders, ROUND(SUM(q.SellingPrice_Inc_GST),0) AS rev, SUM(q.ItemQty) AS units FROM q JOIN sm ON UPPER(TRIM(q.State)) = UPPER(TRIM(sm.State)) WHERE q.Channel='Firstcry' GROUP BY region ORDER BY rev DESC`,
     fcTier: `WITH q AS (${base}), tm AS (SELECT DISTINCT State, City_Tier, Tier_Label FROM \`frido-429506.production.pincode_city_master\` WHERE State IS NOT NULL AND City_Tier IS NOT NULL) SELECT tm.City_Tier AS city_tier, tm.Tier_Label AS tier_label, COUNT(DISTINCT q.OrderId) AS orders, ROUND(SUM(q.SellingPrice_Inc_GST),0) AS rev, SUM(q.ItemQty) AS units FROM q JOIN tm ON UPPER(TRIM(q.State)) = UPPER(TRIM(tm.State)) WHERE q.Channel='Firstcry' GROUP BY city_tier, tier_label ORDER BY city_tier`,
     fcStatus: `WITH q AS (${base}) SELECT FulfilmentStatus AS status, COUNT(DISTINCT OrderId) AS orders, ROUND(SUM(SellingPrice_Inc_GST),0) AS rev FROM q WHERE Channel='Firstcry' AND FulfilmentStatus IS NOT NULL GROUP BY status ORDER BY orders DESC`,
-    fcCities: `WITH q AS (${base}) SELECT INITCAP(TRIM(City)) AS city, COUNT(DISTINCT OrderId) AS orders, ROUND(SUM(SellingPrice_Inc_GST),0) AS rev FROM q WHERE Channel='Firstcry' AND City IS NOT NULL AND TRIM(City) != '' GROUP BY city ORDER BY rev DESC LIMIT 50`,
+    fcCities: `WITH q AS (${base}) SELECT INITCAP(TRIM(City)) AS city, COUNT(DISTINCT OrderId) AS orders, ROUND(SUM(SellingPrice_Inc_GST),0) AS rev, ROUND(SUM(CASE WHEN Order_Status IN ('Return','RTO','CIR') THEN SellingPrice_Inc_GST ELSE 0 END),0) AS return_rev FROM q WHERE Channel='Firstcry' AND City IS NOT NULL AND TRIM(City) != '' GROUP BY city ORDER BY rev DESC LIMIT 50`,
+    fcCitiesPrev: `WITH q AS (${prevBase}) SELECT INITCAP(TRIM(City)) AS city, ROUND(SUM(SellingPrice_Inc_GST),0) AS rev FROM q WHERE Channel='Firstcry' AND City IS NOT NULL AND TRIM(City) != '' GROUP BY city`,
     mnTotals: `WITH q AS (${base}) SELECT COUNT(DISTINCT OrderId) AS orders, SUM(ItemQty) AS units, ROUND(SUM(SellingPrice_Inc_GST),0) AS rev, ROUND(SUM(SellingPrice_Exc_GST),0) AS exc_rev, COUNT(DISTINCT SubCategory) AS skus, COUNT(DISTINCT City) AS cities, COUNT(DISTINCT OrderDate) AS days, ROUND(SUM(CASE WHEN Order_Status='Return' THEN ABS(SellingPrice_Inc_GST) ELSE 0 END),0) AS return_rev, COUNT(DISTINCT CASE WHEN Order_Status='Return' THEN OrderId END) AS return_orders FROM q WHERE Channel='Myntra'`,
+    // Feeds the shared measures layer (computeNetRevenueMeasures)
+    mnNetCalc: `WITH q AS (${base}) SELECT ${netRevenueSelectFragment()} FROM q WHERE Channel='Myntra'`,
     mnDaily: `WITH q AS (${base}) SELECT CAST(OrderDate AS STRING) AS date, COUNT(DISTINCT OrderId) AS orders, SUM(ItemQty) AS units, ROUND(SUM(SellingPrice_Inc_GST),0) AS rev, ROUND(SUM(SellingPrice_Exc_GST),0) AS exc_rev FROM q WHERE Channel='Myntra' GROUP BY date ORDER BY date`,
     mnStatus: `WITH q AS (${base}) SELECT FulfilmentStatus AS status, COUNT(DISTINCT OrderId) AS orders, ROUND(SUM(SellingPrice_Inc_GST),0) AS rev FROM q WHERE Channel='Myntra' AND FulfilmentStatus IS NOT NULL GROUP BY status ORDER BY orders DESC`,
     mnCategories: `WITH q AS (${base}) SELECT Category AS category, COUNT(DISTINCT OrderId) AS orders, SUM(ItemQty) AS units, ROUND(SUM(SellingPrice_Inc_GST),0) AS rev, ROUND(SUM(SellingPrice_Exc_GST),0) AS exc_rev FROM q WHERE Channel='Myntra' GROUP BY category ORDER BY rev DESC`,
     mnSubCategories: `WITH q AS (${base}) SELECT Category AS category, SubCategory AS subcategory, COUNT(DISTINCT OrderId) AS orders, SUM(ItemQty) AS units, ROUND(SUM(SellingPrice_Inc_GST),0) AS rev, ROUND(SUM(SellingPrice_Exc_GST),0) AS exc_rev FROM q WHERE Channel='Myntra' AND SubCategory IS NOT NULL GROUP BY category, subcategory ORDER BY rev DESC`,
     mnSKUMatrix: `WITH q AS (${base}) SELECT Category AS category, SubCategory AS subcategory, ChannelSKUCode AS sku, SUM(ItemQty) AS units, ROUND(SUM(SellingPrice_Inc_GST),0) AS rev, ROUND(SUM(SellingPrice_Exc_GST),0) AS exc_rev, COUNT(DISTINCT OrderId) AS orders FROM q WHERE Channel='Myntra' AND ChannelSKUCode IS NOT NULL GROUP BY category, subcategory, sku ORDER BY rev DESC`,
     mnSKUs: `WITH q AS (${base}) SELECT ChannelSKUCode AS sku, Category AS category, COUNT(DISTINCT OrderId) AS orders, SUM(ItemQty) AS units, ROUND(SUM(SellingPrice_Inc_GST),0) AS rev, ROUND(SUM(SellingPrice_Exc_GST),0) AS exc_rev FROM q WHERE Channel='Myntra' AND ChannelSKUCode IS NOT NULL GROUP BY sku, category ORDER BY rev DESC LIMIT 30`,
-    mnStates: `WITH q AS (${base}) SELECT INITCAP(TRIM(State)) AS state, COUNT(DISTINCT OrderId) AS orders, ROUND(SUM(SellingPrice_Inc_GST),0) AS rev FROM q WHERE Channel='Myntra' AND State IS NOT NULL GROUP BY state ORDER BY rev DESC`,
+    mnStates: `WITH q AS (${base}) SELECT INITCAP(TRIM(State)) AS state, COUNT(DISTINCT OrderId) AS orders, ROUND(SUM(SellingPrice_Inc_GST),0) AS rev, ROUND(SUM(CASE WHEN Order_Status IN ('Return','RTO','CIR') THEN SellingPrice_Inc_GST ELSE 0 END),0) AS return_rev FROM q WHERE Channel='Myntra' AND State IS NOT NULL GROUP BY state ORDER BY rev DESC`,
     mnStatesPrev: `WITH q AS (${prevBase}) SELECT INITCAP(TRIM(State)) AS state, ROUND(SUM(SellingPrice_Inc_GST),0) AS rev FROM q WHERE Channel='Myntra' AND State IS NOT NULL GROUP BY state`,
     mnStateTotal: `WITH q AS (${base}) SELECT ROUND(SUM(SellingPrice_Inc_GST),0) AS total_rev FROM q WHERE Channel='Myntra' AND State IS NOT NULL`,
     mnCityTotal: `WITH q AS (${base}) SELECT ROUND(SUM(SellingPrice_Inc_GST),0) AS total_rev FROM q WHERE Channel='Myntra' AND City IS NOT NULL`,
     mnCatPrev: `WITH q AS (${prevBase}) SELECT Category AS category, ROUND(SUM(SellingPrice_Inc_GST),0) AS rev FROM q WHERE Channel='Myntra' GROUP BY category`,
     mnSubCatPrev: `WITH q AS (${prevBase}) SELECT Category AS category, SubCategory AS subcategory, ROUND(SUM(SellingPrice_Inc_GST),0) AS rev FROM q WHERE Channel='Myntra' AND SubCategory IS NOT NULL GROUP BY category, subcategory`,
-    mnCities: `WITH q AS (${base}) SELECT City AS city, Region AS region, City_Tier AS city_tier, COUNT(DISTINCT OrderId) AS orders, ROUND(SUM(SellingPrice_Inc_GST),0) AS rev FROM q WHERE Channel='Myntra' AND City IS NOT NULL GROUP BY city, region, city_tier ORDER BY rev DESC`,
+    mnCities: `WITH q AS (${base}) SELECT City AS city, Region AS region, City_Tier AS city_tier, COUNT(DISTINCT OrderId) AS orders, ROUND(SUM(SellingPrice_Inc_GST),0) AS rev, ROUND(SUM(CASE WHEN Order_Status IN ('Return','RTO','CIR') THEN SellingPrice_Inc_GST ELSE 0 END),0) AS return_rev FROM q WHERE Channel='Myntra' AND City IS NOT NULL GROUP BY city, region, city_tier ORDER BY rev DESC`,
     mnCitiesPrev: `WITH q AS (${prevBase}) SELECT City AS city, ROUND(SUM(SellingPrice_Inc_GST),0) AS rev FROM q WHERE Channel='Myntra' AND City IS NOT NULL GROUP BY city`,
     prevMn: `WITH q AS (${prevBase}) SELECT SUM(SellingPrice_Inc_GST) AS rev, SUM(SellingPrice_Exc_GST) AS exc_rev, COUNT(DISTINCT OrderId) AS orders FROM q WHERE Channel='Myntra'`,
+    prevMnNetCalc: `WITH q AS (${prevBase}) SELECT ${netRevenueSelectFragment()} FROM q WHERE Channel='Myntra'`,
     prevMnDaily: `WITH q AS (${prevBase}) SELECT CAST(OrderDate AS STRING) AS date, SUM(SellingPrice_Inc_GST) AS rev FROM q WHERE Channel='Myntra' GROUP BY date ORDER BY date`,
     masterSkuList: `SELECT DISTINCT TRIM(Product_Code) AS sku FROM \`frido-429506.sharepoint_to_gcp.Frido_Item_Master__frido_item_sku_master\` WHERE TRIM(Product_Code) != '' ORDER BY sku`,
-    offlineTotals: `WITH q AS (${base}) SELECT SubChannel, SUM(CASE WHEN Order_Status='Sales' THEN SellingPrice_Inc_GST ELSE 0 END) AS rev_sales, SUM(CASE WHEN Order_Status='Sales' THEN SellingPrice_Exc_GST ELSE 0 END) AS exc_rev_sales, SUM(CASE WHEN Order_Status='Credit Note' THEN SellingPrice_Inc_GST ELSE 0 END) AS cn_rev, SUM(CASE WHEN Order_Status='Credit Note' THEN SellingPrice_Exc_GST ELSE 0 END) AS cn_exc_rev, COUNT(DISTINCT CASE WHEN Order_Status='Sales' THEN OrderId END) AS orders, SUM(CASE WHEN Order_Status='Sales' THEN ItemQty ELSE 0 END) AS units, COUNT(DISTINCT CASE WHEN Order_Status='Credit Note' THEN OrderId END) AS cn_orders, SUM(CASE WHEN Order_Status='Credit Note' THEN ItemQty ELSE 0 END) AS cn_units FROM q WHERE Channel='offline_sales' GROUP BY SubChannel`,
-    prevOffline: `WITH q AS (${prevBase}) SELECT SubChannel, SUM(CASE WHEN Order_Status='Sales' THEN SellingPrice_Inc_GST ELSE 0 END) AS rev_sales, SUM(CASE WHEN Order_Status='Sales' THEN SellingPrice_Exc_GST ELSE 0 END) AS exc_rev_sales, SUM(CASE WHEN Order_Status='Credit Note' THEN SellingPrice_Inc_GST ELSE 0 END) AS cn_rev, SUM(CASE WHEN Order_Status='Credit Note' THEN SellingPrice_Exc_GST ELSE 0 END) AS cn_exc_rev, COUNT(DISTINCT CASE WHEN Order_Status='Sales' THEN OrderId END) AS orders, SUM(CASE WHEN Order_Status='Sales' THEN ItemQty ELSE 0 END) AS units, COUNT(DISTINCT CASE WHEN Order_Status='Credit Note' THEN OrderId END) AS cn_orders, SUM(CASE WHEN Order_Status='Credit Note' THEN ItemQty ELSE 0 END) AS cn_units FROM q WHERE Channel='offline_sales' GROUP BY SubChannel`,
-    prevOfflineDaily: `WITH q AS (${prevBase}) SELECT CAST(OrderDate AS STRING) AS date, SubChannel, SUM(CASE WHEN Order_Status='Sales' THEN SellingPrice_Inc_GST ELSE 0 END) AS rev FROM q WHERE Channel='offline_sales' GROUP BY date, SubChannel ORDER BY date`,
-    offlineDaily: `WITH q AS (${base}) SELECT CAST(OrderDate AS STRING) AS date, SubChannel, COUNT(DISTINCT CASE WHEN Order_Status='Sales' THEN OrderId END) AS orders, SUM(CASE WHEN Order_Status='Sales' THEN ItemQty ELSE 0 END) AS units, SUM(CASE WHEN Order_Status='Sales' THEN SellingPrice_Inc_GST ELSE 0 END) AS rev, SUM(CASE WHEN Order_Status='Sales' THEN SellingPrice_Exc_GST ELSE 0 END) AS exc_rev, SUM(CASE WHEN Order_Status='Credit Note' THEN SellingPrice_Inc_GST ELSE 0 END) AS cn_rev, SUM(CASE WHEN Order_Status='Credit Note' THEN SellingPrice_Exc_GST ELSE 0 END) AS cn_exc_rev FROM q WHERE Channel='offline_sales' GROUP BY date, SubChannel ORDER BY date`,
+    offlineTotals: `WITH q AS (${baseWithCN}) SELECT SubChannel, SUM(CASE WHEN Order_Status='Sales' THEN SellingPrice_Inc_GST ELSE 0 END) AS rev_sales, SUM(CASE WHEN Order_Status='Sales' THEN SellingPrice_Exc_GST ELSE 0 END) AS exc_rev_sales, SUM(CASE WHEN Order_Status='Credit Note' THEN SellingPrice_Inc_GST ELSE 0 END) AS cn_rev, SUM(CASE WHEN Order_Status='Credit Note' THEN SellingPrice_Exc_GST ELSE 0 END) AS cn_exc_rev, COUNT(DISTINCT CASE WHEN Order_Status='Sales' THEN OrderId END) AS orders, SUM(CASE WHEN Order_Status='Sales' THEN ItemQty ELSE 0 END) AS units, COUNT(DISTINCT CASE WHEN Order_Status='Credit Note' THEN OrderId END) AS cn_orders, SUM(CASE WHEN Order_Status='Credit Note' THEN ItemQty ELSE 0 END) AS cn_units FROM q WHERE Channel='offline_sales' GROUP BY SubChannel`,
+    prevOffline: `WITH q AS (${prevBaseWithCN}) SELECT SubChannel, SUM(CASE WHEN Order_Status='Sales' THEN SellingPrice_Inc_GST ELSE 0 END) AS rev_sales, SUM(CASE WHEN Order_Status='Sales' THEN SellingPrice_Exc_GST ELSE 0 END) AS exc_rev_sales, SUM(CASE WHEN Order_Status='Credit Note' THEN SellingPrice_Inc_GST ELSE 0 END) AS cn_rev, SUM(CASE WHEN Order_Status='Credit Note' THEN SellingPrice_Exc_GST ELSE 0 END) AS cn_exc_rev, COUNT(DISTINCT CASE WHEN Order_Status='Sales' THEN OrderId END) AS orders, SUM(CASE WHEN Order_Status='Sales' THEN ItemQty ELSE 0 END) AS units, COUNT(DISTINCT CASE WHEN Order_Status='Credit Note' THEN OrderId END) AS cn_orders, SUM(CASE WHEN Order_Status='Credit Note' THEN ItemQty ELSE 0 END) AS cn_units FROM q WHERE Channel='offline_sales' GROUP BY SubChannel`,
+    prevOfflineDaily: `WITH q AS (${prevBaseWithCN}) SELECT CAST(OrderDate AS STRING) AS date, SubChannel, SUM(CASE WHEN Order_Status='Sales' THEN SellingPrice_Inc_GST ELSE 0 END) AS rev FROM q WHERE Channel='offline_sales' GROUP BY date, SubChannel ORDER BY date`,
+    offlineDaily: `WITH q AS (${baseWithCN}) SELECT CAST(OrderDate AS STRING) AS date, SubChannel, COUNT(DISTINCT CASE WHEN Order_Status='Sales' THEN OrderId END) AS orders, SUM(CASE WHEN Order_Status='Sales' THEN ItemQty ELSE 0 END) AS units, SUM(CASE WHEN Order_Status='Sales' THEN SellingPrice_Inc_GST ELSE 0 END) AS rev, SUM(CASE WHEN Order_Status='Sales' THEN SellingPrice_Exc_GST ELSE 0 END) AS exc_rev, SUM(CASE WHEN Order_Status='Credit Note' THEN SellingPrice_Inc_GST ELSE 0 END) AS cn_rev, SUM(CASE WHEN Order_Status='Credit Note' THEN SellingPrice_Exc_GST ELSE 0 END) AS cn_exc_rev FROM q WHERE Channel='offline_sales' GROUP BY date, SubChannel ORDER BY date`,
     offlineSubChannel: `WITH q AS (${base}) SELECT SubChannel, COUNT(DISTINCT CASE WHEN Order_Status='Sales' THEN OrderId END) AS orders, SUM(CASE WHEN Order_Status='Sales' THEN ItemQty ELSE 0 END) AS units, SUM(CASE WHEN Order_Status='Sales' THEN SellingPrice_Inc_GST ELSE 0 END) AS rev, SUM(CASE WHEN Order_Status='Sales' THEN SellingPrice_Exc_GST ELSE 0 END) AS exc_rev FROM q WHERE Channel='offline_sales' GROUP BY SubChannel ORDER BY rev DESC`,
-    offlineCategory: `WITH q AS (${base}) SELECT SubChannel, Category, COUNT(DISTINCT CASE WHEN Order_Status='Sales' THEN OrderId END) AS orders, SUM(CASE WHEN Order_Status='Sales' THEN SellingPrice_Inc_GST ELSE 0 END) AS rev, SUM(CASE WHEN Order_Status='Sales' THEN SellingPrice_Exc_GST ELSE 0 END) AS exc_rev, SUM(CASE WHEN Order_Status='Sales' THEN ItemQty ELSE 0 END) AS units, SUM(CASE WHEN Order_Status='Credit Note' THEN SellingPrice_Inc_GST ELSE 0 END) AS cn_rev FROM q WHERE Channel='offline_sales' GROUP BY SubChannel, Category ORDER BY rev DESC`,
+    offlineCategory: `WITH q AS (${baseWithCN}) SELECT SubChannel, Category, COUNT(DISTINCT CASE WHEN Order_Status='Sales' THEN OrderId END) AS orders, SUM(CASE WHEN Order_Status='Sales' THEN SellingPrice_Inc_GST ELSE 0 END) AS rev, SUM(CASE WHEN Order_Status='Sales' THEN SellingPrice_Exc_GST ELSE 0 END) AS exc_rev, SUM(CASE WHEN Order_Status='Sales' THEN ItemQty ELSE 0 END) AS units, SUM(CASE WHEN Order_Status='Credit Note' THEN SellingPrice_Inc_GST ELSE 0 END) AS cn_rev FROM q WHERE Channel='offline_sales' GROUP BY SubChannel, Category ORDER BY rev DESC`,
     offlineSubCategory: `WITH q AS (${base}) SELECT SubChannel, Category, SubCategory, COUNT(DISTINCT CASE WHEN Order_Status='Sales' THEN OrderId END) AS orders, SUM(CASE WHEN Order_Status='Sales' THEN SellingPrice_Inc_GST ELSE 0 END) AS rev, SUM(CASE WHEN Order_Status='Sales' THEN SellingPrice_Exc_GST ELSE 0 END) AS exc_rev, SUM(CASE WHEN Order_Status='Sales' THEN ItemQty ELSE 0 END) AS units FROM q WHERE Channel='offline_sales' GROUP BY SubChannel, Category, SubCategory ORDER BY rev DESC`,
     offlineSKU: `WITH q AS (${base}) SELECT SubChannel, Category, SubCategory, MasterSKU AS sku, COUNT(DISTINCT CASE WHEN Order_Status='Sales' THEN OrderId END) AS orders, SUM(CASE WHEN Order_Status='Sales' THEN SellingPrice_Inc_GST ELSE 0 END) AS rev, SUM(CASE WHEN Order_Status='Sales' THEN SellingPrice_Exc_GST ELSE 0 END) AS exc_rev, SUM(CASE WHEN Order_Status='Sales' THEN ItemQty ELSE 0 END) AS units FROM q WHERE Channel='offline_sales' AND MasterSKU IS NOT NULL AND TRIM(MasterSKU) != '' GROUP BY SubChannel, Category, SubCategory, MasterSKU ORDER BY rev DESC LIMIT 600`,
     offlineState: `WITH q AS (${base}) SELECT SubChannel, UPPER(TRIM(State)) AS state, COUNT(DISTINCT CASE WHEN Order_Status='Sales' THEN OrderId END) AS orders, SUM(CASE WHEN Order_Status='Sales' THEN SellingPrice_Inc_GST ELSE 0 END) AS rev, COUNT(DISTINCT City) AS cities FROM q WHERE Channel='offline_sales' AND State IS NOT NULL AND TRIM(State) != '' AND Order_Status='Sales' GROUP BY SubChannel, UPPER(TRIM(State)) ORDER BY rev DESC`,
@@ -354,8 +426,11 @@ export default async function handler(req, res) {
     offCitiesPrev: `WITH q AS (${prevBase}) SELECT SubChannel, INITCAP(TRIM(City)) AS city, ROUND(SUM(CASE WHEN Order_Status='Sales' THEN SellingPrice_Inc_GST ELSE 0 END),0) AS rev FROM q WHERE Channel='offline_sales' AND City IS NOT NULL AND TRIM(City) != '' AND Order_Status='Sales' GROUP BY SubChannel, city`,
     offStateTotal: `WITH q AS (${base}) SELECT SubChannel, ROUND(SUM(CASE WHEN Order_Status='Sales' THEN SellingPrice_Inc_GST ELSE 0 END),0) AS total_rev FROM q WHERE Channel='offline_sales' AND State IS NOT NULL AND TRIM(State) != '' GROUP BY SubChannel`,
     offCityTotal: `WITH q AS (${base}) SELECT SubChannel, ROUND(SUM(CASE WHEN Order_Status='Sales' THEN SellingPrice_Inc_GST ELSE 0 END),0) AS total_rev FROM q WHERE Channel='offline_sales' AND City IS NOT NULL AND TRIM(City) != '' AND Order_Status='Sales' GROUP BY SubChannel`,
-    offlineRegion: `WITH q AS (${base}) SELECT SubChannel, Region AS region, COUNT(DISTINCT CASE WHEN Order_Status='Sales' THEN OrderId END) AS orders, SUM(CASE WHEN Order_Status='Sales' THEN SellingPrice_Inc_GST ELSE 0 END) AS rev, SUM(CASE WHEN Order_Status='Sales' THEN ItemQty ELSE 0 END) AS units FROM q WHERE Channel='offline_sales' AND Region IS NOT NULL AND Order_Status='Sales' GROUP BY SubChannel, Region ORDER BY rev DESC`,
-    offlineTier: `WITH q AS (${base}) SELECT SubChannel, City_Tier AS city_tier, Tier_Label AS tier_label, COUNT(DISTINCT CASE WHEN Order_Status='Sales' THEN OrderId END) AS orders, SUM(CASE WHEN Order_Status='Sales' THEN SellingPrice_Inc_GST ELSE 0 END) AS rev, SUM(CASE WHEN Order_Status='Sales' THEN ItemQty ELSE 0 END) AS units FROM q WHERE Channel='offline_sales' AND City_Tier IS NOT NULL AND Order_Status='Sales' GROUP BY SubChannel, City_Tier, Tier_Label ORDER BY City_Tier`,
+    // Region/City_Tier columns are unpopulated for Stockist/MTGT distributor records, so derive
+    // from State via pincode_city_master (same pattern as CRED/Firstcry's crRegion/crTier) instead
+    // of relying on the raw Region/City_Tier columns which only exist for Shopify B2B rows.
+    offlineRegion: `WITH q AS (${base}), sm AS (SELECT DISTINCT State, Region FROM \`frido-429506.production.pincode_city_master\` WHERE State IS NOT NULL AND Region IS NOT NULL) SELECT q.SubChannel, sm.Region AS region, COUNT(DISTINCT CASE WHEN q.Order_Status='Sales' THEN q.OrderId END) AS orders, SUM(CASE WHEN q.Order_Status='Sales' THEN q.SellingPrice_Inc_GST ELSE 0 END) AS rev, SUM(CASE WHEN q.Order_Status='Sales' THEN q.ItemQty ELSE 0 END) AS units FROM q JOIN sm ON UPPER(TRIM(q.State)) = UPPER(TRIM(sm.State)) WHERE q.Channel='offline_sales' AND q.Order_Status='Sales' GROUP BY q.SubChannel, region ORDER BY rev DESC`,
+    offlineTier: `WITH q AS (${base}), tm AS (SELECT DISTINCT State, City_Tier, Tier_Label FROM \`frido-429506.production.pincode_city_master\` WHERE State IS NOT NULL AND City_Tier IS NOT NULL) SELECT q.SubChannel, tm.City_Tier AS city_tier, tm.Tier_Label AS tier_label, COUNT(DISTINCT CASE WHEN q.Order_Status='Sales' THEN q.OrderId END) AS orders, SUM(CASE WHEN q.Order_Status='Sales' THEN q.SellingPrice_Inc_GST ELSE 0 END) AS rev, SUM(CASE WHEN q.Order_Status='Sales' THEN q.ItemQty ELSE 0 END) AS units FROM q JOIN tm ON UPPER(TRIM(q.State)) = UPPER(TRIM(tm.State)) WHERE q.Channel='offline_sales' AND q.Order_Status='Sales' GROUP BY q.SubChannel, city_tier, tier_label ORDER BY city_tier`,
     adsTotals: `SELECT platform, ROUND(SUM(spend),0) AS spend, ROUND(SUM(revenue),0) AS revenue, ROUND(SUM(impressions),0) AS impressions, ROUND(SUM(clicks),0) AS clicks, ROUND(SUM(orders),0) AS orders, ROUND(SAFE_DIVIDE(SUM(clicks),SUM(impressions))*100,2) AS ctr, ROUND(SAFE_DIVIDE(SUM(spend),SUM(clicks)),2) AS cpc, ROUND(SAFE_DIVIDE(SUM(revenue),SUM(spend)),2) AS roas FROM \`frido-429506.production.fact_all_platform_ads_report\` WHERE report_date BETWEEN '${start}' AND '${end}' GROUP BY platform ORDER BY spend DESC`,
     adsDaily: `SELECT CAST(report_date AS STRING) AS date, platform, ROUND(SUM(spend),0) AS spend, ROUND(SUM(revenue),0) AS revenue, ROUND(SUM(impressions),0) AS impressions, ROUND(SUM(clicks),0) AS clicks FROM \`frido-429506.production.fact_all_platform_ads_report\` WHERE report_date BETWEEN '${start}' AND '${end}' GROUP BY date, platform ORDER BY date`,
     adsByAdType: `SELECT platform, ad_type, ROUND(SUM(spend),0) AS spend, ROUND(SUM(revenue),0) AS revenue, ROUND(SUM(impressions),0) AS impressions, ROUND(SUM(clicks),0) AS clicks, ROUND(SUM(orders),0) AS orders, ROUND(SAFE_DIVIDE(SUM(clicks),SUM(impressions))*100,2) AS ctr, ROUND(SAFE_DIVIDE(SUM(spend),SUM(clicks)),2) AS cpc, ROUND(SAFE_DIVIDE(SUM(revenue),SUM(spend)),2) AS roas FROM \`frido-429506.production.fact_all_platform_ads_report\` WHERE report_date BETWEEN '${start}' AND '${end}' GROUP BY platform, ad_type ORDER BY platform, spend DESC`,
@@ -397,11 +472,11 @@ export default async function handler(req, res) {
     eboCategoryPrev: `WITH q AS (${prevBase}) SELECT Category, SUM(SellingPrice_Inc_GST) AS rev FROM q WHERE Channel='Retail' GROUP BY Category`,
     eboSubCategory: `WITH q AS (${base}) SELECT Category, SubCategory, COUNT(DISTINCT OrderId) AS orders, SUM(SellingPrice_Inc_GST) AS rev, SUM(SellingPrice_Exc_GST) AS exc_rev, SUM(ItemQty) AS units, SUM(CASE WHEN UPPER(COALESCE(MasterSKU,'')) NOT LIKE '%COUP%' AND UPPER(COALESCE(MasterSKU,'')) NOT LIKE '%DFA%' THEN ItemQty ELSE 0 END) AS asp_units, COUNT(DISTINCT CASE WHEN Order_Status='Cancelled' THEN OrderId END) AS cancelled, COUNT(DISTINCT CASE WHEN Order_Status IN ('RTO','Return') THEN OrderId END) AS rto, COUNT(DISTINCT CASE WHEN Order_Status='CIR' THEN OrderId END) AS cir, COUNT(DISTINCT CASE WHEN Order_Status='Exchange' THEN OrderId END) AS exch, SUM(CASE WHEN Order_Status='Cancelled' THEN SellingPrice_Inc_GST ELSE 0 END) AS cancel_rev, SUM(CASE WHEN Order_Status IN ('RTO','Return') THEN SellingPrice_Inc_GST ELSE 0 END) AS rto_rev, SUM(CASE WHEN Order_Status='CIR' THEN SellingPrice_Inc_GST ELSE 0 END) AS cir_rev, SUM(CASE WHEN Order_Status='Exchange' THEN SellingPrice_Inc_GST ELSE 0 END) AS exch_rev FROM q WHERE Channel='Retail' GROUP BY Category, SubCategory ORDER BY rev DESC`,
     eboSubCategoryPrev: `WITH q AS (${prevBase}) SELECT Category, SubCategory, SUM(SellingPrice_Inc_GST) AS rev FROM q WHERE Channel='Retail' GROUP BY Category, SubCategory`,
-    eboSKU: `WITH q AS (${base}) SELECT Category, SubCategory, MasterSKU AS sku, COUNT(DISTINCT OrderId) AS orders, SUM(SellingPrice_Inc_GST) AS rev, SUM(SellingPrice_Exc_GST) AS exc_rev, SUM(ItemQty) AS units, COUNT(DISTINCT CASE WHEN Order_Status='Cancelled' THEN OrderId END) AS cancelled, COUNT(DISTINCT CASE WHEN Order_Status IN ('RTO','Return') THEN OrderId END) AS rto, COUNT(DISTINCT CASE WHEN Order_Status='CIR' THEN OrderId END) AS cir, COUNT(DISTINCT CASE WHEN Order_Status='Exchange' THEN OrderId END) AS exch, SUM(CASE WHEN Order_Status='Cancelled' THEN SellingPrice_Inc_GST ELSE 0 END) AS cancel_rev, SUM(CASE WHEN Order_Status IN ('RTO','Return') THEN SellingPrice_Inc_GST ELSE 0 END) AS rto_rev, SUM(CASE WHEN Order_Status='CIR' THEN SellingPrice_Inc_GST ELSE 0 END) AS cir_rev, SUM(CASE WHEN Order_Status='Exchange' THEN SellingPrice_Inc_GST ELSE 0 END) AS exch_rev FROM q WHERE Channel='Retail' AND MasterSKU IS NOT NULL AND TRIM(MasterSKU) != '' GROUP BY Category, SubCategory, MasterSKU ORDER BY rev DESC LIMIT 300`,
-    eboState: `WITH q AS (${base}) SELECT UPPER(TRIM(State)) AS state, COUNT(DISTINCT OrderId) AS orders, SUM(SellingPrice_Inc_GST) AS rev, SUM(ItemQty) AS units, COUNT(DISTINCT City) AS cities, COUNT(DISTINCT CASE WHEN Order_Status IN ('RTO','Return','CIR') THEN OrderId END) AS rto_orders FROM q WHERE Channel='Retail' AND State IS NOT NULL AND TRIM(State) != '' GROUP BY UPPER(TRIM(State)) ORDER BY rev DESC LIMIT 30`,
+    eboSKU: `WITH q AS (${base}) SELECT Category, SubCategory, MasterSKU AS sku, COUNT(DISTINCT OrderId) AS orders, SUM(SellingPrice_Inc_GST) AS rev, SUM(SellingPrice_Exc_GST) AS exc_rev, SUM(ItemQty) AS units, COUNT(DISTINCT CASE WHEN Order_Status='Cancelled' THEN OrderId END) AS cancelled, COUNT(DISTINCT CASE WHEN Order_Status IN ('RTO','Return') THEN OrderId END) AS rto, COUNT(DISTINCT CASE WHEN Order_Status='CIR' THEN OrderId END) AS cir, COUNT(DISTINCT CASE WHEN Order_Status='Exchange' THEN OrderId END) AS exch, SUM(CASE WHEN Order_Status='Cancelled' THEN SellingPrice_Inc_GST ELSE 0 END) AS cancel_rev, SUM(CASE WHEN Order_Status IN ('RTO','Return') THEN SellingPrice_Inc_GST ELSE 0 END) AS rto_rev, SUM(CASE WHEN Order_Status='CIR' THEN SellingPrice_Inc_GST ELSE 0 END) AS cir_rev, SUM(CASE WHEN Order_Status='Exchange' THEN SellingPrice_Inc_GST ELSE 0 END) AS exch_rev FROM q WHERE Channel='Retail' AND MasterSKU IS NOT NULL AND TRIM(MasterSKU) != '' GROUP BY Category, SubCategory, MasterSKU ORDER BY rev DESC`,
+    eboState: `WITH q AS (${base}) SELECT UPPER(TRIM(State)) AS state, COUNT(DISTINCT OrderId) AS orders, SUM(SellingPrice_Inc_GST) AS rev, SUM(ItemQty) AS units, COUNT(DISTINCT City) AS cities, COUNT(DISTINCT CASE WHEN Order_Status IN ('RTO','Return','CIR') THEN OrderId END) AS rto_orders, SUM(CASE WHEN Order_Status IN ('RTO','Return','CIR') THEN SellingPrice_Inc_GST ELSE 0 END) AS return_rev FROM q WHERE Channel='Retail' AND State IS NOT NULL AND TRIM(State) != '' GROUP BY UPPER(TRIM(State)) ORDER BY rev DESC LIMIT 30`,
     eboStateTotal: `WITH q AS (${base}) SELECT SUM(SellingPrice_Inc_GST) AS total_rev, COUNT(DISTINCT OrderId) AS total_orders FROM q WHERE Channel='Retail' AND State IS NOT NULL AND TRIM(State) != ''`,
     eboStatePrev: `WITH q AS (${prevBase}) SELECT UPPER(TRIM(State)) AS state, SUM(SellingPrice_Inc_GST) AS rev, COUNT(DISTINCT OrderId) AS orders FROM q WHERE Channel='Retail' AND State IS NOT NULL AND TRIM(State) != '' GROUP BY UPPER(TRIM(State))`,
-    eboCity: `WITH q AS (${base}) SELECT INITCAP(TRIM(City)) AS city, INITCAP(TRIM(State)) AS state, MAX(Region) AS region, COUNT(DISTINCT OrderId) AS orders, SUM(SellingPrice_Inc_GST) AS rev, COUNT(DISTINCT CASE WHEN Order_Status IN ('RTO','Return','CIR') THEN OrderId END) AS rto_orders FROM q WHERE Channel='Retail' AND City IS NOT NULL AND TRIM(City) != '' GROUP BY INITCAP(TRIM(City)), INITCAP(TRIM(State)) ORDER BY rev DESC LIMIT 50`,
+    eboCity: `WITH q AS (${base}) SELECT INITCAP(TRIM(City)) AS city, INITCAP(TRIM(State)) AS state, MAX(Region) AS region, COUNT(DISTINCT OrderId) AS orders, SUM(SellingPrice_Inc_GST) AS rev, COUNT(DISTINCT CASE WHEN Order_Status IN ('RTO','Return','CIR') THEN OrderId END) AS rto_orders, SUM(CASE WHEN Order_Status IN ('RTO','Return','CIR') THEN SellingPrice_Inc_GST ELSE 0 END) AS return_rev FROM q WHERE Channel='Retail' AND City IS NOT NULL AND TRIM(City) != '' GROUP BY INITCAP(TRIM(City)), INITCAP(TRIM(State)) ORDER BY rev DESC LIMIT 50`,
     eboCityTotal: `WITH q AS (${base}) SELECT SUM(SellingPrice_Inc_GST) AS total_rev, COUNT(DISTINCT OrderId) AS total_orders FROM q WHERE Channel='Retail' AND City IS NOT NULL AND TRIM(City) != ''`,
     eboCityPrev: `WITH q AS (${prevBase}) SELECT INITCAP(TRIM(City)) AS city, INITCAP(TRIM(State)) AS state, SUM(SellingPrice_Inc_GST) AS rev, COUNT(DISTINCT OrderId) AS orders FROM q WHERE Channel='Retail' AND City IS NOT NULL AND TRIM(City) != '' GROUP BY INITCAP(TRIM(City)), INITCAP(TRIM(State))`,
     eboRegion: `WITH q AS (${base}) SELECT Region AS region, COUNT(DISTINCT OrderId) AS orders, SUM(SellingPrice_Inc_GST) AS rev, SUM(ItemQty) AS units FROM q WHERE Channel='Retail' AND Region IS NOT NULL GROUP BY Region ORDER BY rev DESC`,
@@ -491,75 +566,81 @@ export default async function handler(req, res) {
     const refundTrend = (r.byRefundTrend || []).map(x => ({ date: x.date, total: parseInt(x.total_orders) || 0, refunds: parseInt(x.refund_lines) || 0, rate: x.total_orders ? (parseInt(x.refund_lines) / parseInt(x.total_orders) * 100) : 0 }))
     const dailyReturnTrend = (r.byDailyReturnTrend || []).map(x => ({ date: x.date, total: parseInt(x.total_orders) || 0, rtoPct: x.total_orders ? ((parseInt(x.rto_orders) + parseInt(x.return_orders || 0)) / parseInt(x.total_orders) * 100) : 0, exchPct: x.total_orders ? (parseInt(x.exch_orders) / parseInt(x.total_orders) * 100) : 0, cirPct: x.total_orders ? (parseInt(x.cir_orders) / parseInt(x.total_orders) * 100) : 0, cancelPct: x.total_orders ? (parseInt(x.cancel_orders) / parseInt(x.total_orders) * 100) : 0 }))
 
+    // Shared measures layer (computeNetRevenueMeasures in _bq.js) drives every channel's netRev
+    // here too — %s are share-of-Gross-Inc-GST, Net Revenue (Exc GST) = Gross Exc GST × retained
+    // share. This keeps chMap (and the All tab's summed total) reconcilable with each channel tab.
     const chMap = {}
     r.byChannel.forEach(x => {
-      const gross = parseFloat(x.rev) || 0
-      const excRev = parseFloat(x.exc_rev) || 0
-      const cancelRev = parseFloat(x.cancel_rev) || 0
-      const rtoRev = parseFloat(x.rto_rev) || 0
-      const returnRev = parseFloat(x.return_rev) || 0
-      const cirRev = parseFloat(x.cir_rev) || 0
-      const grossAfterReturns = gross - cancelRev - rtoRev - returnRev - cirRev
-      const gstRatio = gross > 0 ? (gross - excRev) / gross : 0
-      const netRev = grossAfterReturns * (1 - gstRatio)
+      const m = computeNetRevenueMeasures({
+        gross_inc_gst: x.rev, gross_exc_gst: x.exc_rev,
+        cir_rev: x.cir_rev, rto_rev: x.rto_rev, return_rev: x.return_rev, cancel_rev: x.cancel_rev,
+      })
       // Split Shopify Retail Store rows into EBO channel
-      if (x.Channel === 'Retail') {
-        if (!chMap['EBO']) chMap['EBO'] = { rev: 0, excRev: 0, netRev: 0, orders: 0, qty: 0 }
-        chMap['EBO'].rev += gross
-        chMap['EBO'].excRev += excRev
-        chMap['EBO'].netRev += netRev
-        chMap['EBO'].orders += parseInt(x.orders) || 0
-        chMap['EBO'].qty += parseInt(x.qty) || 0
-      } else {
-        const key = x.Channel
-        if (!chMap[key]) chMap[key] = { rev: 0, excRev: 0, netRev: 0, orders: 0, qty: 0 }
-        chMap[key].rev += gross
-        chMap[key].excRev += excRev
-        chMap[key].netRev += netRev
-        chMap[key].orders += parseInt(x.orders) || 0
-        chMap[key].qty += parseInt(x.qty) || 0
-      }
+      const key = x.Channel === 'Retail' ? 'EBO' : x.Channel
+      if (!chMap[key]) chMap[key] = { rev: 0, excRev: 0, netRev: 0, orders: 0, qty: 0 }
+      chMap[key].rev += m.grossIncGst
+      chMap[key].excRev += m.grossExcGst
+      chMap[key].netRev += m.netRevenueExcGst
+      chMap[key].orders += parseInt(x.orders) || 0
+      chMap[key].qty += parseInt(x.qty) || 0
     })
-    // Override chMap['Shopify'] netRev using exact same formula as Shopify tab (India only from shNetCalc)
-    // then add International net rev on top
-    const shCalc = r.shNetCalc?.[0] || {}
-    const shGross = parseFloat(shCalc.gross) || 0
-    const shExcRev = parseFloat(shCalc.exc_rev) || 0
-    if (shGross > 0) {
-      const shGrossAfterReturns = shGross - (parseFloat(shCalc.cancel_rev)||0) - (parseFloat(shCalc.rto_rev)||0) - (parseFloat(shCalc.return_rev)||0) - (parseFloat(shCalc.cir_rev)||0)
-      const shGstRatio = (shGross - shExcRev) / shGross
-      const shNetRev = shGrossAfterReturns * (1 - shGstRatio)
+    // Override chMap['Shopify'] netRev using exact same shared-measures formula as the Shopify tab
+    // (India only, from shNetCalc) then add International net rev on top
+    const shM = computeNetRevenueMeasures(r.shNetCalc?.[0] || {})
+    if (shM.grossIncGst > 0) {
       const intlExcRev = parseFloat(r.shopifyIntlTotals?.[0]?.intl_exc_rev) || 0
       const intlRev = parseFloat(r.shopifyIntlTotals?.[0]?.intl_rev) || 0
       if (chMap['Shopify']) {
-        chMap['Shopify'].netRev = shNetRev + intlExcRev
-        chMap['Shopify'].rev = shGross + intlRev
-        chMap['Shopify'].excRev = shExcRev + intlExcRev
+        chMap['Shopify'].netRev = shM.netRevenueExcGst + intlExcRev
+        chMap['Shopify'].rev = shM.grossIncGst + intlRev
+        chMap['Shopify'].excRev = shM.grossExcGst + intlExcRev
       } else {
-        chMap['Shopify'] = { rev: shGross + intlRev, excRev: shExcRev + intlExcRev, netRev: shNetRev + intlExcRev, orders: 0, qty: 0 }
+        chMap['Shopify'] = { rev: shM.grossIncGst + intlRev, excRev: shM.grossExcGst + intlExcRev, netRev: shM.netRevenueExcGst + intlExcRev, orders: 0, qty: 0 }
       }
     }
 
-    // Myntra tab shows excRev directly as net (platform already reports net of returns)
-    if (chMap['Myntra']) chMap['Myntra'].netRev = chMap['Myntra'].excRev
+    // (Myntra previously had excRev shown directly as netRev here, on the assumption the platform
+    // reports net-of-returns — that's false, Myntra has real Return/Cancelled revenue in Order_Status,
+    // so it's now computed by the shared-measures loop above like every other channel. No override needed.)
+
+    // Override chMap['Amazon'] — the Amazon tab's own SC net revenue (amzSCNetCalc) uses Amazon-
+    // specific quirks that byChannel's generic aggregation doesn't replicate: only rows with
+    // SellingPrice_Inc_GST > 0 count toward gross, Return+RTO are combined into one return_rev,
+    // and Cancelled comes from FinancialStatus (not Order_Status). VC has no Cancel/RTO/Return/CIR
+    // concept, so its net revenue is just its Exc-GST total. Mirror the Amazon tab's exact
+    // SC-netCalc + VC-exc-rev sum so the All-tab total reconciles with the Amazon tab.
+    if (r.amzSCNetCalc?.length) {
+      const scM = computeNetRevenueMeasures(r.amzSCNetCalc[0])
+      const vcRev = (r.amzVCAccounts || []).reduce((s, x) => s + (parseFloat(x.ordered_rev) || 0), 0)
+      const vcExcRev = (r.amzVCAccounts || []).reduce((s, x) => s + (parseFloat(x.ordered_exc_rev) || 0), 0)
+      const vcUnits = (r.amzVCAccounts || []).reduce((s, x) => s + (parseInt(x.ordered_units) || 0), 0)
+      if (chMap['Amazon']) {
+        chMap['Amazon'].rev = scM.grossIncGst + vcRev
+        chMap['Amazon'].excRev = scM.grossExcGst + vcExcRev
+        chMap['Amazon'].netRev = scM.netRevenueExcGst + vcExcRev
+        chMap['Amazon'].qty = (chMap['Amazon'].qty || 0)
+      } else {
+        chMap['Amazon'] = { rev: scM.grossIncGst + vcRev, excRev: scM.grossExcGst + vcExcRev, netRev: scM.netRevenueExcGst + vcExcRev, orders: 0, qty: vcUnits }
+      }
+    }
+
+    // Override chMap['offline_sales'] — Offline has no Cancel/RTO/Return/CIR order-status concept,
+    // so computeNetRevenueMeasures always returns a 0% deduction for it above, silently dropping
+    // Credit Notes from the All-tab's Net Revenue. Offline's own tab computes
+    // Net Rev = Exc-GST Sales − Exc-GST Credit Notes (see offlineTotals) — mirror that here so the
+    // All-tab total reconciles with the Offline tab.
+    if (r.offlineTotals?.length) {
+      const offRevSales = r.offlineTotals.reduce((s, x) => s + (parseFloat(x.rev_sales) || 0), 0)
+      const offExcRevSales = r.offlineTotals.reduce((s, x) => s + (parseFloat(x.exc_rev_sales) || 0), 0)
+      const offOrders = r.offlineTotals.reduce((s, x) => s + (parseInt(x.orders) || 0), 0)
+      const offUnits = r.offlineTotals.reduce((s, x) => s + (parseInt(x.units) || 0), 0)
+      const offCnExcRev = Math.abs(r.offlineTotals.reduce((s, x) => s + (parseFloat(x.cn_exc_rev) || 0), 0))
+      chMap['offline_sales'] = { rev: offRevSales, excRev: offExcRevSales, netRev: offExcRevSales - offCnExcRev, orders: offOrders, qty: offUnits }
+    }
 
     const orderStatusMap = {}
     const orderStatusRevMap = {}
     r.byOrderStatus.forEach(x => { orderStatusMap[x.order_status || 'Unknown'] = parseInt(x.cnt) || 0; orderStatusRevMap[x.order_status || 'Unknown'] = parseFloat(x.rev) || 0 })
-
-    // Patch dailyArr _net using each channel's overall netRev/rev ratio from chMap
-    // This ensures QC channels (Blinkit/Zepto/Instamart) with missing exc_rev get correct net
-    dailyArr.forEach(entry => {
-      Object.keys(entry).forEach(k => {
-        if (k === 'date' || k.endsWith('_net') || k.endsWith('_o') || k.endsWith('_u')) return
-        const ch = k
-        const gross = entry[ch] || 0
-        if (gross > 0 && chMap[ch]) {
-          const ratio = chMap[ch].rev > 0 ? chMap[ch].netRev / chMap[ch].rev : 0
-          entry[ch + '_net'] = gross * ratio
-        }
-      })
-    })
 
     const bucketOrder = ['<₹500','₹500-1K','₹1K-2.5K','₹2.5K-5K','₹5K-10K','₹10K-25K','₹25K+']
     const buckets = Object.fromEntries(bucketOrder.map(k => [k, 0]))
@@ -570,6 +651,9 @@ export default async function handler(req, res) {
     r.byVoucher.forEach(x => { voucherMap[x.voucher_type] = { orders: parseInt(x.orders) || 0, rev: parseFloat(x.rev) || 0 } })
     const subChannelMap = {}
     r.bySubChannel.forEach(x => { if (x.SubChannel) subChannelMap[x.SubChannel] = { rev: parseFloat(x.rev) || 0, excRev: parseFloat(x.exc_rev) || 0, orders: parseInt(x.orders) || 0, qty: parseInt(x.qty) || 0 } })
+    const SUB_CHANNEL_ORDER = ['MyFrido', 'Mobility']
+    const allSubChannels = (r.allSubChannels || []).map(x => x.SubChannel).filter(Boolean)
+      .sort((a, b) => (SUB_CHANNEL_ORDER.indexOf(a) === -1 ? 99 : SUB_CHANNEL_ORDER.indexOf(a)) - (SUB_CHANNEL_ORDER.indexOf(b) === -1 ? 99 : SUB_CHANNEL_ORDER.indexOf(b)))
     const paymentModeMap = {}
     r.byPaymentMode.forEach(x => { paymentModeMap[x.payment_mode] = { orders: parseInt(x.orders) || 0, rev: parseFloat(x.rev) || 0 } })
 
@@ -581,6 +665,14 @@ export default async function handler(req, res) {
     const aspQtyRaw = parseFloat(t.asp_qty)
     const aspQty = (!isNaN(aspQtyRaw) && aspQtyRaw > 0) ? aspQtyRaw : totalQty
     const returnTrackableRev = parseFloat(t.return_trackable_rev) || 0
+    // AOV/ASP for the All tab only reflect Shopify, Amazon SC, Myntra, Flipkart, Firstcry, CRED —
+    // not blended across every channel (VC/quick-commerce/offline have no comparable order economics).
+    const aaT = r.aspAovTotals?.[0] || {}
+    const aspAovOrders = parseInt(aaT.orders) || 0
+    const aspAovRev = parseFloat(aaT.rev) || 0
+    const aspAovQty = parseFloat(aaT.asp_qty) || 0
+    const blendedAOVScoped = aspAovOrders ? aspAovRev / aspAovOrders : 0
+    const aspScoped = aspAovQty ? aspAovRev / aspAovQty : 0
     const nDays = parseInt(t.n_days) || 1
     const nCusts = parseInt(r.repeatRate[0]?.n_custs) || parseInt(t.n_custs) || 0
     const repeatCusts = parseInt(r.repeatRate[0]?.repeat_custs) || 0
@@ -609,8 +701,12 @@ export default async function handler(req, res) {
     const cirRev = parseFloat(r.byCIR?.[0]?.cir_rev) || 0
     const cirExcRev = parseFloat(r.byCIR?.[0]?.cir_exc_rev) || 0
     const rtoRevDirect = parseFloat(r.byRTO?.[0]?.rto_rev) || 0
-    // Deduct exc-GST amounts of bad orders from exc-GST gross → true net exc. GST
-    const netRevenueCalc = totalExcRev - rtoExcRev - returnExcRev - cirExcRev - cancellExcRev
+    // netRevenueCalc is finalized below (after chMap/fkBlock apply their per-channel overrides) as
+    // the SUM of each channel's own shared-measures Net Revenue — not one blended global retained-
+    // share applied to the whole business. Summing each channel's own % rates is more accurate
+    // (and is what keeps this reconcilable with every channel tab), since CIR/RTO/Return/Cancel
+    // rates genuinely differ by channel. Placeholder here; real value set after fkBlock below.
+    let netRevenueCalc = 0
 
     // Build flipkart block early so we can patch overall totals with estimated days
     const fkBlock = (() => {
@@ -672,19 +768,25 @@ export default async function handler(req, res) {
       chMap['Flipkart'].excRev += fkBlock.estTotalRev
       chMap['Flipkart'].orders += fkBlock.estTotalOrders
       chMap['Flipkart'].qty += fkBlock.estTotalUnits
-      // Override netRev with exact same formula as Flipkart tab
-      const fkNC = r.fkNetCalc?.[0] || {}
-      const fkGross = parseFloat(fkNC.gross) || 0
-      const fkExcRev = parseFloat(fkNC.exc_rev) || 0
-      const fkCancelRev = parseFloat(fkNC.cancel_rev) || 0
-      const fkReturnRev = parseFloat(fkNC.total_return_rev) || 0
-      if (fkGross > 0) {
-        const fkGstRatio = (fkGross - fkExcRev) / fkGross
-        // Real data net + estimated days net (estimated rev assumed no new returns, same GST ratio)
-        // Estimated rev is added to both rev and excRev in patchedTotals → effectively 0 GST on estimated days
-        chMap['Flipkart'].netRev = Math.max(fkGross - fkCancelRev - fkReturnRev, 0) * (1 - fkGstRatio) + fkBlock.estTotalRev
+      // Override netRev using the exact same aggregate the Flipkart tab itself computes from
+      // (fkBlock.patchedTotals — FBF+NON-FBF combined, real+estimated-days patched), NOT the
+      // separate fkNetCalc query, which runs on a different base (FulfilmentStatus-based Cancelled,
+      // combined Return+RTO via ABS()) and doesn't reconcile with the tab's own numbers.
+      const fkAgg = fkBlock.patchedTotals.reduce((a, t) => ({
+        rev: a.rev + t.rev, excRev: a.excRev + t.excRev,
+        cancelRev: a.cancelRev + (t.cancelRev || 0), returnRev: a.returnRev + (t.totalReturnRev || 0),
+      }), { rev: 0, excRev: 0, cancelRev: 0, returnRev: 0 })
+      const fkM = computeNetRevenueMeasures({ gross_inc_gst: fkAgg.rev, gross_exc_gst: fkAgg.excRev, cancel_rev: fkAgg.cancelRev, return_rev: fkAgg.returnRev, rto_rev: 0, cir_rev: 0 })
+      if (fkM.grossIncGst > 0) {
+        // patchedTotals already includes the estimated-days patch (rev/excRev), so no separate
+        // fkBlock.estTotalRev add-on is needed here — that would double-count it.
+        chMap['Flipkart'].netRev = fkM.netRevenueExcGst
       }
     }
+    // Now that every chMap[channel].netRev override (Shopify, Flipkart) has been applied, finalize
+    // netRevenueCalc as their sum — same number the "All" tab's Net Revenue KPI derives client-side
+    // from chMap (AllTab, App.jsx), so the two can never drift apart.
+    netRevenueCalc = Object.values(chMap).reduce((s, v) => s + (v.netRev || 0), 0)
     // Patch dailyArr for all-channels chart
     fkBlock.daily.filter(x => x.estimated).forEach(x => {
       const entry = dailyArr.find(d => d.date === x.date)
@@ -692,6 +794,23 @@ export default async function handler(req, res) {
       else dailyArr.push({ date: x.date, Flipkart: x.rev, Flipkart_o: x.orders, Flipkart_u: x.units })
     })
     dailyArr.sort((a, b) => a.date?.localeCompare(b.date))
+
+    // Patch dailyArr _net using each channel's overall netRev/rev ratio from chMap — runs after
+    // every chMap override (Shopify/Amazon/Flipkart/Offline) and the Flipkart estimated-days gross
+    // patch above, so daily chart values use the same final netRev the KPIs/tables show, not a
+    // stale pre-override ratio. Also gives QC channels (Blinkit/Zepto/Instamart), which have no
+    // per-day exc_rev, a correct net figure.
+    dailyArr.forEach(entry => {
+      Object.keys(entry).forEach(k => {
+        if (k === 'date' || k.endsWith('_net') || k.endsWith('_o') || k.endsWith('_u')) return
+        const ch = k
+        const gross = entry[ch] || 0
+        if (gross > 0 && chMap[ch]) {
+          const ratio = chMap[ch].rev > 0 ? chMap[ch].netRev / chMap[ch].rev : 0
+          entry[ch + '_net'] = gross * ratio
+        }
+      })
+    })
 
     // Builds the By Category / By Product breakdown feeding the Ads tab's Spend Detail tables.
     // platformFilter is null for "All", a single sales-Channel/ads-platform name (e.g. 'Amazon'),
@@ -728,13 +847,11 @@ export default async function handler(req, res) {
       let unmatchedProductSpend = 0
       adsCB.filter(x => !x.product_name).forEach(x => { unmatchedProductSpend += parseFloat(x.spend) || 0 })
 
-      const netRevOf = row => {
-        const gross = row.grossRevenue
-        const excRev = row.revenue
-        const gstRatio = gross > 0 ? Math.max(0, (gross - excRev) / gross) : 0
-        const afterDeductions = Math.max(gross - row.cancelRev - row.returnRev - row.cirRev, 0)
-        return afterDeductions * (1 - gstRatio)
-      }
+      // Shared measures layer — same formula as Shopify/EBO/All tab.
+      const netRevOf = row => computeNetRevenueMeasures({
+        gross_inc_gst: row.grossRevenue, gross_exc_gst: row.revenue,
+        cancel_rev: row.cancelRev, return_rev: row.returnRev, cir_rev: row.cirRev, rto_rev: 0,
+      }).netRevenueExcGst
 
       // Category-level
       const catMap = {}
@@ -751,7 +868,9 @@ export default async function handler(req, res) {
       const categoryRowsAll = Object.entries(catMap).map(([cat, v]) => ({
         category: cat, spend: adCatMapAll[cat] || 0, revenue: Math.round(v.revenue), netRevenue: Math.round(netRevOf(v)),
         orders: Math.round(v.orders), returns: Math.round(v.returnRev), cancellations: Math.round(v.cancelRev),
-        roas: adCatMapAll[cat] > 0 ? netRevOf(v) / adCatMapAll[cat] : 0,
+        // ROAS = Revenue (Ex GST) ÷ Spend — same definition as the Platform Overview table, not the
+        // returns/cancel/CIR-adjusted netRevenue.
+        roas: adCatMapAll[cat] > 0 ? v.revenue / adCatMapAll[cat] : 0,
       }))
       // Any ad-spend category with no matching sales category at all — fold its spend into
       // "Others" so the category table's total spend always reconciles to adCatMapAll's total.
@@ -814,7 +933,8 @@ export default async function handler(req, res) {
             category: v.category, subCategory: v.subCategory, spend,
             revenue: Math.round(v.revenue), netRevenue: Math.round(netRevOf(v)), orders: Math.round(v.orders),
             returns: Math.round(v.returnRev), cancellations: Math.round(v.cancelRev),
-            roas: spend > 0 ? netRevOf(v) / spend : 0,
+            // ROAS = Revenue (Ex GST) ÷ Spend — matches the Platform Overview definition.
+            roas: spend > 0 ? v.revenue / spend : 0,
           }
         }
         const v = subCatBySubOnly[subCat]
@@ -823,7 +943,7 @@ export default async function handler(req, res) {
             category: normCat(rows.find(x => (x.sub_category || '').trim() === subCat)?.category), subCategory: subCat, spend,
             revenue: Math.round(v.revenue), netRevenue: Math.round(netRevOf(v)), orders: Math.round(v.orders),
             returns: Math.round(v.returnRev), cancellations: Math.round(v.cancelRev),
-            roas: spend > 0 ? netRevOf(v) / spend : 0,
+            roas: spend > 0 ? v.revenue / spend : 0,
           }
         }
         // No sales sub-category matches this ad product_name at all — fold into Others
@@ -887,40 +1007,35 @@ export default async function handler(req, res) {
       prevQty: parseInt(r.prevTotals?.[0]?.total_qty) || 0,
       prevRtoOrders: parseInt(r.prevTotals?.[0]?.rto_orders) || 0,
       prevCirOrders: parseInt(r.prevTotals?.[0]?.cir_orders) || 0,
+      prevScopedAOV: (() => { const o = parseInt(r.prevAspAovTotals?.[0]?.orders) || 0; const rv = parseFloat(r.prevAspAovTotals?.[0]?.rev) || 0; return o ? rv / o : 0 })(),
+      prevScopedASP: (() => { const q = parseFloat(r.prevAspAovTotals?.[0]?.asp_qty) || 0; const rv = parseFloat(r.prevAspAovTotals?.[0]?.rev) || 0; return q ? rv / q : 0 })(),
       prevDailyArr: (r.prevByDate || []).map(x => ({ date: x.date, rev: parseFloat(x.rev) || 0 })),
+      // Shared measures layer — same formula as chMap above, applied to the previous period, so
+      // the WoW/MoM channel-share comparison is apples-to-apples with the current period's chMap.
       prevChMap: (() => {
         const m = {}
         ;(r.prevByChannel || []).forEach(x => {
-          const gross = parseFloat(x.rev) || 0
-          const excRev = parseFloat(x.exc_rev) || 0
-          const grossAfterReturns = gross - (parseFloat(x.cancel_rev)||0) - (parseFloat(x.rto_rev)||0) - (parseFloat(x.return_rev)||0) - (parseFloat(x.cir_rev)||0)
-          const gstRatio = gross > 0 ? (gross - excRev) / gross : 0
-          const netRev = grossAfterReturns * (1 - gstRatio)
-          if (x.Channel === 'Retail') {
-            if (!m['EBO']) m['EBO'] = { rev: 0, excRev: 0, netRev: 0 }
-            m['EBO'].rev += gross; m['EBO'].excRev += excRev; m['EBO'].netRev += netRev
-          } else {
-            const key = x.Channel
-            if (!m[key]) m[key] = { rev: 0, excRev: 0, netRev: 0 }
-            m[key].rev += gross; m[key].excRev += excRev; m[key].netRev += netRev
-          }
+          const cm = computeNetRevenueMeasures({
+            gross_inc_gst: x.rev, gross_exc_gst: x.exc_rev,
+            cir_rev: x.cir_rev, rto_rev: x.rto_rev, return_rev: x.return_rev, cancel_rev: x.cancel_rev,
+          })
+          const key = x.Channel === 'Retail' ? 'EBO' : x.Channel
+          if (!m[key]) m[key] = { rev: 0, excRev: 0, netRev: 0 }
+          m[key].rev += cm.grossIncGst; m[key].excRev += cm.grossExcGst; m[key].netRev += cm.netRevenueExcGst
         })
-        const prevShCalc = r.prevShNetCalc?.[0] || {}
-        const prevShGross = parseFloat(prevShCalc.gross) || 0
-        const prevShExcRev = parseFloat(prevShCalc.exc_rev) || 0
+        const prevShM = computeNetRevenueMeasures(r.prevShNetCalc?.[0] || {})
         const prevIntlExcRev = parseFloat(r.prevShopifyIntlTotals?.[0]?.intl_exc_rev) || 0
         const prevIntlRev = parseFloat(r.prevShopifyIntlTotals?.[0]?.intl_rev) || 0
-        if (prevShGross > 0) {
-          const prevShGAR = prevShGross - (parseFloat(prevShCalc.cancel_rev)||0) - (parseFloat(prevShCalc.rto_rev)||0) - (parseFloat(prevShCalc.return_rev)||0) - (parseFloat(prevShCalc.cir_rev)||0)
-          const prevShGstRatio = (prevShGross - prevShExcRev) / prevShGross
-          const prevShNetRev = prevShGAR * (1 - prevShGstRatio)
-          if (m['Shopify']) { m['Shopify'].rev = prevShGross + prevIntlRev; m['Shopify'].excRev = prevShExcRev + prevIntlExcRev; m['Shopify'].netRev = prevShNetRev + prevIntlExcRev }
-          else m['Shopify'] = { rev: prevShGross + prevIntlRev, excRev: prevShExcRev + prevIntlExcRev, netRev: prevShNetRev + prevIntlExcRev }
+        if (prevShM.grossIncGst > 0) {
+          if (m['Shopify']) { m['Shopify'].rev = prevShM.grossIncGst + prevIntlRev; m['Shopify'].excRev = prevShM.grossExcGst + prevIntlExcRev; m['Shopify'].netRev = prevShM.netRevenueExcGst + prevIntlExcRev }
+          else m['Shopify'] = { rev: prevShM.grossIncGst + prevIntlRev, excRev: prevShM.grossExcGst + prevIntlExcRev, netRev: prevShM.netRevenueExcGst + prevIntlExcRev }
         }
         return m
       })(),
       totalRev: adjTotalRev, totalExcRev: adjTotalExcRev, totalQty: adjTotalQty, aspQty: adjAspQty, nOrders: adjNOrders, nDays,
       blendedAOV: adjNOrders ? adjTotalRev / adjNOrders : 0,
+      // Scoped AOV/ASP for the All tab — Shopify, Amazon SC, Myntra, Flipkart, Firstcry, CRED only.
+      scopedAOV: blendedAOVScoped, scopedASP: aspScoped,
       gstCollected: adjTotalRev - adjTotalExcRev,
       rtoRev, returnRev, cancellRev, cirRev, rtoRevDirect, netRevenueCalc, returnTrackableRev,
       cirOrders: parseInt(r.byCIR?.[0]?.cir_orders) || 0,
@@ -931,26 +1046,29 @@ export default async function handler(req, res) {
       nCusts, repeatCusts,
       uniqueDates: dateSet,
       dailyArr, chMap, catMap, subCatMap, catPrevMap, subCatPrevMap, stateMap, statePrevMap, stateTotal, cityRows, cityPrevMap, cityTotal, regionRows, tierRows, catChannelMap, subCatChannelMap, orderStatusMap, orderStatusRevMap,
-      buckets, bucketRev, voucherMap, subChannelMap, paymentModeMap, tatOrders: [],
+      buckets, bucketRev, voucherMap, subChannelMap, allSubChannels, paymentModeMap, tatOrders: [],
       htCount, htRev: htRevAgg, multiItemOrders,
       financialStatusMap, fulfilmentStatusMap, refundTrend, dailyReturnTrend,
       voucherList: (r.byVoucherRaw || []).map(x => ({ code: x.voucher_code, orders: parseInt(x.orders) || 0 })),
       orders, skuRows, rows: [],
       masterSkuList: (r.masterSkuList || []).map(x => x.sku).filter(Boolean),
       shopify: {
+        // Shared measures layer (computeNetRevenueMeasures in _bq.js) — see formula note there.
+        // exchRev/exchOrders are Shopify-tab-specific extras, not part of the shared measure set.
         netCalc: (() => {
           const sc = r.shNetCalc?.[0] || {}
-          const gross = parseFloat(sc.gross) || 0
-          const excRev = parseFloat(sc.exc_rev) || 0
-          const cancelRev = parseFloat(sc.cancel_rev) || 0
-          const rtoRev = parseFloat(sc.rto_rev) || 0
-          const returnRev = parseFloat(sc.return_rev) || 0
-          const cirRev = parseFloat(sc.cir_rev) || 0
-          const exchRev = parseFloat(sc.exch_rev) || 0
-          const exchOrders = parseInt(sc.exch_orders) || 0
-          const gar = gross - cancelRev - rtoRev - returnRev - cirRev
-          const gstRatio = gross > 0 ? (gross - excRev) / gross : 0
-          return { gross, excRev, cancelRev, rtoRev, returnRev, cirRev, exchRev, exchOrders, netRev: gar * (1 - gstRatio) }
+          const m = computeNetRevenueMeasures(sc)
+          return {
+            gross: m.grossIncGst, excRev: m.grossExcGst,
+            cancelRev: m.cancelRev, rtoRev: m.rtoRev, returnRev: m.returnRev, cirRev: m.cirRev,
+            exchRev: parseFloat(sc.exch_rev) || 0, exchOrders: parseInt(sc.exch_orders) || 0,
+            cirPct: m.cirPct, rtoPct: m.rtoPct, returnPct: m.returnPct, cancelPct: m.cancelPct, totalReturnPct: m.totalReturnPct,
+            gstCompleted: m.gstAmount, netRevIncGst: m.netRevenueIncGst, netRev: m.netRevenueExcGst,
+          }
+        })(),
+        prevNetCalc: (() => {
+          const m = computeNetRevenueMeasures(r.prevShNetCalc?.[0] || {})
+          return { gross: m.grossIncGst, netRevIncGst: m.netRevenueIncGst, gstCompleted: m.gstAmount, netRev: m.netRevenueExcGst }
         })(),
         totals: r.shTotals?.[0] ? { rev: parseFloat(r.shTotals[0].rev)||0, excRev: parseFloat(r.shTotals[0].exc_rev)||0, orders: parseInt(r.shTotals[0].orders)||0, qty: parseInt(r.shTotals[0].qty)||0, aspQty: parseInt(r.shTotals[0].asp_qty)||parseInt(r.shTotals[0].qty)||0 } : {},
         daily: (r.shDaily || []).map(x => ({ date: x.date, rev: parseFloat(x.rev)||0, excRev: parseFloat(x.exc_rev)||0, orders: parseInt(x.orders)||0, units: parseInt(x.units)||0 })),
@@ -969,9 +1087,13 @@ export default async function handler(req, res) {
         subCatPrevMap: Object.fromEntries((r.shSubCategoryPrev || []).map(x => [`${x.Category||'Others'}::${x.SubCategory||'Others'}`, parseFloat(x.rev)||0])),
         skuMap: (() => { const m = {}; (r.shSKU || []).forEach(x => { const cat = x.Category||'Others', sc = x.SubCategory||'Others', sku = x.sku; if (!m[cat]) m[cat] = {}; if (!m[cat][sc]) m[cat][sc] = {}; m[cat][sc][sku] = { rev: parseFloat(x.rev)||0, excRev: parseFloat(x.exc_rev)||0, orders: parseInt(x.orders)||0, units: parseInt(x.units)||0, cancelled: parseInt(x.cancelled)||0, rto: parseInt(x.rto)||0, cir: parseInt(x.cir)||0, exch: parseInt(x.exch)||0, cancelRev: parseFloat(x.cancel_rev)||0, rtoRev: parseFloat(x.rto_rev)||0, cirRev: parseFloat(x.cir_rev)||0, exchRev: parseFloat(x.exch_rev)||0 } }); return m })(),
         skuPrevMap: (() => { const m = {}; (r.shSKUPrev || []).forEach(x => { const cat = x.Category||'Others', sc = x.SubCategory||'Others', sku = x.sku; if (!m[cat]) m[cat] = {}; if (!m[cat][sc]) m[cat][sc] = {}; m[cat][sc][sku] = parseFloat(x.rev)||0 }); return m })(),
-        stateMap: Object.fromEntries((r.shState || []).filter(x => x.state).map(x => [x.state, { rev: parseFloat(x.rev)||0, orders: parseInt(x.orders)||0, units: parseInt(x.units)||0, cities: { size: parseInt(x.cities)||0 }, rtoOrders: parseInt(x.rto_orders)||0 }])),
+        // Rows for SnD (Shipping & Distribution) cost — see shOrderLineWeights in the queries
+        // dict. Each row is one (SKU, order_weight) pair with the summed weight_share the
+        // client multiplies by that order_weight's slab rate (from public/snd-rates.json).
+        skuWeightShares: (r.shOrderLineWeights || []).map(x => ({ category: x.Category||'Others', subCategory: x.SubCategory||'Others', sku: x.sku, orderWeight: parseFloat(x.order_weight)||0, weightShare: parseFloat(x.weight_share)||0 })),
+        stateMap: Object.fromEntries((r.shState || []).filter(x => x.state).map(x => [x.state, { rev: parseFloat(x.rev)||0, orders: parseInt(x.orders)||0, units: parseInt(x.units)||0, cities: { size: parseInt(x.cities)||0 }, rtoOrders: parseInt(x.rto_orders)||0, returnRev: parseFloat(x.return_rev)||0 }])),
         statePrevMap: Object.fromEntries((r.shStatePrev || []).filter(x => x.state).map(x => [x.state, { rev: parseFloat(x.rev)||0, orders: parseInt(x.orders)||0 }])),
-        cityRows: (r.shCity || []).map(x => ({ city: x.city, state: x.state || '', region: x.region || '', orders: parseInt(x.orders)||0, rev: parseFloat(x.rev)||0, rtoOrders: parseInt(x.rto_orders)||0 })).filter(x => x.city),
+        cityRows: (r.shCity || []).map(x => ({ city: x.city, state: x.state || '', region: x.region || '', orders: parseInt(x.orders)||0, rev: parseFloat(x.rev)||0, rtoOrders: parseInt(x.rto_orders)||0, returnRev: parseFloat(x.return_rev)||0 })).filter(x => x.city),
         cityPrevMap: Object.fromEntries((r.shCityPrev || []).filter(x => x.city).map(x => [`${x.city}|${x.state||''}`, { rev: parseFloat(x.rev)||0, orders: parseInt(x.orders)||0 }])),
         cityTotal: r.shCityTotal?.[0] ? { rev: parseFloat(r.shCityTotal[0].total_rev)||0, orders: parseInt(r.shCityTotal[0].total_orders)||0 } : { rev: 0, orders: 0 },
         stateTotal: r.shStateTotal?.[0] ? { rev: parseFloat(r.shStateTotal[0].total_rev)||0, orders: parseInt(r.shStateTotal[0].total_orders)||0 } : { rev: 0, orders: 0 },
@@ -982,21 +1104,22 @@ export default async function handler(req, res) {
         returnReasons: (r.shReturnReasons || []).map(x => ({ reason: x.reason, subReason: x.sub_reason, category: x.category, subCategory: x.sub_category, orders: parseInt(x.orders)||0, rev: parseFloat(x.rev)||0 })),
       },
       ebo: (() => {
+        // Shared measures layer — same formula as Shopify/All tab.
         const nc = r.eboNetCalc?.[0] || {}
-        const gross = parseFloat(nc.gross) || 0
-        const excRev = parseFloat(nc.exc_rev) || 0
-        const cancelRev = parseFloat(nc.cancel_rev) || 0
-        const rtoRev = parseFloat(nc.rto_rev) || 0
-        const returnRev = parseFloat(nc.return_rev) || 0
-        const cirRev = parseFloat(nc.cir_rev) || 0
+        const m = computeNetRevenueMeasures({
+          gross_inc_gst: nc.gross, gross_exc_gst: nc.exc_rev,
+          cir_rev: nc.cir_rev, rto_rev: nc.rto_rev, return_rev: nc.return_rev, cancel_rev: nc.cancel_rev,
+        })
         const exchRev = parseFloat(nc.exch_rev) || 0
         const exchOrders = parseInt(nc.exch_orders) || 0
-        const gar = gross - cancelRev - rtoRev - returnRev - cirRev
-        const gstRatio = gross > 0 ? (gross - excRev) / gross : 0
-        const garExcRev = gar * (1 - gstRatio)
-        const netCalc = { gross, excRev, cancelRev, rtoRev, returnRev, cirRev, exchRev, exchOrders, netRev: garExcRev, gstCollected: gar - garExcRev }
-        const pnc = r.prevEboNetCalc?.[0] || {}
-        const prevNetCalc = { gross: parseFloat(pnc.gross)||0, excRev: parseFloat(pnc.exc_rev)||0, cancelRev: parseFloat(pnc.cancel_rev)||0, rtoRev: parseFloat(pnc.rto_rev)||0, returnRev: parseFloat(pnc.return_rev)||0, cirRev: parseFloat(pnc.cir_rev)||0 }
+        const netCalc = {
+          gross: m.grossIncGst, excRev: m.grossExcGst,
+          cancelRev: m.cancelRev, rtoRev: m.rtoRev, returnRev: m.returnRev, cirRev: m.cirRev,
+          cirPct: m.cirPct, rtoPct: m.rtoPct, returnPct: m.returnPct, cancelPct: m.cancelPct, totalReturnPct: m.totalReturnPct,
+          exchRev, exchOrders, netRev: m.netRevenueExcGst, gstCollected: m.gstAmount,
+        }
+        const pncM = computeNetRevenueMeasures(r.prevEboNetCalc?.[0] || {})
+        const prevNetCalc = { gross: pncM.grossIncGst, excRev: pncM.grossExcGst, cancelRev: pncM.cancelRev, rtoRev: pncM.rtoRev, returnRev: pncM.returnRev, cirRev: pncM.cirRev, netRev: pncM.netRevenueExcGst }
         return {
           netCalc,
           prevNetCalc,
@@ -1015,10 +1138,10 @@ export default async function handler(req, res) {
           subCatMap: Object.fromEntries((r.eboSubCategory || []).map(x => [`${x.Category||'Others'}::${x.SubCategory||'Others'}`, { rev: parseFloat(x.rev)||0, excRev: parseFloat(x.exc_rev)||0, orders: { size: parseInt(x.orders)||0 }, units: parseInt(x.units)||0, aspUnits: parseInt(x.asp_units)||parseInt(x.units)||0, cancelled: parseInt(x.cancelled)||0, rto: parseInt(x.rto)||0, cir: parseInt(x.cir)||0, exch: parseInt(x.exch)||0, cancelRev: parseFloat(x.cancel_rev)||0, rtoRev: parseFloat(x.rto_rev)||0, cirRev: parseFloat(x.cir_rev)||0, exchRev: parseFloat(x.exch_rev)||0 }])),
           subCatPrevMap: Object.fromEntries((r.eboSubCategoryPrev || []).map(x => [`${x.Category||'Others'}::${x.SubCategory||'Others'}`, parseFloat(x.rev)||0])),
           skuMap: (() => { const m = {}; (r.eboSKU || []).forEach(x => { const cat = x.Category||'Others', sc = x.SubCategory||'Others', sku = x.sku; if (!m[cat]) m[cat] = {}; if (!m[cat][sc]) m[cat][sc] = {}; m[cat][sc][sku] = { rev: parseFloat(x.rev)||0, excRev: parseFloat(x.exc_rev)||0, orders: parseInt(x.orders)||0, units: parseInt(x.units)||0, cancelled: parseInt(x.cancelled)||0, rto: parseInt(x.rto)||0, cir: parseInt(x.cir)||0, exch: parseInt(x.exch)||0, cancelRev: parseFloat(x.cancel_rev)||0, rtoRev: parseFloat(x.rto_rev)||0, cirRev: parseFloat(x.cir_rev)||0, exchRev: parseFloat(x.exch_rev)||0 } }); return m })(),
-          stateMap: Object.fromEntries((r.eboState || []).filter(x => x.state).map(x => [x.state, { rev: parseFloat(x.rev)||0, orders: parseInt(x.orders)||0, units: parseInt(x.units)||0, cities: { size: parseInt(x.cities)||0 }, rtoOrders: parseInt(x.rto_orders)||0 }])),
+          stateMap: Object.fromEntries((r.eboState || []).filter(x => x.state).map(x => [x.state, { rev: parseFloat(x.rev)||0, orders: parseInt(x.orders)||0, units: parseInt(x.units)||0, cities: { size: parseInt(x.cities)||0 }, rtoOrders: parseInt(x.rto_orders)||0, returnRev: parseFloat(x.return_rev)||0 }])),
           statePrevMap: Object.fromEntries((r.eboStatePrev || []).filter(x => x.state).map(x => [x.state, { rev: parseFloat(x.rev)||0, orders: parseInt(x.orders)||0 }])),
           stateTotal: r.eboStateTotal?.[0] ? { rev: parseFloat(r.eboStateTotal[0].total_rev)||0, orders: parseInt(r.eboStateTotal[0].total_orders)||0 } : { rev: 0, orders: 0 },
-          cityRows: (r.eboCity || []).map(x => ({ city: x.city, state: x.state || '', region: x.region || '', orders: parseInt(x.orders)||0, rev: parseFloat(x.rev)||0, rtoOrders: parseInt(x.rto_orders)||0 })).filter(x => x.city),
+          cityRows: (r.eboCity || []).map(x => ({ city: x.city, state: x.state || '', region: x.region || '', orders: parseInt(x.orders)||0, rev: parseFloat(x.rev)||0, rtoOrders: parseInt(x.rto_orders)||0, returnRev: parseFloat(x.return_rev)||0 })).filter(x => x.city),
           cityPrevMap: Object.fromEntries((r.eboCityPrev || []).filter(x => x.city).map(x => [`${x.city}|${x.state||''}`, { rev: parseFloat(x.rev)||0, orders: parseInt(x.orders)||0 }])),
           cityTotal: r.eboCityTotal?.[0] ? { rev: parseFloat(r.eboCityTotal[0].total_rev)||0, orders: parseInt(r.eboCityTotal[0].total_orders)||0 } : { rev: 0, orders: 0 },
           regionRows: (r.eboRegion || []).map(x => ({ region: x.region, orders: parseInt(x.orders)||0, rev: parseFloat(x.rev)||0, units: parseInt(x.units)||0 })),
@@ -1034,7 +1157,11 @@ export default async function handler(req, res) {
       amzSC: {
         totalOrders: parseInt(r.amzSCTotals?.[0]?.orders) || 0,
         totalUnits: parseInt(r.amzSCTotals?.[0]?.units) || 0,
-        netCalc: (() => { const row = r.amzSCNetCalc?.[0] || {}; const gross = parseFloat(row.gross_rev)||0; const grossExc = parseFloat(row.gross_exc_rev)||0; const returnRev = parseFloat(row.return_rev)||0; const cancelRev = parseFloat(row.cancel_rev)||0; const gstRatio = gross > 0 ? (gross - grossExc) / gross : 0; const afterReturns = Math.max(gross - cancelRev - returnRev, 0); const netRev = afterReturns * (1 - gstRatio); return { gross, cancelRev, returnRev, afterReturns, netRev, gstRatio } })(),
+        // Shared measures layer — same formula as Shopify/EBO/All tab.
+        netCalc: (() => {
+          const m = computeNetRevenueMeasures(r.amzSCNetCalc?.[0] || {})
+          return { gross: m.grossIncGst, cancelRev: m.cancelRev, returnRev: m.returnRev, afterReturns: m.netRevenueIncGst, netRev: m.netRevenueExcGst, gstRatio: m.grossIncGst > 0 ? (m.grossIncGst - m.grossExcGst) / m.grossIncGst : 0 }
+        })(),
         prevRev: parseFloat(r.prevAmzSC?.[0]?.rev) || 0,
         prevExcRev: parseFloat(r.prevAmzSC?.[0]?.exc_rev) || 0,
         prevOrders: parseInt(r.prevAmzSC?.[0]?.orders) || 0,
@@ -1046,7 +1173,7 @@ export default async function handler(req, res) {
         fulfillment: (r.amzSCFulfillment || []).map(x => ({ type: x.fulfillment_channel === 'Amazon' ? 'FBA' : 'MFN', orders: parseInt(x.orders)||0, rev: parseFloat(x.rev)||0, excRev: parseFloat(x.exc_rev)||0, units: parseInt(x.units)||0 })),
         status: (r.amzSCStatus || []).map(x => ({ status: x.order_status, orders: parseInt(x.orders)||0 })),
         orderStatusDebug: (r.amzSCOrderStatusDebug || []).map(x => ({ status: x.Order_Status, orders: parseInt(x.orders)||0, rev: parseFloat(x.rev)||0 })),
-        states: (r.amzSCStates || []).map(x => ({ state: x.ship_state, orders: parseInt(x.orders)||0, rev: parseFloat(x.rev)||0, rtoOrders: parseInt(x.rto_orders)||0 })),
+        states: (r.amzSCStates || []).map(x => ({ state: x.ship_state, orders: parseInt(x.orders)||0, rev: parseFloat(x.rev)||0, rtoOrders: parseInt(x.rto_orders)||0, returnRev: parseFloat(x.return_rev)||0 })),
         statePrevMap: Object.fromEntries((r.amzSCStatesPrev||[]).map(x => [x.ship_state, parseFloat(x.rev)||0])),
         cityPrevMap: Object.fromEntries((r.amzSCCitiesPrev||[]).map(x => [x.city, parseFloat(x.rev)||0])),
         stateTotal: parseFloat(r.amzSCStateTotal?.[0]?.total_rev) || 0,
@@ -1063,7 +1190,7 @@ export default async function handler(req, res) {
         regionRows: (r.amzSCRegion || []).map(x => ({ region: x.region, orders: parseInt(x.orders)||0, rev: parseFloat(x.rev)||0, units: parseInt(x.units)||0 })),
         tierRows: (r.amzSCTier || []).map(x => ({ tier: parseInt(x.city_tier)||x.city_tier, label: x.tier_label, orders: parseInt(x.orders)||0, rev: parseFloat(x.rev)||0, units: parseInt(x.units)||0 })),
         topStates: (r.amzSCStates || []).slice(0, 6).map(x => ({ name: x.ship_state, orders: parseInt(x.orders)||0, rev: parseFloat(x.rev)||0, units: 0 })),
-        cities: (r.amzSCCities || []).map(x => ({ city: x.city, orders: parseInt(x.orders)||0, rev: parseFloat(x.rev)||0, rtoOrders: parseInt(x.rto_orders)||0 })),
+        cities: (r.amzSCCities || []).map(x => ({ city: x.city, orders: parseInt(x.orders)||0, rev: parseFloat(x.rev)||0, rtoOrders: parseInt(x.rto_orders)||0, returnRev: parseFloat(x.return_rev)||0 })),
         catChannel: (() => {
           const map = {}
           ;(r.amzSCCatChannel || []).forEach(x => {
@@ -1210,11 +1337,12 @@ export default async function handler(req, res) {
         prevDeliveredRev: parseFloat(r.prevFk?.[0]?.delivered_rev) || 0,
         prevDaily: (r.prevFkDaily || []).map(x => ({ date: x.date, rev: parseFloat(x.rev) || 0 })),
         totals: fkBlock.patchedTotals,
+        // Shared measures layer — Flipkart combines Return+RTO as one figure (no separate RTO
+        // status, per fkNetCalc's note), so it's passed as return_rev with rto_rev: 0.
         netCalc: (() => {
           const all = fkBlock.patchedTotals.reduce((a, t) => ({ rev: a.rev + t.rev, excRev: a.excRev + t.excRev, cancelRev: a.cancelRev + (t.cancelRev||0), returnRev: a.returnRev + (t.totalReturnRev||0) }), { rev: 0, excRev: 0, cancelRev: 0, returnRev: 0 })
-          const gstRatio = all.rev > 0 ? (all.rev - all.excRev) / all.rev : 0
-          const afterDeductions = Math.max(all.rev - all.cancelRev - all.returnRev, 0)
-          return { gross: all.rev, cancelRev: all.cancelRev, returnRev: all.returnRev, netRev: afterDeductions * (1 - gstRatio), gstRatio }
+          const m = computeNetRevenueMeasures({ gross_inc_gst: all.rev, gross_exc_gst: all.excRev, cancel_rev: all.cancelRev, return_rev: all.returnRev, rto_rev: 0, cir_rev: 0 })
+          return { gross: m.grossIncGst, cancelRev: m.cancelRev, returnRev: m.returnRev, netRev: m.netRevenueExcGst, gstRatio: m.grossIncGst > 0 ? (m.grossIncGst - m.grossExcGst) / m.grossIncGst : 0 }
         })(),
         estTotalRev: fkBlock.estTotalRev, estTotalOrders: fkBlock.estTotalOrders, estTotalUnits: fkBlock.estTotalUnits,
         daily: fkBlock.daily,
@@ -1263,6 +1391,12 @@ export default async function handler(req, res) {
         })(),
       },
       cred: {
+        // Shared measures layer — same formula as Shopify/EBO/Amazon SC/All tab.
+        netCalc: (() => {
+          const m = computeNetRevenueMeasures(r.crNetCalc?.[0] || {})
+          return { gross: m.grossIncGst, excRev: m.grossExcGst, cancelRev: m.cancelRev, returnRev: m.returnRev, cirRev: m.cirRev, rtoRev: m.rtoRev, netRev: m.netRevenueExcGst, gstCollected: m.gstAmount }
+        })(),
+        prevNetCalc: (() => { const m = computeNetRevenueMeasures(r.prevCrNetCalc?.[0] || {}); return { netRev: m.netRevenueExcGst, gstCollected: m.gstAmount } })(),
         prevRev: parseFloat(r.prevCr?.[0]?.rev) || 0,
         prevExcRev: parseFloat(r.prevCr?.[0]?.exc_rev) || 0,
         prevOrders: parseInt(r.prevCr?.[0]?.orders) || 0,
@@ -1278,17 +1412,23 @@ export default async function handler(req, res) {
         catPrevMap: Object.fromEntries((r.crCatPrev || []).map(x => [x.category, parseFloat(x.rev)||0])),
         subCatPrevMap: (r.crSubCatPrev || []).reduce((m,x) => { m[`${x.category}::${x.subcategory}`] = parseFloat(x.rev)||0; return m }, {}),
         skuMatrix: (() => { const m = {}; (r.crSKUMatrix||[]).forEach(x => { const cat=x.category||'Others', sc=x.subcategory||'Others', sku=x.sku; if(!m[cat])m[cat]={}; if(!m[cat][sc])m[cat][sc]={}; m[cat][sc][sku]={rev:parseFloat(x.rev)||0,excRev:parseFloat(x.exc_rev)||0,units:parseInt(x.units)||0,orders:parseInt(x.orders)||0} }); return m })(),
-        states: (r.crStates || []).map(x => ({ state: x.state, orders: parseInt(x.orders)||0, rev: parseFloat(x.rev)||0 })),
+        states: (r.crStates || []).map(x => ({ state: x.state, orders: parseInt(x.orders)||0, rev: parseFloat(x.rev)||0, returnRev: parseFloat(x.return_rev)||0 })),
         statePrevMap: Object.fromEntries((r.crStatesPrev || []).map(x => [x.state, parseFloat(x.rev)||0])),
         stateTotal: parseFloat(r.crStateTotal?.[0]?.total_rev) || 0,
         cityTotal: parseFloat(r.crCityTotal?.[0]?.total_rev) || 0,
         status: (r.crStatus || []).map(x => ({ status: x.status, orders: parseInt(x.orders)||0, rev: parseFloat(x.rev)||0 })),
-        cities: (r.crCities || []).map(x => ({ city: x.city, orders: parseInt(x.orders)||0, rev: parseFloat(x.rev)||0 })),
+        cities: (r.crCities || []).map(x => ({ city: x.city, orders: parseInt(x.orders)||0, rev: parseFloat(x.rev)||0, returnRev: parseFloat(x.return_rev)||0 })),
         cityPrevMap: Object.fromEntries((r.crCitiesPrev || []).map(x => [x.city, parseFloat(x.rev)||0])),
         regionRows: (r.crRegion || []).map(x => ({ name: x.region, region: x.region, orders: parseInt(x.orders)||0, rev: parseFloat(x.rev)||0, units: parseInt(x.units)||0 })),
         tierRows: (r.crTier || []).map(x => ({ name: `Tier ${x.city_tier}`, tier: parseInt(x.city_tier)||x.city_tier, label: x.tier_label, orders: parseInt(x.orders)||0, rev: parseFloat(x.rev)||0, units: parseInt(x.units)||0 })),
       },
       firstcry: {
+        // Shared measures layer — same formula as Shopify/EBO/Amazon SC/All tab.
+        netCalc: (() => {
+          const m = computeNetRevenueMeasures(r.fcNetCalc?.[0] || {})
+          return { gross: m.grossIncGst, excRev: m.grossExcGst, cancelRev: m.cancelRev, returnRev: m.returnRev, cirRev: m.cirRev, rtoRev: m.rtoRev, netRev: m.netRevenueExcGst, gstCollected: m.gstAmount }
+        })(),
+        prevNetCalc: (() => { const m = computeNetRevenueMeasures(r.prevFcNetCalc?.[0] || {}); return { netRev: m.netRevenueExcGst, gstCollected: m.gstAmount } })(),
         prevRev: parseFloat(r.prevFc?.[0]?.rev) || 0,
         prevExcRev: parseFloat(r.prevFc?.[0]?.exc_rev) || 0,
         prevOrders: parseInt(r.prevFc?.[0]?.orders) || 0,
@@ -1302,9 +1442,15 @@ export default async function handler(req, res) {
         categories: (r.fcCategories || []).map(x => ({ category: x.category, orders: parseInt(x.orders)||0, units: parseInt(x.units)||0, rev: parseFloat(x.rev)||0, excRev: parseFloat(x.exc_rev)||0 })),
         subCategories: (r.fcSubCategories || []).map(x => ({ category: x.category, subcategory: x.subcategory, orders: parseInt(x.orders)||0, units: parseInt(x.units)||0, rev: parseFloat(x.rev)||0, excRev: parseFloat(x.exc_rev)||0 })),
         skuMatrix: (() => { const m = {}; (r.fcSKUMatrix||[]).forEach(x => { const cat=x.category||'Others', sc=x.subcategory||'Others', sku=x.sku; if(!m[cat])m[cat]={}; if(!m[cat][sc])m[cat][sc]={}; m[cat][sc][sku]={rev:parseFloat(x.rev)||0,excRev:parseFloat(x.exc_rev)||0,units:parseInt(x.units)||0,orders:parseInt(x.orders)||0} }); return m })(),
-        states: (r.fcStates || []).map(x => ({ state: x.state, orders: parseInt(x.orders)||0, rev: parseFloat(x.rev)||0 })),
+        states: (r.fcStates || []).map(x => ({ state: x.state, orders: parseInt(x.orders)||0, rev: parseFloat(x.rev)||0, returnRev: parseFloat(x.return_rev)||0 })),
+        statePrevMap: Object.fromEntries((r.fcStatesPrev || []).map(x => [x.state, parseFloat(x.rev)||0])),
+        stateTotal: parseFloat(r.fcStateTotal?.[0]?.total_rev) || 0,
+        cityTotal: parseFloat(r.fcCityTotal?.[0]?.total_rev) || 0,
+        catPrevMap: Object.fromEntries((r.fcCatPrev || []).map(x => [x.category, parseFloat(x.rev)||0])),
+        subCatPrevMap: (r.fcSubCatPrev || []).reduce((m,x) => { m[`${x.category}::${x.subcategory}`] = parseFloat(x.rev)||0; return m }, {}),
         status: (r.fcStatus || []).map(x => ({ status: x.status, orders: parseInt(x.orders)||0, rev: parseFloat(x.rev)||0 })),
-        cities: (r.fcCities || []).map(x => ({ city: x.city, orders: parseInt(x.orders)||0, rev: parseFloat(x.rev)||0 })),
+        cities: (r.fcCities || []).map(x => ({ city: x.city, orders: parseInt(x.orders)||0, rev: parseFloat(x.rev)||0, returnRev: parseFloat(x.return_rev)||0 })),
+        cityPrevMap: Object.fromEntries((r.fcCitiesPrev || []).map(x => [x.city, parseFloat(x.rev)||0])),
         regionRows: (r.fcRegion || []).map(x => ({ name: x.region, region: x.region, orders: parseInt(x.orders)||0, rev: parseFloat(x.rev)||0, units: parseInt(x.units)||0 })),
         tierRows: (r.fcTier || []).map(x => ({ name: `Tier ${x.city_tier}`, tier: parseInt(x.city_tier)||x.city_tier, label: x.tier_label, orders: parseInt(x.orders)||0, rev: parseFloat(x.rev)||0, units: parseInt(x.units)||0 })),
       },
@@ -1357,6 +1503,13 @@ export default async function handler(req, res) {
         skuPrevMap: (() => { const m = {}; (r.inSKUPrev||[]).forEach(x => { if(!m[x.category])m[x.category]={}; if(!m[x.category][x.subcategory])m[x.category][x.subcategory]={}; m[x.category][x.subcategory][x.sku]=(m[x.category][x.subcategory][x.sku]||0)+(parseFloat(x.rev)||0) }); return m })(),
       },
       myntra: {
+        // Shared measures layer — same formula as Shopify/EBO/Amazon SC/All tab. Overrides the
+        // old "excRev shown directly as net" approach (platform data isn't actually net-of-returns).
+        netCalc: (() => {
+          const m = computeNetRevenueMeasures(r.mnNetCalc?.[0] || {})
+          return { gross: m.grossIncGst, excRev: m.grossExcGst, cancelRev: m.cancelRev, returnRev: m.returnRev, cirRev: m.cirRev, rtoRev: m.rtoRev, netRev: m.netRevenueExcGst, gstCollected: m.gstAmount }
+        })(),
+        prevNetCalc: (() => { const m = computeNetRevenueMeasures(r.prevMnNetCalc?.[0] || {}); return { netRev: m.netRevenueExcGst, gstCollected: m.gstAmount } })(),
         prevRev: parseFloat(r.prevMn?.[0]?.rev) || 0,
         prevExcRev: parseFloat(r.prevMn?.[0]?.exc_rev) || 0,
         prevOrders: parseInt(r.prevMn?.[0]?.orders) || 0,
@@ -1370,11 +1523,11 @@ export default async function handler(req, res) {
         subCatPrevMap: (r.mnSubCatPrev || []).reduce((m,x) => { m[`${x.category}::${x.subcategory}`] = parseFloat(x.rev)||0; return m }, {}),
         skuMatrix: (() => { const m = {}; (r.mnSKUMatrix||[]).forEach(x => { const cat=x.category||'Others', sc=x.subcategory||'Others', sku=x.sku; if(!m[cat])m[cat]={}; if(!m[cat][sc])m[cat][sc]={}; m[cat][sc][sku]={rev:parseFloat(x.rev)||0,excRev:parseFloat(x.exc_rev)||0,units:parseInt(x.units)||0,orders:parseInt(x.orders)||0} }); return m })(),
         skus: (r.mnSKUs || []).map(x => ({ sku: x.sku, category: x.category || '', orders: parseInt(x.orders)||0, units: parseInt(x.units)||0, rev: parseFloat(x.rev)||0, excRev: parseFloat(x.exc_rev)||0 })),
-        states: (r.mnStates || []).map(x => ({ state: x.state, orders: parseInt(x.orders)||0, rev: parseFloat(x.rev)||0 })),
+        states: (r.mnStates || []).map(x => ({ state: x.state, orders: parseInt(x.orders)||0, rev: parseFloat(x.rev)||0, returnRev: parseFloat(x.return_rev)||0 })),
         statePrevMap: Object.fromEntries((r.mnStatesPrev || []).map(x => [x.state, parseFloat(x.rev)||0])),
         stateTotal: parseFloat(r.mnStateTotal?.[0]?.total_rev) || 0,
         cityTotal: parseFloat(r.mnCityTotal?.[0]?.total_rev) || 0,
-        cities: (r.mnCities || []).map(x => ({ city: x.city, region: x.region || '', cityTier: x.city_tier || '', orders: parseInt(x.orders)||0, rev: parseFloat(x.rev)||0 })),
+        cities: (r.mnCities || []).map(x => ({ city: x.city, region: x.region || '', cityTier: x.city_tier || '', orders: parseInt(x.orders)||0, rev: parseFloat(x.rev)||0, returnRev: parseFloat(x.return_rev)||0 })),
         cityPrevMap: Object.fromEntries((r.mnCitiesPrev || []).map(x => [x.city, parseFloat(x.rev)||0])),
       },
       blinkit: {
