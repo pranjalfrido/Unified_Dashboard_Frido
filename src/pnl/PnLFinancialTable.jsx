@@ -197,6 +197,7 @@ export default function PnLFinancialTable({ subCatData, skuData, adSpendMap = {}
         CM1: r.cm1 != null ? Math.round(r.cm1) : '', 'CM1 %': r.cm1 != null && r.net > 0 ? +pctOf(r.cm1, r.net).toFixed(2) : '',
         'Marketing Spend': Math.round(r.spend), 'Spend %': +r.spendPct.toFixed(2),
       }
+      const csvSkuTotalGross = Object.values(skuData?.[r.cat]?.[r.sc] || {}).reduce((s, d) => s + (mapRow(d).gross || 0), 0)
       const skuRows = Object.entries(skuData?.[r.cat]?.[r.sc] || {}).map(([sku, d]) => {
         const sk = mapRow(d)
         const entry = cogsMap?.[sku]
@@ -206,6 +207,7 @@ export default function PnLFinancialTable({ subCatData, skuData, adSpendMap = {}
         const skC = skuCosts?.[sku]
         const skSndCsv = skC ? skC.logistics + skC.fulfilment + skC.paymentGw + skC.softwareFee : null
         const skCm1 = skSndCsv != null ? skGm - skSndCsv : null
+        const skSpendCsv = r.spend > 0 && csvSkuTotalGross > 0 ? r.spend * (sk.gross / csvSkuTotalGross) : 0
         return {
           Category: r.cat, Product: `↳ ${sku}`,
           'Gross Rev (Inc GST)': Math.round(sk.gross), 'Gross Rev (Ex GST)': Math.round(sk.excRev),
@@ -214,7 +216,7 @@ export default function PnLFinancialTable({ subCatData, skuData, adSpendMap = {}
           GM: Math.round(skGm), 'GM %': sk.net > 0 ? +pctOf(skGm, sk.net).toFixed(2) : '',
           SND: skSndCsv != null ? Math.round(skSndCsv) : '', 'SND %': skSndCsv != null && sk.net > 0 ? +pctOf(skSndCsv, sk.net).toFixed(2) : '',
           CM1: skCm1 != null ? Math.round(skCm1) : '', 'CM1 %': skCm1 != null && sk.net > 0 ? +pctOf(skCm1, sk.net).toFixed(2) : '',
-          'Marketing Spend': '', 'Spend %': '',
+          'Marketing Spend': skSpendCsv > 0 ? Math.round(skSpendCsv) : '', 'Spend %': skSpendCsv > 0 && sk.net > 0 ? +pctOf(skSpendCsv, sk.net).toFixed(2) : '',
         }
       })
       return [main, ...skuRows]
@@ -261,6 +263,7 @@ export default function PnLFinancialTable({ subCatData, skuData, adSpendMap = {}
               const isOpen = expandedSku[skuKey]
               const allSkus = Object.entries(skuData?.[r.cat]?.[r.sc] || {}).map(([sku, d]) => ({ sku, ...mapRow(d) })).sort((a, b) => b.gross - a.gross)
               const skus = q ? allSkus.filter(sk => r.cat.toLowerCase().includes(q) || r.sc.toLowerCase().includes(q) || sk.sku.toLowerCase().includes(q)) : allSkus
+              const scTotalGross = allSkus.reduce((s, sk) => s + sk.gross, 0)
               const hasSkus = allSkus.length > 0
               return (
                 <Fragment key={skuKey}>
@@ -298,6 +301,7 @@ export default function PnLFinancialTable({ subCatData, skuData, adSpendMap = {}
                     const skC = skuCosts?.[sk.sku]
                     const skSnd = skC ? skC.logistics + skC.fulfilment + skC.paymentGw + skC.softwareFee : null
                     const skCm1 = skSnd != null ? skGm - skSnd : null
+                    const skSpend = r.spend > 0 && scTotalGross > 0 ? r.spend * (sk.gross / scTotalGross) : 0
                     return (
                       <tr key={sk.sku} style={{ background: C.bg, cursor: 'default' }}
                         onMouseEnter={e => { e.currentTarget.style.background = '#FFFBE6'; Array.from(e.currentTarget.querySelectorAll('td[data-sticky]')).forEach(td => td.style.background = '#FFFBE6') }}
@@ -317,8 +321,8 @@ export default function PnLFinancialTable({ subCatData, skuData, adSpendMap = {}
                         <td style={{ ...tdStyle, fontSize: 11 }}>{skSnd != null && sk.net > 0 ? `${pctOf(skSnd, sk.net).toFixed(1)}%` : noCostCell}</td>
                         <td style={{ ...tdStyle, fontSize: 11 }}>{skCm1 != null ? fmt(skCm1) : noCostCell}</td>
                         <td style={{ ...tdStyle, fontSize: 11 }}>{skCm1 != null && sk.net > 0 ? `${pctOf(skCm1, sk.net).toFixed(1)}%` : noCostCell}</td>
-                        <td style={{ ...tdStyle, fontSize: 11 }}><span style={{ color: C.t3 }}>—</span></td>
-                        <td style={{ ...tdStyle, fontSize: 11 }}><span style={{ color: C.t3 }}>—</span></td>
+                        <td style={{ ...tdStyle, fontSize: 11 }}>{skSpend > 0 ? fmt(skSpend) : <span style={{ color: C.t3 }}>—</span>}</td>
+                        <td style={{ ...tdStyle, fontSize: 11 }}>{skSpend > 0 && sk.net > 0 ? `${pctOf(skSpend, sk.net).toFixed(2)}%` : <span style={{ color: C.t3 }}>—</span>}</td>
                       </tr>
                     )
                   })}
