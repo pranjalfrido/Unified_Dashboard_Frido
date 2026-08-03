@@ -6,7 +6,7 @@ import PnLFinancialTable from './PnLFinancialTable.jsx'
 // the user asked for ("firstly the KPIs then trend then financial view table"), same visual
 // chrome as the Sales tab (KPICard, TrendAnalysisCard, C palette) so PnL reads as part of the
 // same product, not a bolted-on new design.
-export default function PnLChannelTab({ title, note, gross, excRev, net, units, orders, returnRev, subCatData, skuData, adSpendMap, sndBySku, daily, grossColor = '#FFD600', gradId = 'pnlGrossGrad' }) {
+export default function PnLChannelTab({ title, note, gross, excRev, net, units, orders, returnRev, subCatData, skuData, adSpendMap, skuCosts, daily, grossColor = '#FFD600', gradId = 'pnlGrossGrad' }) {
   const returnPct = pct(returnRev, gross)
   const aov = orders > 0 ? gross / orders : 0
   const asp = units > 0 ? gross / units : 0
@@ -21,7 +21,7 @@ export default function PnLChannelTab({ title, note, gross, excRev, net, units, 
         <KPICard label="AOV / ASP" value={`₹${Math.round(aov).toLocaleString('en-IN')}`} sub={`ASP ₹${Math.round(asp).toLocaleString('en-IN')}`} />
       </div>
       <TrendAnalysisCard title={`${title} — Revenue Trend`} daily={daily} grossColor={grossColor} grossGradId={gradId} boxHeight={360} />
-      <PnLFinancialTable subCatData={subCatData} skuData={skuData} adSpendMap={adSpendMap} sndBySku={sndBySku} title={`Financial View · ${title}`} />
+      <PnLFinancialTable subCatData={subCatData} skuData={skuData} adSpendMap={adSpendMap} skuCosts={skuCosts} title={`Financial View · ${title}`} />
     </div>
   )
 }

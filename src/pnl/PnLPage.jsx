@@ -42,18 +42,15 @@ function netOf(subCatData) {
   return { gross, excRev, net, units, returnRev }
 }
 
-// SnD (Shipping & Distribution) weight-slab rates — 500 rows, {weightGm, forward, rto,
-// reverse, fulfilment}, sorted ascending. Courier billing convention: round UP to the first
-// slab whose weightGm >= the order's actual weight (never the slab below it).
+// SnD rates — {weightGm, forward, rto, reverse, fulfilment}, sorted ascending by weightGm.
 let sndRatesPromise = null
 function loadSndRates() {
   if (!sndRatesPromise) sndRatesPromise = fetch('/snd-rates.json').then(r => r.ok ? r.json() : []).catch(() => [])
   return sndRatesPromise
 }
-function rateForWeight(slabs, weightGm) {
-  if (!slabs.length) return null
-  for (const s of slabs) if (s.weightGm >= weightGm) return s
-  return slabs[slabs.length - 1] // heavier than the largest slab — bill at the top slab rather than leaving it uncosted
+function rateForSlab(slabs, weightSlab) {
+  if (!slabs || !slabs.length || weightSlab == null) return null
+  return slabs.find(s => s.weightGm === weightSlab) || null
 }
 
 export default function PnLPage({ data, filters, setFilters }) {
@@ -66,20 +63,39 @@ export default function PnLPage({ data, filters, setFilters }) {
 
   useEffect(() => { loadSndRates().then(setSndRates) }, [])
 
-  // Per-SKU SnD cost: for each (sku, orderWeight) group from the backend, look up that
-  // orderWeight's slab rate once, then take weightShare (this SKU's summed fraction of orders
-  // at that exact weight) * rate — matches "one slab lookup per order, cost split across lines
-  // by weight share" (confirmed with the user). Only Shopify has this wired up so far — see
-  // PNL_TAB_ROADMAP.md; other channels don't have MasterSKU-level weight data queried yet.
-  const shSndBySku = useMemo(() => {
-    if (!sndRates || !data?.shopify?.skuWeightShares) return {}
+  // Per-SKU D2C cost breakdown: logistics, fulfilment, payment gateway, software fee.
+  // Logistics cost depends on Order_Status; fulfilment applies to all orders incl. cancelled.
+  // Payment gateway = 1.1% of gross_inc_gst (D2C only). Software fee = ₹15 × units.
+  const shSkuCosts = useMemo(() => {
+    const rows = data?.shopify?.skuCostRows
+    if (!sndRates || !rows?.length) return {}
     const bySku = {}
-    data.shopify.skuWeightShares.forEach(row => {
-      const rate = rateForWeight(sndRates, row.orderWeight)
-      if (!rate) return
-      const cost = row.weightShare * (rate.forward + rate.rto + rate.reverse + rate.fulfilment)
-      if (!bySku[row.sku]) bySku[row.sku] = 0
-      bySku[row.sku] += cost
+    rows.forEach(row => {
+      const { sku, orderStatus, weightSlab, totalQty, grossIncGst } = row
+      if (!sku) return
+      const rate = rateForSlab(sndRates, weightSlab)
+      let logistics = 0
+      let fulfilment = rate ? rate.fulfilment * totalQty : 0
+      if (rate) {
+        const st = (orderStatus || '').toLowerCase()
+        if (st === 'cancelled') {
+          logistics = 0
+        } else if (st === 'rto') {
+          logistics = (rate.forward + rate.rto) * totalQty
+        } else if (st === 'cir' || st === 'exchange' || st === 'return') {
+          logistics = (rate.forward + rate.reverse) * totalQty
+        } else {
+          // Delivered, Dispatched, blank/unknown
+          logistics = rate.forward * totalQty
+        }
+      }
+      const paymentGw = grossIncGst * 0.011
+      const softwareFee = totalQty * 15
+      if (!bySku[sku]) bySku[sku] = { logistics: 0, fulfilment: 0, paymentGw: 0, softwareFee: 0 }
+      bySku[sku].logistics += logistics
+      bySku[sku].fulfilment += fulfilment
+      bySku[sku].paymentGw += paymentGw
+      bySku[sku].softwareFee += softwareFee
     })
     return bySku
   }, [sndRates, data])
@@ -348,7 +364,7 @@ export default function PnLPage({ data, filters, setFilters }) {
           returnRev={activeData.returnRev}
           subCatData={activeData.subCatData}
           skuData={activeData.skuData}
-          sndBySku={activeTab === 'shopify' ? shSndBySku : undefined}
+          skuCosts={activeTab === 'shopify' ? shSkuCosts : undefined}
           daily={activeData.daily}
           grossColor={CHANNEL_COLORS[activeTab] || '#FFD600'}
           gradId={`pnl${activeTab}Grad`}

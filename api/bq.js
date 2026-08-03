@@ -119,30 +119,34 @@ export default async function handler(req, res) {
     shSubCategoryPrev: `WITH q AS (${prevBase}) SELECT Category, SubCategory, SUM(SellingPrice_Inc_GST) AS rev FROM q WHERE Channel='Shopify' GROUP BY Category, SubCategory`,
     shSKU: `WITH q AS (${base}) SELECT Category, SubCategory, MasterSKU AS sku, COUNT(DISTINCT OrderId) AS orders, SUM(SellingPrice_Inc_GST) AS rev, SUM(SellingPrice_Exc_GST) AS exc_rev, SUM(ItemQty) AS units, COUNT(DISTINCT CASE WHEN Order_Status='Cancelled' THEN OrderId END) AS cancelled, COUNT(DISTINCT CASE WHEN Order_Status IN ('RTO','Return') THEN OrderId END) AS rto, COUNT(DISTINCT CASE WHEN Order_Status='CIR' THEN OrderId END) AS cir, COUNT(DISTINCT CASE WHEN Order_Status='Exchange' THEN OrderId END) AS exch, SUM(CASE WHEN Order_Status='Cancelled' THEN SellingPrice_Inc_GST ELSE 0 END) AS cancel_rev, SUM(CASE WHEN Order_Status IN ('RTO','Return') THEN SellingPrice_Inc_GST ELSE 0 END) AS rto_rev, SUM(CASE WHEN Order_Status='CIR' THEN SellingPrice_Inc_GST ELSE 0 END) AS cir_rev, SUM(CASE WHEN Order_Status='Exchange' THEN SellingPrice_Inc_GST ELSE 0 END) AS exch_rev FROM q WHERE Channel='Shopify' AND MasterSKU IS NOT NULL AND TRIM(MasterSKU) != '' GROUP BY Category, SubCategory, MasterSKU ORDER BY rev DESC`,
     shSKUPrev: `WITH q AS (${prevBase}) SELECT Category, SubCategory, MasterSKU AS sku, SUM(SellingPrice_Inc_GST) AS rev FROM q WHERE Channel='Shopify' AND MasterSKU IS NOT NULL AND TRIM(MasterSKU) != '' GROUP BY Category, SubCategory, MasterSKU`,
-    // PnL SnD (Shipping & Distribution) cost — one row per Category/SubCategory/SKU with the
-    // SUMS needed to allocate an order-level weight-slab rate down to line-item grain in JS:
-    // line_weight (this SKU's ItemQty * Weight_gms, summed) and, via the window function, each
-    // line's share of its own order's total weight. Grouping after the window function collapses
-    // per-line rows to per-SKU sums of (line_weight) and (line_weight / order_weight) — the latter
-    // is the fraction of each order's slab rate this SKU should absorb, summed across all its
-    // orders, so the client only needs SUM(weight_share) * rate to get this SKU's total SnD cost
-    // once it looks up each distinct order_weight's slab rate from public/snd-rates.json. Only
-    // SKUs with a real Weight_gms entry contribute — orders where every line is unweighed can't be
-    // bucketed at all, so weight_share stays 0 for those SKUs (rendered as "no cost data" downstream).
-    shOrderLineWeights: `WITH q AS (${base}), lined AS (
-      SELECT OrderId, Category, SubCategory, MasterSKU AS sku, ItemQty, Weight_gms,
-        (ItemQty * Weight_gms) AS line_weight,
-        SUM(ItemQty * Weight_gms) OVER (PARTITION BY OrderId) AS order_weight
-      FROM q
-      WHERE Channel='Shopify' AND MasterSKU IS NOT NULL AND TRIM(MasterSKU) != '' AND Weight_gms IS NOT NULL AND Weight_gms > 0
-        AND Order_Status NOT IN ('Cancelled','RTO','Return','CIR')
+    // PnL cost rows — per SKU × Order_Status × weight_slab for D2C India (Shopify, non-international).
+    // Weight slab: if Weight_gms <= 500 → 500, else CEIL(Weight_gms / 1000) * 1000.
+    // Client applies snd-rates.json lookup per slab + status to get logistics & fulfilment costs.
+    // Fulfilment is charged on ALL statuses including Cancelled; logistics is status-dependent.
+    // Payment gateway (1.1% of gross) and software fee (₹15/unit) are also summed here for D2C.
+    shSkuCosts: `WITH im AS (
+      SELECT DISTINCT TRIM(masterskucode) AS sku, CAST(Weight_gms AS FLOAT64) AS weight_gms
+      FROM \`frido-429506.sharepoint_to_gcp.Frido_Item_Master__frido_item_sku_master\`
+      WHERE masterskucode IS NOT NULL AND TRIM(masterskucode) != '' AND Weight_gms IS NOT NULL
     )
-    SELECT Category, SubCategory, sku, order_weight,
-      SUM(line_weight) AS total_line_weight,
-      SAFE_DIVIDE(SUM(line_weight), ANY_VALUE(order_weight)) AS weight_share
-    FROM lined
-    WHERE order_weight > 0
-    GROUP BY Category, SubCategory, sku, order_weight`,
+    SELECT
+      s.MasterSKU AS sku,
+      COALESCE(s.Order_Status, 'Delivered') AS order_status,
+      CASE
+        WHEN im.weight_gms IS NULL THEN NULL
+        WHEN im.weight_gms <= 500 THEN 500
+        ELSE CAST(CEIL(im.weight_gms / 1000.0) * 1000 AS INT64)
+      END AS weight_slab,
+      SUM(s.ItemQty) AS total_qty,
+      SUM(s.SellingPrice_Inc_GST) AS gross_inc_gst
+    FROM \`frido-429506.production.fact_all_platform_sales_report\` s
+    LEFT JOIN im ON TRIM(s.MasterSKU) = im.sku
+    WHERE s.OrderDate BETWEEN '${start}' AND '${end}'
+      AND s.Channel = 'Shopify'
+      AND s.SubChannel NOT IN ('Shopify International', 'Retail Store')
+      AND s.Country = 'India'
+      AND s.MasterSKU IS NOT NULL AND TRIM(s.MasterSKU) != ''
+    GROUP BY s.MasterSKU, order_status, weight_slab`,
     shState: `WITH q AS (${base}) SELECT UPPER(TRIM(State)) AS state, COUNT(DISTINCT OrderId) AS orders, SUM(SellingPrice_Inc_GST) AS rev, SUM(ItemQty) AS units, COUNT(DISTINCT City) AS cities, COUNT(DISTINCT CASE WHEN Order_Status IN ('RTO','Return','CIR') THEN OrderId END) AS rto_orders, SUM(CASE WHEN Order_Status IN ('RTO','Return','CIR') THEN SellingPrice_Inc_GST ELSE 0 END) AS return_rev FROM q WHERE Channel='Shopify' AND State IS NOT NULL AND TRIM(State) != '' GROUP BY UPPER(TRIM(State)) ORDER BY rev DESC LIMIT 30`,
     shStateTotal: `WITH q AS (${base}) SELECT SUM(SellingPrice_Inc_GST) AS total_rev, COUNT(DISTINCT OrderId) AS total_orders FROM q WHERE Channel='Shopify' AND State IS NOT NULL AND TRIM(State) != ''`,
     shStatePrev: `WITH q AS (${prevBase}) SELECT UPPER(TRIM(State)) AS state, SUM(SellingPrice_Inc_GST) AS rev, COUNT(DISTINCT OrderId) AS orders FROM q WHERE Channel='Shopify' AND State IS NOT NULL AND TRIM(State) != '' GROUP BY UPPER(TRIM(State))`,
@@ -1088,10 +1092,15 @@ export default async function handler(req, res) {
         subCatPrevMap: Object.fromEntries((r.shSubCategoryPrev || []).map(x => [`${x.Category||'Others'}::${x.SubCategory||'Others'}`, parseFloat(x.rev)||0])),
         skuMap: (() => { const m = {}; (r.shSKU || []).forEach(x => { const cat = x.Category||'Others', sc = x.SubCategory||'Others', sku = x.sku; if (!m[cat]) m[cat] = {}; if (!m[cat][sc]) m[cat][sc] = {}; m[cat][sc][sku] = { rev: parseFloat(x.rev)||0, excRev: parseFloat(x.exc_rev)||0, orders: parseInt(x.orders)||0, units: parseInt(x.units)||0, cancelled: parseInt(x.cancelled)||0, rto: parseInt(x.rto)||0, cir: parseInt(x.cir)||0, exch: parseInt(x.exch)||0, cancelRev: parseFloat(x.cancel_rev)||0, rtoRev: parseFloat(x.rto_rev)||0, cirRev: parseFloat(x.cir_rev)||0, exchRev: parseFloat(x.exch_rev)||0 } }); return m })(),
         skuPrevMap: (() => { const m = {}; (r.shSKUPrev || []).forEach(x => { const cat = x.Category||'Others', sc = x.SubCategory||'Others', sku = x.sku; if (!m[cat]) m[cat] = {}; if (!m[cat][sc]) m[cat][sc] = {}; m[cat][sc][sku] = parseFloat(x.rev)||0 }); return m })(),
-        // Rows for SnD (Shipping & Distribution) cost — see shOrderLineWeights in the queries
-        // dict. Each row is one (SKU, order_weight) pair with the summed weight_share the
-        // client multiplies by that order_weight's slab rate (from public/snd-rates.json).
-        skuWeightShares: (r.shOrderLineWeights || []).map(x => ({ category: x.Category||'Others', subCategory: x.SubCategory||'Others', sku: x.sku, orderWeight: parseFloat(x.order_weight)||0, weightShare: parseFloat(x.weight_share)||0 })),
+        // Per-SKU cost rows — each row is (sku, order_status, weight_slab, total_qty, gross_inc_gst).
+        // PnLPage.jsx applies snd-rates.json lookup + status logic to compute logistics/fulfilment.
+        skuCostRows: (r.shSkuCosts || []).map(x => ({
+          sku: x.sku,
+          orderStatus: x.order_status || 'Delivered',
+          weightSlab: x.weight_slab != null ? parseInt(x.weight_slab) : null,
+          totalQty: parseInt(x.total_qty) || 0,
+          grossIncGst: parseFloat(x.gross_inc_gst) || 0,
+        })),
         stateMap: Object.fromEntries((r.shState || []).filter(x => x.state).map(x => [x.state, { rev: parseFloat(x.rev)||0, orders: parseInt(x.orders)||0, units: parseInt(x.units)||0, cities: { size: parseInt(x.cities)||0 }, rtoOrders: parseInt(x.rto_orders)||0, returnRev: parseFloat(x.return_rev)||0 }])),
         statePrevMap: Object.fromEntries((r.shStatePrev || []).filter(x => x.state).map(x => [x.state, { rev: parseFloat(x.rev)||0, orders: parseInt(x.orders)||0 }])),
         cityRows: (r.shCity || []).map(x => ({ city: x.city, state: x.state || '', region: x.region || '', orders: parseInt(x.orders)||0, rev: parseFloat(x.rev)||0, rtoOrders: parseInt(x.rto_orders)||0, returnRev: parseFloat(x.return_rev)||0 })).filter(x => x.city),
