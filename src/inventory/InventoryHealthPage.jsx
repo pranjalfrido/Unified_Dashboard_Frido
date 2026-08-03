@@ -867,6 +867,7 @@ const InventoryHealthInner = React.memo(function InventoryHealthInner({ data, fi
         </div>
       </div>
       </div>
+    </div>
   )
 })
 
