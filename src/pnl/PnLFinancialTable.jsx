@@ -179,7 +179,7 @@ export default function PnLFinancialTable({ subCatData, skuData, adSpendMap = {}
   const stickyCat = { position: 'sticky', left: 0, background: C.card, zIndex: 1, width: catW, minWidth: catW, maxWidth: catW }
   const stickyProd = { position: 'sticky', left: catW, background: C.bg, zIndex: 1, width: scW, minWidth: scW, maxWidth: scW, boxShadow: '2px 0 4px rgba(0,0,0,0.06)' }
   const w = id => ({ width: colWidths[id], minWidth: colWidths[id], maxWidth: colWidths[id] })
-  const totalTdStyle = { ...tdStyle, padding: '6px 7px', fontWeight: 700, color: C.t1, borderBottom: 'none' }
+  const totalTdStyle = { ...tdStyle, padding: '6px 7px', fontWeight: 700, color: C.t1, borderBottom: 'none', position: 'sticky', bottom: 0, background: C.card, borderTop: `1.5px solid ${C.border}`, zIndex: 1 }
   const pendingCell = <span style={{ color: C.t3 }} title="Pending data — see PNL_TAB_ROADMAP.md">—</span>
   const noCostCell = <span style={{ color: C.t3 }} title="No cost entry for this SKU/product yet">—</span>
   const pctCellOf = (val, netCoveredVal) => netCoveredVal > 0 ? `${pctOf(val, netCoveredVal).toFixed(1)}%` : noCostCell
@@ -327,9 +327,9 @@ export default function PnLFinancialTable({ subCatData, skuData, adSpendMap = {}
             })}
           </tbody>
           <tfoot>
-            <tr style={{ background: C.bg, borderTop: `1.5px solid ${C.border}`, position: 'sticky', bottom: 0 }}>
-              <td style={{ ...totalTdStyle, ...stickyCat, textAlign: 'left', zIndex: 2 }}>Total</td>
-              <td style={{ ...totalTdStyle, ...stickyProd, textAlign: 'left', zIndex: 2 }}></td>
+            <tr>
+              <td style={{ ...totalTdStyle, ...stickyCat, textAlign: 'left', zIndex: 3 }}>Total</td>
+              <td style={{ ...totalTdStyle, ...stickyProd, textAlign: 'left', zIndex: 3 }}></td>
               <td style={totalTdStyle}>{fmt(tot.gross)}</td>
               <td style={totalTdStyle}>{fmt(tot.excRev)}</td>
               <td style={totalTdStyle}>{fmtN(tot.units)}</td>
