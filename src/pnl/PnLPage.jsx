@@ -60,6 +60,8 @@ export default function PnLPage({ data, filters, setFilters }) {
   const [activeTab, setActiveTab] = useState('all')
   const [amzChannelView, setAmzChannelView] = useState('all') // 'all' | 'sc' | 'vc'
   const [offlineSub, setOfflineSub] = useState('all') // 'all' | 'b2b' | 'Stockist' | 'MTGT'
+  const [d2cRegion, setD2cRegion] = useState('india') // 'india' | 'international'
+  const [d2cSubCh, setD2cSubCh] = useState('all') // 'all' | 'MyFrido' | 'Mobility'
   const [sndRates, setSndRates] = useState(null)
 
   useEffect(() => { loadSndRates().then(setSndRates) }, [])
@@ -103,14 +105,40 @@ export default function PnLPage({ data, filters, setFilters }) {
       allSkuData[cat][sc][sku].units += x.units || 0
     })
 
-    // ── D2C / Shopify ──
+    // ── D2C / Shopify — filtered by region + sub-channel toggles ──
     const sh = data.shopify || {}
+    // Use salesCategoryOrders rows (have sub_channel) for D2C when filtering is active
+    const allSalesCatRows = data.pnlSalesRows || [] // rows from salesCategoryOrders with sub_channel
+    const shSalesCatRows = allSalesCatRows.filter(r => r.platform === 'Shopify')
+    const filterD2CRow = r => {
+      const sc = (r.sub_channel || '').toLowerCase()
+      if (d2cRegion === 'india' && sc === 'shopify international') return false
+      if (d2cRegion === 'international' && sc !== 'shopify international') return false
+      if (d2cSubCh === 'MyFrido' && sc !== 'myfrido') return false
+      if (d2cSubCh === 'Mobility' && sc !== 'mobility') return false
+      return true
+    }
     const shSubCatData = {}
-    Object.entries(sh.subCatMap || {}).forEach(([k, v]) => {
-      const [cat, sc] = k.split('::')
-      if (!shSubCatData[cat]) shSubCatData[cat] = {}
-      shSubCatData[cat][sc || 'Others'] = pick(v)
-    })
+    if (shSalesCatRows.length > 0) {
+      shSalesCatRows.filter(filterD2CRow).forEach(r => {
+        const cat = r.category || 'Others', sc = r.sub_category || 'Others'
+        if (!shSubCatData[cat]) shSubCatData[cat] = {}
+        if (!shSubCatData[cat][sc]) shSubCatData[cat][sc] = { rev: 0, excRev: 0, units: 0, cancelRev: 0, rtoRev: 0, cirRev: 0, returnRev: 0 }
+        shSubCatData[cat][sc].rev += parseFloat(r.gross_revenue) || 0
+        shSubCatData[cat][sc].excRev += parseFloat(r.revenue) || 0
+        shSubCatData[cat][sc].cancelRev += parseFloat(r.cancel_rev) || 0
+        shSubCatData[cat][sc].rtoRev += parseFloat(r.return_rev) || 0
+        shSubCatData[cat][sc].cirRev += parseFloat(r.cir_rev) || 0
+      })
+      Object.keys(shSubCatData).forEach(cat => Object.keys(shSubCatData[cat]).forEach(sc => { shSubCatData[cat][sc] = pick(shSubCatData[cat][sc]) }))
+    } else {
+      // fallback to pre-aggregated shopify subCatMap (no sub-channel filtering)
+      Object.entries(sh.subCatMap || {}).forEach(([k, v]) => {
+        const [cat, sc] = k.split('::')
+        if (!shSubCatData[cat]) shSubCatData[cat] = {}
+        shSubCatData[cat][sc || 'Others'] = pick(v)
+      })
+    }
     const shSkuData = {}
     Object.entries(sh.skuMap || {}).forEach(([cat, scMap]) => {
       shSkuData[cat] = {}
@@ -248,7 +276,7 @@ export default function PnLPage({ data, filters, setFilters }) {
 
     return {
       all: { subCatData: allSubCatData, skuData: allSkuData, daily: data.dailyArr || [], gross: data.totalRev || 0, excRev: data.totalExcRev || 0, net: data.netRevenueCalc || 0, units: data.totalQty || 0, orders: data.nOrders || 0, returnRev: data.returnRev || 0 },
-      shopify: { subCatData: shSubCatData, skuData: shSkuData, daily: sh.daily || [], gross: sh.totals?.rev || 0, net: sh.netCalc?.netRev ?? 0, units: sh.totals?.qty || 0, orders: sh.totals?.orders || 0, returnRev: (sh.netCalc?.cancelRev || 0) + (sh.netCalc?.rtoRev || 0) + (sh.netCalc?.cirRev || 0) + (sh.netCalc?.returnRev || 0) },
+      shopify: (() => { const n = netOf(shSubCatData); return { subCatData: shSubCatData, skuData: shSkuData, daily: sh.daily || [], ...n } })(),
       ebo: { subCatData: eboSubCatData, skuData: eboSkuData, daily: ebo.daily || [], gross: ebo.totals?.rev || 0, net: ebo.netCalc?.netRev ?? 0, units: ebo.totals?.qty || 0, orders: ebo.totals?.orders || 0, returnRev: (ebo.netCalc?.cancelRev || 0) + (ebo.netCalc?.rtoRev || 0) + (ebo.netCalc?.cirRev || 0) + (ebo.netCalc?.returnRev || 0) },
       amazon: (() => { const n = netOf(amzSubCatData); return { subCatData: amzSubCatData, skuData: amzSkuData, daily: amzDaily, ...n } })(),
       flipkart: (() => { const n = netOf(fkSubCatData); return { subCatData: fkSubCatData, skuData: fkSkuData, daily: fk.daily || [], ...n } })(),
@@ -260,7 +288,7 @@ export default function PnLPage({ data, filters, setFilters }) {
       myntra: (() => { const sc = simpleSubCatOf(mn.subCategories || []); const n = netOf(sc); return { subCatData: sc, skuData: mn.skuMatrix || {}, daily: mn.daily || [], ...n } })(),
       offline: (() => { const n = netOf(offSubCatData); return { subCatData: offSubCatData, skuData: offSkuData, daily: offDaily, ...n } })(),
     }
-  }, [data, amzChannelView, offlineSub])
+  }, [data, amzChannelView, offlineSub, d2cRegion, d2cSubCh])
 
   if (!data || !channelData) return null
 
@@ -280,6 +308,21 @@ export default function PnLPage({ data, filters, setFilters }) {
         ))}
       </div>
       <div className="page-scroll">
+        {activeTab === 'shopify' && (
+          <div style={{ display: 'flex', gap: 16, marginBottom: 12, alignItems: 'center' }}>
+            <div style={{ display: 'flex', gap: 4 }}>
+              {[{ id: 'india', label: 'India' }, { id: 'international', label: 'International' }].map(opt => (
+                <button key={opt.id} onClick={() => setD2cRegion(opt.id)} style={{ fontSize: 12, fontWeight: d2cRegion === opt.id ? 700 : 500, padding: '5px 14px', borderRadius: 7, border: 'none', background: d2cRegion === opt.id ? '#FFD600' : 'transparent', color: '#13121A', cursor: 'pointer' }}>{opt.label}</button>
+              ))}
+            </div>
+            <div style={{ width: 1, height: 20, background: '#E0DDD4' }} />
+            <div style={{ display: 'flex', gap: 4 }}>
+              {[{ id: 'all', label: 'All' }, { id: 'MyFrido', label: 'MyFrido' }, { id: 'Mobility', label: 'Mobility' }].map(opt => (
+                <button key={opt.id} onClick={() => setD2cSubCh(opt.id)} style={{ fontSize: 12, fontWeight: d2cSubCh === opt.id ? 700 : 500, padding: '5px 14px', borderRadius: 7, border: 'none', background: d2cSubCh === opt.id ? '#FFD600' : 'transparent', color: '#13121A', cursor: 'pointer' }}>{opt.label}</button>
+              ))}
+            </div>
+          </div>
+        )}
         {activeTab === 'amazon' && (
           <div style={{ display: 'flex', gap: 4, marginBottom: 12 }}>
             {[{ id: 'all', label: 'All' }, { id: 'sc', label: 'Seller Central' }, { id: 'vc', label: 'Vendor Central' }].map(opt => (
