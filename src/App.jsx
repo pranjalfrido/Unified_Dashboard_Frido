@@ -4131,7 +4131,7 @@ function AllTab({ data, rangeStart, rangeEnd }) {
   Object.entries(subCatMap).forEach(([k, v]) => {
     const [cat, sc] = k.split('::')
     if (!subCatMatrixDataAll[cat]) subCatMatrixDataAll[cat] = {}
-    subCatMatrixDataAll[cat][sc || 'Others'] = { rev: v.rev, excRev: v.excRev || 0, units: v.aspUnits || v.units || 0, orders: v.orders?.size ?? v.orders ?? 0 }
+    subCatMatrixDataAll[cat][sc || 'Others'] = { rev: v.rev, excRev: v.excRev || 0, cancelRev: v.cancelRev || 0, rtoRev: v.rtoRev || 0, cirRev: v.cirRev || 0, returnRev: v.returnRev || 0, units: v.aspUnits || v.units || 0, orders: v.orders?.size ?? v.orders ?? 0 }
   })
 
   const grossMarginPct = totalRev > 0 ? ((totalRev - totalExcRev) / totalRev * 100) : 0
@@ -4246,7 +4246,7 @@ function AllTab({ data, rangeStart, rangeEnd }) {
         <GeoToggleDonutCard regionRows={regionRows} tierRows={tierRows} boxHeight={360} />
       </div>
       <DailyChannelTable dailyArr={dailyArr} channels={channels} nDays={nDays} rangeStart={rangeStart} rangeEnd={rangeEnd} />
-      <FlatCategoryProductMatrix catData={catMatrixDataAll} subCatData={subCatMatrixDataAll} skuData={skuChannelMapBySku} title="Category Revenue Matrix · All Channels" catPrevMap={catPrevMap} subCatPrevMap={subCatPrevMap} noReturns />
+      <FlatCategoryProductMatrix catData={catMatrixDataAll} subCatData={subCatMatrixDataAll} skuData={skuChannelMapBySku} title="Category Revenue Matrix · All Channels" catPrevMap={catPrevMap} subCatPrevMap={subCatPrevMap} />
       {(() => {
         const totalStateRevBQ = stateTotal || stateRows.reduce((s, r) => s + r.rev, 0)
         let cumS = 0
