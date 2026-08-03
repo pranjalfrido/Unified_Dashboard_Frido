@@ -4,9 +4,10 @@ import { getBQ, buildQuery, netRevenueSelectFragment, computeNetRevenueMeasures 
 const cache = new Map()
 const CACHE_TTL = 5 * 60 * 1000
 
+const CACHE_VERSION = 2
 function getCacheKey(body) {
   const { start, end, category, subCategory, sku, subChannel, voucher, channel, region, tier, state, city, country, paymentType, channelGroup } = body
-  return JSON.stringify({ start, end, category, subCategory, sku, subChannel, voucher, channel, region, tier, state, city, country, paymentType, channelGroup })
+  return JSON.stringify({ v: CACHE_VERSION, start, end, category, subCategory, sku, subChannel, voucher, channel, region, tier, state, city, country, paymentType, channelGroup })
 }
 
 function getFromCache(key) {
@@ -176,7 +177,7 @@ export default async function handler(req, res) {
     repeatRate: subChannel === 'International'
       ? `WITH in_range AS (SELECT DISTINCT customer_id FROM \`frido-429506.production.fact_shopify_international_orders\` WHERE order_date BETWEEN '${start}' AND '${end}' AND customer_id IS NOT NULL), prior AS (SELECT DISTINCT customer_id FROM \`frido-429506.production.fact_shopify_international_orders\` WHERE order_date < '${start}' AND customer_id IS NOT NULL) SELECT COUNT(*) AS n_custs, COUNTIF(p.customer_id IS NOT NULL) AS repeat_custs FROM in_range ir LEFT JOIN prior p USING (customer_id)`
       : `WITH in_range AS (SELECT DISTINCT customer_id FROM \`frido-429506.production.fact_shopify_myfrido_mobility_all_orders\` WHERE order_date_ist BETWEEN '${start}' AND '${end}' AND customer_id IS NOT NULL), prior AS (SELECT DISTINCT customer_id FROM \`frido-429506.production.fact_shopify_myfrido_mobility_all_orders\` WHERE order_date_ist < '${start}' AND customer_id IS NOT NULL) SELECT COUNT(*) AS n_custs, COUNTIF(p.customer_id IS NOT NULL) AS repeat_custs FROM in_range ir LEFT JOIN prior p USING (customer_id)`,
-    bySubCategory: `WITH q AS (${base}) SELECT Category, SubCategory, COUNT(DISTINCT OrderId) AS orders, SUM(SellingPrice_Inc_GST) AS rev, SUM(ItemQty) AS units, SUM(CASE WHEN UPPER(COALESCE(MasterSKU,'')) NOT LIKE '%COUP%' AND UPPER(COALESCE(MasterSKU,'')) NOT LIKE '%DFA%' THEN ItemQty ELSE 0 END) AS asp_units FROM q GROUP BY Category, SubCategory ORDER BY rev DESC LIMIT 200`,
+    bySubCategory: `WITH q AS (${base}) SELECT Category, SubCategory, COUNT(DISTINCT OrderId) AS orders, SUM(SellingPrice_Inc_GST) AS rev, ROUND(SUM(SellingPrice_Exc_GST),0) AS exc_rev, SUM(ItemQty) AS units, SUM(CASE WHEN UPPER(COALESCE(MasterSKU,'')) NOT LIKE '%COUP%' AND UPPER(COALESCE(MasterSKU,'')) NOT LIKE '%DFA%' THEN ItemQty ELSE 0 END) AS asp_units, SUM(CASE WHEN Order_Status='Cancelled' THEN SellingPrice_Inc_GST ELSE 0 END) AS cancel_rev, SUM(CASE WHEN Order_Status='RTO' THEN SellingPrice_Inc_GST ELSE 0 END) AS rto_rev, SUM(CASE WHEN Order_Status='CIR' THEN SellingPrice_Inc_GST ELSE 0 END) AS cir_rev, SUM(CASE WHEN Order_Status='Return' THEN SellingPrice_Inc_GST ELSE 0 END) AS return_rev FROM q GROUP BY Category, SubCategory ORDER BY rev DESC LIMIT 200`,
     prevByCategory: `WITH q AS (${prevBase}) SELECT Category, ROUND(SUM(SellingPrice_Inc_GST),0) AS rev FROM q WHERE Category IS NOT NULL GROUP BY Category`,
     prevBySubCategory: `WITH q AS (${prevBase}) SELECT Category, SubCategory, ROUND(SUM(SellingPrice_Inc_GST),0) AS rev FROM q WHERE Category IS NOT NULL GROUP BY Category, SubCategory`,
     byCategoryChannel: `WITH q AS (${base}) SELECT Category, Channel, SubChannel, SUM(SellingPrice_Inc_GST) AS rev FROM q WHERE Channel != 'Flipkart' GROUP BY Category, Channel, SubChannel`,
@@ -527,7 +528,7 @@ export default async function handler(req, res) {
     r.byCategory.forEach(x => { catMap[x.Category || 'Others'] = { rev: parseFloat(x.rev) || 0, excRev: parseFloat(x.exc_rev) || 0, orders: { size: parseInt(x.orders) }, units: parseInt(x.units) || 0, aspUnits: parseInt(x.asp_units) || parseInt(x.units) || 0 } })
 
     const subCatMap = {}
-    r.bySubCategory.forEach(x => { const key = `${x.Category || 'Others'}::${x.SubCategory || 'Others'}`; subCatMap[key] = { rev: parseFloat(x.rev) || 0, orders: { size: parseInt(x.orders) || 0 }, units: parseInt(x.units) || 0, aspUnits: parseInt(x.asp_units) || parseInt(x.units) || 0 } })
+    r.bySubCategory.forEach(x => { const key = `${x.Category || 'Others'}::${x.SubCategory || 'Others'}`; subCatMap[key] = { rev: parseFloat(x.rev) || 0, excRev: parseFloat(x.exc_rev) || 0, cancelRev: parseFloat(x.cancel_rev) || 0, rtoRev: parseFloat(x.rto_rev) || 0, cirRev: parseFloat(x.cir_rev) || 0, returnRev: parseFloat(x.return_rev) || 0, orders: { size: parseInt(x.orders) || 0 }, units: parseInt(x.units) || 0, aspUnits: parseInt(x.asp_units) || parseInt(x.units) || 0 } })
 
     const catPrevMap = {}
     ;(r.prevByCategory || []).forEach(x => { catPrevMap[x.Category || 'Others'] = parseFloat(x.rev) || 0 })
