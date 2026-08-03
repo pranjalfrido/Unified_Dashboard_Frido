@@ -875,20 +875,9 @@ export default function InventoryHealthPage({ data, filters, setFilters, sidebar
   const [sidebarOpen, setSidebarOpen] = useState(false)
   if (!data) return null
   return (
-    <div style={{ display: 'flex', gap: 0, height: '100%', overflow: 'hidden' }}>
-      <FilterSidebar data={data} filters={filters} setFilters={setFilters} open={sidebarOpen} sidebarTop={sidebarTop} />
-      <button onClick={() => setSidebarOpen(o => !o)} style={{
-        width: 16, alignSelf: 'flex-start', marginTop: 4, height: 48, border: `1px solid ${IC.border}`, borderLeft: 'none',
-        background: IC.surface, cursor: 'pointer', borderRadius: '0 8px 8px 0', display: 'flex', alignItems: 'center',
-        justifyContent: 'center', color: IC.t3, fontSize: 12, flexShrink: 0,
-        position: 'sticky', top: 4,
-      }}>
-        {sidebarOpen ? '‹' : '›'}
-      </button>
-      <InventoryHealthInner
-        data={data} filters={filters} setFilters={setFilters}
-        sidebarTop={sidebarTop} sidebarOpen={sidebarOpen} setSidebarOpen={setSidebarOpen}
-      />
-    </div>
+    <InventoryHealthInner
+      data={data} filters={filters} setFilters={setFilters}
+      sidebarTop={sidebarTop} sidebarOpen={sidebarOpen} setSidebarOpen={setSidebarOpen}
+    />
   )
 }
