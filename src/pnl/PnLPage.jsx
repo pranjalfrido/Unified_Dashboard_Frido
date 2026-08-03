@@ -66,13 +66,17 @@ export default function PnLPage({ data, filters, setFilters }) {
   // Per-SKU D2C cost breakdown: logistics, fulfilment, payment gateway, software fee.
   // Logistics cost depends on Order_Status; fulfilment applies to all orders incl. cancelled.
   // Payment gateway = 1.1% of gross_inc_gst (D2C only). Software fee = ₹15 × units.
+  // Filtered by d2cRegion/d2cSubCh so SND matches the revenue toggle selection.
   const shSkuCosts = useMemo(() => {
     const rows = data?.shopify?.skuCostRows
     if (!sndRates || !rows?.length) return {}
     const bySku = {}
     rows.forEach(row => {
-      const { sku, orderStatus, weightSlab, lineCount, totalQty, grossIncGst } = row
+      const { sku, subChannel, orderStatus, weightSlab, lineCount, totalQty, grossIncGst } = row
       if (!sku) return
+      // Apply same sub-channel filter as revenue rows
+      if (d2cSubCh === 'MyFrido' && subChannel !== 'myfrido') return
+      if (d2cSubCh === 'Mobility' && subChannel !== 'mobility') return
       // Fallback: missing weight → treat as 2kg slab
       const effectiveSlab = weightSlab != null ? weightSlab : 2000
       const rate = rateForSlab(sndRates, effectiveSlab)
@@ -100,7 +104,7 @@ export default function PnLPage({ data, filters, setFilters }) {
       bySku[sku].softwareFee += softwareFee
     })
     return bySku
-  }, [sndRates, data])
+  }, [sndRates, data, d2cSubCh])
 
   const channelData = useMemo(() => {
     if (!data) return null

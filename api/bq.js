@@ -128,6 +128,7 @@ export default async function handler(req, res) {
     lined AS (
       SELECT
         MasterSKU AS sku,
+        SubChannel AS sub_channel,
         COALESCE(Order_Status, 'Delivered') AS order_status,
         ItemQty AS qty,
         SellingPrice_Inc_GST AS gross_inc_gst,
@@ -143,13 +144,14 @@ export default async function handler(req, res) {
     )
     SELECT
       sku,
+      sub_channel,
       order_status,
       weight_slab,
       COUNT(*) AS line_count,
       SUM(qty) AS total_qty,
       SUM(gross_inc_gst) AS gross_inc_gst
     FROM lined
-    GROUP BY sku, order_status, weight_slab`,
+    GROUP BY sku, sub_channel, order_status, weight_slab`,
     shState: `WITH q AS (${base}) SELECT UPPER(TRIM(State)) AS state, COUNT(DISTINCT OrderId) AS orders, SUM(SellingPrice_Inc_GST) AS rev, SUM(ItemQty) AS units, COUNT(DISTINCT City) AS cities, COUNT(DISTINCT CASE WHEN Order_Status IN ('RTO','Return','CIR') THEN OrderId END) AS rto_orders, SUM(CASE WHEN Order_Status IN ('RTO','Return','CIR') THEN SellingPrice_Inc_GST ELSE 0 END) AS return_rev FROM q WHERE Channel='Shopify' AND State IS NOT NULL AND TRIM(State) != '' GROUP BY UPPER(TRIM(State)) ORDER BY rev DESC LIMIT 30`,
     shStateTotal: `WITH q AS (${base}) SELECT SUM(SellingPrice_Inc_GST) AS total_rev, COUNT(DISTINCT OrderId) AS total_orders FROM q WHERE Channel='Shopify' AND State IS NOT NULL AND TRIM(State) != ''`,
     shStatePrev: `WITH q AS (${prevBase}) SELECT UPPER(TRIM(State)) AS state, SUM(SellingPrice_Inc_GST) AS rev, COUNT(DISTINCT OrderId) AS orders FROM q WHERE Channel='Shopify' AND State IS NOT NULL AND TRIM(State) != '' GROUP BY UPPER(TRIM(State))`,
@@ -1099,6 +1101,7 @@ export default async function handler(req, res) {
         // PnLPage.jsx applies snd-rates.json lookup + status logic to compute logistics/fulfilment.
         skuCostRows: (r.shSkuCosts || []).map(x => ({
           sku: x.sku,
+          subChannel: (x.sub_channel || '').toLowerCase(),
           orderStatus: x.order_status || 'Delivered',
           weightSlab: x.weight_slab != null ? parseInt(x.weight_slab) : null,
           lineCount: parseInt(x.line_count) || 0,
