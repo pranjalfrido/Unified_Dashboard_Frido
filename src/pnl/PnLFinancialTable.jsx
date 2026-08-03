@@ -139,6 +139,9 @@ export default function PnLFinancialTable({ subCatData, skuData, adSpendMap = {}
   const thStyleL = { ...thStyle, textAlign: 'left' }
   const tdStyle = { fontSize: 11, padding: '4px 7px', textAlign: 'right', color: C.t1, borderBottom: `1px solid ${C.border}`, fontFamily: 'var(--mono)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }
   const tdStyleL = { ...tdStyle, textAlign: 'left', fontFamily: 'inherit' }
+  // Sticky left column styles — Category fixed at 0, Product fixed at 120px
+  const stickyCat = { position: 'sticky', left: 0, background: C.bg, zIndex: 1, minWidth: 120, maxWidth: 120 }
+  const stickyProd = { position: 'sticky', left: 120, background: C.bg, zIndex: 1, minWidth: 220, maxWidth: 220, boxShadow: '2px 0 4px rgba(0,0,0,0.06)' }
   const totalTdStyle = { ...tdStyle, padding: '6px 7px', fontWeight: 700, color: C.t1, borderBottom: 'none' }
   const pendingCell = <span style={{ color: C.t3 }} title="Pending data — see PNL_TAB_ROADMAP.md">—</span>
   const noCostCell = <span style={{ color: C.t3 }} title="No cost entry for this SKU/product yet">—</span>
@@ -196,8 +199,8 @@ export default function PnLFinancialTable({ subCatData, skuData, adSpendMap = {}
         <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'auto', minWidth: 2200 }}>
           <thead>
             <tr style={{ background: C.bg }}>
-              <Th label="Category" sortKey="cat" style={{ ...thStyleL, position: 'sticky', top: 0, background: C.bg, zIndex: 1 }} align="left" />
-              <Th label="Product" sortKey="sc" style={{ ...thStyleL, position: 'sticky', top: 0, background: C.bg, zIndex: 1 }} align="left" />
+              <Th label="Category" sortKey="cat" style={{ ...thStyleL, ...stickyCat, top: 0, zIndex: 3 }} align="left" />
+              <Th label="Product" sortKey="sc" style={{ ...thStyleL, ...stickyProd, top: 0, zIndex: 3 }} align="left" />
               <Th label="Gross (Inc GST)" sortKey="gross" style={{ ...thStyle, position: 'sticky', top: 0, background: C.bg, zIndex: 1 }} />
               <Th label="Gross (Ex GST)" sortKey="excRev" style={{ ...thStyle, position: 'sticky', top: 0, background: C.bg, zIndex: 1 }} />
               <Th label="Units" sortKey="units" style={{ ...thStyle, position: 'sticky', top: 0, background: C.bg, zIndex: 1 }} />
@@ -227,8 +230,8 @@ export default function PnLFinancialTable({ subCatData, skuData, adSpendMap = {}
                   <tr style={{ cursor: 'default' }}
                     onMouseEnter={e => e.currentTarget.style.background = '#FFFBE6'}
                     onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
-                    <td style={tdStyleL}>{r.cat}</td>
-                    <td style={tdStyleL}>
+                    <td style={{ ...tdStyleL, ...stickyCat }}>{r.cat}</td>
+                    <td style={{ ...tdStyleL, ...stickyProd }}>
                       <span onClick={() => hasSkus && toggleSku(skuKey)} style={{ cursor: hasSkus ? 'pointer' : 'default', userSelect: 'none', display: 'inline-flex', alignItems: 'center', gap: 5 }}>
                         {hasSkus && <span style={{ fontSize: 9, color: C.t3, display: 'inline-block', transform: isOpen ? 'rotate(90deg)' : 'rotate(0deg)', transition: 'transform .15s' }}>▶</span>}
                         {r.sc}
@@ -262,8 +265,8 @@ export default function PnLFinancialTable({ subCatData, skuData, adSpendMap = {}
                       <tr key={sk.sku} style={{ background: C.bg, cursor: 'default' }}
                         onMouseEnter={e => e.currentTarget.style.background = '#FFFBE6'}
                         onMouseLeave={e => e.currentTarget.style.background = C.bg}>
-                        <td style={{ ...tdStyleL, borderBottom: `1px solid ${C.border}` }}></td>
-                        <td style={{ ...tdStyleL, borderBottom: `1px solid ${C.border}`, fontFamily: 'var(--mono)', fontSize: 11, color: C.t2, paddingLeft: 22 }}>└ {sk.sku}</td>
+                        <td style={{ ...tdStyleL, ...stickyCat, borderBottom: `1px solid ${C.border}` }}></td>
+                        <td style={{ ...tdStyleL, ...stickyProd, borderBottom: `1px solid ${C.border}`, fontFamily: 'var(--mono)', fontSize: 11, color: C.t2, paddingLeft: 22 }}>└ {sk.sku}</td>
                         <td style={{ ...tdStyle, fontSize: 11 }}>{fmt(sk.gross)}</td>
                         <td style={{ ...tdStyle, fontSize: 11 }}>{fmt(sk.excRev)}</td>
                         <td style={{ ...tdStyle, fontSize: 11 }}>{fmtN(sk.units)}</td>
@@ -288,7 +291,8 @@ export default function PnLFinancialTable({ subCatData, skuData, adSpendMap = {}
           </tbody>
           <tfoot>
             <tr style={{ background: C.bg, borderTop: `1.5px solid ${C.border}`, position: 'sticky', bottom: 0 }}>
-              <td style={{ ...totalTdStyle, textAlign: 'left' }} colSpan={2}>Total</td>
+              <td style={{ ...totalTdStyle, ...stickyCat, textAlign: 'left', zIndex: 2 }}>Total</td>
+              <td style={{ ...totalTdStyle, ...stickyProd, textAlign: 'left', zIndex: 2 }}></td>
               <td style={totalTdStyle}>{fmt(tot.gross)}</td>
               <td style={totalTdStyle}>{fmt(tot.excRev)}</td>
               <td style={totalTdStyle}>{fmtN(tot.units)}</td>
