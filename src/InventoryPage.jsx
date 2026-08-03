@@ -383,9 +383,9 @@ export default function InventoryPage({ onTopbarDateControl, tab = 'health', set
               ? `Snapshot updated ${new Date(inv.data.lastSnapshotUpdated.replace('Z','') + '+05:30').toLocaleString('en-IN', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Kolkata' })}`
               : inv.loading ? 'Loading snapshot time…' : ''}
           </span>
-          {inv.data?.avgSaleWindow?.end && (
+          {inv.data?.lastSalesDateConsidered && (
             <span style={{ fontSize: 11, color: IC.t3 }}>
-              Latest sales {new Date(inv.data.avgSaleWindow.end).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}
+              Latest sales {new Date(inv.data.lastSalesDateConsidered).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}
             </span>
           )}
         </div>
