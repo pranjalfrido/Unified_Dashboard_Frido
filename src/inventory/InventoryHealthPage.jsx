@@ -674,7 +674,7 @@ const InventoryHealthInner = React.memo(function InventoryHealthInner({ data, fi
       {/* +16 accounts for the collapse-toggle button's own width — it's position:fixed
           (out of flow) now, so this padding is the only thing keeping content from
           starting underneath it. */}
-      <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 18, paddingLeft: 32, paddingRight: 24 }}>
+      <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 18, paddingLeft: 32, paddingRight: 24, paddingTop: 16 }}>
 
         {/* KPI row */}
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, minmax(0, 1fr))', gap: 10, alignItems: 'stretch' }}>
