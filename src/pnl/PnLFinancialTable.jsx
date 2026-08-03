@@ -153,10 +153,6 @@ export default function PnLFinancialTable({ subCatData, skuData, adSpendMap = {}
         'Returns %': +r.returnPct.toFixed(2), 'Net Revenue': Math.round(r.net), Units: r.units,
         COGS: r.anyCosted ? Math.round(r.cogs) : '', 'COGS %': r.anyCosted && r.net > 0 ? +pctOf(r.cogs, r.net).toFixed(2) : '',
         GM: r.gm != null ? Math.round(r.gm) : '', 'GM %': r.gm != null && r.net > 0 ? +pctOf(r.gm, r.net).toFixed(2) : '',
-        Logistics: r.anyCosts ? Math.round(r.logistics) : '', 'Logistics %': r.anyCosts && r.net > 0 ? +pctOf(r.logistics, r.net).toFixed(2) : '',
-        Fulfilment: r.anyCosts ? Math.round(r.fulfilment) : '', 'Fulfilment %': r.anyCosts && r.net > 0 ? +pctOf(r.fulfilment, r.net).toFixed(2) : '',
-        'Payment GW': r.anyCosts ? Math.round(r.paymentGw) : '', 'Payment GW %': r.anyCosts && r.net > 0 ? +pctOf(r.paymentGw, r.net).toFixed(2) : '',
-        'Software Fee': r.anyCosts ? Math.round(r.softwareFee) : '', 'Software Fee %': r.anyCosts && r.net > 0 ? +pctOf(r.softwareFee, r.net).toFixed(2) : '',
         SND: r.snd != null ? Math.round(r.snd) : '', 'SND %': r.snd != null && r.net > 0 ? +pctOf(r.snd, r.net).toFixed(2) : '',
         CM1: r.cm1 != null ? Math.round(r.cm1) : '', 'CM1 %': r.cm1 != null && r.net > 0 ? +pctOf(r.cm1, r.net).toFixed(2) : '',
         'Marketing Spend': Math.round(r.spend), 'Spend %': +r.spendPct.toFixed(2),
@@ -176,10 +172,6 @@ export default function PnLFinancialTable({ subCatData, skuData, adSpendMap = {}
           'Returns %': +pctOf(sk.totalReturnRev, sk.gross).toFixed(2), 'Net Revenue': Math.round(sk.net), Units: sk.units,
           COGS: Math.round(skCogs), 'COGS %': sk.net > 0 ? +pctOf(skCogs, sk.net).toFixed(2) : '',
           GM: Math.round(skGm), 'GM %': sk.net > 0 ? +pctOf(skGm, sk.net).toFixed(2) : '',
-          Logistics: skC ? Math.round(skC.logistics) : '', 'Logistics %': skC && sk.net > 0 ? +pctOf(skC.logistics, sk.net).toFixed(2) : '',
-          Fulfilment: skC ? Math.round(skC.fulfilment) : '', 'Fulfilment %': skC && sk.net > 0 ? +pctOf(skC.fulfilment, sk.net).toFixed(2) : '',
-          'Payment GW': skC ? Math.round(skC.paymentGw) : '', 'Payment GW %': skC && sk.net > 0 ? +pctOf(skC.paymentGw, sk.net).toFixed(2) : '',
-          'Software Fee': skC ? Math.round(skC.softwareFee) : '', 'Software Fee %': skC && sk.net > 0 ? +pctOf(skC.softwareFee, sk.net).toFixed(2) : '',
           SND: skSndCsv != null ? Math.round(skSndCsv) : '', 'SND %': skSndCsv != null && sk.net > 0 ? +pctOf(skSndCsv, sk.net).toFixed(2) : '',
           CM1: skCm1 != null ? Math.round(skCm1) : '', 'CM1 %': skCm1 != null && sk.net > 0 ? +pctOf(skCm1, sk.net).toFixed(2) : '',
           'Marketing Spend': '', 'Spend %': '',
@@ -215,14 +207,6 @@ export default function PnLFinancialTable({ subCatData, skuData, adSpendMap = {}
               <th style={{ ...thStyle, position: 'sticky', top: 0, background: C.bg, zIndex: 1, cursor: 'default' }}>COGS %</th>
               <Th label="GM" sortKey="gm" style={{ ...thStyle, position: 'sticky', top: 0, background: C.bg, zIndex: 1 }} />
               <th style={{ ...thStyle, position: 'sticky', top: 0, background: C.bg, zIndex: 1, cursor: 'default' }}>GM %</th>
-              <Th label="Logistics" sortKey="logistics" style={{ ...thStyle, position: 'sticky', top: 0, background: C.bg, zIndex: 1 }} />
-              <th style={{ ...thStyle, position: 'sticky', top: 0, background: C.bg, zIndex: 1, cursor: 'default' }}>Log %</th>
-              <Th label="Fulfilment" sortKey="fulfilment" style={{ ...thStyle, position: 'sticky', top: 0, background: C.bg, zIndex: 1 }} />
-              <th style={{ ...thStyle, position: 'sticky', top: 0, background: C.bg, zIndex: 1, cursor: 'default' }}>Ful %</th>
-              <Th label="Payment GW" sortKey="paymentGw" style={{ ...thStyle, position: 'sticky', top: 0, background: C.bg, zIndex: 1 }} />
-              <th style={{ ...thStyle, position: 'sticky', top: 0, background: C.bg, zIndex: 1, cursor: 'default' }}>PGW %</th>
-              <Th label="Software Fee" sortKey="softwareFee" style={{ ...thStyle, position: 'sticky', top: 0, background: C.bg, zIndex: 1 }} />
-              <th style={{ ...thStyle, position: 'sticky', top: 0, background: C.bg, zIndex: 1, cursor: 'default' }}>SW %</th>
               <Th label="SND" sortKey="snd" style={{ ...thStyle, position: 'sticky', top: 0, background: C.bg, zIndex: 1 }} />
               <th style={{ ...thStyle, position: 'sticky', top: 0, background: C.bg, zIndex: 1, cursor: 'default' }}>SND %</th>
               <Th label="CM1" sortKey="cm1" style={{ ...thStyle, position: 'sticky', top: 0, background: C.bg, zIndex: 1 }} />
@@ -259,14 +243,6 @@ export default function PnLFinancialTable({ subCatData, skuData, adSpendMap = {}
                     <td style={tdStyle}>{r.anyCosted && r.net > 0 ? `${pctOf(r.cogs, r.net).toFixed(1)}%` : noCostCell}</td>
                     <td style={tdStyle}>{valCellOf(r.gm)}</td>
                     <td style={tdStyle}>{r.gm != null && r.net > 0 ? `${pctOf(r.gm, r.net).toFixed(1)}%` : noCostCell}</td>
-                    <td style={tdStyle}>{r.anyCosts ? fmt(r.logistics) : noCostCell}</td>
-                    <td style={tdStyle}>{r.anyCosts && r.net > 0 ? `${pctOf(r.logistics, r.net).toFixed(1)}%` : noCostCell}</td>
-                    <td style={tdStyle}>{r.anyCosts ? fmt(r.fulfilment) : noCostCell}</td>
-                    <td style={tdStyle}>{r.anyCosts && r.net > 0 ? `${pctOf(r.fulfilment, r.net).toFixed(1)}%` : noCostCell}</td>
-                    <td style={tdStyle}>{r.anyCosts ? fmt(r.paymentGw) : noCostCell}</td>
-                    <td style={tdStyle}>{r.anyCosts && r.net > 0 ? `${pctOf(r.paymentGw, r.net).toFixed(1)}%` : noCostCell}</td>
-                    <td style={tdStyle}>{r.anyCosts ? fmt(r.softwareFee) : noCostCell}</td>
-                    <td style={tdStyle}>{r.anyCosts && r.net > 0 ? `${pctOf(r.softwareFee, r.net).toFixed(1)}%` : noCostCell}</td>
                     <td style={tdStyle}>{r.snd != null ? fmt(r.snd) : noCostCell}</td>
                     <td style={tdStyle}>{r.snd != null && r.net > 0 ? `${pctOf(r.snd, r.net).toFixed(1)}%` : noCostCell}</td>
                     <td style={tdStyle}>{valCellOf(r.cm1)}</td>
@@ -297,14 +273,6 @@ export default function PnLFinancialTable({ subCatData, skuData, adSpendMap = {}
                         <td style={{ ...tdStyle, fontSize: 11 }}>{sk.net > 0 ? `${pctOf(skCogs, sk.net).toFixed(1)}%` : noCostCell}</td>
                         <td style={{ ...tdStyle, fontSize: 11 }}>{fmt(skGm)}</td>
                         <td style={{ ...tdStyle, fontSize: 11 }}>{sk.net > 0 ? `${pctOf(skGm, sk.net).toFixed(1)}%` : noCostCell}</td>
-                        <td style={{ ...tdStyle, fontSize: 11 }}>{skC ? fmt(skC.logistics) : noCostCell}</td>
-                        <td style={{ ...tdStyle, fontSize: 11 }}>{skC && sk.net > 0 ? `${pctOf(skC.logistics, sk.net).toFixed(1)}%` : noCostCell}</td>
-                        <td style={{ ...tdStyle, fontSize: 11 }}>{skC ? fmt(skC.fulfilment) : noCostCell}</td>
-                        <td style={{ ...tdStyle, fontSize: 11 }}>{skC && sk.net > 0 ? `${pctOf(skC.fulfilment, sk.net).toFixed(1)}%` : noCostCell}</td>
-                        <td style={{ ...tdStyle, fontSize: 11 }}>{skC ? fmt(skC.paymentGw) : noCostCell}</td>
-                        <td style={{ ...tdStyle, fontSize: 11 }}>{skC && sk.net > 0 ? `${pctOf(skC.paymentGw, sk.net).toFixed(1)}%` : noCostCell}</td>
-                        <td style={{ ...tdStyle, fontSize: 11 }}>{skC ? fmt(skC.softwareFee) : noCostCell}</td>
-                        <td style={{ ...tdStyle, fontSize: 11 }}>{skC && sk.net > 0 ? `${pctOf(skC.softwareFee, sk.net).toFixed(1)}%` : noCostCell}</td>
                         <td style={{ ...tdStyle, fontSize: 11 }}>{skSnd != null ? fmt(skSnd) : noCostCell}</td>
                         <td style={{ ...tdStyle, fontSize: 11 }}>{skSnd != null && sk.net > 0 ? `${pctOf(skSnd, sk.net).toFixed(1)}%` : noCostCell}</td>
                         <td style={{ ...tdStyle, fontSize: 11 }}>{skCm1 != null ? fmt(skCm1) : noCostCell}</td>
@@ -330,14 +298,6 @@ export default function PnLFinancialTable({ subCatData, skuData, adSpendMap = {}
               <td style={totalTdStyle}>{tot.anyCosted && tot.net > 0 ? `${pctOf(tot.cogs, tot.net).toFixed(1)}%` : noCostCell}</td>
               <td style={totalTdStyle}>{valCellOf(totGm)}</td>
               <td style={totalTdStyle}>{totGm != null && tot.net > 0 ? `${pctOf(totGm, tot.net).toFixed(1)}%` : noCostCell}</td>
-              <td style={totalTdStyle}>{tot.anyCosts ? fmt(tot.logistics) : noCostCell}</td>
-              <td style={totalTdStyle}>{tot.anyCosts && tot.net > 0 ? `${pctOf(tot.logistics, tot.net).toFixed(1)}%` : noCostCell}</td>
-              <td style={totalTdStyle}>{tot.anyCosts ? fmt(tot.fulfilment) : noCostCell}</td>
-              <td style={totalTdStyle}>{tot.anyCosts && tot.net > 0 ? `${pctOf(tot.fulfilment, tot.net).toFixed(1)}%` : noCostCell}</td>
-              <td style={totalTdStyle}>{tot.anyCosts ? fmt(tot.paymentGw) : noCostCell}</td>
-              <td style={totalTdStyle}>{tot.anyCosts && tot.net > 0 ? `${pctOf(tot.paymentGw, tot.net).toFixed(1)}%` : noCostCell}</td>
-              <td style={totalTdStyle}>{tot.anyCosts ? fmt(tot.softwareFee) : noCostCell}</td>
-              <td style={totalTdStyle}>{tot.anyCosts && tot.net > 0 ? `${pctOf(tot.softwareFee, tot.net).toFixed(1)}%` : noCostCell}</td>
               <td style={totalTdStyle}>{totSnd != null ? fmt(totSnd) : noCostCell}</td>
               <td style={totalTdStyle}>{totSnd != null && tot.net > 0 ? `${pctOf(totSnd, tot.net).toFixed(1)}%` : noCostCell}</td>
               <td style={totalTdStyle}>{tot.anyCm1 ? fmt(tot.cm1) : noCostCell}</td>
