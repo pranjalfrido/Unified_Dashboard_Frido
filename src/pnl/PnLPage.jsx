@@ -73,7 +73,9 @@ export default function PnLPage({ data, filters, setFilters }) {
     rows.forEach(row => {
       const { sku, orderStatus, weightSlab, lineCount, totalQty, grossIncGst } = row
       if (!sku) return
-      const rate = rateForSlab(sndRates, weightSlab)
+      // Fallback: missing weight → treat as 2kg slab
+      const effectiveSlab = weightSlab != null ? weightSlab : 2000
+      const rate = rateForSlab(sndRates, effectiveSlab)
       // Logistics & fulfilment apply once per line item (lineCount), not per unit
       let logistics = 0
       let fulfilment = rate ? rate.fulfilment * lineCount : 0
