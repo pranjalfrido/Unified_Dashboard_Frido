@@ -372,6 +372,7 @@ export default function PnLPage({ data, filters, setFilters }) {
           subCatData={activeData.subCatData}
           skuData={activeData.skuData}
           skuCosts={activeTab === 'shopify' ? shSkuCosts : undefined}
+          adSpendMap={activeTab === 'shopify' ? (data?.pnlAdSpendMap || {}) : undefined}
           daily={activeData.daily}
           grossColor={CHANNEL_COLORS[activeTab] || '#FFD600'}
           gradId={`pnl${activeTab}Grad`}

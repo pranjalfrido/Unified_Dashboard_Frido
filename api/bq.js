@@ -1061,6 +1061,17 @@ export default async function handler(req, res) {
       voucherList: (r.byVoucherRaw || []).map(x => ({ code: x.voucher_code, orders: parseInt(x.orders) || 0 })),
       orders, skuRows, rows: [],
       pnlSalesRows: [...(r.salesCategoryOrders || []), ...(r.salesCategoryOrdersFk || [])],
+      // D2C ad spend (Meta + Google) by item-master sub_category, from adsCategoryBreakdown which
+      // resolves all targeting types down to normalized subcategory names via revenue share.
+      pnlAdSpendMap: (() => {
+        const m = {}
+        ;(r.adsCategoryBreakdown || []).filter(x => x.platform === 'Meta' || x.platform === 'Google').forEach(x => {
+          const sc = x.product_name
+          if (!sc || !sc.trim()) return
+          m[sc] = (m[sc] || 0) + (parseFloat(x.spend) || 0)
+        })
+        return m
+      })(),
       masterSkuList: (r.masterSkuList || []).map(x => x.sku).filter(Boolean),
       shopify: {
         // Shared measures layer (computeNetRevenueMeasures in _bq.js) — see formula note there.
