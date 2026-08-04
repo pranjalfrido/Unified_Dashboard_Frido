@@ -1071,9 +1071,16 @@ export default async function handler(req, res) {
           .filter(x => x.platform === 'Meta' || x.platform === 'Google')
           .forEach(x => {
             const sc = (x.product_name || '').trim()
-            if (!sc) return  // rows with no sub_category match are unattributable — skip
+            if (!sc) return
             m[sc] = (m[sc] || 0) + (parseFloat(x.spend) || 0)
           })
+        // Add unattributed spend to "Others" so table total matches raw Meta+Google total
+        const adsTotals = r.adsTotals || []
+        const rawTotal = (parseFloat(adsTotals.find(t => t.platform === 'Meta')?.spend) || 0)
+                       + (parseFloat(adsTotals.find(t => t.platform === 'Google')?.spend) || 0)
+        const attributed = Object.values(m).reduce((s, v) => s + v, 0)
+        const unattributed = rawTotal - attributed
+        if (unattributed > 0) m['Others'] = (m['Others'] || 0) + unattributed
         return m
       })(),
       pnlRawAdSpend: (() => {
