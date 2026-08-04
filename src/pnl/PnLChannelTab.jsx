@@ -23,7 +23,7 @@ export default function PnLChannelTab({ title, note, gross, excRev, net, units, 
     <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
       <div className="g-kpi9">
         <KPICard label="Gross Revenue" value={fmt(gross)} sub={`${fmtBig(units)} units${note ? ` · ${note}` : ''}`} />
-        <KPICard label="Net Revenue" value={fmt(net)} sub="Ex GST & returns" />
+        <KPICard label="Net Revenue" value={fmt(net)} sub="" />
         <KPICard label="Returns" value={fmt(returnRev)} sub={`${fmtPct(gross > 0 ? returnRev / gross * 100 : null)} of Gross`} accent={gross > 0 && returnRev / gross > 0.15 ? '#7A1A1A' : undefined} />
         <KPICard label="COGS" value={t?.cogs != null ? fmt(t.cogs) : dash} sub={`${fmtPct(t?.cogsPct)} of Net Rev`} />
         <KPICard label="Gross Margin" value={t?.gm != null ? fmt(t.gm) : dash} sub={`GM% ${fmtPct(t?.gmPct)}`} accent={t?.gmPct != null && t.gmPct < 30 ? '#7A1A1A' : undefined} />
