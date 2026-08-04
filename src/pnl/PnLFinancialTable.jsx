@@ -183,7 +183,7 @@ export default function PnLFinancialTable({ subCatData, skuData, adSpendMap = {}
   // Sticky left column styles — Category fixed at 0, Product fixed at colWidths.cat px
   const catW = colWidths.cat, scW = colWidths.sc
   const stickyCat = { position: 'sticky', left: 0, background: C.card, zIndex: 1, width: catW, minWidth: catW, maxWidth: catW }
-  const stickyProd = { position: 'sticky', left: catW, background: C.bg, zIndex: 1, width: scW, minWidth: scW, maxWidth: scW, boxShadow: '2px 0 4px rgba(0,0,0,0.06)' }
+  const stickyProd = { position: 'sticky', left: catW, background: C.card, zIndex: 1, width: scW, minWidth: scW, maxWidth: scW, boxShadow: '2px 0 4px rgba(0,0,0,0.06)' }
   const w = id => ({ width: colWidths[id], minWidth: colWidths[id], maxWidth: colWidths[id] })
   const totalTdStyle = { ...tdStyle, padding: '6px 7px', fontWeight: 700, color: C.t1, borderBottom: 'none', position: 'sticky', bottom: 0, background: C.card, borderTop: `1.5px solid ${C.border}`, zIndex: 1 }
   const pendingCell = <span style={{ color: C.t3 }} title="Pending data — see PNL_TAB_ROADMAP.md">—</span>
@@ -305,9 +305,9 @@ export default function PnLFinancialTable({ subCatData, skuData, adSpendMap = {}
                     const skCm1 = skSnd != null ? skGm - skSnd : null
                     const skSpend = r.spend > 0 && scTotalGross > 0 ? r.spend * (sk.gross / scTotalGross) : 0
                     return (
-                      <tr key={sk.sku} style={{ background: C.bg, cursor: 'default' }}
+                      <tr key={sk.sku} style={{ cursor: 'default' }}
                         onMouseEnter={e => { e.currentTarget.style.background = '#FFFBE6'; Array.from(e.currentTarget.querySelectorAll('td[data-sticky]')).forEach(td => td.style.background = '#FFFBE6') }}
-                        onMouseLeave={e => { e.currentTarget.style.background = C.card; Array.from(e.currentTarget.querySelectorAll('td[data-sticky]')).forEach(td => td.style.background = C.card) }}>
+                        onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; Array.from(e.currentTarget.querySelectorAll('td[data-sticky]')).forEach(td => td.style.background = C.card) }}>
                         <td data-sticky="1" style={{ ...tdStyleL, ...stickyCat, borderBottom: `1px solid ${C.border}` }}></td>
                         <td data-sticky="1" style={{ ...tdStyleL, ...stickyProd, borderBottom: `1px solid ${C.border}`, fontFamily: 'var(--mono)', fontSize: 11, color: C.t2, paddingLeft: 22 }}>└ {sk.sku}</td>
                         <td style={{ ...tdStyle, fontSize: 11 }}>{fmt(sk.gross)}</td>
