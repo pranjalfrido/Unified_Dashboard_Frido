@@ -4741,7 +4741,7 @@ function ShopifyTab({ data, filters, setFilters }) {
   const [catRevView, setCatRevView] = useState('category') // 'category' | 'product'
   // On mount, default to India scope if no region is set yet
   useEffect(() => {
-    if (filters.subChannel !== 'International' && filters.subChannel !== 'ShopifyIndia') {
+    if (!filters.subChannel) {
       setFilters(f => ({ ...f, subChannel: 'ShopifyIndia' }))
     }
   }, [])
