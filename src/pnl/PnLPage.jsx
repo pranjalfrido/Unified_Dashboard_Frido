@@ -30,7 +30,7 @@ function netOf(subCatData) {
   let gross = 0, excRev = 0, net = 0, returnRev = 0, units = 0
   Object.values(subCatData || {}).forEach(scMap => {
     Object.values(scMap).forEach(d => {
-      const totalReturn = (d.cancelRev || 0) + (d.rtoRev || 0) + (d.cirRev || 0) + (d.returnRev || 0)
+      const totalReturn = ((d.cancelRev || 0) - (d.codCancelRev || 0)) + (d.rtoRev || 0) + (d.cirRev || 0) + (d.returnRev || 0)
       const gstRatio = d.rev > 0 ? (d.rev - d.excRev) / d.rev : 0
       gross += d.rev || 0
       excRev += d.excRev || 0
