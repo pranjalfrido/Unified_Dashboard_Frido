@@ -27,7 +27,7 @@ export default function PnLChannelTab({ title, note, gross, excRev, net, units, 
         <KPICard label="Mktg Spend" value={t?.spend != null ? fmt(t.spend) : dash} sub={`${fmtPct(t?.spendPct)} of Net Rev`} />
         <KPICard label="CM2" value={t?.cm2 != null ? fmt(t.cm2) : dash} sub={`CM2% ${fmtPct(t?.cm2Pct)}`} accent={t?.cm2Pct != null && t.cm2Pct < 0 ? '#7A1A1A' : undefined} />
       </div>
-      <TrendAnalysisCard title={`${title} — Revenue Trend`} daily={daily} grossColor={grossColor} grossGradId={gradId} boxHeight={410} cogsPct={tableTotals?.cogsPct} sndPct={tableTotals?.sndPct} />
+      <TrendAnalysisCard title={`${title} — Revenue Trend`} daily={daily} grossColor={grossColor} grossGradId={gradId} boxHeight={410} cogsPct={tableTotals?.cogsPct} sndPct={tableTotals?.sndPct} netRatio={excRev > 0 ? net / excRev : null} />
       <PnLFinancialTable subCatData={subCatData} skuData={skuData} adSpendMap={adSpendMap} skuCosts={skuCosts} title={`Financial View · ${title}`} onTotals={handleTotals} />
     </div>
   )
