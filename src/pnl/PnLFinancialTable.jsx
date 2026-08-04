@@ -173,7 +173,10 @@ export default function PnLFinancialTable({ subCatData, skuData, adSpendMap = {}
   }), { gross: 0, excRev: 0, net: 0, units: 0, totalReturnRev: 0, spend: 0, cogs: 0, netCovered: 0, anyCosted: false, logistics: 0, fulfilment: 0, paymentGw: 0, softwareFee: 0, anyCosts: false, cm1: 0, anyCm1: false, cm2: 0, anyCm2: false })
   const totSnd = tot.anyCosts ? tot.logistics + tot.fulfilment + tot.paymentGw + tot.softwareFee : null
   const totReturnPct = pctOf(tot.totalReturnRev, tot.gross)
-  const totSpendPct = tot.net > 0 ? (tot.spend / tot.net * 100) : 0
+  // Use sum of ALL adSpendMap values so spend from sub-categories not in the table is included
+  const totalMapSpend = Object.values(adSpendMap).reduce((s, v) => s + v, 0)
+  const totSpend = totalMapSpend > 0 ? totalMapSpend : tot.spend
+  const totSpendPct = tot.net > 0 ? (totSpend / tot.net * 100) : 0
   const totGm = tot.anyCosted ? tot.netCovered - tot.cogs : null
 
   useEffect(() => {
@@ -186,8 +189,8 @@ export default function PnLFinancialTable({ subCatData, skuData, adSpendMap = {}
     const cm1Pct = cm1 != null && tot.netCovered > 0 ? pctOf(cm1, tot.netCovered) : null
     const cm2 = tot.anyCm2 ? tot.cm2 : null
     const cm2Pct = cm2 != null && tot.netCovered > 0 ? pctOf(cm2, tot.netCovered) : null
-    onTotals({ cogsPct, sndPct, cogs: tot.anyCosted ? tot.cogs : null, snd: totSnd, gm, gmPct, cm1, cm1Pct, cm2, cm2Pct, spend: tot.spend, spendPct: totSpendPct, netCovered: tot.netCovered })
-  }, [tot.cogs, tot.netCovered, totSnd, tot.anyCosted, tot.anyCosts, tot.cm1, tot.cm2, tot.anyCm1, tot.anyCm2, tot.spend])
+    onTotals({ cogsPct, sndPct, cogs: tot.anyCosted ? tot.cogs : null, snd: totSnd, gm, gmPct, cm1, cm1Pct, cm2, cm2Pct, spend: totSpend, spendPct: totSpendPct, netCovered: tot.netCovered })
+  }, [tot.cogs, tot.netCovered, totSnd, tot.anyCosted, tot.anyCosts, tot.cm1, tot.cm2, tot.anyCm1, tot.anyCm2, totSpend])
 
   const thStyle = { fontSize: 9.5, fontWeight: 700, color: C.t1, textTransform: 'uppercase', letterSpacing: 0.4, padding: '6px 7px', textAlign: 'right', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', borderBottom: `1.5px solid ${C.border}` }
   const thStyleL = { ...thStyle, textAlign: 'left' }
@@ -355,8 +358,8 @@ export default function PnLFinancialTable({ subCatData, skuData, adSpendMap = {}
               <td style={totalTdStyle}>{totGm != null && tot.net > 0 ? `${pctOf(totGm, tot.net).toFixed(1)}%` : noCostCell}</td>
               <td style={totalTdStyle}>{totSnd != null && tot.net > 0 ? `${pctOf(totSnd, tot.net).toFixed(1)}%` : noCostCell}</td>
               <td style={totalTdStyle}>{tot.anyCm1 && tot.net > 0 ? `${pctOf(tot.cm1, tot.net).toFixed(1)}%` : noCostCell}</td>
-              <td style={totalTdStyle}>{tot.spend > 0 ? fmt(tot.spend) : '—'}</td>
-              <td style={totalTdStyle}>{tot.spend > 0 ? `${totSpendPct.toFixed(2)}%` : '—'}</td>
+              <td style={totalTdStyle}>{totSpend > 0 ? fmt(totSpend) : '—'}</td>
+              <td style={totalTdStyle}>{totSpend > 0 ? `${totSpendPct.toFixed(2)}%` : '—'}</td>
               <td style={totalTdStyle}>{tot.anyCm2 && tot.net > 0 ? `${pctOf(tot.cm2, tot.net).toFixed(1)}%` : noCostCell}</td>
             </tr>
           </tfoot>
