@@ -498,6 +498,7 @@ export default async function handler(req, res) {
     eboExchange: `WITH q AS (${base}) SELECT COUNT(DISTINCT OrderId) AS exchange_orders, SUM(SellingPrice_Inc_GST) AS exchange_rev FROM q WHERE Channel='Retail' AND Order_Status = 'Exchange'`,
     eboRTO: `WITH q AS (${base}) SELECT SUM(SellingPrice_Inc_GST) AS rto_rev, SUM(SellingPrice_Exc_GST) AS rto_exc_rev, COUNT(DISTINCT OrderId) AS rto_orders FROM q WHERE Channel='Retail' AND Order_Status = 'RTO'`,
     eboDailyReturnTrend: `WITH q AS (${base}) SELECT CAST(OrderDate AS STRING) AS date, COUNT(DISTINCT OrderId) AS total_orders, COUNT(DISTINCT CASE WHEN Order_Status='RTO' THEN OrderId END) AS rto_orders, COUNT(DISTINCT CASE WHEN Order_Status='Return' THEN OrderId END) AS return_orders, COUNT(DISTINCT CASE WHEN Order_Status='Exchange' THEN OrderId END) AS exch_orders, COUNT(DISTINCT CASE WHEN Order_Status='CIR' THEN OrderId END) AS cir_orders, COUNT(DISTINCT CASE WHEN Order_Status='Cancelled' THEN OrderId END) AS cancel_orders FROM q WHERE Channel='Retail' GROUP BY date ORDER BY date`,
+    pnlAdRawTotals: `SELECT platform, ROUND(SUM(spend),2) AS spend FROM \`frido-429506.production.fact_all_platform_ads_report\` WHERE report_date BETWEEN '${start}' AND '${end}' AND platform IN ('Meta','Google') GROUP BY platform`,
   }
 
   try {
@@ -1074,19 +1075,19 @@ export default async function handler(req, res) {
             if (!sc) return
             m[sc] = (m[sc] || 0) + (parseFloat(x.spend) || 0)
           })
-        // Add unattributed spend to "Others" so table total matches raw Meta+Google total
-        const adsTotals = r.adsTotals || []
-        const rawTotal = (parseFloat(adsTotals.find(t => t.platform === 'Meta')?.spend) || 0)
-                       + (parseFloat(adsTotals.find(t => t.platform === 'Google')?.spend) || 0)
+        // Add unattributed spend to Others so table total matches raw Meta+Google
+        const rawRows = r.pnlAdRawTotals || []
+        const rawTotal = (parseFloat(rawRows.find(t => t.platform === 'Meta')?.spend) || 0)
+                       + (parseFloat(rawRows.find(t => t.platform === 'Google')?.spend) || 0)
         const attributed = Object.values(m).reduce((s, v) => s + v, 0)
         const unattributed = rawTotal - attributed
         if (unattributed > 0) m['Others'] = (m['Others'] || 0) + unattributed
         return m
       })(),
       pnlRawAdSpend: (() => {
-        const adsTotals = r.adsTotals || []
-        const meta = parseFloat(adsTotals.find(t => t.platform === 'Meta')?.spend) || 0
-        const google = parseFloat(adsTotals.find(t => t.platform === 'Google')?.spend) || 0
+        const rows = r.pnlAdRawTotals || []
+        const meta = parseFloat(rows.find(t => t.platform === 'Meta')?.spend) || 0
+        const google = parseFloat(rows.find(t => t.platform === 'Google')?.spend) || 0
         return meta + google
       })(),
       masterSkuList: (r.masterSkuList || []).map(x => x.sku).filter(Boolean),
