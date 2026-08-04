@@ -22,7 +22,7 @@ import { useSortableTable } from '../components.jsx'
 // adSpendMap: optional {subCategory: spend} — real marketing spend, folded in as Spend % of Net Revenue.
 // sndBySku: optional {sku: totalSndCost} — real SnD cost per SKU (Shopify only for now).
 // skuCosts: {sku: {logistics, fulfilment, paymentGw, softwareFee}} — D2C only, from PnLPage
-export default function PnLFinancialTable({ subCatData, skuData, adSpendMap = {}, skuCosts, title = 'Financial View' }) {
+export default function PnLFinancialTable({ subCatData, skuData, adSpendMap = {}, skuCosts, title = 'Financial View', onTotals }) {
   const [expandedSku, setExpandedSku] = useState({})
   const [search, setSearch] = useState('')
   const [cogsMap, setCogsMap] = useState(null)
@@ -175,6 +175,13 @@ export default function PnLFinancialTable({ subCatData, skuData, adSpendMap = {}
   const totReturnPct = pctOf(tot.totalReturnRev, tot.gross)
   const totSpendPct = tot.net > 0 ? (tot.spend / tot.net * 100) : 0
   const totGm = tot.anyCosted ? tot.netCovered - tot.cogs : null
+
+  useEffect(() => {
+    if (!onTotals) return
+    const cogsPct = tot.anyCosted && tot.netCovered > 0 ? pctOf(tot.cogs, tot.netCovered) : null
+    const sndPct = totSnd != null && tot.netCovered > 0 ? pctOf(totSnd, tot.netCovered) : null
+    onTotals({ cogsPct, sndPct })
+  }, [tot.cogs, tot.netCovered, totSnd, tot.anyCosted, tot.anyCosts])
 
   const thStyle = { fontSize: 9.5, fontWeight: 700, color: C.t1, textTransform: 'uppercase', letterSpacing: 0.4, padding: '6px 7px', textAlign: 'right', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', borderBottom: `1.5px solid ${C.border}` }
   const thStyleL = { ...thStyle, textAlign: 'left' }

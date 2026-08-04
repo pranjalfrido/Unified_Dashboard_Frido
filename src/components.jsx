@@ -232,21 +232,34 @@ export function getGroupKey(date, groupBy) {
 // Shared Gross/Net Revenue + Units trend chart with a granularity selector — used by every
 // Sales-tab channel that doesn't need per-metric-toggle buttons (Amazon quick-commerce family)
 // and reused as-is by the PnL tab's per-channel trend card.
-export function TrendAnalysisCard({ title, daily, grossColor, grossGradId, revKey = 'rev', excRevKey = 'excRev', boxHeight }) {
+export function TrendAnalysisCard({ title, daily, grossColor, grossGradId, revKey = 'rev', excRevKey = 'excRev', boxHeight, cogsPct, sndPct }) {
   const nDays = daily.length
   const autoGroup = nDays <= 14 ? 'daily' : nDays <= 90 ? 'weekly' : 'monthly'
   const [groupBy, setGroupBy] = useState(autoGroup)
   const selStyle = { fontSize: 11, padding: '3px 8px', borderRadius: 6, border: `1px solid ${C.border2}`, background: C.card, color: C.t1, outline: 'none', fontFamily: 'var(--font)', cursor: 'pointer' }
 
+  const showCogs = cogsPct != null
+  const showSnd = sndPct != null
+
   const grouped = (() => {
-    if (groupBy === 'daily') return daily
+    if (groupBy === 'daily') {
+      return daily.map(d => {
+        const net = d[excRevKey] || 0
+        const out = { ...d }
+        if (showCogs) out._cogs = net * cogsPct / 100
+        if (showSnd) out._snd = net * sndPct / 100
+        return out
+      })
+    }
     const agg = {}
     daily.forEach(d => {
       const k = getGroupKey(d.date, groupBy)
-      if (!agg[k]) agg[k] = { date: k, [revKey]: 0, [excRevKey]: 0, units: 0 }
+      if (!agg[k]) agg[k] = { date: k, [revKey]: 0, [excRevKey]: 0, units: 0, _cogs: 0, _snd: 0 }
       agg[k][revKey] += d[revKey] || 0
       agg[k][excRevKey] += d[excRevKey] || 0
       agg[k].units += d.units || 0
+      if (showCogs) agg[k]._cogs += (d[excRevKey] || 0) * cogsPct / 100
+      if (showSnd) agg[k]._snd += (d[excRevKey] || 0) * sndPct / 100
     })
     return Object.values(agg)
   })()
@@ -273,17 +286,25 @@ export function TrendAnalysisCard({ title, daily, grossColor, grossGradId, revKe
           <Tooltip content={({ active, payload, label }) => active && payload?.length ? (
             <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 7, padding: '7px 11px', fontSize: 11 }}>
               <div style={{ fontWeight: 700, marginBottom: 4, color: C.t2 }}>{label?.slice(5) || label}</div>
-              {payload.map(p => (
-                <div key={p.name} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                  <span style={{ width: 7, height: 7, borderRadius: '50%', background: p.color, display: 'inline-block', flexShrink: 0 }} />
-                  <span style={{ color: C.t2 }}>{p.name}: {p.name === 'Units' ? fmtN(p.value) : fmt(p.value)}</span>
-                </div>
-              ))}
+              {payload.map(p => {
+                const isUnits = p.name === 'Units'
+                const isCogs = p.dataKey === '_cogs'
+                const isSnd = p.dataKey === '_snd'
+                const pctLabel = isCogs ? ` (${cogsPct.toFixed(1)}%)` : isSnd ? ` (${sndPct.toFixed(1)}%)` : ''
+                return (
+                  <div key={p.name} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <span style={{ width: 7, height: 7, borderRadius: '50%', background: p.color, display: 'inline-block', flexShrink: 0 }} />
+                    <span style={{ color: C.t2 }}>{p.name}: {isUnits ? fmtN(p.value) : fmt(p.value)}{pctLabel}</span>
+                  </div>
+                )
+              })}
             </div>
           ) : null} />
           <Legend wrapperStyle={{ fontSize: 11 }} />
           <Area yAxisId="rev" type="monotone" dataKey={revKey} name="Gross Revenue" stroke={grossColor} fill={`url(#${gradId})`} strokeWidth={2} dot={false} />
           <Area yAxisId="rev" type="monotone" dataKey={excRevKey} name="Net Revenue" stroke="#0D9E68" fill={`url(#${gradId}_net)`} strokeWidth={2} dot={false} strokeDasharray="4 2" />
+          {showCogs && <Line yAxisId="rev" type="monotone" dataKey="_cogs" name="COGS" stroke="#D97706" strokeWidth={1.5} dot={false} strokeDasharray="3 3" />}
+          {showSnd && <Line yAxisId="rev" type="monotone" dataKey="_snd" name="SnD" stroke="#7C3AED" strokeWidth={1.5} dot={false} strokeDasharray="3 3" />}
           <Line yAxisId="units" type="monotone" dataKey="units" name="Units" stroke="#2E74CC" strokeWidth={2} dot={false} />
         </ComposedChart>
       </ResponsiveContainer>
