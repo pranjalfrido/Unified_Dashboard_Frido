@@ -336,13 +336,13 @@ export default function PnLPage({ data, filters, setFilters }) {
           <div style={{ display: 'flex', gap: 16, marginBottom: 12, alignItems: 'center' }}>
             <div style={{ display: 'flex', gap: 2, background: '#F2F1EF', border: '1px solid #E0DDD4', borderRadius: 8, padding: 3 }}>
               {[{ id: 'india', label: 'India' }, { id: 'international', label: 'International' }].map(opt => (
-                <button key={opt.id} onClick={() => setD2cRegion(opt.id)} style={{ fontSize: 12, fontWeight: d2cRegion === opt.id ? 700 : 500, padding: '4px 12px', borderRadius: 6, border: 'none', background: d2cRegion === opt.id ? '#504F68' : 'transparent', color: d2cRegion === opt.id ? '#fff' : '#13121A', cursor: 'pointer' }}>{opt.label}</button>
+                <button key={opt.id} onClick={() => setD2cRegion(opt.id)} style={{ fontSize: 12, fontWeight: d2cRegion === opt.id ? 700 : 500, padding: '4px 12px', borderRadius: 6, border: 'none', background: d2cRegion === opt.id ? '#94939F' : 'transparent', color: d2cRegion === opt.id ? '#fff' : '#13121A', cursor: 'pointer' }}>{opt.label}</button>
               ))}
             </div>
             <div style={{ width: 1, height: 20, background: '#E0DDD4' }} />
             <div style={{ display: 'flex', gap: 2, background: '#F2F1EF', border: '1px solid #E0DDD4', borderRadius: 8, padding: 3 }}>
               {[{ id: 'all', label: 'All' }, { id: 'MyFrido', label: 'MyFrido' }, { id: 'Mobility', label: 'Mobility' }].map(opt => (
-                <button key={opt.id} onClick={() => setD2cSubCh(opt.id)} style={{ fontSize: 12, fontWeight: d2cSubCh === opt.id ? 700 : 500, padding: '4px 12px', borderRadius: 6, border: 'none', background: d2cSubCh === opt.id ? '#504F68' : 'transparent', color: d2cSubCh === opt.id ? '#fff' : '#13121A', cursor: 'pointer' }}>{opt.label}</button>
+                <button key={opt.id} onClick={() => setD2cSubCh(opt.id)} style={{ fontSize: 12, fontWeight: d2cSubCh === opt.id ? 700 : 500, padding: '4px 12px', borderRadius: 6, border: 'none', background: d2cSubCh === opt.id ? '#94939F' : 'transparent', color: d2cSubCh === opt.id ? '#fff' : '#13121A', cursor: 'pointer' }}>{opt.label}</button>
               ))}
             </div>
           </div>
