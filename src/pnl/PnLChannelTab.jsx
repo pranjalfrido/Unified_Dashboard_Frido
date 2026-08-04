@@ -6,7 +6,7 @@ import PnLFinancialTable from './PnLFinancialTable.jsx'
 const dash = '—'
 const fmtPct = v => v != null ? `${v.toFixed(1)}%` : dash
 
-export default function PnLChannelTab({ title, note, gross, excRev, net, units, orders, returnRev, subCatData, skuData, adSpendMap, skuCosts, daily, grossColor = '#FFD600', gradId = 'pnlGrossGrad' }) {
+export default function PnLChannelTab({ title, note, gross, excRev, net, units, orders, returnRev, subCatData, skuData, adSpendMap, skuCosts, daily, grossColor = '#FFD600', gradId = 'pnlGrossGrad', rawAdSpend }) {
   const returnPct = pct(returnRev, gross)
   const aov = orders > 0 ? gross / orders : 0
   const asp = units > 0 ? gross / units : 0
@@ -14,6 +14,10 @@ export default function PnLChannelTab({ title, note, gross, excRev, net, units, 
   const handleTotals = useCallback(t => setTableTotals(t), [])
 
   const t = tableTotals
+  const spendVal = rawAdSpend != null ? rawAdSpend : t?.spend
+  const spendPct = spendVal != null && t?.netCovered > 0 ? spendVal / t.netCovered * 100 : t?.spendPct
+  const cm2Val = t?.cm1 != null && spendVal != null ? t.cm1 - spendVal : t?.cm2
+  const cm2Pct = cm2Val != null && t?.netCovered > 0 ? cm2Val / t.netCovered * 100 : t?.cm2Pct
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
@@ -25,8 +29,8 @@ export default function PnLChannelTab({ title, note, gross, excRev, net, units, 
         <KPICard label="Gross Margin" value={t?.gm != null ? fmt(t.gm) : dash} sub={`GM% ${fmtPct(t?.gmPct)}`} accent={t?.gmPct != null && t.gmPct < 30 ? '#7A1A1A' : undefined} />
         <KPICard label="SnD Cost" value={t?.snd != null ? fmt(t.snd) : dash} sub={`${fmtPct(t?.sndPct)} of Net Rev`} />
         <KPICard label="CM1" value={t?.cm1 != null ? fmt(t.cm1) : dash} sub={`CM1% ${fmtPct(t?.cm1Pct)}`} accent={t?.cm1Pct != null && t.cm1Pct < 0 ? '#7A1A1A' : undefined} />
-        <KPICard label="Mktg Spend" value={t?.spend != null ? fmt(t.spend) : dash} sub={`${fmtPct(t?.spendPct)} of Net Rev`} />
-        <KPICard label="CM2" value={t?.cm2 != null ? fmt(t.cm2) : dash} sub={`CM2% ${fmtPct(t?.cm2Pct)}`} accent={t?.cm2Pct != null && t.cm2Pct < 0 ? '#7A1A1A' : undefined} />
+        <KPICard label="Mktg Spend" value={spendVal != null ? fmt(spendVal) : dash} sub={`${fmtPct(spendPct)} of Net Rev`} />
+        <KPICard label="CM2" value={cm2Val != null ? fmt(cm2Val) : dash} sub={`CM2% ${fmtPct(cm2Pct)}`} accent={cm2Pct != null && cm2Pct < 0 ? '#7A1A1A' : undefined} />
       </div>
       <TrendAnalysisCard title={`${title} — Revenue Trend`} daily={daily} grossColor={grossColor} grossGradId={gradId} boxHeight={410} cogsPct={tableTotals?.cogsPct} sndPct={tableTotals?.sndPct} netRatio={excRev > 0 ? net / excRev : null} />
       <PnLFinancialTable subCatData={subCatData} skuData={skuData} adSpendMap={adSpendMap} skuCosts={skuCosts} title={`Financial View · ${title}`} onTotals={handleTotals} />

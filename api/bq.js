@@ -1076,6 +1076,12 @@ export default async function handler(req, res) {
           })
         return m
       })(),
+      pnlRawAdSpend: (() => {
+        const adsTotals = r.adsTotals || []
+        const meta = parseFloat(adsTotals.find(t => t.platform === 'Meta')?.spend) || 0
+        const google = parseFloat(adsTotals.find(t => t.platform === 'Google')?.spend) || 0
+        return meta + google
+      })(),
       masterSkuList: (r.masterSkuList || []).map(x => x.sku).filter(Boolean),
       shopify: {
         // Shared measures layer (computeNetRevenueMeasures in _bq.js) — see formula note there.
