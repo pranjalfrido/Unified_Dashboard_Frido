@@ -180,8 +180,14 @@ export default function PnLFinancialTable({ subCatData, skuData, adSpendMap = {}
     if (!onTotals) return
     const cogsPct = tot.anyCosted && tot.netCovered > 0 ? pctOf(tot.cogs, tot.netCovered) : null
     const sndPct = totSnd != null && tot.netCovered > 0 ? pctOf(totSnd, tot.netCovered) : null
-    onTotals({ cogsPct, sndPct })
-  }, [tot.cogs, tot.netCovered, totSnd, tot.anyCosted, tot.anyCosts])
+    const gm = totGm
+    const gmPct = totGm != null && tot.netCovered > 0 ? pctOf(totGm, tot.netCovered) : null
+    const cm1 = tot.anyCm1 ? tot.cm1 : null
+    const cm1Pct = cm1 != null && tot.netCovered > 0 ? pctOf(cm1, tot.netCovered) : null
+    const cm2 = tot.anyCm2 ? tot.cm2 : null
+    const cm2Pct = cm2 != null && tot.netCovered > 0 ? pctOf(cm2, tot.netCovered) : null
+    onTotals({ cogsPct, sndPct, cogs: tot.anyCosted ? tot.cogs : null, snd: totSnd, gm, gmPct, cm1, cm1Pct, cm2, cm2Pct, spend: tot.spend, spendPct: totSpendPct })
+  }, [tot.cogs, tot.netCovered, totSnd, tot.anyCosted, tot.anyCosts, tot.cm1, tot.cm2, tot.anyCm1, tot.anyCm2, tot.spend])
 
   const thStyle = { fontSize: 9.5, fontWeight: 700, color: C.t1, textTransform: 'uppercase', letterSpacing: 0.4, padding: '6px 7px', textAlign: 'right', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', borderBottom: `1.5px solid ${C.border}` }
   const thStyleL = { ...thStyle, textAlign: 'left' }
