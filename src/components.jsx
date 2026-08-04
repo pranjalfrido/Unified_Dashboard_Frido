@@ -300,7 +300,7 @@ export function TrendAnalysisCard({ title, daily, grossColor, grossGradId, revKe
               })}
             </div>
           ) : null} />
-          <Legend verticalAlign="top" wrapperStyle={{ fontSize: 11, paddingBottom: 8 }} />
+          <Legend verticalAlign="bottom" wrapperStyle={{ fontSize: 11, paddingTop: 8 }} />
           <Area yAxisId="rev" type="monotone" dataKey={revKey} name="Gross Revenue" stroke={grossColor} fill={`url(#${gradId})`} strokeWidth={2} dot={false} />
           <Area yAxisId="rev" type="monotone" dataKey={excRevKey} name="Net Revenue" stroke="#B8960C" fill={`url(#${gradId}_net)`} strokeWidth={2} dot={false} strokeDasharray="4 2" />
           {showCogs && <Line yAxisId="rev" type="monotone" dataKey="_cogs" name="COGS" stroke="#F59E0B" strokeWidth={1.5} dot={false} strokeDasharray="3 3" />}

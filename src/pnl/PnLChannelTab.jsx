@@ -19,7 +19,7 @@ export default function PnLChannelTab({ title, note, gross, excRev, net, units, 
         <KPICard label="Orders" value={fmtN(orders)} sub={`${fmtN(units)} units`} />
         <KPICard label="AOV / ASP" value={`₹${Math.round(aov).toLocaleString('en-IN')}`} sub={`ASP ₹${Math.round(asp).toLocaleString('en-IN')}`} />
       </div>
-      <TrendAnalysisCard title={`${title} — Revenue Trend`} daily={daily} grossColor={grossColor} grossGradId={gradId} boxHeight={360} cogsPct={tableTotals?.cogsPct} sndPct={tableTotals?.sndPct} />
+      <TrendAnalysisCard title={`${title} — Revenue Trend`} daily={daily} grossColor={grossColor} grossGradId={gradId} boxHeight={410} cogsPct={tableTotals?.cogsPct} sndPct={tableTotals?.sndPct} />
       <PnLFinancialTable subCatData={subCatData} skuData={skuData} adSpendMap={adSpendMap} skuCosts={skuCosts} title={`Financial View · ${title}`} onTotals={handleTotals} />
     </div>
   )
