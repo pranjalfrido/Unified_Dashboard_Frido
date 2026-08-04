@@ -384,8 +384,8 @@ export default function PnLPage({ data, filters, setFilters }) {
           subCatData={activeData.subCatData}
           skuData={activeData.skuData}
           skuCosts={activeTab === 'shopify' ? shSkuCosts : undefined}
-          adSpendMap={activeTab === 'shopify' ? (data?.pnlAdSpendMap || {}) : undefined}
-          rawAdSpend={activeTab === 'shopify' ? (data?.pnlRawAdSpend || null) : undefined}
+          adSpendMap={activeTab === 'shopify' && d2cSubCh === 'all' ? (data?.pnlAdSpendMap || {}) : undefined}
+          rawAdSpend={activeTab === 'shopify' && d2cSubCh === 'all' ? (data?.pnlRawAdSpend || null) : undefined}
           daily={activeData.daily}
           grossColor={CHANNEL_COLORS[activeTab] || '#FFD600'}
           gradId={`pnl${activeTab}Grad`}
