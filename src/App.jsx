@@ -4777,7 +4777,8 @@ function ShopifyTab({ data, filters, setFilters }) {
   const cirRev = sh.netCalc?.cirRev || 0
   const grossAfterReturns = sh.netCalc?.netRevIncGst ?? (totalRev - cancelledRev - rtoRev - returnStatusRev - cirRev)
   const gst = sh.netCalc?.gstCompleted || 0
-  const netRev = sh.netCalc?.netRev ?? (grossAfterReturns - gst)
+  const mobilityNetRevOverride = filters.subChannel === 'Mobility' ? (subChannelMap['Mobility']?.netRev ?? null) : null
+  const netRev = mobilityNetRevOverride ?? sh.netCalc?.netRev ?? (grossAfterReturns - gst)
   const totalExcRev = netRev
 
   const prevRev = sh.prevRev || 0
