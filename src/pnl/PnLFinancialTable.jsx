@@ -76,11 +76,13 @@ export default function PnLFinancialTable({ subCatData, skuData, adSpendMap = {}
     const excRev = d.excRev || 0
     const returnUnits = d.returnUnits || 0
     const cancelRev = d.cancelRev || 0
+    const codCancelRev = d.codCancelRev || 0
     const rtoRev = d.rtoRev || 0
     const cirRev = d.cirRev || 0
     const exchRev = d.exchRev || 0
     const returnRev = d.returnRev || 0
-    const totalReturnRev = cancelRev + rtoRev + cirRev + returnRev
+    // D2C: exclude COD cancellations from return % — COD cancels are pre-dispatch drops, not returns
+    const totalReturnRev = (cancelRev - codCancelRev) + rtoRev + cirRev + returnRev
     const gstRatio = gross > 0 ? (gross - excRev) / gross : 0
     const grossAfterReturns = gross - totalReturnRev
     const net = grossAfterReturns * (1 - gstRatio)

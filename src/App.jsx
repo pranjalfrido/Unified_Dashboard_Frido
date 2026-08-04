@@ -2224,7 +2224,8 @@ function OverviewPage({ data, alerts, logisticsData, filters }) {
   // ── Categories ──
   const allCats = Object.entries(catMap).map(([k, v]) => {
     const shCat = sh.catMap?.[k] || {}
-    return { name: k, rev: v.rev, orders: (v.orders?.size ?? v.orders) || 0, cancelRev: shCat.cancelRev || 0, rtoRev: shCat.rtoRev || 0, cirRev: shCat.cirRev || 0 }
+    const effectiveCancelRev = (shCat.cancelRev || 0) - (shCat.codCancelRev || 0)
+    return { name: k, rev: v.rev, orders: (v.orders?.size ?? v.orders) || 0, cancelRev: effectiveCancelRev, rtoRev: shCat.rtoRev || 0, cirRev: shCat.cirRev || 0 }
   }).sort((a, b) => b.rev - a.rev)
 
   // ── Logistics ──
@@ -3372,7 +3373,7 @@ function FlatCategoryProductMatrix({ catData, subCatData, skuData, title, catPre
   const mapRow = d => {
     const gross = d.rev || 0
     const excRev = d.excRev || 0
-    const cancelRev = d.cancelRev || 0
+    const cancelRev = (d.cancelRev || 0) - (d.codCancelRev || 0)  // exclude COD cancels for D2C
     const rtoRev = d.rtoRev || 0
     const cirRev = d.cirRev || 0
     const exchRev = d.exchRev || 0
@@ -4771,7 +4772,7 @@ function ShopifyTab({ data, filters, setFilters }) {
   // Net Revenue (Inc GST) = Gross − Cancel − RTO − Return − CIR. GST is summed product-wise
   // (item master GST rate per SKU) over completed orders only, not a blended ratio over all
   // orders — see netCalc in api/bq.js. Net Revenue (Exc GST) = Net Rev (Inc GST) − that GST.
-  const cancelledRev = sh.netCalc?.cancelRev || 0
+  const cancelledRev = (sh.netCalc?.cancelRev || 0) - (sh.netCalc?.codCancelRev || 0)
   const rtoRev = sh.netCalc?.rtoRev || 0
   const returnStatusRev = sh.netCalc?.returnRev || 0
   const cirRev = sh.netCalc?.cirRev || 0
@@ -4828,7 +4829,9 @@ function ShopifyTab({ data, filters, setFilters }) {
   const shRtoRev = sh.netCalc?.rtoRev || 0
   const shReturnRev = sh.netCalc?.returnRev || 0
   const shCirRev = sh.netCalc?.cirRev || 0
-  const shCancelRev = sh.netCalc?.cancelRev || 0
+  const shCancelRevRaw = sh.netCalc?.cancelRev || 0
+  const shCodCancelRev = sh.netCalc?.codCancelRev || 0
+  const shCancelRev = shCancelRevRaw - shCodCancelRev  // exclude COD cancels from return %
   const rtoPct = totalRev > 0 ? (shRtoRev + shReturnRev) / totalRev * 100 : 0
   const atRiskRev = shRtoRev + shReturnRev + shCirRev + shCancelRev
   const returnRevPct = totalRev > 0 ? ((shRtoRev + shReturnRev + shCirRev) / totalRev * 100) : 0
