@@ -287,7 +287,7 @@ export function TrendAnalysisCard({ title, daily, grossColor, grossGradId, revKe
             <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 7, padding: '7px 11px', fontSize: 11 }}>
               <div style={{ fontWeight: 700, marginBottom: 4, color: C.t2 }}>{label?.slice(5) || label}</div>
               {payload.map(p => {
-                const isUnits = p.name === 'Units'
+                const isUnits = p.dataKey === 'units'
                 const isCogs = p.dataKey === '_cogs'
                 const isSnd = p.dataKey === '_snd'
                 const pctLabel = isCogs ? ` (${cogsPct.toFixed(1)}%)` : isSnd ? ` (${sndPct.toFixed(1)}%)` : ''
@@ -301,8 +301,8 @@ export function TrendAnalysisCard({ title, daily, grossColor, grossGradId, revKe
             </div>
           ) : null} />
           <Legend verticalAlign="bottom" wrapperStyle={{ fontSize: 11, paddingTop: 8 }} />
-          <Area yAxisId="rev" type="monotone" dataKey={revKey} name="Gross Revenue" stroke={grossColor} fill={`url(#${gradId})`} strokeWidth={2} dot={false} />
-          <Area yAxisId="rev" type="monotone" dataKey={excRevKey} name="Net Revenue" stroke="#B8960C" fill={`url(#${gradId}_net)`} strokeWidth={2} dot={false} strokeDasharray="4 2" />
+          <Area yAxisId="rev" type="monotone" dataKey={revKey} name="Gross Revenue (Inc GST)" stroke={grossColor} fill={`url(#${gradId})`} strokeWidth={2} dot={false} />
+          <Area yAxisId="rev" type="monotone" dataKey={excRevKey} name="Gross Revenue (Exc GST)" stroke="#B8960C" fill={`url(#${gradId}_net)`} strokeWidth={2} dot={false} strokeDasharray="4 2" />
           {showCogs && <Line yAxisId="rev" type="monotone" dataKey="_cogs" name="COGS" stroke="#F59E0B" strokeWidth={1.5} dot={false} strokeDasharray="3 3" />}
           {showSnd && <Line yAxisId="rev" type="monotone" dataKey="_snd" name="SnD" stroke="#92720A" strokeWidth={1.5} dot={false} strokeDasharray="3 3" />}
           <Line yAxisId="units" type="monotone" dataKey="units" name="Units" stroke="#C9A800" strokeWidth={2} dot={false} />
