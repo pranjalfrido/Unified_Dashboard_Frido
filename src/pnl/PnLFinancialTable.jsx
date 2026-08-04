@@ -22,7 +22,7 @@ import { useSortableTable } from '../components.jsx'
 // adSpendMap: optional {subCategory: spend} — real marketing spend, folded in as Spend % of Net Revenue.
 // sndBySku: optional {sku: totalSndCost} — real SnD cost per SKU (Shopify only for now).
 // skuCosts: {sku: {logistics, fulfilment, paymentGw, softwareFee}} — D2C only, from PnLPage
-export default function PnLFinancialTable({ subCatData, skuData, adSpendMap = {}, skuCosts, title = 'Financial View', onTotals }) {
+export default function PnLFinancialTable({ subCatData, skuData, adSpendMap, skuCosts, title = 'Financial View', onTotals }) {
   const [expandedSku, setExpandedSku] = useState({})
   const [search, setSearch] = useState('')
   const [cogsMap, setCogsMap] = useState(null)
@@ -130,17 +130,17 @@ export default function PnLFinancialTable({ subCatData, skuData, adSpendMap = {}
   Object.entries(subCatData || {}).forEach(([cat, scMap]) => {
     Object.entries(scMap).forEach(([sc, d]) => {
       const r = mapRow(d)
-      const spend = adSpendMap[sc] || 0
+      const spend = adSpendMap != null ? (adSpendMap[sc] || 0) : null
       const { cogs, netCovered, anyCosted, logistics, fulfilment, paymentGw, softwareFee, anyCosts } = (cogsMap || skuCosts) ? costsForSkus(cat, sc) : { cogs: 0, netCovered: 0, anyCosted: false, logistics: 0, fulfilment: 0, paymentGw: 0, softwareFee: 0, anyCosts: false }
       const gm = anyCosted ? netCovered - cogs : null
       const snd = anyCosts ? logistics + fulfilment + paymentGw + softwareFee : null
       const cm1 = anyCosted && anyCosts ? gm - snd : null
-      const cm2 = cm1 != null && spend > 0 ? cm1 - spend : cm1 != null ? cm1 : null
+      const cm2 = cm1 != null && spend != null ? cm1 - spend : null
       allRows.push({
         cat, sc, ...r, spend, cogs, netCovered, anyCosted,
         gm, logistics, fulfilment, paymentGw, softwareFee, anyCosts, snd, cm1, cm2,
         returnPct: pctOf(r.totalReturnRev, r.gross),
-        spendPct: r.net > 0 ? (spend / r.net * 100) : 0,
+        spendPct: spend != null && r.net > 0 ? (spend / r.net * 100) : 0,
         cm2Pct: r.net > 0 && cm2 != null ? (cm2 / r.net * 100) : 0,
       })
     })
@@ -176,9 +176,9 @@ export default function PnLFinancialTable({ subCatData, skuData, adSpendMap = {}
   const totSnd = tot.anyCosts ? tot.logistics + tot.fulfilment + tot.paymentGw + tot.softwareFee : null
   const totReturnPct = pctOf(tot.totalReturnRev, tot.gross)
   // Use sum of ALL adSpendMap values so spend from sub-categories not in the table is included
-  const totalMapSpend = Object.values(adSpendMap).reduce((s, v) => s + v, 0)
-  const totSpend = totalMapSpend > 0 ? totalMapSpend : tot.spend
-  const totSpendPct = tot.net > 0 ? (totSpend / tot.net * 100) : 0
+  const totalMapSpend = adSpendMap != null ? Object.values(adSpendMap).reduce((s, v) => s + v, 0) : null
+  const totSpend = totalMapSpend != null && totalMapSpend > 0 ? totalMapSpend : (adSpendMap != null ? tot.spend : null)
+  const totSpendPct = totSpend != null && tot.net > 0 ? (totSpend / tot.net * 100) : 0
   const totGm = tot.anyCosted ? tot.netCovered - tot.cogs : null
 
   useEffect(() => {
