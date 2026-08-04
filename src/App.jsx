@@ -3443,8 +3443,6 @@ function FlatCategoryProductMatrix({ catData, subCatData, skuData, title, catPre
         'Gross Rev': Math.round(r.gross), 'Share %': tot.gross > 0 ? +(r.gross / tot.gross * 100).toFixed(1) : 0,
         'vs Prev %': r.prevGross > 0 ? +((r.gross - r.prevGross) / r.prevGross * 100).toFixed(1) : null,
         Units: r.units, ASP: Math.round(r.asp),
-        ...(simpleReturns || noReturns ? {} : { 'Cancel %': +r.cancelPct.toFixed(2), 'RTO %': +r.rtoPct.toFixed(2), 'CIR %': +r.cirPct.toFixed(2), 'Exch %': +r.exchPct.toFixed(2) }),
-        ...(noReturns ? {} : { [simpleReturns ? 'Return %' : 'Total Return %']: +r.totalReturnPct.toFixed(2) }),
         'Net Rev': Math.round(r.net),
       }
       const skuRows = Object.entries(skuData?.[r.cat]?.[r.sc] || {}).map(([sku, d]) => {
@@ -3454,8 +3452,6 @@ function FlatCategoryProductMatrix({ catData, subCatData, skuData, title, catPre
           Category: r.cat, Product: `↳ ${sku}`,
           'Gross Rev': Math.round(sk.gross), 'Share %': tot.gross > 0 ? +(sk.gross / tot.gross * 100).toFixed(1) : 0,
           Units: sk.units, ASP: sk.units > 0 ? Math.round(sk.gross / sk.units) : 0,
-          ...(simpleReturns || noReturns ? {} : { 'Cancel %': +pctOf(sk.cancelRev, sk.gross).toFixed(2), 'RTO %': +pctOf(sk.rtoRev, sk.gross).toFixed(2), 'CIR %': +pctOf(sk.cirRev, sk.gross).toFixed(2), 'Exch %': +pctOf(sk.exchRev, sk.gross).toFixed(2) }),
-          ...(noReturns ? {} : { [simpleReturns ? 'Return %' : 'Total Return %']: +pctOf(skTotalReturnRev, sk.gross).toFixed(2) }),
           'Net Rev': Math.round(sk.net),
         }
       })
@@ -3475,12 +3471,10 @@ function FlatCategoryProductMatrix({ catData, subCatData, skuData, title, catPre
         </div>
       </div>
       <div style={{ overflowX: 'auto', overflowY: 'auto', maxHeight: 560 }}>
-        <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed', minWidth: noReturns ? 760 : simpleReturns ? 830 : 1050 }}>
+        <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed', minWidth: 760 }}>
           <colgroup>
             <col style={{ width: '16%' }} /><col style={{ width: '20%' }} />
             <col style={{ width: '12%' }} /><col style={{ width: '9%' }} /><col style={{ width: '8%' }} /><col style={{ width: '9%' }} />
-            {!simpleReturns && !noReturns && <><col style={{ width: '7%' }} /><col style={{ width: '7%' }} /><col style={{ width: '7%' }} /><col style={{ width: '7%' }} /></>}
-            {!noReturns && <col style={{ width: '9%' }} />}
             <col style={{ width: '9%' }} />
           </colgroup>
           <thead>
@@ -3491,13 +3485,6 @@ function FlatCategoryProductMatrix({ catData, subCatData, skuData, title, catPre
               <Th label="vs Prev" sortKey="prevGross" style={{ ...thStyle, position: 'sticky', top: 0, background: C.bg, zIndex: 1 }} />
               <Th label="Units" sortKey="units" style={{ ...thStyle, position: 'sticky', top: 0, background: C.bg, zIndex: 1 }} />
               <Th label="ASP" sortKey="asp" style={{ ...thStyle, position: 'sticky', top: 0, background: C.bg, zIndex: 1 }} />
-              {!simpleReturns && !noReturns && <>
-                <Th label="Cancel %" sortKey="cancelPct" style={{ ...thStyle, position: 'sticky', top: 0, background: C.bg, zIndex: 1 }} />
-                <Th label="RTO %" sortKey="rtoPct" style={{ ...thStyle, position: 'sticky', top: 0, background: C.bg, zIndex: 1 }} />
-                <Th label="CIR %" sortKey="cirPct" style={{ ...thStyle, position: 'sticky', top: 0, background: C.bg, zIndex: 1 }} />
-                <Th label="Exch %" sortKey="exchPct" style={{ ...thStyle, position: 'sticky', top: 0, background: C.bg, zIndex: 1 }} />
-              </>}
-              {!noReturns && <Th label={simpleReturns ? 'Return %' : 'Total Return %'} sortKey="totalReturnPct" style={{ ...thStyle, position: 'sticky', top: 0, background: C.bg, zIndex: 1 }} />}
               <Th label="Net Rev" sortKey="net" style={{ ...thStyle, position: 'sticky', top: 0, background: C.bg, zIndex: 1 }} />
             </tr>
           </thead>
@@ -3524,13 +3511,6 @@ function FlatCategoryProductMatrix({ catData, subCatData, skuData, title, catPre
                     <td style={tdStyle}>{vsPrevCell(r.gross, r.prevGross)}</td>
                     <td style={tdStyle}>{fmtN(r.units)}</td>
                     <td style={tdStyle}>₹{Math.round(r.asp).toLocaleString('en-IN')}</td>
-                    {!simpleReturns && !noReturns && <>
-                      <td style={tdStyle}>{pctCell(r.cancelRev, r.gross, 3)}</td>
-                      <td style={tdStyle}>{pctCell(r.rtoRev, r.gross, 9)}</td>
-                      <td style={tdStyle}>{pctCell(r.cirRev, r.gross, 9)}</td>
-                      <td style={tdStyle}>{pctCell(r.exchRev, r.gross, 6)}</td>
-                    </>}
-                    {!noReturns && <td style={{ ...tdStyle, fontWeight: 700 }}>{r.totalReturnPct > 0 ? <span style={{ color: r.totalReturnPct > 20 ? '#B91C1C' : 'inherit' }}>{r.totalReturnPct.toFixed(2)}%</span> : <span style={{ color: C.t3 }}>—</span>}</td>}
                     <td style={tdStyle}>{fmt(r.net)}</td>
                   </tr>
                   {isOpen && skus.map(sk => {
@@ -3545,13 +3525,6 @@ function FlatCategoryProductMatrix({ catData, subCatData, skuData, title, catPre
                         <td style={{ ...tdStyle, fontSize: 11 }}><span style={{ color: C.t3 }}>—</span></td>
                         <td style={{ ...tdStyle, fontSize: 11 }}>{fmtN(sk.units)}</td>
                         <td style={{ ...tdStyle, fontSize: 11 }}>₹{(sk.units > 0 ? Math.round(sk.gross / sk.units) : 0).toLocaleString('en-IN')}</td>
-                        {!simpleReturns && !noReturns && <>
-                          <td style={{ ...tdStyle, fontSize: 11 }}>{pctCell(sk.cancelRev, sk.gross, 3)}</td>
-                          <td style={{ ...tdStyle, fontSize: 11 }}>{pctCell(sk.rtoRev, sk.gross, 9)}</td>
-                          <td style={{ ...tdStyle, fontSize: 11 }}>{pctCell(sk.cirRev, sk.gross, 9)}</td>
-                          <td style={{ ...tdStyle, fontSize: 11 }}>{pctCell(sk.exchRev, sk.gross, 6)}</td>
-                        </>}
-                        {!noReturns && <td style={{ ...tdStyle, fontSize: 11, fontWeight: 600 }}>{pctCell(skTotalReturnRev, sk.gross, 20)}</td>}
                         <td style={{ ...tdStyle, fontSize: 11 }}>{fmt(sk.net)}</td>
                       </tr>
                     )
@@ -3567,13 +3540,6 @@ function FlatCategoryProductMatrix({ catData, subCatData, skuData, title, catPre
               <td style={totalTdStyle}>{vsPrevCell(tot.gross, tot.prevGross)}</td>
               <td style={totalTdStyle}>{fmtN(tot.units)}</td>
               <td style={totalTdStyle}>₹{tot.units > 0 ? Math.round(tot.gross / tot.units).toLocaleString('en-IN') : '—'}</td>
-              {!simpleReturns && !noReturns && <>
-                <td style={totalTdStyle}>{pctCell(tot.cancelRev, tot.gross, 3)}</td>
-                <td style={totalTdStyle}>{pctCell(tot.rtoRev, tot.gross, 9)}</td>
-                <td style={totalTdStyle}>{pctCell(tot.cirRev, tot.gross, 9)}</td>
-                <td style={totalTdStyle}>{pctCell(tot.exchRev, tot.gross, 6)}</td>
-              </>}
-              {!noReturns && <td style={totalTdStyle}>{pctCell(simpleReturns ? tot.returnRev : tot.cancelRev + tot.rtoRev + tot.cirRev + tot.returnRev, tot.gross, 20)}</td>}
               <td style={totalTdStyle}>{fmt(tot.net)}</td>
             </tr>
           </tfoot>
