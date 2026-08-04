@@ -255,7 +255,7 @@ export function TrendAnalysisCard({ title, daily, grossColor, grossGradId, revKe
   const gradId = grossGradId || 'trendGrossGrad'
 
   return (
-    <Card fill title={title} style={boxHeight ? { height: boxHeight, alignSelf: 'start' } : undefined} action={
+    <Card title={title} style={boxHeight ? { height: boxHeight } : undefined} action={
       <select value={groupBy} onChange={e => setGroupBy(e.target.value)} style={selStyle}>
         {GROUP_OPTS.map(x => <option key={x.id} value={x.id}>{x.label}</option>)}
       </select>
