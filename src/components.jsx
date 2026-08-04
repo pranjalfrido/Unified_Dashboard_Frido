@@ -310,7 +310,7 @@ export function useSortableTable(defaultKey = null, defaultDir = 'desc') {
   }
   const Th = ({ label, sortKey, style, align = 'right', children }) => (
     <th onClick={() => onSort(sortKey)}
-      style={{ ...style, textAlign: align, cursor: 'pointer', userSelect: 'none', whiteSpace: 'nowrap', color: sort?.key === sortKey ? C.t1 : style?.color, position: style?.position || 'relative' }}>
+      style={{ ...style, textAlign: align, cursor: 'pointer', userSelect: 'none', whiteSpace: 'nowrap', color: sort?.key === sortKey ? C.t1 : (style?.color ?? C.t1), position: style?.position || 'relative' }}>
       {label}{sort?.key === sortKey ? (sort.dir === 'asc' ? ' ▲' : ' ▼') : ''}
       {children}
     </th>
