@@ -277,12 +277,12 @@ export function TrendAnalysisCard({ title, daily, grossColor, grossGradId, revKe
         <ComposedChart data={grouped} margin={{ top: 4, right: 40, bottom: 0, left: 0 }}>
           <defs>
             <linearGradient id={gradId} x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor={grossColor} stopOpacity={0.2} /><stop offset="95%" stopColor={grossColor} stopOpacity={0} /></linearGradient>
-            <linearGradient id={gradId + '_net'} x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#0D9E68" stopOpacity={0.1} /><stop offset="95%" stopColor="#0D9E68" stopOpacity={0} /></linearGradient>
+            <linearGradient id={gradId + '_net'} x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#B8960C" stopOpacity={0.15} /><stop offset="95%" stopColor="#B8960C" stopOpacity={0} /></linearGradient>
           </defs>
           <CartesianGrid strokeDasharray="3 3" stroke={C.border} vertical={false} />
           <XAxis dataKey="date" tick={{ fontSize: 10, fill: C.t3 }} tickFormatter={d => d?.slice(5)} />
           <YAxis yAxisId="rev" tick={{ fontSize: 10, fill: C.t3 }} tickFormatter={fmtTick} width={55} />
-          <YAxis yAxisId="units" orientation="right" tick={{ fontSize: 10, fill: '#2E74CC' }} tickFormatter={v => fmtN(v)} width={36} />
+          <YAxis yAxisId="units" orientation="right" tick={{ fontSize: 10, fill: '#C9A800' }} tickFormatter={v => fmtN(v)} width={36} />
           <Tooltip content={({ active, payload, label }) => active && payload?.length ? (
             <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 7, padding: '7px 11px', fontSize: 11 }}>
               <div style={{ fontWeight: 700, marginBottom: 4, color: C.t2 }}>{label?.slice(5) || label}</div>
@@ -302,10 +302,10 @@ export function TrendAnalysisCard({ title, daily, grossColor, grossGradId, revKe
           ) : null} />
           <Legend wrapperStyle={{ fontSize: 11 }} />
           <Area yAxisId="rev" type="monotone" dataKey={revKey} name="Gross Revenue" stroke={grossColor} fill={`url(#${gradId})`} strokeWidth={2} dot={false} />
-          <Area yAxisId="rev" type="monotone" dataKey={excRevKey} name="Net Revenue" stroke="#0D9E68" fill={`url(#${gradId}_net)`} strokeWidth={2} dot={false} strokeDasharray="4 2" />
-          {showCogs && <Line yAxisId="rev" type="monotone" dataKey="_cogs" name="COGS" stroke="#D97706" strokeWidth={1.5} dot={false} strokeDasharray="3 3" />}
-          {showSnd && <Line yAxisId="rev" type="monotone" dataKey="_snd" name="SnD" stroke="#7C3AED" strokeWidth={1.5} dot={false} strokeDasharray="3 3" />}
-          <Line yAxisId="units" type="monotone" dataKey="units" name="Units" stroke="#2E74CC" strokeWidth={2} dot={false} />
+          <Area yAxisId="rev" type="monotone" dataKey={excRevKey} name="Net Revenue" stroke="#B8960C" fill={`url(#${gradId}_net)`} strokeWidth={2} dot={false} strokeDasharray="4 2" />
+          {showCogs && <Line yAxisId="rev" type="monotone" dataKey="_cogs" name="COGS" stroke="#F59E0B" strokeWidth={1.5} dot={false} strokeDasharray="3 3" />}
+          {showSnd && <Line yAxisId="rev" type="monotone" dataKey="_snd" name="SnD" stroke="#92720A" strokeWidth={1.5} dot={false} strokeDasharray="3 3" />}
+          <Line yAxisId="units" type="monotone" dataKey="units" name="Units" stroke="#C9A800" strokeWidth={2} dot={false} />
         </ComposedChart>
       </ResponsiveContainer>
     </Card>
