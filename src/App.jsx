@@ -3378,7 +3378,7 @@ function FlatCategoryProductMatrix({ catData, subCatData, skuData, title, catPre
     const exchRev = d.exchRev || 0
     const returnRev = d.returnRev || 0
     const gstRatio = gross > 0 ? (gross - excRev) / gross : 0
-    const grossAfterReturns = gross - cancelRev - rtoRev - cirRev
+    const grossAfterReturns = gross - cancelRev - rtoRev - cirRev - returnRev
     const net = grossAfterReturns * (1 - gstRatio)
     return { gross, net, units: d.units || 0, cancelRev, rtoRev, cirRev, exchRev, returnRev }
   }
