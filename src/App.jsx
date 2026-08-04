@@ -3361,7 +3361,7 @@ function AmazonCategoryMatrix({ channels, catChannel, subCatChannel, skuChannel,
 // expand → SKU), which stays unchanged for the other tabs still using it.
 // simpleReturns: marketplaces (Amazon/Flipkart/Myntra) only report one combined Return %, with
 // no Cancel/RTO/CIR/Exch breakdown like D2C/EBO have — pass true to collapse to a single column.
-function FlatCategoryProductMatrix({ catData, subCatData, skuData, title, catPrevMap = {}, subCatPrevMap = {}, simpleReturns = false, noReturns = false }) {
+function FlatCategoryProductMatrix({ catData, subCatData, skuData, title, catPrevMap = {}, subCatPrevMap = {}, simpleReturns = false, noReturns = false, showReturnPct = false }) {
   const [expandedSku, setExpandedSku] = useState({})
   const [search, setSearch] = useState('')
   const toggleSku = key => setExpandedSku(prev => ({ ...prev, [key]: !prev[key] }))
@@ -3475,6 +3475,7 @@ function FlatCategoryProductMatrix({ catData, subCatData, skuData, title, catPre
           <colgroup>
             <col style={{ width: '16%' }} /><col style={{ width: '20%' }} />
             <col style={{ width: '12%' }} /><col style={{ width: '9%' }} /><col style={{ width: '8%' }} /><col style={{ width: '9%' }} />
+            {showReturnPct && <col style={{ width: '8%' }} />}
             <col style={{ width: '9%' }} />
           </colgroup>
           <thead>
@@ -3485,6 +3486,7 @@ function FlatCategoryProductMatrix({ catData, subCatData, skuData, title, catPre
               <Th label="vs Prev" sortKey="prevGross" style={{ ...thStyle, position: 'sticky', top: 0, background: C.bg, zIndex: 1 }} />
               <Th label="Units" sortKey="units" style={{ ...thStyle, position: 'sticky', top: 0, background: C.bg, zIndex: 1 }} />
               <Th label="ASP" sortKey="asp" style={{ ...thStyle, position: 'sticky', top: 0, background: C.bg, zIndex: 1 }} />
+              {showReturnPct && <Th label="Return %" sortKey="totalReturnPct" style={{ ...thStyle, position: 'sticky', top: 0, background: C.bg, zIndex: 1 }} />}
               <Th label="Net Rev" sortKey="net" style={{ ...thStyle, position: 'sticky', top: 0, background: C.bg, zIndex: 1 }} />
             </tr>
           </thead>
@@ -3511,6 +3513,7 @@ function FlatCategoryProductMatrix({ catData, subCatData, skuData, title, catPre
                     <td style={tdStyle}>{vsPrevCell(r.gross, r.prevGross)}</td>
                     <td style={tdStyle}>{fmtN(r.units)}</td>
                     <td style={tdStyle}>₹{Math.round(r.asp).toLocaleString('en-IN')}</td>
+                    {showReturnPct && <td style={tdStyle}>{r.totalReturnPct > 0 ? <span style={{ color: r.totalReturnPct > 20 ? '#B91C1C' : 'inherit' }}>{r.totalReturnPct.toFixed(2)}%</span> : <span style={{ color: C.t3 }}>—</span>}</td>}
                     <td style={tdStyle}>{fmt(r.net)}</td>
                   </tr>
                   {isOpen && skus.map(sk => {
@@ -3525,6 +3528,7 @@ function FlatCategoryProductMatrix({ catData, subCatData, skuData, title, catPre
                         <td style={{ ...tdStyle, fontSize: 11 }}><span style={{ color: C.t3 }}>—</span></td>
                         <td style={{ ...tdStyle, fontSize: 11 }}>{fmtN(sk.units)}</td>
                         <td style={{ ...tdStyle, fontSize: 11 }}>₹{(sk.units > 0 ? Math.round(sk.gross / sk.units) : 0).toLocaleString('en-IN')}</td>
+                        {showReturnPct && <td style={{ ...tdStyle, fontSize: 11 }}>{skTotalReturnRev > 0 ? <span style={{ color: pctOf(skTotalReturnRev, sk.gross) > 20 ? '#B91C1C' : 'inherit' }}>{pctOf(skTotalReturnRev, sk.gross).toFixed(2)}%</span> : <span style={{ color: C.t3 }}>—</span>}</td>}
                         <td style={{ ...tdStyle, fontSize: 11 }}>{fmt(sk.net)}</td>
                       </tr>
                     )
@@ -3540,6 +3544,7 @@ function FlatCategoryProductMatrix({ catData, subCatData, skuData, title, catPre
               <td style={totalTdStyle}>{vsPrevCell(tot.gross, tot.prevGross)}</td>
               <td style={totalTdStyle}>{fmtN(tot.units)}</td>
               <td style={totalTdStyle}>₹{tot.units > 0 ? Math.round(tot.gross / tot.units).toLocaleString('en-IN') : '—'}</td>
+              {showReturnPct && <td style={totalTdStyle}>{tot.gross > 0 ? <span style={{ color: pctOf(tot.cancelRev + tot.rtoRev + tot.cirRev + tot.returnRev, tot.gross) > 20 ? '#B91C1C' : 'inherit' }}>{pctOf(tot.cancelRev + tot.rtoRev + tot.cirRev + tot.returnRev, tot.gross).toFixed(2)}%</span> : '—'}</td>}
               <td style={totalTdStyle}>{fmt(tot.net)}</td>
             </tr>
           </tfoot>
@@ -4092,7 +4097,16 @@ function AllTab({ data, rangeStart, rangeEnd }) {
     skuChannelMapBySku[cat][sc][sku].units += x.units || 0
   })
   const catMatrixDataAll = {}
-  Object.entries(catMap).forEach(([k, v]) => { catMatrixDataAll[k] = { rev: v.rev, excRev: v.excRev || 0, units: v.aspUnits || v.units || 0, orders: v.orders?.size ?? v.orders ?? 0 } })
+  Object.entries(catMap).forEach(([k, v]) => { catMatrixDataAll[k] = { rev: v.rev, excRev: v.excRev || 0, units: v.aspUnits || v.units || 0, orders: v.orders?.size ?? v.orders ?? 0, cancelRev: 0, rtoRev: 0, cirRev: 0, returnRev: 0 } })
+  Object.entries(subCatMap).forEach(([k, v]) => {
+    const [cat] = k.split('::')
+    if (catMatrixDataAll[cat]) {
+      catMatrixDataAll[cat].cancelRev += v.cancelRev || 0
+      catMatrixDataAll[cat].rtoRev += v.rtoRev || 0
+      catMatrixDataAll[cat].cirRev += v.cirRev || 0
+      catMatrixDataAll[cat].returnRev += v.returnRev || 0
+    }
+  })
   const subCatMatrixDataAll = {}
   Object.entries(subCatMap).forEach(([k, v]) => {
     const [cat, sc] = k.split('::')
@@ -4212,7 +4226,7 @@ function AllTab({ data, rangeStart, rangeEnd }) {
         <GeoToggleDonutCard regionRows={regionRows} tierRows={tierRows} boxHeight={360} />
       </div>
       <DailyChannelTable dailyArr={dailyArr} channels={channels} nDays={nDays} rangeStart={rangeStart} rangeEnd={rangeEnd} />
-      <FlatCategoryProductMatrix catData={catMatrixDataAll} subCatData={subCatMatrixDataAll} skuData={skuChannelMapBySku} title="Category Revenue Matrix · All Channels" catPrevMap={catPrevMap} subCatPrevMap={subCatPrevMap} />
+      <FlatCategoryProductMatrix catData={catMatrixDataAll} subCatData={subCatMatrixDataAll} skuData={skuChannelMapBySku} title="Category Revenue Matrix · All Channels" catPrevMap={catPrevMap} subCatPrevMap={subCatPrevMap} showReturnPct={true} />
       {(() => {
         const totalStateRevBQ = stateTotal || stateRows.reduce((s, r) => s + r.rev, 0)
         let cumS = 0
