@@ -280,9 +280,9 @@ export function TrendAnalysisCard({ title, daily, grossColor, grossGradId, revKe
             <linearGradient id={gradId + '_net'} x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#B8960C" stopOpacity={0.15} /><stop offset="95%" stopColor="#B8960C" stopOpacity={0} /></linearGradient>
           </defs>
           <CartesianGrid strokeDasharray="3 3" stroke={C.border} vertical={false} />
-          <XAxis dataKey="date" tick={{ fontSize: 10, fill: C.t3 }} tickFormatter={d => d?.slice(5)} />
-          <YAxis yAxisId="rev" tick={{ fontSize: 10, fill: C.t3 }} tickFormatter={fmtTick} width={55} />
-          <YAxis yAxisId="units" orientation="right" tick={{ fontSize: 10, fill: '#C9A800' }} tickFormatter={v => fmtN(v)} width={36} />
+          <XAxis dataKey="date" tick={{ fontSize: 10, fill: C.t1 }} tickFormatter={d => d?.slice(5)} />
+          <YAxis yAxisId="rev" tick={{ fontSize: 10, fill: C.t1 }} tickFormatter={fmtTick} width={55} />
+          <YAxis yAxisId="units" orientation="right" tick={{ fontSize: 10, fill: C.t1 }} tickFormatter={v => fmtN(v)} width={36} />
           <Tooltip content={({ active, payload, label }) => active && payload?.length ? (
             <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 7, padding: '7px 11px', fontSize: 11 }}>
               <div style={{ fontWeight: 700, marginBottom: 4, color: C.t2 }}>{label?.slice(5) || label}</div>
