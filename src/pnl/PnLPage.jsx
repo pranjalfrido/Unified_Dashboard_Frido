@@ -300,7 +300,17 @@ export default function PnLPage({ data, filters, setFilters }) {
 
     return {
       all: { subCatData: allSubCatData, skuData: allSkuData, daily: data.dailyArr || [], gross: data.totalRev || 0, excRev: data.totalExcRev || 0, net: data.netRevenueCalc || 0, units: data.totalQty || 0, orders: data.nOrders || 0, returnRev: data.returnRev || 0 },
-      shopify: (() => { const n = netOf(shSubCatData); return { subCatData: shSubCatData, skuData: shSkuData, daily: sh.daily || [], ...n } })(),
+      shopify: (() => {
+        const n = netOf(shSubCatData)
+        // For Mobility sub-channel, override net revenue with manager-defined filter
+        // (paid/pending/partially_paid × Delivered/Dispatched/Exchange/Blank, SellingPrice_Exc_GST)
+        // computed server-side as mobilityNetCalc and stored in subChannelMap.Mobility.netRev
+        if (d2cSubCh === 'Mobility') {
+          const mobilityNet = data.subChannelMap?.Mobility?.netRev
+          if (mobilityNet != null && mobilityNet > 0) n.net = mobilityNet
+        }
+        return { subCatData: shSubCatData, skuData: shSkuData, daily: sh.daily || [], ...n }
+      })(),
       ebo: { subCatData: eboSubCatData, skuData: eboSkuData, daily: ebo.daily || [], gross: ebo.totals?.rev || 0, net: ebo.netCalc?.netRev ?? 0, units: ebo.totals?.qty || 0, orders: ebo.totals?.orders || 0, returnRev: (ebo.netCalc?.cancelRev || 0) + (ebo.netCalc?.rtoRev || 0) + (ebo.netCalc?.cirRev || 0) + (ebo.netCalc?.returnRev || 0) },
       amazon: (() => { const n = netOf(amzSubCatData); return { subCatData: amzSubCatData, skuData: amzSkuData, daily: amzDaily, ...n } })(),
       flipkart: (() => { const n = netOf(fkSubCatData); return { subCatData: fkSubCatData, skuData: fkSkuData, daily: fk.daily || [], ...n } })(),

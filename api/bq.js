@@ -102,6 +102,10 @@ export default async function handler(req, res) {
     aspAovTotals: `WITH q AS (${base}) SELECT COUNT(DISTINCT OrderId) AS orders, SUM(SellingPrice_Inc_GST) AS rev, SUM(CASE WHEN UPPER(COALESCE(MasterSKU,'')) NOT LIKE '%COUP%' AND UPPER(COALESCE(MasterSKU,'')) NOT LIKE '%DFA%' THEN ItemQty ELSE 0 END) AS asp_qty FROM q WHERE (Channel='Shopify' AND SubChannel != 'Shopify International') OR (Channel='Amazon' AND SubChannel='Amazon Seller Central') OR Channel IN ('Myntra','Flipkart','Firstcry','CRED')`,
     shopifyIntlTotals: subChannel === 'International' ? `SELECT 0 AS intl_rev, 0 AS intl_exc_rev` : `SELECT SUM(final_total_incl_tax) AS intl_rev, SUM(total_excl_tax) AS intl_exc_rev FROM \`frido-429506.production.fact_shopify_international_orders\` WHERE order_date BETWEEN '${start}' AND '${end}' AND (financial_status IS NULL OR financial_status != 'voided')`,
     prevShopifyIntlTotals: subChannel === 'International' ? `SELECT 0 AS intl_rev, 0 AS intl_exc_rev` : `SELECT SUM(final_total_incl_tax) AS intl_rev, SUM(total_excl_tax) AS intl_exc_rev FROM \`frido-429506.production.fact_shopify_international_orders\` WHERE order_date BETWEEN '${ps}' AND '${pe}' AND (financial_status IS NULL OR financial_status != 'voided')`,
+    // Mobility net revenue uses manager-defined filter (FinancialStatus × Order_Status whitelist)
+    // instead of the generic retained-share formula. Only SellingPrice_Exc_GST from qualifying
+    // rows is summed — no GST, no deduction %, just the exact combinations that count as real sales.
+    mobilityNetCalc: `SELECT ROUND(SUM(SellingPrice_Exc_GST), 2) AS net_rev FROM \`frido-429506.production.fact_all_platform_sales_report\` WHERE OrderDate BETWEEN '${start}' AND '${end}' AND Channel = 'Shopify' AND SubChannel = 'Mobility' AND LOWER(COALESCE(FinancialStatus,'')) NOT LIKE '%refund%' AND ((FinancialStatus = 'paid' AND (Order_Status IN ('Delivered','Dispatched','Exchange') OR Order_Status IS NULL OR TRIM(Order_Status) = '' OR Order_Status = 'null')) OR (FinancialStatus IN ('pending','partially_paid') AND Order_Status IN ('Delivered','Dispatched','Exchange')))`,
     // shNetCalc / prevShNetCalc feed the shared measures layer (netRevenueSelectFragment +
     // computeNetRevenueMeasures in _bq.js) — the same fragment every tab uses, so Net Revenue/
     // GST/return-rate math can never drift between Shopify, other channels, and the All tab.
@@ -663,6 +667,9 @@ export default async function handler(req, res) {
     r.byVoucher.forEach(x => { voucherMap[x.voucher_type] = { orders: parseInt(x.orders) || 0, rev: parseFloat(x.rev) || 0 } })
     const subChannelMap = {}
     r.bySubChannel.forEach(x => { if (x.SubChannel) subChannelMap[x.SubChannel] = { rev: parseFloat(x.rev) || 0, excRev: parseFloat(x.exc_rev) || 0, orders: parseInt(x.orders) || 0, qty: parseInt(x.qty) || 0 } })
+    // Override Mobility net revenue with manager-defined filter (paid/pending/partially_paid × Delivered/Dispatched/Exchange/Blank)
+    const mobilityNetRev = parseFloat(r.mobilityNetCalc?.[0]?.net_rev) || 0
+    if (subChannelMap['Mobility'] && mobilityNetRev > 0) subChannelMap['Mobility'].netRev = mobilityNetRev
     const SUB_CHANNEL_ORDER = ['MyFrido', 'Mobility']
     const allSubChannels = (r.allSubChannels || []).map(x => x.SubChannel).filter(Boolean)
       .sort((a, b) => (SUB_CHANNEL_ORDER.indexOf(a) === -1 ? 99 : SUB_CHANNEL_ORDER.indexOf(a)) - (SUB_CHANNEL_ORDER.indexOf(b) === -1 ? 99 : SUB_CHANNEL_ORDER.indexOf(b)))
