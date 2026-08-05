@@ -1007,7 +1007,7 @@ function LogisticsPage({ filters }) {
                         <tr style={{ borderBottom: cExpanded[r.courier_group] ? 'none' : `1px solid ${C.border}` }}>
                           <td style={{ padding: '6px 7px', minWidth: 160 }}>
                             <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
-                              <button onClick={() => setCExpanded(e => ({ ...e, [r.courier_group]: !e[r.courier_group] }))} style={{ width:16, height:16, borderRadius:3, border:`1px solid ${C.border2}`, background:C.bg, color:C.t2, fontSize:10, fontWeight:700, cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0, padding:0, lineHeight:1 }}>{cExpanded[r.courier_group]?'−':'+'}</button>
+                              <span onClick={() => setCExpanded(e => ({ ...e, [r.courier_group]: !e[r.courier_group] }))} style={{ fontSize:9, color:C.t3, display:'inline-block', transform:cExpanded[r.courier_group]?'rotate(90deg)':'rotate(0deg)', transition:'transform .15s', cursor:'pointer', flexShrink:0 }}>▶</span>
                               {logo
                                 ? <img src={logo} alt="" style={{ width: 28, height: 28, objectFit: 'contain', borderRadius: 4, flexShrink: 0, background: '#fff', border: `1px solid ${C.border}` }} onError={e => { e.currentTarget.style.display = 'none' }} />
                                 : <span style={{ width: 28, height: 28, borderRadius: 4, background: color, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, fontWeight: 800, color: '#fff', flexShrink: 0 }}>{r.courier_group.charAt(0)}</span>
