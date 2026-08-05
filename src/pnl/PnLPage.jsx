@@ -74,9 +74,10 @@ export default function PnLPage({ data, filters, setFilters }) {
     rows.forEach(row => {
       const { sku, subChannel, orderStatus, weightSlab, lineCount, totalQty, grossIncGst } = row
       if (!sku) return
-      // Apply same sub-channel filter as revenue rows
-      if (d2cSubCh === 'MyFrido' && subChannel !== 'myfrido') return
+      // Apply same category filter as revenue rows (MyFrido=exclude Mobility cat, Mobility=only Mobility cat)
+      // subChannel field kept for reference but category-based filter matches the table rows
       if (d2cSubCh === 'Mobility' && subChannel !== 'mobility') return
+      if (d2cSubCh === 'MyFrido' && subChannel === 'mobility') return
       // Fallback: missing weight → treat as 2kg slab
       const effectiveSlab = weightSlab != null ? weightSlab : 2000
       const rate = rateForSlab(sndRates, effectiveSlab)
@@ -396,7 +397,6 @@ export default function PnLPage({ data, filters, setFilters }) {
           skuData={activeData.skuData}
           skuCosts={activeTab === 'shopify' ? shSkuCosts : undefined}
           adSpendMap={activeTab === 'shopify' ? (data?.pnlAdSpendMap || {}) : undefined}
-          rawAdSpend={activeTab === 'shopify' && d2cSubCh === 'all' ? (data?.pnlRawAdSpend || null) : undefined}
           daily={activeData.daily}
           grossColor={CHANNEL_COLORS[activeTab] || '#FFD600'}
           gradId={`pnl${activeTab}Grad`}

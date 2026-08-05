@@ -6,7 +6,7 @@ import PnLFinancialTable from './PnLFinancialTable.jsx'
 const dash = '—'
 const fmtPct = v => v != null ? `${v.toFixed(1)}%` : dash
 
-export default function PnLChannelTab({ title, note, gross, excRev, net, units, orders, returnRev, subCatData, skuData, adSpendMap, skuCosts, daily, grossColor = '#FFD600', gradId = 'pnlGrossGrad', rawAdSpend }) {
+export default function PnLChannelTab({ title, note, gross, excRev, net, units, orders, returnRev, subCatData, skuData, adSpendMap, skuCosts, daily, grossColor = '#FFD600', gradId = 'pnlGrossGrad' }) {
   const returnPct = pct(returnRev, gross)
   const aov = orders > 0 ? gross / orders : 0
   const asp = units > 0 ? gross / units : 0
@@ -14,7 +14,7 @@ export default function PnLChannelTab({ title, note, gross, excRev, net, units, 
   const handleTotals = useCallback(t => setTableTotals(t), [])
 
   const t = tableTotals
-  const spendVal = rawAdSpend != null ? rawAdSpend : t?.spend
+  const spendVal = t?.spend
   const spendPct = spendVal != null && t?.netCovered > 0 ? spendVal / t.netCovered * 100 : t?.spendPct
   const cm2Val = t?.cm1 != null && spendVal != null ? t.cm1 - spendVal : t?.cm2
   const cm2Pct = cm2Val != null && t?.netCovered > 0 ? cm2Val / t.netCovered * 100 : t?.cm2Pct
