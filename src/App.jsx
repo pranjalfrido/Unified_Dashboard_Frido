@@ -987,9 +987,9 @@ function LogisticsPage({ filters }) {
               return (
                 <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
                   <thead>
-                    <tr style={{ borderBottom: `1.5px solid ${C.border}` }}>
+                    <tr style={{ borderBottom: `1.5px solid ${C.border}`, background: C.bg }}>
                       {COLS.map((col) => (
-                        <th key={col.key} onClick={() => setSortCol(col.key)} style={{ padding: '6px 7px', textAlign: col.left ? 'left' : 'right', color: C.t1, fontWeight: 700, fontSize: 9.5, letterSpacing: 0.4, textTransform: 'uppercase', whiteSpace: 'nowrap', cursor: 'pointer', userSelect: 'none', borderBottom: `1.5px solid ${C.border}` }}>
+                        <th key={col.key} onClick={() => setSortCol(col.key)} style={{ padding: '6px 7px', textAlign: col.left ? 'left' : 'right', color: C.t1, fontWeight: 700, fontSize: 9.5, letterSpacing: 0.4, textTransform: 'uppercase', whiteSpace: 'nowrap', cursor: 'pointer', userSelect: 'none', borderBottom: `1.5px solid ${C.border}`, background: C.bg }}>
                           {col.label}{sortCol === col.key ? (sortDir === 'desc' ? ' ↓' : ' ↑') : ''}
                         </th>
                       ))}
