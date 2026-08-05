@@ -132,12 +132,14 @@ export default function PnLPage({ data, filters, setFilters }) {
     // Use salesCategoryOrders rows (have sub_channel) for D2C when filtering is active
     const allSalesCatRows = data.pnlSalesRows || [] // rows from salesCategoryOrders with sub_channel
     const shSalesCatRows = allSalesCatRows.filter(r => r.platform === 'Shopify')
+    const SPAREPART_CAT = 'Sparepart (Chair & Mobility)'
     const filterD2CRow = r => {
       const sc = (r.sub_channel || '').toLowerCase()
       if (d2cRegion === 'india' && sc === 'shopify international') return false
       if (d2cRegion === 'international' && sc !== 'shopify international') return false
-      if (d2cSubCh === 'MyFrido' && sc !== 'myfrido') return false
-      if (d2cSubCh === 'Mobility' && sc !== 'mobility') return false
+      const cat = (r.category || '')
+      if (d2cSubCh === 'Mobility') return cat === 'Mobility'
+      if (d2cSubCh === 'MyFrido') return cat !== 'Mobility' && cat !== SPAREPART_CAT
       return true
     }
     const shSubCatData = {}
@@ -166,18 +168,15 @@ export default function PnLPage({ data, filters, setFilters }) {
     }
     const shSkuData = {}
     Object.entries(sh.skuMap || {}).forEach(([cat, scMap]) => {
+      if (d2cSubCh === 'Mobility' && cat !== 'Mobility') return
+      if (d2cSubCh === 'MyFrido' && (cat === 'Mobility' || cat === SPAREPART_CAT)) return
       shSkuData[cat] = {}
       Object.entries(scMap).forEach(([sc, skMap]) => {
         shSkuData[cat][sc] = {}
         Object.entries(skMap).forEach(([sku, v]) => {
           const rows = v.subChannelRows || {}
-          // Determine which subChannel rows to include based on d2cSubCh filter
-          let keys = Object.keys(rows)
-          if (d2cSubCh === 'MyFrido') keys = keys.filter(k => k === 'myfrido')
-          else if (d2cSubCh === 'Mobility') keys = keys.filter(k => k === 'mobility')
-          else keys = keys.filter(k => k !== 'shopify international')
+          const keys = Object.keys(rows).filter(k => k !== 'shopify international')
           if (keys.length === 0) return
-          // Aggregate selected subChannel rows into one entry
           const agg = { rev: 0, excRev: 0, units: 0, returnUnits: 0, cancelRev: 0, codCancelRev: 0, rtoRev: 0, cirRev: 0, exchRev: 0, returnRev: 0 }
           keys.forEach(k => { const r = rows[k]; Object.keys(agg).forEach(f => { agg[f] = (agg[f] || 0) + (r[f] || 0) }) })
           shSkuData[cat][sc][sku] = pick(agg)
