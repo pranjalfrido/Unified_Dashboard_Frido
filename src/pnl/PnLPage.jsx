@@ -74,10 +74,8 @@ export default function PnLPage({ data, filters, setFilters }) {
     rows.forEach(row => {
       const { sku, category, orderStatus, weightSlab, lineCount, totalQty, grossIncGst } = row
       if (!sku) return
-      // Filter by category to match revenue row filtering (Mobility=only Mobility cat, MyFrido=exclude Mobility+Sparepart)
-      const SPAREPART_CAT = 'Sparepart (Chair & Mobility)'
-      if (d2cSubCh === 'Mobility' && category !== 'Mobility') return
-      if (d2cSubCh === 'MyFrido' && (category === 'Mobility' || category === SPAREPART_CAT)) return
+      if (d2cSubCh === 'Mobility' && row.subChannel !== 'mobility') return
+      if (d2cSubCh === 'MyFrido' && row.subChannel !== 'myfrido') return
       // Fallback: missing weight → treat as 2kg slab
       const effectiveSlab = weightSlab != null ? weightSlab : 2000
       const rate = rateForSlab(sndRates, effectiveSlab)
@@ -133,14 +131,12 @@ export default function PnLPage({ data, filters, setFilters }) {
     // Use salesCategoryOrders rows (have sub_channel) for D2C when filtering is active
     const allSalesCatRows = data.pnlSalesRows || [] // rows from salesCategoryOrders with sub_channel
     const shSalesCatRows = allSalesCatRows.filter(r => r.platform === 'Shopify')
-    const SPAREPART_CAT = 'Sparepart (Chair & Mobility)'
     const filterD2CRow = r => {
       const sc = (r.sub_channel || '').toLowerCase()
       if (d2cRegion === 'india' && sc === 'shopify international') return false
       if (d2cRegion === 'international' && sc !== 'shopify international') return false
-      const cat = (r.category || '')
-      if (d2cSubCh === 'Mobility') return cat === 'Mobility'
-      if (d2cSubCh === 'MyFrido') return cat !== 'Mobility' && cat !== SPAREPART_CAT
+      if (d2cSubCh === 'Mobility') return r.sub_channel === 'Mobility'
+      if (d2cSubCh === 'MyFrido') return r.sub_channel === 'MyFrido'
       return true
     }
     const shSubCatData = {}
@@ -168,15 +164,16 @@ export default function PnLPage({ data, filters, setFilters }) {
       })
     }
     const shSkuData = {}
+    const subChKey = d2cSubCh === 'MyFrido' ? 'myfrido' : d2cSubCh === 'Mobility' ? 'mobility' : null
     Object.entries(sh.skuMap || {}).forEach(([cat, scMap]) => {
-      if (d2cSubCh === 'Mobility' && cat !== 'Mobility') return
-      if (d2cSubCh === 'MyFrido' && (cat === 'Mobility' || cat === SPAREPART_CAT)) return
       shSkuData[cat] = {}
       Object.entries(scMap).forEach(([sc, skMap]) => {
         shSkuData[cat][sc] = {}
         Object.entries(skMap).forEach(([sku, v]) => {
           const rows = v.subChannelRows || {}
-          const keys = Object.keys(rows).filter(k => k !== 'shopify international')
+          const keys = subChKey
+            ? (rows[subChKey] ? [subChKey] : [])
+            : Object.keys(rows).filter(k => k !== 'shopify international')
           if (keys.length === 0) return
           const agg = { rev: 0, excRev: 0, units: 0, returnUnits: 0, cancelRev: 0, codCancelRev: 0, rtoRev: 0, cirRev: 0, exchRev: 0, returnRev: 0 }
           keys.forEach(k => { const r = rows[k]; Object.keys(agg).forEach(f => { agg[f] = (agg[f] || 0) + (r[f] || 0) }) })
