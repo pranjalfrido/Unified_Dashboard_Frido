@@ -829,12 +829,12 @@ function LogisticsPage({ filters }) {
                 { key: '_cancPct', label: 'Canc %' },
                 { key: '_fasrPct', label: 'FASR %' },
                 { key: '_rasrPct', label: 'RASR %' },
-                { key: 'avg_processing_days', label: 'Avg Processing' },
-                { key: 'avg_pickup_days', label: 'Avg Pickup' },
-                { key: 'avg_intransit_days', label: 'Avg S2D' },
-                { key: 'avg_fulfilment_days', label: 'Avg O2D' },
-                { key: 'avg_rto_tat_days', label: 'Avg RTO TAT' },
-                { key: 'avg_s2a_days', label: 'Avg S2A' },
+                { key: 'avg_processing_days', label: 'Avg Processing', center: true },
+                { key: 'avg_pickup_days', label: 'Avg Pickup', center: true },
+                { key: 'avg_intransit_days', label: 'Avg S2D', center: true },
+                { key: 'avg_fulfilment_days', label: 'Avg O2D', center: true },
+                { key: 'avg_rto_tat_days', label: 'Avg RTO TAT', center: true },
+                { key: 'avg_s2a_days', label: 'Avg S2A', center: true },
               ]
               const enriched = byCourierData.map(r => ({
                 ...r,
@@ -989,7 +989,7 @@ function LogisticsPage({ filters }) {
                   <thead>
                     <tr style={{ borderBottom: `1.5px solid ${C.border}`, background: C.bg }}>
                       {COLS.map((col) => (
-                        <th key={col.key} onClick={() => setSortCol(col.key)} style={{ padding: '6px 7px', textAlign: col.left ? 'left' : 'right', color: C.t1, fontWeight: 700, fontSize: 9.5, letterSpacing: 0.4, textTransform: 'uppercase', whiteSpace: 'nowrap', cursor: 'pointer', userSelect: 'none', borderBottom: `1.5px solid ${C.border}`, background: C.bg }}>
+                        <th key={col.key} onClick={() => setSortCol(col.key)} style={{ padding: '6px 7px', textAlign: col.left ? 'left' : col.center ? 'center' : 'right', color: C.t1, fontWeight: 700, fontSize: 9.5, letterSpacing: 0.4, textTransform: 'uppercase', whiteSpace: 'nowrap', cursor: 'pointer', userSelect: 'none', borderBottom: `1.5px solid ${C.border}`, background: C.bg }}>
                           {col.label}{sortCol === col.key ? (sortDir === 'desc' ? ' ↓' : ' ↑') : ''}
                         </th>
                       ))}
@@ -1025,12 +1025,12 @@ function LogisticsPage({ filters }) {
                           <td style={{ padding: '6px 7px', textAlign: 'right', color: C.t1, fontSize: 11 }}>{r._cancPct.toFixed(2)}%</td>
                           <td style={{ padding: '6px 7px', textAlign: 'right', color: C.t1, fontSize: 11 }}>{r._fasrPct != null ? r._fasrPct.toFixed(2) + '%' : '—'}</td>
                           <td style={{ padding: '6px 7px', textAlign: 'right', color: C.t1, fontSize: 11 }}>{r._rasrPct != null ? r._rasrPct.toFixed(2) + '%' : '—'}</td>
-                          <td style={{ padding: '6px 7px', textAlign: 'right', color: C.t1, fontSize: 11 }}>{d(r.avg_processing_days)}</td>
-                          <td style={{ padding: '6px 7px', textAlign: 'right', color: C.t1, fontSize: 11 }}>{d(r.avg_pickup_days)}</td>
-                          <td style={{ padding: '6px 7px', textAlign: 'right', color: C.t1, fontSize: 11 }}>{d(r.avg_intransit_days)}</td>
-                          <td style={{ padding: '6px 7px', textAlign: 'right', color: C.t1, fontSize: 11 }}>{d(r.avg_fulfilment_days)}</td>
-                          <td style={{ padding: '6px 7px', textAlign: 'right', color: C.t1, fontSize: 11 }}>{d(r.avg_rto_tat_days)}</td>
-                          <td style={{ padding: '6px 7px', textAlign: 'right', color: C.t1, fontSize: 11 }}>{d(r.avg_s2a_days)}</td>
+                          <td style={{ padding: '6px 7px', textAlign: 'center', color: C.t1, fontSize: 11 }}>{d(r.avg_processing_days)}</td>
+                          <td style={{ padding: '6px 7px', textAlign: 'center', color: C.t1, fontSize: 11 }}>{d(r.avg_pickup_days)}</td>
+                          <td style={{ padding: '6px 7px', textAlign: 'center', color: C.t1, fontSize: 11 }}>{d(r.avg_intransit_days)}</td>
+                          <td style={{ padding: '6px 7px', textAlign: 'center', color: C.t1, fontSize: 11 }}>{d(r.avg_fulfilment_days)}</td>
+                          <td style={{ padding: '6px 7px', textAlign: 'center', color: C.t1, fontSize: 11 }}>{d(r.avg_rto_tat_days)}</td>
+                          <td style={{ padding: '6px 7px', textAlign: 'center', color: C.t1, fontSize: 11 }}>{d(r.avg_s2a_days)}</td>
                         </tr>
                         {cExpanded[r.courier_group] && byCourierMonth.filter(m => m.courier_group === r.courier_group).sort((a,b) => a.month_dt < b.month_dt ? -1 : 1).map(m => {
                           const _delPct = m.total ? +((m.delivered/m.total)*100).toFixed(2) : 0
@@ -1052,12 +1052,12 @@ function LogisticsPage({ filters }) {
                               <td style={{ padding:'4px 7px', textAlign:'right', color:C.t1, fontSize:11 }}>{_cancPct.toFixed(2)}%</td>
                               <td style={{ padding:'4px 7px', textAlign:'right', color:C.t1, fontSize:11 }}>{_fasrPct!=null?_fasrPct.toFixed(2)+'%':'—'}</td>
                               <td style={{ padding:'4px 7px', textAlign:'right', color:C.t1, fontSize:11 }}>{_rasrPct!=null?_rasrPct.toFixed(2)+'%':'—'}</td>
-                              <td style={{ padding:'4px 7px', textAlign:'right', color:C.t1, fontSize:11 }}>{d(m.avg_processing_days)}</td>
-                              <td style={{ padding:'4px 7px', textAlign:'right', color:C.t1, fontSize:11 }}>{d(m.avg_pickup_days)}</td>
-                              <td style={{ padding:'4px 7px', textAlign:'right', color:C.t1, fontSize:11 }}>{d(m.avg_intransit_days)}</td>
-                              <td style={{ padding:'4px 7px', textAlign:'right', color:C.t1, fontSize:11 }}>{d(m.avg_fulfilment_days)}</td>
-                              <td style={{ padding:'4px 7px', textAlign:'right', color:C.t1, fontSize:11 }}>{d(m.avg_rto_tat_days)}</td>
-                              <td style={{ padding:'4px 7px', textAlign:'right', color:C.t1, fontSize:11 }}>{d(m.avg_s2a_days)}</td>
+                              <td style={{ padding:'4px 7px', textAlign:'center', color:C.t1, fontSize:11 }}>{d(m.avg_processing_days)}</td>
+                              <td style={{ padding:'4px 7px', textAlign:'center', color:C.t1, fontSize:11 }}>{d(m.avg_pickup_days)}</td>
+                              <td style={{ padding:'4px 7px', textAlign:'center', color:C.t1, fontSize:11 }}>{d(m.avg_intransit_days)}</td>
+                              <td style={{ padding:'4px 7px', textAlign:'center', color:C.t1, fontSize:11 }}>{d(m.avg_fulfilment_days)}</td>
+                              <td style={{ padding:'4px 7px', textAlign:'center', color:C.t1, fontSize:11 }}>{d(m.avg_rto_tat_days)}</td>
+                              <td style={{ padding:'4px 7px', textAlign:'center', color:C.t1, fontSize:11 }}>{d(m.avg_s2a_days)}</td>
                             </tr>
                           )
                         })}
@@ -1087,12 +1087,12 @@ function LogisticsPage({ filters }) {
                           <td style={{ padding: '6px 7px', textAlign: 'right', color: C.t1, fontSize: 11 }}>{(sumC/tot*100).toFixed(2)}%</td>
                           <td style={{ padding: '6px 7px', textAlign: 'right', color: C.t1, fontSize: 11 }}>{sumOfd ? (sumD1/sumOfd*100).toFixed(2)+'%' : '—'}</td>
                           <td style={{ padding: '6px 7px', textAlign: 'right', color: C.t1, fontSize: 11 }}>{sumOfd ? (sumRN/sumOfd*100).toFixed(2)+'%' : '—'}</td>
-                          <td style={{ padding: '6px 7px', textAlign: 'right', color: C.t1, fontSize: 11 }}>{wavg('avg_processing_days').toFixed(2)}d</td>
-                          <td style={{ padding: '6px 7px', textAlign: 'right', color: C.t1, fontSize: 11 }}>{wavg('avg_pickup_days').toFixed(2)}d</td>
-                          <td style={{ padding: '6px 7px', textAlign: 'right', color: C.t1, fontSize: 11 }}>{wavg('avg_intransit_days').toFixed(2)}d</td>
-                          <td style={{ padding: '6px 7px', textAlign: 'right', color: C.t1, fontSize: 11 }}>{wavg('avg_fulfilment_days').toFixed(2)}d</td>
-                          <td style={{ padding: '6px 7px', textAlign: 'right', color: C.t1, fontSize: 11 }}>{wavg('avg_rto_tat_days').toFixed(2)}d</td>
-                          <td style={{ padding: '6px 7px', textAlign: 'right', color: C.t1, fontSize: 11 }}>{wavg('avg_s2a_days').toFixed(2)}d</td>
+                          <td style={{ padding: '6px 7px', textAlign: 'center', color: C.t1, fontSize: 11 }}>{wavg('avg_processing_days').toFixed(2)}d</td>
+                          <td style={{ padding: '6px 7px', textAlign: 'center', color: C.t1, fontSize: 11 }}>{wavg('avg_pickup_days').toFixed(2)}d</td>
+                          <td style={{ padding: '6px 7px', textAlign: 'center', color: C.t1, fontSize: 11 }}>{wavg('avg_intransit_days').toFixed(2)}d</td>
+                          <td style={{ padding: '6px 7px', textAlign: 'center', color: C.t1, fontSize: 11 }}>{wavg('avg_fulfilment_days').toFixed(2)}d</td>
+                          <td style={{ padding: '6px 7px', textAlign: 'center', color: C.t1, fontSize: 11 }}>{wavg('avg_rto_tat_days').toFixed(2)}d</td>
+                          <td style={{ padding: '6px 7px', textAlign: 'center', color: C.t1, fontSize: 11 }}>{wavg('avg_s2a_days').toFixed(2)}d</td>
                         </tr>
                       )
                     })()}
