@@ -186,6 +186,9 @@ export default function PnLFinancialTable({ subCatData, skuData, adSpendMap, sku
   const totSpend = totalMapSpend != null ? totalMapSpend : null
   const totSpendPct = totSpend != null && tot.net > 0 ? (totSpend / tot.net * 100) : 0
   const totGm = tot.anyCosted ? tot.netCovered - tot.cogs : null
+  const totCm1 = tot.anyCm1 ? tot.cm1 : null
+  const totCm2 = totCm1 != null && totSpend != null ? totCm1 - totSpend : totCm1
+  const totCm2Pct = totCm2 != null && tot.net > 0 ? pctOf(totCm2, tot.net) : null
 
   useEffect(() => {
     if (!onTotals) return
@@ -193,10 +196,10 @@ export default function PnLFinancialTable({ subCatData, skuData, adSpendMap, sku
     const sndPct = totSnd != null && tot.netCovered > 0 ? pctOf(totSnd, tot.netCovered) : null
     const gm = totGm
     const gmPct = totGm != null && tot.netCovered > 0 ? pctOf(totGm, tot.netCovered) : null
-    const cm1 = tot.anyCm1 ? tot.cm1 : null
+    const cm1 = totCm1
     const cm1Pct = cm1 != null && tot.netCovered > 0 ? pctOf(cm1, tot.netCovered) : null
-    const cm2 = tot.anyCm2 ? tot.cm2 : null
-    const cm2Pct = cm2 != null && tot.netCovered > 0 ? pctOf(cm2, tot.netCovered) : null
+    const cm2 = totCm2
+    const cm2Pct = totCm2Pct
     onTotals({ cogsPct, sndPct, cogs: tot.anyCosted ? tot.cogs : null, snd: totSnd, gm, gmPct, cm1, cm1Pct, cm2, cm2Pct, spend: totSpend, spendPct: totSpendPct, netCovered: tot.netCovered })
   }, [tot.cogs, tot.netCovered, totSnd, tot.anyCosted, tot.anyCosts, tot.cm1, tot.cm2, tot.anyCm1, tot.anyCm2, totSpend])
 
@@ -370,7 +373,7 @@ export default function PnLFinancialTable({ subCatData, skuData, adSpendMap, sku
               <td style={totalTdStyle}>{tot.anyCm1 && tot.net > 0 ? `${pctOf(tot.cm1, tot.net).toFixed(1)}%` : noCostCell}</td>
               <td style={totalTdStyle}>{totSpend > 0 ? fmt(totSpend) : '—'}</td>
               <td style={totalTdStyle}>{totSpend > 0 ? `${totSpendPct.toFixed(2)}%` : '—'}</td>
-              <td style={totalTdStyle}>{tot.anyCm2 && tot.net > 0 ? `${pctOf(tot.cm2, tot.net).toFixed(1)}%` : noCostCell}</td>
+              <td style={totalTdStyle}>{totCm2Pct != null ? `${totCm2Pct.toFixed(1)}%` : noCostCell}</td>
             </tr>
           </tfoot>
         </table>

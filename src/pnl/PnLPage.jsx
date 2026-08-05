@@ -72,12 +72,12 @@ export default function PnLPage({ data, filters, setFilters }) {
     if (!sndRates || !rows?.length) return {}
     const bySku = {}
     rows.forEach(row => {
-      const { sku, subChannel, orderStatus, weightSlab, lineCount, totalQty, grossIncGst } = row
+      const { sku, category, orderStatus, weightSlab, lineCount, totalQty, grossIncGst } = row
       if (!sku) return
-      // Apply same category filter as revenue rows (MyFrido=exclude Mobility cat, Mobility=only Mobility cat)
-      // subChannel field kept for reference but category-based filter matches the table rows
-      if (d2cSubCh === 'Mobility' && subChannel !== 'mobility') return
-      if (d2cSubCh === 'MyFrido' && subChannel === 'mobility') return
+      // Filter by category to match revenue row filtering (Mobility=only Mobility cat, MyFrido=exclude Mobility+Sparepart)
+      const SPAREPART_CAT = 'Sparepart (Chair & Mobility)'
+      if (d2cSubCh === 'Mobility' && category !== 'Mobility') return
+      if (d2cSubCh === 'MyFrido' && (category === 'Mobility' || category === SPAREPART_CAT)) return
       // Fallback: missing weight → treat as 2kg slab
       const effectiveSlab = weightSlab != null ? weightSlab : 2000
       const rate = rateForSlab(sndRates, effectiveSlab)
