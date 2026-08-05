@@ -3416,9 +3416,9 @@ function FlatCategoryProductMatrix({ catData, subCatData, skuData, title, catPre
 
   // Same visual language as the Ads tab's Platform Overview / By Category tables: C.bg sticky
   // header band, hover-highlighted rows, bold sticky-bottom Total row.
-  const thStyle = { fontSize: 10, fontWeight: 700, color: C.t3, textTransform: 'uppercase', letterSpacing: 0.4, padding: '7px 10px', textAlign: 'right', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', borderBottom: `1.5px solid ${C.border}` }
+  const thStyle = { fontSize: 9.5, fontWeight: 700, color: C.t3, textTransform: 'uppercase', letterSpacing: '.05em', padding: '9px 10px', textAlign: 'right', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', borderBottom: `1.5px solid ${C.border}` }
   const thStyleL = { ...thStyle, textAlign: 'left' }
-  const tdStyle = { fontSize: 12, padding: '5px 10px', textAlign: 'right', color: C.t1, borderBottom: `1px solid ${C.border}`, fontFamily: 'var(--mono)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }
+  const tdStyle = { fontSize: 12, padding: '9px 10px', textAlign: 'right', color: C.t1, borderBottom: `1px solid ${C.border}`, fontFamily: 'var(--mono)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }
   const tdStyleL = { ...tdStyle, textAlign: 'left', fontFamily: 'inherit' }
   const totalTdStyle = { ...tdStyle, padding: '7px 10px', fontWeight: 700, color: C.t1, borderBottom: 'none' }
   // Flag in red only past the agreed threshold per metric — Cancel >3%, RTO >9%, CIR >9%,
@@ -3500,13 +3500,11 @@ function FlatCategoryProductMatrix({ catData, subCatData, skuData, title, catPre
               const hasSkus = allSkus.length > 0
               return (
                 <Fragment key={skuKey}>
-                  <tr style={{ cursor: 'default' }}
-                    onMouseEnter={e => e.currentTarget.style.background = '#FFFBE6'}
-                    onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
+                  <tr style={{ cursor: 'default' }}>
                     <td style={tdStyleL}>{r.cat}</td>
                     <td style={{ ...tdStyleL, fontWeight: 600 }}>
-                      <span onClick={() => hasSkus && toggleSku(skuKey)} style={{ cursor: hasSkus ? 'pointer' : 'default', userSelect: 'none', display: 'inline-flex', alignItems: 'center', gap: 5 }}>
-                        {hasSkus && <span style={{ fontSize: 9, color: C.t3, display: 'inline-block', transform: isOpen ? 'rotate(90deg)' : 'rotate(0deg)', transition: 'transform .15s' }}>▶</span>}
+                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+                        {hasSkus && <button onClick={() => toggleSku(skuKey)} style={{ width: 16, height: 16, borderRadius: 3, border: `1px solid ${C.border2}`, background: C.bg, color: C.t2, fontSize: 10, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, padding: 0, lineHeight: 1 }}>{isOpen ? '−' : '+'}</button>}
                         {r.sc}
                       </span>
                     </td>
@@ -3520,9 +3518,7 @@ function FlatCategoryProductMatrix({ catData, subCatData, skuData, title, catPre
                   {isOpen && skus.map(sk => {
                     const skTotalReturnRev = simpleReturns ? sk.returnRev : sk.cancelRev + sk.rtoRev + sk.cirRev + sk.returnRev
                     return (
-                      <tr key={sk.sku} style={{ background: C.bg, cursor: 'default' }}
-                        onMouseEnter={e => e.currentTarget.style.background = '#FFFBE6'}
-                        onMouseLeave={e => e.currentTarget.style.background = C.bg}>
+                      <tr key={sk.sku} style={{ background: C.bg, cursor: 'default' }}>
                         <td style={{ ...tdStyleL, borderBottom: `1px solid ${C.border}` }}></td>
                         <td style={{ ...tdStyleL, borderBottom: `1px solid ${C.border}`, fontFamily: 'var(--mono)', fontSize: 11, color: C.t2, paddingLeft: 22 }}>└ {sk.sku}</td>
                         <td style={{ ...tdStyle, fontSize: 11 }}>{fmt(sk.gross)}{tot.gross > 0 && <span style={{ fontSize: 9, color: C.t3, marginLeft: 4 }}>({(sk.gross / tot.gross * 100).toFixed(1)}%)</span>}</td>
