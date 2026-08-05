@@ -5147,7 +5147,7 @@ function ShopifyTab({ data, filters, setFilters }) {
       {isIntl
         ? <Card title="Category Revenue Matrix · D2C International"><div style={{ fontSize: 12, color: C.t3, padding: '10px 0', textAlign: 'center' }}>Category breakdown not available for International orders</div></Card>
         : (() => {
-        const pick = v => ({ rev: v.rev || 0, excRev: v.excRev || 0, units: v.units || 0, orders: v.orders, cancelled: v.cancelled || 0, rto: v.rto || 0, cir: v.cir || 0, exch: v.exch || 0, cancelRev: v.cancelRev || 0, rtoRev: v.rtoRev || 0, cirRev: v.cirRev || 0, exchRev: v.exchRev || 0 })
+        const pick = v => ({ rev: v.rev || 0, excRev: v.excRev || 0, units: v.units || 0, orders: v.orders, cancelled: v.cancelled || 0, rto: v.rto || 0, cir: v.cir || 0, exch: v.exch || 0, cancelRev: v.cancelRev || 0, codCancelRev: v.codCancelRev || 0, rtoRev: v.rtoRev || 0, cirRev: v.cirRev || 0, exchRev: v.exchRev || 0 })
         const catData = {}
         Object.entries(sh.catMap || {}).forEach(([cat, v]) => { catData[cat] = pick(v) })
         const subCatData = {}
@@ -5161,7 +5161,10 @@ function ShopifyTab({ data, filters, setFilters }) {
           skuData[cat] = {}
           Object.entries(scMap).forEach(([sc, skuMap_]) => {
             skuData[cat][sc] = {}
-            Object.entries(skuMap_).forEach(([sku, v]) => { skuData[cat][sc][sku] = pick(v) })
+            Object.entries(skuMap_).forEach(([sku, v]) => {
+              const agg = Object.values(v.subChannelRows || {}).reduce((a, r) => ({ rev: a.rev + (r.rev||0), excRev: a.excRev + (r.excRev||0), units: a.units + (r.units||0), cancelRev: a.cancelRev + (r.cancelRev||0), codCancelRev: a.codCancelRev + (r.codCancelRev||0), rtoRev: a.rtoRev + (r.rtoRev||0), cirRev: a.cirRev + (r.cirRev||0), exchRev: a.exchRev + (r.exchRev||0), returnUnits: a.returnUnits + (r.returnUnits||0) }), { rev:0, excRev:0, units:0, cancelRev:0, codCancelRev:0, rtoRev:0, cirRev:0, exchRev:0, returnUnits:0 })
+              skuData[cat][sc][sku] = agg
+            })
           })
         })
         return <FlatCategoryProductMatrix catData={catData} subCatData={subCatData} skuData={skuData} title="Category Revenue Matrix · D2C India" catPrevMap={sh.catPrevMap || {}} subCatPrevMap={sh.subCatPrevMap || {}} />
