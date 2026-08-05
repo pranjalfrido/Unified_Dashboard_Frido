@@ -22,7 +22,7 @@ import { useSortableTable } from '../components.jsx'
 // adSpendMap: optional {subCategory: spend} — real marketing spend, folded in as Spend % of Net Revenue.
 // sndBySku: optional {sku: totalSndCost} — real SnD cost per SKU (Shopify only for now).
 // skuCosts: {sku: {logistics, fulfilment, paymentGw, softwareFee}} — D2C only, from PnLPage
-export default function PnLFinancialTable({ subCatData, skuData, adSpendMap, skuCosts, title = 'Financial View', onTotals }) {
+export default function PnLFinancialTable({ subCatData, skuData, adSpendMap, skuCosts, title = 'Financial View', onTotals, includeUnmatched = false }) {
   const [expandedSku, setExpandedSku] = useState({})
   const [search, setSearch] = useState('')
   const [cogsMap, setCogsMap] = useState(null)
@@ -175,9 +175,14 @@ export default function PnLFinancialTable({ subCatData, skuData, adSpendMap, sku
   }), { gross: 0, excRev: 0, net: 0, units: 0, totalReturnRev: 0, spend: 0, cogs: 0, netCovered: 0, anyCosted: false, logistics: 0, fulfilment: 0, paymentGw: 0, softwareFee: 0, anyCosts: false, cm1: 0, anyCm1: false, cm2: 0, anyCm2: false })
   const totSnd = tot.anyCosts ? tot.logistics + tot.fulfilment + tot.paymentGw + tot.softwareFee : null
   const totReturnPct = pctOf(tot.totalReturnRev, tot.gross)
-  // Sum spend only for sub-categories visible in the table
+  // Sum spend for visible rows + unmatched keys (unattributed bucket) when includeUnmatched=true (All view)
   const visibleScSet = new Set(filteredRows.map(r => r.sc))
-  const totalMapSpend = adSpendMap != null ? Object.entries(adSpendMap).reduce((s, [k, v]) => visibleScSet.has(k) ? s + v : s, 0) : null
+  const allSubCatKeys = new Set(Object.values(subCatData || {}).flatMap(scMap => Object.keys(scMap)))
+  const totalMapSpend = adSpendMap != null ? Object.entries(adSpendMap).reduce((s, [k, v]) => {
+    if (visibleScSet.has(k)) return s + v
+    if (includeUnmatched && !allSubCatKeys.has(k)) return s + v
+    return s
+  }, 0) : null
   const totSpend = totalMapSpend != null ? totalMapSpend : null
   const totSpendPct = totSpend != null && tot.net > 0 ? (totSpend / tot.net * 100) : 0
   const totGm = tot.anyCosted ? tot.netCovered - tot.cogs : null
