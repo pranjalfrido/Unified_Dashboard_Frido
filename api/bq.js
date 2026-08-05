@@ -4,7 +4,7 @@ import { getBQ, buildQuery, netRevenueSelectFragment, computeNetRevenueMeasures 
 const cache = new Map()
 const CACHE_TTL = 5 * 60 * 1000
 
-const CACHE_VERSION = 7
+const CACHE_VERSION = 8
 function getCacheKey(body) {
   const { start, end, category, subCategory, sku, subChannel, voucher, channel, region, tier, state, city, country, paymentType, channelGroup } = body
   return JSON.stringify({ v: CACHE_VERSION, start, end, category, subCategory, sku, subChannel, voucher, channel, region, tier, state, city, country, paymentType, channelGroup })

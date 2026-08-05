@@ -58,11 +58,14 @@ export function computeNetRevenueMeasures(row = {}) {
   const rtoRev = parseFloat(row.rto_rev) || 0
   const returnRev = parseFloat(row.return_rev) || 0
   const cancelRev = parseFloat(row.cancel_rev) || 0
+  const codCancelRev = parseFloat(row.cod_cancel_rev) || 0
+  // Exclude COD cancellations from Net Rev deduction — COD cancels are pre-dispatch drops, not true returns
+  const effectiveCancelRev = cancelRev - codCancelRev
 
   const cirPct = grossIncGst > 0 ? cirRev / grossIncGst : 0
   const rtoPct = grossIncGst > 0 ? rtoRev / grossIncGst : 0
   const returnPct = grossIncGst > 0 ? returnRev / grossIncGst : 0
-  const cancelPct = grossIncGst > 0 ? cancelRev / grossIncGst : 0
+  const cancelPct = grossIncGst > 0 ? effectiveCancelRev / grossIncGst : 0
   const retainedShare = Math.max(0, 1 - cirPct - rtoPct - returnPct - cancelPct)
 
   const netRevenueExcGst = grossExcGst * retainedShare
@@ -71,7 +74,7 @@ export function computeNetRevenueMeasures(row = {}) {
 
   return {
     grossIncGst, grossExcGst,
-    cirRev, rtoRev, returnRev, cancelRev,
+    cirRev, rtoRev, returnRev, cancelRev, codCancelRev, effectiveCancelRev,
     cirPct, rtoPct, returnPct, cancelPct,
     totalReturnPct: cirPct + rtoPct + returnPct + cancelPct,
     retainedShare,
