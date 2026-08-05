@@ -169,7 +169,19 @@ export default function PnLPage({ data, filters, setFilters }) {
       shSkuData[cat] = {}
       Object.entries(scMap).forEach(([sc, skMap]) => {
         shSkuData[cat][sc] = {}
-        Object.entries(skMap).forEach(([sku, v]) => { shSkuData[cat][sc][sku] = pick(v) })
+        Object.entries(skMap).forEach(([sku, v]) => {
+          const rows = v.subChannelRows || {}
+          // Determine which subChannel rows to include based on d2cSubCh filter
+          let keys = Object.keys(rows)
+          if (d2cSubCh === 'MyFrido') keys = keys.filter(k => k === 'myfrido')
+          else if (d2cSubCh === 'Mobility') keys = keys.filter(k => k === 'mobility')
+          else keys = keys.filter(k => k !== 'shopify international')
+          if (keys.length === 0) return
+          // Aggregate selected subChannel rows into one entry
+          const agg = { rev: 0, excRev: 0, units: 0, returnUnits: 0, cancelRev: 0, codCancelRev: 0, rtoRev: 0, cirRev: 0, exchRev: 0, returnRev: 0 }
+          keys.forEach(k => { const r = rows[k]; Object.keys(agg).forEach(f => { agg[f] = (agg[f] || 0) + (r[f] || 0) }) })
+          shSkuData[cat][sc][sku] = pick(agg)
+        })
       })
     })
 
