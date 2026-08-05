@@ -1018,7 +1018,7 @@ function LogisticsPage({ filters }) {
                             </div>
                           </td>
                           <td style={{ padding: '6px 7px', textAlign: 'right', color: C.t1, fontSize: 11 }}>{r._volPct.toFixed(2)}%</td>
-                          <td style={{ padding: '6px 7px', textAlign: 'right', color: C.t1, fontWeight: 600 }}>{n(r.total)}</td>
+                          <td style={{ padding: '6px 7px', textAlign: 'right', color: C.t1 }}>{n(r.total)}</td>
                           <td style={{ padding: '6px 7px', textAlign: 'right', color: C.t1, fontSize: 11 }}>{r._delPct.toFixed(2)}%</td>
                           <td style={{ padding: '6px 7px', textAlign: 'right', color: rtoColor, fontSize: 11 }}>{r._rtoPct.toFixed(2)}%</td>
                           <td style={{ padding: '6px 7px', textAlign: 'right', color: C.t1, fontSize: 11 }}>{r._zrtoPct.toFixed(2)}%</td>
@@ -1080,7 +1080,7 @@ function LogisticsPage({ filters }) {
                         <tr style={{ borderTop: `2px solid ${C.border}`, background: C.bg, fontWeight: 700 }}>
                           <td style={{ padding: '6px 7px', color: C.t1, fontWeight: 700 }}>Total</td>
                           <td style={{ padding: '6px 7px', textAlign: 'right', color: C.t1, fontSize: 11 }}>100.00%</td>
-                          <td style={{ padding: '6px 7px', textAlign: 'right', color: C.t1, fontWeight: 700 }}>{n(tot)}</td>
+                          <td style={{ padding: '6px 7px', textAlign: 'right', color: C.t1 }}>{n(tot)}</td>
                           <td style={{ padding: '6px 7px', textAlign: 'right', color: C.t1, fontSize: 11 }}>{(sumD/tot*100).toFixed(2)}%</td>
                           <td style={{ padding: '6px 7px', textAlign: 'right', color: C.t1, fontSize: 11 }}>{(sumR/tot*100).toFixed(2)}%</td>
                           <td style={{ padding: '6px 7px', textAlign: 'right', color: C.t1, fontSize: 11 }}>{(sumZ/tot*100).toFixed(2)}%</td>
