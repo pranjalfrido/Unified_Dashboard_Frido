@@ -131,9 +131,7 @@ export default function PnLPage({ data, filters, setFilters }) {
     const sh = data.shopify || {}
     // Use salesCategoryOrders rows (have sub_channel) for D2C when filtering is active
     const allSalesCatRows = data.pnlSalesRows || [] // rows from salesCategoryOrders with sub_channel
-    console.log('[PnL debug] pnlSalesRows total:', allSalesCatRows.length, 'sample:', allSalesCatRows[0])
     const shSalesCatRows = allSalesCatRows.filter(r => r.platform === 'Shopify')
-    console.log('[PnL debug] shSalesCatRows:', shSalesCatRows.length, 'sub_channels:', [...new Set(shSalesCatRows.map(r => r.sub_channel))])
     const filterD2CRow = r => {
       const sc = (r.sub_channel || '').toLowerCase()
       if (d2cRegion === 'india' && sc === 'shopify international') return false

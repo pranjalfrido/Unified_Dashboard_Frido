@@ -175,9 +175,10 @@ export default function PnLFinancialTable({ subCatData, skuData, adSpendMap, sku
   }), { gross: 0, excRev: 0, net: 0, units: 0, totalReturnRev: 0, spend: 0, cogs: 0, netCovered: 0, anyCosted: false, logistics: 0, fulfilment: 0, paymentGw: 0, softwareFee: 0, anyCosts: false, cm1: 0, anyCm1: false, cm2: 0, anyCm2: false })
   const totSnd = tot.anyCosts ? tot.logistics + tot.fulfilment + tot.paymentGw + tot.softwareFee : null
   const totReturnPct = pctOf(tot.totalReturnRev, tot.gross)
-  // Use sum of ALL adSpendMap values so spend from sub-categories not in the table is included
-  const totalMapSpend = adSpendMap != null ? Object.values(adSpendMap).reduce((s, v) => s + v, 0) : null
-  const totSpend = totalMapSpend != null && totalMapSpend > 0 ? totalMapSpend : (adSpendMap != null ? tot.spend : null)
+  // Sum spend only for sub-categories actually in the filtered table
+  const visibleScSet = new Set(filteredRows.map(r => r.sc))
+  const totalMapSpend = adSpendMap != null ? Object.entries(adSpendMap).reduce((s, [k, v]) => visibleScSet.has(k) ? s + v : s, 0) : null
+  const totSpend = totalMapSpend != null ? totalMapSpend : null
   const totSpendPct = totSpend != null && tot.net > 0 ? (totSpend / tot.net * 100) : 0
   const totGm = tot.anyCosted ? tot.netCovered - tot.cogs : null
 
