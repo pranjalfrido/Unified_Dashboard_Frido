@@ -996,11 +996,10 @@ function LogisticsPage({ filters }) {
                     </tr>
                   </thead>
                   <tbody>
-                    {(() => {
+                    {sorted.map((r) => {
                       const _totAll = enriched.reduce((s,r) => s + r.total, 0) || 1
                       const _sumR = enriched.reduce((s,r) => s + (r.rto||0), 0)
                       const avgRtoPct = _sumR / _totAll * 100
-                      return sorted.map((r) => {
                       const logo = COURIER_LOGOS[r.courier_group]
                       const color = COURIER_COLORS[r.courier_group] || C.t3
                       const rtoColor = r._rtoPct > avgRtoPct ? '#dc2626' : C.t1
@@ -1065,7 +1064,6 @@ function LogisticsPage({ filters }) {
                         </Fragment>
                       )
                     })}
-                    })()}
                     </tbody>
                   <tfoot>
                     {(() => {
