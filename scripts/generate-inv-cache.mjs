@@ -306,7 +306,7 @@ function computePayload(windowDays) {
   return {
     asOf: new Date().toISOString(), avgSaleWindowDays: windowDays,
     avgSaleWindow: { start, end },
-    lastSalesDateConsidered: maxSalesDateFull, lastSnapshotUpdated,
+    lastSalesDateConsidered: end, lastSnapshotUpdated,
     summary: {
       totalInvt: Math.round(totalInvt), rawInvt: Math.round(totalRaw), rawBlockedInvt: Math.round(totalRawBlocked),
       rtdInvt: Math.round(totalRtd), avgSale: Math.round(totalAvgSaleB2C), avgSaleB2C: Math.round(totalAvgSaleB2C),
