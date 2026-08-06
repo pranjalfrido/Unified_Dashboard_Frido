@@ -4,7 +4,7 @@ import { getBQ, buildQuery, netRevenueSelectFragment, computeNetRevenueMeasures 
 const cache = new Map()
 const CACHE_TTL = 5 * 60 * 1000
 
-const CACHE_VERSION = 8
+const CACHE_VERSION = 9
 function getCacheKey(body) {
   const { start, end, category, subCategory, sku, subChannel, voucher, channel, region, tier, state, city, country, paymentType, channelGroup } = body
   return JSON.stringify({ v: CACHE_VERSION, start, end, category, subCategory, sku, subChannel, voucher, channel, region, tier, state, city, country, paymentType, channelGroup })
@@ -106,6 +106,9 @@ export default async function handler(req, res) {
     // instead of the generic retained-share formula. Only SellingPrice_Exc_GST from qualifying
     // rows is summed — no GST, no deduction %, just the exact combinations that count as real sales.
     mobilityNetCalc: `SELECT ROUND(SUM(SellingPrice_Exc_GST), 2) AS net_rev FROM \`frido-429506.production.fact_all_platform_sales_report\` WHERE OrderDate BETWEEN '${start}' AND '${end}' AND Channel = 'Shopify' AND SubChannel = 'Mobility' AND LOWER(COALESCE(FinancialStatus,'')) NOT LIKE '%refund%' AND ((FinancialStatus = 'paid' AND (Order_Status IN ('Delivered','Dispatched','Exchange') OR Order_Status IS NULL OR TRIM(Order_Status) = '' OR Order_Status = 'null')) OR (FinancialStatus IN ('pending','partially_paid') AND Order_Status IN ('Delivered','Dispatched','Exchange')))`,
+    // Same whitelist as mobilityNetCalc but broken down by SubCategory (product) so the
+    // Category Revenue Matrix can show per-product net rev consistent with the KPI card.
+    mobilityNetBySubCat: `SELECT SubCategory AS sub_category, ROUND(SUM(SellingPrice_Exc_GST), 2) AS net_rev FROM \`frido-429506.production.fact_all_platform_sales_report\` WHERE OrderDate BETWEEN '${start}' AND '${end}' AND Channel = 'Shopify' AND SubChannel = 'Mobility' AND LOWER(COALESCE(FinancialStatus,'')) NOT LIKE '%refund%' AND ((FinancialStatus = 'paid' AND (Order_Status IN ('Delivered','Dispatched','Exchange') OR Order_Status IS NULL OR TRIM(Order_Status) = '' OR Order_Status = 'null')) OR (FinancialStatus IN ('pending','partially_paid') AND Order_Status IN ('Delivered','Dispatched','Exchange'))) GROUP BY SubCategory`,
     // shNetCalc / prevShNetCalc feed the shared measures layer (netRevenueSelectFragment +
     // computeNetRevenueMeasures in _bq.js) — the same fragment every tab uses, so Net Revenue/
     // GST/return-rate math can never drift between Shopify, other channels, and the All tab.
@@ -1135,6 +1138,7 @@ export default async function handler(req, res) {
         subCatPrevMap: Object.fromEntries((r.shSubCategoryPrev || []).map(x => [`${x.Category||'Others'}::${x.SubCategory||'Others'}`, parseFloat(x.rev)||0])),
         skuMap: (() => { const m = {}; (r.shSKU || []).forEach(x => { const cat = x.Category||'Others', sc = x.SubCategory||'Others', sku = x.sku, subCh = (x.SubChannel||'').toLowerCase(); if (!m[cat]) m[cat] = {}; if (!m[cat][sc]) m[cat][sc] = {}; if (!m[cat][sc][sku]) m[cat][sc][sku] = { subChannelRows: {} }; const e = m[cat][sc][sku]; e.subChannelRows[subCh] = { rev: parseFloat(x.rev)||0, excRev: parseFloat(x.exc_rev)||0, orders: parseInt(x.orders)||0, units: parseInt(x.units)||0, returnUnits: parseInt(x.return_units)||0, cancelled: parseInt(x.cancelled)||0, rto: parseInt(x.rto)||0, cir: parseInt(x.cir)||0, exch: parseInt(x.exch)||0, cancelRev: parseFloat(x.cancel_rev)||0, codCancelRev: parseFloat(x.cod_cancel_rev)||0, rtoRev: parseFloat(x.rto_rev)||0, cirRev: parseFloat(x.cir_rev)||0, exchRev: parseFloat(x.exch_rev)||0 } }); return m })(),
         skuPrevMap: (() => { const m = {}; (r.shSKUPrev || []).forEach(x => { const cat = x.Category||'Others', sc = x.SubCategory||'Others', sku = x.sku; if (!m[cat]) m[cat] = {}; if (!m[cat][sc]) m[cat][sc] = {}; m[cat][sc][sku] = parseFloat(x.rev)||0 }); return m })(),
+        mobilityNetBySubCat: Object.fromEntries((r.mobilityNetBySubCat || []).filter(x => x.sub_category).map(x => [x.sub_category, parseFloat(x.net_rev) || 0])),
         // Per-SKU cost rows — each row is (sku, order_status, weight_slab, total_qty, gross_inc_gst).
         // PnLPage.jsx applies snd-rates.json lookup + status logic to compute logistics/fulfilment.
         skuCostRows: (r.shSkuCosts || []).map(x => ({

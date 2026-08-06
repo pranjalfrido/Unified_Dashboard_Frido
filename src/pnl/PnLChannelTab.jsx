@@ -6,7 +6,7 @@ import PnLFinancialTable from './PnLFinancialTable.jsx'
 const dash = '—'
 const fmtPct = v => v != null ? `${v.toFixed(1)}%` : dash
 
-export default function PnLChannelTab({ title, note, gross, excRev, net, units, orders, returnRev, subCatData, skuData, adSpendMap, skuCosts, daily, grossColor = '#FFD600', gradId = 'pnlGrossGrad', includeUnmatched = false }) {
+export default function PnLChannelTab({ title, note, gross, excRev, net, units, orders, returnRev, subCatData, skuData, adSpendMap, skuCosts, daily, grossColor = '#FFD600', gradId = 'pnlGrossGrad', includeUnmatched = false, mobilityNetBySubCat = {} }) {
   const returnPct = pct(returnRev, gross)
   const aov = orders > 0 ? gross / orders : 0
   const asp = units > 0 ? gross / units : 0
@@ -33,7 +33,7 @@ export default function PnLChannelTab({ title, note, gross, excRev, net, units, 
         <KPICard label="CM2" value={cm2Val != null ? fmt(cm2Val) : dash} sub={`CM2% ${fmtPct(cm2Pct)}`} accent={cm2Pct != null && cm2Pct < 0 ? '#7A1A1A' : undefined} />
       </div>
       <TrendAnalysisCard title={`${title} — Revenue Trend`} daily={daily} grossColor={grossColor} grossGradId={gradId} boxHeight={410} cogsPct={tableTotals?.cogsPct} sndPct={tableTotals?.sndPct} netRatio={excRev > 0 ? net / excRev : null} />
-      <PnLFinancialTable subCatData={subCatData} skuData={skuData} adSpendMap={adSpendMap} skuCosts={skuCosts} title={`Financial View · ${title}`} onTotals={handleTotals} includeUnmatched={includeUnmatched} />
+      <PnLFinancialTable subCatData={subCatData} skuData={skuData} adSpendMap={adSpendMap} skuCosts={skuCosts} title={`Financial View · ${title}`} onTotals={handleTotals} includeUnmatched={includeUnmatched} mobilityNetBySubCat={mobilityNetBySubCat} />
     </div>
   )
 }

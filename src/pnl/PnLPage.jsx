@@ -398,6 +398,7 @@ export default function PnLPage({ data, filters, setFilters }) {
           daily={activeData.daily}
           grossColor={CHANNEL_COLORS[activeTab] || '#FFD600'}
           gradId={`pnl${activeTab}Grad`}
+          mobilityNetBySubCat={activeTab === 'shopify' && d2cSubCh === 'Mobility' ? (data?.shopify?.mobilityNetBySubCat || {}) : {}}
         />
       </div>
     </div>

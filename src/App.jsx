@@ -3362,7 +3362,7 @@ function AmazonCategoryMatrix({ channels, catChannel, subCatChannel, skuChannel,
 // expand → SKU), which stays unchanged for the other tabs still using it.
 // simpleReturns: marketplaces (Amazon/Flipkart/Myntra) only report one combined Return %, with
 // no Cancel/RTO/CIR/Exch breakdown like D2C/EBO have — pass true to collapse to a single column.
-function FlatCategoryProductMatrix({ catData, subCatData, skuData, title, catPrevMap = {}, subCatPrevMap = {}, simpleReturns = false, noReturns = false, showReturnPct = false }) {
+function FlatCategoryProductMatrix({ catData, subCatData, skuData, title, catPrevMap = {}, subCatPrevMap = {}, simpleReturns = false, noReturns = false, showReturnPct = false, mobilityNetBySubCat = {} }) {
   const [expandedSku, setExpandedSku] = useState({})
   const [search, setSearch] = useState('')
   const toggleSku = key => setExpandedSku(prev => ({ ...prev, [key]: !prev[key] }))
@@ -3370,7 +3370,7 @@ function FlatCategoryProductMatrix({ catData, subCatData, skuData, title, catPre
 
   const q = search.trim().toLowerCase()
 
-  const mapRow = d => {
+  const mapRow = (d, scName, catName) => {
     const gross = d.rev || 0
     const excRev = d.excRev || 0
     const cancelRev = (d.cancelRev || 0) - (d.codCancelRev || 0)  // exclude COD cancels for D2C
@@ -3380,7 +3380,9 @@ function FlatCategoryProductMatrix({ catData, subCatData, skuData, title, catPre
     const returnRev = d.returnRev || 0
     const gstRatio = gross > 0 ? (gross - excRev) / gross : 0
     const grossAfterReturns = gross - cancelRev - rtoRev - cirRev - returnRev
-    const net = grossAfterReturns * (1 - gstRatio)
+    const netStandard = grossAfterReturns * (1 - gstRatio)
+    // Only use Mobility whitelist override for Mobility category rows
+    const net = (catName === 'Mobility' && scName && mobilityNetBySubCat[scName] != null) ? mobilityNetBySubCat[scName] : netStandard
     return { gross, net, units: d.units || 0, cancelRev, rtoRev, cirRev, exchRev, returnRev }
   }
   const pctOf = (n, d) => d > 0 ? (n / d * 100) : 0
@@ -3389,7 +3391,7 @@ function FlatCategoryProductMatrix({ catData, subCatData, skuData, title, catPre
   const allRows = []
   Object.entries(subCatData || {}).forEach(([cat, scMap]) => {
     Object.entries(scMap).forEach(([sc, d]) => {
-      const r = mapRow(d)
+      const r = mapRow(d, sc, cat)
       // Marketplaces report one combined return figure (d.returnRev) with no further breakdown;
       // D2C/EBO sum the four distinct statuses.
       const totalReturnRev = simpleReturns ? r.returnRev : r.cancelRev + r.rtoRev + r.cirRev + r.returnRev
@@ -5148,26 +5150,42 @@ function ShopifyTab({ data, filters, setFilters }) {
         ? <Card title="Category Revenue Matrix · D2C International"><div style={{ fontSize: 12, color: C.t3, padding: '10px 0', textAlign: 'center' }}>Category breakdown not available for International orders</div></Card>
         : (() => {
         const pick = v => ({ rev: v.rev || 0, excRev: v.excRev || 0, units: v.units || 0, orders: v.orders, cancelled: v.cancelled || 0, rto: v.rto || 0, cir: v.cir || 0, exch: v.exch || 0, cancelRev: v.cancelRev || 0, codCancelRev: v.codCancelRev || 0, rtoRev: v.rtoRev || 0, cirRev: v.cirRev || 0, exchRev: v.exchRev || 0 })
+        // When MyFrido or Mobility subchannel is selected, filter matrix data to that subchannel only
+        const matrixSubCh = (filters.subChannel === 'MyFrido' || filters.subChannel === 'Mobility') ? filters.subChannel.toLowerCase() : null
         const catData = {}
-        Object.entries(sh.catMap || {}).forEach(([cat, v]) => { catData[cat] = pick(v) })
         const subCatData = {}
-        Object.entries(sh.subCatMap || {}).forEach(([key, v]) => {
-          const [cat, sc] = key.split('::')
-          if (!subCatData[cat]) subCatData[cat] = {}
-          subCatData[cat][sc] = pick(v)
-        })
         const skuData = {}
         Object.entries(sh.skuMap || {}).forEach(([cat, scMap]) => {
           skuData[cat] = {}
           Object.entries(scMap).forEach(([sc, skuMap_]) => {
             skuData[cat][sc] = {}
             Object.entries(skuMap_).forEach(([sku, v]) => {
-              const agg = Object.values(v.subChannelRows || {}).reduce((a, r) => ({ rev: a.rev + (r.rev||0), excRev: a.excRev + (r.excRev||0), units: a.units + (r.units||0), cancelRev: a.cancelRev + (r.cancelRev||0), codCancelRev: a.codCancelRev + (r.codCancelRev||0), rtoRev: a.rtoRev + (r.rtoRev||0), cirRev: a.cirRev + (r.cirRev||0), exchRev: a.exchRev + (r.exchRev||0), returnUnits: a.returnUnits + (r.returnUnits||0) }), { rev:0, excRev:0, units:0, cancelRev:0, codCancelRev:0, rtoRev:0, cirRev:0, exchRev:0, returnUnits:0 })
+              const rows = v.subChannelRows || {}
+              const keys = matrixSubCh ? (rows[matrixSubCh] ? [matrixSubCh] : []) : Object.keys(rows).filter(k => k !== 'shopify international')
+              if (keys.length === 0) return
+              const agg = keys.reduce((a, k) => { const r = rows[k]; return { rev: a.rev+(r.rev||0), excRev: a.excRev+(r.excRev||0), units: a.units+(r.units||0), cancelRev: a.cancelRev+(r.cancelRev||0), codCancelRev: a.codCancelRev+(r.codCancelRev||0), rtoRev: a.rtoRev+(r.rtoRev||0), cirRev: a.cirRev+(r.cirRev||0), exchRev: a.exchRev+(r.exchRev||0), returnUnits: a.returnUnits+(r.returnUnits||0) } }, { rev:0, excRev:0, units:0, cancelRev:0, codCancelRev:0, rtoRev:0, cirRev:0, exchRev:0, returnUnits:0 })
               skuData[cat][sc][sku] = agg
+              // accumulate into subCatData and catData
+              if (!subCatData[cat]) subCatData[cat] = {}
+              if (!subCatData[cat][sc]) subCatData[cat][sc] = { rev:0, excRev:0, units:0, cancelRev:0, codCancelRev:0, rtoRev:0, cirRev:0, exchRev:0 }
+              Object.keys(agg).forEach(f => { if (f !== 'returnUnits') subCatData[cat][sc][f] = (subCatData[cat][sc][f]||0) + agg[f] })
+              if (!catData[cat]) catData[cat] = { rev:0, excRev:0, units:0, cancelRev:0, codCancelRev:0, rtoRev:0, cirRev:0, exchRev:0 }
+              Object.keys(agg).forEach(f => { if (f !== 'returnUnits') catData[cat][f] = (catData[cat][f]||0) + agg[f] })
             })
           })
         })
-        return <FlatCategoryProductMatrix catData={catData} subCatData={subCatData} skuData={skuData} title="Category Revenue Matrix · D2C India" catPrevMap={sh.catPrevMap || {}} subCatPrevMap={sh.subCatPrevMap || {}} />
+        // When no subchannel filter, use pre-aggregated maps (faster, already correct)
+        if (!matrixSubCh) {
+          Object.keys(catData).forEach(k => delete catData[k])
+          Object.keys(subCatData).forEach(k => delete subCatData[k])
+          Object.entries(sh.catMap || {}).forEach(([cat, v]) => { catData[cat] = pick(v) })
+          Object.entries(sh.subCatMap || {}).forEach(([key, v]) => {
+            const [cat, sc] = key.split('::')
+            if (!subCatData[cat]) subCatData[cat] = {}
+            subCatData[cat][sc] = pick(v)
+          })
+        }
+        return <FlatCategoryProductMatrix catData={catData} subCatData={subCatData} skuData={skuData} title="Category Revenue Matrix · D2C India" catPrevMap={sh.catPrevMap || {}} subCatPrevMap={sh.subCatPrevMap || {}} mobilityNetBySubCat={filters.subChannel === 'Mobility' ? (sh.mobilityNetBySubCat || {}) : {}} />
       })()}
       {false && <div className="g-2" style={{ alignItems: 'stretch' }}>
         {(() => {
