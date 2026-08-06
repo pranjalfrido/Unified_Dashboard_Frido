@@ -3478,7 +3478,7 @@ function FlatCategoryProductMatrix({ catData, subCatData, skuData, title, catPre
           <colgroup>
             <col style={{ width: '16%' }} /><col style={{ width: '20%' }} />
             <col style={{ width: '12%' }} /><col style={{ width: '9%' }} /><col style={{ width: '8%' }} /><col style={{ width: '9%' }} />
-            {showReturnPct && <col style={{ width: '8%' }} />}
+            {showReturnPct && <><col style={{ width: '7%' }} /><col style={{ width: '7%' }} /><col style={{ width: '7%' }} /><col style={{ width: '7%' }} /><col style={{ width: '7%' }} /></>}
             <col style={{ width: '9%' }} />
           </colgroup>
           <thead>
@@ -3489,7 +3489,13 @@ function FlatCategoryProductMatrix({ catData, subCatData, skuData, title, catPre
               <Th label="vs Prev" sortKey="prevGross" style={{ ...thStyle, position: 'sticky', top: 0, background: C.bg, zIndex: 1 }} />
               <Th label="Units" sortKey="units" style={{ ...thStyle, position: 'sticky', top: 0, background: C.bg, zIndex: 1 }} />
               <Th label="ASP" sortKey="asp" style={{ ...thStyle, position: 'sticky', top: 0, background: C.bg, zIndex: 1 }} />
-              {showReturnPct && <Th label="Return %" sortKey="totalReturnPct" style={{ ...thStyle, position: 'sticky', top: 0, background: C.bg, zIndex: 1 }} />}
+              {showReturnPct && <>
+                <Th label="Cancel %" sortKey="cancelPct" style={{ ...thStyle, position: 'sticky', top: 0, background: C.bg, zIndex: 1 }} />
+                <Th label="RTO %" sortKey="rtoPct" style={{ ...thStyle, position: 'sticky', top: 0, background: C.bg, zIndex: 1 }} />
+                <Th label="CIR %" sortKey="cirPct" style={{ ...thStyle, position: 'sticky', top: 0, background: C.bg, zIndex: 1 }} />
+                <Th label="Exchange %" sortKey="exchPct" style={{ ...thStyle, position: 'sticky', top: 0, background: C.bg, zIndex: 1 }} />
+                <Th label="Total Return %" sortKey="totalReturnPct" style={{ ...thStyle, position: 'sticky', top: 0, background: C.bg, zIndex: 1 }} />
+              </>}
               <Th label="Net Rev" sortKey="net" style={{ ...thStyle, position: 'sticky', top: 0, background: C.bg, zIndex: 1 }} />
             </tr>
           </thead>
@@ -3516,7 +3522,13 @@ function FlatCategoryProductMatrix({ catData, subCatData, skuData, title, catPre
                     <td style={tdStyle}>{vsPrevCell(r.gross, r.prevGross)}</td>
                     <td style={tdStyle}>{fmtN(r.units)}</td>
                     <td style={tdStyle}>₹{Math.round(r.asp).toLocaleString('en-IN')}</td>
-                    {showReturnPct && <td style={tdStyle}>{r.totalReturnPct > 0 ? <span style={{ color: r.totalReturnPct > 20 ? '#B91C1C' : 'inherit' }}>{r.totalReturnPct.toFixed(2)}%</span> : <span style={{ color: C.t3 }}>—</span>}</td>}
+                    {showReturnPct && <>
+                      <td style={tdStyle}>{r.cancelPct > 0 ? `${r.cancelPct.toFixed(2)}%` : <span style={{ color: C.t3 }}>—</span>}</td>
+                      <td style={tdStyle}>{r.rtoPct > 0 ? `${r.rtoPct.toFixed(2)}%` : <span style={{ color: C.t3 }}>—</span>}</td>
+                      <td style={tdStyle}>{r.cirPct > 0 ? `${r.cirPct.toFixed(2)}%` : <span style={{ color: C.t3 }}>—</span>}</td>
+                      <td style={tdStyle}>{r.exchPct > 0 ? `${r.exchPct.toFixed(2)}%` : <span style={{ color: C.t3 }}>—</span>}</td>
+                      <td style={tdStyle}>{r.totalReturnPct > 0 ? <span style={{ color: r.totalReturnPct > 20 ? '#B91C1C' : 'inherit' }}>{r.totalReturnPct.toFixed(2)}%</span> : <span style={{ color: C.t3 }}>—</span>}</td>
+                    </>}
                     <td style={tdStyle}>{fmt(r.net)}</td>
                   </tr>
                   {isOpen && skus.map(sk => {
@@ -3531,7 +3543,13 @@ function FlatCategoryProductMatrix({ catData, subCatData, skuData, title, catPre
                         <td style={{ ...tdStyle, fontSize: 11 }}><span style={{ color: C.t3 }}>—</span></td>
                         <td style={{ ...tdStyle, fontSize: 11 }}>{fmtN(sk.units)}</td>
                         <td style={{ ...tdStyle, fontSize: 11 }}>₹{(sk.units > 0 ? Math.round(sk.gross / sk.units) : 0).toLocaleString('en-IN')}</td>
-                        {showReturnPct && <td style={{ ...tdStyle, fontSize: 11 }}>{skTotalReturnRev > 0 ? <span style={{ color: pctOf(skTotalReturnRev, sk.gross) > 20 ? '#B91C1C' : 'inherit' }}>{pctOf(skTotalReturnRev, sk.gross).toFixed(2)}%</span> : <span style={{ color: C.t3 }}>—</span>}</td>}
+                        {showReturnPct && <>
+                          <td style={{ ...tdStyle, fontSize: 11 }}>{sk.cancelRev > 0 ? `${pctOf(sk.cancelRev, sk.gross).toFixed(2)}%` : <span style={{ color: C.t3 }}>—</span>}</td>
+                          <td style={{ ...tdStyle, fontSize: 11 }}>{sk.rtoRev > 0 ? `${pctOf(sk.rtoRev, sk.gross).toFixed(2)}%` : <span style={{ color: C.t3 }}>—</span>}</td>
+                          <td style={{ ...tdStyle, fontSize: 11 }}>{sk.cirRev > 0 ? `${pctOf(sk.cirRev, sk.gross).toFixed(2)}%` : <span style={{ color: C.t3 }}>—</span>}</td>
+                          <td style={{ ...tdStyle, fontSize: 11 }}>{sk.exchRev > 0 ? `${pctOf(sk.exchRev, sk.gross).toFixed(2)}%` : <span style={{ color: C.t3 }}>—</span>}</td>
+                          <td style={{ ...tdStyle, fontSize: 11 }}>{skTotalReturnRev > 0 ? <span style={{ color: pctOf(skTotalReturnRev, sk.gross) > 20 ? '#B91C1C' : 'inherit' }}>{pctOf(skTotalReturnRev, sk.gross).toFixed(2)}%</span> : <span style={{ color: C.t3 }}>—</span>}</td>
+                        </>}
                         <td style={{ ...tdStyle, fontSize: 11 }}>{fmt(sk.net)}</td>
                       </tr>
                     )
@@ -3547,7 +3565,13 @@ function FlatCategoryProductMatrix({ catData, subCatData, skuData, title, catPre
               <td style={totalTdStyle}>{vsPrevCell(tot.gross, tot.prevGross)}</td>
               <td style={totalTdStyle}>{fmtN(tot.units)}</td>
               <td style={totalTdStyle}>₹{tot.units > 0 ? Math.round(tot.gross / tot.units).toLocaleString('en-IN') : '—'}</td>
-              {showReturnPct && <td style={totalTdStyle}>{tot.gross > 0 ? <span style={{ color: pctOf(tot.cancelRev + tot.rtoRev + tot.cirRev + tot.returnRev, tot.gross) > 20 ? '#B91C1C' : 'inherit' }}>{pctOf(tot.cancelRev + tot.rtoRev + tot.cirRev + tot.returnRev, tot.gross).toFixed(2)}%</span> : '—'}</td>}
+              {showReturnPct && <>
+                <td style={totalTdStyle}>{tot.gross > 0 ? `${pctOf(tot.cancelRev, tot.gross).toFixed(2)}%` : '—'}</td>
+                <td style={totalTdStyle}>{tot.gross > 0 ? `${pctOf(tot.rtoRev, tot.gross).toFixed(2)}%` : '—'}</td>
+                <td style={totalTdStyle}>{tot.gross > 0 ? `${pctOf(tot.cirRev, tot.gross).toFixed(2)}%` : '—'}</td>
+                <td style={totalTdStyle}>{tot.gross > 0 ? `${pctOf(tot.exchRev, tot.gross).toFixed(2)}%` : '—'}</td>
+                <td style={totalTdStyle}>{tot.gross > 0 ? <span style={{ color: pctOf(tot.cancelRev + tot.rtoRev + tot.cirRev + tot.returnRev, tot.gross) > 20 ? '#B91C1C' : 'inherit' }}>{pctOf(tot.cancelRev + tot.rtoRev + tot.cirRev + tot.returnRev, tot.gross).toFixed(2)}%</span> : '—'}</td>
+              </>}
               <td style={totalTdStyle}>{fmt(tot.net)}</td>
             </tr>
           </tfoot>
@@ -5185,7 +5209,7 @@ function ShopifyTab({ data, filters, setFilters }) {
             subCatData[cat][sc] = pick(v)
           })
         }
-        return <FlatCategoryProductMatrix catData={catData} subCatData={subCatData} skuData={skuData} title="Category Revenue Matrix · D2C India" catPrevMap={sh.catPrevMap || {}} subCatPrevMap={sh.subCatPrevMap || {}} mobilityNetBySubCat={filters.subChannel === 'Mobility' ? (sh.mobilityNetBySubCat || {}) : {}} />
+        return <FlatCategoryProductMatrix catData={catData} subCatData={subCatData} skuData={skuData} title="Category Revenue Matrix · D2C India" catPrevMap={sh.catPrevMap || {}} subCatPrevMap={sh.subCatPrevMap || {}} mobilityNetBySubCat={filters.subChannel === 'Mobility' ? (sh.mobilityNetBySubCat || {}) : {}} showReturnPct={true} />
       })()}
       {false && <div className="g-2" style={{ alignItems: 'stretch' }}>
         {(() => {
