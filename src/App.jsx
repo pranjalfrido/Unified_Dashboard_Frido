@@ -6528,6 +6528,7 @@ const ADS_PLATFORMS = [
   { id: 'Instamart', label: 'Instamart', logo: '/logo-instamart.png' },
   { id: 'Flipkart', label: 'Flipkart', logo: '/logo-flipkart.png' },
   { id: 'Myntra', label: 'Myntra', logo: '/logo-myntra.png' },
+  { id: 'CRED', label: 'CRED' },
 ]
 
 // Generic click-to-sort table header hook — sortKey/dir state plus a Th renderer and a
@@ -6591,7 +6592,7 @@ function AdsSlicerDropdown({ label, options, selected, onChange }) {
   )
 }
 
-function AdsTab({ data }) {
+function AdsTab({ data, filters = {} }) {
   const ads = data.ads || {}
   const totals = ads.totals || []
   const daily = ads.daily || []
@@ -6605,6 +6606,8 @@ function AdsTab({ data }) {
   const channelSalesOrders = ads.channelSalesOrders || {}
   const prevTotals = ads.prevTotals || {}
   const flipkartEstRev = ads.flipkartEstRev || 0
+  const additionalSpend = ads.additionalSpend ?? null
+  const additionalSpendByProduct = ads.additionalSpendByProduct || {}
 
   const [selPlatform, setSelPlatform] = useState(null)
   const [catView, setCatView] = useState('category')
@@ -6632,6 +6635,19 @@ function AdsTab({ data }) {
 
   const isD2C = selPlatform === 'D2C'
   const d2cPlatforms = ['Meta', 'Google']
+
+  const _addlStart = filters.start || ''
+  const _addlEnd = filters.end || ''
+  const getProductAddlSpend = (subCategory) => {
+    const dayMap = additionalSpendByProduct[subCategory]
+    if (!dayMap || !isD2C || !_addlStart) return null
+    let total = 0
+    for (const [date, spend] of Object.entries(dayMap)) {
+      if (date >= _addlStart && date <= _addlEnd) total += spend
+    }
+    return total
+  }
+  const hasAddlSpendData = isD2C && Object.keys(additionalSpendByProduct).length > 0
   const filtTotals = selPlatform ? totals.filter(t => isD2C ? d2cPlatforms.includes(t.platform) : t.platform === selPlatform) : totals
   const filtDaily = selPlatform ? daily.filter(d => isD2C ? d2cPlatforms.includes(d.platform) : d.platform === selPlatform) : daily
   const filtCampaigns = selPlatform ? campaigns.filter(c => isD2C ? d2cPlatforms.includes(c.platform) : c.platform === selPlatform) : campaigns
@@ -6789,7 +6805,22 @@ function AdsTab({ data }) {
       d.revenue = shopifyDay + marketplaceDay
     }
   })
-  const dailyArr = Object.values(dailyByDate).sort((a, b) => a.date.localeCompare(b.date))
+  const dailyArrRaw = Object.values(dailyByDate).sort((a, b) => a.date.localeCompare(b.date))
+
+  // For D2C, add day-wise additional spend (prorated from additionalSpendByProduct) to each day's spend
+  const addlDailySpendMap = (() => {
+    if (!isD2C || !Object.keys(additionalSpendByProduct).length) return {}
+    const map = {}
+    for (const dayMap of Object.values(additionalSpendByProduct)) {
+      for (const [date, spend] of Object.entries(dayMap)) {
+        map[date] = (map[date] || 0) + spend
+      }
+    }
+    return map
+  })()
+  const dailyArr = isD2C && Object.keys(addlDailySpendMap).length
+    ? dailyArrRaw.map(d => ({ ...d, spend: d.spend + (addlDailySpendMap[d.date] || 0) }))
+    : dailyArrRaw
 
   const maxSpend = Math.max(...totals.map(t => t.spend), 1)
   const platformLogo = p => {
@@ -6811,20 +6842,28 @@ function AdsTab({ data }) {
         ))}
       </div>
 
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 14, padding: '14px 16px', flex: 1, overflowY: 'auto' }}>
+      {selPlatform === 'CRED' && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 14, padding: '14px 16px', flex: 1, overflowY: 'auto' }}>
+          <AdsCredView data={data} filters={filters} />
+        </div>
+      )}
 
-        {/* KPI Cards */}
+      {selPlatform !== 'CRED' && <div style={{ display: 'flex', flexDirection: 'column', gap: 14, padding: '14px 16px', flex: 1, overflowY: 'auto' }}>
+
         {(() => {
           const d2cMetaSpend = isD2C ? (filtTotals.find(t => t.platform === 'Meta')?.spend || 0) : 0
           const d2cGoogleSpend = isD2C ? (filtTotals.find(t => t.platform === 'Google')?.spend || 0) : 0
           const d2cPrevMetaSpend = isD2C ? (prevTotals['Meta']?.spend || 0) : 0
           const d2cPrevGoogleSpend = isD2C ? (prevTotals['Google']?.spend || 0) : 0
           const cols = isD2C ? 6 : 5
+          const hasAdditionalSpend = isD2C && additionalSpend != null
+          const d2cTotalSpend = isD2C ? totalSpend + (additionalSpend || 0) : totalSpend
           const row1Items = isD2C ? [
             // D2C tab: Orders sits right after ROAS in row 1 per request.
-            { label: 'Total Spend', value: fmt(totalSpend), badge: chgBadge(totalSpend, prevSpend), sub: 'Ad spend incl. all platforms' },
+            { label: 'Total Spend', value: fmt(d2cTotalSpend), badge: chgBadge(d2cTotalSpend, prevSpend), sub: hasAdditionalSpend ? 'D2C spend + additional spend' : 'Ad spend incl. all platforms' },
             { label: 'Meta Spend', value: fmt(d2cMetaSpend), badge: chgBadge(d2cMetaSpend, d2cPrevMetaSpend), sub: 'Meta ad spend', accentColor: '#1877F2' },
             { label: 'Google Spend', value: fmt(d2cGoogleSpend), badge: chgBadge(d2cGoogleSpend, d2cPrevGoogleSpend), sub: 'Google ad spend', accentColor: '#34A853' },
+            { label: 'Additional Spend', value: fmt(additionalSpend || 0), sub: 'D2C additional mktg spend' },
             { label: 'Revenue (Ex GST)', value: fmt(totalRevenue), badge: chgBadge(totalRevenue, prevRevenue), sub: 'D2C exc. GST (Meta+Google)' },
             { label: 'Overall ROAS', value: `${overallRoas.toFixed(2)}x`, badge: chgBadge(overallRoas, prevRoas), sub: 'Revenue (Ex GST) / Spend', roasVal: overallRoas },
             { label: 'Orders', value: fmtN(currentOrders), sub: 'Distinct orders', badge: chgBadge(currentOrders, prevOrders) },
@@ -6899,6 +6938,20 @@ function AdsTab({ data }) {
                 if (!map[r.date]) map[r.date] = { date: r.date, spend: 0, revenue: 0 }
                 map[r.date].revenue += r.revenue
               })
+              // Add additional spend sliced to matching sub-categories
+              if (isD2C) {
+                const matchedScs = new Set(
+                  (ads.adsDailyByCategory || []).filter(r => trendAdsPlatFilter(r) && trendCatMatches(r)).map(r => r.subCategory).filter(Boolean)
+                )
+                for (const [sc, dayMap] of Object.entries(additionalSpendByProduct)) {
+                  if (!matchedScs.size || matchedScs.has(sc)) {
+                    for (const [date, spend] of Object.entries(dayMap)) {
+                      if (!map[date]) map[date] = { date, spend: 0, revenue: 0 }
+                      map[date].spend += spend
+                    }
+                  }
+                }
+              }
               return Object.values(map).sort((a, b) => a.date.localeCompare(b.date))
             })()
 
@@ -7228,8 +7281,8 @@ function AdsTab({ data }) {
           const tdStyleL = { ...tdStyle, textAlign: 'left' }
           const totalTdStyle = { ...tdStyle, padding: '7px 12px', fontWeight: 700, color: C.t1, borderBottom: 'none' }
 
-          const catGetters = { category: r => r.category, spend: r => r.spend, revenue: r => r.revenue, roas: r => r.roas }
-          const prodGetters = { category: r => r.category, subCategory: r => r.subCategory, spend: r => r.spend, revenue: r => r.revenue, roas: r => r.roas }
+          const catGetters = { category: r => r.category, spend: r => r.spend, revenue: r => r.revenue, roas: r => r.roas, addlSpend: r => { const scs = slicedProdRows.filter(p => p.category === r.category).map(p => p.subCategory); return hasAddlSpendData ? scs.reduce((s, sc) => s + (getProductAddlSpend(sc) || 0), 0) : 0 } }
+          const prodGetters = { category: r => r.category, subCategory: r => r.subCategory, spend: r => r.spend, revenue: r => r.revenue, roas: r => r.roas, addlSpend: r => hasAddlSpendData ? (getProductAddlSpend(r.subCategory) || 0) : 0 }
           const catQ = allCatSearch.trim().toLowerCase()
           const prodQ = allProdSearch.trim().toLowerCase()
           const filteredCatRows = catQ ? slicedCatRows.filter(r => r.category.toLowerCase().includes(catQ)) : slicedCatRows
@@ -7246,6 +7299,9 @@ function AdsTab({ data }) {
           const catRoas = catTotal.spend > 0 && catTotal.revenue > 0 ? catTotal.revenue / catTotal.spend : 0
           const prodTotalAll = filteredProdRows.reduce((a, r) => ({ spend: a.spend + r.spend, revenue: a.revenue + r.revenue }), { spend: 0, revenue: 0 })
           const prodRoasAll = prodTotalAll.spend > 0 && prodTotalAll.revenue > 0 ? prodTotalAll.revenue / prodTotalAll.spend : 0
+          // Sum addl spend from actual product rows (not KPI card) so total matches row sum
+          const catAddlTotal = hasAddlSpendData ? filteredProdRows.reduce((s, r) => s + (getProductAddlSpend(r.subCategory) || 0), 0) : 0
+          const prodAddlTotal = catAddlTotal
 
           const roasCell = r => r > 0
             ? <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 7px', borderRadius: 4, background: roasBg(r), color: roasColor(r) }}>{r.toFixed(2)}x</span>
@@ -7281,24 +7337,30 @@ function AdsTab({ data }) {
                       </tr>
                     </thead>
                     <tbody>
-                      {sortedCats.map(r => (
+                      {sortedCats.map(r => {
+                        const catSubCats = slicedProdRows.filter(p => p.category === r.category).map(p => p.subCategory)
+                        const catAddlSpend = hasAddlSpendData ? catSubCats.reduce((s, sc) => s + (getProductAddlSpend(sc) || 0), 0) : 0
+                        const totalCatSpend = r.spend + catAddlSpend
+                        const totalSpendForPct = catTotal.spend + catAddlTotal
+                        return (
                         <tr key={r.category} style={{ cursor: 'default' }}
                           onMouseEnter={e => e.currentTarget.style.background = C.hover}
                           onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
                           <td style={tdStyleL} title={r.category}>{r.category}</td>
                           <td style={tdStyle}>
-                            {fmt(r.spend)}
-                            {catTotal.spend > 0 && <span style={{ fontSize: 9.5, color: C.t3, marginLeft: 3 }}>({(r.spend / catTotal.spend * 100).toFixed(1)}%)</span>}
+                            {fmt(totalCatSpend)}
+                            {totalSpendForPct > 0 && <span style={{ fontSize: 9.5, color: C.t3, marginLeft: 3 }}>({(totalCatSpend / totalSpendForPct * 100).toFixed(1)}%)</span>}
                           </td>
                           <td style={tdStyle}>{r.revenue > 0 ? fmt(r.revenue) : '—'}</td>
                           <td style={tdStyle}>{roasCell(r.roas)}</td>
                         </tr>
-                      ))}
+                        )
+                      })}
                     </tbody>
                     <tfoot>
                       <tr style={{ background: C.bg, borderTop: `1.5px solid ${C.border}` }}>
                         <td style={{ ...totalTdStyle, textAlign: 'left', position: 'sticky', bottom: 0, background: C.bg }}>Total</td>
-                        <td style={{ ...totalTdStyle, position: 'sticky', bottom: 0, background: C.bg }}>{fmt(catTotal.spend)}</td>
+                        <td style={{ ...totalTdStyle, position: 'sticky', bottom: 0, background: C.bg }}>{fmt(catTotal.spend + catAddlTotal)}</td>
                         <td style={{ ...totalTdStyle, position: 'sticky', bottom: 0, background: C.bg }}>{catTotal.revenue > 0 ? fmt(catTotal.revenue) : '—'}</td>
                         <td style={{ ...totalTdStyle, position: 'sticky', bottom: 0, background: C.bg }}>{roasCell(catRoas)}</td>
                       </tr>
@@ -7323,7 +7385,7 @@ function AdsTab({ data }) {
                 <div style={{ overflowX: 'hidden', overflowY: 'auto', flex: 1 }}>
                   <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed' }}>
                     <colgroup>
-                      <col style={{ width: '20%' }} /><col style={{ width: '30%' }} /><col style={{ width: '18%' }} /><col style={{ width: '18%' }} /><col style={{ width: '14%' }} />
+                      <col style={{ width: '14%' }} /><col style={{ width: '26%' }} /><col style={{ width: '22%' }} /><col style={{ width: '20%' }} /><col style={{ width: '18%' }} />
                     </colgroup>
                     <thead>
                       <tr style={{ background: C.bg }}>
@@ -7335,25 +7397,30 @@ function AdsTab({ data }) {
                       </tr>
                     </thead>
                     <tbody>
-                      {sortedProds.map(r => (
+                      {sortedProds.map(r => {
+                        const prodAddlSpend = hasAddlSpendData ? (getProductAddlSpend(r.subCategory) || 0) : 0
+                        const totalProdSpend = r.spend + prodAddlSpend
+                        const prodSpendTotal = prodTotalAll.spend + catAddlTotal
+                        return (
                         <tr key={`${r.category}||${r.subCategory}`} style={{ cursor: 'default' }}
                           onMouseEnter={e => e.currentTarget.style.background = C.hover}
                           onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
                           <td style={{ ...tdStyleL, color: C.t3 }} title={r.category}>{r.category}</td>
                           <td style={tdStyleL} title={r.subCategory}>{r.subCategory}</td>
                           <td style={tdStyle}>
-                            {fmt(r.spend)}
-                            {prodTotalAll.spend > 0 && <span style={{ fontSize: 9.5, color: C.t3, marginLeft: 3 }}>({(r.spend / prodTotalAll.spend * 100).toFixed(1)}%)</span>}
+                            {fmt(totalProdSpend)}
+                            {prodSpendTotal > 0 && <span style={{ fontSize: 9.5, color: C.t3, marginLeft: 3 }}>({(totalProdSpend / prodSpendTotal * 100).toFixed(1)}%)</span>}
                           </td>
                           <td style={tdStyle}>{r.revenue > 0 ? fmt(r.revenue) : '—'}</td>
                           <td style={tdStyle}>{roasCell(r.roas)}</td>
                         </tr>
-                      ))}
+                        )
+                      })}
                     </tbody>
                     <tfoot>
                       <tr style={{ background: C.bg, borderTop: `1.5px solid ${C.border}` }}>
                         <td style={{ ...totalTdStyle, textAlign: 'left', position: 'sticky', bottom: 0, background: C.bg }} colSpan={2}>Total</td>
-                        <td style={{ ...totalTdStyle, position: 'sticky', bottom: 0, background: C.bg }}>{fmt(prodTotalAll.spend)}</td>
+                        <td style={{ ...totalTdStyle, position: 'sticky', bottom: 0, background: C.bg }}>{fmt(prodTotalAll.spend + catAddlTotal)}</td>
                         <td style={{ ...totalTdStyle, position: 'sticky', bottom: 0, background: C.bg }}>{prodTotalAll.revenue > 0 ? fmt(prodTotalAll.revenue) : '—'}</td>
                         <td style={{ ...totalTdStyle, position: 'sticky', bottom: 0, background: C.bg }}>{roasCell(prodRoasAll)}</td>
                       </tr>
@@ -7366,7 +7433,304 @@ function AdsTab({ data }) {
           )
         })()}
 
+      </div>}
+    </div>
+  )
+}
+
+function AdsCredView({ data, filters = {} }) {
+  const cred = data.cred || {}
+  const totals = cred.totals || {}
+  const daily = cred.daily || []
+  const byCategory = cred.byCategory || []
+  const byProduct = cred.byProduct || []
+  const additionalSpend = cred.additionalSpend ?? null
+
+  const [catSearch, setCatSearch] = useState('')
+  const [prodSearch, setProdSearch] = useState('')
+  const [trendGran, setTrendGran] = useState('daily')
+  const [trendSelCat, setTrendSelCat] = useState([])
+  const [trendSelSubCat, setTrendSelSubCat] = useState([])
+  const catTable = useSortableTable('rev')
+  const prodTable = useSortableTable('rev')
+
+  const totalRev = totals.rev || 0
+  const totalExcRev = totals.excRev || 0
+  const totalOrders = totals.orders || 0
+  const totalUnits = totals.units || 0
+  const asp = totalUnits > 0 ? totalRev / totalUnits : 0
+  const aov = totalOrders > 0 ? totalRev / totalOrders : 0
+  const roas = additionalSpend > 0 ? totalExcRev / additionalSpend : 0
+
+  const roasColor = r => r >= 2 ? C.green.tx : r >= 1 ? '#D97706' : r > 0 ? C.red.tx : C.t3
+  const roasBg = r => r >= 2 ? C.green.bg : r >= 1 ? '#FEF3C7' : r > 0 ? C.red.bg : C.bg
+  const roasCell = r => r > 0
+    ? <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 7px', borderRadius: 4, background: roasBg(r), color: roasColor(r) }}>{r.toFixed(2)}x</span>
+    : '—'
+
+  const kpis = [
+    { label: 'Spend', value: fmt(additionalSpend || 0), sub: 'CRED additional mktg spend' },
+    { label: 'Revenue (Ex GST)', value: fmt(totalExcRev), sub: 'CRED exc. GST' },
+    { label: 'Revenue (Inc GST)', value: fmt(totalRev), sub: 'CRED inc. GST' },
+    { label: 'ROAS', value: roas > 0 ? `${roas.toFixed(2)}x` : '—', sub: 'Rev (Ex GST) / Spend', roasVal: roas },
+    { label: 'Orders', value: fmtN(totalOrders), sub: 'Distinct orders' },
+    { label: 'Units', value: fmtN(totalUnits), sub: 'Items sold' },
+    { label: 'ASP', value: fmt(asp), sub: 'Avg selling price' },
+    { label: 'AOV', value: fmt(aov), sub: 'Avg order value' },
+    { label: 'Cost Per Order', value: (additionalSpend && totalOrders > 0) ? fmt(additionalSpend / totalOrders) : '—', sub: 'Spend / Orders' },
+  ]
+
+  const thStyle = { fontSize: 10, fontWeight: 700, color: C.t3, textTransform: 'uppercase', letterSpacing: 0.4, padding: '7px 12px', textAlign: 'right', whiteSpace: 'nowrap', borderBottom: `1.5px solid ${C.border}` }
+  const thStyleL = { ...thStyle, textAlign: 'left' }
+  const tdStyle = { fontSize: 12, padding: '5px 12px', textAlign: 'right', color: C.t1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', borderBottom: `1px solid ${C.border}` }
+  const tdStyleL = { ...tdStyle, textAlign: 'left' }
+  const totalTdStyle = { ...tdStyle, padding: '7px 12px', fontWeight: 700, borderBottom: 'none' }
+
+  const catQ = catSearch.trim().toLowerCase()
+  const prodQ = prodSearch.trim().toLowerCase()
+  const filtCatRows = catQ ? byCategory.filter(r => r.category.toLowerCase().includes(catQ)) : byCategory
+  const filtProdRows = prodQ ? byProduct.filter(r => r.subCategory.toLowerCase().includes(prodQ) || r.category.toLowerCase().includes(prodQ)) : byProduct
+
+  // Prorate additionalSpend across categories by revenue share
+  const totalRevAll = byCategory.reduce((s, r) => s + r.excRev, 0)
+  const getCatSpend = cat => {
+    if (!additionalSpend || !totalRevAll) return 0
+    const catRow = byCategory.find(r => r.category === cat)
+    return additionalSpend * ((catRow?.excRev || 0) / totalRevAll)
+  }
+  const getProdSpend = (subCat) => {
+    if (!additionalSpend || !totalRevAll) return 0
+    const prodRow = byProduct.find(r => r.subCategory === subCat)
+    return additionalSpend * ((prodRow?.excRev || 0) / totalRevAll)
+  }
+
+  const catGetters = { category: r => r.category, spend: r => getCatSpend(r.category), excRev: r => r.excRev, roas: r => { const s = getCatSpend(r.category); return s > 0 ? r.excRev / s : 0 }, orders: r => r.orders }
+  const prodGetters = { subCategory: r => r.subCategory, category: r => r.category, spend: r => getProdSpend(r.subCategory), excRev: r => r.excRev, roas: r => { const s = getProdSpend(r.subCategory); return s > 0 ? r.excRev / s : 0 }, orders: r => r.orders }
+
+  const { Th: CatTh } = catTable
+  const { Th: ProdTh } = prodTable
+  const sortedCats = catTable.sortRows(filtCatRows, catGetters)
+  const sortedProds = prodTable.sortRows(filtProdRows, prodGetters)
+
+  const catTotalSpend = filtCatRows.reduce((s, r) => s + getCatSpend(r.category), 0)
+  const catTotals = filtCatRows.reduce((a, r) => ({ excRev: a.excRev + r.excRev, orders: a.orders + r.orders }), { excRev: 0, orders: 0 })
+  const catTotalRoas = catTotalSpend > 0 ? catTotals.excRev / catTotalSpend : 0
+  const prodTotalSpend = filtProdRows.reduce((s, r) => s + getProdSpend(r.subCategory), 0)
+  const prodTotals = filtProdRows.reduce((a, r) => ({ excRev: a.excRev + r.excRev, orders: a.orders + r.orders }), { excRev: 0, orders: 0 })
+  const prodTotalRoas = prodTotalSpend > 0 ? prodTotals.excRev / prodTotalSpend : 0
+
+  if (!totalRev && !additionalSpend) return (
+    <div style={{ color: C.t3, fontSize: 13, padding: 32, textAlign: 'center' }}>No CRED data for this period</div>
+  )
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+      {/* KPI Cards */}
+      <div style={{ display: 'grid', gridTemplateColumns: `repeat(${Math.min(kpis.length, 5)}, 1fr)`, gap: 10 }}>
+        {kpis.map(k => (
+          <div key={k.label} className="kpi-card" style={{ padding: '14px 16px' }}>
+            <div style={{ fontSize: 10, fontWeight: 700, color: C.t3, textTransform: 'uppercase', letterSpacing: 0.6, marginBottom: 6 }}>{k.label}</div>
+            <div style={{ fontSize: 20, fontWeight: 800, color: k.roasVal != null ? roasColor(k.roasVal) : C.t1, letterSpacing: -0.5 }}>{k.value}</div>
+            <div style={{ fontSize: 11, color: C.t3, marginTop: 4 }}>{k.sub}</div>
+          </div>
+        ))}
       </div>
+
+      {/* Spend, Revenue & ROAS Trend */}
+      {daily.length > 0 && (() => {
+        const totalRevForSpend = daily.reduce((s, r) => s + r.rev, 0)
+        const dailyWithSpend = daily.map(r => ({
+          ...r,
+          spend: (additionalSpend && totalRevForSpend > 0) ? additionalSpend * (r.rev / totalRevForSpend) : 0
+        }))
+
+        const aggTrend = (rows, gran) => {
+          const map = {}
+          rows.forEach(r => {
+            let key
+            if (gran === 'weekly') {
+              const d = new Date(r.date); const day = d.getDay(); const diff = d.getDate() - day + (day === 0 ? -6 : 1)
+              key = new Date(d.setDate(diff)).toISOString().slice(0, 10)
+            } else if (gran === 'monthly') { key = r.date.slice(0, 7)
+            } else if (gran === 'quarterly') {
+              const mo = parseInt(r.date.slice(5, 7)); const y = parseInt(r.date.slice(0, 4))
+              const q = mo >= 4 ? Math.floor((mo - 4) / 3) + 1 : 4
+              key = `FY${mo >= 4 ? y : y - 1}-${String((mo >= 4 ? y : y - 1)+1).slice(2)} Q${q}`
+            } else { key = r.date }
+            if (!map[key]) map[key] = { date: key, spend: 0, rev: 0 }
+            map[key].spend += r.spend || 0
+            map[key].rev += r.rev || 0
+          })
+          return Object.values(map).sort((a, b) => a.date.localeCompare(b.date))
+            .map(r => ({ ...r, roas: r.spend > 0 ? +(r.rev / r.spend).toFixed(2) : 0 }))
+        }
+
+        const trendData = aggTrend(dailyWithSpend, trendGran)
+        const xFmt = d => (trendGran === 'monthly' || trendGran === 'quarterly') ? d : d?.slice(5)
+
+        const catOptions = [...new Set(byProduct.map(r => r.category).filter(Boolean))].sort()
+        const subCatOptions = [...new Set(byProduct.filter(r => !trendSelCat.length || trendSelCat.includes(r.category)).map(r => r.subCategory).filter(Boolean))].sort()
+        const filterSummary = trendSelSubCat.length ? trendSelSubCat.join(', ') : trendSelCat.length ? trendSelCat.join(', ') : null
+
+        const trendTooltip = ({ active, payload, label }) => {
+          if (!active || !payload?.length) return null
+          return (
+            <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 6, fontSize: 11, padding: '8px 10px', color: C.t1 }}>
+              <div style={{ fontWeight: 600, marginBottom: 4 }}>{label}</div>
+              {['Spend', 'Revenue', 'ROAS'].map(name => {
+                const p = payload.find(x => x.name === name)
+                if (!p) return null
+                return <div key={name}>{name}: {name === 'ROAS' ? `${p.value}x` : fmt(p.value)}</div>
+              })}
+            </div>
+          )
+        }
+
+        return (
+          <div className="kpi-card" style={{ padding: '14px 16px', display: 'flex', flexDirection: 'column' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10, flexWrap: 'wrap', gap: 6 }}>
+              <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, minWidth: 0 }}>
+                <div style={{ fontWeight: 700, fontSize: 13, color: C.t1, flexShrink: 0 }}>Spend, Revenue &amp; ROAS Trend</div>
+                {filterSummary && <div style={{ fontSize: 11, color: C.t3, fontStyle: 'italic' }}>— {filterSummary}</div>}
+              </div>
+              <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
+                <AdsSlicerDropdown label="Category" options={catOptions} selected={trendSelCat} onChange={setTrendSelCat} />
+                <AdsSlicerDropdown label="Sub-category" options={subCatOptions} selected={trendSelSubCat} onChange={setTrendSelSubCat} />
+                <select value={trendGran} onChange={e => setTrendGran(e.target.value)}
+                  style={{ fontSize: 11, fontWeight: 600, padding: '3px 8px', borderRadius: 6, border: `1px solid ${C.border}`, background: C.card, color: C.t2, cursor: 'pointer', outline: 'none' }}>
+                  <option value="daily">Daily</option>
+                  <option value="weekly">Weekly</option>
+                  <option value="monthly">Monthly</option>
+                  <option value="quarterly">Quarterly</option>
+                </select>
+              </div>
+            </div>
+            <ResponsiveContainer width="100%" height={180}>
+              <ComposedChart data={trendData} margin={{ top: 4, right: 50, bottom: 0, left: 0 }}>
+                <defs>
+                  <linearGradient id="credSpendGrad" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#6366F1" stopOpacity={0.25}/><stop offset="95%" stopColor="#6366F1" stopOpacity={0}/></linearGradient>
+                  <linearGradient id="credRevGrad" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#10B981" stopOpacity={0.2}/><stop offset="95%" stopColor="#10B981" stopOpacity={0}/></linearGradient>
+                </defs>
+                <CartesianGrid strokeDasharray="3 3" stroke={C.border} />
+                <XAxis dataKey="date" tick={{ fontSize: 10, fill: C.t3 }} tickFormatter={xFmt} />
+                <YAxis yAxisId="left" tick={{ fontSize: 10, fill: C.t3 }} tickFormatter={v => fmt(v)} width={55} />
+                <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 10, fill: '#F59E0B' }} tickFormatter={v => `${v}x`} width={38} />
+                <Tooltip content={trendTooltip} />
+                <Area yAxisId="left" type="monotone" dataKey="spend" name="Spend" stroke="#6366F1" strokeWidth={2} fill="url(#credSpendGrad)" dot={false} legendType="none" />
+                <Area yAxisId="left" type="monotone" dataKey="rev" name="Revenue" stroke="#10B981" strokeWidth={2} fill="url(#credRevGrad)" dot={false} legendType="none" />
+                <Line yAxisId="right" type="monotone" dataKey="roas" name="ROAS" stroke="#F59E0B" strokeWidth={2} dot={false} strokeDasharray="4 2" legendType="none" />
+              </ComposedChart>
+            </ResponsiveContainer>
+            <div style={{ display: 'flex', justifyContent: 'center', gap: 20, marginTop: 6, fontSize: 11 }}>
+              {[{ name: 'Spend', color: '#6366F1' }, { name: 'Revenue', color: '#10B981' }, { name: 'ROAS', color: '#F59E0B' }].map(s => (
+                <div key={s.name} style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                  <span style={{ width: 8, height: 8, borderRadius: '50%', background: s.color, flexShrink: 0 }} />
+                  <span style={{ color: C.t2 }}>{s.name}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )
+      })()}
+
+      {/* By Category + By Product tables */}
+      {(byCategory.length > 0 || byProduct.length > 0) && (
+        <div style={{ display: 'flex', gap: 14 }}>
+          {/* By Category */}
+          <div className="kpi-card" style={{ padding: '14px 16px', flex: 1, minWidth: 0, maxHeight: 500, display: 'flex', flexDirection: 'column' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+              <div style={{ fontWeight: 700, fontSize: 13, color: C.t1 }}>By Category</div>
+              <input value={catSearch} onChange={e => setCatSearch(e.target.value)} placeholder="Search category…"
+                style={{ fontSize: 11.5, padding: '4px 9px', borderRadius: 6, border: `1px solid ${C.border}`, background: C.card, color: C.t1, width: 150, outline: 'none' }} />
+            </div>
+            <div style={{ overflowY: 'auto', flex: 1 }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed' }}>
+                <colgroup>
+                  <col style={{ width: '40%' }} /><col style={{ width: '22%' }} /><col style={{ width: '22%' }} /><col style={{ width: '16%' }} />
+                </colgroup>
+                <thead>
+                  <tr style={{ background: C.bg }}>
+                    <CatTh label="Category" sortKey="category" style={{ ...thStyleL, position: 'sticky', top: 0, background: C.bg, zIndex: 1 }} align="left" />
+                    <CatTh label="Spend" sortKey="spend" style={{ ...thStyle, position: 'sticky', top: 0, background: C.bg, zIndex: 1 }} />
+                    <CatTh label="Revenue (Ex GST)" sortKey="excRev" style={{ ...thStyle, position: 'sticky', top: 0, background: C.bg, zIndex: 1 }} />
+                    <CatTh label="ROAS" sortKey="roas" style={{ ...thStyle, position: 'sticky', top: 0, background: C.bg, zIndex: 1 }} />
+                  </tr>
+                </thead>
+                <tbody>
+                  {sortedCats.map(r => {
+                    const catSpend = getCatSpend(r.category)
+                    const catRoas = catSpend > 0 ? r.excRev / catSpend : 0
+                    return (
+                    <tr key={r.category} onMouseEnter={e => e.currentTarget.style.background = C.hover} onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
+                      <td style={tdStyleL}>{r.category}</td>
+                      <td style={tdStyle}>{fmt(catSpend)}</td>
+                      <td style={tdStyle}>{r.excRev > 0 ? fmt(r.excRev) : '—'}</td>
+                      <td style={tdStyle}>{roasCell(catRoas)}</td>
+                    </tr>
+                    )
+                  })}
+                </tbody>
+                <tfoot>
+                  <tr style={{ background: C.bg, borderTop: `1.5px solid ${C.border}` }}>
+                    <td style={{ ...totalTdStyle, textAlign: 'left', position: 'sticky', bottom: 0, background: C.bg }}>Total</td>
+                    <td style={{ ...totalTdStyle, position: 'sticky', bottom: 0, background: C.bg }}>{fmt(catTotalSpend)}</td>
+                    <td style={{ ...totalTdStyle, position: 'sticky', bottom: 0, background: C.bg }}>{catTotals.excRev > 0 ? fmt(catTotals.excRev) : '—'}</td>
+                    <td style={{ ...totalTdStyle, position: 'sticky', bottom: 0, background: C.bg }}>{roasCell(catTotalRoas)}</td>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+          </div>
+
+          {/* By Product */}
+          <div className="kpi-card" style={{ padding: '14px 16px', flex: 1, minWidth: 0, maxHeight: 500, display: 'flex', flexDirection: 'column' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+              <div style={{ fontWeight: 700, fontSize: 13, color: C.t1 }}>By Product</div>
+              <input value={prodSearch} onChange={e => setProdSearch(e.target.value)} placeholder="Search product…"
+                style={{ fontSize: 11.5, padding: '4px 9px', borderRadius: 6, border: `1px solid ${C.border}`, background: C.card, color: C.t1, width: 160, outline: 'none' }} />
+            </div>
+            <div style={{ overflowY: 'auto', flex: 1 }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed' }}>
+                <colgroup>
+                  <col style={{ width: '16%' }} /><col style={{ width: '30%' }} /><col style={{ width: '18%' }} /><col style={{ width: '20%' }} /><col style={{ width: '16%' }} />
+                </colgroup>
+                <thead>
+                  <tr style={{ background: C.bg }}>
+                    <ProdTh label="Category" sortKey="category" style={{ ...thStyleL, position: 'sticky', top: 0, background: C.bg, zIndex: 1 }} align="left" />
+                    <ProdTh label="Product" sortKey="subCategory" style={{ ...thStyleL, position: 'sticky', top: 0, background: C.bg, zIndex: 1 }} align="left" />
+                    <ProdTh label="Spend" sortKey="spend" style={{ ...thStyle, position: 'sticky', top: 0, background: C.bg, zIndex: 1 }} />
+                    <ProdTh label="Revenue (Ex GST)" sortKey="excRev" style={{ ...thStyle, position: 'sticky', top: 0, background: C.bg, zIndex: 1 }} />
+                    <ProdTh label="ROAS" sortKey="roas" style={{ ...thStyle, position: 'sticky', top: 0, background: C.bg, zIndex: 1 }} />
+                  </tr>
+                </thead>
+                <tbody>
+                  {sortedProds.map(r => {
+                    const prodSpend = getProdSpend(r.subCategory)
+                    const prodRoas = prodSpend > 0 ? r.excRev / prodSpend : 0
+                    return (
+                    <tr key={`${r.category}||${r.subCategory}`} onMouseEnter={e => e.currentTarget.style.background = C.hover} onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
+                      <td style={{ ...tdStyleL, color: C.t3 }}>{r.category}</td>
+                      <td style={tdStyleL} title={r.subCategory}>{r.subCategory}</td>
+                      <td style={tdStyle}>{fmt(prodSpend)}</td>
+                      <td style={tdStyle}>{r.excRev > 0 ? fmt(r.excRev) : '—'}</td>
+                      <td style={tdStyle}>{roasCell(prodRoas)}</td>
+                    </tr>
+                    )
+                  })}
+                </tbody>
+                <tfoot>
+                  <tr style={{ background: C.bg, borderTop: `1.5px solid ${C.border}` }}>
+                    <td style={{ ...totalTdStyle, textAlign: 'left', position: 'sticky', bottom: 0, background: C.bg }} colSpan={2}>Total</td>
+                    <td style={{ ...totalTdStyle, position: 'sticky', bottom: 0, background: C.bg }}>{fmt(prodTotalSpend)}</td>
+                    <td style={{ ...totalTdStyle, position: 'sticky', bottom: 0, background: C.bg }}>{prodTotals.excRev > 0 ? fmt(prodTotals.excRev) : '—'}</td>
+                    <td style={{ ...totalTdStyle, position: 'sticky', bottom: 0, background: C.bg }}>{roasCell(prodTotalRoas)}</td>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
@@ -10082,7 +10446,7 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
           {page === 'pnl' && data && <PnLPage data={data} filters={filters} setFilters={setFilters} />}
           {page === 'ads' && data && (!allowedTabs || allowedTabs.includes('ads')) && (
             <div className="page-scroll">
-              <AdsTab data={data} />
+              <AdsTab data={data} filters={filters} />
             </div>
           )}
           {page === 'intelligence' && (

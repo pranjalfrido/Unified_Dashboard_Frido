@@ -1,4 +1,5 @@
 import { getBQ, buildQuery, netRevenueSelectFragment, computeNetRevenueMeasures } from './_bq.js'
+import { getPool } from './_db.js'
 
 // Server-side in-memory cache with 5-minute TTL
 const cache = new Map()
@@ -1880,6 +1881,364 @@ export default async function handler(req, res) {
         repeatCusts: parseInt(r.shopifyNewCusts?.[0]?.repeat_custs) || 0,
       },
     }
+
+    // Additional Spend KPI — D2C additional spends from markting_spend (Supabase),
+    // prorated day-wise by actual D2C sales when the selected range is a partial month.
+    try {
+      const db = getPool()
+      // Find which months overlap with the selected date range
+      const selStart = new Date(start), selEnd = new Date(end)
+      // Build set of month keys (YYYY-MM) covered by [start, end]
+      const months = []
+      const cur = new Date(selStart.getFullYear(), selStart.getMonth(), 1)
+      while (cur <= selEnd) {
+        months.push(`${cur.getFullYear()}-${String(cur.getMonth() + 1).padStart(2, '0')}`)
+        cur.setMonth(cur.getMonth() + 1)
+      }
+
+      // Fetch D2C additional product spends for those months
+      const placeholders = months.map((_, i) => `$${i + 1}`).join(',')
+      const { rows: spendRows } = await db.query(
+        `SELECT month_year, SUM(total_spend_ex_gst::numeric) AS total_spend
+         FROM markting_spend
+         WHERE channeltomap = 'D2C'
+           AND is_additional_spend = 'yes'
+           AND marketing_spend_to_be_mapped_for = 'product'
+           AND TO_CHAR(month_year::timestamp, 'YYYY-MM') IN (${placeholders})
+         GROUP BY month_year`,
+        months
+      )
+
+      if (spendRows.length === 0) {
+        payload.ads.additionalSpend = null
+      } else {
+        // For each month, prorate the spend by the fraction of D2C sales in the selected date range
+        // Fetch daily D2C (Shopify) sales for all relevant months from BQ
+        const monthStart = `${months[0]}-01`
+        const lastMonth = months[months.length - 1]
+        const lastDay = new Date(parseInt(lastMonth.split('-')[0]), parseInt(lastMonth.split('-')[1]), 0)
+        const monthEnd = lastDay.toISOString().slice(0, 10)
+
+        // Fetch daily total D2C revenue AND daily product-level D2C revenue for full month(s)
+        const [[dailySalesRows], [dailyProductRows]] = await Promise.all([
+          bq.query({
+            query: `SELECT CAST(OrderDate AS STRING) AS date, SUM(SellingPrice_Inc_GST) AS rev
+                    FROM \`frido-429506.production.fact_all_platform_sales_report\`
+                    WHERE OrderDate BETWEEN '${monthStart}' AND '${monthEnd}'
+                      AND Channel = 'Shopify' AND SubChannel != 'Shopify International'
+                      AND LOWER(COALESCE(FinancialStatus,'')) NOT LIKE '%refund%'
+                    GROUP BY date ORDER BY date`
+          }),
+          bq.query({
+            query: `SELECT CAST(OrderDate AS STRING) AS date,
+                           COALESCE(SubCategory, Category, 'Other') AS subCategory,
+                           SUM(SellingPrice_Inc_GST) AS rev
+                    FROM \`frido-429506.production.fact_all_platform_sales_report\`
+                    WHERE OrderDate BETWEEN '${monthStart}' AND '${monthEnd}'
+                      AND Channel = 'Shopify' AND SubChannel != 'Shopify International'
+                      AND LOWER(COALESCE(FinancialStatus,'')) NOT LIKE '%refund%'
+                    GROUP BY date, subCategory`
+          })
+        ])
+
+        // Build day→totalRev map and month→totalRev map
+        const dayRevMap = {}
+        const monthRevMap = {}
+        for (const row of dailySalesRows) {
+          const d = row.date?.value || row.date
+          const rev = parseFloat(row.rev) || 0
+          dayRevMap[d] = rev
+          const mk = d.slice(0, 7)
+          monthRevMap[mk] = (monthRevMap[mk] || 0) + rev
+        }
+
+        // Build day→subCategory→rev map
+        const dayProductRevMap = {} // { date: { subCategory: rev } }
+        for (const row of dailyProductRows) {
+          const d = row.date?.value || row.date
+          const sc = row.subCategory
+          const rev = parseFloat(row.rev) || 0
+          if (!dayProductRevMap[d]) dayProductRevMap[d] = {}
+          dayProductRevMap[d][sc] = (dayProductRevMap[d][sc] || 0) + rev
+        }
+
+        // For each month's spend, allocate day-wise then split by product within each day
+        // Result: { subCategory: { date: allocatedSpend } } — full month(s)
+        const productDaySpend = {} // { subCategory: { date: spend } }
+
+        let additionalSpend = 0
+        for (const sr of spendRows) {
+          const mk = String(sr.month_year).slice(0, 7) // YYYY-MM (avoid UTC offset shift)
+          const monthTotal = parseFloat(sr.total_spend) || 0
+          if (monthTotal === 0) continue
+
+          const monthRevTotal = monthRevMap[mk] || 0
+
+          // Enumerate all days in this month
+          const [mY, mM] = mk.split('-').map(Number)
+          const daysInMonth = new Date(mY, mM, 0).getDate()
+
+          for (let d = 1; d <= daysInMonth; d++) {
+            const dateStr = `${mk}-${String(d).padStart(2, '0')}`
+            const dayTotalRev = dayRevMap[dateStr] || 0
+
+            // Day's share of monthly spend
+            let daySpend
+            if (monthRevTotal > 0) {
+              daySpend = monthTotal * (dayTotalRev / monthRevTotal)
+            } else {
+              // Fallback: equal daily split when no sales data
+              daySpend = monthTotal / daysInMonth
+            }
+
+            if (daySpend === 0) continue
+
+            // Split day's spend across products by their revenue on that day
+            const dayProds = dayProductRevMap[dateStr] || {}
+            const dayProdTotal = Object.values(dayProds).reduce((s, v) => s + v, 0)
+
+            if (dayProdTotal > 0) {
+              for (const [sc, scRev] of Object.entries(dayProds)) {
+                if (!productDaySpend[sc]) productDaySpend[sc] = {}
+                productDaySpend[sc][dateStr] = (productDaySpend[sc][dateStr] || 0) + daySpend * (scRev / dayProdTotal)
+              }
+            }
+            // If no product breakdown for this day, skip (spend is unattributable)
+          }
+
+          // KPI: sum day spend within selected range for this month
+          if (monthRevTotal > 0) {
+            let rangeRev = 0
+            for (const [day, rev] of Object.entries(dayRevMap)) {
+              if (day >= start && day <= end && day.startsWith(mk)) rangeRev += rev
+            }
+            additionalSpend += monthTotal * (rangeRev / monthRevTotal)
+          } else {
+            const rangeStart = selStart > new Date(`${mk}-01`) ? selStart : new Date(`${mk}-01`)
+            const rangeEnd = selEnd < new Date(mY, mM, 0) ? selEnd : new Date(mY, mM, 0)
+            const daysInRange = Math.max(0, Math.round((rangeEnd - rangeStart) / 86400000) + 1)
+            additionalSpend += monthTotal * (daysInRange / daysInMonth)
+          }
+        }
+
+        payload.ads.additionalSpend = Math.round(additionalSpend)
+        // productDaySpend: { subCategory: { date: spend } } — frontend slices by date range
+        payload.ads.additionalSpendByProduct = productDaySpend
+      }
+    } catch (e) {
+      console.error('[additionalSpend]', e.message)
+      payload.ads.additionalSpend = null
+    }
+
+    // CRED tab data — sales + additional spend (same day-wise proration logic as D2C)
+    try {
+      const credMonths = []
+      const credCur = new Date(new Date(start).getFullYear(), new Date(start).getMonth(), 1)
+      const credEnd = new Date(end)
+      while (credCur <= credEnd) {
+        credMonths.push(`${credCur.getFullYear()}-${String(credCur.getMonth() + 1).padStart(2, '0')}`)
+        credCur.setMonth(credCur.getMonth() + 1)
+      }
+      const credMonthStart = `${credMonths[0]}-01`
+      const credLastMonth = credMonths[credMonths.length - 1]
+      const credLastDay = new Date(parseInt(credLastMonth.split('-')[0]), parseInt(credLastMonth.split('-')[1]), 0)
+      const credMonthEnd = credLastDay.toISOString().slice(0, 10)
+
+      const db = getPool()
+      const credPlaceholders = credMonths.map((_, i) => `$${i + 1}`).join(',')
+      const { rows: credSpendRows } = await db.query(
+        `SELECT month_year, SUM(total_spend_ex_gst::numeric) AS total_spend
+         FROM markting_spend
+         WHERE channeltomap = 'CRED'
+           AND is_additional_spend = 'yes'
+           AND marketing_spend_to_be_mapped_for = 'product'
+           AND TO_CHAR(month_year::timestamp, 'YYYY-MM') IN (${credPlaceholders})
+         GROUP BY month_year`, credMonths)
+
+      const [[credDailyRows], [credDailyProdRows]] = await Promise.all([
+        bq.query({
+          query: `SELECT CAST(OrderDate AS STRING) AS date,
+                         SUM(SellingPrice_Inc_GST) AS rev,
+                         SUM(SellingPrice_Exc_GST) AS excRev,
+                         COUNT(DISTINCT OrderId) AS orders,
+                         SUM(ItemQty) AS units
+                  FROM \`frido-429506.production.fact_all_platform_sales_report\`
+                  WHERE OrderDate BETWEEN '${start}' AND '${end}'
+                    AND Channel = 'CRED'
+                    AND LOWER(COALESCE(FinancialStatus,'')) NOT LIKE '%refund%'
+                  GROUP BY date ORDER BY date`
+        }),
+        bq.query({
+          query: `SELECT CAST(OrderDate AS STRING) AS date,
+                         COALESCE(SubCategory, Category, 'Other') AS subCategory,
+                         COALESCE(Category, 'Other') AS category,
+                         SUM(SellingPrice_Inc_GST) AS rev,
+                         SUM(SellingPrice_Exc_GST) AS excRev,
+                         COUNT(DISTINCT OrderId) AS orders,
+                         SUM(ItemQty) AS units
+                  FROM \`frido-429506.production.fact_all_platform_sales_report\`
+                  WHERE OrderDate BETWEEN '${credMonthStart}' AND '${credMonthEnd}'
+                    AND Channel = 'CRED'
+                    AND LOWER(COALESCE(FinancialStatus,'')) NOT LIKE '%refund%'
+                  GROUP BY date, subCategory, category`
+        })
+      ])
+
+      // Build daily totals for selected range
+      const credDaily = credDailyRows.map(r => ({
+        date: r.date?.value || r.date,
+        rev: parseFloat(r.rev) || 0,
+        excRev: parseFloat(r.excRev) || 0,
+        orders: parseInt(r.orders) || 0,
+        units: parseInt(r.units) || 0,
+      }))
+
+      // Build day→rev map for full month (for proration)
+      const credDayRevMap = {}
+      const credMonthRevMap = {}
+      for (const r of credDailyProdRows) {
+        const d = r.date?.value || r.date
+        const rev = parseFloat(r.rev) || 0
+        credDayRevMap[d] = (credDayRevMap[d] || 0) + rev
+        const mk = d.slice(0, 7)
+        credMonthRevMap[mk] = (credMonthRevMap[mk] || 0) + rev
+      }
+
+      // Build day→subCategory→rev map for full month
+      const credDayProdRevMap = {}
+      for (const r of credDailyProdRows) {
+        const d = r.date?.value || r.date
+        const sc = r.subCategory
+        if (!credDayProdRevMap[d]) credDayProdRevMap[d] = {}
+        if (!credDayProdRevMap[d][sc]) credDayProdRevMap[d][sc] = { rev: 0, excRev: 0, orders: 0, units: 0, category: r.category || 'Other' }
+        credDayProdRevMap[d][sc].rev += parseFloat(r.rev) || 0
+        credDayProdRevMap[d][sc].excRev += parseFloat(r.excRev) || 0
+        credDayProdRevMap[d][sc].orders += parseInt(r.orders) || 0
+        credDayProdRevMap[d][sc].units += parseInt(r.units) || 0
+      }
+
+      // Aggregate by product for selected range
+      const credProductMap = {}
+      for (const r of credDailyProdRows) {
+        const d = r.date?.value || r.date
+        if (d < start || d > end) continue
+        const sc = r.subCategory
+        if (!credProductMap[sc]) credProductMap[sc] = { subCategory: sc, category: r.category || 'Other', rev: 0, excRev: 0, orders: 0, units: 0 }
+        credProductMap[sc].rev += parseFloat(r.rev) || 0
+        credProductMap[sc].excRev += parseFloat(r.excRev) || 0
+        credProductMap[sc].orders += parseInt(r.orders) || 0
+        credProductMap[sc].units += parseInt(r.units) || 0
+      }
+      const credByProduct = Object.values(credProductMap).sort((a, b) => b.rev - a.rev)
+
+      // Aggregate by category
+      const credCatMap = {}
+      for (const p of credByProduct) {
+        if (!credCatMap[p.category]) credCatMap[p.category] = { category: p.category, rev: 0, excRev: 0, orders: 0, units: 0 }
+        credCatMap[p.category].rev += p.rev
+        credCatMap[p.category].excRev += p.excRev
+        credCatMap[p.category].orders += p.orders
+        credCatMap[p.category].units += p.units
+      }
+      const credByCategory = Object.values(credCatMap).sort((a, b) => b.rev - a.rev)
+
+      // Totals for selected range
+      const credTotals = credDaily.reduce((acc, r) => ({
+        rev: acc.rev + r.rev, excRev: acc.excRev + r.excRev,
+        orders: acc.orders + r.orders, units: acc.units + r.units
+      }), { rev: 0, excRev: 0, orders: 0, units: 0 })
+
+      // Additional spend + product day spend (same logic as D2C)
+      let credAdditionalSpend = null
+      const credAdditionalSpendByProduct = {}
+
+      if (credSpendRows.length > 0) {
+        let totalCredSpend = 0
+        for (const sr of credSpendRows) {
+          const mk = String(sr.month_year).slice(0, 7)
+          const monthTotal = parseFloat(sr.total_spend) || 0
+          if (monthTotal === 0) continue
+          const monthRevTotal = credMonthRevMap[mk] || 0
+          const [mY, mM] = mk.split('-').map(Number)
+          const daysInMonth = new Date(mY, mM, 0).getDate()
+
+          for (let d = 1; d <= daysInMonth; d++) {
+            const dateStr = `${mk}-${String(d).padStart(2, '0')}`
+            const dayTotal = credDayRevMap[dateStr] || 0
+            const daySpend = monthRevTotal > 0 ? monthTotal * (dayTotal / monthRevTotal) : monthTotal / daysInMonth
+            if (daySpend === 0) continue
+            const dayProds = credDayProdRevMap[dateStr] || {}
+            const dayProdTotal = Object.values(dayProds).reduce((s, v) => s + v.rev, 0)
+            if (dayProdTotal > 0) {
+              for (const [sc, pData] of Object.entries(dayProds)) {
+                if (!credAdditionalSpendByProduct[sc]) credAdditionalSpendByProduct[sc] = {}
+                credAdditionalSpendByProduct[sc][dateStr] = (credAdditionalSpendByProduct[sc][dateStr] || 0) + daySpend * (pData.rev / dayProdTotal)
+              }
+            }
+          }
+
+          if (monthRevTotal > 0) {
+            let rangeRev = 0
+            for (const [day, rev] of Object.entries(credDayRevMap)) {
+              if (day >= start && day <= end && day.startsWith(mk)) rangeRev += rev
+            }
+            totalCredSpend += monthTotal * (rangeRev / monthRevTotal)
+          } else {
+            const selS = new Date(start), selE = new Date(end)
+            const rangeStart = selS > new Date(`${mk}-01`) ? selS : new Date(`${mk}-01`)
+            const rangeEnd = selE < new Date(mY, mM, 0) ? selE : new Date(mY, mM, 0)
+            const daysInRange = Math.max(0, Math.round((rangeEnd - rangeStart) / 86400000) + 1)
+            totalCredSpend += monthTotal * (daysInRange / daysInMonth)
+          }
+        }
+        credAdditionalSpend = Math.round(totalCredSpend)
+      }
+
+      // Build dailyByCategory for trend chart category/sub-cat filtering
+      const credDailyByCategory = credDailyProdRows
+        .filter(r => { const d = r.date?.value || r.date; return d >= start && d <= end })
+        .map(r => ({
+          date: r.date?.value || r.date,
+          category: r.category || 'Other',
+          subCategory: r.subCategory,
+          rev: parseFloat(r.rev) || 0,
+          spend: 0,
+        }))
+
+      payload.cred = {
+        totals: credTotals,
+        daily: credDaily,
+        dailyByCategory: credDailyByCategory,
+        byCategory: credByCategory,
+        byProduct: credByProduct,
+        additionalSpend: credAdditionalSpend,
+        additionalSpendByProduct: credAdditionalSpendByProduct,
+      }
+    } catch (e) {
+      console.error('[cred]', e.message)
+      payload.cred = { totals: {}, daily: [], dailyByCategory: [], byCategory: [], byProduct: [], additionalSpend: null, additionalSpendByProduct: {} }
+    }
+
+    // Merge additionalSpendByProduct into pnlAdSpendMap so PnL Financial View
+    // includes additional spend in marketing spend column + ratios
+    try {
+      const addlByProd = payload.ads?.additionalSpendByProduct || {}
+      if (Object.keys(addlByProd).length > 0 && payload.pnlAdSpendMap) {
+        const mergedMap = { ...payload.pnlAdSpendMap }
+        for (const [sc, dayMap] of Object.entries(addlByProd)) {
+          let rangeSpend = 0
+          for (const [date, spend] of Object.entries(dayMap)) {
+            if (date >= start && date <= end) rangeSpend += spend
+          }
+          if (rangeSpend > 0) mergedMap[sc] = (mergedMap[sc] || 0) + rangeSpend
+        }
+        payload.pnlAdSpendMap = mergedMap
+        // Also update pnlRawAdSpend total
+        const addlTotal = payload.ads?.additionalSpend || 0
+        if (addlTotal > 0) payload.pnlRawAdSpend = (payload.pnlRawAdSpend || 0) + addlTotal
+      }
+    } catch (e) { console.error('[pnlAdSpendMerge]', e.message) }
+
     setInCache(cacheKey, payload)
     res.setHeader('X-Cache', 'MISS')
     res.json(payload)
