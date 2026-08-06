@@ -245,9 +245,9 @@ export function TrendAnalysisCard({ title, daily, grossColor, grossGradId, revKe
   const grouped = (() => {
     if (groupBy === 'daily') {
       return daily.map(d => {
-        const excR = d[excRevKey] || 0
+        const grossR = d[revKey] || 0
         const out = { ...d }
-        const netR = excR * (netRatio ?? 1)
+        const netR = grossR * (netRatio ?? 1)
         if (showNet) out._net = netR
         if (showCogs) out._cogs = netR * cogsPct / 100
         if (showSnd) out._snd = netR * sndPct / 100
@@ -260,8 +260,8 @@ export function TrendAnalysisCard({ title, daily, grossColor, grossGradId, revKe
       if (!agg[k]) agg[k] = { date: k, [revKey]: 0, [excRevKey]: 0, _net: 0, _cogs: 0, _snd: 0 }
       agg[k][revKey] += d[revKey] || 0
       agg[k][excRevKey] += d[excRevKey] || 0
-      const excR = d[excRevKey] || 0
-      const netR = excR * (netRatio ?? 1)
+      const grossR = d[revKey] || 0
+      const netR = grossR * (netRatio ?? 1)
       if (showNet) agg[k]._net += netR
       if (showCogs) agg[k]._cogs += netR * cogsPct / 100
       if (showSnd) agg[k]._snd += netR * sndPct / 100
