@@ -232,7 +232,7 @@ export function getGroupKey(date, groupBy) {
 // Shared Gross/Net Revenue + Units trend chart with a granularity selector — used by every
 // Sales-tab channel that doesn't need per-metric-toggle buttons (Amazon quick-commerce family)
 // and reused as-is by the PnL tab's per-channel trend card.
-export function TrendAnalysisCard({ title, daily, grossColor, grossGradId, revKey = 'rev', excRevKey = 'excRev', boxHeight, cogsPct, sndPct, netRatio }) {
+export function TrendAnalysisCard({ title, daily, grossColor, grossGradId, revKey = 'rev', excRevKey = 'excRev', boxHeight, cogsPct, sndPct, cogsPctLabel, sndPctLabel, netRatio }) {
   const nDays = daily.length
   const autoGroup = nDays <= 14 ? 'daily' : nDays <= 90 ? 'weekly' : 'monthly'
   const [groupBy, setGroupBy] = useState(autoGroup)
@@ -294,7 +294,7 @@ export function TrendAnalysisCard({ title, daily, grossColor, grossGradId, revKe
                 const isUnits = p.dataKey === 'units'
                 const isCogs = p.dataKey === '_cogs'
                 const isSnd = p.dataKey === '_snd'
-                const pctLabel = isCogs ? ` (${cogsPct.toFixed(1)}%)` : isSnd ? ` (${sndPct.toFixed(1)}%)` : ''
+                const pctLabel = isCogs ? ` (${(cogsPctLabel ?? cogsPct).toFixed(1)}%)` : isSnd ? ` (${(sndPctLabel ?? sndPct).toFixed(1)}%)` : ''
                 return (
                   <div key={p.name} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                     <span style={{ width: 7, height: 7, borderRadius: '50%', background: p.color, display: 'inline-block', flexShrink: 0 }} />

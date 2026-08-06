@@ -32,7 +32,7 @@ export default function PnLChannelTab({ title, note, gross, excRev, net, units, 
         <KPICard label="Mktg Spend" value={spendVal != null ? fmt(spendVal) : dash} sub={`${fmtPct(spendPct)} of Net Rev`} />
         <KPICard label="CM2" value={cm2Val != null ? fmt(cm2Val) : dash} sub={`CM2% ${fmtPct(cm2Pct)}`} accent={cm2Pct != null && cm2Pct < 0 ? '#7A1A1A' : undefined} />
       </div>
-      <TrendAnalysisCard title={`${title} — Revenue Trend`} daily={daily} grossColor={grossColor} grossGradId={gradId} boxHeight={410} cogsPct={t?.cogs != null && net > 0 ? t.cogs / net * 100 : null} sndPct={t?.snd != null && net > 0 ? t.snd / net * 100 : null} netRatio={gross > 0 ? net / gross : null} />
+      <TrendAnalysisCard title={`${title} — Revenue Trend`} daily={daily} grossColor={grossColor} grossGradId={gradId} boxHeight={410} cogsPct={t?.cogs != null && net > 0 ? t.cogs / net * 100 : null} sndPct={t?.snd != null && net > 0 ? t.snd / net * 100 : null} cogsPctLabel={t?.cogsPct} sndPctLabel={t?.sndPct} netRatio={gross > 0 ? net / gross : null} />
       <PnLFinancialTable subCatData={subCatData} skuData={skuData} adSpendMap={adSpendMap} skuCosts={skuCosts} title={`Financial View · ${title}`} onTotals={handleTotals} includeUnmatched={includeUnmatched} mobilityNetBySubCat={mobilityNetBySubCat} />
     </div>
   )
