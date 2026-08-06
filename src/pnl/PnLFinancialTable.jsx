@@ -71,7 +71,7 @@ export default function PnLFinancialTable({ subCatData, skuData, adSpendMap, sku
 
   const q = search.trim().toLowerCase()
 
-  const mapRow = (d) => {
+  const mapRow = (d, scName) => {
     const gross = d.rev || 0
     const excRev = d.excRev || 0
     const returnUnits = d.returnUnits || 0
@@ -81,11 +81,12 @@ export default function PnLFinancialTable({ subCatData, skuData, adSpendMap, sku
     const cirRev = d.cirRev || 0
     const exchRev = d.exchRev || 0
     const returnRev = d.returnRev || 0
-    // D2C: exclude COD cancellations from return % — COD cancels are pre-dispatch drops, not returns
     const totalReturnRev = (cancelRev - codCancelRev) + rtoRev + cirRev + returnRev
     const gstRatio = gross > 0 ? (gross - excRev) / gross : 0
     const grossAfterReturns = gross - totalReturnRev
-    const net = grossAfterReturns * (1 - gstRatio)
+    const netStandard = grossAfterReturns * (1 - gstRatio)
+    // Mobility: use whitelist net rev (manager formula) as the single source of truth for net and all % denominators
+    const net = (scName && mobilityNetBySubCat[scName] != null) ? mobilityNetBySubCat[scName] : netStandard
     const netUnits = Math.max(0, (d.units || 0) - returnUnits)
     return { gross, excRev, net, units: d.units || 0, netUnits, totalReturnRev }
   }
@@ -103,9 +104,17 @@ export default function PnLFinancialTable({ subCatData, skuData, adSpendMap, sku
     const skus = skuData?.[cat]?.[sc] || {}
     let cogs = 0, netCovered = 0, anyCosted = false
     let logistics = 0, fulfilment = 0, paymentGw = 0, softwareFee = 0, anyCosts = false
+    // For Mobility subcategories: distribute whitelist net proportionally across SKUs by standard net share
+    const whitelistNet = mobilityNetBySubCat[sc] != null ? mobilityNetBySubCat[sc] : null
+    const skuEntries = Object.entries(skus)
+    const standardNetTotal = whitelistNet != null ? skuEntries.reduce((s, [, d]) => s + mapRow(d).net, 0) : 0
     Object.entries(skus).forEach(([sku, d]) => {
       const entry = cogsMap?.[sku]
-      const r = mapRow(d)
+      const rStandard = mapRow(d)
+      // Scale SKU net proportionally from whitelist total if available
+      const r = whitelistNet != null && standardNetTotal > 0
+        ? { ...rStandard, net: whitelistNet * (rStandard.net / standardNetTotal) }
+        : rStandard
       if (entry && entry.cogs != null) {
         cogs += entry.cogs * r.netUnits
       } else {
@@ -129,7 +138,7 @@ export default function PnLFinancialTable({ subCatData, skuData, adSpendMap, sku
   const allRows = []
   Object.entries(subCatData || {}).forEach(([cat, scMap]) => {
     Object.entries(scMap).forEach(([sc, d]) => {
-      const r = mapRow(d)
+      const r = mapRow(d, sc)
       const spend = adSpendMap != null ? (adSpendMap[sc] || 0) : null
       const { cogs, netCovered, anyCosted, logistics, fulfilment, paymentGw, softwareFee, anyCosts } = (cogsMap || skuCosts) ? costsForSkus(cat, sc) : { cogs: 0, netCovered: 0, anyCosted: false, logistics: 0, fulfilment: 0, paymentGw: 0, softwareFee: 0, anyCosts: false }
       const gm = anyCosted ? netCovered - cogs : null
