@@ -71,7 +71,7 @@ export default function PnLFinancialTable({ subCatData, skuData, adSpendMap, sku
 
   const q = search.trim().toLowerCase()
 
-  const mapRow = (d, scName, catName) => {
+  const mapRow = (d) => {
     const gross = d.rev || 0
     const excRev = d.excRev || 0
     const returnUnits = d.returnUnits || 0
@@ -85,9 +85,7 @@ export default function PnLFinancialTable({ subCatData, skuData, adSpendMap, sku
     const totalReturnRev = (cancelRev - codCancelRev) + rtoRev + cirRev + returnRev
     const gstRatio = gross > 0 ? (gross - excRev) / gross : 0
     const grossAfterReturns = gross - totalReturnRev
-    const netStandard = grossAfterReturns * (1 - gstRatio)
-    // Use manager-defined Mobility whitelist net rev if available for this product
-    const net = (catName === 'Mobility' && scName && mobilityNetBySubCat[scName] != null) ? mobilityNetBySubCat[scName] : netStandard
+    const net = grossAfterReturns * (1 - gstRatio)
     const netUnits = Math.max(0, (d.units || 0) - returnUnits)
     return { gross, excRev, net, units: d.units || 0, netUnits, totalReturnRev }
   }
@@ -107,7 +105,7 @@ export default function PnLFinancialTable({ subCatData, skuData, adSpendMap, sku
     let logistics = 0, fulfilment = 0, paymentGw = 0, softwareFee = 0, anyCosts = false
     Object.entries(skus).forEach(([sku, d]) => {
       const entry = cogsMap?.[sku]
-      const r = mapRow(d, sc, cat)
+      const r = mapRow(d)
       if (entry && entry.cogs != null) {
         cogs += entry.cogs * r.netUnits
       } else {
@@ -131,7 +129,7 @@ export default function PnLFinancialTable({ subCatData, skuData, adSpendMap, sku
   const allRows = []
   Object.entries(subCatData || {}).forEach(([cat, scMap]) => {
     Object.entries(scMap).forEach(([sc, d]) => {
-      const r = mapRow(d, sc, cat)
+      const r = mapRow(d)
       const spend = adSpendMap != null ? (adSpendMap[sc] || 0) : null
       const { cogs, netCovered, anyCosted, logistics, fulfilment, paymentGw, softwareFee, anyCosts } = (cogsMap || skuCosts) ? costsForSkus(cat, sc) : { cogs: 0, netCovered: 0, anyCosted: false, logistics: 0, fulfilment: 0, paymentGw: 0, softwareFee: 0, anyCosts: false }
       const gm = anyCosted ? netCovered - cogs : null
@@ -235,9 +233,9 @@ export default function PnLFinancialTable({ subCatData, skuData, adSpendMap, sku
         'Marketing Spend': Math.round(r.spend), 'Spend %': +r.spendPct.toFixed(2),
         'CM2 %': r.cm2 != null && r.net > 0 ? +pctOf(r.cm2, r.net).toFixed(2) : '',
       }
-      const csvSkuTotalGross = Object.values(skuData?.[r.cat]?.[r.sc] || {}).reduce((s, d) => s + (mapRow(d, r.sc, r.cat).gross || 0), 0)
+      const csvSkuTotalGross = Object.values(skuData?.[r.cat]?.[r.sc] || {}).reduce((s, d) => s + (mapRow(d).gross || 0), 0)
       const skuRows = Object.entries(skuData?.[r.cat]?.[r.sc] || {}).map(([sku, d]) => {
-        const sk = mapRow(d, r.sc, r.cat)
+        const sk = mapRow(d)
         const entry = cogsMap?.[sku]
         const costed = entry && entry.cogs != null
         const skCogs = costed ? entry.cogs * sk.netUnits : fallbackCogs(sk.gross, sk.units, sk.net)
@@ -297,7 +295,7 @@ export default function PnLFinancialTable({ subCatData, skuData, adSpendMap, sku
             {rows.map(r => {
               const skuKey = `${r.cat}::${r.sc}`
               const isOpen = expandedSku[skuKey]
-              const allSkus = Object.entries(skuData?.[r.cat]?.[r.sc] || {}).map(([sku, d]) => ({ sku, ...mapRow(d, r.sc, r.cat) })).sort((a, b) => b.gross - a.gross)
+              const allSkus = Object.entries(skuData?.[r.cat]?.[r.sc] || {}).map(([sku, d]) => ({ sku, ...mapRow(d) })).sort((a, b) => b.gross - a.gross)
               const skus = q ? allSkus.filter(sk => r.cat.toLowerCase().includes(q) || r.sc.toLowerCase().includes(q) || sk.sku.toLowerCase().includes(q)) : allSkus
               const scTotalGross = allSkus.reduce((s, sk) => s + sk.gross, 0)
               const hasSkus = allSkus.length > 0
