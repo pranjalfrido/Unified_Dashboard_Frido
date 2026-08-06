@@ -319,7 +319,12 @@ export default function PnLPage({ data, filters, setFilters }) {
           const mobilityNet = data.subChannelMap?.Mobility?.netRev
           if (mobilityNet != null && mobilityNet > 0) n.net = mobilityNet
         }
-        return { subCatData: shSubCatData, skuData: shSkuData, daily: sh.daily || [], ...n }
+        // Scale daily values by subchannel share when MyFrido/Mobility is selected
+        const shTotalRev = sh.totals?.rev || 0
+        const isSubChFiltered = d2cSubCh === 'MyFrido' || d2cSubCh === 'Mobility'
+        const subChRatio = (isSubChFiltered && shTotalRev > 0) ? n.gross / shTotalRev : 1
+        const daily = subChRatio === 1 ? (sh.daily || []) : (sh.daily || []).map(d => ({ ...d, rev: (d.rev || 0) * subChRatio, excRev: (d.excRev || 0) * subChRatio }))
+        return { subCatData: shSubCatData, skuData: shSkuData, daily, ...n }
       })(),
       ebo: { subCatData: eboSubCatData, skuData: eboSkuData, daily: ebo.daily || [], gross: ebo.totals?.rev || 0, net: ebo.netCalc?.netRev ?? 0, units: ebo.totals?.qty || 0, orders: ebo.totals?.orders || 0, returnRev: (ebo.netCalc?.cancelRev || 0) + (ebo.netCalc?.rtoRev || 0) + (ebo.netCalc?.cirRev || 0) + (ebo.netCalc?.returnRev || 0) },
       amazon: (() => { const n = netOf(amzSubCatData); return { subCatData: amzSubCatData, skuData: amzSkuData, daily: amzDaily, ...n } })(),
