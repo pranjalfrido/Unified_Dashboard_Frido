@@ -71,7 +71,7 @@ export default function PnLFinancialTable({ subCatData, skuData, adSpendMap, sku
 
   const q = search.trim().toLowerCase()
 
-  const mapRow = (d, scName) => {
+  const mapRow = (d) => {
     const gross = d.rev || 0
     const excRev = d.excRev || 0
     const returnUnits = d.returnUnits || 0
@@ -85,11 +85,9 @@ export default function PnLFinancialTable({ subCatData, skuData, adSpendMap, sku
     const totalReturnRev = (cancelRev - codCancelRev) + rtoRev + cirRev + returnRev
     const gstRatio = gross > 0 ? (gross - excRev) / gross : 0
     const grossAfterReturns = gross - totalReturnRev
-    const netStandard = grossAfterReturns * (1 - gstRatio)
-    // For Mobility: use manager whitelist net rev per SubCategory for display; keep netStandard for ratio denominators
-    const net = (scName && mobilityNetBySubCat[scName] != null) ? mobilityNetBySubCat[scName] : netStandard
+    const net = grossAfterReturns * (1 - gstRatio)
     const netUnits = Math.max(0, (d.units || 0) - returnUnits)
-    return { gross, excRev, net, netStandard, units: d.units || 0, netUnits, totalReturnRev }
+    return { gross, excRev, net, units: d.units || 0, netUnits, totalReturnRev }
   }
   const pctOf = (n, d) => d > 0 ? (n / d * 100) : 0
 
@@ -131,7 +129,7 @@ export default function PnLFinancialTable({ subCatData, skuData, adSpendMap, sku
   const allRows = []
   Object.entries(subCatData || {}).forEach(([cat, scMap]) => {
     Object.entries(scMap).forEach(([sc, d]) => {
-      const r = mapRow(d, sc)
+      const r = mapRow(d)
       const spend = adSpendMap != null ? (adSpendMap[sc] || 0) : null
       const { cogs, netCovered, anyCosted, logistics, fulfilment, paymentGw, softwareFee, anyCosts } = (cogsMap || skuCosts) ? costsForSkus(cat, sc) : { cogs: 0, netCovered: 0, anyCosted: false, logistics: 0, fulfilment: 0, paymentGw: 0, softwareFee: 0, anyCosts: false }
       const gm = anyCosted ? netCovered - cogs : null
@@ -186,11 +184,11 @@ export default function PnLFinancialTable({ subCatData, skuData, adSpendMap, sku
     return s
   }, 0) : null
   const totSpend = totalMapSpend != null ? totalMapSpend : null
-  const totSpendPct = totSpend != null && tot.net > 0 ? (totSpend / tot.net * 100) : 0
+  const totSpendPct = totSpend != null && tot.netCovered > 0 ? (totSpend / tot.netCovered * 100) : 0
   const totGm = tot.anyCosted ? tot.netCovered - tot.cogs : null
   const totCm1 = tot.anyCm1 ? tot.cm1 : null
   const totCm2 = totCm1 != null && totSpend != null ? totCm1 - totSpend : totCm1
-  const totCm2Pct = totCm2 != null && tot.net > 0 ? pctOf(totCm2, tot.net) : null
+  const totCm2Pct = totCm2 != null && tot.netCovered > 0 ? pctOf(totCm2, tot.netCovered) : null
 
   useEffect(() => {
     if (!onTotals) return
@@ -322,6 +320,7 @@ export default function PnLFinancialTable({ subCatData, skuData, adSpendMap, sku
                     <td style={tdStyle}>{r.gm != null && r.netCovered > 0 ? `${pctOf(r.gm, r.netCovered).toFixed(1)}%` : noCostCell}</td>
                     <td style={tdStyle}>{r.snd != null && r.netCovered > 0 ? `${pctOf(r.snd, r.netCovered).toFixed(1)}%` : noCostCell}</td>
                     <td style={tdStyle}>{r.cm1 != null && r.netCovered > 0 ? `${pctOf(r.cm1, r.netCovered).toFixed(1)}%` : noCostCell}</td>
+
                     <td style={tdStyle}>{r.spend > 0 ? fmt(r.spend) : <span style={{ color: C.t3 }}>—</span>}</td>
                     <td style={tdStyle}>{r.spend > 0 ? `${r.spendPct.toFixed(2)}%` : <span style={{ color: C.t3 }}>—</span>}</td>
                     <td style={tdStyle}>{r.cm2 != null && r.netCovered > 0 ? `${pctOf(r.cm2, r.netCovered).toFixed(1)}%` : noCostCell}</td>
@@ -369,10 +368,10 @@ export default function PnLFinancialTable({ subCatData, skuData, adSpendMap, sku
               <td style={totalTdStyle}>{fmtN(tot.units)}</td>
               <td style={totalTdStyle}>{totReturnPct > 0 ? `${totReturnPct.toFixed(2)}%` : '—'}</td>
               <td style={totalTdStyle}>{fmt(tot.net)}</td>
-              <td style={totalTdStyle}>{tot.anyCosted && tot.net > 0 ? `${pctOf(tot.cogs, tot.net).toFixed(1)}%` : noCostCell}</td>
-              <td style={totalTdStyle}>{totGm != null && tot.net > 0 ? `${pctOf(totGm, tot.net).toFixed(1)}%` : noCostCell}</td>
-              <td style={totalTdStyle}>{totSnd != null && tot.net > 0 ? `${pctOf(totSnd, tot.net).toFixed(1)}%` : noCostCell}</td>
-              <td style={totalTdStyle}>{tot.anyCm1 && tot.net > 0 ? `${pctOf(tot.cm1, tot.net).toFixed(1)}%` : noCostCell}</td>
+              <td style={totalTdStyle}>{tot.anyCosted && tot.netCovered > 0 ? `${pctOf(tot.cogs, tot.netCovered).toFixed(1)}%` : noCostCell}</td>
+              <td style={totalTdStyle}>{totGm != null && tot.netCovered > 0 ? `${pctOf(totGm, tot.netCovered).toFixed(1)}%` : noCostCell}</td>
+              <td style={totalTdStyle}>{totSnd != null && tot.netCovered > 0 ? `${pctOf(totSnd, tot.netCovered).toFixed(1)}%` : noCostCell}</td>
+              <td style={totalTdStyle}>{tot.anyCm1 && tot.netCovered > 0 ? `${pctOf(tot.cm1, tot.netCovered).toFixed(1)}%` : noCostCell}</td>
               <td style={totalTdStyle}>{totSpend > 0 ? fmt(totSpend) : '—'}</td>
               <td style={totalTdStyle}>{totSpend > 0 ? `${totSpendPct.toFixed(2)}%` : '—'}</td>
               <td style={totalTdStyle}>{totCm2Pct != null ? `${totCm2Pct.toFixed(1)}%` : noCostCell}</td>
