@@ -1808,7 +1808,6 @@ function Sidebar({ page, setPage, invTab, setInvTab, allowedTabs, profile }) {
         <img src="/frido-logo.png" alt="Frido" style={{ width: 36, height: 36, borderRadius: 10, objectFit: 'cover' }} />
         <span style={{ fontSize: 7.5, fontWeight: 600, color: C.t3, letterSpacing: '.04em', textTransform: 'uppercase', lineHeight: 1, textAlign: 'center' }}>Analytics</span>
       </div>
-      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', flex: 1, justifyContent: 'space-evenly', width: '100%' }}>
       {items.map(item => {
         if (item.id === 'inventory') {
           const subTabs = [
@@ -1857,8 +1856,7 @@ function Sidebar({ page, setPage, invTab, setInvTab, allowedTabs, profile }) {
           </div>
         )
       })}
-      </div>
-      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
+      <div style={{ marginTop: 'auto', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
         <div className="sb-div" />
         <div onClick={() => setPage('profile')} className={`sb-item${page === 'profile' ? ' active' : ''}`}
           style={{ position: 'relative' }}>
