@@ -98,6 +98,17 @@ const PK = "id";
 
 const db = {
   async fetchRows(fmt) {
+    const { data, error } = await supabase
+      .from(fmt.table)
+      .select("*")
+      .order("month_year", { ascending: false })
+      .order(PK, { ascending: false })
+      .limit(200);
+    if (error) throw error;
+    return data ?? [];
+  },
+
+  async fetchAllRows(fmt) {
     const PAGE = 1000;
     let all = [], from = 0;
     while (true) {
@@ -441,39 +452,53 @@ export default function LogisticsLedgerPage() {
     reader.readAsArrayBuffer(file);
   };
 
-  const exportCSV = () => {
-    const data = filtered.filter((r) => hasContent(fmt, r));
-    if (!data.length) return alert("Nothing to export.");
-    const esc = (v) => { const s = String(v ?? ""); return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s; };
-    const lines = [fmt.fields.map((f) => esc(f.label)).join(",")];
-    for (const r of data) lines.push(fmt.fields.map((f) => esc(f.key === fmt.totalField ? effectiveTotal(fmt, r) : r[f.key] ?? "")).join(","));
-    const blob = new Blob([lines.join("\n")], { type: "text/csv;charset=utf-8" });
-    const a = Object.assign(document.createElement("a"), { href: URL.createObjectURL(blob), download: `${fmt.exportPrefix}_${todayDate()}.csv` });
-    a.click(); URL.revokeObjectURL(a.href);
+  const exportCSV = async () => {
+    setBusy(true);
+    flash("ok", "Fetching all rows for export…");
+    try {
+      const all = await db.fetchAllRows(fmt);
+      const data = all.map((d) => fromDbRow(fmt, d)).filter((r) => hasContent(fmt, r));
+      if (!data.length) return alert("Nothing to export.");
+      const esc = (v) => { const s = String(v ?? ""); return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s; };
+      const lines = [fmt.fields.map((f) => esc(f.label)).join(",")];
+      for (const r of data) lines.push(fmt.fields.map((f) => esc(f.key === fmt.totalField ? effectiveTotal(fmt, r) : r[f.key] ?? "")).join(","));
+      const blob = new Blob([lines.join("\n")], { type: "text/csv;charset=utf-8" });
+      const a = Object.assign(document.createElement("a"), { href: URL.createObjectURL(blob), download: `${fmt.exportPrefix}_${todayDate()}.csv` });
+      a.click(); URL.revokeObjectURL(a.href);
+      flash("ok", `Exported ${data.length} rows as CSV.`);
+    } catch (e) { flash("error", `Export failed: ${e.message ?? e}`); }
+    finally { setBusy(false); }
   };
 
-  const exportXLSX = () => {
-    const data = filtered.filter((r) => hasContent(fmt, r));
-    if (!data.length) return alert("Nothing to export.");
-    const green = "1F5C4A";
-    const styleHdr = (ws, n) => { for (let c = 0; c < n; c++) { const a = XLSX.utils.encode_cell({ r: 0, c }); if (ws[a]) ws[a].s = { font: { bold: true, color: { rgb: "FFFFFF" }, sz: 11 }, fill: { fgColor: { rgb: green } } }; } };
-    const head = fmt.fields.map((f) => f.label);
-    const body = data.map((r) => fmt.fields.map((f) => f.key === fmt.totalField ? numOrRaw(effectiveTotal(fmt, r)) : f.type === "num" || f.type === "int" ? numOrRaw(r[f.key]) : r[f.key] ?? ""));
-    const wsAll = XLSX.utils.aoa_to_sheet([head, ...body]);
-    wsAll["!cols"] = fmt.fields.map((f) => ({ wch: Math.max(12, Math.round(f.w / 8)) }));
-    styleHdr(wsAll, head.length);
-    const party = fmt.key === "b2b" ? "transporter_name" : "courier_name";
-    const agg = new Map();
-    for (const r of data) { const k = `${r.month_year}||${r[party] || "(blank)"}`; const cur = agg.get(k) ?? { lines: 0, amount: 0 }; cur.lines += 1; cur.amount += num(effectiveTotal(fmt, r)); agg.set(k, cur); }
-    const sumHead = ["Month Year", fmt.fields.find((f) => f.key === party).label, "Lines", "Total Cost"];
-    const sumBody = Array.from(agg.entries()).sort(([a], [b]) => (a < b ? 1 : -1)).map(([k, v]) => { const [m, p] = k.split("||"); return [m, p, v.lines, Number(v.amount.toFixed(2))]; });
-    const wsSum = XLSX.utils.aoa_to_sheet([sumHead, ...sumBody]);
-    wsSum["!cols"] = [{ wch: 12 }, { wch: 32 }, { wch: 10 }, { wch: 16 }];
-    styleHdr(wsSum, sumHead.length);
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, wsAll, "Invoice Lines");
-    XLSX.utils.book_append_sheet(wb, wsSum, "Month Summary");
-    XLSX.writeFile(wb, `${fmt.exportPrefix}_${todayDate()}.xlsx`);
+  const exportXLSX = async () => {
+    setBusy(true);
+    flash("ok", "Fetching all rows for export…");
+    try {
+      const all = await db.fetchAllRows(fmt);
+      const data = all.map((d) => fromDbRow(fmt, d)).filter((r) => hasContent(fmt, r));
+      if (!data.length) return alert("Nothing to export.");
+      const green = "1F5C4A";
+      const styleHdr = (ws, n) => { for (let c = 0; c < n; c++) { const a = XLSX.utils.encode_cell({ r: 0, c }); if (ws[a]) ws[a].s = { font: { bold: true, color: { rgb: "FFFFFF" }, sz: 11 }, fill: { fgColor: { rgb: green } } }; } };
+      const head = fmt.fields.map((f) => f.label);
+      const body = data.map((r) => fmt.fields.map((f) => f.key === fmt.totalField ? numOrRaw(effectiveTotal(fmt, r)) : f.type === "num" || f.type === "int" ? numOrRaw(r[f.key]) : r[f.key] ?? ""));
+      const wsAll = XLSX.utils.aoa_to_sheet([head, ...body]);
+      wsAll["!cols"] = fmt.fields.map((f) => ({ wch: Math.max(12, Math.round(f.w / 8)) }));
+      styleHdr(wsAll, head.length);
+      const party = fmt.key === "b2b" ? "transporter_name" : "courier_name";
+      const agg = new Map();
+      for (const r of data) { const k = `${r.month_year}||${r[party] || "(blank)"}`; const cur = agg.get(k) ?? { lines: 0, amount: 0 }; cur.lines += 1; cur.amount += num(effectiveTotal(fmt, r)); agg.set(k, cur); }
+      const sumHead = ["Month Year", fmt.fields.find((f) => f.key === party).label, "Lines", "Total Cost"];
+      const sumBody = Array.from(agg.entries()).sort(([a], [b]) => (a < b ? 1 : -1)).map(([k, v]) => { const [m, p] = k.split("||"); return [m, p, v.lines, Number(v.amount.toFixed(2))]; });
+      const wsSum = XLSX.utils.aoa_to_sheet([sumHead, ...sumBody]);
+      wsSum["!cols"] = [{ wch: 12 }, { wch: 32 }, { wch: 10 }, { wch: 16 }];
+      styleHdr(wsSum, sumHead.length);
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, wsAll, "Invoice Lines");
+      XLSX.utils.book_append_sheet(wb, wsSum, "Month Summary");
+      XLSX.writeFile(wb, `${fmt.exportPrefix}_${todayDate()}.xlsx`);
+      flash("ok", `Exported ${data.length} rows as Excel.`);
+    } catch (e) { flash("error", `Export failed: ${e.message ?? e}`); }
+    finally { setBusy(false); }
   };
 
   const unsaved = rows.filter((r) => (!r[PK] && hasContent(fmt, r)) || r._dirty).length;
