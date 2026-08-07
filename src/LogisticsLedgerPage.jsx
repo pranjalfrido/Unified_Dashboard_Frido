@@ -136,16 +136,18 @@ const db = {
     return results.flat();
   },
 
-  async insertRows(fmt, rows) {
+  async insertRows(fmt, rows, onProgress) {
     const out = [];
-    for (let i = 0; i < rows.length; i += 500) {
-      const chunk = rows.slice(i, i + 500).map((r) => toDbRow(fmt, r));
+    const PAGE = 500;
+    for (let i = 0; i < rows.length; i += PAGE) {
+      const chunk = rows.slice(i, i + PAGE).map((r) => toDbRow(fmt, r));
       const q = fmt.uniqueKey
         ? supabase.from(fmt.table).upsert(chunk, { onConflict: fmt.uniqueKey, ignoreDuplicates: false })
         : supabase.from(fmt.table).insert(chunk);
       const { data, error } = await q.select();
       if (error) throw error;
       out.push(...(data ?? []));
+      onProgress?.(Math.min(i + PAGE, rows.length), rows.length);
     }
     return out;
   },
@@ -262,6 +264,7 @@ export default function LogisticsLedgerPage() {
   const [busy, setBusy] = useState(false);
   const [status, setStatus] = useState(null);
   const [exportProgress, setExportProgress] = useState(null); // null | { done, total, type }
+  const [uploadProgress, setUploadProgress] = useState(null); // null | { done, total }
   const fileInput = useRef(null);
 
   const rows = store[tab] ?? [];
@@ -462,14 +465,16 @@ export default function LogisticsLedgerPage() {
         };
         // Show rows immediately in UI, insert to DB in background
         setRows((rs) => mergeIntoGrid(rs, staged));
-        flash("ok", `Inserting ${staged.length} rows to ${fmt.table}…`);
+        setUploadProgress({ done: 0, total: staged.length });
         setBusy(true);
         try {
-          await db.insertRows(fmt, staged);
+          await db.insertRows(fmt, staged, (done, total) => setUploadProgress({ done, total }));
+          setUploadProgress({ done: staged.length, total: staged.length, finished: true });
           flash("ok", `Uploaded ${staged.length} line${staged.length !== 1 ? "s" : ""} to ${fmt.table} — ${final.length - replacing.length} new, ${replacing.length} replaced${dupInFile ? `, ${dupInFile} duplicates collapsed` : ""}.`);
-          // Refresh months list
+          setTimeout(() => setUploadProgress(null), 4000);
           db.fetchMonths(fmt).then((m) => setMonthsStore((s) => ({ ...s, [tab]: m }))).catch(() => {});
-        } finally { setBusy(false); }
+        } catch (e) { setUploadProgress(null); throw e; }
+        finally { setBusy(false); }
       } catch (err) { alert(`Couldn't read that file: ${err.message ?? err}`); }
       finally { if (fileInput.current) fileInput.current.value = ""; }
     };
@@ -581,6 +586,25 @@ export default function LogisticsLedgerPage() {
           </div>
           <div style={{ height: 6, background: '#D1FAE5', borderRadius: 99, overflow: 'hidden' }}>
             <div style={{ height: '100%', background: '#16A34A', borderRadius: 99, width: exportProgress.total > 0 ? `${(exportProgress.done / exportProgress.total) * 100}%` : '0%', transition: 'width 0.2s ease' }} />
+          </div>
+        </div>
+      )}
+
+      {/* Upload progress bar */}
+      {uploadProgress && (
+        <div style={{ margin: '0 0 12px 0', background: '#EFF6FF', border: '1px solid #BFDBFE', borderRadius: 8, padding: '10px 14px' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+            <span style={{ fontSize: 12, fontWeight: 600, color: '#1E40AF' }}>
+              {uploadProgress.finished
+                ? `✓ Upload complete — ${uploadProgress.total.toLocaleString()} rows saved`
+                : `Uploading… ${uploadProgress.done.toLocaleString()} / ${uploadProgress.total.toLocaleString()} rows`}
+            </span>
+            <span style={{ fontSize: 12, color: '#1E40AF', fontWeight: 700 }}>
+              {Math.round((uploadProgress.done / uploadProgress.total) * 100)}%
+            </span>
+          </div>
+          <div style={{ height: 6, background: '#DBEAFE', borderRadius: 99, overflow: 'hidden' }}>
+            <div style={{ height: '100%', background: '#2563EB', borderRadius: 99, width: `${(uploadProgress.done / uploadProgress.total) * 100}%`, transition: 'width 0.3s ease' }} />
           </div>
         </div>
       )}
