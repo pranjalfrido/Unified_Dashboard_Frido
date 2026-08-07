@@ -335,14 +335,14 @@ export default function LogisticsLedgerPage() {
   };
 
   const downloadTemplate = () => {
-    const green = "1F5C4A"; const red = "9E2B25";
     const headerRow = fmt.fields.map((f) => f.label);
     const sampleRows = [0, 1].map((i) => fmt.fields.map((f) => { const v = (i === 0 ? f.ex : SAMPLE2[fmt.key]?.[f.key]) ?? ""; return f.type === "num" || f.type === "int" ? numOrRaw(v) : v; }));
     const ws = XLSX.utils.aoa_to_sheet([headerRow, ...sampleRows]);
     ws["!cols"] = fmt.fields.map((f) => ({ wch: Math.max(14, f.label.length + 4) }));
+    ws["!freeze"] = { r: 1, c: 0 };
     fmt.fields.forEach((f, c) => {
       const h = XLSX.utils.encode_cell({ r: 0, c });
-      if (ws[h]) ws[h].s = { font: { bold: true, color: { rgb: "FFFFFF" }, sz: 11 }, fill: { fgColor: { rgb: f.req ? red : green } }, alignment: { horizontal: "left" } };
+      if (ws[h]) ws[h].s = { font: { bold: true, color: { rgb: "000000" }, sz: 11 }, fill: { fgColor: { rgb: "FFD600" } }, alignment: { horizontal: "left" } };
       for (const r of [1, 2]) { const e = XLSX.utils.encode_cell({ r, c }); if (ws[e]) ws[e].s = { font: { italic: true, color: { rgb: "9A9382" } } }; }
     });
     const wb = XLSX.utils.book_new();
