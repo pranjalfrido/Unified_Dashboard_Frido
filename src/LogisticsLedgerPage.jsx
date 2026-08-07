@@ -98,24 +98,13 @@ const PK = "id";
 
 const db = {
   async fetchRows(fmt, monthFilter) {
-    // With month filter: fetch all rows for that month (no limit). Without: show latest 200.
-    let url = `${import.meta.env.VITE_SUPABASE_URL}/rest/v1/${fmt.table}?select=*&order=month_year.desc,id.desc`;
-    if (monthFilter) {
-      url += `&month_year=eq.${encodeURIComponent(monthFilter)}`;
-    } else {
-      url += `&limit=200`;
+    // No month filter: show latest 200. With month filter: fetch all rows for that month.
+    if (!monthFilter) {
+      const { data, error } = await supabase.from(fmt.table).select("*").order("month_year", { ascending: false }).order(PK, { ascending: false }).limit(200);
+      if (error) throw error;
+      return data ?? [];
     }
-    const res = await fetch(url, {
-      headers: {
-        apikey: import.meta.env.VITE_SUPABASE_ANON_KEY,
-        Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
-        Accept: "application/json",
-        Prefer: "count=none",
-        Range: "0-999999999",
-      },
-    });
-    if (!res.ok) throw new Error(`fetch failed: ${res.status}`);
-    return res.json();
+    return this.fetchAllRows(fmt, monthFilter);
   },
 
   async fetchMonths(fmt) {
@@ -125,20 +114,22 @@ const db = {
   },
 
   async fetchAllRows(fmt, monthFilter) {
-    // Single HTTP request — no pagination, no row limit
-    let url = `${import.meta.env.VITE_SUPABASE_URL}/rest/v1/${fmt.table}?select=*&order=month_year.desc,id.desc`;
-    if (monthFilter) url += `&month_year=eq.${encodeURIComponent(monthFilter)}`;
-    const res = await fetch(url, {
-      headers: {
-        apikey: import.meta.env.VITE_SUPABASE_ANON_KEY,
-        Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
-        Accept: "application/json",
-        Prefer: "count=none",
-        Range: "0-999999999",
-      },
-    });
-    if (!res.ok) throw new Error(`Export fetch failed: ${res.status} ${res.statusText}`);
-    return res.json();
+    // First get total count, then fetch all pages in parallel
+    const base = `${import.meta.env.VITE_SUPABASE_URL}/rest/v1/${fmt.table}?select=*&order=month_year.desc,id.desc${monthFilter ? `&month_year=eq.${encodeURIComponent(monthFilter)}` : ""}`;
+    const hdrs = { apikey: import.meta.env.VITE_SUPABASE_ANON_KEY, Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`, Accept: "application/json", Prefer: "count=exact" };
+    // Get count
+    const countRes = await fetch(`${base}&limit=1`, { headers: hdrs });
+    if (!countRes.ok) throw new Error(`Export fetch failed: ${countRes.status}`);
+    const total = parseInt(countRes.headers.get("content-range")?.split("/")[1] ?? "0", 10);
+    if (!total) return [];
+    const PAGE = 1000;
+    const pages = Math.ceil(total / PAGE);
+    // Fetch all pages in parallel
+    const fetches = Array.from({ length: pages }, (_, i) =>
+      fetch(`${base}&limit=${PAGE}&offset=${i * PAGE}`, { headers: { ...hdrs, Prefer: "count=none" } }).then((r) => r.json())
+    );
+    const results = await Promise.all(fetches);
+    return results.flat();
   },
 
   async insertRows(fmt, rows) {
