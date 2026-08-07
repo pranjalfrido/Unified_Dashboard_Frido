@@ -119,20 +119,9 @@ const db = {
   },
 
   async fetchMonths(fmt) {
-    // Fetch only month_year column with no row limit to get all distinct values
-    const url = `${import.meta.env.VITE_SUPABASE_URL}/rest/v1/${fmt.table}?select=month_year&order=month_year.desc`;
-    const res = await fetch(url, {
-      headers: {
-        apikey: import.meta.env.VITE_SUPABASE_ANON_KEY,
-        Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
-        Accept: "application/json",
-        Prefer: "count=none",
-        Range: "0-999999999",
-      },
-    });
-    if (!res.ok) throw new Error(`months fetch failed: ${res.status}`);
-    const rows = await res.json();
-    return Array.from(new Set(rows.map((r) => r.month_year).filter(Boolean))).sort().reverse();
+    const { data, error } = await supabase.rpc("get_logistics_months", { tbl: fmt.table });
+    if (error) throw error;
+    return (data ?? []).map((r) => r.month_year).filter(Boolean);
   },
 
   async fetchAllRows(fmt, monthFilter) {
