@@ -98,14 +98,21 @@ const PK = "id";
 
 const db = {
   async fetchRows(fmt) {
-    const { data, error } = await supabase
-      .from(fmt.table)
-      .select("*")
-      .order("month_year", { ascending: false })
-      .order(PK, { ascending: false })
-      .limit(5000);
-    if (error) throw error;
-    return data ?? [];
+    const PAGE = 1000;
+    let all = [], from = 0;
+    while (true) {
+      const { data, error } = await supabase
+        .from(fmt.table)
+        .select("*")
+        .order("month_year", { ascending: false })
+        .order(PK, { ascending: false })
+        .range(from, from + PAGE - 1);
+      if (error) throw error;
+      all = all.concat(data ?? []);
+      if (!data || data.length < PAGE) break;
+      from += PAGE;
+    }
+    return all;
   },
 
   async insertRows(fmt, rows) {
