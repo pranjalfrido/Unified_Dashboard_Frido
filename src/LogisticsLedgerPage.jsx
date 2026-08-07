@@ -97,20 +97,29 @@ const FORMATS = {
 const PK = "id";
 
 const db = {
-  async fetchRows(fmt) {
-    const { data, error } = await supabase
-      .from(fmt.table)
-      .select("*")
-      .order("month_year", { ascending: false })
-      .order(PK, { ascending: false })
-      .limit(200);
+  async fetchRows(fmt, monthFilter) {
+    let q = supabase.from(fmt.table).select("*").order("month_year", { ascending: false }).order(PK, { ascending: false });
+    if (monthFilter) q = q.eq("month_year", monthFilter);
+    q = q.limit(200);
+    const { data, error } = await q;
     if (error) throw error;
     return data ?? [];
   },
 
-  async fetchAllRows(fmt) {
+  async fetchMonths(fmt) {
+    const url = `${import.meta.env.VITE_SUPABASE_URL}/rest/v1/${fmt.table}?select=month_year&order=month_year.desc`;
+    const res = await fetch(url, {
+      headers: { apikey: import.meta.env.VITE_SUPABASE_ANON_KEY, Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`, Accept: "application/json", Prefer: "count=none" },
+    });
+    if (!res.ok) throw new Error(`months fetch failed: ${res.status}`);
+    const rows = await res.json();
+    return Array.from(new Set(rows.map((r) => r.month_year).filter(Boolean))).sort().reverse();
+  },
+
+  async fetchAllRows(fmt, monthFilter) {
     // Single HTTP request — no pagination, no row limit
-    const url = `${import.meta.env.VITE_SUPABASE_URL}/rest/v1/${fmt.table}?select=*&order=month_year.desc,id.desc`;
+    let url = `${import.meta.env.VITE_SUPABASE_URL}/rest/v1/${fmt.table}?select=*&order=month_year.desc,id.desc`;
+    if (monthFilter) url += `&month_year=eq.${encodeURIComponent(monthFilter)}`;
     const res = await fetch(url, {
       headers: {
         apikey: import.meta.env.VITE_SUPABASE_ANON_KEY,
@@ -244,6 +253,7 @@ export default function LogisticsLedgerPage() {
   const [tab, setTab] = useState("b2b");
   const fmt = FORMATS[tab];
   const [store, setStore] = useState({ b2b: null, b2c: null });
+  const [monthsStore, setMonthsStore] = useState({ b2b: [], b2c: [] });
   const [query, setQuery] = useState("");
   const [monthFilter, setMonthFilter] = useState("");
   const [busy, setBusy] = useState(false);
@@ -251,6 +261,7 @@ export default function LogisticsLedgerPage() {
   const fileInput = useRef(null);
 
   const rows = store[tab] ?? [];
+  const months = monthsStore[tab] ?? [];
   const setRows = useCallback(
     (fn) => setStore((s) => ({ ...s, [tab]: typeof fn === "function" ? fn(s[tab] ?? []) : fn })),
     [tab]
@@ -261,13 +272,17 @@ export default function LogisticsLedgerPage() {
     if (kind !== "error") setTimeout(() => setStatus(null), 4000);
   };
 
-  const load = useCallback(async (which) => {
+  const load = useCallback(async (which, month) => {
     const f = FORMATS[which];
     setBusy(true);
     try {
-      const data = await db.fetchRows(f);
+      const [data, allMonths] = await Promise.all([
+        db.fetchRows(f, month),
+        db.fetchMonths(f),
+      ]);
       setStore((s) => ({ ...s, [which]: data.map((d) => fromDbRow(f, d)) }));
-      flash("ok", `Loaded ${data.length} row${data.length !== 1 ? "s" : ""} from ${f.table}.`);
+      setMonthsStore((s) => ({ ...s, [which]: allMonths }));
+      flash("ok", `Loaded ${data.length} row${data.length !== 1 ? "s" : ""}${month ? ` for ${month}` : ""} from ${f.table}.`);
     } catch (e) {
       setStore((s) => ({ ...s, [which]: s[which] ?? [blankRow(f)] }));
       flash("error", `Couldn't load ${f.table}: ${e.message ?? e}`);
@@ -276,18 +291,21 @@ export default function LogisticsLedgerPage() {
     }
   }, []);
 
-  useEffect(() => { if (store[tab] == null) load(tab); }, [tab, store, load]);
+  useEffect(() => { if (store[tab] == null) load(tab, monthFilter); }, [tab, store, load]);
 
-  const months = useMemo(() => Array.from(new Set(rows.map((r) => r.month_year).filter(Boolean))).sort().reverse(), [rows]);
+  // When month filter changes, re-fetch from DB
+  const prevMonthRef = useRef(monthFilter);
+  useEffect(() => {
+    if (prevMonthRef.current === monthFilter) return;
+    prevMonthRef.current = monthFilter;
+    load(tab, monthFilter);
+  }, [monthFilter, tab, load]);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
-    return rows.filter((r) => {
-      if (monthFilter && r.month_year !== monthFilter) return false;
-      if (!q) return true;
-      return fmt.searchKeys.some((k) => String(r[k] ?? "").toLowerCase().includes(q));
-    });
-  }, [rows, query, monthFilter, fmt]);
+    if (!q) return rows;
+    return rows.filter((r) => fmt.searchKeys.some((k) => String(r[k] ?? "").toLowerCase().includes(q)));
+  }, [rows, query, fmt]);
 
   const dupKeys = useMemo(() => {
     if (!fmt.uniqueKey) return new Set();
@@ -437,12 +455,15 @@ export default function LogisticsLedgerPage() {
           const brandNew = incoming.filter((r) => !seen.has(k(r)));
           return [...brandNew, ...kept];
         };
+        // Show rows immediately in UI, insert to DB in background
+        setRows((rs) => mergeIntoGrid(rs, staged));
+        flash("ok", `Inserting ${staged.length} rows to ${fmt.table}…`);
         setBusy(true);
         try {
-          const written = await db.insertRows(fmt, staged);
-          const asRows = written.map((d) => fromDbRow(fmt, d));
-          setRows((rs) => mergeIntoGrid(rs, asRows));
-          flash("ok", `Uploaded ${asRows.length} line${asRows.length !== 1 ? "s" : ""} to ${fmt.table} — ${final.length - replacing.length} new, ${replacing.length} replaced${dupInFile ? `, ${dupInFile} duplicates collapsed` : ""}.`);
+          await db.insertRows(fmt, staged);
+          flash("ok", `Uploaded ${staged.length} line${staged.length !== 1 ? "s" : ""} to ${fmt.table} — ${final.length - replacing.length} new, ${replacing.length} replaced${dupInFile ? `, ${dupInFile} duplicates collapsed` : ""}.`);
+          // Refresh months list
+          db.fetchMonths(fmt).then((m) => setMonthsStore((s) => ({ ...s, [tab]: m }))).catch(() => {});
         } finally { setBusy(false); }
       } catch (err) { alert(`Couldn't read that file: ${err.message ?? err}`); }
       finally { if (fileInput.current) fileInput.current.value = ""; }
@@ -454,7 +475,7 @@ export default function LogisticsLedgerPage() {
     setBusy(true);
     flash("ok", "Fetching all rows for export…");
     try {
-      const all = await db.fetchAllRows(fmt);
+      const all = await db.fetchAllRows(fmt, monthFilter);
       const data = all.map((d) => fromDbRow(fmt, d)).filter((r) => hasContent(fmt, r));
       if (!data.length) return alert("Nothing to export.");
       const esc = (v) => { const s = String(v ?? ""); return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s; };
@@ -472,7 +493,7 @@ export default function LogisticsLedgerPage() {
     setBusy(true);
     flash("ok", "Fetching all rows for export…");
     try {
-      const all = await db.fetchAllRows(fmt);
+      const all = await db.fetchAllRows(fmt, monthFilter);
       const data = all.map((d) => fromDbRow(fmt, d)).filter((r) => hasContent(fmt, r));
       if (!data.length) return alert("Nothing to export.");
       const green = "1F5C4A";
@@ -556,7 +577,7 @@ export default function LogisticsLedgerPage() {
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12, flexWrap: 'wrap' }}>
         <button style={chipBtn} onClick={addRow}><Plus size={13} /> Add invoice line</button>
         <button style={{ ...chipBtn, ...(unsaved ? chipHot : {}) }} onClick={saveAll} disabled={busy}><Save size={13} /> Save{unsaved ? ` (${unsaved})` : ''}</button>
-        <button style={chipBtn} onClick={() => load(tab)} disabled={busy}><RefreshCw size={13} /> Reload</button>
+        <button style={chipBtn} onClick={() => load(tab, monthFilter)} disabled={busy}><RefreshCw size={13} /> Reload</button>
         <span style={{ fontSize: 11, color: C.t3, fontFamily: 'monospace', marginLeft: 4 }}>
           {totals.count} line{totals.count !== 1 ? 's' : ''} · ₹{money(totals.amount)}{monthFilter || query ? ' (filtered)' : ''}
         </span>
