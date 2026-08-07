@@ -199,7 +199,7 @@ const normDate = (v) => {
   return isNaN(d2) ? s : d2.toISOString().slice(0, 10);
 };
 
-const normHead = (c) => String(c ?? "").trim().toLowerCase().replace(/\s*\((mandatory|optional|required|computed|auto)\)\s*$/i, "").replace(/[\s_]+/g, " ").trim();
+const normHead = (c) => String(c ?? "").trim().toLowerCase().replace(/\s*\*\s*$/, "").replace(/\s*\((mandatory|optional|required|computed|auto)\)\s*$/i, "").replace(/[\s_]+/g, " ").trim();
 const headKey = (f) => normHead(f.label);
 
 const toDbRow = (fmt, r) => {
@@ -335,7 +335,7 @@ export default function LogisticsLedgerPage() {
   };
 
   const downloadTemplate = () => {
-    const headerRow = fmt.fields.map((f) => f.label);
+    const headerRow = fmt.fields.map((f) => f.req ? `${f.label} *` : f.label);
     const sampleRows = [0, 1].map((i) => fmt.fields.map((f) => { const v = (i === 0 ? f.ex : SAMPLE2[fmt.key]?.[f.key]) ?? ""; return f.type === "num" || f.type === "int" ? numOrRaw(v) : v; }));
     const ws = XLSX.utils.aoa_to_sheet([headerRow, ...sampleRows]);
     ws["!cols"] = fmt.fields.map((f) => ({ wch: Math.max(14, f.label.length + 4) }));
