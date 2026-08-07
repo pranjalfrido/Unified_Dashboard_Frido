@@ -426,12 +426,56 @@ export default function LogisticsLedgerPage() {
     const reader = new FileReader();
     reader.onload = async () => {
       try {
-        // All heavy work (XLSX parse + row mapping + validation) runs in a Web Worker
         const sampleSigs = [fmt.fields.reduce((o, f) => ((o[f.key] = f.ex ?? ""), o), {}), SAMPLE2[fmt.key] ?? {}];
         const sigKeys = [fmt.uniqueKey ?? "reference_no", "invoice_number"].filter(Boolean);
-        const { good, bad, hIdx, error, reqLabels } = await new Promise((resolve, reject) => {
+
+        // Worker streams chunks as it parses — we upload each chunk immediately (parse + upload in parallel)
+        let uploaded = 0, totalValid = 0;
+        await new Promise((resolve, reject) => {
           const worker = new Worker("/xlsx-worker.js");
-          worker.onmessage = (ev) => { worker.terminate(); resolve(ev.data); };
+          // Queue of chunks waiting to be uploaded; we process sequentially
+          const uploadQueue = [];
+          let workerDone = false;
+          let uploading = false;
+
+          const processQueue = async () => {
+            if (uploading) return;
+            uploading = true;
+            while (uploadQueue.length > 0) {
+              const chunk = uploadQueue.shift();
+              const dbRows = chunk.map((r) => toDbRow(fmt, r));
+              const q = fmt.uniqueKey
+                ? supabase.from(fmt.table).upsert(dbRows, { onConflict: fmt.uniqueKey, ignoreDuplicates: false })
+                : supabase.from(fmt.table).insert(dbRows);
+              const { error } = await q;
+              if (error) { worker.terminate(); reject(error); return; }
+              uploaded += chunk.length;
+              setUploadProgress({ done: uploaded, total: totalValid || uploaded });
+            }
+            uploading = false;
+            if (workerDone) resolve();
+          };
+
+          worker.onmessage = async (ev) => {
+            const msg = ev.data;
+            if (msg.type === "error") {
+              worker.terminate();
+              if (msg.error === "header_not_found") {
+                reject(new Error(`header_not_found||${(msg.reqLabels || []).join(", ")}`));
+              } else {
+                reject(new Error(msg.error));
+              }
+            } else if (msg.type === "chunk") {
+              totalValid = msg.total;
+              setUploadProgress({ done: uploaded, total: msg.total });
+              uploadQueue.push(msg.rows);
+              processQueue();
+            } else if (msg.type === "done") {
+              workerDone = true;
+              worker.terminate();
+              if (!uploading && uploadQueue.length === 0) resolve();
+            }
+          };
           worker.onerror = (ev) => { worker.terminate(); reject(new Error(ev.message)); };
           worker.postMessage({
             buffer: reader.result,
@@ -440,50 +484,24 @@ export default function LogisticsLedgerPage() {
             sigKeys,
             totalParts: fmt.totalParts,
             totalField: fmt.totalField,
+            chunkSize: 500,
           });
         });
-        if (!good && error === "header_not_found") {
-          alert(`Couldn't find the header row for ${fmt.label}.\n\nRequired columns: ${reqLabels.join(", ")}.\n\nUse 'Download template' and keep its header row intact.`);
-          return;
-        }
-        if (!good) throw new Error(error);
-        if (bad.length) {
-          const preview = bad.slice(0, 8).map((b) => `• row ${b.line}: missing ${b.missing.join(", ")}`).join("\n");
-          if (!confirm(`${bad.length} row${bad.length !== 1 ? "s" : ""} will be skipped:\n\n${preview}\n\nImport the ${good.length} valid rows anyway?`)) return;
-        }
-        if (!good.length) { alert("No valid rows found."); return; }
-        let final = good; let dupInFile = 0; let replacing = [];
-        if (fmt.uniqueKey) {
-          const byKey = new Map();
-          for (const r of good) { const k = String(r[fmt.uniqueKey]).trim().toLowerCase(); if (byKey.has(k)) dupInFile++; byKey.set(k, r); }
-          final = Array.from(byKey.values());
-          const existing = new Map(rows.filter((r) => String(r[fmt.uniqueKey] ?? "").trim() !== "").map((r) => [String(r[fmt.uniqueKey]).trim().toLowerCase(), r]));
-          replacing = final.filter((r) => existing.has(String(r[fmt.uniqueKey]).trim().toLowerCase()));
-          if (replacing.length) { if (!confirm(`${replacing.length} AWB(s) already exist and will be REPLACED. Continue?`)) return; }
-          final = final.map((r) => { const hit = existing.get(String(r[fmt.uniqueKey]).trim().toLowerCase()); return hit && hit[PK] ? { ...r, [PK]: hit[PK] } : r; });
-        }
-        const staged = final.map((r) => ({ ...r, _uid: uid(), [PK]: r[PK] ?? null, _dirty: true }));
-        const mergeIntoGrid = (rs, incoming) => {
-          if (!fmt.uniqueKey) return [...incoming, ...rs];
-          const k = (r) => String(r[fmt.uniqueKey] ?? "").trim().toLowerCase();
-          const incomingByKey = new Map(incoming.map((r) => [k(r), r]));
-          const kept = rs.map((r) => incomingByKey.get(k(r)) ?? r);
-          const seen = new Set(rs.map(k));
-          const brandNew = incoming.filter((r) => !seen.has(k(r)));
-          return [...brandNew, ...kept];
-        };
-        // Show rows immediately in UI
-        setRows((rs) => mergeIntoGrid(rs, staged));
-        setUploadProgress({ done: 0, total: staged.length });
-        await new Promise((r) => setTimeout(r, 50));
-        await db.insertRows(fmt, staged, (done, total) => setUploadProgress({ done, total }));
-        setUploadProgress({ done: staged.length, total: staged.length, finished: true });
-        flash("ok", `Uploaded ${staged.length} rows to ${fmt.table}.`);
+
+        setUploadProgress({ done: uploaded, total: uploaded, finished: true });
+        flash("ok", `Uploaded ${uploaded} rows to ${fmt.table}.`);
         setTimeout(() => setUploadProgress(null), 4000);
+        // Reload grid and months after upload
+        load(tab, singleMonth);
         db.fetchMonths(fmt).then((m) => setMonthsStore((s) => ({ ...s, [tab]: m }))).catch(() => {});
       } catch (err) {
         setUploadProgress(null);
-        alert(`Upload failed: ${err.message ?? err}`);
+        if (err.message?.startsWith("header_not_found||")) {
+          const cols = err.message.split("||")[1];
+          alert(`Couldn't find the header row for ${fmt.label}.\n\nRequired columns: ${cols}.\n\nUse 'Download template' and keep its header row intact.`);
+        } else {
+          alert(`Upload failed: ${err.message ?? err}`);
+        }
       } finally {
         setBusy(false);
         if (fileInput.current) fileInput.current.value = "";

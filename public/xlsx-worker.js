@@ -1,4 +1,4 @@
-// Web Worker: full Excel parse + row mapping, so main thread never blocks
+// Web Worker: parse Excel and stream validated rows in chunks so upload can start immediately
 importScripts("https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js");
 
 function normMonth(v) {
@@ -32,7 +32,7 @@ function normHead(c) {
 
 self.onmessage = function (e) {
   try {
-    const { buffer, fields, sampleSigs, sigKeys, totalParts, totalField } = e.data;
+    const { buffer, fields, sampleSigs, sigKeys, totalParts, totalField, chunkSize } = e.data;
 
     // 1. Parse workbook
     const wb = XLSX.read(buffer, { type: "array", cellDates: true });
@@ -43,7 +43,7 @@ self.onmessage = function (e) {
     const ws = wb.Sheets[dataName];
     const aoa = XLSX.utils.sheet_to_json(ws, { header: 1, blankrows: false });
 
-    if (!aoa.length) { self.postMessage({ ok: false, error: "empty sheet" }); return; }
+    if (!aoa.length) { self.postMessage({ type: "error", error: "empty sheet" }); return; }
 
     // 2. Find header row
     const reqKeys = fields.filter((f) => f.req).map((f) => normHead(f.label));
@@ -52,53 +52,69 @@ self.onmessage = function (e) {
       return reqKeys.every((w) => cells.includes(w));
     });
     if (hIdx === -1) {
-      self.postMessage({ ok: false, error: "header_not_found", reqLabels: fields.filter((f) => f.req).map((f) => f.label) });
+      self.postMessage({ type: "error", error: "header_not_found", reqLabels: fields.filter((f) => f.req).map((f) => f.label) });
       return;
     }
 
-    // 3. Map rows
+    // 3. Build index
     const head = aoa[hIdx].map(normHead);
     const idxOf = {};
     for (const f of fields) idxOf[f.key] = head.indexOf(normHead(f.label));
 
     const body = aoa.slice(hIdx + 1);
-    const raw = [];
-    for (const r of body) {
+    const totalRows = body.length;
+    const sumParts = (r) => totalParts.reduce((s, k) => s + (Number(r[k]) || 0), 0);
+    const isSample = (r) => sampleSigs.some((sig) =>
+      sigKeys.every((k) => String(sig[k] ?? "").trim() !== "" &&
+        String(r[k] ?? "").trim().toLowerCase() === String(sig[k]).trim().toLowerCase())
+    );
+
+    // 4. Stream chunks — post each chunk as soon as it's ready so upload starts immediately
+    const CHUNK = chunkSize || 500;
+    let parsedSoFar = 0;
+    let badRows = [];
+    let chunk = [];
+
+    for (let i = 0; i < body.length; i++) {
+      const r = body[i];
       const o = {};
       for (const f of fields) {
-        const i = idxOf[f.key];
-        let v = i === -1 ? "" : r[i];
+        const ci = idxOf[f.key];
+        let v = ci === -1 ? "" : r[ci];
         if (f.type === "month") v = normMonth(v) ?? "";
         else if (f.type === "date") v = normDate(v);
         else v = v == null ? "" : String(v).trim();
         o[f.key] = v;
       }
-      raw.push(o);
+
+      // skip empty & sample rows
+      const isEmpty = !fields.some((f) => o[f.key] !== "");
+      if (isEmpty || isSample(o)) continue;
+
+      // validate
+      const missing = fields.filter((f) => f.req && !f.computed && o[f.key] === "").map((f) => f.label);
+      for (const f of fields) {
+        if (f.req && f.computed && o[f.key] === "" && sumParts(o) === 0) missing.push(f.label);
+      }
+      if (missing.length) { badRows.push({ line: hIdx + 2 + i, missing }); continue; }
+
+      chunk.push(o);
+      parsedSoFar++;
+
+      // Send chunk as soon as it's full
+      if (chunk.length >= CHUNK) {
+        self.postMessage({ type: "chunk", rows: chunk, parsed: parsedSoFar, total: totalRows });
+        chunk = [];
+      }
     }
 
-    // 4. Filter empty & sample rows
-    const nonEmpty = raw.filter((r) => fields.some((f) => r[f.key] !== ""));
-    const isSample = (r) => sampleSigs.some((sig) =>
-      sigKeys.every((k) => String(sig[k] ?? "").trim() !== "" &&
-        String(r[k] ?? "").trim().toLowerCase() === String(sig[k]).trim().toLowerCase())
-    );
-    const nonSample = nonEmpty.filter((r) => !isSample(r));
-    const candidates = nonSample.length > 0 ? nonSample : nonEmpty;
+    // Send remaining rows
+    if (chunk.length > 0) {
+      self.postMessage({ type: "chunk", rows: chunk, parsed: parsedSoFar, total: totalRows });
+    }
 
-    // 5. Validate required fields
-    const sumParts = (r) => totalParts.reduce((s, k) => s + (Number(r[k]) || 0), 0);
-    const good = [], bad = [];
-    candidates.forEach((r, i) => {
-      const missing = fields.filter((f) => f.req && !f.computed && r[f.key] === "").map((f) => f.label);
-      for (const f of fields) {
-        if (f.req && f.computed && r[f.key] === "" && sumParts(r) === 0) missing.push(f.label);
-      }
-      if (missing.length) bad.push({ line: hIdx + 2 + i, missing });
-      else good.push(r);
-    });
-
-    self.postMessage({ ok: true, good, bad, hIdx });
+    self.postMessage({ type: "done", bad: badRows, total: parsedSoFar });
   } catch (err) {
-    self.postMessage({ ok: false, error: err.message ?? String(err) });
+    self.postMessage({ type: "error", error: err.message ?? String(err) });
   }
 };
