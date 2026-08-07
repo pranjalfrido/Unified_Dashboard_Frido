@@ -2126,7 +2126,6 @@ function Topnav({ page, alerts, onRefresh, loading, filters, setFilters, rawRows
   const critical = alerts.filter(a => a.type === 'red').length
   return (
     <div className="topnav">
-      <div className="tnav-sep" />
       <span className="tnav-title">{titles[page]}</span>
       {page !== 'inventory' && page !== 'cogs' && page !== 'documents' && page !== 'profile' && page !== 'logistics-ledger' && (
         <div className="tnav-right">
