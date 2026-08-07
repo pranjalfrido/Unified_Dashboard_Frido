@@ -148,19 +148,23 @@ const db = {
   },
 
   async insertRows(fmt, rows, onProgress) {
-    const out = [];
     const PAGE = 500;
-    for (let i = 0; i < rows.length; i += PAGE) {
-      const chunk = rows.slice(i, i + PAGE).map((r) => toDbRow(fmt, r));
-      const q = fmt.uniqueKey
-        ? supabase.from(fmt.table).upsert(chunk, { onConflict: fmt.uniqueKey, ignoreDuplicates: false })
-        : supabase.from(fmt.table).insert(chunk);
-      const { data, error } = await q.select();
-      if (error) throw error;
-      out.push(...(data ?? []));
-      onProgress?.(Math.min(i + PAGE, rows.length), rows.length);
+    // Run chunks in parallel batches of 5 for speed
+    const BATCH = 5;
+    for (let i = 0; i < rows.length; i += PAGE * BATCH) {
+      const chunks = [];
+      for (let j = i; j < Math.min(i + PAGE * BATCH, rows.length); j += PAGE) {
+        chunks.push(rows.slice(j, j + PAGE).map((r) => toDbRow(fmt, r)));
+      }
+      await Promise.all(chunks.map((chunk) => {
+        const q = fmt.uniqueKey
+          ? supabase.from(fmt.table).upsert(chunk, { onConflict: fmt.uniqueKey, ignoreDuplicates: false })
+          : supabase.from(fmt.table).insert(chunk);
+        return q.then(({ error }) => { if (error) throw error; });
+      }));
+      onProgress?.(Math.min(i + PAGE * BATCH, rows.length), rows.length);
     }
-    return out;
+    return [];
   },
 
   async updateRow(fmt, row) {
