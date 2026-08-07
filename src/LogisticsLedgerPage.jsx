@@ -527,6 +527,18 @@ export default function LogisticsLedgerPage() {
       const all = await db.fetchAllRows(fmt, monthFilter, (done, total) => setExportProgress({ done, total, type: "Excel" }));
       const data = all.map((d) => fromDbRow(fmt, d)).filter((r) => hasContent(fmt, r));
       if (!data.length) return alert("Nothing to export.");
+      // For large datasets (>50k rows) Excel generation freezes the browser — use CSV instead
+      if (data.length > 50000) {
+        const esc = (v) => { const s = String(v ?? ""); return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s; };
+        const lines = [fmt.fields.map((f) => esc(f.label)).join(",")];
+        for (const r of data) lines.push(fmt.fields.map((f) => esc(f.key === fmt.totalField ? effectiveTotal(fmt, r) : r[f.key] ?? "")).join(","));
+        const blob = new Blob([lines.join("\n")], { type: "text/csv;charset=utf-8" });
+        const a = Object.assign(document.createElement("a"), { href: URL.createObjectURL(blob), download: `${fmt.exportPrefix}_${todayDate()}.csv` });
+        a.click(); URL.revokeObjectURL(a.href);
+        setExportProgress({ done: data.length, type: "CSV (large dataset, auto-converted)", finished: true });
+        setTimeout(() => setExportProgress(null), 4000);
+        return;
+      }
       const green = "1F5C4A";
       const styleHdr = (ws, n) => { for (let c = 0; c < n; c++) { const a = XLSX.utils.encode_cell({ r: 0, c }); if (ws[a]) ws[a].s = { font: { bold: true, color: { rgb: "FFFFFF" }, sz: 11 }, fill: { fgColor: { rgb: green } } }; } };
       const head = fmt.fields.map((f) => f.label);
@@ -546,7 +558,7 @@ export default function LogisticsLedgerPage() {
       XLSX.utils.book_append_sheet(wb, wsAll, "Invoice Lines");
       XLSX.utils.book_append_sheet(wb, wsSum, "Month Summary");
       XLSX.writeFile(wb, `${fmt.exportPrefix}_${todayDate()}.xlsx`);
-      setExportProgress({ done: data.length, total: data.length, type: "Excel", finished: true });
+      setExportProgress({ done: data.length, type: "Excel", finished: true });
       setTimeout(() => setExportProgress(null), 3000);
     } catch (e) { flash("error", `Export failed: ${e.message ?? e}`); setExportProgress(null); }
     finally { setBusy(false); }
