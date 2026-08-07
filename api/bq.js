@@ -2811,7 +2811,7 @@ export default async function handler(req, res) {
         }))
 
       payload.cred = {
-        totals: credTotals,
+        ...payload.cred,
         daily: credDaily,
         dailyByCategory: credDailyByCategory,
         byCategory: credByCategory,
@@ -2821,7 +2821,7 @@ export default async function handler(req, res) {
       }
     } catch (e) {
       console.error('[cred]', e.message)
-      payload.cred = { totals: {}, daily: [], dailyByCategory: [], byCategory: [], byProduct: [], additionalSpend: null, additionalSpendByProduct: {} }
+      payload.cred = { ...payload.cred, dailyByCategory: [], byCategory: [], byProduct: [], additionalSpend: null, additionalSpendByProduct: {} }
     }
 
     // Merge additionalSpendByProduct into pnlAdSpendMap so PnL Financial View
