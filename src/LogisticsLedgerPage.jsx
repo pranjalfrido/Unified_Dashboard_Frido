@@ -1,5 +1,6 @@
 import { useState, useMemo, useRef, useEffect, useCallback } from "react";
 import * as XLSX from "xlsx";
+import * as XLSXStyle from "xlsx-js-style";
 import { Plus, Trash2, Download, Search, FileSpreadsheet, Upload, Truck, Package, RefreshCw, Save, AlertCircle } from "lucide-react";
 import { supabase } from "./supabase.js";
 
@@ -337,21 +338,21 @@ export default function LogisticsLedgerPage() {
   const downloadTemplate = () => {
     const headerRow = fmt.fields.map((f) => f.req ? `${f.label} *` : f.label);
     const sampleRows = [0, 1].map((i) => fmt.fields.map((f) => { const v = (i === 0 ? f.ex : SAMPLE2[fmt.key]?.[f.key]) ?? ""; return f.type === "num" || f.type === "int" ? numOrRaw(v) : v; }));
-    const ws = XLSX.utils.aoa_to_sheet([headerRow, ...sampleRows]);
-    ws["!cols"] = fmt.fields.map((f) => ({ wch: Math.max(14, f.label.length + 4) }));
+    const ws = XLSXStyle.utils.aoa_to_sheet([headerRow, ...sampleRows]);
+    ws["!cols"] = fmt.fields.map((f) => ({ wch: Math.max(14, f.label.length + 6) }));
     ws["!freeze"] = { r: 1, c: 0 };
     fmt.fields.forEach((f, c) => {
-      const h = XLSX.utils.encode_cell({ r: 0, c });
-      if (ws[h]) ws[h].s = { font: { bold: true, color: { rgb: "000000" }, sz: 11 }, fill: { fgColor: { rgb: "FFD600" } }, alignment: { horizontal: "left" } };
-      for (const r of [1, 2]) { const e = XLSX.utils.encode_cell({ r, c }); if (ws[e]) ws[e].s = { font: { italic: true, color: { rgb: "9A9382" } } }; }
+      const h = XLSXStyle.utils.encode_cell({ r: 0, c });
+      if (ws[h]) ws[h].s = { font: { bold: true, color: { rgb: "000000" }, sz: 11 }, fill: { patternType: "solid", fgColor: { rgb: "FFD600" } }, alignment: { horizontal: "left" } };
+      for (const r of [1, 2]) { const e = XLSXStyle.utils.encode_cell({ r, c }); if (ws[e]) ws[e].s = { font: { italic: true, color: { rgb: "9A9382" } } }; }
     });
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, "billing_data");
+    const wb = XLSXStyle.utils.book_new();
+    XLSXStyle.utils.book_append_sheet(wb, ws, "billing_data");
     const instrRows = fmt.fields.map((f) => [f.label, f.req ? "mandatory" : "optional", f.desc ?? ""]);
-    const notes = XLSX.utils.aoa_to_sheet([["fields", "mandatory/optional", "description"], ...instrRows, [""], ["How this file is uploaded"], ["1. Keep the header row on the billing_data sheet exactly as-is."], ["2. Delete the two grey sample rows, then add your bill lines below the header."], ...fmt.notes.map((n, i) => [`${i + 3}. ${n}`])]);
+    const notes = XLSXStyle.utils.aoa_to_sheet([["fields", "mandatory/optional", "description"], ...instrRows, [""], ["How this file is uploaded"], ["1. Keep the header row on the billing_data sheet exactly as-is."], ["2. Delete the two grey sample rows, then add your bill lines below the header."], ...fmt.notes.map((n, i) => [`${i + 3}. ${n}`])]);
     notes["!cols"] = [{ wch: 26 }, { wch: 20 }, { wch: 96 }];
-    XLSX.utils.book_append_sheet(wb, notes, "instruction");
-    XLSX.writeFile(wb, fmt.templateFile);
+    XLSXStyle.utils.book_append_sheet(wb, notes, "instruction");
+    XLSXStyle.writeFile(wb, fmt.templateFile);
   };
 
   const importTemplate = (e) => {
