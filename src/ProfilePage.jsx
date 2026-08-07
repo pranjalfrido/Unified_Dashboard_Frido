@@ -60,7 +60,19 @@ function MyProfile({ session, onProfileUpdated }) {
   const [pwErr, setPwErr] = useState('')
   const [pwMsg, setPwMsg] = useState('')
   const [pwLoading, setPwLoading] = useState(false)
+  const [isDark, setIsDark] = useState(() => document.documentElement.classList.contains('dark'))
   const fileRef = useRef()
+
+  function toggleTheme(dark) {
+    setIsDark(dark)
+    if (dark) {
+      document.documentElement.classList.add('dark')
+      localStorage.setItem('frido-theme', 'dark')
+    } else {
+      document.documentElement.classList.remove('dark')
+      localStorage.setItem('frido-theme', 'light')
+    }
+  }
 
   useEffect(() => {
     supabase.from('user_profiles').select('*').eq('user_id', session.user.id).single()
@@ -173,6 +185,25 @@ function MyProfile({ session, onProfileUpdated }) {
             <button type="submit" style={{ ...s.primaryBtn, width: 'fit-content' }} disabled={pwLoading}>{pwLoading ? 'Updating…' : 'Update password'}</button>
           </form>
         )}
+      </div>
+
+      <div style={{ marginTop: 24, borderTop: '1px solid #E6E1D2', paddingTop: 20 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div>
+            <div style={{ fontWeight: 700, fontSize: 14 }}>Appearance</div>
+            <div style={{ fontSize: 12.5, color: '#7A8079', marginTop: 2 }}>Switch between light and dark mode</div>
+          </div>
+          <div style={{ display: 'flex', gap: 8 }}>
+            {[{ label: '☀️ Light', value: false }, { label: '🌙 Dark', value: true }].map(opt => (
+              <button key={opt.label} onClick={() => toggleTheme(opt.value)} style={{
+                padding: '7px 18px', borderRadius: 8, fontSize: 12.5, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit', transition: 'all .15s',
+                background: isDark === opt.value ? '#FFD600' : 'transparent',
+                color: isDark === opt.value ? '#13121A' : '#7A8079',
+                border: isDark === opt.value ? '1.5px solid #FFD600' : '1.5px solid #D6D0B0',
+              }}>{opt.label}</button>
+            ))}
+          </div>
+        </div>
       </div>
     </div>
   )
