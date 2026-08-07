@@ -24,8 +24,8 @@ async function adminCall(action, session, payload) {
 function Avatar({ url, name, size = 48 }) {
   if (url) return <img src={url} alt={name} style={{ width: size, height: size, borderRadius: '50%', objectFit: 'cover', flexShrink: 0, border: '3px solid #2F6A45' }} />
   return (
-    <div style={{ width: size, height: size, borderRadius: '50%', background: '#ffffff', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, overflow: 'hidden', border: '2px solid #E8E4DA' }}>
-      <img src="/frido-logo.png" alt="Frido" style={{ width: '75%', height: '75%', objectFit: 'contain' }} />
+    <div style={{ width: size, height: size, borderRadius: '50%', background: '#FFF9E6', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, overflow: 'hidden', border: '2px solid #E8C832' }}>
+      <img src="/frido-logo.png" alt="Frido" style={{ width: '85%', height: '85%', objectFit: 'contain' }} />
     </div>
   )
 }
