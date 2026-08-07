@@ -98,18 +98,37 @@ const PK = "id";
 
 const db = {
   async fetchRows(fmt, monthFilter) {
-    let q = supabase.from(fmt.table).select("*").order("month_year", { ascending: false }).order(PK, { ascending: false });
-    if (monthFilter) q = q.eq("month_year", monthFilter);
-    q = q.limit(200);
-    const { data, error } = await q;
-    if (error) throw error;
-    return data ?? [];
+    // With month filter: fetch all rows for that month (no limit). Without: show latest 200.
+    let url = `${import.meta.env.VITE_SUPABASE_URL}/rest/v1/${fmt.table}?select=*&order=month_year.desc,id.desc`;
+    if (monthFilter) {
+      url += `&month_year=eq.${encodeURIComponent(monthFilter)}`;
+    } else {
+      url += `&limit=200`;
+    }
+    const res = await fetch(url, {
+      headers: {
+        apikey: import.meta.env.VITE_SUPABASE_ANON_KEY,
+        Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
+        Accept: "application/json",
+        Prefer: "count=none",
+        Range: "0-999999999",
+      },
+    });
+    if (!res.ok) throw new Error(`fetch failed: ${res.status}`);
+    return res.json();
   },
 
   async fetchMonths(fmt) {
+    // Fetch only month_year column with no row limit to get all distinct values
     const url = `${import.meta.env.VITE_SUPABASE_URL}/rest/v1/${fmt.table}?select=month_year&order=month_year.desc`;
     const res = await fetch(url, {
-      headers: { apikey: import.meta.env.VITE_SUPABASE_ANON_KEY, Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`, Accept: "application/json", Prefer: "count=none" },
+      headers: {
+        apikey: import.meta.env.VITE_SUPABASE_ANON_KEY,
+        Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
+        Accept: "application/json",
+        Prefer: "count=none",
+        Range: "0-999999999",
+      },
     });
     if (!res.ok) throw new Error(`months fetch failed: ${res.status}`);
     const rows = await res.json();
