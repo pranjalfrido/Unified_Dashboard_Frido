@@ -130,13 +130,15 @@ const db = {
     onProgress?.(0, null);
     while (true) {
       const batch = Array.from({ length: 10 }, (_, i) =>
-        fetch(`${base}&limit=${PAGE}&offset=${offset + i * PAGE}`, { headers: hdrs }).then((r) => r.json())
+        fetch(`${base}&limit=${PAGE}&offset=${offset + i * PAGE}`, { headers: hdrs })
+          .then((r) => r.json())
+          .then((r) => Array.isArray(r) ? r : [])
       );
       const results = await Promise.all(batch);
-      for (const rows of results) all.push(...rows);
+      let lastLen = 0;
+      for (const rows of results) { all.push(...rows); lastLen = rows.length; }
       onProgress?.(all.length, null);
-      const lastBatch = results[results.length - 1];
-      if (lastBatch.length < PAGE) break; // last page reached
+      if (lastLen < PAGE) break;
       offset += 10 * PAGE;
     }
     return all;
