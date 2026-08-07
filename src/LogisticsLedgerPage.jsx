@@ -114,34 +114,32 @@ const db = {
   },
 
   async fetchAllRows(fmt, months, onProgress) {
-    // months: [] = all, [m1] = one month, [m1,m2,...] = multiple
     const selected = Array.isArray(months) ? months : (months ? [months] : []);
-    // Get total count
-    let countQ = supabase.from(fmt.table).select("*", { count: "exact", head: true });
-    if (selected.length === 1) countQ = countQ.eq("month_year", selected[0]);
-    else if (selected.length > 1) countQ = countQ.in("month_year", selected);
-    const { count, error: countErr } = await countQ;
-    if (countErr) throw countErr;
-    const total = count ?? 0;
-    if (!total) return [];
-    const PAGE = 1000;
-    const pages = Math.ceil(total / PAGE);
-    let done = 0;
-    onProgress?.(0, total);
     const monthParam = selected.length === 1
       ? `&month_year=eq.${encodeURIComponent(selected[0])}`
       : selected.length > 1
-        ? `&month_year=in.(${selected.map(encodeURIComponent).join(",")})`
+        ? `&month_year=in.(${selected.join(",")})`
         : "";
     const base = `${import.meta.env.VITE_SUPABASE_URL}/rest/v1/${fmt.table}?select=*&order=month_year.desc,id.desc${monthParam}`;
     const hdrs = { apikey: import.meta.env.VITE_SUPABASE_ANON_KEY, Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`, Accept: "application/json", Prefer: "count=none" };
-    const fetches = Array.from({ length: pages }, (_, i) =>
-      fetch(`${base}&limit=${PAGE}&offset=${i * PAGE}`, { headers: hdrs })
-        .then((r) => r.json())
-        .then((rows) => { done += rows.length; onProgress?.(done, total); return rows; })
-    );
-    const results = await Promise.all(fetches);
-    return results.flat();
+    // Sequential pagination — unknown total upfront, progress shows rows fetched so far
+    const PAGE = 1000;
+    const all = [];
+    let offset = 0;
+    // Fetch in batches of 10 pages in parallel
+    onProgress?.(0, null);
+    while (true) {
+      const batch = Array.from({ length: 10 }, (_, i) =>
+        fetch(`${base}&limit=${PAGE}&offset=${offset + i * PAGE}`, { headers: hdrs }).then((r) => r.json())
+      );
+      const results = await Promise.all(batch);
+      for (const rows of results) all.push(...rows);
+      onProgress?.(all.length, null);
+      const lastBatch = results[results.length - 1];
+      if (lastBatch.length < PAGE) break; // last page reached
+      offset += 10 * PAGE;
+    }
+    return all;
   },
 
   async insertRows(fmt, rows, onProgress) {
@@ -514,7 +512,7 @@ export default function LogisticsLedgerPage() {
       const blob = new Blob([lines.join("\n")], { type: "text/csv;charset=utf-8" });
       const a = Object.assign(document.createElement("a"), { href: URL.createObjectURL(blob), download: `${fmt.exportPrefix}_${todayDate()}.csv` });
       a.click(); URL.revokeObjectURL(a.href);
-      setExportProgress({ done: data.length, total: data.length, type: "CSV", done: true });
+      setExportProgress({ done: data.length, total: data.length, type: "CSV", finished: true });
       setTimeout(() => setExportProgress(null), 3000);
     } catch (e) { flash("error", `Export failed: ${e.message ?? e}`); setExportProgress(null); }
     finally { setBusy(false); }
@@ -546,7 +544,7 @@ export default function LogisticsLedgerPage() {
       XLSX.utils.book_append_sheet(wb, wsAll, "Invoice Lines");
       XLSX.utils.book_append_sheet(wb, wsSum, "Month Summary");
       XLSX.writeFile(wb, `${fmt.exportPrefix}_${todayDate()}.xlsx`);
-      setExportProgress({ done: data.length, total: data.length, type: "Excel", done: true });
+      setExportProgress({ done: data.length, total: data.length, type: "Excel", finished: true });
       setTimeout(() => setExportProgress(null), 3000);
     } catch (e) { flash("error", `Export failed: ${e.message ?? e}`); setExportProgress(null); }
     finally { setBusy(false); }
@@ -618,16 +616,16 @@ export default function LogisticsLedgerPage() {
         <div style={{ margin: '0 0 12px 0', background: '#F0FDF4', border: '1px solid #BBF7D0', borderRadius: 8, padding: '10px 14px' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
             <span style={{ fontSize: 12, fontWeight: 600, color: '#166534' }}>
-              {exportProgress.done === exportProgress.total && exportProgress.total > 0
-                ? `✓ ${exportProgress.type} downloaded — ${exportProgress.total.toLocaleString()} rows`
-                : `Downloading ${exportProgress.type}… ${exportProgress.done.toLocaleString()} / ${exportProgress.total > 0 ? exportProgress.total.toLocaleString() : '…'} rows`}
+              {exportProgress.finished
+                ? `✓ ${exportProgress.type} downloaded — ${exportProgress.done.toLocaleString()} rows`
+                : `Downloading ${exportProgress.type}… ${exportProgress.done.toLocaleString()} rows fetched`}
             </span>
             <span style={{ fontSize: 12, color: '#166534', fontWeight: 700 }}>
-              {exportProgress.total > 0 ? `${Math.round((exportProgress.done / exportProgress.total) * 100)}%` : ''}
+              {exportProgress.finished ? '100%' : ''}
             </span>
           </div>
           <div style={{ height: 6, background: '#D1FAE5', borderRadius: 99, overflow: 'hidden' }}>
-            <div style={{ height: '100%', background: '#16A34A', borderRadius: 99, width: exportProgress.total > 0 ? `${(exportProgress.done / exportProgress.total) * 100}%` : '0%', transition: 'width 0.2s ease' }} />
+            <div style={{ height: '100%', background: '#16A34A', borderRadius: 99, width: exportProgress.finished ? '100%' : `${Math.min(90, 10 + (exportProgress.done / 2000))}%`, transition: 'width 0.4s ease' }} />
           </div>
         </div>
       )}
