@@ -1831,7 +1831,6 @@ function Sidebar({ page, setPage, invTab, setInvTab, allowedTabs, profile }) {
                   boxShadow: '0 8px 24px rgba(0,0,0,0.18)', padding: '6px', minWidth: 170,
                   display: 'flex', flexDirection: 'column', gap: 2,
                 }}>
-                  <div style={{ fontSize: 9, fontWeight: 700, color: C.t3, letterSpacing: '.06em', textTransform: 'uppercase', padding: '2px 8px 4px' }}>Inventory</div>
                   {subTabs.map(sub => (
                     <div key={sub.id} onClick={() => { setPage('inventory'); setInvTab(sub.id); setInvHover(false) }}
                       style={{
@@ -1857,17 +1856,6 @@ function Sidebar({ page, setPage, invTab, setInvTab, allowedTabs, profile }) {
           </div>
         )
       })}
-      {!allowedTabs && (
-        <>
-          <div className="sb-div" />
-          {dims.map(d => (
-            <div key={d.label} className="sb-item dim">
-              <span className="sb-icon">{d.icon}</span>
-              <span className="sb-label">{d.label}</span>
-            </div>
-          ))}
-        </>
-      )}
       <div style={{ marginTop: 'auto', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
         <div className="sb-div" />
         <div onClick={() => setPage('profile')} className={`sb-item${page === 'profile' ? ' active' : ''}`}
@@ -2138,10 +2126,6 @@ function Topnav({ page, alerts, onRefresh, loading, filters, setFilters, rawRows
   const critical = alerts.filter(a => a.type === 'red').length
   return (
     <div className="topnav">
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 1, flexShrink: 0 }}>
-        <span style={{ fontSize: 20, fontWeight: 800, color: C.t1, letterSpacing: '-.02em', lineHeight: 1 }}>Frido</span>
-        <span style={{ fontSize: 10, color: C.t3, fontWeight: 600, lineHeight: 1, letterSpacing: '.04em', textTransform: 'uppercase' }}>Analytics</span>
-      </div>
       <div className="tnav-sep" />
       <span className="tnav-title">{titles[page]}</span>
       {page !== 'inventory' && page !== 'cogs' && page !== 'documents' && page !== 'profile' && page !== 'logistics-ledger' && (
