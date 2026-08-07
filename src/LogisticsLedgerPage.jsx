@@ -344,7 +344,6 @@ export default function LogisticsLedgerPage() {
     fmt.fields.forEach((f, c) => {
       const h = XLSXStyle.utils.encode_cell({ r: 0, c });
       if (ws[h]) ws[h].s = { font: { bold: true, color: { rgb: "000000" }, sz: 11 }, fill: { patternType: "solid", fgColor: { rgb: "FFD600" } }, alignment: { horizontal: "left" } };
-      for (const r of [1, 2]) { const e = XLSXStyle.utils.encode_cell({ r, c }); if (ws[e]) ws[e].s = { font: { italic: true, color: { rgb: "9A9382" } } }; }
     });
     const wb = XLSXStyle.utils.book_new();
     XLSXStyle.utils.book_append_sheet(wb, ws, "billing_data");
