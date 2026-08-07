@@ -386,7 +386,10 @@ export default function LogisticsLedgerPage() {
         const sampleSigs = [fmt.fields.reduce((o, f) => ((o[f.key] = f.ex ?? ""), o), {}), SAMPLE2[fmt.key] ?? {}];
         const sigKeys = [fmt.uniqueKey ?? "reference_no", "invoice_number"].filter(Boolean);
         const isSample = (r) => sampleSigs.some((sig) => sigKeys.every((k) => String(sig[k] ?? "").trim() !== "" && String(r[k] ?? "").trim().toLowerCase() === String(sig[k]).trim().toLowerCase()));
-        const candidates = raw.filter((r) => fmt.fields.some((f) => r[f.key] !== "") && !isSample(r));
+        const nonEmpty = raw.filter((r) => fmt.fields.some((f) => r[f.key] !== ""));
+        const nonSample = nonEmpty.filter((r) => !isSample(r));
+        // If all rows are samples (user uploading blank template), let them through so upload doesn't silently fail
+        const candidates = nonSample.length > 0 ? nonSample : nonEmpty;
         const bad = []; const good = [];
         candidates.forEach((r, i) => {
           const missing = fmt.fields.filter((f) => f.req && !f.computed && r[f.key] === "").map((f) => f.label);
