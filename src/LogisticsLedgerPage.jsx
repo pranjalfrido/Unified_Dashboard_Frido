@@ -114,21 +114,21 @@ const db = {
   },
 
   async fetchAllRows(fmt, monthFilter, onProgress) {
-    const base = `${import.meta.env.VITE_SUPABASE_URL}/rest/v1/${fmt.table}?select=*&order=month_year.desc,id.desc${monthFilter ? `&month_year=eq.${encodeURIComponent(monthFilter)}` : ""}`;
-    const hdrs = (prefer) => ({ apikey: import.meta.env.VITE_SUPABASE_ANON_KEY, Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`, Accept: "application/json", Prefer: prefer });
-    // Get total count via HEAD-style count request
-    const countRes = await fetch(`${base}&limit=1&offset=0`, { headers: hdrs("count=exact") });
-    if (!countRes.ok) throw new Error(`Export fetch failed: ${countRes.status}`);
-    const cr = countRes.headers.get("content-range") ?? "";
-    // content-range format: "0-0/98445" or "*/98445"
-    const total = parseInt(cr.replace(/.*\//, ""), 10);
-    if (!total || isNaN(total)) return [];
+    // Get total count via supabase-js (handles CORS correctly)
+    let countQ = supabase.from(fmt.table).select("*", { count: "exact", head: true });
+    if (monthFilter) countQ = countQ.eq("month_year", monthFilter);
+    const { count, error: countErr } = await countQ;
+    if (countErr) throw countErr;
+    const total = count ?? 0;
+    if (!total) return [];
     const PAGE = 1000;
     const pages = Math.ceil(total / PAGE);
     let done = 0;
     onProgress?.(0, total);
+    const base = `${import.meta.env.VITE_SUPABASE_URL}/rest/v1/${fmt.table}?select=*&order=month_year.desc,id.desc${monthFilter ? `&month_year=eq.${encodeURIComponent(monthFilter)}` : ""}`;
+    const hdrs = { apikey: import.meta.env.VITE_SUPABASE_ANON_KEY, Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`, Accept: "application/json", Prefer: "count=none" };
     const fetches = Array.from({ length: pages }, (_, i) =>
-      fetch(`${base}&limit=${PAGE}&offset=${i * PAGE}`, { headers: hdrs("count=none") })
+      fetch(`${base}&limit=${PAGE}&offset=${i * PAGE}`, { headers: hdrs })
         .then((r) => r.json())
         .then((rows) => { done += rows.length; onProgress?.(done, total); return rows; })
     );
