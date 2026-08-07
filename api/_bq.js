@@ -287,7 +287,18 @@ LEFT JOIN pincode_master pm ON u.Pincode IS NOT NULL AND TRIM(CAST(u.Pincode AS 
 LEFT JOIN city_name_master cm ON pm.pincode IS NULL AND u.Channel IN ('Blinkit','Zepto','Instamart') AND cm.City_L1 = CASE UPPER(TRIM(u.City)) WHEN 'BANGALORE' THEN 'Bengaluru' WHEN 'GURGAON' THEN 'Gurugram' WHEN 'DELHI' THEN 'New Delhi' WHEN 'SAS NAGAR' THEN 'Mohali' ELSE INITCAP(TRIM(u.City)) END
 LEFT JOIN item_master im ON REGEXP_REPLACE(UPPER(TRIM(u.masterskucode)), r'[^A-Z0-9-]', '') = im.sku_key
 WHERE u.OrderDate BETWEEN '${s}' AND '${e}'
-  ${filters.includeCreditNotes ? '' : `AND NOT (u.Channel = 'offline_sales' AND u.Order_Status = 'Credit Note')`}
+  -- NOT (... = 'x') evaluates to NULL (not TRUE) whenever Order_Status IS NULL, and a WHERE
+  -- clause drops any row whose condition isn't TRUE — so an unguarded NOT(...) here silently
+  -- excluded every row with a null Order_Status, not just the intended Credit Note/RTV ones.
+  -- COALESCE(Order_Status, '') keeps the comparison NULL-safe so null-status rows survive.
+  ${filters.includeCreditNotes ? '' : `AND NOT (u.Channel = 'offline_sales' AND COALESCE(u.Order_Status, '') = 'Credit Note')`}
+  -- Amazon RTV (Return-to-Vendor) rows are warehouse stock movements, not customer sales —
+  -- they carry real ItemQty but zero SellingPrice, which silently inflates unit/qty totals
+  -- across every Amazon metric that sums units. Excluded at the source so no downstream query
+  -- needs to remember to filter them out individually. Filtered on Order_Status directly
+  -- (not the 'S02-' OrderId prefix) since that's the actual, reliable signal — some RTV rows
+  -- may not follow the S02- naming convention.
+  AND NOT (u.Channel = 'Amazon' AND COALESCE(u.Order_Status, '') = 'RTV (Return to vendor)')
   ${whereClause}
 ORDER BY u.OrderDate DESC`
 }

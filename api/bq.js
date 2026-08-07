@@ -1,5 +1,66 @@
 import { getBQ, buildQuery, netRevenueSelectFragment, computeNetRevenueMeasures } from './_bq.js'
 import { getPool } from './_db.js'
+import { readFileSync } from 'fs'
+import { join, dirname } from 'path'
+import { fileURLToPath } from 'url'
+
+// Weight-slab logistics/fulfilment rate card — same file the frontend loads for Shopify's SnD
+// (public/snd-rates.json), read here server-side so Amazon SC's MFN (self-ship) S&D can use the
+// identical rates without duplicating the rate table. 500 rows, {weightGm, forward, rto,
+// reverse, fulfilment}, sorted ascending by weightGm.
+let sndRateSlabs = null
+function loadSndRateSlabs() {
+  if (sndRateSlabs) return sndRateSlabs
+  try {
+    const p = join(dirname(fileURLToPath(import.meta.url)), '..', 'public', 'snd-rates.json')
+    sndRateSlabs = JSON.parse(readFileSync(p, 'utf8'))
+  } catch { sndRateSlabs = [] }
+  return sndRateSlabs
+}
+// Courier billing convention: round UP to the first slab whose weightGm >= the order's actual
+// weight (never the slab below it) — matches PnLPage.jsx's rateForWeight for Shopify.
+function rateForWeight(slabs, weightGm) {
+  if (!slabs.length) return null
+  for (const s of slabs) if (s.weightGm >= weightGm) return s
+  return slabs[slabs.length - 1]
+}
+
+// Vendor Central margin-slab card (public/vc-margin-rates.json) — VC has NO settlement report at
+// all, so unlike Seller Central's settlement-based S&D, VC's S&D is a flat margin% of Gross
+// Revenue per ASP price-slab, ANDed with a margin PERIOD: Old (through oldMarginEndDate), BAU
+// Proposed (after), or Event (any date inside vc-event-calendar.json's ranges, which wins over
+// both Old and BAU for that date regardless of which period it'd otherwise fall in).
+let vcMarginCard = null
+function loadVcMarginCard() {
+  if (vcMarginCard) return vcMarginCard
+  try {
+    const p = join(dirname(fileURLToPath(import.meta.url)), '..', 'public', 'vc-margin-rates.json')
+    vcMarginCard = JSON.parse(readFileSync(p, 'utf8'))
+  } catch { vcMarginCard = { oldMarginEndDate: null, slabs: [] } }
+  return vcMarginCard
+}
+let vcEventCalendar = null
+function loadVcEventCalendar() {
+  if (vcEventCalendar) return vcEventCalendar
+  try {
+    const p = join(dirname(fileURLToPath(import.meta.url)), '..', 'public', 'vc-event-calendar.json')
+    vcEventCalendar = JSON.parse(readFileSync(p, 'utf8'))
+  } catch { vcEventCalendar = [] }
+  return vcEventCalendar
+}
+// Slab convention: (minAsp, maxAsp] — lower bound EXCLUSIVE, upper bound INCLUSIVE (an ASP of
+// exactly ₹1000 falls in the 0-1000 slab, not 1000-2000). maxAsp: null means "3000 and above".
+function slabForAsp(slabs, asp) {
+  for (const s of slabs) if (asp > s.minAsp && (s.maxAsp == null || asp <= s.maxAsp)) return s
+  return slabs[slabs.length - 1] || null
+}
+// Which margin period a given OrderDate (a 'YYYY-MM-DD' string) falls into: Event wins outright
+// if the date is inside any event range; otherwise Old vs BAU is a straight date-cutoff compare.
+function vcMarginPeriodFor(orderDate, oldMarginEndDate, events) {
+  for (const ev of events) if (orderDate >= ev.start && orderDate <= ev.end) return 'event'
+  if (oldMarginEndDate && orderDate <= oldMarginEndDate) return 'old'
+  return 'bau'
+}
 
 // Server-side in-memory cache with 5-minute TTL
 const cache = new Map()
@@ -78,6 +139,7 @@ export default async function handler(req, res) {
   const momBase = buildQuery(moms, mome, { category, subCategory, sku, subChannel, voucher, region, tier, state, city, country, paymentType, channelGroup })
   const yoyBase = buildQuery(yoys, yoye, { category, subCategory, sku, subChannel, voucher, region, tier, state, city, country, paymentType, channelGroup })
 
+
   // Detect if selected range is entirely after latest FK data — if so, shift FK queries to last available window
   const [[fkLatestRow]] = await bq.query({ query: `SELECT MAX(OrderDate) AS latest FROM \`frido-429506.production.fact_all_platform_sales_report\` WHERE Channel='Flipkart'`, maximumBytesBilled: '1000000000' })
   const fkLatestDate = fkLatestRow?.latest?.value || fkLatestRow?.latest || null
@@ -90,6 +152,25 @@ export default async function handler(req, res) {
     fkEnd = fkLatestDate
   }
   const fkBase = buildQuery(fkStart, fkEnd, { category, subCategory, sku, subChannel, voucher, region, tier, state, city, country, paymentType, channelGroup })
+
+  // Amazon SC S&D day-wise rate card — settlement coverage for a given order date climbs
+  // gradually (empirically ~0% at day 0 to ~85-100% by ~day 10-14) and even old days never
+  // fully reach 100% (a persistent 5-20% residual never settles). A fixed "older than 30 days
+  // = fully real, newer = fully estimated" split (the old approach) is wrong on both ends: it
+  // silently zeroes out the permanent residual gap on old days (understating S&D — this is what
+  // caused June's S&D% to read ~17% instead of the real ~23%), and it throws away perfectly
+  // good partial data on recent days. The fix computes a real S&D% PER DAY PER (Category,
+  // SubCategory) from whatever settlement data actually exists for that day, then "grosses up"
+  // — applies that rate to the day's FULL net revenue, not just the matched/settled portion —
+  // so the unsettled residual is assumed to behave like the settled majority. A day's own rate
+  // is only trusted once its own coverage crosses RATE_COVERAGE_FLOOR; below that (freshly
+  // placed orders with near-zero settlement yet) it borrows the trailing rolling-window rate
+  // instead, anchored to *today* so it always uses the most recently well-settled data available.
+  const RATE_COVERAGE_FLOOR = 0.3
+  const today = new Date()
+  const rollingEndD = new Date(today); rollingEndD.setDate(rollingEndD.getDate() - 14)
+  const rollingStartD = new Date(rollingEndD); rollingStartD.setDate(rollingStartD.getDate() - 29)
+  const rollingStart = rollingStartD.toISOString().slice(0, 10), rollingEnd = rollingEndD.toISOString().slice(0, 10)
 
   const queries = {
     totals: subChannel === 'International'
@@ -127,6 +208,11 @@ export default async function handler(req, res) {
     shSubCategory: `WITH q AS (${base}) SELECT Category, SubCategory, COUNT(DISTINCT OrderId) AS orders, SUM(SellingPrice_Inc_GST) AS rev, SUM(SellingPrice_Exc_GST) AS exc_rev, SUM(ItemQty) AS units, SUM(CASE WHEN UPPER(COALESCE(MasterSKU,'')) NOT LIKE '%COUP%' AND UPPER(COALESCE(MasterSKU,'')) NOT LIKE '%DFA%' THEN ItemQty ELSE 0 END) AS asp_units, COUNT(DISTINCT CASE WHEN Order_Status='Cancelled' THEN OrderId END) AS cancelled, COUNT(DISTINCT CASE WHEN Order_Status IN ('RTO','Return') THEN OrderId END) AS rto, COUNT(DISTINCT CASE WHEN Order_Status='CIR' THEN OrderId END) AS cir, COUNT(DISTINCT CASE WHEN Order_Status='Exchange' THEN OrderId END) AS exch, SUM(CASE WHEN Order_Status='Cancelled' THEN SellingPrice_Inc_GST ELSE 0 END) AS cancel_rev, SUM(CASE WHEN Order_Status='Cancelled' AND PaymentMode='COD' THEN SellingPrice_Inc_GST ELSE 0 END) AS cod_cancel_rev, SUM(CASE WHEN Order_Status IN ('RTO','Return') THEN SellingPrice_Inc_GST ELSE 0 END) AS rto_rev, SUM(CASE WHEN Order_Status='CIR' THEN SellingPrice_Inc_GST ELSE 0 END) AS cir_rev, SUM(CASE WHEN Order_Status='Exchange' THEN SellingPrice_Inc_GST ELSE 0 END) AS exch_rev FROM q WHERE Channel='Shopify' GROUP BY Category, SubCategory ORDER BY rev DESC`,
     shSubCategoryPrev: `WITH q AS (${prevBase}) SELECT Category, SubCategory, SUM(SellingPrice_Inc_GST) AS rev FROM q WHERE Channel='Shopify' GROUP BY Category, SubCategory`,
     shSKU: `WITH q AS (${base}) SELECT Category, SubCategory, SubChannel, MasterSKU AS sku, COUNT(DISTINCT OrderId) AS orders, SUM(SellingPrice_Inc_GST) AS rev, SUM(SellingPrice_Exc_GST) AS exc_rev, SUM(ItemQty) AS units, SUM(CASE WHEN Order_Status IN ('Cancelled','RTO','Return','CIR') THEN ItemQty ELSE 0 END) AS return_units, COUNT(DISTINCT CASE WHEN Order_Status='Cancelled' THEN OrderId END) AS cancelled, COUNT(DISTINCT CASE WHEN Order_Status IN ('RTO','Return') THEN OrderId END) AS rto, COUNT(DISTINCT CASE WHEN Order_Status='CIR' THEN OrderId END) AS cir, COUNT(DISTINCT CASE WHEN Order_Status='Exchange' THEN OrderId END) AS exch, SUM(CASE WHEN Order_Status='Cancelled' THEN SellingPrice_Inc_GST ELSE 0 END) AS cancel_rev, SUM(CASE WHEN Order_Status='Cancelled' AND PaymentMode='COD' THEN SellingPrice_Inc_GST ELSE 0 END) AS cod_cancel_rev, SUM(CASE WHEN Order_Status IN ('RTO','Return') THEN SellingPrice_Inc_GST ELSE 0 END) AS rto_rev, SUM(CASE WHEN Order_Status='CIR' THEN SellingPrice_Inc_GST ELSE 0 END) AS cir_rev, SUM(CASE WHEN Order_Status='Exchange' THEN SellingPrice_Inc_GST ELSE 0 END) AS exch_rev FROM q WHERE Channel='Shopify' AND MasterSKU IS NOT NULL AND TRIM(MasterSKU) != '' GROUP BY Category, SubCategory, SubChannel, MasterSKU ORDER BY rev DESC`,
+    // Same Category/SubCategory/SKU grain as shSKU, but split by SubChannel (MyFrido/Mobility/
+    // Shopify International/etc) so the PnL tab's D2C All/MyFrido/Mobility toggle can filter the
+    // Financial View table client-side without a refetch — same pattern as data.subChannelMap's
+    // top-line totals, just at product grain instead of channel-total grain.
+    shSKUBySubChannel: `WITH q AS (${base}) SELECT SubChannel, Category, SubCategory, MasterSKU AS sku, SUM(SellingPrice_Inc_GST) AS rev, SUM(SellingPrice_Exc_GST) AS exc_rev, SUM(ItemQty) AS units, SUM(CASE WHEN Order_Status='Cancelled' THEN SellingPrice_Inc_GST ELSE 0 END) AS cancel_rev, SUM(CASE WHEN Order_Status IN ('RTO','Return') THEN SellingPrice_Inc_GST ELSE 0 END) AS rto_rev, SUM(CASE WHEN Order_Status='CIR' THEN SellingPrice_Inc_GST ELSE 0 END) AS cir_rev, SUM(CASE WHEN Order_Status='Exchange' THEN SellingPrice_Inc_GST ELSE 0 END) AS exch_rev FROM q WHERE Channel='Shopify' AND MasterSKU IS NOT NULL AND TRIM(MasterSKU) != '' GROUP BY SubChannel, Category, SubCategory, MasterSKU`,
     shSKUPrev: `WITH q AS (${prevBase}) SELECT Category, SubCategory, MasterSKU AS sku, SUM(SellingPrice_Inc_GST) AS rev FROM q WHERE Channel='Shopify' AND MasterSKU IS NOT NULL AND TRIM(MasterSKU) != '' GROUP BY Category, SubCategory, MasterSKU`,
     // PnL cost rows — per SKU × Order_Status × weight_slab for D2C India (Shopify, non-international).
     // Weight slab: if Weight_gms <= 500 → 500, else CEIL(Weight_gms / 1000) * 1000.
@@ -236,7 +322,7 @@ export default async function handler(req, res) {
       : `WITH q AS (${prevBase}) SELECT CAST(OrderDate AS STRING) AS date, SUM(SellingPrice_Inc_GST) AS rev FROM q WHERE Channel='Shopify' AND SubChannel != 'Shopify International' GROUP BY date ORDER BY date`,
     prevShopifyCancel: `WITH q AS (${prevBase}) SELECT COUNT(DISTINCT CASE WHEN Order_Status='Cancelled' THEN OrderId END) AS cancelled_orders, COUNT(DISTINCT OrderId) AS total_orders FROM q WHERE Channel='Shopify'`,
     prevAmzSC: `WITH q AS (${prevBase}) SELECT SUM(SellingPrice_Inc_GST) AS rev, SUM(SellingPrice_Exc_GST) AS exc_rev, COUNT(DISTINCT CASE WHEN FinancialStatus != 'Cancelled' THEN OrderId END) AS orders, SUM(CASE WHEN FinancialStatus != 'Cancelled' THEN ItemQty ELSE 0 END) AS units, SUM(CASE WHEN fulfillment_channel='Amazon' THEN SellingPrice_Inc_GST ELSE 0 END) AS fba_rev, COUNT(DISTINCT CASE WHEN FinancialStatus='Cancelled' THEN OrderId END) AS cancelled_orders, COUNT(DISTINCT CASE WHEN FulfilmentStatus='Shipped' THEN OrderId END) AS shipped_orders FROM q WHERE SubChannel='Amazon Seller Central'`,
-    prevAmzVC: `WITH q AS (${prevBase}) SELECT SUM(SellingPrice_Inc_GST) AS rev, SUM(SellingPrice_Exc_GST) AS exc_rev, SUM(ItemQty) AS units FROM q WHERE SubChannel='Amazon Vendor Central'`,
+    prevAmzVC: `WITH q AS (${prevBase}) SELECT SUM(SellingPrice_Inc_GST) AS rev, SUM(SellingPrice_Exc_GST) AS exc_rev, SUM(ItemQty) AS units FROM q WHERE SubChannel = 'Amazon Vendor Central'`,
     prevAmzDaily: `WITH q AS (${prevBase}) SELECT CAST(OrderDate AS STRING) AS date, SUM(SellingPrice_Inc_GST) AS rev FROM q WHERE Channel='Amazon' GROUP BY date ORDER BY date`,
     prevFk: `WITH q AS (${prevBase}) SELECT SUM(SellingPrice_Inc_GST) AS rev, SUM(SellingPrice_Exc_GST) AS exc_rev, COUNT(DISTINCT OrderId) AS orders, SUM(ItemQty) AS units, SUM(CASE WHEN SubChannel='FBF' THEN SellingPrice_Inc_GST ELSE 0 END) AS fbf_rev, SUM(CASE WHEN SubChannel!='FBF' THEN SellingPrice_Inc_GST ELSE 0 END) AS nonfbf_rev, COUNT(DISTINCT CASE WHEN FulfilmentStatus='Cancelled' THEN OrderId END) AS cancel_orders, ROUND(SUM(CASE WHEN Order_Status IN ('Return','RTO') THEN ABS(SellingPrice_Inc_GST) ELSE 0 END),0) AS return_rev, ROUND(SUM(CASE WHEN FulfilmentStatus != 'Cancelled' THEN SellingPrice_Inc_GST ELSE 0 END),0) AS delivered_rev FROM q WHERE Channel='Flipkart'`,
     prevFkDaily: `WITH q AS (${prevBase}) SELECT CAST(OrderDate AS STRING) AS date, SUM(SellingPrice_Inc_GST) AS rev FROM q WHERE Channel='Flipkart' GROUP BY date ORDER BY date`,
@@ -252,13 +338,13 @@ export default async function handler(req, res) {
     prevFc: `WITH q AS (${prevBase}) SELECT SUM(SellingPrice_Inc_GST) AS rev, SUM(SellingPrice_Exc_GST) AS exc_rev, COUNT(DISTINCT OrderId) AS orders, SUM(ItemQty) AS units, COUNT(DISTINCT SubCategory) AS skus, COUNT(DISTINCT City) AS cities FROM q WHERE Channel='Firstcry'`,
     prevFcNetCalc: `WITH q AS (${prevBase}) SELECT ${netRevenueSelectFragment()} FROM q WHERE Channel='Firstcry'`,
     prevFcDaily: `WITH q AS (${prevBase}) SELECT CAST(OrderDate AS STRING) AS date, SUM(SellingPrice_Inc_GST) AS rev FROM q WHERE Channel='Firstcry' GROUP BY date ORDER BY date`,
-    amzSCTotals: `WITH q AS (${base}) SELECT COUNT(DISTINCT OrderId) AS orders, SUM(ItemQty) AS units FROM q WHERE SubChannel = 'Amazon Seller Central' AND FinancialStatus != 'Cancelled'`,
+    amzSCTotals: `WITH q AS (${base}) SELECT COUNT(DISTINCT OrderId) AS orders, SUM(ItemQty) AS units FROM q WHERE SubChannel = 'Amazon Seller Central' AND FinancialStatus != 'Cancelled' AND COALESCE(Order_Status, '') != 'RTV (Return to vendor)'`,
     // Gross here is ALL orders (not pre-filtering out Cancelled) so cancel_rev/return_rev read as a
     // true share-of-gross, consistent with the shared measures formula (computeNetRevenueMeasures).
     // Amazon SC doesn't distinguish RTO from Return (combined as return_rev) and has no CIR status;
     // cancellation comes from FinancialStatus, not Order_Status/FulfilmentStatus, on this channel.
     amzSCNetCalc: `WITH q AS (${base}) SELECT ROUND(SUM(CASE WHEN SellingPrice_Inc_GST > 0 THEN SellingPrice_Inc_GST ELSE 0 END),2) AS gross_inc_gst, ROUND(SUM(CASE WHEN SellingPrice_Inc_GST > 0 THEN SellingPrice_Exc_GST ELSE 0 END),2) AS gross_exc_gst, ROUND(SUM(CASE WHEN Order_Status IN ('Return','RTO') THEN ABS(SellingPrice_Inc_GST) ELSE 0 END),2) AS return_rev, ROUND(SUM(CASE WHEN FinancialStatus = 'Cancelled' THEN ABS(SellingPrice_Inc_GST) ELSE 0 END),2) AS cancel_rev, 0 AS rto_rev, 0 AS cir_rev FROM q WHERE SubChannel = 'Amazon Seller Central'`,
-    amzSCFulfillment: `WITH q AS (${base}) SELECT fulfillment_channel, COUNT(DISTINCT OrderId) AS orders, ROUND(SUM(SellingPrice_Inc_GST),0) AS rev, ROUND(SUM(SellingPrice_Exc_GST),0) AS exc_rev, SUM(ItemQty) AS units FROM q WHERE SubChannel = 'Amazon Seller Central' AND FulfilmentStatus != 'Cancelled' AND SellingPrice_Inc_GST > 0 GROUP BY fulfillment_channel`,
+    amzSCFulfillment: `WITH q AS (${base}) SELECT fulfillment_channel, COUNT(DISTINCT OrderId) AS orders, ROUND(SUM(SellingPrice_Inc_GST),0) AS rev, ROUND(SUM(SellingPrice_Exc_GST),0) AS exc_rev, SUM(ItemQty) AS units FROM q WHERE SubChannel = 'Amazon Seller Central' AND FulfilmentStatus != 'Cancelled' AND SellingPrice_Inc_GST > 0 AND COALESCE(Order_Status, '') != 'RTV (Return to vendor)' GROUP BY fulfillment_channel`,
     amzSCStatus: `WITH q AS (${base}) SELECT FinancialStatus AS order_status, COUNT(DISTINCT OrderId) AS orders FROM q WHERE SubChannel = 'Amazon Seller Central' GROUP BY order_status ORDER BY orders DESC`,
     amzSCOrderStatusDebug: `WITH q AS (${base}) SELECT Order_Status, COUNT(DISTINCT OrderId) AS orders, ROUND(SUM(SellingPrice_Inc_GST),0) AS rev FROM q WHERE SubChannel = 'Amazon Seller Central' GROUP BY Order_Status ORDER BY orders DESC`,
     amzSCStates: `WITH q AS (${base}), base AS (SELECT UPPER(TRIM(State)) AS ship_state, OrderId, Order_Status, SellingPrice_Inc_GST, FulfilmentStatus FROM q WHERE SubChannel = 'Amazon Seller Central') SELECT ship_state, COUNT(DISTINCT CASE WHEN FulfilmentStatus != 'Cancelled' AND SellingPrice_Inc_GST > 0 THEN OrderId END) AS orders, ROUND(SUM(CASE WHEN FulfilmentStatus != 'Cancelled' AND SellingPrice_Inc_GST > 0 THEN SellingPrice_Inc_GST ELSE 0 END),0) AS rev, COUNT(DISTINCT CASE WHEN Order_Status IN ('Return','RTO') THEN OrderId END) AS rto_orders, ROUND(SUM(CASE WHEN Order_Status IN ('Return','RTO') THEN ABS(SellingPrice_Inc_GST) ELSE 0 END),0) AS return_rev FROM base GROUP BY ship_state ORDER BY rev DESC`,
@@ -267,27 +353,319 @@ export default async function handler(req, res) {
     amzSCCitiesPrev: `WITH q AS (${prevBase}) SELECT UPPER(TRIM(City_L2)) AS city, ROUND(SUM(SellingPrice_Inc_GST),0) AS rev FROM q WHERE SubChannel = 'Amazon Seller Central' AND FinancialStatus != 'Cancelled' AND City_L2 IS NOT NULL AND TRIM(City_L2) != '' GROUP BY city`,
     amzSCStateTotal: `WITH q AS (${base}) SELECT ROUND(SUM(SellingPrice_Inc_GST),0) AS total_rev FROM q WHERE SubChannel = 'Amazon Seller Central' AND FulfilmentStatus != 'Cancelled' AND SellingPrice_Inc_GST > 0 AND State IS NOT NULL AND TRIM(State) != ''`,
     amzSCCityTotal: `WITH q AS (${base}) SELECT ROUND(SUM(SellingPrice_Inc_GST),0) AS total_rev FROM q WHERE SubChannel = 'Amazon Seller Central' AND FinancialStatus != 'Cancelled' AND SellingPrice_Inc_GST > 0 AND City_L2 IS NOT NULL AND TRIM(City_L2) != ''`,
-    amzSCSKUs: `WITH q AS (${base}) SELECT ChannelSKUCode AS sku, ProductId AS asin, COUNT(DISTINCT OrderId) AS orders, SUM(ItemQty) AS units, ROUND(SUM(SellingPrice_Inc_GST),0) AS rev FROM q WHERE SubChannel = 'Amazon Seller Central' AND FulfilmentStatus != 'Cancelled' AND SellingPrice_Inc_GST > 0 GROUP BY sku, asin ORDER BY rev DESC LIMIT 20`,
-    amzSCDaily: `WITH q AS (${base}) SELECT CAST(OrderDate AS STRING) AS date, fulfillment_channel, COUNT(DISTINCT OrderId) AS orders, SUM(ItemQty) AS units, ROUND(SUM(SellingPrice_Inc_GST),0) AS rev FROM q WHERE SubChannel = 'Amazon Seller Central' AND FulfilmentStatus != 'Cancelled' AND SellingPrice_Inc_GST > 0 GROUP BY date, fulfillment_channel ORDER BY date`,
+    amzSCSKUs: `WITH q AS (${base}) SELECT ChannelSKUCode AS sku, ProductId AS asin, COUNT(DISTINCT OrderId) AS orders, SUM(ItemQty) AS units, ROUND(SUM(SellingPrice_Inc_GST),0) AS rev FROM q WHERE SubChannel = 'Amazon Seller Central' AND FulfilmentStatus != 'Cancelled' AND SellingPrice_Inc_GST > 0 AND COALESCE(Order_Status, '') != 'RTV (Return to vendor)' GROUP BY sku, asin ORDER BY rev DESC LIMIT 20`,
+    amzSCDaily: `WITH q AS (${base}) SELECT CAST(OrderDate AS STRING) AS date, fulfillment_channel, COUNT(DISTINCT OrderId) AS orders, SUM(ItemQty) AS units, ROUND(SUM(SellingPrice_Inc_GST),0) AS rev, ROUND(SUM(SellingPrice_Exc_GST),0) AS exc_rev FROM q WHERE SubChannel = 'Amazon Seller Central' AND FulfilmentStatus != 'Cancelled' AND SellingPrice_Inc_GST > 0 AND COALESCE(Order_Status, '') != 'RTV (Return to vendor)' GROUP BY date, fulfillment_channel ORDER BY date`,
     amzSCReturnRate: `WITH q AS (${base}) SELECT ROUND(SUM(SellingPrice_Inc_GST), 2) AS total_rev_inc, ROUND(SUM(CASE WHEN Order_Status = 'Return' THEN ABS(SellingPrice_Inc_GST) ELSE 0 END), 2) AS returned_rev FROM q WHERE SubChannel = 'Amazon Seller Central'`,
     amzSCReturnCat: `WITH q AS (${base}), ret AS (SELECT DISTINCT order_id FROM \`frido-429506.production.fact_all_settlement_report\` WHERE transaction_type = 'Refund' AND settlement_region = 'India') SELECT q.Category, COUNT(DISTINCT q.OrderId) AS orders, COUNT(DISTINCT CASE WHEN ret.order_id IS NOT NULL THEN q.OrderId END) AS returned FROM q LEFT JOIN ret ON q.OrderId = ret.order_id WHERE q.SubChannel = 'Amazon Seller Central' AND q.FinancialStatus != 'Cancelled' AND q.Category IS NOT NULL GROUP BY q.Category`,
     amzSCReturnSubCat: `WITH q AS (${base}), ret AS (SELECT DISTINCT order_id FROM \`frido-429506.production.fact_all_settlement_report\` WHERE transaction_type = 'Refund' AND settlement_region = 'India') SELECT q.Category, q.SubCategory, COUNT(DISTINCT q.OrderId) AS orders, COUNT(DISTINCT CASE WHEN ret.order_id IS NOT NULL THEN q.OrderId END) AS returned FROM q LEFT JOIN ret ON q.OrderId = ret.order_id WHERE q.SubChannel = 'Amazon Seller Central' AND q.FinancialStatus != 'Cancelled' AND q.Category IS NOT NULL GROUP BY q.Category, q.SubCategory`,
     amzSCReturnSKU: `WITH q AS (${base}), ret AS (SELECT DISTINCT order_id FROM \`frido-429506.production.fact_all_settlement_report\` WHERE transaction_type = 'Refund' AND settlement_region = 'India') SELECT q.Category, q.SubCategory, q.MasterSKU AS sku, COUNT(DISTINCT q.OrderId) AS orders, COUNT(DISTINCT CASE WHEN ret.order_id IS NOT NULL THEN q.OrderId END) AS returned FROM q LEFT JOIN ret ON q.OrderId = ret.order_id WHERE q.SubChannel = 'Amazon Seller Central' AND q.FinancialStatus != 'Cancelled' AND q.MasterSKU IS NOT NULL GROUP BY q.Category, q.SubCategory, q.MasterSKU`,
-    amzSCCatChannel: `WITH q AS (${base}) SELECT Category, CASE WHEN fulfillment_channel='Amazon' THEN 'FBA' ELSE 'MFN' END AS ch, COUNT(DISTINCT OrderId) AS orders, SUM(ItemQty) AS units, ROUND(SUM(SellingPrice_Inc_GST),0) AS rev, ROUND(SUM(SellingPrice_Exc_GST),0) AS exc_rev, ROUND(SUM(CASE WHEN Order_Status='Cancelled' THEN SellingPrice_Inc_GST ELSE 0 END),0) AS cancel_rev, ROUND(SUM(CASE WHEN Order_Status='RTO' THEN SellingPrice_Inc_GST ELSE 0 END),0) AS rto_rev, ROUND(SUM(CASE WHEN Order_Status='CIR' THEN SellingPrice_Inc_GST ELSE 0 END),0) AS cir_rev, ROUND(SUM(CASE WHEN Order_Status='Exchange' THEN SellingPrice_Inc_GST ELSE 0 END),0) AS exch_rev, ROUND(SUM(CASE WHEN Order_Status='Return' THEN SellingPrice_Inc_GST ELSE 0 END),0) AS return_rev FROM q WHERE SubChannel = 'Amazon Seller Central' AND Category IS NOT NULL GROUP BY Category, ch ORDER BY rev DESC`,
-    amzSCSubCatChannel: `WITH q AS (${base}) SELECT Category, SubCategory, CASE WHEN fulfillment_channel='Amazon' THEN 'FBA' ELSE 'MFN' END AS ch, COUNT(DISTINCT OrderId) AS orders, SUM(ItemQty) AS units, ROUND(SUM(SellingPrice_Inc_GST),0) AS rev, ROUND(SUM(SellingPrice_Exc_GST),0) AS exc_rev, ROUND(SUM(CASE WHEN Order_Status='Cancelled' THEN SellingPrice_Inc_GST ELSE 0 END),0) AS cancel_rev, ROUND(SUM(CASE WHEN Order_Status='RTO' THEN SellingPrice_Inc_GST ELSE 0 END),0) AS rto_rev, ROUND(SUM(CASE WHEN Order_Status='CIR' THEN SellingPrice_Inc_GST ELSE 0 END),0) AS cir_rev, ROUND(SUM(CASE WHEN Order_Status='Exchange' THEN SellingPrice_Inc_GST ELSE 0 END),0) AS exch_rev, ROUND(SUM(CASE WHEN Order_Status='Return' THEN SellingPrice_Inc_GST ELSE 0 END),0) AS return_rev FROM q WHERE SubChannel = 'Amazon Seller Central' AND Category IS NOT NULL GROUP BY Category, SubCategory, ch ORDER BY rev DESC`,
-    amzSCSKUChannel: `WITH q AS (${base}) SELECT Category, SubCategory, MasterSKU AS sku, CASE WHEN fulfillment_channel='Amazon' THEN 'FBA' ELSE 'MFN' END AS ch, COUNT(DISTINCT OrderId) AS orders, SUM(ItemQty) AS units, ROUND(SUM(SellingPrice_Inc_GST),0) AS rev, ROUND(SUM(SellingPrice_Exc_GST),0) AS exc_rev, ROUND(SUM(CASE WHEN Order_Status='Cancelled' THEN SellingPrice_Inc_GST ELSE 0 END),0) AS cancel_rev, ROUND(SUM(CASE WHEN Order_Status='RTO' THEN SellingPrice_Inc_GST ELSE 0 END),0) AS rto_rev, ROUND(SUM(CASE WHEN Order_Status='CIR' THEN SellingPrice_Inc_GST ELSE 0 END),0) AS cir_rev, ROUND(SUM(CASE WHEN Order_Status='Exchange' THEN SellingPrice_Inc_GST ELSE 0 END),0) AS exch_rev, ROUND(SUM(CASE WHEN Order_Status='Return' THEN SellingPrice_Inc_GST ELSE 0 END),0) AS return_rev FROM q WHERE SubChannel = 'Amazon Seller Central' AND MasterSKU IS NOT NULL GROUP BY Category, SubCategory, sku, ch ORDER BY rev DESC`,
+    amzSCCatChannel: `WITH q AS (${base}) SELECT Category, CASE WHEN fulfillment_channel='Amazon' THEN 'FBA' ELSE 'MFN' END AS ch, COUNT(DISTINCT OrderId) AS orders, SUM(ItemQty) AS units, ROUND(SUM(SellingPrice_Inc_GST),0) AS rev, ROUND(SUM(SellingPrice_Exc_GST),0) AS exc_rev, ROUND(SUM(CASE WHEN Order_Status='Cancelled' THEN SellingPrice_Inc_GST ELSE 0 END),0) AS cancel_rev, ROUND(SUM(CASE WHEN Order_Status='RTO' THEN SellingPrice_Inc_GST ELSE 0 END),0) AS rto_rev, ROUND(SUM(CASE WHEN Order_Status='CIR' THEN SellingPrice_Inc_GST ELSE 0 END),0) AS cir_rev, ROUND(SUM(CASE WHEN Order_Status='Exchange' THEN SellingPrice_Inc_GST ELSE 0 END),0) AS exch_rev, ROUND(SUM(CASE WHEN Order_Status='Return' THEN SellingPrice_Inc_GST ELSE 0 END),0) AS return_rev FROM q WHERE SubChannel = 'Amazon Seller Central' AND Category IS NOT NULL AND COALESCE(Order_Status, '') != 'RTV (Return to vendor)' GROUP BY Category, ch ORDER BY rev DESC`,
+    // returned_units = cancelled/RTO/returned/CIR unit count, so the frontend can derive
+    // net units sold (units - returned_units) for COGS — COGS should price only units that
+    // actually stayed sold, not gross units before returns are netted out.
+    // 'S02-' order IDs are Amazon RTV (Return-to-Vendor) stock movements, not customer sales —
+    // already excluded in buildQuery's base, but re-asserted explicitly here too (belt and
+    // suspenders) since these are the exact queries that feed COGS/ASP in the PnL table and
+    // must never let RTV units leak into a per-unit-cost calculation.
+    amzSCSubCatChannel: `WITH q AS (${base}) SELECT Category, SubCategory, CASE WHEN fulfillment_channel='Amazon' THEN 'FBA' ELSE 'MFN' END AS ch, COUNT(DISTINCT OrderId) AS orders, SUM(ItemQty) AS units, SUM(CASE WHEN Order_Status IN ('Cancelled','RTO','CIR','Return') THEN ItemQty ELSE 0 END) AS returned_units, ROUND(SUM(SellingPrice_Inc_GST),0) AS rev, ROUND(SUM(SellingPrice_Exc_GST),0) AS exc_rev, ROUND(SUM(CASE WHEN Order_Status='Cancelled' THEN SellingPrice_Inc_GST ELSE 0 END),0) AS cancel_rev, ROUND(SUM(CASE WHEN Order_Status='RTO' THEN SellingPrice_Inc_GST ELSE 0 END),0) AS rto_rev, ROUND(SUM(CASE WHEN Order_Status='CIR' THEN SellingPrice_Inc_GST ELSE 0 END),0) AS cir_rev, ROUND(SUM(CASE WHEN Order_Status='Exchange' THEN SellingPrice_Inc_GST ELSE 0 END),0) AS exch_rev, ROUND(SUM(CASE WHEN Order_Status='Return' THEN SellingPrice_Inc_GST ELSE 0 END),0) AS return_rev FROM q WHERE SubChannel = 'Amazon Seller Central' AND Category IS NOT NULL AND COALESCE(Order_Status, '') != 'RTV (Return to vendor)' GROUP BY Category, SubCategory, ch ORDER BY rev DESC`,
+    amzSCSKUChannel: `WITH q AS (${base}) SELECT Category, SubCategory, MasterSKU AS sku, CASE WHEN fulfillment_channel='Amazon' THEN 'FBA' ELSE 'MFN' END AS ch, COUNT(DISTINCT OrderId) AS orders, SUM(ItemQty) AS units, SUM(CASE WHEN Order_Status IN ('Cancelled','RTO','CIR','Return') THEN ItemQty ELSE 0 END) AS returned_units, ROUND(SUM(SellingPrice_Inc_GST),0) AS rev, ROUND(SUM(SellingPrice_Exc_GST),0) AS exc_rev, ROUND(SUM(CASE WHEN Order_Status='Cancelled' THEN SellingPrice_Inc_GST ELSE 0 END),0) AS cancel_rev, ROUND(SUM(CASE WHEN Order_Status='RTO' THEN SellingPrice_Inc_GST ELSE 0 END),0) AS rto_rev, ROUND(SUM(CASE WHEN Order_Status='CIR' THEN SellingPrice_Inc_GST ELSE 0 END),0) AS cir_rev, ROUND(SUM(CASE WHEN Order_Status='Exchange' THEN SellingPrice_Inc_GST ELSE 0 END),0) AS exch_rev, ROUND(SUM(CASE WHEN Order_Status='Return' THEN SellingPrice_Inc_GST ELSE 0 END),0) AS return_rev FROM q WHERE SubChannel = 'Amazon Seller Central' AND MasterSKU IS NOT NULL AND COALESCE(Order_Status, '') != 'RTV (Return to vendor)' GROUP BY Category, SubCategory, sku, ch ORDER BY rev DESC`,
     amzSCCatChannelPrev: `WITH q AS (${prevBase}) SELECT Category, ROUND(SUM(SellingPrice_Inc_GST),0) AS rev FROM q WHERE SubChannel = 'Amazon Seller Central' AND Category IS NOT NULL GROUP BY Category`,
     amzSCSubCatChannelPrev: `WITH q AS (${prevBase}) SELECT Category, SubCategory, ROUND(SUM(SellingPrice_Inc_GST),0) AS rev FROM q WHERE SubChannel = 'Amazon Seller Central' AND Category IS NOT NULL GROUP BY Category, SubCategory`,
     amzSCSKUChannelPrev: `WITH q AS (${prevBase}) SELECT Category, SubCategory, MasterSKU AS sku, ROUND(SUM(SellingPrice_Inc_GST),0) AS rev FROM q WHERE SubChannel = 'Amazon Seller Central' AND MasterSKU IS NOT NULL GROUP BY Category, SubCategory, sku`,
-    amzVCCat: `WITH q AS (${base}) SELECT Category, COUNT(DISTINCT OrderId) AS orders, SUM(ItemQty) AS units, ROUND(SUM(SellingPrice_Inc_GST),0) AS rev, ROUND(SUM(SellingPrice_Exc_GST),0) AS exc_rev FROM q WHERE SubChannel = 'Amazon Vendor Central' AND Category IS NOT NULL GROUP BY Category ORDER BY rev DESC`,
-    amzVCSubCat: `WITH q AS (${base}) SELECT Category, SubCategory, COUNT(DISTINCT OrderId) AS orders, SUM(ItemQty) AS units, ROUND(SUM(SellingPrice_Inc_GST),0) AS rev, ROUND(SUM(SellingPrice_Exc_GST),0) AS exc_rev FROM q WHERE SubChannel = 'Amazon Vendor Central' AND Category IS NOT NULL GROUP BY Category, SubCategory ORDER BY rev DESC`,
-    amzVCSKU: `WITH q AS (${base}) SELECT Category, SubCategory, MasterSKU AS sku, COUNT(DISTINCT OrderId) AS orders, SUM(ItemQty) AS units, ROUND(SUM(SellingPrice_Inc_GST),0) AS rev, ROUND(SUM(SellingPrice_Exc_GST),0) AS exc_rev FROM q WHERE SubChannel = 'Amazon Vendor Central' AND MasterSKU IS NOT NULL GROUP BY Category, SubCategory, sku ORDER BY rev DESC`,
+    // MFN (Merchant Fulfilled / self-ship) order-line weights — Amazon's settlement report has
+    // NO fulfilment/logistics fee for MFN orders at all (Amazon never charges for them; the
+    // seller ships them directly), so the settlement-based S&D above always undercounts MFN.
+    // Reuses the exact same weight-slab rate card as Shopify's SnD (public/snd-rates.json /
+    // logistics_and_fulfilment_cost.xlsx — verified byte-identical) but applied outcome-specific
+    // rather than flat, since a self-ship order's real logistics cost genuinely differs by
+    // outcome: a plain delivery never incurs RTO/reverse legs, so charging them anyway would
+    // overstate S&D exactly the way the settlement-based side used to understate it. Order_Status
+    // is kept (not filtered out) so the frontend can pick forward+fulfilment (delivered/
+    // dispatched/null-status), +rto_logistics (RTO), +reverse_logistics (Return/CIR), or
+    // fulfilment-only (Cancelled — assumes packing already happened before cancellation).
+    amzSCMFNOrderWeights: `WITH q AS (${base}), lined AS (
+      SELECT OrderId, OrderDate, Category, SubCategory, MasterSKU AS sku, Order_Status, ItemQty, Weight_gms,
+        (ItemQty * Weight_gms) AS line_weight,
+        SUM(ItemQty * Weight_gms) OVER (PARTITION BY OrderId) AS order_weight
+      FROM q
+      WHERE SubChannel = 'Amazon Seller Central' AND fulfillment_channel != 'Amazon'
+        AND MasterSKU IS NOT NULL AND TRIM(MasterSKU) != '' AND Weight_gms IS NOT NULL AND Weight_gms > 0
+        AND COALESCE(Order_Status, '') != 'RTV (Return to vendor)'
+        -- ItemQty = 0 lines (adjustment/placeholder rows, no real quantity or revenue) contribute
+        -- zero to line_weight but still pollute the per-order GROUP BY with a dead (sku, weight)
+        -- row — exclude them so an order's weight-share only ever reflects lines that actually sold.
+        AND ItemQty > 0
+    )
+    SELECT OrderId AS order_id, CAST(OrderDate AS STRING) AS order_date, Category AS category, SubCategory AS subcategory, sku, order_weight,
+      COALESCE(Order_Status, '') AS order_status,
+      SUM(line_weight) AS total_line_weight,
+      SAFE_DIVIDE(SUM(line_weight), ANY_VALUE(order_weight)) AS weight_share
+    FROM lined
+    WHERE order_weight > 0
+    GROUP BY OrderId, OrderDate, Category, SubCategory, sku, order_weight, Order_Status`,
+    // Stock-movement (mother-warehouse → FBA/3PL regional warehouse) cost — ₹4/kg, charged per
+    // ORDER LINE ITEM (each SKU line in an order gets its own weight slab, unlike the pooled
+    // per-order weight above), applies to BOTH FBA and MFN — FBA stock is transferred to
+    // Amazon's fulfilment centers, and MFN stock is transferred from the mother warehouse to a
+    // 3PL regional warehouse for faster self-ship delivery, so both incur this cost. Uses the
+    // same weight-slab table (round up to next 1000g) as logistics/fulfilment, but the ₹4/kg
+    // rate is applied to the SLAB'S weight in kg, not the rupee columns in snd-rates.json.
+    amzSCLineItemWeights: `WITH q AS (${base})
+      SELECT CAST(OrderDate AS STRING) AS order_date, Category AS category, SubCategory AS subcategory, MasterSKU AS sku,
+        (ItemQty * Weight_gms) AS line_weight
+      FROM q
+      WHERE SubChannel = 'Amazon Seller Central' AND MasterSKU IS NOT NULL AND TRIM(MasterSKU) != ''
+        AND Weight_gms IS NOT NULL AND Weight_gms > 0 AND ItemQty > 0
+        AND COALESCE(Order_Status, '') != 'RTV (Return to vendor)'`,
+    // Amazon SC S&D (Selling & Distribution) from the real settlement report — see
+    // PNL_TAB_ROADMAP.md. Settlement rows are keyed by (order_id, sku_code) with events spread
+    // across multiple transaction_type rows (Order, Refund, Fulfillment Fee Refund,
+    // Adjustment/other-transaction, etc.); summing every column across all of them per
+    // (order_id, sku_code) nets an original charge against its later reversal correctly — this
+    // was verified against Amazon's own UI settlement export (113/114 exact match on a 10-order
+    // sample, 341/364 on a random 300-order sample from a full quarter; documented in
+    // PNL_TAB_ROADMAP.md). GST columns (_cgst/_sgst/_igst) are excluded throughout since gross
+    // revenue elsewhere in the P&L is already ex-GST. Reserve-balance snapshot columns
+    // (previous_reserve_amount_balance, current_reserve_amount) are excluded — they're a
+    // point-in-time balance, not a transaction, and summing them across rows is meaningless.
+    // sku_code (e.g. "FR-OHP-BK-L1-FBA") is the channel-specific SKU, not MasterSKU — resolved
+    // via a join to the sales fact table on ChannelSKUCode, then re-aggregated to MasterSKU
+    // grain to match how every other Amazon SC query keys its SKU rollups.
+    // Rolling-window real S&D per (Category, SubCategory), used only when a day's own coverage
+    // is below RATE_COVERAGE_FLOOR (freshly placed orders with ~0% settlement yet). Anchored to
+    // a window ending 14 days before today (rollingEnd) — by then coverage is consistently high
+    // per the empirical coverage curve — not to the selected date range, so it always reflects
+    // the most recently well-settled data available regardless of what period the user is viewing.
+    amzSCRollingRate: `
+      WITH settlement_by_item AS (
+        SELECT
+          order_id, sku_code,
+          SUM(COALESCE(item_fees_fba_pick_and_pack_fee,0) + COALESCE(item_fee_adjustment_fba_pick_and_pack_fee,0)
+            + COALESCE(item_fees_fba_weight_handling_fee,0) + COALESCE(item_fee_adjustment_fba_weight_handling_fee,0)
+            + COALESCE(shipping_chargeback_amount,0)) AS logistics,
+          SUM(COALESCE(storage_fee,0)) AS storage,
+          SUM(COALESCE(commission_amount,0) + COALESCE(refund_commission_amount,0)
+            + COALESCE(fixed_closing_fee,0)
+            + COALESCE(item_fees_technology_fee,0) + COALESCE(item_fee_adjustment_technology_fee,0)) AS fulfilment_selling,
+          -- 'Other' is genuine charges only. cs_error_items_amount, free_replacement_refund_items_amount,
+          -- incorrect_fee_non_itemized_amount, reversal_reimbursement_amount, and
+          -- reimbursement_for_lost_package are excluded here — verified against the FULL
+          -- settlement_report table (every row, all time) that each of these is ALWAYS >= 0,
+          -- meaning they are Amazon reimbursing/crediting YOU (CS-error compensation, free-
+          -- replacement cost recovery, an over-charged fee refunded, reverse-logistics loss/
+          -- damage compensation, lost-package compensation) — not a cost. Bundling a pure credit
+          -- into a cost bucket was silently canceling out genuine logistics/commission charges
+          -- on any SubCategory with meaningful return/CS volume (confirmed on Mobility Transfer
+          -- Lift: reversal_reimbursement_amount alone was +₹2.6L, masking ₹2.7L of real charges
+          -- and understating its SnD by ~7x). warehouse_damage is ALSO always >= 0 for the same
+          -- reason (Amazon compensating a warehouse-caused damage) and is excluded too.
+          -- clawback_reimbursment_amount is kept despite its name — verified ALWAYS negative
+          -- (Amazon clawing money back FROM you), a genuine charge.
+          SUM(COALESCE(clawback_reimbursment_amount,0) + COALESCE(gift_wrap_chargeback,0)
+            + COALESCE(gift_wrap,0)
+            + COALESCE(misadjustment_amount,0) + COALESCE(order_cancellation_charge,0)
+            + COALESCE(promo_rebates,0) + COALESCE(shipping_commission,0)) AS other
+        FROM \`frido-429506.production.fact_amazon_all_settlement_report\`
+        WHERE settlement_region = 'India' AND posted_date BETWEEN '${rollingStart}' AND '${rollingEnd}' AND order_id IS NOT NULL AND order_id != ''
+        GROUP BY order_id, sku_code
+      ),
+      sku_resolved AS (
+        SELECT s.order_id, s.sku_code, s.logistics, s.storage, s.fulfilment_selling, s.other, sales.Category AS category, sales.SubCategory AS subcategory
+        FROM settlement_by_item s
+        JOIN \`frido-429506.production.fact_all_platform_sales_report\` sales
+          ON s.order_id = sales.OrderId AND s.sku_code = sales.ChannelSKUCode
+        WHERE sales.SubChannel = 'Amazon Seller Central' AND s.sku_code IS NOT NULL AND s.sku_code != ''
+      )
+      SELECT category, subcategory,
+        SUM(logistics) AS logistics, SUM(storage) AS storage, SUM(fulfilment_selling) AS fulfilment_selling, SUM(other) AS other
+      FROM sku_resolved
+      GROUP BY category, subcategory`,
+    // Net-revenue denominator for the rolling window, same (Category, SubCategory) grain —
+    // kept separate so logistics/storage/fulfilment/other can each be computed as an
+    // independent %-of-net-revenue rate.
+    amzSCRollingNetRevenue: `
+      WITH q AS (${buildQuery(rollingStart, rollingEnd, {})})
+      SELECT Category AS category, SubCategory AS subcategory,
+        SUM(SellingPrice_Inc_GST) AS gross, SUM(SellingPrice_Exc_GST) AS exc_rev,
+        SUM(CASE WHEN Order_Status='Cancelled' THEN SellingPrice_Inc_GST ELSE 0 END) AS cancel_rev,
+        SUM(CASE WHEN Order_Status='RTO' THEN SellingPrice_Inc_GST ELSE 0 END) AS rto_rev,
+        SUM(CASE WHEN Order_Status='CIR' THEN SellingPrice_Inc_GST ELSE 0 END) AS cir_rev,
+        SUM(CASE WHEN Order_Status='Return' THEN SellingPrice_Inc_GST ELSE 0 END) AS return_rev
+      FROM q WHERE SubChannel = 'Amazon Seller Central' AND Category IS NOT NULL
+      GROUP BY category, subcategory`,
+    // Per-(OrderDate, Category, SubCategory, MasterSKU) net-revenue components for the SELECTED
+    // range — the denominator the day-wise rate gets grossed up against (or the rolling rate,
+    // for days below the coverage floor). Deliberately NOT restricted to only-settled orders —
+    // this is every order in range, matched or not, which is what "gross up to the full day"
+    // means.
+    amzSCDailyNetBySKU: `
+      WITH q AS (${base})
+      SELECT CAST(OrderDate AS STRING) AS order_date, Category AS category, SubCategory AS subcategory, MasterSKU AS sku,
+        SUM(SellingPrice_Inc_GST) AS gross, SUM(SellingPrice_Exc_GST) AS exc_rev,
+        SUM(CASE WHEN Order_Status='Cancelled' THEN SellingPrice_Inc_GST ELSE 0 END) AS cancel_rev,
+        SUM(CASE WHEN Order_Status='RTO' THEN SellingPrice_Inc_GST ELSE 0 END) AS rto_rev,
+        SUM(CASE WHEN Order_Status='CIR' THEN SellingPrice_Inc_GST ELSE 0 END) AS cir_rev,
+        SUM(CASE WHEN Order_Status='Return' THEN SellingPrice_Inc_GST ELSE 0 END) AS return_rev,
+        -- units/returned_units feed the day-wise trend's COGS (net units × flat per-unit COGS
+        -- rate) the same way PnLFinancialTable's mapRow() derives netUnits for the whole-range view.
+        SUM(ItemQty) AS units,
+        SUM(CASE WHEN Order_Status IN ('Cancelled','RTO','CIR','Return') THEN ItemQty ELSE 0 END) AS returned_units
+      FROM q WHERE SubChannel = 'Amazon Seller Central' AND MasterSKU IS NOT NULL
+      GROUP BY order_date, category, subcategory, sku`,
+    // Day-wise real settlement S&D, per (OrderDate, Category, SubCategory) — the settled portion
+    // only. Compared against amzSCDailyNetBySKU's full-day net revenue (rolled up to the same
+    // Category/SubCategory grain) to get both this day's coverage% and its own real rate.
+    amzSCDailySettlement: `
+      WITH settlement_by_item AS (
+        SELECT
+          order_id, sku_code,
+          SUM(COALESCE(item_fees_fba_pick_and_pack_fee,0) + COALESCE(item_fee_adjustment_fba_pick_and_pack_fee,0)
+            + COALESCE(item_fees_fba_weight_handling_fee,0) + COALESCE(item_fee_adjustment_fba_weight_handling_fee,0)
+            + COALESCE(shipping_chargeback_amount,0)) AS logistics,
+          SUM(COALESCE(storage_fee,0)) AS storage,
+          SUM(COALESCE(commission_amount,0) + COALESCE(refund_commission_amount,0)
+            + COALESCE(fixed_closing_fee,0)
+            + COALESCE(item_fees_technology_fee,0) + COALESCE(item_fee_adjustment_technology_fee,0)) AS fulfilment_selling,
+          -- 'Other' is genuine charges only. cs_error_items_amount, free_replacement_refund_items_amount,
+          -- incorrect_fee_non_itemized_amount, reversal_reimbursement_amount, and
+          -- reimbursement_for_lost_package are excluded here — verified against the FULL
+          -- settlement_report table (every row, all time) that each of these is ALWAYS >= 0,
+          -- meaning they are Amazon reimbursing/crediting YOU (CS-error compensation, free-
+          -- replacement cost recovery, an over-charged fee refunded, reverse-logistics loss/
+          -- damage compensation, lost-package compensation) — not a cost. Bundling a pure credit
+          -- into a cost bucket was silently canceling out genuine logistics/commission charges
+          -- on any SubCategory with meaningful return/CS volume (confirmed on Mobility Transfer
+          -- Lift: reversal_reimbursement_amount alone was +₹2.6L, masking ₹2.7L of real charges
+          -- and understating its SnD by ~7x). warehouse_damage is ALSO always >= 0 for the same
+          -- reason (Amazon compensating a warehouse-caused damage) and is excluded too.
+          -- clawback_reimbursment_amount is kept despite its name — verified ALWAYS negative
+          -- (Amazon clawing money back FROM you), a genuine charge.
+          SUM(COALESCE(clawback_reimbursment_amount,0) + COALESCE(gift_wrap_chargeback,0)
+            + COALESCE(gift_wrap,0)
+            + COALESCE(misadjustment_amount,0) + COALESCE(order_cancellation_charge,0)
+            + COALESCE(promo_rebates,0) + COALESCE(shipping_commission,0)) AS other
+        FROM \`frido-429506.production.fact_amazon_all_settlement_report\`
+        WHERE settlement_region = 'India' AND order_id IS NOT NULL AND order_id != ''
+        GROUP BY order_id, sku_code
+      ),
+      sku_resolved AS (
+        SELECT s.order_id, s.sku_code, s.logistics, s.storage, s.fulfilment_selling, s.other,
+          sales.Category AS category, sales.SubCategory AS subcategory, sales.masterskucode AS sku, sales.OrderDate AS order_date,
+          sales.SellingPrice_Inc_GST AS gross, sales.SellingPrice_Exc_GST AS exc_rev,
+          CASE WHEN sales.Order_Status='Cancelled' THEN sales.SellingPrice_Inc_GST ELSE 0 END AS cancel_rev,
+          CASE WHEN sales.Order_Status='RTO' THEN sales.SellingPrice_Inc_GST ELSE 0 END AS rto_rev,
+          CASE WHEN sales.Order_Status='CIR' THEN sales.SellingPrice_Inc_GST ELSE 0 END AS cir_rev,
+          CASE WHEN sales.Order_Status='Return' THEN sales.SellingPrice_Inc_GST ELSE 0 END AS return_rev
+        FROM settlement_by_item s
+        JOIN (SELECT OrderId, ChannelSKUCode, Category, SubCategory, masterskucode, OrderDate, SellingPrice_Inc_GST, SellingPrice_Exc_GST, Order_Status FROM \`frido-429506.production.fact_all_platform_sales_report\` WHERE SubChannel = 'Amazon Seller Central' AND OrderDate BETWEEN '${start}' AND '${end}') sales
+          ON s.order_id = sales.OrderId AND s.sku_code = sales.ChannelSKUCode
+        WHERE s.sku_code IS NOT NULL AND s.sku_code != ''
+      )
+      SELECT CAST(order_date AS STRING) AS order_date, category, subcategory,
+        SUM(logistics) AS logistics, SUM(storage) AS storage, SUM(fulfilment_selling) AS fulfilment_selling, SUM(other) AS other,
+        -- Matched net revenue (same components as amzSCDailyNetBySKU) for exactly the orders
+        -- that DID get a settlement match — the denominator for this day's own real rate.
+        SUM(gross) AS matched_gross, SUM(exc_rev) AS matched_exc_rev, SUM(cancel_rev) AS matched_cancel_rev,
+        SUM(rto_rev) AS matched_rto_rev, SUM(cir_rev) AS matched_cir_rev, SUM(return_rev) AS matched_return_rev
+      FROM sku_resolved
+      GROUP BY order_date, category, subcategory`,
+    // Final per-SKU real settlement S&D, used as-is wherever a SKU already has enough of its
+    // own settlement history (kept for the "Unattributed" catch-all and any caller that wants
+    // a flat per-SKU total rather than the day-wise breakdown).
+    amzSCSettlement: `
+      WITH settlement_by_item AS (
+        SELECT
+          order_id, sku_code,
+          SUM(COALESCE(item_fees_fba_pick_and_pack_fee,0) + COALESCE(item_fee_adjustment_fba_pick_and_pack_fee,0)
+            + COALESCE(item_fees_fba_weight_handling_fee,0) + COALESCE(item_fee_adjustment_fba_weight_handling_fee,0)
+            + COALESCE(shipping_chargeback_amount,0)) AS logistics,
+          SUM(COALESCE(storage_fee,0)) AS storage,
+          SUM(COALESCE(commission_amount,0) + COALESCE(refund_commission_amount,0)
+            + COALESCE(fixed_closing_fee,0)
+            + COALESCE(item_fees_technology_fee,0) + COALESCE(item_fee_adjustment_technology_fee,0)) AS fulfilment_selling,
+          -- 'Other' is genuine charges only. cs_error_items_amount, free_replacement_refund_items_amount,
+          -- incorrect_fee_non_itemized_amount, reversal_reimbursement_amount, and
+          -- reimbursement_for_lost_package are excluded here — verified against the FULL
+          -- settlement_report table (every row, all time) that each of these is ALWAYS >= 0,
+          -- meaning they are Amazon reimbursing/crediting YOU (CS-error compensation, free-
+          -- replacement cost recovery, an over-charged fee refunded, reverse-logistics loss/
+          -- damage compensation, lost-package compensation) — not a cost. Bundling a pure credit
+          -- into a cost bucket was silently canceling out genuine logistics/commission charges
+          -- on any SubCategory with meaningful return/CS volume (confirmed on Mobility Transfer
+          -- Lift: reversal_reimbursement_amount alone was +₹2.6L, masking ₹2.7L of real charges
+          -- and understating its SnD by ~7x). warehouse_damage is ALSO always >= 0 for the same
+          -- reason (Amazon compensating a warehouse-caused damage) and is excluded too.
+          -- clawback_reimbursment_amount is kept despite its name — verified ALWAYS negative
+          -- (Amazon clawing money back FROM you), a genuine charge.
+          SUM(COALESCE(clawback_reimbursment_amount,0) + COALESCE(gift_wrap_chargeback,0)
+            + COALESCE(gift_wrap,0)
+            + COALESCE(misadjustment_amount,0) + COALESCE(order_cancellation_charge,0)
+            + COALESCE(promo_rebates,0) + COALESCE(shipping_commission,0)) AS other
+        FROM \`frido-429506.production.fact_amazon_all_settlement_report\`
+        WHERE settlement_region = 'India' AND order_id IS NOT NULL AND order_id != ''
+        GROUP BY order_id, sku_code
+      ),
+      sku_resolved AS (
+        SELECT s.order_id, s.sku_code, s.logistics, s.storage, s.fulfilment_selling, s.other, sales.masterskucode AS master_sku
+        FROM settlement_by_item s
+        LEFT JOIN (SELECT DISTINCT OrderId, ChannelSKUCode, masterskucode FROM \`frido-429506.production.fact_all_platform_sales_report\` WHERE SubChannel = 'Amazon Seller Central' AND OrderDate BETWEEN '${start}' AND '${end}') sales
+          ON s.order_id = sales.OrderId AND s.sku_code = sales.ChannelSKUCode
+        WHERE s.sku_code IS NOT NULL AND s.sku_code != ''
+      )
+      SELECT
+        COALESCE(master_sku, 'Unattributed') AS sku,
+        SUM(logistics) AS logistics, SUM(storage) AS storage, SUM(fulfilment_selling) AS fulfilment_selling, SUM(other) AS other
+      FROM sku_resolved
+      GROUP BY sku`,
+    // TODO(VC returns): fact_all_platform_sales_report is getting a schema change for Vendor
+    // Central — delivered vs. returned line items will be bifurcated (with a dummy OrderId per
+    // line, same additive "delivered + returned = total revenue" convention Shopify/Amazon
+    // SC/Flipkart already use). Once that lands, this query (and amzVCSKU/amzVCDailySKU below)
+    // needs real cancel_rev/rto_rev/cir_rev/return_rev CASE WHEN columns keyed off the new
+    // Order_Status, matching amzSCSubCatChannel's pattern — VC currently hardcodes all of these
+    // VC now has real Order_Status ('Sales' = delivered, 'Return' = returned), with a dummy
+    // OrderId per line (AVC###### for Sales, AVCR###### for Return) — same additive convention
+    // Shopify/Amazon SC/Flipkart already use. return_rev/returned_units feed Net Revenue/
+    // Returns%/COGS the same way as every other channel now: Net Revenue = (gross −
+    // totalReturnRev) × (1 − gstRatio), Returns% = totalReturnRev/gross, COGS uses net units
+    // (gross units − returned units). Margin-slab SnD stays on GROSS regardless (confirmed with
+    // user — no change there, unlike COGS). Some 'Sales' rows carry a NEGATIVE ItemQty with
+    // positive revenue (~10-20/day, every day, confirmed with user this is just how Amazon's VC
+    // feed arrives, not a data quality issue to special-case) — units/rev are summed as plain
+    // SUM(), no ABS()/filtering, so those rows net out naturally within the total exactly like
+    // any other row would.
+    amzVCCat: `WITH q AS (${base}) SELECT Category, COUNT(DISTINCT OrderId) AS orders, SUM(ItemQty) AS units, ROUND(SUM(SellingPrice_Inc_GST),0) AS rev, ROUND(SUM(SellingPrice_Exc_GST),0) AS exc_rev, SUM(CASE WHEN Order_Status IN ('Cancelled','RTO','CIR','Return') THEN ItemQty ELSE 0 END) AS returned_units, ROUND(SUM(CASE WHEN Order_Status='Return' THEN SellingPrice_Inc_GST ELSE 0 END),0) AS return_rev FROM q WHERE SubChannel = 'Amazon Vendor Central' AND Category IS NOT NULL GROUP BY Category ORDER BY rev DESC`,
+    amzVCSubCat: `WITH q AS (${base}) SELECT Category, SubCategory, COUNT(DISTINCT OrderId) AS orders, SUM(ItemQty) AS units, ROUND(SUM(SellingPrice_Inc_GST),0) AS rev, ROUND(SUM(SellingPrice_Exc_GST),0) AS exc_rev, SUM(CASE WHEN Order_Status IN ('Cancelled','RTO','CIR','Return') THEN ItemQty ELSE 0 END) AS returned_units, ROUND(SUM(CASE WHEN Order_Status='Return' THEN SellingPrice_Inc_GST ELSE 0 END),0) AS return_rev FROM q WHERE SubChannel = 'Amazon Vendor Central' AND Category IS NOT NULL GROUP BY Category, SubCategory ORDER BY rev DESC`,
+    amzVCSKU: `WITH q AS (${base}) SELECT Category, SubCategory, MasterSKU AS sku, COUNT(DISTINCT OrderId) AS orders, SUM(ItemQty) AS units, ROUND(SUM(SellingPrice_Inc_GST),0) AS rev, ROUND(SUM(SellingPrice_Exc_GST),0) AS exc_rev, SUM(CASE WHEN Order_Status IN ('Cancelled','RTO','CIR','Return') THEN ItemQty ELSE 0 END) AS returned_units, ROUND(SUM(CASE WHEN Order_Status='Return' THEN SellingPrice_Inc_GST ELSE 0 END),0) AS return_rev FROM q WHERE SubChannel = 'Amazon Vendor Central' AND MasterSKU IS NOT NULL GROUP BY Category, SubCategory, sku ORDER BY rev DESC`,
     amzVCCatPrev: `WITH q AS (${prevBase}) SELECT Category, ROUND(SUM(SellingPrice_Inc_GST),0) AS rev FROM q WHERE SubChannel = 'Amazon Vendor Central' AND Category IS NOT NULL GROUP BY Category`,
     amzVCSubCatPrev: `WITH q AS (${prevBase}) SELECT Category, SubCategory, ROUND(SUM(SellingPrice_Inc_GST),0) AS rev FROM q WHERE SubChannel = 'Amazon Vendor Central' AND Category IS NOT NULL GROUP BY Category, SubCategory`,
     amzVCSKUPrev: `WITH q AS (${prevBase}) SELECT Category, SubCategory, MasterSKU AS sku, ROUND(SUM(SellingPrice_Inc_GST),0) AS rev FROM q WHERE SubChannel = 'Amazon Vendor Central' AND MasterSKU IS NOT NULL GROUP BY Category, SubCategory, sku`,
-    amzSCRegion: `WITH q AS (${base}) SELECT Region AS region, COUNT(DISTINCT OrderId) AS orders, ROUND(SUM(SellingPrice_Inc_GST),0) AS rev, SUM(ItemQty) AS units FROM q WHERE SubChannel = 'Amazon Seller Central' AND FinancialStatus != 'Cancelled' AND Region IS NOT NULL GROUP BY Region ORDER BY rev DESC`,
-    amzSCTier: `WITH q AS (${base}) SELECT City_Tier AS city_tier, Tier_Label AS tier_label, COUNT(DISTINCT OrderId) AS orders, ROUND(SUM(SellingPrice_Inc_GST),0) AS rev, SUM(ItemQty) AS units FROM q WHERE SubChannel = 'Amazon Seller Central' AND FinancialStatus != 'Cancelled' AND City_Tier IS NOT NULL GROUP BY City_Tier, Tier_Label ORDER BY City_Tier`,
-    amzVCAccounts: `WITH q AS (${base}) SELECT ChannelAccount AS vendor_account, SUM(ItemQty) AS ordered_units, ROUND(SUM(SellingPrice_Inc_GST),0) AS ordered_rev, ROUND(SUM(SellingPrice_Exc_GST),0) AS ordered_exc_rev, SUM(ItemQty) AS shipped_units, ROUND(SUM(SellingPrice_Inc_GST),0) AS shipped_rev, 0 AS returns FROM q WHERE SubChannel = 'Amazon Vendor Central' GROUP BY vendor_account ORDER BY ordered_rev DESC`,
+    // Vendor Central S&D — margin-slab based (VC has no settlement report at all, unlike Seller
+    // Central, so this is a completely different mechanism, not the FBA/MFN settlement approach).
+    // Day-wise + SKU-wise so each day's revenue gets costed against that day's own ASP (for the
+    // price slab) and that day's own margin-period (Old vs BAU vs Event, keyed off OrderDate).
+    // A day-range aggregate would blur both — a SKU whose ASP happens to average out near a slab
+    // boundary across a mixed date range would get one wrong slab for its whole range, and orders
+    // spanning the Old/BAU cutover would silently be costed at whichever rate happened to apply
+    // to the LAST day in range. gross (inc-GST) is the SnD cost base per user directive — margin%
+    // is applied to Gross, not Net Revenue (SnD% for the P&L display is still SnD ÷ Net Revenue,
+    // matching Seller Central's convention — only the cost CALCULATION differs, not the ratio).
+    // returned_units/return_rev feed dailyPnLBySku's Net Revenue/Returns% (see comment above
+    // amzVCCat) — no ItemQty > 0 filter here (removed): a negative-ItemQty 'Sales' row is a real
+    // row that should net into the day's totals via plain SUM(), not be silently dropped.
+    amzVCDailySKU: `WITH q AS (${base})
+      SELECT CAST(OrderDate AS STRING) AS order_date, Category AS category, SubCategory AS subcategory, MasterSKU AS sku,
+        SUM(ItemQty) AS units, SUM(SellingPrice_Inc_GST) AS gross, SUM(SellingPrice_Exc_GST) AS exc_rev,
+        SUM(ItemQty * Weight_gms) AS total_weight,
+        SUM(CASE WHEN Order_Status IN ('Cancelled','RTO','CIR','Return') THEN ItemQty ELSE 0 END) AS returned_units,
+        SUM(CASE WHEN Order_Status='Return' THEN SellingPrice_Inc_GST ELSE 0 END) AS return_rev
+      FROM q WHERE SubChannel = 'Amazon Vendor Central' AND MasterSKU IS NOT NULL
+      GROUP BY order_date, category, subcategory, sku`,
+    amzSCRegion: `WITH q AS (${base}) SELECT Region AS region, COUNT(DISTINCT OrderId) AS orders, ROUND(SUM(SellingPrice_Inc_GST),0) AS rev, SUM(ItemQty) AS units FROM q WHERE SubChannel = 'Amazon Seller Central' AND FinancialStatus != 'Cancelled' AND Region IS NOT NULL AND COALESCE(Order_Status, '') != 'RTV (Return to vendor)' GROUP BY Region ORDER BY rev DESC`,
+    amzSCTier: `WITH q AS (${base}) SELECT City_Tier AS city_tier, Tier_Label AS tier_label, COUNT(DISTINCT OrderId) AS orders, ROUND(SUM(SellingPrice_Inc_GST),0) AS rev, SUM(ItemQty) AS units FROM q WHERE SubChannel = 'Amazon Seller Central' AND FinancialStatus != 'Cancelled' AND City_Tier IS NOT NULL AND COALESCE(Order_Status, '') != 'RTV (Return to vendor)' GROUP BY City_Tier, Tier_Label ORDER BY City_Tier`,
+    // returns/return_rev now real (Order_Status='Return') — see the comment above amzVCCat for
+    // the full VC-returns rollout. Feeds chMap['Amazon'].netRev on the All-Channels summary page.
+    amzVCAccounts: `WITH q AS (${base}) SELECT ChannelAccount AS vendor_account, SUM(ItemQty) AS ordered_units, ROUND(SUM(SellingPrice_Inc_GST),0) AS ordered_rev, ROUND(SUM(SellingPrice_Exc_GST),0) AS ordered_exc_rev, SUM(ItemQty) AS shipped_units, ROUND(SUM(SellingPrice_Inc_GST),0) AS shipped_rev, COUNT(DISTINCT CASE WHEN Order_Status = 'Return' THEN OrderId END) AS returns, ROUND(SUM(CASE WHEN Order_Status='Return' THEN SellingPrice_Inc_GST ELSE 0 END),0) AS return_rev FROM q WHERE SubChannel = 'Amazon Vendor Central' GROUP BY vendor_account ORDER BY ordered_rev DESC`,
     amzVCDaily: `WITH q AS (${base}) SELECT CAST(OrderDate AS STRING) AS date, SUM(ItemQty) AS ordered_units, ROUND(SUM(SellingPrice_Inc_GST),0) AS ordered_rev, SUM(ItemQty) AS shipped_units FROM q WHERE SubChannel = 'Amazon Vendor Central' GROUP BY date ORDER BY date`,
     amzVCASINs: `WITH q AS (${base}) SELECT ProductId AS asin, COALESCE(NULLIF(TRIM(ChannelSKUCode),''), NULLIF(TRIM(MasterSKU),'')) AS sku, SUM(ItemQty) AS ordered_units, ROUND(SUM(SellingPrice_Inc_GST),0) AS ordered_rev, SUM(ItemQty) AS shipped_units, 0 AS returns FROM q WHERE SubChannel = 'Amazon Vendor Central' GROUP BY asin, sku ORDER BY ordered_rev DESC LIMIT 20`,
     amzIntlPrev: `SELECT COUNT(DISTINCT amazon_order_id) AS orders, ROUND(SUM(CAST(item_price AS FLOAT64)),0) AS rev, ROUND(SUM(CAST(item_price AS FLOAT64) - CAST(item_tax AS FLOAT64)),0) AS net_rev, SUM(CAST(quantity AS INT64)) AS units FROM \`frido-429506.production.amazon_seller_central_uk_uae_all_orders\` WHERE purchase_date_ist BETWEEN '${ps}' AND '${pe}' AND item_status != 'Cancelled'`,
@@ -324,8 +702,8 @@ export default async function handler(req, res) {
     fkCatPrev: `WITH q AS (${prevBase}) SELECT Category AS category, CASE WHEN SubChannel='Flipkart FBF' THEN 'FBF' ELSE 'NON-FBF' END AS sub, ROUND(SUM(SellingPrice_Inc_GST),0) AS rev FROM q WHERE Channel='Flipkart' AND Category IS NOT NULL GROUP BY category, sub`,
     fkSubCatPrev: `WITH q AS (${prevBase}) SELECT Category AS category, SubCategory AS subcategory, CASE WHEN SubChannel='Flipkart FBF' THEN 'FBF' ELSE 'NON-FBF' END AS sub, ROUND(SUM(SellingPrice_Inc_GST),0) AS rev FROM q WHERE Channel='Flipkart' AND Category IS NOT NULL GROUP BY category, subcategory, sub`,
     fkSKUPrev: `WITH q AS (${prevBase}) SELECT Category AS category, SubCategory AS subcategory, MasterSKU AS sku, CASE WHEN SubChannel='Flipkart FBF' THEN 'FBF' ELSE 'NON-FBF' END AS sub, ROUND(SUM(SellingPrice_Inc_GST),0) AS rev FROM q WHERE Channel='Flipkart' AND MasterSKU IS NOT NULL AND TRIM(MasterSKU) != '' GROUP BY category, subcategory, sku, sub`,
-    amzSCDailyCat: `WITH q AS (${base}) SELECT CAST(OrderDate AS STRING) AS date, Category AS category, SubCategory AS subcategory, CASE WHEN fulfillment_channel='Amazon' THEN 'FBA' ELSE 'MFN' END AS ch, COUNT(DISTINCT OrderId) AS orders, SUM(ItemQty) AS units, ROUND(SUM(SellingPrice_Inc_GST),0) AS rev, ROUND(SUM(SellingPrice_Exc_GST),0) AS exc_rev FROM q WHERE SubChannel='Amazon Seller Central' AND FinancialStatus != 'Cancelled' AND Category IS NOT NULL GROUP BY date, category, subcategory, ch ORDER BY date`,
-    amzVCDailyCat: `WITH q AS (${base}) SELECT CAST(OrderDate AS STRING) AS date, Category AS category, SubCategory AS subcategory, COUNT(DISTINCT OrderId) AS orders, SUM(ItemQty) AS units, ROUND(SUM(SellingPrice_Inc_GST),0) AS rev, ROUND(SUM(SellingPrice_Exc_GST),0) AS exc_rev FROM q WHERE SubChannel='Amazon Vendor Central' AND Category IS NOT NULL GROUP BY date, category, subcategory ORDER BY date`,
+    amzSCDailyCat: `WITH q AS (${base}) SELECT CAST(OrderDate AS STRING) AS date, Category AS category, SubCategory AS subcategory, CASE WHEN fulfillment_channel='Amazon' THEN 'FBA' ELSE 'MFN' END AS ch, COUNT(DISTINCT OrderId) AS orders, SUM(ItemQty) AS units, ROUND(SUM(SellingPrice_Inc_GST),0) AS rev, ROUND(SUM(SellingPrice_Exc_GST),0) AS exc_rev FROM q WHERE SubChannel='Amazon Seller Central' AND FinancialStatus != 'Cancelled' AND Category IS NOT NULL AND COALESCE(Order_Status, '') != 'RTV (Return to vendor)' GROUP BY date, category, subcategory, ch ORDER BY date`,
+    amzVCDailyCat: `WITH q AS (${base}) SELECT CAST(OrderDate AS STRING) AS date, Category AS category, SubCategory AS subcategory, COUNT(DISTINCT OrderId) AS orders, SUM(ItemQty) AS units, ROUND(SUM(SellingPrice_Inc_GST),0) AS rev, ROUND(SUM(SellingPrice_Exc_GST),0) AS exc_rev FROM q WHERE SubChannel = 'Amazon Vendor Central' AND Category IS NOT NULL GROUP BY date, category, subcategory ORDER BY date`,
     blTotals: `WITH q AS (${base}) SELECT SUM(ItemQty) AS units, ROUND(SUM(SellingPrice_Inc_GST),0) AS rev, ROUND(SUM(SellingPrice_Exc_GST),0) AS exc_rev, COUNT(DISTINCT SubCategory) AS skus, COUNT(DISTINCT City) AS cities, COUNT(DISTINCT OrderDate) AS days, COUNT(DISTINCT OrderId) AS orders FROM q WHERE Channel='Blinkit'`,
     blDaily: `WITH q AS (${base}) SELECT CAST(OrderDate AS STRING) AS date, SUM(ItemQty) AS units, ROUND(SUM(SellingPrice_Inc_GST),0) AS rev, ROUND(SUM(SellingPrice_Exc_GST),0) AS exc_rev FROM q WHERE Channel='Blinkit' GROUP BY date ORDER BY date`,
     blCategories: `WITH q AS (${base}) SELECT Category AS category, SUM(ItemQty) AS units, ROUND(SUM(SellingPrice_Inc_GST),0) AS rev, ROUND(SUM(SellingPrice_Exc_GST),0) AS exc_rev, COUNT(DISTINCT ChannelSKUCode) AS skus FROM q WHERE Channel='Blinkit' GROUP BY category ORDER BY rev DESC`,
@@ -628,21 +1006,26 @@ export default async function handler(req, res) {
     // Override chMap['Amazon'] — the Amazon tab's own SC net revenue (amzSCNetCalc) uses Amazon-
     // specific quirks that byChannel's generic aggregation doesn't replicate: only rows with
     // SellingPrice_Inc_GST > 0 count toward gross, Return+RTO are combined into one return_rev,
-    // and Cancelled comes from FinancialStatus (not Order_Status). VC has no Cancel/RTO/Return/CIR
-    // concept, so its net revenue is just its Exc-GST total. Mirror the Amazon tab's exact
-    // SC-netCalc + VC-exc-rev sum so the All-tab total reconciles with the Amazon tab.
+    // and Cancelled comes from FinancialStatus (not Order_Status). VC now has a real
+    // Order_Status='Return' bucket too (see amzVCAccounts/amzVCCat comments) — its net revenue
+    // is (gross − returnRev) × (1 − gstRatio), same formula every other channel uses, no longer
+    // just its Exc-GST total. Mirror the Amazon tab's exact SC-netCalc + VC-net sum so the
+    // All-tab total reconciles with the Amazon tab.
     if (r.amzSCNetCalc?.length) {
       const scM = computeNetRevenueMeasures(r.amzSCNetCalc[0])
       const vcRev = (r.amzVCAccounts || []).reduce((s, x) => s + (parseFloat(x.ordered_rev) || 0), 0)
       const vcExcRev = (r.amzVCAccounts || []).reduce((s, x) => s + (parseFloat(x.ordered_exc_rev) || 0), 0)
       const vcUnits = (r.amzVCAccounts || []).reduce((s, x) => s + (parseInt(x.ordered_units) || 0), 0)
+      const vcReturnRev = (r.amzVCAccounts || []).reduce((s, x) => s + (parseFloat(x.return_rev) || 0), 0)
+      const vcGstRatio = vcRev > 0 ? Math.max(0, (vcRev - vcExcRev) / vcRev) : 0
+      const vcNetRev = Math.max(vcRev - vcReturnRev, 0) * (1 - vcGstRatio)
       if (chMap['Amazon']) {
         chMap['Amazon'].rev = scM.grossIncGst + vcRev
         chMap['Amazon'].excRev = scM.grossExcGst + vcExcRev
-        chMap['Amazon'].netRev = scM.netRevenueExcGst + vcExcRev
+        chMap['Amazon'].netRev = scM.netRevenueExcGst + vcNetRev
         chMap['Amazon'].qty = (chMap['Amazon'].qty || 0)
       } else {
-        chMap['Amazon'] = { rev: scM.grossIncGst + vcRev, excRev: scM.grossExcGst + vcExcRev, netRev: scM.netRevenueExcGst + vcExcRev, orders: 0, qty: vcUnits }
+        chMap['Amazon'] = { rev: scM.grossIncGst + vcRev, excRev: scM.grossExcGst + vcExcRev, netRev: scM.netRevenueExcGst + vcNetRev, orders: 0, qty: vcUnits }
       }
     }
 
@@ -1152,6 +1535,13 @@ export default async function handler(req, res) {
           totalQty: parseInt(x.total_qty) || 0,
           grossIncGst: parseFloat(x.gross_inc_gst) || 0,
         })),
+        // Category/Product/SKU rev breakdown split by SubChannel (MyFrido/Mobility/Shopify
+        // International/...) — feeds the PnL tab's D2C All/MyFrido/Mobility toggle.
+        skuMapBySubChannel: (() => { const m = {}; (r.shSKUBySubChannel || []).forEach(x => { const subCh = x.SubChannel||'Unknown', cat = x.Category||'Others', sc = x.SubCategory||'Others', sku = x.sku; if (!m[subCh]) m[subCh] = {}; if (!m[subCh][cat]) m[subCh][cat] = {}; if (!m[subCh][cat][sc]) m[subCh][cat][sc] = {}; m[subCh][cat][sc][sku] = { rev: parseFloat(x.rev)||0, excRev: parseFloat(x.exc_rev)||0, units: parseInt(x.units)||0, cancelRev: parseFloat(x.cancel_rev)||0, rtoRev: parseFloat(x.rto_rev)||0, cirRev: parseFloat(x.cir_rev)||0, exchRev: parseFloat(x.exch_rev)||0 } }); return m })(),
+        // Rows for SnD (Shipping & Distribution) cost — see shOrderLineWeights in the queries
+        // dict. Each row is one (SKU, order_weight) pair with the summed weight_share the
+        // client multiplies by that order_weight's slab rate (from public/snd-rates.json).
+        skuWeightShares: (r.shOrderLineWeights || []).map(x => ({ category: x.Category||'Others', subCategory: x.SubCategory||'Others', sku: x.sku, orderWeight: parseFloat(x.order_weight)||0, weightShare: parseFloat(x.weight_share)||0 })),
         stateMap: Object.fromEntries((r.shState || []).filter(x => x.state).map(x => [x.state, { rev: parseFloat(x.rev)||0, orders: parseInt(x.orders)||0, units: parseInt(x.units)||0, cities: { size: parseInt(x.cities)||0 }, rtoOrders: parseInt(x.rto_orders)||0, returnRev: parseFloat(x.return_rev)||0 }])),
         statePrevMap: Object.fromEntries((r.shStatePrev || []).filter(x => x.state).map(x => [x.state, { rev: parseFloat(x.rev)||0, orders: parseInt(x.orders)||0 }])),
         cityRows: (r.shCity || []).map(x => ({ city: x.city, state: x.state || '', region: x.region || '', orders: parseInt(x.orders)||0, rev: parseFloat(x.rev)||0, rtoOrders: parseInt(x.rto_orders)||0, returnRev: parseFloat(x.return_rev)||0 })).filter(x => x.city),
@@ -1240,7 +1630,7 @@ export default async function handler(req, res) {
         stateTotal: parseFloat(r.amzSCStateTotal?.[0]?.total_rev) || 0,
         cityTotal: parseFloat(r.amzSCCityTotal?.[0]?.total_rev) || 0,
         skus: (r.amzSCSKUs || []).map(x => ({ sku: x.sku, asin: x.asin, orders: parseInt(x.orders)||0, units: parseInt(x.units)||0, rev: parseFloat(x.rev)||0 })),
-        daily: (r.amzSCDaily || []).map(x => ({ date: x.date, type: x.fulfillment_channel === 'Amazon' ? 'FBA' : 'MFN', orders: parseInt(x.orders)||0, units: parseInt(x.units)||0, rev: parseFloat(x.rev)||0 })),
+        daily: (r.amzSCDaily || []).map(x => ({ date: x.date, type: x.fulfillment_channel === 'Amazon' ? 'FBA' : 'MFN', orders: parseInt(x.orders)||0, units: parseInt(x.units)||0, rev: parseFloat(x.rev)||0, excRev: parseFloat(x.exc_rev)||0 })),
         returnRate: (() => {
           const row = (r.amzSCReturnRate || [])[0]
           const totalRev = parseFloat(row?.total_rev_inc) || 0
@@ -1265,7 +1655,7 @@ export default async function handler(req, res) {
           ;(r.amzSCSubCatChannel || []).forEach(x => {
             if (!map[x.Category]) map[x.Category] = {}
             if (!map[x.Category][x.SubCategory]) map[x.Category][x.SubCategory] = {}
-            map[x.Category][x.SubCategory][x.ch] = { rev: parseFloat(x.rev)||0, excRev: parseFloat(x.exc_rev)||0, units: parseInt(x.units)||0, orders: parseInt(x.orders)||0, cancelRev: parseFloat(x.cancel_rev)||0, rtoRev: parseFloat(x.rto_rev)||0, cirRev: parseFloat(x.cir_rev)||0, exchRev: parseFloat(x.exch_rev)||0, returnRev: parseFloat(x.return_rev)||0 }
+            map[x.Category][x.SubCategory][x.ch] = { rev: parseFloat(x.rev)||0, excRev: parseFloat(x.exc_rev)||0, units: parseInt(x.units)||0, returnedUnits: parseInt(x.returned_units)||0, orders: parseInt(x.orders)||0, cancelRev: parseFloat(x.cancel_rev)||0, rtoRev: parseFloat(x.rto_rev)||0, cirRev: parseFloat(x.cir_rev)||0, exchRev: parseFloat(x.exch_rev)||0, returnRev: parseFloat(x.return_rev)||0 }
           })
           return map
         })(),
@@ -1275,7 +1665,7 @@ export default async function handler(req, res) {
             if (!map[x.Category]) map[x.Category] = {}
             if (!map[x.Category][x.SubCategory]) map[x.Category][x.SubCategory] = {}
             if (!map[x.Category][x.SubCategory][x.sku]) map[x.Category][x.SubCategory][x.sku] = {}
-            map[x.Category][x.SubCategory][x.sku][x.ch] = { rev: parseFloat(x.rev)||0, excRev: parseFloat(x.exc_rev)||0, units: parseInt(x.units)||0, orders: parseInt(x.orders)||0, cancelRev: parseFloat(x.cancel_rev)||0, rtoRev: parseFloat(x.rto_rev)||0, cirRev: parseFloat(x.cir_rev)||0, exchRev: parseFloat(x.exch_rev)||0, returnRev: parseFloat(x.return_rev)||0 }
+            map[x.Category][x.SubCategory][x.sku][x.ch] = { rev: parseFloat(x.rev)||0, excRev: parseFloat(x.exc_rev)||0, units: parseInt(x.units)||0, returnedUnits: parseInt(x.returned_units)||0, orders: parseInt(x.orders)||0, cancelRev: parseFloat(x.cancel_rev)||0, rtoRev: parseFloat(x.rto_rev)||0, cirRev: parseFloat(x.cir_rev)||0, exchRev: parseFloat(x.exch_rev)||0, returnRev: parseFloat(x.return_rev)||0 }
           })
           return map
         })(),
@@ -1283,6 +1673,158 @@ export default async function handler(req, res) {
         catPrevMap: Object.fromEntries((r.amzSCCatChannelPrev||[]).map(x => [x.Category, parseFloat(x.rev)||0])),
         subCatPrevMap: (r.amzSCSubCatChannelPrev||[]).reduce((m,x) => { m[`${x.Category}::${x.SubCategory}`] = parseFloat(x.rev)||0; return m }, {}),
         skuPrevMap: (r.amzSCSKUChannelPrev||[]).reduce((m,x) => { if (!m[x.Category]) m[x.Category] = {}; if (!m[x.Category][x.SubCategory]) m[x.Category][x.SubCategory] = {}; m[x.Category][x.SubCategory][x.sku] = parseFloat(x.rev)||0; return m }, {}),
+        // Day-wise S&D rate card — see RATE_COVERAGE_FLOOR/rollingStart/rollingEnd comment above
+        // for why this replaced the old "orders older than 30 days = fully real, newer = fully
+        // estimated" split. For each (OrderDate, Category, SubCategory): if enough of that day's
+        // orders already have a settlement match (coverage ≥ RATE_COVERAGE_FLOOR), trust that
+        // day's own real rate and "gross it up" — apply it to the FULL day's net revenue, not
+        // just the matched slice, on the assumption the unsettled residual behaves like the
+        // settled majority. Below the floor (freshly placed orders, ~0% settled yet), borrow the
+        // rolling-window rate instead. sndBySku is the final per-SKU total, summed across every
+        // (date, category, subcategory) bucket that SKU appears in within the selected range.
+        // Computed once as {sndBySku, dailyPnLBySku} and destructured below into two response
+        // fields — sndBySku (whole-range, for the Financial View table) and dailyPnLBySku
+        // (date-keyed, for the PnL trend chart's day-wise SnD%/CM1% lines).
+        ...(() => {
+          const netRevOf = row => {
+            const gross = parseFloat(row.gross) || 0
+            const excRev = parseFloat(row.exc_rev) || 0
+            const totalReturnRev = (parseFloat(row.cancel_rev)||0) + (parseFloat(row.rto_rev)||0) + (parseFloat(row.cir_rev)||0) + (parseFloat(row.return_rev)||0)
+            const gstRatio = gross > 0 ? Math.max(0, (gross - excRev) / gross) : 0
+            return Math.max(gross - totalReturnRev, 0) * (1 - gstRatio)
+          }
+          const sndOf = row => -((parseFloat(row.logistics)||0) + (parseFloat(row.storage)||0) + (parseFloat(row.fulfilment_selling)||0) + (parseFloat(row.other)||0))
+
+          // Rolling-window rate per (Category, SubCategory), falling back to a Seller-Central-
+          // wide blended rate ('ALL') for any SubCategory with no volume in that window.
+          const rollingNetBySubcat = {}
+          ;(r.amzSCRollingNetRevenue || []).forEach(x => { rollingNetBySubcat[`${x.category}::${x.subcategory}`] = netRevOf(x) })
+          const rollingSndBySubcat = {}
+          ;(r.amzSCRollingRate || []).forEach(x => { rollingSndBySubcat[`${x.category}::${x.subcategory}`] = sndOf(x) })
+          let allRollingNet = 0, allRollingSnd = 0
+          Object.entries(rollingNetBySubcat).forEach(([key, net]) => { allRollingNet += net; allRollingSnd += rollingSndBySubcat[key] || 0 })
+          const allRollingPct = allRollingNet > 0 ? allRollingSnd / allRollingNet : 0
+          const rollingPctFor = key => {
+            const net = rollingNetBySubcat[key]
+            return net > 0 ? (rollingSndBySubcat[key] || 0) / net : allRollingPct
+          }
+
+          // This day/category/subcategory's own coverage% and real rate, from the settled slice.
+          const dailySettled = {}
+          ;(r.amzSCDailySettlement || []).forEach(x => {
+            const key = `${x.order_date}::${x.category}::${x.subcategory}`
+            dailySettled[key] = { snd: sndOf(x), matchedNet: netRevOf({ gross: x.matched_gross, exc_rev: x.matched_exc_rev, cancel_rev: x.matched_cancel_rev, rto_rev: x.matched_rto_rev, cir_rev: x.matched_cir_rev, return_rev: x.matched_return_rev }) }
+          })
+
+          // Full-day net revenue per (date, category, subcategory), used both as the coverage
+          // denominator and as what the chosen rate (day's own, or rolling) gets grossed up
+          // against — rolled up from the per-SKU rows below.
+          const dailyTotalNet = {}
+          const rows = r.amzSCDailyNetBySKU || []
+          rows.forEach(x => {
+            const key = `${x.order_date}::${x.category}::${x.subcategory}`
+            dailyTotalNet[key] = (dailyTotalNet[key] || 0) + netRevOf(x)
+          })
+
+          const pctFor = key => {
+            const settled = dailySettled[key]
+            const totalNet = dailyTotalNet[key] || 0
+            const coverage = settled && totalNet > 0 ? settled.matchedNet / totalNet : 0
+            if (coverage >= RATE_COVERAGE_FLOOR && settled.matchedNet > 0) return settled.snd / settled.matchedNet
+            return rollingPctFor(key.split('::').slice(1).join('::'))
+          }
+
+          const sndBySku = {}
+          rows.forEach(x => {
+            const key = `${x.order_date}::${x.category}::${x.subcategory}`
+            const net = netRevOf(x)
+            sndBySku[x.sku] = (sndBySku[x.sku] || 0) + net * pctFor(key)
+          })
+
+          // MFN (self-ship) logistics/fulfilment cost — Amazon's settlement report has no fee
+          // for these orders at all (Amazon isn't involved in fulfilment), so the settlement-
+          // based S&D above always reads zero for MFN SKUs. Filled in here from the same weight-
+          // slab rate card Shopify uses, applied outcome-specific: a plain delivered/dispatched/
+          // still-in-transit (null status) order only ever incurs the forward leg + fulfilment
+          // prep; RTO adds the rto_logistics leg (shipped out AND came back); Return/CIR (a
+          // completed delivery the customer sent back) adds the reverse_logistics leg instead;
+          // Cancelled assumes packing already happened before cancellation was known, so it's
+          // charged fulfilment cost only, with no logistics leg since it never actually shipped.
+          const slabs = loadSndRateSlabs()
+          ;(r.amzSCMFNOrderWeights || []).forEach(x => {
+            const rate = rateForWeight(slabs, parseFloat(x.order_weight) || 0)
+            if (!rate) return
+            const status = x.order_status || ''
+            let cost = rate.fulfilment
+            if (status === 'RTO') cost += rate.forward + rate.rto
+            else if (status === 'Return' || status === 'CIR') cost += rate.forward + rate.reverse
+            else if (status !== 'Cancelled') cost += rate.forward
+            const share = parseFloat(x.weight_share) || 0
+            sndBySku[x.sku] = (sndBySku[x.sku] || 0) + share * cost
+          })
+
+          // Stock-movement cost (mother warehouse → FBA/3PL regional warehouse), ₹4/kg, per
+          // ORDER LINE ITEM — unlike the pooled per-order weight above, each SKU line here gets
+          // its own slab independently (a 2-SKU order with 1.5kg + 2.5kg lines is charged for a
+          // 2kg slab AND a 3kg slab separately, not one combined slab for the whole order).
+          // Applies to both FBA and MFN since both involve a warehouse transfer.
+          const STOCK_MOVEMENT_RATE_PER_KG = 4
+          ;(r.amzSCLineItemWeights || []).forEach(x => {
+            const lineWeightGm = parseFloat(x.line_weight) || 0
+            if (lineWeightGm <= 0) return
+            const rate = rateForWeight(slabs, lineWeightGm)
+            if (!rate) return
+            const slabKg = rate.weightGm / 1000
+            sndBySku[x.sku] = (sndBySku[x.sku] || 0) + slabKg * STOCK_MOVEMENT_RATE_PER_KG
+          })
+
+          // Day-wise per-SKU SnD, same 3-part composition as sndBySku above (settlement gross-up
+          // + MFN weight-slab + stock-movement) but keyed by date too, not just SKU — feeds the
+          // PnL trend chart's day-wise SnD%/CM1% lines. Kept separate from sndBySku (which stays
+          // whole-range, for the Financial View table) rather than replacing it, since the table
+          // doesn't need date granularity and this would only add overhead there.
+          const dailySndBySku = {}
+          const addDaily = (date, sku, amount) => {
+            const key = `${date}::${sku}`
+            dailySndBySku[key] = (dailySndBySku[key] || 0) + amount
+          }
+          rows.forEach(x => { addDaily(x.order_date, x.sku, netRevOf(x) * pctFor(`${x.order_date}::${x.category}::${x.subcategory}`)) })
+          ;(r.amzSCMFNOrderWeights || []).forEach(x => {
+            const rate = rateForWeight(slabs, parseFloat(x.order_weight) || 0)
+            if (!rate) return
+            const status = x.order_status || ''
+            let cost = rate.fulfilment
+            if (status === 'RTO') cost += rate.forward + rate.rto
+            else if (status === 'Return' || status === 'CIR') cost += rate.forward + rate.reverse
+            else if (status !== 'Cancelled') cost += rate.forward
+            addDaily(x.order_date, x.sku, (parseFloat(x.weight_share) || 0) * cost)
+          })
+          ;(r.amzSCLineItemWeights || []).forEach(x => {
+            const lineWeightGm = parseFloat(x.line_weight) || 0
+            if (lineWeightGm <= 0) return
+            const rate = rateForWeight(slabs, lineWeightGm)
+            if (!rate) return
+            addDaily(x.order_date, x.sku, (rate.weightGm / 1000) * STOCK_MOVEMENT_RATE_PER_KG)
+          })
+          // Rolled up to {date, sku, gross, excRev, net, totalReturnRev, units, returnedUnits,
+          // snd} — units/returnedUnits let the frontend derive netUnits for COGS (same formula
+          // as PnLFinancialTable's mapRow), gross/excRev/net/totalReturnRev feed the trend
+          // chart's revenue/returns/ROAS lines, snd feeds the SnD%/CM1% lines.
+          const dailyBySkuMap = {}
+          rows.forEach(x => {
+            const key = `${x.order_date}::${x.sku}`
+            if (!dailyBySkuMap[key]) dailyBySkuMap[key] = { date: x.order_date, sku: x.sku, gross: 0, excRev: 0, net: 0, totalReturnRev: 0, units: 0, returnedUnits: 0 }
+            dailyBySkuMap[key].gross += parseFloat(x.gross) || 0
+            dailyBySkuMap[key].excRev += parseFloat(x.exc_rev) || 0
+            dailyBySkuMap[key].net += netRevOf(x)
+            dailyBySkuMap[key].totalReturnRev += (parseFloat(x.cancel_rev)||0) + (parseFloat(x.rto_rev)||0) + (parseFloat(x.cir_rev)||0) + (parseFloat(x.return_rev)||0)
+            dailyBySkuMap[key].units += parseInt(x.units) || 0
+            dailyBySkuMap[key].returnedUnits += parseInt(x.returned_units) || 0
+          })
+          const dailyPnLBySku = Object.entries(dailyBySkuMap).map(([key, v]) => ({ ...v, snd: dailySndBySku[key] || 0 }))
+
+          return { sndBySku, dailyPnLBySku }
+        })(),
       },
       amzVCMatrix: {
         catData: (() => {
@@ -1294,7 +1836,7 @@ export default async function handler(req, res) {
           const map = {}
           ;(r.amzVCSubCat || []).forEach(x => {
             if (!map[x.Category]) map[x.Category] = {}
-            map[x.Category][x.SubCategory] = { rev: parseFloat(x.rev)||0, excRev: parseFloat(x.exc_rev)||0, units: parseInt(x.units)||0, orders: parseInt(x.orders)||0 }
+            map[x.Category][x.SubCategory] = { rev: parseFloat(x.rev)||0, excRev: parseFloat(x.exc_rev)||0, units: parseInt(x.units)||0, orders: parseInt(x.orders)||0, returnedUnits: parseInt(x.returned_units)||0, returnRev: parseFloat(x.return_rev)||0 }
           })
           return map
         })(),
@@ -1303,7 +1845,7 @@ export default async function handler(req, res) {
           ;(r.amzVCSKU || []).forEach(x => {
             if (!map[x.Category]) map[x.Category] = {}
             if (!map[x.Category][x.SubCategory]) map[x.Category][x.SubCategory] = {}
-            map[x.Category][x.SubCategory][x.sku] = { rev: parseFloat(x.rev)||0, excRev: parseFloat(x.exc_rev)||0, units: parseInt(x.units)||0, orders: parseInt(x.orders)||0 }
+            map[x.Category][x.SubCategory][x.sku] = { rev: parseFloat(x.rev)||0, excRev: parseFloat(x.exc_rev)||0, units: parseInt(x.units)||0, orders: parseInt(x.orders)||0, returnedUnits: parseInt(x.returned_units)||0, returnRev: parseFloat(x.return_rev)||0 }
           })
           return map
         })(),
@@ -1311,6 +1853,69 @@ export default async function handler(req, res) {
         catPrevMap: Object.fromEntries((r.amzVCCatPrev||[]).map(x => [x.Category, parseFloat(x.rev)||0])),
         subCatPrevMap: (r.amzVCSubCatPrev||[]).reduce((m,x) => { m[`${x.Category}::${x.SubCategory}`] = parseFloat(x.rev)||0; return m }, {}),
         skuPrevMap: (r.amzVCSKUPrev||[]).reduce((m,x) => { if (!m[x.Category]) m[x.Category] = {}; if (!m[x.Category][x.SubCategory]) m[x.Category][x.SubCategory] = {}; m[x.Category][x.SubCategory][x.sku] = parseFloat(x.rev)||0; return m }, {}),
+        // Vendor Central S&D — see loadVcMarginCard/vcMarginPeriodFor/slabForAsp above. Computed
+        // day-wise (each row here is one (OrderDate, Category, SubCategory, SKU) bucket) so a
+        // selected range spanning the Old→BAU cutover (or an Event date) costs each day at its
+        // own correct margin period, rather than one blended rate for the whole range. Per row:
+        // (1) ASP = that day's own gross ÷ units for this SKU (picks the slab), (2) margin period
+        // from the row's own OrderDate, (3) SnD = Gross × margin% + stock-movement (₹4/kg,
+        // same rate/weight-slab table as Seller Central, applied to the row's total weight).
+        // Computed once as {sndBySku, dailyPnLBySku} and destructured into both response fields
+        // — sndBySku (whole-range) and dailyPnLBySku (date-keyed, for the trend chart's day-wise
+        // SnD%/CM1% lines, same purpose as Seller Central's dailyPnLBySku above). Net Revenue now
+        // subtracts real returns (totalReturnRev, from Order_Status='Return' rows) the same way
+        // every other channel does — (gross − totalReturnRev) × (1 − gstRatio) — no longer just
+        // gross-ex-GST. Margin-slab SnD only applies to the SKU's own SUM of Sales-row gross
+        // (confirmed with user: Return rows get zero SnD — the sale that would have incurred the
+        // fee didn't ultimately happen), so ASP/slab lookup keys off sales-only gross/units, not
+        // the day's raw combined SUM.
+        ...(() => {
+          const marginCard = loadVcMarginCard()
+          const events = loadVcEventCalendar()
+          const weightSlabs = loadSndRateSlabs()
+          const STOCK_MOVEMENT_RATE_PER_KG = 4
+          const sndBySku = {}
+          const dailyPnLBySku = []
+          ;(r.amzVCDailySKU || []).forEach(x => {
+            const units = parseFloat(x.units) || 0
+            const gross = parseFloat(x.gross) || 0
+            const excRev = parseFloat(x.exc_rev) || 0
+            const returnRev = parseFloat(x.return_rev) || 0
+            const returnedUnits = parseInt(x.returned_units) || 0
+            const salesUnits = units - returnedUnits
+            const salesGross = gross - returnRev
+            const gstRatio = gross > 0 ? Math.max(0, (gross - excRev) / gross) : 0
+            const net = Math.max(gross - returnRev, 0) * (1 - gstRatio)
+
+            let snd = 0
+            // A row can have real sales units but a null/zero sales gross (e.g.
+            // SellingPrice_Inc_GST missing for that line) — the ASP/margin-slab lookup can't run
+            // without a valid gross, but that's no reason to drop the row's units/revenue from
+            // the trend chart's other lines entirely (verified against a real case: SKU
+            // FR-UCWSC-MB1 on 2026-07-04, 1 unit, gross=NULL — previously silently dropped this
+            // unit, causing a Units KPI/trend mismatch).
+            if (salesUnits > 0 && salesGross > 0) {
+              const asp = salesGross / salesUnits
+              const slab = slabForAsp(marginCard.slabs, asp)
+              if (slab) {
+                const period = vcMarginPeriodFor(x.order_date, marginCard.oldMarginEndDate, events)
+                const marginPct = period === 'event' ? slab.eventPct : period === 'old' ? slab.oldPct : slab.bauPct
+                snd = salesGross * (marginPct / 100)
+
+                const weightGm = parseFloat(x.total_weight) || 0
+                if (weightGm > 0) {
+                  const wRate = rateForWeight(weightSlabs, weightGm)
+                  if (wRate) snd += (wRate.weightGm / 1000) * STOCK_MOVEMENT_RATE_PER_KG
+                }
+                sndBySku[x.sku] = (sndBySku[x.sku] || 0) + snd
+              }
+            }
+            if (units > 0 || gross > 0) {
+              dailyPnLBySku.push({ date: x.order_date, sku: x.sku, gross, excRev, net, totalReturnRev: returnRev, units, returnedUnits, snd })
+            }
+          })
+          return { sndBySku, dailyPnLBySku }
+        })(),
       },
       amzVC: {
         prevRev: parseFloat(r.prevAmzVC?.[0]?.rev) || 0,

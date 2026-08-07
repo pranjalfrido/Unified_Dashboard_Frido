@@ -97,9 +97,13 @@ const baseLiveInvRows = invRows.filter(row => {
 
 const toDateStr = d => { if (!d) return null; if (d instanceof Date) return d.toISOString().slice(0,10); return String(d).slice(0,10) }
 
-// Inventory aggregation keyed by (SKU, Facility) so facilityType filter works correctly.
-// Rolled up to (SKU, Location) for display — but per-facility breakdowns are kept so the
-// client can re-aggregate when a facilityType filter is active on the static JSON.
+// Inventory aggregation — keyed by (SKU, Facility), NOT (SKU, Location). A Location (city)
+// can host more than one Facility of different Facility Types (e.g. a Regular facility and a
+// non-Regular one in the same city) — collapsing to Location here would make the Facility Type
+// filter downstream unable to distinguish them, silently including the wrong facility's stock
+// whenever "Regular" (or any other type) is selected. Facility Type is carried on each entry so
+// it survives into the per-SKU facility breakdown; Location-level rollups for display are
+// derived FROM this facility-level data, after any Facility Type filtering has been applied.
 const invBySkuFacility = new Map()
 for (const row of baseLiveInvRows) {
   const { key, finalSku } = resolveMasterSkuKey(row.ItemSkuCode, skuMap)
@@ -108,7 +112,7 @@ for (const row of baseLiveInvRows) {
   const facilityType = facilityToType.get(row.Facility) || 'Regular'
   const { totalInventory, rawInvt, rawBlockedInvt, rtdInvt } = computeRowInventory(row)
   const mapKey = `${key}|${row.Facility}`
-  if (!invBySkuFacility.has(mapKey)) invBySkuFacility.set(mapKey, { sku: finalSku, skuKey: key, facility: row.Facility, facilityType, location: loc, totalInvt: 0, rawInvt: 0, rawBlockedInvt: 0, rtdInvt: 0 })
+  if (!invBySkuFacility.has(mapKey)) invBySkuFacility.set(mapKey, { sku: finalSku, skuKey: key, location: loc, facility: row.Facility, facilityType, totalInvt: 0, rawInvt: 0, rawBlockedInvt: 0, rtdInvt: 0 })
   const acc = invBySkuFacility.get(mapKey)
   acc.totalInvt += totalInventory; acc.rawInvt += rawInvt; acc.rawBlockedInvt += rawBlockedInvt; acc.rtdInvt += rtdInvt
 }
@@ -159,29 +163,36 @@ function computePayload(windowDays) {
     }
   }
 
-  const allKeys = new Set([...invBySkuLoc.keys(), ...avgSaleBySkuLoc.keys(), ...totalAvgSaleBySkuLoc.keys(), ...allocBySkuLoc.keys()])
-  const skuLocRows = []
-  for (const mapKey of allKeys) {
-    const [skuKey, loc] = mapKey.split('|')
-    const invEntry = invBySkuLoc.get(mapKey)
-    const totalInvt = invEntry?.totalInvt || 0
-    const rawInvt = invEntry?.rawInvt || 0
-    const rawBlockedInvt = invEntry?.rawBlockedInvt || 0
-    const rtdInvt = invEntry?.rtdInvt || 0
-    const sku = invEntry?.sku || skuKey
-    const rawQty = avgSaleBySkuLoc.get(mapKey) || 0
+  // Facility-level rows: inventory is genuinely per-facility (invBySkuFacility), but sales/
+  // allocation are only ever attributed at Location grain (nearest-warehouse-by-state has no
+  // facility identity) — so every facility within the same Location shares that Location's
+  // avgSale/allocation figures. This is the best granularity the sales data supports; it does
+  // NOT affect the Facility Type bug fix, which is about INVENTORY being wrongly pooled across
+  // facility types within a location, not about sales attribution.
+  const allFacilityKeys = new Set(invBySkuFacility.keys())
+  const skuFacilityRows = []
+  for (const mapKey of allFacilityKeys) {
+    const invEntry = invBySkuFacility.get(mapKey)
+    const { skuKey, location: loc, facility, facilityType } = invEntry
+    const totalInvt = invEntry.totalInvt || 0
+    const rawInvt = invEntry.rawInvt || 0
+    const rawBlockedInvt = invEntry.rawBlockedInvt || 0
+    const rtdInvt = invEntry.rtdInvt || 0
+    const sku = invEntry.sku || skuKey
+    const locKey = `${skuKey}|${loc}`
+    const rawQty = avgSaleBySkuLoc.get(locKey) || 0
     const avgSale = Math.ceil(rawQty / windowDays)
-    const rawTotalQty = totalAvgSaleBySkuLoc.get(mapKey) || 0
+    const rawTotalQty = totalAvgSaleBySkuLoc.get(locKey) || 0
     const totalAvgSale = Math.ceil(rawTotalQty / windowDays)
-    const orderAllocation = (allocBySkuLoc.get(mapKey) || 0) / windowDays
+    const orderAllocation = (allocBySkuLoc.get(locKey) || 0) / windowDays
     const denominator = Math.ceil(Math.max(avgSale, orderAllocation))
     const doi = totalInvt > 0 && denominator === 0 ? null : (denominator > 0 ? Math.floor(totalInvt / denominator) : 0)
     const master = itemMaster.get(skuKey)
     const last90 = lastSaleBySkuKey.get(skuKey)
     const newLaunch = isNewLaunch(master?.launchDate, endDateObj)
     const isDead = totalInvt > 0 && (last90?.qty90d || 0) === 0 && !newLaunch
-    skuLocRows.push({
-      sku, skuKey, location: loc,
+    skuFacilityRows.push({
+      sku, skuKey, location: loc, facility, facilityType,
       category: master?.category || 'Uncategorized',
       subCategory: master?.subCategory || 'Uncategorized',
       totalInvt, rawInvt, rawBlockedInvt, rtdInvt,
@@ -196,18 +207,40 @@ function computePayload(windowDays) {
       newLaunch, isDead, lastSaleDate: last90?.lastSaleDate || null,
     })
   }
+  // skuLocRows: rolled up from facility grain to (SKU, Location) — used below for the
+  // company-wide Location cards, which show ALL facility types combined by default. Facility
+  // Type filtering (done client-side / in api/inventory.js) operates on skuFacilityRows'
+  // `facility`/`facilityType` fields directly, not on this pre-rolled view.
+  const skuLocMap = new Map()
+  for (const r of skuFacilityRows) {
+    const locKey = `${r.skuKey}|${r.location}`
+    if (!skuLocMap.has(locKey)) skuLocMap.set(locKey, { ...r, totalInvt: 0, rawInvt: 0, rawBlockedInvt: 0, rtdInvt: 0 })
+    const acc = skuLocMap.get(locKey)
+    acc.totalInvt += r.totalInvt; acc.rawInvt += r.rawInvt; acc.rawBlockedInvt += r.rawBlockedInvt; acc.rtdInvt += r.rtdInvt
+  }
+  const skuLocRows = [...skuLocMap.values()]
 
   const rolledSkuMap = new Map()
-  for (const r of skuLocRows) {
+  for (const r of skuFacilityRows) {
     if (!rolledSkuMap.has(r.skuKey)) {
       rolledSkuMap.set(r.skuKey, {
         sku: r.sku, skuKey: r.skuKey, category: r.category, subCategory: r.subCategory,
         totalInvt: 0, rawInvt: 0, rawBlockedInvt: 0, rtdInvt: 0, rawAvgSaleQty: 0, rawTotalAvgSaleQty: 0, orderAllocation: 0,
-        leadTime: r.leadTime, productSource: r.productSource, newLaunch: r.newLaunch, lastSaleDate: r.lastSaleDate, locations: [],
+        leadTime: r.leadTime, productSource: r.productSource, newLaunch: r.newLaunch, lastSaleDate: r.lastSaleDate,
+        locations: [], facilities: [],
       })
     }
     const acc = rolledSkuMap.get(r.skuKey)
     acc.totalInvt += r.totalInvt; acc.rawInvt += r.rawInvt; acc.rawBlockedInvt += r.rawBlockedInvt; acc.rtdInvt += r.rtdInvt
+    // rawAvgSaleQty/rawTotalAvgSaleQty/orderAllocation are Location-grain, not Facility-grain —
+    // summing per facility row here would double/triple-count a location with several
+    // facilities, since every facility row for that location repeats the SAME location sales
+    // figures. Accumulate them once per (sku, location) instead, via skuLocRows below.
+    acc.facilities.push({ location: r.location, facility: r.facility, facilityType: r.facilityType, totalInvt: r.totalInvt, rawInvt: r.rawInvt, rawBlockedInvt: r.rawBlockedInvt, rtdInvt: r.rtdInvt })
+  }
+  for (const r of skuLocRows) {
+    const acc = rolledSkuMap.get(r.skuKey)
+    if (!acc) continue
     acc.rawAvgSaleQty += r.rawAvgSaleQty; acc.rawTotalAvgSaleQty += r.rawTotalAvgSaleQty; acc.orderAllocation += r.orderAllocation
     acc.locations.push({ location: r.location, totalInvt: r.totalInvt, rawInvt: r.rawInvt, rawBlockedInvt: r.rawBlockedInvt, rtdInvt: r.rtdInvt, avgSale: r.avgSale, doi: r.doi, stockStatus: r.stockStatus, facilities: r.facilities })
   }
