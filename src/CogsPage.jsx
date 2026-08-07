@@ -101,7 +101,7 @@ export default function CogsPage() {
     setSaving(true);
     try {
       const records = valid.map(toDbRecord);
-      const { error } = await supabase.from("cogs_ledger").upsert(records, { onConflict: "itemskucode,month" });
+      const { error } = await supabase.from("cogs_ledger").insert(records);
       if (error) throw error;
       setRows((rs) => rs.map((r) => ({ ...r, _dirty: false })));
       const months = [...new Set(valid.map((r) => r.month))].sort();
@@ -243,7 +243,7 @@ export default function CogsPage() {
         let done = 0;
         for (let i = 0; i < good.length; i += PAGE) {
           const chunk = good.slice(i, i + PAGE).map(toDbRecord);
-          const { error } = await supabase.from("cogs_ledger").upsert(chunk, { onConflict: "itemskucode,month" });
+          const { error } = await supabase.from("cogs_ledger").insert(chunk);
           if (error) throw error;
           done += chunk.length;
           setUploadProgress({ done, total: good.length });
