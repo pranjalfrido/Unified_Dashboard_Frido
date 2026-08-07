@@ -22,18 +22,6 @@
   --bot:60px; /* bottom nav height mobile */
 }
 
-.dark{
-  --bg:#0F1117;--card:#1A1D27;--hov:#252836;
-  --b1:#2A2D3A;--b2:#3A3D4A;
-  --t1:#F0F0F5;--t2:#9A9AB0;--t3:#5A5A70;
-  --acc:#FFD600;--acl:#2A2500;--acm:#E6C200;
-  --G:#0D2A0D;--Gt:#6DBF6D;--Gb:#2A5A2A;
-  --R:#2A0D0D;--Rt:#F08080;--Rb:#5A2A2A;
-  --A:#2A1A00;--At:#F0B050;--Ab:#5A3A00;
-  --B:#0D1A2A;--Bt:#6AAAF0;--Bb:#1A3A5A;
-  --P:#1A0D2A;--Pt:#C480F0;--Pb:#3A1A5A;
-}
-
 html,body{height:100%;background:var(--bg);font-family:var(--font);color:var(--t1);font-size:13px;line-height:1.5;-webkit-font-smoothing:antialiased}
 #root{width:100%;height:100%}
 

@@ -10236,12 +10236,6 @@ export default function App() {
   const [allowedTabs, setAllowedTabs] = useState(null)
 
   useEffect(() => {
-    if (localStorage.getItem('frido-theme') === 'dark') {
-      document.documentElement.classList.add('dark')
-    }
-  }, [])
-
-  useEffect(() => {
     if (window.location.hash.includes('type=recovery')) {
       setSession('recovery')
       return
