@@ -7,6 +7,7 @@ import LoginPage from './LoginPage.jsx'
 import ResetPasswordPage from './ResetPasswordPage.jsx'
 import ProfilePage from './ProfilePage.jsx'
 import CogsPage from './CogsPage.jsx'
+import LogisticsLedgerPage from './LogisticsLedgerPage.jsx'
 import { supabase } from './supabase.js'
 import PnLPage from './pnl/PnLPage.jsx'
 
@@ -2133,7 +2134,7 @@ function DateRangePicker({ filters, setFilters, theme: T = C }) {
 }
 
 function Topnav({ page, alerts, onRefresh, loading, filters, setFilters, rawRows, inventoryDateControl }) {
-  const titles = { overview: 'Overview', sales: 'Sales Analytics', pnl: 'P&L Analytics', ads: 'Ads Analytics', intelligence: 'Intelligence', logistics: 'Logistics Performance Analytics', inventory: 'Inventory, Sales & Allocation', customer: 'Customer Intelligence', documents: 'Documents', cogs: 'COGS Ledger' }
+  const titles = { overview: 'Overview', sales: 'Sales Analytics', pnl: 'P&L Analytics', ads: 'Ads Analytics', intelligence: 'Intelligence', logistics: 'Logistics Performance Analytics', inventory: 'Inventory, Sales & Allocation', customer: 'Customer Intelligence', documents: 'Documents', cogs: 'COGS Ledger', 'logistics-ledger': 'Logistics Bill Ledger' }
   const critical = alerts.filter(a => a.type === 'red').length
   return (
     <div className="topnav">
@@ -2143,7 +2144,7 @@ function Topnav({ page, alerts, onRefresh, loading, filters, setFilters, rawRows
       </div>
       <div className="tnav-sep" />
       <span className="tnav-title">{titles[page]}</span>
-      {page !== 'inventory' && page !== 'cogs' && page !== 'documents' && page !== 'profile' && (
+      {page !== 'inventory' && page !== 'cogs' && page !== 'documents' && page !== 'profile' && page !== 'logistics-ledger' && (
         <div className="tnav-right">
           <DateRangePicker filters={filters} setFilters={setFilters} />
           <button onClick={onRefresh} className="tnav-btn">
@@ -10297,6 +10298,12 @@ function DocumentsPage({ setPage }) {
       description: 'Manage cost of goods sold by SKU and month.',
       icon: '💰',
     },
+    {
+      id: 'logistics-ledger',
+      title: 'Logistics Bill Ledger',
+      description: 'Track B2B freight & B2C courier invoices line by line.',
+      icon: '🚚',
+    },
   ]
   return (
     <div style={{ padding: '32px 40px', maxWidth: 900 }}>
@@ -10477,6 +10484,11 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
           {page === 'cogs' && (
             <div className="page-scroll">
               <CogsPage />
+            </div>
+          )}
+          {page === 'logistics-ledger' && (
+            <div className="page-scroll">
+              <LogisticsLedgerPage />
             </div>
           )}
           {page === 'profile' && (
