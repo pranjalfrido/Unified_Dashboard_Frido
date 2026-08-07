@@ -113,10 +113,13 @@ const db = {
     return (data ?? []).map((r) => r.month_year).filter(Boolean);
   },
 
-  async fetchAllRows(fmt, monthFilter, onProgress) {
-    // Get total count via supabase-js (handles CORS correctly)
+  async fetchAllRows(fmt, months, onProgress) {
+    // months: [] = all, [m1] = one month, [m1,m2,...] = multiple
+    const selected = Array.isArray(months) ? months : (months ? [months] : []);
+    // Get total count
     let countQ = supabase.from(fmt.table).select("*", { count: "exact", head: true });
-    if (monthFilter) countQ = countQ.eq("month_year", monthFilter);
+    if (selected.length === 1) countQ = countQ.eq("month_year", selected[0]);
+    else if (selected.length > 1) countQ = countQ.in("month_year", selected);
     const { count, error: countErr } = await countQ;
     if (countErr) throw countErr;
     const total = count ?? 0;
@@ -125,7 +128,12 @@ const db = {
     const pages = Math.ceil(total / PAGE);
     let done = 0;
     onProgress?.(0, total);
-    const base = `${import.meta.env.VITE_SUPABASE_URL}/rest/v1/${fmt.table}?select=*&order=month_year.desc,id.desc${monthFilter ? `&month_year=eq.${encodeURIComponent(monthFilter)}` : ""}`;
+    const monthParam = selected.length === 1
+      ? `&month_year=eq.${encodeURIComponent(selected[0])}`
+      : selected.length > 1
+        ? `&month_year=in.(${selected.map(encodeURIComponent).join(",")})`
+        : "";
+    const base = `${import.meta.env.VITE_SUPABASE_URL}/rest/v1/${fmt.table}?select=*&order=month_year.desc,id.desc${monthParam}`;
     const hdrs = { apikey: import.meta.env.VITE_SUPABASE_ANON_KEY, Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`, Accept: "application/json", Prefer: "count=none" };
     const fetches = Array.from({ length: pages }, (_, i) =>
       fetch(`${base}&limit=${PAGE}&offset=${i * PAGE}`, { headers: hdrs })
@@ -260,7 +268,9 @@ export default function LogisticsLedgerPage() {
   const [store, setStore] = useState({ b2b: null, b2c: null });
   const [monthsStore, setMonthsStore] = useState({ b2b: [], b2c: [] });
   const [query, setQuery] = useState("");
-  const [monthFilter, setMonthFilter] = useState("");
+  const [monthFilter, setMonthFilter] = useState([]); // array of selected months, [] = all
+  const [monthPickerOpen, setMonthPickerOpen] = useState(false);
+  const monthPickerRef = useRef(null);
   const [busy, setBusy] = useState(false);
   const [status, setStatus] = useState(null);
   const [exportProgress, setExportProgress] = useState(null); // null | { done, total, type }
@@ -299,15 +309,25 @@ export default function LogisticsLedgerPage() {
     }
   }, []);
 
-  useEffect(() => { if (store[tab] == null) load(tab, monthFilter); }, [tab, store, load]);
+  // single month passed to fetchRows for UI display (only when exactly 1 selected)
+  const singleMonth = monthFilter.length === 1 ? monthFilter[0] : null;
+
+  useEffect(() => { if (store[tab] == null) load(tab, singleMonth); }, [tab, store, load]);
 
   // When month filter changes, re-fetch from DB
-  const prevMonthRef = useRef(monthFilter);
+  const prevMonthRef = useRef(singleMonth);
   useEffect(() => {
-    if (prevMonthRef.current === monthFilter) return;
-    prevMonthRef.current = monthFilter;
-    load(tab, monthFilter);
-  }, [monthFilter, tab, load]);
+    if (prevMonthRef.current === singleMonth) return;
+    prevMonthRef.current = singleMonth;
+    load(tab, singleMonth);
+  }, [singleMonth, tab, load]);
+
+  // Close month picker on outside click
+  useEffect(() => {
+    const handler = (e) => { if (monthPickerRef.current && !monthPickerRef.current.contains(e.target)) setMonthPickerOpen(false); };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, []);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -558,11 +578,33 @@ export default function LogisticsLedgerPage() {
             <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Filter invoices…"
               style={{ border: 'none', background: 'transparent', fontSize: 12, color: C.t1, width: 140, outline: 'none' }} />
           </div>
-          <select value={monthFilter} onChange={(e) => setMonthFilter(e.target.value)}
-            style={{ ...ghostBtn, padding: '6px 10px' }}>
-            <option value="">All months</option>
-            {months.map((m) => <option key={m} value={m}>{m}</option>)}
-          </select>
+          <div ref={monthPickerRef} style={{ position: 'relative' }}>
+            <button onClick={() => setMonthPickerOpen((o) => !o)}
+              style={{ ...ghostBtn, padding: '6px 10px', minWidth: 120 }}>
+              {monthFilter.length === 0 ? 'All months' : monthFilter.length === 1 ? monthFilter[0] : `${monthFilter.length} months`}
+              <span style={{ marginLeft: 4, fontSize: 10 }}>▾</span>
+            </button>
+            {monthPickerOpen && (
+              <div style={{ position: 'absolute', top: '110%', right: 0, background: C.card, border: `1px solid ${C.border}`, borderRadius: 8, boxShadow: '0 4px 16px rgba(0,0,0,0.1)', zIndex: 100, minWidth: 160, padding: '6px 0' }}>
+                <div onClick={() => { setMonthFilter([]); setMonthPickerOpen(false); }}
+                  style={{ padding: '7px 14px', fontSize: 12, cursor: 'pointer', fontWeight: monthFilter.length === 0 ? 700 : 400, color: monthFilter.length === 0 ? C.accent : C.t1, background: monthFilter.length === 0 ? '#EAF1EC' : 'transparent' }}>
+                  All months
+                </div>
+                {months.map((m) => {
+                  const checked = monthFilter.includes(m);
+                  return (
+                    <div key={m} onClick={() => setMonthFilter((prev) => checked ? prev.filter((x) => x !== m) : [...prev, m])}
+                      style={{ padding: '7px 14px', fontSize: 12, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8, background: checked ? '#EAF1EC' : 'transparent', color: checked ? C.accent : C.t1, fontWeight: checked ? 600 : 400 }}>
+                      <span style={{ width: 14, height: 14, border: `2px solid ${checked ? C.accent : C.t3}`, borderRadius: 3, background: checked ? C.accent : 'transparent', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                        {checked && <span style={{ color: '#fff', fontSize: 9, fontWeight: 900 }}>✓</span>}
+                      </span>
+                      {m}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
           <button style={ghostBtn} onClick={downloadTemplate}><FileSpreadsheet size={13} /> Template</button>
           <button style={ghostBtn} onClick={() => fileInput.current?.click()} disabled={busy}><Upload size={13} /> Upload</button>
           <input ref={fileInput} type="file" accept=".xlsx,.xls,.csv" onChange={importTemplate} style={{ display: 'none' }} />
@@ -627,7 +669,7 @@ export default function LogisticsLedgerPage() {
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12, flexWrap: 'wrap' }}>
         <button style={chipBtn} onClick={addRow}><Plus size={13} /> Add invoice line</button>
         <button style={{ ...chipBtn, ...(unsaved ? chipHot : {}) }} onClick={saveAll} disabled={busy}><Save size={13} /> Save{unsaved ? ` (${unsaved})` : ''}</button>
-        <button style={chipBtn} onClick={() => load(tab, monthFilter)} disabled={busy}><RefreshCw size={13} /> Reload</button>
+        <button style={chipBtn} onClick={() => load(tab, singleMonth)} disabled={busy}><RefreshCw size={13} /> Reload</button>
         <span style={{ fontSize: 11, color: C.t3, fontFamily: 'monospace', marginLeft: 4 }}>
           {totals.count} line{totals.count !== 1 ? 's' : ''} · ₹{money(totals.amount)}{monthFilter || query ? ' (filtered)' : ''}
         </span>
