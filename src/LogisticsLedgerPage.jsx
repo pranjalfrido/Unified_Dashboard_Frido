@@ -426,12 +426,17 @@ export default function LogisticsLedgerPage() {
     const reader = new FileReader();
     reader.onload = async () => {
       try {
-        // Yield so browser renders the progress bar before XLSX parsing freezes the thread
-        await new Promise((r) => setTimeout(r, 80));
-        const wb = XLSX.read(reader.result, { type: "array", cellDates: true });
-        const dataName = wb.SheetNames.find((n) => n.trim().toLowerCase() === "billing_data") ?? wb.SheetNames.find((n) => !/^instruction/i.test(n.trim())) ?? wb.SheetNames[0];
-        const ws = wb.Sheets[dataName];
-        const aoa = XLSX.utils.sheet_to_json(ws, { header: 1, blankrows: false });
+        // Parse in a Web Worker so the main thread (and UI) stays responsive
+        const aoa = await new Promise((resolve, reject) => {
+          const worker = new Worker("/xlsx-worker.js");
+          worker.onmessage = (ev) => {
+            worker.terminate();
+            if (ev.data.ok) resolve(ev.data.aoa);
+            else reject(new Error(ev.data.error));
+          };
+          worker.onerror = (ev) => { worker.terminate(); reject(new Error(ev.message)); };
+          worker.postMessage({ buffer: reader.result });
+        });
         if (!aoa.length) throw new Error("empty sheet");
         const wanted = fmt.fields.filter((f) => f.req).map(headKey);
         let hIdx = aoa.findIndex((r) => { const cells = r.map(normHead); return wanted.every((w) => cells.includes(w)); });
@@ -656,21 +661,32 @@ export default function LogisticsLedgerPage() {
       {uploadProgress && (
         <div style={{ margin: '0 0 12px 0', background: '#EFF6FF', border: '1px solid #BFDBFE', borderRadius: 8, padding: '10px 14px' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
-            <span style={{ fontSize: 12, fontWeight: 600, color: '#1E40AF' }}>
+            <span style={{ fontSize: 13, fontWeight: 700, color: '#1E40AF' }}>
               {uploadProgress.finished
                 ? `✓ Upload complete — ${uploadProgress.total.toLocaleString()} rows saved`
-                : uploadProgress.parsing ? `Parsing file…`
-                : `Uploading… ${uploadProgress.done.toLocaleString()} / ${uploadProgress.total.toLocaleString()} rows`}
+                : uploadProgress.parsing
+                ? `⏳ Parsing file… please wait`
+                : `⬆ Uploading… ${uploadProgress.done.toLocaleString()} / ${uploadProgress.total.toLocaleString()} rows inserted`}
             </span>
-            <span style={{ fontSize: 12, color: '#1E40AF', fontWeight: 700 }}>
-              {uploadProgress.parsing || !uploadProgress.total ? '' : `${Math.round((uploadProgress.done / uploadProgress.total) * 100)}%`}
+            <span style={{ fontSize: 13, color: '#1E40AF', fontWeight: 800 }}>
+              {uploadProgress.finished ? '100%' : uploadProgress.parsing || !uploadProgress.total ? '' : `${Math.round((uploadProgress.done / uploadProgress.total) * 100)}%`}
             </span>
           </div>
-          <div style={{ height: 6, background: '#DBEAFE', borderRadius: 99, overflow: 'hidden' }}>
-            <div style={{ height: '100%', background: '#2563EB', borderRadius: 99, width: uploadProgress.parsing ? '15%' : uploadProgress.total ? `${(uploadProgress.done / uploadProgress.total) * 100}%` : '0%', transition: 'width 0.3s ease' }} />
+          <div style={{ height: 8, background: '#DBEAFE', borderRadius: 99, overflow: 'hidden' }}>
+            {uploadProgress.parsing ? (
+              <div style={{ height: '100%', width: '30%', background: 'linear-gradient(90deg, #2563EB 0%, #60A5FA 50%, #2563EB 100%)', backgroundSize: '200% 100%', borderRadius: 99, animation: 'shimmer 1.2s infinite linear' }} />
+            ) : (
+              <div style={{ height: '100%', background: '#2563EB', borderRadius: 99, width: uploadProgress.total ? `${(uploadProgress.done / uploadProgress.total) * 100}%` : '0%', transition: 'width 0.3s ease' }} />
+            )}
           </div>
+          {!uploadProgress.parsing && !uploadProgress.finished && uploadProgress.total > 0 && (
+            <div style={{ fontSize: 11, color: '#3B82F6', marginTop: 4 }}>
+              {(uploadProgress.total - uploadProgress.done).toLocaleString()} rows remaining…
+            </div>
+          )}
         </div>
       )}
+      <style>{`@keyframes shimmer { 0% { background-position: 200% 0 } 100% { background-position: -200% 0 } }`}</style>
 
       {/* Format tabs */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 4, borderBottom: `1px solid ${C.border}`, marginBottom: 14 }}>
