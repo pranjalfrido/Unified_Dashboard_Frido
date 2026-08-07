@@ -295,7 +295,6 @@ export default function LogisticsLedgerPage() {
 
   const load = useCallback(async (which, month) => {
     const f = FORMATS[which];
-    setBusy(true);
     setExportProgress(null);
     try {
       const [data, allMonths] = await Promise.all([
@@ -304,19 +303,16 @@ export default function LogisticsLedgerPage() {
       ]);
       setStore((s) => ({ ...s, [which]: data.map((d) => fromDbRow(f, d)) }));
       setMonthsStore((s) => ({ ...s, [which]: allMonths }));
-      flash("ok", `Loaded ${data.length} row${data.length !== 1 ? "s" : ""}${month ? ` for ${month}` : ""} from ${f.table}.`);
     } catch (e) {
       setStore((s) => ({ ...s, [which]: s[which] ?? [blankRow(f)] }));
       flash("error", `Couldn't load ${f.table}: ${e.message ?? e}`);
-    } finally {
-      setBusy(false);
     }
   }, []);
 
   // single month passed to fetchRows for UI display (only when exactly 1 selected)
   const singleMonth = monthFilter.length === 1 ? monthFilter[0] : null;
 
-  useEffect(() => { if (store[tab] == null) load(tab, singleMonth); }, [tab, store, load]);
+  useEffect(() => { if (store[tab] == null && !uploadProgress) load(tab, singleMonth); }, [tab, store, load, uploadProgress]);
 
   // When month filter changes, re-fetch from DB
   const prevMonthRef = useRef(singleMonth);
