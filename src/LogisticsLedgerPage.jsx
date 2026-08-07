@@ -148,21 +148,18 @@ const db = {
   },
 
   async insertRows(fmt, rows, onProgress) {
+    // Sequential inserts — reliable, progress updates every chunk
     const PAGE = 500;
-    // Run chunks in parallel batches of 5 for speed
-    const BATCH = 5;
-    for (let i = 0; i < rows.length; i += PAGE * BATCH) {
-      const chunks = [];
-      for (let j = i; j < Math.min(i + PAGE * BATCH, rows.length); j += PAGE) {
-        chunks.push(rows.slice(j, j + PAGE).map((r) => toDbRow(fmt, r)));
-      }
-      await Promise.all(chunks.map((chunk) => {
-        const q = fmt.uniqueKey
-          ? supabase.from(fmt.table).upsert(chunk, { onConflict: fmt.uniqueKey, ignoreDuplicates: false })
-          : supabase.from(fmt.table).insert(chunk);
-        return q.then(({ error }) => { if (error) throw error; });
-      }));
-      onProgress?.(Math.min(i + PAGE * BATCH, rows.length), rows.length);
+    let inserted = 0;
+    for (let i = 0; i < rows.length; i += PAGE) {
+      const chunk = rows.slice(i, i + PAGE).map((r) => toDbRow(fmt, r));
+      const q = fmt.uniqueKey
+        ? supabase.from(fmt.table).upsert(chunk, { onConflict: fmt.uniqueKey, ignoreDuplicates: false })
+        : supabase.from(fmt.table).insert(chunk);
+      const { error } = await q;
+      if (error) throw error;
+      inserted += chunk.length;
+      onProgress?.(inserted, rows.length);
     }
     return [];
   },
@@ -500,7 +497,7 @@ export default function LogisticsLedgerPage() {
           flash("ok", `Uploaded ${staged.length} line${staged.length !== 1 ? "s" : ""} to ${fmt.table} — ${final.length - replacing.length} new, ${replacing.length} replaced${dupInFile ? `, ${dupInFile} duplicates collapsed` : ""}.`);
           setTimeout(() => setUploadProgress(null), 4000);
           db.fetchMonths(fmt).then((m) => setMonthsStore((s) => ({ ...s, [tab]: m }))).catch(() => {});
-        } catch (e) { setUploadProgress(null); throw e; }
+        } catch (e) { setUploadProgress(null); alert(`Upload failed: ${e.message ?? e}`); }
         finally { setBusy(false); }
       } catch (err) { alert(`Couldn't read that file: ${err.message ?? err}`); }
       finally { if (fileInput.current) fileInput.current.value = ""; }
