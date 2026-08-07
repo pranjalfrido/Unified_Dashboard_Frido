@@ -113,20 +113,21 @@ const db = {
     return (data ?? []).map((r) => r.month_year).filter(Boolean);
   },
 
-  async fetchAllRows(fmt, monthFilter) {
-    // First get total count, then fetch all pages in parallel
+  async fetchAllRows(fmt, monthFilter, onProgress) {
     const base = `${import.meta.env.VITE_SUPABASE_URL}/rest/v1/${fmt.table}?select=*&order=month_year.desc,id.desc${monthFilter ? `&month_year=eq.${encodeURIComponent(monthFilter)}` : ""}`;
     const hdrs = { apikey: import.meta.env.VITE_SUPABASE_ANON_KEY, Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`, Accept: "application/json", Prefer: "count=exact" };
-    // Get count
     const countRes = await fetch(`${base}&limit=1`, { headers: hdrs });
     if (!countRes.ok) throw new Error(`Export fetch failed: ${countRes.status}`);
     const total = parseInt(countRes.headers.get("content-range")?.split("/")[1] ?? "0", 10);
     if (!total) return [];
     const PAGE = 1000;
     const pages = Math.ceil(total / PAGE);
-    // Fetch all pages in parallel
+    let done = 0;
+    onProgress?.(0, total);
     const fetches = Array.from({ length: pages }, (_, i) =>
-      fetch(`${base}&limit=${PAGE}&offset=${i * PAGE}`, { headers: { ...hdrs, Prefer: "count=none" } }).then((r) => r.json())
+      fetch(`${base}&limit=${PAGE}&offset=${i * PAGE}`, { headers: { ...hdrs, Prefer: "count=none" } })
+        .then((r) => r.json())
+        .then((rows) => { done += rows.length; onProgress?.(done, total); return rows; })
     );
     const results = await Promise.all(fetches);
     return results.flat();
@@ -257,6 +258,7 @@ export default function LogisticsLedgerPage() {
   const [monthFilter, setMonthFilter] = useState("");
   const [busy, setBusy] = useState(false);
   const [status, setStatus] = useState(null);
+  const [exportProgress, setExportProgress] = useState(null); // null | { done, total, type }
   const fileInput = useRef(null);
 
   const rows = store[tab] ?? [];
@@ -472,9 +474,9 @@ export default function LogisticsLedgerPage() {
 
   const exportCSV = async () => {
     setBusy(true);
-    flash("ok", "Fetching all rows for export…");
+    setExportProgress({ done: 0, total: 0, type: "CSV" });
     try {
-      const all = await db.fetchAllRows(fmt, monthFilter);
+      const all = await db.fetchAllRows(fmt, monthFilter, (done, total) => setExportProgress({ done, total, type: "CSV" }));
       const data = all.map((d) => fromDbRow(fmt, d)).filter((r) => hasContent(fmt, r));
       if (!data.length) return alert("Nothing to export.");
       const esc = (v) => { const s = String(v ?? ""); return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s; };
@@ -483,16 +485,17 @@ export default function LogisticsLedgerPage() {
       const blob = new Blob([lines.join("\n")], { type: "text/csv;charset=utf-8" });
       const a = Object.assign(document.createElement("a"), { href: URL.createObjectURL(blob), download: `${fmt.exportPrefix}_${todayDate()}.csv` });
       a.click(); URL.revokeObjectURL(a.href);
-      flash("ok", `Exported ${data.length} rows as CSV.`);
-    } catch (e) { flash("error", `Export failed: ${e.message ?? e}`); }
+      setExportProgress({ done: data.length, total: data.length, type: "CSV", done: true });
+      setTimeout(() => setExportProgress(null), 3000);
+    } catch (e) { flash("error", `Export failed: ${e.message ?? e}`); setExportProgress(null); }
     finally { setBusy(false); }
   };
 
   const exportXLSX = async () => {
     setBusy(true);
-    flash("ok", "Fetching all rows for export…");
+    setExportProgress({ done: 0, total: 0, type: "Excel" });
     try {
-      const all = await db.fetchAllRows(fmt, monthFilter);
+      const all = await db.fetchAllRows(fmt, monthFilter, (done, total) => setExportProgress({ done, total, type: "Excel" }));
       const data = all.map((d) => fromDbRow(fmt, d)).filter((r) => hasContent(fmt, r));
       if (!data.length) return alert("Nothing to export.");
       const green = "1F5C4A";
@@ -514,8 +517,9 @@ export default function LogisticsLedgerPage() {
       XLSX.utils.book_append_sheet(wb, wsAll, "Invoice Lines");
       XLSX.utils.book_append_sheet(wb, wsSum, "Month Summary");
       XLSX.writeFile(wb, `${fmt.exportPrefix}_${todayDate()}.xlsx`);
-      flash("ok", `Exported ${data.length} rows as Excel.`);
-    } catch (e) { flash("error", `Export failed: ${e.message ?? e}`); }
+      setExportProgress({ done: data.length, total: data.length, type: "Excel", done: true });
+      setTimeout(() => setExportProgress(null), 3000);
+    } catch (e) { flash("error", `Export failed: ${e.message ?? e}`); setExportProgress(null); }
     finally { setBusy(false); }
   };
 
@@ -553,10 +557,29 @@ export default function LogisticsLedgerPage() {
           <button style={ghostBtn} onClick={downloadTemplate}><FileSpreadsheet size={13} /> Template</button>
           <button style={ghostBtn} onClick={() => fileInput.current?.click()} disabled={busy}><Upload size={13} /> Upload</button>
           <input ref={fileInput} type="file" accept=".xlsx,.xls,.csv" onChange={importTemplate} style={{ display: 'none' }} />
-          <button style={ghostBtn} onClick={exportCSV}><Download size={13} /> CSV</button>
-          <button style={primaryBtn} onClick={exportXLSX}><Download size={13} /> Excel</button>
+          <button style={{ ...ghostBtn, opacity: exportProgress ? 0.5 : 1, cursor: exportProgress ? 'not-allowed' : 'pointer' }} onClick={exportProgress ? null : exportCSV} disabled={!!exportProgress}><Download size={13} /> CSV</button>
+          <button style={{ ...primaryBtn, opacity: exportProgress ? 0.5 : 1, cursor: exportProgress ? 'not-allowed' : 'pointer' }} onClick={exportProgress ? null : exportXLSX} disabled={!!exportProgress}><Download size={13} /> Excel</button>
         </div>
       </div>
+
+      {/* Export progress bar */}
+      {exportProgress && (
+        <div style={{ margin: '0 0 12px 0', background: '#F0FDF4', border: '1px solid #BBF7D0', borderRadius: 8, padding: '10px 14px' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+            <span style={{ fontSize: 12, fontWeight: 600, color: '#166534' }}>
+              {exportProgress.done === exportProgress.total && exportProgress.total > 0
+                ? `✓ ${exportProgress.type} downloaded — ${exportProgress.total.toLocaleString()} rows`
+                : `Downloading ${exportProgress.type}… ${exportProgress.done.toLocaleString()} / ${exportProgress.total > 0 ? exportProgress.total.toLocaleString() : '…'} rows`}
+            </span>
+            <span style={{ fontSize: 12, color: '#166534', fontWeight: 700 }}>
+              {exportProgress.total > 0 ? `${Math.round((exportProgress.done / exportProgress.total) * 100)}%` : ''}
+            </span>
+          </div>
+          <div style={{ height: 6, background: '#D1FAE5', borderRadius: 99, overflow: 'hidden' }}>
+            <div style={{ height: '100%', background: '#16A34A', borderRadius: 99, width: exportProgress.total > 0 ? `${(exportProgress.done / exportProgress.total) * 100}%` : '0%', transition: 'width 0.2s ease' }} />
+          </div>
+        </div>
+      )}
 
       {/* Format tabs */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 4, borderBottom: `1px solid ${C.border}`, marginBottom: 14 }}>
