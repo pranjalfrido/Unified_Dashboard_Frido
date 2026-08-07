@@ -426,49 +426,27 @@ export default function LogisticsLedgerPage() {
     const reader = new FileReader();
     reader.onload = async () => {
       try {
-        // Parse in a Web Worker so the main thread (and UI) stays responsive
-        const aoa = await new Promise((resolve, reject) => {
-          const worker = new Worker("/xlsx-worker.js");
-          worker.onmessage = (ev) => {
-            worker.terminate();
-            if (ev.data.ok) resolve(ev.data.aoa);
-            else reject(new Error(ev.data.error));
-          };
-          worker.onerror = (ev) => { worker.terminate(); reject(new Error(ev.message)); };
-          worker.postMessage({ buffer: reader.result });
-        });
-        if (!aoa.length) throw new Error("empty sheet");
-        const wanted = fmt.fields.filter((f) => f.req).map(headKey);
-        let hIdx = aoa.findIndex((r) => { const cells = r.map(normHead); return wanted.every((w) => cells.includes(w)); });
-        if (hIdx === -1) { alert(`Couldn't find the header row for ${fmt.label}.\n\nRequired columns: ${fmt.fields.filter((f) => f.req).map((f) => f.label).join(", ")}.\n\nUse 'Download template' and keep its header row intact.`); return; }
-        const head = aoa[hIdx].map(normHead);
-        const idxOf = {};
-        for (const f of fmt.fields) idxOf[f.key] = head.indexOf(headKey(f));
-        const body = aoa.slice(hIdx + 1);
-        const raw = body.map((r) => {
-          const o = {};
-          for (const f of fmt.fields) {
-            const i = idxOf[f.key]; let v = i === -1 ? "" : r[i];
-            if (f.type === "month") v = normMonth(v) ?? "";
-            else if (f.type === "date") v = normDate(v);
-            else v = v == null ? "" : String(v).trim();
-            o[f.key] = v;
-          }
-          return o;
-        });
+        // All heavy work (XLSX parse + row mapping + validation) runs in a Web Worker
         const sampleSigs = [fmt.fields.reduce((o, f) => ((o[f.key] = f.ex ?? ""), o), {}), SAMPLE2[fmt.key] ?? {}];
         const sigKeys = [fmt.uniqueKey ?? "reference_no", "invoice_number"].filter(Boolean);
-        const isSample = (r) => sampleSigs.some((sig) => sigKeys.every((k) => String(sig[k] ?? "").trim() !== "" && String(r[k] ?? "").trim().toLowerCase() === String(sig[k]).trim().toLowerCase()));
-        const nonEmpty = raw.filter((r) => fmt.fields.some((f) => r[f.key] !== ""));
-        const nonSample = nonEmpty.filter((r) => !isSample(r));
-        // If all rows are samples (user uploading blank template), let them through so upload doesn't silently fail
-        const candidates = nonSample.length > 0 ? nonSample : nonEmpty;
-        const bad = []; const good = [];
-        candidates.forEach((r, i) => {
-          const missing = fmt.fields.filter((f) => f.req && !f.computed && r[f.key] === "").map((f) => f.label);
-          for (const f of fmt.fields) { if (f.req && f.computed && r[f.key] === "" && sumParts(fmt, r) === 0) missing.push(f.label); }
-          if (missing.length) bad.push({ line: hIdx + 2 + i, missing }); else good.push(r);
+        const { good, bad, hIdx, error, reqLabels } = await new Promise((resolve, reject) => {
+          const worker = new Worker("/xlsx-worker.js");
+          worker.onmessage = (ev) => { worker.terminate(); resolve(ev.data); };
+          worker.onerror = (ev) => { worker.terminate(); reject(new Error(ev.message)); };
+          worker.postMessage({
+            buffer: reader.result,
+            fields: fmt.fields,
+            sampleSigs,
+            sigKeys,
+            totalParts: fmt.totalParts,
+            totalField: fmt.totalField,
+          });
         });
+        if (!good && error === "header_not_found") {
+          alert(`Couldn't find the header row for ${fmt.label}.\n\nRequired columns: ${reqLabels.join(", ")}.\n\nUse 'Download template' and keep its header row intact.`);
+          return;
+        }
+        if (!good) throw new Error(error);
         if (bad.length) {
           const preview = bad.slice(0, 8).map((b) => `• row ${b.line}: missing ${b.missing.join(", ")}`).join("\n");
           if (!confirm(`${bad.length} row${bad.length !== 1 ? "s" : ""} will be skipped:\n\n${preview}\n\nImport the ${good.length} valid rows anyway?`)) return;
