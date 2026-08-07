@@ -412,40 +412,20 @@ export default function InventoryPage({ onTopbarDateControl, tab = 'health', set
     const { category, subCategory, stockStatus: stockStatusF, rtdLevel: rtdLevelF, productId, location: locationF, facility: facilityF, facilityType: facilityTypeF } = healthFilters
     const matchCsv = (val, filterArr) => !filterArr?.length || filterArr.includes(val)
 
-    // Resolve facility/facilityType/location filters — keyed at facility grain so that
-    // a location with mixed facility types (e.g. one warehouse + one dark store both at
-    // the same location) is filtered correctly rather than including the whole location
-    // when only one facility type is selected.
-    const facilitiesLookup = raw.filterOptions?.facilities || []
-    const effectiveFacilitySet = facilityF?.length ? new Set(facilityF) : null
-    // facilityType filter → set of matching facility codes
-    const facilityTypeSet = facilityTypeF?.length
-      ? new Set(facilitiesLookup.filter(f => facilityTypeF.includes(f.facilityType)).map(f => f.facility))
-      : null
-    const effectiveLocationSet = locationF?.length ? new Set(locationF) : null
+    // Location filter alone still narrows by the location-level `locations[]` breakdown
+    // (a Location is never split by type, so this is exact either way).
+    let effectiveLocations = locationF?.length ? [...locationF] : null
 
-    // Returns true if the given facility passes all active facility-level filters
-    const facilityPassesFilter = (facilityCode) => {
-      if (effectiveFacilitySet && !effectiveFacilitySet.has(facilityCode)) return false
-      if (facilityTypeSet && !facilityTypeSet.has(facilityCode)) return false
-      return true
-    }
-
-    // When facility-level filters are active, restrict each location entry's inventory to
-    // only the matching facilities, then re-sum. Pure location filter falls through to the
-    // existing location-key logic.
-    const hasFacilityLevelFilter = !!(facilityF?.length || facilityTypeF?.length)
-
-    const filterLocationEntry = (locEntry) => {
-      if (!hasFacilityLevelFilter) return locEntry
-      const matchingFacilities = (locEntry.facilities || []).filter(f => facilityPassesFilter(f.facility))
-      if (!matchingFacilities.length) return null
-      const totalInvt = matchingFacilities.reduce((a, f) => a + (f.totalInvt || 0), 0)
-      const rawInvt = matchingFacilities.reduce((a, f) => a + (f.rawInvt || 0), 0)
-      const rawBlockedInvt = matchingFacilities.reduce((a, f) => a + (f.rawBlockedInvt || 0), 0)
-      const rtdInvt = matchingFacilities.reduce((a, f) => a + (f.rtdInvt || 0), 0)
-      return { ...locEntry, totalInvt, rawInvt, rawBlockedInvt, rtdInvt, facilities: matchingFacilities }
-    }
+    // Facility/FacilityType filters narrow at true FACILITY grain via each SKU's `facilities[]`
+    // array (added alongside `locations[]` specifically so this filter no longer has to
+    // approximate "Regular" as "any location that contains at least one Regular facility" —
+    // a Location can host more than one Facility Type, and the old location-level proxy
+    // wrongly pulled in stock from non-matching facilities that merely share a city with a
+    // matching one. Sales/allocation figures remain Location-grain (sales data has no
+    // facility identity — same limitation the live API fallback has), only the INVENTORY
+    // portion (totalInvt/rawInvt/rawBlockedInvt/rtdInvt) is now facility-exact.
+    const hasFacilityFilter = facilityF?.length || facilityTypeF?.length
+    const matchesFacility = f => (!facilityF?.length || facilityF.includes(f.facility)) && (!facilityTypeF?.length || facilityTypeF.includes(f.facilityType))
 
     let skus = raw.skus
     if (category?.length) skus = skus.filter(s => matchCsv(s.category, category))
@@ -453,14 +433,41 @@ export default function InventoryPage({ onTopbarDateControl, tab = 'health', set
     if (stockStatusF?.length) skus = skus.filter(s => matchCsv(s.stockStatus, stockStatusF))
     if (rtdLevelF?.length) skus = skus.filter(s => matchCsv(s.rtdLevel, rtdLevelF))
     if (productId?.length) skus = skus.filter(s => matchCsv(s.sku, productId))
-    if (hasFacilityLevelFilter || effectiveLocationSet) {
+    if (hasFacilityFilter) {
+      skus = skus
+        .filter(s => s.facilities?.some(f => matchesFacility(f) && (!effectiveLocations?.length || effectiveLocations.includes(f.location))))
+        .map(s => {
+          const facs = (s.facilities || []).filter(f => matchesFacility(f) && (!effectiveLocations?.length || effectiveLocations.includes(f.location)))
+          const totalInvt = facs.reduce((a, f) => a + (f.totalInvt || 0), 0)
+          const rawInvt = facs.reduce((a, f) => a + (f.rawInvt || 0), 0)
+          const rawBlockedInvt = facs.reduce((a, f) => a + (f.rawBlockedInvt || 0), 0)
+          const rtdInvt = facs.reduce((a, f) => a + (f.rtdInvt || 0), 0)
+          // Group matched facilities back to their Location so avgSale/doi/stockStatus (which
+          // only exist at Location grain) can still be shown per remaining location — this
+          // Location list is now the FILTERED inventory total against the SAME Location's
+          // (unfiltered) avgSale, same approach api/inventory.js's true facility filter uses.
+          const locKeys = [...new Set(facs.map(f => f.location))]
+          const origLocs = (s.locations || []).filter(l => locKeys.includes(l.location))
+          const locs = origLocs.map(origLoc => {
+            const facsAtLoc = facs.filter(f => f.location === origLoc.location)
+            const locTotalInvt = facsAtLoc.reduce((a, f) => a + (f.totalInvt || 0), 0)
+            const locRawInvt = facsAtLoc.reduce((a, f) => a + (f.rawInvt || 0), 0)
+            const locRawBlockedInvt = facsAtLoc.reduce((a, f) => a + (f.rawBlockedInvt || 0), 0)
+            const locRtdInvt = facsAtLoc.reduce((a, f) => a + (f.rtdInvt || 0), 0)
+            const doi = origLoc.avgSale > 0 ? Math.floor(locTotalInvt / origLoc.avgSale) : origLoc.doi
+            return { ...origLoc, totalInvt: locTotalInvt, rawInvt: locRawInvt, rawBlockedInvt: locRawBlockedInvt, rtdInvt: locRtdInvt, doi }
+          })
+          const avgSale = locs.reduce((a, l) => a + (l.avgSale || 0), 0)
+          const doi = locs.length === 1 ? locs[0].doi : (avgSale > 0 ? Math.floor(totalInvt / avgSale) : 0)
+          const status = locs.length === 1 ? locs[0].stockStatus : s.stockStatus
+          return { ...s, totalInvt, rawInvt, rawBlockedInvt, rtdInvt, avgSale, doi, stockStatus: status, locations: locs }
+        })
+    } else if (effectiveLocations?.length) {
       skus = skus
         .map(s => {
           let locs = (s.locations || [])
-          // Apply location filter first (coarse)
-          if (effectiveLocationSet) locs = locs.filter(l => effectiveLocationSet.has(l.location))
-          // Apply facility-level filter within each location, re-summing inventory
-          if (hasFacilityLevelFilter) locs = locs.map(filterLocationEntry).filter(Boolean)
+          // Apply location filter
+          if (effectiveLocations?.length) locs = locs.filter(l => effectiveLocations.includes(l.location))
           if (!locs.length) return null
           const totalInvt = locs.reduce((a, l) => a + (l.totalInvt || 0), 0)
           const rawInvt = locs.reduce((a, l) => a + (l.rawInvt || 0), 0)

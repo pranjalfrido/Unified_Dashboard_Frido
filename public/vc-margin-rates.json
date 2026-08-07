@@ -1,0 +1,9 @@
+{
+  "oldMarginEndDate": "2026-06-30",
+  "slabs": [
+    { "minAsp": 0, "maxAsp": 1000, "oldPct": 32, "bauPct": 30, "eventPct": 28 },
+    { "minAsp": 1000, "maxAsp": 2000, "oldPct": 30, "bauPct": 29, "eventPct": 27 },
+    { "minAsp": 2000, "maxAsp": 3000, "oldPct": 28, "bauPct": 27, "eventPct": 25 },
+    { "minAsp": 3000, "maxAsp": null, "oldPct": 25, "bauPct": 23, "eventPct": 21 }
+  ]
+}

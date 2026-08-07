@@ -170,13 +170,16 @@ function TopProductsBarList({ rows, metric, grandTotal, nameWidth = 140 }) {
   // had its own independent `height: 270px`, nested inside an outer 270px `overflow:hidden`
   // wrapper — two separately-set fixed heights that could drift apart by a subpixel under
   // real (non-synthetic) scroll/layout, leaving a blank gap below the last visible row.
+  // When rows are few enough to fit without scrolling (e.g. Category level, ~6-8 rows),
+  // stretch them to fill the box edge-to-edge instead of leaving blank space below the
+  // last row — same fill-vs-scroll split used for Category Revenue/Geography on the Sales tab.
   return (
-    <div style={{ height: '100%', flexShrink: 0, overflowY: 'auto' }}>
+    <div style={{ height: '100%', flexShrink: 0, overflowY: 'auto', display: 'flex', flexDirection: 'column' }}>
       {rows.map((r, i) => {
         const val = r[metric]
         const pctOfTotal = grandTotal > 0 ? (val / grandTotal) * 100 : 0
         return (
-          <div key={r.name} style={{ height: ROW_HEIGHT, boxSizing: 'border-box', display: 'grid', gridTemplateColumns: `18px ${nameWidth}px 1fr 66px 52px`, alignItems: 'center', gap: 8, padding: '4px 0', borderBottom: i < rows.length - 1 ? `1px solid ${IC.border}` : 'none' }}>
+          <div key={r.name} style={{ minHeight: ROW_HEIGHT, flex: '1 1 auto', boxSizing: 'border-box', display: 'grid', gridTemplateColumns: `18px ${nameWidth}px 1fr 66px 52px`, alignItems: 'center', gap: 8, padding: '4px 0', borderBottom: i < rows.length - 1 ? `1px solid ${IC.border}` : 'none' }}>
             <span style={{ fontSize: 10.5, color: IC.t3 }}>{i + 1}</span>
             <span title={r.name} style={{ fontSize: 11.5, color: IC.t1, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.name}</span>
             <div style={{ height: 10, borderRadius: 4, background: 'rgba(0,0,0,0.06)', overflow: 'hidden' }}>
