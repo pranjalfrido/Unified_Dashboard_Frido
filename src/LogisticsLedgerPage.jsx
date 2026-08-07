@@ -126,19 +126,22 @@ const db = {
     const PAGE = 1000;
     const all = [];
     let offset = 0;
-    // Fetch in batches of 10 pages in parallel
     onProgress?.(0, null);
     while (true) {
-      const batch = Array.from({ length: 10 }, (_, i) =>
-        fetch(`${base}&limit=${PAGE}&offset=${offset + i * PAGE}`, { headers: hdrs })
-          .then((r) => r.json())
-          .then((r) => Array.isArray(r) ? r : [])
+      const batch = await Promise.all(
+        Array.from({ length: 10 }, (_, i) =>
+          fetch(`${base}&limit=${PAGE}&offset=${offset + i * PAGE}`, { headers: hdrs })
+            .then((r) => r.json())
+            .then((r) => Array.isArray(r) ? r : [])
+        )
       );
-      const results = await Promise.all(batch);
-      let lastLen = 0;
-      for (const rows of results) { all.push(...rows); lastLen = rows.length; }
+      let done = false;
+      for (const rows of batch) {
+        all.push(...rows);
+        if (rows.length < PAGE) { done = true; break; } // this page was last — stop
+      }
       onProgress?.(all.length, null);
-      if (lastLen < PAGE) break;
+      if (done) break;
       offset += 10 * PAGE;
     }
     return all;
