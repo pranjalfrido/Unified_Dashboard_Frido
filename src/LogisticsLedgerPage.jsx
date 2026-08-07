@@ -420,9 +420,14 @@ export default function LogisticsLedgerPage() {
   const importTemplate = (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
+    // Show parsing state immediately before any heavy work
+    setUploadProgress({ done: 0, total: 0, parsing: true });
+    setBusy(true);
     const reader = new FileReader();
     reader.onload = async () => {
       try {
+        // Yield so browser renders the progress bar before XLSX parsing freezes the thread
+        await new Promise((r) => setTimeout(r, 80));
         const wb = XLSX.read(reader.result, { type: "array", cellDates: true });
         const dataName = wb.SheetNames.find((n) => n.trim().toLowerCase() === "billing_data") ?? wb.SheetNames.find((n) => !/^instruction/i.test(n.trim())) ?? wb.SheetNames[0];
         const ws = wb.Sheets[dataName];
@@ -484,22 +489,22 @@ export default function LogisticsLedgerPage() {
           const brandNew = incoming.filter((r) => !seen.has(k(r)));
           return [...brandNew, ...kept];
         };
-        // Show rows immediately in UI, insert to DB in background
+        // Show rows immediately in UI
         setRows((rs) => mergeIntoGrid(rs, staged));
         setUploadProgress({ done: 0, total: staged.length });
-        setBusy(true);
-        // Yield to browser so progress bar renders before inserts start
         await new Promise((r) => setTimeout(r, 50));
-        try {
-          await db.insertRows(fmt, staged, (done, total) => setUploadProgress({ done, total }));
-          setUploadProgress({ done: staged.length, total: staged.length, finished: true });
-          flash("ok", `Uploaded ${staged.length} line${staged.length !== 1 ? "s" : ""} to ${fmt.table} — ${final.length - replacing.length} new, ${replacing.length} replaced${dupInFile ? `, ${dupInFile} duplicates collapsed` : ""}.`);
-          setTimeout(() => setUploadProgress(null), 4000);
-          db.fetchMonths(fmt).then((m) => setMonthsStore((s) => ({ ...s, [tab]: m }))).catch(() => {});
-        } catch (e) { setUploadProgress(null); alert(`Upload failed: ${e.message ?? e}`); }
-        finally { setBusy(false); }
-      } catch (err) { alert(`Couldn't read that file: ${err.message ?? err}`); }
-      finally { if (fileInput.current) fileInput.current.value = ""; }
+        await db.insertRows(fmt, staged, (done, total) => setUploadProgress({ done, total }));
+        setUploadProgress({ done: staged.length, total: staged.length, finished: true });
+        flash("ok", `Uploaded ${staged.length} rows to ${fmt.table}.`);
+        setTimeout(() => setUploadProgress(null), 4000);
+        db.fetchMonths(fmt).then((m) => setMonthsStore((s) => ({ ...s, [tab]: m }))).catch(() => {});
+      } catch (err) {
+        setUploadProgress(null);
+        alert(`Upload failed: ${err.message ?? err}`);
+      } finally {
+        setBusy(false);
+        if (fileInput.current) fileInput.current.value = "";
+      }
     };
     reader.readAsArrayBuffer(file);
   };
@@ -654,14 +659,15 @@ export default function LogisticsLedgerPage() {
             <span style={{ fontSize: 12, fontWeight: 600, color: '#1E40AF' }}>
               {uploadProgress.finished
                 ? `✓ Upload complete — ${uploadProgress.total.toLocaleString()} rows saved`
+                : uploadProgress.parsing ? `Parsing file…`
                 : `Uploading… ${uploadProgress.done.toLocaleString()} / ${uploadProgress.total.toLocaleString()} rows`}
             </span>
             <span style={{ fontSize: 12, color: '#1E40AF', fontWeight: 700 }}>
-              {Math.round((uploadProgress.done / uploadProgress.total) * 100)}%
+              {uploadProgress.parsing || !uploadProgress.total ? '' : `${Math.round((uploadProgress.done / uploadProgress.total) * 100)}%`}
             </span>
           </div>
           <div style={{ height: 6, background: '#DBEAFE', borderRadius: 99, overflow: 'hidden' }}>
-            <div style={{ height: '100%', background: '#2563EB', borderRadius: 99, width: `${(uploadProgress.done / uploadProgress.total) * 100}%`, transition: 'width 0.3s ease' }} />
+            <div style={{ height: '100%', background: '#2563EB', borderRadius: 99, width: uploadProgress.parsing ? '15%' : uploadProgress.total ? `${(uploadProgress.done / uploadProgress.total) * 100}%` : '0%', transition: 'width 0.3s ease' }} />
           </div>
         </div>
       )}
