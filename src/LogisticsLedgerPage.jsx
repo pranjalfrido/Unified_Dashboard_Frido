@@ -54,7 +54,7 @@ const FORMATS = {
     exportPrefix: "b2c_courier_invoices",
     totalParts: ["freight_charge", "surcharge", "other_charge"],
     totalField: "total_cost",
-    uniqueKey: "awb_number",
+    uniqueKey: null,
     fields: [
       { key: "month_year", label: "month_year", type: "month", req: true, w: 110, ex: "2026-07", desc: "Billing period this invoice covers" },
       { key: "invoice_number", label: "invoice_number", type: "text", w: 155, ex: "INV-DLV-0072451", desc: "Courier's invoice/bill number" },
@@ -83,8 +83,8 @@ const FORMATS = {
     ],
     searchKeys: ["invoice_number", "courier_name", "awb_number", "order_id", "destination_city", "origin_city", "zone", "product"],
     notes: [
-      "awb_number is the unique key. Re-uploading an AWB REPLACES its stored row — no duplicates.",
-      "If the same AWB appears twice in one file, the LAST occurrence wins.",
+      "Upload APPENDS all rows — duplicate AWB numbers are allowed and all rows are stored.",
+      "Re-uploading the same file will add duplicate rows. Delete old data first if needed.",
       "month_year must be YYYY-MM. shipment_date should be YYYY-MM-DD.",
       "total_cost is computed as freight_charge + surcharge + other_charge when left blank.",
       "payment_mode expects Prepaid or COD. shipment_mode expects Forward, RTO or Reverse.",
