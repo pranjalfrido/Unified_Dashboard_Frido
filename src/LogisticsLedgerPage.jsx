@@ -98,13 +98,13 @@ const PK = "id";
 
 const db = {
   async fetchRows(fmt, monthFilter) {
-    // No month filter: show latest 200. With month filter: fetch all rows for that month.
-    if (!monthFilter) {
-      const { data, error } = await supabase.from(fmt.table).select("*").order("month_year", { ascending: false }).order(PK, { ascending: false }).limit(200);
-      if (error) throw error;
-      return data ?? [];
-    }
-    return this.fetchAllRows(fmt, monthFilter);
+    // Always show only 200 rows in UI regardless of filter — exports handle full data
+    let q = supabase.from(fmt.table).select("*").order("month_year", { ascending: false }).order(PK, { ascending: false });
+    if (monthFilter) q = q.eq("month_year", monthFilter);
+    q = q.limit(200);
+    const { data, error } = await q;
+    if (error) throw error;
+    return data ?? [];
   },
 
   async fetchMonths(fmt) {
@@ -276,6 +276,7 @@ export default function LogisticsLedgerPage() {
   const load = useCallback(async (which, month) => {
     const f = FORMATS[which];
     setBusy(true);
+    setExportProgress(null);
     try {
       const [data, allMonths] = await Promise.all([
         db.fetchRows(f, month),
