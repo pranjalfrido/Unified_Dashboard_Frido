@@ -109,21 +109,19 @@ const db = {
   },
 
   async fetchAllRows(fmt) {
-    const PAGE = 1000;
-    let all = [], from = 0;
-    while (true) {
-      const { data, error } = await supabase
-        .from(fmt.table)
-        .select("*")
-        .order("month_year", { ascending: false })
-        .order(PK, { ascending: false })
-        .range(from, from + PAGE - 1);
-      if (error) throw error;
-      all = all.concat(data ?? []);
-      if (!data || data.length < PAGE) break;
-      from += PAGE;
-    }
-    return all;
+    // Single HTTP request — no pagination, no row limit
+    const url = `${import.meta.env.VITE_SUPABASE_URL}/rest/v1/${fmt.table}?select=*&order=month_year.desc,id.desc`;
+    const res = await fetch(url, {
+      headers: {
+        apikey: import.meta.env.VITE_SUPABASE_ANON_KEY,
+        Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
+        Accept: "application/json",
+        Prefer: "count=none",
+        Range: "0-999999999",
+      },
+    });
+    if (!res.ok) throw new Error(`Export fetch failed: ${res.status} ${res.statusText}`);
+    return res.json();
   },
 
   async insertRows(fmt, rows) {
