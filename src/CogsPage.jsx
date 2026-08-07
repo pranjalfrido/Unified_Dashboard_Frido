@@ -1,424 +1,486 @@
 import { useState, useMemo, useRef, useEffect, useCallback } from "react";
 import * as XLSX from "xlsx";
-import { Plus, Trash2, Download, Search, CalendarPlus, X, FileSpreadsheet, Upload, Save, RefreshCw } from "lucide-react";
+import { Plus, Trash2, Download, Search, FileSpreadsheet, Upload, Save, RefreshCw } from "lucide-react";
 import { supabase } from "./supabase.js";
 
-// ── COGS Tracker — Supabase-backed ──────────────────────────────────────────
-// Table: cogs_ledger (itemskucode text, productname text, tallyproductname text,
-//                     subcategory text, category text, month text, cogs numeric,
-//                     is_explicit boolean, PRIMARY KEY (itemskucode, month))
+// ── COGS Tracker — row-wise layout ───────────────────────────────────────────
+// DB: cogs_ledger (itemskucode, productname, tallyproductname, subcategory,
+//                  category, month, cogs, is_explicit)
+// UI: each row = 1 SKU × 1 month, sorted by month then SKU
 
-const FIXED = [
-  { key: "itemskucode", label: "SKU Code", w: "160px", required: true },
-  { key: "productname", label: "Product Name", w: "220px" },
-  { key: "tallyproductname", label: "Tally Product Name", w: "220px" },
-  { key: "subcategory", label: "Sub Category", w: "160px" },
-  { key: "category", label: "Category", w: "160px" },
+const FIELDS = [
+  { key: "month",            label: "Month",              w: 110, req: true,  type: "month", ex: "2026-06" },
+  { key: "itemskucode",      label: "SKU Code",           w: 150, req: true,  type: "text",  ex: "SKU001" },
+  { key: "productname",      label: "Product Name",       w: 220, req: false, type: "text",  ex: "Neck Pillow - Grey" },
+  { key: "tallyproductname", label: "Tally Product Name", w: 200, req: false, type: "text",  ex: "Neck Pillow Grey" },
+  { key: "subcategory",      label: "Sub Category",       w: 150, req: false, type: "text",  ex: "Pillows" },
+  { key: "category",         label: "Category",           w: 150, req: false, type: "text",  ex: "Comfort" },
+  { key: "cogs",             label: "COGS",               w: 110, req: true,  type: "num",   ex: "42.50" },
 ];
 
 const todayMonth = () => new Date().toISOString().slice(0, 7);
-const monthLabel = (m) => {
-  const [y, mo] = m.split("-");
-  const mon = new Date(+y, +mo - 1).toLocaleString("en", { month: "short" });
-  return `${mon}-${String(y).slice(2)}`;
-};
-const nextMonth = (m) => {
-  const [y, mo] = m.split("-").map(Number);
-  return new Date(y, mo, 1).toISOString().slice(0, 7);
-};
 const uid = () => Math.random().toString(36).slice(2, 10);
-const exampleFor = (key) =>
-  ({ itemskucode: "SKU001", productname: "Example Product", category: "Example Category", subcategory: "Example Sub Category", tallyproductname: "Example Tally Name" }[key] ?? "");
-const numOrBlank = (v) => {
-  if (v == null || v === "") return "";
-  const n = Number(v);
-  return Number.isFinite(n) ? n : v;
-};
+const blankRow = () => ({ _uid: uid(), _dirty: true, month: todayMonth(), itemskucode: "", productname: "", tallyproductname: "", subcategory: "", category: "", cogs: "" });
+
 const normMonth = (v) => {
   if (v == null || v === "") return null;
   if (v instanceof Date && !isNaN(v)) return v.toISOString().slice(0, 7);
   const s = String(v).trim();
   const m = s.match(/^(\d{4})[-/.](\d{1,2})/);
   if (m) return `${m[1]}-${String(+m[2]).padStart(2, "0")}`;
-  if (/^\d{4,6}$/.test(s)) {
-    const d = XLSX.SSF ? XLSX.SSF.parse_date_code(+s) : null;
-    if (d && d.y) return `${d.y}-${String(d.m).padStart(2, "0")}`;
-  }
   const d2 = new Date(s);
   if (!isNaN(d2)) return d2.toISOString().slice(0, 7);
   return null;
 };
 
-// Build rows/months from flat Supabase records
-function buildState(records) {
-  const monthSet = new Set();
-  const byKey = new Map();
-  for (const rec of records) {
-    const key = rec.itemskucode.toLowerCase();
-    monthSet.add(rec.month);
-    if (!byKey.has(key)) {
-      byKey.set(key, {
-        id: uid(),
-        itemskucode: rec.itemskucode,
-        productname: rec.productname || "",
-        tallyproductname: rec.tallyproductname || "",
-        subcategory: rec.subcategory || "",
-        category: rec.category || "",
-        cogs: {},
-        explicit: {},
-      });
-    }
-    const row = byKey.get(key);
-    row.cogs[rec.month] = rec.cogs != null ? String(rec.cogs) : "";
-    row.explicit[rec.month] = rec.is_explicit ?? true;
-  }
-  const months = Array.from(monthSet).sort();
-  const rows = Array.from(byKey.values());
-  return { months: months.length ? months : [todayMonth()], rows: rows.length ? rows : [{ id: uid(), itemskucode: "", productname: "", tallyproductname: "", subcategory: "", category: "", cogs: {}, explicit: {} }] };
-}
+const toDbRecord = (r) => ({
+  itemskucode: r.itemskucode.trim(),
+  productname: r.productname || null,
+  tallyproductname: r.tallyproductname || null,
+  subcategory: r.subcategory || null,
+  category: r.category || null,
+  month: r.month,
+  cogs: r.cogs !== "" && r.cogs != null ? Number(r.cogs) : null,
+  is_explicit: true,
+});
+
+const fromDbRecord = (d) => ({
+  _uid: uid(),
+  _dirty: false,
+  month: d.month ?? "",
+  itemskucode: d.itemskucode ?? "",
+  productname: d.productname ?? "",
+  tallyproductname: d.tallyproductname ?? "",
+  subcategory: d.subcategory ?? "",
+  category: d.category ?? "",
+  cogs: d.cogs != null ? String(d.cogs) : "",
+});
 
 export default function CogsPage() {
-  const [months, setMonths] = useState([todayMonth()]);
-  const [rows, setRows] = useState([{ id: uid(), itemskucode: "", productname: "", category: "", subcategory: "", tallyproductname: "", cogs: {}, explicit: {} }]);
+  const [rows, setRows] = useState([blankRow()]);
   const [query, setQuery] = useState("");
-  const [dbLoading, setDbLoading] = useState(true);
+  const [monthFilter, setMonthFilter] = useState("all");
+  const [allMonths, setAllMonths] = useState([]);
+  const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [dbError, setDbError] = useState(null);
-  const [dirty, setDirty] = useState(false);
-  const templateInput = useRef(null);
+  const [status, setStatus] = useState(null);
+  const [uploadProgress, setUploadProgress] = useState(null);
+  const fileInput = useRef(null);
 
-  // Load from Supabase on mount
+  const flash = (kind, text) => {
+    setStatus({ kind, text });
+    if (kind !== "error") setTimeout(() => setStatus(null), 4000);
+  };
+
   const loadFromDb = useCallback(async () => {
-    setDbLoading(true);
-    setDbError(null);
+    setLoading(true);
+    setStatus(null);
     try {
-      const { data, error } = await supabase.from("cogs_ledger").select("*").order("itemskucode").order("month");
+      const { data, error } = await supabase
+        .from("cogs_ledger")
+        .select("*")
+        .order("month", { ascending: true })
+        .order("itemskucode", { ascending: true });
       if (error) throw error;
-      if (data && data.length > 0) {
-        const { months: m, rows: r } = buildState(data);
-        setMonths(m);
-        setRows(r);
-      }
-      setDirty(false);
+      const loaded = (data ?? []).map(fromDbRecord);
+      setRows(loaded.length ? loaded : [blankRow()]);
+      const months = [...new Set((data ?? []).map((d) => d.month).filter(Boolean))].sort();
+      setAllMonths(months);
     } catch (e) {
-      setDbError(e.message || "Failed to load from database");
+      flash("error", `Load failed: ${e.message ?? e}`);
     } finally {
-      setDbLoading(false);
+      setLoading(false);
     }
   }, []);
 
   useEffect(() => { loadFromDb(); }, [loadFromDb]);
 
-  // Save all rows to Supabase (upsert)
   const saveToDb = async () => {
-    const realRows = rows.filter(r => (r.itemskucode || "").trim() !== "");
-    if (!realRows.length) { alert("Add at least one SKU before saving."); return; }
+    const valid = rows.filter((r) => r._dirty && r.itemskucode.trim() && r.month);
+    if (!valid.length) { flash("ok", "Nothing new to save."); return; }
     setSaving(true);
-    setDbError(null);
     try {
-      const records = [];
-      for (const row of realRows) {
-        for (const month of months) {
-          const cogsVal = row.cogs[month];
-          records.push({
-            itemskucode: row.itemskucode.trim(),
-            productname: row.productname || null,
-            tallyproductname: row.tallyproductname || null,
-            subcategory: row.subcategory || null,
-            category: row.category || null,
-            month,
-            cogs: cogsVal !== "" && cogsVal != null ? Number(cogsVal) : null,
-            is_explicit: row.explicit?.[month] ?? false,
-          });
-        }
-      }
+      const records = valid.map(toDbRecord);
       const { error } = await supabase.from("cogs_ledger").upsert(records, { onConflict: "itemskucode,month" });
       if (error) throw error;
-      setDirty(false);
-      alert("Saved to database successfully.");
+      setRows((rs) => rs.map((r) => ({ ...r, _dirty: false })));
+      const months = [...new Set(valid.map((r) => r.month))].sort();
+      setAllMonths((prev) => [...new Set([...prev, ...months])].sort());
+      flash("ok", `Saved ${valid.length} records to database.`);
     } catch (e) {
-      setDbError(e.message || "Save failed");
+      flash("error", `Save failed: ${e.message ?? e}`);
     } finally {
       setSaving(false);
     }
   };
 
-  const filtered = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    if (!q) return rows;
-    return rows.filter(r =>
-      [r.itemskucode, r.productname, r.category, r.subcategory, r.tallyproductname].some(v => (v || "").toLowerCase().includes(q))
-    );
-  }, [rows, query]);
-
-  const mark = () => setDirty(true);
-
-  const setAttr = (id, key, val) => { setRows(rs => rs.map(r => r.id === id ? { ...r, [key]: val } : r)); mark(); };
-  const setCogs = (id, month, val) => {
-    setRows(rs => rs.map(r => r.id === id ? { ...r, cogs: { ...r.cogs, [month]: val }, explicit: { ...(r.explicit || {}), [month]: val !== "" } } : r));
-    mark();
-  };
-  const addRow = () => { setRows(rs => [...rs, { id: uid(), itemskucode: "", productname: "", category: "", subcategory: "", tallyproductname: "", cogs: {}, explicit: {} }]); mark(); };
   const deleteRow = async (id) => {
-    const row = rows.find(r => r.id === id);
-    if (row?.itemskucode?.trim()) {
-      try {
-        await supabase.from("cogs_ledger").delete().eq("itemskucode", row.itemskucode.trim());
-      } catch (e) { /* silently ignore */ }
+    const row = rows.find((r) => r._uid === id);
+    if (!row) return;
+    if (row.itemskucode.trim() && row.month) {
+      if (!confirm(`Delete ${row.itemskucode} / ${row.month}?`)) return;
+      await supabase.from("cogs_ledger").delete().eq("itemskucode", row.itemskucode.trim()).eq("month", row.month);
     }
-    setRows(rs => rs.filter(r => r.id !== id));
-    mark();
-  };
-  const addMonthAfterLast = () => {
-    const last = months[months.length - 1];
-    const nm = nextMonth(last);
-    if (months.includes(nm)) return;
-    setMonths(ms => [...ms, nm]);
-    setRows(rs => rs.map(r => ({ ...r, cogs: { ...r.cogs, [nm]: r.cogs[last] ?? "" } })));
-    mark();
-  };
-  const removeMonth = (m) => {
-    if (months.length === 1) return;
-    setMonths(ms => ms.filter(x => x !== m));
-    setRows(rs => rs.map(r => { const c = { ...r.cogs }; delete c[m]; return { ...r, cogs: c }; }));
-    mark();
+    setRows((rs) => rs.filter((r) => r._uid !== id));
   };
 
+  const setCell = (id, key, val) =>
+    setRows((rs) => rs.map((r) => r._uid === id ? { ...r, [key]: val, _dirty: true } : r));
+
+  const addRow = () => setRows((rs) => [blankRow(), ...rs]);
+
+  const filtered = useMemo(() => {
+    let r = rows;
+    if (monthFilter !== "all") r = r.filter((row) => row.month === monthFilter);
+    const q = query.trim().toLowerCase();
+    if (q) r = r.filter((row) => FIELDS.some((f) => String(row[f.key] ?? "").toLowerCase().includes(q)));
+    return r;
+  }, [rows, monthFilter, query]);
+
+  const unsaved = rows.filter((r) => r._dirty && r.itemskucode.trim() && r.month).length;
+
+  // ── Template download ──────────────────────────────────────────────────────
   const downloadTemplate = () => {
-    const MANDATORY = new Set(["SKU Code", "COGS Month", "COGS"]);
-    const cols = [...FIXED.map(f => ({ label: f.label, ex: exampleFor(f.key) })), { label: "COGS Month", ex: todayMonth() }, { label: "COGS", ex: "42.50" }];
-    const headerRow = cols.map(c => `${c.label} ${MANDATORY.has(c.label) ? "(Mandatory)" : "(Optional)"}`);
-    const ws = XLSX.utils.aoa_to_sheet([headerRow, cols.map(c => c.ex)]);
-    ws["!cols"] = cols.map(c => ({ wch: Math.max(16, c.label.length + 14) }));
-    const green = "1F5C4A", red = "9E2B25";
-    for (let c = 0; c < cols.length; c++) {
+    const headerRow = FIELDS.map((f) => f.req ? `${f.label} *` : f.label);
+    const ex1 = FIELDS.map((f) => f.ex ?? "");
+    const ex2 = FIELDS.map((f) => {
+      if (f.key === "month") return "2026-07";
+      if (f.key === "cogs") return "38.00";
+      if (f.key === "itemskucode") return "SKU002";
+      if (f.key === "productname") return "Back Cushion - Black";
+      return f.ex ?? "";
+    });
+    const ws = XLSX.utils.aoa_to_sheet([headerRow, ex1, ex2]);
+    ws["!cols"] = FIELDS.map((f) => ({ wch: Math.max(14, f.label.length + 6) }));
+    FIELDS.forEach((f, c) => {
       const addr = XLSX.utils.encode_cell({ r: 0, c });
-      ws[addr].s = { font: { bold: true, color: { rgb: "FFFFFF" }, sz: 11 }, fill: { fgColor: { rgb: MANDATORY.has(cols[c].label) ? red : green } }, alignment: { horizontal: "left", vertical: "center" } };
-      const ex = XLSX.utils.encode_cell({ r: 1, c });
-      ws[ex].s = { font: { italic: true, color: { rgb: "9A9382" } } };
-    }
+      if (ws[addr]) ws[addr].s = {
+        font: { bold: true, color: { rgb: "FFFFFF" }, sz: 11 },
+        fill: { patternType: "solid", fgColor: { rgb: f.req ? "9E2B25" : "1F5C4A" } },
+        alignment: { horizontal: "left" },
+      };
+    });
+    const instrData = [
+      ["Column", "Required?", "Description"],
+      ["Month", "YES", "Billing month in YYYY-MM format e.g. 2026-06"],
+      ["SKU Code", "YES", "Your internal SKU / item code"],
+      ["Product Name", "no", "Full product name"],
+      ["Tally Product Name", "no", "Name as it appears in Tally"],
+      ["Sub Category", "no", "Product sub-category"],
+      ["Category", "no", "Product category"],
+      ["COGS", "YES", "Cost of goods sold for this SKU in this month"],
+      [""],
+      ["Notes"],
+      ["1. One row = one SKU for one month."],
+      ["2. To upload multiple months, add rows one below the other — June rows first, then July rows etc."],
+      ["3. Uploading the same SKU + month will UPDATE that record (upsert)."],
+      ["4. Delete the two sample rows before adding your data."],
+    ];
+    const notes = XLSX.utils.aoa_to_sheet(instrData);
+    notes["!cols"] = [{ wch: 22 }, { wch: 12 }, { wch: 80 }];
     const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, "SKUs");
-    const notes = XLSX.utils.aoa_to_sheet([
-      ["How to use this template"], [""],
-      ["MANDATORY columns: SKU Code, COGS Month, COGS."],
-      ["OPTIONAL columns: Product Name, Category, Sub Category, Tally Product Name."], [""],
-      ["1. Keep the header row exactly as-is."],
-      ["2. Delete the grey example row, then add your data below the header."],
-      ["3. COGS Month must be in YYYY-MM format, e.g. 2026-03."],
-      ["4. One row = one SKU's COGS for one month."],
-      ["5. Uploading APPENDS: new SKUs are added; existing SKUs get that month's COGS updated."],
-      ["6. After upload, click Save to persist to the database."],
-    ]);
-    notes["!cols"] = [{ wch: 108 }];
-    if (notes["A1"]) notes["A1"].s = { font: { bold: true, sz: 13 } };
+    XLSX.utils.book_append_sheet(wb, ws, "COGS Data");
     XLSX.utils.book_append_sheet(wb, notes, "Instructions");
     XLSX.writeFile(wb, "cogs_template.xlsx");
   };
 
+  // ── Import ─────────────────────────────────────────────────────────────────
   const importTemplate = (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
+    setUploadProgress({ parsing: true });
     const reader = new FileReader();
-    reader.onload = () => {
+    reader.onload = async () => {
       try {
+        await new Promise((r) => setTimeout(r, 50));
         const wb = XLSX.read(reader.result, { type: "array", cellDates: true });
-        const ws = wb.Sheets[wb.SheetNames[0]];
+        const wsName = wb.SheetNames.find((n) => /cogs|data/i.test(n)) ?? wb.SheetNames[0];
+        const ws = wb.Sheets[wsName];
         const aoa = XLSX.utils.sheet_to_json(ws, { header: 1, blankrows: false });
-        if (!aoa.length) throw new Error("empty");
-        const normHead = (c) => String(c).trim().toLowerCase().replace(/\s*\((mandatory|optional|required)\)\s*$/i, "").trim();
-        let headerIdx = aoa.findIndex(r => { const cells = r.map(normHead); return ["sku code", "cogs month"].every(w => cells.includes(w)); });
-        if (headerIdx === -1) headerIdx = 0;
-        const head = aoa[headerIdx].map(normHead);
-        const col = (label) => head.indexOf(label.toLowerCase());
-        const ci = { sku: col("SKU Code"), name: col("Product Name"), cat: col("Category"), subcat: col("Sub Category"), tally: col("Tally Product Name"), month: col("COGS Month"), cogs: col("COGS") };
-        if (ci.sku === -1 || ci.month === -1 || ci.cogs === -1) { alert("Missing required column (SKU Code, COGS Month, or COGS). Use the downloaded template."); return; }
-        const body = aoa.slice(headerIdx + 1);
-        const rawParsed = body.map(r => ({
-          sku: String(r[ci.sku] ?? "").trim(),
-          name: String(r[ci.name] ?? "").trim(),
-          cat: String(r[ci.cat] ?? "").trim(),
-          subcat: ci.subcat === -1 ? "" : String(r[ci.subcat] ?? "").trim(),
-          tally: ci.tally === -1 ? "" : String(r[ci.tally] ?? "").trim(),
-          month: normMonth(r[ci.month]),
-          cogs: r[ci.cogs] == null ? "" : String(r[ci.cogs]).trim(),
-        })).filter(r => (r.sku || r.name || r.cat || r.subcat || r.tally || r.cogs) && !(r.sku === "SKU001" && r.name === "Example Product"));
-        const bad = [], parsed = [];
-        rawParsed.forEach((r, i) => {
-          const missing = [];
-          if (!r.sku) missing.push("SKU Code");
-          if (r.cogs === "") missing.push("COGS");
-          if (!r.month) missing.push("COGS Month");
-          if (missing.length) bad.push({ line: i + 2, missing });
-          else parsed.push(r);
+        if (!aoa.length) throw new Error("Empty sheet");
+
+        const normHead = (c) => String(c ?? "").trim().toLowerCase().replace(/\s*\*\s*$/, "").replace(/[\s_]+/g, " ").trim();
+        const hIdx = aoa.findIndex((row) => {
+          const cells = row.map(normHead);
+          return ["month", "sku code"].every((w) => cells.includes(w));
         });
+        if (hIdx === -1) throw new Error("Couldn't find header row with 'Month' and 'SKU Code' columns. Use the downloaded template.");
+
+        const head = aoa[hIdx].map(normHead);
+        const ci = {};
+        for (const f of FIELDS) ci[f.key] = head.indexOf(normHead(f.label));
+
+        const body = aoa.slice(hIdx + 1);
+        const good = [], bad = [];
+        body.forEach((row, i) => {
+          const r = {};
+          for (const f of FIELDS) {
+            const idx = ci[f.key];
+            let v = idx === -1 ? "" : row[idx];
+            if (f.type === "month") v = normMonth(v) ?? "";
+            else v = v == null ? "" : String(v).trim();
+            r[f.key] = v;
+          }
+          const isEmpty = !r.itemskucode && !r.cogs;
+          const isSample = r.itemskucode === "SKU001" || r.itemskucode === "SKU002";
+          if (isEmpty || isSample) return;
+
+          const missing = FIELDS.filter((f) => f.req && !r[f.key]).map((f) => f.label);
+          if (missing.length) bad.push({ line: hIdx + 2 + i, missing });
+          else good.push({ ...r, _uid: uid(), _dirty: false });
+        });
+
         if (bad.length) {
-          const preview = bad.slice(0, 8).map(b => `• row ${b.line}: missing ${b.missing.join(", ")}`).join("\n");
-          const more = bad.length > 8 ? `\n…and ${bad.length - 8} more.` : "";
-          const proceed = confirm(`${bad.length} row${bad.length !== 1 ? "s" : ""} skipped:\n\n${preview}${more}\n\nImport ${parsed.length} valid row${parsed.length !== 1 ? "s" : ""} anyway?`);
-          if (!proceed) { if (templateInput.current) templateInput.current.value = ""; return; }
+          const preview = bad.slice(0, 8).map((b) => `• row ${b.line}: missing ${b.missing.join(", ")}`).join("\n");
+          if (!confirm(`${bad.length} row(s) will be skipped:\n\n${preview}\n\nImport ${good.length} valid rows?`)) return;
         }
-        if (!parsed.length) { alert("No rows found."); return; }
-        const fileMonths = Array.from(new Set(parsed.map(r => r.month).filter(Boolean)));
-        const mergedMonths = Array.from(new Set([...months, ...fileMonths])).sort();
-        let added = 0, updated = 0;
-        setRows(prev => {
-          const byKey = new Map(prev.map(r => [r.itemskucode.toLowerCase(), { ...r, cogs: { ...r.cogs }, explicit: { ...(r.explicit || {}) } }]));
-          for (const r of parsed) {
-            const key = r.sku.toLowerCase();
-            if (!byKey.has(key)) { byKey.set(key, { id: uid(), itemskucode: r.sku, productname: r.name, category: r.cat, subcategory: r.subcat, tallyproductname: r.tally, cogs: {}, explicit: {} }); added++; }
-            else { const row = byKey.get(key); if (!row.productname && r.name) row.productname = r.name; if (!row.category && r.cat) row.category = r.cat; if (!row.subcategory && r.subcat) row.subcategory = r.subcat; if (!row.tallyproductname && r.tally) row.tallyproductname = r.tally; }
-          }
-          for (const r of parsed) {
-            if (!r.month || r.cogs === "") continue;
-            const row = byKey.get(r.sku.toLowerCase());
-            row.cogs[r.month] = r.cogs; row.explicit[r.month] = true; updated++;
-          }
-          for (const row of byKey.values()) {
-            let last = "";
-            for (const m of mergedMonths) {
-              const val = row.cogs[m];
-              if (val !== undefined && val !== "") last = val;
-              else if (last !== "") row.cogs[m] = last;
-            }
-          }
-          return Array.from(byKey.values());
-        });
-        setMonths(mergedMonths);
-        mark();
-        alert(`Upload complete.\n${added} new SKU${added !== 1 ? "s" : ""} added, ${updated} COGS value${updated !== 1 ? "s" : ""} updated.\n\nClick Save to persist to the database.`);
-      } catch { alert("Couldn't read that file. Use the template from 'Download template'."); }
-      finally { if (templateInput.current) templateInput.current.value = ""; }
+        if (!good.length) { alert("No valid rows found."); return; }
+
+        setUploadProgress({ done: 0, total: good.length });
+        await new Promise((r) => setTimeout(r, 30));
+
+        const PAGE = 500;
+        let done = 0;
+        for (let i = 0; i < good.length; i += PAGE) {
+          const chunk = good.slice(i, i + PAGE).map(toDbRecord);
+          const { error } = await supabase.from("cogs_ledger").upsert(chunk, { onConflict: "itemskucode,month" });
+          if (error) throw error;
+          done += chunk.length;
+          setUploadProgress({ done, total: good.length });
+        }
+
+        await loadFromDb();
+        setUploadProgress({ done: good.length, total: good.length, finished: true });
+        flash("ok", `Uploaded ${good.length} records.`);
+        setTimeout(() => setUploadProgress(null), 4000);
+      } catch (err) {
+        setUploadProgress(null);
+        alert(`Upload failed: ${err.message ?? err}`);
+      } finally {
+        if (fileInput.current) fileInput.current.value = "";
+      }
     };
     reader.readAsArrayBuffer(file);
   };
 
-  const exportCSV = () => {
-    const header = [...FIXED.map(f => f.label), ...months.map(m => `COGS ${monthLabel(m)}`)];
-    const esc = (v) => { const s = String(v ?? ""); return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s; };
-    const lines = [header.map(esc).join(",")];
-    for (const r of rows) {
-      if ((r.itemskucode || "").trim() === "") continue;
-      lines.push([...FIXED.map(f => esc(r[f.key] ?? "")), ...months.map(m => esc(r.cogs[m] ?? ""))].join(","));
+  // ── Export helpers ─────────────────────────────────────────────────────────
+  const [exportProgress, setExportProgress] = useState(null);
+
+  const fetchAllFromDb = async () => {
+    const all = [];
+    let from = 0;
+    while (true) {
+      const { data, error } = await supabase
+        .from("cogs_ledger")
+        .select("*")
+        .order("month", { ascending: true })
+        .order("itemskucode", { ascending: true })
+        .range(from, from + 999);
+      if (error) throw error;
+      all.push(...data);
+      setExportProgress({ done: all.length });
+      if (data.length < 1000) break;
+      from += 1000;
     }
-    const blob = new Blob([lines.join("\n")], { type: "text/csv;charset=utf-8" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a"); a.href = url; a.download = `cogs_${todayMonth()}.csv`; a.click();
-    URL.revokeObjectURL(url);
+    return all;
   };
 
-  const exportXLSX = () => {
-    const green = "1F5C4A";
-    const realRows = rows.filter(r => (r.itemskucode || "").trim() !== "");
-    if (!realRows.length) { alert("Nothing to export — add at least one SKU first."); return; }
-    const styleHeader = (ws, ncols) => {
-      for (let c = 0; c < ncols; c++) {
-        const addr = XLSX.utils.encode_cell({ r: 0, c });
-        if (ws[addr]) ws[addr].s = { font: { bold: true, color: { rgb: "FFFFFF" }, sz: 11 }, fill: { fgColor: { rgb: green } }, alignment: { horizontal: "left", vertical: "center" } };
+  const exportCSV = async () => {
+    setExportProgress({ done: 0 });
+    try {
+      const all = await fetchAllFromDb();
+      if (!all.length) { alert("Nothing to export."); return; }
+      const header = FIELDS.map((f) => f.label);
+      const esc = (v) => { const s = String(v ?? ""); return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s; };
+      const lines = [header.map(esc).join(",")];
+      for (const r of all) lines.push(FIELDS.map((f) => esc(r[f.key === "cogs" ? "cogs" : f.key] ?? "")).join(","));
+      const blob = new Blob([lines.join("\n")], { type: "text/csv;charset=utf-8" });
+      const a = Object.assign(document.createElement("a"), { href: URL.createObjectURL(blob), download: `cogs_${todayMonth()}.csv` });
+      a.click(); URL.revokeObjectURL(a.href);
+      setExportProgress({ done: all.length, total: all.length, finished: true });
+      setTimeout(() => setExportProgress(null), 3000);
+    } catch (e) { flash("error", `Export failed: ${e.message ?? e}`); setExportProgress(null); }
+  };
+
+  const exportXLSX = async () => {
+    setExportProgress({ done: 0 });
+    try {
+      const all = await fetchAllFromDb();
+      if (!all.length) { alert("Nothing to export."); return; }
+      const head = FIELDS.map((f) => f.label);
+      const body = all.map((r) => FIELDS.map((f) => f.type === "num" ? (r[f.key] != null ? Number(r[f.key]) : "") : r[f.key] ?? ""));
+      const ws = XLSX.utils.aoa_to_sheet([head, ...body]);
+      ws["!cols"] = FIELDS.map((f) => ({ wch: Math.max(12, Math.round(f.w / 7)) }));
+      for (let c = 0; c < head.length; c++) {
+        const a = XLSX.utils.encode_cell({ r: 0, c });
+        if (ws[a]) ws[a].s = { font: { bold: true, color: { rgb: "FFFFFF" }, sz: 11 }, fill: { fgColor: { rgb: "1F5C4A" } } };
       }
-    };
-    const snapHead = [...FIXED.map(f => f.label), "COGS_Update_Month", "Month"];
-    const latestFor = (r) => {
-      const exp = r.explicit || {};
-      for (let i = months.length - 1; i >= 0; i--) { const m = months[i]; if (exp[m] && r.cogs[m] !== undefined && r.cogs[m] !== "") return m; }
-      for (let i = months.length - 1; i >= 0; i--) { const m = months[i]; if (r.cogs[m] !== undefined && r.cogs[m] !== "") return m; }
-      return null;
-    };
-    const snapBody = realRows.map(r => { const m = latestFor(r); return [...FIXED.map(f => r[f.key] ?? ""), m ? numOrBlank(r.cogs[m]) : "", m ? monthLabel(m) : ""]; });
-    const wsSnap = XLSX.utils.aoa_to_sheet([snapHead, ...snapBody]);
-    wsSnap["!cols"] = [{ wch: 18 }, { wch: 40 }, { wch: 18 }, { wch: 18 }, { wch: 24 }, { wch: 18 }, { wch: 10 }];
-    styleHeader(wsSnap, snapHead.length);
-    const longHead = [...FIXED.map(f => f.label), "Month", "COGS"];
-    const longBody = [];
-    for (const m of months) for (const r of realRows) longBody.push([...FIXED.map(f => r[f.key] ?? ""), m, numOrBlank(r.cogs[m])]);
-    const wsLong = XLSX.utils.aoa_to_sheet([longHead, ...longBody]);
-    wsLong["!cols"] = [{ wch: 18 }, { wch: 28 }, { wch: 18 }, { wch: 24 }, { wch: 24 }, { wch: 12 }, { wch: 12 }];
-    styleHeader(wsLong, longHead.length);
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, wsSnap, "Latest COGS");
-    XLSX.utils.book_append_sheet(wb, wsLong, "Month-wise");
-    XLSX.writeFile(wb, `cogs_${todayMonth()}.xlsx`);
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, "COGS");
+      XLSX.writeFile(wb, `cogs_${todayMonth()}.xlsx`);
+      setExportProgress({ done: all.length, total: all.length, finished: true });
+      setTimeout(() => setExportProgress(null), 3000);
+    } catch (e) { flash("error", `Export failed: ${e.message ?? e}`); setExportProgress(null); }
   };
 
-  const S = getStyles();
+  // ── Styles ─────────────────────────────────────────────────────────────────
+  const C = { bg: '#F7F8FA', card: '#FFFFFF', border: '#E8E4DA', t1: '#1A1A2E', t2: '#4A4A6A', t3: '#9A9AB0', accent: '#2F6A45', red: '#9E2B25' };
+  const btnBase = { display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 12, fontWeight: 500, padding: '6px 12px', borderRadius: 7, cursor: 'pointer', fontFamily: 'inherit', border: `1px solid ${C.border}` };
+  const ghostBtn = { ...btnBase, background: C.card, color: C.t2 };
+  const primaryBtn = { ...btnBase, background: C.accent, color: '#fff', border: 'none' };
+  const chipBtn = { ...btnBase, background: '#EAF1EC', color: C.accent, borderRadius: 20 };
 
-  if (dbLoading) return (
-    <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", flexDirection: "column", gap: 12, color: "#8A8271" }}>
-      <RefreshCw size={28} style={{ opacity: 0.4, animation: "spin 1s linear infinite" }} />
+  if (loading) return (
+    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '60vh', gap: 10, color: C.t3 }}>
+      <RefreshCw size={20} style={{ animation: 'spin 1s linear infinite' }} />
       <span style={{ fontSize: 13 }}>Loading COGS data…</span>
       <style>{`@keyframes spin { to { transform: rotate(360deg) } }`}</style>
     </div>
   );
 
   return (
-    <div style={S.page}>
-      <style>{globalCSS}</style>
-      <header style={S.header}>
-        <div style={S.actions}>
-          {dbError && <span style={{ fontSize: 12, color: "#C4483A", maxWidth: 240 }}>⚠ {dbError}</span>}
-          <div style={S.searchWrap}>
-            <Search size={15} style={{ opacity: 0.5 }} />
-            <input style={S.search} placeholder="Filter SKUs…" value={query} onChange={e => setQuery(e.target.value)} />
+    <div style={{ padding: '24px 32px 48px', minHeight: '100vh', background: C.bg, color: C.t1, fontFamily: 'inherit' }}>
+      <style>{`@keyframes shimmer { 0%{background-position:200% 0} 100%{background-position:-200% 0} }`}</style>
+
+      {/* Header */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12, marginBottom: 20 }}>
+        <div>
+          <div style={{ fontSize: 11, fontWeight: 700, color: C.t3, textTransform: 'uppercase', letterSpacing: '.1em', marginBottom: 4 }}>SKU-wise · month-wise</div>
+          <div style={{ fontSize: 20, fontWeight: 800, color: C.t1, letterSpacing: -0.5 }}>COGS Tracker</div>
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, background: C.card, border: `1px solid ${C.border}`, borderRadius: 7, padding: '6px 10px' }}>
+            <Search size={13} style={{ color: C.t3 }} />
+            <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Filter SKUs…"
+              style={{ border: 'none', background: 'transparent', fontSize: 12, color: C.t1, width: 130, outline: 'none' }} />
           </div>
-          <button style={S.ghostBtn} onClick={downloadTemplate}><FileSpreadsheet size={15} /> Download template</button>
-          <button style={S.ghostBtn} onClick={() => templateInput.current?.click()}><Upload size={15} /> Upload template</button>
-          <input ref={templateInput} type="file" accept=".xlsx,.xls" onChange={importTemplate} style={{ display: "none" }} />
-          <button style={S.ghostBtn} onClick={exportCSV}><Download size={15} /> Export CSV</button>
-          <button style={S.ghostBtn} onClick={exportXLSX}><Download size={15} /> Export Excel</button>
-          <button style={S.ghostBtn} onClick={loadFromDb}><RefreshCw size={15} /> Refresh</button>
-          <button style={{ ...S.primaryBtn, opacity: saving ? 0.7 : 1 }} onClick={saveToDb} disabled={saving}>
-            <Save size={15} /> {saving ? "Saving…" : dirty ? "Save *" : "Save"}
+          <select value={monthFilter} onChange={(e) => setMonthFilter(e.target.value)}
+            style={{ ...ghostBtn, padding: '6px 10px' }}>
+            <option value="all">All months</option>
+            {allMonths.map((m) => <option key={m} value={m}>{m}</option>)}
+          </select>
+          <button style={ghostBtn} onClick={downloadTemplate}><FileSpreadsheet size={13} /> Template</button>
+          <button style={ghostBtn} onClick={() => fileInput.current?.click()}><Upload size={13} /> Upload</button>
+          <input ref={fileInput} type="file" accept=".xlsx,.xls,.csv" onChange={importTemplate} style={{ display: 'none' }} />
+          <button style={ghostBtn} onClick={exportCSV}><Download size={13} /> CSV</button>
+          <button style={ghostBtn} onClick={exportXLSX}><Download size={13} /> Excel</button>
+          <button style={ghostBtn} onClick={loadFromDb}><RefreshCw size={13} /> Reload</button>
+          <button style={{ ...primaryBtn, opacity: saving ? 0.7 : 1 }} onClick={saveToDb} disabled={saving}>
+            <Save size={13} /> {saving ? "Saving…" : unsaved ? `Save (${unsaved})` : "Save"}
           </button>
         </div>
-      </header>
-
-      <div style={S.toolbar}>
-        <button style={S.chipBtn} onClick={addRow}><Plus size={15} /> Add SKU</button>
-        <button style={S.chipBtn} onClick={addMonthAfterLast}><CalendarPlus size={15} /> Add month (fills from {monthLabel(months[months.length - 1])})</button>
-        <span style={S.count}>{rows.length} SKU{rows.length !== 1 ? "s" : ""} · {months.length} month{months.length !== 1 ? "s" : ""}</span>
-        {dirty && <span style={{ fontSize: 11.5, color: "#C4483A", fontWeight: 600 }}>Unsaved changes — click Save</span>}
       </div>
 
-      <div style={S.tableWrap}>
-        <table style={S.table}>
+      {/* Upload progress bar */}
+      {uploadProgress && (
+        <div style={{ margin: '0 0 12px 0', background: '#EFF6FF', border: '1px solid #BFDBFE', borderRadius: 8, padding: '10px 14px' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+            <span style={{ fontSize: 13, fontWeight: 700, color: '#1E40AF' }}>
+              {uploadProgress.finished ? `✓ Upload complete — ${uploadProgress.total.toLocaleString()} records saved`
+                : uploadProgress.parsing ? `⏳ Parsing file… please wait`
+                : `⬆ Uploading… ${uploadProgress.done.toLocaleString()} / ${uploadProgress.total.toLocaleString()} records`}
+            </span>
+            <span style={{ fontSize: 13, color: '#1E40AF', fontWeight: 800 }}>
+              {uploadProgress.finished ? '100%' : uploadProgress.parsing || !uploadProgress.total ? '' : `${Math.round((uploadProgress.done / uploadProgress.total) * 100)}%`}
+            </span>
+          </div>
+          <div style={{ height: 8, background: '#DBEAFE', borderRadius: 99, overflow: 'hidden' }}>
+            {uploadProgress.parsing
+              ? <div style={{ height: '100%', width: '30%', background: 'linear-gradient(90deg,#2563EB 0%,#60A5FA 50%,#2563EB 100%)', backgroundSize: '200% 100%', borderRadius: 99, animation: 'shimmer 1.2s infinite linear' }} />
+              : <div style={{ height: '100%', background: '#2563EB', borderRadius: 99, width: uploadProgress.total ? `${(uploadProgress.done / uploadProgress.total) * 100}%` : '0%', transition: 'width 0.3s ease' }} />
+            }
+          </div>
+          {!uploadProgress.parsing && !uploadProgress.finished && uploadProgress.total > 0 && (
+            <div style={{ fontSize: 11, color: '#3B82F6', marginTop: 4 }}>{(uploadProgress.total - uploadProgress.done).toLocaleString()} records remaining…</div>
+          )}
+        </div>
+      )}
+
+      {/* Export progress bar */}
+      {exportProgress && (
+        <div style={{ margin: '0 0 12px 0', background: '#F0FDF4', border: '1px solid #BBF7D0', borderRadius: 8, padding: '10px 14px' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+            <span style={{ fontSize: 13, fontWeight: 700, color: '#166534' }}>
+              {exportProgress.finished
+                ? `✓ Downloaded — ${exportProgress.total.toLocaleString()} rows`
+                : `⬇ Fetching rows… ${exportProgress.done.toLocaleString()} fetched`}
+            </span>
+          </div>
+          <div style={{ height: 6, background: '#D1FAE5', borderRadius: 99, overflow: 'hidden' }}>
+            <div style={{ height: '100%', background: '#16A34A', borderRadius: 99, width: exportProgress.finished ? '100%' : `${Math.min(90, 10 + exportProgress.done / 50)}%`, transition: 'width 0.4s ease' }} />
+          </div>
+        </div>
+      )}
+
+      {/* Status */}
+      {status && (
+        <div style={{ fontSize: 12.5, padding: '8px 12px', borderRadius: 8, marginBottom: 10, border: `1px solid ${status.kind === 'error' ? '#FCA5A5' : '#BBF7D0'}`, background: status.kind === 'error' ? '#FEF2F2' : '#F0FDF4', color: status.kind === 'error' ? C.red : C.accent }}>
+          {status.text}
+        </div>
+      )}
+
+      {/* Toolbar */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+        <button style={chipBtn} onClick={addRow}><Plus size={13} /> Add row</button>
+        <span style={{ fontSize: 11, color: C.t3, fontFamily: 'monospace', marginLeft: 4 }}>
+          {filtered.length} record{filtered.length !== 1 ? 's' : ''}{monthFilter !== 'all' ? ` · ${monthFilter}` : ''}{query ? ' (filtered)' : ''}
+        </span>
+        {unsaved > 0 && <span style={{ fontSize: 11, color: C.red, fontWeight: 600 }}>● {unsaved} unsaved — click Save</span>}
+      </div>
+
+      {/* Table */}
+      <div style={{ border: `1px solid ${C.border}`, borderRadius: 10, overflow: 'auto', background: C.card, maxHeight: '65vh' }}>
+        <table style={{ borderCollapse: 'separate', borderSpacing: 0, width: '100%', fontSize: 12.5 }}>
           <thead>
             <tr>
-              {FIXED.map(f => (
-                <th key={f.key} style={{ ...S.th, ...S.thSticky, minWidth: f.w }}>
-                  {f.label}{f.required && <span style={{ color: "#C4483A" }}> *</span>}
+              {FIELDS.map((f, i) => (
+                <th key={f.key} style={{
+                  position: 'sticky', top: 0, zIndex: i === 0 ? 3 : 2,
+                  left: i === 0 ? 0 : undefined,
+                  background: '#F5F2EC', textAlign: f.type === 'num' ? 'right' : 'left',
+                  padding: '9px 10px', fontSize: 11, fontWeight: 700, color: C.t2,
+                  textTransform: 'uppercase', letterSpacing: 0.4,
+                  borderBottom: `1px solid ${C.border}`, whiteSpace: 'nowrap', minWidth: f.w,
+                }}>
+                  {f.label}{f.req && <span style={{ color: C.red }}> *</span>}
                 </th>
               ))}
-              {months.map(m => (
-                <th key={m} style={{ ...S.th, ...S.thMonth }}>
-                  <div style={S.monthHead}>
-                    <span>{monthLabel(m)}</span>
-                    {months.length > 1 && (
-                      <button style={S.removeMonth} title="Remove month" onClick={() => removeMonth(m)}><X size={12} /></button>
-                    )}
-                  </div>
-                </th>
-              ))}
-              <th style={{ ...S.th, width: 44 }} />
+              <th style={{ position: 'sticky', top: 0, zIndex: 2, background: '#F5F2EC', width: 40, borderBottom: `1px solid ${C.border}` }} />
             </tr>
           </thead>
           <tbody>
             {filtered.length === 0 && (
-              <tr><td colSpan={FIXED.length + months.length + 1} style={S.empty}>No SKUs match your filter. Clear the filter or add a new SKU.</td></tr>
+              <tr><td colSpan={FIELDS.length + 1} style={{ padding: '32px 16px', textAlign: 'center', color: C.t3, fontSize: 13 }}>
+                No records found. Download the template, fill it in, and upload — or add a row manually.
+              </td></tr>
             )}
-            {filtered.map(r => (
-              <tr key={r.id} className="cogs-row">
-                {FIXED.map(f => (
-                  <td key={f.key} style={{ ...S.td, ...S.tdSticky }}>
-                    <input style={S.cellInput} value={r[f.key]} placeholder={f.label} onChange={e => setAttr(r.id, f.key, e.target.value)} />
+            {filtered.map((r) => (
+              <tr key={r._uid}
+                onMouseEnter={(e) => e.currentTarget.querySelectorAll('td').forEach((td) => td.style.background = '#FAFAF7')}
+                onMouseLeave={(e) => e.currentTarget.querySelectorAll('td').forEach((td) => td.style.background = C.card)}>
+                {FIELDS.map((f, i) => (
+                  <td key={f.key} style={{
+                    padding: 0, background: C.card, borderBottom: '1px solid #F0ECE3',
+                    position: i === 0 ? 'sticky' : undefined, left: i === 0 ? 0 : undefined, zIndex: i === 0 ? 1 : undefined,
+                  }}>
+                    <input
+                      value={r[f.key] ?? ""}
+                      onChange={(e) => setCell(r._uid, f.key, e.target.value)}
+                      placeholder={f.ex}
+                      style={{
+                        width: '100%', border: 'none', background: 'transparent',
+                        padding: '9px 10px', fontSize: 12.5, color: C.t1, fontFamily: 'inherit',
+                        textAlign: f.type === 'num' ? 'right' : 'left',
+                        outline: 'none', boxSizing: 'border-box',
+                      }}
+                    />
                   </td>
                 ))}
-                {months.map(m => (
-                  <td key={m} style={S.td}>
-                    <input style={{ ...S.cellInput, ...S.numInput }} value={r.cogs[m] ?? ""} placeholder="0.00" inputMode="decimal" onChange={e => setCogs(r.id, m, e.target.value)} />
-                  </td>
-                ))}
-                <td style={{ ...S.td, textAlign: "center" }}>
-                  <button style={S.delBtn} title="Delete SKU" onClick={() => deleteRow(r.id)}><Trash2 size={15} /></button>
+                <td style={{ padding: '0 4px', textAlign: 'center', background: C.card, borderBottom: '1px solid #F0ECE3' }}>
+                  <button onClick={() => deleteRow(r._uid)}
+                    style={{ background: 'transparent', border: 'none', color: '#C4483A', cursor: 'pointer', padding: 4, borderRadius: 4 }}>
+                    <Trash2 size={13} />
+                  </button>
                 </td>
               </tr>
             ))}
@@ -426,44 +488,9 @@ export default function CogsPage() {
         </table>
       </div>
 
-      <p style={S.note}>Data is persisted to Supabase. Click <strong>Save</strong> after any edits. One row per SKU — new months add a column.</p>
+      <p style={{ fontSize: 12, color: C.t3, marginTop: 12 }}>
+        One row = one SKU for one month. Same SKU + month on upload will update the existing record. Use <strong>Month</strong> dropdown to filter by month.
+      </p>
     </div>
   );
-}
-
-const globalCSS = `
-  .cogs-row:hover td { background: #FBFAF7 !important; }
-  .cogs-row:hover td:first-child { background: #F5F2EC !important; }
-`;
-
-function getStyles() {
-  const ink = "#1C1A16", line = "#E6E1D6", paper = "#FCFBF8", accent = "#1F5C4A", accentSoft = "#EAF1EC";
-  return {
-    page: { fontFamily: "'DM Sans', system-ui, sans-serif", background: paper, color: ink, minHeight: "100%", padding: "28px 24px 48px" },
-    header: { display: "flex", justifyContent: "space-between", alignItems: "flex-end", flexWrap: "wrap", gap: 16, marginBottom: 20 },
-    eyebrow: { fontFamily: "'DM Mono', monospace", fontSize: 11, letterSpacing: "0.14em", textTransform: "uppercase", color: accent, marginBottom: 4 },
-    h1: { fontFamily: "'Fraunces', Georgia, serif", fontSize: 34, fontWeight: 600, margin: 0, letterSpacing: "-0.02em" },
-    actions: { display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" },
-    searchWrap: { display: "flex", alignItems: "center", gap: 7, background: "#fff", border: `1px solid ${line}`, borderRadius: 8, padding: "8px 11px" },
-    search: { border: "none", background: "transparent", fontSize: 14, width: 130, color: ink },
-    primaryBtn: { display: "inline-flex", alignItems: "center", gap: 7, background: accent, color: "#fff", border: "none", padding: "9px 15px", borderRadius: 8, fontSize: 14, fontWeight: 500, cursor: "pointer" },
-    ghostBtn: { display: "inline-flex", alignItems: "center", gap: 7, background: "#fff", color: ink, border: `1px solid ${line}`, padding: "9px 14px", borderRadius: 8, fontSize: 14, cursor: "pointer" },
-    toolbar: { display: "flex", alignItems: "center", gap: 10, marginBottom: 14, flexWrap: "wrap" },
-    chipBtn: { display: "inline-flex", alignItems: "center", gap: 6, background: accentSoft, color: accent, border: `1px solid ${line}`, padding: "7px 13px", borderRadius: 20, fontSize: 13, fontWeight: 500, cursor: "pointer" },
-    count: { fontFamily: "'DM Mono', monospace", fontSize: 12, color: "#8A8271", marginLeft: 4 },
-    tableWrap: { border: `1px solid ${line}`, borderRadius: 12, overflow: "auto", background: "#fff", maxHeight: "68vh" },
-    table: { borderCollapse: "separate", borderSpacing: 0, width: "100%", fontSize: 14 },
-    th: { position: "sticky", top: 0, zIndex: 2, background: "#F5F2EC", textAlign: "left", padding: "11px 12px", fontWeight: 600, fontSize: 12.5, color: "#5C574B", borderBottom: `1px solid ${line}`, whiteSpace: "nowrap" },
-    thSticky: { left: 0, zIndex: 3 },
-    thMonth: { textAlign: "right", fontFamily: "'DM Mono', monospace", letterSpacing: "0.02em" },
-    monthHead: { display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 6 },
-    removeMonth: { display: "inline-flex", background: "transparent", border: "none", color: "#B0A99A", cursor: "pointer", padding: 0 },
-    td: { padding: 0, borderBottom: `1px solid #F0ECE3`, background: "#fff" },
-    tdSticky: { position: "sticky", left: 0, zIndex: 1, background: "#fff" },
-    cellInput: { width: "100%", border: "none", background: "transparent", padding: "11px 12px", fontSize: 14, color: ink, fontFamily: "inherit" },
-    numInput: { textAlign: "right", fontFamily: "'DM Mono', monospace", fontVariantNumeric: "tabular-nums" },
-    delBtn: { display: "inline-flex", background: "transparent", border: "none", color: "#C4483A", cursor: "pointer", padding: 6, borderRadius: 6 },
-    empty: { padding: "34px 16px", textAlign: "center", color: "#9A9382", fontSize: 14 },
-    note: { fontSize: 12.5, color: "#9A9382", marginTop: 16, maxWidth: 640, lineHeight: 1.5 },
-  };
 }
