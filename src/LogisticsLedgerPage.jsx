@@ -148,7 +148,6 @@ const db = {
   },
 
   async insertRows(fmt, rows, onProgress) {
-    // Sequential inserts — reliable, progress updates every chunk
     const PAGE = 500;
     let inserted = 0;
     for (let i = 0; i < rows.length; i += PAGE) {
@@ -160,6 +159,8 @@ const db = {
       if (error) throw error;
       inserted += chunk.length;
       onProgress?.(inserted, rows.length);
+      // Yield to browser every 5 chunks so UI stays responsive
+      if ((i / PAGE) % 5 === 4) await new Promise((r) => setTimeout(r, 0));
     }
     return [];
   },
@@ -487,6 +488,8 @@ export default function LogisticsLedgerPage() {
         setRows((rs) => mergeIntoGrid(rs, staged));
         setUploadProgress({ done: 0, total: staged.length });
         setBusy(true);
+        // Yield to browser so progress bar renders before inserts start
+        await new Promise((r) => setTimeout(r, 50));
         try {
           await db.insertRows(fmt, staged, (done, total) => setUploadProgress({ done, total }));
           setUploadProgress({ done: staged.length, total: staged.length, finished: true });
