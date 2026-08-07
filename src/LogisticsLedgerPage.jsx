@@ -469,14 +469,14 @@ export default function LogisticsLedgerPage() {
   const unsaved = rows.filter((r) => (!r[PK] && hasContent(fmt, r)) || r._dirty).length;
   const TabIcon = fmt.icon;
 
-  // dashboard theme colors
-  const C = { bg: '#181A20', card: '#1E2028', border: '#2A2D35', t1: '#F1F1F3', t2: '#A0A4B0', t3: '#6B6F7E', accent: '#3B82F6', green: '#22C55E', red: '#EF4444' };
+  // light theme matching other dashboard tabs
+  const C = { bg: '#F7F8FA', card: '#FFFFFF', border: '#E8E4DA', t1: '#1A1A2E', t2: '#4A4A6A', t3: '#9A9AB0', accent: '#2F6A45', green: '#166534', red: '#9E2B25' };
 
   const btnBase = { display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 12, fontWeight: 500, padding: '6px 12px', borderRadius: 7, cursor: 'pointer', fontFamily: 'inherit', border: `1px solid ${C.border}` };
   const ghostBtn = { ...btnBase, background: C.card, color: C.t2 };
   const primaryBtn = { ...btnBase, background: C.accent, color: '#fff', border: 'none' };
-  const chipBtn = { ...btnBase, background: C.card, color: C.t2, borderRadius: 20 };
-  const chipHot = { background: '#2A1F0E', color: '#F59E0B', borderColor: '#78450F' };
+  const chipBtn = { ...btnBase, background: '#EAF1EC', color: C.accent, borderRadius: 20 };
+  const chipHot = { background: '#FEF3C7', color: '#92400E', borderColor: '#FDE68A' };
 
   return (
     <div style={{ padding: '24px 32px 48px', minHeight: '100vh', background: C.bg, color: C.t1, fontFamily: 'inherit' }}>
@@ -531,7 +531,7 @@ export default function LogisticsLedgerPage() {
 
       {/* Status banner */}
       {status && (
-        <div style={{ fontSize: 12.5, padding: '8px 12px', borderRadius: 8, marginBottom: 10, border: `1px solid ${status.kind === 'error' ? '#7F1D1D' : '#14532D'}`, background: status.kind === 'error' ? '#2D0A0A' : '#0A1F14', color: status.kind === 'error' ? C.red : C.green }}>
+        <div style={{ fontSize: 12.5, padding: '8px 12px', borderRadius: 8, marginBottom: 10, border: `1px solid ${status.kind === 'error' ? '#FCA5A5' : '#BBF7D0'}`, background: status.kind === 'error' ? '#FEF2F2' : '#F0FDF4', color: status.kind === 'error' ? C.red : C.green }}>
           {status.text}
         </div>
       )}
@@ -542,12 +542,12 @@ export default function LogisticsLedgerPage() {
           <thead>
             <tr>
               {fmt.fields.map((f, i) => (
-                <th key={f.key} style={{ position: 'sticky', top: 0, zIndex: i === 0 ? 3 : 2, left: i === 0 ? 0 : undefined, background: '#16181F', textAlign: f.type === 'num' || f.type === 'int' ? 'right' : 'left', padding: '9px 10px', fontSize: 11, fontWeight: 700, color: C.t3, textTransform: 'uppercase', letterSpacing: 0.4, borderBottom: `1px solid ${C.border}`, whiteSpace: 'nowrap', minWidth: f.w }}
+                <th key={f.key} style={{ position: 'sticky', top: 0, zIndex: i === 0 ? 3 : 2, left: i === 0 ? 0 : undefined, background: '#F5F2EC', textAlign: f.type === 'num' || f.type === 'int' ? 'right' : 'left', padding: '9px 10px', fontSize: 11, fontWeight: 700, color: C.t2, textTransform: 'uppercase', letterSpacing: 0.4, borderBottom: `1px solid ${C.border}`, whiteSpace: 'nowrap', minWidth: f.w }}
                   title={[f.desc, f.req ? 'Mandatory.' : 'Optional.', f.computed ? 'Auto-computed.' : null].filter(Boolean).join(' ')}>
                   {f.label}{f.req && <span style={{ color: C.red }}> *</span>}{f.computed && <span style={{ color: C.t3 }}> ƒ</span>}
                 </th>
               ))}
-              <th style={{ position: 'sticky', top: 0, zIndex: 2, background: '#16181F', width: 40, borderBottom: `1px solid ${C.border}` }} />
+              <th style={{ position: 'sticky', top: 0, zIndex: 2, background: '#F5F2EC', width: 40, borderBottom: `1px solid ${C.border}` }} />
             </tr>
           </thead>
           <tbody>
@@ -557,8 +557,8 @@ export default function LogisticsLedgerPage() {
               </td></tr>
             )}
             {filtered.map((r) => (
-              <tr key={r._uid} style={{ borderBottom: `1px solid ${C.border}` }}
-                onMouseEnter={e => e.currentTarget.querySelectorAll('td').forEach(td => td.style.background = '#22242E')}
+              <tr key={r._uid} style={{ borderBottom: `1px solid #F0ECE3` }}
+                onMouseEnter={e => e.currentTarget.querySelectorAll('td').forEach(td => td.style.background = '#FAFAF7')}
                 onMouseLeave={e => e.currentTarget.querySelectorAll('td').forEach(td => td.style.background = C.card)}>
                 {fmt.fields.map((f, i) => {
                   const isTotal = f.key === fmt.totalField;
@@ -573,7 +573,7 @@ export default function LogisticsLedgerPage() {
                         inputMode={f.type === "num" || f.type === "int" ? "decimal" : undefined}
                         onChange={(e) => setCell(r._uid, f.key, e.target.value)}
                         onBlur={() => commitCell(r._uid)}
-                        style={{ width: '100%', border: 'none', background: dupCell ? '#2D0A0A' : 'transparent', padding: '9px 10px', fontSize: 12.5, color: dupCell ? C.red : derived ? C.t3 : C.t1, fontFamily: derived || f.type === 'num' || f.type === 'int' ? 'monospace' : 'inherit', textAlign: f.type === 'num' || f.type === 'int' ? 'right' : 'left', fontStyle: derived ? 'italic' : 'normal', outline: 'none' }}
+                        style={{ width: '100%', border: 'none', background: dupCell ? '#FEF2F2' : 'transparent', padding: '9px 10px', fontSize: 12.5, color: dupCell ? C.red : derived ? C.t3 : C.t1, fontFamily: derived || f.type === 'num' || f.type === 'int' ? 'monospace' : 'inherit', textAlign: f.type === 'num' || f.type === 'int' ? 'right' : 'left', fontStyle: derived ? 'italic' : 'normal', outline: 'none' }}
                         title={dupCell ? `Duplicate ${f.label}` : derived ? "Computed — type to override" : undefined}
                       />
                     </td>
