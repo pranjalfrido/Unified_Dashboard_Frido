@@ -69,7 +69,7 @@ function MetricPicker({ options, selected, onToggle, onSelectAll, onClearAll }) 
 // attribution — see amzSC.dailyPnLBySku / amzVCMatrix.dailyPnLBySku in api/bq.js) supplies the
 // %-based metrics; only Amazon populates it today, so the %-metric checkboxes are simply absent
 // (not shown, not just disabled) for any channel without it — nothing to slice that doesn't exist.
-function PnLTrendCard({ title, daily, dailyPnL, grossColor, grossGradId, boxHeight, showMarketing = true }) {
+function PnLTrendCard({ title, daily, dailyPnL, grossColor, grossGradId, boxHeight, showMarketing = true, hideUnits = false }) {
   const nDays = daily.length
   const autoGroup = nDays <= 14 ? 'daily' : nDays <= 90 ? 'weekly' : 'monthly'
   const [groupBy, setGroupBy] = useState(autoGroup)
@@ -77,7 +77,9 @@ function PnLTrendCard({ title, daily, dailyPnL, grossColor, grossGradId, boxHeig
   // showMarketing's own gating everywhere else — KPI cards, Financial View table) — Seller
   // Central/Vendor Central individually never have a real CM2, so it's excluded from the slicer
   // entirely there rather than showing an option that would always plot as empty.
-  const availableMetrics = TREND_METRICS.filter(m => (m.axis !== 'pct' || (dailyPnL && dailyPnL.length > 0)) && (m.key !== 'cm2Pct' || showMarketing))
+  // hideUnits: Amazon's All/SC/VC views don't want a Units line on this chart at all (confirmed
+  // with the user) — removed from the picker entirely, not just unchecked by default.
+  const availableMetrics = TREND_METRICS.filter(m => (m.axis !== 'pct' || (dailyPnL && dailyPnL.length > 0)) && (m.key !== 'cm2Pct' || showMarketing) && (m.key !== 'units' || !hideUnits))
   const [selectedKeys, setSelectedKeys] = useState(() => DEFAULT_METRIC_KEYS.filter(k => availableMetrics.some(m => m.key === k)))
   // PnLTrendCard stays mounted across the All/SC/VC toggle (same component instance, only props
   // change) — availableMetrics narrows when switching to SC/VC (CM2% drops out), so any
@@ -85,7 +87,7 @@ function PnLTrendCard({ title, daily, dailyPnL, grossColor, grossGradId, boxHeig
   // "ghost" line/legend entry that isn't even in the dropdown anymore.
   useEffect(() => {
     setSelectedKeys(prev => prev.filter(k => availableMetrics.some(m => m.key === k)))
-  }, [showMarketing, !!dailyPnL])
+  }, [showMarketing, !!dailyPnL, hideUnits])
   const toggleMetric = key => setSelectedKeys(prev => prev.includes(key) ? prev.filter(k => k !== key) : [...prev, key])
   const selectAllMetrics = () => setSelectedKeys(availableMetrics.map(m => m.key))
   const clearAllMetrics = () => setSelectedKeys([])
@@ -197,7 +199,7 @@ function PnLTrendCard({ title, daily, dailyPnL, grossColor, grossGradId, boxHeig
 // simpler 5-card row (Gross/Net/Returns/Orders/AOV-ASP), unchanged.
 // dailyPnL: optional day-wise series (see api/bq.js amzSC.dailyPnLBySku/amzVCMatrix.dailyPnLBySku)
 // that adds SnD%/GM%/CM1% lines to the trend chart — both currently only populated for Amazon.
-export default function PnLChannelTab({ title, note, gross, excRev, net, units, orders, returnRev, subCatData, skuData, adSpendMap, sndBySku, daily, dailyPnL, kpiSummary, grossOfTotalPct, grossColor = '#FFD600', gradId = 'pnlGrossGrad', showMarketing = true, noReturnAccent = false, includeUnmatched = false, mobilityNetBySubCat = {} }) {
+export default function PnLChannelTab({ title, note, gross, excRev, net, units, orders, returnRev, subCatData, skuData, adSpendMap, sndBySku, daily, dailyPnL, kpiSummary, grossOfTotalPct, grossColor = '#FFD600', gradId = 'pnlGrossGrad', showMarketing = true, noReturnAccent = false, includeUnmatched = false, mobilityNetBySubCat = {}, hideTrendUnits = false }) {
   const returnPct = pct(returnRev, gross)
   const aov = orders > 0 ? gross / orders : 0
   const asp = units > 0 ? gross / units : 0
@@ -231,8 +233,8 @@ export default function PnLChannelTab({ title, note, gross, excRev, net, units, 
           <KPICard label="AOV / ASP" value={`₹${Math.round(aov).toLocaleString('en-IN')}`} sub={`ASP ₹${Math.round(asp).toLocaleString('en-IN')}`} />
         </div>
       )}
-      <PnLTrendCard title={`${title} — Revenue Trend`} daily={daily} dailyPnL={dailyPnL} grossColor={grossColor} grossGradId={gradId} boxHeight={360} showMarketing={showMarketing} />
-      <PnLFinancialTable subCatData={subCatData} skuData={skuData} adSpendMap={adSpendMap} sndBySku={sndBySku} title={`Financial View · ${title}`} showMarketing={showMarketing} includeUnmatched={includeUnmatched} mobilityNetBySubCat={mobilityNetBySubCat} />
+      <PnLTrendCard title={`${title}${note ? ` · ${note}` : ''} — Revenue Trend`} daily={daily} dailyPnL={dailyPnL} grossColor={grossColor} grossGradId={gradId} boxHeight={360} showMarketing={showMarketing} hideUnits={hideTrendUnits} />
+      <PnLFinancialTable subCatData={subCatData} skuData={skuData} adSpendMap={adSpendMap} sndBySku={sndBySku} title={`Financial View · ${title}${note ? ` · ${note}` : ''}`} showMarketing={showMarketing} includeUnmatched={includeUnmatched} mobilityNetBySubCat={mobilityNetBySubCat} />
     </div>
   )
 }

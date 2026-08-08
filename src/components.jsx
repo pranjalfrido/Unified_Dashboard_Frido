@@ -218,6 +218,16 @@ export const GROUP_OPTS = [
 export function getGroupKey(date, groupBy) {
   if (!date) return '—'
   if (groupBy === 'daily') return date
+  if (groupBy === 'weekly') {
+    // Week starting Monday, keyed by that Monday's date — previously this case was missing
+    // entirely, so 'weekly' silently fell through to the `return date` default below and behaved
+    // exactly like 'daily' (no aggregation happened, just relabeled as "Weekly" in the UI).
+    const d = new Date(date + 'T00:00:00Z')
+    const day = d.getUTCDay() // 0=Sun..6=Sat
+    const diffToMonday = day === 0 ? -6 : 1 - day
+    d.setUTCDate(d.getUTCDate() + diffToMonday)
+    return d.toISOString().slice(0, 10)
+  }
   if (groupBy === 'monthly') return date.slice(0, 7)
   if (groupBy === 'quarterly') {
     const [y, m] = date.split('-')

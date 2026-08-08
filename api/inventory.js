@@ -574,8 +574,13 @@ export default async function inventoryHandler(req, res) {
         stockStatus: dominantStatus,
         skuCount: skus.length,
         criticalLowCount: skus.filter(s => s.stockStatus === 'Critical' || s.stockStatus === 'Low').length,
-        deadStockCount: deadStock.length,
-        deadStockUnits: deadStock.reduce((s, d) => s + d.totalInvt, 0),
+        // SKU-level isDead (no sale in trailing 90d) — matches statusBreakdown's "Dead / No Sale"
+        // bucket and src/InventoryPage.jsx's client-side filtered recompute. deadStock (below) is
+        // a separate sub-category-level DOI>200 rollup used only by its own detail table — using
+        // it here previously made this KPI tile disagree with everything else that shows a
+        // "dead stock" count for the same data.
+        deadStockCount: skus.filter(s => s.isDead).length,
+        deadStockUnits: skus.filter(s => s.isDead).reduce((s, r) => s + r.totalInvt, 0),
       },
       statusBreakdown: Object.entries(statusCounts).map(([status, count]) => ({ status, count })),
       locations,

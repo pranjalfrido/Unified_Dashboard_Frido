@@ -1,6 +1,6 @@
 import { useState, useMemo, useCallback, useEffect, useRef, Fragment } from 'react'
 import { C, fmt, fmtN, fmtBig, pct, processData, detectAlerts, exportCSV, getDefaultDates } from './utils.js'
-import { KPICard, AlertCard, HBar, DataTable, Card, Badge, CategoryRevenueCard, RevTrendChart, AreaTrendChart, MultiLineChart, ChartTooltip, useSortableTable, GROUP_OPTS, getGroupKey, TrendAnalysisCard, BarChart, Bar, LineChart, Line, AreaChart, Area, ComposedChart, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell, Treemap } from './components.jsx'
+import { KPICard, AlertCard, DataTable, Card, Badge, CategoryRevenueCard, RevTrendChart, AreaTrendChart, MultiLineChart, useSortableTable, GROUP_OPTS, getGroupKey, TrendAnalysisCard, BarChart, Bar, LineChart, Line, AreaChart, Area, ComposedChart, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell, Treemap } from './components.jsx'
 import InventoryPage from './InventoryPage.jsx'
 import { IC } from './inventory/theme.jsx'
 import LoginPage from './LoginPage.jsx'
@@ -636,12 +636,12 @@ function LogisticsPage({ filters }) {
         {/* ── Quality KPIs ── */}
         <LSectionTitle title="Delivery Quality & SLA" collapsed={secCollapsed['quality']} onToggle={() => toggleSec('quality')} />
         <div style={{ display: secCollapsed['quality'] ? 'none' : 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 7 }}>
-          <LKpiCard label="On Time Del" value={n(k.on_time)} badgeText={pct2(k.on_time, k.delivered)} badgeVariant="G" cur={k.on_time} prev={pk.on_time} compact={!filterSidebarOpen} />
-          <LKpiCard label="SLA Breach" value={n(k.sla_breach)} badgeVariant="R" subValue={pct2(k.sla_breach, k.delivered)} cur={k.sla_breach} prev={pk.sla_breach} hideSubValue={filterSidebarOpen} compact={!filterSidebarOpen} />
+          <LKpiCard label="On Time Del" value={n(k.on_time)} badgeText={k.avg_sla == null ? '—' : pct2(k.on_time, k.delivered)} badgeVariant="G" cur={k.avg_sla == null ? null : k.on_time} prev={k.avg_sla == null ? null : pk.on_time} compact={!filterSidebarOpen} />
+          <LKpiCard label="SLA Breach" value={n(k.sla_breach)} badgeVariant="R" subValue={k.avg_sla == null ? '—' : pct2(k.sla_breach, k.delivered)} cur={k.avg_sla == null ? null : k.sla_breach} prev={k.avg_sla == null ? null : pk.sla_breach} hideSubValue={filterSidebarOpen} compact={!filterSidebarOpen} />
           <LKpiCard label="RTO 10+ Days" value={n(k.rto_10plus)} badgeText="Aging" badgeVariant="R" cur={k.rto_10plus} prev={pk.rto_10plus} compact={!filterSidebarOpen} />
           <LKpiCard label="Z-RTO" value={n(k.z_rto)} badgeText={pct2(k.z_rto, k.total_shipments)} badgeVariant="A" cur={k.z_rto} prev={pk.z_rto} compact={!filterSidebarOpen} />
-          <LKpiCard label="FASR %" value={pct2(k.delivered_1attempt, k.total_ofd_attempts)} badgeVariant="G" cur={k.delivered_1attempt} prev={pk.delivered_1attempt} compact={!filterSidebarOpen} />
-          <LKpiCard label="RASR %" value={pct2(k.delivered_multi, k.total_ofd_attempts)} badgeVariant="B" cur={k.delivered_multi} prev={pk.delivered_multi} compact={!filterSidebarOpen} />
+          <LKpiCard label="FASR % (of attempted)" value={pct2(k.delivered_1attempt, k.total_ofd_attempts)} badgeVariant="G" cur={k.delivered_1attempt} prev={pk.delivered_1attempt} compact={!filterSidebarOpen} />
+          <LKpiCard label="RASR % (of attempted)" value={pct2(k.delivered_multi, k.total_ofd_attempts)} badgeVariant="B" cur={k.delivered_multi} prev={pk.delivered_multi} compact={!filterSidebarOpen} />
           <LKpiCard label="Multi-Att Del" value={n(k.delivered_multi)} badgeVariant="B" cur={k.delivered_multi} prev={pk.delivered_multi} compact={!filterSidebarOpen} />
         </div>
 
@@ -1276,11 +1276,14 @@ function LogisticsPage({ filters }) {
         ]
 
         const qKpis = [
-          { label: '1st Attempt Delivery', value: pct1(k.delivered_1attempt, k.delivered), sub: `${(k.delivered_1attempt||0).toLocaleString('en-IN')} shipments` },
+          // "of delivered" — a different base than the "FASR %" card above (delivered_1attempt /
+          // total_ofd_attempts), so the two cards will show different %s for the same numerator.
+          // Labeled explicitly here to avoid reading as a contradiction.
+          { label: '1st Attempt Delivery', value: pct1(k.delivered_1attempt, k.delivered), sub: `${(k.delivered_1attempt||0).toLocaleString('en-IN')} shipments · % of delivered` },
           { label: 'Multi Attempt Delivery', value: pct1(k.delivered_multi, k.delivered), sub: `${(k.delivered_multi||0).toLocaleString('en-IN')} shipments` },
           { label: 'Zero Attempt RTO', value: pct1(k.z_rto, k.rto), sub: `${(k.z_rto||0).toLocaleString('en-IN')} shipments` },
-          { label: 'On-Time Delivery', value: pct1(k.on_time, k.delivered), sub: `${(k.on_time||0).toLocaleString('en-IN')} on time` },
-          { label: 'SLA Breach', value: pct1(k.sla_breach, k.total_shipments), sub: `${(k.sla_breach||0).toLocaleString('en-IN')} breached` },
+          { label: 'On-Time Delivery', value: k.avg_sla == null ? '—' : pct1(k.on_time, k.delivered), sub: k.avg_sla == null ? 'No SLA data for this range' : `${(k.on_time||0).toLocaleString('en-IN')} on time` },
+          { label: 'SLA Breach', value: k.avg_sla == null ? '—' : pct1(k.sla_breach, k.total_shipments), sub: k.avg_sla == null ? 'No SLA data for this range' : `${(k.sla_breach||0).toLocaleString('en-IN')} breached` },
           { label: 'Lost & Damaged', value: (k.lost_damaged||0).toLocaleString('en-IN'), sub: 'Total count' },
         ]
 
@@ -2258,7 +2261,7 @@ function OverviewPage({ data, alerts, logisticsData, filters }) {
       <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr 1fr 1fr', gap: 12 }}>
         <div className="hero-grad" style={{ borderRadius: 14, padding: '20px 22px', position: 'relative', overflow: 'hidden', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
           <div>
-            <div style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.08em', color: 'rgba(0,0,0,.45)', marginBottom: 6 }}>Gross Revenue (Inc. GST)</div>
+            <div style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.08em', color: 'rgba(0,0,0,.45)', marginBottom: 6 }}>Gross Revenue Inc GST</div>
             <div style={{ fontSize: 38, fontWeight: 700, color: '#13121A', letterSpacing: '-.04em', lineHeight: 1, marginBottom: 4 }}>{totalRev >= 1e7 ? `₹${(totalRev / 1e7).toFixed(2)} Cr` : `₹${(totalRev / 1e5).toFixed(1)} L`}</div>
             <div style={{ fontSize: 11.5, color: 'rgba(0,0,0,.5)' }}>Net {fmt(netRevenueCalc)} · {nDays}d · {fmtN(nOrders)} orders</div>
           </div>
@@ -2541,7 +2544,7 @@ function OverviewPage({ data, alerts, logisticsData, filters }) {
 
 // ── Sales sub-tabs ────────────────────────────────────────────
 const TABS = [
-  { id: 'all', label: 'All Channels' },
+  { id: 'all', label: 'Overall' },
   { id: 'shopify', label: 'D2C', ch: 'Shopify', logo: '/logo-shopify.png' },
   { id: 'ebo', label: 'EBO', ch: 'EBO', logo: '/ebo.png' },
   { id: 'amazon', label: 'Amazon', ch: 'Amazon', logo: '/logo-amazon.png' },
@@ -2552,6 +2555,11 @@ const TABS = [
   { id: 'instamart', label: 'Instamart', ch: 'Instamart', logo: '/logo-instamart.png' },
   { id: 'zepto', label: 'Zepto', ch: 'Zepto', logo: '/logo-zepto.png' },
   { id: 'myntra', label: 'Myntra', ch: 'Myntra', logo: '/logo-myntra.png' },
+  // Placeholder tab — International orders (Channel='International', both Amazon International
+  // and Shopify International sub-brands) now have their own top-level Channel post-schema-change
+  // (2026-08). Sales-tab breakdown is not yet built; see PnL tab's "International" tab for the
+  // real KPI/Financial View treatment.
+  { id: 'international', label: 'International', ch: 'International' },
   { id: 'offline', label: 'Offline Sales', ch: 'offline_sales', logo: '/offline-sales.png' },
 ]
 const CHANNEL_LOGOS = Object.fromEntries(TABS.filter(t => t.logo).map(t => [t.ch, t.logo]))
@@ -2584,6 +2592,7 @@ function VoucherDropdown({ voucherList, selected, onChange }) {
   const [search, setSearch] = useState('')
   const [pending, setPending] = useState(null)
   const ref = useRef(null)
+  const searchInputRef = useRef(null)
   const selectedArr = selected ? selected.split(',').map(s => s.trim()).filter(Boolean) : []
   const staged = pending !== null ? pending : selectedArr
   const filtered = (voucherList || []).filter(({ code }) => code.toLowerCase().includes(search.toLowerCase()))
@@ -2593,6 +2602,12 @@ function VoucherDropdown({ voucherList, selected, onChange }) {
     document.addEventListener('mousedown', handler)
     return () => document.removeEventListener('mousedown', handler)
   }, [])
+
+  // See SearchableSelect's identical fix — avoids the browser's native scroll-into-view on focus
+  // shifting the page/popover when this is nested inside the scrollable Filters popover.
+  useEffect(() => {
+    if (open) searchInputRef.current?.focus({ preventScroll: true })
+  }, [open])
 
   const toggle = code => {
     const next = staged.includes(code) ? staged.filter(v => v !== code) : [...staged, code]
@@ -2613,7 +2628,7 @@ function VoucherDropdown({ voucherList, selected, onChange }) {
       {open && (
         <div style={{ position: 'absolute', top: '110%', left: 0, zIndex: 200, background: C.card, border: `1px solid ${C.border2}`, borderRadius: 9, boxShadow: '0 8px 28px rgba(0,0,0,.14)', width: 240 }}>
           <div style={{ padding: '7px 8px', borderBottom: `1px solid ${C.border}` }}>
-            <input autoFocus value={search} onChange={e => setSearch(e.target.value)} onMouseDown={e => e.stopPropagation()} placeholder="Search voucher…" style={{ width: '100%', fontSize: 11.5, padding: '4px 8px', border: `1px solid ${C.border2}`, borderRadius: 6, outline: 'none', fontFamily: 'var(--font)', background: C.bg }} />
+            <input ref={searchInputRef} value={search} onChange={e => setSearch(e.target.value)} onMouseDown={e => e.stopPropagation()} placeholder="Search voucher…" style={{ width: '100%', fontSize: 11.5, padding: '4px 8px', border: `1px solid ${C.border2}`, borderRadius: 6, outline: 'none', fontFamily: 'var(--font)', background: C.bg }} />
           </div>
           <div style={{ maxHeight: 260, overflowY: 'auto' }}>
             {filtered.map(({ code }) => {
@@ -2643,6 +2658,7 @@ function SearchableSelect({ options, value, onChange, placeholder, dropdownWidth
   const [search, setSearch] = useState('')
   const [pending, setPending] = useState(null) // staged selection before Apply (multi only)
   const ref = useRef(null)
+  const searchInputRef = useRef(null)
   const filtered = options.filter(o => o.toLowerCase().includes(search.toLowerCase()))
   const selected = multi ? (value || []) : value
   // while dropdown is open, work on pending; on close without apply, discard
@@ -2653,6 +2669,14 @@ function SearchableSelect({ options, value, onChange, placeholder, dropdownWidth
     document.addEventListener('mousedown', handler)
     return () => document.removeEventListener('mousedown', handler)
   }, [])
+
+  // preventScroll avoids the browser's native "scroll focused element into view" behavior —
+  // when this dropdown is nested inside a scrollable ancestor (e.g. the Filters popover, which
+  // has its own overflowY:auto for long option lists), plain autoFocus made the WHOLE popover
+  // (and sometimes the page behind it) visibly jump/scroll the instant the dropdown opened.
+  useEffect(() => {
+    if (open) searchInputRef.current?.focus({ preventScroll: true })
+  }, [open])
 
   const openDropdown = () => { setPending(null); setOpen(o => !o) }
 
@@ -2679,7 +2703,7 @@ function SearchableSelect({ options, value, onChange, placeholder, dropdownWidth
       {open && (
         <div style={{ position: 'absolute', top: '110%', left: 0, zIndex: 200, background: C.card, border: `1px solid ${C.border2}`, borderRadius: 9, boxShadow: '0 8px 28px rgba(0,0,0,.14)', width: dropdownWidth || 220 }}>
           <div style={{ padding: '7px 8px', borderBottom: `1px solid ${C.border}` }}>
-            <input autoFocus value={search} onChange={e => setSearch(e.target.value)} onMouseDown={e => e.stopPropagation()} placeholder={`Search ${placeholder?.toLowerCase() || ''}…`} style={{ width: '100%', fontSize: 11.5, padding: '4px 8px', border: `1px solid ${C.border2}`, borderRadius: 6, outline: 'none', fontFamily: 'var(--font)', background: C.bg }} />
+            <input ref={searchInputRef} value={search} onChange={e => setSearch(e.target.value)} onMouseDown={e => e.stopPropagation()} placeholder={`Search ${placeholder?.toLowerCase() || ''}…`} style={{ width: '100%', fontSize: 11.5, padding: '4px 8px', border: `1px solid ${C.border2}`, borderRadius: 6, outline: 'none', fontFamily: 'var(--font)', background: C.bg }} />
           </div>
           <div style={{ maxHeight: 240, overflowY: 'auto' }}>
             {filtered.map(opt => {
@@ -2708,7 +2732,7 @@ function SearchableSelect({ options, value, onChange, placeholder, dropdownWidth
 
 const CHART_METRICS = [
   { id: 'net_rev', label: 'Net Revenue', key: ch => ch + '_net' },
-  { id: 'rev', label: 'Gross Revenue', key: ch => ch },
+  { id: 'rev', label: 'Gross Revenue Inc GST', key: ch => ch },
   { id: 'units', label: 'Units', key: ch => ch + '_u' },
 ]
 const CHART_TYPES = [
@@ -2798,7 +2822,7 @@ function ChannelTrendCard({ dailyArr, channels, rangeStart, rangeEnd }) {
 
 const DAILY_METRICS = [
   { id: 'net_rev', label: 'Net Revenue' },
-  { id: 'rev', label: 'Gross Revenue' },
+  { id: 'rev', label: 'Gross Revenue Inc GST' },
   { id: 'units', label: 'Units' },
 ]
 
@@ -3346,7 +3370,14 @@ function AmazonCategoryMatrix({ channels, catChannel, subCatChannel, skuChannel,
 // expand → SKU), which stays unchanged for the other tabs still using it.
 // simpleReturns: marketplaces (Amazon/Flipkart/Myntra) only report one combined Return %, with
 // no Cancel/RTO/CIR/Exch breakdown like D2C/EBO have — pass true to collapse to a single column.
-function FlatCategoryProductMatrix({ catData, subCatData, skuData, title, catPrevMap = {}, subCatPrevMap = {}, simpleReturns = false, noReturns = false, showReturnPct = false, mobilityNetBySubCat = {} }) {
+// detailedReturns: shows the full Cancel %/RTO %/CIR %/Exchange %/Total Return % breakdown
+// (D2C, EBO — channels with real per-status return data) instead of just a single combined
+// "Total Return %" column (All Channels, Amazon/Flipkart/CRED/Firstcry/Myntra via
+// simpleReturns) — explicitly separate from `simpleReturns` since a channel can have
+// showReturnPct=true with neither simpleReturns nor detailedReturns meaning "no return columns
+// wired up yet" is no longer a valid state once showReturnPct is true; every showReturnPct
+// caller must pick exactly one of simpleReturns/detailedReturns.
+function FlatCategoryProductMatrix({ catData, subCatData, skuData, title, catPrevMap = {}, subCatPrevMap = {}, simpleReturns = false, detailedReturns = false, noReturns = false, showReturnPct = false, mobilityNetBySubCat = {} }) {
   const [expandedSku, setExpandedSku] = useState({})
   const [search, setSearch] = useState('')
   const toggleSku = key => setExpandedSku(prev => ({ ...prev, [key]: !prev[key] }))
@@ -3365,8 +3396,13 @@ function FlatCategoryProductMatrix({ catData, subCatData, skuData, title, catPre
     const gstRatio = gross > 0 ? (gross - excRev) / gross : 0
     const grossAfterReturns = gross - cancelRev - rtoRev - cirRev - returnRev
     const netStandard = grossAfterReturns * (1 - gstRatio)
-    // Only use Mobility whitelist override for Mobility category rows
-    const net = (catName === 'Mobility' && scName && mobilityNetBySubCat[scName] != null) ? mobilityNetBySubCat[scName] : netStandard
+    // Only use Mobility whitelist override for Mobility or Sparepart-category rows — the server
+    // (api/bq.js's mobilityNetBySubCat) already excludes any other stray category, so anything
+    // present here by the time it reaches this component legitimately belongs to one of these two.
+    // Keyed 'Category::SubCategory' (see the reconciledMobilityNetBySubCat build site above) —
+    // NOT bare SubCategory, since the same SubCategory name can exist under two Categories.
+    const whitelistKey = `${catName}::${scName}`
+    const net = ((catName === 'Mobility' || /^sparepart/i.test(catName || '')) && scName && mobilityNetBySubCat[whitelistKey] != null) ? mobilityNetBySubCat[whitelistKey] : netStandard
     return { gross, net, units: d.units || 0, cancelRev, rtoRev, cirRev, exchRev, returnRev }
   }
   const pctOf = (n, d) => d > 0 ? (n / d * 100) : 0
@@ -3461,8 +3497,10 @@ function FlatCategoryProductMatrix({ catData, subCatData, skuData, title, catPre
         <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed', minWidth: 760 }}>
           <colgroup>
             <col style={{ width: '16%' }} /><col style={{ width: '20%' }} />
-            <col style={{ width: '12%' }} /><col style={{ width: '9%' }} /><col style={{ width: '8%' }} /><col style={{ width: '9%' }} />
-            {showReturnPct && <><col style={{ width: '7%' }} /><col style={{ width: '7%' }} /><col style={{ width: '7%' }} /><col style={{ width: '7%' }} /><col style={{ width: '7%' }} /></>}
+            <col style={{ width: showReturnPct && detailedReturns ? '11%' : '13%' }} /><col style={{ width: '9%' }} /><col style={{ width: '8%' }} /><col style={{ width: showReturnPct && detailedReturns ? '8%' : '10%' }} />
+            {showReturnPct && (detailedReturns
+              ? <><col style={{ width: '7%' }} /><col style={{ width: '7%' }} /><col style={{ width: '7%' }} /><col style={{ width: '7%' }} /><col style={{ width: '7%' }} /></>
+              : <col style={{ width: '11%' }} />)}
             <col style={{ width: '9%' }} />
           </colgroup>
           <thead>
@@ -3473,13 +3511,17 @@ function FlatCategoryProductMatrix({ catData, subCatData, skuData, title, catPre
               <Th label="vs Prev" sortKey="prevGross" style={{ ...thStyle, position: 'sticky', top: 0, background: C.bg, zIndex: 1 }} />
               <Th label="Units" sortKey="units" style={{ ...thStyle, position: 'sticky', top: 0, background: C.bg, zIndex: 1 }} />
               <Th label="ASP" sortKey="asp" style={{ ...thStyle, position: 'sticky', top: 0, background: C.bg, zIndex: 1 }} />
-              {showReturnPct && <>
-                <Th label="Cancel %" sortKey="cancelPct" style={{ ...thStyle, position: 'sticky', top: 0, background: C.bg, zIndex: 1 }} />
-                <Th label="RTO %" sortKey="rtoPct" style={{ ...thStyle, position: 'sticky', top: 0, background: C.bg, zIndex: 1 }} />
-                <Th label="CIR %" sortKey="cirPct" style={{ ...thStyle, position: 'sticky', top: 0, background: C.bg, zIndex: 1 }} />
-                <Th label="Exchange %" sortKey="exchPct" style={{ ...thStyle, position: 'sticky', top: 0, background: C.bg, zIndex: 1 }} />
+              {showReturnPct && (detailedReturns ? (
+                <>
+                  <Th label="Cancel %" sortKey="cancelPct" style={{ ...thStyle, position: 'sticky', top: 0, background: C.bg, zIndex: 1 }} />
+                  <Th label="RTO %" sortKey="rtoPct" style={{ ...thStyle, position: 'sticky', top: 0, background: C.bg, zIndex: 1 }} />
+                  <Th label="CIR %" sortKey="cirPct" style={{ ...thStyle, position: 'sticky', top: 0, background: C.bg, zIndex: 1 }} />
+                  <Th label="Exchange %" sortKey="exchPct" style={{ ...thStyle, position: 'sticky', top: 0, background: C.bg, zIndex: 1 }} />
+                  <Th label="Total Return %" sortKey="totalReturnPct" style={{ ...thStyle, position: 'sticky', top: 0, background: C.bg, zIndex: 1 }} />
+                </>
+              ) : (
                 <Th label="Total Return %" sortKey="totalReturnPct" style={{ ...thStyle, position: 'sticky', top: 0, background: C.bg, zIndex: 1 }} />
-              </>}
+              ))}
               <Th label="Net Rev" sortKey="net" style={{ ...thStyle, position: 'sticky', top: 0, background: C.bg, zIndex: 1 }} />
             </tr>
           </thead>
@@ -3506,13 +3548,17 @@ function FlatCategoryProductMatrix({ catData, subCatData, skuData, title, catPre
                     <td style={tdStyle}>{vsPrevCell(r.gross, r.prevGross)}</td>
                     <td style={tdStyle}>{fmtN(r.units)}</td>
                     <td style={tdStyle}>₹{Math.round(r.asp).toLocaleString('en-IN')}</td>
-                    {showReturnPct && <>
-                      <td style={tdStyle}>{r.cancelPct > 0 ? `${r.cancelPct.toFixed(2)}%` : <span style={{ color: C.t3 }}>—</span>}</td>
-                      <td style={tdStyle}>{r.rtoPct > 0 ? `${r.rtoPct.toFixed(2)}%` : <span style={{ color: C.t3 }}>—</span>}</td>
-                      <td style={tdStyle}>{r.cirPct > 0 ? `${r.cirPct.toFixed(2)}%` : <span style={{ color: C.t3 }}>—</span>}</td>
-                      <td style={tdStyle}>{r.exchPct > 0 ? `${r.exchPct.toFixed(2)}%` : <span style={{ color: C.t3 }}>—</span>}</td>
+                    {showReturnPct && (detailedReturns ? (
+                      <>
+                        <td style={tdStyle}>{r.cancelPct > 0 ? `${r.cancelPct.toFixed(2)}%` : <span style={{ color: C.t3 }}>—</span>}</td>
+                        <td style={tdStyle}>{r.rtoPct > 0 ? `${r.rtoPct.toFixed(2)}%` : <span style={{ color: C.t3 }}>—</span>}</td>
+                        <td style={tdStyle}>{r.cirPct > 0 ? `${r.cirPct.toFixed(2)}%` : <span style={{ color: C.t3 }}>—</span>}</td>
+                        <td style={tdStyle}>{r.exchPct > 0 ? `${r.exchPct.toFixed(2)}%` : <span style={{ color: C.t3 }}>—</span>}</td>
+                        <td style={tdStyle}>{r.totalReturnPct > 0 ? <span style={{ color: r.totalReturnPct > 20 ? '#B91C1C' : 'inherit' }}>{r.totalReturnPct.toFixed(2)}%</span> : <span style={{ color: C.t3 }}>—</span>}</td>
+                      </>
+                    ) : (
                       <td style={tdStyle}>{r.totalReturnPct > 0 ? <span style={{ color: r.totalReturnPct > 20 ? '#B91C1C' : 'inherit' }}>{r.totalReturnPct.toFixed(2)}%</span> : <span style={{ color: C.t3 }}>—</span>}</td>
-                    </>}
+                    ))}
                     <td style={tdStyle}>{fmt(r.net)}</td>
                   </tr>
                   {isOpen && skus.map(sk => {
@@ -3527,13 +3573,17 @@ function FlatCategoryProductMatrix({ catData, subCatData, skuData, title, catPre
                         <td style={{ ...tdStyle, fontSize: 11 }}><span style={{ color: C.t3 }}>—</span></td>
                         <td style={{ ...tdStyle, fontSize: 11 }}>{fmtN(sk.units)}</td>
                         <td style={{ ...tdStyle, fontSize: 11 }}>₹{(sk.units > 0 ? Math.round(sk.gross / sk.units) : 0).toLocaleString('en-IN')}</td>
-                        {showReturnPct && <>
-                          <td style={{ ...tdStyle, fontSize: 11 }}>{sk.cancelRev > 0 ? `${pctOf(sk.cancelRev, sk.gross).toFixed(2)}%` : <span style={{ color: C.t3 }}>—</span>}</td>
-                          <td style={{ ...tdStyle, fontSize: 11 }}>{sk.rtoRev > 0 ? `${pctOf(sk.rtoRev, sk.gross).toFixed(2)}%` : <span style={{ color: C.t3 }}>—</span>}</td>
-                          <td style={{ ...tdStyle, fontSize: 11 }}>{sk.cirRev > 0 ? `${pctOf(sk.cirRev, sk.gross).toFixed(2)}%` : <span style={{ color: C.t3 }}>—</span>}</td>
-                          <td style={{ ...tdStyle, fontSize: 11 }}>{sk.exchRev > 0 ? `${pctOf(sk.exchRev, sk.gross).toFixed(2)}%` : <span style={{ color: C.t3 }}>—</span>}</td>
+                        {showReturnPct && (detailedReturns ? (
+                          <>
+                            <td style={{ ...tdStyle, fontSize: 11 }}>{sk.cancelRev > 0 ? `${pctOf(sk.cancelRev, sk.gross).toFixed(2)}%` : <span style={{ color: C.t3 }}>—</span>}</td>
+                            <td style={{ ...tdStyle, fontSize: 11 }}>{sk.rtoRev > 0 ? `${pctOf(sk.rtoRev, sk.gross).toFixed(2)}%` : <span style={{ color: C.t3 }}>—</span>}</td>
+                            <td style={{ ...tdStyle, fontSize: 11 }}>{sk.cirRev > 0 ? `${pctOf(sk.cirRev, sk.gross).toFixed(2)}%` : <span style={{ color: C.t3 }}>—</span>}</td>
+                            <td style={{ ...tdStyle, fontSize: 11 }}>{sk.exchRev > 0 ? `${pctOf(sk.exchRev, sk.gross).toFixed(2)}%` : <span style={{ color: C.t3 }}>—</span>}</td>
+                            <td style={{ ...tdStyle, fontSize: 11 }}>{skTotalReturnRev > 0 ? <span style={{ color: pctOf(skTotalReturnRev, sk.gross) > 20 ? '#B91C1C' : 'inherit' }}>{pctOf(skTotalReturnRev, sk.gross).toFixed(2)}%</span> : <span style={{ color: C.t3 }}>—</span>}</td>
+                          </>
+                        ) : (
                           <td style={{ ...tdStyle, fontSize: 11 }}>{skTotalReturnRev > 0 ? <span style={{ color: pctOf(skTotalReturnRev, sk.gross) > 20 ? '#B91C1C' : 'inherit' }}>{pctOf(skTotalReturnRev, sk.gross).toFixed(2)}%</span> : <span style={{ color: C.t3 }}>—</span>}</td>
-                        </>}
+                        ))}
                         <td style={{ ...tdStyle, fontSize: 11 }}>{fmt(sk.net)}</td>
                       </tr>
                     )
@@ -3549,13 +3599,17 @@ function FlatCategoryProductMatrix({ catData, subCatData, skuData, title, catPre
               <td style={totalTdStyle}>{vsPrevCell(tot.gross, tot.prevGross)}</td>
               <td style={totalTdStyle}>{fmtN(tot.units)}</td>
               <td style={totalTdStyle}>₹{tot.units > 0 ? Math.round(tot.gross / tot.units).toLocaleString('en-IN') : '—'}</td>
-              {showReturnPct && <>
-                <td style={totalTdStyle}>{tot.gross > 0 ? `${pctOf(tot.cancelRev, tot.gross).toFixed(2)}%` : '—'}</td>
-                <td style={totalTdStyle}>{tot.gross > 0 ? `${pctOf(tot.rtoRev, tot.gross).toFixed(2)}%` : '—'}</td>
-                <td style={totalTdStyle}>{tot.gross > 0 ? `${pctOf(tot.cirRev, tot.gross).toFixed(2)}%` : '—'}</td>
-                <td style={totalTdStyle}>{tot.gross > 0 ? `${pctOf(tot.exchRev, tot.gross).toFixed(2)}%` : '—'}</td>
+              {showReturnPct && (detailedReturns ? (
+                <>
+                  <td style={totalTdStyle}>{tot.gross > 0 ? `${pctOf(tot.cancelRev, tot.gross).toFixed(2)}%` : '—'}</td>
+                  <td style={totalTdStyle}>{tot.gross > 0 ? `${pctOf(tot.rtoRev, tot.gross).toFixed(2)}%` : '—'}</td>
+                  <td style={totalTdStyle}>{tot.gross > 0 ? `${pctOf(tot.cirRev, tot.gross).toFixed(2)}%` : '—'}</td>
+                  <td style={totalTdStyle}>{tot.gross > 0 ? `${pctOf(tot.exchRev, tot.gross).toFixed(2)}%` : '—'}</td>
+                  <td style={totalTdStyle}>{tot.gross > 0 ? <span style={{ color: pctOf(tot.cancelRev + tot.rtoRev + tot.cirRev + tot.returnRev, tot.gross) > 20 ? '#B91C1C' : 'inherit' }}>{pctOf(tot.cancelRev + tot.rtoRev + tot.cirRev + tot.returnRev, tot.gross).toFixed(2)}%</span> : '—'}</td>
+                </>
+              ) : (
                 <td style={totalTdStyle}>{tot.gross > 0 ? <span style={{ color: pctOf(tot.cancelRev + tot.rtoRev + tot.cirRev + tot.returnRev, tot.gross) > 20 ? '#B91C1C' : 'inherit' }}>{pctOf(tot.cancelRev + tot.rtoRev + tot.cirRev + tot.returnRev, tot.gross).toFixed(2)}%</span> : '—'}</td>
-              </>}
+              ))}
               <td style={totalTdStyle}>{fmt(tot.net)}</td>
             </tr>
           </tfoot>
@@ -4176,7 +4230,7 @@ function AllTab({ data, rangeStart, rangeEnd }) {
       <div style={{ display: 'grid', gridTemplateColumns: '1.5fr 5fr', gap: 10, alignItems: 'stretch' }}>
         {/* Gross Revenue hero — tall left column */}
         <div className="kpi-card" style={{ display: 'flex', flexDirection: 'column', gap: 8, padding: '16px 18px' }}>
-          <div className="kpi-label" style={{ fontSize: 11 }}>Gross Revenue (Inc. GST)</div>
+          <div className="kpi-label" style={{ fontSize: 11 }}>Gross Revenue Inc GST</div>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 6 }}>
             <div className="kpi-value" style={{ fontSize: 32, fontWeight: 800 }}>{fmt(totalRev)}</div>
             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4 }}>
@@ -4200,14 +4254,14 @@ function AllTab({ data, rangeStart, rangeEnd }) {
         {/* Right: 2 rows of 4 KPIs each — single grid so all 8 cards share equal height */}
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gridTemplateRows: 'repeat(2, 1fr)', gap: 10, alignItems: 'stretch' }}>
           {[
-            { label: 'Net Revenue (Exc. Returns & GST)', value: fmt(netRevenueCalc), sub: `${totalRev > 0 ? (netRevenueCalc / totalRev * 100).toFixed(1) : 0}% of gross`, badge: (() => { const excChg = prevExcRev > 0 ? ((netRevenueCalc - prevExcRev) / prevExcRev * 100) : null; if (excChg === null) return null; return <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 4, background: excChg >= 0 ? C.green.bg : C.red.bg, color: excChg >= 0 ? C.green.tx : C.red.tx, flexShrink: 0 }}>{excChg >= 0 ? '▲' : '▼'} {Math.abs(excChg).toFixed(1)}%</span> })() },
-            { label: 'Revenue at Risk', value: fmt(atRiskRev), sub: `${totalRev > 0 ? (atRiskRev / totalRev * 100).toFixed(1) : 0}% of gross · RTO + Return + Cancel + CIR`, accent: atRiskRev > 0 ? '#7A4000' : undefined, badge: (() => { const prevAtRiskEst = prevOrders > 0 ? (prevRtoOrders + prevCirOrders) / prevOrders * prevRev : 0; if (!prevAtRiskEst) return null; const p = (atRiskRev - prevAtRiskEst) / prevAtRiskEst * 100; return <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 4, background: p > 0 ? C.red.bg : C.green.bg, color: p > 0 ? C.red.tx : C.green.tx, flexShrink: 0 }}>{p > 0 ? '▲' : '▼'} {Math.abs(p).toFixed(1)}%</span> })() },
-            { label: 'AOV', value: `₹${Math.round(scopedAOV).toLocaleString('en-IN')}`, sub: 'D2C/Amazon SC/Myntra/Flipkart/Firstcry/CRED only', badge: chgBadge(scopedAOV, prevScopedAOV) },
-            { label: 'Avg. Daily Gross Rev', value: fmt(totalRev / nDays), sub: `over ${nDays} days`, badge: chgBadge(totalRev / nDays, prevDailyAvg) },
-            { label: 'ASP', value: `₹${Math.round(scopedASP).toLocaleString('en-IN')}`, sub: 'D2C/Amazon SC/Myntra/Flipkart/Firstcry/CRED only', badge: chgBadge(scopedASP, prevScopedASP) },
-            { label: 'Total GST Collected', value: fmt(gstCollected), sub: `${totalRev > 0 ? ((gstCollected / totalRev) * 100).toFixed(1) : 0}% of gross rev`, badge: chgBadge(gstCollected, prevGST) },
+            { label: 'Net Revenue', value: fmt(netRevenueCalc), sub: `Ex GST, after returns · ${totalRev > 0 ? (netRevenueCalc / totalRev * 100).toFixed(1) : 0}% of gross`, badge: (() => { const excChg = prevExcRev > 0 ? ((netRevenueCalc - prevExcRev) / prevExcRev * 100) : null; if (excChg === null) return null; return <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 4, background: excChg >= 0 ? C.green.bg : C.red.bg, color: excChg >= 0 ? C.green.tx : C.red.tx, flexShrink: 0 }}>{excChg >= 0 ? '▲' : '▼'} {Math.abs(excChg).toFixed(1)}%</span> })() },
+            { label: 'Revenue at Risk', value: fmt(atRiskRev), sub: `${totalRev > 0 ? (atRiskRev / totalRev * 100).toFixed(1) : 0}% of gross`, accent: atRiskRev > 0 ? '#7A4000' : undefined, badge: (() => { const prevAtRiskEst = prevOrders > 0 ? (prevRtoOrders + prevCirOrders) / prevOrders * prevRev : 0; if (!prevAtRiskEst) return null; const p = (atRiskRev - prevAtRiskEst) / prevAtRiskEst * 100; return <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 4, background: p > 0 ? C.red.bg : C.green.bg, color: p > 0 ? C.red.tx : C.green.tx, flexShrink: 0 }}>{p > 0 ? '▲' : '▼'} {Math.abs(p).toFixed(1)}%</span> })() },
+            { label: 'AOV', value: `₹${Math.round(scopedAOV).toLocaleString('en-IN')}`, sub: 'Select channels only', subTitle: 'D2C, Amazon SC, Myntra, Flipkart, Firstcry, CRED only', badge: chgBadge(scopedAOV, prevScopedAOV) },
+            { label: 'Daily Avg Rev', value: fmt(totalRev / nDays), sub: `over ${nDays} days`, badge: chgBadge(totalRev / nDays, prevDailyAvg) },
+            { label: 'ASP', value: `₹${Math.round(scopedASP).toLocaleString('en-IN')}`, sub: 'Select channels only', subTitle: 'D2C, Amazon SC, Myntra, Flipkart, Firstcry, CRED only', badge: chgBadge(scopedASP, prevScopedASP) },
+            { label: 'GST', value: fmt(gstCollected), sub: `${totalRev > 0 ? ((gstCollected / totalRev) * 100).toFixed(1) : 0}% of gross rev`, badge: chgBadge(gstCollected, prevGST) },
             { label: 'Repeat Customer Rate', value: `${repeatRate}%`, sub: `${fmtN(repeatCusts)} of ${fmtN(nCusts)} customers`, accent: undefined },
-            { label: 'Return Rate', value: `${returnPct.toFixed(1)}%`, sub: `${fmt(returnNumeratorRev)} returns · ${fmt(totalRev)} gross`, accent: returnPct > 10 ? '#7A1A1A' : undefined, badge: (() => { if (!prevRev) return null; const prevRtoCirRev = (data.prevRtoRev || 0) + (data.prevCirRev || 0); const prev = prevRev > 0 ? prevRtoCirRev / prevRev * 100 : 0; if (!prev) return null; const p = (returnPct - prev) / prev * 100; return <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 4, background: p >= 0 ? C.red.bg : C.green.bg, color: p >= 0 ? C.red.tx : C.green.tx, flexShrink: 0 }}>{p >= 0 ? '▲' : '▼'} {Math.abs(p).toFixed(1)}%</span> })() },
+            { label: 'Returns %', value: `${returnPct.toFixed(1)}%`, sub: `${fmt(returnNumeratorRev)} returns · ${fmt(totalRev)} gross`, accent: returnPct > 10 ? '#7A1A1A' : undefined, badge: (() => { if (!prevRev) return null; const prevRtoCirRev = (data.prevRtoRev || 0) + (data.prevCirRev || 0); const prev = prevRev > 0 ? prevRtoCirRev / prevRev * 100 : 0; if (!prev) return null; const p = (returnPct - prev) / prev * 100; return <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 4, background: p >= 0 ? C.red.bg : C.green.bg, color: p >= 0 ? C.red.tx : C.green.tx, flexShrink: 0 }}>{p >= 0 ? '▲' : '▼'} {Math.abs(p).toFixed(1)}%</span> })() },
           ].map(k => (
             <div key={k.label} className="kpi-card" style={{ padding: '10px 13px', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
               <div className="kpi-label">{k.label}</div>
@@ -4215,7 +4269,7 @@ function AllTab({ data, rangeStart, rangeEnd }) {
                 <div className="kpi-value" style={{ fontSize: 17, ...(k.accent ? { color: k.accent } : {}) }}>{k.value}</div>
                 {k.badge}
               </div>
-              {k.sub && <div className="kpi-sub">{k.sub}</div>}
+              {k.sub && <div className="kpi-sub" title={k.subTitle}>{k.sub}</div>}
             </div>
           ))}
         </div>
@@ -4748,16 +4802,34 @@ function ShopifyReturnReasonsTable({ reasons = [] }) {
   )
 }
 
+// D2C's All/MyFrido/Mobility toggle — extracted so SalesPage can render it on the shared
+// filter-bar row (next to the filter icon) instead of nested inside ShopifyTab's own content.
+// Reads/writes filters.subChannel directly, same as before — no new state introduced.
+function D2CSubChannelToggle({ data, filters, setFilters }) {
+  const subChannelMap = data.subChannelMap || {}
+  const indiaSubChMap = Object.fromEntries(Object.entries(subChannelMap).filter(([k]) => k !== 'International' && k !== 'Shopify B2B' && k !== 'Shopify International' && k !== 'Unknown' && k !== 'Retail Store'))
+  const indiaSubChKeys = data.allSubChannels?.length ? data.allSubChannels : Object.keys(indiaSubChMap)
+  if (indiaSubChKeys.length === 0) return null
+  const sel = filters.subChannel ? filters.subChannel.split(',').map(x => x.trim()).filter(v => v && v !== 'ShopifyIndia' && v !== 'International') : []
+  const active = sel[0] || null
+  const opts = [{ id: null, label: 'Overall' }, ...indiaSubChKeys.map(k => ({ id: k, label: k }))]
+  return (
+    <div style={{ display: 'flex', gap: 4 }}>
+      {opts.map((opt, i) => (
+        <div key={opt.label} style={{ display: 'flex', alignItems: 'center' }}>
+          {i > 0 && <div style={{ width: 1, height: 14, background: '#E3E0D8', margin: '0 2px' }} />}
+          <button onClick={() => setFilters(f => ({ ...f, subChannel: opt.id == null ? 'ShopifyIndia' : (active === opt.id ? 'ShopifyIndia' : opt.id) }))} style={{ fontSize: 12, fontWeight: (opt.id == null ? !active : active === opt.id) ? 700 : 500, padding: '5px 14px', borderRadius: 7, border: 'none', background: (opt.id == null ? !active : active === opt.id) ? '#FFD600' : 'transparent', color: '#13121A', cursor: 'pointer' }}>{opt.label}</button>
+        </div>
+      ))}
+    </div>
+  )
+}
+
 function ShopifyTab({ data, filters, setFilters }) {
   const [catRevView, setCatRevView] = useState('category') // 'category' | 'product'
-  // On mount, default to India scope if no region is set yet
-  useEffect(() => {
-    if (!filters.subChannel) {
-      setFilters(f => ({ ...f, subChannel: 'ShopifyIndia' }))
-    }
-  }, [])
-
-  const isIntl = filters.subChannel === 'International'
+  // D2C is India-only permanently (International orders now live under their own top-level
+  // Channel='International' tab) — no region toggle, no filters.subChannel default needed.
+  const isIntl = false
 
   const subChannelMap = data.subChannelMap || {}
   const paymentModeMap = data.paymentModeMap || {}
@@ -4773,7 +4845,15 @@ function ShopifyTab({ data, filters, setFilters }) {
   const cityPrevMap = sh.cityPrevMap || {}
   const paymentTypes = sh.paymentTypes || []
 
-  const shCh = sh.totals || {}
+  // sh.totals (and catMap/subCatMap below) are filtered server-side by the raw, ORDER-level
+  // SubChannel column alone — they still include any stray non-Mobility-category row's revenue
+  // when filters.subChannel='Mobility' is active, since (unlike pnlSalesRows/skuMap/
+  // subChannelMap, which now all apply the Category-based reassignment) these come straight from
+  // buildQuery()'s base filter with no item-master category join. subChannelMap (built from the
+  // already-reconciled pnlSalesRows — see api/bq.js) IS category-correct, so use it in place of
+  // sh.totals whenever a MyFrido/Mobility sub-channel filter is active.
+  const isD2CSubChFiltered = filters.subChannel === 'Mobility' || filters.subChannel === 'MyFrido'
+  const shCh = isD2CSubChFiltered ? (subChannelMap[filters.subChannel] || {}) : (sh.totals || {})
   const totalRev = shCh.rev || 0
   const totalExcRevRaw = shCh.excRev || 0
   const totalQty = shCh.qty || 0
@@ -4847,25 +4927,50 @@ function ShopifyTab({ data, filters, setFilters }) {
   const returnRevPct = totalRev > 0 ? ((shRtoRev + shReturnRev + shCirRev) / totalRev * 100) : 0
   const repeatRate = nCusts ? (repeatCusts / nCusts * 100).toFixed(1) : '0'
 
-  // Sub-channel breakdown — India excludes International, Intl shows only International
+  // Sub-channel breakdown — D2C is India-only, so this is just every non-International sub-channel.
   const indiaSubChMap = Object.fromEntries(Object.entries(subChannelMap).filter(([k]) => k !== 'International' && k !== 'Shopify B2B' && k !== 'Shopify International' && k !== 'Unknown' && k !== 'Retail Store'))
-  const intlSubChMap = subChannelMap['International'] ? { International: subChannelMap['International'] } : {}
-  const activeSubChMap = isIntl ? intlSubChMap : indiaSubChMap
+  const activeSubChMap = indiaSubChMap
   const activeSubChKeys = Object.keys(activeSubChMap).sort((a, b) => activeSubChMap[b].rev - activeSubChMap[a].rev)
   const maxSubChRev = Math.max(...Object.values(activeSubChMap).map(v => v.rev), 1)
 
-  // Sub-channel-agnostic list — always shows every D2C sub-channel regardless of which one is
-  // currently selected (subChannelMap itself is scoped to the active filter, so it collapses to
-  // just the selected one otherwise).
-  const indiaSubChKeys = data.allSubChannels?.length ? data.allSubChannels : Object.keys(indiaSubChMap)
-
-  const [intlCountry, setIntlCountry] = useState(null)
   const [selectedCat, setSelectedCat] = useState(null)
   const [shTrendGroup, setShTrendGroup] = useState('daily')
   const [shCatView, setShCatView] = useState('table')
   const [shSubCatView, setShSubCatView] = useState('table')
-  const catRows = Object.entries(catMap).map(([k, v]) => { const orders = v.orders?.size ?? v.orders ?? 0; const aspU = v.aspUnits || v.units || 0; return { name: k, rev: v.rev, excRev: v.excRev || 0, orders, units: aspU, aov: orders ? v.rev / orders : 0, asp: aspU ? v.rev / aspU : 0 } }).sort((a, b) => b.rev - a.rev)
-  const allSubCatRows = Object.entries(subCatMap).map(([k, v]) => { const orders = v.orders?.size ?? v.orders ?? 0; const aspU = v.aspUnits || v.units || 0; return { name: k.split('::')[1] || k, category: k.split('::')[0] || '', rev: v.rev, orders, units: aspU, aov: orders ? v.rev / orders : 0, asp: aspU ? v.rev / aspU : 0 } }).sort((a, b) => b.rev - a.rev)
+  // Same category-leak problem as sh.totals above — catMap/subCatMap come straight from
+  // buildQuery()'s raw SubChannel filter (no item-master category correction), so they still
+  // include stray non-Mobility-category revenue under the Mobility filter. Rebuild both from the
+  // already-reconciled pnlSalesRows (api/bq.js) when a D2C sub-channel filter is active — orders
+  // is a per-(category,sub_category) COUNT(DISTINCT OrderId) in pnlSalesRows and can't be summed
+  // across sub_category rows to get a Category total without risking double-counting an order
+  // that spans multiple sub-categories, so catRows' `orders` uses the sum here as a reasonable
+  // approximation (same caveat already accepted for subChannelMap.orders in api/bq.js).
+  const filteredCatMap = isD2CSubChFiltered ? (() => {
+    const m = {}
+    ;(data.pnlSalesRows || []).filter(r => r.platform === 'Shopify' && r.sub_channel === filters.subChannel).forEach(x => {
+      const cat = x.category || 'Others'
+      if (!m[cat]) m[cat] = { rev: 0, excRev: 0, orders: 0, units: 0 }
+      m[cat].rev += parseFloat(x.gross_revenue) || 0
+      m[cat].excRev += parseFloat(x.revenue) || 0
+      m[cat].orders += parseInt(x.orders) || 0
+      m[cat].units += parseInt(x.units) || 0
+    })
+    return m
+  })() : catMap
+  const filteredSubCatMap = isD2CSubChFiltered ? (() => {
+    const m = {}
+    ;(data.pnlSalesRows || []).filter(r => r.platform === 'Shopify' && r.sub_channel === filters.subChannel).forEach(x => {
+      const key = `${x.category || 'Others'}::${x.sub_category || 'Others'}`
+      if (!m[key]) m[key] = { rev: 0, excRev: 0, orders: 0, units: 0 }
+      m[key].rev += parseFloat(x.gross_revenue) || 0
+      m[key].excRev += parseFloat(x.revenue) || 0
+      m[key].orders += parseInt(x.orders) || 0
+      m[key].units += parseInt(x.units) || 0
+    })
+    return m
+  })() : subCatMap
+  const catRows = Object.entries(filteredCatMap).map(([k, v]) => { const orders = v.orders?.size ?? v.orders ?? 0; const aspU = v.aspUnits || v.units || 0; return { name: k, rev: v.rev, excRev: v.excRev || 0, orders, units: aspU, aov: orders ? v.rev / orders : 0, asp: aspU ? v.rev / aspU : 0 } }).sort((a, b) => b.rev - a.rev)
+  const allSubCatRows = Object.entries(filteredSubCatMap).map(([k, v]) => { const orders = v.orders?.size ?? v.orders ?? 0; const aspU = v.aspUnits || v.units || 0; return { name: k.split('::')[1] || k, category: k.split('::')[0] || '', rev: v.rev, orders, units: aspU, aov: orders ? v.rev / orders : 0, asp: aspU ? v.rev / aspU : 0 } }).sort((a, b) => b.rev - a.rev)
   const subCatRows = selectedCat ? allSubCatRows.filter(r => r.category === selectedCat) : allSubCatRows
   const stateRows = (() => {
     const totalRevAll = sh.stateTotal?.rev || Object.values(stateMap).reduce((s, v) => s + (v.rev || 0), 0)
@@ -4914,42 +5019,8 @@ function ShopifyTab({ data, filters, setFilters }) {
     return sorted
   })()
 
-  const toggleStyle = active => ({ fontSize: 12, fontWeight: active ? 700 : 500, padding: '5px 18px', borderRadius: 7, border: `1.5px solid ${active ? C.acm : C.border2}`, background: active ? C.acc : C.card, color: C.t1, cursor: 'pointer', fontFamily: 'var(--font)', transition: 'all .12s' })
-
-  const switchRegion = toIntl => {
-    setIntlCountry(null)
-    setFilters(f => ({ ...f, subChannel: toIntl ? 'International' : 'ShopifyIndia', country: '', voucher: '' }))
-  }
-
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-      {/* India / International toggle + sub-channel toggle beside it */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-        <button style={{ ...toggleStyle(!isIntl), display: 'inline-flex', alignItems: 'center', gap: 5 }} onClick={() => switchRegion(false)}><img src="https://flagcdn.com/w20/in.png" width="18" style={{ borderRadius: 2, flexShrink: 0 }} /> India</button>
-        <button style={toggleStyle(isIntl)} onClick={() => switchRegion(true)}><span style={{ fontFamily: 'sans-serif' }}>🌐</span> International</button>
-        {!isIntl && indiaSubChKeys.length > 0 && (() => {
-          const sel = filters.subChannel ? filters.subChannel.split(',').map(x => x.trim()).filter(v => v && v !== 'ShopifyIndia' && v !== 'International') : []
-          const active = sel[0] || null
-          return (
-            <div style={{ display: 'flex', background: C.bg, borderRadius: 9, padding: 3, border: `1px solid ${C.border}`, gap: 0 }}>
-              <button onClick={() => setFilters(f => ({ ...f, subChannel: 'ShopifyIndia' }))} style={{ fontSize: 12, fontWeight: !active ? 700 : 500, padding: '5px 14px', borderRadius: 7, border: 'none', background: !active ? C.acc : 'transparent', color: C.t1, cursor: 'pointer', fontFamily: 'var(--font)', transition: 'all .15s' }}>All</button>
-              {indiaSubChKeys.map(k => (
-                <button key={k} onClick={() => setFilters(f => ({ ...f, subChannel: active === k ? 'ShopifyIndia' : k }))} style={{ fontSize: 12, fontWeight: active === k ? 700 : 500, padding: '5px 14px', borderRadius: 7, border: 'none', background: active === k ? C.acc : 'transparent', color: C.t1, cursor: 'pointer', fontFamily: 'var(--font)', transition: 'all .15s' }}>{k}</button>
-              ))}
-            </div>
-          )
-        })()}
-        {isIntl && (
-          <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginLeft: 4, border: `1.5px solid ${C.border2}`, borderRadius: 8, overflow: 'hidden', background: C.card }}>
-            {[{ id: null, label: 'All' }, { id: 'UAE', label: '🇦🇪 UAE' }, { id: 'UK', label: '🇬🇧 UK' }, { id: 'US', label: '🇺🇸 US' }].map(opt => (
-              <button key={String(opt.id)} onClick={() => {
-                setIntlCountry(opt.id)
-                setFilters(f => ({ ...f, country: opt.id || '' }))
-              }} style={{ fontSize: 12, fontWeight: intlCountry === opt.id ? 700 : 500, padding: '5px 14px', border: 'none', borderRight: `1px solid ${C.border2}`, background: intlCountry === opt.id ? C.acc : 'transparent', color: intlCountry === opt.id ? C.t1 : C.t2, cursor: 'pointer', fontFamily: 'var(--font)', transition: 'all .12s' }}>{opt.label}</button>
-            ))}
-          </div>
-        )}
-      </div>
       {(filters.category?.length > 0 || filters.subCategory?.length > 0) && (
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 12px', background: C.acl, borderRadius: 8, border: `1px solid ${C.acm}`, fontSize: 12 }}>
           <span style={{ color: C.t3, fontWeight: 600 }}>Filtered by:</span>
@@ -4971,7 +5042,7 @@ function ShopifyTab({ data, filters, setFilters }) {
       <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 5fr', gap: 10, alignItems: 'stretch' }}>
         {/* Hero card */}
         <div className="kpi-card" style={{ display: 'flex', flexDirection: 'column', gap: 8, padding: '16px 18px' }}>
-          <div className="kpi-label" style={{ fontSize: 11 }}>Gross Revenue (Inc. GST)</div>
+          <div className="kpi-label" style={{ fontSize: 11 }}>Gross Revenue Inc GST</div>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 6 }}>
             <div className="kpi-value" style={{ fontSize: 32, fontWeight: 800 }}>{fmt(totalRev)}</div>
             {shRevChg !== null && <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 7px', borderRadius: 4, background: shRevChg >= 0 ? C.green.bg : C.red.bg, color: shRevChg >= 0 ? C.green.tx : C.red.tx }}>{shRevChg >= 0 ? '▲' : '▼'} {Math.abs(shRevChg).toFixed(1)}%</span>}
@@ -5001,13 +5072,13 @@ function ShopifyTab({ data, filters, setFilters }) {
           const prevGst = prevGrossAfterReturns - prevNetRev
           const row1 = [
             {
-              label: 'Net Revenue (Ex. GST)',
+              label: 'Net Revenue',
               value: fmt(netRev),
               sub: 'Ex. return & cancellation',
               badge: excChg !== null ? <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 4, background: excChg >= 0 ? C.green.bg : C.red.bg, color: excChg >= 0 ? C.green.tx : C.red.tx, flexShrink: 0 }}>{excChg >= 0 ? '▲' : '▼'} {Math.abs(excChg).toFixed(1)}%</span> : null,
             },
-            { label: 'Total GST Collected', value: fmt(gst), sub: grossAfterReturns > 0 ? `${((gst / grossAfterReturns) * 100).toFixed(1)}% of net sales` : '—', badge: shChgBadge(gst, prevGst) },
-            { label: 'Avg. Daily Gross Rev', value: fmt(dailyAvg), sub: `over ${nDays} days`, badge: shChgBadge(dailyAvg, prevRev > 0 ? prevRev / nDays : 0) },
+            { label: 'GST', value: fmt(gst), sub: grossAfterReturns > 0 ? `${((gst / grossAfterReturns) * 100).toFixed(1)}% of net sales` : '—', badge: shChgBadge(gst, prevGst) },
+            { label: 'Daily Avg Rev', value: fmt(dailyAvg), sub: `over ${nDays} days`, badge: shChgBadge(dailyAvg, prevRev > 0 ? prevRev / nDays : 0) },
             { label: 'AOV', value: `₹${Math.round(aov).toLocaleString('en-IN')}`, sub: 'Gross rev ÷ orders', badge: shChgBadge(aov, prevOrders > 0 ? prevRev / prevOrders : 0) },
             { label: 'ASP', value: `₹${Math.round(asp).toLocaleString('en-IN')}`, sub: 'Gross rev ÷ units sold (excl. COUP/DFA)', badge: shChgBadge(asp, prevUnits > 0 ? prevRev / prevUnits : 0) },
           ]
@@ -5020,7 +5091,7 @@ function ShopifyTab({ data, filters, setFilters }) {
           const returnOrderPct = shNOrders ? ((rtoOrders + cirOrders) / shNOrders * 100) : 0
           const row2 = [
             { label: 'Cancellation %', value: `${cancelPct.toFixed(1)}%`, sub: `${fmt(cancelledRev)} cancelled rev`, accent: cancelPct > 5 ? '#7A1A1A' : undefined, badge: shReturnBadge(cancelPct, prevCancelPct) },
-            { label: 'Return %', value: `${returnRevPct.toFixed(1)}%`, sub: `${fmt(shRtoRev + shReturnRev + shCirRev)} RTO+CIR rev`, accent: returnRevPct > 5 ? '#7A1A1A' : undefined, badge: shReturnBadge(returnRevPct, prevReturnRevPct) },
+            { label: 'Returns %', value: `${returnRevPct.toFixed(1)}%`, sub: `${fmt(shRtoRev + shReturnRev + shCirRev)} RTO+CIR rev`, accent: returnRevPct > 5 ? '#7A1A1A' : undefined, badge: shReturnBadge(returnRevPct, prevReturnRevPct) },
             { label: 'Exchange %', value: `${exchangePct.toFixed(1)}%`, sub: `${fmt(exchangeRev)} exchange rev`, badge: shReturnBadge(exchangePct, prevExchangePct) },
             { label: 'RTO %', value: `${rtoPct.toFixed(1)}%`, sub: `${fmt(shRtoRev + shReturnRev)} RTO+Return rev`, accent: rtoPct > 10 ? '#7A1A1A' : undefined, badge: shReturnBadge(rtoPct, prevOrders > 0 ? prevRtoOrders / prevOrders * 100 : 0) },
             { label: 'CIR %', value: `${cirPct.toFixed(1)}%`, sub: `${fmt(shCirRev)} CIR rev`, badge: shReturnBadge(cirPct, prevOrders > 0 ? prevCirOrders / prevOrders * 100 : 0) },
@@ -5193,7 +5264,36 @@ function ShopifyTab({ data, filters, setFilters }) {
             subCatData[cat][sc] = pick(v)
           })
         }
-        return <FlatCategoryProductMatrix catData={catData} subCatData={subCatData} skuData={skuData} title="Category Revenue Matrix · D2C India" catPrevMap={sh.catPrevMap || {}} subCatPrevMap={sh.subCatPrevMap || {}} mobilityNetBySubCat={filters.subChannel === 'Mobility' ? (sh.mobilityNetBySubCat || {}) : {}} showReturnPct={true} />
+        // Reconcile sh.mobilityNetBySubCat (raw, keyed by bare SubCategory — no Category
+        // dimension) into a 'Category::SubCategory' composite-keyed map before passing it down —
+        // the same SubCategory name can exist under 2 different Categories (e.g. 'Sparepart'
+        // under both 'Mobility' and 'Sparepart (Chair & Mobility)'), and FlatCategoryProductMatrix.
+        // mapRow() looks up by composite key (see its Mobility-override comment), so a bare-keyed
+        // map would apply that one whitelist value to BOTH rows independently, double-counting it
+        // in the table's Total. Mirrors PnLPage.jsx's reconciledMobilityNetBySubCat exactly.
+        let reconciledMobilityNetBySubCat = {}
+        if (filters.subChannel === 'Mobility' && sh.mobilityNetBySubCat) {
+          const scToCats = new Map()
+          Object.entries(subCatData).forEach(([cat, scMap]) => Object.keys(scMap).forEach(sc => {
+            if (!scToCats.has(sc)) scToCats.set(sc, [])
+            scToCats.get(sc).push(cat)
+          }))
+          Object.entries(sh.mobilityNetBySubCat).forEach(([sc, val]) => {
+            const cats = scToCats.get(sc) || []
+            if (cats.length <= 1) {
+              const cat = cats[0] || 'Others'
+              reconciledMobilityNetBySubCat[`${cat}::${sc}`] = (reconciledMobilityNetBySubCat[`${cat}::${sc}`] || 0) + val
+            } else {
+              const grossByCat = cats.map(cat => subCatData[cat]?.[sc]?.rev || 0)
+              const totalGross = grossByCat.reduce((s, g) => s + g, 0)
+              cats.forEach((cat, i) => {
+                const share = totalGross > 0 ? val * (grossByCat[i] / totalGross) : val / cats.length
+                reconciledMobilityNetBySubCat[`${cat}::${sc}`] = (reconciledMobilityNetBySubCat[`${cat}::${sc}`] || 0) + share
+              })
+            }
+          })
+        }
+        return <FlatCategoryProductMatrix catData={catData} subCatData={subCatData} skuData={skuData} title="Category Revenue Matrix · D2C India" catPrevMap={sh.catPrevMap || {}} subCatPrevMap={sh.subCatPrevMap || {}} mobilityNetBySubCat={reconciledMobilityNetBySubCat} showReturnPct={true} detailedReturns />
       })()}
       {false && <div className="g-2" style={{ alignItems: 'stretch' }}>
         {(() => {
@@ -5446,16 +5546,11 @@ function EBOTab({ data, rangeStart, rangeEnd }) {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-      {/* Title */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-        <div style={{ width: 6, height: 24, borderRadius: 3, background: EBO_ACCENT }} />
-        <span style={{ fontSize: 16, fontWeight: 800, color: C.t1 }}>EBO · Retail Store</span>
-      </div>
       {/* KPI Grid */}
       <div style={{ display: 'grid', gridTemplateColumns: '1.5fr 5fr', gap: 10, alignItems: 'stretch' }}>
         {/* Hero card */}
         <div className="kpi-card" style={{ display: 'flex', flexDirection: 'column', gap: 8, padding: '16px 18px' }}>
-          <div className="kpi-label" style={{ fontSize: 11 }}>Gross Revenue (Inc. GST)</div>
+          <div className="kpi-label" style={{ fontSize: 11 }}>Gross Revenue Inc GST</div>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 6 }}>
             <div className="kpi-value" style={{ fontSize: 32, fontWeight: 800 }}>{fmt(totalRev)}</div>
             {shRevChg !== null && <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 7px', borderRadius: 4, background: shRevChg >= 0 ? C.green.bg : C.red.bg, color: shRevChg >= 0 ? C.green.tx : C.red.tx }}>{shRevChg >= 0 ? '▲' : '▼'} {Math.abs(shRevChg).toFixed(1)}%</span>}
@@ -5476,12 +5571,12 @@ function EBOTab({ data, rangeStart, rangeEnd }) {
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gridTemplateRows: 'repeat(2, 1fr)', gap: 10 }}>
           {[
             { label: 'Net Revenue', value: fmt(netRev), sub: 'Gross − Cancel − RTO − Return − CIR − GST', badge: chgBadge(netRev, prevNetRev) },
-            { label: 'Total GST Collected', value: fmt(gstCollected), sub: grossAfterReturns > 0 ? `${((gstCollected / grossAfterReturns) * 100).toFixed(1)}% of net sales` : '—', badge: null },
-            { label: 'Avg. Daily Gross Rev', value: fmt(dailyAvg), sub: `over ${nDays} days`, badge: chgBadge(dailyAvg, prevRev > 0 ? prevRev / nDays : 0) },
+            { label: 'GST', value: fmt(gstCollected), sub: grossAfterReturns > 0 ? `${((gstCollected / grossAfterReturns) * 100).toFixed(1)}% of net sales` : '—', badge: null },
+            { label: 'Daily Avg Rev', value: fmt(dailyAvg), sub: `over ${nDays} days`, badge: chgBadge(dailyAvg, prevRev > 0 ? prevRev / nDays : 0) },
             { label: 'AOV', value: `₹${Math.round(aov).toLocaleString('en-IN')}`, sub: 'Gross rev ÷ orders', badge: chgBadge(aov, prevOrders > 0 ? prevRev / prevOrders : 0) },
             { label: 'ASP', value: `₹${Math.round(asp).toLocaleString('en-IN')}`, sub: 'Gross rev ÷ units', badge: chgBadge(asp, prevUnits > 0 ? prevRev / prevUnits : 0) },
             { label: 'Cancellation %', value: `${cancelPct.toFixed(1)}%`, sub: `${fmt(cancelRev)} cancelled rev`, accent: cancelPct > 5 ? '#7A1A1A' : undefined, badge: retBadge(cancelPct, prevCancelPct) },
-            { label: 'Return %', value: `${returnRevPct.toFixed(1)}%`, sub: `${fmt(rtoRev + returnRev + cirRev)} RTO+CIR rev`, accent: returnRevPct > 5 ? '#7A1A1A' : undefined, badge: retBadge(returnRevPct, prevReturnRevPct) },
+            { label: 'Returns %', value: `${returnRevPct.toFixed(1)}%`, sub: `${fmt(rtoRev + returnRev + cirRev)} RTO+CIR rev`, accent: returnRevPct > 5 ? '#7A1A1A' : undefined, badge: retBadge(returnRevPct, prevReturnRevPct) },
             { label: 'Exchange %', value: `${exchangePct.toFixed(1)}%`, sub: `${fmt(exchangeRev)} exchange rev`, badge: retBadge(exchangePct, prevOrders > 0 ? prevExchangeOrders / prevOrders * 100 : 0) },
             { label: 'RTO %', value: `${rtoPct.toFixed(1)}%`, sub: `${fmt(rtoRev + returnRev)} RTO+Return rev`, accent: rtoPct > 10 ? '#7A1A1A' : undefined, badge: retBadge(rtoPct, prevOrders > 0 ? prevRtoOrders / prevOrders * 100 : 0) },
             { label: 'CIR %', value: `${cirPct.toFixed(1)}%`, sub: `${fmt(cirRev)} CIR rev`, badge: retBadge(cirPct, prevOrders > 0 ? prevCirOrders / prevOrders * 100 : 0) },
@@ -5557,7 +5652,7 @@ function EBOTab({ data, rangeStart, rangeEnd }) {
         />
         <GeoToggleDonutCard regionRows={regionRows} tierRows={tierRows} boxHeight={360} />
       </div>
-      <FlatCategoryProductMatrix catData={catDataForMatrix} subCatData={subCatDataForMatrix} skuData={skuDataForMatrix} title="Category Revenue Matrix · EBO" catPrevMap={ebo.catPrevMap || {}} subCatPrevMap={ebo.subCatPrevMap || {}} />
+      <FlatCategoryProductMatrix catData={catDataForMatrix} subCatData={subCatDataForMatrix} skuData={skuDataForMatrix} title="Category Revenue Matrix · EBO" catPrevMap={ebo.catPrevMap || {}} subCatPrevMap={ebo.subCatPrevMap || {}} showReturnPct={true} detailedReturns />
       {/* Geo tables */}
       <div className="g-2" style={{ alignItems: 'stretch' }}>
         <ShopifyGeoRichTable title="Top States" rows={stateRows} firstKey="state" firstLabel="State" formatFirst={v => v ? v.charAt(0).toUpperCase() + v.slice(1).toLowerCase() : v} rtoLabel="Return %" />
@@ -5569,27 +5664,73 @@ function EBOTab({ data, rangeStart, rangeEnd }) {
   )
 }
 
-function AmazonTab({ data, region = 'india', setRegion = () => {} }) {
-  const [channelView, setChannelView] = useState('all') // 'all' | 'sc' | 'vc'
-  const [intlMetric, setIntlMetric] = useState('rev')
+// Amazon SC/VC is India-only permanently — International orders (SubChannel='Amazon
+// International') now live under their own top-level Channel='International' tab. No region
+// toggle/state here anymore.
+// Amazon's Overall/Seller Central/Vendor Central toggle — extracted so SalesPage can render it on
+// the shared filter-bar row, same pattern as D2CSubChannelToggle. channelView/setChannelView are
+// now lifted to SalesPage (was local useState here before) so both the toggle and AmazonTab's
+// content stay in sync from a single source of truth.
+function AmazonChannelViewToggle({ channelView, setChannelView }) {
+  const opts = [{ id: 'all', label: 'Overall' }, { id: 'sc', label: 'Seller Central' }, { id: 'vc', label: 'Vendor Central' }]
+  return (
+    <div style={{ display: 'flex', gap: 4 }}>
+      {opts.map((opt, i) => (
+        <div key={opt.id} style={{ display: 'flex', alignItems: 'center' }}>
+          {i > 0 && <div style={{ width: 1, height: 14, background: '#E3E0D8', margin: '0 2px' }} />}
+          <button onClick={() => setChannelView(opt.id)} style={{ fontSize: 12, fontWeight: channelView === opt.id ? 700 : 500, padding: '5px 14px', borderRadius: 7, border: 'none', background: channelView === opt.id ? '#FFD600' : 'transparent', color: '#13121A', cursor: 'pointer' }}>{opt.label}</button>
+        </div>
+      ))}
+    </div>
+  )
+}
+
+function AmazonTab({ data, channelView, setChannelView }) {
   const [selectedCat, setSelectedCat] = useState(null)
   const [selectedSubCat, setSelectedSubCat] = useState(null)
   const [catRevView, setCatRevView] = useState('category')
   const amzSC = data.amzSC || {}
   const amzVC = data.amzVC || {}
   const amzVCMatrix = data.amzVCMatrix || {}
-  const amzIntl = data.amzIntl || {}
-
-  const toggleStyle = active => ({ fontSize: 12, fontWeight: active ? 700 : 500, padding: '5px 18px', borderRadius: 7, border: `1.5px solid ${active ? C.acm : C.border2}`, background: active ? C.acc : C.card, color: C.t1, cursor: 'pointer', fontFamily: 'var(--font)', transition: 'all .12s' })
 
   const returnRateReliable = (amzSC.returnRate?.rollOrders || 0) > 0
+  // Combined SC+VC Returns % for the "All" toggle — SC's own returnRate card (rollOrders/
+  // rollReturned — despite the "rollOrders" name, both are REVENUE figures: total_rev_inc/
+  // returned_rev from amzSCReturnRate, see api/bq.js) is Seller-Central-only, so on the combined
+  // view this must also fold in VC's orderedRev/returnRev rather than silently showing SC-only
+  // figures under an "All"-scoped label.
+  const amzCombinedReturnedRev = (amzSC.returnRate?.rollReturned || 0) + (amzVC.accounts?.reduce((s, a) => s + (a.returnRev || 0), 0) || 0)
+  const amzCombinedGrossRev = (amzSC.returnRate?.rollOrders || 0) + (amzVC.accounts?.reduce((s, a) => s + (a.orderedRev || 0), 0) || 0)
+  const amzCombinedReturnPct = amzCombinedGrossRev > 0 ? (amzCombinedReturnedRev / amzCombinedGrossRev * 100) : 0
 
   // ── Seller Central calcs ──
   const scFBA = amzSC.fulfillment?.find(f => f.type === 'FBA') || { orders: 0, rev: 0, excRev: 0, units: 0 }
   const scMFN = amzSC.fulfillment?.find(f => f.type === 'MFN') || { orders: 0, rev: 0, excRev: 0, units: 0 }
   const scTotalRev = scFBA.rev + scMFN.rev
   const scTotalExcRevRaw = (scFBA.excRev || 0) + (scMFN.excRev || 0)
-  const scNetRev = amzSC.netCalc?.netRev || scTotalExcRevRaw
+  // Net Revenue: same row-level (Category/SubCategory, gross − returns, × blended GST ratio)
+  // formula PnL's netOf()/netRevenueOf() uses — NOT amzSC.netCalc.netRev's precise per-order
+  // formula. Confirmed with the user: the Sales tab should match PnL's number exactly here,
+  // rather than each tab showing a different (if individually more/less precise) Net Revenue for
+  // the same Amazon SC data — same fix direction as the D2C tab already uses.
+  const scNetRevRowLevel = (() => {
+    let net = 0
+    Object.values(amzSC.subCatChannel || {}).forEach(scMap => {
+      Object.values(scMap).forEach(d => {
+        const gross = (d.FBA?.rev || 0) + (d.MFN?.rev || 0)
+        const excRev = (d.FBA?.excRev || 0) + (d.MFN?.excRev || 0)
+        const cancelRev = (d.FBA?.cancelRev || 0) + (d.MFN?.cancelRev || 0)
+        const rtoRev = (d.FBA?.rtoRev || 0) + (d.MFN?.rtoRev || 0)
+        const cirRev = (d.FBA?.cirRev || 0) + (d.MFN?.cirRev || 0)
+        const returnRev = (d.FBA?.returnRev || 0) + (d.MFN?.returnRev || 0)
+        const totalReturnRev = cancelRev + rtoRev + cirRev + returnRev
+        const gstRatio = gross > 0 ? (gross - excRev) / gross : 0
+        net += (gross - totalReturnRev) * (1 - gstRatio)
+      })
+    })
+    return net
+  })()
+  const scNetRev = scNetRevRowLevel
   const scTotalExcRev = scNetRev
   const scTotalOrders = scFBA.orders + scMFN.orders
   const scAOV = scTotalOrders ? scTotalRev / scTotalOrders : 0
@@ -5615,9 +5756,20 @@ function AmazonTab({ data, region = 'india', setRegion = () => {} }) {
   const vcTotalOrderedExcRev = amzVC.accounts?.reduce((s, a) => s + (a.orderedExcRev || 0), 0) || 0
   const vcTotalShipped = amzVC.accounts?.reduce((s, a) => s + a.shippedRev, 0) || 0
   const vcTotalOrderedUnits = amzVC.accounts?.reduce((s, a) => s + a.orderedUnits, 0) || 0
-  const vcTotalShippedUnits = amzVC.accounts?.reduce((s, a) => s + a.shippedUnits, 0) || 0
-  const vcTotalReturns = amzVC.accounts?.reduce((s, a) => s + a.returns, 0) || 0
-  const vcReturnRate = vcTotalShippedUnits ? (vcTotalReturns / vcTotalShippedUnits * 100) : 0
+  // Returns% = return_rev ÷ gross_rev (revenue ÷ revenue) — same canonical ratio PnL's netOf()
+  // uses for VC (totalReturnRev/gross, where VC's totalReturnRev is just returnRev). Previously
+  // this divided a COUNT(DISTINCT OrderId) line-item count (amzVCAccounts.returns) by an
+  // unfiltered gross unit SUM (shippedUnits) — a dimensionally wrong count÷units ratio that
+  // showed ~5% here vs PnL's correct ~19% for the same July VC data.
+  const vcTotalReturnRev = amzVC.accounts?.reduce((s, a) => s + (a.returnRev || 0), 0) || 0
+  const vcReturnRate = vcTotalOrdered ? (vcTotalReturnRev / vcTotalOrdered * 100) : 0
+  // Net Revenue (Ex GST, after returns) — vcTotalOrderedExcRev above is gross Ex-GST with no
+  // returns deduction (correct to keep using it for GST/ASP/other cards where "gross" is what's
+  // wanted), but a "Net Revenue" card must actually net out returns like every other channel.
+  // Same (gross − returnRev) × (1 − gstRatio) formula api/bq.js's chMap['Amazon'] override and
+  // PnL's Amazon tab already use for VC — kept in sync so this card can never drift from either.
+  const vcGstRatio = vcTotalOrdered > 0 ? Math.max(0, (vcTotalOrdered - vcTotalOrderedExcRev) / vcTotalOrdered) : 0
+  const vcNetRevenue = Math.max(vcTotalOrdered - vcTotalReturnRev, 0) * (1 - vcGstRatio)
   const vcMaxRev = Math.max(...(amzVC.accounts || []).map(a => a.orderedRev), 1)
 
   // ── Category filter overrides ──
@@ -5660,6 +5812,7 @@ function AmazonTab({ data, region = 'india', setRegion = () => {} }) {
   const chVcCatRev = showVC ? vcCatRev : 0
   const chScCatExcRev = showSC ? scCatExcRev : 0
   const chVcCatExcRev = showVC ? vcCatExcRev : 0
+  const chVcNetRevenue = showVC ? vcNetRevenue : 0
   const chScCatOrders = showSC ? scCatOrders : 0
   const chVcCatOrders = showVC ? vcCatOrders : 0
   const chScCatUnits = showSC ? scCatUnits : 0
@@ -5673,33 +5826,10 @@ function AmazonTab({ data, region = 'india', setRegion = () => {} }) {
   const chAmzPrevSCRev = showSC ? amzPrevSCRev : 0
   const chAmzPrevVCRev = showVC ? amzPrevVCRev : 0
 
-  // ── International calcs ──
-  const intlTotalRev = amzIntl.countries?.reduce((s, c) => s + c.rev, 0) || 0
-  const intlTotalOrders = amzIntl.countries?.reduce((s, c) => s + c.orders, 0) || 0
-  const intlAOV = intlTotalOrders ? intlTotalRev / intlTotalOrders : 0
-  const intlDots = { UAE: '#E8930A', UK: '#2E74CC', US: '#0D9E68', Unknown: C.t3 }
-
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-      {/* Region + sub-view in one row */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
-        {/* Pill toggle: India / International */}
-        <div style={{ display: 'flex', background: C.bg, borderRadius: 9, padding: 3, border: `1px solid ${C.border}`, gap: 0 }}>
-          {[{ id: 'india', label: 'India', img: 'https://flagcdn.com/w20/in.png' }, { id: 'intl', label: 'International', emoji: '🌍' }].map(opt => (
-            <button key={opt.id} onClick={() => setRegion(opt.id)} style={{ fontSize: 12, fontWeight: region === opt.id ? 700 : 500, padding: '5px 16px', borderRadius: 7, border: 'none', background: region === opt.id ? C.acc : 'transparent', color: C.t1, cursor: 'pointer', fontFamily: 'var(--font)', transition: 'all .15s', boxShadow: region === opt.id ? '0 1px 4px rgba(0,0,0,.10)' : 'none', display: 'flex', alignItems: 'center', gap: 5 }}>{opt.img ? <img src={opt.img} width="18" style={{ verticalAlign: 'middle', borderRadius: 2 }} /> : <span style={{ fontFamily: 'sans-serif' }}>{opt.emoji}</span>}{opt.label}</button>
-          ))}
-        </div>
-        {region === 'india' && (
-          <div style={{ display: 'flex', background: C.bg, borderRadius: 9, padding: 3, border: `1px solid ${C.border}`, gap: 0 }}>
-            {[{ id: 'all', label: 'All' }, { id: 'sc', label: 'Seller Central' }, { id: 'vc', label: 'Vendor Central' }].map(opt => (
-              <button key={opt.id} onClick={() => setChannelView(opt.id)} style={{ fontSize: 12, fontWeight: channelView === opt.id ? 700 : 500, padding: '5px 14px', borderRadius: 7, border: 'none', background: channelView === opt.id ? C.acc : 'transparent', color: C.t1, cursor: 'pointer', fontFamily: 'var(--font)', transition: 'all .15s', boxShadow: channelView === opt.id ? '0 1px 4px rgba(0,0,0,.10)' : 'none' }}>{opt.label}</button>
-            ))}
-          </div>
-        )}
-      </div>
-
-      {/* ── INDIA · OVERVIEW (SC + VC combined, filterable by channelView) ── */}
-      {region === 'india' && (
+      {/* ── OVERVIEW (SC + VC combined, filterable by channelView) ── */}
+      {(
         <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
           {/* KPI layout: hero + 2 rows of 4 */}
           {(() => {
@@ -5716,7 +5846,7 @@ function AmazonTab({ data, region = 'india', setRegion = () => {} }) {
             return (
               <div style={{ display: 'grid', gridTemplateColumns: '1.5fr 5fr', gap: 10, alignItems: 'stretch' }}>
                 <div className="kpi-card" style={{ display: 'flex', flexDirection: 'column', gap: 8, padding: '16px 18px' }}>
-                  <div className="kpi-label" style={{ fontSize: 11 }}>Gross Revenue · {channelView === 'all' ? 'SC + VC' : channelView === 'sc' ? 'Seller Central' : 'Vendor Central'}{selectedCat ? ` · ${selectedSubCat || selectedCat}` : ''}</div>
+                  <div className="kpi-label" style={{ fontSize: 11 }}>Gross Revenue Inc GST · {channelView === 'all' ? 'SC + VC' : channelView === 'sc' ? 'Seller Central' : 'Vendor Central'}{selectedCat ? ` · ${selectedSubCat || selectedCat}` : ''}</div>
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 6 }}>
                     <div className="kpi-value" style={{ fontSize: 32, fontWeight: 800 }}>{fmt(chScCatRev + chVcCatRev)}</div>
                     {amzTotalChg !== null && !selectedCat && channelView === 'all' && <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 7px', borderRadius: 4, background: amzTotalChg >= 0 ? C.green.bg : C.red.bg, color: amzTotalChg >= 0 ? C.green.tx : C.red.tx }}>{amzTotalChg >= 0 ? '▲' : '▼'} {Math.abs(amzTotalChg).toFixed(1)}%</span>}
@@ -5735,16 +5865,17 @@ function AmazonTab({ data, region = 'india', setRegion = () => {} }) {
                 </div>
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gridTemplateRows: 'repeat(2, 1fr)', gap: 10, alignItems: 'stretch' }}>
                   {[
-                    ...(channelView !== 'vc' ? [{ label: 'SC Revenue', value: fmt(chScCatRev), sub: `Seller Central${(chScCatRev + chVcCatRev) > 0 ? ` · ${(chScCatRev / (chScCatRev + chVcCatRev) * 100).toFixed(1)}% of total` : ''}`, badge: selectedCat ? null : amzChgBadge(chScTotalRev, chAmzPrevSCRev) }] : []),
-                    ...(channelView !== 'sc' ? [{ label: 'VC Revenue', value: fmt(chVcCatRev), sub: `Vendor Central${(chScCatRev + chVcCatRev) > 0 ? ` · ${(chVcCatRev / (chScCatRev + chVcCatRev) * 100).toFixed(1)}% of total` : ''}`, badge: selectedCat ? null : amzChgBadge(chVcTotalOrdered, chAmzPrevVCRev) }] : []),
-                    { label: 'Net Revenue', value: fmt(chScCatExcRev + chVcCatExcRev), sub: channelView === 'all' ? 'SC (Gross−Cancel−Returns−GST) + VC excl. GST' : channelView === 'sc' ? 'Gross−Cancel−Returns−GST' : 'Excl. GST', badge: selectedCat || channelView !== 'all' ? null : amzChgBadge(scTotalExcRev + vcTotalOrderedExcRev, (amzSC.prevExcRev || 0) + (amzVC.prevExcRev || 0)) },
-                    { label: 'Total GST Collected', value: fmt((chScCatRev - chScTotalExcRevRaw) + (chVcCatRev - chVcCatExcRev)), sub: channelView === 'all' ? 'SC + VC GST' : channelView === 'sc' ? 'SC GST' : 'VC GST', badge: selectedCat || channelView !== 'all' ? null : amzChgBadge((scTotalRev - scTotalExcRevRaw) + (vcTotalOrdered - vcTotalOrderedExcRev), ((amzSC.prevRev || 0) - (amzSC.prevExcRev || 0)) + ((amzVC.prevRev || 0) - (amzVC.prevExcRev || 0))) },
-                    { label: 'Avg. Daily Gross Rev', value: fmt((chScCatRev + chVcCatRev) / (data.nDays || 1)), sub: channelView === 'all' ? 'SC + VC per day' : 'Per day', badge: selectedCat || channelView !== 'all' ? null : amzChgBadge((scTotalRev + vcTotalOrdered) / (data.nDays || 1), amzPrevDailyAvg) },
+                    ...(channelView === 'all' ? [{ label: 'Gross Rev · Seller Central', value: fmt(chScCatRev), sub: (chScCatRev + chVcCatRev) > 0 ? `${(chScCatRev / (chScCatRev + chVcCatRev) * 100).toFixed(1)}% of total` : undefined, badge: selectedCat ? null : amzChgBadge(chScTotalRev, chAmzPrevSCRev) }] : []),
+                    ...(channelView === 'all' ? [{ label: 'Gross Rev · Vendor Central', value: fmt(chVcCatRev), sub: (chScCatRev + chVcCatRev) > 0 ? `${(chVcCatRev / (chScCatRev + chVcCatRev) * 100).toFixed(1)}% of total` : undefined, badge: selectedCat ? null : amzChgBadge(chVcTotalOrdered, chAmzPrevVCRev) }] : []),
+                    { label: 'Net Revenue', value: fmt(chScCatExcRev + chVcNetRevenue), sub: 'Ex GST, after returns/cancellation', subTitle: channelView === 'all' ? 'SC (Gross−Cancel−Returns−GST) + VC (Gross−Returns−GST)' : channelView === 'sc' ? 'Gross−Cancel−Returns−GST' : 'Gross−Returns−GST', badge: selectedCat || channelView !== 'all' ? null : amzChgBadge(scTotalExcRev + vcNetRevenue, (amzSC.prevExcRev || 0) + (amzVC.prevExcRev || 0)) },
+                    { label: 'GST', value: fmt((chScCatRev - chScTotalExcRevRaw) + (chVcCatRev - chVcCatExcRev)), sub: channelView === 'all' ? 'SC + VC GST' : channelView === 'sc' ? 'SC GST' : 'VC GST', badge: selectedCat || channelView !== 'all' ? null : amzChgBadge((scTotalRev - scTotalExcRevRaw) + (vcTotalOrdered - vcTotalOrderedExcRev), ((amzSC.prevRev || 0) - (amzSC.prevExcRev || 0)) + ((amzVC.prevRev || 0) - (amzVC.prevExcRev || 0))) },
+                    { label: 'Daily Avg Rev', value: fmt((chScCatRev + chVcCatRev) / (data.nDays || 1)), sub: channelView === 'all' ? 'SC + VC per day' : 'Per day', badge: selectedCat || channelView !== 'all' ? null : amzChgBadge((scTotalRev + vcTotalOrdered) / (data.nDays || 1), amzPrevDailyAvg) },
                     { label: 'ASP', value: `₹${(chScCatUnits + chVcCatUnits) ? Math.round((chScCatRev + chVcCatRev) / (chScCatUnits + chVcCatUnits)).toLocaleString('en-IN') : 0}`, sub: channelView === 'all' ? 'Gross rev ÷ units (SC+VC)' : 'Gross rev ÷ units', badge: selectedCat || channelView !== 'all' ? null : amzChgBadge((scTotalUnits + vcTotalOrderedUnits) ? (scTotalRev + vcTotalOrdered) / (scTotalUnits + vcTotalOrderedUnits) : 0, amzPrevASP) },
                     ...(channelView !== 'vc' ? [{ label: 'AOV', value: `₹${chScCatOrders ? Math.round(chScCatRev / chScCatOrders).toLocaleString('en-IN') : 0}`, sub: 'SC gross rev ÷ orders (VC has no order count)', badge: selectedCat ? null : amzChgBadge(scAOV, amzPrevAOV) }] : []),
                     ...(channelView === 'sc' ? [{ label: 'Cancellation Rate', value: `${scCancelRate.toFixed(1)}%`, sub: `${fmtN(scCancelOrders)} cancelled (SC)`, accent: scCancelRate > 10 ? '#7A1A1A' : undefined, badge: amzPrevCancelRate ? (() => { const p = (scCancelRate - amzPrevCancelRate) / amzPrevCancelRate * 100; return <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 4, background: p > 0 ? C.red.bg : C.green.bg, color: p > 0 ? C.red.tx : C.green.tx, flexShrink: 0 }}>{p > 0 ? '▲' : '▼'} {Math.abs(p).toFixed(1)}%</span> })() : null }] : []),
-                    ...(channelView !== 'vc' ? [{ label: channelView === 'all' ? 'Return %' : 'Return% (SC)', value: returnRateReliable ? `${(amzSC.returnRate?.pct || 0).toFixed(1)}%` : 'N/A', sub: returnRateReliable ? `${fmt(amzSC.returnRate?.rollReturned || 0)} returned of ${fmt(amzSC.returnRate?.rollOrders || 0)} SC rev` : 'No reliable data', accent: returnRateReliable && (amzSC.returnRate?.pct || 0) > 18 ? '#7A1A1A' : undefined }] : []),
-                    ...(channelView === 'vc' ? [{ label: 'Return Rate (VC)', value: `${vcReturnRate.toFixed(1)}%`, sub: `${fmtN(vcTotalReturns)} returned of ${fmtN(vcTotalShippedUnits)} shipped` }] : []),
+                    ...(channelView === 'all' ? [{ label: 'Returns %', value: returnRateReliable ? `${amzCombinedReturnPct.toFixed(1)}%` : 'N/A', sub: returnRateReliable ? `${fmt(amzCombinedReturnedRev)} returned of ${fmt(amzCombinedGrossRev)} SC+VC rev` : 'No reliable data', accent: returnRateReliable && amzCombinedReturnPct > 18 ? '#7A1A1A' : undefined }] : []),
+                    ...(channelView === 'sc' ? [{ label: 'Returns % (SC)', value: returnRateReliable ? `${(amzSC.returnRate?.pct || 0).toFixed(1)}%` : 'N/A', sub: returnRateReliable ? `${fmt(amzSC.returnRate?.rollReturned || 0)} returned of ${fmt(amzSC.returnRate?.rollOrders || 0)} SC rev` : 'No reliable data', accent: returnRateReliable && (amzSC.returnRate?.pct || 0) > 18 ? '#7A1A1A' : undefined }] : []),
+                    ...(channelView === 'vc' ? [{ label: 'Returns % (VC)', value: `${vcReturnRate.toFixed(1)}%`, sub: `${fmt(vcTotalReturnRev)} returned of ${fmt(vcTotalOrdered)} gross rev` }] : []),
                   ].map(k => (
                     <div key={k.label} className="kpi-card" style={{ padding: '10px 13px', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
                       <div className="kpi-label">{k.label}</div>
@@ -5752,7 +5883,7 @@ function AmazonTab({ data, region = 'india', setRegion = () => {} }) {
                         <div className="kpi-value" style={{ fontSize: 17, ...(k.accent ? { color: k.accent } : {}) }}>{k.value}</div>
                         {k.badge}
                       </div>
-                      {k.sub && <div className="kpi-sub">{k.sub}</div>}
+                      {k.sub && <div className="kpi-sub" title={k.subTitle}>{k.sub}</div>}
                     </div>
                   ))}
                 </div>
@@ -5959,7 +6090,7 @@ function AmazonTab({ data, region = 'india', setRegion = () => {} }) {
             const skuPrevMap = {}
             const skuCats = new Set([...Object.keys(scSkuPrev), ...Object.keys(vcSkuPrev)])
             skuCats.forEach(cat => { skuPrevMap[cat] = {}; const allScs = new Set([...Object.keys(scSkuPrev[cat]||{}), ...Object.keys(vcSkuPrev[cat]||{})]); allScs.forEach(sc => { skuPrevMap[cat][sc] = {}; const allSkus = new Set([...Object.keys(scSkuPrev[cat]?.[sc]||{}), ...Object.keys(vcSkuPrev[cat]?.[sc]||{})]); allSkus.forEach(sku => { skuPrevMap[cat][sc][sku] = (scSkuPrev[cat]?.[sc]?.[sku]||0) + (vcSkuPrev[cat]?.[sc]?.[sku]||0) }) }) })
-            return <FlatCategoryProductMatrix catData={catData} subCatData={subCatData} skuData={skuData} title={`Category Revenue Matrix · Amazon India${channelView !== 'all' ? ` · ${channelView === 'sc' ? 'Seller Central' : 'Vendor Central'}` : ''}`} catPrevMap={catPrevMap} subCatPrevMap={subCatPrevMap} simpleReturns />
+            return <FlatCategoryProductMatrix catData={catData} subCatData={subCatData} skuData={skuData} title={`Category Revenue Matrix · Amazon India${channelView !== 'all' ? ` · ${channelView === 'sc' ? 'Seller Central' : 'Vendor Central'}` : ''}`} catPrevMap={catPrevMap} subCatPrevMap={subCatPrevMap} simpleReturns showReturnPct />
           })()}
           {(() => {
             const statePrevMap = amzSC.statePrevMap || {}
@@ -5996,170 +6127,6 @@ function AmazonTab({ data, region = 'india', setRegion = () => {} }) {
         </div>
       )}
 
-      {/* ── INTERNATIONAL · SELLER CENTRAL ── */}
-      {region === 'intl' && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-          {(() => {
-            const intlTotalUnits = (amzIntl.countries || []).reduce((s, c) => s + (c.units || 0), 0)
-            const intlTotalNetRev = (amzIntl.countries || []).reduce((s, c) => s + (c.netRev || 0), 0)
-            const intlTotalTax = (amzIntl.countries || []).reduce((s, c) => s + (c.tax || 0), 0)
-            const intlASP = intlTotalUnits ? Math.round(intlTotalRev / intlTotalUnits) : 0
-            const prevRev = amzIntl.prevRev || 0
-            const prevNetRev = amzIntl.prevNetRev || 0
-            const prevOrders = amzIntl.prevOrders || 0
-            const prevUnits = amzIntl.prevUnits || 0
-            const prevAOV = prevOrders > 0 ? prevRev / prevOrders : 0
-            const prevASP = prevUnits > 0 ? prevRev / prevUnits : 0
-            const prevDailyAvg = prevRev > 0 ? prevRev / (data.nDays || 1) : 0
-            const chgBadge = (cur, prev) => {
-              if (!prev) return null
-              const p = (cur - prev) / prev * 100
-              return <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 4, background: p >= 0 ? C.green.bg : C.red.bg, color: p >= 0 ? C.green.tx : C.red.tx, flexShrink: 0 }}>{p >= 0 ? '▲' : '▼'} {Math.abs(p).toFixed(1)}%</span>
-            }
-            // sparkline: daily totals
-            const intlDailyMap = {}
-            ;(amzIntl.daily || []).forEach(d => {
-              intlDailyMap[d.date] = (intlDailyMap[d.date] || 0) + d.rev
-            })
-            const sparkData = Object.entries(intlDailyMap).sort(([a],[b]) => a.localeCompare(b)).map(([date, rev]) => ({ date, rev }))
-            return (
-              <div style={{ display: 'grid', gridTemplateColumns: '1.5fr 5fr', gap: 10, alignItems: 'stretch' }}>
-                <div className="kpi-card" style={{ display: 'flex', flexDirection: 'column', gap: 8, padding: '16px 18px' }}>
-                  <div className="kpi-label" style={{ fontSize: 11 }}>Gross Revenue · International SC</div>
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 6 }}>
-                    <div className="kpi-value" style={{ fontSize: 32, fontWeight: 800 }}>{fmt(intlTotalRev)}</div>
-                    {chgBadge(intlTotalRev, prevRev)}
-                  </div>
-                  <div className="kpi-sub" style={{ fontSize: 13 }}>{fmtN(intlTotalOrders)} orders · {fmtN(intlTotalUnits)} units</div>
-                  <div style={{ flex: 1, minHeight: 60 }}>
-                    <ResponsiveContainer width="100%" height="100%">
-                      <AreaChart data={sparkData} margin={{ top: 4, right: 0, bottom: 0, left: 0 }}>
-                        <defs><linearGradient id="intlGrad" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#E8930A" stopOpacity={0.25} /><stop offset="95%" stopColor="#E8930A" stopOpacity={0} /></linearGradient></defs>
-                        <Area type="monotone" dataKey="rev" stroke="#E8930A" strokeWidth={2} fill="url(#intlGrad)" dot={false} />
-                        <Tooltip content={({ active, payload }) => active && payload?.length ? <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 6, padding: '4px 8px', fontSize: 10 }}>{fmt(payload[0].value)}</div> : null} />
-                      </AreaChart>
-                    </ResponsiveContainer>
-                  </div>
-                </div>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gridAutoRows: '1fr', gap: 10 }}>
-                  {[
-                    { label: 'Net Revenue', value: fmt(intlTotalNetRev), sub: `Tax: ${fmt(intlTotalTax)}`, badge: chgBadge(intlTotalNetRev, prevNetRev) },
-                    { label: 'Total Orders', value: fmtN(intlTotalOrders), sub: `${(amzIntl.countries||[]).length} markets`, badge: chgBadge(intlTotalOrders, prevOrders) },
-                    { label: 'Total Units', value: fmtN(intlTotalUnits), sub: 'Units sold', badge: chgBadge(intlTotalUnits, prevUnits) },
-                    { label: 'AOV', value: `₹${Math.round(intlAOV).toLocaleString('en-IN')}`, sub: 'Gross / Orders', badge: chgBadge(intlAOV, prevAOV) },
-                    { label: 'ASP', value: `₹${intlASP.toLocaleString('en-IN')}`, sub: 'Gross / Units', badge: chgBadge(intlASP, prevASP) },
-                    { label: 'Daily Avg Revenue', value: fmt(intlTotalRev / (data.nDays || 1)), sub: 'Gross per day', badge: chgBadge(intlTotalRev / (data.nDays||1), prevDailyAvg) },
-                    { label: 'Return %', value: `${(amzIntl.returnRate?.pct || 0).toFixed(1)}%`, sub: `${fmt(amzIntl.returnRate?.returnRev || 0)} return rev · ${fmt(amzIntl.returnRate?.totalRev || 0)} gross`, accent: (amzIntl.returnRate?.pct || 0) > 18 ? '#7A1A1A' : undefined },
-                  ].map(k => (
-                    <div key={k.label} className="kpi-card" style={{ padding: '10px 13px', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
-                      <div className="kpi-label">{k.label}</div>
-                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 4 }}><div className="kpi-value" style={{ fontSize: 17 }}>{k.value}</div>{k.badge}</div>
-                      {k.sub && <div className="kpi-sub">{k.sub}</div>}
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )
-          })()}
-          {/* Trend Analysis · International SC */}
-          {(() => {
-            const intlCountryColors = { UAE: '#E8930A', UK: '#2E74CC', US: '#0D9E68' }
-            const intlDailyMap = {}
-            ;(amzIntl.daily || []).forEach(d => {
-              if (!intlDailyMap[d.date]) intlDailyMap[d.date] = { date: d.date, _totalRev: 0, _totalNet: 0, _totalOrders: 0, _totalUnits: 0 }
-              const key = d.country
-              intlDailyMap[d.date][key + '_rev'] = (intlDailyMap[d.date][key + '_rev'] || 0) + (d.rev || 0)
-              intlDailyMap[d.date][key + '_net'] = (intlDailyMap[d.date][key + '_net'] || 0) + (d.netRev || 0)
-              intlDailyMap[d.date][key + '_orders'] = (intlDailyMap[d.date][key + '_orders'] || 0) + (d.orders || 0)
-              intlDailyMap[d.date][key + '_units'] = (intlDailyMap[d.date][key + '_units'] || 0) + (d.units || 0)
-              intlDailyMap[d.date]._totalRev += d.rev || 0
-              intlDailyMap[d.date]._totalNet += d.netRev || 0
-              intlDailyMap[d.date]._totalOrders += d.orders || 0
-              intlDailyMap[d.date]._totalUnits += d.units || 0
-            })
-            const intlDailyArr = Object.values(intlDailyMap).sort((a, b) => a.date.localeCompare(b.date))
-            const intlCountries = [...new Set((amzIntl.daily || []).map(d => d.country).filter(Boolean))]
-            const suffix = intlMetric === 'rev' ? '_rev' : intlMetric === 'net' ? '_net' : intlMetric === 'orders' ? '_orders' : '_units'
-            const totalKey = intlMetric === 'rev' ? '_totalRev' : intlMetric === 'net' ? '_totalNet' : intlMetric === 'orders' ? '_totalOrders' : '_totalUnits'
-            const yFmt = v => intlMetric === 'rev' || intlMetric === 'net' ? (v >= 1e5 ? `${(v/1e5).toFixed(1)}L` : v >= 1000 ? `${(v/1000).toFixed(0)}K` : v) : fmtN(v)
-            const btnSt = k => ({ fontSize: 10, fontWeight: 600, padding: '2px 8px', borderRadius: 4, border: `1px solid ${intlMetric===k?C.acm:C.border}`, background: intlMetric===k?C.acc:'transparent', color: C.t1, cursor: 'pointer', fontFamily: 'var(--font)' })
-            return (
-              <Card fill title="Trend Analysis · International SC" action={
-                <div style={{ display: 'flex', gap: 3 }}>
-                  {[['rev','Gross Rev'],['net','Net Rev'],['orders','Orders'],['units','Units']].map(([k,l]) => <button key={k} style={btnSt(k)} onClick={() => setIntlMetric(k)}>{l}</button>)}
-                </div>
-              }>
-                <ResponsiveContainer width="100%" height="100%" minHeight={220}>
-                  <ComposedChart data={intlDailyArr} margin={{ top: 4, right: 10, bottom: 0, left: 0 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke={C.border} vertical={false} />
-                    <XAxis dataKey="date" tick={{ fontSize: 10, fill: C.t3 }} tickFormatter={d => d?.slice(5)} />
-                    <YAxis tick={{ fontSize: 10, fill: C.t3 }} tickFormatter={yFmt} width={44} />
-                    <Tooltip content={<ChartTooltip />} />
-                    <Legend iconSize={8} wrapperStyle={{ fontSize: 10 }} />
-                    <Area type="monotone" dataKey={totalKey} name="Total" stroke="#FFD600" fill="#FFD60022" strokeWidth={2} dot={false} />
-                    {intlCountries.map(ct => <Line key={ct} type="monotone" dataKey={ct + suffix} name={ct} stroke={intlCountryColors[ct] || C.t3} strokeWidth={1.5} dot={false} />)}
-                  </ComposedChart>
-                </ResponsiveContainer>
-              </Card>
-            )
-          })()}
-          <div className="g-2" style={{ alignItems: 'stretch' }}>
-            {/* Country Breakdown with donut */}
-            {(() => {
-              const countries = amzIntl.countries || []
-              const donutData = countries.map(c => ({ name: c.country, value: c.rev }))
-              const RCOLORS = ['#E8930A','#2E74CC','#0D9E68','#9B59B6','#E24B4A']
-              return (
-                <Card title="Country Breakdown">
-                  {countries.length > 0 && (
-                    <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 8 }}>
-                      <PieChart width={160} height={140}>
-                        <Pie data={donutData} cx={75} cy={65} innerRadius={40} outerRadius={65} dataKey="value" paddingAngle={2}>
-                          {donutData.map((_, i) => <Cell key={i} fill={RCOLORS[i % RCOLORS.length]} />)}
-                        </Pie>
-                        <Tooltip formatter={v => fmt(v)} />
-                      </PieChart>
-                    </div>
-                  )}
-                  {countries.map((c, i) => (
-                    <HBar key={c.country} dot={intlDots[c.country] || RCOLORS[i % RCOLORS.length]} label={c.country} width={intlTotalRev ? (c.rev / intlTotalRev * 100) : 0} value={fmt(c.rev)} pctVal={fmtN(c.orders) + ' ord'} />
-                  ))}
-                  {countries.length === 0 && <div style={{ fontSize: 12, color: C.t3, padding: '20px 0', textAlign: 'center' }}>No international orders in this period</div>}
-                </Card>
-              )
-            })()}
-            {/* Category Revenue Matrix · International */}
-            {(() => {
-              const pickRet = (...chs) => { for (const c of chs) if (c?.totalOrdersForReturn) return { returned: c.returned||0, totalOrdersForReturn: c.totalOrdersForReturn }; return { returned: 0, totalOrdersForReturn: 0 } }
-              const catData = {}
-              Object.entries(amzIntl.catChannel || {}).forEach(([cat, chData]) => {
-                const allCh = Object.values(chData)
-                catData[cat] = { rev: allCh.reduce((s,c)=>s+(c.rev||0),0), excRev: allCh.reduce((s,c)=>s+(c.excRev||0),0), units: allCh.reduce((s,c)=>s+(c.units||0),0), ...pickRet(...allCh) }
-              })
-              const subCatData = {}
-              Object.entries(amzIntl.subCatChannel || {}).forEach(([cat, scMap]) => {
-                subCatData[cat] = {}
-                Object.entries(scMap).forEach(([sc, chData]) => {
-                  const allCh = Object.values(chData)
-                  subCatData[cat][sc] = { rev: allCh.reduce((s,c)=>s+(c.rev||0),0), excRev: allCh.reduce((s,c)=>s+(c.excRev||0),0), units: allCh.reduce((s,c)=>s+(c.units||0),0), ...pickRet(...allCh) }
-                })
-              })
-              const skuData = {}
-              Object.entries(amzIntl.skuChannel || {}).forEach(([cat, scMap]) => {
-                skuData[cat] = {}
-                Object.entries(scMap).forEach(([sc, skuMap]) => {
-                  skuData[cat][sc] = {}
-                  Object.entries(skuMap).forEach(([sku, chData]) => {
-                    const allCh = Object.values(chData)
-                    skuData[cat][sc][sku] = { rev: allCh.reduce((s,c)=>s+(c.rev||0),0), excRev: allCh.reduce((s,c)=>s+(c.excRev||0),0), units: allCh.reduce((s,c)=>s+(c.units||0),0), ...pickRet(...allCh) }
-                  })
-                })
-              })
-              return <FinancialCategoryMatrix catData={catData} subCatData={subCatData} skuData={skuData} title="Category Revenue Matrix · International SC" showReturns={false} />
-            })()}
-          </div>
-        </div>
-      )}
     </div>
   )
 }
@@ -6252,7 +6219,7 @@ function FlipkartTab({ data }) {
       {/* KPI layout: hero + 2 rows of 4 */}
       <div style={{ display: 'grid', gridTemplateColumns: '1.5fr 5fr', gap: 10, alignItems: 'stretch' }}>
         <div className="kpi-card" style={{ display: 'flex', flexDirection: 'column', gap: 8, padding: '16px 18px' }}>
-          <div className="kpi-label" style={{ fontSize: 11 }}>Gross Revenue (Inc. GST){selectedCat ? ` · ${selectedSubCat || selectedCat}` : ''}</div>
+          <div className="kpi-label" style={{ fontSize: 11 }}>Gross Revenue Inc GST{selectedCat ? ` · ${selectedSubCat || selectedCat}` : ''}</div>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 6 }}>
             <div className="kpi-value" style={{ fontSize: 32, fontWeight: 800 }}>{fmt(rev)}</div>
             {fkRevChg !== null && !selectedCat && <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 7px', borderRadius: 4, background: fkRevChg >= 0 ? C.green.bg : C.red.bg, color: fkRevChg >= 0 ? C.green.tx : C.red.tx }}>{fkRevChg >= 0 ? '▲' : '▼'} {Math.abs(fkRevChg).toFixed(1)}%</span>}
@@ -6272,13 +6239,13 @@ function FlipkartTab({ data }) {
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gridTemplateRows: 'repeat(2, 1fr)', gap: 10, alignItems: 'stretch' }}>
           {[
             { label: 'Net Revenue', value: fmt(fkNetRev), sub: 'Ex. return & cancellation', badge: selectedCat ? null : fkChgBadge(fkNetRev, fkPrevExcRev) },
-            { label: 'Avg. Daily Gross Rev', value: fmt(rev / nDays), sub: `over ${nDays} days`, badge: selectedCat ? null : fkChgBadge(rev / nDays, fkPrevRev > 0 ? fkPrevRev / nDays : 0) },
+            { label: 'Daily Avg Rev', value: fmt(rev / nDays), sub: `over ${nDays} days`, badge: selectedCat ? null : fkChgBadge(rev / nDays, fkPrevRev > 0 ? fkPrevRev / nDays : 0) },
             { label: 'AOV', value: `₹${Math.round(aov).toLocaleString('en-IN')}`, sub: 'Gross rev ÷ orders', badge: selectedCat ? null : fkChgBadge(aov, fkPrevOrders > 0 ? fkPrevRev / fkPrevOrders : 0) },
             { label: 'ASP', value: `₹${Math.round(asp).toLocaleString('en-IN')}`, sub: 'Gross rev ÷ units', badge: selectedCat ? null : fkChgBadge(asp, fkPrevUnits > 0 ? fkPrevRev / fkPrevUnits : 0) },
             { label: 'Delivered %', value: `${fkDeliveredPct.pct.toFixed(1)}%`, sub: `${fmtN(fkDeliveredPct.deliveredOrders)} del · ${fmtN(fkDeliveredPct.nonCancelledOrders)} non-cancel`, accent: fkDeliveredPct.pct < 50 ? '#7A1A1A' : undefined },
-            { label: 'Total GST Collected', value: fmt(rev - excRev), sub: 'Inc GST − Exc GST', badge: selectedCat ? null : fkChgBadge(rev - excRev, fkPrevGST) },
+            { label: 'GST', value: fmt(rev - excRev), sub: 'Inc GST − Exc GST', badge: selectedCat ? null : fkChgBadge(rev - excRev, fkPrevGST) },
             { label: 'Cancellation %', value: `${nOrders > 0 ? (cancelOrders / nOrders * 100).toFixed(1) : 0}%`, sub: `${fmtN(cancelOrders)} cancelled · ${fmt(cancelRev)} rev`, accent: nOrders > 0 && cancelOrders / nOrders > 0.1 ? '#7A1A1A' : undefined, badge: fkPrevCancelPct > 0 ? (() => { const cur = nOrders > 0 ? cancelOrders / nOrders * 100 : 0; const p = (cur - fkPrevCancelPct) / fkPrevCancelPct * 100; return <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 4, background: p > 0 ? C.red.bg : C.green.bg, color: p > 0 ? C.red.tx : C.green.tx, flexShrink: 0 }}>{p > 0 ? '▲' : '▼'} {Math.abs(p).toFixed(1)}%</span> })() : null },
-            { label: 'Return %', value: `${fkReturnCur.pct.toFixed(1)}%`, sub: `${fmt(fkReturnCur.returnRev)} ret · ${fmt(fkReturnCur.deliveredRev)} gross`, accent: fkReturnCur.pct > 20 ? '#7A1A1A' : undefined, badge: fkPrevReturnPct > 0 ? (() => { const p = (fkReturnCur.pct - fkPrevReturnPct) / fkPrevReturnPct * 100; return <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 4, background: p > 0 ? C.red.bg : C.green.bg, color: p > 0 ? C.red.tx : C.green.tx, flexShrink: 0 }}>{p > 0 ? '▲' : '▼'} {Math.abs(p).toFixed(1)}%</span> })() : null },
+            { label: 'Returns %', value: `${fkReturnCur.pct.toFixed(1)}%`, sub: `${fmt(fkReturnCur.returnRev)} ret · ${fmt(fkReturnCur.deliveredRev)} gross`, accent: fkReturnCur.pct > 20 ? '#7A1A1A' : undefined, badge: fkPrevReturnPct > 0 ? (() => { const p = (fkReturnCur.pct - fkPrevReturnPct) / fkPrevReturnPct * 100; return <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 4, background: p > 0 ? C.red.bg : C.green.bg, color: p > 0 ? C.red.tx : C.green.tx, flexShrink: 0 }}>{p > 0 ? '▲' : '▼'} {Math.abs(p).toFixed(1)}%</span> })() : null },
           ].map(k => (
             <div key={k.label} className="kpi-card" style={{ padding: '10px 13px', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
               <div className="kpi-label">{k.label}</div>
@@ -6448,7 +6415,7 @@ function FlipkartTab({ data }) {
           const parts = k.split('::')
           const key = `${parts[0]}::${parts[1]}`; subCatPrevMap[key] = (subCatPrevMap[key] || 0) + v
         })
-        return <FlatCategoryProductMatrix catData={catAggMatrix} subCatData={subCatData} skuData={skuData} title="Category Revenue Matrix · Flipkart" catPrevMap={catPrevMap} subCatPrevMap={subCatPrevMap} simpleReturns />
+        return <FlatCategoryProductMatrix catData={catAggMatrix} subCatData={subCatData} skuData={skuData} title="Category Revenue Matrix · Flipkart" catPrevMap={catPrevMap} subCatPrevMap={subCatPrevMap} simpleReturns showReturnPct />
       })()}
 
       {/* Top States + Cities rich tables */}
@@ -6504,7 +6471,7 @@ const PLATFORM_COLORS = { Meta: '#1877F2', Google: '#EA4335', Amazon: '#FF9900',
 const ADS_CHART_ROW_H = 340
 const ADS_SPEND_TABLE_H = 460
 const ADS_PLATFORMS = [
-  { id: 'All', label: 'All' },
+  { id: 'All', label: 'Overall' },
   { id: 'D2C', label: 'D2C' },
   { id: 'Amazon', label: 'Amazon', logo: '/logo-amazon.png' },
   { id: 'Blinkit', label: 'Blinkit', logo: '/logo-blinkit.png' },
@@ -6839,7 +6806,9 @@ function AdsTab({ data, filters = {} }) {
           const d2cGoogleSpend = isD2C ? (filtTotals.find(t => t.platform === 'Google')?.spend || 0) : 0
           const d2cPrevMetaSpend = isD2C ? (prevTotals['Meta']?.spend || 0) : 0
           const d2cPrevGoogleSpend = isD2C ? (prevTotals['Google']?.spend || 0) : 0
-          const cols = isD2C ? 6 : 5
+          // D2C has 13 KPI cards (8+5) — 7 columns fits them into exactly 2 rows (7+6) instead of
+          // spilling a lone 13th card onto a 3rd row at 6 columns.
+          const cols = isD2C ? 7 : 5
           const hasAdditionalSpend = isD2C && additionalSpend != null
           const d2cTotalSpend = isD2C ? totalSpend + (additionalSpend || 0) : totalSpend
           const row1Items = isD2C ? [
@@ -6848,13 +6817,13 @@ function AdsTab({ data, filters = {} }) {
             { label: 'Meta Spend', value: fmt(d2cMetaSpend), badge: chgBadge(d2cMetaSpend, d2cPrevMetaSpend), sub: 'Meta ad spend', accentColor: '#1877F2' },
             { label: 'Google Spend', value: fmt(d2cGoogleSpend), badge: chgBadge(d2cGoogleSpend, d2cPrevGoogleSpend), sub: 'Google ad spend', accentColor: '#34A853' },
             { label: 'Additional Spend', value: fmt(additionalSpend || 0), sub: 'D2C additional mktg spend' },
-            { label: 'Revenue (Ex GST)', value: fmt(totalRevenue), badge: chgBadge(totalRevenue, prevRevenue), sub: 'D2C exc. GST (Meta+Google)' },
+            { label: 'Gross Revenue Ex GST', value: fmt(totalRevenue), badge: chgBadge(totalRevenue, prevRevenue), sub: 'D2C exc. GST (Meta+Google)' },
             { label: 'Overall ROAS', value: `${overallRoas.toFixed(2)}x`, badge: chgBadge(overallRoas, prevRoas), sub: 'Revenue (Ex GST) / Spend', roasVal: overallRoas },
             { label: 'Orders', value: fmtN(currentOrders), sub: 'Distinct orders', badge: chgBadge(currentOrders, prevOrders) },
             { label: 'Total Clicks', value: fmtBig(totalClicks), badge: chgBadge(totalClicks, prevClicks), sub: 'Across all platforms' },
           ] : [
             { label: 'Total Spend', value: fmt(totalSpend), badge: chgBadge(totalSpend, prevSpend), sub: 'Ad spend incl. all platforms' },
-            { label: 'Revenue (Ex GST)', value: fmt(totalRevenue), badge: chgBadge(totalRevenue, prevRevenue), sub: selPlatform ? `${selPlatform === 'Meta' || selPlatform === 'Google' ? 'D2C (spend-split)' : selPlatform} exc. GST` : 'All channels exc. GST' },
+            { label: 'Gross Revenue Ex GST', value: fmt(totalRevenue), badge: chgBadge(totalRevenue, prevRevenue), sub: selPlatform ? `${selPlatform === 'Meta' || selPlatform === 'Google' ? 'D2C (spend-split)' : selPlatform} exc. GST` : 'All channels exc. GST' },
             { label: 'Overall ROAS', value: `${overallRoas.toFixed(2)}x`, badge: chgBadge(overallRoas, prevRoas), sub: 'Revenue (Ex GST) / Spend', roasVal: overallRoas },
             { label: 'Total Clicks', value: fmtBig(totalClicks), badge: chgBadge(totalClicks, prevClicks), sub: 'Across all platforms' },
             { label: 'Impressions', value: fmtBig(totalImpressions), badge: chgBadge(totalImpressions, prevImpressions), sub: 'Total ad impressions' },
@@ -7454,8 +7423,8 @@ function AdsCredView({ data, filters = {} }) {
 
   const kpis = [
     { label: 'Spend', value: fmt(additionalSpend || 0), sub: 'CRED additional mktg spend' },
-    { label: 'Revenue (Ex GST)', value: fmt(totalExcRev), sub: 'CRED exc. GST' },
-    { label: 'Revenue (Inc GST)', value: fmt(totalRev), sub: 'CRED inc. GST' },
+    { label: 'Gross Revenue Ex GST', value: fmt(totalExcRev), sub: 'CRED exc. GST' },
+    { label: 'Gross Revenue Inc GST', value: fmt(totalRev), sub: 'CRED inc. GST' },
     { label: 'ROAS', value: roas > 0 ? `${roas.toFixed(2)}x` : '—', sub: 'Rev (Ex GST) / Spend', roasVal: roas },
     { label: 'Orders', value: fmtN(totalOrders), sub: 'Distinct orders' },
     { label: 'Units', value: fmtN(totalUnits), sub: 'Items sold' },
@@ -7782,7 +7751,7 @@ function BlinkitTab({ data }) {
       {/* KPI layout */}
       <div style={{ display: 'grid', gridTemplateColumns: '1.5fr 5fr', gap: 10, alignItems: 'stretch' }}>
         <div className="kpi-card" style={{ display: 'flex', flexDirection: 'column', gap: 8, padding: '16px 18px' }}>
-          <div className="kpi-label" style={{ fontSize: 11 }}>Gross Revenue · MRP</div>
+          <div className="kpi-label" style={{ fontSize: 11 }}>Gross Revenue Inc GST · MRP</div>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 6 }}>
             <div className="kpi-value" style={{ fontSize: 32, fontWeight: 800 }}>{fmt(rev)}</div>
             {blRevChg !== null && <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 7px', borderRadius: 4, background: blRevChg >= 0 ? C.green.bg : C.red.bg, color: blRevChg >= 0 ? C.green.tx : C.red.tx }}>{blRevChg >= 0 ? '▲' : '▼'} {Math.abs(blRevChg).toFixed(1)}%</span>}
@@ -7801,9 +7770,9 @@ function BlinkitTab({ data }) {
         </div>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gridTemplateRows: 'repeat(2, 1fr)', gap: 10, alignItems: 'stretch' }}>
           {[
-            { label: 'Net. Rev. (Exc GST)', value: fmt(excRev), sub: null, badge: blChgBadge(excRev, blPrevExcRev) },
-            { label: 'Total GST Collected', value: fmt(gst), sub: `${rev > 0 ? ((gst/rev)*100).toFixed(1) : 0}% of gross rev`, badge: blChgBadge(gst, blPrevRev - blPrevExcRev) },
-            { label: 'Avg. Daily Gross Rev', value: fmt(dailyAvg), sub: `over ${nDays} days`, badge: blChgBadge(dailyAvg, blPrevRev > 0 ? blPrevRev / nDays : 0) },
+            { label: 'Net Revenue', value: fmt(excRev), sub: 'Ex GST', badge: blChgBadge(excRev, blPrevExcRev) },
+            { label: 'GST', value: fmt(gst), sub: `${rev > 0 ? ((gst/rev)*100).toFixed(1) : 0}% of gross rev`, badge: blChgBadge(gst, blPrevRev - blPrevExcRev) },
+            { label: 'Daily Avg Rev', value: fmt(dailyAvg), sub: `over ${nDays} days`, badge: blChgBadge(dailyAvg, blPrevRev > 0 ? blPrevRev / nDays : 0) },
             { label: 'Orders', value: fmtN(orders), sub: `${fmtN(cities)} cities`, badge: blChgBadge(orders, blPrevOrders) },
             { label: 'AOV', value: `₹${Math.round(aov).toLocaleString('en-IN')}`, sub: 'Gross rev ÷ orders', badge: blChgBadge(aov, blPrevOrders > 0 ? blPrevRev / blPrevOrders : 0) },
             { label: 'ASP', value: `₹${Math.round(asp).toLocaleString('en-IN')}`, sub: 'Gross rev ÷ units', badge: blChgBadge(asp, blPrevUnits > 0 ? blPrevRev / blPrevUnits : 0) },
@@ -7938,7 +7907,7 @@ function InstaTab({ data }) {
       )}
       <div style={{ display: 'grid', gridTemplateColumns: '1.5fr 5fr', gap: 10, alignItems: 'stretch' }}>
         <div className="kpi-card" style={{ display: 'flex', flexDirection: 'column', gap: 8, padding: '16px 18px' }}>
-          <div className="kpi-label" style={{ fontSize: 11 }}>Gross Revenue (Inc. GST)</div>
+          <div className="kpi-label" style={{ fontSize: 11 }}>Gross Revenue Inc GST</div>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 6 }}>
             <div className="kpi-value" style={{ fontSize: 32, fontWeight: 800 }}>{fmt(rev)}</div>
             {insRevChg !== null && <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 7px', borderRadius: 4, background: insRevChg >= 0 ? C.green.bg : C.red.bg, color: insRevChg >= 0 ? C.green.tx : C.red.tx }}>{insRevChg >= 0 ? '▲' : '▼'} {Math.abs(insRevChg).toFixed(1)}%</span>}
@@ -7957,9 +7926,9 @@ function InstaTab({ data }) {
         </div>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gridTemplateRows: 'repeat(2, 1fr)', gap: 10, alignItems: 'stretch' }}>
           {[
-            { label: 'Net. Rev. (Exc GST)', value: fmt(excRev), sub: null, badge: insChgBadge(excRev, insPrevExcRev) },
-            { label: 'Total GST Collected', value: fmt(gst), sub: `${rev > 0 ? ((gst/rev)*100).toFixed(1) : 0}% of gross rev`, badge: insChgBadge(gst, insPrevRev - insPrevExcRev) },
-            { label: 'Daily Avg Revenue', value: fmt(dailyAvg), sub: `Inc GST / day`, badge: insChgBadge(dailyAvg, insPrevRev > 0 ? insPrevRev / nDays : 0) },
+            { label: 'Net Revenue', value: fmt(excRev), sub: 'Ex GST', badge: insChgBadge(excRev, insPrevExcRev) },
+            { label: 'GST', value: fmt(gst), sub: `${rev > 0 ? ((gst/rev)*100).toFixed(1) : 0}% of gross rev`, badge: insChgBadge(gst, insPrevRev - insPrevExcRev) },
+            { label: 'Daily Avg Rev', value: fmt(dailyAvg), sub: `Inc GST / day`, badge: insChgBadge(dailyAvg, insPrevRev > 0 ? insPrevRev / nDays : 0) },
             { label: 'Orders', value: fmtN(orders), sub: `${fmtN(cities)} cities`, badge: insChgBadge(orders, insPrevOrders) },
             { label: 'AOV', value: `₹${Math.round(aov).toLocaleString('en-IN')}`, sub: 'Gross rev ÷ orders', badge: insChgBadge(aov, insPrevOrders > 0 ? insPrevRev / insPrevOrders : 0) },
             { label: 'ASP', value: `₹${Math.round(asp).toLocaleString('en-IN')}`, sub: 'Gross rev ÷ units', badge: insChgBadge(asp, insPrevUnits > 0 ? insPrevRev / insPrevUnits : 0) },
@@ -8092,7 +8061,7 @@ function ZeptoTab({ data }) {
       )}
       <div style={{ display: 'grid', gridTemplateColumns: '1.5fr 5fr', gap: 10, alignItems: 'stretch' }}>
         <div className="kpi-card" style={{ display: 'flex', flexDirection: 'column', gap: 8, padding: '16px 18px' }}>
-          <div className="kpi-label" style={{ fontSize: 11 }}>Gross Revenue (Inc. GST)</div>
+          <div className="kpi-label" style={{ fontSize: 11 }}>Gross Revenue Inc GST</div>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 6 }}>
             <div className="kpi-value" style={{ fontSize: 32, fontWeight: 800 }}>{fmt(rev)}</div>
             {zpRevChg !== null && <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 7px', borderRadius: 4, background: zpRevChg >= 0 ? C.green.bg : C.red.bg, color: zpRevChg >= 0 ? C.green.tx : C.red.tx }}>{zpRevChg >= 0 ? '▲' : '▼'} {Math.abs(zpRevChg).toFixed(1)}%</span>}
@@ -8111,9 +8080,9 @@ function ZeptoTab({ data }) {
         </div>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gridTemplateRows: 'repeat(2, 1fr)', gap: 10, alignItems: 'stretch' }}>
           {[
-            { label: 'Net. Rev. (Exc GST)', value: fmt(excRev), sub: null, badge: zpChgBadge(excRev, zpPrevExcRev) },
-            { label: 'Total GST Collected', value: fmt(gst), sub: `${rev > 0 ? ((gst/rev)*100).toFixed(1) : 0}% of gross rev`, badge: zpChgBadge(gst, zpPrevRev - zpPrevExcRev) },
-            { label: 'Daily Avg Revenue', value: fmt(dailyAvg), sub: 'Inc GST / day', badge: zpChgBadge(dailyAvg, zpPrevRev > 0 ? zpPrevRev / nDays : 0) },
+            { label: 'Net Revenue', value: fmt(excRev), sub: 'Ex GST', badge: zpChgBadge(excRev, zpPrevExcRev) },
+            { label: 'GST', value: fmt(gst), sub: `${rev > 0 ? ((gst/rev)*100).toFixed(1) : 0}% of gross rev`, badge: zpChgBadge(gst, zpPrevRev - zpPrevExcRev) },
+            { label: 'Daily Avg Rev', value: fmt(dailyAvg), sub: 'Inc GST / day', badge: zpChgBadge(dailyAvg, zpPrevRev > 0 ? zpPrevRev / nDays : 0) },
             { label: 'Orders', value: fmtN(orders), sub: `${fmtN(cities)} cities`, badge: zpChgBadge(orders, zpPrevOrders) },
             { label: 'AOV', value: `₹${Math.round(aov).toLocaleString('en-IN')}`, sub: 'Gross rev ÷ orders', badge: zpChgBadge(aov, zpPrevOrders > 0 ? zpPrevRev / zpPrevOrders : 0) },
             { label: 'ASP', value: `₹${Math.round(asp).toLocaleString('en-IN')}`, sub: 'Gross rev ÷ units', badge: zpChgBadge(asp, zpPrevUnits > 0 ? zpPrevRev / zpPrevUnits : 0) },
@@ -8267,7 +8236,7 @@ function CredTab({ data }) {
       {/* Hero + KPI grid */}
       <div style={{ display: 'grid', gridTemplateColumns: '1.5fr 5fr', gap: 10, alignItems: 'stretch' }}>
         <div className="kpi-card" style={{ display: 'flex', flexDirection: 'column', gap: 8, padding: '16px 18px' }}>
-          <div className="kpi-label" style={{ fontSize: 11 }}>Gross Revenue (Inc. GST)</div>
+          <div className="kpi-label" style={{ fontSize: 11 }}>Gross Revenue Inc GST</div>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 6 }}>
             <div className="kpi-value" style={{ fontSize: 32, fontWeight: 800 }}>{fmt(rev)}</div>
             {crRevChg !== null && <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 7px', borderRadius: 4, background: crRevChg >= 0 ? C.green.bg : C.red.bg, color: crRevChg >= 0 ? C.green.tx : C.red.tx }}>{crRevChg >= 0 ? '▲' : '▼'} {Math.abs(crRevChg).toFixed(1)}%</span>}
@@ -8286,14 +8255,14 @@ function CredTab({ data }) {
         </div>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gridTemplateRows: 'repeat(2, 1fr)', gap: 10, alignItems: 'stretch' }}>
           {[
-            { label: 'Net Revenue (Ex. GST)', value: fmt(netRev), sub: 'Ex. return & cancellation', badge: crChgBadge(netRev, crPrevNetRev) },
-            { label: 'Total GST Collected', value: fmt(gstCollected), sub: `${rev > 0 ? ((gstCollected/rev)*100).toFixed(1) : 0}% of gross rev`, badge: crChgBadge(gstCollected, crPrevGstCollected) },
-            { label: 'Avg. Daily Gross Rev', value: fmt(dailyAvg), sub: `over ${nDays} days`, badge: crChgBadge(dailyAvg, crPrevRev > 0 ? crPrevRev / nDays : 0) },
+            { label: 'Net Revenue', value: fmt(netRev), sub: 'Ex. return & cancellation', badge: crChgBadge(netRev, crPrevNetRev) },
+            { label: 'GST', value: fmt(gstCollected), sub: `${rev > 0 ? ((gstCollected/rev)*100).toFixed(1) : 0}% of gross rev`, badge: crChgBadge(gstCollected, crPrevGstCollected) },
+            { label: 'Daily Avg Rev', value: fmt(dailyAvg), sub: `over ${nDays} days`, badge: crChgBadge(dailyAvg, crPrevRev > 0 ? crPrevRev / nDays : 0) },
             { label: 'AOV', value: `₹${Math.round(orders ? rev / orders : 0).toLocaleString('en-IN')}`, sub: 'Gross rev ÷ orders', badge: crChgBadge(orders ? rev / orders : 0, crPrevOrders > 0 ? crPrevRev / crPrevOrders : 0) },
             { label: 'ASP', value: `₹${Math.round(asp).toLocaleString('en-IN')}`, sub: 'Gross rev ÷ units', badge: crChgBadge(asp, crPrevUnits > 0 ? crPrevRev / crPrevUnits : 0) },
             { label: 'Orders', value: fmtN(orders), sub: `${fmtN(units)} units`, badge: crChgBadge(orders, crPrevOrders) },
             { label: 'Cancellation %', value: `${cancelPct.toFixed(1)}%`, sub: `${fmt(cancelRev)} rev`, accent: cancelPct > 10 ? '#7A1A1A' : undefined },
-            { label: 'Return %', value: `${returnPct.toFixed(1)}%`, sub: `${fmt(totalReturnRev)} rev`, accent: returnPct > 20 ? '#7A1A1A' : undefined },
+            { label: 'Returns %', value: `${returnPct.toFixed(1)}%`, sub: `${fmt(totalReturnRev)} rev`, accent: returnPct > 20 ? '#7A1A1A' : undefined },
           ].map(k => (
             <div key={k.label} className="kpi-card" style={{ padding: '10px 13px', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
               <div className="kpi-label">{k.label}</div>
@@ -8388,7 +8357,7 @@ function CredTab({ data }) {
       })()}
 
       {/* Category Revenue Matrix */}
-      <FlatCategoryProductMatrix catData={catMatrixData} subCatData={subCatMatrixData} skuData={cr.skuMatrix || {}} title="Category Revenue Matrix · CRED" catPrevMap={catPrevMap} subCatPrevMap={subCatPrevMap} simpleReturns />
+      <FlatCategoryProductMatrix catData={catMatrixData} subCatData={subCatMatrixData} skuData={cr.skuMatrix || {}} title="Category Revenue Matrix · CRED" catPrevMap={catPrevMap} subCatPrevMap={subCatPrevMap} simpleReturns showReturnPct />
 
       {/* States + Cities */}
       <div className="g-2" style={{ alignItems: 'stretch' }}>
@@ -8480,7 +8449,7 @@ function FirstcryTab({ data }) {
     <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
       <div style={{ display: 'grid', gridTemplateColumns: '1.5fr 5fr', gap: 10, alignItems: 'stretch' }}>
         <div className="kpi-card" style={{ display: 'flex', flexDirection: 'column', gap: 8, padding: '16px 18px' }}>
-          <div className="kpi-label" style={{ fontSize: 11 }}>Gross Revenue (Inc. GST)</div>
+          <div className="kpi-label" style={{ fontSize: 11 }}>Gross Revenue Inc GST</div>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 6 }}>
             <div className="kpi-value" style={{ fontSize: 32, fontWeight: 800 }}>{fmt(rev)}</div>
             {fcRevChg !== null && <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 7px', borderRadius: 4, background: fcRevChg >= 0 ? C.green.bg : C.red.bg, color: fcRevChg >= 0 ? C.green.tx : C.red.tx }}>{fcRevChg >= 0 ? '▲' : '▼'} {Math.abs(fcRevChg).toFixed(1)}%</span>}
@@ -8499,14 +8468,14 @@ function FirstcryTab({ data }) {
         </div>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gridTemplateRows: 'repeat(2, 1fr)', gap: 10, alignItems: 'stretch' }}>
           {[
-            { label: 'Net Revenue (Ex. GST)', value: fmt(netRev), sub: 'Ex. return & cancellation', badge: fcChgBadge(netRev, fcPrevNetRev) },
-            { label: 'Total GST Collected', value: fmt(gstCollected), sub: `${rev > 0 ? ((gstCollected/rev)*100).toFixed(1) : 0}% of gross rev`, badge: fcChgBadge(gstCollected, fcPrevGstCollected) },
-            { label: 'Avg. Daily Gross Rev', value: fmt(dailyAvg), sub: `over ${nDays} days`, badge: fcChgBadge(dailyAvg, fcPrevRev > 0 ? fcPrevRev / nDays : 0) },
+            { label: 'Net Revenue', value: fmt(netRev), sub: 'Ex. return & cancellation', badge: fcChgBadge(netRev, fcPrevNetRev) },
+            { label: 'GST', value: fmt(gstCollected), sub: `${rev > 0 ? ((gstCollected/rev)*100).toFixed(1) : 0}% of gross rev`, badge: fcChgBadge(gstCollected, fcPrevGstCollected) },
+            { label: 'Daily Avg Rev', value: fmt(dailyAvg), sub: `over ${nDays} days`, badge: fcChgBadge(dailyAvg, fcPrevRev > 0 ? fcPrevRev / nDays : 0) },
             { label: 'AOV', value: `₹${Math.round(orders ? rev / orders : 0).toLocaleString('en-IN')}`, sub: 'Gross rev ÷ orders', badge: fcChgBadge(orders ? rev / orders : 0, fcPrevOrders > 0 ? fcPrevRev / fcPrevOrders : 0) },
             { label: 'ASP', value: `₹${Math.round(asp).toLocaleString('en-IN')}`, sub: 'Gross rev ÷ units', badge: fcChgBadge(asp, fcPrevUnits > 0 ? fcPrevRev / fcPrevUnits : 0) },
             { label: 'Orders', value: fmtN(orders), sub: `${fmtN(units)} units`, badge: fcChgBadge(orders, fcPrevOrders) },
             { label: 'Cancellation %', value: `${cancelPct.toFixed(1)}%`, sub: `${fmt(cancelRev)} rev`, accent: cancelPct > 10 ? '#7A1A1A' : undefined },
-            { label: 'Return %', value: `${returnPct.toFixed(1)}%`, sub: `${fmt(totalReturnRev)} rev`, accent: returnPct > 20 ? '#7A1A1A' : undefined },
+            { label: 'Returns %', value: `${returnPct.toFixed(1)}%`, sub: `${fmt(totalReturnRev)} rev`, accent: returnPct > 20 ? '#7A1A1A' : undefined },
           ].map(k => (
             <div key={k.label} className="kpi-card" style={{ padding: '10px 13px', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
               <div className="kpi-label">{k.label}</div>
@@ -8595,7 +8564,7 @@ function FirstcryTab({ data }) {
         )
       })()}
 
-      <FlatCategoryProductMatrix catData={catMatrixData} subCatData={subCatMatrixData} skuData={fc.skuMatrix || {}} title="Category Revenue Matrix · Firstcry" catPrevMap={catPrevMap} subCatPrevMap={subCatPrevMap} simpleReturns />
+      <FlatCategoryProductMatrix catData={catMatrixData} subCatData={subCatMatrixData} skuData={fc.skuMatrix || {}} title="Category Revenue Matrix · Firstcry" catPrevMap={catPrevMap} subCatPrevMap={subCatPrevMap} simpleReturns showReturnPct />
 
       <div className="g-2" style={{ alignItems: 'stretch' }}>
         <ShopifyGeoRichTable title="Top States" rows={enrichedStates} firstKey="state" firstLabel="State" rtoLabel="Return %" />
@@ -8684,7 +8653,7 @@ function MyntraTab({ data }) {
       {/* KPI Hero + grid */}
       <div style={{ display: 'grid', gridTemplateColumns: '1.5fr 5fr', gap: 10, alignItems: 'stretch' }}>
         <div className="kpi-card" style={{ display: 'flex', flexDirection: 'column', gap: 8, padding: '16px 18px' }}>
-          <div className="kpi-label" style={{ fontSize: 11 }}>Gross Revenue (Inc. GST)</div>
+          <div className="kpi-label" style={{ fontSize: 11 }}>Gross Revenue Inc GST</div>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 6 }}>
             <div className="kpi-value" style={{ fontSize: 32, fontWeight: 800 }}>{fmt(rev)}</div>
             {revChg !== null && <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 7px', borderRadius: 4, background: revChg >= 0 ? C.green.bg : C.red.bg, color: revChg >= 0 ? C.green.tx : C.red.tx }}>{revChg >= 0 ? '▲' : '▼'} {Math.abs(revChg).toFixed(1)}%</span>}
@@ -8703,14 +8672,14 @@ function MyntraTab({ data }) {
         </div>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gridTemplateRows: 'repeat(2, 1fr)', gap: 10, alignItems: 'stretch' }}>
           {[
-            { label: 'Net Revenue (Ex. GST)', value: fmt(netRev), sub: 'Ex. return & cancellation', badge: chgBadge(netRev, prevNetRev) },
-            { label: 'Total GST Collected', value: fmt(gstCollected), sub: `${rev > 0 ? ((gstCollected/rev)*100).toFixed(1) : 0}% of gross rev`, badge: chgBadge(gstCollected, prevGstCollected) },
-            { label: 'Avg. Daily Gross Rev', value: fmt(rev / nDays), sub: `over ${nDays} days`, badge: chgBadge(rev / nDays, prevRev > 0 ? prevRev / nDays : 0) },
+            { label: 'Net Revenue', value: fmt(netRev), sub: 'Ex. return & cancellation', badge: chgBadge(netRev, prevNetRev) },
+            { label: 'GST', value: fmt(gstCollected), sub: `${rev > 0 ? ((gstCollected/rev)*100).toFixed(1) : 0}% of gross rev`, badge: chgBadge(gstCollected, prevGstCollected) },
+            { label: 'Daily Avg Rev', value: fmt(rev / nDays), sub: `over ${nDays} days`, badge: chgBadge(rev / nDays, prevRev > 0 ? prevRev / nDays : 0) },
             { label: 'AOV', value: `₹${Math.round(nOrders ? rev / nOrders : 0).toLocaleString('en-IN')}`, sub: 'Gross rev ÷ orders', badge: chgBadge(nOrders ? rev / nOrders : 0, mn.prevOrders > 0 ? prevRev / mn.prevOrders : 0) },
             { label: 'ASP', value: `₹${Math.round(asp).toLocaleString('en-IN')}`, sub: 'Gross rev ÷ units', badge: chgBadge(asp, mn.prevUnits > 0 ? prevRev / mn.prevUnits : 0) },
             { label: 'Active Products', value: fmtN(totals.skus), sub: 'Product types sold' },
             { label: 'Cancellation %', value: `${cancelPct.toFixed(1)}%`, sub: `${fmt(cancelRev)} rev`, accent: cancelPct > 10 ? '#7A1A1A' : undefined },
-            { label: 'Return %', value: `${mnReturnPct.toFixed(1)}%`, sub: `${fmt(mnReturnRev)} ret · ${fmtN(mnReturnOrders)} orders`, accent: mnReturnPct > 15 ? '#7A1A1A' : undefined },
+            { label: 'Returns %', value: `${mnReturnPct.toFixed(1)}%`, sub: `${fmt(mnReturnRev)} ret · ${fmtN(mnReturnOrders)} orders`, accent: mnReturnPct > 15 ? '#7A1A1A' : undefined },
           ].map(k => (
             <div key={k.label} className="kpi-card" style={{ padding: '10px 13px', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
               <div className="kpi-label">{k.label}</div>
@@ -8807,7 +8776,7 @@ function MyntraTab({ data }) {
       })()}
 
       {/* Category Revenue Matrix */}
-      <FlatCategoryProductMatrix catData={catMatrixData} subCatData={subCatMatrixData} skuData={mn.skuMatrix || {}} title="Category Revenue Matrix · Myntra" catPrevMap={mnCatPrevMap} subCatPrevMap={mnSubCatPrevMap} simpleReturns />
+      <FlatCategoryProductMatrix catData={catMatrixData} subCatData={subCatMatrixData} skuData={mn.skuMatrix || {}} title="Category Revenue Matrix · Myntra" catPrevMap={mnCatPrevMap} subCatPrevMap={mnSubCatPrevMap} simpleReturns showReturnPct />
 
       {/* Top States + Top Cities side by side */}
       <div className="g-2" style={{ alignItems: 'stretch' }}>
@@ -8818,18 +8787,35 @@ function MyntraTab({ data }) {
   )
 }
 
-function OfflineTab({ data }) {
+const OFFLINE_SUB_OPTIONS = [
+  { id: 'all', label: 'Overall' },
+  { id: 'b2b', label: 'B2B' },
+  { id: 'Stockist', label: 'Stockist' },
+  { id: 'MTGT', label: 'MT GT' },
+]
+
+// Offline's Overall/B2B/Stockist/MT GT toggle — extracted so SalesPage can render it on the
+// shared filter-bar row, same pattern as D2CSubChannelToggle/AmazonChannelViewToggle. sub/setSub
+// are lifted to SalesPage (was local useState inside OfflineTab before).
+function OfflineSubToggle({ sub, setSub }) {
+  const opts = OFFLINE_SUB_OPTIONS
+  return (
+    <div style={{ display: 'flex', gap: 4 }}>
+      {opts.map((opt, i) => (
+        <div key={opt.id} style={{ display: 'flex', alignItems: 'center' }}>
+          {i > 0 && <div style={{ width: 1, height: 14, background: '#E3E0D8', margin: '0 2px' }} />}
+          <button onClick={() => setSub(opt.id)} style={{ fontSize: 12, fontWeight: sub === opt.id ? 700 : 500, padding: '5px 14px', borderRadius: 7, border: 'none', background: sub === opt.id ? '#FFD600' : 'transparent', color: '#13121A', cursor: 'pointer' }}>{opt.label}</button>
+        </div>
+      ))}
+    </div>
+  )
+}
+
+function OfflineTab({ data, sub, setSub }) {
   const off = data.offline || {}
-  const [sub, setSub] = useState('all') // 'all' | 'Stockist' | 'MTGT' | 'b2b'
   const [catRevView, setCatRevView] = useState('category')
   const [selectedCat, setSelectedCat] = useState(null)
-
-  const SUB_OPTIONS = [
-    { id: 'all', label: 'All' },
-    { id: 'b2b', label: 'B2B' },
-    { id: 'Stockist', label: 'Stockist' },
-    { id: 'MTGT', label: 'MT GT' },
-  ]
+  const SUB_OPTIONS = OFFLINE_SUB_OPTIONS
 
   // Real SubChannel values are namespaced (e.g. "Stockist_Sayball", "Offline_B2B_Savio"), not
   // the bare "Stockist"/"Offline_B2B" literals — match by prefix, not exact equality.
@@ -9003,7 +8989,6 @@ function OfflineTab({ data }) {
   const pct = (a, b) => b > 0 ? `${(a / b * 100).toFixed(1)}%` : '—'
   const cnPct = grossRev > 0 ? cnRevAbs / grossRev * 100 : 0
 
-  const subTab = active => ({ fontSize: 12, fontWeight: active ? 700 : 500, padding: '5px 14px', borderRadius: 7, border: 'none', background: active ? C.acc : 'transparent', color: C.t1, cursor: 'pointer', fontFamily: 'var(--font)', transition: 'all .15s' })
   const subLabel = sub !== 'all' ? ` · ${SUB_OPTIONS.find(o => o.id === sub)?.label || sub}` : ''
 
   const [offTrendGroup, setOffTrendGroup] = useState('daily')
@@ -9011,15 +8996,10 @@ function OfflineTab({ data }) {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-      {/* Sub-channel toggle — All / B2B / Stockist / MT GT split kept, per offline distribution model */}
-      <div style={{ display: 'flex', background: C.bg, borderRadius: 9, padding: 3, border: `1px solid ${C.border}`, width: 'fit-content' }}>
-        {SUB_OPTIONS.map(o => <button key={o.id} onClick={() => setSub(o.id)} style={subTab(sub === o.id)}>{o.label}</button>)}
-      </div>
-
       {/* KPI Hero + grid */}
       <div style={{ display: 'grid', gridTemplateColumns: '1.5fr 5fr', gap: 10, alignItems: 'stretch' }}>
         <div className="kpi-card" style={{ display: 'flex', flexDirection: 'column', gap: 8, padding: '16px 18px' }}>
-          <div className="kpi-label" style={{ fontSize: 11 }}>Gross Revenue (Inc. GST){subLabel}</div>
+          <div className="kpi-label" style={{ fontSize: 11 }}>Gross Revenue Inc GST{subLabel}</div>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 6 }}>
             <div className="kpi-value" style={{ fontSize: 32, fontWeight: 800 }}>{fmt(rev)}</div>
             {revChg !== null && <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 7px', borderRadius: 4, background: revChg >= 0 ? C.green.bg : C.red.bg, color: revChg >= 0 ? C.green.tx : C.red.tx }}>{revChg >= 0 ? '▲' : '▼'} {Math.abs(revChg).toFixed(1)}%</span>}
@@ -9038,9 +9018,9 @@ function OfflineTab({ data }) {
         </div>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gridTemplateRows: 'repeat(2, 1fr)', gap: 10, alignItems: 'stretch' }}>
           {[
-            { label: 'Net Revenue (Ex. GST)', value: fmt(netRev), sub: 'Ex. credit notes', badge: chgBadge(netRev, prevNetRev) },
-            { label: 'Total GST Collected', value: fmt(gstCollected), sub: 'On net sales', badge: chgBadge(gstCollected, (prevGrossRev - prevCnRev) - prevNetRev) },
-            { label: 'Avg. Daily Gross Rev', value: fmt(rev / Math.max(nDays, 1)), sub: `over ${nDays} days`, badge: chgBadge(rev / Math.max(nDays, 1), prevGrossRev / Math.max(nDays, 1)) },
+            { label: 'Net Revenue', value: fmt(netRev), sub: 'Ex. credit notes', badge: chgBadge(netRev, prevNetRev) },
+            { label: 'GST', value: fmt(gstCollected), sub: 'On net sales', badge: chgBadge(gstCollected, (prevGrossRev - prevCnRev) - prevNetRev) },
+            { label: 'Daily Avg Rev', value: fmt(rev / Math.max(nDays, 1)), sub: `over ${nDays} days`, badge: chgBadge(rev / Math.max(nDays, 1), prevGrossRev / Math.max(nDays, 1)) },
             { label: 'AOV', value: `₹${Math.round(nOrders ? grossRev / nOrders : 0).toLocaleString('en-IN')}`, sub: 'Gross ÷ orders', badge: chgBadge(nOrders ? grossRev / nOrders : 0, prevOrders ? prevGrossRev / prevOrders : 0) },
             { label: 'ASP', value: `₹${Math.round(asp).toLocaleString('en-IN')}`, sub: 'Gross rev ÷ units', badge: chgBadge(asp, prevUnits > 0 ? prevGrossRev / prevUnits : 0) },
             { label: 'Orders', value: fmtN(nOrders), sub: `${fmtN(qty)} units`, badge: chgBadge(nOrders, prevOrders) },
@@ -9147,9 +9127,21 @@ function OfflineTab({ data }) {
   )
 }
 
-function ChannelTab({ data, channel, filters, setFilters, amzRegion, setAmzRegion }) {
+// International Sales tab — placeholder only. Channel='International' rows (Amazon
+// International + Shopify International sub-brands, unified under one Channel by the 2026-08
+// schema change) don't have a Sales-tab breakdown built yet; see PnL tab's "International" tab
+// for the real KPI/Financial View treatment already built on this data.
+function InternationalPlaceholderTab() {
+  return (
+    <div className="kpi-card" style={{ padding: '40px 24px', textAlign: 'center', color: C.t3, fontSize: 13 }}>
+      International Sales — calculation pending
+    </div>
+  )
+}
+
+function ChannelTab({ data, channel, filters, setFilters, channelView, setChannelView }) {
   if (channel === 'Shopify') return <ShopifyTab data={data} filters={filters} setFilters={setFilters} />
-  if (channel === 'Amazon') return <AmazonTab data={data} region={amzRegion} setRegion={setAmzRegion} />
+  if (channel === 'Amazon') return <AmazonTab data={data} channelView={channelView} setChannelView={setChannelView} />
   if (channel === 'Flipkart') return <FlipkartTab data={data} />
   if (channel === 'Blinkit') return <BlinkitTab data={data} />
   if (channel === 'Instamart') return <InstaTab data={data} />
@@ -9157,6 +9149,7 @@ function ChannelTab({ data, channel, filters, setFilters, amzRegion, setAmzRegio
   if (channel === 'CRED') return <CredTab data={data} />
   if (channel === 'Firstcry') return <FirstcryTab data={data} />
   if (channel === 'Myntra') return <MyntraTab data={data} />
+  if (channel === 'International') return <InternationalPlaceholderTab />
   const chOrders = data.orders.filter(o => o.channel === channel)
   const chRows = data.rows.filter(r => r.Channel === channel)
   const rev = chOrders.reduce((s, o) => s + o.rev, 0)
@@ -9322,9 +9315,46 @@ function CXTab({ data }) {
   )
 }
 
+// Filter icon + popover — replaces the always-visible Category/Sub-category/SKU/Payment Type/
+// Voucher dropdown row with a single icon on the right of the toggle bar; clicking it opens the
+// same set of filters in a floating box. `children` are the filter controls to render inside —
+// callers (SalesPage) decide which controls apply per active channel (e.g. Payment Types/Vouchers
+// only render for Shopify), same conditional logic the old always-visible row already used.
+function FilterIconPopover({ children, activeCount }) {
+  const [open, setOpen] = useState(false)
+  const ref = useRef(null)
+
+  useEffect(() => {
+    const handler = e => { if (ref.current && !ref.current.contains(e.target)) setOpen(false) }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [])
+
+  return (
+    <div ref={ref} style={{ position: 'relative', flexShrink: 0, marginLeft: 'auto' }}>
+      <button onClick={() => setOpen(o => !o)} title="Filters" style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, fontWeight: 600, padding: '4px 10px', borderRadius: 7, border: `1px solid ${activeCount > 0 ? C.acm : C.border}`, background: activeCount > 0 ? '#FFF9CC' : C.card, color: C.t1, cursor: 'pointer' }}>
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round"><line x1="4" y1="6" x2="20" y2="6" /><line x1="7" y1="12" x2="17" y2="12" /><line x1="10" y1="18" x2="14" y2="18" /></svg>
+        Filters
+        {activeCount > 0 && <span style={{ background: C.acm, color: '#fff', borderRadius: 10, fontSize: 10, fontWeight: 700, padding: '1px 6px', minWidth: 16, textAlign: 'center' }}>{activeCount}</span>}
+      </button>
+      {open && (
+        <div style={{ position: 'absolute', top: '110%', right: 0, zIndex: 200, background: C.card, border: `1px solid ${C.border2}`, borderRadius: 9, boxShadow: '0 8px 28px rgba(0,0,0,.14)', padding: 10, display: 'flex', flexDirection: 'column', gap: 8, minWidth: 260, maxHeight: '70vh', overflowY: 'auto' }}>
+          {children}
+        </div>
+      )}
+    </div>
+  )
+}
+
 function SalesPage({ data, filters, setFilters, activeTab, setActiveTab, fetchData }) {
-  const [amzRegion, setAmzRegion] = useState('india') // lifted from AmazonTab to blur filters for intl
   const filteredData = data
+  // Amazon's Overall/Seller Central/Vendor Central toggle — lifted here (was local useState
+  // inside AmazonTab) so both the toggle (rendered on this shared bar) and AmazonTab's content
+  // read from the same source of truth. Resets to 'all' on tab switch, same as filters.subChannel.
+  const [channelView, setChannelView] = useState('all')
+  // Offline's Overall/B2B/Stockist/MT GT toggle — same lift pattern as channelView above (was
+  // local useState inside OfflineTab before).
+  const [offlineSub, setOfflineSub] = useState('all')
 
   const cats = useMemo(() => Object.keys(data?.catMap || {}).filter(Boolean).sort(), [data])
   const subCats = useMemo(() => {
@@ -9337,38 +9367,44 @@ function SalesPage({ data, filters, setFilters, activeTab, setActiveTab, fetchDa
   const skuOpts = useMemo(() => data?.masterSkuList || [], [data])
   const paymentTypeOpts = useMemo(() => (data?.shopify?.paymentTypes || []).map(p => p.paymentType).filter(Boolean), [data])
 
+  // Per-channel toggle slot — add a new channel's toggle here as its own one-line entry. Channels
+  // with no toggle fall back to a plain label (the channel's own tab name) instead of leaving this
+  // side of the bar empty, so the row doesn't look like an accidental gap under the tab bar.
+  const channelToggle = activeTab === 'shopify' ? <D2CSubChannelToggle data={data} filters={filters} setFilters={setFilters} />
+    : activeTab === 'amazon' ? <AmazonChannelViewToggle channelView={channelView} setChannelView={setChannelView} />
+    : activeTab === 'offline' ? <OfflineSubToggle sub={offlineSub} setSub={setOfflineSub} />
+    : <span style={{ fontSize: 13, fontWeight: 700, color: C.t2 }}>{TABS.find(t => t.id === activeTab)?.label || ''}</span>
+
+  const activeFilterCount = (filters.category?.length || 0) + (filters.subCategory?.length || 0) + (filters.sku?.length || 0)
+    + (filters.paymentType ? filters.paymentType.split(',').filter(Boolean).length : 0)
+    + (filters.voucher ? filters.voucher.split(',').filter(Boolean).length : 0)
+
   if (!filteredData) return null
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
       {/* Tab bar */}
       <div className="sales-tabs">
         {TABS.map(tab => (
-          <button key={tab.id} onClick={() => { setActiveTab(tab.id); setFilters(f => ({ ...f, subChannel: '', voucher: '', channelGroup: [] })) }} className={`stab${activeTab === tab.id ? ' active' : ''}`} style={tab.id === 'all' ? { fontWeight: activeTab === 'all' ? 800 : 700, fontSize: 13 } : {}}>
+          <button key={tab.id} onClick={() => { setActiveTab(tab.id); setChannelView('all'); setOfflineSub('all'); setFilters(f => ({ ...f, subChannel: '', voucher: '', channelGroup: [], category: [], subCategory: [], sku: [], paymentType: '' })) }} className={`stab${activeTab === tab.id ? ' active' : ''}`} style={tab.id === 'all' ? { fontWeight: activeTab === 'all' ? 800 : 700, fontSize: 13 } : {}}>
             {tab.logo && <img src={tab.logo} alt="" style={{ width: 14, height: 14, borderRadius: 3, flexShrink: 0, objectFit: 'contain', filter: tab.id === 'cred' ? 'invert(1)' : 'none' }} />}
             {tab.label}
           </button>
         ))}
       </div>
-      {/* Filter bar */}
+      {/* Fixed bar: per-channel toggle on the left, filter icon on the right */}
       <div className="fbar">
-        <div className="fbar-inner">
-          {(() => {
-            const catBlur = activeTab === 'amazon' && amzRegion === 'intl'
-            return <>
-              <div style={{ position: 'relative', opacity: catBlur ? 0.35 : 1, pointerEvents: catBlur ? 'none' : 'auto' }} title={catBlur ? 'Not applicable for International' : undefined}>
-                <SearchableSelect multi options={cats} value={filters.category || []} onChange={v => setFilters(f => ({ ...f, category: v, subCategory: [] }))} placeholder="All Categories" />
-              </div>
-              <div style={{ position: 'relative', opacity: catBlur ? 0.35 : 1, pointerEvents: catBlur ? 'none' : 'auto' }} title={catBlur ? 'Not applicable for International' : undefined}>
-                <SearchableSelect multi options={subCats} value={filters.subCategory || []} onChange={v => setFilters(f => ({ ...f, subCategory: v }))} placeholder="All Sub-categories" dropdownWidth={320} />
-              </div>
-            </>
-          })()}
-          <SearchableSelect multi options={skuOpts} value={filters.sku || []} onChange={v => setFilters(f => ({ ...f, sku: v }))} placeholder="All SKUs" dropdownWidth={280} />
-          {activeTab === 'shopify' && paymentTypeOpts.length > 0 && (
-            <SearchableSelect multi options={paymentTypeOpts} value={(filters.paymentType ? filters.paymentType.split(',').map(x => x.trim()).filter(Boolean) : [])} onChange={v => setFilters(f => ({ ...f, paymentType: v.join(',') }))} placeholder="All Payment Types" dropdownWidth={220} />
-          )}
-          {activeTab === 'shopify' && <VoucherDropdown voucherList={data?.voucherList || []} selected={filters.voucher} onChange={v => setFilters(f => ({ ...f, voucher: v }))} />}
-          <button onClick={() => setFilters(f => ({ ...f, category: [], subCategory: [], sku: [], subChannel: '', voucher: '', region: [], tier: [], state: [], city: '', channelGroup: [] }))} className="fclr">✕ Clear</button>
+        <div className="fbar-inner" style={{ width: '100%', justifyContent: 'space-between' }}>
+          <div>{channelToggle}</div>
+          <FilterIconPopover activeCount={activeFilterCount}>
+            <SearchableSelect multi options={cats} value={filters.category || []} onChange={v => setFilters(f => ({ ...f, category: v, subCategory: [] }))} placeholder="All Categories" />
+            <SearchableSelect multi options={subCats} value={filters.subCategory || []} onChange={v => setFilters(f => ({ ...f, subCategory: v }))} placeholder="All Sub-categories" dropdownWidth={320} />
+            <SearchableSelect multi options={skuOpts} value={filters.sku || []} onChange={v => setFilters(f => ({ ...f, sku: v }))} placeholder="All SKUs" dropdownWidth={280} />
+            {activeTab === 'shopify' && paymentTypeOpts.length > 0 && (
+              <SearchableSelect multi options={paymentTypeOpts} value={(filters.paymentType ? filters.paymentType.split(',').map(x => x.trim()).filter(Boolean) : [])} onChange={v => setFilters(f => ({ ...f, paymentType: v.join(',') }))} placeholder="All Payment Types" dropdownWidth={220} />
+            )}
+            {activeTab === 'shopify' && <VoucherDropdown voucherList={data?.voucherList || []} selected={filters.voucher} onChange={v => setFilters(f => ({ ...f, voucher: v }))} />}
+            <button onClick={() => setFilters(f => ({ ...f, category: [], subCategory: [], sku: [], subChannel: '', voucher: '', region: [], tier: [], state: [], city: '', channelGroup: [] }))} className="fclr">✕ Clear</button>
+          </FilterIconPopover>
         </div>
       </div>
       {/* Content */}
@@ -9376,7 +9412,7 @@ function SalesPage({ data, filters, setFilters, activeTab, setActiveTab, fetchDa
         {activeTab === 'all' && <AllTab data={filteredData} rangeStart={filters.start} rangeEnd={filters.end} />}
         {activeTab === 'shopify' && <ChannelTab data={filteredData} channel="Shopify" filters={filters} setFilters={setFilters} />}
         {activeTab === 'ebo' && <EBOTab data={filteredData} rangeStart={filters.start} rangeEnd={filters.end} />}
-        {activeTab === 'amazon' && <ChannelTab data={filteredData} channel="Amazon" amzRegion={amzRegion} setAmzRegion={setAmzRegion} />}
+        {activeTab === 'amazon' && <ChannelTab data={filteredData} channel="Amazon" channelView={channelView} setChannelView={setChannelView} />}
         {activeTab === 'flipkart' && <ChannelTab data={filteredData} channel="Flipkart" />}
         {activeTab === 'blinkit' && <ChannelTab data={filteredData} channel="Blinkit" />}
         {activeTab === 'cred' && <ChannelTab data={filteredData} channel="CRED" />}
@@ -9384,7 +9420,8 @@ function SalesPage({ data, filters, setFilters, activeTab, setActiveTab, fetchDa
         {activeTab === 'instamart' && <ChannelTab data={filteredData} channel="Instamart" />}
         {activeTab === 'zepto' && <ChannelTab data={filteredData} channel="Zepto" />}
         {activeTab === 'myntra' && <ChannelTab data={filteredData} channel="Myntra" />}
-        {activeTab === 'offline' && <OfflineTab data={filteredData} />}
+        {activeTab === 'international' && <ChannelTab data={filteredData} channel="International" />}
+        {activeTab === 'offline' && <OfflineTab data={filteredData} sub={offlineSub} setSub={setOfflineSub} />}
         {activeTab === 'qc' && <QCTab data={filteredData} />}
         {activeTab === 'ops' && <OpsTab data={filteredData} />}
         {activeTab === 'cx' && <CXTab data={filteredData} />}
@@ -9523,8 +9560,8 @@ function IntelPage({ data }) {
       {/* Summary strip */}
       <div className="g-intel">
         {[
-          { label: 'Gross Revenue', val: fmt(totalRev) },
-          { label: 'Total GST Collected', val: fmt(gstCollected) },
+          { label: 'Gross Revenue Inc GST', val: fmt(totalRev) },
+          { label: 'GST', val: fmt(gstCollected) },
           { label: 'Repeat Rate', val: `${repeatRate.toFixed(1)}%`, warn: repeatRate < 10 },
           { label: 'QC Share', val: pct(qcRev, totalRev) },
           { label: 'Voucher Orders', val: pct(voucherOrders.length, nOrders) },
