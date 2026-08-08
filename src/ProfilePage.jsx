@@ -22,11 +22,10 @@ async function adminCall(action, session, payload) {
 }
 
 function Avatar({ url, name, size = 48 }) {
-  const initials = (name || '?').split(' ').filter(Boolean).map(w => w[0]).join('').slice(0, 2).toUpperCase()
   if (url) return <img src={url} alt={name} style={{ width: size, height: size, borderRadius: '50%', objectFit: 'cover', flexShrink: 0, border: '3px solid #2F6A45' }} />
   return (
-    <div style={{ width: size, height: size, borderRadius: '50%', background: '#2F6A45', color: '#ffffff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: size * 0.35, fontWeight: 700, flexShrink: 0, letterSpacing: '0.05em', userSelect: 'none', overflow: 'hidden', lineHeight: 1 }}>
-      {initials}
+    <div style={{ width: size, height: size, borderRadius: '50%', background: '#FFF9E6', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, overflow: 'hidden', border: '2px solid #E8C832' }}>
+      <img src="/frido-logo.png" alt="Frido" style={{ width: '85%', height: '85%', objectFit: 'contain' }} />
     </div>
   )
 }
@@ -175,6 +174,7 @@ function MyProfile({ session, onProfileUpdated }) {
           </form>
         )}
       </div>
+
     </div>
   )
 }
@@ -390,39 +390,41 @@ function UserRow({ user, permissions, session, onUpdate }) {
   return (
     <>
       <div style={{ borderBottom: '1px solid #E6E1D2' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '14px 0', flexWrap: 'wrap' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '14px 0' }}>
           <Avatar url={user.avatar_url} name={user.name} size={40} />
-          <div style={{ flex: 1, minWidth: 160 }}>
+          <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ fontWeight: 700, fontSize: 14 }}>{user.name}</div>
             <div style={{ fontSize: 12.5, color: '#7A8079' }}>{user.email}</div>
             <div style={{ fontSize: 11.5, color: '#7A8079', marginTop: 2 }}>Last login: {fmtDate(user.last_login_at)}</div>
           </div>
-          <StatusBadge active={user.is_active} />
-          <div style={{ fontSize: 12, color: '#7A8079', minWidth: 70 }}>
-            {user.is_admin ? 'Admin' : `${permissions.length} tab${permissions.length !== 1 ? 's' : ''}`}
-          </div>
-          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-            <button style={s.smBtn} onClick={() => setShowActivity(true)}>Activity</button>
-            {!user.is_admin && <button style={s.smBtn} onClick={() => setExpanded(v => !v)}>{expanded ? 'Close' : 'Permissions'}</button>}
-            <button style={s.smBtn} onClick={() => setShowReset(true)}>Reset pw</button>
-            {user.is_active && (
-              confirmRevoke ? (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0 }}>
+            <StatusBadge active={user.is_active} />
+            <div style={{ fontSize: 12, color: '#7A8079', minWidth: 50 }}>
+              {user.is_admin ? 'Admin' : `${permissions.length} tab${permissions.length !== 1 ? 's' : ''}`}
+            </div>
+            <div style={{ display: 'flex', gap: 6, flexWrap: 'nowrap' }}>
+              <button style={s.smBtn} onClick={() => setShowActivity(true)}>Activity</button>
+              {!user.is_admin && <button style={s.smBtn} onClick={() => setExpanded(v => !v)}>{expanded ? 'Close' : 'Permissions'}</button>}
+              <button style={s.smBtn} onClick={() => setShowReset(true)}>Reset pw</button>
+              {user.is_active && (
+                confirmRevoke ? (
+                  <>
+                    <button style={{ ...s.smBtn, background: '#D9612E', color: '#fff', border: 'none' }} onClick={revokeUser} disabled={revoking}>{revoking ? '…' : 'Confirm'}</button>
+                    <button style={s.smBtn} onClick={() => setConfirmRevoke(false)}>Cancel</button>
+                  </>
+                ) : (
+                  <button style={{ ...s.smBtn, color: '#D9612E' }} onClick={() => setConfirmRevoke(true)}>Revoke</button>
+                )
+              )}
+              {confirmDelete ? (
                 <>
-                  <button style={{ ...s.smBtn, background: '#D9612E', color: '#fff', border: 'none' }} onClick={revokeUser} disabled={revoking}>{revoking ? '…' : 'Confirm revoke'}</button>
-                  <button style={s.smBtn} onClick={() => setConfirmRevoke(false)}>Cancel</button>
+                  <button style={{ ...s.smBtn, background: '#D9612E', color: '#fff', border: 'none' }} onClick={deleteUser} disabled={deleting}>{deleting ? '…' : 'Confirm'}</button>
+                  <button style={s.smBtn} onClick={() => setConfirmDelete(false)}>Cancel</button>
                 </>
               ) : (
-                <button style={{ ...s.smBtn, color: '#D9612E' }} onClick={() => setConfirmRevoke(true)}>Revoke</button>
-              )
-            )}
-            {confirmDelete ? (
-              <>
-                <button style={{ ...s.smBtn, background: '#D9612E', color: '#fff', border: 'none' }} onClick={deleteUser} disabled={deleting}>{deleting ? '…' : 'Confirm delete'}</button>
-                <button style={s.smBtn} onClick={() => setConfirmDelete(false)}>Cancel</button>
-              </>
-            ) : (
-              <button style={{ ...s.smBtn, color: '#7A8079' }} onClick={() => setConfirmDelete(true)}>Delete</button>
-            )}
+                <button style={{ ...s.smBtn, color: '#7A8079' }} onClick={() => setConfirmDelete(true)}>Delete</button>
+              )}
+            </div>
           </div>
         </div>
 
