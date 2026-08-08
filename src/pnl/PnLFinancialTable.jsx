@@ -1,6 +1,7 @@
 import { useState, useEffect, Fragment } from 'react'
 import { C, fmt, fmtN, exportCSV } from '../utils.js'
 import { useSortableTable } from '../components.jsx'
+import { netRevenueOf, estimateCogsPerUnit } from './pnlUtils.js'
 
 // Financial View table — Category → Product (→ SKU) grain, same visual language as
 // FlatCategoryProductMatrix (sticky C.bg header, sortable columns, hover-highlight rows,
@@ -50,37 +51,19 @@ export default function PnLFinancialTable({ subCatData, skuData, adSpendMap = {}
 
   const q = search.trim().toLowerCase()
 
-  const mapRow = (d, scName) => {
-    const gross = d.rev || 0
-    const excRev = d.excRev || 0
-    const returnUnits = d.returnUnits || 0
-    const cancelRev = d.cancelRev || 0
-    const codCancelRev = d.codCancelRev || 0
-    const rtoRev = d.rtoRev || 0
-    const cirRev = d.cirRev || 0
-    const exchRev = d.exchRev || 0
-    const returnRev = d.returnRev || 0
-    const totalReturnRev = (cancelRev - codCancelRev) + rtoRev + cirRev + returnRev
-    const gstRatio = gross > 0 ? (gross - excRev) / gross : 0
-    const grossAfterReturns = gross - totalReturnRev
-    const netStandard = grossAfterReturns * (1 - gstRatio)
-    // Mobility: use whitelist net rev (manager formula) as the single source of truth for net and all % denominators
-    const net = (scName && mobilityNetBySubCat[scName] != null) ? mobilityNetBySubCat[scName] : netStandard
-    // netUnits = gross units minus cancelled/RTO/returned/CIR units — COGS should only price
-    // units that stayed sold, not gross units before returns are netted out. Prefers the explicit
-    // per-row returnUnits (Shopify/D2C) when present, else falls back to Amazon SC's returnedUnits,
-    // else gross units where neither is tracked yet.
-    const units = d.units || 0
-    const netUnits = returnUnits > 0 ? Math.max(units - returnUnits, 0) : (d.returnedUnits != null ? Math.max(units - d.returnedUnits, 0) : units)
-    return { gross, excRev, net, units, netUnits, totalReturnRev }
-  }
+  // Net Revenue / netUnits / totalReturnRev — single canonical formula, shared with
+  // PnLPage.jsx's netOf()/amzDailyPnL/kpiSummary via ./pnlUtils.js (see that file's header
+  // comment for the exact formula and the mobility-override behavior).
+  const mapRow = (d, scName, catName) => netRevenueOf(d, scName, mobilityNetBySubCat, catName)
   const pctOf = (n, d) => d > 0 ? (n / d * 100) : 0
-
-  // Fallback COGS-per-unit estimate for any SKU missing a real cogs-data.json entry, so no
-  // product silently drops out of COGS/GM/CM1/CM2 for lack of a cost sheet row. Rate is applied
-  // to ASP Inc GST (gross ÷ units): below ₹5,000 ASP → 40% of ASP is COGS, ₹5,000 and above →
-  // 50% of ASP is COGS (confirmed with user — these are the two flat slabs to use).
-  const estimateCogsPerUnit = asp => asp > 0 ? asp * (asp < 5000 ? 0.4 : 0.5) : 0
+  // A handful of rows have genuinely non-zero but negligible revenue (e.g. a ₹1 leftover-cent
+  // transaction) — pctOf's `d > 0` guard lets these through and produces million-percent ratios
+  // (COGS%/GM%/SnD%/CM1%/CM2%/Spend%/ROAS) that are technically correct arithmetic but visually
+  // meaningless and alarming. Below this floor, treat the denominator as "not meaningfully
+  // covered" the same way a true-zero row already renders as "—", rather than fabricating a
+  // finite-but-absurd percentage.
+  const MIN_REV_FOR_RATIOS = 100
+  const pctOfFloored = (n, d) => d > MIN_REV_FOR_RATIOS ? (n / d * 100) : 0
 
   // Per-SKU COGS × units and SnD. Every SKU gets a COGS figure — real (cogsMap) where available,
   // else the ASP-based estimate above — so anyCosted is always true and no product is ever
@@ -94,7 +77,11 @@ export default function PnLFinancialTable({ subCatData, skuData, adSpendMap = {}
     // proportionally across SKUs by each SKU's standard-formula net share, so per-SKU COGS%/GM%/
     // SnD%/CM1% denominators stay consistent with the subcategory-level override applied in
     // mapRow() above, instead of silently reverting to the standard (non-whitelist) net per SKU.
-    const whitelistNet = mobilityNetBySubCat[sc] != null ? mobilityNetBySubCat[sc] : null
+    // Keyed 'Category::SubCategory' — see pnlUtils.js's netRevenueOf() header comment for why a
+    // bare SubCategory key would double-apply this whitelist value when the same SubCategory name
+    // exists under two different Categories (e.g. 'Sparepart' under both Mobility and 'Sparepart
+    // (Chair & Mobility)').
+    const whitelistNet = mobilityNetBySubCat[`${cat}::${sc}`] != null ? mobilityNetBySubCat[`${cat}::${sc}`] : null
     const skuEntries = Object.entries(skus)
     const standardNetTotal = whitelistNet != null ? skuEntries.reduce((s, [, d]) => s + mapRow(d).net, 0) : 0
     skuEntries.forEach(([sku, d]) => {
@@ -122,7 +109,7 @@ export default function PnLFinancialTable({ subCatData, skuData, adSpendMap = {}
   const allRows = []
   Object.entries(subCatData || {}).forEach(([cat, scMap]) => {
     Object.entries(scMap).forEach(([sc, d]) => {
-      const r = mapRow(d, sc)
+      const r = mapRow(d, sc, cat)
       const spend = adSpendMap != null ? (adSpendMap[sc] || 0) : null
       const { cogs, netCovered, anyCosted, snd, sndNetCovered, anySnd } = (cogsMap || sndBySku) ? costsForSkus(cat, sc) : { cogs: 0, netCovered: 0, anyCosted: false, snd: 0, sndNetCovered: 0, anySnd: false }
       const gm = anyCosted ? netCovered - cogs : null
@@ -135,18 +122,32 @@ export default function PnLFinancialTable({ subCatData, skuData, adSpendMap = {}
       // valid CM2 of cm1 - 0, since "no ad spend" is a known fact, not a missing cost).
       const cm2Covered = cm1Covered
       const cm2 = cm2Covered ? cm1 - spend : null
+      // Rows with negligible-but-nonzero revenue (e.g. a genuine ₹1 leftover transaction) would
+      // otherwise pass every `> 0` guard below and produce finite-but-meaningless million-percent
+      // ratios (COGS 2,104,545%, CM1 -2,161,006% observed on a real ₹1 row) — floor them to "not
+      // meaningfully covered" instead, same treatment a true-zero-revenue row already gets.
+      const belowFloor = r.net <= MIN_REV_FOR_RATIOS
       allRows.push({
         cat, sc, ...r, spend, cogs, netCovered, anyCosted, gm, snd, sndNetCovered, anySnd, cm1, cm1Covered, cm2, cm2Covered,
         returnPct: pctOf(r.totalReturnRev, r.gross),
-        spendPct: r.net > 0 ? (spend / r.net * 100) : 0,
-        roas: spend > 0 ? r.excRev / spend : null,
-        netRoas: spend > 0 ? r.net / spend : null,
+        spendPct: belowFloor ? 0 : (r.net > 0 ? (spend / r.net * 100) : 0),
+        roas: belowFloor ? null : (spend > 0 ? r.excRev / spend : null),
+        netRoas: belowFloor ? null : (spend > 0 ? r.net / spend : null),
         asp: r.units > 0 ? r.gross / r.units : 0,
-        cogsPct: netCovered > 0 ? pctOf(cogs, netCovered) : null,
-        gmPct: gm != null && netCovered > 0 ? pctOf(gm, netCovered) : null,
-        sndPct: sndNetCovered > 0 ? pctOf(snd, sndNetCovered) : null,
-        cm1Pct: cm1 != null && r.net > 0 ? pctOf(cm1, r.net) : null,
-        cm2Pct: cm2 != null && r.net > 0 ? pctOf(cm2, r.net) : null,
+        cogsPct: !belowFloor && netCovered > MIN_REV_FOR_RATIOS ? pctOfFloored(cogs, netCovered) : null,
+        gmPct: !belowFloor && gm != null && netCovered > MIN_REV_FOR_RATIOS ? pctOfFloored(gm, netCovered) : null,
+        sndPct: !belowFloor && sndNetCovered > MIN_REV_FOR_RATIOS ? pctOfFloored(snd, sndNetCovered) : null,
+        // CM1%/CM2% denominator: "covered net" (sndNetCovered, since cm1Covered = anyCosted &&
+        // anySnd and COGS's ASP-fallback means anyCosted is ~always true — so sndNetCovered is
+        // effectively cm1/cm2's own covered-net) — NOT the row's full r.net. Using r.net here
+        // previously disagreed with this exact row's own COGS%/GM%/SnD% cells (which correctly use
+        // netCovered/sndNetCovered) whenever a row had partial SnD coverage across its SKUs, AND
+        // disagreed with the Total row (totCm1Pct/totCm2Pct below, which already use
+        // tot.cm1NetCovered) and the KPI card (PnLPage.jsx's kpiSummary.cm1Pct/cm2Pct, which use
+        // cm1NetCovered) for the identical date range — three different denominators for what
+        // should be one number.
+        cm1Pct: !belowFloor && cm1 != null && sndNetCovered > MIN_REV_FOR_RATIOS ? pctOfFloored(cm1, sndNetCovered) : null,
+        cm2Pct: !belowFloor && cm2 != null && sndNetCovered > MIN_REV_FOR_RATIOS ? pctOfFloored(cm2, sndNetCovered) : null,
       })
     })
   })
@@ -228,7 +229,7 @@ export default function PnLFinancialTable({ subCatData, skuData, adSpendMap = {}
       // SKU sub-rows: same per-SKU cost logic as the table body (whitelist-net-scaled mapRow,
       // estimateCogsPerUnit fallback, sndBySku lookup) so exported SKU rows always match what's
       // shown when a Product row is expanded — no separately-derived export-only calculation.
-      const whitelistNet = mobilityNetBySubCat[r.sc] != null ? mobilityNetBySubCat[r.sc] : null
+      const whitelistNet = mobilityNetBySubCat[`${r.cat}::${r.sc}`] != null ? mobilityNetBySubCat[`${r.cat}::${r.sc}`] : null
       const skuEntries = Object.entries(skuData?.[r.cat]?.[r.sc] || {})
       const standardNetTotal = whitelistNet != null ? skuEntries.reduce((s, [, d]) => s + mapRow(d).net, 0) : 0
       const csvSkuTotalGross = skuEntries.reduce((s, [, d]) => s + (mapRow(d).gross || 0), 0)
@@ -253,14 +254,14 @@ export default function PnLFinancialTable({ subCatData, skuData, adSpendMap = {}
           Units: sk.units, ASP: asp > 0 ? Math.round(asp) : '',
           'Returns %': +pctOf(sk.totalReturnRev, sk.gross).toFixed(2), 'Returns Value': Math.round(sk.totalReturnRev),
           'Net Revenue': Math.round(sk.net),
-          'COGS': costed ? Math.round(skCogs) : '', 'COGS %': costed && sk.net > 0 ? +pctOf(skCogs, sk.net).toFixed(2) : '',
-          'Gross Margin': skGm != null ? Math.round(skGm) : '', 'GM %': skGm != null && sk.net > 0 ? +pctOf(skGm, sk.net).toFixed(2) : '',
-          'SnD Cost': skSnd != null ? Math.round(skSnd) : '', 'SnD %': skSnd != null && sk.net > 0 ? +pctOf(skSnd, sk.net).toFixed(2) : '',
-          'CM1': skCm1 != null ? Math.round(skCm1) : '', 'CM1 %': skCm1 != null && sk.net > 0 ? +pctOf(skCm1, sk.net).toFixed(2) : '',
+          'COGS': costed ? Math.round(skCogs) : '', 'COGS %': costed && sk.net > MIN_REV_FOR_RATIOS ? +pctOf(skCogs, sk.net).toFixed(2) : '',
+          'Gross Margin': skGm != null ? Math.round(skGm) : '', 'GM %': skGm != null && sk.net > MIN_REV_FOR_RATIOS ? +pctOf(skGm, sk.net).toFixed(2) : '',
+          'SnD Cost': skSnd != null ? Math.round(skSnd) : '', 'SnD %': skSnd != null && sk.net > MIN_REV_FOR_RATIOS ? +pctOf(skSnd, sk.net).toFixed(2) : '',
+          'CM1': skCm1 != null ? Math.round(skCm1) : '', 'CM1 %': skCm1 != null && sk.net > MIN_REV_FOR_RATIOS ? +pctOf(skCm1, sk.net).toFixed(2) : '',
           ...(showMarketing ? {
-            'Marketing Spend': skSpendCsv > 0 ? Math.round(skSpendCsv) : '', 'Spend %': skSpendCsv > 0 && sk.net > 0 ? +pctOf(skSpendCsv, sk.net).toFixed(2) : '',
+            'Marketing Spend': skSpendCsv > 0 ? Math.round(skSpendCsv) : '', 'Spend %': skSpendCsv > 0 && sk.net > MIN_REV_FOR_RATIOS ? +pctOf(skSpendCsv, sk.net).toFixed(2) : '',
             'RoAS': '', 'Net RoAS': '',
-            'CM2': skCm2 != null ? Math.round(skCm2) : '', 'CM2 %': skCm2 != null && sk.net > 0 ? +pctOf(skCm2, sk.net).toFixed(2) : '',
+            'CM2': skCm2 != null ? Math.round(skCm2) : '', 'CM2 %': skCm2 != null && sk.net > MIN_REV_FOR_RATIOS ? +pctOf(skCm2, sk.net).toFixed(2) : '',
           } : {}),
         }
       })
@@ -334,14 +335,14 @@ export default function PnLFinancialTable({ subCatData, skuData, adSpendMap = {}
                     <td style={tdStyle}>{r.asp > 0 ? `₹${Math.round(r.asp).toLocaleString('en-IN')}` : <span style={{ color: C.t3 }}>—</span>}</td>
                     <td style={tdStyle}>{r.returnPct > 0 ? <span style={{ color: r.returnPct > 20 ? '#B91C1C' : 'inherit' }}>{r.returnPct.toFixed(2)}%</span> : <span style={{ color: C.t3 }}>—</span>}</td>
                     <td style={tdStyle}>{fmt(r.net)}</td>
-                    <td style={tdStyle}>{pctCellOf(r.cogs, r.netCovered)}</td>
-                    <td style={tdStyle}>{r.gm != null ? pctCellOf(r.gm, r.netCovered) : noCostCell}</td>
-                    <td style={tdStyle}>{pctCellOf(r.snd, r.sndNetCovered)}</td>
-                    <td style={tdStyle}>{r.cm1 != null && r.net > 0 ? `${pctOf(r.cm1, r.net).toFixed(1)}%` : noCostCell}</td>
+                    <td style={tdStyle}>{r.cogsPct != null ? `${r.cogsPct.toFixed(1)}%` : noCostCell}</td>
+                    <td style={tdStyle}>{r.gmPct != null ? `${r.gmPct.toFixed(1)}%` : noCostCell}</td>
+                    <td style={tdStyle}>{r.sndPct != null ? `${r.sndPct.toFixed(1)}%` : noCostCell}</td>
+                    <td style={tdStyle}>{r.cm1Pct != null ? `${r.cm1Pct.toFixed(1)}%` : noCostCell}</td>
                     {showMarketing && <>
                       <td style={tdStyle}>{r.spend > 0 ? `${r.spendPct.toFixed(2)}%` : <span style={{ color: C.t3 }}>—</span>}</td>
                       <td style={tdStyle}>{r.roas != null ? `${r.roas.toFixed(2)}x` : <span style={{ color: C.t3 }}>—</span>}</td>
-                      <td style={tdStyle}>{r.cm2 != null && r.net > 0 ? `${pctOf(r.cm2, r.net).toFixed(1)}%` : noCostCell}</td>
+                      <td style={tdStyle}>{r.cm2Pct != null ? `${r.cm2Pct.toFixed(1)}%` : noCostCell}</td>
                     </>}
                   </tr>
                   {isOpen && skus.map(sk => {
@@ -365,10 +366,10 @@ export default function PnLFinancialTable({ subCatData, skuData, adSpendMap = {}
                         <td style={{ ...tdStyle, fontSize: 11 }}>{sk.units > 0 ? `₹${Math.round(sk.gross / sk.units).toLocaleString('en-IN')}` : <span style={{ color: C.t3 }}>—</span>}</td>
                         <td style={{ ...tdStyle, fontSize: 11 }}>{pctOf(sk.totalReturnRev, sk.gross) > 0 ? `${pctOf(sk.totalReturnRev, sk.gross).toFixed(2)}%` : <span style={{ color: C.t3 }}>—</span>}</td>
                         <td style={{ ...tdStyle, fontSize: 11 }}>{fmt(sk.net)}</td>
-                        <td style={{ ...tdStyle, fontSize: 11 }}>{costed && sk.net > 0 ? `${pctOf(skCogs, sk.net).toFixed(1)}%` : noCostCell}</td>
-                        <td style={{ ...tdStyle, fontSize: 11 }}>{skGm != null && sk.net > 0 ? `${pctOf(skGm, sk.net).toFixed(1)}%` : noCostCell}</td>
-                        <td style={{ ...tdStyle, fontSize: 11 }}>{skSnd != null && sk.net > 0 ? `${pctOf(skSnd, sk.net).toFixed(1)}%` : noCostCell}</td>
-                        <td style={{ ...tdStyle, fontSize: 11 }}>{skCm1 != null && sk.net > 0 ? `${pctOf(skCm1, sk.net).toFixed(1)}%` : noCostCell}</td>
+                        <td style={{ ...tdStyle, fontSize: 11 }}>{costed && sk.net > MIN_REV_FOR_RATIOS ? `${pctOf(skCogs, sk.net).toFixed(1)}%` : noCostCell}</td>
+                        <td style={{ ...tdStyle, fontSize: 11 }}>{skGm != null && sk.net > MIN_REV_FOR_RATIOS ? `${pctOf(skGm, sk.net).toFixed(1)}%` : noCostCell}</td>
+                        <td style={{ ...tdStyle, fontSize: 11 }}>{skSnd != null && sk.net > MIN_REV_FOR_RATIOS ? `${pctOf(skSnd, sk.net).toFixed(1)}%` : noCostCell}</td>
+                        <td style={{ ...tdStyle, fontSize: 11 }}>{skCm1 != null && sk.net > MIN_REV_FOR_RATIOS ? `${pctOf(skCm1, sk.net).toFixed(1)}%` : noCostCell}</td>
                         {showMarketing && <>
                           <td style={{ ...tdStyle, fontSize: 11 }}><span style={{ color: C.t3 }}>—</span></td>
                           <td style={{ ...tdStyle, fontSize: 11 }}><span style={{ color: C.t3 }}>—</span></td>

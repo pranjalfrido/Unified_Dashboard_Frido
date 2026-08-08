@@ -1,5 +1,6 @@
 import { useState, useMemo, useEffect } from 'react'
 import PnLChannelTab from './PnLChannelTab.jsx'
+import { netRevenueOf, estimateCogsPerUnit } from './pnlUtils.js'
 
 // One subtab per Sales-tab channel + a consolidated "All Channels" tab — same bar, same visual
 // chrome as SalesPage. Every channel's Category→Product(→SKU) map is rebuilt here the same way
@@ -8,7 +9,7 @@ import PnLChannelTab from './PnLChannelTab.jsx'
 // existing response shape. See PNL_TAB_ROADMAP.md for the COGS/SnD prerequisites still pending;
 // the Financial View table (PnLFinancialTable.jsx) renders those columns as "—" until then.
 const PNL_TABS = [
-  { id: 'all', label: 'All Channels' },
+  { id: 'all', label: 'Overall' },
   { id: 'shopify', label: 'D2C', logo: '/logo-shopify.png' },
   { id: 'ebo', label: 'EBO', logo: '/ebo.png' },
   { id: 'amazon', label: 'Amazon', logo: '/logo-amazon.png' },
@@ -19,6 +20,11 @@ const PNL_TABS = [
   { id: 'instamart', label: 'Instamart', logo: '/logo-instamart.png' },
   { id: 'zepto', label: 'Zepto', logo: '/logo-zepto.png' },
   { id: 'myntra', label: 'Myntra', logo: '/logo-myntra.png' },
+  // Channel='International' (Amazon International + Shopify International sub-brands, unified
+  // under one Channel by the 2026-08 schema change) — India-scoped D2C/Amazon tabs no longer
+  // carry these rows, so International gets its own top-level tab, same depth as every other
+  // channel minus Marketing Spend/ROAS/CM2 (ad spend isn't attributable to international sales).
+  { id: 'international', label: 'International' },
   { id: 'offline', label: 'Offline Sales', logo: '/offline-sales.png' },
 ]
 
@@ -26,17 +32,20 @@ const PNL_TABS = [
 // local (not imported) since it's a 2-line pure function, not worth a shared-module trip.
 const pick = v => ({ rev: v.rev || 0, excRev: v.excRev || 0, units: v.units || v.aspUnits || 0, returnUnits: v.returnUnits || 0, cancelRev: v.cancelRev || 0, codCancelRev: v.codCancelRev || 0, rtoRev: v.rtoRev || 0, cirRev: v.cirRev || 0, exchRev: v.exchRev || 0, returnRev: v.returnRev || 0 })
 
+// Aggregates every {category: {subCategory: d}} row's Net Revenue via the shared netRevenueOf()
+// formula (see ./pnlUtils.js) — no scName/mobility override passed here, since the Mobility
+// whitelist-net override is applied afterward on the AGGREGATE n.net (see the `shopify` block
+// below), exactly as this function did before centralization.
 function netOf(subCatData) {
   let gross = 0, excRev = 0, net = 0, returnRev = 0, units = 0
   Object.values(subCatData || {}).forEach(scMap => {
     Object.values(scMap).forEach(d => {
-      const totalReturn = ((d.cancelRev || 0) - (d.codCancelRev || 0)) + (d.rtoRev || 0) + (d.cirRev || 0) + (d.returnRev || 0)
-      const gstRatio = d.rev > 0 ? (d.rev - d.excRev) / d.rev : 0
-      gross += d.rev || 0
-      excRev += d.excRev || 0
-      units += d.units || 0
-      returnRev += totalReturn
-      net += (d.rev - totalReturn) * (1 - gstRatio)
+      const r = netRevenueOf(d)
+      gross += r.gross
+      excRev += r.excRev
+      units += r.units
+      returnRev += r.totalReturnRev
+      net += r.net
     })
   })
   return { gross, excRev, net, units, returnRev }
@@ -66,7 +75,8 @@ export default function PnLPage({ data, filters, setFilters }) {
   const [activeTab, setActiveTab] = useState('all')
   const [amzChannelView, setAmzChannelView] = useState('all') // 'all' | 'sc' | 'vc'
   const [offlineSub, setOfflineSub] = useState('all') // 'all' | 'b2b' | 'Stockist' | 'MTGT'
-  const [d2cRegion, setD2cRegion] = useState('india') // 'india' | 'international'
+  // D2C is India-only permanently (International orders live under their own top-level
+  // "International" PnL tab) — no region toggle/state needed here anymore.
   const [d2cSubCh, setD2cSubCh] = useState('all') // 'all' | 'MyFrido' | 'Mobility'
   const [sndRates, setSndRates] = useState(null)
   const [cogsMap, setCogsMap] = useState(null)
@@ -174,10 +184,21 @@ export default function PnLPage({ data, filters, setFilters }) {
     const catTotalSpend = {}
     categoryRows.forEach(r => { catTotalSpend[r.category || 'Others'] = r.spend || 0 })
 
+    // Only keys that actually exist as an Amazon SubCategory (SC or VC) for THIS date range can
+    // ever be reached by kpiSummary (it sums activeAdSpendMap[sc] only for sc keys present in
+    // amzSubCatData) — a productRows subCategory that doesn't exactly match a real SubCategory
+    // (renamed/discontinued/spelling drift) would otherwise sit under an orphaned key forever
+    // summed into nothing, silently undercounting Marketing Spend/CM2 versus the Ads tab's raw
+    // Amazon total (same class of bug fixed for D2C's pnlAdSpendMap — see api/bq.js comment).
+    const validSubCats = new Set()
+    Object.values(data?.amzSC?.subCatChannel || {}).forEach(scMap => Object.keys(scMap).forEach(sc => validSubCats.add(sc)))
+    Object.values(data?.amzVCMatrix?.subCatData || {}).forEach(scMap => Object.keys(scMap).forEach(sc => validSubCats.add(sc)))
+
     const map = {}
     productRows.forEach(r => {
       const cat = r.category || 'Others'
-      const key = r.subCategory || 'Others'
+      const keyRaw = r.subCategory || 'Others'
+      const key = validSubCats.has(keyRaw) ? keyRaw : 'Others'
       const catProductSum = productSpendByCat[cat] || 0
       const catTrueTotal = catTotalSpend[cat]
       // Scale factor: if this Category's true total is known and its product-level sum is
@@ -216,9 +237,11 @@ export default function PnLPage({ data, filters, setFilters }) {
     const allSalesCatRows = data.pnlSalesRows || [] // rows from salesCategoryOrders with sub_channel
     const shSalesCatRows = allSalesCatRows.filter(r => r.platform === 'Shopify')
     const filterD2CRow = r => {
+      // D2C is India-only — Channel='International' rows are already excluded upstream (this
+      // channel's data is scoped to Channel='Shopify', which no longer contains them post the
+      // 2026-08 schema change), so the only remaining filter here is the MyFrido/Mobility toggle.
       const sc = (r.sub_channel || '').toLowerCase()
-      if (d2cRegion === 'india' && sc === 'shopify international') return false
-      if (d2cRegion === 'international' && sc !== 'shopify international') return false
+      if (sc === 'shopify international') return false
       if (d2cSubCh === 'Mobility') return r.sub_channel === 'Mobility'
       if (d2cSubCh === 'MyFrido') return r.sub_channel === 'MyFrido'
       return true
@@ -372,12 +395,20 @@ export default function PnLPage({ data, filters, setFilters }) {
         d.excRev += x.excRev || 0
         d.net += x.net || 0
         d.totalReturnRev += x.totalReturnRev || 0
-        const rowCosted = cogsMap?.[x.sku]?.cogs != null
         const rowSndCovered = x.snd != null
         if (rowSndCovered) { d.snd += x.snd || 0; d.sndNetCovered += x.net || 0; d.anySnd = true }
+        // Same ASP-based COGS fallback PnLFinancialTable.jsx's costsForSkus() uses (via shared
+        // estimateCogsPerUnit in ./pnlUtils.js) for any SKU missing a real cogs-data.json entry —
+        // previously this trend calc read cogsMap[x.sku].cogs directly with NO fallback, so a day
+        // with SKUs not yet in the cost sheet showed a different (lower-coverage) COGS%/GM%/
+        // CM1%/CM2% here than the whole-range Financial View table for the identical date range.
+        const netUnits = Math.max((x.units || 0) - (x.returnedUnits || 0), 0)
+        const entry = cogsMap?.[x.sku]
+        const asp = (x.units || 0) > 0 ? (x.gross || 0) / x.units : 0
+        const perUnitCogs = (entry && entry.cogs != null) ? entry.cogs : estimateCogsPerUnit(asp)
+        const rowCosted = perUnitCogs > 0 || netUnits > 0
         if (rowCosted) {
-          const netUnits = Math.max((x.units || 0) - (x.returnedUnits || 0), 0)
-          d.cogs += cogsMap[x.sku].cogs * netUnits
+          d.cogs += perUnitCogs * netUnits
           d.netCovered += x.net || 0
           d.anyCosted = true
         }
@@ -395,6 +426,103 @@ export default function PnLPage({ data, filters, setFilters }) {
         const cm1 = cm1Covered ? gm - d.snd : null
         const spend = spendByDate[d.date] || 0
         const cm2 = cm1Covered && amzChannelView === 'all' ? cm1 - spend : null
+        return {
+          date: d.date,
+          returnPct: d.gross > 0 ? (d.totalReturnRev / d.gross * 100) : 0,
+          cogsPct: d.anyCosted && d.netCovered > 0 ? (d.cogs / d.netCovered * 100) : null,
+          sndPct: d.anySnd && d.sndNetCovered > 0 ? (d.snd / d.sndNetCovered * 100) : null,
+          gmPct: gm != null && d.netCovered > 0 ? (gm / d.netCovered * 100) : null,
+          cm1Pct: cm1 != null && d.cm1NetCovered > 0 ? (cm1 / d.cm1NetCovered * 100) : null,
+          cm2Pct: cm2 != null && d.cm2NetCovered > 0 ? (cm2 / d.cm2NetCovered * 100) : null,
+        }
+      })
+    })()
+
+    // D2C day-wise SnD per SKU — same rate-slab lookup shSkuCosts/shSndBySku use, just grouped by
+    // (date, sku) via shDailySkuCostRows (see api/bq.js) instead of the whole range. Real per-day
+    // computation, not a whole-range rate applied uniformly across days — same standard as
+    // Amazon VC's dailyPnLBySku (fresh per-day margin-slab calc, not an averaged rate).
+    const shDailySndBySku = (() => {
+      const rows = data?.shopify?.dailySkuCostRows
+      if (!sndRates || !rows?.length) return {}
+      const out = {}
+      rows.forEach(row => {
+        const { date, sku, orderStatus, weightSlab, lineCount, totalQty, grossIncGst } = row
+        if (!sku) return
+        // Same d2cSubCh scoping shSkuCosts (the whole-range equivalent) already applies — without
+        // this, every Overall/MyFrido/Mobility view showed identical (unfiltered) day-wise SnD.
+        if (d2cSubCh === 'Mobility' && row.subChannel !== 'mobility') return
+        if (d2cSubCh === 'MyFrido' && row.subChannel !== 'myfrido') return
+        const effectiveSlab = weightSlab != null ? weightSlab : 2000
+        const rate = rateForSlab(sndRates, effectiveSlab)
+        let logistics = 0
+        const fulfilment = rate ? rate.fulfilment * lineCount : 0
+        if (rate) {
+          const st = (orderStatus || '').toLowerCase()
+          if (st === 'cancelled') logistics = 0
+          else if (st === 'rto') logistics = (rate.forward + rate.rto) * lineCount
+          else if (st === 'cir' || st === 'exchange' || st === 'return') logistics = (rate.forward + rate.reverse) * lineCount
+          else logistics = rate.forward * lineCount
+        }
+        const paymentGw = grossIncGst * 0.011
+        const softwareFee = totalQty * 15
+        const key = `${date}::${sku}`
+        out[key] = (out[key] || 0) + logistics + fulfilment + paymentGw + softwareFee
+      })
+      return out
+    })()
+
+    // D2C day-wise COGS%/GM%/SnD%/CM1%/CM2% for the trend chart — same "covered net" convention
+    // and ASP-COGS fallback (estimateCogsPerUnit) as amzDailyPnL above, built from shDailySKU
+    // (real per-day Net Revenue via netRevenueOf()) and shDailySndBySku (real per-day SnD above).
+    const shDailyPnL = (() => {
+      const allRows = data?.shopify?.dailySKU || []
+      // Same d2cSubCh scoping as shSubCatData/shSkuData above — without this, the trend chart's
+      // day-wise %-metrics were always computed from ALL sub-channels combined, identical on
+      // every Overall/MyFrido/Mobility view regardless of the selected toggle.
+      const rows = d2cSubCh === 'all' ? allRows : allRows.filter(x => d2cSubCh === 'Mobility' ? x.subChannel === 'mobility' : d2cSubCh === 'MyFrido' ? x.subChannel === 'myfrido' : true)
+      // Day-wise Meta+Google ad spend (adsDailyByCategory has no MyFrido/Mobility dimension at
+      // all — only product Category, e.g. "Mobility" the CATEGORY, which is a different concept
+      // from the Mobility SUB-CHANNEL toggle and coincidentally shares the name) — so "Overall"
+      // gets the real, exact day-wise total (matches the KPI card precisely), while MyFrido/
+      // Mobility approximate it via the same revenue-share ratio already used for the raw
+      // Gross/Net Revenue trend line on those views (confirmed acceptable with the user).
+      const shTotalRevForRatio = data?.shopify?.totals?.rev || 0
+      const subChGrossForRatio = rows.reduce((s, x) => s + (x.rev || 0), 0)
+      const cm2Ratio = d2cSubCh !== 'all' && shTotalRevForRatio > 0 ? subChGrossForRatio / shTotalRevForRatio : 1
+      const spendByDate = {}
+      ;(data.ads?.adsDailyByCategory || []).filter(x => x.platform === 'Meta' || x.platform === 'Google').forEach(x => {
+        spendByDate[x.date] = (spendByDate[x.date] || 0) + (x.spend || 0) * cm2Ratio
+      })
+      const byDate = {}
+      rows.forEach(x => {
+        if (!byDate[x.date]) byDate[x.date] = { date: x.date, gross: 0, excRev: 0, net: 0, totalReturnRev: 0, snd: 0, sndNetCovered: 0, anySnd: false, cogs: 0, netCovered: 0, anyCosted: false, cm1NetCovered: 0, cm2NetCovered: 0 }
+        const d = byDate[x.date]
+        const r = netRevenueOf(x)
+        d.gross += r.gross
+        d.excRev += r.excRev
+        d.net += r.net
+        d.totalReturnRev += r.totalReturnRev
+        const snd = shDailySndBySku[`${x.date}::${x.sku}`]
+        const rowSndCovered = snd != null
+        if (rowSndCovered) { d.snd += snd; d.sndNetCovered += r.net; d.anySnd = true }
+        const entry = cogsMap?.[x.sku]
+        const asp = r.units > 0 ? r.gross / r.units : 0
+        const perUnitCogs = (entry && entry.cogs != null) ? entry.cogs : estimateCogsPerUnit(asp)
+        const rowCosted = perUnitCogs > 0 || r.netUnits > 0
+        if (rowCosted) {
+          d.cogs += perUnitCogs * r.netUnits
+          d.netCovered += r.net
+          d.anyCosted = true
+        }
+        if (rowCosted && rowSndCovered) { d.cm1NetCovered += r.net; d.cm2NetCovered += r.net }
+      })
+      return Object.values(byDate).sort((a, b) => a.date.localeCompare(b.date)).map(d => {
+        const gm = d.anyCosted ? d.netCovered - d.cogs : null
+        const cm1Covered = d.anyCosted && d.anySnd
+        const cm1 = cm1Covered ? gm - d.snd : null
+        const spend = spendByDate[d.date] || 0
+        const cm2 = cm1Covered ? cm1 - spend : null
         return {
           date: d.date,
           returnPct: d.gross > 0 ? (d.totalReturnRev / d.gross * 100) : 0,
@@ -443,6 +571,9 @@ export default function PnLPage({ data, filters, setFilters }) {
     const cr = data.cred || {}
     const fc = data.firstcry || {}
     const mn = data.myntra || {}
+    // ── International (Channel='International', both Amazon International + Shopify
+    // International sub-brands) — same simple single-Channel shape as CRED/Firstcry/Myntra above.
+    const intl = data.international || {}
 
     // ── Offline (row-array shape, sub-channel filterable) ──
     const off = data.offline || {}
@@ -476,22 +607,104 @@ export default function PnLPage({ data, filters, setFilters }) {
       all: { subCatData: allSubCatData, skuData: allSkuData, daily: data.dailyArr || [], gross: data.totalRev || 0, excRev: data.totalExcRev || 0, net: data.netRevenueCalc || 0, units: data.totalQty || 0, orders: data.nOrders || 0, returnRev: data.returnRev || 0 },
       shopify: (() => {
         const n = netOf(shSubCatData)
+        // Net Revenue here is intentionally the SAME revenue-weighted blended-GST-ratio formula
+        // (netRevenueOf in ./pnlUtils.js) used by every row in the Financial View table below —
+        // NOT the Sales tab's netCalc.netRev (real per-line-item GST summed over completed orders
+        // only). The two will always differ by a small margin: netCalc.netRev is a whole-range
+        // total with no per-Category/SubCategory/SKU breakdown, so it can't feed the table's
+        // per-row GM%/CM1%/etc. math — using it here would make the KPI card match the Sales tab
+        // exactly but then mismatch the Financial View Total row (which must stay on the row-level
+        // formula), just moving the discrepancy instead of closing it. Confirmed acceptable by the
+        // user: PnL's Net Revenue is consistently the weighted-average-GST method everywhere within
+        // this tab (KPI card = table Total = trend chart), even though it won't tie to the Sales
+        // tab's more precise figure — that gap is a known, accepted methodology difference.
         // For Mobility sub-channel, override net revenue with manager-defined filter
         // (paid/pending/partially_paid × Delivered/Dispatched/Exchange/Blank, SellingPrice_Exc_GST)
-        // computed server-side as mobilityNetCalc and stored in subChannelMap.Mobility.netRev
+        // computed server-side as mobilityNetCalc and stored in subChannelMap.Mobility.netRev —
+        // takes priority over netCalc.netRev above, since netCalc isn't Mobility-scoped.
         if (d2cSubCh === 'Mobility') {
           const mobilityNet = data.subChannelMap?.Mobility?.netRev
           if (mobilityNet != null && mobilityNet > 0) n.net = mobilityNet
+        }
+        // Reconcile mobilityNetBySubCat's SubCategory keys against shSubCatData's actual
+        // SubCategory names before exposing it below — mobilityNetBySubCat is built server-side
+        // from a SEPARATE BigQuery query (mobilityNetBySubCat, keyed by raw SubCategory ALONE,
+        // with no Category dimension) than shSubCatData (built here from pnlSalesRows, which null-
+        // coalesces a missing sub_category to 'Others'). Two real problems this must handle:
+        // (1) a row whose SubCategory is null/blank can independently normalize to two different
+        // names across these two paths (observed: 'Frido' in one, 'Others' in the other) — an
+        // orphaned whitelist key like that would silently never attach to a Financial View row;
+        // (2) the SAME SubCategory name can appear under TWO DIFFERENT Categories (observed:
+        // 'Sparepart' exists under both Category='Mobility' and Category='Sparepart (Chair &
+        // Mobility)') — since netRevenueOf() looks up mobilityNetBySubCat BY BARE SUBCATEGORY NAME
+        // (no Category dimension), a flat SubCategory-only map would apply that ONE whitelist
+        // value to BOTH rows independently, double-counting it in the Financial Table's Total sum
+        // versus the KPI card's true whole-range total (mobilityNetCalc) — this is why the two
+        // previously disagreed by exactly one Sparepart-value's worth even after case (1) above
+        // was fixed. Guarded against by keying this reconciled map by 'Category::SubCategory' and
+        // changing consumers (PnLFinancialTable.jsx's mapRow, kpiSummary below) to look up that
+        // same composite key instead of bare SubCategory.
+        const reconciledMobilityNetBySubCat = {}
+        if (d2cSubCh === 'Mobility' && sh.mobilityNetBySubCat) {
+          const scToCats = new Map()
+          Object.entries(shSubCatData).forEach(([cat, scMap]) => Object.keys(scMap).forEach(sc => {
+            if (!scToCats.has(sc)) scToCats.set(sc, [])
+            scToCats.get(sc).push(cat)
+          }))
+          Object.entries(sh.mobilityNetBySubCat).forEach(([sc, val]) => {
+            const cats = scToCats.get(sc)
+            if (!cats || cats.length === 0) {
+              // Orphaned — no row anywhere has this SubCategory name; fold into whichever
+              // Category actually has an 'Others' bucket in shSubCatData (there's normally at
+              // most one, since 'Others' itself is a null-coalesce fallback, not a real product
+              // category), defaulting to a bare 'Others::Others' key if none exists at all.
+              const othersCat = Object.keys(shSubCatData).find(cat => shSubCatData[cat]?.Others) || 'Others'
+              const key = `${othersCat}::Others`
+              reconciledMobilityNetBySubCat[key] = (reconciledMobilityNetBySubCat[key] || 0) + val
+            } else if (cats.length === 1) {
+              const key = `${cats[0]}::${sc}`
+              reconciledMobilityNetBySubCat[key] = (reconciledMobilityNetBySubCat[key] || 0) + val
+            } else {
+              // SubCategory name collides across multiple Categories — the raw whitelist query has
+              // no Category dimension to split this by, so distribute proportionally to each
+              // colliding row's own gross revenue share (same fallback already used for Mobility's
+              // whitelist-net-by-SKU distribution elsewhere in this file).
+              const grossByCat = cats.map(cat => shSubCatData[cat]?.[sc]?.rev || 0)
+              const totalGross = grossByCat.reduce((s, g) => s + g, 0)
+              cats.forEach((cat, i) => {
+                const share = totalGross > 0 ? val * (grossByCat[i] / totalGross) : val / cats.length
+                const key = `${cat}::${sc}`
+                reconciledMobilityNetBySubCat[key] = (reconciledMobilityNetBySubCat[key] || 0) + share
+              })
+            }
+          })
         }
         // Scale daily values by subchannel share when MyFrido/Mobility is selected
         const shTotalRev = sh.totals?.rev || 0
         const isSubChFiltered = d2cSubCh === 'MyFrido' || d2cSubCh === 'Mobility'
         const subChRatio = (isSubChFiltered && shTotalRev > 0) ? n.gross / shTotalRev : 1
         const daily = subChRatio === 1 ? (sh.daily || []) : (sh.daily || []).map(d => ({ ...d, rev: (d.rev || 0) * subChRatio, excRev: (d.excRev || 0) * subChRatio }))
-        return { subCatData: shSubCatData, skuData: shSkuData, daily, ...n, orders: d2cSubCh === 'all' ? (sh.totals?.orders || 0) : (data.subChannelMap?.[d2cSubCh]?.orders || 0) }
+        // shDailyPnL is unscaled by subChRatio unlike `daily` above — every one of its fields
+        // (cogsPct/sndPct/gmPct/cm1Pct) is a ratio (numerator ÷ denominator), and MyFrido/Mobility
+        // filtering would scale both halves of each ratio by the same factor, leaving the % itself
+        // unchanged — only the raw ₹ `daily` line needs the scale-down, not this %-only series.
+        return { subCatData: shSubCatData, skuData: shSkuData, daily, dailyPnL: shDailyPnL, ...n, mobilityNetBySubCat: reconciledMobilityNetBySubCat, orders: d2cSubCh === 'all' ? (sh.totals?.orders || 0) : (data.subChannelMap?.[d2cSubCh]?.orders || 0) }
       })(),
       ebo: { subCatData: eboSubCatData, skuData: eboSkuData, daily: ebo.daily || [], gross: ebo.totals?.rev || 0, net: ebo.netCalc?.netRev ?? 0, units: ebo.totals?.qty || 0, orders: ebo.totals?.orders || 0, returnRev: (ebo.netCalc?.cancelRev || 0) + (ebo.netCalc?.rtoRev || 0) + (ebo.netCalc?.cirRev || 0) + (ebo.netCalc?.returnRev || 0) },
+      // Net Revenue intentionally stays on netOf()'s row-level blended-GST formula (NOT
+      // amzPreciseNetRev/amzSC.netCalc.netRev) — same reasoning as D2C: the precise figure is a
+      // whole-range total with no per-Category/SubCategory breakdown, so it can't feed the
+      // Financial View table's row-level GM%/CM1%/etc, and using it only for the KPI headline
+      // made the KPI card diverge visibly from the table's Total row (confirmed by the user — a
+      // ₹12.48 Cr vs ₹14.82 Cr mismatch on the same date range). PnL's Net Revenue is now
+      // consistently the same formula everywhere (KPI card = table Total = trend chart) for both
+      // Amazon and D2C, even though neither ties exactly to the Sales tab's more precise figure —
+      // that gap is a known, accepted methodology difference, not a bug to keep chasing.
       amazon: (() => { const n = netOf(amzSubCatData); return { subCatData: amzSubCatData, skuData: amzSkuData, daily: amzDaily, dailyPnL: amzDailyPnL, amzTotalGross, ...n } })(),
+      // Flipkart/CRED/Firstcry/Myntra: same reasoning as D2C above — kept on netOf()'s
+      // revenue-weighted blended-GST formula (not the channel's own precise netCalc.netRev) so
+      // the KPI card stays consistent with the Financial View table's row-level math within
+      // this tab, even though it won't tie exactly to the Sales tab's more precise figure.
       flipkart: (() => { const n = netOf(fkSubCatData); return { subCatData: fkSubCatData, skuData: fkSkuData, daily: fk.daily || [], ...n } })(),
       blinkit: (() => { const sc = qcSubCatOf(bl); const n = netOf(sc); return { subCatData: sc, skuData: bl.skuMatrix || {}, daily: bl.daily || [], ...n } })(),
       instamart: (() => { const sc = qcSubCatOf(ins); const n = netOf(sc); return { subCatData: sc, skuData: ins.skuMatrix || {}, daily: ins.daily || [], ...n } })(),
@@ -499,23 +712,33 @@ export default function PnLPage({ data, filters, setFilters }) {
       cred: (() => { const sc = simpleSubCatOf(cr.subCategories || []); const n = netOf(sc); return { subCatData: sc, skuData: cr.skuMatrix || {}, daily: cr.daily || [], ...n } })(),
       firstcry: (() => { const sc = simpleSubCatOf(fc.subCategories || []); const n = netOf(sc); return { subCatData: sc, skuData: fc.skuMatrix || {}, daily: fc.daily || [], ...n } })(),
       myntra: (() => { const sc = simpleSubCatOf(mn.subCategories || []); const n = netOf(sc); return { subCatData: sc, skuData: mn.skuMatrix || {}, daily: mn.daily || [], ...n } })(),
+      international: (() => { const sc = simpleSubCatOf(intl.subCategories || []); const n = netOf(sc); return { subCatData: sc, skuData: intl.skuMatrix || {}, daily: intl.daily || [], ...n } })(),
       offline: (() => { const n = netOf(offSubCatData); return { subCatData: offSubCatData, skuData: offSkuData, daily: offDaily, ...n } })(),
     }
-  }, [data, amzChannelView, offlineSub, d2cRegion, d2cSubCh, cogsMap])
+  }, [data, amzChannelView, offlineSub, d2cSubCh, cogsMap, sndRates])
 
-  const CHANNEL_COLORS = { all: '#94939F', shopify: '#FFD600', ebo: '#8B5E3C', amazon: '#E8930A', flipkart: '#2E74CC', blinkit: '#0D9E68', cred: '#CC4078', firstcry: '#9B56B6', instamart: '#4AB89A', zepto: '#858380', myntra: '#E87858', offline: '#6B7280' }
+  const CHANNEL_COLORS = { all: '#94939F', shopify: '#FFD600', ebo: '#8B5E3C', amazon: '#E8930A', flipkart: '#2E74CC', blinkit: '#0D9E68', cred: '#CC4078', firstcry: '#9B56B6', instamart: '#4AB89A', zepto: '#858380', myntra: '#E87858', international: '#0D9E68', offline: '#6B7280' }
 
   const activeData = channelData ? (channelData[activeTab] || channelData.all) : null
   const activeTabMeta = PNL_TABS.find(t => t.id === activeTab)
 
   const activeSndBySku = activeTab === 'shopify' ? shSndBySku : (activeTab === 'amazon' && amzChannelView === 'sc') ? amzSndBySku : (activeTab === 'amazon' && amzChannelView === 'vc') ? amzVCSndBySku : (activeTab === 'amazon' && amzChannelView === 'all') ? amzAllSndBySku : undefined
   const activeAdSpendMap = activeTab === 'amazon' && amzChannelView === 'all' ? amzAdSpendMap : activeTab === 'shopify' ? (data?.pnlAdSpendMap || {}) : undefined
-  const activeShowMarketing = !(activeTab === 'amazon' && (amzChannelView === 'sc' || amzChannelView === 'vc'))
+  // International has no attributable ad spend (same treatment as Amazon SC/VC individually) —
+  // Marketing Spend/ROAS/CM2 columns are hidden rather than showing an always-zero spend.
+  const activeShowMarketing = !(activeTab === 'amazon' && (amzChannelView === 'sc' || amzChannelView === 'vc')) && activeTab !== 'international'
   // "All" D2C ad-spend covers SubCategories with no matching sales row in this exact range (an
   // unattributed remainder) — only fold that bucket in when viewing the unfiltered D2C total, or
   // MyFrido/Mobility's own numbers would silently absorb spend that belongs to the other sub-channel.
   const activeIncludeUnmatched = activeTab === 'shopify' && d2cSubCh === 'all'
-  const activeMobilityNetBySubCat = activeTab === 'shopify' && d2cSubCh === 'Mobility' ? (data?.shopify?.mobilityNetBySubCat || {}) : {}
+  // Sourced from channelData's reconciled version (activeData.mobilityNetBySubCat), NOT the raw
+  // data.shopify.mobilityNetBySubCat server payload — the raw version's SubCategory keys can
+  // include names (e.g. a null-SubCategory row normalizing to 'Frido' server-side) that don't
+  // match any SubCategory actually present in activeData.subCatData (which instead null-coalesces
+  // to 'Others'), silently excluding that whitelist value from every per-row consumer (this KPI
+  // card, the Financial Table) while the whole-range KPI net total included it — a real, visible
+  // gap between the two for the exact same date range. See channelData's shopify branch above.
+  const activeMobilityNetBySubCat = activeTab === 'shopify' && d2cSubCh === 'Mobility' ? (activeData?.mobilityNetBySubCat || {}) : {}
 
   // Whole-range GM%/SnD%/CM1%/CM2% KPI summary — same aggregation PnLFinancialTable.jsx's Total
   // row computes (net units × flat COGS rate, SnD from sndBySku, CM1 = GM − SnD, CM2 = CM1 −
@@ -530,49 +753,90 @@ export default function PnLPage({ data, filters, setFilters }) {
   // particular, since not every SKU has a cogs-data.json entry).
   const kpiSummary = useMemo(() => {
     let net = 0, grossExcRev = 0, netCovered = 0, cogs = 0, anyCosted = false, snd = 0, sndNetCovered = 0, anySnd = false, spend = 0
-    let cm1NetCovered = 0, cm2NetCovered = 0
+    let cm1 = 0, cm1NetCovered = 0, anyCm1 = false, cm2NetCovered = 0
     if (!activeData) {
       return { net, cogs: null, gm: null, snd: null, cm1: null, spend, cm2: null, roas: null, cogsPct: null, gmPct: null, sndPct: null, cm1Pct: null, spendPct: null, cm2Pct: null }
     }
+    // Ad spend is keyed by SubCategory name only (activeAdSpendMap[sc]) — sum it once per unique
+    // sc, NOT once per (cat, sc) iteration below, or any SubCategory name that appears under 2+
+    // Categories gets its spend added multiple times (this previously inflated D2C's "All" Mktg
+    // Spend/CM2 by counting "Mouse Wrist Support"/"Sparepart" — both shared across categories —
+    // 2x). PnLFinancialTable.jsx's totSpend avoids this the same way, by summing Object.entries
+    // (adSpendMap) directly instead of accumulating inside the per-row loop.
+    const visibleScSet = new Set()
+    Object.values(activeData.subCatData || {}).forEach(scMap => Object.keys(scMap).forEach(sc => visibleScSet.add(sc)))
+    Array.from(visibleScSet).forEach(sc => { spend += activeAdSpendMap?.[sc] || 0 })
     Object.entries(activeData.subCatData || {}).forEach(([cat, scMap]) => {
       Object.entries(scMap).forEach(([sc, d]) => {
-        const gross = d.rev || 0
+        // Net Revenue via the shared netRevenueOf() formula (./pnlUtils.js) — previously this
+        // block hand-rolled its own totalReturn = cancelRev+rtoRev+cirRev+returnRev WITHOUT
+        // subtracting codCancelRev, unlike netRevenueOf()/netOf() (which the KPI card's own
+        // "Net Revenue" figure, the Financial View Total row, and the trend chart all use). COD
+        // cancellations are pre-dispatch drops, not true returns, so omitting the exclusion here
+        // overstated Returns and understated Net Revenue for D2C specifically (the only channel
+        // with real cod_cancel_rev) versus every other number on this exact same KPI row.
+        const rowR = netRevenueOf(d, sc, activeMobilityNetBySubCat, cat)
+        const rowNet = rowR.net
         const excRev = d.excRev || 0
-        const totalReturn = (d.cancelRev||0) + (d.rtoRev||0) + (d.cirRev||0) + (d.returnRev||0)
-        const gstRatio = gross > 0 ? (gross - excRev) / gross : 0
-        const rowNet = Math.max(gross - totalReturn, 0) * (1 - gstRatio)
         net += rowNet
         grossExcRev += excRev
-        const rowSpend = activeAdSpendMap?.[sc] || 0
-        spend += rowSpend
 
         let rowCogs = 0, rowNetCovered = 0, rowAnyCosted = false, rowSnd = 0, rowSndNetCovered = 0, rowAnySnd = false
-        Object.entries(activeData.skuData?.[cat]?.[sc] || {}).forEach(([sku, sd]) => {
-          const skGross = sd.rev || 0
-          const skExcRev = sd.excRev || 0
-          const skReturn = (sd.cancelRev||0) + (sd.rtoRev||0) + (sd.cirRev||0) + (sd.returnRev||0)
-          const skGstRatio = skGross > 0 ? (skGross - skExcRev) / skGross : 0
-          const skNet = Math.max(skGross - skReturn, 0) * (1 - skGstRatio)
-          const units = sd.units || 0
-          const netUnits = sd.returnedUnits != null ? Math.max(units - sd.returnedUnits, 0) : units
+        const skuEntriesForRow = Object.entries(activeData.skuData?.[cat]?.[sc] || {})
+        // Mobility whitelist net is a SUBCATEGORY-level override — distribute it proportionally
+        // across this subcategory's SKUs by each SKU's own standard-formula net share, exactly
+        // like PnLFinancialTable.jsx's costsForSkus() does (same whitelistNet/standardNetTotal
+        // pattern). Without this, kpiSummary summed each SKU's un-overridden netRevenueOf(sd).net
+        // directly — since that call passes no scName/catName, the whitelist guard is a permissive
+        // no-op there, so every Mobility SKU's COGS/GM/CM1 silently used the standard formula
+        // instead of the manager-defined whitelist net the Financial Table's Total row correctly
+        // uses, producing a real KPI-vs-Total CM1%/CM2% mismatch confirmed live (58.6% vs 38.4%
+        // for the same date range).
+        const rowWhitelistNet = activeMobilityNetBySubCat[`${cat}::${sc}`] != null ? activeMobilityNetBySubCat[`${cat}::${sc}`] : null
+        const rowStandardNetTotal = rowWhitelistNet != null ? skuEntriesForRow.reduce((s, [, sd]) => s + netRevenueOf(sd).net, 0) : 0
+        skuEntriesForRow.forEach(([sku, sd]) => {
+          const skRStandard = netRevenueOf(sd)
+          const skR = rowWhitelistNet != null && rowStandardNetTotal > 0
+            ? { ...skRStandard, net: rowWhitelistNet * (skRStandard.net / rowStandardNetTotal) }
+            : skRStandard
+          const skNet = skR.net
+          const netUnits = skR.netUnits
           const entry = cogsMap?.[sku]
-          if (entry && entry.cogs != null) { rowCogs += entry.cogs * netUnits; rowNetCovered += skNet; rowAnyCosted = true }
+          // Same ASP-fallback estimate PnLFinancialTable.jsx's costsForSkus() and this file's own
+          // amzDailyPnL already use for any SKU missing a real cogs-data.json entry — without this,
+          // this block silently dropped uncosted SKUs from both cogs and netCovered instead of
+          // estimating them, so kpiSummary's COGS%/GM%/CM1%/CM2% covered a DIFFERENT set of SKUs
+          // than the Financial View table's identical-looking %s for the same date range.
+          const skUnits = skR.units || 0
+          const skAsp = skUnits > 0 ? skR.gross / skUnits : 0
+          const perUnitCogs = (entry && entry.cogs != null) ? entry.cogs : estimateCogsPerUnit(skAsp)
+          if (perUnitCogs > 0 || netUnits > 0) { rowCogs += perUnitCogs * netUnits; rowNetCovered += skNet; rowAnyCosted = true }
           if (activeSndBySku && activeSndBySku[sku] != null) { rowSnd += activeSndBySku[sku]; rowSndNetCovered += skNet; rowAnySnd = true }
         })
         if (rowAnyCosted) { cogs += rowCogs; netCovered += rowNetCovered; anyCosted = true }
         if (rowAnySnd) { snd += rowSnd; sndNetCovered += rowSndNetCovered; anySnd = true }
-        // CM1/CM2 coverage is gated on BOTH COGS and SnD being known for this row (same
-        // cm1Covered = anyCosted && anySnd the table uses) — their "covered net" only counts
-        // rowNet when both conditions hold, not just whichever one happens to be true.
-        if (rowAnyCosted && rowAnySnd) { cm1NetCovered += rowNet; cm2NetCovered += rowNet }
+        // CM1 is computed and gated PER ROW (rowGm - rowSnd, only when BOTH costs are known for
+        // this row) then summed — exactly like PnLFinancialTable.jsx's tot.cm1 (which sums only
+        // rows where r.cm1Covered is true). Previously this derived CM1 from whole-range
+        // accumulators (netCovered - cogs - snd) gated on whole-range anyCosted/anySnd flags,
+        // which let a row that's COGS-covered but NOT SnD-covered (or vice versa) leak its COGS/
+        // net into the global gm term even though the table correctly excludes that exact row
+        // from CM1 — a genuine per-row-vs-aggregate mismatch, not just a rounding difference.
+        if (rowAnyCosted && rowAnySnd) {
+          const rowGm = rowNetCovered - rowCogs
+          cm1 += rowGm - rowSnd
+          cm1NetCovered += rowNet
+          cm2NetCovered += rowNet
+          anyCm1 = true
+        }
       })
     })
     const gm = anyCosted ? netCovered - cogs : null
-    const cm1Covered = anyCosted && anySnd
-    const cm1 = cm1Covered ? gm - snd : null
+    const cm1Covered = anyCm1
+    const cm1Final = cm1Covered ? cm1 : null
     const cm2 = cm1Covered ? cm1 - spend : null
     return {
-      net, cogs: anyCosted ? cogs : null, gm, snd: anySnd ? snd : null, cm1, spend, cm2,
+      net, cogs: anyCosted ? cogs : null, gm, snd: anySnd ? snd : null, cm1: cm1Final, spend, cm2,
       // ROAS = Gross Revenue (Ex GST, before returns) ÷ Marketing Spend — same formula and same
       // numerator base ("Revenue (Ex GST) / Spend") the Ads tab's own Overall ROAS card uses, so
       // this always matches that number exactly rather than drifting via a different revenue base.
@@ -580,11 +844,11 @@ export default function PnLPage({ data, filters, setFilters }) {
       cogsPct: anyCosted && netCovered > 0 ? (cogs / netCovered * 100) : null,
       gmPct: gm != null && netCovered > 0 ? (gm / netCovered * 100) : null,
       sndPct: anySnd && sndNetCovered > 0 ? (snd / sndNetCovered * 100) : null,
-      cm1Pct: cm1 != null && cm1NetCovered > 0 ? (cm1 / cm1NetCovered * 100) : null,
+      cm1Pct: cm1Final != null && cm1NetCovered > 0 ? (cm1Final / cm1NetCovered * 100) : null,
       spendPct: net > 0 ? (spend / net * 100) : null,
       cm2Pct: cm2 != null && cm2NetCovered > 0 ? (cm2 / cm2NetCovered * 100) : null,
     }
-  }, [activeData, activeSndBySku, activeAdSpendMap, cogsMap])
+  }, [activeData, activeSndBySku, activeAdSpendMap, cogsMap, activeMobilityNetBySubCat])
 
   if (!data || !channelData) return null
 
@@ -600,31 +864,32 @@ export default function PnLPage({ data, filters, setFilters }) {
       </div>
       <div className="page-scroll">
         {activeTab === 'shopify' && (
-          <div style={{ display: 'flex', gap: 16, marginBottom: 12, alignItems: 'center' }}>
-            <div style={{ display: 'flex', gap: 2, background: '#F2F1EF', border: '1px solid #E0DDD4', borderRadius: 8, padding: 3 }}>
-              {[{ id: 'india', label: 'India' }, { id: 'international', label: 'International' }].map(opt => (
-                <button key={opt.id} onClick={() => setD2cRegion(opt.id)} style={{ fontSize: 12, fontWeight: d2cRegion === opt.id ? 700 : 500, padding: '4px 12px', borderRadius: 6, border: 'none', background: d2cRegion === opt.id ? '#94939F' : 'transparent', color: d2cRegion === opt.id ? '#fff' : '#13121A', cursor: 'pointer' }}>{opt.label}</button>
-              ))}
-            </div>
-            <div style={{ width: 1, height: 20, background: '#E0DDD4' }} />
-            <div style={{ display: 'flex', gap: 2, background: '#F2F1EF', border: '1px solid #E0DDD4', borderRadius: 8, padding: 3 }}>
-              {[{ id: 'all', label: 'All' }, { id: 'MyFrido', label: 'MyFrido' }, { id: 'Mobility', label: 'Mobility' }].map(opt => (
-                <button key={opt.id} onClick={() => setD2cSubCh(opt.id)} style={{ fontSize: 12, fontWeight: d2cSubCh === opt.id ? 700 : 500, padding: '4px 12px', borderRadius: 6, border: 'none', background: d2cSubCh === opt.id ? '#94939F' : 'transparent', color: d2cSubCh === opt.id ? '#fff' : '#13121A', cursor: 'pointer' }}>{opt.label}</button>
-              ))}
-            </div>
+          <div style={{ display: 'flex', gap: 4, marginBottom: 12 }}>
+            {[{ id: 'all', label: 'Overall' }, { id: 'MyFrido', label: 'MyFrido' }, { id: 'Mobility', label: 'Mobility' }].map((opt, i) => (
+              <div key={opt.id} style={{ display: 'flex', alignItems: 'center' }}>
+                {i > 0 && <div style={{ width: 1, height: 14, background: '#E3E0D8', margin: '0 2px' }} />}
+                <button onClick={() => setD2cSubCh(opt.id)} style={{ fontSize: 12, fontWeight: d2cSubCh === opt.id ? 700 : 500, padding: '5px 14px', borderRadius: 7, border: 'none', background: d2cSubCh === opt.id ? '#FFD600' : 'transparent', color: '#13121A', cursor: 'pointer' }}>{opt.label}</button>
+              </div>
+            ))}
           </div>
         )}
         {activeTab === 'amazon' && (
           <div style={{ display: 'flex', gap: 4, marginBottom: 12 }}>
-            {[{ id: 'all', label: 'All' }, { id: 'sc', label: 'Seller Central' }, { id: 'vc', label: 'Vendor Central' }].map(opt => (
-              <button key={opt.id} onClick={() => setAmzChannelView(opt.id)} style={{ fontSize: 12, fontWeight: amzChannelView === opt.id ? 700 : 500, padding: '5px 14px', borderRadius: 7, border: 'none', background: amzChannelView === opt.id ? '#FFD600' : 'transparent', color: '#13121A', cursor: 'pointer' }}>{opt.label}</button>
+            {[{ id: 'all', label: 'Overall' }, { id: 'sc', label: 'Seller Central' }, { id: 'vc', label: 'Vendor Central' }].map((opt, i) => (
+              <div key={opt.id} style={{ display: 'flex', alignItems: 'center' }}>
+                {i > 0 && <div style={{ width: 1, height: 14, background: '#E3E0D8', margin: '0 2px' }} />}
+                <button onClick={() => setAmzChannelView(opt.id)} style={{ fontSize: 12, fontWeight: amzChannelView === opt.id ? 700 : 500, padding: '5px 14px', borderRadius: 7, border: 'none', background: amzChannelView === opt.id ? '#FFD600' : 'transparent', color: '#13121A', cursor: 'pointer' }}>{opt.label}</button>
+              </div>
             ))}
           </div>
         )}
         {activeTab === 'offline' && (
           <div style={{ display: 'flex', gap: 4, marginBottom: 12 }}>
-            {[{ id: 'all', label: 'All' }, { id: 'b2b', label: 'B2B' }, { id: 'Stockist', label: 'Stockist' }, { id: 'MTGT', label: 'MT GT' }].map(opt => (
-              <button key={opt.id} onClick={() => setOfflineSub(opt.id)} style={{ fontSize: 12, fontWeight: offlineSub === opt.id ? 700 : 500, padding: '5px 14px', borderRadius: 7, border: 'none', background: offlineSub === opt.id ? '#FFD600' : 'transparent', color: '#13121A', cursor: 'pointer' }}>{opt.label}</button>
+            {[{ id: 'all', label: 'Overall' }, { id: 'b2b', label: 'B2B' }, { id: 'Stockist', label: 'Stockist' }, { id: 'MTGT', label: 'MT GT' }].map((opt, i) => (
+              <div key={opt.id} style={{ display: 'flex', alignItems: 'center' }}>
+                {i > 0 && <div style={{ width: 1, height: 14, background: '#E3E0D8', margin: '0 2px' }} />}
+                <button onClick={() => setOfflineSub(opt.id)} style={{ fontSize: 12, fontWeight: offlineSub === opt.id ? 700 : 500, padding: '5px 14px', borderRadius: 7, border: 'none', background: offlineSub === opt.id ? '#FFD600' : 'transparent', color: '#13121A', cursor: 'pointer' }}>{opt.label}</button>
+              </div>
             ))}
           </div>
         )}
@@ -651,6 +916,7 @@ export default function PnLPage({ data, filters, setFilters }) {
           gradId={`pnl${activeTab}Grad`}
           includeUnmatched={activeIncludeUnmatched}
           mobilityNetBySubCat={activeMobilityNetBySubCat}
+          hideTrendUnits={activeTab === 'amazon' || activeTab === 'shopify'}
         />
       </div>
     </div>
