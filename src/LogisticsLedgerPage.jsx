@@ -21,7 +21,7 @@ const FORMATS = {
       { key: "month_year", label: "month_year", type: "month", req: true, w: 110, ex: "2026-07", desc: "Billing period this invoice covers" },
       { key: "invoice_number", label: "invoice_number", type: "text", w: 150, ex: "TRN-INV-3321", desc: "Transporter's invoice/bill number" },
       { key: "transporter_name", label: "transporter_name", type: "text", req: true, w: 170, ex: "ABC Roadlines", desc: "Name of the B2B transporter" },
-      { key: "reference_no", label: "reference_no", type: "text", req: true, w: 140, ex: "LR-778812", desc: "LR number or consignment reference" },
+      { key: "reference_no", label: "reference_no", type: "text", w: 140, ex: "LR-778812", desc: "LR number or consignment reference" },
       { key: "origin_location", label: "origin_location", type: "text", req: true, w: 150, ex: "Bhiwandi WH", desc: "Warehouse/city goods dispatched from" },
       { key: "destination_location", label: "destination_location", type: "text", req: true, w: 170, ex: "Pune WH", desc: "Warehouse/city goods delivered to" },
       { key: "vehicle_number", label: "vehicle_number", type: "text", w: 140, ex: "MH12AB1234", desc: "Registration number of the vehicle" },
