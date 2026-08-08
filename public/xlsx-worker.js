@@ -3,7 +3,12 @@ importScripts("https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js
 
 function normMonth(v) {
   if (v == null || v === "") return null;
-  if (v instanceof Date && !isNaN(v)) return v.toISOString().slice(0, 7);
+  if (v instanceof Date && !isNaN(v)) {
+    // Use local year/month to avoid UTC timezone shift on end-of-month dates
+    const y = v.getFullYear();
+    const m = String(v.getMonth() + 1).padStart(2, "0");
+    return y + "-" + m;
+  }
   const s = String(v).trim();
   const m = s.match(/^(\d{4})[-/.](\d{1,2})/);
   if (m) return m[1] + "-" + String(+m[2]).padStart(2, "0");
