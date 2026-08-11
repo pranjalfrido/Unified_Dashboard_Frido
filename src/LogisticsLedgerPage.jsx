@@ -151,7 +151,13 @@ const db = {
     const PAGE = 500;
     let inserted = 0;
     for (let i = 0; i < rows.length; i += PAGE) {
-      const chunk = rows.slice(i, i + PAGE).map((r) => toDbRow(fmt, r));
+      let chunk = rows.slice(i, i + PAGE).map((r) => toDbRow(fmt, r));
+      // Deduplicate within chunk — last row wins (matches upsert semantics)
+      if (fmt.uniqueKey) {
+        const seen = new Map();
+        for (const r of chunk) seen.set(String(r[fmt.uniqueKey] ?? ""), r);
+        chunk = [...seen.values()];
+      }
       const q = fmt.uniqueKey
         ? supabase.from(fmt.table).upsert(chunk, { onConflict: fmt.uniqueKey, ignoreDuplicates: false })
         : supabase.from(fmt.table).insert(chunk);
@@ -443,7 +449,13 @@ export default function LogisticsLedgerPage() {
             uploading = true;
             while (uploadQueue.length > 0) {
               const chunk = uploadQueue.shift();
-              const dbRows = chunk.map((r) => toDbRow(fmt, r));
+              let dbRows = chunk.map((r) => toDbRow(fmt, r));
+              // Deduplicate within chunk — last row wins
+              if (fmt.uniqueKey) {
+                const seen = new Map();
+                for (const r of dbRows) seen.set(String(r[fmt.uniqueKey] ?? ""), r);
+                dbRows = [...seen.values()];
+              }
               const q = fmt.uniqueKey
                 ? supabase.from(fmt.table).upsert(dbRows, { onConflict: fmt.uniqueKey, ignoreDuplicates: false })
                 : supabase.from(fmt.table).insert(dbRows);
