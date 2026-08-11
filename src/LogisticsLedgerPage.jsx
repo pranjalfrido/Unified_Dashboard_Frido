@@ -54,7 +54,7 @@ const FORMATS = {
     exportPrefix: "b2c_courier_invoices",
     totalParts: ["freight_charge", "surcharge", "other_charge"],
     totalField: "total_cost",
-    uniqueKey: null,
+    uniqueKey: "awb_number",
     fields: [
       { key: "month_year", label: "month_year", type: "month", req: true, w: 110, ex: "2026-07", desc: "Billing period this invoice covers" },
       { key: "invoice_number", label: "invoice_number", type: "text", w: 155, ex: "INV-DLV-0072451", desc: "Courier's invoice/bill number" },
