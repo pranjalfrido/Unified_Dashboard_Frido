@@ -248,3 +248,6 @@ html,body{height:100%;background:var(--bg);font-family:var(--font);color:var(--t
 .seg-action-wrap:hover .seg-action-tt { opacity: 1 !important; }
 .rfm-grid-cell:hover .rfm-grid-tt { opacity: 1 !important; }
 .rscard-info-wrap:hover .rscard-info-tt { opacity: 1 !important; }
+
+/* ── Chart info icon tooltip ── */
+.info-icon-wrap:hover .info-tooltip { opacity: 1 !important; }

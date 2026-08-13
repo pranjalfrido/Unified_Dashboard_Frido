@@ -10796,11 +10796,21 @@ function CustomerPage({ filters }) {
             )
           }
 
-          const CCard = ({ title, sub, action, children }) => (
+          const CCard = ({ title, sub, action, info, children }) => (
             <div style={{ background: CT.card, borderRadius: 14, overflow: 'hidden', boxShadow: '0 1px 3px rgba(80,65,20,.04)', display: 'flex', flexDirection: 'column' }}>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 16px', background: '#FFFFFF' }}>
                 <div>
-                  <div style={{ fontSize: 11, fontWeight: 800, color: '#3A3324', textTransform: 'uppercase', letterSpacing: '.08em' }}>{title}</div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <div style={{ fontSize: 11, fontWeight: 800, color: '#3A3324', textTransform: 'uppercase', letterSpacing: '.08em' }}>{title}</div>
+                    {info && (
+                      <div style={{ position: 'relative', display: 'inline-flex' }} className="info-icon-wrap">
+                        <span style={{ width: 15, height: 15, borderRadius: '50%', background: '#E8DDB8', color: '#8A7F63', fontSize: 9, fontWeight: 800, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'default', userSelect: 'none', flexShrink: 0 }}>ⓘ</span>
+                        <div style={{ position: 'absolute', top: 20, left: 0, zIndex: 99, background: '#3A3324', color: '#FFF9E8', fontSize: 11, lineHeight: 1.5, padding: '8px 12px', borderRadius: 8, width: 260, boxShadow: '0 4px 16px rgba(0,0,0,0.18)', pointerEvents: 'none', opacity: 0, transition: 'opacity 0.15s' }} className="info-tooltip">
+                          {info}
+                        </div>
+                      </div>
+                    )}
+                  </div>
                   {sub && <div style={{ fontSize: 11, color: '#8A7F63', marginTop: 2 }}>{sub}</div>}
                 </div>
                 {action && <div style={{ display: 'flex', gap: 4 }}>{action}</div>}
@@ -10969,7 +10979,7 @@ function CustomerPage({ filters }) {
               </div>
 
               {/* 2. Blended Retention Curve (M1+, M0 excluded) */}
-              <CCard title="Blended Retention Curve" sub="Weighted avg retention across all cohorts — M0 excluded"
+              <CCard title="Blended Retention Curve" sub="Weighted avg retention across all cohorts — M0 excluded" info="Out of all cohorts combined, what % of customers came back in each month after their first purchase? M1 = came back in month 1, M2 = month 2, and so on."
                 action={[['customer','Customers'],['sales','Sales']].map(([v,l]) => <button key={v} style={pill(cohortMode===v)} onClick={() => setCohortMode(v)}>{l}</button>)}
               >
                 <ResponsiveContainer width="100%" height={200}>
@@ -10989,7 +10999,7 @@ function CustomerPage({ filters }) {
               {/* 3 & 4. Quality trend + Size vs Retention — side by side */}
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
 
-                <CCard title="Cohort Quality Trend" sub="M1 retention % per cohort over time">
+                <CCard title="Cohort Quality Trend" sub="M1 retention % per cohort over time" info="For each month's batch of new customers, what % came back in Month 1 (M1)? Shows whether the quality of customers you're acquiring is improving or declining over time.">
                   <ResponsiveContainer width="100%" height={200}>
                     <AreaChart data={qualityTrend} margin={{ top: 4, right: 16, bottom: 4, left: 0 }}>
                       <defs>
@@ -11008,7 +11018,7 @@ function CustomerPage({ filters }) {
                   {qualityInsight && <div style={{ marginTop: 10, fontSize: 11, color: CT.t2, fontStyle: 'italic', borderTop: `1px solid ${CT.borderSoft}`, paddingTop: 8 }}>⚡ {qualityInsight}</div>}
                 </CCard>
 
-                <CCard title="Cohort Size vs Retention" sub="Growing cohorts — at what cost to retention?">
+                <CCard title="Cohort Size vs Retention" sub="Growing cohorts — at what cost to retention?" info="As monthly new customer volume grew (bars), did M1 retention % go up or down (line)? Shows whether scaling acquisition is hurting or improving customer quality.">
                   <ResponsiveContainer width="100%" height={200}>
                     <ComposedChart data={sizeVsRetention} margin={{ top: 4, right: 30, bottom: 4, left: 0 }}>
                       <CartesianGrid stroke={CT.borderSoft} />
@@ -12006,7 +12016,7 @@ function CustomerPage({ filters }) {
           // (per Q9 discount_bucket query: first_orders = discounted, repeat_orders = full price)
           const pieData = [
             { name: 'Discounted (1st order)', value: totalFirstOrders },
-            { name: 'Full Price', value: totalRepeatOrders },
+            { name: 'Non-Discounted', value: totalRepeatOrders },
           ]
 
           const cardStyle = { background: SD.card, borderRadius: 12, border: `1px solid ${SD.border}`, overflow: 'hidden', boxShadow: '0 1px 2px rgba(80,65,20,.04)' }
@@ -12078,7 +12088,7 @@ function CustomerPage({ filters }) {
                 <div style={cardStyle}>
                   <div style={cardHead}>
                     <span style={cardTitle}>Discount Distribution</span>
-                    <span style={{ fontSize: 10, color: SD.t3, fontStyle: 'italic' }}>New vs Repeat · AOV line</span>
+                    <span style={{ fontSize: 10, color: SD.t3, fontStyle: 'italic' }}>Actual % off MRP (Listing Price) · New vs Repeat · AOV line</span>
                   </div>
                   <div style={cardBody}>
                     {discountDist.length > 0 ? (
@@ -12088,7 +12098,7 @@ function CustomerPage({ filters }) {
                           <XAxis dataKey="bucket" tick={{ fontSize: 9.5, fill: SD.t3 }} />
                           <YAxis yAxisId="orders" tick={{ fontSize: 10, fill: SD.t3 }} tickFormatter={v => fmtBig(v)} />
                           <YAxis yAxisId="aov" orientation="right" tick={{ fontSize: 10, fill: SD.t3 }} tickFormatter={v => fmt(v)} />
-                          <Tooltip contentStyle={{ background: '#fff', border: `1px solid ${SD.border}`, borderRadius: 7, fontSize: 11, color: SD.t1 }} formatter={(v, name) => [name === 'AOV (ex GST)' ? fmt(v) : fmtN(v), name]} labelStyle={{ color: SD.t1, fontWeight: 700 }} itemStyle={{ color: SD.t1 }} />
+                          <Tooltip contentStyle={{ background: '#fff', border: `1px solid ${SD.border}`, borderRadius: 7, fontSize: 11, color: SD.t1 }} formatter={(v, name) => [name === 'AOV (ex GST)' ? fmt(v) : name === 'Avg Disc %' ? `${v}%` : fmtN(v), name]} labelStyle={{ color: SD.t1, fontWeight: 700 }} itemStyle={{ color: SD.t1 }} />
                           <Legend wrapperStyle={{ fontSize: 11, fontFamily: 'Inter, sans-serif' }} />
                           <Bar yAxisId="orders" dataKey="firstOrders" stackId="a" fill={SD.amberDeep} name="New Customer Orders" radius={[0,0,0,0]} />
                           <Bar yAxisId="orders" dataKey="repeatOrders" stackId="a" fill={SD.borderSoft} name="Repeat Customer Orders" radius={[3,3,0,0]} />
@@ -12103,7 +12113,7 @@ function CustomerPage({ filters }) {
 
                 {/* Bug 2 fixed: pie uses correct summed fields */}
                 <div style={cardStyle}>
-                  <div style={cardHead}><span style={cardTitle}>Discounted vs Full Price Orders</span></div>
+                  <div style={cardHead}><span style={cardTitle}>Discounted vs Non-Discounted Orders</span></div>
                   <div style={cardBody}>
                     {totalAllOrders > 0 ? (
                       <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
@@ -12155,7 +12165,9 @@ function CustomerPage({ filters }) {
                         <YAxis yAxisId="left" tick={{ fontSize: 9.5, fill: SD.t3 }} tickFormatter={v => fmtN(v)} />
                         <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 9.5, fill: SD.t3 }} tickFormatter={v => `${v}%`} domain={[0, 100]} />
                         <Tooltip
-                          contentStyle={{ background: SD.paper, border: `1px solid ${SD.border}`, borderRadius: 6, fontSize: 11 }}
+                          contentStyle={{ background: SD.paper, border: `1px solid ${SD.border}`, borderRadius: 6, fontSize: 11, color: SD.t1 }}
+                          labelStyle={{ color: SD.t1, fontWeight: 700 }}
+                          itemStyle={{ color: SD.t1 }}
                           formatter={(val, name) => {
                             if (name === 'Repeat Rate %') return [`${val}%`, name]
                             if (name === 'Avg Orders') return [`${val}x`, name]
