@@ -24,7 +24,7 @@ export default async function handler(req, res) {
     const ps = new Date(ms - dur - 86400000).toISOString().slice(0, 10)
     const pe = new Date(ms - 86400000).toISOString().slice(0, 10)
 
-    const [kpis, monthly, cohort, crossSell, rfm, freqDist, monetaryDist, inactivity, discountDist, adsKpis, dailySpend, prevKpis, prevAdsKpis, discountRepeatRate, daysToSecondPurchase, aovByOrderNumber] = await Promise.all([
+    const [kpis, monthly, cohort, crossSell, rfm, freqDist, monetaryDist, inactivity, discountDist, adsKpis, dailySpend, prevKpis, prevAdsKpis, discountRepeatRate, daysToSecondPurchase, aovByOrderNumber, repurchaseCycleByCategory, basketComposition, purchaseBehaviorKpis, orderFreqDist] = await Promise.all([
 
       // Q1 — KPIs for the selected period (Shopify only)
       run(`WITH first_dates AS (
@@ -504,6 +504,156 @@ SELECT
 FROM capped
 GROUP BY order_label, order_sort
 ORDER BY order_sort`),
+
+      // Q17 — median days to 2nd purchase per first-purchase category (all-time)
+      run(`WITH
+item_master AS (
+  SELECT DISTINCT TRIM(Product_Code) AS sku, Category_Name
+  FROM \`frido-429506.sharepoint_to_gcp.Frido_Item_Master__frido_item_sku_master\`
+  WHERE Product_Code IS NOT NULL
+),
+pid_map AS (
+  SELECT DISTINCT TRIM(productid) AS productid, TRIM(masterskucode) AS masterskucode
+  FROM \`frido-429506.sharepoint_to_gcp.Frido_Item_Master__productid_sku_mapping\`
+  WHERE productid IS NOT NULL AND masterskucode IS NOT NULL
+),
+order_cat AS (
+  SELECT t.CustomerId, t.OrderId, MIN(DATE(t.OrderDate)) AS order_date,
+    ANY_VALUE(COALESCE(im.Category_Name, im2.Category_Name)) AS category
+  FROM ${TBL} t
+  LEFT JOIN pid_map pm ON TRIM(CAST(t.ProductId AS STRING)) = pm.productid
+  LEFT JOIN item_master im ON TRIM(CAST(t.masterskucode AS STRING)) = im.sku
+  LEFT JOIN item_master im2 ON pm.masterskucode = im2.sku
+  WHERE t.Channel = 'Shopify' AND t.CustomerId IS NOT NULL
+  GROUP BY t.CustomerId, t.OrderId
+),
+ranked AS (
+  SELECT CustomerId, OrderId, order_date, category,
+    ROW_NUMBER() OVER (PARTITION BY CustomerId ORDER BY order_date, OrderId) AS rn
+  FROM order_cat
+),
+gaps AS (
+  SELECT o1.CustomerId, o1.category AS first_category,
+    DATE_DIFF(o2.order_date, o1.order_date, DAY) AS days_gap
+  FROM ranked o1
+  JOIN ranked o2 ON o1.CustomerId = o2.CustomerId AND o2.rn = 2
+  WHERE o1.rn = 1 AND o1.category IS NOT NULL AND DATE_DIFF(o2.order_date, o1.order_date, DAY) >= 0
+)
+SELECT
+  first_category,
+  COUNT(*) AS repeat_customers,
+  APPROX_QUANTILES(days_gap, 4)[OFFSET(1)] AS p25_days,
+  APPROX_QUANTILES(days_gap, 2)[OFFSET(1)] AS median_days,
+  APPROX_QUANTILES(days_gap, 4)[OFFSET(3)] AS p75_days
+FROM gaps
+GROUP BY first_category
+HAVING COUNT(*) >= 5
+ORDER BY median_days`),
+
+      // Q18 — basket composition: single vs multi-category orders
+      run(`WITH
+item_master AS (
+  SELECT DISTINCT TRIM(Product_Code) AS sku, Category_Name
+  FROM \`frido-429506.sharepoint_to_gcp.Frido_Item_Master__frido_item_sku_master\`
+  WHERE Product_Code IS NOT NULL
+),
+pid_map AS (
+  SELECT DISTINCT TRIM(productid) AS productid, TRIM(masterskucode) AS masterskucode
+  FROM \`frido-429506.sharepoint_to_gcp.Frido_Item_Master__productid_sku_mapping\`
+  WHERE productid IS NOT NULL AND masterskucode IS NOT NULL
+),
+order_cats AS (
+  SELECT t.OrderId,
+    COUNT(DISTINCT COALESCE(im.Category_Name, im2.Category_Name)) AS distinct_categories,
+    COUNT(DISTINCT t.masterskucode) AS distinct_skus,
+    SUM(t.ItemQty) AS total_items
+  FROM ${TBL} t
+  LEFT JOIN pid_map pm ON TRIM(CAST(t.ProductId AS STRING)) = pm.productid
+  LEFT JOIN item_master im ON TRIM(CAST(t.masterskucode AS STRING)) = im.sku
+  LEFT JOIN item_master im2 ON pm.masterskucode = im2.sku
+  WHERE t.Channel = 'Shopify' AND t.CustomerId IS NOT NULL
+    AND DATE(t.OrderDate) BETWEEN '${s}' AND '${e}'
+  GROUP BY t.OrderId
+)
+SELECT
+  COUNT(*) AS total_orders,
+  COUNTIF(distinct_categories = 1) AS single_cat_orders,
+  COUNTIF(distinct_categories > 1) AS multi_cat_orders,
+  ROUND(AVG(distinct_categories), 2) AS avg_categories_per_order,
+  ROUND(AVG(distinct_skus), 2) AS avg_skus_per_order,
+  ROUND(AVG(total_items), 2) AS avg_items_per_order
+FROM order_cats`),
+
+      // Q19 — purchase behavior KPIs (repeat rate, avg orders, avg days between orders, multi-cat customers)
+      run(`WITH
+all_orders AS (
+  SELECT CustomerId, OrderId, MIN(DATE(OrderDate)) AS order_date
+  FROM ${TBL}
+  WHERE Channel = 'Shopify' AND CustomerId IS NOT NULL
+    AND DATE(OrderDate) <= DATE('${e}')
+  GROUP BY CustomerId, OrderId
+),
+customer_stats AS (
+  SELECT CustomerId,
+    COUNT(DISTINCT OrderId) AS total_orders,
+    MIN(order_date) AS first_order,
+    MAX(order_date) AS last_order
+  FROM all_orders
+  GROUP BY CustomerId
+),
+gaps AS (
+  SELECT o1.CustomerId, DATE_DIFF(o2.order_date, o1.order_date, DAY) AS gap
+  FROM (SELECT CustomerId, OrderId, order_date, ROW_NUMBER() OVER (PARTITION BY CustomerId ORDER BY order_date, OrderId) AS rn FROM all_orders) o1
+  JOIN (SELECT CustomerId, OrderId, order_date, ROW_NUMBER() OVER (PARTITION BY CustomerId ORDER BY order_date, OrderId) AS rn FROM all_orders) o2
+    ON o1.CustomerId = o2.CustomerId AND o2.rn = o1.rn + 1
+  WHERE DATE_DIFF(o2.order_date, o1.order_date, DAY) >= 0
+),
+item_master AS (
+  SELECT DISTINCT TRIM(Product_Code) AS sku, Category_Name
+  FROM \`frido-429506.sharepoint_to_gcp.Frido_Item_Master__frido_item_sku_master\`
+  WHERE Product_Code IS NOT NULL
+),
+pid_map AS (
+  SELECT DISTINCT TRIM(productid) AS productid, TRIM(masterskucode) AS masterskucode
+  FROM \`frido-429506.sharepoint_to_gcp.Frido_Item_Master__productid_sku_mapping\`
+  WHERE productid IS NOT NULL AND masterskucode IS NOT NULL
+),
+customer_cats AS (
+  SELECT t.CustomerId,
+    COUNT(DISTINCT COALESCE(im.Category_Name, im2.Category_Name)) AS distinct_categories
+  FROM ${TBL} t
+  LEFT JOIN pid_map pm ON TRIM(CAST(t.ProductId AS STRING)) = pm.productid
+  LEFT JOIN item_master im ON TRIM(CAST(t.masterskucode AS STRING)) = im.sku
+  LEFT JOIN item_master im2 ON pm.masterskucode = im2.sku
+  WHERE t.Channel = 'Shopify' AND t.CustomerId IS NOT NULL
+    AND DATE(t.OrderDate) <= DATE('${e}')
+  GROUP BY t.CustomerId
+)
+SELECT
+  COUNT(DISTINCT cs.CustomerId) AS total_customers,
+  COUNTIF(cs.total_orders >= 2) AS repeat_customers,
+  ROUND(AVG(cs.total_orders), 2) AS avg_orders_per_customer,
+  ROUND(AVG(g.avg_gap), 0) AS avg_days_between_orders,
+  COUNTIF(cc.distinct_categories > 1) AS multi_cat_customers
+FROM customer_stats cs
+LEFT JOIN (SELECT CustomerId, AVG(gap) AS avg_gap FROM gaps GROUP BY CustomerId) g USING (CustomerId)
+LEFT JOIN customer_cats cc USING (CustomerId)`),
+
+      // Q20 — order frequency histogram (1,2,3,4,5,6+) all-time
+      run(`WITH freq AS (
+  SELECT CustomerId, COUNT(DISTINCT OrderId) AS orders
+  FROM ${TBL}
+  WHERE Channel = 'Shopify' AND CustomerId IS NOT NULL
+    AND DATE(OrderDate) <= DATE('${e}')
+  GROUP BY CustomerId
+)
+SELECT
+  CASE WHEN orders >= 6 THEN '6+' ELSE CAST(orders AS STRING) END AS order_count,
+  CASE WHEN orders >= 6 THEN 6 ELSE orders END AS sort_order,
+  COUNT(*) AS customers
+FROM freq
+GROUP BY order_count, sort_order
+ORDER BY sort_order`),
     ])
 
     // Fetch additional (offline) spend from Postgres for the selected date range
@@ -757,6 +907,43 @@ LIMIT 50`)
       aovByOrderNumber: aovByOrderNumber.map(r => ({
         orderLabel: r.order_label,
         aov: parseFloat(r.aov) || 0,
+        customers: parseInt(r.customers) || 0,
+      })),
+      repurchaseCycleByCategory: repurchaseCycleByCategory.map(r => ({
+        category: r.first_category,
+        repeatCustomers: parseInt(r.repeat_customers) || 0,
+        p25Days: parseInt(r.p25_days) || 0,
+        medianDays: parseInt(r.median_days) || 0,
+        p75Days: parseInt(r.p75_days) || 0,
+      })),
+      basketComposition: (() => {
+        const r = basketComposition[0] || {}
+        return {
+          totalOrders: parseInt(r.total_orders) || 0,
+          singleCatOrders: parseInt(r.single_cat_orders) || 0,
+          multiCatOrders: parseInt(r.multi_cat_orders) || 0,
+          avgCategoriesPerOrder: parseFloat(r.avg_categories_per_order) || 0,
+          avgSkusPerOrder: parseFloat(r.avg_skus_per_order) || 0,
+          avgItemsPerOrder: parseFloat(r.avg_items_per_order) || 0,
+        }
+      })(),
+      purchaseBehaviorKpis: (() => {
+        const r = purchaseBehaviorKpis[0] || {}
+        const total = parseInt(r.total_customers) || 0
+        const repeat = parseInt(r.repeat_customers) || 0
+        const multiCat = parseInt(r.multi_cat_customers) || 0
+        return {
+          totalCustomers: total,
+          repeatCustomers: repeat,
+          repeatRate: total > 0 ? parseFloat((repeat / total * 100).toFixed(1)) : 0,
+          avgOrdersPerCustomer: parseFloat(r.avg_orders_per_customer) || 0,
+          avgDaysBetweenOrders: parseInt(r.avg_days_between_orders) || 0,
+          multiCatCustomers: multiCat,
+          multiCatRate: total > 0 ? parseFloat((multiCat / total * 100).toFixed(1)) : 0,
+        }
+      })(),
+      orderFreqDist: orderFreqDist.map(r => ({
+        orderCount: r.order_count,
         customers: parseInt(r.customers) || 0,
       })),
     })

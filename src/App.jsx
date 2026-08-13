@@ -9694,7 +9694,7 @@ const TAB_TO_CHANNEL = { blinkit: 'Blinkit', instamart: 'Instamart', zepto: 'Zep
 const CP = {
   bg: '#FFFFFF', paper: '#FFFFFF', ink: '#15130B', ink2: '#4A4636', ink3: '#8A8468',
   yellow: '#F5C518', yellowDeep: '#D9A800', head: '#F3DFA0', headLine: '#E6C877',
-  line: '#15130B', lineSoft: '#D8CD9E', green: '#2E6B3E', red: '#A62E2E',
+  line: '#8A8478', lineSoft: '#D8CD9E', green: '#2E6B3E', red: '#A62E2E',
 }
 
 function CpCard({ title, sub, action, children }) {
@@ -9811,6 +9811,7 @@ function CustomerPage({ filters }) {
   const [nrGran, setNrGran] = useState('daily')
   const [spendChartGran, setSpendChartGran] = useState('daily')
   const [dowMetric, setDowMetric] = useState('customers')
+  const [liftDisplay, setLiftDisplay] = useState('lift')
   const [spendCacGran, setSpendCacGran] = useState('daily')
   const [cacBandGran, setCacBandGran] = useState('daily')
   const [cohortMode, setCohortMode] = useState('customer')
@@ -11097,98 +11098,279 @@ function CustomerPage({ filters }) {
         })()}
 
         {activeTab === 'purchase' && (() => {
-          const crossMaxVal = Math.max(...crossRows.flatMap(r => r.data), 1)
+          // ── compute lift heatmap from crossSell data ──
+          const crossRaw = crossSell || []
+          const isSubCat = crossFilter === 'Sub Category'
+
+          // top-N categories by volume
+          const catVolume = {}
+          crossRaw.forEach(r => {
+            const f = isSubCat ? r.firstSubCategory : r.firstCategory
+            const s = isSubCat ? r.secondSubCategory : r.secondCategory
+            if (f) catVolume[f] = (catVolume[f] || 0) + r.customers
+            if (s) catVolume[s] = (catVolume[s] || 0) + r.customers
+          })
+          const TOP_N = isSubCat ? 8 : 9
+          const topCats = Object.entries(catVolume).sort((a,b) => b[1]-a[1]).slice(0, TOP_N).map(([k]) => k)
+          const getKey = (r, role) => {
+            const raw = isSubCat ? (role === 'first' ? r.firstSubCategory : r.secondSubCategory) : (role === 'first' ? r.firstCategory : r.secondCategory)
+            return topCats.includes(raw) ? raw : (raw ? 'Other' : null)
+          }
+          const liftCols = [...topCats, ...(crossRaw.some(r => !topCats.includes(isSubCat ? r.secondSubCategory : r.secondCategory)) ? ['Other'] : [])]
+          const liftRows = [...topCats, ...(crossRaw.some(r => !topCats.includes(isSubCat ? r.firstSubCategory : r.firstCategory)) ? ['Other'] : [])]
+
+          // count matrix
+          const countMatrix = {}
+          crossRaw.forEach(r => {
+            const f = getKey(r, 'first'), s = getKey(r, 'second')
+            if (!f || !s) return
+            if (!countMatrix[f]) countMatrix[f] = {}
+            countMatrix[f][s] = (countMatrix[f][s] || 0) + r.customers
+          })
+          // second-purchase totals for lift denominator
+          const secondTotals = {}
+          liftCols.forEach(c => { secondTotals[c] = liftRows.reduce((sum, f) => sum + (countMatrix[f]?.[c] || 0), 0) })
+          const grandTotal = Object.values(secondTotals).reduce((a, b) => a + b, 0)
+          // row totals
+          const rowTotals = {}
+          liftRows.forEach(f => { rowTotals[f] = liftCols.reduce((sum, c) => sum + (countMatrix[f]?.[c] || 0), 0) })
+
+          // lift = (count[f][s] / rowTotal[f]) / (secondTotals[s] / grandTotal)
+          const liftVal = (f, s) => {
+            const cnt = countMatrix[f]?.[s] || 0
+            const rowT = rowTotals[f] || 0
+            const colShare = grandTotal > 0 ? (secondTotals[s] || 0) / grandTotal : 0
+            if (!rowT || !colShare) return null
+            return parseFloat(((cnt / rowT) / colShare).toFixed(2))
+          }
+          const rateVal = (f, s) => {
+            const cnt = countMatrix[f]?.[s] || 0
+            const rowT = rowTotals[f] || 0
+            return rowT > 0 ? parseFloat((cnt / rowT * 100).toFixed(1)) : 0
+          }
+
+          // top 5 lift opportunities (exclude diagonal same-cat)
+          const liftPairs = []
+          liftRows.forEach(f => liftCols.forEach(s => {
+            if (f === s) return
+            const cnt = countMatrix[f]?.[s] || 0
+            if (cnt < 10) return
+            const lv = liftVal(f, s)
+            if (lv && lv > 1) liftPairs.push({ f, s, lift: lv, count: cnt })
+          }))
+          liftPairs.sort((a, b) => b.lift - a.lift)
+          const top5 = liftPairs.slice(0, 5)
+
+          // best insight
+          const bestLift = top5[0]
+          const crossInsight = bestLift
+            ? `${bestLift.f} buyers are ${bestLift.lift}× more likely than average to buy ${bestLift.s} next — prime bundle opportunity.`
+            : null
+
+          // cell color for lift
+          const liftCellBg = (lv) => {
+            if (lv === null) return 'transparent'
+            if (lv >= 3) return `rgba(245,197,24,0.90)`
+            if (lv >= 2) return `rgba(245,197,24,0.65)`
+            if (lv >= 1.5) return `rgba(245,197,24,0.40)`
+            if (lv >= 1) return `rgba(245,197,24,0.15)`
+            return `rgba(148,147,159,0.12)`
+          }
+
+          // ── purchase behavior KPIs ──
+          const pbKpis = custData.purchaseBehaviorKpis || {}
+          const basket = custData.basketComposition || {}
+
+          // ── order freq dist ──
+          const freqHistData = (() => {
+            const data = custData.orderFreqDist || []
+            const total = data.reduce((s, r) => s + r.customers, 0)
+            let cum = 0
+            return data.map(r => {
+              cum += r.customers
+              return { ...r, pct: total > 0 ? parseFloat((r.customers / total * 100).toFixed(1)) : 0, cumPct: total > 0 ? parseFloat((cum / total * 100).toFixed(1)) : 0 }
+            })
+          })()
+          const oneTimePct = freqHistData.find(r => r.orderCount === '1')?.pct || 0
+
+          // ── repurchase cycle ──
+          const cycleData = (custData.repurchaseCycleByCategory || []).slice(0, 10)
+          const fastestCat = cycleData[0]
+          const slowestCat = cycleData[cycleData.length - 1]
+
           return (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 16, paddingTop: 16, paddingLeft: 16, paddingRight: 16, width: '100%', boxSizing: 'border-box' }}>
+
+              {/* KPI Strip */}
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 12 }}>
+                {[
+                  { label: 'Repeat Purchase Rate', value: pbKpis.repeatRate != null ? `${pbKpis.repeatRate}%` : '—', sub: `${fmtN(pbKpis.repeatCustomers || 0)} of ${fmtN(pbKpis.totalCustomers || 0)} customers` },
+                  { label: 'Avg Orders / Customer', value: pbKpis.avgOrdersPerCustomer ? pbKpis.avgOrdersPerCustomer.toFixed(2) : '—', sub: 'Lifetime order frequency' },
+                  { label: 'Avg Days Between Orders', value: pbKpis.avgDaysBetweenOrders ? `${pbKpis.avgDaysBetweenOrders}d` : '—', sub: 'Median repurchase gap' },
+                  { label: 'Multi-Category Customers', value: pbKpis.multiCatRate != null ? `${pbKpis.multiCatRate}%` : '—', sub: 'Bought 2+ categories ever' },
+                  { label: 'Avg Categories / Order', value: basket.avgCategoriesPerOrder ? basket.avgCategoriesPerOrder.toFixed(2) : '—', sub: `${basket.avgItemsPerOrder ? basket.avgItemsPerOrder.toFixed(1) : '—'} items per order` },
+                ].map(({ label, value, sub }) => (
+                  <div key={label} style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 10, padding: '12px 14px' }}>
+                    <div style={{ fontSize: 10, color: C.t3, textTransform: 'uppercase', letterSpacing: '.06em', fontWeight: 700, marginBottom: 4 }}>{label}</div>
+                    <div style={{ fontSize: 22, fontWeight: 800, color: C.t1, lineHeight: 1.1, fontFamily: 'JetBrains Mono, monospace' }}>{value}</div>
+                    <div style={{ fontSize: 10, color: C.t3, marginTop: 4, fontStyle: 'italic' }}>{sub}</div>
+                  </div>
+                ))}
+              </div>
+
+              {/* Lift Heatmap */}
               <CpCard
-                title="First vs Second Purchase Cross-Sell"
+                title="Cross-Sell Affinity Heatmap"
+                sub="Which categories have genuine purchase affinity beyond category size?"
                 action={
-                  <div style={{ display: 'flex', gap: 4 }}>
+                  <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
+                    {[['lift','Lift'], ['rate','Rate %'], ['count','Count']].map(([v, l]) => (
+                      <button key={v} onClick={() => setLiftDisplay(v)} style={{ background: liftDisplay === v ? CP.ink : CP.head, color: liftDisplay === v ? CP.head : CP.ink2, border: `1px solid ${CP.line}`, borderRadius: 0, padding: '3px 9px', fontSize: 11, cursor: 'pointer', fontWeight: liftDisplay === v ? 700 : 400, outline: 'none' }}>{l}</button>
+                    ))}
+                    <span style={{ width: 8 }} />
                     {['Category', 'Sub Category'].map(f => (
-                      <button
-                        key={f}
-                        onClick={() => setCrossFilter(f)}
-                        style={{
-                          background: crossFilter === f ? CP.ink : CP.head,
-                          color: crossFilter === f ? CP.head : CP.ink2,
-                          border: `1px solid ${CP.line}`,
-                          borderRadius: 0,
-                          padding: '4px 10px',
-                          fontSize: 11,
-                          cursor: 'pointer',
-                          fontFamily: 'Space Grotesk, var(--font)',
-                          fontWeight: crossFilter === f ? 700 : 400,
-                          outline: 'none',
-                        }}
-                      >{f}</button>
+                      <button key={f} onClick={() => setCrossFilter(f)} style={{ background: crossFilter === f ? CP.ink : CP.head, color: crossFilter === f ? CP.head : CP.ink2, border: `1px solid ${CP.line}`, borderRadius: 0, padding: '3px 9px', fontSize: 11, cursor: 'pointer', fontWeight: crossFilter === f ? 700 : 400, outline: 'none' }}>{f}</button>
                     ))}
                   </div>
                 }
               >
-                {crossRows.length > 0
-                  ? (
-                    <div style={{ overflowX: 'auto', width: '100%' }}>
-                      <table style={{ borderCollapse: 'collapse', fontSize: 11, width: '100%', minWidth: 500 }}>
-                        <thead>
-                          <tr style={{ background: CP.head, borderBottom: `2px solid ${CP.line}` }}>
-                            <th style={{ padding: '5px 8px', textAlign: 'left', color: CP.ink, fontWeight: 700 }}>
-                              <span style={{ color: CP.ink3 }}>First Purchase →</span>
-                            </th>
-                            {allCrossSecond.map(s => (
-                              <th key={s} style={{ padding: '5px 8px', textAlign: 'center', color: CP.ink, fontWeight: 700, fontSize: 10 }}>{s}</th>
-                            ))}
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {crossRows.map((row, ri) => (
-                            <tr key={ri} style={{ borderBottom: `1px solid ${CP.lineSoft}` }}>
-                              <td style={{ padding: '5px 8px', color: CP.ink2, fontWeight: 600 }}>{row.first}</td>
-                              {row.data.map((v, ci) => {
-                                const intensity = v / crossMaxVal
-                                return (
-                                  <td key={ci} style={{ padding: '5px 8px', textAlign: 'center', background: v > 0 ? `rgba(245,197,24,${(intensity * 0.8 + 0.1).toFixed(2)})` : 'transparent', fontFamily: 'JetBrains Mono, monospace', fontSize: 10, color: CP.ink }}>
-                                    {v > 0 ? fmtN(v) : ''}
-                                  </td>
-                                )
-                              })}
-                            </tr>
+                {crossInsight && <div style={{ fontSize: 11, color: CP.ink3, fontStyle: 'italic', marginBottom: 10 }}>{crossInsight}</div>}
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: 16, alignItems: 'start' }}>
+                  <div style={{ overflowX: 'auto', width: '100%' }}>
+                    <table style={{ borderCollapse: 'collapse', fontSize: 10, width: '100%' }}>
+                      <colgroup>
+                        <col style={{ width: isSubCat ? 180 : 120 }} />
+                        {liftCols.map(s => <col key={s} />)}
+                      </colgroup>
+                      <thead>
+                        <tr style={{ background: CP.head }}>
+                          <th style={{ padding: '5px 8px', textAlign: 'left', color: CP.ink3, fontWeight: 600, whiteSpace: 'nowrap', fontSize: 10, minWidth: isSubCat ? 180 : 120 }}>1st Purchase ↓ / 2nd →</th>
+                          {liftCols.map(s => (
+                            <th key={s} style={{ padding: '5px 6px', textAlign: 'center', color: CP.ink, fontWeight: 700, fontSize: 9, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }} title={s}>{s.length > 10 ? s.slice(0,10)+'…' : s}</th>
                           ))}
-                        </tbody>
-                      </table>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {liftRows.map((f, ri) => (
+                          <tr key={f} style={{ borderBottom: `1px solid ${CP.lineSoft}`, background: ri % 2 === 0 ? '#FDFCF8' : '#FFF' }}>
+                            <td style={{ padding: '5px 8px', color: CP.ink2, fontWeight: 600, whiteSpace: 'nowrap', fontSize: 10, minWidth: isSubCat ? 180 : 120 }}>{f}</td>
+                            {liftCols.map(s => {
+                              const cnt = countMatrix[f]?.[s] || 0
+                              const lv = liftVal(f, s)
+                              const rv = rateVal(f, s)
+                              const bg = liftDisplay === 'lift' ? liftCellBg(lv) : liftDisplay === 'rate' ? (rv > 0 ? `rgba(245,197,24,${Math.min(rv/30, 0.9).toFixed(2)})` : 'transparent') : (cnt > 0 ? `rgba(245,197,24,${Math.min(cnt / Math.max(...liftRows.map(ff => Math.max(...liftCols.map(ss => countMatrix[ff]?.[ss] || 0))), 1) * 0.85 + 0.05, 0.95).toFixed(2)})` : 'transparent')
+                              const display = liftDisplay === 'lift' ? (lv != null && cnt >= 5 ? `${lv}×` : '') : liftDisplay === 'rate' ? (rv > 0 ? `${rv}%` : '') : (cnt > 0 ? fmtN(cnt) : '')
+                              return (
+                                <td key={s} title={`${f} → ${s}\nCount: ${fmtN(cnt)}\nRate: ${rv}%\nLift: ${lv != null ? lv+'×' : 'n/a'}`} style={{ padding: '5px 6px', textAlign: 'center', background: bg, fontFamily: 'JetBrains Mono, monospace', fontSize: 9, color: CP.ink, cursor: 'default' }}>
+                                  {display}
+                                </td>
+                              )
+                            })}
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                  {/* Top 5 lift opportunities */}
+                  {top5.length > 0 && (
+                    <div style={{ minWidth: 220, background: CP.head, borderRadius: 8, padding: '10px 12px' }}>
+                      <div style={{ fontSize: 10, fontWeight: 700, color: CP.ink, textTransform: 'uppercase', letterSpacing: '.06em', marginBottom: 8 }}>Top 5 Opportunities</div>
+                      {top5.map(({ f, s, lift: lv, count: cnt }, i) => (
+                        <div key={i} style={{ marginBottom: 8, paddingBottom: 8, borderBottom: i < 4 ? `1px solid ${CP.lineSoft}` : 'none' }}>
+                          <div style={{ fontSize: 10, fontWeight: 700, color: CP.ink }}>{f} → {s}</div>
+                          <div style={{ fontSize: 9, color: CP.ink2, marginTop: 2 }}>{lv}× lift · {fmtN(cnt)} customers · bundle candidate</div>
+                        </div>
+                      ))}
                     </div>
-                  )
-                  : <div style={{ color: CP.ink3, fontSize: 12, padding: 12 }}>No cross-sell data available.</div>
-                }
+                  )}
+                </div>
               </CpCard>
 
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+              {/* Repurchase Cycle by Category */}
+              <CpCard title="Repurchase Cycle by Category" sub="Which categories have the fastest natural replacement cycles?">
+                {cycleData.length > 0 ? (() => {
+                  const insight = fastestCat && slowestCat && fastestCat.category !== slowestCat.category
+                    ? `${fastestCat.category} buyers repurchase in a median of ${fastestCat.medianDays} days — ${slowestCat.category} buyers take ${slowestCat.medianDays}+ days.`
+                    : null
+                  return (
+                    <div>
+                      {insight && <div style={{ fontSize: 11, color: CP.ink3, fontStyle: 'italic', marginBottom: 10 }}>{insight}</div>}
+                      <ResponsiveContainer width="100%" height={220}>
+                        <ComposedChart data={cycleData} layout="vertical" margin={{ top: 4, right: 40, bottom: 4, left: 80 }}>
+                          <CartesianGrid stroke={CP.lineSoft} horizontal={false} />
+                          <XAxis type="number" tick={{ fontSize: 10, fill: CP.ink3 }} tickFormatter={v => `${v}d`} />
+                          <YAxis type="category" dataKey="category" tick={{ fontSize: 10, fill: CP.ink2 }} width={80} />
+                          <Tooltip contentStyle={ttStyle} itemStyle={{ color: CP.ink }} labelStyle={{ color: CP.ink, fontWeight: 700 }}
+                            formatter={(v, name) => [`${v} days`, name]} />
+                          <Bar dataKey="p25Days" name="P25" fill={CP.head} radius={[0,0,0,0]} maxBarSize={14} stackId="cycle" />
+                          <Bar dataKey="medianDays" name="Median" fill={CP.yellow} radius={[0,3,3,0]} maxBarSize={14} stackId="cycle">
+                            <LabelList dataKey="medianDays" position="right" style={{ fontSize: 9, fill: CP.ink2 }} formatter={v => `${v}d`} />
+                          </Bar>
+                        </ComposedChart>
+                      </ResponsiveContainer>
+                    </div>
+                  )
+                })() : <CpBackendTodo field="repurchaseCycleByCategory" />}
+              </CpCard>
+
+              {/* Bottom row: 3 charts */}
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 16 }}>
+
+                {/* Days to Second Purchase */}
                 <CpCard title="Days to Second Purchase" sub="How quickly do customers come back?">
                   {custData.daysToSecondPurchase?.length > 0 ? (() => {
                     const total = custData.daysToSecondPurchase.reduce((s, r) => s + r.customers, 0)
                     const data = custData.daysToSecondPurchase.map(r => ({ ...r, pct: total > 0 ? parseFloat((r.customers / total * 100).toFixed(1)) : 0 }))
-                    const fastest = data[0]
+                    const within30 = data.filter(r => ['0-7d','8-30d'].includes(r.bucket)).reduce((s,r)=>s+r.customers,0)
+                    const pct30 = total > 0 ? (within30 / total * 100).toFixed(0) : 0
                     return (
                       <div>
-                        {fastest && <div style={{ fontSize: 11, color: CP.ink3, marginBottom: 10, fontStyle: 'italic' }}>
-                          {fastest.pct}% of repeat customers came back within {fastest.bucket} — {total > 0 ? fmtN(data.filter(r => ['0-7d','8-30d'].includes(r.bucket)).reduce((s,r)=>s+r.customers,0)) : 0} within 30 days
-                        </div>}
-                        <ResponsiveContainer width="100%" height={200}>
-                          <BarChart data={data} margin={{ top: 4, right: 16, bottom: 4, left: 0 }}>
+                        <div style={{ fontSize: 11, color: CP.ink3, marginBottom: 10, fontStyle: 'italic' }}>
+                          {pct30}% of repeat customers came back within 30 days — {fmtN(within30)} customers
+                        </div>
+                        <ResponsiveContainer width="100%" height={190}>
+                          <ComposedChart data={data} margin={{ top: 4, right: 16, bottom: 4, left: 0 }}>
                             <CartesianGrid stroke={CP.lineSoft} />
-                            <XAxis dataKey="bucket" tick={{ fontSize: 10, fill: CP.ink3 }} />
-                            <YAxis yAxisId="left" tick={{ fontSize: 10, fill: CP.ink3 }} tickFormatter={v => fmtN(v)} />
-                            <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 10, fill: CP.ink3 }} tickFormatter={v => `${v}%`} />
+                            <XAxis dataKey="bucket" tick={{ fontSize: 9, fill: CP.ink3 }} />
+                            <YAxis yAxisId="left" tick={{ fontSize: 9, fill: CP.ink3 }} tickFormatter={v => fmtBig(v)} />
+                            <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 9, fill: CP.ink3 }} tickFormatter={v => `${v}%`} />
                             <Tooltip contentStyle={ttStyle} itemStyle={{ color: CP.ink }} labelStyle={{ color: CP.ink, fontWeight: 700 }} formatter={(v, name) => name === '% of Repeaters' ? [`${v}%`, name] : [fmtN(v), name]} />
-                            <Legend wrapperStyle={{ fontSize: 10 }} />
-                            <Bar yAxisId="left" dataKey="customers" fill={CP.yellow} name="Customers" radius={[3,3,0,0]} maxBarSize={40} />
+                            <Legend wrapperStyle={{ fontSize: 9 }} />
+                            <Bar yAxisId="left" dataKey="customers" fill={CP.yellow} name="Customers" radius={[3,3,0,0]} maxBarSize={36} />
                             <Line yAxisId="right" type="monotone" dataKey="pct" stroke={CP.line} strokeWidth={2} dot={{ r: 3, fill: CP.line }} name="% of Repeaters" />
-                          </BarChart>
+                          </ComposedChart>
                         </ResponsiveContainer>
                       </div>
                     )
                   })() : <CpBackendTodo field="daysToSecondPurchase" />}
                 </CpCard>
 
+                {/* Order Frequency Distribution */}
+                <CpCard title="Order Frequency Distribution" sub="How many orders do customers place over their lifetime?">
+                  {freqHistData.length > 0 ? (() => {
+                    return (
+                      <div>
+                        <div style={{ fontSize: 11, color: CP.ink3, marginBottom: 10, fontStyle: 'italic' }}>
+                          {oneTimePct}% of customers are one-time buyers — growing repeat orders is the highest-leverage retention lever.
+                        </div>
+                        <ResponsiveContainer width="100%" height={190}>
+                          <ComposedChart data={freqHistData} margin={{ top: 4, right: 16, bottom: 4, left: 0 }}>
+                            <CartesianGrid stroke={CP.lineSoft} />
+                            <XAxis dataKey="orderCount" tick={{ fontSize: 9, fill: CP.ink3 }} label={{ value: 'Orders placed', position: 'insideBottom', offset: -2, fontSize: 9, fill: CP.ink3 }} />
+                            <YAxis yAxisId="left" tick={{ fontSize: 9, fill: CP.ink3 }} tickFormatter={v => fmtBig(v)} />
+                            <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 9, fill: CP.ink3 }} tickFormatter={v => `${v}%`} domain={[0, 100]} />
+                            <Tooltip contentStyle={ttStyle} itemStyle={{ color: CP.ink }} labelStyle={{ color: CP.ink, fontWeight: 700 }} formatter={(v, name) => name === 'Cumulative %' ? [`${v}%`, name] : [fmtN(v), name]} />
+                            <Legend wrapperStyle={{ fontSize: 9 }} />
+                            <Bar yAxisId="left" dataKey="customers" fill={CP.yellowDeep} name="Customers" radius={[3,3,0,0]} maxBarSize={36} />
+                            <Line yAxisId="right" type="monotone" dataKey="cumPct" stroke={CP.line} strokeWidth={2} dot={{ r: 3, fill: CP.line }} name="Cumulative %" />
+                          </ComposedChart>
+                        </ResponsiveContainer>
+                      </div>
+                    )
+                  })() : <CpBackendTodo field="orderFreqDist" />}
+                </CpCard>
+
+                {/* AOV by Order Number */}
                 <CpCard title="AOV by Order Number" sub="Does AOV grow as customers become loyal?">
                   {custData.aovByOrderNumber?.length > 0 ? (() => {
                     const first = custData.aovByOrderNumber.find(r => r.orderLabel === '1st')
@@ -11199,15 +11381,15 @@ function CustomerPage({ filters }) {
                         {growth !== null && <div style={{ fontSize: 11, color: CP.ink3, marginBottom: 10, fontStyle: 'italic' }}>
                           AOV {parseFloat(growth) >= 0 ? 'grows' : 'drops'} {Math.abs(growth)}% from 1st to {last.orderLabel} order — {parseFloat(growth) >= 0 ? 'loyal customers spend more' : 'newer customers drive higher initial AOV'}
                         </div>}
-                        <ResponsiveContainer width="100%" height={200}>
+                        <ResponsiveContainer width="100%" height={190}>
                           <ComposedChart data={custData.aovByOrderNumber} margin={{ top: 4, right: 16, bottom: 4, left: 0 }}>
                             <CartesianGrid stroke={CP.lineSoft} />
-                            <XAxis dataKey="orderLabel" tick={{ fontSize: 10, fill: CP.ink3 }} />
-                            <YAxis yAxisId="aov" tick={{ fontSize: 10, fill: CP.ink3 }} tickFormatter={v => fmt(v)} />
-                            <YAxis yAxisId="cust" orientation="right" tick={{ fontSize: 10, fill: CP.ink3 }} tickFormatter={v => fmtN(v)} />
+                            <XAxis dataKey="orderLabel" tick={{ fontSize: 9, fill: CP.ink3 }} />
+                            <YAxis yAxisId="aov" tick={{ fontSize: 9, fill: CP.ink3 }} tickFormatter={v => fmt(v)} />
+                            <YAxis yAxisId="cust" orientation="right" tick={{ fontSize: 9, fill: CP.ink3 }} tickFormatter={v => fmtBig(v)} />
                             <Tooltip contentStyle={ttStyle} itemStyle={{ color: CP.ink }} labelStyle={{ color: CP.ink, fontWeight: 700 }} formatter={(v, name) => name === 'Customers' ? [fmtN(v), name] : [fmt(v), name]} />
-                            <Legend wrapperStyle={{ fontSize: 10 }} />
-                            <Bar yAxisId="aov" dataKey="aov" fill={CP.yellowDeep} name="AOV (ex GST)" radius={[3,3,0,0]} maxBarSize={40} />
+                            <Legend wrapperStyle={{ fontSize: 9 }} />
+                            <Bar yAxisId="aov" dataKey="aov" fill={CP.yellowDeep} name="AOV (ex GST)" radius={[3,3,0,0]} maxBarSize={36} />
                             <Line yAxisId="cust" type="monotone" dataKey="customers" stroke={CP.line} strokeWidth={2} dot={{ r: 3, fill: CP.line }} name="Customers" strokeDasharray="4 3" />
                           </ComposedChart>
                         </ResponsiveContainer>
@@ -11216,6 +11398,49 @@ function CustomerPage({ filters }) {
                   })() : <CpBackendTodo field="aovByOrderNumber" />}
                 </CpCard>
               </div>
+
+              {/* Basket Composition */}
+              {basket.totalOrders > 0 && (
+                <CpCard title="Basket Composition" sub="How often do customers buy multiple categories in one order?">
+                  {(() => {
+                    const singlePct = basket.totalOrders > 0 ? (basket.singleCatOrders / basket.totalOrders * 100).toFixed(1) : 0
+                    const multiPct  = basket.totalOrders > 0 ? (basket.multiCatOrders  / basket.totalOrders * 100).toFixed(1) : 0
+                    return (
+                      <div style={{ display: 'flex', gap: 24, alignItems: 'center' }}>
+                        <div style={{ flex: 1 }}>
+                          <div style={{ fontSize: 11, color: CP.ink3, fontStyle: 'italic', marginBottom: 10 }}>
+                            {multiPct}% of orders contain items from multiple categories — cross-sell is already happening organically.
+                          </div>
+                          <div style={{ display: 'flex', height: 28, borderRadius: 6, overflow: 'hidden', border: `1px solid ${CP.lineSoft}` }}>
+                            <div style={{ width: `${singlePct}%`, background: CP.yellow, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                              <span style={{ fontSize: 10, fontWeight: 700, color: CP.ink }}>{singlePct}%</span>
+                            </div>
+                            <div style={{ width: `${multiPct}%`, background: CP.yellowDeep, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                              <span style={{ fontSize: 10, fontWeight: 700, color: '#fff' }}>{multiPct}%</span>
+                            </div>
+                          </div>
+                          <div style={{ display: 'flex', gap: 16, marginTop: 8 }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}><div style={{ width: 10, height: 10, borderRadius: 2, background: CP.yellow }} /><span style={{ fontSize: 10, color: CP.ink2 }}>Single-category ({fmtN(basket.singleCatOrders)})</span></div>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}><div style={{ width: 10, height: 10, borderRadius: 2, background: CP.yellowDeep }} /><span style={{ fontSize: 10, color: CP.ink2 }}>Multi-category ({fmtN(basket.multiCatOrders)})</span></div>
+                          </div>
+                        </div>
+                        <div style={{ display: 'flex', gap: 16 }}>
+                          {[
+                            { label: 'Avg Categories/Order', value: basket.avgCategoriesPerOrder?.toFixed(2) },
+                            { label: 'Avg SKUs/Order', value: basket.avgSkusPerOrder?.toFixed(2) },
+                            { label: 'Avg Items/Order', value: basket.avgItemsPerOrder?.toFixed(1) },
+                          ].map(({ label, value }) => (
+                            <div key={label} style={{ textAlign: 'center', background: CP.head, borderRadius: 8, padding: '8px 14px' }}>
+                              <div style={{ fontSize: 18, fontWeight: 800, color: CP.ink, fontFamily: 'JetBrains Mono, monospace' }}>{value || '—'}</div>
+                              <div style={{ fontSize: 9, color: CP.ink3, marginTop: 3, textTransform: 'uppercase', letterSpacing: '.04em' }}>{label}</div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )
+                  })()}
+                </CpCard>
+              )}
             </div>
           )
         })()}
@@ -11845,50 +12070,6 @@ function CustomerPage({ filters }) {
                       <Line yAxisId="sales" dataKey="netRevenue" stroke={SD.t1} strokeWidth={1.5} strokeDasharray="4 3" dot={false} name="Net Revenue" />
                     </ComposedChart>
                   </ResponsiveContainer>
-                </div>
-              </div>
-
-              {/* Channel Efficiency */}
-              <div style={cardStyle}>
-                <div style={cardHead}>
-                  <span style={cardTitle}>Channel Efficiency</span>
-                </div>
-                <div style={{ padding: '0 0 4px' }}>
-                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
-                    <thead>
-                      <tr style={{ background: SD.amberSoft, borderBottom: `1px solid ${SD.amberLine}` }}>
-                        {['Channel', 'Spend', 'Revenue (ex GST)', 'Orders', 'RoAS', 'CAC'].map(h => (
-                          <th key={h} style={{ padding: '8px 16px', textAlign: h === 'Channel' ? 'left' : 'right', fontFamily: 'Inter, sans-serif', fontWeight: 700, fontSize: 10.5, color: SD.t2, textTransform: 'uppercase', letterSpacing: '.06em' }}>{h}</th>
-                        ))}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {(() => {
-                        const metaRevShare = kpis.totalSpend > 0 ? (kpis.metaSpend || 0) / kpis.totalSpend : 0
-                        const googleRevShare = kpis.totalSpend > 0 ? (kpis.googleSpend || 0) / kpis.totalSpend : 0
-                        const metaOrdShare = kpis.totalSpend > 0 ? (kpis.metaSpend || 0) / kpis.totalSpend : 0
-                        const rows = [
-                          { channel: 'Meta',       spend: kpis.metaSpend || 0,       rev: grossRevForRoas * metaRevShare,   orders: Math.round((kpis.totalOrders || 0) * metaOrdShare), roas: metaRoAS,   cacStr: '—', isBlended: false, isAdditional: false },
-                          { channel: 'Google',     spend: kpis.googleSpend || 0,     rev: grossRevForRoas * googleRevShare, orders: Math.round((kpis.totalOrders || 0) * googleRevShare), roas: googleRoAS, cacStr: '—', isBlended: false, isAdditional: false },
-                          { channel: 'Additional', spend: kpis.additionalSpend || 0, rev: null, orders: null, roas: null, cacStr: '—', isBlended: false, isAdditional: true },
-                          { channel: 'Blended',    spend: kpis.totalSpend || 0,      rev: grossRevForRoas, orders: kpis.totalOrders || 0, roas: blendedRoAS, cacStr: fmt(blendedCAC), isBlended: true, isAdditional: false },
-                        ]
-                        return rows.map((row, i) => (
-                          <tr key={i} style={{ borderBottom: `1px solid ${SD.borderSoft}`, background: row.isBlended ? SD.amberSoft : 'transparent' }}>
-                            <td style={{ padding: '10px 16px', color: SD.t1, fontWeight: row.isBlended ? 800 : 500, fontFamily: 'Inter, sans-serif', fontSize: 12 }}>
-                              {row.channel}
-                              {row.isAdditional && <span style={{ fontSize: 9.5, color: SD.t3, marginLeft: 5 }}>(offline/other)</span>}
-                            </td>
-                            <td style={{ padding: '10px 16px', textAlign: 'right', fontFamily: 'JetBrains Mono, monospace', fontSize: 12, color: SD.t1 }}>{fmt(row.spend)}</td>
-                            <td style={{ padding: '10px 16px', textAlign: 'right', fontFamily: 'JetBrains Mono, monospace', fontSize: 12, color: SD.t3 }}>{row.rev != null && row.rev > 0 ? fmt(row.rev) : '—'}</td>
-                            <td style={{ padding: '10px 16px', textAlign: 'right', fontFamily: 'JetBrains Mono, monospace', fontSize: 12, color: SD.t3 }}>{row.orders != null ? fmtN(row.orders) : '—'}</td>
-                            <td style={{ padding: '10px 16px', textAlign: 'right', fontFamily: 'JetBrains Mono, monospace', fontSize: 12, color: row.roas != null ? (row.roas >= 3 ? '#3a7d44' : row.roas >= 1.5 ? SD.amberDeep : '#a63a3a') : SD.t3, fontWeight: row.roas != null ? 700 : 400 }}>{row.roas != null && row.roas > 0 ? `${row.roas.toFixed(2)}×` : '—'}</td>
-                            <td style={{ padding: '10px 16px', textAlign: 'right', fontFamily: 'JetBrains Mono, monospace', fontSize: 12, color: SD.t1 }}>{row.cacStr}</td>
-                          </tr>
-                        ))
-                      })()}
-                    </tbody>
-                  </table>
                 </div>
               </div>
 
