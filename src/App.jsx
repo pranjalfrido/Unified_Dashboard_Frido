@@ -9802,6 +9802,8 @@ function CustomerPage({ filters }) {
   const [granularity, setGranularity] = useState('daily')
   const [spendGranularity, setSpendGranularity] = useState('daily')
   const [activeTab, setActiveTab] = useState('overview')
+  const [ovChartView, setOvChartView] = useState('revenue')
+  const [ovGran, setOvGran] = useState('monthly')
   const [nrMetric, setNrMetric] = useState('customers')
   const [nrGran, setNrGran] = useState('daily')
   const [spendChartGran, setSpendChartGran] = useState('daily')
@@ -10188,6 +10190,123 @@ function CustomerPage({ filters }) {
                 <MetricTable title="Ad Spend & Acquisition" rows={ledger1} accentColor="#D9A800" insight={spendInsight} />
                 <MetricTable title="Revenue & Lifetime Value" rows={ledger2} accentColor="#0D9E68" insight={revenueInsight} />
               </div>
+
+              {/* ── Main Trend Chart ── */}
+              {(() => {
+                const excRatio = kpis.grossSales > 0 && kpis.grossExcGst > 0 ? kpis.grossExcGst / kpis.grossSales : 1
+                const netRatio  = kpis.grossSales > 0 && kpis.netRevenue  > 0 ? kpis.netRevenue  / kpis.grossSales : 0
+                const bucketKey = dateStr => {
+                  if (ovGran === 'daily') return dateStr
+                  if (ovGran === 'weekly') {
+                    const d = new Date(dateStr); const day = d.getDay()
+                    const diff = d.getDate() - day + (day === 0 ? -6 : 1)
+                    return new Date(d.setDate(diff)).toISOString().slice(0, 10)
+                  }
+                  return dateStr.slice(0, 7)
+                }
+                // build unified map
+                const map = {}
+                rawDaily.forEach(r => {
+                  const k = bucketKey(r.date || '')
+                  if (!map[k]) map[k] = { label: k, grossExcGst: 0, netRevenue: 0, newCustomers: 0, repeatCustomers: 0, totalOrders: 0, aovSum: 0, aovN: 0, spend: 0 }
+                  map[k].grossExcGst     += (r.grossSales || 0) * excRatio
+                  map[k].netRevenue      += (r.grossSales || 0) * netRatio
+                  map[k].newCustomers    += r.newCustomers || 0
+                  map[k].repeatCustomers += r.repeatCustomers || 0
+                  map[k].totalOrders     += r.totalOrders || 0
+                  if (r.totalOrders > 0) { map[k].aovSum += r.grossSales || 0; map[k].aovN += r.totalOrders }
+                })
+                rawDailySpend.forEach(r => {
+                  const k = bucketKey(r.date || '')
+                  if (!map[k]) map[k] = { label: k, grossExcGst: 0, netRevenue: 0, newCustomers: 0, repeatCustomers: 0, totalOrders: 0, aovSum: 0, aovN: 0, spend: 0 }
+                  map[k].spend += r.totalSpend || 0
+                })
+                const chartData = Object.values(map).sort((a, b) => a.label < b.label ? -1 : 1).map(r => ({
+                  ...r,
+                  aov:  r.aovN > 0 ? Math.round(r.aovSum / r.aovN) : 0,
+                  roas: r.spend > 0 ? parseFloat((r.grossExcGst / r.spend).toFixed(2)) : 0,
+                  cac:  r.newCustomers > 0 ? Math.round(r.spend / r.newCustomers) : 0,
+                }))
+
+                const views = [
+                  { id: 'revenue',   label: 'Revenue & Spend' },
+                  { id: 'customers', label: 'Customers' },
+                  { id: 'aov',       label: 'AOV' },
+                ]
+                const pill = active => ({
+                  background: active ? '#C9A24F' : '#FBF6E8',
+                  color: active ? '#fff' : '#8A7F63',
+                  border: `1px solid ${active ? '#C9A24F' : '#F0E2BC'}`,
+                  borderRadius: 20, padding: '3px 11px', fontSize: 11,
+                  cursor: 'pointer', fontWeight: active ? 700 : 500,
+                  fontFamily: 'Inter, sans-serif', outline: 'none',
+                })
+                const granPill = active => ({
+                  ...pill(active),
+                  padding: '2px 9px', fontSize: 10.5,
+                })
+                const ttStyle = { background: '#fff', border: '1px solid #F0E2BC', borderRadius: 8, fontSize: 11, color: '#3A3324' }
+
+                return (
+                  <div style={{ background: '#fff', borderRadius: 14, overflow: 'hidden', boxShadow: '0 1px 3px rgba(80,65,20,.04)', border: '1px solid #F0EADC' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 16px', borderBottom: '1px solid #F0EADC', flexWrap: 'wrap', gap: 8 }}>
+                      <div style={{ fontSize: 11, fontWeight: 800, color: '#3A3324', textTransform: 'uppercase', letterSpacing: '.08em', fontFamily: 'Inter, sans-serif' }}>Performance Trend</div>
+                      <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+                        <div style={{ display: 'flex', gap: 4 }}>
+                          {views.map(v => <button key={v.id} style={pill(ovChartView === v.id)} onClick={() => setOvChartView(v.id)}>{v.label}</button>)}
+                        </div>
+                        <div style={{ width: 1, height: 16, background: '#E2D9C8' }} />
+                        <div style={{ display: 'flex', gap: 4 }}>
+                          {['daily','weekly','monthly'].map(g => <button key={g} style={granPill(ovGran === g)} onClick={() => setOvGran(g)}>{g.charAt(0).toUpperCase()+g.slice(1)}</button>)}
+                        </div>
+                      </div>
+                    </div>
+                    <div style={{ padding: '14px 16px' }}>
+                      <ResponsiveContainer width="100%" height={280}>
+                        {ovChartView === 'revenue' ? (
+                          <ComposedChart data={chartData} margin={{ top: 4, right: 50, bottom: 4, left: 0 }}>
+                            <CartesianGrid stroke="#F0EADC" />
+                            <XAxis dataKey="label" tick={{ fontSize: 10, fill: '#B8AE93' }} />
+                            <YAxis yAxisId="rev" tick={{ fontSize: 10, fill: '#B8AE93' }} tickFormatter={v => fmtBig(v)} />
+                            <YAxis yAxisId="roas" orientation="right" tick={{ fontSize: 10, fill: '#B8AE93' }} tickFormatter={v => `${v}×`} />
+                            <Tooltip contentStyle={ttStyle} itemStyle={{ color: '#3A3324' }} labelStyle={{ color: '#3A3324', fontWeight: 700 }} formatter={(v, name) => name === 'RoAS' ? [`${v}×`, name] : name === 'CAC' ? [fmt(v), name] : [fmt(v), name]} />
+                            <Legend wrapperStyle={{ fontSize: 10, fontFamily: 'Inter, sans-serif' }} />
+                            <Bar yAxisId="rev" dataKey="grossExcGst" name="Gross Sales (ex GST)" fill="#E8C578" maxBarSize={32} radius={[3,3,0,0]} />
+                            <Bar yAxisId="rev" dataKey="netRevenue"   name="Net Revenue"          fill="#C9A24F" maxBarSize={32} radius={[3,3,0,0]} />
+                            <Bar yAxisId="rev" dataKey="spend"        name="Ad Spend"             fill="#4A7CC7" maxBarSize={32} radius={[3,3,0,0]} opacity={0.7} />
+                            <Line yAxisId="roas" type="monotone" dataKey="roas" name="RoAS" stroke="#3A3324" strokeWidth={2} dot={false} />
+                          </ComposedChart>
+                        ) : ovChartView === 'customers' ? (
+                          <ComposedChart data={chartData} margin={{ top: 4, right: 50, bottom: 4, left: 0 }}>
+                            <CartesianGrid stroke="#F0EADC" />
+                            <XAxis dataKey="label" tick={{ fontSize: 10, fill: '#B8AE93' }} />
+                            <YAxis yAxisId="cust" tick={{ fontSize: 10, fill: '#B8AE93' }} tickFormatter={v => fmtN(v)} />
+                            <YAxis yAxisId="cac" orientation="right" tick={{ fontSize: 10, fill: '#B8AE93' }} tickFormatter={v => fmt(v)} />
+                            <Tooltip contentStyle={ttStyle} itemStyle={{ color: '#3A3324' }} labelStyle={{ color: '#3A3324', fontWeight: 700 }} formatter={(v, name) => name === 'CAC' ? [fmt(v), name] : [fmtN(v), name]} />
+                            <Legend wrapperStyle={{ fontSize: 10, fontFamily: 'Inter, sans-serif' }} />
+                            <Bar yAxisId="cust" dataKey="newCustomers"    name="New Customers"    fill="#E8C578" maxBarSize={32} radius={[3,3,0,0]} />
+                            <Bar yAxisId="cust" dataKey="repeatCustomers" name="Repeat Customers" fill="#C9A24F" maxBarSize={32} radius={[3,3,0,0]} />
+                            <Line yAxisId="cac" type="monotone" dataKey="cac" name="CAC" stroke="#3A3324" strokeWidth={2} dot={false} />
+                          </ComposedChart>
+                        ) : (
+                          <ComposedChart data={chartData} margin={{ top: 4, right: 50, bottom: 4, left: 0 }}>
+                            <CartesianGrid stroke="#F0EADC" />
+                            <XAxis dataKey="label" tick={{ fontSize: 10, fill: '#B8AE93' }} />
+                            <YAxis yAxisId="aov" tick={{ fontSize: 10, fill: '#B8AE93' }} tickFormatter={v => fmt(v)} />
+                            <YAxis yAxisId="rr" orientation="right" tick={{ fontSize: 10, fill: '#B8AE93' }} tickFormatter={v => `${v.toFixed(0)}%`} />
+                            <Tooltip contentStyle={ttStyle} itemStyle={{ color: '#3A3324' }} labelStyle={{ color: '#3A3324', fontWeight: 700 }} formatter={(v, name) => name === 'Repeat Rev %' ? [`${v.toFixed(1)}%`, name] : [fmt(v), name]} />
+                            <Legend wrapperStyle={{ fontSize: 10, fontFamily: 'Inter, sans-serif' }} />
+                            <Bar yAxisId="aov" dataKey="aov" name="AOV (ex GST)" fill="#E8C578" maxBarSize={32} radius={[3,3,0,0]} />
+                            <Line yAxisId="rr" type="monotone" dataKey="roas" name="RoAS" stroke="#C9A24F" strokeWidth={2} dot={false} />
+                            <Line yAxisId="aov" type="monotone" dataKey="cac" name="CAC" stroke="#3A3324" strokeWidth={2} dot={false} strokeDasharray="4 3" />
+                          </ComposedChart>
+                        )}
+                      </ResponsiveContainer>
+                    </div>
+                  </div>
+                )
+              })()}
+
             </div>
           )
         })()}
