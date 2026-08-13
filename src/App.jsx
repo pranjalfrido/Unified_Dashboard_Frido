@@ -10425,25 +10425,8 @@ function CustomerPage({ filters }) {
             })).sort((a, b) => a.date.localeCompare(b.date))
           }
 
-          // ── 1. Insight banner ──
-          const insightBanner = (() => {
-            if (enriched.length < 8) return null
-            const last = enriched[enriched.length - 1]
-            const prev7 = enriched.slice(-8, -1)
-            const avg7nc = prev7.reduce((s, r) => s + (r.newCustomers || 0), 0) / prev7.length
-            if (avg7nc > 0) {
-              const dev = ((last.newCustomers || 0) - avg7nc) / avg7nc * 100
-              if (Math.abs(dev) > 30) {
-                const dir = dev > 0 ? 'above' : 'below'
-                return `${last.date}: New customer acquisitions are ${Math.abs(dev).toFixed(0)}% ${dir} the 7-day average (${fmtN(Math.round(avg7nc))} avg vs ${fmtN(last.newCustomers)} today) — verify this isn't a partial-day reporting artifact.`
-              }
-            }
-            // fallback: biggest mover in the period
-            const metaDelta = prevKpis.metaSpend ? (kpis.metaSpend - prevKpis.metaSpend) / prevKpis.metaSpend * 100 : null
-            const cacDelta = prevKpis.cac ? (kpis.cac - prevKpis.cac) / prevKpis.cac * 100 : null
-            if (cacDelta !== null) return `CAC is ${Math.abs(cacDelta).toFixed(1)}% ${cacDelta < 0 ? 'lower' : 'higher'} than last period at ${fmt(kpis.cac)}, acquiring ${fmtN(kpis.newCustomers)} new customers on ${fmt(kpis.totalSpend)} spend.`
-            return null
-          })()
+          // ── 1. Insight banner removed ──
+          const insightBanner = null
 
           // ── 2. KPI cards data ──
           const acqRate = kpis.totalCustomers > 0 ? kpis.newCustomers / kpis.totalCustomers : 0
@@ -10568,12 +10551,6 @@ function CustomerPage({ filters }) {
           return (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 16, paddingTop: 14, paddingLeft: 16, paddingRight: 16, paddingBottom: 24, background: T.bg, width: '100%', boxSizing: 'border-box' }}>
 
-              {/* 1. Insight banner */}
-              {insightBanner && (
-                <div style={{ background: T.amberSoft, border: `1px solid ${T.amberLine}`, borderRadius: 10, padding: '10px 14px', fontSize: 12, color: T.t1, fontStyle: 'italic', lineHeight: 1.5 }}>
-                  ⚡ {insightBanner}
-                </div>
-              )}
 
               {/* 2. KPI row */}
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6,1fr)', gap: 10 }}>
@@ -11066,7 +11043,7 @@ function CustomerPage({ filters }) {
                       </tr>
                     </thead>
                     <tbody>
-                      {cohortMonths.map((cm, ri) => {
+                      {cohortMonths.filter(cm => (cohort0[cm] || 0) > 0).map((cm, ri) => {
                         const base = cohortMode === 'customer' ? (cohort0[cm] || 0) : (cohortRev0[cm] || 0)
                         return (
                           <tr key={cm} style={{ borderBottom: `1px solid ${CT.borderSoft}`, background: ri % 2 === 0 ? CT.card : CT.bg }}>
@@ -11770,16 +11747,7 @@ function CustomerPage({ filters }) {
           const blendedRoAS = kpis.roas || 0
           const blendedCAC  = kpis.cac || 0
 
-          // ── Channel insight: flag if one channel has dramatically higher RoAS ──
-          const channelInsight = (() => {
-            if (metaRoAS > 0 && googleRoAS > 0) {
-              const ratio = metaRoAS > googleRoAS ? metaRoAS / googleRoAS : googleRoAS / metaRoAS
-              const higher = metaRoAS > googleRoAS ? 'Meta' : 'Google'
-              const lower  = metaRoAS > googleRoAS ? 'Google' : 'Meta'
-              if (ratio >= 1.5) return `${higher} is running at ${ratio.toFixed(1)}× the RoAS of ${lower} — worth testing incremental budget shift toward ${higher}.`
-            }
-            return null
-          })()
+          const channelInsight = null
 
           // ── CAC zero-while-spend bug flag ──
           const cacMissing = (kpis.metaSpend > 0 || kpis.googleSpend > 0)
@@ -11867,11 +11835,6 @@ function CustomerPage({ filters }) {
                   <span style={cardTitle}>Channel Efficiency</span>
                 </div>
                 <div style={{ padding: '0 0 4px' }}>
-                  {channelInsight && (
-                    <div style={{ padding: '8px 16px', background: SD.amberSoft, borderBottom: `1px solid ${SD.amberLine}`, fontSize: 11, color: SD.t1, fontFamily: 'Inter, sans-serif' }}>
-                      💡 {channelInsight}
-                    </div>
-                  )}
                   <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
                     <thead>
                       <tr style={{ background: SD.amberSoft, borderBottom: `1px solid ${SD.amberLine}` }}>

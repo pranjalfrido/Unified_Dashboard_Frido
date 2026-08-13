@@ -116,9 +116,8 @@ ORDER BY day`),
 ),
 all_orders AS (
   SELECT CustomerId, DATE_TRUNC(DATE(OrderDate), MONTH) AS order_month,
-    -- Only count successful orders (exclude Cancel/RTO/CIR) for both customer and revenue retention
-    COUNT(DISTINCT CASE WHEN LOWER(Order_Status) NOT IN ('cancelled','cancel','rto','rto initiated','rto delivered','cir return','cir') THEN OrderId END) AS valid_orders,
-    SUM(CASE WHEN LOWER(Order_Status) NOT IN ('cancelled','cancel','rto','rto initiated','rto delivered','cir return','cir') THEN SellingPrice_Exc_GST ELSE 0 END) AS revenue
+    COUNT(DISTINCT OrderId) AS order_count,
+    SUM(SellingPrice_Exc_GST) AS revenue
   FROM ${TBL}
   WHERE Channel = 'Shopify' AND CustomerId IS NOT NULL
   GROUP BY CustomerId, order_month
@@ -126,13 +125,11 @@ all_orders AS (
 cohort_data AS (
   SELECT f.cohort_month,
     DATE_DIFF(a.order_month, f.cohort_month, MONTH) AS cohort_index,
-    -- Only count customers who had at least 1 successful order that month
-    COUNT(DISTINCT CASE WHEN a.valid_orders > 0 THEN a.CustomerId END) AS customers,
+    COUNT(DISTINCT a.CustomerId) AS customers,
     ROUND(SUM(a.revenue), 0) AS revenue
   FROM first_orders f
   JOIN all_orders a USING (CustomerId)
-  WHERE f.cohort_month >= '2024-01-01'
-    AND f.cohort_month <= DATE_TRUNC(DATE('${e}'), MONTH)
+  WHERE f.cohort_month <= DATE_TRUNC(DATE('${e}'), MONTH)
     AND DATE_DIFF(a.order_month, f.cohort_month, MONTH) BETWEEN 0 AND 54
   GROUP BY cohort_month, cohort_index
 )
