@@ -20,7 +20,7 @@ const INVENTORY_DATE_THEME = {
   bg: IC.page, card: IC.surfaceHi, border: IC.border, border2: IC.border2,
   t1: IC.t1, t2: IC.t2, t3: IC.t3,
 }
-import { ReferenceLine, LabelList } from 'recharts'
+import { ReferenceLine, LabelList, ScatterChart, Scatter } from 'recharts'
 
 // ── Logistics Page ────────────────────────────────────────────
 const COURIERS = ['Bluedart','Delhivery','Delhivery NDD','Ekart','ElasticRun','Safexpress','Shadowfax','Shiprocket','Skye Air','Swift','Urbane Bolt']
@@ -6640,8 +6640,9 @@ function AdsTab({ data, filters = {} }) {
   const totalImpressions = filtTotals.reduce((s, x) => s + x.impressions, 0)
   const totalClicks = filtTotals.reduce((s, x) => s + x.clicks, 0)
   const totalOrders = filtTotals.reduce((s, x) => s + x.orders, 0)
-  // ROAS = net channel revenue (exc GST) / spend
-  const overallRoas = totalSpend > 0 ? totalRevenue / totalSpend : 0
+  // ROAS = net channel revenue (exc GST) / spend (D2C includes additional spend in denominator)
+  const _roasSpend = isD2C ? totalSpend + (additionalSpend || 0) : totalSpend
+  const overallRoas = _roasSpend > 0 ? totalRevenue / _roasSpend : 0
   const overallCtr = totalImpressions > 0 ? totalClicks / totalImpressions * 100 : 0
   const overallCpc = totalClicks > 0 ? totalSpend / totalClicks : 0
   const overallCpm = totalImpressions > 0 ? (totalSpend / totalImpressions) * 1000 : 0
@@ -6818,13 +6819,13 @@ function AdsTab({ data, filters = {} }) {
             { label: 'Google Spend', value: fmt(d2cGoogleSpend), badge: chgBadge(d2cGoogleSpend, d2cPrevGoogleSpend), sub: 'Google ad spend', accentColor: '#34A853' },
             { label: 'Additional Spend', value: fmt(additionalSpend || 0), sub: 'D2C additional mktg spend' },
             { label: 'Gross Revenue Ex GST', value: fmt(totalRevenue), badge: chgBadge(totalRevenue, prevRevenue), sub: 'D2C exc. GST (Meta+Google)' },
-            { label: 'Overall ROAS', value: `${overallRoas.toFixed(2)}x`, badge: chgBadge(overallRoas, prevRoas), sub: 'Revenue (Ex GST) / Spend', roasVal: overallRoas },
+            { label: 'Overall ROAS', value: `${overallRoas.toFixed(2)}x`, badge: chgBadge(overallRoas, prevRoas), sub: 'Gross Revenue (Ex GST) / Spend', roasVal: overallRoas },
             { label: 'Orders', value: fmtN(currentOrders), sub: 'Distinct orders', badge: chgBadge(currentOrders, prevOrders) },
             { label: 'Total Clicks', value: fmtBig(totalClicks), badge: chgBadge(totalClicks, prevClicks), sub: 'Across all platforms' },
           ] : [
             { label: 'Total Spend', value: fmt(totalSpend), badge: chgBadge(totalSpend, prevSpend), sub: 'Ad spend incl. all platforms' },
             { label: 'Gross Revenue Ex GST', value: fmt(totalRevenue), badge: chgBadge(totalRevenue, prevRevenue), sub: selPlatform ? `${selPlatform === 'Meta' || selPlatform === 'Google' ? 'D2C (spend-split)' : selPlatform} exc. GST` : 'All channels exc. GST' },
-            { label: 'Overall ROAS', value: `${overallRoas.toFixed(2)}x`, badge: chgBadge(overallRoas, prevRoas), sub: 'Revenue (Ex GST) / Spend', roasVal: overallRoas },
+            { label: 'Overall ROAS', value: `${overallRoas.toFixed(2)}x`, badge: chgBadge(overallRoas, prevRoas), sub: 'Gross Revenue (Ex GST) / Spend', roasVal: overallRoas },
             { label: 'Total Clicks', value: fmtBig(totalClicks), badge: chgBadge(totalClicks, prevClicks), sub: 'Across all platforms' },
             { label: 'Impressions', value: fmtBig(totalImpressions), badge: chgBadge(totalImpressions, prevImpressions), sub: 'Total ad impressions' },
           ]
@@ -9682,587 +9683,2195 @@ function Skeleton() {
 // ── Main App ──────────────────────────────────────────────────
 const TAB_TO_CHANNEL = { blinkit: 'Blinkit', instamart: 'Instamart', zepto: 'Zepto', cred: 'CRED', firstcry: 'Firstcry' }
 
+// ── CustomerPage ──────────────────────────────────────────────
+// NEW BACKEND FIELDS NEEDED — checklist for /api/customer:
+//   1. customersByChannel: [{channel, customers, spend, cac, roas}]
+//   2. daysToSecondPurchase: [{bucket, pct, count}]
+//   3. aovByOrderNumber: [{orderNum, aov}]
+//   4. segmentMigration: [{from, to, customers, direction}]
+//   5. discountDepthRepeatRate: [{bucket, repeatRate}]
+
+const CP = {
+  bg: '#FFFFFF', paper: '#FFFFFF', ink: '#15130B', ink2: '#4A4636', ink3: '#8A8468',
+  yellow: '#F5C518', yellowDeep: '#D9A800', head: '#F3DFA0', headLine: '#E6C877',
+  line: '#15130B', lineSoft: '#D8CD9E', green: '#2E6B3E', red: '#A62E2E',
+}
+
+function CpCard({ title, action, children }) {
+  return (
+    <div style={{ borderRadius: 8 }}>
+      <div style={{ background: CP.head, borderBottom: `1px solid ${CP.headLine}`, padding: '8px 14px', display: 'flex', flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+        <span style={{ fontFamily: 'Space Grotesk, var(--font)', fontWeight: 700, fontSize: 12, color: CP.ink, textTransform: 'uppercase', letterSpacing: '.06em' }}>{title}</span>
+        {action && <span>{action}</span>}
+      </div>
+      <div style={{ padding: '12px 14px' }}>{children}</div>
+    </div>
+  )
+}
+
+function CpDelta({ cur, prev }) {
+  if (prev === 0 || prev == null) return null
+  const chg = (cur - prev) / Math.abs(prev) * 100
+  return (
+    <span style={{ color: chg >= 0 ? CP.green : CP.red, fontFamily: 'JetBrains Mono, monospace', fontSize: 11, fontWeight: 700 }}>
+      {chg >= 0 ? `▲ ${chg.toFixed(1)}%` : `▼ ${Math.abs(chg).toFixed(1)}%`}
+    </span>
+  )
+}
+
+function CpBackendTodo({ field }) {
+  return (
+    <div style={{ border: `2px dashed ${CP.lineSoft}`, padding: 18, textAlign: 'center', color: CP.ink3, fontSize: 11 }}>
+      Needs backend support — {field} not yet in API
+    </div>
+  )
+}
+
+function HeroSparkCard({ c }) {
+  const [hov, setHov] = useState(null)
+  const [hovCard, setHovCard] = useState(false)
+  const svgRef = useRef(null)
+  const W = 200, H = 32
+  const vals = c.sparkVals
+  if (!vals || vals.length < 2) return null
+  const min = Math.min(...vals), max = Math.max(...vals)
+  const range = max - min || 1
+  const getX = i => (i / (vals.length - 1)) * W
+  const getY = v => H - 2 - ((v - min) / range) * (H - 6)
+  const linePts = vals.map((v, i) => `${getX(i)},${getY(v)}`).join(' ')
+  // area path: line + down to bottom-right + across to bottom-left + close
+  const areaPath = `M ${vals.map((v, i) => `${getX(i)},${getY(v)}`).join(' L ')} L ${getX(vals.length - 1)},${H} L ${getX(0)},${H} Z`
+  const gradId = `sg-${c.label.replace(/\s/g, '')}`
+  const hovIdx = hov !== null ? hov : vals.length - 1
+  const hovX = getX(hovIdx), hovY = getY(vals[hovIdx])
+  const handleMove = e => {
+    const rect = svgRef.current?.getBoundingClientRect()
+    if (!rect) return
+    const x = e.clientX - rect.left
+    const idx = Math.round((x / rect.width) * (vals.length - 1))
+    setHov(Math.max(0, Math.min(vals.length - 1, idx)))
+  }
+  return (
+    <div onMouseEnter={() => setHovCard(true)} onMouseLeave={() => setHovCard(false)} style={{ background: 'var(--card)', border: `1px solid ${hovCard ? '#F5C518' : 'var(--b1)'}`, borderRadius: 12, padding: '10px 14px 6px', display: 'flex', flexDirection: 'column', gap: 2, transition: 'border-color .15s', cursor: 'default' }}>
+      <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: '.08em', color: 'var(--t3)', textTransform: 'uppercase' }}>{c.label}</span>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 4 }}>
+        <span style={{ fontSize: 20, fontWeight: 700, letterSpacing: '-.02em', lineHeight: 1.15, color: c.valColor }}>{c.value}</span>
+        {c.badge}
+      </div>
+      <span style={{ fontSize: 10, color: 'var(--t3)', marginBottom: 2 }}>{c.sub}</span>
+      <div style={{ position: 'relative' }}>
+        <svg ref={svgRef} width="100%" height={H} viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none"
+          style={{ display: 'block', cursor: 'crosshair' }}
+          onMouseMove={handleMove}
+          onMouseLeave={() => setHov(null)}>
+          <defs>
+            <linearGradient id={gradId} x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor={c.sparkColor} stopOpacity="0.25" />
+              <stop offset="100%" stopColor={c.sparkColor} stopOpacity="0" />
+            </linearGradient>
+          </defs>
+          {/* filled area */}
+          <path d={areaPath} fill={`url(#${gradId})`} />
+          {/* line */}
+          <polyline points={linePts} fill="none" stroke={c.sparkColor} strokeWidth="1.8" strokeLinejoin="round" strokeLinecap="round" opacity="0.9" />
+          {hov !== null && <circle cx={hovX} cy={hovY} r="3.5" fill={c.sparkColor} />}
+        </svg>
+        {hov !== null && (
+          <div style={{
+            position: 'absolute', top: 2,
+            left: hovX / W * 100 > 65 ? 'auto' : 4,
+            right: hovX / W * 100 > 65 ? 4 : 'auto',
+            background: 'var(--card)', borderRadius: 4,
+            padding: '1px 6px', pointerEvents: 'none',
+            fontSize: 11, fontWeight: 700, color: c.valColor,
+            boxShadow: '0 1px 4px rgba(0,0,0,.15)'
+          }}>
+            {c.fmt(vals[hovIdx])}
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
 function CustomerPage({ filters }) {
   const [custData, setCustData] = useState(null)
   const [custError, setCustError] = useState(null)
   const [loading, setLoading] = useState(false)
   const [crossFilter, setCrossFilter] = useState('Category')
   const [granularity, setGranularity] = useState('daily')
-  const [secCollapsed, setSecCollapsed] = useState({ trends: false, cohort: false, purchase: false, rfm: false, discount: false })
-  const toggleSec = k => setSecCollapsed(s => ({ ...s, [k]: !s[k] }))
   const [spendGranularity, setSpendGranularity] = useState('daily')
+  const [activeTab, setActiveTab] = useState('overview')
+  const [nrMetric, setNrMetric] = useState('customers')
+  const [nrGran, setNrGran] = useState('daily')
+  const [spendChartGran, setSpendChartGran] = useState('daily')
+  const [spendCacGran, setSpendCacGran] = useState('daily')
+  const [cacBandGran, setCacBandGran] = useState('daily')
+  const [cohortMode, setCohortMode] = useState('customer')
+  const [cohortDisplay, setCohortDisplay] = useState('pct')
+  const [cohortMonthLimit, setCohortMonthLimit] = useState(14)
   const API = import.meta.env.VITE_API_URL || ''
 
   useEffect(() => {
-    setLoading(true); setCustError(null)
+    if (!filters?.start || !filters?.end) return
+    setLoading(true)
+    setCustError(null)
     fetch(`${API}/api/customer`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ start: filters.start, end: filters.end })
+      body: JSON.stringify({ start: filters.start, end: filters.end }),
     })
-      .then(r => r.json())
-      .then(d => { if (d.error) { setCustError(d.error); setCustData(null) } else { setCustData(d) }; setLoading(false) })
+      .then(r => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json() })
+      .then(d => { setCustData(d); setLoading(false) })
       .catch(e => { setCustError(e.message); setLoading(false) })
-  }, [filters.start, filters.end])
+  }, [filters?.start, filters?.end])
 
-  if (loading) return <div style={{ padding: 60, textAlign: 'center', color: C.t3 }}>Loading customer data...</div>
-  if (custError) return <div style={{ padding: 40, margin: 16, borderRadius: 10, background: C.red.bg, border: `1px solid ${C.red.bd}`, color: C.red.tx, fontSize: 12 }}><strong>Error loading customer data:</strong> {custError}</div>
-  if (!custData) return <div style={{ padding: 60, textAlign: 'center', color: C.t3 }}>Select a date range to load customer analysis</div>
+  if (loading) return (
+    <div style={{ background: CP.bg, padding: 40, textAlign: 'center', fontFamily: 'Space Grotesk, var(--font)', color: CP.ink3, fontSize: 13 }}>
+      Loading customer data…
+    </div>
+  )
+  if (custError) return (
+    <div style={{ background: CP.bg, padding: 40, textAlign: 'center', fontFamily: 'Space Grotesk, var(--font)', color: CP.red, fontSize: 13 }}>
+      Error: {custError}
+    </div>
+  )
+  if (!custData) return (
+    <div style={{ background: CP.bg, padding: 40, textAlign: 'center', fontFamily: 'Space Grotesk, var(--font)', color: CP.ink3, fontSize: 13 }}>
+      No data — select a date range.
+    </div>
+  )
 
-  const { kpis = {}, prevKpis = {}, daily: rawDaily = [], cohort = [], rfm = [], freqDist = [], monetaryDist = [], inactivity = [], discountDist = [], crossSell = [], dailySpend: rawDailySpend = [] } = custData
+  const {
+    kpis = {}, prevKpis = {},
+    daily: rawDaily = [],
+    cohort = [],
+    rfm = [],
+    segMigration = [],
+    freqDist = [],
+    monetaryDist = [],
+    inactivity = [],
+    discountDist = [],
+    discountRepeatRate = [],
+    crossSell = [],
+    dailySpend: rawDailySpend = [],
+  } = custData
 
-  // Aggregate daily rows into the selected granularity
-  const monthly = (() => {
-    const buckets = {}
-    rawDaily.forEach(r => {
-      const d = new Date(r.day)
-      let key, label
-      if (granularity === 'daily') {
-        key = r.day
-        label = d.toLocaleDateString('en-IN', { day: '2-digit', month: 'short' })
-      } else if (granularity === 'weekly') {
-        // ISO week start (Monday)
-        const day = d.getDay()
-        const diff = (day === 0 ? -6 : 1 - day)
-        const mon = new Date(d); mon.setDate(d.getDate() + diff)
-        key = mon.toISOString().slice(0, 10)
-        label = `W${mon.toLocaleDateString('en-IN', { day: '2-digit', month: 'short' })}`
-      } else {
-        key = r.day.slice(0, 7)
-        label = d.toLocaleDateString('en-IN', { month: 'short', year: '2-digit' })
-      }
-      if (!buckets[key]) buckets[key] = { month: label, customersAcquired: 0, totalOrders: 0, grossSales: 0, repeatRevenue: 0, newRevenue: 0, newCustomers: 0, repeatCustomers: 0, newOrders: 0, repeatOrders: 0 }
-      buckets[key].customersAcquired += r.customersAcquired
-      buckets[key].totalOrders += r.totalOrders
-      buckets[key].grossSales += r.grossSales
-      buckets[key].repeatRevenue += r.repeatRevenue
-      buckets[key].newRevenue += r.newRevenue
-      buckets[key].newCustomers += r.newCustomers
-      buckets[key].repeatCustomers += r.repeatCustomers
-      buckets[key].newOrders += r.newOrders
-      buckets[key].repeatOrders += r.repeatOrders
-    })
-    return Object.entries(buckets).sort(([a], [b]) => a.localeCompare(b)).map(([, v]) => ({
-      ...v,
-      aov: v.totalOrders > 0 ? v.grossSales / v.totalOrders : 0,
-      repeatRevenueRate: v.grossSales > 0 ? v.repeatRevenue / v.grossSales : 0,
-    }))
-  })()
+  const bucketKey = (dateStr) => {
+    if (!dateStr) return 'Unknown'
+    if (granularity === 'daily') return dateStr
+    if (granularity === 'weekly') {
+      const d = new Date(dateStr)
+      const day = d.getDay()
+      const diff = d.getDate() - day + (day === 0 ? -6 : 1)
+      const mon = new Date(d.setDate(diff))
+      return mon.toISOString().slice(0, 10)
+    }
+    return dateStr.slice(0, 7)
+  }
 
-  // Cohort pivot — customers and revenue
-  const cohortMap = {}      // cohortMap[month][idx] = { customers, revenue }
-  const cohort0 = {}        // base customers at index 0
-  const cohortRev0 = {}     // base revenue at index 0
-  cohort.forEach(r => {
-    if (!cohortMap[r.cohortMonth]) cohortMap[r.cohortMonth] = {}
-    cohortMap[r.cohortMonth][r.cohortIndex] = { customers: r.customers, revenue: r.revenue }
-    if (r.cohortIndex === 0) { cohort0[r.cohortMonth] = r.customers; cohortRev0[r.cohortMonth] = r.revenue }
+  const monthlyMap = {}
+  rawDaily.forEach(r => {
+    const k = bucketKey(r.date || r.month || r.label || '')
+    if (!monthlyMap[k]) monthlyMap[k] = { month: k, grossSales: 0, customersAcquired: 0, repeatRevenue: 0, totalOrders: 0 }
+    monthlyMap[k].grossSales += r.grossSales || 0
+    monthlyMap[k].customersAcquired += r.newCustomers || r.customersAcquired || 0
+    monthlyMap[k].repeatRevenue += r.repeatRevenue || 0
+    monthlyMap[k].totalOrders += r.totalOrders || 0
+  })
+  const monthly = Object.values(monthlyMap).sort((a, b) => a.month < b.month ? -1 : 1).map(r => ({
+    ...r,
+    aov: r.totalOrders > 0 ? r.grossSales / r.totalOrders : 0,
+    repeatRevenueRate: r.grossSales > 0 ? r.repeatRevenue / r.grossSales * 100 : 0,
+  }))
+
+  const cohortMap = {}
+  const cohort0 = {}
+  const cohortRev0 = {}
+  cohort.forEach(row => {
+    const cm = row.cohortMonth || row.cohort_month || ''
+    const idx = row.cohortIndex ?? row.cohort_index ?? 0
+    if (!cohortMap[cm]) cohortMap[cm] = {}
+    cohortMap[cm][idx] = row
+    if (idx === 0) {
+      cohort0[cm] = row.customers || 0
+      cohortRev0[cm] = row.revenue || 0
+    }
   })
   const cohortMonths = Object.keys(cohortMap).sort()
-  const maxCohortIdx = Math.max(...cohort.map(r => r.cohortIndex), 0)
+  let maxCohortIdx = 0
+  cohort.forEach(r => {
+    const idx = r.cohortIndex ?? r.cohort_index ?? 0
+    if (idx > maxCohortIdx) maxCohortIdx = idx
+  })
 
-  // RFM treemap data
-  const RFM_COLORS = { 'Champions': '#FFD600', 'Loyal Customers': '#FFE033', 'Recent Users': '#FAD000', 'Potential Loyalists': '#F5C800', 'Cannot Lose Them': '#EFC000', "Can't Lose Them": '#EFC000', 'Hibernating': '#E8B800', 'Others': '#E0B000', 'Price Sensitive': '#D9A800', 'Needs Attention': '#F2CA00', 'About to Sleep': '#DCAC00', 'Lost Customers': '#D4A400' }
-  const rfmTotal = rfm.reduce((s, r) => s + r.totalRevenue, 0)
+  const rfmTotal = rfm.reduce((s, r) => s + (r.customers || 0), 0)
 
-  // Cross-sell pivot — supports Category / Sub Category toggle
   const crossFirstKey = crossFilter === 'Category' ? 'firstCategory' : 'firstSubCategory'
   const crossSecondKey = crossFilter === 'Category' ? 'secondCategory' : 'secondSubCategory'
-  const allCrossFirst = [...new Set(crossSell.map(r => r[crossFirstKey]).filter(Boolean))].sort()
-  const allCrossSecond = [...new Set(crossSell.map(r => r[crossSecondKey]).filter(Boolean))].sort()
+  const allCrossFirst = [...new Set(crossSell.map(r => r[crossFirstKey]).filter(Boolean))]
+  const allCrossSecond = [...new Set(crossSell.map(r => r[crossSecondKey]).filter(Boolean))]
   const crossMap = {}
   crossSell.forEach(r => {
-    const sk = r[crossSecondKey], fk = r[crossFirstKey]
-    if (!sk || !fk) return
-    if (!crossMap[sk]) crossMap[sk] = {}
-    crossMap[sk][fk] = (crossMap[sk][fk] || 0) + r.customers
+    const fk = r[crossFirstKey]; const sk = r[crossSecondKey]
+    if (!fk || !sk) return
+    if (!crossMap[fk]) crossMap[fk] = {}
+    crossMap[fk][sk] = (crossMap[fk][sk] || 0) + (r.customers || 0)
   })
-  const crossRows = allCrossSecond.filter(sc => crossMap[sc])
+  const crossRows = allCrossFirst.map(f => ({ first: f, data: allCrossSecond.map(s => crossMap[f]?.[s] || 0) }))
+
+  function Sparkline({ vals, color }) {
+    const W = 120, H = 40
+    if (!vals || vals.length < 2) return <svg width={W} height={H} />
+    const min = Math.min(...vals), max = Math.max(...vals)
+    const range = max - min || 1
+    const pts = vals.map((v, i) => {
+      const x = (i / (vals.length - 1)) * W
+      const y = H - ((v - min) / range) * (H - 4) - 2
+      return `${x},${y}`
+    }).join(' ')
+    const lastX = W
+    const lastY = H - ((vals[vals.length - 1] - min) / range) * (H - 4) - 2
+    return (
+      <svg width={W} height={H} style={{ display: 'block' }}>
+        <polyline points={pts} fill="none" stroke={color} strokeWidth={1.5} />
+        <circle cx={lastX} cy={lastY} r={3} fill={color} />
+      </svg>
+    )
+  }
+
+  const CP_TAB_ICONS = {
+    overview: (
+      <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+        <rect x="1" y="1" width="5" height="5" /><rect x="8" y="1" width="5" height="5" />
+        <rect x="1" y="8" width="5" height="5" /><rect x="8" y="8" width="5" height="5" />
+      </svg>
+    ),
+    trends: (
+      <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+        <polyline points="1,10 5,6 8,8 13,2" />
+        <polyline points="9,2 13,2 13,6" />
+      </svg>
+    ),
+    cohort: (
+      <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M12,7 A5,5 0 1,1 9.5,2.5" />
+        <polyline points="10,1 9.5,2.5 11,3.5" />
+      </svg>
+    ),
+    purchase: (
+      <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M2,1 L4,1 L5.5,8 L11,8 L12.5,3.5 L4.5,3.5" />
+        <circle cx="6" cy="11" r="1" /><circle cx="10.5" cy="11" r="1" />
+      </svg>
+    ),
+    rfm: (
+      <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+        <circle cx="7" cy="4" r="2.5" />
+        <path d="M1,13 C1,10 3.5,8.5 7,8.5 C10.5,8.5 13,10 13,13" />
+      </svg>
+    ),
+    spend: (
+      <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+        <line x1="3" y1="11" x2="11" y2="3" />
+        <circle cx="4" cy="4" r="1.5" /><circle cx="10" cy="10" r="1.5" />
+      </svg>
+    ),
+  }
+
+  const tabs = [
+    { id: 'overview', label: 'Overview' },
+    { id: 'trends', label: 'Acquisition & Trends' },
+    { id: 'cohort', label: 'Retention Cohort' },
+    { id: 'purchase', label: 'Purchase Behavior' },
+    { id: 'rfm', label: 'Segments & RFM' },
+    { id: 'spend', label: 'Spend & Discounts' },
+  ]
+
+  const ttStyle = { background: CP.paper, border: `2px solid ${CP.line}`, borderRadius: 0, padding: '8px 12px', fontSize: 11 }
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 14, padding: '0 4px' }}>
-      {/* Yellow info banner */}
-      <div style={{ background: C.acl, border: `1px solid #E6C200`, borderRadius: 9, padding: '8px 14px', fontSize: 12, color: '#7A6000' }}>
-        <strong>Shopify D2C only</strong> — Amazon, Flipkart & quick-commerce channels do not share customer identity
+    <div style={{ background: CP.bg, fontFamily: 'Inter, var(--font)', minHeight: '100%' }}>
+      <div className="sales-tabs">
+        {tabs.map(tab => (
+          <button key={tab.id} onClick={() => setActiveTab(tab.id)} className={`stab${activeTab === tab.id ? ' active' : ''}`}>
+            {CP_TAB_ICONS[tab.id]}
+            {tab.label}
+          </button>
+        ))}
       </div>
 
-      {/* Section 1: Overview KPIs — always visible */}
-      <LSectionTitle title="Overview KPIs" />
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(8, 1fr)', gap: 8 }}>
-        <LKpiCard label="Gross Sale" value={fmtBig(kpis.grossSales)} cur={kpis.grossSales} prev={prevKpis.grossSales} />
-        <LKpiCard label="Total Spend" value={fmtBig(kpis.totalSpend)} cur={kpis.totalSpend} prev={prevKpis.totalSpend} />
-        <LKpiCard label="Meta Spend" value={fmtBig(kpis.metaSpend)} cur={kpis.metaSpend} prev={prevKpis.metaSpend} />
-        <LKpiCard label="Google Spend" value={fmtBig(kpis.googleSpend)} cur={kpis.googleSpend} prev={prevKpis.googleSpend} />
-        <LKpiCard label="Total Customers" value={fmtBig(kpis.totalCustomers)} cur={kpis.totalCustomers} prev={prevKpis.totalCustomers} />
-        <LKpiCard label="New Customers" value={fmtBig(kpis.newCustomers)} cur={kpis.newCustomers} prev={prevKpis.newCustomers} />
-        <LKpiCard label="Returning Customers" value={fmtBig(kpis.returningCustomers)} cur={kpis.returningCustomers} prev={prevKpis.returningCustomers} />
-        <LKpiCard label="Repeat Rate" value={`${(kpis.repeatRate * 100).toFixed(2)}%`} cur={kpis.repeatRate} prev={prevKpis.repeatRate} />
-      </div>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(8, 1fr)', gap: 8 }}>
-        <LKpiCard label="RoAS" value={kpis.roas.toFixed(2)} cur={kpis.roas} prev={prevKpis.roas} />
-        <LKpiCard label="CAC" value={`₹${Math.round(kpis.cac).toLocaleString('en-IN')}`} cur={kpis.cac} prev={prevKpis.cac} />
-        <LKpiCard label="AOV" value={`₹${Math.round(kpis.aov).toLocaleString('en-IN')}`} cur={kpis.aov} prev={prevKpis.aov} />
-        <LKpiCard label="CLTV" value={fmt((kpis.grossSales || 0) / (kpis.totalCustomers || 1))} cur={kpis.grossSales / (kpis.totalCustomers || 1)} prev={prevKpis.grossSales / (prevKpis.totalCustomers || 1)} subValue="Rev / unique customer" />
-        <LKpiCard label="Acquisition Rate" value={`${(kpis.acquisitionRate * 100).toFixed(2)}%`} cur={kpis.acquisitionRate} prev={prevKpis.acquisitionRate} />
-        <LKpiCard label="Repeat Revenue" value={`${((kpis.repeatRevenueRate || 0) * 100).toFixed(2)}%`} cur={kpis.repeatRevenueRate} prev={prevKpis.repeatRevenueRate} subValue={fmt(kpis.repeatRevenue || 0)} />
-        <LKpiCard label="Revenue per Cust" value={fmt(kpis.grossSales / (kpis.totalCustomers || 1))} cur={kpis.grossSales / (kpis.totalCustomers || 1)} prev={prevKpis.grossSales / (prevKpis.totalCustomers || 1)} />
-        <LKpiCard label="Net Revenue %" value={kpis.netRevenueRate ? `${((kpis.netRevenueRate) * 100).toFixed(2)}%` : '—'} cur={kpis.netRevenueRate} prev={prevKpis.netRevenueRate} subValue={kpis.netRevenue ? fmt(kpis.netRevenue) : ''} />
-      </div>
+      <div>
 
-      {/* Section 2: Acquisition & Revenue Trends */}
-      <LSectionTitle title="Acquisition & Revenue Trends" collapsed={secCollapsed.trends} onToggle={() => toggleSec('trends')} />
-      {!secCollapsed.trends && (() => {
-        const xLabel = granularity === 'monthly' ? 'First Order Date Month' : granularity === 'weekly' ? 'First Order Date Week' : 'First Order Date'
-        const maxBar = granularity === 'daily' ? 18 : granularity === 'weekly' ? 30 : 48
-        const showLabels = monthly.length <= 20
-        return (
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
-        <Card title={xLabel} action={
-          <select value={granularity} onChange={e => setGranularity(e.target.value)} style={{ fontSize: 11, fontWeight: 600, padding: '3px 8px', borderRadius: 6, border: `1px solid ${C.border2}`, background: C.card, color: C.t1, cursor: 'pointer', fontFamily: 'var(--font)', outline: 'none' }}>
-            {['daily','weekly','monthly'].map(g => <option key={g} value={g}>{g.charAt(0).toUpperCase()+g.slice(1)}</option>)}
-          </select>
-        }>
-          <ResponsiveContainer width="100%" height={260}>
-            <ComposedChart data={monthly} margin={{ top: 20, right: 10, bottom: 0, left: 0 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke={C.border} vertical={false} />
-              <XAxis dataKey="month" tick={{ fontSize: 10 }} interval="preserveStartEnd" />
-              <YAxis yAxisId="cust" tick={{ fontSize: 10 }} tickFormatter={v => v.toLocaleString('en-IN')} width={55} />
-              <YAxis yAxisId="sales" orientation="right" tick={{ fontSize: 10 }} tickFormatter={v => v >= 1e7 ? `₹${(v/1e7).toFixed(1)}Cr` : v >= 1e5 ? `₹${(v/1e5).toFixed(0)}L` : `₹${(v/1000).toFixed(0)}K`} />
-              <YAxis yAxisId="aov" hide />
-              <YAxis yAxisId="rrr" hide />
-              <Tooltip content={({ active, payload, label }) => {
-                if (!active || !payload?.length) return null
-                const d = payload[0]?.payload || {}
+        {activeTab === 'overview' && (() => {
+          const chgBadgeCp = (cur, prev, lowerIsBetter = false) => {
+            if (!prev) return null
+            const pct = (cur - prev) / Math.abs(prev) * 100
+            const isGood = lowerIsBetter ? pct <= 0 : pct >= 0
+            return <span style={{ fontSize: 10, fontWeight: 700, color: isGood ? '#0D9E68' : '#B91C1C', background: isGood ? '#F0FDF4' : '#FFF1F1', borderRadius: 4, padding: '1px 5px', marginLeft: 4 }}>{pct >= 0 ? '▲' : '▼'} {Math.abs(pct).toFixed(1)}%</span>
+          }
+          const roasColor = kpis.roas >= 2 ? '#0D9E68' : kpis.roas >= 1 ? '#D97706' : '#B91C1C'
+
+          // Insight banner — top 2 biggest movers
+          const metricDefs = [
+            { label: 'Gross Sales', cur: kpis.grossSales || 0, prev: prevKpis.grossSales || 0 },
+            { label: 'Total Customers', cur: kpis.totalCustomers || 0, prev: prevKpis.totalCustomers || 0 },
+            { label: 'Repeat Rate', cur: (kpis.repeatRate || 0) * 100, prev: (prevKpis.repeatRate || 0) * 100 },
+            { label: 'CAC', cur: kpis.cac || 0, prev: prevKpis.cac || 0 },
+            { label: 'AOV', cur: kpis.aov || 0, prev: prevKpis.aov || 0 },
+            { label: 'RoAS', cur: kpis.roas || 0, prev: prevKpis.roas || 0 },
+          ]
+          const withDelta = metricDefs.map(m => ({ ...m, delta: m.prev > 0 ? (m.cur - m.prev) / Math.abs(m.prev) * 100 : 0 })).sort((a, b) => Math.abs(b.delta) - Math.abs(a.delta))
+          const top2 = withDelta.slice(0, 2)
+          const insightText = top2.length >= 2
+            ? `${top2[0].label} is ${top2[0].delta >= 0 ? 'up' : 'down'} ${Math.abs(top2[0].delta).toFixed(1)}% while ${top2[1].label} is ${top2[1].delta >= 0 ? 'up' : 'down'} ${Math.abs(top2[1].delta).toFixed(1)}% in this period.`
+            : null
+
+          // — ledger helpers —
+          const d = (cur, prev) => prev ? (cur - prev) / Math.abs(prev) * 100 : null
+
+          // LTV prev: use prev period's ltv12 if available, else null (Maturing)
+          const pLtv12 = prevKpis.ltv12 || null
+          const pLtvCac = (prevKpis.ltvCac != null && prevKpis.ltvCac > 0) ? prevKpis.ltvCac : null
+
+          const ledger1 = [
+            { label: 'Total Spend',         cur: kpis.totalSpend || 0,   prev: prevKpis.totalSpend || 0,   f: fmt },
+            { label: 'New Customers',       cur: kpis.newCustomers || 0, prev: prevKpis.newCustomers || 0, f: fmtN },
+            { label: 'Returning Customers', cur: kpis.returningCustomers || 0, prev: prevKpis.returningCustomers || 0, f: fmtN },
+            { label: 'RoAS',                cur: kpis.roas || 0,         prev: prevKpis.roas || 0,         f: v => `${v.toFixed(2)}×`, accent: 'good' },
+            { label: 'CAC',                 cur: kpis.cac || 0,          prev: prevKpis.cac || 0,          f: fmt, lowerBetter: true, accent: 'inverted' },
+          ]
+          const ledger2 = [
+            { label: 'Gross Rev (ex GST)',   cur: kpis.grossExcGst || 0,           prev: prevKpis.grossExcGst || 0,           f: fmt },
+            { label: 'Net Rev (ex GST)',     cur: kpis.netRevenue || 0,             prev: prevKpis.netRevenue || 0,            f: fmt },
+            { label: 'Repeat Rev %',         cur: (kpis.repeatRevenueRate||0)*100,  prev: (prevKpis.repeatRevenueRate||0)*100, f: v => `${v.toFixed(1)}%` },
+            { label: '12-Mo LTV',            cur: kpis.ltv12 || 0,                 prev: pLtv12,                              f: fmt, maturing: !pLtv12 },
+            { label: 'LTV : CAC',            cur: kpis.ltvCac || 0,                prev: pLtvCac,                             f: v => `${v.toFixed(2)}×`, maturing: !pLtvCac, ltvCacRow: true },
+          ]
+
+          // — dynamic one-line insights —
+          const spendInsight = (() => {
+            const metaDelta = d(kpis.metaSpend, prevKpis.metaSpend)
+            const googleDelta = d(kpis.googleSpend, prevKpis.googleSpend)
+            if (metaDelta === null || googleDelta === null) return null
+            const metaDir = metaDelta >= 0 ? `grew ${Math.abs(metaDelta).toFixed(1)}%` : `fell ${Math.abs(metaDelta).toFixed(1)}%`
+            const googleDir = googleDelta >= 0 ? `grew ${Math.abs(googleDelta).toFixed(1)}%` : `fell ${Math.abs(googleDelta).toFixed(1)}%`
+            const diverge = Math.abs(metaDelta - googleDelta)
+            if (diverge < 2) return null
+            const leader = metaDelta > googleDelta ? 'Meta' : 'Google'
+            return `Meta spend ${metaDir} while Google ${googleDir} — channel mix has shifted toward ${leader}.`
+          })()
+          const revenueInsight = (() => {
+            const repRevDelta = d(kpis.repeatRevenue, prevKpis.repeatRevenue)
+            const repRateDelta = d((kpis.repeatRevenueRate||0)*100, (prevKpis.repeatRevenueRate||0)*100)
+            if (repRevDelta === null || repRateDelta === null) return null
+            if (repRevDelta >= 0 && repRateDelta < 0) {
+              return `Repeat revenue grew ${repRevDelta.toFixed(1)}% but repeat rate fell ${Math.abs(repRateDelta).toFixed(1)}pts — new customer growth is outpacing repeat rate.`
+            }
+            if (repRevDelta < 0 && repRateDelta >= 0) {
+              return `Repeat rate improved ${repRateDelta.toFixed(1)}pts despite repeat revenue falling ${Math.abs(repRevDelta).toFixed(1)}% — base size contracted.`
+            }
+            const netDelta = d(kpis.netRevenue, prevKpis.netRevenue)
+            if (netDelta !== null) return `Net revenue ${netDelta >= 0 ? 'grew' : 'fell'} ${Math.abs(netDelta).toFixed(1)}% this period.`
+            return null
+          })()
+
+          function MetricTable({ title, rows, accentColor = '#F5C518', insight = null }) {
+            return (
+              <div style={{ background: '#fff', borderRadius: 12, overflow: 'hidden', boxShadow: '0 1px 3px rgba(0,0,0,.06)' }}>
+                {/* title header */}
+                <div style={{ background: CP.head, padding: '10px 16px', display: 'flex', alignItems: 'center', gap: 8, borderBottom: `1px solid ${CP.headLine}` }}>
+                  <div style={{ width: 3, height: 14, background: accentColor, borderRadius: 2, flexShrink: 0 }} />
+                  <span style={{ fontFamily: 'Space Grotesk, var(--font)', fontWeight: 800, fontSize: 11, color: CP.ink, textTransform: 'uppercase', letterSpacing: '.1em' }}>{title}</span>
+                </div>
+                {/* one-line insight */}
+                {insight && (
+                  <div style={{ padding: '7px 16px 6px', borderBottom: `1px solid ${CP.head}`, background: '#fff' }}>
+                    <span style={{ fontSize: 11, color: CP.ink3, fontStyle: 'italic' }}>{insight}</span>
+                  </div>
+                )}
+                {/* column headers */}
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 90px 90px 70px', alignItems: 'center', padding: '7px 16px 7px 19px', borderBottom: `1px solid ${CP.headLine}`, background: '#fff' }}>
+                  <span style={{ fontSize: 10, fontWeight: 800, color: CP.ink, textTransform: 'uppercase', letterSpacing: '.06em' }}>Metric</span>
+                  <span style={{ fontSize: 10, fontWeight: 800, color: CP.ink, textTransform: 'uppercase', letterSpacing: '.06em', textAlign: 'right' }}>Prev</span>
+                  <span style={{ fontSize: 10, fontWeight: 800, color: CP.ink, textTransform: 'uppercase', letterSpacing: '.06em', textAlign: 'right' }}>Current</span>
+                  <span style={{ fontSize: 10, fontWeight: 800, color: CP.ink, textTransform: 'uppercase', letterSpacing: '.06em', textAlign: 'right' }}>vs Prev</span>
+                </div>
+                {/* rows */}
+                {rows.map((row, i) => {
+                  const delta = (row.prev != null && row.prev !== 0) ? (row.cur - row.prev) / Math.abs(row.prev) * 100 : null
+                  const isGood = row.lowerBetter ? delta !== null && delta <= 0 : delta !== null && delta >= 0
+                  const rowAccent = 'transparent'
+                  const ltvCacColor = row.ltvCacRow
+                    ? row.cur >= 3 ? '#0D9E68' : row.cur >= 2 ? '#D97706' : '#B91C1C'
+                    : CP.ink
+                  return (
+                    <div key={i} style={{ display: 'grid', gridTemplateColumns: '1fr 90px 90px 70px', alignItems: 'center', padding: '10px 16px 10px 13px', borderBottom: i < rows.length - 1 ? `1px solid ${CP.head}` : 'none', borderLeft: `3px solid ${rowAccent}` }}>
+                      {/* label + optional subtitle */}
+                      <div>
+                        <span style={{ fontSize: 12, color: CP.ink2, fontWeight: 500 }}>{row.label}</span>
+                        {row.subtitle && <div style={{ fontSize: 10, color: CP.ink3, marginTop: 1 }}>{row.subtitle}</div>}
+                      </div>
+                      {/* prev */}
+                      <div style={{ textAlign: 'right' }}>
+                        {row.maturing
+                          ? <span style={{ fontSize: 10, color: CP.ink3, fontStyle: 'italic' }}>Maturing</span>
+                          : (row.prev != null && row.prev !== 0)
+                            ? <span style={{ fontSize: 11, color: CP.ink3, fontFamily: 'JetBrains Mono, monospace', whiteSpace: 'nowrap' }}>{row.f(row.prev)}</span>
+                            : null
+                        }
+                      </div>
+                      {/* current */}
+                      <div style={{ textAlign: 'right' }}>
+                        <span style={{ fontSize: 14, fontWeight: 700, color: ltvCacColor, fontFamily: 'Space Grotesk, var(--font)', whiteSpace: 'nowrap' }}>{row.f(row.cur)}</span>
+                        {row.ltvCacRow && <div style={{ fontSize: 10, color: CP.ink3, marginTop: 1 }}>Target: 3×</div>}
+                      </div>
+                      {/* vs prev */}
+                      <div style={{ textAlign: 'right' }}>
+                        {!row.maturing && delta !== null
+                          ? <span style={{ fontSize: 10, fontWeight: 700, color: isGood ? '#0D9E68' : '#B91C1C', background: isGood ? '#ECFDF5' : '#FEF2F2', borderRadius: 5, padding: '3px 7px', whiteSpace: 'nowrap' }}>
+                              {delta >= 0 ? '▲' : '▼'} {Math.abs(delta).toFixed(1)}%
+                            </span>
+                          : <span style={{ fontSize: 10, color: CP.ink3 }}>—</span>
+                        }
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            )
+          }
+
+          return (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 14, paddingTop: 14, paddingLeft: 16, paddingRight: 16 }}>
+              {/* 8 hero KPIs with interactive sparklines */}
+              {(() => {
+                const dailyDates = rawDaily.map(r => r.date || '')
+                const spendDates = rawDailySpend.map(r => r.date || '')
+                const dailyVals = rawDaily.map(r => r.grossSales || 0)
+                const newCustVals = rawDaily.map(r => r.newCustomers || 0)
+                const spendVals = rawDailySpend.map(r => r.totalSpend || 0)
+                const roasVals = rawDailySpend.map((r, i) => {
+                  const s = r.totalSpend || 0
+                  const rev = rawDaily[i]?.grossSales || 0
+                  return s > 0 ? rev / s : 0
+                })
+                const cacVals = rawDailySpend.map((r, i) => {
+                  const nc = rawDaily[i]?.newCustomers || 0
+                  return nc > 0 ? (r.totalSpend || 0) / nc : 0
+                })
+                const repeatRevPctVals = rawDaily.map(r => {
+                  const gs = r.grossSales || 0
+                  return gs > 0 ? (r.repeatRevenue || 0) / gs * 100 : 0
+                })
+                const heroCards = [
+                  { label: 'GROSS SALES', value: fmt(kpis.grossSales), sub: `${fmtN(kpis.totalOrders||0)} orders · AOV ${fmt(kpis.aov)}`, badge: chgBadgeCp(kpis.grossSales, prevKpis.grossSales), accent: '#F5C518', valColor: '#15130B', sparkVals: dailyVals, sparkColor: '#D9A800', fmt: v => fmt(v) },
+                  { label: 'TOTAL CUSTOMERS', value: fmtN(kpis.totalCustomers), sub: `${fmtN(kpis.newCustomers||0)} new · ${fmtN(kpis.returningCustomers||0)} returning`, badge: chgBadgeCp(kpis.totalCustomers, prevKpis.totalCustomers), accent: '#F5C518', valColor: '#15130B', sparkVals: newCustVals, sparkColor: '#D9A800', fmt: v => fmtN(v) },
+                  { label: 'TOTAL AD SPEND', value: fmt(kpis.totalSpend), sub: `Meta ${fmt(kpis.metaSpend)} · Google ${fmt(kpis.googleSpend)} · Add. ${fmt(kpis.additionalSpend || 0)}`, badge: chgBadgeCp(kpis.totalSpend, prevKpis.totalSpend), accent: '#F5C518', valColor: '#15130B', sparkVals: spendVals, sparkColor: '#D9A800', fmt: v => fmt(v) },
+                  { label: 'ROAS', value: `${(kpis.roas||0).toFixed(2)}x`, sub: 'Gross Rev (Ex GST) / Ad Spend', badge: chgBadgeCp(kpis.roas, prevKpis.roas), accent: '#F5C518', valColor: '#D97706', sparkVals: roasVals, sparkColor: '#D97706', fmt: v => `${v.toFixed(2)}x` },
+                  { label: 'CAC', value: fmt(kpis.cac), sub: 'Total Spend / New Customers', badge: chgBadgeCp(kpis.cac, prevKpis.cac, true), accent: '#F5C518', valColor: '#15130B', sparkVals: cacVals, sparkColor: '#D9A800', fmt: v => fmt(v) },
+                  { label: '12-MO LTV', value: fmt(kpis.ltv12 || 0), sub: 'Avg rev / customer (last 12 mo)', badge: null, accent: '#F5C518', valColor: '#15130B', sparkVals: dailyVals, sparkColor: '#D9A800', fmt: v => fmt(v) },
+                  { label: 'LTV : CAC', value: (kpis.ltvCac||0).toFixed(2)+'x', sub: '12-Mo LTV / CAC', badge: null, accent: '#F5C518', valColor: '#15130B', sparkVals: roasVals, sparkColor: '#D9A800', fmt: v => `${v.toFixed(2)}x` },
+                  { label: 'REPEAT REVENUE %', value: `${((kpis.repeatRevenueRate||0)*100).toFixed(1)}%`, sub: `${fmt(kpis.repeatRevenue||0)} of Gross Sales`, badge: chgBadgeCp(kpis.repeatRevenueRate, prevKpis.repeatRevenueRate), accent: '#F5C518', valColor: '#15130B', sparkVals: repeatRevPctVals, sparkColor: '#D9A800', fmt: v => `${v.toFixed(1)}%` },
+                ]
                 return (
-                  <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 7, padding: '8px 12px', fontSize: 11 }}>
-                    <div style={{ fontWeight: 700, marginBottom: 5, color: C.t2 }}>{label}</div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}><span style={{ width: 7, height: 7, borderRadius: '50%', background: C.acc, display: 'inline-block', flexShrink: 0 }} /><span style={{ color: C.t2 }}>Customers Acquired: {(d.customersAcquired||0).toLocaleString('en-IN')}</span></div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}><span style={{ width: 7, height: 7, borderRadius: '50%', background: '#2E74CC', display: 'inline-block', flexShrink: 0 }} /><span style={{ color: C.t2 }}>Gross Sales: {fmt(d.grossSales||0)}</span></div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}><span style={{ width: 7, height: 7, borderRadius: '50%', background: '#E8930A', display: 'inline-block', flexShrink: 0 }} /><span style={{ color: C.t2 }}>AOV: ₹{Math.round(d.aov||0).toLocaleString('en-IN')}</span></div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}><span style={{ width: 7, height: 7, borderRadius: '50%', background: '#0D9E68', display: 'inline-block', flexShrink: 0 }} /><span style={{ color: C.t2 }}>Repeat Revenue Rate: {((d.repeatRevenueRate||0)*100).toFixed(1)}%</span></div>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 12 }}>
+                    {heroCards.map(c => <HeroSparkCard key={c.label} c={c} />)}
                   </div>
                 )
-              }} />
-              <Legend wrapperStyle={{ fontSize: 11 }} />
-              <Bar yAxisId="cust" dataKey="customersAcquired" name="Customers Acquired" fill={C.acc} radius={[3,3,0,0]} maxBarSize={maxBar}
-                label={showLabels ? { position: 'top', fontSize: 9, fill: C.t2, fontWeight: 600, formatter: v => v.toLocaleString('en-IN') } : false} />
-              <Line yAxisId="sales" type="monotone" dataKey="grossSales" name="Gross Sales" stroke="#2E74CC" strokeWidth={2} dot={false} />
-              <Line yAxisId="aov"   type="monotone" dataKey="aov"   name="AOV"         stroke="#E8930A" strokeWidth={2} dot={false} />
-              <Line yAxisId="rrr"   type="monotone" dataKey="repeatRevenueRate" name="Repeat Revenue Rate" stroke="#0D9E68" strokeWidth={2} dot={false} />
-            </ComposedChart>
-          </ResponsiveContainer>
-        </Card>
-        {(() => {
-          const [nrMetric, setNrMetric] = [custData._nrMetric || 'customers', v => setCustData(d => ({ ...d, _nrMetric: v }))]
-          const [nrGran, setNrGran] = [custData._nrGran || granularity, v => setCustData(d => ({ ...d, _nrGran: v }))]
-          const nrData = (() => {
-            const buckets = {}
-            rawDaily.forEach(r => {
-              const d = new Date(r.day)
-              let key, label
-              if (nrGran === 'daily') { key = r.day; label = d.toLocaleDateString('en-IN', { day: '2-digit', month: 'short' }) }
-              else if (nrGran === 'weekly') { const day = d.getDay(), diff = (day === 0 ? -6 : 1 - day); const mon = new Date(d); mon.setDate(d.getDate() + diff); key = mon.toISOString().slice(0, 10); label = `W${mon.toLocaleDateString('en-IN', { day: '2-digit', month: 'short' })}` }
-              else { key = r.day.slice(0, 7); label = d.toLocaleDateString('en-IN', { month: 'short', year: '2-digit' }) }
-              if (!buckets[key]) buckets[key] = { month: label, newCustomers: 0, repeatCustomers: 0, newOrders: 0, repeatOrders: 0, newRevenue: 0, repeatRevenue: 0 }
-              buckets[key].newCustomers += r.newCustomers; buckets[key].repeatCustomers += r.repeatCustomers
-              buckets[key].newOrders += r.newOrders; buckets[key].repeatOrders += r.repeatOrders
-              buckets[key].newRevenue += r.newRevenue; buckets[key].repeatRevenue += r.repeatRevenue
-            })
-            return Object.entries(buckets).sort(([a],[b]) => a.localeCompare(b)).map(([,v]) => v)
-          })()
-          const newKey = nrMetric === 'customers' ? 'newCustomers' : nrMetric === 'orders' ? 'newOrders' : 'newRevenue'
-          const repKey = nrMetric === 'customers' ? 'repeatCustomers' : nrMetric === 'orders' ? 'repeatOrders' : 'repeatRevenue'
-          const tickFmt = v => nrMetric === 'revenue' ? (v >= 1e7 ? `₹${(v/1e7).toFixed(1)}Cr` : v >= 1e5 ? `₹${(v/1e5).toFixed(0)}L` : `₹${(v/1000).toFixed(0)}K`) : v.toLocaleString('en-IN')
-          const lblFmt = v => nrMetric === 'revenue' ? (v >= 1e7 ? `₹${(v/1e7).toFixed(1)}Cr` : v >= 1e5 ? `₹${(v/1e5).toFixed(0)}L` : `₹${(v/1000).toFixed(0)}K`) : v.toLocaleString('en-IN')
-          return (
-          <Card title="New vs Repeat Customers" action={
-            <div style={{ display: 'flex', gap: 5, alignItems: 'center' }}>
-              {[['customers','Customers'],['orders','Orders'],['revenue','Sales']].map(([k,l]) => (
-                <button key={k} onClick={() => setNrMetric(k)} style={{ fontSize: 10, padding: '2px 8px', borderRadius: 5, border: `1px solid ${nrMetric===k ? C.acc : C.border}`, background: nrMetric===k ? C.acl : C.card, color: nrMetric===k ? '#7A6000' : C.t2, cursor: 'pointer', fontFamily: 'var(--font)', fontWeight: nrMetric===k ? 700 : 400 }}>{l}</button>
-              ))}
-              <select value={nrGran} onChange={e => setNrGran(e.target.value)} style={{ fontSize: 10, padding: '2px 7px', borderRadius: 5, border: `1px solid ${C.border}`, background: C.card, color: C.t2, cursor: 'pointer', fontFamily: 'var(--font)' }}>
-                {['daily','weekly','monthly'].map(g => <option key={g} value={g}>{g.charAt(0).toUpperCase()+g.slice(1)}</option>)}
-              </select>
+              })()}
+
+              {insightText && <div style={{ fontSize: 12, color: C.t3, padding: '4px 2px', fontStyle: 'italic' }}>{insightText}</div>}
+
+              {/* Metric tables */}
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+                <MetricTable title="Ad Spend & Acquisition" rows={ledger1} accentColor="#D9A800" insight={spendInsight} />
+                <MetricTable title="Revenue & Lifetime Value" rows={ledger2} accentColor="#0D9E68" insight={revenueInsight} />
+              </div>
             </div>
-          }>
-            <ResponsiveContainer width="100%" height={240}>
-              <BarChart data={nrData} margin={{ top: 20, right: 10, left: 0, bottom: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke={C.border} vertical={false} />
-                <XAxis dataKey="month" tick={{ fontSize: 10 }} interval="preserveStartEnd" />
-                <YAxis tick={{ fontSize: 10 }} tickFormatter={tickFmt} />
-                <Tooltip formatter={(v, n) => [nrMetric === 'revenue' ? fmt(v) : fmtN(v), n]} />
-                <Legend wrapperStyle={{ fontSize: 11 }} />
-                <Bar dataKey={newKey} stackId="a" fill={C.acc} name="New Customers" radius={[0,0,0,0]}
-                  label={{ position: 'inside', fontSize: 9, fill: '#7A6000', fontWeight: 700, formatter: lblFmt }} />
-                <Bar dataKey={repKey} stackId="a" fill="#B8A000" name="Repeat Customers" radius={[3,3,0,0]}
-                  label={{ position: 'top', fontSize: 9, fill: C.t2, fontWeight: 700, formatter: lblFmt }} />
-              </BarChart>
-            </ResponsiveContainer>
-          </Card>
           )
         })()}
-      </div>
-        )
-      })()}
 
-      {/* Section 3: Customer Retention Cohort */}
-      <LSectionTitle title="Customer Retention Cohort" collapsed={secCollapsed.cohort} onToggle={() => toggleSec('cohort')} />
-      {!secCollapsed.cohort && (() => {
-        const [cohortMode, setCohortMode] = [custData._cohortMode || 'customer', v => setCustData(d => ({ ...d, _cohortMode: v }))]
-        return (
-        <Card title={
-          <div>
-            <div>Customer Retention Cohort</div>
-            <div style={{ fontSize: 11, fontWeight: 400, color: C.t3, marginTop: 2 }}>
-              {cohortMode === 'customer'
-                ? 'Only customers with ≥1 successful order (excl. Cancel / RTO / CIR)'
-                : 'Net revenue per cohort (Exc. GST, excl. Cancel / RTO / CIR) ÷ Month 0 revenue'}
+        {activeTab === 'trends' && (() => {
+          // TODO: new API fields needed for full tab functionality:
+          //   monthlyBudget   — monthly ad spend budget (number) for Spend Pacing bar
+          //   customersByChannel — [{channel, customers, spend, cac, roas}] for channel breakdown
+          //   qualityByChannel   — [{channel, cac, repeatRate90d, customers}] for quality quadrant chart
+
+          const MONTHLY_BUDGET = null // TODO: wire up monthlyBudget from config/API
+          const MARGIN_PCT = 0.35     // approximation pending real margin data per order
+
+          // ── palette tokens ──────────────────────────────────
+          const T = {
+            bg: '#FDFCF8', card: '#FFFFFF', border: '#F0EADC', borderSoft: '#F6F2E8',
+            t1: '#3A3324', t2: '#8A7F63', t3: '#B8AE93',
+            amber: '#E8C578', amberDeep: '#C9A24F', amberSoft: '#FBF6E8', amberLine: '#F0E2BC',
+            gold: '#D3B36C', goldDeep: '#A8874A', goldSoft: '#F9F3E4',
+            green: '#9CA875', red: '#CFA579',
+          }
+          const ttS = { background: '#FFFFFF', border: `1px solid ${T.amberLine}`, borderRadius: 8, padding: '8px 12px', fontSize: 11, fontFamily: 'Inter, sans-serif', color: '#1a1a1a' }
+          const ttItemStyle = { color: '#1a1a1a' }
+
+          // ── pill toggle button style ──
+          const pill = active => ({
+            background: active ? T.amberDeep : T.amberSoft,
+            color: active ? '#fff' : T.t2,
+            border: `1px solid ${active ? T.amberDeep : T.amberLine}`,
+            borderRadius: 20, padding: '3px 11px', fontSize: 11,
+            cursor: 'pointer', fontWeight: active ? 700 : 500,
+            fontFamily: 'Inter, sans-serif', outline: 'none',
+          })
+
+          // ── section card wrapper ──
+          const SCard = ({ title, sub, action, children, stretch }) => (
+            <div style={{ background: T.card, borderRadius: 14, overflow: 'hidden', boxShadow: '0 1px 3px rgba(80,65,20,.04)', display: 'flex', flexDirection: 'column' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 16px' }}>
+                <div>
+                  <div style={{ fontSize: 11, fontWeight: 800, color: '#3A3324', fontFamily: 'Inter, sans-serif', textTransform: 'uppercase', letterSpacing: '.08em' }}>{title}</div>
+                  {sub && <div style={{ fontSize: 11, color: '#8A7F63', marginTop: 2 }}>{sub}</div>}
+                </div>
+                {action && <div style={{ display: 'flex', gap: 4 }}>{action}</div>}
+              </div>
+              <div style={{ padding: '0 16px 14px', flex: 1, display: 'flex', flexDirection: 'column' }}>{children}</div>
             </div>
-          </div>
-        } action={
-          <div style={{ display: 'flex', gap: 5 }}>
-            {[['customer','Customer Retention %'],['sales','Sales Retention %']].map(([k,l]) => (
-              <button key={k} onClick={() => setCohortMode(k)} style={{ fontSize: 10, padding: '3px 10px', borderRadius: 5, border: `1px solid ${cohortMode===k ? '#2E74CC' : C.border}`, background: cohortMode===k ? '#E1EFFD' : C.card, color: cohortMode===k ? '#184078' : C.t2, cursor: 'pointer', fontFamily: 'var(--font)', fontWeight: cohortMode===k ? 700 : 400 }}>{l}</button>
-            ))}
-          </div>
-        }>
-          <div style={{ overflowX: 'auto', width: '100%' }}>
-            <table style={{ borderCollapse: 'collapse', fontSize: 10.5, width: '100%', tableLayout: 'fixed' }}>
-              <thead>
-                <tr style={{ borderBottom: `2px solid ${C.border}` }}>
-                  <th style={{ padding: '5px 8px', textAlign: 'left', color: C.t3, fontWeight: 700, fontSize: 9.5, whiteSpace: 'nowrap', width: 80 }}>Cohort Month</th>
-                  {Array.from({ length: maxCohortIdx + 1 }, (_, i) => (
-                    <th key={i} style={{ padding: '5px 4px', textAlign: 'center', color: C.t3, fontWeight: 700, fontSize: 9.5 }}>{i === 0 ? 'Month 0' : `+${i}M`}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {cohortMonths.map(cm => {
-                  const baseC = cohort0[cm] || 1
-                  const baseR = cohortRev0[cm] || 1
+          )
+
+          // ── mini sparkline SVG ──
+          const MiniSpark = ({ vals, color = T.amberDeep, h = 36 }) => {
+            if (!vals || vals.length < 2) return <div style={{ height: h }} />
+            const W = 180
+            const min = Math.min(...vals), max = Math.max(...vals), range = max - min || 1
+            const gx = i => (i / (vals.length - 1)) * W
+            const gy = v => h - 2 - ((v - min) / range) * (h - 6)
+            const pts = vals.map((v, i) => `${gx(i)},${gy(v)}`).join(' ')
+            const area = `M ${vals.map((v, i) => `${gx(i)},${gy(v)}`).join(' L ')} L ${gx(vals.length-1)},${h} L 0,${h} Z`
+            const gid = `tsg${color.replace('#','')}${h}`
+            return (
+              <svg width="100%" height={h} viewBox={`0 0 ${W} ${h}`} preserveAspectRatio="none" style={{ display: 'block' }}>
+                <defs><linearGradient id={gid} x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor={color} stopOpacity=".22"/><stop offset="100%" stopColor={color} stopOpacity="0"/></linearGradient></defs>
+                <path d={area} fill={`url(#${gid})`} />
+                <polyline points={pts} fill="none" stroke={color} strokeWidth="1.6" strokeLinejoin="round" strokeLinecap="round" />
+              </svg>
+            )
+          }
+
+          // ── delta badge ──
+          const Delta = ({ cur, prev, lowerBetter = false }) => {
+            if (!prev) return null
+            const d = (cur - prev) / Math.abs(prev) * 100
+            const good = lowerBetter ? d <= 0 : d >= 0
+            return <span style={{ fontSize: 10, fontWeight: 700, color: good ? '#0D9E68' : '#B91C1C', background: good ? '#F0FDF4' : '#FFF1F1', borderRadius: 4, padding: '2px 6px', whiteSpace: 'nowrap' }}>{d >= 0 ? '▲' : '▼'} {Math.abs(d).toFixed(1)}%</span>
+          }
+
+          // ── derived daily series ──
+          const spendByDay = {}
+          rawDailySpend.forEach(r => { spendByDay[r.date || ''] = r.totalSpend || 0 })
+
+          const enriched = rawDaily.map(r => {
+            const d = r.date || ''
+            const spend = spendByDay[d] || 0
+            const nc = r.newCustomers || 0
+            return { ...r, spend, cac: (nc > 0 && spend > 0) ? spend / nc : 0, roas: spend > 0 ? (r.grossSales || 0) / spend : 0 }
+          })
+
+          // ── bucket enriched by granularity for spend charts ──
+          const bucketEnriched = (gran) => {
+            if (gran === 'daily') return enriched.map(r => ({ ...r, date: r.date }))
+            const map = {}
+            enriched.forEach(r => {
+              const d = new Date(r.date)
+              let key
+              if (gran === 'weekly') {
+                const day = d.getDay()
+                const diff = day === 0 ? -6 : 1 - day
+                const mon = new Date(d); mon.setDate(d.getDate() + diff)
+                key = mon.toISOString().slice(0, 10)
+              } else {
+                key = r.date.slice(0, 7)
+              }
+              if (!map[key]) map[key] = { date: key, spend: 0, grossSales: 0, newCustomers: 0, _cacSpend: 0, _cacNc: 0, _roasSpend: 0, _roasN: 0 }
+              map[key].spend += r.spend || 0
+              map[key].grossSales += r.grossSales || 0
+              map[key].newCustomers += r.newCustomers || 0
+              if (r.cac > 0) { map[key]._cacSpend += r.spend || 0; map[key]._cacNc += r.newCustomers || 0 }
+              if (r.roas > 0) { map[key]._roasSpend += r.spend || 0; map[key]._roasN++ }
+            })
+            return Object.values(map).map(r => ({
+              ...r,
+              cac: r._cacNc > 0 ? r._cacSpend / r._cacNc : 0,
+              roas: r._roasSpend > 0 ? r.grossSales / r._roasSpend : 0,
+            })).sort((a, b) => a.date.localeCompare(b.date))
+          }
+
+          // ── 1. Insight banner ──
+          const insightBanner = (() => {
+            if (enriched.length < 8) return null
+            const last = enriched[enriched.length - 1]
+            const prev7 = enriched.slice(-8, -1)
+            const avg7nc = prev7.reduce((s, r) => s + (r.newCustomers || 0), 0) / prev7.length
+            if (avg7nc > 0) {
+              const dev = ((last.newCustomers || 0) - avg7nc) / avg7nc * 100
+              if (Math.abs(dev) > 30) {
+                const dir = dev > 0 ? 'above' : 'below'
+                return `${last.date}: New customer acquisitions are ${Math.abs(dev).toFixed(0)}% ${dir} the 7-day average (${fmtN(Math.round(avg7nc))} avg vs ${fmtN(last.newCustomers)} today) — verify this isn't a partial-day reporting artifact.`
+              }
+            }
+            // fallback: biggest mover in the period
+            const metaDelta = prevKpis.metaSpend ? (kpis.metaSpend - prevKpis.metaSpend) / prevKpis.metaSpend * 100 : null
+            const cacDelta = prevKpis.cac ? (kpis.cac - prevKpis.cac) / prevKpis.cac * 100 : null
+            if (cacDelta !== null) return `CAC is ${Math.abs(cacDelta).toFixed(1)}% ${cacDelta < 0 ? 'lower' : 'higher'} than last period at ${fmt(kpis.cac)}, acquiring ${fmtN(kpis.newCustomers)} new customers on ${fmt(kpis.totalSpend)} spend.`
+            return null
+          })()
+
+          // ── 2. KPI cards data ──
+          const acqRate = kpis.totalCustomers > 0 ? kpis.newCustomers / kpis.totalCustomers : 0
+          const pAcqRate = prevKpis.totalCustomers > 0 ? prevKpis.newCustomers / prevKpis.totalCustomers : 0
+          const ltvCac = kpis.ltvCac || (kpis.ltv12 && kpis.cac ? kpis.ltv12 / kpis.cac : 0)
+          const pLtvCac = prevKpis.ltvCac || 0
+          // Payback Period: cac / (aov * marginPct) in days — approximation
+          const avgOrderFreqDays = kpis.totalOrders > 0 && kpis.totalCustomers > 0 ? 30 : 30 // fallback 30d
+          const paybackDays = kpis.aov > 0 && kpis.cac > 0 ? Math.round(kpis.cac / (kpis.aov * MARGIN_PCT)) : null
+
+          const newCustVals = enriched.map(r => r.newCustomers || 0)
+          const cacVals = enriched.filter(r => r.cac > 0).map(r => r.cac)
+          const roasVals = enriched.filter(r => r.roas > 0).map(r => r.roas)
+          const acqRateVals = enriched.map(r => {
+            const tc = (r.newCustomers || 0) + (r.repeatCustomers || 0)
+            return tc > 0 ? (r.newCustomers || 0) / tc * 100 : 0
+          })
+
+          const kpiCards = [
+            { label: 'New Customers', val: fmtN(kpis.newCustomers), sub: `${fmtN(kpis.returningCustomers || 0)} returning`, spark: newCustVals, cur: kpis.newCustomers, prev: prevKpis.newCustomers },
+            { label: 'CAC', val: fmt(kpis.cac), sub: 'Total Spend / New Customers', spark: cacVals, cur: kpis.cac, prev: prevKpis.cac, lowerBetter: true },
+            { label: 'RoAS', val: `${(kpis.roas||0).toFixed(2)}×`, sub: 'Gross Rev (ex GST) / Spend', spark: roasVals, cur: kpis.roas, prev: prevKpis.roas },
+            { label: 'Acquisition Rate', val: `${(acqRate*100).toFixed(1)}%`, sub: 'New / Total Customers', spark: acqRateVals, cur: acqRate, prev: pAcqRate },
+            {
+              label: 'LTV : CAC', val: ltvCac > 0 ? `${ltvCac.toFixed(2)}×` : '—',
+              sub: ltvCac > 0 ? (ltvCac >= 3 ? '✦ Healthy' : '⚠ Watch') : 'Needs LTV data',
+              subColor: ltvCac >= 3 ? T.green : ltvCac > 0 ? T.amberDeep : T.t3,
+              spark: roasVals, cur: ltvCac, prev: pLtvCac,
+            },
+            {
+              label: 'Payback Period', val: paybackDays != null ? `${paybackDays}d` : '—',
+              sub: `Approx. at ${(MARGIN_PCT*100).toFixed(0)}% margin`, spark: null,
+              cur: paybackDays, prev: null, lowerBetter: true,
+            },
+          ]
+
+          // ── New vs Repeat bucketing ──
+          const nrBucketKey = ds => {
+            if (!ds) return 'Unknown'
+            if (nrGran === 'daily') return ds
+            if (nrGran === 'weekly') {
+              const d = new Date(ds), day = d.getDay()
+              const mon = new Date(d); mon.setDate(d.getDate() - day + (day === 0 ? -6 : 1))
+              return mon.toISOString().slice(0, 10)
+            }
+            return ds.slice(0, 7)
+          }
+          const nrMap = {}
+          rawDaily.forEach(r => {
+            const k = nrBucketKey(r.date || '')
+            if (!nrMap[k]) nrMap[k] = { label: k, newCustomers: 0, repeatCustomers: 0, newOrders: 0, repeatOrders: 0, newSales: 0, repeatSales: 0 }
+            nrMap[k].newCustomers += r.newCustomers || 0
+            nrMap[k].repeatCustomers += r.repeatCustomers || 0
+            nrMap[k].newOrders += r.newOrders || 0
+            nrMap[k].repeatOrders += r.repeatOrders || 0
+            nrMap[k].newSales += r.newSales || 0
+            nrMap[k].repeatSales += r.repeatSales || r.repeatRevenue || 0
+          })
+          const nrData = Object.values(nrMap).sort((a, b) => a.label < b.label ? -1 : 1)
+          const newKey = nrMetric === 'customers' ? 'newCustomers' : nrMetric === 'orders' ? 'newOrders' : 'newSales'
+          const repKey = nrMetric === 'customers' ? 'repeatCustomers' : nrMetric === 'orders' ? 'repeatOrders' : 'repeatSales'
+
+          // ── CAC vs RoAS dual-axis data ──
+          const cacRoasData = enriched.filter(r => r.cac > 0 || r.roas > 0).map(r => ({
+            label: r.date || '', cac: r.cac > 0 ? Math.round(r.cac) : null, roas: r.roas > 0 ? +r.roas.toFixed(2) : null,
+          }))
+
+          // ── Day-of-Week seasonality ──
+          const dowMap = { 0: { day: 'Sunday', nc: 0, cnt: 0 }, 1: { day: 'Monday', nc: 0, cnt: 0 }, 2: { day: 'Tuesday', nc: 0, cnt: 0 }, 3: { day: 'Wednesday', nc: 0, cnt: 0 }, 4: { day: 'Thursday', nc: 0, cnt: 0 }, 5: { day: 'Friday', nc: 0, cnt: 0 }, 6: { day: 'Saturday', nc: 0, cnt: 0 } }
+          enriched.forEach(r => {
+            if (!r.date) return
+            const dow = new Date(r.date).getDay()
+            dowMap[dow].nc += r.newCustomers || 0
+            dowMap[dow].cnt++
+          })
+          const dowData = [1,2,3,4,5,6,0].map(i => ({ day: dowMap[i].day, avg: dowMap[i].cnt > 0 ? Math.round(dowMap[i].nc / dowMap[i].cnt) : 0 }))
+          const bestDow = dowData.reduce((a, b) => b.avg > a.avg ? b : a, dowData[0] || { day: '-', avg: 0 })
+          const avgDowAll = dowData.reduce((s, d) => s + d.avg, 0) / (dowData.filter(d => d.avg > 0).length || 1)
+          const dowInsight = bestDow.avg > 0 && avgDowAll > 0
+            ? `${bestDow.day} has the highest avg new customer acquisition at ${fmtN(bestDow.avg)}/day — ${((bestDow.avg/avgDowAll-1)*100).toFixed(0)}% above the weekly average.`
+            : null
+
+          // ── Marginal efficiency scatter ──
+          const scatterData = enriched
+            .filter(r => r.spend > 0 && (r.newCustomers || 0) > 0)
+            .map(r => ({ spend: Math.round(r.spend), nc: r.newCustomers || 0 }))
+          // least-squares trend line
+          const n = scatterData.length
+          let trendLine = []
+          if (n > 2) {
+            const sx = scatterData.reduce((a, d) => a + d.spend, 0), sy = scatterData.reduce((a, d) => a + d.nc, 0)
+            const sxx = scatterData.reduce((a, d) => a + d.spend * d.spend, 0), sxy = scatterData.reduce((a, d) => a + d.spend * d.nc, 0)
+            const slope = (n * sxy - sx * sy) / (n * sxx - sx * sx || 1)
+            const intercept = (sy - slope * sx) / n
+            const xMin = Math.min(...scatterData.map(d => d.spend)), xMax = Math.max(...scatterData.map(d => d.spend))
+            trendLine = [{ spend: xMin, nc: Math.max(0, Math.round(slope * xMin + intercept)) }, { spend: xMax, nc: Math.max(0, Math.round(slope * xMax + intercept)) }]
+          }
+
+          // ── Spend donut data ──
+          const totalSpend = kpis.totalSpend || 0
+          const donutData = [
+            { name: 'Meta', value: kpis.metaSpend || 0, color: T.amberDeep },
+            { name: 'Google', value: kpis.googleSpend || 0, color: T.gold },
+            { name: 'Additional', value: kpis.additionalSpend || 0, color: T.amberSoft },
+          ].filter(d => d.value > 0)
+
+          // ── Acquisition efficiency ledger sparklines ──
+          const cqArr = custData.channelQuality || []
+          const blendedClicks = cqArr.reduce((s, c) => s + (c.clicks || 0), 0)
+          const blendedCpc = blendedClicks > 0 ? (kpis.totalSpend || 0) / blendedClicks : 0
+
+          const effRows = [
+            { label: 'Total Spend', cur: kpis.totalSpend||0, prev: prevKpis.totalSpend||0, f: fmt },
+            { label: 'New Customers', cur: kpis.newCustomers||0, prev: prevKpis.newCustomers||0, f: fmtN },
+            { label: 'CAC', cur: kpis.cac||0, prev: prevKpis.cac||0, f: fmt, lowerBetter: true },
+            { label: 'RoAS', cur: kpis.roas||0, prev: prevKpis.roas||0, f: v => `${v.toFixed(2)}×` },
+            { label: 'Acquisition Rate', cur: acqRate*100, prev: pAcqRate*100, f: v => `${v.toFixed(1)}%` },
+            { label: 'CPC (Blended)', cur: blendedCpc, prev: 0, f: v => v > 0 ? fmt(v) : '—', lowerBetter: true },
+            { label: 'LTV : CAC', cur: ltvCac, prev: pLtvCac, f: v => v > 0 ? `${v.toFixed(2)}×` : '—' },
+          ]
+
+          return (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 16, paddingTop: 14, paddingLeft: 16, paddingRight: 16, paddingBottom: 24, background: T.bg }}>
+
+              {/* 1. Insight banner */}
+              {insightBanner && (
+                <div style={{ background: T.amberSoft, border: `1px solid ${T.amberLine}`, borderRadius: 10, padding: '10px 14px', fontSize: 12, color: T.t1, fontStyle: 'italic', lineHeight: 1.5 }}>
+                  ⚡ {insightBanner}
+                </div>
+              )}
+
+              {/* 2. KPI row */}
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6,1fr)', gap: 10 }}>
+                {kpiCards.map((c, i) => (
+                  <div key={i} style={{ background: T.card, borderRadius: 12, padding: '10px 12px 8px', display: 'flex', flexDirection: 'column', gap: 2 }}>
+                    <span style={{ fontSize: 9, fontWeight: 700, color: T.t3, textTransform: 'uppercase', letterSpacing: '.07em' }}>{c.label}</span>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 4 }}>
+                      <span style={{ fontSize: 18, fontWeight: 700, color: c.valColor || T.t1, fontFamily: 'Space Grotesk, var(--font)', lineHeight: 1.2 }}>{c.val}</span>
+                      <Delta cur={c.cur} prev={c.prev} lowerBetter={c.lowerBetter} />
+                    </div>
+                    <span style={{ fontSize: 10, color: c.subColor || T.t3, lineHeight: 1.3, minHeight: 14 }}>{c.sub}</span>
+                    {c.spark && c.spark.length > 1 ? <MiniSpark vals={c.spark} /> : <div style={{ height: 36 }} />}
+                  </div>
+                ))}
+              </div>
+
+
+              {/* 4 & 5. Charts row: First Order Date + New vs Repeat */}
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+                <SCard title="Acquisition Over Time" sub="Customers acquired & gross sales by day"
+                  action={['daily','weekly','monthly'].map(g => <button key={g} style={pill(granularity===g)} onClick={() => setGranularity(g)}>{g[0].toUpperCase()+g.slice(1)}</button>)}
+                >
+                  <ResponsiveContainer width="100%" height={220}>
+                    <ComposedChart data={monthly} margin={{ top: 18, right: 8, bottom: 4, left: 0 }}>
+                      <CartesianGrid stroke={T.borderSoft} />
+                      <XAxis dataKey="month" tick={{ fontSize: 9, fill: T.t3 }} />
+                      <YAxis yAxisId="cust" orientation="left" tick={{ fontSize: 9, fill: T.t3 }} />
+                      <YAxis yAxisId="sales" orientation="right" tick={{ fontSize: 9, fill: T.t3 }} tickFormatter={v => fmtBig(v)} />
+                      <Tooltip contentStyle={ttS} itemStyle={ttItemStyle} labelStyle={{ color: '#1a1a1a' }} />
+                      <Legend wrapperStyle={{ fontSize: 10 }} />
+                      <Bar yAxisId="cust" dataKey="customersAcquired" fill="#F5C518" maxBarSize={granularity==='daily'?14:granularity==='weekly'?24:40} name="Customers" radius={[3,3,0,0]}>
+                        <LabelList dataKey="customersAcquired" position="top" style={{ fontSize: 8, fill: '#3A3324', fontFamily: 'JetBrains Mono, monospace' }} formatter={v => v > 0 ? fmtN(v) : ''} />
+                      </Bar>
+                      <Line yAxisId="sales" dataKey="grossSales" stroke="#1a1a1a" strokeWidth={2.5} dot={false} name="Gross Sales" />
+                    </ComposedChart>
+                  </ResponsiveContainer>
+                </SCard>
+
+                <SCard title="New vs Repeat" sub="Customer/order/sales split over time"
+                  action={[
+                    ...['customers','orders','sales'].map(m => <button key={m} style={pill(nrMetric===m)} onClick={() => setNrMetric(m)}>{m[0].toUpperCase()+m.slice(1)}</button>),
+                    <span key="sep" style={{ width: 6 }} />,
+                    ...['daily','weekly','monthly'].map(g => <button key={g} style={pill(nrGran===g)} onClick={() => setNrGran(g)}>{g[0].toUpperCase()+g.slice(1)}</button>),
+                  ]}
+                >
+                  <ResponsiveContainer width="100%" height={220}>
+                    <BarChart data={nrData} margin={{ top: 18, right: 8, bottom: 4, left: 0 }}>
+                      <CartesianGrid stroke={T.borderSoft} />
+                      <XAxis dataKey="label" tick={{ fontSize: 9, fill: T.t3 }} />
+                      <YAxis tick={{ fontSize: 9, fill: T.t3 }} />
+                      <Tooltip contentStyle={ttS} itemStyle={ttItemStyle} labelStyle={{ color: '#1a1a1a' }} />
+                      <Legend wrapperStyle={{ fontSize: 10 }} />
+                      <Bar dataKey={newKey} stackId="a" fill="#F5C518" name="New" radius={[0,0,0,0]} />
+                      <Bar dataKey={repKey} stackId="a" fill="#A8874A" name="Repeat" radius={[3,3,0,0]}>
+                        <LabelList dataKey={repKey} position="top" style={{ fontSize: 8, fill: '#3A3324', fontFamily: 'JetBrains Mono, monospace' }} formatter={v => v > 0 ? fmtN(v) : ''} />
+                      </Bar>
+                    </BarChart>
+                  </ResponsiveContainer>
+                </SCard>
+              </div>
+
+              {/* 6 & 7. CAC vs RoAS + Day-of-Week */}
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+                <SCard title="CAC vs RoAS Trend" sub="Daily acquisition cost vs return on ad spend">
+                  <ResponsiveContainer width="100%" height={220}>
+                    <ComposedChart data={cacRoasData} margin={{ top: 4, right: 8, bottom: 4, left: 0 }}>
+                      <CartesianGrid stroke={T.borderSoft} />
+                      <XAxis dataKey="label" tick={{ fontSize: 9, fill: T.t3 }} />
+                      <YAxis yAxisId="cac" orientation="left" tick={{ fontSize: 9, fill: T.t3 }} />
+                      <YAxis yAxisId="roas" orientation="right" tick={{ fontSize: 9, fill: T.t3 }} />
+                      <Tooltip contentStyle={ttS} itemStyle={ttItemStyle} labelStyle={{ color: '#1a1a1a' }} />
+                      <Legend wrapperStyle={{ fontSize: 10 }} />
+                      <Bar yAxisId="cac" dataKey="cac" fill="#F5C518" maxBarSize={12} name="CAC (₹)" radius={[3,3,0,0]} />
+                      <Line yAxisId="roas" dataKey="roas" stroke="#1a1a1a" strokeWidth={2.5} dot={false} name="RoAS" />
+                    </ComposedChart>
+                  </ResponsiveContainer>
+                </SCard>
+
+                <SCard title="Day-of-Week Seasonality" sub={dowInsight || 'Avg new customers per weekday across period'}>
+                  <ResponsiveContainer width="100%" height={220}>
+                    <BarChart data={dowData} margin={{ top: 4, right: 8, bottom: 4, left: 0 }}>
+                      <CartesianGrid stroke={T.borderSoft} />
+                      <XAxis dataKey="day" tick={{ fontSize: 10, fill: T.t3 }} />
+                      <YAxis tick={{ fontSize: 9, fill: T.t3 }} />
+                      <Tooltip contentStyle={ttS} itemStyle={ttItemStyle} labelStyle={{ color: '#1a1a1a' }} />
+                      {dowData.map((d, i) => null)}
+                      <Bar dataKey="avg" name="Avg New Customers" radius={[4,4,0,0]} fill="#F5C518" />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </SCard>
+              </div>
+
+              {/* 8. Spend vs Sales vs RoAS — triple story on one chart */}
+              {(() => {
+                const sd = bucketEnriched(spendChartGran)
+                const granPills = ['daily','weekly','monthly'].map(g => (
+                  <button key={g} style={pill(spendChartGran===g)} onClick={() => setSpendChartGran(g)}>{g[0].toUpperCase()+g.slice(1)}</button>
+                ))
+                return (<>
+              <SCard title="Spend vs Sales vs RoAS" sub="Ad spend (bars) · Gross Sales (black line) · RoAS (amber line)"
+                action={granPills}>
+                <ResponsiveContainer width="100%" height={240}>
+                  <ComposedChart data={sd} margin={{ top: 18, right: 48, bottom: 4, left: 0 }}>
+                    <CartesianGrid stroke={T.borderSoft} />
+                    <XAxis dataKey="date" tick={{ fontSize: 9, fill: T.t3 }} />
+                    <YAxis yAxisId="spend" orientation="left" tick={{ fontSize: 9, fill: T.t3 }} tickFormatter={v => fmtBig(v)} />
+                    <YAxis yAxisId="roas" orientation="right" tick={{ fontSize: 9, fill: T.t3 }} tickFormatter={v => `${v.toFixed(1)}×`} />
+                    <Tooltip contentStyle={ttS} itemStyle={ttItemStyle} labelStyle={{ color: '#1a1a1a' }}
+                      formatter={(v, n) => n === 'RoAS' ? [`${v.toFixed(2)}×`, n] : n === 'Gross Sales' ? [fmt(v), n] : [fmt(v), n]} />
+                    <Legend wrapperStyle={{ fontSize: 10 }} />
+                    <Bar yAxisId="spend" dataKey="spend" fill="#F5C518" maxBarSize={14} name="Ad Spend" radius={[3,3,0,0]} />
+                    <Line yAxisId="spend" dataKey="grossSales" stroke="#1a1a1a" strokeWidth={2.5} dot={false} name="Gross Sales" />
+                    <Line yAxisId="roas" dataKey="roas" stroke={T.amberDeep} strokeWidth={2} dot={false} strokeDasharray="4 2" name="RoAS" />
+                  </ComposedChart>
+                </ResponsiveContainer>
+              </SCard>
+                </>)
+              })()}
+
+              {/* 9 & 10. Spend vs CAC  +  CAC Efficiency Band */}
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+
+                {/* Spend vs CAC: bar=spend, line=CAC */}
+                <SCard title="Spend vs CAC" sub="As spend rises, does CAC improve or worsen?"
+                  action={['daily','weekly','monthly'].map(g => <button key={g} style={pill(spendCacGran===g)} onClick={() => setSpendCacGran(g)}>{g[0].toUpperCase()+g.slice(1)}</button>)}>
+                  <ResponsiveContainer width="100%" height={220}>
+                    <ComposedChart data={bucketEnriched(spendCacGran)} margin={{ top: 18, right: 48, bottom: 4, left: 0 }}>
+                      <CartesianGrid stroke={T.borderSoft} />
+                      <XAxis dataKey="date" tick={{ fontSize: 9, fill: T.t3 }} />
+                      <YAxis yAxisId="spend" orientation="left" tick={{ fontSize: 9, fill: T.t3 }} tickFormatter={v => fmtBig(v)} />
+                      <YAxis yAxisId="cac" orientation="right" tick={{ fontSize: 9, fill: T.t3 }} tickFormatter={v => fmt(v)} />
+                      <Tooltip contentStyle={ttS} itemStyle={ttItemStyle} labelStyle={{ color: '#1a1a1a' }}
+                        formatter={(v, n) => n === 'CAC' ? [fmt(v), n] : [fmt(v), n]} />
+                      <Legend wrapperStyle={{ fontSize: 10 }} />
+                      <Bar yAxisId="spend" dataKey="spend" fill="#F5C518" maxBarSize={14} name="Ad Spend" radius={[3,3,0,0]} />
+                      <Line yAxisId="cac" dataKey="cac" stroke="#1a1a1a" strokeWidth={2.5} dot={false} name="CAC" />
+                    </ComposedChart>
+                  </ResponsiveContainer>
+                </SCard>
+
+                {/* CAC Efficiency Band: CAC vs period avg ± stddev */}
+                {(() => {
+                  const bd = bucketEnriched(cacBandGran)
+                  const cacVals = bd.map(r => r.cac).filter(v => v > 0)
+                  const cacAvg = cacVals.length ? cacVals.reduce((s, v) => s + v, 0) / cacVals.length : 0
+                  const cacStd = cacVals.length > 1 ? Math.sqrt(cacVals.reduce((s, v) => s + (v - cacAvg) ** 2, 0) / cacVals.length) : 0
+                  const bandData = bd.map(r => ({
+                    date: r.date,
+                    cac: r.cac > 0 ? r.cac : null,
+                    band: r.cac > 0 ? [Math.max(0, cacAvg - cacStd), cacAvg + cacStd] : null,
+                    avg: cacAvg,
+                  }))
+                  const unit = cacBandGran === 'daily' ? 'days' : cacBandGran === 'weekly' ? 'weeks' : 'months'
+                  const aboveAvg = bd.filter(r => r.cac > cacAvg + cacStd).length
+                  const belowAvg = bd.filter(r => r.cac > 0 && r.cac < cacAvg - cacStd).length
                   return (
-                    <tr key={cm} style={{ borderBottom: `1px solid ${C.border}` }}>
-                      <td style={{ padding: '4px 8px', fontWeight: 700, color: C.t1, fontSize: 10, whiteSpace: 'nowrap' }}>{cm}</td>
-                      {Array.from({ length: maxCohortIdx + 1 }, (_, i) => {
-                        const cell = cohortMap[cm]?.[i]
-                        const pctVal = cell != null
-                          ? cohortMode === 'customer'
-                            ? cell.customers / baseC * 100
-                            : cell.revenue / baseR * 100
-                          : null
-                        const intensity = pctVal != null ? Math.min(i === 0 ? 1 : pctVal / 15, 1) : 0
-                        const bg = i === 0 ? '#2E74CC' : pctVal != null ? `rgba(46,116,204,${0.08 + intensity * 0.55})` : 'transparent'
-                        const txtColor = i === 0 ? '#fff' : pctVal != null && intensity > 0.5 ? '#fff' : C.t1
+                    <SCard title="CAC Efficiency Band"
+                      sub={`${belowAvg} ${unit} below avg (efficient) · ${aboveAvg} ${unit} above avg (costly)`}
+                      action={['daily','weekly','monthly'].map(g => <button key={g} style={pill(cacBandGran===g)} onClick={() => setCacBandGran(g)}>{g[0].toUpperCase()+g.slice(1)}</button>)}>
+                      <ResponsiveContainer width="100%" height={220}>
+                        <ComposedChart data={bandData} margin={{ top: 18, right: 8, bottom: 4, left: 0 }}>
+                          <CartesianGrid stroke={T.borderSoft} />
+                          <XAxis dataKey="date" tick={{ fontSize: 9, fill: T.t3 }} />
+                          <YAxis tick={{ fontSize: 9, fill: T.t3 }} tickFormatter={v => fmt(v)} />
+                          <Tooltip contentStyle={ttS} itemStyle={ttItemStyle} labelStyle={{ color: '#1a1a1a' }}
+                            formatter={(v, n) => n === 'CAC' ? [fmt(v), n] : [fmt(v), n]} />
+                          <Legend wrapperStyle={{ fontSize: 10 }} />
+                          <Line dataKey="avg" stroke={T.amberLine} strokeWidth={1.5} dot={false} strokeDasharray="6 3" name="Avg CAC" legendType="plainline" />
+                          <Line dataKey="cac" stroke="#1a1a1a" strokeWidth={2.5} dot={false} name="CAC" connectNulls />
+                        </ComposedChart>
+                      </ResponsiveContainer>
+                    </SCard>
+                  )
+                })()}
+
+              </div>
+
+            </div>
+          )
+        })()}
+
+        {activeTab === 'cohort' && (() => {
+          const CT = {
+            bg: '#FDFCF8', card: '#FFFFFF', border: '#F0EADC', borderSoft: '#F6F2E8',
+            t1: '#3A3324', t2: '#8A7F63', t3: '#B8AE93',
+            amber: '#E8C578', amberDeep: '#C9A24F', amberSoft: '#FBF6E8', amberLine: '#F0E2BC',
+            gold: '#D3B36C', green: '#9CA875', red: '#CFA579',
+          }
+          const ttC = { background: '#fff', border: `1px solid ${CT.amberLine}`, borderRadius: 8, padding: '8px 12px', fontSize: 11, color: '#1a1a1a' }
+          const iStyle = { color: '#1a1a1a' }
+
+          const pill = active => ({
+            background: active ? CT.amberDeep : CT.amberSoft,
+            color: active ? '#fff' : CT.t2,
+            border: `1px solid ${active ? CT.amberDeep : CT.amberLine}`,
+            borderRadius: 20, padding: '3px 11px', fontSize: 11,
+            cursor: 'pointer', fontWeight: active ? 700 : 500,
+            fontFamily: 'Inter, sans-serif', outline: 'none',
+          })
+
+          const CDelta = ({ cur, prev, lowerBetter = false }) => {
+            if (!prev) return null
+            const d = (cur - prev) / Math.abs(prev) * 100
+            const good = lowerBetter ? d <= 0 : d >= 0
+            return <span style={{ fontSize: 10, fontWeight: 700, color: good ? '#0D9E68' : '#B91C1C', background: good ? '#F0FDF4' : '#FFF1F1', borderRadius: 4, padding: '2px 6px', whiteSpace: 'nowrap' }}>{d >= 0 ? '▲' : '▼'} {Math.abs(d).toFixed(1)}%</span>
+          }
+
+          const MiniSpark = ({ vals, color = CT.amberDeep, h = 36 }) => {
+            if (!vals || vals.length < 2) return <div style={{ height: h }} />
+            const W = 180
+            const min = Math.min(...vals), max = Math.max(...vals), range = max - min || 1
+            const gx = i => (i / (vals.length - 1)) * W
+            const gy = v => h - 2 - ((v - min) / range) * (h - 6)
+            const pts = vals.map((v, i) => `${gx(i)},${gy(v)}`).join(' ')
+            const area = `M ${vals.map((v, i) => `${gx(i)},${gy(v)}`).join(' L ')} L ${gx(vals.length-1)},${h} L 0,${h} Z`
+            const gid = `ctsg${color.replace('#','')}${h}`
+            return (
+              <svg width="100%" height={h} viewBox={`0 0 ${W} ${h}`} preserveAspectRatio="none" style={{ display: 'block' }}>
+                <defs><linearGradient id={gid} x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor={color} stopOpacity=".22"/><stop offset="100%" stopColor={color} stopOpacity="0"/></linearGradient></defs>
+                <path d={area} fill={`url(#${gid})`} />
+                <polyline points={pts} fill="none" stroke={color} strokeWidth="1.6" strokeLinejoin="round" strokeLinecap="round" />
+              </svg>
+            )
+          }
+
+          const CCard = ({ title, sub, action, children }) => (
+            <div style={{ background: CT.card, borderRadius: 14, overflow: 'hidden', boxShadow: '0 1px 3px rgba(80,65,20,.04)', display: 'flex', flexDirection: 'column' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 16px', background: '#FFFFFF' }}>
+                <div>
+                  <div style={{ fontSize: 11, fontWeight: 800, color: '#3A3324', textTransform: 'uppercase', letterSpacing: '.08em' }}>{title}</div>
+                  {sub && <div style={{ fontSize: 11, color: '#8A7F63', marginTop: 2 }}>{sub}</div>}
+                </div>
+                {action && <div style={{ display: 'flex', gap: 4 }}>{action}</div>}
+              </div>
+              <div style={{ padding: '14px 16px', flex: 1 }}>{children}</div>
+            </div>
+          )
+
+          // ── weighted avg M1 & M6 (full + first-half as "prev" for delta) ──
+          let wSumM1 = 0, wTotM1 = 0, wSumM6 = 0, wTotM6 = 0
+          let wSumM1p = 0, wTotM1p = 0, wSumM6p = 0, wTotM6p = 0
+          const half = Math.floor(cohortMonths.length / 2)
+          cohortMonths.forEach((cm, ci) => {
+            const base = cohortMode === 'customer' ? (cohort0[cm] || 0) : (cohortRev0[cm] || 0)
+            if (!base) return
+            const r1 = cohortMap[cm][1], r6 = cohortMap[cm][6]
+            if (r1) {
+              const v = cohortMode === 'customer' ? r1.customers : r1.revenue
+              wSumM1 += v; wTotM1 += base
+              if (ci < half) { wSumM1p += v; wTotM1p += base }
+            }
+            if (r6) {
+              const v = cohortMode === 'customer' ? r6.customers : r6.revenue
+              wSumM6 += v; wTotM6 += base
+              if (ci < half) { wSumM6p += v; wTotM6p += base }
+            }
+          })
+          const avgM1 = wTotM1 > 0 ? wSumM1 / wTotM1 * 100 : 0
+          const avgM6 = wTotM6 > 0 ? wSumM6 / wTotM6 * 100 : 0
+          const prevAvgM1 = wTotM1p > 0 ? wSumM1p / wTotM1p * 100 : 0
+          const prevAvgM6 = wTotM6p > 0 ? wSumM6p / wTotM6p * 100 : 0
+          const lost90Row = inactivity.find(r => String(r.bucket || '').includes('90'))
+          const lost90 = lost90Row ? (lost90Row.customers || 0) : 0
+
+          // ── spark lines for stat cards: M1% per cohort, M6% per cohort ──
+          const sparkM1 = cohortMonths.map(cm => {
+            const base = cohortMode === 'customer' ? (cohort0[cm] || 0) : (cohortRev0[cm] || 0)
+            if (!base) return 0
+            const r1 = cohortMap[cm][1]
+            if (!r1) return 0
+            const v = cohortMode === 'customer' ? r1.customers : r1.revenue
+            return +(v / base * 100).toFixed(2)
+          }).filter(v => v > 0)
+          const sparkM6 = cohortMonths.map(cm => {
+            const base = cohortMode === 'customer' ? (cohort0[cm] || 0) : (cohortRev0[cm] || 0)
+            if (!base) return 0
+            const r6 = cohortMap[cm][6]
+            if (!r6) return 0
+            const v = cohortMode === 'customer' ? r6.customers : r6.revenue
+            return +(v / base * 100).toFixed(2)
+          }).filter(v => v > 0)
+          const sparkLost90 = cohortMonths.map(cm => cohort0[cm] || 0).filter(v => v > 0)
+          const avgOrdersPerCust = kpis.totalCustomers > 0 ? kpis.totalOrders / kpis.totalCustomers : 0
+          const prevAvgOrdersPerCust = prevKpis.totalCustomers > 0 ? (prevKpis.totalOrders || 0) / prevKpis.totalCustomers : 0
+          const sparkAvgOrders = cohortMonths.map(cm => {
+            const base = cohort0[cm] || 0
+            if (!base) return 0
+            const r0 = cohortMap[cm][0]
+            if (!r0) return 0
+            return +(r0.customers > 0 ? r0.customers / base : 0)
+          }).filter(v => v > 0)
+
+          // ── blended retention curve (M1 onwards, weighted by cohort size) ──
+          const avgRetention = []
+          for (let idx = 1; idx <= maxCohortIdx; idx++) {
+            let wSum = 0, wTot = 0
+            cohortMonths.forEach(cm => {
+              const base = cohortMode === 'customer' ? (cohort0[cm] || 0) : (cohortRev0[cm] || 0)
+              if (!base) return
+              const row = cohortMap[cm][idx]
+              if (!row) return
+              const v = cohortMode === 'customer' ? (row.customers || 0) : (row.revenue || 0)
+              wSum += v; wTot += base
+            })
+            avgRetention.push({ month: `M${idx}`, pct: wTot > 0 ? +(wSum / wTot * 100).toFixed(2) : 0 })
+          }
+          // insight: find where retention drops below 2% or flattens
+          const retInsight = (() => {
+            const below2 = avgRetention.find(d => d.pct > 0 && d.pct < 2)
+            if (below2) return `Retention drops below 2% at ${below2.month} (${below2.pct.toFixed(1)}%), indicating most churn occurs in the first ${below2.month.slice(1)} months.`
+            const last3 = avgRetention.slice(-3)
+            if (last3.length >= 2) {
+              const diff = Math.abs(last3[last3.length-1].pct - last3[0].pct)
+              if (diff < 0.3) return `Retention appears to have stabilised between ${last3[0].month}–${last3[last3.length-1].month} at ~${last3[last3.length-1].pct.toFixed(1)}%, suggesting a loyal core base.`
+            }
+            return `Average Month-1 retention is ${avgM1.toFixed(1)}% across all cohorts.`
+          })()
+
+          // ── cohort quality trend (M1 retention per cohort over time) ──
+          const qualityTrend = cohortMonths.map(cm => {
+            const base = cohortMode === 'customer' ? (cohort0[cm] || 0) : (cohortRev0[cm] || 0)
+            if (!base) return null
+            const r1 = cohortMap[cm][1]
+            if (!r1) return null
+            const v = cohortMode === 'customer' ? (r1.customers || 0) : (r1.revenue || 0)
+            return { cohort: cm, m1pct: +(v / base * 100).toFixed(2) }
+          }).filter(Boolean)
+          const qualityInsight = (() => {
+            if (qualityTrend.length < 4) return null
+            const early = qualityTrend.slice(0, Math.ceil(qualityTrend.length / 2))
+            const recent = qualityTrend.slice(-Math.min(4, qualityTrend.length))
+            const earlyAvg = early.reduce((s, d) => s + d.m1pct, 0) / early.length
+            const recentAvg = recent.reduce((s, d) => s + d.m1pct, 0) / recent.length
+            const dir = recentAvg > earlyAvg ? 'improved' : 'declined'
+            const diff = Math.abs(recentAvg - earlyAvg).toFixed(1)
+            return `M1 retention has ${dir} by ${diff}pp in recent cohorts (${recentAvg.toFixed(1)}%) vs earlier cohorts (${earlyAvg.toFixed(1)}%).`
+          })()
+
+          // ── cohort size vs M1 retention ──
+          const sizeVsRetention = cohortMonths.map(cm => {
+            const base = cohort0[cm] || 0
+            if (!base) return null
+            const r1 = cohortMap[cm][1]
+            if (!r1) return null
+            const v = cohortMode === 'customer' ? (r1.customers || 0) : (r1.revenue || 0)
+            const baseVal = cohortMode === 'customer' ? base : (cohortRev0[cm] || 0)
+            return { cohort: cm, size: base, m1pct: baseVal > 0 ? +(v / baseVal * 100).toFixed(2) : 0 }
+          }).filter(Boolean)
+          const sizeInsight = (() => {
+            if (sizeVsRetention.length < 3) return null
+            const first = sizeVsRetention[0], last = sizeVsRetention[sizeVsRetention.length - 1]
+            const sizeChg = first.size > 0 ? ((last.size - first.size) / first.size * 100).toFixed(0) : null
+            const retChg = first.m1pct > 0 ? ((last.m1pct - first.m1pct) / first.m1pct * 100).toFixed(0) : null
+            if (!sizeChg || !retChg) return null
+            const sizeDir = +sizeChg >= 0 ? `grown ${sizeChg}%` : `shrunk ${Math.abs(sizeChg)}%`
+            const retDir = +retChg >= 0 ? `also improved ${retChg}%` : `declined ${Math.abs(retChg)}%`
+            return `Cohort size has ${sizeDir} while M1 retention has ${retDir} — from ${first.m1pct.toFixed(1)}% to ${last.m1pct.toFixed(1)}%.`
+          })()
+
+          // ── heatmap intensity ceiling from actual non-M0 data ──
+          let maxNonM0Pct = 0
+          cohortMonths.forEach(cm => {
+            const base = cohortMode === 'customer' ? (cohort0[cm] || 0) : (cohortRev0[cm] || 0)
+            if (!base) return
+            for (let idx = 1; idx <= maxCohortIdx; idx++) {
+              const row = cohortMap[cm]?.[idx]
+              if (!row) continue
+              const v = cohortMode === 'customer' ? (row.customers || 0) : (row.revenue || 0)
+              const p = v / base * 100
+              if (p > maxNonM0Pct) maxNonM0Pct = p
+            }
+          })
+          const heatCeiling = Math.max(maxNonM0Pct * 1.1, 5)
+
+          return (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 16, paddingTop: 14, paddingLeft: 16, paddingRight: 16, paddingBottom: 24, background: CT.bg }}>
+
+              {/* 1. Stat row */}
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 10 }}>
+                {[
+                  { label: 'Avg M1 Retention', value: `${avgM1.toFixed(1)}%`, sub: 'Weighted by cohort size', spark: sparkM1, cur: avgM1, prev: prevAvgM1 },
+                  { label: 'Avg M6 Retention', value: `${avgM6.toFixed(1)}%`, sub: 'Weighted by cohort size', spark: sparkM6, cur: avgM6, prev: prevAvgM6 },
+                  { label: 'Inactive 90+ Days', value: fmtN(lost90), sub: 'Customers not seen in 90d', spark: sparkLost90, cur: lost90, prev: null },
+                  { label: 'Avg Orders / Customer', value: avgOrdersPerCust > 0 ? avgOrdersPerCust.toFixed(2) : '—', sub: 'Total orders ÷ unique customers', spark: sparkAvgOrders, cur: avgOrdersPerCust, prev: prevAvgOrdersPerCust },
+                ].map((s, i) => (
+                  <div key={i} style={{ background: CT.card, borderRadius: 12, padding: '10px 12px 8px', boxShadow: '0 1px 2px rgba(80,65,20,.04)', display: 'flex', flexDirection: 'column', gap: 2 }}>
+                    <span style={{ fontSize: 9, fontWeight: 700, color: CT.t3, textTransform: 'uppercase', letterSpacing: '.07em' }}>{s.label}</span>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 4 }}>
+                      <span style={{ fontSize: 18, fontWeight: 700, color: CT.t1, fontFamily: 'Space Grotesk, var(--font)', lineHeight: 1.2 }}>{s.value}</span>
+                      <CDelta cur={s.cur} prev={s.prev} />
+                    </div>
+                    <span style={{ fontSize: 10, color: CT.t3, lineHeight: 1.3 }}>{s.sub}</span>
+                    {s.spark && s.spark.length > 1 ? <MiniSpark vals={s.spark} /> : <div style={{ height: 36 }} />}
+                  </div>
+                ))}
+              </div>
+
+              {/* 2. Blended Retention Curve (M1+, M0 excluded) */}
+              <CCard title="Blended Retention Curve" sub="Weighted avg retention across all cohorts — M0 excluded"
+                action={[['customer','Customers'],['sales','Sales']].map(([v,l]) => <button key={v} style={pill(cohortMode===v)} onClick={() => setCohortMode(v)}>{l}</button>)}
+              >
+                <ResponsiveContainer width="100%" height={200}>
+                  <BarChart data={avgRetention} margin={{ top: 4, right: 16, bottom: 4, left: 0 }} barCategoryGap="30%">
+                    <CartesianGrid stroke={CT.borderSoft} />
+                    <XAxis dataKey="month" tick={{ fontSize: 10, fill: CT.t3 }} />
+                    <YAxis tick={{ fontSize: 10, fill: CT.t3 }} unit="%" />
+                    <Tooltip contentStyle={ttC} itemStyle={iStyle} labelStyle={{ color: '#1a1a1a' }} formatter={v => [`${v.toFixed(1)}%`, 'Avg Retention']} />
+                    <Bar dataKey="pct" name="Avg Retention %" radius={[4,4,0,0]} isAnimationActive={false}>
+                      {avgRetention.map((d, i) => <Cell key={i} fill={i === 0 ? CT.amberDeep : CT.amber} />)}
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+                {retInsight && <div style={{ marginTop: 10, fontSize: 11, color: CT.t2, fontStyle: 'italic', borderTop: `1px solid ${CT.borderSoft}`, paddingTop: 8 }}>⚡ {retInsight}</div>}
+              </CCard>
+
+              {/* 3 & 4. Quality trend + Size vs Retention — side by side */}
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+
+                <CCard title="Cohort Quality Trend" sub="M1 retention % per cohort over time">
+                  <ResponsiveContainer width="100%" height={200}>
+                    <AreaChart data={qualityTrend} margin={{ top: 4, right: 16, bottom: 4, left: 0 }}>
+                      <defs>
+                        <linearGradient id="cqGrad" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="0%" stopColor={CT.amberDeep} stopOpacity=".25" />
+                          <stop offset="100%" stopColor={CT.amberDeep} stopOpacity="0" />
+                        </linearGradient>
+                      </defs>
+                      <CartesianGrid stroke={CT.borderSoft} />
+                      <XAxis dataKey="cohort" tick={{ fontSize: 9, fill: CT.t3 }} />
+                      <YAxis tick={{ fontSize: 9, fill: CT.t3 }} unit="%" />
+                      <Tooltip contentStyle={ttC} itemStyle={iStyle} labelStyle={{ color: '#1a1a1a' }} formatter={v => [`${v.toFixed(1)}%`, 'M1 Retention']} />
+                      <Area dataKey="m1pct" stroke={CT.amberDeep} strokeWidth={2} fill="url(#cqGrad)" dot={{ r: 3, fill: CT.amberDeep }} name="M1 Retention %" isAnimationActive={false} />
+                    </AreaChart>
+                  </ResponsiveContainer>
+                  {qualityInsight && <div style={{ marginTop: 10, fontSize: 11, color: CT.t2, fontStyle: 'italic', borderTop: `1px solid ${CT.borderSoft}`, paddingTop: 8 }}>⚡ {qualityInsight}</div>}
+                </CCard>
+
+                <CCard title="Cohort Size vs Retention" sub="Growing cohorts — at what cost to retention?">
+                  <ResponsiveContainer width="100%" height={200}>
+                    <ComposedChart data={sizeVsRetention} margin={{ top: 4, right: 30, bottom: 4, left: 0 }}>
+                      <CartesianGrid stroke={CT.borderSoft} />
+                      <XAxis dataKey="cohort" tick={{ fontSize: 9, fill: CT.t3 }} />
+                      <YAxis yAxisId="size" orientation="left" tick={{ fontSize: 9, fill: CT.t3 }} tickFormatter={v => fmtBig(v)} />
+                      <YAxis yAxisId="ret" orientation="right" tick={{ fontSize: 9, fill: CT.t3 }} unit="%" />
+                      <Tooltip contentStyle={ttC} itemStyle={iStyle} labelStyle={{ color: '#1a1a1a' }} />
+                      <Bar yAxisId="size" dataKey="size" fill={CT.amber} maxBarSize={28} name="Cohort Size" isAnimationActive={false} />
+                      <Line yAxisId="ret" dataKey="m1pct" stroke={CT.amberDeep} strokeWidth={2} dot={{ r: 3, fill: CT.amberDeep }} name="M1 Retention %" isAnimationActive={false} />
+                    </ComposedChart>
+                  </ResponsiveContainer>
+                  {sizeInsight && <div style={{ marginTop: 10, fontSize: 11, color: CT.t2, fontStyle: 'italic', borderTop: `1px solid ${CT.borderSoft}`, paddingTop: 8 }}>⚡ {sizeInsight}</div>}
+                </CCard>
+
+              </div>
+
+              {/* 5. Cohort Heatmap */}
+              {(() => {
+                const visibleMax = Math.min(cohortMonthLimit, maxCohortIdx)
+                return (
+              <CCard title="Cohort Heatmap"
+                action={
+                  <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', alignItems: 'center' }}>
+                    {[['customer','Customers'],['sales','Sales']].map(([v,l]) => <button key={v} style={pill(cohortMode===v)} onClick={() => setCohortMode(v)}>{l}</button>)}
+                    <span style={{ width: 6 }} />
+                    {[['pct','%'],['count','Count']].map(([v,l]) => <button key={v} style={pill(cohortDisplay===v)} onClick={() => setCohortDisplay(v)}>{l}</button>)}
+                    <span style={{ width: 6 }} />
+                    <select
+                      value={cohortMonthLimit}
+                      onChange={e => setCohortMonthLimit(Number(e.target.value))}
+                      style={{ fontSize: 11, borderRadius: 20, border: `1px solid ${CT.amberLine}`, background: CT.amberSoft, color: CT.t2, padding: '3px 10px', fontFamily: 'Inter, sans-serif', cursor: 'pointer', outline: 'none' }}
+                    >
+                      {[6, 12, 24, 36, 54].map(n => <option key={n} value={n}>{n} Months</option>)}
+                    </select>
+                  </div>
+                }
+              >
+                <div style={{ overflowX: 'auto', width: '100%' }}>
+                  <table style={{ borderCollapse: 'collapse', fontSize: 11, minWidth: '100%', tableLayout: 'auto' }}>
+                    <colgroup>
+                      <col style={{ width: 72 }} />
+                      <col style={{ width: 62 }} />
+                      {Array.from({ length: visibleMax + 1 }, (_, i) => <col key={i} />)}
+                    </colgroup>
+                    <thead>
+                      <tr style={{ background: '#F3DFA0', borderBottom: `1px solid #E6C877` }}>
+                        <th style={{ padding: '6px 8px', textAlign: 'left', color: CT.t1, fontWeight: 700, fontSize: 10, textTransform: 'uppercase', letterSpacing: '.05em', overflow: 'hidden' }}>Cohort</th>
+                        <th style={{ padding: '6px 8px', textAlign: 'right', color: CT.t1, fontWeight: 700, fontSize: 10, textTransform: 'uppercase', letterSpacing: '.05em' }}>Size</th>
+                        {Array.from({ length: visibleMax + 1 }, (_, i) => (
+                          <th key={i} style={{ padding: '6px 4px', textAlign: 'center', color: CT.t1, fontWeight: 700, fontSize: 10 }}>M{i}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {cohortMonths.map((cm, ri) => {
+                        const base = cohortMode === 'customer' ? (cohort0[cm] || 0) : (cohortRev0[cm] || 0)
                         return (
-                          <td key={i} title={cell ? `${cohortMode==='customer'?cell.customers+' customers':fmt(cell.revenue)}` : ''} style={{ padding: '4px 4px', textAlign: 'center', fontSize: 9.5, fontFamily: 'var(--mono)', background: bg, color: txtColor, fontWeight: 400 }}>
-                            {pctVal != null ? `${pctVal.toFixed(1)}%` : ''}
-                          </td>
+                          <tr key={cm} style={{ borderBottom: `1px solid ${CT.borderSoft}`, background: ri % 2 === 0 ? CT.card : CT.bg }}>
+                            <td style={{ padding: '5px 8px', color: CT.t2, overflow: 'hidden', fontFamily: 'JetBrains Mono, monospace', fontSize: 10 }}>{cm}</td>
+                            <td style={{ padding: '5px 8px', textAlign: 'right', fontFamily: 'JetBrains Mono, monospace', color: CT.t1, fontSize: 10 }}>{fmtN(cohort0[cm] || 0)}</td>
+                            {Array.from({ length: visibleMax + 1 }, (_, idx) => {
+                              const row = cohortMap[cm]?.[idx]
+                              if (!row) return <td key={idx} style={{ padding: '5px 4px', background: 'transparent' }} />
+                              const rawVal = cohortMode === 'customer' ? (row.customers || 0) : (row.revenue || 0)
+                              const pctVal = base > 0 ? rawVal / base * 100 : 0
+                              const intensity = idx === 0 ? 1 : Math.min(pctVal / heatCeiling, 1)
+                              const bg = idx === 0 ? CT.amberDeep : `rgba(232,197,120,${(intensity * 0.85 + 0.05).toFixed(2)})`
+                              const textColor = idx === 0 ? '#fff' : CT.t1
+                              return (
+                                <td key={idx} style={{ padding: '5px 4px', textAlign: 'center', background: bg, fontFamily: 'JetBrains Mono, monospace', fontSize: 10, color: textColor, overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                  {cohortDisplay === 'pct' ? `${pctVal.toFixed(1)}%` : cohortMode === 'customer' ? fmtN(rawVal) : fmt(rawVal)}
+                                </td>
+                              )
+                            })}
+                          </tr>
                         )
                       })}
-                    </tr>
-                  )
-                })}
-              </tbody>
-            </table>
-          </div>
-        </Card>
-        )
-      })()}
+                    </tbody>
+                  </table>
+                </div>
+              </CCard>
+                )
+              })()}
 
-      {/* Section 4: Purchase Behavior */}
-      <LSectionTitle title="Purchase Behavior" collapsed={secCollapsed.purchase} onToggle={() => toggleSec('purchase')} />
-      {!secCollapsed.purchase && (() => {
-        return (
-      <Card title={<div><div>Purchase Behavior: First vs Second Purchase</div><div style={{ fontSize: 11, fontWeight: 400, color: C.t3, marginTop: 2 }}>All-time data — not affected by date filter. Shows what customers bought on their 2nd order after their 1st.</div></div>} action={
-        <div style={{ display: 'flex', gap: 4 }}>
-          {['Sub Category', 'Category'].map(t => (
-            <button key={t} onClick={() => setCrossFilter(t)} style={{ fontSize: 10, padding: '3px 9px', borderRadius: 5, border: `1px solid ${C.border}`, background: crossFilter === t ? C.t1 : C.card, color: crossFilter === t ? '#fff' : C.t2, cursor: 'pointer', fontFamily: 'var(--font)', fontWeight: crossFilter === t ? 700 : 400 }}>{t}</button>
-          ))}
-        </div>
-      }>
-        <div style={{ overflowX: 'auto', overflowY: 'auto', width: '100%', maxHeight: 420 }}>
-          <table style={{ borderCollapse: 'collapse', fontSize: 10.5, width: '100%', tableLayout: 'fixed' }}>
-            <colgroup>
-              <col style={{ width: '140px' }} />
-              {allCrossFirst.map(cat => <col key={cat} />)}
-            </colgroup>
-            <thead>
-              {/* Span header row: "First Purchase →" label above all category columns */}
-              <tr>
-                <th style={{ padding: '2px 8px 0', borderBottom: 'none' }} />
-                <th colSpan={allCrossFirst.length} style={{ padding: '4px 6px 2px', textAlign: 'center', fontSize: 9.5, fontWeight: 700, color: C.blue.tx, background: C.blue.bg, borderRadius: '6px 6px 0 0', letterSpacing: '.04em' }}>
-                  First Purchase {crossFilter} →
-                </th>
-              </tr>
-              <tr style={{ borderBottom: `2px solid ${C.border}` }}>
-                <th style={{ padding: '4px 8px', textAlign: 'left', verticalAlign: 'bottom', overflow: 'hidden' }}>
-                  <div style={{ fontSize: 8.5, fontWeight: 700, color: C.blue.tx, background: C.blue.bg, display: 'inline-block', padding: '2px 6px', borderRadius: 4, marginBottom: 2 }}>↓ Second Purchase {crossFilter}</div>
-                </th>
-                {allCrossFirst.map(cat => (
-                  <th key={cat} style={{ padding: '4px 6px', textAlign: 'right', color: C.t3, fontWeight: 700, fontSize: 9, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{cat}</th>
+            </div>
+          )
+        })()}
+
+        {activeTab === 'purchase' && (() => {
+          const crossMaxVal = Math.max(...crossRows.flatMap(r => r.data), 1)
+          return (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 16, paddingTop: 16, paddingLeft: 16, paddingRight: 16 }}>
+              <CpCard
+                title="First vs Second Purchase Cross-Sell"
+                action={
+                  <div style={{ display: 'flex', gap: 4 }}>
+                    {['Category', 'Sub Category'].map(f => (
+                      <button
+                        key={f}
+                        onClick={() => setCrossFilter(f)}
+                        style={{
+                          background: crossFilter === f ? CP.ink : CP.head,
+                          color: crossFilter === f ? CP.head : CP.ink2,
+                          border: `1px solid ${CP.line}`,
+                          borderRadius: 0,
+                          padding: '4px 10px',
+                          fontSize: 11,
+                          cursor: 'pointer',
+                          fontFamily: 'Space Grotesk, var(--font)',
+                          fontWeight: crossFilter === f ? 700 : 400,
+                          outline: 'none',
+                        }}
+                      >{f}</button>
+                    ))}
+                  </div>
+                }
+              >
+                {crossRows.length > 0
+                  ? (
+                    <div style={{ overflowX: 'auto' }}>
+                      <table style={{ borderCollapse: 'collapse', fontSize: 11, minWidth: 500 }}>
+                        <thead>
+                          <tr style={{ background: CP.head, borderBottom: `2px solid ${CP.line}` }}>
+                            <th style={{ padding: '5px 8px', textAlign: 'left', color: CP.ink, fontWeight: 700 }}>
+                              <span style={{ color: CP.ink3 }}>First Purchase →</span>
+                            </th>
+                            {allCrossSecond.map(s => (
+                              <th key={s} style={{ padding: '5px 8px', textAlign: 'center', color: CP.ink, fontWeight: 700, fontSize: 10 }}>{s}</th>
+                            ))}
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {crossRows.map((row, ri) => (
+                            <tr key={ri} style={{ borderBottom: `1px solid ${CP.lineSoft}` }}>
+                              <td style={{ padding: '5px 8px', color: CP.ink2, fontWeight: 600 }}>{row.first}</td>
+                              {row.data.map((v, ci) => {
+                                const intensity = v / crossMaxVal
+                                return (
+                                  <td key={ci} style={{ padding: '5px 8px', textAlign: 'center', background: v > 0 ? `rgba(245,197,24,${(intensity * 0.8 + 0.1).toFixed(2)})` : 'transparent', fontFamily: 'JetBrains Mono, monospace', fontSize: 10, color: CP.ink }}>
+                                    {v > 0 ? fmtN(v) : ''}
+                                  </td>
+                                )
+                              })}
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )
+                  : <div style={{ color: CP.ink3, fontSize: 12, padding: 12 }}>No cross-sell data available.</div>
+                }
+              </CpCard>
+
+              <CpCard title="Days to Second Purchase">
+                {custData.daysToSecondPurchase
+                  ? (
+                    <ResponsiveContainer width="100%" height={200}>
+                      <BarChart data={custData.daysToSecondPurchase} margin={{ top: 4, right: 16, bottom: 4, left: 0 }}>
+                        <CartesianGrid stroke={CP.lineSoft} />
+                        <XAxis dataKey="bucket" tick={{ fontSize: 10, fill: CP.ink3 }} />
+                        <YAxis tick={{ fontSize: 10, fill: CP.ink3 }} />
+                        <Tooltip contentStyle={ttStyle} />
+                        <Bar dataKey="pct" fill={CP.yellow} name="% Customers" />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  )
+                  : <CpBackendTodo field="daysToSecondPurchase" />
+                }
+              </CpCard>
+
+              <CpCard title="AOV by Order Number">
+                {custData.aovByOrderNumber
+                  ? (
+                    <ResponsiveContainer width="100%" height={200}>
+                      <BarChart data={custData.aovByOrderNumber} margin={{ top: 4, right: 16, bottom: 4, left: 0 }}>
+                        <CartesianGrid stroke={CP.lineSoft} />
+                        <XAxis dataKey="orderNum" tick={{ fontSize: 10, fill: CP.ink3 }} />
+                        <YAxis tick={{ fontSize: 10, fill: CP.ink3 }} />
+                        <Tooltip contentStyle={ttStyle} />
+                        <Bar dataKey="aov" fill={CP.yellowDeep} name="AOV" />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  )
+                  : <CpBackendTodo field="aovByOrderNumber" />
+                }
+              </CpCard>
+            </div>
+          )
+        })()}
+
+        {activeTab === 'rfm' && (() => {
+          // ── Design tokens ──────────────────────────────────────
+          const RS = {
+            bg: '#FDFCF8', card: '#FFFFFF', border: '#E2D9C8', borderSoft: '#EDE7DA',
+            t1: '#3A3324', t2: '#8A7F63', t3: '#B8AE93',
+            amber: '#E8C578', amberDeep: '#C9A24F', amberSoft: '#FBF6E8', amberLine: '#F0E2BC',
+            gold: '#D3B36C', green: '#9CA875', red: '#CFA579',
+          }
+
+          // ── RFM segment taxonomy ────────────────────────────────
+          const SEG_META = {
+            'Champions':           { action: 'REWARD VIP',       actionBg: '#166534', actionColor: '#fff', desc: 'Bought recently, buy often, spend the most',         tooltip: 'Bought very recently, buy most often, and spend the most. Your best customers right now. Reward with VIP perks, early access, and referral programs.',             actionTooltip: 'Bought very recently, buy most often, spend the most. Your best customers right now. → Reward VIP: loyalty perks, early access, referral programs.',           gridTooltip: 'Buy often + bought recently. These are your best customers right now.' },
+            'Loyal Customers':     { action: 'UPSELL',            actionBg: '#1e40af', actionColor: '#fff', desc: 'Regular buyers with strong lifetime value',          tooltip: 'Buy regularly with good frequency and decent lifetime value. Not top spenders but very reliable. Introduce premium products or bundles to grow their basket.',    actionTooltip: 'Buy regularly, decent frequency, good lifetime value. Not top spenders but reliable. → Upsell: introduce premium products or bundles.',                        gridTooltip: 'Frequent buyers but not as recent as Champions. Still very valuable — buy often, just need a nudge to come back sooner.' },
+            'Potential Loyalists': { action: 'NURTURE',           actionBg: '#0369a1', actionColor: '#fff', desc: 'Recent customers with repeat potential',             tooltip: 'Recent buyers who have purchased more than once and show signs of becoming loyal. Keep them engaged and build the habit before they go cold.',                  actionTooltip: 'Recent buyers with repeat potential — bought more than once, good recency. On track to become Champions. → Nurture: keep them engaged, build the habit.',      gridTooltip: 'Bought recently but not yet frequent. On track to become Champions if nurtured well. Keep them engaged.' },
+            'New Customers':       { action: 'NUDGE 2ND ORDER',   actionBg: '#7c3aed', actionColor: '#fff', desc: 'Bought recently for the first time',                 tooltip: 'Made their first purchase recently. Critical window — nudge them towards a second order quickly to increase retention odds.',                                    actionTooltip: 'Bought recently for the first time. Critical window. → Nudge 2nd order quickly to increase retention odds.',                                                   gridTooltip: 'First-time buyers. Critical window — push for a 2nd order before they forget about you.' },
+            'Promising':           { action: 'NUDGE 2ND ORDER',   actionBg: '#7c3aed', actionColor: '#fff', desc: 'Recent buyers, low frequency so far',                tooltip: 'Bought recently but only once or twice. Still forming habits. Nurture with targeted offers to convert them into regulars.',                                        actionTooltip: 'Recent buyers, low frequency so far. Still forming habits. → Nudge towards next order while purchase intent is still fresh.',                                  gridTooltip: 'Bought recently, low frequency so far. Still forming habits. Targeted offers can convert them to regulars.' },
+            'Need Attention':      { action: 'REVIEW',            actionBg: '#b45309', actionColor: '#fff', desc: 'Above average but haven\'t bought recently',         tooltip: 'Had above-average scores before but recency is dropping. At a tipping point — re-engage now before they drift into hibernation.',                                  actionTooltip: 'Customers that don\'t fit cleanly into standard RFM buckets. Mixed signals on recency/frequency. → Review: analyze deeper before deciding.',                   gridTooltip: 'Mixed signals — recency is dropping. At a tipping point, re-engage now before they drift to hibernation.' },
+            'About To Sleep':      { action: 'WIN-BACK',          actionBg: '#c2410c', actionColor: '#fff', desc: 'Below average — at risk of going dormant',           tooltip: 'Recency and frequency are both declining. On the verge of going fully dormant. A timely win-back offer could recover them.',                                     actionTooltip: 'Bought recently but only once or twice. New-ish customers still forming habits. → Review: nurture them before they go cold.',                                  gridTooltip: 'Recency and frequency both declining. On the verge of going fully dormant. A timely offer can still recover them.' },
+            'At Risk':             { action: 'WIN-BACK',          actionBg: '#c2410c', actionColor: '#fff', desc: 'Bought often before but not recently',               tooltip: 'Used to buy frequently but have not returned in a while. High churn risk. Personalised win-back campaign recommended urgently.',                                  actionTooltip: 'Used to buy frequently but not recently. High churn risk. → Win-back: personalised campaign referencing their past purchases.',                                gridTooltip: 'Used to buy often but disappeared recently. High churn risk — personalised win-back urgently needed.' },
+            'Cannot Lose Them':    { action: 'URGENT SAVE',       actionBg: '#991b1b', actionColor: '#fff', desc: 'Used to be champions — haven\'t returned',          tooltip: 'Previously your best customers — high spend, high frequency — but they have stopped buying. Most dangerous segment. Reach out immediately with high-value offers.', actionTooltip: 'Previously your best customers — high spend, high frequency — but stopped buying. Most dangerous segment. → Urgent Save: reach out immediately, high priority.', gridTooltip: 'Rare buyers now, but used to be champions. Most dangerous segment — high value at risk. Reach out immediately.' },
+            'Hibernating':         { action: 'WIN-BACK',          actionBg: '#78350f', actionColor: '#fff', desc: 'Last purchase was long ago, low frequency',          tooltip: 'Bought a long time ago and have not come back. Not fully churned yet but going very cold. Win-back campaigns like "we miss you" discounts can reactivate them.',  actionTooltip: 'Bought a long time ago, haven\'t come back. Low frequency, long gap since last order. Not fully churned yet but going cold fast. → Win-Back: discounts, "we miss you" emails.', gridTooltip: 'Rarely bought + last purchase was long ago. Not fully churned yet — "we miss you" campaigns can reactivate them.' },
+            'Lost':                { action: 'WIN-BACK',          actionBg: '#6b7280', actionColor: '#fff', desc: 'Lowest recency, frequency and monetary scores',      tooltip: 'Lowest scores across all three RFM dimensions. Effectively churned. Low ROI to pursue, but a small reactivation campaign may recover a fraction.',               actionTooltip: 'Lowest scores across all RFM dimensions. Effectively churned. → Win-back with a single low-cost campaign; do not invest heavily.',                             gridTooltip: 'Lowest scores on all three dimensions. Effectively churned. Low ROI to pursue — one small campaign is all worth trying.' },
+            'Recent Users':        { action: 'REVIEW',            actionBg: '#6b7280', actionColor: '#fff', desc: 'Bought recently but low frequency',                   tooltip: 'Bought recently but only once or twice. New-ish customers still forming habits. Need nurturing before they go cold.',                                              actionTooltip: 'Bought recently but only once or twice. New-ish customers still forming habits. → Review: nurture them before they go cold.' },
+            'Others':              { action: 'REVIEW',            actionBg: '#6b7280', actionColor: '#fff', desc: 'Mixed signals — doesn\'t fit standard RFM buckets',   tooltip: 'Customers that don\'t fit cleanly into standard RFM buckets — mixed signals on recency, frequency, and monetary. Analyze deeper before deciding on action.',    actionTooltip: 'Doesn\'t fit cleanly into standard RFM buckets. Mixed signals on recency/frequency/monetary. → Review: analyze this group deeper before deciding on action.' },
+          }
+
+          // ── RFM Grid placement (3×3) ────────────────────────────
+          const GRID_PLACEMENT = {
+            'Champions':           { row: 0, col: 0 },
+            'Loyal Customers':     { row: 0, col: 1 },
+            'Potential Loyalists': { row: 1, col: 0 },
+            'New Customers':       { row: 0, col: 2 },
+            'Promising':           { row: 1, col: 2 },
+            'Need Attention':      { row: 1, col: 1 },
+            'About To Sleep':      { row: 2, col: 0 },
+            'At Risk':             { row: 1, col: 0 },
+            'Cannot Lose Them':    { row: 2, col: 1 },
+            'Hibernating':         { row: 2, col: 2 },
+            'Lost':                { row: 2, col: 2 },
+          }
+
+          // ── RSCard component ────────────────────────────────────
+          const RSCard = ({ title, sub, action, children, infoTooltip }) => (
+            <div style={{ background: RS.card, borderRadius: 14, overflow: 'hidden', border: `1px solid ${RS.border}`, boxShadow: '0 1px 3px rgba(80,65,20,.04)', display: 'flex', flexDirection: 'column' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 16px', background: '#FFFFFF' }}>
+                <div>
+                  <div style={{ fontSize: 11, fontWeight: 800, color: '#3A3324', textTransform: 'uppercase', letterSpacing: '.08em', display: 'flex', alignItems: 'center', gap: 5 }}>
+                    {title}
+                    {infoTooltip && (
+                      <span className="rscard-info-wrap" style={{ position: 'relative', display: 'inline-flex', alignItems: 'center' }}>
+                        <span style={{ width: 14, height: 14, borderRadius: '50%', background: RS.borderSoft, border: `1px solid ${RS.border}`, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: 9, fontWeight: 700, color: RS.t2, cursor: 'default', lineHeight: 1, userSelect: 'none' }}>i</span>
+                        <div className="rscard-info-tt" style={{ position: 'absolute', top: 'calc(100% + 6px)', left: 0, zIndex: 999, background: '#fff', border: `1px solid ${RS.border}`, borderRadius: 7, padding: '10px 12px', width: 280, fontSize: 11, color: RS.t1, lineHeight: 1.6, boxShadow: '0 4px 14px rgba(0,0,0,.10)', pointerEvents: 'none', opacity: 0, transition: 'opacity .15s', fontWeight: 400, textTransform: 'none', letterSpacing: 0 }}>{infoTooltip}</div>
+                      </span>
+                    )}
+                  </div>
+                  {sub && <div style={{ fontSize: 11, color: '#8A7F63', marginTop: 2 }}>{sub}</div>}
+                </div>
+                {action && <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>{action}</div>}
+              </div>
+              <div style={{ padding: '14px 16px', flex: 1 }}>{children}</div>
+            </div>
+          )
+
+          // ── Computations ────────────────────────────────────────
+          const rfmSorted = [...rfm].sort((a, b) => (b.totalRevenue || 0) - (a.totalRevenue || 0))
+          const totalRev = rfm.reduce((s, r) => s + (r.totalRevenue || 0), 0)
+          const totalCust = rfm.reduce((s, r) => s + (r.customers || 0), 0)
+
+          const atRiskActions = new Set(['WIN-BACK', 'URGENT SAVE'])
+          const healthyNames = new Set(['Champions', 'Loyal Customers'])
+
+          const atRiskRev = rfm.reduce((s, r) => {
+            const meta = SEG_META[r.segment]
+            return s + (meta && atRiskActions.has(meta.action) ? (r.totalRevenue || 0) : 0)
+          }, 0)
+          const healthyRev = rfm.reduce((s, r) => {
+            return s + (healthyNames.has(r.segment) ? (r.totalRevenue || 0) : 0)
+          }, 0)
+
+          const atRiskSegs = rfm.filter(r => { const m = SEG_META[r.segment]; return m && atRiskActions.has(m.action) })
+          const atRiskCust = atRiskSegs.reduce((s, r) => s + (r.customers || 0), 0)
+
+          const rfmMaxRev = rfmSorted[0]?.totalRevenue || 1
+
+          // Build 3×3 grid
+          const colLabels = ['Recent', 'Mid Recency', 'Long Ago']
+          const rowLabels = ['Frequent', 'Mid Freq', 'Rare']
+          const gridCells = Array.from({ length: 3 }, () => Array.from({ length: 3 }, () => []))
+          rfm.forEach(seg => {
+            const placement = GRID_PLACEMENT[seg.segment]
+            if (placement) {
+              gridCells[placement.row][placement.col].push(seg)
+            }
+          })
+          const cellRevs = gridCells.map(row => row.map(segs => segs.reduce((s, r) => s + (r.totalRevenue || 0), 0)))
+          const maxCellRev = Math.max(...cellRevs.flat(), 1)
+
+          // Inactivity 90+ insight
+          const inact90 = inactivity.filter(r => (r.bucket || '').includes('90') || (r.bucket || '').includes('90+')).reduce((s, r) => s + (r.customers || 0), 0)
+          const hibSeg = rfm.find(r => r.segment === 'Hibernating')
+
+          return (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 16, paddingTop: 16, paddingLeft: 16, paddingRight: 16, paddingBottom: 24 }}>
+
+              {/* 1. Insight banner */}
+              <div style={{ background: RS.amberSoft, border: `1px solid ${RS.amberLine}`, borderRadius: 10, padding: '10px 16px', display: 'flex', alignItems: 'center', gap: 10 }}>
+                <span style={{ fontSize: 18 }}>⚡</span>
+                <span style={{ fontSize: 12, color: RS.t1, lineHeight: 1.5 }}>
+                  <strong>{fmtN(atRiskCust)} customers</strong> ({totalCust > 0 ? (atRiskCust / totalCust * 100).toFixed(1) : 0}% of base) are in win-back segments representing <strong>{fmt(atRiskRev)}</strong> at risk.{' '}
+                  Healthy segments (Champions + Loyal) account for <strong>{fmt(healthyRev)}</strong> ({totalRev > 0 ? (healthyRev / totalRev * 100).toFixed(1) : 0}% of total lifetime revenue).
+                </span>
+              </div>
+
+              {/* 2. KPI row */}
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10 }}>
+                {[
+                  { label: 'Customers Analyzed', value: fmtN(totalCust), bg: RS.card, sub: 'All RFM segments combined', tooltip: 'Total unique customers across all 7 RFM segments. This is your entire analyzed customer base.' },
+                  { label: 'Revenue at Risk', value: fmt(atRiskRev), bg: '#FFF7ED', sub: `${atRiskSegs.length} win-back segments`, tooltip: 'Revenue from Hibernating + Cannot Lose Them segments. These customers used to buy but haven\'t returned — if not re-engaged, this revenue is lost.' },
+                  { label: 'Healthy Base Revenue', value: fmt(healthyRev), bg: RS.card, sub: 'Champions + Loyal Customers', tooltip: 'Revenue from Champions + Loyal Customers — your core active buyers who purchase often and spend the most. This is your stable, reliable revenue.' },
+                  { label: 'Total Lifetime Revenue', value: fmt(totalRev), bg: RS.card, sub: 'All segments combined', tooltip: 'Sum of revenue across all 7 RFM segments combined — your total lifetime value from the entire customer base.' },
+                ].map((kpi, i) => (
+                  <div key={i} style={{ background: kpi.bg, borderRadius: 12, padding: '10px 12px 8px', border: `1px solid ${RS.border}`, position: 'relative', cursor: 'default' }}
+                    onMouseEnter={e => {
+                      const tt = e.currentTarget.querySelector('.rfm-kpi-tt')
+                      if (tt) tt.style.opacity = '1'
+                    }}
+                    onMouseLeave={e => {
+                      const tt = e.currentTarget.querySelector('.rfm-kpi-tt')
+                      if (tt) tt.style.opacity = '0'
+                    }}>
+                    <div style={{ fontSize: 10, fontWeight: 700, color: RS.t2, textTransform: 'uppercase', letterSpacing: '.07em', marginBottom: 4 }}>{kpi.label}</div>
+                    <div style={{ fontSize: 20, fontWeight: 800, color: RS.t1, fontFamily: 'JetBrains Mono, monospace', letterSpacing: '-.01em', lineHeight: 1.1 }}>{kpi.value}</div>
+                    <div style={{ fontSize: 10, color: RS.t3, marginTop: 4 }}>{kpi.sub}</div>
+                    <div className="rfm-kpi-tt" style={{
+                      opacity: 0, pointerEvents: 'none', transition: 'opacity .15s',
+                      position: 'absolute', top: 'calc(100% + 8px)', left: '50%', transform: 'translateX(-50%)',
+                      background: '#ffffff', color: '#3A3324', fontSize: 11, lineHeight: 1.5, border: '1px solid #E8DFC8',
+                      padding: '7px 10px', borderRadius: 7, whiteSpace: 'normal', width: 200,
+                      boxShadow: '0 4px 14px rgba(0,0,0,.18)', zIndex: 99, textAlign: 'center',
+                    }}>{kpi.tooltip}</div>
+                  </div>
                 ))}
-              </tr>
-            </thead>
-            <tbody>
-              {crossRows.map((sc, i) => (
-                <tr key={sc} style={{ borderBottom: `1px solid ${C.border}`, background: i % 2 === 0 ? 'transparent' : C.bg }}>
-                  <td style={{ padding: '4px 8px', fontWeight: 600, color: C.t1, fontSize: 10.5, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                    <span style={{ color: C.t3, fontSize: 9 }}>⊞</span> {sc}
-                  </td>
-                  {allCrossFirst.map(fc => {
-                    const v = crossMap[sc]?.[fc]
-                    return <td key={fc} style={{ padding: '4px 6px', textAlign: 'right', fontFamily: 'var(--mono)', fontSize: 10, color: v ? C.t1 : C.t3 }}>{v ? fmtN(v) : ''}</td>
-                  })}
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </Card>
-        )
-      })()}
-
-      {/* Section 5: RFM & Segmentation */}
-      <LSectionTitle title="RFM & Segmentation" collapsed={secCollapsed.rfm} onToggle={() => toggleSec('rfm')} />
-      {!secCollapsed.rfm && (
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
-        {/* RFM Segments — horizontal bar list */}
-        <Card title="RFM Segments">
-          {(() => {
-            const RFM_DESC = {
-              'Champions':          'Bought recently, buy often, high spend',
-              'Loyal Customers':    'Buy regularly, decent recency & frequency',
-              'Recent Users':       'Bought recently but only once or twice',
-              'Potential Loyalists':'Recent buyers with good spend potential',
-              'Cannot Lose Them':   'Bought often but not seen in 90–180+ days',
-              'Hibernating':        'Low recency & low frequency — going cold',
-              'Others':             'High spenders not fitting other segments',
-              'Price Sensitive':    'Moderate frequency but low spend per order',
-              'Needs Attention':    'Average recency & frequency — at risk',
-              'About to Sleep':     'Dropping off — haven\'t bought in a while',
-              'Lost Customers':     'Haven\'t purchased in 180+ days',
-            }
-            const RFM_TOOLTIP = {
-              'Champions':          'Rule: Last order ≤60 days ago (R≥4) AND ≥4 orders ever (F≥4).\nThese are your best customers — buy often, spend a lot, bought recently. Reward them with early access and loyalty perks.',
-              'Loyal Customers':    'Rule: Last order ≤90 days (R≥3) AND ≥3 orders (F≥3).\nRegular buyers who come back consistently. Nurture with personalised offers to push them to Champions.',
-              'Recent Users':       'Rule: Last order ≤60 days (R≥4) AND ≤2 orders (F≤2).\nNew or recent customers who haven\'t bought much yet. Focus on getting them to a 2nd or 3rd purchase.',
-              'Potential Loyalists':'Rule: Last order ≤90 days (R≥3) AND spend ≥₹2,000 (M≥3).\nSpend decent money and bought recently. With the right nudge they can become Loyal Customers.',
-              'Cannot Lose Them':   'Rule: Last order >180 days (R≤2) AND ≥3 orders (F≥3).\nUsed to buy regularly but have gone quiet. High risk — win them back with a strong re-engagement offer.',
-              'Hibernating':        'Rule: Last order >180 days (R≤2) AND ≤2 orders (F≤2).\nBought once or twice long ago and haven\'t returned. Hard to reactivate — try a big discount or new product launch.',
-              'Others':             'Rule: Lifetime spend ≥₹5,000 but doesn\'t fit any other segment.\nHigh spenders with unusual purchase patterns. Review manually.',
-              'Price Sensitive':    'Rule: ≥3 orders (F≥3) AND spend <₹2,000 (M≤2).\nBuy often but spend very little each time. Upsell or bundle to increase order value.',
-              'Needs Attention':    'Rule: Last order 60–90 days (R=3) AND 2–3 orders (F=2–3).\nMid-range on all metrics — at risk of slipping away. Send a timely re-engagement message.',
-              'About to Sleep':     'Rule: Last order 90–180 days (R=2) AND 2–3 orders (F=2–3).\nActivity is dropping. Act now before they hibernate completely.',
-              'Lost Customers':     'Rule: Last order >180 days (R=1) AND ≤2 orders (F≤2).\nHaven\'t been seen in a long time and barely bought. Very low chance of return without a strong incentive.',
-            }
-            const sorted = [...rfm].sort((a, b) => b.totalRevenue - a.totalRevenue)
-            const maxRev = sorted[0]?.totalRevenue || 1
-            return (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                {sorted.map(seg => {
-                  const col = RFM_COLORS[seg.segment] || '#8B8000'
-                  const barW = seg.totalRevenue / maxRev * 100
-                  const pct = rfmTotal > 0 ? (seg.totalRevenue / rfmTotal * 100).toFixed(1) : '0'
-                  const desc = RFM_DESC[seg.segment] || ''
-                  const tooltip = RFM_TOOLTIP[seg.segment] || ''
-                  return (
-                    <div key={seg.segment} title={tooltip} style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'help' }}>
-                      <div style={{ width: 4, height: 34, borderRadius: 2, background: col, flexShrink: 0 }} />
-                      <div style={{ width: 200, flexShrink: 0 }}>
-                        <div style={{ fontSize: 11, fontWeight: 600, color: C.t1 }}>{seg.segment}</div>
-                        <div style={{ fontSize: 9.5, color: C.t3 }}>{desc}</div>
-                      </div>
-                      <div style={{ fontSize: 10, color: C.t3, width: 80, flexShrink: 0 }}>{fmtN(seg.customers)} custs</div>
-                      <div style={{ flex: 1, background: C.border, borderRadius: 3, height: 8, overflow: 'hidden' }}>
-                        <div style={{ height: '100%', width: `${barW}%`, background: col, borderRadius: 3 }} />
-                      </div>
-                      <div style={{ width: 72, textAlign: 'right', flexShrink: 0 }}>
-                        <div style={{ fontSize: 11, fontWeight: 700, color: C.t1, fontFamily: 'var(--mono)' }}>{fmt(seg.totalRevenue)}</div>
-                        <div style={{ fontSize: 10, color: C.t3 }}>{pct}%</div>
-                      </div>
-                    </div>
-                  )
-                })}
               </div>
-            )
-          })()}
-        </Card>
 
-        {/* Purchase Frequency Distribution */}
-        <Card title="Purchase Frequency Distribution">
-          {(() => {
-            const total = freqDist.reduce((s, r) => s + r.customers, 0) || 1
-            const maxCusts = Math.max(...freqDist.map(r => r.customers), 1)
-            const shades = [C.acc, '#F5DC00', '#E6CC00', '#CCB400', '#B8A000']
-            return (
-              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3, paddingTop: 8 }}>
-                {freqDist.map((r, i) => {
-                  const widthPct = r.customers / maxCusts * 100
-                  const pct = (r.customers / total * 100).toFixed(1)
-                  const shade = shades[i] || C.acc
-                  return (
-                    <div key={r.label} style={{ width: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-                      <div style={{ width: `${Math.max(widthPct, 8)}%`, background: shade, borderRadius: 4, height: 36, display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative', transition: 'width .3s' }}>
-                        <span style={{ fontSize: 11, fontWeight: 700, color: C.t1, fontFamily: 'var(--mono)' }}>{fmtBig(r.customers)}</span>
-                      </div>
-                      <div style={{ display: 'flex', gap: 6, alignItems: 'center', marginTop: 2 }}>
-                        <span style={{ fontSize: 10, color: C.t2 }}>{r.label}</span>
-                        <span style={{ fontSize: 10, color: C.t3 }}>{pct}%</span>
-                      </div>
+              {/* 3. Segments list + RFM Grid */}
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+
+                {/* RFM Segments list */}
+                <RSCard title="RFM Segments" sub={`${rfmSorted.length} segments · sorted by revenue`} infoTooltip={<>Segments are assigned based on R + F + M scores:<br/><br/><table style={{width:'100%',borderCollapse:'collapse',fontSize:10}}><tbody><tr style={{borderBottom:'1px solid #F0EADC'}}><td style={{padding:'2px 6px 2px 0',fontWeight:700}}>R≥4 &amp; F≥4</td><td style={{padding:'2px 0'}}>Champions</td></tr><tr style={{borderBottom:'1px solid #F0EADC'}}><td style={{padding:'2px 6px 2px 0',fontWeight:700}}>R≥3 &amp; F≥3</td><td>Loyal Customers</td></tr><tr style={{borderBottom:'1px solid #F0EADC'}}><td style={{padding:'2px 6px 2px 0',fontWeight:700}}>R≥4 &amp; F≤2</td><td>Recent Users</td></tr><tr style={{borderBottom:'1px solid #F0EADC'}}><td style={{padding:'2px 6px 2px 0',fontWeight:700}}>R≥3 &amp; M≥3</td><td>Potential Loyalists</td></tr><tr style={{borderBottom:'1px solid #F0EADC'}}><td style={{padding:'2px 6px 2px 0',fontWeight:700}}>R≤2 &amp; F≥3</td><td>Cannot Lose Them</td></tr><tr style={{borderBottom:'1px solid #F0EADC'}}><td style={{padding:'2px 6px 2px 0',fontWeight:700}}>R≤2 &amp; F≥2</td><td>Hibernating</td></tr><tr style={{borderBottom:'1px solid #F0EADC'}}><td style={{padding:'2px 6px 2px 0',fontWeight:700}}>Monetary ≥ ₹5000</td><td>Others</td></tr><tr><td style={{padding:'2px 6px 2px 0',fontWeight:700}}>Everything else</td><td>Hibernating</td></tr></tbody></table></>}>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                    {rfmSorted.map((seg, i) => {
+                      const name = seg.segment || 'Unknown'
+                      const meta = SEG_META[name] || { action: 'REVIEW', actionBg: '#6b7280', actionColor: '#fff', desc: '' }
+                      const segRev = seg.totalRevenue || 0
+                      const segCust = seg.customers || 0
+                      const barPct = rfmMaxRev > 0 ? segRev / rfmMaxRev * 100 : 0
+                      const revPct = totalRev > 0 ? segRev / totalRev * 100 : 0
+                      return (
+                        <div key={i} style={{ borderBottom: i < rfmSorted.length - 1 ? `1px solid ${RS.borderSoft}` : 'none', paddingBottom: i < rfmSorted.length - 1 ? 10 : 0 }}>
+                          {/* row: name+bar  |  customers  |  revenue  |  rev%  |  action */}
+                          <div style={{ display: 'grid', gridTemplateColumns: '1fr 90px 110px 54px 90px', gap: 8, alignItems: 'center' }}>
+                            {/* Left: name + desc + bar */}
+                            <div style={{ minWidth: 0 }}>
+                              <div style={{ marginBottom: 2, display: 'flex', alignItems: 'center', gap: 5 }}>
+                                <span style={{ fontWeight: 700, fontSize: 12, color: RS.t1 }}>{name}</span>
+                                {meta.tooltip && (
+                                  <span className="seg-info-wrap" style={{ position: 'relative', display: 'inline-flex', alignItems: 'center' }}>
+                                    <span style={{ width: 14, height: 14, borderRadius: '50%', background: RS.borderSoft, border: `1px solid ${RS.border}`, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: 9, fontWeight: 700, color: RS.t2, cursor: 'default', lineHeight: 1, userSelect: 'none' }}>i</span>
+                                    <div className="seg-info-tt" style={{ position: 'absolute', ...(i === 0 ? { top: 'calc(100% + 6px)' } : { bottom: 'calc(100% + 6px)' }), left: 0, zIndex: 999, background: '#fff', border: `1px solid ${RS.border}`, borderRadius: 7, padding: '7px 10px', width: 220, fontSize: 11, color: RS.t1, lineHeight: 1.5, boxShadow: '0 4px 14px rgba(0,0,0,.10)', pointerEvents: 'none', opacity: 0, transition: 'opacity .15s' }}>{meta.tooltip}</div>
+                                  </span>
+                                )}
+                              </div>
+                              <div style={{ background: RS.borderSoft, height: 4, borderRadius: 2, overflow: 'hidden' }}>
+                                <div style={{ width: `${barPct}%`, height: '100%', background: RS.amberDeep, borderRadius: 2, transition: 'width .3s' }} />
+                              </div>
+                            </div>
+                            {/* Customers */}
+                            <div style={{ textAlign: 'right' }}>
+                              <div style={{ fontSize: 9, color: RS.t3, marginBottom: 1 }}>Customers</div>
+                              <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 12, fontWeight: 700, color: RS.t1 }}>{fmtBig(segCust)}</div>
+                            </div>
+                            {/* Revenue */}
+                            <div style={{ textAlign: 'right' }}>
+                              <div style={{ fontSize: 9, color: RS.t3, marginBottom: 1 }}>Revenue</div>
+                              <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 12, fontWeight: 600, color: RS.t1 }}>{fmt(segRev)}</div>
+                            </div>
+                            {/* Rev % */}
+                            <div style={{ textAlign: 'right' }}>
+                              <div style={{ fontSize: 9, color: RS.t3, marginBottom: 1 }}>Rev %</div>
+                              <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 12, fontWeight: 600, color: RS.t2 }}>{revPct.toFixed(1)}%</div>
+                            </div>
+                            {/* Action badge */}
+                            <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+                              <span className="seg-action-wrap" style={{ position: 'relative', display: 'inline-flex' }}>
+                                <span style={{ fontSize: 9, fontWeight: 800, padding: '3px 8px', borderRadius: 4, background: meta.actionBg, color: meta.actionColor, letterSpacing: '.05em', whiteSpace: 'nowrap', cursor: 'default' }}>{meta.action}</span>
+                                {meta.actionTooltip && <div className="seg-action-tt" style={{ position: 'absolute', bottom: 'calc(100% + 6px)', right: 0, zIndex: 999, background: '#fff', border: `1px solid ${RS.border}`, borderRadius: 7, padding: '7px 10px', width: 220, fontSize: 11, color: RS.t1, lineHeight: 1.5, boxShadow: '0 4px 14px rgba(0,0,0,.10)', pointerEvents: 'none', opacity: 0, transition: 'opacity .15s' }}>{meta.actionTooltip}</div>}
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                </RSCard>
+
+                {/* RFM Grid */}
+                <RSCard title="RFM Grid" sub="Recency (cols) × Frequency (rows)" infoTooltip={<><strong>Recency</strong> = days since last order<br/><span style={{fontSize:10}}>≤30d → 5 · 31–60d → 4 · 61–90d → 3 · 91–180d → 2 · 180d+ → 1</span><br/><br/><strong>Frequency</strong> = total distinct orders (all-time)<br/><span style={{fontSize:10}}>5+ → 5 · 4 → 4 · 3 → 3 · 2 → 2 · 1 → 1</span><br/><br/><strong>Monetary</strong> = total spend exc. GST (all-time)<br/><span style={{fontSize:10}}>≥₹10K → 5 · ₹5K–10K → 4 · ₹2K–5K → 3 · ₹1K–2K → 2 · &lt;₹1K → 1</span></>}>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
+                    {/* Column headers row */}
+                    <div style={{ display: 'grid', gridTemplateColumns: '52px repeat(3, 1fr)', gap: 6, marginBottom: 6 }}>
+                      <div />
+                      {colLabels.map((lbl, ci) => (
+                        <div key={ci} style={{ textAlign: 'center', fontSize: 9, fontWeight: 800, color: RS.t2, textTransform: 'uppercase', letterSpacing: '.08em', background: RS.borderSoft, borderRadius: 6, padding: '4px 0' }}>{lbl}</div>
+                      ))}
                     </div>
-                  )
-                })}
+                    {/* Grid rows */}
+                    {rowLabels.map((rowLbl, ri) => (
+                      <div key={ri} style={{ display: 'grid', gridTemplateColumns: '52px repeat(3, 1fr)', gap: 6, marginBottom: 6 }}>
+                        {/* Row label */}
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                          <span style={{ fontSize: 8, fontWeight: 800, color: RS.t2, textTransform: 'uppercase', letterSpacing: '.06em', writingMode: 'vertical-rl', transform: 'rotate(180deg)', background: RS.borderSoft, borderRadius: 6, padding: '6px 3px' }}>{rowLbl}</span>
+                        </div>
+                        {[0, 1, 2].map(ci => {
+                          const segs = gridCells[ri][ci]
+                          const cellRev = cellRevs[ri][ci]
+                          const intensity = maxCellRev > 0 ? cellRev / maxCellRev * 0.4 + (segs.length > 0 ? 0.07 : 0) : 0
+                          const isIdeal = ri === 0 && ci === 0
+                          const isEmpty = segs.length === 0
+                          const emptyReasons = [
+                            ['', '', 'Frequent buyers rarely go long ago — they keep coming back.'],
+                            ['', 'Mid-frequency buyers with mid recency tend to shift to either loyal or hibernating — rarely stay in between.', 'Mid-frequency buyers who disappeared long ago are reclassified into Hibernating or Cannot Lose Them.'],
+                            ['Rare buyers who purchased recently are grouped as Recent Users, not here.', '', ''],
+                          ]
+                          const emptyReason = isEmpty ? (emptyReasons[ri]?.[ci] || 'No customers fall into this recency + frequency combination.') : ''
+                          return (
+                            <div key={ci} className="rfm-grid-cell" style={{
+                              background: isEmpty ? RS.borderSoft : `rgba(201,162,79,${intensity})`,
+                              border: `1px solid ${isEmpty ? RS.borderSoft : RS.amberLine}`,
+                              borderRadius: 8,
+                              padding: isEmpty ? 0 : '10px 12px',
+                              minHeight: 80,
+                              position: 'relative',
+                              display: 'flex',
+                              flexDirection: 'column',
+                              justifyContent: isEmpty ? 'center' : 'flex-start',
+                            }}>
+                              {isIdeal && !isEmpty && (
+                                <div style={{ position: 'absolute', top: 5, right: 6, fontSize: 8, fontWeight: 800, color: RS.amberDeep, letterSpacing: '.04em' }}>✦ Ideal</div>
+                              )}
+                              {isEmpty ? (
+                                <div className="rfm-grid-cell" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', minHeight: 80, position: 'relative' }}>
+                                  <span style={{ color: RS.t3, fontSize: 11 }}>—</span>
+                                  {emptyReason && <div className="rfm-grid-tt" style={{ position: 'absolute', bottom: 'calc(100% + 6px)', left: 0, zIndex: 999, background: '#fff', border: `1px solid ${RS.border}`, borderRadius: 7, padding: '7px 10px', width: 210, fontSize: 11, color: RS.t1, lineHeight: 1.5, boxShadow: '0 4px 14px rgba(0,0,0,.10)', pointerEvents: 'none', opacity: 0, transition: 'opacity .15s' }}>{emptyReason}</div>}
+                                </div>
+                              ) : (
+                                <>
+                                  <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+                                    {segs.map((seg, si) => {
+                                      const segMeta = SEG_META[seg.segment] || { action: 'REVIEW', actionBg: '#6b7280', actionColor: '#fff' }
+                                      const segRevPct = totalRev > 0 ? (seg.totalRevenue || 0) / totalRev * 100 : 0
+                                      return (
+                                        <div key={si} style={{ borderTop: si > 0 ? `1px solid ${RS.amberLine}` : 'none', paddingTop: si > 0 ? 5 : 0 }}>
+                                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
+                                            <span style={{ fontWeight: 800, fontSize: 11, color: RS.t1 }}>{seg.segment}</span>
+                                            <span style={{ fontSize: 8, fontWeight: 800, padding: '2px 5px', borderRadius: 3, background: segMeta.actionBg, color: segMeta.actionColor, letterSpacing: '.04em', whiteSpace: 'nowrap' }}>{segMeta.action}</span>
+                                          </div>
+                                          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 4, marginTop: 4 }}>
+                                            <div>
+                                              <div style={{ fontSize: 8.5, color: RS.t3, marginBottom: 1 }}>Customers</div>
+                                              <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 11, fontWeight: 700, color: RS.t1 }}>{fmtBig(seg.customers || 0)}</div>
+                                            </div>
+                                            <div>
+                                              <div style={{ fontSize: 8.5, color: RS.t3, marginBottom: 1 }}>Revenue</div>
+                                              <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 11, fontWeight: 700, color: RS.t1, whiteSpace: 'nowrap' }}>{fmtBig(seg.totalRevenue || 0)}</div>
+                                            </div>
+                                            <div>
+                                              <div style={{ fontSize: 8.5, color: RS.t3, marginBottom: 1 }}>Rev %</div>
+                                              <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 11, fontWeight: 700, color: RS.t2 }}>{segRevPct.toFixed(1)}%</div>
+                                            </div>
+                                          </div>
+                                          {segMeta.gridTooltip && (
+                                            <div className="rfm-grid-tt" style={{ position: 'absolute', bottom: 'calc(100% + 6px)', left: 0, zIndex: 999, background: '#fff', border: `1px solid ${RS.border}`, borderRadius: 7, padding: '7px 10px', width: 230, fontSize: 11, color: RS.t1, lineHeight: 1.5, boxShadow: '0 4px 14px rgba(0,0,0,.10)', pointerEvents: 'none', opacity: 0, transition: 'opacity .15s' }}>{segMeta.gridTooltip}</div>
+                                          )}
+                                        </div>
+                                      )
+                                    })}
+                                  </div>
+                                </>
+                              )}
+                            </div>
+                          )
+                        })}
+                      </div>
+                    ))}
+                  </div>
+                </RSCard>
               </div>
-            )
-          })()}
-        </Card>
 
-        {/* Monetary Distribution */}
-        <Card title="Distribution of Customers Across Monetary Segment">
-          <ResponsiveContainer width="100%" height={260}>
-            <ComposedChart data={monetaryDist} margin={{ top: 24, right: 60, left: 10, bottom: 30 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke={C.border} vertical={false} />
-              <XAxis dataKey="bucket" tick={{ fontSize: 9.5, fill: C.t2 }} angle={-12} textAnchor="end" interval={0} />
-              <YAxis yAxisId="left" tick={{ fontSize: 9 }} tickFormatter={v => v >= 1e6 ? `${(v/1e6).toFixed(1)}M` : v >= 1000 ? `${(v/1000).toFixed(0)}K` : v} width={48} label={{ value: 'Customers', angle: -90, position: 'insideLeft', offset: 10, style: { fontSize: 9, fill: C.t3 } }} />
-              <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 9 }} tickFormatter={v => v >= 1e9 ? `₹${(v/1e9).toFixed(1)}B` : v >= 1e7 ? `₹${(v/1e7).toFixed(1)}Cr` : v >= 1e5 ? `₹${(v/1e5).toFixed(0)}L` : `₹${(v/1000).toFixed(0)}K`} width={58} label={{ value: 'Revenue', angle: 90, position: 'insideRight', offset: 10, style: { fontSize: 9, fill: C.t3 } }} />
-              <Tooltip formatter={(v, n) => n === 'Revenue' ? [fmt(v), n] : [fmtN(v), n]} />
-              <Legend wrapperStyle={{ fontSize: 10, paddingTop: 8 }} />
-              <Bar yAxisId="left" dataKey="customers" name="Customers" radius={[4,4,0,0]} maxBarSize={60}
-                label={{ position: 'top', fontSize: 9, fill: C.t2, formatter: v => v >= 1e6 ? `${(v/1e6).toFixed(1)}M` : v >= 1000 ? `${(v/1000).toFixed(0)}K` : v }}>
-                {monetaryDist.map((_, i) => <Cell key={i} fill={[C.acc, '#F5DC00', '#E6CC00', '#CCB400', '#B8A000'][i] || C.acc} />)}
-              </Bar>
-              <Line yAxisId="right" type="monotone" dataKey="totalRevenue" name="Revenue" stroke="#2E74CC" strokeWidth={2} dot={{ r: 4, fill: '#2E74CC' }}
-                label={{ position: 'top', fontSize: 9, fill: '#2E74CC', formatter: v => v >= 1e7 ? `${(v/1e7).toFixed(1)}Cr` : v >= 1e5 ? `${(v/1e5).toFixed(0)}L` : `${(v/1000).toFixed(0)}K` }} />
-            </ComposedChart>
-          </ResponsiveContainer>
-        </Card>
 
-        {/* Inactivity Buckets */}
-        <Card title="Inactive Customers (30, 60, 90 Days)">
-          <ResponsiveContainer width="100%" height={220}>
-            <BarChart data={inactivity} margin={{ top: 24, right: 10, left: 10, bottom: 20 }}>
-              <XAxis dataKey="bucket" tick={{ fontSize: 9, fill: C.t2 }} angle={-10} textAnchor="end" interval={0} />
-              <YAxis tick={{ fontSize: 9 }} tickFormatter={v => v >= 1e7 ? `${(v/1e7).toFixed(1)} Cr` : v >= 1e5 ? `${(v/1e5).toFixed(1)} L` : v >= 1000 ? `${(v/1000).toFixed(0)}K` : v} width={45} />
-              <Tooltip formatter={(v) => [fmtN(v), 'Customers']} />
-              <Bar dataKey="customers" fill={C.acc} name="Customers" radius={[3,3,0,0]}
-                label={{ position: 'top', fontSize: 9, fill: C.t2, fontWeight: 600, formatter: v => v >= 1e7 ? `${(v/1e7).toFixed(2)} Cr` : v >= 1e5 ? `${(v/1e5).toFixed(2)} L` : v >= 1000 ? `${(v/1000).toFixed(1)}K` : v }}>
-                {inactivity.map((r, i) => <Cell key={i} fill={r.bucket.includes('90+') ? C.acc : r.bucket.includes('60') ? '#F5DC00' : r.bucket.includes('30') ? '#E6CC00' : '#CCB400'} />)}
-              </Bar>
-            </BarChart>
-          </ResponsiveContainer>
-        </Card>
-      </div>
-      )}
+              {/* 4. Segment Migration — removed */}
+              {false && segMigration.length > 0 && (() => {
+                const SEGMENT_RANK = { 'Champions': 1, 'Loyal Customers': 2, 'Potential Loyalists': 3, 'Recent Users': 4, 'Others': 5, 'Cannot Lose Them': 6, 'Hibernating': 7 }
+                const allMoves   = segMigration.filter(r => r.from !== r.to && SEGMENT_RANK[r.from] != null && SEGMENT_RANK[r.to] != null)
+                const upgrades   = allMoves.filter(r => SEGMENT_RANK[r.to] < SEGMENT_RANK[r.from]).sort((a,b) => b.customers - a.customers)
+                const downgrades = allMoves.filter(r => SEGMENT_RANK[r.to] > SEGMENT_RANK[r.from]).sort((a,b) => b.customers - a.customers)
+                const totalMoved = allMoves.reduce((s,r) => s + r.customers, 0)
+                const totalUp    = upgrades.reduce((s,r) => s + r.customers, 0)
+                const totalDown  = downgrades.reduce((s,r) => s + r.customers, 0)
+                const maxUp      = upgrades[0]?.customers || 1
+                const maxDown    = downgrades[0]?.customers || 1
+                const netDiff    = Math.abs(totalDown - totalUp)
+                const biggestMove = [...allMoves].sort((a,b) => b.customers - a.customers)[0]
+                const netDir     = totalDown > totalUp ? 'down' : 'up'
+                const insightText = netDir === 'down'
+                  ? `Downgrades outnumber upgrades by ${fmtBig(netDiff)} net this period — more customers are slipping to lower-engagement segments than moving up.`
+                  : `Upgrades outnumber downgrades by ${fmtBig(netDiff)} net this period — more customers are moving to higher-engagement segments.`
+                const biggestText = biggestMove ? `Biggest single move: ${fmtBig(biggestMove.customers)} customers from ${biggestMove.from} → ${biggestMove.to}.` : ''
 
-      {/* Section 6: Discount & Spend Analysis */}
-      <LSectionTitle title="Discount & Spend Analysis" collapsed={secCollapsed.discount} onToggle={() => toggleSec('discount')} />
-      {!secCollapsed.discount && (<>
-      {/* Spend vs Sales */}
-      {(() => {
-        const fmtAxis = v => v >= 1e7 ? `₹${(v/1e7).toFixed(1)}Cr` : v >= 1e5 ? `₹${(v/1e5).toFixed(0)}L` : v >= 1000 ? `₹${(v/1000).toFixed(0)}K` : `₹${v}`
-        // Build spend lookup by day
-        const spendByDay = {}
-        rawDailySpend.forEach(r => { spendByDay[r.day] = r.totalSpend })
-        // Merge spend into daily rows
-        const mergedDaily = rawDaily.map(r => ({ ...r, totalSpend: spendByDay[r.day] || 0 }))
-        // Aggregate by spendGranularity
-        const buckets = {}
-        mergedDaily.forEach(r => {
-          const key = spendGranularity === 'monthly' ? r.day.slice(0, 7)
-            : spendGranularity === 'weekly' ? (() => { const d = new Date(r.day); const day = d.getDay(); const diff = d.getDate() - day + (day === 0 ? -6 : 1); const mon = new Date(d.setDate(diff)); return mon.toISOString().slice(0, 10) })()
-            : r.day
-          if (!buckets[key]) buckets[key] = { key, grossSales: 0, totalSpend: 0 }
-          buckets[key].grossSales += r.grossSales || 0
-          buckets[key].totalSpend += r.totalSpend || 0
-        })
-        const spendData = Object.values(buckets).sort((a, b) => a.key.localeCompare(b.key))
-        const xLabel = spendGranularity === 'monthly' ? 'Total Spend vs Gross Sales by Month'
-          : spendGranularity === 'weekly' ? 'Total Spend vs Gross Sales by Week'
-          : 'Total Spend vs Gross Sales by Day'
-        return (
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 14 }}>
-          <Card title={xLabel} action={
-            <select value={spendGranularity} onChange={e => setSpendGranularity(e.target.value)} style={{ fontSize: 11, fontWeight: 600, padding: '3px 8px', borderRadius: 6, border: `1px solid ${C.border2}`, background: C.card, color: C.t1, cursor: 'pointer', fontFamily: 'var(--font)', outline: 'none' }}>
-              {['daily','weekly','monthly'].map(g => <option key={g} value={g}>{g.charAt(0).toUpperCase()+g.slice(1)}</option>)}
-            </select>
-          }>
-            <ResponsiveContainer width="100%" height={220}>
-              <ComposedChart data={spendData} margin={{ top: 20, right: 60, left: 10, bottom: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke={C.border} vertical={false} />
-                <XAxis dataKey="key" tick={{ fontSize: 9.5 }} tickFormatter={d => spendGranularity === 'monthly' ? d : d?.slice(5)} interval="preserveStartEnd" />
-                <YAxis yAxisId="spend" tick={{ fontSize: 9 }} tickFormatter={fmtAxis} width={52} />
-                <YAxis yAxisId="sales" orientation="right" tick={{ fontSize: 9 }} tickFormatter={fmtAxis} width={52} />
-                <Tooltip formatter={(v, n) => [fmt(v), n]} labelFormatter={l => spendGranularity === 'monthly' ? l : l} />
-                <Legend wrapperStyle={{ fontSize: 10 }} />
-                <Bar yAxisId="spend" dataKey="totalSpend" name="Total Spend (Meta+Google)" fill={C.acc} radius={[3,3,0,0]} maxBarSize={40}
-                  label={{ position: 'top', fontSize: 9, fill: C.t2, fontWeight: 600, formatter: v => v >= 1e7 ? `₹${(v/1e7).toFixed(1)}Cr` : v >= 1e5 ? `₹${(v/1e5).toFixed(1)}L` : v >= 1000 ? `₹${(v/1000).toFixed(0)}K` : `₹${v}` }} />
-                <Line yAxisId="sales" type="monotone" dataKey="grossSales" name="Gross Sales" stroke="#2E74CC" strokeWidth={2} dot={false} />
-              </ComposedChart>
-            </ResponsiveContainer>
-          </Card>
-        </div>
-        )
-      })()}
+                const SM_GREEN      = '#6B8F5A'
+                const SM_GREEN_SOFT = '#EEF3E8'
+                const SM_RED        = '#B5615A'
+                const SM_RED_SOFT   = '#FAEEEC'
+                const SM_AMBER_SOFT = '#FBF6E8'
+                const SM_AMBER_LINE = '#F0E2BC'
+                const SM_BORDER     = '#F0EADC'
+                const SM_T1         = '#3A3324'
+                const SM_T2         = '#8A7F63'
+                const SM_T3         = '#B8AE93'
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
-        {/* Discount distribution First vs Repeat */}
-        <Card title="Order Distribution by Discount % (First vs Repeat)">
-          <ResponsiveContainer width="100%" height={240}>
-            <BarChart data={discountDist} margin={{ top: 24, right: 10, left: 0, bottom: 0 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke={C.border} vertical={false} />
-              <XAxis dataKey="bucket" tick={{ fontSize: 10 }} />
-              <YAxis tick={{ fontSize: 9 }} tickFormatter={v => v >= 1e5 ? `${(v/1e5).toFixed(0)}L` : v >= 1000 ? `${(v/1000).toFixed(0)}K` : v} />
-              <Tooltip formatter={(v, n) => [fmtN(v), n]} />
-              <Legend wrapperStyle={{ fontSize: 10 }} />
-              <Bar dataKey="firstOrders" stackId="a" fill={C.acc} name="First Order"
-                label={{ position: 'inside', fontSize: 9, fill: C.t1, fontWeight: 600, formatter: v => v >= 2000 ? (v >= 1000 ? `${(v/1000).toFixed(0)}K` : v) : '' }} />
-              <Bar dataKey="repeatOrders" stackId="a" fill="#CCB400" name="Repeat Order" radius={[3,3,0,0]}
-                label={(props) => {
-                  const { x, y, width, value, index } = props
-                  const row = discountDist[index] || {}
-                  const total = (row.firstOrders || 0) + (row.repeatOrders || 0)
-                  if (!total) return null
-                  const lbl = total >= 1000 ? `${(total/1000).toFixed(0)}K` : total
-                  return <text x={x + width / 2} y={y - 4} textAnchor="middle" fontSize={9} fill={C.t2} fontWeight={600}>{lbl}</text>
-                }} />
-            </BarChart>
-          </ResponsiveContainer>
-        </Card>
+                const MigRow = ({ row, max, barColor, barBg }) => (
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 72px 52px', gap: 8, alignItems: 'center' }}>
+                    <span style={{ fontSize: 10.5, color: SM_T2, fontFamily: 'Inter, sans-serif', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', minWidth: 0 }}>
+                      {row.from} → {row.to}
+                    </span>
+                    <div style={{ height: 5, background: barBg, borderRadius: 3, overflow: 'hidden' }}>
+                      <div style={{ width: `${Math.max(row.customers / max * 100, 3)}%`, height: '100%', background: barColor, borderRadius: 3 }} />
+                    </div>
+                    <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 10.5, fontWeight: 700, color: SM_T1, textAlign: 'right', whiteSpace: 'nowrap' }}>{fmtBig(row.customers)}</span>
+                  </div>
+                )
 
-        {/* Discounted vs Non-Discounted donut */}
-        <Card title="Discounted vs Non-Discounted Orders Split">
-          {(() => {
-            const disc = kpis.discountedOrders
-            const nonDisc = kpis.nonDiscountedOrders
-            const total = disc + nonDisc || 1
-            const pieData = [
-              { name: 'Discounted', value: disc, color: C.acc },
-              { name: 'Non-Discounted', value: nonDisc, color: '#B8A000' },
-            ]
-            return (
-              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: 200 }}>
-                <PieChart width={180} height={180}>
-                  <Pie data={pieData} cx={88} cy={88} innerRadius={52} outerRadius={82} dataKey="value">
-                    {pieData.map((entry, i) => <Cell key={i} fill={entry.color} />)}
-                  </Pie>
-                </PieChart>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 12 }}>
-                  {pieData.map(d => (
-                    <div key={d.name} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                      <div style={{ width: 12, height: 12, borderRadius: 3, background: d.color, flexShrink: 0 }} />
-                      <div style={{ fontSize: 11, color: C.t2 }}>{d.name}</div>
-                      <div style={{ fontSize: 11, fontWeight: 700, color: C.t1, fontFamily: 'var(--mono)', marginLeft: 4 }}>
-                        {fmtN(d.value)} ({(d.value / total * 100).toFixed(2)}%)
+                return (
+                  <div style={{ background: '#FFFFFF', borderRadius: 14, border: `1px solid ${SM_BORDER}`, overflow: 'hidden', boxShadow: '0 1px 2px rgba(80,65,20,.04)' }}>
+                    {/* Header */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '11px 16px', borderBottom: `1px solid ${SM_BORDER}` }}>
+                      <div style={{ width: 30, height: 30, borderRadius: 8, background: SM_AMBER_SOFT, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 15, color: '#C9A24F' }}>↔</div>
+                      <div>
+                        <div style={{ fontSize: 12, fontWeight: 800, color: SM_T1, fontFamily: 'Inter, sans-serif' }}>Segment Migration</div>
+                        <div style={{ fontSize: 10.5, color: SM_T2, fontFamily: 'Inter, sans-serif' }}>Who moved between RFM segments this period vs last</div>
                       </div>
                     </div>
-                  ))}
+
+                    {/* Summary strip */}
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', borderBottom: `1px solid ${SM_BORDER}` }}>
+                      {[
+                        { label: 'TOTAL MOVED', value: fmtBig(totalMoved), sub: 'Customers who changed segment', valColor: SM_T1 },
+                        { label: 'UPGRADED',    value: fmtBig(totalUp),    sub: `${totalMoved > 0 ? Math.round(totalUp/totalMoved*100) : 0}% of all moves`, valColor: SM_GREEN },
+                        { label: 'DOWNGRADED',  value: fmtBig(totalDown),  sub: `${totalMoved > 0 ? Math.round(totalDown/totalMoved*100) : 0}% of all moves`, valColor: SM_RED },
+                      ].map((k, i) => (
+                        <div key={i} style={{ padding: '12px 16px', borderRight: i < 2 ? `1px solid ${SM_BORDER}` : 'none' }}>
+                          <div style={{ fontSize: 9, fontWeight: 800, color: SM_T3, textTransform: 'uppercase', letterSpacing: '.09em', marginBottom: 4, fontFamily: 'Inter, sans-serif' }}>{k.label}</div>
+                          <div style={{ fontSize: 22, fontWeight: 800, color: k.valColor, fontFamily: 'JetBrains Mono, monospace', lineHeight: 1.1, marginBottom: 3 }}>{k.value}</div>
+                          <div style={{ fontSize: 10, color: SM_T2, fontFamily: 'Inter, sans-serif' }}>{k.sub}</div>
+                        </div>
+                      ))}
+                    </div>
+
+                    {/* Insight banner */}
+                    <div style={{ background: SM_AMBER_SOFT, borderBottom: `1px solid ${SM_AMBER_LINE}`, padding: '9px 16px', fontSize: 11, color: SM_T1, lineHeight: 1.6, fontFamily: 'Inter, sans-serif' }}>
+                      <span>{insightText}</span>
+                      {biggestText && <span style={{ marginLeft: 6, color: SM_T2 }}>{biggestText}</span>}
+                    </div>
+
+                    {/* Two columns */}
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr' }}>
+                      {/* Upgrades */}
+                      <div style={{ padding: '12px 16px', borderRight: `1px solid ${SM_BORDER}` }}>
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                            <span style={{ width: 20, height: 20, borderRadius: 5, background: SM_GREEN_SOFT, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, color: SM_GREEN, fontWeight: 800 }}>↑</span>
+                            <span style={{ fontSize: 11.5, fontWeight: 800, color: SM_T1, fontFamily: 'Inter, sans-serif' }}>Upgrades</span>
+                          </div>
+                          <span style={{ fontSize: 10, color: SM_T3, fontFamily: 'Inter, sans-serif' }}>{upgrades.length} paths</span>
+                        </div>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                          {upgrades.length > 0 ? upgrades.map((row, i) => (
+                            <MigRow key={i} row={row} max={maxUp} barColor={SM_GREEN} barBg={SM_GREEN_SOFT} />
+                          )) : <div style={{ fontSize: 11, color: SM_T3, fontFamily: 'Inter, sans-serif' }}>No upgrades this period.</div>}
+                        </div>
+                      </div>
+                      {/* Downgrades */}
+                      <div style={{ padding: '12px 16px' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                            <span style={{ width: 20, height: 20, borderRadius: 5, background: SM_RED_SOFT, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, color: SM_RED, fontWeight: 800 }}>↓</span>
+                            <span style={{ fontSize: 11.5, fontWeight: 800, color: SM_T1, fontFamily: 'Inter, sans-serif' }}>Downgrades</span>
+                          </div>
+                          <span style={{ fontSize: 10, color: SM_T3, fontFamily: 'Inter, sans-serif' }}>{downgrades.length} paths</span>
+                        </div>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                          {downgrades.length > 0 ? downgrades.map((row, i) => (
+                            <MigRow key={i} row={row} max={maxDown} barColor={SM_RED} barBg={SM_RED_SOFT} />
+                          )) : <div style={{ fontSize: 11, color: SM_T3, fontFamily: 'Inter, sans-serif' }}>No downgrades this period.</div>}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )
+              })()}
+
+              {/* 5. Purchase Frequency + Monetary Distribution */}
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+
+                <RSCard title="Purchase Frequency" sub="Customers by order count bucket">
+                  {freqDist.length > 0 ? (
+                    <ResponsiveContainer width="100%" height={Math.max(freqDist.length * 44 + 20, 200)}>
+                      <BarChart data={freqDist} layout="vertical" margin={{ top: 4, right: 60, bottom: 4, left: 8 }}>
+                        <CartesianGrid stroke={RS.borderSoft} horizontal={false} />
+                        <XAxis type="number" tick={{ fontSize: 10, fill: RS.t3 }} tickFormatter={fmtBig} />
+                        <YAxis type="category" dataKey="label" tick={{ fontSize: 10, fill: RS.t2 }} width={120} />
+                        <Tooltip contentStyle={ttStyle} formatter={v => [fmtBig(v), 'Customers']} />
+                        <Bar dataKey="customers" fill={RS.amberDeep} name="Customers" radius={[0, 3, 3, 0]} label={{ position: 'right', fontSize: 10, fill: RS.t2, formatter: fmtBig }} />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  ) : (
+                    <div style={{ color: RS.t3, fontSize: 12, padding: 12, textAlign: 'center' }}>No frequency data available.</div>
+                  )}
+                </RSCard>
+
+                <RSCard title="Monetary Distribution" sub="Customers and revenue by spend tier">
+                  {monetaryDist.length > 0 ? (
+                    <ResponsiveContainer width="100%" height={220}>
+                      <ComposedChart data={monetaryDist} margin={{ top: 4, right: 16, bottom: 4, left: 0 }}>
+                        <CartesianGrid stroke={RS.borderSoft} />
+                        <XAxis dataKey="bucket" tick={{ fontSize: 9, fill: RS.t3 }} />
+                        <YAxis yAxisId="left" tick={{ fontSize: 10, fill: RS.t3 }} tickFormatter={fmtBig} />
+                        <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 10, fill: RS.t3 }} tickFormatter={fmtBig} />
+                        <Tooltip contentStyle={ttStyle} formatter={(v, name) => [fmtBig(v), name]} />
+                        <Bar yAxisId="left" dataKey="customers" fill={RS.amber} name="Customers" />
+                        <Line yAxisId="right" dataKey="revenue" stroke={RS.amberDeep} strokeWidth={2} dot={false} name="Revenue" />
+                      </ComposedChart>
+                    </ResponsiveContainer>
+                  ) : (
+                    <div style={{ color: RS.t3, fontSize: 12, padding: 12, textAlign: 'center' }}>No monetary data available.</div>
+                  )}
+                </RSCard>
+              </div>
+
+              {/* 6. Inactivity Distribution */}
+              <RSCard title="Inactivity Distribution" sub="Days since last purchase">
+                {inactivity.length > 0 ? (
+                  <>
+                    <ResponsiveContainer width="100%" height={200}>
+                      <BarChart data={inactivity} margin={{ top: 4, right: 16, bottom: 4, left: 0 }}>
+                        <CartesianGrid stroke={RS.borderSoft} />
+                        <XAxis dataKey="bucket" tick={{ fontSize: 10, fill: RS.t3 }} />
+                        <YAxis tick={{ fontSize: 10, fill: RS.t3 }} tickFormatter={fmtBig} />
+                        <Tooltip contentStyle={ttStyle} formatter={v => [fmtBig(v), 'Customers']} />
+                        <Bar dataKey="customers" name="Customers">
+                          {inactivity.map((entry, index) => (
+                            <Cell key={`cell-${index}`} fill={(entry.bucket || '').includes('90') ? RS.amberDeep : RS.amber} />
+                          ))}
+                        </Bar>
+                      </BarChart>
+                    </ResponsiveContainer>
+                    <div style={{ fontSize: 11, color: RS.t2, marginTop: 8, padding: '6px 8px', background: RS.amberSoft, borderRadius: 6 }}>
+                      {inact90 > 0 && (
+                        <>
+                          <strong>{fmtN(inact90)}</strong> customers have been inactive for 90+ days.
+                          {hibSeg && <> Hibernating segment alone accounts for <strong>{fmt(hibSeg.totalRevenue || 0)}</strong> in lifetime revenue — a significant win-back opportunity.</>}
+                        </>
+                      )}
+                      {inact90 === 0 && 'No customers in the 90+ day inactivity bucket.'}
+                    </div>
+                  </>
+                ) : (
+                  <div style={{ color: RS.t3, fontSize: 12, padding: 12, textAlign: 'center' }}>No inactivity data available.</div>
+                )}
+              </RSCard>
+
+            </div>
+          )
+        })()}
+
+        {activeTab === 'spend' && (() => {
+          // ── Bug fixes:
+          // Bug 1: discountDist has fields {bucket, firstOrders, repeatOrders} — not "discounted"/"nonDiscounted"
+          // Bug 2: pie chart derived from same fields by summing across buckets
+          // Bug 3: metaCac/googleCac don't exist in API — show "—" instead of ₹0
+
+          const SD = {
+            bg: '#FDFCF8', card: '#FFFFFF', border: '#E2D9C8', borderSoft: '#EDE7DA',
+            t1: '#3A3324', t2: '#8A7F63', t3: '#B8AE93',
+            amber: '#E8C578', amberDeep: '#C9A24F', amberSoft: '#FBF6E8', amberLine: '#F0E2BC',
+            blue: '#4A7CC7', blueSoft: '#EBF1FB',
+          }
+
+          const pill = active => ({
+            background: active ? SD.amberDeep : SD.amberSoft,
+            color: active ? '#fff' : SD.t2,
+            border: `1px solid ${active ? SD.amberDeep : SD.amberLine}`,
+            borderRadius: 20, padding: '3px 12px', fontSize: 11,
+            cursor: 'pointer', fontFamily: 'Inter, sans-serif', fontWeight: active ? 700 : 400, outline: 'none',
+          })
+
+          // ── Build spend+sales chart data ──
+          const spendBucketKey = (dateStr) => {
+            if (!dateStr) return 'Unknown'
+            if (spendGranularity === 'daily') return dateStr
+            if (spendGranularity === 'weekly') {
+              const d = new Date(dateStr)
+              const day = d.getDay()
+              const diff = d.getDate() - day + (day === 0 ? -6 : 1)
+              const mon = new Date(d.setDate(diff))
+              return mon.toISOString().slice(0, 10)
+            }
+            return dateStr.slice(0, 7)
+          }
+          const spendByDay2 = {}
+          rawDailySpend.forEach(r => {
+            const k = spendBucketKey(r.date || r.label || '')
+            spendByDay2[k] = (spendByDay2[k] || 0) + (r.totalSpend || r.spend || 0)
+          })
+          const spendSalesMap = {}
+          rawDaily.forEach(r => {
+            const k = spendBucketKey(r.date || r.month || r.label || '')
+            if (!spendSalesMap[k]) spendSalesMap[k] = { label: k, totalSpend: 0, grossSalesExcGst: 0, netRevenue: 0 }
+            // grossSales in rawDaily is inc-GST; use proportion: grossExcGst/grossSales ratio to approximate
+            const excRatio = (kpis.grossSales > 0 && kpis.grossExcGst > 0) ? kpis.grossExcGst / kpis.grossSales : 1
+            const netRatio  = (kpis.grossSales > 0 && kpis.netRevenue > 0)  ? kpis.netRevenue  / kpis.grossSales : 0
+            spendSalesMap[k].grossSalesExcGst += (r.grossSales || 0) * excRatio
+            spendSalesMap[k].netRevenue       += (r.grossSales || 0) * netRatio
+          })
+          Object.entries(spendByDay2).forEach(([k, v]) => {
+            if (!spendSalesMap[k]) spendSalesMap[k] = { label: k, totalSpend: 0, grossSalesExcGst: 0, netRevenue: 0 }
+            spendSalesMap[k].totalSpend += v
+          })
+          const spendSalesData = Object.values(spendSalesMap).sort((a, b) => a.label < b.label ? -1 : 1)
+
+          // ── RoAS per channel (use grossExcGst as revenue proxy) ──
+          const grossRevForRoas = kpis.grossExcGst || kpis.grossSales || 0
+          const metaRoAS   = kpis.metaSpend > 0 ? grossRevForRoas / kpis.metaSpend : 0
+          const googleRoAS = kpis.googleSpend > 0 ? grossRevForRoas / kpis.googleSpend : 0
+          const blendedRoAS = kpis.roas || 0
+          const blendedCAC  = kpis.cac || 0
+
+          // ── Channel insight: flag if one channel has dramatically higher RoAS ──
+          const channelInsight = (() => {
+            if (metaRoAS > 0 && googleRoAS > 0) {
+              const ratio = metaRoAS > googleRoAS ? metaRoAS / googleRoAS : googleRoAS / metaRoAS
+              const higher = metaRoAS > googleRoAS ? 'Meta' : 'Google'
+              const lower  = metaRoAS > googleRoAS ? 'Google' : 'Meta'
+              if (ratio >= 1.5) return `${higher} is running at ${ratio.toFixed(1)}× the RoAS of ${lower} — worth testing incremental budget shift toward ${higher}.`
+            }
+            return null
+          })()
+
+          // ── CAC zero-while-spend bug flag ──
+          const cacMissing = (kpis.metaSpend > 0 || kpis.googleSpend > 0)
+
+          // ── Bug 1 fix: use correct field names firstOrders / repeatOrders ──
+          const totalFirstOrders  = discountDist.reduce((s, r) => s + (r.firstOrders || 0), 0)
+          const totalRepeatOrders = discountDist.reduce((s, r) => s + (r.repeatOrders || 0), 0)
+          const totalAllOrders    = totalFirstOrders + totalRepeatOrders
+
+          // ── Bug 2 fix: pie data derived from correct fields ──
+          // firstOrders = orders with a discount code, repeatOrders = orders without
+          // (per Q9 discount_bucket query: first_orders = discounted, repeat_orders = full price)
+          const pieData = [
+            { name: 'Discounted (1st order)', value: totalFirstOrders },
+            { name: 'Full Price', value: totalRepeatOrders },
+          ]
+
+          const cardStyle = { background: SD.card, borderRadius: 12, border: `1px solid ${SD.border}`, overflow: 'hidden', boxShadow: '0 1px 2px rgba(80,65,20,.04)' }
+          const cardHead  = { background: SD.amberSoft, borderBottom: `1px solid ${SD.amberLine}`, padding: '9px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }
+          const cardTitle = { fontSize: 11, fontWeight: 800, color: SD.t1, textTransform: 'uppercase', letterSpacing: '.07em', fontFamily: 'Inter, sans-serif' }
+          const cardBody  = { padding: '14px 16px' }
+
+          return (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 14, padding: '16px 16px 24px' }}>
+
+              {/* CAC note banner */}
+              {cacMissing && (
+                <div style={{ background: SD.amberSoft, border: `1px solid ${SD.amberLine}`, borderRadius: 10, padding: '9px 14px', fontSize: 11.5, color: SD.t1, lineHeight: 1.5 }}>
+                  ℹ️ Per-channel CAC (Meta / Google) requires <strong>customersByChannel</strong> in the API — showing <strong>—</strong> until added. Blended CAC uses total new customers and is accurate.
+                </div>
+              )}
+
+              {/* KPI row */}
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 10 }}>
+                {(() => {
+                  const paybackMonths = (kpis.cac > 0 && kpis.ltv12 > 0) ? (kpis.cac / (kpis.ltv12 / 12)) : null
+                  return [
+                    { label: 'Total Spend', value: fmt(kpis.totalSpend || 0), sub: `Meta ${fmt(kpis.metaSpend || 0)} · Google ${fmt(kpis.googleSpend || 0)}${kpis.additionalSpend > 0 ? ` · Add. ${fmt(kpis.additionalSpend)}` : ''}` },
+                    { label: 'Blended RoAS', value: `${blendedRoAS.toFixed(2)}×`, sub: 'Gross Rev (ex GST) / Spend' },
+                    { label: 'Blended CAC', value: fmt(blendedCAC), sub: 'Total Spend / New Customers' },
+                    { label: 'Payback Period', value: paybackMonths != null ? `${paybackMonths.toFixed(1)} mo` : '—', sub: 'CAC ÷ Monthly Rev per Customer' },
+                    { label: 'Discounted Order Share', value: totalAllOrders > 0 ? `${(totalFirstOrders / totalAllOrders * 100).toFixed(1)}%` : '—', sub: totalAllOrders > 0 ? `${fmtN(totalFirstOrders)} of ${fmtN(totalAllOrders)} orders` : 'No data' },
+                  ]
+                })().map((k, i) => (
+                  <div key={i} style={{ background: SD.card, borderRadius: 12, padding: '12px 14px', border: `1px solid ${SD.border}` }}>
+                    <div style={{ fontSize: 9.5, fontWeight: 700, color: SD.t3, textTransform: 'uppercase', letterSpacing: '.08em', marginBottom: 4, fontFamily: 'Inter, sans-serif' }}>{k.label}</div>
+                    <div style={{ fontSize: 22, fontWeight: 800, color: SD.t1, fontFamily: 'JetBrains Mono, monospace', lineHeight: 1.1, marginBottom: 3 }}>{k.value}</div>
+                    <div style={{ fontSize: 10, color: SD.t2, fontFamily: 'Inter, sans-serif' }}>{k.sub}</div>
+                  </div>
+                ))}
+              </div>
+
+              {/* Spend vs Sales */}
+              <div style={cardStyle}>
+                <div style={cardHead}>
+                  <span style={cardTitle}>Spend vs Sales</span>
+                  <div style={{ display: 'flex', gap: 4 }}>
+                    {['daily', 'weekly', 'monthly'].map(g => (
+                      <button key={g} style={pill(spendGranularity === g)} onClick={() => setSpendGranularity(g)}>
+                        {g.charAt(0).toUpperCase() + g.slice(1)}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <div style={cardBody}>
+                  <ResponsiveContainer width="100%" height={240}>
+                    <ComposedChart data={spendSalesData} margin={{ top: 4, right: 20, bottom: 4, left: 0 }}>
+                      <CartesianGrid stroke={SD.borderSoft} />
+                      <XAxis dataKey="label" tick={{ fontSize: 10, fill: SD.t3 }} />
+                      <YAxis yAxisId="spend" orientation="left" tick={{ fontSize: 10, fill: SD.t3 }} tickFormatter={v => fmtBig(v)} />
+                      <YAxis yAxisId="sales" orientation="right" tick={{ fontSize: 10, fill: SD.t3 }} tickFormatter={v => fmtBig(v)} />
+                      <Tooltip contentStyle={{ background: '#fff', border: `1px solid ${SD.border}`, borderRadius: 7, fontSize: 11 }} formatter={(v, name) => [fmt(v), name]} />
+                      <Legend wrapperStyle={{ fontSize: 11, fontFamily: 'Inter, sans-serif' }} />
+                      <Bar yAxisId="spend" dataKey="totalSpend" fill={SD.amber} name="Total Spend" maxBarSize={40} radius={[3,3,0,0]} />
+                      <Line yAxisId="sales" dataKey="grossSalesExcGst" stroke={SD.blue} strokeWidth={2} dot={false} name="Gross Sales (ex GST)" />
+                      <Line yAxisId="sales" dataKey="netRevenue" stroke={SD.t1} strokeWidth={1.5} strokeDasharray="4 3" dot={false} name="Net Revenue" />
+                    </ComposedChart>
+                  </ResponsiveContainer>
                 </div>
               </div>
-            )
-          })()}
-        </Card>
+
+              {/* Channel Efficiency */}
+              <div style={cardStyle}>
+                <div style={cardHead}>
+                  <span style={cardTitle}>Channel Efficiency</span>
+                </div>
+                <div style={{ padding: '0 0 4px' }}>
+                  {channelInsight && (
+                    <div style={{ padding: '8px 16px', background: SD.amberSoft, borderBottom: `1px solid ${SD.amberLine}`, fontSize: 11, color: SD.t1, fontFamily: 'Inter, sans-serif' }}>
+                      💡 {channelInsight}
+                    </div>
+                  )}
+                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+                    <thead>
+                      <tr style={{ background: SD.amberSoft, borderBottom: `1px solid ${SD.amberLine}` }}>
+                        {['Channel', 'Spend', 'Revenue (ex GST)', 'Orders', 'RoAS', 'CAC'].map(h => (
+                          <th key={h} style={{ padding: '8px 16px', textAlign: h === 'Channel' ? 'left' : 'right', fontFamily: 'Inter, sans-serif', fontWeight: 700, fontSize: 10.5, color: SD.t2, textTransform: 'uppercase', letterSpacing: '.06em' }}>{h}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {(() => {
+                        const metaRevShare = kpis.totalSpend > 0 ? (kpis.metaSpend || 0) / kpis.totalSpend : 0
+                        const googleRevShare = kpis.totalSpend > 0 ? (kpis.googleSpend || 0) / kpis.totalSpend : 0
+                        const metaOrdShare = kpis.totalSpend > 0 ? (kpis.metaSpend || 0) / kpis.totalSpend : 0
+                        const rows = [
+                          { channel: 'Meta',       spend: kpis.metaSpend || 0,       rev: grossRevForRoas * metaRevShare,   orders: Math.round((kpis.totalOrders || 0) * metaOrdShare), roas: metaRoAS,   cacStr: '—', isBlended: false, isAdditional: false },
+                          { channel: 'Google',     spend: kpis.googleSpend || 0,     rev: grossRevForRoas * googleRevShare, orders: Math.round((kpis.totalOrders || 0) * googleRevShare), roas: googleRoAS, cacStr: '—', isBlended: false, isAdditional: false },
+                          { channel: 'Additional', spend: kpis.additionalSpend || 0, rev: null, orders: null, roas: null, cacStr: '—', isBlended: false, isAdditional: true },
+                          { channel: 'Blended',    spend: kpis.totalSpend || 0,      rev: grossRevForRoas, orders: kpis.totalOrders || 0, roas: blendedRoAS, cacStr: fmt(blendedCAC), isBlended: true, isAdditional: false },
+                        ]
+                        return rows.map((row, i) => (
+                          <tr key={i} style={{ borderBottom: `1px solid ${SD.borderSoft}`, background: row.isBlended ? SD.amberSoft : 'transparent' }}>
+                            <td style={{ padding: '10px 16px', color: SD.t1, fontWeight: row.isBlended ? 800 : 500, fontFamily: 'Inter, sans-serif', fontSize: 12 }}>
+                              {row.channel}
+                              {row.isAdditional && <span style={{ fontSize: 9.5, color: SD.t3, marginLeft: 5 }}>(offline/other)</span>}
+                            </td>
+                            <td style={{ padding: '10px 16px', textAlign: 'right', fontFamily: 'JetBrains Mono, monospace', fontSize: 12, color: SD.t1 }}>{fmt(row.spend)}</td>
+                            <td style={{ padding: '10px 16px', textAlign: 'right', fontFamily: 'JetBrains Mono, monospace', fontSize: 12, color: SD.t3 }}>{row.rev != null && row.rev > 0 ? fmt(row.rev) : '—'}</td>
+                            <td style={{ padding: '10px 16px', textAlign: 'right', fontFamily: 'JetBrains Mono, monospace', fontSize: 12, color: SD.t3 }}>{row.orders != null ? fmtN(row.orders) : '—'}</td>
+                            <td style={{ padding: '10px 16px', textAlign: 'right', fontFamily: 'JetBrains Mono, monospace', fontSize: 12, color: row.roas != null ? (row.roas >= 3 ? '#3a7d44' : row.roas >= 1.5 ? SD.amberDeep : '#a63a3a') : SD.t3, fontWeight: row.roas != null ? 700 : 400 }}>{row.roas != null && row.roas > 0 ? `${row.roas.toFixed(2)}×` : '—'}</td>
+                            <td style={{ padding: '10px 16px', textAlign: 'right', fontFamily: 'JetBrains Mono, monospace', fontSize: 12, color: SD.t1 }}>{row.cacStr}</td>
+                          </tr>
+                        ))
+                      })()}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              {/* Discount Distribution + Donut */}
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+                <div style={cardStyle}>
+                  <div style={cardHead}>
+                    <span style={cardTitle}>Discount Distribution</span>
+                    <span style={{ fontSize: 10, color: SD.t3, fontStyle: 'italic' }}>New vs Repeat · AOV line</span>
+                  </div>
+                  <div style={cardBody}>
+                    {discountDist.length > 0 ? (
+                      <ResponsiveContainer width="100%" height={220}>
+                        <ComposedChart data={discountDist} margin={{ top: 4, right: 24, bottom: 4, left: 0 }}>
+                          <CartesianGrid stroke={SD.borderSoft} />
+                          <XAxis dataKey="bucket" tick={{ fontSize: 9.5, fill: SD.t3 }} />
+                          <YAxis yAxisId="orders" tick={{ fontSize: 10, fill: SD.t3 }} tickFormatter={v => fmtBig(v)} />
+                          <YAxis yAxisId="aov" orientation="right" tick={{ fontSize: 10, fill: SD.t3 }} tickFormatter={v => fmt(v)} />
+                          <Tooltip contentStyle={{ background: '#fff', border: `1px solid ${SD.border}`, borderRadius: 7, fontSize: 11, color: SD.t1 }} formatter={(v, name) => [name === 'AOV (ex GST)' ? fmt(v) : fmtN(v), name]} labelStyle={{ color: SD.t1, fontWeight: 700 }} itemStyle={{ color: SD.t1 }} />
+                          <Legend wrapperStyle={{ fontSize: 11, fontFamily: 'Inter, sans-serif' }} />
+                          <Bar yAxisId="orders" dataKey="firstOrders" stackId="a" fill={SD.amberDeep} name="New Customer Orders" radius={[0,0,0,0]} />
+                          <Bar yAxisId="orders" dataKey="repeatOrders" stackId="a" fill={SD.borderSoft} name="Repeat Customer Orders" radius={[3,3,0,0]} />
+                          <Line yAxisId="aov" type="monotone" dataKey="aovExc" stroke={SD.t1} strokeWidth={2} dot={{ r: 3, fill: SD.t1 }} name="AOV (ex GST)" />
+                        </ComposedChart>
+                      </ResponsiveContainer>
+                    ) : (
+                      <div style={{ color: SD.t3, fontSize: 12, padding: 12, textAlign: 'center' }}>No discount data.</div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Bug 2 fixed: pie uses correct summed fields */}
+                <div style={cardStyle}>
+                  <div style={cardHead}><span style={cardTitle}>Discounted vs Full Price Orders</span></div>
+                  <div style={cardBody}>
+                    {totalAllOrders > 0 ? (
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+                        <ResponsiveContainer width="55%" height={200}>
+                          <PieChart>
+                            <Pie data={pieData} dataKey="value" nameKey="name" cx="50%" cy="50%" innerRadius={55} outerRadius={80} paddingAngle={2}>
+                              <Cell fill={SD.amberDeep} />
+                              <Cell fill={SD.borderSoft} />
+                            </Pie>
+                            <Tooltip contentStyle={{ background: '#fff', border: `1px solid ${SD.border}`, borderRadius: 7, fontSize: 11 }} formatter={(v, name) => [fmtN(v), name]} />
+                          </PieChart>
+                        </ResponsiveContainer>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                          {pieData.map((d, i) => (
+                            <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                              <div style={{ width: 10, height: 10, borderRadius: 2, background: i === 0 ? SD.amberDeep : SD.borderSoft, flexShrink: 0 }} />
+                              <div>
+                                <div style={{ fontSize: 10, color: SD.t2, fontFamily: 'Inter, sans-serif' }}>{d.name}</div>
+                                <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 13, fontWeight: 700, color: SD.t1 }}>{fmtN(d.value)}</div>
+                                <div style={{ fontSize: 10, color: SD.t3, fontFamily: 'Inter, sans-serif' }}>{totalAllOrders > 0 ? (d.value / totalAllOrders * 100).toFixed(1) : 0}%</div>
+                              </div>
+                            </div>
+                          ))}
+                          <div style={{ borderTop: `1px solid ${SD.borderSoft}`, paddingTop: 8 }}>
+                            <div style={{ fontSize: 9, color: SD.t3, fontFamily: 'Inter, sans-serif', textTransform: 'uppercase', letterSpacing: '.06em' }}>Total Orders</div>
+                            <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 13, fontWeight: 800, color: SD.t1 }}>{fmtN(totalAllOrders)}</div>
+                          </div>
+                        </div>
+                      </div>
+                    ) : (
+                      <div style={{ color: SD.t3, fontSize: 12, padding: 12, textAlign: 'center' }}>No data.</div>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* Discount Depth vs Repeat Rate */}
+              <div style={cardStyle}>
+                <div style={cardHead}>
+                  <span style={cardTitle}>Discount Depth vs Repeat Rate</span>
+                  <span style={{ fontSize: 10, color: SD.t3, fontStyle: 'italic' }}>% of customers who repurchased after buying at each discount level</span>
+                </div>
+                <div style={cardBody}>
+                  {discountRepeatRate.length > 0 ? (
+                    <ResponsiveContainer width="100%" height={220}>
+                      <ComposedChart data={discountRepeatRate} margin={{ top: 4, right: 24, bottom: 4, left: 0 }}>
+                        <CartesianGrid stroke={SD.borderSoft} />
+                        <XAxis dataKey="bucket" tick={{ fontSize: 9.5, fill: SD.t3 }} />
+                        <YAxis yAxisId="left" tick={{ fontSize: 9.5, fill: SD.t3 }} tickFormatter={v => fmtN(v)} />
+                        <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 9.5, fill: SD.t3 }} tickFormatter={v => `${v}%`} domain={[0, 100]} />
+                        <Tooltip
+                          contentStyle={{ background: SD.paper, border: `1px solid ${SD.border}`, borderRadius: 6, fontSize: 11 }}
+                          formatter={(val, name) => {
+                            if (name === 'Repeat Rate %') return [`${val}%`, name]
+                            if (name === 'Avg Orders') return [`${val}x`, name]
+                            return [fmtN(val), name]
+                          }}
+                        />
+                        <Legend wrapperStyle={{ fontSize: 10 }} />
+                        <Bar yAxisId="left" dataKey="totalCustomers" name="Total Customers" fill={SD.amber} radius={[3,3,0,0]} />
+                        <Bar yAxisId="left" dataKey="repeatCustomers" name="Repeat Customers" fill={SD.amberDeep} radius={[3,3,0,0]} />
+                        <Line yAxisId="right" type="monotone" dataKey="repeatRate" name="Repeat Rate %" stroke={SD.t1} strokeWidth={2} dot={{ r: 4, fill: SD.t1 }} />
+                      </ComposedChart>
+                    </ResponsiveContainer>
+                  ) : (
+                    <div style={{ textAlign: 'center', color: SD.t3, fontSize: 11, padding: 40 }}>No data</div>
+                  )}
+                </div>
+              </div>
+
+            </div>
+          )
+        })()}
+
       </div>
-      </>)}
     </div>
   )
 }
@@ -10492,7 +12101,7 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
             </div>
           )}
           {page === 'customer' && data && (!allowedTabs || allowedTabs.includes('customer')) && (
-            <div className="page-scroll">
+            <div className="page-scroll" style={{ padding: 0 }}>
               <CustomerPage filters={filters} />
             </div>
           )}
