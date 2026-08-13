@@ -85,7 +85,7 @@ FROM order_agg`),
 ),
 period AS (
   SELECT o.CustomerId, o.OrderId, DATE(o.OrderDate) AS order_date,
-    o.SellingPrice_Inc_GST AS rev, f.first_date
+    o.SellingPrice_Inc_GST AS rev, o.SellingPrice_Exc_GST AS rev_exc, f.first_date
   FROM ${TBL} o
   JOIN first_dates f USING (CustomerId)
   WHERE o.Channel = 'Shopify'
@@ -97,6 +97,7 @@ SELECT
   COUNT(DISTINCT CustomerId) AS customers_acquired,
   COUNT(DISTINCT OrderId) AS total_orders,
   ROUND(SUM(rev), 0) AS gross_sales,
+  ROUND(SUM(rev_exc), 0) AS gross_sales_exc,
   ROUND(SUM(CASE WHEN first_date < DATE('${s}') THEN rev ELSE 0 END), 0) AS repeat_revenue,
   ROUND(SUM(CASE WHEN first_date BETWEEN DATE('${s}') AND DATE('${e}') THEN rev ELSE 0 END), 0) AS new_revenue,
   COUNT(DISTINCT CASE WHEN first_date BETWEEN DATE('${s}') AND DATE('${e}') THEN CustomerId END) AS new_customers,
@@ -679,6 +680,7 @@ LIMIT 50`)
         customersAcquired: parseInt(r.customers_acquired) || 0,
         totalOrders: parseInt(r.total_orders) || 0,
         grossSales: parseFloat(r.gross_sales) || 0,
+        grossSalesExc: parseFloat(r.gross_sales_exc) || 0,
         repeatRevenue: parseFloat(r.repeat_revenue) || 0,
         newRevenue: parseFloat(r.new_revenue) || 0,
         newSales: parseFloat(r.new_revenue) || 0,

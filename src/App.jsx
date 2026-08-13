@@ -9810,6 +9810,7 @@ function CustomerPage({ filters }) {
   const [nrMetric, setNrMetric] = useState('customers')
   const [nrGran, setNrGran] = useState('daily')
   const [spendChartGran, setSpendChartGran] = useState('daily')
+  const [dowMetric, setDowMetric] = useState('customers')
   const [spendCacGran, setSpendCacGran] = useState('daily')
   const [cacBandGran, setCacBandGran] = useState('daily')
   const [cohortMode, setCohortMode] = useState('customer')
@@ -10277,7 +10278,7 @@ function CustomerPage({ filters }) {
                             <Bar yAxisId="rev" dataKey="grossExcGst" name="Gross Sales (ex GST)" fill="#E8C578" maxBarSize={32} radius={[3,3,0,0]} />
                             <Bar yAxisId="rev" dataKey="netRevenue"   name="Net Revenue"          fill="#C9A24F" maxBarSize={32} radius={[3,3,0,0]} />
                             <Bar yAxisId="rev" dataKey="spend"        name="Ad Spend"             fill="#4A7CC7" maxBarSize={32} radius={[3,3,0,0]} opacity={0.7} />
-                            <Line yAxisId="roas" type="monotone" dataKey="roas" name="RoAS" stroke="#3A3324" strokeWidth={2} dot={false} />
+                            <Line yAxisId="roas" type="monotone" dataKey="roas" name="RoAS" stroke="#9E9484" strokeWidth={2} dot={false} />
                           </ComposedChart>
                         ) : ovChartView === 'customers' ? (
                           <ComposedChart data={chartData} margin={{ top: 4, right: 50, bottom: 4, left: 0 }}>
@@ -10289,19 +10290,19 @@ function CustomerPage({ filters }) {
                             <Legend wrapperStyle={{ fontSize: 10, fontFamily: 'Inter, sans-serif' }} />
                             <Bar yAxisId="cust" dataKey="newCustomers"    name="New Customers"    fill="#E8C578" maxBarSize={32} radius={[3,3,0,0]} />
                             <Bar yAxisId="cust" dataKey="repeatCustomers" name="Repeat Customers" fill="#C9A24F" maxBarSize={32} radius={[3,3,0,0]} />
-                            <Line yAxisId="cac" type="monotone" dataKey="cac" name="CAC" stroke="#3A3324" strokeWidth={2} dot={false} />
+                            <Line yAxisId="cac" type="monotone" dataKey="cac" name="CAC" stroke="#9E9484" strokeWidth={2} dot={false} />
                           </ComposedChart>
                         ) : (
                           <ComposedChart data={chartData} margin={{ top: 4, right: 50, bottom: 4, left: 0 }}>
                             <CartesianGrid stroke="#F0EADC" />
                             <XAxis dataKey="label" tick={{ fontSize: 10, fill: '#B8AE93' }} />
                             <YAxis yAxisId="aov" tick={{ fontSize: 10, fill: '#B8AE93' }} tickFormatter={v => fmt(v)} />
-                            <YAxis yAxisId="rr" orientation="right" tick={{ fontSize: 10, fill: '#B8AE93' }} tickFormatter={v => `${v.toFixed(0)}%`} />
-                            <Tooltip contentStyle={ttStyle} itemStyle={{ color: '#3A3324' }} labelStyle={{ color: '#3A3324', fontWeight: 700 }} formatter={(v, name) => name === 'Repeat Rev %' ? [`${v.toFixed(1)}%`, name] : [fmt(v), name]} />
+                            <YAxis yAxisId="rr" orientation="right" tick={{ fontSize: 10, fill: '#B8AE93' }} tickFormatter={v => `${v.toFixed(1)}×`} />
+                            <Tooltip contentStyle={ttStyle} itemStyle={{ color: '#3A3324' }} labelStyle={{ color: '#3A3324', fontWeight: 700 }} formatter={(v, name) => name === 'RoAS' ? [`${v.toFixed(2)}×`, name] : [fmt(v), name]} />
                             <Legend wrapperStyle={{ fontSize: 10, fontFamily: 'Inter, sans-serif' }} />
                             <Bar yAxisId="aov" dataKey="aov" name="AOV (ex GST)" fill="#E8C578" maxBarSize={32} radius={[3,3,0,0]} />
                             <Line yAxisId="rr" type="monotone" dataKey="roas" name="RoAS" stroke="#C9A24F" strokeWidth={2} dot={false} />
-                            <Line yAxisId="aov" type="monotone" dataKey="cac" name="CAC" stroke="#3A3324" strokeWidth={2} dot={false} strokeDasharray="4 3" />
+                            <Line yAxisId="aov" type="monotone" dataKey="cac" name="CAC" stroke="#9E9484" strokeWidth={2} dot={false} strokeDasharray="4 3" />
                           </ComposedChart>
                         )}
                       </ResponsiveContainer>
@@ -10495,14 +10496,21 @@ function CustomerPage({ filters }) {
           }))
 
           // ── Day-of-Week seasonality ──
-          const dowMap = { 0: { day: 'Sunday', nc: 0, cnt: 0 }, 1: { day: 'Monday', nc: 0, cnt: 0 }, 2: { day: 'Tuesday', nc: 0, cnt: 0 }, 3: { day: 'Wednesday', nc: 0, cnt: 0 }, 4: { day: 'Thursday', nc: 0, cnt: 0 }, 5: { day: 'Friday', nc: 0, cnt: 0 }, 6: { day: 'Saturday', nc: 0, cnt: 0 } }
+          const dowMap = { 0: { day: 'Sun', nc: 0, rev: 0, orders: 0, cnt: 0 }, 1: { day: 'Mon', nc: 0, rev: 0, orders: 0, cnt: 0 }, 2: { day: 'Tue', nc: 0, rev: 0, orders: 0, cnt: 0 }, 3: { day: 'Wed', nc: 0, rev: 0, orders: 0, cnt: 0 }, 4: { day: 'Thu', nc: 0, rev: 0, orders: 0, cnt: 0 }, 5: { day: 'Fri', nc: 0, rev: 0, orders: 0, cnt: 0 }, 6: { day: 'Sat', nc: 0, rev: 0, orders: 0, cnt: 0 } }
           enriched.forEach(r => {
             if (!r.date) return
             const dow = new Date(r.date).getDay()
             dowMap[dow].nc += r.newCustomers || 0
+            dowMap[dow].rev += r.grossSalesExc || 0
+            dowMap[dow].orders += r.totalOrders || 0
             dowMap[dow].cnt++
           })
-          const dowData = [1,2,3,4,5,6,0].map(i => ({ day: dowMap[i].day, avg: dowMap[i].cnt > 0 ? Math.round(dowMap[i].nc / dowMap[i].cnt) : 0 }))
+          const dowData = [1,2,3,4,5,6,0].map(i => ({
+            day: dowMap[i].day,
+            avg: dowMap[i].cnt > 0 ? Math.round(dowMap[i].nc / dowMap[i].cnt) : 0,
+            avgRev: dowMap[i].cnt > 0 ? Math.round(dowMap[i].rev / dowMap[i].cnt) : 0,
+            avgOrders: dowMap[i].cnt > 0 ? Math.round(dowMap[i].orders / dowMap[i].cnt) : 0,
+          }))
           const bestDow = dowData.reduce((a, b) => b.avg > a.avg ? b : a, dowData[0] || { day: '-', avg: 0 })
           const avgDowAll = dowData.reduce((s, d) => s + d.avg, 0) / (dowData.filter(d => d.avg > 0).length || 1)
           const dowInsight = bestDow.avg > 0 && avgDowAll > 0
@@ -10577,14 +10585,14 @@ function CustomerPage({ filters }) {
                     <ComposedChart data={monthly} margin={{ top: 18, right: 8, bottom: 4, left: 0 }}>
                       <CartesianGrid stroke={T.borderSoft} />
                       <XAxis dataKey="month" tick={{ fontSize: 9, fill: T.t3 }} />
-                      <YAxis yAxisId="cust" orientation="left" tick={{ fontSize: 9, fill: T.t3 }} />
+                      <YAxis yAxisId="cust" orientation="left" tick={{ fontSize: 9, fill: T.t3 }} tickFormatter={v => fmtBig(v)} />
                       <YAxis yAxisId="sales" orientation="right" tick={{ fontSize: 9, fill: T.t3 }} tickFormatter={v => fmtBig(v)} />
                       <Tooltip contentStyle={ttS} itemStyle={ttItemStyle} labelStyle={{ color: '#1a1a1a' }} />
                       <Legend wrapperStyle={{ fontSize: 10 }} />
                       <Bar yAxisId="cust" dataKey="customersAcquired" fill="#F5C518" maxBarSize={granularity==='daily'?14:granularity==='weekly'?24:40} name="Customers" radius={[3,3,0,0]}>
-                        <LabelList dataKey="customersAcquired" position="top" style={{ fontSize: 8, fill: '#3A3324', fontFamily: 'JetBrains Mono, monospace' }} formatter={v => v > 0 ? fmtN(v) : ''} />
+                        <LabelList dataKey="customersAcquired" position="top" style={{ fontSize: 8, fill: '#3A3324', fontFamily: 'JetBrains Mono, monospace' }} formatter={v => v > 0 ? fmtBig(v) : ''} />
                       </Bar>
-                      <Line yAxisId="sales" dataKey="grossSales" stroke="#1a1a1a" strokeWidth={2.5} dot={false} name="Gross Sales" />
+                      <Line yAxisId="sales" dataKey="grossSales" stroke="#8A8478" strokeWidth={2.5} dot={false} name="Gross Sales" />
                     </ComposedChart>
                   </ResponsiveContainer>
                 </SCard>
@@ -10600,12 +10608,12 @@ function CustomerPage({ filters }) {
                     <BarChart data={nrData} margin={{ top: 18, right: 8, bottom: 4, left: 0 }}>
                       <CartesianGrid stroke={T.borderSoft} />
                       <XAxis dataKey="label" tick={{ fontSize: 9, fill: T.t3 }} />
-                      <YAxis tick={{ fontSize: 9, fill: T.t3 }} />
+                      <YAxis tick={{ fontSize: 9, fill: T.t3 }} tickFormatter={v => fmtBig(v)} />
                       <Tooltip contentStyle={ttS} itemStyle={ttItemStyle} labelStyle={{ color: '#1a1a1a' }} />
                       <Legend wrapperStyle={{ fontSize: 10 }} />
                       <Bar dataKey={newKey} stackId="a" fill="#F5C518" name="New" radius={[0,0,0,0]} />
                       <Bar dataKey={repKey} stackId="a" fill="#A8874A" name="Repeat" radius={[3,3,0,0]}>
-                        <LabelList dataKey={repKey} position="top" style={{ fontSize: 8, fill: '#3A3324', fontFamily: 'JetBrains Mono, monospace' }} formatter={v => v > 0 ? fmtN(v) : ''} />
+                        <LabelList dataKey={repKey} position="top" style={{ fontSize: 8, fill: '#3A3324', fontFamily: 'JetBrains Mono, monospace' }} formatter={v => v > 0 ? fmtBig(v) : ''} />
                       </Bar>
                     </BarChart>
                   </ResponsiveContainer>
@@ -10619,25 +10627,36 @@ function CustomerPage({ filters }) {
                     <ComposedChart data={cacRoasData} margin={{ top: 4, right: 8, bottom: 4, left: 0 }}>
                       <CartesianGrid stroke={T.borderSoft} />
                       <XAxis dataKey="label" tick={{ fontSize: 9, fill: T.t3 }} />
-                      <YAxis yAxisId="cac" orientation="left" tick={{ fontSize: 9, fill: T.t3 }} />
-                      <YAxis yAxisId="roas" orientation="right" tick={{ fontSize: 9, fill: T.t3 }} />
+                      <YAxis yAxisId="cac" orientation="left" tick={{ fontSize: 9, fill: T.t3 }} tickFormatter={v => fmt(v)} />
+                      <YAxis yAxisId="roas" orientation="right" tick={{ fontSize: 9, fill: T.t3 }} tickFormatter={v => `${v.toFixed(1)}×`} />
                       <Tooltip contentStyle={ttS} itemStyle={ttItemStyle} labelStyle={{ color: '#1a1a1a' }} />
                       <Legend wrapperStyle={{ fontSize: 10 }} />
                       <Bar yAxisId="cac" dataKey="cac" fill="#F5C518" maxBarSize={12} name="CAC (₹)" radius={[3,3,0,0]} />
-                      <Line yAxisId="roas" dataKey="roas" stroke="#1a1a1a" strokeWidth={2.5} dot={false} name="RoAS" />
+                      <Line yAxisId="roas" dataKey="roas" stroke="#8A8478" strokeWidth={2.5} dot={false} name="RoAS" />
                     </ComposedChart>
                   </ResponsiveContainer>
                 </SCard>
 
-                <SCard title="Day-of-Week Seasonality" sub={dowInsight || 'Avg new customers per weekday across period'}>
+                <SCard title="Day-of-Week Seasonality"
+                  sub={dowMetric === 'customers' ? (dowInsight || 'Avg new customers per weekday') : dowMetric === 'revenue' ? 'Avg gross sales (Ex GST) per weekday' : 'Avg orders per weekday'}
+                  action={
+                    <div style={{ display: 'flex', gap: 4 }}>
+                      {[['customers','Customers'],['revenue','Revenue'],['orders','Orders']].map(([m, label]) => (
+                        <button key={m} style={pill(dowMetric === m)} onClick={() => setDowMetric(m)}>{label}</button>
+                      ))}
+                    </div>
+                  }
+                >
                   <ResponsiveContainer width="100%" height={220}>
                     <BarChart data={dowData} margin={{ top: 4, right: 8, bottom: 4, left: 0 }}>
                       <CartesianGrid stroke={T.borderSoft} />
                       <XAxis dataKey="day" tick={{ fontSize: 10, fill: T.t3 }} />
-                      <YAxis tick={{ fontSize: 9, fill: T.t3 }} />
-                      <Tooltip contentStyle={ttS} itemStyle={ttItemStyle} labelStyle={{ color: '#1a1a1a' }} />
-                      {dowData.map((d, i) => null)}
-                      <Bar dataKey="avg" name="Avg New Customers" radius={[4,4,0,0]} fill="#F5C518" />
+                      <YAxis tick={{ fontSize: 9, fill: T.t3 }} tickFormatter={v => dowMetric === 'revenue' ? fmtBig(v) : fmtBig(v)} />
+                      <Tooltip contentStyle={ttS} itemStyle={ttItemStyle} labelStyle={{ color: '#1a1a1a' }}
+                        formatter={(v, name) => dowMetric === 'revenue' ? [fmt(v), name] : [fmtN(v), name]} />
+                      <Bar dataKey={dowMetric === 'customers' ? 'avg' : dowMetric === 'revenue' ? 'avgRev' : 'avgOrders'}
+                        name={dowMetric === 'customers' ? 'Avg New Customers' : dowMetric === 'revenue' ? 'Avg Gross Sales (Ex GST)' : 'Avg Orders'}
+                        radius={[4,4,0,0]} fill="#F5C518" />
                     </BarChart>
                   </ResponsiveContainer>
                 </SCard>
@@ -10662,7 +10681,7 @@ function CustomerPage({ filters }) {
                       formatter={(v, n) => n === 'RoAS' ? [`${v.toFixed(2)}×`, n] : n === 'Gross Sales' ? [fmt(v), n] : [fmt(v), n]} />
                     <Legend wrapperStyle={{ fontSize: 10 }} />
                     <Bar yAxisId="spend" dataKey="spend" fill="#F5C518" maxBarSize={14} name="Ad Spend" radius={[3,3,0,0]} />
-                    <Line yAxisId="spend" dataKey="grossSales" stroke="#1a1a1a" strokeWidth={2.5} dot={false} name="Gross Sales" />
+                    <Line yAxisId="spend" dataKey="grossSales" stroke="#8A8478" strokeWidth={2.5} dot={false} name="Gross Sales" />
                     <Line yAxisId="roas" dataKey="roas" stroke={T.amberDeep} strokeWidth={2} dot={false} strokeDasharray="4 2" name="RoAS" />
                   </ComposedChart>
                 </ResponsiveContainer>
@@ -10686,7 +10705,7 @@ function CustomerPage({ filters }) {
                         formatter={(v, n) => n === 'CAC' ? [fmt(v), n] : [fmt(v), n]} />
                       <Legend wrapperStyle={{ fontSize: 10 }} />
                       <Bar yAxisId="spend" dataKey="spend" fill="#F5C518" maxBarSize={14} name="Ad Spend" radius={[3,3,0,0]} />
-                      <Line yAxisId="cac" dataKey="cac" stroke="#1a1a1a" strokeWidth={2.5} dot={false} name="CAC" />
+                      <Line yAxisId="cac" dataKey="cac" stroke="#8A8478" strokeWidth={2.5} dot={false} name="CAC" />
                     </ComposedChart>
                   </ResponsiveContainer>
                 </SCard>
@@ -10719,7 +10738,7 @@ function CustomerPage({ filters }) {
                             formatter={(v, n) => n === 'CAC' ? [fmt(v), n] : [fmt(v), n]} />
                           <Legend wrapperStyle={{ fontSize: 10 }} />
                           <Line dataKey="avg" stroke={T.amberLine} strokeWidth={1.5} dot={false} strokeDasharray="6 3" name="Avg CAC" legendType="plainline" />
-                          <Line dataKey="cac" stroke="#1a1a1a" strokeWidth={2.5} dot={false} name="CAC" connectNulls />
+                          <Line dataKey="cac" stroke="#8A8478" strokeWidth={2.5} dot={false} name="CAC" connectNulls />
                         </ComposedChart>
                       </ResponsiveContainer>
                     </SCard>
@@ -11021,12 +11040,12 @@ function CustomerPage({ filters }) {
                       onChange={e => setCohortMonthLimit(Number(e.target.value))}
                       style={{ fontSize: 11, borderRadius: 20, border: `1px solid ${CT.amberLine}`, background: CT.amberSoft, color: CT.t2, padding: '3px 10px', fontFamily: 'Inter, sans-serif', cursor: 'pointer', outline: 'none' }}
                     >
-                      {[6, 12, 24, 36, 54].map(n => <option key={n} value={n}>{n} Months</option>)}
+                      {[6, 12, 24, 36].map(n => <option key={n} value={n}>{n} Months</option>)}
                     </select>
                   </div>
                 }
               >
-                <div style={{ overflowX: 'auto', width: '100%' }}>
+                <div style={{ overflowX: 'auto', overflowY: 'auto', width: '100%', height: 420, maxHeight: 420 }}>
                   <table style={{ borderCollapse: 'collapse', fontSize: 11, minWidth: '100%', tableLayout: 'auto' }}>
                     <colgroup>
                       <col style={{ width: 72 }} />
@@ -11035,10 +11054,10 @@ function CustomerPage({ filters }) {
                     </colgroup>
                     <thead>
                       <tr style={{ background: '#F3DFA0', borderBottom: `1px solid #E6C877` }}>
-                        <th style={{ padding: '6px 8px', textAlign: 'left', color: CT.t1, fontWeight: 700, fontSize: 10, textTransform: 'uppercase', letterSpacing: '.05em', overflow: 'hidden' }}>Cohort</th>
-                        <th style={{ padding: '6px 8px', textAlign: 'right', color: CT.t1, fontWeight: 700, fontSize: 10, textTransform: 'uppercase', letterSpacing: '.05em' }}>Size</th>
+                        <th style={{ position: 'sticky', top: 0, left: 0, zIndex: 4, background: '#F3DFA0', padding: '6px 8px', textAlign: 'left', color: CT.t1, fontWeight: 700, fontSize: 10, textTransform: 'uppercase', letterSpacing: '.05em' }}>Cohort</th>
+                        <th style={{ position: 'sticky', top: 0, left: 72, zIndex: 4, background: '#F3DFA0', padding: '6px 8px', textAlign: 'right', color: CT.t1, fontWeight: 700, fontSize: 10, textTransform: 'uppercase', letterSpacing: '.05em' }}>Size</th>
                         {Array.from({ length: visibleMax + 1 }, (_, i) => (
-                          <th key={i} style={{ padding: '6px 4px', textAlign: 'center', color: CT.t1, fontWeight: 700, fontSize: 10 }}>M{i}</th>
+                          <th key={i} style={{ position: 'sticky', top: 0, zIndex: 3, background: '#F3DFA0', padding: '6px 4px', textAlign: 'center', color: CT.t1, fontWeight: 700, fontSize: 10 }}>M{i}</th>
                         ))}
                       </tr>
                     </thead>
@@ -11047,8 +11066,8 @@ function CustomerPage({ filters }) {
                         const base = cohortMode === 'customer' ? (cohort0[cm] || 0) : (cohortRev0[cm] || 0)
                         return (
                           <tr key={cm} style={{ borderBottom: `1px solid ${CT.borderSoft}`, background: ri % 2 === 0 ? CT.card : CT.bg }}>
-                            <td style={{ padding: '5px 8px', color: CT.t2, overflow: 'hidden', fontFamily: 'JetBrains Mono, monospace', fontSize: 10 }}>{cm}</td>
-                            <td style={{ padding: '5px 8px', textAlign: 'right', fontFamily: 'JetBrains Mono, monospace', color: CT.t1, fontSize: 10 }}>{fmtN(cohort0[cm] || 0)}</td>
+                            <td style={{ position: 'sticky', left: 0, zIndex: 1, background: ri % 2 === 0 ? CT.card : CT.bg, padding: '5px 8px', color: CT.t2, fontFamily: 'JetBrains Mono, monospace', fontSize: 10 }}>{cm}</td>
+                            <td style={{ position: 'sticky', left: 72, zIndex: 1, background: ri % 2 === 0 ? CT.card : CT.bg, padding: '5px 8px', textAlign: 'right', fontFamily: 'JetBrains Mono, monospace', color: CT.t1, fontSize: 10 }}>{fmtN(cohort0[cm] || 0)}</td>
                             {Array.from({ length: visibleMax + 1 }, (_, idx) => {
                               const row = cohortMap[cm]?.[idx]
                               if (!row) return <td key={idx} style={{ padding: '5px 4px', background: 'transparent' }} />

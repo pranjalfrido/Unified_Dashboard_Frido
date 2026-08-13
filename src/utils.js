@@ -23,9 +23,9 @@ export const fmt = v => {
 export const fmtN = v => (v || 0).toLocaleString('en-IN')
 export const fmtBig = v => {
   if (v == null || isNaN(v)) return '0'
-  if (v >= 1e7) return `${(v / 1e7).toFixed(2)} Cr`
-  if (v >= 1e5) return `${(v / 1e5).toFixed(2)} L`
-  if (v >= 1e3) return `${(v / 1e3).toFixed(2)} K`
+  if (v >= 1e7) return `${(v / 1e7).toFixed(2)}Cr`
+  if (v >= 1e5) return `${(v / 1e5).toFixed(2)}L`
+  if (v >= 1e3) return `${(v / 1e3).toFixed(1)}K`
   return Math.round(v).toLocaleString('en-IN')
 }
 export const pct = (a, b) => b ? ((a / b) * 100).toFixed(1) + '%' : '0%'
@@ -210,6 +210,7 @@ function localDateStr(d) {
 
 export function getDefaultDates() {
   const end = new Date()
+  end.setDate(end.getDate() - 1)
   const start = new Date(end.getFullYear(), end.getMonth(), 1)
   return { start: localDateStr(start), end: localDateStr(end) }
 }
