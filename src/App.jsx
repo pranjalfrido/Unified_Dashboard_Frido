@@ -9697,11 +9697,14 @@ const CP = {
   line: '#15130B', lineSoft: '#D8CD9E', green: '#2E6B3E', red: '#A62E2E',
 }
 
-function CpCard({ title, action, children }) {
+function CpCard({ title, sub, action, children }) {
   return (
-    <div style={{ borderRadius: 8 }}>
-      <div style={{ background: CP.head, borderBottom: `1px solid ${CP.headLine}`, padding: '8px 14px', display: 'flex', flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-        <span style={{ fontFamily: 'Space Grotesk, var(--font)', fontWeight: 700, fontSize: 12, color: CP.ink, textTransform: 'uppercase', letterSpacing: '.06em' }}>{title}</span>
+    <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, width: '100%', boxSizing: 'border-box', overflow: 'hidden' }}>
+      <div style={{ borderBottom: `1px solid ${C.border}`, padding: '10px 16px', display: 'flex', flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+        <div>
+          <span style={{ fontWeight: 700, fontSize: 12, color: C.t1, textTransform: 'uppercase', letterSpacing: '.06em' }}>{title}</span>
+          {sub && <div style={{ fontSize: 10, color: C.t3, fontStyle: 'italic', marginTop: 1 }}>{sub}</div>}
+        </div>
         {action && <span>{action}</span>}
       </div>
       <div style={{ padding: '12px 14px' }}>{children}</div>
@@ -9993,7 +9996,7 @@ function CustomerPage({ filters }) {
   const ttStyle = { background: CP.paper, border: `2px solid ${CP.line}`, borderRadius: 0, padding: '8px 12px', fontSize: 11 }
 
   return (
-    <div style={{ background: CP.bg, fontFamily: 'Inter, var(--font)', minHeight: '100%' }}>
+    <div style={{ background: CP.bg, fontFamily: 'Inter, var(--font)', minHeight: '100%', width: '100%', boxSizing: 'border-box' }}>
       <div className="sales-tabs">
         {tabs.map(tab => (
           <button key={tab.id} onClick={() => setActiveTab(tab.id)} className={`stab${activeTab === tab.id ? ' active' : ''}`}>
@@ -10003,7 +10006,7 @@ function CustomerPage({ filters }) {
         ))}
       </div>
 
-      <div>
+      <div style={{ width: '100%', boxSizing: 'border-box' }}>
 
         {activeTab === 'overview' && (() => {
           const chgBadgeCp = (cur, prev, lowerIsBetter = false) => {
@@ -10145,7 +10148,7 @@ function CustomerPage({ filters }) {
           }
 
           return (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 14, paddingTop: 14, paddingLeft: 16, paddingRight: 16 }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 14, paddingTop: 14, paddingLeft: 16, paddingRight: 16, width: '100%', boxSizing: 'border-box' }}>
               {/* 8 hero KPIs with interactive sparklines */}
               {(() => {
                 const dailyDates = rawDaily.map(r => r.date || '')
@@ -10563,7 +10566,7 @@ function CustomerPage({ filters }) {
           ]
 
           return (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 16, paddingTop: 14, paddingLeft: 16, paddingRight: 16, paddingBottom: 24, background: T.bg }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 16, paddingTop: 14, paddingLeft: 16, paddingRight: 16, paddingBottom: 24, background: T.bg, width: '100%', boxSizing: 'border-box' }}>
 
               {/* 1. Insight banner */}
               {insightBanner && (
@@ -10946,7 +10949,7 @@ function CustomerPage({ filters }) {
           const heatCeiling = Math.max(maxNonM0Pct * 1.1, 5)
 
           return (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 16, paddingTop: 14, paddingLeft: 16, paddingRight: 16, paddingBottom: 24, background: CT.bg }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 16, paddingTop: 14, paddingLeft: 16, paddingRight: 16, paddingBottom: 24, background: CT.bg, width: '100%', boxSizing: 'border-box' }}>
 
               {/* 1. Stat row */}
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 10 }}>
@@ -11100,7 +11103,7 @@ function CustomerPage({ filters }) {
         {activeTab === 'purchase' && (() => {
           const crossMaxVal = Math.max(...crossRows.flatMap(r => r.data), 1)
           return (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 16, paddingTop: 16, paddingLeft: 16, paddingRight: 16 }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 16, paddingTop: 16, paddingLeft: 16, paddingRight: 16, width: '100%', boxSizing: 'border-box' }}>
               <CpCard
                 title="First vs Second Purchase Cross-Sell"
                 action={
@@ -11128,8 +11131,8 @@ function CustomerPage({ filters }) {
               >
                 {crossRows.length > 0
                   ? (
-                    <div style={{ overflowX: 'auto' }}>
-                      <table style={{ borderCollapse: 'collapse', fontSize: 11, minWidth: 500 }}>
+                    <div style={{ overflowX: 'auto', width: '100%' }}>
+                      <table style={{ borderCollapse: 'collapse', fontSize: 11, width: '100%', minWidth: 500 }}>
                         <thead>
                           <tr style={{ background: CP.head, borderBottom: `2px solid ${CP.line}` }}>
                             <th style={{ padding: '5px 8px', textAlign: 'left', color: CP.ink, fontWeight: 700 }}>
@@ -11162,39 +11165,61 @@ function CustomerPage({ filters }) {
                 }
               </CpCard>
 
-              <CpCard title="Days to Second Purchase">
-                {custData.daysToSecondPurchase
-                  ? (
-                    <ResponsiveContainer width="100%" height={200}>
-                      <BarChart data={custData.daysToSecondPurchase} margin={{ top: 4, right: 16, bottom: 4, left: 0 }}>
-                        <CartesianGrid stroke={CP.lineSoft} />
-                        <XAxis dataKey="bucket" tick={{ fontSize: 10, fill: CP.ink3 }} />
-                        <YAxis tick={{ fontSize: 10, fill: CP.ink3 }} />
-                        <Tooltip contentStyle={ttStyle} />
-                        <Bar dataKey="pct" fill={CP.yellow} name="% Customers" />
-                      </BarChart>
-                    </ResponsiveContainer>
-                  )
-                  : <CpBackendTodo field="daysToSecondPurchase" />
-                }
-              </CpCard>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+                <CpCard title="Days to Second Purchase" sub="How quickly do customers come back?">
+                  {custData.daysToSecondPurchase?.length > 0 ? (() => {
+                    const total = custData.daysToSecondPurchase.reduce((s, r) => s + r.customers, 0)
+                    const data = custData.daysToSecondPurchase.map(r => ({ ...r, pct: total > 0 ? parseFloat((r.customers / total * 100).toFixed(1)) : 0 }))
+                    const fastest = data[0]
+                    return (
+                      <div>
+                        {fastest && <div style={{ fontSize: 11, color: CP.ink3, marginBottom: 10, fontStyle: 'italic' }}>
+                          {fastest.pct}% of repeat customers came back within {fastest.bucket} — {total > 0 ? fmtN(data.filter(r => ['0-7d','8-30d'].includes(r.bucket)).reduce((s,r)=>s+r.customers,0)) : 0} within 30 days
+                        </div>}
+                        <ResponsiveContainer width="100%" height={200}>
+                          <BarChart data={data} margin={{ top: 4, right: 16, bottom: 4, left: 0 }}>
+                            <CartesianGrid stroke={CP.lineSoft} />
+                            <XAxis dataKey="bucket" tick={{ fontSize: 10, fill: CP.ink3 }} />
+                            <YAxis yAxisId="left" tick={{ fontSize: 10, fill: CP.ink3 }} tickFormatter={v => fmtN(v)} />
+                            <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 10, fill: CP.ink3 }} tickFormatter={v => `${v}%`} />
+                            <Tooltip contentStyle={ttStyle} itemStyle={{ color: CP.ink }} labelStyle={{ color: CP.ink, fontWeight: 700 }} formatter={(v, name) => name === '% of Repeaters' ? [`${v}%`, name] : [fmtN(v), name]} />
+                            <Legend wrapperStyle={{ fontSize: 10 }} />
+                            <Bar yAxisId="left" dataKey="customers" fill={CP.yellow} name="Customers" radius={[3,3,0,0]} maxBarSize={40} />
+                            <Line yAxisId="right" type="monotone" dataKey="pct" stroke={CP.line} strokeWidth={2} dot={{ r: 3, fill: CP.line }} name="% of Repeaters" />
+                          </BarChart>
+                        </ResponsiveContainer>
+                      </div>
+                    )
+                  })() : <CpBackendTodo field="daysToSecondPurchase" />}
+                </CpCard>
 
-              <CpCard title="AOV by Order Number">
-                {custData.aovByOrderNumber
-                  ? (
-                    <ResponsiveContainer width="100%" height={200}>
-                      <BarChart data={custData.aovByOrderNumber} margin={{ top: 4, right: 16, bottom: 4, left: 0 }}>
-                        <CartesianGrid stroke={CP.lineSoft} />
-                        <XAxis dataKey="orderNum" tick={{ fontSize: 10, fill: CP.ink3 }} />
-                        <YAxis tick={{ fontSize: 10, fill: CP.ink3 }} />
-                        <Tooltip contentStyle={ttStyle} />
-                        <Bar dataKey="aov" fill={CP.yellowDeep} name="AOV" />
-                      </BarChart>
-                    </ResponsiveContainer>
-                  )
-                  : <CpBackendTodo field="aovByOrderNumber" />
-                }
-              </CpCard>
+                <CpCard title="AOV by Order Number" sub="Does AOV grow as customers become loyal?">
+                  {custData.aovByOrderNumber?.length > 0 ? (() => {
+                    const first = custData.aovByOrderNumber.find(r => r.orderLabel === '1st')
+                    const last  = custData.aovByOrderNumber[custData.aovByOrderNumber.length - 1]
+                    const growth = first && last && first.aov > 0 ? ((last.aov - first.aov) / first.aov * 100).toFixed(1) : null
+                    return (
+                      <div>
+                        {growth !== null && <div style={{ fontSize: 11, color: CP.ink3, marginBottom: 10, fontStyle: 'italic' }}>
+                          AOV {parseFloat(growth) >= 0 ? 'grows' : 'drops'} {Math.abs(growth)}% from 1st to {last.orderLabel} order — {parseFloat(growth) >= 0 ? 'loyal customers spend more' : 'newer customers drive higher initial AOV'}
+                        </div>}
+                        <ResponsiveContainer width="100%" height={200}>
+                          <ComposedChart data={custData.aovByOrderNumber} margin={{ top: 4, right: 16, bottom: 4, left: 0 }}>
+                            <CartesianGrid stroke={CP.lineSoft} />
+                            <XAxis dataKey="orderLabel" tick={{ fontSize: 10, fill: CP.ink3 }} />
+                            <YAxis yAxisId="aov" tick={{ fontSize: 10, fill: CP.ink3 }} tickFormatter={v => fmt(v)} />
+                            <YAxis yAxisId="cust" orientation="right" tick={{ fontSize: 10, fill: CP.ink3 }} tickFormatter={v => fmtN(v)} />
+                            <Tooltip contentStyle={ttStyle} itemStyle={{ color: CP.ink }} labelStyle={{ color: CP.ink, fontWeight: 700 }} formatter={(v, name) => name === 'Customers' ? [fmtN(v), name] : [fmt(v), name]} />
+                            <Legend wrapperStyle={{ fontSize: 10 }} />
+                            <Bar yAxisId="aov" dataKey="aov" fill={CP.yellowDeep} name="AOV (ex GST)" radius={[3,3,0,0]} maxBarSize={40} />
+                            <Line yAxisId="cust" type="monotone" dataKey="customers" stroke={CP.line} strokeWidth={2} dot={{ r: 3, fill: CP.line }} name="Customers" strokeDasharray="4 3" />
+                          </ComposedChart>
+                        </ResponsiveContainer>
+                      </div>
+                    )
+                  })() : <CpBackendTodo field="aovByOrderNumber" />}
+                </CpCard>
+              </div>
             </div>
           )
         })()}
@@ -11301,7 +11326,7 @@ function CustomerPage({ filters }) {
           const hibSeg = rfm.find(r => r.segment === 'Hibernating')
 
           return (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 16, paddingTop: 16, paddingLeft: 16, paddingRight: 16, paddingBottom: 24 }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 16, paddingTop: 16, paddingLeft: 16, paddingRight: 16, paddingBottom: 24, width: '100%', boxSizing: 'border-box' }}>
 
               {/* 1. Insight banner */}
               <div style={{ background: RS.amberSoft, border: `1px solid ${RS.amberLine}`, borderRadius: 10, padding: '10px 16px', display: 'flex', alignItems: 'center', gap: 10 }}>

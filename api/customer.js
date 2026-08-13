@@ -24,7 +24,7 @@ export default async function handler(req, res) {
     const ps = new Date(ms - dur - 86400000).toISOString().slice(0, 10)
     const pe = new Date(ms - 86400000).toISOString().slice(0, 10)
 
-    const [kpis, monthly, cohort, crossSell, rfm, freqDist, monetaryDist, inactivity, discountDist, adsKpis, dailySpend, prevKpis, prevAdsKpis, discountRepeatRate] = await Promise.all([
+    const [kpis, monthly, cohort, crossSell, rfm, freqDist, monetaryDist, inactivity, discountDist, adsKpis, dailySpend, prevKpis, prevAdsKpis, discountRepeatRate, daysToSecondPurchase, aovByOrderNumber] = await Promise.all([
 
       // Q1 — KPIs for the selected period (Shopify only)
       run(`WITH first_dates AS (
@@ -140,7 +140,7 @@ SELECT FORMAT_DATE('%Y-%m', cohort_month) AS cohort_month, cohort_index, custome
 FROM cohort_data
 ORDER BY cohort_month, cohort_index`),
 
-      // Q4 — first vs second purchase (order-level, with item master category/subcat lookup)
+      // Q4 — first vs second purchase cross-sell (revenue-weighted category per order)
       run(`WITH
 item_master AS (
   SELECT DISTINCT TRIM(Product_Code) AS sku, Category_Name, Sub_category
@@ -152,26 +152,33 @@ pid_map AS (
   FROM \`frido-429506.sharepoint_to_gcp.Frido_Item_Master__productid_sku_mapping\`
   WHERE productid IS NOT NULL AND masterskucode IS NOT NULL
 ),
--- Rank at ORDER level (not item level) — use MIN(OrderDate) per order to deduplicate
-order_ranked AS (
+order_items AS (
   SELECT
-    CustomerId,
-    OrderId,
+    CustomerId, OrderId,
     MIN(OrderDate) AS order_date,
-    -- pick one ProductId per order (any_value) then resolve SKU via pid_map
-    ANY_VALUE(ProductId) AS product_id,
-    ANY_VALUE(masterskucode) AS direct_sku
-  FROM ${TBL}
-  WHERE Channel = 'Shopify' AND CustomerId IS NOT NULL
-  GROUP BY CustomerId, OrderId
+    COALESCE(pm.masterskucode, CAST(t.masterskucode AS STRING)) AS masterskucode,
+    SUM(t.SellingPrice_Exc_GST) AS item_rev
+  FROM ${TBL} t
+  LEFT JOIN pid_map pm ON TRIM(CAST(t.ProductId AS STRING)) = pm.productid
+  WHERE t.Channel = 'Shopify' AND t.CustomerId IS NOT NULL
+  GROUP BY CustomerId, OrderId, COALESCE(pm.masterskucode, CAST(t.masterskucode AS STRING))
+),
+order_top_item AS (
+  -- pick the highest-revenue SKU per order to represent the order's category
+  SELECT CustomerId, OrderId, MIN(order_date) AS order_date, masterskucode
+  FROM (
+    SELECT *, ROW_NUMBER() OVER (PARTITION BY CustomerId, OrderId ORDER BY item_rev DESC, masterskucode) AS rn
+    FROM order_items
+  ) sub
+  WHERE rn = 1
+  GROUP BY CustomerId, OrderId, masterskucode
 ),
 order_with_rank AS (
   SELECT
     o.CustomerId, o.OrderId, o.order_date,
     ROW_NUMBER() OVER (PARTITION BY o.CustomerId ORDER BY o.order_date, o.OrderId) AS rn,
-    COALESCE(pm.masterskucode, o.direct_sku) AS masterskucode
-  FROM order_ranked o
-  LEFT JOIN pid_map pm ON TRIM(CAST(o.product_id AS STRING)) = pm.productid
+    o.masterskucode
+  FROM order_top_item o
 ),
 fp AS (
   SELECT r.CustomerId, im.Category_Name AS first_category, im.Sub_category AS first_sub_category
@@ -427,6 +434,78 @@ SELECT
 FROM bucketed
 GROUP BY discount_bucket
 ORDER BY sort_order`),
+
+      // Q15 — days between 1st and 2nd purchase (all-time, not date-filtered)
+      run(`WITH
+orders AS (
+  SELECT CustomerId, OrderId, MIN(DATE(OrderDate)) AS order_date
+  FROM ${TBL}
+  WHERE Channel = 'Shopify' AND CustomerId IS NOT NULL
+  GROUP BY CustomerId, OrderId
+),
+ranked AS (
+  SELECT CustomerId, order_date,
+    ROW_NUMBER() OVER (PARTITION BY CustomerId ORDER BY order_date, OrderId) AS rn
+  FROM orders
+),
+gaps AS (
+  SELECT
+    o1.CustomerId,
+    DATE_DIFF(o2.order_date, o1.order_date, DAY) AS days_to_second
+  FROM ranked o1
+  JOIN ranked o2 ON o1.CustomerId = o2.CustomerId AND o2.rn = 2
+  WHERE o1.rn = 1 AND DATE_DIFF(o2.order_date, o1.order_date, DAY) >= 0
+),
+bucketed AS (
+  SELECT CustomerId,
+    CASE
+      WHEN days_to_second <= 7   THEN '0-7d'
+      WHEN days_to_second <= 30  THEN '8-30d'
+      WHEN days_to_second <= 60  THEN '31-60d'
+      WHEN days_to_second <= 90  THEN '61-90d'
+      WHEN days_to_second <= 180 THEN '91-180d'
+      ELSE '180d+'
+    END AS bucket,
+    days_to_second
+  FROM gaps
+)
+SELECT
+  bucket,
+  COUNT(DISTINCT CustomerId) AS customers,
+  CASE bucket WHEN '0-7d' THEN 0 WHEN '8-30d' THEN 1 WHEN '31-60d' THEN 2 WHEN '61-90d' THEN 3 WHEN '91-180d' THEN 4 ELSE 5 END AS sort_order
+FROM bucketed
+GROUP BY bucket
+ORDER BY sort_order`),
+
+      // Q16 — AOV by order number (1st through 6th+), revenue-weighted, all-time
+      run(`WITH
+order_totals AS (
+  SELECT CustomerId, OrderId, MIN(DATE(OrderDate)) AS order_date,
+    SUM(SellingPrice_Exc_GST) AS order_rev
+  FROM ${TBL}
+  WHERE Channel = 'Shopify' AND CustomerId IS NOT NULL
+  GROUP BY CustomerId, OrderId
+),
+ranked AS (
+  SELECT CustomerId, OrderId, order_rev,
+    ROW_NUMBER() OVER (PARTITION BY CustomerId ORDER BY order_date, OrderId) AS order_num
+  FROM order_totals
+),
+capped AS (
+  SELECT
+    CASE WHEN order_num >= 6 THEN '6th+' ELSE CONCAT(CAST(order_num AS STRING), CASE order_num WHEN 1 THEN 'st' WHEN 2 THEN 'nd' WHEN 3 THEN 'rd' ELSE 'th' END) END AS order_label,
+    CASE WHEN order_num >= 6 THEN 6 ELSE order_num END AS order_sort,
+    order_rev
+  FROM ranked
+)
+SELECT
+  order_label,
+  order_sort,
+  ROUND(AVG(order_rev), 0) AS aov,
+  COUNT(*) AS customers
+FROM capped
+GROUP BY order_label, order_sort
+ORDER BY order_sort`),
     ])
 
     // Fetch additional (offline) spend from Postgres for the selected date range
@@ -671,6 +750,15 @@ LIMIT 50`)
         totalCustomers: parseInt(r.total_customers) || 0,
         repeatCustomers: parseInt(r.repeat_customers) || 0,
         repeatRate: parseFloat(r.repeat_rate) || 0,
+      })),
+      daysToSecondPurchase: daysToSecondPurchase.map(r => ({
+        bucket: r.bucket,
+        customers: parseInt(r.customers) || 0,
+      })),
+      aovByOrderNumber: aovByOrderNumber.map(r => ({
+        orderLabel: r.order_label,
+        aov: parseFloat(r.aov) || 0,
+        customers: parseInt(r.customers) || 0,
       })),
     })
   } catch (err) {
