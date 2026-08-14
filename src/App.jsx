@@ -1816,7 +1816,7 @@ function Sidebar({ page, setPage, invTab, setInvTab, allowedTabs, profile }) {
           const subTabs = [
             { id: 'health', label: 'Inventory Health' },
             { id: 'sales', label: 'Sales & Allocation' },
-            { id: 'inward', label: 'Inward' },
+            // { id: 'inward', label: 'Inward' },
           ]
           return (
             <div key="inventory" style={{ position: 'relative' }}
