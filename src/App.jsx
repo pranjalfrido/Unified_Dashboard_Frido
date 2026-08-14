@@ -12193,13 +12193,14 @@ function CustomerPage({ filters }) {
                   const totalDiscOrders = discountedBuckets.reduce((s, r) => s + (r.totalOrders || 0), 0)
                   const totalDiscValue = discountedBuckets.reduce((s, r) => s + (r.totalOrders || 0) * (r.aovExc || 0) * ((r.avgDiscPct || 0) / 100), 0)
                   const discValuePerOrder = totalDiscOrders > 0 ? totalDiscValue / totalDiscOrders : null
+                  const avgDiscPctOverall = totalDiscOrders > 0 ? discountedBuckets.reduce((s, r) => s + (r.avgDiscPct || 0) * (r.totalOrders || 0), 0) / totalDiscOrders : null
                   return [
                     { label: 'Total Spend', value: fmt(kpis.totalSpend || 0), sub: `Meta ${fmt(kpis.metaSpend || 0)} · Google ${fmt(kpis.googleSpend || 0)}${kpis.additionalSpend > 0 ? ` · Add. ${fmt(kpis.additionalSpend)}` : ''}` },
                     { label: 'Blended RoAS', value: `${blendedRoAS.toFixed(2)}×`, sub: 'Gross Rev (ex GST) / Spend' },
                     { label: 'Blended CAC', value: fmt(blendedCAC), sub: 'Total Spend / New Customers' },
                     { label: 'Payback Period', value: paybackMonths != null ? `${paybackMonths.toFixed(1)} mo` : '—', sub: 'CAC ÷ Monthly Rev per Customer' },
                     { label: 'Discounted Order Share', value: totalAllOrders > 0 ? `${(totalFirstOrders / totalAllOrders * 100).toFixed(1)}%` : '—', sub: totalAllOrders > 0 ? `${fmtN(totalFirstOrders)} of ${fmtN(totalAllOrders)} orders` : 'No data' },
-                    { label: 'Avg Discount / Order', value: discValuePerOrder != null ? fmt(discValuePerOrder) : '—', sub: 'Avg ₹ discount on discounted orders' },
+                    { label: 'Avg Discount / Order', value: discValuePerOrder != null ? fmt(discValuePerOrder) : '—', sub: avgDiscPctOverall != null ? `${avgDiscPctOverall.toFixed(1)}% avg discount on discounted orders` : 'Avg ₹ discount on discounted orders' },
                   ]
                 })().map((k, i) => (
                   <div key={i} style={{ background: SD.card, borderRadius: 12, padding: '12px 14px', border: `1px solid ${SD.border}` }}>
@@ -12329,19 +12330,17 @@ function CustomerPage({ filters }) {
                                     <div style={{ fontSize: 10, color: SD.t3, fontFamily: 'Inter, sans-serif' }}>{totalAllOrders > 0 ? (g.orders / totalAllOrders * 100).toFixed(1) : 0}% of orders</div>
                                   </div>
                                 </div>
-                                <div style={{ display: 'flex', gap: 12, textAlign: 'right' }}>
-                                  <div>
+                                <div style={{ display: 'flex', gap: 0, textAlign: 'right' }}>
+                                  <div style={{ width: 100 }}>
                                     <div style={{ fontSize: 10, color: SD.t3, fontFamily: 'Inter, sans-serif' }}>Avg AOV</div>
                                     <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 13, fontWeight: 700, color: SD.t1 }}>₹{Math.round(g.aov).toLocaleString('en-IN')}</div>
                                     <div style={{ fontSize: 10, color: SD.t3, fontFamily: 'Inter, sans-serif' }}>{totalRevAllBuckets > 0 ? (g.rev / totalRevAllBuckets * 100).toFixed(1) : 0}% of rev</div>
                                   </div>
-                                  {g.repeatData && (
-                                    <div style={{ borderLeft: `1px solid ${SD.borderSoft}`, paddingLeft: 12 }}>
-                                      <div style={{ fontSize: 10, color: SD.t3, fontFamily: 'Inter, sans-serif' }}>Repeat Rate</div>
-                                      <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 13, fontWeight: 700, color: SD.t1 }}>{g.repeatData.repeatRate}%</div>
-                                      <div style={{ fontSize: 10, color: SD.t3, fontFamily: 'Inter, sans-serif' }}>{fmtN(g.repeatData.repeatCustomers)} came back</div>
-                                    </div>
-                                  )}
+                                  <div style={{ width: 110, borderLeft: `1px solid ${SD.borderSoft}`, paddingLeft: 12 }}>
+                                    <div style={{ fontSize: 10, color: SD.t3, fontFamily: 'Inter, sans-serif' }}>Repeat Rate</div>
+                                    <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 13, fontWeight: 700, color: SD.t1 }}>{g.repeatData ? `${g.repeatData.repeatRate}%` : '—'}</div>
+                                    <div style={{ fontSize: 10, color: SD.t3, fontFamily: 'Inter, sans-serif' }}>{g.repeatData ? `${fmtN(g.repeatData.repeatCustomers)} came back` : ''}</div>
+                                  </div>
                                 </div>
                               </div>
                             </div>
