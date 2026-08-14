@@ -12052,6 +12052,11 @@ function CustomerPage({ filters }) {
             { name: 'Non-Discounted', value: totalNonDiscountedOrders },
           ]
 
+          const discountedRev    = discountDist.filter(r => r.bucket !== '0% (Full Price)' && r.bucket !== 'No Price Data').reduce((s, r) => s + (r.totalOrders || 0) * (r.aovExc || 0), 0)
+          const nonDiscountedRev = discountDist.filter(r => r.bucket === '0% (Full Price)' || r.bucket === 'No Price Data').reduce((s, r) => s + (r.totalOrders || 0) * (r.aovExc || 0), 0)
+          const discountedAov    = totalDiscountedOrders > 0 ? discountedRev / totalDiscountedOrders : 0
+          const nonDiscountedAov = totalNonDiscountedOrders > 0 ? nonDiscountedRev / totalNonDiscountedOrders : 0
+
           const cardStyle = { background: SD.card, borderRadius: 12, border: `1px solid ${SD.border}`, overflow: 'hidden', boxShadow: '0 1px 2px rgba(80,65,20,.04)' }
           const cardHead  = { background: SD.amberSoft, borderBottom: `1px solid ${SD.amberLine}`, padding: '9px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }
           const cardTitle = { fontSize: 11, fontWeight: 800, color: SD.t1, textTransform: 'uppercase', letterSpacing: '.07em', fontFamily: 'Inter, sans-serif' }
@@ -12161,42 +12166,72 @@ function CustomerPage({ filters }) {
                   </div>
                 </div>
 
-                {/* Bug 2 fixed: pie uses correct summed fields */}
+                {/* Discounted vs Non-Discounted — redesigned */}
                 <div style={cardStyle}>
-                  <div style={cardHead}><span style={cardTitle}>Discounted vs Non-Discounted Orders</span></div>
-                  <div style={cardBody}>
+                  <div style={cardHead}>
+                    <div>
+                      <span style={cardTitle}>Discounted vs Non-Discounted Orders</span>
+                      <div style={{ fontSize: 10, color: SD.t3, fontFamily: 'Inter, sans-serif', marginTop: 2 }}>Order volume and basket size, this period</div>
+                    </div>
+                  </div>
+                  <div style={{ padding: '12px 16px 0' }}>
                     {totalAllOrders > 0 ? (
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-                        <ResponsiveContainer width="55%" height={200}>
-                          <PieChart>
-                            <Pie data={pieData} dataKey="value" nameKey="name" cx="50%" cy="50%" innerRadius={55} outerRadius={80} paddingAngle={2}>
-                              <Cell fill={SD.amberDeep} />
-                              <Cell fill={SD.borderSoft} />
-                            </Pie>
-                            <Tooltip contentStyle={{ background: '#fff', border: `1px solid ${SD.border}`, borderRadius: 7, fontSize: 11 }} formatter={(v, name) => [fmtN(v), name]} />
-                          </PieChart>
-                        </ResponsiveContainer>
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                          {pieData.map((d, i) => (
-                            <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                              <div style={{ width: 10, height: 10, borderRadius: 2, background: i === 0 ? SD.amberDeep : SD.borderSoft, flexShrink: 0 }} />
-                              <div>
-                                <div style={{ fontSize: 10, color: SD.t2, fontFamily: 'Inter, sans-serif' }}>{d.name}</div>
-                                <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 13, fontWeight: 700, color: SD.t1 }}>{fmtN(d.value)}</div>
-                                <div style={{ fontSize: 10, color: SD.t3, fontFamily: 'Inter, sans-serif' }}>{totalAllOrders > 0 ? (d.value / totalAllOrders * 100).toFixed(1) : 0}%</div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 20 }}>
+                        {/* Donut with center label */}
+                        <div style={{ position: 'relative', flexShrink: 0, width: 160, height: 160 }}>
+                          <ResponsiveContainer width={160} height={160}>
+                            <PieChart>
+                              <Pie data={pieData} dataKey="value" nameKey="name" cx="50%" cy="50%" innerRadius={50} outerRadius={72} paddingAngle={2}>
+                                <Cell fill="#C9A24F" />
+                                <Cell fill="#E4DAC0" />
+                              </Pie>
+                              <Tooltip contentStyle={{ background: '#fff', border: `1px solid ${SD.border}`, borderRadius: 7, fontSize: 11 }} formatter={(v, name) => [fmtN(v), name]} />
+                            </PieChart>
+                          </ResponsiveContainer>
+                          <div style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%,-50%)', textAlign: 'center', pointerEvents: 'none' }}>
+                            <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 13, fontWeight: 800, color: SD.t1, lineHeight: 1.2 }}>{fmtN(totalAllOrders)}</div>
+                            <div style={{ fontSize: 8, color: SD.t3, fontFamily: 'Inter, sans-serif', textTransform: 'uppercase', letterSpacing: '.05em' }}>total</div>
+                          </div>
+                        </div>
+                        {/* Stat rows */}
+                        <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
+                          {[
+                            { name: 'Discounted', color: '#C9A24F', orders: totalDiscountedOrders, rev: discountedRev, aov: discountedAov },
+                            { name: 'Non-Discounted', color: '#E4DAC0', orders: totalNonDiscountedOrders, rev: nonDiscountedRev, aov: nonDiscountedAov },
+                          ].map((g, i) => (
+                            <div key={i}>
+                              {i > 0 && <div style={{ borderTop: `1px solid ${SD.borderSoft}`, margin: '10px 0' }} />}
+                              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                                <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8 }}>
+                                  <div style={{ width: 10, height: 10, borderRadius: 2, background: g.color, flexShrink: 0, marginTop: 3 }} />
+                                  <div>
+                                    <div style={{ fontSize: 10, color: SD.t2, fontFamily: 'Inter, sans-serif' }}>{g.name}</div>
+                                    <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 15, fontWeight: 700, color: SD.t1 }}>{fmtN(g.orders)}</div>
+                                    <div style={{ fontSize: 10, color: SD.t3, fontFamily: 'Inter, sans-serif' }}>{totalAllOrders > 0 ? (g.orders / totalAllOrders * 100).toFixed(1) : 0}% of orders</div>
+                                  </div>
+                                </div>
+                                <div style={{ textAlign: 'right' }}>
+                                  <div style={{ fontSize: 10, color: SD.t3, fontFamily: 'Inter, sans-serif' }}>Avg AOV</div>
+                                  <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 15, fontWeight: 700, color: SD.t1 }}>₹{Math.round(g.aov).toLocaleString('en-IN')}</div>
+                                  <div style={{ fontSize: 10, color: SD.t3, fontFamily: 'Inter, sans-serif' }}>{totalRevAllBuckets > 0 ? (g.rev / totalRevAllBuckets * 100).toFixed(1) : 0}% of rev</div>
+                                </div>
                               </div>
                             </div>
                           ))}
-                          <div style={{ borderTop: `1px solid ${SD.borderSoft}`, paddingTop: 8 }}>
-                            <div style={{ fontSize: 9, color: SD.t3, fontFamily: 'Inter, sans-serif', textTransform: 'uppercase', letterSpacing: '.06em' }}>Total Orders</div>
-                            <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 13, fontWeight: 800, color: SD.t1 }}>{fmtN(totalAllOrders)}</div>
-                          </div>
                         </div>
                       </div>
                     ) : (
                       <div style={{ color: SD.t3, fontSize: 12, padding: 12, textAlign: 'center' }}>No data.</div>
                     )}
                   </div>
+                  {/* Footer */}
+                  {totalAllOrders > 0 && (
+                    <div style={{ margin: '12px 16px 0', borderTop: `1px solid ${SD.borderSoft}`, padding: '8px 0 14px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <div style={{ fontSize: 10, color: SD.t1, fontFamily: 'Inter, sans-serif', textTransform: 'uppercase', letterSpacing: '.06em' }}>Total Orders Analyzed</div>
+                      <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 13, fontWeight: 800, color: SD.t1 }}>{fmtN(totalAllOrders)}</div>
+                    </div>
+                  )}
+                  <div style={{ height: 2 }} />
                 </div>
               </div>
 
