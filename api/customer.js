@@ -130,7 +130,8 @@ cohort_data AS (
     ROUND(SUM(a.revenue), 0) AS revenue
   FROM first_orders f
   JOIN all_orders a USING (CustomerId)
-  WHERE f.cohort_month <= DATE_TRUNC(DATE('${e}'), MONTH)
+  WHERE f.cohort_month >= '2024-01-01'
+    AND f.cohort_month <= DATE_TRUNC(DATE('${e}'), MONTH)
     AND DATE_DIFF(a.order_month, f.cohort_month, MONTH) BETWEEN 0 AND 54
   GROUP BY cohort_month, cohort_index
 )
@@ -292,7 +293,7 @@ FROM last_purchase
 GROUP BY bucket
 ORDER BY MIN(DATE_DIFF(DATE('${e}'), last_date, DAY))`),
 
-      // Q9 — discount distribution by voucher usage (Shopify only)
+      // Q9 — discount distribution using actual Listing_Price & Discount columns (Shopify only)
       run(`WITH
 first_dates AS (
   SELECT CustomerId, MIN(DATE(OrderDate)) AS first_date
@@ -305,7 +306,8 @@ order_agg AS (
     o.OrderId, o.CustomerId,
     ANY_VALUE(f.first_date) AS first_date,
     SUM(o.SellingPrice_Exc_GST) AS order_rev_exc,
-    MAX(CASE WHEN o.voucher_code IS NOT NULL AND TRIM(o.voucher_code) != '' THEN 1 ELSE 0 END) AS has_voucher
+    SUM(o.Listing_Price) AS total_listing,
+    SUM(o.Discount) AS total_discount
   FROM ${TBL} o
   JOIN first_dates f USING (CustomerId)
   WHERE o.Channel = 'Shopify'
@@ -316,10 +318,26 @@ order_agg AS (
 bucketed AS (
   SELECT
     OrderId, CustomerId, order_rev_exc,
-    CASE WHEN has_voucher = 1 THEN 'Discounted' ELSE '0% (Full Price)' END AS discount_bucket,
-    CASE WHEN has_voucher = 1 THEN 1 ELSE 0 END AS sort_order,
+    CASE
+      WHEN total_listing IS NULL OR total_listing = 0 THEN 'No Price Data'
+      WHEN total_discount IS NULL OR total_discount = 0 THEN '0% (Full Price)'
+      WHEN SAFE_DIVIDE(total_discount, total_listing) <= 0.10 THEN '1–10%'
+      WHEN SAFE_DIVIDE(total_discount, total_listing) <= 0.20 THEN '11–20%'
+      WHEN SAFE_DIVIDE(total_discount, total_listing) <= 0.30 THEN '21–30%'
+      WHEN SAFE_DIVIDE(total_discount, total_listing) <= 0.40 THEN '31–40%'
+      ELSE '40%+'
+    END AS discount_bucket,
+    CASE
+      WHEN total_listing IS NULL OR total_listing = 0 THEN 6
+      WHEN total_discount IS NULL OR total_discount = 0 THEN 0
+      WHEN SAFE_DIVIDE(total_discount, total_listing) <= 0.10 THEN 1
+      WHEN SAFE_DIVIDE(total_discount, total_listing) <= 0.20 THEN 2
+      WHEN SAFE_DIVIDE(total_discount, total_listing) <= 0.30 THEN 3
+      WHEN SAFE_DIVIDE(total_discount, total_listing) <= 0.40 THEN 4
+      ELSE 5
+    END AS sort_order,
     CASE WHEN first_date BETWEEN DATE('${s}') AND DATE('${e}') THEN 'new' ELSE 'repeat' END AS customer_type,
-    NULL AS disc_pct
+    ROUND(SAFE_DIVIDE(total_discount, total_listing) * 100, 1) AS disc_pct
   FROM order_agg
 )
 SELECT
@@ -330,7 +348,7 @@ SELECT
   COUNTIF(customer_type = 'repeat') AS repeat_orders,
   ROUND(SAFE_DIVIDE(SUM(order_rev_exc), COUNT(DISTINCT OrderId)), 0) AS aov_exc,
   COUNT(DISTINCT CustomerId) AS unique_customers,
-  NULL AS avg_disc_pct
+  ROUND(AVG(disc_pct), 1) AS avg_disc_pct
 FROM bucketed
 GROUP BY discount_bucket, sort_order
 ORDER BY sort_order`),
@@ -390,30 +408,45 @@ FROM \`frido-429506.production.fact_all_platform_ads_report\`
 WHERE report_date BETWEEN '${ps}' AND '${pe}' AND platform IN ('Meta', 'Google')
 GROUP BY platform`),
 
-      // Q14 — discount depth vs repeat rate by voucher usage (all-time, Shopify only)
-      // For each bucket (had voucher on first order vs not): what % ever repurchased?
+      // Q14 — discount depth vs repeat rate using actual Listing_Price & Discount columns (all-time, Shopify only)
+      // For each discount % bucket: of customers whose FIRST-EVER order fell in that bucket,
+      // what % went on to place a second order (ever)?
       run(`WITH
 order_agg AS (
   SELECT CustomerId, OrderId, MIN(DATE(OrderDate)) AS order_date,
-    MAX(CASE WHEN voucher_code IS NOT NULL AND TRIM(voucher_code) != '' THEN 1 ELSE 0 END) AS has_voucher
+    SAFE_DIVIDE(SUM(Discount), NULLIF(SUM(Listing_Price), 0)) AS disc_ratio
   FROM ${TBL}
   WHERE Channel = 'Shopify' AND CustomerId IS NOT NULL
   GROUP BY CustomerId, OrderId
 ),
 ranked AS (
-  SELECT CustomerId, OrderId, order_date, has_voucher,
+  SELECT CustomerId, OrderId, order_date, disc_ratio,
     ROW_NUMBER() OVER (PARTITION BY CustomerId ORDER BY order_date, OrderId) AS rn,
     COUNT(DISTINCT OrderId) OVER (PARTITION BY CustomerId) AS total_orders
   FROM order_agg
 ),
 first_orders AS (
-  SELECT CustomerId, has_voucher, total_orders
+  SELECT CustomerId, disc_ratio, total_orders
   FROM ranked WHERE rn = 1
 ),
 bucketed AS (
   SELECT CustomerId, total_orders,
-    CASE WHEN has_voucher = 1 THEN 'Discounted (Voucher)' ELSE '0% (Full Price)' END AS discount_bucket,
-    CASE WHEN has_voucher = 1 THEN 1 ELSE 0 END AS sort_order
+    CASE
+      WHEN disc_ratio IS NULL OR disc_ratio = 0 THEN '0% (Full Price)'
+      WHEN disc_ratio <= 0.10 THEN '1–10%'
+      WHEN disc_ratio <= 0.20 THEN '11–20%'
+      WHEN disc_ratio <= 0.30 THEN '21–30%'
+      WHEN disc_ratio <= 0.40 THEN '31–40%'
+      ELSE '40%+'
+    END AS discount_bucket,
+    CASE
+      WHEN disc_ratio IS NULL OR disc_ratio = 0 THEN 0
+      WHEN disc_ratio <= 0.10 THEN 1
+      WHEN disc_ratio <= 0.20 THEN 2
+      WHEN disc_ratio <= 0.30 THEN 3
+      WHEN disc_ratio <= 0.40 THEN 4
+      ELSE 5
+    END AS sort_order
   FROM first_orders
 )
 SELECT

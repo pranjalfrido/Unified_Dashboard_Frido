@@ -10275,7 +10275,7 @@ function CustomerPage({ filters }) {
                             <YAxis yAxisId="rev" tick={{ fontSize: 10, fill: '#B8AE93' }} tickFormatter={v => fmtBig(v)} />
                             <YAxis yAxisId="roas" orientation="right" tick={{ fontSize: 10, fill: '#B8AE93' }} tickFormatter={v => `${v}×`} />
                             <Tooltip contentStyle={ttStyle} itemStyle={{ color: '#3A3324' }} labelStyle={{ color: '#3A3324', fontWeight: 700 }} formatter={(v, name) => name === 'RoAS' ? [`${v}×`, name] : name === 'CAC' ? [fmt(v), name] : [fmt(v), name]} />
-                            <Legend wrapperStyle={{ fontSize: 10, fontFamily: 'Inter, sans-serif' }} />
+                            <Legend wrapperStyle={{ fontSize: 10, fontFamily: 'Inter, sans-serif' }} formatter={v => <span style={{ color: '#13121A' }}>{v}</span>} />
                             <Bar yAxisId="rev" dataKey="grossExcGst" name="Gross Sales (ex GST)" fill="#E8C578" maxBarSize={32} radius={[3,3,0,0]} />
                             <Bar yAxisId="rev" dataKey="netRevenue"   name="Net Revenue"          fill="#C9A24F" maxBarSize={32} radius={[3,3,0,0]} />
                             <Bar yAxisId="rev" dataKey="spend"        name="Ad Spend"             fill="#4A7CC7" maxBarSize={32} radius={[3,3,0,0]} opacity={0.7} />
@@ -10288,7 +10288,7 @@ function CustomerPage({ filters }) {
                             <YAxis yAxisId="cust" tick={{ fontSize: 10, fill: '#B8AE93' }} tickFormatter={v => fmtN(v)} />
                             <YAxis yAxisId="cac" orientation="right" tick={{ fontSize: 10, fill: '#B8AE93' }} tickFormatter={v => fmt(v)} />
                             <Tooltip contentStyle={ttStyle} itemStyle={{ color: '#3A3324' }} labelStyle={{ color: '#3A3324', fontWeight: 700 }} formatter={(v, name) => name === 'CAC' ? [fmt(v), name] : [fmtN(v), name]} />
-                            <Legend wrapperStyle={{ fontSize: 10, fontFamily: 'Inter, sans-serif' }} />
+                            <Legend wrapperStyle={{ fontSize: 10, fontFamily: 'Inter, sans-serif' }} formatter={v => <span style={{ color: '#13121A' }}>{v}</span>} />
                             <Bar yAxisId="cust" dataKey="newCustomers"    name="New Customers"    fill="#E8C578" maxBarSize={32} radius={[3,3,0,0]} />
                             <Bar yAxisId="cust" dataKey="repeatCustomers" name="Repeat Customers" fill="#C9A24F" maxBarSize={32} radius={[3,3,0,0]} />
                             <Line yAxisId="cac" type="monotone" dataKey="cac" name="CAC" stroke="#9E9484" strokeWidth={2} dot={false} />
@@ -10300,7 +10300,7 @@ function CustomerPage({ filters }) {
                             <YAxis yAxisId="aov" tick={{ fontSize: 10, fill: '#B8AE93' }} tickFormatter={v => fmt(v)} />
                             <YAxis yAxisId="rr" orientation="right" tick={{ fontSize: 10, fill: '#B8AE93' }} tickFormatter={v => `${v.toFixed(1)}×`} />
                             <Tooltip contentStyle={ttStyle} itemStyle={{ color: '#3A3324' }} labelStyle={{ color: '#3A3324', fontWeight: 700 }} formatter={(v, name) => name === 'RoAS' ? [`${v.toFixed(2)}×`, name] : [fmt(v), name]} />
-                            <Legend wrapperStyle={{ fontSize: 10, fontFamily: 'Inter, sans-serif' }} />
+                            <Legend wrapperStyle={{ fontSize: 10, fontFamily: 'Inter, sans-serif' }} formatter={v => <span style={{ color: '#13121A' }}>{v}</span>} />
                             <Bar yAxisId="aov" dataKey="aov" name="AOV (ex GST)" fill="#E8C578" maxBarSize={32} radius={[3,3,0,0]} />
                             <Line yAxisId="rr" type="monotone" dataKey="roas" name="RoAS" stroke="#C9A24F" strokeWidth={2} dot={false} />
                             <Line yAxisId="aov" type="monotone" dataKey="cac" name="CAC" stroke="#9E9484" strokeWidth={2} dot={false} strokeDasharray="4 3" />
@@ -10506,11 +10506,18 @@ function CustomerPage({ filters }) {
             dowMap[dow].orders += r.totalOrders || 0
             dowMap[dow].cnt++
           })
-          const dowData = [1,2,3,4,5,6,0].map(i => ({
+          const dowRaw = [1,2,3,4,5,6,0].map(i => ({
             day: dowMap[i].day,
             avg: dowMap[i].cnt > 0 ? Math.round(dowMap[i].nc / dowMap[i].cnt) : 0,
             avgRev: dowMap[i].cnt > 0 ? Math.round(dowMap[i].rev / dowMap[i].cnt) : 0,
             avgOrders: dowMap[i].cnt > 0 ? Math.round(dowMap[i].orders / dowMap[i].cnt) : 0,
+          }))
+          const dowTotals = { avg: dowRaw.reduce((s,d) => s+d.avg, 0), avgRev: dowRaw.reduce((s,d) => s+d.avgRev, 0), avgOrders: dowRaw.reduce((s,d) => s+d.avgOrders, 0) }
+          const dowData = dowRaw.map(d => ({
+            ...d,
+            pctCustomers: dowTotals.avg > 0 ? parseFloat((d.avg / dowTotals.avg * 100).toFixed(1)) : 0,
+            pctRev: dowTotals.avgRev > 0 ? parseFloat((d.avgRev / dowTotals.avgRev * 100).toFixed(1)) : 0,
+            pctOrders: dowTotals.avgOrders > 0 ? parseFloat((d.avgOrders / dowTotals.avgOrders * 100).toFixed(1)) : 0,
           }))
           const bestDow = dowData.reduce((a, b) => b.avg > a.avg ? b : a, dowData[0] || { day: '-', avg: 0 })
           const avgDowAll = dowData.reduce((s, d) => s + d.avg, 0) / (dowData.filter(d => d.avg > 0).length || 1)
@@ -10589,10 +10596,8 @@ function CustomerPage({ filters }) {
                       <YAxis yAxisId="cust" orientation="left" tick={{ fontSize: 9, fill: T.t3 }} tickFormatter={v => fmtBig(v)} />
                       <YAxis yAxisId="sales" orientation="right" tick={{ fontSize: 9, fill: T.t3 }} tickFormatter={v => fmtBig(v)} />
                       <Tooltip contentStyle={ttS} itemStyle={ttItemStyle} labelStyle={{ color: '#1a1a1a' }} />
-                      <Legend wrapperStyle={{ fontSize: 10 }} />
-                      <Bar yAxisId="cust" dataKey="customersAcquired" fill="#F5C518" maxBarSize={granularity==='daily'?14:granularity==='weekly'?24:40} name="Customers" radius={[3,3,0,0]}>
-                        <LabelList dataKey="customersAcquired" position="top" style={{ fontSize: 8, fill: '#3A3324', fontFamily: 'JetBrains Mono, monospace' }} formatter={v => v > 0 ? fmtBig(v) : ''} />
-                      </Bar>
+                      <Legend wrapperStyle={{ fontSize: 10 }} formatter={v => <span style={{ color: '#13121A' }}>{v}</span>} />
+                      <Bar yAxisId="cust" dataKey="customersAcquired" fill="#F5C518" maxBarSize={granularity==='daily'?14:granularity==='weekly'?24:40} name="Customers" radius={[3,3,0,0]} />
                       <Line yAxisId="sales" dataKey="grossSales" stroke="#8A8478" strokeWidth={2.5} dot={false} name="Gross Sales" />
                     </ComposedChart>
                   </ResponsiveContainer>
@@ -10611,11 +10616,9 @@ function CustomerPage({ filters }) {
                       <XAxis dataKey="label" tick={{ fontSize: 9, fill: T.t3 }} />
                       <YAxis tick={{ fontSize: 9, fill: T.t3 }} tickFormatter={v => fmtBig(v)} />
                       <Tooltip contentStyle={ttS} itemStyle={ttItemStyle} labelStyle={{ color: '#1a1a1a' }} />
-                      <Legend wrapperStyle={{ fontSize: 10 }} />
+                      <Legend wrapperStyle={{ fontSize: 10 }} formatter={v => <span style={{ color: '#13121A' }}>{v}</span>} />
                       <Bar dataKey={newKey} stackId="a" fill="#F5C518" name="New" radius={[0,0,0,0]} />
-                      <Bar dataKey={repKey} stackId="a" fill="#A8874A" name="Repeat" radius={[3,3,0,0]}>
-                        <LabelList dataKey={repKey} position="top" style={{ fontSize: 8, fill: '#3A3324', fontFamily: 'JetBrains Mono, monospace' }} formatter={v => v > 0 ? fmtBig(v) : ''} />
-                      </Bar>
+                      <Bar dataKey={repKey} stackId="a" fill="#A8874A" name="Repeat" radius={[3,3,0,0]} />
                     </BarChart>
                   </ResponsiveContainer>
                 </SCard>
@@ -10631,7 +10634,7 @@ function CustomerPage({ filters }) {
                       <YAxis yAxisId="cac" orientation="left" tick={{ fontSize: 9, fill: T.t3 }} tickFormatter={v => fmt(v)} />
                       <YAxis yAxisId="roas" orientation="right" tick={{ fontSize: 9, fill: T.t3 }} tickFormatter={v => `${v.toFixed(1)}×`} />
                       <Tooltip contentStyle={ttS} itemStyle={ttItemStyle} labelStyle={{ color: '#1a1a1a' }} />
-                      <Legend wrapperStyle={{ fontSize: 10 }} />
+                      <Legend wrapperStyle={{ fontSize: 10 }} formatter={v => <span style={{ color: '#13121A' }}>{v}</span>} />
                       <Bar yAxisId="cac" dataKey="cac" fill="#F5C518" maxBarSize={12} name="CAC (₹)" radius={[3,3,0,0]} />
                       <Line yAxisId="roas" dataKey="roas" stroke="#8A8478" strokeWidth={2.5} dot={false} name="RoAS" />
                     </ComposedChart>
@@ -10649,15 +10652,35 @@ function CustomerPage({ filters }) {
                   }
                 >
                   <ResponsiveContainer width="100%" height={220}>
-                    <BarChart data={dowData} margin={{ top: 4, right: 8, bottom: 4, left: 0 }}>
+                    <BarChart data={dowData} margin={{ top: 20, right: 8, bottom: 4, left: 0 }}>
                       <CartesianGrid stroke={T.borderSoft} />
                       <XAxis dataKey="day" tick={{ fontSize: 10, fill: T.t3 }} />
                       <YAxis tick={{ fontSize: 9, fill: T.t3 }} tickFormatter={v => dowMetric === 'revenue' ? fmtBig(v) : fmtBig(v)} />
                       <Tooltip contentStyle={ttS} itemStyle={ttItemStyle} labelStyle={{ color: '#1a1a1a' }}
-                        formatter={(v, name) => dowMetric === 'revenue' ? [fmt(v), name] : [fmtN(v), name]} />
+                        formatter={(v, name) => {
+                          if (name === '%') return null
+                          const pctKey = dowMetric === 'customers' ? 'pctCustomers' : dowMetric === 'revenue' ? 'pctRev' : 'pctOrders'
+                          return dowMetric === 'revenue' ? [fmt(v), name] : [fmtN(v), name]
+                        }}
+                        content={({ active, payload, label }) => {
+                          if (!active || !payload?.length) return null
+                          const d = payload[0]?.payload
+                          const pct = dowMetric === 'customers' ? d?.pctCustomers : dowMetric === 'revenue' ? d?.pctRev : d?.pctOrders
+                          const val = dowMetric === 'revenue' ? fmt(d?.avgRev) : dowMetric === 'customers' ? fmtN(d?.avg) : fmtN(d?.avgOrders)
+                          const metricName = dowMetric === 'customers' ? 'Avg New Customers' : dowMetric === 'revenue' ? 'Avg Gross Sales' : 'Avg Orders'
+                          return (
+                            <div style={{ ...ttS, padding: '8px 12px' }}>
+                              <div style={{ fontWeight: 700, color: '#1a1a1a', marginBottom: 4 }}>{label}</div>
+                              <div style={{ color: '#1a1a1a', fontSize: 12 }}>{metricName}: {val}</div>
+                              <div style={{ color: '#1a1a1a', fontSize: 12 }}>Share of week: {pct}%</div>
+                            </div>
+                          )
+                        }}
+                      />
                       <Bar dataKey={dowMetric === 'customers' ? 'avg' : dowMetric === 'revenue' ? 'avgRev' : 'avgOrders'}
                         name={dowMetric === 'customers' ? 'Avg New Customers' : dowMetric === 'revenue' ? 'Avg Gross Sales (Ex GST)' : 'Avg Orders'}
-                        radius={[4,4,0,0]} fill="#F5C518" />
+                        radius={[4,4,0,0]} fill="#F5C518">
+                      </Bar>
                     </BarChart>
                   </ResponsiveContainer>
                 </SCard>
@@ -10673,14 +10696,14 @@ function CustomerPage({ filters }) {
               <SCard title="Spend vs Sales vs RoAS" sub="Ad spend (bars) · Gross Sales (black line) · RoAS (amber line)"
                 action={granPills}>
                 <ResponsiveContainer width="100%" height={240}>
-                  <ComposedChart data={sd} margin={{ top: 18, right: 48, bottom: 4, left: 0 }}>
+                  <ComposedChart data={sd} margin={{ top: 18, right: 8, bottom: 4, left: 0 }}>
                     <CartesianGrid stroke={T.borderSoft} />
                     <XAxis dataKey="date" tick={{ fontSize: 9, fill: T.t3 }} />
                     <YAxis yAxisId="spend" orientation="left" tick={{ fontSize: 9, fill: T.t3 }} tickFormatter={v => fmtBig(v)} />
                     <YAxis yAxisId="roas" orientation="right" tick={{ fontSize: 9, fill: T.t3 }} tickFormatter={v => `${v.toFixed(1)}×`} />
                     <Tooltip contentStyle={ttS} itemStyle={ttItemStyle} labelStyle={{ color: '#1a1a1a' }}
                       formatter={(v, n) => n === 'RoAS' ? [`${v.toFixed(2)}×`, n] : n === 'Gross Sales' ? [fmt(v), n] : [fmt(v), n]} />
-                    <Legend wrapperStyle={{ fontSize: 10 }} />
+                    <Legend wrapperStyle={{ fontSize: 10 }} formatter={v => <span style={{ color: '#13121A' }}>{v}</span>} />
                     <Bar yAxisId="spend" dataKey="spend" fill="#F5C518" maxBarSize={14} name="Ad Spend" radius={[3,3,0,0]} />
                     <Line yAxisId="spend" dataKey="grossSales" stroke="#8A8478" strokeWidth={2.5} dot={false} name="Gross Sales" />
                     <Line yAxisId="roas" dataKey="roas" stroke={T.amberDeep} strokeWidth={2} dot={false} strokeDasharray="4 2" name="RoAS" />
@@ -10697,14 +10720,14 @@ function CustomerPage({ filters }) {
                 <SCard title="Spend vs CAC" sub="As spend rises, does CAC improve or worsen?"
                   action={['daily','weekly','monthly'].map(g => <button key={g} style={pill(spendCacGran===g)} onClick={() => setSpendCacGran(g)}>{g[0].toUpperCase()+g.slice(1)}</button>)}>
                   <ResponsiveContainer width="100%" height={220}>
-                    <ComposedChart data={bucketEnriched(spendCacGran)} margin={{ top: 18, right: 48, bottom: 4, left: 0 }}>
+                    <ComposedChart data={bucketEnriched(spendCacGran)} margin={{ top: 18, right: 8, bottom: 4, left: 0 }}>
                       <CartesianGrid stroke={T.borderSoft} />
                       <XAxis dataKey="date" tick={{ fontSize: 9, fill: T.t3 }} />
                       <YAxis yAxisId="spend" orientation="left" tick={{ fontSize: 9, fill: T.t3 }} tickFormatter={v => fmtBig(v)} />
                       <YAxis yAxisId="cac" orientation="right" tick={{ fontSize: 9, fill: T.t3 }} tickFormatter={v => fmt(v)} />
                       <Tooltip contentStyle={ttS} itemStyle={ttItemStyle} labelStyle={{ color: '#1a1a1a' }}
                         formatter={(v, n) => n === 'CAC' ? [fmt(v), n] : [fmt(v), n]} />
-                      <Legend wrapperStyle={{ fontSize: 10 }} />
+                      <Legend wrapperStyle={{ fontSize: 10 }} formatter={v => <span style={{ color: '#13121A' }}>{v}</span>} />
                       <Bar yAxisId="spend" dataKey="spend" fill="#F5C518" maxBarSize={14} name="Ad Spend" radius={[3,3,0,0]} />
                       <Line yAxisId="cac" dataKey="cac" stroke="#8A8478" strokeWidth={2.5} dot={false} name="CAC" />
                     </ComposedChart>
@@ -10737,7 +10760,7 @@ function CustomerPage({ filters }) {
                           <YAxis tick={{ fontSize: 9, fill: T.t3 }} tickFormatter={v => fmt(v)} />
                           <Tooltip contentStyle={ttS} itemStyle={ttItemStyle} labelStyle={{ color: '#1a1a1a' }}
                             formatter={(v, n) => n === 'CAC' ? [fmt(v), n] : [fmt(v), n]} />
-                          <Legend wrapperStyle={{ fontSize: 10 }} />
+                          <Legend wrapperStyle={{ fontSize: 10 }} formatter={v => <span style={{ color: '#13121A' }}>{v}</span>} />
                           <Line dataKey="avg" stroke={T.amberLine} strokeWidth={1.5} dot={false} strokeDasharray="6 3" name="Avg CAC" legendType="plainline" />
                           <Line dataKey="cac" stroke="#8A8478" strokeWidth={2.5} dot={false} name="CAC" connectNulls />
                         </ComposedChart>
@@ -11234,13 +11257,15 @@ function CustomerPage({ filters }) {
                 sub="Which categories have genuine purchase affinity beyond category size?"
                 action={
                   <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
-                    {[['lift','Lift'], ['rate','Rate %'], ['count','Count']].map(([v, l]) => (
-                      <button key={v} onClick={() => setLiftDisplay(v)} style={{ background: liftDisplay === v ? CP.ink : CP.head, color: liftDisplay === v ? CP.head : CP.ink2, border: `1px solid ${CP.line}`, borderRadius: 0, padding: '3px 9px', fontSize: 11, cursor: 'pointer', fontWeight: liftDisplay === v ? 700 : 400, outline: 'none' }}>{l}</button>
-                    ))}
+                    {[['lift','Lift'], ['rate','Rate %'], ['count','Count']].map(([v, l]) => {
+                      const active = liftDisplay === v
+                      return <button key={v} onClick={() => setLiftDisplay(v)} style={{ background: active ? '#C9A24F' : '#FBF6E8', color: active ? '#fff' : '#8A7F63', border: `1px solid ${active ? '#C9A24F' : '#F0E2BC'}`, borderRadius: 20, padding: '3px 11px', fontSize: 11, cursor: 'pointer', fontWeight: active ? 700 : 500, fontFamily: 'Inter, sans-serif', outline: 'none' }}>{l}</button>
+                    })}
                     <span style={{ width: 8 }} />
-                    {['Category', 'Sub Category'].map(f => (
-                      <button key={f} onClick={() => setCrossFilter(f)} style={{ background: crossFilter === f ? CP.ink : CP.head, color: crossFilter === f ? CP.head : CP.ink2, border: `1px solid ${CP.line}`, borderRadius: 0, padding: '3px 9px', fontSize: 11, cursor: 'pointer', fontWeight: crossFilter === f ? 700 : 400, outline: 'none' }}>{f}</button>
-                    ))}
+                    {['Category', 'Sub Category'].map(f => {
+                      const active = crossFilter === f
+                      return <button key={f} onClick={() => setCrossFilter(f)} style={{ background: active ? '#C9A24F' : '#FBF6E8', color: active ? '#fff' : '#8A7F63', border: `1px solid ${active ? '#C9A24F' : '#F0E2BC'}`, borderRadius: 20, padding: '3px 11px', fontSize: 11, cursor: 'pointer', fontWeight: active ? 700 : 500, fontFamily: 'Inter, sans-serif', outline: 'none' }}>{f}</button>
+                    })}
                   </div>
                 }
               >
@@ -11345,7 +11370,7 @@ function CustomerPage({ filters }) {
                             <YAxis yAxisId="left" tick={{ fontSize: 9, fill: CP.ink3 }} tickFormatter={v => fmtBig(v)} />
                             <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 9, fill: CP.ink3 }} tickFormatter={v => `${v}%`} />
                             <Tooltip contentStyle={ttStyle} itemStyle={{ color: CP.ink }} labelStyle={{ color: CP.ink, fontWeight: 700 }} formatter={(v, name) => name === '% of Repeaters' ? [`${v}%`, name] : [fmtN(v), name]} />
-                            <Legend wrapperStyle={{ fontSize: 9 }} />
+                            <Legend wrapperStyle={{ fontSize: 9 }} formatter={v => <span style={{ color: '#13121A' }}>{v}</span>} />
                             <Bar yAxisId="left" dataKey="customers" fill={CP.yellow} name="Customers" radius={[3,3,0,0]} maxBarSize={36} />
                             <Line yAxisId="right" type="monotone" dataKey="pct" stroke={CP.line} strokeWidth={2} dot={{ r: 3, fill: CP.line }} name="% of Repeaters" />
                           </ComposedChart>
@@ -11366,11 +11391,11 @@ function CustomerPage({ filters }) {
                         <ResponsiveContainer width="100%" height={190}>
                           <ComposedChart data={freqHistData} margin={{ top: 4, right: 16, bottom: 4, left: 0 }}>
                             <CartesianGrid stroke={CP.lineSoft} />
-                            <XAxis dataKey="orderCount" tick={{ fontSize: 9, fill: CP.ink3 }} tickFormatter={v => v === '6+' ? '6+ time' : `${v} time`} />
+                            <XAxis dataKey="orderCount" tick={{ fontSize: 8.5, fill: CP.ink3 }} interval={0} tickFormatter={v => v === '1' ? '1st time' : v === '2' ? '2nd time' : v === '3' ? '3rd time' : v === '6+' ? '6th+ time' : `${v}th time`} />
                             <YAxis yAxisId="left" tick={{ fontSize: 9, fill: CP.ink3 }} tickFormatter={v => fmtBig(v)} />
                             <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 9, fill: CP.ink3 }} tickFormatter={v => `${v}%`} domain={[0, 100]} />
-                            <Tooltip contentStyle={ttStyle} itemStyle={{ color: CP.ink }} labelStyle={{ color: CP.ink, fontWeight: 700 }} formatter={(v, name) => name === 'Cumulative %' ? [`${v}%`, name] : [fmtN(v), name]} />
-                            <Legend wrapperStyle={{ fontSize: 9 }} />
+                            <Tooltip contentStyle={ttStyle} itemStyle={{ color: CP.ink }} labelStyle={{ color: CP.ink, fontWeight: 700 }} labelFormatter={v => v === '1' ? '1st time' : v === '2' ? '2nd time' : v === '3' ? '3rd time' : v === '6+' ? '6th+ time' : `${v}th time`} formatter={(v, name) => name === 'Cumulative %' ? [`${v}%`, name] : [fmtN(v), name]} />
+                            <Legend wrapperStyle={{ fontSize: 9 }} formatter={v => <span style={{ color: '#13121A' }}>{v}</span>} />
                             <Bar yAxisId="left" dataKey="customers" fill={CP.yellowDeep} name="Customers" radius={[3,3,0,0]} maxBarSize={36} />
                             <Line yAxisId="right" type="monotone" dataKey="cumPct" stroke={CP.line} strokeWidth={2} dot={{ r: 3, fill: CP.line }} name="Cumulative %" />
                           </ComposedChart>
@@ -11394,11 +11419,11 @@ function CustomerPage({ filters }) {
                         <ResponsiveContainer width="100%" height={190}>
                           <ComposedChart data={custData.aovByOrderNumber} margin={{ top: 4, right: 16, bottom: 4, left: 0 }}>
                             <CartesianGrid stroke={CP.lineSoft} />
-                            <XAxis dataKey="orderLabel" tick={{ fontSize: 9, fill: CP.ink3 }} tickFormatter={v => `${v} order`} />
+                            <XAxis dataKey="orderLabel" tick={{ fontSize: 8.5, fill: CP.ink3 }} interval={0} tickFormatter={v => `${v} time`} />
                             <YAxis yAxisId="aov" tick={{ fontSize: 9, fill: CP.ink3 }} tickFormatter={v => fmt(v)} />
                             <YAxis yAxisId="cust" orientation="right" tick={{ fontSize: 9, fill: CP.ink3 }} tickFormatter={v => fmtBig(v)} />
-                            <Tooltip contentStyle={ttStyle} itemStyle={{ color: CP.ink }} labelStyle={{ color: CP.ink, fontWeight: 700 }} formatter={(v, name) => name === 'Customers' ? [fmtN(v), name] : [fmt(v), name]} />
-                            <Legend wrapperStyle={{ fontSize: 9 }} />
+                            <Tooltip contentStyle={ttStyle} itemStyle={{ color: CP.ink }} labelStyle={{ color: CP.ink, fontWeight: 700 }} labelFormatter={v => `${v} time`} formatter={(v, name) => name === 'Customers' ? [fmtN(v), name] : [fmt(v), name]} />
+                            <Legend wrapperStyle={{ fontSize: 9 }} formatter={v => <span style={{ color: '#13121A' }}>{v}</span>} />
                             <Bar yAxisId="aov" dataKey="aov" fill={CP.yellowDeep} name="AOV (ex GST)" radius={[3,3,0,0]} maxBarSize={36} />
                             <Line yAxisId="cust" type="monotone" dataKey="customers" stroke={CP.line} strokeWidth={2} dot={{ r: 3, fill: CP.line }} name="Customers" strokeDasharray="4 3" />
                           </ComposedChart>
@@ -11992,7 +12017,11 @@ function CustomerPage({ filters }) {
             if (!spendSalesMap[k]) spendSalesMap[k] = { label: k, totalSpend: 0, grossSalesExcGst: 0, netRevenue: 0 }
             spendSalesMap[k].totalSpend += v
           })
-          const spendSalesData = Object.values(spendSalesMap).sort((a, b) => a.label < b.label ? -1 : 1)
+          const spendSalesData = Object.values(spendSalesMap).sort((a, b) => a.label < b.label ? -1 : 1).map(r => ({
+            ...r,
+            discountGiven: Math.max(0, r.grossSalesExcGst - r.netRevenue),
+            discountPct: r.grossSalesExcGst > 0 ? parseFloat(((r.grossSalesExcGst - r.netRevenue) / r.grossSalesExcGst * 100).toFixed(1)) : 0,
+          }))
 
           // ── RoAS per channel (use grossExcGst as revenue proxy) ──
           const grossRevForRoas = kpis.grossExcGst || kpis.grossSales || 0
@@ -12006,17 +12035,16 @@ function CustomerPage({ filters }) {
           // ── CAC zero-while-spend bug flag ──
           const cacMissing = (kpis.metaSpend > 0 || kpis.googleSpend > 0)
 
-          // ── Bug 1 fix: use correct field names firstOrders / repeatOrders ──
-          const totalFirstOrders  = discountDist.reduce((s, r) => s + (r.firstOrders || 0), 0)
-          const totalRepeatOrders = discountDist.reduce((s, r) => s + (r.repeatOrders || 0), 0)
-          const totalAllOrders    = totalFirstOrders + totalRepeatOrders
+          // Discounted = any bucket with actual discount %, Non-Discounted = '0% (Full Price)' + 'No Price Data'
+          const totalDiscountedOrders    = discountDist.filter(r => r.bucket !== '0% (Full Price)' && r.bucket !== 'No Price Data').reduce((s, r) => s + (r.totalOrders || 0), 0)
+          const totalNonDiscountedOrders = discountDist.filter(r => r.bucket === '0% (Full Price)' || r.bucket === 'No Price Data').reduce((s, r) => s + (r.totalOrders || 0), 0)
+          const totalAllOrders           = discountDist.reduce((s, r) => s + (r.totalOrders || 0), 0)
+          const totalFirstOrders         = totalDiscountedOrders
+          const totalRepeatOrders        = totalNonDiscountedOrders
 
-          // ── Bug 2 fix: pie data derived from correct fields ──
-          // firstOrders = orders with a discount code, repeatOrders = orders without
-          // (per Q9 discount_bucket query: first_orders = discounted, repeat_orders = full price)
           const pieData = [
-            { name: 'Discounted (1st order)', value: totalFirstOrders },
-            { name: 'Non-Discounted', value: totalRepeatOrders },
+            { name: 'Discounted', value: totalDiscountedOrders },
+            { name: 'Non-Discounted', value: totalNonDiscountedOrders },
           ]
 
           const cardStyle = { background: SD.card, borderRadius: 12, border: `1px solid ${SD.border}`, overflow: 'hidden', boxShadow: '0 1px 2px rgba(80,65,20,.04)' }
@@ -12067,11 +12095,26 @@ function CustomerPage({ filters }) {
                       <XAxis dataKey="label" tick={{ fontSize: 10, fill: SD.t3 }} />
                       <YAxis yAxisId="spend" orientation="left" tick={{ fontSize: 10, fill: SD.t3 }} tickFormatter={v => fmtBig(v)} />
                       <YAxis yAxisId="sales" orientation="right" tick={{ fontSize: 10, fill: SD.t3 }} tickFormatter={v => fmtBig(v)} />
-                      <Tooltip contentStyle={{ background: '#fff', border: `1px solid ${SD.border}`, borderRadius: 7, fontSize: 11 }} formatter={(v, name) => [fmt(v), name]} />
-                      <Legend wrapperStyle={{ fontSize: 11, fontFamily: 'Inter, sans-serif' }} />
+                      <Tooltip contentStyle={{ background: '#fff', border: `1px solid ${SD.border}`, borderRadius: 7, fontSize: 11 }}
+                        content={({ active, payload, label }) => {
+                          if (!active || !payload?.length) return null
+                          const d = payload[0]?.payload
+                          return (
+                            <div style={{ background: '#fff', border: `1px solid ${SD.border}`, borderRadius: 7, padding: '8px 12px', fontSize: 11 }}>
+                              <div style={{ fontWeight: 700, color: SD.t1, marginBottom: 4 }}>{label}</div>
+                              {payload.filter(p => p.dataKey !== 'discountGiven').map((p, i) => (
+                                <div key={i} style={{ color: SD.t1 }}>{p.name}: {fmt(p.value)}</div>
+                              ))}
+                              <div style={{ color: '#E07000', marginTop: 2 }}>Discount Given: {fmt(d?.discountGiven)} <span style={{ fontWeight: 700 }}>({d?.discountPct}%)</span></div>
+                            </div>
+                          )
+                        }}
+                      />
+                      <Legend wrapperStyle={{ fontSize: 11, fontFamily: 'Inter, sans-serif' }} formatter={v => <span style={{ color: '#13121A' }}>{v}</span>} />
                       <Bar yAxisId="spend" dataKey="totalSpend" fill={SD.amber} name="Total Spend" maxBarSize={40} radius={[3,3,0,0]} />
                       <Line yAxisId="sales" dataKey="grossSalesExcGst" stroke={SD.blue} strokeWidth={2} dot={false} name="Gross Sales (ex GST)" />
                       <Line yAxisId="sales" dataKey="netRevenue" stroke={SD.t1} strokeWidth={1.5} strokeDasharray="4 3" dot={false} name="Net Revenue" />
+                      <Line yAxisId="sales" dataKey="discountGiven" stroke="#E07000" strokeWidth={1.5} strokeDasharray="3 2" dot={false} name="Discount Given" />
                     </ComposedChart>
                   </ResponsiveContainer>
                 </div>
@@ -12093,7 +12136,7 @@ function CustomerPage({ filters }) {
                           <YAxis yAxisId="orders" tick={{ fontSize: 10, fill: SD.t3 }} tickFormatter={v => fmtBig(v)} />
                           <YAxis yAxisId="aov" orientation="right" tick={{ fontSize: 10, fill: SD.t3 }} tickFormatter={v => fmt(v)} />
                           <Tooltip contentStyle={{ background: '#fff', border: `1px solid ${SD.border}`, borderRadius: 7, fontSize: 11, color: SD.t1 }} formatter={(v, name) => [name === 'AOV (ex GST)' ? fmt(v) : name === 'Avg Disc %' ? `${v}%` : fmtN(v), name]} labelStyle={{ color: SD.t1, fontWeight: 700 }} itemStyle={{ color: SD.t1 }} />
-                          <Legend wrapperStyle={{ fontSize: 11, fontFamily: 'Inter, sans-serif' }} />
+                          <Legend wrapperStyle={{ fontSize: 11, fontFamily: 'Inter, sans-serif' }} formatter={v => <span style={{ color: '#13121A' }}>{v}</span>} />
                           <Bar yAxisId="orders" dataKey="firstOrders" stackId="a" fill={SD.amberDeep} name="New Customer Orders" radius={[0,0,0,0]} />
                           <Bar yAxisId="orders" dataKey="repeatOrders" stackId="a" fill={SD.borderSoft} name="Repeat Customer Orders" radius={[3,3,0,0]} />
                           <Line yAxisId="aov" type="monotone" dataKey="aovExc" stroke={SD.t1} strokeWidth={2} dot={{ r: 3, fill: SD.t1 }} name="AOV (ex GST)" />
@@ -12168,7 +12211,7 @@ function CustomerPage({ filters }) {
                             return [fmtN(val), name]
                           }}
                         />
-                        <Legend wrapperStyle={{ fontSize: 10 }} />
+                        <Legend wrapperStyle={{ fontSize: 10 }} formatter={v => <span style={{ color: '#13121A' }}>{v}</span>} />
                         <Bar yAxisId="left" dataKey="totalCustomers" name="Total Customers" fill={SD.amber} radius={[3,3,0,0]} />
                         <Bar yAxisId="left" dataKey="repeatCustomers" name="Repeat Customers" fill={SD.amberDeep} radius={[3,3,0,0]} />
                         <Line yAxisId="right" type="monotone" dataKey="repeatRate" name="Repeat Rate %" stroke={SD.t1} strokeWidth={2} dot={{ r: 4, fill: SD.t1 }} />
