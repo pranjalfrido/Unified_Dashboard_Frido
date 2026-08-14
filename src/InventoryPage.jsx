@@ -60,7 +60,7 @@ function SubTabSwitcher({ tab, setTab }) {
     <div style={{ display: 'inline-flex', gap: 2, background: IC.surface, border: `1px solid ${IC.border}`, borderRadius: 10, padding: 3, marginBottom: 12 }}>
       <IconTab icon="📦" label="Inventory Health" active={tab === 'health'} onClick={() => setTab('health')} />
       <IconTab icon="📊" label="Sales & Allocation" active={tab === 'sales'} onClick={() => setTab('sales')} />
-      <IconTab icon="📥" label="Inward" active={tab === 'inward'} onClick={() => setTab('inward')} />
+      {/* <IconTab icon="📥" label="Inward" active={tab === 'inward'} onClick={() => setTab('inward')} /> */}
     </div>
   )
 }
@@ -395,12 +395,12 @@ export default function InventoryPage({ onTopbarDateControl, tab = 'health', set
           Latest sales {sales.data.lastSalesDateConsidered.slice(8,10)} {new Date(sales.data.lastSalesDateConsidered + 'T12:00:00').toLocaleDateString('en-IN', { month: 'short' })}
         </div>
       )}
-      {tab === 'inward' && (
+      {/* tab === 'inward' && (
         <div style={{ marginBottom: 10 }}>
           <DateRangeControl filters={active.dateFilters} setFilters={active.setDateFilters}
             onRefresh={() => active.fetchData({ ...active.dateFilters, ...inwardFilterBody })} />
         </div>
-      )}
+      ) */}
     </div>
   )
 
@@ -580,7 +580,7 @@ export default function InventoryPage({ onTopbarDateControl, tab = 'health', set
 
         <div style={{ display: tab === 'health' ? 'contents' : 'none' }}><InventoryHealthPage data={invData} filters={healthFilters} setFilters={setHealthFilters} sidebarTop={sidebarTop} /></div>
         <div style={{ display: tab === 'sales' ? 'contents' : 'none' }}><SalesAllocationPage data={sales.data} filters={salesFilters} setFilters={setSalesFilters} sidebarTop={sidebarTop} /></div>
-        <div style={{ display: tab === 'inward' ? 'contents' : 'none' }}><InwardPage data={inward.data} filters={inwardFilters} setFilters={setInwardFilters} sidebarTop={sidebarTop} /></div>
+        {/* <div style={{ display: tab === 'inward' ? 'contents' : 'none' }}><InwardPage data={inward.data} filters={inwardFilters} setFilters={setInwardFilters} sidebarTop={sidebarTop} /></div> */}
       </div>
     </div>
   )
