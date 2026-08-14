@@ -12041,6 +12041,11 @@ function CustomerPage({ filters }) {
           const totalAllOrders           = discountDist.reduce((s, r) => s + (r.totalOrders || 0), 0)
           const totalFirstOrders         = totalDiscountedOrders
           const totalRepeatOrders        = totalNonDiscountedOrders
+          const totalRevAllBuckets       = discountDist.reduce((s, r) => s + (r.totalOrders || 0) * (r.aovExc || 0), 0)
+          const discountDistWithRevPct   = discountDist.map(r => ({
+            ...r,
+            revPct: totalRevAllBuckets > 0 ? parseFloat(((r.totalOrders || 0) * (r.aovExc || 0) / totalRevAllBuckets * 100).toFixed(1)) : 0,
+          }))
 
           const pieData = [
             { name: 'Discounted', value: totalDiscountedOrders },
@@ -12057,15 +12062,20 @@ function CustomerPage({ filters }) {
 
 
               {/* KPI row */}
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 10 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6, 1fr)', gap: 10 }}>
                 {(() => {
                   const paybackMonths = (kpis.cac > 0 && kpis.ltv12 > 0) ? (kpis.cac / (kpis.ltv12 / 12)) : null
+                  const discountedBuckets = discountDist.filter(r => r.bucket !== '0% (Full Price)' && r.bucket !== 'No Price Data' && (r.avgDiscPct || 0) > 0)
+                  const totalDiscOrders = discountedBuckets.reduce((s, r) => s + (r.totalOrders || 0), 0)
+                  const totalDiscValue = discountedBuckets.reduce((s, r) => s + (r.totalOrders || 0) * (r.aovExc || 0) * ((r.avgDiscPct || 0) / 100), 0)
+                  const discValuePerOrder = totalDiscOrders > 0 ? totalDiscValue / totalDiscOrders : null
                   return [
                     { label: 'Total Spend', value: fmt(kpis.totalSpend || 0), sub: `Meta ${fmt(kpis.metaSpend || 0)} · Google ${fmt(kpis.googleSpend || 0)}${kpis.additionalSpend > 0 ? ` · Add. ${fmt(kpis.additionalSpend)}` : ''}` },
                     { label: 'Blended RoAS', value: `${blendedRoAS.toFixed(2)}×`, sub: 'Gross Rev (ex GST) / Spend' },
                     { label: 'Blended CAC', value: fmt(blendedCAC), sub: 'Total Spend / New Customers' },
                     { label: 'Payback Period', value: paybackMonths != null ? `${paybackMonths.toFixed(1)} mo` : '—', sub: 'CAC ÷ Monthly Rev per Customer' },
                     { label: 'Discounted Order Share', value: totalAllOrders > 0 ? `${(totalFirstOrders / totalAllOrders * 100).toFixed(1)}%` : '—', sub: totalAllOrders > 0 ? `${fmtN(totalFirstOrders)} of ${fmtN(totalAllOrders)} orders` : 'No data' },
+                    { label: 'Avg Discount / Order', value: discValuePerOrder != null ? fmt(discValuePerOrder) : '—', sub: 'Avg ₹ discount on discounted orders' },
                   ]
                 })().map((k, i) => (
                   <div key={i} style={{ background: SD.card, borderRadius: 12, padding: '12px 14px', border: `1px solid ${SD.border}` }}>
@@ -12130,16 +12140,19 @@ function CustomerPage({ filters }) {
                   <div style={cardBody}>
                     {discountDist.length > 0 ? (
                       <ResponsiveContainer width="100%" height={220}>
-                        <ComposedChart data={discountDist} margin={{ top: 4, right: 24, bottom: 4, left: 0 }}>
+                        <ComposedChart data={discountDistWithRevPct} margin={{ top: 4, right: 24, bottom: 4, left: 0 }}>
                           <CartesianGrid stroke={SD.borderSoft} />
                           <XAxis dataKey="bucket" tick={{ fontSize: 9.5, fill: SD.t3 }} />
                           <YAxis yAxisId="orders" tick={{ fontSize: 10, fill: SD.t3 }} tickFormatter={v => fmtBig(v)} />
                           <YAxis yAxisId="aov" orientation="right" tick={{ fontSize: 10, fill: SD.t3 }} tickFormatter={v => fmt(v)} />
-                          <Tooltip contentStyle={{ background: '#fff', border: `1px solid ${SD.border}`, borderRadius: 7, fontSize: 11, color: SD.t1 }} formatter={(v, name) => [name === 'AOV (ex GST)' ? fmt(v) : name === 'Avg Disc %' ? `${v}%` : fmtN(v), name]} labelStyle={{ color: SD.t1, fontWeight: 700 }} itemStyle={{ color: SD.t1 }} />
+                          <YAxis yAxisId="pct" orientation="right" hide />
+                          <Tooltip contentStyle={{ background: '#fff', border: `1px solid ${SD.border}`, borderRadius: 7, fontSize: 11, color: SD.t1 }} formatter={(v, name) => [name === 'AOV (ex GST)' ? fmt(v) : (name === 'Avg Disc %' || name === 'Revenue %') ? `${v}%` : fmtN(v), name]} labelStyle={{ color: SD.t1, fontWeight: 700 }} itemStyle={{ color: SD.t1 }} />
                           <Legend wrapperStyle={{ fontSize: 11, fontFamily: 'Inter, sans-serif' }} formatter={v => <span style={{ color: '#13121A' }}>{v}</span>} />
                           <Bar yAxisId="orders" dataKey="firstOrders" stackId="a" fill={SD.amberDeep} name="New Customer Orders" radius={[0,0,0,0]} />
                           <Bar yAxisId="orders" dataKey="repeatOrders" stackId="a" fill={SD.borderSoft} name="Repeat Customer Orders" radius={[3,3,0,0]} />
                           <Line yAxisId="aov" type="monotone" dataKey="aovExc" stroke={SD.t1} strokeWidth={2} dot={{ r: 3, fill: SD.t1 }} name="AOV (ex GST)" />
+                          <Line yAxisId="pct" type="monotone" dataKey="avgDiscPct" stroke="#E07000" strokeWidth={1.5} strokeDasharray="4 3" dot={{ r: 3, fill: '#E07000' }} name="Avg Disc %" />
+                          <Line yAxisId="pct" type="monotone" dataKey="revPct" stroke="#2E74CC" strokeWidth={1.5} strokeDasharray="2 2" dot={{ r: 3, fill: '#2E74CC' }} name="Revenue %" />
                         </ComposedChart>
                       </ResponsiveContainer>
                     ) : (
