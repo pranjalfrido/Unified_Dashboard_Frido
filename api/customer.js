@@ -24,7 +24,7 @@ export default async function handler(req, res) {
     const ps = new Date(ms - dur - 86400000).toISOString().slice(0, 10)
     const pe = new Date(ms - 86400000).toISOString().slice(0, 10)
 
-    const [kpis, monthly, cohort, crossSell, rfm, freqDist, monetaryDist, inactivity, discountDist, adsKpis, dailySpend, prevKpis, prevAdsKpis, discountRepeatRate, daysToSecondPurchase, aovByOrderNumber, repurchaseCycleByCategory, basketComposition, purchaseBehaviorKpis, orderFreqDist] = await Promise.all([
+    const [kpis, monthly, cohort, crossSell, rfm, freqDist, monetaryDist, inactivity, discountDist, adsKpis, dailySpend, prevKpis, prevAdsKpis, discountRepeatRate, daysToSecondPurchase, aovByOrderNumber, repurchaseCycleByCategory, basketComposition, purchaseBehaviorKpis, orderFreqDist, discountRepeatRateByFirst] = await Promise.all([
 
       // Q1 — KPIs for the selected period (Shopify only)
       run(`WITH first_dates AS (
@@ -320,20 +320,20 @@ bucketed AS (
     OrderId, CustomerId, order_rev_exc,
     CASE
       WHEN total_listing IS NULL OR total_listing = 0 THEN 'No Price Data'
-      WHEN total_discount IS NULL OR total_discount = 0 THEN '0% (Full Price)'
-      WHEN SAFE_DIVIDE(total_discount, total_listing) <= 0.10 THEN '1–10%'
-      WHEN SAFE_DIVIDE(total_discount, total_listing) <= 0.20 THEN '11–20%'
-      WHEN SAFE_DIVIDE(total_discount, total_listing) <= 0.30 THEN '21–30%'
-      WHEN SAFE_DIVIDE(total_discount, total_listing) <= 0.40 THEN '31–40%'
-      ELSE '40%+'
+      WHEN total_discount IS NULL OR total_discount = 0 THEN '0%'
+      WHEN SAFE_DIVIDE(total_discount, total_listing) <= 0.05 THEN '0–5%'
+      WHEN SAFE_DIVIDE(total_discount, total_listing) <= 0.10 THEN '5–10%'
+      WHEN SAFE_DIVIDE(total_discount, total_listing) <= 0.20 THEN '10–20%'
+      WHEN SAFE_DIVIDE(total_discount, total_listing) <= 0.30 THEN '20–30%'
+      ELSE '30%+'
     END AS discount_bucket,
     CASE
       WHEN total_listing IS NULL OR total_listing = 0 THEN 6
       WHEN total_discount IS NULL OR total_discount = 0 THEN 0
-      WHEN SAFE_DIVIDE(total_discount, total_listing) <= 0.10 THEN 1
-      WHEN SAFE_DIVIDE(total_discount, total_listing) <= 0.20 THEN 2
-      WHEN SAFE_DIVIDE(total_discount, total_listing) <= 0.30 THEN 3
-      WHEN SAFE_DIVIDE(total_discount, total_listing) <= 0.40 THEN 4
+      WHEN SAFE_DIVIDE(total_discount, total_listing) <= 0.05 THEN 1
+      WHEN SAFE_DIVIDE(total_discount, total_listing) <= 0.10 THEN 2
+      WHEN SAFE_DIVIDE(total_discount, total_listing) <= 0.20 THEN 3
+      WHEN SAFE_DIVIDE(total_discount, total_listing) <= 0.30 THEN 4
       ELSE 5
     END AS sort_order,
     CASE WHEN first_date BETWEEN DATE('${s}') AND DATE('${e}') THEN 'new' ELSE 'repeat' END AS customer_type,
@@ -680,6 +680,51 @@ SELECT
 FROM freq
 GROUP BY order_count, sort_order
 ORDER BY sort_order`),
+
+      // Q21 — repeat rate by first-order discount status
+      run(`WITH
+item_master AS (
+  SELECT DISTINCT TRIM(Product_Code) AS sku, Category_Name
+  FROM \`frido-429506.sharepoint_to_gcp.Frido_Item_Master__frido_item_sku_master\`
+  WHERE Product_Code IS NOT NULL
+),
+pid_map AS (
+  SELECT DISTINCT TRIM(productid) AS productid, TRIM(masterskucode) AS masterskucode
+  FROM \`frido-429506.sharepoint_to_gcp.Frido_Item_Master__productid_sku_mapping\`
+  WHERE productid IS NOT NULL AND masterskucode IS NOT NULL
+),
+all_orders AS (
+  SELECT
+    t.CustomerId,
+    t.OrderId,
+    MIN(DATE(t.OrderDate)) AS order_date,
+    SAFE_DIVIDE(SUM(t.Discount), NULLIF(SUM(t.Listing_Price), 0)) AS disc_pct
+  FROM ${TBL} t
+  WHERE t.Channel = 'Shopify' AND t.CustomerId IS NOT NULL
+    AND DATE(t.OrderDate) <= DATE('${e}')
+  GROUP BY t.CustomerId, t.OrderId
+),
+ranked AS (
+  SELECT *,
+    ROW_NUMBER() OVER (PARTITION BY CustomerId ORDER BY order_date, OrderId) AS rn
+  FROM all_orders
+),
+first_orders AS (
+  SELECT CustomerId, order_date AS first_date,
+    CASE WHEN disc_pct > 0 THEN 'Discounted' ELSE 'Non-Discounted' END AS first_order_type
+  FROM ranked WHERE rn = 1
+),
+second_orders AS (
+  SELECT CustomerId FROM ranked WHERE rn = 2
+)
+SELECT
+  fo.first_order_type,
+  COUNT(DISTINCT fo.CustomerId) AS total_customers,
+  COUNT(DISTINCT so.CustomerId) AS repeat_customers,
+  ROUND(SAFE_DIVIDE(COUNT(DISTINCT so.CustomerId), COUNT(DISTINCT fo.CustomerId)) * 100, 1) AS repeat_rate
+FROM first_orders fo
+LEFT JOIN second_orders so USING (CustomerId)
+GROUP BY fo.first_order_type`),
     ])
 
     // Fetch additional (offline) spend from Postgres for the selected date range
@@ -971,6 +1016,12 @@ LIMIT 50`)
       orderFreqDist: orderFreqDist.map(r => ({
         orderCount: r.order_count,
         customers: parseInt(r.customers) || 0,
+      })),
+      discountRepeatRateByFirst: discountRepeatRateByFirst.map(r => ({
+        type: r.first_order_type,
+        totalCustomers: parseInt(r.total_customers) || 0,
+        repeatCustomers: parseInt(r.repeat_customers) || 0,
+        repeatRate: parseFloat(r.repeat_rate) || 0,
       })),
     })
   } catch (err) {

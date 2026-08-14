@@ -9860,6 +9860,7 @@ function CustomerPage({ filters }) {
     inactivity = [],
     discountDist = [],
     discountRepeatRate = [],
+    discountRepeatRateByFirst = [],
     crossSell = [],
     dailySpend: rawDailySpend = [],
   } = custData
@@ -11568,13 +11569,25 @@ function CustomerPage({ filters }) {
                         </tr>
                       </thead>
                       <tbody>
-                        {crossSell.slice(0, 7).map((r, i) => (
-                          <tr key={i} style={{ borderBottom: `1px solid ${CP.lineSoft}`, background: i % 2 === 0 ? 'transparent' : CP.head }}>
-                            <td style={{ padding: '6px 8px', color: CP.ink2, fontFamily: 'Inter, sans-serif' }}>{r.firstCategory || '—'}</td>
-                            <td style={{ padding: '6px 8px', color: CP.ink, fontWeight: 600, fontFamily: 'Inter, sans-serif' }}>{r.secondCategory || '—'}</td>
-                            <td style={{ padding: '6px 8px', textAlign: 'right', fontFamily: 'JetBrains Mono, monospace', fontWeight: 700, color: CP.ink }}>{fmtN(r.customers)}</td>
-                          </tr>
-                        ))}
+                        {(() => {
+                          // aggregate by category pair (crossSell has sub-category level rows)
+                          const pairMap = new Map()
+                          crossSell.forEach(r => {
+                            const key = `${r.firstCategory}|||${r.secondCategory}`
+                            pairMap.set(key, (pairMap.get(key) || 0) + r.customers)
+                          })
+                          return [...pairMap.entries()]
+                            .map(([key, customers]) => { const [first, second] = key.split('|||'); return { first, second, customers } })
+                            .sort((a, b) => b.customers - a.customers)
+                            .slice(0, 7)
+                            .map((r, i) => (
+                              <tr key={i} style={{ borderBottom: `1px solid ${CP.lineSoft}`, background: i % 2 === 0 ? 'transparent' : CP.head }}>
+                                <td style={{ padding: '6px 8px', color: CP.ink2, fontFamily: 'Inter, sans-serif' }}>{r.first || '—'}</td>
+                                <td style={{ padding: '6px 8px', color: CP.ink, fontWeight: 600, fontFamily: 'Inter, sans-serif' }}>{r.second || '—'}</td>
+                                <td style={{ padding: '6px 8px', textAlign: 'right', fontFamily: 'JetBrains Mono, monospace', fontWeight: 700, color: CP.ink }}>{fmtN(r.customers)}</td>
+                              </tr>
+                            ))
+                        })()}
                       </tbody>
                     </table>
                   </CpCard>
@@ -12141,8 +12154,8 @@ function CustomerPage({ filters }) {
           const cacMissing = (kpis.metaSpend > 0 || kpis.googleSpend > 0)
 
           // Discounted = any bucket with actual discount %, Non-Discounted = '0% (Full Price)' + 'No Price Data'
-          const totalDiscountedOrders    = discountDist.filter(r => r.bucket !== '0% (Full Price)' && r.bucket !== 'No Price Data').reduce((s, r) => s + (r.totalOrders || 0), 0)
-          const totalNonDiscountedOrders = discountDist.filter(r => r.bucket === '0% (Full Price)' || r.bucket === 'No Price Data').reduce((s, r) => s + (r.totalOrders || 0), 0)
+          const totalDiscountedOrders    = discountDist.filter(r => r.bucket !== '0%' && r.bucket !== 'No Price Data').reduce((s, r) => s + (r.totalOrders || 0), 0)
+          const totalNonDiscountedOrders = discountDist.filter(r => r.bucket === '0%' || r.bucket === 'No Price Data').reduce((s, r) => s + (r.totalOrders || 0), 0)
           const totalAllOrders           = discountDist.reduce((s, r) => s + (r.totalOrders || 0), 0)
           const totalFirstOrders         = totalDiscountedOrders
           const totalRepeatOrders        = totalNonDiscountedOrders
@@ -12150,6 +12163,7 @@ function CustomerPage({ filters }) {
           const discountDistWithRevPct   = discountDist.map(r => ({
             ...r,
             revPct: totalRevAllBuckets > 0 ? parseFloat(((r.totalOrders || 0) * (r.aovExc || 0) / totalRevAllBuckets * 100).toFixed(1)) : 0,
+            repeatPct: (r.totalOrders || 0) > 0 ? parseFloat(((r.repeatOrders || 0) / (r.totalOrders || 0) * 100).toFixed(1)) : 0,
           }))
 
           const pieData = [
@@ -12157,8 +12171,8 @@ function CustomerPage({ filters }) {
             { name: 'Non-Discounted', value: totalNonDiscountedOrders },
           ]
 
-          const discountedRev    = discountDist.filter(r => r.bucket !== '0% (Full Price)' && r.bucket !== 'No Price Data').reduce((s, r) => s + (r.totalOrders || 0) * (r.aovExc || 0), 0)
-          const nonDiscountedRev = discountDist.filter(r => r.bucket === '0% (Full Price)' || r.bucket === 'No Price Data').reduce((s, r) => s + (r.totalOrders || 0) * (r.aovExc || 0), 0)
+          const discountedRev    = discountDist.filter(r => r.bucket !== '0%' && r.bucket !== 'No Price Data').reduce((s, r) => s + (r.totalOrders || 0) * (r.aovExc || 0), 0)
+          const nonDiscountedRev = discountDist.filter(r => r.bucket === '0%' || r.bucket === 'No Price Data').reduce((s, r) => s + (r.totalOrders || 0) * (r.aovExc || 0), 0)
           const discountedAov    = totalDiscountedOrders > 0 ? discountedRev / totalDiscountedOrders : 0
           const nonDiscountedAov = totalNonDiscountedOrders > 0 ? nonDiscountedRev / totalNonDiscountedOrders : 0
 
@@ -12175,7 +12189,7 @@ function CustomerPage({ filters }) {
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6, 1fr)', gap: 10 }}>
                 {(() => {
                   const paybackMonths = (kpis.cac > 0 && kpis.ltv12 > 0) ? (kpis.cac / (kpis.ltv12 / 12)) : null
-                  const discountedBuckets = discountDist.filter(r => r.bucket !== '0% (Full Price)' && r.bucket !== 'No Price Data' && (r.avgDiscPct || 0) > 0)
+                  const discountedBuckets = discountDist.filter(r => r.bucket !== '0%' && r.bucket !== 'No Price Data' && (r.avgDiscPct || 0) > 0)
                   const totalDiscOrders = discountedBuckets.reduce((s, r) => s + (r.totalOrders || 0), 0)
                   const totalDiscValue = discountedBuckets.reduce((s, r) => s + (r.totalOrders || 0) * (r.aovExc || 0) * ((r.avgDiscPct || 0) / 100), 0)
                   const discValuePerOrder = totalDiscOrders > 0 ? totalDiscValue / totalDiscOrders : null
@@ -12256,13 +12270,13 @@ function CustomerPage({ filters }) {
                           <YAxis yAxisId="orders" tick={{ fontSize: 10, fill: SD.t3 }} tickFormatter={v => fmtBig(v)} />
                           <YAxis yAxisId="aov" orientation="right" tick={{ fontSize: 10, fill: SD.t3 }} tickFormatter={v => fmt(v)} />
                           <YAxis yAxisId="pct" orientation="right" hide />
-                          <Tooltip contentStyle={{ background: '#fff', border: `1px solid ${SD.border}`, borderRadius: 7, fontSize: 11, color: SD.t1 }} formatter={(v, name) => [name === 'AOV (ex GST)' ? fmt(v) : (name === 'Avg Disc %' || name === 'Revenue %') ? `${v}%` : fmtN(v), name]} labelStyle={{ color: SD.t1, fontWeight: 700 }} itemStyle={{ color: SD.t1 }} />
+                          <Tooltip contentStyle={{ background: '#fff', border: `1px solid ${SD.border}`, borderRadius: 7, fontSize: 11, color: SD.t1 }} formatter={(v, name) => [name === 'AOV (ex GST)' ? fmt(v) : (name === 'Avg Disc %' || name === 'Revenue %' || name === 'Repeat Customer %') ? `${v}%` : fmtN(v), name]} labelStyle={{ color: SD.t1, fontWeight: 700 }} itemStyle={{ color: SD.t1 }} />
                           <Legend wrapperStyle={{ fontSize: 11, fontFamily: 'Inter, sans-serif' }} formatter={v => <span style={{ color: '#13121A' }}>{v}</span>} />
-                          <Bar yAxisId="orders" dataKey="firstOrders" stackId="a" fill={SD.amberDeep} name="New Customer Orders" radius={[0,0,0,0]} />
-                          <Bar yAxisId="orders" dataKey="repeatOrders" stackId="a" fill={SD.borderSoft} name="Repeat Customer Orders" radius={[3,3,0,0]} />
+                          <Bar yAxisId="orders" dataKey="totalOrders" fill={SD.amberDeep} name="Total Orders" radius={[3,3,0,0]} />
                           <Line yAxisId="aov" type="monotone" dataKey="aovExc" stroke={SD.t1} strokeWidth={2} dot={{ r: 3, fill: SD.t1 }} name="AOV (ex GST)" />
                           <Line yAxisId="pct" type="monotone" dataKey="avgDiscPct" stroke="#E07000" strokeWidth={1.5} strokeDasharray="4 3" dot={{ r: 3, fill: '#E07000' }} name="Avg Disc %" />
                           <Line yAxisId="pct" type="monotone" dataKey="revPct" stroke="#2E74CC" strokeWidth={1.5} strokeDasharray="2 2" dot={{ r: 3, fill: '#2E74CC' }} name="Revenue %" />
+                          <Line yAxisId="pct" type="monotone" dataKey="repeatPct" stroke="#7C6F3E" strokeWidth={1.5} strokeDasharray="3 2" dot={{ r: 3, fill: '#7C6F3E' }} name="Repeat Customer %" />
                         </ComposedChart>
                       </ResponsiveContainer>
                     ) : (
@@ -12301,12 +12315,12 @@ function CustomerPage({ filters }) {
                         {/* Stat rows */}
                         <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
                           {[
-                            { name: 'Discounted', color: '#C9A24F', orders: totalDiscountedOrders, rev: discountedRev, aov: discountedAov },
-                            { name: 'Non-Discounted', color: '#E4DAC0', orders: totalNonDiscountedOrders, rev: nonDiscountedRev, aov: nonDiscountedAov },
+                            { name: 'Discounted', color: '#C9A24F', orders: totalDiscountedOrders, rev: discountedRev, aov: discountedAov, repeatData: discountRepeatRateByFirst.find(r => r.type === 'Discounted') },
+                            { name: 'Non-Discounted', color: '#E4DAC0', orders: totalNonDiscountedOrders, rev: nonDiscountedRev, aov: nonDiscountedAov, repeatData: discountRepeatRateByFirst.find(r => r.type === 'Non-Discounted') },
                           ].map((g, i) => (
                             <div key={i}>
                               {i > 0 && <div style={{ borderTop: `1px solid ${SD.borderSoft}`, margin: '10px 0' }} />}
-                              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
                                 <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8 }}>
                                   <div style={{ width: 10, height: 10, borderRadius: 2, background: g.color, flexShrink: 0, marginTop: 3 }} />
                                   <div>
@@ -12315,10 +12329,19 @@ function CustomerPage({ filters }) {
                                     <div style={{ fontSize: 10, color: SD.t3, fontFamily: 'Inter, sans-serif' }}>{totalAllOrders > 0 ? (g.orders / totalAllOrders * 100).toFixed(1) : 0}% of orders</div>
                                   </div>
                                 </div>
-                                <div style={{ textAlign: 'right' }}>
-                                  <div style={{ fontSize: 10, color: SD.t3, fontFamily: 'Inter, sans-serif' }}>Avg AOV</div>
-                                  <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 15, fontWeight: 700, color: SD.t1 }}>₹{Math.round(g.aov).toLocaleString('en-IN')}</div>
-                                  <div style={{ fontSize: 10, color: SD.t3, fontFamily: 'Inter, sans-serif' }}>{totalRevAllBuckets > 0 ? (g.rev / totalRevAllBuckets * 100).toFixed(1) : 0}% of rev</div>
+                                <div style={{ display: 'flex', gap: 12, textAlign: 'right' }}>
+                                  <div>
+                                    <div style={{ fontSize: 10, color: SD.t3, fontFamily: 'Inter, sans-serif' }}>Avg AOV</div>
+                                    <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 13, fontWeight: 700, color: SD.t1 }}>₹{Math.round(g.aov).toLocaleString('en-IN')}</div>
+                                    <div style={{ fontSize: 10, color: SD.t3, fontFamily: 'Inter, sans-serif' }}>{totalRevAllBuckets > 0 ? (g.rev / totalRevAllBuckets * 100).toFixed(1) : 0}% of rev</div>
+                                  </div>
+                                  {g.repeatData && (
+                                    <div style={{ borderLeft: `1px solid ${SD.borderSoft}`, paddingLeft: 12 }}>
+                                      <div style={{ fontSize: 10, color: SD.t3, fontFamily: 'Inter, sans-serif' }}>Repeat Rate</div>
+                                      <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 13, fontWeight: 700, color: SD.t1 }}>{g.repeatData.repeatRate}%</div>
+                                      <div style={{ fontSize: 10, color: SD.t3, fontFamily: 'Inter, sans-serif' }}>{fmtN(g.repeatData.repeatCustomers)} came back</div>
+                                    </div>
+                                  )}
                                 </div>
                               </div>
                             </div>
@@ -12340,41 +12363,6 @@ function CustomerPage({ filters }) {
                 </div>
               </div>
 
-              {/* Discount Depth vs Repeat Rate */}
-              <div style={cardStyle}>
-                <div style={cardHead}>
-                  <span style={cardTitle}>Discount Depth vs Repeat Rate</span>
-                  <span style={{ fontSize: 10, color: SD.t3, fontStyle: 'italic' }}>% of customers who repurchased after buying at each discount level</span>
-                </div>
-                <div style={cardBody}>
-                  {discountRepeatRate.length > 0 ? (
-                    <ResponsiveContainer width="100%" height={220}>
-                      <ComposedChart data={discountRepeatRate} margin={{ top: 4, right: 24, bottom: 4, left: 0 }}>
-                        <CartesianGrid stroke={SD.borderSoft} />
-                        <XAxis dataKey="bucket" tick={{ fontSize: 9.5, fill: SD.t3 }} />
-                        <YAxis yAxisId="left" tick={{ fontSize: 9.5, fill: SD.t3 }} tickFormatter={v => fmtN(v)} />
-                        <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 9.5, fill: SD.t3 }} tickFormatter={v => `${v}%`} domain={[0, 100]} />
-                        <Tooltip
-                          contentStyle={{ background: SD.paper, border: `1px solid ${SD.border}`, borderRadius: 6, fontSize: 11, color: SD.t1 }}
-                          labelStyle={{ color: SD.t1, fontWeight: 700 }}
-                          itemStyle={{ color: SD.t1 }}
-                          formatter={(val, name) => {
-                            if (name === 'Repeat Rate %') return [`${val}%`, name]
-                            if (name === 'Avg Orders') return [`${val}x`, name]
-                            return [fmtN(val), name]
-                          }}
-                        />
-                        <Legend wrapperStyle={{ fontSize: 10 }} formatter={v => <span style={{ color: '#13121A' }}>{v}</span>} />
-                        <Bar yAxisId="left" dataKey="totalCustomers" name="Total Customers" fill={SD.amber} radius={[3,3,0,0]} />
-                        <Bar yAxisId="left" dataKey="repeatCustomers" name="Repeat Customers" fill={SD.amberDeep} radius={[3,3,0,0]} />
-                        <Line yAxisId="right" type="monotone" dataKey="repeatRate" name="Repeat Rate %" stroke={SD.t1} strokeWidth={2} dot={{ r: 4, fill: SD.t1 }} />
-                      </ComposedChart>
-                    </ResponsiveContainer>
-                  ) : (
-                    <div style={{ textAlign: 'center', color: SD.t3, fontSize: 11, padding: 40 }}>No data</div>
-                  )}
-                </div>
-              </div>
 
             </div>
           )
