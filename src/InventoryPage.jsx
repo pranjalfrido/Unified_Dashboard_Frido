@@ -385,14 +385,14 @@ export default function InventoryPage({ onTopbarDateControl, tab = 'health', set
           </span>
           {inv.data?.lastSalesDateConsidered && (
             <span style={{ fontSize: 11, color: IC.t3 }}>
-              Latest sales {new Date(inv.data.lastSalesDateConsidered).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}
+              Latest sales {inv.data.lastSalesDateConsidered.slice(8,10)} {new Date(inv.data.lastSalesDateConsidered + 'T12:00:00').toLocaleDateString('en-IN', { month: 'short' })}
             </span>
           )}
         </div>
       )}
       {tab === 'sales' && sales.data?.lastSalesDateConsidered && (
         <div style={{ fontSize: 11, color: IC.t3, marginBottom: 10 }}>
-          Latest sales {new Date(sales.data.lastSalesDateConsidered).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}
+          Latest sales {sales.data.lastSalesDateConsidered.slice(8,10)} {new Date(sales.data.lastSalesDateConsidered + 'T12:00:00').toLocaleDateString('en-IN', { month: 'short' })}
         </div>
       )}
       {tab === 'inward' && (
