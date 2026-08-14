@@ -11366,7 +11366,7 @@ function CustomerPage({ filters }) {
                         <ResponsiveContainer width="100%" height={190}>
                           <ComposedChart data={freqHistData} margin={{ top: 4, right: 16, bottom: 4, left: 0 }}>
                             <CartesianGrid stroke={CP.lineSoft} />
-                            <XAxis dataKey="orderCount" tick={{ fontSize: 9, fill: CP.ink3 }} label={{ value: 'Orders placed', position: 'insideBottom', offset: -2, fontSize: 9, fill: CP.ink3 }} />
+                            <XAxis dataKey="orderCount" tick={{ fontSize: 9, fill: CP.ink3 }} tickFormatter={v => v === '6+' ? '6+ time' : `${v} time`} />
                             <YAxis yAxisId="left" tick={{ fontSize: 9, fill: CP.ink3 }} tickFormatter={v => fmtBig(v)} />
                             <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 9, fill: CP.ink3 }} tickFormatter={v => `${v}%`} domain={[0, 100]} />
                             <Tooltip contentStyle={ttStyle} itemStyle={{ color: CP.ink }} labelStyle={{ color: CP.ink, fontWeight: 700 }} formatter={(v, name) => name === 'Cumulative %' ? [`${v}%`, name] : [fmtN(v), name]} />
@@ -11394,7 +11394,7 @@ function CustomerPage({ filters }) {
                         <ResponsiveContainer width="100%" height={190}>
                           <ComposedChart data={custData.aovByOrderNumber} margin={{ top: 4, right: 16, bottom: 4, left: 0 }}>
                             <CartesianGrid stroke={CP.lineSoft} />
-                            <XAxis dataKey="orderLabel" tick={{ fontSize: 9, fill: CP.ink3 }} />
+                            <XAxis dataKey="orderLabel" tick={{ fontSize: 9, fill: CP.ink3 }} tickFormatter={v => `${v} order`} />
                             <YAxis yAxisId="aov" tick={{ fontSize: 9, fill: CP.ink3 }} tickFormatter={v => fmt(v)} />
                             <YAxis yAxisId="cust" orientation="right" tick={{ fontSize: 9, fill: CP.ink3 }} tickFormatter={v => fmtBig(v)} />
                             <Tooltip contentStyle={ttStyle} itemStyle={{ color: CP.ink }} labelStyle={{ color: CP.ink, fontWeight: 700 }} formatter={(v, name) => name === 'Customers' ? [fmtN(v), name] : [fmt(v), name]} />
@@ -12027,12 +12027,6 @@ function CustomerPage({ filters }) {
           return (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 14, padding: '16px 16px 24px' }}>
 
-              {/* CAC note banner */}
-              {cacMissing && (
-                <div style={{ background: SD.amberSoft, border: `1px solid ${SD.amberLine}`, borderRadius: 10, padding: '9px 14px', fontSize: 11.5, color: SD.t1, lineHeight: 1.5 }}>
-                  ℹ️ Per-channel CAC (Meta / Google) requires <strong>customersByChannel</strong> in the API — showing <strong>—</strong> until added. Blended CAC uses total new customers and is accurate.
-                </div>
-              )}
 
               {/* KPI row */}
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 10 }}>
