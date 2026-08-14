@@ -11330,16 +11330,15 @@ function CustomerPage({ filters }) {
                   return (
                     <div>
                       {insight && <div style={{ fontSize: 11, color: CP.ink3, fontStyle: 'italic', marginBottom: 10 }}>{insight}</div>}
-                      <ResponsiveContainer width="100%" height={220}>
-                        <ComposedChart data={cycleData} layout="vertical" margin={{ top: 4, right: 40, bottom: 4, left: 80 }}>
-                          <CartesianGrid stroke={CP.lineSoft} horizontal={false} />
-                          <XAxis type="number" tick={{ fontSize: 10, fill: CP.ink3 }} tickFormatter={v => `${v}d`} />
-                          <YAxis type="category" dataKey="category" tick={{ fontSize: 10, fill: CP.ink2 }} width={80} />
+                      <ResponsiveContainer width="100%" height={240}>
+                        <ComposedChart data={cycleData} margin={{ top: 16, right: 16, bottom: 60, left: 8 }}>
+                          <CartesianGrid stroke={CP.lineSoft} vertical={false} />
+                          <XAxis dataKey="category" tick={{ fontSize: 10, fill: CP.ink2 }} angle={-35} textAnchor="end" interval={0} />
+                          <YAxis tick={{ fontSize: 10, fill: CP.ink3 }} tickFormatter={v => `${v}d`} />
                           <Tooltip contentStyle={ttStyle} itemStyle={{ color: CP.ink }} labelStyle={{ color: CP.ink, fontWeight: 700 }}
                             formatter={(v, name) => [`${v} days`, name]} />
-                          <Bar dataKey="p25Days" name="P25" fill={CP.head} radius={[0,0,0,0]} maxBarSize={14} stackId="cycle" />
-                          <Bar dataKey="medianDays" name="Median" fill={CP.yellow} radius={[0,3,3,0]} maxBarSize={14} stackId="cycle">
-                            <LabelList dataKey="medianDays" position="right" style={{ fontSize: 9, fill: CP.ink2 }} formatter={v => `${v}d`} />
+                          <Bar dataKey="medianDays" name="Median days to repurchase" fill={CP.yellow} radius={[3,3,0,0]} maxBarSize={36}>
+                            <LabelList dataKey="medianDays" position="top" style={{ fontSize: 9, fill: CP.ink2 }} formatter={v => `${v}d`} />
                           </Bar>
                         </ComposedChart>
                       </ResponsiveContainer>
@@ -11440,34 +11439,60 @@ function CustomerPage({ filters }) {
                   {(() => {
                     const singlePct = basket.totalOrders > 0 ? (basket.singleCatOrders / basket.totalOrders * 100).toFixed(1) : 0
                     const multiPct  = basket.totalOrders > 0 ? (basket.multiCatOrders  / basket.totalOrders * 100).toFixed(1) : 0
+                    const basketPieData = [
+                      { name: 'Single-category', value: basket.singleCatOrders || 0 },
+                      { name: 'Multi-category',  value: basket.multiCatOrders  || 0 },
+                    ]
                     return (
                       <div style={{ display: 'flex', gap: 24, alignItems: 'center' }}>
-                        <div style={{ flex: 1 }}>
-                          <div style={{ fontSize: 11, color: CP.ink3, fontStyle: 'italic', marginBottom: 10 }}>
-                            {multiPct}% of orders contain items from multiple categories — cross-sell is already happening organically.
-                          </div>
-                          <div style={{ display: 'flex', height: 28, borderRadius: 6, overflow: 'hidden', border: `1px solid ${CP.lineSoft}` }}>
-                            <div style={{ width: `${singlePct}%`, background: CP.yellow, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                              <span style={{ fontSize: 10, fontWeight: 700, color: CP.ink }}>{singlePct}%</span>
-                            </div>
-                            <div style={{ width: `${multiPct}%`, background: CP.yellowDeep, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                              <span style={{ fontSize: 10, fontWeight: 700, color: '#fff' }}>{multiPct}%</span>
-                            </div>
-                          </div>
-                          <div style={{ display: 'flex', gap: 16, marginTop: 8 }}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}><div style={{ width: 10, height: 10, borderRadius: 2, background: CP.yellow }} /><span style={{ fontSize: 10, color: CP.ink2 }}>Single-category ({fmtN(basket.singleCatOrders)})</span></div>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}><div style={{ width: 10, height: 10, borderRadius: 2, background: CP.yellowDeep }} /><span style={{ fontSize: 10, color: CP.ink2 }}>Multi-category ({fmtN(basket.multiCatOrders)})</span></div>
+                        {/* Donut */}
+                        <div style={{ position: 'relative', flexShrink: 0, width: 140, height: 140 }}>
+                          <ResponsiveContainer width={140} height={140}>
+                            <PieChart>
+                              <Pie data={basketPieData} dataKey="value" cx="50%" cy="50%" innerRadius={42} outerRadius={60} paddingAngle={2}>
+                                <Cell fill={CP.yellow} />
+                                <Cell fill={CP.yellowDeep} />
+                              </Pie>
+                              <Tooltip contentStyle={ttStyle} formatter={(v, name) => [fmtN(v), name]} />
+                            </PieChart>
+                          </ResponsiveContainer>
+                          <div style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%,-50%)', textAlign: 'center', pointerEvents: 'none' }}>
+                            <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 12, fontWeight: 800, color: CP.ink }}>{fmtN(basket.totalOrders)}</div>
+                            <div style={{ fontSize: 8, color: CP.ink3, textTransform: 'uppercase', letterSpacing: '.04em' }}>orders</div>
                           </div>
                         </div>
-                        <div style={{ display: 'flex', gap: 16 }}>
+                        {/* Order type breakdown */}
+                        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 10 }}>
                           {[
-                            { label: 'Avg Categories/Order', value: basket.avgCategoriesPerOrder?.toFixed(2) },
-                            { label: 'Avg SKUs/Order', value: basket.avgSkusPerOrder?.toFixed(2) },
-                            { label: 'Avg Items/Order', value: basket.avgItemsPerOrder?.toFixed(1) },
+                            { label: 'Single-category', orders: basket.singleCatOrders, pct: singlePct, color: CP.yellow },
+                            { label: 'Multi-category',  orders: basket.multiCatOrders,  pct: multiPct,  color: CP.yellowDeep },
+                          ].map((g, i) => (
+                            <div key={i}>
+                              {i > 0 && <div style={{ borderTop: `1px solid ${CP.lineSoft}`, marginBottom: 10 }} />}
+                              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                                  <div style={{ width: 9, height: 9, borderRadius: 2, background: g.color }} />
+                                  <span style={{ fontSize: 11, color: CP.ink2, fontFamily: 'Inter, sans-serif' }}>{g.label}</span>
+                                </div>
+                                <span style={{ fontSize: 11, fontWeight: 700, color: CP.ink, fontFamily: 'JetBrains Mono, monospace' }}>{fmtN(g.orders)}</span>
+                              </div>
+                              <div style={{ height: 6, borderRadius: 4, background: CP.lineSoft, overflow: 'hidden' }}>
+                                <div style={{ width: `${g.pct}%`, height: '100%', background: g.color, borderRadius: 4 }} />
+                              </div>
+                              <div style={{ fontSize: 10, color: CP.ink3, marginTop: 3 }}>{g.pct}% of orders</div>
+                            </div>
+                          ))}
+                        </div>
+                        {/* KPI tiles */}
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                          {[
+                            { label: 'Avg Categories / Order', value: basket.avgCategoriesPerOrder?.toFixed(2) },
+                            { label: 'Avg SKUs / Order',       value: basket.avgSkusPerOrder?.toFixed(2) },
+                            { label: 'Avg Items / Order',      value: basket.avgItemsPerOrder?.toFixed(1) },
                           ].map(({ label, value }) => (
-                            <div key={label} style={{ textAlign: 'center', background: CP.head, borderRadius: 8, padding: '8px 14px' }}>
-                              <div style={{ fontSize: 18, fontWeight: 800, color: CP.ink, fontFamily: 'JetBrains Mono, monospace' }}>{value || '—'}</div>
-                              <div style={{ fontSize: 9, color: CP.ink3, marginTop: 3, textTransform: 'uppercase', letterSpacing: '.04em' }}>{label}</div>
+                            <div key={label} style={{ textAlign: 'center', background: CP.head, borderRadius: 8, padding: '7px 16px', minWidth: 110 }}>
+                              <div style={{ fontSize: 17, fontWeight: 800, color: CP.ink, fontFamily: 'JetBrains Mono, monospace' }}>{value || '—'}</div>
+                              <div style={{ fontSize: 9, color: CP.ink3, marginTop: 2, textTransform: 'uppercase', letterSpacing: '.04em' }}>{label}</div>
                             </div>
                           ))}
                         </div>
@@ -11475,6 +11500,86 @@ function CustomerPage({ filters }) {
                     )
                   })()}
                 </CpCard>
+              )}
+
+              {/* Multi-cat customer stat + Top category pairs */}
+              {pbKpis.totalCustomers > 0 && crossSell.length > 0 && (
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr', gap: 16 }}>
+
+                  {/* Multi-category customers */}
+                  <CpCard title="Cross-Category Customers" sub="Customers who bought from 2+ categories">
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                      <div style={{ display: 'flex', gap: 12 }}>
+                        <div style={{ flex: 1, textAlign: 'center', background: CP.head, borderRadius: 8, padding: '10px 12px' }}>
+                          <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 22, fontWeight: 800, color: CP.ink }}>{pbKpis.multiCatRate}%</div>
+                          <div style={{ fontSize: 9, color: CP.ink3, textTransform: 'uppercase', letterSpacing: '.04em', marginTop: 2 }}>of customers</div>
+                        </div>
+                        <div style={{ flex: 1, textAlign: 'center', background: CP.head, borderRadius: 8, padding: '10px 12px' }}>
+                          <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 22, fontWeight: 800, color: CP.ink }}>{fmtN(pbKpis.multiCatCustomers)}</div>
+                          <div style={{ fontSize: 9, color: CP.ink3, textTransform: 'uppercase', letterSpacing: '.04em', marginTop: 2 }}>customers</div>
+                        </div>
+                      </div>
+                      {/* Single vs Multi bar */}
+                      <div>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
+                          <span style={{ fontSize: 10, color: CP.ink3 }}>Single-category</span>
+                          <span style={{ fontSize: 10, color: CP.ink3 }}>Multi-category</span>
+                        </div>
+                        <div style={{ display: 'flex', height: 8, borderRadius: 4, overflow: 'hidden' }}>
+                          <div style={{ width: `${100 - pbKpis.multiCatRate}%`, background: CP.yellow }} />
+                          <div style={{ width: `${pbKpis.multiCatRate}%`, background: CP.yellowDeep }} />
+                        </div>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 3 }}>
+                          <span style={{ fontSize: 10, fontWeight: 700, color: CP.ink, fontFamily: 'JetBrains Mono, monospace' }}>{fmtN(pbKpis.totalCustomers - pbKpis.multiCatCustomers)}</span>
+                          <span style={{ fontSize: 10, fontWeight: 700, color: CP.ink, fontFamily: 'JetBrains Mono, monospace' }}>{fmtN(pbKpis.multiCatCustomers)}</span>
+                        </div>
+                      </div>
+                      {/* Extra stats */}
+                      <div style={{ display: 'flex', gap: 8, borderTop: `1px solid ${CP.lineSoft}`, paddingTop: 10 }}>
+                        <div style={{ flex: 1, textAlign: 'center' }}>
+                          <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 14, fontWeight: 700, color: CP.ink }}>{pbKpis.avgDaysBetweenOrders}d</div>
+                          <div style={{ fontSize: 9, color: CP.ink3, textTransform: 'uppercase', letterSpacing: '.04em', marginTop: 1 }}>Avg days between orders</div>
+                        </div>
+                        <div style={{ flex: 1, textAlign: 'center' }}>
+                          <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 14, fontWeight: 700, color: CP.ink }}>{pbKpis.avgOrdersPerCustomer?.toFixed(1)}×</div>
+                          <div style={{ fontSize: 9, color: CP.ink3, textTransform: 'uppercase', letterSpacing: '.04em', marginTop: 1 }}>Avg orders / customer</div>
+                        </div>
+                        <div style={{ flex: 1, textAlign: 'center' }}>
+                          <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 14, fontWeight: 700, color: CP.ink }}>{pbKpis.repeatRate}%</div>
+                          <div style={{ fontSize: 9, color: CP.ink3, textTransform: 'uppercase', letterSpacing: '.04em', marginTop: 1 }}>Repeat rate</div>
+                        </div>
+                      </div>
+                      <div style={{ fontSize: 11, color: CP.ink3, fontStyle: 'italic' }}>
+                        {pbKpis.multiCatRate >= 20
+                          ? `Strong cross-sell — ${pbKpis.multiCatRate}% of customers explore multiple categories.`
+                          : `Cross-sell opportunity — only ${pbKpis.multiCatRate}% of customers buy across categories.`}
+                      </div>
+                    </div>
+                  </CpCard>
+
+                  {/* Top category pairs */}
+                  <CpCard title="Top Category Pairs" sub="Most common first → second purchase category combinations">
+                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11 }}>
+                      <thead>
+                        <tr style={{ borderBottom: `1px solid ${CP.lineSoft}` }}>
+                          <th style={{ textAlign: 'left', padding: '4px 8px', fontSize: 10, color: CP.ink3, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.04em' }}>First Purchase</th>
+                          <th style={{ textAlign: 'left', padding: '4px 8px', fontSize: 10, color: CP.ink3, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.04em' }}>Then Bought</th>
+                          <th style={{ textAlign: 'right', padding: '4px 8px', fontSize: 10, color: CP.ink3, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.04em' }}>Customers</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {crossSell.slice(0, 7).map((r, i) => (
+                          <tr key={i} style={{ borderBottom: `1px solid ${CP.lineSoft}`, background: i % 2 === 0 ? 'transparent' : CP.head }}>
+                            <td style={{ padding: '6px 8px', color: CP.ink2, fontFamily: 'Inter, sans-serif' }}>{r.firstCategory || '—'}</td>
+                            <td style={{ padding: '6px 8px', color: CP.ink, fontWeight: 600, fontFamily: 'Inter, sans-serif' }}>{r.secondCategory || '—'}</td>
+                            <td style={{ padding: '6px 8px', textAlign: 'right', fontFamily: 'JetBrains Mono, monospace', fontWeight: 700, color: CP.ink }}>{fmtN(r.customers)}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </CpCard>
+
+                </div>
               )}
             </div>
           )
@@ -12360,9 +12465,17 @@ function DocumentsPage({ setPage }) {
   )
 }
 
+const TAB_PRIORITY = ['overview', 'sales', 'ads', 'logistics', 'inventory', 'customer', 'documents']
+
 function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated }) {
-  const [page, setPage] = useState(allowedTabs?.length ? allowedTabs[0] : 'overview')
+  const [page, setPage] = useState(allowedTabs?.length ? (TAB_PRIORITY.find(t => allowedTabs.includes(t)) || allowedTabs[0]) : 'overview')
   const [invTab, setInvTab] = useState('health')
+
+  useEffect(() => {
+    if (allowedTabs?.length && !allowedTabs.includes(page)) {
+      setPage(TAB_PRIORITY.find(t => allowedTabs.includes(t)) || allowedTabs[0])
+    }
+  }, [allowedTabs])
   const def = getDefaultDates()
   const [filters, setFilters] = useState({ start: def.start, end: def.end, category: [], subCategory: [], sku: [], subChannel: '', voucher: '', region: [], tier: [], state: [], city: '', channelGroup: [] })
   const [activeTab, setActiveTab] = useState('all')
