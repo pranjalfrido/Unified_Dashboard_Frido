@@ -131,7 +131,7 @@ export default async function salesAllocationHandler(req, res) {
     }
     let lastSalesDateConsidered = null
     if (maxSalesDate) {
-      lastSalesDateConsidered = new Date(maxSalesDate).toISOString().slice(0, 10)
+      lastSalesDateConsidered = String(maxSalesDate).slice(0, 10)
     }
 
     const itemMaster = new Map()
