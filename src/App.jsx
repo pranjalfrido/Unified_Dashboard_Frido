@@ -2401,7 +2401,7 @@ function Topnav({ page, customerTab, invTab, setInvTab, alerts, onRefresh, loadi
       <div style={{ display: 'flex', alignItems: 'center', gap: 6, position: 'relative' }}>
         {page === 'inventory' && (
           <>
-            <button className="tnav-mob-only" onClick={() => setMobFilterOpen(v => !v)} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '2px 4px', color: C.t2, fontSize: 16, lineHeight: 1, display: 'flex', alignItems: 'center' }}>☰</button>
+            <button className="tnav-mob-only" onClick={() => setMobFilterOpen(v => !v)} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '2px 4px', color: C.t2, fontSize: 16, lineHeight: 1, alignItems: 'center' }}>☰</button>
             {mobFilterOpen && (
               <>
                 <div onClick={() => setMobFilterOpen(false)} style={{ position: 'fixed', inset: 0, zIndex: 499, background: 'rgba(0,0,0,0.35)' }} />
