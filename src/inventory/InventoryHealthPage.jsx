@@ -753,6 +753,13 @@ const InventoryHealthInner = React.memo(function InventoryHealthInner({ data, fi
   }, [searchInput])
   const [expandedSku, setExpandedSku] = useState(null)
   const toggleExpandedSku = useCallback(skuKey => setExpandedSku(k => k === skuKey ? null : skuKey), [])
+
+  // Desktop table virtualization
+  const tableScrollRef = useRef(null)
+  const [vScrollTop, setVScrollTop] = useState(0)
+  const ROW_H = 34
+  const OVERSCAN = 5
+  const useVirtual = !expandedSku
   const [colWidths, setColWidths] = useState(DEFAULT_COL_WIDTHS)
   // Column visibility IS its width — dragging a header border to 0 hides it (Excel's own
   // model), rather than a separate hidden-columns Set that could drift out of sync with the
@@ -956,7 +963,8 @@ const InventoryHealthInner = React.memo(function InventoryHealthInner({ data, fi
         {/* Mobile table: sticky Product ID + 6 scrollable cols */}
         <MobDetailTable filteredSkus={filteredSkus} tableTotals={tableTotals} expandedSku={expandedSku} setExpandedSku={toggleExpandedSku} TABLE_SCROLL_HEIGHT={TABLE_SCROLL_HEIGHT} />
         {/* Desktop table */}
-        <div className="inv-detail-desktop-only" style={{ maxHeight: TABLE_SCROLL_HEIGHT, overflow: 'auto' }}>
+        <div className="inv-detail-desktop-only" ref={tableScrollRef} style={{ maxHeight: TABLE_SCROLL_HEIGHT, overflow: 'auto' }}
+          onScroll={e => setVScrollTop(e.currentTarget.scrollTop)}>
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12, tableLayout: 'fixed' }}>
             <thead style={{ position: 'sticky', top: 0, zIndex: 2, background: IC.surfaceHi }}>
               <tr>
@@ -971,7 +979,17 @@ const InventoryHealthInner = React.memo(function InventoryHealthInner({ data, fi
               </tr>
             </thead>
             <tbody>
-              {filteredSkus.map((s, i) => {
+              {(() => {
+                const containerH = tableScrollRef.current ? tableScrollRef.current.clientHeight : window.innerHeight * 0.58
+                const startIdx = useVirtual ? Math.max(0, Math.floor(vScrollTop / ROW_H) - OVERSCAN) : 0
+                const endIdx = useVirtual ? Math.min(filteredSkus.length, Math.ceil((vScrollTop + containerH) / ROW_H) + OVERSCAN) : filteredSkus.length
+                const topSpacerH = useVirtual ? startIdx * ROW_H : 0
+                const bottomSpacerH = useVirtual ? (filteredSkus.length - endIdx) * ROW_H : 0
+                return (
+                  <>
+                    {topSpacerH > 0 && <tr style={{ height: topSpacerH }}><td colSpan={colOrder.length} /></tr>}
+                    {filteredSkus.slice(startIdx, endIdx).map((s, relIdx) => {
+                const i = startIdx + relIdx
                 const activeLocations = s.locations.filter(l => l.totalInvt > 0 || l.avgSale > 0)
                 return (
                   <React.Fragment key={`${s.skuKey || 'sku'}-${i}`}>
@@ -1034,7 +1052,11 @@ const InventoryHealthInner = React.memo(function InventoryHealthInner({ data, fi
                     ))}
                   </React.Fragment>
                 )
-              })}
+                    })}
+                    {bottomSpacerH > 0 && <tr style={{ height: bottomSpacerH }}><td colSpan={colOrder.length} /></tr>}
+                  </>
+                )
+              })()}
             </tbody>
             <tfoot>
               {/* Total row — sticky to the bottom of the scroll area, sums whatever's
