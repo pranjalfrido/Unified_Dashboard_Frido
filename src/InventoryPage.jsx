@@ -80,7 +80,6 @@ function useEndpoint(path, extraFilters, enabled = true) {
   // the range to end on lastSalesDateConsidered (today's data is usually partial) instead
   // — but only on that first auto-correction, so a user's own later date-picker edits or
   // Refresh clicks aren't silently overridden.
-  const autoCorrectedRef = useRef(false)
   const API = import.meta.env.VITE_API_URL || ''
 
   const fetchData = useCallback(async (body) => {
@@ -95,13 +94,6 @@ function useEndpoint(path, extraFilters, enabled = true) {
       const json = await res.json()
       if (reqId !== reqIdRef.current) return
       setData(json)
-      if (!autoCorrectedRef.current && json.lastSalesDateConsidered && json.lastSalesDateConsidered < body.end) {
-        autoCorrectedRef.current = true
-        const rangeDays = Math.round((new Date(body.end) - new Date(body.start)) / 86400000)
-        const newEnd = new Date(json.lastSalesDateConsidered)
-        const newStart = new Date(newEnd); newStart.setDate(newStart.getDate() - rangeDays)
-        setDateFilters({ start: newStart.toISOString().slice(0, 10), end: json.lastSalesDateConsidered })
-      }
     } catch (e) { if (reqId === reqIdRef.current) setError(e.message) }
     finally { if (reqId === reqIdRef.current) setLoading(false) }
   }, [API, path])
