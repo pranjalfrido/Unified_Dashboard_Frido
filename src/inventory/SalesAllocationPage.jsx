@@ -898,31 +898,17 @@ export default function SalesAllocationPage({ data, filters, setFilters, sidebar
               {isMobile ? (
                 <>
                   <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
-                    {[{ k: 'sku', label: 'SKU' }, { k: 'subCategory', label: 'Sub-cat' }, { k: 'category', label: 'Category' }].map(l => (
-                      <button key={l.k} onClick={() => setDrasticLevel(l.k)}
-                        style={{ fontSize: 10.5, padding: '3px 9px', borderRadius: 6, cursor: 'pointer', background: drasticLevel === l.k ? IC.accDim : IC.surface, color: drasticLevel === l.k ? IC.t1 : IC.t3, border: `1px solid ${drasticLevel === l.k ? IC.accBorder : IC.border}` }}>
+                    {[{ k: 'sku', label: 'SKU' }, { k: 'subCategory', label: 'Sub-cat' }, { k: 'category', label: 'Category' }, { k: 'risers', label: '▲ Risers', dir: true }, { k: 'fallers', label: '▼ Fallers', dir: true }].map(l => (
+                      <button key={l.k} onClick={() => l.dir ? setDrasticDirection(l.k) : setDrasticLevel(l.k)}
+                        style={{ fontSize: 10.5, padding: '3px 0', borderRadius: 6, cursor: 'pointer', width: 58, textAlign: 'center', whiteSpace: 'nowrap', background: (l.dir ? drasticDirection === l.k : drasticLevel === l.k) ? IC.accDim : IC.surface, color: (l.dir ? drasticDirection === l.k : drasticLevel === l.k) ? (l.k === 'fallers' ? IC.status.Critical.c : IC.t1) : IC.t3, border: `1px solid ${(l.dir ? drasticDirection === l.k : drasticLevel === l.k) ? IC.accBorder : IC.border}` }}>
                         {l.label}
-                      </button>
-                    ))}
-                    <div style={{ width: 1, background: IC.border, margin: '0 2px' }} />
-                    {[{ k: 'risers', label: '▲ Risers' }, { k: 'fallers', label: '▼ Fallers' }].map(d => (
-                      <button key={d.k} onClick={() => setDrasticDirection(d.k)}
-                        style={{ fontSize: 10.5, padding: '3px 9px', borderRadius: 6, cursor: 'pointer', background: drasticDirection === d.k ? IC.accDim : IC.surface, color: drasticDirection === d.k ? (d.k === 'risers' ? IC.positive : IC.status.Critical.c) : IC.t3, border: `1px solid ${drasticDirection === d.k ? IC.accBorder : IC.border}` }}>
-                        {d.label}
                       </button>
                     ))}
                   </div>
                   <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
-                    {[{ k: 'qty', label: 'Units' }, { k: 'rev', label: 'Revenue' }].map(m => (
-                      <button key={m.k} disabled={m.k === 'rev' && !revenueAvailable} onClick={() => setDrasticMetric(m.k)}
-                        style={{ fontSize: 10.5, padding: '3px 9px', borderRadius: 6, cursor: m.k === 'rev' && !revenueAvailable ? 'not-allowed' : 'pointer', opacity: m.k === 'rev' && !revenueAvailable ? 0.4 : 1, background: drasticMetric === m.k ? IC.accDim : IC.surface, color: drasticMetric === m.k ? IC.t1 : IC.t3, border: `1px solid ${drasticMetric === m.k ? IC.accBorder : IC.border}` }}>
-                        {m.label}
-                      </button>
-                    ))}
-                    <div style={{ width: 1, background: IC.border, margin: '0 2px' }} />
-                    {[{ k: 'day2', label: 'Last vs 2nd' }, { k: 'day7', label: 'Last vs 7th' }].map(m => (
-                      <button key={m.k} onClick={() => setDrasticMode(m.k)}
-                        style={{ fontSize: 10.5, padding: '3px 9px', borderRadius: 6, cursor: 'pointer', background: drasticMode === m.k ? IC.accDim : IC.surface, color: drasticMode === m.k ? IC.t1 : IC.t3, border: `1px solid ${drasticMode === m.k ? IC.accBorder : IC.border}`, whiteSpace: 'nowrap' }}>
+                    {[{ k: 'qty', label: 'Units' }, { k: 'rev', label: 'Revenue' }, { k: 'day2', label: 'Lst vs 2nd', mode: true }, { k: 'day7', label: 'Lst vs 7th', mode: true }].map(m => (
+                      <button key={m.k} disabled={m.k === 'rev' && !revenueAvailable} onClick={() => m.mode ? setDrasticMode(m.k) : setDrasticMetric(m.k)}
+                        style={{ fontSize: 10.5, padding: '3px 0', borderRadius: 6, cursor: m.k === 'rev' && !revenueAvailable ? 'not-allowed' : 'pointer', opacity: m.k === 'rev' && !revenueAvailable ? 0.4 : 1, width: 58, textAlign: 'center', whiteSpace: 'nowrap', background: (m.mode ? drasticMode === m.k : drasticMetric === m.k) ? IC.accDim : IC.surface, color: (m.mode ? drasticMode === m.k : drasticMetric === m.k) ? IC.t1 : IC.t3, border: `1px solid ${(m.mode ? drasticMode === m.k : drasticMetric === m.k) ? IC.accBorder : IC.border}` }}>
                         {m.label}
                       </button>
                     ))}
