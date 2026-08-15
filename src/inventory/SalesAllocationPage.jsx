@@ -753,7 +753,7 @@ export default function SalesAllocationPage({ data, filters, setFilters, sidebar
         )}
 
         {/* Sales trend */}
-        <GlassCard title="Sales Trend" note={isMobile ? null : `${trendGranularity} units & revenue`}
+        <GlassCard title={isMobile ? <span style={{ marginLeft: 8 }}>Sales Trend</span> : "Sales Trend"} note={isMobile ? null : `${trendGranularity} units & revenue`}
           style={isMobile ? { paddingLeft: 6, paddingRight: 6 } : undefined}
           action={
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
