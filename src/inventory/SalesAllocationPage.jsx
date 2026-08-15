@@ -753,26 +753,40 @@ export default function SalesAllocationPage({ data, filters, setFilters, sidebar
         )}
 
         {/* Sales trend */}
-        <GlassCard title="Sales Trend" note={`${trendGranularity} units & revenue`}
+        <GlassCard title="Sales Trend" note={isMobile ? null : `${trendGranularity} units & revenue`}
+          style={isMobile ? { paddingLeft: 6, paddingRight: 6 } : undefined}
           action={
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <div style={{ display: 'flex', gap: 4 }}>
-                {[{ k: 'daily', label: 'Daily' }, { k: 'weekly', label: 'Weekly' }, { k: 'monthly', label: 'Monthly' }].map(g => (
-                  <button key={g.k} onClick={() => setTrendGranularity(g.k)}
-                    style={{ fontSize: 11, padding: '4px 10px', borderRadius: 7, cursor: 'pointer', background: trendGranularity === g.k ? IC.accDim : IC.surface, color: trendGranularity === g.k ? IC.t1 : IC.t3, border: `1px solid ${trendGranularity === g.k ? IC.accBorder : IC.border}` }}>
-                    {g.label}
-                  </button>
-                ))}
-              </div>
-              <ExportButton filename="sales_trend.csv" rows={filteredData[trendGranularity]} columns={[{ label: 'Date', key: 'date' }, { label: 'Units', key: 'qty' }, { label: 'Revenue', key: 'rev' }]} />
+              {isMobile ? (
+                <div style={{ display: 'flex', gap: 4 }}>
+                  {[{ k: 'daily', label: 'Daily' }, { k: 'weekly', label: 'Weekly' }, { k: 'monthly', label: 'Monthly' }].map(g => (
+                    <button key={g.k} onClick={() => setTrendGranularity(g.k)}
+                      style={{ fontSize: 11, padding: '4px 10px', borderRadius: 7, cursor: 'pointer', background: trendGranularity === g.k ? IC.accDim : IC.surface, color: trendGranularity === g.k ? IC.t1 : IC.t3, border: `1px solid ${trendGranularity === g.k ? IC.accBorder : IC.border}` }}>
+                      {g.label}
+                    </button>
+                  ))}
+                </div>
+              ) : (
+                <>
+                  <div style={{ display: 'flex', gap: 4 }}>
+                    {[{ k: 'daily', label: 'Daily' }, { k: 'weekly', label: 'Weekly' }, { k: 'monthly', label: 'Monthly' }].map(g => (
+                      <button key={g.k} onClick={() => setTrendGranularity(g.k)}
+                        style={{ fontSize: 11, padding: '4px 10px', borderRadius: 7, cursor: 'pointer', background: trendGranularity === g.k ? IC.accDim : IC.surface, color: trendGranularity === g.k ? IC.t1 : IC.t3, border: `1px solid ${trendGranularity === g.k ? IC.accBorder : IC.border}` }}>
+                        {g.label}
+                      </button>
+                    ))}
+                  </div>
+                  <ExportButton filename="sales_trend.csv" rows={filteredData[trendGranularity]} columns={[{ label: 'Date', key: 'date' }, { label: 'Units', key: 'qty' }, { label: 'Revenue', key: 'rev' }]} />
+                </>
+              )}
             </div>
           }>
           <ResponsiveContainer width="100%" height={220}>
-            <ComposedChart data={dailyChart} margin={{ top: 4, right: 12, bottom: 0, left: 0 }}>
+            <ComposedChart data={dailyChart} margin={{ top: 4, right: isMobile ? 4 : 12, bottom: 0, left: 0 }}>
               <CartesianGrid stroke={IC.border} vertical={false} />
               <XAxis dataKey="date" tick={{ fontSize: 10, fill: IC.t3 }} axisLine={{ stroke: IC.border2 }} tickLine={false} />
               <YAxis yAxisId="qty" tick={{ fontSize: 10, fill: IC.t3 }} tickFormatter={fmtNum} axisLine={{ stroke: IC.border2 }} tickLine={false} width={44} />
-              {revenueAvailable && <YAxis yAxisId="rev" orientation="right" tick={{ fontSize: 10, fill: IC.t3 }} tickFormatter={fmtCurrency} axisLine={{ stroke: IC.border2 }} tickLine={false} width={56} />}
+              {revenueAvailable && !isMobile && <YAxis yAxisId="rev" orientation="right" tick={{ fontSize: 10, fill: IC.t3 }} tickFormatter={fmtCurrency} axisLine={{ stroke: IC.border2 }} tickLine={false} width={56} />}
               <Tooltip content={<SalesTrendTip />} />
               <Area yAxisId="qty" type="monotone" dataKey="qty" name="Units Sold" fill="rgba(255,214,0,0.14)" stroke={IC.acc} strokeWidth={2} />
               {revenueAvailable && <Line yAxisId="rev" type="monotone" dataKey="rev" name="Revenue" stroke={IC.categorical[0]} strokeWidth={2} dot={false} />}
