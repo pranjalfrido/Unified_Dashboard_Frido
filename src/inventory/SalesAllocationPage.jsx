@@ -782,7 +782,7 @@ export default function SalesAllocationPage({ data, filters, setFilters, sidebar
             </div>
           }>
           <ResponsiveContainer width="100%" height={220}>
-            <ComposedChart data={dailyChart} margin={{ top: 4, right: isMobile ? 10 : 12, bottom: 0, left: isMobile ? 10 : 0 }}>
+            <ComposedChart data={dailyChart} margin={{ top: 4, right: isMobile ? 10 : 12, bottom: 0, left: isMobile ? 20 : 0 }}>
               <CartesianGrid stroke={IC.border} vertical={false} />
               <XAxis dataKey="date" tick={{ fontSize: 10, fill: IC.t3 }} axisLine={{ stroke: IC.border2 }} tickLine={false}
                 {...(isMobile && dailyChart?.length ? {
