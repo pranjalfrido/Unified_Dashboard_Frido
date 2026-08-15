@@ -174,6 +174,7 @@ html,body{height:100%;background:var(--bg);font-family:var(--font);color:var(--t
 
 /* Hidden on desktop, shown on mobile via media query */
 .tnav-mob-only { display: none; }
+.inv-detail-mobile-only { display: none; }
 
 /* ══════════════════════════════════════════════
    MOBILE  ≤ 768px
