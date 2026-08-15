@@ -879,7 +879,7 @@ export default function SalesAllocationPage({ data, filters, setFilters, sidebar
             <div style={{ flex: 1, minHeight: 0, overflow: 'hidden' }}>
               <TopProductsBarList rows={topProductsRows} metric={top20Metric}
                 grandTotal={top20Metric === 'rev' ? filteredData.summary.totalRevenue : filteredData.summary.totalUnits}
-                nameWidth={top20Level === 'sku' ? (isMobile ? 145 : 150) : (isMobile ? 215 : 220)}
+                nameWidth={top20Level === 'sku' ? (isMobile ? 130 : 150) : (isMobile ? 160 : 220)}
                 isMobile={isMobile} />
             </div>
           </GlassCard>
