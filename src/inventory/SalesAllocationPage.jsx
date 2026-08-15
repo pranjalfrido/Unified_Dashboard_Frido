@@ -1,10 +1,49 @@
-import { useMemo, useState, useEffect, Fragment } from 'react'
+import { useMemo, useState, useEffect, useRef, useCallback, Children, Fragment } from 'react'
 import {
   ResponsiveContainer, ComposedChart, Area, Line, XAxis, YAxis, CartesianGrid, Tooltip,
 } from 'recharts'
 import {
   IC, fmtNum, fmtInt, fmtCurrency, GlassCard, KpiTile, SearchableMultiSelect, ExportButton,
 } from './theme.jsx'
+
+function SaKpiCarousel({ children }) {
+  const count = Children.count(children)
+  const scrollRef = useRef(null)
+  const [activeIdx, setActiveIdx] = useState(0)
+  const onScroll = useCallback(() => {
+    const el = scrollRef.current
+    if (!el) return
+    const cardW = 160 + 10
+    setActiveIdx(Math.min(count - 1, Math.round(el.scrollLeft / cardW)))
+  }, [count])
+  useEffect(() => {
+    const el = scrollRef.current
+    if (!el) return
+    el.addEventListener('scroll', onScroll, { passive: true })
+    return () => el.removeEventListener('scroll', onScroll)
+  }, [onScroll])
+  return (
+    <>
+      <div className="inv-kpi-carousel-wrap" style={{ display: 'none' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+          <span style={{ fontWeight: 700, fontSize: 14, color: IC.t1 }}>Key Metrics</span>
+          <span style={{ fontSize: 11, color: IC.t3 }}>{count} tiles · swipe →</span>
+        </div>
+        <div ref={scrollRef} className="inv-kpi-grid" style={{ display: 'flex', gap: 10 }}>
+          {children}
+        </div>
+        <div style={{ display: 'flex', justifyContent: 'center', gap: 5, marginTop: 10 }}>
+          {Array.from({ length: count }).map((_, i) => (
+            <div key={i} style={{ width: i === activeIdx ? 16 : 6, height: 6, borderRadius: 3, background: i === activeIdx ? '#FFD600' : '#C7C7CE', transition: 'all .2s' }} />
+          ))}
+        </div>
+      </div>
+      <div className="inv-kpi-desktop-grid" style={{ display: 'grid', gridTemplateColumns: `repeat(${count}, minmax(0, 1fr))`, gap: 10, alignItems: 'stretch' }}>
+        {children}
+      </div>
+    </>
+  )
+}
 
 const SLICER_HEIGHT = 32
 const SIDEBAR_WIDTH = 220
@@ -695,7 +734,7 @@ export default function SalesAllocationPage({ data, filters, setFilters, sidebar
         </button>
 
         {/* KPI row */}
-        <div className="inv-kpi-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(6, minmax(0, 1fr))', gap: 10, alignItems: 'stretch' }}>
+        <SaKpiCarousel>
           <KpiTile compact label="Revenue" value={revenueAvailable ? fmtCurrency(filteredData.summary.totalRevenue) : '—'}
             sub={revenueAvailable ? `Avg ${fmtCurrency(filteredData.summary.avgDailyRevenue)}/day` : 'Pending pipeline sync for recent dates'} icon="/sa-icon-revenue.jpg" />
           <KpiTile compact label="Units Sold" value={fmtNum(filteredData.summary.totalUnits)} unit="units"
@@ -705,7 +744,7 @@ export default function SalesAllocationPage({ data, filters, setFilters, sidebar
           <KpiTile compact label="Momentum" value={filteredData.summary.momentumPct != null ? `${filteredData.summary.momentumPct > 0 ? '+' : ''}${filteredData.summary.momentumPct.toFixed(0)}%` : '—'} sub="first vs last day" accent={filteredData.summary.momentumPct >= 0 ? IC.positive : IC.status.Critical.c} icon="/sa-icon-momentum.png" />
           <KpiTile compact label="Sales Type Mix" value={salesTypeMix ? `${salesTypeMix.b2c}% B2C` : '—'}
             sub={salesTypeMix ? `${salesTypeMix.b2b}% B2B · ${salesTypeMix.po}% PO` : 'No sales in range'} icon="/sa-icon-salesmix.png" />
-        </div>
+        </SaKpiCarousel>
         {filteredData.previousPeriod && (
           <div style={{ display: 'flex', gap: 16, fontSize: 11, color: IC.t3, marginTop: -6 }}>
             <span>Revenue vs previous period: <ChangeBadge pct={filteredData.previousPeriod.revenueChangePct} /></span>
