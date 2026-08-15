@@ -1112,9 +1112,9 @@ const InventoryHealthInner = React.memo(function InventoryHealthInner({ data, fi
           — the actual cause of the page-wide horizontal scroll/misalignment bug reported
           earlier. Belt-and-suspenders: the constraint is enforced at both the grid-item
           wrapper level and the card level, not relying on either alone. */}
-      <div className="inv-2col-row" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+      <div className="inv-2col-row" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, alignItems: 'stretch' }}>
         <div style={{ minWidth: 0 }}>
-        <GlassCard title="Slow Moving"
+        <GlassCard title={<><span className="inv-detail-desktop-only">Slow Moving Sub-categories</span><span className="inv-detail-mobile-only">Slow Moving</span></>}
           note={<span className="inv-detail-desktop-only">DOI &gt; 45d or not being sold, sub-cat stock &gt; 50 units</span>}
           action={<div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <input placeholder="Search…" value={slowSearch} onChange={e => setSlowSearch(e.target.value)}
@@ -1128,7 +1128,7 @@ const InventoryHealthInner = React.memo(function InventoryHealthInner({ data, fi
         </div>
 
         <div style={{ minWidth: 0 }}>
-        <GlassCard title="Dead Stock"
+        <GlassCard title={<><span className="inv-detail-desktop-only">Dead Stock Sub-categories</span><span className="inv-detail-mobile-only">Dead Stock</span></>}
           note={<span className="inv-detail-desktop-only">DOI &gt; 200d, or not being sold with stock &gt; 200 units</span>}
           action={<div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <input placeholder="Search…" value={deadSearch} onChange={e => setDeadSearch(e.target.value)}
