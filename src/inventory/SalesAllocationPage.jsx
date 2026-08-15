@@ -213,7 +213,7 @@ function RankedBarList({ rows, total, height, nameWidth = 90, metric = 'qty' }) 
 // the #1 row always reads as a full bar. The %-of-total column is against total sales for
 // the WHOLE period (grandTotal), not the sum of visible rows — so percentages don't
 // silently re-normalize as you scroll.
-function TopProductsBarList({ rows, metric, grandTotal, nameWidth = 140 }) {
+function TopProductsBarList({ rows, metric, grandTotal, nameWidth = 140, isMobile = false }) {
   const maxVal = Math.max(1, ...rows.map(r => r[metric]))
   const ROW_HEIGHT = 25 // explicit fixed row height — no layout-dependent sizing.
   // This element only fills its parent (height: 100%) — the actual fixed pixel height is
@@ -230,8 +230,8 @@ function TopProductsBarList({ rows, metric, grandTotal, nameWidth = 140 }) {
         const val = r[metric]
         const pctOfTotal = grandTotal > 0 ? (val / grandTotal) * 100 : 0
         return (
-          <div key={r.name} style={{ minHeight: ROW_HEIGHT, flex: '1 1 auto', boxSizing: 'border-box', display: 'grid', gridTemplateColumns: `18px ${nameWidth}px 1fr 66px 52px`, alignItems: 'center', gap: 8, padding: '4px 0', borderBottom: i < rows.length - 1 ? `1px solid ${IC.border}` : 'none' }}>
-            <span style={{ fontSize: 10.5, color: IC.t3 }}>{i + 1}</span>
+          <div key={r.name} style={{ minHeight: ROW_HEIGHT, flex: '1 1 auto', boxSizing: 'border-box', display: 'grid', gridTemplateColumns: isMobile ? `${nameWidth}px 1fr 66px 52px` : `18px ${nameWidth}px 1fr 66px 52px`, alignItems: 'center', gap: 8, padding: '4px 0', borderBottom: i < rows.length - 1 ? `1px solid ${IC.border}` : 'none' }}>
+            {!isMobile && <span style={{ fontSize: 10.5, color: IC.t3 }}>{i + 1}</span>}
             <span title={r.name} style={{ fontSize: 11.5, color: IC.t1, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.name}</span>
             <div style={{ height: 10, borderRadius: 4, background: 'rgba(0,0,0,0.06)', overflow: 'hidden' }}>
               <div style={{ width: `${(val / maxVal) * 100}%`, height: '100%', background: IC.acc, borderRadius: 4 }} />
@@ -879,7 +879,8 @@ export default function SalesAllocationPage({ data, filters, setFilters, sidebar
             <div style={{ flex: 1, minHeight: 0, overflow: 'hidden' }}>
               <TopProductsBarList rows={topProductsRows} metric={top20Metric}
                 grandTotal={top20Metric === 'rev' ? filteredData.summary.totalRevenue : filteredData.summary.totalUnits}
-                nameWidth={top20Level === 'sku' ? 150 : 220} />
+                nameWidth={top20Level === 'sku' ? (isMobile ? 145 : 150) : (isMobile ? 215 : 220)}
+                isMobile={isMobile} />
             </div>
           </GlassCard>
 
