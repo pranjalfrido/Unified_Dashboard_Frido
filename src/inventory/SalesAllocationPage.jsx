@@ -297,7 +297,7 @@ function DrasticMoversTable({ rows, metric, level, isMobile = false }) {
         const up = r.pctChange >= 0
         return (
           <div key={i} style={{
-            display: 'grid', gridTemplateColumns: isMobile ? '1fr 60px 60px 68px' : '16px 1fr 60px 60px 68px', alignItems: 'center', gap: 8, padding: '3.5px 0',
+            display: 'grid', gridTemplateColumns: isMobile ? '1fr 52px 52px 62px' : '16px 1fr 60px 60px 68px', alignItems: 'center', gap: 8, padding: '3.5px 0',
             borderBottom: i < rows.length - 1 ? `1px solid ${IC.border}` : 'none',
           }}>
             {!isMobile && <span style={{ fontSize: 10.5, color: IC.t3 }}>{i + 1}</span>}
@@ -953,7 +953,7 @@ export default function SalesAllocationPage({ data, filters, setFilters, sidebar
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0, overflow: 'hidden' }}>
               {drasticRows.length > 0 && (
-                <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr 60px 60px 68px' : '16px 1fr 60px 60px 68px', gap: 8, padding: '0 0 4px', borderBottom: `1px solid ${IC.border2}`, marginBottom: 2, flexShrink: 0 }}>
+                <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr 52px 52px 62px' : '16px 1fr 60px 60px 68px', gap: 8, padding: '0 0 4px', borderBottom: `1px solid ${IC.border2}`, marginBottom: 2, flexShrink: 0 }}>
                   {!isMobile && <span />}
                   <span style={{ fontSize: 9.5, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.04em', color: IC.t3, whiteSpace: 'nowrap' }}>
                     {drasticLevel === 'sku' ? 'SKU' : drasticLevel === 'subCategory' ? 'Sub-cat' : 'Category'}
