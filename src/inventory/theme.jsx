@@ -106,10 +106,14 @@ export function fmtCurrency(n) {
 }
 
 export function getDefaultDates() {
+  const toLocal = d => {
+    const y = d.getFullYear(), m = String(d.getMonth() + 1).padStart(2, '0'), day = String(d.getDate()).padStart(2, '0')
+    return `${y}-${m}-${day}`
+  }
   const end = new Date()
   const start = new Date(end)
   start.setDate(start.getDate() - 6)
-  return { start: start.toISOString().slice(0, 10), end: end.toISOString().slice(0, 10) }
+  return { start: toLocal(start), end: toLocal(end) }
 }
 
 // ── Shared building blocks ─────────────────────────────────────────────────
