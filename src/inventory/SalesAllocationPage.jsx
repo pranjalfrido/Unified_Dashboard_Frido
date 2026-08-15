@@ -288,7 +288,7 @@ function LocationClusteredBarList({ rows, height, nameWidth = 90 }) {
 // works across all 3 levels since the API already labels each row with the right fields
 // (sku+category+subCategory, or subCategory+category, or just category). No sub-label
 // under the name — level is already stated in the toggle above, so it'd just repeat.
-function DrasticMoversTable({ rows, metric, level }) {
+function DrasticMoversTable({ rows, metric, level, isMobile = false }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0, overflowY: 'auto' }}>
       {rows.length === 0 && <div style={{ fontSize: 12, color: IC.t3, padding: '4px 0' }}>No data for this comparison.</div>}
@@ -297,10 +297,10 @@ function DrasticMoversTable({ rows, metric, level }) {
         const up = r.pctChange >= 0
         return (
           <div key={i} style={{
-            display: 'grid', gridTemplateColumns: '16px 1fr 60px 60px 68px', alignItems: 'center', gap: 8, padding: '3.5px 0',
+            display: 'grid', gridTemplateColumns: isMobile ? '1fr 60px 60px 68px' : '16px 1fr 60px 60px 68px', alignItems: 'center', gap: 8, padding: '3.5px 0',
             borderBottom: i < rows.length - 1 ? `1px solid ${IC.border}` : 'none',
           }}>
-            <span style={{ fontSize: 10.5, color: IC.t3 }}>{i + 1}</span>
+            {!isMobile && <span style={{ fontSize: 10.5, color: IC.t3 }}>{i + 1}</span>}
             <span title={label} style={{ fontSize: 11.5, color: IC.t1, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{label}</span>
             <span style={{ fontSize: 10.5, color: IC.t3, textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>
               {metric === 'rev' ? fmtCurrency(r.compareVal) : fmtInt(r.compareVal)}
@@ -953,17 +953,17 @@ export default function SalesAllocationPage({ data, filters, setFilters, sidebar
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0, overflow: 'hidden' }}>
               {drasticRows.length > 0 && (
-                <div style={{ display: 'grid', gridTemplateColumns: '16px 1fr 60px 60px 68px', gap: 8, padding: '0 0 4px', borderBottom: `1px solid ${IC.border2}`, marginBottom: 2, flexShrink: 0 }}>
-                  <span />
-                  <span style={{ fontSize: 9.5, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.04em', color: IC.t3 }}>
-                    {drasticLevel === 'sku' ? 'SKU' : drasticLevel === 'subCategory' ? 'Sub-category' : 'Category'}
+                <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr 60px 60px 68px' : '16px 1fr 60px 60px 68px', gap: 8, padding: '0 0 4px', borderBottom: `1px solid ${IC.border2}`, marginBottom: 2, flexShrink: 0 }}>
+                  {!isMobile && <span />}
+                  <span style={{ fontSize: 9.5, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.04em', color: IC.t3, whiteSpace: 'nowrap' }}>
+                    {drasticLevel === 'sku' ? 'SKU' : drasticLevel === 'subCategory' ? 'Sub-cat' : 'Category'}
                   </span>
                   <span style={{ fontSize: 9.5, fontWeight: 700, textTransform: 'uppercase', color: IC.t3, textAlign: 'right' }}>Before</span>
                   <span style={{ fontSize: 9.5, fontWeight: 700, textTransform: 'uppercase', color: IC.t3, textAlign: 'right' }}>Now</span>
                   <span style={{ fontSize: 9.5, fontWeight: 700, textTransform: 'uppercase', color: IC.t3, textAlign: 'right' }}>Change</span>
                 </div>
               )}
-              <DrasticMoversTable rows={drasticRows} metric={drasticMetric} level={drasticLevel} />
+              <DrasticMoversTable rows={drasticRows} metric={drasticMetric} level={drasticLevel} isMobile={isMobile} />
             </div>
           </GlassCard>
         </div>
