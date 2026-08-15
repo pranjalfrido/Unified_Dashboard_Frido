@@ -54,7 +54,8 @@ const ZOOM_BREAKPOINTS = [
   { minWidth: 1600, zoom: 1 },
   { minWidth: 1440, zoom: 0.9 },
   { minWidth: 1280, zoom: 0.8 },
-  { minWidth: 0, zoom: 0.72 },
+  { minWidth: 769, zoom: 0.72 },
+  { minWidth: 0, zoom: 1 }, // no zoom on mobile — CSS responsive layout takes over
 ]
 function zoomForWidth(width) {
   for (const bp of ZOOM_BREAKPOINTS) if (width >= bp.minWidth) return bp.zoom

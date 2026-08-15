@@ -368,6 +368,7 @@ export default function InventoryPage({ onTopbarDateControl, tab = 'health', set
   // date range now lives in App.jsx's actual top bar instead, see onTopbarDateControl above).
   const sidebarTop = (
     <div style={{ marginBottom: 4 }}>
+      <SubTabSwitcher tab={tab} setTab={setTab} />
       {tab === 'health' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 2, marginBottom: 10 }}>
           <span style={{ fontSize: 11, color: IC.t3 }}>
@@ -559,6 +560,22 @@ export default function InventoryPage({ onTopbarDateControl, tab = 'health', set
 
   return (
     <div style={{ background: PAGE_BACKGROUND, height: '100%', display: 'flex', flexDirection: 'column', color: IC.t1, fontFamily: 'Inter, sans-serif' }}>
+      {/* Mobile-only tab bar — the desktop tab switcher lives inside the FilterSidebar. On
+          mobile the sidebar is hidden, so we surface the same tabs as a horizontal scroll row. */}
+      <div className="inv-mobile-subtabs" style={{
+        display: 'none', alignItems: 'center', gap: 0,
+        borderBottom: `1px solid ${IC.border}`, background: IC.surface,
+        padding: '0 12px', overflowX: 'auto', flexShrink: 0,
+      }}>
+        {[{ id: 'health', label: '📦 Health' }, { id: 'sales', label: '📊 Sales & Alloc' }].map(t => (
+          <button key={t.id} onClick={() => setTab(t.id)} style={{
+            padding: '10px 14px', border: 'none', borderBottom: tab === t.id ? `3px solid ${IC.acc}` : '3px solid transparent',
+            background: 'none', fontSize: 13, fontWeight: tab === t.id ? 700 : 500,
+            color: tab === t.id ? IC.t1 : IC.t3, cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0,
+          }}>{t.label}</button>
+        ))}
+      </div>
+
       {/* No horizontal padding here — each sub-page applies its own paddingLeft to content. */}
       <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
         {active.loading && !active.data && (

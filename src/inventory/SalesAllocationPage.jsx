@@ -60,26 +60,66 @@ function ChangeBadge({ pct }) {
 
 // ── Tiny inline sparkline (single series, no axes/legend — the mark IS the label) ──
 // ── Left filter sidebar — same pattern/component set as Inventory Health, for consistency ──
-function FilterSidebar({ data, filters, setFilters, open, sidebarTop }) {
+function FilterSidebar({ data, filters, setFilters, open, onClose, isMobile, sidebarTop }) {
   const opts = data.filterOptions
   const set = (key, arr) => setFilters(f => ({ ...f, [key]: arr }))
   const anyActive = ['category', 'subCategory', 'sku', 'channel', 'salesType', 'facility', 'region']
     .some(k => filters[k]?.length)
 
-  // position: fixed, positioned using the app shell's own known CSS variables (--sb for the
-  // left icon rail's width, --nav for the top bar's height) instead of a live
-  // getBoundingClientRect() measurement — see InventoryHealthPage.jsx's FilterSidebar for
-  // the full writeup on why the measured approach could drift and detach the fixed sidebar
-  // from its actual layout slot.
+  const filterContent = (
+    <>
+      {sidebarTop}
+      <div style={{ fontSize: 10, fontWeight: 800, color: IC.t3, letterSpacing: '.06em', textTransform: 'uppercase' }}>Filters</div>
+      <SearchableMultiSelect label="Category" options={opts.categories} selected={filters.category || []} onChange={v => set('category', v)}
+        width={SIDEBAR_WIDTH - 24} height={SLICER_HEIGHT} />
+      <SearchableMultiSelect label="Sub-category" options={opts.subCategories} selected={filters.subCategory || []} onChange={v => set('subCategory', v)}
+        width={SIDEBAR_WIDTH - 24} height={SLICER_HEIGHT} />
+      <SearchableMultiSelect label="Product ID" options={opts.skus} selected={filters.sku || []} onChange={v => set('sku', v)}
+        width={SIDEBAR_WIDTH - 24} height={SLICER_HEIGHT} />
+      <div style={{ height: 1, background: IC.border, margin: '2px 0' }} />
+      <SearchableMultiSelect label="Channel" options={opts.channels} selected={filters.channel || []} onChange={v => set('channel', v)}
+        width={SIDEBAR_WIDTH - 24} height={SLICER_HEIGHT} />
+      <SearchableMultiSelect label="Sales Type" options={opts.salesTypes} selected={filters.salesType || []} onChange={v => set('salesType', v)}
+        width={SIDEBAR_WIDTH - 24} height={SLICER_HEIGHT} />
+      <div style={{ height: 1, background: IC.border, margin: '2px 0' }} />
+      <SearchableMultiSelect label="Facility" options={opts.facilities} selected={filters.facility || []} onChange={v => set('facility', v)}
+        getKey={o => o.facility} getLabel={o => o.facility} width={SIDEBAR_WIDTH - 24} height={SLICER_HEIGHT} />
+      <SearchableMultiSelect label="Region" options={opts.regions} selected={filters.region || []} onChange={v => set('region', v)}
+        width={SIDEBAR_WIDTH - 24} height={SLICER_HEIGHT} />
+      <div style={{ height: 1, background: IC.border, margin: '2px 0' }} />
+      <label style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: 12, color: IC.t2, cursor: 'pointer' }}>
+        <input type="checkbox" checked={!!filters.comparePrevious} onChange={e => setFilters(f => ({ ...f, comparePrevious: e.target.checked }))} />
+        Compare to previous period
+      </label>
+      {anyActive && (
+        <button onClick={() => setFilters(f => ({ comparePrevious: f.comparePrevious, momentumWindow: f.momentumWindow }))}
+          style={{ fontSize: 11, color: IC.t3, background: 'none', border: `1px solid ${IC.border}`, borderRadius: 6, padding: '5px 0', cursor: 'pointer' }}>
+          ✕ Clear all
+        </button>
+      )}
+    </>
+  )
+
+  if (isMobile) {
+    if (!open) return null
+    return (
+      <>
+        <div className="inv-filter-backdrop" onClick={onClose} />
+        <div className="inv-filter-drawer" style={{ background: IC.surface, borderRight: `1px solid ${IC.border}`, display: 'flex', flexDirection: 'column', gap: 10, padding: '12px', boxSizing: 'border-box' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
+            <span style={{ fontSize: 12, fontWeight: 700, color: IC.t1 }}>Filters</span>
+            <button onClick={onClose} style={{ background: 'none', border: 'none', color: IC.t3, fontSize: 18, cursor: 'pointer', padding: '2px 6px', lineHeight: 1 }}>✕</button>
+          </div>
+          {filterContent}
+        </div>
+      </>
+    )
+  }
+
   return (
     <div style={{
       width: open ? SIDEBAR_WIDTH : 0, minWidth: open ? SIDEBAR_WIDTH : 0, transition: 'width .2s ease, min-width .2s ease',
       overflow: 'hidden', borderRight: `1px solid ${IC.border}`, flexShrink: 0,
-      // Matches the fixed inner panel's own background — this outer div only reserves width
-      // in the flex row (its child is position:fixed), but it still occupies real vertical
-      // space at its own top offset. Without a matching background here, that offset shows
-      // through as a grey gap between the top bar and where the fixed white sidebar
-      // visually begins.
       background: IC.surface,
     }}>
       <div style={{
@@ -90,35 +130,7 @@ function FilterSidebar({ data, filters, setFilters, open, sidebarTop }) {
           height: 'calc(100vh - var(--nav))', overflowY: 'auto',
         } : {}),
       }}>
-        {sidebarTop}
-        <div style={{ fontSize: 10, fontWeight: 800, color: IC.t3, letterSpacing: '.06em', textTransform: 'uppercase' }}>Filters</div>
-        <SearchableMultiSelect label="Category" options={opts.categories} selected={filters.category || []} onChange={v => set('category', v)}
-          width={SIDEBAR_WIDTH - 24} height={SLICER_HEIGHT} />
-        <SearchableMultiSelect label="Sub-category" options={opts.subCategories} selected={filters.subCategory || []} onChange={v => set('subCategory', v)}
-          width={SIDEBAR_WIDTH - 24} height={SLICER_HEIGHT} />
-        <SearchableMultiSelect label="Product ID" options={opts.skus} selected={filters.sku || []} onChange={v => set('sku', v)}
-          width={SIDEBAR_WIDTH - 24} height={SLICER_HEIGHT} />
-        <div style={{ height: 1, background: IC.border, margin: '2px 0' }} />
-        <SearchableMultiSelect label="Channel" options={opts.channels} selected={filters.channel || []} onChange={v => set('channel', v)}
-          width={SIDEBAR_WIDTH - 24} height={SLICER_HEIGHT} />
-        <SearchableMultiSelect label="Sales Type" options={opts.salesTypes} selected={filters.salesType || []} onChange={v => set('salesType', v)}
-          width={SIDEBAR_WIDTH - 24} height={SLICER_HEIGHT} />
-        <div style={{ height: 1, background: IC.border, margin: '2px 0' }} />
-        <SearchableMultiSelect label="Facility" options={opts.facilities} selected={filters.facility || []} onChange={v => set('facility', v)}
-          getKey={o => o.facility} getLabel={o => o.facility} width={SIDEBAR_WIDTH - 24} height={SLICER_HEIGHT} />
-        <SearchableMultiSelect label="Region" options={opts.regions} selected={filters.region || []} onChange={v => set('region', v)}
-          width={SIDEBAR_WIDTH - 24} height={SLICER_HEIGHT} />
-        <div style={{ height: 1, background: IC.border, margin: '2px 0' }} />
-        <label style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: 12, color: IC.t2, cursor: 'pointer' }}>
-          <input type="checkbox" checked={!!filters.comparePrevious} onChange={e => setFilters(f => ({ ...f, comparePrevious: e.target.checked }))} />
-          Compare to previous period
-        </label>
-        {anyActive && (
-          <button onClick={() => setFilters(f => ({ comparePrevious: f.comparePrevious, momentumWindow: f.momentumWindow }))}
-            style={{ fontSize: 11, color: IC.t3, background: 'none', border: `1px solid ${IC.border}`, borderRadius: 6, padding: '5px 0', cursor: 'pointer' }}>
-            ✕ Clear all
-          </button>
-        )}
+        {filterContent}
       </div>
     </div>
   )
@@ -268,6 +280,12 @@ function DrasticMoversTable({ rows, metric, level }) {
 }
 
 export default function SalesAllocationPage({ data, filters, setFilters, sidebarTop }) {
+  const [isMobile, setIsMobile] = useState(() => window.innerWidth <= 768)
+  useEffect(() => {
+    const onResize = () => setIsMobile(window.innerWidth <= 768)
+    window.addEventListener('resize', onResize)
+    return () => window.removeEventListener('resize', onResize)
+  }, [])
   const [trendGranularity, setTrendGranularity] = useState('daily') // 'daily' | 'weekly' | 'monthly'
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [channelMetric, setChannelMetric] = useState('rev') // 'rev' | 'qty' — Channel-Wise Sales bar list
@@ -652,8 +670,9 @@ export default function SalesAllocationPage({ data, filters, setFilters, sidebar
   // keyed off --sb instead of assuming flow-adjacency to the (also position:fixed) sidebar.
   return (
     <div style={{ display: 'flex', gap: 0 }}>
-      <FilterSidebar data={data} filters={filters} setFilters={setFilters} open={sidebarOpen} sidebarTop={sidebarTop} />
-      <button onClick={() => setSidebarOpen(o => !o)} style={{
+      <FilterSidebar data={data} filters={filters} setFilters={setFilters} open={sidebarOpen} onClose={() => setSidebarOpen(false)} isMobile={isMobile} sidebarTop={sidebarTop} />
+      {/* Desktop collapse-toggle — hidden on mobile via CSS */}
+      <button className="inv-filter-toggle" onClick={() => setSidebarOpen(o => !o)} style={{
         width: 16, height: 48, border: `1px solid ${IC.border}`, borderLeft: 'none',
         background: IC.surface, cursor: 'pointer', borderRadius: '0 8px 8px 0', display: 'flex', alignItems: 'center',
         justifyContent: 'center', color: IC.t3, fontSize: 12, flexShrink: 0,
@@ -665,10 +684,18 @@ export default function SalesAllocationPage({ data, filters, setFilters, sidebar
       </button>
 
       {/* +16 accounts for the collapse-toggle button's own width (position:fixed, out of flow). */}
-      <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 18, paddingLeft: 32, paddingRight: 24, paddingTop: 16 }}>
+      <div className="inv-main-content" style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 18, paddingLeft: 32, paddingRight: 24, paddingTop: 16 }}>
+
+        {/* Mobile filter button */}
+        <button className="inv-filter-mobile-btn" onClick={() => setSidebarOpen(true)} style={{
+          display: 'none', alignItems: 'center', gap: 6, padding: '8px 14px', borderRadius: 8,
+          background: IC.surface, border: `1px solid ${IC.border2}`, color: IC.t2, fontSize: 13, cursor: 'pointer', alignSelf: 'flex-start',
+        }}>
+          ☰ Filters{filters && ['category', 'subCategory', 'sku', 'channel', 'salesType', 'facility', 'region'].some(k => filters[k]?.length) ? ' •' : ''}
+        </button>
 
         {/* KPI row */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6, minmax(0, 1fr))', gap: 10, alignItems: 'stretch' }}>
+        <div className="inv-kpi-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(6, minmax(0, 1fr))', gap: 10, alignItems: 'stretch' }}>
           <KpiTile compact label="Revenue" value={revenueAvailable ? fmtCurrency(filteredData.summary.totalRevenue) : '—'}
             sub={revenueAvailable ? `Avg ${fmtCurrency(filteredData.summary.avgDailyRevenue)}/day` : 'Pending pipeline sync for recent dates'} icon="/sa-icon-revenue.jpg" />
           <KpiTile compact label="Units Sold" value={fmtNum(filteredData.summary.totalUnits)} unit="units"
@@ -717,7 +744,7 @@ export default function SalesAllocationPage({ data, filters, setFilters, sidebar
         {/* Location-wise sold vs allocation + channel-wise split + category-wise split —
             fixed, matched heights so no card's content area grows/shrinks with row count
             or toggle state. Same RankedBarList sizing/fonts across all three. */}
-        <div style={{ display: 'grid', gridTemplateColumns: '0.85fr 0.85fr 1fr', gap: 14, alignItems: 'stretch' }}>
+        <div className="inv-3col-row" style={{ display: 'grid', gridTemplateColumns: '0.85fr 0.85fr 1fr', gap: 14, alignItems: 'stretch' }}>
           <GlassCard title="Location-Wise Sales vs Allocation"
             style={{ display: 'flex', flexDirection: 'column' }}
             action={

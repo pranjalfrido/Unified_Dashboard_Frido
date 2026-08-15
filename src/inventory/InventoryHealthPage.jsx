@@ -259,7 +259,7 @@ function TileToggle({ label, active, onClick }) {
   )
 }
 
-function FilterSidebar({ data, filters, setFilters, open, sidebarTop }) {
+function FilterSidebar({ data, filters, setFilters, open, onClose, isMobile, sidebarTop }) {
   const opts = data.filterOptions
   const set = (key, arr) => setFilters(f => ({ ...f, [key]: arr }))
   const toggleTile = (key, value) => setFilters(f => {
@@ -270,14 +270,54 @@ function FilterSidebar({ data, filters, setFilters, open, sidebarTop }) {
   const anyActive = ['category', 'subCategory', 'facility', 'facilityType', 'productId', 'location', 'stockStatus']
     .some(k => filters[k]?.length)
 
-  // position: fixed, positioned using the app shell's own known CSS variables (--sb for the
-  // left icon rail's width, --nav for the top bar's height, both defined in index.css)
-  // instead of a live getBoundingClientRect() measurement. The measured approach was
-  // fundamentally fragile: it only re-ran on mount and window `resize`, so anything else
-  // that shifted the sidebar's layout slot afterward (a scrollbar appearing on the main
-  // content, a reflow with no resize event, etc.) left `left` stale — the fixed panel then
-  // visually detached from its slot, showing the sidebar and main content scrolled to
-  // completely different positions. --sb/--nav are static, so this can't drift.
+  // On mobile: renders as a fixed overlay drawer. On desktop: position:fixed panel anchored
+  // to --sb/--nav CSS variables (see comment below for why measured approach was dropped).
+  if (isMobile) {
+    if (!open) return null
+    return (
+      <>
+        <div className="inv-filter-backdrop" onClick={onClose} />
+        <div className="inv-filter-drawer" style={{ background: IC.surface, borderRight: `1px solid ${IC.border}`, display: 'flex', flexDirection: 'column', gap: 10, padding: '12px', boxSizing: 'border-box' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
+            {sidebarTop}
+            <button onClick={onClose} style={{ background: 'none', border: 'none', color: IC.t3, fontSize: 18, cursor: 'pointer', padding: '2px 6px', lineHeight: 1 }}>✕</button>
+          </div>
+          <SidebarSectionTitle title="Location" />
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 6 }}>
+            {opts.locations.map(loc => (
+              <TileToggle key={loc} label={loc} active={(filters.location || []).includes(loc)} onClick={() => toggleTile('location', loc)} />
+            ))}
+          </div>
+          <SidebarSectionTitle title="Stock Status" />
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 6 }}>
+            {sortByStatusOrder(opts.stockStatuses).map(s => (
+              <TileToggle key={s} label={IC.status[s]?.label || s} active={(filters.stockStatus || []).includes(s)} onClick={() => toggleTile('stockStatus', s)} />
+            ))}
+          </div>
+          <div style={{ height: 1, background: IC.border, margin: '2px 0' }} />
+          <SidebarSectionTitle title="Avg Sale Window" />
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 6 }}>
+            {[7, 15, 30].map(d => (
+              <TileToggle key={d} label={`${d}d`} active={(filters.avgSaleWindowDays || 7) === d} onClick={() => setFilters(f => ({ ...f, avgSaleWindowDays: d }))} />
+            ))}
+          </div>
+          <div style={{ height: 1, background: IC.border, margin: '2px 0' }} />
+          <SidebarSectionTitle title="Filters" />
+          <SearchableMultiSelect label="Facility Type" options={opts.facilityTypes} selected={filters.facilityType || []} onChange={v => set('facilityType', v)} width={240} height={SLICER_HEIGHT} />
+          <SearchableMultiSelect label="Facility" options={opts.facilities} selected={filters.facility || []} onChange={v => set('facility', v)} getKey={o => o.facility} getLabel={o => o.facility} width={240} height={SLICER_HEIGHT} />
+          <SearchableMultiSelect label="Category" options={opts.categories} selected={filters.category || []} onChange={v => set('category', v)} width={240} height={SLICER_HEIGHT} />
+          <SearchableMultiSelect label="Sub-category" options={opts.subCategories} selected={filters.subCategory || []} onChange={v => set('subCategory', v)} width={240} height={SLICER_HEIGHT} />
+          <SearchableMultiSelect label="Product ID" options={opts.productIds} selected={filters.productId || []} onChange={v => set('productId', v)} getKey={o => o.sku} getLabel={o => o.sku} width={240} height={SLICER_HEIGHT} />
+          {anyActive && (
+            <button onClick={() => setFilters({})} style={{ fontSize: 11, color: IC.t3, background: 'none', border: `1px solid ${IC.border}`, borderRadius: 6, padding: '5px 0', cursor: 'pointer' }}>
+              ✕ Clear all
+            </button>
+          )}
+        </div>
+      </>
+    )
+  }
+
   return (
     <div style={{
       width: open ? SIDEBAR_WIDTH : 0, minWidth: open ? SIDEBAR_WIDTH : 0, transition: 'width .2s ease, min-width .2s ease',
@@ -521,6 +561,12 @@ function PivotTable({ pivot, search }) {
 }
 
 const InventoryHealthInner = React.memo(function InventoryHealthInner({ data, filters, setFilters, sidebarTop, sidebarOpen, setSidebarOpen }) {
+  const [isMobile, setIsMobile] = useState(() => window.innerWidth <= 768)
+  useEffect(() => {
+    const onResize = () => setIsMobile(window.innerWidth <= 768)
+    window.addEventListener('resize', onResize)
+    return () => window.removeEventListener('resize', onResize)
+  }, [])
   const [search, setSearch] = useState('')
   const [expandedSku, setExpandedSku] = useState(null)
   const [colWidths, setColWidths] = useState(DEFAULT_COL_WIDTHS)
@@ -659,8 +705,9 @@ const InventoryHealthInner = React.memo(function InventoryHealthInner({ data, fi
   // them locked together.
   return (
     <div style={{ display: 'flex', gap: 0 }}>
-      <FilterSidebar data={data} filters={filters} setFilters={setFilters} open={sidebarOpen} sidebarTop={sidebarTop} />
-      <button onClick={() => setSidebarOpen(o => !o)} style={{
+      <FilterSidebar data={data} filters={filters} setFilters={setFilters} open={sidebarOpen} onClose={() => setSidebarOpen(false)} isMobile={isMobile} sidebarTop={sidebarTop} />
+      {/* Desktop collapse-toggle button — hidden on mobile via CSS */}
+      <button className="inv-filter-toggle" onClick={() => setSidebarOpen(o => !o)} style={{
         width: 16, height: 48, border: `1px solid ${IC.border}`, borderLeft: 'none',
         background: IC.surface, cursor: 'pointer', borderRadius: '0 8px 8px 0', display: 'flex', alignItems: 'center',
         justifyContent: 'center', color: IC.t3, fontSize: 12, flexShrink: 0,
@@ -674,10 +721,18 @@ const InventoryHealthInner = React.memo(function InventoryHealthInner({ data, fi
       {/* +16 accounts for the collapse-toggle button's own width — it's position:fixed
           (out of flow) now, so this padding is the only thing keeping content from
           starting underneath it. */}
-      <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 18, paddingLeft: 32, paddingRight: 24, paddingTop: 16 }}>
+      <div className="inv-main-content" style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 18, paddingLeft: 32, paddingRight: 24, paddingTop: 16 }}>
+
+        {/* Mobile filter button — hidden on desktop via CSS (display:none by default) */}
+        <button className="inv-filter-mobile-btn" onClick={() => setSidebarOpen(true)} style={{
+          display: 'none', alignItems: 'center', gap: 6, padding: '8px 14px', borderRadius: 8,
+          background: IC.surface, border: `1px solid ${IC.border2}`, color: IC.t2, fontSize: 13, cursor: 'pointer', alignSelf: 'flex-start',
+        }}>
+          ☰ Filters{filters && Object.values(filters).some(v => Array.isArray(v) ? v.length : v) ? ' •' : ''}
+        </button>
 
         {/* KPI row */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, minmax(0, 1fr))', gap: 10, alignItems: 'stretch' }}>
+        <div className="inv-kpi-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(7, minmax(0, 1fr))', gap: 10, alignItems: 'stretch' }}>
           <KpiTile compact label="Total Inventory" value={fmtNum(data.summary.totalInvt)} unit="units" icon="/inv-icon-total.png" />
           <KpiTile compact label="RTD Inventory" value={fmtNum(data.summary.rtdInvt)} unit="units" icon="/inv-icon-rtd.jpg" />
           <KpiTile compact label="RAW Inventory" value={fmtNum(data.summary.rawInvt)} unit="units" icon="/inv-icon-raw.png" />
@@ -687,9 +742,9 @@ const InventoryHealthInner = React.memo(function InventoryHealthInner({ data, fi
           <KpiTile compact label="Days of Inventory" value={data.summary.doi} unit="days" accent={data.summary.doi <= 15 ? IC.status.Critical.c : IC.positive} icon="/inv-icon-doi.png" />
         </div>
 
-        {/* Warehouse grid — always one row; cards shrink to fit rather than wrapping to a 2nd line */}
+        {/* Warehouse grid — collapses to 2-per-row on mobile via CSS */}
         <GlassCard title="Warehouse Health" note={`${(data.allLocations || data.locations).length} locations`}>
-          <div style={{ display: 'grid', gridTemplateColumns: `repeat(${Math.max((data.allLocations || data.locations).length, 1)}, 1fr)`, gap: 8 }}>
+          <div className="inv-wh-grid" style={{ display: 'grid', gridTemplateColumns: `repeat(${Math.max((data.allLocations || data.locations).length, 1)}, 1fr)`, gap: 8 }}>
             {(data.allLocations || data.locations).map(loc => <WarehouseCard key={loc.location} loc={loc} selected={filters.location?.length > 0 && filters.location.includes(loc.location)} />)}
           </div>
         </GlassCard>
@@ -849,7 +904,7 @@ const InventoryHealthInner = React.memo(function InventoryHealthInner({ data, fi
           — the actual cause of the page-wide horizontal scroll/misalignment bug reported
           earlier. Belt-and-suspenders: the constraint is enforced at both the grid-item
           wrapper level and the card level, not relying on either alone. */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+      <div className="inv-2col-row" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
         <div style={{ minWidth: 0 }}>
         <GlassCard title="Slow-Moving Sub-categories" note="DOI > 45d or not being sold, sub-cat stock > 50 units"
           action={<ExportButton filename="slow_moving.csv" rows={slowMovingExportRows}

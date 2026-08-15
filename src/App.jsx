@@ -214,7 +214,13 @@ function LogisticsPage({ filters }) {
   const [cSort, setCSort] = useState({ col: 'total', dir: 'desc' })
   const [cView, setCView] = useState('courier') // 'courier' | 'month'
   const [payTrendGran, setPayTrendGran] = useState('Daily')
-  const [filterSidebarOpen, setFilterSidebarOpen] = useState(true)
+  const [isMobile, setIsMobile] = useState(() => window.innerWidth <= 768)
+  useEffect(() => {
+    const onResize = () => setIsMobile(window.innerWidth <= 768)
+    window.addEventListener('resize', onResize)
+    return () => window.removeEventListener('resize', onResize)
+  }, [])
+  const [filterSidebarOpen, setFilterSidebarOpen] = useState(() => window.innerWidth > 768)
   const [cExpanded, setCExpanded] = useState({})
   const [rawData, setRawData] = useState(null)
   const [rawPrevData, setRawPrevData] = useState(null)
@@ -541,18 +547,8 @@ function LogisticsPage({ filters }) {
   const cardStyle = { background: C.card, border: `1px solid ${C.border}`, borderRadius: 14, padding: '16px 18px' }
   const chartTitle = { fontSize: 11, fontWeight: 700, color: C.t2, letterSpacing: '.06em', textTransform: 'uppercase', marginBottom: 14 }
 
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
-      {loading && (
-        <div style={{ height: 2, background: C.border, flexShrink: 0 }}>
-          <div className="progress-bar" style={{ height: '100%', background: C.acc }} />
-        </div>
-      )}
-    <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
-
-      {/* ── Filter Sidebar ── */}
-      <div style={{ width: filterSidebarOpen ? 220 : 0, minWidth: filterSidebarOpen ? 220 : 0, transition: 'width 0.25s ease, min-width 0.25s ease', overflow: 'hidden', borderRight: `1px solid ${C.border}`, background: C.card, display: 'flex', flexDirection: 'column', flexShrink: 0 }}>
-        <div style={{ width: 220, padding: '14px 12px', display: 'flex', flexDirection: 'column', gap: 10, overflowY: 'auto', height: '100%' }}>
+  const filterSidebarContent = (
+    <div style={{ width: 220, padding: '14px 12px', display: 'flex', flexDirection: 'column', gap: 10, overflowY: 'auto', height: '100%' }}>
           <div style={{ fontSize: 10, fontWeight: 800, color: C.t3, letterSpacing: '.06em', textTransform: 'uppercase' }}>Courier Partner</div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
             {COURIERS.map(c => (
@@ -597,17 +593,51 @@ function LogisticsPage({ filters }) {
               style={{ fontSize: 11, color: C.t3, background: 'none', border: `1px solid ${C.border}`, borderRadius: 6, padding: '4px 10px', cursor: 'pointer', fontFamily: 'var(--font)' }}>✕ Clear All</button>
           )}
         </div>
-      </div>
+  )
 
-      {/* ── Sidebar Toggle Button ── */}
-      <button onClick={() => setFilterSidebarOpen(o => !o)} style={{ width: 16, alignSelf: 'flex-start', marginTop: 20, height: 48, border: `1px solid ${C.border}`, borderLeft: 'none', background: C.card, cursor: 'pointer', borderRadius: '0 6px 6px 0', display: 'flex', alignItems: 'center', justifyContent: 'center', color: C.t3, fontSize: 12, flexShrink: 0, boxShadow: '2px 0 4px rgba(0,0,0,0.06)', padding: 0 }}>
-        {filterSidebarOpen ? '‹' : '›'}
-      </button>
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
+      {loading && (
+        <div style={{ height: 2, background: C.border, flexShrink: 0 }}>
+          <div className="progress-bar" style={{ height: '100%', background: C.acc }} />
+        </div>
+      )}
+      <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
 
-      {/* ── Main Content ── */}
-      <div style={{ flex: 1, overflow: 'auto', padding: '4px 20px 16px', display: 'flex', flexDirection: 'column', gap: 14 }}>
+        {/* ── Filter Sidebar: overlay drawer on mobile, inline panel on desktop ── */}
+        {isMobile ? (
+          filterSidebarOpen && <>
+            <div onClick={() => setFilterSidebarOpen(false)} style={{ position: 'fixed', inset: 0, top: 'var(--nav)', background: 'rgba(0,0,0,0.35)', zIndex: 199 }} />
+            <div style={{ position: 'fixed', top: 'var(--nav)', left: 0, width: 260, maxWidth: '85vw', height: 'calc(100vh - var(--nav) - var(--bot))', background: C.card, zIndex: 200, boxShadow: '4px 0 24px rgba(0,0,0,0.18)', display: 'flex', flexDirection: 'column', overflowY: 'auto' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 14px 8px', borderBottom: `1px solid ${C.border}` }}>
+                <span style={{ fontSize: 12, fontWeight: 700, color: C.t1 }}>Filters</span>
+                <button onClick={() => setFilterSidebarOpen(false)} style={{ background: 'none', border: 'none', color: C.t3, fontSize: 18, cursor: 'pointer', padding: '2px 6px', lineHeight: 1 }}>✕</button>
+              </div>
+              {filterSidebarContent}
+            </div>
+          </>
+        ) : (
+          <div style={{ width: filterSidebarOpen ? 220 : 0, minWidth: filterSidebarOpen ? 220 : 0, transition: 'width 0.25s ease, min-width 0.25s ease', overflow: 'hidden', borderRight: `1px solid ${C.border}`, background: C.card, display: 'flex', flexDirection: 'column', flexShrink: 0 }}>
+            {filterSidebarContent}
+          </div>
+        )}
 
+        {/* ── Sidebar Toggle Button (desktop only) ── */}
+        {!isMobile && (
+          <button onClick={() => setFilterSidebarOpen(o => !o)} style={{ width: 16, alignSelf: 'flex-start', marginTop: 20, height: 48, border: `1px solid ${C.border}`, borderLeft: 'none', background: C.card, cursor: 'pointer', borderRadius: '0 6px 6px 0', display: 'flex', alignItems: 'center', justifyContent: 'center', color: C.t3, fontSize: 12, flexShrink: 0, boxShadow: '2px 0 4px rgba(0,0,0,0.06)', padding: 0 }}>
+            {filterSidebarOpen ? '‹' : '›'}
+          </button>
+        )}
 
+        {/* ── Main Content ── */}
+        <div style={{ flex: 1, overflow: 'auto', padding: isMobile ? '8px 12px 16px' : '4px 20px 16px', display: 'flex', flexDirection: 'column', gap: 14 }}>
+
+          {/* Mobile filter button */}
+          {isMobile && (
+            <button onClick={() => setFilterSidebarOpen(true)} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 14px', borderRadius: 8, background: C.card, border: `1px solid ${C.border2}`, color: C.t2, fontSize: 13, cursor: 'pointer', alignSelf: 'flex-start', fontFamily: 'var(--font)' }}>
+              ☰ Filters{(lFilters.couriers.length || lFilters.zone || lFilters.paymentMode || lFilters.category) ? ' •' : ''}
+            </button>
+          )}
 
       {error && <div style={{ padding: '10px 14px', borderRadius: 9, background: C.red.bg, border: `1px solid ${C.red.bd}`, color: C.red.tx, fontSize: 12 }}>⚠ {error}</div>}
       {loading && !rawData && !staleData && (
@@ -624,7 +654,7 @@ function LogisticsPage({ filters }) {
 
         {/* ── Volume KPIs ── */}
         <LSectionTitle title="Volume Overview" collapsed={secCollapsed['volume']} onToggle={() => toggleSec('volume')} />
-        <div style={{ display: secCollapsed['volume'] ? 'none' : 'grid', gridTemplateColumns: 'repeat(6, 1fr)', gap: 7 }}>
+        <div style={{ display: secCollapsed['volume'] ? 'none' : 'grid', gridTemplateColumns: isMobile ? 'repeat(2, 1fr)' : 'repeat(6, 1fr)', gap: 7 }}>
           <LKpiCard label="Total Shipments" value={n(k.total_shipments)} cur={k.total_shipments} prev={pk.total_shipments} compact={!filterSidebarOpen} />
           <LKpiCard label="Total GMV" value={fmtGMV(k.total_value)} cur={k.total_value} prev={pk.total_value} compact={!filterSidebarOpen} />
           <LKpiCard label="Delivered" value={n(k.delivered)} badgeVariant="G" subValue={pct2(k.delivered, k.total_shipments)} cur={k.delivered} prev={pk.delivered} hideSubValue={filterSidebarOpen} compact={!filterSidebarOpen} />
@@ -635,7 +665,7 @@ function LogisticsPage({ filters }) {
 
         {/* ── Quality KPIs ── */}
         <LSectionTitle title="Delivery Quality & SLA" collapsed={secCollapsed['quality']} onToggle={() => toggleSec('quality')} />
-        <div style={{ display: secCollapsed['quality'] ? 'none' : 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 7 }}>
+        <div style={{ display: secCollapsed['quality'] ? 'none' : 'grid', gridTemplateColumns: isMobile ? 'repeat(2, 1fr)' : 'repeat(7, 1fr)', gap: 7 }}>
           <LKpiCard label="On Time Del" value={n(k.on_time)} badgeText={k.avg_sla == null ? '—' : pct2(k.on_time, k.delivered)} badgeVariant="G" cur={k.avg_sla == null ? null : k.on_time} prev={k.avg_sla == null ? null : pk.on_time} compact={!filterSidebarOpen} />
           <LKpiCard label="SLA Breach" value={n(k.sla_breach)} badgeVariant="R" subValue={k.avg_sla == null ? '—' : pct2(k.sla_breach, k.delivered)} cur={k.avg_sla == null ? null : k.sla_breach} prev={k.avg_sla == null ? null : pk.sla_breach} hideSubValue={filterSidebarOpen} compact={!filterSidebarOpen} />
           <LKpiCard label="RTO 10+ Days" value={n(k.rto_10plus)} badgeText="Aging" badgeVariant="R" cur={k.rto_10plus} prev={pk.rto_10plus} compact={!filterSidebarOpen} />
@@ -647,7 +677,7 @@ function LogisticsPage({ filters }) {
 
         {/* ── TAT KPIs ── */}
         <LSectionTitle title="Turnaround Time" collapsed={secCollapsed['tat']} onToggle={() => toggleSec('tat')} />
-        <div style={{ display: secCollapsed['tat'] ? 'none' : 'grid', gridTemplateColumns: 'repeat(6, 1fr)', gap: 7 }}>
+        <div style={{ display: secCollapsed['tat'] ? 'none' : 'grid', gridTemplateColumns: isMobile ? 'repeat(2, 1fr)' : 'repeat(6, 1fr)', gap: 7 }}>
           <LKpiCard label="Avg Processing" value={d1(k.avg_processing)} badgeText="Cr→1st OFD" badgeVariant="N" cur={k.avg_processing} prev={pk.avg_processing} compact={!filterSidebarOpen} />
           <LKpiCard label="Avg Pickup TAT" value={d1(k.avg_pickup)} badgeText="Cr→Pick" badgeVariant="B" cur={k.avg_pickup} prev={pk.avg_pickup} compact={!filterSidebarOpen} />
           <LKpiCard label="Avg In-Transit" value={d1(k.avg_intransit)} badgeText="Pick→Del" badgeVariant="N" cur={k.avg_intransit} prev={pk.avg_intransit} compact={!filterSidebarOpen} />
@@ -658,7 +688,7 @@ function LogisticsPage({ filters }) {
 
         {/* ── Monthly Trend + Courier TAT ── */}
         <LSectionTitle title="Monthly Trend" collapsed={secCollapsed['trend']} onToggle={() => toggleSec('trend')} />
-        <div style={{ display: secCollapsed['trend'] ? 'none' : 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+        <div style={{ display: secCollapsed['trend'] ? 'none' : 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: 14 }}>
           <div style={{ ...cardStyle, display: 'flex', flexDirection: 'column' }}>
             <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 10, flexShrink: 0 }}>
               <div>
@@ -803,8 +833,8 @@ function LogisticsPage({ filters }) {
         {/* ── Courier Performance Table ── */}
         <LSectionTitle title="Courier Performance" collapsed={secCollapsed['courier']} onToggle={() => toggleSec('courier')} />
 
-<div style={{ display: secCollapsed['courier'] ? 'none' : 'grid', gridTemplateColumns: '1fr', gap: 14 }}>
-          <div style={cardStyle}>
+<div style={{ display: secCollapsed['courier'] ? 'none' : 'grid', gridTemplateColumns: '1fr', gap: 14, minWidth: 0 }}>
+          <div style={{ ...cardStyle, minWidth: 0 }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
             <div style={chartTitle}>Courier-wise Breakdown</div>
             <div style={{ display: 'inline-flex', border: `1.5px solid ${C.border2}`, borderRadius: 7, overflow: 'hidden' }}>
@@ -989,8 +1019,8 @@ function LogisticsPage({ filters }) {
                 <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
                   <thead>
                     <tr style={{ borderBottom: `1.5px solid ${C.border}`, background: C.bg }}>
-                      {COLS.map((col) => (
-                        <th key={col.key} onClick={() => setSortCol(col.key)} style={{ padding: '6px 7px', textAlign: col.left ? 'left' : col.center ? 'center' : 'right', color: C.t1, fontWeight: 700, fontSize: 9.5, letterSpacing: 0.4, textTransform: 'uppercase', whiteSpace: 'nowrap', cursor: 'pointer', userSelect: 'none', borderBottom: `1.5px solid ${C.border}`, background: C.bg }}>
+                      {COLS.map((col, ci) => (
+                        <th key={col.key} onClick={() => setSortCol(col.key)} style={{ padding: '6px 7px', textAlign: col.left ? 'left' : col.center ? 'center' : 'right', color: C.t1, fontWeight: 700, fontSize: 9.5, letterSpacing: 0.4, textTransform: 'uppercase', whiteSpace: 'nowrap', cursor: 'pointer', userSelect: 'none', borderBottom: `1.5px solid ${C.border}`, background: C.bg, ...(ci === 0 ? { position: 'sticky', left: 0, zIndex: 3 } : {}) }}>
                           {col.label}{sortCol === col.key ? (sortDir === 'desc' ? ' ↓' : ' ↑') : ''}
                         </th>
                       ))}
@@ -1008,7 +1038,7 @@ function LogisticsPage({ filters }) {
                       return (
                         <Fragment key={r.courier_group}>
                         <tr style={{ borderBottom: cExpanded[r.courier_group] ? 'none' : `1px solid ${C.border}` }}>
-                          <td style={{ padding: '6px 7px', minWidth: 160 }}>
+                          <td style={{ padding: '6px 7px', minWidth: 160, position: 'sticky', left: 0, background: C.card, zIndex: 1 }}>
                             <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
                               <span onClick={() => setCExpanded(e => ({ ...e, [r.courier_group]: !e[r.courier_group] }))} style={{ fontSize:9, color:C.t3, display:'inline-block', transform:cExpanded[r.courier_group]?'rotate(90deg)':'rotate(0deg)', transition:'transform .15s', cursor:'pointer', flexShrink:0 }}>▶</span>
                               {logo
@@ -1044,7 +1074,7 @@ function LogisticsPage({ filters }) {
                           const mRtoColor = _rtoPct > avgRtoPct ? '#dc2626' : C.t1
                           return (
                             <tr key={m.month_label} style={{ borderBottom:`1px solid ${C.border}`, background:'#FAFAF8' }}>
-                              <td style={{ padding:'4px 7px 4px 46px', color:C.t2, fontSize:11, whiteSpace:'nowrap' }}>{m.month_label}</td>
+                              <td style={{ padding:'4px 7px 4px 46px', color:C.t2, fontSize:11, whiteSpace:'nowrap', position:'sticky', left:0, background:'#FAFAF8', zIndex:1 }}>{m.month_label}</td>
                               <td style={{ padding:'4px 7px', textAlign:'right', color:C.t1, fontSize:11 }}>{mVolPct.toFixed(2)}%</td>
                               <td style={{ padding:'4px 7px', textAlign:'right', color:C.t1, fontSize:11 }}>{n(m.total)}</td>
                               <td style={{ padding:'4px 7px', textAlign:'right', color:C.t1, fontSize:11 }}>{_delPct.toFixed(2)}%</td>
@@ -1079,7 +1109,7 @@ function LogisticsPage({ filters }) {
                       const wavg = (key) => { const w = enriched.reduce((s,r) => s + (r[key]!=null ? r[key]*r.total : 0),0); return w/tot }
                       return (
                         <tr style={{ borderTop: `2px solid ${C.border}`, background: C.bg, fontWeight: 700 }}>
-                          <td style={{ padding: '6px 7px', color: C.t1, fontWeight: 700 }}>Total</td>
+                          <td style={{ padding: '6px 7px', color: C.t1, fontWeight: 700, position: 'sticky', left: 0, background: C.bg, zIndex: 1 }}>Total</td>
                           <td style={{ padding: '6px 7px', textAlign: 'right', color: C.t1, fontSize: 11 }}>100.00%</td>
                           <td style={{ padding: '6px 7px', textAlign: 'right', color: C.t1 }}>{n(tot)}</td>
                           <td style={{ padding: '6px 7px', textAlign: 'right', color: C.t1, fontSize: 11 }}>{(sumD/tot*100).toFixed(2)}%</td>
@@ -1140,7 +1170,7 @@ function LogisticsPage({ filters }) {
           ]
 
           return (
-            <div style={{ display: 'grid', gridTemplateColumns: '280px 1fr', gap: 14, alignItems: 'stretch' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '280px 1fr', gap: 14, alignItems: 'stretch' }}>
 
               {/* Left: Donut + 3 KPIs beside it */}
               <div style={cardStyle}>
@@ -1338,7 +1368,7 @@ function LogisticsPage({ filters }) {
               return (
                 <>
                   <LSectionTitle title="TAT Bucket Analysis" collapsed={secCollapsed['tatbucket']} onToggle={() => toggleSec('tatbucket')} />
-                  <div style={{ display: secCollapsed['tatbucket'] ? 'none' : 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 14 }}>
+                  <div style={{ display: secCollapsed['tatbucket'] ? 'none' : 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr 1fr', gap: 14 }}>
 
                     {/* Table 1: Order → Pickup by Facility */}
                     <div style={{ ...tableCard2, alignSelf: 'start' }}>
@@ -1492,7 +1522,7 @@ function LogisticsPage({ filters }) {
           }))
           const fmtVal = v => v >= 10000000 ? '₹'+(v/10000000).toFixed(1)+'Cr' : v >= 100000 ? '₹'+(v/100000).toFixed(1)+'L' : v >= 1000 ? '₹'+(v/1000).toFixed(0)+'K' : '₹'+v
           return (
-            <div style={{ display: secCollapsed['weight'] ? 'none' : 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+            <div style={{ display: secCollapsed['weight'] ? 'none' : 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: 14 }}>
               {/* Left: Donut with toggle */}
               <div style={cardStyle}>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
@@ -1593,7 +1623,7 @@ function LogisticsPage({ filters }) {
             )
           }
           return (
-            <div style={{ display: secCollapsed['geo'] ? 'none' : 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 14 }}>
+            <div style={{ display: secCollapsed['geo'] ? 'none' : 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr 1fr', gap: 14 }}>
               <div style={cardStyle}>
                 <div style={chartTitle}>Total Shipments by Drop City</div>
                 <div style={{ fontSize: 11, color: C.t3, marginBottom: 12, marginTop: 2 }}>Top 10 destination cities</div>
@@ -1622,10 +1652,10 @@ function LogisticsPage({ filters }) {
           return (
             <div style={{ ...cardStyle, padding: '16px 18px', display: secCollapsed['rto'] ? 'none' : undefined }}>
               <div style={{ ...chartTitle, marginBottom: 16 }}>RTO Reasons — Shipment Count & % of Total RTO</div>
-              <ResponsiveContainer width="100%" height={280}>
-                <BarChart data={reasons} margin={{ top: 20, right: 10, left: 0, bottom: 80 }}>
+              <ResponsiveContainer width="100%" height={isMobile ? 320 : 280}>
+                <BarChart data={reasons} margin={{ top: 20, right: 10, left: 0, bottom: isMobile ? 120 : 80 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke={C.border} vertical={false} />
-                  <XAxis dataKey="reason" tick={{ fontSize: 10, fill: C.t1, fontWeight: 600 }} angle={-35} textAnchor="end" interval={0} />
+                  <XAxis dataKey="reason" tick={{ fontSize: isMobile ? 9 : 10, fill: C.t1, fontWeight: 600 }} angle={-55} textAnchor="end" interval={0} tickFormatter={v => isMobile && v.length > 18 ? v.slice(0, 18) + '…' : v} />
                   <YAxis tick={{ fontSize: 10, fill: C.t3 }} />
                   <Tooltip content={({ active, payload }) => {
                     if (!active || !payload?.length) return null
@@ -1666,7 +1696,7 @@ function LogisticsPage({ filters }) {
             <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
 
               {/* KPI Cards */}
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 14 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: isMobile ? 'repeat(2,1fr)' : 'repeat(4,1fr)', gap: 14 }}>
                 {[
                   { label: 'Total Requests', value: (rk.total_requests||0).toLocaleString('en-IN'), sub: `Returns: ${(rk.total_returns||0).toLocaleString('en-IN')} · Exchange: ${(rk.total_exchanges||0).toLocaleString('en-IN')}`, color: '#2563eb', bg: '#EFF6FF', border: '#BFDBFE' },
                   { label: 'Pickup Success %', value: pickupSuccessPct+'%', sub: `${(rk.pickup_success||0).toLocaleString('en-IN')} picked up`, color: '#16a34a', bg: '#F0FDF4', border: '#BBF7D0' },
@@ -1715,7 +1745,7 @@ function LogisticsPage({ filters }) {
               </div>
 
               {/* Row: Trend + Products side by side */}
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: 14 }}>
 
                 {/* Trend chart */}
                 <div style={cardStyle}>
@@ -1875,11 +1905,15 @@ function Sidebar({ page, setPage, invTab, setInvTab, allowedTabs, profile }) {
 }
 
 // ── Bottom Nav (mobile) ───────────────────────────────────────
-function BottomNav({ page, setPage }) {
-  const items = [
+function BottomNav({ page, setPage, allowedTabs }) {
+  const allItems = [
     { id: 'overview', label: 'Overview', icon: <svg width={22} height={22} viewBox="0 0 24 24" fill="currentColor"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg> },
     { id: 'sales', label: 'Sales', icon: <svg width={22} height={22} viewBox="0 0 24 24" fill="currentColor"><rect x="2" y="12" width="4" height="10" rx="1"/><rect x="10" y="6" width="4" height="16" rx="1"/><rect x="18" y="2" width="4" height="20" rx="1"/></svg> },
+    { id: 'inventory', label: 'Inventory', icon: <svg width={22} height={22} viewBox="0 0 24 24" fill="currentColor"><path d="M12 2L2 7v10l10 5 10-5V7L12 2zm0 2.24L20 8.5l-8 4-8-4 8-4.26zM3 9.74l8 4V21l-8-4V9.74zm10 11.26v-7.5l8-4V17l-8 4z"/></svg> },
+    { id: 'logistics', label: 'Logistics', icon: <svg width={22} height={22} viewBox="0 0 24 24" fill="currentColor"><path d="M1 3h14a1 1 0 011 1v9H1V3zm15 4h4.5L23 10.5V16h-7V7zM5.5 20a2 2 0 100-4 2 2 0 000 4zm13 0a2 2 0 100-4 2 2 0 000 4z"/></svg> },
+    { id: 'ads', label: 'Ads', icon: <svg width={22} height={22} viewBox="0 0 24 24" fill="currentColor"><path d="M5 3l14 9-14 9V3z"/></svg> },
   ]
+  const items = (allowedTabs ? allItems.filter(i => allowedTabs.includes(i.id)) : allItems).slice(0, 5)
   return (
     <nav className="bottom-nav">
       <div className="bottom-nav-inner">
@@ -1899,7 +1933,13 @@ function BottomNav({ page, setPage }) {
 // dashboard) reuse this same calendar UI with their own palette instead of forking it —
 // only colors are parameterized, all layout/behavior stays identical. Defaults to the
 // app shell's own light theme so every existing call site is unaffected.
-function DateRangePicker({ filters, setFilters, theme: T = C }) {
+function DateRangePicker({ filters, setFilters, theme: T = C, onRefresh, loading }) {
+  const [isMobile, setIsMobile] = useState(() => window.innerWidth <= 768)
+  useEffect(() => {
+    const onResize = () => setIsMobile(window.innerWidth <= 768)
+    window.addEventListener('resize', onResize)
+    return () => window.removeEventListener('resize', onResize)
+  }, [])
   const [open, setOpen] = useState(false)
   const [draft, setDraft] = useState({ start: filters.start, end: filters.end })
   const [selecting, setSelecting] = useState('start')
@@ -2019,25 +2059,160 @@ function DateRangePicker({ filters, setFilters, theme: T = C }) {
     )
   }
 
-  const displayLabel = filters.start && filters.end ? `${fmtDisplay(filters.start)}  →  ${fmtDisplay(filters.end)}` : 'Select date range'
+  const fmtShort = s => { if (!s) return '—'; const d = parseD(s); if (!d) return s; return d.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' }) }
+  const displayLabel = filters.start && filters.end
+    ? (isMobile ? `${fmtShort(filters.start)} – ${fmtShort(filters.end)}` : `${fmtDisplay(filters.start)}  →  ${fmtDisplay(filters.end)}`)
+    : 'Date range'
+
+  const calIcon = (
+    <svg width="13" height="13" viewBox="0 0 16 16" fill="none" style={{ flexShrink: 0 }}>
+      <rect x="1" y="2.5" width="14" height="12.5" rx="2" stroke={T.t2} strokeWidth="1.4" fill="none"/>
+      <path d="M1 6h14" stroke={T.t2} strokeWidth="1.4"/>
+      <path d="M5 1v3M11 1v3" stroke={T.t2} strokeWidth="1.4" strokeLinecap="round"/>
+      <rect x="4" y="8.5" width="2" height="2" rx=".4" fill={T.t2}/>
+      <rect x="7.5" y="8.5" width="2" height="2" rx=".4" fill={T.t2}/>
+      <rect x="11" y="8.5" width="2" height="2" rx=".4" fill={T.t2}/>
+      <rect x="4" y="11.5" width="2" height="2" rx=".4" fill={T.t2}/>
+      <rect x="7.5" y="11.5" width="2" height="2" rx=".4" fill={T.t2}/>
+    </svg>
+  )
+
+  const openPicker = () => {
+    if (!isMobile) {
+      const r = btnRef.current?.getBoundingClientRect()
+      if (r) setDropPos({ top: r.bottom + 6, right: window.innerWidth - r.right })
+    }
+    setDraft({ start: filters.start, end: filters.end })
+    setSelecting('start')
+    setOpen(o => !o)
+  }
+
+  /* ── shared calendar body (used in both desktop dropdown and mobile sheet) ── */
+  const calendarBody = (
+    <div style={{ flex: 1, padding: '12px 14px', display: 'flex', flexDirection: 'column', gap: 10 }}>
+      {/* Selected range display */}
+      <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+        <div style={{ flex: 1, padding: '6px 10px', border: `1.5px solid ${selecting === 'start' ? T.acc : T.border}`, borderRadius: 7, fontSize: 12, color: draft.start ? T.t1 : T.t3 }}>{draft.start ? fmtDisplay(draft.start) : 'Start date'}</div>
+        <span style={{ color: T.t3, fontSize: 13 }}>→</span>
+        <div style={{ flex: 1, padding: '6px 10px', border: `1.5px solid ${selecting === 'end' ? T.acc : T.border}`, borderRadius: 7, fontSize: 12, color: draft.end ? T.t1 : T.t3 }}>{draft.end ? fmtDisplay(draft.end) : 'End date'}</div>
+      </div>
+      {monthPickerOpen ? (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10 }}>
+            <button onClick={() => setYearInput(y => y - 1)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 16, color: T.t2, padding: '2px 8px', fontFamily: 'var(--font)' }}>‹</button>
+            <span style={{ fontSize: 15, fontWeight: 700, color: T.t1, minWidth: 48, textAlign: 'center' }}>{yearInput}</span>
+            <button onClick={() => setYearInput(y => y + 1)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 16, color: T.t2, padding: '2px 8px', fontFamily: 'var(--font)' }}>›</button>
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 5 }}>
+            {MONTH_NAMES.map((mn, i) => {
+              const refMonth = monthPickerSide === 'right' ? rightMonth : leftMonth
+              const isCurrent = refMonth.getFullYear() === yearInput && refMonth.getMonth() === i
+              return (
+                <button key={mn} onClick={() => {
+                  const picked = new Date(yearInput, i, 1)
+                  if (monthPickerSide === 'right') setRightMonth(picked)
+                  else setLeftMonth(picked)
+                  setMonthPickerSide(null)
+                }}
+                  style={{ padding: '6px 4px', borderRadius: 6, border: isCurrent ? `2px solid ${T.acc}` : `1px solid ${T.border}`, background: isCurrent ? T.acl : 'transparent', color: T.t1, cursor: 'pointer', fontSize: 12, fontWeight: isCurrent ? 700 : 400, fontFamily: 'var(--font)' }}>
+                  {mn}
+                </button>
+              )
+            })}
+          </div>
+          <div style={{ textAlign: 'center', marginTop: 2 }}>
+            <button onClick={() => setMonthPickerSide(null)} style={{ padding: '3px 14px', borderRadius: 6, border: `1px solid ${T.border}`, background: 'transparent', color: T.t3, cursor: 'pointer', fontSize: 11, fontFamily: 'var(--font)' }}>← back</button>
+          </div>
+        </div>
+      ) : (
+        <>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: -4 }}>
+            <button onClick={() => { setLeftMonth(m => new Date(m.getFullYear(), m.getMonth()-1, 1)); if (!isMobile) setRightMonth(m => new Date(m.getFullYear(), m.getMonth()-1, 1)) }} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 18, color: T.t2, padding: '2px 8px' }}>‹</button>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button onClick={() => { setYearInput(leftMonth.getFullYear()); setMonthPickerSide('left') }}
+                style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 13, fontWeight: 700, color: T.t1, padding: '2px 6px', borderRadius: 6, display: 'flex', alignItems: 'center', gap: 3 }}>
+                {leftMonth.toLocaleDateString('en-IN', { month: 'long', year: 'numeric' })} <span style={{ fontSize: 10, color: T.t3 }}>▾</span>
+              </button>
+              {!isMobile && <>
+                <span style={{ color: T.border2, fontSize: 16 }}>|</span>
+                <button onClick={() => { setYearInput(rightMonth.getFullYear()); setMonthPickerSide('right') }}
+                  style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 13, fontWeight: 700, color: T.t1, padding: '2px 6px', borderRadius: 6, display: 'flex', alignItems: 'center', gap: 3 }}>
+                  {rightMonth.toLocaleDateString('en-IN', { month: 'long', year: 'numeric' })} <span style={{ fontSize: 10, color: T.t3 }}>▾</span>
+                </button>
+              </>}
+            </div>
+            <button onClick={() => { setLeftMonth(m => new Date(m.getFullYear(), m.getMonth()+1, 1)); if (!isMobile) setRightMonth(m => new Date(m.getFullYear(), m.getMonth()+1, 1)) }} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 18, color: T.t2, padding: '2px 8px' }}>›</button>
+          </div>
+          {isMobile ? (
+            renderMonth(leftMonth)
+          ) : (
+            <div style={{ display: 'flex', gap: 24 }}>
+              {renderMonth(leftMonth)}
+              <div style={{ width: 1, background: T.border }} />
+              {renderMonth(rightMonth)}
+            </div>
+          )}
+        </>
+      )}
+      {/* Footer */}
+      <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, paddingTop: 6, borderTop: `1px solid ${T.border}`, marginTop: 'auto' }}>
+        <button onClick={() => setOpen(false)} style={{ padding: '6px 16px', borderRadius: 7, border: `1px solid ${T.border2}`, background: 'transparent', color: T.t2, cursor: 'pointer', fontSize: 12, fontFamily: 'var(--font)' }}>Cancel</button>
+        <button onClick={() => apply()} disabled={!draft.start || !draft.end} style={{ padding: '6px 16px', borderRadius: 7, border: 'none', background: draft.start && draft.end ? T.acc : T.border, color: '#13121A', cursor: draft.start && draft.end ? 'pointer' : 'default', fontSize: 12, fontWeight: 600, fontFamily: 'var(--font)' }}>Apply</button>
+      </div>
+    </div>
+  )
 
   return (
-    <div ref={ref} style={{ position: 'relative' }}>
-      <button ref={btnRef} onClick={() => { const r = btnRef.current?.getBoundingClientRect(); if (r) setDropPos({ top: r.bottom + 6, right: window.innerWidth - r.right }); setDraft({ start: filters.start, end: filters.end }); setSelecting('start'); setOpen(o => !o) }}
+    <div ref={ref} style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: 6 }}>
+      {/* Trigger button */}
+      <button ref={btnRef} onClick={openPicker}
         style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '6px 12px', borderRadius: 8, border: `1px solid ${T.border2}`, background: T.card, color: T.t1, cursor: 'pointer', fontSize: 12, fontFamily: 'var(--font)', whiteSpace: 'nowrap' }}>
-        <svg width="13" height="13" viewBox="0 0 16 16" fill="none" style={{ flexShrink: 0 }}>
-          <rect x="1" y="2.5" width="14" height="12.5" rx="2" stroke={T.t2} strokeWidth="1.4" fill="none"/>
-          <path d="M1 6h14" stroke={T.t2} strokeWidth="1.4"/>
-          <path d="M5 1v3M11 1v3" stroke={T.t2} strokeWidth="1.4" strokeLinecap="round"/>
-          <rect x="4" y="8.5" width="2" height="2" rx=".4" fill={T.t2}/>
-          <rect x="7.5" y="8.5" width="2" height="2" rx=".4" fill={T.t2}/>
-          <rect x="11" y="8.5" width="2" height="2" rx=".4" fill={T.t2}/>
-          <rect x="4" y="11.5" width="2" height="2" rx=".4" fill={T.t2}/>
-          <rect x="7.5" y="11.5" width="2" height="2" rx=".4" fill={T.t2}/>
-        </svg>
+        {calIcon}
         {displayLabel}
       </button>
-      {open && (
+      {/* Refresh button — shown inline on desktop, inside trigger row on mobile */}
+      {onRefresh && (
+        <button onClick={onRefresh} style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '6px 10px', borderRadius: 8, border: `1px solid ${T.border2}`, background: T.card, color: T.t2, cursor: 'pointer', fontSize: 12, fontFamily: 'var(--font)', whiteSpace: 'nowrap' }}>
+          <span style={{ display: 'inline-block', animation: loading ? 'spin 1s linear infinite' : 'none', fontSize: 14 }}>↻</span>
+          {!isMobile && ' Refresh'}
+        </button>
+      )}
+
+      {open && isMobile ? (
+        /* ── Mobile: bottom sheet ── */
+        <>
+          {/* Backdrop */}
+          <div onClick={() => setOpen(false)} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', zIndex: 9998 }} />
+          <div style={{
+            position: 'fixed', bottom: 'var(--bot)', left: 0, right: 0, zIndex: 9999,
+            background: T.card, borderRadius: '16px 16px 0 0',
+            boxShadow: '0 -8px 32px rgba(0,0,0,0.18)',
+            maxHeight: '90vh', overflowY: 'auto',
+            display: 'flex', flexDirection: 'column',
+          }}>
+            {/* Handle + header */}
+            <div style={{ padding: '10px 16px 0', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0 }}>
+              <div style={{ width: 36, height: 4, borderRadius: 2, background: T.border2, margin: '0 auto 8px' }} />
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 16px 10px', borderBottom: `1px solid ${T.border}`, flexShrink: 0 }}>
+              <span style={{ fontSize: 14, fontWeight: 700, color: T.t1 }}>Date Range</span>
+              <button onClick={() => setOpen(false)} style={{ background: 'none', border: 'none', color: T.t3, fontSize: 20, cursor: 'pointer', lineHeight: 1 }}>✕</button>
+            </div>
+            {/* Quick presets as horizontal chips */}
+            <div style={{ display: 'flex', gap: 6, overflowX: 'auto', padding: '10px 14px', flexShrink: 0, scrollbarWidth: 'none' }}>
+              {PRESETS.map(p => (
+                <button key={p.label} onClick={() => { const r = p.fn(); setDraft(r); apply(r.start, r.end) }}
+                  style={{ padding: '5px 12px', borderRadius: 20, border: `1px solid ${T.border2}`, background: T.bg, color: T.t2, fontSize: 12, cursor: 'pointer', whiteSpace: 'nowrap', fontFamily: 'var(--font)', flexShrink: 0 }}>
+                  {p.label}
+                </button>
+              ))}
+            </div>
+            {/* Calendar */}
+            {calendarBody}
+          </div>
+        </>
+      ) : open ? (
+        /* ── Desktop: dropdown ── */
         <div style={{ position: 'fixed', top: dropPos.top, right: dropPos.right, zIndex: 9999, background: T.card, border: `1px solid ${T.border2}`, borderRadius: 12, boxShadow: '0 8px 32px rgba(0,0,0,.15)', display: 'flex', minWidth: 680 }}>
           {/* Preset list */}
           <div style={{ width: 140, borderRight: `1px solid ${T.border}`, padding: '8px 0', flexShrink: 0 }}>
@@ -2050,76 +2225,9 @@ function DateRangePicker({ filters, setFilters, theme: T = C }) {
               </div>
             ))}
           </div>
-          {/* Calendar */}
-          <div style={{ flex: 1, padding: '12px 14px', display: 'flex', flexDirection: 'column', gap: 10 }}>
-            {/* Selected range display */}
-            <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-              <div style={{ flex: 1, padding: '6px 10px', border: `1.5px solid ${selecting === 'start' ? T.acc : T.border}`, borderRadius: 7, fontSize: 12, color: draft.start ? T.t1 : T.t3 }}>{draft.start ? fmtDisplay(draft.start) : 'Start date'}</div>
-              <span style={{ color: T.t3, fontSize: 13 }}>→</span>
-              <div style={{ flex: 1, padding: '6px 10px', border: `1.5px solid ${selecting === 'end' ? T.acc : T.border}`, borderRadius: 7, fontSize: 12, color: draft.end ? T.t1 : T.t3 }}>{draft.end ? fmtDisplay(draft.end) : 'End date'}</div>
-            </div>
-            {monthPickerOpen ? (
-              /* ── Month/Year quick-jump overlay ── */
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10 }}>
-                  <button onClick={() => setYearInput(y => y - 1)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 16, color: T.t2, padding: '2px 8px', fontFamily: 'var(--font)' }}>‹</button>
-                  <span style={{ fontSize: 15, fontWeight: 700, color: T.t1, minWidth: 48, textAlign: 'center' }}>{yearInput}</span>
-                  <button onClick={() => setYearInput(y => y + 1)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 16, color: T.t2, padding: '2px 8px', fontFamily: 'var(--font)' }}>›</button>
-                </div>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 5 }}>
-                  {MONTH_NAMES.map((mn, i) => {
-                    const refMonth = monthPickerSide === 'right' ? rightMonth : leftMonth
-                    const isCurrent = refMonth.getFullYear() === yearInput && refMonth.getMonth() === i
-                    return (
-                      <button key={mn} onClick={() => {
-                        const picked = new Date(yearInput, i, 1)
-                        if (monthPickerSide === 'right') setRightMonth(picked)
-                        else setLeftMonth(picked)
-                        setMonthPickerSide(null)
-                      }}
-                        style={{ padding: '6px 4px', borderRadius: 6, border: isCurrent ? `2px solid ${T.acc}` : `1px solid ${T.border}`, background: isCurrent ? T.acl : 'transparent', color: T.t1, cursor: 'pointer', fontSize: 12, fontWeight: isCurrent ? 700 : 400, fontFamily: 'var(--font)' }}>
-                        {mn}
-                      </button>
-                    )
-                  })}
-                </div>
-                <div style={{ textAlign: 'center', marginTop: 2 }}>
-                  <button onClick={() => setMonthPickerSide(null)} style={{ padding: '3px 14px', borderRadius: 6, border: `1px solid ${T.border}`, background: 'transparent', color: T.t3, cursor: 'pointer', fontSize: 11, fontFamily: 'var(--font)' }}>← back</button>
-                </div>
-              </div>
-            ) : (
-              /* ── Dual calendar view ── */
-              <>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: -4 }}>
-                  <button onClick={() => { setLeftMonth(m => new Date(m.getFullYear(), m.getMonth()-1, 1)); setRightMonth(m => new Date(m.getFullYear(), m.getMonth()-1, 1)) }} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 18, color: T.t2, padding: '2px 8px' }}>‹</button>
-                  <div style={{ display: 'flex', gap: 8 }}>
-                    <button onClick={() => { setYearInput(leftMonth.getFullYear()); setMonthPickerSide('left') }}
-                      style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 13, fontWeight: 700, color: T.t1, padding: '2px 6px', borderRadius: 6, display: 'flex', alignItems: 'center', gap: 3 }}>
-                      {leftMonth.toLocaleDateString('en-IN', { month: 'long', year: 'numeric' })} <span style={{ fontSize: 10, color: T.t3 }}>▾</span>
-                    </button>
-                    <span style={{ color: T.border2, fontSize: 16 }}>|</span>
-                    <button onClick={() => { setYearInput(rightMonth.getFullYear()); setMonthPickerSide('right') }}
-                      style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 13, fontWeight: 700, color: T.t1, padding: '2px 6px', borderRadius: 6, display: 'flex', alignItems: 'center', gap: 3 }}>
-                      {rightMonth.toLocaleDateString('en-IN', { month: 'long', year: 'numeric' })} <span style={{ fontSize: 10, color: T.t3 }}>▾</span>
-                    </button>
-                  </div>
-                  <button onClick={() => { setLeftMonth(m => new Date(m.getFullYear(), m.getMonth()+1, 1)); setRightMonth(m => new Date(m.getFullYear(), m.getMonth()+1, 1)) }} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 18, color: T.t2, padding: '2px 8px' }}>›</button>
-                </div>
-                <div style={{ display: 'flex', gap: 24 }}>
-                  {renderMonth(leftMonth)}
-                  <div style={{ width: 1, background: T.border }} />
-                  {renderMonth(rightMonth)}
-                </div>
-              </>
-            )}
-            {/* Footer */}
-            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, paddingTop: 6, borderTop: `1px solid ${T.border}`, marginTop: 'auto' }}>
-              <button onClick={() => setOpen(false)} style={{ padding: '6px 16px', borderRadius: 7, border: `1px solid ${T.border2}`, background: 'transparent', color: T.t2, cursor: 'pointer', fontSize: 12, fontFamily: 'var(--font)' }}>Cancel</button>
-              <button onClick={() => apply()} disabled={!draft.start || !draft.end} style={{ padding: '6px 16px', borderRadius: 7, border: 'none', background: draft.start && draft.end ? T.acc : T.border, color: '#13121A', cursor: draft.start && draft.end ? 'pointer' : 'default', fontSize: 12, fontWeight: 600, fontFamily: 'var(--font)' }}>Apply</button>
-            </div>
-          </div>
+          {calendarBody}
         </div>
-      )}
+      ) : null}
     </div>
   )
 }
@@ -2134,19 +2242,13 @@ function Topnav({ page, customerTab, alerts, onRefresh, loading, filters, setFil
       {page !== 'inventory' && page !== 'cogs' && page !== 'documents' && page !== 'profile' && page !== 'logistics-ledger' && (
         <div className="tnav-right">
           <div style={{ opacity: dateBlurred ? 0.35 : 1, pointerEvents: dateBlurred ? 'none' : 'auto', transition: 'opacity 0.2s', position: 'relative' }} title={dateBlurred ? 'Segments & RFM is all-time — date range not applied' : undefined}>
-            <DateRangePicker filters={filters} setFilters={setFilters} />
+            <DateRangePicker filters={filters} setFilters={setFilters} onRefresh={onRefresh} loading={loading} />
           </div>
-          <button onClick={onRefresh} className="tnav-btn">
-            <span style={{ display: 'inline-block', animation: loading ? 'spin 1s linear infinite' : 'none', fontSize: 14 }}>↻</span> Refresh
-          </button>
         </div>
       )}
       {page === 'inventory' && inventoryDateControl && (
         <div className="tnav-right">
-          <DateRangePicker filters={inventoryDateControl.filters} setFilters={inventoryDateControl.setFilters} theme={INVENTORY_DATE_THEME} />
-          <button onClick={inventoryDateControl.onRefresh} className="tnav-btn">
-            <span style={{ display: 'inline-block', fontSize: 14 }}>↻</span> Refresh
-          </button>
+          <DateRangePicker filters={inventoryDateControl.filters} setFilters={inventoryDateControl.setFilters} theme={INVENTORY_DATE_THEME} onRefresh={inventoryDateControl.onRefresh} />
         </div>
       )}
     </div>
@@ -12673,7 +12775,7 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
           )}
         </div>
       </div>
-      <BottomNav page={page} setPage={setPage} />
+      <BottomNav page={page} setPage={setPage} allowedTabs={allowedTabs} />
     </div>
   )
 }
