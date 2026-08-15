@@ -2353,7 +2353,7 @@ function MobileInvFilterPanel({ invTab, setInvTab, inventoryDateControl, onClose
       {/* Sub-tab pills */}
       <div style={{ display: 'flex', gap: 6, padding: '12px 14px', borderBottom: `1px solid ${C.border}`, flexShrink: 0, overflowX: 'auto' }}>
         {TABS.map(t => (
-          <button key={t.id} onClick={() => setInvTab(t.id)}
+          <button key={t.id} onClick={() => { setInvTab(t.id); onClose(); }}
             style={{ padding: '6px 12px', borderRadius: 20, fontSize: 12, fontWeight: invTab === t.id ? 700 : 500, border: `1px solid ${invTab === t.id ? C.acc : C.border}`, background: invTab === t.id ? C.acl : 'transparent', color: invTab === t.id ? C.acc : C.t2, cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0 }}>
             {t.label}
           </button>
