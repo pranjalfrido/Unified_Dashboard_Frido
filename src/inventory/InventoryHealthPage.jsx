@@ -103,7 +103,7 @@ function WhCarousel({ locations, filters }) {
 
 // Mobile inventory detail table — sticky Product ID, scrolled to right on mount so
 // Inventory/Avg Sale/DOI are visible by default; Sub-cat revealed by scrolling left.
-function MobDetailTable({ filteredSkus, tableTotals, expandedSku, setExpandedSku, TABLE_SCROLL_HEIGHT }) {
+const MobDetailTable = React.memo(function MobDetailTable({ filteredSkus, tableTotals, expandedSku, setExpandedSku, TABLE_SCROLL_HEIGHT }) {
   const scrollRef = useRef(null)
   useEffect(() => {
     if (scrollRef.current) scrollRef.current.scrollLeft = 250
@@ -143,7 +143,7 @@ function MobDetailTable({ filteredSkus, tableTotals, expandedSku, setExpandedSku
         <tbody>
           {filteredSkus.map((s, i) => (
             <React.Fragment key={`mob-${s.skuKey || 'sku'}-${i}`}>
-              <tr onClick={() => setExpandedSku(k => k === s.skuKey ? null : s.skuKey)}
+              <tr onClick={() => setExpandedSku(s.skuKey)}
                 style={{ borderBottom: `1px solid ${IC.border}`, cursor: 'pointer', height: 30 }}>
                 <td style={{ ...stickyTd(IC.surface), fontWeight: 600, color: th1 }}>
                   <span style={{ color: ths, marginRight: 3, display: 'inline-block', transform: expandedSku === s.skuKey ? 'rotate(90deg)' : 'none', transition: 'transform .15s', fontSize: 10 }}>›</span>
@@ -178,7 +178,7 @@ function MobDetailTable({ filteredSkus, tableTotals, expandedSku, setExpandedSku
       </table>
     </div>
   )
-}
+})
 
 // "Columns" button + dropdown — the only way back for a column hidden via DraggableTh's
 // right-click menu, since a right-click affordance with no visible undo would be a dead end.
@@ -745,8 +745,14 @@ const InventoryHealthInner = React.memo(function InventoryHealthInner({ data, fi
     window.addEventListener('resize', onResize)
     return () => window.removeEventListener('resize', onResize)
   }, [])
+  const [searchInput, setSearchInput] = useState('')
   const [search, setSearch] = useState('')
+  useEffect(() => {
+    const t = setTimeout(() => setSearch(searchInput), 250)
+    return () => clearTimeout(t)
+  }, [searchInput])
   const [expandedSku, setExpandedSku] = useState(null)
+  const toggleExpandedSku = useCallback(skuKey => setExpandedSku(k => k === skuKey ? null : skuKey), [])
   const [colWidths, setColWidths] = useState(DEFAULT_COL_WIDTHS)
   // Column visibility IS its width — dragging a header border to 0 hides it (Excel's own
   // model), rather than a separate hidden-columns Set that could drift out of sync with the
@@ -933,7 +939,7 @@ const InventoryHealthInner = React.memo(function InventoryHealthInner({ data, fi
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
               <span className="inv-detail-desktop-only"><SearchableMultiSelect label="RTD Level" options={data.filterOptions.rtdLevels} selected={filters.rtdLevel || []}
                 onChange={v => setFilters(f => ({ ...f, rtdLevel: v }))} width={SLICER_WIDTH} height={SLICER_HEIGHT} /></span>
-              <input placeholder="Search…" value={search} onChange={e => setSearch(e.target.value)}
+              <input placeholder="Search…" value={searchInput} onChange={e => setSearchInput(e.target.value)}
                 className="inv-detail-search"
                 style={{ background: IC.surface, border: `1px solid ${IC.border2}`, borderRadius: 8, padding: '6px 10px', color: IC.t1, fontSize: 12, width: 170 }} />
               <span className="inv-detail-desktop-only"><ColumnVisibilityMenu columnDefs={COLUMN_DEFS} order={colOrder} hidden={hiddenCols} onShow={restoreColumn} /></span>
@@ -948,7 +954,7 @@ const InventoryHealthInner = React.memo(function InventoryHealthInner({ data, fi
           }
         >
         {/* Mobile table: sticky Product ID + 6 scrollable cols */}
-        <MobDetailTable filteredSkus={filteredSkus} tableTotals={tableTotals} expandedSku={expandedSku} setExpandedSku={setExpandedSku} TABLE_SCROLL_HEIGHT={TABLE_SCROLL_HEIGHT} />
+        <MobDetailTable filteredSkus={filteredSkus} tableTotals={tableTotals} expandedSku={expandedSku} setExpandedSku={toggleExpandedSku} TABLE_SCROLL_HEIGHT={TABLE_SCROLL_HEIGHT} />
         {/* Desktop table */}
         <div className="inv-detail-desktop-only" style={{ maxHeight: TABLE_SCROLL_HEIGHT, overflow: 'auto' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12, tableLayout: 'fixed' }}>
@@ -969,7 +975,7 @@ const InventoryHealthInner = React.memo(function InventoryHealthInner({ data, fi
                 const activeLocations = s.locations.filter(l => l.totalInvt > 0 || l.avgSale > 0)
                 return (
                   <React.Fragment key={`${s.skuKey || 'sku'}-${i}`}>
-                    <tr onClick={() => setExpandedSku(k => k === s.skuKey ? null : s.skuKey)}
+                    <tr onClick={() => toggleExpandedSku(s.skuKey)}
                       style={{ borderBottom: `1px solid ${IC.border}`, cursor: 'pointer', height: 34 }}
                       onMouseEnter={e => e.currentTarget.style.background = 'rgba(0,0,0,0.025)'}
                       onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
