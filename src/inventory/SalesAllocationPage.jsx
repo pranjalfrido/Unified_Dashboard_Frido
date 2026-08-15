@@ -854,7 +854,7 @@ export default function SalesAllocationPage({ data, filters, setFilters, sidebar
             total height and neither list is forced to match the other's size. */}
         <div className="sa-movers-row" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, alignItems: 'start' }}>
           <GlassCard title="Top Products"
-            note={`${fmtInt(topProductsRows.length)} ${top20Level === 'sku' ? 'SKUs' : top20Level === 'subCategory' ? 'sub-cats' : 'categories'}`}
+            note={isMobile ? null : `${fmtInt(topProductsRows.length)} ${top20Level === 'sku' ? 'SKUs' : top20Level === 'subCategory' ? 'sub-cats' : 'categories'}`}
             style={{ display: 'flex', flexDirection: 'column', height: MOVERS_TOTAL_HEIGHT }}
             action={
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
