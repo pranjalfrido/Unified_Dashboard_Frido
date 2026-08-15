@@ -58,11 +58,12 @@ html,body{height:100%;background:var(--bg);font-family:var(--font);color:var(--t
   height:var(--bot);background:var(--card);border-top:1px solid var(--b1);
   z-index:50;
 }
-.bottom-nav-inner{display:flex;align-items:center;justify-content:space-around;height:100%;padding:0 8px}
-.bn-item{display:flex;flex-direction:column;align-items:center;gap:3px;cursor:pointer;color:var(--t3);padding:6px 12px;border-radius:10px;transition:all .13s;flex:1}
+.bottom-nav-inner{display:flex;align-items:center;justify-content:space-around;height:100%;padding:0 2px;overflow:hidden}
+.bn-item{display:flex;flex-direction:column;align-items:center;gap:2px;cursor:pointer;color:var(--t3);padding:4px 2px;border-radius:8px;transition:all .13s;flex:1;min-width:0}
 .bn-item.active{color:var(--t1);background:var(--acl)}
-.bn-item .bn-icon{font-size:20px;line-height:1}
-.bn-item .bn-label{font-size:10px;font-weight:500;line-height:1}
+.bn-item .bn-icon{font-size:18px;line-height:1;display:flex;align-items:center;justify-content:center}
+.bn-item .bn-icon svg{width:18px;height:18px}
+.bn-item .bn-label{font-size:8.5px;font-weight:500;line-height:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
 .bn-item.active .bn-label{font-weight:700}
 
 /* ── Topnav ────────────────────────────────── */
@@ -171,6 +172,9 @@ html,body{height:100%;background:var(--bg);font-family:var(--font);color:var(--t
 .fclr{font-size:11.5px;font-weight:500;color:var(--t3);cursor:pointer;padding:4px;border:none;background:none;font-family:var(--font);flex-shrink:0}
 .fclr:hover{color:var(--Rt)}
 
+/* Hidden on desktop, shown on mobile via media query */
+.tnav-mob-only { display: none; }
+
 /* ══════════════════════════════════════════════
    MOBILE  ≤ 768px
    ══════════════════════════════════════════════ */
@@ -179,6 +183,7 @@ html,body{height:100%;background:var(--bg);font-family:var(--font);color:var(--t
 
   .sidebar{ display:none }
   .bottom-nav{ display:block }
+  .tnav-mob-only{ display:flex !important }
 
   .app-main{ padding-bottom:var(--bot) }
 
@@ -229,17 +234,53 @@ html,body{height:100%;background:var(--bg);font-family:var(--font);color:var(--t
      too tiny on a 375px phone; reset it so the mobile layout controls sizing. */
   .inv-page-shell{ zoom:1 !important }
 
-  /* Inventory KPI tiles: collapse to 2-col grid on mobile */
-  .inv-kpi-grid{ grid-template-columns:1fr 1fr !important }
+  /* Inventory Detail table: mobile vs desktop */
+  .inv-detail-mobile-only{ display:block !important }
+  .inv-detail-desktop-only{ display:none !important }
+  .inv-detail-search{ width:110px !important; padding:5px 8px !important; font-size:11px !important }
 
-  /* Inventory warehouse cards: 2 per row on mobile */
-  .inv-wh-grid{ grid-template-columns:1fr 1fr !important }
+  /* Inventory KPI tiles: horizontal swipe carousel on mobile */
+  .inv-kpi-carousel-wrap{ display:block !important }
+  .inv-kpi-carousel-wrap .inv-kpi-grid > div{
+    box-shadow: none !important;
+  }
+  .inv-kpi-desktop-grid{ display:none !important }
+  .inv-kpi-grid{
+    display:flex !important;
+    flex-direction:row !important;
+    overflow-x:auto !important;
+    scroll-snap-type:x mandatory !important;
+    -webkit-overflow-scrolling:touch !important;
+    gap:10px !important;
+    padding-bottom:4px !important;
+    scrollbar-width:none !important;
+  }
+  .inv-kpi-grid::-webkit-scrollbar{ display:none !important }
+  .inv-kpi-grid > *{
+    flex:0 0 calc(50% - 5px) !important;
+    scroll-snap-align:start !important;
+    min-width:calc(50% - 5px) !important;
+    max-width:calc(50% - 5px) !important;
+  }
+
+  /* Inventory warehouse cards: swipe carousel on mobile */
+  .inv-wh-carousel-wrap{ display:block !important }
+  .inv-wh-desktop-wrap{ display:none !important }
+  .inv-wh-grid-mob > *{
+    flex:0 0 calc(50% - 4px) !important;
+    min-width:calc(50% - 4px) !important;
+    max-width:calc(50% - 4px) !important;
+    scroll-snap-align:start !important;
+    box-shadow:none !important;
+  }
 
   /* Inventory 3-col analysis row → 1-col stack */
   .inv-3col-row{ grid-template-columns:1fr !important }
 
   /* Inventory slow/dead stock 2-col → 1-col */
   .inv-2col-row{ grid-template-columns:1fr !important }
+  .inv-2col-row > div > div{ padding-left:6px !important; padding-right:6px !important }
+  .inv-detail-card > div{ padding-left:6px !important; padding-right:6px !important }
 
   /* Filter sidebar: full-screen drawer overlay on mobile */
   .inv-filter-drawer{
@@ -256,14 +297,13 @@ html,body{height:100%;background:var(--bg);font-family:var(--font);color:var(--t
   }
   /* Hide the desktop sidebar-collapse toggle on mobile */
   .inv-filter-toggle{ display:none !important }
-  /* Show mobile filter button */
-  .inv-filter-mobile-btn{ display:flex !important }
+  .inv-filter-mobile-btn{ display:none !important }
 
   /* Inventory main content: full width, no left offset */
   .inv-main-content{ padding-left:12px !important; padding-right:12px !important }
 
-  /* Sub-tab switcher visible above content on mobile */
-  .inv-mobile-subtabs{ display:flex !important }
+  /* Sub-tab switcher handled by bottom nav popup — hide the inline one on mobile */
+  .inv-mobile-subtabs{ display:none !important }
 }
 
 /* ══════════════════════════════════════════════

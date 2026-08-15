@@ -1907,15 +1907,15 @@ function Sidebar({ page, setPage, invTab, setInvTab, allowedTabs, profile }) {
 // ── Bottom Nav (mobile) ───────────────────────────────────────
 function BottomNav({ page, setPage, allowedTabs }) {
   const allItems = [
-    { id: 'overview', label: 'Overview', icon: <svg width={22} height={22} viewBox="0 0 24 24" fill="currentColor"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg> },
-    { id: 'sales', label: 'Sales', icon: <svg width={22} height={22} viewBox="0 0 24 24" fill="currentColor"><rect x="2" y="12" width="4" height="10" rx="1"/><rect x="10" y="6" width="4" height="16" rx="1"/><rect x="18" y="2" width="4" height="20" rx="1"/></svg> },
-    { id: 'pnl', label: 'PnL', icon: <svg width={22} height={22} viewBox="0 0 24 24" fill="currentColor"><path d="M21 7H7a2 2 0 00-2 2v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2zm-7 9a3 3 0 110-6 3 3 0 010 6z"/><path d="M3 5h14a1 1 0 000-2H3a1 1 0 000 2z"/></svg> },
-    { id: 'inventory', label: 'Inventory', icon: <svg width={22} height={22} viewBox="0 0 24 24" fill="currentColor"><path d="M12 2L2 7v10l10 5 10-5V7L12 2zm0 2.24L20 8.5l-8 4-8-4 8-4.26zM3 9.74l8 4V21l-8-4V9.74zm10 11.26v-7.5l8-4V17l-8 4z"/></svg> },
-    { id: 'logistics', label: 'Logistics', icon: <svg width={22} height={22} viewBox="0 0 24 24" fill="currentColor"><path d="M1 3h14a1 1 0 011 1v9H1V3zm15 4h4.5L23 10.5V16h-7V7zM5.5 20a2 2 0 100-4 2 2 0 000 4zm13 0a2 2 0 100-4 2 2 0 000 4z"/></svg> },
-    { id: 'ads', label: 'Ads', icon: <svg width={22} height={22} viewBox="0 0 24 24" fill="currentColor"><path d="M5 3l14 9-14 9V3z"/></svg> },
-    { id: 'customer', label: 'Customer', icon: <svg width={22} height={22} viewBox="0 0 24 24" fill="currentColor"><path d="M9 12a4 4 0 100-8 4 4 0 000 8zm0 2c-4.42 0-8 1.79-8 4v1h16v-1c0-2.21-3.58-4-8-4zm7-8a3 3 0 000 6 3 3 0 000-6zm0 8c-1.04 0-2.02.2-2.88.53C14.32 15.2 15.5 16.5 15.5 18H23v-1c0-2.21-3.13-4-7-4z"/></svg> },
+    { id: 'overview', label: 'Overview', icon: <svg width={18} height={18} viewBox="0 0 24 24" fill="currentColor"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg> },
+    { id: 'sales', label: 'Sales', icon: <svg width={18} height={18} viewBox="0 0 24 24" fill="currentColor"><rect x="2" y="12" width="4" height="10" rx="1"/><rect x="10" y="6" width="4" height="16" rx="1"/><rect x="18" y="2" width="4" height="20" rx="1"/></svg> },
+    { id: 'pnl', label: 'PnL', icon: <svg width={18} height={18} viewBox="0 0 24 24" fill="currentColor"><path d="M21 7H7a2 2 0 00-2 2v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2zm-7 9a3 3 0 110-6 3 3 0 010 6z"/><path d="M3 5h14a1 1 0 000-2H3a1 1 0 000 2z"/></svg> },
+    { id: 'inventory', label: 'Inventory', icon: <svg width={18} height={18} viewBox="0 0 24 24" fill="currentColor"><path d="M12 2L2 7v10l10 5 10-5V7L12 2zm0 2.24L20 8.5l-8 4-8-4 8-4.26zM3 9.74l8 4V21l-8-4V9.74zm10 11.26v-7.5l8-4V17l-8 4z"/></svg> },
+    { id: 'logistics', label: 'Logistics', icon: <svg width={18} height={18} viewBox="0 0 24 24" fill="currentColor"><path d="M1 3h14a1 1 0 011 1v9H1V3zm15 4h4.5L23 10.5V16h-7V7zM5.5 20a2 2 0 100-4 2 2 0 000 4zm13 0a2 2 0 100-4 2 2 0 000 4z"/></svg> },
+    { id: 'ads', label: 'Ads', icon: <svg width={18} height={18} viewBox="0 0 24 24" fill="currentColor"><path d="M5 3l14 9-14 9V3z"/></svg> },
+    { id: 'customer', label: 'Customer', icon: <svg width={18} height={18} viewBox="0 0 24 24" fill="currentColor"><path d="M9 12a4 4 0 100-8 4 4 0 000 8zm0 2c-4.42 0-8 1.79-8 4v1h16v-1c0-2.21-3.58-4-8-4zm7-8a3 3 0 000 6 3 3 0 000-6zm0 8c-1.04 0-2.02.2-2.88.53C14.32 15.2 15.5 16.5 15.5 18H23v-1c0-2.21-3.13-4-7-4z"/></svg> },
   ]
-  const items = (allowedTabs ? allItems.filter(i => allowedTabs.includes(i.id)) : allItems).slice(0, 5)
+  const items = allowedTabs ? allItems.filter(i => allowedTabs.includes(i.id)) : allItems
   return (
     <nav className="bottom-nav">
       <div className="bottom-nav-inner">
@@ -1943,7 +1943,7 @@ function DateRangePicker({ filters, setFilters, theme: T = C, onRefresh, loading
     return () => window.removeEventListener('resize', onResize)
   }, [])
   const [open, setOpen] = useState(false)
-  const [draft, setDraft] = useState({ start: filters.start, end: filters.end })
+  const [draft, setDraft] = useState({ start: filters?.start ?? '', end: filters?.end ?? '' })
   const [selecting, setSelecting] = useState('start')
   const [hover, setHover] = useState(null)
   const [dropPos, setDropPos] = useState({ top: 0, right: 0 })
@@ -1954,11 +1954,11 @@ function DateRangePicker({ filters, setFilters, theme: T = C, onRefresh, loading
   const fmt0 = d => { const y = d.getFullYear(), m = String(d.getMonth()+1).padStart(2,'0'), dd = String(d.getDate()).padStart(2,'0'); return `${y}-${m}-${dd}` }
   const parseD = s => { const d = new Date(s + 'T00:00:00'); return isNaN(d) ? null : d }
 
-  const [leftMonth, setLeftMonth] = useState(() => { const d = parseD(filters.start) || today; return new Date(d.getFullYear(), d.getMonth(), 1) })
-  const [rightMonth, setRightMonth] = useState(() => { const d = parseD(filters.start) || today; return new Date(d.getFullYear(), d.getMonth() + 1, 1) })
+  const [leftMonth, setLeftMonth] = useState(() => { const d = parseD(filters?.start) || today; return new Date(d.getFullYear(), d.getMonth(), 1) })
+  const [rightMonth, setRightMonth] = useState(() => { const d = parseD(filters?.start) || today; return new Date(d.getFullYear(), d.getMonth() + 1, 1) })
   const [monthPickerSide, setMonthPickerSide] = useState(null) // 'left' | 'right' | null
   const monthPickerOpen = monthPickerSide !== null
-  const [yearInput, setYearInput] = useState(() => (parseD(filters.start) || today).getFullYear())
+  const [yearInput, setYearInput] = useState(() => (parseD(filters?.start) || today).getFullYear())
 
   const PRESETS = [
     { label: 'Today', fn: () => { const d = fmt0(today); return { start: d, end: d } } },
@@ -2234,13 +2234,186 @@ function DateRangePicker({ filters, setFilters, theme: T = C, onRefresh, loading
   )
 }
 
-function Topnav({ page, customerTab, alerts, onRefresh, loading, filters, setFilters, rawRows, inventoryDateControl }) {
+function MobileInvFilterPanel({ invTab, setInvTab, inventoryDateControl, onClose }) {
+  const [subPanel, setSubPanel] = useState(null) // { key, label, options, selected, onChange, isRadio, getKey, getLabel }
+  const [search, setSearch] = useState('')
+
+  const idc = inventoryDateControl || {}
+  const hf = idc.invHealthFilters || {}
+  const setHf = idc.setInvHealthFilters || (() => {})
+  const hOpts = idc.invHealthOpts || {}
+  const sf = idc.invSalesFilters || {}
+  const setSf = idc.setInvSalesFilters || (() => {})
+  const sOpts = idc.invSalesOpts || {}
+
+  const TABS = [
+    { id: 'health', label: 'Inventory Health' },
+    { id: 'sales', label: 'Sales & Allocation' },
+    { id: 'inward', label: 'Inward' },
+  ]
+
+  const STOCK_STATUSES = ['Out of Stock', 'Critical', 'Low', 'Sufficient', 'Excess', 'Dead / No Sale', 'No Demand']
+  const AVG_WINDOWS = [{ label: '7d', value: 7 }, { label: '15d', value: 15 }, { label: '30d', value: 30 }]
+
+  // Build slicer rows for each tab
+  const healthSlicers = [
+    { key: 'location', label: 'Location', options: hOpts.locations || [], selected: hf.location || [], onChange: v => setHf(p => ({ ...p, location: v })) },
+    { key: 'stockStatus', label: 'Stock Status', options: STOCK_STATUSES, selected: hf.stockStatus || [], onChange: v => setHf(p => ({ ...p, stockStatus: v })) },
+    { key: 'avgSaleWindowDays', label: 'Avg Sale Window', options: AVG_WINDOWS, selected: hf.avgSaleWindowDays || 7, onChange: v => setHf(p => ({ ...p, avgSaleWindowDays: v })), isRadio: true, getKey: o => o.value, getLabel: o => o.label },
+    { key: 'facilityType', label: 'Facility Type', options: hOpts.facilityTypes || [], selected: hf.facilityType || [], onChange: v => setHf(p => ({ ...p, facilityType: v })) },
+    { key: 'facility', label: 'Facility', options: hOpts.facilities || [], selected: hf.facility || [], onChange: v => setHf(p => ({ ...p, facility: v })), getKey: o => o?.facility ?? o, getLabel: o => o?.facility ?? o },
+    { key: 'category', label: 'Category', options: hOpts.categories || [], selected: hf.category || [], onChange: v => setHf(p => ({ ...p, category: v })) },
+    { key: 'subCategory', label: 'Sub-category', options: hOpts.subCategories || [], selected: hf.subCategory || [], onChange: v => setHf(p => ({ ...p, subCategory: v })) },
+    { key: 'productId', label: 'Product ID', options: hOpts.productIds || [], selected: hf.productId || [], onChange: v => setHf(p => ({ ...p, productId: v })), getKey: o => o?.sku ?? o, getLabel: o => o?.sku ?? o },
+  ]
+
+  const salesSlicers = [
+    { key: 'category', label: 'Category', options: sOpts.categories || [], selected: sf.category || [], onChange: v => setSf(p => ({ ...p, category: v })) },
+    { key: 'subCategory', label: 'Sub-category', options: sOpts.subCategories || [], selected: sf.subCategory || [], onChange: v => setSf(p => ({ ...p, subCategory: v })) },
+    { key: 'sku', label: 'Product ID / SKU', options: sOpts.skus || [], selected: sf.sku || [], onChange: v => setSf(p => ({ ...p, sku: v })) },
+    { key: 'channel', label: 'Channel', options: sOpts.channels || [], selected: sf.channel || [], onChange: v => setSf(p => ({ ...p, channel: v })) },
+    { key: 'salesType', label: 'Sales Type', options: sOpts.salesTypes || [], selected: sf.salesType || [], onChange: v => setSf(p => ({ ...p, salesType: v })) },
+    { key: 'facility', label: 'Facility', options: sOpts.facilities || [], selected: sf.facility || [], onChange: v => setSf(p => ({ ...p, facility: v })), getKey: o => o?.facility ?? o, getLabel: o => o?.facility ?? o },
+    { key: 'region', label: 'Region', options: sOpts.regions || [], selected: sf.region || [], onChange: v => setSf(p => ({ ...p, region: v })) },
+  ]
+
+  const currentSlicers = invTab === 'health' ? healthSlicers : invTab === 'sales' ? salesSlicers : []
+
+  const countSelected = (s) => {
+    if (!s) return 0
+    if (Array.isArray(s)) return s.length
+    return 0
+  }
+
+  const openSubPanel = (slicer) => {
+    setSearch('')
+    setSubPanel(slicer)
+  }
+
+  const handleClearAll = () => {
+    if (invTab === 'health') setHf({})
+    else if (invTab === 'sales') setSf({})
+  }
+
+  // Sub-panel view
+  if (subPanel) {
+    const { label, options, selected, onChange, isRadio, getKey, getLabel } = subPanel
+    const keyOf = o => getKey ? getKey(o) : o
+    const labelOf = o => getLabel ? getLabel(o) : o
+    const filteredOpts = search ? options.filter(o => labelOf(o).toString().toLowerCase().includes(search.toLowerCase())) : options
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+        {/* Sub-panel header */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '14px 16px 10px', borderBottom: `1px solid ${C.border}`, flexShrink: 0 }}>
+          <button onClick={() => setSubPanel(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.t2, fontSize: 18, padding: 0, display: 'flex', alignItems: 'center' }}>←</button>
+          <span style={{ fontWeight: 700, fontSize: 14, color: C.t1 }}>{label}</span>
+          {!isRadio && selected.length > 0 && (
+            <button onClick={() => onChange([])} style={{ marginLeft: 'auto', fontSize: 11, color: C.t3, background: 'none', border: 'none', cursor: 'pointer', padding: '2px 6px' }}>Clear</button>
+          )}
+        </div>
+        {/* Search if > 10 options */}
+        {options.length > 10 && (
+          <div style={{ padding: '8px 14px', flexShrink: 0 }}>
+            <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search…"
+              style={{ width: '100%', padding: '7px 10px', borderRadius: 8, border: `1px solid ${C.border}`, fontSize: 13, outline: 'none', boxSizing: 'border-box', fontFamily: 'var(--font)' }} />
+          </div>
+        )}
+        {/* Options list */}
+        <div style={{ flex: 1, overflowY: 'auto', padding: '4px 0' }}>
+          {filteredOpts.map((opt, oi) => {
+            const k = keyOf(opt)
+            const lbl = labelOf(opt)
+            const checked = isRadio ? selected === k : selected.includes(k)
+            return (
+              <label key={`${oi}-${k}`} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 16px', cursor: 'pointer', borderBottom: `1px solid ${C.bg}` }}>
+                <input type={isRadio ? 'radio' : 'checkbox'} checked={checked}
+                  onChange={() => {
+                    if (isRadio) { onChange(k) }
+                    else { onChange(checked ? selected.filter(x => x !== k) : [...selected, k]) }
+                  }}
+                  style={{ width: 16, height: 16, accentColor: C.acc, flexShrink: 0 }} />
+                <span style={{ fontSize: 13, color: C.t1 }}>{lbl}</span>
+              </label>
+            )
+          })}
+          {filteredOpts.length === 0 && <div style={{ padding: '16px', fontSize: 12, color: C.t3, textAlign: 'center' }}>No matches</div>}
+        </div>
+      </div>
+    )
+  }
+
+  // Main panel view
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+      {/* Panel header */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 16px 12px', borderBottom: `1px solid ${C.border}`, flexShrink: 0 }}>
+        <span style={{ fontWeight: 700, fontSize: 15, color: C.t1 }}>Filters</span>
+        <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.t2, fontSize: 20, padding: 0, lineHeight: 1 }}>✕</button>
+      </div>
+      {/* Sub-tab pills */}
+      <div style={{ display: 'flex', gap: 6, padding: '12px 14px', borderBottom: `1px solid ${C.border}`, flexShrink: 0, overflowX: 'auto' }}>
+        {TABS.map(t => (
+          <button key={t.id} onClick={() => setInvTab(t.id)}
+            style={{ padding: '6px 12px', borderRadius: 20, fontSize: 12, fontWeight: invTab === t.id ? 700 : 500, border: `1px solid ${invTab === t.id ? C.acc : C.border}`, background: invTab === t.id ? C.acl : 'transparent', color: invTab === t.id ? C.acc : C.t2, cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0 }}>
+            {t.label}
+          </button>
+        ))}
+      </div>
+      {/* Slicer list */}
+      <div style={{ flex: 1, overflowY: 'auto' }}>
+        {invTab === 'inward' ? (
+          <div style={{ padding: 20, fontSize: 13, color: C.t3, textAlign: 'center' }}>No filters available for Inward</div>
+        ) : currentSlicers.length === 0 ? (
+          <div style={{ padding: 20, fontSize: 13, color: C.t3, textAlign: 'center' }}>Loading filter options…</div>
+        ) : currentSlicers.map(slicer => {
+          const cnt = slicer.isRadio ? 0 : countSelected(slicer.selected)
+          return (
+            <div key={slicer.key} onClick={() => openSubPanel(slicer)}
+              style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '13px 16px', borderBottom: `1px solid ${C.bg}`, cursor: 'pointer' }}>
+              <span style={{ fontSize: 13, color: C.t1 }}>{slicer.label}{cnt > 0 ? ` (${cnt})` : ''}</span>
+              <span style={{ fontSize: 14, color: C.t3 }}>›</span>
+            </div>
+          )
+        })}
+      </div>
+      {/* Clear all button */}
+      {invTab !== 'inward' && (
+        <div style={{ padding: '12px 16px', borderTop: `1px solid ${C.border}`, flexShrink: 0 }}>
+          <button onClick={handleClearAll}
+            style={{ width: '100%', padding: '10px', borderRadius: 10, border: `1px solid ${C.border}`, background: 'transparent', color: C.t2, fontSize: 13, cursor: 'pointer', fontFamily: 'var(--font)' }}>
+            Clear All Filters
+          </button>
+        </div>
+      )}
+    </div>
+  )
+}
+
+function Topnav({ page, customerTab, invTab, setInvTab, alerts, onRefresh, loading, filters, setFilters, rawRows, inventoryDateControl }) {
+  const [mobFilterOpen, setMobFilterOpen] = useState(false)
   const titles = { overview: 'Overview', sales: 'Sales Analytics', pnl: 'P&L Analytics', ads: 'Ads Analytics', intelligence: 'Intelligence', logistics: 'Logistics Performance Analytics', inventory: 'Inventory, Sales & Allocation', customer: 'Customer Intelligence', documents: 'Documents', cogs: 'COGS Ledger', 'logistics-ledger': 'Logistics Bill Ledger' }
+  const invTitles = { health: 'Inventory Health', sales: 'Sales & Allocation' }
+  const pageTitle = page === 'inventory' ? (invTitles[invTab] || titles.inventory) : titles[page]
   const critical = alerts.filter(a => a.type === 'red').length
   const dateBlurred = page === 'customer' && customerTab === 'rfm'
   return (
     <div className="topnav">
-      <span className="tnav-title">{titles[page]}</span>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6, position: 'relative' }}>
+        {page === 'inventory' && (
+          <>
+            <button className="tnav-mob-only" onClick={() => setMobFilterOpen(v => !v)} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '2px 4px', color: C.t2, fontSize: 16, lineHeight: 1, display: 'flex', alignItems: 'center' }}>☰</button>
+            {mobFilterOpen && (
+              <>
+                <div onClick={() => setMobFilterOpen(false)} style={{ position: 'fixed', inset: 0, zIndex: 499, background: 'rgba(0,0,0,0.35)' }} />
+                <div style={{ position: 'fixed', top: 'var(--nav)', left: 0, right: 0, bottom: 'var(--bot)', zIndex: 500, background: '#fff', overflowY: 'auto', display: 'flex', flexDirection: 'column' }}>
+                  <MobileInvFilterPanel invTab={invTab} setInvTab={setInvTab} inventoryDateControl={inventoryDateControl} onClose={() => setMobFilterOpen(false)} />
+                </div>
+              </>
+            )}
+          </>
+        )}
+        <span className="tnav-title">{pageTitle}</span>
+      </div>
       {page !== 'inventory' && page !== 'cogs' && page !== 'documents' && page !== 'profile' && page !== 'logistics-ledger' && (
         <div className="tnav-right">
           <div style={{ opacity: dateBlurred ? 0.35 : 1, pointerEvents: dateBlurred ? 'none' : 'auto', transition: 'opacity 0.2s', position: 'relative' }} title={dateBlurred ? 'Segments & RFM is all-time — date range not applied' : undefined}>
@@ -2248,7 +2421,7 @@ function Topnav({ page, customerTab, alerts, onRefresh, loading, filters, setFil
           </div>
         </div>
       )}
-      {page === 'inventory' && inventoryDateControl && (
+      {page === 'inventory' && inventoryDateControl?.filters && (
         <div className="tnav-right">
           <DateRangePicker filters={inventoryDateControl.filters} setFilters={inventoryDateControl.setFilters} theme={INVENTORY_DATE_THEME} onRefresh={inventoryDateControl.onRefresh} />
         </div>
@@ -4537,7 +4710,7 @@ function CatSubCatRow({ catRows, subCatRows, title = 'Category Revenue', selecte
                 <YAxis type="category" dataKey="name" tick={{ fontSize: 10, fill: C.t2 }} width={135} />
                 <CartesianGrid strokeDasharray="3 3" stroke={C.border} horizontal={false} />
                 <Tooltip formatter={v => fmt(v)} />
-                <Bar dataKey="rev" name="Revenue" radius={[0,4,4,0]}>{filteredSubCat.map((r, i) => <Cell key={r.name} fill="#FFD600" />)}</Bar>
+                <Bar dataKey="rev" name="Revenue" radius={[0,4,4,0]}>{filteredSubCat.map((r, i) => <Cell key={r.name + r.category} fill="#FFD600" />)}</Bar>
               </BarChart>
             </ResponsiveContainer>
           </div>
@@ -12707,7 +12880,7 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
     <div className="app-shell">
       <Sidebar page={page} setPage={setPage} invTab={invTab} setInvTab={setInvTab} allowedTabs={allowedTabs} profile={profile} />
       <div className="app-main">
-        <Topnav page={page} customerTab={customerTab} alerts={alerts} onRefresh={() => { const { start, end, category, subCategory, sku, subChannel, voucher, region, tier, state, city, country } = filters; const e = {}; if (category?.length) e.category = category.join(','); if (subCategory?.length) e.subCategory = subCategory.join(','); if (sku?.length) e.sku = sku.join(','); if (subChannel) e.subChannel = subChannel; if (voucher) e.voucher = voucher; if (region?.length) e.region = region.join(','); if (tier?.length) e.tier = tier.join(','); if (state?.length) e.state = state.join(','); if (city) e.city = city; if (country) e.country = country; fetchData(start, end, e) }} loading={loading} filters={filters} setFilters={setFilters} rawRows={rawRows} inventoryDateControl={inventoryDateControl} />
+        <Topnav page={page} customerTab={customerTab} invTab={invTab} setInvTab={setInvTab} alerts={alerts} onRefresh={() => { const { start, end, category, subCategory, sku, subChannel, voucher, region, tier, state, city, country } = filters; const e = {}; if (category?.length) e.category = category.join(','); if (subCategory?.length) e.subCategory = subCategory.join(','); if (sku?.length) e.sku = sku.join(','); if (subChannel) e.subChannel = subChannel; if (voucher) e.voucher = voucher; if (region?.length) e.region = region.join(','); if (tier?.length) e.tier = tier.join(','); if (state?.length) e.state = state.join(','); if (city) e.city = city; if (country) e.country = country; fetchData(start, end, e) }} loading={loading} filters={filters} setFilters={setFilters} rawRows={rawRows} inventoryDateControl={inventoryDateControl} />
         {(loading || inventoryDateControl?.loading) && (
           <div style={{ height: 2, background: C.border, flexShrink: 0 }}>
             <div className="progress-bar" style={{ height: '100%', background: C.acc }} />

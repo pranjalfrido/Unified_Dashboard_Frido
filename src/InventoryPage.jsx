@@ -352,15 +352,27 @@ export default function InventoryPage({ onTopbarDateControl, tab = 'health', set
   // in-page control since Health has no picker and Inward isn't in scope for this move.
   useEffect(() => {
     if (!onTopbarDateControl) return
-    if (tab !== 'sales') { onTopbarDateControl(null); return }
-    onTopbarDateControl({
-      filters: sales.dateFilters, setFilters: sales.setDateFilters,
-      onRefresh: () => sales.fetchData({ ...sales.dateFilters, ...salesFilterBody }),
-      loading: sales.loading,
-    })
+    const extra = {
+      invHealthFilters: healthFilters,
+      setInvHealthFilters: setHealthFilters,
+      invHealthOpts: inv.data?.filterOptions || null,
+      invSalesFilters: salesFilters,
+      setInvSalesFilters: setSalesFilters,
+      invSalesOpts: sales.data?.filterOptions || null,
+    }
+    if (tab === 'sales') {
+      onTopbarDateControl({
+        filters: sales.dateFilters, setFilters: sales.setDateFilters,
+        onRefresh: () => sales.fetchData({ ...sales.dateFilters, ...salesFilterBody }),
+        loading: sales.loading,
+        ...extra,
+      })
+    } else {
+      onTopbarDateControl(extra)
+    }
     return () => onTopbarDateControl(null)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tab, sales.dateFilters, sales.setDateFilters, sales.fetchData, sales.loading, onTopbarDateControl])
+  }, [tab, sales.dateFilters, sales.setDateFilters, sales.fetchData, sales.loading, onTopbarDateControl, healthFilters, setHealthFilters, inv.data?.filterOptions, salesFilters, setSalesFilters, sales.data?.filterOptions])
 
   // Rendered at the top of each sub-page's own FilterSidebar (see SubTabSwitcher comment) —
   // holds the Health/Sales/Inward switcher plus whatever per-tab info/date-control used to
