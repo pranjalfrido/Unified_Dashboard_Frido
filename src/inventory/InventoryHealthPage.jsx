@@ -106,7 +106,7 @@ function WhCarousel({ locations, filters }) {
 function MobDetailTable({ filteredSkus, tableTotals, expandedSku, setExpandedSku, TABLE_SCROLL_HEIGHT }) {
   const scrollRef = useRef(null)
   useEffect(() => {
-    if (scrollRef.current) scrollRef.current.scrollLeft = scrollRef.current.scrollWidth
+    if (scrollRef.current) scrollRef.current.scrollLeft = 180
   }, [])
 
   const P = '5px 6px'
