@@ -852,7 +852,7 @@ export default function SalesAllocationPage({ data, filters, setFilters, sidebar
             Products' and can be taller) — the list below fills whatever space remains via
             flex:1/minHeight:0 and scrolls internally, so neither card grows past the fixed
             total height and neither list is forced to match the other's size. */}
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, alignItems: 'start' }}>
+        <div className="sa-movers-row" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, alignItems: 'start' }}>
           <GlassCard title="Top Products"
             note={`${fmtInt(topProductsRows.length)} ${top20Level === 'sku' ? 'SKUs' : top20Level === 'subCategory' ? 'sub-cats' : 'categories'}`}
             style={{ display: 'flex', flexDirection: 'column', height: MOVERS_TOTAL_HEIGHT }}
