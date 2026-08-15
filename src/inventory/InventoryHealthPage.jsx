@@ -106,11 +106,11 @@ function WhCarousel({ locations, filters }) {
 function MobDetailTable({ filteredSkus, tableTotals, expandedSku, setExpandedSku, TABLE_SCROLL_HEIGHT }) {
   const scrollRef = useRef(null)
   useEffect(() => {
-    if (scrollRef.current) scrollRef.current.scrollLeft = 180
+    if (scrollRef.current) scrollRef.current.scrollLeft = 250
   }, [])
 
   const P = '5px 6px'
-  const W = { sku: 110, sub: 180, inv: 68, avg: 65, doi: 50 }
+  const W = { sku: 110, sub: 250, inv: 68, avg: 65, doi: 50 }
   const ths = IC.t3, th1 = IC.t1, th2 = IC.t2
   const nb = { whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }
   const stickyTd = (bg) => ({ position: 'sticky', left: 0, zIndex: 2, background: bg, padding: P, borderRight: `1px solid ${IC.border}`, ...nb })
