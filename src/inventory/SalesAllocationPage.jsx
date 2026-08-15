@@ -784,7 +784,10 @@ export default function SalesAllocationPage({ data, filters, setFilters, sidebar
           <ResponsiveContainer width="100%" height={220}>
             <ComposedChart data={dailyChart} margin={{ top: 4, right: isMobile ? 10 : 12, bottom: 0, left: isMobile ? 10 : 0 }}>
               <CartesianGrid stroke={IC.border} vertical={false} />
-              <XAxis dataKey="date" tick={{ fontSize: 10, fill: IC.t3 }} axisLine={{ stroke: IC.border2 }} tickLine={false} />
+              <XAxis dataKey="date" tick={{ fontSize: 10, fill: IC.t3 }} axisLine={{ stroke: IC.border2 }} tickLine={false}
+                {...(isMobile && dailyChart?.length ? {
+                  ticks: [dailyChart[0].date, ...dailyChart.filter((_, i) => i > 0 && i < dailyChart.length - 1 && i % Math.ceil(dailyChart.length / 6) === 0).map(d => d.date), dailyChart[dailyChart.length - 1].date]
+                } : {})} />
               <YAxis yAxisId="qty" tick={isMobile ? false : { fontSize: 10, fill: IC.t3 }} tickFormatter={fmtNum} axisLine={{ stroke: IC.border2 }} tickLine={false} width={isMobile ? 0 : 44} />
               {revenueAvailable && !isMobile && <YAxis yAxisId="rev" orientation="right" tick={{ fontSize: 10, fill: IC.t3 }} tickFormatter={fmtCurrency} axisLine={{ stroke: IC.border2 }} tickLine={false} width={56} />}
               <Tooltip content={<SalesTrendTip />} />
