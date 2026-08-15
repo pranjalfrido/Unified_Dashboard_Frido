@@ -759,9 +759,9 @@ export default function SalesAllocationPage({ data, filters, setFilters, sidebar
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
               {isMobile ? (
                 <div style={{ display: 'flex', gap: 4 }}>
-                  {[{ k: 'daily', label: 'Daily' }, { k: 'weekly', label: 'Weekly' }, { k: 'monthly', label: 'Monthly' }].map(g => (
+                  {[{ k: 'daily', label: 'D' }, { k: 'weekly', label: 'W' }, { k: 'monthly', label: 'M' }].map(g => (
                     <button key={g.k} onClick={() => setTrendGranularity(g.k)}
-                      style={{ fontSize: 11, padding: '4px 10px', borderRadius: 7, cursor: 'pointer', background: trendGranularity === g.k ? IC.accDim : IC.surface, color: trendGranularity === g.k ? IC.t1 : IC.t3, border: `1px solid ${trendGranularity === g.k ? IC.accBorder : IC.border}` }}>
+                      style={{ fontSize: 11, padding: '4px 8px', borderRadius: 7, cursor: 'pointer', background: trendGranularity === g.k ? IC.accDim : IC.surface, color: trendGranularity === g.k ? IC.t1 : IC.t3, border: `1px solid ${trendGranularity === g.k ? IC.accBorder : IC.border}` }}>
                       {g.label}
                     </button>
                   ))}
@@ -785,7 +785,7 @@ export default function SalesAllocationPage({ data, filters, setFilters, sidebar
             <ComposedChart data={dailyChart} margin={{ top: 4, right: isMobile ? 4 : 12, bottom: 0, left: 0 }}>
               <CartesianGrid stroke={IC.border} vertical={false} />
               <XAxis dataKey="date" tick={{ fontSize: 10, fill: IC.t3 }} axisLine={{ stroke: IC.border2 }} tickLine={false} />
-              <YAxis yAxisId="qty" tick={{ fontSize: 10, fill: IC.t3 }} tickFormatter={fmtNum} axisLine={{ stroke: IC.border2 }} tickLine={false} width={44} />
+              <YAxis yAxisId="qty" tick={isMobile ? false : { fontSize: 10, fill: IC.t3 }} tickFormatter={fmtNum} axisLine={{ stroke: IC.border2 }} tickLine={false} width={isMobile ? 0 : 44} />
               {revenueAvailable && !isMobile && <YAxis yAxisId="rev" orientation="right" tick={{ fontSize: 10, fill: IC.t3 }} tickFormatter={fmtCurrency} axisLine={{ stroke: IC.border2 }} tickLine={false} width={56} />}
               <Tooltip content={<SalesTrendTip />} />
               <Area yAxisId="qty" type="monotone" dataKey="qty" name="Units Sold" fill="rgba(255,214,0,0.14)" stroke={IC.acc} strokeWidth={2} />
