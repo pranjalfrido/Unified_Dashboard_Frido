@@ -2124,15 +2124,18 @@ function DateRangePicker({ filters, setFilters, theme: T = C }) {
   )
 }
 
-function Topnav({ page, alerts, onRefresh, loading, filters, setFilters, rawRows, inventoryDateControl }) {
+function Topnav({ page, customerTab, alerts, onRefresh, loading, filters, setFilters, rawRows, inventoryDateControl }) {
   const titles = { overview: 'Overview', sales: 'Sales Analytics', pnl: 'P&L Analytics', ads: 'Ads Analytics', intelligence: 'Intelligence', logistics: 'Logistics Performance Analytics', inventory: 'Inventory, Sales & Allocation', customer: 'Customer Intelligence', documents: 'Documents', cogs: 'COGS Ledger', 'logistics-ledger': 'Logistics Bill Ledger' }
   const critical = alerts.filter(a => a.type === 'red').length
+  const dateBlurred = page === 'customer' && customerTab === 'rfm'
   return (
     <div className="topnav">
       <span className="tnav-title">{titles[page]}</span>
       {page !== 'inventory' && page !== 'cogs' && page !== 'documents' && page !== 'profile' && page !== 'logistics-ledger' && (
         <div className="tnav-right">
-          <DateRangePicker filters={filters} setFilters={setFilters} />
+          <div style={{ opacity: dateBlurred ? 0.35 : 1, pointerEvents: dateBlurred ? 'none' : 'auto', transition: 'opacity 0.2s', position: 'relative' }} title={dateBlurred ? 'Segments & RFM is all-time — date range not applied' : undefined}>
+            <DateRangePicker filters={filters} setFilters={setFilters} />
+          </div>
           <button onClick={onRefresh} className="tnav-btn">
             <span style={{ display: 'inline-block', animation: loading ? 'spin 1s linear infinite' : 'none', fontSize: 14 }}>↻</span> Refresh
           </button>
@@ -9797,14 +9800,16 @@ function HeroSparkCard({ c }) {
   )
 }
 
-function CustomerPage({ filters }) {
+function CustomerPage({ filters, activeTab: activeTabProp, setActiveTab: setActiveTabProp }) {
   const [custData, setCustData] = useState(null)
   const [custError, setCustError] = useState(null)
   const [loading, setLoading] = useState(false)
   const [crossFilter, setCrossFilter] = useState('Category')
   const [granularity, setGranularity] = useState('daily')
   const [spendGranularity, setSpendGranularity] = useState('daily')
-  const [activeTab, setActiveTab] = useState('overview')
+  const [activeTabLocal, setActiveTabLocal] = useState('overview')
+  const activeTab = activeTabProp !== undefined ? activeTabProp : activeTabLocal
+  const setActiveTab = setActiveTabProp || setActiveTabLocal
   const [ovChartView, setOvChartView] = useState('revenue')
   const [ovGran, setOvGran] = useState('monthly')
   const [nrMetric, setNrMetric] = useState('customers')
@@ -9861,6 +9866,7 @@ function CustomerPage({ filters }) {
     discountDist = [],
     discountRepeatRate = [],
     discountRepeatRateByFirst = [],
+    categoryDiscountAnalysis = [],
     crossSell = [],
     dailySpend: rawDailySpend = [],
   } = custData
@@ -12363,6 +12369,41 @@ function CustomerPage({ filters }) {
               </div>
 
 
+              {/* Category-wise Discount Analysis */}
+              {categoryDiscountAnalysis.length > 0 && (
+                <div style={cardStyle}>
+                  <div style={cardHead}>
+                    <span style={cardTitle}>Category-wise Discount Analysis</span>
+                    <span style={{ fontSize: 10, color: SD.t3, fontStyle: 'italic' }}>Order volume · % orders discounted · Avg discount depth · Repeat order %</span>
+                  </div>
+                  <div style={cardBody}>
+                    <ResponsiveContainer width="100%" height={360}>
+                      <ComposedChart data={categoryDiscountAnalysis} margin={{ top: 8, right: 48, bottom: 70, left: 8 }}>
+                        <CartesianGrid stroke={SD.borderSoft} vertical={false} />
+                        <XAxis dataKey="category" tick={{ fontSize: 10, fill: SD.t2 }} angle={-35} textAnchor="end" interval={0} />
+                        <YAxis yAxisId="orders" tick={{ fontSize: 10, fill: SD.t3 }} tickFormatter={v => fmtBig(v)} />
+                        <YAxis yAxisId="pct" orientation="right" tick={{ fontSize: 10, fill: SD.t3 }} tickFormatter={v => `${v}%`} domain={[0, 100]} />
+                        <Tooltip
+                          contentStyle={{ background: '#fff', border: `1px solid ${SD.border}`, borderRadius: 7, fontSize: 11, color: SD.t1 }}
+                          labelStyle={{ color: SD.t1, fontWeight: 700 }}
+                          itemStyle={{ color: SD.t1 }}
+                          formatter={(v, name) => {
+                            if (name === 'Total Orders') return [fmtN(v), name]
+                            if (name === 'AOV') return [fmt(v), name]
+                            return [`${v}%`, name]
+                          }}
+                        />
+                        <Legend verticalAlign="bottom" align="center" wrapperStyle={{ fontSize: 10, fontFamily: 'Inter, sans-serif', paddingTop: 8, bottom: 0 }} formatter={v => <span style={{ color: '#13121A' }}>{v}</span>} />
+                        <Bar yAxisId="orders" dataKey="totalOrders" name="Total Orders" fill={SD.amberDeep} radius={[3,3,0,0]} maxBarSize={36} />
+                        <Line yAxisId="pct" type="monotone" dataKey="discountedOrderPct" name="% Orders Discounted" stroke="#E07000" strokeWidth={2} dot={{ r: 3, fill: '#E07000' }} />
+                        <Line yAxisId="pct" type="monotone" dataKey="avgDiscPct" name="Avg Disc %" stroke="#2E74CC" strokeWidth={2} strokeDasharray="4 3" dot={{ r: 3, fill: '#2E74CC' }} />
+                        <Line yAxisId="pct" type="monotone" dataKey="repeatOrderPct" name="Repeat Order %" stroke="#7C6F3E" strokeWidth={2} strokeDasharray="3 2" dot={{ r: 3, fill: '#7C6F3E' }} />
+                      </ComposedChart>
+                    </ResponsiveContainer>
+                  </div>
+                </div>
+              )}
+
             </div>
           )
         })()}
@@ -12457,6 +12498,7 @@ const TAB_PRIORITY = ['overview', 'sales', 'ads', 'logistics', 'inventory', 'cus
 function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated }) {
   const [page, setPage] = useState(allowedTabs?.length ? (TAB_PRIORITY.find(t => allowedTabs.includes(t)) || allowedTabs[0]) : 'overview')
   const [invTab, setInvTab] = useState('health')
+  const [customerTab, setCustomerTab] = useState('overview')
 
   useEffect(() => {
     if (allowedTabs?.length && !allowedTabs.includes(page)) {
@@ -12551,7 +12593,7 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
     <div className="app-shell">
       <Sidebar page={page} setPage={setPage} invTab={invTab} setInvTab={setInvTab} allowedTabs={allowedTabs} profile={profile} />
       <div className="app-main">
-        <Topnav page={page} alerts={alerts} onRefresh={() => { const { start, end, category, subCategory, sku, subChannel, voucher, region, tier, state, city, country } = filters; const e = {}; if (category?.length) e.category = category.join(','); if (subCategory?.length) e.subCategory = subCategory.join(','); if (sku?.length) e.sku = sku.join(','); if (subChannel) e.subChannel = subChannel; if (voucher) e.voucher = voucher; if (region?.length) e.region = region.join(','); if (tier?.length) e.tier = tier.join(','); if (state?.length) e.state = state.join(','); if (city) e.city = city; if (country) e.country = country; fetchData(start, end, e) }} loading={loading} filters={filters} setFilters={setFilters} rawRows={rawRows} inventoryDateControl={inventoryDateControl} />
+        <Topnav page={page} customerTab={customerTab} alerts={alerts} onRefresh={() => { const { start, end, category, subCategory, sku, subChannel, voucher, region, tier, state, city, country } = filters; const e = {}; if (category?.length) e.category = category.join(','); if (subCategory?.length) e.subCategory = subCategory.join(','); if (sku?.length) e.sku = sku.join(','); if (subChannel) e.subChannel = subChannel; if (voucher) e.voucher = voucher; if (region?.length) e.region = region.join(','); if (tier?.length) e.tier = tier.join(','); if (state?.length) e.state = state.join(','); if (city) e.city = city; if (country) e.country = country; fetchData(start, end, e) }} loading={loading} filters={filters} setFilters={setFilters} rawRows={rawRows} inventoryDateControl={inventoryDateControl} />
         {(loading || inventoryDateControl?.loading) && (
           <div style={{ height: 2, background: C.border, flexShrink: 0 }}>
             <div className="progress-bar" style={{ height: '100%', background: C.acc }} />
@@ -12606,7 +12648,7 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
           )}
           {page === 'customer' && data && (!allowedTabs || allowedTabs.includes('customer')) && (
             <div className="page-scroll" style={{ padding: 0 }}>
-              <CustomerPage filters={filters} />
+              <CustomerPage filters={filters} activeTab={customerTab} setActiveTab={setCustomerTab} />
             </div>
           )}
           {page === 'documents' && (

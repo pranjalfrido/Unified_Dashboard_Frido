@@ -24,7 +24,7 @@ export default async function handler(req, res) {
     const ps = new Date(ms - dur - 86400000).toISOString().slice(0, 10)
     const pe = new Date(ms - 86400000).toISOString().slice(0, 10)
 
-    const [kpis, monthly, cohort, crossSell, rfm, freqDist, monetaryDist, inactivity, discountDist, adsKpis, dailySpend, prevKpis, prevAdsKpis, discountRepeatRate, daysToSecondPurchase, aovByOrderNumber, repurchaseCycleByCategory, basketComposition, purchaseBehaviorKpis, orderFreqDist, discountRepeatRateByFirst] = await Promise.all([
+    const [kpis, monthly, cohort, crossSell, rfm, freqDist, monetaryDist, inactivity, discountDist, adsKpis, dailySpend, prevKpis, prevAdsKpis, discountRepeatRate, daysToSecondPurchase, aovByOrderNumber, repurchaseCycleByCategory, basketComposition, purchaseBehaviorKpis, orderFreqDist, discountRepeatRateByFirst, categoryDiscountAnalysis] = await Promise.all([
 
       // Q1 — KPIs for the selected period (Shopify only)
       run(`WITH first_dates AS (
@@ -725,6 +725,61 @@ SELECT
 FROM first_orders fo
 LEFT JOIN second_orders so USING (CustomerId)
 GROUP BY fo.first_order_type`),
+
+      // Q22 — category-wise discount analysis
+      run(`WITH
+first_dates AS (
+  SELECT CustomerId, MIN(DATE(OrderDate)) AS first_date
+  FROM ${TBL}
+  WHERE Channel = 'Shopify' AND CustomerId IS NOT NULL
+  GROUP BY CustomerId
+),
+item_master AS (
+  SELECT DISTINCT TRIM(Product_Code) AS sku, Category_Name
+  FROM \`frido-429506.sharepoint_to_gcp.Frido_Item_Master__frido_item_sku_master\`
+  WHERE Product_Code IS NOT NULL AND Category_Name IS NOT NULL
+),
+pid_map AS (
+  SELECT DISTINCT TRIM(productid) AS productid, TRIM(masterskucode) AS masterskucode
+  FROM \`frido-429506.sharepoint_to_gcp.Frido_Item_Master__productid_sku_mapping\`
+  WHERE productid IS NOT NULL AND masterskucode IS NOT NULL
+),
+order_agg AS (
+  SELECT
+    t.OrderId, t.CustomerId,
+    ANY_VALUE(f.first_date) AS first_date,
+    COALESCE(im.Category_Name, im2.Category_Name) AS category,
+    SUM(t.SellingPrice_Exc_GST) AS order_rev,
+    SUM(t.Listing_Price) AS total_listing,
+    SUM(t.Discount) AS total_discount
+  FROM ${TBL} t
+  JOIN first_dates f USING (CustomerId)
+  LEFT JOIN pid_map pm ON TRIM(CAST(t.ProductId AS STRING)) = pm.productid
+  LEFT JOIN item_master im ON TRIM(CAST(t.masterskucode AS STRING)) = im.sku
+  LEFT JOIN item_master im2 ON pm.masterskucode = im2.sku
+  WHERE t.Channel = 'Shopify' AND t.CustomerId IS NOT NULL
+    AND DATE(t.OrderDate) BETWEEN '${s}' AND '${e}'
+  GROUP BY t.OrderId, t.CustomerId, COALESCE(im.Category_Name, im2.Category_Name)
+),
+with_repeat AS (
+  SELECT *,
+    CASE WHEN first_date < DATE('${s}') THEN 'repeat' ELSE 'new' END AS customer_type,
+    SAFE_DIVIDE(total_discount, NULLIF(total_listing, 0)) AS disc_ratio
+  FROM order_agg
+  WHERE category IS NOT NULL
+)
+SELECT
+  category,
+  COUNT(DISTINCT OrderId) AS total_orders,
+  ROUND(SAFE_DIVIDE(COUNTIF(total_discount > 0), COUNT(DISTINCT OrderId)) * 100, 1) AS discounted_order_pct,
+  ROUND(AVG(CASE WHEN total_discount > 0 THEN disc_ratio * 100 END), 1) AS avg_disc_pct,
+  ROUND(SAFE_DIVIDE(SUM(order_rev), COUNT(DISTINCT OrderId)), 0) AS aov,
+  ROUND(SAFE_DIVIDE(COUNTIF(customer_type = 'repeat'), COUNT(DISTINCT OrderId)) * 100, 1) AS repeat_order_pct
+FROM with_repeat
+GROUP BY category
+HAVING COUNT(DISTINCT OrderId) >= 50
+ORDER BY total_orders DESC
+LIMIT 20`),
     ])
 
     // Fetch additional (offline) spend from Postgres for the selected date range
@@ -1022,6 +1077,14 @@ LIMIT 50`)
         totalCustomers: parseInt(r.total_customers) || 0,
         repeatCustomers: parseInt(r.repeat_customers) || 0,
         repeatRate: parseFloat(r.repeat_rate) || 0,
+      })),
+      categoryDiscountAnalysis: categoryDiscountAnalysis.map(r => ({
+        category: r.category,
+        totalOrders: parseInt(r.total_orders) || 0,
+        discountedOrderPct: parseFloat(r.discounted_order_pct) || 0,
+        avgDiscPct: parseFloat(r.avg_disc_pct) || 0,
+        aov: parseFloat(r.aov) || 0,
+        repeatOrderPct: parseFloat(r.repeat_order_pct) || 0,
       })),
     })
   } catch (err) {
