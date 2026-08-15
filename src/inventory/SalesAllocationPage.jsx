@@ -884,16 +884,51 @@ export default function SalesAllocationPage({ data, filters, setFilters, sidebar
             </div>
           </GlassCard>
 
-          <GlassCard title="Drastic Sales Change" note="biggest movers"
+          <GlassCard title="Drastic Sales Change" note={isMobile ? null : "biggest movers"}
             style={{ display: 'flex', flexDirection: 'column', height: MOVERS_TOTAL_HEIGHT }}
-            action={
-              <ExportButton filename="drastic_movers.csv" rows={drasticRows}
-                columns={[
-                  { label: drasticLevel === 'sku' ? 'SKU' : drasticLevel === 'subCategory' ? 'Sub-category' : 'Category', key: drasticLevel === 'sku' ? 'sku' : drasticLevel === 'subCategory' ? 'subCategory' : 'category' },
-                  { label: 'Category', key: 'category' }, { label: 'Last', key: 'lastVal' }, { label: 'Compare', key: 'compareVal' }, { label: '% Change', key: 'pctChange' },
-                ]} />
+            action={isMobile
+              ? <SearchableMultiSelect label="Channel" options={data.filterOptions.unifiedChannels2} selected={filters.drasticChannel || []} onChange={v => setFilters(f => ({ ...f, drasticChannel: v }))} width={110} height={25} />
+              : <ExportButton filename="drastic_movers.csv" rows={drasticRows}
+                  columns={[
+                    { label: drasticLevel === 'sku' ? 'SKU' : drasticLevel === 'subCategory' ? 'Sub-category' : 'Category', key: drasticLevel === 'sku' ? 'sku' : drasticLevel === 'subCategory' ? 'subCategory' : 'category' },
+                    { label: 'Category', key: 'category' }, { label: 'Last', key: 'lastVal' }, { label: 'Compare', key: 'compareVal' }, { label: '% Change', key: 'pctChange' },
+                  ]} />
             }>
             <div style={{ flexShrink: 0, display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 8 }}>
+              {isMobile ? (
+                <>
+                  <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
+                    {[{ k: 'sku', label: 'SKU' }, { k: 'subCategory', label: 'Sub-cat' }, { k: 'category', label: 'Category' }].map(l => (
+                      <button key={l.k} onClick={() => setDrasticLevel(l.k)}
+                        style={{ fontSize: 10.5, padding: '3px 9px', borderRadius: 6, cursor: 'pointer', background: drasticLevel === l.k ? IC.accDim : IC.surface, color: drasticLevel === l.k ? IC.t1 : IC.t3, border: `1px solid ${drasticLevel === l.k ? IC.accBorder : IC.border}` }}>
+                        {l.label}
+                      </button>
+                    ))}
+                    <div style={{ width: 1, background: IC.border, margin: '0 2px' }} />
+                    {[{ k: 'risers', label: '▲ Risers' }, { k: 'fallers', label: '▼ Fallers' }].map(d => (
+                      <button key={d.k} onClick={() => setDrasticDirection(d.k)}
+                        style={{ fontSize: 10.5, padding: '3px 9px', borderRadius: 6, cursor: 'pointer', background: drasticDirection === d.k ? IC.accDim : IC.surface, color: drasticDirection === d.k ? (d.k === 'risers' ? IC.positive : IC.status.Critical.c) : IC.t3, border: `1px solid ${drasticDirection === d.k ? IC.accBorder : IC.border}` }}>
+                        {d.label}
+                      </button>
+                    ))}
+                  </div>
+                  <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
+                    {[{ k: 'qty', label: 'Units' }, { k: 'rev', label: 'Revenue' }].map(m => (
+                      <button key={m.k} disabled={m.k === 'rev' && !revenueAvailable} onClick={() => setDrasticMetric(m.k)}
+                        style={{ fontSize: 10.5, padding: '3px 9px', borderRadius: 6, cursor: m.k === 'rev' && !revenueAvailable ? 'not-allowed' : 'pointer', opacity: m.k === 'rev' && !revenueAvailable ? 0.4 : 1, background: drasticMetric === m.k ? IC.accDim : IC.surface, color: drasticMetric === m.k ? IC.t1 : IC.t3, border: `1px solid ${drasticMetric === m.k ? IC.accBorder : IC.border}` }}>
+                        {m.label}
+                      </button>
+                    ))}
+                    <div style={{ width: 1, background: IC.border, margin: '0 2px' }} />
+                    {[{ k: 'day2', label: 'Last vs 2nd' }, { k: 'day7', label: 'Last vs 7th' }].map(m => (
+                      <button key={m.k} onClick={() => setDrasticMode(m.k)}
+                        style={{ fontSize: 10.5, padding: '3px 9px', borderRadius: 6, cursor: 'pointer', background: drasticMode === m.k ? IC.accDim : IC.surface, color: drasticMode === m.k ? IC.t1 : IC.t3, border: `1px solid ${drasticMode === m.k ? IC.accBorder : IC.border}`, whiteSpace: 'nowrap' }}>
+                        {m.label}
+                      </button>
+                    ))}
+                  </div>
+                </>
+              ) : (
               <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', alignItems: 'center' }}>
                 {[{ k: 'sku', label: 'SKU' }, { k: 'subCategory', label: 'Sub-category' }, { k: 'category', label: 'Category' }].map(l => (
                   <button key={l.k} onClick={() => setDrasticLevel(l.k)}
@@ -928,6 +963,7 @@ export default function SalesAllocationPage({ data, filters, setFilters, sidebar
                 <SearchableMultiSelect label="Channel" options={data.filterOptions.unifiedChannels2} selected={filters.drasticChannel || []} onChange={v => setFilters(f => ({ ...f, drasticChannel: v }))}
                   width={130} height={25} />
               </div>
+              )}
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0, overflow: 'hidden' }}>
               {drasticRows.length > 0 && (
