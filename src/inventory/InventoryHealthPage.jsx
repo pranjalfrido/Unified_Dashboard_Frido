@@ -1112,7 +1112,7 @@ const InventoryHealthInner = React.memo(function InventoryHealthInner({ data, fi
           — the actual cause of the page-wide horizontal scroll/misalignment bug reported
           earlier. Belt-and-suspenders: the constraint is enforced at both the grid-item
           wrapper level and the card level, not relying on either alone. */}
-      <div className="inv-2col-row" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, alignItems: 'stretch' }}>
+      <div className="inv-2col-row" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, alignItems: 'stretch', paddingBottom: 20 }}>
         <div style={{ minWidth: 0 }}>
         <GlassCard title={<><span className="inv-detail-desktop-only">Slow Moving Sub-categories</span><span className="inv-detail-mobile-only">Slow Moving</span></>}
           action={<div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
