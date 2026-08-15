@@ -1115,7 +1115,6 @@ const InventoryHealthInner = React.memo(function InventoryHealthInner({ data, fi
       <div className="inv-2col-row" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, alignItems: 'stretch' }}>
         <div style={{ minWidth: 0 }}>
         <GlassCard title={<><span className="inv-detail-desktop-only">Slow Moving Sub-categories</span><span className="inv-detail-mobile-only">Slow Moving</span></>}
-          note={<span className="inv-detail-desktop-only">DOI &gt; 45d or not being sold, sub-cat stock &gt; 50 units</span>}
           action={<div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <input placeholder="Search…" value={slowSearch} onChange={e => setSlowSearch(e.target.value)}
               className="inv-detail-search"
@@ -1129,7 +1128,6 @@ const InventoryHealthInner = React.memo(function InventoryHealthInner({ data, fi
 
         <div style={{ minWidth: 0 }}>
         <GlassCard title={<><span className="inv-detail-desktop-only">Dead Stock Sub-categories</span><span className="inv-detail-mobile-only">Dead Stock</span></>}
-          note={<span className="inv-detail-desktop-only">DOI &gt; 200d, or not being sold with stock &gt; 200 units</span>}
           action={<div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <input placeholder="Search…" value={deadSearch} onChange={e => setDeadSearch(e.target.value)}
               className="inv-detail-search"
