@@ -10606,9 +10606,15 @@ function CustomerPage({ filters, activeTab: activeTabProp, setActiveTab: setActi
           }))
 
           // ── Day-of-Week seasonality ──
+          // Only use the most recent floor(n/7)*7 days so every weekday appears the same
+          // number of times — avoids skewed averages when the range isn't a clean multiple of 7.
+          const dowSortedDates = [...new Set(enriched.map(r => r.date).filter(Boolean))].sort()
+          const dowWeeks = Math.floor(dowSortedDates.length / 7)
+          const dowTrimmedDates = new Set(dowSortedDates.slice(-dowWeeks * 7))
+          const dowInsufficient = dowSortedDates.length < 7
           const dowMap = { 0: { day: 'Sun', nc: 0, rev: 0, orders: 0, cnt: 0 }, 1: { day: 'Mon', nc: 0, rev: 0, orders: 0, cnt: 0 }, 2: { day: 'Tue', nc: 0, rev: 0, orders: 0, cnt: 0 }, 3: { day: 'Wed', nc: 0, rev: 0, orders: 0, cnt: 0 }, 4: { day: 'Thu', nc: 0, rev: 0, orders: 0, cnt: 0 }, 5: { day: 'Fri', nc: 0, rev: 0, orders: 0, cnt: 0 }, 6: { day: 'Sat', nc: 0, rev: 0, orders: 0, cnt: 0 } }
           enriched.forEach(r => {
-            if (!r.date) return
+            if (!r.date || !dowTrimmedDates.has(r.date)) return
             const dow = new Date(r.date).getDay()
             dowMap[dow].nc += r.newCustomers || 0
             dowMap[dow].rev += r.grossSalesExc || 0
@@ -10631,7 +10637,7 @@ function CustomerPage({ filters, activeTab: activeTabProp, setActiveTab: setActi
           const bestDow = dowData.reduce((a, b) => b.avg > a.avg ? b : a, dowData[0] || { day: '-', avg: 0 })
           const avgDowAll = dowData.reduce((s, d) => s + d.avg, 0) / (dowData.filter(d => d.avg > 0).length || 1)
           const dowInsight = bestDow.avg > 0 && avgDowAll > 0
-            ? `${bestDow.day} has the highest avg new customer acquisition at ${fmtN(bestDow.avg)}/day — ${((bestDow.avg/avgDowAll-1)*100).toFixed(0)}% above the weekly average.`
+            ? `${bestDow.day} has the highest avg new customer acquisition at ${fmtN(bestDow.avg)}/day — ${((bestDow.avg/avgDowAll-1)*100).toFixed(0)}% above the weekly average. Based on ${dowWeeks} complete week${dowWeeks !== 1 ? 's' : ''}.`
             : null
 
           // ── Marginal efficiency scatter ──
@@ -10751,7 +10757,7 @@ function CustomerPage({ filters, activeTab: activeTabProp, setActiveTab: setActi
                 </SCard>
 
                 <SCard title="Day-of-Week Seasonality"
-                  sub={dowMetric === 'customers' ? (dowInsight || 'Avg new customers per weekday') : dowMetric === 'revenue' ? 'Avg gross sales (Ex GST) per weekday' : 'Avg orders per weekday'}
+                  sub={dowInsufficient ? 'Select at least 7 days to view day-of-week patterns' : dowMetric === 'customers' ? (dowInsight || 'Avg new customers per weekday') : dowMetric === 'revenue' ? 'Avg gross sales (Ex GST) per weekday' : 'Avg orders per weekday'}
                   action={
                     <div style={{ display: 'flex', gap: 4 }}>
                       {[['customers','Customers'],['revenue','Revenue'],['orders','Orders']].map(([m, label]) => (
@@ -10760,7 +10766,11 @@ function CustomerPage({ filters, activeTab: activeTabProp, setActiveTab: setActi
                     </div>
                   }
                 >
-                  <ResponsiveContainer width="100%" height={220}>
+                  {dowInsufficient ? (
+                    <div style={{ height: 220, display: 'flex', alignItems: 'center', justifyContent: 'center', color: T.t3, fontSize: 13 }}>
+                      Select at least 7 days to view day-of-week patterns
+                    </div>
+                  ) : <ResponsiveContainer width="100%" height={220}>
                     <BarChart data={dowData} margin={{ top: 20, right: 8, bottom: 4, left: 0 }}>
                       <CartesianGrid stroke={T.borderSoft} />
                       <XAxis dataKey="day" tick={{ fontSize: 10, fill: T.t3 }} />
@@ -10791,7 +10801,7 @@ function CustomerPage({ filters, activeTab: activeTabProp, setActiveTab: setActi
                         radius={[4,4,0,0]} fill="#F5C518">
                       </Bar>
                     </BarChart>
-                  </ResponsiveContainer>
+                  </ResponsiveContainer>}
                 </SCard>
               </div>
 
