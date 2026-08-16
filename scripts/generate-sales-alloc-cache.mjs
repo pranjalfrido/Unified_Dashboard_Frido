@@ -28,8 +28,7 @@ function monthKey(dateStr) { return dateStr.slice(0, 7) }
 const bq = new BigQuery({ keyFilename: 'sa_key.json' })
 
 // Default 30-day window — same as the frontend's default date picker range
-const end = new Date()
-end.setDate(end.getDate() - 1) // d-1: yesterday as last complete day
+const end = new Date() // fetch up to today — frontend excludes partial last day via lastSalesDate-1
 const endStr = end.toISOString().slice(0, 10)
 const startD = new Date(end)
 startD.setDate(startD.getDate() - 29) // 30 days inclusive
