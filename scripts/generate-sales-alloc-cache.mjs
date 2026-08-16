@@ -249,11 +249,13 @@ const moversLabelForLevel = {
 }
 
 function resolveCompareDates(mode) {
+  // Use last complete day (maxSalesDate - 1) as anchor, not endStr (today may have 0 data)
+  const lastCompleteDate = lastSalesDateConsidered || endStr
   const windowN = mode === 'day2' ? 1 : 6
-  const compareD = new Date(endStr); compareD.setDate(compareD.getDate() - windowN)
+  const compareD = new Date(lastCompleteDate); compareD.setDate(compareD.getDate() - windowN)
   const compareDate = compareD.toISOString().slice(0, 10)
-  if (!lookbackDates.includes(endStr) && !lookbackDates.includes(compareDate)) return null
-  return { lastDate: endStr, compareDate }
+  if (!lookbackDates.includes(lastCompleteDate) && !lookbackDates.includes(compareDate)) return null
+  return { lastDate: lastCompleteDate, compareDate }
 }
 
 function topMoversFor(level, mode, metric) {
