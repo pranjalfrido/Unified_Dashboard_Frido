@@ -285,6 +285,7 @@ html,body{height:100%;background:var(--bg);font-family:var(--font);color:var(--t
   /* Inventory slow/dead stock 2-col → 1-col */
   .inv-2col-row{ grid-template-columns:1fr !important }
   .sa-movers-row{ grid-template-columns:1fr !important }
+  .sa-movers-row > div > div{ padding-left:6px !important; padding-right:6px !important }
   .inv-2col-row > div > div{ padding-left:6px !important; padding-right:6px !important }
   .inv-detail-card > div{ padding-left:6px !important; padding-right:6px !important }
 

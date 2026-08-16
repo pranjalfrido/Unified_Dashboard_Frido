@@ -232,14 +232,14 @@ function TopProductsBarList({ rows, metric, grandTotal, nameWidth = 140, isMobil
         return (
           <div key={r.name} style={{ minHeight: ROW_HEIGHT, flex: '1 1 auto', boxSizing: 'border-box', display: 'grid', gridTemplateColumns: isMobile ? `${nameWidth}px 1fr 66px 52px` : `18px ${nameWidth}px 1fr 66px 52px`, alignItems: 'center', gap: 8, padding: '4px 0', borderBottom: i < rows.length - 1 ? `1px solid ${IC.border}` : 'none' }}>
             {!isMobile && <span style={{ fontSize: 10.5, color: IC.t3 }}>{i + 1}</span>}
-            <span title={r.name} style={{ fontSize: 11.5, color: IC.t1, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.name}</span>
+            <span title={r.name} style={{ fontSize: isMobile ? 9.2 : 11.5, color: IC.t1, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.name}</span>
             <div style={{ height: 10, borderRadius: 4, background: 'rgba(0,0,0,0.06)', overflow: 'hidden' }}>
               <div style={{ width: `${(val / maxVal) * 100}%`, height: '100%', background: IC.acc, borderRadius: 4 }} />
             </div>
-            <span style={{ fontSize: 11.5, fontWeight: 700, color: IC.t1, textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>
+            <span style={{ fontSize: isMobile ? 9.2 : 11.5, fontWeight: 700, color: IC.t1, textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>
               {metric === 'rev' ? fmtCurrency(val) : fmtInt(val)}
             </span>
-            <span style={{ fontSize: 10.5, color: IC.t3, textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{pctOfTotal.toFixed(1)}%</span>
+            <span style={{ fontSize: isMobile ? 8.4 : 10.5, color: IC.t3, textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{pctOfTotal.toFixed(1)}%</span>
           </div>
         )
       })}
@@ -291,7 +291,7 @@ function LocationClusteredBarList({ rows, height, nameWidth = 90 }) {
 function DrasticMoversTable({ rows, metric, level, isMobile = false }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0, overflowY: 'auto' }}>
-      {rows.length === 0 && <div style={{ fontSize: 12, color: IC.t3, padding: '4px 0' }}>No data for this comparison.</div>}
+      {rows.length === 0 && <div style={{ fontSize: isMobile ? 9.6 : 12, color: IC.t3, padding: '4px 0' }}>No data for this comparison.</div>}
       {rows.map((r, i) => {
         const label = level === 'sku' ? r.sku : level === 'subCategory' ? r.subCategory : r.category
         const up = r.pctChange >= 0
@@ -301,14 +301,14 @@ function DrasticMoversTable({ rows, metric, level, isMobile = false }) {
             borderBottom: i < rows.length - 1 ? `1px solid ${IC.border}` : 'none',
           }}>
             {!isMobile && <span style={{ fontSize: 10.5, color: IC.t3 }}>{i + 1}</span>}
-            <span title={label} style={{ fontSize: 11.5, color: IC.t1, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{label}</span>
-            <span style={{ fontSize: 10.5, color: IC.t3, textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>
+            <span title={label} style={{ fontSize: isMobile ? 9.2 : 11.5, color: IC.t1, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{label}</span>
+            <span style={{ fontSize: isMobile ? 8.4 : 10.5, color: IC.t3, textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>
               {metric === 'rev' ? fmtCurrency(r.compareVal) : fmtInt(r.compareVal)}
             </span>
-            <span style={{ fontSize: 11.5, fontWeight: 700, color: IC.t1, textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>
+            <span style={{ fontSize: isMobile ? 9.2 : 11.5, fontWeight: 700, color: IC.t1, textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>
               {metric === 'rev' ? fmtCurrency(r.lastVal) : fmtInt(r.lastVal)}
             </span>
-            <span style={{ fontSize: 11.5, fontWeight: 700, color: up ? IC.positive : IC.status.Critical.c, textAlign: 'right' }}>
+            <span style={{ fontSize: isMobile ? 9.2 : 11.5, fontWeight: 700, color: up ? IC.positive : IC.status.Critical.c, textAlign: 'right' }}>
               {up ? '▲' : '▼'} {Math.abs(r.pctChange).toFixed(0)}%
             </span>
           </div>
