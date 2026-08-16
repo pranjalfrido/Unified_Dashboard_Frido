@@ -238,7 +238,7 @@ html,body{height:100%;background:var(--bg);font-family:var(--font);color:var(--t
   /* Inventory Detail table: mobile vs desktop */
   .inv-detail-mobile-only{ display:block !important }
   .inv-detail-desktop-only{ display:none !important }
-  .inv-detail-search{ width:110px !important; padding:5px 8px !important; font-size:11px !important }
+  .inv-detail-search{ width:130px !important; padding:5px 8px !important; font-size:11px !important }
 
   /* Inventory KPI tiles: horizontal swipe carousel on mobile */
   .inv-kpi-carousel-wrap{ display:block !important }

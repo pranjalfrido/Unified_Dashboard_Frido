@@ -948,7 +948,7 @@ const InventoryHealthInner = React.memo(function InventoryHealthInner({ data, fi
                 onChange={v => setFilters(f => ({ ...f, rtdLevel: v }))} width={SLICER_WIDTH} height={SLICER_HEIGHT} /></span>
               <input placeholder="Search…" value={searchInput} onChange={e => setSearchInput(e.target.value)}
                 className="inv-detail-search"
-                style={{ background: IC.surface, border: `1px solid ${IC.border2}`, borderRadius: 8, padding: '6px 10px', color: IC.t1, fontSize: 12, width: 170 }} />
+                style={{ background: IC.surface, border: `1px solid ${IC.border2}`, borderRadius: 8, padding: '6px 10px', color: IC.t1, fontSize: 12, width: 238, maxWidth: '100%', boxSizing: 'border-box' }} />
               <span className="inv-detail-desktop-only"><ColumnVisibilityMenu columnDefs={COLUMN_DEFS} order={colOrder} hidden={hiddenCols} onShow={restoreColumn} /></span>
               <span className="inv-detail-desktop-only"><ExportButton filename="inventory_detail.csv" rows={inventoryDetailExportRows}
                 columns={[
@@ -1118,7 +1118,7 @@ const InventoryHealthInner = React.memo(function InventoryHealthInner({ data, fi
           action={<div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <input placeholder="Search…" value={slowSearch} onChange={e => setSlowSearch(e.target.value)}
               className="inv-detail-search"
-              style={{ background: IC.surface, border: `1px solid ${IC.border2}`, borderRadius: 8, padding: '6px 10px', color: IC.t1, fontSize: 12, width: 170 }} />
+              style={{ background: IC.surface, border: `1px solid ${IC.border2}`, borderRadius: 8, padding: '6px 10px', color: IC.t1, fontSize: 12, width: 238, maxWidth: '100%', boxSizing: 'border-box' }} />
             <span className="inv-detail-desktop-only"><ExportButton filename="slow_moving.csv" rows={slowMovingExportRows}
               columns={[{ label: 'Category', key: 'category' }, { label: 'Sub-category', key: 'subCategory' }, { label: 'Product ID', key: 'sku' }, { label: 'Total Invt', key: 'totalInvt' }, { label: 'Avg Sale', key: 'avgSale' }, { label: 'DOI', key: 'doi' }]} /></span>
           </div>}>
@@ -1131,7 +1131,7 @@ const InventoryHealthInner = React.memo(function InventoryHealthInner({ data, fi
           action={<div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <input placeholder="Search…" value={deadSearch} onChange={e => setDeadSearch(e.target.value)}
               className="inv-detail-search"
-              style={{ background: IC.surface, border: `1px solid ${IC.border2}`, borderRadius: 8, padding: '6px 10px', color: IC.t1, fontSize: 12, width: 170 }} />
+              style={{ background: IC.surface, border: `1px solid ${IC.border2}`, borderRadius: 8, padding: '6px 10px', color: IC.t1, fontSize: 12, width: 238, maxWidth: '100%', boxSizing: 'border-box' }} />
             <span className="inv-detail-desktop-only"><ExportButton filename="dead_stock.csv" rows={deadStockExportRows}
               columns={[{ label: 'Category', key: 'category' }, { label: 'Sub-category', key: 'subCategory' }, { label: 'Product ID', key: 'sku' }, { label: 'Total Invt', key: 'totalInvt' }, { label: 'Avg Sale', key: 'avgSale' }, { label: 'DOI', key: 'doi' }]} /></span>
           </div>}>
