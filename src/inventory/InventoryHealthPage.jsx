@@ -110,14 +110,14 @@ const MobDetailTable = React.memo(function MobDetailTable({ filteredSkus, tableT
   }, [])
 
   const P = '5px 6px'
-  const W = { sku: 110, sub: 250, inv: 68, avg: 65, doi: 50 }
+  const W = { sku: 139, sub: 250, inv: 68, avg: 65, doi: 50 }
   const ths = IC.t3, th1 = IC.t1, th2 = IC.t2
   const nb = { whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }
   const stickyTd = (bg) => ({ position: 'sticky', left: 0, zIndex: 2, background: bg, padding: P, borderRight: `1px solid ${IC.border}`, ...nb })
 
   return (
     <div className="inv-detail-mobile-only" ref={scrollRef} style={{ maxHeight: TABLE_SCROLL_HEIGHT, overflow: 'auto' }}>
-      <table style={{ borderCollapse: 'collapse', fontSize: 11.5, tableLayout: 'fixed', width: W.sku + W.sub + W.inv + W.avg + W.doi }}>
+      <table style={{ borderCollapse: 'collapse', fontSize: 9.2, tableLayout: 'fixed', width: W.sku + W.sub + W.inv + W.avg + W.doi }}>
         <colgroup>
           <col style={{ width: W.sku }} /><col style={{ width: W.sub }} />
           <col style={{ width: W.inv }} /><col style={{ width: W.avg }} /><col style={{ width: W.doi }} />
@@ -315,7 +315,7 @@ function SubCatStockTable({ rows, emptyLabel, search = '' }) {
   const th = (label, key, align = 'right') => (
     <th onClick={() => onSort(key)}
       style={{
-        textAlign: align, padding: '6px 8px', fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.05em',
+        textAlign: align, padding: '6px 8px', fontSize: 8, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.05em',
         color: sort?.key === key ? IC.t1 : IC.t3, cursor: 'pointer', userSelect: 'none', whiteSpace: 'nowrap',
       }}>
       {label}{sort?.key === key ? (sort.dir === 'asc' ? ' ▲' : ' ▼') : ''}
@@ -324,7 +324,7 @@ function SubCatStockTable({ rows, emptyLabel, search = '' }) {
 
   return (
     <div style={{ maxHeight: 460, overflowY: 'auto' }}>
-      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12, tableLayout: 'fixed' }}>
+      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 9.6, tableLayout: 'fixed' }}>
         <colgroup>
           <col style={{ width: 190 }} />
           <col style={{ width: 72 }} />
@@ -352,7 +352,7 @@ function SubCatStockTable({ rows, emptyLabel, search = '' }) {
                   <td style={{ padding: '6px 8px', fontWeight: 600, color: IC.t1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                     <span style={{ color: IC.t3, marginRight: 6, display: 'inline-block', transform: isOpen ? 'rotate(90deg)' : 'none', transition: 'transform .15s' }}>›</span>
                     {r.subCategory}
-                    <span style={{ marginLeft: 6, fontSize: 10.5, color: IC.t3, fontWeight: 500 }}>({r.category})</span>
+                    <span style={{ marginLeft: 6, fontSize: 8.4, color: IC.t3, fontWeight: 500 }}>({r.category})</span>
                   </td>
                   <td style={{ padding: '6px 8px', textAlign: 'right', fontVariantNumeric: 'tabular-nums', fontWeight: 700 }}>{fmtInt(r.totalInvt)}</td>
                   <td style={{ padding: '6px 8px', textAlign: 'right', fontVariantNumeric: 'tabular-nums', color: IC.t2 }}>{fmtNum(r.avgSale)}</td>
@@ -360,10 +360,10 @@ function SubCatStockTable({ rows, emptyLabel, search = '' }) {
                 </tr>
                 {isOpen && r.skus.map((s, j) => (
                   <tr key={key + '-' + j} style={{ background: 'rgba(0,0,0,0.02)', borderBottom: `1px solid ${IC.border}`, height: 28 }}>
-                    <td style={{ padding: '5px 8px 5px 26px', color: IC.t3, fontSize: 11.5, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>↳ {s.sku}</td>
-                    <td style={{ padding: '5px 8px', textAlign: 'right', fontVariantNumeric: 'tabular-nums', fontSize: 11.5, color: IC.t2 }}>{fmtInt(s.totalInvt)}</td>
-                    <td style={{ padding: '5px 8px', textAlign: 'right', fontVariantNumeric: 'tabular-nums', fontSize: 11.5, color: IC.t2 }}>{fmtNum(s.avgSale)}</td>
-                    <td style={{ padding: '5px 8px', textAlign: 'right', fontVariantNumeric: 'tabular-nums', fontSize: 11.5, color: IC.t1 }}>{fmtDays(s.doi)}d</td>
+                    <td style={{ padding: '5px 8px 5px 26px', color: IC.t3, fontSize: 9.2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>↳ {s.sku}</td>
+                    <td style={{ padding: '5px 8px', textAlign: 'right', fontVariantNumeric: 'tabular-nums', fontSize: 9.2, color: IC.t2 }}>{fmtInt(s.totalInvt)}</td>
+                    <td style={{ padding: '5px 8px', textAlign: 'right', fontVariantNumeric: 'tabular-nums', fontSize: 9.2, color: IC.t2 }}>{fmtNum(s.avgSale)}</td>
+                    <td style={{ padding: '5px 8px', textAlign: 'right', fontVariantNumeric: 'tabular-nums', fontSize: 9.2, color: IC.t1 }}>{fmtDays(s.doi)}d</td>
                   </tr>
                 ))}
               </React.Fragment>

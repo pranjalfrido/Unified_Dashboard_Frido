@@ -178,6 +178,7 @@ function useStatic(staticPath, fallbackApiPath, fallbackBody = {}, enabled = tru
         setDateFilters({ start: range.start, end: range.end })
       }
     } catch {
+      if (cachedDataRef.current) return // static loaded fine already
       const { start, end } = getDefaultDates()
       if (reqId !== reqIdRef.current) return
       setLoading(false)
@@ -262,6 +263,7 @@ function useStaticInv(enabled = true, windowDays = 7) {
     const reqId = ++reqIdRef.current
     setLoading(true)
     setError(null)
+    let staticOk = false
     try {
       const res = await fetch(`/inv-data-${windowDays}d.json`)
       if (!res.ok) throw new Error(`static file missing (${res.status})`)
@@ -269,9 +271,11 @@ function useStaticInv(enabled = true, windowDays = 7) {
       if (reqId !== reqIdRef.current) return
       const ageMs = json.asOf ? Date.now() - new Date(json.asOf).getTime() : Infinity
       if (ageMs > 2 * 60 * 60 * 1000) throw new Error('static file stale')
+      staticOk = true
       setData(json)
       if (json.avgSaleWindow) setDateFilters({ start: json.avgSaleWindow.start, end: json.avgSaleWindow.end })
     } catch {
+      if (staticOk) return // static loaded fine, no need to fallback
       // fallback: hit live API
       try {
         const { start, end } = getDefaultDates()
@@ -593,7 +597,7 @@ export default function InventoryPage({ onTopbarDateControl, tab = 'health', set
         {active.loading && !active.data && (
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: 300, color: IC.t3, fontSize: 13, margin: '0 24px' }}>Loading…</div>
         )}
-        {active.error && (
+        {active.error && !active.data && (
           <div style={{ padding: '12px 16px', borderRadius: 10, background: 'rgba(208,59,59,0.12)', border: '1px solid rgba(208,59,59,0.35)', color: '#ff8b8b', fontSize: 12.5, margin: '0 24px' }}>
             ⚠ {active.error}
           </div>
