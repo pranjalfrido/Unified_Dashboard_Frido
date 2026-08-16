@@ -183,7 +183,7 @@ export function KpiTile({ label, value, unit, sub, accent, icon, compact }) {
         <span style={{ fontSize: valueSize, fontWeight: 700, letterSpacing: '-.02em', color: accent || IC.t1, fontVariantNumeric: 'tabular-nums', lineHeight: 1.1 }}>{value}</span>
         {unit && <span style={{ fontSize: unitSize, color: IC.t3 }}>{unit}</span>}
       </div>
-      {sub && <span style={{ fontSize: compact ? 10.5 : 11.5, color: IC.t3 }}>{sub}</span>}
+      {sub && <span className="kpi-tile-sub" style={{ fontSize: compact ? 10.5 : 11.5, color: IC.t3 }}>{sub}</span>}
     </div>
   )
 }

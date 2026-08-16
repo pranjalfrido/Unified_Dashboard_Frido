@@ -29,7 +29,7 @@ function SaKpiCarousel({ children }) {
           <span style={{ fontWeight: 700, fontSize: 14, color: IC.t1 }}>Key Metrics</span>
           <span style={{ fontSize: 11, color: IC.t3 }}>{count} tiles · swipe →</span>
         </div>
-        <div ref={scrollRef} className="inv-kpi-grid" style={{ display: 'flex', gap: 10 }}>
+        <div ref={scrollRef} className="inv-kpi-grid" style={{ display: 'flex', gap: 10, alignItems: 'stretch' }}>
           {children}
         </div>
         <div style={{ display: 'flex', justifyContent: 'center', gap: 5, marginTop: 10 }}>
@@ -318,7 +318,7 @@ function DrasticMoversTable({ rows, metric, level, isMobile = false }) {
   )
 }
 
-export default function SalesAllocationPage({ data, filters, setFilters, sidebarTop }) {
+export default function SalesAllocationPage({ data, filters, setFilters, sidebarTop, dateFilters }) {
   const [isMobile, setIsMobile] = useState(() => window.innerWidth <= 768)
   useEffect(() => {
     const onResize = () => setIsMobile(window.innerWidth <= 768)
@@ -493,11 +493,14 @@ export default function SalesAllocationPage({ data, filters, setFilters, sidebar
   const dailyChart = useMemo(() => {
     if (!filteredData) return []
     const series = filteredData[trendGranularity] || filteredData.daily
-    return series.map(d => {
+    const filtered = (dateFilters?.start && dateFilters?.end && trendGranularity === 'daily')
+      ? series.filter(d => d.date >= dateFilters.start && d.date <= dateFilters.end)
+      : series
+    return filtered.map(d => {
       const label = trendGranularity === 'monthly' ? d.date : d.date.slice(5)
       return { date: label, qty: d.qty, rev: d.rev, asp: d.qty > 0 ? Math.round(d.rev / d.qty) : null }
     })
-  }, [data, trendGranularity])
+  }, [data, trendGranularity, dateFilters])
 
   const categoryRollup = useMemo(() => {
     if (!filteredData) return []

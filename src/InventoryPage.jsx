@@ -172,11 +172,14 @@ function useStatic(staticPath, fallbackApiPath, fallbackBody = {}, enabled = tru
       if (ageMs > 2 * 60 * 60 * 1000 || json._placeholder) throw new Error('static file stale or placeholder')
       cachedDataRef.current = json
       setData(json)
-      const range = json.dateRange || null
-      if (range) {
-        cachedRangeRef.current = { start: range.start, end: range.end }
-        setDateFilters({ start: range.start, end: range.end })
-      }
+      // end = max(order_date) - 1 (last complete day), start = end - 6 → 7-day window
+      const lastSales = json.lastSalesDate || getDefaultDates().end
+      const endD = new Date(lastSales + 'T00:00:00Z')
+      endD.setUTCDate(endD.getUTCDate() - 1) // subtract 1: partial day excluded
+      const startD = new Date(endD); startD.setUTCDate(startD.getUTCDate() - 6)
+      const toLocal = d => d.toISOString().slice(0, 10)
+      cachedRangeRef.current = { start: toLocal(startD), end: toLocal(endD) }
+      setDateFilters({ start: toLocal(startD), end: toLocal(endD) })
     } catch {
       if (cachedDataRef.current) return // static loaded fine already
       const { start, end } = getDefaultDates()
@@ -604,7 +607,7 @@ export default function InventoryPage({ onTopbarDateControl, tab = 'health', set
         )}
 
         <div style={{ display: tab === 'health' ? 'contents' : 'none' }}><InventoryHealthPage data={invData} filters={healthFilters} setFilters={setHealthFilters} sidebarTop={sidebarTop} /></div>
-        <div style={{ display: tab === 'sales' ? 'contents' : 'none' }}><SalesAllocationPage data={sales.data} filters={salesFilters} setFilters={setSalesFilters} sidebarTop={sidebarTop} /></div>
+        <div style={{ display: tab === 'sales' ? 'contents' : 'none' }}><SalesAllocationPage data={sales.data} filters={salesFilters} setFilters={setSalesFilters} sidebarTop={sidebarTop} dateFilters={sales.dateFilters} /></div>
         {/* <div style={{ display: tab === 'inward' ? 'contents' : 'none' }}><InwardPage data={inward.data} filters={inwardFilters} setFilters={setInwardFilters} sidebarTop={sidebarTop} /></div> */}
       </div>
     </div>

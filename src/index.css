@@ -245,11 +245,13 @@ html,body{height:100%;background:var(--bg);font-family:var(--font);color:var(--t
   .inv-kpi-carousel-wrap .inv-kpi-grid > div{
     box-shadow: none !important;
   }
+  .inv-kpi-carousel-wrap .kpi-tile-sub{ display:none !important }
   .inv-kpi-desktop-grid{ display:none !important }
   .inv-kpi-grid{
     display:flex !important;
     flex-direction:row !important;
     overflow-x:auto !important;
+    align-items:stretch !important;
     scroll-snap-type:x mandatory !important;
     -webkit-overflow-scrolling:touch !important;
     gap:10px !important;
@@ -262,6 +264,8 @@ html,body{height:100%;background:var(--bg);font-family:var(--font);color:var(--t
     scroll-snap-align:start !important;
     min-width:calc(50% - 5px) !important;
     max-width:calc(50% - 5px) !important;
+    align-self:stretch !important;
+    height:auto !important;
   }
 
   /* Inventory warehouse cards: swipe carousel on mobile */
