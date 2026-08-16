@@ -113,7 +113,7 @@ const MobDetailTable = React.memo(function MobDetailTable({ filteredSkus, tableT
   const W = { sku: 139, sub: 250, inv: 68, avg: 65, doi: 50 }
   const ths = IC.t3, th1 = IC.t1, th2 = IC.t2
   const nb = { whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }
-  const stickyTd = (bg) => ({ position: 'sticky', left: 0, zIndex: 2, background: bg, padding: P, borderRight: `1px solid ${IC.border}`, ...nb })
+  const stickyTd = (bg) => ({ position: 'sticky', left: 0, zIndex: 2, background: bg, padding: P, ...nb })
 
   return (
     <div className="inv-detail-mobile-only" ref={scrollRef} style={{ maxHeight: TABLE_SCROLL_HEIGHT, overflow: 'auto' }}>
@@ -135,7 +135,7 @@ const MobDetailTable = React.memo(function MobDetailTable({ filteredSkus, tableT
                 padding: P, fontSize: 9, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.04em',
                 color: ths, textAlign: col.align, whiteSpace: 'nowrap', overflow: 'hidden',
                 borderBottom: `1px solid ${IC.border2}`,
-                ...(col.sticky ? { position: 'sticky', left: 0, zIndex: 4, background: IC.surfaceHi, borderRight: `1px solid ${IC.border2}` } : {}),
+                ...(col.sticky ? { position: 'sticky', left: 0, zIndex: 4, background: IC.surfaceHi } : {}),
               }}>{col.label}</th>
             ))}
           </tr>
