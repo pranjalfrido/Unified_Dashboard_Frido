@@ -858,7 +858,7 @@ export default function SalesAllocationPage({ data, filters, setFilters, sidebar
         <div className="sa-movers-row" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, alignItems: 'start' }}>
           <GlassCard title="Top Products"
             note={isMobile ? null : `${fmtInt(topProductsRows.length)} ${top20Level === 'sku' ? 'SKUs' : top20Level === 'subCategory' ? 'sub-cats' : 'categories'}`}
-            style={{ display: 'flex', flexDirection: 'column', height: MOVERS_TOTAL_HEIGHT }}
+            style={{ display: 'flex', flexDirection: 'column', height: MOVERS_TOTAL_HEIGHT, ...(isMobile ? { paddingLeft: 8, paddingRight: 8 } : {}) }}
             action={
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                 <div style={{ display: 'flex', gap: 4 }}>
@@ -888,7 +888,7 @@ export default function SalesAllocationPage({ data, filters, setFilters, sidebar
           </GlassCard>
 
           <GlassCard title="Drastic Sales Change" note={isMobile ? null : "biggest movers"}
-            style={{ display: 'flex', flexDirection: 'column', height: MOVERS_TOTAL_HEIGHT }}
+            style={{ display: 'flex', flexDirection: 'column', height: MOVERS_TOTAL_HEIGHT, ...(isMobile ? { paddingLeft: 8, paddingRight: 8 } : {}) }}
             action={isMobile
               ? <SearchableMultiSelect label="Channel" options={data.filterOptions.unifiedChannels2} selected={filters.drasticChannel || []} onChange={v => setFilters(f => ({ ...f, drasticChannel: v }))} width={110} height={25} />
               : <ExportButton filename="drastic_movers.csv" rows={drasticRows}

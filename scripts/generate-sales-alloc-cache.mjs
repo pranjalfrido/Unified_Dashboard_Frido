@@ -105,11 +105,8 @@ for (const row of salesRows) {
   const d = row.order_date?.value || row.order_date
   if (d && (!maxSalesDate || d > maxSalesDate)) maxSalesDate = d
 }
-let lastSalesDateConsidered = null
-if (maxSalesDate) {
-  const d = new Date(maxSalesDate); d.setDate(d.getDate() - 1)
-  lastSalesDateConsidered = d.toISOString().slice(0, 10)
-}
+// maxSalesDate is the last complete day (pipeline ensures full day before syncing)
+const lastSalesDateConsidered = maxSalesDate
 
 // No filters — all rows qualify (passesFilters always true when no filter is active)
 function passesFilters(r) {
