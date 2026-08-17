@@ -184,6 +184,7 @@ html,body{height:100%;background:var(--bg);font-family:var(--font);color:var(--t
 
   .sidebar{ display:none }
   .bottom-nav{ display:block }
+  .bn-label{ display:none !important }
   .tnav-mob-only{ display:flex !important }
 
   .app-main{ padding-bottom:var(--bot) }
