@@ -2188,10 +2188,10 @@ function DateRangePicker({ filters, setFilters, theme: T = C, onRefresh, loading
         {displayLabel}
       </button>
       {/* Refresh button — shown inline on desktop, inside trigger row on mobile */}
-      {onRefresh && (
+      {onRefresh && !isMobile && (
         <button onClick={onRefresh} style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '6px 10px', borderRadius: 8, border: `1px solid ${T.border2}`, background: T.card, color: T.t2, cursor: 'pointer', fontSize: 12, fontFamily: 'var(--font)', whiteSpace: 'nowrap' }}>
           <span style={{ display: 'inline-block', animation: loading ? 'spin 1s linear infinite' : 'none', fontSize: 14 }}>↻</span>
-          {!isMobile && ' Refresh'}
+          Refresh
         </button>
       )}
 
