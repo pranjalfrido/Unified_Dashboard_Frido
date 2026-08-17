@@ -230,7 +230,7 @@ function TopProductsBarList({ rows, metric, grandTotal, nameWidth = 140, isMobil
         const val = r[metric]
         const pctOfTotal = grandTotal > 0 ? (val / grandTotal) * 100 : 0
         return (
-          <div key={r.name} style={{ minHeight: ROW_HEIGHT, flex: '1 1 auto', boxSizing: 'border-box', display: 'grid', gridTemplateColumns: isMobile ? `${nameWidth}px 1fr 66px 52px` : `18px ${nameWidth}px 1fr 66px 52px`, alignItems: 'center', gap: 8, padding: '4px 0', borderBottom: i < rows.length - 1 ? `1px solid ${IC.border}` : 'none' }}>
+          <div key={r.name + i} style={{ minHeight: ROW_HEIGHT, flex: '1 1 auto', boxSizing: 'border-box', display: 'grid', gridTemplateColumns: isMobile ? `${nameWidth}px 1fr 66px 52px` : `18px ${nameWidth}px 1fr 66px 52px`, alignItems: 'center', gap: 8, padding: '4px 0', borderBottom: i < rows.length - 1 ? `1px solid ${IC.border}` : 'none' }}>
             {!isMobile && <span style={{ fontSize: 10.5, color: IC.t3 }}>{i + 1}</span>}
             <span title={r.name} style={{ fontSize: isMobile ? 9.2 : 11.5, color: IC.t1, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.name}</span>
             <div style={{ height: 10, borderRadius: 4, background: 'rgba(0,0,0,0.06)', overflow: 'hidden' }}>
@@ -696,7 +696,17 @@ export default function SalesAllocationPage({ data, filters, setFilters, sidebar
   const topProductsSource = !filteredData ? [] : top20Level === 'sku' ? filteredData.productSales.map(r => ({ name: r.sku, qty: r.qty, rev: r.rev }))
     : top20Level === 'subCategory' ? filteredData.subCategorySales.map(r => ({ name: r.subCategory, qty: r.qty, rev: r.rev }))
     : filteredData.categorySales.map(r => ({ name: r.category, qty: r.qty, rev: r.rev }))
-  const topProductsRows = [...topProductsSource].sort((a, b) => b[top20Metric] - a[top20Metric])
+  // deduplicate by name (merge duplicates), filter zero-sales rows, then sort
+  const _deduped = new Map()
+  for (const r of topProductsSource) {
+    if (!r.name) continue
+    const ex = _deduped.get(r.name)
+    if (ex) { ex.qty = (ex.qty || 0) + (r.qty || 0); ex.rev = (ex.rev || 0) + (r.rev || 0) }
+    else _deduped.set(r.name, { ...r })
+  }
+  const topProductsRows = [..._deduped.values()]
+    .filter(r => (r.rev || 0) > 0 || (r.qty || 0) > 0)
+    .sort((a, b) => (b[top20Metric] || 0) - (a[top20Metric] || 0))
 
   if (!data) return null
   const revenueAvailable = filteredData.summary.totalRevenue > 0
@@ -971,9 +981,8 @@ export default function SalesAllocationPage({ data, filters, setFilters, sidebar
           </GlassCard>
         </div>
 
-        {/* Product-Wise Sales Matrix — Category → Sub-category → SKU rows, time-bucketed
-            columns. Own Channel filter, independent of the sidebar. */}
-        <GlassCard title="Product-Wise Sales Matrix" note="click a row to expand — category → sub-category → SKU"
+        {/* Product-Wise Sales Matrix — hidden on mobile */}
+        {!isMobile && <GlassCard title="Product-Wise Sales Matrix" note="click a row to expand — category → sub-category → SKU"
           action={
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
               <input type="text" value={matrixSearch} onChange={e => setMatrixSearch(e.target.value)}
@@ -1121,7 +1130,7 @@ export default function SalesAllocationPage({ data, filters, setFilters, sidebar
               </tfoot>
             </table>
           </div>
-        </GlassCard>
+        </GlassCard>}
       </div>
     </div>
   )
