@@ -1915,25 +1915,30 @@ function BottomNav({ page, setPage, allowedTabs, profile }) {
     { id: 'ads', label: 'Ads', icon: <svg width={18} height={18} viewBox="0 0 24 24" fill="currentColor"><path d="M5 3l14 9-14 9V3z"/></svg> },
     { id: 'customer', label: 'Customer', icon: <svg width={18} height={18} viewBox="0 0 24 24" fill="currentColor"><path d="M9 12a4 4 0 100-8 4 4 0 000 8zm0 2c-4.42 0-8 1.79-8 4v1h16v-1c0-2.21-3.58-4-8-4zm7-8a3 3 0 000 6 3 3 0 000-6zm0 8c-1.04 0-2.02.2-2.88.53C14.32 15.2 15.5 16.5 15.5 18H23v-1c0-2.21-3.13-4-7-4z"/></svg> },
   ]
-  const items = allowedTabs ? allItems.filter(i => allowedTabs.includes(i.id)) : allItems
   return (
     <nav className="bottom-nav">
-      <div className="bottom-nav-inner" style={{ justifyContent: 'flex-start' }}>
-        {items.map(item => (
-          <div key={item.id} onClick={() => setPage(item.id)} className={`bn-item${page === item.id ? ' active' : ''}`} style={{ flex: '0 0 auto', width: 48 }}>
-            <span className="bn-icon">{item.icon}</span>
-            <span className="bn-label">{item.label}</span>
-          </div>
-        ))}
-        <div style={{ marginLeft: 'auto' }}>
-          <div onClick={() => setPage('profile')} className={`bn-item${page === 'profile' ? ' active' : ''}`} style={{ flex: '0 0 auto', width: 48 }}>
-            <span className="bn-icon">
-              {profile?.avatar_url
-                ? <img src={profile.avatar_url} alt="" style={{ width: 20, height: 20, borderRadius: '50%', objectFit: 'cover' }} />
-                : <svg width={18} height={18} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
-              }
-            </span>
-          </div>
+      <div className="bottom-nav-inner">
+        {allItems.map(item => {
+          const allowed = !allowedTabs || allowedTabs.includes(item.id)
+          const isActive = page === item.id
+          return (
+            <div key={item.id}
+              onClick={() => allowed && setPage(item.id)}
+              className={`bn-item${isActive ? ' active' : ''}`}
+              style={{ opacity: allowed ? 1 : 0.3, cursor: allowed ? 'pointer' : 'default' }}>
+              <span className="bn-icon">{item.icon}</span>
+              <span className="bn-label">{item.label}</span>
+            </div>
+          )
+        })}
+        <div onClick={() => setPage('profile')} className={`bn-item${page === 'profile' ? ' active' : ''}`}>
+          <span className="bn-icon">
+            {profile?.avatar_url
+              ? <img src={profile.avatar_url} alt="" style={{ width: 20, height: 20, borderRadius: '50%', objectFit: 'cover' }} />
+              : <svg width={18} height={18} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+            }
+          </span>
+          <span className="bn-label">Profile</span>
         </div>
       </div>
     </nav>
