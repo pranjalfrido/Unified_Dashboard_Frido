@@ -1905,7 +1905,7 @@ function Sidebar({ page, setPage, invTab, setInvTab, allowedTabs, profile }) {
 }
 
 // ── Bottom Nav (mobile) ───────────────────────────────────────
-function BottomNav({ page, setPage, allowedTabs }) {
+function BottomNav({ page, setPage, allowedTabs, profile }) {
   const allItems = [
     { id: 'overview', label: 'Overview', icon: <svg width={18} height={18} viewBox="0 0 24 24" fill="currentColor"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg> },
     { id: 'sales', label: 'Sales', icon: <svg width={18} height={18} viewBox="0 0 24 24" fill="currentColor"><rect x="2" y="12" width="4" height="10" rx="1"/><rect x="10" y="6" width="4" height="16" rx="1"/><rect x="18" y="2" width="4" height="20" rx="1"/></svg> },
@@ -1918,13 +1918,23 @@ function BottomNav({ page, setPage, allowedTabs }) {
   const items = allowedTabs ? allItems.filter(i => allowedTabs.includes(i.id)) : allItems
   return (
     <nav className="bottom-nav">
-      <div className="bottom-nav-inner">
+      <div className="bottom-nav-inner" style={{ justifyContent: 'flex-start' }}>
         {items.map(item => (
-          <div key={item.id} onClick={() => setPage(item.id)} className={`bn-item${page === item.id ? ' active' : ''}`}>
+          <div key={item.id} onClick={() => setPage(item.id)} className={`bn-item${page === item.id ? ' active' : ''}`} style={{ flex: '0 0 auto', width: 48 }}>
             <span className="bn-icon">{item.icon}</span>
             <span className="bn-label">{item.label}</span>
           </div>
         ))}
+        <div style={{ marginLeft: 'auto' }}>
+          <div onClick={() => setPage('profile')} className={`bn-item${page === 'profile' ? ' active' : ''}`} style={{ flex: '0 0 auto', width: 48 }}>
+            <span className="bn-icon">
+              {profile?.avatar_url
+                ? <img src={profile.avatar_url} alt="" style={{ width: 20, height: 20, borderRadius: '50%', objectFit: 'cover' }} />
+                : <svg width={18} height={18} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+              }
+            </span>
+          </div>
+        </div>
       </div>
     </nav>
   )
@@ -12960,7 +12970,7 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
           )}
         </div>
       </div>
-      <BottomNav page={page} setPage={setPage} allowedTabs={allowedTabs} />
+      <BottomNav page={page} setPage={setPage} allowedTabs={allowedTabs} profile={profile} />
     </div>
   )
 }
