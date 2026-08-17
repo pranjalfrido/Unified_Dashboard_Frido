@@ -112,7 +112,7 @@ function MyProfile({ session, onProfileUpdated }) {
     <div style={s.section} className="profile-section">
       <div style={s.sectionTitle}>My Profile</div>
       <div className="profile-fields-row" style={{ display: 'flex', alignItems: 'flex-start', gap: 24, flexWrap: 'wrap' }}>
-        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10 }}>
+        <div className="profile-avatar-col" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10 }}>
           <Avatar url={avatarUrl} name={name} size={80} />
           <button style={s.outlineBtn} onClick={() => fileRef.current?.click()} disabled={uploading}>
             {uploading ? 'Uploading…' : 'Change photo'}
