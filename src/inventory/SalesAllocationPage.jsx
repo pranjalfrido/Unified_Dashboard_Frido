@@ -333,6 +333,7 @@ export default function SalesAllocationPage({ data, filters, setFilters, sidebar
   const [drasticMode, setDrasticMode] = useState('day2') // 'day2' | 'day7'
   const [drasticMetric, setDrasticMetric] = useState('qty') // 'qty' | 'rev'
   const [drasticDirection, setDrasticDirection] = useState('risers') // 'risers' | 'fallers'
+  const [drasticSearch, setDrasticSearch] = useState('')
   const [matrixMetric, setMatrixMetric] = useState('qty') // 'qty' | 'rev'
   const [matrixGranularity, setMatrixGranularity] = useState('date') // 'date' | 'week' | 'month' | 'quarter' | 'year'
   const [matrixExpanded, setMatrixExpanded] = useState(new Set()) // expanded row paths ("cat" or "cat|sub")
@@ -687,7 +688,13 @@ export default function SalesAllocationPage({ data, filters, setFilters, sidebar
   })
 
   const drasticBucket = filteredData?.topMovers?.[drasticLevel]?.[drasticMode]?.[drasticMetric]
-  const drasticRows = drasticBucket ? (drasticDirection === 'risers' ? drasticBucket.risers : drasticBucket.fallers) : []
+  const _drasticRowsRaw = drasticBucket ? (drasticDirection === 'risers' ? drasticBucket.risers : drasticBucket.fallers) : []
+  const drasticRows = drasticSearch.trim()
+    ? _drasticRowsRaw.filter(r => {
+        const nameVal = (r.sku || r.subCategory || r.category || '').toLowerCase()
+        return nameVal.includes(drasticSearch.trim().toLowerCase())
+      })
+    : _drasticRowsRaw
 
   // Top Products — full leaderboard (no cap) for the selected range, sits beside Drastic
   // Sales Change. Level toggle picks which server-computed rollup to rank: SKU-level uses
@@ -900,12 +907,18 @@ export default function SalesAllocationPage({ data, filters, setFilters, sidebar
           <GlassCard title="Drastic Sales Change" note={isMobile ? null : "biggest movers"}
             style={{ display: 'flex', flexDirection: 'column', height: MOVERS_TOTAL_HEIGHT, ...(isMobile ? { paddingLeft: 8, paddingRight: 8 } : {}) }}
             action={isMobile
-              ? <SearchableMultiSelect label="Channel" options={data.filterOptions.unifiedChannels2} selected={filters.drasticChannel || []} onChange={v => setFilters(f => ({ ...f, drasticChannel: v }))} width={110} height={25} />
-              : <ExportButton filename="drastic_movers.csv" rows={drasticRows}
-                  columns={[
-                    { label: drasticLevel === 'sku' ? 'SKU' : drasticLevel === 'subCategory' ? 'Sub-category' : 'Category', key: drasticLevel === 'sku' ? 'sku' : drasticLevel === 'subCategory' ? 'subCategory' : 'category' },
-                    { label: 'Category', key: 'category' }, { label: 'Last', key: 'lastVal' }, { label: 'Compare', key: 'compareVal' }, { label: '% Change', key: 'pctChange' },
-                  ]} />
+              ? <input type="text" value={drasticSearch} onChange={e => setDrasticSearch(e.target.value)} placeholder="Search…"
+                  style={{ width: 110, padding: '4px 8px', fontSize: 11, borderRadius: 6, border: `1px solid ${IC.border}`, background: IC.surface, color: IC.t1, outline: 'none' }} />
+              : <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                  <input type="text" value={drasticSearch} onChange={e => setDrasticSearch(e.target.value)} placeholder="Search…"
+                    style={{ width: 110, padding: '4px 8px', fontSize: 11, borderRadius: 6, border: `1px solid ${IC.border}`, background: IC.surface, color: IC.t1, outline: 'none' }} />
+                  <SearchableMultiSelect label="Channel" options={data.filterOptions.unifiedChannels2} selected={filters.drasticChannel || []} onChange={v => setFilters(f => ({ ...f, drasticChannel: v }))} width={110} height={25} />
+                  <ExportButton filename="drastic_movers.csv" rows={drasticRows}
+                    columns={[
+                      { label: drasticLevel === 'sku' ? 'SKU' : drasticLevel === 'subCategory' ? 'Sub-category' : 'Category', key: drasticLevel === 'sku' ? 'sku' : drasticLevel === 'subCategory' ? 'subCategory' : 'category' },
+                      { label: 'Category', key: 'category' }, { label: 'Last', key: 'lastVal' }, { label: 'Compare', key: 'compareVal' }, { label: '% Change', key: 'pctChange' },
+                    ]} />
+                </div>
             }>
             <div style={{ flexShrink: 0, display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 8 }}>
               {isMobile ? (
