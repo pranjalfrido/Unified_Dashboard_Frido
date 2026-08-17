@@ -204,8 +204,8 @@ function momentumFor(N) {
     const master = itemMaster.get(skuKey)
     rows.push({ sku: skuKey, category: master?.category || 'Uncategorized', lastQty, compareQty, pctChange })
   }
-  const risers = [...rows].filter(r => r.pctChange > 0).sort((a, b) => b.pctChange - a.pctChange).slice(0, 10)
-  const fallers = [...rows].filter(r => r.pctChange < 0).sort((a, b) => a.pctChange - b.pctChange).slice(0, 10)
+  const risers = [...rows].filter(r => r.pctChange > 0).sort((a, b) => b.pctChange - a.pctChange)
+  const fallers = [...rows].filter(r => r.pctChange < 0).sort((a, b) => a.pctChange - b.pctChange)
   return { risers, fallers, lastDate, compareDate }
 }
 const momentum = { requested: momentumFor(7), '2day': momentumFor(2), '7day': momentumFor(7) }
@@ -273,8 +273,8 @@ function topMoversFor(level, mode, metric) {
     const pctChange = compareVal > 0 ? ((lastVal - compareVal) / compareVal) * 100 : (lastVal > 0 ? 100 : 0)
     rows.push({ ...labelFor(groupKey), lastVal, compareVal, pctChange })
   }
-  const risers = [...rows].filter(r => r.pctChange > 0).sort((a, b) => b.pctChange - a.pctChange).slice(0, 20)
-  const fallers = [...rows].filter(r => r.pctChange < 0).sort((a, b) => a.pctChange - b.pctChange).slice(0, 20)
+  const risers = [...rows].filter(r => r.pctChange > 0).sort((a, b) => b.pctChange - a.pctChange)
+  const fallers = [...rows].filter(r => r.pctChange < 0).sort((a, b) => a.pctChange - b.pctChange)
   return { risers, fallers, lastDate, compareDate }
 }
 const topMovers = {}
