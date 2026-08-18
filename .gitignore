@@ -32,3 +32,8 @@ sa_key.json
 
 .vercel
 .env*
+
+# Service-account keys under any filename — the bare `sa_key.json` rule above missed
+# copies like "sa_key 1 (1).json" that download managers create.
+sa_key*.json
+*service-account*.json

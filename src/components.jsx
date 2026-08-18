@@ -1,8 +1,8 @@
 import { useState } from 'react'
 import { C, fmt, fmtN, pct } from './utils.js'
-import { BarChart, Bar, LineChart, Line, AreaChart, Area, ComposedChart, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell, Treemap } from 'recharts'
+import { BarChart, Bar, LineChart, Line, AreaChart, Area, ComposedChart, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ReferenceLine, LabelList, ResponsiveContainer, PieChart, Pie, Cell, Treemap } from 'recharts'
 
-export { BarChart, Bar, LineChart, Line, AreaChart, Area, ComposedChart, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell, Treemap }
+export { BarChart, Bar, LineChart, Line, AreaChart, Area, ComposedChart, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ReferenceLine, LabelList, ResponsiveContainer, PieChart, Pie, Cell, Treemap }
 
 export function ChartTooltip({ active, payload, label, formatter }) {
   if (!active || !payload?.length) return null
@@ -112,15 +112,17 @@ export function CategoryRevenueCard({ catRows, subCatRows, skuMap, totalRev, vie
   )
 }
 
-export function DataTable({ columns, rows, maxRows = 50 }) {
+export function DataTable({ columns, rows, maxRows = 50, maxHeight }) {
   const visible = rows.slice(0, maxRows)
   return (
-    <div className="overflow-x-auto">
+    // maxHeight scrolls the body vertically while the header stays put, so a card can
+    // hold a long table at a fixed height instead of stretching the whole row.
+    <div className="overflow-x-auto" style={maxHeight ? { maxHeight, overflowY: 'auto' } : undefined}>
       <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
         <thead>
           <tr>
             {columns.map(c => (
-              <th key={c.key + c.label} style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.05em', color: C.t3, textAlign: c.align === 'right' ? 'right' : 'left', padding: '3px 5px 7px', borderBottom: `1px solid ${C.border}` }}>{c.label}</th>
+              <th key={c.key + c.label} style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.05em', color: C.t3, textAlign: c.align === 'right' ? 'right' : 'left', padding: '3px 5px 7px', borderBottom: `1px solid ${C.border}`, ...(maxHeight ? { position: 'sticky', top: 0, background: C.card, zIndex: 1 } : {}) }}>{c.label}</th>
             ))}
           </tr>
         </thead>

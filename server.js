@@ -12,6 +12,7 @@ import bqHandler from './api/bq.js'
 import inventoryHandler from './api/inventory.js'
 import salesAllocationHandler from './api/sales-allocation.js'
 import inwardHandler from './api/inward.js'
+import logisticsCostHandler, { prewarm as prewarmLogisticsCost } from './api/logistics-cost.js'
 
 config()
 
@@ -258,6 +259,7 @@ app.post('/api/bq', (req, res) => bqHandler(req, res))
 app.post('/api/inventory', (req, res) => inventoryHandler(req, res))
 app.post('/api/sales-allocation', (req, res) => salesAllocationHandler(req, res))
 app.post('/api/inward', (req, res) => inwardHandler(req, res))
+app.post('/api/logistics-cost', (req, res) => logisticsCostHandler(req, res))
 
 // ── API: Logistics / Clickpost data ──────────────────────────
 app.post('/api/logistics', async (req, res) => {
@@ -919,7 +921,13 @@ ORDER BY q.OrderDate, q.ProductId`
 async function start() {
   await initDB().catch(e => console.warn('[db] init skipped (read-only):', e.message))
   const PORT = process.env.PORT || 3001
-  app.listen(PORT, () => console.log(`[server] BQ proxy running on port ${PORT}`))
+  app.listen(PORT, () => {
+    console.log(`[server] BQ proxy running on port ${PORT}`)
+    // Warm the logistics-cost caches immediately, then on a rolling schedule. Its cold path
+    // is ~56s (GROUPED alone is 29s of aggregation over 660k rows), so the point is that a
+    // real user request never pays it. Fired without await so the port opens right away.
+    prewarmLogisticsCost()
+  })
   // No background syncs — all data is in Supabase, streamed on demand to stay within 512MB
 }
 
