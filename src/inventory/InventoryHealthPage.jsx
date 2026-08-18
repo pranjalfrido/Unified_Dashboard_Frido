@@ -807,6 +807,8 @@ const InventoryHealthInner = React.memo(function InventoryHealthInner({ data, fi
     next.splice(to, 0, draggedKey)
     return next
   })
+  const isDefaultColLayout = colOrder.every((k, i) => k === DEFAULT_COL_ORDER[i]) && colOrder.every(k => (colWidths[k] ?? DEFAULT_COL_WIDTHS[k]) === DEFAULT_COL_WIDTHS[k])
+  const resetColLayout = () => { setColOrder(DEFAULT_COL_ORDER); setColWidths(DEFAULT_COL_WIDTHS); lastNonZeroWidthsRef.current = { ...DEFAULT_COL_WIDTHS } }
 
   const filteredSkus = useMemo(() => {
     if (!data) return []
@@ -955,6 +957,14 @@ const InventoryHealthInner = React.memo(function InventoryHealthInner({ data, fi
                 className="inv-detail-search"
                 style={{ background: IC.surface, border: `1px solid ${IC.border2}`, borderRadius: 8, padding: '6px 10px', color: IC.t1, fontSize: 12, width: 238, maxWidth: '100%', boxSizing: 'border-box' }} />
               <span className="inv-detail-desktop-only"><ColumnVisibilityMenu columnDefs={COLUMN_DEFS} order={colOrder} hidden={hiddenCols} onShow={restoreColumn} /></span>
+              {!isDefaultColLayout && (
+                <span className="inv-detail-desktop-only">
+                  <button onClick={resetColLayout}
+                    style={{ fontSize: 11, color: IC.t2, background: IC.surface, border: `1px solid ${IC.border2}`, borderRadius: 8, padding: '5px 10px', cursor: 'pointer' }}>
+                    ↺ Reset columns
+                  </button>
+                </span>
+              )}
               <span className="inv-detail-desktop-only"><ExportButton filename="inventory_detail.csv" rows={inventoryDetailExportRows}
                 columns={[
                   { label: 'Category', key: 'category' }, { label: 'Sub-category', key: 'subCategory' }, { label: 'Product ID', key: 'sku' }, { label: 'Location', key: 'location' },

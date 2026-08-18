@@ -1,6 +1,6 @@
 import { useState, useMemo, useCallback, useEffect, useRef, Fragment } from 'react'
 import { C, fmt, fmtN, fmtBig, pct, processData, detectAlerts, exportCSV, getDefaultDates, COURIER_COLORS, COURIER_LOGOS } from './utils.js'
-import { KPICard, AlertCard, DataTable, Card, Badge, CategoryRevenueCard, RevTrendChart, AreaTrendChart, MultiLineChart, useSortableTable, GROUP_OPTS, getGroupKey, TrendAnalysisCard, BarChart, Bar, LineChart, Line, AreaChart, Area, ComposedChart, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell, Treemap } from './components.jsx'
+import { KPICard, AlertCard, DataTable, Card, Badge, CategoryRevenueCard, RevTrendChart, AreaTrendChart, MultiLineChart, useSortableTable, useReorderableColumns, GROUP_OPTS, getGroupKey, TrendAnalysisCard, BarChart, Bar, LineChart, Line, AreaChart, Area, ComposedChart, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell, Treemap } from './components.jsx'
 import InventoryPage from './InventoryPage.jsx'
 import { IC } from './inventory/theme.jsx'
 import LoginPage from './LoginPage.jsx'
@@ -3258,7 +3258,7 @@ function PaginatedCard({ title, rows, columns, pageSize = 10 }) {
   const visible = rows.slice(page * pageSize, (page + 1) * pageSize)
   return (
     <Card title={title} style={{ display: 'flex', flexDirection: 'column' }}>
-      <DataTable columns={columns} rows={visible} />
+      <DataTable columns={columns} rows={visible} storageKey={`datatable-cols:${title}`} />
       {totalPages > 1 && (
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 10, paddingTop: 8, borderTop: `1px solid ${C.border}` }}>
           <span style={{ fontSize: 11, color: C.t3 }}>{page * pageSize + 1}–{Math.min((page + 1) * pageSize, rows.length)} of {rows.length}</span>
@@ -3579,6 +3579,8 @@ function DailyChannelTable({ dailyArr, channels, nDays = 7, rangeStart, rangeEnd
   const m = DAILY_METRICS.find(x => x.id === metric)
   const grouped = groupDailyArr(dailyArr, channels, groupBy, rangeStart, rangeEnd)
   const table = useSortableTable('date', 'desc')
+  const channelReorder = useReorderableColumns('datatable-cols:revenue-by-channel', channels.map(ch => ({ id: ch })))
+  const orderedChannels = channelReorder.orderedColumns.map(c => c.id)
 
   const getVal = (d, ch) => {
     if (metric === 'net_rev') return d[ch + '_net'] ?? d[ch] ?? 0
@@ -3656,6 +3658,12 @@ function DailyChannelTable({ dailyArr, channels, nDays = 7, rangeStart, rangeEnd
           <select value={metric} onChange={e => setMetric(e.target.value)} style={selStyle}>
             {DAILY_METRICS.map(x => <option key={x.id} value={x.id}>{x.label}</option>)}
           </select>
+          {!channelReorder.isDefaultOrder && (
+            <button onClick={channelReorder.resetOrder} title="Reset column order to default"
+              style={{ fontSize: 10, color: C.t2, background: C.card, border: `1px solid ${C.border}`, borderRadius: 6, padding: '3px 8px', cursor: 'pointer' }}>
+              ↺ Reset columns
+            </button>
+          )}
           <button onClick={handleExport} style={{ fontSize: 10, color: C.t2, background: C.card, border: `1px solid ${C.border}`, borderRadius: 6, padding: '3px 8px', cursor: 'pointer' }}>⭳ Export</button>
         </div>
       </div>
@@ -3663,14 +3671,15 @@ function DailyChannelTable({ dailyArr, channels, nDays = 7, rangeStart, rangeEnd
         <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed', minWidth: 700 }}>
           <colgroup>
             <col style={{ width: `${Math.max(14, 100 - channels.length * 9 - 10)}%` }} />
-            {channels.map(ch => <col key={ch} style={{ width: `${Math.min(12, 80 / channels.length)}%` }} />)}
+            {orderedChannels.map(ch => <col key={ch} style={{ width: `${Math.min(12, 80 / channels.length)}%` }} />)}
             <col style={{ width: '10%' }} />
           </colgroup>
           <thead>
             <tr style={{ background: C.bg }}>
               <Th label="Period" sortKey="date" style={{ ...thStyleL, position: 'sticky', top: 0, background: C.bg, zIndex: 1 }} align="left" />
-              {channels.map(ch => (
-                <Th key={ch} label={ch === 'offline_sales' ? 'Offline Sales' : ch === 'Shopify' ? 'D2C' : ch} sortKey={ch} style={{ ...thStyle, position: 'sticky', top: 0, background: C.bg, zIndex: 1 }} />
+              {orderedChannels.map(ch => (
+                <Th key={ch} label={ch === 'offline_sales' ? 'Offline Sales' : ch === 'Shopify' ? 'D2C' : ch} sortKey={ch} style={{ ...thStyle, position: 'sticky', top: 0, background: C.bg, zIndex: 1 }}
+                  dragProps={{ onDragStart: channelReorder.onDragStart(ch), onDragOver: channelReorder.onDragOver, onDrop: channelReorder.onDrop(ch) }} />
               ))}
               <Th label="Total" sortKey="total" style={{ ...thStyle, position: 'sticky', top: 0, background: C.bg, zIndex: 1 }} />
             </tr>
@@ -3679,7 +3688,7 @@ function DailyChannelTable({ dailyArr, channels, nDays = 7, rangeStart, rangeEnd
             {sortedRows.map((d, i) => (
               <tr key={i} onMouseEnter={e => e.currentTarget.style.background = '#FFFBE6'} onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
                 <td style={tdStyleL}>{fmtDate(d.date)}</td>
-                {channels.map(ch => {
+                {orderedChannels.map(ch => {
                   const v = getVal(d, ch)
                   return <td key={ch} style={{ ...tdStyle, color: v ? C.t1 : C.t3 }}>{v ? fmtVal(v) : '—'}</td>
                 })}
@@ -3690,7 +3699,7 @@ function DailyChannelTable({ dailyArr, channels, nDays = 7, rangeStart, rangeEnd
           <tfoot>
             <tr style={{ background: C.bg, borderTop: `1.5px solid ${C.border}` }}>
               <td style={{ ...totalTdStyle, textAlign: 'left' }}>Total</td>
-              {channels.map(ch => <td key={ch} style={totalTdStyle}>{fmtVal(colTotals[ch])}</td>)}
+              {orderedChannels.map(ch => <td key={ch} style={totalTdStyle}>{fmtVal(colTotals[ch])}</td>)}
               <td style={totalTdStyle}>{fmtVal(grandTotal)}</td>
             </tr>
           </tfoot>
@@ -4146,6 +4155,62 @@ function FlatCategoryProductMatrix({ catData, subCatData, skuData, title, catPre
   }
   const { Th } = table
 
+  // Column registry. The detailed-returns breakdown (Cancel/RTO/CIR/Exchange/Total Return%) is
+  // treated as 5 separate reorderable columns when detailedReturns is on; the simple variant is
+  // just 1 column (Total Return%) — both keyed 'totalReturnPct' plus the extra 4 when detailed,
+  // so a saved order from one variant degrades gracefully if the variant later changes for this
+  // exact title (falls back to default per useReorderableColumns' validation).
+  const ALL_COLUMNS = [
+    { id: 'gross', label: 'Gross Rev / Share', sortKey: 'gross', width: 13,
+      row: r => <td style={tdStyle}>{fmt(r.gross)}{tot.gross > 0 && <span style={{ fontSize: 10, color: C.t3, marginLeft: 4 }}>({(r.gross / tot.gross * 100).toFixed(1)}%)</span>}</td>,
+      sku: sk => <td style={{ ...tdStyle, fontSize: 11 }}>{fmt(sk.gross)}{tot.gross > 0 && <span style={{ fontSize: 9, color: C.t3, marginLeft: 4 }}>({(sk.gross / tot.gross * 100).toFixed(1)}%)</span>}</td>,
+      total: () => <td style={totalTdStyle}>{fmt(tot.gross)} <span style={{ color: C.t3, fontWeight: 400 }}>(100%)</span></td> },
+    { id: 'prevGross', label: 'vs Prev', sortKey: 'prevGross', width: 9,
+      row: r => <td style={tdStyle}>{vsPrevCell(r.gross, r.prevGross)}</td>,
+      sku: () => <td style={{ ...tdStyle, fontSize: 11 }}><span style={{ color: C.t3 }}>—</span></td>,
+      total: () => <td style={totalTdStyle}>{vsPrevCell(tot.gross, tot.prevGross)}</td> },
+    { id: 'units', label: 'Units', sortKey: 'units', width: 8,
+      row: r => <td style={tdStyle}>{fmtN(r.units)}</td>,
+      sku: sk => <td style={{ ...tdStyle, fontSize: 11 }}>{fmtN(sk.units)}</td>,
+      total: () => <td style={totalTdStyle}>{fmtN(tot.units)}</td> },
+    { id: 'asp', label: 'ASP', sortKey: 'asp', width: showReturnPct && detailedReturns ? 8 : 10,
+      row: r => <td style={tdStyle}>₹{Math.round(r.asp).toLocaleString('en-IN')}</td>,
+      sku: sk => <td style={{ ...tdStyle, fontSize: 11 }}>₹{(sk.units > 0 ? Math.round(sk.gross / sk.units) : 0).toLocaleString('en-IN')}</td>,
+      total: () => <td style={totalTdStyle}>₹{tot.units > 0 ? Math.round(tot.gross / tot.units).toLocaleString('en-IN') : '—'}</td> },
+    ...(showReturnPct && detailedReturns ? [
+      { id: 'cancelPct', label: 'Cancel %', sortKey: 'cancelPct', width: 7,
+        row: r => <td style={tdStyle}>{r.cancelPct > 0 ? `${r.cancelPct.toFixed(2)}%` : <span style={{ color: C.t3 }}>—</span>}</td>,
+        sku: sk => <td style={{ ...tdStyle, fontSize: 11 }}>{sk.cancelRev > 0 ? `${pctOf(sk.cancelRev, sk.gross).toFixed(2)}%` : <span style={{ color: C.t3 }}>—</span>}</td>,
+        total: () => <td style={totalTdStyle}>{tot.gross > 0 ? `${pctOf(tot.cancelRev, tot.gross).toFixed(2)}%` : '—'}</td> },
+      { id: 'rtoPct', label: 'RTO %', sortKey: 'rtoPct', width: 7,
+        row: r => <td style={tdStyle}>{r.rtoPct > 0 ? `${r.rtoPct.toFixed(2)}%` : <span style={{ color: C.t3 }}>—</span>}</td>,
+        sku: sk => <td style={{ ...tdStyle, fontSize: 11 }}>{sk.rtoRev > 0 ? `${pctOf(sk.rtoRev, sk.gross).toFixed(2)}%` : <span style={{ color: C.t3 }}>—</span>}</td>,
+        total: () => <td style={totalTdStyle}>{tot.gross > 0 ? `${pctOf(tot.rtoRev, tot.gross).toFixed(2)}%` : '—'}</td> },
+      { id: 'cirPct', label: 'CIR %', sortKey: 'cirPct', width: 7,
+        row: r => <td style={tdStyle}>{r.cirPct > 0 ? `${r.cirPct.toFixed(2)}%` : <span style={{ color: C.t3 }}>—</span>}</td>,
+        sku: sk => <td style={{ ...tdStyle, fontSize: 11 }}>{sk.cirRev > 0 ? `${pctOf(sk.cirRev, sk.gross).toFixed(2)}%` : <span style={{ color: C.t3 }}>—</span>}</td>,
+        total: () => <td style={totalTdStyle}>{tot.gross > 0 ? `${pctOf(tot.cirRev, tot.gross).toFixed(2)}%` : '—'}</td> },
+      { id: 'exchPct', label: 'Exchange %', sortKey: 'exchPct', width: 7,
+        row: r => <td style={tdStyle}>{r.exchPct > 0 ? `${r.exchPct.toFixed(2)}%` : <span style={{ color: C.t3 }}>—</span>}</td>,
+        sku: sk => <td style={{ ...tdStyle, fontSize: 11 }}>{sk.exchRev > 0 ? `${pctOf(sk.exchRev, sk.gross).toFixed(2)}%` : <span style={{ color: C.t3 }}>—</span>}</td>,
+        total: () => <td style={totalTdStyle}>{tot.gross > 0 ? `${pctOf(tot.exchRev, tot.gross).toFixed(2)}%` : '—'}</td> },
+      { id: 'totalReturnPct', label: 'Total Return %', sortKey: 'totalReturnPct', width: 7,
+        row: r => <td style={tdStyle}>{r.totalReturnPct > 0 ? <span style={{ color: r.totalReturnPct > 20 ? '#B91C1C' : 'inherit' }}>{r.totalReturnPct.toFixed(2)}%</span> : <span style={{ color: C.t3 }}>—</span>}</td>,
+        sku: sk => { const skTotalReturnRev = simpleReturns ? sk.returnRev : sk.cancelRev + sk.rtoRev + sk.cirRev + sk.returnRev; return <td style={{ ...tdStyle, fontSize: 11 }}>{skTotalReturnRev > 0 ? <span style={{ color: pctOf(skTotalReturnRev, sk.gross) > 20 ? '#B91C1C' : 'inherit' }}>{pctOf(skTotalReturnRev, sk.gross).toFixed(2)}%</span> : <span style={{ color: C.t3 }}>—</span>}</td> },
+        total: () => <td style={totalTdStyle}>{tot.gross > 0 ? <span style={{ color: pctOf(tot.cancelRev + tot.rtoRev + tot.cirRev + tot.returnRev, tot.gross) > 20 ? '#B91C1C' : 'inherit' }}>{pctOf(tot.cancelRev + tot.rtoRev + tot.cirRev + tot.returnRev, tot.gross).toFixed(2)}%</span> : '—'}</td> },
+    ] : showReturnPct ? [
+      { id: 'totalReturnPct', label: 'Total Return %', sortKey: 'totalReturnPct', width: 11,
+        row: r => <td style={tdStyle}>{r.totalReturnPct > 0 ? <span style={{ color: r.totalReturnPct > 20 ? '#B91C1C' : 'inherit' }}>{r.totalReturnPct.toFixed(2)}%</span> : <span style={{ color: C.t3 }}>—</span>}</td>,
+        sku: sk => { const skTotalReturnRev = simpleReturns ? sk.returnRev : sk.cancelRev + sk.rtoRev + sk.cirRev + sk.returnRev; return <td style={{ ...tdStyle, fontSize: 11 }}>{skTotalReturnRev > 0 ? <span style={{ color: pctOf(skTotalReturnRev, sk.gross) > 20 ? '#B91C1C' : 'inherit' }}>{pctOf(skTotalReturnRev, sk.gross).toFixed(2)}%</span> : <span style={{ color: C.t3 }}>—</span>}</td> },
+        total: () => <td style={totalTdStyle}>{tot.gross > 0 ? <span style={{ color: pctOf(tot.cancelRev + tot.rtoRev + tot.cirRev + tot.returnRev, tot.gross) > 20 ? '#B91C1C' : 'inherit' }}>{pctOf(tot.cancelRev + tot.rtoRev + tot.cirRev + tot.returnRev, tot.gross).toFixed(2)}%</span> : '—'}</td> },
+    ] : []),
+    { id: 'net', label: 'Net Rev', sortKey: 'net', width: 9,
+      row: r => <td style={tdStyle}>{fmt(r.net)}</td>,
+      sku: sk => <td style={{ ...tdStyle, fontSize: 11 }}>{fmt(sk.net)}</td>,
+      total: () => <td style={totalTdStyle}>{fmt(tot.net)}</td> },
+  ]
+  const reorder = useReorderableColumns(`datatable-cols:${title || 'category-revenue-matrix'}`, ALL_COLUMNS)
+
   const handleExport = () => {
     const csvRows = rows.flatMap(r => {
       const main = {
@@ -4177,6 +4242,7 @@ function FlatCategoryProductMatrix({ catData, subCatData, skuData, title, catPre
         <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
           <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search category / product…"
             style={{ fontSize: 11.5, padding: '4px 9px', borderRadius: 6, border: `1px solid ${C.border}`, background: C.card, color: C.t1, width: 200, outline: 'none' }} />
+          {!reorder.isDefaultOrder && <button onClick={reorder.resetOrder} title="Reset column order to default" style={{ fontSize: 10, color: C.t2, background: C.card, border: `1px solid ${C.border}`, borderRadius: 6, padding: '3px 8px', cursor: 'pointer' }}>↺ Reset</button>}
           <button onClick={handleExport} style={{ fontSize: 10, color: C.t2, background: C.card, border: `1px solid ${C.border}`, borderRadius: 6, padding: '3px 8px', cursor: 'pointer' }}>⭳ Export</button>
         </div>
       </div>
@@ -4184,32 +4250,16 @@ function FlatCategoryProductMatrix({ catData, subCatData, skuData, title, catPre
         <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed', minWidth: 760 }}>
           <colgroup>
             <col style={{ width: '16%' }} /><col style={{ width: '20%' }} />
-            <col style={{ width: showReturnPct && detailedReturns ? '11%' : '13%' }} /><col style={{ width: '9%' }} /><col style={{ width: '8%' }} /><col style={{ width: showReturnPct && detailedReturns ? '8%' : '10%' }} />
-            {showReturnPct && (detailedReturns
-              ? <><col style={{ width: '7%' }} /><col style={{ width: '7%' }} /><col style={{ width: '7%' }} /><col style={{ width: '7%' }} /><col style={{ width: '7%' }} /></>
-              : <col style={{ width: '11%' }} />)}
-            <col style={{ width: '9%' }} />
+            {reorder.orderedColumns.map(c => <col key={c.id} style={{ width: `${c.width}%` }} />)}
           </colgroup>
           <thead>
             <tr style={{ background: C.bg }}>
               <Th label="Category" sortKey="cat" style={{ ...thStyleL, position: 'sticky', top: 0, background: C.bg, zIndex: 1 }} align="left" />
               <Th label="Product" sortKey="sc" style={{ ...thStyleL, position: 'sticky', top: 0, background: C.bg, zIndex: 1 }} align="left" />
-              <Th label="Gross Rev / Share" sortKey="gross" style={{ ...thStyle, position: 'sticky', top: 0, background: C.bg, zIndex: 1 }} />
-              <Th label="vs Prev" sortKey="prevGross" style={{ ...thStyle, position: 'sticky', top: 0, background: C.bg, zIndex: 1 }} />
-              <Th label="Units" sortKey="units" style={{ ...thStyle, position: 'sticky', top: 0, background: C.bg, zIndex: 1 }} />
-              <Th label="ASP" sortKey="asp" style={{ ...thStyle, position: 'sticky', top: 0, background: C.bg, zIndex: 1 }} />
-              {showReturnPct && (detailedReturns ? (
-                <>
-                  <Th label="Cancel %" sortKey="cancelPct" style={{ ...thStyle, position: 'sticky', top: 0, background: C.bg, zIndex: 1 }} />
-                  <Th label="RTO %" sortKey="rtoPct" style={{ ...thStyle, position: 'sticky', top: 0, background: C.bg, zIndex: 1 }} />
-                  <Th label="CIR %" sortKey="cirPct" style={{ ...thStyle, position: 'sticky', top: 0, background: C.bg, zIndex: 1 }} />
-                  <Th label="Exchange %" sortKey="exchPct" style={{ ...thStyle, position: 'sticky', top: 0, background: C.bg, zIndex: 1 }} />
-                  <Th label="Total Return %" sortKey="totalReturnPct" style={{ ...thStyle, position: 'sticky', top: 0, background: C.bg, zIndex: 1 }} />
-                </>
-              ) : (
-                <Th label="Total Return %" sortKey="totalReturnPct" style={{ ...thStyle, position: 'sticky', top: 0, background: C.bg, zIndex: 1 }} />
+              {reorder.orderedColumns.map(c => (
+                <Th key={c.id} label={c.label} sortKey={c.sortKey} style={{ ...thStyle, position: 'sticky', top: 0, background: C.bg, zIndex: 1 }}
+                  dragProps={{ onDragStart: reorder.onDragStart(c.id), onDragOver: reorder.onDragOver, onDrop: reorder.onDrop(c.id) }} />
               ))}
-              <Th label="Net Rev" sortKey="net" style={{ ...thStyle, position: 'sticky', top: 0, background: C.bg, zIndex: 1 }} />
             </tr>
           </thead>
           <tbody>
@@ -4231,50 +4281,17 @@ function FlatCategoryProductMatrix({ catData, subCatData, skuData, title, catPre
                         {r.sc}
                       </span>
                     </td>
-                    <td style={tdStyle}>{fmt(r.gross)}{tot.gross > 0 && <span style={{ fontSize: 10, color: C.t3, marginLeft: 4 }}>({(r.gross / tot.gross * 100).toFixed(1)}%)</span>}</td>
-                    <td style={tdStyle}>{vsPrevCell(r.gross, r.prevGross)}</td>
-                    <td style={tdStyle}>{fmtN(r.units)}</td>
-                    <td style={tdStyle}>₹{Math.round(r.asp).toLocaleString('en-IN')}</td>
-                    {showReturnPct && (detailedReturns ? (
-                      <>
-                        <td style={tdStyle}>{r.cancelPct > 0 ? `${r.cancelPct.toFixed(2)}%` : <span style={{ color: C.t3 }}>—</span>}</td>
-                        <td style={tdStyle}>{r.rtoPct > 0 ? `${r.rtoPct.toFixed(2)}%` : <span style={{ color: C.t3 }}>—</span>}</td>
-                        <td style={tdStyle}>{r.cirPct > 0 ? `${r.cirPct.toFixed(2)}%` : <span style={{ color: C.t3 }}>—</span>}</td>
-                        <td style={tdStyle}>{r.exchPct > 0 ? `${r.exchPct.toFixed(2)}%` : <span style={{ color: C.t3 }}>—</span>}</td>
-                        <td style={tdStyle}>{r.totalReturnPct > 0 ? <span style={{ color: r.totalReturnPct > 20 ? '#B91C1C' : 'inherit' }}>{r.totalReturnPct.toFixed(2)}%</span> : <span style={{ color: C.t3 }}>—</span>}</td>
-                      </>
-                    ) : (
-                      <td style={tdStyle}>{r.totalReturnPct > 0 ? <span style={{ color: r.totalReturnPct > 20 ? '#B91C1C' : 'inherit' }}>{r.totalReturnPct.toFixed(2)}%</span> : <span style={{ color: C.t3 }}>—</span>}</td>
-                    ))}
-                    <td style={tdStyle}>{fmt(r.net)}</td>
+                    {reorder.orderedColumns.map(c => <Fragment key={c.id}>{c.row(r)}</Fragment>)}
                   </tr>
-                  {isOpen && skus.map(sk => {
-                    const skTotalReturnRev = simpleReturns ? sk.returnRev : sk.cancelRev + sk.rtoRev + sk.cirRev + sk.returnRev
-                    return (
-                      <tr key={sk.sku} style={{ background: C.bg, cursor: 'default' }}
-                        onMouseEnter={e => e.currentTarget.style.background = '#FFFBE6'}
-                        onMouseLeave={e => e.currentTarget.style.background = C.bg}>
-                        <td style={{ ...tdStyleL, borderBottom: `1px solid ${C.border}` }}></td>
-                        <td style={{ ...tdStyleL, borderBottom: `1px solid ${C.border}`, fontFamily: 'var(--mono)', fontSize: 11, color: C.t2, paddingLeft: 22 }}>└ {sk.sku}</td>
-                        <td style={{ ...tdStyle, fontSize: 11 }}>{fmt(sk.gross)}{tot.gross > 0 && <span style={{ fontSize: 9, color: C.t3, marginLeft: 4 }}>({(sk.gross / tot.gross * 100).toFixed(1)}%)</span>}</td>
-                        <td style={{ ...tdStyle, fontSize: 11 }}><span style={{ color: C.t3 }}>—</span></td>
-                        <td style={{ ...tdStyle, fontSize: 11 }}>{fmtN(sk.units)}</td>
-                        <td style={{ ...tdStyle, fontSize: 11 }}>₹{(sk.units > 0 ? Math.round(sk.gross / sk.units) : 0).toLocaleString('en-IN')}</td>
-                        {showReturnPct && (detailedReturns ? (
-                          <>
-                            <td style={{ ...tdStyle, fontSize: 11 }}>{sk.cancelRev > 0 ? `${pctOf(sk.cancelRev, sk.gross).toFixed(2)}%` : <span style={{ color: C.t3 }}>—</span>}</td>
-                            <td style={{ ...tdStyle, fontSize: 11 }}>{sk.rtoRev > 0 ? `${pctOf(sk.rtoRev, sk.gross).toFixed(2)}%` : <span style={{ color: C.t3 }}>—</span>}</td>
-                            <td style={{ ...tdStyle, fontSize: 11 }}>{sk.cirRev > 0 ? `${pctOf(sk.cirRev, sk.gross).toFixed(2)}%` : <span style={{ color: C.t3 }}>—</span>}</td>
-                            <td style={{ ...tdStyle, fontSize: 11 }}>{sk.exchRev > 0 ? `${pctOf(sk.exchRev, sk.gross).toFixed(2)}%` : <span style={{ color: C.t3 }}>—</span>}</td>
-                            <td style={{ ...tdStyle, fontSize: 11 }}>{skTotalReturnRev > 0 ? <span style={{ color: pctOf(skTotalReturnRev, sk.gross) > 20 ? '#B91C1C' : 'inherit' }}>{pctOf(skTotalReturnRev, sk.gross).toFixed(2)}%</span> : <span style={{ color: C.t3 }}>—</span>}</td>
-                          </>
-                        ) : (
-                          <td style={{ ...tdStyle, fontSize: 11 }}>{skTotalReturnRev > 0 ? <span style={{ color: pctOf(skTotalReturnRev, sk.gross) > 20 ? '#B91C1C' : 'inherit' }}>{pctOf(skTotalReturnRev, sk.gross).toFixed(2)}%</span> : <span style={{ color: C.t3 }}>—</span>}</td>
-                        ))}
-                        <td style={{ ...tdStyle, fontSize: 11 }}>{fmt(sk.net)}</td>
-                      </tr>
-                    )
-                  })}
+                  {isOpen && skus.map(sk => (
+                    <tr key={sk.sku} style={{ background: C.bg, cursor: 'default' }}
+                      onMouseEnter={e => e.currentTarget.style.background = '#FFFBE6'}
+                      onMouseLeave={e => e.currentTarget.style.background = C.bg}>
+                      <td style={{ ...tdStyleL, borderBottom: `1px solid ${C.border}` }}></td>
+                      <td style={{ ...tdStyleL, borderBottom: `1px solid ${C.border}`, fontFamily: 'var(--mono)', fontSize: 11, color: C.t2, paddingLeft: 22 }}>└ {sk.sku}</td>
+                      {reorder.orderedColumns.map(c => <Fragment key={c.id}>{c.sku(sk)}</Fragment>)}
+                    </tr>
+                  ))}
                 </Fragment>
               )
             })}
@@ -4282,22 +4299,7 @@ function FlatCategoryProductMatrix({ catData, subCatData, skuData, title, catPre
           <tfoot>
             <tr style={{ background: C.bg, borderTop: `1.5px solid ${C.border}`, position: 'sticky', bottom: 0 }}>
               <td style={{ ...totalTdStyle, textAlign: 'left' }} colSpan={2}>Total</td>
-              <td style={totalTdStyle}>{fmt(tot.gross)} <span style={{ color: C.t3, fontWeight: 400 }}>(100%)</span></td>
-              <td style={totalTdStyle}>{vsPrevCell(tot.gross, tot.prevGross)}</td>
-              <td style={totalTdStyle}>{fmtN(tot.units)}</td>
-              <td style={totalTdStyle}>₹{tot.units > 0 ? Math.round(tot.gross / tot.units).toLocaleString('en-IN') : '—'}</td>
-              {showReturnPct && (detailedReturns ? (
-                <>
-                  <td style={totalTdStyle}>{tot.gross > 0 ? `${pctOf(tot.cancelRev, tot.gross).toFixed(2)}%` : '—'}</td>
-                  <td style={totalTdStyle}>{tot.gross > 0 ? `${pctOf(tot.rtoRev, tot.gross).toFixed(2)}%` : '—'}</td>
-                  <td style={totalTdStyle}>{tot.gross > 0 ? `${pctOf(tot.cirRev, tot.gross).toFixed(2)}%` : '—'}</td>
-                  <td style={totalTdStyle}>{tot.gross > 0 ? `${pctOf(tot.exchRev, tot.gross).toFixed(2)}%` : '—'}</td>
-                  <td style={totalTdStyle}>{tot.gross > 0 ? <span style={{ color: pctOf(tot.cancelRev + tot.rtoRev + tot.cirRev + tot.returnRev, tot.gross) > 20 ? '#B91C1C' : 'inherit' }}>{pctOf(tot.cancelRev + tot.rtoRev + tot.cirRev + tot.returnRev, tot.gross).toFixed(2)}%</span> : '—'}</td>
-                </>
-              ) : (
-                <td style={totalTdStyle}>{tot.gross > 0 ? <span style={{ color: pctOf(tot.cancelRev + tot.rtoRev + tot.cirRev + tot.returnRev, tot.gross) > 20 ? '#B91C1C' : 'inherit' }}>{pctOf(tot.cancelRev + tot.rtoRev + tot.cirRev + tot.returnRev, tot.gross).toFixed(2)}%</span> : '—'}</td>
-              ))}
-              <td style={totalTdStyle}>{fmt(tot.net)}</td>
+              {reorder.orderedColumns.map(c => <Fragment key={c.id}>{c.total()}</Fragment>)}
             </tr>
           </tfoot>
         </table>
@@ -5335,33 +5337,48 @@ function ShopifyGeoRichTable({ title, rows, firstKey, firstLabel, formatFirst, r
     exportCSV(csvRows, `${title.toLowerCase().replace(/[^a-z0-9]+/g, '_')}.csv`)
   }
 
+  const ALL_COLUMNS = [
+    { id: 'rev', label: 'Revenue', sortKey: 'rev', width: 9,
+      row: r => <td style={tdStyle}>{fmt(r.rev)}</td>, total: () => <td style={totalTdStyle}>{fmt(tot.rev)}</td> },
+    { id: 'sharePct', label: '% Share', sortKey: 'sharePct', width: 9,
+      row: r => <td style={tdStyle}>{r.sharePct.toFixed(1)}%</td>, total: () => <td style={totalTdStyle}>100%</td> },
+    { id: 'cumPct', label: 'Cum %', sortKey: 'cumPct', width: 9,
+      row: r => <td style={tdStyle}>{r.cumPct.toFixed(1)}%</td>, total: () => <td style={totalTdStyle}>—</td> },
+    { id: 'orders', label: 'Orders', sortKey: 'orders', width: 9,
+      row: r => <td style={tdStyle}>{fmtN(r.orders)}</td>, total: () => <td style={totalTdStyle}>{fmtN(tot.orders)}</td> },
+    ...(showAOV ? [{ id: 'aov', label: 'AOV', sortKey: 'aov', width: 9,
+      row: r => <td style={tdStyle}>₹{Math.round(r.aov || 0).toLocaleString('en-IN')}</td>, total: () => <td style={totalTdStyle}>₹{Math.round(totAov).toLocaleString('en-IN')}</td> }] : []),
+    ...(showASP ? [{ id: 'asp', label: 'ASP', sortKey: 'asp', width: 9,
+      row: r => <td style={tdStyle}>₹{Math.round(r.asp || 0).toLocaleString('en-IN')}</td>, total: () => <td style={totalTdStyle}>₹{Math.round(totAsp).toLocaleString('en-IN')}</td> }] : []),
+    { id: 'mom', label: 'vs Prev', sortKey: 'mom', width: 9,
+      row: r => <td style={{ ...tdStyle, fontFamily: 'inherit' }}>{momCell(r.mom)}</td>, total: () => <td style={{ ...totalTdStyle, fontFamily: 'inherit' }}>—</td> },
+    ...(showRTO ? [{ id: 'rtoPct', label: rtoLabel, sortKey: 'rtoPct', width: 9,
+      row: r => <td style={{ ...tdStyle, fontFamily: 'inherit' }}>{rtoChip(r.rtoPct || 0)}</td>, total: () => <td style={{ ...totalTdStyle, fontFamily: 'inherit' }}>{rtoChip(totRtoPct)}</td> }] : []),
+  ]
+  const reorder = useReorderableColumns(`datatable-cols:${title}`, ALL_COLUMNS)
+
   return (
     <div className="kpi-card" style={{ padding: '14px 16px', display: 'flex', flexDirection: 'column', minWidth: 0, height: '100%', boxSizing: 'border-box' }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10, flexShrink: 0 }}>
         <div style={{ fontWeight: 700, fontSize: 13, color: C.t1 }}>{title} <span style={{ fontWeight: 400, fontSize: 11.5, color: C.t3 }}>{rows.length} total{note ? ` · ${note}` : ''}</span></div>
-        <button onClick={handleExport} style={{ fontSize: 10, color: C.t2, background: C.card, border: `1px solid ${C.border}`, borderRadius: 6, padding: '3px 8px', cursor: 'pointer' }}>⭳ Export</button>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+          {!reorder.isDefaultOrder && <button onClick={reorder.resetOrder} title="Reset column order to default" style={{ fontSize: 10, color: C.t2, background: C.card, border: `1px solid ${C.border}`, borderRadius: 6, padding: '3px 8px', cursor: 'pointer' }}>↺ Reset</button>}
+          <button onClick={handleExport} style={{ fontSize: 10, color: C.t2, background: C.card, border: `1px solid ${C.border}`, borderRadius: 6, padding: '3px 8px', cursor: 'pointer' }}>⭳ Export</button>
+        </div>
       </div>
       <div style={{ overflowY: 'auto', flex: 1, minHeight: 0, maxHeight: 560, minWidth: 0 }}>
         <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed' }}>
           <colgroup>
             <col style={{ width: '12%' }} />
-            <col style={{ width: '12%' }} /><col style={{ width: '9%' }} /><col style={{ width: '9%' }} /><col style={{ width: '9%' }} />
-            {showAOV && <col style={{ width: '9%' }} />}
-            {showASP && <col style={{ width: '9%' }} />}
-            <col style={{ width: '9%' }} />
-            {showRTO && <col style={{ width: '9%' }} />}
+            {reorder.orderedColumns.map(c => <col key={c.id} style={{ width: `${c.width}%` }} />)}
           </colgroup>
           <thead>
             <tr style={{ background: C.bg }}>
               <Th label={firstLabel} sortKey={firstKey} style={{ ...thStyleL, position: 'sticky', top: 0, background: C.bg, zIndex: 1 }} align="left" />
-              <Th label="Revenue" sortKey="rev" style={{ ...thStyle, position: 'sticky', top: 0, background: C.bg, zIndex: 1 }} />
-              <Th label="% Share" sortKey="sharePct" style={{ ...thStyle, position: 'sticky', top: 0, background: C.bg, zIndex: 1 }} />
-              <Th label="Cum %" sortKey="cumPct" style={{ ...thStyle, position: 'sticky', top: 0, background: C.bg, zIndex: 1 }} />
-              <Th label="Orders" sortKey="orders" style={{ ...thStyle, position: 'sticky', top: 0, background: C.bg, zIndex: 1 }} />
-              {showAOV && <Th label="AOV" sortKey="aov" style={{ ...thStyle, position: 'sticky', top: 0, background: C.bg, zIndex: 1 }} />}
-              {showASP && <Th label="ASP" sortKey="asp" style={{ ...thStyle, position: 'sticky', top: 0, background: C.bg, zIndex: 1 }} />}
-              <Th label="vs Prev" sortKey="mom" style={{ ...thStyle, position: 'sticky', top: 0, background: C.bg, zIndex: 1 }} />
-              {showRTO && <Th label={rtoLabel} sortKey="rtoPct" style={{ ...thStyle, position: 'sticky', top: 0, background: C.bg, zIndex: 1 }} />}
+              {reorder.orderedColumns.map(c => (
+                <Th key={c.id} label={c.label} sortKey={c.sortKey} style={{ ...thStyle, position: 'sticky', top: 0, background: C.bg, zIndex: 1 }}
+                  dragProps={{ onDragStart: reorder.onDragStart(c.id), onDragOver: reorder.onDragOver, onDrop: reorder.onDrop(c.id) }} />
+              ))}
             </tr>
           </thead>
           <tbody>
@@ -5371,14 +5388,7 @@ function ShopifyGeoRichTable({ title, rows, firstKey, firstLabel, formatFirst, r
                   onMouseEnter={e => e.currentTarget.style.background = '#FFFBE6'}
                   onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
                   <td style={tdStyleL}>{formatFirst ? formatFirst(r[firstKey]) : r[firstKey]}</td>
-                  <td style={tdStyle}>{fmt(r.rev)}</td>
-                  <td style={tdStyle}>{r.sharePct.toFixed(1)}%</td>
-                  <td style={tdStyle}>{r.cumPct.toFixed(1)}%</td>
-                  <td style={tdStyle}>{fmtN(r.orders)}</td>
-                  {showAOV && <td style={tdStyle}>₹{Math.round(r.aov || 0).toLocaleString('en-IN')}</td>}
-                  {showASP && <td style={tdStyle}>₹{Math.round(r.asp || 0).toLocaleString('en-IN')}</td>}
-                  <td style={{ ...tdStyle, fontFamily: 'inherit' }}>{momCell(r.mom)}</td>
-                  {showRTO && <td style={{ ...tdStyle, fontFamily: 'inherit' }}>{rtoChip(r.rtoPct || 0)}</td>}
+                  {reorder.orderedColumns.map(c => <Fragment key={c.id}>{c.row(r)}</Fragment>)}
                 </tr>
               )
             })}
@@ -5386,14 +5396,7 @@ function ShopifyGeoRichTable({ title, rows, firstKey, firstLabel, formatFirst, r
           <tfoot>
             <tr style={{ background: C.bg, borderTop: `1.5px solid ${C.border}`, position: 'sticky', bottom: 0 }}>
               <td style={{ ...totalTdStyle, textAlign: 'left' }}>Total</td>
-              <td style={totalTdStyle}>{fmt(tot.rev)}</td>
-              <td style={totalTdStyle}>100%</td>
-              <td style={totalTdStyle}>—</td>
-              <td style={totalTdStyle}>{fmtN(tot.orders)}</td>
-              {showAOV && <td style={totalTdStyle}>₹{Math.round(totAov).toLocaleString('en-IN')}</td>}
-              {showASP && <td style={totalTdStyle}>₹{Math.round(totAsp).toLocaleString('en-IN')}</td>}
-              <td style={{ ...totalTdStyle, fontFamily: 'inherit' }}>—</td>
-              {showRTO && <td style={{ ...totalTdStyle, fontFamily: 'inherit' }}>{rtoChip(totRtoPct)}</td>}
+              {reorder.orderedColumns.map(c => <Fragment key={c.id}>{c.total()}</Fragment>)}
             </tr>
           </tfoot>
         </table>
@@ -5767,7 +5770,7 @@ function ShopifyTab({ data, filters, setFilters }) {
             { label: 'GST', value: fmt(gst), sub: grossAfterReturns > 0 ? `${((gst / grossAfterReturns) * 100).toFixed(1)}% of net sales` : '—', badge: shChgBadge(gst, prevGst) },
             { label: 'Daily Avg Rev', value: fmt(dailyAvg), sub: `over ${nDays} days`, badge: shChgBadge(dailyAvg, prevRev > 0 ? prevRev / nDays : 0) },
             { label: 'AOV', value: `₹${Math.round(aov).toLocaleString('en-IN')}`, sub: 'Gross rev ÷ orders', badge: shChgBadge(aov, prevOrders > 0 ? prevRev / prevOrders : 0) },
-            { label: 'ASP', value: `₹${Math.round(asp).toLocaleString('en-IN')}`, sub: 'Gross rev ÷ units sold (excl. COUP/DFA)', badge: shChgBadge(asp, prevUnits > 0 ? prevRev / prevUnits : 0) },
+            { label: 'ASP', value: `₹${Math.round(asp).toLocaleString('en-IN')}`, sub: 'Gross rev ÷ units sold', badge: shChgBadge(asp, prevUnits > 0 ? prevRev / prevUnits : 0) },
           ]
           const cancelRevPerOrder = cancelledOrders > 0 ? cancelledRev / cancelledOrders : 0
           const prevCancelPct = prevRev > 0 ? (prevCancelledOrders * cancelRevPerOrder) / prevRev * 100 : 0
@@ -5780,7 +5783,7 @@ function ShopifyTab({ data, filters, setFilters }) {
             { label: 'Cancellation %', value: `${cancelPct.toFixed(1)}%`, sub: `${fmt(cancelledRev)} cancelled rev`, accent: cancelPct > 5 ? '#7A1A1A' : undefined, badge: shReturnBadge(cancelPct, prevCancelPct) },
             { label: 'Returns %', value: `${returnRevPct.toFixed(1)}%`, sub: `${fmt(shRtoRev + shReturnRev + shCirRev)} RTO+CIR rev`, accent: returnRevPct > 5 ? '#7A1A1A' : undefined, badge: shReturnBadge(returnRevPct, prevReturnRevPct) },
             { label: 'Exchange %', value: `${exchangePct.toFixed(1)}%`, sub: `${fmt(exchangeRev)} exchange rev`, badge: shReturnBadge(exchangePct, prevExchangePct) },
-            { label: 'RTO %', value: `${rtoPct.toFixed(1)}%`, sub: `${fmt(shRtoRev + shReturnRev)} RTO+Return rev`, accent: rtoPct > 10 ? '#7A1A1A' : undefined, badge: shReturnBadge(rtoPct, prevOrders > 0 ? prevRtoOrders / prevOrders * 100 : 0) },
+            { label: 'RTO %', value: `${rtoPct.toFixed(1)}%`, sub: `${fmt(shRtoRev + shReturnRev)} RTO rev`, accent: rtoPct > 10 ? '#7A1A1A' : undefined, badge: shReturnBadge(rtoPct, prevOrders > 0 ? prevRtoOrders / prevOrders * 100 : 0) },
             { label: 'CIR %', value: `${cirPct.toFixed(1)}%`, sub: `${fmt(shCirRev)} CIR rev`, badge: shReturnBadge(cirPct, prevOrders > 0 ? prevCirOrders / prevOrders * 100 : 0) },
           ]
           return (
@@ -6265,7 +6268,7 @@ function EBOTab({ data, rangeStart, rangeEnd }) {
             { label: 'Cancellation %', value: `${cancelPct.toFixed(1)}%`, sub: `${fmt(cancelRev)} cancelled rev`, accent: cancelPct > 5 ? '#7A1A1A' : undefined, badge: retBadge(cancelPct, prevCancelPct) },
             { label: 'Returns %', value: `${returnRevPct.toFixed(1)}%`, sub: `${fmt(rtoRev + returnRev + cirRev)} RTO+CIR rev`, accent: returnRevPct > 5 ? '#7A1A1A' : undefined, badge: retBadge(returnRevPct, prevReturnRevPct) },
             { label: 'Exchange %', value: `${exchangePct.toFixed(1)}%`, sub: `${fmt(exchangeRev)} exchange rev`, badge: retBadge(exchangePct, prevOrders > 0 ? prevExchangeOrders / prevOrders * 100 : 0) },
-            { label: 'RTO %', value: `${rtoPct.toFixed(1)}%`, sub: `${fmt(rtoRev + returnRev)} RTO+Return rev`, accent: rtoPct > 10 ? '#7A1A1A' : undefined, badge: retBadge(rtoPct, prevOrders > 0 ? prevRtoOrders / prevOrders * 100 : 0) },
+            { label: 'RTO %', value: `${rtoPct.toFixed(1)}%`, sub: `${fmt(rtoRev + returnRev)} RTO rev`, accent: rtoPct > 10 ? '#7A1A1A' : undefined, badge: retBadge(rtoPct, prevOrders > 0 ? prevRtoOrders / prevOrders * 100 : 0) },
             { label: 'CIR %', value: `${cirPct.toFixed(1)}%`, sub: `${fmt(cirRev)} CIR rev`, badge: retBadge(cirPct, prevOrders > 0 ? prevCirOrders / prevOrders * 100 : 0) },
           ].map(k => (
             <div key={k.label} className="kpi-card" style={{ padding: '10px 13px', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
@@ -7258,6 +7261,12 @@ function AdsTab({ data, filters = {} }) {
   const platformTable = useSortableTable('spend')
   const catTable = useSortableTable('spend')
   const prodTable = useSortableTable('spend')
+  // Called unconditionally at the top level (Rules of Hooks) — the Platform Overview table
+  // renders conditionally (!selPlatform) further down, so its column definitions (which close
+  // over render-local totals) are built there and just looked up by id against this order.
+  const platformColumnOrder = useReorderableColumns('datatable-cols:ads-platform-overview', [{ id: 'spend' }, { id: 'rev' }, { id: 'roas' }])
+  const adsCatColumnOrder = useReorderableColumns('datatable-cols:ads-by-category', [{ id: 'spend' }, { id: 'revenue' }, { id: 'roas' }])
+  const adsProdColumnOrder = useReorderableColumns('datatable-cols:ads-by-product', [{ id: 'spend' }, { id: 'revenue' }, { id: 'roas' }])
   const [selAdType, setSelAdType] = useState({})
   const [allCatSearch, setAllCatSearch] = useState('')
   const [allProdSearch, setAllProdSearch] = useState('')
@@ -7304,6 +7313,7 @@ function AdsTab({ data, filters = {} }) {
   const _filtD2CSpend = _filtMetaSpend + _filtGoogleSpend
   const metaShopifyRev = _filtD2CSpend > 0 ? shopifyExcRev * (_filtMetaSpend / _filtD2CSpend) : shopifyExcRev
   const googleShopifyRev = _filtD2CSpend > 0 ? shopifyExcRev * (_filtGoogleSpend / _filtD2CSpend) : 0
+  const credAdditionalSpend = data.cred?.additionalSpend || 0
   const platformNetRev = {
     D2C:       shopifyExcRev,
     Meta:      metaShopifyRev,
@@ -7314,14 +7324,15 @@ function AdsTab({ data, filters = {} }) {
     Instamart: chMap['Instamart']?.excRev || 0,
     Myntra:    chMap['Myntra']?.excRev    || 0,
     Flipkart:  chMap['Flipkart']?.excRev  || 0,
+    CRED:      chMap['CRED']?.excRev      || 0,
   }
   // For "All" tab, sum unique channels (Shopify counted once)
   const allNetRev = shopifyExcRev + (chMap['Amazon']?.excRev || 0) +
     (chMap['Blinkit']?.excRev || 0) + (chMap['Zepto']?.excRev || 0) +
     (chMap['Instamart']?.excRev || 0) + (chMap['Myntra']?.excRev || 0) +
-    (chMap['Flipkart']?.excRev || 0)
+    (chMap['Flipkart']?.excRev || 0) + (chMap['CRED']?.excRev || 0)
 
-  const totalSpend = filtTotals.reduce((s, x) => s + x.spend, 0)
+  const totalSpend = filtTotals.reduce((s, x) => s + x.spend, 0) + (!selPlatform ? credAdditionalSpend : 0)
   const adAttributedRevenue = filtTotals.reduce((s, x) => s + x.revenue, 0)
   const totalRevenue = selPlatform ? (platformNetRev[selPlatform] || 0) : allNetRev
   const totalImpressions = filtTotals.reduce((s, x) => s + x.impressions, 0)
@@ -7789,6 +7800,7 @@ function AdsTab({ data, filters = {} }) {
               Zepto: '/logo-zepto.png',
               Instamart: '/logo-instamart.png',
               Blinkit: '/logo-blinkit.png',
+              CRED: '/logo-cred.png',
             }
             // Merge Meta + Google into one D2C row; use sales orders for all platforms
             const metaT = totals.find(t => t.platform === 'Meta') || {}
@@ -7803,7 +7815,19 @@ function AdsTab({ data, filters = {} }) {
             }
             const otherTotals = totals.filter(t => t.platform !== 'Meta' && t.platform !== 'Google')
             const platformToChannel = { Amazon: 'Amazon', Flipkart: 'Flipkart', Myntra: 'Myntra', Zepto: 'Zepto', Instamart: 'Instamart', Blinkit: 'Blinkit' }
-            const rawRows = [d2cRow, ...otherTotals.map(t => ({ ...t, rev: platformNetRev[t.platform] || 0, orders: channelSalesOrders[platformToChannel[t.platform]] || t.orders || 0 }))]
+            // CRED's ad spend is manager-entered (data.cred.additionalSpend), not a per-platform
+            // row from the ads API like the others — so it's not in `totals` and must be added
+            // separately here to appear in the Overall Platform Overview table. Shown even at
+            // ₹0 spend for consistency with every other channel row.
+            const credRow = {
+              platform: 'CRED',
+              spend: credAdditionalSpend,
+              clicks: 0,
+              impressions: 0,
+              orders: channelSalesOrders['CRED'] || 0,
+              rev: platformNetRev['CRED'] || 0,
+            }
+            const rawRows = [d2cRow, ...otherTotals.map(t => ({ ...t, rev: platformNetRev[t.platform] || 0, orders: channelSalesOrders[platformToChannel[t.platform]] || t.orders || 0 })), credRow]
             const enrichedRows = rawRows.map(t => ({
               ...t,
               roas: t.spend > 0 && (t.rev || 0) > 0 ? (t.rev || 0) / t.spend : 0,
@@ -7821,31 +7845,53 @@ function AdsTab({ data, filters = {} }) {
             const totalSpendAll = enrichedRows.reduce((s, r) => s + (r.spend || 0), 0)
             const totalRev = enrichedRows.reduce((s, r) => s + (r.rev || 0), 0)
             const totalRoas = totalSpendAll > 0 && totalRev > 0 ? totalRev / totalSpendAll : 0
+            const platformColumns = [
+              { id: 'spend', label: 'Spend', sortKey: 'spend',
+                row: t => <td style={tdStyle}>{fmt(t.spend)}{totalSpendAll > 0 && <span style={{ fontSize: 10, color: C.t3, marginLeft: 4 }}>({(t.spend / totalSpendAll * 100).toFixed(1)}%)</span>}</td>,
+                total: () => <td style={totalTdStyle}>{fmt(totalSpendAll)}</td> },
+              { id: 'rev', label: 'Revenue (Ex GST)', sortKey: 'rev',
+                row: t => <td style={tdStyle}>{(t.rev || 0) > 0 ? fmt(t.rev) : '—'}</td>,
+                total: () => <td style={totalTdStyle}>{totalRev > 0 ? fmt(totalRev) : '—'}</td> },
+              { id: 'roas', label: 'ROAS', sortKey: 'roas',
+                row: t => <td style={tdStyle}>{t.roas > 0 ? <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 7px', borderRadius: 4, background: roasBg(t.roas), color: roasColor(t.roas) }}>{t.roas.toFixed(2)}x</span> : '—'}</td>,
+                total: () => <td style={totalTdStyle}>{totalRoas > 0 ? <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 7px', borderRadius: 4, background: roasBg(totalRoas), color: roasColor(totalRoas) }}>{totalRoas.toFixed(2)}x</span> : '—'}</td> },
+            ]
+            // platformReorder is a hook call — must NOT live inside this conditionally-invoked
+            // IIFE (would violate the Rules of Hooks the moment selPlatform toggles). Called
+            // unconditionally near the top of AdsTab instead; referenced here by column identity.
+            const orderedPlatformCols = platformColumnOrder.orderedColumns.map(oc => platformColumns.find(c => c.id === oc.id) || oc)
             return (
               <div className="kpi-card" style={{ padding: '14px 16px', flex: 2, minWidth: 0, maxWidth: '38%', height: ADS_CHART_ROW_H, display: 'flex', flexDirection: 'column' }}>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
                   <div style={{ fontWeight: 700, fontSize: 13, color: C.t1 }}>Platform Overview</div>
-                  <button onClick={() => exportCSV(tableRows.map(t => ({
-                    Platform: t.platform === 'D2C' ? 'D2C (Meta + Google)' : t.platform, Spend: t.spend, 'Revenue (Ex GST)': t.rev || 0, ROAS: t.roas || '',
-                  })), 'ads_platform_overview.csv')}
-                    style={{ fontSize: 10, color: C.t2, background: C.card, border: `1px solid ${C.border}`, borderRadius: 6, padding: '3px 8px', cursor: 'pointer' }}>
-                    ⭳ Export
-                  </button>
+                  <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                    {!platformColumnOrder.isDefaultOrder && (
+                      <button onClick={platformColumnOrder.resetOrder} title="Reset column order to default"
+                        style={{ fontSize: 10, color: C.t2, background: C.card, border: `1px solid ${C.border}`, borderRadius: 6, padding: '3px 8px', cursor: 'pointer' }}>
+                        ↺ Reset columns
+                      </button>
+                    )}
+                    <button onClick={() => exportCSV(tableRows.map(t => ({
+                      Platform: t.platform === 'D2C' ? 'D2C (Meta + Google)' : t.platform, Spend: t.spend, 'Revenue (Ex GST)': t.rev || 0, ROAS: t.roas || '',
+                    })), 'ads_platform_overview.csv')}
+                      style={{ fontSize: 10, color: C.t2, background: C.card, border: `1px solid ${C.border}`, borderRadius: 6, padding: '3px 8px', cursor: 'pointer' }}>
+                      ⭳ Export
+                    </button>
+                  </div>
                 </div>
                 <div style={{ overflowX: 'auto', flex: 1, display: 'flex', flexDirection: 'column' }}>
                   <table style={{ width: '100%', height: '100%', borderCollapse: 'collapse', minWidth: 480 }}>
                     <thead>
                       <tr style={{ background: C.bg }}>
                         <Th label="Platform" sortKey="platform" style={thStyle} align="left" />
-                        <Th label="Spend" sortKey="spend" style={thStyle} />
-                        <Th label="Revenue (Ex GST)" sortKey="rev" style={thStyle} />
-                        <Th label="ROAS" sortKey="roas" style={thStyle} />
+                        {orderedPlatformCols.map(c => (
+                          <Th key={c.id} label={c.label} sortKey={c.sortKey} style={thStyle}
+                            dragProps={{ onDragStart: platformColumnOrder.onDragStart(c.id), onDragOver: platformColumnOrder.onDragOver, onDrop: platformColumnOrder.onDrop(c.id) }} />
+                        ))}
                       </tr>
                     </thead>
                     <tbody>
                       {tableRows.map(t => {
-                        const rev = t.rev || 0
-                        const roas = t.roas
                         const isD2CRow = t.platform === 'D2C'
                         return (
                           <tr key={t.platform} style={{ cursor: 'default' }}
@@ -7859,35 +7905,20 @@ function AdsTab({ data, filters = {} }) {
                                     <img src="/logo-google.jpg" alt="Google" style={{ width: 16, height: 16, borderRadius: 3, objectFit: 'contain', flexShrink: 0 }} />
                                   </>
                                 ) : platLogos[t.platform] ? (
-                                  <img src={platLogos[t.platform]} alt="" style={{ width: 16, height: 16, borderRadius: 3, objectFit: 'contain', flexShrink: 0 }} />
+                                  <img src={platLogos[t.platform]} alt="" style={{ width: 16, height: 16, borderRadius: 3, objectFit: 'contain', flexShrink: 0, background: t.platform === 'CRED' ? '#1a1a1a' : 'transparent', padding: t.platform === 'CRED' ? 1 : 0 }} />
                                 ) : (
                                   <span style={{ width: 10, height: 10, borderRadius: '50%', background: PLATFORM_COLORS[t.platform] || C.acc, flexShrink: 0, display: 'inline-block' }} />
                                 )}
                                 <span style={{ fontWeight: 700 }}>{isD2CRow ? 'D2C (Meta + Google)' : t.platform}</span>
                               </div>
                             </td>
-                            <td style={tdStyle}>
-                              {fmt(t.spend)}
-                              {totalSpendAll > 0 && <span style={{ fontSize: 10, color: C.t3, marginLeft: 4 }}>({(t.spend / totalSpendAll * 100).toFixed(1)}%)</span>}
-                            </td>
-                            <td style={tdStyle}>{rev > 0 ? fmt(rev) : '—'}</td>
-                            <td style={tdStyle}>
-                              {roas > 0
-                                ? <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 7px', borderRadius: 4, background: roasBg(roas), color: roasColor(roas) }}>{roas.toFixed(2)}x</span>
-                                : '—'}
-                            </td>
+                            {orderedPlatformCols.map(c => <Fragment key={c.id}>{c.row(t)}</Fragment>)}
                           </tr>
                         )
                       })}
                       <tr style={{ background: C.bg, borderTop: `1.5px solid ${C.border}` }}>
                         <td style={{ ...totalTdStyle, textAlign: 'left' }}>Total</td>
-                        <td style={totalTdStyle}>{fmt(totalSpendAll)}</td>
-                        <td style={totalTdStyle}>{totalRev > 0 ? fmt(totalRev) : '—'}</td>
-                        <td style={totalTdStyle}>
-                          {totalRoas > 0
-                            ? <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 7px', borderRadius: 4, background: roasBg(totalRoas), color: roasColor(totalRoas) }}>{totalRoas.toFixed(2)}x</span>
-                            : '—'}
-                        </td>
+                        {orderedPlatformCols.map(c => <Fragment key={c.id}>{c.total()}</Fragment>)}
                       </tr>
                     </tbody>
                   </table>
@@ -7948,6 +7979,61 @@ function AdsTab({ data, filters = {} }) {
             ? <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 7px', borderRadius: 4, background: roasBg(r), color: roasColor(r) }}>{r.toFixed(2)}x</span>
             : '—'
 
+          const catColumnDefs = [
+            {
+              id: 'spend', label: 'Spend', sortKey: 'spend', width: '22%', style: thStyle,
+              row: r => {
+                const catSubCats = slicedProdRows.filter(p => p.category === r.category).map(p => p.subCategory)
+                const catAddlSpend = hasAddlSpendData ? catSubCats.reduce((s, sc) => s + (getProductAddlSpend(sc) || 0), 0) : 0
+                const totalCatSpend = r.spend + catAddlSpend
+                const totalSpendForPct = catTotal.spend + catAddlTotal
+                return <td style={tdStyle}>
+                  {fmt(totalCatSpend)}
+                  {totalSpendForPct > 0 && <span style={{ fontSize: 9.5, color: C.t3, marginLeft: 3 }}>({(totalCatSpend / totalSpendForPct * 100).toFixed(1)}%)</span>}
+                </td>
+              },
+              total: () => <td style={{ ...totalTdStyle, position: 'sticky', bottom: 0, background: C.bg }}>{fmt(catTotal.spend + catAddlTotal)}</td>,
+            },
+            {
+              id: 'revenue', label: 'Revenue (Ex GST)', sortKey: 'revenue', width: '22%', style: thStyle,
+              row: r => <td style={tdStyle}>{r.revenue > 0 ? fmt(r.revenue) : '—'}</td>,
+              total: () => <td style={{ ...totalTdStyle, position: 'sticky', bottom: 0, background: C.bg }}>{catTotal.revenue > 0 ? fmt(catTotal.revenue) : '—'}</td>,
+            },
+            {
+              id: 'roas', label: 'ROAS', sortKey: 'roas', width: '16%', style: thStyle,
+              row: r => <td style={tdStyle}>{roasCell(r.roas)}</td>,
+              total: () => <td style={{ ...totalTdStyle, position: 'sticky', bottom: 0, background: C.bg }}>{roasCell(catRoas)}</td>,
+            },
+          ]
+          const orderedCatCols = adsCatColumnOrder.orderedColumns.map(oc => catColumnDefs.find(c => c.id === oc.id) || oc)
+
+          const prodColumnDefs = [
+            {
+              id: 'spend', label: 'Spend', sortKey: 'spend', width: '20%', style: thStyle,
+              row: r => {
+                const prodAddlSpend = hasAddlSpendData ? (getProductAddlSpend(r.subCategory) || 0) : 0
+                const totalProdSpend = r.spend + prodAddlSpend
+                const prodSpendTotal = prodTotalAll.spend + catAddlTotal
+                return <td style={tdStyle}>
+                  {fmt(totalProdSpend)}
+                  {prodSpendTotal > 0 && <span style={{ fontSize: 9.5, color: C.t3, marginLeft: 3 }}>({(totalProdSpend / prodSpendTotal * 100).toFixed(1)}%)</span>}
+                </td>
+              },
+              total: () => <td style={{ ...totalTdStyle, position: 'sticky', bottom: 0, background: C.bg }}>{fmt(prodTotalAll.spend + catAddlTotal)}</td>,
+            },
+            {
+              id: 'revenue', label: 'Revenue (Ex GST)', sortKey: 'revenue', width: '18%', style: thStyle,
+              row: r => <td style={tdStyle}>{r.revenue > 0 ? fmt(r.revenue) : '—'}</td>,
+              total: () => <td style={{ ...totalTdStyle, position: 'sticky', bottom: 0, background: C.bg }}>{prodTotalAll.revenue > 0 ? fmt(prodTotalAll.revenue) : '—'}</td>,
+            },
+            {
+              id: 'roas', label: 'ROAS', sortKey: 'roas', width: '18%', style: thStyle,
+              row: r => <td style={tdStyle}>{roasCell(r.roas)}</td>,
+              total: () => <td style={{ ...totalTdStyle, position: 'sticky', bottom: 0, background: C.bg }}>{roasCell(prodRoasAll)}</td>,
+            },
+          ]
+          const orderedProdCols = adsProdColumnOrder.orderedColumns.map(oc => prodColumnDefs.find(c => c.id === oc.id) || oc)
+
           return (
             <div style={{ marginBottom: 16 }}>
               <div style={{ display: 'flex', gap: 14 }}>
@@ -7956,6 +8042,12 @@ function AdsTab({ data, filters = {} }) {
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
                   <div style={{ fontWeight: 700, fontSize: 13, color: C.t1 }}>By Category</div>
                   <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                    {!adsCatColumnOrder.isDefaultOrder && (
+                      <button onClick={adsCatColumnOrder.resetOrder}
+                        style={{ fontSize: 10, color: C.t2, background: C.card, border: `1px solid ${C.border}`, borderRadius: 6, padding: '3px 8px', cursor: 'pointer' }}>
+                        ↺ Reset columns
+                      </button>
+                    )}
                     <input value={allCatSearch} onChange={e => setAllCatSearch(e.target.value)} placeholder="Search category…"
                       style={{ fontSize: 11.5, padding: '4px 9px', borderRadius: 6, border: `1px solid ${C.border}`, background: C.card, color: C.t1, width: 150, outline: 'none' }} />
                     <button onClick={() => exportCSV(filteredCatRows.map(r => ({ Category: r.category, Spend: r.spend, Revenue: r.revenue, ROAS: r.roas })), 'ads_all_by_category.csv')}
@@ -7967,43 +8059,32 @@ function AdsTab({ data, filters = {} }) {
                 <div style={{ overflowX: 'hidden', overflowY: 'auto', flex: 1 }}>
                   <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed' }}>
                     <colgroup>
-                      <col style={{ width: '40%' }} /><col style={{ width: '22%' }} /><col style={{ width: '22%' }} /><col style={{ width: '16%' }} />
+                      <col style={{ width: '40%' }} />
+                      {orderedCatCols.map(c => <col key={c.id} style={{ width: c.width }} />)}
                     </colgroup>
                     <thead>
                       <tr style={{ background: C.bg }}>
                         <CatTh label="Category" sortKey="category" style={{ ...thStyleL, position: 'sticky', top: 0, background: C.bg, zIndex: 1 }} align="left" />
-                        <CatTh label="Spend" sortKey="spend" style={{ ...thStyle, position: 'sticky', top: 0, background: C.bg, zIndex: 1 }} />
-                        <CatTh label="Revenue (Ex GST)" sortKey="revenue" style={{ ...thStyle, position: 'sticky', top: 0, background: C.bg, zIndex: 1 }} />
-                        <CatTh label="ROAS" sortKey="roas" style={{ ...thStyle, position: 'sticky', top: 0, background: C.bg, zIndex: 1 }} />
+                        {orderedCatCols.map(c => (
+                          <CatTh key={c.id} label={c.label} sortKey={c.sortKey} style={{ ...c.style, position: 'sticky', top: 0, background: C.bg, zIndex: 1 }}
+                            dragProps={{ onDragStart: adsCatColumnOrder.onDragStart(c.id), onDragOver: adsCatColumnOrder.onDragOver, onDrop: adsCatColumnOrder.onDrop(c.id) }} />
+                        ))}
                       </tr>
                     </thead>
                     <tbody>
-                      {sortedCats.map(r => {
-                        const catSubCats = slicedProdRows.filter(p => p.category === r.category).map(p => p.subCategory)
-                        const catAddlSpend = hasAddlSpendData ? catSubCats.reduce((s, sc) => s + (getProductAddlSpend(sc) || 0), 0) : 0
-                        const totalCatSpend = r.spend + catAddlSpend
-                        const totalSpendForPct = catTotal.spend + catAddlTotal
-                        return (
+                      {sortedCats.map(r => (
                         <tr key={r.category} style={{ cursor: 'default' }}
                           onMouseEnter={e => e.currentTarget.style.background = C.hover}
                           onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
                           <td style={tdStyleL} title={r.category}>{r.category}</td>
-                          <td style={tdStyle}>
-                            {fmt(totalCatSpend)}
-                            {totalSpendForPct > 0 && <span style={{ fontSize: 9.5, color: C.t3, marginLeft: 3 }}>({(totalCatSpend / totalSpendForPct * 100).toFixed(1)}%)</span>}
-                          </td>
-                          <td style={tdStyle}>{r.revenue > 0 ? fmt(r.revenue) : '—'}</td>
-                          <td style={tdStyle}>{roasCell(r.roas)}</td>
+                          {orderedCatCols.map(c => <Fragment key={c.id}>{c.row(r)}</Fragment>)}
                         </tr>
-                        )
-                      })}
+                      ))}
                     </tbody>
                     <tfoot>
                       <tr style={{ background: C.bg, borderTop: `1.5px solid ${C.border}` }}>
                         <td style={{ ...totalTdStyle, textAlign: 'left', position: 'sticky', bottom: 0, background: C.bg }}>Total</td>
-                        <td style={{ ...totalTdStyle, position: 'sticky', bottom: 0, background: C.bg }}>{fmt(catTotal.spend + catAddlTotal)}</td>
-                        <td style={{ ...totalTdStyle, position: 'sticky', bottom: 0, background: C.bg }}>{catTotal.revenue > 0 ? fmt(catTotal.revenue) : '—'}</td>
-                        <td style={{ ...totalTdStyle, position: 'sticky', bottom: 0, background: C.bg }}>{roasCell(catRoas)}</td>
+                        {orderedCatCols.map(c => <Fragment key={c.id}>{c.total()}</Fragment>)}
                       </tr>
                     </tfoot>
                   </table>
@@ -8015,6 +8096,12 @@ function AdsTab({ data, filters = {} }) {
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
                   <div style={{ fontWeight: 700, fontSize: 13, color: C.t1 }}>By Product</div>
                   <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                    {!adsProdColumnOrder.isDefaultOrder && (
+                      <button onClick={adsProdColumnOrder.resetOrder}
+                        style={{ fontSize: 10, color: C.t2, background: C.card, border: `1px solid ${C.border}`, borderRadius: 6, padding: '3px 8px', cursor: 'pointer' }}>
+                        ↺ Reset columns
+                      </button>
+                    )}
                     <input value={allProdSearch} onChange={e => setAllProdSearch(e.target.value)} placeholder="Search category / product…"
                       style={{ fontSize: 11.5, padding: '4px 9px', borderRadius: 6, border: `1px solid ${C.border}`, background: C.card, color: C.t1, width: 180, outline: 'none' }} />
                     <button onClick={() => exportCSV(filteredProdRows.map(r => ({ Category: r.category, Product: r.subCategory, Spend: r.spend, Revenue: r.revenue, ROAS: r.roas })), 'ads_all_by_product.csv')}
@@ -8026,44 +8113,34 @@ function AdsTab({ data, filters = {} }) {
                 <div style={{ overflowX: 'hidden', overflowY: 'auto', flex: 1 }}>
                   <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed' }}>
                     <colgroup>
-                      <col style={{ width: '14%' }} /><col style={{ width: '26%' }} /><col style={{ width: '22%' }} /><col style={{ width: '20%' }} /><col style={{ width: '18%' }} />
+                      <col style={{ width: '14%' }} /><col style={{ width: '26%' }} />
+                      {orderedProdCols.map(c => <col key={c.id} style={{ width: c.width }} />)}
                     </colgroup>
                     <thead>
                       <tr style={{ background: C.bg }}>
                         <ProdTh label="Category" sortKey="category" style={{ ...thStyleL, position: 'sticky', top: 0, background: C.bg, zIndex: 1 }} align="left" />
                         <ProdTh label="Product" sortKey="subCategory" style={{ ...thStyleL, position: 'sticky', top: 0, background: C.bg, zIndex: 1 }} align="left" />
-                        <ProdTh label="Spend" sortKey="spend" style={{ ...thStyle, position: 'sticky', top: 0, background: C.bg, zIndex: 1 }} />
-                        <ProdTh label="Revenue (Ex GST)" sortKey="revenue" style={{ ...thStyle, position: 'sticky', top: 0, background: C.bg, zIndex: 1 }} />
-                        <ProdTh label="ROAS" sortKey="roas" style={{ ...thStyle, position: 'sticky', top: 0, background: C.bg, zIndex: 1 }} />
+                        {orderedProdCols.map(c => (
+                          <ProdTh key={c.id} label={c.label} sortKey={c.sortKey} style={{ ...c.style, position: 'sticky', top: 0, background: C.bg, zIndex: 1 }}
+                            dragProps={{ onDragStart: adsProdColumnOrder.onDragStart(c.id), onDragOver: adsProdColumnOrder.onDragOver, onDrop: adsProdColumnOrder.onDrop(c.id) }} />
+                        ))}
                       </tr>
                     </thead>
                     <tbody>
-                      {sortedProds.map(r => {
-                        const prodAddlSpend = hasAddlSpendData ? (getProductAddlSpend(r.subCategory) || 0) : 0
-                        const totalProdSpend = r.spend + prodAddlSpend
-                        const prodSpendTotal = prodTotalAll.spend + catAddlTotal
-                        return (
+                      {sortedProds.map(r => (
                         <tr key={`${r.category}||${r.subCategory}`} style={{ cursor: 'default' }}
                           onMouseEnter={e => e.currentTarget.style.background = C.hover}
                           onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
                           <td style={{ ...tdStyleL, color: C.t3 }} title={r.category}>{r.category}</td>
                           <td style={tdStyleL} title={r.subCategory}>{r.subCategory}</td>
-                          <td style={tdStyle}>
-                            {fmt(totalProdSpend)}
-                            {prodSpendTotal > 0 && <span style={{ fontSize: 9.5, color: C.t3, marginLeft: 3 }}>({(totalProdSpend / prodSpendTotal * 100).toFixed(1)}%)</span>}
-                          </td>
-                          <td style={tdStyle}>{r.revenue > 0 ? fmt(r.revenue) : '—'}</td>
-                          <td style={tdStyle}>{roasCell(r.roas)}</td>
+                          {orderedProdCols.map(c => <Fragment key={c.id}>{c.row(r)}</Fragment>)}
                         </tr>
-                        )
-                      })}
+                      ))}
                     </tbody>
                     <tfoot>
                       <tr style={{ background: C.bg, borderTop: `1.5px solid ${C.border}` }}>
                         <td style={{ ...totalTdStyle, textAlign: 'left', position: 'sticky', bottom: 0, background: C.bg }} colSpan={2}>Total</td>
-                        <td style={{ ...totalTdStyle, position: 'sticky', bottom: 0, background: C.bg }}>{fmt(prodTotalAll.spend + catAddlTotal)}</td>
-                        <td style={{ ...totalTdStyle, position: 'sticky', bottom: 0, background: C.bg }}>{prodTotalAll.revenue > 0 ? fmt(prodTotalAll.revenue) : '—'}</td>
-                        <td style={{ ...totalTdStyle, position: 'sticky', bottom: 0, background: C.bg }}>{roasCell(prodRoasAll)}</td>
+                        {orderedProdCols.map(c => <Fragment key={c.id}>{c.total()}</Fragment>)}
                       </tr>
                     </tfoot>
                   </table>
@@ -8094,6 +8171,8 @@ function AdsCredView({ data, filters = {} }) {
   const [trendSelSubCat, setTrendSelSubCat] = useState([])
   const catTable = useSortableTable('rev')
   const prodTable = useSortableTable('rev')
+  const credCatColumnOrder = useReorderableColumns('datatable-cols:ads-cred-by-category', [{ id: 'spend' }, { id: 'excRev' }, { id: 'roas' }])
+  const credProdColumnOrder = useReorderableColumns('datatable-cols:ads-cred-by-product', [{ id: 'spend' }, { id: 'excRev' }, { id: 'roas' }])
 
   const totalRev = totals.rev || 0
   const totalExcRev = totals.excRev || 0
@@ -8275,48 +8354,89 @@ function AdsCredView({ data, filters = {} }) {
       })()}
 
       {/* By Category + By Product tables */}
-      {(byCategory.length > 0 || byProduct.length > 0) && (
+      {(byCategory.length > 0 || byProduct.length > 0) && (() => {
+        const credCatColumnDefs = [
+          {
+            id: 'spend', label: 'Spend', sortKey: 'spend', width: '22%', style: thStyle,
+            row: r => <td style={tdStyle}>{fmt(getCatSpend(r.category))}</td>,
+            total: () => <td style={{ ...totalTdStyle, position: 'sticky', bottom: 0, background: C.bg }}>{fmt(catTotalSpend)}</td>,
+          },
+          {
+            id: 'excRev', label: 'Revenue (Ex GST)', sortKey: 'excRev', width: '22%', style: thStyle,
+            row: r => <td style={tdStyle}>{r.excRev > 0 ? fmt(r.excRev) : '—'}</td>,
+            total: () => <td style={{ ...totalTdStyle, position: 'sticky', bottom: 0, background: C.bg }}>{catTotals.excRev > 0 ? fmt(catTotals.excRev) : '—'}</td>,
+          },
+          {
+            id: 'roas', label: 'ROAS', sortKey: 'roas', width: '16%', style: thStyle,
+            row: r => { const s = getCatSpend(r.category); return <td style={tdStyle}>{roasCell(s > 0 ? r.excRev / s : 0)}</td> },
+            total: () => <td style={{ ...totalTdStyle, position: 'sticky', bottom: 0, background: C.bg }}>{roasCell(catTotalRoas)}</td>,
+          },
+        ]
+        const orderedCredCatCols = credCatColumnOrder.orderedColumns.map(oc => credCatColumnDefs.find(c => c.id === oc.id) || oc)
+
+        const credProdColumnDefs = [
+          {
+            id: 'spend', label: 'Spend', sortKey: 'spend', width: '20%', style: thStyle,
+            row: r => <td style={tdStyle}>{fmt(getProdSpend(r.subCategory))}</td>,
+            total: () => <td style={{ ...totalTdStyle, position: 'sticky', bottom: 0, background: C.bg }}>{fmt(prodTotalSpend)}</td>,
+          },
+          {
+            id: 'excRev', label: 'Revenue (Ex GST)', sortKey: 'excRev', width: '20%', style: thStyle,
+            row: r => <td style={tdStyle}>{r.excRev > 0 ? fmt(r.excRev) : '—'}</td>,
+            total: () => <td style={{ ...totalTdStyle, position: 'sticky', bottom: 0, background: C.bg }}>{prodTotals.excRev > 0 ? fmt(prodTotals.excRev) : '—'}</td>,
+          },
+          {
+            id: 'roas', label: 'ROAS', sortKey: 'roas', width: '16%', style: thStyle,
+            row: r => { const s = getProdSpend(r.subCategory); return <td style={tdStyle}>{roasCell(s > 0 ? r.excRev / s : 0)}</td> },
+            total: () => <td style={{ ...totalTdStyle, position: 'sticky', bottom: 0, background: C.bg }}>{roasCell(prodTotalRoas)}</td>,
+          },
+        ]
+        const orderedCredProdCols = credProdColumnOrder.orderedColumns.map(oc => credProdColumnDefs.find(c => c.id === oc.id) || oc)
+
+        return (
         <div style={{ display: 'flex', gap: 14 }}>
           {/* By Category */}
           <div className="kpi-card" style={{ padding: '14px 16px', flex: 1, minWidth: 0, maxHeight: 500, display: 'flex', flexDirection: 'column' }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
               <div style={{ fontWeight: 700, fontSize: 13, color: C.t1 }}>By Category</div>
-              <input value={catSearch} onChange={e => setCatSearch(e.target.value)} placeholder="Search category…"
-                style={{ fontSize: 11.5, padding: '4px 9px', borderRadius: 6, border: `1px solid ${C.border}`, background: C.card, color: C.t1, width: 150, outline: 'none' }} />
+              <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                {!credCatColumnOrder.isDefaultOrder && (
+                  <button onClick={credCatColumnOrder.resetOrder}
+                    style={{ fontSize: 10, color: C.t2, background: C.card, border: `1px solid ${C.border}`, borderRadius: 6, padding: '3px 8px', cursor: 'pointer' }}>
+                    ↺ Reset columns
+                  </button>
+                )}
+                <input value={catSearch} onChange={e => setCatSearch(e.target.value)} placeholder="Search category…"
+                  style={{ fontSize: 11.5, padding: '4px 9px', borderRadius: 6, border: `1px solid ${C.border}`, background: C.card, color: C.t1, width: 150, outline: 'none' }} />
+              </div>
             </div>
             <div style={{ overflowY: 'auto', flex: 1 }}>
               <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed' }}>
                 <colgroup>
-                  <col style={{ width: '40%' }} /><col style={{ width: '22%' }} /><col style={{ width: '22%' }} /><col style={{ width: '16%' }} />
+                  <col style={{ width: '40%' }} />
+                  {orderedCredCatCols.map(c => <col key={c.id} style={{ width: c.width }} />)}
                 </colgroup>
                 <thead>
                   <tr style={{ background: C.bg }}>
                     <CatTh label="Category" sortKey="category" style={{ ...thStyleL, position: 'sticky', top: 0, background: C.bg, zIndex: 1 }} align="left" />
-                    <CatTh label="Spend" sortKey="spend" style={{ ...thStyle, position: 'sticky', top: 0, background: C.bg, zIndex: 1 }} />
-                    <CatTh label="Revenue (Ex GST)" sortKey="excRev" style={{ ...thStyle, position: 'sticky', top: 0, background: C.bg, zIndex: 1 }} />
-                    <CatTh label="ROAS" sortKey="roas" style={{ ...thStyle, position: 'sticky', top: 0, background: C.bg, zIndex: 1 }} />
+                    {orderedCredCatCols.map(c => (
+                      <CatTh key={c.id} label={c.label} sortKey={c.sortKey} style={{ ...c.style, position: 'sticky', top: 0, background: C.bg, zIndex: 1 }}
+                        dragProps={{ onDragStart: credCatColumnOrder.onDragStart(c.id), onDragOver: credCatColumnOrder.onDragOver, onDrop: credCatColumnOrder.onDrop(c.id) }} />
+                    ))}
                   </tr>
                 </thead>
                 <tbody>
-                  {sortedCats.map(r => {
-                    const catSpend = getCatSpend(r.category)
-                    const catRoas = catSpend > 0 ? r.excRev / catSpend : 0
-                    return (
+                  {sortedCats.map(r => (
                     <tr key={r.category} onMouseEnter={e => e.currentTarget.style.background = C.hover} onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
                       <td style={tdStyleL}>{r.category}</td>
-                      <td style={tdStyle}>{fmt(catSpend)}</td>
-                      <td style={tdStyle}>{r.excRev > 0 ? fmt(r.excRev) : '—'}</td>
-                      <td style={tdStyle}>{roasCell(catRoas)}</td>
+                      {orderedCredCatCols.map(c => <Fragment key={c.id}>{c.row(r)}</Fragment>)}
                     </tr>
-                    )
-                  })}
+                  ))}
                 </tbody>
                 <tfoot>
                   <tr style={{ background: C.bg, borderTop: `1.5px solid ${C.border}` }}>
                     <td style={{ ...totalTdStyle, textAlign: 'left', position: 'sticky', bottom: 0, background: C.bg }}>Total</td>
-                    <td style={{ ...totalTdStyle, position: 'sticky', bottom: 0, background: C.bg }}>{fmt(catTotalSpend)}</td>
-                    <td style={{ ...totalTdStyle, position: 'sticky', bottom: 0, background: C.bg }}>{catTotals.excRev > 0 ? fmt(catTotals.excRev) : '—'}</td>
-                    <td style={{ ...totalTdStyle, position: 'sticky', bottom: 0, background: C.bg }}>{roasCell(catTotalRoas)}</td>
+                    {orderedCredCatCols.map(c => <Fragment key={c.id}>{c.total()}</Fragment>)}
                   </tr>
                 </tfoot>
               </table>
@@ -8327,51 +8447,54 @@ function AdsCredView({ data, filters = {} }) {
           <div className="kpi-card" style={{ padding: '14px 16px', flex: 1, minWidth: 0, maxHeight: 500, display: 'flex', flexDirection: 'column' }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
               <div style={{ fontWeight: 700, fontSize: 13, color: C.t1 }}>By Product</div>
-              <input value={prodSearch} onChange={e => setProdSearch(e.target.value)} placeholder="Search product…"
-                style={{ fontSize: 11.5, padding: '4px 9px', borderRadius: 6, border: `1px solid ${C.border}`, background: C.card, color: C.t1, width: 160, outline: 'none' }} />
+              <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                {!credProdColumnOrder.isDefaultOrder && (
+                  <button onClick={credProdColumnOrder.resetOrder}
+                    style={{ fontSize: 10, color: C.t2, background: C.card, border: `1px solid ${C.border}`, borderRadius: 6, padding: '3px 8px', cursor: 'pointer' }}>
+                    ↺ Reset columns
+                  </button>
+                )}
+                <input value={prodSearch} onChange={e => setProdSearch(e.target.value)} placeholder="Search product…"
+                  style={{ fontSize: 11.5, padding: '4px 9px', borderRadius: 6, border: `1px solid ${C.border}`, background: C.card, color: C.t1, width: 160, outline: 'none' }} />
+              </div>
             </div>
             <div style={{ overflowY: 'auto', flex: 1 }}>
               <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed' }}>
                 <colgroup>
-                  <col style={{ width: '16%' }} /><col style={{ width: '30%' }} /><col style={{ width: '18%' }} /><col style={{ width: '20%' }} /><col style={{ width: '16%' }} />
+                  <col style={{ width: '16%' }} /><col style={{ width: '30%' }} />
+                  {orderedCredProdCols.map(c => <col key={c.id} style={{ width: c.width }} />)}
                 </colgroup>
                 <thead>
                   <tr style={{ background: C.bg }}>
                     <ProdTh label="Category" sortKey="category" style={{ ...thStyleL, position: 'sticky', top: 0, background: C.bg, zIndex: 1 }} align="left" />
                     <ProdTh label="Product" sortKey="subCategory" style={{ ...thStyleL, position: 'sticky', top: 0, background: C.bg, zIndex: 1 }} align="left" />
-                    <ProdTh label="Spend" sortKey="spend" style={{ ...thStyle, position: 'sticky', top: 0, background: C.bg, zIndex: 1 }} />
-                    <ProdTh label="Revenue (Ex GST)" sortKey="excRev" style={{ ...thStyle, position: 'sticky', top: 0, background: C.bg, zIndex: 1 }} />
-                    <ProdTh label="ROAS" sortKey="roas" style={{ ...thStyle, position: 'sticky', top: 0, background: C.bg, zIndex: 1 }} />
+                    {orderedCredProdCols.map(c => (
+                      <ProdTh key={c.id} label={c.label} sortKey={c.sortKey} style={{ ...c.style, position: 'sticky', top: 0, background: C.bg, zIndex: 1 }}
+                        dragProps={{ onDragStart: credProdColumnOrder.onDragStart(c.id), onDragOver: credProdColumnOrder.onDragOver, onDrop: credProdColumnOrder.onDrop(c.id) }} />
+                    ))}
                   </tr>
                 </thead>
                 <tbody>
-                  {sortedProds.map(r => {
-                    const prodSpend = getProdSpend(r.subCategory)
-                    const prodRoas = prodSpend > 0 ? r.excRev / prodSpend : 0
-                    return (
+                  {sortedProds.map(r => (
                     <tr key={`${r.category}||${r.subCategory}`} onMouseEnter={e => e.currentTarget.style.background = C.hover} onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
                       <td style={{ ...tdStyleL, color: C.t3 }}>{r.category}</td>
                       <td style={tdStyleL} title={r.subCategory}>{r.subCategory}</td>
-                      <td style={tdStyle}>{fmt(prodSpend)}</td>
-                      <td style={tdStyle}>{r.excRev > 0 ? fmt(r.excRev) : '—'}</td>
-                      <td style={tdStyle}>{roasCell(prodRoas)}</td>
+                      {orderedCredProdCols.map(c => <Fragment key={c.id}>{c.row(r)}</Fragment>)}
                     </tr>
-                    )
-                  })}
+                  ))}
                 </tbody>
                 <tfoot>
                   <tr style={{ background: C.bg, borderTop: `1.5px solid ${C.border}` }}>
                     <td style={{ ...totalTdStyle, textAlign: 'left', position: 'sticky', bottom: 0, background: C.bg }} colSpan={2}>Total</td>
-                    <td style={{ ...totalTdStyle, position: 'sticky', bottom: 0, background: C.bg }}>{fmt(prodTotalSpend)}</td>
-                    <td style={{ ...totalTdStyle, position: 'sticky', bottom: 0, background: C.bg }}>{prodTotals.excRev > 0 ? fmt(prodTotals.excRev) : '—'}</td>
-                    <td style={{ ...totalTdStyle, position: 'sticky', bottom: 0, background: C.bg }}>{roasCell(prodTotalRoas)}</td>
+                    {orderedCredProdCols.map(c => <Fragment key={c.id}>{c.total()}</Fragment>)}
                   </tr>
                 </tfoot>
               </table>
             </div>
           </div>
         </div>
-      )}
+        )
+      })()}
     </div>
   )
 }
@@ -9896,10 +10019,10 @@ function ChannelTab({ data, channel, filters, setFilters, channelView, setChanne
         </Card>
       </div>
       <Card title="Category Breakdown">
-        <DataTable columns={[{ key: 'name', label: 'Category' }, { key: 'rev', label: 'Revenue', align: 'right', mono: true, render: v => fmt(v) }, { key: 'orders', label: 'Orders', align: 'right', render: v => fmtN(v) }, { key: 'aov', label: 'AOV', align: 'right', render: v => `₹${Math.round(v).toLocaleString('en-IN')}` }]} rows={catRows} />
+        <DataTable columns={[{ key: 'name', label: 'Category' }, { key: 'rev', label: 'Revenue', align: 'right', mono: true, render: v => fmt(v) }, { key: 'orders', label: 'Orders', align: 'right', render: v => fmtN(v) }, { key: 'aov', label: 'AOV', align: 'right', render: v => `₹${Math.round(v).toLocaleString('en-IN')}` }]} rows={catRows} storageKey="datatable-cols:qc-category" />
       </Card>
       <Card title="Daily Performance">
-        <DataTable columns={[{ key: 'date', label: 'Date' }, { key: 'rev', label: 'Revenue', align: 'right', mono: true, render: v => fmt(v) }, { key: 'orders', label: 'Orders', align: 'right', render: v => fmtN(v) }, { key: 'aov', label: 'AOV', align: 'right', render: (_, r) => r.orders ? `₹${Math.round(r.rev / r.orders).toLocaleString('en-IN')}` : '—' }]} rows={dailyArr} />
+        <DataTable columns={[{ key: 'date', label: 'Date' }, { key: 'rev', label: 'Revenue', align: 'right', mono: true, render: v => fmt(v) }, { key: 'orders', label: 'Orders', align: 'right', render: v => fmtN(v) }, { key: 'aov', label: 'AOV', align: 'right', render: (_, r) => r.orders ? `₹${Math.round(r.rev / r.orders).toLocaleString('en-IN')}` : '—' }]} rows={dailyArr} storageKey="datatable-cols:qc-daily" />
       </Card>
     </div>
   )
@@ -9929,7 +10052,7 @@ function QCTab({ data }) {
           chRows.forEach(r => { const p = r.ProductId || 'Unknown'; if (!prodMap[p]) prodMap[p] = { rev: 0, qty: 0 }; prodMap[p].rev += parseFloat(r.SellingPrice_Inc_GST || 0); prodMap[p].qty += parseInt(r.ItemQty || 0) })
           return (
             <Card key={ch} title={ch} note={`${fmt(chOrd.rev)} · ${fmtN(chOrd.orders)} orders`}>
-              <DataTable columns={[{ key: 'sku', label: 'SKU' }, { key: 'rev', label: 'Revenue', align: 'right', mono: true, render: v => fmt(v) }, { key: 'qty', label: 'Qty', align: 'right', render: v => fmtN(v) }]} rows={Object.entries(prodMap).map(([k, v]) => ({ sku: k, ...v })).sort((a, b) => b.rev - a.rev).slice(0, 15)} maxRows={15} />
+              <DataTable columns={[{ key: 'sku', label: 'SKU' }, { key: 'rev', label: 'Revenue', align: 'right', mono: true, render: v => fmt(v) }, { key: 'qty', label: 'Qty', align: 'right', render: v => fmtN(v) }]} rows={Object.entries(prodMap).map(([k, v]) => ({ sku: k, ...v })).sort((a, b) => b.rev - a.rev).slice(0, 15)} maxRows={15} storageKey="datatable-cols:qc-top-skus" />
             </Card>
           )
         })}
@@ -9967,7 +10090,7 @@ function OpsTab({ data }) {
           })}
         </Card>
         <Card title="TAT Distribution">
-          <DataTable columns={[{ key: 'label', label: 'Bucket' }, { key: 'count', label: 'Orders', align: 'right', render: v => fmtN(v) }, { key: 'pct', label: '%', render: (_, r) => pct(r.count, tatArr.length) }]} rows={tatBuckets} />
+          <DataTable columns={[{ key: 'label', label: 'Bucket' }, { key: 'count', label: 'Orders', align: 'right', render: v => fmtN(v) }, { key: 'pct', label: '%', render: (_, r) => pct(r.count, tatArr.length) }]} rows={tatBuckets} storageKey="datatable-cols:ops-tat-buckets" />
         </Card>
       </div>
     </div>
@@ -9992,7 +10115,7 @@ function CXTab({ data }) {
       </div>
       <Card title="Voucher Analysis">
         <DataTable columns={[{ key: 'type', label: 'Type' }, { key: 'orders', label: 'Orders', align: 'right', render: v => fmtN(v) }, { key: 'rev', label: 'Revenue', align: 'right', mono: true, render: v => fmt(v) }, { key: 'aov', label: 'AOV', align: 'right', render: v => `₹${Math.round(v).toLocaleString('en-IN')}` }]}
-          rows={Object.entries(voucherMap).map(([k, v]) => ({ type: k, orders: v.orders, rev: v.rev, aov: v.orders ? v.rev / v.orders : 0 })).sort((a, b) => b.rev - a.rev)} />
+          rows={Object.entries(voucherMap).map(([k, v]) => ({ type: k, orders: v.orders, rev: v.rev, aov: v.orders ? v.rev / v.orders : 0 })).sort((a, b) => b.rev - a.rev)} storageKey="datatable-cols:cx-voucher-analysis" />
       </Card>
     </div>
   )
