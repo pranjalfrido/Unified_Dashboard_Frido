@@ -630,7 +630,7 @@ function LogisticsPage({ filters }) {
         )}
 
         {/* ── Main Content ── */}
-        <div style={{ flex: 1, overflow: 'auto', padding: isMobile ? '8px 12px 16px' : '4px 20px 16px', display: 'flex', flexDirection: 'column', gap: 14 }}>
+        <div style={{ flex: 1, overflow: 'auto', padding: isMobile ? '8px 12px 16px' : '16px 20px 16px', display: 'flex', flexDirection: 'column', gap: 14 }}>
 
           {/* Mobile filter button */}
           {isMobile && (
@@ -652,39 +652,78 @@ function LogisticsPage({ filters }) {
 
       {data && <>
 
-        {/* ── Volume KPIs ── */}
-        <LSectionTitle title="Volume Overview" collapsed={secCollapsed['volume']} onToggle={() => toggleSec('volume')} />
-        <div style={{ display: secCollapsed['volume'] ? 'none' : 'grid', gridTemplateColumns: isMobile ? 'repeat(2, 1fr)' : 'repeat(6, 1fr)', gap: 7 }}>
-          <LKpiCard label="Total Shipments" value={n(k.total_shipments)} cur={k.total_shipments} prev={pk.total_shipments} compact={!filterSidebarOpen} />
-          <LKpiCard label="Total GMV" value={fmtGMV(k.total_value)} cur={k.total_value} prev={pk.total_value} compact={!filterSidebarOpen} />
-          <LKpiCard label="Delivered" value={n(k.delivered)} badgeVariant="G" subValue={pct2(k.delivered, k.total_shipments)} cur={k.delivered} prev={pk.delivered} hideSubValue={filterSidebarOpen} compact={!filterSidebarOpen} />
-          <LKpiCard label="RTO" value={n(k.rto)} badgeVariant="R" subValue={pct2(k.rto, k.total_shipments)} cur={k.rto} prev={pk.rto} hideSubValue={filterSidebarOpen} compact={!filterSidebarOpen} />
-          <LKpiCard label="Pickup Pending" value={n(k.pickup_pending)} badgeVariant="A" cur={k.pickup_pending} prev={pk.pickup_pending} compact={!filterSidebarOpen} />
-          <LKpiCard label="Cancelled" value={n(k.cancelled)} badgeVariant="N" subValue={pct2(k.cancelled, k.total_shipments)} cur={k.cancelled} prev={pk.cancelled} hideSubValue={filterSidebarOpen} compact={!filterSidebarOpen} />
-        </div>
-
-        {/* ── Quality KPIs ── */}
-        <LSectionTitle title="Delivery Quality & SLA" collapsed={secCollapsed['quality']} onToggle={() => toggleSec('quality')} />
-        <div style={{ display: secCollapsed['quality'] ? 'none' : 'grid', gridTemplateColumns: isMobile ? 'repeat(2, 1fr)' : 'repeat(7, 1fr)', gap: 7 }}>
-          <LKpiCard label="On Time Del" value={n(k.on_time)} badgeText={k.avg_sla == null ? '—' : pct2(k.on_time, k.delivered)} badgeVariant="G" cur={k.avg_sla == null ? null : k.on_time} prev={k.avg_sla == null ? null : pk.on_time} compact={!filterSidebarOpen} />
-          <LKpiCard label="SLA Breach" value={n(k.sla_breach)} badgeVariant="R" subValue={k.avg_sla == null ? '—' : pct2(k.sla_breach, k.delivered)} cur={k.avg_sla == null ? null : k.sla_breach} prev={k.avg_sla == null ? null : pk.sla_breach} hideSubValue={filterSidebarOpen} compact={!filterSidebarOpen} />
-          <LKpiCard label="RTO 10+ Days" value={n(k.rto_10plus)} badgeText="Aging" badgeVariant="R" cur={k.rto_10plus} prev={pk.rto_10plus} compact={!filterSidebarOpen} />
-          <LKpiCard label="Z-RTO" value={n(k.z_rto)} badgeText={pct2(k.z_rto, k.total_shipments)} badgeVariant="A" cur={k.z_rto} prev={pk.z_rto} compact={!filterSidebarOpen} />
-          <LKpiCard label="FASR % (of attempted)" value={pct2(k.delivered_1attempt, k.total_ofd_attempts)} badgeVariant="G" cur={k.delivered_1attempt} prev={pk.delivered_1attempt} compact={!filterSidebarOpen} />
-          <LKpiCard label="RASR % (of attempted)" value={pct2(k.delivered_multi, k.total_ofd_attempts)} badgeVariant="B" cur={k.delivered_multi} prev={pk.delivered_multi} compact={!filterSidebarOpen} />
-          <LKpiCard label="Multi-Att Del" value={n(k.delivered_multi)} badgeVariant="B" cur={k.delivered_multi} prev={pk.delivered_multi} compact={!filterSidebarOpen} />
-        </div>
-
-        {/* ── TAT KPIs ── */}
-        <LSectionTitle title="Turnaround Time" collapsed={secCollapsed['tat']} onToggle={() => toggleSec('tat')} />
-        <div style={{ display: secCollapsed['tat'] ? 'none' : 'grid', gridTemplateColumns: isMobile ? 'repeat(2, 1fr)' : 'repeat(6, 1fr)', gap: 7 }}>
-          <LKpiCard label="Avg Processing" value={d1(k.avg_processing)} badgeText="Cr→1st OFD" badgeVariant="N" cur={k.avg_processing} prev={pk.avg_processing} compact={!filterSidebarOpen} />
-          <LKpiCard label="Avg Pickup TAT" value={d1(k.avg_pickup)} badgeText="Cr→Pick" badgeVariant="B" cur={k.avg_pickup} prev={pk.avg_pickup} compact={!filterSidebarOpen} />
-          <LKpiCard label="Avg In-Transit" value={d1(k.avg_intransit)} badgeText="Pick→Del" badgeVariant="N" cur={k.avg_intransit} prev={pk.avg_intransit} compact={!filterSidebarOpen} />
-          <LKpiCard label="Avg Fulfilment" value={d1(k.avg_fulfilment)} badgeText="Cr→Del" badgeVariant="G" cur={k.avg_fulfilment} prev={pk.avg_fulfilment} compact={!filterSidebarOpen} />
-          <LKpiCard label="Avg RTO TAT" value={d1(k.avg_rto_tat)} badgeText="RTO days" badgeVariant="R" cur={k.avg_rto_tat} prev={pk.avg_rto_tat} compact={!filterSidebarOpen} />
-          <LKpiCard label="Avg S2A Days" value={d1(k.avg_s2a)} badgeText="Ship→OFD" badgeVariant="B" cur={k.avg_s2a} prev={pk.avg_s2a} compact={!filterSidebarOpen} />
-        </div>
+        {/* ── KPI Hero + Grid ── */}
+        {isMobile ? (
+          // Mobile: stacked rows
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
+            {/* Hero summary card */}
+            <div className="kpi-card" style={{ padding: '12px 14px' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                <div>
+                  <div className="kpi-label">Total Shipments</div>
+                  <div className="kpi-value" style={{ fontSize: 22 }}>{n(k.total_shipments)}</div>
+                  {(() => { const chg = k.total_shipments && pk.total_shipments ? (k.total_shipments - pk.total_shipments) / pk.total_shipments * 100 : null; return chg != null ? <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 4, background: chg >= 0 ? C.green.bg : C.red.bg, color: chg >= 0 ? C.green.tx : C.red.tx }}>{chg >= 0 ? '▲' : '▼'} {Math.abs(chg).toFixed(1)}%</span> : null })()}
+                </div>
+                <div>
+                  <div className="kpi-label">Total GMV</div>
+                  <div className="kpi-value" style={{ fontSize: 22 }}>{fmtGMV(k.total_value)}</div>
+                  {(() => { const chg = k.total_value && pk.total_value ? (k.total_value - pk.total_value) / pk.total_value * 100 : null; return chg != null ? <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 4, background: chg >= 0 ? C.green.bg : C.red.bg, color: chg >= 0 ? C.green.tx : C.red.tx }}>{chg >= 0 ? '▲' : '▼'} {Math.abs(chg).toFixed(1)}%</span> : null })()}
+                </div>
+                <div>
+                  <div className="kpi-label">Delivered %</div>
+                  <div className="kpi-value" style={{ fontSize: 22 }}>{pct2(k.delivered, k.total_shipments)}</div>
+                </div>
+                <div>
+                  <div className="kpi-label">RTO %</div>
+                  <div className="kpi-value" style={{ fontSize: 22, color: (k.rto / (k.total_shipments || 1) * 100) > 15 ? C.red.tx : undefined }}>{pct2(k.rto, k.total_shipments)}</div>
+                </div>
+              </div>
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 7 }}>
+              <LKpiCard label="On Time Del" value={n(k.on_time)} badgeText={pct2(k.on_time, k.delivered)} badgeVariant="G" cur={k.on_time} prev={pk.on_time} compact />
+              <LKpiCard label="SLA Breach" value={n(k.sla_breach)} badgeVariant="R" cur={k.sla_breach} prev={pk.sla_breach} compact />
+              <LKpiCard label="RTO 10+ Days" value={n(k.rto_10plus)} badgeVariant="R" cur={k.rto_10plus} prev={pk.rto_10plus} compact />
+              <LKpiCard label="Z-RTO" value={n(k.z_rto)} badgeText={pct2(k.z_rto, k.total_shipments)} badgeVariant="A" cur={k.z_rto} prev={pk.z_rto} compact />
+              <LKpiCard label="FASR %" value={pct2(k.delivered_1attempt, k.total_ofd_attempts)} badgeVariant="G" cur={k.delivered_1attempt} prev={pk.delivered_1attempt} compact />
+              <LKpiCard label="RASR %" value={pct2(k.delivered_multi, k.total_ofd_attempts)} badgeVariant="B" cur={k.delivered_multi} prev={pk.delivered_multi} compact />
+              <LKpiCard label="Multi-Att Del" value={n(k.delivered_multi)} badgeVariant="B" cur={k.delivered_multi} prev={pk.delivered_multi} compact />
+              <LKpiCard label="Avg Processing" value={d1(k.avg_processing)} badgeText="Cr→1st OFD" badgeVariant="N" cur={k.avg_processing} prev={pk.avg_processing} compact />
+              <LKpiCard label="Avg Pickup TAT" value={d1(k.avg_pickup)} badgeText="Cr→Pick" badgeVariant="B" cur={k.avg_pickup} prev={pk.avg_pickup} compact />
+              <LKpiCard label="Avg In-Transit" value={d1(k.avg_intransit)} badgeText="Pick→Del" badgeVariant="N" cur={k.avg_intransit} prev={pk.avg_intransit} compact />
+              <LKpiCard label="Avg Fulfilment" value={d1(k.avg_fulfilment)} badgeText="Cr→Del" badgeVariant="G" cur={k.avg_fulfilment} prev={pk.avg_fulfilment} compact />
+              <LKpiCard label="Avg RTO TAT" value={d1(k.avg_rto_tat)} badgeText="RTO days" badgeVariant="R" cur={k.avg_rto_tat} prev={pk.avg_rto_tat} compact />
+            </div>
+          </div>
+        ) : (
+          // Desktop: hero card left + 2×6 grid right
+          <div style={{ display: 'grid', gridTemplateColumns: filterSidebarOpen ? '260px 1fr' : '230px 1fr', gap: 10, alignItems: 'stretch' }}>
+            {/* Hero card */}
+            <div className="kpi-card" style={{ display: 'flex', flexDirection: 'column', gap: 8, padding: '16px 18px' }}>
+              <div className="kpi-label" style={{ fontSize: 10 }}>Total Shipments</div>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 6 }}>
+                <div className="kpi-value" style={{ fontSize: 30, fontWeight: 800, letterSpacing: '-0.5px' }}>{n(k.total_shipments)}</div>
+                {(() => { const chg = k.total_shipments && pk.total_shipments ? (k.total_shipments - pk.total_shipments) / pk.total_shipments * 100 : null; return chg != null ? <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 7px', borderRadius: 4, background: chg >= 0 ? C.green.bg : C.red.bg, color: chg >= 0 ? C.green.tx : C.red.tx }}>{chg >= 0 ? '▲' : '▼'} {Math.abs(chg).toFixed(1)}%</span> : null })()}
+              </div>
+              <div className="kpi-sub" style={{ fontSize: 12 }}>GMV: <strong>{fmtGMV(k.total_value)}</strong></div>
+              <div className="kpi-sub" style={{ fontSize: 11, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                <span style={{ color: C.green.tx, fontWeight: 700 }}>{pct2(k.delivered, k.total_shipments)}</span> Delivered · <span style={{ color: (k.rto / (k.total_shipments || 1) * 100) > 15 ? C.red.tx : C.t2, fontWeight: 700 }}>{pct2(k.rto, k.total_shipments)}</span> RTO
+              </div>
+            </div>
+            {/* Right: 2 rows × 6 cols */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gridTemplateRows: 'repeat(2, 1fr)', gap: 7, alignItems: 'stretch' }}>
+              <LKpiCard label="Total Attempted" value={n(k.total_ofd_attempts)} badgeVariant="N" cur={k.total_ofd_attempts} prev={pk.total_ofd_attempts} compact />
+              <LKpiCard label="Z-RTO" value={n(k.z_rto)} badgeText={pct2(k.z_rto, k.total_shipments)} badgeVariant="A" cur={k.z_rto} prev={pk.z_rto} compact />
+              <LKpiCard label="FASR % (of attempted)" value={pct2(k.delivered_1attempt, k.total_ofd_attempts)} badgeVariant="G" cur={k.delivered_1attempt} prev={pk.delivered_1attempt} compact />
+              <LKpiCard label="RASR % (of attempted)" value={pct2(k.delivered_multi, k.total_ofd_attempts)} badgeVariant="B" cur={k.delivered_multi} prev={pk.delivered_multi} compact />
+              <LKpiCard label="Multi-Att Del" value={n(k.delivered_multi)} badgeVariant="B" cur={k.delivered_multi} prev={pk.delivered_multi} compact />
+              <LKpiCard label="Avg Processing" value={d1(k.avg_processing)} badgeText="Cr→1st OFD" badgeVariant="N" cur={k.avg_processing} prev={pk.avg_processing} compact />
+              <LKpiCard label="Avg Pickup TAT" value={d1(k.avg_pickup)} badgeText="Cr→Pick" badgeVariant="B" cur={k.avg_pickup} prev={pk.avg_pickup} compact />
+              <LKpiCard label="Avg In-Transit" value={d1(k.avg_intransit)} badgeText="Pick→Del" badgeVariant="N" cur={k.avg_intransit} prev={pk.avg_intransit} compact />
+              <LKpiCard label="Avg Fulfilment" value={d1(k.avg_fulfilment)} badgeText="Cr→Del" badgeVariant="G" cur={k.avg_fulfilment} prev={pk.avg_fulfilment} compact />
+              <LKpiCard label="Avg RTO TAT" value={d1(k.avg_rto_tat)} badgeText="RTO days" badgeVariant="R" cur={k.avg_rto_tat} prev={pk.avg_rto_tat} compact />
+            </div>
+          </div>
+        )}
 
         {/* ── Monthly Trend + Courier TAT ── */}
         <LSectionTitle title="Monthly Trend" collapsed={secCollapsed['trend']} onToggle={() => toggleSec('trend')} />
@@ -847,7 +886,7 @@ function LogisticsPage({ filters }) {
               ))}
             </div>
           </div>
-          <div style={{ overflowX: 'auto' }}>
+          <div style={{ overflowX: 'auto', overflowY: 'auto', maxHeight: 420 }}>
             {(() => {
               const totalAll = byCourierData.reduce((s, r) => s + (r.total || 0), 0) || 1
               const COLS = [
@@ -1017,10 +1056,10 @@ function LogisticsPage({ filters }) {
               }
               return (
                 <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
-                  <thead>
+                  <thead style={{ position: 'sticky', top: 0, zIndex: 4 }}>
                     <tr style={{ borderBottom: `1.5px solid ${C.border}`, background: C.bg }}>
                       {COLS.map((col, ci) => (
-                        <th key={col.key} onClick={() => setSortCol(col.key)} style={{ padding: '6px 7px', textAlign: col.left ? 'left' : col.center ? 'center' : 'right', color: C.t1, fontWeight: 700, fontSize: 9.5, letterSpacing: 0.4, textTransform: 'uppercase', whiteSpace: 'nowrap', cursor: 'pointer', userSelect: 'none', borderBottom: `1.5px solid ${C.border}`, background: C.bg, ...(ci === 0 ? { position: 'sticky', left: 0, zIndex: 3 } : {}) }}>
+                        <th key={col.key} onClick={() => setSortCol(col.key)} style={{ padding: '6px 7px', textAlign: col.left ? 'left' : col.center ? 'center' : 'right', color: C.t1, fontWeight: 700, fontSize: 9.5, letterSpacing: 0.4, textTransform: 'uppercase', whiteSpace: 'nowrap', cursor: 'pointer', userSelect: 'none', borderBottom: `1.5px solid ${C.border}`, background: C.bg, ...(ci === 0 ? { position: 'sticky', left: 0, zIndex: 5 } : {}) }}>
                           {col.label}{sortCol === col.key ? (sortDir === 'desc' ? ' ↓' : ' ↑') : ''}
                         </th>
                       ))}
@@ -1096,7 +1135,7 @@ function LogisticsPage({ filters }) {
                       )
                     })}
                     </tbody>
-                  <tfoot>
+                  <tfoot style={{ position: 'sticky', bottom: 0, zIndex: 4 }}>
                     {(() => {
                       const tot = enriched.reduce((s,r) => s + r.total, 0) || 1
                       const sumD = enriched.reduce((s,r) => s + (r.delivered||0), 0)
@@ -1333,8 +1372,8 @@ function LogisticsPage({ filters }) {
         const thL2 = { ...thStyle2, textAlign: 'left' }
         const tdStyle2 = { fontSize: 11.5, color: C.t1, padding: '6px 10px', borderBottom: `1px solid ${C.border}`, textAlign: 'right', whiteSpace: 'nowrap' }
         const tdL2 = { ...tdStyle2, textAlign: 'left', fontWeight: 600 }
-        const tableCard2 = { background: C.card, border: `1px solid ${C.border}`, borderRadius: 10, overflow: 'hidden' }
-        const tableTitle2 = { fontSize: 11, fontWeight: 700, color: C.t2, padding: '10px 12px 8px', borderBottom: `1px solid ${C.border}`, letterSpacing: '.02em' }
+        const tableCard2 = { background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, overflow: 'hidden', display: 'flex', flexDirection: 'column' }
+        const tableTitle2 = { fontSize: 13, fontWeight: 700, color: C.t1, padding: '12px 14px 10px', borderBottom: `1px solid ${C.border}` }
 
         const byZone2 = data.byZoneDetail || []
 
@@ -1358,11 +1397,11 @@ function LogisticsPage({ filters }) {
               }, { total:0, delivered:0, bucket_0_1:0, bucket_2_3:0, bucket_4_5:0, bucket_5plus:0 })
 
               const BOX_H = 320
-              const thS = { fontSize: 10, fontWeight: 700, color: C.t3, textTransform: 'uppercase', letterSpacing: '.04em', padding: '6px 8px', borderBottom: `1px solid ${C.border}`, whiteSpace: 'nowrap', textAlign: 'right', background: C.card }
+              const thS = { fontSize: 10, fontWeight: 700, color: C.t3, textTransform: 'uppercase', letterSpacing: '.05em', padding: '8px 10px', borderBottom: `1.5px solid ${C.border}`, whiteSpace: 'nowrap', textAlign: 'right', background: C.card }
               const thL = { ...thS, textAlign: 'left' }
-              const tdS = { fontSize: 11, color: C.t1, padding: '5px 8px', borderBottom: `1px solid ${C.border}`, textAlign: 'right', whiteSpace: 'nowrap' }
-              const tdL = { ...tdS, textAlign: 'left', fontWeight: 600 }
-              const totalRowS = { fontSize: 11, fontWeight: 700, color: C.t1, padding: '5px 8px', textAlign: 'right', whiteSpace: 'nowrap', background: `${C.border}55` }
+              const tdS = { fontSize: 12, color: C.t2, padding: '7px 10px', borderBottom: `1px solid ${C.border}`, textAlign: 'right', whiteSpace: 'nowrap' }
+              const tdL = { ...tdS, textAlign: 'left', fontWeight: 600, color: C.t1 }
+              const totalRowS = { fontSize: 12, fontWeight: 700, color: C.t1, padding: '7px 10px', textAlign: 'right', whiteSpace: 'nowrap', background: C.bg }
               const totalRowL = { ...totalRowS, textAlign: 'left' }
 
               return (
@@ -1371,68 +1410,28 @@ function LogisticsPage({ filters }) {
                   <div style={{ display: secCollapsed['tatbucket'] ? 'none' : 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr 1fr', gap: 14 }}>
 
                     {/* Table 1: Order → Pickup by Facility */}
-                    <div style={{ ...tableCard2, alignSelf: 'start' }}>
-                      <div style={tableTitle2}>Order → Pickup <span style={{ fontWeight: 400, color: C.t3 }}>(by Facility)</span></div>
-                      <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-                        <thead>
-                          <tr>
-                            <th style={thL}>Facility</th>
-                            <th style={thS}>0-12h</th>
-                            <th style={thS}>12-24h</th>
-                            <th style={thS}>24-48h</th>
-                            <th style={thS}>48h+</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {tatByFacility.map((row, i) => {
-                            const tot = (row.proc_0_12h||0)+(row.proc_12_24h||0)+(row.proc_24_48h||0)+(row.proc_48plus||0)
-                            return (
-                              <tr key={row.facility} style={{ background: i%2===0?'transparent':`${C.border}33` }}>
-                                <td style={tdL}>{row.facility}</td>
-                                {[row.proc_0_12h, row.proc_12_24h, row.proc_24_48h, row.proc_48plus].map((v, ci) => (
-                                  <td key={ci} style={{ ...tdS, color: (v/tot)>0.2?'#dc2626':C.t1, fontWeight: (v/tot)>0.2?700:400 }}>{pctB(v, tot)}</td>
-                                ))}
-                              </tr>
-                            )
-                          })}
-                          {(() => { const t=(facTotals.proc_0_12h+facTotals.proc_12_24h+facTotals.proc_24_48h+facTotals.proc_48plus); return (
-                            <tr style={{ background: `${C.border}55`, borderTop: `2px solid ${C.border2}` }}>
-                              <td style={totalRowL}>Total</td>
-                              <td style={totalRowS}>{pctB(facTotals.proc_0_12h,t)}</td>
-                              <td style={totalRowS}>{pctB(facTotals.proc_12_24h,t)}</td>
-                              <td style={totalRowS}>{pctB(facTotals.proc_24_48h,t)}</td>
-                              <td style={totalRowS}>{pctB(facTotals.proc_48plus,t)}</td>
-                            </tr>
-                          ) })()}
-                        </tbody>
-                      </table>
-                    </div>
-
-                    {/* Table 2: Pickup → Delivery by Courier (scrollable, matches sibling height) */}
-                    <div style={{ ...tableCard2, alignSelf: 'start', display: 'flex', flexDirection: 'column', maxHeight: 281, overflow: 'hidden' }}>
-                      <div style={{ ...tableTitle2, flexShrink: 0 }}>Pickup → Delivery <span style={{ fontWeight: 400, color: C.t3 }}>(by Courier)</span></div>
+                    {(() => { const cw = ['40%','15%','15%','15%','15%']; const t1=(facTotals.proc_0_12h+facTotals.proc_12_24h+facTotals.proc_24_48h+facTotals.proc_48plus); return (
+                    <div style={{ ...tableCard2, height: 340 }}>
+                      <div style={tableTitle2}>Order → Pickup <span style={{ fontWeight: 500, color: C.t3, fontSize: 12 }}>(by Facility)</span></div>
                       <div style={{ flex: 1, overflowY: 'auto' }}>
                         <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed' }}>
-                          <colgroup><col style={{width:'34%'}}/><col style={{width:'13%'}}/><col style={{width:'13%'}}/><col style={{width:'13%'}}/><col style={{width:'13%'}}/><col style={{width:'13%'}}/></colgroup>
-                          <thead style={{ position: 'sticky', top: 0, zIndex: 2, background: C.card }}>
-                            <tr>
-                              <th style={thL}>Courier</th>
-                              <th style={thS}>Del</th>
-                              <th style={thS}>0-1d</th>
-                              <th style={thS}>2-3d</th>
-                              <th style={thS}>4-5d</th>
-                              <th style={thS}>5+d</th>
-                            </tr>
-                          </thead>
+                          <colgroup>{cw.map((w,i)=><col key={i} style={{width:w}}/>)}</colgroup>
+                          <thead><tr style={{ background: C.bg }}>
+                            <th style={{ ...thL, position: 'sticky', top: 0, background: C.bg, zIndex: 1 }}>Facility</th>
+                            <th style={{ ...thS, position: 'sticky', top: 0, background: C.bg, zIndex: 1 }}>0-12h</th>
+                            <th style={{ ...thS, position: 'sticky', top: 0, background: C.bg, zIndex: 1 }}>12-24h</th>
+                            <th style={{ ...thS, position: 'sticky', top: 0, background: C.bg, zIndex: 1 }}>24-48h</th>
+                            <th style={{ ...thS, position: 'sticky', top: 0, background: C.bg, zIndex: 1 }}>48h+</th>
+                          </tr></thead>
                           <tbody>
-                            {tatByCourier.map((row, i) => {
-                              const tot = row.delivered || 0
+                            {tatByFacility.map((row, ri, arr) => {
+                              const tot = (row.proc_0_12h||0)+(row.proc_12_24h||0)+(row.proc_24_48h||0)+(row.proc_48plus||0)
+                              const isLast = ri === arr.length - 1
                               return (
-                                <tr key={row.courier_group} style={{ background: i%2===0?'transparent':`${C.border}33` }}>
-                                  <td style={tdL}>{row.courier_group}</td>
-                                  <td style={tdS}>{tot.toLocaleString('en-IN')}</td>
-                                  {[row.bucket_0_1, row.bucket_2_3, row.bucket_4_5, row.bucket_5plus].map((v, ci) => (
-                                    <td key={ci} style={{ ...tdS, color: (v/tot)>0.2?'#dc2626':C.t1, fontWeight: (v/tot)>0.2?700:400 }}>{pctB(v, tot)}</td>
+                                <tr key={row.facility}>
+                                  <td style={{ ...tdL, ...(isLast ? { borderBottom: 'none' } : {}) }}>{row.facility}</td>
+                                  {[row.proc_0_12h, row.proc_12_24h, row.proc_24_48h, row.proc_48plus].map((v, ci) => (
+                                    <td key={ci} style={{ ...tdS, color: (v/tot)>0.2?'#dc2626':C.t2, fontWeight: (v/tot)>0.2?700:400, ...(isLast ? { borderBottom: 'none' } : {}) }}>{pctB(v, tot)}</td>
                                   ))}
                                 </tr>
                               )
@@ -1440,58 +1439,103 @@ function LogisticsPage({ filters }) {
                           </tbody>
                         </table>
                       </div>
-                      <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed', flexShrink: 0, borderTop: `2px solid ${C.border2}` }}>
-                        <colgroup><col style={{width:'34%'}}/><col style={{width:'13%'}}/><col style={{width:'13%'}}/><col style={{width:'13%'}}/><col style={{width:'13%'}}/><col style={{width:'13%'}}/></colgroup>
-                        <tbody>
-                          <tr style={{ background: `${C.border}55` }}>
-                            <td style={totalRowL}>Total</td>
-                            <td style={totalRowS}>{courierTotals.delivered.toLocaleString('en-IN')}</td>
-                            <td style={totalRowS}>{pctB(courierTotals.bucket_0_1, courierTotals.delivered)}</td>
-                            <td style={totalRowS}>{pctB(courierTotals.bucket_2_3, courierTotals.delivered)}</td>
-                            <td style={totalRowS}>{pctB(courierTotals.bucket_4_5, courierTotals.delivered)}</td>
-                            <td style={totalRowS}>{pctB(courierTotals.bucket_5plus, courierTotals.delivered)}</td>
-                          </tr>
-                        </tbody>
+                      <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed', borderTop: `1.5px solid ${C.border}`, background: C.bg }}>
+                        <colgroup>{cw.map((w,i)=><col key={i} style={{width:w}}/>)}</colgroup>
+                        <tbody><tr>
+                          <td style={totalRowL}>Total</td>
+                          <td style={totalRowS}>{pctB(facTotals.proc_0_12h,t1)}</td>
+                          <td style={totalRowS}>{pctB(facTotals.proc_12_24h,t1)}</td>
+                          <td style={totalRowS}>{pctB(facTotals.proc_24_48h,t1)}</td>
+                          <td style={totalRowS}>{pctB(facTotals.proc_48plus,t1)}</td>
+                        </tr></tbody>
                       </table>
+                    </div>
+                    ) })()}
+
+                    {/* Table 2: Pickup → Delivery by Courier (scrollable tbody, sticky tfoot) */}
+                    <div style={{ ...tableCard2, height: 340 }}>
+                      <div style={tableTitle2}>Pickup → Delivery <span style={{ fontWeight: 500, color: C.t3, fontSize: 12 }}>(by Courier)</span></div>
+                      <div style={{ flex: 1, overflowY: 'auto' }}>
+                        <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed' }}>
+                          <colgroup><col style={{ width: '30%' }} /><col style={{ width: '14%' }} /><col style={{ width: '14%' }} /><col style={{ width: '14%' }} /><col style={{ width: '14%' }} /><col style={{ width: '14%' }} /></colgroup>
+                          <thead><tr style={{ background: C.bg }}>
+                            <th style={{ ...thL, position: 'sticky', top: 0, background: C.bg, zIndex: 1 }}>Courier</th>
+                            <th style={{ ...thS, position: 'sticky', top: 0, background: C.bg, zIndex: 1 }}>Del</th>
+                            <th style={{ ...thS, position: 'sticky', top: 0, background: C.bg, zIndex: 1 }}>0-1d</th>
+                            <th style={{ ...thS, position: 'sticky', top: 0, background: C.bg, zIndex: 1 }}>2-3d</th>
+                            <th style={{ ...thS, position: 'sticky', top: 0, background: C.bg, zIndex: 1 }}>4-5d</th>
+                            <th style={{ ...thS, position: 'sticky', top: 0, background: C.bg, zIndex: 1 }}>5+d</th>
+                          </tr></thead>
+                          <tbody>
+                            {tatByCourier.map((row) => {
+                              const tot = row.delivered || 0
+                              return (
+                                <tr key={row.courier_group}>
+                                  <td style={tdL}>{row.courier_group}</td>
+                                  <td style={tdS}>{tot.toLocaleString('en-IN')}</td>
+                                  {[row.bucket_0_1, row.bucket_2_3, row.bucket_4_5, row.bucket_5plus].map((v, ci) => (
+                                    <td key={ci} style={{ ...tdS, color: (v/tot)>0.2?'#dc2626':C.t2, fontWeight: (v/tot)>0.2?700:400 }}>{pctB(v, tot)}</td>
+                                  ))}
+                                </tr>
+                              )
+                            })}
+                          </tbody>
+                          <tfoot>
+                            <tr style={{ borderTop: `1.5px solid ${C.border}`, background: C.bg }}>
+                              <td style={{ ...totalRowL, position: 'sticky', bottom: 0, background: C.bg }}>Total</td>
+                              <td style={{ ...totalRowS, position: 'sticky', bottom: 0, background: C.bg }}>{courierTotals.delivered.toLocaleString('en-IN')}</td>
+                              <td style={{ ...totalRowS, position: 'sticky', bottom: 0, background: C.bg }}>{pctB(courierTotals.bucket_0_1, courierTotals.delivered)}</td>
+                              <td style={{ ...totalRowS, position: 'sticky', bottom: 0, background: C.bg }}>{pctB(courierTotals.bucket_2_3, courierTotals.delivered)}</td>
+                              <td style={{ ...totalRowS, position: 'sticky', bottom: 0, background: C.bg }}>{pctB(courierTotals.bucket_4_5, courierTotals.delivered)}</td>
+                              <td style={{ ...totalRowS, position: 'sticky', bottom: 0, background: C.bg }}>{pctB(courierTotals.bucket_5plus, courierTotals.delivered)}</td>
+                            </tr>
+                          </tfoot>
+                        </table>
+                      </div>
                     </div>
 
                     {/* Table 3: Processing → Pickup by Facility */}
-                    <div style={{ ...tableCard2, alignSelf: 'start' }}>
+                    {(() => { const cw = ['40%','15%','15%','15%','15%']; const t3=(facTotals.ord_0_1+facTotals.ord_2_3+facTotals.ord_4_5+facTotals.ord_5plus); return (
+                    <div style={{ ...tableCard2, height: 340 }}>
                       <div style={tableTitle2}>Processing → Pickup <span style={{ fontWeight: 400, color: C.t3 }}>(by Facility)</span></div>
-                      <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-                        <thead>
-                          <tr>
-                            <th style={thL}>Facility</th>
-                            <th style={thS}>0-1d</th>
-                            <th style={thS}>2-3d</th>
-                            <th style={thS}>4-5d</th>
-                            <th style={thS}>5+d</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {tatByFacility.map((row, i) => {
-                            const tot = (row.ord_0_1||0)+(row.ord_2_3||0)+(row.ord_4_5||0)+(row.ord_5plus||0)
-                            return (
-                              <tr key={row.facility} style={{ background: i%2===0?'transparent':`${C.border}33` }}>
-                                <td style={tdL}>{row.facility}</td>
-                                {[row.ord_0_1, row.ord_2_3, row.ord_4_5, row.ord_5plus].map((v, ci) => (
-                                  <td key={ci} style={{ ...tdS, color: (v/tot)>0.2?'#dc2626':C.t1, fontWeight: (v/tot)>0.2?700:400 }}>{pctB(v, tot)}</td>
-                                ))}
-                              </tr>
-                            )
-                          })}
-                          {(() => { const t=(facTotals.ord_0_1+facTotals.ord_2_3+facTotals.ord_4_5+facTotals.ord_5plus); return (
-                            <tr style={{ background: `${C.border}55`, borderTop: `2px solid ${C.border2}` }}>
-                              <td style={totalRowL}>Total</td>
-                              <td style={totalRowS}>{pctB(facTotals.ord_0_1,t)}</td>
-                              <td style={totalRowS}>{pctB(facTotals.ord_2_3,t)}</td>
-                              <td style={totalRowS}>{pctB(facTotals.ord_4_5,t)}</td>
-                              <td style={totalRowS}>{pctB(facTotals.ord_5plus,t)}</td>
-                            </tr>
-                          ) })()}
-                        </tbody>
+                      <div style={{ flex: 1, overflowY: 'auto' }}>
+                        <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed' }}>
+                          <colgroup>{cw.map((w,i)=><col key={i} style={{width:w}}/>)}</colgroup>
+                          <thead><tr style={{ background: C.bg }}>
+                            <th style={{ ...thL, position: 'sticky', top: 0, background: C.bg, zIndex: 1 }}>Facility</th>
+                            <th style={{ ...thS, position: 'sticky', top: 0, background: C.bg, zIndex: 1 }}>0-1d</th>
+                            <th style={{ ...thS, position: 'sticky', top: 0, background: C.bg, zIndex: 1 }}>2-3d</th>
+                            <th style={{ ...thS, position: 'sticky', top: 0, background: C.bg, zIndex: 1 }}>4-5d</th>
+                            <th style={{ ...thS, position: 'sticky', top: 0, background: C.bg, zIndex: 1 }}>5+d</th>
+                          </tr></thead>
+                          <tbody>
+                            {tatByFacility.map((row, ri, arr) => {
+                              const tot = (row.ord_0_1||0)+(row.ord_2_3||0)+(row.ord_4_5||0)+(row.ord_5plus||0)
+                              const isLast = ri === arr.length - 1
+                              return (
+                                <tr key={row.facility}>
+                                  <td style={{ ...tdL, ...(isLast ? { borderBottom: 'none' } : {}) }}>{row.facility}</td>
+                                  {[row.ord_0_1, row.ord_2_3, row.ord_4_5, row.ord_5plus].map((v, ci) => (
+                                    <td key={ci} style={{ ...tdS, color: (v/tot)>0.2?'#dc2626':C.t2, fontWeight: (v/tot)>0.2?700:400, ...(isLast ? { borderBottom: 'none' } : {}) }}>{pctB(v, tot)}</td>
+                                  ))}
+                                </tr>
+                              )
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
+                      <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed', borderTop: `1.5px solid ${C.border}`, background: C.bg }}>
+                        <colgroup>{cw.map((w,i)=><col key={i} style={{width:w}}/>)}</colgroup>
+                        <tbody><tr>
+                          <td style={totalRowL}>Total</td>
+                          <td style={totalRowS}>{pctB(facTotals.ord_0_1,t3)}</td>
+                          <td style={totalRowS}>{pctB(facTotals.ord_2_3,t3)}</td>
+                          <td style={totalRowS}>{pctB(facTotals.ord_4_5,t3)}</td>
+                          <td style={totalRowS}>{pctB(facTotals.ord_5plus,t3)}</td>
+                        </tr></tbody>
                       </table>
                     </div>
+                    ) })()}
 
                   </div>
                 </>
@@ -1624,21 +1668,17 @@ function LogisticsPage({ filters }) {
           }
           return (
             <div style={{ display: secCollapsed['geo'] ? 'none' : 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr 1fr', gap: 14 }}>
-              <div style={cardStyle}>
-                <div style={chartTitle}>Total Shipments by Drop City</div>
-                <div style={{ fontSize: 11, color: C.t3, marginBottom: 12, marginTop: 2 }}>Top 10 destination cities</div>
-                {geoBar(data.topDropCities || [], 'city', '#2563eb')}
-              </div>
-              <div style={cardStyle}>
-                <div style={chartTitle}>Total Shipments by Pickup City</div>
-                <div style={{ fontSize: 11, color: C.t3, marginBottom: 12, marginTop: 2 }}>Top 10 origin cities</div>
-                {geoBar(data.topPickupCities || [], 'city', '#FFD600')}
-              </div>
-              <div style={cardStyle}>
-                <div style={chartTitle}>Total Shipments by Drop State</div>
-                <div style={{ fontSize: 11, color: C.t3, marginBottom: 12, marginTop: 2 }}>Top 10 destination states</div>
-                {geoBar(data.topDropStates || [], 'state', '#2563eb')}
-              </div>
+              {[
+                { title: 'Total Shipments by Drop City', sub: 'Top 10 destination cities', rows: data.topDropCities || [], key: 'city', color: '#2563eb', h: 340 },
+                { title: 'Total Shipments by Pickup City', sub: 'Top 10 origin cities', rows: data.topPickupCities || [], key: 'city', color: '#FFD600', h: 343 },
+                { title: 'Total Shipments by Drop State', sub: 'Top 10 destination states', rows: data.topDropStates || [], key: 'state', color: '#2563eb', h: 340 },
+              ].map(({ title, sub, rows, key, color, h }) => (
+                <div key={title} style={{ ...cardStyle, display: 'flex', flexDirection: 'column', height: h }}>
+                  <div style={chartTitle}>{title}</div>
+                  <div style={{ fontSize: 11, color: C.t3, marginBottom: 12, marginTop: 2 }}>{sub}</div>
+                  <div style={{ overflowY: 'auto', flex: 1 }}>{geoBar(rows, key, color)}</div>
+                </div>
+              ))}
             </div>
           )
         })()}
@@ -2249,6 +2289,253 @@ function DateRangePicker({ filters, setFilters, theme: T = C, onRefresh, loading
   )
 }
 
+function MobileKpiCarousel({ cards }) {
+  const [active, setActive] = useState(0)
+  const ref = useRef(null)
+  useEffect(() => {
+    const el = ref.current
+    if (!el) return
+    const onScroll = () => {
+      const idx = Math.round(el.scrollLeft / el.offsetWidth)
+      setActive(idx)
+    }
+    el.addEventListener('scroll', onScroll, { passive: true })
+    return () => el.removeEventListener('scroll', onScroll)
+  }, [])
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+      <div ref={ref} style={{ display: 'flex', overflowX: 'auto', scrollSnapType: 'x mandatory', scrollBehavior: 'smooth', gap: 10, paddingBottom: 2, msOverflowStyle: 'none', scrollbarWidth: 'none' }}>
+        {cards.map((card, i) => (
+          <div key={i} style={{ flexShrink: 0, width: '80vw', maxWidth: 280, scrollSnapAlign: 'start' }}>
+            {card}
+          </div>
+        ))}
+      </div>
+      {cards.length > 1 && (
+        <div style={{ display: 'flex', justifyContent: 'center', gap: 5 }}>
+          {cards.map((_, i) => (
+            <div key={i} onClick={() => { if (ref.current) ref.current.scrollTo({ left: i * ref.current.offsetWidth, behavior: 'smooth' }) }} style={{ width: i === active ? 16 : 6, height: 6, borderRadius: 3, background: i === active ? '#1967D2' : '#CBD5E1', cursor: 'pointer', transition: 'all .2s' }} />
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+function MobileSalesFilterPanel({ activeTab, setActiveTab, filters, setFilters, salesData, channelView, setChannelView, offlineSub, setOfflineSub, onClose }) {
+  const [expandedKey, setExpandedKey] = useState(null)
+
+  const data = salesData || {}
+  const cats = useMemo(() => Object.keys(data?.catMap || {}).filter(Boolean).sort(), [data])
+  const subCats = useMemo(() => {
+    const all = Object.entries(data?.subCatMap || {})
+    const selCats = filters.category?.length > 0 ? filters.category : null
+    const filtered = selCats ? all.filter(([k]) => selCats.includes(k.split('::')[0])) : all
+    return [...new Set(filtered.map(([k]) => k.split('::')[1]).filter(Boolean))].sort()
+  }, [data, filters.category])
+  const skuOpts = useMemo(() => data?.masterSkuList || [], [data])
+  const paymentTypeOpts = useMemo(() => (data?.shopify?.paymentTypes || []).map(p => p.paymentType).filter(Boolean), [data])
+
+  // D2C sub-channels (MyFrido, Mobility etc.)
+  const subChannelMap = data.subChannelMap || {}
+  const indiaSubChKeys = data.allSubChannels?.length ? data.allSubChannels
+    : Object.keys(Object.fromEntries(Object.entries(subChannelMap).filter(([k]) => k !== 'International' && k !== 'Shopify B2B' && k !== 'Shopify International' && k !== 'Unknown' && k !== 'Retail Store')))
+  const d2cSubSel = filters.subChannel ? filters.subChannel.split(',').map(x => x.trim()).filter(v => v && v !== 'ShopifyIndia' && v !== 'International') : []
+  const d2cActive = d2cSubSel[0] || null
+
+  const PV = { bg: '#FFFFFF', canvas: '#F5F6F8', border: '#E7E8EC', ink: '#1F2430', sub: '#6B7280', accent: '#F2C230', accentDark: '#8A6D00' }
+
+  const switchTab = (id) => {
+    setActiveTab(id)
+    setChannelView('all')
+    setOfflineSub('all')
+    setFilters(f => ({ ...f, subChannel: '', voucher: '', channelGroup: [], category: [], subCategory: [], sku: [], paymentType: '' }))
+    setExpandedKey(null)
+  }
+
+  // Slicers for filters section
+  const filterSlicers = [
+    { key: 'category', label: 'Category', options: cats, selected: filters.category || [], onChange: v => setFilters(f => ({ ...f, category: v, subCategory: [] })) },
+    { key: 'subCategory', label: 'Sub-category', options: subCats, selected: filters.subCategory || [], onChange: v => setFilters(f => ({ ...f, subCategory: v })) },
+    { key: 'sku', label: 'SKU', options: skuOpts, selected: filters.sku || [], onChange: v => setFilters(f => ({ ...f, sku: v })) },
+    ...(activeTab === 'shopify' && paymentTypeOpts.length > 0 ? [{
+      key: 'paymentType', label: 'Payment Type',
+      options: paymentTypeOpts,
+      selected: filters.paymentType ? filters.paymentType.split(',').filter(Boolean) : [],
+      onChange: v => setFilters(f => ({ ...f, paymentType: v.join(',') })),
+    }] : []),
+  ]
+
+  const totalActive = filterSlicers.reduce((sum, s) => sum + (Array.isArray(s.selected) ? s.selected.length : 0), 0)
+
+  const handleClearAll = () => {
+    setFilters(f => ({ ...f, category: [], subCategory: [], sku: [], paymentType: '', voucher: '' }))
+    setExpandedKey(null)
+  }
+
+  const toggleExpand = (key) => setExpandedKey(k => k === key ? null : key)
+
+  // Sub-channel section for D2C
+  const renderSubChannels = () => {
+    if (activeTab !== 'shopify' || indiaSubChKeys.length === 0) return null
+    const opts = [{ id: null, label: 'Overall' }, ...indiaSubChKeys.map(k => ({ id: k, label: k }))]
+    return (
+      <div style={{ padding: '10px 16px 12px', borderBottom: `1px solid ${PV.border}` }}>
+        <div style={{ fontSize: 10, fontWeight: 800, color: PV.sub, letterSpacing: '.07em', textTransform: 'uppercase', marginBottom: 8 }}>Sub-channel</div>
+        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+          {opts.map(opt => {
+            const isActive = opt.id == null ? !d2cActive : d2cActive === opt.id
+            return (
+              <button key={opt.label} onClick={() => setFilters(f => ({ ...f, subChannel: opt.id == null ? 'ShopifyIndia' : (d2cActive === opt.id ? 'ShopifyIndia' : opt.id) }))}
+                style={{ padding: '5px 13px', borderRadius: 20, fontSize: 12, fontWeight: isActive ? 700 : 500, border: `1px solid ${isActive ? PV.accent : PV.border}`, background: isActive ? PV.accent : 'transparent', color: isActive ? PV.accentDark : PV.ink, cursor: 'pointer' }}>
+                {opt.label}
+              </button>
+            )
+          })}
+        </div>
+      </div>
+    )
+  }
+
+  // Sub-toggle for Amazon
+  const renderAmazonToggle = () => {
+    if (activeTab !== 'amazon') return null
+    const opts = [{ id: 'all', label: 'Overall' }, { id: 'sc', label: 'Seller Central' }, { id: 'vc', label: 'Vendor Central' }]
+    return (
+      <div style={{ padding: '10px 16px 12px', borderBottom: `1px solid ${PV.border}` }}>
+        <div style={{ fontSize: 10, fontWeight: 800, color: PV.sub, letterSpacing: '.07em', textTransform: 'uppercase', marginBottom: 8 }}>View</div>
+        <div style={{ display: 'flex', gap: 6 }}>
+          {opts.map(opt => (
+            <button key={opt.id} onClick={() => setChannelView(opt.id)}
+              style={{ padding: '5px 13px', borderRadius: 20, fontSize: 12, fontWeight: channelView === opt.id ? 700 : 500, border: `1px solid ${channelView === opt.id ? PV.accent : PV.border}`, background: channelView === opt.id ? PV.accent : 'transparent', color: channelView === opt.id ? PV.accentDark : PV.ink, cursor: 'pointer' }}>
+              {opt.label}
+            </button>
+          ))}
+        </div>
+      </div>
+    )
+  }
+
+  // Sub-toggle for Offline
+  const renderOfflineToggle = () => {
+    if (activeTab !== 'offline') return null
+    const opts = OFFLINE_SUB_OPTIONS
+    return (
+      <div style={{ padding: '10px 16px 12px', borderBottom: `1px solid ${PV.border}` }}>
+        <div style={{ fontSize: 10, fontWeight: 800, color: PV.sub, letterSpacing: '.07em', textTransform: 'uppercase', marginBottom: 8 }}>Sub-channel</div>
+        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+          {opts.map(opt => (
+            <button key={opt.id} onClick={() => setOfflineSub(opt.id)}
+              style={{ padding: '5px 13px', borderRadius: 20, fontSize: 12, fontWeight: offlineSub === opt.id ? 700 : 500, border: `1px solid ${offlineSub === opt.id ? PV.accent : PV.border}`, background: offlineSub === opt.id ? PV.accent : 'transparent', color: offlineSub === opt.id ? PV.accentDark : PV.ink, cursor: 'pointer' }}>
+              {opt.label}
+            </button>
+          ))}
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', maxHeight: '78vh', fontFamily: 'Inter, system-ui, sans-serif' }}>
+      {/* Header */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 16px 10px', flexShrink: 0 }}>
+        <span style={{ fontWeight: 700, fontSize: 15, color: PV.ink, letterSpacing: '-0.01em' }}>Channel & Filters</span>
+        <button onClick={onClose} style={{ width: 28, height: 28, borderRadius: 8, border: 'none', background: PV.canvas, color: PV.sub, fontSize: 14, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>✕</button>
+      </div>
+
+      {/* Scrollable body */}
+      <div style={{ flex: 1, overflowY: 'auto' }}>
+        {/* Channel tabs — 2-row grid */}
+        <div style={{ padding: '4px 14px 12px', borderBottom: `1px solid ${PV.border}` }}>
+          <div style={{ fontSize: 10, fontWeight: 800, color: PV.sub, letterSpacing: '.07em', textTransform: 'uppercase', marginBottom: 8 }}>Channel</div>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+            {TABS.map(tab => {
+              const isActive = activeTab === tab.id
+              return (
+                <button key={tab.id} onClick={() => switchTab(tab.id)}
+                  style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '5px 12px', borderRadius: 20, fontSize: 12, fontWeight: isActive ? 700 : 500, border: `1px solid ${isActive ? PV.ink : PV.border}`, background: isActive ? PV.ink : 'transparent', color: isActive ? '#fff' : PV.ink, cursor: 'pointer', whiteSpace: 'nowrap' }}>
+                  {tab.logo && <img src={tab.logo} alt="" style={{ width: 13, height: 13, borderRadius: 2, objectFit: 'contain', filter: isActive || tab.id === 'cred' ? 'invert(1)' : 'none' }} />}
+                  {tab.label}
+                </button>
+              )
+            })}
+          </div>
+        </div>
+
+        {/* Sub-channel / sub-toggle (D2C / Amazon / Offline) */}
+        {renderSubChannels()}
+        {renderAmazonToggle()}
+        {renderOfflineToggle()}
+
+        {/* Filters */}
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 16px 6px' }}>
+          <span style={{ fontSize: 10, fontWeight: 800, color: PV.sub, letterSpacing: '.07em', textTransform: 'uppercase' }}>
+            Filters{totalActive > 0 ? ` · ${totalActive} active` : ''}
+          </span>
+          {totalActive > 0 && (
+            <button onClick={handleClearAll} style={{ fontSize: 11, color: '#D93025', background: 'none', border: 'none', cursor: 'pointer', padding: 0, fontWeight: 600 }}>↺ Reset</button>
+          )}
+        </div>
+        <div style={{ borderTop: `1px solid ${PV.border}` }}>
+          {filterSlicers.map((slicer, si) => {
+            const isExpanded = expandedKey === slicer.key
+            const selCount = Array.isArray(slicer.selected) ? slicer.selected.length : 0
+            const isLast = si === filterSlicers.length - 1
+            return (
+              <div key={slicer.key} style={{ borderBottom: isLast ? 'none' : `1px solid ${PV.border}` }}>
+                <div onClick={() => toggleExpand(slicer.key)}
+                  style={{ display: 'flex', alignItems: 'center', padding: '12px 16px', cursor: 'pointer', gap: 8, userSelect: 'none' }}>
+                  <span style={{ flex: 1, fontSize: 13, fontWeight: 500, color: PV.ink }}>{slicer.label}</span>
+                  {selCount > 0 && (
+                    <span style={{ fontSize: 10, fontWeight: 700, background: '#FFF3CD', color: '#8A6D00', border: '1px solid #F2C230', borderRadius: 10, padding: '1px 7px' }}>{selCount}</span>
+                  )}
+                  {selCount > 0 && (
+                    <button onClick={e => { e.stopPropagation(); slicer.onChange([]) }}
+                      style={{ background: 'none', border: 'none', color: PV.sub, fontSize: 13, cursor: 'pointer', padding: '0 2px', lineHeight: 1 }}>✕</button>
+                  )}
+                  <span style={{ fontSize: 13, color: PV.sub, transform: isExpanded ? 'rotate(90deg)' : 'none', transition: 'transform .18s', lineHeight: 1 }}>›</span>
+                </div>
+                {isExpanded && (
+                  <div style={{ background: PV.canvas, borderTop: `1px solid ${PV.border}`, padding: '4px 0 8px' }}>
+                    {slicer.options.length === 0 && <div style={{ padding: '10px 16px', fontSize: 12, color: PV.sub }}>No options</div>}
+                    {slicer.options.map((opt, oi) => {
+                      const checked = Array.isArray(slicer.selected) && slicer.selected.includes(opt)
+                      return (
+                        <label key={`${oi}-${opt}`} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '9px 16px', cursor: 'pointer', userSelect: 'none' }}>
+                          <div style={{ width: 17, height: 17, borderRadius: 5, flexShrink: 0, border: `2px solid ${checked ? PV.accent : PV.border}`, background: checked ? PV.accent : PV.bg, display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all .12s' }}
+                            onClick={() => slicer.onChange(checked ? slicer.selected.filter(x => x !== opt) : [...slicer.selected, opt])}>
+                            {checked && <span style={{ fontSize: 10, color: PV.accentDark, lineHeight: 1 }}>✓</span>}
+                          </div>
+                          <span style={{ fontSize: 12.5, color: checked ? PV.ink : PV.sub, fontWeight: checked ? 600 : 400 }}
+                            onClick={() => slicer.onChange(checked ? slicer.selected.filter(x => x !== opt) : [...slicer.selected, opt])}>
+                            {opt}
+                          </span>
+                        </label>
+                      )
+                    })}
+                  </div>
+                )}
+              </div>
+            )
+          })}
+        </div>
+      </div>
+
+      {/* Footer */}
+      <div style={{ display: 'flex', gap: 8, padding: '12px 14px', borderTop: `1px solid ${PV.border}`, flexShrink: 0 }}>
+        <button onClick={handleClearAll} disabled={totalActive === 0}
+          style={{ flex: 1, padding: '10px', borderRadius: 10, border: `1px solid ${PV.border}`, background: 'transparent', color: totalActive > 0 ? PV.ink : PV.sub, fontSize: 13, cursor: totalActive > 0 ? 'pointer' : 'default', fontFamily: 'inherit', opacity: totalActive > 0 ? 1 : 0.5 }}>
+          Reset
+        </button>
+        <button onClick={onClose}
+          style={{ flex: 2, padding: '10px', borderRadius: 10, border: 'none', background: PV.ink, color: '#fff', fontSize: 13, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>
+          {totalActive > 0 ? `Apply (${totalActive})` : 'Done'}
+        </button>
+      </div>
+    </div>
+  )
+}
+
 function MobileInvFilterPanel({ invTab, setInvTab, inventoryDateControl, onClose }) {
   const [expandedKey, setExpandedKey] = useState(null)
 
@@ -2445,17 +2732,18 @@ function MobileInvFilterPanel({ invTab, setInvTab, inventoryDateControl, onClose
   )
 }
 
-function Topnav({ page, customerTab, invTab, setInvTab, alerts, onRefresh, loading, filters, setFilters, rawRows, inventoryDateControl }) {
+function Topnav({ page, customerTab, invTab, setInvTab, alerts, onRefresh, loading, filters, setFilters, rawRows, inventoryDateControl, salesActiveTab, setSalesActiveTab, salesData, salesChannelView, setSalesChannelView, salesOfflineSub, setSalesOfflineSub }) {
   const [mobFilterOpen, setMobFilterOpen] = useState(false)
   const titles = { overview: 'Overview', sales: 'Sales Analytics', pnl: 'P&L Analytics', ads: 'Ads Analytics', intelligence: 'Intelligence', logistics: 'Logistics Performance Analytics', inventory: 'Inventory, Sales & Allocation', customer: 'Customer Intelligence', documents: 'Documents', cogs: 'COGS Ledger', 'logistics-ledger': 'Logistics Bill Ledger' }
   const invTitles = { health: 'Inventory Health', sales: 'Sales & Allocation' }
-  const pageTitle = page === 'inventory' ? (invTitles[invTab] || titles.inventory) : titles[page]
+  const salesChannelLabel = TABS.find(t => t.id === salesActiveTab)?.label || 'Sales Analytics'
+  const pageTitle = page === 'inventory' ? (invTitles[invTab] || titles.inventory) : page === 'sales' ? salesChannelLabel : titles[page]
   const critical = alerts.filter(a => a.type === 'red').length
   const dateBlurred = page === 'customer' && customerTab === 'rfm'
   return (
     <div className="topnav">
       <div style={{ display: 'flex', alignItems: 'center', gap: 6, position: 'relative' }}>
-        {page === 'inventory' && (
+        {(page === 'inventory' || page === 'sales') && (
           <>
             <button className="tnav-mob-only" onClick={() => setMobFilterOpen(v => !v)} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '2px 4px', color: C.t2, fontSize: 16, lineHeight: 1, alignItems: 'center' }}>☰</button>
             {mobFilterOpen && (
@@ -2463,12 +2751,15 @@ function Topnav({ page, customerTab, invTab, setInvTab, alerts, onRefresh, loadi
                 <div onClick={() => setMobFilterOpen(false)} style={{ position: 'fixed', inset: 0, zIndex: 499, background: 'rgba(0,0,0,0.40)' }} />
                 <div style={{
                   position: 'fixed', top: '50%', left: '50%', transform: 'translate(-50%, -50%)',
-                  zIndex: 500, width: 'min(320px, 92vw)',
+                  zIndex: 500, width: 'min(340px, 92vw)',
                   background: '#fff', borderRadius: 16, overflow: 'hidden',
                   boxShadow: '0 8px 40px rgba(0,0,0,0.22)',
                   display: 'flex', flexDirection: 'column',
                 }}>
-                  <MobileInvFilterPanel invTab={invTab} setInvTab={setInvTab} inventoryDateControl={inventoryDateControl} onClose={() => setMobFilterOpen(false)} />
+                  {page === 'inventory'
+                    ? <MobileInvFilterPanel invTab={invTab} setInvTab={setInvTab} inventoryDateControl={inventoryDateControl} onClose={() => setMobFilterOpen(false)} />
+                    : <MobileSalesFilterPanel activeTab={salesActiveTab} setActiveTab={setSalesActiveTab} filters={filters} setFilters={setFilters} salesData={salesData} channelView={salesChannelView} setChannelView={setSalesChannelView} offlineSub={salesOfflineSub} setOfflineSub={setSalesOfflineSub} onClose={() => setMobFilterOpen(false)} />
+                  }
                 </div>
               </>
             )}
@@ -2905,6 +3196,12 @@ const TABS = [
   { id: 'offline', label: 'Offline Sales', ch: 'offline_sales', logo: '/offline-sales.png' },
 ]
 const CHANNEL_LOGOS = Object.fromEntries(TABS.filter(t => t.logo).map(t => [t.ch, t.logo]))
+const OFFLINE_SUB_OPTIONS = [
+  { id: 'all', label: 'Overall' },
+  { id: 'b2b', label: 'B2B' },
+  { id: 'Stockist', label: 'Stockist' },
+  { id: 'MTGT', label: 'MT GT' },
+]
 
 function PaginatedCard({ title, rows, columns, pageSize = 10 }) {
   const [page, setPage] = useState(0)
@@ -4569,9 +4866,9 @@ function AllTab({ data, rangeStart, rangeEnd }) {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-      <div style={{ display: 'grid', gridTemplateColumns: '1.5fr 5fr', gap: 10, alignItems: 'stretch' }}>
+      <div className="sales-kpi-section" style={{ display: 'grid', gridTemplateColumns: '1.5fr 5fr', gap: 10, alignItems: 'stretch' }}>
         {/* Gross Revenue hero — tall left column */}
-        <div className="kpi-card" style={{ display: 'flex', flexDirection: 'column', gap: 8, padding: '16px 18px' }}>
+        <div className="kpi-card sales-kpi-hero" style={{ display: 'flex', flexDirection: 'column', gap: 8, padding: '16px 18px' }}>
           <div className="kpi-label" style={{ fontSize: 11 }}>Gross Revenue Inc GST</div>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 6 }}>
             <div className="kpi-value" style={{ fontSize: 32, fontWeight: 800 }}>{fmt(totalRev)}</div>
@@ -4594,7 +4891,7 @@ function AllTab({ data, rangeStart, rangeEnd }) {
           </div>
         </div>
         {/* Right: 2 rows of 4 KPIs each — single grid so all 8 cards share equal height */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gridTemplateRows: 'repeat(2, 1fr)', gap: 10, alignItems: 'stretch' }}>
+        <div className="sales-kpi-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gridTemplateRows: 'repeat(2, 1fr)', gap: 10, alignItems: 'stretch' }}>
           {[
             { label: 'Net Revenue', value: fmt(netRevenueCalc), sub: `Ex GST, after returns · ${totalRev > 0 ? (netRevenueCalc / totalRev * 100).toFixed(1) : 0}% of gross`, badge: (() => { const excChg = prevExcRev > 0 ? ((netRevenueCalc - prevExcRev) / prevExcRev * 100) : null; if (excChg === null) return null; return <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 4, background: excChg >= 0 ? C.green.bg : C.red.bg, color: excChg >= 0 ? C.green.tx : C.red.tx, flexShrink: 0 }}>{excChg >= 0 ? '▲' : '▼'} {Math.abs(excChg).toFixed(1)}%</span> })() },
             { label: 'Revenue at Risk', value: fmt(atRiskRev), sub: `${totalRev > 0 ? (atRiskRev / totalRev * 100).toFixed(1) : 0}% of gross`, accent: atRiskRev > 0 ? '#7A4000' : undefined, badge: (() => { const prevAtRiskEst = prevOrders > 0 ? (prevRtoOrders + prevCirOrders) / prevOrders * prevRev : 0; if (!prevAtRiskEst) return null; const p = (atRiskRev - prevAtRiskEst) / prevAtRiskEst * 100; return <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 4, background: p > 0 ? C.red.bg : C.green.bg, color: p > 0 ? C.red.tx : C.green.tx, flexShrink: 0 }}>{p > 0 ? '▲' : '▼'} {Math.abs(p).toFixed(1)}%</span> })() },
@@ -5381,9 +5678,9 @@ function ShopifyTab({ data, filters, setFilters }) {
           <span style={{ marginLeft: 'auto', color: C.t3, fontSize: 11 }}>All KPIs & charts reflect this filter</span>
         </div>
       )}
-      <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 5fr', gap: 10, alignItems: 'stretch' }}>
+      <div className="sales-kpi-section" style={{ display: 'grid', gridTemplateColumns: '1.2fr 5fr', gap: 10, alignItems: 'stretch' }}>
         {/* Hero card */}
-        <div className="kpi-card" style={{ display: 'flex', flexDirection: 'column', gap: 8, padding: '16px 18px' }}>
+        <div className="kpi-card sales-kpi-hero" style={{ display: 'flex', flexDirection: 'column', gap: 8, padding: '16px 18px' }}>
           <div className="kpi-label" style={{ fontSize: 11 }}>Gross Revenue Inc GST</div>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 6 }}>
             <div className="kpi-value" style={{ fontSize: 32, fontWeight: 800 }}>{fmt(totalRev)}</div>
@@ -5439,7 +5736,7 @@ function ShopifyTab({ data, filters, setFilters }) {
             { label: 'CIR %', value: `${cirPct.toFixed(1)}%`, sub: `${fmt(shCirRev)} CIR rev`, badge: shReturnBadge(cirPct, prevOrders > 0 ? prevCirOrders / prevOrders * 100 : 0) },
           ]
           return (
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gridTemplateRows: 'repeat(2, 1fr)', gap: 10, alignItems: 'stretch' }}>
+            <div className="sales-kpi-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gridTemplateRows: 'repeat(2, 1fr)', gap: 10, alignItems: 'stretch' }}>
               {[...row1, ...row2].map(k => (
                 <div key={k.label} className="kpi-card" style={{ padding: '10px 13px', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
                   <div className="kpi-label">{k.label}</div>
@@ -5889,9 +6186,9 @@ function EBOTab({ data, rangeStart, rangeEnd }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
       {/* KPI Grid */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1.5fr 5fr', gap: 10, alignItems: 'stretch' }}>
+      <div className="sales-kpi-section" style={{ display: 'grid', gridTemplateColumns: '1.5fr 5fr', gap: 10, alignItems: 'stretch' }}>
         {/* Hero card */}
-        <div className="kpi-card" style={{ display: 'flex', flexDirection: 'column', gap: 8, padding: '16px 18px' }}>
+        <div className="kpi-card sales-kpi-hero" style={{ display: 'flex', flexDirection: 'column', gap: 8, padding: '16px 18px' }}>
           <div className="kpi-label" style={{ fontSize: 11 }}>Gross Revenue Inc GST</div>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 6 }}>
             <div className="kpi-value" style={{ fontSize: 32, fontWeight: 800 }}>{fmt(totalRev)}</div>
@@ -5910,7 +6207,7 @@ function EBOTab({ data, rangeStart, rangeEnd }) {
           </div>
         </div>
         {/* Right KPI grid */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gridTemplateRows: 'repeat(2, 1fr)', gap: 10 }}>
+        <div className="sales-kpi-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gridTemplateRows: 'repeat(2, 1fr)', gap: 10 }}>
           {[
             { label: 'Net Revenue', value: fmt(netRev), sub: 'Gross − Cancel − RTO − Return − CIR − GST', badge: chgBadge(netRev, prevNetRev) },
             { label: 'GST', value: fmt(gstCollected), sub: grossAfterReturns > 0 ? `${((gstCollected / grossAfterReturns) * 100).toFixed(1)}% of net sales` : '—', badge: null },
@@ -6186,8 +6483,8 @@ function AmazonTab({ data, channelView, setChannelView }) {
             const amzPrevFbaShare = amzPrevSCRev > 0 ? (amzPrevFbaRev / amzPrevSCRev * 100) : 0
             const amzPrevCancelRate = amzPrevOrders > 0 ? (amzPrevCancelledOrders / amzPrevOrders * 100) : 0
             return (
-              <div style={{ display: 'grid', gridTemplateColumns: '1.5fr 5fr', gap: 10, alignItems: 'stretch' }}>
-                <div className="kpi-card" style={{ display: 'flex', flexDirection: 'column', gap: 8, padding: '16px 18px' }}>
+              <div className="sales-kpi-section" style={{ display: 'grid', gridTemplateColumns: '1.5fr 5fr', gap: 10, alignItems: 'stretch' }}>
+                <div className="kpi-card sales-kpi-hero" style={{ display: 'flex', flexDirection: 'column', gap: 8, padding: '16px 18px' }}>
                   <div className="kpi-label" style={{ fontSize: 11 }}>Gross Revenue Inc GST · {channelView === 'all' ? 'SC + VC' : channelView === 'sc' ? 'Seller Central' : 'Vendor Central'}{selectedCat ? ` · ${selectedSubCat || selectedCat}` : ''}</div>
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 6 }}>
                     <div className="kpi-value" style={{ fontSize: 32, fontWeight: 800 }}>{fmt(chScCatRev + chVcCatRev)}</div>
@@ -6205,7 +6502,7 @@ function AmazonTab({ data, channelView, setChannelView }) {
                     </ResponsiveContainer>
                   </div>
                 </div>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gridTemplateRows: 'repeat(2, 1fr)', gap: 10, alignItems: 'stretch' }}>
+                <div className="sales-kpi-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gridTemplateRows: 'repeat(2, 1fr)', gap: 10, alignItems: 'stretch' }}>
                   {[
                     ...(channelView === 'all' ? [{ label: 'Gross Rev · Seller Central', value: fmt(chScCatRev), sub: (chScCatRev + chVcCatRev) > 0 ? `${(chScCatRev / (chScCatRev + chVcCatRev) * 100).toFixed(1)}% of total` : undefined, badge: selectedCat ? null : amzChgBadge(chScTotalRev, chAmzPrevSCRev) }] : []),
                     ...(channelView === 'all' ? [{ label: 'Gross Rev · Vendor Central', value: fmt(chVcCatRev), sub: (chScCatRev + chVcCatRev) > 0 ? `${(chVcCatRev / (chScCatRev + chVcCatRev) * 100).toFixed(1)}% of total` : undefined, badge: selectedCat ? null : amzChgBadge(chVcTotalOrdered, chAmzPrevVCRev) }] : []),
@@ -6559,8 +6856,8 @@ function FlipkartTab({ data }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
       {/* KPI layout: hero + 2 rows of 4 */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1.5fr 5fr', gap: 10, alignItems: 'stretch' }}>
-        <div className="kpi-card" style={{ display: 'flex', flexDirection: 'column', gap: 8, padding: '16px 18px' }}>
+      <div className="sales-kpi-section" style={{ display: 'grid', gridTemplateColumns: '1.5fr 5fr', gap: 10, alignItems: 'stretch' }}>
+        <div className="kpi-card sales-kpi-hero" style={{ display: 'flex', flexDirection: 'column', gap: 8, padding: '16px 18px' }}>
           <div className="kpi-label" style={{ fontSize: 11 }}>Gross Revenue Inc GST{selectedCat ? ` · ${selectedSubCat || selectedCat}` : ''}</div>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 6 }}>
             <div className="kpi-value" style={{ fontSize: 32, fontWeight: 800 }}>{fmt(rev)}</div>
@@ -6578,7 +6875,7 @@ function FlipkartTab({ data }) {
             </ResponsiveContainer>
           </div>
         </div>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gridTemplateRows: 'repeat(2, 1fr)', gap: 10, alignItems: 'stretch' }}>
+        <div className="sales-kpi-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gridTemplateRows: 'repeat(2, 1fr)', gap: 10, alignItems: 'stretch' }}>
           {[
             { label: 'Net Revenue', value: fmt(fkNetRev), sub: 'Ex. return & cancellation', badge: selectedCat ? null : fkChgBadge(fkNetRev, fkPrevExcRev) },
             { label: 'Daily Avg Rev', value: fmt(rev / nDays), sub: `over ${nDays} days`, badge: selectedCat ? null : fkChgBadge(rev / nDays, fkPrevRev > 0 ? fkPrevRev / nDays : 0) },
@@ -8092,8 +8389,8 @@ function BlinkitTab({ data }) {
         </div>
       )}
       {/* KPI layout */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1.5fr 5fr', gap: 10, alignItems: 'stretch' }}>
-        <div className="kpi-card" style={{ display: 'flex', flexDirection: 'column', gap: 8, padding: '16px 18px' }}>
+      <div className="sales-kpi-section" style={{ display: 'grid', gridTemplateColumns: '1.5fr 5fr', gap: 10, alignItems: 'stretch' }}>
+        <div className="kpi-card sales-kpi-hero" style={{ display: 'flex', flexDirection: 'column', gap: 8, padding: '16px 18px' }}>
           <div className="kpi-label" style={{ fontSize: 11 }}>Gross Revenue Inc GST · MRP</div>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 6 }}>
             <div className="kpi-value" style={{ fontSize: 32, fontWeight: 800 }}>{fmt(rev)}</div>
@@ -8111,7 +8408,7 @@ function BlinkitTab({ data }) {
             </ResponsiveContainer>
           </div>
         </div>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gridTemplateRows: 'repeat(2, 1fr)', gap: 10, alignItems: 'stretch' }}>
+        <div className="sales-kpi-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gridTemplateRows: 'repeat(2, 1fr)', gap: 10, alignItems: 'stretch' }}>
           {[
             { label: 'Net Revenue', value: fmt(excRev), sub: 'Ex GST', badge: blChgBadge(excRev, blPrevExcRev) },
             { label: 'GST', value: fmt(gst), sub: `${rev > 0 ? ((gst/rev)*100).toFixed(1) : 0}% of gross rev`, badge: blChgBadge(gst, blPrevRev - blPrevExcRev) },
@@ -8248,8 +8545,8 @@ function InstaTab({ data }) {
           <button onClick={() => setSelectedCat(null)} style={{ marginLeft: 'auto', fontSize: 11, color: C.acc, background: 'none', border: 'none', cursor: 'pointer', fontWeight: 700 }}>✕ Clear</button>
         </div>
       )}
-      <div style={{ display: 'grid', gridTemplateColumns: '1.5fr 5fr', gap: 10, alignItems: 'stretch' }}>
-        <div className="kpi-card" style={{ display: 'flex', flexDirection: 'column', gap: 8, padding: '16px 18px' }}>
+      <div className="sales-kpi-section" style={{ display: 'grid', gridTemplateColumns: '1.5fr 5fr', gap: 10, alignItems: 'stretch' }}>
+        <div className="kpi-card sales-kpi-hero" style={{ display: 'flex', flexDirection: 'column', gap: 8, padding: '16px 18px' }}>
           <div className="kpi-label" style={{ fontSize: 11 }}>Gross Revenue Inc GST</div>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 6 }}>
             <div className="kpi-value" style={{ fontSize: 32, fontWeight: 800 }}>{fmt(rev)}</div>
@@ -8267,7 +8564,7 @@ function InstaTab({ data }) {
             </ResponsiveContainer>
           </div>
         </div>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gridTemplateRows: 'repeat(2, 1fr)', gap: 10, alignItems: 'stretch' }}>
+        <div className="sales-kpi-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gridTemplateRows: 'repeat(2, 1fr)', gap: 10, alignItems: 'stretch' }}>
           {[
             { label: 'Net Revenue', value: fmt(excRev), sub: 'Ex GST', badge: insChgBadge(excRev, insPrevExcRev) },
             { label: 'GST', value: fmt(gst), sub: `${rev > 0 ? ((gst/rev)*100).toFixed(1) : 0}% of gross rev`, badge: insChgBadge(gst, insPrevRev - insPrevExcRev) },
@@ -8402,8 +8699,8 @@ function ZeptoTab({ data }) {
           <button onClick={() => setSelectedCat(null)} style={{ marginLeft: 'auto', fontSize: 11, color: C.acc, background: 'none', border: 'none', cursor: 'pointer', fontWeight: 700 }}>✕ Clear</button>
         </div>
       )}
-      <div style={{ display: 'grid', gridTemplateColumns: '1.5fr 5fr', gap: 10, alignItems: 'stretch' }}>
-        <div className="kpi-card" style={{ display: 'flex', flexDirection: 'column', gap: 8, padding: '16px 18px' }}>
+      <div className="sales-kpi-section" style={{ display: 'grid', gridTemplateColumns: '1.5fr 5fr', gap: 10, alignItems: 'stretch' }}>
+        <div className="kpi-card sales-kpi-hero" style={{ display: 'flex', flexDirection: 'column', gap: 8, padding: '16px 18px' }}>
           <div className="kpi-label" style={{ fontSize: 11 }}>Gross Revenue Inc GST</div>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 6 }}>
             <div className="kpi-value" style={{ fontSize: 32, fontWeight: 800 }}>{fmt(rev)}</div>
@@ -8421,7 +8718,7 @@ function ZeptoTab({ data }) {
             </ResponsiveContainer>
           </div>
         </div>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gridTemplateRows: 'repeat(2, 1fr)', gap: 10, alignItems: 'stretch' }}>
+        <div className="sales-kpi-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gridTemplateRows: 'repeat(2, 1fr)', gap: 10, alignItems: 'stretch' }}>
           {[
             { label: 'Net Revenue', value: fmt(excRev), sub: 'Ex GST', badge: zpChgBadge(excRev, zpPrevExcRev) },
             { label: 'GST', value: fmt(gst), sub: `${rev > 0 ? ((gst/rev)*100).toFixed(1) : 0}% of gross rev`, badge: zpChgBadge(gst, zpPrevRev - zpPrevExcRev) },
@@ -8577,8 +8874,8 @@ function CredTab({ data }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
       {/* Hero + KPI grid */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1.5fr 5fr', gap: 10, alignItems: 'stretch' }}>
-        <div className="kpi-card" style={{ display: 'flex', flexDirection: 'column', gap: 8, padding: '16px 18px' }}>
+      <div className="sales-kpi-section" style={{ display: 'grid', gridTemplateColumns: '1.5fr 5fr', gap: 10, alignItems: 'stretch' }}>
+        <div className="kpi-card sales-kpi-hero" style={{ display: 'flex', flexDirection: 'column', gap: 8, padding: '16px 18px' }}>
           <div className="kpi-label" style={{ fontSize: 11 }}>Gross Revenue Inc GST</div>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 6 }}>
             <div className="kpi-value" style={{ fontSize: 32, fontWeight: 800 }}>{fmt(rev)}</div>
@@ -8596,7 +8893,7 @@ function CredTab({ data }) {
             </ResponsiveContainer>
           </div>
         </div>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gridTemplateRows: 'repeat(2, 1fr)', gap: 10, alignItems: 'stretch' }}>
+        <div className="sales-kpi-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gridTemplateRows: 'repeat(2, 1fr)', gap: 10, alignItems: 'stretch' }}>
           {[
             { label: 'Net Revenue', value: fmt(netRev), sub: 'Ex. return & cancellation', badge: crChgBadge(netRev, crPrevNetRev) },
             { label: 'GST', value: fmt(gstCollected), sub: `${rev > 0 ? ((gstCollected/rev)*100).toFixed(1) : 0}% of gross rev`, badge: crChgBadge(gstCollected, crPrevGstCollected) },
@@ -8790,8 +9087,8 @@ function FirstcryTab({ data }) {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-      <div style={{ display: 'grid', gridTemplateColumns: '1.5fr 5fr', gap: 10, alignItems: 'stretch' }}>
-        <div className="kpi-card" style={{ display: 'flex', flexDirection: 'column', gap: 8, padding: '16px 18px' }}>
+      <div className="sales-kpi-section" style={{ display: 'grid', gridTemplateColumns: '1.5fr 5fr', gap: 10, alignItems: 'stretch' }}>
+        <div className="kpi-card sales-kpi-hero" style={{ display: 'flex', flexDirection: 'column', gap: 8, padding: '16px 18px' }}>
           <div className="kpi-label" style={{ fontSize: 11 }}>Gross Revenue Inc GST</div>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 6 }}>
             <div className="kpi-value" style={{ fontSize: 32, fontWeight: 800 }}>{fmt(rev)}</div>
@@ -8809,7 +9106,7 @@ function FirstcryTab({ data }) {
             </ResponsiveContainer>
           </div>
         </div>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gridTemplateRows: 'repeat(2, 1fr)', gap: 10, alignItems: 'stretch' }}>
+        <div className="sales-kpi-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gridTemplateRows: 'repeat(2, 1fr)', gap: 10, alignItems: 'stretch' }}>
           {[
             { label: 'Net Revenue', value: fmt(netRev), sub: 'Ex. return & cancellation', badge: fcChgBadge(netRev, fcPrevNetRev) },
             { label: 'GST', value: fmt(gstCollected), sub: `${rev > 0 ? ((gstCollected/rev)*100).toFixed(1) : 0}% of gross rev`, badge: fcChgBadge(gstCollected, fcPrevGstCollected) },
@@ -8994,8 +9291,8 @@ function MyntraTab({ data }) {
     <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
 
       {/* KPI Hero + grid */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1.5fr 5fr', gap: 10, alignItems: 'stretch' }}>
-        <div className="kpi-card" style={{ display: 'flex', flexDirection: 'column', gap: 8, padding: '16px 18px' }}>
+      <div className="sales-kpi-section" style={{ display: 'grid', gridTemplateColumns: '1.5fr 5fr', gap: 10, alignItems: 'stretch' }}>
+        <div className="kpi-card sales-kpi-hero" style={{ display: 'flex', flexDirection: 'column', gap: 8, padding: '16px 18px' }}>
           <div className="kpi-label" style={{ fontSize: 11 }}>Gross Revenue Inc GST</div>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 6 }}>
             <div className="kpi-value" style={{ fontSize: 32, fontWeight: 800 }}>{fmt(rev)}</div>
@@ -9013,7 +9310,7 @@ function MyntraTab({ data }) {
             </ResponsiveContainer>
           </div>
         </div>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gridTemplateRows: 'repeat(2, 1fr)', gap: 10, alignItems: 'stretch' }}>
+        <div className="sales-kpi-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gridTemplateRows: 'repeat(2, 1fr)', gap: 10, alignItems: 'stretch' }}>
           {[
             { label: 'Net Revenue', value: fmt(netRev), sub: 'Ex. return & cancellation', badge: chgBadge(netRev, prevNetRev) },
             { label: 'GST', value: fmt(gstCollected), sub: `${rev > 0 ? ((gstCollected/rev)*100).toFixed(1) : 0}% of gross rev`, badge: chgBadge(gstCollected, prevGstCollected) },
@@ -9129,13 +9426,6 @@ function MyntraTab({ data }) {
     </div>
   )
 }
-
-const OFFLINE_SUB_OPTIONS = [
-  { id: 'all', label: 'Overall' },
-  { id: 'b2b', label: 'B2B' },
-  { id: 'Stockist', label: 'Stockist' },
-  { id: 'MTGT', label: 'MT GT' },
-]
 
 // Offline's Overall/B2B/Stockist/MT GT toggle — extracted so SalesPage can render it on the
 // shared filter-bar row, same pattern as D2CSubChannelToggle/AmazonChannelViewToggle. sub/setSub
@@ -9340,8 +9630,8 @@ function OfflineTab({ data, sub, setSub }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
       {/* KPI Hero + grid */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1.5fr 5fr', gap: 10, alignItems: 'stretch' }}>
-        <div className="kpi-card" style={{ display: 'flex', flexDirection: 'column', gap: 8, padding: '16px 18px' }}>
+      <div className="sales-kpi-section" style={{ display: 'grid', gridTemplateColumns: '1.5fr 5fr', gap: 10, alignItems: 'stretch' }}>
+        <div className="kpi-card sales-kpi-hero" style={{ display: 'flex', flexDirection: 'column', gap: 8, padding: '16px 18px' }}>
           <div className="kpi-label" style={{ fontSize: 11 }}>Gross Revenue Inc GST{subLabel}</div>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 6 }}>
             <div className="kpi-value" style={{ fontSize: 32, fontWeight: 800 }}>{fmt(rev)}</div>
@@ -9359,7 +9649,7 @@ function OfflineTab({ data, sub, setSub }) {
             </ResponsiveContainer>
           </div>
         </div>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gridTemplateRows: 'repeat(2, 1fr)', gap: 10, alignItems: 'stretch' }}>
+        <div className="sales-kpi-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gridTemplateRows: 'repeat(2, 1fr)', gap: 10, alignItems: 'stretch' }}>
           {[
             { label: 'Net Revenue', value: fmt(netRev), sub: 'Ex. credit notes', badge: chgBadge(netRev, prevNetRev) },
             { label: 'GST', value: fmt(gstCollected), sub: 'On net sales', badge: chgBadge(gstCollected, (prevGrossRev - prevCnRev) - prevNetRev) },
@@ -9525,6 +9815,7 @@ function ChannelTab({ data, channel, filters, setFilters, channelView, setChanne
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+      <div className="sales-channel-kpis">
       <div className="g-kpi5">
         <KPICard label="Revenue" value={fmt(rev)} />
         <KPICard label="Orders" value={fmtN(nOrders)} />
@@ -9536,6 +9827,7 @@ function ChannelTab({ data, channel, filters, setFilters, channelView, setChanne
         <KPICard label="Revenue per Unit" value={`₹${Math.round(revPerUnit).toLocaleString('en-IN')}`} sub="Avg price per SKU" />
         <KPICard label="Revenue at Risk" value={channel === 'Shopify' ? fmt(chRTORev) : 'N/A'} sub="RTO + Cancelled + CIR" accent={chRTORev > 0 ? '#7A4000' : undefined} />
         <KPICard label="Units per Order" value={upo.toFixed(2)} sub="Avg basket size" />
+      </div>
       </div>
       <div className="g-2">
         <Card title={`${channel} Daily Revenue`}>
@@ -9689,15 +9981,8 @@ function FilterIconPopover({ children, activeCount }) {
   )
 }
 
-function SalesPage({ data, filters, setFilters, activeTab, setActiveTab, fetchData }) {
+function SalesPage({ data, filters, setFilters, activeTab, setActiveTab, fetchData, channelView, setChannelView, offlineSub, setOfflineSub }) {
   const filteredData = data
-  // Amazon's Overall/Seller Central/Vendor Central toggle — lifted here (was local useState
-  // inside AmazonTab) so both the toggle (rendered on this shared bar) and AmazonTab's content
-  // read from the same source of truth. Resets to 'all' on tab switch, same as filters.subChannel.
-  const [channelView, setChannelView] = useState('all')
-  // Offline's Overall/B2B/Stockist/MT GT toggle — same lift pattern as channelView above (was
-  // local useState inside OfflineTab before).
-  const [offlineSub, setOfflineSub] = useState('all')
 
   const cats = useMemo(() => Object.keys(data?.catMap || {}).filter(Boolean).sort(), [data])
   const subCats = useMemo(() => {
@@ -12857,6 +13142,8 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
   const def = getDefaultDates()
   const [filters, setFilters] = useState({ start: def.start, end: def.end, category: [], subCategory: [], sku: [], subChannel: '', voucher: '', region: [], tier: [], state: [], city: '', channelGroup: [] })
   const [activeTab, setActiveTab] = useState('all')
+  const [salesChannelView, setSalesChannelView] = useState('all')
+  const [salesOfflineSub, setSalesOfflineSub] = useState('all')
   const [rawRows, setRawRows] = useState(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
@@ -12942,7 +13229,7 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
     <div className="app-shell">
       <Sidebar page={page} setPage={setPage} invTab={invTab} setInvTab={setInvTab} allowedTabs={allowedTabs} profile={profile} />
       <div className="app-main">
-        <Topnav page={page} customerTab={customerTab} invTab={invTab} setInvTab={setInvTab} alerts={alerts} onRefresh={() => { const { start, end, category, subCategory, sku, subChannel, voucher, region, tier, state, city, country } = filters; const e = {}; if (category?.length) e.category = category.join(','); if (subCategory?.length) e.subCategory = subCategory.join(','); if (sku?.length) e.sku = sku.join(','); if (subChannel) e.subChannel = subChannel; if (voucher) e.voucher = voucher; if (region?.length) e.region = region.join(','); if (tier?.length) e.tier = tier.join(','); if (state?.length) e.state = state.join(','); if (city) e.city = city; if (country) e.country = country; fetchData(start, end, e) }} loading={loading} filters={filters} setFilters={setFilters} rawRows={rawRows} inventoryDateControl={inventoryDateControl} />
+        <Topnav page={page} customerTab={customerTab} invTab={invTab} setInvTab={setInvTab} alerts={alerts} onRefresh={() => { const { start, end, category, subCategory, sku, subChannel, voucher, region, tier, state, city, country } = filters; const e = {}; if (category?.length) e.category = category.join(','); if (subCategory?.length) e.subCategory = subCategory.join(','); if (sku?.length) e.sku = sku.join(','); if (subChannel) e.subChannel = subChannel; if (voucher) e.voucher = voucher; if (region?.length) e.region = region.join(','); if (tier?.length) e.tier = tier.join(','); if (state?.length) e.state = state.join(','); if (city) e.city = city; if (country) e.country = country; fetchData(start, end, e) }} loading={loading} filters={filters} setFilters={setFilters} rawRows={rawRows} inventoryDateControl={inventoryDateControl} salesActiveTab={activeTab} setSalesActiveTab={setActiveTab} salesData={data} salesChannelView={salesChannelView} setSalesChannelView={setSalesChannelView} salesOfflineSub={salesOfflineSub} setSalesOfflineSub={setSalesOfflineSub} />
         {(loading || inventoryDateControl?.loading) && (
           <div style={{ height: 2, background: C.border, flexShrink: 0 }}>
             <div className="progress-bar" style={{ height: '100%', background: C.acc }} />
@@ -12973,7 +13260,7 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
               <OverviewPage data={data} alerts={alerts} logisticsData={logisticsData} filters={filters} />
             </div>
           )}
-          {page === 'sales' && data && (!allowedTabs || allowedTabs.includes('sales')) && <SalesPage data={data} filters={filters} setFilters={setFilters} activeTab={activeTab} setActiveTab={setActiveTab} fetchData={fetchData} />}
+          {page === 'sales' && data && (!allowedTabs || allowedTabs.includes('sales')) && <SalesPage data={data} filters={filters} setFilters={setFilters} activeTab={activeTab} setActiveTab={setActiveTab} fetchData={fetchData} channelView={salesChannelView} setChannelView={setSalesChannelView} offlineSub={salesOfflineSub} setOfflineSub={setSalesOfflineSub} />}
           {page === 'pnl' && data && <PnLPage data={data} filters={filters} setFilters={setFilters} />}
           {page === 'ads' && data && (!allowedTabs || allowedTabs.includes('ads')) && (
             <div className="page-scroll">

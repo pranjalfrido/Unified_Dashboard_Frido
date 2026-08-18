@@ -235,8 +235,9 @@ html,body{height:100%;background:var(--bg);font-family:var(--font);color:var(--t
   /* Tables scroll horizontally */
   .tbl-wrap{ overflow-x:auto;-webkit-overflow-scrolling:touch }
 
-  /* Sales tabs always scrollable */
-  .stab{ font-size:11px;height:28px }
+  /* Sales tabs + filter bar hidden on mobile — moved into hamburger popover */
+  .sales-tabs{ display:none !important }
+  .fbar{ display:none !important }
 
   /* Intel cards full width */
   .intel-row{ grid-template-columns:1fr !important }
@@ -325,6 +326,60 @@ html,body{height:100%;background:var(--bg);font-family:var(--font);color:var(--t
 
   /* Sub-tab switcher handled by bottom nav popup — hide the inline one on mobile */
   .inv-mobile-subtabs{ display:none !important }
+
+  /* ── Sales KPI carousel on mobile ────────────────────────────────────────── */
+  /* Outer hero+grid wrapper: stack vertically */
+  .sales-kpi-section{ display:flex !important; flex-direction:column !important; gap:10px !important }
+
+  /* Hero card: fixed height so sparkline renders */
+  .sales-kpi-hero{ height:auto !important }
+  .sales-kpi-hero > div:last-child{ flex:none !important; height:70px !important }
+
+  /* Right KPI grid → horizontal scroll carousel */
+  .sales-kpi-grid{
+    display:flex !important;
+    flex-direction:row !important;
+    overflow-x:auto !important;
+    scroll-snap-type:x mandatory !important;
+    -webkit-overflow-scrolling:touch !important;
+    gap:10px !important;
+    padding-bottom:4px !important;
+    scrollbar-width:none !important;
+    grid-template-columns:unset !important;
+    grid-template-rows:unset !important;
+  }
+  .sales-kpi-grid::-webkit-scrollbar{ display:none !important }
+  .sales-kpi-grid > *{
+    flex:0 0 44vw !important;
+    min-width:44vw !important;
+    max-width:44vw !important;
+    scroll-snap-align:start !important;
+    align-self:stretch !important;
+    height:auto !important;
+  }
+
+  /* ChannelTab generic .g-kpi5 / .g-kpi3 → carousel on mobile */
+  .sales-channel-kpis .g-kpi5,
+  .sales-channel-kpis .g-kpi3{
+    display:flex !important;
+    flex-direction:row !important;
+    overflow-x:auto !important;
+    scroll-snap-type:x mandatory !important;
+    -webkit-overflow-scrolling:touch !important;
+    gap:10px !important;
+    padding-bottom:4px !important;
+    scrollbar-width:none !important;
+    grid-template-columns:unset !important;
+  }
+  .sales-channel-kpis .g-kpi5::-webkit-scrollbar,
+  .sales-channel-kpis .g-kpi3::-webkit-scrollbar{ display:none !important }
+  .sales-channel-kpis .g-kpi5 > *,
+  .sales-channel-kpis .g-kpi3 > *{
+    flex:0 0 44vw !important;
+    min-width:44vw !important;
+    max-width:44vw !important;
+    scroll-snap-align:start !important;
+  }
 }
 
 /* ══════════════════════════════════════════════
