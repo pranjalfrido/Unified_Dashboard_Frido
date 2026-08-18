@@ -146,7 +146,7 @@ function LKpiCard({ label, value, badgeText, badgeVariant, subValue, cur, prev, 
     ? <span style={{ fontSize: tight ? 9 : 10, fontWeight: 700, padding: tight ? '1px 4px' : '2px 6px', borderRadius: 4, background: chg >= 0 ? C.green.bg : C.red.bg, color: chg >= 0 ? C.green.tx : C.red.tx, flexShrink: 0 }}>{chg >= 0 ? '▲' : '▼'} {Math.abs(chg).toFixed(1)}%</span>
     : badgeText ? <span className={`bdg bdg-${bv}`} style={{ fontSize: tight ? 9 : 10, flexShrink: 0 }}>{badgeText}</span> : null
   return (
-    <div className="kpi-card" style={{ display: 'flex', flexDirection: 'column', gap: 0, padding: tight ? '7px 6px' : '7px 10px' }}>
+    <div className="kpi-card" style={{ display: 'flex', flexDirection: 'column', gap: 0, padding: tight ? '5px 6px' : '7px 10px' }}>
       <div className="kpi-label" style={{ marginBottom: 2 }}>{label}</div>
       {compact ? (
         <>
@@ -698,7 +698,7 @@ function LogisticsPage({ filters }) {
           // Desktop: hero card left + 2×6 grid right
           <div style={{ display: 'grid', gridTemplateColumns: filterSidebarOpen ? '200px 1fr' : '230px 1fr', gap: 10, alignItems: 'stretch' }}>
             {/* Hero card */}
-            <div className="kpi-card" style={{ display: 'flex', flexDirection: 'column', gap: 8, padding: '16px 18px' }}>
+            <div className="kpi-card" style={{ display: 'flex', flexDirection: 'column', gap: filterSidebarOpen ? 4 : 8, padding: filterSidebarOpen ? '10px 14px' : '16px 18px' }}>
               <div className="kpi-label" style={{ fontSize: 10 }}>Total Shipments</div>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 6 }}>
                 <div className="kpi-value" style={{ fontSize: 30, fontWeight: 800, letterSpacing: '-0.5px' }}>{n(k.total_shipments)}</div>
