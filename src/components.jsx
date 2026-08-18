@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import { C, fmt, fmtN, pct } from './utils.js'
 import { BarChart, Bar, LineChart, Line, AreaChart, Area, ComposedChart, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell, Treemap } from 'recharts'
 
@@ -112,22 +112,30 @@ export function CategoryRevenueCard({ catRows, subCatRows, skuMap, totalRev, vie
   )
 }
 
-export function DataTable({ columns, rows, maxRows = 50 }) {
+// storageKey: identifies this table instance for persisted column order — pass something unique
+// per call site (e.g. the table's title/section name). Falls back to a key derived from the
+// column set if omitted, so an existing caller that hasn't been updated yet still gets a stable
+// (if less human-readable) storage key rather than colliding with every other unkeyed DataTable.
+export function DataTable({ columns, rows, maxRows = 50, storageKey }) {
   const visible = rows.slice(0, maxRows)
+  const key = storageKey || `datatable-cols:${columns.map(c => c.key).join(',')}`
+  const idColumns = columns.map(c => ({ id: c.key, ...c }))
+  const reorder = useReorderableColumns(key, idColumns)
   return (
     <div className="overflow-x-auto">
       <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
         <thead>
           <tr>
-            {columns.map(c => (
-              <th key={c.key + c.label} style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.05em', color: C.t3, textAlign: c.align === 'right' ? 'right' : 'left', padding: '3px 5px 7px', borderBottom: `1px solid ${C.border}` }}>{c.label}</th>
+            {reorder.orderedColumns.map(c => (
+              <th key={c.key + c.label} draggable onDragStart={reorder.onDragStart(c.id)} onDragOver={reorder.onDragOver} onDrop={reorder.onDrop(c.id)}
+                style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.05em', color: C.t3, textAlign: c.align === 'right' ? 'right' : 'left', padding: '3px 5px 7px', borderBottom: `1px solid ${C.border}`, cursor: 'grab', userSelect: 'none' }}>{c.label}</th>
             ))}
           </tr>
         </thead>
         <tbody>
           {visible.map((r, i) => (
             <tr key={i} style={{ borderBottom: i < visible.length - 1 ? `1px solid ${C.border}` : 'none' }} onMouseEnter={e => e.currentTarget.style.background = '#FFFBE6'} onMouseLeave={e => e.currentTarget.style.background = ''}>
-              {columns.map(c => (
+              {reorder.orderedColumns.map(c => (
                 <td key={c.key + c.label} style={{ padding: i < visible.length - 1 ? '5.5px 5px' : '5.5px 5px 14px', color: c.align === 'right' ? C.t1 : C.t2, textAlign: c.align === 'right' ? 'right' : 'left', fontFamily: c.mono ? 'var(--mono)' : 'inherit', fontSize: c.mono ? 11.5 : 12, whiteSpace: 'nowrap' }}>
                   {c.render ? c.render(r[c.key], r) : r[c.key]}
                 </td>
@@ -329,6 +337,65 @@ export function TrendAnalysisCard({ title, daily, grossColor, grossGradId, revKe
 // (desc first, then asc on repeat click), used by every matrix/leaderboard table across
 // Sales/Ads/PnL tabs. `getters` maps sortKey -> row accessor so callers don't need to
 // pre-flatten rows into a single sortable shape.
+// Drag-to-reorder table columns, persisted to localStorage per table (keyed by `storageKey`) so
+// a user's custom order survives refreshes/future visits. `columns` is the table's full,
+// canonical column-id list in DEFAULT order — passed fresh on every render (it's fine for this
+// to be a new array each time, only the ids are used as the identity). Returns the CURRENT
+// order (validated against `columns` so a stale saved order from a since-changed column set
+// never produces missing/duplicate/unknown ids) plus drag handlers to spread onto each header
+// cell. Reordering only ever changes DISPLAY order — callers still key all cell/sort logic by
+// column id, so no per-column rendering code needs to change to support this.
+export function useReorderableColumns(storageKey, columns) {
+  const defaultOrder = columns.map(c => c.id)
+  const [order, setOrder] = useState(() => {
+    try {
+      const saved = JSON.parse(localStorage.getItem(storageKey) || 'null')
+      if (!Array.isArray(saved)) return defaultOrder
+      // Validate: every id in the saved order must exist in the current column set, and every
+      // current column must appear somewhere — otherwise fall back to default. This is what
+      // keeps a saved order from a previous app version from silently hiding/duplicating columns
+      // after a table's column set changes.
+      const savedSet = new Set(saved)
+      const defaultSet = new Set(defaultOrder)
+      if (saved.length !== defaultOrder.length) return defaultOrder
+      if (!saved.every(id => defaultSet.has(id))) return defaultOrder
+      if (!defaultOrder.every(id => savedSet.has(id))) return defaultOrder
+      return saved
+    } catch { return defaultOrder }
+  })
+  const dragId = useRef(null)
+
+  const persist = next => {
+    setOrder(next)
+    try { localStorage.setItem(storageKey, JSON.stringify(next)) } catch { /* storage unavailable — order still holds for this session via state */ }
+  }
+
+  const onDragStart = id => e => {
+    dragId.current = id
+    e.dataTransfer.effectAllowed = 'move'
+  }
+  const onDragOver = e => e.preventDefault()
+  const onDrop = id => e => {
+    e.preventDefault()
+    const from = dragId.current
+    if (from == null || from === id) return
+    const next = [...order]
+    const fromIdx = next.indexOf(from)
+    const toIdx = next.indexOf(id)
+    if (fromIdx === -1 || toIdx === -1) return
+    next.splice(fromIdx, 1)
+    next.splice(toIdx, 0, from)
+    persist(next)
+    dragId.current = null
+  }
+  const resetOrder = () => persist(defaultOrder)
+
+  const orderedColumns = order.map(id => columns.find(c => c.id === id)).filter(Boolean)
+  const isDefaultOrder = order.length === defaultOrder.length && order.every((id, i) => id === defaultOrder[i])
+
+  return { orderedColumns, onDragStart, onDragOver, onDrop, resetOrder, isDefaultOrder }
+}
+
 export function useSortableTable(defaultKey = null, defaultDir = 'desc') {
   const [sort, setSort] = useState(defaultKey ? { key: defaultKey, dir: defaultDir } : null)
   const onSort = key => setSort(prev => prev?.key === key ? { key, dir: prev.dir === 'asc' ? 'desc' : 'asc' } : { key, dir: 'desc' })
@@ -342,9 +409,13 @@ export function useSortableTable(defaultKey = null, defaultDir = 'desc') {
       return sign * ((av ?? -Infinity) - (bv ?? -Infinity))
     })
   }
-  const Th = ({ label, sortKey, style, align = 'right', children }) => (
-    <th onClick={() => onSort(sortKey)}
-      style={{ ...style, textAlign: align, cursor: 'pointer', userSelect: 'none', whiteSpace: 'nowrap', color: sort?.key === sortKey ? C.t1 : (style?.color ?? C.t1), position: style?.position || 'relative' }}>
+  // dragProps: optional {onDragStart, onDragOver, onDrop} from useReorderableColumns, spread
+  // onto this <th> so the whole header becomes the drag handle (no separate grip icon — the
+  // header itself stays clickable for sort; native HTML5 drag only engages on an actual
+  // press-and-move gesture, so it doesn't fight with a plain click).
+  const Th = ({ label, sortKey, style, align = 'right', children, dragProps }) => (
+    <th onClick={() => onSort(sortKey)} draggable={!!dragProps} {...dragProps}
+      style={{ ...style, textAlign: align, cursor: dragProps ? 'grab' : 'pointer', userSelect: 'none', whiteSpace: 'nowrap', color: sort?.key === sortKey ? C.t1 : (style?.color ?? C.t1), position: style?.position || 'relative' }}>
       {label}{sort?.key === sortKey ? (sort.dir === 'asc' ? ' ▲' : ' ▼') : ''}
       {children}
     </th>
