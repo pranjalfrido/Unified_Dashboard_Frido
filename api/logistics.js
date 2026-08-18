@@ -412,19 +412,76 @@ rto_reasons AS (
 ),
 top_drop_states AS (
   SELECT courier_group,
-    CONCAT(UPPER(SUBSTR(drop_state,1,1)), LOWER(SUBSTR(drop_state,2))) AS state,
+    CASE UPPER(TRIM(drop_state))
+      WHEN 'MAHARASHTRA' THEN 'Maharashtra' WHEN 'MH' THEN 'Maharashtra'
+      WHEN 'KARNATAKA' THEN 'Karnataka' WHEN 'KA' THEN 'Karnataka'
+      WHEN 'UTTAR PRADESH' THEN 'Uttar Pradesh' WHEN 'UP' THEN 'Uttar Pradesh'
+      WHEN 'GUJARAT' THEN 'Gujarat'
+      WHEN 'DELHI' THEN 'Delhi' WHEN 'DL' THEN 'Delhi' WHEN 'NEW DELHI' THEN 'Delhi'
+      WHEN 'TELANGANA' THEN 'Telangana' WHEN 'TL' THEN 'Telangana'
+      WHEN 'TAMIL NADU' THEN 'Tamil Nadu' WHEN 'TAMILNADU' THEN 'Tamil Nadu' WHEN 'TN' THEN 'Tamil Nadu'
+      WHEN 'HARYANA' THEN 'Haryana'
+      WHEN 'RAJASTHAN' THEN 'Rajasthan'
+      WHEN 'WEST BENGAL' THEN 'West Bengal'
+      WHEN 'PUNJAB' THEN 'Punjab'
+      WHEN 'MADHYA PRADESH' THEN 'Madhya Pradesh'
+      WHEN 'KERALA' THEN 'Kerala'
+      WHEN 'ANDHRA PRADESH' THEN 'Andhra Pradesh'
+      WHEN 'ODISHA' THEN 'Odisha'
+      WHEN 'BIHAR' THEN 'Bihar'
+      WHEN 'ASSAM' THEN 'Assam'
+      WHEN 'CHHATTISGARH' THEN 'Chhattisgarh'
+      WHEN 'JAMMU & KASHMIR' THEN 'Jammu & Kashmir' WHEN 'JAMMU AND KASHMIR' THEN 'Jammu & Kashmir'
+      WHEN 'UTTARAKHAND' THEN 'Uttarakhand' WHEN 'UTTARANCHAL' THEN 'Uttarakhand'
+      WHEN 'JHARKHAND' THEN 'Jharkhand'
+      WHEN 'HIMACHAL PRADESH' THEN 'Himachal Pradesh'
+      WHEN 'CHANDIGARH' THEN 'Chandigarh'
+      ELSE CONCAT(UPPER(SUBSTR(TRIM(drop_state),1,1)), LOWER(SUBSTR(TRIM(drop_state),2)))
+    END AS state,
     COUNT(awb) AS total
   FROM base WHERE drop_state IS NOT NULL AND drop_state != '' GROUP BY 1, 2
 ),
 top_drop_cities AS (
   SELECT courier_group,
-    CONCAT(UPPER(SUBSTR(drop_city,1,1)), LOWER(SUBSTR(drop_city,2))) AS city,
+    CASE UPPER(TRIM(drop_city))
+      WHEN 'BANGALORE' THEN 'Bengaluru' WHEN 'BENGALURU' THEN 'Bengaluru'
+      WHEN 'BANGLORE' THEN 'Bengaluru' WHEN 'BANGALURU' THEN 'Bengaluru'
+      WHEN 'BENGALORE' THEN 'Bengaluru' WHEN 'BANGALORE,' THEN 'Bengaluru'
+      WHEN 'BANGALORE NORTH' THEN 'Bengaluru' WHEN 'BANGALORE SOUTH' THEN 'Bengaluru'
+      WHEN 'BANGALORE EAST' THEN 'Bengaluru' WHEN 'BANGALORE WEST' THEN 'Bengaluru'
+      WHEN 'BANGALORE RURAL' THEN 'Bengaluru' WHEN 'BANGALORE URBAN' THEN 'Bengaluru'
+      WHEN 'BANGALORE NORTH,' THEN 'Bengaluru' WHEN 'BANGALORE SOUTH,' THEN 'Bengaluru'
+      WHEN 'BANGALORE EAST,' THEN 'Bengaluru' WHEN 'BENGALURU RURAL' THEN 'Bengaluru'
+      WHEN 'BENGALURU URBAN' THEN 'Bengaluru'
+      WHEN 'DELHI' THEN 'Delhi' WHEN 'NEW DELHI' THEN 'Delhi'
+      WHEN 'MUMBAI' THEN 'Mumbai' WHEN 'BOMBAY' THEN 'Mumbai'
+      WHEN 'GURUGRAM' THEN 'Gurugram' WHEN 'GURGAON' THEN 'Gurugram'
+      WHEN 'KOLKATA' THEN 'Kolkata' WHEN 'CALCUTTA' THEN 'Kolkata'
+      WHEN 'PUNE' THEN 'Pune' WHEN 'HYDERABAD' THEN 'Hyderabad'
+      WHEN 'CHENNAI' THEN 'Chennai' WHEN 'MADRAS' THEN 'Chennai'
+      WHEN 'THANE' THEN 'Thane' WHEN 'AHMEDABAD' THEN 'Ahmedabad'
+      WHEN 'SURAT' THEN 'Surat'
+      ELSE CONCAT(UPPER(SUBSTR(TRIM(drop_city),1,1)), LOWER(SUBSTR(TRIM(drop_city),2)))
+    END AS city,
     COUNT(awb) AS total
   FROM base WHERE drop_city IS NOT NULL AND drop_city != '' GROUP BY 1, 2
 ),
 top_pickup_cities AS (
   SELECT courier_group,
-    CONCAT(UPPER(SUBSTR(pickup_city,1,1)), LOWER(SUBSTR(pickup_city,2))) AS city,
+    CASE UPPER(TRIM(pickup_city))
+      WHEN 'BANGALORE' THEN 'Bengaluru'
+      WHEN 'BENGALURU' THEN 'Bengaluru'
+      WHEN 'BANGLORE' THEN 'Bengaluru'
+      WHEN 'DELHI' THEN 'Delhi'
+      WHEN 'NEW DELHI' THEN 'Delhi'
+      WHEN 'MUMBAI' THEN 'Mumbai'
+      WHEN 'BOMBAY' THEN 'Mumbai'
+      WHEN 'GURUGRAM' THEN 'Gurugram'
+      WHEN 'GURGAON' THEN 'Gurugram'
+      WHEN 'KOLKATA' THEN 'Kolkata'
+      WHEN 'CALCUTTA' THEN 'Kolkata'
+      ELSE CONCAT(UPPER(SUBSTR(TRIM(pickup_city),1,1)), LOWER(SUBSTR(TRIM(pickup_city),2)))
+    END AS city,
     COUNT(awb) AS total
   FROM base WHERE pickup_city IS NOT NULL AND pickup_city != '' GROUP BY 1, 2
 ),

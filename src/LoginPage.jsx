@@ -121,9 +121,9 @@ export default function LoginPage({ onLogin }) {
 
   return (
     <div style={s.page}>
-      <div style={s.shell}>
-        {/* Left brand panel */}
-        <div style={s.side}>
+      <div style={s.shell} className="login-shell">
+        {/* Left brand panel — hidden on mobile */}
+        <div style={s.side} className="login-side">
           <div style={s.grain} />
           <div style={s.brandmark}>
             <img src="/frido-logo.png" alt="Frido" style={{ width: 38, height: 38, borderRadius: 9, objectFit: 'cover' }} onError={e => { e.target.style.display = 'none' }} />
@@ -157,8 +157,15 @@ export default function LoginPage({ onLogin }) {
         </div>
 
         {/* Right form panel */}
-        <div style={s.formSide}>
-          <div style={{ fontSize: 12.5, color: '#7A8079', marginBottom: 40 }}></div>
+        <div style={s.formSide} className="login-form-side">
+          {/* Mobile-only brand header */}
+          <div style={s.mobileBrand} className="login-mobile-brand">
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 6 }}>
+              <img src="/frido-logo.png" alt="Frido" style={{ width: 36, height: 36, borderRadius: 8, objectFit: 'cover' }} onError={e => { e.target.style.display = 'none' }} />
+              <span style={{ fontFamily: "'Baloo 2', sans-serif", fontWeight: 700, fontSize: 22, color: '#2F6A45' }}>frido</span>
+            </div>
+            <div style={{ fontSize: 10.5, fontWeight: 800, letterSpacing: '0.12em', textTransform: 'uppercase', color: '#D9612E' }}>Freedom To Do More</div>
+          </div>
 
           {forgotMode ? (
             <ForgotPassword prefillEmail={email} onBack={() => setForgotMode(false)} />
@@ -208,14 +215,25 @@ export default function LoginPage({ onLogin }) {
           )}
         </div>
       </div>
-      <style>{`@import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=Manrope:wght@400;500;600;700;800&family=Baloo+2:wght@600;700&display=swap');`}</style>
+      <style>{`
+        @import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=Manrope:wght@400;500;600;700;800&family=Baloo+2:wght@600;700&display=swap');
+        .login-side { display: block }
+        .login-mobile-brand { display: none }
+        @media (max-width: 640px) {
+          .login-shell { grid-template-columns: 1fr !important; }
+          .login-side { display: none !important; }
+          .login-mobile-brand { display: block !important; }
+          .login-form-side { padding: 32px 24px !important; justify-content: flex-start !important; }
+        }
+      `}</style>
     </div>
   )
 }
 
 const s = {
-  page: { fontFamily: "'Manrope', sans-serif", background: '#F5F1E8', minHeight: '100vh', display: 'grid', placeItems: 'center', padding: 32 },
+  page: { fontFamily: "'Manrope', sans-serif", background: '#F5F1E8', minHeight: '100vh', display: 'grid', placeItems: 'center', padding: '24px 16px' },
   shell: { width: '100%', maxWidth: 1040, minHeight: 640, background: '#FFFFFF', borderRadius: 28, display: 'grid', gridTemplateColumns: '1.05fr 1fr', overflow: 'hidden', boxShadow: '0 30px 80px -30px rgba(23,33,28,0.25)' },
+  mobileBrand: { display: 'none', marginBottom: 28 },
   side: { position: 'relative', background: '#2F6A45', color: '#F5F1E8', padding: '48px 44px', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', overflow: 'hidden' },
   grain: { position: 'absolute', inset: 0, background: 'radial-gradient(circle at 78% 8%, rgba(255,255,255,0.06), transparent 40%), radial-gradient(circle at 8% 100%, rgba(217,97,46,0.25), transparent 45%)', pointerEvents: 'none' },
   brandmark: { position: 'relative', zIndex: 2, display: 'flex', alignItems: 'center', gap: 11 },

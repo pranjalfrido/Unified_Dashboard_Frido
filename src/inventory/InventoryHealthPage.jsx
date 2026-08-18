@@ -1,7 +1,184 @@
-import React, { useState, useMemo, useRef, useEffect } from 'react'
+import React, { useState, useMemo, useRef, useEffect, useCallback, Children } from 'react'
 import {
   IC, fmtNum, fmtInt, fmtDays, GlassCard, KpiTile, StatusChip, SearchableMultiSelect, DraggableTh, ExportButton,
 } from './theme.jsx'
+
+// Mobile: horizontal swipe carousel with header + dots. Desktop: normal 7-col grid.
+function KpiCarousel({ children }) {
+  const count = Children.count(children)
+  const scrollRef = useRef(null)
+  const [activeIdx, setActiveIdx] = useState(0)
+
+  const onScroll = useCallback(() => {
+    const el = scrollRef.current
+    if (!el) return
+    const cardW = 160 + 10 // card width + gap
+    setActiveIdx(Math.min(count - 1, Math.round(el.scrollLeft / cardW)))
+  }, [count])
+
+  useEffect(() => {
+    const el = scrollRef.current
+    if (!el) return
+    el.addEventListener('scroll', onScroll, { passive: true })
+    return () => el.removeEventListener('scroll', onScroll)
+  }, [onScroll])
+
+  return (
+    <>
+      {/* Mobile carousel — shown via CSS */}
+      <div className="inv-kpi-carousel-wrap" style={{ display: 'none' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+          <span style={{ fontWeight: 700, fontSize: 14, color: IC.t1 }}>Key Metrics</span>
+          <span style={{ fontSize: 11, color: IC.t3 }}>{count} tiles · swipe →</span>
+        </div>
+        <div ref={scrollRef} className="inv-kpi-grid" style={{ display: 'flex', gap: 10 }}>
+          {children}
+        </div>
+        <div style={{ display: 'flex', justifyContent: 'center', gap: 5, marginTop: 10 }}>
+          {Array.from({ length: count }).map((_, i) => (
+            <div key={i} style={{ width: i === activeIdx ? 16 : 6, height: 6, borderRadius: 3, background: i === activeIdx ? '#FFD600' : '#C7C7CE', transition: 'all .2s' }} />
+          ))}
+        </div>
+      </div>
+      {/* Desktop grid */}
+      <div className="inv-kpi-desktop-grid" style={{ display: 'grid', gridTemplateColumns: `repeat(${count}, minmax(0, 1fr))`, gap: 10, alignItems: 'stretch' }}>
+        {children}
+      </div>
+    </>
+  )
+}
+
+// Mobile: horizontal swipe carousel for Warehouse Health. Desktop: GlassCard grid.
+function WhCarousel({ locations, filters }) {
+  const count = locations.length
+  const scrollRef = useRef(null)
+  const [activeIdx, setActiveIdx] = useState(0)
+
+  const onScroll = useCallback(() => {
+    const el = scrollRef.current
+    if (!el) return
+    const cardW = 180 + 8
+    setActiveIdx(Math.min(count - 1, Math.round(el.scrollLeft / cardW)))
+  }, [count])
+
+  useEffect(() => {
+    const el = scrollRef.current
+    if (!el) return
+    el.addEventListener('scroll', onScroll, { passive: true })
+    return () => el.removeEventListener('scroll', onScroll)
+  }, [onScroll])
+
+  const cards = locations.map(loc => (
+    <WarehouseCard key={loc.location} loc={loc} selected={filters.location?.length > 0 && filters.location.includes(loc.location)} />
+  ))
+
+  return (
+    <>
+      {/* Mobile carousel */}
+      <div className="inv-wh-carousel-wrap" style={{ display: 'none' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+          <span style={{ fontWeight: 700, fontSize: 14, color: IC.t1 }}>Warehouse Health</span>
+          <span style={{ fontSize: 11, color: IC.t3 }}>{count} locations · swipe →</span>
+        </div>
+        <div ref={scrollRef} className="inv-wh-grid-mob" style={{ display: 'flex', gap: 8, overflowX: 'auto', scrollSnapType: 'x mandatory', WebkitOverflowScrolling: 'touch', paddingBottom: 4, scrollbarWidth: 'none' }}>
+          {cards}
+        </div>
+        <div style={{ display: 'flex', justifyContent: 'center', gap: 5, marginTop: 10 }}>
+          {Array.from({ length: count }).map((_, i) => (
+            <div key={i} style={{ width: i === activeIdx ? 16 : 6, height: 6, borderRadius: 3, background: i === activeIdx ? '#FFD600' : '#C7C7CE', transition: 'all .2s' }} />
+          ))}
+        </div>
+      </div>
+      {/* Desktop GlassCard grid */}
+      <div className="inv-wh-desktop-wrap">
+        <GlassCard title="Warehouse Health" note={`${count} locations`}>
+          <div className="inv-wh-grid" style={{ display: 'grid', gridTemplateColumns: `repeat(${Math.max(count, 1)}, 1fr)`, gap: 8 }}>
+            {cards}
+          </div>
+        </GlassCard>
+      </div>
+    </>
+  )
+}
+
+// Mobile inventory detail table — sticky Product ID, scrolled to right on mount so
+// Inventory/Avg Sale/DOI are visible by default; Sub-cat revealed by scrolling left.
+const MobDetailTable = React.memo(function MobDetailTable({ filteredSkus, tableTotals, expandedSku, setExpandedSku, TABLE_SCROLL_HEIGHT }) {
+  const scrollRef = useRef(null)
+  useEffect(() => {
+    if (scrollRef.current) scrollRef.current.scrollLeft = 250
+  }, [])
+
+  const P = '5px 6px'
+  const W = { sku: 139, sub: 250, inv: 68, avg: 65, doi: 50 }
+  const ths = IC.t3, th1 = IC.t1, th2 = IC.t2
+  const nb = { whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }
+  const stickyTd = (bg) => ({ position: 'sticky', left: 0, zIndex: 2, background: bg, padding: P, ...nb })
+
+  return (
+    <div className="inv-detail-mobile-only" ref={scrollRef} style={{ maxHeight: TABLE_SCROLL_HEIGHT, overflow: 'auto' }}>
+      <table style={{ borderCollapse: 'collapse', fontSize: 9.2, tableLayout: 'fixed', width: W.sku + W.sub + W.inv + W.avg + W.doi }}>
+        <colgroup>
+          <col style={{ width: W.sku }} /><col style={{ width: W.sub }} />
+          <col style={{ width: W.inv }} /><col style={{ width: W.avg }} /><col style={{ width: W.doi }} />
+        </colgroup>
+        <thead style={{ position: 'sticky', top: 0, zIndex: 3, background: IC.surfaceHi }}>
+          <tr>
+            {[
+              { label: 'Product ID', sticky: true, align: 'left' },
+              { label: 'Sub-cat', align: 'left' },
+              { label: 'Inventory', align: 'right' },
+              { label: 'Avg Sale', align: 'right' },
+              { label: 'DOI', align: 'right' },
+            ].map((col, ci) => (
+              <th key={ci} style={{
+                padding: P, fontSize: 9, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.04em',
+                color: ths, textAlign: col.align, whiteSpace: 'nowrap', overflow: 'hidden',
+                borderBottom: `1px solid ${IC.border2}`,
+                ...(col.sticky ? { position: 'sticky', left: 0, zIndex: 4, background: IC.surfaceHi } : {}),
+              }}>{col.label}</th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {filteredSkus.map((s, i) => (
+            <React.Fragment key={`mob-${s.skuKey || 'sku'}-${i}`}>
+              <tr onClick={() => setExpandedSku(s.skuKey)}
+                style={{ borderBottom: `1px solid ${IC.border}`, cursor: 'pointer', height: 30 }}>
+                <td style={{ ...stickyTd(IC.surface), fontWeight: 600, color: th1 }}>
+                  <span style={{ color: ths, marginRight: 3, display: 'inline-block', transform: expandedSku === s.skuKey ? 'rotate(90deg)' : 'none', transition: 'transform .15s', fontSize: 10 }}>›</span>
+                  {s.sku}
+                </td>
+                <td style={{ padding: P, color: th2, ...nb }}>{s.subCategory}</td>
+                <td style={{ padding: P, textAlign: 'right', fontVariantNumeric: 'tabular-nums', fontWeight: 700 }}>{fmtInt(s.totalInvt)}</td>
+                <td style={{ padding: P, textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{fmtInt(s.avgSale)}</td>
+                <td style={{ padding: P, textAlign: 'right', fontVariantNumeric: 'tabular-nums', fontWeight: 700 }}>{fmtDays(s.doi)}d</td>
+              </tr>
+              {expandedSku === s.skuKey && s.locations.filter(l => l.totalInvt > 0 || l.avgSale > 0).map(l => (
+                <tr key={`mob-${s.skuKey}-${l.location}`} style={{ background: 'rgba(0,0,0,0.025)', borderBottom: `1px solid ${IC.border}`, height: 26 }}>
+                  <td style={{ ...stickyTd('rgba(245,245,246,1)'), color: ths, fontSize: 10.5, paddingLeft: 10 }}>↳ {l.location}</td>
+                  <td style={{ padding: P }} />
+                  <td style={{ padding: P, textAlign: 'right', fontVariantNumeric: 'tabular-nums', fontWeight: 700 }}>{fmtInt(l.totalInvt)}</td>
+                  <td style={{ padding: P, textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{fmtInt(l.avgSale)}</td>
+                  <td style={{ padding: P, textAlign: 'right', fontVariantNumeric: 'tabular-nums', fontWeight: 700 }}>{fmtDays(l.doi)}d</td>
+                </tr>
+              ))}
+            </React.Fragment>
+          ))}
+        </tbody>
+        <tfoot>
+          <tr style={{ position: 'sticky', bottom: 0, zIndex: 2, background: IC.surfaceHi, borderTop: `2px solid ${IC.border2}`, height: 30 }}>
+            <td style={{ ...stickyTd(IC.surfaceHi), fontWeight: 700, fontSize: 10, color: ths }}>{filteredSkus.length} SKUs</td>
+            <td style={{ padding: P }} />
+            <td style={{ padding: P, textAlign: 'right', fontVariantNumeric: 'tabular-nums', fontWeight: 700 }}>{fmtInt(tableTotals.totalInvt)}</td>
+            <td style={{ padding: P, textAlign: 'right', fontVariantNumeric: 'tabular-nums', fontWeight: 700 }}>{fmtInt(tableTotals.avgSale)}</td>
+            <td style={{ padding: P, textAlign: 'right', fontVariantNumeric: 'tabular-nums', fontWeight: 700 }}>{fmtDays(tableTotals.doi)}d</td>
+          </tr>
+        </tfoot>
+      </table>
+    </div>
+  )
+})
 
 // "Columns" button + dropdown — the only way back for a column hidden via DraggableTh's
 // right-click menu, since a right-click affordance with no visible undo would be a dead end.
@@ -119,25 +296,26 @@ function WebsiteStatusBadge({ status, stockStatus }) {
 
 // Sub-category rollup table for Slow-Moving / Dead Stock — click a sub-category row
 // to expand into its SKUs.
-function SubCatStockTable({ rows, emptyLabel }) {
+function SubCatStockTable({ rows, emptyLabel, search = '' }) {
   const [expanded, setExpanded] = useState(new Set())
   const toggle = key => setExpanded(prev => { const n = new Set(prev); n.has(key) ? n.delete(key) : n.add(key); return n })
-  const [sort, setSort] = useState(null) // { key: 'subCategory' | 'totalInvt' | 'avgSale' | 'doi', dir: 'asc' | 'desc' }
+  const [sort, setSort] = useState(null)
   const onSort = key => setSort(prev => prev?.key === key ? { key, dir: prev.dir === 'asc' ? 'desc' : 'asc' } : { key, dir: key === 'subCategory' ? 'asc' : 'desc' })
 
   if (rows.length === 0) return <div style={{ color: IC.t3, fontSize: 12 }}>{emptyLabel}</div>
 
-  const sortedRows = sort ? [...rows].sort((a, b) => {
+  const filtered = search ? rows.filter(r => r.subCategory?.toLowerCase().includes(search.toLowerCase())) : rows
+  const sortedRows = sort ? [...filtered].sort((a, b) => {
     const sign = sort.dir === 'asc' ? 1 : -1
     const av = a[sort.key], bv = b[sort.key]
     if (typeof av === 'string') return sign * av.localeCompare(bv)
     return sign * ((av ?? -Infinity) - (bv ?? -Infinity))
-  }) : rows
+  }) : filtered
 
   const th = (label, key, align = 'right') => (
     <th onClick={() => onSort(key)}
       style={{
-        textAlign: align, padding: '6px 8px', fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.05em',
+        textAlign: align, padding: '6px 8px', fontSize: 8, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.05em',
         color: sort?.key === key ? IC.t1 : IC.t3, cursor: 'pointer', userSelect: 'none', whiteSpace: 'nowrap',
       }}>
       {label}{sort?.key === key ? (sort.dir === 'asc' ? ' ▲' : ' ▼') : ''}
@@ -146,12 +324,12 @@ function SubCatStockTable({ rows, emptyLabel }) {
 
   return (
     <div style={{ maxHeight: 460, overflowY: 'auto' }}>
-      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12, tableLayout: 'fixed' }}>
+      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 9.6, tableLayout: 'fixed' }}>
         <colgroup>
-          <col style={{ width: 'auto' }} />
-          <col style={{ width: 90 }} />
-          <col style={{ width: 80 }} />
-          <col style={{ width: 70 }} />
+          <col style={{ width: 190 }} />
+          <col style={{ width: 72 }} />
+          <col style={{ width: 64 }} />
+          <col style={{ width: 52 }} />
         </colgroup>
         <thead style={{ position: 'sticky', top: 0, background: IC.surfaceHi, zIndex: 1 }}>
           <tr>
@@ -174,7 +352,7 @@ function SubCatStockTable({ rows, emptyLabel }) {
                   <td style={{ padding: '6px 8px', fontWeight: 600, color: IC.t1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                     <span style={{ color: IC.t3, marginRight: 6, display: 'inline-block', transform: isOpen ? 'rotate(90deg)' : 'none', transition: 'transform .15s' }}>›</span>
                     {r.subCategory}
-                    <span style={{ marginLeft: 6, fontSize: 10.5, color: IC.t3, fontWeight: 500 }}>({r.category})</span>
+                    <span style={{ marginLeft: 6, fontSize: 8.4, color: IC.t3, fontWeight: 500 }}>({r.category})</span>
                   </td>
                   <td style={{ padding: '6px 8px', textAlign: 'right', fontVariantNumeric: 'tabular-nums', fontWeight: 700 }}>{fmtInt(r.totalInvt)}</td>
                   <td style={{ padding: '6px 8px', textAlign: 'right', fontVariantNumeric: 'tabular-nums', color: IC.t2 }}>{fmtNum(r.avgSale)}</td>
@@ -182,10 +360,10 @@ function SubCatStockTable({ rows, emptyLabel }) {
                 </tr>
                 {isOpen && r.skus.map((s, j) => (
                   <tr key={key + '-' + j} style={{ background: 'rgba(0,0,0,0.02)', borderBottom: `1px solid ${IC.border}`, height: 28 }}>
-                    <td style={{ padding: '5px 8px 5px 26px', color: IC.t3, fontSize: 11.5, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>↳ {s.sku}</td>
-                    <td style={{ padding: '5px 8px', textAlign: 'right', fontVariantNumeric: 'tabular-nums', fontSize: 11.5, color: IC.t2 }}>{fmtInt(s.totalInvt)}</td>
-                    <td style={{ padding: '5px 8px', textAlign: 'right', fontVariantNumeric: 'tabular-nums', fontSize: 11.5, color: IC.t2 }}>{fmtNum(s.avgSale)}</td>
-                    <td style={{ padding: '5px 8px', textAlign: 'right', fontVariantNumeric: 'tabular-nums', fontSize: 11.5, color: IC.t1 }}>{fmtDays(s.doi)}d</td>
+                    <td style={{ padding: '5px 8px 5px 26px', color: IC.t3, fontSize: 9.2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>↳ {s.sku}</td>
+                    <td style={{ padding: '5px 8px', textAlign: 'right', fontVariantNumeric: 'tabular-nums', fontSize: 9.2, color: IC.t2 }}>{fmtInt(s.totalInvt)}</td>
+                    <td style={{ padding: '5px 8px', textAlign: 'right', fontVariantNumeric: 'tabular-nums', fontSize: 9.2, color: IC.t2 }}>{fmtNum(s.avgSale)}</td>
+                    <td style={{ padding: '5px 8px', textAlign: 'right', fontVariantNumeric: 'tabular-nums', fontSize: 9.2, color: IC.t1 }}>{fmtDays(s.doi)}d</td>
                   </tr>
                 ))}
               </React.Fragment>
@@ -240,26 +418,31 @@ function WarehouseCard({ loc, selected }) {
 const SIDEBAR_WIDTH = 220
 
 function SidebarSectionTitle({ title }) {
-  return <div style={{ fontSize: 10, fontWeight: 800, color: IC.t3, letterSpacing: '.06em', textTransform: 'uppercase', margin: '2px 0 2px' }}>{title}</div>
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 6, margin: '6px 0 4px' }}>
+      <div style={{ width: 3, height: 12, borderRadius: 2, background: '#1967D2', flexShrink: 0 }} />
+      <span style={{ fontSize: 10, fontWeight: 800, color: IC.t2, letterSpacing: '.05em', textTransform: 'uppercase' }}>{title}</span>
+    </div>
+  )
 }
 
 function TileToggle({ label, active, onClick }) {
   return (
     <button onClick={onClick}
-      onMouseEnter={e => { if (!active) e.currentTarget.style.background = IC.hoverBg }}
+      onMouseEnter={e => { if (!active) e.currentTarget.style.background = '#F4F6FB' }}
       onMouseLeave={e => { if (!active) e.currentTarget.style.background = IC.surface }}
       style={{
-        padding: '6px 4px', borderRadius: 8, cursor: 'pointer', fontSize: 11, fontWeight: active ? 700 : 500,
-        background: active ? IC.accDim : IC.surface, color: active ? IC.t1 : IC.t2,
-        border: `1.5px solid ${active ? IC.accBorder : IC.border}`, textAlign: 'center',
-        overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', transition: 'background .12s',
+        padding: '7px 4px', borderRadius: 8, cursor: 'pointer', fontSize: 11, fontWeight: active ? 700 : 500,
+        background: active ? '#E8F0FE' : IC.surface, color: active ? '#1967D2' : IC.t2,
+        border: `1.5px solid ${active ? '#AECBFA' : IC.border}`, textAlign: 'center',
+        overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', transition: 'background .12s, border-color .12s',
       }}>
       {label}
     </button>
   )
 }
 
-function FilterSidebar({ data, filters, setFilters, open, sidebarTop }) {
+function FilterSidebar({ data, filters, setFilters, open, onClose, isMobile, sidebarTop }) {
   const opts = data.filterOptions
   const set = (key, arr) => setFilters(f => ({ ...f, [key]: arr }))
   const toggleTile = (key, value) => setFilters(f => {
@@ -270,14 +453,54 @@ function FilterSidebar({ data, filters, setFilters, open, sidebarTop }) {
   const anyActive = ['category', 'subCategory', 'facility', 'facilityType', 'productId', 'location', 'stockStatus']
     .some(k => filters[k]?.length)
 
-  // position: fixed, positioned using the app shell's own known CSS variables (--sb for the
-  // left icon rail's width, --nav for the top bar's height, both defined in index.css)
-  // instead of a live getBoundingClientRect() measurement. The measured approach was
-  // fundamentally fragile: it only re-ran on mount and window `resize`, so anything else
-  // that shifted the sidebar's layout slot afterward (a scrollbar appearing on the main
-  // content, a reflow with no resize event, etc.) left `left` stale — the fixed panel then
-  // visually detached from its slot, showing the sidebar and main content scrolled to
-  // completely different positions. --sb/--nav are static, so this can't drift.
+  // On mobile: renders as a fixed overlay drawer. On desktop: position:fixed panel anchored
+  // to --sb/--nav CSS variables (see comment below for why measured approach was dropped).
+  if (isMobile) {
+    if (!open) return null
+    return (
+      <>
+        <div className="inv-filter-backdrop" onClick={onClose} />
+        <div className="inv-filter-drawer" style={{ background: '#FAFBFF', borderRight: `1px solid ${IC.border}`, display: 'flex', flexDirection: 'column', gap: 8, padding: '14px 12px 16px', boxSizing: 'border-box' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 2 }}>
+            {sidebarTop}
+            <button onClick={onClose} style={{ background: '#F0F2F5', border: 'none', color: IC.t2, fontSize: 14, cursor: 'pointer', padding: '4px 8px', lineHeight: 1, borderRadius: 8 }}>✕</button>
+          </div>
+          <SidebarSectionTitle title="Location" />
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 6 }}>
+            {opts.locations.map(loc => (
+              <TileToggle key={loc} label={loc} active={(filters.location || []).includes(loc)} onClick={() => toggleTile('location', loc)} />
+            ))}
+          </div>
+          <SidebarSectionTitle title="Stock Status" />
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 6 }}>
+            {sortByStatusOrder(opts.stockStatuses).map(s => (
+              <TileToggle key={s} label={IC.status[s]?.label || s} active={(filters.stockStatus || []).includes(s)} onClick={() => toggleTile('stockStatus', s)} />
+            ))}
+          </div>
+          <div style={{ height: 1, background: IC.border, margin: '2px 0' }} />
+          <SidebarSectionTitle title="Avg Sale Window" />
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 6 }}>
+            {[7, 15, 30].map(d => (
+              <TileToggle key={d} label={`${d}d`} active={(filters.avgSaleWindowDays || 7) === d} onClick={() => setFilters(f => ({ ...f, avgSaleWindowDays: d }))} />
+            ))}
+          </div>
+          <div style={{ height: 1, background: IC.border, margin: '2px 0' }} />
+          <SidebarSectionTitle title="Filters" />
+          <SearchableMultiSelect label="Facility Type" options={opts.facilityTypes} selected={filters.facilityType || []} onChange={v => set('facilityType', v)} width={240} height={SLICER_HEIGHT} />
+          <SearchableMultiSelect label="Facility" options={opts.facilities} selected={filters.facility || []} onChange={v => set('facility', v)} getKey={o => o.facility} getLabel={o => o.facility} width={240} height={SLICER_HEIGHT} />
+          <SearchableMultiSelect label="Category" options={opts.categories} selected={filters.category || []} onChange={v => set('category', v)} width={240} height={SLICER_HEIGHT} />
+          <SearchableMultiSelect label="Sub-category" options={opts.subCategories} selected={filters.subCategory || []} onChange={v => set('subCategory', v)} width={240} height={SLICER_HEIGHT} />
+          <SearchableMultiSelect label="Product ID" options={opts.productIds} selected={filters.productId || []} onChange={v => set('productId', v)} getKey={o => o.sku} getLabel={o => o.sku} width={240} height={SLICER_HEIGHT} />
+          {anyActive && (
+            <button onClick={() => setFilters({})} style={{ fontSize: 11.5, color: '#D93025', background: '#FFF0EE', border: '1px solid #F5B8B2', borderRadius: 8, padding: '7px 0', cursor: 'pointer', fontWeight: 600, marginTop: 4 }}>
+              ✕ Clear all filters
+            </button>
+          )}
+        </div>
+      </>
+    )
+  }
+
   return (
     <div style={{
       width: open ? SIDEBAR_WIDTH : 0, minWidth: open ? SIDEBAR_WIDTH : 0, transition: 'width .2s ease, min-width .2s ease',
@@ -521,8 +744,27 @@ function PivotTable({ pivot, search }) {
 }
 
 const InventoryHealthInner = React.memo(function InventoryHealthInner({ data, filters, setFilters, sidebarTop, sidebarOpen, setSidebarOpen }) {
+  const [isMobile, setIsMobile] = useState(() => window.innerWidth <= 768)
+  useEffect(() => {
+    const onResize = () => setIsMobile(window.innerWidth <= 768)
+    window.addEventListener('resize', onResize)
+    return () => window.removeEventListener('resize', onResize)
+  }, [])
+  const [searchInput, setSearchInput] = useState('')
   const [search, setSearch] = useState('')
+  useEffect(() => {
+    const t = setTimeout(() => setSearch(searchInput), 250)
+    return () => clearTimeout(t)
+  }, [searchInput])
   const [expandedSku, setExpandedSku] = useState(null)
+  const toggleExpandedSku = useCallback(skuKey => setExpandedSku(k => k === skuKey ? null : skuKey), [])
+
+  // Desktop table virtualization
+  const tableScrollRef = useRef(null)
+  const [vScrollTop, setVScrollTop] = useState(0)
+  const ROW_H = 34
+  const OVERSCAN = 5
+  const useVirtual = !expandedSku
   const [colWidths, setColWidths] = useState(DEFAULT_COL_WIDTHS)
   // Column visibility IS its width — dragging a header border to 0 hides it (Excel's own
   // model), rather than a separate hidden-columns Set that could drift out of sync with the
@@ -534,6 +776,8 @@ const InventoryHealthInner = React.memo(function InventoryHealthInner({ data, fi
   const [dragCol, setDragCol] = useState(null)
   const [sort, setSort] = useState({ key: 'avgSale', dir: 'desc' })
   const [pivotSearch, setPivotSearch] = useState('')
+  const [slowSearch, setSlowSearch] = useState('')
+  const [deadSearch, setDeadSearch] = useState('')
 
   // Facility Type defaults to "Regular" on first load (once options are known).
   const defaultedFacilityType = React.useRef(false)
@@ -661,8 +905,9 @@ const InventoryHealthInner = React.memo(function InventoryHealthInner({ data, fi
   // them locked together.
   return (
     <div style={{ display: 'flex', gap: 0 }}>
-      <FilterSidebar data={data} filters={filters} setFilters={setFilters} open={sidebarOpen} sidebarTop={sidebarTop} />
-      <button onClick={() => setSidebarOpen(o => !o)} style={{
+      <FilterSidebar data={data} filters={filters} setFilters={setFilters} open={sidebarOpen} onClose={() => setSidebarOpen(false)} isMobile={isMobile} sidebarTop={sidebarTop} />
+      {/* Desktop collapse-toggle button — hidden on mobile via CSS */}
+      <button className="inv-filter-toggle" onClick={() => setSidebarOpen(o => !o)} style={{
         width: 16, height: 48, border: `1px solid ${IC.border}`, borderLeft: 'none',
         background: IC.surface, cursor: 'pointer', borderRadius: '0 8px 8px 0', display: 'flex', alignItems: 'center',
         justifyContent: 'center', color: IC.t3, fontSize: 12, flexShrink: 0,
@@ -676,10 +921,18 @@ const InventoryHealthInner = React.memo(function InventoryHealthInner({ data, fi
       {/* +16 accounts for the collapse-toggle button's own width — it's position:fixed
           (out of flow) now, so this padding is the only thing keeping content from
           starting underneath it. */}
-      <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 18, paddingLeft: 32, paddingRight: 24, paddingTop: 16 }}>
+      <div className="inv-main-content" style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 18, paddingLeft: 32, paddingRight: 24, paddingTop: 16 }}>
 
-        {/* KPI row */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, minmax(0, 1fr))', gap: 10, alignItems: 'stretch' }}>
+        {/* Mobile filter button — hidden on desktop via CSS (display:none by default) */}
+        <button className="inv-filter-mobile-btn" onClick={() => setSidebarOpen(true)} style={{
+          display: 'none', alignItems: 'center', gap: 6, padding: '8px 14px', borderRadius: 8,
+          background: IC.surface, border: `1px solid ${IC.border2}`, color: IC.t2, fontSize: 13, cursor: 'pointer', alignSelf: 'flex-start',
+        }}>
+          ☰ Filters{filters && Object.values(filters).some(v => Array.isArray(v) ? v.length : v) ? ' •' : ''}
+        </button>
+
+        {/* KPI row — desktop: 7-col grid; mobile: swipe carousel */}
+        <KpiCarousel>
           <KpiTile compact label="Total Inventory" value={fmtNum(data.summary.totalInvt)} unit="units" icon="/inv-icon-total.png" />
           <KpiTile compact label="RTD Inventory" value={fmtNum(data.summary.rtdInvt)} unit="units" icon="/inv-icon-rtd.jpg" />
           <KpiTile compact label="RAW Inventory" value={fmtNum(data.summary.rawInvt)} unit="units" icon="/inv-icon-raw.png" />
@@ -687,43 +940,46 @@ const InventoryHealthInner = React.memo(function InventoryHealthInner({ data, fi
           <KpiTile compact label="Avg Sale (B2C)" value={fmtNum(data.summary.avgSaleB2C)} unit="units/day" icon="/inv-icon-avgsale.png" />
           <KpiTile compact label="Total Avg Sale" value={fmtNum(data.summary.totalAvgSale)} unit="units/day" icon="/inv-icon-totalavgsale.png" />
           <KpiTile compact label="Days of Inventory" value={data.summary.doi} unit="days" accent={data.summary.doi <= 15 ? IC.status.Critical.c : IC.positive} icon="/inv-icon-doi.png" />
-        </div>
+        </KpiCarousel>
 
-        {/* Warehouse grid — always one row; cards shrink to fit rather than wrapping to a 2nd line */}
-        <GlassCard title="Warehouse Health" note={`${(data.allLocations || data.locations).length} locations`}>
-          <div style={{ display: 'grid', gridTemplateColumns: `repeat(${Math.max((data.allLocations || data.locations).length, 1)}, 1fr)`, gap: 8 }}>
-            {(data.allLocations || data.locations).map(loc => <WarehouseCard key={loc.location} loc={loc} selected={filters.location?.length > 0 && filters.location.includes(loc.location)} />)}
-          </div>
-        </GlassCard>
+        {/* Warehouse Health — desktop: GlassCard grid; mobile: swipe carousel */}
+        <WhCarousel locations={data.allLocations || data.locations} filters={filters} />
 
         {/* Main inventory table */}
-        <GlassCard
+        <div className="inv-detail-card"><GlassCard
           title="Inventory Detail"
-          note={`${fmtInt(filteredSkus.length)} of ${fmtInt(data.skus.length)} SKUs`}
+          note={<span className="inv-detail-desktop-only">{`${fmtInt(filteredSkus.length)} of ${fmtInt(data.skus.length)} SKUs`}</span>}
           action={
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <SearchableMultiSelect label="RTD Level" options={data.filterOptions.rtdLevels} selected={filters.rtdLevel || []}
-                onChange={v => setFilters(f => ({ ...f, rtdLevel: v }))} width={SLICER_WIDTH} height={SLICER_HEIGHT} />
-              <input placeholder="Quick search…" value={search} onChange={e => setSearch(e.target.value)}
-                style={{ background: IC.surface, border: `1px solid ${IC.border2}`, borderRadius: 8, padding: '6px 10px', color: IC.t1, fontSize: 12, width: 170 }} />
-              <ColumnVisibilityMenu columnDefs={COLUMN_DEFS} order={colOrder} hidden={hiddenCols} onShow={restoreColumn} />
+              <span className="inv-detail-desktop-only"><SearchableMultiSelect label="RTD Level" options={data.filterOptions.rtdLevels} selected={filters.rtdLevel || []}
+                onChange={v => setFilters(f => ({ ...f, rtdLevel: v }))} width={SLICER_WIDTH} height={SLICER_HEIGHT} /></span>
+              <input placeholder="Search…" value={searchInput} onChange={e => setSearchInput(e.target.value)}
+                className="inv-detail-search"
+                style={{ background: IC.surface, border: `1px solid ${IC.border2}`, borderRadius: 8, padding: '6px 10px', color: IC.t1, fontSize: 12, width: 238, maxWidth: '100%', boxSizing: 'border-box' }} />
+              <span className="inv-detail-desktop-only"><ColumnVisibilityMenu columnDefs={COLUMN_DEFS} order={colOrder} hidden={hiddenCols} onShow={restoreColumn} /></span>
               {!isDefaultColLayout && (
-                <button onClick={resetColLayout}
-                  style={{ fontSize: 11, color: IC.t2, background: IC.surface, border: `1px solid ${IC.border2}`, borderRadius: 8, padding: '5px 10px', cursor: 'pointer' }}>
-                  ↺ Reset columns
-                </button>
+                <span className="inv-detail-desktop-only">
+                  <button onClick={resetColLayout}
+                    style={{ fontSize: 11, color: IC.t2, background: IC.surface, border: `1px solid ${IC.border2}`, borderRadius: 8, padding: '5px 10px', cursor: 'pointer' }}>
+                    ↺ Reset columns
+                  </button>
+                </span>
               )}
-              <ExportButton filename="inventory_detail.csv" rows={inventoryDetailExportRows}
+              <span className="inv-detail-desktop-only"><ExportButton filename="inventory_detail.csv" rows={inventoryDetailExportRows}
                 columns={[
                   { label: 'Category', key: 'category' }, { label: 'Sub-category', key: 'subCategory' }, { label: 'Product ID', key: 'sku' }, { label: 'Location', key: 'location' },
                   { label: 'RTD Inventory', key: 'rtdInvt' }, { label: 'RAW Inventory', key: 'rawInvt' }, { label: 'RAW Blocked Inventory', key: 'rawBlockedInvt' },
                   { label: 'Total Inventory', key: 'totalInvt' }, { label: 'Avg Sale (B2C)', key: 'avgSale' }, { label: 'DOI', key: 'doi' },
                   { label: 'Stock Status', key: 'stockStatus' }, { label: 'Website Status', key: 'websiteStatus' },
-                ]} />
+                ]} /></span>
             </div>
           }
         >
-        <div style={{ maxHeight: TABLE_SCROLL_HEIGHT, overflow: 'auto' }}>
+        {/* Mobile table: sticky Product ID + 6 scrollable cols */}
+        <MobDetailTable filteredSkus={filteredSkus} tableTotals={tableTotals} expandedSku={expandedSku} setExpandedSku={toggleExpandedSku} TABLE_SCROLL_HEIGHT={TABLE_SCROLL_HEIGHT} />
+        {/* Desktop table */}
+        <div className="inv-detail-desktop-only" ref={tableScrollRef} style={{ maxHeight: TABLE_SCROLL_HEIGHT, overflow: 'auto' }}
+          onScroll={e => setVScrollTop(e.currentTarget.scrollTop)}>
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12, tableLayout: 'fixed' }}>
             <thead style={{ position: 'sticky', top: 0, zIndex: 2, background: IC.surfaceHi }}>
               <tr>
@@ -738,11 +994,21 @@ const InventoryHealthInner = React.memo(function InventoryHealthInner({ data, fi
               </tr>
             </thead>
             <tbody>
-              {filteredSkus.map((s, i) => {
+              {(() => {
+                const containerH = tableScrollRef.current ? tableScrollRef.current.clientHeight : window.innerHeight * 0.58
+                const startIdx = useVirtual ? Math.max(0, Math.floor(vScrollTop / ROW_H) - OVERSCAN) : 0
+                const endIdx = useVirtual ? Math.min(filteredSkus.length, Math.ceil((vScrollTop + containerH) / ROW_H) + OVERSCAN) : filteredSkus.length
+                const topSpacerH = useVirtual ? startIdx * ROW_H : 0
+                const bottomSpacerH = useVirtual ? (filteredSkus.length - endIdx) * ROW_H : 0
+                return (
+                  <>
+                    {topSpacerH > 0 && <tr style={{ height: topSpacerH }}><td colSpan={colOrder.length} /></tr>}
+                    {filteredSkus.slice(startIdx, endIdx).map((s, relIdx) => {
+                const i = startIdx + relIdx
                 const activeLocations = s.locations.filter(l => l.totalInvt > 0 || l.avgSale > 0)
                 return (
                   <React.Fragment key={`${s.skuKey || 'sku'}-${i}`}>
-                    <tr onClick={() => setExpandedSku(k => k === s.skuKey ? null : s.skuKey)}
+                    <tr onClick={() => toggleExpandedSku(s.skuKey)}
                       style={{ borderBottom: `1px solid ${IC.border}`, cursor: 'pointer', height: 34 }}
                       onMouseEnter={e => e.currentTarget.style.background = 'rgba(0,0,0,0.025)'}
                       onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
@@ -801,7 +1067,11 @@ const InventoryHealthInner = React.memo(function InventoryHealthInner({ data, fi
                     ))}
                   </React.Fragment>
                 )
-              })}
+                    })}
+                    {bottomSpacerH > 0 && <tr style={{ height: bottomSpacerH }}><td colSpan={colOrder.length} /></tr>}
+                  </>
+                )
+              })()}
             </tbody>
             <tfoot>
               {/* Total row — sticky to the bottom of the scroll area, sums whatever's
@@ -832,10 +1102,10 @@ const InventoryHealthInner = React.memo(function InventoryHealthInner({ data, fi
             </tfoot>
           </table>
         </div>
-      </GlassCard>
+      </GlassCard></div>
 
-      {/* Location-wise pivot table */}
-      <GlassCard title="Location-Wise Inventory & Avg Sale"
+      {/* Location-wise pivot table — hidden on mobile */}
+      <div className="inv-detail-desktop-only"><GlassCard title="Location-Wise Inventory & Avg Sale"
         action={
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <input type="text" value={pivotSearch} onChange={e => setPivotSearch(e.target.value)}
@@ -849,7 +1119,7 @@ const InventoryHealthInner = React.memo(function InventoryHealthInner({ data, fi
           </div>
         }>
         <PivotTable pivot={data.pivot} search={pivotSearch} />
-      </GlassCard>
+      </GlassCard></div>
 
       {/* Slow-moving + Dead stock — each card sits in its own minWidth:0 wrapper div,
           on top of GlassCard's own minWidth:0, so this two-card row can't be pushed wider
@@ -857,20 +1127,30 @@ const InventoryHealthInner = React.memo(function InventoryHealthInner({ data, fi
           — the actual cause of the page-wide horizontal scroll/misalignment bug reported
           earlier. Belt-and-suspenders: the constraint is enforced at both the grid-item
           wrapper level and the card level, not relying on either alone. */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+      <div className="inv-2col-row" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, alignItems: 'stretch', paddingBottom: 20 }}>
         <div style={{ minWidth: 0 }}>
-        <GlassCard title="Slow-Moving Sub-categories" note="DOI > 45d or not being sold, sub-cat stock > 50 units"
-          action={<ExportButton filename="slow_moving.csv" rows={slowMovingExportRows}
-            columns={[{ label: 'Category', key: 'category' }, { label: 'Sub-category', key: 'subCategory' }, { label: 'Product ID', key: 'sku' }, { label: 'Total Invt', key: 'totalInvt' }, { label: 'Avg Sale', key: 'avgSale' }, { label: 'DOI', key: 'doi' }]} />}>
-          <SubCatStockTable rows={data.slowMoving} emptyLabel="No slow-moving sub-categories flagged." />
+        <GlassCard title={<><span className="inv-detail-desktop-only">Slow Moving Sub-categories</span><span className="inv-detail-mobile-only">Slow Moving</span></>}
+          action={<div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <input placeholder="Search…" value={slowSearch} onChange={e => setSlowSearch(e.target.value)}
+              className="inv-detail-search"
+              style={{ background: IC.surface, border: `1px solid ${IC.border2}`, borderRadius: 8, padding: '6px 10px', color: IC.t1, fontSize: 12, width: 238, maxWidth: '100%', boxSizing: 'border-box' }} />
+            <span className="inv-detail-desktop-only"><ExportButton filename="slow_moving.csv" rows={slowMovingExportRows}
+              columns={[{ label: 'Category', key: 'category' }, { label: 'Sub-category', key: 'subCategory' }, { label: 'Product ID', key: 'sku' }, { label: 'Total Invt', key: 'totalInvt' }, { label: 'Avg Sale', key: 'avgSale' }, { label: 'DOI', key: 'doi' }]} /></span>
+          </div>}>
+          <SubCatStockTable rows={data.slowMoving} emptyLabel="No slow-moving sub-categories flagged." search={slowSearch} />
         </GlassCard>
         </div>
 
         <div style={{ minWidth: 0 }}>
-        <GlassCard title="Dead Stock Sub-categories" note="DOI > 200d, or not being sold with stock > 200 units"
-          action={<ExportButton filename="dead_stock.csv" rows={deadStockExportRows}
-            columns={[{ label: 'Category', key: 'category' }, { label: 'Sub-category', key: 'subCategory' }, { label: 'Product ID', key: 'sku' }, { label: 'Total Invt', key: 'totalInvt' }, { label: 'Avg Sale', key: 'avgSale' }, { label: 'DOI', key: 'doi' }]} />}>
-          <SubCatStockTable rows={data.deadStock} emptyLabel="No dead stock right now." />
+        <GlassCard title={<><span className="inv-detail-desktop-only">Dead Stock Sub-categories</span><span className="inv-detail-mobile-only">Dead Stock</span></>}
+          action={<div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <input placeholder="Search…" value={deadSearch} onChange={e => setDeadSearch(e.target.value)}
+              className="inv-detail-search"
+              style={{ background: IC.surface, border: `1px solid ${IC.border2}`, borderRadius: 8, padding: '6px 10px', color: IC.t1, fontSize: 12, width: 238, maxWidth: '100%', boxSizing: 'border-box' }} />
+            <span className="inv-detail-desktop-only"><ExportButton filename="dead_stock.csv" rows={deadStockExportRows}
+              columns={[{ label: 'Category', key: 'category' }, { label: 'Sub-category', key: 'subCategory' }, { label: 'Product ID', key: 'sku' }, { label: 'Total Invt', key: 'totalInvt' }, { label: 'Avg Sale', key: 'avgSale' }, { label: 'DOI', key: 'doi' }]} /></span>
+          </div>}>
+          <SubCatStockTable rows={data.deadStock} emptyLabel="No dead stock right now." search={deadSearch} />
         </GlassCard>
         </div>
       </div>

@@ -1,4 +1,5 @@
 ﻿import { getBQ } from './_bq.js'
+import { getPool } from './_db.js'
 
 // All queries use fact_all_platform_sales_report filtered to Shopify
 const TBL = '`frido-429506.production.fact_all_platform_sales_report`'
@@ -23,7 +24,7 @@ export default async function handler(req, res) {
     const ps = new Date(ms - dur - 86400000).toISOString().slice(0, 10)
     const pe = new Date(ms - 86400000).toISOString().slice(0, 10)
 
-    const [kpis, monthly, cohort, crossSell, rfm, freqDist, monetaryDist, inactivity, discountDist, adsKpis, dailySpend, prevKpis, prevAdsKpis] = await Promise.all([
+    const [kpis, monthly, cohort, crossSell, rfm, freqDist, monetaryDist, inactivity, discountDist, adsKpis, dailySpend, prevKpis, prevAdsKpis, discountRepeatRate, daysToSecondPurchase, aovByOrderNumber, repurchaseCycleByCategory, basketComposition, purchaseBehaviorKpis, orderFreqDist, discountRepeatRateByFirst, categoryDiscountAnalysis] = await Promise.all([
 
       // Q1 — KPIs for the selected period (Shopify only)
       run(`WITH first_dates AS (
@@ -64,6 +65,7 @@ SELECT
   COUNT(DISTINCT CASE WHEN first_date < DATE('${s}') THEN CustomerId END) AS returning_customers,
   COUNT(DISTINCT OrderId) AS total_orders,
   ROUND(SUM(order_rev_inc), 0) AS gross_sales,
+  ROUND(SUM(order_rev_exc), 0) AS gross_exc_gst,
   ROUND(SAFE_DIVIDE(SUM(order_rev_inc), COUNT(DISTINCT OrderId)), 0) AS aov,
   ROUND(SUM(CASE WHEN first_date < DATE('${s}') THEN order_rev_inc ELSE 0 END), 0) AS repeat_revenue,
   ROUND(SUM(order_rev_exc)
@@ -83,7 +85,7 @@ FROM order_agg`),
 ),
 period AS (
   SELECT o.CustomerId, o.OrderId, DATE(o.OrderDate) AS order_date,
-    o.SellingPrice_Inc_GST AS rev, f.first_date
+    o.SellingPrice_Inc_GST AS rev, o.SellingPrice_Exc_GST AS rev_exc, f.first_date
   FROM ${TBL} o
   JOIN first_dates f USING (CustomerId)
   WHERE o.Channel = 'Shopify'
@@ -95,6 +97,7 @@ SELECT
   COUNT(DISTINCT CustomerId) AS customers_acquired,
   COUNT(DISTINCT OrderId) AS total_orders,
   ROUND(SUM(rev), 0) AS gross_sales,
+  ROUND(SUM(rev_exc), 0) AS gross_sales_exc,
   ROUND(SUM(CASE WHEN first_date < DATE('${s}') THEN rev ELSE 0 END), 0) AS repeat_revenue,
   ROUND(SUM(CASE WHEN first_date BETWEEN DATE('${s}') AND DATE('${e}') THEN rev ELSE 0 END), 0) AS new_revenue,
   COUNT(DISTINCT CASE WHEN first_date BETWEEN DATE('${s}') AND DATE('${e}') THEN CustomerId END) AS new_customers,
@@ -114,9 +117,8 @@ ORDER BY day`),
 ),
 all_orders AS (
   SELECT CustomerId, DATE_TRUNC(DATE(OrderDate), MONTH) AS order_month,
-    -- Only count successful orders (exclude Cancel/RTO/CIR) for both customer and revenue retention
-    COUNT(DISTINCT CASE WHEN LOWER(Order_Status) NOT IN ('cancelled','cancel','rto','rto initiated','rto delivered','cir return','cir') THEN OrderId END) AS valid_orders,
-    SUM(CASE WHEN LOWER(Order_Status) NOT IN ('cancelled','cancel','rto','rto initiated','rto delivered','cir return','cir') THEN SellingPrice_Exc_GST ELSE 0 END) AS revenue
+    COUNT(DISTINCT OrderId) AS order_count,
+    SUM(SellingPrice_Exc_GST) AS revenue
   FROM ${TBL}
   WHERE Channel = 'Shopify' AND CustomerId IS NOT NULL
   GROUP BY CustomerId, order_month
@@ -124,21 +126,20 @@ all_orders AS (
 cohort_data AS (
   SELECT f.cohort_month,
     DATE_DIFF(a.order_month, f.cohort_month, MONTH) AS cohort_index,
-    -- Only count customers who had at least 1 successful order that month
-    COUNT(DISTINCT CASE WHEN a.valid_orders > 0 THEN a.CustomerId END) AS customers,
+    COUNT(DISTINCT a.CustomerId) AS customers,
     ROUND(SUM(a.revenue), 0) AS revenue
   FROM first_orders f
   JOIN all_orders a USING (CustomerId)
-  WHERE f.cohort_month >= DATE_TRUNC(DATE_SUB(DATE('${e}'), INTERVAL 18 MONTH), MONTH)
+  WHERE f.cohort_month >= '2024-01-01'
     AND f.cohort_month <= DATE_TRUNC(DATE('${e}'), MONTH)
-    AND DATE_DIFF(a.order_month, f.cohort_month, MONTH) BETWEEN 0 AND 14
+    AND DATE_DIFF(a.order_month, f.cohort_month, MONTH) BETWEEN 0 AND 54
   GROUP BY cohort_month, cohort_index
 )
 SELECT FORMAT_DATE('%Y-%m', cohort_month) AS cohort_month, cohort_index, customers, revenue
 FROM cohort_data
 ORDER BY cohort_month, cohort_index`),
 
-      // Q4 — first vs second purchase (order-level, with item master category/subcat lookup)
+      // Q4 — first vs second purchase cross-sell (revenue-weighted category per order)
       run(`WITH
 item_master AS (
   SELECT DISTINCT TRIM(Product_Code) AS sku, Category_Name, Sub_category
@@ -150,26 +151,33 @@ pid_map AS (
   FROM \`frido-429506.sharepoint_to_gcp.Frido_Item_Master__productid_sku_mapping\`
   WHERE productid IS NOT NULL AND masterskucode IS NOT NULL
 ),
--- Rank at ORDER level (not item level) — use MIN(OrderDate) per order to deduplicate
-order_ranked AS (
+order_items AS (
   SELECT
-    CustomerId,
-    OrderId,
+    CustomerId, OrderId,
     MIN(OrderDate) AS order_date,
-    -- pick one ProductId per order (any_value) then resolve SKU via pid_map
-    ANY_VALUE(ProductId) AS product_id,
-    ANY_VALUE(masterskucode) AS direct_sku
-  FROM ${TBL}
-  WHERE Channel = 'Shopify' AND CustomerId IS NOT NULL
-  GROUP BY CustomerId, OrderId
+    COALESCE(pm.masterskucode, CAST(t.masterskucode AS STRING)) AS masterskucode,
+    SUM(t.SellingPrice_Exc_GST) AS item_rev
+  FROM ${TBL} t
+  LEFT JOIN pid_map pm ON TRIM(CAST(t.ProductId AS STRING)) = pm.productid
+  WHERE t.Channel = 'Shopify' AND t.CustomerId IS NOT NULL
+  GROUP BY CustomerId, OrderId, COALESCE(pm.masterskucode, CAST(t.masterskucode AS STRING))
+),
+order_top_item AS (
+  -- pick the highest-revenue SKU per order to represent the order's category
+  SELECT CustomerId, OrderId, MIN(order_date) AS order_date, masterskucode
+  FROM (
+    SELECT *, ROW_NUMBER() OVER (PARTITION BY CustomerId, OrderId ORDER BY item_rev DESC, masterskucode) AS rn
+    FROM order_items
+  ) sub
+  WHERE rn = 1
+  GROUP BY CustomerId, OrderId, masterskucode
 ),
 order_with_rank AS (
   SELECT
     o.CustomerId, o.OrderId, o.order_date,
     ROW_NUMBER() OVER (PARTITION BY o.CustomerId ORDER BY o.order_date, o.OrderId) AS rn,
-    COALESCE(pm.masterskucode, o.direct_sku) AS masterskucode
-  FROM order_ranked o
-  LEFT JOIN pid_map pm ON TRIM(CAST(o.product_id AS STRING)) = pm.productid
+    o.masterskucode
+  FROM order_top_item o
 ),
 fp AS (
   SELECT r.CustomerId, im.Category_Name AS first_category, im.Sub_category AS first_sub_category
@@ -201,7 +209,7 @@ LIMIT 500`),
     CustomerId,
     DATE_DIFF(DATE('${e}'), MAX(DATE(OrderDate)), DAY) AS recency_days,
     COUNT(DISTINCT OrderId) AS frequency,
-    ROUND(SUM(SellingPrice_Inc_GST), 0) AS monetary
+    ROUND(SUM(SellingPrice_Exc_GST), 0) AS monetary
   FROM ${TBL}
   WHERE Channel = 'Shopify' AND CustomerId IS NOT NULL
     AND DATE(OrderDate) <= DATE('${e}')
@@ -263,7 +271,7 @@ ORDER BY MIN(orders)`),
   GROUP BY CustomerId
 )
 SELECT
-  CASE WHEN monetary < 500 THEN 'Very Low (0-500)' WHEN monetary < 2000 THEN 'Low (500-2K)' WHEN monetary < 5000 THEN 'Medium (2K-5K)' WHEN monetary < 10000 THEN 'High (5K-10K)' ELSE 'Very High (10K+)' END AS bucket,
+  CASE WHEN monetary < 2000 THEN '0-2K' WHEN monetary < 5000 THEN '2K-5K' WHEN monetary < 10000 THEN '5K-10K' WHEN monetary < 50000 THEN '10K-50K' ELSE '50K+' END AS bucket,
   COUNT(*) AS customers,
   ROUND(SUM(monetary), 0) AS total_revenue,
   ROUND(AVG(monetary), 0) AS avg_revenue
@@ -285,44 +293,65 @@ FROM last_purchase
 GROUP BY bucket
 ORDER BY MIN(DATE_DIFF(DATE('${e}'), last_date, DAY))`),
 
-      // Q9 — discount % distribution (first vs repeat)
+      // Q9 — discount distribution using actual Listing_Price & Discount columns (Shopify only)
       run(`WITH
-SHOPIFY_TBL AS (
-  SELECT DISTINCT
-    order_id, customer_id, order_date_ist,
-    item_discount_percent AS discount_pct
-  FROM \`frido-429506.production.fact_shopify_myfrido_mobility_all_orders\`
-  WHERE customer_id IS NOT NULL
-    AND order_date_ist BETWEEN '${s}' AND '${e}'
-    AND LOWER(sku) NOT LIKE '%coup%'
-    AND LOWER(sku) NOT LIKE '%dfa%'
+first_dates AS (
+  SELECT CustomerId, MIN(DATE(OrderDate)) AS first_date
+  FROM ${TBL}
+  WHERE Channel = 'Shopify' AND CustomerId IS NOT NULL
+  GROUP BY CustomerId
 ),
-order_rank AS (
-  SELECT *,
-    ROW_NUMBER() OVER (PARTITION BY customer_id ORDER BY order_date_ist, order_id) AS rn
-  FROM (SELECT DISTINCT order_id, customer_id, order_date_ist, discount_pct FROM SHOPIFY_TBL)
-),
-tagged AS (
+order_agg AS (
   SELECT
-    order_id,
-    CASE WHEN rn = 1 THEN 'First Order' ELSE 'Repeat Order' END AS order_type,
+    o.OrderId, o.CustomerId,
+    ANY_VALUE(f.first_date) AS first_date,
+    SUM(o.SellingPrice_Exc_GST) AS order_rev_exc,
+    SUM(o.Listing_Price) AS total_listing,
+    SUM(o.Discount) AS total_discount
+  FROM ${TBL} o
+  JOIN first_dates f USING (CustomerId)
+  WHERE o.Channel = 'Shopify'
+    AND DATE(o.OrderDate) BETWEEN '${s}' AND '${e}'
+    AND o.CustomerId IS NOT NULL
+  GROUP BY o.OrderId, o.CustomerId
+),
+bucketed AS (
+  SELECT
+    OrderId, CustomerId, order_rev_exc,
     CASE
-      WHEN discount_pct = 0 THEN '0%'
-      WHEN discount_pct <= 0.10 THEN '1-10%'
-      WHEN discount_pct <= 0.20 THEN '11-20%'
-      WHEN discount_pct <= 0.30 THEN '21-30%'
-      WHEN discount_pct <= 0.40 THEN '31-40%'
-      ELSE '40%+'
-    END AS discount_bucket
-  FROM order_rank
+      WHEN total_listing IS NULL OR total_listing = 0 THEN 'No Price Data'
+      WHEN total_discount IS NULL OR total_discount = 0 THEN '0%'
+      WHEN SAFE_DIVIDE(total_discount, total_listing) <= 0.05 THEN '0–5%'
+      WHEN SAFE_DIVIDE(total_discount, total_listing) <= 0.10 THEN '5–10%'
+      WHEN SAFE_DIVIDE(total_discount, total_listing) <= 0.20 THEN '10–20%'
+      WHEN SAFE_DIVIDE(total_discount, total_listing) <= 0.30 THEN '20–30%'
+      ELSE '30%+'
+    END AS discount_bucket,
+    CASE
+      WHEN total_listing IS NULL OR total_listing = 0 THEN 6
+      WHEN total_discount IS NULL OR total_discount = 0 THEN 0
+      WHEN SAFE_DIVIDE(total_discount, total_listing) <= 0.05 THEN 1
+      WHEN SAFE_DIVIDE(total_discount, total_listing) <= 0.10 THEN 2
+      WHEN SAFE_DIVIDE(total_discount, total_listing) <= 0.20 THEN 3
+      WHEN SAFE_DIVIDE(total_discount, total_listing) <= 0.30 THEN 4
+      ELSE 5
+    END AS sort_order,
+    CASE WHEN first_date BETWEEN DATE('${s}') AND DATE('${e}') THEN 'new' ELSE 'repeat' END AS customer_type,
+    ROUND(SAFE_DIVIDE(total_discount, total_listing) * 100, 1) AS disc_pct
+  FROM order_agg
 )
 SELECT
   discount_bucket,
-  COUNTIF(order_type = 'First Order') AS first_orders,
-  COUNTIF(order_type = 'Repeat Order') AS repeat_orders
-FROM tagged
-GROUP BY discount_bucket
-ORDER BY MIN(CASE discount_bucket WHEN '0%' THEN 0 WHEN '1-10%' THEN 1 WHEN '11-20%' THEN 2 WHEN '21-30%' THEN 3 WHEN '31-40%' THEN 4 ELSE 5 END)`),
+  sort_order,
+  COUNT(DISTINCT OrderId) AS total_orders,
+  COUNTIF(customer_type = 'new') AS first_orders,
+  COUNTIF(customer_type = 'repeat') AS repeat_orders,
+  ROUND(SAFE_DIVIDE(SUM(order_rev_exc), COUNT(DISTINCT OrderId)), 0) AS aov_exc,
+  COUNT(DISTINCT CustomerId) AS unique_customers,
+  ROUND(AVG(disc_pct), 1) AS avg_disc_pct
+FROM bucketed
+GROUP BY discount_bucket, sort_order
+ORDER BY sort_order`),
 
       // Q10 â€” ads KPIs
       run(`SELECT platform, ROUND(SUM(spend), 0) AS spend, ROUND(SUM(revenue), 0) AS revenue, ROUND(SUM(orders), 0) AS orders
@@ -364,6 +393,7 @@ SELECT
   COUNT(DISTINCT CASE WHEN first_date < DATE('${ps}') THEN CustomerId END) AS returning_customers,
   COUNT(DISTINCT OrderId) AS total_orders,
   ROUND(SUM(order_rev_inc), 0) AS gross_sales,
+  ROUND(SUM(order_rev_exc), 0) AS gross_exc_gst,
   ROUND(SAFE_DIVIDE(SUM(order_rev_inc), COUNT(DISTINCT OrderId)), 0) AS aov,
   ROUND(SUM(CASE WHEN first_date < DATE('${ps}') THEN order_rev_inc ELSE 0 END), 0) AS repeat_revenue,
   ROUND(SUM(order_rev_exc)
@@ -377,16 +407,492 @@ FROM order_agg`),
 FROM \`frido-429506.production.fact_all_platform_ads_report\`
 WHERE report_date BETWEEN '${ps}' AND '${pe}' AND platform IN ('Meta', 'Google')
 GROUP BY platform`),
+
+      // Q14 — discount depth vs repeat rate using actual Listing_Price & Discount columns (all-time, Shopify only)
+      // For each discount % bucket: of customers whose FIRST-EVER order fell in that bucket,
+      // what % went on to place a second order (ever)?
+      run(`WITH
+order_agg AS (
+  SELECT CustomerId, OrderId, MIN(DATE(OrderDate)) AS order_date,
+    SAFE_DIVIDE(SUM(Discount), NULLIF(SUM(Listing_Price), 0)) AS disc_ratio
+  FROM ${TBL}
+  WHERE Channel = 'Shopify' AND CustomerId IS NOT NULL
+  GROUP BY CustomerId, OrderId
+),
+ranked AS (
+  SELECT CustomerId, OrderId, order_date, disc_ratio,
+    ROW_NUMBER() OVER (PARTITION BY CustomerId ORDER BY order_date, OrderId) AS rn,
+    COUNT(DISTINCT OrderId) OVER (PARTITION BY CustomerId) AS total_orders
+  FROM order_agg
+),
+first_orders AS (
+  SELECT CustomerId, disc_ratio, total_orders
+  FROM ranked WHERE rn = 1
+),
+bucketed AS (
+  SELECT CustomerId, total_orders,
+    CASE
+      WHEN disc_ratio IS NULL OR disc_ratio = 0 THEN '0% (Full Price)'
+      WHEN disc_ratio <= 0.10 THEN '1–10%'
+      WHEN disc_ratio <= 0.20 THEN '11–20%'
+      WHEN disc_ratio <= 0.30 THEN '21–30%'
+      WHEN disc_ratio <= 0.40 THEN '31–40%'
+      ELSE '40%+'
+    END AS discount_bucket,
+    CASE
+      WHEN disc_ratio IS NULL OR disc_ratio = 0 THEN 0
+      WHEN disc_ratio <= 0.10 THEN 1
+      WHEN disc_ratio <= 0.20 THEN 2
+      WHEN disc_ratio <= 0.30 THEN 3
+      WHEN disc_ratio <= 0.40 THEN 4
+      ELSE 5
+    END AS sort_order
+  FROM first_orders
+)
+SELECT
+  discount_bucket,
+  sort_order,
+  COUNT(DISTINCT CustomerId) AS total_customers,
+  COUNTIF(total_orders > 1) AS repeat_customers,
+  ROUND(SAFE_DIVIDE(COUNTIF(total_orders > 1), COUNT(DISTINCT CustomerId)) * 100, 1) AS repeat_rate
+FROM bucketed
+GROUP BY discount_bucket, sort_order
+ORDER BY sort_order`),
+
+      // Q15 — days between 1st and 2nd purchase (all-time, not date-filtered)
+      run(`WITH
+orders AS (
+  SELECT CustomerId, OrderId, MIN(DATE(OrderDate)) AS order_date
+  FROM ${TBL}
+  WHERE Channel = 'Shopify' AND CustomerId IS NOT NULL
+  GROUP BY CustomerId, OrderId
+),
+ranked AS (
+  SELECT CustomerId, order_date,
+    ROW_NUMBER() OVER (PARTITION BY CustomerId ORDER BY order_date, OrderId) AS rn
+  FROM orders
+),
+gaps AS (
+  SELECT
+    o1.CustomerId,
+    DATE_DIFF(o2.order_date, o1.order_date, DAY) AS days_to_second
+  FROM ranked o1
+  JOIN ranked o2 ON o1.CustomerId = o2.CustomerId AND o2.rn = 2
+  WHERE o1.rn = 1 AND DATE_DIFF(o2.order_date, o1.order_date, DAY) >= 0
+),
+bucketed AS (
+  SELECT CustomerId,
+    CASE
+      WHEN days_to_second <= 7   THEN '0-7d'
+      WHEN days_to_second <= 30  THEN '8-30d'
+      WHEN days_to_second <= 60  THEN '31-60d'
+      WHEN days_to_second <= 90  THEN '61-90d'
+      WHEN days_to_second <= 180 THEN '91-180d'
+      ELSE '180d+'
+    END AS bucket,
+    days_to_second
+  FROM gaps
+)
+SELECT
+  bucket,
+  COUNT(DISTINCT CustomerId) AS customers,
+  CASE bucket WHEN '0-7d' THEN 0 WHEN '8-30d' THEN 1 WHEN '31-60d' THEN 2 WHEN '61-90d' THEN 3 WHEN '91-180d' THEN 4 ELSE 5 END AS sort_order
+FROM bucketed
+GROUP BY bucket
+ORDER BY sort_order`),
+
+      // Q16 — AOV by order number (1st through 6th+), revenue-weighted, all-time
+      run(`WITH
+order_totals AS (
+  SELECT CustomerId, OrderId, MIN(DATE(OrderDate)) AS order_date,
+    SUM(SellingPrice_Exc_GST) AS order_rev
+  FROM ${TBL}
+  WHERE Channel = 'Shopify' AND CustomerId IS NOT NULL
+  GROUP BY CustomerId, OrderId
+),
+ranked AS (
+  SELECT CustomerId, OrderId, order_rev,
+    ROW_NUMBER() OVER (PARTITION BY CustomerId ORDER BY order_date, OrderId) AS order_num
+  FROM order_totals
+),
+capped AS (
+  SELECT
+    CASE WHEN order_num >= 6 THEN '6th+' ELSE CONCAT(CAST(order_num AS STRING), CASE order_num WHEN 1 THEN 'st' WHEN 2 THEN 'nd' WHEN 3 THEN 'rd' ELSE 'th' END) END AS order_label,
+    CASE WHEN order_num >= 6 THEN 6 ELSE order_num END AS order_sort,
+    order_rev
+  FROM ranked
+)
+SELECT
+  order_label,
+  order_sort,
+  ROUND(AVG(order_rev), 0) AS aov,
+  COUNT(*) AS customers
+FROM capped
+GROUP BY order_label, order_sort
+ORDER BY order_sort`),
+
+      // Q17 — median days to 2nd purchase per first-purchase category (all-time)
+      run(`WITH
+item_master AS (
+  SELECT DISTINCT TRIM(Product_Code) AS sku, Category_Name
+  FROM \`frido-429506.sharepoint_to_gcp.Frido_Item_Master__frido_item_sku_master\`
+  WHERE Product_Code IS NOT NULL
+),
+pid_map AS (
+  SELECT DISTINCT TRIM(productid) AS productid, TRIM(masterskucode) AS masterskucode
+  FROM \`frido-429506.sharepoint_to_gcp.Frido_Item_Master__productid_sku_mapping\`
+  WHERE productid IS NOT NULL AND masterskucode IS NOT NULL
+),
+order_cat AS (
+  SELECT t.CustomerId, t.OrderId, MIN(DATE(t.OrderDate)) AS order_date,
+    ANY_VALUE(COALESCE(im.Category_Name, im2.Category_Name)) AS category
+  FROM ${TBL} t
+  LEFT JOIN pid_map pm ON TRIM(CAST(t.ProductId AS STRING)) = pm.productid
+  LEFT JOIN item_master im ON TRIM(CAST(t.masterskucode AS STRING)) = im.sku
+  LEFT JOIN item_master im2 ON pm.masterskucode = im2.sku
+  WHERE t.Channel = 'Shopify' AND t.CustomerId IS NOT NULL
+  GROUP BY t.CustomerId, t.OrderId
+),
+ranked AS (
+  SELECT CustomerId, OrderId, order_date, category,
+    ROW_NUMBER() OVER (PARTITION BY CustomerId ORDER BY order_date, OrderId) AS rn
+  FROM order_cat
+),
+gaps AS (
+  SELECT o1.CustomerId, o1.category AS first_category,
+    DATE_DIFF(o2.order_date, o1.order_date, DAY) AS days_gap
+  FROM ranked o1
+  JOIN ranked o2 ON o1.CustomerId = o2.CustomerId AND o2.rn = 2
+  WHERE o1.rn = 1 AND o1.category IS NOT NULL AND DATE_DIFF(o2.order_date, o1.order_date, DAY) >= 0
+)
+SELECT
+  first_category,
+  COUNT(*) AS repeat_customers,
+  APPROX_QUANTILES(days_gap, 4)[OFFSET(1)] AS p25_days,
+  APPROX_QUANTILES(days_gap, 2)[OFFSET(1)] AS median_days,
+  APPROX_QUANTILES(days_gap, 4)[OFFSET(3)] AS p75_days
+FROM gaps
+GROUP BY first_category
+HAVING COUNT(*) >= 5
+ORDER BY median_days`),
+
+      // Q18 — basket composition: single vs multi-category orders
+      run(`WITH
+item_master AS (
+  SELECT DISTINCT TRIM(Product_Code) AS sku, Category_Name
+  FROM \`frido-429506.sharepoint_to_gcp.Frido_Item_Master__frido_item_sku_master\`
+  WHERE Product_Code IS NOT NULL
+),
+pid_map AS (
+  SELECT DISTINCT TRIM(productid) AS productid, TRIM(masterskucode) AS masterskucode
+  FROM \`frido-429506.sharepoint_to_gcp.Frido_Item_Master__productid_sku_mapping\`
+  WHERE productid IS NOT NULL AND masterskucode IS NOT NULL
+),
+order_cats AS (
+  SELECT t.OrderId,
+    COUNT(DISTINCT COALESCE(im.Category_Name, im2.Category_Name)) AS distinct_categories,
+    COUNT(DISTINCT t.masterskucode) AS distinct_skus,
+    SUM(t.ItemQty) AS total_items
+  FROM ${TBL} t
+  LEFT JOIN pid_map pm ON TRIM(CAST(t.ProductId AS STRING)) = pm.productid
+  LEFT JOIN item_master im ON TRIM(CAST(t.masterskucode AS STRING)) = im.sku
+  LEFT JOIN item_master im2 ON pm.masterskucode = im2.sku
+  WHERE t.Channel = 'Shopify' AND t.CustomerId IS NOT NULL
+    AND DATE(t.OrderDate) BETWEEN '${s}' AND '${e}'
+  GROUP BY t.OrderId
+)
+SELECT
+  COUNT(*) AS total_orders,
+  COUNTIF(distinct_categories = 1) AS single_cat_orders,
+  COUNTIF(distinct_categories > 1) AS multi_cat_orders,
+  ROUND(AVG(distinct_categories), 2) AS avg_categories_per_order,
+  ROUND(AVG(distinct_skus), 2) AS avg_skus_per_order,
+  ROUND(AVG(total_items), 2) AS avg_items_per_order
+FROM order_cats`),
+
+      // Q19 — purchase behavior KPIs (repeat rate, avg orders, avg days between orders, multi-cat customers)
+      run(`WITH
+all_orders AS (
+  SELECT CustomerId, OrderId, MIN(DATE(OrderDate)) AS order_date
+  FROM ${TBL}
+  WHERE Channel = 'Shopify' AND CustomerId IS NOT NULL
+    AND DATE(OrderDate) <= DATE('${e}')
+  GROUP BY CustomerId, OrderId
+),
+customer_stats AS (
+  SELECT CustomerId,
+    COUNT(DISTINCT OrderId) AS total_orders,
+    MIN(order_date) AS first_order,
+    MAX(order_date) AS last_order
+  FROM all_orders
+  GROUP BY CustomerId
+),
+gaps AS (
+  SELECT o1.CustomerId, DATE_DIFF(o2.order_date, o1.order_date, DAY) AS gap
+  FROM (SELECT CustomerId, OrderId, order_date, ROW_NUMBER() OVER (PARTITION BY CustomerId ORDER BY order_date, OrderId) AS rn FROM all_orders) o1
+  JOIN (SELECT CustomerId, OrderId, order_date, ROW_NUMBER() OVER (PARTITION BY CustomerId ORDER BY order_date, OrderId) AS rn FROM all_orders) o2
+    ON o1.CustomerId = o2.CustomerId AND o2.rn = o1.rn + 1
+  WHERE DATE_DIFF(o2.order_date, o1.order_date, DAY) >= 0
+),
+item_master AS (
+  SELECT DISTINCT TRIM(Product_Code) AS sku, Category_Name
+  FROM \`frido-429506.sharepoint_to_gcp.Frido_Item_Master__frido_item_sku_master\`
+  WHERE Product_Code IS NOT NULL
+),
+pid_map AS (
+  SELECT DISTINCT TRIM(productid) AS productid, TRIM(masterskucode) AS masterskucode
+  FROM \`frido-429506.sharepoint_to_gcp.Frido_Item_Master__productid_sku_mapping\`
+  WHERE productid IS NOT NULL AND masterskucode IS NOT NULL
+),
+customer_cats AS (
+  SELECT t.CustomerId,
+    COUNT(DISTINCT COALESCE(im.Category_Name, im2.Category_Name)) AS distinct_categories
+  FROM ${TBL} t
+  LEFT JOIN pid_map pm ON TRIM(CAST(t.ProductId AS STRING)) = pm.productid
+  LEFT JOIN item_master im ON TRIM(CAST(t.masterskucode AS STRING)) = im.sku
+  LEFT JOIN item_master im2 ON pm.masterskucode = im2.sku
+  WHERE t.Channel = 'Shopify' AND t.CustomerId IS NOT NULL
+    AND DATE(t.OrderDate) <= DATE('${e}')
+  GROUP BY t.CustomerId
+)
+SELECT
+  COUNT(DISTINCT cs.CustomerId) AS total_customers,
+  COUNTIF(cs.total_orders >= 2) AS repeat_customers,
+  ROUND(AVG(cs.total_orders), 2) AS avg_orders_per_customer,
+  ROUND(AVG(g.avg_gap), 0) AS avg_days_between_orders,
+  COUNTIF(cc.distinct_categories > 1) AS multi_cat_customers
+FROM customer_stats cs
+LEFT JOIN (SELECT CustomerId, AVG(gap) AS avg_gap FROM gaps GROUP BY CustomerId) g USING (CustomerId)
+LEFT JOIN customer_cats cc USING (CustomerId)`),
+
+      // Q20 — order frequency histogram (1,2,3,4,5,6+) all-time
+      run(`WITH freq AS (
+  SELECT CustomerId, COUNT(DISTINCT OrderId) AS orders
+  FROM ${TBL}
+  WHERE Channel = 'Shopify' AND CustomerId IS NOT NULL
+    AND DATE(OrderDate) <= DATE('${e}')
+  GROUP BY CustomerId
+)
+SELECT
+  CASE WHEN orders >= 6 THEN '6+' ELSE CAST(orders AS STRING) END AS order_count,
+  CASE WHEN orders >= 6 THEN 6 ELSE orders END AS sort_order,
+  COUNT(*) AS customers
+FROM freq
+GROUP BY order_count, sort_order
+ORDER BY sort_order`),
+
+      // Q21 — repeat rate by first-order discount status
+      run(`WITH
+item_master AS (
+  SELECT DISTINCT TRIM(Product_Code) AS sku, Category_Name
+  FROM \`frido-429506.sharepoint_to_gcp.Frido_Item_Master__frido_item_sku_master\`
+  WHERE Product_Code IS NOT NULL
+),
+pid_map AS (
+  SELECT DISTINCT TRIM(productid) AS productid, TRIM(masterskucode) AS masterskucode
+  FROM \`frido-429506.sharepoint_to_gcp.Frido_Item_Master__productid_sku_mapping\`
+  WHERE productid IS NOT NULL AND masterskucode IS NOT NULL
+),
+all_orders AS (
+  SELECT
+    t.CustomerId,
+    t.OrderId,
+    MIN(DATE(t.OrderDate)) AS order_date,
+    SAFE_DIVIDE(SUM(t.Discount), NULLIF(SUM(t.Listing_Price), 0)) AS disc_pct
+  FROM ${TBL} t
+  WHERE t.Channel = 'Shopify' AND t.CustomerId IS NOT NULL
+    AND DATE(t.OrderDate) <= DATE('${e}')
+  GROUP BY t.CustomerId, t.OrderId
+),
+ranked AS (
+  SELECT *,
+    ROW_NUMBER() OVER (PARTITION BY CustomerId ORDER BY order_date, OrderId) AS rn
+  FROM all_orders
+),
+first_orders AS (
+  SELECT CustomerId, order_date AS first_date,
+    CASE WHEN disc_pct > 0 THEN 'Discounted' ELSE 'Non-Discounted' END AS first_order_type
+  FROM ranked WHERE rn = 1
+),
+second_orders AS (
+  SELECT CustomerId FROM ranked WHERE rn = 2
+)
+SELECT
+  fo.first_order_type,
+  COUNT(DISTINCT fo.CustomerId) AS total_customers,
+  COUNT(DISTINCT so.CustomerId) AS repeat_customers,
+  ROUND(SAFE_DIVIDE(COUNT(DISTINCT so.CustomerId), COUNT(DISTINCT fo.CustomerId)) * 100, 1) AS repeat_rate
+FROM first_orders fo
+LEFT JOIN second_orders so USING (CustomerId)
+GROUP BY fo.first_order_type`),
+
+      // Q22 — category-wise discount analysis
+      run(`WITH
+first_dates AS (
+  SELECT CustomerId, MIN(DATE(OrderDate)) AS first_date
+  FROM ${TBL}
+  WHERE Channel = 'Shopify' AND CustomerId IS NOT NULL
+  GROUP BY CustomerId
+),
+item_master AS (
+  SELECT DISTINCT TRIM(Product_Code) AS sku, Category_Name
+  FROM \`frido-429506.sharepoint_to_gcp.Frido_Item_Master__frido_item_sku_master\`
+  WHERE Product_Code IS NOT NULL AND Category_Name IS NOT NULL
+),
+pid_map AS (
+  SELECT DISTINCT TRIM(productid) AS productid, TRIM(masterskucode) AS masterskucode
+  FROM \`frido-429506.sharepoint_to_gcp.Frido_Item_Master__productid_sku_mapping\`
+  WHERE productid IS NOT NULL AND masterskucode IS NOT NULL
+),
+order_agg AS (
+  SELECT
+    t.OrderId, t.CustomerId,
+    ANY_VALUE(f.first_date) AS first_date,
+    COALESCE(im.Category_Name, im2.Category_Name) AS category,
+    SUM(t.SellingPrice_Exc_GST) AS order_rev,
+    SUM(t.Listing_Price) AS total_listing,
+    SUM(t.Discount) AS total_discount
+  FROM ${TBL} t
+  JOIN first_dates f USING (CustomerId)
+  LEFT JOIN pid_map pm ON TRIM(CAST(t.ProductId AS STRING)) = pm.productid
+  LEFT JOIN item_master im ON TRIM(CAST(t.masterskucode AS STRING)) = im.sku
+  LEFT JOIN item_master im2 ON pm.masterskucode = im2.sku
+  WHERE t.Channel = 'Shopify' AND t.CustomerId IS NOT NULL
+    AND DATE(t.OrderDate) BETWEEN '${s}' AND '${e}'
+  GROUP BY t.OrderId, t.CustomerId, COALESCE(im.Category_Name, im2.Category_Name)
+),
+with_repeat AS (
+  SELECT *,
+    CASE WHEN first_date < DATE('${s}') THEN 'repeat' ELSE 'new' END AS customer_type,
+    SAFE_DIVIDE(total_discount, NULLIF(total_listing, 0)) AS disc_ratio
+  FROM order_agg
+  WHERE category IS NOT NULL
+)
+SELECT
+  category,
+  COUNT(DISTINCT OrderId) AS total_orders,
+  ROUND(SAFE_DIVIDE(COUNTIF(total_discount > 0), COUNT(DISTINCT OrderId)) * 100, 1) AS discounted_order_pct,
+  ROUND(AVG(CASE WHEN total_discount > 0 THEN disc_ratio * 100 END), 1) AS avg_disc_pct,
+  ROUND(SAFE_DIVIDE(SUM(order_rev), COUNT(DISTINCT OrderId)), 0) AS aov,
+  ROUND(SAFE_DIVIDE(COUNTIF(customer_type = 'repeat'), COUNT(DISTINCT OrderId)) * 100, 1) AS repeat_order_pct
+FROM with_repeat
+GROUP BY category
+HAVING COUNT(DISTINCT OrderId) >= 50
+ORDER BY total_orders DESC
+LIMIT 20`),
     ])
+
+    // Fetch additional (offline) spend from Postgres for the selected date range
+    let additionalSpend = 0
+    try {
+      const db = getPool()
+      const months = []
+      const cur = new Date(s)
+      const endDate = new Date(e)
+      while (cur <= endDate) {
+        const ym = cur.toISOString().slice(0, 7)
+        if (!months.includes(ym)) months.push(ym)
+        cur.setMonth(cur.getMonth() + 1)
+      }
+      const placeholders = months.map((_, i) => `$${i + 1}`).join(',')
+      const { rows } = await db.query(
+        `SELECT SUM(total_spend_ex_gst::numeric) AS total
+         FROM markting_spend
+         WHERE channeltomap = 'D2C'
+           AND is_additional_spend = 'yes'
+           AND TO_CHAR(month_year::timestamp, 'YYYY-MM') IN (${placeholders})`,
+        months
+      )
+      additionalSpend = parseFloat(rows[0]?.total) || 0
+    } catch (_) {
+      additionalSpend = 0
+    }
 
     const k = kpis[0] || {}
     const metaAds = adsKpis.find(r => r.platform === 'Meta') || {}
     const googleAds = adsKpis.find(r => r.platform === 'Google') || {}
-    const totalSpend = (parseFloat(metaAds.spend) || 0) + (parseFloat(googleAds.spend) || 0)
+    const metaSpend = parseFloat(metaAds.spend) || 0
+    const googleSpend = parseFloat(googleAds.spend) || 0
+    const totalSpend = metaSpend + googleSpend + additionalSpend
     const grossSales = parseFloat(k.gross_sales) || 0
+    const grossExcGst = parseFloat(k.gross_exc_gst) || 0
     const totalCustomers = parseInt(k.total_customers) || 0
     const newCustomers = parseInt(k.new_customers) || 0
     const returningCustomers = parseInt(k.returning_customers) || 0
+    const netRevenue = parseFloat(k.net_revenue) || 0
+    const cac = newCustomers > 0 ? totalSpend / newCustomers : 0
+    // ltv12: avg revenue per customer over last 12 months from rfm total
+    const rfmTotalRev = rfm.reduce((s, r) => s + (parseFloat(r.total_revenue) || 0), 0)
+    const rfmTotalCust = rfm.reduce((s, r) => s + (parseInt(r.customers) || 0), 0)
+    const ltv12 = rfmTotalCust > 0 ? rfmTotalRev / rfmTotalCust : 0
+    const ltvCac = cac > 0 ? ltv12 / cac : 0
+
+    // Segment migration: compare segments at prev period end vs current end
+    const segMigration = await run(`WITH
+prev_stats AS (
+  SELECT CustomerId,
+    DATE_DIFF(DATE('${pe}'), MAX(DATE(OrderDate)), DAY) AS recency_days,
+    COUNT(DISTINCT OrderId) AS frequency,
+    ROUND(SUM(SellingPrice_Exc_GST), 0) AS monetary
+  FROM ${TBL}
+  WHERE Channel = 'Shopify' AND CustomerId IS NOT NULL AND DATE(OrderDate) <= DATE('${pe}')
+  GROUP BY CustomerId
+),
+prev_seg AS (
+  SELECT CustomerId,
+    CASE
+      WHEN (CASE WHEN recency_days<=30 THEN 5 WHEN recency_days<=60 THEN 4 WHEN recency_days<=90 THEN 3 WHEN recency_days<=180 THEN 2 ELSE 1 END) >= 4
+       AND (CASE WHEN frequency>=5 THEN 5 WHEN frequency>=4 THEN 4 WHEN frequency>=3 THEN 3 WHEN frequency>=2 THEN 2 ELSE 1 END) >= 4 THEN 'Champions'
+      WHEN (CASE WHEN recency_days<=30 THEN 5 WHEN recency_days<=60 THEN 4 WHEN recency_days<=90 THEN 3 WHEN recency_days<=180 THEN 2 ELSE 1 END) >= 3
+       AND (CASE WHEN frequency>=5 THEN 5 WHEN frequency>=4 THEN 4 WHEN frequency>=3 THEN 3 WHEN frequency>=2 THEN 2 ELSE 1 END) >= 3 THEN 'Loyal Customers'
+      WHEN (CASE WHEN recency_days<=30 THEN 5 WHEN recency_days<=60 THEN 4 WHEN recency_days<=90 THEN 3 WHEN recency_days<=180 THEN 2 ELSE 1 END) >= 4
+       AND (CASE WHEN frequency>=5 THEN 5 WHEN frequency>=4 THEN 4 WHEN frequency>=3 THEN 3 WHEN frequency>=2 THEN 2 ELSE 1 END) <= 2 THEN 'Recent Users'
+      WHEN (CASE WHEN recency_days<=30 THEN 5 WHEN recency_days<=60 THEN 4 WHEN recency_days<=90 THEN 3 WHEN recency_days<=180 THEN 2 ELSE 1 END) >= 3
+       AND (CASE WHEN monetary>=10000 THEN 5 WHEN monetary>=5000 THEN 4 WHEN monetary>=2000 THEN 3 WHEN monetary>=1000 THEN 2 ELSE 1 END) >= 3 THEN 'Potential Loyalists'
+      WHEN (CASE WHEN recency_days<=30 THEN 5 WHEN recency_days<=60 THEN 4 WHEN recency_days<=90 THEN 3 WHEN recency_days<=180 THEN 2 ELSE 1 END) <= 2
+       AND (CASE WHEN frequency>=5 THEN 5 WHEN frequency>=4 THEN 4 WHEN frequency>=3 THEN 3 WHEN frequency>=2 THEN 2 ELSE 1 END) >= 3 THEN 'Cannot Lose Them'
+      WHEN (CASE WHEN recency_days<=30 THEN 5 WHEN recency_days<=60 THEN 4 WHEN recency_days<=90 THEN 3 WHEN recency_days<=180 THEN 2 ELSE 1 END) <= 2
+       AND (CASE WHEN frequency>=5 THEN 5 WHEN frequency>=4 THEN 4 WHEN frequency>=3 THEN 3 WHEN frequency>=2 THEN 2 ELSE 1 END) >= 2 THEN 'Hibernating'
+      WHEN monetary >= 5000 THEN 'Others'
+      ELSE 'Hibernating'
+    END AS segment
+  FROM prev_stats
+),
+curr_stats AS (
+  SELECT CustomerId,
+    DATE_DIFF(DATE('${e}'), MAX(DATE(OrderDate)), DAY) AS recency_days,
+    COUNT(DISTINCT OrderId) AS frequency,
+    ROUND(SUM(SellingPrice_Exc_GST), 0) AS monetary
+  FROM ${TBL}
+  WHERE Channel = 'Shopify' AND CustomerId IS NOT NULL AND DATE(OrderDate) <= DATE('${e}')
+  GROUP BY CustomerId
+),
+curr_seg AS (
+  SELECT CustomerId,
+    CASE
+      WHEN (CASE WHEN recency_days<=30 THEN 5 WHEN recency_days<=60 THEN 4 WHEN recency_days<=90 THEN 3 WHEN recency_days<=180 THEN 2 ELSE 1 END) >= 4
+       AND (CASE WHEN frequency>=5 THEN 5 WHEN frequency>=4 THEN 4 WHEN frequency>=3 THEN 3 WHEN frequency>=2 THEN 2 ELSE 1 END) >= 4 THEN 'Champions'
+      WHEN (CASE WHEN recency_days<=30 THEN 5 WHEN recency_days<=60 THEN 4 WHEN recency_days<=90 THEN 3 WHEN recency_days<=180 THEN 2 ELSE 1 END) >= 3
+       AND (CASE WHEN frequency>=5 THEN 5 WHEN frequency>=4 THEN 4 WHEN frequency>=3 THEN 3 WHEN frequency>=2 THEN 2 ELSE 1 END) >= 3 THEN 'Loyal Customers'
+      WHEN (CASE WHEN recency_days<=30 THEN 5 WHEN recency_days<=60 THEN 4 WHEN recency_days<=90 THEN 3 WHEN recency_days<=180 THEN 2 ELSE 1 END) >= 4
+       AND (CASE WHEN frequency>=5 THEN 5 WHEN frequency>=4 THEN 4 WHEN frequency>=3 THEN 3 WHEN frequency>=2 THEN 2 ELSE 1 END) <= 2 THEN 'Recent Users'
+      WHEN (CASE WHEN recency_days<=30 THEN 5 WHEN recency_days<=60 THEN 4 WHEN recency_days<=90 THEN 3 WHEN recency_days<=180 THEN 2 ELSE 1 END) >= 3
+       AND (CASE WHEN monetary>=10000 THEN 5 WHEN monetary>=5000 THEN 4 WHEN monetary>=2000 THEN 3 WHEN monetary>=1000 THEN 2 ELSE 1 END) >= 3 THEN 'Potential Loyalists'
+      WHEN (CASE WHEN recency_days<=30 THEN 5 WHEN recency_days<=60 THEN 4 WHEN recency_days<=90 THEN 3 WHEN recency_days<=180 THEN 2 ELSE 1 END) <= 2
+       AND (CASE WHEN frequency>=5 THEN 5 WHEN frequency>=4 THEN 4 WHEN frequency>=3 THEN 3 WHEN frequency>=2 THEN 2 ELSE 1 END) >= 3 THEN 'Cannot Lose Them'
+      WHEN (CASE WHEN recency_days<=30 THEN 5 WHEN recency_days<=60 THEN 4 WHEN recency_days<=90 THEN 3 WHEN recency_days<=180 THEN 2 ELSE 1 END) <= 2
+       AND (CASE WHEN frequency>=5 THEN 5 WHEN frequency>=4 THEN 4 WHEN frequency>=3 THEN 3 WHEN frequency>=2 THEN 2 ELSE 1 END) >= 2 THEN 'Hibernating'
+      WHEN monetary >= 5000 THEN 'Others'
+      ELSE 'Hibernating'
+    END AS segment
+  FROM curr_stats
+)
+SELECT p.segment AS from_segment, c.segment AS to_segment, COUNT(*) AS customers
+FROM prev_seg p JOIN curr_seg c USING (CustomerId)
+WHERE p.segment != c.segment
+GROUP BY from_segment, to_segment
+ORDER BY customers DESC
+LIMIT 50`)
 
     const pk = prevKpis[0] || {}
     const pMeta = prevAdsKpis.find(r => r.platform === 'Meta') || {}
@@ -402,27 +908,32 @@ GROUP BY platform`),
     res.json({
       kpis: {
         grossSales,
+        grossExcGst,
         totalSpend,
-        metaSpend: parseFloat(metaAds.spend) || 0,
-        googleSpend: parseFloat(googleAds.spend) || 0,
+        metaSpend,
+        googleSpend,
+        additionalSpend,
         totalCustomers,
         newCustomers,
         returningCustomers,
         repeatRate: totalCustomers > 0 ? returningCustomers / totalCustomers : 0,
-        roas: totalSpend > 0 ? grossSales / totalSpend : 0,
-        cac: newCustomers > 0 ? totalSpend / newCustomers : 0,
+        roas: totalSpend > 0 ? grossExcGst / totalSpend : 0,
+        cac,
+        ltv12,
+        ltvCac,
         aov: parseFloat(k.aov) || 0,
         acquisitionRate: totalCustomers > 0 ? newCustomers / totalCustomers : 0,
         repeatRevenue: parseFloat(k.repeat_revenue) || 0,
         repeatRevenueRate: grossSales > 0 ? (parseFloat(k.repeat_revenue) || 0) / grossSales : 0,
-        netRevenue: parseFloat(k.net_revenue) || 0,
-        netRevenueRate: grossSales > 0 ? (parseFloat(k.net_revenue) || 0) / grossSales : 0,
+        netRevenue,
+        netRevenueRate: grossExcGst > 0 ? netRevenue / grossExcGst : 0,
         discountedOrders: parseInt(k.discounted_orders) || 0,
         nonDiscountedOrders: parseInt(k.non_discounted_orders) || 0,
         totalOrders: parseInt(k.total_orders) || 0,
       },
       prevKpis: {
         grossSales: pGrossSales,
+        grossExcGst: parseFloat(pk.gross_exc_gst) || 0,
         totalSpend: pTotalSpend,
         metaSpend: parseFloat(pMeta.spend) || 0,
         googleSpend: parseFloat(pGoogle.spend) || 0,
@@ -430,22 +941,26 @@ GROUP BY platform`),
         newCustomers: pNewCustomers,
         returningCustomers: pReturningCustomers,
         repeatRate: pTotalCustomers > 0 ? pReturningCustomers / pTotalCustomers : 0,
-        roas: pTotalSpend > 0 ? pGrossSales / pTotalSpend : 0,
+        roas: pTotalSpend > 0 ? (parseFloat(pk.gross_exc_gst) || 0) / pTotalSpend : 0,
         cac: pNewCustomers > 0 ? pTotalSpend / pNewCustomers : 0,
         aov: parseFloat(pk.aov) || 0,
         acquisitionRate: pTotalCustomers > 0 ? pNewCustomers / pTotalCustomers : 0,
         repeatRevenue: pRepeatRevenue,
         repeatRevenueRate: pGrossSales > 0 ? pRepeatRevenue / pGrossSales : 0,
+        netRevenue: pNetRevenue,
         netRevenueRate: pGrossSales > 0 ? pNetRevenue / pGrossSales : 0,
         totalOrders: parseInt(pk.total_orders) || 0,
       },
       daily: monthly.map(r => ({
-        day: r.day,
+        date: r.day,
         customersAcquired: parseInt(r.customers_acquired) || 0,
         totalOrders: parseInt(r.total_orders) || 0,
         grossSales: parseFloat(r.gross_sales) || 0,
+        grossSalesExc: parseFloat(r.gross_sales_exc) || 0,
         repeatRevenue: parseFloat(r.repeat_revenue) || 0,
         newRevenue: parseFloat(r.new_revenue) || 0,
+        newSales: parseFloat(r.new_revenue) || 0,
+        repeatSales: parseFloat(r.repeat_revenue) || 0,
         newCustomers: parseInt(r.new_customers) || 0,
         repeatCustomers: parseInt(r.repeat_customers) || 0,
         newOrders: parseInt(r.new_orders) || 0,
@@ -472,6 +987,11 @@ GROUP BY platform`),
         avgFrequency: parseFloat(r.avg_frequency) || 0,
         avgRecency: parseFloat(r.avg_recency) || 0,
       })),
+      segMigration: segMigration.map(r => ({
+        from: r.from_segment,
+        to: r.to_segment,
+        customers: parseInt(r.customers) || 0,
+      })),
       freqDist: freqDist.map(r => ({
         label: r.frequency_label,
         customers: parseInt(r.customers) || 0,
@@ -480,7 +1000,7 @@ GROUP BY platform`),
       monetaryDist: monetaryDist.map(r => ({
         bucket: r.bucket,
         customers: parseInt(r.customers) || 0,
-        totalRevenue: parseFloat(r.total_revenue) || 0,
+        revenue: parseFloat(r.total_revenue) || 0,
         avgRevenue: parseFloat(r.avg_revenue) || 0,
       })),
       inactivity: inactivity.map(r => ({
@@ -489,12 +1009,82 @@ GROUP BY platform`),
       })),
       discountDist: discountDist.map(r => ({
         bucket: r.discount_bucket,
+        totalOrders: parseInt(r.total_orders) || 0,
         firstOrders: parseInt(r.first_orders) || 0,
         repeatOrders: parseInt(r.repeat_orders) || 0,
+        aovExc: parseFloat(r.aov_exc) || 0,
+        uniqueCustomers: parseInt(r.unique_customers) || 0,
+        avgDiscPct: parseFloat(r.avg_disc_pct) || 0,
       })),
       dailySpend: dailySpend.map(r => ({
-        day: r.day,
+        date: r.day,
         totalSpend: parseFloat(r.total_spend) || 0,
+      })),
+      discountRepeatRate: discountRepeatRate.map(r => ({
+        bucket: r.discount_bucket,
+        totalCustomers: parseInt(r.total_customers) || 0,
+        repeatCustomers: parseInt(r.repeat_customers) || 0,
+        repeatRate: parseFloat(r.repeat_rate) || 0,
+      })),
+      daysToSecondPurchase: daysToSecondPurchase.map(r => ({
+        bucket: r.bucket,
+        customers: parseInt(r.customers) || 0,
+      })),
+      aovByOrderNumber: aovByOrderNumber.map(r => ({
+        orderLabel: r.order_label,
+        aov: parseFloat(r.aov) || 0,
+        customers: parseInt(r.customers) || 0,
+      })),
+      repurchaseCycleByCategory: repurchaseCycleByCategory.map(r => ({
+        category: r.first_category,
+        repeatCustomers: parseInt(r.repeat_customers) || 0,
+        p25Days: parseInt(r.p25_days) || 0,
+        medianDays: parseInt(r.median_days) || 0,
+        p75Days: parseInt(r.p75_days) || 0,
+      })),
+      basketComposition: (() => {
+        const r = basketComposition[0] || {}
+        return {
+          totalOrders: parseInt(r.total_orders) || 0,
+          singleCatOrders: parseInt(r.single_cat_orders) || 0,
+          multiCatOrders: parseInt(r.multi_cat_orders) || 0,
+          avgCategoriesPerOrder: parseFloat(r.avg_categories_per_order) || 0,
+          avgSkusPerOrder: parseFloat(r.avg_skus_per_order) || 0,
+          avgItemsPerOrder: parseFloat(r.avg_items_per_order) || 0,
+        }
+      })(),
+      purchaseBehaviorKpis: (() => {
+        const r = purchaseBehaviorKpis[0] || {}
+        const total = parseInt(r.total_customers) || 0
+        const repeat = parseInt(r.repeat_customers) || 0
+        const multiCat = parseInt(r.multi_cat_customers) || 0
+        return {
+          totalCustomers: total,
+          repeatCustomers: repeat,
+          repeatRate: total > 0 ? parseFloat((repeat / total * 100).toFixed(1)) : 0,
+          avgOrdersPerCustomer: parseFloat(r.avg_orders_per_customer) || 0,
+          avgDaysBetweenOrders: parseInt(r.avg_days_between_orders) || 0,
+          multiCatCustomers: multiCat,
+          multiCatRate: total > 0 ? parseFloat((multiCat / total * 100).toFixed(1)) : 0,
+        }
+      })(),
+      orderFreqDist: orderFreqDist.map(r => ({
+        orderCount: r.order_count,
+        customers: parseInt(r.customers) || 0,
+      })),
+      discountRepeatRateByFirst: discountRepeatRateByFirst.map(r => ({
+        type: r.first_order_type,
+        totalCustomers: parseInt(r.total_customers) || 0,
+        repeatCustomers: parseInt(r.repeat_customers) || 0,
+        repeatRate: parseFloat(r.repeat_rate) || 0,
+      })),
+      categoryDiscountAnalysis: categoryDiscountAnalysis.map(r => ({
+        category: r.category,
+        totalOrders: parseInt(r.total_orders) || 0,
+        discountedOrderPct: parseFloat(r.discounted_order_pct) || 0,
+        avgDiscPct: parseFloat(r.avg_disc_pct) || 0,
+        aov: parseFloat(r.aov) || 0,
+        repeatOrderPct: parseFloat(r.repeat_order_pct) || 0,
       })),
     })
   } catch (err) {

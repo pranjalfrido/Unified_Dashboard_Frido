@@ -54,7 +54,8 @@ const ZOOM_BREAKPOINTS = [
   { minWidth: 1600, zoom: 1 },
   { minWidth: 1440, zoom: 0.9 },
   { minWidth: 1280, zoom: 0.8 },
-  { minWidth: 0, zoom: 0.72 },
+  { minWidth: 769, zoom: 0.72 },
+  { minWidth: 0, zoom: 1 }, // no zoom on mobile — CSS responsive layout takes over
 ]
 function zoomForWidth(width) {
   for (const bp of ZOOM_BREAKPOINTS) if (width >= bp.minWidth) return bp.zoom
@@ -106,10 +107,14 @@ export function fmtCurrency(n) {
 }
 
 export function getDefaultDates() {
+  const toLocal = d => {
+    const y = d.getFullYear(), m = String(d.getMonth() + 1).padStart(2, '0'), day = String(d.getDate()).padStart(2, '0')
+    return `${y}-${m}-${day}`
+  }
   const end = new Date()
   const start = new Date(end)
   start.setDate(start.getDate() - 6)
-  return { start: start.toISOString().slice(0, 10), end: end.toISOString().slice(0, 10) }
+  return { start: toLocal(start), end: toLocal(end) }
 }
 
 // ── Shared building blocks ─────────────────────────────────────────────────
@@ -178,7 +183,7 @@ export function KpiTile({ label, value, unit, sub, accent, icon, compact }) {
         <span style={{ fontSize: valueSize, fontWeight: 700, letterSpacing: '-.02em', color: accent || IC.t1, fontVariantNumeric: 'tabular-nums', lineHeight: 1.1 }}>{value}</span>
         {unit && <span style={{ fontSize: unitSize, color: IC.t3 }}>{unit}</span>}
       </div>
-      {sub && <span style={{ fontSize: compact ? 10.5 : 11.5, color: IC.t3 }}>{sub}</span>}
+      {sub && <span className="kpi-tile-sub" style={{ fontSize: compact ? 10.5 : 11.5, color: IC.t3 }}>{sub}</span>}
     </div>
   )
 }

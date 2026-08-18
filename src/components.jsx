@@ -1,8 +1,8 @@
 import { useState, useRef } from 'react'
 import { C, fmt, fmtN, pct } from './utils.js'
-import { BarChart, Bar, LineChart, Line, AreaChart, Area, ComposedChart, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell, Treemap } from 'recharts'
+import { BarChart, Bar, LineChart, Line, AreaChart, Area, ComposedChart, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ReferenceLine, LabelList, ResponsiveContainer, PieChart, Pie, Cell, Treemap } from 'recharts'
 
-export { BarChart, Bar, LineChart, Line, AreaChart, Area, ComposedChart, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell, Treemap }
+export { BarChart, Bar, LineChart, Line, AreaChart, Area, ComposedChart, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ReferenceLine, LabelList, ResponsiveContainer, PieChart, Pie, Cell, Treemap }
 
 export function ChartTooltip({ active, payload, label, formatter }) {
   if (!active || !payload?.length) return null
@@ -116,19 +116,21 @@ export function CategoryRevenueCard({ catRows, subCatRows, skuMap, totalRev, vie
 // per call site (e.g. the table's title/section name). Falls back to a key derived from the
 // column set if omitted, so an existing caller that hasn't been updated yet still gets a stable
 // (if less human-readable) storage key rather than colliding with every other unkeyed DataTable.
-export function DataTable({ columns, rows, maxRows = 50, storageKey }) {
+// maxHeight scrolls the body vertically while the header stays put, so a card can hold a long
+// table at a fixed height instead of stretching the whole row.
+export function DataTable({ columns, rows, maxRows = 50, storageKey, maxHeight }) {
   const visible = rows.slice(0, maxRows)
   const key = storageKey || `datatable-cols:${columns.map(c => c.key).join(',')}`
   const idColumns = columns.map(c => ({ id: c.key, ...c }))
   const reorder = useReorderableColumns(key, idColumns)
   return (
-    <div className="overflow-x-auto">
+    <div className="overflow-x-auto" style={maxHeight ? { maxHeight, overflowY: 'auto' } : undefined}>
       <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
         <thead>
           <tr>
             {reorder.orderedColumns.map(c => (
               <th key={c.key + c.label} draggable onDragStart={reorder.onDragStart(c.id)} onDragOver={reorder.onDragOver} onDrop={reorder.onDrop(c.id)}
-                style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.05em', color: C.t3, textAlign: c.align === 'right' ? 'right' : 'left', padding: '3px 5px 7px', borderBottom: `1px solid ${C.border}`, cursor: 'grab', userSelect: 'none' }}>{c.label}</th>
+                style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.05em', color: C.t3, textAlign: c.align === 'right' ? 'right' : 'left', padding: '3px 5px 7px', borderBottom: `1px solid ${C.border}`, cursor: 'grab', userSelect: 'none', ...(maxHeight ? { position: 'sticky', top: 0, background: C.card, zIndex: 1 } : {}) }}>{c.label}</th>
             ))}
           </tr>
         </thead>
