@@ -457,7 +457,7 @@ export default function LogisticsCostPage() {
   const [opts, setOpts] = useState({ months: [], zones: [], modes: [], payments: [], couriers: [], accountTypes: [], cities: [] })
   const [sidebarOpen, setSidebarOpen] = useState(true)
   // 'all' = B2B + B2C summary · 'b2c' = courier detail · 'b2b' = lane-wise freight
-  const [scope, setScope] = useState('b2c')
+  const [scope, setScope] = useState('all')
   // Bumped after a claim mutation to force a refetch, so every derived figure (hero,
   // recovery rate, aging) recomputes from the server rather than local guesswork.
   // Retained as a fetch-effect dependency. Its only setter went with the claim-filing
@@ -473,20 +473,42 @@ export default function LogisticsCostPage() {
     const ctl = new AbortController()
     const myRun = ++scanRef.current
 
+    // Check if all filters are empty — if so, try the pre-computed static file first
+    const f = JSON.parse(filterKey)
+    const isDefaultFilters = !f.months?.length && !f.zones?.length && !f.modes?.length &&
+      !f.payments?.length && !f.couriers?.length && !f.accountTypes?.length &&
+      !f.band && !f.destCity && (!f.billing || f.billing === 'all')
+
     ;(async () => {
       setLoading(true); setError(null)
       try {
-        const res = await fetch(`${API}/api/logistics-cost`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: filterKey,
-          signal: ctl.signal,
-        })
-        if (!res.ok) {
-          const body = await res.json().catch(() => ({}))
-          throw new Error(body.error || `Server returned ${res.status}`)
+        let j
+        if (isDefaultFilters) {
+          // Try CDN static file first — 100-200ms vs 30-56s from Supabase
+          const staticRes = await fetch('/logistics-cost-data.json', { signal: ctl.signal }).catch(() => null)
+          if (staticRes?.ok) {
+            const data = await staticRes.json()
+            // Accept if generated within last 2 hours
+            const age = data.asOf ? (Date.now() - new Date(data.asOf).getTime()) : Infinity
+            if (age < 2 * 60 * 60 * 1000) {
+              j = data
+            }
+          }
         }
-        const j = await res.json()
+        if (!j) {
+          // Fall back to live API (filters set, or static file missing/stale)
+          const res = await fetch(`${API}/api/logistics-cost`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: filterKey,
+            signal: ctl.signal,
+          })
+          if (!res.ok) {
+            const body = await res.json().catch(() => ({}))
+            throw new Error(body.error || `Server returned ${res.status}`)
+          }
+          j = await res.json()
+        }
         if (scanRef.current !== myRun) return
         setAgg(shapeResponse(j))
         setB2bRows(j.b2b || [])
@@ -2244,7 +2266,7 @@ export default function LogisticsCostPage() {
           {/* Scope tabs: which ledger this page is reporting on. Sits above everything
               it scopes, alongside the filter summary. */}
           <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap', paddingTop: 2, marginBottom: 18 }}>
-            <div style={{ display: 'inline-flex', background: C.bg, borderRadius: 9, padding: 3, gap: 2 }}>
+            <div style={{ display: 'inline-flex', background: C.bg, borderRadius: 9, padding: 3, gap: 2, border: `1.5px solid ${C.border2}` }}>
               {SCOPES.map(sc => {
                 const on = scope === sc.id
                 return (

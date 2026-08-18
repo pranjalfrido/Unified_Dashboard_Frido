@@ -13449,7 +13449,7 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
             </div>
           )}
           {page === 'logistics-cost' && (!allowedTabs || allowedTabs.includes('logistics')) && (
-            <div className="page-scroll">
+            <div style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
               <LogisticsCostPage />
             </div>
           )}
