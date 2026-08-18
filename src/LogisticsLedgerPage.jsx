@@ -21,7 +21,7 @@ const FORMATS = {
       { key: "month_year", label: "month_year", type: "month", req: true, w: 110, ex: "2026-07", desc: "Billing period this invoice covers" },
       { key: "invoice_number", label: "invoice_number", type: "text", w: 150, ex: "TRN-INV-3321", desc: "Transporter's invoice/bill number" },
       { key: "transporter_name", label: "transporter_name", type: "text", req: true, w: 170, ex: "ABC Roadlines", desc: "Name of the B2B transporter" },
-      { key: "reference_no", label: "reference_no", type: "text", req: true, w: 140, ex: "LR-778812", desc: "LR number or consignment reference" },
+      { key: "reference_no", label: "reference_no", type: "text", w: 140, ex: "LR-778812", desc: "LR number or consignment reference" },
       { key: "origin_location", label: "origin_location", type: "text", req: true, w: 150, ex: "Bhiwandi WH", desc: "Warehouse/city goods dispatched from" },
       { key: "destination_location", label: "destination_location", type: "text", req: true, w: 170, ex: "Pune WH", desc: "Warehouse/city goods delivered to" },
       { key: "vehicle_number", label: "vehicle_number", type: "text", w: 140, ex: "MH12AB1234", desc: "Registration number of the vehicle" },
@@ -29,9 +29,9 @@ const FORMATS = {
       { key: "freight_type_FTL_PTL", label: "freight_type_FTL_PTL", type: "text", w: 165, ex: "PTL", desc: "FTL / PTL" },
       { key: "no_of_packages", label: "no_of_packages", type: "int", w: 130, ex: "120", desc: "Number of packages/cartons" },
       { key: "load_weight", label: "load_weight", type: "num", w: 120, ex: "2800", desc: "Actual weight loaded" },
-      { key: "charged_weight", label: "charged_weight", type: "num", req: true, w: 135, ex: "2850", desc: "Weight the transporter billed on" },
-      { key: "freight_charge", label: "freight_charge", type: "num", req: true, w: 130, ex: "9500", desc: "Base freight charge" },
-      { key: "surcharge", label: "surcharge", type: "num", req: true, w: 110, ex: "650", desc: "Fuel surcharge or similar" },
+      { key: "charged_weight", label: "charged_weight", type: "num", w: 135, ex: "2850", desc: "Weight the transporter billed on" },
+      { key: "freight_charge", label: "freight_charge", type: "num", w: 130, ex: "9500", desc: "Base freight charge" },
+      { key: "surcharge", label: "surcharge", type: "num", w: 110, ex: "650", desc: "Fuel surcharge or similar" },
       { key: "other_charge", label: "other_charge", type: "num", w: 120, ex: "300", desc: "Loading/unloading/detention or other charges" },
       { key: "toll_charge", label: "toll_charge", type: "num", w: 110, ex: "200", desc: "Toll charges billed separately" },
       { key: "total_cost", label: "total_cost", type: "num", req: true, computed: true, w: 120, ex: "10650", desc: "Grand total invoiced for this trip" },
@@ -54,7 +54,7 @@ const FORMATS = {
     exportPrefix: "b2c_courier_invoices",
     totalParts: ["freight_charge", "surcharge", "other_charge"],
     totalField: "total_cost",
-    uniqueKey: null,
+    uniqueKey: "awb_number",
     fields: [
       { key: "month_year", label: "month_year", type: "month", req: true, w: 110, ex: "2026-07", desc: "Billing period this invoice covers" },
       { key: "invoice_number", label: "invoice_number", type: "text", w: 155, ex: "INV-DLV-0072451", desc: "Courier's invoice/bill number" },
@@ -148,19 +148,27 @@ const db = {
   },
 
   async insertRows(fmt, rows, onProgress) {
-    const out = [];
     const PAGE = 500;
+    let inserted = 0;
     for (let i = 0; i < rows.length; i += PAGE) {
-      const chunk = rows.slice(i, i + PAGE).map((r) => toDbRow(fmt, r));
+      let chunk = rows.slice(i, i + PAGE).map((r) => toDbRow(fmt, r));
+      // Deduplicate within chunk — last row wins (matches upsert semantics)
+      if (fmt.uniqueKey) {
+        const seen = new Map();
+        for (const r of chunk) seen.set(String(r[fmt.uniqueKey] ?? ""), r);
+        chunk = [...seen.values()];
+      }
       const q = fmt.uniqueKey
         ? supabase.from(fmt.table).upsert(chunk, { onConflict: fmt.uniqueKey, ignoreDuplicates: false })
         : supabase.from(fmt.table).insert(chunk);
-      const { data, error } = await q.select();
+      const { error } = await q;
       if (error) throw error;
-      out.push(...(data ?? []));
-      onProgress?.(Math.min(i + PAGE, rows.length), rows.length);
+      inserted += chunk.length;
+      onProgress?.(inserted, rows.length);
+      // Yield to browser every 5 chunks so UI stays responsive
+      if ((i / PAGE) % 5 === 4) await new Promise((r) => setTimeout(r, 0));
     }
-    return out;
+    return [];
   },
 
   async updateRow(fmt, row) {
@@ -294,7 +302,6 @@ export default function LogisticsLedgerPage() {
 
   const load = useCallback(async (which, month) => {
     const f = FORMATS[which];
-    setBusy(true);
     setExportProgress(null);
     try {
       const [data, allMonths] = await Promise.all([
@@ -303,19 +310,16 @@ export default function LogisticsLedgerPage() {
       ]);
       setStore((s) => ({ ...s, [which]: data.map((d) => fromDbRow(f, d)) }));
       setMonthsStore((s) => ({ ...s, [which]: allMonths }));
-      flash("ok", `Loaded ${data.length} row${data.length !== 1 ? "s" : ""}${month ? ` for ${month}` : ""} from ${f.table}.`);
     } catch (e) {
       setStore((s) => ({ ...s, [which]: s[which] ?? [blankRow(f)] }));
       flash("error", `Couldn't load ${f.table}: ${e.message ?? e}`);
-    } finally {
-      setBusy(false);
     }
   }, []);
 
   // single month passed to fetchRows for UI display (only when exactly 1 selected)
   const singleMonth = monthFilter.length === 1 ? monthFilter[0] : null;
 
-  useEffect(() => { if (store[tab] == null) load(tab, singleMonth); }, [tab, store, load]);
+  useEffect(() => { if (store[tab] == null && !uploadProgress) load(tab, singleMonth); }, [tab, store, load, uploadProgress]);
 
   // When month filter changes, re-fetch from DB
   const prevMonthRef = useRef(singleMonth);
@@ -422,84 +426,98 @@ export default function LogisticsLedgerPage() {
   const importTemplate = (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
+    // Show parsing state immediately before any heavy work
+    setUploadProgress({ done: 0, total: 0, parsing: true });
+    setBusy(true);
     const reader = new FileReader();
     reader.onload = async () => {
       try {
-        const wb = XLSX.read(reader.result, { type: "array", cellDates: true });
-        const dataName = wb.SheetNames.find((n) => n.trim().toLowerCase() === "billing_data") ?? wb.SheetNames.find((n) => !/^instruction/i.test(n.trim())) ?? wb.SheetNames[0];
-        const ws = wb.Sheets[dataName];
-        const aoa = XLSX.utils.sheet_to_json(ws, { header: 1, blankrows: false });
-        if (!aoa.length) throw new Error("empty sheet");
-        const wanted = fmt.fields.filter((f) => f.req).map(headKey);
-        let hIdx = aoa.findIndex((r) => { const cells = r.map(normHead); return wanted.every((w) => cells.includes(w)); });
-        if (hIdx === -1) { alert(`Couldn't find the header row for ${fmt.label}.\n\nRequired columns: ${fmt.fields.filter((f) => f.req).map((f) => f.label).join(", ")}.\n\nUse 'Download template' and keep its header row intact.`); return; }
-        const head = aoa[hIdx].map(normHead);
-        const idxOf = {};
-        for (const f of fmt.fields) idxOf[f.key] = head.indexOf(headKey(f));
-        const body = aoa.slice(hIdx + 1);
-        const raw = body.map((r) => {
-          const o = {};
-          for (const f of fmt.fields) {
-            const i = idxOf[f.key]; let v = i === -1 ? "" : r[i];
-            if (f.type === "month") v = normMonth(v) ?? "";
-            else if (f.type === "date") v = normDate(v);
-            else v = v == null ? "" : String(v).trim();
-            o[f.key] = v;
-          }
-          return o;
-        });
         const sampleSigs = [fmt.fields.reduce((o, f) => ((o[f.key] = f.ex ?? ""), o), {}), SAMPLE2[fmt.key] ?? {}];
         const sigKeys = [fmt.uniqueKey ?? "reference_no", "invoice_number"].filter(Boolean);
-        const isSample = (r) => sampleSigs.some((sig) => sigKeys.every((k) => String(sig[k] ?? "").trim() !== "" && String(r[k] ?? "").trim().toLowerCase() === String(sig[k]).trim().toLowerCase()));
-        const nonEmpty = raw.filter((r) => fmt.fields.some((f) => r[f.key] !== ""));
-        const nonSample = nonEmpty.filter((r) => !isSample(r));
-        // If all rows are samples (user uploading blank template), let them through so upload doesn't silently fail
-        const candidates = nonSample.length > 0 ? nonSample : nonEmpty;
-        const bad = []; const good = [];
-        candidates.forEach((r, i) => {
-          const missing = fmt.fields.filter((f) => f.req && !f.computed && r[f.key] === "").map((f) => f.label);
-          for (const f of fmt.fields) { if (f.req && f.computed && r[f.key] === "" && sumParts(fmt, r) === 0) missing.push(f.label); }
-          if (missing.length) bad.push({ line: hIdx + 2 + i, missing }); else good.push(r);
+
+        // Worker streams chunks as it parses — we upload each chunk immediately (parse + upload in parallel)
+        let uploaded = 0, totalValid = 0;
+        await new Promise((resolve, reject) => {
+          const worker = new Worker("/xlsx-worker.js");
+          // Queue of chunks waiting to be uploaded; we process sequentially
+          const uploadQueue = [];
+          let workerDone = false;
+          let uploading = false;
+
+          const processQueue = async () => {
+            if (uploading) return;
+            uploading = true;
+            while (uploadQueue.length > 0) {
+              const chunk = uploadQueue.shift();
+              let dbRows = chunk.map((r) => toDbRow(fmt, r));
+              // Deduplicate within chunk — last row wins
+              if (fmt.uniqueKey) {
+                const seen = new Map();
+                for (const r of dbRows) seen.set(String(r[fmt.uniqueKey] ?? ""), r);
+                dbRows = [...seen.values()];
+              }
+              const q = fmt.uniqueKey
+                ? supabase.from(fmt.table).upsert(dbRows, { onConflict: fmt.uniqueKey, ignoreDuplicates: false })
+                : supabase.from(fmt.table).insert(dbRows);
+              const { error } = await q;
+              if (error) { worker.terminate(); reject(error); return; }
+              uploaded += chunk.length;
+              setUploadProgress({ done: uploaded, total: totalValid || uploaded });
+            }
+            uploading = false;
+            if (workerDone) resolve();
+          };
+
+          worker.onmessage = async (ev) => {
+            const msg = ev.data;
+            if (msg.type === "error") {
+              worker.terminate();
+              if (msg.error === "header_not_found") {
+                reject(new Error(`header_not_found||${(msg.reqLabels || []).join(", ")}`));
+              } else {
+                reject(new Error(msg.error));
+              }
+            } else if (msg.type === "chunk") {
+              totalValid = msg.total;
+              setUploadProgress({ done: uploaded, total: msg.total });
+              uploadQueue.push(msg.rows);
+              processQueue();
+            } else if (msg.type === "done") {
+              workerDone = true;
+              worker.terminate();
+              if (!uploading && uploadQueue.length === 0) resolve();
+            }
+          };
+          worker.onerror = (ev) => { worker.terminate(); reject(new Error(ev.message)); };
+          worker.postMessage({
+            buffer: reader.result,
+            fields: fmt.fields,
+            sampleSigs,
+            sigKeys,
+            totalParts: fmt.totalParts,
+            totalField: fmt.totalField,
+            chunkSize: 500,
+          });
         });
-        if (bad.length) {
-          const preview = bad.slice(0, 8).map((b) => `• row ${b.line}: missing ${b.missing.join(", ")}`).join("\n");
-          if (!confirm(`${bad.length} row${bad.length !== 1 ? "s" : ""} will be skipped:\n\n${preview}\n\nImport the ${good.length} valid rows anyway?`)) return;
+
+        setUploadProgress({ done: uploaded, total: uploaded, finished: true });
+        flash("ok", `Uploaded ${uploaded} rows to ${fmt.table}.`);
+        setTimeout(() => setUploadProgress(null), 4000);
+        // Reload grid and months after upload
+        load(tab, singleMonth);
+        db.fetchMonths(fmt).then((m) => setMonthsStore((s) => ({ ...s, [tab]: m }))).catch(() => {});
+      } catch (err) {
+        setUploadProgress(null);
+        if (err.message?.startsWith("header_not_found||")) {
+          const cols = err.message.split("||")[1];
+          alert(`Couldn't find the header row for ${fmt.label}.\n\nRequired columns: ${cols}.\n\nUse 'Download template' and keep its header row intact.`);
+        } else {
+          alert(`Upload failed: ${err.message ?? err}`);
         }
-        if (!good.length) { alert("No valid rows found."); return; }
-        let final = good; let dupInFile = 0; let replacing = [];
-        if (fmt.uniqueKey) {
-          const byKey = new Map();
-          for (const r of good) { const k = String(r[fmt.uniqueKey]).trim().toLowerCase(); if (byKey.has(k)) dupInFile++; byKey.set(k, r); }
-          final = Array.from(byKey.values());
-          const existing = new Map(rows.filter((r) => String(r[fmt.uniqueKey] ?? "").trim() !== "").map((r) => [String(r[fmt.uniqueKey]).trim().toLowerCase(), r]));
-          replacing = final.filter((r) => existing.has(String(r[fmt.uniqueKey]).trim().toLowerCase()));
-          if (replacing.length) { if (!confirm(`${replacing.length} AWB(s) already exist and will be REPLACED. Continue?`)) return; }
-          final = final.map((r) => { const hit = existing.get(String(r[fmt.uniqueKey]).trim().toLowerCase()); return hit && hit[PK] ? { ...r, [PK]: hit[PK] } : r; });
-        }
-        const staged = final.map((r) => ({ ...r, _uid: uid(), [PK]: r[PK] ?? null, _dirty: true }));
-        const mergeIntoGrid = (rs, incoming) => {
-          if (!fmt.uniqueKey) return [...incoming, ...rs];
-          const k = (r) => String(r[fmt.uniqueKey] ?? "").trim().toLowerCase();
-          const incomingByKey = new Map(incoming.map((r) => [k(r), r]));
-          const kept = rs.map((r) => incomingByKey.get(k(r)) ?? r);
-          const seen = new Set(rs.map(k));
-          const brandNew = incoming.filter((r) => !seen.has(k(r)));
-          return [...brandNew, ...kept];
-        };
-        // Show rows immediately in UI, insert to DB in background
-        setRows((rs) => mergeIntoGrid(rs, staged));
-        setUploadProgress({ done: 0, total: staged.length });
-        setBusy(true);
-        try {
-          await db.insertRows(fmt, staged, (done, total) => setUploadProgress({ done, total }));
-          setUploadProgress({ done: staged.length, total: staged.length, finished: true });
-          flash("ok", `Uploaded ${staged.length} line${staged.length !== 1 ? "s" : ""} to ${fmt.table} — ${final.length - replacing.length} new, ${replacing.length} replaced${dupInFile ? `, ${dupInFile} duplicates collapsed` : ""}.`);
-          setTimeout(() => setUploadProgress(null), 4000);
-          db.fetchMonths(fmt).then((m) => setMonthsStore((s) => ({ ...s, [tab]: m }))).catch(() => {});
-        } catch (e) { setUploadProgress(null); throw e; }
-        finally { setBusy(false); }
-      } catch (err) { alert(`Couldn't read that file: ${err.message ?? err}`); }
-      finally { if (fileInput.current) fileInput.current.value = ""; }
+      } finally {
+        setBusy(false);
+        if (fileInput.current) fileInput.current.value = "";
+      }
     };
     reader.readAsArrayBuffer(file);
   };
@@ -651,20 +669,32 @@ export default function LogisticsLedgerPage() {
       {uploadProgress && (
         <div style={{ margin: '0 0 12px 0', background: '#EFF6FF', border: '1px solid #BFDBFE', borderRadius: 8, padding: '10px 14px' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
-            <span style={{ fontSize: 12, fontWeight: 600, color: '#1E40AF' }}>
+            <span style={{ fontSize: 13, fontWeight: 700, color: '#1E40AF' }}>
               {uploadProgress.finished
                 ? `✓ Upload complete — ${uploadProgress.total.toLocaleString()} rows saved`
-                : `Uploading… ${uploadProgress.done.toLocaleString()} / ${uploadProgress.total.toLocaleString()} rows`}
+                : uploadProgress.parsing
+                ? `⏳ Parsing file… please wait`
+                : `⬆ Uploading… ${uploadProgress.done.toLocaleString()} / ${uploadProgress.total.toLocaleString()} rows inserted`}
             </span>
-            <span style={{ fontSize: 12, color: '#1E40AF', fontWeight: 700 }}>
-              {Math.round((uploadProgress.done / uploadProgress.total) * 100)}%
+            <span style={{ fontSize: 13, color: '#1E40AF', fontWeight: 800 }}>
+              {uploadProgress.finished ? '100%' : uploadProgress.parsing || !uploadProgress.total ? '' : `${Math.round((uploadProgress.done / uploadProgress.total) * 100)}%`}
             </span>
           </div>
-          <div style={{ height: 6, background: '#DBEAFE', borderRadius: 99, overflow: 'hidden' }}>
-            <div style={{ height: '100%', background: '#2563EB', borderRadius: 99, width: `${(uploadProgress.done / uploadProgress.total) * 100}%`, transition: 'width 0.3s ease' }} />
+          <div style={{ height: 8, background: '#DBEAFE', borderRadius: 99, overflow: 'hidden' }}>
+            {uploadProgress.parsing ? (
+              <div style={{ height: '100%', width: '30%', background: 'linear-gradient(90deg, #2563EB 0%, #60A5FA 50%, #2563EB 100%)', backgroundSize: '200% 100%', borderRadius: 99, animation: 'shimmer 1.2s infinite linear' }} />
+            ) : (
+              <div style={{ height: '100%', background: '#2563EB', borderRadius: 99, width: uploadProgress.total ? `${(uploadProgress.done / uploadProgress.total) * 100}%` : '0%', transition: 'width 0.3s ease' }} />
+            )}
           </div>
+          {!uploadProgress.parsing && !uploadProgress.finished && uploadProgress.total > 0 && (
+            <div style={{ fontSize: 11, color: '#3B82F6', marginTop: 4 }}>
+              {(uploadProgress.total - uploadProgress.done).toLocaleString()} rows remaining…
+            </div>
+          )}
         </div>
       )}
+      <style>{`@keyframes shimmer { 0% { background-position: 200% 0 } 100% { background-position: -200% 0 } }`}</style>
 
       {/* Format tabs */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 4, borderBottom: `1px solid ${C.border}`, marginBottom: 14 }}>

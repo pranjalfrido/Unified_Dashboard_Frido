@@ -28,8 +28,7 @@ function monthKey(dateStr) { return dateStr.slice(0, 7) }
 const bq = new BigQuery({ keyFilename: 'sa_key.json' })
 
 // Default 30-day window — same as the frontend's default date picker range
-const end = new Date()
-end.setDate(end.getDate() - 1) // d-1: yesterday as last complete day
+const end = new Date() // fetch up to today — frontend excludes partial last day via lastSalesDate-1
 const endStr = end.toISOString().slice(0, 10)
 const startD = new Date(end)
 startD.setDate(startD.getDate() - 29) // 30 days inclusive
@@ -106,6 +105,7 @@ for (const row of salesRows) {
   const d = row.order_date?.value || row.order_date
   if (d && (!maxSalesDate || d > maxSalesDate)) maxSalesDate = d
 }
+// lastSalesDateConsidered = max(order_date) - 1 (latest complete day)
 let lastSalesDateConsidered = null
 if (maxSalesDate) {
   const d = new Date(maxSalesDate); d.setDate(d.getDate() - 1)
@@ -204,8 +204,8 @@ function momentumFor(N) {
     const master = itemMaster.get(skuKey)
     rows.push({ sku: skuKey, category: master?.category || 'Uncategorized', lastQty, compareQty, pctChange })
   }
-  const risers = [...rows].filter(r => r.pctChange > 0).sort((a, b) => b.pctChange - a.pctChange).slice(0, 10)
-  const fallers = [...rows].filter(r => r.pctChange < 0).sort((a, b) => a.pctChange - b.pctChange).slice(0, 10)
+  const risers = [...rows].filter(r => r.pctChange > 0).sort((a, b) => b.pctChange - a.pctChange)
+  const fallers = [...rows].filter(r => r.pctChange < 0).sort((a, b) => a.pctChange - b.pctChange)
   return { risers, fallers, lastDate, compareDate }
 }
 const momentum = { requested: momentumFor(7), '2day': momentumFor(2), '7day': momentumFor(7) }
@@ -250,11 +250,13 @@ const moversLabelForLevel = {
 }
 
 function resolveCompareDates(mode) {
+  // Use last complete day (maxSalesDate - 1) as anchor, not endStr (today may have 0 data)
+  const lastCompleteDate = lastSalesDateConsidered || endStr
   const windowN = mode === 'day2' ? 1 : 6
-  const compareD = new Date(endStr); compareD.setDate(compareD.getDate() - windowN)
+  const compareD = new Date(lastCompleteDate); compareD.setDate(compareD.getDate() - windowN)
   const compareDate = compareD.toISOString().slice(0, 10)
-  if (!lookbackDates.includes(endStr) && !lookbackDates.includes(compareDate)) return null
-  return { lastDate: endStr, compareDate }
+  if (!lookbackDates.includes(lastCompleteDate) && !lookbackDates.includes(compareDate)) return null
+  return { lastDate: lastCompleteDate, compareDate }
 }
 
 function topMoversFor(level, mode, metric) {
@@ -271,8 +273,8 @@ function topMoversFor(level, mode, metric) {
     const pctChange = compareVal > 0 ? ((lastVal - compareVal) / compareVal) * 100 : (lastVal > 0 ? 100 : 0)
     rows.push({ ...labelFor(groupKey), lastVal, compareVal, pctChange })
   }
-  const risers = [...rows].filter(r => r.pctChange > 0).sort((a, b) => b.pctChange - a.pctChange).slice(0, 20)
-  const fallers = [...rows].filter(r => r.pctChange < 0).sort((a, b) => a.pctChange - b.pctChange).slice(0, 20)
+  const risers = [...rows].filter(r => r.pctChange > 0).sort((a, b) => b.pctChange - a.pctChange)
+  const fallers = [...rows].filter(r => r.pctChange < 0).sort((a, b) => a.pctChange - b.pctChange)
   return { risers, fallers, lastDate, compareDate }
 }
 const topMovers = {}

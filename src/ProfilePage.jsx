@@ -45,6 +45,12 @@ function fmtDate(ts) {
 
 // ── My Profile ────────────────────────────────────────────────────────────────
 function MyProfile({ session, onProfileUpdated }) {
+  const [isMobile, setIsMobile] = useState(() => window.innerWidth <= 768)
+  useEffect(() => {
+    const fn = () => setIsMobile(window.innerWidth <= 768)
+    window.addEventListener('resize', fn)
+    return () => window.removeEventListener('resize', fn)
+  }, [])
   const [profile, setProfile] = useState(null)
   const [name, setName] = useState('')
   const [avatarUrl, setAvatarUrl] = useState('')
@@ -109,11 +115,11 @@ function MyProfile({ session, onProfileUpdated }) {
   }
 
   return (
-    <div style={s.section}>
+    <div style={s.section} className="profile-section">
       <div style={s.sectionTitle}>My Profile</div>
-      <div style={{ display: 'flex', alignItems: 'flex-start', gap: 24, flexWrap: 'wrap' }}>
-        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10 }}>
-          <Avatar url={avatarUrl} name={name} size={80} />
+      <div className="profile-fields-row" style={{ display: 'flex', alignItems: 'flex-start', gap: 24, flexWrap: 'wrap' }}>
+        <div className="profile-avatar-col" style={{ display: 'flex', flexDirection: isMobile ? 'row' : 'column', alignItems: 'center', gap: isMobile ? 14 : 10 }}>
+          <Avatar url={avatarUrl} name={name} size={isMobile ? 56 : 80} />
           <button style={s.outlineBtn} onClick={() => fileRef.current?.click()} disabled={uploading}>
             {uploading ? 'Uploading…' : 'Change photo'}
           </button>
@@ -495,8 +501,8 @@ export default function ProfilePage({ session, profile, onSignOut, onProfileUpda
   }
 
   return (
-    <div style={s.page}>
-      <div style={s.header}>
+    <div style={s.page} className="profile-page">
+      <div style={s.header} className="profile-header">
         <div style={{ fontFamily: "'Fraunces', serif", fontSize: 22, fontWeight: 600 }}>Profile & Settings</div>
         <button style={{ ...s.outlineBtn, color: '#D9612E', borderColor: '#D9612E' }} onClick={handleSignOut}>Sign out</button>
       </div>

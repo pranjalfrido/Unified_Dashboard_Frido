@@ -31,9 +31,9 @@ function IconTab({ icon, label, active, onClick }) {
         style={{
           width: 34, height: 34, borderRadius: 7, cursor: 'pointer', fontSize: 15, display: 'flex',
           alignItems: 'center', justifyContent: 'center',
-          background: active ? IC.accDim : 'transparent',
-          color: active ? IC.t1 : IC.t3,
-          border: active ? `1px solid ${IC.accBorder}` : '1px solid transparent',
+          background: active ? '#E8F0FE' : 'transparent',
+          color: active ? '#1967D2' : IC.t3,
+          border: active ? '1px solid #AECBFA' : '1px solid transparent',
         }}>
         {icon}
       </button>
@@ -51,16 +51,41 @@ function IconTab({ icon, label, active, onClick }) {
   )
 }
 
+// Mobile tab button — icon + label text stacked, used inside the filter drawer
+function MobileTab({ icon, label, active, onClick }) {
+  return (
+    <button onClick={onClick} style={{
+      flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3,
+      padding: '8px 4px', borderRadius: 10, cursor: 'pointer', border: 'none',
+      background: active ? '#E8F0FE' : 'transparent',
+      color: active ? '#1967D2' : IC.t3,
+      fontWeight: active ? 700 : 500, fontSize: 10, lineHeight: 1.2, transition: 'background .15s',
+    }}>
+      <span style={{ fontSize: 18 }}>{icon}</span>
+      <span style={{ whiteSpace: 'nowrap' }}>{label}</span>
+    </button>
+  )
+}
+
 // Sub-tab switcher (Health/Sales/Inward) — rendered at the top of each sub-page's own
 // FilterSidebar instead of as a second horizontal bar above the page, so the Inventory tab
 // matches Logistics's layout convention: one top bar (title + date), everything else lives
 // in the left column.
-function SubTabSwitcher({ tab, setTab }) {
+function SubTabSwitcher({ tab, setTab, isMobile }) {
+  if (isMobile) {
+    return (
+      <div style={{ display: 'flex', gap: 4, background: '#F4F6FB', borderRadius: 12, padding: 4, marginBottom: 14 }}>
+        <MobileTab icon="📦" label="Health" active={tab === 'health'} onClick={() => setTab('health')} />
+        <MobileTab icon="📊" label="Sales & Alloc" active={tab === 'sales'} onClick={() => setTab('sales')} />
+        {/* <MobileTab icon="📥" label="Inward" active={tab === 'inward'} onClick={() => setTab('inward')} /> */}
+      </div>
+    )
+  }
   return (
     <div style={{ display: 'inline-flex', gap: 2, background: IC.surface, border: `1px solid ${IC.border}`, borderRadius: 10, padding: 3, marginBottom: 12 }}>
       <IconTab icon="📦" label="Inventory Health" active={tab === 'health'} onClick={() => setTab('health')} />
       <IconTab icon="📊" label="Sales & Allocation" active={tab === 'sales'} onClick={() => setTab('sales')} />
-      <IconTab icon="📥" label="Inward" active={tab === 'inward'} onClick={() => setTab('inward')} />
+      {/* <IconTab icon="📥" label="Inward" active={tab === 'inward'} onClick={() => setTab('inward')} /> */}
     </div>
   )
 }
@@ -80,7 +105,6 @@ function useEndpoint(path, extraFilters, enabled = true) {
   // the range to end on lastSalesDateConsidered (today's data is usually partial) instead
   // — but only on that first auto-correction, so a user's own later date-picker edits or
   // Refresh clicks aren't silently overridden.
-  const autoCorrectedRef = useRef(false)
   const API = import.meta.env.VITE_API_URL || ''
 
   const fetchData = useCallback(async (body) => {
@@ -95,13 +119,6 @@ function useEndpoint(path, extraFilters, enabled = true) {
       const json = await res.json()
       if (reqId !== reqIdRef.current) return
       setData(json)
-      if (!autoCorrectedRef.current && json.lastSalesDateConsidered && json.lastSalesDateConsidered < body.end) {
-        autoCorrectedRef.current = true
-        const rangeDays = Math.round((new Date(body.end) - new Date(body.start)) / 86400000)
-        const newEnd = new Date(json.lastSalesDateConsidered)
-        const newStart = new Date(newEnd); newStart.setDate(newStart.getDate() - rangeDays)
-        setDateFilters({ start: newStart.toISOString().slice(0, 10), end: json.lastSalesDateConsidered })
-      }
     } catch (e) { if (reqId === reqIdRef.current) setError(e.message) }
     finally { if (reqId === reqIdRef.current) setLoading(false) }
   }, [API, path])
@@ -177,15 +194,19 @@ function useStatic(staticPath, fallbackApiPath, fallbackBody = {}, enabled = tru
       const json = await res.json()
       if (reqId !== reqIdRef.current) return
       const ageMs = json.asOf ? Date.now() - new Date(json.asOf).getTime() : Infinity
-      if (ageMs > 2 * 60 * 60 * 1000 || json._placeholder) throw new Error('static file stale or placeholder')
+      if (ageMs > 30 * 24 * 60 * 60 * 1000 || json._placeholder) throw new Error('static file stale or placeholder')
       cachedDataRef.current = json
       setData(json)
-      const range = json.dateRange || null
-      if (range) {
-        cachedRangeRef.current = { start: range.start, end: range.end }
-        setDateFilters({ start: range.start, end: range.end })
-      }
+      // end = max(order_date) - 1 (last complete day), start = end - 6 → 7-day window
+      const lastSales = json.lastSalesDate || getDefaultDates().end
+      const endD = new Date(lastSales + 'T00:00:00Z')
+      endD.setUTCDate(endD.getUTCDate() - 1) // subtract 1: partial day excluded
+      const startD = new Date(endD); startD.setUTCDate(startD.getUTCDate() - 6)
+      const toLocal = d => d.toISOString().slice(0, 10)
+      cachedRangeRef.current = { start: toLocal(startD), end: toLocal(endD) }
+      setDateFilters({ start: toLocal(startD), end: toLocal(endD) })
     } catch {
+      if (cachedDataRef.current) return // static loaded fine already
       const { start, end } = getDefaultDates()
       if (reqId !== reqIdRef.current) return
       setLoading(false)
@@ -270,16 +291,19 @@ function useStaticInv(enabled = true, windowDays = 7) {
     const reqId = ++reqIdRef.current
     setLoading(true)
     setError(null)
+    let staticOk = false
     try {
       const res = await fetch(`/inv-data-${windowDays}d.json`)
       if (!res.ok) throw new Error(`static file missing (${res.status})`)
       const json = await res.json()
       if (reqId !== reqIdRef.current) return
       const ageMs = json.asOf ? Date.now() - new Date(json.asOf).getTime() : Infinity
-      if (ageMs > 2 * 60 * 60 * 1000) throw new Error('static file stale')
+      if (ageMs > 30 * 24 * 60 * 60 * 1000) throw new Error('static file stale')
+      staticOk = true
       setData(json)
       if (json.avgSaleWindow) setDateFilters({ start: json.avgSaleWindow.start, end: json.avgSaleWindow.end })
     } catch {
+      if (staticOk) return // static loaded fine, no need to fallback
       // fallback: hit live API
       try {
         const { start, end } = getDefaultDates()
@@ -309,6 +333,12 @@ function useStaticInv(enabled = true, windowDays = 7) {
 }
 
 export default function InventoryPage({ onTopbarDateControl, tab = 'health', setTab = () => {} }) {
+  const [isMobile, setIsMobile] = useState(() => window.innerWidth <= 768)
+  useEffect(() => {
+    const onResize = () => setIsMobile(window.innerWidth <= 768)
+    window.addEventListener('resize', onResize)
+    return () => window.removeEventListener('resize', onResize)
+  }, [])
   const [healthFilters, setHealthFilters] = useState({})
   const [salesFilters, setSalesFilters] = useState({})
   const [inwardFilters, setInwardFilters] = useState({})
@@ -360,15 +390,27 @@ export default function InventoryPage({ onTopbarDateControl, tab = 'health', set
   // in-page control since Health has no picker and Inward isn't in scope for this move.
   useEffect(() => {
     if (!onTopbarDateControl) return
-    if (tab !== 'sales') { onTopbarDateControl(null); return }
-    onTopbarDateControl({
-      filters: sales.dateFilters, setFilters: sales.setDateFilters,
-      onRefresh: () => sales.fetchData({ ...sales.dateFilters, ...salesFilterBody }),
-      loading: sales.loading,
-    })
+    const extra = {
+      invHealthFilters: healthFilters,
+      setInvHealthFilters: setHealthFilters,
+      invHealthOpts: inv.data?.filterOptions || null,
+      invSalesFilters: salesFilters,
+      setInvSalesFilters: setSalesFilters,
+      invSalesOpts: sales.data?.filterOptions || null,
+    }
+    if (tab === 'sales') {
+      onTopbarDateControl({
+        filters: sales.dateFilters, setFilters: sales.setDateFilters,
+        onRefresh: () => sales.fetchData({ ...sales.dateFilters, ...salesFilterBody }),
+        loading: sales.loading,
+        ...extra,
+      })
+    } else {
+      onTopbarDateControl(extra)
+    }
     return () => onTopbarDateControl(null)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tab, sales.dateFilters, sales.setDateFilters, sales.fetchData, sales.loading, onTopbarDateControl])
+  }, [tab, sales.dateFilters, sales.setDateFilters, sales.fetchData, sales.loading, onTopbarDateControl, healthFilters, setHealthFilters, inv.data?.filterOptions, salesFilters, setSalesFilters, sales.data?.filterOptions])
 
   // Rendered at the top of each sub-page's own FilterSidebar (see SubTabSwitcher comment) —
   // holds the Health/Sales/Inward switcher plus whatever per-tab info/date-control used to
@@ -376,6 +418,7 @@ export default function InventoryPage({ onTopbarDateControl, tab = 'health', set
   // date range now lives in App.jsx's actual top bar instead, see onTopbarDateControl above).
   const sidebarTop = (
     <div style={{ marginBottom: 4 }}>
+      <SubTabSwitcher tab={tab} setTab={setTab} isMobile={isMobile} />
       {tab === 'health' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 2, marginBottom: 10 }}>
           <span style={{ fontSize: 11, color: IC.t3 }}>
@@ -385,22 +428,22 @@ export default function InventoryPage({ onTopbarDateControl, tab = 'health', set
           </span>
           {inv.data?.lastSalesDateConsidered && (
             <span style={{ fontSize: 11, color: IC.t3 }}>
-              Latest sales {new Date(inv.data.lastSalesDateConsidered).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}
+              Latest sales {inv.data.lastSalesDateConsidered.slice(8,10)} {new Date(inv.data.lastSalesDateConsidered + 'T12:00:00').toLocaleDateString('en-IN', { month: 'short' })}
             </span>
           )}
         </div>
       )}
       {tab === 'sales' && sales.data?.lastSalesDateConsidered && (
         <div style={{ fontSize: 11, color: IC.t3, marginBottom: 10 }}>
-          Latest sales {new Date(sales.data.lastSalesDateConsidered).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}
+          Latest sales {sales.data.lastSalesDateConsidered.slice(8,10)} {new Date(sales.data.lastSalesDateConsidered + 'T12:00:00').toLocaleDateString('en-IN', { month: 'short' })}
         </div>
       )}
-      {tab === 'inward' && (
+      {/* tab === 'inward' && (
         <div style={{ marginBottom: 10 }}>
           <DateRangeControl filters={active.dateFilters} setFilters={active.setDateFilters}
             onRefresh={() => active.fetchData({ ...active.dateFilters, ...inwardFilterBody })} />
         </div>
-      )}
+      ) */}
     </div>
   )
 
@@ -567,20 +610,36 @@ export default function InventoryPage({ onTopbarDateControl, tab = 'health', set
 
   return (
     <div style={{ background: PAGE_BACKGROUND, height: '100%', display: 'flex', flexDirection: 'column', color: IC.t1, fontFamily: 'Inter, sans-serif' }}>
+      {/* Mobile-only tab bar — the desktop tab switcher lives inside the FilterSidebar. On
+          mobile the sidebar is hidden, so we surface the same tabs as a horizontal scroll row. */}
+      <div className="inv-mobile-subtabs" style={{
+        display: 'none', alignItems: 'center', gap: 0,
+        borderBottom: `1px solid ${IC.border}`, background: IC.surface,
+        padding: '0 12px', overflowX: 'auto', flexShrink: 0,
+      }}>
+        {[{ id: 'health', label: '📦 Health' }, { id: 'sales', label: '📊 Sales & Alloc' }].map(t => (
+          <button key={t.id} onClick={() => setTab(t.id)} style={{
+            padding: '10px 14px', border: 'none', borderBottom: tab === t.id ? '3px solid #1967D2' : '3px solid transparent',
+            background: 'none', fontSize: 13, fontWeight: tab === t.id ? 700 : 500,
+            color: tab === t.id ? '#1967D2' : IC.t3, cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0,
+          }}>{t.label}</button>
+        ))}
+      </div>
+
       {/* No horizontal padding here — each sub-page applies its own paddingLeft to content. */}
       <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
         {active.loading && !active.data && (
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: 300, color: IC.t3, fontSize: 13, margin: '0 24px' }}>Loading…</div>
         )}
-        {active.error && (
+        {active.error && !active.data && (
           <div style={{ padding: '12px 16px', borderRadius: 10, background: 'rgba(208,59,59,0.12)', border: '1px solid rgba(208,59,59,0.35)', color: '#ff8b8b', fontSize: 12.5, margin: '0 24px' }}>
             ⚠ {active.error}
           </div>
         )}
 
         <div style={{ display: tab === 'health' ? 'contents' : 'none' }}><InventoryHealthPage data={invData} filters={healthFilters} setFilters={setHealthFilters} sidebarTop={sidebarTop} /></div>
-        <div style={{ display: tab === 'sales' ? 'contents' : 'none' }}><SalesAllocationPage data={sales.data} filters={salesFilters} setFilters={setSalesFilters} sidebarTop={sidebarTop} /></div>
-        <div style={{ display: tab === 'inward' ? 'contents' : 'none' }}><InwardPage data={inward.data} filters={inwardFilters} setFilters={setInwardFilters} sidebarTop={sidebarTop} /></div>
+        <div style={{ display: tab === 'sales' ? 'contents' : 'none' }}><SalesAllocationPage data={sales.data} filters={salesFilters} setFilters={setSalesFilters} sidebarTop={sidebarTop} dateFilters={sales.dateFilters} /></div>
+        {/* <div style={{ display: tab === 'inward' ? 'contents' : 'none' }}><InwardPage data={inward.data} filters={inwardFilters} setFilters={setInwardFilters} sidebarTop={sidebarTop} /></div> */}
       </div>
     </div>
   )

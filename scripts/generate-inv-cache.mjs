@@ -345,7 +345,14 @@ function computePayload(windowDays) {
       rtdInvt: Math.round(totalRtd), avgSale: Math.round(totalAvgSaleB2C), avgSaleB2C: Math.round(totalAvgSaleB2C),
       totalAvgSale: Math.round(totalAvgSaleAll), doi: compDOI, stockStatus: dominantStatus, skuCount: skus.length,
       criticalLowCount: skus.filter(s=>s.stockStatus==='Critical'||s.stockStatus==='Low').length,
-      deadStockCount: deadStock.length, deadStockUnits: deadStock.reduce((s,d)=>s+d.totalInvt,0),
+      // SKU-level isDead (no sale in trailing 90d), NOT the deadStock array below (a separate
+      // sub-category-level DOI>200 rollup used only by the "Dead Stock Sub-categories" table) —
+      // using the sub-category definition here previously made this KPI tile disagree with the
+      // "Dead / No Sale" bucket in statusBreakdown for the exact same cached data (49/235K vs
+      // 250/50K units), and disagreed with src/InventoryPage.jsx's OWN filtered-view recompute
+      // (which already used isDead), so the number would silently change definition the moment
+      // any filter was touched. Both consumers of this tile now agree unconditionally.
+      deadStockCount: skus.filter(s=>s.isDead).length, deadStockUnits: skus.filter(s=>s.isDead).reduce((s,r)=>s+r.totalInvt,0),
     },
     statusBreakdown: Object.entries(statusCounts).map(([status,count])=>({status,count})),
     locations, leadTimeRisk, deadStock, slowMoving,

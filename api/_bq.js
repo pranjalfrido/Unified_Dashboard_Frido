@@ -82,12 +82,40 @@ export function computeNetRevenueMeasures(row = {}) {
   }
 }
 
+// Amazon Vendor Central returns fragment — the ONE canonical returned_units/return_rev pair for
+// VC, shared by every VC query in bq.js (amzVCCat, amzVCSubCat, amzVCSKU, amzVCDailySKU,
+// amzVCAccounts) so they can never drift into 5 slightly-different hand-copied CASE WHEN
+// expressions again. VC's Order_Status vocabulary is currently just 'Sales' (delivered) /
+// 'Return' (returned), with a dummy OrderId per line (AVC###### / AVCR######) — same additive
+// "delivered + returned = total revenue" convention Shopify/Amazon SC/Flipkart already use.
+//   returned_units — cancelled/RTO/CIR/Return unit count, used to derive net units sold
+//                    (gross units − returned_units) for COGS. Includes Cancelled/RTO/CIR
+//                    defensively even though VC doesn't currently emit those statuses, so this
+//                    doesn't silently need updating again if VC's feed ever adds them.
+//   return_rev     — Order_Status='Return' revenue only (SellingPrice_Inc_GST) — the canonical
+//                    revenue-based return figure. Net Revenue = (gross − return_rev) × (1 −
+//                    gstRatio), Returns% = return_rev ÷ gross — REVENUE ÷ REVENUE, never a
+//                    line-item COUNT divided by a units SUM (the confirmed Sales-tab VC bug:
+//                    amzVCAccounts.returns is a COUNT(DISTINCT OrderId), only ever meant for
+//                    display as a raw count, never as this ratio's numerator).
+export function vcReturnsSelectFragment(alias = '') {
+  const p = alias ? `${alias}.` : ''
+  return `SUM(CASE WHEN ${p}Order_Status IN ('Cancelled','RTO','CIR','Return') THEN ${p}ItemQty ELSE 0 END) AS returned_units,
+    ROUND(SUM(CASE WHEN ${p}Order_Status='Return' THEN ${p}SellingPrice_Inc_GST ELSE 0 END),0) AS return_rev`
+}
+
 const CHANNEL_GROUPS = {
+  // 'Shopify International' is now dead here — those rows moved to Channel='International' on
+  // the schema change (2026-08), so this subChannels list never matches them anymore. Left as-is
+  // (harmless no-op) rather than removed, since MyFrido/Mobility still need it.
   d2c:           { channels: ['Shopify'], subChannels: ['MyFrido', 'Mobility', 'Shopify International'] },
   ebo:           { channels: ['Shopify'], subChannels: ['Retail Store'] },
   marketplace:   { channels: ['Amazon', 'Flipkart', 'CRED', 'Myntra', 'Firstcry'] },
   quick_commerce:{ channels: ['Blinkit', 'Zepto', 'Instamart'] },
   offline:       { channels: ['offline_sales'] },
+  // New unified International channel (both Amazon International + Shopify International sub-
+  // brands) — Channel='International' rows, added 2026-08 schema change. See PnL "International" tab.
+  international: { channels: ['International'] },
 }
 
 export function buildQuery(s, e, filters = {}) {
@@ -161,7 +189,11 @@ export function buildQuery(s, e, filters = {}) {
     if (vals.length === 1 && vals[0] === 'International') {
       whereClauses.push(`u.SubChannel = 'Shopify International'`)
     } else if (vals.length === 1 && vals[0] === 'ShopifyIndia') {
-      whereClauses.push(`(u.Channel != 'Shopify' OR u.SubChannel != 'Shopify International')`)
+      // International orders now carry Channel='International' (not 'Shopify'), so the old
+      // "Channel != 'Shopify' OR SubChannel != 'Shopify International'" pair is trivially true
+      // for them (first half alone passes) — leaks Shopify-International rows back into
+      // "ShopifyIndia". Exclude by SubChannel alone instead, since SubChannel itself is unchanged.
+      whereClauses.push(`u.SubChannel != 'Shopify International'`)
     } else if (vals.length === 1) {
       whereClauses.push(`u.SubChannel = '${vals[0].replace(/'/g, "''")}'`)
     } else if (vals.length > 1) {

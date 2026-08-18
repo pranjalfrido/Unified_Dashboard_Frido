@@ -58,11 +58,12 @@ html,body{height:100%;background:var(--bg);font-family:var(--font);color:var(--t
   height:var(--bot);background:var(--card);border-top:1px solid var(--b1);
   z-index:50;
 }
-.bottom-nav-inner{display:flex;align-items:center;justify-content:space-around;height:100%;padding:0 8px}
-.bn-item{display:flex;flex-direction:column;align-items:center;gap:3px;cursor:pointer;color:var(--t3);padding:6px 12px;border-radius:10px;transition:all .13s;flex:1}
+.bottom-nav-inner{display:flex;align-items:center;justify-content:space-around;height:100%;padding:0 2px;overflow:hidden}
+.bn-item{display:flex;flex-direction:column;align-items:center;gap:2px;cursor:pointer;color:var(--t3);padding:4px 2px;border-radius:8px;transition:all .13s;flex:1;min-width:0}
 .bn-item.active{color:var(--t1);background:var(--acl)}
-.bn-item .bn-icon{font-size:20px;line-height:1}
-.bn-item .bn-label{font-size:10px;font-weight:500;line-height:1}
+.bn-item .bn-icon{font-size:18px;line-height:1;display:flex;align-items:center;justify-content:center}
+.bn-item .bn-icon svg{width:18px;height:18px}
+.bn-item .bn-label{font-size:8.5px;font-weight:500;line-height:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
 .bn-item.active .bn-label{font-weight:700}
 
 /* ── Topnav ────────────────────────────────── */
@@ -155,21 +156,25 @@ html,body{height:100%;background:var(--bg);font-family:var(--font);color:var(--t
 .spin{animation:spin 1s linear infinite}
 
 /* ── Sales tabs ────────────────────────────── */
-.sales-tabs{height:44px;background:var(--card);border-bottom:1px solid var(--b1);display:flex;align-items:center;padding:0 6px;gap:0;flex-shrink:0}
-.stab{display:inline-flex;align-items:center;justify-content:center;gap:5px;flex:1;height:30px;font-size:12px;font-weight:500;color:var(--t3);cursor:pointer;border:none;border-radius:7px;white-space:nowrap;background:none;font-family:var(--font);transition:background .13s,color .13s;position:relative}
+.sales-tabs{height:44px;background:var(--card);border-bottom:1px solid var(--b1);display:flex;align-items:stretch;padding:0 6px;gap:0;flex-shrink:0;position:sticky;top:0;z-index:20}
+.stab{display:inline-flex;align-items:center;justify-content:center;gap:5px;flex:1;font-size:12px;font-weight:500;color:var(--t3);cursor:pointer;border:none;border-bottom:2px solid transparent;margin-bottom:-2px;white-space:nowrap;background:none;font-family:var(--font);transition:color .13s,border-color .13s;position:relative;padding:0 4px}
 .stab+.stab::before{content:'';position:absolute;left:0;top:50%;transform:translateY(-50%);width:1px;height:14px;background:#D6D6D6}
-.stab:hover{background:#FAFAF7;color:var(--t1)}
-.stab.active{color:var(--t1);background:#FEFDF0;font-weight:700}
+.stab:hover{color:var(--t1)}
+.stab.active{color:var(--t1);font-weight:700;border-bottom:3px solid #C9A24F;margin-bottom:-3px}
 .stab.active+.stab::before,.stab+.stab.active::before{opacity:0}
 
 /* ── Filter bar ────────────────────────────── */
 .fbar{background:#ECEAE8;border-bottom:1px solid var(--b1);padding:0 16px;display:flex;align-items:center;flex-shrink:0;overflow:visible;position:relative;z-index:10}
-.fbar-inner{display:flex;align-items:center;gap:6px;overflow-x:visible;padding:7px 0;flex:1;scrollbar-width:none}
+.fbar-inner{display:flex;align-items:center;gap:6px;overflow-x:visible;padding:4px 0;flex:1;scrollbar-width:none}
 .fbar-inner::-webkit-scrollbar{display:none}
 .fsel{font-size:11.5px;padding:5px 8px;border-radius:7px;border:1px solid var(--b2);background:var(--card);color:var(--t1);outline:none;font-family:var(--font)}
 .fsrch{font-size:11.5px;padding:5px 8px;border-radius:7px;border:1px solid var(--b2);background:var(--card);color:var(--t1);outline:none;width:130px;font-family:var(--font)}
 .fclr{font-size:11.5px;font-weight:500;color:var(--t3);cursor:pointer;padding:4px;border:none;background:none;font-family:var(--font);flex-shrink:0}
 .fclr:hover{color:var(--Rt)}
+
+/* Hidden on desktop, shown on mobile via media query */
+.tnav-mob-only { display: none; }
+.inv-detail-mobile-only { display: none; }
 
 /* ══════════════════════════════════════════════
    MOBILE  ≤ 768px
@@ -179,6 +184,19 @@ html,body{height:100%;background:var(--bg);font-family:var(--font);color:var(--t
 
   .sidebar{ display:none }
   .bottom-nav{ display:block }
+  .bn-label{ display:none !important }
+
+  .profile-page{ padding:16px 14px !important }
+  .profile-header{ margin-bottom:16px !important }
+  .profile-header > div:first-child{ font-size:17px !important }
+  .profile-section{ padding:14px 14px !important; border-radius:12px !important }
+  .profile-fields-row{ flex-direction:column !important; align-items:flex-start !important; gap:12px !important }
+  .profile-fields-row > div:last-child{ min-width:0 !important; width:100% !important }
+  .profile-avatar-col{ flex-direction:row !important; align-items:center !important; gap:14px !important; width:100% !important }
+  .profile-section input{ padding:8px 11px !important; font-size:13px !important }
+  .profile-section label{ font-size:11.5px !important; margin-bottom:4px !important }
+  .profile-section > div > div{ gap:10px !important }
+  .tnav-mob-only{ display:flex !important }
 
   .app-main{ padding-bottom:var(--bot) }
 
@@ -217,11 +235,151 @@ html,body{height:100%;background:var(--bg);font-family:var(--font);color:var(--t
   /* Tables scroll horizontally */
   .tbl-wrap{ overflow-x:auto;-webkit-overflow-scrolling:touch }
 
-  /* Sales tabs always scrollable */
-  .stab{ font-size:11px;height:28px }
+  /* Sales tabs + filter bar hidden on mobile — moved into hamburger popover */
+  .sales-tabs{ display:none !important }
+  .fbar{ display:none !important }
 
   /* Intel cards full width */
   .intel-row{ grid-template-columns:1fr !important }
+
+  /* ── Inventory page mobile fixes ──────────────── */
+
+  /* Disable zoom scaling on mobile — zoom:0.72 applied on desktop makes things
+     too tiny on a 375px phone; reset it so the mobile layout controls sizing. */
+  .inv-page-shell{ zoom:1 !important }
+
+  /* Inventory Detail table: mobile vs desktop */
+  .inv-detail-mobile-only{ display:block !important }
+  .inv-detail-desktop-only{ display:none !important }
+  .inv-detail-search{ width:130px !important; padding:5px 8px !important; font-size:11px !important }
+
+  /* Inventory KPI tiles: horizontal swipe carousel on mobile */
+  .inv-kpi-carousel-wrap{ display:block !important }
+  .inv-kpi-carousel-wrap .inv-kpi-grid > div{
+    box-shadow: none !important;
+  }
+  .inv-kpi-carousel-wrap .kpi-tile-sub{ display:none !important }
+  .inv-kpi-desktop-grid{ display:none !important }
+  .inv-kpi-grid{
+    display:flex !important;
+    flex-direction:row !important;
+    overflow-x:auto !important;
+    align-items:stretch !important;
+    scroll-snap-type:x mandatory !important;
+    -webkit-overflow-scrolling:touch !important;
+    gap:10px !important;
+    padding-bottom:4px !important;
+    scrollbar-width:none !important;
+  }
+  .inv-kpi-grid::-webkit-scrollbar{ display:none !important }
+  .inv-kpi-grid > *{
+    flex:0 0 calc(50% - 5px) !important;
+    scroll-snap-align:start !important;
+    min-width:calc(50% - 5px) !important;
+    max-width:calc(50% - 5px) !important;
+    align-self:stretch !important;
+    height:auto !important;
+  }
+
+  /* Inventory warehouse cards: swipe carousel on mobile */
+  .inv-wh-carousel-wrap{ display:block !important }
+  .inv-wh-desktop-wrap{ display:none !important }
+  .inv-wh-grid-mob > *{
+    flex:0 0 calc(50% - 4px) !important;
+    min-width:calc(50% - 4px) !important;
+    max-width:calc(50% - 4px) !important;
+    scroll-snap-align:start !important;
+    box-shadow:none !important;
+  }
+
+  /* Inventory 3-col analysis row → 1-col stack */
+  .inv-3col-row{ grid-template-columns:1fr !important }
+
+  /* Inventory slow/dead stock 2-col → 1-col */
+  .inv-2col-row{ grid-template-columns:1fr !important }
+  .sa-movers-row{ grid-template-columns:1fr !important }
+  .sa-movers-row > div > div{ padding-left:6px !important; padding-right:6px !important }
+  .inv-main-content .sa-movers-row > div{ padding-left:6px !important; padding-right:6px !important }
+  .inv-main-content{ padding-left:8px !important; padding-right:8px !important }
+  .inv-2col-row > div > div{ padding-left:6px !important; padding-right:6px !important }
+  .inv-detail-card > div{ padding-left:6px !important; padding-right:6px !important }
+
+  /* Filter sidebar: full-screen drawer overlay on mobile */
+  .inv-filter-drawer{
+    position:fixed !important; top:var(--nav) !important; left:0 !important;
+    width:85vw !important; min-width:85vw !important; max-width:320px !important;
+    height:calc(100vh - var(--nav) - var(--bot)) !important;
+    z-index:200 !important; box-shadow:4px 0 24px rgba(0,0,0,0.18) !important;
+    overflow-y:auto !important; overflow-x:hidden !important;
+  }
+  /* Backdrop when filter drawer is open */
+  .inv-filter-backdrop{
+    display:block !important; position:fixed; inset:0; top:var(--nav);
+    background:rgba(0,0,0,0.35); z-index:199;
+  }
+  /* Hide the desktop sidebar-collapse toggle on mobile */
+  .inv-filter-toggle{ display:none !important }
+  .inv-filter-mobile-btn{ display:none !important }
+
+  /* Inventory main content: full width, no left offset */
+  .inv-main-content{ padding-left:12px !important; padding-right:12px !important }
+
+  /* Sub-tab switcher handled by bottom nav popup — hide the inline one on mobile */
+  .inv-mobile-subtabs{ display:none !important }
+
+  /* ── Sales KPI carousel on mobile ────────────────────────────────────────── */
+  /* Outer hero+grid wrapper: stack vertically */
+  .sales-kpi-section{ display:flex !important; flex-direction:column !important; gap:10px !important }
+
+  /* Hero card: fixed height so sparkline renders */
+  .sales-kpi-hero{ height:auto !important }
+  .sales-kpi-hero > div:last-child{ flex:none !important; height:70px !important }
+
+  /* Right KPI grid → horizontal scroll carousel */
+  .sales-kpi-grid{
+    display:flex !important;
+    flex-direction:row !important;
+    overflow-x:auto !important;
+    scroll-snap-type:x mandatory !important;
+    -webkit-overflow-scrolling:touch !important;
+    gap:10px !important;
+    padding-bottom:4px !important;
+    scrollbar-width:none !important;
+    grid-template-columns:unset !important;
+    grid-template-rows:unset !important;
+  }
+  .sales-kpi-grid::-webkit-scrollbar{ display:none !important }
+  .sales-kpi-grid > *{
+    flex:0 0 44vw !important;
+    min-width:44vw !important;
+    max-width:44vw !important;
+    scroll-snap-align:start !important;
+    align-self:stretch !important;
+    height:auto !important;
+  }
+
+  /* ChannelTab generic .g-kpi5 / .g-kpi3 → carousel on mobile */
+  .sales-channel-kpis .g-kpi5,
+  .sales-channel-kpis .g-kpi3{
+    display:flex !important;
+    flex-direction:row !important;
+    overflow-x:auto !important;
+    scroll-snap-type:x mandatory !important;
+    -webkit-overflow-scrolling:touch !important;
+    gap:10px !important;
+    padding-bottom:4px !important;
+    scrollbar-width:none !important;
+    grid-template-columns:unset !important;
+  }
+  .sales-channel-kpis .g-kpi5::-webkit-scrollbar,
+  .sales-channel-kpis .g-kpi3::-webkit-scrollbar{ display:none !important }
+  .sales-channel-kpis .g-kpi5 > *,
+  .sales-channel-kpis .g-kpi3 > *{
+    flex:0 0 44vw !important;
+    min-width:44vw !important;
+    max-width:44vw !important;
+    scroll-snap-align:start !important;
+  }
 }
 
 /* ══════════════════════════════════════════════
@@ -246,3 +404,11 @@ html,body{height:100%;background:var(--bg);font-family:var(--font);color:var(--t
 /* Logistics Cost slicer column: it scrolls, so no child should be squeezed to fit.
    Without this the last controls (Billing Status) collapsed to a hairline. */
 .lc-slicers > * { flex-shrink: 0 }
+/* ── RFM / Segments tooltip hover rules ── */
+.seg-info-wrap:hover .seg-info-tt { opacity: 1 !important; }
+.seg-action-wrap:hover .seg-action-tt { opacity: 1 !important; }
+.rfm-grid-cell:hover .rfm-grid-tt { opacity: 1 !important; }
+.rscard-info-wrap:hover .rscard-info-tt { opacity: 1 !important; }
+
+/* ── Chart info icon tooltip ── */
+.info-icon-wrap:hover .info-tooltip { opacity: 1 !important; }

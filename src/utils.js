@@ -46,9 +46,9 @@ export const fmt = v => {
 export const fmtN = v => (v || 0).toLocaleString('en-IN')
 export const fmtBig = v => {
   if (v == null || isNaN(v)) return '0'
-  if (v >= 1e7) return `${(v / 1e7).toFixed(2)} Cr`
-  if (v >= 1e5) return `${(v / 1e5).toFixed(2)} L`
-  if (v >= 1e3) return `${(v / 1e3).toFixed(2)} K`
+  if (v >= 1e7) return `${(v / 1e7).toFixed(2)}Cr`
+  if (v >= 1e5) return `${(v / 1e5).toFixed(2)}L`
+  if (v >= 1e3) return `${(v / 1e3).toFixed(1)}K`
   return Math.round(v).toLocaleString('en-IN')
 }
 export const pct = (a, b) => b ? ((a / b) * 100).toFixed(1) + '%' : '0%'
@@ -64,7 +64,7 @@ export function processData(rows) {
         customerId: r.CustomerId, voucher: r.voucher_code,
         dispatchDate: r.Dispatch_Date, deliverDate: r.Delivered_Date, orderStatus: r.Order_Status,
         financialStatus: r.FinancialStatus, fulfilmentStatus: r.FulfilmentStatus,
-        isRTO: false, isCIR: false, isExchange: false, isCancelled: false,
+        isRTO: false, isCIR: false, isExchange: false, isCancelled: false, isReturn: false,
       }
     }
     const o = orderMap[r.OrderId]
@@ -76,6 +76,13 @@ export function processData(rows) {
     if (r.is_CIR_return == 1) o.isCIR = true
     if (r.is_exchange == 1) o.isExchange = true
     if (r.is_cancelled == 1) o.isCancelled = true
+    // Order_Status='Return' bucket — newer channels (Amazon VC, Flipkart) carry their returns
+    // under this status rather than the older is_rto/is_CIR_return/is_cancelled flags, which are
+    // dbt-derived and don't cover it. Without this, netRevenueCalc below silently under-counted
+    // total returns for any channel using the 'Return' status, not just VC — see
+    // api/_bq.js's computeNetRevenueMeasures / netRevenueSelectFragment for the same bucket used
+    // server-side, which this client-side calc is now kept consistent with.
+    if (r.Order_Status === 'Return') o.isReturn = true
   })
   const orders = Object.values(orderMap)
   const totalRev = orders.reduce((s, o) => s + o.rev, 0)
@@ -172,9 +179,14 @@ export function processData(rows) {
   const rtoRev = orders.filter(o => o.isRTO).reduce((s, o) => s + o.rev, 0)
   const cirRev = orders.filter(o => o.isCIR).reduce((s, o) => s + o.rev, 0)
   const cancellRev = orders.filter(o => o.isCancelled).reduce((s, o) => s + o.rev, 0)
-  const netRevenueCalc = totalRev - (totalRev - totalExcRev) - rtoRev - cirRev - cancellRev
+  // returnRev = Order_Status='Return' bucket (Amazon VC, Flipkart, etc — see isReturn above).
+  // Included in netRevenueCalc alongside RTO/CIR/Cancelled so this client-side "All Channels"
+  // rollup stays consistent with api/_bq.js's computeNetRevenueMeasures, which already treats
+  // 'Return' as a 4th deduction bucket server-side.
+  const returnRev = orders.filter(o => o.isReturn).reduce((s, o) => s + o.rev, 0)
+  const netRevenueCalc = totalRev - (totalRev - totalExcRev) - rtoRev - cirRev - cancellRev - returnRev
 
-  return { totalRev, totalExcRev, totalQty, nOrders, blendedAOV, nDays, gstCollected: totalRev - totalExcRev, dailyArr, catMap, subCatMap, chMap, stateMap, nCusts, repeatCusts, tatOrders, buckets, bucketRev, voucherMap, gstMap, orders, rows, uniqueDates, rtoRev, cirRev, cancellRev, netRevenueCalc }
+  return { totalRev, totalExcRev, totalQty, nOrders, blendedAOV, nDays, gstCollected: totalRev - totalExcRev, dailyArr, catMap, subCatMap, chMap, stateMap, nCusts, repeatCusts, tatOrders, buckets, bucketRev, voucherMap, gstMap, orders, rows, uniqueDates, rtoRev, cirRev, cancellRev, returnRev, netRevenueCalc }
 }
 
 export function detectAlerts(data) {
@@ -221,6 +233,7 @@ function localDateStr(d) {
 
 export function getDefaultDates() {
   const end = new Date()
+  end.setDate(end.getDate() - 1)
   const start = new Date(end.getFullYear(), end.getMonth(), 1)
   return { start: localDateStr(start), end: localDateStr(end) }
 }
