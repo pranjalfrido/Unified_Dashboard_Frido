@@ -13,6 +13,29 @@ export const C = {
   }
 }
 
+// Courier branding, shared by the Logistics Performance and Logistics Cost sidebars.
+// Lives here rather than in App.jsx so both pages read from one definition.
+// Keyed on BOTH spellings on purpose. The Logistics Performance tab reads courier names
+// from BigQuery as "Skye Air" / "Urbane Bolt", while the B2C invoice ledger stores them
+// as "SkyAir" / "Urbanbolt" — so a single spelling left those two showing a coloured
+// initial instead of their logo on the cost tab.
+export const COURIER_COLORS = {
+  Bluedart: '#E8400A', Delhivery: '#E60000', 'Delhivery NDD': '#A00000',
+  Ekart: '#F78F1E', ElasticRun: '#00509E', 'Elastic Run': '#00509E',
+  Safexpress: '#1B4D9E', Shadowfax: '#6B3FA0', Shiprocket: '#E8400A',
+  'Skye Air': '#00B0F0', SkyAir: '#00B0F0',
+  Swift: '#13803A',
+  'Urbane Bolt': '#2BB24C', Urbanbolt: '#2BB24C',
+}
+export const COURIER_LOGOS = {
+  Bluedart: '/blue-dart.jpg', Delhivery: '/Delhivery.png', 'Delhivery NDD': '/delhivery-ndd.png',
+  Ekart: '/ekart_logistics_logo.jpg', ElasticRun: '/elasticrun_logo.jpg', 'Elastic Run': '/elasticrun_logo.jpg',
+  Safexpress: '/safeexpress.webp', Shadowfax: '/shadow-fax.jpg', Shiprocket: '/shiprocket.jpg',
+  'Skye Air': '/sky-air.webp', SkyAir: '/sky-air.webp',
+  Swift: '/swift-courier.jpg',
+  'Urbane Bolt': '/urban-bolt.jpg', Urbanbolt: '/urban-bolt.jpg',
+}
+
 export const fmt = v => {
   if (v == null || isNaN(v)) return '₹0'
   if (v >= 1e7) return `₹${(v / 1e7).toFixed(2)} Cr`

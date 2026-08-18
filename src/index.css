@@ -242,3 +242,7 @@ html,body{height:100%;background:var(--bg);font-family:var(--font);color:var(--t
 
 /* Remove Recharts focus outlines */
 .recharts-wrapper:focus,.recharts-wrapper *:focus,.recharts-surface:focus{outline:none!important}
+
+/* Logistics Cost slicer column: it scrolls, so no child should be squeezed to fit.
+   Without this the last controls (Billing Status) collapsed to a hairline. */
+.lc-slicers > * { flex-shrink: 0 }

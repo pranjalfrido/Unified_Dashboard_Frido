@@ -1,5 +1,5 @@
 import { useState, useMemo, useCallback, useEffect, useRef, Fragment } from 'react'
-import { C, fmt, fmtN, fmtBig, pct, processData, detectAlerts, exportCSV, getDefaultDates } from './utils.js'
+import { C, fmt, fmtN, fmtBig, pct, processData, detectAlerts, exportCSV, getDefaultDates, COURIER_COLORS, COURIER_LOGOS } from './utils.js'
 import { KPICard, AlertCard, HBar, DataTable, Card, Badge, CategoryRevenueCard, RevTrendChart, AreaTrendChart, MultiLineChart, ChartTooltip, useSortableTable, GROUP_OPTS, getGroupKey, TrendAnalysisCard, BarChart, Bar, LineChart, Line, AreaChart, Area, ComposedChart, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell, Treemap } from './components.jsx'
 import InventoryPage from './InventoryPage.jsx'
 import { IC } from './inventory/theme.jsx'
@@ -8,6 +8,7 @@ import ResetPasswordPage from './ResetPasswordPage.jsx'
 import ProfilePage from './ProfilePage.jsx'
 import CogsPage from './CogsPage.jsx'
 import LogisticsLedgerPage from './LogisticsLedgerPage.jsx'
+import LogisticsCostPage from './LogisticsCostPage.jsx'
 import { supabase } from './supabase.js'
 import PnLPage from './pnl/PnLPage.jsx'
 
@@ -24,8 +25,7 @@ import { ReferenceLine, LabelList } from 'recharts'
 
 // ── Logistics Page ────────────────────────────────────────────
 const COURIERS = ['Bluedart','Delhivery','Delhivery NDD','Ekart','ElasticRun','Safexpress','Shadowfax','Shiprocket','Skye Air','Swift','Urbane Bolt']
-const COURIER_COLORS = { Bluedart:'#E8400A', Delhivery:'#E60000', 'Delhivery NDD':'#A00000', Ekart:'#F78F1E', ElasticRun:'#00509E', Safexpress:'#1B4D9E', Shadowfax:'#6B3FA0', Shiprocket:'#E8400A', 'Skye Air':'#00B0F0', Swift:'#13803A', 'Urbane Bolt':'#FFD600' }
-const COURIER_LOGOS = { Bluedart:'/blue-dart.jpg', Delhivery:'/Delhivery.png', 'Delhivery NDD':'/delhivery-ndd.png', Ekart:'/ekart_logistics_logo.jpg', ElasticRun:'/elasticrun_logo.jpg', Safexpress:'/safeexpress.webp', Shadowfax:'/shadow-fax.jpg', Shiprocket:'/shiprocket.jpg', 'Skye Air':'/sky-air.webp', Swift:'/swift-courier.jpg', 'Urbane Bolt':'/urban-bolt.jpg' }
+// COURIER_COLORS / COURIER_LOGOS now live in utils.js — shared with the cost page.
 
 function LogisticsKPI({ label, value, sub, color, badge }) {
   return (
@@ -1786,7 +1786,9 @@ const SvgIcon = ({ d, size = 18, stroke = 'currentColor', fill = 'none', strokeW
 
 function Sidebar({ page, setPage, invTab, setInvTab, allowedTabs, profile }) {
   const [invHover, setInvHover] = useState(false)
+  const [logHover, setLogHover] = useState(false)
   const hoverTimerRef = useRef(null)
+  const logHoverTimerRef = useRef(null)
   const allItems = [
     { id: 'overview', label: 'Overview', icon: <svg width={18} height={18} viewBox="0 0 24 24" fill="currentColor"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg> },
     { id: 'sales', label: 'Sales', icon: <svg width={18} height={18} viewBox="0 0 24 24" fill="currentColor"><rect x="2" y="12" width="4" height="10" rx="1"/><rect x="10" y="6" width="4" height="16" rx="1"/><rect x="18" y="2" width="4" height="20" rx="1"/></svg> },
@@ -1840,6 +1842,47 @@ function Sidebar({ page, setPage, invTab, setInvTab, allowedTabs, profile }) {
                       }}
                       onMouseEnter={e => { if (!(invTab === sub.id && page === 'inventory')) e.currentTarget.style.background = C.bg }}
                       onMouseLeave={e => { if (!(invTab === sub.id && page === 'inventory')) e.currentTarget.style.background = 'transparent' }}>
+                      {sub.label}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )
+        }
+        if (item.id === 'logistics') {
+          const logSubTabs = [
+            { id: 'logistics', label: 'Logistics Performance' },
+            { id: 'logistics-cost', label: 'Logistics Cost Analytics' },
+          ]
+          const logActive = page === 'logistics' || page === 'logistics-cost'
+          return (
+            <div key="logistics" style={{ position: 'relative' }}
+              onMouseEnter={() => { clearTimeout(logHoverTimerRef.current); setLogHover(true) }}
+              onMouseLeave={() => { logHoverTimerRef.current = setTimeout(() => setLogHover(false), 200) }}>
+              <div onClick={() => setPage('logistics')}
+                className={`sb-item${logActive ? ' active' : ''}`}>
+                <span className="sb-icon">{item.icon}</span>
+                <span className="sb-label">{item.label}</span>
+              </div>
+              {logHover && (
+                <div style={{
+                  position: 'absolute', left: '100%', top: 0, marginLeft: 6, zIndex: 999,
+                  background: C.card, border: `1px solid ${C.border2}`, borderRadius: 10,
+                  boxShadow: '0 8px 24px rgba(0,0,0,0.18)', padding: '6px', minWidth: 200,
+                  display: 'flex', flexDirection: 'column', gap: 2,
+                }}>
+                  {logSubTabs.map(sub => (
+                    <div key={sub.id} onClick={() => { setPage(sub.id); setLogHover(false) }}
+                      style={{
+                        padding: '8px 12px', borderRadius: 7, cursor: 'pointer', fontSize: 12,
+                        fontWeight: page === sub.id ? 700 : 500,
+                        color: page === sub.id ? C.t1 : C.t2,
+                        background: page === sub.id ? C.acl : 'transparent',
+                        whiteSpace: 'nowrap',
+                      }}
+                      onMouseEnter={e => { if (page !== sub.id) e.currentTarget.style.background = C.bg }}
+                      onMouseLeave={e => { if (page !== sub.id) e.currentTarget.style.background = 'transparent' }}>
                       {sub.label}
                     </div>
                   ))}
@@ -2122,12 +2165,12 @@ function DateRangePicker({ filters, setFilters, theme: T = C }) {
 }
 
 function Topnav({ page, alerts, onRefresh, loading, filters, setFilters, rawRows, inventoryDateControl }) {
-  const titles = { overview: 'Overview', sales: 'Sales Analytics', pnl: 'P&L Analytics', ads: 'Ads Analytics', intelligence: 'Intelligence', logistics: 'Logistics Performance Analytics', inventory: 'Inventory, Sales & Allocation', customer: 'Customer Intelligence', documents: 'Documents', cogs: 'COGS Ledger', 'logistics-ledger': 'Logistics Bill Ledger' }
+  const titles = { overview: 'Overview', sales: 'Sales Analytics', pnl: 'P&L Analytics', ads: 'Ads Analytics', intelligence: 'Intelligence', logistics: 'Logistics Performance Analytics', 'logistics-cost': 'Logistics Cost Analytics', inventory: 'Inventory, Sales & Allocation', customer: 'Customer Intelligence', documents: 'Documents', cogs: 'COGS Ledger', 'logistics-ledger': 'Logistics Bill Ledger' }
   const critical = alerts.filter(a => a.type === 'red').length
   return (
     <div className="topnav">
       <span className="tnav-title">{titles[page]}</span>
-      {page !== 'inventory' && page !== 'cogs' && page !== 'documents' && page !== 'profile' && page !== 'logistics-ledger' && (
+      {page !== 'inventory' && page !== 'cogs' && page !== 'documents' && page !== 'profile' && page !== 'logistics-ledger' && page !== 'logistics-cost' && (
         <div className="tnav-right">
           <DateRangePicker filters={filters} setFilters={setFilters} />
           <button onClick={onRefresh} className="tnav-btn">
@@ -10414,7 +10457,7 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
           </div>
         )}
         <div style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
-          {!data && !loading && !error && page !== 'logistics' && page !== 'inventory' && page !== 'documents' && page !== 'cogs' && page !== 'logistics-ledger' && page !== 'profile' && (
+          {!data && !loading && !error && page !== 'logistics' && page !== 'inventory' && page !== 'documents' && page !== 'cogs' && page !== 'logistics-ledger' && page !== 'profile' && page !== 'logistics-cost' && (
             <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 16 }}>
               <div style={{ width: 64, height: 64, borderRadius: 18, background: C.acl, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 28 }}>📊</div>
               <div style={{ textAlign: 'center' }}>
@@ -10426,7 +10469,7 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
               </div>
             </div>
           )}
-          {loading && !data && page !== 'logistics' && page !== 'inventory' && page !== 'documents' && page !== 'cogs' && page !== 'logistics-ledger' && page !== 'profile' && <Skeleton />}
+          {loading && !data && page !== 'logistics' && page !== 'inventory' && page !== 'documents' && page !== 'cogs' && page !== 'logistics-ledger' && page !== 'profile' && page !== 'logistics-cost' && <Skeleton />}
           {page === 'overview' && data && (!allowedTabs || allowedTabs.includes('overview')) && (
             <div className="page-scroll">
               <OverviewPage data={data} alerts={alerts} logisticsData={logisticsData} filters={filters} />
@@ -10447,6 +10490,11 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
           {page === 'logistics' && (!allowedTabs || allowedTabs.includes('logistics')) && (
             <div style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
               <LogisticsPage filters={filters} />
+            </div>
+          )}
+          {page === 'logistics-cost' && (!allowedTabs || allowedTabs.includes('logistics')) && (
+            <div className="page-scroll">
+              <LogisticsCostPage />
             </div>
           )}
           {page === 'inventory' && (!allowedTabs || allowedTabs.includes('inventory')) && (
