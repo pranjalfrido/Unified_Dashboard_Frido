@@ -748,7 +748,7 @@ function LogisticsPage({ filters }) {
               </div>
             </div>
             <ResponsiveContainer width="100%" height={220}>
-              <ComposedChart data={trendData} margin={{ top: 4, right: 32, left: 0, bottom: 0 }}>
+              <ComposedChart data={trendData} margin={{ top: 4, right: -20, left: -30, bottom: 0 }}>
                 <defs>
                   <linearGradient id="lgDel" x1="0" y1="0" x2="0" y2="1">
                     <stop offset="5%" stopColor="#FFD600" stopOpacity={0.25} />
@@ -767,15 +767,15 @@ function LogisticsPage({ filters }) {
                   if (!active || !payload?.length) return null
                   const get = key => payload.find(p => p.dataKey === key)?.value
                   return (
-                    <div style={{ background: C.card, border: `1px solid ${C.border2}`, borderRadius: 8, padding: '10px 14px', fontSize: 12, color: C.t1, minWidth: 140 }}>
-                      <div style={{ fontWeight: 700, marginBottom: 6 }}>{label}</div>
+                    <div style={{ background: C.card, border: `1px solid ${C.border2}`, borderRadius: 8, padding: '6px 10px', fontSize: 11, color: C.t1, minWidth: 120 }}>
+                      <div style={{ fontWeight: 700, marginBottom: 4 }}>{label}</div>
                       {trendMetric === 'Qty' ? <>
-                          <div style={{ color: '#E6A800', fontWeight: 600 }}>Del % : {get('del_pct') ?? '—'}%</div>
-                          <div style={{ color: '#b91c1c', fontWeight: 600 }}>RTO % : {get('rto_pct') ?? '—'}%</div>
+                          <div style={{ color: C.t1, fontWeight: 600 }}>Del % : {get('del_pct') ?? '—'}%</div>
+                          <div style={{ color: C.t1, fontWeight: 600 }}>RTO % : {get('rto_pct') ?? '—'}%</div>
                           <div style={{ color: C.t2 }}>Total : {Number(get('total') ?? 0).toLocaleString('en-IN')}</div>
                         </> : <>
-                        <div style={{ color: '#E6A800', fontWeight: 600 }}>Del % : {get('del_value_pct') ?? '—'}%</div>
-                        <div style={{ color: '#b91c1c', fontWeight: 600 }}>RTO % : {get('rto_value_pct') ?? '—'}%</div>
+                        <div style={{ color: C.t1, fontWeight: 600 }}>Del % : {get('del_value_pct') ?? '—'}%</div>
+                        <div style={{ color: C.t1, fontWeight: 600 }}>RTO % : {get('rto_value_pct') ?? '—'}%</div>
                         <div style={{ color: C.t2 }}>Total Value : ₹{Number(get('total_value') ?? 0).toLocaleString('en-IN')}</div>
                       </>}
                     </div>
@@ -815,7 +815,7 @@ function LogisticsPage({ filters }) {
               <div style={chartTitle}>Shipment Volume & TAT Trend</div>
               <div style={{ display: 'flex', gap: 4 }}>
                 {['Daily','Weekly','Monthly'].map(g => (
-                  <button key={g} onClick={() => setCourierTatGran(g)} style={{ fontSize: 11, padding: '3px 10px', borderRadius: 6, border: `1px solid ${courierTatGran === g ? C.acc : C.border}`, background: courierTatGran === g ? C.acl : C.card, color: courierTatGran === g ? C.t1 : C.t2, cursor: 'pointer', fontWeight: courierTatGran === g ? 700 : 500, fontFamily: 'var(--font)' }}>{g}</button>
+                  <button key={g} onClick={() => setCourierTatGran(g)} style={{ fontSize: 11, padding: '3px 10px', borderRadius: 6, border: `1px solid ${courierTatGran === g ? C.acc : C.border}`, background: courierTatGran === g ? C.acc : C.card, color: courierTatGran === g ? '#000' : C.t2, cursor: 'pointer', fontWeight: courierTatGran === g ? 700 : 500, fontFamily: 'var(--font)' }}>{g}</button>
                 ))}
               </div>
             </div>
@@ -844,21 +844,26 @@ function LogisticsPage({ filters }) {
               }))
               return (<>
             <ResponsiveContainer width="100%" height={220}>
-              <ComposedChart data={tatData} margin={{ top: 10, right: 40, left: 0, bottom: 0 }}>
+              <ComposedChart data={tatData} margin={{ top: 10, right: -20, left: -30, bottom: 0 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke={C.border} vertical={false} />
                 <XAxis dataKey="label" tick={{ fontSize: 10, fill: C.t3 }} />
-                <YAxis yAxisId="left" tick={{ fontSize: 9, fill: '#5BA4CF' }} tickFormatter={v => v >= 1000 ? (v/1000).toFixed(0)+'K' : v} />
+                <YAxis yAxisId="left" tick={{ fontSize: 9, fill: C.t3 }} tickFormatter={v => v >= 1000 ? (v/1000).toFixed(0)+'K' : v} />
                 <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 9, fill: C.t2 }} tickFormatter={v => v + 'd'} />
-                <Tooltip formatter={(value, name) => name.includes('Days') ? [value != null ? value + 'd' : '—', name] : [Number(value).toLocaleString('en-IN'), name]} />
-                <Bar yAxisId="left" dataKey="total" name="Total Shipments" fill="#5BA4CF" opacity={0.8} radius={[3,3,0,0]} />
-                <Line yAxisId="right" type="monotone" dataKey="avg_processing_days" name="Avg Processing Days" stroke="#8B5CF6" strokeWidth={2} dot={{ fill: '#8B5CF6', r: 3 }} />
-                <Line yAxisId="right" type="monotone" dataKey="avg_pickup_days" name="Avg Pickup Days" stroke="#10B981" strokeWidth={2} dot={{ fill: '#10B981', r: 3 }} />
-                <Line yAxisId="right" type="monotone" dataKey="avg_intransit_days" name="Avg Intransit Days" stroke="#1E3A5F" strokeWidth={2} dot={{ fill: '#1E3A5F', r: 3 }} />
-                <Line yAxisId="right" type="monotone" dataKey="avg_fulfilment_days" name="Avg Fulfilment Days" stroke="#F97316" strokeWidth={2} dot={{ fill: '#F97316', r: 3 }} />
+                <Tooltip
+                  contentStyle={{ fontSize: 11, padding: '6px 10px', borderRadius: 8, border: `1px solid ${C.border}`, background: C.card, color: C.t1 }}
+                  itemStyle={{ color: C.t1, padding: '1px 0' }}
+                  labelStyle={{ color: C.t1, fontWeight: 700, marginBottom: 3, fontSize: 11 }}
+                  formatter={(value, name) => name.includes('Days') ? [value != null ? value + 'd' : '—', name] : [Number(value).toLocaleString('en-IN'), name]}
+                />
+                <Bar yAxisId="left" dataKey="total" name="Total Shipments" fill="#FFE082" opacity={0.9} radius={[3,3,0,0]} />
+                <Line yAxisId="right" type="monotone" dataKey="avg_processing_days" name="Avg Processing Days" stroke="#333" strokeWidth={1.5} strokeDasharray="6 3" dot={{ fill: '#333', r: 2.5 }} />
+                <Line yAxisId="right" type="monotone" dataKey="avg_pickup_days" name="Avg Pickup Days" stroke="#333" strokeWidth={1.5} strokeDasharray="2 3" dot={{ fill: '#333', r: 2.5 }} />
+                <Line yAxisId="right" type="monotone" dataKey="avg_intransit_days" name="Avg Intransit Days" stroke="#333" strokeWidth={1.5} strokeDasharray="10 3" dot={{ fill: '#333', r: 2.5 }} />
+                <Line yAxisId="right" type="monotone" dataKey="avg_fulfilment_days" name="Avg Fulfilment Days" stroke="#333" strokeWidth={2} dot={{ fill: '#333', r: 2.5 }} />
               </ComposedChart>
             </ResponsiveContainer>
             <div style={{ display: 'flex', gap: 16, justifyContent: 'center', marginTop: 8, flexWrap: 'wrap', flexShrink: 0 }}>
-              {[['#5BA4CF','Total Shipments'],['#8B5CF6','Avg Processing Days'],['#10B981','Avg Pickup Days'],['#1E3A5F','Avg Intransit Days'],['#F97316','Avg Fulfilment Days']].map(([color, label]) => (
+              {[['#FFE082','Total Shipments'],['#333','Avg Processing Days'],['#333','Avg Pickup Days'],['#333','Avg Intransit Days'],['#333','Avg Fulfilment Days']].map(([color, label]) => (
                 <span key={label} style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 10, color: C.t2 }}>
                   <span style={{ width: 10, height: 10, borderRadius: 2, background: color, display: 'inline-block' }} />{label}
                 </span>
