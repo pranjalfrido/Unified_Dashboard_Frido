@@ -150,7 +150,7 @@ function LKpiCard({ label, value, badgeText, badgeVariant, subValue, cur, prev, 
       <div className="kpi-label" style={{ marginBottom: 2 }}>{label}</div>
       {compact ? (
         <>
-          <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 4, minWidth: 0 }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 4, minWidth: 0 }}>
             <div className="kpi-value" style={{ fontSize: 16, whiteSpace: 'nowrap', minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis' }}>{value ?? '—'}</div>
             {chgBadge}
           </div>
