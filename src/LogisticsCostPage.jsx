@@ -445,6 +445,74 @@ function ShareBar({ pct, children }) {
 }
 
 // ── Page ──────────────────────────────────────────────────────
+// Sum a set of cube rows into a totals object matching the API's `totals` shape.
+function sumCube(rows) {
+  const t = {}
+  const add = (k, v) => { t[k] = (t[k] || 0) + (Number(v) || 0) }
+  for (const r of rows) {
+    add('n', r.n); add('cost', r.cost); add('charged_wt', r.wt); add('declared_wt', r.decl_wt)
+    add('ship_value', r.value); add('surcharge', r.surcharge)
+    add('overbilled_rows', r.over_n); add('overbilled_kg', r.over_kg); add('overbilled_cost', r.over_cost)
+    add('rec_infl', r.rec_infl); add('rec_unexp', r.rec_unexp); add('reverse_n', r.reverse_n)
+    add('rec_admit', r.rec_admit); add('rec_admit_n', r.rec_admit_n)
+    add('slab_rows', r.slab_n); add('slab_excess_kg', r.slab_kg); add('slab_excess_cost', r.slab_cost)
+    add('rc_entitled', r.rc_entitled); add('rc_carrier', r.rc_carrier); add('rc_total', r.rc_total)
+    add('rc_entitled_allin', r.rc_entitled_allin); add('rc_carrier_allin', r.rc_carrier_allin)
+    add('rc_entitled_surcharge', r.rc_entitled_surcharge); add('inv_addons', r.inv_addons)
+    add('inv_freight', r.inv_freight); add('rc_priced', r.rc_priced)
+    add('rc_over_n', r.rc_over_n); add('rc_over_cost', r.rc_over_cost)
+    add('rc_infl_n', r.rc_infl_n); add('rc_infl_cost', r.rc_infl_cost)
+    add('claimable_n', r.claimable_n); add('claimable_rs', r.claimable_rs)
+    add('margin_killer_n', r.margin_killer_n); add('margin_killer_cost', r.margin_killer_cost)
+  }
+  return t
+}
+
+// Re-derive the byZone / byMode / byMonth / byCourier / byPay breakdown arrays
+// from the cube rows, so charts still work after a client-side filter.
+function cubeToBreakdowns(rows) {
+  const acc = (map, key, r) => {
+    if (!map[key]) map[key] = {}
+    const add = (k, v) => { map[key][k] = (map[key][k] || 0) + (Number(v) || 0) }
+    add('n', r.n); add('cost', r.cost); add('wt', r.wt); add('decl_wt', r.decl_wt)
+    add('value', r.value); add('surcharge', r.surcharge)
+    add('over_n', r.over_n); add('over_kg', r.over_kg); add('over_cost', r.over_cost)
+    add('rec_infl', r.rec_infl); add('rec_unexp', r.rec_unexp); add('rec_admit', r.rec_admit)
+    add('rec_admit_n', r.rec_admit_n); add('reverse_n', r.reverse_n)
+    add('claimable_n', r.claimable_n)
+    add('rc_entitled', r.rc_entitled); add('rc_carrier', r.rc_carrier)
+  }
+  const byZone = {}, byMode = {}, byMonth = {}, byCourier = {}, byPay = {}
+  for (const r of rows) {
+    if (r.zone)    acc(byZone,    r.zone,    r)
+    if (r.mode)    acc(byMode,    r.mode,    r)
+    if (r.month)   acc(byMonth,   r.month,   r)
+    if (r.courier_name) acc(byCourier, r.courier_name, r)
+    if (r.payment) acc(byPay,     r.payment, r)
+  }
+  const toArr = (map) => Object.entries(map).map(([key, v]) => ({ key, ...v }))
+  return { byZone: toArr(byZone), byMode: toArr(byMode), byMonth: toArr(byMonth), byCourier: toArr(byCourier), byPay: toArr(byPay) }
+}
+
+// Filters that can be satisfied purely from the cube (no API needed).
+function isCubeFilter(f) {
+  return !f.band && !f.destCity
+}
+
+// Apply cube-compatible filters to cube rows.
+function filterCube(cube, f) {
+  return cube.filter(r => {
+    if (f.couriers?.length && !f.couriers.includes(r.courier_name)) return false
+    if (f.zones?.length && !f.zones.includes(r.zone)) return false
+    if (f.modes?.length && !f.modes.includes(r.mode)) return false
+    if (f.months?.length && !f.months.includes(r.month)) return false
+    if (f.payments?.length && !f.payments.includes(r.payment)) return false
+    if (f.billing === 'overbilled' && !r.is_overbilled) return false
+    if (f.billing === 'clean' && r.is_overbilled) return false
+    return true
+  })
+}
+
 export default function LogisticsCostPage() {
   const [agg, setAgg] = useState(null)
   const [b2bRows, setB2bRows] = useState(null)
@@ -458,45 +526,58 @@ export default function LogisticsCostPage() {
   const [sidebarOpen, setSidebarOpen] = useState(true)
   // 'all' = B2B + B2C summary · 'b2c' = courier detail · 'b2b' = lane-wise freight
   const [scope, setScope] = useState('all')
-  // Bumped after a claim mutation to force a refetch, so every derived figure (hero,
-  // recovery rate, aging) recomputes from the server rather than local guesswork.
-  // Retained as a fetch-effect dependency. Its only setter went with the claim-filing
-  // flow; wire a setter back in if a manual refresh button is added.
   const [reloadKey] = useState(0)
 
-  // Re-fetch whenever any slicer changes. The previous request is aborted so a slower
-  // wider query can't land after a newer, narrower one.
+  // Raw full-dataset JSON — loaded once from CDN, never re-fetched for cube-compatible filters.
+  const [baseData, setBaseData] = useState(null)
+
   const filterKey = JSON.stringify(filters)
   const scanRef = useRef(0)
 
   useEffect(() => {
     const ctl = new AbortController()
     const myRun = ++scanRef.current
-
-    // Check if all filters are empty — if so, try the pre-computed static file first
     const f = JSON.parse(filterKey)
-    const isDefaultFilters = !f.months?.length && !f.zones?.length && !f.modes?.length &&
-      !f.payments?.length && !f.couriers?.length && !f.accountTypes?.length &&
-      !f.band && !f.destCity && (!f.billing || f.billing === 'all')
+
+    // If the base data is loaded AND the filter can be handled by the cube, skip the API.
+    if (baseData?.cube && isCubeFilter(f)) {
+      const filtered = filterCube(baseData.cube, f)
+      const totals = sumCube(filtered)
+      const breakdowns = cubeToBreakdowns(filtered)
+      // Merge totals + breakdowns into the base response shape, preserving filter-independent fields.
+      const merged = {
+        ...baseData,
+        totals,
+        byZone: breakdowns.byZone,
+        byMode: breakdowns.byMode,
+        byMonth: breakdowns.byMonth,
+        byCourier: breakdowns.byCourier,
+        byPay: breakdowns.byPay,
+      }
+      setAgg(shapeResponse(merged))
+      setLoading(false)
+      return
+    }
 
     ;(async () => {
       setLoading(true); setError(null)
       try {
         let j
-        if (isDefaultFilters) {
-          // Try CDN static file first — 100-200ms vs 30-56s from Supabase
+        // Try CDN static file on first load (no filters set yet, or base not cached)
+        const isDefaultFilters = !f.months?.length && !f.zones?.length && !f.modes?.length &&
+          !f.payments?.length && !f.couriers?.length && !f.accountTypes?.length &&
+          !f.band && !f.destCity && (!f.billing || f.billing === 'all')
+
+        if (isDefaultFilters && !baseData) {
           const staticRes = await fetch('/logistics-cost-data.json', { signal: ctl.signal }).catch(() => null)
           if (staticRes?.ok) {
             const data = await staticRes.json()
-            // Accept if generated within last 2 hours
             const age = data.asOf ? (Date.now() - new Date(data.asOf).getTime()) : Infinity
-            if (age < 2 * 60 * 60 * 1000) {
-              j = data
-            }
+            if (age < 2 * 60 * 60 * 1000) { j = data }
           }
         }
+
         if (!j) {
-          // Fall back to live API (filters set, or static file missing/stale)
           const res = await fetch(`${API}/api/logistics-cost`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -509,7 +590,12 @@ export default function LogisticsCostPage() {
           }
           j = await res.json()
         }
+
         if (scanRef.current !== myRun) return
+
+        // Cache the full base response so future cube-compatible filters are instant.
+        if (isDefaultFilters && j.cube) setBaseData(j)
+
         setAgg(shapeResponse(j))
         setB2bRows(j.b2b || [])
         setB2b({
@@ -539,7 +625,7 @@ export default function LogisticsCostPage() {
     })()
 
     return () => ctl.abort()
-  }, [filterKey, API, reloadKey])
+  }, [filterKey, API, reloadKey, baseData])
 
   // ── Derived views ──
   const kpis = useMemo(() => {
