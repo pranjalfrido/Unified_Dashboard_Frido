@@ -855,7 +855,7 @@ function LogisticsPage({ filters }) {
                   labelStyle={{ color: C.t1, fontWeight: 700, marginBottom: 3, fontSize: 11 }}
                   formatter={(value, name) => name.includes('Days') ? [value != null ? value + 'd' : '—', name] : [Number(value).toLocaleString('en-IN'), name]}
                 />
-                <Bar yAxisId="left" dataKey="total" name="Total Shipments" fill="#FFE082" opacity={0.9} radius={[3,3,0,0]} />
+                <Bar yAxisId="left" dataKey="total" name="Total Shipments" fill="#FFC107" opacity={0.85} radius={[3,3,0,0]} />
                 <Line yAxisId="right" type="monotone" dataKey="avg_processing_days" name="Avg Processing Days" stroke="#333" strokeWidth={1.5} strokeDasharray="6 3" dot={{ fill: '#333', r: 2.5 }} />
                 <Line yAxisId="right" type="monotone" dataKey="avg_pickup_days" name="Avg Pickup Days" stroke="#333" strokeWidth={1.5} strokeDasharray="2 3" dot={{ fill: '#333', r: 2.5 }} />
                 <Line yAxisId="right" type="monotone" dataKey="avg_intransit_days" name="Avg Intransit Days" stroke="#333" strokeWidth={1.5} strokeDasharray="10 3" dot={{ fill: '#333', r: 2.5 }} />
@@ -863,7 +863,7 @@ function LogisticsPage({ filters }) {
               </ComposedChart>
             </ResponsiveContainer>
             <div style={{ display: 'flex', gap: 16, justifyContent: 'center', marginTop: 8, flexWrap: 'wrap', flexShrink: 0 }}>
-              {[['#FFE082','Total Shipments'],['#333','Avg Processing Days'],['#333','Avg Pickup Days'],['#333','Avg Intransit Days'],['#333','Avg Fulfilment Days']].map(([color, label]) => (
+              {[['#FFC107','Total Shipments'],['#333','Avg Processing Days'],['#333','Avg Pickup Days'],['#333','Avg Intransit Days'],['#333','Avg Fulfilment Days']].map(([color, label]) => (
                 <span key={label} style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 10, color: C.t2 }}>
                   <span style={{ width: 10, height: 10, borderRadius: 2, background: color, display: 'inline-block' }} />{label}
                 </span>
