@@ -54,6 +54,8 @@ jobs:
           git add public/inv-data-7d.json public/inv-data-15d.json public/inv-data-30d.json \
                   public/sales-alloc-data.json public/inward-data.json public/logistics-data.json \
                   public/logistics-cost-data.json
-          git diff --cached --quiet && echo "No changes" || git commit -m "chore: update static data cache [skip ci]"
-          git pull --rebase origin main
-          git push
+          git diff --cached --quiet && echo "No changes" && exit 0
+          git fetch origin main
+          git reset --soft origin/main
+          git commit -m "chore: update static data cache [skip ci]"
+          git push origin main
