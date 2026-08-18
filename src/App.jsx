@@ -1823,7 +1823,7 @@ function Sidebar({ page, setPage, invTab, setInvTab, allowedTabs, profile }) {
   const allItems = [
     { id: 'overview', label: 'Overview', icon: <svg width={18} height={18} viewBox="0 0 24 24" fill="currentColor"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg> },
     { id: 'sales', label: 'Sales', icon: <svg width={18} height={18} viewBox="0 0 24 24" fill="currentColor"><rect x="2" y="12" width="4" height="10" rx="1"/><rect x="10" y="6" width="4" height="16" rx="1"/><rect x="18" y="2" width="4" height="20" rx="1"/></svg> },
-    { id: 'pnl', label: 'PnL', icon: <svg width={18} height={18} viewBox="0 0 24 24" fill="currentColor"><path d="M21 7H7a2 2 0 00-2 2v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2zm-7 9a3 3 0 110-6 3 3 0 010 6z"/><path d="M3 5h14a1 1 0 000-2H3a1 1 0 000 2z"/></svg> },
+    { id: 'pnl', label: 'PnL', icon: <img src="/graph.png" alt="PnL" width={18} height={18} style={{ objectFit: 'contain', opacity: 0.7 }} /> },
     { id: 'ads', label: 'Ads', icon: <svg width={18} height={18} viewBox="0 0 24 24" fill="currentColor"><path d="M5 3l14 9-14 9V3z"/></svg> },
     { id: 'logistics', label: 'Logistics', icon: <svg width={18} height={18} viewBox="0 0 24 24" fill="currentColor"><path d="M1 3h14a1 1 0 011 1v9H1V3zm15 4h4.5L23 10.5V16h-7V7zM5.5 20a2 2 0 100-4 2 2 0 000 4zm13 0a2 2 0 100-4 2 2 0 000 4z"/></svg> },
     { id: 'inventory', label: 'Inventory', icon: <svg width={18} height={18} viewBox="0 0 24 24" fill="currentColor"><path d="M12 2L2 7v10l10 5 10-5V7L12 2zm0 2.24L20 8.5l-8 4-8-4 8-4.26zM3 9.74l8 4V21l-8-4V9.74zm10 11.26v-7.5l8-4V17l-8 4z"/></svg> },
@@ -1909,7 +1909,7 @@ function BottomNav({ page, setPage, allowedTabs, profile }) {
   const allItems = [
     { id: 'overview', label: 'Overview', icon: <svg width={18} height={18} viewBox="0 0 24 24" fill="currentColor"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg> },
     { id: 'sales', label: 'Sales', icon: <svg width={18} height={18} viewBox="0 0 24 24" fill="currentColor"><rect x="2" y="12" width="4" height="10" rx="1"/><rect x="10" y="6" width="4" height="16" rx="1"/><rect x="18" y="2" width="4" height="20" rx="1"/></svg> },
-    { id: 'pnl', label: 'PnL', icon: <svg width={18} height={18} viewBox="0 0 24 24" fill="currentColor"><path d="M21 7H7a2 2 0 00-2 2v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2zm-7 9a3 3 0 110-6 3 3 0 010 6z"/><path d="M3 5h14a1 1 0 000-2H3a1 1 0 000 2z"/></svg> },
+    { id: 'pnl', label: 'PnL', icon: <img src="/graph.png" alt="PnL" width={18} height={18} style={{ objectFit: 'contain', opacity: 0.7 }} /> },
     { id: 'inventory', label: 'Inventory', icon: <svg width={18} height={18} viewBox="0 0 24 24" fill="currentColor"><path d="M12 2L2 7v10l10 5 10-5V7L12 2zm0 2.24L20 8.5l-8 4-8-4 8-4.26zM3 9.74l8 4V21l-8-4V9.74zm10 11.26v-7.5l8-4V17l-8 4z"/></svg> },
     { id: 'logistics', label: 'Logistics', icon: <svg width={18} height={18} viewBox="0 0 24 24" fill="currentColor"><path d="M1 3h14a1 1 0 011 1v9H1V3zm15 4h4.5L23 10.5V16h-7V7zM5.5 20a2 2 0 100-4 2 2 0 000 4zm13 0a2 2 0 100-4 2 2 0 000 4z"/></svg> },
     { id: 'ads', label: 'Ads', icon: <svg width={18} height={18} viewBox="0 0 24 24" fill="currentColor"><path d="M5 3l14 9-14 9V3z"/></svg> },
@@ -2250,8 +2250,7 @@ function DateRangePicker({ filters, setFilters, theme: T = C, onRefresh, loading
 }
 
 function MobileInvFilterPanel({ invTab, setInvTab, inventoryDateControl, onClose }) {
-  const [subPanel, setSubPanel] = useState(null) // { key, label, options, selected, onChange, isRadio, getKey, getLabel }
-  const [search, setSearch] = useState('')
+  const [expandedKey, setExpandedKey] = useState(null)
 
   const idc = inventoryDateControl || {}
   const hf = idc.invHealthFilters || {}
@@ -2264,13 +2263,12 @@ function MobileInvFilterPanel({ invTab, setInvTab, inventoryDateControl, onClose
   const TABS = [
     { id: 'health', label: 'Inventory Health' },
     { id: 'sales', label: 'Sales & Allocation' },
-    { id: 'inward', label: 'Inward' },
+    // { id: 'inward', label: 'Inward' },
   ]
 
   const STOCK_STATUSES = ['Out of Stock', 'Critical', 'Low', 'Sufficient', 'Excess', 'Dead / No Sale', 'No Demand']
   const AVG_WINDOWS = [{ label: '7d', value: 7 }, { label: '15d', value: 15 }, { label: '30d', value: 30 }]
 
-  // Build slicer rows for each tab
   const healthSlicers = [
     { key: 'location', label: 'Location', options: hOpts.locations || [], selected: hf.location || [], onChange: v => setHf(p => ({ ...p, location: v })) },
     { key: 'stockStatus', label: 'Stock Status', options: STOCK_STATUSES, selected: hf.stockStatus || [], onChange: v => setHf(p => ({ ...p, stockStatus: v })) },
@@ -2294,109 +2292,152 @@ function MobileInvFilterPanel({ invTab, setInvTab, inventoryDateControl, onClose
 
   const currentSlicers = invTab === 'health' ? healthSlicers : invTab === 'sales' ? salesSlicers : []
 
-  const countSelected = (s) => {
-    if (!s) return 0
-    if (Array.isArray(s)) return s.length
-    return 0
-  }
+  const keyOf = (slicer, o) => slicer.getKey ? slicer.getKey(o) : o
+  const labelOf = (slicer, o) => slicer.getLabel ? slicer.getLabel(o) : o
 
-  const openSubPanel = (slicer) => {
-    setSearch('')
-    setSubPanel(slicer)
-  }
+  const totalActive = currentSlicers.reduce((sum, s) => {
+    if (s.isRadio) return sum
+    return sum + (Array.isArray(s.selected) ? s.selected.length : 0)
+  }, 0)
 
   const handleClearAll = () => {
     if (invTab === 'health') setHf({})
     else if (invTab === 'sales') setSf({})
+    setExpandedKey(null)
   }
 
-  // Sub-panel view
-  if (subPanel) {
-    const { label, options, selected, onChange, isRadio, getKey, getLabel } = subPanel
-    const keyOf = o => getKey ? getKey(o) : o
-    const labelOf = o => getLabel ? getLabel(o) : o
-    const filteredOpts = search ? options.filter(o => labelOf(o).toString().toLowerCase().includes(search.toLowerCase())) : options
-    return (
-      <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
-        {/* Sub-panel header */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '14px 16px 10px', borderBottom: `1px solid ${C.border}`, flexShrink: 0 }}>
-          <button onClick={() => setSubPanel(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.t2, fontSize: 18, padding: 0, display: 'flex', alignItems: 'center' }}>←</button>
-          <span style={{ fontWeight: 700, fontSize: 14, color: C.t1 }}>{label}</span>
-          {!isRadio && selected.length > 0 && (
-            <button onClick={() => onChange([])} style={{ marginLeft: 'auto', fontSize: 11, color: C.t3, background: 'none', border: 'none', cursor: 'pointer', padding: '2px 6px' }}>Clear</button>
-          )}
-        </div>
-        {/* Search if > 10 options */}
-        {options.length > 10 && (
-          <div style={{ padding: '8px 14px', flexShrink: 0 }}>
-            <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search…"
-              style={{ width: '100%', padding: '7px 10px', borderRadius: 8, border: `1px solid ${C.border}`, fontSize: 13, outline: 'none', boxSizing: 'border-box', fontFamily: 'var(--font)' }} />
-          </div>
-        )}
-        {/* Options list */}
-        <div style={{ flex: 1, overflowY: 'auto', padding: '4px 0' }}>
-          {filteredOpts.map((opt, oi) => {
-            const k = keyOf(opt)
-            const lbl = labelOf(opt)
-            const checked = isRadio ? selected === k : selected.includes(k)
-            return (
-              <label key={`${oi}-${k}`} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 16px', cursor: 'pointer', borderBottom: `1px solid ${C.bg}` }}>
-                <input type={isRadio ? 'radio' : 'checkbox'} checked={checked}
-                  onChange={() => {
-                    if (isRadio) { onChange(k) }
-                    else { onChange(checked ? selected.filter(x => x !== k) : [...selected, k]) }
-                  }}
-                  style={{ width: 16, height: 16, accentColor: C.acc, flexShrink: 0 }} />
-                <span style={{ fontSize: 13, color: C.t1 }}>{lbl}</span>
-              </label>
-            )
-          })}
-          {filteredOpts.length === 0 && <div style={{ padding: '16px', fontSize: 12, color: C.t3, textAlign: 'center' }}>No matches</div>}
-        </div>
-      </div>
-    )
-  }
+  const toggleExpand = (key) => setExpandedKey(k => k === key ? null : key)
 
-  // Main panel view
+  // color tokens
+  const PV = { bg: '#FFFFFF', canvas: '#F5F6F8', border: '#E7E8EC', ink: '#1F2430', sub: '#6B7280', accent: '#F2C230', accentDark: '#8A6D00', blue: '#1967D2', blueBg: '#E8F0FE', blueBorder: '#AECBFA' }
+
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
-      {/* Panel header */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 16px 12px', borderBottom: `1px solid ${C.border}`, flexShrink: 0 }}>
-        <span style={{ fontWeight: 700, fontSize: 15, color: C.t1 }}>Filters</span>
-        <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.t2, fontSize: 20, padding: 0, lineHeight: 1 }}>✕</button>
+    <div style={{ display: 'flex', flexDirection: 'column', maxHeight: '72vh', fontFamily: 'Inter, system-ui, sans-serif' }}>
+
+      {/* Header */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 16px 10px', flexShrink: 0 }}>
+        <span style={{ fontWeight: 700, fontSize: 15, color: PV.ink, letterSpacing: '-0.01em' }}>Menu & Filters</span>
+        <button onClick={onClose} style={{ width: 28, height: 28, borderRadius: 8, border: 'none', background: PV.canvas, color: PV.sub, fontSize: 14, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', lineHeight: 1 }}>✕</button>
       </div>
-      {/* Sub-tab pills */}
-      <div style={{ display: 'flex', gap: 6, padding: '12px 14px', borderBottom: `1px solid ${C.border}`, flexShrink: 0, overflowX: 'auto' }}>
+
+      {/* Page segmented control */}
+      <div style={{ display: 'flex', margin: '0 14px 12px', background: PV.canvas, borderRadius: 10, padding: 3, gap: 2, flexShrink: 0 }}>
         {TABS.map(t => (
-          <button key={t.id} onClick={() => { setInvTab(t.id); onClose(); }}
-            style={{ padding: '6px 12px', borderRadius: 20, fontSize: 12, fontWeight: invTab === t.id ? 700 : 500, border: `1px solid ${invTab === t.id ? C.acc : C.border}`, background: invTab === t.id ? C.acl : 'transparent', color: invTab === t.id ? C.acc : C.t2, cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0 }}>
+          <button key={t.id} onClick={() => { setInvTab(t.id); setExpandedKey(null) }}
+            style={{
+              flex: 1, padding: '7px 4px', borderRadius: 8, border: 'none', fontSize: 12, fontWeight: invTab === t.id ? 700 : 500,
+              background: invTab === t.id ? PV.bg : 'transparent',
+              color: invTab === t.id ? PV.ink : PV.sub,
+              cursor: 'pointer', whiteSpace: 'nowrap',
+              boxShadow: invTab === t.id ? '0 1px 4px rgba(0,0,0,0.10)' : 'none',
+              transition: 'all .15s',
+            }}>
             {t.label}
           </button>
         ))}
       </div>
-      {/* Slicer list */}
-      <div style={{ flex: 1, overflowY: 'auto' }}>
+
+      {/* Divider + filters label */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 16px 8px', flexShrink: 0 }}>
+        <span style={{ fontSize: 10, fontWeight: 800, color: PV.sub, letterSpacing: '.07em', textTransform: 'uppercase' }}>
+          Filters{totalActive > 0 ? ` · ${totalActive} active` : ''}
+        </span>
+        {totalActive > 0 && (
+          <button onClick={handleClearAll} style={{ fontSize: 11, color: '#D93025', background: 'none', border: 'none', cursor: 'pointer', padding: 0, fontWeight: 600 }}>
+            ↺ Reset
+          </button>
+        )}
+      </div>
+
+      {/* Scrollable filter list */}
+      <div style={{ flex: 1, overflowY: 'auto', borderTop: `1px solid ${PV.border}` }}>
         {invTab === 'inward' ? (
-          <div style={{ padding: 20, fontSize: 13, color: C.t3, textAlign: 'center' }}>No filters available for Inward</div>
+          <div style={{ padding: 24, fontSize: 13, color: PV.sub, textAlign: 'center' }}>No filters for Inward</div>
         ) : currentSlicers.length === 0 ? (
-          <div style={{ padding: 20, fontSize: 13, color: C.t3, textAlign: 'center' }}>Loading filter options…</div>
-        ) : currentSlicers.map(slicer => {
-          const cnt = slicer.isRadio ? 0 : countSelected(slicer.selected)
+          <div style={{ padding: 24, fontSize: 13, color: PV.sub, textAlign: 'center' }}>Loading…</div>
+        ) : currentSlicers.map((slicer, si) => {
+          const isExpanded = expandedKey === slicer.key
+          const selCount = slicer.isRadio ? 0 : (Array.isArray(slicer.selected) ? slicer.selected.length : 0)
+          const isLast = si === currentSlicers.length - 1
+
           return (
-            <div key={slicer.key} onClick={() => openSubPanel(slicer)}
-              style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '13px 16px', borderBottom: `1px solid ${C.bg}`, cursor: 'pointer' }}>
-              <span style={{ fontSize: 13, color: C.t1 }}>{slicer.label}{cnt > 0 ? ` (${cnt})` : ''}</span>
-              <span style={{ fontSize: 14, color: C.t3 }}>›</span>
+            <div key={slicer.key} style={{ borderBottom: isLast ? 'none' : `1px solid ${PV.border}` }}>
+              {/* Row header */}
+              <div onClick={() => toggleExpand(slicer.key)}
+                style={{ display: 'flex', alignItems: 'center', padding: '12px 16px', cursor: 'pointer', gap: 8, userSelect: 'none' }}>
+                <span style={{ flex: 1, fontSize: 13, fontWeight: 500, color: selCount > 0 ? PV.ink : PV.ink }}>{slicer.label}</span>
+                {selCount > 0 && (
+                  <span style={{ fontSize: 10, fontWeight: 700, background: '#FFF3CD', color: '#8A6D00', border: '1px solid #F2C230', borderRadius: 10, padding: '1px 7px', lineHeight: '16px' }}>
+                    {selCount}
+                  </span>
+                )}
+                {selCount > 0 && (
+                  <button onClick={e => { e.stopPropagation(); slicer.onChange([]) }}
+                    style={{ background: 'none', border: 'none', color: PV.sub, fontSize: 13, cursor: 'pointer', padding: '0 2px', lineHeight: 1, flexShrink: 0 }}>✕</button>
+                )}
+                <span style={{ fontSize: 13, color: PV.sub, transform: isExpanded ? 'rotate(90deg)' : 'none', transition: 'transform .18s', lineHeight: 1, flexShrink: 0 }}>›</span>
+              </div>
+
+              {/* Expanded options */}
+              {isExpanded && (
+                <div style={{ background: PV.canvas, borderTop: `1px solid ${PV.border}`, padding: '4px 0 8px' }}>
+                  {slicer.options.length === 0 && (
+                    <div style={{ padding: '10px 16px', fontSize: 12, color: PV.sub }}>No options available</div>
+                  )}
+                  {slicer.options.map((opt, oi) => {
+                    const k = keyOf(slicer, opt)
+                    const lbl = labelOf(slicer, opt)
+                    const checked = slicer.isRadio ? slicer.selected === k : (Array.isArray(slicer.selected) && slicer.selected.includes(k))
+                    return (
+                      <label key={`${oi}-${k}`}
+                        style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '9px 16px', cursor: 'pointer', userSelect: 'none' }}>
+                        {/* Custom checkbox / radio */}
+                        <div style={{
+                          width: 17, height: 17, borderRadius: slicer.isRadio ? '50%' : 5, flexShrink: 0,
+                          border: `2px solid ${checked ? PV.accent : PV.border}`,
+                          background: checked ? PV.accent : PV.bg,
+                          display: 'flex', alignItems: 'center', justifyContent: 'center',
+                          transition: 'all .12s',
+                        }}
+                          onClick={() => {
+                            if (slicer.isRadio) { slicer.onChange(k) }
+                            else {
+                              const sel = Array.isArray(slicer.selected) ? slicer.selected : []
+                              slicer.onChange(checked ? sel.filter(x => x !== k) : [...sel, k])
+                            }
+                          }}>
+                          {checked && <span style={{ fontSize: slicer.isRadio ? 7 : 10, color: PV.accentDark, lineHeight: 1 }}>{slicer.isRadio ? '●' : '✓'}</span>}
+                        </div>
+                        <span style={{ fontSize: 12.5, color: checked ? PV.ink : PV.sub, fontWeight: checked ? 600 : 400 }}
+                          onClick={() => {
+                            if (slicer.isRadio) { slicer.onChange(k) }
+                            else {
+                              const sel = Array.isArray(slicer.selected) ? slicer.selected : []
+                              slicer.onChange(checked ? sel.filter(x => x !== k) : [...sel, k])
+                            }
+                          }}>
+                          {lbl}
+                        </span>
+                      </label>
+                    )
+                  })}
+                </div>
+              )}
             </div>
           )
         })}
       </div>
-      {/* Clear all button */}
+
+      {/* Footer */}
       {invTab !== 'inward' && (
-        <div style={{ padding: '12px 16px', borderTop: `1px solid ${C.border}`, flexShrink: 0 }}>
-          <button onClick={handleClearAll}
-            style={{ width: '100%', padding: '10px', borderRadius: 10, border: `1px solid ${C.border}`, background: 'transparent', color: C.t2, fontSize: 13, cursor: 'pointer', fontFamily: 'var(--font)' }}>
-            Clear All Filters
+        <div style={{ display: 'flex', gap: 8, padding: '12px 14px', borderTop: `1px solid ${PV.border}`, flexShrink: 0 }}>
+          <button onClick={handleClearAll} disabled={totalActive === 0}
+            style={{ flex: 1, padding: '10px', borderRadius: 10, border: `1px solid ${PV.border}`, background: 'transparent', color: totalActive > 0 ? PV.ink : PV.sub, fontSize: 13, cursor: totalActive > 0 ? 'pointer' : 'default', fontFamily: 'inherit', opacity: totalActive > 0 ? 1 : 0.5 }}>
+            Reset
+          </button>
+          <button onClick={onClose}
+            style={{ flex: 2, padding: '10px', borderRadius: 10, border: 'none', background: PV.ink, color: '#fff', fontSize: 13, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>
+            {totalActive > 0 ? `Apply (${totalActive})` : 'Done'}
           </button>
         </div>
       )}
@@ -2419,8 +2460,14 @@ function Topnav({ page, customerTab, invTab, setInvTab, alerts, onRefresh, loadi
             <button className="tnav-mob-only" onClick={() => setMobFilterOpen(v => !v)} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '2px 4px', color: C.t2, fontSize: 16, lineHeight: 1, alignItems: 'center' }}>☰</button>
             {mobFilterOpen && (
               <>
-                <div onClick={() => setMobFilterOpen(false)} style={{ position: 'fixed', inset: 0, zIndex: 499, background: 'rgba(0,0,0,0.35)' }} />
-                <div style={{ position: 'fixed', top: 'var(--nav)', left: 0, right: 0, bottom: 'var(--bot)', zIndex: 500, background: '#fff', overflowY: 'auto', display: 'flex', flexDirection: 'column' }}>
+                <div onClick={() => setMobFilterOpen(false)} style={{ position: 'fixed', inset: 0, zIndex: 499, background: 'rgba(0,0,0,0.40)' }} />
+                <div style={{
+                  position: 'fixed', top: '50%', left: '50%', transform: 'translate(-50%, -50%)',
+                  zIndex: 500, width: 'min(320px, 92vw)',
+                  background: '#fff', borderRadius: 16, overflow: 'hidden',
+                  boxShadow: '0 8px 40px rgba(0,0,0,0.22)',
+                  display: 'flex', flexDirection: 'column',
+                }}>
                   <MobileInvFilterPanel invTab={invTab} setInvTab={setInvTab} inventoryDateControl={inventoryDateControl} onClose={() => setMobFilterOpen(false)} />
                 </div>
               </>

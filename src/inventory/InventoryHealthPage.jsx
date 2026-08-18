@@ -418,19 +418,24 @@ function WarehouseCard({ loc, selected }) {
 const SIDEBAR_WIDTH = 220
 
 function SidebarSectionTitle({ title }) {
-  return <div style={{ fontSize: 10, fontWeight: 800, color: IC.t3, letterSpacing: '.06em', textTransform: 'uppercase', margin: '2px 0 2px' }}>{title}</div>
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 6, margin: '6px 0 4px' }}>
+      <div style={{ width: 3, height: 12, borderRadius: 2, background: '#1967D2', flexShrink: 0 }} />
+      <span style={{ fontSize: 10, fontWeight: 800, color: IC.t2, letterSpacing: '.05em', textTransform: 'uppercase' }}>{title}</span>
+    </div>
+  )
 }
 
 function TileToggle({ label, active, onClick }) {
   return (
     <button onClick={onClick}
-      onMouseEnter={e => { if (!active) e.currentTarget.style.background = IC.hoverBg }}
+      onMouseEnter={e => { if (!active) e.currentTarget.style.background = '#F4F6FB' }}
       onMouseLeave={e => { if (!active) e.currentTarget.style.background = IC.surface }}
       style={{
-        padding: '6px 4px', borderRadius: 8, cursor: 'pointer', fontSize: 11, fontWeight: active ? 700 : 500,
-        background: active ? IC.accDim : IC.surface, color: active ? IC.t1 : IC.t2,
-        border: `1.5px solid ${active ? IC.accBorder : IC.border}`, textAlign: 'center',
-        overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', transition: 'background .12s',
+        padding: '7px 4px', borderRadius: 8, cursor: 'pointer', fontSize: 11, fontWeight: active ? 700 : 500,
+        background: active ? '#E8F0FE' : IC.surface, color: active ? '#1967D2' : IC.t2,
+        border: `1.5px solid ${active ? '#AECBFA' : IC.border}`, textAlign: 'center',
+        overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', transition: 'background .12s, border-color .12s',
       }}>
       {label}
     </button>
@@ -455,10 +460,10 @@ function FilterSidebar({ data, filters, setFilters, open, onClose, isMobile, sid
     return (
       <>
         <div className="inv-filter-backdrop" onClick={onClose} />
-        <div className="inv-filter-drawer" style={{ background: IC.surface, borderRight: `1px solid ${IC.border}`, display: 'flex', flexDirection: 'column', gap: 10, padding: '12px', boxSizing: 'border-box' }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
+        <div className="inv-filter-drawer" style={{ background: '#FAFBFF', borderRight: `1px solid ${IC.border}`, display: 'flex', flexDirection: 'column', gap: 8, padding: '14px 12px 16px', boxSizing: 'border-box' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 2 }}>
             {sidebarTop}
-            <button onClick={onClose} style={{ background: 'none', border: 'none', color: IC.t3, fontSize: 18, cursor: 'pointer', padding: '2px 6px', lineHeight: 1 }}>✕</button>
+            <button onClick={onClose} style={{ background: '#F0F2F5', border: 'none', color: IC.t2, fontSize: 14, cursor: 'pointer', padding: '4px 8px', lineHeight: 1, borderRadius: 8 }}>✕</button>
           </div>
           <SidebarSectionTitle title="Location" />
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 6 }}>
@@ -487,8 +492,8 @@ function FilterSidebar({ data, filters, setFilters, open, onClose, isMobile, sid
           <SearchableMultiSelect label="Sub-category" options={opts.subCategories} selected={filters.subCategory || []} onChange={v => set('subCategory', v)} width={240} height={SLICER_HEIGHT} />
           <SearchableMultiSelect label="Product ID" options={opts.productIds} selected={filters.productId || []} onChange={v => set('productId', v)} getKey={o => o.sku} getLabel={o => o.sku} width={240} height={SLICER_HEIGHT} />
           {anyActive && (
-            <button onClick={() => setFilters({})} style={{ fontSize: 11, color: IC.t3, background: 'none', border: `1px solid ${IC.border}`, borderRadius: 6, padding: '5px 0', cursor: 'pointer' }}>
-              ✕ Clear all
+            <button onClick={() => setFilters({})} style={{ fontSize: 11.5, color: '#D93025', background: '#FFF0EE', border: '1px solid #F5B8B2', borderRadius: 8, padding: '7px 0', cursor: 'pointer', fontWeight: 600, marginTop: 4 }}>
+              ✕ Clear all filters
             </button>
           )}
         </div>

@@ -105,10 +105,13 @@ function FilterSidebar({ data, filters, setFilters, open, onClose, isMobile, sid
   const anyActive = ['category', 'subCategory', 'sku', 'channel', 'salesType', 'facility', 'region']
     .some(k => filters[k]?.length)
 
-  const filterContent = (
+  const filterContent = (isMobileCtx) => (
     <>
-      {sidebarTop}
-      <div style={{ fontSize: 10, fontWeight: 800, color: IC.t3, letterSpacing: '.06em', textTransform: 'uppercase' }}>Filters</div>
+      {!isMobileCtx && sidebarTop}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6, margin: '6px 0 4px' }}>
+        <div style={{ width: 3, height: 12, borderRadius: 2, background: '#1967D2', flexShrink: 0 }} />
+        <span style={{ fontSize: 10, fontWeight: 800, color: '#5B5B62', letterSpacing: '.05em', textTransform: 'uppercase' }}>Filters</span>
+      </div>
       <SearchableMultiSelect label="Category" options={opts.categories} selected={filters.category || []} onChange={v => set('category', v)}
         width={SIDEBAR_WIDTH - 24} height={SLICER_HEIGHT} />
       <SearchableMultiSelect label="Sub-category" options={opts.subCategories} selected={filters.subCategory || []} onChange={v => set('subCategory', v)}
@@ -132,8 +135,8 @@ function FilterSidebar({ data, filters, setFilters, open, onClose, isMobile, sid
       </label>
       {anyActive && (
         <button onClick={() => setFilters(f => ({ comparePrevious: f.comparePrevious, momentumWindow: f.momentumWindow }))}
-          style={{ fontSize: 11, color: IC.t3, background: 'none', border: `1px solid ${IC.border}`, borderRadius: 6, padding: '5px 0', cursor: 'pointer' }}>
-          ✕ Clear all
+          style={{ fontSize: 11.5, color: '#D93025', background: '#FFF0EE', border: '1px solid #F5B8B2', borderRadius: 8, padding: '7px 0', cursor: 'pointer', fontWeight: 600, marginTop: 4 }}>
+          ✕ Clear all filters
         </button>
       )}
     </>
@@ -144,12 +147,12 @@ function FilterSidebar({ data, filters, setFilters, open, onClose, isMobile, sid
     return (
       <>
         <div className="inv-filter-backdrop" onClick={onClose} />
-        <div className="inv-filter-drawer" style={{ background: IC.surface, borderRight: `1px solid ${IC.border}`, display: 'flex', flexDirection: 'column', gap: 10, padding: '12px', boxSizing: 'border-box' }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
-            <span style={{ fontSize: 12, fontWeight: 700, color: IC.t1 }}>Filters</span>
-            <button onClick={onClose} style={{ background: 'none', border: 'none', color: IC.t3, fontSize: 18, cursor: 'pointer', padding: '2px 6px', lineHeight: 1 }}>✕</button>
+        <div className="inv-filter-drawer" style={{ background: '#FAFBFF', borderRight: `1px solid ${IC.border}`, display: 'flex', flexDirection: 'column', gap: 8, padding: '14px 12px 16px', boxSizing: 'border-box' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 2 }}>
+            {sidebarTop}
+            <button onClick={onClose} style={{ background: '#F0F2F5', border: 'none', color: IC.t2, fontSize: 14, cursor: 'pointer', padding: '4px 8px', lineHeight: 1, borderRadius: 8 }}>✕</button>
           </div>
-          {filterContent}
+          {filterContent(true)}
         </div>
       </>
     )
@@ -169,7 +172,7 @@ function FilterSidebar({ data, filters, setFilters, open, onClose, isMobile, sid
           height: 'calc(100vh - var(--nav))', overflowY: 'auto',
         } : {}),
       }}>
-        {filterContent}
+        {filterContent(false)}
       </div>
     </div>
   )

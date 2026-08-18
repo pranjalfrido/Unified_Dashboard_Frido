@@ -31,9 +31,9 @@ function IconTab({ icon, label, active, onClick }) {
         style={{
           width: 34, height: 34, borderRadius: 7, cursor: 'pointer', fontSize: 15, display: 'flex',
           alignItems: 'center', justifyContent: 'center',
-          background: active ? IC.accDim : 'transparent',
-          color: active ? IC.t1 : IC.t3,
-          border: active ? `1px solid ${IC.accBorder}` : '1px solid transparent',
+          background: active ? '#E8F0FE' : 'transparent',
+          color: active ? '#1967D2' : IC.t3,
+          border: active ? '1px solid #AECBFA' : '1px solid transparent',
         }}>
         {icon}
       </button>
@@ -51,11 +51,36 @@ function IconTab({ icon, label, active, onClick }) {
   )
 }
 
+// Mobile tab button — icon + label text stacked, used inside the filter drawer
+function MobileTab({ icon, label, active, onClick }) {
+  return (
+    <button onClick={onClick} style={{
+      flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3,
+      padding: '8px 4px', borderRadius: 10, cursor: 'pointer', border: 'none',
+      background: active ? '#E8F0FE' : 'transparent',
+      color: active ? '#1967D2' : IC.t3,
+      fontWeight: active ? 700 : 500, fontSize: 10, lineHeight: 1.2, transition: 'background .15s',
+    }}>
+      <span style={{ fontSize: 18 }}>{icon}</span>
+      <span style={{ whiteSpace: 'nowrap' }}>{label}</span>
+    </button>
+  )
+}
+
 // Sub-tab switcher (Health/Sales/Inward) — rendered at the top of each sub-page's own
 // FilterSidebar instead of as a second horizontal bar above the page, so the Inventory tab
 // matches Logistics's layout convention: one top bar (title + date), everything else lives
 // in the left column.
-function SubTabSwitcher({ tab, setTab }) {
+function SubTabSwitcher({ tab, setTab, isMobile }) {
+  if (isMobile) {
+    return (
+      <div style={{ display: 'flex', gap: 4, background: '#F4F6FB', borderRadius: 12, padding: 4, marginBottom: 14 }}>
+        <MobileTab icon="📦" label="Health" active={tab === 'health'} onClick={() => setTab('health')} />
+        <MobileTab icon="📊" label="Sales & Alloc" active={tab === 'sales'} onClick={() => setTab('sales')} />
+        {/* <MobileTab icon="📥" label="Inward" active={tab === 'inward'} onClick={() => setTab('inward')} /> */}
+      </div>
+    )
+  }
   return (
     <div style={{ display: 'inline-flex', gap: 2, background: IC.surface, border: `1px solid ${IC.border}`, borderRadius: 10, padding: 3, marginBottom: 12 }}>
       <IconTab icon="📦" label="Inventory Health" active={tab === 'health'} onClick={() => setTab('health')} />
@@ -169,7 +194,7 @@ function useStatic(staticPath, fallbackApiPath, fallbackBody = {}, enabled = tru
       const json = await res.json()
       if (reqId !== reqIdRef.current) return
       const ageMs = json.asOf ? Date.now() - new Date(json.asOf).getTime() : Infinity
-      if (ageMs > 2 * 60 * 60 * 1000 || json._placeholder) throw new Error('static file stale or placeholder')
+      if (ageMs > 30 * 24 * 60 * 60 * 1000 || json._placeholder) throw new Error('static file stale or placeholder')
       cachedDataRef.current = json
       setData(json)
       // end = max(order_date) - 1 (last complete day), start = end - 6 → 7-day window
@@ -273,7 +298,7 @@ function useStaticInv(enabled = true, windowDays = 7) {
       const json = await res.json()
       if (reqId !== reqIdRef.current) return
       const ageMs = json.asOf ? Date.now() - new Date(json.asOf).getTime() : Infinity
-      if (ageMs > 2 * 60 * 60 * 1000) throw new Error('static file stale')
+      if (ageMs > 30 * 24 * 60 * 60 * 1000) throw new Error('static file stale')
       staticOk = true
       setData(json)
       if (json.avgSaleWindow) setDateFilters({ start: json.avgSaleWindow.start, end: json.avgSaleWindow.end })
@@ -308,6 +333,12 @@ function useStaticInv(enabled = true, windowDays = 7) {
 }
 
 export default function InventoryPage({ onTopbarDateControl, tab = 'health', setTab = () => {} }) {
+  const [isMobile, setIsMobile] = useState(() => window.innerWidth <= 768)
+  useEffect(() => {
+    const onResize = () => setIsMobile(window.innerWidth <= 768)
+    window.addEventListener('resize', onResize)
+    return () => window.removeEventListener('resize', onResize)
+  }, [])
   const [healthFilters, setHealthFilters] = useState({})
   const [salesFilters, setSalesFilters] = useState({})
   const [inwardFilters, setInwardFilters] = useState({})
@@ -387,7 +418,7 @@ export default function InventoryPage({ onTopbarDateControl, tab = 'health', set
   // date range now lives in App.jsx's actual top bar instead, see onTopbarDateControl above).
   const sidebarTop = (
     <div style={{ marginBottom: 4 }}>
-      <SubTabSwitcher tab={tab} setTab={setTab} />
+      <SubTabSwitcher tab={tab} setTab={setTab} isMobile={isMobile} />
       {tab === 'health' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 2, marginBottom: 10 }}>
           <span style={{ fontSize: 11, color: IC.t3 }}>
@@ -588,9 +619,9 @@ export default function InventoryPage({ onTopbarDateControl, tab = 'health', set
       }}>
         {[{ id: 'health', label: '📦 Health' }, { id: 'sales', label: '📊 Sales & Alloc' }].map(t => (
           <button key={t.id} onClick={() => setTab(t.id)} style={{
-            padding: '10px 14px', border: 'none', borderBottom: tab === t.id ? `3px solid ${IC.acc}` : '3px solid transparent',
+            padding: '10px 14px', border: 'none', borderBottom: tab === t.id ? '3px solid #1967D2' : '3px solid transparent',
             background: 'none', fontSize: 13, fontWeight: tab === t.id ? 700 : 500,
-            color: tab === t.id ? IC.t1 : IC.t3, cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0,
+            color: tab === t.id ? '#1967D2' : IC.t3, cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0,
           }}>{t.label}</button>
         ))}
       </div>
