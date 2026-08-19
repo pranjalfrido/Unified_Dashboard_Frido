@@ -1413,7 +1413,7 @@ function LogisticsPage({ filters }) {
         const tdStyle2 = { fontSize: 11.5, color: C.t1, padding: '6px 10px', borderBottom: `1px solid ${C.border}`, textAlign: 'right', whiteSpace: 'nowrap' }
         const tdL2 = { ...tdStyle2, textAlign: 'left', fontWeight: 600 }
         const tableCard2 = { background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, overflow: 'hidden', display: 'flex', flexDirection: 'column' }
-        const totalWrap = { margin: '0 8px 4px' }
+        const totalWrap = { margin: '0 8px 0' }
         const tableTitle2 = { fontSize: 9.9, fontWeight: 700, color: C.t1, padding: '12px 14px 10px' }
 
         const byZone2 = data.byZoneDetail || []
@@ -1462,7 +1462,7 @@ function LogisticsPage({ filters }) {
               const thL = { ...thS, textAlign: 'left' }
               const tdS = { fontSize: 12.35, color: C.t2, padding: '5.75px 10px', borderBottom: `1px solid ${C.border}`, textAlign: 'right', whiteSpace: 'nowrap' }
               const tdL = { ...tdS, textAlign: 'left', fontWeight: 600, color: C.t1 }
-              const totalRowS = { fontSize: 12.35, fontWeight: 700, color: C.t1, padding: '9px 10px', textAlign: 'right', whiteSpace: 'nowrap', background: C.bg, borderTop: `2px solid ${C.border}` }
+              const totalRowS = { fontSize: 12.35, fontWeight: 700, color: C.t1, padding: '6px 10px', textAlign: 'right', whiteSpace: 'nowrap', background: C.bg, borderTop: `2px solid ${C.border}` }
               const totalRowL = { ...totalRowS, textAlign: 'left' }
 
               return (
