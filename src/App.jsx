@@ -1422,7 +1422,7 @@ function LogisticsPage({ filters }) {
                     {(() => { const cw = ['25%','18.75%','18.75%','18.75%','18.75%']; const t1=(facTotals.op_0_1||0)+(facTotals.op_2_3||0)+(facTotals.op_4_5||0)+(facTotals.op_5plus||0); return (
                     <div style={{ ...tableCard2, height: 340 }}>
                       <div style={tableTitle2}>Order Processing Time <span style={{ fontWeight: 500, color: C.t3, fontSize: 9.1 }}>(by Facility)</span></div>
-                      <div style={{ flex: 1, overflowY: 'auto' }}>
+                      <div style={{ flex: 1, overflowY: 'auto', margin: '0 8px' }}>
                         <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed' }}>
                           <colgroup>{cw.map((w,i)=><col key={i} style={{width:w}}/>)}</colgroup>
                           <thead><tr style={{ background: C.bg }}>
@@ -1467,7 +1467,7 @@ function LogisticsPage({ filters }) {
                     {(() => { const cw = ['25%','18.75%','18.75%','18.75%','18.75%']; const t2=(facTotals.proc_0_12h+facTotals.proc_12_24h+facTotals.proc_24_48h+facTotals.proc_48plus); return (
                     <div style={{ ...tableCard2, height: 340 }}>
                       <div style={tableTitle2}>Order Pickup Time <span style={{ fontWeight: 500, color: C.t3, fontSize: 9.1 }}>(by Facility)</span></div>
-                      <div style={{ flex: 1, overflowY: 'auto' }}>
+                      <div style={{ flex: 1, overflowY: 'auto', margin: '0 8px' }}>
                         <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed' }}>
                           <colgroup>{cw.map((w,i)=><col key={i} style={{width:w}}/>)}</colgroup>
                           <thead><tr style={{ background: C.bg }}>
@@ -1511,7 +1511,7 @@ function LogisticsPage({ filters }) {
                     {/* Table 3: In-Transit Time — pickup_ts → delivery_ts (by Courier) */}
                     <div style={{ ...tableCard2, height: 340 }}>
                       <div style={tableTitle2}>In-Transit Time <span style={{ fontWeight: 500, color: C.t3, fontSize: 9.1 }}>(by Courier)</span></div>
-                      <div style={{ flex: 1, overflowY: 'auto' }}>
+                      <div style={{ flex: 1, overflowY: 'auto', margin: '0 8px' }}>
                         <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed' }}>
                           <colgroup><col style={{ width: '25%' }} /><col style={{ width: '15%' }} /><col style={{ width: '15%' }} /><col style={{ width: '15%' }} /><col style={{ width: '15%' }} /><col style={{ width: '15%' }} /></colgroup>
                           <thead><tr style={{ background: C.bg }}>
@@ -1557,7 +1557,7 @@ function LogisticsPage({ filters }) {
                     {(() => { const cw = ['25%','18.75%','18.75%','18.75%','18.75%']; const t4=(facTotals.ord_0_1+facTotals.ord_2_3+facTotals.ord_4_5+facTotals.ord_5plus); return (
                     <div style={{ ...tableCard2, height: 340 }}>
                       <div style={tableTitle2}>Fulfilment Time <span style={{ fontWeight: 400, color: C.t3 }}>(by Facility)</span></div>
-                      <div style={{ flex: 1, overflowY: 'auto' }}>
+                      <div style={{ flex: 1, overflowY: 'auto', margin: '0 8px' }}>
                         <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed' }}>
                           <colgroup>{cw.map((w,i)=><col key={i} style={{width:w}}/>)}</colgroup>
                           <thead><tr style={{ background: C.bg }}>
