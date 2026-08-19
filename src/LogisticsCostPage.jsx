@@ -548,6 +548,13 @@ export default function LogisticsCostPage() {
     if (baseData?.cube && isCubeFilter(f)) {
       const filtered = filterCube(baseData.cube, f)
       const totals = sumCube(filtered)
+      // dt_*/dc_* come from refCache and are filter-independent — they are not in the cube
+      // rows, so they must be carried over from the unfiltered base or they read as zero.
+      const BASE_TOTALS = baseData.totals || {}
+      const FILTER_INDEPENDENT_KEYS = ['dc_n', 'dc_ours', 'dc_theirs', 'dc_invoiced',
+        'dc_weight_n', 'dc_rate_n', 'dt_ours', 'dt_theirs', 'dt_invoiced', 'dt_weight_n',
+        'dt_rate_n', 'dt_weight_claim', 'dt_rate_claim']
+      FILTER_INDEPENDENT_KEYS.forEach(k => { if (BASE_TOTALS[k] != null) totals[k] = BASE_TOTALS[k] })
       const breakdowns = cubeToBreakdowns(filtered)
       // Merge totals + breakdowns into the base response shape, preserving filter-independent fields.
       const merged = {
