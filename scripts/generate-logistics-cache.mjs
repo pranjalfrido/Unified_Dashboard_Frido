@@ -7,16 +7,17 @@ import { BigQuery } from '@google-cloud/bigquery'
 
 const bq = new BigQuery({ keyFilename: 'sa_key.json' })
 
-// Default 30-day window
+// Match dashboard default: 1st of current month → yesterday
 const endD = new Date()
 endD.setDate(endD.getDate() - 1)
 const end = endD.toISOString().slice(0, 10)
-const startD = new Date(endD); startD.setDate(startD.getDate() - 29)
+const startD = new Date(endD.getFullYear(), endD.getMonth(), 1)
 const start = startD.toISOString().slice(0, 10)
+const days = Math.round((endD - startD) / 86400000) + 1
 
-// Previous period (same 30 days, immediately preceding)
+// Previous period: same number of days immediately preceding
 const prevEnd = new Date(startD); prevEnd.setDate(prevEnd.getDate() - 1)
-const prevStart = new Date(prevEnd); prevStart.setDate(prevStart.getDate() - 29)
+const prevStart = new Date(prevEnd); prevStart.setDate(prevStart.getDate() - days + 1)
 const prevStartStr = prevStart.toISOString().slice(0, 10)
 const prevEndStr = prevEnd.toISOString().slice(0, 10)
 
@@ -366,7 +367,11 @@ tat_by_facility AS (
       COUNTIF(delivery_date IS NOT NULL AND order_date IS NOT NULL AND DATE_DIFF(delivery_date, order_date, DAY) BETWEEN 0 AND 1) AS ord_0_1,
       COUNTIF(delivery_date IS NOT NULL AND order_date IS NOT NULL AND DATE_DIFF(delivery_date, order_date, DAY) BETWEEN 2 AND 3) AS ord_2_3,
       COUNTIF(delivery_date IS NOT NULL AND order_date IS NOT NULL AND DATE_DIFF(delivery_date, order_date, DAY) BETWEEN 4 AND 5) AS ord_4_5,
-      COUNTIF(delivery_date IS NOT NULL AND order_date IS NOT NULL AND DATE_DIFF(delivery_date, order_date, DAY) > 5) AS ord_5plus
+      COUNTIF(delivery_date IS NOT NULL AND order_date IS NOT NULL AND DATE_DIFF(delivery_date, order_date, DAY) > 5) AS ord_5plus,
+      COUNTIF(created_date IS NOT NULL AND order_date IS NOT NULL AND DATE_DIFF(created_date, order_date, DAY) BETWEEN 0 AND 1) AS op_0_1,
+      COUNTIF(created_date IS NOT NULL AND order_date IS NOT NULL AND DATE_DIFF(created_date, order_date, DAY) BETWEEN 2 AND 3) AS op_2_3,
+      COUNTIF(created_date IS NOT NULL AND order_date IS NOT NULL AND DATE_DIFF(created_date, order_date, DAY) BETWEEN 4 AND 5) AS op_4_5,
+      COUNTIF(created_date IS NOT NULL AND order_date IS NOT NULL AND DATE_DIFF(created_date, order_date, DAY) > 5) AS op_5plus
     FROM base WHERE pickup_city IS NOT NULL GROUP BY 1, 2, 3
   ) WHERE facility IS NOT NULL
 ),

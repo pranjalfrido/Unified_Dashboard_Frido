@@ -527,14 +527,21 @@ tat_by_facility AS (
       END AS facility,
       COUNT(awb) AS total,
       COUNTIF(unified_status='Delivered') AS delivered,
+      -- Order Pickup Time: created_at → pickup_ts (hours)
       COUNTIF(pickup_ts IS NOT NULL AND created_ts IS NOT NULL AND TIMESTAMP_DIFF(pickup_ts, created_ts, MINUTE) BETWEEN 0 AND 720) AS proc_0_12h,
       COUNTIF(pickup_ts IS NOT NULL AND created_ts IS NOT NULL AND TIMESTAMP_DIFF(pickup_ts, created_ts, MINUTE) BETWEEN 721 AND 1440) AS proc_12_24h,
       COUNTIF(pickup_ts IS NOT NULL AND created_ts IS NOT NULL AND TIMESTAMP_DIFF(pickup_ts, created_ts, MINUTE) BETWEEN 1441 AND 2880) AS proc_24_48h,
       COUNTIF(pickup_ts IS NOT NULL AND created_ts IS NOT NULL AND TIMESTAMP_DIFF(pickup_ts, created_ts, MINUTE) > 2880) AS proc_48plus,
+      -- Fulfilment Time: order_date → delivery_date (days)
       COUNTIF(delivery_date IS NOT NULL AND order_date IS NOT NULL AND DATE_DIFF(delivery_date, order_date, DAY) BETWEEN 0 AND 1) AS ord_0_1,
       COUNTIF(delivery_date IS NOT NULL AND order_date IS NOT NULL AND DATE_DIFF(delivery_date, order_date, DAY) BETWEEN 2 AND 3) AS ord_2_3,
       COUNTIF(delivery_date IS NOT NULL AND order_date IS NOT NULL AND DATE_DIFF(delivery_date, order_date, DAY) BETWEEN 4 AND 5) AS ord_4_5,
-      COUNTIF(delivery_date IS NOT NULL AND order_date IS NOT NULL AND DATE_DIFF(delivery_date, order_date, DAY) > 5) AS ord_5plus
+      COUNTIF(delivery_date IS NOT NULL AND order_date IS NOT NULL AND DATE_DIFF(delivery_date, order_date, DAY) > 5) AS ord_5plus,
+      -- Order Processing Time: order_date → created_date (days)
+      COUNTIF(created_date IS NOT NULL AND order_date IS NOT NULL AND DATE_DIFF(created_date, order_date, DAY) BETWEEN 0 AND 1) AS op_0_1,
+      COUNTIF(created_date IS NOT NULL AND order_date IS NOT NULL AND DATE_DIFF(created_date, order_date, DAY) BETWEEN 2 AND 3) AS op_2_3,
+      COUNTIF(created_date IS NOT NULL AND order_date IS NOT NULL AND DATE_DIFF(created_date, order_date, DAY) BETWEEN 4 AND 5) AS op_4_5,
+      COUNTIF(created_date IS NOT NULL AND order_date IS NOT NULL AND DATE_DIFF(created_date, order_date, DAY) > 5) AS op_5plus
     FROM base WHERE pickup_city IS NOT NULL GROUP BY 1, 2
   ) WHERE facility IS NOT NULL
 ),
