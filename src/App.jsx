@@ -1380,7 +1380,7 @@ function LogisticsPage({ filters }) {
         const tdStyle2 = { fontSize: 11.5, color: C.t1, padding: '6px 10px', borderBottom: `1px solid ${C.border}`, textAlign: 'right', whiteSpace: 'nowrap' }
         const tdL2 = { ...tdStyle2, textAlign: 'left', fontWeight: 600 }
         const tableCard2 = { background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, overflow: 'hidden', display: 'flex', flexDirection: 'column' }
-        const tableTitle2 = { fontSize: 13, fontWeight: 700, color: C.t1, padding: '12px 14px 10px', borderBottom: `1px solid ${C.border}` }
+        const tableTitle2 = { fontSize: 10.4, fontWeight: 700, color: C.t1, padding: '12px 14px 10px', borderBottom: `1px solid ${C.border}` }
 
         const byZone2 = data.byZoneDetail || []
 
@@ -1405,9 +1405,9 @@ function LogisticsPage({ filters }) {
               }, { total:0, delivered:0, bucket_0_1:0, bucket_2_3:0, bucket_4_5:0, bucket_5plus:0 })
 
               const BOX_H = 320
-              const thS = { fontSize: 10, fontWeight: 700, color: C.t3, textTransform: 'uppercase', letterSpacing: '.05em', padding: '8px 10px', borderBottom: `1.5px solid ${C.border}`, whiteSpace: 'nowrap', textAlign: 'right', background: C.card }
+              const thS = { fontSize: 8, fontWeight: 700, color: C.t3, textTransform: 'uppercase', letterSpacing: '.05em', padding: '8px 10px', borderBottom: `1.5px solid ${C.border}`, whiteSpace: 'nowrap', textAlign: 'right', background: C.card }
               const thL = { ...thS, textAlign: 'left' }
-              const tdS = { fontSize: 12, color: C.t2, padding: '7px 10px', borderBottom: `1px solid ${C.border}`, textAlign: 'right', whiteSpace: 'nowrap' }
+              const tdS = { fontSize: 9.6, color: C.t2, padding: '7px 10px', borderBottom: `1px solid ${C.border}`, textAlign: 'right', whiteSpace: 'nowrap' }
               const tdL = { ...tdS, textAlign: 'left', fontWeight: 600, color: C.t1 }
               const totalRowS = { fontSize: 12, fontWeight: 700, color: C.t1, padding: '7px 10px', textAlign: 'right', whiteSpace: 'nowrap', background: C.bg }
               const totalRowL = { ...totalRowS, textAlign: 'left' }
@@ -1420,7 +1420,7 @@ function LogisticsPage({ filters }) {
                     {/* Table 1: Order Processing Time — order_date → created_at (by Facility) */}
                     {(() => { const cw = ['25%','18.75%','18.75%','18.75%','18.75%']; const t1=(facTotals.op_0_1||0)+(facTotals.op_2_3||0)+(facTotals.op_4_5||0)+(facTotals.op_5plus||0); return (
                     <div style={{ ...tableCard2, height: 340 }}>
-                      <div style={tableTitle2}>Order Processing Time <span style={{ fontWeight: 500, color: C.t3, fontSize: 12 }}>(by Facility)</span></div>
+                      <div style={tableTitle2}>Order Processing Time <span style={{ fontWeight: 500, color: C.t3, fontSize: 9.6 }}>(by Facility)</span></div>
                       <div style={{ flex: 1, overflowY: 'auto' }}>
                         <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed' }}>
                           <colgroup>{cw.map((w,i)=><col key={i} style={{width:w}}/>)}</colgroup>
@@ -1463,7 +1463,7 @@ function LogisticsPage({ filters }) {
                     {/* Table 2: Order Pickup Time — created_at → pickup_ts (by Facility) */}
                     {(() => { const cw = ['25%','18.75%','18.75%','18.75%','18.75%']; const t2=(facTotals.proc_0_12h+facTotals.proc_12_24h+facTotals.proc_24_48h+facTotals.proc_48plus); return (
                     <div style={{ ...tableCard2, height: 340 }}>
-                      <div style={tableTitle2}>Order Pickup Time <span style={{ fontWeight: 500, color: C.t3, fontSize: 12 }}>(by Facility)</span></div>
+                      <div style={tableTitle2}>Order Pickup Time <span style={{ fontWeight: 500, color: C.t3, fontSize: 9.6 }}>(by Facility)</span></div>
                       <div style={{ flex: 1, overflowY: 'auto' }}>
                         <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed' }}>
                           <colgroup>{cw.map((w,i)=><col key={i} style={{width:w}}/>)}</colgroup>
@@ -1505,7 +1505,7 @@ function LogisticsPage({ filters }) {
 
                     {/* Table 3: In-Transit Time — pickup_ts → delivery_ts (by Courier) */}
                     <div style={{ ...tableCard2, height: 340 }}>
-                      <div style={tableTitle2}>In-Transit Time <span style={{ fontWeight: 500, color: C.t3, fontSize: 12 }}>(by Courier)</span></div>
+                      <div style={tableTitle2}>In-Transit Time <span style={{ fontWeight: 500, color: C.t3, fontSize: 9.6 }}>(by Courier)</span></div>
                       <div style={{ flex: 1, overflowY: 'auto' }}>
                         <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed' }}>
                           <colgroup><col style={{ width: '25%' }} /><col style={{ width: '15%' }} /><col style={{ width: '15%' }} /><col style={{ width: '15%' }} /><col style={{ width: '15%' }} /><col style={{ width: '15%' }} /></colgroup>
