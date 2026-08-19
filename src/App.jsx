@@ -1508,7 +1508,7 @@ function LogisticsPage({ filters }) {
                           </tbody>
                         </table>
                       </div>
-                      <div style={totalWrap}>
+                      <div style={{ ...totalWrap, margin: '0 8px 0' }}>
                         <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed', background: C.bg }}>
                           <colgroup>{cw.map((w,i)=><col key={i} style={{width:w}}/>)}</colgroup>
                           <tbody><tr>
@@ -1668,7 +1668,7 @@ function LogisticsPage({ filters }) {
                           </tbody>
                         </table>
                       </div>
-                      <div style={totalWrap}>
+                      <div style={{ ...totalWrap, margin: '0 8px 0' }}>
                         <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed', background: C.bg }}>
                           <colgroup>{cw.map((w,i)=><col key={i} style={{width:w}}/>)}</colgroup>
                           <tbody><tr>
