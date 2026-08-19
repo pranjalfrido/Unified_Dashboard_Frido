@@ -1409,7 +1409,7 @@ function LogisticsPage({ filters }) {
               const thL = { ...thS, textAlign: 'left' }
               const tdS = { fontSize: 9.1, color: C.t2, padding: '7px 10px', borderBottom: `1px solid ${C.border}`, textAlign: 'right', whiteSpace: 'nowrap' }
               const tdL = { ...tdS, textAlign: 'left', fontWeight: 600, color: C.t1 }
-              const totalRowS = { fontSize: 12, fontWeight: 700, color: C.t1, padding: '7px 10px', textAlign: 'right', whiteSpace: 'nowrap', background: C.bg }
+              const totalRowS = { fontSize: 9.1, fontWeight: 700, color: C.t1, padding: '7px 10px', textAlign: 'right', whiteSpace: 'nowrap', background: C.bg }
               const totalRowL = { ...totalRowS, textAlign: 'left' }
 
               return (
