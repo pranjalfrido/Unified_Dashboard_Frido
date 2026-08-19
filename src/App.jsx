@@ -1472,7 +1472,7 @@ function LogisticsPage({ filters }) {
 
                     {/* Table 1: Order Processing Time — order_date → created_at (by Facility) */}
                     {(() => { const cw = ['25%','18.75%','18.75%','18.75%','18.75%']; const t1=(facTotals.op_0_1||0)+(facTotals.op_2_3||0)+(facTotals.op_4_5||0)+(facTotals.op_5plus||0); return (
-                    <div style={{ ...tableCard2, height: 330 }}>
+                    <div style={{ ...tableCard2, height: 340 }}>
                       <div style={{ ...tableTitle2, fontSize: 13, padding: '8px 14px 7px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                         <span>Order Processing Time <span style={{ fontWeight: 500, color: C.t3, fontSize: 10.2, marginLeft: 4 }}>(by Facility)</span></span>
                         <div style={{ display: 'inline-flex', border: `1px solid ${C.border2}`, borderRadius: 6, overflow: 'hidden' }}>
@@ -1525,7 +1525,7 @@ function LogisticsPage({ filters }) {
 
                     {/* Table 2: Order Pickup Time — created_at → pickup_ts (by Facility) */}
                     {(() => { const cw = ['25%','18.75%','18.75%','18.75%','18.75%']; const t2=(facTotals.proc_0_12h+facTotals.proc_12_24h+facTotals.proc_24_48h+facTotals.proc_48plus); return (
-                    <div style={{ ...tableCard2, height: 330 }}>
+                    <div style={{ ...tableCard2, height: 340 }}>
                       <div style={{ ...tableTitle2, fontSize: 13, padding: '8px 14px 7px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                         <span>Order Pickup Time <span style={{ fontWeight: 500, color: C.t3, fontSize: 10.2, marginLeft: 4 }}>(by Courier)</span></span>
                         <div style={{ display: 'inline-flex', border: `1px solid ${C.border2}`, borderRadius: 6, overflow: 'hidden' }}>
@@ -1577,7 +1577,7 @@ function LogisticsPage({ filters }) {
 
                     {/* Table 3: In-Transit Time — pickup_ts → delivery_ts */}
                     {(() => { const cw3 = ['25%','15%','15%','15%','15%','15%']; const t3total = courierTotals.delivered; return (
-                    <div style={{ ...tableCard2, height: 330 }}>
+                    <div style={{ ...tableCard2, height: 340 }}>
                       <div style={{ ...tableTitle2, fontSize: 13, padding: '8px 14px 7px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                         <span>In-Transit Time <span style={{ fontWeight: 500, color: C.t3, fontSize: 10.2, marginLeft: 4 }}>(by Courier)</span></span>
                         <div style={{ display: 'inline-flex', border: `1px solid ${C.border2}`, borderRadius: 6, overflow: 'hidden' }}>
@@ -1632,7 +1632,7 @@ function LogisticsPage({ filters }) {
 
                     {/* Table 4: Fulfilment Time — order_date → delivery_date (by Facility) */}
                     {(() => { const cw = ['25%','18.75%','18.75%','18.75%','18.75%']; const t4=(facTotals.ord_0_1+facTotals.ord_2_3+facTotals.ord_4_5+facTotals.ord_5plus); return (
-                    <div style={{ ...tableCard2, height: 330 }}>
+                    <div style={{ ...tableCard2, height: 340 }}>
                       <div style={{ ...tableTitle2, fontSize: 13, padding: '8px 14px 7px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                         <span>Fulfilment Time <span style={{ fontWeight: 500, color: C.t3, fontSize: 10.2, marginLeft: 4 }}>(by Facility)</span></span>
                         <div style={{ display: 'inline-flex', border: `1px solid ${C.border2}`, borderRadius: 6, overflow: 'hidden' }}>
