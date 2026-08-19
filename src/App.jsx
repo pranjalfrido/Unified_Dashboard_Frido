@@ -204,7 +204,6 @@ function LogisticsPage({ filters }) {
   const [logisticsView, setLogisticsView] = useState('Logistics')
   const [lopsTab, setLopsTab] = useState('overview') // kept for compat but toggle removed
   const [tatCourierView, setTatCourierView] = useState('courier') // 'courier' | 'month'
-  const [tatView3, setTatView3] = useState('courier')
   const [tatMode, setTatMode] = useState('pct')
   const [secCollapsed, setSecCollapsed] = useState({})
   const [wMetric, setWMetric] = useState('qty')
@@ -1562,58 +1561,52 @@ function LogisticsPage({ filters }) {
                     ) })()}
 
                     {/* Table 3: In-Transit Time — pickup_ts → delivery_ts */}
-                    {(() => {
-                      const t3rows = tatView3 === 'courier' ? tatByCourier : tatByFacility
-                      const t3total = tatView3 === 'courier' ? courierTotals.delivered : (facTotals.bucket_0_1+facTotals.bucket_2_3+facTotals.bucket_4_5+facTotals.bucket_5plus)
-                      const cw3 = ['25%','15%','15%','15%','15%','15%']
-                      return (
-                      <div style={{ ...tableCard2, height: 320 }}>
-                        <div style={{ ...tableTitle2, display: 'flex', alignItems: 'center' }}>In-Transit Time <span style={{ fontWeight: 500, color: C.t3, fontSize: 9.5, marginLeft: 4 }}>({tatView3 === 'courier' ? 'by Courier' : 'by Facility'})</span><ViewToggle view={tatView3} setView={setTatView3} /></div>
-                        <div style={{ margin: '0 8px', flex: 1, overflowY: 'auto' }}>
-                          <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed' }}>
-                            <colgroup>{cw3.map((w,i)=><col key={i} style={{width:w}}/>)}</colgroup>
-                            <thead><tr style={{ background: C.bg }}>
-                              <th style={{ ...thL, position: 'sticky', top: 0, background: C.bg, zIndex: 1 }}>{tatView3 === 'courier' ? 'Courier' : 'Facility'}</th>
-                              <th style={{ ...thS, position: 'sticky', top: 0, background: C.bg, zIndex: 1 }}>Del</th>
-                              <th style={{ ...thS, position: 'sticky', top: 0, background: C.bg, zIndex: 1 }}>0-1d</th>
-                              <th style={{ ...thS, position: 'sticky', top: 0, background: C.bg, zIndex: 1 }}>2-3d</th>
-                              <th style={{ ...thS, position: 'sticky', top: 0, background: C.bg, zIndex: 1 }}>4-5d</th>
-                              <th style={{ ...thS, position: 'sticky', top: 0, background: C.bg, zIndex: 1 }}>5+d</th>
-                            </tr></thead>
-                            <tbody>
-                              {t3rows.map((row, ri, arr) => {
-                                const tot = tatView3 === 'courier' ? (row.delivered||0) : ((row.bucket_0_1||0)+(row.bucket_2_3||0)+(row.bucket_4_5||0)+(row.bucket_5plus||0))
-                                const isLast = ri === arr.length - 1
-                                const rowLabel = tatView3 === 'courier' ? row.courier_group : row.facility
-                                return (
-                                  <tr key={rowLabel}>
-                                    <td style={{ ...tdL, ...(isLast ? { borderBottom: 'none' } : {}) }}>{rowLabel}</td>
-                                    <td style={{ ...tdS, ...(isLast ? { borderBottom: 'none' } : {}) }}>{tot.toLocaleString('en-IN')}</td>
-                                    {[row.bucket_0_1, row.bucket_2_3, row.bucket_4_5, row.bucket_5plus].map((v, ci) => (
-                                      <td key={ci} style={{ ...tdS, color: (v/tot)>0.2?'#dc2626':C.t2, fontWeight: (v/tot)>0.2?700:400, ...(isLast ? { borderBottom: 'none' } : {}) }}>{fmtCell(v, tot)}</td>
-                                    ))}
-                                  </tr>
-                                )
-                              })}
-                            </tbody>
-                          </table>
-                        </div>
-                        <div style={totalWrap}>
-                          <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed', background: C.bg }}>
-                            <colgroup>{cw3.map((w,i)=><col key={i} style={{width:w}}/>)}</colgroup>
-                            <tbody><tr>
-                              <td style={totalRowL}>Total</td>
-                              <td style={totalRowS}>{t3total.toLocaleString('en-IN')}</td>
-                              <td style={totalRowS}>{fmtCell(tatView3 === 'courier' ? courierTotals.bucket_0_1 : facTotals.bucket_0_1, t3total)}</td>
-                              <td style={totalRowS}>{fmtCell(tatView3 === 'courier' ? courierTotals.bucket_2_3 : facTotals.bucket_2_3, t3total)}</td>
-                              <td style={totalRowS}>{fmtCell(tatView3 === 'courier' ? courierTotals.bucket_4_5 : facTotals.bucket_4_5, t3total)}</td>
-                              <td style={totalRowS}>{fmtCell(tatView3 === 'courier' ? courierTotals.bucket_5plus : facTotals.bucket_5plus, t3total)}</td>
-                            </tr></tbody>
-                          </table>
-                        </div>
+                    {(() => { const cw3 = ['25%','15%','15%','15%','15%','15%']; const t3total = courierTotals.delivered; return (
+                    <div style={{ ...tableCard2, height: 320 }}>
+                      <div style={{ ...tableTitle2 }}>In-Transit Time <span style={{ fontWeight: 500, color: C.t3, fontSize: 9.5, marginLeft: 4 }}>(by Courier)</span></div>
+                      <div style={{ margin: '0 8px', flex: 1, overflowY: 'auto' }}>
+                        <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed' }}>
+                          <colgroup>{cw3.map((w,i)=><col key={i} style={{width:w}}/>)}</colgroup>
+                          <thead><tr style={{ background: C.bg }}>
+                            <th style={{ ...thL, position: 'sticky', top: 0, background: C.bg, zIndex: 1 }}>Courier</th>
+                            <th style={{ ...thS, position: 'sticky', top: 0, background: C.bg, zIndex: 1 }}>Del</th>
+                            <th style={{ ...thS, position: 'sticky', top: 0, background: C.bg, zIndex: 1 }}>0-1d</th>
+                            <th style={{ ...thS, position: 'sticky', top: 0, background: C.bg, zIndex: 1 }}>2-3d</th>
+                            <th style={{ ...thS, position: 'sticky', top: 0, background: C.bg, zIndex: 1 }}>4-5d</th>
+                            <th style={{ ...thS, position: 'sticky', top: 0, background: C.bg, zIndex: 1 }}>5+d</th>
+                          </tr></thead>
+                          <tbody>
+                            {tatByCourier.map((row, ri, arr) => {
+                              const tot = row.delivered || 0
+                              const isLast = ri === arr.length - 1
+                              return (
+                                <tr key={row.courier_group}>
+                                  <td style={{ ...tdL, ...(isLast ? { borderBottom: 'none' } : {}) }}>{row.courier_group}</td>
+                                  <td style={{ ...tdS, ...(isLast ? { borderBottom: 'none' } : {}) }}>{tot.toLocaleString('en-IN')}</td>
+                                  {[row.bucket_0_1, row.bucket_2_3, row.bucket_4_5, row.bucket_5plus].map((v, ci) => (
+                                    <td key={ci} style={{ ...tdS, color: (v/tot)>0.2?'#dc2626':C.t2, fontWeight: (v/tot)>0.2?700:400, ...(isLast ? { borderBottom: 'none' } : {}) }}>{fmtCell(v, tot)}</td>
+                                  ))}
+                                </tr>
+                              )
+                            })}
+                          </tbody>
+                        </table>
                       </div>
-                      )
-                    })()}
+                      <div style={totalWrap}>
+                        <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed', background: C.bg }}>
+                          <colgroup>{cw3.map((w,i)=><col key={i} style={{width:w}}/>)}</colgroup>
+                          <tbody><tr>
+                            <td style={totalRowL}>Total</td>
+                            <td style={totalRowS}>{t3total.toLocaleString('en-IN')}</td>
+                            <td style={totalRowS}>{fmtCell(courierTotals.bucket_0_1, t3total)}</td>
+                            <td style={totalRowS}>{fmtCell(courierTotals.bucket_2_3, t3total)}</td>
+                            <td style={totalRowS}>{fmtCell(courierTotals.bucket_4_5, t3total)}</td>
+                            <td style={totalRowS}>{fmtCell(courierTotals.bucket_5plus, t3total)}</td>
+                          </tr></tbody>
+                        </table>
+                      </div>
+                    </div>
+                    ) })()}
 
                     {/* Table 4: Fulfilment Time — order_date → delivery_date (by Facility) */}
                     {(() => { const cw = ['25%','18.75%','18.75%','18.75%','18.75%']; const t4=(facTotals.ord_0_1+facTotals.ord_2_3+facTotals.ord_4_5+facTotals.ord_5plus); return (
