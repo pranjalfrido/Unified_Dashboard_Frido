@@ -788,6 +788,14 @@ export default async function handler(req, res) {
     //   invoice     - card_theirs = rate-driven (their own card can't explain it)
     // Restricted to rows priced BOTH ways, so all three figures cover one population —
     // comparing unequal row sets produced a spurious 14.9% control variance.
+    // Per-courier dispute split, on the same total-cost basis as the summary above. Built by
+    // scripts/refresh-cost-aggregates.mjs; see that file for why the clamp is per row.
+    const disputesQ = () => query(pool, `
+      SELECT courier_name, priced_n, disputed_n, weight_rs, rate_rs, total_rs, invoiced_rs
+        FROM public.lc_courier_disputes
+       ORDER BY total_rs DESC
+    `, [])
+
     const wrQ = () => query(pool, `
       -- Reads a PRE-COMPUTED single-row summary, not a live join.
       --
@@ -814,8 +822,63 @@ export default async function handler(req, res) {
     // Parallelism is not the lever here: 4 concurrent scans measured the same 3.1s as fewer
     // because the instance is CPU-bound, so the fix is fewer scans per request, not more
     // connections.
-    const [grouped, lanes, lfl, drift, product] = await mapLimit([
+    // ── Cube: (courier × zone × mode × month × payment × is_overbilled) ──
+    // Pre-aggregated at the finest grain the common filters need. Returned in the
+    // static JSON so the frontend can re-aggregate client-side on every filter change
+    // without a round-trip. Band and destCity are excluded — their cardinality would
+    // make the cube too large; those filters still hit the live API.
+    const CUBE_Q = `
+      ${BASE}
+      SELECT
+        courier_name,
+        zone,
+        mode_group                                                AS mode,
+        month_year                                               AS month,
+        COALESCE(payment_mode, 'Unknown')                        AS payment,
+        (gap > 0.001 AND COALESCE(dw, 0) > 0)                   AS is_overbilled,
+        COUNT(*)::int                                            AS n,
+        SUM(cost)::float8                                        AS cost,
+        SUM(cw)::float8                                          AS wt,
+        SUM(dw)::float8                                          AS decl_wt,
+        SUM(ship_value)::float8                                  AS value,
+        SUM(surcharge)::float8                                   AS surcharge,
+        COUNT(*) FILTER (WHERE gap > 0.001 AND COALESCE(dw, 0) > 0)::int  AS over_n,
+        COALESCE(SUM(gap) FILTER (WHERE gap > 0.001 AND COALESCE(dw, 0) > 0), 0)::float8 AS over_kg,
+        COALESCE(SUM((cost / NULLIF(cw_slab, 0)) * gap) FILTER (WHERE gap > 0.001 AND COALESCE(dw, 0) > 0), 0)::float8 AS over_cost,
+        COALESCE(SUM(GREATEST(frido_carrier - frido_base, 0)), 0)::float8  AS rec_infl,
+        COALESCE(SUM(GREATEST(inv_freight - frido_carrier, 0)), 0)::float8 AS rec_unexp,
+        COUNT(*) FILTER (WHERE courier_admits = 'admitted')::int            AS rec_admit_n,
+        COALESCE(SUM(GREATEST(frido_carrier - frido_base, 0)) FILTER (WHERE courier_admits = 'admitted'), 0)::float8 AS rec_admit,
+        COUNT(*) FILTER (WHERE GREATEST(frido_carrier - frido_base, 0) + GREATEST(inv_freight - frido_carrier, 0) > 10)::int AS claimable_n,
+        COALESCE(SUM(GREATEST(frido_carrier - frido_base, 0) + GREATEST(inv_freight - frido_carrier, 0))
+                 FILTER (WHERE GREATEST(frido_carrier - frido_base, 0) + GREATEST(inv_freight - frido_carrier, 0) > 10), 0)::float8 AS claimable_rs,
+        COUNT(*) FILTER (WHERE mode_group <> 'Forward')::int               AS reverse_n,
+        COUNT(*) FILTER (WHERE slab IS NOT NULL AND cw - slab > 0.001)::int AS slab_n,
+        COALESCE(SUM(cw - slab) FILTER (WHERE slab IS NOT NULL AND cw - slab > 0.001), 0)::float8 AS slab_kg,
+        COALESCE(SUM((cost / cw) * (cw - slab)) FILTER (WHERE slab IS NOT NULL AND cw - slab > 0.001), 0)::float8 AS slab_cost,
+        COALESCE(SUM(frido_base), 0)::float8           AS rc_entitled,
+        COALESCE(SUM(frido_carrier), 0)::float8        AS rc_carrier,
+        COALESCE(SUM(frido_base_allin), 0)::float8     AS rc_entitled_allin,
+        COALESCE(SUM(frido_carrier_allin), 0)::float8  AS rc_carrier_allin,
+        COALESCE(SUM(frido_base_allin - frido_base), 0)::float8 AS rc_entitled_surcharge,
+        COALESCE(SUM(cost - inv_freight), 0)::float8   AS inv_addons,
+        COALESCE(SUM(frido_total), 0)::float8          AS rc_total,
+        COALESCE(SUM(inv_freight), 0)::float8          AS inv_freight,
+        COUNT(frido_base)::int                         AS rc_priced,
+        COUNT(*) FILTER (WHERE frido_carrier IS NOT NULL AND inv_freight - frido_carrier > 0.5)::int AS rc_over_n,
+        COALESCE(SUM(inv_freight - frido_carrier) FILTER (WHERE frido_carrier IS NOT NULL AND inv_freight - frido_carrier > 0.5), 0)::float8 AS rc_over_cost,
+        COALESCE(SUM(frido_carrier - frido_base) FILTER (WHERE frido_carrier IS NOT NULL AND frido_carrier > frido_base), 0)::float8 AS rc_infl_cost,
+        COUNT(*) FILTER (WHERE frido_carrier IS NOT NULL AND frido_carrier - frido_base > 0.5)::int AS rc_infl_n,
+        COUNT(*) FILTER (WHERE ship_value > 0 AND cost > 0.25 * ship_value)::int AS margin_killer_n,
+        COALESCE(SUM(cost) FILTER (WHERE ship_value > 0 AND cost > 0.25 * ship_value), 0)::float8 AS margin_killer_cost
+      FROM base
+      GROUP BY 1, 2, 3, 4, 5, 6
+      ORDER BY 1, 2, 3, 4, 5, 6
+    `
+
+    const [grouped, lanes, lfl, drift, product, cubeRes] = await mapLimit([
       () => query(pool, GROUPED, params), lanesQ, lflQ, driftQ, productQ,
+      () => query(pool, CUBE_Q, params),
     ], 3)
 
     const DIM_KEY = {
@@ -861,6 +924,7 @@ export default async function handler(req, res) {
       if (r.sub !== null) catNode.get(r.cat)?.children.push(r)
     }
     out.byProduct = [...catNode.values()].sort((a, b) => b.cost - a.cost)
+    out.cube = cubeRes.rows
     // Served from refCache — see the note on the mapLimit call above.
 
     // ── 4. Filter-independent reference data, cached ──
@@ -868,7 +932,7 @@ export default async function handler(req, res) {
       // Throttled to 3: this block is 10 queries and only runs on a cache miss, so it can
       // afford to be slower — but firing all 10 at once starved the pool and produced the
       // same connect timeout the main block hit.
-      const [health, joinCov, opt, cityRows, b2b, b2bLanes, b2bTotals, b2bTrans, b2bMonths, b2bTypes, wr, gridRes, trendRes] = await mapLimit([
+      const [health, joinCov, opt, cityRows, b2b, b2bLanes, b2bTotals, b2bTrans, b2bMonths, b2bTypes, wr, gridRes, trendRes, disputes] = await mapLimit([
         // ── Data Health (spec §0) ──
         // Every exclusion and every coverage rate the page depends on, in one query.
         // This exists so finance can see the gaps before finding one themselves and
@@ -975,7 +1039,7 @@ export default async function handler(req, res) {
             FROM public.logistics_invoices_b2b WHERE total_cost > 0
            GROUP BY 1 ORDER BY 3 DESC
         `),
-        wrQ, gridQ, trendQ,
+        wrQ, gridQ, trendQ, disputesQ,
       ], 3)
       const options = opt.rows[0] || {}
       options.cities = cityRows.rows.map(r => r.c).sort()
@@ -984,6 +1048,7 @@ export default async function handler(req, res) {
         // measured once per cache period rather than per request.
         weightRate: wr.rows[0] || {},
         rateGrid: gridRes.rows,
+        courierDisputes: disputes.rows,
         trendAll: trendRes.rows,
         at: Date.now(), options, b2b: b2b.rows,
         // Data Health (§0): exclusions + coverage, so every number is auditable.
@@ -1003,6 +1068,7 @@ export default async function handler(req, res) {
     // Applied here, after section 4 has guaranteed refCache exists.
     Object.assign(out.totals, refCache.weightRate || {})
     out.rateGrid = refCache.rateGrid || []
+    out.courierDisputes = refCache.courierDisputes || []
     out.trendAll = refCache.trendAll || []
     out.skipped = refCache.skipped
     out.health = refCache.health

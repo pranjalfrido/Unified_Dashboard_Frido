@@ -130,7 +130,7 @@ export function DataTable({ columns, rows, maxRows = 50, storageKey, maxHeight }
           <tr>
             {reorder.orderedColumns.map(c => (
               <th key={c.key + c.label} draggable onDragStart={reorder.onDragStart(c.id)} onDragOver={reorder.onDragOver} onDrop={reorder.onDrop(c.id)}
-                style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.05em', color: C.t3, textAlign: c.align === 'right' ? 'right' : 'left', padding: '3px 5px 7px', borderBottom: `1px solid ${C.border}`, cursor: 'grab', userSelect: 'none', ...(maxHeight ? { position: 'sticky', top: 0, background: C.card, zIndex: 1 } : {}) }}>{c.label}</th>
+                style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.05em', color: C.t3, textAlign: c.align === 'right' ? 'right' : c.align === 'center' ? 'center' : 'left', padding: '3px 5px 7px', borderBottom: `1px solid ${C.border}`, cursor: 'grab', userSelect: 'none', ...(maxHeight ? { position: 'sticky', top: 0, background: C.card, zIndex: 1 } : {}) }}>{c.label}</th>
             ))}
           </tr>
         </thead>
@@ -138,7 +138,7 @@ export function DataTable({ columns, rows, maxRows = 50, storageKey, maxHeight }
           {visible.map((r, i) => (
             <tr key={i} style={{ borderBottom: i < visible.length - 1 ? `1px solid ${C.border}` : 'none' }} onMouseEnter={e => e.currentTarget.style.background = '#FFFBE6'} onMouseLeave={e => e.currentTarget.style.background = ''}>
               {reorder.orderedColumns.map(c => (
-                <td key={c.key + c.label} style={{ padding: i < visible.length - 1 ? '5.5px 5px' : '5.5px 5px 14px', color: c.align === 'right' ? C.t1 : C.t2, textAlign: c.align === 'right' ? 'right' : 'left', fontFamily: c.mono ? 'var(--mono)' : 'inherit', fontSize: c.mono ? 11.5 : 12, whiteSpace: 'nowrap' }}>
+                <td key={c.key + c.label} style={{ padding: i < visible.length - 1 ? '5.5px 5px' : '5.5px 5px 14px', color: c.align === 'right' || c.align === 'center' ? C.t1 : C.t2, textAlign: c.align === 'right' ? 'right' : c.align === 'center' ? 'center' : 'left', fontFamily: c.mono ? 'var(--mono)' : 'inherit', fontSize: c.mono ? 11.5 : 12, whiteSpace: 'nowrap' }}>
                   {c.render ? c.render(r[c.key], r) : r[c.key]}
                 </td>
               ))}
