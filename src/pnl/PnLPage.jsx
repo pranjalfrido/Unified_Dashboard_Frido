@@ -36,11 +36,11 @@ const pick = v => ({ rev: v.rev || 0, excRev: v.excRev || 0, units: v.units || v
 // formula (see ./pnlUtils.js) — no scName/mobility override passed here, since the Mobility
 // whitelist-net override is applied afterward on the AGGREGATE n.net (see the `shopify` block
 // below), exactly as this function did before centralization.
-function netOf(subCatData) {
+function netOf(subCatData, netScale = 1) {
   let gross = 0, excRev = 0, net = 0, returnRev = 0, units = 0
   Object.values(subCatData || {}).forEach(scMap => {
     Object.values(scMap).forEach(d => {
-      const r = netRevenueOf(d)
+      const r = netRevenueOf(d, undefined, {}, undefined, netScale)
       gross += r.gross
       excRev += r.excRev
       units += r.units
@@ -251,7 +251,7 @@ export default function PnLPage({ data, filters, setFilters }) {
       shSalesCatRows.filter(filterD2CRow).forEach(r => {
         const cat = r.category || 'Others', sc = r.sub_category || 'Others'
         if (!shSubCatData[cat]) shSubCatData[cat] = {}
-        if (!shSubCatData[cat][sc]) shSubCatData[cat][sc] = { rev: 0, excRev: 0, units: 0, returnUnits: 0, cancelRev: 0, codCancelRev: 0, rtoRev: 0, cirRev: 0, returnRev: 0 }
+        if (!shSubCatData[cat][sc]) shSubCatData[cat][sc] = { rev: 0, excRev: 0, units: 0, returnUnits: 0, cancelRev: 0, codCancelRev: 0, rtoRev: 0, cirRev: 0, exchRev: 0, returnRev: 0 }
         shSubCatData[cat][sc].rev += parseFloat(r.gross_revenue) || 0
         shSubCatData[cat][sc].excRev += parseFloat(r.revenue) || 0
         shSubCatData[cat][sc].units = (shSubCatData[cat][sc].units || 0) + (parseInt(r.units) || 0)
@@ -260,6 +260,7 @@ export default function PnLPage({ data, filters, setFilters }) {
         shSubCatData[cat][sc].codCancelRev += parseFloat(r.cod_cancel_rev) || 0
         shSubCatData[cat][sc].rtoRev += parseFloat(r.return_rev) || 0
         shSubCatData[cat][sc].cirRev += parseFloat(r.cir_rev) || 0
+        shSubCatData[cat][sc].exchRev += parseFloat(r.exch_rev) || 0
       })
       Object.keys(shSubCatData).forEach(cat => Object.keys(shSubCatData[cat]).forEach(sc => { shSubCatData[cat][sc] = pick(shSubCatData[cat][sc]) }))
     } else {
@@ -270,6 +271,21 @@ export default function PnLPage({ data, filters, setFilters }) {
         shSubCatData[cat][sc || 'Others'] = pick(v)
       })
     }
+    // netScale reconciles PnL's row-level blended-GST-ratio Net Revenue to the Sales tab's more
+    // precise whole-range netCalc.netRev (real per-line-item GST summed over completed orders
+    // only) — confirmed 2026-08-19 the two tabs should tie out exactly rather than differ by a
+    // small methodology margin. Computed once here (needed by both shDailyPnL below and the
+    // `shopify` channelData block further down) as (Sales tab's authoritative total) ÷ (this same
+    // row set's raw, unscaled netOf() sum). 'all' (Overall D2C) reconciles to sh.netCalc.netRev;
+    // 'MyFrido' reconciles to subChannelMap.MyFrido.netCalc.netRev (added alongside bySubChannel
+    // in api/bq.js). Mobility is excluded — it already has its own exact manager-defined whitelist
+    // override, which must stay unscaled.
+    const shNetScale = (() => {
+      if (d2cSubCh === 'Mobility') return 1
+      const rawNet = netOf(shSubCatData).net
+      const target = d2cSubCh === 'MyFrido' ? data.subChannelMap?.MyFrido?.netCalc?.netRev : sh.netCalc?.netRev
+      return (target != null && rawNet > 0) ? target / rawNet : 1
+    })()
     const shSkuData = {}
     const subChKey = d2cSubCh === 'MyFrido' ? 'myfrido' : d2cSubCh === 'Mobility' ? 'mobility' : null
     Object.entries(sh.skuMap || {}).forEach(([cat, scMap]) => {
@@ -498,7 +514,7 @@ export default function PnLPage({ data, filters, setFilters }) {
       rows.forEach(x => {
         if (!byDate[x.date]) byDate[x.date] = { date: x.date, gross: 0, excRev: 0, net: 0, totalReturnRev: 0, snd: 0, sndNetCovered: 0, anySnd: false, cogs: 0, netCovered: 0, anyCosted: false, cm1NetCovered: 0, cm2NetCovered: 0 }
         const d = byDate[x.date]
-        const r = netRevenueOf(x)
+        const r = netRevenueOf(x, undefined, {}, undefined, shNetScale)
         d.gross += r.gross
         d.excRev += r.excRev
         d.net += r.net
@@ -606,18 +622,9 @@ export default function PnLPage({ data, filters, setFilters }) {
     return {
       all: { subCatData: allSubCatData, skuData: allSkuData, daily: data.dailyArr || [], gross: data.totalRev || 0, excRev: data.totalExcRev || 0, net: data.netRevenueCalc || 0, units: data.totalQty || 0, orders: data.nOrders || 0, returnRev: data.returnRev || 0 },
       shopify: (() => {
-        const n = netOf(shSubCatData)
-        // Net Revenue here is intentionally the SAME revenue-weighted blended-GST-ratio formula
-        // (netRevenueOf in ./pnlUtils.js) used by every row in the Financial View table below —
-        // NOT the Sales tab's netCalc.netRev (real per-line-item GST summed over completed orders
-        // only). The two will always differ by a small margin: netCalc.netRev is a whole-range
-        // total with no per-Category/SubCategory/SKU breakdown, so it can't feed the table's
-        // per-row GM%/CM1%/etc. math — using it here would make the KPI card match the Sales tab
-        // exactly but then mismatch the Financial View Total row (which must stay on the row-level
-        // formula), just moving the discrepancy instead of closing it. Confirmed acceptable by the
-        // user: PnL's Net Revenue is consistently the weighted-average-GST method everywhere within
-        // this tab (KPI card = table Total = trend chart), even though it won't tie to the Sales
-        // tab's more precise figure — that gap is a known, accepted methodology difference.
+        // shNetScale (computed above, right after shSubCatData, so shDailyPnL can use it too) — see
+        // that computation's comment for the full reconciliation rationale.
+        const n = netOf(shSubCatData, shNetScale)
         // For Mobility sub-channel, override net revenue with manager-defined filter
         // (paid/pending/partially_paid × Delivered/Dispatched/Exchange/Blank, SellingPrice_Exc_GST)
         // computed server-side as mobilityNetCalc and stored in subChannelMap.Mobility.netRev —
@@ -688,7 +695,7 @@ export default function PnLPage({ data, filters, setFilters }) {
         // (cogsPct/sndPct/gmPct/cm1Pct) is a ratio (numerator ÷ denominator), and MyFrido/Mobility
         // filtering would scale both halves of each ratio by the same factor, leaving the % itself
         // unchanged — only the raw ₹ `daily` line needs the scale-down, not this %-only series.
-        return { subCatData: shSubCatData, skuData: shSkuData, daily, dailyPnL: shDailyPnL, ...n, mobilityNetBySubCat: reconciledMobilityNetBySubCat, orders: d2cSubCh === 'all' ? (sh.totals?.orders || 0) : (data.subChannelMap?.[d2cSubCh]?.orders || 0) }
+        return { subCatData: shSubCatData, skuData: shSkuData, daily, dailyPnL: shDailyPnL, ...n, netScale: shNetScale, mobilityNetBySubCat: reconciledMobilityNetBySubCat, orders: d2cSubCh === 'all' ? (sh.totals?.orders || 0) : (data.subChannelMap?.[d2cSubCh]?.orders || 0) }
       })(),
       ebo: { subCatData: eboSubCatData, skuData: eboSkuData, daily: ebo.daily || [], gross: ebo.totals?.rev || 0, net: ebo.netCalc?.netRev ?? 0, units: ebo.totals?.qty || 0, orders: ebo.totals?.orders || 0, returnRev: (ebo.netCalc?.cancelRev || 0) + (ebo.netCalc?.rtoRev || 0) + (ebo.netCalc?.cirRev || 0) + (ebo.netCalc?.returnRev || 0) },
       // Net Revenue intentionally stays on netOf()'s row-level blended-GST formula (NOT
@@ -739,6 +746,12 @@ export default function PnLPage({ data, filters, setFilters }) {
   // card, the Financial Table) while the whole-range KPI net total included it — a real, visible
   // gap between the two for the exact same date range. See channelData's shopify branch above.
   const activeMobilityNetBySubCat = activeTab === 'shopify' && d2cSubCh === 'Mobility' ? (activeData?.mobilityNetBySubCat || {}) : {}
+  // netScale reconciles PnL's row-level Net Revenue to the Sales tab's whole-range figure (see
+  // the `shopify` block's netScale comment in channelData above) — only ever non-1 for D2C
+  // Overall/MyFrido. Threaded into kpiSummary's own netRevenueOf() calls below so COGS%/GM%/
+  // CM1%/CM2% (which divide by this same rescaled net) stay consistent with the KPI card and
+  // Financial Table, which already receive it via activeData.netScale / the netScale prop.
+  const activeNetScale = activeData?.netScale ?? 1
 
   // Whole-range GM%/SnD%/CM1%/CM2% KPI summary — same aggregation PnLFinancialTable.jsx's Total
   // row computes (net units × flat COGS rate, SnD from sndBySku, CM1 = GM − SnD, CM2 = CM1 −
@@ -775,7 +788,7 @@ export default function PnLPage({ data, filters, setFilters }) {
         // cancellations are pre-dispatch drops, not true returns, so omitting the exclusion here
         // overstated Returns and understated Net Revenue for D2C specifically (the only channel
         // with real cod_cancel_rev) versus every other number on this exact same KPI row.
-        const rowR = netRevenueOf(d, sc, activeMobilityNetBySubCat, cat)
+        const rowR = netRevenueOf(d, sc, activeMobilityNetBySubCat, cat, activeNetScale)
         const rowNet = rowR.net
         const excRev = d.excRev || 0
         net += rowNet
@@ -793,9 +806,9 @@ export default function PnLPage({ data, filters, setFilters }) {
         // uses, producing a real KPI-vs-Total CM1%/CM2% mismatch confirmed live (58.6% vs 38.4%
         // for the same date range).
         const rowWhitelistNet = activeMobilityNetBySubCat[`${cat}::${sc}`] != null ? activeMobilityNetBySubCat[`${cat}::${sc}`] : null
-        const rowStandardNetTotal = rowWhitelistNet != null ? skuEntriesForRow.reduce((s, [, sd]) => s + netRevenueOf(sd).net, 0) : 0
+        const rowStandardNetTotal = rowWhitelistNet != null ? skuEntriesForRow.reduce((s, [, sd]) => s + netRevenueOf(sd, undefined, {}, undefined, activeNetScale).net, 0) : 0
         skuEntriesForRow.forEach(([sku, sd]) => {
-          const skRStandard = netRevenueOf(sd)
+          const skRStandard = netRevenueOf(sd, undefined, {}, undefined, activeNetScale)
           const skR = rowWhitelistNet != null && rowStandardNetTotal > 0
             ? { ...skRStandard, net: rowWhitelistNet * (skRStandard.net / rowStandardNetTotal) }
             : skRStandard
@@ -848,7 +861,7 @@ export default function PnLPage({ data, filters, setFilters }) {
       spendPct: net > 0 ? (spend / net * 100) : null,
       cm2Pct: cm2 != null && cm2NetCovered > 0 ? (cm2 / cm2NetCovered * 100) : null,
     }
-  }, [activeData, activeSndBySku, activeAdSpendMap, cogsMap, activeMobilityNetBySubCat])
+  }, [activeData, activeSndBySku, activeAdSpendMap, cogsMap, activeMobilityNetBySubCat, activeNetScale])
 
   if (!data || !channelData) return null
 
@@ -916,6 +929,7 @@ export default function PnLPage({ data, filters, setFilters }) {
           gradId={`pnl${activeTab}Grad`}
           includeUnmatched={activeIncludeUnmatched}
           mobilityNetBySubCat={activeMobilityNetBySubCat}
+          netScale={activeData?.netScale ?? 1}
           hideTrendUnits={activeTab === 'amazon' || activeTab === 'shopify'}
         />
       </div>

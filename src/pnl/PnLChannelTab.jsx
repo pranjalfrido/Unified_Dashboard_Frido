@@ -199,7 +199,7 @@ function PnLTrendCard({ title, daily, dailyPnL, grossColor, grossGradId, boxHeig
 // simpler 5-card row (Gross/Net/Returns/Orders/AOV-ASP), unchanged.
 // dailyPnL: optional day-wise series (see api/bq.js amzSC.dailyPnLBySku/amzVCMatrix.dailyPnLBySku)
 // that adds SnD%/GM%/CM1% lines to the trend chart — both currently only populated for Amazon.
-export default function PnLChannelTab({ title, note, gross, excRev, net, units, orders, returnRev, subCatData, skuData, adSpendMap, sndBySku, daily, dailyPnL, kpiSummary, grossOfTotalPct, grossColor = '#FFD600', gradId = 'pnlGrossGrad', showMarketing = true, noReturnAccent = false, includeUnmatched = false, mobilityNetBySubCat = {}, hideTrendUnits = false }) {
+export default function PnLChannelTab({ title, note, gross, excRev, net, units, orders, returnRev, subCatData, skuData, adSpendMap, sndBySku, daily, dailyPnL, kpiSummary, grossOfTotalPct, grossColor = '#FFD600', gradId = 'pnlGrossGrad', showMarketing = true, noReturnAccent = false, includeUnmatched = false, mobilityNetBySubCat = {}, netScale = 1, hideTrendUnits = false }) {
   const returnPct = pct(returnRev, gross)
   const aov = orders > 0 ? gross / orders : 0
   const asp = units > 0 ? gross / units : 0
@@ -234,7 +234,7 @@ export default function PnLChannelTab({ title, note, gross, excRev, net, units, 
         </div>
       )}
       <PnLTrendCard title={`${title}${note ? ` · ${note}` : ''} — Revenue Trend`} daily={daily} dailyPnL={dailyPnL} grossColor={grossColor} grossGradId={gradId} boxHeight={360} showMarketing={showMarketing} hideUnits={hideTrendUnits} />
-      <PnLFinancialTable subCatData={subCatData} skuData={skuData} adSpendMap={adSpendMap} sndBySku={sndBySku} title={`Financial View · ${title}${note ? ` · ${note}` : ''}`} showMarketing={showMarketing} includeUnmatched={includeUnmatched} mobilityNetBySubCat={mobilityNetBySubCat} />
+      <PnLFinancialTable subCatData={subCatData} skuData={skuData} adSpendMap={adSpendMap} sndBySku={sndBySku} title={`Financial View · ${title}${note ? ` · ${note}` : ''}`} showMarketing={showMarketing} includeUnmatched={includeUnmatched} mobilityNetBySubCat={mobilityNetBySubCat} netScale={netScale} />
     </div>
   )
 }

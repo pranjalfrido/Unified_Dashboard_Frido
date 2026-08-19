@@ -19,6 +19,48 @@ export function getBQ() {
   return bq
 }
 
+const sleep = ms => new Promise(resolve => setTimeout(resolve, ms))
+
+// api/bq.js fires ~150 distinct queries per request in one Promise.all — firing them all as
+// truly concurrent BigQuery jobs regularly trips BigQuery's per-user JobService.query rate limit
+// (confirmed 2026-08-19: real 500s in production, which made the frontend silently keep showing
+// stale data — see App.jsx's fetchData). runQueriesLimited caps how many queries are in flight at
+// once and retries a rate-limited query with backoff instead of failing the whole request.
+const QUERY_CONCURRENCY = 12
+const MAX_RETRIES = 4
+async function runQueryWithRetry(bqClient, sql, key) {
+  for (let attempt = 0; ; attempt++) {
+    try {
+      const [rows] = await bqClient.query({ query: sql })
+      return { key, rows }
+    } catch (e) {
+      const isRateLimit = e?.code === 403 && /rateLimitExceeded|Exceeded rate limits/i.test(e?.message || '')
+      if (!isRateLimit || attempt >= MAX_RETRIES) throw e
+      // Exponential backoff with jitter: 500ms, 1s, 2s, 4s (+ up to 250ms jitter)
+      await sleep(500 * 2 ** attempt + Math.random() * 250)
+    }
+  }
+}
+
+// Runs {key: sql} query map with bounded concurrency instead of api/bq.js's old
+// Object.entries(queries).map(...) + Promise.all, which fired every query at once.
+export async function runQueriesLimited(bqClient, queries) {
+  const entries = Object.entries(queries)
+  const results = new Array(entries.length)
+  let nextIndex = 0
+  async function worker() {
+    while (true) {
+      const i = nextIndex++
+      if (i >= entries.length) return
+      const [key, sql] = entries[i]
+      results[i] = await runQueryWithRetry(bqClient, sql, key)
+    }
+  }
+  const workers = Array.from({ length: Math.min(QUERY_CONCURRENCY, entries.length) }, worker)
+  await Promise.all(workers)
+  return results
+}
+
 // ============================================================================
 // Shared "measures" layer — every sub-tab (Shopify, Amazon, EBO, Offline, ...)
 // must compute Net Revenue / GST / return-rate KPIs identically. Two pieces:
@@ -48,7 +90,8 @@ export function netRevenueSelectFragment(alias = '') {
     SUM(CASE WHEN ${p}Order_Status = 'CIR' THEN ${p}SellingPrice_Inc_GST ELSE 0 END) AS cir_rev,
     SUM(CASE WHEN ${p}Order_Status = 'RTO' THEN ${p}SellingPrice_Inc_GST ELSE 0 END) AS rto_rev,
     SUM(CASE WHEN ${p}Order_Status = 'Return' THEN ${p}SellingPrice_Inc_GST ELSE 0 END) AS return_rev,
-    SUM(CASE WHEN ${p}Order_Status = 'Cancelled' THEN ${p}SellingPrice_Inc_GST ELSE 0 END) AS cancel_rev`
+    SUM(CASE WHEN ${p}Order_Status = 'Cancelled' THEN ${p}SellingPrice_Inc_GST ELSE 0 END) AS cancel_rev,
+    SUM(CASE WHEN ${p}Order_Status = 'Exchange' THEN ${p}SellingPrice_Inc_GST ELSE 0 END) AS exch_rev`
 }
 
 export function computeNetRevenueMeasures(row = {}) {
@@ -59,14 +102,31 @@ export function computeNetRevenueMeasures(row = {}) {
   const returnRev = parseFloat(row.return_rev) || 0
   const cancelRev = parseFloat(row.cancel_rev) || 0
   const codCancelRev = parseFloat(row.cod_cancel_rev) || 0
-  // Exclude COD cancellations from Net Rev deduction — COD cancels are pre-dispatch drops, not true returns
-  const effectiveCancelRev = cancelRev - codCancelRev
+  const exchRev = parseFloat(row.exch_rev) || 0
+  // Prepaid-only slice of cancellations — used for "Overall Return%" (confirmed 2026-08-19),
+  // a separate metric from the Net Revenue deduction below, which uses full cancelRev.
+  const prepaidCancelRev = cancelRev - codCancelRev
 
+  // Individual rate cards (CIR%, RTO%, Return%, Cancel%) are each irrespective of payment type —
+  // no COD carve-out.
   const cirPct = grossIncGst > 0 ? cirRev / grossIncGst : 0
   const rtoPct = grossIncGst > 0 ? rtoRev / grossIncGst : 0
   const returnPct = grossIncGst > 0 ? returnRev / grossIncGst : 0
-  const cancelPct = grossIncGst > 0 ? effectiveCancelRev / grossIncGst : 0
-  const retainedShare = Math.max(0, 1 - cirPct - rtoPct - returnPct - cancelPct)
+  const cancelPct = grossIncGst > 0 ? cancelRev / grossIncGst : 0
+  const exchPct = grossIncGst > 0 ? exchRev / grossIncGst : 0
+
+  // Overall Return% = RTO + CIR + Return-status + prepaid-only Cancellation (confirmed 2026-08-19).
+  // Return-status is the catch-all bucket for orders (mostly marketplace) where the specific
+  // return type isn't identifiable — it stays in every returns/deduction total below.
+  const overallReturnPct = grossIncGst > 0 ? (rtoRev + cirRev + returnRev + prepaidCancelRev) / grossIncGst : 0
+
+  // Net Revenue deducts RTO + CIR + Return + FULL Cancellation (COD included) — Exchange is NOT
+  // deducted (reverted 2026-08-19): the customer keeps a product either way, so an exchange isn't
+  // lost revenue. The double-counting risk this briefly introduced (the ops team recreates a new
+  // '_EX...' OrderId that also carries Order_Status='Exchange') is instead solved by excluding
+  // '_EX' OrderIds entirely at the base query (buildQuery above) — so this formula no longer needs
+  // to special-case Exchange at all; the original order's own revenue flows through normally.
+  const retainedShare = Math.max(0, 1 - (rtoRev + cirRev + returnRev + cancelRev) / (grossIncGst || 1))
 
   const netRevenueExcGst = grossExcGst * retainedShare
   const gstAmount = (grossIncGst - grossExcGst) * retainedShare
@@ -74,9 +134,9 @@ export function computeNetRevenueMeasures(row = {}) {
 
   return {
     grossIncGst, grossExcGst,
-    cirRev, rtoRev, returnRev, cancelRev, codCancelRev, effectiveCancelRev,
-    cirPct, rtoPct, returnPct, cancelPct,
-    totalReturnPct: cirPct + rtoPct + returnPct + cancelPct,
+    cirRev, rtoRev, returnRev, cancelRev, codCancelRev, prepaidCancelRev, exchRev,
+    cirPct, rtoPct, returnPct, cancelPct, exchPct,
+    totalReturnPct: overallReturnPct,
     retainedShare,
     netRevenueExcGst, netRevenueIncGst, gstAmount,
   }
@@ -109,7 +169,10 @@ const CHANNEL_GROUPS = {
   // the schema change (2026-08), so this subChannels list never matches them anymore. Left as-is
   // (harmless no-op) rather than removed, since MyFrido/Mobility still need it.
   d2c:           { channels: ['Shopify'], subChannels: ['MyFrido', 'Mobility', 'Shopify International'] },
-  ebo:           { channels: ['Shopify'], subChannels: ['Retail Store'] },
+  // EBO (Retail Store) rows carry Channel='Retail', not 'Shopify' — confirmed against BQ
+  // 2026-08-19 (all 35k+ Retail Store rows since 2025-08-05 use Channel='Retail'). The old
+  // Channel='Shopify' definition matched zero rows, silently breaking the channelGroup=ebo filter.
+  ebo:           { channels: ['Retail'], subChannels: ['Retail Store'] },
   marketplace:   { channels: ['Amazon', 'Flipkart', 'CRED', 'Myntra', 'Firstcry'] },
   quick_commerce:{ channels: ['Blinkit', 'Zepto', 'Instamart'] },
   offline:       { channels: ['offline_sales'] },
@@ -331,6 +394,16 @@ WHERE u.OrderDate BETWEEN '${s}' AND '${e}'
   -- (not the 'S02-' OrderId prefix) since that's the actual, reliable signal — some RTV rows
   -- may not follow the S02- naming convention.
   AND NOT (u.Channel = 'Amazon' AND COALESCE(u.Order_Status, '') = 'RTV (Return to vendor)')
+  -- Exchange process (confirmed 2026-08-19): when a Shopify order gets exchanged, Frido's ops
+  -- team recreates a NEW OrderId with an '_EX...' suffix (e.g. '#MF0223023108_EX160'), copies over
+  -- the original order's details, and ships the replacement product under that new ID. Both the
+  -- original OrderId and its '_EX...' recreation independently carry Order_Status='Exchange' with
+  -- real, non-zero SellingPrice — summing both double-counts the same underlying sale (confirmed:
+  -- July 2026 MyFrido had 14,671 original vs only 690 recreated rows tagged Exchange, since most
+  -- recreations land in a later month than the original order). The recreated '_EX' row is pure
+  -- re-shipment bookkeeping, not a second sale, so it's excluded here at the source — the original
+  -- order's own revenue/Gross/Net treatment is untouched and unaffected by this filter.
+  AND NOT (u.OrderId LIKE '%_EX%')
   ${whereClause}
 ORDER BY u.OrderDate DESC`
 }
