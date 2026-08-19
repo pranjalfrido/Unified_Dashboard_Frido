@@ -573,7 +573,7 @@ export default function LogisticsCostPage() {
           if (staticRes?.ok) {
             const data = await staticRes.json()
             const age = data.asOf ? (Date.now() - new Date(data.asOf).getTime()) : Infinity
-            if (age < 2 * 60 * 60 * 1000) { j = data }
+            if (age < 3 * 60 * 60 * 1000) { j = data }
           }
         }
 

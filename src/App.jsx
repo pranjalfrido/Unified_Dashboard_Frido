@@ -247,7 +247,7 @@ function LogisticsPage({ filters }) {
           const json = await res.json()
           const ageMs = json.asOf ? Date.now() - new Date(json.asOf).getTime() : Infinity
           const dateMatches = json.dateRange && json.dateRange.start === filters.start && json.dateRange.end === filters.end
-          if (ageMs <= 2 * 60 * 60 * 1000 && !json._placeholder && json.current && dateMatches) {
+          if (ageMs <= 3 * 60 * 60 * 1000 && !json._placeholder && json.current && dateMatches) {
             setRawData(json.current)
             setRawPrevData(json.previous || null)
             try { localStorage.setItem('logistics_stale', JSON.stringify({ current: json.current, previous: json.previous || null, dateRange: json.dateRange, savedAt: Date.now() })) } catch {}
