@@ -228,9 +228,7 @@ function LogisticsPage({ filters }) {
   const [prevData, setPrevData] = useState(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
-  const [staleData, setStaleData] = useState(() => {
-    try { const s = localStorage.getItem('logistics_stale'); return s ? JSON.parse(s) : null } catch { return null }
-  })
+  const [staleData, setStaleData] = useState(() => { try { const s = localStorage.getItem('logistics_stale'); return s ? JSON.parse(s) : null } catch { return null } })
   const [retData, setRetData] = useState(null)
   const [retTrendGran, setRetTrendGran] = useState('Daily')
   const [retReasonView, setRetReasonView] = useState('reason') // 'reason' | 'sub'
@@ -422,9 +420,9 @@ function LogisticsPage({ filters }) {
             const m = {}
             const rows = (raw.tatByFacility || []).filter(courierFilter)
             rows.forEach(x => {
-              if (!m[x.facility]) m[x.facility] = { facility: x.facility, total: 0, delivered: 0, proc_0_12h: 0, proc_12_24h: 0, proc_24_48h: 0, proc_48plus: 0, ord_0_1: 0, ord_2_3: 0, ord_4_5: 0, ord_5plus: 0 }
+              if (!m[x.facility]) m[x.facility] = { facility: x.facility, total: 0, delivered: 0, proc_0_12h: 0, proc_12_24h: 0, proc_24_48h: 0, proc_48plus: 0, ord_0_1: 0, ord_2_3: 0, ord_4_5: 0, ord_5plus: 0, op_0_1: 0, op_2_3: 0, op_4_5: 0, op_5plus: 0 }
               const f = m[x.facility]
-              ;['total','delivered','proc_0_12h','proc_12_24h','proc_24_48h','proc_48plus','ord_0_1','ord_2_3','ord_4_5','ord_5plus'].forEach(k => f[k] += x[k] || 0)
+              ;['total','delivered','proc_0_12h','proc_12_24h','proc_24_48h','proc_48plus','ord_0_1','ord_2_3','ord_4_5','ord_5plus','op_0_1','op_2_3','op_4_5','op_5plus'].forEach(k => f[k] += x[k] || 0)
             })
             return Object.values(m).sort((a,b) => b.total - a.total)
           })(),
@@ -1394,8 +1392,9 @@ function LogisticsPage({ filters }) {
               const facTotals = tatByFacility.reduce((acc, r) => {
                 acc.total += r.total||0; acc.proc_0_12h += r.proc_0_12h||0; acc.proc_12_24h += r.proc_12_24h||0; acc.proc_24_48h += r.proc_24_48h||0; acc.proc_48plus += r.proc_48plus||0
                 acc.ord_0_1 += r.ord_0_1||0; acc.ord_2_3 += r.ord_2_3||0; acc.ord_4_5 += r.ord_4_5||0; acc.ord_5plus += r.ord_5plus||0
+                acc.op_0_1 += r.op_0_1||0; acc.op_2_3 += r.op_2_3||0; acc.op_4_5 += r.op_4_5||0; acc.op_5plus += r.op_5plus||0
                 return acc
-              }, { total:0, proc_0_12h:0, proc_12_24h:0, proc_24_48h:0, proc_48plus:0, ord_0_1:0, ord_2_3:0, ord_4_5:0, ord_5plus:0 })
+              }, { total:0, proc_0_12h:0, proc_12_24h:0, proc_24_48h:0, proc_48plus:0, ord_0_1:0, ord_2_3:0, ord_4_5:0, ord_5plus:0, op_0_1:0, op_2_3:0, op_4_5:0, op_5plus:0 })
               const courierTotals = tatByCourier.reduce((acc, r) => {
                 acc.total += r.total||0; acc.delivered += r.delivered||0; acc.bucket_0_1 += r.bucket_0_1||0; acc.bucket_2_3 += r.bucket_2_3||0; acc.bucket_4_5 += r.bucket_4_5||0; acc.bucket_5plus += r.bucket_5plus||0
                 return acc
@@ -1414,19 +1413,62 @@ function LogisticsPage({ filters }) {
                   <LSectionTitle title="TAT Bucket Analysis" collapsed={secCollapsed['tatbucket']} onToggle={() => toggleSec('tatbucket')} />
                   <div style={{ display: secCollapsed['tatbucket'] ? 'none' : 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr 1fr', gap: 14 }}>
 
-                    {/* Table 1: Order → Pickup by Facility */}
-                    {(() => { const cw = ['40%','15%','15%','15%','15%']; const t1=(facTotals.proc_0_12h+facTotals.proc_12_24h+facTotals.proc_24_48h+facTotals.proc_48plus); return (
+                    {/* Table 1: Order Processing Time — order_date → created_at (by Facility) */}
+                    {(() => { const cw = ['40%','15%','15%','15%','15%']; const t1=(facTotals.op_0_1||0)+(facTotals.op_2_3||0)+(facTotals.op_4_5||0)+(facTotals.op_5plus||0); return (
                     <div style={{ ...tableCard2, height: 340 }}>
-                      <div style={tableTitle2}>Order → Pickup <span style={{ fontWeight: 500, color: C.t3, fontSize: 12 }}>(by Facility)</span></div>
+                      <div style={tableTitle2}>Order Processing Time <span style={{ fontWeight: 500, color: C.t3, fontSize: 12 }}>(by Facility)</span></div>
                       <div style={{ flex: 1, overflowY: 'auto' }}>
                         <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed' }}>
                           <colgroup>{cw.map((w,i)=><col key={i} style={{width:w}}/>)}</colgroup>
                           <thead><tr style={{ background: C.bg }}>
                             <th style={{ ...thL, position: 'sticky', top: 0, background: C.bg, zIndex: 1 }}>Facility</th>
-                            <th style={{ ...thS, position: 'sticky', top: 0, background: C.bg, zIndex: 1 }}>0-12h</th>
-                            <th style={{ ...thS, position: 'sticky', top: 0, background: C.bg, zIndex: 1 }}>12-24h</th>
-                            <th style={{ ...thS, position: 'sticky', top: 0, background: C.bg, zIndex: 1 }}>24-48h</th>
-                            <th style={{ ...thS, position: 'sticky', top: 0, background: C.bg, zIndex: 1 }}>48h+</th>
+                            <th style={{ ...thS, position: 'sticky', top: 0, background: C.bg, zIndex: 1 }}>0-1D</th>
+                            <th style={{ ...thS, position: 'sticky', top: 0, background: C.bg, zIndex: 1 }}>2-3D</th>
+                            <th style={{ ...thS, position: 'sticky', top: 0, background: C.bg, zIndex: 1 }}>4-5D</th>
+                            <th style={{ ...thS, position: 'sticky', top: 0, background: C.bg, zIndex: 1 }}>5+D</th>
+                          </tr></thead>
+                          <tbody>
+                            {tatByFacility.map((row, ri, arr) => {
+                              const tot = (row.op_0_1||0)+(row.op_2_3||0)+(row.op_4_5||0)+(row.op_5plus||0)
+                              const isLast = ri === arr.length - 1
+                              return (
+                                <tr key={row.facility}>
+                                  <td style={{ ...tdL, ...(isLast ? { borderBottom: 'none' } : {}) }}>{row.facility}</td>
+                                  {[row.op_0_1, row.op_2_3, row.op_4_5, row.op_5plus].map((v, ci) => (
+                                    <td key={ci} style={{ ...tdS, color: (v/tot)>0.2?'#dc2626':C.t2, fontWeight: (v/tot)>0.2?700:400, ...(isLast ? { borderBottom: 'none' } : {}) }}>{pctB(v, tot)}</td>
+                                  ))}
+                                </tr>
+                              )
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
+                      <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed', borderTop: `1.5px solid ${C.border}`, background: C.bg }}>
+                        <colgroup>{cw.map((w,i)=><col key={i} style={{width:w}}/>)}</colgroup>
+                        <tbody><tr>
+                          <td style={totalRowL}>Total</td>
+                          <td style={totalRowS}>{pctB(facTotals.op_0_1||0,t1)}</td>
+                          <td style={totalRowS}>{pctB(facTotals.op_2_3||0,t1)}</td>
+                          <td style={totalRowS}>{pctB(facTotals.op_4_5||0,t1)}</td>
+                          <td style={totalRowS}>{pctB(facTotals.op_5plus||0,t1)}</td>
+                        </tr></tbody>
+                      </table>
+                    </div>
+                    ) })()}
+
+                    {/* Table 2: Order Pickup Time — created_at → pickup_ts (by Facility) */}
+                    {(() => { const cw = ['40%','15%','15%','15%','15%']; const t2=(facTotals.proc_0_12h+facTotals.proc_12_24h+facTotals.proc_24_48h+facTotals.proc_48plus); return (
+                    <div style={{ ...tableCard2, height: 340 }}>
+                      <div style={tableTitle2}>Order Pickup Time <span style={{ fontWeight: 500, color: C.t3, fontSize: 12 }}>(by Facility)</span></div>
+                      <div style={{ flex: 1, overflowY: 'auto' }}>
+                        <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed' }}>
+                          <colgroup>{cw.map((w,i)=><col key={i} style={{width:w}}/>)}</colgroup>
+                          <thead><tr style={{ background: C.bg }}>
+                            <th style={{ ...thL, position: 'sticky', top: 0, background: C.bg, zIndex: 1 }}>Facility</th>
+                            <th style={{ ...thS, position: 'sticky', top: 0, background: C.bg, zIndex: 1 }}>0-12H</th>
+                            <th style={{ ...thS, position: 'sticky', top: 0, background: C.bg, zIndex: 1 }}>12-24H</th>
+                            <th style={{ ...thS, position: 'sticky', top: 0, background: C.bg, zIndex: 1 }}>24-48H</th>
+                            <th style={{ ...thS, position: 'sticky', top: 0, background: C.bg, zIndex: 1 }}>48H+</th>
                           </tr></thead>
                           <tbody>
                             {tatByFacility.map((row, ri, arr) => {
@@ -1448,18 +1490,18 @@ function LogisticsPage({ filters }) {
                         <colgroup>{cw.map((w,i)=><col key={i} style={{width:w}}/>)}</colgroup>
                         <tbody><tr>
                           <td style={totalRowL}>Total</td>
-                          <td style={totalRowS}>{pctB(facTotals.proc_0_12h,t1)}</td>
-                          <td style={totalRowS}>{pctB(facTotals.proc_12_24h,t1)}</td>
-                          <td style={totalRowS}>{pctB(facTotals.proc_24_48h,t1)}</td>
-                          <td style={totalRowS}>{pctB(facTotals.proc_48plus,t1)}</td>
+                          <td style={totalRowS}>{pctB(facTotals.proc_0_12h,t2)}</td>
+                          <td style={totalRowS}>{pctB(facTotals.proc_12_24h,t2)}</td>
+                          <td style={totalRowS}>{pctB(facTotals.proc_24_48h,t2)}</td>
+                          <td style={totalRowS}>{pctB(facTotals.proc_48plus,t2)}</td>
                         </tr></tbody>
                       </table>
                     </div>
                     ) })()}
 
-                    {/* Table 2: Pickup → Delivery by Courier (scrollable tbody, sticky tfoot) */}
+                    {/* Table 3: In-Transit Time — pickup_ts → delivery_ts (by Courier) */}
                     <div style={{ ...tableCard2, height: 340 }}>
-                      <div style={tableTitle2}>Pickup → Delivery <span style={{ fontWeight: 500, color: C.t3, fontSize: 12 }}>(by Courier)</span></div>
+                      <div style={tableTitle2}>In-Transit Time <span style={{ fontWeight: 500, color: C.t3, fontSize: 12 }}>(by Courier)</span></div>
                       <div style={{ flex: 1, overflowY: 'auto' }}>
                         <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed' }}>
                           <colgroup><col style={{ width: '30%' }} /><col style={{ width: '14%' }} /><col style={{ width: '14%' }} /><col style={{ width: '14%' }} /><col style={{ width: '14%' }} /><col style={{ width: '14%' }} /></colgroup>
@@ -1499,19 +1541,19 @@ function LogisticsPage({ filters }) {
                       </div>
                     </div>
 
-                    {/* Table 3: Processing → Pickup by Facility */}
-                    {(() => { const cw = ['40%','15%','15%','15%','15%']; const t3=(facTotals.ord_0_1+facTotals.ord_2_3+facTotals.ord_4_5+facTotals.ord_5plus); return (
+                    {/* Table 4: Fulfilment Time — order_date → delivery_date (by Facility) */}
+                    {(() => { const cw = ['40%','15%','15%','15%','15%']; const t4=(facTotals.ord_0_1+facTotals.ord_2_3+facTotals.ord_4_5+facTotals.ord_5plus); return (
                     <div style={{ ...tableCard2, height: 340 }}>
-                      <div style={tableTitle2}>Processing → Pickup <span style={{ fontWeight: 400, color: C.t3 }}>(by Facility)</span></div>
+                      <div style={tableTitle2}>Fulfilment Time <span style={{ fontWeight: 400, color: C.t3 }}>(by Facility)</span></div>
                       <div style={{ flex: 1, overflowY: 'auto' }}>
                         <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed' }}>
                           <colgroup>{cw.map((w,i)=><col key={i} style={{width:w}}/>)}</colgroup>
                           <thead><tr style={{ background: C.bg }}>
                             <th style={{ ...thL, position: 'sticky', top: 0, background: C.bg, zIndex: 1 }}>Facility</th>
-                            <th style={{ ...thS, position: 'sticky', top: 0, background: C.bg, zIndex: 1 }}>0-1d</th>
-                            <th style={{ ...thS, position: 'sticky', top: 0, background: C.bg, zIndex: 1 }}>2-3d</th>
-                            <th style={{ ...thS, position: 'sticky', top: 0, background: C.bg, zIndex: 1 }}>4-5d</th>
-                            <th style={{ ...thS, position: 'sticky', top: 0, background: C.bg, zIndex: 1 }}>5+d</th>
+                            <th style={{ ...thS, position: 'sticky', top: 0, background: C.bg, zIndex: 1 }}>0-1D</th>
+                            <th style={{ ...thS, position: 'sticky', top: 0, background: C.bg, zIndex: 1 }}>2-3D</th>
+                            <th style={{ ...thS, position: 'sticky', top: 0, background: C.bg, zIndex: 1 }}>4-5D</th>
+                            <th style={{ ...thS, position: 'sticky', top: 0, background: C.bg, zIndex: 1 }}>5+D</th>
                           </tr></thead>
                           <tbody>
                             {tatByFacility.map((row, ri, arr) => {
@@ -1533,10 +1575,10 @@ function LogisticsPage({ filters }) {
                         <colgroup>{cw.map((w,i)=><col key={i} style={{width:w}}/>)}</colgroup>
                         <tbody><tr>
                           <td style={totalRowL}>Total</td>
-                          <td style={totalRowS}>{pctB(facTotals.ord_0_1,t3)}</td>
-                          <td style={totalRowS}>{pctB(facTotals.ord_2_3,t3)}</td>
-                          <td style={totalRowS}>{pctB(facTotals.ord_4_5,t3)}</td>
-                          <td style={totalRowS}>{pctB(facTotals.ord_5plus,t3)}</td>
+                          <td style={totalRowS}>{pctB(facTotals.ord_0_1,t4)}</td>
+                          <td style={totalRowS}>{pctB(facTotals.ord_2_3,t4)}</td>
+                          <td style={totalRowS}>{pctB(facTotals.ord_4_5,t4)}</td>
+                          <td style={totalRowS}>{pctB(facTotals.ord_5plus,t4)}</td>
                         </tr></tbody>
                       </table>
                     </div>
