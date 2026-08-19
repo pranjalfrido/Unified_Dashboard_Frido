@@ -665,7 +665,7 @@ function LogisticsPage({ filters }) {
             </button>
           )}
 
-      {error && <div style={{ padding: '10px 14px', borderRadius: 9, background: C.red.bg, border: `1px solid ${C.red.bd}`, color: C.red.tx, fontSize: 12 }}>⚠ {error}</div>}
+      {error && !rawData && !staleData && <div style={{ padding: '10px 14px', borderRadius: 9, background: C.red.bg, border: `1px solid ${C.red.bd}`, color: C.red.tx, fontSize: 12 }}>⚠ {error} <button onClick={fetchLogistics} style={{ marginLeft: 8, fontSize: 11, cursor: 'pointer' }}>Retry</button></div>}
       {loading && !rawData && !staleData && (
         <LogisticsSkeleton />
       )}
