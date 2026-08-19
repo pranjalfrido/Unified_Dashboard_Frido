@@ -204,7 +204,10 @@ function LogisticsPage({ filters }) {
   const [logisticsView, setLogisticsView] = useState('Logistics')
   const [lopsTab, setLopsTab] = useState('overview') // kept for compat but toggle removed
   const [tatCourierView, setTatCourierView] = useState('courier') // 'courier' | 'month'
+  const [tatView1, setTatView1] = useState('facility')
+  const [tatView2, setTatView2] = useState('facility')
   const [tatView3, setTatView3] = useState('courier')
+  const [tatView4, setTatView4] = useState('facility')
   const [tatMode, setTatMode] = useState('pct')
   const [secCollapsed, setSecCollapsed] = useState({})
   const [wMetric, setWMetric] = useState('qty')
@@ -1473,22 +1476,22 @@ function LogisticsPage({ filters }) {
                     {/* Table 1: Order Processing Time — order_date → created_at (by Facility) */}
                     {(() => { const cw = ['25%','18.75%','18.75%','18.75%','18.75%']; const t1=(facTotals.op_0_1||0)+(facTotals.op_2_3||0)+(facTotals.op_4_5||0)+(facTotals.op_5plus||0); return (
                     <div style={{ ...tableCard2, height: 320 }}>
-                      <div style={{ ...tableTitle2 }}>Order Processing Time <span style={{ fontWeight: 500, color: C.t3, fontSize: 9.5, marginLeft: 4 }}>(by Facility)</span></div>
+                      <div style={{ ...tableTitle2, display: 'flex', alignItems: 'center' }}>Order Processing Time <span style={{ fontWeight: 500, color: C.t3, fontSize: 9.5, marginLeft: 4 }}>({tatView1 === 'facility' ? 'by Facility' : 'by Courier'})</span><ViewToggle view={tatView1} setView={setTatView1} /></div>
                       <div style={{ margin: '0 8px', flex: 1, overflowY: 'auto' }}>
                         <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed' }}>
                           <colgroup>{cw.map((w,i)=><col key={i} style={{width:w}}/>)}</colgroup>
                           <thead><tr style={{ background: C.bg }}>
-                            <th style={{ ...thL, position: 'sticky', top: 0, background: C.bg, zIndex: 1 }}>Facility</th>
+                            <th style={{ ...thL, position: 'sticky', top: 0, background: C.bg, zIndex: 1 }}>{tatView1 === 'facility' ? 'Facility' : 'Courier'}</th>
                             <th style={{ ...thS, position: 'sticky', top: 0, background: C.bg, zIndex: 1 }}>0-1D</th>
                             <th style={{ ...thS, position: 'sticky', top: 0, background: C.bg, zIndex: 1 }}>2-3D</th>
                             <th style={{ ...thS, position: 'sticky', top: 0, background: C.bg, zIndex: 1 }}>4-5D</th>
                             <th style={{ ...thS, position: 'sticky', top: 0, background: C.bg, zIndex: 1 }}>5+D</th>
                           </tr></thead>
                           <tbody>
-                            {tatByFacility.map((row, ri, arr) => {
+                            {(tatView1 === 'facility' ? tatByFacility : tatByCourierGrouped).map((row, ri, arr) => {
                               const tot = (row.op_0_1||0)+(row.op_2_3||0)+(row.op_4_5||0)+(row.op_5plus||0)
                               const isLast = ri === arr.length - 1
-                              const label = row.facility
+                              const label = tatView1 === 'facility' ? row.facility : row.label
                               return (
                                 <tr key={label}>
                                   <td style={{ ...tdL, ...(isLast ? { borderBottom: 'none' } : {}) }}>{label}</td>
@@ -1519,24 +1522,25 @@ function LogisticsPage({ filters }) {
                     {/* Table 2: Order Pickup Time — created_at → pickup_ts (by Facility) */}
                     {(() => { const cw = ['25%','18.75%','18.75%','18.75%','18.75%']; const t2=(facTotals.proc_0_12h+facTotals.proc_12_24h+facTotals.proc_24_48h+facTotals.proc_48plus); return (
                     <div style={{ ...tableCard2, height: 320 }}>
-                      <div style={{ ...tableTitle2 }}>Order Pickup Time <span style={{ fontWeight: 500, color: C.t3, fontSize: 9.5, marginLeft: 4 }}>(by Courier)</span></div>
+                      <div style={{ ...tableTitle2, display: 'flex', alignItems: 'center' }}>Order Pickup Time <span style={{ fontWeight: 500, color: C.t3, fontSize: 9.5, marginLeft: 4 }}>({tatView2 === 'facility' ? 'by Facility' : 'by Courier'})</span><ViewToggle view={tatView2} setView={setTatView2} /></div>
                       <div style={{ margin: '0 8px', flex: 1, overflowY: 'auto' }}>
                         <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed' }}>
                           <colgroup>{cw.map((w,i)=><col key={i} style={{width:w}}/>)}</colgroup>
                           <thead><tr style={{ background: C.bg }}>
-                            <th style={{ ...thL, position: 'sticky', top: 0, background: C.bg, zIndex: 1 }}>Courier</th>
+                            <th style={{ ...thL, position: 'sticky', top: 0, background: C.bg, zIndex: 1 }}>{tatView2 === 'facility' ? 'Facility' : 'Courier'}</th>
                             <th style={{ ...thS, position: 'sticky', top: 0, background: C.bg, zIndex: 1 }}>0-12H</th>
                             <th style={{ ...thS, position: 'sticky', top: 0, background: C.bg, zIndex: 1 }}>12-24H</th>
                             <th style={{ ...thS, position: 'sticky', top: 0, background: C.bg, zIndex: 1 }}>24-48H</th>
                             <th style={{ ...thS, position: 'sticky', top: 0, background: C.bg, zIndex: 1 }}>48H+</th>
                           </tr></thead>
                           <tbody>
-                            {tatByCourierGrouped.map((row, ri, arr) => {
+                            {(tatView2 === 'facility' ? tatByFacility : tatByCourierGrouped).map((row, ri, arr) => {
                               const tot = (row.proc_0_12h||0)+(row.proc_12_24h||0)+(row.proc_24_48h||0)+(row.proc_48plus||0)
                               const isLast = ri === arr.length - 1
+                              const label = tatView2 === 'facility' ? row.facility : row.label
                               return (
-                                <tr key={row.label}>
-                                  <td style={{ ...tdL, ...(isLast ? { borderBottom: 'none' } : {}) }}>{row.label}</td>
+                                <tr key={label}>
+                                  <td style={{ ...tdL, ...(isLast ? { borderBottom: 'none' } : {}) }}>{label}</td>
                                   {[row.proc_0_12h, row.proc_12_24h, row.proc_24_48h, row.proc_48plus].map((v, ci) => (
                                     <td key={ci} style={{ ...tdS, color: (v/tot)>0.2?'#dc2626':C.t2, fontWeight: (v/tot)>0.2?700:400, ...(isLast ? { borderBottom: 'none' } : {}) }}>{fmtCell(v, tot)}</td>
                                   ))}
@@ -1618,22 +1622,22 @@ function LogisticsPage({ filters }) {
                     {/* Table 4: Fulfilment Time — order_date → delivery_date (by Facility) */}
                     {(() => { const cw = ['25%','18.75%','18.75%','18.75%','18.75%']; const t4=(facTotals.ord_0_1+facTotals.ord_2_3+facTotals.ord_4_5+facTotals.ord_5plus); return (
                     <div style={{ ...tableCard2, height: 320 }}>
-                      <div style={{ ...tableTitle2 }}>Fulfilment Time <span style={{ fontWeight: 500, color: C.t3, fontSize: 9.5, marginLeft: 4 }}>(by Facility)</span></div>
+                      <div style={{ ...tableTitle2, display: 'flex', alignItems: 'center' }}>Fulfilment Time <span style={{ fontWeight: 500, color: C.t3, fontSize: 9.5, marginLeft: 4 }}>({tatView4 === 'facility' ? 'by Facility' : 'by Courier'})</span><ViewToggle view={tatView4} setView={setTatView4} /></div>
                       <div style={{ margin: '0 8px', flex: 1, overflowY: 'auto' }}>
                         <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed' }}>
                           <colgroup>{cw.map((w,i)=><col key={i} style={{width:w}}/>)}</colgroup>
                           <thead><tr style={{ background: C.bg }}>
-                            <th style={{ ...thL, position: 'sticky', top: 0, background: C.bg, zIndex: 1 }}>Facility</th>
+                            <th style={{ ...thL, position: 'sticky', top: 0, background: C.bg, zIndex: 1 }}>{tatView4 === 'facility' ? 'Facility' : 'Courier'}</th>
                             <th style={{ ...thS, position: 'sticky', top: 0, background: C.bg, zIndex: 1 }}>0-1D</th>
                             <th style={{ ...thS, position: 'sticky', top: 0, background: C.bg, zIndex: 1 }}>2-3D</th>
                             <th style={{ ...thS, position: 'sticky', top: 0, background: C.bg, zIndex: 1 }}>4-5D</th>
                             <th style={{ ...thS, position: 'sticky', top: 0, background: C.bg, zIndex: 1 }}>5+D</th>
                           </tr></thead>
                           <tbody>
-                            {tatByFacility.map((row, ri, arr) => {
+                            {(tatView4 === 'facility' ? tatByFacility : tatByCourierGrouped).map((row, ri, arr) => {
                               const tot = (row.ord_0_1||0)+(row.ord_2_3||0)+(row.ord_4_5||0)+(row.ord_5plus||0)
                               const isLast = ri === arr.length - 1
-                              const label = row.facility
+                              const label = tatView4 === 'facility' ? row.facility : row.label
                               return (
                                 <tr key={label}>
                                   <td style={{ ...tdL, ...(isLast ? { borderBottom: 'none' } : {}) }}>{label}</td>
