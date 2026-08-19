@@ -1481,7 +1481,7 @@ function LogisticsPage({ filters }) {
                           )})}
                         </div>
                       </div>
-                      <div style={{ margin: '0 8px', overflowY: 'auto', maxHeight: 240 }}>
+                      <div style={{ margin: '0 8px', overflowY: 'hidden' }}>
                         <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed' }}>
                           <colgroup>{cw.map((w,i)=><col key={i} style={{width:w}}/>)}</colgroup>
                           <thead><tr style={{ background: C.bg }}>
@@ -1641,7 +1641,7 @@ function LogisticsPage({ filters }) {
                           )})}
                         </div>
                       </div>
-                      <div style={{ margin: '0 8px', overflowY: 'auto', maxHeight: 240 }}>
+                      <div style={{ margin: '0 8px', overflowY: 'hidden' }}>
                         <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed' }}>
                           <colgroup>{cw.map((w,i)=><col key={i} style={{width:w}}/>)}</colgroup>
                           <thead><tr style={{ background: C.bg }}>
