@@ -1406,11 +1406,11 @@ function LogisticsPage({ filters }) {
               }, { total:0, delivered:0, bucket_0_1:0, bucket_2_3:0, bucket_4_5:0, bucket_5plus:0 })
 
               const BOX_H = 320
-              const thS = { fontSize: 9, fontWeight: 800, color: C.t2, textTransform: 'uppercase', letterSpacing: '.05em', padding: '11px 10px', borderBottom: `1.5px solid ${C.border}`, whiteSpace: 'nowrap', textAlign: 'right', background: C.card }
+              const thS = { fontSize: 9, fontWeight: 800, color: C.t2, textTransform: 'uppercase', letterSpacing: '.05em', padding: '9.7px 10px', borderBottom: `1.5px solid ${C.border}`, whiteSpace: 'nowrap', textAlign: 'right', background: C.card }
               const thL = { ...thS, textAlign: 'left' }
               const tdS = { fontSize: 9.1, color: C.t2, padding: '7.6px 10px', borderBottom: `1px solid ${C.border}`, textAlign: 'right', whiteSpace: 'nowrap' }
               const tdL = { ...tdS, textAlign: 'left', fontWeight: 600, color: C.t1 }
-              const totalRowS = { fontSize: 9.1, fontWeight: 700, color: C.t1, padding: '11px 10px', textAlign: 'right', whiteSpace: 'nowrap', background: C.bg, borderTop: `2px solid ${C.border}` }
+              const totalRowS = { fontSize: 9.1, fontWeight: 700, color: C.t1, padding: '9.7px 10px', textAlign: 'right', whiteSpace: 'nowrap', background: C.bg, borderTop: `2px solid ${C.border}` }
               const totalRowL = { ...totalRowS, textAlign: 'left' }
 
               return (
