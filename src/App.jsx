@@ -246,8 +246,7 @@ function LogisticsPage({ filters }) {
           const json = await res.json()
           const ageMs = json.asOf ? Date.now() - new Date(json.asOf).getTime() : Infinity
           const dateMatches = json.dateRange && json.dateRange.start === filters.start && json.dateRange.end === filters.end
-          const noExtraFilters = !lFilters.category && !lFilters.subCategory && (!lFilters.shipmentType || lFilters.shipmentType === 'forward')
-          if (ageMs <= 2 * 60 * 60 * 1000 && !json._placeholder && json.current && dateMatches && noExtraFilters) {
+          if (ageMs <= 2 * 60 * 60 * 1000 && !json._placeholder && json.current && dateMatches) {
             setRawData(json.current)
             setRawPrevData(json.previous || null)
             try { localStorage.setItem('logistics_stale', JSON.stringify({ current: json.current, previous: json.previous || null, dateRange: json.dateRange, savedAt: Date.now() })) } catch {}
@@ -279,7 +278,7 @@ function LogisticsPage({ filters }) {
       }
     } catch (e) { setError(e.message) }
     finally { setLoading(false) }
-  }, [filters.start, filters.end, lFilters.category, lFilters.subCategory, lFilters.shipmentType])
+  }, [filters.start, filters.end])
 
   useEffect(() => { fetchLogistics() }, [fetchLogistics])
 
@@ -295,9 +294,12 @@ function LogisticsPage({ filters }) {
       const sddNddFilter = hasSddNdd
         ? (sddNdd === 'SDD/NDD' ? cg => isNdd(cg) : cg => !isNdd(cg))
         : () => true
-      const hasShipmentType = false // handled by BQ refetch, not client-side
-      const shipmentTypeFilter = () => true
-      const courierFilter = x => (!hasCourier || couriers.includes(x.courier_group)) && sddNddFilter(x.courier_group) && shipmentTypeFilter(x)
+      const hasShipmentType = shipmentType && shipmentType !== 'all'
+      const shipmentTypeFilter = x => !hasShipmentType || (x.shipment_type || '').toLowerCase() === shipmentType.toLowerCase()
+      const hasCategory = !!category
+      const hasSubCategory = !!subCategory
+      const categoryFilter = x => (!hasCategory || (x.category || '').toLowerCase() === category.toLowerCase()) && (!hasSubCategory || (x.sub_category || '').toLowerCase() === subCategory.toLowerCase())
+      const courierFilter = x => (!hasCourier || couriers.includes(x.courier_group)) && sddNddFilter(x.courier_group) && shipmentTypeFilter(x) && categoryFilter(x)
 
       // build filtered byCourier rows
       const filteredCouriers = (raw.byCourier || []).filter(courierFilter)
