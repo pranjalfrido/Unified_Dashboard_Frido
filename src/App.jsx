@@ -204,6 +204,10 @@ function LogisticsPage({ filters }) {
   const [logisticsView, setLogisticsView] = useState('Logistics')
   const [lopsTab, setLopsTab] = useState('overview') // kept for compat but toggle removed
   const [tatCourierView, setTatCourierView] = useState('courier') // 'courier' | 'month'
+  const [tatView1, setTatView1] = useState('facility')
+  const [tatView2, setTatView2] = useState('facility')
+  const [tatView4, setTatView4] = useState('facility')
+  const [tatMode, setTatMode] = useState('pct')
   const [secCollapsed, setSecCollapsed] = useState({})
   const [wMetric, setWMetric] = useState('qty')
   const toggleSec = key => setSecCollapsed(p => ({ ...p, [key]: !p[key] }))
@@ -1404,10 +1408,7 @@ function LogisticsPage({ filters }) {
                 acc.total += r.total||0; acc.delivered += r.delivered||0; acc.bucket_0_1 += r.bucket_0_1||0; acc.bucket_2_3 += r.bucket_2_3||0; acc.bucket_4_5 += r.bucket_4_5||0; acc.bucket_5plus += r.bucket_5plus||0
                 return acc
               }, { total:0, delivered:0, bucket_0_1:0, bucket_2_3:0, bucket_4_5:0, bucket_5plus:0 })
-              const [tatView1, setTatView1] = React.useState('facility')
-              const [tatView2, setTatView2] = React.useState('facility')
-              const [tatView4, setTatView4] = React.useState('facility')
-              const [tatMode, setTatMode] = React.useState('pct')
+
 
               const groupByCourier = (rows, keys) => {
                 const map = {}
