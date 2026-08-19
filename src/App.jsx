@@ -1380,6 +1380,7 @@ function LogisticsPage({ filters }) {
         const tdStyle2 = { fontSize: 11.5, color: C.t1, padding: '6px 10px', borderBottom: `1px solid ${C.border}`, textAlign: 'right', whiteSpace: 'nowrap' }
         const tdL2 = { ...tdStyle2, textAlign: 'left', fontWeight: 600 }
         const tableCard2 = { background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, overflow: 'hidden', display: 'flex', flexDirection: 'column' }
+        const totalWrap = { margin: '0 8px 8px', borderRadius: 8, overflow: 'hidden', border: `1px solid ${C.border}` }
         const tableTitle2 = { fontSize: 9.9, fontWeight: 700, color: C.t1, padding: '12px 14px 10px', borderBottom: `1px solid ${C.border}` }
 
         const byZone2 = data.byZoneDetail || []
@@ -1409,7 +1410,7 @@ function LogisticsPage({ filters }) {
               const thL = { ...thS, textAlign: 'left' }
               const tdS = { fontSize: 9.1, color: C.t2, padding: '9px 10px', borderBottom: `1px solid ${C.border}`, textAlign: 'right', whiteSpace: 'nowrap' }
               const tdL = { ...tdS, textAlign: 'left', fontWeight: 600, color: C.t1 }
-              const totalRowS = { fontSize: 9.1, fontWeight: 700, color: C.t1, padding: '11px 16px', textAlign: 'right', whiteSpace: 'nowrap', background: C.bg, borderTop: `2px solid ${C.border}` }
+              const totalRowS = { fontSize: 9.1, fontWeight: 700, color: C.t1, padding: '11px 10px', textAlign: 'right', whiteSpace: 'nowrap', background: C.bg, borderTop: `2px solid ${C.border}` }
               const totalRowL = { ...totalRowS, textAlign: 'left' }
 
               return (
@@ -1445,15 +1446,18 @@ function LogisticsPage({ filters }) {
                               )
                             })}
                           </tbody>
-                          <tfoot>
-                            <tr style={{ borderTop: `2px solid ${C.border}`, background: C.bg }}>
-                              <td style={totalRowL}>Total</td>
-                              <td style={totalRowS}>{pctB(facTotals.op_0_1||0,t1)}</td>
-                              <td style={totalRowS}>{pctB(facTotals.op_2_3||0,t1)}</td>
-                              <td style={totalRowS}>{pctB(facTotals.op_4_5||0,t1)}</td>
-                              <td style={totalRowS}>{pctB(facTotals.op_5plus||0,t1)}</td>
-                            </tr>
-                          </tfoot>
+                        </table>
+                      </div>
+                      <div style={totalWrap}>
+                        <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed', background: C.bg }}>
+                          <colgroup>{cw.map((w,i)=><col key={i} style={{width:w}}/>)}</colgroup>
+                          <tbody><tr>
+                            <td style={totalRowL}>Total</td>
+                            <td style={totalRowS}>{pctB(facTotals.op_0_1||0,t1)}</td>
+                            <td style={totalRowS}>{pctB(facTotals.op_2_3||0,t1)}</td>
+                            <td style={totalRowS}>{pctB(facTotals.op_4_5||0,t1)}</td>
+                            <td style={totalRowS}>{pctB(facTotals.op_5plus||0,t1)}</td>
+                          </tr></tbody>
                         </table>
                       </div>
                     </div>
@@ -1487,15 +1491,18 @@ function LogisticsPage({ filters }) {
                               )
                             })}
                           </tbody>
-                          <tfoot>
-                            <tr style={{ borderTop: `2px solid ${C.border}`, background: C.bg }}>
-                              <td style={totalRowL}>Total</td>
-                              <td style={totalRowS}>{pctB(facTotals.proc_0_12h,t2)}</td>
-                              <td style={totalRowS}>{pctB(facTotals.proc_12_24h,t2)}</td>
-                              <td style={totalRowS}>{pctB(facTotals.proc_24_48h,t2)}</td>
-                              <td style={totalRowS}>{pctB(facTotals.proc_48plus,t2)}</td>
-                            </tr>
-                          </tfoot>
+                        </table>
+                      </div>
+                      <div style={totalWrap}>
+                        <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed', background: C.bg }}>
+                          <colgroup>{cw.map((w,i)=><col key={i} style={{width:w}}/>)}</colgroup>
+                          <tbody><tr>
+                            <td style={totalRowL}>Total</td>
+                            <td style={totalRowS}>{pctB(facTotals.proc_0_12h,t2)}</td>
+                            <td style={totalRowS}>{pctB(facTotals.proc_12_24h,t2)}</td>
+                            <td style={totalRowS}>{pctB(facTotals.proc_24_48h,t2)}</td>
+                            <td style={totalRowS}>{pctB(facTotals.proc_48plus,t2)}</td>
+                          </tr></tbody>
                         </table>
                       </div>
                     </div>
@@ -1529,16 +1536,19 @@ function LogisticsPage({ filters }) {
                               )
                             })}
                           </tbody>
-                          <tfoot>
-                            <tr style={{ borderTop: `1.5px solid ${C.border}`, background: C.bg }}>
-                              <td style={{ ...totalRowL, position: 'sticky', bottom: 0, background: C.bg }}>Total</td>
-                              <td style={{ ...totalRowS, position: 'sticky', bottom: 0, background: C.bg }}>{courierTotals.delivered.toLocaleString('en-IN')}</td>
-                              <td style={{ ...totalRowS, position: 'sticky', bottom: 0, background: C.bg }}>{pctB(courierTotals.bucket_0_1, courierTotals.delivered)}</td>
-                              <td style={{ ...totalRowS, position: 'sticky', bottom: 0, background: C.bg }}>{pctB(courierTotals.bucket_2_3, courierTotals.delivered)}</td>
-                              <td style={{ ...totalRowS, position: 'sticky', bottom: 0, background: C.bg }}>{pctB(courierTotals.bucket_4_5, courierTotals.delivered)}</td>
-                              <td style={{ ...totalRowS, position: 'sticky', bottom: 0, background: C.bg }}>{pctB(courierTotals.bucket_5plus, courierTotals.delivered)}</td>
-                            </tr>
-                          </tfoot>
+                        </table>
+                      </div>
+                      <div style={totalWrap}>
+                        <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed', background: C.bg }}>
+                          <colgroup><col style={{ width: '25%' }} /><col style={{ width: '15%' }} /><col style={{ width: '15%' }} /><col style={{ width: '15%' }} /><col style={{ width: '15%' }} /><col style={{ width: '15%' }} /></colgroup>
+                          <tbody><tr>
+                            <td style={totalRowL}>Total</td>
+                            <td style={totalRowS}>{courierTotals.delivered.toLocaleString('en-IN')}</td>
+                            <td style={totalRowS}>{pctB(courierTotals.bucket_0_1, courierTotals.delivered)}</td>
+                            <td style={totalRowS}>{pctB(courierTotals.bucket_2_3, courierTotals.delivered)}</td>
+                            <td style={totalRowS}>{pctB(courierTotals.bucket_4_5, courierTotals.delivered)}</td>
+                            <td style={totalRowS}>{pctB(courierTotals.bucket_5plus, courierTotals.delivered)}</td>
+                          </tr></tbody>
                         </table>
                       </div>
                     </div>
@@ -1571,15 +1581,18 @@ function LogisticsPage({ filters }) {
                               )
                             })}
                           </tbody>
-                          <tfoot>
-                            <tr style={{ borderTop: `2px solid ${C.border}`, background: C.bg }}>
-                              <td style={totalRowL}>Total</td>
-                              <td style={totalRowS}>{pctB(facTotals.ord_0_1,t4)}</td>
-                              <td style={totalRowS}>{pctB(facTotals.ord_2_3,t4)}</td>
-                              <td style={totalRowS}>{pctB(facTotals.ord_4_5,t4)}</td>
-                              <td style={totalRowS}>{pctB(facTotals.ord_5plus,t4)}</td>
-                            </tr>
-                          </tfoot>
+                        </table>
+                      </div>
+                      <div style={totalWrap}>
+                        <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed', background: C.bg }}>
+                          <colgroup>{cw.map((w,i)=><col key={i} style={{width:w}}/>)}</colgroup>
+                          <tbody><tr>
+                            <td style={totalRowL}>Total</td>
+                            <td style={totalRowS}>{pctB(facTotals.ord_0_1,t4)}</td>
+                            <td style={totalRowS}>{pctB(facTotals.ord_2_3,t4)}</td>
+                            <td style={totalRowS}>{pctB(facTotals.ord_4_5,t4)}</td>
+                            <td style={totalRowS}>{pctB(facTotals.ord_5plus,t4)}</td>
+                          </tr></tbody>
                         </table>
                       </div>
                     </div>
