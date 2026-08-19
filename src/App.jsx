@@ -1404,24 +1404,79 @@ function LogisticsPage({ filters }) {
                 acc.total += r.total||0; acc.delivered += r.delivered||0; acc.bucket_0_1 += r.bucket_0_1||0; acc.bucket_2_3 += r.bucket_2_3||0; acc.bucket_4_5 += r.bucket_4_5||0; acc.bucket_5plus += r.bucket_5plus||0
                 return acc
               }, { total:0, delivered:0, bucket_0_1:0, bucket_2_3:0, bucket_4_5:0, bucket_5plus:0 })
+              const [tatView1, setTatView1] = React.useState('facility')
+              const [tatView2, setTatView2] = React.useState('facility')
+              const [tatView4, setTatView4] = React.useState('facility')
+              const [tatMode, setTatMode] = React.useState('pct')
+
+              const groupByCourier = (rows, keys) => {
+                const map = {}
+                rows.forEach(r => {
+                  const k = r.courier_group || 'Unknown'
+                  if (!map[k]) { map[k] = { label: k }; keys.forEach(key => { map[k][key] = 0 }) }
+                  keys.forEach(key => { map[k][key] = (map[k][key]||0) + (r[key]||0) })
+                })
+                return Object.values(map).sort((a,b) => {
+                  const ta = keys.reduce((s,k)=>s+(a[k]||0),0)
+                  const tb = keys.reduce((s,k)=>s+(b[k]||0),0)
+                  return tb - ta
+                })
+              }
+              const tatByCourierProc = groupByCourier(tatByFacility, ['proc_0_12h','proc_12_24h','proc_24_48h','proc_48plus'])
+              const tatByCourierOp = groupByCourier(tatByFacility, ['op_0_1','op_2_3','op_4_5','op_5plus'])
+              const tatByCourierOrd = groupByCourier(tatByFacility, ['ord_0_1','ord_2_3','ord_4_5','ord_5plus'])
+
+              const fmtCell = (v, total) => tatMode === 'pct' ? pctB(v, total) : (v||0).toLocaleString('en-IN')
+
+              const ViewToggle = ({ view, setView }) => (
+                <div style={{ display: 'inline-flex', border: `1px solid ${C.border2}`, borderRadius: 6, overflow: 'hidden', marginLeft: 'auto' }}>
+                  {['Facility','Courier'].map((opt,i) => (
+                    <button key={opt} onClick={() => setView(opt.toLowerCase())} style={{
+                      padding: '3px 8px', fontSize: 9.5, fontWeight: view === opt.toLowerCase() ? 700 : 400,
+                      background: view === opt.toLowerCase() ? C.t1 : 'transparent',
+                      color: view === opt.toLowerCase() ? '#fff' : C.t2,
+                      border: 'none', cursor: 'pointer', fontFamily: 'var(--font)',
+                      borderLeft: i > 0 ? `1px solid ${C.border2}` : 'none'
+                    }}>{opt}</button>
+                  ))}
+                </div>
+              )
 
               const BOX_H = 320
-              const thS = { fontSize: 9, fontWeight: 800, color: C.t2, textTransform: 'uppercase', letterSpacing: '.05em', padding: '9px 10px', borderBottom: `1.5px solid ${C.border}`, whiteSpace: 'nowrap', textAlign: 'right', background: C.card }
+              const thS = { fontSize: 10, fontWeight: 700, color: C.t3, textTransform: 'uppercase', letterSpacing: '.04em', padding: '9px 10px', borderBottom: `1.5px solid ${C.border}`, whiteSpace: 'nowrap', textAlign: 'right', background: C.card }
               const thL = { ...thS, textAlign: 'left' }
-              const tdS = { fontSize: 9.1, color: C.t2, padding: '7.6px 10px', borderBottom: `1px solid ${C.border}`, textAlign: 'right', whiteSpace: 'nowrap' }
+              const tdS = { fontSize: 11.5, color: C.t2, padding: '7.6px 10px', borderBottom: `1px solid ${C.border}`, textAlign: 'right', whiteSpace: 'nowrap' }
               const tdL = { ...tdS, textAlign: 'left', fontWeight: 600, color: C.t1 }
-              const totalRowS = { fontSize: 9.1, fontWeight: 700, color: C.t1, padding: '9px 10px', textAlign: 'right', whiteSpace: 'nowrap', background: C.bg, borderTop: `2px solid ${C.border}` }
+              const totalRowS = { fontSize: 11.5, fontWeight: 700, color: C.t1, padding: '9px 10px', textAlign: 'right', whiteSpace: 'nowrap', background: C.bg, borderTop: `2px solid ${C.border}` }
               const totalRowL = { ...totalRowS, textAlign: 'left' }
 
               return (
                 <>
                   <LSectionTitle title="TAT Bucket Analysis" collapsed={secCollapsed['tatbucket']} onToggle={() => toggleSec('tatbucket')} />
-                  <div style={{ display: secCollapsed['tatbucket'] ? 'none' : 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr 1fr 1fr', gap: 14 }}>
+                  {!secCollapsed['tatbucket'] && (
+                    <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: -6 }}>
+                      <div style={{ display: 'inline-flex', border: `1px solid ${C.border2}`, borderRadius: 6, overflow: 'hidden' }}>
+                        {['% Share','Count'].map((opt,i) => {
+                          const val = opt === '% Share' ? 'pct' : 'count'
+                          return (
+                            <button key={opt} onClick={() => setTatMode(val)} style={{
+                              padding: '3px 10px', fontSize: 9.5, fontWeight: tatMode === val ? 700 : 400,
+                              background: tatMode === val ? C.t1 : 'transparent',
+                              color: tatMode === val ? '#fff' : C.t2,
+                              border: 'none', cursor: 'pointer', fontFamily: 'var(--font)',
+                              borderLeft: i > 0 ? `1px solid ${C.border2}` : 'none'
+                            }}>{opt}</button>
+                          )
+                        })}
+                      </div>
+                    </div>
+                  )}
+                  <div style={{ display: secCollapsed['tatbucket'] ? 'none' : 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: 14 }}>
 
                     {/* Table 1: Order Processing Time — order_date → created_at (by Facility) */}
                     {(() => { const cw = ['25%','18.75%','18.75%','18.75%','18.75%']; const t1=(facTotals.op_0_1||0)+(facTotals.op_2_3||0)+(facTotals.op_4_5||0)+(facTotals.op_5plus||0); return (
                     <div style={{ ...tableCard2, height: 320 }}>
-                      <div style={tableTitle2}>Order Processing Time <span style={{ fontWeight: 500, color: C.t3, fontSize: 9.1 }}>(by Facility)</span></div>
+                      <div style={{ ...tableTitle2, display: 'flex', alignItems: 'center' }}>Order Processing Time <span style={{ fontWeight: 500, color: C.t3, fontSize: 9.5, marginLeft: 4 }}>({tatView1 === 'facility' ? 'by Facility' : 'by Courier'})</span><ViewToggle view={tatView1} setView={setTatView1} /></div>
                       <div style={{ margin: '0 8px', flex: 1, overflowY: 'auto' }}>
                         <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed' }}>
                           <colgroup>{cw.map((w,i)=><col key={i} style={{width:w}}/>)}</colgroup>
@@ -1433,14 +1488,15 @@ function LogisticsPage({ filters }) {
                             <th style={{ ...thS, position: 'sticky', top: 0, background: C.bg, zIndex: 1 }}>5+D</th>
                           </tr></thead>
                           <tbody>
-                            {tatByFacility.map((row, ri, arr) => {
+                            {(tatView1 === 'facility' ? tatByFacility : tatByCourierOp).map((row, ri, arr) => {
                               const tot = (row.op_0_1||0)+(row.op_2_3||0)+(row.op_4_5||0)+(row.op_5plus||0)
                               const isLast = ri === arr.length - 1
+                              const label = tatView1 === 'facility' ? row.facility : row.label
                               return (
-                                <tr key={row.facility}>
-                                  <td style={{ ...tdL, ...(isLast ? { borderBottom: 'none' } : {}) }}>{row.facility}</td>
+                                <tr key={label}>
+                                  <td style={{ ...tdL, ...(isLast ? { borderBottom: 'none' } : {}) }}>{label}</td>
                                   {[row.op_0_1, row.op_2_3, row.op_4_5, row.op_5plus].map((v, ci) => (
-                                    <td key={ci} style={{ ...tdS, color: (v/tot)>0.2?'#dc2626':C.t2, fontWeight: (v/tot)>0.2?700:400, ...(isLast ? { borderBottom: 'none' } : {}) }}>{pctB(v, tot)}</td>
+                                    <td key={ci} style={{ ...tdS, color: (v/tot)>0.2?'#dc2626':C.t2, fontWeight: (v/tot)>0.2?700:400, ...(isLast ? { borderBottom: 'none' } : {}) }}>{fmtCell(v, tot)}</td>
                                   ))}
                                 </tr>
                               )
@@ -1453,10 +1509,10 @@ function LogisticsPage({ filters }) {
                           <colgroup>{cw.map((w,i)=><col key={i} style={{width:w}}/>)}</colgroup>
                           <tbody><tr>
                             <td style={totalRowL}>Total</td>
-                            <td style={totalRowS}>{pctB(facTotals.op_0_1||0,t1)}</td>
-                            <td style={totalRowS}>{pctB(facTotals.op_2_3||0,t1)}</td>
-                            <td style={totalRowS}>{pctB(facTotals.op_4_5||0,t1)}</td>
-                            <td style={totalRowS}>{pctB(facTotals.op_5plus||0,t1)}</td>
+                            <td style={totalRowS}>{fmtCell(facTotals.op_0_1||0,t1)}</td>
+                            <td style={totalRowS}>{fmtCell(facTotals.op_2_3||0,t1)}</td>
+                            <td style={totalRowS}>{fmtCell(facTotals.op_4_5||0,t1)}</td>
+                            <td style={totalRowS}>{fmtCell(facTotals.op_5plus||0,t1)}</td>
                           </tr></tbody>
                         </table>
                       </div>
@@ -1466,7 +1522,7 @@ function LogisticsPage({ filters }) {
                     {/* Table 2: Order Pickup Time — created_at → pickup_ts (by Facility) */}
                     {(() => { const cw = ['25%','18.75%','18.75%','18.75%','18.75%']; const t2=(facTotals.proc_0_12h+facTotals.proc_12_24h+facTotals.proc_24_48h+facTotals.proc_48plus); return (
                     <div style={{ ...tableCard2, height: 320 }}>
-                      <div style={tableTitle2}>Order Pickup Time <span style={{ fontWeight: 500, color: C.t3, fontSize: 9.1 }}>(by Facility)</span></div>
+                      <div style={{ ...tableTitle2, display: 'flex', alignItems: 'center' }}>Order Pickup Time <span style={{ fontWeight: 500, color: C.t3, fontSize: 9.5, marginLeft: 4 }}>({tatView2 === 'facility' ? 'by Facility' : 'by Courier'})</span><ViewToggle view={tatView2} setView={setTatView2} /></div>
                       <div style={{ margin: '0 8px', flex: 1, overflowY: 'auto' }}>
                         <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed' }}>
                           <colgroup>{cw.map((w,i)=><col key={i} style={{width:w}}/>)}</colgroup>
@@ -1478,14 +1534,15 @@ function LogisticsPage({ filters }) {
                             <th style={{ ...thS, position: 'sticky', top: 0, background: C.bg, zIndex: 1 }}>48H+</th>
                           </tr></thead>
                           <tbody>
-                            {tatByFacility.map((row, ri, arr) => {
+                            {(tatView2 === 'facility' ? tatByFacility : tatByCourierProc).map((row, ri, arr) => {
                               const tot = (row.proc_0_12h||0)+(row.proc_12_24h||0)+(row.proc_24_48h||0)+(row.proc_48plus||0)
                               const isLast = ri === arr.length - 1
+                              const label = tatView2 === 'facility' ? row.facility : row.label
                               return (
-                                <tr key={row.facility}>
-                                  <td style={{ ...tdL, ...(isLast ? { borderBottom: 'none' } : {}) }}>{row.facility}</td>
+                                <tr key={label}>
+                                  <td style={{ ...tdL, ...(isLast ? { borderBottom: 'none' } : {}) }}>{label}</td>
                                   {[row.proc_0_12h, row.proc_12_24h, row.proc_24_48h, row.proc_48plus].map((v, ci) => (
-                                    <td key={ci} style={{ ...tdS, color: (v/tot)>0.2?'#dc2626':C.t2, fontWeight: (v/tot)>0.2?700:400, ...(isLast ? { borderBottom: 'none' } : {}) }}>{pctB(v, tot)}</td>
+                                    <td key={ci} style={{ ...tdS, color: (v/tot)>0.2?'#dc2626':C.t2, fontWeight: (v/tot)>0.2?700:400, ...(isLast ? { borderBottom: 'none' } : {}) }}>{fmtCell(v, tot)}</td>
                                   ))}
                                 </tr>
                               )
@@ -1498,10 +1555,10 @@ function LogisticsPage({ filters }) {
                           <colgroup>{cw.map((w,i)=><col key={i} style={{width:w}}/>)}</colgroup>
                           <tbody><tr>
                             <td style={totalRowL}>Total</td>
-                            <td style={totalRowS}>{pctB(facTotals.proc_0_12h,t2)}</td>
-                            <td style={totalRowS}>{pctB(facTotals.proc_12_24h,t2)}</td>
-                            <td style={totalRowS}>{pctB(facTotals.proc_24_48h,t2)}</td>
-                            <td style={totalRowS}>{pctB(facTotals.proc_48plus,t2)}</td>
+                            <td style={totalRowS}>{fmtCell(facTotals.proc_0_12h,t2)}</td>
+                            <td style={totalRowS}>{fmtCell(facTotals.proc_12_24h,t2)}</td>
+                            <td style={totalRowS}>{fmtCell(facTotals.proc_24_48h,t2)}</td>
+                            <td style={totalRowS}>{fmtCell(facTotals.proc_48plus,t2)}</td>
                           </tr></tbody>
                         </table>
                       </div>
@@ -1510,7 +1567,7 @@ function LogisticsPage({ filters }) {
 
                     {/* Table 3: In-Transit Time — pickup_ts → delivery_ts (by Courier) */}
                     <div style={{ ...tableCard2, height: 320 }}>
-                      <div style={tableTitle2}>In-Transit Time <span style={{ fontWeight: 500, color: C.t3, fontSize: 9.1 }}>(by Courier)</span></div>
+                      <div style={tableTitle2}>In-Transit Time <span style={{ fontWeight: 500, color: C.t3, fontSize: 9.5, marginLeft: 4 }}>(by Courier)</span></div>
                       <div style={{ margin: '0 8px', flex: 1, overflowY: 'auto' }}>
                         <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed' }}>
                           <colgroup><col style={{ width: '25%' }} /><col style={{ width: '15%' }} /><col style={{ width: '15%' }} /><col style={{ width: '15%' }} /><col style={{ width: '15%' }} /><col style={{ width: '15%' }} /></colgroup>
@@ -1530,7 +1587,7 @@ function LogisticsPage({ filters }) {
                                   <td style={tdL}>{row.courier_group}</td>
                                   <td style={tdS}>{tot.toLocaleString('en-IN')}</td>
                                   {[row.bucket_0_1, row.bucket_2_3, row.bucket_4_5, row.bucket_5plus].map((v, ci) => (
-                                    <td key={ci} style={{ ...tdS, color: (v/tot)>0.2?'#dc2626':C.t2, fontWeight: (v/tot)>0.2?700:400 }}>{pctB(v, tot)}</td>
+                                    <td key={ci} style={{ ...tdS, color: (v/tot)>0.2?'#dc2626':C.t2, fontWeight: (v/tot)>0.2?700:400 }}>{fmtCell(v, tot)}</td>
                                   ))}
                                 </tr>
                               )
@@ -1544,10 +1601,10 @@ function LogisticsPage({ filters }) {
                           <tbody><tr>
                             <td style={totalRowL}>Total</td>
                             <td style={totalRowS}>{courierTotals.delivered.toLocaleString('en-IN')}</td>
-                            <td style={totalRowS}>{pctB(courierTotals.bucket_0_1, courierTotals.delivered)}</td>
-                            <td style={totalRowS}>{pctB(courierTotals.bucket_2_3, courierTotals.delivered)}</td>
-                            <td style={totalRowS}>{pctB(courierTotals.bucket_4_5, courierTotals.delivered)}</td>
-                            <td style={totalRowS}>{pctB(courierTotals.bucket_5plus, courierTotals.delivered)}</td>
+                            <td style={totalRowS}>{fmtCell(courierTotals.bucket_0_1, courierTotals.delivered)}</td>
+                            <td style={totalRowS}>{fmtCell(courierTotals.bucket_2_3, courierTotals.delivered)}</td>
+                            <td style={totalRowS}>{fmtCell(courierTotals.bucket_4_5, courierTotals.delivered)}</td>
+                            <td style={totalRowS}>{fmtCell(courierTotals.bucket_5plus, courierTotals.delivered)}</td>
                           </tr></tbody>
                         </table>
                       </div>
@@ -1556,7 +1613,7 @@ function LogisticsPage({ filters }) {
                     {/* Table 4: Fulfilment Time — order_date → delivery_date (by Facility) */}
                     {(() => { const cw = ['25%','18.75%','18.75%','18.75%','18.75%']; const t4=(facTotals.ord_0_1+facTotals.ord_2_3+facTotals.ord_4_5+facTotals.ord_5plus); return (
                     <div style={{ ...tableCard2, height: 320 }}>
-                      <div style={tableTitle2}>Fulfilment Time <span style={{ fontWeight: 400, color: C.t3 }}>(by Facility)</span></div>
+                      <div style={{ ...tableTitle2, display: 'flex', alignItems: 'center' }}>Fulfilment Time <span style={{ fontWeight: 500, color: C.t3, fontSize: 9.5, marginLeft: 4 }}>({tatView4 === 'facility' ? 'by Facility' : 'by Courier'})</span><ViewToggle view={tatView4} setView={setTatView4} /></div>
                       <div style={{ margin: '0 8px', flex: 1, overflowY: 'auto' }}>
                         <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed' }}>
                           <colgroup>{cw.map((w,i)=><col key={i} style={{width:w}}/>)}</colgroup>
@@ -1568,14 +1625,15 @@ function LogisticsPage({ filters }) {
                             <th style={{ ...thS, position: 'sticky', top: 0, background: C.bg, zIndex: 1 }}>5+D</th>
                           </tr></thead>
                           <tbody>
-                            {tatByFacility.map((row, ri, arr) => {
+                            {(tatView4 === 'facility' ? tatByFacility : tatByCourierOrd).map((row, ri, arr) => {
                               const tot = (row.ord_0_1||0)+(row.ord_2_3||0)+(row.ord_4_5||0)+(row.ord_5plus||0)
                               const isLast = ri === arr.length - 1
+                              const label = tatView4 === 'facility' ? row.facility : row.label
                               return (
-                                <tr key={row.facility}>
-                                  <td style={{ ...tdL, ...(isLast ? { borderBottom: 'none' } : {}) }}>{row.facility}</td>
+                                <tr key={label}>
+                                  <td style={{ ...tdL, ...(isLast ? { borderBottom: 'none' } : {}) }}>{label}</td>
                                   {[row.ord_0_1, row.ord_2_3, row.ord_4_5, row.ord_5plus].map((v, ci) => (
-                                    <td key={ci} style={{ ...tdS, color: (v/tot)>0.2?'#dc2626':C.t2, fontWeight: (v/tot)>0.2?700:400, ...(isLast ? { borderBottom: 'none' } : {}) }}>{pctB(v, tot)}</td>
+                                    <td key={ci} style={{ ...tdS, color: (v/tot)>0.2?'#dc2626':C.t2, fontWeight: (v/tot)>0.2?700:400, ...(isLast ? { borderBottom: 'none' } : {}) }}>{fmtCell(v, tot)}</td>
                                   ))}
                                 </tr>
                               )
@@ -1588,10 +1646,10 @@ function LogisticsPage({ filters }) {
                           <colgroup>{cw.map((w,i)=><col key={i} style={{width:w}}/>)}</colgroup>
                           <tbody><tr>
                             <td style={totalRowL}>Total</td>
-                            <td style={totalRowS}>{pctB(facTotals.ord_0_1,t4)}</td>
-                            <td style={totalRowS}>{pctB(facTotals.ord_2_3,t4)}</td>
-                            <td style={totalRowS}>{pctB(facTotals.ord_4_5,t4)}</td>
-                            <td style={totalRowS}>{pctB(facTotals.ord_5plus,t4)}</td>
+                            <td style={totalRowS}>{fmtCell(facTotals.ord_0_1,t4)}</td>
+                            <td style={totalRowS}>{fmtCell(facTotals.ord_2_3,t4)}</td>
+                            <td style={totalRowS}>{fmtCell(facTotals.ord_4_5,t4)}</td>
+                            <td style={totalRowS}>{fmtCell(facTotals.ord_5plus,t4)}</td>
                           </tr></tbody>
                         </table>
                       </div>
