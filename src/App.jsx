@@ -1409,7 +1409,7 @@ function LogisticsPage({ filters }) {
               const thL = { ...thS, textAlign: 'left' }
               const tdS = { fontSize: 9.1, color: C.t2, padding: '9px 10px', borderBottom: `1px solid ${C.border}`, textAlign: 'right', whiteSpace: 'nowrap' }
               const tdL = { ...tdS, textAlign: 'left', fontWeight: 600, color: C.t1 }
-              const totalRowS = { fontSize: 9.1, fontWeight: 700, color: C.t1, padding: '11px 10px', textAlign: 'right', whiteSpace: 'nowrap', background: C.bg, borderTop: `2px solid ${C.border}` }
+              const totalRowS = { fontSize: 9.1, fontWeight: 700, color: C.t1, padding: '11px 10px', textAlign: 'right', whiteSpace: 'nowrap', background: C.card, borderTop: `2px solid ${C.border}` }
               const totalRowL = { ...totalRowS, textAlign: 'left' }
 
               return (
@@ -1447,7 +1447,7 @@ function LogisticsPage({ filters }) {
                           </tbody>
                         </table>
                       </div>
-                      <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed', borderTop: `1.5px solid ${C.border}`, background: C.bg }}>
+                      <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed', background: C.card }}>
                         <colgroup>{cw.map((w,i)=><col key={i} style={{width:w}}/>)}</colgroup>
                         <tbody><tr>
                           <td style={totalRowL}>Total</td>
@@ -1490,7 +1490,7 @@ function LogisticsPage({ filters }) {
                           </tbody>
                         </table>
                       </div>
-                      <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed', borderTop: `1.5px solid ${C.border}`, background: C.bg }}>
+                      <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed', background: C.card }}>
                         <colgroup>{cw.map((w,i)=><col key={i} style={{width:w}}/>)}</colgroup>
                         <tbody><tr>
                           <td style={totalRowL}>Total</td>
@@ -1575,7 +1575,7 @@ function LogisticsPage({ filters }) {
                           </tbody>
                         </table>
                       </div>
-                      <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed', borderTop: `1.5px solid ${C.border}`, background: C.bg }}>
+                      <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed', background: C.card }}>
                         <colgroup>{cw.map((w,i)=><col key={i} style={{width:w}}/>)}</colgroup>
                         <tbody><tr>
                           <td style={totalRowL}>Total</td>
