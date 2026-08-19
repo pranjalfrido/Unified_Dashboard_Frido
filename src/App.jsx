@@ -297,10 +297,10 @@ function LogisticsPage({ filters }) {
         ? (sddNdd === 'SDD/NDD' ? cg => isNdd(cg) : cg => !isNdd(cg))
         : () => true
       const hasShipmentType = shipmentType && shipmentType !== 'all'
-      const shipmentTypeFilter = x => !hasShipmentType || (x.shipment_type || '').toLowerCase() === shipmentType.toLowerCase()
+      const shipmentTypeFilter = x => !hasShipmentType || x.shipment_type == null || (x.shipment_type || '').toLowerCase() === shipmentType.toLowerCase()
       const hasCategory = !!category
       const hasSubCategory = !!subCategory
-      const categoryFilter = x => (!hasCategory || (x.category || '').toLowerCase() === category.toLowerCase()) && (!hasSubCategory || (x.sub_category || '').toLowerCase() === subCategory.toLowerCase())
+      const categoryFilter = x => (!hasCategory || x.category == null || (x.category || '').toLowerCase() === category.toLowerCase()) && (!hasSubCategory || x.sub_category == null || (x.sub_category || '').toLowerCase() === subCategory.toLowerCase())
       const courierFilter = x => (!hasCourier || couriers.includes(x.courier_group)) && sddNddFilter(x.courier_group) && shipmentTypeFilter(x) && categoryFilter(x)
 
       // build filtered byCourier rows
@@ -1415,7 +1415,7 @@ function LogisticsPage({ filters }) {
               return (
                 <>
                   <LSectionTitle title="TAT Bucket Analysis" collapsed={secCollapsed['tatbucket']} onToggle={() => toggleSec('tatbucket')} />
-                  <div style={{ display: secCollapsed['tatbucket'] ? 'none' : 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr 1fr', gap: 14 }}>
+                  <div style={{ display: secCollapsed['tatbucket'] ? 'none' : 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr 1fr 1fr', gap: 14 }}>
 
                     {/* Table 1: Order Processing Time — order_date → created_at (by Facility) */}
                     {(() => { const cw = ['40%','15%','15%','15%','15%']; const t1=(facTotals.op_0_1||0)+(facTotals.op_2_3||0)+(facTotals.op_4_5||0)+(facTotals.op_5plus||0); return (
