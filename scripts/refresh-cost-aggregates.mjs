@@ -123,7 +123,14 @@ await swap('lc_billing_summary', `
          COUNT(*) FILTER (WHERE dct.freight_median*(1+dct.surcharge_rate)
                               - dco.freight_median*(1+dco.surcharge_rate) > 1)::int AS dt_weight_n,
          COUNT(*) FILTER (WHERE ${EXI}
-                              - dct.freight_median*(1+dct.surcharge_rate) > 1)::int AS dt_rate_n
+                              - dct.freight_median*(1+dct.surcharge_rate) > 1)::int AS dt_rate_n,
+         -- Per-ROW clamped: the claimable figure. Netting on the grand total lets a shipment
+         -- billed BELOW card cancel one billed above it, but you cannot invoice a courier for
+         -- the under-billed parcels — so the clamp belongs on each row, not on the sum.
+         COALESCE(SUM(GREATEST(dct.freight_median*(1+dct.surcharge_rate)
+                             - dco.freight_median*(1+dco.surcharge_rate), 0)), 0)::float8 AS dt_weight_claim,
+         COALESCE(SUM(GREATEST(${EXI}
+                             - dct.freight_median*(1+dct.surcharge_rate), 0)), 0)::float8 AS dt_rate_claim
     FROM public.logistics_invoices_b2c i
     ${CARD('dct','i.charged_weight_courier')}
     ${CARD('dco','i.declared_weight_frido')}
@@ -132,6 +139,45 @@ await swap('lc_billing_summary', `
      AND i.declared_weight_frido > 0 AND i.month_year IS NOT NULL
 `, null)
 
-console.log('all aggregates refreshed.')
+// ── Per-courier dispute breakdown, on the SAME total-cost basis as lc_billing_summary ──
+//
+// WHY: the Recoverable by Cause section was computing its own figures from frido_billed_cost
+// / frido_carrier_cost, which price BASE FREIGHT only. Cost Overview meanwhile reports the
+// total-cost basis. The page therefore showed two different "claimable" totals — ₹76.78 L
+// here against ₹32.34 L there — with no way for a reader to tell which was right.
+//
+// It also divided each courier's claim by its ENTIRE shipment count, so Bluedart read ₹7.1
+// per shipment when only ~106k of its 431k shipments are disputed at all. Counting only the
+// disputed rows gives ₹28.60, which is the number a claim is actually argued on.
+await swap('lc_courier_disputes', `
+  CREATE TABLE __TARGET__ AS
+  WITH j AS (
+    SELECT i.courier_name,
+           dco.freight_median * (1 + dco.surcharge_rate) AS ours,
+           dct.freight_median * (1 + dct.surcharge_rate) AS theirs,
+           ${EXI} AS invoiced
+      FROM public.logistics_invoices_b2c i
+      ${CARD('dct','i.charged_weight_courier')}
+      ${CARD('dco','i.declared_weight_frido')}
+     WHERE i.total_cost > 0 AND i.zone IN ('A','B','C','D','E')
+       AND i.charged_weight_courier <= 500
+       AND i.declared_weight_frido > 0 AND i.month_year IS NOT NULL
+  )
+  SELECT courier_name,
+         COUNT(*)::int AS priced_n,
+         -- GREATEST(...,0): billing BELOW their own card is not an overcharge, and letting it
+         -- go negative would net off real overbilling on other shipments.
+         COALESCE(SUM(GREATEST(theirs - ours, 0)), 0)::float8   AS weight_rs,
+         COALESCE(SUM(GREATEST(invoiced - theirs, 0)), 0)::float8 AS rate_rs,
+         COALESCE(SUM(GREATEST(theirs - ours, 0) + GREATEST(invoiced - theirs, 0)), 0)::float8 AS total_rs,
+         -- Denominator for a per-shipment figure: rows with a dispute worth more than ₹1,
+         -- not every shipment the courier carried.
+         COUNT(*) FILTER (WHERE GREATEST(theirs - ours, 0) + GREATEST(invoiced - theirs, 0) > 1)::int AS disputed_n,
+         COALESCE(SUM(invoiced), 0)::float8 AS invoiced_rs
+    FROM j
+   GROUP BY 1
+`, 'CREATE INDEX __IDX__ ON __TARGET__ (courier_name)')
 
+
+console.log('all aggregates refreshed.')
 await pool.end()

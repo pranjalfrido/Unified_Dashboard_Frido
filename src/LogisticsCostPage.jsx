@@ -170,6 +170,10 @@ function shapeResponse(j) {
     dtTheirs: Number(t.dt_theirs) || 0,
     dtInvoiced: Number(t.dt_invoiced) || 0,
     dtN: Number(t.dc_n) || 0,
+    // Per-ROW clamped claim figures. The netted dt_theirs/dt_ours difference is the net
+    // commercial position; these are what can actually be invoiced back.
+    dtWeightClaim: Number(t.dt_weight_claim) || 0,
+    dtRateClaim: Number(t.dt_rate_claim) || 0,
     dtWeightN: Number(t.dt_weight_n) || 0,
     dtRateN: Number(t.dt_rate_n) || 0,
     skipped: Number(j.skipped) || 0,
@@ -187,6 +191,7 @@ function shapeResponse(j) {
     rateDrift: j.rateDrift || [],
     byProduct: j.byProduct || [],
     rateGrid: j.rateGrid || [],
+    courierDisputes: j.courierDisputes || [],
     trendAll: j.trendAll || [],
   }
 }
@@ -435,7 +440,7 @@ function SearchSelect({ label, options, value, onChange, multi, selected }) {
 function ShareBar({ pct, children }) {
   const w = Math.max(0, Math.min(100, num(pct)))
   return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 7, justifyContent: 'flex-end' }}>
+    <div style={{ display: 'flex', alignItems: 'center', gap: 7, justifyContent: 'center' }}>
       <span style={{ fontVariantNumeric: 'tabular-nums' }}>{children}</span>
       <span aria-hidden="true" style={{ width: 46, height: 5, borderRadius: 3, background: C.bg, flexShrink: 0, overflow: 'hidden' }}>
         <span style={{ display: 'block', width: w + '%', height: '100%', borderRadius: 3, background: SERIES.blue }} />
@@ -813,20 +818,30 @@ export default function LogisticsCostPage() {
   }, [agg])
 
   // Couriers ranked by what is recoverable from them, for the cause-split chart.
+  // Reads the pre-computed per-courier table, on the SAME total-cost basis as Cost Overview.
+  // It used to derive its own figures from the base-freight columns, so the page showed two
+  // different claimable totals — ₹76.78 L here against ₹32.34 L there — with nothing to tell
+  // a reader which was right.
   const recoverRows = useMemo(
-    () => [...courierRows].filter(r => r.recTotal > 0).sort((a, b) => b.recTotal - a.recTotal)
+    () => (agg?.courierDisputes || [])
       .map(r => ({
-        ...r,
-        // Rupees alone rank by size, which hides intensity: Ekart's ₹1.14 L is 27.5% of
-        // what we pay them, while Bluedart's ₹30.4 L is 9.9% of theirs. The percentage is
-        // what says "this partner's billing is systematically off" rather than "this
-        // partner is large", so both are carried.
-        recPctFreight: r.cost ? (r.recTotal / r.cost) * 100 : 0,
-        recPerShipment: r.shipments ? r.recTotal / r.shipments : 0,
-        // Share of the claim that needs no argument — the courier already conceded it.
-        admitPct: r.recTotal ? (r.recAdmit / r.recTotal) * 100 : 0,
-      })),
-    [courierRows]
+        courier: r.courier_name,
+        recInfl: num(r.weight_rs),
+        recUnexp: num(r.rate_rs),
+        recTotal: num(r.total_rs),
+        shipments: num(r.priced_n),
+        disputedN: num(r.disputed_n),
+        // Disputed rows only as the denominator. Dividing by EVERY shipment a courier
+        // carried made Bluedart read ₹7.1 when only 128k of its 417k priced shipments carry
+        // a dispute — ₹32.7 is what a claim is actually argued on.
+        recPerShipment: num(r.disputed_n) ? num(r.total_rs) / num(r.disputed_n) : 0,
+        // Intensity, not size: it says whose billing is systematically off, rather than who
+        // is simply the largest partner.
+        recPctFreight: num(r.invoiced_rs) ? (num(r.total_rs) / num(r.invoiced_rs)) * 100 : 0,
+      }))
+      .filter(r => r.recTotal > 0)
+      .sort((a, b) => b.recTotal - a.recTotal),
+    [agg]
   )
 
   // Section totals, so the header states the prize before the reader parses eight rows.
@@ -881,7 +896,7 @@ export default function LogisticsCostPage() {
 
   const activeCell = useMemo(() => {
     const rows = agg?.likeForLike || []
-    if (!rows.length) return null
+    if (!rows.length) return { rows: [], comparable: false, n: 0, zones: [], bands: [], legs: [] }
     const zs = pick(lflZones, lflOptions.zones)
     const bs = pick(lflBands, lflOptions.bands)
     const ls = pick(lflLegs, lflOptions.legs)
@@ -909,10 +924,11 @@ export default function LogisticsCostPage() {
       .map(c => ({ courier: c.courier, n: c.n, avgCost: c.cost / c.n, cpk: c.kg > 0 ? c.cost / c.kg : 0 }))
       .sort((a, b) => a.avgCost - b.avgCost)
 
-    // Fewer than two couriers is not a comparison.
-    if (out.length < 2) return null
+    // A single courier is still worth showing — it just is not a comparison.
+    const comparable = out.length >= 2
     return {
       rows: out,
+      comparable,
       n: out.reduce((s, c) => s + c.n, 0),
       zones: zs, bands: bs, legs: ls,
       allZones: zs.length === lflOptions.zones.length,
@@ -930,8 +946,6 @@ export default function LogisticsCostPage() {
     next.has(name) ? next.delete(name) : next.add(name)
     return next
   }), [])
-
-  const num = v => (Number(v) || 0)
 
   // Cost to serve one product: forward + reverse + RTO, each scaled by how often it happens
   // (return count ÷ forward count). Forward is the denominator because every order has one;
@@ -1039,8 +1053,11 @@ export default function LogisticsCostPage() {
   // GREATEST(...,0) on each leg — a courier billing BELOW its own card is not an overcharge,
   // and letting it go negative would net off real overbilling elsewhere.
   const billingGap = useMemo(() => {
-    const weight = Math.max((agg?.dtTheirs || 0) - (agg?.dtOurs || 0), 0)
-    const rate = Math.max((agg?.dtInvoiced || 0) - (agg?.dtTheirs || 0), 0)
+    // Per-ROW clamped, so this agrees with Recoverable by Cause. Clamping the grand total
+    // instead let shipments billed BELOW card cancel those billed above it — a netting no
+    // courier would accept, since under-billed parcels cannot be invoiced back.
+    const weight = agg?.dtWeightClaim || 0
+    const rate = agg?.dtRateClaim || 0
     const total = weight + rate
     const billed = agg?.dtInvoiced || 0
     return { weight, rate, total, pctOfBilled: billed ? (total / billed) * 100 : 0 }
@@ -1342,8 +1359,8 @@ export default function LogisticsCostPage() {
             <DataTable
               columns={[
                 { key: 'name', label: 'Stream' },
-                { key: 'units', label: 'Units', align: 'right', render: (_, r) => `${fmtBig(r.units)} ${r.unitLabel}` },
-                { key: 'cost', label: 'Cost', align: 'right', render: (_, r) => fmt(r.cost) },
+                { key: 'units', label: 'Units', align: 'center', render: (_, r) => `${fmtBig(r.units)} ${r.unitLabel}` },
+                { key: 'cost', label: 'Cost', align: 'center', render: (_, r) => fmt(r.cost) },
               ]}
               rows={overall.streams}
             />
@@ -1368,9 +1385,9 @@ export default function LogisticsCostPage() {
             <DataTable
               columns={[
                 { key: 'month', label: 'Period' },
-                { key: 'b2c', label: 'B2C', align: 'right', render: (_, r) => fmt(r.b2c) },
-                { key: 'b2b', label: 'B2B', align: 'right', render: (_, r) => fmt(r.b2b) },
-                { key: 'total', label: 'Total', align: 'right', render: (_, r) => fmt(r.total) },
+                { key: 'b2c', label: 'B2C', align: 'center', render: (_, r) => fmt(r.b2c) },
+                { key: 'b2b', label: 'B2B', align: 'center', render: (_, r) => fmt(r.b2b) },
+                { key: 'total', label: 'Total', align: 'center', render: (_, r) => fmt(r.total) },
               ]}
               rows={overallMonths}
             />
@@ -1461,17 +1478,17 @@ export default function LogisticsCostPage() {
             <DataTable
               columns={[
                 { key: 'lane', label: 'Lane' },
-                { key: 'trips', label: 'Trips', align: 'right', render: (_, r) => fmtN(r.trips) },
-                { key: 'cost', label: 'Total', align: 'right', render: (_, r) => fmt(r.cost) },
-                { key: 'avgCost', label: 'Avg / trip', align: 'right', render: (_, r) => fmt(r.avgCost) },
-                { key: 'minCost', label: 'Min', align: 'right', render: (_, r) => fmt(r.minCost) },
-                { key: 'maxCost', label: 'Max', align: 'right', render: (_, r) => fmt(r.maxCost) },
-                { key: 'spread', label: 'Spread', align: 'right', render: (_, r) => (
+                { key: 'trips', label: 'Trips', align: 'center', render: (_, r) => fmtN(r.trips) },
+                { key: 'cost', label: 'Total', align: 'center', render: (_, r) => fmt(r.cost) },
+                { key: 'avgCost', label: 'Avg / trip', align: 'center', render: (_, r) => fmt(r.avgCost) },
+                { key: 'minCost', label: 'Min', align: 'center', render: (_, r) => fmt(r.minCost) },
+                { key: 'maxCost', label: 'Max', align: 'center', render: (_, r) => fmt(r.maxCost) },
+                { key: 'spread', label: 'Spread', align: 'center', render: (_, r) => (
                   <span style={{ color: r.trips >= 10 && r.spread > r.avgCost ? C.red.tx : undefined, fontWeight: r.trips >= 10 && r.spread > r.avgCost ? 700 : undefined }}>
                     {fmt(r.spread)}
                   </span>
                 ) },
-                { key: 'share', label: 'Share', align: 'right', render: (_, r) => <ShareBar pct={r.share}>{r.share.toFixed(1) + '%'}</ShareBar> },
+                { key: 'share', label: 'Share', align: 'center', render: (_, r) => <ShareBar pct={r.share}>{r.share.toFixed(1) + '%'}</ShareBar> },
               ]}
               rows={b2bLaneRows}
               maxRows={60}
@@ -1485,10 +1502,10 @@ export default function LogisticsCostPage() {
             <DataTable
               columns={[
                 { key: 'key', label: 'Transporter' },
-                { key: 'trips', label: 'Trips', align: 'right', render: (_, r) => fmtN(r.trips) },
-                { key: 'cost', label: 'Cost', align: 'right', render: (_, r) => fmt(r.cost) },
-                { key: 'avgCost', label: 'Avg / trip', align: 'right', render: (_, r) => fmt(r.avgCost) },
-                { key: 'share', label: 'Share', align: 'right', render: (_, r) => <ShareBar pct={r.share}>{r.share.toFixed(1) + '%'}</ShareBar> },
+                { key: 'trips', label: 'Trips', align: 'center', render: (_, r) => fmtN(r.trips) },
+                { key: 'cost', label: 'Cost', align: 'center', render: (_, r) => fmt(r.cost) },
+                { key: 'avgCost', label: 'Avg / trip', align: 'center', render: (_, r) => fmt(r.avgCost) },
+                { key: 'share', label: 'Share', align: 'center', render: (_, r) => <ShareBar pct={r.share}>{r.share.toFixed(1) + '%'}</ShareBar> },
               ]}
               rows={b2bTransRows}
             />
@@ -1498,10 +1515,10 @@ export default function LogisticsCostPage() {
             <DataTable
               columns={[
                 { key: 'key', label: 'Type' },
-                { key: 'trips', label: 'Trips', align: 'right', render: (_, r) => fmtN(r.trips) },
-                { key: 'cost', label: 'Cost', align: 'right', render: (_, r) => fmt(r.cost) },
-                { key: 'avgCost', label: 'Avg / trip', align: 'right', render: (_, r) => fmt(r.avgCost) },
-                { key: 'share', label: 'Share', align: 'right', render: (_, r) => <ShareBar pct={r.share}>{r.share.toFixed(1) + '%'}</ShareBar> },
+                { key: 'trips', label: 'Trips', align: 'center', render: (_, r) => fmtN(r.trips) },
+                { key: 'cost', label: 'Cost', align: 'center', render: (_, r) => fmt(r.cost) },
+                { key: 'avgCost', label: 'Avg / trip', align: 'center', render: (_, r) => fmt(r.avgCost) },
+                { key: 'share', label: 'Share', align: 'center', render: (_, r) => <ShareBar pct={r.share}>{r.share.toFixed(1) + '%'}</ShareBar> },
               ]}
               rows={b2bTypeRows}
             />
@@ -1519,7 +1536,7 @@ export default function LogisticsCostPage() {
                 { key: 'origin_location', label: 'Origin' },
                 { key: 'destination_location', label: 'Destination' },
                 { key: 'freight_type', label: 'Type' },
-                { key: 'total_cost', label: 'Total', align: 'right', render: (_, r) => fmt(r.total_cost) },
+                { key: 'total_cost', label: 'Total', align: 'center', render: (_, r) => fmt(r.total_cost) },
               ]}
               rows={b2bRows}
               maxRows={25}
@@ -1564,8 +1581,8 @@ export default function LogisticsCostPage() {
           <DataTable
             columns={[
               { key: 'month', label: 'Period' },
-              { key: 'trips', label: 'Trips', align: 'right', render: (_, r) => fmtN(r.trips) },
-              { key: 'cost', label: 'Cost', align: 'right', render: (_, r) => fmt(r.cost) },
+              { key: 'trips', label: 'Trips', align: 'center', render: (_, r) => fmtN(r.trips) },
+              { key: 'cost', label: 'Cost', align: 'center', render: (_, r) => fmt(r.cost) },
             ]}
             rows={b2bMonthRows}
           />
@@ -1740,14 +1757,14 @@ export default function LogisticsCostPage() {
           <DataTable
             columns={[
               { key: 'month', label: 'Period' },
-              { key: 'cost', label: 'Freight cost', align: 'right', render: (_, r) => fmt(r.cost) },
-              { key: 'shipments', label: 'Shipments', align: 'right', render: (_, r) => fmtN(r.shipments) },
-              { key: 'avgCost', label: 'Avg / ship', align: 'right', render: (_, r) => '₹' + r.avgCost.toFixed(2) },
-              { key: 'cpk', label: '₹ / kg', align: 'right', render: (_, r) => '₹' + r.cpk.toFixed(2) },
-              { key: 'wt', label: 'Billed wt', align: 'right', render: (_, r) => fmtKg(r.wt) },
+              { key: 'cost', label: 'Freight cost', align: 'center', render: (_, r) => fmt(r.cost) },
+              { key: 'shipments', label: 'Shipments', align: 'center', render: (_, r) => fmtN(r.shipments) },
+              { key: 'avgCost', label: 'Avg / ship', align: 'center', render: (_, r) => '₹' + r.avgCost.toFixed(2) },
+              { key: 'cpk', label: '₹ / kg', align: 'center', render: (_, r) => '₹' + r.cpk.toFixed(2) },
+              { key: 'wt', label: 'Billed wt', align: 'center', render: (_, r) => fmtKg(r.wt) },
               // Moved down from the Cost Overview tiles: as a single blended number it had no
               // context, but per period it shows whether freight is gaining on revenue.
-              { key: 'pctGmv', label: '% of GMV', align: 'right', render: (_, r) => (
+              { key: 'pctGmv', label: '% of GMV', align: 'center', render: (_, r) => (
                 r.pctGmv != null ? r.pctGmv.toFixed(2) + '%' : '—'
               ) },
             ]}
@@ -1784,10 +1801,10 @@ export default function LogisticsCostPage() {
           <DataTable
             columns={[
               { key: 'zone', label: 'Zone' },
-              { key: 'shipments', label: 'Shipments', align: 'right', render: (_, r) => fmtN(r.shipments) },
-              { key: 'avgCost', label: 'Avg ₹', align: 'right', render: (_, r) => '₹' + r.avgCost.toFixed(2) },
-              { key: 'cpk', label: '₹/kg', align: 'right', render: (_, r) => (r.cpk != null ? '₹' + r.cpk.toFixed(2) : '—') },
-              { key: 'share', label: 'Share', align: 'right', render: (_, r) => <ShareBar pct={r.share}>{r.share.toFixed(1) + '%'}</ShareBar> },
+              { key: 'shipments', label: 'Shipments', align: 'center', render: (_, r) => fmtN(r.shipments) },
+              { key: 'avgCost', label: 'Avg ₹', align: 'center', render: (_, r) => '₹' + r.avgCost.toFixed(2) },
+              { key: 'cpk', label: '₹/kg', align: 'center', render: (_, r) => (r.cpk != null ? '₹' + r.cpk.toFixed(2) : '—') },
+              { key: 'share', label: 'Share', align: 'center', render: (_, r) => <ShareBar pct={r.share}>{r.share.toFixed(1) + '%'}</ShareBar> },
             ]}
             rows={zoneRows}
           />
@@ -1848,19 +1865,14 @@ export default function LogisticsCostPage() {
               </PieChart>
             </ResponsiveContainer>
           </div>
-          {/* Total in the donut hole — the figure the slices are shares of. */}
-          <div style={{ textAlign: 'center', marginTop: -148, marginBottom: 118, pointerEvents: 'none' }}>
-            <div style={{ fontSize: 10, fontWeight: 800, color: C.t3, letterSpacing: '.05em', textTransform: 'uppercase' }}>Total</div>
-            <div style={{ fontSize: 17, fontWeight: 800, color: C.t1 }}>{fmt(agg.cost)}</div>
-          </div>
           <div style={{ fontSize: 10.5, color: VIZ.muted, marginTop: -2, marginBottom: 6 }}>Click a slice to filter by leg</div>
           <DataTable
             columns={[
               { key: 'mode', label: 'Mode' },
-              { key: 'shipments', label: 'Shipments', align: 'right', render: (_, r) => fmtN(r.shipments) },
-              { key: 'cost', label: 'Cost', align: 'right', render: (_, r) => fmt(r.cost) },
-              { key: 'avgCost', label: 'Avg ₹', align: 'right', render: (_, r) => '₹' + r.avgCost.toFixed(2) },
-              { key: 'share', label: 'Share', align: 'right', render: (_, r) => <ShareBar pct={r.share}>{r.share.toFixed(1) + '%'}</ShareBar> },
+              { key: 'shipments', label: 'Shipments', align: 'center', render: (_, r) => fmtN(r.shipments) },
+              { key: 'cost', label: 'Cost', align: 'center', render: (_, r) => fmt(r.cost) },
+              { key: 'avgCost', label: 'Avg ₹', align: 'center', render: (_, r) => '₹' + r.avgCost.toFixed(2) },
+              { key: 'share', label: 'Share', align: 'center', render: (_, r) => <ShareBar pct={r.share}>{r.share.toFixed(1) + '%'}</ShareBar> },
             ]}
             rows={modeRows}
           />
@@ -1918,12 +1930,12 @@ export default function LogisticsCostPage() {
           <DataTable
             columns={[
               { key: 'band', label: 'Slab' },
-              { key: 'shipments', label: 'Shipments', align: 'right', render: (_, r) => fmtN(r.shipments) },
-              { key: 'cost', label: 'Total Cost', align: 'right', render: (_, r) => fmt(r.cost) },
-              { key: 'share', label: 'Share', align: 'right', render: (_, r) => <ShareBar pct={r.share}>{r.share.toFixed(1) + '%'}</ShareBar> },
-              { key: 'avgCost', label: 'Avg ₹', align: 'right', render: (_, r) => '₹' + r.avgCost.toFixed(2) },
-              { key: 'cpk', label: '₹/kg', align: 'right', render: (_, r) => (r.cpk != null ? '₹' + r.cpk.toFixed(2) : '—') },
-              { key: 'overPct', label: 'Overbilled', align: 'right', render: (_, r) => r.overPct.toFixed(1) + '%' },
+              { key: 'shipments', label: 'Shipments', align: 'center', render: (_, r) => fmtN(r.shipments) },
+              { key: 'cost', label: 'Total Cost', align: 'center', render: (_, r) => fmt(r.cost) },
+              { key: 'share', label: 'Share', align: 'center', render: (_, r) => <ShareBar pct={r.share}>{r.share.toFixed(1) + '%'}</ShareBar> },
+              { key: 'avgCost', label: 'Avg ₹', align: 'center', render: (_, r) => '₹' + r.avgCost.toFixed(2) },
+              { key: 'cpk', label: '₹/kg', align: 'center', render: (_, r) => (r.cpk != null ? '₹' + r.cpk.toFixed(2) : '—') },
+              { key: 'overPct', label: 'Overbilled', align: 'center', render: (_, r) => r.overPct.toFixed(1) + '%' },
             ]}
             rows={bandRows}
             maxHeight={220}
@@ -1963,15 +1975,15 @@ export default function LogisticsCostPage() {
           <DataTable
             columns={[
               { key: 'courier', label: 'Courier' },
-              { key: 'first', label: 'First', align: 'right', render: (_, r) => '₹' + r.first.toFixed(2) },
-              { key: 'last', label: 'Latest', align: 'right', render: (_, r) => '₹' + r.last.toFixed(2) },
-              { key: 'drift', label: 'Drift', align: 'right', render: (_, r) => (
+              { key: 'first', label: 'First', align: 'center', render: (_, r) => '₹' + r.first.toFixed(2) },
+              { key: 'last', label: 'Latest', align: 'center', render: (_, r) => '₹' + r.last.toFixed(2) },
+              { key: 'drift', label: 'Drift', align: 'center', render: (_, r) => (
                 r.months < 2 ? <span style={{ color: C.t3 }}>—</span>
                   : <span style={{ color: r.drift > 5 ? C.red.tx : r.drift < -5 ? C.green.tx : undefined, fontWeight: Math.abs(r.drift) > 5 ? 700 : undefined }}>
                       {(r.drift >= 0 ? '+' : '') + r.drift.toFixed(1) + '%'}
                     </span>
               ) },
-              { key: 'months', label: 'Months', align: 'right', render: (_, r) => fmtN(r.months) },
+              { key: 'months', label: 'Months', align: 'center', render: (_, r) => fmtN(r.months) },
             ]}
             rows={driftRows}
             maxHeight={220}
@@ -1993,13 +2005,13 @@ export default function LogisticsCostPage() {
         <DataTable
           columns={[
             { key: 'courier', label: 'Courier' },
-            { key: 'shipments', label: 'Shipments', align: 'right', render: (_, r) => fmtN(r.shipments) },
-            { key: 'cost', label: 'Cost', align: 'right', render: (_, r) => fmt(r.cost) },
-            { key: 'avgCost', label: 'Avg ₹', align: 'right', render: (_, r) => '₹' + r.avgCost.toFixed(2) },
-            { key: 'cpk', label: '₹/kg', align: 'right', render: (_, r) => (r.cpk != null ? '₹' + r.cpk.toFixed(2) : '—') },
+            { key: 'shipments', label: 'Shipments', align: 'center', render: (_, r) => fmtN(r.shipments) },
+            { key: 'cost', label: 'Cost', align: 'center', render: (_, r) => fmt(r.cost) },
+            { key: 'avgCost', label: 'Avg ₹', align: 'center', render: (_, r) => '₹' + r.avgCost.toFixed(2) },
+            { key: 'cpk', label: '₹/kg', align: 'center', render: (_, r) => (r.cpk != null ? '₹' + r.cpk.toFixed(2) : '—') },
             // "Overbilled" alone didn't say overbilled on WHAT — it is the share of
             // this courier's shipments billed at a heavier slab than we declared.
-            { key: 'overPct', label: '% Wrong Weight', align: 'right', render: (_, r) => (
+            { key: 'overPct', label: '% Wrong Weight', align: 'center', render: (_, r) => (
               <span style={{ color: r.overPct > 40 ? C.red.tx : undefined, fontWeight: r.overPct > 40 ? 700 : undefined }}>
                 {r.overPct.toFixed(1) + '%'}
               </span>
@@ -2072,9 +2084,9 @@ export default function LogisticsCostPage() {
           <DataTable
             columns={[
               { key: 'k', label: 'Payment' },
-              { key: 'n', label: 'Shipments', align: 'right', render: (_, r) => fmtN(r.n) },
-              { key: 'cost', label: 'Cost', align: 'right', render: (_, r) => fmt(r.cost) },
-              { key: 'avgCost', label: 'Avg ₹', align: 'right', render: (_, r) => '₹' + r.avgCost.toFixed(2) },
+              { key: 'n', label: 'Shipments', align: 'center', render: (_, r) => fmtN(r.n) },
+              { key: 'cost', label: 'Cost', align: 'center', render: (_, r) => fmt(r.cost) },
+              { key: 'avgCost', label: 'Avg ₹', align: 'center', render: (_, r) => '₹' + r.avgCost.toFixed(2) },
             ]}
             rows={payRows}
           />
@@ -2097,10 +2109,11 @@ export default function LogisticsCostPage() {
       {recoverRows.length > 0 && (
         <>
           <SectionHdr title="Recoverable by Cause"
-            note={`${fmt(recoverTotals.total)} across ${recoverRows.length} partners · weight disputes and rate-compliance disputes need different escalations`} />
+            note={`${fmt(recoverTotals.total)} claimable across ${recoverRows.length} partners · priced on total cost, same basis as Cost Overview`} />
 
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(360px,1fr))', gap: 14 }}>
-            <Card style={{ display: 'flex', flexDirection: 'column' }} title="Recoverable per courier" note="bar length = rupees · split = which dispute">
+            <Card style={{ display: 'flex', flexDirection: 'column' }} title="Recoverable per courier"
+              note={`${fmt(recoverTotals.total)} total in dispute · bar = rupees, split = which dispute`}>
               <div style={{ flex: 1, minHeight: 200 }}>
                 <ResponsiveContainer width="100%" height="100%">
                   {/* Horizontal: courier names read straight instead of angled, and the
@@ -2143,27 +2156,39 @@ export default function LogisticsCostPage() {
                 <div style={{ fontSize: 11.5, color: C.t2, marginTop: 8, lineHeight: 1.5 }}>
                   Highest intensity: <strong>{worstIntensity.courier}</strong> at{' '}
                   <strong style={{ color: C.red.tx }}>{worstIntensity.recPctFreight.toFixed(1)}%</strong> of
-                  their own freight bill ({fmt(worstIntensity.recTotal)} on {fmtN(worstIntensity.shipments)} shipments).
+                  their own freight bill ({fmt(worstIntensity.recTotal)} across{' '}
+                  {fmtN(worstIntensity.disputedN)} affected shipments).
                 </div>
               )}
             </Card>
 
-            <Card title="Escalation priority" note="ranked by claim size, with intensity and per-shipment cost">
+            <Card title="Escalation priority"
+              note="what each courier over-billed, and how concentrated it is">
               <DataTable
                 columns={[
                   { key: 'courier', label: 'Courier' },
-                  { key: 'recTotal', label: 'Total Claim', align: 'right', render: (_, r) => (
+                  // Renamed from 'Total Claim': it is the over-billed amount, and saying so
+                  // removes the guesswork about what the number represents.
+                  { key: 'recTotal', label: 'Over-billed', align: 'center', render: (_, r) => (
                     <span style={{ fontWeight: 700, color: C.red.tx }}>{fmt(r.recTotal)}</span>
                   ) },
-                  // Intensity, not size. Ranks by how wrong the billing is relative to what
-                  // we pay that partner, which is what a rate review is argued on.
-                  { key: 'recPctFreight', label: '% of Freight', align: 'right', render: (_, r) => (
-                    <span style={{ color: r.recPctFreight > 20 ? C.red.tx : undefined, fontWeight: r.recPctFreight > 20 ? 700 : undefined }}>
-                      {r.recPctFreight.toFixed(1)}%
+                  // How many shipments it sits on, out of how many we could price. Without
+                  // this the per-shipment figure has no visible denominator.
+                  { key: 'disputedN', label: 'Shipments Affected', align: 'center', render: (_, r) => (
+                    <span>
+                      {fmtN(r.disputedN)}
+                      <span style={{ fontSize: 10.5, color: C.t3 }}> of {fmtN(r.shipments)}</span>
                     </span>
                   ) },
-                  { key: 'recPerShipment', label: '₹ / Shipment', align: 'right', render: (_, r) => (
-                    <span style={{ color: C.t2 }}>₹{r.recPerShipment.toFixed(1)}</span>
+                  { key: 'recPerShipment', label: 'Avg per Affected', align: 'center', render: (_, r) => (
+                    <span style={{ color: C.t2 }}>₹{r.recPerShipment.toFixed(0)}</span>
+                  ) },
+                  // Intensity: over-billing as a share of what we pay that courier. Ranks by
+                  // how wrong the billing is rather than by partner size.
+                  { key: 'recPctFreight', label: '% of Their Bill', align: 'center', render: (_, r) => (
+                    <span style={{ color: r.recPctFreight > 12 ? C.red.tx : undefined, fontWeight: r.recPctFreight > 12 ? 700 : undefined }}>
+                      {r.recPctFreight.toFixed(1)}%
+                    </span>
                   ) },
                 ]}
                 rows={recoverRows}
@@ -2181,6 +2206,7 @@ export default function LogisticsCostPage() {
         <Card title="Category detail" note="click a category to open its sub-categories">
           <DataTable
             columns={[
+              // Left-aligned so the indented sub-category names still read as a hierarchy.
               { key: 'label', label: 'Category / Sub-category', render: (_, r) => (
                 r.isSub
                   ? <span style={{ paddingLeft: 16, color: VIZ.muted }}>{r.label}</span>
@@ -2191,37 +2217,28 @@ export default function LogisticsCostPage() {
                       </span>{r.label}
                     </span>
               ) },
-              { key: 'n', label: 'Shipments', align: 'right', render: (_, r) => fmtN(r.n) },
-              { key: 'fwd', label: 'Forward', align: 'right', render: (_, r) => r.fwd ? fmt(r.fwd) : '—' },
-              { key: 'rev', label: 'Reverse', align: 'right', render: (_, r) => r.rev ? fmt(r.rev) : '—' },
-              { key: 'rto', label: 'RTO', align: 'right', render: (_, r) => r.rto ? fmt(r.rto) : '—' },
-              // Cost to serve one order: forward + reverse + RTO, each weighted by how often
-              // it actually happens (return count ÷ forward count). Forward is the
-              // denominator because every order has one; returns are the exception at 3-21%.
-              // A raw sum of the three averages was dropped — it assumes every shipment goes
-              // out, is picked up AND is RTO'd, which overstates Footwear by ~2.5x (₹264 vs
-              // ₹103) and would mislead any margin decision built on it.
-              { key: 'ctsReal', label: 'Avg. Logistic Cost', align: 'right', render: (_, r) => (
+              { key: 'n', label: 'Shipments', align: 'center', render: (_, r) => fmtN(r.n) },
+              { key: 'cost', label: 'Total Spend', align: 'center', render: (_, r) => fmt(r.cost) },
+              { key: 'fwd', label: 'Forward', align: 'center', render: (_, r) => r.fwd ? fmt(r.fwd) : '—' },
+              { key: 'rev', label: 'Reverse', align: 'center', render: (_, r) => r.rev ? fmt(r.rev) : '—' },
+              { key: 'rto', label: 'RTO', align: 'center', render: (_, r) => r.rto ? fmt(r.rto) : '—' },
+              // Cost to serve one order: forward + reverse + RTO, each scaled by how often it
+              // actually happens (return count ÷ forward count). Forward is the denominator
+              // because every order has one; returns are the exception at 3-21%. A raw sum of
+              // the three averages would assume every shipment goes out, is picked up AND is
+              // RTO'd — overstating Footwear by ~2.5x (₹264 vs ₹103).
+              { key: 'ctsReal', label: 'Avg. Logistic Cost', align: 'center', render: (_, r) => (
                 r.ctsReal ? <span style={{ fontWeight: 700 }}>{fmt(r.ctsReal)}</span> : '—'
               ) },
-              // Slab derived from the item master's product weight, so it is ONE real slab
-              // per product rather than an average of billed slabs (the old 1.72 kg was a
-              // value no parcel is ever charged). Actual product weight shown beside it.
-              // Falls back to the billed average only where the master has no single weight:
-              // a category spanning several sub-categories, or 'Mixed Shipments'.
-              // Slab only — the actual product weight is already in the Volumetric KG column
-              // beside it, so repeating it in brackets was redundant.
-              // Unit carried on the value, so the header does not need to repeat it.
-              // Category rows show the shipment-weighted AVERAGE product weight, because a
-              // category spans products of different weights and no single slab is true for
-              // all of them. Sub-category rows show the billable SLAB, which is one real
-              // value the courier charges on.
-              { key: 'slab', label: 'Weight Slab', align: 'right', render: (_, r) => {
+              // Sub-category rows show the billable SLAB from the item master — one real value
+              // the courier charges on. Category rows show the shipment-weighted average
+              // product weight instead, because a category spans products of different weights
+              // and no single slab is true for all of them.
+              { key: 'slab', label: 'Weight Slab', align: 'center', render: (_, r) => {
                 if (r.masterSlab > 0) return <strong>{r.masterSlab} kg</strong>
                 return r.masterKg > 0 ? <strong>{r.masterKg.toFixed(2)} kg</strong> : '—'
               } },
-              { key: 'vw', label: 'Volumetric', align: 'right', render: (_, r) => (r.vw ? r.vw.toFixed(2) + ' kg' : '—') },
-              { key: 'cost', label: 'Total spend', align: 'right', render: (_, r) => fmt(r.cost) },
+              { key: 'vw', label: 'Volumetric Weight', align: 'center', render: (_, r) => (r.vw ? r.vw.toFixed(2) + ' kg' : '—') },
             ]}
             rows={productRows}
             maxHeight={480}
@@ -2260,8 +2277,27 @@ export default function LogisticsCostPage() {
               activeCell.allBands ? 'all weights' : activeCell.bands.join(', '),
               activeCell.allLegs ? 'all legs' : activeCell.legs.join(', '),
             ].join(' · ')}
-            note={`${fmtN(activeCell.n)} shipments · min 50 per courier per cell`}
+            note={activeCell.rows.length
+              ? `${fmtN(activeCell.n)} shipments · min 50 per courier per cell`
+              : 'no shipments match this combination'}
           >
+          {/* Empty and single-courier results render an explanation instead of a blank
+              chart. Returning null from activeCell used to unmount this entire section —
+              zone E is served by one courier — leaving no filters to click back with. */}
+          {!activeCell.rows.length ? (
+            <div style={{ fontSize: 12.5, color: C.t2, padding: '16px 0' }}>
+              Nothing matches this combination. A courier needs 50+ shipments in the cell to
+              appear, so a narrow zone, slab and leg together can rule everything out —
+              widen any one of them.
+            </div>
+          ) : (
+          <>
+            {!activeCell.comparable && (
+              <div style={{ fontSize: 11.5, color: C.t2, marginBottom: 10 }}>
+                Only one courier ships this combination, so there is nothing to compare
+                against — the figures below are that courier alone.
+              </div>
+            )}
             <div style={{ height: 200 }}>
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={activeCell.rows} layout="vertical" margin={{ top: 10, right: 46, left: 8, bottom: 4 }}>
@@ -2300,10 +2336,10 @@ export default function LogisticsCostPage() {
             <DataTable
               columns={[
                 { key: 'courier', label: 'Courier' },
-                { key: 'n', label: 'Shipments', align: 'right', render: (_, r) => fmtN(r.n) },
-                { key: 'avgCost', label: 'Avg ₹', align: 'right', render: (_, r) => '₹' + r.avgCost.toFixed(2) },
-                { key: 'cpk', label: '₹/kg', align: 'right', render: (_, r) => '₹' + r.cpk.toFixed(2) },
-                { key: 'vs', label: 'vs cheapest', align: 'right', render: (_, r) => {
+                { key: 'n', label: 'Shipments', align: 'center', render: (_, r) => fmtN(r.n) },
+                { key: 'avgCost', label: 'Avg ₹', align: 'center', render: (_, r) => '₹' + r.avgCost.toFixed(2) },
+                { key: 'cpk', label: '₹/kg', align: 'center', render: (_, r) => '₹' + r.cpk.toFixed(2) },
+                { key: 'vs', label: 'vs cheapest', align: 'center', render: (_, r) => {
                   const d = r.avgCost - activeCell.rows[0].avgCost
                   return d < 0.01
                     ? <span style={{ color: C.green.tx, fontWeight: 700 }}>cheapest</span>
@@ -2316,6 +2352,8 @@ export default function LogisticsCostPage() {
               Cost only — this does not account for SLA, coverage or damage rates. Confirm
               service levels are comparable before shifting volume.
             </div>
+          </>
+          )}
           </Card>
         </>
       )}

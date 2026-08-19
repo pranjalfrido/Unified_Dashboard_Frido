@@ -788,6 +788,14 @@ export default async function handler(req, res) {
     //   invoice     - card_theirs = rate-driven (their own card can't explain it)
     // Restricted to rows priced BOTH ways, so all three figures cover one population —
     // comparing unequal row sets produced a spurious 14.9% control variance.
+    // Per-courier dispute split, on the same total-cost basis as the summary above. Built by
+    // scripts/refresh-cost-aggregates.mjs; see that file for why the clamp is per row.
+    const disputesQ = () => query(pool, `
+      SELECT courier_name, priced_n, disputed_n, weight_rs, rate_rs, total_rs, invoiced_rs
+        FROM public.lc_courier_disputes
+       ORDER BY total_rs DESC
+    `, [])
+
     const wrQ = () => query(pool, `
       -- Reads a PRE-COMPUTED single-row summary, not a live join.
       --
@@ -924,7 +932,7 @@ export default async function handler(req, res) {
       // Throttled to 3: this block is 10 queries and only runs on a cache miss, so it can
       // afford to be slower — but firing all 10 at once starved the pool and produced the
       // same connect timeout the main block hit.
-      const [health, joinCov, opt, cityRows, b2b, b2bLanes, b2bTotals, b2bTrans, b2bMonths, b2bTypes, wr, gridRes, trendRes] = await mapLimit([
+      const [health, joinCov, opt, cityRows, b2b, b2bLanes, b2bTotals, b2bTrans, b2bMonths, b2bTypes, wr, gridRes, trendRes, disputes] = await mapLimit([
         // ── Data Health (spec §0) ──
         // Every exclusion and every coverage rate the page depends on, in one query.
         // This exists so finance can see the gaps before finding one themselves and
@@ -1031,7 +1039,7 @@ export default async function handler(req, res) {
             FROM public.logistics_invoices_b2b WHERE total_cost > 0
            GROUP BY 1 ORDER BY 3 DESC
         `),
-        wrQ, gridQ, trendQ,
+        wrQ, gridQ, trendQ, disputesQ,
       ], 3)
       const options = opt.rows[0] || {}
       options.cities = cityRows.rows.map(r => r.c).sort()
@@ -1040,6 +1048,7 @@ export default async function handler(req, res) {
         // measured once per cache period rather than per request.
         weightRate: wr.rows[0] || {},
         rateGrid: gridRes.rows,
+        courierDisputes: disputes.rows,
         trendAll: trendRes.rows,
         at: Date.now(), options, b2b: b2b.rows,
         // Data Health (§0): exclusions + coverage, so every number is auditable.
@@ -1059,6 +1068,7 @@ export default async function handler(req, res) {
     // Applied here, after section 4 has guaranteed refCache exists.
     Object.assign(out.totals, refCache.weightRate || {})
     out.rateGrid = refCache.rateGrid || []
+    out.courierDisputes = refCache.courierDisputes || []
     out.trendAll = refCache.trendAll || []
     out.skipped = refCache.skipped
     out.health = refCache.health
