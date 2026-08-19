@@ -4084,12 +4084,16 @@ function FlatCategoryProductMatrix({ catData, subCatData, skuData, title, catPre
   const mapRow = (d, scName, catName) => {
     const gross = d.rev || 0
     const excRev = d.excRev || 0
-    const cancelRev = (d.cancelRev || 0) - (d.codCancelRev || 0)  // exclude COD cancels for D2C
+    const cancelRev = d.cancelRev || 0  // full cancellation deducted, COD included (confirmed 2026-08-19)
     const rtoRev = d.rtoRev || 0
     const cirRev = d.cirRev || 0
     const exchRev = d.exchRev || 0
     const returnRev = d.returnRev || 0
     const gstRatio = gross > 0 ? (gross - excRev) / gross : 0
+    // Exchange is NOT deducted from Net Revenue (reverted 2026-08-19) — the customer keeps a
+    // product either way, so an exchange isn't lost revenue. exchRev is still extracted above for
+    // display (exchPct) only. The recreated '_EX...' OrderId that would otherwise double-count
+    // this same sale is excluded entirely at the base BigQuery query (see api/_bq.js buildQuery).
     const grossAfterReturns = gross - cancelRev - rtoRev - cirRev - returnRev
     const netStandard = grossAfterReturns * (1 - gstRatio)
     // Only use Mobility whitelist override for Mobility or Sparepart-category rows — the server
@@ -5548,18 +5552,25 @@ function ShopifyTab({ data, filters, setFilters }) {
   const totalExcRevRaw = shCh.excRev || 0
   const totalQty = shCh.qty || 0
   const shAspQty = shCh.aspQty || totalQty
-  // Use shNetCalc (Shopify-only deductions) — same formula, correct channel scope.
+  // netCalcSrc: sh.netCalc is scoped to ALL of D2C (MyFrido+Mobility combined) — it must never be
+  // used once a single sub-channel is selected, or every rate card silently mixes one sub-
+  // channel's gross with the OTHER sub-channel's (or combined) cancel/RTO/CIR/exchange revenue,
+  // producing nonsensical %s (confirmed 2026-08-19: Mobility showed RTO% > 90%). When
+  // filters.subChannel is MyFrido/Mobility, subChannelMap[filters.subChannel].netCalc (added
+  // alongside bySubChannel in api/bq.js) is used instead — it's computed from THAT SAME sub-
+  // channel's own rows, in the same response, so it can never drift out of sync with shCh above.
+  const netCalcSrc = isD2CSubChFiltered ? (shCh.netCalc || {}) : (sh.netCalc || {})
   // Net Revenue (Inc GST) = Gross − Cancel − RTO − Return − CIR. GST is summed product-wise
   // (item master GST rate per SKU) over completed orders only, not a blended ratio over all
   // orders — see netCalc in api/bq.js. Net Revenue (Exc GST) = Net Rev (Inc GST) − that GST.
-  const cancelledRev = (sh.netCalc?.cancelRev || 0) - (sh.netCalc?.codCancelRev || 0)
-  const rtoRev = sh.netCalc?.rtoRev || 0
-  const returnStatusRev = sh.netCalc?.returnRev || 0
-  const cirRev = sh.netCalc?.cirRev || 0
-  const grossAfterReturns = sh.netCalc?.netRevIncGst ?? (totalRev - cancelledRev - rtoRev - returnStatusRev - cirRev)
-  const gst = sh.netCalc?.gstCompleted || 0
+  const cancelledRev = netCalcSrc.cancelRev || 0  // full cancellation deducted, COD included (confirmed 2026-08-19)
+  const rtoRev = netCalcSrc.rtoRev || 0
+  const returnStatusRev = netCalcSrc.returnRev || 0
+  const cirRev = netCalcSrc.cirRev || 0
+  const grossAfterReturns = netCalcSrc.netRevIncGst ?? (totalRev - cancelledRev - rtoRev - returnStatusRev - cirRev)
+  const gst = netCalcSrc.gstCompleted || 0
   const mobilityNetRevOverride = filters.subChannel === 'Mobility' ? (subChannelMap['Mobility']?.netRev ?? null) : null
-  const netRev = mobilityNetRevOverride ?? sh.netCalc?.netRev ?? (grossAfterReturns - gst)
+  const netRev = mobilityNetRevOverride ?? netCalcSrc.netRev ?? (grossAfterReturns - gst)
   const totalExcRev = netRev
 
   const prevRev = sh.prevRev || 0
@@ -5606,11 +5617,11 @@ function ShopifyTab({ data, filters, setFilters }) {
   const deliveredOrders = orderStatusMap['Delivered'] || 0
   const rtoOrders = (orderStatusMap['RTO'] || 0) + (orderStatusMap['Return'] || 0)
   const fulfilmentPct = shNOrders ? (deliveredOrders / shNOrders * 100) : 0
-  const shRtoRev = sh.netCalc?.rtoRev || 0
-  const shReturnRev = sh.netCalc?.returnRev || 0
-  const shCirRev = sh.netCalc?.cirRev || 0
-  const shCancelRevRaw = sh.netCalc?.cancelRev || 0
-  const shCodCancelRev = sh.netCalc?.codCancelRev || 0
+  const shRtoRev = netCalcSrc.rtoRev || 0
+  const shReturnRev = netCalcSrc.returnRev || 0
+  const shCirRev = netCalcSrc.cirRev || 0
+  const shCancelRevRaw = netCalcSrc.cancelRev || 0
+  const shCodCancelRev = netCalcSrc.codCancelRev || 0
   const shCancelRev = shCancelRevRaw - shCodCancelRev  // exclude COD cancels from return %
   const rtoPct = totalRev > 0 ? (shRtoRev + shReturnRev) / totalRev * 100 : 0
   const atRiskRev = shRtoRev + shReturnRev + shCirRev + shCancelRev
@@ -5752,8 +5763,8 @@ function ShopifyTab({ data, filters, setFilters }) {
         {/* Right: 2 rows of 5 KPIs */}
         {(() => {
           const cirOrders = data.cirOrders || 0
-          const exchangeOrders = sh.netCalc?.exchOrders ?? data.exchangeOrders ?? 0
-          const exchangeRev = sh.netCalc?.exchRev ?? data.exchangeRev ?? 0
+          const exchangeOrders = netCalcSrc.exchOrders ?? data.exchangeOrders ?? 0
+          const exchangeRev = netCalcSrc.exchRev ?? data.exchangeRev ?? 0
           const cancelledOrders = orderStatusMap['Cancelled'] || 0
           const cancelPct = totalRev > 0 ? (cancelledRev / totalRev * 100) : 0
           const cirPct = totalRev > 0 ? shCirRev / totalRev * 100 : 0
@@ -13356,7 +13367,17 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
         if (keepPrev && prev && typeof prev === 'object' && !Array.isArray(prev)) return { ...prev, ...next }
         return next
       })
-    } catch (e) { if (reqId === reqIdRef.current) setError(e.message) }
+    } catch (e) {
+      if (reqId === reqIdRef.current) {
+        setError(e.message)
+        // Clear stale data on failure — otherwise the dashboard keeps rendering the LAST
+        // successful fetch's numbers under whatever filter is now selected (e.g. switching
+        // D2C sub-channel from MyFrido to Overall while a BigQuery rate-limit 500 hits silently
+        // left MyFrido's Net Revenue on screen under the "Overall" tab, with no visual indication
+        // that the switch never actually completed) — confirmed 2026-08-19.
+        setRawRows(null)
+      }
+    }
     finally { if (reqId === reqIdRef.current) setLoading(false) }
   }, [API])
 

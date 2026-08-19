@@ -37,7 +37,7 @@ import { netRevenueOf, estimateCogsPerUnit } from './pnlUtils.js'
 // Seller Central and Vendor Central views stop at CM1 % (marketing spend is only mapped on the
 // combined "All" SC+VC view, since that's the grain the Ads tab's Amazon spend reconciles to).
 // includeUnmatched/mobilityNetBySubCat: D2C-only — see PnLPage.jsx for how each is computed.
-export default function PnLFinancialTable({ subCatData, skuData, adSpendMap = {}, sndBySku, title = 'Financial View', showMarketing = true, includeUnmatched = false, mobilityNetBySubCat = {} }) {
+export default function PnLFinancialTable({ subCatData, skuData, adSpendMap = {}, sndBySku, title = 'Financial View', showMarketing = true, includeUnmatched = false, mobilityNetBySubCat = {}, netScale = 1 }) {
   const [expandedSku, setExpandedSku] = useState({})
   const [search, setSearch] = useState('')
   const [cogsMap, setCogsMap] = useState(null)
@@ -54,7 +54,7 @@ export default function PnLFinancialTable({ subCatData, skuData, adSpendMap = {}
   // Net Revenue / netUnits / totalReturnRev — single canonical formula, shared with
   // PnLPage.jsx's netOf()/amzDailyPnL/kpiSummary via ./pnlUtils.js (see that file's header
   // comment for the exact formula and the mobility-override behavior).
-  const mapRow = (d, scName, catName) => netRevenueOf(d, scName, mobilityNetBySubCat, catName)
+  const mapRow = (d, scName, catName) => netRevenueOf(d, scName, mobilityNetBySubCat, catName, netScale)
   const pctOf = (n, d) => d > 0 ? (n / d * 100) : 0
   // A handful of rows have genuinely non-zero but negligible revenue (e.g. a ₹1 leftover-cent
   // transaction) — pctOf's `d > 0` guard lets these through and produces million-percent ratios
