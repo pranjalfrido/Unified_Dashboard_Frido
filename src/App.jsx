@@ -206,6 +206,7 @@ function LogisticsPage({ filters }) {
   const [tatCourierView, setTatCourierView] = useState('courier') // 'courier' | 'month'
   const [tatView1, setTatView1] = useState('facility')
   const [tatView2, setTatView2] = useState('facility')
+  const [tatView3, setTatView3] = useState('courier')
   const [tatView4, setTatView4] = useState('facility')
   const [tatMode, setTatMode] = useState('pct')
   const [secCollapsed, setSecCollapsed] = useState({})
@@ -427,10 +428,23 @@ function LogisticsPage({ filters }) {
         tatByFacility: (() => {
             const m = {}
             const rows = (raw.tatByFacility || []).filter(courierFilter)
+            const TAT_KEYS = ['total','delivered','proc_0_12h','proc_12_24h','proc_24_48h','proc_48plus','ord_0_1','ord_2_3','ord_4_5','ord_5plus','op_0_1','op_2_3','op_4_5','op_5plus','bucket_0_1','bucket_2_3','bucket_4_5','bucket_5plus']
             rows.forEach(x => {
-              if (!m[x.facility]) m[x.facility] = { facility: x.facility, total: 0, delivered: 0, proc_0_12h: 0, proc_12_24h: 0, proc_24_48h: 0, proc_48plus: 0, ord_0_1: 0, ord_2_3: 0, ord_4_5: 0, ord_5plus: 0, op_0_1: 0, op_2_3: 0, op_4_5: 0, op_5plus: 0 }
+              if (!m[x.facility]) m[x.facility] = { facility: x.facility, ...Object.fromEntries(TAT_KEYS.map(k => [k, 0])) }
               const f = m[x.facility]
-              ;['total','delivered','proc_0_12h','proc_12_24h','proc_24_48h','proc_48plus','ord_0_1','ord_2_3','ord_4_5','ord_5plus','op_0_1','op_2_3','op_4_5','op_5plus'].forEach(k => f[k] += x[k] || 0)
+              TAT_KEYS.forEach(k => f[k] += x[k] || 0)
+            })
+            return Object.values(m).sort((a,b) => b.total - a.total)
+          })(),
+        tatByCourierGrouped: (() => {
+            const m = {}
+            const rows = (raw.tatByFacility || []).filter(courierFilter)
+            const TAT_KEYS = ['total','delivered','proc_0_12h','proc_12_24h','proc_24_48h','proc_48plus','ord_0_1','ord_2_3','ord_4_5','ord_5plus','op_0_1','op_2_3','op_4_5','op_5plus','bucket_0_1','bucket_2_3','bucket_4_5','bucket_5plus']
+            rows.forEach(x => {
+              const k = x.courier_group || 'Unknown'
+              if (!m[k]) m[k] = { label: k, ...Object.fromEntries(TAT_KEYS.map(key => [key, 0])) }
+              const f = m[k]
+              TAT_KEYS.forEach(key => f[key] += x[key] || 0)
             })
             return Object.values(m).sort((a,b) => b.total - a.total)
           })(),
@@ -1397,35 +1411,20 @@ function LogisticsPage({ filters }) {
               const tatByFacility = (data.tatByFacility || []).filter(r => r.facility && r.facility.trim())
               const pctB = (v, total) => total ? ((v/total)*100).toFixed(1)+'%' : '—'
 
+              const tatByCourierGrouped = data.tatByCourierGrouped || []
+
               // totals rows
               const facTotals = tatByFacility.reduce((acc, r) => {
                 acc.total += r.total||0; acc.proc_0_12h += r.proc_0_12h||0; acc.proc_12_24h += r.proc_12_24h||0; acc.proc_24_48h += r.proc_24_48h||0; acc.proc_48plus += r.proc_48plus||0
                 acc.ord_0_1 += r.ord_0_1||0; acc.ord_2_3 += r.ord_2_3||0; acc.ord_4_5 += r.ord_4_5||0; acc.ord_5plus += r.ord_5plus||0
                 acc.op_0_1 += r.op_0_1||0; acc.op_2_3 += r.op_2_3||0; acc.op_4_5 += r.op_4_5||0; acc.op_5plus += r.op_5plus||0
+                acc.bucket_0_1 += r.bucket_0_1||0; acc.bucket_2_3 += r.bucket_2_3||0; acc.bucket_4_5 += r.bucket_4_5||0; acc.bucket_5plus += r.bucket_5plus||0
                 return acc
-              }, { total:0, proc_0_12h:0, proc_12_24h:0, proc_24_48h:0, proc_48plus:0, ord_0_1:0, ord_2_3:0, ord_4_5:0, ord_5plus:0, op_0_1:0, op_2_3:0, op_4_5:0, op_5plus:0 })
+              }, { total:0, proc_0_12h:0, proc_12_24h:0, proc_24_48h:0, proc_48plus:0, ord_0_1:0, ord_2_3:0, ord_4_5:0, ord_5plus:0, op_0_1:0, op_2_3:0, op_4_5:0, op_5plus:0, bucket_0_1:0, bucket_2_3:0, bucket_4_5:0, bucket_5plus:0 })
               const courierTotals = tatByCourier.reduce((acc, r) => {
                 acc.total += r.total||0; acc.delivered += r.delivered||0; acc.bucket_0_1 += r.bucket_0_1||0; acc.bucket_2_3 += r.bucket_2_3||0; acc.bucket_4_5 += r.bucket_4_5||0; acc.bucket_5plus += r.bucket_5plus||0
                 return acc
               }, { total:0, delivered:0, bucket_0_1:0, bucket_2_3:0, bucket_4_5:0, bucket_5plus:0 })
-
-
-              const groupByCourier = (rows, keys) => {
-                const map = {}
-                rows.forEach(r => {
-                  const k = r.courier_group || 'Unknown'
-                  if (!map[k]) { map[k] = { label: k }; keys.forEach(key => { map[k][key] = 0 }) }
-                  keys.forEach(key => { map[k][key] = (map[k][key]||0) + (r[key]||0) })
-                })
-                return Object.values(map).sort((a,b) => {
-                  const ta = keys.reduce((s,k)=>s+(a[k]||0),0)
-                  const tb = keys.reduce((s,k)=>s+(b[k]||0),0)
-                  return tb - ta
-                })
-              }
-              const tatByCourierProc = groupByCourier(tatByFacility, ['proc_0_12h','proc_12_24h','proc_24_48h','proc_48plus'])
-              const tatByCourierOp = groupByCourier(tatByFacility, ['op_0_1','op_2_3','op_4_5','op_5plus'])
-              const tatByCourierOrd = groupByCourier(tatByFacility, ['ord_0_1','ord_2_3','ord_4_5','ord_5plus'])
 
               const fmtCell = (v, total) => tatMode === 'pct' ? pctB(v, total) : (v||0).toLocaleString('en-IN')
 
@@ -1482,14 +1481,14 @@ function LogisticsPage({ filters }) {
                         <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed' }}>
                           <colgroup>{cw.map((w,i)=><col key={i} style={{width:w}}/>)}</colgroup>
                           <thead><tr style={{ background: C.bg }}>
-                            <th style={{ ...thL, position: 'sticky', top: 0, background: C.bg, zIndex: 1 }}>Facility</th>
+                            <th style={{ ...thL, position: 'sticky', top: 0, background: C.bg, zIndex: 1 }}>{tatView1 === 'facility' ? 'Facility' : 'Courier'}</th>
                             <th style={{ ...thS, position: 'sticky', top: 0, background: C.bg, zIndex: 1 }}>0-1D</th>
                             <th style={{ ...thS, position: 'sticky', top: 0, background: C.bg, zIndex: 1 }}>2-3D</th>
                             <th style={{ ...thS, position: 'sticky', top: 0, background: C.bg, zIndex: 1 }}>4-5D</th>
                             <th style={{ ...thS, position: 'sticky', top: 0, background: C.bg, zIndex: 1 }}>5+D</th>
                           </tr></thead>
                           <tbody>
-                            {(tatView1 === 'facility' ? tatByFacility : tatByCourierOp).map((row, ri, arr) => {
+                            {(tatView1 === 'facility' ? tatByFacility : tatByCourierGrouped).map((row, ri, arr) => {
                               const tot = (row.op_0_1||0)+(row.op_2_3||0)+(row.op_4_5||0)+(row.op_5plus||0)
                               const isLast = ri === arr.length - 1
                               const label = tatView1 === 'facility' ? row.facility : row.label
@@ -1528,14 +1527,14 @@ function LogisticsPage({ filters }) {
                         <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed' }}>
                           <colgroup>{cw.map((w,i)=><col key={i} style={{width:w}}/>)}</colgroup>
                           <thead><tr style={{ background: C.bg }}>
-                            <th style={{ ...thL, position: 'sticky', top: 0, background: C.bg, zIndex: 1 }}>Facility</th>
+                            <th style={{ ...thL, position: 'sticky', top: 0, background: C.bg, zIndex: 1 }}>{tatView2 === 'facility' ? 'Facility' : 'Courier'}</th>
                             <th style={{ ...thS, position: 'sticky', top: 0, background: C.bg, zIndex: 1 }}>0-12H</th>
                             <th style={{ ...thS, position: 'sticky', top: 0, background: C.bg, zIndex: 1 }}>12-24H</th>
                             <th style={{ ...thS, position: 'sticky', top: 0, background: C.bg, zIndex: 1 }}>24-48H</th>
                             <th style={{ ...thS, position: 'sticky', top: 0, background: C.bg, zIndex: 1 }}>48H+</th>
                           </tr></thead>
                           <tbody>
-                            {(tatView2 === 'facility' ? tatByFacility : tatByCourierProc).map((row, ri, arr) => {
+                            {(tatView2 === 'facility' ? tatByFacility : tatByCourierGrouped).map((row, ri, arr) => {
                               const tot = (row.proc_0_12h||0)+(row.proc_12_24h||0)+(row.proc_24_48h||0)+(row.proc_48plus||0)
                               const isLast = ri === arr.length - 1
                               const label = tatView2 === 'facility' ? row.facility : row.label
@@ -1566,50 +1565,59 @@ function LogisticsPage({ filters }) {
                     </div>
                     ) })()}
 
-                    {/* Table 3: In-Transit Time — pickup_ts → delivery_ts (by Courier) */}
-                    <div style={{ ...tableCard2, height: 320 }}>
-                      <div style={tableTitle2}>In-Transit Time <span style={{ fontWeight: 500, color: C.t3, fontSize: 9.5, marginLeft: 4 }}>(by Courier)</span></div>
-                      <div style={{ margin: '0 8px', flex: 1, overflowY: 'auto' }}>
-                        <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed' }}>
-                          <colgroup><col style={{ width: '25%' }} /><col style={{ width: '15%' }} /><col style={{ width: '15%' }} /><col style={{ width: '15%' }} /><col style={{ width: '15%' }} /><col style={{ width: '15%' }} /></colgroup>
-                          <thead><tr style={{ background: C.bg }}>
-                            <th style={{ ...thL, position: 'sticky', top: 0, background: C.bg, zIndex: 1 }}>Courier</th>
-                            <th style={{ ...thS, position: 'sticky', top: 0, background: C.bg, zIndex: 1 }}>Del</th>
-                            <th style={{ ...thS, position: 'sticky', top: 0, background: C.bg, zIndex: 1 }}>0-1d</th>
-                            <th style={{ ...thS, position: 'sticky', top: 0, background: C.bg, zIndex: 1 }}>2-3d</th>
-                            <th style={{ ...thS, position: 'sticky', top: 0, background: C.bg, zIndex: 1 }}>4-5d</th>
-                            <th style={{ ...thS, position: 'sticky', top: 0, background: C.bg, zIndex: 1 }}>5+d</th>
-                          </tr></thead>
-                          <tbody>
-                            {tatByCourier.map((row) => {
-                              const tot = row.delivered || 0
-                              return (
-                                <tr key={row.courier_group}>
-                                  <td style={tdL}>{row.courier_group}</td>
-                                  <td style={tdS}>{tot.toLocaleString('en-IN')}</td>
-                                  {[row.bucket_0_1, row.bucket_2_3, row.bucket_4_5, row.bucket_5plus].map((v, ci) => (
-                                    <td key={ci} style={{ ...tdS, color: (v/tot)>0.2?'#dc2626':C.t2, fontWeight: (v/tot)>0.2?700:400 }}>{fmtCell(v, tot)}</td>
-                                  ))}
-                                </tr>
-                              )
-                            })}
-                          </tbody>
-                        </table>
+                    {/* Table 3: In-Transit Time — pickup_ts → delivery_ts */}
+                    {(() => {
+                      const t3rows = tatView3 === 'courier' ? tatByCourier : tatByFacility
+                      const t3total = tatView3 === 'courier' ? courierTotals.delivered : (facTotals.bucket_0_1+facTotals.bucket_2_3+facTotals.bucket_4_5+facTotals.bucket_5plus)
+                      const cw3 = ['25%','15%','15%','15%','15%','15%']
+                      return (
+                      <div style={{ ...tableCard2, height: 320 }}>
+                        <div style={{ ...tableTitle2, display: 'flex', alignItems: 'center' }}>In-Transit Time <span style={{ fontWeight: 500, color: C.t3, fontSize: 9.5, marginLeft: 4 }}>({tatView3 === 'courier' ? 'by Courier' : 'by Facility'})</span><ViewToggle view={tatView3} setView={setTatView3} /></div>
+                        <div style={{ margin: '0 8px', flex: 1, overflowY: 'auto' }}>
+                          <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed' }}>
+                            <colgroup>{cw3.map((w,i)=><col key={i} style={{width:w}}/>)}</colgroup>
+                            <thead><tr style={{ background: C.bg }}>
+                              <th style={{ ...thL, position: 'sticky', top: 0, background: C.bg, zIndex: 1 }}>{tatView3 === 'courier' ? 'Courier' : 'Facility'}</th>
+                              <th style={{ ...thS, position: 'sticky', top: 0, background: C.bg, zIndex: 1 }}>Del</th>
+                              <th style={{ ...thS, position: 'sticky', top: 0, background: C.bg, zIndex: 1 }}>0-1d</th>
+                              <th style={{ ...thS, position: 'sticky', top: 0, background: C.bg, zIndex: 1 }}>2-3d</th>
+                              <th style={{ ...thS, position: 'sticky', top: 0, background: C.bg, zIndex: 1 }}>4-5d</th>
+                              <th style={{ ...thS, position: 'sticky', top: 0, background: C.bg, zIndex: 1 }}>5+d</th>
+                            </tr></thead>
+                            <tbody>
+                              {t3rows.map((row, ri, arr) => {
+                                const tot = tatView3 === 'courier' ? (row.delivered||0) : ((row.bucket_0_1||0)+(row.bucket_2_3||0)+(row.bucket_4_5||0)+(row.bucket_5plus||0))
+                                const isLast = ri === arr.length - 1
+                                const rowLabel = tatView3 === 'courier' ? row.courier_group : row.facility
+                                return (
+                                  <tr key={rowLabel}>
+                                    <td style={{ ...tdL, ...(isLast ? { borderBottom: 'none' } : {}) }}>{rowLabel}</td>
+                                    <td style={{ ...tdS, ...(isLast ? { borderBottom: 'none' } : {}) }}>{tot.toLocaleString('en-IN')}</td>
+                                    {[row.bucket_0_1, row.bucket_2_3, row.bucket_4_5, row.bucket_5plus].map((v, ci) => (
+                                      <td key={ci} style={{ ...tdS, color: (v/tot)>0.2?'#dc2626':C.t2, fontWeight: (v/tot)>0.2?700:400, ...(isLast ? { borderBottom: 'none' } : {}) }}>{fmtCell(v, tot)}</td>
+                                    ))}
+                                  </tr>
+                                )
+                              })}
+                            </tbody>
+                          </table>
+                        </div>
+                        <div style={totalWrap}>
+                          <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed', background: C.bg }}>
+                            <colgroup>{cw3.map((w,i)=><col key={i} style={{width:w}}/>)}</colgroup>
+                            <tbody><tr>
+                              <td style={totalRowL}>Total</td>
+                              <td style={totalRowS}>{t3total.toLocaleString('en-IN')}</td>
+                              <td style={totalRowS}>{fmtCell(tatView3 === 'courier' ? courierTotals.bucket_0_1 : facTotals.bucket_0_1, t3total)}</td>
+                              <td style={totalRowS}>{fmtCell(tatView3 === 'courier' ? courierTotals.bucket_2_3 : facTotals.bucket_2_3, t3total)}</td>
+                              <td style={totalRowS}>{fmtCell(tatView3 === 'courier' ? courierTotals.bucket_4_5 : facTotals.bucket_4_5, t3total)}</td>
+                              <td style={totalRowS}>{fmtCell(tatView3 === 'courier' ? courierTotals.bucket_5plus : facTotals.bucket_5plus, t3total)}</td>
+                            </tr></tbody>
+                          </table>
+                        </div>
                       </div>
-                      <div style={totalWrap}>
-                        <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed', background: C.bg }}>
-                          <colgroup><col style={{ width: '25%' }} /><col style={{ width: '15%' }} /><col style={{ width: '15%' }} /><col style={{ width: '15%' }} /><col style={{ width: '15%' }} /><col style={{ width: '15%' }} /></colgroup>
-                          <tbody><tr>
-                            <td style={totalRowL}>Total</td>
-                            <td style={totalRowS}>{courierTotals.delivered.toLocaleString('en-IN')}</td>
-                            <td style={totalRowS}>{fmtCell(courierTotals.bucket_0_1, courierTotals.delivered)}</td>
-                            <td style={totalRowS}>{fmtCell(courierTotals.bucket_2_3, courierTotals.delivered)}</td>
-                            <td style={totalRowS}>{fmtCell(courierTotals.bucket_4_5, courierTotals.delivered)}</td>
-                            <td style={totalRowS}>{fmtCell(courierTotals.bucket_5plus, courierTotals.delivered)}</td>
-                          </tr></tbody>
-                        </table>
-                      </div>
-                    </div>
+                      )
+                    })()}
 
                     {/* Table 4: Fulfilment Time — order_date → delivery_date (by Facility) */}
                     {(() => { const cw = ['25%','18.75%','18.75%','18.75%','18.75%']; const t4=(facTotals.ord_0_1+facTotals.ord_2_3+facTotals.ord_4_5+facTotals.ord_5plus); return (
@@ -1619,14 +1627,14 @@ function LogisticsPage({ filters }) {
                         <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed' }}>
                           <colgroup>{cw.map((w,i)=><col key={i} style={{width:w}}/>)}</colgroup>
                           <thead><tr style={{ background: C.bg }}>
-                            <th style={{ ...thL, position: 'sticky', top: 0, background: C.bg, zIndex: 1 }}>Facility</th>
+                            <th style={{ ...thL, position: 'sticky', top: 0, background: C.bg, zIndex: 1 }}>{tatView4 === 'facility' ? 'Facility' : 'Courier'}</th>
                             <th style={{ ...thS, position: 'sticky', top: 0, background: C.bg, zIndex: 1 }}>0-1D</th>
                             <th style={{ ...thS, position: 'sticky', top: 0, background: C.bg, zIndex: 1 }}>2-3D</th>
                             <th style={{ ...thS, position: 'sticky', top: 0, background: C.bg, zIndex: 1 }}>4-5D</th>
                             <th style={{ ...thS, position: 'sticky', top: 0, background: C.bg, zIndex: 1 }}>5+D</th>
                           </tr></thead>
                           <tbody>
-                            {(tatView4 === 'facility' ? tatByFacility : tatByCourierOrd).map((row, ri, arr) => {
+                            {(tatView4 === 'facility' ? tatByFacility : tatByCourierGrouped).map((row, ri, arr) => {
                               const tot = (row.ord_0_1||0)+(row.ord_2_3||0)+(row.ord_4_5||0)+(row.ord_5plus||0)
                               const isLast = ri === arr.length - 1
                               const label = tatView4 === 'facility' ? row.facility : row.label

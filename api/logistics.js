@@ -541,7 +541,12 @@ tat_by_facility AS (
       COUNTIF(created_date IS NOT NULL AND order_date IS NOT NULL AND DATE_DIFF(created_date, order_date, DAY) BETWEEN 0 AND 1) AS op_0_1,
       COUNTIF(created_date IS NOT NULL AND order_date IS NOT NULL AND DATE_DIFF(created_date, order_date, DAY) BETWEEN 2 AND 3) AS op_2_3,
       COUNTIF(created_date IS NOT NULL AND order_date IS NOT NULL AND DATE_DIFF(created_date, order_date, DAY) BETWEEN 4 AND 5) AS op_4_5,
-      COUNTIF(created_date IS NOT NULL AND order_date IS NOT NULL AND DATE_DIFF(created_date, order_date, DAY) > 5) AS op_5plus
+      COUNTIF(created_date IS NOT NULL AND order_date IS NOT NULL AND DATE_DIFF(created_date, order_date, DAY) > 5) AS op_5plus,
+      -- In-Transit Time: pickup_ts → delivery_ts (days)
+      COUNTIF(pickup_ts IS NOT NULL AND delivery_ts IS NOT NULL AND TIMESTAMP_DIFF(delivery_ts, pickup_ts, MINUTE) BETWEEN 0 AND 2880) AS bucket_0_1,
+      COUNTIF(pickup_ts IS NOT NULL AND delivery_ts IS NOT NULL AND TIMESTAMP_DIFF(delivery_ts, pickup_ts, MINUTE) BETWEEN 2881 AND 5760) AS bucket_2_3,
+      COUNTIF(pickup_ts IS NOT NULL AND delivery_ts IS NOT NULL AND TIMESTAMP_DIFF(delivery_ts, pickup_ts, MINUTE) BETWEEN 5761 AND 7200) AS bucket_4_5,
+      COUNTIF(pickup_ts IS NOT NULL AND delivery_ts IS NOT NULL AND TIMESTAMP_DIFF(delivery_ts, pickup_ts, MINUTE) > 7200) AS bucket_5plus
     FROM base WHERE pickup_city IS NOT NULL GROUP BY 1, 2
   ) WHERE facility IS NOT NULL
 ),
