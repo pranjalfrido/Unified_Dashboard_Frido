@@ -1380,7 +1380,7 @@ function LogisticsPage({ filters }) {
         const tdStyle2 = { fontSize: 11.5, color: C.t1, padding: '6px 10px', borderBottom: `1px solid ${C.border}`, textAlign: 'right', whiteSpace: 'nowrap' }
         const tdL2 = { ...tdStyle2, textAlign: 'left', fontWeight: 600 }
         const tableCard2 = { background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, overflow: 'hidden', display: 'flex', flexDirection: 'column' }
-        const totalWrap = { margin: '0 8px 8px', borderRadius: 8, overflow: 'hidden', border: `1px solid ${C.border}` }
+        const totalWrap = { margin: '0 8px 8px' }
         const tableTitle2 = { fontSize: 9.9, fontWeight: 700, color: C.t1, padding: '12px 14px 10px', borderBottom: `1px solid ${C.border}` }
 
         const byZone2 = data.byZoneDetail || []
