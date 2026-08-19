@@ -879,11 +879,11 @@ function LogisticsPage({ filters }) {
               }))
               return (<>
             <ResponsiveContainer width="100%" height={220}>
-              <ComposedChart data={tatData} margin={{ top: 10, right: 30, left: -30, bottom: 0 }}>
+              <ComposedChart data={tatData} margin={{ top: 10, right: 10, left: -30, bottom: 0 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke={C.border} vertical={false} />
                 <XAxis dataKey="label" tick={{ fontSize: 10, fill: C.t3 }} />
                 <YAxis yAxisId="left" tick={{ fontSize: 9, fill: C.t3 }} tickFormatter={v => v >= 1000 ? (v/1000).toFixed(0)+'K' : v} />
-                <YAxis yAxisId="right" orientation="right" domain={[0, 'dataMax + 2']} tick={{ fontSize: 9, fill: C.t2 }} tickFormatter={v => v + 'd'} />
+                <YAxis yAxisId="right" orientation="right" domain={[0, dataMax => Math.ceil(dataMax) + 1]} tickCount={5} tick={{ fontSize: 9, fill: C.t2 }} tickFormatter={v => Math.round(v) + 'd'} />
                 <Tooltip
                   contentStyle={{ fontSize: 11, padding: '6px 10px', borderRadius: 8, border: `1px solid ${C.border}`, background: C.card, color: C.t1 }}
                   itemStyle={{ color: C.t1, padding: '1px 0' }}
@@ -891,14 +891,14 @@ function LogisticsPage({ filters }) {
                   formatter={(value, name) => name.includes('Days') ? [value != null ? value + 'd' : '—', name] : [Number(value).toLocaleString('en-IN'), name]}
                 />
                 <Bar yAxisId="left" dataKey="total" name="Total Shipments" fill="#FFC107" opacity={0.85} radius={[3,3,0,0]} />
-                <Line yAxisId="right" type="monotone" dataKey="avg_processing_days" name="Avg Processing Days" stroke="#3B82F6" strokeWidth={2} dot={false} connectNulls />
-                <Line yAxisId="right" type="monotone" dataKey="avg_pickup_days" name="Avg Pickup Days" stroke="#22C55E" strokeWidth={2} dot={false} connectNulls />
-                <Line yAxisId="right" type="monotone" dataKey="avg_intransit_days" name="Avg Intransit Days" stroke="#F97316" strokeWidth={2} dot={false} connectNulls />
-                <Line yAxisId="right" type="monotone" dataKey="avg_fulfilment_days" name="Avg Fulfilment Days" stroke="#A855F7" strokeWidth={2} dot={false} connectNulls />
+                <Line yAxisId="right" type="monotone" dataKey="avg_processing_days" name="Avg Processing Days" stroke="#111" strokeWidth={1.5} dot={false} connectNulls />
+                <Line yAxisId="right" type="monotone" dataKey="avg_pickup_days" name="Avg Pickup Days" stroke="#111" strokeWidth={1.5} strokeDasharray="5 3" dot={false} connectNulls />
+                <Line yAxisId="right" type="monotone" dataKey="avg_intransit_days" name="Avg Intransit Days" stroke="#111" strokeWidth={1.5} strokeDasharray="2 2" dot={false} connectNulls />
+                <Line yAxisId="right" type="monotone" dataKey="avg_fulfilment_days" name="Avg Fulfilment Days" stroke="#111" strokeWidth={2} strokeDasharray="8 3" dot={false} connectNulls />
               </ComposedChart>
             </ResponsiveContainer>
             <div style={{ display: 'flex', gap: 16, justifyContent: 'center', marginTop: 8, flexWrap: 'wrap', flexShrink: 0 }}>
-              {[['#FFC107','Total Shipments'],['#3B82F6','Avg Processing Days'],['#22C55E','Avg Pickup Days'],['#F97316','Avg Intransit Days'],['#A855F7','Avg Fulfilment Days']].map(([color, label]) => (
+              {[['#FFC107','Total Shipments'],['#111','Avg Processing Days'],['#111','Avg Pickup Days'],['#111','Avg Intransit Days'],['#111','Avg Fulfilment Days']].map(([color, label]) => (
                 <span key={label} style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 10, color: C.t2 }}>
                   <span style={{ width: 10, height: 10, borderRadius: 2, background: color, display: 'inline-block' }} />{label}
                 </span>
