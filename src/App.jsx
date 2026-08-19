@@ -239,6 +239,7 @@ function LogisticsPage({ filters }) {
     setLoading(true); setError(null)
     try {
       // Try static file first — served from Vercel CDN in ~14ms
+      // Static file has ALL shipment types and categories, so we filter client-side (instant)
       let usedStatic = false
       try {
         const res = await fetch('/logistics-data.json')
@@ -256,6 +257,7 @@ function LogisticsPage({ filters }) {
       } catch { /* fall through to live API */ }
 
       if (!usedStatic) {
+        // Static JSON unavailable — hit live BQ with all active filters
         const body = { start: filters.start, end: filters.end }
         if (lFilters.category) body.category = [lFilters.category]
         if (lFilters.subCategory) body.subCategory = [lFilters.subCategory]
@@ -278,7 +280,7 @@ function LogisticsPage({ filters }) {
       }
     } catch (e) { setError(e.message) }
     finally { setLoading(false) }
-  }, [filters.start, filters.end])
+  }, [filters.start, filters.end, lFilters.category, lFilters.subCategory, lFilters.shipmentType])
 
   useEffect(() => { fetchLogistics() }, [fetchLogistics])
 
