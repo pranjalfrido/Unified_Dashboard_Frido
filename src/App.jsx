@@ -1462,7 +1462,7 @@ function LogisticsPage({ filters }) {
               const thL = { ...thS, textAlign: 'left' }
               const tdS = { fontSize: 12.35, color: C.t2, padding: '5.75px 10px', borderBottom: `1px solid ${C.border}`, textAlign: 'right', whiteSpace: 'nowrap' }
               const tdL = { ...tdS, textAlign: 'left', fontWeight: 600, color: C.t1 }
-              const totalRowS = { fontSize: 12.35, fontWeight: 700, color: C.t1, padding: '6px 10px', textAlign: 'right', whiteSpace: 'nowrap', background: C.bg, borderTop: `2px solid ${C.border}` }
+              const totalRowS = { fontSize: 12.35, fontWeight: 700, color: C.t1, padding: '9px 10px', textAlign: 'right', whiteSpace: 'nowrap', background: C.bg, borderTop: `2px solid ${C.border}` }
               const totalRowL = { ...totalRowS, textAlign: 'left' }
 
               return (
@@ -1481,7 +1481,7 @@ function LogisticsPage({ filters }) {
                           )})}
                         </div>
                       </div>
-                      <div style={{ margin: '0 8px', flex: 1, overflowY: 'auto' }}>
+                      <div style={{ margin: '0 8px', overflowY: 'auto', maxHeight: 240 }}>
                         <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed' }}>
                           <colgroup>{cw.map((w,i)=><col key={i} style={{width:w}}/>)}</colgroup>
                           <thead><tr style={{ background: C.bg }}>
@@ -1534,7 +1534,7 @@ function LogisticsPage({ filters }) {
                           )})}
                         </div>
                       </div>
-                      <div style={{ margin: '0 8px', flex: 1, overflowY: 'auto' }}>
+                      <div style={{ margin: '0 8px', overflowY: 'auto', maxHeight: 240 }}>
                         <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed' }}>
                           <colgroup>{cw.map((w,i)=><col key={i} style={{width:w}}/>)}</colgroup>
                           <thead><tr style={{ background: C.bg }}>
@@ -1586,7 +1586,7 @@ function LogisticsPage({ filters }) {
                           )})}
                         </div>
                       </div>
-                      <div style={{ margin: '0 8px', flex: 1, overflowY: 'auto' }}>
+                      <div style={{ margin: '0 8px', overflowY: 'auto', maxHeight: 240 }}>
                         <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed' }}>
                           <colgroup>{cw3.map((w,i)=><col key={i} style={{width:w}}/>)}</colgroup>
                           <thead><tr style={{ background: C.bg }}>
@@ -1641,7 +1641,7 @@ function LogisticsPage({ filters }) {
                           )})}
                         </div>
                       </div>
-                      <div style={{ margin: '0 8px', flex: 1, overflowY: 'auto' }}>
+                      <div style={{ margin: '0 8px', overflowY: 'auto', maxHeight: 240 }}>
                         <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed' }}>
                           <colgroup>{cw.map((w,i)=><col key={i} style={{width:w}}/>)}</colgroup>
                           <thead><tr style={{ background: C.bg }}>
