@@ -3149,7 +3149,7 @@ function MobileLogisticsPanel({ page, setPage, onClose, lFilters, setLFilters, f
 
 function Topnav({ page, setPage, customerTab, invTab, setInvTab, alerts, onRefresh, loading, filters, setFilters, rawRows, inventoryDateControl, salesActiveTab, setSalesActiveTab, salesData, salesChannelView, setSalesChannelView, salesOfflineSub, setSalesOfflineSub, lFilters, setLFilters, logisticsFilterOpts }) {
   const [mobFilterOpen, setMobFilterOpen] = useState(false)
-  const titles = { overview: 'Overview', sales: 'Sales Analytics', pnl: 'P&L Analytics', ads: 'Ads Analytics', intelligence: 'Intelligence', logistics: 'Logistics Performance Analytics', 'logistics-cost': 'Logistics Cost Analytics', inventory: 'Inventory, Sales & Allocation', customer: 'Customer Intelligence', documents: 'Documents', cogs: 'COGS Ledger', 'logistics-ledger': 'Logistics Bill Ledger' }
+  const titles = { overview: 'Overview', sales: 'Sales Analytics', pnl: 'P&L Analytics', ads: 'Ads Analytics', intelligence: 'Intelligence', logistics: 'Performance Analytics', 'logistics-cost': 'Logistics Cost Analytics', inventory: 'Inventory, Sales & Allocation', customer: 'Customer Intelligence', documents: 'Documents', cogs: 'COGS Ledger', 'logistics-ledger': 'Logistics Bill Ledger' }
   const invTitles = { health: 'Inventory Health', sales: 'Sales & Allocation' }
   const salesChannelLabel = TABS.find(t => t.id === salesActiveTab)?.label || 'Sales Analytics'
   const pageTitle = page === 'inventory' ? (invTitles[invTab] || titles.inventory) : page === 'sales' ? salesChannelLabel : titles[page]
