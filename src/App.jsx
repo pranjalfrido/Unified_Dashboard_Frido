@@ -1785,9 +1785,9 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
                   </div>
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-                  <ResponsiveContainer width={150} height={190}>
+                  <ResponsiveContainer width={isMobile ? 150 : 180} height={isMobile ? 190 : 200}>
                     <PieChart>
-                      <Pie data={donutData} cx="50%" cy="50%" innerRadius={48} outerRadius={72} dataKey="value" paddingAngle={2}>
+                      <Pie data={donutData} cx="50%" cy="50%" innerRadius={isMobile ? 48 : 55} outerRadius={isMobile ? 72 : 85} dataKey="value" paddingAngle={2}>
                         {donutData.map((d,i) => <Cell key={i} fill={d.color} />)}
                       </Pie>
                       <Tooltip content={({ active, payload }) => {
@@ -1817,30 +1817,34 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
               </div>
               {/* Right: Shipment Qty bars + RTO% & Intrasit TAT lines */}
               <div style={{ ...cardStyle, padding: isMobile ? '14px 4px' : '16px 18px' }}>
-                <div style={{ padding: isMobile ? '0 6px' : 0, marginBottom: 0 }}>
+                <div style={{ padding: isMobile ? '0 6px' : 0, marginBottom: isMobile ? 0 : 10 }}>
                   <div style={chartTitle}>Delivery Performance by Weight Slab</div>
                 </div>
-                <div style={{ height: 1, background: C.border, margin: '10px 0 6px' }} />
+                {isMobile && <div style={{ height: 1, background: C.border, margin: '10px 0 6px' }} />}
                 <ResponsiveContainer width="100%" height={220}>
-                  <ComposedChart data={ordered} margin={{ top: 4, right: 4, left: 4, bottom: 0 }}>
-                    <XAxis dataKey="slab" tick={{ fontSize: 9, fill: C.t2 }} axisLine={{ stroke: C.border }} tickLine={false} />
-                    <YAxis yAxisId="qty" tick={false} axisLine={false} tickLine={false} width={0} />
-                    <YAxis yAxisId="pct" orientation="right" tick={false} axisLine={false} tickLine={false} width={0} domain={[0, 'dataMax + 5']} />
+                  <ComposedChart data={ordered} margin={isMobile ? { top: 4, right: 4, left: 4, bottom: 0 } : { top: 4, right: 40, left: -10, bottom: 0 }}>
+                    {!isMobile && <CartesianGrid strokeDasharray="3 3" stroke={C.border} vertical={false} />}
+                    <XAxis dataKey="slab" tick={{ fontSize: isMobile ? 9 : 10, fill: C.t2 }} axisLine={isMobile ? { stroke: C.border } : undefined} tickLine={false} />
+                    {isMobile
+                      ? <><YAxis yAxisId="qty" tick={false} axisLine={false} tickLine={false} width={0} /><YAxis yAxisId="pct" orientation="right" tick={false} axisLine={false} tickLine={false} width={0} domain={[0, 'dataMax + 5']} /></>
+                      : <><YAxis yAxisId="qty" tick={{ fontSize: 10, fill: C.t2 }} tickFormatter={v => v >= 1000 ? `${(v/1000).toFixed(0)}K` : v} /><YAxis yAxisId="pct" orientation="right" tick={{ fontSize: 10, fill: C.t2 }} unit="%" domain={[0, 'dataMax + 5']} /></>
+                    }
                     <Tooltip content={({ active, payload, label }) => {
                       if (!active || !payload?.length) return null
                       const row = ordered.find(r => r.slab === label) || {}
                       return (
                         <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 8, padding: '8px 12px', fontSize: 11, color: C.t1 }}>
                           <div style={{ fontWeight: 700, marginBottom: 4 }}>{label}</div>
-                          <div style={{ color: C.t1 }}>Shipments: {(row.total||0).toLocaleString('en-IN')}</div>
-                          <div style={{ color: C.t1 }}>RTO %: {row.rto_pct??'—'}%</div>
-                          <div style={{ color: C.t1 }}>Intrasit TAT: {row.avg_tat??'—'}d</div>
+                          <div style={{ color: '#5BA4CF' }}>Shipments: <strong>{(row.total||0).toLocaleString('en-IN')}</strong></div>
+                          <div style={{ color: C.red.tx }}>RTO %: <strong>{row.rto_pct??'—'}%</strong></div>
+                          <div style={{ color: '#60A5FA' }}>Intrasit TAT: <strong>{row.avg_tat??'—'}d</strong></div>
                         </div>
                       )
                     }} />
                     <Bar yAxisId="qty" dataKey="total" name="Shipments" fill="#5BA4CF" radius={[3,3,0,0]} barSize={20} />
                     <Line yAxisId="pct" type="monotone" dataKey="rto_pct" name="RTO %" stroke={C.red.tx} strokeWidth={2} dot={{ r: 3, fill: C.red.tx }} />
                     <Line yAxisId="pct" type="monotone" dataKey="avg_tat" name="Intrasit TAT" stroke="#60A5FA" strokeWidth={2} dot={{ r: 3, fill: '#60A5FA' }} />
+                    {!isMobile && <Legend wrapperStyle={{ fontSize: 10 }} />}
                   </ComposedChart>
                 </ResponsiveContainer>
               </div>
