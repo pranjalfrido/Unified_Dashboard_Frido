@@ -830,11 +830,6 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
                 <div style={chartTitle}>Shipment Trend</div>
               </div>
               <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-                <div style={{ display: 'flex', background: C.bg, border: `1px solid ${C.border}`, borderRadius: 6, padding: 2, gap: 0 }}>
-                  {['Qty','Value'].map(m => (
-                    <button key={m} onClick={() => setTrendMetric(m)} style={{ fontSize: 9, padding: '2px 9px', borderRadius: 4, border: 'none', background: trendMetric === m ? C.acc : 'transparent', color: trendMetric === m ? '#000' : C.t3, cursor: 'pointer', fontWeight: trendMetric === m ? 700 : 500, fontFamily: 'var(--font)' }}>{m}</button>
-                  ))}
-                </div>
                 <select value={trendGranularity} onChange={e => setTrendGranularity(e.target.value)} style={{ fontSize: 10, padding: '2px 7px', borderRadius: 5, border: `1px solid ${C.border}`, background: C.card, color: C.t1, cursor: 'pointer', fontFamily: 'var(--font)', fontWeight: 600 }}>
                   {['Daily','Weekly','Monthly'].map(g => <option key={g} value={g}>{g}</option>)}
                 </select>
