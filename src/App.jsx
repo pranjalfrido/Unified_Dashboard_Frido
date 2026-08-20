@@ -766,13 +766,11 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
             </div>
             {(() => {
               const kpiItems = [
-                <LKpiCard key="ontm" label="On Time Del" value={n(k.on_time)} badgeText={pct2(k.on_time, k.delivered)} badgeVariant="G" cur={k.on_time} prev={pk.on_time} compact mobile />,
-                <LKpiCard key="sla" label="SLA Breach" value={n(k.sla_breach)} badgeVariant="R" cur={k.sla_breach} prev={pk.sla_breach} compact mobile />,
-                <LKpiCard key="rto10" label="RTO 10+ Days" value={n(k.rto_10plus)} badgeVariant="R" cur={k.rto_10plus} prev={pk.rto_10plus} compact mobile />,
-                <LKpiCard key="zrto" label="Z-RTO" value={n(k.z_rto)} badgeText={pct2(k.z_rto, k.total_shipments)} badgeVariant="A" cur={k.z_rto} prev={pk.z_rto} compact mobile />,
-                <LKpiCard key="fasr" label="FASR %" value={pct2(k.delivered_1attempt, k.total_ofd_attempts)} badgeVariant="G" cur={k.delivered_1attempt} prev={pk.delivered_1attempt} compact mobile />,
-                <LKpiCard key="rasr" label="RASR %" value={pct2(k.delivered_multi, k.total_ofd_attempts)} badgeVariant="B" cur={k.delivered_multi} prev={pk.delivered_multi} compact mobile />,
-                <LKpiCard key="multi" label="Multi-Att Del" value={n(k.delivered_multi)} badgeVariant="B" cur={k.delivered_multi} prev={pk.delivered_multi} compact mobile />,
+                <LKpiCard key="att" label="Total Attempted" value={fmtBig(k.total_ofd_attempts)} badgeVariant="N" cur={k.total_ofd_attempts} prev={pk.total_ofd_attempts} compact mobile />,
+                <LKpiCard key="zrto" label="Z-RTO" value={fmtBig(k.z_rto)} badgeText={pct2(k.z_rto, k.total_shipments)} badgeVariant="A" cur={k.z_rto} prev={pk.z_rto} compact mobile />,
+                <LKpiCard key="fasr" label="FASR % (of attempted)" value={pct2(k.delivered_1attempt, k.total_ofd_attempts)} badgeVariant="G" cur={k.delivered_1attempt} prev={pk.delivered_1attempt} compact mobile />,
+                <LKpiCard key="rasr" label="RASR % (of attempted)" value={pct2(k.delivered_multi, k.total_ofd_attempts)} badgeVariant="B" cur={k.delivered_multi} prev={pk.delivered_multi} compact mobile />,
+                <LKpiCard key="multi" label="Multi-Att Del" value={fmtBig(k.delivered_multi)} badgeVariant="B" cur={k.delivered_multi} prev={pk.delivered_multi} compact mobile />,
                 <LKpiCard key="proc" label="Avg Processing" value={d1(k.avg_processing)} badgeText="Cr→1st OFD" badgeVariant="N" cur={k.avg_processing} prev={pk.avg_processing} compact mobile />,
                 <LKpiCard key="pick" label="Avg Pickup TAT" value={d1(k.avg_pickup)} badgeText="Cr→Pick" badgeVariant="B" cur={k.avg_pickup} prev={pk.avg_pickup} compact mobile />,
                 <LKpiCard key="intr" label="Avg In-Transit" value={d1(k.avg_intransit)} badgeText="Pick→Del" badgeVariant="N" cur={k.avg_intransit} prev={pk.avg_intransit} compact mobile />,
@@ -807,11 +805,11 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
             </div>
             {/* Right: 2 rows × 6 cols */}
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gridTemplateRows: 'repeat(2, 1fr)', gap: filterSidebarOpen ? 5 : 7, alignItems: 'stretch' }}>
-              <LKpiCard label="Total Attempted" value={n(k.total_ofd_attempts)} badgeVariant="N" cur={k.total_ofd_attempts} prev={pk.total_ofd_attempts} compact tight={filterSidebarOpen} />
-              <LKpiCard label="Z-RTO" value={n(k.z_rto)} badgeText={pct2(k.z_rto, k.total_shipments)} badgeVariant="A" cur={k.z_rto} prev={pk.z_rto} compact tight={filterSidebarOpen} />
+              <LKpiCard label="Total Attempted" value={fmtBig(k.total_ofd_attempts)} badgeVariant="N" cur={k.total_ofd_attempts} prev={pk.total_ofd_attempts} compact tight={filterSidebarOpen} />
+              <LKpiCard label="Z-RTO" value={fmtBig(k.z_rto)} badgeText={pct2(k.z_rto, k.total_shipments)} badgeVariant="A" cur={k.z_rto} prev={pk.z_rto} compact tight={filterSidebarOpen} />
               <LKpiCard label="FASR % (of attempted)" value={pct2(k.delivered_1attempt, k.total_ofd_attempts)} badgeVariant="G" cur={k.delivered_1attempt} prev={pk.delivered_1attempt} compact tight={filterSidebarOpen} />
               <LKpiCard label="RASR % (of attempted)" value={pct2(k.delivered_multi, k.total_ofd_attempts)} badgeVariant="B" cur={k.delivered_multi} prev={pk.delivered_multi} compact tight={filterSidebarOpen} />
-              <LKpiCard label="Multi-Att Del" value={n(k.delivered_multi)} badgeVariant="B" cur={k.delivered_multi} prev={pk.delivered_multi} compact tight={filterSidebarOpen} />
+              <LKpiCard label="Multi-Att Del" value={fmtBig(k.delivered_multi)} badgeVariant="B" cur={k.delivered_multi} prev={pk.delivered_multi} compact tight={filterSidebarOpen} />
               <LKpiCard label="Avg Processing" value={d1(k.avg_processing)} badgeText="Cr→1st OFD" badgeVariant="N" cur={k.avg_processing} prev={pk.avg_processing} compact tight={filterSidebarOpen} />
               <LKpiCard label="Avg Pickup TAT" value={d1(k.avg_pickup)} badgeText="Cr→Pick" badgeVariant="B" cur={k.avg_pickup} prev={pk.avg_pickup} compact tight={filterSidebarOpen} />
               <LKpiCard label="Avg In-Transit" value={d1(k.avg_intransit)} badgeText="Pick→Del" badgeVariant="N" cur={k.avg_intransit} prev={pk.avg_intransit} compact tight={filterSidebarOpen} />
