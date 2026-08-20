@@ -43,6 +43,7 @@ import { config } from 'dotenv'
 import { readFileSync } from 'fs'
 import { join, dirname } from 'path'
 import { fileURLToPath } from 'url'
+import { loadCourierProfiles, PER_KG_COURIERS, sqlList } from './courier-profiles.mjs'
 
 config()
 const { Pool } = pkg
@@ -72,7 +73,7 @@ const SCOPE = `total_cost > 0 AND zone IN ('A','B','C','D','E')
 
 // Slab from the COURIER'S charged weight — see the header note. 0.5 kg floor then round up.
 // NULL for Bluedart B2B, which its contract prices per actual kg.
-const SLAB = `CASE WHEN courier_name = 'Bluedart B2B' THEN NULL
+const SLAB = `CASE WHEN courier_name IN (${sqlList(PER_KG_COURIERS)}) THEN NULL
                    WHEN charged_weight_courier <= 0.5 THEN 0.5
                    ELSE CEIL(charged_weight_courier) END`
 
@@ -80,9 +81,13 @@ const LEG = `CASE WHEN upper(shipment_mode) = 'FORWARD' THEN 'Forward'
                   WHEN upper(shipment_mode) = 'RTO'     THEN 'RTO'
                   ELSE 'Reverse' END`
 
-// RTO rows bundle forward + return for five couriers, so the return leg is the row minus
-// the matching forward cost. Bluedart/Urbanbolt already invoice the return leg alone.
-const RTO_BUNDLES = ['Delhivery', 'ElasticRun', 'Shadowfax', 'SkyAir', 'Swift']
+// RTO rows bundle forward + return for some couriers, so the return leg is the row minus
+// the matching forward cost; others already invoice the return leg alone. Which is which is
+// MEASURED from the RTO-to-forward cost ratio on each run, so a newly dumped courier gets
+// classified on its own billing instead of defaulting to "not a bundler" and reporting its
+// RTO leg at roughly twice reality.
+const PROFILES = await loadCourierProfiles(pool)
+const RTO_BUNDLES = PROFILES.bundlers
 
 // ── 1. Ensure the table exists ──
 const ddl = readFileSync(join(__dirname, 'sql', 'derived-rate-card.sql'), 'utf8')
@@ -116,10 +121,15 @@ const { rows: cells } = await pool.query(`
      WHERE ${SCOPE} ${monthFilter}
   ),
   b AS (
-    SELECT r.month_year, r.courier_name, r.acct, r.zone, r.slab, r.leg, r.pay, r.cw, r.t,
+    SELECT r.month_year, r.courier_name, r.acct, r.zone, r.slab, r.leg, r.pay, r.cw,
            CASE WHEN upper(r.shipment_mode) = 'RTO' AND r.courier_name = ANY($1)
                      AND f.fwd_f IS NOT NULL
-                THEN GREATEST(r.f - f.fwd_f, 0) ELSE r.f END AS f
+                THEN GREATEST(r.f - f.fwd_f, 0) ELSE r.f END AS f,
+           -- The total must be netted by the same amount as the freight, or sur_rate
+           -- measures a shrunken denominator against a whole numerator.
+           CASE WHEN upper(r.shipment_mode) = 'RTO' AND r.courier_name = ANY($1)
+                     AND f.fwd_f IS NOT NULL
+                THEN GREATEST(r.t - f.fwd_f, 0) ELSE r.t END AS t
       FROM raw r
       LEFT JOIN fwd f ON f.month_year = r.month_year AND f.courier_name = r.courier_name
                      AND f.acct = r.acct AND f.zone = r.zone
@@ -134,7 +144,10 @@ const { rows: cells } = await pool.query(`
          CASE WHEN AVG(f) > 0 THEN STDDEV_POP(f) / AVG(f) ELSE 0 END::float8 AS cv,
          -- Add-on load measured off the total, not by summing the surcharge columns:
          -- those columns do not always account for the whole freight-to-total gap.
-         GREATEST(SUM(t) / NULLIF(SUM(f), 0) - 1, 0)::float8 AS sur_rate,
+         CASE WHEN courier_name IN (${PROFILES.allInSql})
+              THEN 0
+              ELSE GREATEST(SUM(t) / NULLIF(SUM(f), 0) - 1, 0)
+         END::float8 AS sur_rate,
          (SUM(t) / COUNT(*))::float8 AS total_wavg,
          (SUM(t) / NULLIF(SUM(cw), 0))::float8 AS cpk
     FROM b
@@ -202,13 +215,15 @@ if (DRY) {
   process.exit(0)
 }
 
-const { rows: cov } = await pool.query(`
+let cov = []
+try {
+  const covRes = await pool.query(`
   WITH s AS (
     SELECT month_year, courier_name, COALESCE(courier_account_type,'(none)') AS acct,
            zone, ${LEG} AS leg, COALESCE(payment_mode,'(none)') AS pay,
            -- OUR declared weight decides the slab we price at; the card was built on
            -- theirs. That asymmetry is the measurement.
-           CASE WHEN courier_name = 'Bluedart B2B' THEN NULL
+           CASE WHEN courier_name IN (${sqlList(PER_KG_COURIERS)}) THEN NULL
                 WHEN declared_weight_frido <= 0.5 THEN 0.5
                 ELSE CEIL(declared_weight_frido) END AS our_slab
       FROM public.logistics_invoices_b2c
@@ -248,9 +263,16 @@ const { rows: cov } = await pool.query(`
     LEFT JOIN cz   z ON z.courier_name = s.courier_name AND z.leg = s.leg AND z.zone = s.zone
    GROUP BY 1 ORDER BY 1
 `)
+  cov = covRes.rows
+} catch (e) {
+  // Diagnostics only — the card is already committed above, so a slow report must not
+  // turn a good build into a failed one.
+  console.warn(`
+coverage report skipped: ${e.message}`)
+}
 
 const totCov = cov.reduce((s, r) => s + r.shipments, 0)
-console.log('\nfallback tier coverage (priced on OUR declared weight):')
+if (cov.length) console.log('\nfallback tier coverage (priced on OUR declared weight):')
 for (const r of cov) {
   console.log(`  ${r.tier.padEnd(16)} ${String(r.shipments).padStart(7)}  ${(r.shipments / totCov * 100).toFixed(2)}%`)
 }

@@ -349,7 +349,8 @@ export default async function handler(req, res) {
     // drop the RVP and DTO shipments folded into that bar.
     if (f.modes?.length) {
       add(`CASE
-             WHEN upper(i.shipment_mode) IN ('REVERSE','RVP','DTO','RTO') THEN 'Reverse'
+             WHEN upper(i.shipment_mode) = 'RTO' THEN 'RTO'
+             WHEN upper(i.shipment_mode) IN ('REVERSE','RVP','DTO') THEN 'Reverse'
              WHEN upper(i.shipment_mode) = 'FORWARD' THEN 'Forward'
              ELSE COALESCE(i.shipment_mode, 'Unknown')
            END = ANY($?)`, f.modes)
@@ -425,18 +426,29 @@ export default async function handler(req, res) {
         SELECT
           i.month_year, i.courier_name, i.zone, i.shipment_mode, i.payment_mode,
           i.courier_account_type, i.destination_city, i.origin_city,
-          -- Shipment mode, collapsed to the two legs that matter commercially: freight
-          -- that carries revenue, and freight that doesn't. RTO / RVP / DTO / Reverse are
-          -- all goods coming back, so they report as one "Reverse" bucket.
+          -- Shipment mode, collapsed to the three legs that matter commercially: freight
+          -- that carries revenue, goods coming back from the customer (Reverse: RVP/DTO),
+          -- and goods that never reached them (RTO). RTO is kept separate because it prices
+          -- differently — ~90% of forward, and for the bundling couriers it arrives on the
+          -- same invoice row as the forward leg.
           --
-          -- NOTE: pricing still treats RTO separately (90% of forward, per the rate
-          -- cards) — this grouping is for REPORTING only and must not be reused as a
-          -- pricing key, or RTO would be priced as a full reverse leg.
+          -- NOTE: this grouping is for REPORTING. The rate card prices RTO on its own
+          -- terms; do not reuse this as a pricing key.
           CASE
-            WHEN upper(i.shipment_mode) IN ('REVERSE', 'RVP', 'DTO', 'RTO') THEN 'Reverse'
+            WHEN upper(i.shipment_mode) = 'RTO' THEN 'RTO'
+            WHEN upper(i.shipment_mode) IN ('REVERSE', 'RVP', 'DTO') THEN 'Reverse'
             WHEN upper(i.shipment_mode) = 'FORWARD' THEN 'Forward'
             ELSE COALESCE(i.shipment_mode, 'Unknown')
           END AS mode_group,
+          -- Same value under a second name: mode_group reads naturally for the KPI
+          -- breakdowns, leg_group for the per-leg cost comparison. Aliased rather than
+          -- duplicated so the two can never drift apart.
+          CASE
+            WHEN upper(i.shipment_mode) = 'RTO' THEN 'RTO'
+            WHEN upper(i.shipment_mode) IN ('REVERSE', 'RVP', 'DTO') THEN 'Reverse'
+            WHEN upper(i.shipment_mode) = 'FORWARD' THEN 'Forward'
+            ELSE COALESCE(i.shipment_mode, 'Unknown')
+          END AS leg_group,
           -- Ex-GST so Delhivery is comparable with the other couriers. See exGst().
           ${exGst('i.total_cost::float8', 'i.freight_charge::float8', 'i.surcharge::float8', 'i.other_charge::float8')} AS cost,
           i.freight_charge::float8 AS inv_freight,
@@ -597,26 +609,50 @@ export default async function handler(req, res) {
     // a cell where it has enough shipments to be meaningful.
     const lflQ = () => query(pool, `
       ${BASE}
-      SELECT zone,
-             CASE WHEN cw < 1 THEN '0 – 1 kg'
-                  WHEN cw < 2 THEN '1 – 2 kg'
-                  WHEN cw < 5 THEN '2 – 5 kg'
-                  WHEN cw < 10 THEN '5 – 10 kg'
+      -- RTO is the RETURN LEG ONLY here. For couriers flagged is_rto_bundle the invoice row
+      -- is forward + return in one line (measured: row/forward = 1.80-2.00, so net of the
+      -- forward the return leg is ~0.90x forward, matching the contracts). Comparing that raw
+      -- row against a return-only courier would make the bundlers look ~2x dearer on RTO —
+      -- an artefact of the billing convention, not a price difference. Bluedart (0.72x) and
+      -- Urbanbolt (0.90x) already bill the return alone and must NOT be netted, or their RTO
+      -- cost would go negative.
+      --
+      -- The netting joins are RESTRICTED TO RTO ROWS (leg_group = 'RTO' in the join
+      -- condition, not just the CASE). Only ~24k of 664k rows are RTO, so this keeps the
+      -- lookup off the other 96% — wrapping base in a subquery to compute it for every row
+      -- pushed this query past the statement timeout.
+      , fwdmed AS (SELECT courier_name, zone, acct, slab, fwd_t FROM public.lc_fwd_median),
+        prof AS (SELECT courier_name FROM public.lc_courier_profile WHERE is_rto_bundle)
+      SELECT base.zone,
+             CASE WHEN base.cw < 1 THEN '0 – 1 kg'
+                  WHEN base.cw < 2 THEN '1 – 2 kg'
+                  WHEN base.cw < 5 THEN '2 – 5 kg'
+                  WHEN base.cw < 10 THEN '5 – 10 kg'
                   ELSE '10 kg +' END AS band,
+             ${SLAB_OF('base.cw')} AS slab,
              -- Leg is a returned dimension now, not a hard-coded Forward filter, so the UI
              -- can compare couriers on reverse and RTO legs too. A courier that is cheapest
              -- outbound is not necessarily cheapest on returns.
-             mode_group AS leg,
-             courier_name,
-             COUNT(*)::int      AS n,
-             AVG(cost)::float8  AS avg_cost,
-             (SUM(cost) / NULLIF(SUM(cw), 0))::float8 AS cpk
+             base.leg_group AS leg,
+             base.courier_name,
+             COUNT(*)::int AS n,
+             -- GREATEST(...,0) guards the rare cell priced below forward.
+             AVG(CASE WHEN fm.fwd_t IS NOT NULL THEN GREATEST(base.cost - fm.fwd_t, 0)
+                      ELSE base.cost END)::float8 AS avg_cost,
+             (SUM(CASE WHEN fm.fwd_t IS NOT NULL THEN GREATEST(base.cost - fm.fwd_t, 0)
+                       ELSE base.cost END) / NULLIF(SUM(base.cw), 0))::float8 AS cpk
         FROM base
-       GROUP BY 1, 2, 3, 4
+        LEFT JOIN prof pr ON base.leg_group = 'RTO' AND pr.courier_name = base.courier_name
+        LEFT JOIN fwdmed fm ON pr.courier_name IS NOT NULL
+                           AND fm.courier_name = base.courier_name
+                           AND fm.zone = base.zone
+                           AND fm.acct = COALESCE(base.courier_account_type, '(none)')
+                           AND fm.slab IS NOT DISTINCT FROM ${SLAB_OF('base.cw')}
+       GROUP BY 1, 2, 3, 4, 5
       -- 200 was tuned for forward-only volumes; reverse and RTO legs are an order of
       -- magnitude thinner, so a flat 200 would erase them from the comparison entirely.
       HAVING COUNT(*) >= 50
-       ORDER BY 1, 2, 3, 6
+       ORDER BY 1, 2, 3, 4, 7
     `, params)
 
     // ── Rate drift: ₹/kg per courier per month ──
@@ -671,7 +707,7 @@ export default async function handler(req, res) {
                -- Net out the bundled forward leg for the five couriers that include it.
                -- GREATEST(...,0) guards the rare cell priced below forward.
                CASE WHEN upper(i.shipment_mode) = 'RTO'
-                         AND i.courier_name IN ('Delhivery','ElasticRun','Shadowfax','SkyAir','Swift')
+                         AND i.courier_name IN (SELECT courier_name FROM public.lc_courier_profile WHERE is_rto_bundle)
                          AND f.fwd_t IS NOT NULL
                     THEN GREATEST(${exGst('i.total_cost::float8', 'i.freight_charge::float8', 'i.surcharge::float8', 'i.other_charge::float8')} - f.fwd_t, 0)
                     ELSE ${exGst('i.total_cost::float8', 'i.freight_charge::float8', 'i.surcharge::float8', 'i.other_charge::float8')} END AS cost,
@@ -759,19 +795,25 @@ export default async function handler(req, res) {
     // a filtered trend line looks like a spend drop when it is only a narrower question.
     // Same reason as the rate grid: identical for every request, so it is cached below.
     const trendQ = () => query(pool, `
-      SELECT month_year,
+      SELECT t.month_year,
              COUNT(*)::int          AS n,
              -- Ex-GST, or the trend would step up whenever Delhivery's share of the month
              -- grew, which is a tax artefact rather than a cost movement.
-             SUM(${exGst('total_cost::float8', 'freight_charge::float8', 'surcharge::float8', 'other_charge::float8')})::float8 AS cost,
-             SUM(charged_weight_courier)::float8 AS wt,
+             SUM(${exGst('t.total_cost::float8', 't.freight_charge::float8', 't.surcharge::float8', 't.other_charge::float8')})::float8 AS cost,
+             SUM(t.charged_weight_courier)::float8 AS wt,
              -- Declared shipment value, so freight-as-%-of-GMV can be shown per period
              -- rather than only as one blended figure.
-             SUM(shipment_value)::float8 AS value
-        FROM public.logistics_invoices_b2c
-       WHERE total_cost > 0 AND zone IN ('A','B','C','D','E')
-         AND charged_weight_courier <= ${MAX_PLAUSIBLE_PARCEL_KG}
-         AND month_year IS NOT NULL
+             SUM(t.shipment_value)::float8 AS value,
+             -- Claimable weight overbilling for the period, from the pre-computed table.
+             -- MAX not SUM: it is already one row per month, so aggregating would multiply
+             -- it by the shipment count.
+             MAX(m.weight_claim)::float8  AS claim,
+             MAX(m.affected_n)::int       AS claim_n
+        FROM public.logistics_invoices_b2c t
+        LEFT JOIN public.lc_month_claims m ON m.month_year = t.month_year
+       WHERE t.total_cost > 0 AND t.zone IN ('A','B','C','D','E')
+         AND t.charged_weight_courier <= ${MAX_PLAUSIBLE_PARCEL_KG}
+         AND t.month_year IS NOT NULL
        GROUP BY 1
        ORDER BY 1
     `, [])
@@ -790,6 +832,14 @@ export default async function handler(req, res) {
     // comparing unequal row sets produced a spurious 14.9% control variance.
     // Per-courier dispute split, on the same total-cost basis as the summary above. Built by
     // scripts/refresh-cost-aggregates.mjs; see that file for why the clamp is per row.
+    // Per-slab cost analysis for the weight-slab table. Pre-computed and filter-independent.
+    const slabQ = () => query(pool, `
+      SELECT slab, n, cost, avg_cost, cpk, fwd_n, fwd_avg, rev_n, rev_avg, rto_n, rto_avg,
+             claim_rs, claim_n, avg_gap_kg
+        FROM public.lc_slab_costs
+       ORDER BY slab
+    `, [])
+
     const disputesQ = () => query(pool, `
       SELECT courier_name, priced_n, disputed_n, weight_rs, rate_rs, total_rs, invoiced_rs
         FROM public.lc_courier_disputes
@@ -932,7 +982,7 @@ export default async function handler(req, res) {
       // Throttled to 3: this block is 10 queries and only runs on a cache miss, so it can
       // afford to be slower — but firing all 10 at once starved the pool and produced the
       // same connect timeout the main block hit.
-      const [health, joinCov, opt, cityRows, b2b, b2bLanes, b2bTotals, b2bTrans, b2bMonths, b2bTypes, wr, gridRes, trendRes, disputes] = await mapLimit([
+      const [health, joinCov, opt, cityRows, b2b, b2bLanes, b2bTotals, b2bTrans, b2bMonths, b2bTypes, wr, gridRes, trendRes, disputes, slabs] = await mapLimit([
         // ── Data Health (spec §0) ──
         // Every exclusion and every coverage rate the page depends on, in one query.
         // This exists so finance can see the gaps before finding one themselves and
@@ -973,7 +1023,7 @@ export default async function handler(req, res) {
             -- Only the five real zones, matching the exclusion in the base CTE. Without
             -- this the slicer offered "North"/"West", which would filter to zero rows.
             (SELECT array_agg(DISTINCT zone ORDER BY zone) FROM public.logistics_invoices_b2c WHERE zone IN ('A','B','C','D','E')) AS zones,
-            (SELECT array_agg(DISTINCT m ORDER BY m) FROM (SELECT DISTINCT CASE WHEN upper(shipment_mode) IN ('REVERSE','RVP','DTO','RTO') THEN 'Reverse' WHEN upper(shipment_mode)='FORWARD' THEN 'Forward' ELSE shipment_mode END AS m FROM public.logistics_invoices_b2c WHERE shipment_mode IS NOT NULL) q) AS modes,
+            (SELECT array_agg(DISTINCT m ORDER BY m) FROM (SELECT DISTINCT CASE WHEN upper(shipment_mode)='RTO' THEN 'RTO' WHEN upper(shipment_mode) IN ('REVERSE','RVP','DTO') THEN 'Reverse' WHEN upper(shipment_mode)='FORWARD' THEN 'Forward' ELSE shipment_mode END AS m FROM public.logistics_invoices_b2c WHERE shipment_mode IS NOT NULL) q) AS modes,
             (SELECT array_agg(DISTINCT payment_mode ORDER BY payment_mode) FROM public.logistics_invoices_b2c WHERE payment_mode IS NOT NULL) AS payments,
             (SELECT array_agg(DISTINCT courier_name ORDER BY courier_name) FROM public.logistics_invoices_b2c WHERE courier_name IS NOT NULL) AS couriers,
             (SELECT array_agg(DISTINCT courier_account_type ORDER BY courier_account_type) FROM public.logistics_invoices_b2c WHERE courier_account_type IS NOT NULL) AS account_types
@@ -1039,7 +1089,7 @@ export default async function handler(req, res) {
             FROM public.logistics_invoices_b2b WHERE total_cost > 0
            GROUP BY 1 ORDER BY 3 DESC
         `),
-        wrQ, gridQ, trendQ, disputesQ,
+        wrQ, gridQ, trendQ, disputesQ, slabQ,
       ], 3)
       const options = opt.rows[0] || {}
       options.cities = cityRows.rows.map(r => r.c).sort()
@@ -1049,6 +1099,7 @@ export default async function handler(req, res) {
         weightRate: wr.rows[0] || {},
         rateGrid: gridRes.rows,
         courierDisputes: disputes.rows,
+        slabCosts: slabs.rows,
         trendAll: trendRes.rows,
         at: Date.now(), options, b2b: b2b.rows,
         // Data Health (§0): exclusions + coverage, so every number is auditable.
@@ -1069,6 +1120,7 @@ export default async function handler(req, res) {
     Object.assign(out.totals, refCache.weightRate || {})
     out.rateGrid = refCache.rateGrid || []
     out.courierDisputes = refCache.courierDisputes || []
+    out.slabCosts = refCache.slabCosts || []
     out.trendAll = refCache.trendAll || []
     out.skipped = refCache.skipped
     out.health = refCache.health

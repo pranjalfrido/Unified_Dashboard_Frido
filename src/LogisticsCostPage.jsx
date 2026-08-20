@@ -29,7 +29,7 @@ const ORDINAL_BLUE = ['#86b6ef', '#5598e7', '#2a78d6', '#1c5cab', '#104281']
 const SERIES = { blue: '#2a78d6', orange: '#eb6834', aqua: '#1baf7a', yellow: '#eda100' }
 // Two reporting legs now — RTO/RVP/DTO all fold into Reverse upstream. The RTO key is
 // retained only so an unexpected raw value still renders in a stable colour.
-const MODE_COLOR = { Forward: SERIES.blue, Reverse: SERIES.orange, RTO: SERIES.orange }
+const MODE_COLOR = { Forward: SERIES.blue, Reverse: SERIES.orange, RTO: SERIES.yellow }
 
 // Six categorical slots in fixed order for the rate-drift lines — validated against
 // this app's white surface (worst adjacent ΔE 9.1 CVD / 19.6 normal vision). Fixed
@@ -61,6 +61,25 @@ const WEIGHT_BANDS = [
 
 // The three reporting scopes. B2C is the default because it is where the detail
 // (and the recoverable money) lives.
+// Courier name with its mark. The logo is decorative — alt is empty so a screen reader
+// reads the name once, not twice — and a broken file hides the img rather than showing a
+// torn-image glyph, so an unmapped courier degrades to plain text instead of visible damage.
+function CourierCell({ name }) {
+  const [bad, setBad] = useState(false)
+  const logo = COURIER_LOGOS[name]
+  return (
+    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 7, whiteSpace: 'nowrap' }}>
+      {logo && !bad
+        ? <img src={logo} alt="" onError={() => setBad(true)}
+            style={{ width: 18, height: 18, objectFit: 'contain', borderRadius: 3,
+                     flexShrink: 0, background: '#fff' }} />
+        // Fixed-size placeholder, so names stay left-aligned whether or not a mark exists.
+        : <span style={{ width: 18, flexShrink: 0 }} />}
+      {name}
+    </span>
+  )
+}
+
 const SCOPES = [
   { id: 'all', label: 'Overall', hint: 'B2B + B2C combined summary' },
   { id: 'b2c', label: 'B2C', hint: 'Courier / parcel shipments' },
@@ -192,6 +211,7 @@ function shapeResponse(j) {
     byProduct: j.byProduct || [],
     rateGrid: j.rateGrid || [],
     courierDisputes: j.courierDisputes || [],
+    slabCosts: j.slabCosts || [],
     trendAll: j.trendAll || [],
   }
 }
@@ -217,7 +237,7 @@ function Tile({ label, value, sub, badge, accent }) {
     // the grid. Now the label pins to the top, the value sits directly under it, and the sub
     // is pushed to the bottom by `marginTop: auto`, so the three bands line up across every
     // card regardless of how long any one sub is.
-    <div className="kpi-card" style={{ padding: '12px 14px', display: 'flex', flexDirection: 'column', gap: 2 }}>
+    <div className="kpi-card" style={{ padding: '9px 14px', display: 'flex', flexDirection: 'column', gap: 2 }}>
       <div className="kpi-label">{label}</div>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 4 }}>
         <div className="kpi-value" style={{ fontSize: 17, marginBottom: 0, ...(accent ? { color: accent } : {}) }}>{value}</div>
@@ -240,7 +260,7 @@ function Tile({ label, value, sub, badge, accent }) {
 // (no tabular-nums) — equal-width digits read loose at this scale.
 function Hero({ label, value, sub, deltas, children }) {
   return (
-    <div className="kpi-card" style={{ display: 'flex', flexDirection: 'column', gap: 8, padding: '18px 22px' }}>
+    <div className="kpi-card" style={{ display: 'flex', flexDirection: 'column', gap: 6, padding: '14px 22px' }}>
       <div className="kpi-label" style={{ fontSize: 11 }}>{label}</div>
       {/* Value left, change badges pinned RIGHT — same arrangement as the Tile badges, so
           the eye finds every MoM figure in the same place down the row. space-between rather
@@ -262,15 +282,24 @@ function Hero({ label, value, sub, deltas, children }) {
           </div>
         )}
       </div>
-      {sub && <div className="kpi-sub" style={{ fontSize: 13, marginTop: 6 }}>{sub}</div>}
-      {children && <div style={{ flex: 1, minHeight: 48, paddingTop: 10 }}>{children}</div>}
+      {sub && <div className="kpi-sub" style={{ fontSize: 12.5, marginTop: 2, lineHeight: 1.5 }}>{sub}</div>}
+      {children && <div style={{ flex: 1, minHeight: 38, paddingTop: 6 }}>{children}</div>}
     </div>
   )
 }
 
-function SectionHdr({ title, note }) {
+// Section header. Collapsible when given onToggle — the caret and whole-row click match
+// the Logistics Performance tab, so the two tabs behave the same way.
+function SectionHdr({ title, note, collapsed, onToggle }) {
+  const clickable = typeof onToggle === 'function'
   return (
-    <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, margin: '22px 0 11px' }}>
+    <div onClick={clickable ? onToggle : undefined}
+      style={{ display: 'flex', alignItems: 'baseline', gap: 10, margin: '22px 0 11px',
+               cursor: clickable ? 'pointer' : 'default', userSelect: clickable ? 'none' : undefined }}>
+      {clickable && (
+        <span style={{ fontSize: 9, color: C.t3, display: 'inline-block', flexShrink: 0,
+                       transform: collapsed ? 'rotate(-90deg)' : 'rotate(0deg)', transition: 'transform .2s' }}>▼</span>
+      )}
       <span style={{ fontSize: 12, fontWeight: 700, color: C.t2, letterSpacing: '.06em', textTransform: 'uppercase' }}>{title}</span>
       {note && <span style={{ fontSize: 11.5, color: C.t3 }}>{note}</span>}
       <div style={{ flex: 1, height: 1, background: C.border }} />
@@ -700,6 +729,8 @@ export default function LogisticsCostPage() {
       month: monthLabel(r.month_year), raw: r.month_year,
       cost, shipments: n, wt, value,
       pctGmv: value > 0 ? (cost / value) * 100 : null,
+      claim: Number(r.claim) || 0,
+      claimN: Number(r.claim_n) || 0,
       avgCost: n ? cost / n : 0,
       cpk: perKg(cost, wt) ?? 0,
     }
@@ -757,15 +788,10 @@ export default function LogisticsCostPage() {
       .sort((a, b) => b.cost - a.cost)
   }, [agg])
 
-  const payRows = useMemo(() => {
-    if (!agg) return []
-    return Object.entries(agg.byPay)
-      .map(([k, b]) => ({ k, n: b.n, cost: b.cost, avgCost: b.n ? b.cost / b.n : 0 }))
-      .sort((a, b) => b.cost - a.cost)
-  }, [agg])
-
   const courierRows = useMemo(() => {
     if (!agg) return []
+    // Claimable weight overbilling per courier, keyed for lookup below.
+    const claimBy = new Map((agg.courierDisputes || []).map(d => [d.courier_name, d]))
     return Object.entries(agg.byCourier)
       .map(([courier, b]) => ({
         courier, shipments: b.n, cost: b.cost,
@@ -779,6 +805,9 @@ export default function LogisticsCostPage() {
         recTotal: b.recInfl + b.recUnexp,
         // Reverse-leg share: an operational-quality signal, not a cost one.
         reversePct: b.n ? (b.reverseN / b.n) * 100 : 0,
+        // Weight-only claim on the total-cost basis, so this column reconciles with the
+        // headline figure. recInfl above is base freight and stays for the stacked chart.
+        claimRs: Number(claimBy.get(courier)?.weight_rs) || 0,
       }))
       .sort((a, b) => b.cost - a.cost)
   }, [agg])
@@ -825,6 +854,39 @@ export default function LogisticsCostPage() {
   }, [agg])
 
   // Couriers ranked by what is recoverable from them, for the cause-split chart.
+  // Pre-computed per-slab costs. Filter-independent, like the trend and the rate grid, so it
+  // reads straight from the payload rather than re-aggregating on every render.
+  const slabRows = useMemo(() => (agg?.slabCosts || []).map(r => ({
+    slab: Number(r.slab),
+    n: num(r.n),
+    cost: num(r.cost),
+    avgCost: num(r.avg_cost),
+    cpk: num(r.cpk),
+    fwdAvg: num(r.fwd_avg),
+    revAvg: num(r.rev_avg),
+    rtoAvg: num(r.rto_avg),
+    claimRs: num(r.claim_rs),
+    claimN: num(r.claim_n),
+  })),
+  // Every slab, no threshold. A cost table should account for all the spend: an n>=1000
+  // filter hid 120 of 139 slabs and 13% of it, including a 104 kg slab worth ₹10.45 L. The
+  // card scrolls, so extra rows are cheap; a silently missing row is not.
+  [agg])
+
+  // Courier spend with claim intensity, for the chart beside the escalation table.
+  // Sorted by spend so the bars descend; claim% rides a second axis because the two measures
+  // are ~100x apart and would otherwise render the claim as a flat line at zero.
+  const courierSpendRows = useMemo(() => {
+    const claim = new Map((agg?.courierDisputes || []).map(d => [d.courier_name, num(d.weight_rs)]))
+    return Object.entries(agg?.byCourier || {})
+      .map(([courier, b]) => {
+        const spend = num(b.cost)
+        const cl = claim.get(courier) || 0
+        return { courier, spend, claim: cl, claimPct: spend ? (cl / spend) * 100 : 0 }
+      })
+      .sort((a, b) => b.spend - a.spend)
+  }, [agg])
+
   // Reads the pre-computed per-courier table, on the SAME total-cost basis as Cost Overview.
   // It used to derive its own figures from the base-freight columns, so the page showed two
   // different claimable totals — ₹76.78 L here against ₹32.34 L there — with nothing to tell
@@ -841,13 +903,16 @@ export default function LogisticsCostPage() {
         // Disputed rows only as the denominator. Dividing by EVERY shipment a courier
         // carried made Bluedart read ₹7.1 when only 128k of its 417k priced shipments carry
         // a dispute — ₹32.7 is what a claim is actually argued on.
-        recPerShipment: num(r.disputed_n) ? num(r.total_rs) / num(r.disputed_n) : 0,
+        // Per-shipment and intensity use the claimable weight figure, not the combined
+        // total, so every column here is on one basis.
+        recPerShipment: num(r.disputed_n) ? num(r.weight_rs) / num(r.disputed_n) : 0,
         // Intensity, not size: it says whose billing is systematically off, rather than who
         // is simply the largest partner.
-        recPctFreight: num(r.invoiced_rs) ? (num(r.total_rs) / num(r.invoiced_rs)) * 100 : 0,
+        recPctFreight: num(r.invoiced_rs) ? (num(r.weight_rs) / num(r.invoiced_rs)) * 100 : 0,
       }))
-      .filter(r => r.recTotal > 0)
-      .sort((a, b) => b.recTotal - a.recTotal),
+      // Ranked by claimable weight, so the top of the table is where recovery starts.
+      .filter(r => r.recInfl > 0 || r.recUnexp > 0)
+      .sort((a, b) => b.recInfl - a.recInfl),
     [agg]
   )
 
@@ -863,15 +928,6 @@ export default function LogisticsCostPage() {
     return { ...s, top2, top2Pct: s.total ? (top2 / s.total) * 100 : 0 }
   }, [recoverRows])
 
-  // Worst offender by INTENSITY, not size. A 1,000-shipment floor keeps a tiny partner
-  // with a freak percentage from being presented as the headline problem.
-  const worstIntensity = useMemo(() => {
-    const eligible = recoverRows.filter(r => r.shipments >= 1000)
-    return eligible.length
-      ? eligible.reduce((a, r) => (r.recPctFreight > a.recPctFreight ? r : a))
-      : null
-  }, [recoverRows])
-
   // Like-for-like: pick one (zone, slab) cell and compare couriers inside it. Holding
   // both constant is the only fair basis for a switching decision — a raw per-shipment
   // average just reflects whose parcels are heavier.
@@ -880,22 +936,43 @@ export default function LogisticsCostPage() {
   // comparison into exactly one zone and one slab, so questions like "cheapest across all
   // metro zones for parcels under 2 kg" were unanswerable.
   const lflOptions = useMemo(() => {
-    const z = new Set(), b = new Set(), l = new Set()
+    const z = new Set(), b = new Set(), l = new Set(), sl = new Set()
     for (const r of agg?.likeForLike || []) {
       z.add(r.zone); b.add(r.band); l.add(r.leg)
+      if (r.slab != null) sl.add(Number(r.slab))
     }
     // Bands are weight ranges, so they must sort by weight and not as text.
     const bandOrder = ['0 – 1 kg', '1 – 2 kg', '2 – 5 kg', '5 – 10 kg', '10 kg +']
+    // Legs follow the shipment's lifecycle, not the alphabet — alphabetical would read
+    // Forward, RTO, Reverse and put the undelivered return before the customer return.
+    const legOrder = ['Forward', 'Reverse', 'RTO']
     return {
       zones: [...z].sort(),
       bands: [...b].sort((x, y) => bandOrder.indexOf(x) - bandOrder.indexOf(y)),
-      legs: [...l].sort(),
+      legs: [...l].sort((x, y) => {
+        const ix = legOrder.indexOf(x), iy = legOrder.indexOf(y)
+        return (ix < 0 ? 99 : ix) - (iy < 0 ? 99 : iy)
+      }),
+      // Exact billable slabs, numeric-sorted. Far too many to expose as chips, which is
+      // why this one is a dropdown while the coarse bands stay as chips.
+      slabs: [...sl].sort((x, y) => x - y),
     }
   }, [agg])
 
   const [lflZones, setLflZones] = useState([])
   const [lflBands, setLflBands] = useState([])
   const [lflLegs, setLflLegs] = useState([])
+  const [lflSlab, setLflSlab] = useState('')
+  const [subQuery, setSubQuery] = useState('')
+  // Collapsed sections, persisted so the layout a user settles on survives a reload.
+  const [secHid, setSecHid] = useState(() => {
+    try { return JSON.parse(localStorage.getItem('lc-sections') || '{}') } catch { return {} }
+  })
+  const toggleSec = key => setSecHid(prev => {
+    const next = { ...prev, [key]: !prev[key] }
+    try { localStorage.setItem('lc-sections', JSON.stringify(next)) } catch { /* private mode */ }
+    return next
+  })
 
   // Empty selection means "all", so the card renders something on first paint instead of
   // an empty state that looks broken.
@@ -914,6 +991,9 @@ export default function LogisticsCostPage() {
     const byCourier = new Map()
     for (const r of rows) {
       if (!zs.includes(r.zone) || !bs.includes(r.band) || !ls.includes(r.leg)) continue
+      // An exact slab overrides the coarse band when one is picked. '' means unset, so
+      // the band chips keep working on their own.
+      if (lflSlab !== '' && Number(r.slab) !== Number(lflSlab)) continue
       const n = Number(r.n) || 0
       const c = byCourier.get(r.courier_name)
         || { courier: r.courier_name, n: 0, cost: 0, kg: 0 }
@@ -938,11 +1018,12 @@ export default function LogisticsCostPage() {
       comparable,
       n: out.reduce((s, c) => s + c.n, 0),
       zones: zs, bands: bs, legs: ls,
+      slab: lflSlab,
       allZones: zs.length === lflOptions.zones.length,
       allBands: bs.length === lflOptions.bands.length,
       allLegs: ls.length === lflOptions.legs.length,
     }
-  }, [agg, lflZones, lflBands, lflLegs, lflOptions])
+  }, [agg, lflZones, lflBands, lflLegs, lflSlab, lflOptions])
 
   // ── Cost by product ──
   // Categories are collapsed by default: 15 categories expand to ~200 sub-category rows,
@@ -971,10 +1052,19 @@ export default function LogisticsCostPage() {
   // Flat row list with the open sub-categories spliced in beneath their parent, so one
   // DataTable renders the whole tree.
   const productRows = useMemo(() => {
+    // A matching sub-category must surface even when its parent is collapsed, so the
+    // search expands the parent rather than filtering rows after the fact.
+    const sq = subQuery.trim().toLowerCase()
+    const hit = s => String(s?.sub ?? '').toLowerCase().includes(sq)
     const out = []
     for (const c of agg?.byProduct || []) {
       const fwd = num(c.fwd_avg)
       const kids = c.children || []
+      // Resolve the search first: the parent header must not be emitted for a category
+      // with no matching child, or the filtered list still shows all ~30 categories.
+      const kidHits = sq ? kids.filter(hit) : null
+      const catHit = sq ? String(c.cat).toLowerCase().includes(sq) : false
+      if (sq && !catHit && !kidHits.length) continue
       out.push({
         label: c.cat, isSub: false, hasKids: kids.length > 0, open: openCats.has(c.cat),
         n: num(c.n), fwd, rev: num(c.rev_avg), rto: num(c.rto_avg),
@@ -982,8 +1072,10 @@ export default function LogisticsCostPage() {
         cw: num(c.cw_slab_avg), masterKg: num(c.master_kg), masterSlab: num(c.master_slab),
         vw: num(c.vw_avg), cost: num(c.cost),
       })
-      if (!openCats.has(c.cat)) continue
-      for (const s of [...kids].sort((a, b) => num(b.cost) - num(a.cost))) {
+      // A category matched by name shows all its children; otherwise only the matching
+      // ones. With no search active, honour the manual open/closed state.
+      if (!sq && !openCats.has(c.cat)) continue
+      for (const s of [...(catHit ? kids : (kidHits || kids))].sort((a, b) => num(b.cost) - num(a.cost))) {
         const sf = num(s.fwd_avg)
         out.push({
           label: s.sub, isSub: true, hasKids: false,
@@ -995,7 +1087,7 @@ export default function LogisticsCostPage() {
       }
     }
     return out
-  }, [agg, openCats, costToServe])
+  }, [agg, openCats, costToServe, subQuery])
 
 
   // Weight slab is where rate-card leakage usually hides — a slab whose ₹/kg is
@@ -1060,35 +1152,24 @@ export default function LogisticsCostPage() {
   // GREATEST(...,0) on each leg — a courier billing BELOW its own card is not an overcharge,
   // and letting it go negative would net off real overbilling elsewhere.
   const billingGap = useMemo(() => {
-    // Per-ROW clamped, so this agrees with Recoverable by Cause. Clamping the grand total
-    // instead let shipments billed BELOW card cancel those billed above it — a netting no
-    // courier would accept, since under-billed parcels cannot be invoiced back.
+    // WEIGHT ONLY is the claim. The rate component — the courier billing above its own
+    // card — is measured against a card DERIVED from those same invoices, so it detects
+    // inconsistency with their own average behaviour rather than a breach of the signed
+    // contract. It is not invoiceable, so it is reported separately as a diagnostic and
+    // never summed into the claimable figure.
+    //
+    // Per-ROW clamped: clamping the grand total would let shipments billed BELOW card
+    // cancel those billed above it, a netting no courier would accept since the
+    // under-billed parcels cannot be claimed back.
     const weight = agg?.dtWeightClaim || 0
     const rate = agg?.dtRateClaim || 0
-    const total = weight + rate
     const billed = agg?.dtInvoiced || 0
-    return { weight, rate, total, pctOfBilled: billed ? (total / billed) * 100 : 0 }
-  }, [agg])
-
-  // What a COD shipment costs above a prepaid one — the fee is real, and at scale it
-  // is a lever (COD averages ₹125.41 vs ₹92.34 prepaid).
-  const codPremium = useMemo(() => {
-    if (!agg) return null
-    const cod = agg.byPay.COD, pre = agg.byPay.Prepaid
-    if (!cod?.n || !pre?.n) return null
-    return cod.cost / cod.n - pre.cost / pre.n
-  }, [agg])
-
-  // How much MORE of the cost COD carries than of the volume, in percentage points.
-  // This over-index is the actual finding — a cost pie alone can't show it.
-  const payShareGap = useMemo(() => {
-    if (!agg) return null
-    const cod = agg.byPay.COD
-    if (!cod?.n) return null
-    const totalN = Object.values(agg.byPay).reduce((s, b) => s + b.n, 0)
-    const totalCost = Object.values(agg.byPay).reduce((s, b) => s + b.cost, 0)
-    if (!totalN || !totalCost) return null
-    return (cod.cost / totalCost) * 100 - (cod.n / totalN) * 100
+    return {
+      weight,
+      rate,
+      total: weight,
+      pctOfBilled: billed ? (weight / billed) * 100 : 0,
+    }
   }, [agg])
 
   // ── B2B derived views ──
@@ -1190,11 +1271,14 @@ export default function LogisticsCostPage() {
   // Hero sub-line: volume, weight, and freight as a share of GMV. The GMV percentage had
   // its own tile, but it is a property of total cost — reading it beside the rupee figure
   // it divides is clearer than as a standalone number.
-  const heroSub = !kpis ? '' : [
-    `${fmtBig(kpis.shipments)} invoices`,
-    `${fmtKg(kpis.chargedWt)} billed`,
-    kpis.costPctValue != null ? `${kpis.costPctValue.toFixed(2)}% of GMV` : null,
-  ].filter(Boolean).join(' · ')
+  // Two lines, GMV share first: it is the ratio that judges the rupee figure above it, so it
+  // earns its own line. Volume and weight are supporting counts and sit together below.
+  const heroSub = !kpis ? null : (
+    <>
+      {kpis.costPctValue != null && <div>{kpis.costPctValue.toFixed(2)}% of GMV</div>}
+      <div>{fmtBig(kpis.shipments)} invoices · {fmtKg(kpis.chargedWt)} billed</div>
+    </>
+  )
 
   const sidebar = (
     <div style={{ width: sidebarOpen ? 220 : 0, minWidth: sidebarOpen ? 220 : 0, transition: 'width .25s ease, min-width .25s ease', overflow: 'hidden', borderRight: `1px solid ${C.border}`, background: C.card, display: 'flex', flexDirection: 'column', flexShrink: 0 }}>
@@ -1487,7 +1571,7 @@ export default function LogisticsCostPage() {
                 { key: 'lane', label: 'Lane' },
                 { key: 'trips', label: 'Trips', align: 'center', render: (_, r) => fmtN(r.trips) },
                 { key: 'cost', label: 'Total', align: 'center', render: (_, r) => fmt(r.cost) },
-                { key: 'avgCost', label: 'Avg / trip', align: 'center', render: (_, r) => fmt(r.avgCost) },
+                { key: 'avgCost', label: 'Avg Cost / Trip', align: 'center', render: (_, r) => fmt(r.avgCost) },
                 { key: 'minCost', label: 'Min', align: 'center', render: (_, r) => fmt(r.minCost) },
                 { key: 'maxCost', label: 'Max', align: 'center', render: (_, r) => fmt(r.maxCost) },
                 { key: 'spread', label: 'Spread', align: 'center', render: (_, r) => (
@@ -1511,7 +1595,7 @@ export default function LogisticsCostPage() {
                 { key: 'key', label: 'Transporter' },
                 { key: 'trips', label: 'Trips', align: 'center', render: (_, r) => fmtN(r.trips) },
                 { key: 'cost', label: 'Cost', align: 'center', render: (_, r) => fmt(r.cost) },
-                { key: 'avgCost', label: 'Avg / trip', align: 'center', render: (_, r) => fmt(r.avgCost) },
+                { key: 'avgCost', label: 'Avg Cost / Trip', align: 'center', render: (_, r) => fmt(r.avgCost) },
                 { key: 'share', label: 'Share', align: 'center', render: (_, r) => <ShareBar pct={r.share}>{r.share.toFixed(1) + '%'}</ShareBar> },
               ]}
               rows={b2bTransRows}
@@ -1524,7 +1608,7 @@ export default function LogisticsCostPage() {
                 { key: 'key', label: 'Type' },
                 { key: 'trips', label: 'Trips', align: 'center', render: (_, r) => fmtN(r.trips) },
                 { key: 'cost', label: 'Cost', align: 'center', render: (_, r) => fmt(r.cost) },
-                { key: 'avgCost', label: 'Avg / trip', align: 'center', render: (_, r) => fmt(r.avgCost) },
+                { key: 'avgCost', label: 'Avg Cost / Trip', align: 'center', render: (_, r) => fmt(r.avgCost) },
                 { key: 'share', label: 'Share', align: 'center', render: (_, r) => <ShareBar pct={r.share}>{r.share.toFixed(1) + '%'}</ShareBar> },
               ]}
               rows={b2bTypeRows}
@@ -1664,7 +1748,10 @@ export default function LogisticsCostPage() {
           <Tile label="Actually Billed" value={fmt(agg.dtInvoiced)}
             sub={`${fmt(Math.max(agg.dtInvoiced - agg.dtOurs, 0))} over card`}
             accent={C.red.tx} />
-          <Tile label="Claimable Overcharge" value={fmt(billingGap.total)}
+          {/* Weight-only per the agreed basis. The rate variance is reported separately in
+              Recoverable by Cause: it measures inconsistency against the courier own derived
+              card, not a breach of the signed contract, so it is not invoiceable. */}
+          <Tile label="Claimable — Wrong Weight" value={fmt(billingGap.weight)}
             sub={`${billingGap.pctOfBilled.toFixed(1)}% of total cost billed`}
             accent={C.red.tx} />
           <Tile label="Wasted Freight (Returns)" value={fmt(reverseBurden.cost)}
@@ -1684,8 +1771,8 @@ export default function LogisticsCostPage() {
           UNFILTERED BY DESIGN — reads trendAll, not the slicer-scoped monthSeries. "Is our
           freight bill rising" must not change when someone filters to one courier. */}
       <SectionHdr title="Monthly Trend"
-        note={`${trendWindow.length} of ${trendRows.length} period${trendRows.length === 1 ? '' : 's'} · all couriers, zones and modes — not affected by the slicers`} />
-      <Card title="Freight spend and unit cost"
+        note={`${trendWindow.length} of ${trendRows.length} period${trendRows.length === 1 ? '' : 's'} · all couriers, zones and modes — not affected by the slicers`} collapsed={secHid['trend']} onToggle={() => toggleSec('trend')} />
+      <Card style={secHid['trend'] ? { display: 'none' } : undefined} title="Freight spend and unit cost"
         note="bars = total spend (left axis) · lines = cost per unit (right axis)"
         action={
           // Range applies to THIS chart only. Options above the available history are
@@ -1766,13 +1853,20 @@ export default function LogisticsCostPage() {
               { key: 'month', label: 'Period' },
               { key: 'cost', label: 'Freight cost', align: 'center', render: (_, r) => fmt(r.cost) },
               { key: 'shipments', label: 'Shipments', align: 'center', render: (_, r) => fmtN(r.shipments) },
-              { key: 'avgCost', label: 'Avg / ship', align: 'center', render: (_, r) => '₹' + r.avgCost.toFixed(2) },
-              { key: 'cpk', label: '₹ / kg', align: 'center', render: (_, r) => '₹' + r.cpk.toFixed(2) },
+              { key: 'avgCost', label: 'Avg Cost / Shipment', align: 'center', render: (_, r) => '₹' + r.avgCost.toFixed(2) },
+              { key: 'cpk', label: 'Cost / kg', align: 'center', render: (_, r) => '₹' + r.cpk.toFixed(2) },
               { key: 'wt', label: 'Billed wt', align: 'center', render: (_, r) => fmtKg(r.wt) },
               // Moved down from the Cost Overview tiles: as a single blended number it had no
               // context, but per period it shows whether freight is gaining on revenue.
               { key: 'pctGmv', label: '% of GMV', align: 'center', render: (_, r) => (
                 r.pctGmv != null ? r.pctGmv.toFixed(2) + '%' : '—'
+              ) },
+              // Claimable weight overbilling for the period. Weight only — the rate variance
+              // is a diagnostic, not invoiceable — so this column sums to the headline figure.
+              { key: 'claim', label: 'Claimable', align: 'center', render: (_, r) => (
+                r.claim > 0
+                  ? <span style={{ color: C.red.tx, fontWeight: 700 }}>{fmt(r.claim)}</span>
+                  : <span style={{ color: C.t3 }}>—</span>
               ) },
             ]}
             rows={trendWindow}
@@ -1781,18 +1875,33 @@ export default function LogisticsCostPage() {
       </Card>
 
       {/* ── Zone + mode ── */}
-      <SectionHdr title="Where The Money Goes" />
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(330px,1fr))', gap: 14 }}>
+      <SectionHdr title="Where The Money Goes" collapsed={secHid['money']} onToggle={() => toggleSec('money')} />
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(330px,1fr))', gap: 14 , ...(secHid['money'] ? { display: 'none' } : {}) }}>
         <Card title="Cost by zone" note="zone drives the courier's rate card">
           <div style={{ height: 200 }}>
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={zoneRows} margin={{ top: 10, right: 12, left: 4, bottom: 4 }}>
                 <CartesianGrid stroke={VIZ.grid} vertical={false} />
-                <XAxis dataKey="zone" tick={{ fontSize: 11.5, fill: VIZ.muted }} axisLine={{ stroke: VIZ.axis }} tickLine={false} />
+                <XAxis dataKey="zone" tickFormatter={z => `Zone ${z}`} tick={{ fontSize: 11.5, fill: VIZ.muted }} axisLine={{ stroke: VIZ.axis }} tickLine={false} />
                 <YAxis tick={{ fontSize: 11, fill: VIZ.muted }} axisLine={false} tickLine={false}
                   tickFormatter={v => fmt(v)} />
                 <Tooltip cursor={{ fill: 'rgba(11,11,11,0.04)' }}
-                  content={<ChartTooltip formatter={v => fmt(v)} />} />
+                  content={({ active, payload }) => {
+                    if (!active || !payload?.length) return null
+                    const r = payload[0].payload
+                    return (
+                      <div style={{ background: C.card, border: `1px solid ${C.border2}`, borderRadius: 9, padding: '9px 11px', boxShadow: '0 6px 20px rgba(0,0,0,.12)' }}>
+                        <div style={{ fontSize: 11.5, fontWeight: 700, color: C.t1, marginBottom: 5 }}>Zone {r.zone}</div>
+                        <div style={{ fontSize: 15, fontWeight: 800, color: C.t1 }}>{fmt(r.cost)}</div>
+                        <div style={{ fontSize: 11, color: C.t2, marginTop: 3 }}>
+                          {r.share.toFixed(1)}% of total freight
+                        </div>
+                        <div style={{ fontSize: 11, color: C.t3, marginTop: 2 }}>
+                          {fmtN(r.shipments)} shipments · ₹{r.avgCost.toFixed(2)} per shipment
+                        </div>
+                      </div>
+                    )
+                  }} />
                 <Bar dataKey="cost" name="Cost" radius={[4, 4, 0, 0]} maxBarSize={44}
                   onClick={d => d?.zone && ZONES.includes(d.zone) && toggleIn('zones', d.zone)}
                   style={{ cursor: 'pointer' }}>
@@ -1807,10 +1916,10 @@ export default function LogisticsCostPage() {
           <div style={{ fontSize: 10.5, color: VIZ.muted, marginTop: -2, marginBottom: 6 }}>Click a bar to filter by zone</div>
           <DataTable
             columns={[
-              { key: 'zone', label: 'Zone' },
+              { key: 'zone', label: 'Zone', render: v => `Zone ${v}` },
               { key: 'shipments', label: 'Shipments', align: 'center', render: (_, r) => fmtN(r.shipments) },
-              { key: 'avgCost', label: 'Avg ₹', align: 'center', render: (_, r) => '₹' + r.avgCost.toFixed(2) },
-              { key: 'cpk', label: '₹/kg', align: 'center', render: (_, r) => (r.cpk != null ? '₹' + r.cpk.toFixed(2) : '—') },
+              { key: 'avgCost', label: 'Avg Cost / Shipment', align: 'center', render: (_, r) => '₹' + r.avgCost.toFixed(2) },
+              { key: 'cpk', label: 'Cost / kg', align: 'center', render: (_, r) => (r.cpk != null ? '₹' + r.cpk.toFixed(2) : '—') },
               { key: 'share', label: 'Share', align: 'center', render: (_, r) => <ShareBar pct={r.share}>{r.share.toFixed(1) + '%'}</ShareBar> },
             ]}
             rows={zoneRows}
@@ -1822,8 +1931,8 @@ export default function LogisticsCostPage() {
             Rendered as a donut with direct labels because Forward takes 316° of arc
             while Reverse (28°) and RTO (15°) are thin wedges — the labels carry the
             comparison that the angles cannot. RVP and DTO are folded into Reverse
-            upstream in api/logistics-cost.js. */}
-        <Card style={{ display: 'flex', flexDirection: 'column' }} title="Forward vs reverse" note="RTO, RVP and DTO all count as reverse — cost with no revenue">
+            upstream in api/logistics-cost.js; RTO is its own leg. */}
+        <Card style={{ display: 'flex', flexDirection: 'column' }} title="Cost by leg" note="RVP and DTO count as reverse · RTO shown separately — both are cost with no revenue">
           <div style={{ flex: 1, minHeight: 200 }}>
             <ResponsiveContainer width="100%" height="100%">
               <PieChart margin={{ top: 8, right: 8, left: 8, bottom: 8 }}>
@@ -1878,7 +1987,7 @@ export default function LogisticsCostPage() {
               { key: 'mode', label: 'Mode' },
               { key: 'shipments', label: 'Shipments', align: 'center', render: (_, r) => fmtN(r.shipments) },
               { key: 'cost', label: 'Cost', align: 'center', render: (_, r) => fmt(r.cost) },
-              { key: 'avgCost', label: 'Avg ₹', align: 'center', render: (_, r) => '₹' + r.avgCost.toFixed(2) },
+              { key: 'avgCost', label: 'Avg Cost / Shipment', align: 'center', render: (_, r) => '₹' + r.avgCost.toFixed(2) },
               { key: 'share', label: 'Share', align: 'center', render: (_, r) => <ShareBar pct={r.share}>{r.share.toFixed(1) + '%'}</ShareBar> },
             ]}
             rows={modeRows}
@@ -1887,8 +1996,8 @@ export default function LogisticsCostPage() {
       </div>
 
       {/* ── Weight slab + service type ── */}
-      <SectionHdr title="Rate Card Exposure" note="cost behaviour across billing slabs" />
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(330px,1fr))', gap: 14 }}>
+      <SectionHdr title="Rate Card Exposure" note="cost behaviour across billing slabs" collapsed={secHid['ratecard']} onToggle={() => toggleSec('ratecard')} />
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(330px,1fr))', gap: 14 , ...(secHid['ratecard'] ? { display: 'none' } : {}) }}>
         {/* ONE chart, ONE axis, grouped bars.
             The two series are avg cost PER SHIPMENT and cost PER KG — both are
             per-shipment rupee figures on the same order of magnitude (₹44–₹415 and
@@ -1930,7 +2039,7 @@ export default function LogisticsCostPage() {
                   }} />
                 <Legend wrapperStyle={{ fontSize: 11.5, paddingTop: 4 }} />
                 <Bar dataKey="avgCost" name="Avg ₹ / shipment" fill={SERIES.blue} radius={[4, 4, 0, 0]} maxBarSize={30} />
-                <Bar dataKey="cpk" name="₹ / kg" fill={SERIES.orange} radius={[4, 4, 0, 0]} maxBarSize={30} />
+                <Bar dataKey="cpk" name="Cost / kg" fill={SERIES.orange} radius={[4, 4, 0, 0]} maxBarSize={30} />
               </BarChart>
             </ResponsiveContainer>
           </div>
@@ -1940,8 +2049,8 @@ export default function LogisticsCostPage() {
               { key: 'shipments', label: 'Shipments', align: 'center', render: (_, r) => fmtN(r.shipments) },
               { key: 'cost', label: 'Total Cost', align: 'center', render: (_, r) => fmt(r.cost) },
               { key: 'share', label: 'Share', align: 'center', render: (_, r) => <ShareBar pct={r.share}>{r.share.toFixed(1) + '%'}</ShareBar> },
-              { key: 'avgCost', label: 'Avg ₹', align: 'center', render: (_, r) => '₹' + r.avgCost.toFixed(2) },
-              { key: 'cpk', label: '₹/kg', align: 'center', render: (_, r) => (r.cpk != null ? '₹' + r.cpk.toFixed(2) : '—') },
+              { key: 'avgCost', label: 'Avg Cost / Shipment', align: 'center', render: (_, r) => '₹' + r.avgCost.toFixed(2) },
+              { key: 'cpk', label: 'Cost / kg', align: 'center', render: (_, r) => (r.cpk != null ? '₹' + r.cpk.toFixed(2) : '—') },
               { key: 'overPct', label: 'Overbilled', align: 'center', render: (_, r) => r.overPct.toFixed(1) + '%' },
             ]}
             rows={bandRows}
@@ -1981,7 +2090,7 @@ export default function LogisticsCostPage() {
           </div>
           <DataTable
             columns={[
-              { key: 'courier', label: 'Courier' },
+              { key: 'courier', label: 'Courier', render: v => <CourierCell name={v} /> },
               { key: 'first', label: 'First', align: 'center', render: (_, r) => '₹' + r.first.toFixed(2) },
               { key: 'last', label: 'Latest', align: 'center', render: (_, r) => '₹' + r.last.toFixed(2) },
               { key: 'drift', label: 'Drift', align: 'center', render: (_, r) => (
@@ -2007,21 +2116,28 @@ export default function LogisticsCostPage() {
           in Billing Accuracy above. Prepaid vs COD follows it, since the COD premium is
           read per courier once the partner table has set the context. */}
       <SectionHdr title="By Courier Partner"
-        note={courierRows.length === 1 ? 'one partner in the ledger so far' : `${courierRows.length} partners`} />
-      <Card>
+        note={courierRows.length === 1 ? 'one partner in the ledger so far' : `${courierRows.length} partners`} collapsed={secHid['courier']} onToggle={() => toggleSec('courier')} />
+      <Card style={secHid['courier'] ? { display: 'none' } : undefined}>
         <DataTable
           columns={[
-            { key: 'courier', label: 'Courier' },
+            { key: 'courier', label: 'Courier', render: v => <CourierCell name={v} /> },
             { key: 'shipments', label: 'Shipments', align: 'center', render: (_, r) => fmtN(r.shipments) },
             { key: 'cost', label: 'Cost', align: 'center', render: (_, r) => fmt(r.cost) },
-            { key: 'avgCost', label: 'Avg ₹', align: 'center', render: (_, r) => '₹' + r.avgCost.toFixed(2) },
-            { key: 'cpk', label: '₹/kg', align: 'center', render: (_, r) => (r.cpk != null ? '₹' + r.cpk.toFixed(2) : '—') },
+            { key: 'avgCost', label: 'Avg Cost / Shipment', align: 'center', render: (_, r) => '₹' + r.avgCost.toFixed(2) },
+            { key: 'cpk', label: 'Cost / kg', align: 'center', render: (_, r) => (r.cpk != null ? '₹' + r.cpk.toFixed(2) : '—') },
             // "Overbilled" alone didn't say overbilled on WHAT — it is the share of
             // this courier's shipments billed at a heavier slab than we declared.
             { key: 'overPct', label: '% Wrong Weight', align: 'center', render: (_, r) => (
               <span style={{ color: r.overPct > 40 ? C.red.tx : undefined, fontWeight: r.overPct > 40 ? 700 : undefined }}>
                 {r.overPct.toFixed(1) + '%'}
               </span>
+            ) },
+            // Claimable rupees, next to the % that drives it — the percentage says how
+            // widespread the problem is, this says what it is worth.
+            { key: 'claimRs', label: 'Claimable', align: 'center', render: (_, r) => (
+              r.claimRs > 0
+                ? <span style={{ color: C.red.tx, fontWeight: 700 }}>{fmt(r.claimRs)}</span>
+                : <span style={{ color: C.t3 }}>—</span>
             ) },
           ]}
           rows={courierRows}
@@ -2033,105 +2149,61 @@ export default function LogisticsCostPage() {
         )}
       </Card>
 
-      {/* ── Payment mode ── */}
-      <div style={{ marginTop: 14 }}>
-        {/* Two donuts rather than one: the insight is the GAP between COD's share of
-            volume (21.5%) and its share of cost (27.1%). A single cost pie shows the
-            27% but gives nothing to compare it against, so the over-index is invisible.
-            Two mutually-exclusive slices summing to 100% is a legitimate part-to-whole,
-            and at 97° vs 263° the angles are readable without labels doing the work. */}
-        <Card title="Prepaid vs COD" note="COD takes a bigger bite of cost than of volume">
-          <div style={{ display: 'flex', gap: 4 }}>
-            {[
-              { key: 'n', title: 'Share of shipments' },
-              { key: 'cost', title: 'Share of cost' },
-            ].map(metric => {
-              const total = payRows.reduce((s, r) => s + r[metric.key], 0)
-              return (
-                <div key={metric.key} style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontSize: 10, fontWeight: 800, color: C.t3, letterSpacing: '.05em', textTransform: 'uppercase', textAlign: 'center', marginBottom: 2 }}>
-                    {metric.title}
-                  </div>
-                  <div style={{ height: 200 }}>
-                    <ResponsiveContainer width="100%" height="100%">
-                      <PieChart margin={{ top: 4, right: 4, left: 4, bottom: 4 }}>
-                        <Tooltip
-                          content={({ active, payload }) => {
-                            if (!active || !payload?.length) return null
-                            const r = payload[0].payload
-                            return (
-                              <div style={{ background: C.card, border: `1px solid ${C.border2}`, borderRadius: 9, padding: '9px 11px', boxShadow: '0 6px 20px rgba(0,0,0,.12)' }}>
-                                <div style={{ fontSize: 11.5, fontWeight: 700, color: C.t1, marginBottom: 4 }}>{r.k}</div>
-                                <div style={{ fontSize: 14, fontWeight: 800, color: C.t1 }}>
-                                  {metric.key === 'cost' ? fmt(r.cost) : fmtN(r.n)}
-                                </div>
-                                <div style={{ fontSize: 11, color: C.t3, marginTop: 3 }}>
-                                  {(r[metric.key] / total * 100).toFixed(1)}% · ₹{r.avgCost.toFixed(2)} avg
-                                </div>
-                              </div>
-                            )
-                          }} />
-                        <Pie data={payRows} dataKey={metric.key} nameKey="k"
-                          cx="50%" cy="50%" innerRadius={38} outerRadius={64}
-                          paddingAngle={2} stroke={VIZ.surface} strokeWidth={2}
-                          label={({ k, value }) => `${k} ${(value / total * 100).toFixed(0)}%`}
-                          labelLine={false}
-                          style={{ fontSize: 10 }}>
-                          {payRows.map(r => (
-                            <Cell key={r.k} fill={r.k === 'COD' ? SERIES.orange : SERIES.blue} />
-                          ))}
-                        </Pie>
-                      </PieChart>
-                    </ResponsiveContainer>
-                  </div>
-                </div>
-              )
-            })}
-          </div>
+      {/* ── Weight slab cost analysis ── */}
+      {/* Replaces the Prepaid-vs-COD donuts, which restated a KPI tile. Cost per billable
+          slab answers something nothing else on the page did: where the money sits by weight,
+          and which slabs carry the overbilling. Slab is the courier's charged weight rounded
+          how they bill it — 0.5 kg floor, then up to the next whole kg. */}
+      <div style={{ marginTop: 14 , ...(secHid['courier'] ? { display: 'none' } : {}) }}>
+        <Card title="Weight slab detail"
+          note="spend, unit cost and leg split per billable slab">
           <DataTable
             columns={[
-              { key: 'k', label: 'Payment' },
+              { key: 'slab', label: 'Weight Slab', render: (_, r) => (
+                <span style={{ fontWeight: 700 }}>{r.slab} kg</span>
+              ) },
               { key: 'n', label: 'Shipments', align: 'center', render: (_, r) => fmtN(r.n) },
-              { key: 'cost', label: 'Cost', align: 'center', render: (_, r) => fmt(r.cost) },
-              { key: 'avgCost', label: 'Avg ₹', align: 'center', render: (_, r) => '₹' + r.avgCost.toFixed(2) },
+              { key: 'cost', label: 'Total Spend', align: 'center', render: (_, r) => fmt(r.cost) },
+              { key: 'avgCost', label: 'Avg Cost / Shipment', align: 'center', render: (_, r) => '₹' + r.avgCost.toFixed(0) },
+              { key: 'cpk', label: 'Cost / kg', align: 'center', render: (_, r) => '₹' + r.cpk.toFixed(1) },
+              { key: 'fwdAvg', label: 'Forward', align: 'center', render: (_, r) => (r.fwdAvg ? '₹' + r.fwdAvg.toFixed(0) : '—') },
+              { key: 'revAvg', label: 'Reverse', align: 'center', render: (_, r) => (r.revAvg ? '₹' + r.revAvg.toFixed(0) : '—') },
+              { key: 'rtoAvg', label: 'RTO', align: 'center', render: (_, r) => (r.rtoAvg ? '₹' + r.rtoAvg.toFixed(0) : '—') },
             ]}
-            rows={payRows}
+            rows={slabRows}
+            search searchKeys={['slab']} searchPlaceholder="Find a weight slab…"
+            maxRows={200}
+            maxHeight={420}
           />
-          {codPremium != null && (
-            <div style={{ fontSize: 11.5, color: C.t3, marginTop: 8 }}>
-              COD costs <strong style={{ color: C.red.tx }}>₹{codPremium.toFixed(2)}</strong> more per
-              shipment, so it carries {payShareGap != null ? `${payShareGap.toFixed(1)} points more` : 'more'} of
-              the cost than of the volume.
-            </div>
-          )}
         </Card>
-      </div>
 
       {/* ── Recoverable, split by cause ── */}
-      {/* The two causes need different conversations, so they are separate stack
-          segments rather than one "recoverable" total:
-            weight inflation → a weight-capture dispute (they measured heavier than we shipped)
-            unexplained      → a rate-compliance dispute (billed above their own card)
-          Stacked because they sum to one recoverable figure per courier. */}
+      </div>
+      {/* Weight overbilling only — the courier charged for weight we did not ship, the one
+          dispute backed by our own declared figures rather than by a card inferred from
+          their invoices. Rate variance sits beside it as a diagnostic, never summed in. */}
       {recoverRows.length > 0 && (
         <>
-          <SectionHdr title="Recoverable by Cause"
-            note={`${fmt(recoverTotals.total)} claimable across ${recoverRows.length} partners · priced on total cost, same basis as Cost Overview`} />
+          <SectionHdr title="Recoverable"
+            note={`${fmt(recoverTotals.infl)} claimable on weight across ${recoverRows.length} partners · ${fmt(recoverTotals.unexp)} rate variance shown separately, not invoiceable`} collapsed={secHid['recover']} onToggle={() => toggleSec('recover')} />
 
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(360px,1fr))', gap: 14 }}>
-            <Card style={{ display: 'flex', flexDirection: 'column' }} title="Recoverable per courier"
-              note={`${fmt(recoverTotals.total)} total in dispute · bar = rupees, split = which dispute`}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(360px,1fr))', gap: 14 , ...(secHid['recover'] ? { display: 'none' } : {}) }}>
+            <Card style={{ display: 'flex', flexDirection: 'column' }} title="Spend and claim by courier"
+              note="bars = total spend (left axis) · line = claim as % of that courier's spend (right axis)">
               <div style={{ flex: 1, minHeight: 200 }}>
                 <ResponsiveContainer width="100%" height="100%">
-                  {/* Horizontal: courier names read straight instead of angled, and the
-                      ranking runs top-to-bottom the same way the table does. */}
-                  <BarChart data={recoverRows} layout="vertical"
-                    margin={{ top: 6, right: 14, left: 4, bottom: 4 }}>
-                    <CartesianGrid stroke={VIZ.grid} horizontal={false} />
-                    <XAxis type="number" tick={{ fontSize: 11, fill: VIZ.muted }}
-                      axisLine={{ stroke: VIZ.axis }} tickLine={false} tickFormatter={v => fmt(v)} />
-                    <YAxis type="category" dataKey="courier" width={78}
-                      tick={{ fontSize: 11, fill: VIZ.muted }} axisLine={false} tickLine={false} />
+                  <ComposedChart data={courierSpendRows} margin={{ top: 10, right: 14, left: 4, bottom: 4 }}>
+                    <CartesianGrid stroke={VIZ.grid} vertical={false} />
+                    <XAxis dataKey="courier" tick={{ fontSize: 9.5, fill: VIZ.muted }}
+                      axisLine={{ stroke: VIZ.axis }} tickLine={false} interval={0}
+                      angle={-25} textAnchor="end" height={52} />
+                    <YAxis yAxisId="spend" tick={{ fontSize: 11, fill: VIZ.muted }}
+                      axisLine={false} tickLine={false} tickFormatter={v => fmt(v)} />
+                    {/* Second axis is unavoidable: spend spans ₹1.5 L to ₹4.29 Cr while the
+                        claim rate spans 0-8%. Bar-vs-line separates the encodings so neither
+                        is read against the wrong scale. */}
+                    <YAxis yAxisId="pct" orientation="right" tick={{ fontSize: 11, fill: VIZ.muted }}
+                      axisLine={false} tickLine={false} tickFormatter={v => v.toFixed(0) + '%'} />
                     <Tooltip cursor={{ fill: 'rgba(11,11,11,0.04)' }}
                       content={({ active, payload, label }) => {
                         if (!active || !payload?.length) return null
@@ -2139,45 +2211,40 @@ export default function LogisticsCostPage() {
                         return (
                           <div style={{ background: C.card, border: `1px solid ${C.border2}`, borderRadius: 9, padding: '9px 11px', boxShadow: '0 6px 20px rgba(0,0,0,.12)' }}>
                             <div style={{ fontSize: 11.5, fontWeight: 700, color: C.t1, marginBottom: 5 }}>{label}</div>
-                            <div style={{ fontSize: 15, fontWeight: 800, color: C.t1 }}>{fmt(r.recTotal)}</div>
-                            <div style={{ fontSize: 11, color: C.t3, marginTop: 4 }}>
-                              wrong weight {fmt(r.recInfl)}<br />
-                              wrong rate {fmt(r.recUnexp)}
-                            </div>
-                            <div style={{ fontSize: 11, color: C.t2, marginTop: 4 }}>
-                              {r.recPctFreight.toFixed(1)}% of their freight · ₹{r.recPerShipment.toFixed(1)}/shipment
+                            <div style={{ fontSize: 15, fontWeight: 800, color: C.t1 }}>{fmt(r.spend)}</div>
+                            <div style={{ fontSize: 11, color: C.t3, marginTop: 3 }}>total spend</div>
+                            <div style={{ fontSize: 11.5, color: C.red.tx, marginTop: 5, fontWeight: 600 }}>
+                              {fmt(r.claim)} claimable · {r.claimPct.toFixed(2)}% of their spend
                             </div>
                           </div>
                         )
                       }} />
                     <Legend wrapperStyle={{ fontSize: 11.5, paddingTop: 4 }} />
-                    <Bar dataKey="recInfl" name="Wrong weight" stackId="rec" fill={SERIES.blue} maxBarSize={26} stroke={VIZ.surface} strokeWidth={2} />
-                    <Bar dataKey="recUnexp" name="Wrong rate" stackId="rec" fill={SERIES.orange} radius={[0, 4, 4, 0]} maxBarSize={26} stroke={VIZ.surface} strokeWidth={2} />
-                  </BarChart>
+                    <Bar yAxisId="spend" dataKey="spend" name="Total spend" fill={SERIES.blue}
+                      fillOpacity={0.82} radius={[4, 4, 0, 0]} maxBarSize={38} />
+                    <Line yAxisId="pct" type="monotone" dataKey="claimPct" name="Claim % of spend"
+                      stroke={SERIES.orange} strokeWidth={2.5}
+                      dot={{ r: 3.5, fill: SERIES.orange, stroke: VIZ.surface, strokeWidth: 2 }}
+                      activeDot={{ r: 6, fill: SERIES.orange, stroke: VIZ.surface, strokeWidth: 2 }} />
+                  </ComposedChart>
                 </ResponsiveContainer>
               </div>
-              {/* The chart ranks by rupees, which tracks partner size. This names the
-                  partner whose billing is most wrong relative to what we pay them — a
-                  different question, and the one that justifies a rate review. */}
-              {worstIntensity && (
-                <div style={{ fontSize: 11.5, color: C.t2, marginTop: 8, lineHeight: 1.5 }}>
-                  Highest intensity: <strong>{worstIntensity.courier}</strong> at{' '}
-                  <strong style={{ color: C.red.tx }}>{worstIntensity.recPctFreight.toFixed(1)}%</strong> of
-                  their own freight bill ({fmt(worstIntensity.recTotal)} across{' '}
-                  {fmtN(worstIntensity.disputedN)} affected shipments).
-                </div>
-              )}
             </Card>
 
             <Card title="Escalation priority"
               note="what each courier over-billed, and how concentrated it is">
               <DataTable
                 columns={[
-                  { key: 'courier', label: 'Courier' },
+                  { key: 'courier', label: 'Courier', render: v => <CourierCell name={v} /> },
                   // Renamed from 'Total Claim': it is the over-billed amount, and saying so
                   // removes the guesswork about what the number represents.
-                  { key: 'recTotal', label: 'Over-billed', align: 'center', render: (_, r) => (
-                    <span style={{ fontWeight: 700, color: C.red.tx }}>{fmt(r.recTotal)}</span>
+                  { key: 'recInfl', label: 'Claimable (Weight)', align: 'center', render: (_, r) => (
+                    <span style={{ fontWeight: 700, color: C.red.tx }}>{fmt(r.recInfl)}</span>
+                  ) },
+                  // Rate variance kept visible but plainly separate: it is measured against
+                  // the courier own derived card, so it flags inconsistency, not a claim.
+                  { key: 'recUnexp', label: 'Rate Variance', align: 'center', render: (_, r) => (
+                    <span style={{ color: C.t2 }}>{r.recUnexp > 0 ? fmt(r.recUnexp) : '—'}</span>
                   ) },
                   // How many shipments it sits on, out of how many we could price. Without
                   // this the per-shipment figure has no visible denominator.
@@ -2208,9 +2275,28 @@ export default function LogisticsCostPage() {
 
       {/* ── Cost by product ── */}
       <SectionHdr title="Cost by Product"
-        note="category → sub-category, per shipment by leg. RTO is the return leg only" />
-      <div>
+        note="category → sub-category, per shipment by leg. RTO is the return leg only" collapsed={secHid['product']} onToggle={() => toggleSec('product')} />
+      <div style={secHid['product'] ? { display: 'none' } : undefined}>
         <Card title="Category detail" note="click a category to open its sub-categories">
+          {/* Own search box rather than DataTable's: a collapsed category never emits its
+              children, so filtering finished rows could not reach a sub-category. This
+              query feeds productRows, which expands matching parents as it builds. */}
+          <div style={{ marginBottom: 8 }}>
+            <input value={subQuery} onChange={e => setSubQuery(e.target.value)}
+              placeholder="Find a category or sub-category…"
+              style={{
+                fontFamily: 'var(--font)', fontSize: 11.5, padding: '6px 10px', width: 260,
+                borderRadius: 7, border: `1.5px solid ${subQuery.trim() ? C.acm : C.border2}`,
+                background: subQuery.trim() ? C.acl : C.card, color: C.t1, outline: 'none',
+              }} />
+            {subQuery.trim() && (
+              <span style={{ fontSize: 11, color: C.t3, marginLeft: 9 }}>
+                {productRows.filter(r => r.isSub).length} sub-categories
+                <button onClick={() => setSubQuery('')}
+                  style={{ marginLeft: 8, border: 'none', background: 'none', color: C.t3, cursor: 'pointer', fontSize: 11, textDecoration: 'underline', padding: 0, fontFamily: 'var(--font)' }}>clear</button>
+              </span>
+            )}
+          </div>
           <DataTable
             columns={[
               // Left-aligned so the indented sub-category names still read as a hierarchy.
@@ -2258,10 +2344,10 @@ export default function LogisticsCostPage() {
       {activeCell && (
         <>
           <SectionHdr title="Like-for-Like Courier Cost"
-            note="same zone, same weight slab, same leg — the only fair comparison" />
+            note="same zone, same weight slab, same leg — the only fair comparison" collapsed={secHid['lfl']} onToggle={() => toggleSec('lfl')} />
           {/* Three independent multi-selects instead of one combined dropdown. Selecting
               nothing in a row means ALL of it, so the card always has data to show. */}
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 18, marginBottom: 12 }}>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 18, marginBottom: 12 , ...(secHid['lfl'] ? { display: 'none' } : {}) }}>
             <div>
               <div className="kpi-label" style={{ marginBottom: 6 }}>ZONE</div>
               <ChipRow options={lflOptions.zones} selected={lflZones}
@@ -2277,11 +2363,30 @@ export default function LogisticsCostPage() {
               <ChipRow options={lflOptions.legs} selected={lflLegs}
                 onToggle={l => setLflLegs(t => t.includes(l) ? t.filter(x => x !== l) : [...t, l])} />
             </div>
+            <div>
+              {/* Exact slab as a SELECT, not chips: there are ~40 of them here, which as
+                  chips would wrap into a wall that buries the zone and leg rows above it.
+                  Empty value = no constraint, so the coarse band chips still drive the
+                  comparison unless a specific slab is chosen. */}
+              <div className="kpi-label" style={{ marginBottom: 6 }}>SPECIFIC SLAB</div>
+              <select value={lflSlab} onChange={e => setLflSlab(e.target.value)}
+                style={{
+                  fontFamily: 'var(--font)', fontSize: 11, padding: '6px 9px',
+                  borderRadius: 7, border: `1.5px solid ${lflSlab !== '' ? C.acm : C.border2}`,
+                  background: lflSlab !== '' ? C.acl : C.card, color: C.t1, cursor: 'pointer',
+                }}>
+                <option value="">All slabs</option>
+                {lflOptions.slabs.map(sv => (
+                  <option key={sv} value={sv}>{sv} kg</option>
+                ))}
+              </select>
+            </div>
           </div>
-          <Card
+          <Card style={secHid['lfl'] ? { display: 'none' } : undefined}
             title={[
               activeCell.allZones ? 'All zones' : 'Zone ' + activeCell.zones.join(', '),
-              activeCell.allBands ? 'all weights' : activeCell.bands.join(', '),
+              activeCell.slab !== '' ? activeCell.slab + ' kg slab'
+                : activeCell.allBands ? 'all weights' : activeCell.bands.join(', '),
               activeCell.allLegs ? 'all legs' : activeCell.legs.join(', '),
             ].join(' · ')}
             note={activeCell.rows.length
@@ -2342,7 +2447,7 @@ export default function LogisticsCostPage() {
             </div>
             <DataTable
               columns={[
-                { key: 'courier', label: 'Courier' },
+                { key: 'courier', label: 'Courier', render: v => <CourierCell name={v} /> },
                 { key: 'n', label: 'Shipments', align: 'center', render: (_, r) => fmtN(r.n) },
                 { key: 'avgCost', label: 'Avg ₹', align: 'center', render: (_, r) => '₹' + r.avgCost.toFixed(2) },
                 { key: 'cpk', label: '₹/kg', align: 'center', render: (_, r) => '₹' + r.cpk.toFixed(2) },
@@ -2397,7 +2502,7 @@ export default function LogisticsCostPage() {
           {/* Scope tabs: which ledger this page is reporting on. Sits above everything
               it scopes, alongside the filter summary. */}
           <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap', paddingTop: 2, marginBottom: 18 }}>
-            <div style={{ display: 'inline-flex', background: C.bg, borderRadius: 9, padding: 3, gap: 2, border: `1.5px solid ${C.border2}` }}>
+            <div style={{ display: 'inline-flex', background: C.bg, borderRadius: 9, padding: 3, gap: 2 }}>
               {SCOPES.map(sc => {
                 const on = scope === sc.id
                 return (

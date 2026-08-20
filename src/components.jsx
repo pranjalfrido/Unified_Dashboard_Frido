@@ -118,12 +118,40 @@ export function CategoryRevenueCard({ catRows, subCatRows, skuMap, totalRev, vie
 // (if less human-readable) storage key rather than colliding with every other unkeyed DataTable.
 // maxHeight scrolls the body vertically while the header stays put, so a card can hold a long
 // table at a fixed height instead of stretching the whole row.
-export function DataTable({ columns, rows, maxRows = 50, storageKey, maxHeight }) {
-  const visible = rows.slice(0, maxRows)
+export function DataTable({ columns, rows, maxRows = 50, storageKey, maxHeight, search, searchKeys, searchPlaceholder }) {
+  // Opt-in search. Long tables (139 weight slabs, ~290 sub-categories) are scroll-only
+  // otherwise, so finding one row means dragging through the whole list.
+  const [q, setQ] = useState('')
+  const needle = q.trim().toLowerCase()
+  // Match the named keys' RAW values, not the rendered cells: a cell may render JSX, and
+  // stringifying that would search React internals instead of the data.
+  const keys = searchKeys && searchKeys.length ? searchKeys : columns.map(c => c.key)
+  const matched = !needle ? rows : rows.filter(r =>
+    keys.some(k => String(r?.[k] ?? '').toLowerCase().includes(needle)))
+  const visible = matched.slice(0, maxRows)
   const key = storageKey || `datatable-cols:${columns.map(c => c.key).join(',')}`
   const idColumns = columns.map(c => ({ id: c.key, ...c }))
   const reorder = useReorderableColumns(key, idColumns)
   return (
+    <>
+      {search && (
+        <div style={{ marginBottom: 8 }}>
+          <input value={q} onChange={e => setQ(e.target.value)}
+            placeholder={searchPlaceholder || 'Search…'}
+            style={{
+              fontFamily: 'var(--font)', fontSize: 11.5, padding: '6px 10px', width: 230,
+              borderRadius: 7, border: `1.5px solid ${needle ? C.acm : C.border2}`,
+              background: needle ? C.acl : C.card, color: C.t1, outline: 'none',
+            }} />
+          {needle && (
+            <span style={{ fontSize: 11, color: C.t3, marginLeft: 9 }}>
+              {matched.length} of {rows.length}
+              <button onClick={() => setQ('')}
+                style={{ marginLeft: 8, border: 'none', background: 'none', color: C.t3, cursor: 'pointer', fontSize: 11, textDecoration: 'underline', padding: 0, fontFamily: 'var(--font)' }}>clear</button>
+            </span>
+          )}
+        </div>
+      )}
     <div className="overflow-x-auto" style={maxHeight ? { maxHeight, overflowY: 'auto' } : undefined}>
       <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
         <thead>
@@ -146,8 +174,10 @@ export function DataTable({ columns, rows, maxRows = 50, storageKey, maxHeight }
           ))}
         </tbody>
       </table>
-      {rows.length > maxRows && <div className="text-xs text-center py-2" style={{ color: C.t3, paddingBottom: 14 }}>Showing {maxRows} of {rows.length}</div>}
+      {matched.length > maxRows && <div className="text-xs text-center py-2" style={{ color: C.t3, paddingBottom: 14 }}>Showing {maxRows} of {matched.length}</div>}
+      {needle && !matched.length && <div className="text-xs text-center py-2" style={{ color: C.t3, paddingBottom: 14 }}>No rows match “{q}”</div>}
     </div>
+    </>
   )
 }
 
