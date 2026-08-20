@@ -139,26 +139,26 @@ function LDropdown({ label, options, value, onChange, flex }) {
   )
 }
 
-function LKpiCard({ label, value, badgeText, badgeVariant, subValue, cur, prev, hideSubValue, compact, tight }) {
+function LKpiCard({ label, value, badgeText, badgeVariant, subValue, cur, prev, hideSubValue, compact, tight, mobile }) {
   const bv = badgeVariant || 'N'
   const chg = (cur != null && prev != null && prev !== 0) ? ((cur - prev) / prev * 100) : null
   const chgBadge = chg != null && Math.abs(chg) < 999
     ? <span style={{ fontSize: tight ? 9 : 10, fontWeight: 700, padding: tight ? '1px 4px' : '2px 6px', borderRadius: 4, background: chg >= 0 ? C.green.bg : C.red.bg, color: chg >= 0 ? C.green.tx : C.red.tx, flexShrink: 0 }}>{chg >= 0 ? '▲' : '▼'} {Math.abs(chg).toFixed(1)}%</span>
     : badgeText ? <span className={`bdg bdg-${bv}`} style={{ fontSize: tight ? 9 : 10, flexShrink: 0 }}>{badgeText}</span> : null
   return (
-    <div className="kpi-card" style={{ display: 'flex', flexDirection: 'column', gap: 0, padding: tight ? '5px 6px' : '7px 10px' }}>
+    <div className="kpi-card" style={{ display: 'flex', flexDirection: 'column', gap: 0, padding: mobile ? '10px 12px' : tight ? '5px 6px' : '7px 10px', minHeight: mobile ? 78 : undefined, height: mobile ? '100%' : undefined, border: mobile ? `1px solid ${C.border}` : undefined, background: mobile ? '#fff' : undefined }}>
       <div className="kpi-label" style={{ marginBottom: 2 }}>{label}</div>
       {compact ? (
         <>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 4, minWidth: 0 }}>
-            <div className="kpi-value" style={{ fontSize: tight ? 14 : 16, whiteSpace: 'nowrap', minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis' }}>{value ?? '—'}</div>
+            <div className="kpi-value" style={{ fontSize: mobile ? 20 : tight ? 14 : 16, whiteSpace: 'nowrap', minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis' }}>{value ?? '—'}</div>
             {chgBadge}
           </div>
           {subValue && <div style={{ fontSize: 11, fontWeight: 500, color: C.t3, marginTop: 1 }}>{subValue} of total</div>}
         </>
       ) : (
         <>
-          <div className="kpi-value" style={{ fontSize: 16, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{value ?? '—'}</div>
+          <div className="kpi-value" style={{ fontSize: mobile ? 20 : 16, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{value ?? '—'}</div>
           {chgBadge && <div style={{ marginTop: 2 }}>{chgBadge}</div>}
           {subValue && !hideSubValue && <div style={{ fontSize: 11, fontWeight: 500, color: C.t3, marginTop: 2 }}>{subValue}</div>}
         </>
@@ -764,18 +764,18 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
             </div>
             {(() => {
               const kpiItems = [
-                <LKpiCard key="ontm" label="On Time Del" value={n(k.on_time)} badgeText={pct2(k.on_time, k.delivered)} badgeVariant="G" cur={k.on_time} prev={pk.on_time} compact />,
-                <LKpiCard key="sla" label="SLA Breach" value={n(k.sla_breach)} badgeVariant="R" cur={k.sla_breach} prev={pk.sla_breach} compact />,
-                <LKpiCard key="rto10" label="RTO 10+ Days" value={n(k.rto_10plus)} badgeVariant="R" cur={k.rto_10plus} prev={pk.rto_10plus} compact />,
-                <LKpiCard key="zrto" label="Z-RTO" value={n(k.z_rto)} badgeText={pct2(k.z_rto, k.total_shipments)} badgeVariant="A" cur={k.z_rto} prev={pk.z_rto} compact />,
-                <LKpiCard key="fasr" label="FASR %" value={pct2(k.delivered_1attempt, k.total_ofd_attempts)} badgeVariant="G" cur={k.delivered_1attempt} prev={pk.delivered_1attempt} compact />,
-                <LKpiCard key="rasr" label="RASR %" value={pct2(k.delivered_multi, k.total_ofd_attempts)} badgeVariant="B" cur={k.delivered_multi} prev={pk.delivered_multi} compact />,
-                <LKpiCard key="multi" label="Multi-Att Del" value={n(k.delivered_multi)} badgeVariant="B" cur={k.delivered_multi} prev={pk.delivered_multi} compact />,
-                <LKpiCard key="proc" label="Avg Processing" value={d1(k.avg_processing)} badgeText="Cr→1st OFD" badgeVariant="N" cur={k.avg_processing} prev={pk.avg_processing} compact />,
-                <LKpiCard key="pick" label="Avg Pickup TAT" value={d1(k.avg_pickup)} badgeText="Cr→Pick" badgeVariant="B" cur={k.avg_pickup} prev={pk.avg_pickup} compact />,
-                <LKpiCard key="intr" label="Avg In-Transit" value={d1(k.avg_intransit)} badgeText="Pick→Del" badgeVariant="N" cur={k.avg_intransit} prev={pk.avg_intransit} compact />,
-                <LKpiCard key="ful" label="Avg Fulfilment" value={d1(k.avg_fulfilment)} badgeText="Cr→Del" badgeVariant="G" cur={k.avg_fulfilment} prev={pk.avg_fulfilment} compact />,
-                <LKpiCard key="rtot" label="Avg RTO TAT" value={d1(k.avg_rto_tat)} badgeText="RTO days" badgeVariant="R" cur={k.avg_rto_tat} prev={pk.avg_rto_tat} compact />,
+                <LKpiCard key="ontm" label="On Time Del" value={n(k.on_time)} badgeText={pct2(k.on_time, k.delivered)} badgeVariant="G" cur={k.on_time} prev={pk.on_time} compact mobile />,
+                <LKpiCard key="sla" label="SLA Breach" value={n(k.sla_breach)} badgeVariant="R" cur={k.sla_breach} prev={pk.sla_breach} compact mobile />,
+                <LKpiCard key="rto10" label="RTO 10+ Days" value={n(k.rto_10plus)} badgeVariant="R" cur={k.rto_10plus} prev={pk.rto_10plus} compact mobile />,
+                <LKpiCard key="zrto" label="Z-RTO" value={n(k.z_rto)} badgeText={pct2(k.z_rto, k.total_shipments)} badgeVariant="A" cur={k.z_rto} prev={pk.z_rto} compact mobile />,
+                <LKpiCard key="fasr" label="FASR %" value={pct2(k.delivered_1attempt, k.total_ofd_attempts)} badgeVariant="G" cur={k.delivered_1attempt} prev={pk.delivered_1attempt} compact mobile />,
+                <LKpiCard key="rasr" label="RASR %" value={pct2(k.delivered_multi, k.total_ofd_attempts)} badgeVariant="B" cur={k.delivered_multi} prev={pk.delivered_multi} compact mobile />,
+                <LKpiCard key="multi" label="Multi-Att Del" value={n(k.delivered_multi)} badgeVariant="B" cur={k.delivered_multi} prev={pk.delivered_multi} compact mobile />,
+                <LKpiCard key="proc" label="Avg Processing" value={d1(k.avg_processing)} badgeText="Cr→1st OFD" badgeVariant="N" cur={k.avg_processing} prev={pk.avg_processing} compact mobile />,
+                <LKpiCard key="pick" label="Avg Pickup TAT" value={d1(k.avg_pickup)} badgeText="Cr→Pick" badgeVariant="B" cur={k.avg_pickup} prev={pk.avg_pickup} compact mobile />,
+                <LKpiCard key="intr" label="Avg In-Transit" value={d1(k.avg_intransit)} badgeText="Pick→Del" badgeVariant="N" cur={k.avg_intransit} prev={pk.avg_intransit} compact mobile />,
+                <LKpiCard key="ful" label="Avg Fulfilment" value={d1(k.avg_fulfilment)} badgeText="Cr→Del" badgeVariant="G" cur={k.avg_fulfilment} prev={pk.avg_fulfilment} compact mobile />,
+                <LKpiCard key="rtot" label="Avg RTO TAT" value={d1(k.avg_rto_tat)} badgeText="RTO days" badgeVariant="R" cur={k.avg_rto_tat} prev={pk.avg_rto_tat} compact mobile />,
               ]
               // pair into slides of 2
               const slides = []
