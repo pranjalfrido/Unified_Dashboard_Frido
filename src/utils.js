@@ -29,6 +29,7 @@ export const COURIER_COLORS = {
 }
 export const COURIER_LOGOS = {
   Bluedart: '/blue-dart.jpg', Delhivery: '/Delhivery.png', 'Delhivery NDD': '/delhivery-ndd.png',
+  'Bluedart B2B': '/blue-dart.jpg',
   Ekart: '/ekart_logistics_logo.jpg', ElasticRun: '/elasticrun_logo.jpg', 'Elastic Run': '/elasticrun_logo.jpg',
   Safexpress: '/safeexpress.webp', Shadowfax: '/shadow-fax.jpg', Shiprocket: '/shiprocket.jpg',
   'Skye Air': '/sky-air.webp', SkyAir: '/sky-air.webp',
