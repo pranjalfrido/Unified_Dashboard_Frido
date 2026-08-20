@@ -839,8 +839,8 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
               </div>
             </div>
             <div style={{ height: 1, background: C.border, margin: '10px 0 6px' }} />
-            <ResponsiveContainer width="100%" height={180}>
-              <ComposedChart data={trendData} margin={{ top: 4, right: 20, left: 20, bottom: 0 }}>
+            <ResponsiveContainer width="100%" height={isMobile ? 180 : 220}>
+              <ComposedChart data={trendData} margin={isMobile ? { top: 4, right: 20, left: 20, bottom: 0 } : { top: 4, right: -20, left: -30, bottom: 0 }}>
                 <defs>
                   <linearGradient id="lgDel" x1="0" y1="0" x2="0" y2="1">
                     <stop offset="5%" stopColor="#FFD600" stopOpacity={0.25} />
@@ -884,6 +884,22 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
                 </>}
               </ComposedChart>
             </ResponsiveContainer>
+            {!isMobile && (
+              <div style={{ display: 'flex', gap: 16, justifyContent: 'center', marginTop: 8, flexShrink: 0 }}>
+                {trendMetric === 'Qty'
+                  ? [['#94939F','Total'],['#E6A800','Del %'],['#b91c1c','RTO %']].map(([color, label]) => (
+                      <span key={label} style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 10, color: C.t2 }}>
+                        <span style={{ width: 10, height: 10, borderRadius: 2, background: color, display: 'inline-block' }} />{label}
+                      </span>
+                    ))
+                  : [['#E6A800','Total Value'],['#b91c1c','RTO Value'],['#E6A800','Del %'],['#b91c1c','RTO %']].map(([color, label]) => (
+                      <span key={label} style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 10, color: C.t2 }}>
+                        <span style={{ width: 10, height: 10, borderRadius: 2, background: color, display: 'inline-block' }} />{label}
+                      </span>
+                    ))
+                }
+              </div>
+            )}
           </div>
 
           {/* Courier TAT */}
@@ -920,10 +936,13 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
               }))
               return (<>
             <ResponsiveContainer width="100%" height={220}>
-              <ComposedChart data={tatData} margin={{ top: 4, right: 20, left: 20, bottom: 0 }}>
-                <XAxis dataKey="label" tick={{ fontSize: 9, fill: C.t3 }} axisLine={{ stroke: C.border }} tickLine={false} interval={0} ticks={tatData.length > 1 ? [tatData[0]?.label, tatData[Math.floor((tatData.length-1)/3)]?.label, tatData[Math.floor((tatData.length-1)*2/3)]?.label, tatData[tatData.length-1]?.label].filter(Boolean) : [tatData[0]?.label]} />
-                <YAxis yAxisId="left" tick={false} axisLine={false} tickLine={false} width={0} />
-                <YAxis yAxisId="right" orientation="right" domain={[0, dataMax => Math.ceil(dataMax) + 1]} tick={false} axisLine={false} tickLine={false} width={0} />
+              <ComposedChart data={tatData} margin={isMobile ? { top: 4, right: 20, left: 20, bottom: 0 } : { top: 10, right: 10, left: -30, bottom: 0 }}>
+                {!isMobile && <CartesianGrid strokeDasharray="3 3" stroke={C.border} vertical={false} />}
+                <XAxis dataKey="label" tick={{ fontSize: isMobile ? 9 : 10, fill: C.t3 }} axisLine={isMobile ? { stroke: C.border } : undefined} tickLine={false} interval={0} ticks={tatData.length > 1 ? [tatData[0]?.label, tatData[Math.floor((tatData.length-1)/3)]?.label, tatData[Math.floor((tatData.length-1)*2/3)]?.label, tatData[tatData.length-1]?.label].filter(Boolean) : [tatData[0]?.label]} />
+                {isMobile
+                  ? <><YAxis yAxisId="left" tick={false} axisLine={false} tickLine={false} width={0} /><YAxis yAxisId="right" orientation="right" domain={[0, dataMax => Math.ceil(dataMax) + 1]} tick={false} axisLine={false} tickLine={false} width={0} /></>
+                  : <><YAxis yAxisId="left" tick={{ fontSize: 9, fill: C.t3 }} tickFormatter={v => v >= 1000 ? (v/1000).toFixed(0)+'K' : v} /><YAxis yAxisId="right" orientation="right" domain={[0, dataMax => Math.ceil(dataMax) + 1]} tickCount={5} tick={{ fontSize: 9, fill: C.t2 }} tickFormatter={v => Math.round(v) + 'd'} /></>
+                }
                 <Tooltip
                   contentStyle={{ fontSize: 11, padding: '6px 10px', borderRadius: 8, border: `1px solid ${C.border}`, background: C.card, color: C.t1 }}
                   itemStyle={{ color: C.t1, padding: '1px 0' }}
@@ -937,6 +956,15 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
                 <Line yAxisId="right" type="monotone" dataKey="avg_fulfilment_days" name="Avg Fulfilment Days" stroke="#111" strokeWidth={1.5} dot={false} connectNulls />
               </ComposedChart>
             </ResponsiveContainer>
+            {!isMobile && (
+              <div style={{ display: 'flex', gap: 16, justifyContent: 'center', marginTop: 8, flexWrap: 'wrap', flexShrink: 0 }}>
+                {[['#FFC107','Total Shipments'],['#111','Avg Processing Days'],['#111','Avg Pickup Days'],['#111','Avg Intransit Days'],['#111','Avg Fulfilment Days']].map(([color, label]) => (
+                  <span key={label} style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 10, color: C.t2 }}>
+                    <span style={{ width: 10, height: 10, borderRadius: 2, background: color, display: 'inline-block' }} />{label}
+                  </span>
+                ))}
+              </div>
+            )}
               </>)
             })()}
           </div>
