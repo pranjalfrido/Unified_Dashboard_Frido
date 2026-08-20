@@ -432,9 +432,9 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
             (raw.byCourierDay || []).filter(courierFilter)
               .reduce((acc, x) => {
                 const key = x.period_label
-                if (!acc[key]) acc[key] = { label: x.period_label, dt: x.period_dt, total: 0, delivered: 0, rto: 0, _wt: 0, avg_processing_days: 0, avg_pickup_days: 0, avg_intransit_days: 0, avg_fulfilment_days: 0 }
+                if (!acc[key]) acc[key] = { label: x.period_label, dt: x.period_dt, total: 0, delivered: 0, rto: 0, total_value: 0, rto_value: 0, _wt: 0, avg_processing_days: 0, avg_pickup_days: 0, avg_intransit_days: 0, avg_fulfilment_days: 0 }
                 const t = x.total || 0
-                acc[key].total += t; acc[key].delivered += x.delivered || 0; acc[key].rto += x.rto || 0
+                acc[key].total += t; acc[key].delivered += x.delivered || 0; acc[key].rto += x.rto || 0; acc[key].total_value += x.total_value || 0; acc[key].rto_value += x.rto_value || 0
                 ;['avg_processing_days','avg_pickup_days','avg_intransit_days','avg_fulfilment_days'].forEach(k => { if (x[k] != null) { acc[key][k] = (acc[key][k] * acc[key]._wt + x[k] * t) / (acc[key]._wt + t || 1) } })
                 acc[key]._wt += t
                 return acc
@@ -444,9 +444,9 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
             (raw.byCourierWeek || []).filter(courierFilter)
               .reduce((acc, x) => {
                 const key = x.period_label
-                if (!acc[key]) acc[key] = { label: x.period_label, dt: x.period_dt, total: 0, delivered: 0, rto: 0, _wt: 0, avg_processing_days: 0, avg_pickup_days: 0, avg_intransit_days: 0, avg_fulfilment_days: 0 }
+                if (!acc[key]) acc[key] = { label: x.period_label, dt: x.period_dt, total: 0, delivered: 0, rto: 0, total_value: 0, rto_value: 0, _wt: 0, avg_processing_days: 0, avg_pickup_days: 0, avg_intransit_days: 0, avg_fulfilment_days: 0 }
                 const t = x.total || 0
-                acc[key].total += t; acc[key].delivered += x.delivered || 0; acc[key].rto += x.rto || 0
+                acc[key].total += t; acc[key].delivered += x.delivered || 0; acc[key].rto += x.rto || 0; acc[key].total_value += x.total_value || 0; acc[key].rto_value += x.rto_value || 0
                 ;['avg_processing_days','avg_pickup_days','avg_intransit_days','avg_fulfilment_days'].forEach(k => { if (x[k] != null) { acc[key][k] = (acc[key][k] * acc[key]._wt + x[k] * t) / (acc[key]._wt + t || 1) } })
                 acc[key]._wt += t
                 return acc
@@ -605,11 +605,13 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
       acc[d.label].total = (acc[d.label].total || 0) + (d.total || 0)
       acc[d.label].delivered = (acc[d.label].delivered || 0) + (d.delivered || 0)
       acc[d.label].rto = (acc[d.label].rto || 0) + (d.rto || 0)
+      acc[d.label].total_value = (acc[d.label].total_value || 0) + (d.total_value || 0)
+      acc[d.label].rto_value = (acc[d.label].rto_value || 0) + (d.rto_value || 0)
       acc[d.label]._n++
     }
     return acc
   }, {}))
-  const trendData = trendDeduped.map(d => ({ ...d, rto_pct: d.total ? +((d.rto / d.total) * 100).toFixed(1) : 0, del_pct: d.total ? +((d.delivered / d.total) * 100).toFixed(1) : 0 }))
+  const trendData = trendDeduped.map(d => ({ ...d, rto_pct: d.total ? +((d.rto / d.total) * 100).toFixed(1) : 0, del_pct: d.total ? +((d.delivered / d.total) * 100).toFixed(1) : 0, del_value_pct: d.del_value_pct ?? (d.total_value ? +((d.total_value - (d.rto_value||0)) / d.total_value * 100).toFixed(1) : 0), rto_value_pct: d.rto_value_pct ?? (d.total_value ? +((d.rto_value||0) / d.total_value * 100).toFixed(1) : 0), rto_value: d.rto_value ?? 0 }))
   const byCourierData = (data?.byCourier || []).map(d => ({ ...d, del_pct: d.total ? +((d.delivered / d.total) * 100).toFixed(1) : 0, rto_pct: d.total ? +((d.rto / d.total) * 100).toFixed(1) : 0 }))
   const maxCourierTotal = byCourierData[0]?.total || 1
 
