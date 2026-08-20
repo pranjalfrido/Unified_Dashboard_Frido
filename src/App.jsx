@@ -861,13 +861,13 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
                     <div style={{ background: C.card, border: `1px solid ${C.border2}`, borderRadius: 8, padding: '6px 10px', fontSize: 11, color: C.t1, minWidth: 120 }}>
                       <div style={{ fontWeight: 700, marginBottom: 4 }}>{label}</div>
                       {trendMetric === 'Qty' ? <>
-                          <div style={{ color: C.t1, fontWeight: 600 }}>Del % : {get('del_pct') ?? '—'}%</div>
-                          <div style={{ color: C.t1, fontWeight: 600 }}>RTO % : {get('rto_pct') ?? '—'}%</div>
-                          <div style={{ color: C.t2 }}>Total : {Number(get('total') ?? 0).toLocaleString('en-IN')}</div>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 5, color: C.t1, fontWeight: 600 }}><span style={{ width: 7, height: 7, borderRadius: '50%', background: '#E6A800', flexShrink: 0 }} />Del % : {get('del_pct') ?? '—'}%</div>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 5, color: C.t1, fontWeight: 600 }}><span style={{ width: 7, height: 7, borderRadius: '50%', background: '#b91c1c', flexShrink: 0 }} />RTO % : {get('rto_pct') ?? '—'}%</div>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 5, color: C.t2 }}><span style={{ width: 7, height: 7, borderRadius: '50%', background: C.t3, flexShrink: 0 }} />Total : {Number(get('total') ?? 0).toLocaleString('en-IN')}</div>
                         </> : <>
-                        <div style={{ color: C.t1, fontWeight: 600 }}>Del % : {get('del_value_pct') ?? '—'}%</div>
-                        <div style={{ color: C.t1, fontWeight: 600 }}>RTO % : {get('rto_value_pct') ?? '—'}%</div>
-                        <div style={{ color: C.t2 }}>Total Value : ₹{Number(get('total_value') ?? 0).toLocaleString('en-IN')}</div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 5, color: C.t1, fontWeight: 600 }}><span style={{ width: 7, height: 7, borderRadius: '50%', background: '#E6A800', flexShrink: 0 }} />Del % : {get('del_value_pct') ?? '—'}%</div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 5, color: C.t1, fontWeight: 600 }}><span style={{ width: 7, height: 7, borderRadius: '50%', background: '#b91c1c', flexShrink: 0 }} />RTO % : {get('rto_value_pct') ?? '—'}%</div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 5, color: C.t2 }}><span style={{ width: 7, height: 7, borderRadius: '50%', background: '#E6A800', flexShrink: 0 }} />Total Value : ₹{Number(get('total_value') ?? 0).toLocaleString('en-IN')}</div>
                       </>}
                     </div>
                   )
@@ -943,22 +943,31 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
                   ? <><YAxis yAxisId="left" tick={false} axisLine={false} tickLine={false} width={0} /><YAxis yAxisId="right" orientation="right" domain={[0, dataMax => Math.ceil(dataMax) + 1]} tick={false} axisLine={false} tickLine={false} width={0} /></>
                   : <><YAxis yAxisId="left" tick={{ fontSize: 9, fill: C.t3 }} tickFormatter={v => v >= 1000 ? (v/1000).toFixed(0)+'K' : v} /><YAxis yAxisId="right" orientation="right" domain={[0, dataMax => Math.ceil(dataMax) + 1]} tickCount={5} tick={{ fontSize: 9, fill: C.t2 }} tickFormatter={v => Math.round(v) + 'd'} /></>
                 }
-                <Tooltip
-                  contentStyle={{ fontSize: 11, padding: '6px 10px', borderRadius: 8, border: `1px solid ${C.border}`, background: C.card, color: C.t1 }}
-                  itemStyle={{ color: C.t1, padding: '1px 0' }}
-                  labelStyle={{ color: C.t1, fontWeight: 700, marginBottom: 3, fontSize: 11 }}
-                  formatter={(value, name) => name.includes('Days') ? [value != null ? value + 'd' : '—', name] : [Number(value).toLocaleString('en-IN'), name]}
-                />
+                <Tooltip content={({ active, payload, label }) => {
+                  if (!active || !payload?.length) return null
+                  const colorMap = { 'Total Shipments': '#FFC107', 'Avg Processing Days': '#6366F1', 'Avg Pickup Days': '#10B981', 'Avg Intransit Days': '#F59E0B', 'Avg Fulfilment Days': '#EF4444' }
+                  return (
+                    <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 8, padding: '6px 10px', fontSize: 11, color: C.t1 }}>
+                      <div style={{ fontWeight: 700, marginBottom: 4 }}>{label}</div>
+                      {payload.map(p => (
+                        <div key={p.dataKey} style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '1px 0' }}>
+                          <span style={{ width: 7, height: 7, borderRadius: '50%', background: colorMap[p.name] || p.stroke, flexShrink: 0 }} />
+                          <span>{p.name.includes('Days') ? `${p.name}: ${p.value != null ? p.value + 'd' : '—'}` : `${p.name}: ${Number(p.value).toLocaleString('en-IN')}`}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )
+                }} />
                 <Bar yAxisId="left" dataKey="total" name="Total Shipments" fill="#FFC107" opacity={0.85} radius={[3,3,0,0]} />
-                <Line yAxisId="right" type="monotone" dataKey="avg_processing_days" name="Avg Processing Days" stroke="#111" strokeWidth={1.5} dot={false} connectNulls />
-                <Line yAxisId="right" type="monotone" dataKey="avg_pickup_days" name="Avg Pickup Days" stroke="#111" strokeWidth={1.5} dot={false} connectNulls />
-                <Line yAxisId="right" type="monotone" dataKey="avg_intransit_days" name="Avg Intransit Days" stroke="#111" strokeWidth={1.5} dot={false} connectNulls />
-                <Line yAxisId="right" type="monotone" dataKey="avg_fulfilment_days" name="Avg Fulfilment Days" stroke="#111" strokeWidth={1.5} dot={false} connectNulls />
+                <Line yAxisId="right" type="monotone" dataKey="avg_processing_days" name="Avg Processing Days" stroke="#6366F1" strokeWidth={1.5} dot={false} connectNulls />
+                <Line yAxisId="right" type="monotone" dataKey="avg_pickup_days" name="Avg Pickup Days" stroke="#10B981" strokeWidth={1.5} dot={false} connectNulls />
+                <Line yAxisId="right" type="monotone" dataKey="avg_intransit_days" name="Avg Intransit Days" stroke="#F59E0B" strokeWidth={1.5} dot={false} connectNulls />
+                <Line yAxisId="right" type="monotone" dataKey="avg_fulfilment_days" name="Avg Fulfilment Days" stroke="#EF4444" strokeWidth={1.5} dot={false} connectNulls />
               </ComposedChart>
             </ResponsiveContainer>
             {!isMobile && (
               <div style={{ display: 'flex', gap: 16, justifyContent: 'center', marginTop: 8, flexWrap: 'wrap', flexShrink: 0 }}>
-                {[['#FFC107','Total Shipments'],['#111','Avg Processing Days'],['#111','Avg Pickup Days'],['#111','Avg Intransit Days'],['#111','Avg Fulfilment Days']].map(([color, label]) => (
+                {[['#FFC107','Total Shipments'],['#6366F1','Avg Processing Days'],['#10B981','Avg Pickup Days'],['#F59E0B','Avg Intransit Days'],['#EF4444','Avg Fulfilment Days']].map(([color, label]) => (
                   <span key={label} style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 10, color: C.t2 }}>
                     <span style={{ width: 10, height: 10, borderRadius: 2, background: color, display: 'inline-block' }} />{label}
                   </span>
@@ -3105,27 +3114,42 @@ function MobileLogisticsPanel({ page, setPage, onClose, lFilters, setLFilters, f
             )}
           </div>
 
-          {/* Courier Direction */}
-          <div style={{ borderBottom: `1px solid ${PV.border}`, padding: '12px 16px' }}>
-            <div style={{ fontSize: 10, fontWeight: 800, color: PV.sub, letterSpacing: '.07em', textTransform: 'uppercase', marginBottom: 8 }}>Courier Direction</div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-              {[{ opts: ['Forward', 'Reverse'], val: lf.shipmentType, onChange: v => setLf(f => ({ ...f, shipmentType: v })), normalize: v => v.toLowerCase() },
-                { opts: ['Regular', 'SDD/NDD'], val: lf.sddNdd, onChange: v => setLf(f => ({ ...f, sddNdd: v })), normalize: v => v }].map((grp, gi) => (
-                <div key={gi} style={{ display: 'flex', border: `1.5px solid ${PV.border}`, borderRadius: 8, overflow: 'hidden', background: PV.bg }}>
-                  {grp.opts.map((opt, i) => {
-                    const nv = grp.normalize(opt)
-                    const active = grp.val === nv
-                    return (
-                      <button key={opt} onClick={() => grp.onChange(active ? 'all' : nv)}
-                        style={{ flex: 1, padding: '7px 0', border: 'none', borderLeft: i > 0 ? `1.5px solid ${PV.border}` : 'none', background: active ? PV.ink : 'transparent', color: active ? '#fff' : PV.sub, fontSize: 12, fontWeight: active ? 700 : 500, cursor: 'pointer', fontFamily: 'inherit', transition: 'all .15s' }}>
-                        {opt}
-                      </button>
-                    )
-                  })}
+          {/* Shipment Direction */}
+          {[
+            { key: 'shipmentDir', label: 'Shipment Direction', opts: ['Forward', 'Reverse'], val: lf.shipmentType, onChange: v => setLf(f => ({ ...f, shipmentType: v })), normalize: v => v.toLowerCase() },
+            { key: 'shipmentType', label: 'Shipment Type', opts: ['Regular', 'SDD/NDD'], val: lf.sddNdd, onChange: v => setLf(f => ({ ...f, sddNdd: v })), normalize: v => v },
+          ].map(grp => {
+            const isExpanded = expandedKey === grp.key
+            const hasVal = grp.val && grp.val !== 'all'
+            const activeLabel = hasVal ? grp.opts.find(o => grp.normalize(o) === grp.val) : null
+            return (
+              <div key={grp.key} style={{ borderBottom: `1px solid ${PV.border}` }}>
+                <div onClick={() => setExpandedKey(k => k === grp.key ? null : grp.key)}
+                  style={{ display: 'flex', alignItems: 'center', padding: '12px 16px', cursor: 'pointer', gap: 8, userSelect: 'none' }}>
+                  <span style={{ flex: 1, fontSize: 13, fontWeight: 500, color: PV.ink }}>{grp.label}</span>
+                  {activeLabel && <span style={{ fontSize: 10, fontWeight: 700, background: '#FFF3CD', color: PV.accentDark, border: `1px solid ${PV.accent}`, borderRadius: 10, padding: '1px 7px', lineHeight: '16px' }}>{activeLabel}</span>}
+                  {hasVal && <button onClick={e => { e.stopPropagation(); grp.onChange('all') }} style={{ background: 'none', border: 'none', color: PV.sub, fontSize: 13, cursor: 'pointer', padding: '0 2px', lineHeight: 1 }}>✕</button>}
+                  <span style={{ fontSize: 13, color: PV.sub, transform: isExpanded ? 'rotate(90deg)' : 'none', transition: 'transform .18s', lineHeight: 1 }}>›</span>
                 </div>
-              ))}
-            </div>
-          </div>
+                {isExpanded && (
+                  <div style={{ background: PV.canvas, borderTop: `1px solid ${PV.border}`, padding: '10px 16px 12px' }}>
+                    <div style={{ display: 'flex', border: `1.5px solid ${PV.border}`, borderRadius: 8, overflow: 'hidden', background: PV.bg }}>
+                      {grp.opts.map((opt, i) => {
+                        const nv = grp.normalize(opt)
+                        const active = grp.val === nv
+                        return (
+                          <button key={opt} onClick={() => grp.onChange(active ? 'all' : nv)}
+                            style={{ flex: 1, padding: '7px 0', border: 'none', borderLeft: i > 0 ? `1.5px solid ${PV.border}` : 'none', background: active ? PV.ink : 'transparent', color: active ? '#fff' : PV.sub, fontSize: 12, fontWeight: active ? 700 : 500, cursor: 'pointer', fontFamily: 'inherit', transition: 'all .15s' }}>
+                            {opt}
+                          </button>
+                        )
+                      })}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )
+          })}
 
           {/* Dropdown filters */}
           {dropdownFilters.map((df, di) => {
