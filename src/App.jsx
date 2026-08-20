@@ -2979,8 +2979,8 @@ function MobileLogisticsPanel({ page, setPage, onClose, lFilters, setLFilters, f
   const PV = { bg: '#FFFFFF', canvas: '#F5F6F8', border: '#E7E8EC', ink: '#1F2430', sub: '#6B7280', accent: '#F2C230', accentDark: '#8A6D00' }
   const [expandedKey, setExpandedKey] = useState(null)
   const TABS = [
-    { id: 'logistics', label: 'Logistics Performance' },
-    { id: 'logistics-cost', label: 'Logistics Cost Analytics' },
+    { id: 'logistics', label: 'Performance Analytics' },
+    { id: 'logistics-cost', label: 'Cost Analytics' },
   ]
   const opts = filterOpts || {}
   const lf = lFilters || { couriers: [], shipmentType: 'forward', sddNdd: 'all', zone: null, pickupState: null, dropState: null, dropCity: null, paymentMode: null, category: null, subCategory: null }
