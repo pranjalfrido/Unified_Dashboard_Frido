@@ -2292,16 +2292,16 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters 
           </div>
           {isMobile ? (
             <div style={{ overflowX: 'auto', marginLeft: -8, marginRight: -8, WebkitOverflowScrolling: 'touch' }}>
-              <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed', fontSize: 11.5 }}>
+              <table style={{ borderCollapse: 'collapse', tableLayout: 'fixed', width: 'max-content', minWidth: '100%', fontSize: 11.5 }}>
                 <thead>
                   <tr style={{ borderBottom: `1px solid ${C.border2}` }}>
-                    <th style={{ position: 'sticky', left: 0, background: C.card, zIndex: 2, padding: '5px 8px', textAlign: 'left', fontWeight: 700, color: C.t2, minWidth: 72, whiteSpace: 'nowrap', borderRight: `1px solid ${C.border}` }}>Slab</th>
-                    <th style={{ padding: '5px 6px', textAlign: 'center', fontWeight: 700, color: C.t2, minWidth: 80, whiteSpace: 'nowrap' }}>Shipments</th>
-                    <th style={{ padding: '5px 6px', textAlign: 'center', fontWeight: 700, color: C.t2, minWidth: 80, whiteSpace: 'nowrap' }}>Cost</th>
-                    <th style={{ padding: '5px 6px', textAlign: 'center', fontWeight: 700, color: C.t2, minWidth: 60, whiteSpace: 'nowrap' }}>Share</th>
-                    <th style={{ padding: '5px 6px', textAlign: 'center', fontWeight: 700, color: C.t2, minWidth: 90, whiteSpace: 'nowrap' }}>Avg/Ship</th>
-                    <th style={{ padding: '5px 6px', textAlign: 'center', fontWeight: 700, color: C.t2, minWidth: 72, whiteSpace: 'nowrap' }}>Cost/kg</th>
-                    <th style={{ padding: '5px 6px', textAlign: 'center', fontWeight: 700, color: C.t2, minWidth: 72, whiteSpace: 'nowrap' }}>Overbilled</th>
+                    <th style={{ position: 'sticky', left: 0, background: C.card, zIndex: 2, padding: '5px 8px', textAlign: 'left', fontWeight: 700, color: C.t2, width: 72, whiteSpace: 'nowrap', borderRight: `1px solid ${C.border}` }}>Slab</th>
+                    <th style={{ padding: '5px 6px', textAlign: 'center', fontWeight: 700, color: C.t2, width: 72, whiteSpace: 'nowrap' }}>Shipments</th>
+                    <th style={{ padding: '5px 6px', textAlign: 'center', fontWeight: 700, color: C.t2, width: 72, whiteSpace: 'nowrap' }}>Cost</th>
+                    <th style={{ padding: '5px 6px', textAlign: 'center', fontWeight: 700, color: C.t2, width: 58, whiteSpace: 'nowrap' }}>Share</th>
+                    <th style={{ padding: '5px 6px', textAlign: 'center', fontWeight: 700, color: C.t2, width: 80, whiteSpace: 'nowrap' }}>Avg/Ship</th>
+                    <th style={{ padding: '5px 6px', textAlign: 'center', fontWeight: 700, color: C.t2, width: 68, whiteSpace: 'nowrap' }}>Cost/kg</th>
+                    <th style={{ padding: '5px 6px', textAlign: 'center', fontWeight: 700, color: C.t2, width: 72, whiteSpace: 'nowrap' }}>Overbilled</th>
                   </tr>
                 </thead>
                 <tbody>
