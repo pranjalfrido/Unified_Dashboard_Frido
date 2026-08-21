@@ -886,6 +886,12 @@ export default async function handler(req, res) {
         month_year                                               AS month,
         COALESCE(payment_mode, 'Unknown')                        AS payment,
         (gap > 0.001 AND COALESCE(dw, 0) > 0)                   AS is_overbilled,
+        slab,
+        CASE WHEN cw < 1  THEN '0-1'
+             WHEN cw < 2  THEN '1-2'
+             WHEN cw < 5  THEN '2-5'
+             WHEN cw < 10 THEN '5-10'
+             ELSE '10+' END                                      AS band,
         COUNT(*)::int                                            AS n,
         SUM(cost)::float8                                        AS cost,
         SUM(cw)::float8                                          AS wt,
@@ -922,8 +928,8 @@ export default async function handler(req, res) {
         COUNT(*) FILTER (WHERE ship_value > 0 AND cost > 0.25 * ship_value)::int AS margin_killer_n,
         COALESCE(SUM(cost) FILTER (WHERE ship_value > 0 AND cost > 0.25 * ship_value), 0)::float8 AS margin_killer_cost
       FROM base
-      GROUP BY 1, 2, 3, 4, 5, 6
-      ORDER BY 1, 2, 3, 4, 5, 6
+      GROUP BY 1, 2, 3, 4, 5, 6, 7, 8
+      ORDER BY 1, 2, 3, 4, 5, 6, 7, 8
     `
 
     const [grouped, lanes, lfl, drift, product, cubeRes] = await mapLimit([

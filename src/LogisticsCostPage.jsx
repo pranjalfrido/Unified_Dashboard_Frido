@@ -80,6 +80,8 @@ function CourierCell({ name }) {
   )
 }
 
+const BAND_LABEL = { '0-1': '0 – 1 kg', '1-2': '1 – 2 kg', '2-5': '2 – 5 kg', '5-10': '5 – 10 kg', '10+': '10 kg +' }
+
 const SCOPES = [
   { id: 'all', label: 'Overall', hint: 'B2B + B2C combined summary' },
   { id: 'b2c', label: 'B2C', hint: 'Courier / parcel shipments' },
@@ -517,6 +519,7 @@ function cubeToBreakdowns(rows) {
     add('rc_entitled', r.rc_entitled); add('rc_carrier', r.rc_carrier)
   }
   const byZone = {}, byMode = {}, byMonth = {}, byCourier = {}, byPay = {}, byCourierMonth = {}
+  const bySlab = {}, byBand = {}
   for (const r of rows) {
     if (r.zone)    acc(byZone,    r.zone,    r)
     if (r.mode)    acc(byMode,    r.mode,    r)
@@ -524,9 +527,43 @@ function cubeToBreakdowns(rows) {
     if (r.courier_name) acc(byCourier, r.courier_name, r)
     if (r.payment) acc(byPay,     r.payment, r)
     if (r.courier_name && r.month) acc(byCourierMonth, `${r.courier_name}|${r.month}`, r)
+    if (r.slab != null) {
+      const sk = String(r.slab)
+      acc(bySlab, sk, r)
+      // track per-mode cost/n for fwd/rev/rto averages
+      if (!bySlab[sk]._mode) bySlab[sk]._mode = {}
+      const md = bySlab[sk]._mode
+      md[r.mode] = md[r.mode] || { n: 0, cost: 0 }
+      md[r.mode].n += Number(r.n) || 0
+      md[r.mode].cost += Number(r.cost) || 0
+    }
+    if (r.band) {
+      acc(byBand, r.band, r)
+      if (!byBand[r.band].dim) byBand[r.band].dim = 'band'
+    }
   }
   const toArr = (map) => Object.entries(map).map(([key, v]) => ({ key, ...v }))
-  return { byZone: toArr(byZone), byMode: toArr(byMode), byMonth: toArr(byMonth), byCourier: toArr(byCourier), byPay: toArr(byPay), byCourierMonth: toArr(byCourierMonth) }
+  // Shape slabCosts to match the format slabRows expects
+  const slabCosts = Object.entries(bySlab).map(([slab, v]) => {
+    const md = v._mode || {}
+    const fwd = md['Forward'] || { n: 0, cost: 0 }
+    const rev = md['Reverse'] || { n: 0, cost: 0 }
+    const rto = md['RTO'] || { n: 0, cost: 0 }
+    return {
+      slab: Number(slab),
+      n: v.n,
+      cost: v.cost,
+      avg_cost: v.n ? v.cost / v.n : 0,
+      cpk: v.wt ? v.cost / v.wt : 0,
+      fwd_avg: fwd.n ? fwd.cost / fwd.n : 0,
+      rev_avg: rev.n ? rev.cost / rev.n : 0,
+      rto_avg: rto.n ? rto.cost / rto.n : 0,
+      claim_rs: v.claimable_rs || 0,
+      claim_n: v.claimable_n || 0,
+    }
+  }).sort((a, b) => a.slab - b.slab)
+  const byBandArr = toArr(byBand).map(r => ({ ...r, key: BAND_LABEL[r.key] || r.key }))
+  return { byZone: toArr(byZone), byMode: toArr(byMode), byMonth: toArr(byMonth), byCourier: toArr(byCourier), byPay: toArr(byPay), byCourierMonth: toArr(byCourierMonth), slabCosts, byBand: byBandArr }
 }
 
 // Filters that can be satisfied purely from the cube (no API needed).
@@ -596,6 +633,8 @@ export default function LogisticsCostPage() {
         byCourier: breakdowns.byCourier,
         byPay: breakdowns.byPay,
         byCourierMonth: breakdowns.byCourierMonth,
+        slabCosts: breakdowns.slabCosts,
+        byBand: breakdowns.byBand,
       }
       setAgg(shapeResponse(merged))
       setLoading(false)
