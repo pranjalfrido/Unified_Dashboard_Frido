@@ -1317,7 +1317,7 @@ export default function LogisticsCostPage() {
         <SegPair
           value={filters.billing === 'all' ? null : filters.billing}
           onChange={v => setOne('billing', v || 'all')}
-          options={[{ value: 'over', label: 'Overbilled' }, { value: 'ok', label: 'Clean' }]} />
+          options={[{ value: 'overbilled', label: 'Overbilled' }, { value: 'clean', label: 'Clean' }]} />
 
         <div style={{ height: 1, background: C.border, margin: '4px 0' }} />
 
