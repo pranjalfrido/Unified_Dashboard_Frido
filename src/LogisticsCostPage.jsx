@@ -2694,8 +2694,8 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters 
               // Left-aligned so the indented sub-category names still read as a hierarchy.
               { key: 'label', label: isMobile ? <span>Category /<br/>Sub-cat</span> : 'Category / Sub-category', width: isMobile ? 129 : undefined, sticky: isMobile ? true : undefined, render: (_, r) => (
                 r.isSub
-                  ? <span onClickCapture={isMobile ? e => { e.stopPropagation(); setCatTooltip(r.label) } : undefined} style={{ paddingLeft: 16, color: VIZ.muted, display: 'block', maxWidth: isMobile ? 129 : undefined, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.label}</span>
-                  : <span onClickCapture={isMobile ? e => { e.stopPropagation(); setCatTooltip(r.label) } : undefined} style={{ fontWeight: 700, cursor: 'pointer', display: 'block', maxWidth: isMobile ? 129 : undefined, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
+                  ? <span onClick={isMobile ? e => { e.stopPropagation(); setCatTooltip(r.label) } : undefined} style={{ paddingLeft: 16, color: VIZ.muted, display: 'block', maxWidth: isMobile ? 129 : undefined, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.label}</span>
+                  : <span style={{ fontWeight: 700, cursor: 'pointer', display: 'block', maxWidth: isMobile ? 129 : undefined, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
                       onClick={() => toggleCat(r.label)}>
                       <span style={{ display: 'inline-block', width: 12, color: VIZ.muted }}>
                         {r.hasKids ? (r.open ? '−' : '+') : ''}
