@@ -356,9 +356,9 @@ function CourierRow({ label, active, onClick }) {
 // Two-up segmented control in the boxed style the Performance sidebar uses for
 // Courier Direction. Clicking the active option clears it back to "all".
 // Multi-select pill row, for dimensions with 3+ options that don't fit a SegPair.
-function ChipRow({ options, selected, onToggle }) {
+function ChipRow({ options, selected, onToggle, small }) {
   return (
-    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5 }}>
+    <div style={{ display: 'flex', flexWrap: 'wrap', gap: small ? 3 : 5 }}>
       {(options || []).map(o => {
         const on = selected.includes(o)
         return (
@@ -366,8 +366,8 @@ function ChipRow({ options, selected, onToggle }) {
             style={{
               border: `1.5px solid ${on ? C.acm : C.border2}`, cursor: 'pointer',
               background: on ? C.acl : C.card, color: C.t1,
-              fontSize: 11, fontWeight: on ? 700 : 500, padding: '5px 11px',
-              borderRadius: 7, fontFamily: 'var(--font)', whiteSpace: 'nowrap',
+              fontSize: small ? 10 : 11, fontWeight: on ? 700 : 500, padding: small ? '3px 7px' : '5px 11px',
+              borderRadius: small ? 5 : 7, fontFamily: 'var(--font)', whiteSpace: 'nowrap',
             }}>
             {o}
           </button>
@@ -1787,7 +1787,7 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters 
         <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
           {[
             { label: 'Total Logistics Cost', value: fmt(kpis.total), spark: monthSeries.map(d => d.cost || 0) },
-            { label: 'GMV %', value: kpis.costPctValue != null ? kpis.costPctValue.toFixed(2) + '%' : '—', spark: monthSeries.map(d => d.pctGmv || 0), invertColor: true },
+            { label: '% of Revenue', value: kpis.costPctValue != null ? kpis.costPctValue.toFixed(2) + '%' : '—', spark: monthSeries.map(d => d.pctGmv || 0), invertColor: true },
             { label: 'Total Invoices', value: fmtBig(kpis.shipments), spark: monthSeries.map(d => d.shipments || 0) },
             { label: 'Billed Weight', value: fmtKg(kpis.chargedWt), spark: monthSeries.map(d => d.wt || 0), invertColor: true },
             { label: 'Total Shipment Value', value: fmt(agg.shipValue), spark: monthSeries.map(d => d.cost || 0) },
@@ -1797,7 +1797,7 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters 
             { label: 'Should Have Paid', value: fmt(agg.dtOurs), spark: monthSeries.map(d => d.cost || 0) },
             { label: 'Actually Billed', value: fmt(agg.dtInvoiced), spark: monthSeries.map(d => d.cost || 0), accent: C.red.tx },
             { label: 'Claimable', value: fmt(billingGap.weight), spark: monthSeries.map(d => d.claim || 0), accent: C.red.tx, invertColor: true },
-            { label: 'Wasted Freight', value: fmt(reverseBurden.cost), spark: monthSeries.map(d => d.cost || 0), accent: C.red.tx, invertColor: true },
+            ...(!isMobile ? [{ label: 'Wasted Freight', value: fmt(reverseBurden.cost), spark: monthSeries.map(d => d.cost || 0), accent: C.red.tx, invertColor: true }] : []),
           ].map(m => {
             const pts = m.spark.slice(-14)
             const min = Math.min(...pts), max = Math.max(...pts)
@@ -2297,7 +2297,7 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters 
                   <tr style={{ borderBottom: `1px solid ${C.border2}` }}>
                     <th style={{ position: 'sticky', left: 0, background: C.card, zIndex: 2, padding: '5px 8px', textAlign: 'left', fontWeight: 700, color: C.t2, minWidth: 72, whiteSpace: 'nowrap' }}>Slab</th>
                     <th style={{ padding: '5px 6px', textAlign: 'center', fontWeight: 700, color: C.t2, minWidth: 80, whiteSpace: 'nowrap' }}>Shipments</th>
-                    <th style={{ padding: '5px 6px', textAlign: 'center', fontWeight: 700, color: C.t2, minWidth: 80, whiteSpace: 'nowrap' }}>Total Cost</th>
+                    <th style={{ padding: '5px 6px', textAlign: 'center', fontWeight: 700, color: C.t2, minWidth: 80, whiteSpace: 'nowrap' }}>Cost</th>
                     <th style={{ padding: '5px 6px', textAlign: 'center', fontWeight: 700, color: C.t2, minWidth: 60, whiteSpace: 'nowrap' }}>Share</th>
                     <th style={{ padding: '5px 6px', textAlign: 'center', fontWeight: 700, color: C.t2, minWidth: 90, whiteSpace: 'nowrap' }}>Avg/Ship</th>
                     <th style={{ padding: '5px 6px', textAlign: 'center', fontWeight: 700, color: C.t2, minWidth: 72, whiteSpace: 'nowrap' }}>Cost/kg</th>
@@ -2324,7 +2324,7 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters 
             columns={[
               { key: 'band', label: 'Slab' },
               { key: 'shipments', label: 'Shipments', align: 'center', render: (_, r) => fmtN(r.shipments) },
-              { key: 'cost', label: 'Total Cost', align: 'center', render: (_, r) => fmt(r.cost) },
+              { key: 'cost', label: isMobile ? 'Cost' : 'Total Cost', align: 'center', render: (_, r) => fmt(r.cost) },
               { key: 'share', label: 'Share', align: 'center', render: (_, r) => <ShareBar pct={r.share}>{r.share.toFixed(1) + '%'}</ShareBar> },
               { key: 'avgCost', label: 'Avg Cost / Shipment', align: 'center', render: (_, r) => '₹' + r.avgCost.toFixed(2) },
               { key: 'cpk', label: 'Cost / kg', align: 'center', render: (_, r) => (r.cpk != null ? '₹' + r.cpk.toFixed(2) : '—') },
@@ -2513,7 +2513,7 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters 
                     <tr style={{ borderBottom: `1px solid ${C.border2}` }}>
                       <th style={{ position: 'sticky', top: 0, left: 0, background: C.card, zIndex: 3, padding: '5px 8px', textAlign: 'left', fontWeight: 800, color: C.t1, width: 60, whiteSpace: 'nowrap', borderRight: `1px solid ${C.border}`, borderBottom: `1px solid ${C.border2}` }}>Wt Slab</th>
                       <th style={{ position: 'sticky', top: 0, background: C.card, padding: '5px 4px', textAlign: 'center', fontWeight: 800, color: C.t1, width: 72, whiteSpace: 'nowrap', borderBottom: `1px solid ${C.border2}` }}>Shipments</th>
-                      <th style={{ position: 'sticky', top: 0, background: C.card, padding: '5px 4px', textAlign: 'center', fontWeight: 800, color: C.t1, width: 72, whiteSpace: 'nowrap', borderBottom: `1px solid ${C.border2}` }}>Total Spend</th>
+                      <th style={{ position: 'sticky', top: 0, background: C.card, padding: '5px 4px', textAlign: 'center', fontWeight: 800, color: C.t1, width: 72, whiteSpace: 'nowrap', borderBottom: `1px solid ${C.border2}` }}>Cost</th>
                       <th style={{ position: 'sticky', top: 0, background: C.card, padding: '5px 4px', textAlign: 'center', fontWeight: 800, color: C.t1, width: 72, whiteSpace: 'nowrap', borderBottom: `1px solid ${C.border2}` }}>Avg/Ship</th>
                       <th style={{ position: 'sticky', top: 0, background: C.card, padding: '5px 4px', textAlign: 'center', fontWeight: 800, color: C.t1, width: 66, whiteSpace: 'nowrap', borderBottom: `1px solid ${C.border2}` }}>Cost/kg</th>
                       <th style={{ position: 'sticky', top: 0, background: C.card, padding: '5px 4px', textAlign: 'center', fontWeight: 800, color: C.t1, width: 66, whiteSpace: 'nowrap', borderBottom: `1px solid ${C.border2}` }}>Forward</th>
@@ -2692,14 +2692,15 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters 
           <DataTable
             columns={[
               // Left-aligned so the indented sub-category names still read as a hierarchy.
-              { key: 'label', label: isMobile ? <span>Category /<br/>Sub-cat</span> : 'Category / Sub-category', width: isMobile ? 129 : undefined, sticky: isMobile ? true : undefined, render: (_, r) => (
+              { key: 'label', label: isMobile ? 'Category' : 'Category / Sub-category', width: isMobile ? 129 : undefined, sticky: isMobile ? true : undefined, render: (_, r) => (
+                isMobile && r.isSub ? null :
                 r.isSub
-                  ? <span onClick={isMobile ? e => { e.stopPropagation(); setCatTooltip(r.label) } : undefined} style={{ paddingLeft: 16, color: VIZ.muted, display: 'block', maxWidth: isMobile ? 129 : undefined, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.label}</span>
+                  ? <span onClick={e => { e.stopPropagation(); setCatTooltip(r.label) }} style={{ paddingLeft: 16, color: VIZ.muted, display: 'block', maxWidth: 129, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.label}</span>
                   : <span style={{ fontWeight: 700, cursor: 'pointer', display: 'block', maxWidth: isMobile ? 129 : undefined, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
                       onClick={() => toggleCat(r.label)}>
-                      <span style={{ display: 'inline-block', width: 12, color: VIZ.muted }}>
+                      {!isMobile && <span style={{ display: 'inline-block', width: 12, color: VIZ.muted }}>
                         {r.hasKids ? (r.open ? '−' : '+') : ''}
-                      </span>{r.label}
+                      </span>}{r.label}
                     </span>
               ) },
               { key: 'n', label: 'Shipments', align: 'center', render: (_, r) => fmtN(r.n) },
@@ -2746,9 +2747,33 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters 
       {activeCell && (
         <>
           <SectionHdr title="Like-for-Like Courier Cost"
-            note="same zone, same weight slab, same leg — the only fair comparison" collapsed={secHid['lfl']} onToggle={() => toggleSec('lfl')} />
+            note={isMobile ? "" : "same zone, same weight slab, same leg — the only fair comparison"} collapsed={secHid['lfl']} onToggle={() => toggleSec('lfl')} />
           {/* Three independent multi-selects instead of one combined dropdown. Selecting
               nothing in a row means ALL of it, so the card always has data to show. */}
+          {isMobile ? (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 10, ...(secHid['lfl'] ? { display: 'none' } : {}) }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                <span style={{ fontSize: 9, fontWeight: 700, color: C.t3, whiteSpace: 'nowrap', letterSpacing: '0.03em', minWidth: 28 }}>Zone</span>
+                <ChipRow options={lflOptions.zones} selected={lflZones} small
+                  onToggle={z => setLflZones(t => t.includes(z) ? t.filter(x => x !== z) : [...t, z])} />
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                <span style={{ fontSize: 9, fontWeight: 700, color: C.t3, whiteSpace: 'nowrap', letterSpacing: '0.03em', minWidth: 28 }}>Slab</span>
+                <ChipRow options={lflOptions.bands} selected={lflBands} small
+                  onToggle={b => setLflBands(t => t.includes(b) ? t.filter(x => x !== b) : [...t, b])} />
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                <span style={{ fontSize: 9, fontWeight: 700, color: C.t3, whiteSpace: 'nowrap', letterSpacing: '0.03em', minWidth: 28 }}>Leg</span>
+                <ChipRow options={lflOptions.legs} selected={lflLegs} small
+                  onToggle={l => setLflLegs(t => t.includes(l) ? t.filter(x => x !== l) : [...t, l])} />
+                <select value={lflSlab} onChange={e => setLflSlab(e.target.value)}
+                  style={{ fontFamily: 'var(--font)', fontSize: 10, padding: '3px 6px', borderRadius: 6, border: `1px solid ${lflSlab !== '' ? C.acm : C.border2}`, background: lflSlab !== '' ? C.acl : C.card, color: C.t1, cursor: 'pointer' }}>
+                  <option value="">All slabs</option>
+                  {lflOptions.slabs.map(sv => (<option key={sv} value={sv}>{sv} kg</option>))}
+                </select>
+              </div>
+            </div>
+          ) : (
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 18, marginBottom: 12 , ...(secHid['lfl'] ? { display: 'none' } : {}) }}>
             <div>
               <div className="kpi-label" style={{ marginBottom: 6 }}>ZONE</div>
@@ -2766,10 +2791,6 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters 
                 onToggle={l => setLflLegs(t => t.includes(l) ? t.filter(x => x !== l) : [...t, l])} />
             </div>
             <div>
-              {/* Exact slab as a SELECT, not chips: there are ~40 of them here, which as
-                  chips would wrap into a wall that buries the zone and leg rows above it.
-                  Empty value = no constraint, so the coarse band chips still drive the
-                  comparison unless a specific slab is chosen. */}
               <div className="kpi-label" style={{ marginBottom: 6 }}>SPECIFIC SLAB</div>
               <select value={lflSlab} onChange={e => setLflSlab(e.target.value)}
                 style={{
@@ -2784,6 +2805,7 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters 
               </select>
             </div>
           </div>
+          )}
           <Card style={secHid['lfl'] ? { display: 'none' } : undefined}
             title={[
               activeCell.allZones ? 'All zones' : 'Zone ' + activeCell.zones.join(', '),
