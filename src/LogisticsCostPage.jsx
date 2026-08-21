@@ -2695,8 +2695,8 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters 
               { key: 'label', label: isMobile ? 'Category' : 'Category / Sub-category', width: isMobile ? 129 : undefined, sticky: isMobile ? true : undefined, render: (_, r) => (
                 isMobile && r.isSub ? null :
                 r.isSub
-                  ? <span onClick={e => { e.stopPropagation(); setCatTooltip(r.label) }} style={{ paddingLeft: 16, color: VIZ.muted, display: 'block', maxWidth: 129, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.label}</span>
-                  : <span style={{ fontWeight: 700, cursor: 'pointer', display: 'block', maxWidth: isMobile ? 129 : undefined, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
+                  ? <span onClick={e => { e.stopPropagation(); setCatTooltip(r.label) }} style={{ paddingLeft: 16, color: VIZ.muted, display: 'block', maxWidth: isMobile ? 129 : undefined, overflow: isMobile ? 'hidden' : 'visible', textOverflow: isMobile ? 'ellipsis' : 'unset', whiteSpace: isMobile ? 'nowrap' : 'normal' }}>{r.label}</span>
+                  : <span style={{ fontWeight: 700, cursor: 'pointer', display: 'block', maxWidth: isMobile ? 129 : undefined, overflow: isMobile ? 'hidden' : 'visible', textOverflow: isMobile ? 'ellipsis' : 'unset', whiteSpace: isMobile ? 'nowrap' : 'normal' }}
                       onClick={() => toggleCat(r.label)}>
                       {!isMobile && <span style={{ display: 'inline-block', width: 12, color: VIZ.muted }}>
                         {r.hasKids ? (r.open ? '−' : '+') : ''}
@@ -2774,7 +2774,7 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters 
               </div>
             </div>
           ) : (
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 18, marginBottom: 12 , ...(secHid['lfl'] ? { display: 'none' } : {}) }}>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 18, marginBottom: 12, ...(secHid['lfl'] ? { display: 'none' } : {}) }}>
             <div>
               <div className="kpi-label" style={{ marginBottom: 6 }}>ZONE</div>
               <ChipRow options={lflOptions.zones} selected={lflZones}
