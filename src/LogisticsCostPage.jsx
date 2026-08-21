@@ -530,7 +530,7 @@ function cubeToBreakdowns(rows) {
     add('over_n', r.over_n); add('over_kg', r.over_kg); add('over_cost', r.over_cost)
     add('rec_infl', r.rec_infl); add('rec_unexp', r.rec_unexp); add('rec_admit', r.rec_admit)
     add('rec_admit_n', r.rec_admit_n); add('reverse_n', r.reverse_n)
-    add('claimable_n', r.claimable_n)
+    add('claimable_n', r.claimable_n); add('claimable_rs', r.claimable_rs)
     add('rc_entitled', r.rc_entitled); add('rc_carrier', r.rc_carrier)
   }
   const byZone = {}, byMode = {}, byMonth = {}, byCourier = {}, byPay = {}, byCourierMonth = {}
@@ -762,6 +762,8 @@ export default function LogisticsCostPage() {
         avgCost: b.n ? b.cost / b.n : 0,
         cpk: perKg(b.cost, b.wt) ?? 0,
         wt: b.wt,
+        pctGmv: b.value > 0 ? (b.cost / b.value) * 100 : null,
+        claim: b.claimable_rs || 0,
       }))
     // No indexing: the trend chart plots native ₹, so there is nothing to normalise.
     return rows
