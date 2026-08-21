@@ -2814,7 +2814,7 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters 
               activeCell.allLegs ? 'all legs' : activeCell.legs.join(', '),
             ].join(' · ')}
             note={activeCell.rows.length
-              ? (isMobile ? `${fmtN(activeCell.n)} shipments` : `${fmtN(activeCell.n)} shipments · min 50 per courier per cell`)
+              ? (isMobile ? '' : `${fmtN(activeCell.n)} shipments · min 50 per courier per cell`)
               : 'no shipments match this combination'}
           >
           {/* Empty and single-courier results render an explanation instead of a blank
@@ -2869,6 +2869,35 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters 
                 </BarChart>
               </ResponsiveContainer>
             </div>
+            {isMobile ? (
+              <div style={{ overflowX: 'auto', marginLeft: -8, marginRight: -8, WebkitOverflowScrolling: 'touch' }}>
+                <table style={{ borderCollapse: 'collapse', tableLayout: 'fixed', width: 460, fontSize: 11.5 }}>
+                  <thead>
+                    <tr style={{ borderBottom: `1px solid ${C.border2}` }}>
+                      <th style={{ position: 'sticky', left: 0, background: C.card, zIndex: 2, padding: '5px 8px', textAlign: 'left', fontWeight: 700, color: C.t2, width: 100, whiteSpace: 'nowrap', borderRight: `1px solid ${C.border}` }}>Courier</th>
+                      <th style={{ padding: '5px 4px', textAlign: 'center', fontWeight: 700, color: C.t2, width: 70, whiteSpace: 'nowrap' }}>Shipments</th>
+                      <th style={{ padding: '5px 4px', textAlign: 'center', fontWeight: 700, color: C.t2, width: 65, whiteSpace: 'nowrap' }}>Avg ₹</th>
+                      <th style={{ padding: '5px 4px', textAlign: 'center', fontWeight: 700, color: C.t2, width: 55, whiteSpace: 'nowrap' }}>₹/kg</th>
+                      <th style={{ padding: '5px 4px', textAlign: 'center', fontWeight: 700, color: C.t2, width: 90, whiteSpace: 'nowrap' }}>Vs Cheapest</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {activeCell.rows.map((r, i) => {
+                      const d = r.avgCost - activeCell.rows[0].avgCost
+                      return (
+                        <tr key={r.courier} style={{ borderBottom: i < activeCell.rows.length - 1 ? `1px solid ${C.border2}` : 'none' }}>
+                          <td style={{ position: 'sticky', left: 0, background: C.card, zIndex: 1, padding: '5px 8px', fontWeight: 600, color: C.t1, whiteSpace: 'nowrap', borderRight: `1px solid ${C.border}` }}><CourierCell name={r.courier} /></td>
+                          <td style={{ padding: '5px 4px', textAlign: 'center', color: C.t1 }}>{fmtN(r.n)}</td>
+                          <td style={{ padding: '5px 4px', textAlign: 'center', color: C.t1 }}>₹{r.avgCost.toFixed(2)}</td>
+                          <td style={{ padding: '5px 4px', textAlign: 'center', color: C.t1 }}>₹{r.cpk.toFixed(2)}</td>
+                          <td style={{ padding: '5px 4px', textAlign: 'center' }}>{d < 0.01 ? <span style={{ color: C.green.tx, fontWeight: 700 }}>cheapest</span> : <span style={{ color: C.red.tx }}>{'+₹' + d.toFixed(2)}</span>}</td>
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            ) : (
             <DataTable
               columns={[
                 { key: 'courier', label: 'Courier', render: v => <CourierCell name={v} /> },
@@ -2884,6 +2913,7 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters 
               ]}
               rows={activeCell.rows}
             />
+            )}
             {!isMobile && <div style={{ fontSize: 11, color: C.t3, marginTop: 8 }}>
               Cost only — this does not account for SLA, coverage or damage rates. Confirm
               service levels are comparable before shifting volume.
