@@ -366,8 +366,8 @@ function ChipRow({ options, selected, onToggle, small }) {
             style={{
               border: `1.5px solid ${on ? C.acm : C.border2}`, cursor: 'pointer',
               background: on ? C.acl : C.card, color: C.t1,
-              fontSize: small ? 10 : 11, fontWeight: on ? 700 : 500, padding: small ? '3px 7px' : '5px 11px',
-              borderRadius: small ? 5 : 7, fontFamily: 'var(--font)', whiteSpace: 'nowrap',
+              fontSize: small ? 12 : 11, fontWeight: on ? 700 : 500, padding: small ? '4px 9px' : '5px 11px',
+              borderRadius: small ? 6 : 7, fontFamily: 'var(--font)', whiteSpace: 'nowrap',
             }}>
             {o}
           </button>
@@ -2067,8 +2067,8 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters 
           </div>
           {!isMobile && <div style={{ fontSize: 10.5, color: VIZ.muted, marginTop: -2, marginBottom: 6 }}>Click a bar to filter by zone</div>}
           {isMobile ? (
-            <div style={{ overflowX: 'auto', marginTop: 8, marginLeft: -8 }}>
-              <table style={{ borderCollapse: 'collapse', tableLayout: 'fixed', fontSize: 11 }}>
+            <div style={{ overflowX: 'auto', marginTop: 8, marginLeft: -8, marginRight: -8 }}>
+              <table style={{ borderCollapse: 'collapse', tableLayout: 'fixed', fontSize: 11, width: '100%' }}>
                 <thead>
                   <tr style={{ borderBottom: `1px solid ${C.border}` }}>
                     <th style={{ position: 'sticky', left: 0, background: C.card, zIndex: 2, padding: '6px 6px', textAlign: 'left', fontWeight: 700, color: C.t2, whiteSpace: 'nowrap', fontSize: 10, minWidth: 58 }}>ZONE</th>
@@ -2207,7 +2207,7 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters 
               <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed', minWidth: 360, fontSize: 11.5 }}>
                 <thead>
                   <tr style={{ borderBottom: `1px solid ${C.border2}` }}>
-                    <th style={{ position: 'sticky', left: 0, background: C.card, zIndex: 2, padding: '5px 8px', textAlign: 'left', fontWeight: 700, color: C.t2, minWidth: 80, whiteSpace: 'nowrap' }}>Mode</th>
+                    <th style={{ position: 'sticky', left: 0, background: C.card, zIndex: 2, padding: '5px 8px', textAlign: 'left', fontWeight: 700, color: C.t2, minWidth: 80, whiteSpace: 'nowrap', borderRight: `1px solid ${C.border}` }}>Mode</th>
                     <th style={{ padding: '5px 6px', textAlign: 'center', fontWeight: 700, color: C.t2, minWidth: 80, whiteSpace: 'nowrap' }}>Shipments</th>
                     <th style={{ padding: '5px 6px', textAlign: 'center', fontWeight: 700, color: C.t2, minWidth: 80, whiteSpace: 'nowrap' }}>Cost</th>
                     <th style={{ padding: '5px 6px', textAlign: 'center', fontWeight: 700, color: C.t2, minWidth: 90, whiteSpace: 'nowrap' }}>Avg/Ship</th>
@@ -2217,7 +2217,7 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters 
                 <tbody>
                   {modeRows.map((r, i) => (
                     <tr key={r.mode} style={{ borderBottom: i < modeRows.length - 1 ? `1px solid ${C.border2}` : 'none', background: i % 2 === 0 ? 'transparent' : 'rgba(0,0,0,0.02)' }}>
-                      <td style={{ position: 'sticky', left: 0, background: i % 2 === 0 ? C.card : 'rgba(0,0,0,0.02)', zIndex: 1, padding: '5px 8px', fontWeight: 600, color: C.t1, whiteSpace: 'nowrap' }}>{r.mode}</td>
+                      <td style={{ position: 'sticky', left: 0, background: C.card, zIndex: 1, padding: '5px 8px', fontWeight: 600, color: C.t1, whiteSpace: 'nowrap', borderRight: `1px solid ${C.border}` }}>{r.mode}</td>
                       <td style={{ padding: '5px 6px', textAlign: 'center', color: C.t1 }}>{fmtBig(r.shipments)}</td>
                       <td style={{ padding: '5px 6px', textAlign: 'center', color: C.t1 }}>{fmt(r.cost)}</td>
                       <td style={{ padding: '5px 6px', textAlign: 'center', color: C.t1 }}>₹{r.avgCost.toFixed(2)}</td>
@@ -2753,21 +2753,21 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters 
           {isMobile ? (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 10, ...(secHid['lfl'] ? { display: 'none' } : {}) }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                <span style={{ fontSize: 9, fontWeight: 700, color: C.t3, whiteSpace: 'nowrap', letterSpacing: '0.03em', minWidth: 28 }}>Zone</span>
+                <span style={{ fontSize: 12, fontWeight: 800, color: C.t2, whiteSpace: 'nowrap', letterSpacing: '0.03em', minWidth: 32 }}>Zone</span>
                 <ChipRow options={lflOptions.zones} selected={lflZones} small
                   onToggle={z => setLflZones(t => t.includes(z) ? t.filter(x => x !== z) : [...t, z])} />
               </div>
               <div style={{ display: 'flex', alignItems: 'flex-start', flexWrap: 'wrap', gap: 6 }}>
-                <span style={{ fontSize: 9, fontWeight: 700, color: C.t3, whiteSpace: 'nowrap', letterSpacing: '0.03em', minWidth: 28, paddingTop: 4 }}>Slab</span>
+                <span style={{ fontSize: 12, fontWeight: 800, color: C.t2, whiteSpace: 'nowrap', letterSpacing: '0.03em', minWidth: 32, paddingTop: 4 }}>Slab</span>
                 <ChipRow options={lflOptions.bands} selected={lflBands} small
                   onToggle={b => setLflBands(t => t.includes(b) ? t.filter(x => x !== b) : [...t, b])} />
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                <span style={{ fontSize: 9, fontWeight: 700, color: C.t3, whiteSpace: 'nowrap', letterSpacing: '0.03em', minWidth: 28 }}>Leg</span>
+                <span style={{ fontSize: 12, fontWeight: 800, color: C.t2, whiteSpace: 'nowrap', letterSpacing: '0.03em', minWidth: 32 }}>Leg</span>
                 <ChipRow options={lflOptions.legs} selected={lflLegs} small
                   onToggle={l => setLflLegs(t => t.includes(l) ? t.filter(x => x !== l) : [...t, l])} />
                 <select value={lflSlab} onChange={e => setLflSlab(e.target.value)}
-                  style={{ fontFamily: 'var(--font)', fontSize: 10, padding: '3px 6px', borderRadius: 6, border: `1px solid ${lflSlab !== '' ? C.acm : C.border2}`, background: lflSlab !== '' ? C.acl : C.card, color: C.t1, cursor: 'pointer' }}>
+                  style={{ fontFamily: 'var(--font)', fontSize: 12, fontWeight: 500, padding: '4px 9px', borderRadius: 6, border: `1.5px solid ${lflSlab !== '' ? C.acm : C.border2}`, background: lflSlab !== '' ? C.acl : C.card, color: C.t1, cursor: 'pointer' }}>
                   <option value="">All slabs</option>
                   {lflOptions.slabs.map(sv => (<option key={sv} value={sv}>{sv} kg</option>))}
                 </select>
@@ -2814,7 +2814,7 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters 
               activeCell.allLegs ? 'all legs' : activeCell.legs.join(', '),
             ].join(' · ')}
             note={activeCell.rows.length
-              ? `${fmtN(activeCell.n)} shipments · min 50 per courier per cell`
+              ? (isMobile ? `${fmtN(activeCell.n)} shipments` : `${fmtN(activeCell.n)} shipments · min 50 per courier per cell`)
               : 'no shipments match this combination'}
           >
           {/* Empty and single-courier results render an explanation instead of a blank
@@ -2884,10 +2884,10 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters 
               ]}
               rows={activeCell.rows}
             />
-            <div style={{ fontSize: 11, color: C.t3, marginTop: 8 }}>
+            {!isMobile && <div style={{ fontSize: 11, color: C.t3, marginTop: 8 }}>
               Cost only — this does not account for SLA, coverage or damage rates. Confirm
               service levels are comparable before shifting volume.
-            </div>
+            </div>}
           </>
           )}
           </Card>
