@@ -711,32 +711,12 @@ export default function LogisticsCostPage() {
     return rows
   }, [agg])
 
-  // Monthly Trend runs on the UNFILTERED series. The slicers scope the rest of the page,
-  // but "is our total freight bill rising" must answer the same way regardless of which
-  // courier or zone is selected — a filtered line reads as a spend drop when it is only a
-  // narrower question. monthSeries stays slicer-scoped because the MoM/YoY deltas on the
-  // KPI cards describe the filtered view they sit next to.
-  // Window for the Monthly Trend chart alone: 1, 3 or 6 months back, or everything.
-  // Independent of the sidebar filters, which the trend deliberately ignores.
+  // Window for the Monthly Trend chart: 1, 3 or 6 months back, or everything.
   const [trendMonths, setTrendMonths] = useState(6)
 
-  const trendRows = useMemo(() => (agg?.trendAll || []).map(r => {
-    const cost = Number(r.cost) || 0
-    const n = Number(r.n) || 0
-    const wt = Number(r.wt) || 0
-    const value = Number(r.value) || 0
-    return {
-      month: monthLabel(r.month_year), raw: r.month_year,
-      cost, shipments: n, wt, value,
-      pctGmv: value > 0 ? (cost / value) * 100 : null,
-      claim: Number(r.claim) || 0,
-      claimN: Number(r.claim_n) || 0,
-      avgCost: n ? cost / n : 0,
-      cpk: perKg(cost, wt) ?? 0,
-    }
-  }), [agg])
+  const trendRows = useMemo(() => monthSeries, [monthSeries])
 
-  // The chart and its table both read this — the last N periods of the full series.
+  // The chart and its table both read this — the last N periods of the filtered series.
   const trendWindow = useMemo(
     () => (trendMonths >= 999 ? trendRows : trendRows.slice(-trendMonths)),
     [trendRows, trendMonths]
@@ -1771,7 +1751,7 @@ export default function LogisticsCostPage() {
           UNFILTERED BY DESIGN — reads trendAll, not the slicer-scoped monthSeries. "Is our
           freight bill rising" must not change when someone filters to one courier. */}
       <SectionHdr title="Monthly Trend"
-        note={`${trendWindow.length} of ${trendRows.length} period${trendRows.length === 1 ? '' : 's'} · all couriers, zones and modes — not affected by the slicers`} collapsed={secHid['trend']} onToggle={() => toggleSec('trend')} />
+        note={`${trendWindow.length} of ${trendRows.length} period${trendRows.length === 1 ? '' : 's'}`} collapsed={secHid['trend']} onToggle={() => toggleSec('trend')} />
       <Card style={secHid['trend'] ? { display: 'none' } : undefined} title="Freight spend and unit cost"
         note="bars = total spend (left axis) · lines = cost per unit (right axis)"
         action={
