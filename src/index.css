@@ -5,6 +5,7 @@
 @tailwind utilities;
 
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+button,select,input{touch-action:manipulation}
 
 :root{
   --bg:#F2F1EF;--card:#fff;--hov:#FFFBE6;
