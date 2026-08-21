@@ -117,6 +117,20 @@ const perKg = (cost, wt) => (num(wt) > 0.001 ? num(cost) / num(wt) : null)
 // Tested against what Bluedart actually charged, the flipped "< 0.5" form matches
 // 26.7% of rows vs 4.7% for the literal reading, so that is the real rate card.
 
+function cubeToByCourierMonth(cube) {
+  if (!cube?.length) return []
+  const map = {}
+  for (const r of cube) {
+    if (!r.courier_name || !r.month) continue
+    const key = `${r.courier_name}|${r.month}`
+    if (!map[key]) map[key] = { key, n: 0, cost: 0, wt: 0 }
+    map[key].n += Number(r.n) || 0
+    map[key].cost += Number(r.cost) || 0
+    map[key].wt += Number(r.wt) || 0
+  }
+  return Object.values(map)
+}
+
 // Maps the API's row-per-group payload into the keyed shape the rest of this page
 // already renders from, so the aggregation move stayed confined to data loading.
 function shapeResponse(j) {
@@ -215,6 +229,7 @@ function shapeResponse(j) {
     courierDisputes: j.courierDisputes || [],
     slabCosts: j.slabCosts || [],
     trendAll: j.trendAll || [],
+    byCourierMonth: j.byCourierMonth || cubeToByCourierMonth(j.cube),
   }
 }
 
