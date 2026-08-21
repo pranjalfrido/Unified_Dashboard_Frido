@@ -253,6 +253,10 @@ html,body{height:100%;background:var(--bg);font-family:var(--font);color:var(--t
   .inv-detail-desktop-only{ display:none !important }
   .inv-detail-search{ width:130px !important; padding:5px 8px !important; font-size:11px !important }
 
+  /* Cost Analytics KPI carousel on mobile */
+  .cost-kpi-carousel-wrap{ display:block !important }
+  .cost-kpi-desktop-grid{ display:none !important }
+
   /* Inventory KPI tiles: horizontal swipe carousel on mobile */
   .inv-kpi-carousel-wrap{ display:block !important }
   .inv-kpi-carousel-wrap .inv-kpi-grid > div{

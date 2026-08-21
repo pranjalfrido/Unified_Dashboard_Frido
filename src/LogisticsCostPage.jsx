@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useRef, useCallback } from 'react'
+import { useState, useEffect, useMemo, useRef, useCallback, Children } from 'react'
 import { C, fmt, fmtN, fmtBig, COURIER_COLORS, COURIER_LOGOS } from './utils.js'
 import {
   Card, Badge, DataTable, ChartTooltip,
@@ -602,7 +602,46 @@ function filterCube(cube, f) {
   })
 }
 
-export default function LogisticsCostPage() {
+// Mobile-only swipe carousel for hero KPI tiles — hidden on desktop via CSS class.
+function CostKpiCarousel({ children }) {
+  const count = Children.count(children)
+  const scrollRef = useRef(null)
+  const [activeIdx, setActiveIdx] = useState(0)
+  const onScroll = useCallback(() => {
+    const el = scrollRef.current
+    if (!el) return
+    setActiveIdx(Math.min(count - 1, Math.round(el.scrollLeft / (el.offsetWidth * 0.72 + 10))))
+  }, [count])
+  useEffect(() => {
+    const el = scrollRef.current
+    if (!el) return
+    el.addEventListener('scroll', onScroll, { passive: true })
+    return () => el.removeEventListener('scroll', onScroll)
+  }, [onScroll])
+  return (
+    <>
+      {/* Mobile carousel */}
+      <div className="cost-kpi-carousel-wrap" style={{ display: 'none' }}>
+        <div ref={scrollRef} style={{ display: 'flex', gap: 10, overflowX: 'auto', scrollSnapType: 'x mandatory', WebkitOverflowScrolling: 'touch', paddingBottom: 4 }}
+          className="cost-kpi-carousel-inner">
+          {children}
+        </div>
+        <div style={{ display: 'flex', justifyContent: 'center', gap: 5, marginTop: 8 }}>
+          {Array.from({ length: count }).map((_, i) => (
+            <div key={i} style={{ width: i === activeIdx ? 16 : 6, height: 6, borderRadius: 3, background: i === activeIdx ? C.acc : C.border2, transition: 'all .2s' }} />
+          ))}
+        </div>
+      </div>
+      {/* Desktop grid — hidden on mobile */}
+      <div className="cost-kpi-desktop-grid">
+        {children}
+      </div>
+    </>
+  )
+}
+
+export default function LogisticsCostPage({ externalFilters, setExternalFilters } = {}) {
+  const isMobile = typeof window !== 'undefined' && window.innerWidth <= 768
   const [agg, setAgg] = useState(null)
   const [b2bRows, setB2bRows] = useState(null)
   // B2B aggregates (lanes, transporters, months, freight types) for the B2B tab.
@@ -610,7 +649,9 @@ export default function LogisticsCostPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const API = import.meta.env.VITE_API_URL || ''
-  const [filters, setFilters] = useState(EMPTY_FILTERS)
+  const [internalFilters, setInternalFilters] = useState(EMPTY_FILTERS)
+  const filters = externalFilters || internalFilters
+  const setFilters = setExternalFilters || setInternalFilters
   const [opts, setOpts] = useState({ months: [], zones: [], modes: [], payments: [], couriers: [], accountTypes: [], cities: [] })
   const [sidebarOpen, setSidebarOpen] = useState(true)
   // 'all' = B2B + B2C summary · 'b2c' = courier detail · 'b2b' = lane-wise freight
@@ -766,6 +807,7 @@ export default function LogisticsCostPage() {
         wt: b.wt,
         pctGmv: b.value > 0 ? (b.cost / b.value) * 100 : null,
         claim: b.claimableRs || 0,
+        surchargePct: b.cost > 0 ? (b.surcharge / b.cost) * 100 : 0,
       }))
     // No indexing: the trend chart plots native ₹, so there is nothing to normalise.
     return rows
@@ -1006,6 +1048,8 @@ export default function LogisticsCostPage() {
   const [lflSlab, setLflSlab] = useState('')
   const [subQuery, setSubQuery] = useState('')
   // Collapsed sections, persisted so the layout a user settles on survives a reload.
+  const [slabSearch, setSlabSearch] = useState('')
+  const [catTooltip, setCatTooltip] = useState('')
   const [secHid, setSecHid] = useState(() => {
     try { return JSON.parse(localStorage.getItem('lc-sections') || '{}') } catch { return {} }
   })
@@ -1447,28 +1491,41 @@ export default function LogisticsCostPage() {
     content = !overall ? <Card title="Loading summary…" /> : (
       <>
         <SectionHdr title="Combined Freight Spend" note="B2C courier + B2B transporter" />
-        <div style={{ display: 'grid', gridTemplateColumns: '1.5fr 5fr', gap: 10, alignItems: 'stretch' }}>
+        {/* Desktop layout */}
+        <div className="cost-kpi-desktop-grid" style={{ display: 'grid', gridTemplateColumns: '1.5fr 5fr', gap: 10, alignItems: 'stretch' }}>
           <Hero label="Total Logistics Cost" value={fmt(overall.total)}
             sub={`${fmtN(overall.b2cUnits)} parcels + ${fmtN(overall.b2bUnits)} freight trips`} />
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gridTemplateRows: 'repeat(2, 1fr)', gap: 10 }}>
-            <Tile label="B2C Courier Spend" value={fmt(overall.b2cCost)}
-              sub={`${overall.b2cShare.toFixed(1)}% of total`} />
-            <Tile label="B2B Freight Spend" value={fmt(overall.b2bCost)}
-              sub={`${overall.b2bShare.toFixed(1)}% of total`} />
-            <Tile label="B2C Shipments" value={fmtBig(overall.b2cUnits)}
-              sub={'avg ₹' + (overall.b2cCost / (overall.b2cUnits || 1)).toFixed(2) + ' / parcel'} />
-            <Tile label="B2B Trips" value={fmtN(overall.b2bUnits)}
-              sub={'avg ' + fmt(overall.b2bCost / (overall.b2bUnits || 1)) + ' / trip'} />
-            <Tile label="Recoverable (B2C)" value={fmt(kpis.overbilledCost)}
-              sub="weight overbilling" accent={C.red.tx} />
-            <Tile label="B2B Lanes" value={fmtN(overall.b2bLanes)}
-              sub={`${overall.b2bTransporters} transporters`} />
-            <Tile label="Freight as % of GMV"
-              value={kpis.costPctValue != null ? kpis.costPctValue.toFixed(2) + '%' : '—'}
-              sub="B2C declared value" />
-            <Tile label="Billing Periods" value={fmtN(overallMonths.length)}
-              sub={overallMonths.length ? `${overallMonths[0].month} – ${overallMonths[overallMonths.length - 1].month}` : null} />
+            <Tile label="B2C Courier Spend" value={fmt(overall.b2cCost)} sub={`${overall.b2cShare.toFixed(1)}% of total`} />
+            <Tile label="B2B Freight Spend" value={fmt(overall.b2bCost)} sub={`${overall.b2bShare.toFixed(1)}% of total`} />
+            <Tile label="B2C Shipments" value={fmtBig(overall.b2cUnits)} sub={'avg ₹' + (overall.b2cCost / (overall.b2cUnits || 1)).toFixed(2) + ' / parcel'} />
+            <Tile label="B2B Trips" value={fmtN(overall.b2bUnits)} sub={'avg ' + fmt(overall.b2bCost / (overall.b2bUnits || 1)) + ' / trip'} />
+            <Tile label="Recoverable (B2C)" value={fmt(kpis.overbilledCost)} sub="weight overbilling" accent={C.red.tx} />
+            <Tile label="B2B Lanes" value={fmtN(overall.b2bLanes)} sub={`${overall.b2bTransporters} transporters`} />
+            <Tile label="Freight as % of GMV" value={kpis.costPctValue != null ? kpis.costPctValue.toFixed(2) + '%' : '—'} sub="B2C declared value" />
+            <Tile label="Billing Periods" value={fmtN(overallMonths.length)} sub={overallMonths.length ? `${overallMonths[0].month} – ${overallMonths[overallMonths.length - 1].month}` : null} />
           </div>
+        </div>
+        {/* Mobile carousel */}
+        <div className="cost-kpi-carousel-wrap" style={{ display: 'none' }}>
+          <CostKpiCarousel>
+            {[
+              { label: 'Total Logistics Cost', value: fmt(overall.total), sub: `${fmtBig(overall.b2cUnits)} parcels` },
+              { label: 'B2C Courier Spend', value: fmt(overall.b2cCost), sub: `${overall.b2cShare.toFixed(1)}% of total` },
+              { label: 'B2B Freight Spend', value: fmt(overall.b2bCost), sub: `${overall.b2bShare.toFixed(1)}% of total` },
+              { label: 'B2C Shipments', value: fmtBig(overall.b2cUnits), sub: 'avg ₹' + (overall.b2cCost / (overall.b2cUnits || 1)).toFixed(2) + ' / parcel' },
+              { label: 'B2B Trips', value: fmtN(overall.b2bUnits), sub: 'avg ' + fmt(overall.b2bCost / (overall.b2bUnits || 1)) + ' / trip' },
+              { label: 'Recoverable (B2C)', value: fmt(kpis.overbilledCost), sub: 'weight overbilling', accent: C.red.tx },
+              { label: 'Freight as % of GMV', value: kpis.costPctValue != null ? kpis.costPctValue.toFixed(2) + '%' : '—', sub: 'B2C declared value' },
+              { label: 'B2B Lanes', value: fmtN(overall.b2bLanes), sub: `${overall.b2bTransporters} transporters` },
+            ].map(t => (
+              <div key={t.label} style={{ minWidth: '70vw', maxWidth: '70vw', background: '#fff', border: `1px solid ${C.border}`, borderRadius: 12, padding: '12px 14px', boxSizing: 'border-box', scrollSnapAlign: 'start', flexShrink: 0, display: 'flex', flexDirection: 'column', gap: 4 }}>
+                <div style={{ fontSize: 10, fontWeight: 700, color: C.t3, letterSpacing: '.05em', textTransform: 'uppercase' }}>{t.label}</div>
+                <div style={{ fontSize: 22, fontWeight: 800, color: t.accent || C.t1, lineHeight: 1.15 }}>{t.value}</div>
+                {t.sub && <div style={{ fontSize: 11, color: C.t3 }}>{t.sub}</div>}
+              </div>
+            ))}
+          </CostKpiCarousel>
         </div>
 
         <SectionHdr title="Stream Split" note="the two ledgers bill different units, so they are reported separately" />
@@ -1726,8 +1783,50 @@ export default function LogisticsCostPage() {
       <>
 
       {/* ── Cost overview: hero + 2 rows of 4 ── */}
-      {/* Hero widened from 1.5fr to 2.2fr: it now carries the MoM badge on the value row and
-          a bigger number, so it needs the room. */}
+      {isMobile ? (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+          {[
+            { label: 'Total Logistics Cost', value: fmt(kpis.total), spark: monthSeries.map(d => d.cost || 0) },
+            { label: 'GMV %', value: kpis.costPctValue != null ? kpis.costPctValue.toFixed(2) + '%' : '—', spark: monthSeries.map(d => d.pctGmv || 0), invertColor: true },
+            { label: 'Total Invoices', value: fmtBig(kpis.shipments), spark: monthSeries.map(d => d.shipments || 0) },
+            { label: 'Billed Weight', value: fmtKg(kpis.chargedWt), spark: monthSeries.map(d => d.wt || 0), invertColor: true },
+            { label: 'Total Shipment Value', value: fmt(agg.shipValue), spark: monthSeries.map(d => d.cost || 0) },
+            { label: 'Cost per Kg', value: kpis.cpk != null ? '₹' + kpis.cpk.toFixed(2) : '—', spark: monthSeries.map(d => d.cpk || 0), invertColor: true },
+            { label: 'Avg Cost / Shipment', value: '₹' + kpis.avgCost.toFixed(2), spark: monthSeries.map(d => d.avgCost || 0), invertColor: true },
+            { label: 'Surcharge %', value: kpis.surchargePct.toFixed(2) + '%', spark: monthSeries.map(d => d.cpk || 0), invertColor: true },
+            { label: 'Should Have Paid', value: fmt(agg.dtOurs), spark: monthSeries.map(d => d.cost || 0) },
+            { label: 'Actually Billed', value: fmt(agg.dtInvoiced), spark: monthSeries.map(d => d.cost || 0), accent: C.red.tx },
+            { label: 'Claimable', value: fmt(billingGap.weight), spark: monthSeries.map(d => d.claim || 0), accent: C.red.tx, invertColor: true },
+            { label: 'Wasted Freight', value: fmt(reverseBurden.cost), spark: monthSeries.map(d => d.cost || 0), accent: C.red.tx, invertColor: true },
+          ].map(m => {
+            const pts = m.spark.slice(-14)
+            const min = Math.min(...pts), max = Math.max(...pts)
+            const range = max - min || 1
+            const W = 44, H = 22
+            const points = pts.map((v, i) => {
+              const x = pts.length === 1 ? W/2 : (i/(pts.length-1))*W
+              const y = H - ((v-min)/range)*H
+              return `${x.toFixed(1)},${y.toFixed(1)}`
+            }).join(' ')
+            const last2 = pts.slice(-2)
+            const isUp = last2.length === 2 ? last2[1] >= last2[0] : null
+            const lineColor = isUp === null ? '#1baf7a' : m.invertColor ? (isUp ? '#E53935' : '#1baf7a') : (isUp ? '#1baf7a' : '#E53935')
+            return (
+              <div key={m.label} style={{ background: '#fff', border: `1px solid ${C.border}`, borderRadius: 12, padding: '0 14px', display: 'flex', alignItems: 'center', height: 45, gap: 0 }}>
+                <div style={{ flex: 1, fontSize: 13, fontWeight: 700, color: C.t2, letterSpacing: '.03em', textTransform: 'uppercase' }}>{m.label}</div>
+                {pts.length > 1
+                  ? <svg width={W} height={H} viewBox={`0 0 ${W} ${H}`} style={{ overflow: 'visible', flexShrink: 0 }}>
+                      <polyline points={points} fill="none" stroke={lineColor} strokeWidth="2" strokeLinejoin="round" strokeLinecap="round" />
+                      <circle cx={points.split(' ').pop().split(',')[0]} cy={points.split(' ').pop().split(',')[1]} r="2.5" fill={lineColor} />
+                    </svg>
+                  : <div style={{ width: W, flexShrink: 0 }} />
+                }
+                <div style={{ width: 90, fontSize: 15, fontWeight: 800, color: m.accent || C.t1, lineHeight: 1.1, textAlign: 'right', paddingLeft: 8, whiteSpace: 'nowrap' }}>{m.value}</div>
+              </div>
+            )
+          })}
+        </div>
+      ) : (
       <div style={{ display: 'grid', gridTemplateColumns: '2.2fr 5fr', gap: 18, alignItems: 'stretch' }}>
         <Hero
           label="Total Logistics Cost"
@@ -1735,8 +1834,6 @@ export default function LogisticsCostPage() {
           deltas={heroDeltas}
           sub={heroSub}
         >
-          {/* Sparkline of the same measure the hero reports — one series, so the
-              card title names it and no legend is needed. */}
           {monthSeries.length > 1 && (
             <ResponsiveContainer width="100%" height="100%">
               <AreaChart data={monthSeries} margin={{ top: 6, right: 0, bottom: 0, left: 0 }}>
@@ -1746,10 +1843,6 @@ export default function LogisticsCostPage() {
                     <stop offset="95%" stopColor={SERIES.blue} stopOpacity={0} />
                   </linearGradient>
                 </defs>
-                {/* Hidden axis bound to `month`. Without an XAxis, Recharts labels the
-                    tooltip with the array INDEX — the sparkline was showing "1" instead of
-                    "May 2026". hide keeps the chart a clean sparkline while giving the
-                    tooltip a real category to name. */}
                 <XAxis dataKey="month" hide />
                 <Area type="monotone" dataKey="cost" name="Freight cost" stroke={SERIES.blue}
                   strokeWidth={2} fill="url(#lcHero)" dot={false} />
@@ -1759,39 +1852,20 @@ export default function LogisticsCostPage() {
           )}
         </Hero>
 
-        {/* 4x2. Invoiced Shipments moved to the Monthly Trend table, where the
-            period-by-period figures give it context; the three rate-card figures folded in
-            here when the Billing Accuracy section was removed. */}
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gridTemplateRows: 'repeat(2, 1fr)', gap: 14, alignItems: 'stretch' }}>
-          {/* Declared shipment value — the GMV the freight was spent moving. It is the
-              denominator behind the 'of GMV' figure in the hero, so showing it makes that
-              percentage checkable rather than asserted. */}
           <Tile label="Total Shipment Value" value={fmt(agg.shipValue)}
             sub="goods shipped" />
           <Tile label="Cost per Kg" value={kpis.cpk != null ? '₹' + kpis.cpk.toFixed(2) : '—'}
             sub={`${fmtKg(kpis.chargedWt)} billed`} />
-          {/* Renamed for clarity:
-              "Surcharge Load" -> the % had no stated denominator; now names it.
-              "Reverse Leg Cost" -> kept, but retitled to say WHY it matters (wasted
-                freight), since the leg chart below already shows the split. */}
           <Tile label="Avg Cost / Shipment" value={'₹' + kpis.avgCost.toFixed(2)}
             sub="freight ÷ invoices" />
           <Tile label="Surcharge % of Freight" value={kpis.surchargePct.toFixed(1) + '%'}
             sub={`${fmt(agg.surcharge)} of ${fmt(agg.cost)} billed`} />
-          {/* Billing Accuracy folded in here: the whole section reduced to three figures —
-              what the rate card says we owed, what was invoiced, and the gap — so it earns a
-              row rather than a section of its own.
-              The weight-vs-rate split and the control tile are gone: the split is a
-              diagnostic rather than a decision, and the control ('Card at Their Weight')
-              existed to prove the model, which the 0.55% variance has now established. */}
           <Tile label="Should Have Paid" value={fmt(agg.dtOurs)}
             sub="card × our weight" />
           <Tile label="Actually Billed" value={fmt(agg.dtInvoiced)}
             sub={`${fmt(Math.max(agg.dtInvoiced - agg.dtOurs, 0))} over card`}
             accent={C.red.tx} />
-          {/* Weight-only per the agreed basis. The rate variance is reported separately in
-              Recoverable by Cause: it measures inconsistency against the courier own derived
-              card, not a breach of the signed contract, so it is not invoiceable. */}
           <Tile label="Claimable — Wrong Weight" value={fmt(billingGap.weight)}
             sub={`${billingGap.pctOfBilled.toFixed(1)}% of total cost billed`}
             accent={C.red.tx} />
@@ -1800,6 +1874,7 @@ export default function LogisticsCostPage() {
             accent={C.red.tx} />
         </div>
       </div>
+      )}
 
       {/* ── Trend ── */}
       {/* ONE chart carrying all four measures. Total spend is a BAR on the left axis
@@ -1813,16 +1888,22 @@ export default function LogisticsCostPage() {
           freight bill rising" must not change when someone filters to one courier. */}
       <SectionHdr title="Monthly Trend"
         note={`${trendWindow.length} of ${trendRows.length} period${trendRows.length === 1 ? '' : 's'}`} collapsed={secHid['trend']} onToggle={() => toggleSec('trend')} />
-      <Card style={secHid['trend'] ? { display: 'none' } : undefined} title="Freight spend and unit cost"
-        note="bars = total spend (left axis) · lines = cost per unit (right axis)"
+      <Card style={{ ...(secHid['trend'] ? { display: 'none' } : {}), ...(isMobile ? { paddingLeft: 8 } : {}) }} title={isMobile ? <span style={{ fontSize: 15 }}>Freight spend and unit cost</span> : "Freight spend and unit cost"}
+        note={isMobile ? "" : "bars = total spend (left axis) · lines = cost per unit (right axis)"}
         action={
           // Range applies to THIS chart only. Options above the available history are
           // disabled rather than hidden, so the reader can see how much data exists.
+          isMobile ? (
+            <select value={trendMonths} onChange={e => setTrendMonths(Number(e.target.value))}
+              style={{ fontSize: 11, fontWeight: 600, padding: '3px 8px', borderRadius: 6, fontFamily: 'var(--font)', border: `1.5px solid ${C.acm}`, background: '#fff', color: C.t1, cursor: 'pointer' }}>
+              {[{ n: 1, l: '1M' }, { n: 3, l: '3M' }, { n: 6, l: '6M' }, { n: 999, l: 'All' }].map(o => (
+                <option key={o.l} value={o.n}>{o.l}</option>
+              ))}
+            </select>
+          ) : (
           <div style={{ display: 'flex', gap: 4 }}>
             {[{ n: 1, l: '1M' }, { n: 3, l: '3M' }, { n: 6, l: '6M' }, { n: 999, l: 'All' }].map(o => {
               const on = trendMonths === o.n
-              // Disabled only if a SMALLER option already covers the whole series, so the
-              // button is not offering a distinct view. Never disable the current selection.
               const short = o.n !== 999 && !on && o.n > trendRows.length
                 && trendRows.length <= Math.max(...[1, 3, 6].filter(v => v < o.n))
               return (
@@ -1841,10 +1922,11 @@ export default function LogisticsCostPage() {
               )
             })}
           </div>
+          )
         }>
-        <div style={{ height: 200 }}>
+        <div style={{ height: 200, marginTop: isMobile ? 20 : 0 }}>
           <ResponsiveContainer width="100%" height="100%">
-            <ComposedChart data={trendWindow} margin={{ top: 12, right: 14, left: 4, bottom: 4 }}>
+            <ComposedChart data={trendWindow} margin={{ top: 12, right: isMobile ? -28 : 14, left: isMobile ? -4 : 4, bottom: 4 }}>
               <CartesianGrid stroke={VIZ.grid} vertical={false} />
               <XAxis dataKey="month" tick={{ fontSize: 11, fill: VIZ.muted }}
                 axisLine={{ stroke: VIZ.axis }} tickLine={false} />
@@ -1872,7 +1954,7 @@ export default function LogisticsCostPage() {
                     </div>
                   )
                 }} />
-              <Legend wrapperStyle={{ fontSize: 11.5, paddingTop: 6 }} />
+              <Legend verticalAlign="bottom" wrapperStyle={{ fontSize: 11.5, paddingTop: 0, bottom: isMobile ? 8 : 0 }} formatter={(value) => <span style={{ color: C.t1 }}>{value}</span>} />
               <Bar yAxisId="spend" dataKey="cost" name="Total freight spend"
                 fill={SERIES.blue} fillOpacity={0.82} radius={[4, 4, 0, 0]} maxBarSize={64} />
               <Line yAxisId="unit" type="monotone" dataKey="avgCost" name="Avg / shipment"
@@ -1889,6 +1971,38 @@ export default function LogisticsCostPage() {
 
         {/* Table twin — the real rupees, counts and weights behind the chart. */}
         <div style={{ marginTop: 12 }}>
+          {isMobile ? (
+            <div style={{ overflowX: 'auto' }}>
+              <table style={{ borderCollapse: 'collapse', tableLayout: 'fixed', fontSize: 11 }}>
+                <thead>
+                  <tr style={{ borderBottom: `1px solid ${C.border}` }}>
+                    <th style={{ position: 'sticky', left: 0, background: C.card, zIndex: 2, padding: '6px 8px', textAlign: 'left', fontWeight: 700, color: C.t2, whiteSpace: 'nowrap', fontSize: 10, minWidth: 72 }}>PERIOD</th>
+                    <th style={{ padding: '6px 8px', textAlign: 'center', fontWeight: 700, color: C.t2, whiteSpace: 'nowrap', fontSize: 10, minWidth: 88 }}>FREIGHT COST</th>
+                    <th style={{ padding: '6px 8px', textAlign: 'center', fontWeight: 700, color: C.t2, whiteSpace: 'nowrap', fontSize: 10, minWidth: 88 }}>SHIPMENTS</th>
+                    <th style={{ padding: '6px 8px', textAlign: 'center', fontWeight: 700, color: C.t2, whiteSpace: 'nowrap', fontSize: 10, minWidth: 88 }}>AVG COST/SHIP</th>
+                    <th style={{ padding: '6px 8px', textAlign: 'center', fontWeight: 700, color: C.t2, whiteSpace: 'nowrap', fontSize: 10, minWidth: 88 }}>COST/KG</th>
+                    <th style={{ padding: '6px 8px', textAlign: 'center', fontWeight: 700, color: C.t2, whiteSpace: 'nowrap', fontSize: 10, minWidth: 88 }}>BILLED WT</th>
+                    <th style={{ padding: '6px 8px', textAlign: 'center', fontWeight: 700, color: C.t2, whiteSpace: 'nowrap', fontSize: 10, minWidth: 88 }}>% GMV</th>
+                    <th style={{ padding: '6px 8px', textAlign: 'center', fontWeight: 700, color: C.t2, whiteSpace: 'nowrap', fontSize: 10, minWidth: 88 }}>CLAIMABLE</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {trendWindow.map((r, i) => (
+                    <tr key={r.month} style={{ borderBottom: `1px solid ${C.border}`, background: i % 2 === 0 ? C.card : C.bg }}>
+                      <td style={{ position: 'sticky', left: 0, background: i % 2 === 0 ? C.card : C.bg, zIndex: 1, padding: '6px 8px', fontWeight: 600, color: C.t1, whiteSpace: 'nowrap' }}>{r.month}</td>
+                      <td style={{ padding: '6px 8px', textAlign: 'center', color: C.t1 }}>{fmt(r.cost)}</td>
+                      <td style={{ padding: '6px 8px', textAlign: 'center', color: C.t1 }}>{fmtN(r.shipments)}</td>
+                      <td style={{ padding: '6px 8px', textAlign: 'center', color: C.t1 }}>{'₹' + r.avgCost.toFixed(2)}</td>
+                      <td style={{ padding: '6px 8px', textAlign: 'center', color: C.t1 }}>{'₹' + r.cpk.toFixed(2)}</td>
+                      <td style={{ padding: '6px 8px', textAlign: 'center', color: C.t1 }}>{fmtKg(r.wt)}</td>
+                      <td style={{ padding: '6px 8px', textAlign: 'center', color: C.t1 }}>{r.pctGmv != null ? r.pctGmv.toFixed(2) + '%' : '—'}</td>
+                      <td style={{ padding: '6px 8px', textAlign: 'center' }}>{r.claim > 0 ? <span style={{ color: C.red.tx, fontWeight: 700 }}>{fmt(r.claim)}</span> : <span style={{ color: C.t3 }}>—</span>}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : (
           <DataTable
             columns={[
               { key: 'month', label: 'Period' },
@@ -1897,13 +2011,9 @@ export default function LogisticsCostPage() {
               { key: 'avgCost', label: 'Avg Cost / Shipment', align: 'center', render: (_, r) => '₹' + r.avgCost.toFixed(2) },
               { key: 'cpk', label: 'Cost / kg', align: 'center', render: (_, r) => '₹' + r.cpk.toFixed(2) },
               { key: 'wt', label: 'Billed wt', align: 'center', render: (_, r) => fmtKg(r.wt) },
-              // Moved down from the Cost Overview tiles: as a single blended number it had no
-              // context, but per period it shows whether freight is gaining on revenue.
               { key: 'pctGmv', label: '% of GMV', align: 'center', render: (_, r) => (
                 r.pctGmv != null ? r.pctGmv.toFixed(2) + '%' : '—'
               ) },
-              // Claimable weight overbilling for the period. Weight only — the rate variance
-              // is a diagnostic, not invoiceable — so this column sums to the headline figure.
               { key: 'claim', label: 'Claimable', align: 'center', render: (_, r) => (
                 r.claim > 0
                   ? <span style={{ color: C.red.tx, fontWeight: 700 }}>{fmt(r.claim)}</span>
@@ -1912,16 +2022,17 @@ export default function LogisticsCostPage() {
             ]}
             rows={trendWindow}
           />
+          )}
         </div>
       </Card>
 
       {/* ── Zone + mode ── */}
       <SectionHdr title="Where The Money Goes" collapsed={secHid['money']} onToggle={() => toggleSec('money')} />
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(330px,1fr))', gap: 14 , ...(secHid['money'] ? { display: 'none' } : {}) }}>
-        <Card title="Cost by zone" note="zone drives the courier's rate card">
+        <Card title="Cost by zone" note="">
           <div style={{ height: 200 }}>
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={zoneRows} margin={{ top: 10, right: 12, left: 4, bottom: 4 }}>
+              <BarChart data={zoneRows} margin={{ top: 10, right: isMobile ? 10 : 12, left: isMobile ? -14 : 4, bottom: 4 }}>
                 <CartesianGrid stroke={VIZ.grid} vertical={false} />
                 <XAxis dataKey="zone" tickFormatter={z => `Zone ${z}`} tick={{ fontSize: 11.5, fill: VIZ.muted }} axisLine={{ stroke: VIZ.axis }} tickLine={false} />
                 <YAxis tick={{ fontSize: 11, fill: VIZ.muted }} axisLine={false} tickLine={false}
@@ -1954,7 +2065,33 @@ export default function LogisticsCostPage() {
               </BarChart>
             </ResponsiveContainer>
           </div>
-          <div style={{ fontSize: 10.5, color: VIZ.muted, marginTop: -2, marginBottom: 6 }}>Click a bar to filter by zone</div>
+          {!isMobile && <div style={{ fontSize: 10.5, color: VIZ.muted, marginTop: -2, marginBottom: 6 }}>Click a bar to filter by zone</div>}
+          {isMobile ? (
+            <div style={{ overflowX: 'auto', marginTop: 8, marginLeft: -8 }}>
+              <table style={{ borderCollapse: 'collapse', tableLayout: 'fixed', fontSize: 11 }}>
+                <thead>
+                  <tr style={{ borderBottom: `1px solid ${C.border}` }}>
+                    <th style={{ position: 'sticky', left: 0, background: C.card, zIndex: 2, padding: '6px 6px', textAlign: 'left', fontWeight: 700, color: C.t2, whiteSpace: 'nowrap', fontSize: 10, minWidth: 58 }}>ZONE</th>
+                    <th style={{ padding: '6px 6px', textAlign: 'center', fontWeight: 700, color: C.t2, whiteSpace: 'nowrap', fontSize: 10, minWidth: 70 }}>SHIPMENTS</th>
+                    <th style={{ padding: '6px 6px', textAlign: 'center', fontWeight: 700, color: C.t2, whiteSpace: 'nowrap', fontSize: 10, minWidth: 70 }}>AVG COST/SHIP</th>
+                    <th style={{ padding: '6px 6px', textAlign: 'center', fontWeight: 700, color: C.t2, whiteSpace: 'nowrap', fontSize: 10, minWidth: 70 }}>COST/KG</th>
+                    <th style={{ padding: '6px 6px', textAlign: 'center', fontWeight: 700, color: C.t2, whiteSpace: 'nowrap', fontSize: 10, minWidth: 55 }}>SHARE</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {zoneRows.map((r, i) => (
+                    <tr key={r.zone} style={{ borderBottom: `1px solid ${C.border}`, background: i % 2 === 0 ? C.card : C.bg }}>
+                      <td style={{ position: 'sticky', left: 0, background: i % 2 === 0 ? C.card : C.bg, zIndex: 1, padding: '6px 6px', fontWeight: 600, color: C.t1, whiteSpace: 'nowrap' }}>Zone {r.zone}</td>
+                      <td style={{ padding: '6px 6px', textAlign: 'center', color: C.t1 }}>{fmtBig(r.shipments)}</td>
+                      <td style={{ padding: '6px 6px', textAlign: 'center', color: C.t1 }}>{'₹' + r.avgCost.toFixed(2)}</td>
+                      <td style={{ padding: '6px 6px', textAlign: 'center', color: C.t1 }}>{r.cpk != null ? '₹' + r.cpk.toFixed(2) : '—'}</td>
+                      <td style={{ padding: '6px 6px', textAlign: 'center', color: C.t1 }}>{r.share.toFixed(1) + '%'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : (
           <DataTable
             columns={[
               { key: 'zone', label: 'Zone', render: v => `Zone ${v}` },
@@ -1965,6 +2102,7 @@ export default function LogisticsCostPage() {
             ]}
             rows={zoneRows}
           />
+          )}
         </Card>
 
         {/* Part-to-whole is valid here: the three legs are mutually exclusive and sum to
@@ -1973,56 +2111,123 @@ export default function LogisticsCostPage() {
             while Reverse (28°) and RTO (15°) are thin wedges — the labels carry the
             comparison that the angles cannot. RVP and DTO are folded into Reverse
             upstream in api/logistics-cost.js; RTO is its own leg. */}
-        <Card style={{ display: 'flex', flexDirection: 'column' }} title="Cost by leg" note="RVP and DTO count as reverse · RTO shown separately — both are cost with no revenue">
-          <div style={{ flex: 1, minHeight: 200 }}>
-            <ResponsiveContainer width="100%" height="100%">
-              <PieChart margin={{ top: 8, right: 8, left: 8, bottom: 8 }}>
-                <Tooltip
-                  content={({ active, payload }) => {
-                    if (!active || !payload?.length) return null
-                    const r = payload[0].payload
-                    return (
-                      <div style={{ background: C.card, border: `1px solid ${C.border2}`, borderRadius: 9, padding: '9px 11px', boxShadow: '0 6px 20px rgba(0,0,0,.12)' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 4 }}>
-                          <span style={{ width: 9, height: 9, borderRadius: 2, background: MODE_COLOR[r.mode] || VIZ.muted, flexShrink: 0 }} />
-                          <span style={{ fontSize: 11.5, fontWeight: 700, color: C.t1 }}>{r.mode}</span>
+        <Card style={{ display: 'flex', flexDirection: 'column' }} title="Cost by leg" note={isMobile ? "" : "RVP and DTO count as reverse · RTO shown separately — both are cost with no revenue"}>
+          {isMobile ? (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 12 }}>
+              <div style={{ width: 150, height: 150, flexShrink: 0 }}>
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart margin={{ top: 4, right: 4, left: 4, bottom: 4 }}>
+                    <Tooltip
+                      content={({ active, payload }) => {
+                        if (!active || !payload?.length) return null
+                        const r = payload[0].payload
+                        return (
+                          <div style={{ background: C.card, border: `1px solid ${C.border2}`, borderRadius: 9, padding: '9px 11px', boxShadow: '0 6px 20px rgba(0,0,0,.12)' }}>
+                            <div style={{ fontSize: 13, fontWeight: 800, color: C.t1 }}>{fmt(r.cost)}</div>
+                            <div style={{ fontSize: 11, color: C.t3, marginTop: 2 }}>{r.share.toFixed(1)}% of spend</div>
+                          </div>
+                        )
+                      }} />
+                    <Pie data={modeRows} dataKey="cost" nameKey="mode" cx="50%" cy="50%"
+                      innerRadius={38} outerRadius={62} paddingAngle={2}
+                      stroke={VIZ.surface} strokeWidth={2}
+                      onClick={d => d?.mode && toggleIn('modes', d.mode)}
+                      style={{ cursor: 'pointer' }} label={false} labelLine={false}>
+                      {modeRows.map(r => (
+                        <Cell key={r.mode} fill={MODE_COLOR[r.mode] || VIZ.muted}
+                          opacity={filters.modes.length && !filters.modes.includes(r.mode) ? 0.35 : 1} />
+                      ))}
+                    </Pie>
+                  </PieChart>
+                </ResponsiveContainer>
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginLeft: 'auto' }}>
+                {modeRows.map(r => (
+                  <div key={r.mode} style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
+                    <span style={{ width: 10, height: 10, borderRadius: '50%', background: MODE_COLOR[r.mode] || VIZ.muted, flexShrink: 0 }} />
+                    <div>
+                      <div style={{ fontSize: 12, fontWeight: 700, color: C.t1, lineHeight: 1.2 }}>{r.mode} <span style={{ fontWeight: 400, color: C.t3 }}>{r.share.toFixed(1)}%</span></div>
+                      <div style={{ fontSize: 11, color: C.t3 }}>{fmt(r.cost)}</div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ) : (
+            <div style={{ flex: 1, minHeight: 200 }}>
+              <ResponsiveContainer width="100%" height="100%">
+                <PieChart margin={{ top: 8, right: 8, left: 8, bottom: 8 }}>
+                  <Tooltip
+                    content={({ active, payload }) => {
+                      if (!active || !payload?.length) return null
+                      const r = payload[0].payload
+                      return (
+                        <div style={{ background: C.card, border: `1px solid ${C.border2}`, borderRadius: 9, padding: '9px 11px', boxShadow: '0 6px 20px rgba(0,0,0,.12)' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 4 }}>
+                            <span style={{ width: 9, height: 9, borderRadius: 2, background: MODE_COLOR[r.mode] || VIZ.muted, flexShrink: 0 }} />
+                            <span style={{ fontSize: 11.5, fontWeight: 700, color: C.t1 }}>{r.mode}</span>
+                          </div>
+                          <div style={{ fontSize: 15, fontWeight: 800, color: C.t1 }}>{fmt(r.cost)}</div>
+                          <div style={{ fontSize: 11, color: C.t3, marginTop: 3 }}>
+                            {fmtN(r.shipments)} shipments · ₹{r.avgCost.toFixed(2)} avg · {r.share.toFixed(1)}% of spend
+                          </div>
                         </div>
-                        <div style={{ fontSize: 15, fontWeight: 800, color: C.t1 }}>{fmt(r.cost)}</div>
-                        <div style={{ fontSize: 11, color: C.t3, marginTop: 3 }}>
-                          {fmtN(r.shipments)} shipments · ₹{r.avgCost.toFixed(2)} avg · {r.share.toFixed(1)}% of spend
-                        </div>
-                      </div>
-                    )
-                  }} />
-                <Pie
-                  data={modeRows}
-                  dataKey="cost"
-                  nameKey="mode"
-                  cx="50%" cy="50%"
-                  innerRadius={52} outerRadius={88}
-                  // 2px surface gap between segments rather than a stroke outline.
-                  paddingAngle={2}
-                  stroke={VIZ.surface} strokeWidth={2}
-                  onClick={d => d?.mode && toggleIn('modes', d.mode)}
-                  style={{ cursor: 'pointer' }}
-                  // Direct labels: the thin slices are unreadable by angle alone.
-                  label={({ mode, share, x, y, textAnchor }) => (
-                    <text x={x} y={y} textAnchor={textAnchor} dominantBaseline="central"
-                      fontSize={11} fontWeight={700} fill={C.t2}>
-                      {`${mode} ${share.toFixed(1)}%`}
-                    </text>
-                  )}
-                  labelLine={{ stroke: VIZ.axis, strokeWidth: 1 }}
-                >
-                  {modeRows.map(r => (
-                    <Cell key={r.mode} fill={MODE_COLOR[r.mode] || VIZ.muted}
-                      opacity={filters.modes.length && !filters.modes.includes(r.mode) ? 0.35 : 1} />
+                      )
+                    }} />
+                  <Pie
+                    data={modeRows}
+                    dataKey="cost"
+                    nameKey="mode"
+                    cx="50%" cy="50%"
+                    innerRadius={52} outerRadius={88}
+                    paddingAngle={2}
+                    stroke={VIZ.surface} strokeWidth={2}
+                    onClick={d => d?.mode && toggleIn('modes', d.mode)}
+                    style={{ cursor: 'pointer' }}
+                    label={({ mode, share, x, y, textAnchor }) => (
+                      <text x={x} y={y} textAnchor={textAnchor} dominantBaseline="central"
+                        fontSize={11} fontWeight={700} fill={C.t2}>
+                        {`${mode} ${share.toFixed(1)}%`}
+                      </text>
+                    )}
+                    labelLine={{ stroke: VIZ.axis, strokeWidth: 1 }}
+                  >
+                    {modeRows.map(r => (
+                      <Cell key={r.mode} fill={MODE_COLOR[r.mode] || VIZ.muted}
+                        opacity={filters.modes.length && !filters.modes.includes(r.mode) ? 0.35 : 1} />
+                    ))}
+                  </Pie>
+                </PieChart>
+              </ResponsiveContainer>
+            </div>
+          )}
+          {!isMobile && <div style={{ fontSize: 10.5, color: VIZ.muted, marginTop: -2, marginBottom: 6 }}>Click a slice to filter by leg</div>}
+          {isMobile ? (
+            <div style={{ overflowX: 'auto', marginLeft: -8, marginRight: -8, WebkitOverflowScrolling: 'touch' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed', minWidth: 360, fontSize: 11.5 }}>
+                <thead>
+                  <tr style={{ borderBottom: `1px solid ${C.border2}` }}>
+                    <th style={{ position: 'sticky', left: 0, background: C.card, zIndex: 2, padding: '5px 8px', textAlign: 'left', fontWeight: 700, color: C.t2, minWidth: 80, whiteSpace: 'nowrap' }}>Mode</th>
+                    <th style={{ padding: '5px 6px', textAlign: 'center', fontWeight: 700, color: C.t2, minWidth: 80, whiteSpace: 'nowrap' }}>Shipments</th>
+                    <th style={{ padding: '5px 6px', textAlign: 'center', fontWeight: 700, color: C.t2, minWidth: 80, whiteSpace: 'nowrap' }}>Cost</th>
+                    <th style={{ padding: '5px 6px', textAlign: 'center', fontWeight: 700, color: C.t2, minWidth: 90, whiteSpace: 'nowrap' }}>Avg/Ship</th>
+                    <th style={{ padding: '5px 6px', textAlign: 'center', fontWeight: 700, color: C.t2, minWidth: 60, whiteSpace: 'nowrap' }}>Share</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {modeRows.map((r, i) => (
+                    <tr key={r.mode} style={{ borderBottom: i < modeRows.length - 1 ? `1px solid ${C.border2}` : 'none', background: i % 2 === 0 ? 'transparent' : 'rgba(0,0,0,0.02)' }}>
+                      <td style={{ position: 'sticky', left: 0, background: i % 2 === 0 ? C.card : 'rgba(0,0,0,0.02)', zIndex: 1, padding: '5px 8px', fontWeight: 600, color: C.t1, whiteSpace: 'nowrap' }}>{r.mode}</td>
+                      <td style={{ padding: '5px 6px', textAlign: 'center', color: C.t1 }}>{fmtBig(r.shipments)}</td>
+                      <td style={{ padding: '5px 6px', textAlign: 'center', color: C.t1 }}>{fmt(r.cost)}</td>
+                      <td style={{ padding: '5px 6px', textAlign: 'center', color: C.t1 }}>₹{r.avgCost.toFixed(2)}</td>
+                      <td style={{ padding: '5px 6px', textAlign: 'center', color: C.t1 }}>{r.share.toFixed(1)}%</td>
+                    </tr>
                   ))}
-                </Pie>
-              </PieChart>
-            </ResponsiveContainer>
-          </div>
-          <div style={{ fontSize: 10.5, color: VIZ.muted, marginTop: -2, marginBottom: 6 }}>Click a slice to filter by leg</div>
+                </tbody>
+              </table>
+            </div>
+          ) : (
           <DataTable
             columns={[
               { key: 'mode', label: 'Mode' },
@@ -2033,11 +2238,12 @@ export default function LogisticsCostPage() {
             ]}
             rows={modeRows}
           />
+          )}
         </Card>
       </div>
 
       {/* ── Weight slab + service type ── */}
-      <SectionHdr title="Rate Card Exposure" note="cost behaviour across billing slabs" collapsed={secHid['ratecard']} onToggle={() => toggleSec('ratecard')} />
+      <SectionHdr title="Rate Card Exposure" note={isMobile ? "" : "cost behaviour across billing slabs"} collapsed={secHid['ratecard']} onToggle={() => toggleSec('ratecard')} />
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(330px,1fr))', gap: 14 , ...(secHid['ratecard'] ? { display: 'none' } : {}) }}>
         {/* ONE chart, ONE axis, grouped bars.
             The two series are avg cost PER SHIPMENT and cost PER KG — both are
@@ -2046,11 +2252,11 @@ export default function LogisticsCostPage() {
             Total spend is deliberately NOT a series here: at ₹1.4 Cr it would render
             ₹/kg at 0.0006% of the axis, i.e. invisible. Spend lives in the table
             below and in the tooltip, where its own scale does it justice. */}
-        <Card style={{ display: 'flex', flexDirection: 'column' }} title="Cost per shipment vs cost per kg, by weight slab"
-          note="both in ₹ on one axis — heavier slabs cost more per parcel but less per kg">
+        <Card style={{ display: 'flex', flexDirection: 'column' }} title={isMobile ? "Cost Efficiency Across Weight Slabs" : "Cost per shipment vs cost per kg, by weight slab"}
+          note={isMobile ? "" : "both in ₹ on one axis — heavier slabs cost more per parcel but less per kg"}>
           <div style={{ flex: 1, minHeight: 200 }}>
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={bandRows} margin={{ top: 12, right: 12, left: 4, bottom: 4 }} barGap={4}>
+              <BarChart data={bandRows} margin={isMobile ? { top: 12, right: 10, left: -24, bottom: 4 } : { top: 12, right: 12, left: 4, bottom: 4 }} barGap={4}>
                 <CartesianGrid stroke={VIZ.grid} vertical={false} />
                 <XAxis dataKey="band" tick={{ fontSize: 10.5, fill: VIZ.muted }} axisLine={{ stroke: VIZ.axis }} tickLine={false} />
                 <YAxis tick={{ fontSize: 11, fill: VIZ.muted }} axisLine={false} tickLine={false}
@@ -2078,12 +2284,42 @@ export default function LogisticsCostPage() {
                       </div>
                     )
                   }} />
-                <Legend wrapperStyle={{ fontSize: 11.5, paddingTop: 4 }} />
+                <Legend wrapperStyle={{ fontSize: 11.5, paddingTop: 4 }} formatter={(value) => <span style={{ color: C.t1 }}>{value}</span>} />
                 <Bar dataKey="avgCost" name="Avg ₹ / shipment" fill={SERIES.blue} radius={[4, 4, 0, 0]} maxBarSize={30} />
                 <Bar dataKey="cpk" name="Cost / kg" fill={SERIES.orange} radius={[4, 4, 0, 0]} maxBarSize={30} />
               </BarChart>
             </ResponsiveContainer>
           </div>
+          {isMobile ? (
+            <div style={{ overflowX: 'auto', marginLeft: -8, marginRight: -8, WebkitOverflowScrolling: 'touch' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed', minWidth: 400, fontSize: 11.5 }}>
+                <thead>
+                  <tr style={{ borderBottom: `1px solid ${C.border2}` }}>
+                    <th style={{ position: 'sticky', left: 0, background: C.card, zIndex: 2, padding: '5px 8px', textAlign: 'left', fontWeight: 700, color: C.t2, minWidth: 72, whiteSpace: 'nowrap' }}>Slab</th>
+                    <th style={{ padding: '5px 6px', textAlign: 'center', fontWeight: 700, color: C.t2, minWidth: 80, whiteSpace: 'nowrap' }}>Shipments</th>
+                    <th style={{ padding: '5px 6px', textAlign: 'center', fontWeight: 700, color: C.t2, minWidth: 80, whiteSpace: 'nowrap' }}>Total Cost</th>
+                    <th style={{ padding: '5px 6px', textAlign: 'center', fontWeight: 700, color: C.t2, minWidth: 60, whiteSpace: 'nowrap' }}>Share</th>
+                    <th style={{ padding: '5px 6px', textAlign: 'center', fontWeight: 700, color: C.t2, minWidth: 90, whiteSpace: 'nowrap' }}>Avg/Ship</th>
+                    <th style={{ padding: '5px 6px', textAlign: 'center', fontWeight: 700, color: C.t2, minWidth: 72, whiteSpace: 'nowrap' }}>Cost/kg</th>
+                    <th style={{ padding: '5px 6px', textAlign: 'center', fontWeight: 700, color: C.t2, minWidth: 72, whiteSpace: 'nowrap' }}>Overbilled</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {bandRows.map((r, i) => (
+                    <tr key={r.band} style={{ borderBottom: i < bandRows.length - 1 ? `1px solid ${C.border2}` : 'none', background: i % 2 === 0 ? 'transparent' : 'rgba(0,0,0,0.02)' }}>
+                      <td style={{ position: 'sticky', left: 0, background: i % 2 === 0 ? C.card : 'rgba(0,0,0,0.02)', zIndex: 1, padding: '5px 8px', fontWeight: 600, color: C.t1, whiteSpace: 'nowrap' }}>{r.band}</td>
+                      <td style={{ padding: '5px 6px', textAlign: 'center', color: C.t1 }}>{fmtBig(r.shipments)}</td>
+                      <td style={{ padding: '5px 6px', textAlign: 'center', color: C.t1 }}>{fmt(r.cost)}</td>
+                      <td style={{ padding: '5px 6px', textAlign: 'center', color: C.t1 }}>{r.share.toFixed(1)}%</td>
+                      <td style={{ padding: '5px 6px', textAlign: 'center', color: C.t1 }}>₹{r.avgCost.toFixed(2)}</td>
+                      <td style={{ padding: '5px 6px', textAlign: 'center', color: C.t1 }}>{r.cpk != null ? '₹' + r.cpk.toFixed(2) : '—'}</td>
+                      <td style={{ padding: '5px 6px', textAlign: 'center', color: C.t1 }}>{r.overPct.toFixed(1)}%</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : (
           <DataTable
             columns={[
               { key: 'band', label: 'Slab' },
@@ -2097,6 +2333,7 @@ export default function LogisticsCostPage() {
             rows={bandRows}
             maxHeight={220}
           />
+          )}
         </Card>
 
         {/* Note corrected: the old text claimed "express/NDD carries a premium over
@@ -2110,17 +2347,17 @@ export default function LogisticsCostPage() {
             Replaced with rate drift, which answers a question nobody could ask before:
             is any courier quietly raising its effective rate? */}
         <Card title="Effective rate drift by courier"
-          note="₹/kg per month — a rising line is a rate increase, not a heavier mix">
+          note={isMobile ? "" : "₹/kg per month — a rising line is a rate increase, not a heavier mix"}>
           <div style={{ height: 200 }}>
             <ResponsiveContainer width="100%" height="100%">
-              <ComposedChart data={driftSeries} margin={{ top: 12, right: 44, left: 4, bottom: 4 }}>
+              <ComposedChart data={driftSeries} margin={isMobile ? { top: 12, right: 16, left: -24, bottom: 4 } : { top: 12, right: 44, left: 4, bottom: 4 }}>
                 <CartesianGrid stroke={VIZ.grid} vertical={false} />
                 <XAxis dataKey="month" tick={{ fontSize: 11, fill: VIZ.muted }} axisLine={{ stroke: VIZ.axis }} tickLine={false} />
                 <YAxis tick={{ fontSize: 11, fill: VIZ.muted }} axisLine={false} tickLine={false}
                   tickFormatter={v => '₹' + v.toFixed(0)} />
                 <Tooltip cursor={{ stroke: VIZ.axis, strokeWidth: 1 }}
                   content={<ChartTooltip formatter={v => '₹' + num(v).toFixed(2) + ' / kg'} />} />
-                <Legend wrapperStyle={{ fontSize: 11, paddingTop: 4 }} iconType="plainline" />
+                <Legend wrapperStyle={{ fontSize: 11, paddingTop: 4 }} iconType="plainline" formatter={(value) => <span style={{ color: C.t1 }}>{value}</span>} />
                 {driftCouriers.map((c, i) => (
                   <Line key={c} type="monotone" dataKey={c} name={c}
                     stroke={DRIFT_COLORS[i % DRIFT_COLORS.length]} strokeWidth={2}
@@ -2129,6 +2366,37 @@ export default function LogisticsCostPage() {
               </ComposedChart>
             </ResponsiveContainer>
           </div>
+          {isMobile ? (
+            <div style={{ overflowX: 'auto', marginLeft: -8, marginRight: -8, WebkitOverflowScrolling: 'touch' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed', fontSize: 11 }}>
+                <thead>
+                  <tr style={{ borderBottom: `1px solid ${C.border2}` }}>
+                    <th style={{ position: 'sticky', left: 0, background: C.card, zIndex: 2, padding: '5px 6px', textAlign: 'left', fontWeight: 800, color: C.t1, width: '28%', whiteSpace: 'nowrap' }}>Courier</th>
+                    <th style={{ padding: '5px 2px', textAlign: 'center', fontWeight: 800, color: C.t1, width: '18%', whiteSpace: 'nowrap' }}>First</th>
+                    <th style={{ padding: '5px 2px', textAlign: 'center', fontWeight: 800, color: C.t1, width: '18%', whiteSpace: 'nowrap' }}>Latest</th>
+                    <th style={{ padding: '5px 2px', textAlign: 'center', fontWeight: 800, color: C.t1, width: '18%', whiteSpace: 'nowrap' }}>Drift</th>
+                    <th style={{ padding: '5px 2px', textAlign: 'center', fontWeight: 800, color: C.t1, width: '18%', whiteSpace: 'nowrap' }}>Months</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {driftRows.map((r, i) => (
+                    <tr key={r.courier} style={{ borderBottom: i < driftRows.length - 1 ? `1px solid ${C.border2}` : 'none', background: i % 2 === 0 ? 'transparent' : 'rgba(0,0,0,0.02)' }}>
+                      <td style={{ position: 'sticky', left: 0, background: i % 2 === 0 ? C.card : 'rgba(0,0,0,0.02)', zIndex: 1, padding: '5px 6px', fontWeight: 700, color: C.t1, whiteSpace: 'nowrap' }}><CourierCell name={r.courier} /></td>
+                      <td style={{ padding: '5px 2px', textAlign: 'center', color: C.t1 }}>₹{r.first.toFixed(2)}</td>
+                      <td style={{ padding: '5px 2px', textAlign: 'center', color: C.t1 }}>₹{r.last.toFixed(2)}</td>
+                      <td style={{ padding: '5px 2px', textAlign: 'center' }}>
+                        {r.months < 2 ? <span style={{ color: C.t3 }}>—</span>
+                          : <span style={{ color: r.drift > 5 ? C.red.tx : r.drift < -5 ? C.green.tx : C.t1, fontWeight: Math.abs(r.drift) > 5 ? 700 : undefined }}>
+                              {(r.drift >= 0 ? '+' : '') + r.drift.toFixed(1) + '%'}
+                            </span>}
+                      </td>
+                      <td style={{ padding: '5px 2px', textAlign: 'center', color: C.t1 }}>{fmtN(r.months)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : (
           <DataTable
             columns={[
               { key: 'courier', label: 'Courier', render: v => <CourierCell name={v} /> },
@@ -2145,10 +2413,11 @@ export default function LogisticsCostPage() {
             rows={driftRows}
             maxHeight={220}
           />
-          <div style={{ fontSize: 11, color: C.t3, marginTop: 8 }}>
+          )}
+          {!isMobile && <div style={{ fontSize: 11, color: C.t3, marginTop: 8 }}>
             Couriers with fewer than 500 shipments in a month are excluded, so a handful
             of parcels can't fake a spike.
-          </div>
+          </div>}
         </Card>
       </div>
 
@@ -2159,6 +2428,40 @@ export default function LogisticsCostPage() {
       <SectionHdr title="By Courier Partner"
         note={courierRows.length === 1 ? 'one partner in the ledger so far' : `${courierRows.length} partners`} collapsed={secHid['courier']} onToggle={() => toggleSec('courier')} />
       <Card style={secHid['courier'] ? { display: 'none' } : undefined}>
+        {isMobile ? (
+          <div style={{ overflowX: 'auto', marginLeft: -8, marginRight: -8, WebkitOverflowScrolling: 'touch' }}>
+            <table style={{ borderCollapse: 'collapse', tableLayout: 'fixed', width: 570, fontSize: 11.5 }}>
+              <thead>
+                <tr style={{ borderBottom: `1px solid ${C.border2}` }}>
+                  <th style={{ position: 'sticky', left: 0, background: C.card, zIndex: 2, padding: '5px 8px', textAlign: 'left', fontWeight: 800, color: C.t1, width: 100, whiteSpace: 'nowrap', borderRight: `1px solid ${C.border}` }}>Courier</th>
+                  <th style={{ padding: '5px 4px', textAlign: 'center', fontWeight: 800, color: C.t1, width: 70, whiteSpace: 'nowrap' }}>Shipments</th>
+                  <th style={{ padding: '5px 4px', textAlign: 'center', fontWeight: 800, color: C.t1, width: 70, whiteSpace: 'nowrap' }}>Cost</th>
+                  <th style={{ padding: '5px 4px', textAlign: 'center', fontWeight: 800, color: C.t1, width: 70, whiteSpace: 'nowrap' }}>Avg/Ship</th>
+                  <th style={{ padding: '5px 4px', textAlign: 'center', fontWeight: 800, color: C.t1, width: 70, whiteSpace: 'nowrap' }}>Cost/kg</th>
+                  <th style={{ padding: '5px 4px', textAlign: 'center', fontWeight: 800, color: C.t1, width: 75, whiteSpace: 'nowrap' }}>% Wrong Wt</th>
+                  <th style={{ padding: '5px 4px', textAlign: 'center', fontWeight: 800, color: C.t1, width: 70, whiteSpace: 'nowrap' }}>Claimable</th>
+                </tr>
+              </thead>
+              <tbody>
+                {courierRows.map((r, i) => (
+                  <tr key={r.courier} style={{ borderBottom: i < courierRows.length - 1 ? `1px solid ${C.border2}` : 'none', background: i % 2 === 0 ? 'transparent' : 'rgba(0,0,0,0.02)' }}>
+                    <td style={{ position: 'sticky', left: 0, background: C.card, zIndex: 1, padding: '5px 8px', fontWeight: 700, color: C.t1, whiteSpace: 'nowrap', borderRight: `1px solid ${C.border}` }}><CourierCell name={r.courier} /></td>
+                    <td style={{ padding: '5px 4px', textAlign: 'center', color: C.t1 }}>{fmtBig(r.shipments)}</td>
+                    <td style={{ padding: '5px 4px', textAlign: 'center', color: C.t1 }}>{fmt(r.cost)}</td>
+                    <td style={{ padding: '5px 4px', textAlign: 'center', color: C.t1 }}>₹{r.avgCost.toFixed(2)}</td>
+                    <td style={{ padding: '5px 4px', textAlign: 'center', color: C.t1 }}>{r.cpk != null ? '₹' + r.cpk.toFixed(2) : '—'}</td>
+                    <td style={{ padding: '5px 4px', textAlign: 'center' }}>
+                      <span style={{ color: r.overPct > 40 ? C.red.tx : C.t1, fontWeight: r.overPct > 40 ? 700 : undefined }}>{r.overPct.toFixed(1)}%</span>
+                    </td>
+                    <td style={{ padding: '5px 4px', textAlign: 'center' }}>
+                      {r.claimRs > 0 ? <span style={{ color: C.red.tx, fontWeight: 700 }}>{fmt(r.claimRs)}</span> : <span style={{ color: C.t3 }}>—</span>}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : (
         <DataTable
           columns={[
             { key: 'courier', label: 'Courier', render: v => <CourierCell name={v} /> },
@@ -2166,15 +2469,11 @@ export default function LogisticsCostPage() {
             { key: 'cost', label: 'Cost', align: 'center', render: (_, r) => fmt(r.cost) },
             { key: 'avgCost', label: 'Avg Cost / Shipment', align: 'center', render: (_, r) => '₹' + r.avgCost.toFixed(2) },
             { key: 'cpk', label: 'Cost / kg', align: 'center', render: (_, r) => (r.cpk != null ? '₹' + r.cpk.toFixed(2) : '—') },
-            // "Overbilled" alone didn't say overbilled on WHAT — it is the share of
-            // this courier's shipments billed at a heavier slab than we declared.
             { key: 'overPct', label: '% Wrong Weight', align: 'center', render: (_, r) => (
               <span style={{ color: r.overPct > 40 ? C.red.tx : undefined, fontWeight: r.overPct > 40 ? 700 : undefined }}>
                 {r.overPct.toFixed(1) + '%'}
               </span>
             ) },
-            // Claimable rupees, next to the % that drives it — the percentage says how
-            // widespread the problem is, this says what it is worth.
             { key: 'claimRs', label: 'Claimable', align: 'center', render: (_, r) => (
               r.claimRs > 0
                 ? <span style={{ color: C.red.tx, fontWeight: 700 }}>{fmt(r.claimRs)}</span>
@@ -2183,6 +2482,7 @@ export default function LogisticsCostPage() {
           ]}
           rows={courierRows}
         />
+        )}
         {courierRows.length === 1 && (
           <div style={{ fontSize: 11.5, color: C.t3, marginTop: 8 }}>
             Courier-vs-courier comparison unlocks once bills from other partners are uploaded.
@@ -2197,7 +2497,52 @@ export default function LogisticsCostPage() {
           how they bill it — 0.5 kg floor, then up to the next whole kg. */}
       <div style={{ marginTop: 14 , ...(secHid['courier'] ? { display: 'none' } : {}) }}>
         <Card title="Weight slab detail"
-          note="spend, unit cost and leg split per billable slab">
+          note={isMobile ? "" : "spend, unit cost and leg split per billable slab"}
+          action={isMobile ? (
+            <input
+              value={slabSearch} onChange={e => setSlabSearch(e.target.value)}
+              placeholder="Search…"
+              style={{ fontSize: 11.5, padding: '4px 8px', borderRadius: 7, border: `1px solid ${C.border2}`, background: C.bg, color: C.t1, outline: 'none', width: 100 }}
+            />
+          ) : null}>
+          {isMobile ? (
+            <>
+              <div style={{ overflowX: 'auto', overflowY: 'auto', maxHeight: 320, marginLeft: -8, marginRight: -8, WebkitOverflowScrolling: 'touch' }}>
+                <table style={{ borderCollapse: 'collapse', tableLayout: 'fixed', width: 548, fontSize: 11.5 }}>
+                  <thead>
+                    <tr style={{ borderBottom: `1px solid ${C.border2}` }}>
+                      <th style={{ position: 'sticky', top: 0, left: 0, background: C.card, zIndex: 3, padding: '5px 8px', textAlign: 'left', fontWeight: 800, color: C.t1, width: 60, whiteSpace: 'nowrap', borderRight: `1px solid ${C.border}`, borderBottom: `1px solid ${C.border2}` }}>Wt Slab</th>
+                      <th style={{ position: 'sticky', top: 0, background: C.card, padding: '5px 4px', textAlign: 'center', fontWeight: 800, color: C.t1, width: 72, whiteSpace: 'nowrap', borderBottom: `1px solid ${C.border2}` }}>Shipments</th>
+                      <th style={{ position: 'sticky', top: 0, background: C.card, padding: '5px 4px', textAlign: 'center', fontWeight: 800, color: C.t1, width: 72, whiteSpace: 'nowrap', borderBottom: `1px solid ${C.border2}` }}>Total Spend</th>
+                      <th style={{ position: 'sticky', top: 0, background: C.card, padding: '5px 4px', textAlign: 'center', fontWeight: 800, color: C.t1, width: 72, whiteSpace: 'nowrap', borderBottom: `1px solid ${C.border2}` }}>Avg/Ship</th>
+                      <th style={{ position: 'sticky', top: 0, background: C.card, padding: '5px 4px', textAlign: 'center', fontWeight: 800, color: C.t1, width: 66, whiteSpace: 'nowrap', borderBottom: `1px solid ${C.border2}` }}>Cost/kg</th>
+                      <th style={{ position: 'sticky', top: 0, background: C.card, padding: '5px 4px', textAlign: 'center', fontWeight: 800, color: C.t1, width: 66, whiteSpace: 'nowrap', borderBottom: `1px solid ${C.border2}` }}>Forward</th>
+                      <th style={{ position: 'sticky', top: 0, background: C.card, padding: '5px 4px', textAlign: 'center', fontWeight: 800, color: C.t1, width: 66, whiteSpace: 'nowrap', borderBottom: `1px solid ${C.border2}` }}>Reverse</th>
+                      <th style={{ position: 'sticky', top: 0, background: C.card, padding: '5px 4px', textAlign: 'center', fontWeight: 800, color: C.t1, width: 58, whiteSpace: 'nowrap', borderBottom: `1px solid ${C.border2}` }}>RTO</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {slabRows.filter(r => {
+                      const q = slabSearch.trim().toLowerCase()
+                      const label = `${r.slab} kg`.toLowerCase()
+                      return q === '' || label === q || (label.startsWith(q) && !q.includes('kg'))
+                    }).map((r, i, arr) => (
+                      <tr key={r.slab} style={{ borderBottom: i < arr.length - 1 ? `1px solid ${C.border2}` : 'none', background: i % 2 === 0 ? 'transparent' : 'rgba(0,0,0,0.02)' }}>
+                        <td style={{ position: 'sticky', left: 0, background: C.card, zIndex: 1, padding: '5px 8px', fontWeight: 700, color: C.t1, whiteSpace: 'nowrap', borderRight: `1px solid ${C.border}` }}>{r.slab} kg</td>
+                        <td style={{ padding: '5px 4px', textAlign: 'center', color: C.t1 }}>{fmtBig(r.n)}</td>
+                        <td style={{ padding: '5px 4px', textAlign: 'center', color: C.t1 }}>{fmt(r.cost)}</td>
+                        <td style={{ padding: '5px 4px', textAlign: 'center', color: C.t1 }}>₹{r.avgCost.toFixed(0)}</td>
+                        <td style={{ padding: '5px 4px', textAlign: 'center', color: C.t1 }}>₹{r.cpk.toFixed(1)}</td>
+                        <td style={{ padding: '5px 4px', textAlign: 'center', color: C.t1 }}>{r.fwdAvg ? '₹' + r.fwdAvg.toFixed(0) : '—'}</td>
+                        <td style={{ padding: '5px 4px', textAlign: 'center', color: C.t1 }}>{r.revAvg ? '₹' + r.revAvg.toFixed(0) : '—'}</td>
+                        <td style={{ padding: '5px 4px', textAlign: 'center', color: C.t1 }}>{r.rtoAvg ? '₹' + r.rtoAvg.toFixed(0) : '—'}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </>
+          ) : (
           <DataTable
             columns={[
               { key: 'slab', label: 'Weight Slab', render: (_, r) => (
@@ -2216,6 +2561,7 @@ export default function LogisticsCostPage() {
             maxRows={200}
             maxHeight={420}
           />
+          )}
         </Card>
 
       {/* ── Recoverable, split by cause ── */}
@@ -2316,13 +2662,18 @@ export default function LogisticsCostPage() {
 
       {/* ── Cost by product ── */}
       <SectionHdr title="Cost by Product"
-        note="category → sub-category, per shipment by leg. RTO is the return leg only" collapsed={secHid['product']} onToggle={() => toggleSec('product')} />
+        note={isMobile ? "" : "category → sub-category, per shipment by leg. RTO is the return leg only"} collapsed={secHid['product']} onToggle={() => toggleSec('product')} />
       <div style={secHid['product'] ? { display: 'none' } : undefined}>
-        <Card title="Category detail" note="click a category to open its sub-categories">
+        <Card title="Category detail" note={isMobile ? "" : "click a category to open its sub-categories"}
+          action={isMobile ? (
+            <input value={subQuery} onChange={e => setSubQuery(e.target.value)}
+              placeholder="Search…"
+              style={{ fontSize: 11.5, padding: '4px 8px', width: 100, borderRadius: 7, border: `1px solid ${C.border2}`, background: C.bg, color: C.t1, outline: 'none' }} />
+          ) : null}>
           {/* Own search box rather than DataTable's: a collapsed category never emits its
               children, so filtering finished rows could not reach a sub-category. This
               query feeds productRows, which expands matching parents as it builds. */}
-          <div style={{ marginBottom: 8 }}>
+          {!isMobile && <div style={{ marginBottom: 8 }}>
             <input value={subQuery} onChange={e => setSubQuery(e.target.value)}
               placeholder="Find a category or sub-category…"
               style={{
@@ -2337,14 +2688,14 @@ export default function LogisticsCostPage() {
                   style={{ marginLeft: 8, border: 'none', background: 'none', color: C.t3, cursor: 'pointer', fontSize: 11, textDecoration: 'underline', padding: 0, fontFamily: 'var(--font)' }}>clear</button>
               </span>
             )}
-          </div>
+          </div>}
           <DataTable
             columns={[
               // Left-aligned so the indented sub-category names still read as a hierarchy.
-              { key: 'label', label: 'Category / Sub-category', render: (_, r) => (
+              { key: 'label', label: isMobile ? <span>Category /<br/>Sub-cat</span> : 'Category / Sub-category', width: isMobile ? 129 : undefined, sticky: isMobile ? true : undefined, render: (_, r) => (
                 r.isSub
-                  ? <span style={{ paddingLeft: 16, color: VIZ.muted }}>{r.label}</span>
-                  : <span style={{ fontWeight: 700, cursor: 'pointer' }}
+                  ? <span onClickCapture={isMobile ? e => { e.stopPropagation(); setCatTooltip(r.label) } : undefined} style={{ paddingLeft: 16, color: VIZ.muted, display: 'block', maxWidth: isMobile ? 129 : undefined, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.label}</span>
+                  : <span onClickCapture={isMobile ? e => { e.stopPropagation(); setCatTooltip(r.label) } : undefined} style={{ fontWeight: 700, cursor: 'pointer', display: 'block', maxWidth: isMobile ? 129 : undefined, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
                       onClick={() => toggleCat(r.label)}>
                       <span style={{ display: 'inline-block', width: 12, color: VIZ.muted }}>
                         {r.hasKids ? (r.open ? '−' : '+') : ''}
@@ -2352,7 +2703,7 @@ export default function LogisticsCostPage() {
                     </span>
               ) },
               { key: 'n', label: 'Shipments', align: 'center', render: (_, r) => fmtN(r.n) },
-              { key: 'cost', label: 'Total Spend', align: 'center', render: (_, r) => fmt(r.cost) },
+              { key: 'cost', label: isMobile ? 'Spend' : 'Total Spend', align: 'center', render: (_, r) => fmt(r.cost) },
               { key: 'fwd', label: 'Forward', align: 'center', render: (_, r) => r.fwd ? fmt(r.fwd) : '—' },
               { key: 'rev', label: 'Reverse', align: 'center', render: (_, r) => r.rev ? fmt(r.rev) : '—' },
               { key: 'rto', label: 'RTO', align: 'center', render: (_, r) => r.rto ? fmt(r.rto) : '—' },
@@ -2377,7 +2728,17 @@ export default function LogisticsCostPage() {
             rows={productRows}
             maxHeight={480}
             maxRows={200}
+            style={isMobile ? { marginLeft: -8, marginRight: -8 } : undefined}
           />
+          {isMobile && catTooltip ? (
+            <div onClick={() => setCatTooltip('')}
+              style={{ position: 'fixed', inset: 0, zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <div style={{ background: C.card, border: `1px solid ${C.border2}`, borderRadius: 10, padding: '12px 16px', maxWidth: 260, boxShadow: '0 8px 24px rgba(0,0,0,0.15)', fontSize: 13, fontWeight: 600, color: C.t1, textAlign: 'center' }}>
+                {catTooltip}
+                <div style={{ fontSize: 11, color: C.t3, marginTop: 6 }}>tap anywhere to close</div>
+              </div>
+            </div>
+          ) : null}
         </Card>
       </div>
 
@@ -2531,15 +2892,17 @@ export default function LogisticsCostPage() {
         </div>
       )}
       <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
-        {sidebar}
+        {!isMobile && sidebar}
 
-        {/* Sidebar collapse handle */}
-        <button onClick={() => setSidebarOpen(o => !o)}
-          style={{ width: 16, alignSelf: 'flex-start', marginTop: 20, height: 48, border: `1px solid ${C.border}`, borderLeft: 'none', background: C.card, cursor: 'pointer', borderRadius: '0 6px 6px 0', display: 'flex', alignItems: 'center', justifyContent: 'center', color: C.t3, fontSize: 12, flexShrink: 0, boxShadow: '2px 0 4px rgba(0,0,0,0.06)', padding: 0 }}>
-          {sidebarOpen ? '‹' : '›'}
-        </button>
+        {/* Sidebar collapse handle — desktop only */}
+        {!isMobile && (
+          <button onClick={() => setSidebarOpen(o => !o)}
+            style={{ width: 16, alignSelf: 'flex-start', marginTop: 20, height: 48, border: `1px solid ${C.border}`, borderLeft: 'none', background: C.card, cursor: 'pointer', borderRadius: '0 6px 6px 0', display: 'flex', alignItems: 'center', justifyContent: 'center', color: C.t3, fontSize: 12, flexShrink: 0, boxShadow: '2px 0 4px rgba(0,0,0,0.06)', padding: 0 }}>
+            {sidebarOpen ? '‹' : '›'}
+          </button>
+        )}
 
-        <div style={{ flex: 1, overflow: 'auto', padding: '6px 20px 40px' }}>
+        <div style={{ flex: 1, overflow: 'auto', padding: isMobile ? '6px 8px 40px' : '6px 20px 40px' }}>
           {/* Scope tabs: which ledger this page is reporting on. Sits above everything
               it scopes, alongside the filter summary. */}
           <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap', paddingTop: 2, marginBottom: 18 }}>

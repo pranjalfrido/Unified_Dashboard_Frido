@@ -25,6 +25,10 @@ import { ReferenceLine, LabelList, ScatterChart, Scatter } from 'recharts'
 
 // ── Logistics Page ────────────────────────────────────────────
 const COURIERS = ['Bluedart','Delhivery','Delhivery NDD','Ekart','ElasticRun','Safexpress','Shadowfax','Shiprocket','Skye Air','Swift','Urbane Bolt']
+const EMPTY_COST_FILTERS = {
+  months: [], zones: [], modes: [], payments: [], couriers: [],
+  accountTypes: [], band: null, destCity: null, billing: 'all',
+}
 // COURIER_COLORS / COURIER_LOGOS now live in utils.js — shared with the cost page.
 
 function LogisticsKPI({ label, value, sub, color, badge }) {
@@ -195,6 +199,38 @@ function LogisticsSkeleton() {
       </div>
       {/* Table */}
       <div style={sk('100%', 180)} />
+    </div>
+  )
+}
+
+// Mobile KPI card with mini sparkline — Option A style.
+// sparkData: array of numbers (e.g. daily totals). rising=green, falling=red.
+function SparkKpiCard({ label, value, chg, sparkData = [], accent, invertColor }) {
+  const isUp = chg != null ? chg >= 0 : null
+  const badgeBg = isUp === null ? C.border : isUp ? C.green.bg : C.red.bg
+  const badgeTx = isUp === null ? C.t3 : isUp ? C.green.tx : C.red.tx
+  const lineColor = isUp === null ? '#1baf7a' : invertColor ? (isUp ? '#E53935' : '#1baf7a') : (isUp ? '#1baf7a' : '#E53935')
+  // Normalise sparkData to 0–1 for the polyline
+  const pts = sparkData.slice(-14)
+  const min = Math.min(...pts), max = Math.max(...pts)
+  const range = max - min || 1
+  const W = 44, H = 22
+  const points = pts.map((v, i) => {
+    const x = pts.length === 1 ? W / 2 : (i / (pts.length - 1)) * W
+    const y = H - ((v - min) / range) * H
+    return `${x.toFixed(1)},${y.toFixed(1)}`
+  }).join(' ')
+  return (
+    <div style={{ background: '#fff', border: `1px solid ${C.border}`, borderRadius: 12, padding: '0 14px', display: 'flex', alignItems: 'center', height: 45, gap: 0 }}>
+      <div style={{ flex: 1, fontSize: 13, fontWeight: 700, color: C.t2, letterSpacing: '.03em', textTransform: 'uppercase' }}>{label}</div>
+      {pts.length > 1
+        ? <svg width={W} height={H} viewBox={`0 0 ${W} ${H}`} style={{ overflow: 'visible', flexShrink: 0 }}>
+            <polyline points={points} fill="none" stroke={lineColor} strokeWidth="2" strokeLinejoin="round" strokeLinecap="round" />
+            <circle cx={points.split(' ').pop().split(',')[0]} cy={points.split(' ').pop().split(',')[1]} r="2.5" fill={lineColor} />
+          </svg>
+        : <div style={{ width: W, flexShrink: 0 }} />
+      }
+      <div style={{ width: 90, fontSize: 15, fontWeight: 800, color: accent || C.t1, lineHeight: 1.1, textAlign: 'right', paddingLeft: 8, whiteSpace: 'nowrap' }}>{value}</div>
     </div>
   )
 }
@@ -741,52 +777,23 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
 
         {/* ── KPI Hero + Grid ── */}
         {isMobile ? (
-          // Mobile: stacked rows
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
-            {/* Hero summary card — 2×2 grid */}
-            <div className="kpi-card" style={{ padding: 0, overflow: 'hidden' }}>
-              {[
-                { label: 'Shipments', value: k.total_shipments >= 1e7 ? (k.total_shipments/1e7).toFixed(2)+' Cr' : k.total_shipments >= 1e5 ? (k.total_shipments/1e5).toFixed(1)+' L' : k.total_shipments >= 1000 ? (k.total_shipments/1000).toFixed(1)+'K' : n(k.total_shipments), chg: k.total_shipments && pk.total_shipments ? (k.total_shipments - pk.total_shipments) / pk.total_shipments * 100 : null },
-                { label: 'GMV', value: fmtGMV(k.total_value), chg: k.total_value && pk.total_value ? (k.total_value - pk.total_value) / pk.total_value * 100 : null },
-                { label: 'Delivered %', value: pct2(k.delivered, k.total_shipments), chg: null },
-                { label: 'RTO %', value: pct2(k.rto, k.total_shipments), chg: null, alert: (k.rto / (k.total_shipments || 1) * 100) > 15 },
-              ].map((m, i) => (
-                <div key={m.label} style={{
-                  display: 'inline-flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', textAlign: 'center',
-                  width: '50%', padding: '12px 14px',
-                  boxSizing: 'border-box',
-                }}>
-                  <div style={{ fontSize: 20, fontWeight: 700, color: m.alert ? C.red.tx : C.t1, letterSpacing: '-0.3px', lineHeight: 1.1 }}>{m.value}</div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 3 }}>
-                    <span style={{ fontSize: 10, fontWeight: 600, color: C.t3, textTransform: 'uppercase', letterSpacing: '.04em' }}>{m.label}</span>
-                    {m.chg != null && <span style={{ fontSize: 10, fontWeight: 700, padding: '1px 5px', borderRadius: 4, background: m.chg >= 0 ? C.green.bg : C.red.bg, color: m.chg >= 0 ? C.green.tx : C.red.tx }}>{m.chg >= 0 ? '▲' : '▼'} {Math.abs(m.chg).toFixed(1)}%</span>}
-                  </div>
-                </div>
-              ))}
-            </div>
-            {(() => {
-              const kpiItems = [
-                <LKpiCard key="att" label="Total Attempted" value={fmtBig(k.total_ofd_attempts)} badgeVariant="N" cur={k.total_ofd_attempts} prev={pk.total_ofd_attempts} compact mobile />,
-                <LKpiCard key="zrto" label="Z-RTO" value={fmtBig(k.z_rto)} badgeText={pct2(k.z_rto, k.total_shipments)} badgeVariant="A" cur={k.z_rto} prev={pk.z_rto} compact mobile />,
-                <LKpiCard key="fasr" label="FASR % (of attempted)" value={pct2(k.delivered_1attempt, k.total_ofd_attempts)} badgeVariant="G" cur={k.delivered_1attempt} prev={pk.delivered_1attempt} compact mobile />,
-                <LKpiCard key="rasr" label="RASR % (of attempted)" value={pct2(k.delivered_multi, k.total_ofd_attempts)} badgeVariant="B" cur={k.delivered_multi} prev={pk.delivered_multi} compact mobile />,
-                <LKpiCard key="multi" label="Multi-Att Del" value={fmtBig(k.delivered_multi)} badgeVariant="B" cur={k.delivered_multi} prev={pk.delivered_multi} compact mobile />,
-                <LKpiCard key="proc" label="Avg Processing" value={d1(k.avg_processing)} badgeText="Cr→1st OFD" badgeVariant="N" cur={k.avg_processing} prev={pk.avg_processing} compact mobile />,
-                <LKpiCard key="pick" label="Avg Pickup TAT" value={d1(k.avg_pickup)} badgeText="Cr→Pick" badgeVariant="B" cur={k.avg_pickup} prev={pk.avg_pickup} compact mobile />,
-                <LKpiCard key="intr" label="Avg In-Transit" value={d1(k.avg_intransit)} badgeText="Pick→Del" badgeVariant="N" cur={k.avg_intransit} prev={pk.avg_intransit} compact mobile />,
-                <LKpiCard key="ful" label="Avg Fulfilment" value={d1(k.avg_fulfilment)} badgeText="Cr→Del" badgeVariant="G" cur={k.avg_fulfilment} prev={pk.avg_fulfilment} compact mobile />,
-                <LKpiCard key="rtot" label="Avg RTO TAT" value={d1(k.avg_rto_tat)} badgeText="RTO days" badgeVariant="R" cur={k.avg_rto_tat} prev={pk.avg_rto_tat} compact mobile />,
-              ]
-              // pair into slides of 2
-              const slides = []
-              for (let i = 0; i < kpiItems.length; i += 2) slides.push(kpiItems.slice(i, i + 2))
-              return <>
-                <div style={{ textAlign: 'right', margin: '4px 0 2px' }}>
-                  <span style={{ fontSize: 11, color: C.t3 }}>{slides.length * 2} tiles · swipe →</span>
-                </div>
-                <LogKpiCarousel slides={slides} />
-              </>
-            })()}
+          // Mobile: vertical list of SparkKpiCards
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+            {[
+              { label: 'Shipments', value: k.total_shipments >= 1e7 ? (k.total_shipments/1e7).toFixed(2)+' Cr' : k.total_shipments >= 1e5 ? (k.total_shipments/1e5).toFixed(2)+' L' : k.total_shipments >= 1000 ? (k.total_shipments/1000).toFixed(2)+'K' : String(k.total_shipments), chg: k.total_shipments && pk.total_shipments ? (k.total_shipments - pk.total_shipments) / pk.total_shipments * 100 : null, spark: trendData.map(d => d.total) },
+              { label: 'GMV', value: fmtGMV(k.total_value), chg: k.total_value && pk.total_value ? (k.total_value - pk.total_value) / pk.total_value * 100 : null, spark: trendData.map(d => d.total_value || 0) },
+              { label: 'RTO %', value: k.rto && k.total_shipments ? ((k.rto/k.total_shipments)*100).toFixed(2)+'%' : '—', chg: k.rto && pk.rto ? (k.rto/k.total_shipments - pk.rto/pk.total_shipments) / (pk.rto/pk.total_shipments) * 100 : null, spark: trendData.map(d => d.rto_pct), accent: (k.rto / (k.total_shipments || 1) * 100) > 15 ? C.red.tx : undefined, invertColor: true },
+              { label: 'FASR %', value: k.delivered_1attempt && k.total_ofd_attempts ? ((k.delivered_1attempt/k.total_ofd_attempts)*100).toFixed(2)+'%' : '—', chg: k.delivered_1attempt && pk.delivered_1attempt ? (k.delivered_1attempt/k.total_ofd_attempts - pk.delivered_1attempt/pk.total_ofd_attempts) / (pk.delivered_1attempt/pk.total_ofd_attempts) * 100 : null, spark: trendData.map(d => d.del_pct) },
+              { label: 'RASR %', value: k.delivered_multi && k.total_ofd_attempts ? ((k.delivered_multi/k.total_ofd_attempts)*100).toFixed(2)+'%' : '—', chg: k.delivered_multi && pk.delivered_multi ? (k.delivered_multi/k.total_ofd_attempts - pk.delivered_multi/pk.total_ofd_attempts) / (pk.delivered_multi/pk.total_ofd_attempts) * 100 : null, spark: trendData.map(d => d.del_pct) },
+              { label: 'Multi-Att Del', value: k.delivered_multi && k.total_ofd_attempts ? ((k.delivered_multi/k.total_ofd_attempts)*100).toFixed(2)+'%' : '—', chg: k.delivered_multi && pk.delivered_multi ? (k.delivered_multi/k.total_ofd_attempts - pk.delivered_multi/pk.total_ofd_attempts) / (pk.delivered_multi/pk.total_ofd_attempts) * 100 : null, spark: trendData.map(d => d.delivered || 0) },
+              { label: 'Avg Processing', value: k.avg_processing ? k.avg_processing.toFixed(2)+'d' : '—', chg: k.avg_processing && pk.avg_processing ? (k.avg_processing - pk.avg_processing) / pk.avg_processing * 100 : null, spark: trendData.map(d => d.avg_processing_days || 0), invertColor: true },
+              { label: 'Avg Pickup TAT', value: k.avg_pickup ? k.avg_pickup.toFixed(2)+'d' : '—', chg: k.avg_pickup && pk.avg_pickup ? (k.avg_pickup - pk.avg_pickup) / pk.avg_pickup * 100 : null, spark: trendData.map(d => d.avg_pickup_days || 0), invertColor: true },
+              { label: 'Avg In-Transit', value: k.avg_intransit ? k.avg_intransit.toFixed(2)+'d' : '—', chg: k.avg_intransit && pk.avg_intransit ? (k.avg_intransit - pk.avg_intransit) / pk.avg_intransit * 100 : null, spark: trendData.map(d => d.avg_intransit_days || 0), invertColor: true },
+              { label: 'Avg Fulfilment', value: k.avg_fulfilment ? k.avg_fulfilment.toFixed(2)+'d' : '—', chg: k.avg_fulfilment && pk.avg_fulfilment ? (k.avg_fulfilment - pk.avg_fulfilment) / pk.avg_fulfilment * 100 : null, spark: trendData.map(d => d.avg_fulfilment_days || 0), invertColor: true },
+              { label: 'Avg RTO TAT', value: k.avg_rto_tat ? k.avg_rto_tat.toFixed(2)+'d' : '—', chg: k.avg_rto_tat && pk.avg_rto_tat ? (k.avg_rto_tat - pk.avg_rto_tat) / pk.avg_rto_tat * 100 : null, spark: trendData.map(d => d.rto_pct || 0), invertColor: true },
+            ].map(m => (
+              <SparkKpiCard key={m.label} label={m.label} value={m.value} chg={m.chg} sparkData={m.spark} accent={m.accent} invertColor={m.invertColor} />
+            ))}
           </div>
         ) : (
           // Desktop: hero card left + 2×6 grid right
@@ -3011,7 +3018,7 @@ function MobileInvFilterPanel({ invTab, setInvTab, inventoryDateControl, onClose
   )
 }
 
-function MobileLogisticsPanel({ page, setPage, onClose, lFilters, setLFilters, filterOpts }) {
+function MobileLogisticsPanel({ page, setPage, onClose, lFilters, setLFilters, filterOpts, costFilters, setCostFilters }) {
   const PV = { bg: '#FFFFFF', canvas: '#F5F6F8', border: '#E7E8EC', ink: '#1F2430', sub: '#6B7280', accent: '#F2C230', accentDark: '#8A6D00' }
   const [expandedKey, setExpandedKey] = useState(null)
   const TABS = [
@@ -3186,8 +3193,170 @@ function MobileLogisticsPanel({ page, setPage, onClose, lFilters, setLFilters, f
             )
           })}
         </div>
-      ) : (
-        <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', color: PV.sub, fontSize: 13, padding: 24 }}>No filters for Logistics Cost</div>
+      ) : page === 'logistics-cost' ? (() => {
+        const cf = costFilters || EMPTY_COST_FILTERS
+        const setcf = setCostFilters || (() => {})
+        const opts = filterOpts || {}
+        const toggleCostCourier = c => setcf(f => ({ ...f, couriers: (f.couriers || []).includes(c) ? f.couriers.filter(x => x !== c) : [...(f.couriers || []), c] }))
+        const costCourierCount = (cf.couriers || []).length
+        const costModeCount = (cf.modes || []).length
+        const costMonthCount = (cf.months || []).length
+        const costZoneCount = (cf.zones || []).length
+        const costPayCount = (cf.payments || []).length
+        const totalCostActive = costCourierCount + costModeCount + costMonthCount + costZoneCount + costPayCount + (cf.billing !== 'all' ? 1 : 0)
+        const clearAllCost = () => setcf(EMPTY_COST_FILTERS)
+        const costCouriers = opts.couriers?.length ? opts.couriers : COURIERS
+        const costDropdowns = [
+          { key: 'months', label: 'Billing Period', options: opts.months || [], value: cf.months, multi: true, onChange: v => setcf(f => ({ ...f, months: v === null ? [] : (f.months || []).includes(v) ? f.months.filter(x => x !== v) : [...(f.months || []), v] })) },
+          { key: 'zones', label: 'Zone', options: opts.zones || [], value: cf.zones, multi: true, onChange: v => setcf(f => ({ ...f, zones: v === null ? [] : (f.zones || []).includes(v) ? f.zones.filter(x => x !== v) : [...(f.zones || []), v] })) },
+          { key: 'payments', label: 'Payment', options: opts.payments || [], value: cf.payments, multi: true, onChange: v => setcf(f => ({ ...f, payments: v === null ? [] : (f.payments || []).includes(v) ? f.payments.filter(x => x !== v) : [...(f.payments || []), v] })) },
+        ]
+        return (
+          <div style={{ flex: 1, overflowY: 'auto', borderTop: `1px solid ${PV.border}` }}>
+            {/* Filters label */}
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 16px 8px', flexShrink: 0 }}>
+              <span style={{ fontSize: 10, fontWeight: 800, color: PV.sub, letterSpacing: '.07em', textTransform: 'uppercase' }}>
+                Filters{totalCostActive > 0 ? ` · ${totalCostActive} active` : ''}
+              </span>
+              {totalCostActive > 0 && (
+                <button onClick={clearAllCost} style={{ fontSize: 11, color: '#D93025', background: 'none', border: 'none', cursor: 'pointer', padding: 0, fontWeight: 600 }}>↺ Reset</button>
+              )}
+            </div>
+
+            {/* Courier Partner */}
+            <div style={{ borderBottom: `1px solid ${PV.border}` }}>
+              <div onClick={() => setExpandedKey(k => k === 'cost-couriers' ? null : 'cost-couriers')}
+                style={{ display: 'flex', alignItems: 'center', padding: '12px 16px', cursor: 'pointer', gap: 8, userSelect: 'none' }}>
+                <span style={{ flex: 1, fontSize: 13, fontWeight: 500, color: PV.ink }}>Courier Partner</span>
+                {costCourierCount > 0 && (
+                  <span style={{ fontSize: 10, fontWeight: 700, background: '#FFF3CD', color: PV.accentDark, border: `1px solid ${PV.accent}`, borderRadius: 10, padding: '1px 7px', lineHeight: '16px' }}>{costCourierCount}</span>
+                )}
+                {costCourierCount > 0 && (
+                  <button onClick={e => { e.stopPropagation(); setcf(f => ({ ...f, couriers: [] })) }} style={{ background: 'none', border: 'none', color: PV.sub, fontSize: 13, cursor: 'pointer', padding: '0 2px', lineHeight: 1 }}>✕</button>
+                )}
+                <span style={{ fontSize: 13, color: PV.sub, transform: expandedKey === 'cost-couriers' ? 'rotate(90deg)' : 'none', transition: 'transform .18s', lineHeight: 1 }}>›</span>
+              </div>
+              {expandedKey === 'cost-couriers' && (
+                <div style={{ background: PV.canvas, borderTop: `1px solid ${PV.border}`, padding: '4px 0 8px' }}>
+                  {costCouriers.map(c => {
+                    const checked = (cf.couriers || []).includes(c)
+                    return (
+                      <label key={c} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '9px 16px', cursor: 'pointer', userSelect: 'none' }}>
+                        <div style={{ width: 17, height: 17, borderRadius: 5, flexShrink: 0, border: `2px solid ${checked ? PV.accent : PV.border}`, background: checked ? PV.accent : PV.bg, display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all .12s' }}
+                          onClick={() => toggleCostCourier(c)}>
+                          {checked && <span style={{ fontSize: 10, color: PV.accentDark, lineHeight: 1 }}>✓</span>}
+                        </div>
+                        <span style={{ fontSize: 12.5, color: checked ? PV.ink : PV.sub, fontWeight: checked ? 600 : 400 }} onClick={() => toggleCostCourier(c)}>{c}</span>
+                      </label>
+                    )
+                  })}
+                </div>
+              )}
+            </div>
+
+            {/* Shipment Leg chips */}
+            <div style={{ borderBottom: `1px solid ${PV.border}` }}>
+              <div onClick={() => setExpandedKey(k => k === 'cost-modes' ? null : 'cost-modes')}
+                style={{ display: 'flex', alignItems: 'center', padding: '12px 16px', cursor: 'pointer', gap: 8, userSelect: 'none' }}>
+                <span style={{ flex: 1, fontSize: 13, fontWeight: 500, color: PV.ink }}>Shipment Leg</span>
+                {costModeCount > 0 && (
+                  <span style={{ fontSize: 10, fontWeight: 700, background: '#FFF3CD', color: PV.accentDark, border: `1px solid ${PV.accent}`, borderRadius: 10, padding: '1px 7px', lineHeight: '16px' }}>{costModeCount}</span>
+                )}
+                {costModeCount > 0 && (
+                  <button onClick={e => { e.stopPropagation(); setcf(f => ({ ...f, modes: [] })) }} style={{ background: 'none', border: 'none', color: PV.sub, fontSize: 13, cursor: 'pointer', padding: '0 2px', lineHeight: 1 }}>✕</button>
+                )}
+                <span style={{ fontSize: 13, color: PV.sub, transform: expandedKey === 'cost-modes' ? 'rotate(90deg)' : 'none', transition: 'transform .18s', lineHeight: 1 }}>›</span>
+              </div>
+              {expandedKey === 'cost-modes' && (
+                <div style={{ background: PV.canvas, borderTop: `1px solid ${PV.border}`, padding: '10px 16px 12px' }}>
+                  <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                    {['Forward', 'Reverse', 'RTO'].map(m => {
+                      const active = (cf.modes || []).includes(m)
+                      return (
+                        <button key={m} onClick={() => setcf(f => ({ ...f, modes: active ? f.modes.filter(x => x !== m) : [...(f.modes || []), m] }))}
+                          style={{ padding: '6px 14px', borderRadius: 8, border: `1.5px solid ${active ? PV.accent : PV.border}`, background: active ? '#FFF3CD' : PV.bg, color: active ? PV.accentDark : PV.sub, fontSize: 12, fontWeight: active ? 700 : 500, cursor: 'pointer', fontFamily: 'inherit', transition: 'all .15s' }}>
+                          {m}
+                        </button>
+                      )
+                    })}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Billing Status */}
+            <div style={{ borderBottom: `1px solid ${PV.border}` }}>
+              <div onClick={() => setExpandedKey(k => k === 'cost-billing' ? null : 'cost-billing')}
+                style={{ display: 'flex', alignItems: 'center', padding: '12px 16px', cursor: 'pointer', gap: 8, userSelect: 'none' }}>
+                <span style={{ flex: 1, fontSize: 13, fontWeight: 500, color: PV.ink }}>Billing Status</span>
+                {cf.billing !== 'all' && (
+                  <span style={{ fontSize: 10, fontWeight: 700, background: '#FFF3CD', color: PV.accentDark, border: `1px solid ${PV.accent}`, borderRadius: 10, padding: '1px 7px', lineHeight: '16px' }}>{cf.billing === 'overbilled' ? 'Overbilled' : 'Clean'}</span>
+                )}
+                {cf.billing !== 'all' && (
+                  <button onClick={e => { e.stopPropagation(); setcf(f => ({ ...f, billing: 'all' })) }} style={{ background: 'none', border: 'none', color: PV.sub, fontSize: 13, cursor: 'pointer', padding: '0 2px', lineHeight: 1 }}>✕</button>
+                )}
+                <span style={{ fontSize: 13, color: PV.sub, transform: expandedKey === 'cost-billing' ? 'rotate(90deg)' : 'none', transition: 'transform .18s', lineHeight: 1 }}>›</span>
+              </div>
+              {expandedKey === 'cost-billing' && (
+                <div style={{ background: PV.canvas, borderTop: `1px solid ${PV.border}`, padding: '10px 16px 12px' }}>
+                  <div style={{ display: 'flex', border: `1.5px solid ${PV.border}`, borderRadius: 8, overflow: 'hidden', background: PV.bg }}>
+                    {[{ value: 'overbilled', label: 'Overbilled' }, { value: 'clean', label: 'Clean' }].map((opt, i) => {
+                      const active = cf.billing === opt.value
+                      return (
+                        <button key={opt.value} onClick={() => setcf(f => ({ ...f, billing: active ? 'all' : opt.value }))}
+                          style={{ flex: 1, padding: '7px 0', border: 'none', borderLeft: i > 0 ? `1.5px solid ${PV.border}` : 'none', background: active ? PV.ink : 'transparent', color: active ? '#fff' : PV.sub, fontSize: 12, fontWeight: active ? 700 : 500, cursor: 'pointer', fontFamily: 'inherit', transition: 'all .15s' }}>
+                          {opt.label}
+                        </button>
+                      )
+                    })}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Dropdown filters: Billing Period, Zone, Payment */}
+            {costDropdowns.map((df, di) => {
+              const isLast = di === costDropdowns.length - 1
+              const isExpanded = expandedKey === df.key
+              const activeCount = (df.value || []).length
+              return (
+                <div key={df.key} style={{ borderBottom: isLast ? 'none' : `1px solid ${PV.border}` }}>
+                  <div onClick={() => setExpandedKey(k => k === df.key ? null : df.key)}
+                    style={{ display: 'flex', alignItems: 'center', padding: '12px 16px', cursor: 'pointer', gap: 8, userSelect: 'none' }}>
+                    <span style={{ flex: 1, fontSize: 13, fontWeight: 500, color: PV.ink }}>{df.label}</span>
+                    {activeCount > 0 && (
+                      <span style={{ fontSize: 10, fontWeight: 700, background: '#FFF3CD', color: PV.accentDark, border: `1px solid ${PV.accent}`, borderRadius: 10, padding: '1px 7px', lineHeight: '16px' }}>{activeCount}</span>
+                    )}
+                    {activeCount > 0 && (
+                      <button onClick={e => { e.stopPropagation(); df.onChange(null) }} style={{ background: 'none', border: 'none', color: PV.sub, fontSize: 13, cursor: 'pointer', padding: '0 2px', lineHeight: 1 }}>✕</button>
+                    )}
+                    <span style={{ fontSize: 13, color: PV.sub, transform: isExpanded ? 'rotate(90deg)' : 'none', transition: 'transform .18s', lineHeight: 1 }}>›</span>
+                  </div>
+                  {isExpanded && (
+                    <div style={{ background: PV.canvas, borderTop: `1px solid ${PV.border}`, padding: '4px 0 8px' }}>
+                      {df.options.length === 0 ? (
+                        <div style={{ padding: '10px 16px', fontSize: 12, color: PV.sub }}>No options available</div>
+                      ) : df.options.map((opt, oi) => {
+                        const checked = (df.value || []).includes(opt)
+                        return (
+                          <label key={oi} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '9px 16px', cursor: 'pointer', userSelect: 'none' }}>
+                            <div style={{ width: 17, height: 17, borderRadius: 5, flexShrink: 0, border: `2px solid ${checked ? PV.accent : PV.border}`, background: checked ? PV.accent : PV.bg, display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all .12s' }}
+                              onClick={() => df.onChange(opt)}>
+                              {checked && <span style={{ fontSize: 10, color: PV.accentDark, lineHeight: 1 }}>✓</span>}
+                            </div>
+                            <span style={{ fontSize: 12.5, color: checked ? PV.ink : PV.sub, fontWeight: checked ? 600 : 400 }} onClick={() => df.onChange(opt)}>{opt}</span>
+                          </label>
+                        )
+                      })}
+                    </div>
+                  )}
+                </div>
+              )
+            })}
+          </div>
+        )
+      })() : (
+        <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', color: PV.sub, fontSize: 13, padding: 24 }}>No filters available</div>
       )}
 
       {/* Footer */}
@@ -3198,7 +3367,7 @@ function MobileLogisticsPanel({ page, setPage, onClose, lFilters, setLFilters, f
   )
 }
 
-function Topnav({ page, setPage, customerTab, invTab, setInvTab, alerts, onRefresh, loading, filters, setFilters, rawRows, inventoryDateControl, salesActiveTab, setSalesActiveTab, salesData, salesChannelView, setSalesChannelView, salesOfflineSub, setSalesOfflineSub, lFilters, setLFilters, logisticsFilterOpts }) {
+function Topnav({ page, setPage, customerTab, invTab, setInvTab, alerts, onRefresh, loading, filters, setFilters, rawRows, inventoryDateControl, salesActiveTab, setSalesActiveTab, salesData, salesChannelView, setSalesChannelView, salesOfflineSub, setSalesOfflineSub, lFilters, setLFilters, logisticsFilterOpts, costFilters, setCostFilters }) {
   const [mobFilterOpen, setMobFilterOpen] = useState(false)
   const titles = { overview: 'Overview', sales: 'Sales Analytics', pnl: 'P&L Analytics', ads: 'Ads Analytics', intelligence: 'Intelligence', logistics: 'Performance Analytics', 'logistics-cost': 'Cost Analytics', inventory: 'Inventory, Sales & Allocation', customer: 'Customer Intelligence', documents: 'Documents', cogs: 'COGS Ledger', 'logistics-ledger': 'Logistics Bill Ledger' }
   const invTitles = { health: 'Inventory Health', sales: 'Sales & Allocation' }
@@ -3225,7 +3394,7 @@ function Topnav({ page, setPage, customerTab, invTab, setInvTab, alerts, onRefre
                   {page === 'inventory'
                     ? <MobileInvFilterPanel invTab={invTab} setInvTab={setInvTab} inventoryDateControl={inventoryDateControl} onClose={() => setMobFilterOpen(false)} />
                     : (page === 'logistics' || page === 'logistics-cost')
-                    ? <MobileLogisticsPanel page={page} setPage={p => { setPage(p); setMobFilterOpen(false) }} onClose={() => setMobFilterOpen(false)} lFilters={lFilters} setLFilters={setLFilters} filterOpts={logisticsFilterOpts} />
+                    ? <MobileLogisticsPanel page={page} setPage={p => { setPage(p); setMobFilterOpen(false) }} onClose={() => setMobFilterOpen(false)} lFilters={lFilters} setLFilters={setLFilters} filterOpts={logisticsFilterOpts} costFilters={costFilters} setCostFilters={setCostFilters} />
                     : <MobileSalesFilterPanel activeTab={salesActiveTab} setActiveTab={setSalesActiveTab} filters={filters} setFilters={setFilters} salesData={salesData} channelView={salesChannelView} setChannelView={setSalesChannelView} offlineSub={salesOfflineSub} setOfflineSub={setSalesOfflineSub} onClose={() => setMobFilterOpen(false)} />
                   }
                 </div>
@@ -13752,6 +13921,7 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
   const [logisticsData, setLogisticsData] = useState(null)
   const [inventoryDateControl, setInventoryDateControl] = useState(null)
   const [lFilters, setLFilters] = useState({ couriers: [], shipmentType: 'forward', sddNdd: 'all', paymentMode: null, zone: null, pickupState: null, dropState: null, dropCity: null, category: null, subCategory: null })
+  const [costFilters, setCostFilters] = useState(EMPTY_COST_FILTERS)
   const [logisticsFilterOpts, setLogisticsFilterOpts] = useState({})
 
   const API = import.meta.env.VITE_API_URL || ''
@@ -13843,7 +14013,7 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
     <div className="app-shell">
       <Sidebar page={page} setPage={setPage} invTab={invTab} setInvTab={setInvTab} allowedTabs={allowedTabs} profile={profile} />
       <div className="app-main">
-        <Topnav page={page} setPage={setPage} customerTab={customerTab} invTab={invTab} setInvTab={setInvTab} alerts={alerts} lFilters={lFilters} setLFilters={setLFilters} logisticsFilterOpts={logisticsFilterOpts} onRefresh={() => { const { start, end, category, subCategory, sku, subChannel, voucher, region, tier, state, city, country } = filters; const e = {}; if (category?.length) e.category = category.join(','); if (subCategory?.length) e.subCategory = subCategory.join(','); if (sku?.length) e.sku = sku.join(','); if (subChannel) e.subChannel = subChannel; if (voucher) e.voucher = voucher; if (region?.length) e.region = region.join(','); if (tier?.length) e.tier = tier.join(','); if (state?.length) e.state = state.join(','); if (city) e.city = city; if (country) e.country = country; fetchData(start, end, e) }} loading={loading} filters={filters} setFilters={setFilters} rawRows={rawRows} inventoryDateControl={inventoryDateControl} salesActiveTab={activeTab} setSalesActiveTab={setActiveTab} salesData={data} salesChannelView={salesChannelView} setSalesChannelView={setSalesChannelView} salesOfflineSub={salesOfflineSub} setSalesOfflineSub={setSalesOfflineSub} />
+        <Topnav page={page} setPage={setPage} customerTab={customerTab} invTab={invTab} setInvTab={setInvTab} alerts={alerts} lFilters={lFilters} setLFilters={setLFilters} logisticsFilterOpts={logisticsFilterOpts} costFilters={costFilters} setCostFilters={setCostFilters} onRefresh={() => { const { start, end, category, subCategory, sku, subChannel, voucher, region, tier, state, city, country } = filters; const e = {}; if (category?.length) e.category = category.join(','); if (subCategory?.length) e.subCategory = subCategory.join(','); if (sku?.length) e.sku = sku.join(','); if (subChannel) e.subChannel = subChannel; if (voucher) e.voucher = voucher; if (region?.length) e.region = region.join(','); if (tier?.length) e.tier = tier.join(','); if (state?.length) e.state = state.join(','); if (city) e.city = city; if (country) e.country = country; fetchData(start, end, e) }} loading={loading} filters={filters} setFilters={setFilters} rawRows={rawRows} inventoryDateControl={inventoryDateControl} salesActiveTab={activeTab} setSalesActiveTab={setActiveTab} salesData={data} salesChannelView={salesChannelView} setSalesChannelView={setSalesChannelView} salesOfflineSub={salesOfflineSub} setSalesOfflineSub={setSalesOfflineSub} />
         {(loading || inventoryDateControl?.loading) && (
           <div style={{ height: 2, background: C.border, flexShrink: 0 }}>
             <div className="progress-bar" style={{ height: '100%', background: C.acc }} />
@@ -13893,7 +14063,7 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
           )}
           {page === 'logistics-cost' && (!allowedTabs || allowedTabs.includes('logistics')) && (
             <div style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
-              <LogisticsCostPage />
+              <LogisticsCostPage externalFilters={costFilters} setExternalFilters={setCostFilters} />
             </div>
           )}
           {page === 'inventory' && (!allowedTabs || allowedTabs.includes('inventory')) && (

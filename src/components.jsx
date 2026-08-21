@@ -118,7 +118,7 @@ export function CategoryRevenueCard({ catRows, subCatRows, skuMap, totalRev, vie
 // (if less human-readable) storage key rather than colliding with every other unkeyed DataTable.
 // maxHeight scrolls the body vertically while the header stays put, so a card can hold a long
 // table at a fixed height instead of stretching the whole row.
-export function DataTable({ columns, rows, maxRows = 50, storageKey, maxHeight, search, searchKeys, searchPlaceholder }) {
+export function DataTable({ columns, rows, maxRows = 50, storageKey, maxHeight, search, searchKeys, searchPlaceholder, style }) {
   // Opt-in search. Long tables (139 weight slabs, ~290 sub-categories) are scroll-only
   // otherwise, so finding one row means dragging through the whole list.
   const [q, setQ] = useState('')
@@ -152,13 +152,13 @@ export function DataTable({ columns, rows, maxRows = 50, storageKey, maxHeight, 
           )}
         </div>
       )}
-    <div className="overflow-x-auto" style={maxHeight ? { maxHeight, overflowY: 'auto' } : undefined}>
+    <div className="overflow-x-auto" style={{ ...(maxHeight ? { maxHeight, overflowY: 'auto' } : {}), ...( style || {}) }}>
       <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
         <thead>
           <tr>
             {reorder.orderedColumns.map(c => (
               <th key={c.key + c.label} draggable onDragStart={reorder.onDragStart(c.id)} onDragOver={reorder.onDragOver} onDrop={reorder.onDrop(c.id)}
-                style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.05em', color: C.t3, textAlign: c.align === 'right' ? 'right' : c.align === 'center' ? 'center' : 'left', padding: '3px 5px 7px', borderBottom: `1px solid ${C.border}`, cursor: 'grab', userSelect: 'none', ...(maxHeight ? { position: 'sticky', top: 0, background: C.card, zIndex: 1 } : {}) }}>{c.label}</th>
+                style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.05em', color: C.t3, textAlign: c.align === 'right' ? 'right' : c.align === 'center' ? 'center' : 'left', padding: '3px 5px 7px', borderBottom: `1px solid ${C.border}`, cursor: 'grab', userSelect: 'none', ...(c.width ? { width: c.width, minWidth: c.width } : {}), ...(c.sticky ? { position: 'sticky', left: 0, background: C.card, zIndex: 3, borderRight: `1px solid ${C.border}` } : {}), ...(maxHeight ? { position: 'sticky', top: 0, background: C.card, zIndex: c.sticky ? 4 : 1 } : {}) }}>{c.label}</th>
             ))}
           </tr>
         </thead>
@@ -166,7 +166,7 @@ export function DataTable({ columns, rows, maxRows = 50, storageKey, maxHeight, 
           {visible.map((r, i) => (
             <tr key={i} style={{ borderBottom: i < visible.length - 1 ? `1px solid ${C.border}` : 'none' }} onMouseEnter={e => e.currentTarget.style.background = '#FFFBE6'} onMouseLeave={e => e.currentTarget.style.background = ''}>
               {reorder.orderedColumns.map(c => (
-                <td key={c.key + c.label} style={{ padding: i < visible.length - 1 ? '5.5px 5px' : '5.5px 5px 14px', color: c.align === 'right' || c.align === 'center' ? C.t1 : C.t2, textAlign: c.align === 'right' ? 'right' : c.align === 'center' ? 'center' : 'left', fontFamily: c.mono ? 'var(--mono)' : 'inherit', fontSize: c.mono ? 11.5 : 12, whiteSpace: 'nowrap' }}>
+                <td key={c.key + c.label} style={{ padding: i < visible.length - 1 ? '5.5px 5px' : '5.5px 5px 14px', color: c.align === 'right' || c.align === 'center' ? C.t1 : C.t2, textAlign: c.align === 'right' ? 'right' : c.align === 'center' ? 'center' : 'left', fontFamily: c.mono ? 'var(--mono)' : 'inherit', fontSize: c.mono ? 11.5 : 12, whiteSpace: 'nowrap', ...(c.sticky ? { position: 'sticky', left: 0, background: C.card, zIndex: 1, borderRight: `1px solid ${C.border}` } : {}) }}>
                   {c.render ? c.render(r[c.key], r) : r[c.key]}
                 </td>
               ))}
