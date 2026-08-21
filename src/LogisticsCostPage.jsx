@@ -151,6 +151,8 @@ function shapeResponse(j) {
         recAdmitN: Number(r.rec_admit_n) || 0,
         recUnexp: Number(r.rec_unexp) || 0,
         reverseN: Number(r.reverse_n) || 0,
+        claimableRs: Number(r.claimable_rs) || 0,
+        claimableN: Number(r.claimable_n) || 0,
       }
     }
     return out
@@ -763,7 +765,7 @@ export default function LogisticsCostPage() {
         cpk: perKg(b.cost, b.wt) ?? 0,
         wt: b.wt,
         pctGmv: b.value > 0 ? (b.cost / b.value) * 100 : null,
-        claim: b.claimable_rs || 0,
+        claim: b.claimableRs || 0,
       }))
     // No indexing: the trend chart plots native ₹, so there is nothing to normalise.
     return rows
