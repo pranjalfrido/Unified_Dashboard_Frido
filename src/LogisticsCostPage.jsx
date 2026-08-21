@@ -516,16 +516,17 @@ function cubeToBreakdowns(rows) {
     add('claimable_n', r.claimable_n)
     add('rc_entitled', r.rc_entitled); add('rc_carrier', r.rc_carrier)
   }
-  const byZone = {}, byMode = {}, byMonth = {}, byCourier = {}, byPay = {}
+  const byZone = {}, byMode = {}, byMonth = {}, byCourier = {}, byPay = {}, byCourierMonth = {}
   for (const r of rows) {
     if (r.zone)    acc(byZone,    r.zone,    r)
     if (r.mode)    acc(byMode,    r.mode,    r)
     if (r.month)   acc(byMonth,   r.month,   r)
     if (r.courier_name) acc(byCourier, r.courier_name, r)
     if (r.payment) acc(byPay,     r.payment, r)
+    if (r.courier_name && r.month) acc(byCourierMonth, `${r.courier_name}|${r.month}`, r)
   }
   const toArr = (map) => Object.entries(map).map(([key, v]) => ({ key, ...v }))
-  return { byZone: toArr(byZone), byMode: toArr(byMode), byMonth: toArr(byMonth), byCourier: toArr(byCourier), byPay: toArr(byPay) }
+  return { byZone: toArr(byZone), byMode: toArr(byMode), byMonth: toArr(byMonth), byCourier: toArr(byCourier), byPay: toArr(byPay), byCourierMonth: toArr(byCourierMonth) }
 }
 
 // Filters that can be satisfied purely from the cube (no API needed).
@@ -594,6 +595,7 @@ export default function LogisticsCostPage() {
         byMonth: breakdowns.byMonth,
         byCourier: breakdowns.byCourier,
         byPay: breakdowns.byPay,
+        byCourierMonth: breakdowns.byCourierMonth,
       }
       setAgg(shapeResponse(merged))
       setLoading(false)
@@ -796,30 +798,40 @@ export default function LogisticsCostPage() {
   // Pivot (month, courier, cpk) into one row per month with a column per courier, which
   // is the shape a multi-line chart needs. Couriers are ordered by spend so the biggest
   // ones take the leading colour slots.
+  // Rate drift derived from byCourierMonth — filter-responsive.
   const driftCouriers = useMemo(() => {
-    if (!agg?.rateDrift?.length) return []
+    const rows = agg?.byCourierMonth || []
+    if (!rows.length) return []
     const spend = {}
-    for (const r of agg.rateDrift) spend[r.courier_name] = (spend[r.courier_name] || 0) + Number(r.n)
+    for (const r of rows) {
+      const courier = r.key.split('|')[0]
+      spend[courier] = (spend[courier] || 0) + (Number(r.n) || 0)
+    }
     return Object.keys(spend).sort((a, b) => spend[b] - spend[a]).slice(0, DRIFT_COLORS.length)
   }, [agg])
 
   const driftSeries = useMemo(() => {
-    if (!agg?.rateDrift?.length) return []
+    const rows = agg?.byCourierMonth || []
+    if (!rows.length) return []
     const byMonth = {}
-    for (const r of agg.rateDrift) {
-      if (!driftCouriers.includes(r.courier_name)) continue
-      byMonth[r.month_year] ??= { month: monthLabel(r.month_year), raw: r.month_year }
-      byMonth[r.month_year][r.courier_name] = Number(r.cpk)
+    for (const r of rows) {
+      const [courier, month] = r.key.split('|')
+      if (!driftCouriers.includes(courier)) continue
+      const cpk = r.wt ? r.cost / r.wt : 0
+      byMonth[month] ??= { month: monthLabel(month), raw: month }
+      byMonth[month][courier] = cpk
     }
     return Object.values(byMonth).sort((a, b) => a.raw.localeCompare(b.raw))
   }, [agg, driftCouriers])
 
-  // First vs latest ₹/kg per courier — the drift figure management acts on.
   const driftRows = useMemo(() => {
-    if (!agg?.rateDrift?.length) return []
+    const rows = agg?.byCourierMonth || []
+    if (!rows.length) return []
     const by = {}
-    for (const r of agg.rateDrift) {
-      (by[r.courier_name] ??= []).push({ m: r.month_year, cpk: Number(r.cpk) })
+    for (const r of rows) {
+      const [courier, month] = r.key.split('|')
+      const cpk = r.wt ? r.cost / r.wt : 0;
+      (by[courier] ??= []).push({ m: month, cpk })
     }
     return Object.entries(by)
       .map(([courier, pts]) => {
@@ -853,44 +865,35 @@ export default function LogisticsCostPage() {
   // card scrolls, so extra rows are cheap; a silently missing row is not.
   [agg])
 
-  // Courier spend with claim intensity, for the chart beside the escalation table.
-  // Sorted by spend so the bars descend; claim% rides a second axis because the two measures
-  // are ~100x apart and would otherwise render the claim as a flat line at zero.
+  // Courier spend with claim intensity — derived from byCourier (filter-responsive).
   const courierSpendRows = useMemo(() => {
-    const claim = new Map((agg?.courierDisputes || []).map(d => [d.courier_name, num(d.weight_rs)]))
     return Object.entries(agg?.byCourier || {})
       .map(([courier, b]) => {
         const spend = num(b.cost)
-        const cl = claim.get(courier) || 0
+        const cl = num(b.rec_infl)
         return { courier, spend, claim: cl, claimPct: spend ? (cl / spend) * 100 : 0 }
       })
       .sort((a, b) => b.spend - a.spend)
   }, [agg])
 
-  // Reads the pre-computed per-courier table, on the SAME total-cost basis as Cost Overview.
-  // It used to derive its own figures from the base-freight columns, so the page showed two
-  // different claimable totals — ₹76.78 L here against ₹32.34 L there — with nothing to tell
-  // a reader which was right.
+  // Escalation priority derived from byCourier (filter-responsive).
   const recoverRows = useMemo(
-    () => (agg?.courierDisputes || [])
-      .map(r => ({
-        courier: r.courier_name,
-        recInfl: num(r.weight_rs),
-        recUnexp: num(r.rate_rs),
-        recTotal: num(r.total_rs),
-        shipments: num(r.priced_n),
-        disputedN: num(r.disputed_n),
-        // Disputed rows only as the denominator. Dividing by EVERY shipment a courier
-        // carried made Bluedart read ₹7.1 when only 128k of its 417k priced shipments carry
-        // a dispute — ₹32.7 is what a claim is actually argued on.
-        // Per-shipment and intensity use the claimable weight figure, not the combined
-        // total, so every column here is on one basis.
-        recPerShipment: num(r.disputed_n) ? num(r.weight_rs) / num(r.disputed_n) : 0,
-        // Intensity, not size: it says whose billing is systematically off, rather than who
-        // is simply the largest partner.
-        recPctFreight: num(r.invoiced_rs) ? (num(r.weight_rs) / num(r.invoiced_rs)) * 100 : 0,
-      }))
-      // Ranked by claimable weight, so the top of the table is where recovery starts.
+    () => Object.entries(agg?.byCourier || {})
+      .map(([courier, b]) => {
+        const recInfl = num(b.rec_infl)
+        const recUnexp = num(b.rec_unexp)
+        const recAdmit = num(b.rec_admit)
+        const recTotal = recInfl + recUnexp
+        const shipments = num(b.n)
+        const disputedN = num(b.claimable_n)
+        return {
+          courier,
+          recInfl, recUnexp, recAdmit, recTotal,
+          shipments, disputedN,
+          recPerShipment: disputedN ? recInfl / disputedN : 0,
+          recPctFreight: num(b.cost) ? (recInfl / num(b.cost)) * 100 : 0,
+        }
+      })
       .filter(r => r.recInfl > 0 || r.recUnexp > 0)
       .sort((a, b) => b.recInfl - a.recInfl),
     [agg]
