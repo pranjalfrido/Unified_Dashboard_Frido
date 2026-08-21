@@ -2295,7 +2295,7 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters 
               <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed', minWidth: 400, fontSize: 11.5 }}>
                 <thead>
                   <tr style={{ borderBottom: `1px solid ${C.border2}` }}>
-                    <th style={{ position: 'sticky', left: 0, background: C.card, zIndex: 2, padding: '5px 8px', textAlign: 'left', fontWeight: 700, color: C.t2, minWidth: 72, whiteSpace: 'nowrap' }}>Slab</th>
+                    <th style={{ position: 'sticky', left: 0, background: C.card, zIndex: 2, padding: '5px 8px', textAlign: 'left', fontWeight: 700, color: C.t2, minWidth: 72, whiteSpace: 'nowrap', borderRight: `1px solid ${C.border}` }}>Slab</th>
                     <th style={{ padding: '5px 6px', textAlign: 'center', fontWeight: 700, color: C.t2, minWidth: 80, whiteSpace: 'nowrap' }}>Shipments</th>
                     <th style={{ padding: '5px 6px', textAlign: 'center', fontWeight: 700, color: C.t2, minWidth: 80, whiteSpace: 'nowrap' }}>Cost</th>
                     <th style={{ padding: '5px 6px', textAlign: 'center', fontWeight: 700, color: C.t2, minWidth: 60, whiteSpace: 'nowrap' }}>Share</th>
@@ -2307,7 +2307,7 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters 
                 <tbody>
                   {bandRows.map((r, i) => (
                     <tr key={r.band} style={{ borderBottom: i < bandRows.length - 1 ? `1px solid ${C.border2}` : 'none', background: i % 2 === 0 ? 'transparent' : 'rgba(0,0,0,0.02)' }}>
-                      <td style={{ position: 'sticky', left: 0, background: i % 2 === 0 ? C.card : 'rgba(0,0,0,0.02)', zIndex: 1, padding: '5px 8px', fontWeight: 600, color: C.t1, whiteSpace: 'nowrap' }}>{r.band}</td>
+                      <td style={{ position: 'sticky', left: 0, background: C.card, zIndex: 1, padding: '5px 8px', fontWeight: 600, color: C.t1, whiteSpace: 'nowrap', borderRight: `1px solid ${C.border}` }}>{r.band}</td>
                       <td style={{ padding: '5px 6px', textAlign: 'center', color: C.t1 }}>{fmtBig(r.shipments)}</td>
                       <td style={{ padding: '5px 6px', textAlign: 'center', color: C.t1 }}>{fmt(r.cost)}</td>
                       <td style={{ padding: '5px 6px', textAlign: 'center', color: C.t1 }}>{r.share.toFixed(1)}%</td>
