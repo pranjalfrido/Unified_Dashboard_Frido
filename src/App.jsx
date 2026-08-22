@@ -14060,9 +14060,8 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
     // channel exc rev from sliced daily for reconcile
     const chExcRev = {}
     Object.entries(slicedChannelDailyExcRev).forEach(([ch, dates]) => { chExcRev[ch] = Object.values(dates).reduce((s, v) => s + v, 0) })
-    // Shopify exc rev from sliced totals (Meta+Google revenue proxy)
-    const shopifyExcRev = (slicedTotals.find(t => t.platform === 'Meta')?.revenue || 0) + (slicedTotals.find(t => t.platform === 'Google')?.revenue || 0)
-    chExcRev['Shopify'] = shopifyExcRev
+    // Shopify exc rev from salesDailyByCategory (actual sales revenue, not ad-attributed)
+    chExcRev['Shopify'] = slicedSalDBC.filter(x => x.platform === 'Shopify').reduce((s, x) => s + (x.revenue || 0), 0)
 
     const buildSpendDetailFromDaily = (platformFilter) => {
       const adPlats = platformFilter ? (AD_PLATS[platformFilter] || [platformFilter]) : null
