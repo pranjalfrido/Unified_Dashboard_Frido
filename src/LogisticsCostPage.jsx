@@ -2789,10 +2789,15 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters 
                 <ChipRow options={lflOptions.zones} selected={lflZones} small
                   onToggle={z => setLflZones(t => t.includes(z) ? t.filter(x => x !== z) : [...t, z])} />
               </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'nowrap', overflowX: 'auto' }}>
-                <span style={{ fontSize: 12, fontWeight: 800, color: C.t2, whiteSpace: 'nowrap', letterSpacing: '0.03em', minWidth: 32 }}>Slab</span>
-                <ChipRow options={lflOptions.bands} selected={lflBands} small
-                  onToggle={b => setLflBands(t => t.includes(b) ? t.filter(x => x !== b) : [...t, b])} />
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, overflowX: 'auto', flexWrap: 'nowrap' }}>
+                <span style={{ fontSize: 12, fontWeight: 800, color: C.t2, whiteSpace: 'nowrap', letterSpacing: '0.03em', minWidth: 32, flexShrink: 0 }}>Slab</span>
+                <div style={{ display: 'flex', gap: 6, flexWrap: 'nowrap', flexShrink: 0 }}>
+                  {lflOptions.bands.map(b => {
+                    const on = lflBands.includes(b)
+                    return <button key={b} onClick={() => setLflBands(t => t.includes(b) ? t.filter(x => x !== b) : [...t, b])}
+                      style={{ border: `1.5px solid ${on ? C.acm : C.border2}`, cursor: 'pointer', background: on ? C.acl : C.card, color: C.t1, fontSize: 12, fontWeight: on ? 700 : 500, padding: '4px 9px', borderRadius: 6, fontFamily: 'var(--font)', whiteSpace: 'nowrap', flexShrink: 0 }}>{b}</button>
+                  })}
+                </div>
                 <SlabDropdown value={lflSlab} onChange={setLflSlab} slabs={lflOptions.slabs} />
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
