@@ -14158,11 +14158,9 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
     slicedDailyOrders.forEach(x => { chOrdersMap[x.channel] = (chOrdersMap[x.channel] || 0) + x.orders })
     const totalOrders = Object.values(chOrdersMap).reduce((s, v) => s + v, 0)
 
-    // Slice shopify new custs
-    const slicedNewCusts = (ads.shopifyNewCustsDaily || []).filter(x => x.date >= start && x.date <= end)
-    const nCusts = slicedNewCusts.reduce((s, x) => s + x.nCusts, 0)
-    const newCusts = slicedNewCusts.reduce((s, x) => s + x.newCusts, 0)
-    const repeatCusts = nCusts - newCusts
+    // Shopify new/repeat custs — pre-computed for full rolling window, used as-is
+    const nCusts = ads.shopifyNewCusts?.nCusts || 0
+    const repeatCusts = ads.shopifyNewCusts?.repeatCusts || 0
 
     // Build chMap from sliced daily data so KPI cards show instantly
     const cachedChMap = {}
