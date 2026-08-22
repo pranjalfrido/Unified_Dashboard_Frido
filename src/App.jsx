@@ -14049,15 +14049,117 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
     Object.entries(ads.channelDailyExcRev || {}).forEach(([ch, dates]) => {
       slicedChannelDailyExcRev[ch] = Object.fromEntries(Object.entries(dates).filter(([d]) => d >= start && d <= end))
     })
+    const slicedAdsDBC = slice(ads.adsDailyByCategory)
+    const slicedSalDBC = slice(ads.salesDailyByCategory)
+
+    // Build allSpendDetail + spendDetailByPlatform from sliced daily arrays
+    // adsDailyByCategory has: { date, platform, category, subCategory (=product_name), spend }
+    // salesDailyByCategory has: { date, platform, category, subCategory, revenue }
+    const AD_PLATS = { D2C: ['Meta', 'Google'], Meta: ['Meta'], Google: ['Google'], Amazon: ['Amazon'], Flipkart: ['Flipkart'], Myntra: ['Myntra'], Zepto: ['Zepto'], Instamart: ['Instamart'], Blinkit: ['Blinkit'] }
+    const SAL_CHANS = { D2C: ['Shopify'], Meta: ['Shopify'], Google: ['Shopify'], Amazon: ['Amazon'], Flipkart: ['Flipkart'], Myntra: ['Myntra'], Zepto: ['Zepto'], Instamart: ['Instamart'], Blinkit: ['Blinkit'] }
+    // channel exc rev from sliced daily for reconcile
+    const chExcRev = {}
+    Object.entries(slicedChannelDailyExcRev).forEach(([ch, dates]) => { chExcRev[ch] = Object.values(dates).reduce((s, v) => s + v, 0) })
+    // Shopify exc rev from sliced totals (Meta+Google revenue proxy)
+    const shopifyExcRev = (slicedTotals.find(t => t.platform === 'Meta')?.revenue || 0) + (slicedTotals.find(t => t.platform === 'Google')?.revenue || 0)
+    chExcRev['Shopify'] = shopifyExcRev
+
+    const buildSpendDetailFromDaily = (platformFilter) => {
+      const adPlats = platformFilter ? (AD_PLATS[platformFilter] || [platformFilter]) : null
+      const salChans = platformFilter ? (SAL_CHANS[platformFilter] || [platformFilter]) : null
+      // Aggregate spend by category and by subCategory (product) from ads daily
+      const adCatMap = {}; const adProdMap = {}; let unmatchedProdSpend = 0
+      slicedAdsDBC.filter(x => !adPlats || adPlats.includes(x.platform)).forEach(x => {
+        const cat = (x.category || 'Others').trim()
+        adCatMap[cat] = (adCatMap[cat] || 0) + (x.spend || 0)
+        if (x.subCategory) {
+          const prod = x.subCategory.trim()
+          adProdMap[prod] = (adProdMap[prod] || 0) + (x.spend || 0)
+        } else {
+          unmatchedProdSpend += (x.spend || 0)
+        }
+      })
+      // Aggregate revenue by category and by subCategory from sales daily
+      const salCatMap = {}; const salProdMap = {}; const salProdCatMap = {}
+      slicedSalDBC.filter(x => !salChans || salChans.includes(x.platform)).forEach(x => {
+        const cat = (x.category || 'Others').trim()
+        const sub = (x.subCategory || 'Unspecified').trim()
+        if (!salCatMap[cat]) salCatMap[cat] = 0
+        salCatMap[cat] += (x.revenue || 0)
+        const key = `${cat}||${sub}`
+        if (!salProdMap[key]) salProdMap[key] = 0
+        salProdMap[key] += (x.revenue || 0)
+        if (!salProdCatMap[sub]) salProdCatMap[sub] = cat
+      })
+      // Category rows
+      const categoryRowsAll = Object.entries(salCatMap).map(([cat, rev]) => ({
+        category: cat, spend: adCatMap[cat] || 0, revenue: Math.round(rev), netRevenue: Math.round(rev),
+        orders: 0, returns: 0, cancellations: 0, roas: adCatMap[cat] > 0 ? rev / adCatMap[cat] : 0,
+      }))
+      const unmatchedCatSpend = Object.entries(adCatMap).filter(([c]) => !salCatMap[c]).reduce((s, [, v]) => s + v, 0)
+      if (unmatchedCatSpend > 0) {
+        const oth = categoryRowsAll.find(x => x.category === 'Others')
+        if (oth) oth.spend += unmatchedCatSpend
+        else categoryRowsAll.push({ category: 'Others', spend: unmatchedCatSpend, revenue: 0, netRevenue: 0, orders: 0, returns: 0, cancellations: 0, roas: 0 })
+      }
+      // Sub-category (product) rows — driven from ad spend
+      const usedKeys = new Set()
+      const spendMatchedRows = Object.keys(adProdMap).map(prod => {
+        const spend = adProdMap[prod]
+        const matchKey = Object.keys(salProdMap).find(k => k.endsWith(`||${prod}`))
+        if (matchKey) {
+          usedKeys.add(matchKey)
+          const rev = salProdMap[matchKey]
+          const cat = matchKey.split('||')[0]
+          return { category: cat, subCategory: prod, spend, revenue: Math.round(rev), netRevenue: Math.round(rev), orders: 0, returns: 0, cancellations: 0, roas: spend > 0 ? rev / spend : 0 }
+        }
+        const cat = salProdCatMap[prod] || 'Others'
+        const rev = Object.entries(salProdMap).filter(([k]) => k.endsWith(`||${prod}`)).reduce((s, [, v]) => s + v, 0)
+        if (rev > 0) return { category: cat, subCategory: prod, spend, revenue: Math.round(rev), netRevenue: Math.round(rev), orders: 0, returns: 0, cancellations: 0, roas: spend > 0 ? rev / spend : 0 }
+        return { category: 'Others', subCategory: prod, spend, revenue: 0, netRevenue: 0, orders: 0, returns: 0, cancellations: 0, roas: 0 }
+      })
+      const unspentRows = Object.entries(salProdMap).filter(([k]) => !usedKeys.has(k)).map(([k, rev]) => {
+        const [cat, sub] = k.split('||')
+        return { category: cat, subCategory: sub, spend: 0, revenue: Math.round(rev), netRevenue: Math.round(rev), orders: 0, returns: 0, cancellations: 0, roas: 0 }
+      })
+      const otherRows = unmatchedProdSpend > 0
+        ? [{ category: 'Others', subCategory: 'Unattributed', spend: unmatchedProdSpend, revenue: 0, netRevenue: 0, orders: 0, returns: 0, cancellations: 0, roas: 0 }]
+        : []
+      const subCategoryRowsAll = [...spendMatchedRows, ...unspentRows, ...otherRows]
+      // Reconcile to channel exc rev
+      const trueRev = platformFilter === 'D2C' ? (chExcRev['Shopify'] || 0)
+        : platformFilter ? (chExcRev[platformFilter] || 0)
+        : ['Shopify','Amazon','Blinkit','Zepto','Instamart','Myntra','Flipkart'].reduce((s,c) => s + (chExcRev[c]||0), 0)
+      const reconcile = (rows, isCat) => {
+        const tot = rows.reduce((s, x) => s + x.revenue, 0)
+        const res = Math.round(trueRev - tot)
+        if (Math.abs(res) < 1) return rows
+        const oth = rows.find(x => x.category === 'Others' && (isCat || x.subCategory === 'Unspecified'))
+        if (oth) { oth.revenue += res; oth.netRevenue += res }
+        else rows.push(isCat
+          ? { category: 'Others', spend: 0, revenue: res, netRevenue: res, orders: 0, returns: 0, cancellations: 0, roas: 0 }
+          : { category: 'Others', subCategory: 'Unspecified', spend: 0, revenue: res, netRevenue: res, orders: 0, returns: 0, cancellations: 0, roas: 0 })
+        return rows
+      }
+      reconcile(categoryRowsAll, true); reconcile(subCategoryRowsAll, false)
+      return { categoryRows: categoryRowsAll, subCategoryRows: subCategoryRowsAll }
+    }
+
+    const allSpendDetail = buildSpendDetailFromDaily(null)
+    const spendDetailByPlatform = {}
+    for (const plat of ['D2C','Meta','Google','Amazon','Flipkart','Myntra','Zepto','Instamart','Blinkit']) {
+      spendDetailByPlatform[plat] = buildSpendDetailFromDaily(plat)
+    }
+
     const slicedAds = {
       ...ads,
       totals: slicedTotals,
       daily: slicedDaily,
-      adsDailyByCategory: slice(ads.adsDailyByCategory),
-      salesDailyByCategory: slice(ads.salesDailyByCategory),
+      adsDailyByCategory: slicedAdsDBC,
+      salesDailyByCategory: slicedSalDBC,
       channelDailyExcRev: slicedChannelDailyExcRev,
-      allSpendDetail: ads.allSpendDetail || { categoryRows: [], subCategoryRows: [] },
-      spendDetailByPlatform: ads.spendDetailByPlatform || {},
+      allSpendDetail,
+      spendDetailByPlatform,
     }
     setAdsCache(slicedAds)
   }
