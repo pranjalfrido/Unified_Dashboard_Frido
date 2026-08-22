@@ -49,7 +49,7 @@ function p(v) { return parseFloat(v) || 0 }
 function i(v) { return parseInt(v) || 0 }
 
 async function runQuery(sql) {
-  const [rows] = await bq.query({ query: sql, location: 'US' })
+  const [rows] = await bq.query({ query: sql })
   return rows
 }
 
