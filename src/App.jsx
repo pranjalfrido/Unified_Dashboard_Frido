@@ -14049,33 +14049,6 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
     Object.entries(ads.channelDailyExcRev || {}).forEach(([ch, dates]) => {
       slicedChannelDailyExcRev[ch] = Object.fromEntries(Object.entries(dates).filter(([d]) => d >= start && d <= end))
     })
-    // Build allSpendDetail + spendDetailByPlatform from rawCategoryBreakdown (needed for By Category / By Product tables)
-    const cb = ads.categoryBreakdown || { categoryRows: [], productRows: [] }
-    const rawCB = ads.rawCategoryBreakdown || []
-    const buildSpendDetail = (catRows, rawRows) => {
-      // Category rows already have correct spend from categoryBreakdown.categoryRows
-      const catDetail = catRows.map(r => ({ category: r.category, spend: r.spend, revenue: r.revenue, roas: r.roas, orders: r.orders || 0 }))
-        .sort((a, b) => b.spend - a.spend)
-      // Product rows: aggregate spend from raw BQ rows by product_name+category
-      const subCatMap = {}
-      rawRows.forEach(x => {
-        if (!x.productName) return
-        const key = `${x.category || 'Others'}::${x.productName}`
-        if (!subCatMap[key]) subCatMap[key] = { category: x.category || 'Others', subCategory: x.productName, spend: 0, revenue: 0, orders: 0 }
-        subCatMap[key].spend += x.spend || 0
-      })
-      // Add revenue from productRows by matching subCategory name
-      ;(cb.productRows || []).forEach(r => {
-        const key = `${r.category}::${r.subCategory}`
-        if (subCatMap[key]) { subCatMap[key].revenue = r.revenue; subCatMap[key].orders = r.orders || 0 }
-      })
-      const subCatRows = Object.values(subCatMap)
-        .map(r => ({ ...r, roas: r.spend > 0 ? r.revenue / r.spend : 0 }))
-        .sort((a, b) => b.spend - a.spend)
-      return { categoryRows: catDetail, subCategoryRows: subCatRows }
-    }
-    const allSpendDetail = buildSpendDetail(cb.categoryRows || [], rawCB)
-
     const slicedAds = {
       ...ads,
       totals: slicedTotals,
@@ -14083,8 +14056,8 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
       adsDailyByCategory: slice(ads.adsDailyByCategory),
       salesDailyByCategory: slice(ads.salesDailyByCategory),
       channelDailyExcRev: slicedChannelDailyExcRev,
-      allSpendDetail,
-      spendDetailByPlatform: { D2C: allSpendDetail },
+      allSpendDetail: { categoryRows: [], subCategoryRows: [] },
+      spendDetailByPlatform: {},
     }
     setAdsCache(slicedAds)
   }

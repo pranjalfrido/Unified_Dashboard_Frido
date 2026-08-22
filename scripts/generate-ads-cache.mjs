@@ -143,7 +143,6 @@ const payload = {
     byCategory: (r.adsByCategory || []).map(x => ({ platform: x.platform, category: x.category, spend: p(x.spend), revenue: p(x.revenue), impressions: p(x.impressions), clicks: p(x.clicks), orders: p(x.orders), roas: p(x.roas) })),
     bySku: (r.adsBySku || []).map(x => ({ platform: x.platform, category: x.category, sku: x.product_name, spend: p(x.spend), revenue: p(x.revenue), impressions: p(x.impressions), clicks: p(x.clicks), orders: p(x.orders), roas: p(x.roas) })),
     categoryBreakdown: { categoryRows, productRows },
-    rawCategoryBreakdown: (r.adsCategoryBreakdown || []).map(x => ({ platform: x.platform, targetType: x.target_type, productName: x.product_name, category: x.category, spend: p(x.spend) })),
     prevTotals: prevTotalsMap,
     flipkartEstRev: 0,
     channelSalesOrders: {},
