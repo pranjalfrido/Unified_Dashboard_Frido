@@ -14049,6 +14049,22 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
     Object.entries(ads.channelDailyExcRev || {}).forEach(([ch, dates]) => {
       slicedChannelDailyExcRev[ch] = Object.fromEntries(Object.entries(dates).filter(([d]) => d >= start && d <= end))
     })
+    // Build allSpendDetail + spendDetailByPlatform from categoryBreakdown (needed for By Category / By Product tables)
+    const cb = ads.categoryBreakdown || { categoryRows: [], productRows: [] }
+    const buildSpendDetail = (catRows, prodRows) => {
+      const catMap = {}
+      catRows.forEach(r => { catMap[r.category] = { category: r.category, spend: r.spend, revenue: r.revenue, roas: r.roas, orders: r.orders || 0 } })
+      const subCatMap = {}
+      prodRows.forEach(r => {
+        const key = `${r.category}::${r.subCategory}`
+        if (!subCatMap[key]) subCatMap[key] = { category: r.category, subCategory: r.subCategory, spend: 0, revenue: r.revenue || 0, orders: r.orders || 0 }
+        subCatMap[key].spend += r.spend || 0
+      })
+      const subCatRows = Object.values(subCatMap).map(r => ({ ...r, roas: r.spend > 0 ? r.revenue / r.spend : 0 })).sort((a, b) => b.spend - a.spend)
+      return { categoryRows: Object.values(catMap).sort((a, b) => b.spend - a.spend), subCategoryRows: subCatRows }
+    }
+    const allSpendDetail = buildSpendDetail(cb.categoryRows || [], cb.productRows || [])
+
     const slicedAds = {
       ...ads,
       totals: slicedTotals,
@@ -14056,6 +14072,8 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
       adsDailyByCategory: slice(ads.adsDailyByCategory),
       salesDailyByCategory: slice(ads.salesDailyByCategory),
       channelDailyExcRev: slicedChannelDailyExcRev,
+      allSpendDetail,
+      spendDetailByPlatform: { D2C: allSpendDetail },
     }
     setAdsCache(slicedAds)
   }
