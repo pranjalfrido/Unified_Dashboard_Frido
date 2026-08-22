@@ -3,6 +3,8 @@
 
 import { writeFileSync } from 'fs'
 import { BigQuery } from '@google-cloud/bigquery'
+import pkg from 'pg'
+const { Pool } = pkg
 
 const bq = new BigQuery({ keyFilename: 'sa_key.json' })
 
@@ -233,6 +235,116 @@ const channelDailyExcRevMap = {}
 const prevTotalsMap = {}
 ;(r.prevAdsTotals || []).forEach(x => { prevTotalsMap[x.platform] = { spend: p(x.spend), revenue: p(x.revenue), impressions: p(x.impressions), clicks: p(x.clicks) } })
 
+// Additional Spend — from markting_spend Postgres table (same logic as api/bq.js)
+// Covers the full rolling 90-day window so the frontend can slice by date client-side.
+let additionalSpend = null
+let additionalSpendByProduct = {}
+try {
+  const connStr = process.env.NEON_URL || process.env.SUPABASE_URL
+  if (!connStr) throw new Error('No database URL configured')
+  const pool = new Pool({ connectionString: connStr, ssl: { rejectUnauthorized: false }, max: 3 })
+
+  // Find all months in the 90-day window
+  const months = []
+  const cur = new Date(startD.getFullYear(), startD.getMonth(), 1)
+  while (cur <= endD) {
+    months.push(`${cur.getFullYear()}-${String(cur.getMonth() + 1).padStart(2, '0')}`)
+    cur.setMonth(cur.getMonth() + 1)
+  }
+  const placeholders = months.map((_, i) => `$${i + 1}`).join(',')
+  const { rows: spendRows } = await pool.query(
+    `SELECT month_year, SUM(total_spend_ex_gst::numeric) AS total_spend
+     FROM markting_spend
+     WHERE channeltomap = 'D2C'
+       AND is_additional_spend = 'yes'
+       AND marketing_spend_to_be_mapped_for = 'product'
+       AND TO_CHAR(month_year::timestamp, 'YYYY-MM') IN (${placeholders})
+     GROUP BY month_year`,
+    months
+  )
+  console.log(`  ✓ markting_spend: ${spendRows.length} month rows`)
+
+  if (spendRows.length > 0) {
+    // Fetch daily Shopify sales for the full rolling window to prorate spend
+    const monthStart = `${months[0]}-01`
+    const lastMonth = months[months.length - 1]
+    const [mY, mM] = lastMonth.split('-').map(Number)
+    const monthEnd = new Date(mY, mM, 0).toISOString().slice(0, 10)
+
+    const [[dailySalesRows], [dailyProductRows]] = await Promise.all([
+      bq.query({ query: `SELECT CAST(OrderDate AS STRING) AS date, SUM(SellingPrice_Inc_GST) AS rev FROM \`frido-429506.production.fact_all_platform_sales_report\` WHERE OrderDate BETWEEN '${monthStart}' AND '${monthEnd}' AND Channel = 'Shopify' AND SubChannel != 'Shopify International' AND LOWER(COALESCE(FinancialStatus,'')) NOT LIKE '%refund%' GROUP BY date ORDER BY date` }),
+      bq.query({ query: `SELECT CAST(OrderDate AS STRING) AS date, COALESCE(SubCategory, Category, 'Other') AS subCategory, SUM(SellingPrice_Inc_GST) AS rev FROM \`frido-429506.production.fact_all_platform_sales_report\` WHERE OrderDate BETWEEN '${monthStart}' AND '${monthEnd}' AND Channel = 'Shopify' AND SubChannel != 'Shopify International' AND LOWER(COALESCE(FinancialStatus,'')) NOT LIKE '%refund%' GROUP BY date, subCategory` }),
+    ])
+
+    const dayRevMap = {}
+    const monthRevMap = {}
+    for (const row of dailySalesRows) {
+      const d = row.date?.value || row.date
+      const rev = parseFloat(row.rev) || 0
+      dayRevMap[d] = rev
+      const mk = d.slice(0, 7)
+      monthRevMap[mk] = (monthRevMap[mk] || 0) + rev
+    }
+
+    const dayProductRevMap = {}
+    for (const row of dailyProductRows) {
+      const d = row.date?.value || row.date
+      const sc = row.subCategory
+      const rev = parseFloat(row.rev) || 0
+      if (!dayProductRevMap[d]) dayProductRevMap[d] = {}
+      dayProductRevMap[d][sc] = (dayProductRevMap[d][sc] || 0) + rev
+    }
+
+    const productDaySpend = {}
+    let totalAdditionalSpend = 0
+
+    for (const sr of spendRows) {
+      const mk = String(sr.month_year).slice(0, 7)
+      const monthTotal = parseFloat(sr.total_spend) || 0
+      if (monthTotal === 0) continue
+      const monthRevTotal = monthRevMap[mk] || 0
+      const [mYr, mMo] = mk.split('-').map(Number)
+      const daysInMonth = new Date(mYr, mMo, 0).getDate()
+
+      for (let d = 1; d <= daysInMonth; d++) {
+        const dateStr = `${mk}-${String(d).padStart(2, '0')}`
+        const dayTotalRev = dayRevMap[dateStr] || 0
+        let daySpend = monthRevTotal > 0 ? monthTotal * (dayTotalRev / monthRevTotal) : monthTotal / daysInMonth
+        if (daySpend === 0) continue
+
+        const dayProds = dayProductRevMap[dateStr] || {}
+        const dayProdTotal = Object.values(dayProds).reduce((s, v) => s + v, 0)
+        if (dayProdTotal > 0) {
+          for (const [sc, scRev] of Object.entries(dayProds)) {
+            if (!productDaySpend[sc]) productDaySpend[sc] = {}
+            productDaySpend[sc][dateStr] = (productDaySpend[sc][dateStr] || 0) + daySpend * (scRev / dayProdTotal)
+          }
+        }
+      }
+
+      // KPI: sum for the full rolling window (frontend will slice to selected range)
+      if (monthRevTotal > 0) {
+        let rangeRev = 0
+        for (const [day, rev] of Object.entries(dayRevMap)) {
+          if (day >= start && day <= end && day.startsWith(mk)) rangeRev += rev
+        }
+        totalAdditionalSpend += monthTotal * (rangeRev / monthRevTotal)
+      } else {
+        const daysInRange = daysInMonth
+        totalAdditionalSpend += monthTotal * (daysInRange / daysInMonth)
+      }
+    }
+
+    additionalSpend = Math.round(totalAdditionalSpend)
+    additionalSpendByProduct = productDaySpend
+    console.log(`  ✓ additionalSpend computed: ₹${(additionalSpend / 1e7).toFixed(2)} Cr`)
+  }
+
+  await pool.end()
+} catch (e) {
+  console.error('  ✗ additionalSpend error:', e.message)
+}
+
 const payload = {
   asOf: new Date().toISOString(),
   rollingStart: start,
@@ -254,6 +366,8 @@ const payload = {
     prevTotals: prevTotalsMap,
     flipkartEstRev: 0,
     channelSalesOrders: {},
+    additionalSpend,
+    additionalSpendByProduct,
   },
 }
 

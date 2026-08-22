@@ -14170,6 +14170,18 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
     })
     cachedChMap['Shopify'] = { excRev: chExcRev['Shopify'] || 0, rev: chExcRev['Shopify'] || 0, orders: chOrdersMap['Shopify'] || 0, qty: 0 }
 
+    // Slice additionalSpendByProduct to selected date range and recompute additionalSpend KPI
+    const rawAddlByProduct = ads.additionalSpendByProduct || {}
+    const slicedAddlByProduct = {}
+    let slicedAddlSpend = 0
+    Object.entries(rawAddlByProduct).forEach(([sc, dayMap]) => {
+      const filtered = Object.fromEntries(Object.entries(dayMap).filter(([d]) => d >= start && d <= end))
+      if (Object.keys(filtered).length > 0) {
+        slicedAddlByProduct[sc] = filtered
+        slicedAddlSpend += Object.values(filtered).reduce((s, v) => s + v, 0)
+      }
+    })
+
     const slicedAds = {
       ...ads,
       totals: slicedTotals,
@@ -14179,6 +14191,8 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
       channelDailyExcRev: slicedChannelDailyExcRev,
       allSpendDetail,
       spendDetailByPlatform,
+      additionalSpend: Object.keys(slicedAddlByProduct).length > 0 ? Math.round(slicedAddlSpend) : null,
+      additionalSpendByProduct: slicedAddlByProduct,
     }
     setAdsCachedChMap(cachedChMap)
     setAdsCachedMeta({ nOrders: totalOrders, nCusts, repeatCusts, shopifyOrders: chOrdersMap['Shopify'] || 0 })

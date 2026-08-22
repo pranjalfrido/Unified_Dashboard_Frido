@@ -48,6 +48,8 @@ jobs:
         run: node scripts/generate-logistics-cost-cache.mjs
 
       - name: Generate static ads JSON
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
         run: node scripts/generate-ads-cache.mjs
 
       - name: Commit and push static data files
