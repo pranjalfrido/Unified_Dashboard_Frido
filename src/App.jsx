@@ -320,7 +320,7 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
           const json = await res.json()
           const ageMs = json.asOf ? Date.now() - new Date(json.asOf).getTime() : Infinity
           const dateMatches = json.dateRange && json.dateRange.start === filters.start && json.dateRange.end === filters.end
-          if (ageMs <= 3 * 60 * 60 * 1000 && !json._placeholder && json.current) {
+          if (ageMs <= 3 * 60 * 60 * 1000 && dateMatches && !json._placeholder && json.current) {
             setRawData(json.current)
             setRawPrevData(json.previous || null)
             try { localStorage.setItem('logistics_stale', JSON.stringify({ current: json.current, previous: json.previous || null, dateRange: json.dateRange, savedAt: Date.now() })) } catch {}
@@ -357,7 +357,8 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
         const stale = localStorage.getItem('logistics_stale')
         if (stale) {
           const parsed = JSON.parse(stale)
-          if (parsed.current) { setRawData(parsed.current); setRawPrevData(parsed.previous || null); return }
+          const staleMatches = parsed.dateRange && parsed.dateRange.start === filters.start && parsed.dateRange.end === filters.end
+          if (parsed.current && staleMatches) { setRawData(parsed.current); setRawPrevData(parsed.previous || null); return }
         }
       } catch {}
       setError(e.message)
