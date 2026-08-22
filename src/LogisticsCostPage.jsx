@@ -387,7 +387,7 @@ function SlabDropdown({ value, onChange, slabs }) {
     document.addEventListener('touchstart', handler)
     return () => { document.removeEventListener('mousedown', handler); document.removeEventListener('touchstart', handler) }
   }, [open])
-  const label = value === '' ? 'All slabs' : `${value} kg`
+  const label = value === '' ? 'All' : `${value} kg`
   const active = value !== ''
   return (
     <div ref={ref} style={{ position: 'relative', flexShrink: 0 }}>
@@ -2789,9 +2789,9 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters 
                 <ChipRow options={lflOptions.zones} selected={lflZones} small
                   onToggle={z => setLflZones(t => t.includes(z) ? t.filter(x => x !== z) : [...t, z])} />
               </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 6, overflowX: 'auto', flexWrap: 'nowrap' }}>
-                <span style={{ fontSize: 12, fontWeight: 800, color: C.t2, whiteSpace: 'nowrap', letterSpacing: '0.03em', minWidth: 32, flexShrink: 0 }}>Slab</span>
-                <div style={{ display: 'flex', gap: 6, flexWrap: 'nowrap', flexShrink: 0 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 4, overflowX: 'auto', flexWrap: 'nowrap' }}>
+                <span style={{ fontSize: 12, fontWeight: 800, color: C.t2, whiteSpace: 'nowrap', letterSpacing: '0.03em', minWidth: 28, flexShrink: 0 }}>Slab</span>
+                <div style={{ display: 'flex', gap: 4, flexWrap: 'nowrap', flexShrink: 0 }}>
                   {lflOptions.bands.map(b => {
                     const on = lflBands.includes(b)
                     return <button key={b} onClick={() => setLflBands(t => t.includes(b) ? t.filter(x => x !== b) : [...t, b])}
