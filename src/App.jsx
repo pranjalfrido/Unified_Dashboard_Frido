@@ -14056,8 +14056,8 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
       adsDailyByCategory: slice(ads.adsDailyByCategory),
       salesDailyByCategory: slice(ads.salesDailyByCategory),
       channelDailyExcRev: slicedChannelDailyExcRev,
-      allSpendDetail: { categoryRows: [], subCategoryRows: [] },
-      spendDetailByPlatform: {},
+      allSpendDetail: ads.allSpendDetail || { categoryRows: [], subCategoryRows: [] },
+      spendDetailByPlatform: ads.spendDetailByPlatform || {},
     }
     setAdsCache(slicedAds)
   }
