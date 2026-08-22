@@ -13916,6 +13916,7 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
   const [error, setError] = useState(null)
   const [logisticsData, setLogisticsData] = useState(null)
   const [adsCache, setAdsCache] = useState(null)
+  const [adsCachedChMap, setAdsCachedChMap] = useState(null)
   const adsCacheRef = useRef(null)
   const [inventoryDateControl, setInventoryDateControl] = useState(null)
   const [lFilters, setLFilters] = useState({ couriers: [], shipmentType: 'forward', sddNdd: 'all', paymentMode: null, zone: null, pickupState: null, dropState: null, dropCity: null, category: null, subCategory: null })
@@ -14150,6 +14151,14 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
       spendDetailByPlatform[plat] = buildSpendDetailFromDaily(plat)
     }
 
+    // Build chMap from sliced daily data so KPI cards show instantly
+    const cachedChMap = {}
+    Object.entries(slicedChannelDailyExcRev).forEach(([ch, dates]) => {
+      const excRev = Object.values(dates).reduce((s, v) => s + v, 0)
+      cachedChMap[ch] = { excRev, rev: excRev, orders: 0, qty: 0 }
+    })
+    cachedChMap['Shopify'] = { excRev: chExcRev['Shopify'] || 0, rev: chExcRev['Shopify'] || 0, orders: 0, qty: 0 }
+
     const slicedAds = {
       ...ads,
       totals: slicedTotals,
@@ -14160,6 +14169,7 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
       allSpendDetail,
       spendDetailByPlatform,
     }
+    setAdsCachedChMap(cachedChMap)
     setAdsCache(slicedAds)
   }
 
@@ -14207,7 +14217,7 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
           {page === 'ads' && !adsCache && !data && <Skeleton />}
           {page === 'ads' && (adsCache || data) && (!allowedTabs || allowedTabs.includes('ads')) && (
             <div className="page-scroll">
-              <AdsTab data={adsCache ? { chMap: {}, cred: {}, ...(data || {}), ads: adsCache } : data} filters={filters} />
+              <AdsTab data={adsCache ? { cred: {}, ...(data || {}), chMap: data?.chMap || adsCachedChMap || {}, ads: adsCache } : data} filters={filters} />
             </div>
           )}
           {page === 'intelligence' && (
