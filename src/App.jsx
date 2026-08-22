@@ -14103,7 +14103,7 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
           {page === 'pnl' && data && <PnLPage data={data} filters={filters} setFilters={setFilters} />}
           {page === 'ads' && (adsCache || data) && (!allowedTabs || allowedTabs.includes('ads')) && (
             <div className="page-scroll">
-              <AdsTab data={adsCache ? { ...(data || {}), ads: adsCache } : data} filters={filters} />
+              <AdsTab data={adsCache ? { chMap: {}, cred: {}, ...(data || {}), ads: adsCache } : data} filters={filters} />
             </div>
           )}
           {page === 'intelligence' && (
