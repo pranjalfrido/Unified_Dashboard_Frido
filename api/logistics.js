@@ -417,7 +417,7 @@ rto_reasons AS (
   GROUP BY 1, 2
 ),
 top_drop_states AS (
-  SELECT courier_group,
+  SELECT courier_group, shipment_type,
     CASE UPPER(TRIM(drop_state))
       WHEN 'MAHARASHTRA' THEN 'Maharashtra' WHEN 'MH' THEN 'Maharashtra'
       WHEN 'KARNATAKA' THEN 'Karnataka' WHEN 'KA' THEN 'Karnataka'
@@ -445,10 +445,10 @@ top_drop_states AS (
       ELSE CONCAT(UPPER(SUBSTR(TRIM(drop_state),1,1)), LOWER(SUBSTR(TRIM(drop_state),2)))
     END AS state,
     COUNT(awb) AS total
-  FROM base WHERE drop_state IS NOT NULL AND drop_state != '' GROUP BY 1, 2
+  FROM base WHERE drop_state IS NOT NULL AND drop_state != '' GROUP BY 1, 2, 3
 ),
 top_drop_cities AS (
-  SELECT courier_group,
+  SELECT courier_group, shipment_type,
     CASE UPPER(TRIM(drop_city))
       WHEN 'BANGALORE' THEN 'Bengaluru' WHEN 'BENGALURU' THEN 'Bengaluru'
       WHEN 'BANGLORE' THEN 'Bengaluru' WHEN 'BANGALURU' THEN 'Bengaluru'
@@ -470,10 +470,10 @@ top_drop_cities AS (
       ELSE CONCAT(UPPER(SUBSTR(TRIM(drop_city),1,1)), LOWER(SUBSTR(TRIM(drop_city),2)))
     END AS city,
     COUNT(awb) AS total
-  FROM base WHERE drop_city IS NOT NULL AND drop_city != '' GROUP BY 1, 2
+  FROM base WHERE drop_city IS NOT NULL AND drop_city != '' GROUP BY 1, 2, 3
 ),
 top_pickup_cities AS (
-  SELECT courier_group,
+  SELECT courier_group, shipment_type,
     CASE UPPER(TRIM(pickup_city))
       WHEN 'BANGALORE' THEN 'Bengaluru'
       WHEN 'BENGALURU' THEN 'Bengaluru'
@@ -489,7 +489,7 @@ top_pickup_cities AS (
       ELSE CONCAT(UPPER(SUBSTR(TRIM(pickup_city),1,1)), LOWER(SUBSTR(TRIM(pickup_city),2)))
     END AS city,
     COUNT(awb) AS total
-  FROM base WHERE pickup_city IS NOT NULL AND pickup_city != '' GROUP BY 1, 2
+  FROM base WHERE pickup_city IS NOT NULL AND pickup_city != '' GROUP BY 1, 2, 3
 ),
 by_payment AS (
   SELECT payment_mode, COUNT(awb) AS total FROM base WHERE payment_mode IS NOT NULL GROUP BY 1

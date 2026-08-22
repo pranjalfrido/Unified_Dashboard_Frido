@@ -275,6 +275,7 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
   const [lopsTab, setLopsTab] = useState('overview') // kept for compat but toggle removed
   const [tatCourierView, setTatCourierView] = useState('courier') // 'courier' | 'month'
   const [tatMode, setTatMode] = useState('pct')
+  const [geoShipType, setGeoShipType] = useState({ dropCity: 'all', pickupCity: 'all', dropState: 'all' })
   const [secCollapsed, setSecCollapsed] = useState({})
   const [wMetric, setWMetric] = useState('qty')
   const toggleSec = key => setSecCollapsed(p => ({ ...p, [key]: !p[key] }))
@@ -1548,11 +1549,6 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
                     <div style={{ ...tableCard2, height: 335 }}>
                       <div style={{ ...tableTitle2, fontSize: 13, padding: '8px 14px 7px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                         <span>Order Processing Time <span style={{ fontWeight: 500, color: C.t3, fontSize: 10.2, marginLeft: 4 }}>(by Facility)</span></span>
-                        <div style={{ display: 'inline-flex', border: `1px solid ${C.border2}`, borderRadius: 6, overflow: 'hidden' }}>
-                          {['% Share','Count'].map((opt,i) => { const val = opt === '% Share' ? 'pct' : 'count'; return (
-                            <button key={opt} onClick={() => setTatMode(val)} style={{ padding: '2px 8px', fontSize: 9.5, fontWeight: tatMode === val ? 700 : 400, background: tatMode === val ? C.acc : 'transparent', color: tatMode === val ? '#000' : C.t2, border: 'none', cursor: 'pointer', fontFamily: 'var(--font)', borderLeft: i > 0 ? `1px solid ${C.border2}` : 'none' }}>{opt}</button>
-                          )})}
-                        </div>
                       </div>
                       <div style={{ margin: '0 8px', overflowY: 'hidden' }}>
                         <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed' }}>
@@ -1601,11 +1597,6 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
                     <div style={{ ...tableCard2, height: 335 }}>
                       <div style={{ ...tableTitle2, fontSize: 13, padding: '8px 14px 7px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                         <span>Order Pickup Time <span style={{ fontWeight: 500, color: C.t3, fontSize: 10.2, marginLeft: 4 }}>(by Courier)</span></span>
-                        <div style={{ display: 'inline-flex', border: `1px solid ${C.border2}`, borderRadius: 6, overflow: 'hidden' }}>
-                          {['% Share','Count'].map((opt,i) => { const val = opt === '% Share' ? 'pct' : 'count'; return (
-                            <button key={opt} onClick={() => setTatMode(val)} style={{ padding: '2px 8px', fontSize: 9.5, fontWeight: tatMode === val ? 700 : 400, background: tatMode === val ? C.acc : 'transparent', color: tatMode === val ? '#000' : C.t2, border: 'none', cursor: 'pointer', fontFamily: 'var(--font)', borderLeft: i > 0 ? `1px solid ${C.border2}` : 'none' }}>{opt}</button>
-                          )})}
-                        </div>
                       </div>
                       <div style={{ margin: '0 8px', overflowY: 'auto', maxHeight: 240 }}>
                         <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed' }}>
@@ -1653,11 +1644,6 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
                     <div style={{ ...tableCard2, height: 335 }}>
                       <div style={{ ...tableTitle2, fontSize: 13, padding: '8px 14px 7px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                         <span>In-Transit Time <span style={{ fontWeight: 500, color: C.t3, fontSize: 10.2, marginLeft: 4 }}>(by Courier)</span></span>
-                        <div style={{ display: 'inline-flex', border: `1px solid ${C.border2}`, borderRadius: 6, overflow: 'hidden' }}>
-                          {['% Share','Count'].map((opt,i) => { const val = opt === '% Share' ? 'pct' : 'count'; return (
-                            <button key={opt} onClick={() => setTatMode(val)} style={{ padding: '2px 8px', fontSize: 9.5, fontWeight: tatMode === val ? 700 : 400, background: tatMode === val ? C.acc : 'transparent', color: tatMode === val ? '#000' : C.t2, border: 'none', cursor: 'pointer', fontFamily: 'var(--font)', borderLeft: i > 0 ? `1px solid ${C.border2}` : 'none' }}>{opt}</button>
-                          )})}
-                        </div>
                       </div>
                       <div style={{ margin: '0 8px', overflowY: 'auto', maxHeight: 240 }}>
                         <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed' }}>
@@ -1708,11 +1694,6 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
                     <div style={{ ...tableCard2, height: 335 }}>
                       <div style={{ ...tableTitle2, fontSize: 13, padding: '8px 14px 7px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                         <span>Fulfilment Time <span style={{ fontWeight: 500, color: C.t3, fontSize: 10.2, marginLeft: 4 }}>(by Facility)</span></span>
-                        <div style={{ display: 'inline-flex', border: `1px solid ${C.border2}`, borderRadius: 6, overflow: 'hidden' }}>
-                          {['% Share','Count'].map((opt,i) => { const val = opt === '% Share' ? 'pct' : 'count'; return (
-                            <button key={opt} onClick={() => setTatMode(val)} style={{ padding: '2px 8px', fontSize: 9.5, fontWeight: tatMode === val ? 700 : 400, background: tatMode === val ? C.acc : 'transparent', color: tatMode === val ? '#000' : C.t2, border: 'none', cursor: 'pointer', fontFamily: 'var(--font)', borderLeft: i > 0 ? `1px solid ${C.border2}` : 'none' }}>{opt}</button>
-                          )})}
-                        </div>
                       </div>
                       <div style={{ margin: '0 8px', overflowY: 'hidden' }}>
                         <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed' }}>
@@ -1893,16 +1874,30 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
           return (
             <div style={{ display: secCollapsed['geo'] ? 'none' : 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr 1fr', gap: 14 }}>
               {[
-                { title: 'Total Shipments by Drop City', sub: 'Top 10 destination cities', rows: data.topDropCities || [], key: 'city', color: '#2563eb', h: 340 },
-                { title: 'Total Shipments by Pickup City', sub: 'Top 10 origin cities', rows: data.topPickupCities || [], key: 'city', color: '#FFD600', h: 343 },
-                { title: 'Total Shipments by Drop State', sub: 'Top 10 destination states', rows: data.topDropStates || [], key: 'state', color: '#2563eb', h: 340 },
-              ].map(({ title, sub, rows, key, color, h }) => (
+                { title: 'Total Shipments by Drop City', sub: 'Top 10 destination cities', rawRows: data.topDropCities || [], key: 'city', color: '#2563eb', h: 340, stateKey: 'dropCity' },
+                { title: 'Total Shipments by Pickup City', sub: 'Top 10 origin cities', rawRows: data.topPickupCities || [], key: 'city', color: '#FFD600', h: 343, stateKey: 'pickupCity' },
+                { title: 'Total Shipments by Drop State', sub: 'Top 10 destination states', rawRows: data.topDropStates || [], key: 'state', color: '#2563eb', h: 340, stateKey: 'dropState' },
+              ].map(({ title, sub, rawRows, key, color, h, stateKey }) => {
+                const cardGeoType = geoShipType[stateKey]
+                const filtered = cardGeoType === 'all' ? rawRows : rawRows.filter(r => r.shipment_type?.toLowerCase() === cardGeoType.toLowerCase())
+                const merged = Object.values(filtered.reduce((m, r) => { const k = r[key]; m[k] = { [key]: k, total: (m[k]?.total || 0) + r.total }; return m }, {})).sort((a,b) => b.total - a.total).slice(0, 10)
+                return (
                 <div key={title} style={{ ...cardStyle, display: 'flex', flexDirection: 'column', height: h }}>
-                  <div style={chartTitle}>{title}</div>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 2 }}>
+                    <div style={chartTitle}>{title}</div>
+                    <div style={{ display: 'inline-flex', border: `1px solid ${C.border2}`, borderRadius: 6, overflow: 'hidden', flexShrink: 0 }}>
+                      {['All', 'Forward', 'Reverse'].map((opt, i) => {
+                        const val = opt.toLowerCase()
+                        const active = cardGeoType === val
+                        return <button key={opt} onClick={() => setGeoShipType(p => ({ ...p, [stateKey]: val }))} style={{ padding: '2px 8px', fontSize: 9.5, fontWeight: active ? 700 : 400, background: active ? C.acc : 'transparent', color: active ? '#000' : C.t2, border: 'none', cursor: 'pointer', fontFamily: 'var(--font)', borderLeft: i > 0 ? `1px solid ${C.border2}` : 'none' }}>{opt}</button>
+                      })}
+                    </div>
+                  </div>
                   <div style={{ fontSize: 11, color: C.t3, marginBottom: 12, marginTop: 2 }}>{sub}</div>
-                  <div style={{ overflowY: 'auto', flex: 1 }}>{geoBar(rows, key, color)}</div>
+                  <div style={{ overflowY: 'auto', flex: 1 }}>{geoBar(merged, key, color)}</div>
                 </div>
-              ))}
+                )
+              })}
             </div>
           )
         })()}
