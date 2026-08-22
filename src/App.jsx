@@ -8597,7 +8597,13 @@ function AdsTab({ data, filters = {} }) {
             },
             {
               id: 'roas', label: 'ROAS', sortKey: 'roas', width: '16%', style: thStyle,
-              row: r => <td style={tdStyle}>{roasCell(r.roas)}</td>,
+              row: r => {
+                const catSubCats = slicedProdRows.filter(p => p.category === r.category).map(p => p.subCategory)
+                const catAddlSpend = hasAddlSpendData ? catSubCats.reduce((s, sc) => s + (getProductAddlSpend(sc) || 0), 0) : 0
+                const totalCatSpend = r.spend + catAddlSpend
+                const effectiveRoas = totalCatSpend > 0 && r.revenue > 0 ? r.revenue / totalCatSpend : 0
+                return <td style={tdStyle}>{roasCell(effectiveRoas)}</td>
+              },
               total: () => <td style={{ ...totalTdStyle, position: 'sticky', bottom: 0, background: C.bg }}>{roasCell(catRoas)}</td>,
             },
           ]
@@ -8624,7 +8630,12 @@ function AdsTab({ data, filters = {} }) {
             },
             {
               id: 'roas', label: 'ROAS', sortKey: 'roas', width: '18%', style: thStyle,
-              row: r => <td style={tdStyle}>{roasCell(r.roas)}</td>,
+              row: r => {
+                const prodAddlSpend = hasAddlSpendData ? (getProductAddlSpend(r.subCategory) || 0) : 0
+                const totalProdSpend = r.spend + prodAddlSpend
+                const effectiveRoas = totalProdSpend > 0 && r.revenue > 0 ? r.revenue / totalProdSpend : 0
+                return <td style={tdStyle}>{roasCell(effectiveRoas)}</td>
+              },
               total: () => <td style={{ ...totalTdStyle, position: 'sticky', bottom: 0, background: C.bg }}>{roasCell(prodRoasAll)}</td>,
             },
           ]
