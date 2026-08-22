@@ -14188,6 +14188,16 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
   const data = useMemo(() => { if (!rawRows) return null; if (rawRows.source === 'postgres-aggregated' || rawRows.totalRev !== undefined) return rawRows; return processData(rawRows) }, [rawRows])
   const alerts = useMemo(() => data ? detectAlerts(data) : [], [data])
 
+  // When live data arrives, patch additionalSpend/additionalSpendByProduct into adsCache
+  // (the cache script doesn't query the markting_spend Postgres table, so these fields are
+  // absent from the static JSON — the live API response fills them in after ~7s).
+  useEffect(() => {
+    if (!adsCache || !data?.ads) return
+    const liveAdditionalSpend = data.ads.additionalSpend ?? null
+    const liveAdditionalSpendByProduct = data.ads.additionalSpendByProduct || {}
+    if (liveAdditionalSpend === adsCache.additionalSpend) return
+    setAdsCache(prev => prev ? { ...prev, additionalSpend: liveAdditionalSpend, additionalSpendByProduct: liveAdditionalSpendByProduct } : prev)
+  }, [data?.ads?.additionalSpend])
 
   return (
     <div className="app-shell">
