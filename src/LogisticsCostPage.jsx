@@ -377,6 +377,38 @@ function ChipRow({ options, selected, onToggle, small }) {
   )
 }
 
+function SlabDropdown({ value, onChange, slabs }) {
+  const [open, setOpen] = useState(false)
+  const ref = useRef(null)
+  useEffect(() => {
+    if (!open) return
+    const handler = e => { if (ref.current && !ref.current.contains(e.target)) setOpen(false) }
+    document.addEventListener('mousedown', handler)
+    document.addEventListener('touchstart', handler)
+    return () => { document.removeEventListener('mousedown', handler); document.removeEventListener('touchstart', handler) }
+  }, [open])
+  const label = value === '' ? 'All slabs' : `${value} kg`
+  const active = value !== ''
+  return (
+    <div ref={ref} style={{ position: 'relative', flexShrink: 0 }}>
+      <button onClick={() => setOpen(o => !o)}
+        style={{ fontFamily: 'var(--font)', fontSize: 12, fontWeight: 500, padding: '4px 9px', borderRadius: 6, border: `1.5px solid ${active ? C.acm : C.border2}`, background: active ? C.acl : C.card, color: C.t1, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4, whiteSpace: 'nowrap' }}>
+        {label} <span style={{ fontSize: 9, color: C.t3 }}>▼</span>
+      </button>
+      {open && (
+        <div style={{ position: 'absolute', top: '100%', left: 0, zIndex: 999, background: C.card, border: `1.5px solid ${C.border2}`, borderRadius: 8, marginTop: 4, minWidth: 100, maxHeight: 220, overflowY: 'auto', boxShadow: '0 4px 16px rgba(0,0,0,0.18)' }}>
+          {[{ label: 'All slabs', value: '' }, ...slabs.map(sv => ({ label: `${sv} kg`, value: sv }))].map(opt => (
+            <div key={opt.value} onClick={() => { onChange(opt.value); setOpen(false) }}
+              style={{ padding: '8px 14px', fontSize: 12, fontWeight: opt.value === value ? 700 : 400, color: opt.value === value ? C.acc : C.t1, background: opt.value === value ? C.acl : 'transparent', cursor: 'pointer', whiteSpace: 'nowrap' }}>
+              {opt.label}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
 function SegPair({ options, value, onChange }) {
   return (
     // flexShrink: 0 — the sidebar is a flex column, so without it this control gets
@@ -2766,11 +2798,7 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters 
                 <span style={{ fontSize: 12, fontWeight: 800, color: C.t2, whiteSpace: 'nowrap', letterSpacing: '0.03em', minWidth: 32 }}>Leg</span>
                 <ChipRow options={lflOptions.legs} selected={lflLegs} small
                   onToggle={l => setLflLegs(t => t.includes(l) ? t.filter(x => x !== l) : [...t, l])} />
-                <select value={lflSlab} onChange={e => setLflSlab(e.target.value)}
-                  style={{ fontFamily: 'var(--font)', fontSize: 12, fontWeight: 500, padding: '4px 9px', borderRadius: 6, border: `1.5px solid ${lflSlab !== '' ? C.acm : C.border2}`, background: lflSlab !== '' ? C.acl : C.card, color: C.t1, cursor: 'pointer' }}>
-                  <option value="">All slabs</option>
-                  {lflOptions.slabs.map(sv => (<option key={sv} value={sv}>{sv} kg</option>))}
-                </select>
+                <SlabDropdown value={lflSlab} onChange={setLflSlab} slabs={lflOptions.slabs} />
               </div>
             </div>
           ) : (
