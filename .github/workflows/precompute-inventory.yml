@@ -2,7 +2,7 @@ name: Precompute Inventory Cache
 
 on:
   schedule:
-    - cron: '0 * * * *'   # every hour
+    - cron: '0 */6 * * *'  # every 6 hours
   workflow_dispatch:        # manual trigger from GitHub UI
 
 jobs:
@@ -47,13 +47,16 @@ jobs:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
         run: node scripts/generate-logistics-cost-cache.mjs
 
+      - name: Generate static ads JSON
+        run: node scripts/generate-ads-cache.mjs
+
       - name: Commit and push static data files
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add public/inv-data-7d.json public/inv-data-15d.json public/inv-data-30d.json \
                   public/sales-alloc-data.json public/inward-data.json public/logistics-data.json \
-                  public/logistics-cost-data.json
+                  public/logistics-cost-data.json public/ads-data.json
           git diff --cached --quiet && echo "No changes" && exit 0
           git stash
           git fetch origin main
@@ -61,6 +64,6 @@ jobs:
           git stash pop
           git add public/inv-data-7d.json public/inv-data-15d.json public/inv-data-30d.json \
                   public/sales-alloc-data.json public/inward-data.json public/logistics-data.json \
-                  public/logistics-cost-data.json
+                  public/logistics-cost-data.json public/ads-data.json
           git commit -m "chore: update static data cache [skip ci]"
           git push origin main

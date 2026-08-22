@@ -13945,6 +13945,60 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
     if (!keepPrev) setLoading(true)
     setError(null)
     try {
+      // Try static ads cache first — covers rolling 90-day window, refreshed every 6h
+      if (activeTabRef.current === 'ads' && !ch && !Object.keys(extraFilters).length) {
+        try {
+          const staticRes = await fetch(`${API}/ads-data.json`)
+          if (staticRes.ok) {
+            const staticJson = await staticRes.json()
+            const cacheStart = staticJson.rollingStart
+            const cacheEnd = staticJson.rollingEnd
+            if (cacheStart && cacheEnd && start >= cacheStart && end <= cacheEnd) {
+              // Slice daily arrays to requested date range
+              const slice = arr => (arr || []).filter(x => x.date >= start && x.date <= end)
+              const ads = staticJson.ads || {}
+              const slicedAds = {
+                ...ads,
+                daily: slice(ads.daily),
+                adsDailyByCategory: slice(ads.adsDailyByCategory),
+                salesDailyByCategory: slice(ads.salesDailyByCategory),
+                channelDailyExcRev: (() => {
+                  const m = {}
+                  Object.entries(ads.channelDailyExcRev || {}).forEach(([ch, dates]) => {
+                    m[ch] = Object.fromEntries(Object.entries(dates).filter(([d]) => d >= start && d <= end))
+                  })
+                  return m
+                })(),
+              }
+              // Re-aggregate totals from sliced daily data
+              const totalsMap = {}
+              slicedAds.daily.forEach(x => {
+                if (!totalsMap[x.platform]) totalsMap[x.platform] = { platform: x.platform, spend: 0, revenue: 0, impressions: 0, clicks: 0, orders: 0 }
+                totalsMap[x.platform].spend += x.spend || 0
+                totalsMap[x.platform].revenue += x.revenue || 0
+                totalsMap[x.platform].impressions += x.impressions || 0
+                totalsMap[x.platform].clicks += x.clicks || 0
+              })
+              const slicedTotals = Object.values(totalsMap).map(t => ({
+                ...t,
+                ctr: t.impressions > 0 ? t.clicks / t.impressions * 100 : 0,
+                cpc: t.clicks > 0 ? t.spend / t.clicks : 0,
+                roas: t.spend > 0 ? t.revenue / t.spend : 0,
+              })).sort((a, b) => b.spend - a.spend)
+              slicedAds.totals = slicedTotals
+              if (reqId !== reqIdRef.current) return
+              const next = { ads: slicedAds, _fromCache: true }
+              clientCacheRef.current.set(cacheKey, next)
+              setRawRows(prev => {
+                if (keepPrev && prev && typeof prev === 'object' && !Array.isArray(prev)) return { ...prev, ...next }
+                return next
+              })
+              setLoading(false)
+              return
+            }
+          }
+        } catch (_) { /* fall through to API */ }
+      }
       const res = await fetch(`${API}/api/bq`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ start, end, ...extraFilters, ...(ch ? { channel: ch } : {}) }) })
       if (!res.ok) throw new Error(`API error ${res.status}: ${await res.text()}`)
       const json = await res.json()
