@@ -2793,12 +2793,12 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters 
                 <span style={{ fontSize: 12, fontWeight: 800, color: C.t2, whiteSpace: 'nowrap', letterSpacing: '0.03em', minWidth: 32, paddingTop: 4 }}>Slab</span>
                 <ChipRow options={lflOptions.bands} selected={lflBands} small
                   onToggle={b => setLflBands(t => t.includes(b) ? t.filter(x => x !== b) : [...t, b])} />
+                <SlabDropdown value={lflSlab} onChange={setLflSlab} slabs={lflOptions.slabs} />
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                 <span style={{ fontSize: 12, fontWeight: 800, color: C.t2, whiteSpace: 'nowrap', letterSpacing: '0.03em', minWidth: 32 }}>Leg</span>
                 <ChipRow options={lflOptions.legs} selected={lflLegs} small
                   onToggle={l => setLflLegs(t => t.includes(l) ? t.filter(x => x !== l) : [...t, l])} />
-                <SlabDropdown value={lflSlab} onChange={setLflSlab} slabs={lflOptions.slabs} />
               </div>
             </div>
           ) : (
