@@ -396,10 +396,10 @@ function SlabDropdown({ value, onChange, slabs }) {
         {label} <span style={{ fontSize: 9, color: C.t3 }}>▼</span>
       </button>
       {open && (
-        <div style={{ position: 'absolute', top: '100%', left: 0, zIndex: 999, background: C.card, border: `1.5px solid ${C.border2}`, borderRadius: 8, marginTop: 4, minWidth: 100, maxHeight: 220, overflowY: 'auto', boxShadow: '0 4px 16px rgba(0,0,0,0.18)' }}>
+        <div style={{ position: 'absolute', top: '100%', left: 0, zIndex: 999, background: C.card, border: `1.5px solid ${C.border2}`, borderRadius: 8, marginTop: 4, minWidth: 90, maxHeight: 160, overflowY: 'auto', boxShadow: '0 4px 16px rgba(0,0,0,0.18)' }}>
           {[{ label: 'All slabs', value: '' }, ...slabs.map(sv => ({ label: `${sv} kg`, value: sv }))].map(opt => (
             <div key={opt.value} onClick={() => { onChange(opt.value); setOpen(false) }}
-              style={{ padding: '8px 14px', fontSize: 12, fontWeight: opt.value === value ? 700 : 400, color: opt.value === value ? C.acc : C.t1, background: opt.value === value ? C.acl : 'transparent', cursor: 'pointer', whiteSpace: 'nowrap' }}>
+              style={{ padding: '5px 12px', fontSize: 12, fontWeight: opt.value === value ? 700 : 400, color: opt.value === value ? C.acc : C.t1, background: opt.value === value ? C.acl : 'transparent', cursor: 'pointer', whiteSpace: 'nowrap' }}>
               {opt.label}
             </div>
           ))}
