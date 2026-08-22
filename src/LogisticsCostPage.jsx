@@ -2795,7 +2795,7 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters 
                   {lflOptions.bands.map(b => {
                     const on = lflBands.includes(b)
                     return <button key={b} onClick={() => setLflBands(t => t.includes(b) ? t.filter(x => x !== b) : [...t, b])}
-                      style={{ border: `1.5px solid ${on ? C.acm : C.border2}`, cursor: 'pointer', background: on ? C.acl : C.card, color: C.t1, fontSize: 12, fontWeight: on ? 700 : 500, padding: '4px 9px', borderRadius: 6, fontFamily: 'var(--font)', whiteSpace: 'nowrap', flexShrink: 0 }}>{b}</button>
+                      style={{ border: `1.5px solid ${on ? C.acm : C.border2}`, cursor: 'pointer', background: on ? C.acl : C.card, color: C.t1, fontSize: 11, fontWeight: on ? 700 : 500, padding: '3px 6px', borderRadius: 6, fontFamily: 'var(--font)', whiteSpace: 'nowrap', flexShrink: 0 }}>{b}</button>
                   })}
                 </div>
                 <SlabDropdown value={lflSlab} onChange={setLflSlab} slabs={lflOptions.slabs} />
