@@ -13915,6 +13915,8 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
   const [logisticsData, setLogisticsData] = useState(null)
+  const [adsCache, setAdsCache] = useState(null)
+  const adsCacheRef = useRef(null)
   const [inventoryDateControl, setInventoryDateControl] = useState(null)
   const [lFilters, setLFilters] = useState({ couriers: [], shipmentType: 'forward', sddNdd: 'all', paymentMode: null, zone: null, pickupState: null, dropState: null, dropCity: null, category: null, subCategory: null })
   const [costFilters, setCostFilters] = useState(EMPTY_COST_FILTERS)
@@ -13945,60 +13947,6 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
     if (!keepPrev) setLoading(true)
     setError(null)
     try {
-      // Try static ads cache first — covers rolling 90-day window, refreshed every 6h
-      if (activeTabRef.current === 'ads' && !ch && !Object.keys(extraFilters).length) {
-        try {
-          const staticRes = await fetch(`${API}/ads-data.json`)
-          if (staticRes.ok) {
-            const staticJson = await staticRes.json()
-            const cacheStart = staticJson.rollingStart
-            const cacheEnd = staticJson.rollingEnd
-            if (cacheStart && cacheEnd && start >= cacheStart && end <= cacheEnd) {
-              // Slice daily arrays to requested date range
-              const slice = arr => (arr || []).filter(x => x.date >= start && x.date <= end)
-              const ads = staticJson.ads || {}
-              const slicedAds = {
-                ...ads,
-                daily: slice(ads.daily),
-                adsDailyByCategory: slice(ads.adsDailyByCategory),
-                salesDailyByCategory: slice(ads.salesDailyByCategory),
-                channelDailyExcRev: (() => {
-                  const m = {}
-                  Object.entries(ads.channelDailyExcRev || {}).forEach(([ch, dates]) => {
-                    m[ch] = Object.fromEntries(Object.entries(dates).filter(([d]) => d >= start && d <= end))
-                  })
-                  return m
-                })(),
-              }
-              // Re-aggregate totals from sliced daily data
-              const totalsMap = {}
-              slicedAds.daily.forEach(x => {
-                if (!totalsMap[x.platform]) totalsMap[x.platform] = { platform: x.platform, spend: 0, revenue: 0, impressions: 0, clicks: 0, orders: 0 }
-                totalsMap[x.platform].spend += x.spend || 0
-                totalsMap[x.platform].revenue += x.revenue || 0
-                totalsMap[x.platform].impressions += x.impressions || 0
-                totalsMap[x.platform].clicks += x.clicks || 0
-              })
-              const slicedTotals = Object.values(totalsMap).map(t => ({
-                ...t,
-                ctr: t.impressions > 0 ? t.clicks / t.impressions * 100 : 0,
-                cpc: t.clicks > 0 ? t.spend / t.clicks : 0,
-                roas: t.spend > 0 ? t.revenue / t.spend : 0,
-              })).sort((a, b) => b.spend - a.spend)
-              slicedAds.totals = slicedTotals
-              if (reqId !== reqIdRef.current) return
-              const next = { ads: slicedAds, _fromCache: true }
-              clientCacheRef.current.set(cacheKey, next)
-              setRawRows(prev => {
-                if (keepPrev && prev && typeof prev === 'object' && !Array.isArray(prev)) return { ...prev, ...next }
-                return next
-              })
-              setLoading(false)
-              return
-            }
-          }
-        } catch (_) { /* fall through to API */ }
-      }
       const res = await fetch(`${API}/api/bq`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ start, end, ...extraFilters, ...(ch ? { channel: ch } : {}) }) })
       if (!res.ok) throw new Error(`API error ${res.status}: ${await res.text()}`)
       const json = await res.json()
@@ -14055,6 +14003,63 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
     return () => clearTimeout(debounceRef.current)
   }, [filters.start, filters.end, filters.category, filters.subCategory, filters.sku, filters.subChannel, filters.voucher, filters.region, filters.tier, filters.state, filters.city, filters.country, filters.paymentType, filters.channelGroup, fetchData])
 
+  // Load ads static cache when user navigates to Ads tab — independent of main fetchData
+  useEffect(() => {
+    if (page !== 'ads') return
+    const { start, end } = filters
+    if (!start || !end) return
+    const load = async () => {
+      try {
+        // Return already-loaded cache if it covers the selected range
+        if (adsCacheRef.current && start >= adsCacheRef.current.rollingStart && end <= adsCacheRef.current.rollingEnd) {
+          injectAdsFromCache(adsCacheRef.current, start, end)
+          return
+        }
+        const res = await fetch(`${API}/ads-data.json`)
+        if (!res.ok) return
+        const json = await res.json()
+        adsCacheRef.current = json
+        if (start >= json.rollingStart && end <= json.rollingEnd) {
+          injectAdsFromCache(json, start, end)
+        }
+      } catch (_) { /* fall through — main rawRows.ads will be used if available */ }
+    }
+    load()
+  }, [page, filters.start, filters.end])
+
+  function injectAdsFromCache(json, start, end) {
+    const ads = json.ads || {}
+    const slice = arr => (arr || []).filter(x => x.date >= start && x.date <= end)
+    const slicedDaily = slice(ads.daily)
+    const totalsMap = {}
+    slicedDaily.forEach(x => {
+      if (!totalsMap[x.platform]) totalsMap[x.platform] = { platform: x.platform, spend: 0, revenue: 0, impressions: 0, clicks: 0 }
+      totalsMap[x.platform].spend += x.spend || 0
+      totalsMap[x.platform].revenue += x.revenue || 0
+      totalsMap[x.platform].impressions += x.impressions || 0
+      totalsMap[x.platform].clicks += x.clicks || 0
+    })
+    const slicedTotals = Object.values(totalsMap).map(t => ({
+      ...t, orders: 0,
+      ctr: t.impressions > 0 ? t.clicks / t.impressions * 100 : 0,
+      cpc: t.clicks > 0 ? t.spend / t.clicks : 0,
+      roas: t.spend > 0 ? t.revenue / t.spend : 0,
+    })).sort((a, b) => b.spend - a.spend)
+    const slicedChannelDailyExcRev = {}
+    Object.entries(ads.channelDailyExcRev || {}).forEach(([ch, dates]) => {
+      slicedChannelDailyExcRev[ch] = Object.fromEntries(Object.entries(dates).filter(([d]) => d >= start && d <= end))
+    })
+    const slicedAds = {
+      ...ads,
+      totals: slicedTotals,
+      daily: slicedDaily,
+      adsDailyByCategory: slice(ads.adsDailyByCategory),
+      salesDailyByCategory: slice(ads.salesDailyByCategory),
+      channelDailyExcRev: slicedChannelDailyExcRev,
+    }
+    setAdsCache(slicedAds)
+  }
+
   const data = useMemo(() => { if (!rawRows) return null; if (rawRows.source === 'postgres-aggregated' || rawRows.totalRev !== undefined) return rawRows; return processData(rawRows) }, [rawRows])
   const alerts = useMemo(() => data ? detectAlerts(data) : [], [data])
 
@@ -14096,9 +14101,9 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
           )}
           {page === 'sales' && data && (!allowedTabs || allowedTabs.includes('sales')) && <SalesPage data={data} filters={filters} setFilters={setFilters} activeTab={activeTab} setActiveTab={setActiveTab} fetchData={fetchData} channelView={salesChannelView} setChannelView={setSalesChannelView} offlineSub={salesOfflineSub} setOfflineSub={setSalesOfflineSub} />}
           {page === 'pnl' && data && <PnLPage data={data} filters={filters} setFilters={setFilters} />}
-          {page === 'ads' && data && (!allowedTabs || allowedTabs.includes('ads')) && (
+          {page === 'ads' && (adsCache || data) && (!allowedTabs || allowedTabs.includes('ads')) && (
             <div className="page-scroll">
-              <AdsTab data={data} filters={filters} />
+              <AdsTab data={adsCache ? { ...(data || {}), ads: adsCache } : data} filters={filters} />
             </div>
           )}
           {page === 'intelligence' && (
