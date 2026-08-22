@@ -13917,6 +13917,7 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
   const [logisticsData, setLogisticsData] = useState(null)
   const [adsCache, setAdsCache] = useState(null)
   const [adsCachedChMap, setAdsCachedChMap] = useState(null)
+  const [adsCachedMeta, setAdsCachedMeta] = useState(null)
   const adsCacheRef = useRef(null)
   const [inventoryDateControl, setInventoryDateControl] = useState(null)
   const [lFilters, setLFilters] = useState({ couriers: [], shipmentType: 'forward', sddNdd: 'all', paymentMode: null, zone: null, pickupState: null, dropState: null, dropCity: null, category: null, subCategory: null })
@@ -14151,13 +14152,25 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
       spendDetailByPlatform[plat] = buildSpendDetailFromDaily(plat)
     }
 
+    // Slice daily orders by channel
+    const slicedDailyOrders = (ads.channelDailyOrders || []).filter(x => x.date >= start && x.date <= end)
+    const chOrdersMap = {}
+    slicedDailyOrders.forEach(x => { chOrdersMap[x.channel] = (chOrdersMap[x.channel] || 0) + x.orders })
+    const totalOrders = Object.values(chOrdersMap).reduce((s, v) => s + v, 0)
+
+    // Slice shopify new custs
+    const slicedNewCusts = (ads.shopifyNewCustsDaily || []).filter(x => x.date >= start && x.date <= end)
+    const nCusts = slicedNewCusts.reduce((s, x) => s + x.nCusts, 0)
+    const newCusts = slicedNewCusts.reduce((s, x) => s + x.newCusts, 0)
+    const repeatCusts = nCusts - newCusts
+
     // Build chMap from sliced daily data so KPI cards show instantly
     const cachedChMap = {}
     Object.entries(slicedChannelDailyExcRev).forEach(([ch, dates]) => {
       const excRev = Object.values(dates).reduce((s, v) => s + v, 0)
-      cachedChMap[ch] = { excRev, rev: excRev, orders: 0, qty: 0 }
+      cachedChMap[ch] = { excRev, rev: excRev, orders: chOrdersMap[ch] || 0, qty: 0 }
     })
-    cachedChMap['Shopify'] = { excRev: chExcRev['Shopify'] || 0, rev: chExcRev['Shopify'] || 0, orders: 0, qty: 0 }
+    cachedChMap['Shopify'] = { excRev: chExcRev['Shopify'] || 0, rev: chExcRev['Shopify'] || 0, orders: chOrdersMap['Shopify'] || 0, qty: 0 }
 
     const slicedAds = {
       ...ads,
@@ -14170,6 +14183,7 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
       spendDetailByPlatform,
     }
     setAdsCachedChMap(cachedChMap)
+    setAdsCachedMeta({ nOrders: totalOrders, nCusts, repeatCusts, shopifyOrders: chOrdersMap['Shopify'] || 0 })
     setAdsCache(slicedAds)
   }
 
@@ -14217,7 +14231,7 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
           {page === 'ads' && !adsCache && !data && <Skeleton />}
           {page === 'ads' && (adsCache || data) && (!allowedTabs || allowedTabs.includes('ads')) && (
             <div className="page-scroll">
-              <AdsTab data={adsCache ? { cred: {}, ...(data || {}), chMap: data?.chMap || adsCachedChMap || {}, ads: adsCache } : data} filters={filters} />
+              <AdsTab data={adsCache ? { cred: {}, ...(data || {}), chMap: data?.chMap || adsCachedChMap || {}, nOrders: data?.nOrders ?? adsCachedMeta?.nOrders ?? 0, nCusts: data?.nCusts ?? adsCachedMeta?.nCusts ?? 0, repeatCusts: data?.repeatCusts ?? adsCachedMeta?.repeatCusts ?? 0, shopify: data?.shopify || { totals: { orders: adsCachedMeta?.shopifyOrders || 0 } }, ads: adsCache } : data} filters={filters} />
             </div>
           )}
           {page === 'intelligence' && (
