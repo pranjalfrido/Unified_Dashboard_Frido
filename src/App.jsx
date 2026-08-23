@@ -1704,7 +1704,7 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
                     ) })()}
 
                     {/* Table 3: In-Transit Time — pickup_ts → delivery_ts */}
-                    {(() => { const cw3 = ['25%','15%','15%','15%','15%','15%']; const t3total = courierTotals.delivered;
+                    {(() => { const cw3 = ['25%','18.75%','18.75%','18.75%','18.75%']; const t3total = courierTotals.delivered;
                     const t3TotalPcts = [courierTotals.bucket_0_1, courierTotals.bucket_2_3, courierTotals.bucket_4_5, courierTotals.bucket_5plus].map(v => t3total ? (v/t3total)*100 : 0)
                     return (
                     <div style={{ ...tableCard2, height: 335 }}>
@@ -1716,7 +1716,6 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
                           <colgroup>{cw3.map((w,i)=><col key={i} style={{width:w}}/>)}</colgroup>
                           <thead><tr style={{ background: C.bg }}>
                             <th style={{ ...thL, position: 'sticky', top: 0, background: C.bg, zIndex: 1 }}>Courier</th>
-                            <th style={{ ...thS, position: 'sticky', top: 0, background: C.bg, zIndex: 1 }}>Del</th>
                             <th style={{ ...thS, position: 'sticky', top: 0, background: C.bg, zIndex: 1 }}>0-1d</th>
                             <th style={{ ...thS, position: 'sticky', top: 0, background: C.bg, zIndex: 1 }}>2-3d</th>
                             <th style={{ ...thS, position: 'sticky', top: 0, background: C.bg, zIndex: 1 }}>4-5d</th>
@@ -1729,7 +1728,6 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
                               return (
                                 <tr key={row.courier_group}>
                                   <td style={{ ...tdL, ...(isLast ? { borderBottom: 'none' } : {}) }}>{row.courier_group}</td>
-                                  <td style={{ ...tdS, ...(isLast ? { borderBottom: 'none' } : {}) }}>{tot.toLocaleString('en-IN')}</td>
                                   {[row.bucket_0_1, row.bucket_2_3, row.bucket_4_5, row.bucket_5plus].map((v, ci) => (
                                     <td key={ci} style={{ ...tatCellStyle(v, tot, t3TotalPcts[ci], TAT_CFG.transit[ci], isLast), textAlign: 'right', padding: '5.75px 10px', whiteSpace: 'nowrap', fontSize: 12.35 }}>{fmtCell(v, tot)}</td>
                                   ))}
@@ -1744,7 +1742,6 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
                           <colgroup>{cw3.map((w,i)=><col key={i} style={{width:w}}/>)}</colgroup>
                           <tbody><tr>
                             <td style={totalRowL}>Total</td>
-                            <td style={totalRowS}>{t3total.toLocaleString('en-IN')}</td>
                             <td style={totalRowS}>{fmtCell(courierTotals.bucket_0_1, t3total)}</td>
                             <td style={totalRowS}>{fmtCell(courierTotals.bucket_2_3, t3total)}</td>
                             <td style={totalRowS}>{fmtCell(courierTotals.bucket_4_5, t3total)}</td>
