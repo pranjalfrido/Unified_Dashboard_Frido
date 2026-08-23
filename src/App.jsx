@@ -1577,26 +1577,13 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
                   return 'red'
                 }
               }
-              const SEV_STYLE = {
-                green: { background: '#E6F4EA', color: '#1E7E34', fontWeight: 400 },
-                amber: { background: '#FFF4E5', color: '#B65C00', fontWeight: 400 },
-                red:   { background: '#FDE8E8', color: '#C0392B', fontWeight: 700 },
-              }
-              // Returns cell style with severity + optional "30% worse than total" left-border flag
+              // Returns cell style — red+bold for concerning cells only, plain otherwise
               const tatCellStyle = (v, rowTot, totalPct, cfgEntry, isLastRow) => {
-                const pct = rowTot ? (v / rowTot) * 100 : 0
                 if (isLastRow) return { ...tdS, borderBottom: 'none' }
+                const pct = rowTot ? (v / rowTot) * 100 : 0
                 const sev = getSeverity(pct, cfgEntry)
-                const sevStyle = SEV_STYLE[sev]
-                // secondary flag: >30% worse than total row value
-                let worseBorder = {}
-                if (totalPct != null && sev !== 'red') {
-                  const worse = cfgEntry.dir === 'higher'
-                    ? totalPct > 0 && pct < totalPct * 0.7
-                    : totalPct > 0 && pct > totalPct * 1.3
-                  if (worse) worseBorder = { borderLeft: '3px solid #F59E0B' }
-                }
-                return { ...tdS, ...sevStyle, ...worseBorder }
+                if (sev === 'red') return { ...tdS, color: '#C0392B', fontWeight: 700 }
+                return { ...tdS }
               }
 
               return (
