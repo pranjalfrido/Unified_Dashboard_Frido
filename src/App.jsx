@@ -1539,13 +1539,75 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
               const totalRowS = { fontSize: 12.35, fontWeight: 700, color: C.t1, padding: '9px 10px', textAlign: 'right', whiteSpace: 'nowrap', background: C.bg, borderTop: `2px solid ${C.border}` }
               const totalRowL = { ...totalRowS, textAlign: 'left' }
 
+              // TAT threshold config — direction:'higher'=first bucket (good when high), 'lower'=later buckets (good when low)
+              const TAT_CFG = {
+                processing: [
+                  { dir: 'higher', green: 75, watch: 60 },  // 0-1D
+                  { dir: 'lower',  green: 15, watch: 25 },  // 2-3D
+                  { dir: 'lower',  green: 3,  watch: 6  },  // 4-5D
+                  { dir: 'lower',  green: 2,  watch: 5  },  // 5+D
+                ],
+                pickup: [
+                  { dir: 'higher', green: 65, watch: 45 },  // 0-12H
+                  { dir: 'lower',  green: 12, watch: 18 },  // 12-24H
+                  { dir: 'lower',  green: 20, watch: 35 },  // 24-48H
+                  { dir: 'lower',  green: 3,  watch: 6  },  // 48H+
+                ],
+                transit: [
+                  { dir: 'higher', green: 50, watch: 25 },  // 0-1d
+                  { dir: 'lower',  green: 35, watch: 45 },  // 2-3d
+                  { dir: 'lower',  green: 15, watch: 25 },  // 4-5d
+                  { dir: 'lower',  green: 10, watch: 20 },  // 5+d
+                ],
+                fulfilment: [
+                  { dir: 'higher', green: 6,  watch: 3  },  // 0-1D
+                  { dir: 'lower',  green: 20, watch: 30 },  // 2-3D
+                  { dir: 'lower',  green: 25, watch: 35 },  // 4-5D
+                  { dir: 'lower',  green: 20, watch: 35 },  // 5+D
+                ],
+              }
+              const getSeverity = (pct, cfg) => {
+                if (cfg.dir === 'higher') {
+                  if (pct >= cfg.green) return 'green'
+                  if (pct >= cfg.watch) return 'amber'
+                  return 'red'
+                } else {
+                  if (pct <= cfg.green) return 'green'
+                  if (pct <= cfg.watch) return 'amber'
+                  return 'red'
+                }
+              }
+              const SEV_STYLE = {
+                green: { background: '#E6F4EA', color: '#1E7E34', fontWeight: 400 },
+                amber: { background: '#FFF4E5', color: '#B65C00', fontWeight: 400 },
+                red:   { background: '#FDE8E8', color: '#C0392B', fontWeight: 700 },
+              }
+              // Returns cell style with severity + optional "30% worse than total" left-border flag
+              const tatCellStyle = (v, rowTot, totalPct, cfgEntry, isLastRow) => {
+                const pct = rowTot ? (v / rowTot) * 100 : 0
+                if (isLastRow) return { ...tdS, borderBottom: 'none' }
+                const sev = getSeverity(pct, cfgEntry)
+                const sevStyle = SEV_STYLE[sev]
+                // secondary flag: >30% worse than total row value
+                let worseBorder = {}
+                if (totalPct != null && sev !== 'red') {
+                  const worse = cfgEntry.dir === 'higher'
+                    ? totalPct > 0 && pct < totalPct * 0.7
+                    : totalPct > 0 && pct > totalPct * 1.3
+                  if (worse) worseBorder = { borderLeft: '3px solid #F59E0B' }
+                }
+                return { ...tdS, ...sevStyle, ...worseBorder }
+              }
+
               return (
                 <>
                   <LSectionTitle title="TAT Bucket Analysis" collapsed={secCollapsed['tatbucket']} onToggle={() => toggleSec('tatbucket')} />
                   <div style={{ display: secCollapsed['tatbucket'] ? 'none' : 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: 14 }}>
 
                     {/* Table 1: Order Processing Time — order_date → created_at (by Facility) */}
-                    {(() => { const cw = ['25%','18.75%','18.75%','18.75%','18.75%']; const t1=(facTotals.op_0_1||0)+(facTotals.op_2_3||0)+(facTotals.op_4_5||0)+(facTotals.op_5plus||0); return (
+                    {(() => { const cw = ['25%','18.75%','18.75%','18.75%','18.75%']; const t1=(facTotals.op_0_1||0)+(facTotals.op_2_3||0)+(facTotals.op_4_5||0)+(facTotals.op_5plus||0);
+                    const t1TotalPcts = [facTotals.op_0_1, facTotals.op_2_3, facTotals.op_4_5, facTotals.op_5plus].map(v => t1 ? (v/t1)*100 : 0)
+                    return (
                     <div style={{ ...tableCard2, height: 335 }}>
                       <div style={{ ...tableTitle2, fontSize: 13, padding: '8px 14px 7px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                         <span>Order Processing Time <span style={{ fontWeight: 500, color: C.t3, fontSize: 10.2, marginLeft: 4 }}>(by Facility)</span></span>
@@ -1569,7 +1631,7 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
                                 <tr key={label}>
                                   <td style={{ ...tdL, ...(isLast ? { borderBottom: 'none' } : {}) }}>{label}</td>
                                   {[row.op_0_1, row.op_2_3, row.op_4_5, row.op_5plus].map((v, ci) => (
-                                    <td key={ci} style={{ ...tdS, color: (v/tot)>0.2?'#dc2626':C.t2, fontWeight: (v/tot)>0.2?700:400, ...(isLast ? { borderBottom: 'none' } : {}) }}>{fmtCell(v, tot)}</td>
+                                    <td key={ci} style={{ ...tatCellStyle(v, tot, t1TotalPcts[ci], TAT_CFG.processing[ci], isLast), textAlign: 'right', padding: '5.75px 10px', whiteSpace: 'nowrap', fontSize: 12.35 }}>{fmtCell(v, tot)}</td>
                                   ))}
                                 </tr>
                               )
@@ -1592,8 +1654,10 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
                     </div>
                     ) })()}
 
-                    {/* Table 2: Order Pickup Time — created_at → pickup_ts (by Facility) */}
-                    {(() => { const cw = ['25%','18.75%','18.75%','18.75%','18.75%']; const t2=(facTotals.proc_0_12h+facTotals.proc_12_24h+facTotals.proc_24_48h+facTotals.proc_48plus); return (
+                    {/* Table 2: Order Pickup Time — created_at → pickup_ts (by Courier) */}
+                    {(() => { const cw = ['25%','18.75%','18.75%','18.75%','18.75%']; const t2=(facTotals.proc_0_12h+facTotals.proc_12_24h+facTotals.proc_24_48h+facTotals.proc_48plus);
+                    const t2TotalPcts = [facTotals.proc_0_12h, facTotals.proc_12_24h, facTotals.proc_24_48h, facTotals.proc_48plus].map(v => t2 ? (v/t2)*100 : 0)
+                    return (
                     <div style={{ ...tableCard2, height: 335 }}>
                       <div style={{ ...tableTitle2, fontSize: 13, padding: '8px 14px 7px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                         <span>Order Pickup Time <span style={{ fontWeight: 500, color: C.t3, fontSize: 10.2, marginLeft: 4 }}>(by Courier)</span></span>
@@ -1616,7 +1680,7 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
                                 <tr key={row.label}>
                                   <td style={{ ...tdL, ...(isLast ? { borderBottom: 'none' } : {}) }}>{row.label}</td>
                                   {[row.proc_0_12h, row.proc_12_24h, row.proc_24_48h, row.proc_48plus].map((v, ci) => (
-                                    <td key={ci} style={{ ...tdS, color: (v/tot)>0.2?'#dc2626':C.t2, fontWeight: (v/tot)>0.2?700:400, ...(isLast ? { borderBottom: 'none' } : {}) }}>{fmtCell(v, tot)}</td>
+                                    <td key={ci} style={{ ...tatCellStyle(v, tot, t2TotalPcts[ci], TAT_CFG.pickup[ci], isLast), textAlign: 'right', padding: '5.75px 10px', whiteSpace: 'nowrap', fontSize: 12.35 }}>{fmtCell(v, tot)}</td>
                                   ))}
                                 </tr>
                               )
@@ -1640,7 +1704,9 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
                     ) })()}
 
                     {/* Table 3: In-Transit Time — pickup_ts → delivery_ts */}
-                    {(() => { const cw3 = ['25%','15%','15%','15%','15%','15%']; const t3total = courierTotals.delivered; return (
+                    {(() => { const cw3 = ['25%','15%','15%','15%','15%','15%']; const t3total = courierTotals.delivered;
+                    const t3TotalPcts = [courierTotals.bucket_0_1, courierTotals.bucket_2_3, courierTotals.bucket_4_5, courierTotals.bucket_5plus].map(v => t3total ? (v/t3total)*100 : 0)
+                    return (
                     <div style={{ ...tableCard2, height: 335 }}>
                       <div style={{ ...tableTitle2, fontSize: 13, padding: '8px 14px 7px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                         <span>In-Transit Time <span style={{ fontWeight: 500, color: C.t3, fontSize: 10.2, marginLeft: 4 }}>(by Courier)</span></span>
@@ -1665,7 +1731,7 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
                                   <td style={{ ...tdL, ...(isLast ? { borderBottom: 'none' } : {}) }}>{row.courier_group}</td>
                                   <td style={{ ...tdS, ...(isLast ? { borderBottom: 'none' } : {}) }}>{tot.toLocaleString('en-IN')}</td>
                                   {[row.bucket_0_1, row.bucket_2_3, row.bucket_4_5, row.bucket_5plus].map((v, ci) => (
-                                    <td key={ci} style={{ ...tdS, color: (v/tot)>0.2?'#dc2626':C.t2, fontWeight: (v/tot)>0.2?700:400, ...(isLast ? { borderBottom: 'none' } : {}) }}>{fmtCell(v, tot)}</td>
+                                    <td key={ci} style={{ ...tatCellStyle(v, tot, t3TotalPcts[ci], TAT_CFG.transit[ci], isLast), textAlign: 'right', padding: '5.75px 10px', whiteSpace: 'nowrap', fontSize: 12.35 }}>{fmtCell(v, tot)}</td>
                                   ))}
                                 </tr>
                               )
@@ -1690,7 +1756,9 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
                     ) })()}
 
                     {/* Table 4: Fulfilment Time — order_date → delivery_date (by Facility) */}
-                    {(() => { const cw = ['25%','18.75%','18.75%','18.75%','18.75%']; const t4=(facTotals.ord_0_1+facTotals.ord_2_3+facTotals.ord_4_5+facTotals.ord_5plus); return (
+                    {(() => { const cw = ['25%','18.75%','18.75%','18.75%','18.75%']; const t4=(facTotals.ord_0_1+facTotals.ord_2_3+facTotals.ord_4_5+facTotals.ord_5plus);
+                    const t4TotalPcts = [facTotals.ord_0_1, facTotals.ord_2_3, facTotals.ord_4_5, facTotals.ord_5plus].map(v => t4 ? (v/t4)*100 : 0)
+                    return (
                     <div style={{ ...tableCard2, height: 335 }}>
                       <div style={{ ...tableTitle2, fontSize: 13, padding: '8px 14px 7px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                         <span>Fulfilment Time <span style={{ fontWeight: 500, color: C.t3, fontSize: 10.2, marginLeft: 4 }}>(by Facility)</span></span>
@@ -1714,7 +1782,7 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
                                 <tr key={label}>
                                   <td style={{ ...tdL, ...(isLast ? { borderBottom: 'none' } : {}) }}>{label}</td>
                                   {[row.ord_0_1, row.ord_2_3, row.ord_4_5, row.ord_5plus].map((v, ci) => (
-                                    <td key={ci} style={{ ...tdS, color: (v/tot)>0.2?'#dc2626':C.t2, fontWeight: (v/tot)>0.2?700:400, ...(isLast ? { borderBottom: 'none' } : {}) }}>{fmtCell(v, tot)}</td>
+                                    <td key={ci} style={{ ...tatCellStyle(v, tot, t4TotalPcts[ci], TAT_CFG.fulfilment[ci], isLast), textAlign: 'right', padding: '5.75px 10px', whiteSpace: 'nowrap', fontSize: 12.35 }}>{fmtCell(v, tot)}</td>
                                   ))}
                                 </tr>
                               )
@@ -2571,7 +2639,7 @@ function DateRangePicker({ filters, setFilters, theme: T = C, onRefresh, loading
   )
 }
 
-function MobileKpiCarousel({ cards }) {
+function MobileKpiCarousel({ cards, cardWidth = '80vw', cardMaxWidth = 280 }) {
   const [active, setActive] = useState(0)
   const ref = useRef(null)
   useEffect(() => {
@@ -2588,7 +2656,7 @@ function MobileKpiCarousel({ cards }) {
     <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
       <div ref={ref} style={{ display: 'flex', overflowX: 'auto', scrollSnapType: 'x mandatory', scrollBehavior: 'smooth', gap: 10, paddingBottom: 2, msOverflowStyle: 'none', scrollbarWidth: 'none' }}>
         {cards.map((card, i) => (
-          <div key={i} style={{ flexShrink: 0, width: '80vw', maxWidth: 280, scrollSnapAlign: 'start' }}>
+          <div key={i} style={{ flexShrink: 0, width: cardWidth, maxWidth: cardMaxWidth, scrollSnapAlign: 'start' }}>
             {card}
           </div>
         ))}
@@ -3363,7 +3431,34 @@ function MobileLogisticsPanel({ page, setPage, onClose, lFilters, setLFilters, f
   )
 }
 
-function Topnav({ page, setPage, customerTab, invTab, setInvTab, alerts, onRefresh, loading, filters, setFilters, rawRows, inventoryDateControl, salesActiveTab, setSalesActiveTab, salesData, salesChannelView, setSalesChannelView, salesOfflineSub, setSalesOfflineSub, lFilters, setLFilters, logisticsFilterOpts, costFilters, setCostFilters }) {
+function MobileAdsPanel({ selPlatform, setSelPlatform, onClose }) {
+  const PV = { bg: C.bg, ink: C.t1, ink2: C.t2, sub: C.t3, border: C.border, canvas: C.surface, accent: C.acc, accentDark: C.acc }
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', maxHeight: '80vh' }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '16px 18px 12px' }}>
+        <span style={{ fontSize: 15, fontWeight: 700, color: PV.ink }}>Select Channel</span>
+        <button onClick={onClose} style={{ background: 'none', border: 'none', fontSize: 22, color: PV.ink2, cursor: 'pointer', lineHeight: 1, padding: 4 }}>×</button>
+      </div>
+      <div style={{ overflowY: 'auto', padding: '0 14px 16px', display: 'flex', flexDirection: 'column', gap: 6 }}>
+        {ADS_PLATFORMS.map(p => {
+          const isActive = p.id === 'All' ? !selPlatform : selPlatform === p.id
+          return (
+            <button key={p.id} onClick={() => setSelPlatform(p.id === 'All' ? null : p.id)}
+              style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 14px', borderRadius: 10, border: `1.5px solid ${isActive ? PV.ink : PV.border}`, background: 'transparent', cursor: 'pointer', textAlign: 'left', fontFamily: 'inherit' }}>
+              {p.logo
+                ? <img src={p.logo} alt="" style={{ width: 22, height: 22, borderRadius: 4, objectFit: 'contain', ...(p.id === 'CRED' ? { background: '#000', padding: 2 } : {}) }} />
+                : <div style={{ width: 22, height: 22, borderRadius: 4, background: PV.canvas, flexShrink: 0 }} />}
+              <span style={{ fontSize: 14, fontWeight: isActive ? 700 : 500, color: PV.ink }}>{p.label}</span>
+              {isActive && <span style={{ marginLeft: 'auto', fontSize: 16, color: PV.ink, fontWeight: 700 }}>✓</span>}
+            </button>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
+function Topnav({ page, setPage, customerTab, invTab, setInvTab, alerts, onRefresh, loading, filters, setFilters, rawRows, inventoryDateControl, salesActiveTab, setSalesActiveTab, salesData, salesChannelView, setSalesChannelView, salesOfflineSub, setSalesOfflineSub, lFilters, setLFilters, logisticsFilterOpts, costFilters, setCostFilters, adsSelPlatform, setAdsSelPlatform }) {
   const [mobFilterOpen, setMobFilterOpen] = useState(false)
   const titles = { overview: 'Overview', sales: 'Sales Analytics', pnl: 'P&L Analytics', ads: 'Ads Analytics', intelligence: 'Intelligence', logistics: 'Performance Analytics', 'logistics-cost': 'Cost Analytics', inventory: 'Inventory, Sales & Allocation', customer: 'Customer Intelligence', documents: 'Documents', cogs: 'COGS Ledger', 'logistics-ledger': 'Logistics Bill Ledger' }
   const invTitles = { health: 'Inventory Health', sales: 'Sales & Allocation' }
@@ -3374,7 +3469,7 @@ function Topnav({ page, setPage, customerTab, invTab, setInvTab, alerts, onRefre
   return (
     <div className="topnav">
       <div style={{ display: 'flex', alignItems: 'center', gap: 6, position: 'relative', minWidth: 0, flex: 1 }}>
-        {(page === 'inventory' || page === 'sales' || page === 'logistics' || page === 'logistics-cost') && (
+        {(page === 'inventory' || page === 'sales' || page === 'logistics' || page === 'logistics-cost' || page === 'ads') && (
           <>
             <button className="tnav-mob-only" onClick={() => setMobFilterOpen(v => !v)} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '2px 6px 2px 0', color: C.t2, fontSize: 16, lineHeight: 1, alignItems: 'center', flexShrink: 0 }}>☰</button>
             {mobFilterOpen && (
@@ -3391,6 +3486,8 @@ function Topnav({ page, setPage, customerTab, invTab, setInvTab, alerts, onRefre
                     ? <MobileInvFilterPanel invTab={invTab} setInvTab={setInvTab} inventoryDateControl={inventoryDateControl} onClose={() => setMobFilterOpen(false)} />
                     : (page === 'logistics' || page === 'logistics-cost')
                     ? <MobileLogisticsPanel page={page} setPage={p => { setPage(p); setMobFilterOpen(false) }} onClose={() => setMobFilterOpen(false)} lFilters={lFilters} setLFilters={setLFilters} filterOpts={logisticsFilterOpts} costFilters={costFilters} setCostFilters={setCostFilters} />
+                    : page === 'ads'
+                    ? <MobileAdsPanel selPlatform={adsSelPlatform} setSelPlatform={p => { setAdsSelPlatform(p); setMobFilterOpen(false) }} onClose={() => setMobFilterOpen(false)} />
                     : <MobileSalesFilterPanel activeTab={salesActiveTab} setActiveTab={setSalesActiveTab} filters={filters} setFilters={setFilters} salesData={salesData} channelView={salesChannelView} setChannelView={setSalesChannelView} offlineSub={salesOfflineSub} setOfflineSub={setSalesOfflineSub} onClose={() => setMobFilterOpen(false)} />
                   }
                 </div>
@@ -7765,7 +7862,7 @@ const ADS_PLATFORMS = [
   { id: 'Instamart', label: 'Instamart', logo: '/logo-instamart.png' },
   { id: 'Flipkart', label: 'Flipkart', logo: '/logo-flipkart.png' },
   { id: 'Myntra', label: 'Myntra', logo: '/logo-myntra.png' },
-  { id: 'CRED', label: 'CRED' },
+  { id: 'CRED', label: 'CRED', logo: '/logo-cred.png' },
 ]
 
 // Generic click-to-sort table header hook — sortKey/dir state plus a Th renderer and a
@@ -7829,7 +7926,7 @@ function AdsSlicerDropdown({ label, options, selected, onChange }) {
   )
 }
 
-function AdsTab({ data, filters = {} }) {
+function AdsTab({ data, filters = {}, selPlatform, setSelPlatform }) {
   const ads = data.ads || {}
   const totals = ads.totals || []
   const daily = ads.daily || []
@@ -7846,7 +7943,6 @@ function AdsTab({ data, filters = {} }) {
   const additionalSpend = ads.additionalSpend ?? null
   const additionalSpendByProduct = ads.additionalSpendByProduct || {}
 
-  const [selPlatform, setSelPlatform] = useState(null)
   const [catView, setCatView] = useState('category')
   const [trendGran, setTrendGran] = useState('daily')
   const [selCat, setSelCat] = useState([])
@@ -8076,17 +8172,18 @@ function AdsTab({ data, filters = {} }) {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
-      <div className="sales-tabs">
+      <div className="sales-tabs mob-hidden">
         {ADS_PLATFORMS.map(p => (
           <button key={p.id} onClick={() => setSelPlatform(p.id === 'All' ? null : p.id)}
             className={`stab${(p.id === 'All' ? !selPlatform : selPlatform === p.id) ? ' active' : ''}`}
             style={p.id === 'All' ? { fontWeight: !selPlatform ? 800 : 700, fontSize: 13 } : {}}>
-            {p.logo && <img src={p.logo} alt="" style={{ width: 14, height: 14, borderRadius: 3, flexShrink: 0, objectFit: 'contain' }} />}
+            {p.logo && <img src={p.logo} alt="" style={{ width: 14, height: 14, borderRadius: 3, flexShrink: 0, objectFit: 'contain', ...(p.id === 'CRED' ? { background: '#000', padding: 1 } : {}) }} />}
             {p.logo2 && <img src={p.logo2} alt="" style={{ width: 14, height: 14, borderRadius: 3, flexShrink: 0, objectFit: 'contain', marginLeft: -4 }} />}
             {p.label}
           </button>
         ))}
       </div>
+
 
       {selPlatform === 'CRED' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 14, padding: '14px 16px', flex: 1, overflowY: 'auto' }}>
@@ -8139,19 +8236,32 @@ function AdsTab({ data, filters = {} }) {
               ? [{ label: 'CAC (D2C)', value: cac > 0 ? `₹${Math.round(cac).toLocaleString('en-IN')}` : '—', sub: `Spend / ${fmtN(shopifyNewCustomers)} new custs`, badge: chgBadge(cac, prevCac) }]
               : [{ label: 'CPM', value: overallCpm > 0 ? `₹${Math.round(overallCpm).toLocaleString('en-IN')}` : '—', sub: 'Cost per 1K impressions', badge: chgBadge(overallCpm, prevCpm) }]),
           ]
-          return (
-            <div style={{ display: 'grid', gridTemplateColumns: `repeat(${cols}, 1fr)`, gap: 10 }}>
-              {[...row1Items, ...row2Items].map(k => (
-                <div key={k.label} className="kpi-card" style={{ padding: '12px 14px', ...(k.accentColor ? { borderLeft: `3px solid ${k.accentColor}` } : {}) }}>
-                  <div className="kpi-label">{k.label}</div>
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 4, marginTop: 4 }}>
-                    <div className="kpi-value" style={{ fontSize: 18, color: k.roasVal != null ? roasColor(k.roasVal) : C.t1 }}>{k.value}</div>
-                    {k.badge}
-                  </div>
-                  {k.sub && <div className="kpi-sub" style={{ marginTop: 3 }}>{k.sub}</div>}
-                </div>
-              ))}
+          const allKpis = [...row1Items, ...row2Items]
+          const kpiCard = k => (
+            <div key={k.label} className="kpi-card" style={{ padding: '12px 14px', ...(k.accentColor ? { borderLeft: `3px solid ${k.accentColor}` } : {}) }}>
+              <div className="kpi-label">{k.label}</div>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 4, marginTop: 4 }}>
+                <div className="kpi-value" style={{ fontSize: 18, color: k.roasVal != null ? roasColor(k.roasVal) : C.t1 }}>{k.value}</div>
+                {k.badge}
+              </div>
+              {k.sub && <div className="kpi-sub" style={{ marginTop: 3 }}>{k.sub}</div>}
             </div>
+          )
+          return (
+            <>
+              {/* Desktop grid — hidden on mobile */}
+              <div className="mob-hidden" style={{ display: 'grid', gridTemplateColumns: `repeat(${cols}, 1fr)`, gap: 10 }}>
+                {allKpis.map(k => kpiCard(k))}
+              </div>
+              {/* Mobile carousel — hidden on desktop */}
+              <div className="mob-only" style={{ flexDirection: 'column', gap: 6, marginLeft: -16, marginRight: -16, paddingLeft: 4 }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingLeft: 12, paddingRight: 12 }}>
+                  <span style={{ fontSize: 13, fontWeight: 700, color: C.t1 }}>Key Metrics</span>
+                  <span style={{ fontSize: 11, color: C.t3 }}>{allKpis.length} tiles · swipe →</span>
+                </div>
+                <MobileKpiCarousel cards={allKpis.map(k => kpiCard(k))} cardWidth="46vw" cardMaxWidth={176} />
+              </div>
+            </>
           )
         })()}
 
@@ -8159,7 +8269,7 @@ function AdsTab({ data, filters = {} }) {
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
 
           {/* Trend + Platform Overview — one row, equal fixed height */}
-          <div style={{ display: 'flex', gap: 12, alignItems: 'stretch' }}>
+          <div className="ads-trend-row" style={{ display: 'flex', gap: 12, alignItems: 'stretch' }}>
 
           {/* Spend, Revenue & ROAS Trend */}
           {(() => {
@@ -8261,7 +8371,7 @@ function AdsTab({ data, filters = {} }) {
               )
             }
             return (
-              <div className="kpi-card" style={{ padding: '14px 16px', flex: selPlatform === 'Amazon' ? 4 : 3, minWidth: 0, height: ADS_CHART_ROW_H, display: 'flex', flexDirection: 'column' }}>
+              <div className="kpi-card ads-trend-chart" style={{ padding: '14px 16px', flex: selPlatform === 'Amazon' ? 4 : 3, minWidth: 0, height: ADS_CHART_ROW_H, display: 'flex', flexDirection: 'column' }}>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10, flexWrap: 'wrap', gap: 6 }}>
                   <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, minWidth: 0 }}>
                     <div style={{ fontWeight: 700, fontSize: 13, color: C.t1, flexShrink: 0 }}>Spend, Revenue & ROAS Trend</div>
@@ -8272,8 +8382,27 @@ function AdsTab({ data, filters = {} }) {
                     )}
                   </div>
                   <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
-                    <AdsSlicerDropdown label="Category" options={trendCatOptions} selected={selCat} onChange={setSelCat} />
-                    <AdsSlicerDropdown label="Sub-category" options={trendSubCatOptions} selected={selSubCat} onChange={setSelSubCat} />
+                    <span className="ads-trend-desktop-filters" style={{ display: 'contents' }}>
+                      <AdsSlicerDropdown label="Category" options={trendCatOptions} selected={selCat} onChange={setSelCat} />
+                      <AdsSlicerDropdown label="Sub-category" options={trendSubCatOptions} selected={selSubCat} onChange={setSelSubCat} />
+                    </span>
+                    {/* Mobile: single combined filter dropdown */}
+                    <select className="ads-trend-mob-filter" onChange={e => {
+                      const val = e.target.value
+                      if (!val) { setSelCat([]); setSelSubCat([]) }
+                      else if (trendCatOptions.includes(val)) { setSelCat([val]); setSelSubCat([]) }
+                      else { setSelSubCat([val]) }
+                    }}
+                      value={selSubCat[0] || selCat[0] || ''}
+                      style={{ display: 'none', fontSize: 11, fontWeight: 600, padding: '3px 8px', borderRadius: 6, border: `1px solid ${C.border}`, background: C.card, color: C.t2, cursor: 'pointer', outline: 'none', maxWidth: 110 }}>
+                      <option value="">Category ▾</option>
+                      <optgroup label="Category">
+                        {trendCatOptions.map(o => <option key={o} value={o}>{o}</option>)}
+                      </optgroup>
+                      <optgroup label="Sub-category">
+                        {trendSubCatOptions.map(o => <option key={o} value={o}>{o}</option>)}
+                      </optgroup>
+                    </select>
                     <select value={trendGran} onChange={e => setTrendGran(e.target.value)}
                       style={{ fontSize: 11, fontWeight: 600, padding: '3px 8px', borderRadius: 6, border: `1px solid ${C.border}`, background: C.card, color: C.t2, cursor: 'pointer', outline: 'none' }}>
                       <option value="daily">Daily</option>
@@ -13922,6 +14051,7 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
   const [activeTab, setActiveTab] = useState('all')
   const [salesChannelView, setSalesChannelView] = useState('all')
   const [salesOfflineSub, setSalesOfflineSub] = useState('all')
+  const [adsSelPlatform, setAdsSelPlatform] = useState(null)
   const [rawRows, setRawRows] = useState(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
@@ -14228,7 +14358,7 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
     <div className="app-shell">
       <Sidebar page={page} setPage={setPage} invTab={invTab} setInvTab={setInvTab} allowedTabs={allowedTabs} profile={profile} />
       <div className="app-main">
-        <Topnav page={page} setPage={setPage} customerTab={customerTab} invTab={invTab} setInvTab={setInvTab} alerts={alerts} lFilters={lFilters} setLFilters={setLFilters} logisticsFilterOpts={logisticsFilterOpts} costFilters={costFilters} setCostFilters={setCostFilters} onRefresh={() => { const { start, end, category, subCategory, sku, subChannel, voucher, region, tier, state, city, country } = filters; const e = {}; if (category?.length) e.category = category.join(','); if (subCategory?.length) e.subCategory = subCategory.join(','); if (sku?.length) e.sku = sku.join(','); if (subChannel) e.subChannel = subChannel; if (voucher) e.voucher = voucher; if (region?.length) e.region = region.join(','); if (tier?.length) e.tier = tier.join(','); if (state?.length) e.state = state.join(','); if (city) e.city = city; if (country) e.country = country; fetchData(start, end, e) }} loading={loading} filters={filters} setFilters={setFilters} rawRows={rawRows} inventoryDateControl={inventoryDateControl} salesActiveTab={activeTab} setSalesActiveTab={setActiveTab} salesData={data} salesChannelView={salesChannelView} setSalesChannelView={setSalesChannelView} salesOfflineSub={salesOfflineSub} setSalesOfflineSub={setSalesOfflineSub} />
+        <Topnav page={page} setPage={setPage} customerTab={customerTab} invTab={invTab} setInvTab={setInvTab} alerts={alerts} lFilters={lFilters} setLFilters={setLFilters} logisticsFilterOpts={logisticsFilterOpts} costFilters={costFilters} setCostFilters={setCostFilters} onRefresh={() => { const { start, end, category, subCategory, sku, subChannel, voucher, region, tier, state, city, country } = filters; const e = {}; if (category?.length) e.category = category.join(','); if (subCategory?.length) e.subCategory = subCategory.join(','); if (sku?.length) e.sku = sku.join(','); if (subChannel) e.subChannel = subChannel; if (voucher) e.voucher = voucher; if (region?.length) e.region = region.join(','); if (tier?.length) e.tier = tier.join(','); if (state?.length) e.state = state.join(','); if (city) e.city = city; if (country) e.country = country; fetchData(start, end, e) }} loading={loading} filters={filters} setFilters={setFilters} rawRows={rawRows} inventoryDateControl={inventoryDateControl} salesActiveTab={activeTab} setSalesActiveTab={setActiveTab} salesData={data} salesChannelView={salesChannelView} setSalesChannelView={setSalesChannelView} salesOfflineSub={salesOfflineSub} setSalesOfflineSub={setSalesOfflineSub} adsSelPlatform={adsSelPlatform} setAdsSelPlatform={setAdsSelPlatform} />
         {(loading || inventoryDateControl?.loading) && (
           <div style={{ height: 2, background: C.border, flexShrink: 0 }}>
             <div className="progress-bar" style={{ height: '100%', background: C.acc }} />
@@ -14264,7 +14394,7 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
           {page === 'ads' && !adsCache && !data && <Skeleton />}
           {page === 'ads' && (adsCache || data) && (!allowedTabs || allowedTabs.includes('ads')) && (
             <div className="page-scroll">
-              <AdsTab data={adsCache ? { cred: {}, ...(data || {}), chMap: data?.chMap || adsCachedChMap || {}, nOrders: data?.nOrders ?? adsCachedMeta?.nOrders ?? 0, nCusts: data?.nCusts ?? adsCachedMeta?.nCusts ?? 0, repeatCusts: data?.repeatCusts ?? adsCachedMeta?.repeatCusts ?? 0, shopify: data?.shopify || { totals: { orders: adsCachedMeta?.shopifyOrders || 0 } }, ads: adsCache } : data} filters={filters} />
+              <AdsTab data={adsCache ? { cred: {}, ...(data || {}), chMap: data?.chMap || adsCachedChMap || {}, nOrders: data?.nOrders ?? adsCachedMeta?.nOrders ?? 0, nCusts: data?.nCusts ?? adsCachedMeta?.nCusts ?? 0, repeatCusts: data?.repeatCusts ?? adsCachedMeta?.repeatCusts ?? 0, shopify: data?.shopify || { totals: { orders: adsCachedMeta?.shopifyOrders || 0 } }, ads: adsCache } : data} filters={filters} selPlatform={adsSelPlatform} setSelPlatform={setAdsSelPlatform} />
             </div>
           )}
           {page === 'intelligence' && (

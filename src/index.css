@@ -176,6 +176,7 @@ html,body{height:100%;background:var(--bg);font-family:var(--font);color:var(--t
 /* Hidden on desktop, shown on mobile via media query */
 .tnav-mob-only { display: none; }
 .inv-detail-mobile-only { display: none; }
+.mob-only { display: none; }
 
 /* ══════════════════════════════════════════════
    MOBILE  ≤ 768px
@@ -198,6 +199,15 @@ html,body{height:100%;background:var(--bg);font-family:var(--font);color:var(--t
   .profile-section label{ font-size:11.5px !important; margin-bottom:4px !important }
   .profile-section > div > div{ gap:10px !important }
   .tnav-mob-only{ display:flex !important }
+  .mob-only{ display:flex !important }
+  .mob-hidden{ display:none !important }
+  .sales-tabs.mob-hidden{ display:none !important }
+  .mob-only .kpi-sub{ display:none !important }
+  .ads-trend-desktop-filters{ display:none !important }
+  .ads-trend-mob-filter{ display:block !important }
+  .ads-trend-row{ flex-direction:column !important; margin-left:-16px !important; margin-right:-16px !important }
+  .ads-trend-chart{ height:480px !important; flex:none !important; width:100% !important; border-radius:0 !important }
+  .ads-trend-row > *{ width:100% !important; max-width:100% !important; flex:none !important; border-radius:0 !important; box-sizing:border-box !important }
 
   .app-main{ padding-bottom:var(--bot) }
 
