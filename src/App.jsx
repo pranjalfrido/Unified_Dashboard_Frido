@@ -8741,11 +8741,11 @@ function AdsTab({ data, filters = {}, selPlatform, setSelPlatform }) {
 
           // Same look as the Platform Overview table above: C.bg header band with a 1.5px
           // bottom border, hover-highlighted rows (no zebra striping), roasBg/roasColor badge.
-          const thStyle = { fontSize: 10, fontWeight: 700, color: C.t3, textTransform: 'uppercase', letterSpacing: 0.4, padding: '7px 12px', textAlign: 'right', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', borderBottom: `1.5px solid ${C.border}` }
+          const thStyle = { fontSize: 10, fontWeight: 700, color: C.t3, textTransform: 'uppercase', letterSpacing: 0.4, padding: isMob ? '7px 4px' : '7px 12px', textAlign: 'right', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', borderBottom: `1.5px solid ${C.border}` }
           const thStyleL = { ...thStyle, textAlign: 'left' }
-          const tdStyle = { fontSize: 12, padding: '5px 12px', textAlign: 'right', color: C.t1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', borderBottom: `1px solid ${C.border}` }
+          const tdStyle = { fontSize: 12, padding: isMob ? '5px 4px' : '5px 12px', textAlign: 'right', color: C.t1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', borderBottom: `1px solid ${C.border}` }
           const tdStyleL = { ...tdStyle, textAlign: 'left' }
-          const totalTdStyle = { ...tdStyle, padding: '7px 12px', fontWeight: 700, color: C.t1, borderBottom: 'none' }
+          const totalTdStyle = { ...tdStyle, padding: isMob ? '7px 4px' : '7px 12px', fontWeight: 700, color: C.t1, borderBottom: 'none' }
 
           const catGetters = { category: r => r.category, spend: r => r.spend, revenue: r => r.revenue, roas: r => r.roas, addlSpend: r => { const scs = slicedProdRows.filter(p => p.category === r.category).map(p => p.subCategory); return hasAddlSpendData ? scs.reduce((s, sc) => s + (getProductAddlSpend(sc) || 0), 0) : 0 } }
           const prodGetters = { category: r => r.category, subCategory: r => r.subCategory, spend: r => r.spend, revenue: r => r.revenue, roas: r => r.roas, addlSpend: r => hasAddlSpendData ? (getProductAddlSpend(r.subCategory) || 0) : 0 }
