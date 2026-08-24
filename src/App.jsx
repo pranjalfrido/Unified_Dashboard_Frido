@@ -3447,7 +3447,8 @@ function Topnav({ page, setPage, customerTab, invTab, setInvTab, alerts, onRefre
   const titles = { overview: 'Overview', sales: 'Sales Analytics', pnl: 'P&L Analytics', ads: 'Ads Analytics', intelligence: 'Intelligence', logistics: 'Performance Analytics', 'logistics-cost': 'Cost Analytics', inventory: 'Inventory, Sales & Allocation', customer: 'Customer Intelligence', documents: 'Documents', cogs: 'COGS Ledger', 'logistics-ledger': 'Logistics Bill Ledger' }
   const invTitles = { health: 'Inventory Health', sales: 'Sales & Allocation' }
   const salesChannelLabel = TABS.find(t => t.id === salesActiveTab)?.label || 'Sales Analytics'
-  const pageTitle = page === 'inventory' ? (invTitles[invTab] || titles.inventory) : page === 'sales' ? salesChannelLabel : titles[page]
+  const adsTitle = page === 'ads' ? (adsSelPlatform ? `${adsSelPlatform} Ads Analytics` : 'Overview') : null
+  const pageTitle = page === 'inventory' ? (invTitles[invTab] || titles.inventory) : page === 'sales' ? salesChannelLabel : page === 'ads' ? adsTitle : titles[page]
   const critical = alerts.filter(a => a.type === 'red').length
   const dateBlurred = page === 'customer' && customerTab === 'rfm'
   return (
@@ -7835,7 +7836,7 @@ function FlipkartTab({ data }) {
 }
 
 const PLATFORM_COLORS = { Meta: '#1877F2', Google: '#EA4335', Amazon: '#FF9900', Blinkit: '#FFD600', Zepto: '#8B5CF6', Instamart: '#FF6B35', Flipkart: '#2E74CC', Myntra: '#FF3F6C' }
-const ADS_CHART_ROW_H = 340
+const ADS_CHART_ROW_H = 290
 const ADS_SPEND_TABLE_H = 460
 const ADS_PLATFORMS = [
   { id: 'All', label: 'Overall' },
@@ -7910,7 +7911,48 @@ function AdsSlicerDropdown({ label, options, selected, onChange }) {
   )
 }
 
+function AdsMobCatDropdown({ catOptions, subCatOptions, selCat, selSubCat, setSelCat, setSelSubCat }) {
+  const [open, setOpen] = useState(false)
+  const ref = useRef(null)
+  useEffect(() => {
+    if (!open) return
+    const handler = e => { if (ref.current && !ref.current.contains(e.target)) setOpen(false) }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [open])
+  const current = selSubCat[0] || selCat[0] || ''
+  const label = current || 'Category ▾'
+  const select = val => {
+    if (!val) { setSelCat([]); setSelSubCat([]) }
+    else if (catOptions.includes(val)) { setSelCat([val]); setSelSubCat([]) }
+    else { setSelSubCat([val]); setSelCat([]) }
+    setOpen(false)
+  }
+  return (
+    <div ref={ref} className="ads-trend-mob-filter" style={{ display: 'none', position: 'relative' }}>
+      <button onClick={() => setOpen(o => !o)} style={{ fontSize: 11, fontWeight: 600, padding: '3px 8px', borderRadius: 6, border: `1px solid ${C.border}`, background: C.card, color: C.t2, cursor: 'pointer', outline: 'none', maxWidth: 110, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+        {label}
+      </button>
+      {open && (
+        <div style={{ position: 'absolute', top: '100%', left: 0, zIndex: 999, background: C.card, border: `1px solid ${C.border}`, borderRadius: 8, boxShadow: '0 4px 16px rgba(0,0,0,0.12)', minWidth: 160, maxHeight: 220, overflowY: 'auto', marginTop: 4 }}>
+          <div onClick={() => select('')} style={{ padding: '7px 12px', fontSize: 11.5, color: !current ? C.t1 : C.t2, fontWeight: !current ? 700 : 400, cursor: 'pointer', borderBottom: `1px solid ${C.border}` }}>All</div>
+          <div style={{ padding: '4px 12px 2px', fontSize: 10, fontWeight: 700, color: C.t3, textTransform: 'uppercase', letterSpacing: '.04em', marginTop: 4 }}>Category</div>
+          {catOptions.map(o => (
+            <div key={o} onClick={() => select(o)} style={{ padding: '6px 12px', fontSize: 11.5, color: selCat[0] === o ? C.t1 : C.t2, fontWeight: selCat[0] === o ? 700 : 400, cursor: 'pointer', background: selCat[0] === o ? C.bg : 'transparent' }}>{o}</div>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
 function AdsTab({ data, filters = {}, selPlatform, setSelPlatform }) {
+  const [isMob, setIsMob] = useState(() => window.innerWidth <= 768)
+  useEffect(() => {
+    const onResize = () => setIsMob(window.innerWidth <= 768)
+    window.addEventListener('resize', onResize)
+    return () => window.removeEventListener('resize', onResize)
+  }, [])
   const ads = data.ads || {}
   const totals = ads.totals || []
   const daily = ads.daily || []
@@ -8371,22 +8413,7 @@ function AdsTab({ data, filters = {}, selPlatform, setSelPlatform }) {
                       <AdsSlicerDropdown label="Sub-category" options={trendSubCatOptions} selected={selSubCat} onChange={setSelSubCat} />
                     </span>
                     {/* Mobile: single combined filter dropdown */}
-                    <select className="ads-trend-mob-filter" onChange={e => {
-                      const val = e.target.value
-                      if (!val) { setSelCat([]); setSelSubCat([]) }
-                      else if (trendCatOptions.includes(val)) { setSelCat([val]); setSelSubCat([]) }
-                      else { setSelSubCat([val]) }
-                    }}
-                      value={selSubCat[0] || selCat[0] || ''}
-                      style={{ display: 'none', fontSize: 11, fontWeight: 600, padding: '3px 8px', borderRadius: 6, border: `1px solid ${C.border}`, background: C.card, color: C.t2, cursor: 'pointer', outline: 'none', maxWidth: 110 }}>
-                      <option value="">Category ▾</option>
-                      <optgroup label="Category">
-                        {trendCatOptions.map(o => <option key={o} value={o}>{o}</option>)}
-                      </optgroup>
-                      <optgroup label="Sub-category">
-                        {trendSubCatOptions.map(o => <option key={o} value={o}>{o}</option>)}
-                      </optgroup>
-                    </select>
+                    <AdsMobCatDropdown catOptions={trendCatOptions} subCatOptions={trendSubCatOptions} selCat={selCat} selSubCat={selSubCat} setSelCat={setSelCat} setSelSubCat={setSelSubCat} />
                     <select value={trendGran} onChange={e => setTrendGran(e.target.value)}
                       style={{ fontSize: 11, fontWeight: 600, padding: '3px 8px', borderRadius: 6, border: `1px solid ${C.border}`, background: C.card, color: C.t2, cursor: 'pointer', outline: 'none' }}>
                       <option value="daily">Daily</option>
@@ -8397,15 +8424,15 @@ function AdsTab({ data, filters = {}, selPlatform, setSelPlatform }) {
                   </div>
                 </div>
                 <ResponsiveContainer width="100%" height="100%">
-                  <ComposedChart data={trendData} margin={{ top: 4, right: 50, bottom: 0, left: 0 }}>
+                  <ComposedChart data={trendData} margin={{ top: 4, right: isMob ? 12 : 50, bottom: 0, left: isMob ? 12 : 0 }}>
                     <defs>
                       <linearGradient id="adsSpendGrad" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#6366F1" stopOpacity={0.25}/><stop offset="95%" stopColor="#6366F1" stopOpacity={0}/></linearGradient>
                       <linearGradient id="adsRevGrad" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#10B981" stopOpacity={0.2}/><stop offset="95%" stopColor="#10B981" stopOpacity={0}/></linearGradient>
                     </defs>
                     <CartesianGrid strokeDasharray="3 3" stroke={C.border} />
                     <XAxis dataKey="date" tick={{ fontSize: 10, fill: C.t3 }} tickFormatter={xFmt} />
-                    <YAxis yAxisId="left" tick={{ fontSize: 10, fill: C.t3 }} tickFormatter={v => fmt(v)} width={55} />
-                    <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 10, fill: '#F59E0B' }} tickFormatter={v => `${v}x`} width={38} />
+                    <YAxis yAxisId="left" tick={isMob ? false : { fontSize: 10, fill: C.t3 }} tickFormatter={v => fmt(v)} width={isMob ? 0 : 55} />
+                    <YAxis yAxisId="right" orientation="right" tick={isMob ? false : { fontSize: 10, fill: '#F59E0B' }} tickFormatter={v => `${v}x`} width={isMob ? 0 : 38} />
                     <Tooltip content={trendTooltip} />
                     <Area yAxisId="left" type="monotone" dataKey="spend" name="Spend" stroke="#6366F1" strokeWidth={2} fill="url(#adsSpendGrad)" dot={false} legendType="none" />
                     <Area yAxisId="left" type="monotone" dataKey="revenue" name="Revenue" stroke="#10B981" strokeWidth={2} fill="url(#adsRevGrad)" dot={false} legendType="none" />
@@ -8547,18 +8574,19 @@ function AdsTab({ data, filters = {}, selPlatform, setSelPlatform }) {
               platform: r => r.platform, spend: r => r.spend, rev: r => r.rev || 0, roas: r => r.roas,
             })
 
-            const thStyle = { fontSize: 10, fontWeight: 700, color: C.t3, textTransform: 'uppercase', letterSpacing: 0.4, padding: '7px 10px', textAlign: 'right', whiteSpace: 'nowrap', borderBottom: `1.5px solid ${C.border}` }
-            const tdStyle = { fontSize: 12, padding: '5px 10px', textAlign: 'right', color: C.t1, borderBottom: `1px solid ${C.border}` }
-            const totalTdStyle = { ...tdStyle, padding: '7px 10px', fontWeight: 700, color: C.t1, borderBottom: 'none' }
+            const isMobPlatTable = window.innerWidth <= 768
+            const thStyle = { fontSize: 10, fontWeight: 700, color: C.t3, textTransform: 'uppercase', letterSpacing: 0.4, padding: isMobPlatTable ? '5px 5px' : '7px 10px', textAlign: 'right', whiteSpace: 'nowrap', borderBottom: `1.5px solid ${C.border}` }
+            const tdStyle = { fontSize: isMobPlatTable ? 11 : 12, padding: isMobPlatTable ? '5px 5px' : '5px 10px', textAlign: 'right', color: C.t1, borderBottom: `1px solid ${C.border}` }
+            const totalTdStyle = { ...tdStyle, padding: '7px 10px', fontWeight: 700, color: C.t1, borderBottom: 'none', whiteSpace: 'nowrap' }
             const { Th } = platformTable
             const totalSpendAll = enrichedRows.reduce((s, r) => s + (r.spend || 0), 0)
             const totalRev = enrichedRows.reduce((s, r) => s + (r.rev || 0), 0)
             const totalRoas = totalSpendAll > 0 && totalRev > 0 ? totalRev / totalSpendAll : 0
             const platformColumns = [
               { id: 'spend', label: 'Spend', sortKey: 'spend',
-                row: t => <td style={tdStyle}>{fmt(t.spend)}{totalSpendAll > 0 && <span style={{ fontSize: 10, color: C.t3, marginLeft: 4 }}>({(t.spend / totalSpendAll * 100).toFixed(1)}%)</span>}</td>,
+                row: t => <td style={tdStyle}>{fmt(t.spend)}{totalSpendAll > 0 && !isMobPlatTable && <span style={{ fontSize: 10, color: C.t3, marginLeft: 4 }}>({(t.spend / totalSpendAll * 100).toFixed(1)}%)</span>}</td>,
                 total: () => <td style={totalTdStyle}>{fmt(totalSpendAll)}</td> },
-              { id: 'rev', label: 'Revenue (Ex GST)', sortKey: 'rev',
+              { id: 'rev', label: isMobPlatTable ? 'Revenue' : 'Revenue (Ex GST)', sortKey: 'rev',
                 row: t => <td style={tdStyle}>{(t.rev || 0) > 0 ? fmt(t.rev) : '—'}</td>,
                 total: () => <td style={totalTdStyle}>{totalRev > 0 ? fmt(totalRev) : '—'}</td> },
               { id: 'roas', label: 'ROAS', sortKey: 'roas',
@@ -8570,7 +8598,7 @@ function AdsTab({ data, filters = {}, selPlatform, setSelPlatform }) {
             // unconditionally near the top of AdsTab instead; referenced here by column identity.
             const orderedPlatformCols = platformColumnOrder.orderedColumns.map(oc => platformColumns.find(c => c.id === oc.id) || oc)
             return (
-              <div className="kpi-card" style={{ padding: '14px 16px', flex: 2, minWidth: 0, maxWidth: '38%', height: ADS_CHART_ROW_H, display: 'flex', flexDirection: 'column' }}>
+              <div className="kpi-card ads-platform-overview" style={{ padding: '14px 16px', flex: 2, minWidth: 0, maxWidth: '38%', height: ADS_CHART_ROW_H, display: 'flex', flexDirection: 'column' }}>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
                   <div style={{ fontWeight: 700, fontSize: 13, color: C.t1 }}>Platform Overview</div>
                   <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
@@ -8580,7 +8608,7 @@ function AdsTab({ data, filters = {}, selPlatform, setSelPlatform }) {
                         ↺ Reset columns
                       </button>
                     )}
-                    <button onClick={() => exportCSV(tableRows.map(t => ({
+                    <button className="mob-hidden" onClick={() => exportCSV(tableRows.map(t => ({
                       Platform: t.platform === 'D2C' ? 'D2C (Meta + Google)' : t.platform, Spend: t.spend, 'Revenue (Ex GST)': t.rev || 0, ROAS: t.roas || '',
                     })), 'ads_platform_overview.csv')}
                       style={{ fontSize: 10, color: C.t2, background: C.card, border: `1px solid ${C.border}`, borderRadius: 6, padding: '3px 8px', cursor: 'pointer' }}>
@@ -8589,10 +8617,10 @@ function AdsTab({ data, filters = {}, selPlatform, setSelPlatform }) {
                   </div>
                 </div>
                 <div style={{ overflowX: 'auto', flex: 1, display: 'flex', flexDirection: 'column' }}>
-                  <table style={{ width: '100%', height: '100%', borderCollapse: 'collapse', minWidth: 480 }}>
+                  <table style={{ width: '100%', height: '100%', borderCollapse: 'collapse', minWidth: window.innerWidth <= 768 ? 0 : 480 }}>
                     <thead>
                       <tr style={{ background: C.bg }}>
-                        <Th label="Platform" sortKey="platform" style={thStyle} align="left" />
+                        <Th label="Platform" sortKey="platform" style={{ ...thStyle, width: window.innerWidth <= 768 ? 90 : undefined }} align="left" />
                         {orderedPlatformCols.map(c => (
                           <Th key={c.id} label={c.label} sortKey={c.sortKey} style={thStyle}
                             dragProps={{ onDragStart: platformColumnOrder.onDragStart(c.id), onDragOver: platformColumnOrder.onDragOver, onDrop: platformColumnOrder.onDrop(c.id) }} />
@@ -8606,20 +8634,30 @@ function AdsTab({ data, filters = {}, selPlatform, setSelPlatform }) {
                           <tr key={t.platform} style={{ cursor: 'default' }}
                             onMouseEnter={e => e.currentTarget.style.background = C.hover}
                             onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
-                            <td style={{ ...tdStyle, textAlign: 'left' }}>
-                              <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-                                {isD2CRow ? (
-                                  <>
-                                    <img src="/logo-meta.jpg" alt="Meta" style={{ width: 16, height: 16, borderRadius: 3, objectFit: 'contain', flexShrink: 0 }} />
-                                    <img src="/logo-google.jpg" alt="Google" style={{ width: 16, height: 16, borderRadius: 3, objectFit: 'contain', flexShrink: 0 }} />
-                                  </>
-                                ) : platLogos[t.platform] ? (
-                                  <img src={platLogos[t.platform]} alt="" style={{ width: 16, height: 16, borderRadius: 3, objectFit: 'contain', flexShrink: 0, background: t.platform === 'CRED' ? '#1a1a1a' : 'transparent', padding: t.platform === 'CRED' ? 1 : 0 }} />
-                                ) : (
-                                  <span style={{ width: 10, height: 10, borderRadius: '50%', background: PLATFORM_COLORS[t.platform] || C.acc, flexShrink: 0, display: 'inline-block' }} />
-                                )}
-                                <span style={{ fontWeight: 700 }}>{isD2CRow ? 'D2C (Meta + Google)' : t.platform}</span>
-                              </div>
+                            <td style={{ ...tdStyle, textAlign: 'left', maxWidth: window.innerWidth <= 768 ? 100 : undefined }}>
+                              {isD2CRow && window.innerWidth <= 768 ? (
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                  <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                                    <img src="/logo-meta.jpg" alt="Meta" style={{ width: 13, height: 13, borderRadius: 2, objectFit: 'contain' }} />
+                                    <img src="/logo-google.jpg" alt="Google" style={{ width: 13, height: 13, borderRadius: 2, objectFit: 'contain' }} />
+                                  </div>
+                                  <span style={{ fontWeight: 700, fontSize: 11, whiteSpace: 'nowrap' }}>D2C</span>
+                                </div>
+                              ) : (
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 5, overflow: 'hidden' }}>
+                                  {isD2CRow ? (
+                                    <>
+                                      <img src="/logo-meta.jpg" alt="Meta" style={{ width: 16, height: 16, borderRadius: 3, objectFit: 'contain', flexShrink: 0 }} />
+                                      <img src="/logo-google.jpg" alt="Google" style={{ width: 16, height: 16, borderRadius: 3, objectFit: 'contain', flexShrink: 0 }} />
+                                    </>
+                                  ) : platLogos[t.platform] ? (
+                                    <img src={platLogos[t.platform]} alt="" style={{ width: 16, height: 16, borderRadius: 3, objectFit: 'contain', flexShrink: 0, background: t.platform === 'CRED' ? '#1a1a1a' : 'transparent', padding: t.platform === 'CRED' ? 1 : 0 }} />
+                                  ) : (
+                                    <span style={{ width: 10, height: 10, borderRadius: '50%', background: PLATFORM_COLORS[t.platform] || C.acc, flexShrink: 0, display: 'inline-block' }} />
+                                  )}
+                                  <span style={{ fontWeight: 700, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{t.platform}</span>
+                                </div>
+                              )}
                             </td>
                             {orderedPlatformCols.map(c => <Fragment key={c.id}>{c.row(t)}</Fragment>)}
                           </tr>
@@ -8690,7 +8728,7 @@ function AdsTab({ data, filters = {}, selPlatform, setSelPlatform }) {
 
           const catColumnDefs = [
             {
-              id: 'spend', label: 'Spend', sortKey: 'spend', width: '22%', style: thStyle,
+              id: 'spend', label: 'Spend', sortKey: 'spend', width: window.innerWidth <= 768 ? '20%' : '22%', style: thStyle,
               row: r => {
                 const catSubCats = slicedProdRows.filter(p => p.category === r.category).map(p => p.subCategory)
                 const catAddlSpend = hasAddlSpendData ? catSubCats.reduce((s, sc) => s + (getProductAddlSpend(sc) || 0), 0) : 0
@@ -8698,18 +8736,18 @@ function AdsTab({ data, filters = {}, selPlatform, setSelPlatform }) {
                 const totalSpendForPct = catTotal.spend + catAddlTotal
                 return <td style={tdStyle}>
                   {fmt(totalCatSpend)}
-                  {totalSpendForPct > 0 && <span style={{ fontSize: 9.5, color: C.t3, marginLeft: 3 }}>({(totalCatSpend / totalSpendForPct * 100).toFixed(1)}%)</span>}
+                  {totalSpendForPct > 0 && window.innerWidth > 768 && <span style={{ fontSize: 9.5, color: C.t3, marginLeft: 3 }}>({(totalCatSpend / totalSpendForPct * 100).toFixed(1)}%)</span>}
                 </td>
               },
               total: () => <td style={{ ...totalTdStyle, position: 'sticky', bottom: 0, background: C.bg }}>{fmt(catTotal.spend + catAddlTotal)}</td>,
             },
             {
-              id: 'revenue', label: 'Revenue (Ex GST)', sortKey: 'revenue', width: '22%', style: thStyle,
+              id: 'revenue', label: window.innerWidth <= 768 ? 'Revenue' : 'Revenue (Ex GST)', sortKey: 'revenue', width: window.innerWidth <= 768 ? '20%' : '22%', style: thStyle,
               row: r => <td style={tdStyle}>{r.revenue > 0 ? fmt(r.revenue) : '—'}</td>,
               total: () => <td style={{ ...totalTdStyle, position: 'sticky', bottom: 0, background: C.bg }}>{catTotal.revenue > 0 ? fmt(catTotal.revenue) : '—'}</td>,
             },
             {
-              id: 'roas', label: 'ROAS', sortKey: 'roas', width: '16%', style: thStyle,
+              id: 'roas', label: 'ROAS', sortKey: 'roas', width: window.innerWidth <= 768 ? '20%' : '16%', style: thStyle,
               row: r => {
                 const catSubCats = slicedProdRows.filter(p => p.category === r.category).map(p => p.subCategory)
                 const catAddlSpend = hasAddlSpendData ? catSubCats.reduce((s, sc) => s + (getProductAddlSpend(sc) || 0), 0) : 0
@@ -8724,20 +8762,20 @@ function AdsTab({ data, filters = {}, selPlatform, setSelPlatform }) {
 
           const prodColumnDefs = [
             {
-              id: 'spend', label: 'Spend', sortKey: 'spend', width: '20%', style: thStyle,
+              id: 'spend', label: 'Spend', sortKey: 'spend', width: '28%', style: thStyle,
               row: r => {
                 const prodAddlSpend = hasAddlSpendData ? (getProductAddlSpend(r.subCategory) || 0) : 0
                 const totalProdSpend = r.spend + prodAddlSpend
                 const prodSpendTotal = prodTotalAll.spend + catAddlTotal
                 return <td style={tdStyle}>
                   {fmt(totalProdSpend)}
-                  {prodSpendTotal > 0 && <span style={{ fontSize: 9.5, color: C.t3, marginLeft: 3 }}>({(totalProdSpend / prodSpendTotal * 100).toFixed(1)}%)</span>}
+                  {prodSpendTotal > 0 && window.innerWidth > 768 && <span style={{ fontSize: 9.5, color: C.t3, marginLeft: 3 }}>({(totalProdSpend / prodSpendTotal * 100).toFixed(1)}%)</span>}
                 </td>
               },
               total: () => <td style={{ ...totalTdStyle, position: 'sticky', bottom: 0, background: C.bg }}>{fmt(prodTotalAll.spend + catAddlTotal)}</td>,
             },
             {
-              id: 'revenue', label: 'Revenue (Ex GST)', sortKey: 'revenue', width: '18%', style: thStyle,
+              id: 'revenue', label: 'Revenue (Ex GST)', sortKey: 'revenue', width: '26%', style: thStyle,
               row: r => <td style={tdStyle}>{r.revenue > 0 ? fmt(r.revenue) : '—'}</td>,
               total: () => <td style={{ ...totalTdStyle, position: 'sticky', bottom: 0, background: C.bg }}>{prodTotalAll.revenue > 0 ? fmt(prodTotalAll.revenue) : '—'}</td>,
             },
@@ -8756,7 +8794,7 @@ function AdsTab({ data, filters = {}, selPlatform, setSelPlatform }) {
 
           return (
             <div style={{ marginBottom: 16 }}>
-              <div style={{ display: 'flex', gap: 14 }}>
+              <div className="ads-cat-prod-section" style={{ display: 'flex', flexDirection: window.innerWidth <= 768 ? 'column' : 'row', gap: window.innerWidth <= 768 ? 0 : 14 }}>
               {/* Category table */}
               <div className="kpi-card" style={{ padding: '14px 16px', flex: 1, minWidth: 0, height: ADS_SPEND_TABLE_H, display: 'flex', flexDirection: 'column' }}>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
@@ -8770,7 +8808,7 @@ function AdsTab({ data, filters = {}, selPlatform, setSelPlatform }) {
                     )}
                     <input value={allCatSearch} onChange={e => setAllCatSearch(e.target.value)} placeholder="Search category…"
                       style={{ fontSize: 11.5, padding: '4px 9px', borderRadius: 6, border: `1px solid ${C.border}`, background: C.card, color: C.t1, width: 150, outline: 'none' }} />
-                    <button onClick={() => exportCSV(filteredCatRows.map(r => ({ Category: r.category, Spend: r.spend, Revenue: r.revenue, ROAS: r.roas })), 'ads_all_by_category.csv')}
+                    <button className="mob-hidden" onClick={() => exportCSV(filteredCatRows.map(r => ({ Category: r.category, Spend: r.spend, Revenue: r.revenue, ROAS: r.roas })), 'ads_all_by_category.csv')}
                       style={{ fontSize: 10, color: C.t2, background: C.card, border: `1px solid ${C.border}`, borderRadius: 6, padding: '3px 8px', cursor: 'pointer' }}>
                       ⭳ Export
                     </button>
@@ -8779,8 +8817,10 @@ function AdsTab({ data, filters = {}, selPlatform, setSelPlatform }) {
                 <div style={{ overflowX: 'hidden', overflowY: 'auto', flex: 1 }}>
                   <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed' }}>
                     <colgroup>
-                      <col style={{ width: '40%' }} />
-                      {orderedCatCols.map(c => <col key={c.id} style={{ width: c.width }} />)}
+                      <col style={{ width: isMob ? '28%' : '40%' }} />
+                      {orderedCatCols.map(c => <col key={c.id} style={{ width: isMob
+                        ? (c.id === 'spend' ? '22%' : c.id === 'revenue' ? '26%' : c.id === 'roas' ? '24%' : c.width)
+                        : c.width }} />)}
                     </colgroup>
                     <thead>
                       <tr style={{ background: C.bg }}>
@@ -8812,8 +8852,8 @@ function AdsTab({ data, filters = {}, selPlatform, setSelPlatform }) {
               </div>
 
               {/* Product table — Category column included */}
-              <div className="kpi-card" style={{ padding: '14px 16px', flex: 1, minWidth: 0, height: ADS_SPEND_TABLE_H, display: 'flex', flexDirection: 'column' }}>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+              <div className="kpi-card ads-by-product-card" style={{ padding: isMob ? '14px 0px' : '14px 16px', flex: 1, minWidth: 0, height: ADS_SPEND_TABLE_H, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10, padding: isMob ? '0 16px' : 0 }}>
                   <div style={{ fontWeight: 700, fontSize: 13, color: C.t1 }}>By Product</div>
                   <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
                     {!adsProdColumnOrder.isDefaultOrder && (
@@ -8824,21 +8864,23 @@ function AdsTab({ data, filters = {}, selPlatform, setSelPlatform }) {
                     )}
                     <input value={allProdSearch} onChange={e => setAllProdSearch(e.target.value)} placeholder="Search category / product…"
                       style={{ fontSize: 11.5, padding: '4px 9px', borderRadius: 6, border: `1px solid ${C.border}`, background: C.card, color: C.t1, width: 180, outline: 'none' }} />
-                    <button onClick={() => exportCSV(filteredProdRows.map(r => ({ Category: r.category, Product: r.subCategory, Spend: r.spend, Revenue: r.revenue, ROAS: r.roas })), 'ads_all_by_product.csv')}
+                    <button className="mob-hidden" onClick={() => exportCSV(filteredProdRows.map(r => ({ Category: r.category, Product: r.subCategory, Spend: r.spend, Revenue: r.revenue, ROAS: r.roas })), 'ads_all_by_product.csv')}
                       style={{ fontSize: 10, color: C.t2, background: C.card, border: `1px solid ${C.border}`, borderRadius: 6, padding: '3px 8px', cursor: 'pointer' }}>
                       ⭳ Export
                     </button>
                   </div>
                 </div>
-                <div style={{ overflowX: 'hidden', overflowY: 'auto', flex: 1 }}>
-                  <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed' }}>
+                <div className="kpi-inner-scroll" style={{ overflowX: 'auto', overflowY: 'auto', flex: 1, width: '100%' }}>
+                  <table style={{ width: isMob ? 490 : '100%', borderCollapse: 'collapse', tableLayout: 'fixed' }}>
                     <colgroup>
-                      <col style={{ width: '14%' }} /><col style={{ width: '26%' }} />
-                      {orderedProdCols.map(c => <col key={c.id} style={{ width: c.width }} />)}
+                      {!isMob && <col style={{ width: '14%' }} />}<col style={{ width: isMob ? 130 : '26%' }} />
+                      {orderedProdCols.map(c => <col key={c.id} style={{ width: isMob
+                        ? (c.id === 'spend' ? 90 : c.id === 'revenue' ? 170 : c.id === 'roas' ? 100 : c.width)
+                        : c.width }} />)}
                     </colgroup>
                     <thead>
                       <tr style={{ background: C.bg }}>
-                        <ProdTh label="Category" sortKey="category" style={{ ...thStyleL, position: 'sticky', top: 0, background: C.bg, zIndex: 1 }} align="left" />
+                        {window.innerWidth > 768 && <ProdTh label="Category" sortKey="category" style={{ ...thStyleL, position: 'sticky', top: 0, background: C.bg, zIndex: 1 }} align="left" />}
                         <ProdTh label="Product" sortKey="subCategory" style={{ ...thStyleL, position: 'sticky', top: 0, background: C.bg, zIndex: 1 }} align="left" />
                         {orderedProdCols.map(c => (
                           <ProdTh key={c.id} label={c.label} sortKey={c.sortKey} style={{ ...c.style, position: 'sticky', top: 0, background: C.bg, zIndex: 1 }}
@@ -8851,7 +8893,7 @@ function AdsTab({ data, filters = {}, selPlatform, setSelPlatform }) {
                         <tr key={`${r.category}||${r.subCategory}`} style={{ cursor: 'default' }}
                           onMouseEnter={e => e.currentTarget.style.background = C.hover}
                           onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
-                          <td style={{ ...tdStyleL, color: C.t3 }} title={r.category}>{r.category}</td>
+                          {window.innerWidth > 768 && <td style={{ ...tdStyleL, color: C.t3 }} title={r.category}>{r.category}</td>}
                           <td style={tdStyleL} title={r.subCategory}>{r.subCategory}</td>
                           {orderedProdCols.map(c => <Fragment key={c.id}>{c.row(r)}</Fragment>)}
                         </tr>
@@ -8859,7 +8901,7 @@ function AdsTab({ data, filters = {}, selPlatform, setSelPlatform }) {
                     </tbody>
                     <tfoot>
                       <tr style={{ background: C.bg, borderTop: `1.5px solid ${C.border}` }}>
-                        <td style={{ ...totalTdStyle, textAlign: 'left', position: 'sticky', bottom: 0, background: C.bg }} colSpan={2}>Total</td>
+                        <td style={{ ...totalTdStyle, textAlign: 'left', position: 'sticky', bottom: 0, background: C.bg }} colSpan={window.innerWidth <= 768 ? 1 : 2}>Total</td>
                         {orderedProdCols.map(c => <Fragment key={c.id}>{c.total()}</Fragment>)}
                       </tr>
                     </tfoot>
@@ -8877,6 +8919,12 @@ function AdsTab({ data, filters = {}, selPlatform, setSelPlatform }) {
 }
 
 function AdsCredView({ data, filters = {} }) {
+  const [isMob, setIsMob] = useState(() => window.innerWidth <= 768)
+  useEffect(() => {
+    const onResize = () => setIsMob(window.innerWidth <= 768)
+    window.addEventListener('resize', onResize)
+    return () => window.removeEventListener('resize', onResize)
+  }, [])
   const cred = data.cred || {}
   const totals = cred.totals || {}
   const daily = cred.daily || []
@@ -8966,15 +9014,31 @@ function AdsCredView({ data, filters = {} }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
       {/* KPI Cards */}
-      <div style={{ display: 'grid', gridTemplateColumns: `repeat(${Math.min(kpis.length, 5)}, 1fr)`, gap: 10 }}>
-        {kpis.map(k => (
-          <div key={k.label} className="kpi-card" style={{ padding: '14px 16px' }}>
-            <div style={{ fontSize: 10, fontWeight: 700, color: C.t3, textTransform: 'uppercase', letterSpacing: 0.6, marginBottom: 6 }}>{k.label}</div>
-            <div style={{ fontSize: 20, fontWeight: 800, color: k.roasVal != null ? roasColor(k.roasVal) : C.t1, letterSpacing: -0.5 }}>{k.value}</div>
-            <div style={{ fontSize: 11, color: C.t3, marginTop: 4 }}>{k.sub}</div>
+      {isMob ? (
+        <div style={{ flexDirection: 'column', gap: 6, marginLeft: -16, marginRight: -16, paddingLeft: 4 }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingLeft: 12, paddingRight: 12, marginBottom: 6 }}>
+            <span style={{ fontSize: 13, fontWeight: 700, color: C.t1 }}>Key Metrics</span>
+            <span style={{ fontSize: 11, color: C.t3 }}>{kpis.length} tiles · swipe →</span>
           </div>
-        ))}
-      </div>
+          <MobileKpiCarousel cards={kpis.map(k => (
+            <div className="kpi-card" style={{ padding: '14px 16px', height: '100%' }}>
+              <div style={{ fontSize: 10, fontWeight: 700, color: C.t3, textTransform: 'uppercase', letterSpacing: 0.6, marginBottom: 6 }}>{k.label}</div>
+              <div style={{ fontSize: 20, fontWeight: 800, color: k.roasVal != null ? roasColor(k.roasVal) : C.t1, letterSpacing: -0.5 }}>{k.value}</div>
+              <div style={{ fontSize: 11, color: C.t3, marginTop: 4 }}>{k.sub}</div>
+            </div>
+          ))} cardWidth="46vw" cardMaxWidth={176} />
+        </div>
+      ) : (
+        <div style={{ display: 'grid', gridTemplateColumns: `repeat(${Math.min(kpis.length, 5)}, 1fr)`, gap: 10 }}>
+          {kpis.map(k => (
+            <div key={k.label} className="kpi-card" style={{ padding: '14px 16px' }}>
+              <div style={{ fontSize: 10, fontWeight: 700, color: C.t3, textTransform: 'uppercase', letterSpacing: 0.6, marginBottom: 6 }}>{k.label}</div>
+              <div style={{ fontSize: 20, fontWeight: 800, color: k.roasVal != null ? roasColor(k.roasVal) : C.t1, letterSpacing: -0.5 }}>{k.value}</div>
+              <div style={{ fontSize: 11, color: C.t3, marginTop: 4 }}>{k.sub}</div>
+            </div>
+          ))}
+        </div>
+      )}
 
       {/* Spend, Revenue & ROAS Trend */}
       {daily.length > 0 && (() => {
@@ -9027,7 +9091,7 @@ function AdsCredView({ data, filters = {} }) {
         }
 
         return (
-          <div className="kpi-card" style={{ padding: '14px 16px', display: 'flex', flexDirection: 'column' }}>
+          <div className="kpi-card ads-trend-chart" style={{ padding: '14px 16px', display: 'flex', flexDirection: 'column', height: isMob ? undefined : 320 }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10, flexWrap: 'wrap', gap: 6 }}>
               <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, minWidth: 0 }}>
                 <div style={{ fontWeight: 700, fontSize: 13, color: C.t1, flexShrink: 0 }}>Spend, Revenue &amp; ROAS Trend</div>
@@ -9035,7 +9099,7 @@ function AdsCredView({ data, filters = {} }) {
               </div>
               <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
                 <AdsSlicerDropdown label="Category" options={catOptions} selected={trendSelCat} onChange={setTrendSelCat} />
-                <AdsSlicerDropdown label="Sub-category" options={subCatOptions} selected={trendSelSubCat} onChange={setTrendSelSubCat} />
+                {!isMob && <AdsSlicerDropdown label="Sub-category" options={subCatOptions} selected={trendSelSubCat} onChange={setTrendSelSubCat} />}
                 <select value={trendGran} onChange={e => setTrendGran(e.target.value)}
                   style={{ fontSize: 11, fontWeight: 600, padding: '3px 8px', borderRadius: 6, border: `1px solid ${C.border}`, background: C.card, color: C.t2, cursor: 'pointer', outline: 'none' }}>
                   <option value="daily">Daily</option>
@@ -9045,16 +9109,16 @@ function AdsCredView({ data, filters = {} }) {
                 </select>
               </div>
             </div>
-            <ResponsiveContainer width="100%" height={180}>
-              <ComposedChart data={trendData} margin={{ top: 4, right: 50, bottom: 0, left: 0 }}>
+            <ResponsiveContainer width="100%" height="100%">
+              <ComposedChart data={trendData} margin={{ top: 4, right: isMob ? 12 : 50, bottom: 0, left: isMob ? 12 : 0 }}>
                 <defs>
                   <linearGradient id="credSpendGrad" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#6366F1" stopOpacity={0.25}/><stop offset="95%" stopColor="#6366F1" stopOpacity={0}/></linearGradient>
                   <linearGradient id="credRevGrad" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#10B981" stopOpacity={0.2}/><stop offset="95%" stopColor="#10B981" stopOpacity={0}/></linearGradient>
                 </defs>
                 <CartesianGrid strokeDasharray="3 3" stroke={C.border} />
                 <XAxis dataKey="date" tick={{ fontSize: 10, fill: C.t3 }} tickFormatter={xFmt} />
-                <YAxis yAxisId="left" tick={{ fontSize: 10, fill: C.t3 }} tickFormatter={v => fmt(v)} width={55} />
-                <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 10, fill: '#F59E0B' }} tickFormatter={v => `${v}x`} width={38} />
+                <YAxis yAxisId="left" tick={isMob ? false : { fontSize: 10, fill: C.t3 }} tickFormatter={v => fmt(v)} width={isMob ? 0 : 55} />
+                <YAxis yAxisId="right" orientation="right" tick={isMob ? false : { fontSize: 10, fill: '#F59E0B' }} tickFormatter={v => `${v}x`} width={isMob ? 0 : 38} />
                 <Tooltip content={trendTooltip} />
                 <Area yAxisId="left" type="monotone" dataKey="spend" name="Spend" stroke="#6366F1" strokeWidth={2} fill="url(#credSpendGrad)" dot={false} legendType="none" />
                 <Area yAxisId="left" type="monotone" dataKey="rev" name="Revenue" stroke="#10B981" strokeWidth={2} fill="url(#credRevGrad)" dot={false} legendType="none" />

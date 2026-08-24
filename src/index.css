@@ -205,9 +205,17 @@ html,body{height:100%;background:var(--bg);font-family:var(--font);color:var(--t
   .mob-only .kpi-sub{ display:none !important }
   .ads-trend-desktop-filters{ display:none !important }
   .ads-trend-mob-filter{ display:block !important }
-  .ads-trend-row{ flex-direction:column !important; margin-left:-16px !important; margin-right:-16px !important }
-  .ads-trend-chart{ height:480px !important; flex:none !important; width:100% !important; border-radius:0 !important }
+  .ads-trend-row{ flex-direction:column !important; margin-left:-12px !important; margin-right:-12px !important }
+  .ads-trend-chart{ height:320px !important; flex:none !important; width:100% !important; border-radius:0 !important; padding-left:8px !important; padding-right:0 !important; margin-left:-12px !important; margin-right:-12px !important; width:calc(100% + 24px) !important }
   .ads-trend-row > *{ width:100% !important; max-width:100% !important; flex:none !important; border-radius:0 !important; box-sizing:border-box !important }
+  .ads-platform-overview{ height:380px !important }
+  .ads-cat-prod-section{ margin-left:-12px !important; margin-right:-12px !important }
+  .ads-cat-prod-section > .kpi-card{ border-radius:0 !important; width:100% !important; box-sizing:border-box !important; margin-bottom:10px; padding-left:0 !important; padding-right:0 !important; overflow-x:hidden !important; overflow-y:hidden !important }
+  .ads-by-product-card .kpi-inner-scroll{ overflow-x:auto !important }
+  .ads-cat-prod-section > .kpi-card:not(.ads-by-product-card){ padding-left:8px !important; padding-right:8px !important }
+  .ads-cat-prod-section > .kpi-card:first-child{ height:380px !important }
+  .ads-cat-prod-section > .kpi-card:last-child{ height:600px !important }
+  .ads-by-product-card{ height:600px !important; max-height:600px !important; flex:none !important; overflow:visible !important }
 
   .app-main{ padding-bottom:var(--bot) }
 
