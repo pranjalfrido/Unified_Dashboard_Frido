@@ -9179,10 +9179,14 @@ function AdsCredView({ data, filters = {} }) {
   const credCatColumnOrder = useReorderableColumns('datatable-cols:ads-cred-by-category', [{ id: 'spend' }, { id: 'excRev' }, { id: 'roas' }])
   const credProdColumnOrder = useReorderableColumns('datatable-cols:ads-cred-by-product', [{ id: 'spend' }, { id: 'excRev' }, { id: 'roas' }])
 
-  const totalRev = totals.rev || 0
-  const totalExcRev = totals.excRev || 0
-  const totalOrders = totals.orders || 0
-  const totalUnits = totals.units || 0
+  // Fall back to summing byCategory when live totals aren't available (cache path)
+  const derivedExcRev = byCategory.reduce((s, r) => s + (r.excRev || 0), 0)
+  const derivedOrders = byCategory.reduce((s, r) => s + (r.orders || 0), 0)
+  const derivedUnits = byProduct.reduce((s, r) => s + (r.units || 0), 0)
+  const totalRev = totals.rev || byProduct.reduce((s, r) => s + (r.rev || 0), 0)
+  const totalExcRev = totals.excRev || derivedExcRev
+  const totalOrders = totals.orders || derivedOrders
+  const totalUnits = totals.units || derivedUnits
   const asp = totalUnits > 0 ? totalRev / totalUnits : 0
   const aov = totalOrders > 0 ? totalRev / totalOrders : 0
   const roas = additionalSpend > 0 ? totalExcRev / additionalSpend : 0
@@ -14698,7 +14702,7 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
           {page === 'ads' && !adsCache && !data && <Skeleton />}
           {page === 'ads' && (adsCache || data) && (!allowedTabs || allowedTabs.includes('ads')) && (
             <div className="page-scroll">
-              <AdsTab data={adsCache ? { cred: adsCachedMeta?.credCache || {}, ...(data || {}), chMap: data?.chMap || adsCachedChMap || {}, nOrders: data?.nOrders ?? adsCachedMeta?.nOrders ?? 0, nCusts: data?.nCusts ?? adsCachedMeta?.nCusts ?? 0, repeatCusts: data?.repeatCusts ?? adsCachedMeta?.repeatCusts ?? 0, shopify: data?.shopify || { totals: { orders: adsCachedMeta?.shopifyOrders || 0 } }, ads: adsCache } : data} filters={filters} selPlatform={adsSelPlatform} setSelPlatform={setAdsSelPlatform} />
+              <AdsTab data={adsCache ? { cred: (adsCachedMeta?.credCache?.byCategory?.length ? adsCachedMeta.credCache : null) ?? data?.cred ?? {}, ...(data || {}), chMap: data?.chMap || adsCachedChMap || {}, nOrders: data?.nOrders ?? adsCachedMeta?.nOrders ?? 0, nCusts: data?.nCusts ?? adsCachedMeta?.nCusts ?? 0, repeatCusts: data?.repeatCusts ?? adsCachedMeta?.repeatCusts ?? 0, shopify: data?.shopify || { totals: { orders: adsCachedMeta?.shopifyOrders || 0 } }, ads: adsCache } : data} filters={filters} selPlatform={adsSelPlatform} setSelPlatform={setAdsSelPlatform} />
             </div>
           )}
           {page === 'intelligence' && (
