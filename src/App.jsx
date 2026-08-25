@@ -9425,9 +9425,9 @@ function AdsCredView({ data, filters = {} }) {
         const orderedCredProdCols = credProdColumnOrder.orderedColumns.map(oc => credProdColumnDefs.find(c => c.id === oc.id) || oc)
 
         return (
-        <div style={{ display: 'flex', gap: 14 }}>
+        <div className="ads-cat-prod-section" style={{ display: 'flex', flexDirection: isMob ? 'column' : 'row', gap: isMob ? 0 : 14 }}>
           {/* By Category */}
-          <div className="kpi-card" style={{ padding: '14px 16px', flex: 1, minWidth: 0, maxHeight: 500, display: 'flex', flexDirection: 'column' }}>
+          <div className="kpi-card" style={{ padding: '14px 16px', flex: 1, minWidth: 0, maxHeight: isMob ? undefined : 500, display: 'flex', flexDirection: 'column' }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
               <div style={{ fontWeight: 700, fontSize: 13, color: C.t1 }}>By Category</div>
               <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
@@ -9438,14 +9438,16 @@ function AdsCredView({ data, filters = {} }) {
                   </button>
                 )}
                 <input value={catSearch} onChange={e => setCatSearch(e.target.value)} placeholder="Search category…"
-                  style={{ fontSize: 11.5, padding: '4px 9px', borderRadius: 6, border: `1px solid ${C.border}`, background: C.card, color: C.t1, width: 150, outline: 'none' }} />
+                  style={{ fontSize: 11.5, padding: '4px 9px', borderRadius: 6, border: `1px solid ${C.border}`, background: C.card, color: C.t1, width: isMob ? 130 : 150, outline: 'none' }} />
               </div>
             </div>
             <div style={{ overflowY: 'auto', flex: 1 }}>
               <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed' }}>
                 <colgroup>
-                  <col style={{ width: '40%' }} />
-                  {orderedCredCatCols.map(c => <col key={c.id} style={{ width: c.width }} />)}
+                  <col style={{ width: isMob ? '30%' : '40%' }} />
+                  {orderedCredCatCols.map(c => <col key={c.id} style={{ width: isMob
+                    ? (c.id === 'spend' ? '22%' : c.id === 'excRev' ? '28%' : c.id === 'roas' ? '20%' : c.width)
+                    : c.width }} />)}
                 </colgroup>
                 <thead>
                   <tr style={{ background: C.bg }}>
@@ -9475,8 +9477,8 @@ function AdsCredView({ data, filters = {} }) {
           </div>
 
           {/* By Product */}
-          <div className="kpi-card" style={{ padding: '14px 16px', flex: 1, minWidth: 0, maxHeight: 500, display: 'flex', flexDirection: 'column' }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+          <div className="kpi-card ads-by-product-card" style={{ padding: isMob ? '14px 0px' : '14px 16px', flex: 1, minWidth: 0, maxHeight: isMob ? undefined : 500, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10, padding: isMob ? '0 14px 0 18px' : 0 }}>
               <div style={{ fontWeight: 700, fontSize: 13, color: C.t1 }}>By Product</div>
               <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
                 {!credProdColumnOrder.isDefaultOrder && (
@@ -9486,9 +9488,40 @@ function AdsCredView({ data, filters = {} }) {
                   </button>
                 )}
                 <input value={prodSearch} onChange={e => setProdSearch(e.target.value)} placeholder="Search product…"
-                  style={{ fontSize: 11.5, padding: '4px 9px', borderRadius: 6, border: `1px solid ${C.border}`, background: C.card, color: C.t1, width: 160, outline: 'none' }} />
+                  style={{ fontSize: 11.5, padding: '4px 9px', borderRadius: 6, border: `1px solid ${C.border}`, background: C.card, color: C.t1, width: isMob ? 110 : 160, outline: 'none' }} />
               </div>
             </div>
+            {isMob ? (
+              /* Mobile: card-list layout */
+              <div style={{ overflowY: 'auto', flex: 1, padding: '0 14px 0 18px' }}>
+                {sortedProds.map(r => {
+                  const s = getProdSpend(r.subCategory)
+                  const effectiveRoas = s > 0 ? r.excRev / s : 0
+                  return (
+                    <div key={`${r.category}||${r.subCategory}`} style={{ borderBottom: `1px solid ${C.border}`, padding: '10px 0' }}>
+                      <div style={{ fontSize: 12, fontWeight: 700, color: C.t1, marginBottom: 5 }}>{r.subCategory}</div>
+                      <div style={{ fontSize: 11, color: C.t3, marginBottom: 4 }}>{r.category}</div>
+                      <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
+                        <div>
+                          <span style={{ fontSize: 10, color: C.t3, textTransform: 'uppercase', letterSpacing: '.03em' }}>Spend </span>
+                          <span style={{ fontSize: 12, fontWeight: 700, color: C.t1 }}>{fmt(s)}</span>
+                        </div>
+                        <div>
+                          <span style={{ fontSize: 10, color: C.t3, textTransform: 'uppercase', letterSpacing: '.03em' }}>Rev </span>
+                          <span style={{ fontSize: 12, fontWeight: 700, color: C.t1 }}>{r.excRev > 0 ? fmt(r.excRev) : '—'}</span>
+                        </div>
+                        <div>
+                          <span style={{ fontSize: 10, color: C.t3, textTransform: 'uppercase', letterSpacing: '.03em' }}>ROAS </span>
+                          {effectiveRoas > 0
+                            ? <span style={{ fontSize: 12, fontWeight: 700, padding: '1px 6px', borderRadius: 4, background: roasBg(effectiveRoas), color: roasColor(effectiveRoas) }}>{effectiveRoas.toFixed(2)}x</span>
+                            : <span style={{ fontSize: 12, fontWeight: 700, color: C.t3 }}>—</span>}
+                        </div>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            ) : (
             <div style={{ overflowY: 'auto', flex: 1 }}>
               <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed' }}>
                 <colgroup>
@@ -9522,6 +9555,7 @@ function AdsCredView({ data, filters = {} }) {
                 </tfoot>
               </table>
             </div>
+            )}
           </div>
         </div>
         )
