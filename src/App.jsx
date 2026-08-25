@@ -9323,7 +9323,7 @@ function AdsCredView({ data, filters = {} }) {
         const trendData = aggTrend(dailyWithSpend, trendGran)
         const xFmt = d => (trendGran === 'monthly' || trendGran === 'quarterly') ? d : d?.slice(5)
 
-        const catOptions = [...new Set(byProduct.map(r => r.category).filter(Boolean))].sort()
+        const catOptions = [...new Set(byCategory.map(r => r.category).filter(Boolean))].sort()
         const subCatOptions = [...new Set(byProduct.filter(r => !trendSelCat.length || trendSelCat.includes(r.category)).map(r => r.subCategory).filter(Boolean))].sort()
         const filterSummary = trendSelSubCat.length ? trendSelSubCat.join(', ') : trendSelCat.length ? trendSelCat.join(', ') : null
 
