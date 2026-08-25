@@ -60,10 +60,6 @@ function useToast() {
 
 // ── Avatar ────────────────────────────────────────────────────────────────────
 function Avatar({ url, name, size = 44 }) {
-  const [imgErr, setImgErr] = useState(false)
-  if (url && !imgErr) return (
-    <img src={url} alt={name} onError={() => setImgErr(true)} style={{ width: size, height: size, borderRadius: '50%', objectFit: 'cover', flexShrink: 0, border: '2px solid #E7E3D8' }} />
-  )
   return (
     <div style={{
       width: size, height: size, borderRadius: '50%', flexShrink: 0,
@@ -71,8 +67,15 @@ function Avatar({ url, name, size = 44 }) {
       display: 'flex', alignItems: 'center', justifyContent: 'center',
       color: '#fff', fontSize: size * 0.36, fontWeight: 700,
       fontFamily: 'Inter, system-ui, sans-serif', letterSpacing: '-0.02em',
+      position: 'relative', overflow: 'hidden',
     }}>
       {initials(name)}
+      {url && (
+        <img src={url} alt={name}
+          style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', borderRadius: '50%' }}
+          onError={e => { e.currentTarget.style.display = 'none' }}
+        />
+      )}
     </div>
   )
 }
