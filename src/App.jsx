@@ -205,29 +205,37 @@ function LogisticsSkeleton() {
 }
 
 // Mobile KPI card with mini sparkline — Option A style.
-// sparkData: array of numbers (e.g. daily totals). rising=green, falling=red.
+// sparkData: array of numbers (e.g. daily totals). Yellow line + fill on mobile ads list.
 function SparkKpiCard({ label, value, chg, sparkData = [], accent, invertColor }) {
   const isUp = chg != null ? chg >= 0 : null
-  const badgeBg = isUp === null ? C.border : isUp ? C.green.bg : C.red.bg
-  const badgeTx = isUp === null ? C.t3 : isUp ? C.green.tx : C.red.tx
-  const lineColor = isUp === null ? '#1baf7a' : invertColor ? (isUp ? '#E53935' : '#1baf7a') : (isUp ? '#1baf7a' : '#E53935')
-  // Normalise sparkData to 0–1 for the polyline
   const pts = sparkData.slice(-14)
   const min = Math.min(...pts), max = Math.max(...pts)
   const range = max - min || 1
-  const W = 44, H = 22
-  const points = pts.map((v, i) => {
+  const W = 52, H = 24
+  const coordPts = pts.map((v, i) => {
     const x = pts.length === 1 ? W / 2 : (i / (pts.length - 1)) * W
-    const y = H - ((v - min) / range) * H
-    return `${x.toFixed(1)},${y.toFixed(1)}`
-  }).join(' ')
+    const y = H - ((v - min) / range) * (H - 2) - 1
+    return [+x.toFixed(1), +y.toFixed(1)]
+  })
+  const linePoints = coordPts.map(([x, y]) => `${x},${y}`).join(' ')
+  const fillPoints = coordPts.length > 1
+    ? `${coordPts[0][0]},${H} ` + coordPts.map(([x, y]) => `${x},${y}`).join(' ') + ` ${coordPts[coordPts.length - 1][0]},${H}`
+    : ''
+  const sparkColor = '#F4B400'
+  const gradId = `sg${label.replace(/\s/g, '')}`
   return (
     <div style={{ background: '#fff', border: `1px solid ${C.border}`, borderRadius: 12, padding: '0 14px', display: 'flex', alignItems: 'center', height: 45, gap: 0 }}>
       <div style={{ flex: 1, fontSize: 13, fontWeight: 700, color: C.t2, letterSpacing: '.03em', textTransform: 'uppercase' }}>{label}</div>
       {pts.length > 1
-        ? <svg width={W} height={H} viewBox={`0 0 ${W} ${H}`} style={{ overflow: 'visible', flexShrink: 0 }}>
-            <polyline points={points} fill="none" stroke={lineColor} strokeWidth="2" strokeLinejoin="round" strokeLinecap="round" />
-            <circle cx={points.split(' ').pop().split(',')[0]} cy={points.split(' ').pop().split(',')[1]} r="2.5" fill={lineColor} />
+        ? <svg width={W} height={H} viewBox={`0 0 ${W} ${H}`} style={{ overflow: 'hidden', flexShrink: 0, borderRadius: 4 }}>
+            <defs>
+              <linearGradient id={gradId} x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stopColor={sparkColor} stopOpacity="0.28" />
+                <stop offset="100%" stopColor={sparkColor} stopOpacity="0.02" />
+              </linearGradient>
+            </defs>
+            {fillPoints && <polygon points={fillPoints} fill={`url(#${gradId})`} />}
+            <polyline points={linePoints} fill="none" stroke={sparkColor} strokeWidth="1.8" strokeLinejoin="round" strokeLinecap="round" />
           </svg>
         : <div style={{ width: W, flexShrink: 0 }} />
       }
@@ -279,6 +287,7 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
   const [geoShipType, setGeoShipType] = useState({ dropCity: 'all', pickupCity: 'all', dropState: 'all' })
   const [secCollapsed, setSecCollapsed] = useState({})
   const [wMetric, setWMetric] = useState('qty')
+  const [ageingMetric, setAgeingMetric] = useState('del')
   const toggleSec = key => setSecCollapsed(p => ({ ...p, [key]: !p[key] }))
   const [lFiltersLocal, setLFiltersLocal] = useState({ couriers: [], shipmentType: 'forward', sddNdd: 'all', paymentMode: null, zone: null, pickupState: null, dropState: null, dropCity: null, category: null, subCategory: null })
   const lFilters = lFiltersProp || lFiltersLocal
@@ -566,6 +575,7 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
           const m = {}; f2.forEach(x => { const k = `${x.city}||${x.shipment_type}`; m[k] = { city: x.city, shipment_type: x.shipment_type, total: (m[k]?.total || 0) + (x.total || 0) } })
           return Object.values(m)
         })(),
+        pickupAgeing: (raw.pickupAgeing || []).filter(courierFilter),
       }
     }
     const effectiveRaw = rawData || (staleData?.current ?? null)
@@ -1799,6 +1809,120 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
         )
         })()}
 
+
+        {/* ── Pickup Ageing Analysis ── */}
+        <LSectionTitle title="Pickup Ageing Analysis" collapsed={secCollapsed['pickupAgeing']} onToggle={() => toggleSec('pickupAgeing')} />
+        {(() => {
+          const raw = data.pickupAgeing || []
+          if (!raw.length) return null
+
+          // Aggregate all courier rows into a single totals row + keep per-courier
+          const buckets = ['0-2', '2-4', '4-6', '6-8', '8-10', '10+']
+          const delKeys = ['del_0_2', 'del_2_4', 'del_4_6', 'del_6_8', 'del_8_10', 'del_10plus']
+          const rtoKeys = ['rto_0_2', 'rto_2_4', 'rto_4_6', 'rto_6_8', 'rto_8_10', 'rto_10plus']
+
+          const totals = raw.reduce((acc, r) => {
+            delKeys.forEach(k => { acc[k] = (acc[k] || 0) + (r[k] || 0) })
+            rtoKeys.forEach(k => { acc[k] = (acc[k] || 0) + (r[k] || 0) })
+            acc.del_total = (acc.del_total || 0) + (r.del_total || 0)
+            acc.rto_total = (acc.rto_total || 0) + (r.rto_total || 0)
+            return acc
+          }, {})
+
+          const modeKeys = ageingMetric === 'del' ? delKeys : rtoKeys
+          const modeTotal = ageingMetric === 'del' ? 'del_total' : 'rto_total'
+          const maxPct = Math.max(...buckets.map((_, i) => {
+            const v = totals[modeKeys[i]] || 0
+            const t = totals[modeTotal] || 1
+            return (v / t) * 100
+          }), 1)
+
+          const pct = (v, t) => t ? +((v / t) * 100).toFixed(1) : 0
+
+          const couriers = raw.map(r => r.courier_group).filter(Boolean).sort()
+
+          return (
+            <div style={{ display: secCollapsed['pickupAgeing'] ? 'none' : 'grid', gridTemplateColumns: isMobile ? '1fr' : '2fr 1fr', gap: 14 }}>
+              {/* Bar chart: overall ageing distribution */}
+              <div style={cardStyle}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
+                  <div style={chartTitle}>Shipment Ageing (Pickup → {ageingMetric === 'del' ? 'Delivery' : 'RTO Mark'}) — Days</div>
+                  <div style={{ display: 'flex', background: C.bg, border: `1px solid ${C.border}`, borderRadius: 7, padding: 2 }}>
+                    {[['del','Delivered%'],['rto','RTO%']].map(([id,lbl]) => (
+                      <button key={id} onClick={() => setAgeingMetric(id)} style={{ fontSize: 10, padding: '2px 10px', borderRadius: 5, border: 'none', background: ageingMetric === id ? C.acc : 'transparent', color: ageingMetric === id ? '#000' : C.t3, cursor: 'pointer', fontWeight: ageingMetric === id ? 700 : 500, fontFamily: 'var(--font)' }}>{lbl}</button>
+                    ))}
+                  </div>
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                  {buckets.map((label, i) => {
+                    const v = totals[modeKeys[i]] || 0
+                    const t = totals[modeTotal] || 1
+                    const p = pct(v, t)
+                    const barW = (p / maxPct * 100).toFixed(1)
+                    const barColor = ageingMetric === 'del'
+                      ? (i === 0 ? '#22C55E' : i === 1 ? '#86EFAC' : i === 2 ? '#FBBF24' : i === 3 ? '#FB923C' : '#F87171')
+                      : (i === 0 ? '#86EFAC' : i === 1 ? '#FBBF24' : i === 2 ? '#FB923C' : '#F87171')
+                    return (
+                      <div key={label}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 3 }}>
+                          <span style={{ fontSize: 11.5, color: C.t2, fontWeight: 600, minWidth: 36 }}>{label}d</span>
+                          <span style={{ fontSize: 11.5, fontWeight: 700, color: C.t1 }}>{v.toLocaleString('en-IN')} <span style={{ fontSize: 10.5, color: C.t3, fontWeight: 400 }}>({p}%)</span></span>
+                        </div>
+                        <div style={{ height: 8, borderRadius: 4, background: C.border, overflow: 'hidden' }}>
+                          <div style={{ height: '100%', width: barW + '%', background: barColor, borderRadius: 4, transition: 'width .4s ease' }} />
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+                <div style={{ marginTop: 14, paddingTop: 10, borderTop: `1px solid ${C.border}`, fontSize: 11, color: C.t3 }}>
+                  Total {ageingMetric === 'del' ? 'delivered' : 'RTO marked'} with pickup date: <strong style={{ color: C.t1 }}>{(totals[modeTotal] || 0).toLocaleString('en-IN')}</strong>
+                </div>
+              </div>
+
+              {/* Per-courier breakdown table */}
+              <div style={{ ...cardStyle, overflow: 'hidden', padding: 0 }}>
+                <div style={{ fontSize: 11, fontWeight: 700, color: C.t1, padding: '12px 14px 10px' }}>By Courier</div>
+                <div style={{ overflowX: 'auto' }}>
+                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11 }}>
+                    <thead>
+                      <tr>
+                        <th style={{ ...thStyle2, textAlign: 'left', paddingLeft: 14 }}>Courier</th>
+                        {buckets.map(b => <th key={b} style={thStyle2}>{b}d</th>)}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {couriers.map(courier => {
+                        const r = raw.find(x => x.courier_group === courier) || {}
+                        const t = (ageingMetric === 'del' ? r.del_total : r.rto_total) || 0
+                        return (
+                          <tr key={courier}>
+                            <td style={{ ...tdStyle2, textAlign: 'left', paddingLeft: 14, fontWeight: 600 }}>{courier}</td>
+                            {modeKeys.map((k, i) => {
+                              const v = r[k] || 0
+                              const p = pct(v, t)
+                              return <td key={i} style={{ ...tdStyle2, color: p > 0 ? C.t1 : C.t3 }}>{p > 0 ? p + '%' : '—'}</td>
+                            })}
+                          </tr>
+                        )
+                      })}
+                      {/* Totals row */}
+                      <tr style={{ background: C.border + '33' }}>
+                        <td style={{ ...tdStyle2, textAlign: 'left', paddingLeft: 14, fontWeight: 700, color: C.t1 }}>All</td>
+                        {modeKeys.map((k, i) => {
+                          const v = totals[k] || 0
+                          const t = totals[modeTotal] || 1
+                          const p = pct(v, t)
+                          return <td key={i} style={{ ...tdStyle2, fontWeight: 700 }}>{p > 0 ? p + '%' : '—'}</td>
+                        })}
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          )
+        })()}
 
         {/* ── Weight Based Analysis ── */}
         <LSectionTitle title="Weight Based Analysis" collapsed={secCollapsed['weight']} onToggle={() => toggleSec('weight')} />

@@ -556,6 +556,28 @@ tat_by_facility AS (
     FROM base WHERE pickup_city IS NOT NULL GROUP BY 1, 2
   ) WHERE facility IS NOT NULL
 ),
+pickup_ageing AS (
+  SELECT
+    courier_group,
+    -- Delivered: ageing = delivery_date - pickup_date
+    COUNTIF(unified_status='Delivered' AND pickup_date IS NOT NULL AND delivery_date IS NOT NULL AND DATE_DIFF(delivery_date, pickup_date, DAY) BETWEEN 0 AND 2) AS del_0_2,
+    COUNTIF(unified_status='Delivered' AND pickup_date IS NOT NULL AND delivery_date IS NOT NULL AND DATE_DIFF(delivery_date, pickup_date, DAY) BETWEEN 3 AND 4) AS del_2_4,
+    COUNTIF(unified_status='Delivered' AND pickup_date IS NOT NULL AND delivery_date IS NOT NULL AND DATE_DIFF(delivery_date, pickup_date, DAY) BETWEEN 5 AND 6) AS del_4_6,
+    COUNTIF(unified_status='Delivered' AND pickup_date IS NOT NULL AND delivery_date IS NOT NULL AND DATE_DIFF(delivery_date, pickup_date, DAY) BETWEEN 7 AND 8) AS del_6_8,
+    COUNTIF(unified_status='Delivered' AND pickup_date IS NOT NULL AND delivery_date IS NOT NULL AND DATE_DIFF(delivery_date, pickup_date, DAY) BETWEEN 9 AND 10) AS del_8_10,
+    COUNTIF(unified_status='Delivered' AND pickup_date IS NOT NULL AND delivery_date IS NOT NULL AND DATE_DIFF(delivery_date, pickup_date, DAY) > 10) AS del_10plus,
+    COUNTIF(unified_status='Delivered' AND pickup_date IS NOT NULL AND delivery_date IS NOT NULL) AS del_total,
+    -- RTO: ageing = rto_mark_date - pickup_date
+    COUNTIF(unified_status='RTO' AND pickup_date IS NOT NULL AND rto_mark_date IS NOT NULL AND DATE_DIFF(rto_mark_date, pickup_date, DAY) BETWEEN 0 AND 2) AS rto_0_2,
+    COUNTIF(unified_status='RTO' AND pickup_date IS NOT NULL AND rto_mark_date IS NOT NULL AND DATE_DIFF(rto_mark_date, pickup_date, DAY) BETWEEN 3 AND 4) AS rto_2_4,
+    COUNTIF(unified_status='RTO' AND pickup_date IS NOT NULL AND rto_mark_date IS NOT NULL AND DATE_DIFF(rto_mark_date, pickup_date, DAY) BETWEEN 5 AND 6) AS rto_4_6,
+    COUNTIF(unified_status='RTO' AND pickup_date IS NOT NULL AND rto_mark_date IS NOT NULL AND DATE_DIFF(rto_mark_date, pickup_date, DAY) BETWEEN 7 AND 8) AS rto_6_8,
+    COUNTIF(unified_status='RTO' AND pickup_date IS NOT NULL AND rto_mark_date IS NOT NULL AND DATE_DIFF(rto_mark_date, pickup_date, DAY) BETWEEN 9 AND 10) AS rto_8_10,
+    COUNTIF(unified_status='RTO' AND pickup_date IS NOT NULL AND rto_mark_date IS NOT NULL AND DATE_DIFF(rto_mark_date, pickup_date, DAY) > 10) AS rto_10plus,
+    COUNTIF(unified_status='RTO' AND pickup_date IS NOT NULL AND rto_mark_date IS NOT NULL) AS rto_total
+  FROM base
+  GROUP BY 1
+),
 failed_delivery_reasons AS (
   SELECT courier_group,
     reason_for_last_failed_delivery AS reason,
@@ -667,6 +689,7 @@ SELECT
   TO_JSON_STRING(ARRAY(SELECT AS STRUCT * FROM tat_by_month ORDER BY month_dt)) AS tat_by_month,
   TO_JSON_STRING(ARRAY(SELECT AS STRUCT * FROM tat_by_facility ORDER BY total DESC)) AS tat_by_facility,
   TO_JSON_STRING(ARRAY(SELECT AS STRUCT * FROM by_weight_slab ORDER BY slab_order)) AS by_weight_slab,
+  TO_JSON_STRING(ARRAY(SELECT AS STRUCT * FROM pickup_ageing ORDER BY courier_group)) AS pickup_ageing,
   TO_JSON_STRING((SELECT AS STRUCT * FROM filter_opts)) AS filter_opts
 `
 
@@ -703,6 +726,7 @@ SELECT
       tatByMonth: JSON.parse(r.tat_by_month),
       tatByFacility: JSON.parse(r.tat_by_facility),
       byWeightSlab: JSON.parse(r.by_weight_slab),
+      pickupAgeing: JSON.parse(r.pickup_ageing),
       filterOpts: JSON.parse(r.filter_opts),
     })
   } catch (e) {

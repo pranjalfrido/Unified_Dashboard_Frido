@@ -3087,6 +3087,8 @@ export default async function handler(req, res) {
       payload.cred = {
         ...payload.cred,
         daily: credDaily,
+        byCategory: credByCategory,
+        byProduct: credByProduct,
         dailyByCategory: credDailyByCategory,
         additionalSpend: credAdditionalSpend,
         additionalSpendByProduct: credAdditionalSpendByProduct,
@@ -3095,7 +3097,7 @@ export default async function handler(req, res) {
       console.error('[cred]', e.message)
       // Preserve the richer payload.cred object built earlier (netCalc, subCategories, etc.) —
       // only fall back to empty additionalSpend/daily fields, not the whole channel object.
-      payload.cred = { ...payload.cred, daily: payload.cred?.daily || [], dailyByCategory: payload.cred?.dailyByCategory || [], byCategory: [], byProduct: [], additionalSpend: null, additionalSpendByProduct: {} }
+      payload.cred = { ...payload.cred, daily: payload.cred?.daily || [], dailyByCategory: payload.cred?.dailyByCategory || [], byCategory: payload.cred?.byCategory || [], byProduct: payload.cred?.byProduct || [], additionalSpend: null, additionalSpendByProduct: {} }
     }
 
     // Merge additionalSpendByProduct into pnlAdSpendMap so PnL Financial View
