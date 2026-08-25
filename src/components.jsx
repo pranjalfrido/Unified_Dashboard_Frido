@@ -53,7 +53,7 @@ export function HBar({ dot, label, width, value, pctVal, onClick, isSelected, la
     <div onClick={onClick} style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '6px 0', borderBottom: `1px solid ${C.border}`, cursor: onClick ? 'pointer' : 'default', background: isSelected ? '#FFFBE6' : 'transparent', borderRadius: isSelected ? 4 : 0 }} className="hbar-row">
       <span style={{ width: 8, height: 8, borderRadius: '50%', background: dot, flexShrink: 0 }} />
       <span title={label} style={{ fontSize: 12, color: C.t2, flexShrink: 0, width: labelWidth, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{label}</span>
-      <div className="hb-track" style={{ flex: 1 }}><div className="hb-fill" style={{ width: `${width}%`, background: dot }} /></div>
+      <div className="hb-track" style={{ flex: 1 }}><div className="hb-fill" style={{ width: `${width}%`, background: '#FFD600' }} /></div>
       <span style={{ fontSize: 12, fontWeight: 700, color: C.t1, fontFamily: 'var(--mono)', flexShrink: 0, minWidth: 62, textAlign: 'right' }}>{value}</span>
       <span style={{ fontSize: 11, color: C.t3, flexShrink: 0, width: 36, textAlign: 'right' }}>{pctVal}</span>
     </div>
@@ -354,7 +354,7 @@ export function TrendAnalysisCard({ title, daily, grossColor, grossGradId, revKe
               })}
             </div>
           ) : null} />
-          <Legend verticalAlign="bottom" wrapperStyle={{ fontSize: 11, paddingTop: 8 }} />
+          <Legend verticalAlign="bottom" wrapperStyle={{ fontSize: 11, paddingTop: 8 }} formatter={v => <span style={{ color: '#111' }}>{v}</span>} />
           <Area yAxisId="rev" type="monotone" dataKey={revKey} name="Gross Revenue" stroke={grossColor} fill={`url(#${gradId})`} strokeWidth={2} dot={false} />
           {showNet && <Area yAxisId="rev" type="monotone" dataKey="_net" name="Net Revenue" stroke="#B8960C" fill={`url(#${gradId}_net)`} strokeWidth={2} dot={false} strokeDasharray="4 2" />}
           {showCogs && <Line yAxisId="rev" type="monotone" dataKey="_cogs" name="COGS" stroke="#F59E0B" strokeWidth={1.5} dot={false} strokeDasharray="3 3" />}

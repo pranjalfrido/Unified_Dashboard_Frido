@@ -2031,7 +2031,7 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
                     <Bar yAxisId="qty" dataKey="total" name="Shipments" fill="#5BA4CF" radius={[3,3,0,0]} barSize={20} />
                     <Line yAxisId="pct" type="monotone" dataKey="rto_pct" name="RTO %" stroke={C.red.tx} strokeWidth={2} dot={{ r: 3, fill: C.red.tx }} />
                     <Line yAxisId="pct" type="monotone" dataKey="avg_tat" name="Intrasit TAT" stroke="#60A5FA" strokeWidth={2} dot={{ r: 3, fill: '#60A5FA' }} />
-                    {!isMobile && <Legend wrapperStyle={{ fontSize: 10 }} />}
+                    {!isMobile && <Legend wrapperStyle={{ fontSize: 10 }} formatter={v => <span style={{ color: '#111' }}>{v}</span>} />}
                   </ComposedChart>
                 </ResponsiveContainer>
               </div>
@@ -2238,7 +2238,7 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
                       <YAxis yAxisId="vol" tick={{ fontSize: 9, fill: C.t3 }} />
                       <YAxis yAxisId="pct" orientation="right" tick={{ fontSize: 9, fill: C.t3 }} tickFormatter={v => v+'%'} domain={[0,100]} />
                       <Tooltip formatter={(v, n) => n.includes('%') ? [v.toFixed(1)+'%', n] : [v.toLocaleString('en-IN'), n]} />
-                      <Legend wrapperStyle={{ fontSize: 10, paddingTop: 8 }} />
+                      <Legend wrapperStyle={{ fontSize: 10, paddingTop: 8 }} formatter={v => <span style={{ color: '#111' }}>{v}</span>} />
                       <Line yAxisId="vol" type="monotone" dataKey="returns" name="Returns" stroke="#2563eb" strokeWidth={2.5} dot={{ r: 2.5, fill: '#2563eb', strokeWidth: 0 }} activeDot={{ r: 4 }} />
                       <Line yAxisId="vol" type="monotone" dataKey="exchanges" name="Exchanges" stroke="#FFD600" strokeWidth={2.5} dot={{ r: 2.5, fill: '#FFD600', strokeWidth: 0 }} activeDot={{ r: 4 }} />
                       <Line yAxisId="pct" type="monotone" dataKey="pickup_pct" name="Pickup %" stroke="#16a34a" strokeWidth={2} dot={{ r: 2.5, fill: '#16a34a', strokeWidth: 0 }} strokeDasharray="4 3" />
@@ -5612,7 +5612,7 @@ function ChannelShareTable({ sortedCh, prevChMap = {}, boxHeight }) {
                 : <span style={{ width: 18, height: 18, borderRadius: 4, background: C.ch[r.ch] || C.acm, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 8, fontWeight: 800, color: '#fff' }}>{r.ch.charAt(0)}</span>}
               <span style={{ fontSize: 12, color: C.t2, width: 90, flexShrink: 0 }}>{chLabel(r.ch)}</span>
               <div style={{ flex: 1, height: 5, background: C.bg, borderRadius: 3 }}>
-                <div style={{ height: '100%', borderRadius: 3, background: C.ch[r.ch] || C.acm, width: `${(r.rev / maxRev) * 100}%`, transition: 'width .5s' }} />
+                <div style={{ height: '100%', borderRadius: 3, background: '#FFD600', width: `${(r.rev / maxRev) * 100}%`, transition: 'width .5s' }} />
               </div>
               <span style={{ fontSize: 12, fontWeight: 700, color: C.t1, minWidth: 72, textAlign: 'right', fontFamily: 'var(--mono)' }}>{fmt(r.rev)}</span>
               <span style={{ fontSize: 11, color: C.t3, minWidth: 36, textAlign: 'right' }}>{(r.rev / totalRev * 100).toFixed(1)}%</span>
@@ -6724,7 +6724,7 @@ function ShopifyTab({ data, filters, setFilters }) {
                       ))}
                     </div>
                   ) : null} />
-                  <Legend wrapperStyle={{ fontSize: 11 }} />
+                  <Legend wrapperStyle={{ fontSize: 11 }} formatter={v => <span style={{ color: '#111' }}>{v}</span>} />
                   <Area yAxisId="rev" type="monotone" dataKey="grossRev" name="Gross Revenue" stroke="#E0B800" fill="url(#shGrossGrad)" strokeWidth={2.5} dot={false} />
                   <Area yAxisId="rev" type="monotone" dataKey="netRev" name="Net Revenue" stroke="#0D9E68" fill="url(#shNetGrad)" strokeWidth={2} dot={false} strokeDasharray="4 2" />
                   <Line yAxisId="pct" type="monotone" dataKey="returnPct" name="Return % (RTO+CIR)" stroke="#E24B4A" strokeWidth={1.5} dot={false} />
@@ -7158,7 +7158,7 @@ function EBOTab({ data, rangeStart, rangeEnd }) {
                   ))}
                 </div>
               ) : null} />
-              <Legend wrapperStyle={{ fontSize: 11 }} />
+              <Legend wrapperStyle={{ fontSize: 11 }} formatter={v => <span style={{ color: '#111' }}>{v}</span>} />
               <Area yAxisId="rev" type="monotone" dataKey="grossRev" name="Gross Revenue" stroke="#E0B800" fill="url(#eboGrossGrad)" strokeWidth={2.5} dot={false} />
               <Area yAxisId="rev" type="monotone" dataKey="netRev" name="Net Revenue" stroke="#0D9E68" fill="url(#eboNetGrad)" strokeWidth={2} dot={false} strokeDasharray="4 2" />
               <Line yAxisId="pct" type="monotone" dataKey="returnPct" name="Return % (RTO+CIR)" stroke="#E24B4A" strokeWidth={1.5} dot={false} />
@@ -7529,7 +7529,7 @@ function AmazonTab({ data, channelView, setChannelView }) {
                           ))}
                         </div>
                       ) : null} />
-                      <Legend wrapperStyle={{ fontSize: 10 }} formatter={v => v} />
+                      <Legend wrapperStyle={{ fontSize: 10 }} formatter={v => <span style={{ color: '#111' }}>{v}</span>} />
                       <Area yAxisId="main" type="monotone" dataKey={dk.total} name={dk.totalName} stroke="#FFD600" fill="#FFD60022" strokeWidth={2} dot={false} />
                       {isRev && <Area yAxisId="main" type="monotone" dataKey={dk.sub} name={dk.subName} stroke="#0D9E68" fill="#0D9E6811" strokeWidth={2} dot={false} strokeDasharray="4 2" />}
                       {channelView === 'all' && <Line yAxisId="main" type="monotone" dataKey={dk.a} name={dk.aName} stroke="#E8930A" strokeWidth={1.5} dot={false} />}
@@ -7866,7 +7866,7 @@ function FlipkartTab({ data }) {
                       </div>
                     )
                   }} />
-                  <Legend wrapperStyle={{ fontSize: 11 }} />
+                  <Legend wrapperStyle={{ fontSize: 11 }} formatter={v => <span style={{ color: '#111' }}>{v}</span>} />
                   {isRev ? (<>
                     <Area yAxisId="main" type="monotone" dataKey="grossRev" name="Gross Revenue" stroke="#E8930A" fill="#E8930A22" strokeWidth={2} dot={grouped.length <= 3} />
                     <Area yAxisId="main" type="monotone" dataKey="netRev" name="Net Revenue" stroke="#0D9E68" fill="#0D9E6811" strokeWidth={2} dot={grouped.length <= 3} strokeDasharray="4 2" />
@@ -10208,7 +10208,7 @@ function CredTab({ data }) {
                       ))}
                     </div>
                   ) : null} />
-                  <Legend wrapperStyle={{ fontSize: 11 }} />
+                  <Legend wrapperStyle={{ fontSize: 11 }} formatter={v => <span style={{ color: '#111' }}>{v}</span>} />
                   {isRev ? (<>
                     <Area type="monotone" dataKey="grossRev" name="Gross Revenue" stroke="#E11D48" fill="#E11D4822" strokeWidth={2} dot={grouped.length <= 3} />
                     <Area type="monotone" dataKey="netRev" name="Net Revenue" stroke="#0D9E68" fill="#0D9E6811" strokeWidth={2} dot={grouped.length <= 3} strokeDasharray="4 2" />
@@ -10416,7 +10416,7 @@ function FirstcryTab({ data }) {
                       ))}
                     </div>
                   ) : null} />
-                  <Legend wrapperStyle={{ fontSize: 11 }} />
+                  <Legend wrapperStyle={{ fontSize: 11 }} formatter={v => <span style={{ color: '#111' }}>{v}</span>} />
                   {isRev ? (<>
                     <Area type="monotone" dataKey="grossRev" name="Gross Revenue" stroke="#F97316" fill="#F9731622" strokeWidth={2} dot={grouped.length <= 3} />
                     <Area type="monotone" dataKey="netRev" name="Net Revenue" stroke="#0D9E68" fill="#0D9E6811" strokeWidth={2} dot={grouped.length <= 3} strokeDasharray="4 2" />
@@ -10620,7 +10620,7 @@ function MyntraTab({ data }) {
                       ))}
                     </div>
                   ) : null} />
-                  <Legend wrapperStyle={{ fontSize: 11 }} />
+                  <Legend wrapperStyle={{ fontSize: 11 }} formatter={v => <span style={{ color: '#111' }}>{v}</span>} />
                   {isRev ? (<>
                     <Area type="monotone" dataKey="grossRev" name="Gross Revenue" stroke="#E87858" fill="#E8785822" strokeWidth={2} dot={grouped.length <= 3} />
                     <Area type="monotone" dataKey="netRev" name="Net Revenue" stroke="#0D9E68" fill="#0D9E6811" strokeWidth={2} dot={grouped.length <= 3} strokeDasharray="4 2" />
@@ -10960,7 +10960,7 @@ function OfflineTab({ data, sub, setSub }) {
                       ))}
                     </div>
                   ) : null} />
-                  <Legend wrapperStyle={{ fontSize: 11 }} />
+                  <Legend wrapperStyle={{ fontSize: 11 }} formatter={v => <span style={{ color: '#111' }}>{v}</span>} />
                   {isRev ? (<>
                     <Area type="monotone" dataKey="rev" name="Gross Revenue" stroke="#FFD600" fill="#FFD60022" strokeWidth={2} dot={grouped.length <= 3} />
                     <Area type="monotone" dataKey="net" name="Net Revenue" stroke="#0D9E68" fill="#0D9E6811" strokeWidth={2} dot={grouped.length <= 3} strokeDasharray="4 2" />
