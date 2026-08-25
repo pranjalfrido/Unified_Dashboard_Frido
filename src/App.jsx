@@ -1816,6 +1816,9 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
           const raw = data.pickupAgeing || []
           if (!raw.length) return null
 
+          const thStyle2 = { fontSize: 10, fontWeight: 700, color: C.t3, textTransform: 'uppercase', letterSpacing: '.04em', padding: '7px 10px', borderBottom: `1px solid ${C.border}`, whiteSpace: 'nowrap', textAlign: 'right' }
+          const tdStyle2 = { fontSize: 11.5, color: C.t1, padding: '6px 10px', borderBottom: `1px solid ${C.border}`, textAlign: 'right', whiteSpace: 'nowrap' }
+
           // Aggregate all courier rows into a single totals row + keep per-courier
           const buckets = ['0-2', '2-4', '4-6', '6-8', '8-10', '10+']
           const delKeys = ['del_0_2', 'del_2_4', 'del_4_6', 'del_6_8', 'del_8_10', 'del_10plus']
