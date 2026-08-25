@@ -1810,11 +1810,10 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
         })()}
 
 
-        {/* ── Pickup Ageing Analysis ── */}
-        <LSectionTitle title="Pickup Ageing Analysis" collapsed={secCollapsed['pickupAgeing']} onToggle={() => toggleSec('pickupAgeing')} />
+        {/* ── Pickup Ageing Analysis ── (hidden until ready) */}
         {(() => {
           const raw = data.pickupAgeing || []
-          if (!raw.length) return null
+          if (true || !raw.length) return null
 
           const thStyle2 = { fontSize: 10, fontWeight: 700, color: C.t3, textTransform: 'uppercase', letterSpacing: '.04em', padding: '7px 10px', borderBottom: `1px solid ${C.border}`, whiteSpace: 'nowrap', textAlign: 'right' }
           const tdStyle2 = { fontSize: 11.5, color: C.t1, padding: '6px 10px', borderBottom: `1px solid ${C.border}`, textAlign: 'right', whiteSpace: 'nowrap' }
@@ -1834,20 +1833,26 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
 
           const modeKeys = ageingMetric === 'del' ? delKeys : rtoKeys
           const modeTotal = ageingMetric === 'del' ? 'del_total' : 'rto_total'
-          const maxPct = Math.max(...buckets.map((_, i) => {
-            const v = totals[modeKeys[i]] || 0
-            const t = totals[modeTotal] || 1
-            return (v / t) * 100
-          }), 1)
-
           const pct = (v, t) => t ? +((v / t) * 100).toFixed(1) : 0
 
           const couriers = raw.map(r => r.courier_group).filter(Boolean).sort()
 
+          const AGEING_COLORS = ['#22C55E', '#86EFAC', '#FBBF24', '#FB923C', '#F87171', '#EF4444']
+          const AGEING_COLORS_RTO = ['#86EFAC', '#FBBF24', '#FB923C', '#F87171', '#EF4444', '#B91C1C']
+          const colors = ageingMetric === 'del' ? AGEING_COLORS : AGEING_COLORS_RTO
+
+          const donutData = buckets.map((label, i) => {
+            const v = totals[modeKeys[i]] || 0
+            const t = totals[modeTotal] || 1
+            return { name: label + 'd', value: v, pct: pct(v, t), color: colors[i] }
+          }).filter(d => d.value > 0)
+
+          const grandTotal = totals[modeTotal] || 0
+
           return (
-            <div style={{ display: secCollapsed['pickupAgeing'] ? 'none' : 'grid', gridTemplateColumns: isMobile ? '1fr' : '2fr 1fr', gap: 14 }}>
-              {/* Bar chart: overall ageing distribution */}
-              <div style={cardStyle}>
+            <div style={{ display: secCollapsed['pickupAgeing'] ? 'none' : 'grid', gridTemplateColumns: isMobile ? '1fr' : '2fr 1fr', gap: 14, alignItems: 'start' }}>
+              {/* Donut chart: overall ageing distribution */}
+              <div style={{ ...cardStyle, paddingBottom: 14, height: 160, overflow: 'hidden' }}>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
                   <div style={chartTitle}>Shipment Ageing (Pickup → {ageingMetric === 'del' ? 'Delivery' : 'RTO Mark'}) — Days</div>
                   <div style={{ display: 'flex', background: C.bg, border: `1px solid ${C.border}`, borderRadius: 7, padding: 2 }}>
@@ -1856,30 +1861,35 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
                     ))}
                   </div>
                 </div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                  {buckets.map((label, i) => {
-                    const v = totals[modeKeys[i]] || 0
-                    const t = totals[modeTotal] || 1
-                    const p = pct(v, t)
-                    const barW = (p / maxPct * 100).toFixed(1)
-                    const barColor = ageingMetric === 'del'
-                      ? (i === 0 ? '#22C55E' : i === 1 ? '#86EFAC' : i === 2 ? '#FBBF24' : i === 3 ? '#FB923C' : '#F87171')
-                      : (i === 0 ? '#86EFAC' : i === 1 ? '#FBBF24' : i === 2 ? '#FB923C' : '#F87171')
-                    return (
-                      <div key={label}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 3 }}>
-                          <span style={{ fontSize: 11.5, color: C.t2, fontWeight: 600, minWidth: 36 }}>{label}d</span>
-                          <span style={{ fontSize: 11.5, fontWeight: 700, color: C.t1 }}>{v.toLocaleString('en-IN')} <span style={{ fontSize: 10.5, color: C.t3, fontWeight: 400 }}>({p}%)</span></span>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 20 }}>
+                  <PieChart width={140} height={140}>
+                    <Pie data={donutData} cx={70} cy={70} innerRadius={42} outerRadius={65} dataKey="value" paddingAngle={2}>
+                      {donutData.map((d, i) => <Cell key={i} fill={d.color} />)}
+                    </Pie>
+                    <Tooltip content={({ active, payload }) => {
+                      if (!active || !payload?.length) return null
+                      const d = payload[0].payload
+                      return (
+                        <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 8, padding: '6px 10px', fontSize: 11, color: C.t1 }}>
+                          <div style={{ fontWeight: 700, marginBottom: 2 }}>{d.name}</div>
+                          <div>{d.value.toLocaleString('en-IN')} · {d.pct}%</div>
                         </div>
-                        <div style={{ height: 8, borderRadius: 4, background: C.border, overflow: 'hidden' }}>
-                          <div style={{ height: '100%', width: barW + '%', background: barColor, borderRadius: 4, transition: 'width .4s ease' }} />
-                        </div>
+                      )
+                    }} />
+                  </PieChart>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 1, flex: 1 }}>
+                    {donutData.map(d => (
+                      <div key={d.name} style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
+                        <div style={{ width: 8, height: 8, borderRadius: 2, background: d.color, flexShrink: 0 }} />
+                        <div style={{ fontSize: 11.5, color: C.t2, minWidth: 34, fontWeight: 600 }}>{d.name}</div>
+                        <div style={{ fontSize: 11.5, color: C.t1, fontWeight: 700, minWidth: 54, textAlign: 'right' }}>{d.value.toLocaleString('en-IN')}</div>
+                        <div style={{ fontSize: 11, color: C.t3, minWidth: 44, textAlign: 'right' }}>{d.pct}%</div>
                       </div>
-                    )
-                  })}
-                </div>
-                <div style={{ marginTop: 14, paddingTop: 10, borderTop: `1px solid ${C.border}`, fontSize: 11, color: C.t3 }}>
-                  Total {ageingMetric === 'del' ? 'delivered' : 'RTO marked'} with pickup date: <strong style={{ color: C.t1 }}>{(totals[modeTotal] || 0).toLocaleString('en-IN')}</strong>
+                    ))}
+                    <div style={{ marginTop: 3, paddingTop: 6, borderTop: `1px solid ${C.border}`, fontSize: 11, color: C.t3 }}>
+                      Total: <strong style={{ color: C.t1 }}>{grandTotal.toLocaleString('en-IN')}</strong>
+                    </div>
+                  </div>
                 </div>
               </div>
 
