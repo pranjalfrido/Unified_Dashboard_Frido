@@ -1,13 +1,13 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { supabase } from './supabase.js'
 
 const ALL_TABS = [
-  { key: 'overview', label: 'Overview' },
-  { key: 'sales', label: 'Sales & Ads' },
-  { key: 'logistics', label: 'Logistics' },
-  { key: 'inventory', label: 'Inventory' },
-  { key: 'customer', label: 'Customer' },
-  { key: 'documents', label: 'Documents' },
+  { key: 'overview',   label: 'Overview' },
+  { key: 'sales',      label: 'Sales & Ads' },
+  { key: 'logistics',  label: 'Logistics' },
+  { key: 'inventory',  label: 'Inventory' },
+  { key: 'customer',   label: 'Customer' },
+  { key: 'documents',  label: 'Documents' },
 ]
 
 const API = import.meta.env.VITE_API_URL || ''
@@ -21,36 +21,97 @@ async function adminCall(action, session, payload) {
   return res.json()
 }
 
-function Avatar({ url, name, size = 48 }) {
-  if (url) return <img src={url} alt={name} style={{ width: size, height: size, borderRadius: '50%', objectFit: 'cover', flexShrink: 0, border: '3px solid #2F6A45' }} />
-  return (
-    <div style={{ width: size, height: size, borderRadius: '50%', background: '#FFF9E6', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, overflow: 'hidden', border: '2px solid #E8C832' }}>
-      <img src="/frido-logo.png" alt="Frido" style={{ width: '85%', height: '85%', objectFit: 'contain' }} />
-    </div>
-  )
-}
-
-function StatusBadge({ active }) {
-  return (
-    <span style={{ fontSize: 11, fontWeight: 700, padding: '3px 10px', borderRadius: 20, background: active ? '#EAF4EE' : '#FFF0EA', color: active ? '#2F6A45' : '#D9612E' }}>
-      {active ? 'Active' : 'Revoked'}
-    </span>
-  )
-}
-
 function fmtDate(ts) {
   if (!ts) return '—'
   return new Date(ts).toLocaleString('en-IN', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })
 }
 
+function initials(name) {
+  if (!name) return '?'
+  return name.trim().split(/\s+/).map(w => w[0]).join('').toUpperCase().slice(0, 2)
+}
+
+// ── Toast ─────────────────────────────────────────────────────────────────────
+function Toast({ message, onDone }) {
+  useEffect(() => {
+    const t = setTimeout(onDone, 2500)
+    return () => clearTimeout(t)
+  }, [onDone])
+  return (
+    <div style={{
+      position: 'fixed', bottom: 28, left: '50%', transform: 'translateX(-50%)',
+      background: '#1E2321', color: '#F7F5EF', fontSize: 13, fontWeight: 600,
+      padding: '10px 22px', borderRadius: 100, zIndex: 10000,
+      boxShadow: '0 4px 20px rgba(0,0,0,0.25)', whiteSpace: 'nowrap',
+      fontFamily: 'Inter, system-ui, sans-serif',
+      animation: 'fadeInUp .2s ease',
+    }}>
+      {message}
+    </div>
+  )
+}
+
+function useToast() {
+  const [msg, setMsg] = useState('')
+  const show = useCallback((m) => { setMsg(m) }, [])
+  const el = msg ? <Toast message={msg} onDone={() => setMsg('')} /> : null
+  return [el, show]
+}
+
+// ── Avatar ────────────────────────────────────────────────────────────────────
+function Avatar({ url, name, size = 44 }) {
+  if (url) return (
+    <img src={url} alt={name} style={{ width: size, height: size, borderRadius: '50%', objectFit: 'cover', flexShrink: 0, border: '2px solid #E7E3D8' }} />
+  )
+  return (
+    <div style={{
+      width: size, height: size, borderRadius: '50%', flexShrink: 0,
+      background: 'radial-gradient(135deg, #F4B400 0%, #B8830A 100%)',
+      display: 'flex', alignItems: 'center', justifyContent: 'center',
+      color: '#fff', fontSize: size * 0.36, fontWeight: 700,
+      fontFamily: 'Inter, system-ui, sans-serif', letterSpacing: '-0.02em',
+    }}>
+      {initials(name)}
+    </div>
+  )
+}
+
+// ── StatusPill ────────────────────────────────────────────────────────────────
+function StatusPill({ active }) {
+  return (
+    <span style={{
+      fontSize: 11, fontWeight: 700, padding: '3px 10px', borderRadius: 100,
+      background: active ? '#E4EFE6' : '#F6E6E1',
+      color: active ? '#3E6B4F' : '#B4472B',
+      fontFamily: 'Inter, system-ui, sans-serif',
+    }}>
+      {active ? 'Active' : 'Revoked'}
+    </span>
+  )
+}
+
+// ── Confirm Dialog ────────────────────────────────────────────────────────────
+function ConfirmDialog({ message, confirmLabel, onConfirm, onCancel, danger = true }) {
+  useEffect(() => {
+    const fn = e => { if (e.key === 'Escape') onCancel() }
+    window.addEventListener('keydown', fn)
+    return () => window.removeEventListener('keydown', fn)
+  }, [onCancel])
+  return (
+    <div style={S.overlay} onClick={onCancel}>
+      <div style={{ ...S.modal, maxWidth: 360, padding: '28px 28px' }} onClick={e => e.stopPropagation()}>
+        <div style={{ fontSize: 14, color: '#1E2321', marginBottom: 20, lineHeight: 1.5 }}>{message}</div>
+        <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
+          <button style={S.outlineBtn} onClick={onCancel}>Cancel</button>
+          <button style={danger ? S.destructiveBtn : S.primaryBtn} onClick={onConfirm}>{confirmLabel}</button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // ── My Profile ────────────────────────────────────────────────────────────────
 function MyProfile({ session, onProfileUpdated }) {
-  const [isMobile, setIsMobile] = useState(() => window.innerWidth <= 768)
-  useEffect(() => {
-    const fn = () => setIsMobile(window.innerWidth <= 768)
-    window.addEventListener('resize', fn)
-    return () => window.removeEventListener('resize', fn)
-  }, [])
   const [profile, setProfile] = useState(null)
   const [name, setName] = useState('')
   const [avatarUrl, setAvatarUrl] = useState('')
@@ -91,7 +152,7 @@ function MyProfile({ session, onProfileUpdated }) {
     if (!name.trim()) return
     setSaving(true)
     await supabase.from('user_profiles').update({ name: name.trim() }).eq('user_id', session.user.id)
-    setSaveMsg('Saved!')
+    setSaveMsg('✓ Saved')
     setTimeout(() => setSaveMsg(''), 2500)
     setSaving(false)
     onProfileUpdated()
@@ -115,72 +176,86 @@ function MyProfile({ session, onProfileUpdated }) {
   }
 
   return (
-    <div style={s.section} className="profile-section">
-      <div style={s.sectionTitle}>My Profile</div>
-      <div className="profile-fields-row" style={{ display: 'flex', alignItems: 'flex-start', gap: 24, flexWrap: 'wrap' }}>
-        <div className="profile-avatar-col" style={{ display: 'flex', flexDirection: isMobile ? 'row' : 'column', alignItems: 'center', gap: isMobile ? 14 : 10 }}>
-          <Avatar url={avatarUrl} name={name} size={isMobile ? 56 : 80} />
-          <button style={s.outlineBtn} onClick={() => fileRef.current?.click()} disabled={uploading}>
+    <div style={S.card}>
+      <div style={S.cardTitle}>My Profile</div>
+
+      <div style={{ display: 'flex', gap: 28, flexWrap: 'wrap', alignItems: 'flex-start' }}>
+        {/* Avatar col */}
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10, minWidth: 80 }}>
+          <div style={{ position: 'relative', cursor: 'pointer' }} onClick={() => fileRef.current?.click()}>
+            <Avatar url={avatarUrl} name={name} size={80} />
+            <div style={{
+              position: 'absolute', inset: 0, borderRadius: '50%',
+              background: 'rgba(0,0,0,0)', display: 'flex', alignItems: 'center', justifyContent: 'center',
+              transition: 'background .15s',
+            }}
+              onMouseEnter={e => e.currentTarget.style.background = 'rgba(0,0,0,0.18)'}
+              onMouseLeave={e => e.currentTarget.style.background = 'rgba(0,0,0,0)'}
+            />
+          </div>
+          <button style={{ ...S.smBtn, fontSize: 12 }} onClick={() => fileRef.current?.click()} disabled={uploading}>
             {uploading ? 'Uploading…' : 'Change photo'}
           </button>
           <input ref={fileRef} type="file" accept="image/*" style={{ display: 'none' }} onChange={e => uploadAvatar(e.target.files[0])} />
         </div>
+
+        {/* Fields col */}
         <div style={{ flex: 1, minWidth: 220, display: 'flex', flexDirection: 'column', gap: 14 }}>
           <div>
-            <label style={s.label}>Full name</label>
-            <input style={s.input} value={name} onChange={e => setName(e.target.value)} />
+            <label style={S.label}>Full name</label>
+            <input style={S.input} value={name} onChange={e => setName(e.target.value)} />
           </div>
           <div>
-            <label style={s.label}>Email</label>
-            <input style={{ ...s.input, background: '#F0EEE9', color: '#7A8079' }} value={session.user.email} disabled />
+            <label style={S.label}>Email</label>
+            <input style={{ ...S.input, background: '#F0EDE6', color: '#4B534F', cursor: 'not-allowed' }} value={session.user.email} disabled />
           </div>
           <div>
-            <label style={s.label}>Role</label>
-            <input style={{ ...s.input, background: '#F0EEE9', color: '#7A8079' }} value={profile?.is_admin ? 'Admin' : 'Member'} disabled />
+            <label style={S.label}>Role</label>
+            <input style={{ ...S.input, background: '#F0EDE6', color: '#4B534F', cursor: 'not-allowed' }} value={profile?.is_admin ? 'Admin' : 'Member'} disabled />
           </div>
-          <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
-            <button style={s.primaryBtn} onClick={saveProfile} disabled={saving}>{saving ? 'Saving…' : 'Save changes'}</button>
-            {saveMsg && <span style={{ fontSize: 13, color: '#2F6A45', fontWeight: 700 }}>{saveMsg}</span>}
+          <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
+            <button style={S.primaryBtn} onClick={saveProfile} disabled={saving}>{saving ? 'Saving…' : 'Save changes'}</button>
+            {saveMsg && <span style={{ fontSize: 13, color: '#3E6B4F', fontWeight: 700 }}>{saveMsg}</span>}
           </div>
         </div>
       </div>
 
-      {pwMsg && <div style={{ ...s.successBox, marginTop: 16 }}>{pwMsg}</div>}
+      {pwMsg && <div style={{ ...S.successBox, marginTop: 16 }}>{pwMsg}</div>}
 
-      <div style={{ marginTop: 24, borderTop: '1px solid #E6E1D2', paddingTop: 20 }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+      {/* Password row */}
+      <div style={{ marginTop: 24, borderTop: `1px solid #E7E3D8`, paddingTop: 20 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 10 }}>
           <div>
-            <div style={{ fontWeight: 700, fontSize: 14 }}>Password</div>
-            <div style={{ fontSize: 12.5, color: '#7A8079', marginTop: 2 }}>Update your account password</div>
+            <div style={{ fontWeight: 700, fontSize: 14, color: '#1E2321' }}>Password</div>
+            <div style={{ fontSize: 12.5, color: '#4B534F', marginTop: 2 }}>Update your account password</div>
           </div>
-          <button style={s.outlineBtn} onClick={() => setShowChangePw(v => !v)}>{showChangePw ? 'Cancel' : 'Change password'}</button>
+          <button style={S.outlineBtn} onClick={() => setShowChangePw(v => !v)}>{showChangePw ? 'Cancel' : 'Change password'}</button>
         </div>
         {showChangePw && (
           <form onSubmit={changePassword} style={{ display: 'flex', flexDirection: 'column', gap: 13, marginTop: 18, maxWidth: 360 }}>
-            {pwErr && <div style={s.errBox}>{pwErr}</div>}
+            {pwErr && <div style={S.errBox}>{pwErr}</div>}
             <div>
-              <label style={s.label}>Current password</label>
+              <label style={S.label}>Current password</label>
               <div style={{ position: 'relative' }}>
-                <input style={{ ...s.input, paddingRight: 60 }} type={showCur ? 'text' : 'password'} value={curPw} onChange={e => setCurPw(e.target.value)} placeholder="Enter current password" />
-                <button type="button" style={s.toggle} onClick={() => setShowCur(v => !v)}>{showCur ? 'HIDE' : 'SHOW'}</button>
+                <input style={{ ...S.input, paddingRight: 60 }} type={showCur ? 'text' : 'password'} value={curPw} onChange={e => setCurPw(e.target.value)} placeholder="Enter current password" />
+                <button type="button" style={S.toggleBtn} onClick={() => setShowCur(v => !v)}>{showCur ? 'HIDE' : 'SHOW'}</button>
               </div>
             </div>
             <div>
-              <label style={s.label}>New password</label>
+              <label style={S.label}>New password</label>
               <div style={{ position: 'relative' }}>
-                <input style={{ ...s.input, paddingRight: 60 }} type={showNew ? 'text' : 'password'} value={newPw} onChange={e => setNewPw(e.target.value)} placeholder="Min 8 characters" />
-                <button type="button" style={s.toggle} onClick={() => setShowNew(v => !v)}>{showNew ? 'HIDE' : 'SHOW'}</button>
+                <input style={{ ...S.input, paddingRight: 60 }} type={showNew ? 'text' : 'password'} value={newPw} onChange={e => setNewPw(e.target.value)} placeholder="Min 8 characters" />
+                <button type="button" style={S.toggleBtn} onClick={() => setShowNew(v => !v)}>{showNew ? 'HIDE' : 'SHOW'}</button>
               </div>
             </div>
             <div>
-              <label style={s.label}>Confirm new password</label>
-              <input style={s.input} type={showNew ? 'text' : 'password'} value={confirmPw} onChange={e => setConfirmPw(e.target.value)} placeholder="Repeat new password" />
+              <label style={S.label}>Confirm new password</label>
+              <input style={S.input} type={showNew ? 'text' : 'password'} value={confirmPw} onChange={e => setConfirmPw(e.target.value)} placeholder="Repeat new password" />
             </div>
-            <button type="submit" style={{ ...s.primaryBtn, width: 'fit-content' }} disabled={pwLoading}>{pwLoading ? 'Updating…' : 'Update password'}</button>
+            <button type="submit" style={{ ...S.primaryBtn, width: 'fit-content' }} disabled={pwLoading}>{pwLoading ? 'Updating…' : 'Update password'}</button>
           </form>
         )}
       </div>
-
     </div>
   )
 }
@@ -189,12 +264,16 @@ function MyProfile({ session, onProfileUpdated }) {
 function CreateUserModal({ session, onClose, onCreated }) {
   const [name, setName] = useState('')
   const [email, setEmail] = useState('')
-  const [password, setPassword] = useState('')
-  const [showPw, setShowPw] = useState(false)
+  const [password, setPassword] = useState(() => Math.random().toString(36).slice(2, 10) + 'A1!')
+  const [showPw, setShowPw] = useState(true)
   const [isAdmin, setIsAdmin] = useState(false)
   const [tabs, setTabs] = useState([])
   const [loading, setLoading] = useState(false)
   const [err, setErr] = useState('')
+
+  function regenPassword() {
+    setPassword(Math.random().toString(36).slice(2, 10) + 'A1!')
+  }
 
   function toggleTab(key) {
     setTabs(prev => prev.includes(key) ? prev.filter(t => t !== key) : [...prev, key])
@@ -207,61 +286,72 @@ function CreateUserModal({ session, onClose, onCreated }) {
     if (password.length < 8) { setErr('Password must be at least 8 characters.'); return }
     if (!isAdmin && tabs.length === 0) { setErr('Assign at least one tab permission.'); return }
     setErr(''); setLoading(true)
-
     const result = await adminCall('create_user', session, { name: name.trim(), email: email.trim().toLowerCase(), password, is_admin: isAdmin, tabs })
     if (result.error) { setErr(result.error); setLoading(false); return }
-
-    setLoading(false)
-    onCreated()
-    onClose()
+    setLoading(false); onCreated(); onClose()
   }
 
+  useEffect(() => {
+    const fn = e => { if (e.key === 'Escape') onClose() }
+    window.addEventListener('keydown', fn)
+    return () => window.removeEventListener('keydown', fn)
+  }, [onClose])
+
   return (
-    <div style={s.overlay} onClick={onClose}>
-      <div style={s.modal} onClick={e => e.stopPropagation()}>
+    <div style={S.overlay} onClick={onClose}>
+      <div style={S.modal} onClick={e => e.stopPropagation()}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
-          <div style={{ fontFamily: "'Fraunces', serif", fontSize: 20, fontWeight: 600 }}>Add team member</div>
-          <button style={s.iconBtn} onClick={onClose}>✕</button>
+          <div style={{ fontFamily: 'Georgia, serif', fontSize: 20, fontWeight: 700, color: '#1E2321' }}>Add team member</div>
+          <button style={S.iconBtn} onClick={onClose}>✕</button>
         </div>
-        {err && <div style={{ ...s.errBox, marginBottom: 16 }}>{err}</div>}
+        {err && <div style={{ ...S.errBox, marginBottom: 16 }}>{err}</div>}
         <form onSubmit={handleCreate} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
           <div>
-            <label style={s.label}>Full name</label>
-            <input style={s.input} value={name} onChange={e => setName(e.target.value)} placeholder="Jane Smith" />
+            <label style={S.label}>Full name</label>
+            <input style={S.input} value={name} onChange={e => setName(e.target.value)} placeholder="Jane Smith" autoFocus />
           </div>
           <div>
-            <label style={s.label}>Work email</label>
-            <input style={s.input} type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="jane@myfrido.com" />
+            <label style={S.label}>Work email</label>
+            <input style={S.input} type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="jane@myfrido.com" />
           </div>
           <div>
-            <label style={s.label}>Password</label>
-            <div style={{ position: 'relative' }}>
-              <input style={{ ...s.input, paddingRight: 60 }} type={showPw ? 'text' : 'password'} value={password} onChange={e => setPassword(e.target.value)} placeholder="Min 8 characters" />
-              <button type="button" style={s.toggle} onClick={() => setShowPw(v => !v)}>{showPw ? 'HIDE' : 'SHOW'}</button>
+            <label style={S.label}>Temporary password</label>
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+              <div style={{ position: 'relative', flex: 1 }}>
+                <input style={{ ...S.input, paddingRight: 60, fontFamily: 'monospace', letterSpacing: '0.04em' }} type="text" value={password} onChange={e => setPassword(e.target.value)} />
+              </div>
+              <button type="button" style={{ ...S.smBtn, flexShrink: 0, fontSize: 16, padding: '8px 12px' }} onClick={regenPassword} title="Regenerate password">↻</button>
             </div>
-            <div style={{ fontSize: 12, color: '#7A8079', marginTop: 5 }}>Share this password with the user via Teams or email.</div>
+            <div style={{ fontSize: 11.5, color: '#4B534F', marginTop: 5 }}>Share this with the person directly — it won't be shown again.</div>
           </div>
           <div>
-            <label style={{ ...s.label, marginBottom: 10 }}>Role</label>
-            <div style={{ display: 'flex', gap: 10 }}>
-              <button type="button" style={{ ...s.roleBtn, ...(isAdmin ? s.roleBtnActive : {}) }} onClick={() => setIsAdmin(true)}>Admin</button>
-              <button type="button" style={{ ...s.roleBtn, ...(!isAdmin ? s.roleBtnActive : {}) }} onClick={() => setIsAdmin(false)}>Member</button>
+            <label style={{ ...S.label, marginBottom: 10 }}>Role</label>
+            <div style={{ display: 'flex', gap: 8, background: '#F7F5EF', borderRadius: 10, padding: 4 }}>
+              {[{ id: true, label: 'Admin' }, { id: false, label: 'Member' }].map(r => (
+                <button key={String(r.id)} type="button"
+                  style={{ flex: 1, padding: '8px 4px', borderRadius: 8, border: 'none', fontSize: 13, fontWeight: isAdmin === r.id ? 700 : 500, cursor: 'pointer', transition: 'all .15s',
+                    background: isAdmin === r.id ? '#fff' : 'transparent',
+                    color: isAdmin === r.id ? '#1E2321' : '#4B534F',
+                    boxShadow: isAdmin === r.id ? '0 1px 4px rgba(0,0,0,.10)' : 'none',
+                  }}
+                  onClick={() => setIsAdmin(r.id)}>{r.label}</button>
+              ))}
             </div>
-            {isAdmin && <p style={{ fontSize: 12, color: '#7A8079', marginTop: 6 }}>Admins can see all tabs and manage team members.</p>}
+            {isAdmin && <p style={{ fontSize: 12, color: '#4B534F', marginTop: 6 }}>Admins can see all tabs and manage team members.</p>}
           </div>
           {!isAdmin && (
             <div>
-              <label style={{ ...s.label, marginBottom: 10 }}>Tab permissions</label>
+              <label style={{ ...S.label, marginBottom: 10 }}>Tab permissions</label>
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
                 {ALL_TABS.map(t => (
-                  <button key={t.key} type="button" style={{ ...s.chip, ...(tabs.includes(t.key) ? s.chipActive : {}) }} onClick={() => toggleTab(t.key)}>{t.label}</button>
+                  <button key={t.key} type="button" style={{ ...S.chip, ...(tabs.includes(t.key) ? S.chipActive : {}) }} onClick={() => toggleTab(t.key)}>{t.label}</button>
                 ))}
               </div>
             </div>
           )}
-          <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', marginTop: 8 }}>
-            <button type="button" style={s.outlineBtn} onClick={onClose}>Cancel</button>
-            <button type="submit" style={{ ...s.primaryBtn, opacity: loading ? 0.7 : 1 }} disabled={loading}>{loading ? 'Creating…' : 'Create user'}</button>
+          <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', marginTop: 8, borderTop: `1px solid #E7E3D8`, paddingTop: 18 }}>
+            <button type="button" style={S.outlineBtn} onClick={onClose}>Cancel</button>
+            <button type="submit" style={{ ...S.primaryBtn, opacity: loading ? 0.7 : 1 }} disabled={loading}>{loading ? 'Creating…' : 'Create user'}</button>
           </div>
         </form>
       </div>
@@ -284,36 +374,40 @@ function ResetPasswordModal({ session, user, onClose, onDone }) {
     setErr(''); setLoading(true)
     const result = await adminCall('reset_password', session, { user_id: user.user_id, new_password: newPw })
     if (result.error) { setErr(result.error); setLoading(false); return }
-    setLoading(false)
-    onDone()
-    onClose()
+    setLoading(false); onDone(); onClose()
   }
 
+  useEffect(() => {
+    const fn = e => { if (e.key === 'Escape') onClose() }
+    window.addEventListener('keydown', fn)
+    return () => window.removeEventListener('keydown', fn)
+  }, [onClose])
+
   return (
-    <div style={s.overlay} onClick={onClose}>
-      <div style={{ ...s.modal, maxWidth: 400 }} onClick={e => e.stopPropagation()}>
+    <div style={S.overlay} onClick={onClose}>
+      <div style={{ ...S.modal, maxWidth: 400 }} onClick={e => e.stopPropagation()}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
-          <div style={{ fontWeight: 700, fontSize: 16 }}>Reset password</div>
-          <button style={s.iconBtn} onClick={onClose}>✕</button>
+          <div style={{ fontFamily: 'Georgia, serif', fontSize: 18, fontWeight: 700, color: '#1E2321' }}>Reset password</div>
+          <button style={S.iconBtn} onClick={onClose}>✕</button>
         </div>
-        <div style={{ fontSize: 13, color: '#7A8079', marginBottom: 20 }}>Setting new password for <strong>{user.name}</strong></div>
-        {err && <div style={{ ...s.errBox, marginBottom: 16 }}>{err}</div>}
+        <div style={{ fontSize: 13, color: '#4B534F', marginBottom: 20 }}>Setting new password for <strong style={{ color: '#1E2321' }}>{user.name}</strong></div>
+        {err && <div style={{ ...S.errBox, marginBottom: 16 }}>{err}</div>}
         <form onSubmit={handleReset} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
           <div>
-            <label style={s.label}>New password</label>
+            <label style={S.label}>New password</label>
             <div style={{ position: 'relative' }}>
-              <input style={{ ...s.input, paddingRight: 60 }} type={showPw ? 'text' : 'password'} value={newPw} onChange={e => setNewPw(e.target.value)} placeholder="Min 8 characters" autoFocus />
-              <button type="button" style={s.toggle} onClick={() => setShowPw(v => !v)}>{showPw ? 'HIDE' : 'SHOW'}</button>
+              <input style={{ ...S.input, paddingRight: 60 }} type={showPw ? 'text' : 'password'} value={newPw} onChange={e => setNewPw(e.target.value)} placeholder="Min 8 characters" autoFocus />
+              <button type="button" style={S.toggleBtn} onClick={() => setShowPw(v => !v)}>{showPw ? 'HIDE' : 'SHOW'}</button>
             </div>
           </div>
           <div>
-            <label style={s.label}>Confirm password</label>
-            <input style={s.input} type={showPw ? 'text' : 'password'} value={confirmPw} onChange={e => setConfirmPw(e.target.value)} placeholder="Repeat password" />
+            <label style={S.label}>Confirm password</label>
+            <input style={S.input} type={showPw ? 'text' : 'password'} value={confirmPw} onChange={e => setConfirmPw(e.target.value)} placeholder="Repeat password" />
           </div>
-          <div style={{ fontSize: 12, color: '#7A8079' }}>Share the new password with {user.name} via Teams or email.</div>
-          <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
-            <button type="button" style={s.outlineBtn} onClick={onClose}>Cancel</button>
-            <button type="submit" style={{ ...s.primaryBtn, opacity: loading ? 0.7 : 1 }} disabled={loading}>{loading ? 'Resetting…' : 'Reset password'}</button>
+          <div style={{ fontSize: 12, color: '#4B534F' }}>Share the new password with {user.name} via Teams or email.</div>
+          <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', borderTop: `1px solid #E7E3D8`, paddingTop: 16 }}>
+            <button type="button" style={S.outlineBtn} onClick={onClose}>Cancel</button>
+            <button type="submit" style={{ ...S.primaryBtn, opacity: loading ? 0.7 : 1 }} disabled={loading}>{loading ? 'Resetting…' : 'Reset password'}</button>
           </div>
         </form>
       </div>
@@ -329,25 +423,28 @@ function ActivityLog({ userId, onClose }) {
   useEffect(() => {
     supabase.from('login_activity').select('*').eq('user_id', userId).order('created_at', { ascending: false }).limit(50)
       .then(({ data }) => { setLogs(data || []); setLoading(false) })
-  }, [userId])
+    const fn = e => { if (e.key === 'Escape') onClose() }
+    window.addEventListener('keydown', fn)
+    return () => window.removeEventListener('keydown', fn)
+  }, [userId, onClose])
 
   return (
-    <div style={s.overlay} onClick={onClose}>
-      <div style={{ ...s.modal, maxWidth: 440 }} onClick={e => e.stopPropagation()}>
+    <div style={S.overlay} onClick={onClose}>
+      <div style={{ ...S.modal, maxWidth: 440 }} onClick={e => e.stopPropagation()}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
-          <div style={{ fontWeight: 700, fontSize: 16 }}>Login activity</div>
-          <button style={s.iconBtn} onClick={onClose}>✕</button>
+          <div style={{ fontFamily: 'Georgia, serif', fontSize: 18, fontWeight: 700, color: '#1E2321' }}>Login activity</div>
+          <button style={S.iconBtn} onClick={onClose}>✕</button>
         </div>
-        {loading ? <div style={{ color: '#7A8079', fontSize: 13 }}>Loading…</div> : logs.length === 0 ? (
-          <div style={{ color: '#7A8079', fontSize: 13 }}>No activity recorded yet.</div>
+        {loading ? <div style={{ color: '#4B534F', fontSize: 13 }}>Loading…</div> : logs.length === 0 ? (
+          <div style={{ color: '#4B534F', fontSize: 13 }}>No activity recorded yet.</div>
         ) : (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 8, maxHeight: 380, overflowY: 'auto' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6, maxHeight: 380, overflowY: 'auto' }}>
             {logs.map(log => (
-              <div key={log.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 12px', background: '#F5F1E8', borderRadius: 8 }}>
-                <span style={{ fontSize: 13, fontWeight: 700, color: log.action === 'login' ? '#2F6A45' : '#D9612E' }}>
+              <div key={log.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 12px', background: '#F7F5EF', borderRadius: 8 }}>
+                <span style={{ fontSize: 13, fontWeight: 700, color: log.action === 'login' ? '#3E6B4F' : '#B4472B' }}>
                   {log.action === 'login' ? '→ Logged in' : '← Logged out'}
                 </span>
-                <span style={{ fontSize: 12, color: '#7A8079' }}>{fmtDate(log.created_at)}</span>
+                <span style={{ fontSize: 12, color: '#4B534F' }}>{fmtDate(log.created_at)}</span>
               </div>
             ))}
           </div>
@@ -358,7 +455,7 @@ function ActivityLog({ userId, onClose }) {
 }
 
 // ── User Row ──────────────────────────────────────────────────────────────────
-function UserRow({ user, permissions, session, onUpdate }) {
+function UserRow({ user, permissions, session, onUpdate, showToast }) {
   const [expanded, setExpanded] = useState(false)
   const [localTabs, setLocalTabs] = useState(permissions)
   const [saving, setSaving] = useState(false)
@@ -368,7 +465,6 @@ function UserRow({ user, permissions, session, onUpdate }) {
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [revoking, setRevoking] = useState(false)
   const [deleting, setDeleting] = useState(false)
-  const [resetDone, setResetDone] = useState(false)
 
   useEffect(() => { setLocalTabs(permissions) }, [permissions])
 
@@ -377,92 +473,134 @@ function UserRow({ user, permissions, session, onUpdate }) {
     await supabase.from('user_permissions').delete().eq('user_id', user.user_id)
     if (localTabs.length > 0) await supabase.from('user_permissions').insert(localTabs.map(tab => ({ user_id: user.user_id, tab })))
     setSaving(false); setExpanded(false); onUpdate()
+    showToast('Permissions saved')
   }
 
   async function revokeUser() {
     setRevoking(true)
     await adminCall('revoke_user', session, { user_id: user.user_id })
     setRevoking(false); setConfirmRevoke(false); onUpdate()
+    showToast(`${user.name} revoked`)
   }
 
   async function deleteUser() {
     setDeleting(true)
     await adminCall('delete_user', session, { user_id: user.user_id })
     setDeleting(false); setConfirmDelete(false); onUpdate()
+    showToast(`${user.name} deleted`)
   }
 
   const tabsChanged = JSON.stringify([...localTabs].sort()) !== JSON.stringify([...permissions].sort())
+  const isRevoked = !user.is_active
 
   return (
     <>
-      <div style={{ borderBottom: '1px solid #E6E1D2' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '14px 0' }}>
-          <Avatar url={user.avatar_url} name={user.name} size={40} />
+      <div style={{
+        borderRadius: 12, border: `1px solid #E7E3D8`,
+        background: isRevoked ? '#FAF9F6' : '#FFFFFF',
+        marginBottom: 10, overflow: 'hidden',
+        boxShadow: '0 1px 2px rgba(0,0,0,.04)',
+        opacity: isRevoked ? 0.75 : 1,
+        transition: 'opacity .2s',
+      }}>
+        {/* Main row */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '14px 16px', flexWrap: 'wrap' }}>
+          <Avatar url={user.avatar_url} name={user.name} size={42} />
           <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ fontWeight: 700, fontSize: 14 }}>{user.name}</div>
-            <div style={{ fontSize: 12.5, color: '#7A8079' }}>{user.email}</div>
-            <div style={{ fontSize: 11.5, color: '#7A8079', marginTop: 2 }}>Last login: {fmtDate(user.last_login_at)}</div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+              <span style={{ fontWeight: 700, fontSize: 14, color: '#1E2321' }}>{user.name}</span>
+              <StatusPill active={user.is_active} />
+              <span style={{ fontSize: 11, fontWeight: 600, padding: '2px 9px', borderRadius: 100, background: '#F7F5EF', color: '#4B534F', border: '1px solid #E7E3D8' }}>
+                {user.is_admin ? 'Admin' : `${permissions.length} tab${permissions.length !== 1 ? 's' : ''}`}
+              </span>
+            </div>
+            <div style={{ fontSize: 12.5, color: '#4B534F', marginTop: 3 }}>{user.email}</div>
+            <div style={{ fontSize: 11.5, color: '#9BA5A1', marginTop: 1 }}>Last login: {fmtDate(user.last_login_at)}</div>
           </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0 }}>
-            <StatusBadge active={user.is_active} />
-            <div style={{ fontSize: 12, color: '#7A8079', minWidth: 50 }}>
-              {user.is_admin ? 'Admin' : `${permissions.length} tab${permissions.length !== 1 ? 's' : ''}`}
-            </div>
-            <div style={{ display: 'flex', gap: 6, flexWrap: 'nowrap' }}>
-              <button style={s.smBtn} onClick={() => setShowActivity(true)}>Activity</button>
-              {!user.is_admin && <button style={s.smBtn} onClick={() => setExpanded(v => !v)}>{expanded ? 'Close' : 'Permissions'}</button>}
-              <button style={s.smBtn} onClick={() => setShowReset(true)}>Reset pw</button>
-              {user.is_active && (
-                confirmRevoke ? (
-                  <>
-                    <button style={{ ...s.smBtn, background: '#D9612E', color: '#fff', border: 'none' }} onClick={revokeUser} disabled={revoking}>{revoking ? '…' : 'Confirm'}</button>
-                    <button style={s.smBtn} onClick={() => setConfirmRevoke(false)}>Cancel</button>
-                  </>
-                ) : (
-                  <button style={{ ...s.smBtn, color: '#D9612E' }} onClick={() => setConfirmRevoke(true)}>Revoke</button>
-                )
-              )}
-              {confirmDelete ? (
-                <>
-                  <button style={{ ...s.smBtn, background: '#D9612E', color: '#fff', border: 'none' }} onClick={deleteUser} disabled={deleting}>{deleting ? '…' : 'Confirm'}</button>
-                  <button style={s.smBtn} onClick={() => setConfirmDelete(false)}>Cancel</button>
-                </>
-              ) : (
-                <button style={{ ...s.smBtn, color: '#7A8079' }} onClick={() => setConfirmDelete(true)}>Delete</button>
-              )}
-            </div>
+
+          {/* Actions */}
+          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', flexShrink: 0 }}>
+            <button style={S.smBtn} onClick={() => setShowActivity(true)}>Activity</button>
+            <button style={S.smBtn} onClick={() => setShowReset(true)}>Reset pw</button>
+            {!user.is_admin && (
+              <button style={{ ...S.smBtn, color: expanded ? '#3E6B4F' : '#4B534F', borderColor: expanded ? '#3E6B4F' : '#E7E3D8' }}
+                onClick={() => setExpanded(v => !v)}>
+                {expanded ? '▾ Tab access' : '▸ Tab access'}
+              </button>
+            )}
+            {user.is_active ? (
+              <button style={{ ...S.smBtn, color: '#B4472B', borderColor: '#B4472B' }} onClick={() => setConfirmRevoke(true)}>Revoke</button>
+            ) : (
+              <button style={{ ...S.smBtn, color: '#3E6B4F', borderColor: '#3E6B4F' }} onClick={() => setConfirmRevoke(true)}>Restore</button>
+            )}
+            <button style={{ ...S.smBtn, color: '#9BA5A1' }} onClick={() => setConfirmDelete(true)}>Delete</button>
           </div>
         </div>
 
-        {resetDone && <div style={{ ...s.successBox, marginBottom: 10, marginLeft: 54 }}>✓ Password reset. Share new credentials with {user.name}.</div>}
-
+        {/* Tab access panel */}
         {expanded && !user.is_admin && (
-          <div style={{ paddingBottom: 14, paddingLeft: 54 }}>
-            <div style={{ fontSize: 12.5, fontWeight: 700, color: '#7A8079', marginBottom: 8 }}>Tab access</div>
+          <div style={{ borderTop: `1px solid #E7E3D8`, padding: '14px 16px', background: '#F7F5EF' }}>
+            <div style={{ fontSize: 12, fontWeight: 700, color: '#4B534F', marginBottom: 10, textTransform: 'uppercase', letterSpacing: '.06em' }}>Tab access</div>
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 12 }}>
               {ALL_TABS.map(t => (
-                <button key={t.key} type="button" style={{ ...s.chip, ...(localTabs.includes(t.key) ? s.chipActive : {}) }} onClick={() => setLocalTabs(prev => prev.includes(t.key) ? prev.filter(x => x !== t.key) : [...prev, t.key])}>
+                <button key={t.key} type="button"
+                  style={{ ...S.chip, ...(localTabs.includes(t.key) ? S.chipActive : {}) }}
+                  onClick={() => setLocalTabs(prev => prev.includes(t.key) ? prev.filter(x => x !== t.key) : [...prev, t.key])}>
                   {t.label}
                 </button>
               ))}
             </div>
-            {tabsChanged && <button style={{ ...s.primaryBtn, opacity: saving ? 0.7 : 1 }} onClick={savePermissions} disabled={saving}>{saving ? 'Saving…' : 'Save permissions'}</button>}
+            {tabsChanged && (
+              <button style={{ ...S.primaryBtn, opacity: saving ? 0.7 : 1, fontSize: 12, padding: '7px 14px' }} onClick={savePermissions} disabled={saving}>
+                {saving ? 'Saving…' : 'Save permissions'}
+              </button>
+            )}
+          </div>
+        )}
+
+        {user.is_admin && expanded && (
+          <div style={{ borderTop: `1px solid #E7E3D8`, padding: '12px 16px', background: '#F7F5EF', fontSize: 12.5, color: '#4B534F' }}>
+            Admins have access to every tab.
           </div>
         )}
       </div>
 
-      {showReset && <ResetPasswordModal session={session} user={user} onClose={() => setShowReset(false)} onDone={() => setResetDone(true)} />}
+      {showReset && (
+        <ResetPasswordModal session={session} user={user} onClose={() => setShowReset(false)}
+          onDone={() => showToast(`Password reset for ${user.name}`)} />
+      )}
       {showActivity && <ActivityLog userId={user.user_id} onClose={() => setShowActivity(false)} />}
+      {confirmRevoke && (
+        <ConfirmDialog
+          message={user.is_active
+            ? `Revoke access for ${user.name}? They won't be able to log in until restored.`
+            : `Restore access for ${user.name}?`}
+          confirmLabel={user.is_active ? 'Revoke' : 'Restore'}
+          danger={user.is_active}
+          onConfirm={revokeUser}
+          onCancel={() => setConfirmRevoke(false)}
+        />
+      )}
+      {confirmDelete && (
+        <ConfirmDialog
+          message={`Permanently delete ${user.name}'s account? This cannot be undone.`}
+          confirmLabel="Delete"
+          danger
+          onConfirm={deleteUser}
+          onCancel={() => setConfirmDelete(false)}
+        />
+      )}
     </>
   )
 }
 
 // ── Team Members ──────────────────────────────────────────────────────────────
-function TeamMembers({ session }) {
+function TeamMembers({ session, showToast }) {
   const [users, setUsers] = useState([])
   const [permissions, setPermissions] = useState({})
   const [loading, setLoading] = useState(true)
   const [showCreate, setShowCreate] = useState(false)
+  const [search, setSearch] = useState('')
 
   async function loadUsers() {
     setLoading(true)
@@ -477,23 +615,59 @@ function TeamMembers({ session }) {
 
   useEffect(() => { loadUsers() }, [])
 
+  const filtered = users.filter(u => {
+    const q = search.toLowerCase()
+    return !q || u.name?.toLowerCase().includes(q) || u.email?.toLowerCase().includes(q)
+  })
+
   return (
-    <div style={s.section}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
-        <div style={s.sectionTitle}>Team Members</div>
-        <button style={s.primaryBtn} onClick={() => setShowCreate(true)}>+ Add member</button>
+    <div style={S.card}>
+      {/* Header */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16, flexWrap: 'wrap', gap: 10 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <div style={S.cardTitle}>Team Members</div>
+          <span style={{ fontSize: 12, fontWeight: 700, padding: '2px 10px', borderRadius: 100, background: '#F7F5EF', color: '#4B534F', border: '1px solid #E7E3D8' }}>
+            {users.length}
+          </span>
+        </div>
+        <button style={S.primaryBtn} onClick={() => setShowCreate(true)}>+ Add member</button>
       </div>
-      {loading ? <div style={{ color: '#7A8079', fontSize: 14 }}>Loading…</div>
-        : users.length === 0 ? <div style={{ color: '#7A8079', fontSize: 14 }}>No team members yet.</div>
-        : users.map(u => <UserRow key={u.user_id} user={u} permissions={permissions[u.user_id] || []} session={session} onUpdate={loadUsers} />)
-      }
-      {showCreate && <CreateUserModal session={session} onClose={() => setShowCreate(false)} onCreated={loadUsers} />}
+
+      {/* Search */}
+      <div style={{ position: 'relative', marginBottom: 16 }}>
+        <span style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', fontSize: 14, color: '#9BA5A1', pointerEvents: 'none' }}>⌕</span>
+        <input
+          style={{ ...S.input, paddingLeft: 34, background: '#F7F5EF' }}
+          placeholder="Search by name or email…"
+          value={search}
+          onChange={e => setSearch(e.target.value)}
+        />
+      </div>
+
+      {/* List */}
+      {loading ? (
+        <div style={{ color: '#4B534F', fontSize: 14, padding: '20px 0' }}>Loading…</div>
+      ) : filtered.length === 0 ? (
+        <div style={{ color: '#9BA5A1', fontSize: 14, textAlign: 'center', padding: '32px 0' }}>
+          {search ? `No members match "${search}"` : 'No team members yet.'}
+        </div>
+      ) : (
+        filtered.map(u => (
+          <UserRow key={u.user_id} user={u} permissions={permissions[u.user_id] || []} session={session} onUpdate={loadUsers} showToast={showToast} />
+        ))
+      )}
+
+      {showCreate && (
+        <CreateUserModal session={session} onClose={() => setShowCreate(false)} onCreated={() => { loadUsers(); showToast('Member added') }} />
+      )}
     </div>
   )
 }
 
 // ── Main ProfilePage ──────────────────────────────────────────────────────────
 export default function ProfilePage({ session, profile, onSignOut, onProfileUpdated }) {
+  const [toastEl, showToast] = useToast()
+
   async function handleSignOut() {
     await supabase.from('login_activity').insert({ user_id: session.user.id, action: 'logout' })
     await supabase.auth.signOut()
@@ -501,36 +675,142 @@ export default function ProfilePage({ session, profile, onSignOut, onProfileUpda
   }
 
   return (
-    <div style={s.page} className="profile-page">
-      <div style={s.header} className="profile-header">
-        <div style={{ fontFamily: "'Fraunces', serif", fontSize: 22, fontWeight: 600 }}>Profile & Settings</div>
-        <button style={{ ...s.outlineBtn, color: '#D9612E', borderColor: '#D9612E' }} onClick={handleSignOut}>Sign out</button>
+    <div style={S.page}>
+      {/* Page header */}
+      <div style={S.pageHeader}>
+        <div>
+          <div style={{ fontSize: 11, fontWeight: 700, color: '#B8830A', textTransform: 'uppercase', letterSpacing: '.1em', marginBottom: 4, fontFamily: 'Inter, system-ui, sans-serif' }}>
+            Frido Admin
+          </div>
+          <h1 style={{ fontFamily: 'Georgia, serif', fontSize: 26, fontWeight: 700, color: '#1E2321', margin: 0, lineHeight: 1.1 }}>
+            Profile &amp; Settings
+          </h1>
+        </div>
+        <button style={{ ...S.outlineBtn, color: '#B4472B', borderColor: '#B4472B' }}
+          onMouseEnter={e => { e.currentTarget.style.background = '#F6E6E1' }}
+          onMouseLeave={e => { e.currentTarget.style.background = 'transparent' }}
+          onClick={handleSignOut}>
+          Sign out
+        </button>
       </div>
+
       <MyProfile session={session} onProfileUpdated={onProfileUpdated} />
-      {profile?.is_admin && <TeamMembers session={session} />}
-      <style>{`@import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600&family=Manrope:wght@400;500;600;700;800&display=swap');`}</style>
+      {profile?.is_admin && <TeamMembers session={session} showToast={showToast} />}
+
+      {toastEl}
+
+      <style>{`
+        @keyframes fadeInUp {
+          from { opacity: 0; transform: translateX(-50%) translateY(10px); }
+          to   { opacity: 1; transform: translateX(-50%) translateY(0); }
+        }
+        .profile-page-input:focus { outline: none; border-color: #F4B400 !important; box-shadow: 0 0 0 3px rgba(244,180,0,.15) !important; }
+      `}</style>
     </div>
   )
 }
 
-const s = {
-  page: { fontFamily: "'Manrope', sans-serif", padding: '28px 32px', maxWidth: 860, margin: '0 auto', color: '#17211C' },
-  header: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 28 },
-  section: { background: '#fff', borderRadius: 16, padding: '24px 28px', marginBottom: 20, boxShadow: '0 2px 12px rgba(23,33,28,0.06)' },
-  sectionTitle: { fontSize: 15, fontWeight: 800, marginBottom: 20 },
-  label: { fontSize: 12.5, fontWeight: 700, display: 'block', marginBottom: 6 },
-  input: { width: '100%', padding: '11px 13px', fontSize: 14, fontFamily: "'Manrope', sans-serif", border: '1.5px solid #E6E1D2', borderRadius: 9, background: '#F5F1E8', color: '#17211C', outline: 'none', boxSizing: 'border-box' },
-  toggle: { position: 'absolute', right: 13, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', fontSize: 11.5, fontWeight: 800, color: '#7A8079', cursor: 'pointer' },
-  primaryBtn: { padding: '9px 18px', border: 'none', borderRadius: 8, background: '#2F6A45', color: '#F5F1E8', fontFamily: "'Manrope', sans-serif", fontSize: 13.5, fontWeight: 800, cursor: 'pointer' },
-  outlineBtn: { padding: '8px 16px', border: '1.5px solid #E6E1D2', borderRadius: 8, background: 'transparent', color: '#17211C', fontFamily: "'Manrope', sans-serif", fontSize: 13, fontWeight: 700, cursor: 'pointer' },
-  smBtn: { padding: '6px 12px', border: '1.5px solid #E6E1D2', borderRadius: 7, background: '#fff', color: '#17211C', fontFamily: "'Manrope', sans-serif", fontSize: 12, fontWeight: 700, cursor: 'pointer' },
-  iconBtn: { background: 'none', border: 'none', fontSize: 16, cursor: 'pointer', color: '#7A8079', padding: 4 },
-  roleBtn: { padding: '8px 20px', border: '1.5px solid #E6E1D2', borderRadius: 8, background: '#fff', color: '#7A8079', fontFamily: "'Manrope', sans-serif", fontSize: 13, fontWeight: 700, cursor: 'pointer' },
-  roleBtnActive: { border: '1.5px solid #2F6A45', background: '#EAF4EE', color: '#2F6A45' },
-  chip: { padding: '6px 14px', border: '1.5px solid #E6E1D2', borderRadius: 20, background: '#fff', color: '#7A8079', fontFamily: "'Manrope', sans-serif", fontSize: 12.5, fontWeight: 700, cursor: 'pointer' },
-  chipActive: { border: '1.5px solid #2F6A45', background: '#EAF4EE', color: '#2F6A45' },
-  errBox: { background: '#FCF0E8', border: '1.5px solid #D9612E', borderRadius: 8, padding: '10px 14px', fontSize: 13, color: '#D9612E', fontWeight: 600 },
-  successBox: { background: '#EAF4EE', border: '1.5px solid #2F6A45', borderRadius: 8, padding: '12px 14px', fontSize: 13, color: '#2F6A45', fontWeight: 600 },
-  overlay: { position: 'fixed', inset: 0, background: 'rgba(23,33,28,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999, padding: 24 },
-  modal: { background: '#fff', borderRadius: 20, padding: '32px 36px', width: '100%', maxWidth: 480, boxShadow: '0 30px 80px rgba(23,33,28,0.25)', maxHeight: '90vh', overflowY: 'auto' },
+// ── Style tokens ──────────────────────────────────────────────────────────────
+const S = {
+  page: {
+    fontFamily: 'Inter, system-ui, sans-serif',
+    padding: '28px 28px 48px',
+    maxWidth: 880,
+    margin: '0 auto',
+    color: '#1E2321',
+    background: '#F7F5EF',
+    minHeight: '100%',
+  },
+  pageHeader: {
+    display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start',
+    marginBottom: 28, flexWrap: 'wrap', gap: 14,
+  },
+  card: {
+    background: '#FFFFFF',
+    borderRadius: 16,
+    border: '1px solid #E7E3D8',
+    padding: '24px 24px',
+    marginBottom: 20,
+    boxShadow: '0 1px 2px rgba(0,0,0,.04), 0 8px 24px -12px rgba(0,0,0,.12)',
+  },
+  cardTitle: {
+    fontSize: 15, fontWeight: 800, color: '#1E2321',
+    fontFamily: 'Inter, system-ui, sans-serif',
+    marginBottom: 0,
+  },
+  label: {
+    fontSize: 12, fontWeight: 700, display: 'block', marginBottom: 6,
+    color: '#4B534F', textTransform: 'uppercase', letterSpacing: '.05em',
+  },
+  input: {
+    width: '100%', padding: '10px 13px', fontSize: 14,
+    fontFamily: 'Inter, system-ui, sans-serif',
+    border: '1px solid #E7E3D8', borderRadius: 9,
+    background: '#F7F5EF', color: '#1E2321',
+    outline: 'none', boxSizing: 'border-box',
+    transition: 'border-color .15s, box-shadow .15s',
+  },
+  toggleBtn: {
+    position: 'absolute', right: 13, top: '50%', transform: 'translateY(-50%)',
+    background: 'none', border: 'none', fontSize: 11, fontWeight: 800,
+    color: '#9BA5A1', cursor: 'pointer', letterSpacing: '.05em',
+  },
+  primaryBtn: {
+    padding: '9px 18px', border: 'none', borderRadius: 8,
+    background: '#3E6B4F', color: '#F7F5EF',
+    fontFamily: 'Inter, system-ui, sans-serif', fontSize: 13.5, fontWeight: 700,
+    cursor: 'pointer', transition: 'background .15s',
+  },
+  outlineBtn: {
+    padding: '8px 16px', border: '1.5px solid #E7E3D8', borderRadius: 8,
+    background: 'transparent', color: '#1E2321',
+    fontFamily: 'Inter, system-ui, sans-serif', fontSize: 13, fontWeight: 600,
+    cursor: 'pointer', transition: 'background .15s',
+  },
+  destructiveBtn: {
+    padding: '9px 18px', border: '1.5px solid #B4472B', borderRadius: 8,
+    background: '#B4472B', color: '#fff',
+    fontFamily: 'Inter, system-ui, sans-serif', fontSize: 13.5, fontWeight: 700,
+    cursor: 'pointer',
+  },
+  smBtn: {
+    padding: '6px 12px', border: '1px solid #E7E3D8', borderRadius: 8,
+    background: '#fff', color: '#1E2321',
+    fontFamily: 'Inter, system-ui, sans-serif', fontSize: 12, fontWeight: 600,
+    cursor: 'pointer', transition: 'background .12s',
+    whiteSpace: 'nowrap',
+  },
+  iconBtn: {
+    background: '#F7F5EF', border: 'none', borderRadius: 8,
+    width: 30, height: 30, display: 'flex', alignItems: 'center', justifyContent: 'center',
+    fontSize: 14, cursor: 'pointer', color: '#4B534F',
+  },
+  chip: {
+    padding: '5px 13px', border: '1px solid #E7E3D8', borderRadius: 100,
+    background: '#F7F5EF', color: '#4B534F',
+    fontFamily: 'Inter, system-ui, sans-serif', fontSize: 12.5, fontWeight: 600,
+    cursor: 'pointer', transition: 'all .12s',
+  },
+  chipActive: {
+    border: '1.5px solid #3E6B4F', background: '#E4EFE6', color: '#3E6B4F',
+  },
+  errBox: {
+    background: '#F6E6E1', border: '1px solid #B4472B', borderRadius: 8,
+    padding: '10px 14px', fontSize: 13, color: '#B4472B', fontWeight: 600,
+  },
+  successBox: {
+    background: '#E4EFE6', border: '1px solid #3E6B4F', borderRadius: 8,
+    padding: '12px 14px', fontSize: 13, color: '#3E6B4F', fontWeight: 600,
+  },
+  overlay: {
+    position: 'fixed', inset: 0, background: 'rgba(30,35,33,0.45)',
+    display: 'flex', alignItems: 'center', justifyContent: 'center',
+    zIndex: 9999, padding: 24,
+  },
+  modal: {
+    background: '#fff', borderRadius: 20, padding: '28px 32px',
+    width: '100%', maxWidth: 480,
+    boxShadow: '0 30px 80px rgba(30,35,33,0.22)',
+    maxHeight: '90vh', overflowY: 'auto',
+  },
 }
