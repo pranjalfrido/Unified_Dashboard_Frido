@@ -47,6 +47,7 @@ const queries = {
   salesCategoryOrdersFk: `WITH item_master AS (SELECT REGEXP_REPLACE(UPPER(TRIM(Product_Code)), r'[^A-Z0-9-]', '') AS sku_key, CASE WHEN LOWER(ANY_VALUE(Category_Name)) LIKE '%spare%' THEN 'Others' ELSE ANY_VALUE(Category_Name) END AS Category_Name, CASE WHEN LOWER(ANY_VALUE(Category_Name)) LIKE '%spare%' THEN 'Others' ELSE ANY_VALUE(Sub_category) END AS Sub_category FROM \`frido-429506.sharepoint_to_gcp.Frido_Item_Master__frido_item_sku_master\` WHERE Product_Code IS NOT NULL AND TRIM(Product_Code) != '' GROUP BY sku_key) SELECT s.Channel AS platform, COALESCE(im.Category_Name, 'Others') AS category, im.Sub_category AS sub_category, COUNT(DISTINCT s.OrderId) AS orders, SUM(s.ItemQty) AS units, ROUND(SUM(s.SellingPrice_Exc_GST),0) AS revenue, ROUND(SUM(s.SellingPrice_Inc_GST),0) AS gross_revenue, ROUND(SUM(CASE WHEN s.Order_Status = 'Cancelled' THEN s.SellingPrice_Inc_GST ELSE 0 END),0) AS cancel_rev, ROUND(SUM(CASE WHEN s.Order_Status IN ('RTO','Return') THEN s.SellingPrice_Inc_GST ELSE 0 END),0) AS return_rev, ROUND(SUM(CASE WHEN s.Order_Status = 'CIR' THEN s.SellingPrice_Inc_GST ELSE 0 END),0) AS cir_rev FROM \`frido-429506.production.fact_all_platform_sales_report\` s LEFT JOIN item_master im ON REGEXP_REPLACE(UPPER(TRIM(s.masterskucode)), r'[^A-Z0-9-]', '') = im.sku_key WHERE s.OrderDate BETWEEN '${fkStart}' AND '${fkEnd}' AND s.Channel = 'Flipkart' AND s.Country = 'India' AND s.Category IS NOT NULL AND TRIM(s.Category) != '' GROUP BY platform, category, sub_category ORDER BY orders DESC`,
   channelExcRevTotals: `SELECT Channel, ROUND(SUM(SellingPrice_Exc_GST),0) AS exc_rev FROM \`frido-429506.production.fact_all_platform_sales_report\` WHERE OrderDate BETWEEN '${start}' AND '${end}' AND Channel IN ('Shopify','Amazon','Blinkit','Zepto','Instamart','Myntra','Flipkart') AND Country = 'India' AND NOT (Channel = 'Shopify' AND OrderId LIKE '%_EX%') GROUP BY Channel`,
   channelDailyOrders: `SELECT Channel, CAST(OrderDate AS STRING) AS date, COUNT(DISTINCT OrderId) AS orders FROM \`frido-429506.production.fact_all_platform_sales_report\` WHERE OrderDate BETWEEN '${start}' AND '${end}' AND Channel IN ('Shopify','Amazon','Blinkit','Zepto','Instamart','Myntra','Flipkart') AND Country = 'India' AND NOT (Channel = 'Shopify' AND OrderId LIKE '%_EX%') GROUP BY Channel, date ORDER BY Channel, date`,
+  credDailyByProduct: `SELECT CAST(OrderDate AS STRING) AS date, COALESCE(SubCategory, Category, 'Other') AS subCategory, COALESCE(Category, 'Other') AS category, SUM(SellingPrice_Inc_GST) AS rev, SUM(SellingPrice_Exc_GST) AS excRev, COUNT(DISTINCT OrderId) AS orders, SUM(ItemQty) AS units FROM \`frido-429506.production.fact_all_platform_sales_report\` WHERE OrderDate BETWEEN '${start}' AND '${end}' AND Channel = 'CRED' AND LOWER(COALESCE(FinancialStatus,'')) NOT LIKE '%refund%' GROUP BY date, subCategory, category ORDER BY date`,
   shopifyNewCusts: `WITH in_range AS (SELECT DISTINCT customer_id FROM \`frido-429506.production.fact_shopify_myfrido_mobility_all_orders\` WHERE order_date_ist BETWEEN '${start}' AND '${end}' AND customer_id IS NOT NULL), prior AS (SELECT DISTINCT customer_id FROM \`frido-429506.production.fact_shopify_myfrido_mobility_all_orders\` WHERE order_date_ist < '${start}' AND customer_id IS NOT NULL) SELECT COUNT(*) AS n_custs, COUNTIF(p.customer_id IS NOT NULL) AS repeat_custs FROM in_range ir LEFT JOIN prior p USING (customer_id)`,
   prevAdsTotals: `SELECT platform, ROUND(SUM(spend),0) AS spend, ROUND(SUM(revenue),0) AS revenue, ROUND(SUM(impressions),0) AS impressions, ROUND(SUM(clicks),0) AS clicks FROM \`frido-429506.production.fact_all_platform_ads_report\` WHERE report_date BETWEEN '${ps}' AND '${pe}' GROUP BY platform`,
 }
@@ -345,6 +346,43 @@ try {
   console.error('  ✗ additionalSpend error:', e.message)
 }
 
+// Build CRED byCategory and byProduct (aggregated over rolling window)
+const credProductMap = {}
+for (const row of (r.credDailyByProduct || [])) {
+  const date = row.date?.value || row.date
+  if (date < start || date > end) continue
+  const sc = row.subCategory
+  if (!credProductMap[sc]) credProductMap[sc] = { subCategory: sc, category: row.category || 'Other', rev: 0, excRev: 0, orders: 0, units: 0 }
+  credProductMap[sc].rev += p(row.rev)
+  credProductMap[sc].excRev += p(row.excRev)
+  credProductMap[sc].orders += i(row.orders)
+  credProductMap[sc].units += i(row.units)
+}
+const credByProduct = Object.values(credProductMap).sort((a, b) => b.rev - a.rev)
+const credCatMap = {}
+for (const prod of credByProduct) {
+  const cat = prod.category
+  if (!credCatMap[cat]) credCatMap[cat] = { category: cat, rev: 0, excRev: 0, orders: 0, units: 0 }
+  credCatMap[cat].rev += prod.rev
+  credCatMap[cat].excRev += prod.excRev
+  credCatMap[cat].orders += prod.orders
+  credCatMap[cat].units += prod.units
+}
+const credByCategory = Object.values(credCatMap).sort((a, b) => b.rev - a.rev)
+
+// CRED daily totals for the rolling window
+const credDailyByProductRaw = (r.credDailyByProduct || []).map(x => ({
+  date: x.date?.value || x.date,
+  subCategory: x.subCategory,
+  category: x.category || 'Other',
+  rev: p(x.rev),
+  excRev: p(x.excRev),
+  orders: i(x.orders),
+  units: i(x.units),
+}))
+
+console.log(`  ✓ CRED byCategory: ${credByCategory.length} cats, byProduct: ${credByProduct.length} products`)
+
 const payload = {
   asOf: new Date().toISOString(),
   rollingStart: start,
@@ -369,6 +407,12 @@ const payload = {
     additionalSpend,
     additionalSpendByProduct,
   },
+}
+
+payload.cred = {
+  byCategory: credByCategory,
+  byProduct: credByProduct,
+  dailyByProduct: credDailyByProductRaw,
 }
 
 writeFileSync('public/ads-data.json', JSON.stringify(payload))

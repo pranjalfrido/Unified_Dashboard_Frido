@@ -14613,8 +14613,31 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
       additionalSpend: Object.keys(slicedAddlByProduct).length > 0 ? Math.round(slicedAddlSpend) : null,
       additionalSpendByProduct: slicedAddlByProduct,
     }
+    // Build sliced CRED byCategory/byProduct from rolling daily data
+    const credCache = json.cred || {}
+    const credDailySliced = (credCache.dailyByProduct || []).filter(x => x.date >= start && x.date <= end)
+    const credProdMap = {}
+    credDailySliced.forEach(x => {
+      const sc = x.subCategory
+      if (!credProdMap[sc]) credProdMap[sc] = { subCategory: sc, category: x.category || 'Other', rev: 0, excRev: 0, orders: 0, units: 0 }
+      credProdMap[sc].rev += x.rev || 0
+      credProdMap[sc].excRev += x.excRev || 0
+      credProdMap[sc].orders += x.orders || 0
+      credProdMap[sc].units += x.units || 0
+    })
+    const slicedCredByProduct = Object.values(credProdMap).sort((a, b) => b.rev - a.rev)
+    const credCatAgg = {}
+    slicedCredByProduct.forEach(p => {
+      const cat = p.category
+      if (!credCatAgg[cat]) credCatAgg[cat] = { category: cat, rev: 0, excRev: 0, orders: 0, units: 0 }
+      credCatAgg[cat].rev += p.rev; credCatAgg[cat].excRev += p.excRev
+      credCatAgg[cat].orders += p.orders; credCatAgg[cat].units += p.units
+    })
+    const slicedCredByCategory = Object.values(credCatAgg).sort((a, b) => b.rev - a.rev)
+    const slicedCredCache = { byCategory: slicedCredByCategory, byProduct: slicedCredByProduct }
+
     setAdsCachedChMap(cachedChMap)
-    setAdsCachedMeta({ nOrders: totalOrders, nCusts, repeatCusts, shopifyOrders: chOrdersMap['Shopify'] || 0 })
+    setAdsCachedMeta({ nOrders: totalOrders, nCusts, repeatCusts, shopifyOrders: chOrdersMap['Shopify'] || 0, credCache: slicedCredCache })
     setAdsCache(slicedAds)
   }
 
@@ -14672,7 +14695,7 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
           {page === 'ads' && !adsCache && !data && <Skeleton />}
           {page === 'ads' && (adsCache || data) && (!allowedTabs || allowedTabs.includes('ads')) && (
             <div className="page-scroll">
-              <AdsTab data={adsCache ? { cred: {}, ...(data || {}), chMap: data?.chMap || adsCachedChMap || {}, nOrders: data?.nOrders ?? adsCachedMeta?.nOrders ?? 0, nCusts: data?.nCusts ?? adsCachedMeta?.nCusts ?? 0, repeatCusts: data?.repeatCusts ?? adsCachedMeta?.repeatCusts ?? 0, shopify: data?.shopify || { totals: { orders: adsCachedMeta?.shopifyOrders || 0 } }, ads: adsCache } : data} filters={filters} selPlatform={adsSelPlatform} setSelPlatform={setAdsSelPlatform} />
+              <AdsTab data={adsCache ? { cred: adsCachedMeta?.credCache || {}, ...(data || {}), chMap: data?.chMap || adsCachedChMap || {}, nOrders: data?.nOrders ?? adsCachedMeta?.nOrders ?? 0, nCusts: data?.nCusts ?? adsCachedMeta?.nCusts ?? 0, repeatCusts: data?.repeatCusts ?? adsCachedMeta?.repeatCusts ?? 0, shopify: data?.shopify || { totals: { orders: adsCachedMeta?.shopifyOrders || 0 } }, ads: adsCache } : data} filters={filters} selPlatform={adsSelPlatform} setSelPlatform={setAdsSelPlatform} />
             </div>
           )}
           {page === 'intelligence' && (
