@@ -394,9 +394,13 @@ export default function InventoryPage({ onTopbarDateControl, tab = 'health', set
       invHealthFilters: healthFilters,
       setInvHealthFilters: setHealthFilters,
       invHealthOpts: inv.data?.filterOptions || null,
+      invHealthAsOf: inv.data?.asOf || null,
+      invHealthLastSales: inv.data?.lastSalesDateConsidered || null,
       invSalesFilters: salesFilters,
       setInvSalesFilters: setSalesFilters,
       invSalesOpts: sales.data?.filterOptions || null,
+      invSalesAsOf: sales.data?.asOf || null,
+      invSalesLastSales: sales.data?.lastSalesDateConsidered || null,
     }
     if (tab === 'sales') {
       onTopbarDateControl({
@@ -410,7 +414,7 @@ export default function InventoryPage({ onTopbarDateControl, tab = 'health', set
     }
     return () => onTopbarDateControl(null)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tab, sales.dateFilters, sales.setDateFilters, sales.fetchData, sales.loading, onTopbarDateControl, healthFilters, setHealthFilters, inv.data?.filterOptions, salesFilters, setSalesFilters, sales.data?.filterOptions])
+  }, [tab, sales.dateFilters, sales.setDateFilters, sales.fetchData, sales.loading, onTopbarDateControl, healthFilters, setHealthFilters, inv.data?.filterOptions, inv.data?.asOf, inv.data?.lastSalesDateConsidered, salesFilters, setSalesFilters, sales.data?.filterOptions, sales.data?.asOf, sales.data?.lastSalesDateConsidered])
 
   // Rendered at the top of each sub-page's own FilterSidebar (see SubTabSwitcher comment) —
   // holds the Health/Sales/Inward switcher plus whatever per-tab info/date-control used to
@@ -421,11 +425,18 @@ export default function InventoryPage({ onTopbarDateControl, tab = 'health', set
       <SubTabSwitcher tab={tab} setTab={setTab} isMobile={isMobile} />
       {tab === 'health' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 2, marginBottom: 10 }}>
-          <span style={{ fontSize: 11, color: IC.t3 }}>
-            {inv.data?.lastSnapshotUpdated
-              ? `Snapshot updated ${new Date(inv.data.lastSnapshotUpdated.replace('Z','') + '+05:30').toLocaleString('en-IN', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Kolkata' })}`
-              : inv.loading ? 'Loading snapshot time…' : ''}
-          </span>
+          {!isMobile && (
+            <span style={{ fontSize: 11, color: IC.t3 }}>
+              {inv.data?.lastSnapshotUpdated
+                ? `Snapshot updated ${new Date(inv.data.lastSnapshotUpdated.replace('Z','') + '+05:30').toLocaleString('en-IN', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Kolkata' })}`
+                : inv.loading ? 'Loading snapshot time…' : ''}
+            </span>
+          )}
+          {isMobile && inv.data?.asOf && (
+            <span style={{ fontSize: 11, color: IC.t3 }}>
+              Updated {new Date(inv.data.asOf).toLocaleString('en-IN', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Kolkata', hour12: true })}
+            </span>
+          )}
           {inv.data?.lastSalesDateConsidered && (
             <span style={{ fontSize: 11, color: IC.t3 }}>
               Latest sales {inv.data.lastSalesDateConsidered.slice(8,10)} {new Date(inv.data.lastSalesDateConsidered + 'T12:00:00').toLocaleDateString('en-IN', { month: 'short' })}
@@ -433,9 +444,18 @@ export default function InventoryPage({ onTopbarDateControl, tab = 'health', set
           )}
         </div>
       )}
-      {tab === 'sales' && sales.data?.lastSalesDateConsidered && (
-        <div style={{ fontSize: 11, color: IC.t3, marginBottom: 10 }}>
-          Latest sales {sales.data.lastSalesDateConsidered.slice(8,10)} {new Date(sales.data.lastSalesDateConsidered + 'T12:00:00').toLocaleDateString('en-IN', { month: 'short' })}
+      {tab === 'sales' && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 2, marginBottom: 10 }}>
+          {isMobile && sales.data?.asOf && (
+            <span style={{ fontSize: 11, color: IC.t3 }}>
+              Updated {new Date(sales.data.asOf).toLocaleString('en-IN', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Kolkata', hour12: true })}
+            </span>
+          )}
+          {sales.data?.lastSalesDateConsidered && (
+            <span style={{ fontSize: 11, color: IC.t3 }}>
+              Latest sales {sales.data.lastSalesDateConsidered.slice(8,10)} {new Date(sales.data.lastSalesDateConsidered + 'T12:00:00').toLocaleDateString('en-IN', { month: 'short' })}
+            </span>
+          )}
         </div>
       )}
       {/* tab === 'inward' && (

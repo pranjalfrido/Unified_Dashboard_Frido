@@ -2880,6 +2880,12 @@ function MobileInvFilterPanel({ invTab, setInvTab, inventoryDateControl, onClose
   const sf = idc.invSalesFilters || {}
   const setSf = idc.setInvSalesFilters || (() => {})
   const sOpts = idc.invSalesOpts || {}
+  const fmtAsOf = (asOf) => asOf ? new Date(asOf).toLocaleString('en-IN', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Kolkata', hour12: true }) : null
+  const fmtLastSales = (d) => d ? `${d.slice(8,10)} ${new Date(d + 'T12:00:00').toLocaleDateString('en-IN', { month: 'short' })}` : null
+  const healthAsOf = fmtAsOf(idc.invHealthAsOf)
+  const healthLastSales = fmtLastSales(idc.invHealthLastSales)
+  const salesAsOf = fmtAsOf(idc.invSalesAsOf)
+  const salesLastSales = fmtLastSales(idc.invSalesLastSales)
 
   const TABS = [
     { id: 'health', label: 'Inventory Health' },
@@ -2957,6 +2963,20 @@ function MobileInvFilterPanel({ invTab, setInvTab, inventoryDateControl, onClose
           </button>
         ))}
       </div>
+
+      {/* Updated / Latest sales info */}
+      {invTab === 'health' && (healthAsOf || healthLastSales) && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 1, padding: '0 16px 10px', flexShrink: 0 }}>
+          {healthAsOf && <span style={{ fontSize: 11, color: PV.sub }}>Updated {healthAsOf}</span>}
+          {healthLastSales && <span style={{ fontSize: 11, color: PV.sub }}>Latest sales {healthLastSales}</span>}
+        </div>
+      )}
+      {invTab === 'sales' && (salesAsOf || salesLastSales) && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 1, padding: '0 16px 10px', flexShrink: 0 }}>
+          {salesAsOf && <span style={{ fontSize: 11, color: PV.sub }}>Updated {salesAsOf}</span>}
+          {salesLastSales && <span style={{ fontSize: 11, color: PV.sub }}>Latest sales {salesLastSales}</span>}
+        </div>
+      )}
 
       {/* Divider + filters label */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 16px 8px', flexShrink: 0 }}>
