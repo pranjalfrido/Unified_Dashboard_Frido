@@ -217,12 +217,16 @@ function SparkKpiCard({ label, value, chg, sparkData = [], accent, invertColor }
     const y = H - ((v - min) / range) * (H - 2) - 1
     return [+x.toFixed(1), +y.toFixed(1)]
   })
-  const linePoints = coordPts.map(([x, y]) => `${x},${y}`).join(' ')
-  const fillPoints = coordPts.length > 1
-    ? `${coordPts[0][0]},${H} ` + coordPts.map(([x, y]) => `${x},${y}`).join(' ') + ` ${coordPts[coordPts.length - 1][0]},${H}`
-    : ''
   const sparkColor = '#F4B400'
   const gradId = `sg${label.replace(/\s/g, '')}`
+  // Build smooth cubic bezier path
+  const smoothPath = coordPts.length > 1 ? coordPts.reduce((d, [x, y], i) => {
+    if (i === 0) return `M${x},${y}`
+    const [px, py] = coordPts[i - 1]
+    const cpx = (px + x) / 2
+    return `${d} C${cpx},${py} ${cpx},${y} ${x},${y}`
+  }, '') : ''
+  const fillPath = smoothPath ? `${smoothPath} L${coordPts[coordPts.length-1][0]},${H} L${coordPts[0][0]},${H} Z` : ''
   return (
     <div style={{ background: '#fff', border: `1px solid ${C.border}`, borderRadius: 12, padding: '0 14px', display: 'flex', alignItems: 'center', height: 45, gap: 0 }}>
       <div style={{ flex: 1, fontSize: 13, fontWeight: 700, color: C.t2, letterSpacing: '.03em', textTransform: 'uppercase' }}>{label}</div>
@@ -234,8 +238,8 @@ function SparkKpiCard({ label, value, chg, sparkData = [], accent, invertColor }
                 <stop offset="100%" stopColor={sparkColor} stopOpacity="0.02" />
               </linearGradient>
             </defs>
-            {fillPoints && <polygon points={fillPoints} fill={`url(#${gradId})`} />}
-            <polyline points={linePoints} fill="none" stroke={sparkColor} strokeWidth="1.8" strokeLinejoin="round" strokeLinecap="round" />
+            {fillPath && <path d={fillPath} fill={`url(#${gradId})`} />}
+            <path d={smoothPath} fill="none" stroke={sparkColor} strokeWidth="1.8" strokeLinejoin="round" strokeLinecap="round" />
           </svg>
         : <div style={{ width: W, flexShrink: 0 }} />
       }
