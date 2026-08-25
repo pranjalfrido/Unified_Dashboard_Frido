@@ -204,7 +204,7 @@ html,body{height:100%;background:var(--bg);font-family:var(--font);color:var(--t
   .sales-tabs.mob-hidden{ display:none !important }
   .mob-only .kpi-sub{ display:none !important }
   .ads-kpi-list{ gap:8px !important }
-  .ads-kpi-list > div{ border-radius:0 !important; border-left:none !important; border-right:none !important }
+  .ads-kpi-list > div{ border-radius:12px !important }
   .ads-trend-desktop-filters{ display:none !important }
   .ads-trend-mob-filter{ display:block !important }
   .ads-trend-row{ flex-direction:column !important; margin-left:0 !important; margin-right:0 !important }
