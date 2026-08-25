@@ -10,6 +10,7 @@ import CogsPage from './CogsPage.jsx'
 import LogisticsLedgerPage from './LogisticsLedgerPage.jsx'
 import LogisticsCostPage from './LogisticsCostPage.jsx'
 import { supabase } from './supabase.js'
+import { hasPermission } from './permissionTree.js'
 import PnLPage from './pnl/PnLPage.jsx'
 
 // Maps the Inventory dashboard's dark IC palette onto the {t1,t2,t3,acc,acl,border,border2,
@@ -2178,8 +2179,7 @@ function Sidebar({ page, setPage, invTab, setInvTab, allowedTabs, profile }) {
         if (item.id === 'inventory') {
           const subTabs = [
             { id: 'health', label: 'Inventory Health' },
-            { id: 'sales', label: 'Sales & Allocation' },
-            // { id: 'inward', label: 'Inward' },
+            ...(!allowedTabs || allowedTabs.includes('inventory:sales') ? [{ id: 'sales', label: 'Sales & Allocation' }] : []),
           ]
           return (
             <div key="inventory" style={{ position: 'relative' }}
@@ -2217,7 +2217,7 @@ function Sidebar({ page, setPage, invTab, setInvTab, allowedTabs, profile }) {
         if (item.id === 'logistics') {
           const logSubTabs = [
             { id: 'logistics', label: 'Performance Analytics' },
-            { id: 'logistics-cost', label: 'Cost Analytics' },
+            ...(!allowedTabs || allowedTabs.includes('logistics:cost') ? [{ id: 'logistics-cost', label: 'Cost Analytics' }] : []),
           ]
           const logActive = page === 'logistics' || page === 'logistics-cost'
           return (
@@ -14561,7 +14561,7 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
               <LogisticsPage filters={filters} page={page} setPage={setPage} lFilters={lFilters} setLFilters={setLFilters} onFilterOptsChange={setLogisticsFilterOpts} />
             </div>
           )}
-          {page === 'logistics-cost' && (!allowedTabs || allowedTabs.includes('logistics')) && (
+          {page === 'logistics-cost' && (!allowedTabs || allowedTabs.includes('logistics:cost')) && (
             <div style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
               <LogisticsCostPage externalFilters={costFilters} setExternalFilters={setCostFilters} />
             </div>
