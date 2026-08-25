@@ -455,7 +455,7 @@ function ActivityLog({ userId, onClose }) {
 }
 
 // ── User Row ──────────────────────────────────────────────────────────────────
-function UserRow({ user, permissions, session, onUpdate, showToast }) {
+function UserRow({ user, permissions, session, onUpdate, showToast, isLast }) {
   const [expanded, setExpanded] = useState(false)
   const [localTabs, setLocalTabs] = useState(permissions)
   const [saving, setSaving] = useState(false)
@@ -480,7 +480,7 @@ function UserRow({ user, permissions, session, onUpdate, showToast }) {
     setRevoking(true)
     await adminCall('revoke_user', session, { user_id: user.user_id })
     setRevoking(false); setConfirmRevoke(false); onUpdate()
-    showToast(`${user.name} revoked`)
+    showToast(user.is_active ? `${user.name} revoked` : `${user.name} restored`)
   }
 
   async function deleteUser() {
@@ -496,73 +496,75 @@ function UserRow({ user, permissions, session, onUpdate, showToast }) {
   return (
     <>
       <div style={{
-        borderRadius: 12, border: `1px solid #E7E3D8`,
-        background: isRevoked ? '#FAF9F6' : '#FFFFFF',
-        marginBottom: 10, overflow: 'hidden',
-        boxShadow: '0 1px 2px rgba(0,0,0,.04)',
-        opacity: isRevoked ? 0.75 : 1,
+        borderBottom: isLast ? 'none' : `1px solid #E7E3D8`,
+        padding: '16px 0',
+        opacity: isRevoked ? 0.65 : 1,
         transition: 'opacity .2s',
       }}>
         {/* Main row */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '14px 16px', flexWrap: 'wrap' }}>
+        <div style={{ display: 'flex', alignItems: 'flex-start', gap: 14 }}>
           <Avatar url={user.avatar_url} name={user.name} size={42} />
           <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+            {/* Name + pills */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 2 }}>
               <span style={{ fontWeight: 700, fontSize: 14, color: '#1E2321' }}>{user.name}</span>
               <StatusPill active={user.is_active} />
-              <span style={{ fontSize: 11, fontWeight: 600, padding: '2px 9px', borderRadius: 100, background: '#F7F5EF', color: '#4B534F', border: '1px solid #E7E3D8' }}>
-                {user.is_admin ? 'Admin' : `${permissions.length} tab${permissions.length !== 1 ? 's' : ''}`}
-              </span>
+              {user.is_admin
+                ? <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 9px', borderRadius: 100, background: '#F7F5EF', color: '#4B534F', border: '1px solid #E7E3D8' }}>Admin</span>
+                : <span style={{ fontSize: 11, fontWeight: 600, padding: '2px 9px', borderRadius: 100, background: '#F7F5EF', color: '#4B534F', border: '1px solid #E7E3D8' }}>{permissions.length} tab{permissions.length !== 1 ? 's' : ''}</span>
+              }
             </div>
-            <div style={{ fontSize: 12.5, color: '#4B534F', marginTop: 3 }}>{user.email}</div>
+            {/* Email */}
+            <div style={{ fontSize: 12.5, color: '#4B534F' }}>{user.email}</div>
+            {/* Last login */}
             <div style={{ fontSize: 11.5, color: '#9BA5A1', marginTop: 1 }}>Last login: {fmtDate(user.last_login_at)}</div>
+            {/* Tab access toggle link */}
+            <button
+              style={{ background: 'none', border: 'none', padding: 0, marginTop: 6, fontSize: 12.5, color: '#4B534F', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4 }}
+              onClick={() => setExpanded(v => !v)}>
+              <span style={{ fontSize: 10 }}>{expanded ? '▾' : '▸'}</span>
+              {expanded ? 'Hide tab access' : 'Tab access'}
+            </button>
+
+            {/* Expanded tab panel — inline below the link */}
+            {expanded && (
+              <div style={{ marginTop: 10 }}>
+                {user.is_admin ? (
+                  <div style={{ fontSize: 12.5, color: '#4B534F', fontStyle: 'italic' }}>Admins have access to every tab.</div>
+                ) : (
+                  <>
+                    <div style={{ fontSize: 10, fontWeight: 700, color: '#9BA5A1', textTransform: 'uppercase', letterSpacing: '.08em', marginBottom: 8 }}>Click to grant or remove access</div>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 7, marginBottom: 10 }}>
+                      {ALL_TABS.map(t => (
+                        <button key={t.key} type="button"
+                          style={{ ...S.chip, ...(localTabs.includes(t.key) ? S.chipActive : {}) }}
+                          onClick={() => setLocalTabs(prev => prev.includes(t.key) ? prev.filter(x => x !== t.key) : [...prev, t.key])}>
+                          {t.label}
+                        </button>
+                      ))}
+                    </div>
+                    {tabsChanged && (
+                      <button style={{ ...S.primaryBtn, fontSize: 12.5, padding: '8px 16px', opacity: saving ? 0.7 : 1 }} onClick={savePermissions} disabled={saving}>
+                        {saving ? 'Saving…' : 'Save permissions'}
+                      </button>
+                    )}
+                  </>
+                )}
+              </div>
+            )}
           </div>
 
-          {/* Actions */}
-          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', flexShrink: 0 }}>
-            <button style={S.smBtn} onClick={() => setShowActivity(true)}>Activity</button>
-            <button style={S.smBtn} onClick={() => setShowReset(true)}>Reset pw</button>
-            {!user.is_admin && (
-              <button style={{ ...S.smBtn, color: expanded ? '#3E6B4F' : '#4B534F', borderColor: expanded ? '#3E6B4F' : '#E7E3D8' }}
-                onClick={() => setExpanded(v => !v)}>
-                {expanded ? '▾ Tab access' : '▸ Tab access'}
-              </button>
-            )}
-            {user.is_active ? (
-              <button style={{ ...S.smBtn, color: '#B4472B', borderColor: '#B4472B' }} onClick={() => setConfirmRevoke(true)}>Revoke</button>
-            ) : (
-              <button style={{ ...S.smBtn, color: '#3E6B4F', borderColor: '#3E6B4F' }} onClick={() => setConfirmRevoke(true)}>Restore</button>
-            )}
-            <button style={{ ...S.smBtn, color: '#9BA5A1' }} onClick={() => setConfirmDelete(true)}>Delete</button>
+          {/* Text action buttons */}
+          <div style={{ display: 'flex', gap: 16, flexShrink: 0, alignItems: 'center', paddingTop: 2 }}>
+            <button style={S.textBtn} onClick={() => setShowActivity(true)}>Activity</button>
+            <button style={S.textBtn} onClick={() => setShowReset(true)}>Reset pw</button>
+            {user.is_active
+              ? <button style={{ ...S.textBtn, color: '#B4472B' }} onClick={() => setConfirmRevoke(true)}>Revoke</button>
+              : <button style={{ ...S.textBtn, color: '#3E6B4F' }} onClick={() => setConfirmRevoke(true)}>Restore</button>
+            }
+            <button style={{ ...S.textBtn, color: '#B4472B' }} onClick={() => setConfirmDelete(true)}>Delete</button>
           </div>
         </div>
-
-        {/* Tab access panel */}
-        {expanded && !user.is_admin && (
-          <div style={{ borderTop: `1px solid #E7E3D8`, padding: '14px 16px', background: '#F7F5EF' }}>
-            <div style={{ fontSize: 12, fontWeight: 700, color: '#4B534F', marginBottom: 10, textTransform: 'uppercase', letterSpacing: '.06em' }}>Tab access</div>
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 12 }}>
-              {ALL_TABS.map(t => (
-                <button key={t.key} type="button"
-                  style={{ ...S.chip, ...(localTabs.includes(t.key) ? S.chipActive : {}) }}
-                  onClick={() => setLocalTabs(prev => prev.includes(t.key) ? prev.filter(x => x !== t.key) : [...prev, t.key])}>
-                  {t.label}
-                </button>
-              ))}
-            </div>
-            {tabsChanged && (
-              <button style={{ ...S.primaryBtn, opacity: saving ? 0.7 : 1, fontSize: 12, padding: '7px 14px' }} onClick={savePermissions} disabled={saving}>
-                {saving ? 'Saving…' : 'Save permissions'}
-              </button>
-            )}
-          </div>
-        )}
-
-        {user.is_admin && expanded && (
-          <div style={{ borderTop: `1px solid #E7E3D8`, padding: '12px 16px', background: '#F7F5EF', fontSize: 12.5, color: '#4B534F' }}>
-            Admins have access to every tab.
-          </div>
-        )}
       </div>
 
       {showReset && (
@@ -652,8 +654,8 @@ function TeamMembers({ session, showToast }) {
           {search ? `No members match "${search}"` : 'No team members yet.'}
         </div>
       ) : (
-        filtered.map(u => (
-          <UserRow key={u.user_id} user={u} permissions={permissions[u.user_id] || []} session={session} onUpdate={loadUsers} showToast={showToast} />
+        filtered.map((u, i) => (
+          <UserRow key={u.user_id} user={u} permissions={permissions[u.user_id] || []} session={session} onUpdate={loadUsers} showToast={showToast} isLast={i === filtered.length - 1} />
         ))
       )}
 
@@ -779,6 +781,11 @@ const S = {
     fontFamily: 'Inter, system-ui, sans-serif', fontSize: 12, fontWeight: 600,
     cursor: 'pointer', transition: 'background .12s',
     whiteSpace: 'nowrap',
+  },
+  textBtn: {
+    background: 'none', border: 'none', padding: 0,
+    fontFamily: 'Inter, system-ui, sans-serif', fontSize: 13, fontWeight: 600,
+    color: '#1E2321', cursor: 'pointer', whiteSpace: 'nowrap',
   },
   iconBtn: {
     background: '#F7F5EF', border: 'none', borderRadius: 8,
