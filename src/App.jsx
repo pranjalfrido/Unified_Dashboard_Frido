@@ -550,20 +550,20 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
         topDropStates: (() => {
           const rows = hasCourier ? (raw.topDropStates || []).filter(x => couriers.includes(x.courier_group)) : (raw.topDropStates || [])
           const f2 = dropState ? rows.filter(x => x.state?.toLowerCase() === dropState.toLowerCase()) : rows
-          const m = {}; f2.forEach(x => { m[x.state] = (m[x.state] || 0) + (x.total || 0) })
-          return Object.entries(m).map(([state, total]) => ({ state, total })).sort((a,b) => b.total - a.total).slice(0, 10)
+          const m = {}; f2.forEach(x => { const k = `${x.state}||${x.shipment_type}`; m[k] = { state: x.state, shipment_type: x.shipment_type, total: (m[k]?.total || 0) + (x.total || 0) } })
+          return Object.values(m)
         })(),
         topDropCities: (() => {
           const rows = hasCourier ? (raw.topDropCities || []).filter(x => couriers.includes(x.courier_group)) : (raw.topDropCities || [])
           const f2 = dropCity ? rows.filter(x => x.city?.toLowerCase() === dropCity.toLowerCase()) : rows
-          const m = {}; f2.forEach(x => { m[x.city] = (m[x.city] || 0) + (x.total || 0) })
-          return Object.entries(m).map(([city, total]) => ({ city, total })).sort((a,b) => b.total - a.total).slice(0, 10)
+          const m = {}; f2.forEach(x => { const k = `${x.city}||${x.shipment_type}`; m[k] = { city: x.city, shipment_type: x.shipment_type, total: (m[k]?.total || 0) + (x.total || 0) } })
+          return Object.values(m)
         })(),
         topPickupCities: (() => {
           const rows = hasCourier ? (raw.topPickupCities || []).filter(x => couriers.includes(x.courier_group)) : (raw.topPickupCities || [])
           const f2 = pickupState ? rows.filter(x => x.pickup_state?.toLowerCase() === pickupState.toLowerCase()) : rows
-          const m = {}; f2.forEach(x => { m[x.city] = (m[x.city] || 0) + (x.total || 0) })
-          return Object.entries(m).map(([city, total]) => ({ city, total })).sort((a,b) => b.total - a.total).slice(0, 10)
+          const m = {}; f2.forEach(x => { const k = `${x.city}||${x.shipment_type}`; m[k] = { city: x.city, shipment_type: x.shipment_type, total: (m[k]?.total || 0) + (x.total || 0) } })
+          return Object.values(m)
         })(),
       }
     }
