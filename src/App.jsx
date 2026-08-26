@@ -218,7 +218,7 @@ function SparkKpiCard({ label, value, chg, sparkData = [], accent, invertColor }
     return [+x.toFixed(1), +y.toFixed(1)]
   })
   const sparkColor = '#F4B400'
-  const gradId = `sg${label.replace(/\s/g, '')}`
+  const gradId = `sg${label.replace(/[^a-zA-Z0-9]/g, '')}`
   // Build smooth cubic bezier path
   const smoothPath = coordPts.length > 1 ? coordPts.reduce((d, [x, y], i) => {
     if (i === 0) return `M${x},${y}`
