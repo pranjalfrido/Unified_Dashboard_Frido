@@ -355,6 +355,7 @@ html,body{height:100%;background:var(--bg);font-family:var(--font);color:var(--t
   /* ── Sales KPI carousel on mobile ────────────────────────────────────────── */
   /* Outer hero+grid wrapper: stack vertically */
   .sales-kpi-section{ display:flex !important; flex-direction:column !important; gap:10px !important }
+  .sales-kpi-section.mob-hidden{ display:none !important }
 
   /* Hero card: fixed height so sparkline renders */
   .sales-kpi-hero{ height:auto !important }
@@ -405,6 +406,21 @@ html,body{height:100%;background:var(--bg);font-family:var(--font);color:var(--t
     max-width:44vw !important;
     scroll-snap-align:start !important;
   }
+
+  /* ── Category Revenue view buttons — smaller on mobile ───────────────── */
+  .cat-rev-btn { font-size: 10px !important; padding: 2px 6px !important }
+  .hb-track { display: none !important }
+  .hb-value { margin-left: auto !important }
+
+  /* ── 3-col grids → single column on mobile ───────────────────────────── */
+  .g-3col { grid-template-columns: 1fr !important }
+  .g-3col > * { max-width: 100%; overflow: hidden }
+
+  /* ── Revenue & Returns Trend chart — mobile legend fix ───────────────── */
+  .recharts-legend-wrapper { position:static !important; width:100% !important; margin-top:6px !important }
+  .recharts-default-legend { display:flex !important; flex-wrap:wrap !important; justify-content:center !important; gap:4px 10px !important; padding:0 !important }
+  .recharts-legend-item { margin:0 !important }
+  .recharts-legend-item-text { font-size:10.5px !important }
 }
 
 /* ══════════════════════════════════════════════

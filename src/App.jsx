@@ -13,6 +13,16 @@ import { supabase } from './supabase.js'
 import { hasPermission } from './permissionTree.js'
 import PnLPage from './pnl/PnLPage.jsx'
 
+function useIsMobile() {
+  const [mob, setMob] = useState(() => window.innerWidth <= 768)
+  useEffect(() => {
+    const h = () => setMob(window.innerWidth <= 768)
+    window.addEventListener('resize', h)
+    return () => window.removeEventListener('resize', h)
+  }, [])
+  return mob
+}
+
 // Maps the Inventory dashboard's dark IC palette onto the {t1,t2,t3,acc,acl,border,border2,
 // bg,card} shape DateRangePicker expects (that shape mirrors the light C theme it was built
 // for) — lets the calendar dropdown render in dark colors without forking its ~200 lines of
@@ -208,15 +218,22 @@ function LogisticsSkeleton() {
 // sparkData: array of numbers (e.g. daily totals). Yellow line + fill on mobile ads list.
 function SparkKpiCard({ label, value, chg, sparkData = [], accent, invertColor }) {
   const isUp = chg != null ? chg >= 0 : null
-  const pts = sparkData.slice(-14)
-  const min = Math.min(...pts), max = Math.max(...pts)
+  // Filter nulls/undefined, keep only valid numbers
+  const pts = sparkData.slice(-14).map(v => (v == null || isNaN(v)) ? null : v)
+  const validPts = pts.filter(v => v !== null)
+  const min = validPts.length ? Math.min(...validPts) : 0
+  const max = validPts.length ? Math.max(...validPts) : 0
   const range = max - min || 1
   const W = 52, H = 24
-  const coordPts = pts.map((v, i) => {
+  // For flat lines (all same value), center them vertically
+  const flatLine = max === min
+  const coordPts = pts.reduce((acc, v, i) => {
+    if (v === null) return acc
     const x = pts.length === 1 ? W / 2 : (i / (pts.length - 1)) * W
-    const y = H - ((v - min) / range) * (H - 2) - 1
-    return [+x.toFixed(1), +y.toFixed(1)]
-  })
+    const y = flatLine ? H / 2 : H - ((v - min) / range) * (H - 4) - 2
+    acc.push([+x.toFixed(1), +y.toFixed(1)])
+    return acc
+  }, [])
   const sparkColor = '#F4B400'
   const gradId = `sg${label.replace(/[^a-zA-Z0-9]/g, '')}`
   // Build smooth cubic bezier path
@@ -226,11 +243,11 @@ function SparkKpiCard({ label, value, chg, sparkData = [], accent, invertColor }
     const cpx = (px + x) / 2
     return `${d} C${cpx},${py} ${cpx},${y} ${x},${y}`
   }, '') : ''
-  const fillPath = smoothPath ? `${smoothPath} L${coordPts[coordPts.length-1][0]},${H} L${coordPts[0][0]},${H} Z` : ''
+  const fillPath = (!flatLine && smoothPath) ? `${smoothPath} L${coordPts[coordPts.length-1][0]},${H} L${coordPts[0][0]},${H} Z` : ''
   return (
     <div style={{ background: '#fff', border: `1px solid ${C.border}`, borderRadius: 12, padding: '0 14px', display: 'flex', alignItems: 'center', height: 45, gap: 0 }}>
       <div style={{ flex: 1, fontSize: 13, fontWeight: 700, color: C.t2, letterSpacing: '.03em', textTransform: 'uppercase' }}>{label}</div>
-      {pts.length > 1
+      {coordPts.length > 1
         ? <svg width={W} height={H} viewBox={`0 0 ${W} ${H}`} style={{ overflow: 'hidden', flexShrink: 0, borderRadius: 4 }}>
             <defs>
               <linearGradient id={gradId} x1="0" y1="0" x2="0" y2="1">
@@ -2847,12 +2864,13 @@ function MobileSalesFilterPanel({ activeTab, setActiveTab, filters, setFilters, 
     },
   ]
 
-  const totalActive = filterSlicers.reduce((sum, s) => {
+  const totalActive = (activeTab !== 'all' ? 1 : 0) + filterSlicers.reduce((sum, s) => {
     if (s.radio) return sum + (s.selected ? 1 : 0)
     return sum + (Array.isArray(s.selected) ? s.selected.length : 0)
   }, 0)
 
   const handleClearAll = () => {
+    switchTab('all')
     setFilters(f => ({ ...f, category: [], subCategory: [], sku: [], paymentType: '', voucher: '', productAge: '' }))
     setExpandedKey(null)
   }
@@ -2929,21 +2947,41 @@ function MobileSalesFilterPanel({ activeTab, setActiveTab, filters, setFilters, 
 
       {/* Scrollable body */}
       <div style={{ flex: 1, overflowY: 'auto' }}>
-        {/* Channel tabs — 2-row grid */}
-        <div style={{ padding: '4px 14px 12px', borderBottom: `1px solid ${PV.border}` }}>
-          <div style={{ fontSize: 10, fontWeight: 800, color: PV.sub, letterSpacing: '.07em', textTransform: 'uppercase', marginBottom: 8 }}>Channel</div>
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-            {TABS.map(tab => {
-              const isActive = activeTab === tab.id
-              return (
-                <button key={tab.id} onClick={() => switchTab(tab.id)}
-                  style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '5px 12px', borderRadius: 20, fontSize: 12, fontWeight: isActive ? 700 : 500, border: `1px solid ${isActive ? PV.ink : PV.border}`, background: isActive ? PV.ink : 'transparent', color: isActive ? '#fff' : PV.ink, cursor: 'pointer', whiteSpace: 'nowrap' }}>
-                  {tab.logo && <img src={tab.logo} alt="" style={{ width: 13, height: 13, borderRadius: 2, objectFit: 'contain', filter: isActive || tab.id === 'cred' ? 'invert(1)' : 'none' }} />}
-                  {tab.label}
-                </button>
-              )
-            })}
+        {/* Channel — accordion style like filters */}
+        <div style={{ borderBottom: `1px solid ${PV.border}` }}>
+          <div onClick={() => toggleExpand('__channel')}
+            style={{ display: 'flex', alignItems: 'center', padding: '12px 16px', cursor: 'pointer', gap: 8, userSelect: 'none' }}>
+            <span style={{ flex: 1, fontSize: 13, fontWeight: 500, color: PV.ink }}>Channel</span>
+            {activeTab !== 'all' && (
+              <span style={{ fontSize: 10, fontWeight: 700, background: '#FFF3CD', color: '#8A6D00', border: '1px solid #F2C230', borderRadius: 10, padding: '1px 7px', maxWidth: 100, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {TABS.find(t => t.id === activeTab)?.label || activeTab}
+              </span>
+            )}
+            {activeTab !== 'all' && (
+              <button onClick={e => { e.stopPropagation(); switchTab('all') }}
+                style={{ background: 'none', border: 'none', color: PV.sub, fontSize: 13, cursor: 'pointer', padding: '0 2px', lineHeight: 1 }}>✕</button>
+            )}
+            <span style={{ fontSize: 13, color: PV.sub, transform: expandedKey === '__channel' ? 'rotate(90deg)' : 'none', transition: 'transform .18s', lineHeight: 1 }}>›</span>
           </div>
+          {expandedKey === '__channel' && (
+            <div style={{ background: PV.canvas, borderTop: `1px solid ${PV.border}`, padding: '4px 0 8px' }}>
+              {TABS.map(tab => {
+                const checked = activeTab === tab.id
+                return (
+                  <label key={tab.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '9px 16px', cursor: 'pointer', userSelect: 'none' }}
+                    onClick={() => { switchTab(tab.id); setExpandedKey(null) }}>
+                    <div style={{ width: 17, height: 17, borderRadius: '50%', flexShrink: 0, border: `2px solid ${checked ? PV.accent : PV.border}`, background: checked ? PV.accent : PV.bg, display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all .12s' }}>
+                      {checked && <span style={{ width: 7, height: 7, borderRadius: '50%', background: PV.accentDark, display: 'block' }} />}
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                      {tab.logo && <img src={tab.logo} alt="" style={{ width: 16, height: 16, borderRadius: 3, objectFit: 'contain', flexShrink: 0 }} />}
+                      <span style={{ fontSize: 12.5, color: checked ? PV.ink : PV.sub, fontWeight: checked ? 600 : 400 }}>{tab.label}</span>
+                    </div>
+                  </label>
+                )
+              })}
+            </div>
+          )}
         </div>
 
         {/* Sub-channel / sub-toggle (D2C / Amazon / Offline) */}
@@ -2952,14 +2990,6 @@ function MobileSalesFilterPanel({ activeTab, setActiveTab, filters, setFilters, 
         {renderOfflineToggle()}
 
         {/* Filters */}
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 16px 6px' }}>
-          <span style={{ fontSize: 10, fontWeight: 800, color: PV.sub, letterSpacing: '.07em', textTransform: 'uppercase' }}>
-            Filters{totalActive > 0 ? ` · ${totalActive} active` : ''}
-          </span>
-          {totalActive > 0 && (
-            <button onClick={handleClearAll} style={{ fontSize: 11, color: '#D93025', background: 'none', border: 'none', cursor: 'pointer', padding: 0, fontWeight: 600 }}>↺ Reset</button>
-          )}
-        </div>
         <div style={{ borderTop: `1px solid ${PV.border}` }}>
           {filterSlicers.map((slicer, si) => {
             const isExpanded = expandedKey === slicer.key
@@ -4294,7 +4324,7 @@ function ChannelTrendCard({ dailyArr, channels, rangeStart, rangeEnd }) {
   const selStyle = { fontSize: 11.5, padding: '4px 8px', borderRadius: 7, border: `1px solid ${C.border2}`, background: C.card, color: C.t1, outline: 'none', fontFamily: 'var(--font)', cursor: 'pointer' }
 
   const nDays = dailyArr.length
-  const autoGroup = nDays <= 14 ? 'daily' : nDays <= 90 ? 'weekly' : 'monthly'
+  const autoGroup = nDays <= 90 ? 'daily' : 'monthly'
   const [groupBy, setGroupBy] = useState(autoGroup)
 
   const grouped = groupDailyArr(dailyArr, channels, groupBy, rangeStart, rangeEnd)
@@ -4327,19 +4357,20 @@ function ChannelTrendCard({ dailyArr, channels, rangeStart, rangeEnd }) {
 
   return (
     <Card>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 11 }}>
+      <div style={{ display: 'flex', flexDirection: 'column', marginBottom: 11, gap: 5 }}>
         <span style={{ fontSize: 13, fontWeight: 600, color: C.t1 }}>{GROUP_OPTS.find(x => x.id === groupBy)?.label} {m.label} by Channel</span>
-        <div style={{ display: 'flex', gap: 6 }}>
-          <select value={groupBy} onChange={e => setGroupBy(e.target.value)} style={selStyle}>
+        <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end' }}>
+          <select value={groupBy} onChange={e => setGroupBy(e.target.value)} style={{ ...selStyle, width: 60, fontSize: 10.5, padding: '3px 4px' }}>
             {GROUP_OPTS.map(x => <option key={x.id} value={x.id}>{x.label}</option>)}
           </select>
-          <select value={metric} onChange={e => setMetric(e.target.value)} style={selStyle}>
+          <select value={metric} onChange={e => setMetric(e.target.value)} style={{ ...selStyle, width: 98, fontSize: 10.5, padding: '3px 4px' }}>
             {CHART_METRICS.map(x => <option key={x.id} value={x.id}>{x.label}</option>)}
           </select>
         </div>
       </div>
+      <div style={{ margin: '0 -18px' }}>
       <ResponsiveContainer width="100%" height={220}>
-        <ComposedChart data={enrichedDaily} margin={{ top: 0, right: 0, bottom: 0, left: 0 }}>
+        <ComposedChart data={enrichedDaily} margin={{ top: 0, right: groupBy === 'weekly' ? 36 : 18, bottom: 0, left: groupBy === 'weekly' ? 36 : 18 }}>
           <defs>
             <linearGradient id="chTotalGrad" x1="0" y1="0" x2="0" y2="1">
               <stop offset="5%" stopColor={C.acm} stopOpacity={0.18} />
@@ -4347,19 +4378,32 @@ function ChannelTrendCard({ dailyArr, channels, rangeStart, rangeEnd }) {
             </linearGradient>
           </defs>
           <CartesianGrid strokeDasharray="3 3" stroke={C.border} vertical={false} />
-          <XAxis dataKey="date" tick={{ fontSize: 10, fill: C.t3 }} tickFormatter={d => {
-            if (groupBy === 'daily') return d?.slice(5)
-            if (groupBy === 'monthly' && d?.match(/^\d{4}-\d{2}$/)) {
-              const [y, m] = d.split('-')
-              return new Date(+y, +m - 1).toLocaleString('en-US', { month: 'short' }) + " '" + y.slice(2)
+          <XAxis dataKey="date" tick={{ fontSize: 10, fill: C.t3 }} interval={0} ticks={(() => {
+            const keys = enrichedDaily.map(d => d.date)
+            if (keys.length <= 1) return keys
+            const n = keys.length
+            if (n <= 4) return keys
+            const mid1 = keys[Math.floor(n / 3)]
+            const mid2 = keys[Math.floor(2 * n / 3)]
+            return [keys[0], mid1, mid2, keys[n - 1]]
+          })()} tickFormatter={d => {
+            if (!d) return ''
+            if (d.match(/^\d{4}-\d{2}-\d{2}$/)) {
+              const dt = new Date(d + 'T00:00:00')
+              return `${dt.toLocaleString('en-US', { month: 'short' })} ${dt.getDate()}`
             }
-            return d
+            if (d.match(/^\d{4}-\d{2}$/)) {
+              const [y, mo] = d.split('-')
+              return new Date(+y, +mo - 1).toLocaleString('en-US', { month: 'short' }) + " '" + y.slice(2)
+            }
+            return d.replace(/'\d{2}\s*/, '')
           }} />
-          <YAxis tick={{ fontSize: 10, fill: C.t3 }} tickFormatter={fmtTick} width={40} />
+          <YAxis hide />
           <Tooltip content={totalTooltip} />
           <Area type="monotone" dataKey="_total" name="Total" stroke={C.acm} strokeWidth={2.5} fill="url(#chTotalGrad)" dot={false} />
         </ComposedChart>
       </ResponsiveContainer>
+      </div>
     </Card>
   )
 }
@@ -4430,7 +4474,8 @@ function groupDailyArr(dailyArr, channels, groupBy, rangeStart, rangeEnd) {
 }
 
 function DailyChannelTable({ dailyArr, channels, nDays = 7, rangeStart, rangeEnd }) {
-  const autoGroup = nDays <= 14 ? 'daily' : nDays <= 90 ? 'weekly' : 'monthly'
+  const isMob = useIsMobile()
+  const autoGroup = nDays <= 90 ? 'daily' : 'monthly'
   const [metric, setMetric] = useState('net_rev')
   const [groupBy, setGroupBy] = useState(autoGroup)
   const m = DAILY_METRICS.find(x => x.id === metric)
@@ -4485,11 +4530,12 @@ function DailyChannelTable({ dailyArr, channels, nDays = 7, rangeStart, rangeEnd
   // Same visual language as the Category Revenue Matrix: C.bg sticky header band, sortable
   // columns, hover-highlighted rows, bold sticky-bottom Total row. Numbers only — no per-cell
   // share % (that's what Channel Share is for).
-  const thStyle = { fontSize: 10, fontWeight: 700, color: C.t3, textTransform: 'uppercase', letterSpacing: 0.4, padding: '7px 10px', textAlign: 'right', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', borderBottom: `1.5px solid ${C.border}` }
+  const thStyle = { fontSize: 10, fontWeight: 700, color: C.t3, textTransform: 'uppercase', letterSpacing: 0.4, padding: '7px 10px', textAlign: 'left', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', borderBottom: `1.5px solid ${C.border}` }
   const thStyleL = { ...thStyle, textAlign: 'left' }
-  const tdStyle = { fontSize: 12, padding: '5px 10px', textAlign: 'right', color: C.t1, borderBottom: `1px solid ${C.border}`, fontFamily: 'var(--mono)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }
+  const tdStyle = { fontSize: 11, padding: '5px 10px', textAlign: 'left', color: C.t1, borderBottom: `1px solid ${C.border}`, fontFamily: 'var(--mono)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }
   const tdStyleL = { ...tdStyle, textAlign: 'left', fontFamily: 'inherit' }
   const totalTdStyle = { ...tdStyle, padding: '7px 10px', fontWeight: 700, color: C.t1, borderBottom: 'none' }
+  const stickyCol = isMob ? { position: 'sticky', left: 0, background: C.card, zIndex: 2 } : {}
 
   const handleExport = () => {
     const csvRows = sortedRows.map(d => {
@@ -4502,17 +4548,16 @@ function DailyChannelTable({ dailyArr, channels, nDays = 7, rangeStart, rangeEnd
   }
 
   return (
-    <div className="kpi-card" style={{ padding: '14px 16px', display: 'flex', flexDirection: 'column' }}>
+    <div className="kpi-card" style={{ padding: isMob ? '12px 8px' : '14px 16px', display: 'flex', flexDirection: 'column' }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           <span style={{ fontWeight: 700, fontSize: 13, color: C.t1 }}>Revenue by Channel</span>
-          <span style={{ fontSize: 11.5, color: C.t3 }}>{grouped.length} {groupBy === 'daily' ? 'days' : groupBy === 'weekly' ? 'weeks' : 'periods'}</span>
         </div>
         <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-          <select value={groupBy} onChange={e => setGroupBy(e.target.value)} style={selStyle}>
+          <select value={groupBy} onChange={e => setGroupBy(e.target.value)} style={isMob ? { ...selStyle, fontSize: 10.5, padding: '3px 4px', width: 60 } : selStyle}>
             {GROUP_OPTS.map(x => <option key={x.id} value={x.id}>{x.label}</option>)}
           </select>
-          <select value={metric} onChange={e => setMetric(e.target.value)} style={selStyle}>
+          <select value={metric} onChange={e => setMetric(e.target.value)} style={isMob ? { ...selStyle, fontSize: 10.5, padding: '3px 4px', width: 98 } : selStyle}>
             {DAILY_METRICS.map(x => <option key={x.id} value={x.id}>{x.label}</option>)}
           </select>
           {!channelReorder.isDefaultOrder && (
@@ -4521,30 +4566,30 @@ function DailyChannelTable({ dailyArr, channels, nDays = 7, rangeStart, rangeEnd
               ↺ Reset columns
             </button>
           )}
-          <button onClick={handleExport} style={{ fontSize: 10, color: C.t2, background: C.card, border: `1px solid ${C.border}`, borderRadius: 6, padding: '3px 8px', cursor: 'pointer' }}>⭳ Export</button>
+          {!isMob && <button onClick={handleExport} style={{ fontSize: 10, color: C.t2, background: C.card, border: `1px solid ${C.border}`, borderRadius: 6, padding: '3px 8px', cursor: 'pointer' }}>⭳ Export</button>}
         </div>
       </div>
       <div style={{ overflowX: 'auto', overflowY: 'auto', maxHeight: 420 }}>
-        <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed', minWidth: 700 }}>
+        <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed', minWidth: isMob ? 420 : 700 }}>
           <colgroup>
-            <col style={{ width: `${Math.max(14, 100 - channels.length * 9 - 10)}%` }} />
-            {orderedChannels.map(ch => <col key={ch} style={{ width: `${Math.min(12, 80 / channels.length)}%` }} />)}
-            <col style={{ width: '10%' }} />
+            <col style={{ width: isMob ? 129 : `${Math.max(14, 100 - channels.length * 9 - 10)}%` }} />
+            {orderedChannels.map(ch => <col key={ch} style={{ width: isMob ? 72 : `${Math.min(12, 80 / channels.length)}%` }} />)}
+            <col style={{ width: isMob ? 72 : '10%' }} />
           </colgroup>
           <thead>
             <tr style={{ background: C.bg }}>
-              <Th label="Period" sortKey="date" style={{ ...thStyleL, position: 'sticky', top: 0, background: C.bg, zIndex: 1 }} align="left" />
+              <Th label="Period" sortKey="date" style={{ ...thStyleL, ...stickyCol, position: 'sticky', top: 0, background: C.bg, zIndex: 3 }} align="left" />
               {orderedChannels.map(ch => (
-                <Th key={ch} label={ch === 'offline_sales' ? 'Offline Sales' : ch === 'Shopify' ? 'D2C' : ch} sortKey={ch} style={{ ...thStyle, position: 'sticky', top: 0, background: C.bg, zIndex: 1 }}
+                <Th key={ch} label={ch === 'offline_sales' ? 'Offline Sales' : ch === 'Shopify' ? 'D2C' : ch} sortKey={ch} align="left" style={{ ...thStyle, position: 'sticky', top: 0, background: C.bg, zIndex: 1 }}
                   dragProps={{ onDragStart: channelReorder.onDragStart(ch), onDragOver: channelReorder.onDragOver, onDrop: channelReorder.onDrop(ch) }} />
               ))}
-              <Th label="Total" sortKey="total" style={{ ...thStyle, position: 'sticky', top: 0, background: C.bg, zIndex: 1 }} />
+              <Th label="Total" sortKey="total" align="left" style={{ ...thStyle, position: 'sticky', top: 0, background: C.bg, zIndex: 1 }} />
             </tr>
           </thead>
           <tbody>
             {sortedRows.map((d, i) => (
               <tr key={i} onMouseEnter={e => e.currentTarget.style.background = '#FFFBE6'} onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
-                <td style={tdStyleL}>{fmtDate(d.date)}</td>
+                <td style={{ ...tdStyleL, ...stickyCol }}>{fmtDate(d.date)}</td>
                 {orderedChannels.map(ch => {
                   const v = getVal(d, ch)
                   return <td key={ch} style={{ ...tdStyle, color: v ? C.t1 : C.t3 }}>{v ? fmtVal(v) : '—'}</td>
@@ -4555,7 +4600,7 @@ function DailyChannelTable({ dailyArr, channels, nDays = 7, rangeStart, rangeEnd
           </tbody>
           <tfoot>
             <tr style={{ background: C.bg, borderTop: `1.5px solid ${C.border}` }}>
-              <td style={{ ...totalTdStyle, textAlign: 'left' }}>Total</td>
+              <td style={{ ...totalTdStyle, textAlign: 'left', ...stickyCol, background: C.bg }}>Total</td>
               {orderedChannels.map(ch => <td key={ch} style={totalTdStyle}>{fmtVal(colTotals[ch])}</td>)}
               <td style={totalTdStyle}>{fmtVal(grandTotal)}</td>
             </tr>
@@ -4931,6 +4976,7 @@ function AmazonCategoryMatrix({ channels, catChannel, subCatChannel, skuChannel,
 // wired up yet" is no longer a valid state once showReturnPct is true; every showReturnPct
 // caller must pick exactly one of simpleReturns/detailedReturns.
 function FlatCategoryProductMatrix({ catData, subCatData, skuData, title, catPrevMap = {}, subCatPrevMap = {}, simpleReturns = false, detailedReturns = false, noReturns = false, showReturnPct = false, mobilityNetBySubCat = {} }) {
+  const isMob = useIsMobile()
   const [expandedSku, setExpandedSku] = useState({})
   const [search, setSearch] = useState('')
   const toggleSku = key => setExpandedSku(prev => ({ ...prev, [key]: !prev[key] }))
@@ -5021,9 +5067,10 @@ function FlatCategoryProductMatrix({ catData, subCatData, skuData, title, catPre
   // just 1 column (Total Return%) — both keyed 'totalReturnPct' plus the extra 4 when detailed,
   // so a saved order from one variant degrades gracefully if the variant later changes for this
   // exact title (falls back to default per useReorderableColumns' validation).
-  const ALL_COLUMNS = [
-    { id: 'gross', label: 'Gross Rev / Share', sortKey: 'gross', width: 13,
-      row: r => <td style={tdStyle}>{fmt(r.gross)}{tot.gross > 0 && <span style={{ fontSize: 10, color: C.t3, marginLeft: 4 }}>({(r.gross / tot.gross * 100).toFixed(1)}%)</span>}</td>,
+  const MOB_HIDDEN_COLS = new Set(['prevGross'])
+  const ALL_COLUMNS_RAW = [
+    { id: 'gross', label: isMob ? 'Gross Rev' : 'Gross Rev / Share', sortKey: 'gross', width: 13,
+      row: r => <td style={tdStyle}>{fmt(r.gross)}{!isMob && tot.gross > 0 && <span style={{ fontSize: 10, color: C.t3, marginLeft: 4 }}>({(r.gross / tot.gross * 100).toFixed(1)}%)</span>}</td>,
       sku: sk => <td style={{ ...tdStyle, fontSize: 11 }}>{fmt(sk.gross)}{tot.gross > 0 && <span style={{ fontSize: 9, color: C.t3, marginLeft: 4 }}>({(sk.gross / tot.gross * 100).toFixed(1)}%)</span>}</td>,
       total: () => <td style={totalTdStyle}>{fmt(tot.gross)} <span style={{ color: C.t3, fontWeight: 400 }}>(100%)</span></td> },
     { id: 'prevGross', label: 'vs Prev', sortKey: 'prevGross', width: 9,
@@ -5055,12 +5102,12 @@ function FlatCategoryProductMatrix({ catData, subCatData, skuData, title, catPre
         row: r => <td style={tdStyle}>{r.exchPct > 0 ? `${r.exchPct.toFixed(2)}%` : <span style={{ color: C.t3 }}>—</span>}</td>,
         sku: sk => <td style={{ ...tdStyle, fontSize: 11 }}>{sk.exchRev > 0 ? `${pctOf(sk.exchRev, sk.gross).toFixed(2)}%` : <span style={{ color: C.t3 }}>—</span>}</td>,
         total: () => <td style={totalTdStyle}>{tot.gross > 0 ? `${pctOf(tot.exchRev, tot.gross).toFixed(2)}%` : '—'}</td> },
-      { id: 'totalReturnPct', label: 'Total Return %', sortKey: 'totalReturnPct', width: 7,
+      { id: 'totalReturnPct', label: isMob ? 'Return %' : 'Total Return %', sortKey: 'totalReturnPct', width: 7,
         row: r => <td style={tdStyle}>{r.totalReturnPct > 0 ? <span style={{ color: r.totalReturnPct > 20 ? '#B91C1C' : 'inherit' }}>{r.totalReturnPct.toFixed(2)}%</span> : <span style={{ color: C.t3 }}>—</span>}</td>,
         sku: sk => { const skTotalReturnRev = simpleReturns ? sk.returnRev : sk.cancelRev + sk.rtoRev + sk.cirRev + sk.returnRev; return <td style={{ ...tdStyle, fontSize: 11 }}>{skTotalReturnRev > 0 ? <span style={{ color: pctOf(skTotalReturnRev, sk.gross) > 20 ? '#B91C1C' : 'inherit' }}>{pctOf(skTotalReturnRev, sk.gross).toFixed(2)}%</span> : <span style={{ color: C.t3 }}>—</span>}</td> },
         total: () => <td style={totalTdStyle}>{tot.gross > 0 ? <span style={{ color: pctOf(tot.cancelRev + tot.rtoRev + tot.cirRev + tot.returnRev, tot.gross) > 20 ? '#B91C1C' : 'inherit' }}>{pctOf(tot.cancelRev + tot.rtoRev + tot.cirRev + tot.returnRev, tot.gross).toFixed(2)}%</span> : '—'}</td> },
     ] : showReturnPct ? [
-      { id: 'totalReturnPct', label: 'Total Return %', sortKey: 'totalReturnPct', width: 11,
+      { id: 'totalReturnPct', label: isMob ? 'Return %' : 'Total Return %', sortKey: 'totalReturnPct', width: 11,
         row: r => <td style={tdStyle}>{r.totalReturnPct > 0 ? <span style={{ color: r.totalReturnPct > 20 ? '#B91C1C' : 'inherit' }}>{r.totalReturnPct.toFixed(2)}%</span> : <span style={{ color: C.t3 }}>—</span>}</td>,
         sku: sk => { const skTotalReturnRev = simpleReturns ? sk.returnRev : sk.cancelRev + sk.rtoRev + sk.cirRev + sk.returnRev; return <td style={{ ...tdStyle, fontSize: 11 }}>{skTotalReturnRev > 0 ? <span style={{ color: pctOf(skTotalReturnRev, sk.gross) > 20 ? '#B91C1C' : 'inherit' }}>{pctOf(skTotalReturnRev, sk.gross).toFixed(2)}%</span> : <span style={{ color: C.t3 }}>—</span>}</td> },
         total: () => <td style={totalTdStyle}>{tot.gross > 0 ? <span style={{ color: pctOf(tot.cancelRev + tot.rtoRev + tot.cirRev + tot.returnRev, tot.gross) > 20 ? '#B91C1C' : 'inherit' }}>{pctOf(tot.cancelRev + tot.rtoRev + tot.cirRev + tot.returnRev, tot.gross).toFixed(2)}%</span> : '—'}</td> },
@@ -5070,6 +5117,7 @@ function FlatCategoryProductMatrix({ catData, subCatData, skuData, title, catPre
       sku: sk => <td style={{ ...tdStyle, fontSize: 11 }}>{fmt(sk.net)}</td>,
       total: () => <td style={totalTdStyle}>{fmt(tot.net)}</td> },
   ]
+  const ALL_COLUMNS = isMob ? ALL_COLUMNS_RAW.filter(c => !MOB_HIDDEN_COLS.has(c.id)) : ALL_COLUMNS_RAW
   const reorder = useReorderableColumns(`datatable-cols:${title || 'category-revenue-matrix'}`, ALL_COLUMNS)
 
   const handleExport = () => {
@@ -5097,23 +5145,23 @@ function FlatCategoryProductMatrix({ catData, subCatData, skuData, title, catPre
   }
 
   return (
-    <div className="kpi-card" style={{ padding: '14px 16px', display: 'flex', flexDirection: 'column' }}>
+    <div className="kpi-card" style={{ padding: isMob ? '12px 4px' : '14px 16px', display: 'flex', flexDirection: 'column' }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
-        <div style={{ fontWeight: 700, fontSize: 13, color: C.t1 }}>{title || 'Category Revenue Matrix'}</div>
+        <div style={{ fontWeight: 700, fontSize: 13, color: C.t1 }}>{isMob ? 'Category Rev Matrix' : (title || 'Category Revenue Matrix')}</div>
         <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-          <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search category / product…"
-            style={{ fontSize: 11.5, padding: '4px 9px', borderRadius: 6, border: `1px solid ${C.border}`, background: C.card, color: C.t1, width: 200, outline: 'none' }} />
-          {!reorder.isDefaultOrder && <button onClick={reorder.resetOrder} title="Reset column order to default" style={{ fontSize: 10, color: C.t2, background: C.card, border: `1px solid ${C.border}`, borderRadius: 6, padding: '3px 8px', cursor: 'pointer' }}>↺ Reset</button>}
-          <button onClick={handleExport} style={{ fontSize: 10, color: C.t2, background: C.card, border: `1px solid ${C.border}`, borderRadius: 6, padding: '3px 8px', cursor: 'pointer' }}>⭳ Export</button>
+          <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search…"
+            style={{ fontSize: 11.5, padding: '4px 9px', borderRadius: 6, border: `1px solid ${C.border}`, background: C.card, color: C.t1, width: isMob ? 120 : 200, outline: 'none' }} />
+          {!isMob && !reorder.isDefaultOrder && <button onClick={reorder.resetOrder} title="Reset column order to default" style={{ fontSize: 10, color: C.t2, background: C.card, border: `1px solid ${C.border}`, borderRadius: 6, padding: '3px 8px', cursor: 'pointer' }}>↺ Reset</button>}
+          {!isMob && <button onClick={handleExport} style={{ fontSize: 10, color: C.t2, background: C.card, border: `1px solid ${C.border}`, borderRadius: 6, padding: '3px 8px', cursor: 'pointer' }}>⭳ Export</button>}
         </div>
       </div>
       <div style={{ overflowX: 'auto', overflowY: 'auto', maxHeight: 560 }}>
-        <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed', minWidth: 760 }}>
+        <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed', minWidth: isMob ? 0 : 760 }}>
           <colgroup>
             <col style={{ width: '16%' }} /><col style={{ width: '20%' }} />
             {reorder.orderedColumns.map(c => <col key={c.id} style={{ width: `${c.width}%` }} />)}
           </colgroup>
-          <thead>
+          {!isMob && <thead>
             <tr style={{ background: C.bg }}>
               <Th label="Category" sortKey="cat" style={{ ...thStyleL, position: 'sticky', top: 0, background: C.bg, zIndex: 1 }} align="left" />
               <Th label="Product" sortKey="sc" style={{ ...thStyleL, position: 'sticky', top: 0, background: C.bg, zIndex: 1 }} align="left" />
@@ -5122,7 +5170,7 @@ function FlatCategoryProductMatrix({ catData, subCatData, skuData, title, catPre
                   dragProps={{ onDragStart: reorder.onDragStart(c.id), onDragOver: reorder.onDragOver, onDrop: reorder.onDrop(c.id) }} />
               ))}
             </tr>
-          </thead>
+          </thead>}
           <tbody>
             {rows.map(r => {
               const skuKey = `${r.cat}::${r.sc}`
@@ -5130,6 +5178,30 @@ function FlatCategoryProductMatrix({ catData, subCatData, skuData, title, catPre
               const allSkus = Object.entries(skuData?.[r.cat]?.[r.sc] || {}).map(([sku, d]) => ({ sku, ...mapRow(d) })).sort((a, b) => b.gross - a.gross)
               const skus = q ? allSkus.filter(sk => r.cat.toLowerCase().includes(q) || r.sc.toLowerCase().includes(q) || sk.sku.toLowerCase().includes(q)) : allSkus
               const hasSkus = allSkus.length > 0
+              if (isMob) {
+                return (
+                  <tr key={skuKey} style={{ cursor: 'default' }}
+                    onMouseEnter={e => e.currentTarget.style.background = '#FFFBE6'}
+                    onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
+                    <td colSpan={reorder.orderedColumns.length + 2} style={{ padding: '5px 4px', borderBottom: `1px solid ${C.border}` }}>
+                      <div style={{ fontWeight: 700, fontSize: 12, color: C.t1, marginBottom: 1 }}>{r.sc}</div>
+                      <div style={{ fontSize: 11, color: C.t3, marginBottom: 3 }}>{r.cat}</div>
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '2px 10px' }}>
+                        {reorder.orderedColumns.map(c => {
+                          const tdEl = c.row(r)
+                          const rawVal = tdEl?.props?.children
+                          return (
+                            <span key={c.id} style={{ fontSize: 11, color: C.t2 }}>
+                              <span style={{ fontWeight: 600, color: C.t3, textTransform: 'uppercase', fontSize: 9.5, letterSpacing: 0.3 }}>{c.label} </span>
+                              <span style={{ fontWeight: 700, color: C.t1, fontFamily: 'var(--mono)' }}>{rawVal}</span>
+                            </span>
+                          )
+                        })}
+                      </div>
+                    </td>
+                  </tr>
+                )
+              }
               return (
                 <Fragment key={skuKey}>
                   <tr style={{ cursor: 'default' }}
@@ -5157,12 +5229,12 @@ function FlatCategoryProductMatrix({ catData, subCatData, skuData, title, catPre
               )
             })}
           </tbody>
-          <tfoot>
+          {!isMob && <tfoot>
             <tr style={{ background: C.bg, borderTop: `1.5px solid ${C.border}`, position: 'sticky', bottom: 0 }}>
               <td style={{ ...totalTdStyle, textAlign: 'left' }} colSpan={2}>Total</td>
               {reorder.orderedColumns.map(c => <Fragment key={c.id}>{c.total()}</Fragment>)}
             </tr>
-          </tfoot>
+          </tfoot>}
         </table>
       </div>
     </div>
@@ -5640,7 +5712,7 @@ function ChannelShareTable({ sortedCh, prevChMap = {}, boxHeight }) {
                 ? <img src={CHANNEL_LOGOS[r.ch]} alt={r.ch} style={{ width: r.ch === 'offline_sales' ? 22 : 18, height: r.ch === 'offline_sales' ? 22 : 18, objectFit: 'contain', borderRadius: 4, flexShrink: 0, background: r.ch === 'CRED' ? '#1a1a1a' : '#f5f5f5', padding: r.ch === 'CRED' ? 2 : 0 }} />
                 : <span style={{ width: 18, height: 18, borderRadius: 4, background: C.ch[r.ch] || C.acm, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 8, fontWeight: 800, color: '#fff' }}>{r.ch.charAt(0)}</span>}
               <span style={{ fontSize: 12, color: C.t2, width: 90, flexShrink: 0 }}>{chLabel(r.ch)}</span>
-              <div style={{ flex: 1, height: 5, background: C.bg, borderRadius: 3 }}>
+              <div className="mob-hidden" style={{ flex: 1, height: 5, background: C.bg, borderRadius: 3 }}>
                 <div style={{ height: '100%', borderRadius: 3, background: '#FFD600', width: `${(r.rev / maxRev) * 100}%`, transition: 'width .5s' }} />
               </div>
               <span style={{ fontSize: 12, fontWeight: 700, color: C.t1, minWidth: 72, textAlign: 'right', fontFamily: 'var(--mono)' }}>{fmt(r.rev)}</span>
@@ -5775,9 +5847,48 @@ function AllTab({ data, rangeStart, rangeEnd }) {
     return { i, cur: curRev, prev: pre?.rev ?? null }
   })
 
+  // Daily sparks for mobile KPI list
+  const dailySorted = [...dailyArr].sort((a, b) => (a.date || '').localeCompare(b.date || ''))
+  const mobRevSpark = dailySorted.map(d => Object.entries(d).filter(([k]) => k !== 'date' && !k.endsWith('_o') && !k.endsWith('_u')).reduce((s, [, v]) => s + (v || 0), 0))
+  const mobOrdersSpark = dailySorted.map(d => Object.entries(d).filter(([k]) => k.endsWith('_o')).reduce((s, [, v]) => s + (v || 0), 0))
+  const mobUnitsSpark = dailySorted.map(d => Object.entries(d).filter(([k]) => k.endsWith('_u')).reduce((s, [, v]) => s + (v || 0), 0))
+  const mobAovSpark = mobRevSpark.map((r, i) => mobOrdersSpark[i] > 0 ? r / mobOrdersSpark[i] : 0)
+  const mobAspSpark = mobRevSpark.map((r, i) => mobUnitsSpark[i] > 0 ? r / mobUnitsSpark[i] : 0)
+  const mobReturnSpark = dailySorted.map(d => {
+    const dayRev = Object.entries(d).filter(([k]) => k !== 'date' && !k.endsWith('_o') && !k.endsWith('_u')).reduce((s, [, v]) => s + (v || 0), 0)
+    return dayRev > 0 && totalRev > 0 ? (returnNumeratorRev / totalRev * 100) : 0
+  })
+  const mobRepeatSpark = dailySorted.map(() => parseFloat(repeatRate) || 0)
+
+  const mobGstSpark = mobRevSpark.map(r => r * (totalRev > 0 ? gstCollected / totalRev : 0))
+  const mobAtRiskSpark = mobRevSpark.map(r => r * (totalRev > 0 ? atRiskRev / totalRev : 0))
+
+  const fmtShort = v => v >= 1e7 ? `₹${(v/1e7).toFixed(2)}Cr` : v >= 1e5 ? `₹${(v/1e5).toFixed(2)}L` : v >= 1e3 ? `₹${(v/1e3).toFixed(2)}K` : `₹${Math.round(v)}`
+  const fmtNShort = v => v >= 1e5 ? `${(v/1e5).toFixed(2)}L` : v >= 1e3 ? `${(v/1e3).toFixed(2)}K` : `${v}`
+
+  const mobKpis = [
+    { label: 'Gross Revenue', value: fmt(totalRev), chg: revChg, spark: mobRevSpark },
+    { label: 'Net Revenue', value: fmt(netRevenueCalc), spark: mobRevSpark },
+    { label: 'Revenue at Risk', value: fmt(atRiskRev), spark: mobAtRiskSpark, accent: atRiskRev > 0 ? '#7A4000' : undefined },
+    { label: 'Orders', value: fmtNShort(nOrders), chg: ordChg, spark: mobOrdersSpark },
+    { label: 'Units', value: fmtNShort(aspQtyAll), spark: mobUnitsSpark },
+    { label: 'AOV', value: fmtShort(scopedAOV), spark: mobAovSpark },
+    { label: 'ASP', value: fmtShort(scopedASP), spark: mobAspSpark },
+    { label: 'Daily Avg Rev', value: fmt(totalRev / nDays), spark: mobRevSpark },
+    { label: 'GST', value: fmt(gstCollected), spark: mobGstSpark },
+    { label: 'Returns %', value: `${returnPct.toFixed(1)}%`, spark: mobReturnSpark, accent: returnPct > 10 ? '#7A1A1A' : undefined },
+    { label: 'Repeat Customer Rate', value: `${repeatRate}%`, spark: mobRepeatSpark },
+  ]
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-      <div className="sales-kpi-section" style={{ display: 'grid', gridTemplateColumns: '1.5fr 5fr', gap: 10, alignItems: 'stretch' }}>
+      {/* Mobile KPI list — same style as Ads tab */}
+      <div className="mob-only ads-kpi-list" style={{ flexDirection: 'column', gap: 8 }}>
+        {mobKpis.map(k => (
+          <SparkKpiCard key={k.label} label={k.label} value={k.value} chg={k.chg ?? null} sparkData={k.spark || []} accent={k.accent} />
+        ))}
+      </div>
+      <div className="sales-kpi-section mob-hidden" style={{ display: 'grid', gridTemplateColumns: '1.5fr 5fr', gap: 10, alignItems: 'stretch' }}>
         {/* Gross Revenue hero — tall left column */}
         <div className="kpi-card sales-kpi-hero" style={{ display: 'flex', flexDirection: 'column', gap: 8, padding: '16px 18px' }}>
           <div className="kpi-label" style={{ fontSize: 11 }}>Gross Revenue Inc GST</div>
@@ -5825,7 +5936,7 @@ function AllTab({ data, rangeStart, rangeEnd }) {
         </div>
       </div>
       <ChannelTrendCard dailyArr={dailyArr} channels={channels} rangeStart={rangeStart} rangeEnd={rangeEnd} />
-      <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1.5fr 1fr', gap: 14, alignItems: 'start' }}>
+      <div className="g-3col" style={{ display: 'grid', gridTemplateColumns: '1.2fr 1.5fr 1fr', gap: 14, alignItems: 'start' }}>
         <ChannelShareTable sortedCh={sortedCh} prevChMap={prevChMap} boxHeight={360} />
         <CategoryRevenueCard
           catRows={catRows}
@@ -6087,7 +6198,7 @@ function GeoToggleDonutCard({ regionRows, tierRows, note, boxHeight }) {
   const fixedContentH = boxHeight ? boxHeight - HEADER_CHROME : naturalContentH
 
   return (
-    <Card title="Geography Breakdown" note={note} style={boxHeight ? { height: boxHeight, alignSelf: 'start' } : undefined}>
+    <Card title="Geography Breakdown" note={note} style={boxHeight && typeof window !== 'undefined' && window.innerWidth > 768 ? { height: boxHeight, alignSelf: 'start' } : undefined}>
       <div style={{ display: 'flex', gap: 3, marginBottom: 10 }}>
         <button onClick={() => setGeoView('region')} style={{ ...btnStyle(geoView === 'region'), flex: 1 }}>By Region</button>
         <button onClick={() => setGeoView('tier')} style={{ ...btnStyle(geoView === 'tier'), flex: 1 }}>By City Tier</button>
@@ -6095,8 +6206,8 @@ function GeoToggleDonutCard({ regionRows, tierRows, note, boxHeight }) {
       {data.length === 0 ? (
         <div style={{ fontSize: 12, color: C.t3, textAlign: 'center', padding: '30px 0', height: fixedContentH, boxSizing: 'border-box', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>City-tier detail not available{geoView === 'tier' ? '' : ' for this channel'}</div>
       ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10, height: fixedContentH, boxSizing: 'border-box' }}>
-          <ResponsiveContainer width={130} height={130} style={{ flexShrink: 0 }}>
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10, height: window.innerWidth > 768 ? fixedContentH : 'auto', boxSizing: 'border-box' }}>
+          <ResponsiveContainer width="100%" height={130} style={{ flexShrink: 0 }}>
             <PieChart>
               <Pie data={data} cx="50%" cy="50%" innerRadius={38} outerRadius={60} dataKey="value" paddingAngle={2}>
                 {data.map((d, i) => <Cell key={i} fill={d.color} />)}
@@ -6152,6 +6263,7 @@ function TopSubCatBar({ subCatRows }) {
 }
 
 function ShopifyGeoRichTable({ title, rows, firstKey, firstLabel, formatFirst, rtoLabel = 'RTO %', showAOV = true, showRTO = true, showASP = false, note }) {
+  const isMob = useIsMobile()
   const table = useSortableTable('rev')
   const getters = {
     [firstKey]: r => r[firstKey], rev: r => r.rev, sharePct: r => r.sharePct, cumPct: r => r.cumPct, orders: r => r.orders,
@@ -6216,26 +6328,28 @@ function ShopifyGeoRichTable({ title, rows, firstKey, firstLabel, formatFirst, r
     ...(showRTO ? [{ id: 'rtoPct', label: rtoLabel, sortKey: 'rtoPct', width: 9,
       row: r => <td style={{ ...tdStyle, fontFamily: 'inherit' }}>{rtoChip(r.rtoPct || 0)}</td>, total: () => <td style={{ ...totalTdStyle, fontFamily: 'inherit' }}>{rtoChip(totRtoPct)}</td> }] : []),
   ]
-  const reorder = useReorderableColumns(`datatable-cols:${title}`, ALL_COLUMNS)
+  const MOB_HIDDEN = new Set(['sharePct', 'cumPct', 'mom'])
+  const VISIBLE_COLUMNS = isMob ? ALL_COLUMNS.filter(c => !MOB_HIDDEN.has(c.id)) : ALL_COLUMNS
+  const reorder = useReorderableColumns(`datatable-cols:${title}`, VISIBLE_COLUMNS)
 
   return (
-    <div className="kpi-card" style={{ padding: '14px 16px', display: 'flex', flexDirection: 'column', minWidth: 0, height: '100%', boxSizing: 'border-box' }}>
+    <div className="kpi-card" style={{ padding: isMob ? '12px 8px' : '14px 16px', display: 'flex', flexDirection: 'column', minWidth: 0, height: '100%', boxSizing: 'border-box' }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10, flexShrink: 0 }}>
         <div style={{ fontWeight: 700, fontSize: 13, color: C.t1 }}>{title} <span style={{ fontWeight: 400, fontSize: 11.5, color: C.t3 }}>{rows.length} total{note ? ` · ${note}` : ''}</span></div>
         <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-          {!reorder.isDefaultOrder && <button onClick={reorder.resetOrder} title="Reset column order to default" style={{ fontSize: 10, color: C.t2, background: C.card, border: `1px solid ${C.border}`, borderRadius: 6, padding: '3px 8px', cursor: 'pointer' }}>↺ Reset</button>}
-          <button onClick={handleExport} style={{ fontSize: 10, color: C.t2, background: C.card, border: `1px solid ${C.border}`, borderRadius: 6, padding: '3px 8px', cursor: 'pointer' }}>⭳ Export</button>
+          {!isMob && !reorder.isDefaultOrder && <button onClick={reorder.resetOrder} title="Reset column order to default" style={{ fontSize: 10, color: C.t2, background: C.card, border: `1px solid ${C.border}`, borderRadius: 6, padding: '3px 8px', cursor: 'pointer' }}>↺ Reset</button>}
+          {!isMob && <button onClick={handleExport} style={{ fontSize: 10, color: C.t2, background: C.card, border: `1px solid ${C.border}`, borderRadius: 6, padding: '3px 8px', cursor: 'pointer' }}>⭳ Export</button>}
         </div>
       </div>
       <div style={{ overflowY: 'auto', flex: 1, minHeight: 0, maxHeight: 560, minWidth: 0 }}>
         <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed' }}>
           <colgroup>
-            <col style={{ width: '12%' }} />
-            {reorder.orderedColumns.map(c => <col key={c.id} style={{ width: `${c.width}%` }} />)}
+            <col style={{ width: isMob ? 155 : '12%' }} />
+            {reorder.orderedColumns.map((c, i) => <col key={c.id} style={{ width: isMob ? (i === 0 ? 85 : 95) : `${c.width}%` }} />)}
           </colgroup>
           <thead>
             <tr style={{ background: C.bg }}>
-              <Th label={firstLabel} sortKey={firstKey} style={{ ...thStyleL, position: 'sticky', top: 0, background: C.bg, zIndex: 1 }} align="left" />
+              <Th label={firstLabel} sortKey={firstKey} style={{ ...thStyleL, position: 'sticky', top: 0, left: isMob ? 0 : undefined, background: C.bg, zIndex: isMob ? 3 : 1 }} align="left" />
               {reorder.orderedColumns.map(c => (
                 <Th key={c.id} label={c.label} sortKey={c.sortKey} style={{ ...thStyle, position: 'sticky', top: 0, background: C.bg, zIndex: 1 }}
                   dragProps={{ onDragStart: reorder.onDragStart(c.id), onDragOver: reorder.onDragOver, onDrop: reorder.onDrop(c.id) }} />
@@ -6248,15 +6362,15 @@ function ShopifyGeoRichTable({ title, rows, firstKey, firstLabel, formatFirst, r
                 <tr key={r[firstKey] + '|' + i} style={{ cursor: 'default' }}
                   onMouseEnter={e => e.currentTarget.style.background = '#FFFBE6'}
                   onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
-                  <td style={tdStyleL}>{formatFirst ? formatFirst(r[firstKey]) : r[firstKey]}</td>
+                  <td style={{ ...tdStyleL, ...(isMob ? { position: 'sticky', left: 0, background: C.card, zIndex: 2 } : {}) }}>{formatFirst ? formatFirst(r[firstKey]) : r[firstKey]}</td>
                   {reorder.orderedColumns.map(c => <Fragment key={c.id}>{c.row(r)}</Fragment>)}
                 </tr>
               )
             })}
           </tbody>
           <tfoot>
-            <tr style={{ background: C.bg, borderTop: `1.5px solid ${C.border}`, position: 'sticky', bottom: 0 }}>
-              <td style={{ ...totalTdStyle, textAlign: 'left' }}>Total</td>
+            <tr style={{ background: C.bg, borderTop: `1.5px solid ${C.border}`, position: 'sticky', bottom: 0, zIndex: isMob ? 2 : 1 }}>
+              <td style={{ ...totalTdStyle, textAlign: 'left', ...(isMob ? { position: 'sticky', left: 0, background: C.bg, zIndex: 3 } : {}) }}>Total</td>
               {reorder.orderedColumns.map(c => <Fragment key={c.id}>{c.total()}</Fragment>)}
             </tr>
           </tfoot>
@@ -6377,6 +6491,7 @@ function D2CSubChannelToggle({ data, filters, setFilters }) {
 }
 
 function ShopifyTab({ data, filters, setFilters }) {
+  const isMob = useIsMobile()
   const [catRevView, setCatRevView] = useState('category') // 'category' | 'product'
   // D2C is India-only permanently (International orders now live under their own top-level
   // Channel='International' tab) — no region toggle, no filters.subChannel default needed.
@@ -6577,6 +6692,30 @@ function ShopifyTab({ data, filters, setFilters }) {
     return sorted
   })()
 
+  const shFmtShort = v => !v ? '—' : v >= 1e7 ? `₹${(v/1e7).toFixed(2)}Cr` : v >= 1e5 ? `₹${(v/1e5).toFixed(2)}L` : v >= 1e3 ? `₹${(v/1e3).toFixed(2)}K` : `₹${Math.round(v)}`
+  const shFmtNShort = v => v >= 1e5 ? `${(v/1e5).toFixed(2)}L` : v >= 1e3 ? `${(v/1e3).toFixed(2)}K` : `${v}`
+  const shDailySorted = [...shDailyArr].sort((a, b) => a.date?.localeCompare(b.date))
+  const shCirPct = totalRev > 0 ? shCirRev / totalRev * 100 : 0
+  const shExchRev = netCalcSrc.exchRev ?? data.exchangeRev ?? 0
+  const shExchPct = totalRev > 0 ? shExchRev / totalRev * 100 : 0
+  const shReturnTrendMap = {}
+  ;(data.dailyReturnTrend || []).forEach(x => { shReturnTrendMap[x.date] = x })
+  const shMobKpis = [
+    { label: 'Gross Revenue', value: shFmtShort(totalRev), spark: shDailySorted.map(d => d.rev || 0) },
+    { label: 'Net Revenue', value: shFmtShort(netRev), spark: shDailySorted.map(d => (d.rev || 0) * (totalRev > 0 ? netRev / totalRev : 0)) },
+    { label: 'GST', value: shFmtShort(gst), spark: shDailySorted.map(d => (d.rev || 0) * (totalRev > 0 ? gst / totalRev : 0)) },
+    { label: 'Daily Avg Rev', value: shFmtShort(dailyAvg), spark: shDailySorted.map(d => d.rev || 0) },
+    { label: 'Orders', value: shFmtNShort(shNOrders), spark: shDailySorted.map(d => d.orders || 0) },
+    { label: 'Units', value: shFmtNShort(totalQty), spark: shDailySorted.map(d => d.units || 0) },
+    { label: 'AOV', value: shFmtShort(aov), spark: shDailySorted.map(d => (d.orders || 0) > 0 ? (d.rev || 0) / d.orders : null) },
+    { label: 'ASP', value: shFmtShort(asp), spark: shDailySorted.map(d => (d.units || 0) > 0 ? (d.rev || 0) / d.units : null) },
+    { label: 'Returns %', value: `${returnRevPct.toFixed(1)}%`, spark: shDailySorted.map(d => { const rt = shReturnTrendMap[d.date]; return rt ? (rt.rtoPct||0)+(rt.cirPct||0) : null }), accent: returnRevPct > 5 ? '#7A1A1A' : undefined },
+    { label: 'RTO %', value: `${rtoPct.toFixed(1)}%`, spark: shDailySorted.map(d => shReturnTrendMap[d.date]?.rtoPct ?? null), accent: rtoPct > 10 ? '#7A1A1A' : undefined },
+    { label: 'CIR %', value: `${shCirPct.toFixed(1)}%`, spark: shDailySorted.map(d => shReturnTrendMap[d.date]?.cirPct ?? null) },
+    { label: 'Exchange %', value: `${shExchPct.toFixed(1)}%`, spark: shDailySorted.map(d => shReturnTrendMap[d.date]?.exchPct ?? null) },
+    { label: 'Cancellation %', value: `${(totalRev > 0 ? cancelledRev / totalRev * 100 : 0).toFixed(1)}%`, spark: shDailySorted.map(d => shReturnTrendMap[d.date]?.cancelPct ?? null) },
+  ]
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
       {(filters.category?.length > 0 || filters.subCategory?.length > 0) && (
@@ -6597,7 +6736,12 @@ function ShopifyTab({ data, filters, setFilters }) {
           <span style={{ marginLeft: 'auto', color: C.t3, fontSize: 11 }}>All KPIs & charts reflect this filter</span>
         </div>
       )}
-      <div className="sales-kpi-section" style={{ display: 'grid', gridTemplateColumns: '1.2fr 5fr', gap: 10, alignItems: 'stretch' }}>
+      <div className="mob-only ads-kpi-list" style={{ flexDirection: 'column', gap: 8 }}>
+        {shMobKpis.map(k => (
+          <SparkKpiCard key={k.label} label={k.label} value={k.value} chg={null} sparkData={k.spark || []} accent={k.accent} />
+        ))}
+      </div>
+      <div className="sales-kpi-section mob-hidden" style={{ display: 'grid', gridTemplateColumns: '1.2fr 5fr', gap: 10, alignItems: 'stretch' }}>
         {/* Hero card */}
         <div className="kpi-card sales-kpi-hero" style={{ display: 'flex', flexDirection: 'column', gap: 8, padding: '16px 18px' }}>
           <div className="kpi-label" style={{ fontSize: 11 }}>Gross Revenue Inc GST</div>
@@ -6720,14 +6864,19 @@ function ShopifyTab({ data, filters, setFilters }) {
             }
             return xFmt(d)
           }
+          const shLegendItems = [
+            { name: 'Gross Revenue', color: '#E0B800' }, { name: 'Net Revenue', color: '#0D9E68' },
+            { name: 'Return % (RTO+CIR)', color: '#E24B4A' }, { name: 'Exchange %', color: '#9B59B6' }, { name: 'Cancellation %', color: '#B91C1C' },
+          ]
           return (
-            <Card fill title="Revenue & Returns Trend" style={{ height: 360, alignSelf: 'start' }} action={
+            <Card title="Revenue & Returns Trend" style={{ alignSelf: 'start' }} action={
               <select value={shTrendGroup} onChange={e => setShTrendGroup(e.target.value)} style={{ fontSize: 11, fontWeight: 600, padding: '3px 8px', borderRadius: 6, border: `1px solid ${C.border2}`, background: C.card, color: C.t1, cursor: 'pointer', fontFamily: 'var(--font)', outline: 'none' }}>
                 {['daily','weekly','monthly','quarterly'].map(g => <option key={g} value={g}>{g.charAt(0).toUpperCase() + g.slice(1)}</option>)}
               </select>
             }>
-              <ResponsiveContainer width="100%" height="100%" minHeight={240}>
-                <ComposedChart data={grouped} margin={{ top: 4, right: 50, bottom: 0, left: 0 }}>
+              <div style={isMob ? { margin: '0 -18px' } : {}}>
+              <ResponsiveContainer width="100%" height={isMob ? 240 : 300} minHeight={200}>
+                <ComposedChart data={grouped} margin={{ top: 4, right: isMob ? 18 : 50, bottom: 0, left: isMob ? 18 : 0 }}>
                   <defs>
                     <linearGradient id="shGrossGrad" x1="0" y1="0" x2="0" y2="1">
                       <stop offset="5%" stopColor="#FFD600" stopOpacity={0.45} />
@@ -6739,9 +6888,9 @@ function ShopifyTab({ data, filters, setFilters }) {
                     </linearGradient>
                   </defs>
                   <CartesianGrid strokeDasharray="3 3" stroke={C.border} vertical={false} />
-                  <XAxis dataKey="date" tick={{ fontSize: 10, fill: C.t3 }} tickFormatter={xFmt} />
-                  <YAxis yAxisId="rev" tick={{ fontSize: 10, fill: C.t3 }} tickFormatter={v => fmt(v)} width={60} />
-                  <YAxis yAxisId="pct" orientation="right" tick={{ fontSize: 10, fill: C.t3 }} tickFormatter={v => `${v.toFixed(1)}%`} width={40} />
+                  <XAxis dataKey="date" tick={{ fontSize: 10, fill: C.t3 }} tickFormatter={xFmt} interval={isMob ? 0 : 'preserveStartEnd'} ticks={isMob ? (() => { const k = grouped.map(d => d.date); const n = k.length; if (n <= 4) return k; return [k[0], k[Math.floor(n/3)], k[Math.floor(2*n/3)], k[n-1]] })() : undefined} />
+                  <YAxis yAxisId="rev" hide={isMob} tick={{ fontSize: 10, fill: C.t3 }} tickFormatter={v => fmt(v)} width={isMob ? 0 : 60} />
+                  <YAxis yAxisId="pct" orientation="right" hide={isMob} tick={{ fontSize: 10, fill: C.t3 }} tickFormatter={v => `${v.toFixed(1)}%`} width={isMob ? 0 : 40} />
                   <Tooltip content={({ active, payload, label }) => active && payload?.length ? (
                     <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 7, padding: '7px 11px', fontSize: 11 }}>
                       <div style={{ fontWeight: 700, marginBottom: 4, color: C.t1 }}>{tooltipFmt(label)}</div>
@@ -6753,7 +6902,7 @@ function ShopifyTab({ data, filters, setFilters }) {
                       ))}
                     </div>
                   ) : null} />
-                  <Legend wrapperStyle={{ fontSize: 11 }} formatter={v => <span style={{ color: '#111' }}>{v}</span>} />
+                  {!isMob && <Legend verticalAlign="bottom" align="center" layout="horizontal" wrapperStyle={{ fontSize: 11, paddingTop: 8 }} formatter={v => <span style={{ color: '#111' }}>{v}</span>} />}
                   <Area yAxisId="rev" type="monotone" dataKey="grossRev" name="Gross Revenue" stroke="#E0B800" fill="url(#shGrossGrad)" strokeWidth={2.5} dot={false} />
                   <Area yAxisId="rev" type="monotone" dataKey="netRev" name="Net Revenue" stroke="#0D9E68" fill="url(#shNetGrad)" strokeWidth={2} dot={false} strokeDasharray="4 2" />
                   <Line yAxisId="pct" type="monotone" dataKey="returnPct" name="Return % (RTO+CIR)" stroke="#E24B4A" strokeWidth={1.5} dot={false} />
@@ -6761,6 +6910,16 @@ function ShopifyTab({ data, filters, setFilters }) {
                   <Line yAxisId="pct" type="monotone" dataKey="cancelPct" name="Cancellation %" stroke="#B91C1C" strokeWidth={1.5} dot={false} strokeDasharray="6 2" />
                 </ComposedChart>
               </ResponsiveContainer>
+              </div>
+              {isMob && (
+                <div style={{ display:'flex', flexWrap:'wrap', justifyContent:'center', gap:'6px 12px', marginTop: 8 }}>
+                  {shLegendItems.map(it => (
+                    <span key={it.name} style={{ display:'flex', alignItems:'center', gap: 4, fontSize: 11, color: '#111' }}>
+                      <span style={{ width:8, height:8, borderRadius:'50%', background: it.color, display:'inline-block', flexShrink:0 }} />{it.name}
+                    </span>
+                  ))}
+                </div>
+              )}
             </Card>
           )
         })()}
@@ -6936,6 +7095,7 @@ function ShopifyTab({ data, filters, setFilters }) {
 }
 
 function EBOTab({ data, rangeStart, rangeEnd }) {
+  const isMob = useIsMobile()
   const EBO_ACCENT = '#8B5E3C'
   const ebo = data.ebo || {}
   const catMap = ebo.catMap || {}
@@ -7102,10 +7262,37 @@ function EBOTab({ data, rangeStart, rangeEnd }) {
   const prevCancelPct = prevOrders > 0 ? (prevOrders * (cancelPct / 100) * (nOrders > 0 ? cancelRev / nOrders : 0)) / prevRev * 100 : 0
   const prevReturnRevPct = prevRev > 0 ? ((prevRtoOrders + prevCirOrders) / Math.max(prevOrders, 1) * 100) : 0
 
+  const eboFmtS = v => !v ? '—' : v >= 1e7 ? `₹${(v/1e7).toFixed(2)}Cr` : v >= 1e5 ? `₹${(v/1e5).toFixed(2)}L` : v >= 1e3 ? `₹${(v/1e3).toFixed(2)}K` : `₹${Math.round(v)}`
+  const eboFmtN = v => v >= 1e5 ? `${(v/1e5).toFixed(2)}L` : v >= 1e3 ? `${(v/1e3).toFixed(2)}K` : `${v}`
+  const eboDailySorted = [...shDailyArr].sort((a, b) => a.date?.localeCompare(b.date))
+  const eboReturnTrendMap = {}
+  ;(ebo.dailyReturnTrend || []).forEach(x => { eboReturnTrendMap[x.date] = x })
+  const eboMobKpis = [
+    { label: 'Gross Revenue', value: eboFmtS(totalRev), spark: eboDailySorted.map(d => d.rev || 0) },
+    { label: 'Net Revenue', value: eboFmtS(netRev), spark: eboDailySorted.map(d => (d.rev || 0) * (totalRev > 0 ? netRev / totalRev : 0)) },
+    { label: 'GST', value: eboFmtS(gstCollected), spark: eboDailySorted.map(d => (d.rev || 0) * (totalRev > 0 ? gstCollected / totalRev : 0)) },
+    { label: 'Daily Avg Rev', value: eboFmtS(dailyAvg), spark: eboDailySorted.map(d => d.rev || 0) },
+    { label: 'Orders', value: eboFmtN(nOrders), spark: eboDailySorted.map(d => d.orders || 0) },
+    { label: 'Units', value: eboFmtN(totalQty), spark: eboDailySorted.map(d => d.units || 0) },
+    { label: 'AOV', value: eboFmtS(aov), spark: eboDailySorted.map(d => (d.orders || 0) > 0 ? (d.rev || 0) / d.orders : null) },
+    { label: 'ASP', value: eboFmtS(asp), spark: eboDailySorted.map(d => (d.units || 0) > 0 ? (d.rev || 0) / d.units : null) },
+    { label: 'Cancellation %', value: `${cancelPct.toFixed(1)}%`, spark: eboDailySorted.map(d => eboReturnTrendMap[d.date]?.cancelPct ?? null) },
+    { label: 'Returns %', value: `${returnRevPct.toFixed(1)}%`, spark: eboDailySorted.map(d => { const rt = eboReturnTrendMap[d.date]; return rt ? (rt.rtoPct||0)+(rt.cirPct||0) : null }), accent: returnRevPct > 5 ? '#7A1A1A' : undefined },
+    { label: 'RTO %', value: `${rtoPct.toFixed(1)}%`, spark: eboDailySorted.map(d => eboReturnTrendMap[d.date]?.rtoPct ?? null), accent: rtoPct > 10 ? '#7A1A1A' : undefined },
+    { label: 'CIR %', value: `${cirPct.toFixed(1)}%`, spark: eboDailySorted.map(d => eboReturnTrendMap[d.date]?.cirPct ?? null) },
+    { label: 'Exchange %', value: `${exchangePct.toFixed(1)}%`, spark: eboDailySorted.map(d => eboReturnTrendMap[d.date]?.exchPct ?? null) },
+  ]
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+      {/* Mobile KPI list */}
+      <div className="mob-only ads-kpi-list" style={{ flexDirection: 'column', gap: 8 }}>
+        {eboMobKpis.map(k => (
+          <SparkKpiCard key={k.label} label={k.label} value={k.value} chg={null} sparkData={k.spark || []} accent={k.accent} />
+        ))}
+      </div>
       {/* KPI Grid */}
-      <div className="sales-kpi-section" style={{ display: 'grid', gridTemplateColumns: '1.5fr 5fr', gap: 10, alignItems: 'stretch' }}>
+      <div className="sales-kpi-section mob-hidden" style={{ display: 'grid', gridTemplateColumns: '1.5fr 5fr', gap: 10, alignItems: 'stretch' }}>
         {/* Hero card */}
         <div className="kpi-card sales-kpi-hero" style={{ display: 'flex', flexDirection: 'column', gap: 8, padding: '16px 18px' }}>
           <div className="kpi-label" style={{ fontSize: 11 }}>Gross Revenue Inc GST</div>
@@ -7151,17 +7338,17 @@ function EBOTab({ data, rangeStart, rangeEnd }) {
         </div>
       </div>
       {/* Revenue & Returns Trend + Category Revenue + Geography Breakdown side by side */}
-      <div className="g-2" style={{ gridTemplateColumns: '1.5fr 1fr 0.65fr', alignItems: 'start' }}>
-        <div className="card" style={{ padding: '14px 18px', display: 'flex', flexDirection: 'column', height: 360, alignSelf: 'start', boxSizing: 'border-box' }}>
+      <div className="g-2 g-3col" style={{ gridTemplateColumns: '1.5fr 1fr 0.65fr', alignItems: 'start' }}>
+        <div className="card" style={{ padding: '14px 18px', display: 'flex', flexDirection: 'column', height: isMob ? 'auto' : 360, alignSelf: 'start', boxSizing: 'border-box' }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10, flexShrink: 0 }}>
             <span style={{ fontSize: 13, fontWeight: 700, color: C.t1 }}>Revenue &amp; Returns Trend</span>
             <select value={trendGroup} onChange={e => setTrendGroup(e.target.value)} style={{ fontSize: 11, fontWeight: 600, padding: '3px 8px', borderRadius: 6, border: `1px solid ${C.border2}`, background: C.card, color: C.t1, cursor: 'pointer', fontFamily: 'var(--font)', outline: 'none' }}>
               {['daily','weekly','monthly'].map(g => <option key={g} value={g}>{g.charAt(0).toUpperCase() + g.slice(1)}</option>)}
             </select>
           </div>
-          <div style={{ flex: 1, minHeight: 0 }}>
-          <ResponsiveContainer width="100%" height="100%" minHeight={240}>
-            <ComposedChart data={groupedDaily} margin={{ top: 4, right: 50, bottom: 0, left: 0 }}>
+          <div style={isMob ? { margin: '0 -18px' } : {}}>
+          <ResponsiveContainer width="100%" height={isMob ? 240 : 280} minHeight={200}>
+            <ComposedChart data={groupedDaily} margin={{ top: 4, right: isMob ? 18 : 50, bottom: 0, left: isMob ? 18 : 0 }}>
               <defs>
                 <linearGradient id="eboGrossGrad" x1="0" y1="0" x2="0" y2="1">
                   <stop offset="5%" stopColor="#FFD600" stopOpacity={0.45} />
@@ -7173,9 +7360,9 @@ function EBOTab({ data, rangeStart, rangeEnd }) {
                 </linearGradient>
               </defs>
               <CartesianGrid strokeDasharray="3 3" stroke={C.border} vertical={false} />
-              <XAxis dataKey="date" tick={{ fontSize: 10, fill: C.t3 }} tickFormatter={v => v?.slice(5)} />
-              <YAxis yAxisId="rev" tick={{ fontSize: 10, fill: C.t3 }} tickFormatter={v => fmt(v)} width={60} />
-              <YAxis yAxisId="pct" orientation="right" tick={{ fontSize: 10, fill: C.t3 }} tickFormatter={v => `${v.toFixed(1)}%`} width={40} />
+              <XAxis dataKey="date" tick={{ fontSize: 10, fill: C.t3 }} tickFormatter={v => v?.slice(5)} interval={isMob ? 0 : 'preserveStartEnd'} ticks={isMob ? (() => { const k = groupedDaily.map(d => d.date); const n = k.length; if (n <= 4) return k; return [k[0], k[Math.floor(n/3)], k[Math.floor(2*n/3)], k[n-1]] })() : undefined} />
+              <YAxis yAxisId="rev" hide={isMob} tick={{ fontSize: 10, fill: C.t3 }} tickFormatter={v => fmt(v)} width={isMob ? 0 : 60} />
+              <YAxis yAxisId="pct" orientation="right" hide={isMob} tick={{ fontSize: 10, fill: C.t3 }} tickFormatter={v => `${v.toFixed(1)}%`} width={isMob ? 0 : 40} />
               <Tooltip content={({ active, payload, label }) => active && payload?.length ? (
                 <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 7, padding: '7px 11px', fontSize: 11 }}>
                   <div style={{ fontWeight: 700, marginBottom: 4, color: C.t2 }}>{label?.slice(5)}</div>
@@ -7187,7 +7374,7 @@ function EBOTab({ data, rangeStart, rangeEnd }) {
                   ))}
                 </div>
               ) : null} />
-              <Legend wrapperStyle={{ fontSize: 11 }} formatter={v => <span style={{ color: '#111' }}>{v}</span>} />
+              {!isMob && <Legend verticalAlign="bottom" align="center" layout="horizontal" wrapperStyle={{ fontSize: 11, paddingTop: 8 }} formatter={v => <span style={{ color: '#111' }}>{v}</span>} />}
               <Area yAxisId="rev" type="monotone" dataKey="grossRev" name="Gross Revenue" stroke="#E0B800" fill="url(#eboGrossGrad)" strokeWidth={2.5} dot={false} />
               <Area yAxisId="rev" type="monotone" dataKey="netRev" name="Net Revenue" stroke="#0D9E68" fill="url(#eboNetGrad)" strokeWidth={2} dot={false} strokeDasharray="4 2" />
               <Line yAxisId="pct" type="monotone" dataKey="returnPct" name="Return % (RTO+CIR)" stroke="#E24B4A" strokeWidth={1.5} dot={false} />
@@ -7196,6 +7383,15 @@ function EBOTab({ data, rangeStart, rangeEnd }) {
             </ComposedChart>
           </ResponsiveContainer>
           </div>
+          {isMob && (
+            <div style={{ display:'flex', flexWrap:'wrap', justifyContent:'center', gap:'6px 12px', marginTop: 8 }}>
+              {[{name:'Gross Revenue',color:'#E0B800'},{name:'Net Revenue',color:'#0D9E68'},{name:'Return % (RTO+CIR)',color:'#E24B4A'},{name:'Exchange %',color:'#9B59B6'},{name:'Cancellation %',color:'#B91C1C'}].map(it => (
+                <span key={it.name} style={{ display:'flex', alignItems:'center', gap: 4, fontSize: 11, color: '#111' }}>
+                  <span style={{ width:8, height:8, borderRadius:'50%', background: it.color, display:'inline-block', flexShrink:0 }} />{it.name}
+                </span>
+              ))}
+            </div>
+          )}
         </div>
         <CategoryRevenueCard
           catRows={catRows}
@@ -7244,6 +7440,7 @@ function AmazonChannelViewToggle({ channelView, setChannelView }) {
 }
 
 function AmazonTab({ data, channelView, setChannelView }) {
+  const isMob = useIsMobile()
   const [selectedCat, setSelectedCat] = useState(null)
   const [selectedSubCat, setSelectedSubCat] = useState(null)
   const [catRevView, setCatRevView] = useState('category')
@@ -7384,8 +7581,35 @@ function AmazonTab({ data, channelView, setChannelView }) {
   const chAmzPrevSCRev = showSC ? amzPrevSCRev : 0
   const chAmzPrevVCRev = showVC ? amzPrevVCRev : 0
 
+  const amzFmtS = v => !v ? '—' : v >= 1e7 ? `₹${(v/1e7).toFixed(2)}Cr` : v >= 1e5 ? `₹${(v/1e5).toFixed(2)}L` : v >= 1e3 ? `₹${(v/1e3).toFixed(2)}K` : `₹${Math.round(v)}`
+  const amzFmtN = v => v >= 1e5 ? `${(v/1e5).toFixed(2)}L` : v >= 1e3 ? `${(v/1e3).toFixed(2)}K` : `${v}`
+  const amzMobGrossRev = chScCatRev + chVcCatRev
+  const amzMobNetRev = scNetRev + vcNetRevenue
+  const amzMobOrders = chScCatOrders
+  const amzMobUnits = chScCatUnits + chVcCatUnits
+  const amzMobAOV = amzMobOrders > 0 ? amzMobGrossRev / amzMobOrders : 0
+  const amzMobASP = amzMobUnits > 0 ? amzMobGrossRev / amzMobUnits : 0
+  const amzMobGST = (amzMobGrossRev - scTotalExcRevRaw) + (vcTotalOrdered - vcTotalOrderedExcRev)
+  const amzMobKpis = [
+    { label: 'Gross Revenue', value: amzFmtS(amzMobGrossRev), spark: scDailyArr.map(d => (d.FBA || 0) + (d.MFN || 0)) },
+    { label: 'Net Revenue', value: amzFmtS(amzMobNetRev), spark: scDailyArr.map(d => ((d.FBA || 0) + (d.MFN || 0)) * (amzMobGrossRev > 0 ? amzMobNetRev / amzMobGrossRev : 0)) },
+    { label: 'GST', value: amzFmtS(amzMobGST), spark: scDailyArr.map(d => ((d.FBA || 0) + (d.MFN || 0)) * (amzMobGrossRev > 0 ? amzMobGST / amzMobGrossRev : 0)) },
+    { label: 'Daily Avg Rev', value: amzFmtS(amzMobGrossRev / (data.nDays || 1)), spark: scDailyArr.map(d => (d.FBA || 0) + (d.MFN || 0)) },
+    { label: 'Orders (SC)', value: amzFmtN(amzMobOrders), spark: scDailyArr.map(d => (d.FBA_orders || 0) + (d.MFN_orders || 0)) },
+    { label: 'Units', value: amzFmtN(amzMobUnits), spark: scDailyArr.map(d => (d.FBA_units || 0) + (d.MFN_units || 0)) },
+    { label: 'AOV', value: amzFmtS(amzMobAOV), spark: scDailyArr.map(d => { const o = (d.FBA_orders||0)+(d.MFN_orders||0); const r = (d.FBA||0)+(d.MFN||0); return o > 0 ? r / o : null }) },
+    { label: 'ASP', value: amzFmtS(amzMobASP), spark: scDailyArr.map(d => { const u = (d.FBA_units||0)+(d.MFN_units||0); const r = (d.FBA||0)+(d.MFN||0); return u > 0 ? r / u : null }) },
+    { label: 'Returns %', value: `${amzCombinedReturnPct.toFixed(1)}%`, spark: scDailyArr.map(() => amzCombinedReturnPct), accent: amzCombinedReturnPct > 18 ? '#7A1A1A' : undefined },
+  ]
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+      {/* Mobile KPI list */}
+      <div className="mob-only ads-kpi-list" style={{ flexDirection: 'column', gap: 8 }}>
+        {amzMobKpis.map(k => (
+          <SparkKpiCard key={k.label} label={k.label} value={k.value} chg={null} sparkData={k.spark || []} accent={k.accent} />
+        ))}
+      </div>
       {/* ── OVERVIEW (SC + VC combined, filterable by channelView) ── */}
       {(
         <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
@@ -7402,7 +7626,7 @@ function AmazonTab({ data, channelView, setChannelView }) {
             const amzPrevFbaShare = amzPrevSCRev > 0 ? (amzPrevFbaRev / amzPrevSCRev * 100) : 0
             const amzPrevCancelRate = amzPrevOrders > 0 ? (amzPrevCancelledOrders / amzPrevOrders * 100) : 0
             return (
-              <div className="sales-kpi-section" style={{ display: 'grid', gridTemplateColumns: '1.5fr 5fr', gap: 10, alignItems: 'stretch' }}>
+              <div className="sales-kpi-section mob-hidden" style={{ display: 'grid', gridTemplateColumns: '1.5fr 5fr', gap: 10, alignItems: 'stretch' }}>
                 <div className="kpi-card sales-kpi-hero" style={{ display: 'flex', flexDirection: 'column', gap: 8, padding: '16px 18px' }}>
                   <div className="kpi-label" style={{ fontSize: 11 }}>Gross Revenue Inc GST · {channelView === 'all' ? 'SC + VC' : channelView === 'sc' ? 'Seller Central' : 'Vendor Central'}{selectedCat ? ` · ${selectedSubCat || selectedCat}` : ''}</div>
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 6 }}>
@@ -7529,7 +7753,7 @@ function AmazonTab({ data, channelView, setChannelView }) {
             ]
             const statusColors = { Shipped: '#2E74CC', Pending: '#E8930A', Cancelled: '#E24B4A', Shipping: '#9B59B6' }
             return (
-              <div style={{ display: 'grid', gridTemplateColumns: '1.5fr 1fr 0.65fr', gap: 14, alignItems: 'start' }}>
+              <div className="g-3col" style={{ display: 'grid', gridTemplateColumns: '1.5fr 1fr 0.65fr', gap: 14, alignItems: 'start' }}>
                 <Card fill title="Revenue & Returns Trend" style={{ height: 360, alignSelf: 'start' }} note={channelView !== 'all' ? (channelView === 'sc' ? 'Seller Central' : 'Vendor Central') : undefined} action={
                   <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
                     <div style={{ display: 'flex', gap: 4 }}>
@@ -7542,11 +7766,12 @@ function AmazonTab({ data, channelView, setChannelView }) {
                     </select>
                   </div>
                 }>
-                  <ResponsiveContainer width="100%" height="100%" minHeight={240}>
-                    <ComposedChart data={groupedWithRet} margin={{ top: 4, right: 12, bottom: 0, left: 0 }}>
+                  <div style={isMob ? { margin: '0 -18px' } : {}}>
+                  <ResponsiveContainer width="100%" height={isMob ? 240 : 300} minHeight={200}>
+                    <ComposedChart data={groupedWithRet} margin={{ top: 4, right: isMob ? 18 : 12, bottom: 0, left: isMob ? 18 : 0 }}>
                       <CartesianGrid strokeDasharray="3 3" stroke={C.border} vertical={false} />
-                      <XAxis dataKey="date" tick={{ fontSize: 10, fill: C.t3 }} tickFormatter={xFmt} />
-                      <YAxis yAxisId="main" tick={{ fontSize: 10, fill: C.t3 }} tickFormatter={mainFmt} width={58} />
+                      <XAxis dataKey="date" tick={{ fontSize: 10, fill: C.t3 }} tickFormatter={xFmt} interval={isMob ? 0 : 'preserveStartEnd'} ticks={isMob ? (() => { const k = groupedWithRet.map(d => d.date); const n = k.length; if (n <= 4) return k; return [k[0], k[Math.floor(n/3)], k[Math.floor(2*n/3)], k[n-1]] })() : undefined} />
+                      <YAxis yAxisId="main" hide={isMob} tick={{ fontSize: 10, fill: C.t3 }} tickFormatter={mainFmt} width={isMob ? 0 : 58} />
                       <Tooltip content={({ active, payload, label }) => active && payload?.length ? (
                         <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 7, padding: '7px 11px', fontSize: 11 }}>
                           <div style={{ fontWeight: 700, marginBottom: 4, color: C.t2 }}>{xFmt(label)}</div>
@@ -7558,13 +7783,23 @@ function AmazonTab({ data, channelView, setChannelView }) {
                           ))}
                         </div>
                       ) : null} />
-                      <Legend wrapperStyle={{ fontSize: 10 }} formatter={v => <span style={{ color: '#111' }}>{v}</span>} />
+                      {!isMob && <Legend verticalAlign="bottom" align="center" layout="horizontal" wrapperStyle={{ fontSize: 10, paddingTop: 8 }} formatter={v => <span style={{ color: '#111' }}>{v}</span>} />}
                       <Area yAxisId="main" type="monotone" dataKey={dk.total} name={dk.totalName} stroke="#FFD600" fill="#FFD60022" strokeWidth={2} dot={false} />
                       {isRev && <Area yAxisId="main" type="monotone" dataKey={dk.sub} name={dk.subName} stroke="#0D9E68" fill="#0D9E6811" strokeWidth={2} dot={false} strokeDasharray="4 2" />}
                       {channelView === 'all' && <Line yAxisId="main" type="monotone" dataKey={dk.a} name={dk.aName} stroke="#E8930A" strokeWidth={1.5} dot={false} />}
                       {channelView === 'all' && <Line yAxisId="main" type="monotone" dataKey={dk.b} name={dk.bName} stroke="#2E74CC" strokeWidth={1.5} dot={false} strokeDasharray="3 2" />}
                     </ComposedChart>
                   </ResponsiveContainer>
+                  </div>
+                  {isMob && (
+                    <div style={{ display:'flex', flexWrap:'wrap', justifyContent:'center', gap:'6px 12px', marginTop: 8 }}>
+                      {[{name: dk.totalName, color:'#FFD600'}, ...(isRev ? [{name: dk.subName, color:'#0D9E68'}] : []), ...(channelView==='all' ? [{name:dk.aName,color:'#E8930A'},{name:dk.bName,color:'#2E74CC'}] : [])].map(it => (
+                        <span key={it.name} style={{ display:'flex', alignItems:'center', gap: 4, fontSize: 11, color: '#111' }}>
+                          <span style={{ width:8, height:8, borderRadius:'50%', background: it.color, display:'inline-block', flexShrink:0 }} />{it.name}
+                        </span>
+                      ))}
+                    </div>
+                  )}
                 </Card>
                 {(() => {
                   const catRows = Array.from(new Set([...Object.keys(amzSC.catChannel || {}), ...Object.keys(amzVCMatrix.catData || {})])).map(cat => {
@@ -7690,6 +7925,7 @@ function AmazonTab({ data, channelView, setChannelView }) {
 }
 
 function FlipkartTab({ data }) {
+  const isMob = useIsMobile()
   const [fkTrendGroup, setFkTrendGroup] = useState('daily')
   const [fkTrendMetric, setFkTrendMetric] = useState('rev')
   const [selectedCat, setSelectedCat] = useState(null)
@@ -7772,10 +8008,32 @@ function FlipkartTab({ data }) {
   // Returns total (combined)
   const totalReturns = (fk.categories || []).reduce((s, x) => s + (x.returns || 0), 0)
 
+  const fkFmtS = v => !v ? '—' : v >= 1e7 ? `₹${(v/1e7).toFixed(2)}Cr` : v >= 1e5 ? `₹${(v/1e5).toFixed(2)}L` : v >= 1e3 ? `₹${(v/1e3).toFixed(2)}K` : `₹${Math.round(v)}`
+  const fkFmtN = v => v >= 1e5 ? `${(v/1e5).toFixed(2)}L` : v >= 1e3 ? `${(v/1e3).toFixed(2)}K` : `${v}`
+  const fkMobKpis = [
+    { label: 'Gross Revenue', value: fkFmtS(rev), spark: dailyArr.map(d => d.rev || 0) },
+    { label: 'Net Revenue', value: fkFmtS(fkNetRev), spark: dailyArr.map(d => (d.rev || 0) * (rev > 0 ? fkNetRev / rev : 0)) },
+    { label: 'GST', value: fkFmtS(rev - excRev), spark: dailyArr.map(d => (d.rev || 0) * (rev > 0 ? (rev - excRev) / rev : 0)) },
+    { label: 'Daily Avg Rev', value: fkFmtS(rev / nDays), spark: dailyArr.map(d => d.rev || 0) },
+    { label: 'Orders', value: fkFmtN(nOrders), spark: dailyArr.map(d => d.orders || 0) },
+    { label: 'Units', value: fkFmtN(qty), spark: dailyArr.map(d => d.units || 0) },
+    { label: 'AOV', value: fkFmtS(aov), spark: dailyArr.map(d => (d.orders || 0) > 0 ? (d.rev || 0) / d.orders : null) },
+    { label: 'ASP', value: fkFmtS(asp), spark: dailyArr.map(d => (d.units || 0) > 0 ? (d.rev || 0) / d.units : null) },
+    { label: 'Delivered %', value: `${fkDeliveredPct.pct.toFixed(1)}%`, spark: dailyArr.map(() => fkDeliveredPct.pct), accent: fkDeliveredPct.pct < 50 ? '#7A1A1A' : undefined },
+    { label: 'Cancellation %', value: `${nOrders > 0 ? (cancelOrders / nOrders * 100).toFixed(1) : 0}%`, spark: dailyArr.map(() => nOrders > 0 ? cancelOrders / nOrders * 100 : 0) },
+    { label: 'Returns %', value: `${fkReturnCur.pct.toFixed(1)}%`, spark: dailyArr.map(d => d.rev > 0 ? (d.returnRev || 0) / d.rev * 100 : null), accent: fkReturnCur.pct > 20 ? '#7A1A1A' : undefined },
+  ]
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+      {/* Mobile KPI list */}
+      <div className="mob-only ads-kpi-list" style={{ flexDirection: 'column', gap: 8 }}>
+        {fkMobKpis.map(k => (
+          <SparkKpiCard key={k.label} label={k.label} value={k.value} chg={null} sparkData={k.spark || []} accent={k.accent} />
+        ))}
+      </div>
       {/* KPI layout: hero + 2 rows of 4 */}
-      <div className="sales-kpi-section" style={{ display: 'grid', gridTemplateColumns: '1.5fr 5fr', gap: 10, alignItems: 'stretch' }}>
+      <div className="sales-kpi-section mob-hidden" style={{ display: 'grid', gridTemplateColumns: '1.5fr 5fr', gap: 10, alignItems: 'stretch' }}>
         <div className="kpi-card sales-kpi-hero" style={{ display: 'flex', flexDirection: 'column', gap: 8, padding: '16px 18px' }}>
           <div className="kpi-label" style={{ fontSize: 11 }}>Gross Revenue Inc GST{selectedCat ? ` · ${selectedSubCat || selectedCat}` : ''}</div>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 6 }}>
@@ -7845,7 +8103,7 @@ function FlipkartTab({ data }) {
         const yFmt = v => isRev ? (v >= 1e5 ? `${(v/1e5).toFixed(1)}L` : fmt(v)) : fmtN(v)
         const btnSt = k => ({ fontSize: 11, fontWeight: 600, padding: '3px 10px', borderRadius: 5, border: `1.5px solid ${fkTrendMetric===k?C.t1:C.border}`, background: fkTrendMetric===k?C.t1:'transparent', color: fkTrendMetric===k?'#fff':C.t2, cursor: 'pointer', fontFamily: 'var(--font)' })
         return (
-          <div style={{ display: 'grid', gridTemplateColumns: '1.5fr 1fr 0.65fr', gap: 14, alignItems: 'start' }}>
+          <div className="g-3col" style={{ display: 'grid', gridTemplateColumns: '1.5fr 1fr 0.65fr', gap: 14, alignItems: 'start' }}>
             <Card fill title="Revenue & Returns Trend" style={{ height: 360, alignSelf: 'start' }} action={
               <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
                 <div style={{ display: 'flex', gap: 4 }}>
@@ -7870,12 +8128,13 @@ function FlipkartTab({ data }) {
                 )}
               </div>
               <div style={{ flex: 1, minHeight: 0 }}>
-              <ResponsiveContainer width="100%" height="100%" minHeight={200}>
-                <ComposedChart data={grouped} margin={{ top: 4, right: 50, bottom: 0, left: 0 }}>
+              <div style={isMob ? { margin: '0 -18px' } : {}}>
+              <ResponsiveContainer width="100%" height={isMob ? 240 : '100%'} minHeight={200}>
+                <ComposedChart data={grouped} margin={{ top: 4, right: isMob ? 18 : 50, bottom: 0, left: isMob ? 18 : 0 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke={C.border} vertical={false} />
-                  <XAxis dataKey="date" tick={{ fontSize: 10, fill: C.t3 }} tickFormatter={xFmt} />
-                  <YAxis yAxisId="main" tick={{ fontSize: 10, fill: C.t3 }} tickFormatter={yFmt} width={60} />
-                  <YAxis yAxisId="pct" orientation="right" tick={{ fontSize: 10, fill: C.t3 }} tickFormatter={v => `${v.toFixed(1)}%`} width={40} />
+                  <XAxis dataKey="date" tick={{ fontSize: 10, fill: C.t3 }} tickFormatter={xFmt} interval={isMob ? 0 : 'preserveStartEnd'} ticks={isMob ? (() => { const k = grouped.map(d => d.date); const n = k.length; if (n <= 4) return k; return [k[0], k[Math.floor(n/3)], k[Math.floor(2*n/3)], k[n-1]] })() : undefined} />
+                  <YAxis yAxisId="main" hide={isMob} tick={{ fontSize: 10, fill: C.t3 }} tickFormatter={yFmt} width={isMob ? 0 : 60} />
+                  <YAxis yAxisId="pct" orientation="right" hide={isMob} tick={{ fontSize: 10, fill: C.t3 }} tickFormatter={v => `${v.toFixed(1)}%`} width={isMob ? 0 : 40} />
                   <Tooltip content={({ active, payload, label }) => {
                     if (!active || !payload?.length) return null
                     const d = payload[0]?.payload
@@ -7895,7 +8154,7 @@ function FlipkartTab({ data }) {
                       </div>
                     )
                   }} />
-                  <Legend wrapperStyle={{ fontSize: 11 }} formatter={v => <span style={{ color: '#111' }}>{v}</span>} />
+                  {!isMob && <Legend verticalAlign="bottom" align="center" layout="horizontal" wrapperStyle={{ fontSize: 11, paddingTop: 8 }} formatter={v => <span style={{ color: '#111' }}>{v}</span>} />}
                   {isRev ? (<>
                     <Area yAxisId="main" type="monotone" dataKey="grossRev" name="Gross Revenue" stroke="#E8930A" fill="#E8930A22" strokeWidth={2} dot={grouped.length <= 3} />
                     <Area yAxisId="main" type="monotone" dataKey="netRev" name="Net Revenue" stroke="#0D9E68" fill="#0D9E6811" strokeWidth={2} dot={grouped.length <= 3} strokeDasharray="4 2" />
@@ -7908,6 +8167,16 @@ function FlipkartTab({ data }) {
                   {fkReturnCur.pct > 0 && <ReferenceLine yAxisId="pct" y={fkReturnCur.pct} stroke="#E24B4A" strokeWidth={1} strokeDasharray="5 3" label={{ value: `Avg ${fkReturnCur.pct.toFixed(1)}%`, position: 'insideTopRight', fontSize: 10, fill: '#E24B4A' }} />}
                 </ComposedChart>
               </ResponsiveContainer>
+              </div>
+              {isMob && (
+                <div style={{ display:'flex', flexWrap:'wrap', justifyContent:'center', gap:'6px 12px', marginTop: 8 }}>
+                  {[...(isRev ? [{name:'Gross Revenue',color:'#E8930A'},{name:'Net Revenue',color:'#0D9E68'}] : [{name: fkTrendMetric==='orders'?'Orders':'Units', color:'#E8930A'}]), {name:'Return %',color:'#E24B4A'}].map(it => (
+                    <span key={it.name} style={{ display:'flex', alignItems:'center', gap: 4, fontSize: 11, color: '#111' }}>
+                      <span style={{ width:8, height:8, borderRadius:'50%', background: it.color, display:'inline-block', flexShrink:0 }} />{it.name}
+                    </span>
+                  ))}
+                </div>
+              )}
               </div>
             </Card>
             {(() => {
@@ -9657,6 +9926,19 @@ function BlinkitTab({ data }) {
   const catRowsForCatSubCat = allCats.map(c => ({ name: c.category, rev: c.rev, units: c.units, orders: 0 }))
   const subCatRowsForCatSubCat = allSubCats.map(x => ({ name: x.subcategory, category: x.category, rev: x.rev, units: x.units, orders: 0 }))
 
+  const blFmtS = v => !v ? '—' : v >= 1e7 ? `₹${(v/1e7).toFixed(2)}Cr` : v >= 1e5 ? `₹${(v/1e5).toFixed(2)}L` : v >= 1e3 ? `₹${(v/1e3).toFixed(2)}K` : `₹${Math.round(v)}`
+  const blFmtN = v => v >= 1e5 ? `${(v/1e5).toFixed(2)}L` : v >= 1e3 ? `${(v/1e3).toFixed(2)}K` : `${v}`
+  const blMobKpis = [
+    { label: 'Gross Revenue', value: blFmtS(rev), spark: daily.map(d => d.rev || 0) },
+    { label: 'Net Revenue', value: blFmtS(excRev), spark: daily.map(d => d.excRev || (d.rev || 0) * (rev > 0 ? excRev / rev : 0)) },
+    { label: 'GST', value: blFmtS(gst), spark: daily.map(d => (d.rev || 0) * (rev > 0 ? gst / rev : 0)) },
+    { label: 'Daily Avg Rev', value: blFmtS(dailyAvg), spark: daily.map(d => d.rev || 0) },
+    { label: 'Orders', value: blFmtN(orders), spark: daily.map(d => d.orders || 0) },
+    { label: 'Units', value: blFmtN(units), spark: daily.map(d => d.units || 0) },
+    { label: 'AOV', value: blFmtS(aov), spark: daily.map(d => (d.orders || 0) > 0 ? (d.rev || 0) / d.orders : null) },
+    { label: 'ASP', value: blFmtS(asp), spark: daily.map(d => (d.units || 0) > 0 ? (d.rev || 0) / d.units : null) },
+  ]
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
       {selectedCat && (
@@ -9666,8 +9948,14 @@ function BlinkitTab({ data }) {
           <button onClick={() => setSelectedCat(null)} style={{ marginLeft: 'auto', fontSize: 11, color: C.acc, background: 'none', border: 'none', cursor: 'pointer', fontWeight: 700 }}>✕ Clear</button>
         </div>
       )}
+      {/* Mobile KPI list */}
+      <div className="mob-only ads-kpi-list" style={{ flexDirection: 'column', gap: 8 }}>
+        {blMobKpis.map(k => (
+          <SparkKpiCard key={k.label} label={k.label} value={k.value} chg={null} sparkData={k.spark || []} accent={k.accent} />
+        ))}
+      </div>
       {/* KPI layout */}
-      <div className="sales-kpi-section" style={{ display: 'grid', gridTemplateColumns: '1.5fr 5fr', gap: 10, alignItems: 'stretch' }}>
+      <div className="sales-kpi-section mob-hidden" style={{ display: 'grid', gridTemplateColumns: '1.5fr 5fr', gap: 10, alignItems: 'stretch' }}>
         <div className="kpi-card sales-kpi-hero" style={{ display: 'flex', flexDirection: 'column', gap: 8, padding: '16px 18px' }}>
           <div className="kpi-label" style={{ fontSize: 11 }}>Gross Revenue Inc GST · MRP</div>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 6 }}>
@@ -9708,7 +9996,7 @@ function BlinkitTab({ data }) {
       </div>
 
       {/* Revenue Trend + Category Revenue + Geography Breakdown side by side */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1.5fr 1fr 0.65fr', gap: 14, alignItems: 'start' }}>
+      <div className="g-3col" style={{ display: 'grid', gridTemplateColumns: '1.5fr 1fr 0.65fr', gap: 14, alignItems: 'start' }}>
         <TrendAnalysisCard title="Revenue & Returns Trend" daily={daily} grossColor="#FFD600" grossGradId="blGrossGrad2" revKey="rev" excRevKey="excRev" boxHeight={360} />
         <CategoryRevenueCard
           catRows={catRowsForCatSubCat}
@@ -9813,6 +10101,18 @@ function InstaTab({ data }) {
   const subCatRowsForCatSubCat = allSubCats.map(x => ({ name: x.subcategory, category: x.category, rev: x.rev, units: x.units, orders: 0 }))
 
   const insChgBadge = (cur, prev) => { if (!prev) return null; const p = (cur - prev) / prev * 100; return <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 4, background: p >= 0 ? C.green.bg : C.red.bg, color: p >= 0 ? C.green.tx : C.red.tx, flexShrink: 0 }}>{p >= 0 ? '▲' : '▼'} {Math.abs(p).toFixed(1)}%</span> }
+  const insFmtS = v => !v ? '—' : v >= 1e7 ? `₹${(v/1e7).toFixed(2)}Cr` : v >= 1e5 ? `₹${(v/1e5).toFixed(2)}L` : v >= 1e3 ? `₹${(v/1e3).toFixed(2)}K` : `₹${Math.round(v)}`
+  const insFmtN = v => v >= 1e5 ? `${(v/1e5).toFixed(2)}L` : v >= 1e3 ? `${(v/1e3).toFixed(2)}K` : `${v}`
+  const insMobKpis = [
+    { label: 'Gross Revenue', value: insFmtS(rev), spark: daily.map(d => d.rev || 0) },
+    { label: 'Net Revenue', value: insFmtS(excRev), spark: daily.map(d => d.excRev || (d.rev || 0) * (rev > 0 ? excRev / rev : 0)) },
+    { label: 'GST', value: insFmtS(gst), spark: daily.map(d => (d.rev || 0) * (rev > 0 ? gst / rev : 0)) },
+    { label: 'Daily Avg Rev', value: insFmtS(dailyAvg), spark: daily.map(d => d.rev || 0) },
+    { label: 'Orders', value: insFmtN(orders), spark: daily.map(d => d.orders || 0) },
+    { label: 'Units', value: insFmtN(units), spark: daily.map(d => d.units || 0) },
+    { label: 'AOV', value: insFmtS(aov), spark: daily.map(d => (d.orders || 0) > 0 ? (d.rev || 0) / d.orders : null) },
+    { label: 'ASP', value: insFmtS(asp), spark: daily.map(d => (d.units || 0) > 0 ? (d.rev || 0) / d.units : null) },
+  ]
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
@@ -9823,7 +10123,12 @@ function InstaTab({ data }) {
           <button onClick={() => setSelectedCat(null)} style={{ marginLeft: 'auto', fontSize: 11, color: C.acc, background: 'none', border: 'none', cursor: 'pointer', fontWeight: 700 }}>✕ Clear</button>
         </div>
       )}
-      <div className="sales-kpi-section" style={{ display: 'grid', gridTemplateColumns: '1.5fr 5fr', gap: 10, alignItems: 'stretch' }}>
+      <div className="mob-only ads-kpi-list" style={{ flexDirection: 'column', gap: 8 }}>
+        {insMobKpis.map(k => (
+          <SparkKpiCard key={k.label} label={k.label} value={k.value} chg={null} sparkData={k.spark || []} accent={k.accent} />
+        ))}
+      </div>
+      <div className="sales-kpi-section mob-hidden" style={{ display: 'grid', gridTemplateColumns: '1.5fr 5fr', gap: 10, alignItems: 'stretch' }}>
         <div className="kpi-card sales-kpi-hero" style={{ display: 'flex', flexDirection: 'column', gap: 8, padding: '16px 18px' }}>
           <div className="kpi-label" style={{ fontSize: 11 }}>Gross Revenue Inc GST</div>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 6 }}>
@@ -9864,7 +10169,7 @@ function InstaTab({ data }) {
       </div>
 
       {/* Revenue Trend + Category Revenue + Geography Breakdown side by side */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1.5fr 1fr 0.65fr', gap: 14, alignItems: 'start' }}>
+      <div className="g-3col" style={{ display: 'grid', gridTemplateColumns: '1.5fr 1fr 0.65fr', gap: 14, alignItems: 'start' }}>
         <TrendAnalysisCard title="Revenue & Returns Trend" daily={daily} grossColor="#FF6B35" grossGradId="inGrossGrad2" revKey="rev" excRevKey="excRev" boxHeight={360} />
         <CategoryRevenueCard
           catRows={catRowsForCatSubCat}
@@ -9967,6 +10272,18 @@ function ZeptoTab({ data }) {
   const subCatRowsForCatSubCat = allSubCats.map(x => ({ name: x.subcategory, category: x.category, rev: x.rev, units: x.units, orders: 0 }))
 
   const zpChgBadge = (cur, prev) => { if (!prev) return null; const p = (cur - prev) / prev * 100; return <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 4, background: p >= 0 ? C.green.bg : C.red.bg, color: p >= 0 ? C.green.tx : C.red.tx, flexShrink: 0 }}>{p >= 0 ? '▲' : '▼'} {Math.abs(p).toFixed(1)}%</span> }
+  const zpFmtS = v => !v ? '—' : v >= 1e7 ? `₹${(v/1e7).toFixed(2)}Cr` : v >= 1e5 ? `₹${(v/1e5).toFixed(2)}L` : v >= 1e3 ? `₹${(v/1e3).toFixed(2)}K` : `₹${Math.round(v)}`
+  const zpFmtN = v => v >= 1e5 ? `${(v/1e5).toFixed(2)}L` : v >= 1e3 ? `${(v/1e3).toFixed(2)}K` : `${v}`
+  const zpMobKpis = [
+    { label: 'Gross Revenue', value: zpFmtS(rev), spark: daily.map(d => d.rev || 0) },
+    { label: 'Net Revenue', value: zpFmtS(excRev), spark: daily.map(d => d.excRev || (d.rev || 0) * (rev > 0 ? excRev / rev : 0)) },
+    { label: 'GST', value: zpFmtS(gst), spark: daily.map(d => (d.rev || 0) * (rev > 0 ? gst / rev : 0)) },
+    { label: 'Daily Avg Rev', value: zpFmtS(dailyAvg), spark: daily.map(d => d.rev || 0) },
+    { label: 'Orders', value: zpFmtN(orders), spark: daily.map(d => d.orders || 0) },
+    { label: 'Units', value: zpFmtN(units), spark: daily.map(d => d.units || 0) },
+    { label: 'AOV', value: zpFmtS(aov), spark: daily.map(d => (d.orders || 0) > 0 ? (d.rev || 0) / d.orders : null) },
+    { label: 'ASP', value: zpFmtS(asp), spark: daily.map(d => (d.units || 0) > 0 ? (d.rev || 0) / d.units : null) },
+  ]
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
@@ -9977,7 +10294,12 @@ function ZeptoTab({ data }) {
           <button onClick={() => setSelectedCat(null)} style={{ marginLeft: 'auto', fontSize: 11, color: C.acc, background: 'none', border: 'none', cursor: 'pointer', fontWeight: 700 }}>✕ Clear</button>
         </div>
       )}
-      <div className="sales-kpi-section" style={{ display: 'grid', gridTemplateColumns: '1.5fr 5fr', gap: 10, alignItems: 'stretch' }}>
+      <div className="mob-only ads-kpi-list" style={{ flexDirection: 'column', gap: 8 }}>
+        {zpMobKpis.map(k => (
+          <SparkKpiCard key={k.label} label={k.label} value={k.value} chg={null} sparkData={k.spark || []} accent={k.accent} />
+        ))}
+      </div>
+      <div className="sales-kpi-section mob-hidden" style={{ display: 'grid', gridTemplateColumns: '1.5fr 5fr', gap: 10, alignItems: 'stretch' }}>
         <div className="kpi-card sales-kpi-hero" style={{ display: 'flex', flexDirection: 'column', gap: 8, padding: '16px 18px' }}>
           <div className="kpi-label" style={{ fontSize: 11 }}>Gross Revenue Inc GST</div>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 6 }}>
@@ -10018,7 +10340,7 @@ function ZeptoTab({ data }) {
       </div>
 
       {/* Revenue Trend + Category Revenue + Geography Breakdown side by side */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1.5fr 1fr 0.65fr', gap: 14, alignItems: 'start' }}>
+      <div className="g-3col" style={{ display: 'grid', gridTemplateColumns: '1.5fr 1fr 0.65fr', gap: 14, alignItems: 'start' }}>
         <TrendAnalysisCard title="Revenue & Returns Trend" daily={daily} grossColor="#8B5CF6" grossGradId="zpGrossGrad2" revKey="rev" excRevKey="excRev" boxHeight={360} />
         <CategoryRevenueCard
           catRows={catRowsForCatSubCat}
@@ -10149,10 +10471,31 @@ function CredTab({ data }) {
     i, cur: daily[i]?.rev ?? null, prev: crPrevDailyArr[i]?.rev ?? null
   }))
 
+  const crFmtS = v => !v ? '—' : v >= 1e7 ? `₹${(v/1e7).toFixed(2)}Cr` : v >= 1e5 ? `₹${(v/1e5).toFixed(2)}L` : v >= 1e3 ? `₹${(v/1e3).toFixed(2)}K` : `₹${Math.round(v)}`
+  const crFmtN = v => v >= 1e5 ? `${(v/1e5).toFixed(2)}L` : v >= 1e3 ? `${(v/1e3).toFixed(2)}K` : `${v}`
+  const crMobKpis = [
+    { label: 'Gross Revenue', value: crFmtS(rev), spark: daily.map(d => d.rev || 0) },
+    { label: 'Net Revenue', value: crFmtS(netRev), spark: daily.map(d => (d.rev || 0) * (rev > 0 ? netRev / rev : 0)) },
+    { label: 'GST', value: crFmtS(gstCollected), spark: daily.map(d => (d.rev || 0) * (rev > 0 ? gstCollected / rev : 0)) },
+    { label: 'Daily Avg Rev', value: crFmtS(dailyAvg), spark: daily.map(d => d.rev || 0) },
+    { label: 'Orders', value: crFmtN(orders), spark: daily.map(d => d.orders || 0) },
+    { label: 'Units', value: crFmtN(units), spark: daily.map(d => d.units || 0) },
+    { label: 'AOV', value: crFmtS(orders ? rev / orders : 0), spark: daily.map(d => (d.orders || 0) > 0 ? (d.rev || 0) / d.orders : null) },
+    { label: 'ASP', value: crFmtS(asp), spark: daily.map(d => (d.units || 0) > 0 ? (d.rev || 0) / d.units : null) },
+    { label: 'Cancellation %', value: `${cancelPct.toFixed(1)}%`, spark: [] },
+    { label: 'Returns %', value: `${returnPct.toFixed(1)}%`, spark: [], accent: returnPct > 20 ? '#7A1A1A' : undefined },
+  ]
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+      {/* Mobile KPI list */}
+      <div className="mob-only ads-kpi-list" style={{ flexDirection: 'column', gap: 8 }}>
+        {crMobKpis.map(k => (
+          <SparkKpiCard key={k.label} label={k.label} value={k.value} chg={null} sparkData={k.spark || []} accent={k.accent} />
+        ))}
+      </div>
       {/* Hero + KPI grid */}
-      <div className="sales-kpi-section" style={{ display: 'grid', gridTemplateColumns: '1.5fr 5fr', gap: 10, alignItems: 'stretch' }}>
+      <div className="sales-kpi-section mob-hidden" style={{ display: 'grid', gridTemplateColumns: '1.5fr 5fr', gap: 10, alignItems: 'stretch' }}>
         <div className="kpi-card sales-kpi-hero" style={{ display: 'flex', flexDirection: 'column', gap: 8, padding: '16px 18px' }}>
           <div className="kpi-label" style={{ fontSize: 11 }}>Gross Revenue Inc GST</div>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 6 }}>
@@ -10219,7 +10562,7 @@ function CredTab({ data }) {
         const yFmt = v => isRev ? (v >= 1e5 ? `${(v/1e5).toFixed(1)}L` : fmt(v)) : fmtN(v)
         const btnSt = k => ({ fontSize: 11, fontWeight: 600, padding: '3px 10px', borderRadius: 5, border: `1.5px solid ${crTrendMetric===k?C.t1:C.border}`, background: crTrendMetric===k?C.t1:'transparent', color: crTrendMetric===k?'#fff':C.t2, cursor: 'pointer', fontFamily: 'var(--font)' })
         return (
-          <div style={{ display: 'grid', gridTemplateColumns: '1.5fr 1fr 0.65fr', gap: 14, alignItems: 'start' }}>
+          <div className="g-3col" style={{ display: 'grid', gridTemplateColumns: '1.5fr 1fr 0.65fr', gap: 14, alignItems: 'start' }}>
             <Card fill title="Revenue & Returns Trend" style={{ height: 360, alignSelf: 'start' }} action={
               <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
                 <div style={{ display: 'flex', gap: 4 }}>
@@ -10363,9 +10706,29 @@ function FirstcryTab({ data }) {
     i, cur: daily[i]?.rev ?? null, prev: fcPrevDailyArr[i]?.rev ?? null
   }))
 
+  const fcFmtS = v => !v ? '—' : v >= 1e7 ? `₹${(v/1e7).toFixed(2)}Cr` : v >= 1e5 ? `₹${(v/1e5).toFixed(2)}L` : v >= 1e3 ? `₹${(v/1e3).toFixed(2)}K` : `₹${Math.round(v)}`
+  const fcFmtN = v => v >= 1e5 ? `${(v/1e5).toFixed(2)}L` : v >= 1e3 ? `${(v/1e3).toFixed(2)}K` : `${v}`
+  const fcMobKpis = [
+    { label: 'Gross Revenue', value: fcFmtS(rev), spark: daily.map(d => d.rev || 0) },
+    { label: 'Net Revenue', value: fcFmtS(netRev), spark: daily.map(d => (d.rev || 0) * (rev > 0 ? netRev / rev : 0)) },
+    { label: 'GST', value: fcFmtS(gstCollected), spark: daily.map(d => (d.rev || 0) * (rev > 0 ? gstCollected / rev : 0)) },
+    { label: 'Daily Avg Rev', value: fcFmtS(dailyAvg), spark: daily.map(d => d.rev || 0) },
+    { label: 'Orders', value: fcFmtN(orders), spark: daily.map(d => d.orders || 0) },
+    { label: 'Units', value: fcFmtN(units), spark: daily.map(d => d.units || 0) },
+    { label: 'AOV', value: fcFmtS(orders ? rev / orders : 0), spark: daily.map(d => (d.orders || 0) > 0 ? (d.rev || 0) / d.orders : null) },
+    { label: 'ASP', value: fcFmtS(asp), spark: daily.map(d => (d.units || 0) > 0 ? (d.rev || 0) / d.units : null) },
+    { label: 'Cancellation %', value: `${cancelPct.toFixed(1)}%`, spark: [] },
+    { label: 'Returns %', value: `${returnPct.toFixed(1)}%`, spark: [], accent: returnPct > 20 ? '#7A1A1A' : undefined },
+  ]
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-      <div className="sales-kpi-section" style={{ display: 'grid', gridTemplateColumns: '1.5fr 5fr', gap: 10, alignItems: 'stretch' }}>
+      <div className="mob-only ads-kpi-list" style={{ flexDirection: 'column', gap: 8 }}>
+        {fcMobKpis.map(k => (
+          <SparkKpiCard key={k.label} label={k.label} value={k.value} chg={null} sparkData={k.spark || []} accent={k.accent} />
+        ))}
+      </div>
+      <div className="sales-kpi-section mob-hidden" style={{ display: 'grid', gridTemplateColumns: '1.5fr 5fr', gap: 10, alignItems: 'stretch' }}>
         <div className="kpi-card sales-kpi-hero" style={{ display: 'flex', flexDirection: 'column', gap: 8, padding: '16px 18px' }}>
           <div className="kpi-label" style={{ fontSize: 11 }}>Gross Revenue Inc GST</div>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 6 }}>
@@ -10427,7 +10790,7 @@ function FirstcryTab({ data }) {
         const yFmt = v => isRev ? (v >= 1e5 ? `${(v/1e5).toFixed(1)}L` : fmt(v)) : fmtN(v)
         const btnSt = k => ({ fontSize: 11, fontWeight: 600, padding: '3px 10px', borderRadius: 5, border: `1.5px solid ${fcTrendMetric===k?C.t1:C.border}`, background: fcTrendMetric===k?C.t1:'transparent', color: fcTrendMetric===k?'#fff':C.t2, cursor: 'pointer', fontFamily: 'var(--font)' })
         return (
-          <div style={{ display: 'grid', gridTemplateColumns: '1.5fr 1fr 0.65fr', gap: 14, alignItems: 'start' }}>
+          <div className="g-3col" style={{ display: 'grid', gridTemplateColumns: '1.5fr 1fr 0.65fr', gap: 14, alignItems: 'start' }}>
             <Card fill title="Revenue & Returns Trend" style={{ height: 360, alignSelf: 'start' }} action={
               <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
                 <div style={{ display: 'flex', gap: 4 }}>
@@ -10565,11 +10928,33 @@ function MyntraTab({ data }) {
   const [mnTrendGroup, setMnTrendGroup] = useState('daily')
   const [mnTrendMetric, setMnTrendMetric] = useState('rev')
 
+  const mnFmtS = v => !v ? '—' : v >= 1e7 ? `₹${(v/1e7).toFixed(2)}Cr` : v >= 1e5 ? `₹${(v/1e5).toFixed(2)}L` : v >= 1e3 ? `₹${(v/1e3).toFixed(2)}K` : `₹${Math.round(v)}`
+  const mnFmtN = v => v >= 1e5 ? `${(v/1e5).toFixed(2)}L` : v >= 1e3 ? `${(v/1e3).toFixed(2)}K` : `${v}`
+  const mnMobKpis = [
+    { label: 'Gross Revenue', value: mnFmtS(rev), spark: dailyArr.map(d => d.rev || 0) },
+    { label: 'Net Revenue', value: mnFmtS(netRev), spark: dailyArr.map(d => (d.rev || 0) * (rev > 0 ? netRev / rev : 0)) },
+    { label: 'GST', value: mnFmtS(gstCollected), spark: dailyArr.map(d => (d.rev || 0) * (rev > 0 ? gstCollected / rev : 0)) },
+    { label: 'Daily Avg Rev', value: mnFmtS(rev / nDays), spark: dailyArr.map(d => d.rev || 0) },
+    { label: 'Orders', value: mnFmtN(nOrders), spark: dailyArr.map(d => d.orders || 0) },
+    { label: 'Units', value: mnFmtN(qty), spark: dailyArr.map(d => d.units || 0) },
+    { label: 'AOV', value: mnFmtS(nOrders > 0 ? rev / nOrders : 0), spark: dailyArr.map(d => (d.orders || 0) > 0 ? (d.rev || 0) / d.orders : null) },
+    { label: 'ASP', value: mnFmtS(asp), spark: dailyArr.map(d => (d.units || 0) > 0 ? (d.rev || 0) / d.units : null) },
+    { label: 'Active Products', value: String(totals.skus || 0), spark: dailyArr.map(() => totals.skus || 0) },
+    { label: 'Cancellation %', value: `${cancelPct.toFixed(1)}%`, spark: [] },
+    { label: 'Returns %', value: `${mnReturnPct.toFixed(1)}%`, spark: [], accent: mnReturnPct > 15 ? '#7A1A1A' : undefined },
+  ]
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+      {/* Mobile KPI list */}
+      <div className="mob-only ads-kpi-list" style={{ flexDirection: 'column', gap: 8 }}>
+        {mnMobKpis.map(k => (
+          <SparkKpiCard key={k.label} label={k.label} value={k.value} chg={null} sparkData={k.spark || []} accent={k.accent} />
+        ))}
+      </div>
 
       {/* KPI Hero + grid */}
-      <div className="sales-kpi-section" style={{ display: 'grid', gridTemplateColumns: '1.5fr 5fr', gap: 10, alignItems: 'stretch' }}>
+      <div className="sales-kpi-section mob-hidden" style={{ display: 'grid', gridTemplateColumns: '1.5fr 5fr', gap: 10, alignItems: 'stretch' }}>
         <div className="kpi-card sales-kpi-hero" style={{ display: 'flex', flexDirection: 'column', gap: 8, padding: '16px 18px' }}>
           <div className="kpi-label" style={{ fontSize: 11 }}>Gross Revenue Inc GST</div>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 6 }}>
@@ -10631,7 +11016,7 @@ function MyntraTab({ data }) {
         const yFmt = v => isRev ? (v >= 1e5 ? `${(v/1e5).toFixed(1)}L` : fmt(v)) : fmtN(v)
         const btnSt = k => ({ fontSize: 11, fontWeight: 600, padding: '3px 10px', borderRadius: 5, border: `1.5px solid ${mnTrendMetric===k?C.t1:C.border}`, background: mnTrendMetric===k?C.t1:'transparent', color: mnTrendMetric===k?'#fff':C.t2, cursor: 'pointer', fontFamily: 'var(--font)' })
         return (
-          <div style={{ display: 'grid', gridTemplateColumns: '1.5fr 1fr 0.65fr', gap: 14, alignItems: 'start' }}>
+          <div className="g-3col" style={{ display: 'grid', gridTemplateColumns: '1.5fr 1fr 0.65fr', gap: 14, alignItems: 'start' }}>
             <Card fill title="Revenue & Returns Trend" style={{ height: 360, alignSelf: 'start' }} action={
               <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
                 <div style={{ display: 'flex', gap: 4 }}>
@@ -10905,10 +11290,31 @@ function OfflineTab({ data, sub, setSub }) {
   const [offTrendGroup, setOffTrendGroup] = useState('daily')
   const [offTrendMetric, setOffTrendMetric] = useState('rev')
 
+  const offFmtS = v => !v ? '—' : v >= 1e7 ? `₹${(v/1e7).toFixed(2)}Cr` : v >= 1e5 ? `₹${(v/1e5).toFixed(2)}L` : v >= 1e3 ? `₹${(v/1e3).toFixed(2)}K` : `₹${Math.round(v)}`
+  const offFmtN = v => v >= 1e5 ? `${(v/1e5).toFixed(2)}L` : v >= 1e3 ? `${(v/1e3).toFixed(2)}K` : `${v}`
+  const offMobKpis = [
+    { label: 'Gross Revenue', value: offFmtS(grossRev), spark: dailyArr.map(d => d.rev || 0) },
+    { label: 'Net Revenue', value: offFmtS(netRev), spark: dailyArr.map(d => d.net || 0) },
+    { label: 'GST', value: offFmtS(gstCollected), spark: dailyArr.map(d => (d.rev || 0) * (grossRev > 0 ? gstCollected / grossRev : 0)) },
+    { label: 'Daily Avg Rev', value: offFmtS(grossRev / Math.max(nDays, 1)), spark: dailyArr.map(d => d.rev || 0) },
+    { label: 'Orders', value: offFmtN(nOrders), spark: dailyArr.map(d => d.orders || 0) },
+    { label: 'Units', value: offFmtN(qty), spark: dailyArr.map(d => d.units || 0) },
+    { label: 'AOV', value: offFmtS(nOrders > 0 ? grossRev / nOrders : 0), spark: dailyArr.map(d => (d.orders || 0) > 0 ? (d.rev || 0) / d.orders : null) },
+    { label: 'ASP', value: offFmtS(asp), spark: dailyArr.map(d => (d.units || 0) > 0 ? (d.rev || 0) / d.units : null) },
+    { label: 'Units / Order', value: nOrders ? Math.round(qty / nOrders).toString() : '0', spark: dailyArr.map(d => (d.orders || 0) > 0 ? (d.units || 0) / d.orders : null) },
+    { label: 'Credit Notes %', value: `${cnPct.toFixed(1)}%`, spark: dailyArr.map(() => cnPct), accent: cnPct > 10 ? '#7A1A1A' : undefined },
+  ]
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+      {/* Mobile KPI list */}
+      <div className="mob-only ads-kpi-list" style={{ flexDirection: 'column', gap: 8 }}>
+        {offMobKpis.map(k => (
+          <SparkKpiCard key={k.label} label={k.label} value={k.value} chg={null} sparkData={k.spark || []} accent={k.accent} />
+        ))}
+      </div>
       {/* KPI Hero + grid */}
-      <div className="sales-kpi-section" style={{ display: 'grid', gridTemplateColumns: '1.5fr 5fr', gap: 10, alignItems: 'stretch' }}>
+      <div className="sales-kpi-section mob-hidden" style={{ display: 'grid', gridTemplateColumns: '1.5fr 5fr', gap: 10, alignItems: 'stretch' }}>
         <div className="kpi-card sales-kpi-hero" style={{ display: 'flex', flexDirection: 'column', gap: 8, padding: '16px 18px' }}>
           <div className="kpi-label" style={{ fontSize: 11 }}>Gross Revenue Inc GST{subLabel}</div>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 6 }}>
@@ -10971,7 +11377,7 @@ function OfflineTab({ data, sub, setSub }) {
         const yFmt = v => isRev ? (v >= 1e5 ? `${(v/1e5).toFixed(1)}L` : fmt(v)) : fmtN(v)
         const btnSt = k => ({ fontSize: 11, fontWeight: 600, padding: '3px 10px', borderRadius: 5, border: `1.5px solid ${offTrendMetric===k?C.t1:C.border}`, background: offTrendMetric===k?C.t1:'transparent', color: offTrendMetric===k?'#fff':C.t2, cursor: 'pointer', fontFamily: 'var(--font)' })
         return (
-          <div style={{ display: 'grid', gridTemplateColumns: '1.5fr 1fr 0.65fr', gap: 14, alignItems: 'start' }}>
+          <div className="g-3col" style={{ display: 'grid', gridTemplateColumns: '1.5fr 1fr 0.65fr', gap: 14, alignItems: 'start' }}>
             <Card fill title="Revenue & Returns Trend" style={{ height: 360, alignSelf: 'start' }} note={sub !== 'all' ? SUB_OPTIONS.find(o => o.id === sub)?.label : undefined} action={
               <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
                 <div style={{ display: 'flex', gap: 4 }}>

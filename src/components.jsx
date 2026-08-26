@@ -54,7 +54,7 @@ export function HBar({ dot, label, width, value, pctVal, onClick, isSelected, la
       <span style={{ width: 8, height: 8, borderRadius: '50%', background: dot, flexShrink: 0 }} />
       <span title={label} style={{ fontSize: 12, color: C.t2, flexShrink: 0, width: labelWidth, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{label}</span>
       <div className="hb-track" style={{ flex: 1 }}><div className="hb-fill" style={{ width: `${width}%`, background: '#FFD600' }} /></div>
-      <span style={{ fontSize: 12, fontWeight: 700, color: C.t1, fontFamily: 'var(--mono)', flexShrink: 0, minWidth: 62, textAlign: 'right' }}>{value}</span>
+      <span className="hb-value" style={{ fontSize: 12, fontWeight: 700, color: C.t1, fontFamily: 'var(--mono)', flexShrink: 0, minWidth: 62, textAlign: 'right' }}>{value}</span>
       <span style={{ fontSize: 11, color: C.t3, flexShrink: 0, width: 36, textAlign: 'right' }}>{pctVal}</span>
     </div>
   )
@@ -67,7 +67,7 @@ const DOTS = ['#534AB7','#0D9E68','#2E74CC','#CC8A00','#CC4078','#E24B4A','#9B59
 // catRows: [{name, rev}]; subCatRows: [{name, category, rev}]; skuMap: {category: {subCategory: {sku: {rev}}}}.
 // view/setView: lift the toggle state up so it can be reset (e.g. on category click) if needed.
 export function CategoryRevenueCard({ catRows, subCatRows, skuMap, totalRev, view, setView, onSelectCategory, onSelectSubCategory, onSelectSku, selectedName, height = 242, maxSkuRows = 100 }) {
-  const labelWidthFor = names => Math.min(260, Math.max(110, Math.max(...names.map(n => n.length), 0) * 6.5 + 8))
+  const labelWidthFor = names => window.innerWidth <= 768 ? 150 : Math.min(260, Math.max(132, Math.max(...names.map(n => n.length), 0) * 7.8 + 8))
 
   let rows, maxRev, labelWidth, onClick
   if (view === 'category') {
@@ -97,8 +97,8 @@ export function CategoryRevenueCard({ catRows, subCatRows, skuMap, totalRev, vie
   return (
     <Card fill title="Category Revenue" style={{ height, alignSelf: 'start' }} action={
       <div style={{ display: 'flex', gap: 4 }}>
-        {[{ id: 'category', label: 'Category' }, { id: 'subcategory', label: 'Product' }, { id: 'sku', label: 'SKU Code' }].map(v => (
-          <button key={v.id} onClick={() => setView(v.id)} style={{ fontSize: 11, fontWeight: 600, padding: '3px 10px', borderRadius: 5, border: `1.5px solid ${view === v.id ? C.t1 : C.border}`, background: view === v.id ? C.t1 : 'transparent', color: view === v.id ? '#fff' : C.t2, cursor: 'pointer', fontFamily: 'var(--font)' }}>{v.label}</button>
+        {[{ id: 'category', label: 'Category' }, { id: 'subcategory', label: 'Product' }, ...(window.innerWidth > 768 ? [{ id: 'sku', label: 'SKU Code' }] : [])].map(v => (
+          <button key={v.id} onClick={() => setView(v.id)} className="cat-rev-btn" style={{ fontSize: 11, fontWeight: 600, padding: '3px 10px', borderRadius: 5, border: `1.5px solid ${view === v.id ? C.acm : C.border}`, background: view === v.id ? C.acc : 'transparent', color: view === v.id ? C.t1 : C.t2, cursor: 'pointer', fontFamily: 'var(--font)' }}>{v.label}</button>
         ))}
       </div>
     }>
