@@ -1010,6 +1010,7 @@ export default async function handler(req, res) {
     eboRTO: `WITH q AS (${base}) SELECT SUM(SellingPrice_Inc_GST) AS rto_rev, SUM(SellingPrice_Exc_GST) AS rto_exc_rev, COUNT(DISTINCT OrderId) AS rto_orders FROM q WHERE Channel='Retail' AND Order_Status = 'RTO'`,
     eboDailyReturnTrend: `WITH q AS (${base}) SELECT CAST(OrderDate AS STRING) AS date, COUNT(DISTINCT OrderId) AS total_orders, COUNT(DISTINCT CASE WHEN Order_Status='RTO' THEN OrderId END) AS rto_orders, COUNT(DISTINCT CASE WHEN Order_Status='Return' THEN OrderId END) AS return_orders, COUNT(DISTINCT CASE WHEN Order_Status='Exchange' THEN OrderId END) AS exch_orders, COUNT(DISTINCT CASE WHEN Order_Status='CIR' THEN OrderId END) AS cir_orders, COUNT(DISTINCT CASE WHEN Order_Status='Cancelled' THEN OrderId END) AS cancel_orders FROM q WHERE Channel='Retail' GROUP BY date ORDER BY date`,
     pnlAdRawTotals: `SELECT platform, ROUND(SUM(spend),2) AS spend FROM \`frido-429506.production.fact_all_platform_ads_report\` WHERE report_date BETWEEN '${start}' AND '${end}' AND platform IN ('Meta','Google') GROUP BY platform`,
+    subCatFirstOrder: `SELECT im.Sub_category AS subCategory, CAST(MIN(u.OrderDate) AS STRING) AS firstOrderDate FROM \`frido-429506.production.fact_all_platform_sales_report\` u LEFT JOIN \`frido-429506.sharepoint_to_gcp.Frido_Item_Master__frido_item_sku_master\` im ON REGEXP_REPLACE(UPPER(TRIM(u.masterskucode)), r'[^A-Z0-9-]', '') = REGEXP_REPLACE(UPPER(TRIM(im.Product_Code)), r'[^A-Z0-9-]', '') WHERE im.Sub_category IS NOT NULL GROUP BY im.Sub_category`,
   }
 
   try {
@@ -3119,6 +3120,13 @@ export default async function handler(req, res) {
         if (addlTotal > 0) payload.pnlRawAdSpend = (payload.pnlRawAdSpend || 0) + addlTotal
       }
     } catch (e) { console.error('[pnlAdSpendMerge]', e.message) }
+
+    // Sub-category first order date map — used by frontend to tag newly launched products
+    const subCatFirstOrderMap = {}
+    ;(r.subCatFirstOrder || []).forEach(x => {
+      if (x.subCategory && x.firstOrderDate) subCatFirstOrderMap[x.subCategory] = x.firstOrderDate
+    })
+    payload.subCatFirstOrderMap = subCatFirstOrderMap
 
     setInCache(cacheKey, payload)
     res.setHeader('X-Cache', 'MISS')

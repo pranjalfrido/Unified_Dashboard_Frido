@@ -2824,7 +2824,7 @@ function MobileSalesFilterPanel({ activeTab, setActiveTab, filters, setFilters, 
     setActiveTab(id)
     setChannelView('all')
     setOfflineSub('all')
-    setFilters(f => ({ ...f, subChannel: '', voucher: '', channelGroup: [], category: [], subCategory: [], sku: [], paymentType: '' }))
+    setFilters(f => ({ ...f, subChannel: '', voucher: '', channelGroup: [], category: [], subCategory: [], sku: [], paymentType: '', productAge: '' }))
     setExpandedKey(null)
   }
 
@@ -2839,12 +2839,21 @@ function MobileSalesFilterPanel({ activeTab, setActiveTab, filters, setFilters, 
       selected: filters.paymentType ? filters.paymentType.split(',').filter(Boolean) : [],
       onChange: v => setFilters(f => ({ ...f, paymentType: v.join(',') })),
     }] : []),
+    {
+      key: 'productAge', label: 'Product Launch', radio: true,
+      options: [{ id: 'new', label: 'Newly Launched (≤90 days)' }, { id: 'established', label: 'Established (>90 days)' }],
+      selected: filters.productAge || '',
+      onChange: v => setFilters(f => ({ ...f, productAge: v, subCategory: [] })),
+    },
   ]
 
-  const totalActive = filterSlicers.reduce((sum, s) => sum + (Array.isArray(s.selected) ? s.selected.length : 0), 0)
+  const totalActive = filterSlicers.reduce((sum, s) => {
+    if (s.radio) return sum + (s.selected ? 1 : 0)
+    return sum + (Array.isArray(s.selected) ? s.selected.length : 0)
+  }, 0)
 
   const handleClearAll = () => {
-    setFilters(f => ({ ...f, category: [], subCategory: [], sku: [], paymentType: '', voucher: '' }))
+    setFilters(f => ({ ...f, category: [], subCategory: [], sku: [], paymentType: '', voucher: '', productAge: '' }))
     setExpandedKey(null)
   }
 
@@ -2954,40 +2963,60 @@ function MobileSalesFilterPanel({ activeTab, setActiveTab, filters, setFilters, 
         <div style={{ borderTop: `1px solid ${PV.border}` }}>
           {filterSlicers.map((slicer, si) => {
             const isExpanded = expandedKey === slicer.key
-            const selCount = Array.isArray(slicer.selected) ? slicer.selected.length : 0
             const isLast = si === filterSlicers.length - 1
+            const isRadio = slicer.radio
+            const selCount = isRadio ? (slicer.selected ? 1 : 0) : (Array.isArray(slicer.selected) ? slicer.selected.length : 0)
+            const selLabel = isRadio && slicer.selected ? slicer.options.find(o => o.id === slicer.selected)?.label : null
             return (
               <div key={slicer.key} style={{ borderBottom: isLast ? 'none' : `1px solid ${PV.border}` }}>
                 <div onClick={() => toggleExpand(slicer.key)}
                   style={{ display: 'flex', alignItems: 'center', padding: '12px 16px', cursor: 'pointer', gap: 8, userSelect: 'none' }}>
                   <span style={{ flex: 1, fontSize: 13, fontWeight: 500, color: PV.ink }}>{slicer.label}</span>
-                  {selCount > 0 && (
+                  {selCount > 0 && !isRadio && (
                     <span style={{ fontSize: 10, fontWeight: 700, background: '#FFF3CD', color: '#8A6D00', border: '1px solid #F2C230', borderRadius: 10, padding: '1px 7px' }}>{selCount}</span>
                   )}
+                  {isRadio && selLabel && (
+                    <span style={{ fontSize: 10, fontWeight: 700, background: '#FFF3CD', color: '#8A6D00', border: '1px solid #F2C230', borderRadius: 10, padding: '1px 7px', maxWidth: 120, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{selLabel}</span>
+                  )}
                   {selCount > 0 && (
-                    <button onClick={e => { e.stopPropagation(); slicer.onChange([]) }}
+                    <button onClick={e => { e.stopPropagation(); slicer.onChange(isRadio ? '' : []) }}
                       style={{ background: 'none', border: 'none', color: PV.sub, fontSize: 13, cursor: 'pointer', padding: '0 2px', lineHeight: 1 }}>✕</button>
                   )}
                   <span style={{ fontSize: 13, color: PV.sub, transform: isExpanded ? 'rotate(90deg)' : 'none', transition: 'transform .18s', lineHeight: 1 }}>›</span>
                 </div>
                 {isExpanded && (
                   <div style={{ background: PV.canvas, borderTop: `1px solid ${PV.border}`, padding: '4px 0 8px' }}>
-                    {slicer.options.length === 0 && <div style={{ padding: '10px 16px', fontSize: 12, color: PV.sub }}>No options</div>}
-                    {slicer.options.map((opt, oi) => {
-                      const checked = Array.isArray(slicer.selected) && slicer.selected.includes(opt)
+                    {isRadio ? slicer.options.map(opt => {
+                      const checked = slicer.selected === opt.id
                       return (
-                        <label key={`${oi}-${opt}`} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '9px 16px', cursor: 'pointer', userSelect: 'none' }}>
-                          <div style={{ width: 17, height: 17, borderRadius: 5, flexShrink: 0, border: `2px solid ${checked ? PV.accent : PV.border}`, background: checked ? PV.accent : PV.bg, display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all .12s' }}
-                            onClick={() => slicer.onChange(checked ? slicer.selected.filter(x => x !== opt) : [...slicer.selected, opt])}>
-                            {checked && <span style={{ fontSize: 10, color: PV.accentDark, lineHeight: 1 }}>✓</span>}
+                        <label key={opt.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '9px 16px', cursor: 'pointer', userSelect: 'none' }}
+                          onClick={() => { slicer.onChange(checked ? '' : opt.id); setExpandedKey(null) }}>
+                          <div style={{ width: 17, height: 17, borderRadius: '50%', flexShrink: 0, border: `2px solid ${checked ? PV.accent : PV.border}`, background: checked ? PV.accent : PV.bg, display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all .12s' }}>
+                            {checked && <span style={{ width: 7, height: 7, borderRadius: '50%', background: PV.accentDark, display: 'block' }} />}
                           </div>
-                          <span style={{ fontSize: 12.5, color: checked ? PV.ink : PV.sub, fontWeight: checked ? 600 : 400 }}
-                            onClick={() => slicer.onChange(checked ? slicer.selected.filter(x => x !== opt) : [...slicer.selected, opt])}>
-                            {opt}
-                          </span>
+                          <span style={{ fontSize: 12.5, color: checked ? PV.ink : PV.sub, fontWeight: checked ? 600 : 400 }}>{opt.label}</span>
                         </label>
                       )
-                    })}
+                    }) : (
+                      <>
+                        {slicer.options.length === 0 && <div style={{ padding: '10px 16px', fontSize: 12, color: PV.sub }}>No options</div>}
+                        {slicer.options.map((opt, oi) => {
+                          const checked = Array.isArray(slicer.selected) && slicer.selected.includes(opt)
+                          return (
+                            <label key={`${oi}-${opt}`} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '9px 16px', cursor: 'pointer', userSelect: 'none' }}>
+                              <div style={{ width: 17, height: 17, borderRadius: 5, flexShrink: 0, border: `2px solid ${checked ? PV.accent : PV.border}`, background: checked ? PV.accent : PV.bg, display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all .12s' }}
+                                onClick={() => slicer.onChange(checked ? slicer.selected.filter(x => x !== opt) : [...slicer.selected, opt])}>
+                                {checked && <span style={{ fontSize: 10, color: PV.accentDark, lineHeight: 1 }}>✓</span>}
+                              </div>
+                              <span style={{ fontSize: 12.5, color: checked ? PV.ink : PV.sub, fontWeight: checked ? 600 : 400 }}
+                                onClick={() => slicer.onChange(checked ? slicer.selected.filter(x => x !== opt) : [...slicer.selected, opt])}>
+                                {opt}
+                              </span>
+                            </label>
+                          )
+                        })}
+                      </>
+                    )}
                   </div>
                 )}
               </div>
@@ -9212,19 +9241,28 @@ function AdsCredView({ data, filters = {} }) {
     : '—'
 
   const dailySorted = [...daily].sort((a, b) => (a.date || '').localeCompare(b.date || ''))
+  const totalRevForSpend = dailySorted.reduce((s, d) => s + (d.rev || 0), 0)
   const credRevSpark = dailySorted.map(d => d.excRev || 0)
+  const credRevIncSpark = dailySorted.map(d => d.rev || 0)
   const credOrdersSpark = dailySorted.map(d => d.orders || 0)
   const credUnitsSpark = dailySorted.map(d => d.units || 0)
+  const credSpendSpark = additionalSpend > 0 && totalRevForSpend > 0
+    ? dailySorted.map(d => additionalSpend * ((d.rev || 0) / totalRevForSpend))
+    : dailySorted.map(() => 0)
+  const credRoasSpark = credSpendSpark.map((s, i) => s > 0 ? credRevSpark[i] / s : 0)
+  const credAspSpark = dailySorted.map(d => (d.units || 0) > 0 ? (d.rev || 0) / d.units : 0)
+  const credAovSpark = dailySorted.map(d => (d.orders || 0) > 0 ? (d.rev || 0) / d.orders : 0)
+  const credCpoSpark = credSpendSpark.map((s, i) => (s > 0 && (credOrdersSpark[i] || 0) > 0) ? s / credOrdersSpark[i] : 0)
   const kpis = [
-    { label: 'Spend', value: fmt(additionalSpend || 0), sub: 'CRED additional mktg spend', spark: credRevSpark },
+    { label: 'Spend', value: fmt(additionalSpend || 0), sub: 'CRED additional mktg spend', spark: credSpendSpark },
     { label: 'Gross Revenue Ex GST', value: fmt(totalExcRev), sub: 'CRED exc. GST', spark: credRevSpark },
-    { label: 'Gross Revenue Inc GST', value: fmt(totalRev), sub: 'CRED inc. GST', spark: credRevSpark },
-    { label: 'ROAS', value: roas > 0 ? `${roas.toFixed(2)}x` : '—', sub: 'Rev (Ex GST) / Spend', roasVal: roas, spark: credRevSpark },
+    { label: 'Gross Revenue Inc GST', value: fmt(totalRev), sub: 'CRED inc. GST', spark: credRevIncSpark },
+    { label: 'ROAS', value: roas > 0 ? `${roas.toFixed(2)}x` : '—', sub: 'Rev (Ex GST) / Spend', roasVal: roas, spark: credRoasSpark },
     { label: 'Orders', value: fmtN(totalOrders), sub: 'Distinct orders', spark: credOrdersSpark },
     { label: 'Units', value: fmtN(totalUnits), sub: 'Items sold', spark: credUnitsSpark },
-    { label: 'ASP', value: fmt(asp), sub: 'Avg selling price', spark: credRevSpark },
-    { label: 'AOV', value: fmt(aov), sub: 'Avg order value', spark: credRevSpark },
-    { label: 'Cost Per Order', value: (additionalSpend && totalOrders > 0) ? fmt(additionalSpend / totalOrders) : '—', sub: 'Spend / Orders', spark: credOrdersSpark },
+    { label: 'ASP', value: fmt(asp), sub: 'Avg selling price', spark: credAspSpark },
+    { label: 'AOV', value: fmt(aov), sub: 'Avg order value', spark: credAovSpark },
+    { label: 'Cost Per Order', value: (additionalSpend && totalOrders > 0) ? fmt(additionalSpend / totalOrders) : '—', sub: 'Spend / Orders', spark: credCpoSpark },
   ]
 
   const thStyle = { fontSize: 10, fontWeight: 700, color: C.t3, textTransform: 'uppercase', letterSpacing: 0.4, padding: '7px 12px', textAlign: 'right', whiteSpace: 'nowrap', borderBottom: `1.5px solid ${C.border}` }
@@ -11253,7 +11291,7 @@ function SalesPage({ data, filters, setFilters, activeTab, setActiveTab, fetchDa
       {/* Tab bar */}
       <div className="sales-tabs">
         {TABS.map(tab => (
-          <button key={tab.id} onClick={() => { setActiveTab(tab.id); setChannelView('all'); setOfflineSub('all'); setFilters(f => ({ ...f, subChannel: '', voucher: '', channelGroup: [], category: [], subCategory: [], sku: [], paymentType: '' })) }} className={`stab${activeTab === tab.id ? ' active' : ''}`} style={tab.id === 'all' ? { fontWeight: activeTab === 'all' ? 800 : 700, fontSize: 13 } : {}}>
+          <button key={tab.id} onClick={() => { setActiveTab(tab.id); setChannelView('all'); setOfflineSub('all'); setFilters(f => ({ ...f, subChannel: '', voucher: '', channelGroup: [], category: [], subCategory: [], sku: [], paymentType: '', productAge: '' })) }} className={`stab${activeTab === tab.id ? ' active' : ''}`} style={tab.id === 'all' ? { fontWeight: activeTab === 'all' ? 800 : 700, fontSize: 13 } : {}}>
             {tab.logo && <img src={tab.logo} alt="" style={{ width: 14, height: 14, borderRadius: 3, flexShrink: 0, objectFit: 'contain', filter: tab.id === 'cred' ? 'invert(1)' : 'none' }} />}
             {tab.label}
           </button>
@@ -14380,7 +14418,8 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
     }
   }, [allowedTabs])
   const def = getDefaultDates()
-  const [filters, setFilters] = useState({ start: def.start, end: def.end, category: [], subCategory: [], sku: [], subChannel: '', voucher: '', region: [], tier: [], state: [], city: '', channelGroup: [] })
+  const [filters, setFilters] = useState({ start: def.start, end: def.end, category: [], subCategory: [], sku: [], subChannel: '', voucher: '', region: [], tier: [], state: [], city: '', channelGroup: [], productAge: '' })
+  const [subCatFirstOrderMap, setSubCatFirstOrderMap] = useState({})
   const [activeTab, setActiveTab] = useState('all')
   const [salesChannelView, setSalesChannelView] = useState('all')
   const [salesOfflineSub, setSalesOfflineSub] = useState('all')
@@ -14428,6 +14467,9 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
       const json = await res.json()
       if (reqId !== reqIdRef.current) return // stale response, ignore
       const next = json.source === 'postgres-aggregated' ? json : (json.totalRev !== undefined ? json : (json.rows || []))
+      if (json.subCatFirstOrderMap && Object.keys(json.subCatFirstOrderMap).length) {
+        setSubCatFirstOrderMap(json.subCatFirstOrderMap)
+      }
       clientCacheRef.current.set(cacheKey, next)
       setRawRows(prev => {
         if (keepPrev && prev && typeof prev === 'object' && !Array.isArray(prev)) return { ...prev, ...next }
@@ -14457,10 +14499,24 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
     const dateChanged = filters.start !== prevDateRef.current.start || filters.end !== prevDateRef.current.end
     if (dateChanged) { prevDateRef.current = { start: filters.start, end: filters.end }; setRawRows(null) }
     debounceRef.current = setTimeout(() => {
-      const { start, end, category, subCategory, sku, subChannel, voucher, region, tier, state, city, country, paymentType, channelGroup } = filtersRef.current
+      const { start, end, category, subCategory, sku, subChannel, voucher, region, tier, state, city, country, paymentType, channelGroup, productAge } = filtersRef.current
       const extra = {}
       if (category?.length) extra.category = category.join(',')
-      if (subCategory?.length) extra.subCategory = subCategory.join(',')
+
+      // productAge filter: compute subcats from firstOrderMap and inject as subCategory filter
+      let effectiveSubCat = subCategory || []
+      if (productAge && Object.keys(subCatFirstOrderMap).length) {
+        const today = new Date()
+        const ageSubCats = Object.entries(subCatFirstOrderMap)
+          .filter(([, d]) => {
+            const days = Math.floor((today - new Date(d)) / 86400000)
+            return productAge === 'new' ? days <= 90 : days > 90
+          })
+          .map(([sc]) => sc)
+        effectiveSubCat = ageSubCats
+      }
+      if (effectiveSubCat.length) extra.subCategory = effectiveSubCat.join(',')
+
       if (sku?.length) extra.sku = sku.join(',')
       if (subChannel) extra.subChannel = subChannel
       if (voucher) extra.voucher = voucher
@@ -14477,7 +14533,7 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
         .then(r => r.ok ? r.json() : null).then(j => { if (j) setLogisticsData(j) }).catch(() => {})
     }, 600)
     return () => clearTimeout(debounceRef.current)
-  }, [filters.start, filters.end, filters.category, filters.subCategory, filters.sku, filters.subChannel, filters.voucher, filters.region, filters.tier, filters.state, filters.city, filters.country, filters.paymentType, filters.channelGroup, fetchData])
+  }, [filters.start, filters.end, filters.category, filters.subCategory, filters.sku, filters.subChannel, filters.voucher, filters.region, filters.tier, filters.state, filters.city, filters.country, filters.paymentType, filters.channelGroup, filters.productAge, subCatFirstOrderMap, fetchData])
 
   // Load ads static cache when user navigates to Ads tab — independent of main fetchData
   useEffect(() => {
