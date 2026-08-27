@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react'
+import { useState, useRef, Fragment } from 'react'
 import { C, fmt, fmtN, pct } from './utils.js'
 import { BarChart, Bar, LineChart, Line, AreaChart, Area, ComposedChart, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ReferenceLine, LabelList, ResponsiveContainer, PieChart, Pie, Cell, Treemap } from 'recharts'
 
@@ -426,6 +426,182 @@ export function useReorderableColumns(storageKey, columns) {
   const isDefaultOrder = order.length === defaultOrder.length && order.every((id, i) => id === defaultOrder[i])
 
   return { orderedColumns, onDragStart, onDragOver, onDrop, resetOrder, isDefaultOrder }
+}
+
+// Small pill toggle switching a table's basis between 'qty' and 'revenue' — used by the D2C
+// Return Analysis page's Top Products widget and its Category/Month/Payment-type tables so the
+// Revenue column AND every Cancel/RTO/CIR/Exchange/Total-Return % column switch basis together
+// (qty mode = % of units returned, revenue mode = % of revenue lost — never a mix of the two).
+export function QtyRevToggle({ value, onChange }) {
+  const btnStyle = v => ({ fontSize: 11, fontWeight: 600, padding: '3px 10px', borderRadius: 5, border: `1.5px solid ${value === v ? C.acm : C.border}`, background: value === v ? C.acc : 'transparent', color: value === v ? C.t1 : C.t2, cursor: 'pointer', fontFamily: 'var(--font)' })
+  return (
+    <div style={{ display: 'flex', gap: 4 }}>
+      <button style={btnStyle('qty')} onClick={() => onChange('qty')}>Qty</button>
+      <button style={btnStyle('revenue')} onClick={() => onChange('revenue')}>Rev</button>
+    </div>
+  )
+}
+
+// Return-badge helper — "higher is worse" for return-type metrics, so a rise shows red and a
+// fall shows green (inverted vs a normal revenue badge). Shared by every KPI/table on the D2C
+// Return Analysis page — see api/_bq.js's computeNetRevenueMeasures for the underlying formula
+// this colors, and App.jsx's ShopifyTab (D2C Overview) for the original inline version this was
+// lifted from, kept byte-for-byte identical so both pages agree on what counts as an improvement.
+export function returnBadge(curPct, prevPct) {
+  if (!prevPct) return null
+  const p = (curPct - prevPct) / prevPct * 100
+  return <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 4, background: p > 0 ? C.red.bg : C.green.bg, color: p > 0 ? C.red.tx : C.green.tx, flexShrink: 0 }}>{p > 0 ? '▲' : '▼'} {Math.abs(p).toFixed(1)}%</span>
+}
+
+// Shared 8-column return-breakdown table: {rowLabel col(s)} + Revenue/Qty + Cancel%/RTO%/CIR%/
+// Exchange%/Total Return% — used for D2C Return Analysis sections 4 (Category), 5 (Last 6
+// months), and 6 (Payment-type). `rows` items must carry the *Pct fields from
+// api/return-analysis.js's withPct() plus whatever labelCols name (e.g. category+subCategory,
+// or month, or paymentType). `basis`: 'qty' | 'revenue' selects which Revenue/%% fields render.
+// `labelCols`: [{key, label, render?}] — one or two leading columns identifying the row. Each
+// entry may carry an optional `render(value, row)` to reformat the display text (e.g. an ISO
+// '2026-07' month key rendered as 'Jul-26') without changing the underlying value sorting keys
+// off of — `key` itself always stays the raw, lexicographically-sortable field.
+// `getVariants(row)` (optional): returns that row's SKU/variant rows (same shape as `rows`
+// items) — when supplied, the last labelCol becomes clickable with a rotating ▶ chevron (same
+// interaction as App.jsx's FlatCategoryProductMatrix) that expands indented variant rows below,
+// e.g. "Posture Corrector" → its S/M/L/XL SKUs. Omit for tables with no natural drill-down (the
+// Monthly and Payment-type tables).
+export function ReturnBreakdownTable({ title, rows, labelCols, basis, search, onSearchChange, onExport, getVariants, maxHeight = 420, action, defaultSortKey = 'revenue', defaultSortDir = 'desc' }) {
+  const { sortRows, Th } = useSortableTable(defaultSortKey, defaultSortDir)
+  const [expanded, setExpanded] = useState({})
+  const revKey = basis === 'qty' ? 'qty' : 'revenue'
+  const pctSuffix = basis === 'qty' ? 'PctQty' : 'Pct'
+  const rowKey = r => labelCols.map(c => r[c.key]).join('::')
+  const filtered = search
+    ? rows.filter(r => labelCols.some(c => String(r[c.key] || '').toLowerCase().includes(search.toLowerCase())))
+    : rows
+  const getters = {
+    revenue: r => r[revKey],
+    cancelPct: r => r[`cancel${pctSuffix}`],
+    rtoPct: r => r[`rto${pctSuffix}`],
+    cirPct: r => r[`cir${pctSuffix}`],
+    exchangePct: r => r[`exchange${pctSuffix}`],
+    totalReturnPct: r => r[`totalReturn${pctSuffix}`],
+    // Also expose each label column as its own sort key (e.g. 'month', 'category') so a caller
+    // can default-sort by it (Monthly table → latest-to-oldest) and its <th> becomes clickable.
+    ...Object.fromEntries(labelCols.map(c => [c.key, r => r[c.key]])),
+  }
+  const sortedRows = sortRows(filtered, getters)
+  const thStyle = { fontSize: 9.5, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.03em', color: C.t3, padding: '3px 4px 7px', borderBottom: `1px solid ${C.border}`, whiteSpace: 'normal', lineHeight: 1.25, position: 'sticky', top: 0, background: C.card, zIndex: 1 }
+  const fmtPct = v => `${(v || 0).toFixed(1)}%`
+  // Conditional formatting: only flag numbers PAST the agreed bad threshold in red — every
+  // other value (including 0%, which is good) stays plain ink. Never colors a "good" number.
+  const RED_THRESH = { cancelPct: 3, rtoPct: 9, cirPct: 9, exchangePct: 6, totalReturnPct: 20 }
+  const cellColor = (key, val) => (val || 0) > RED_THRESH[key] ? '#B91C1C' : C.t1
+  const metricCells = (r, mono, size) => (
+    <>
+      <td style={{ padding: '5.5px 5px', textAlign: 'right', fontFamily: 'var(--mono)', fontSize: size ?? 11.5, color: C.t1, whiteSpace: 'nowrap' }}>{basis === 'qty' ? fmtN(r.qty) : fmt(r.revenue)}</td>
+      <td style={{ padding: '5.5px 5px', textAlign: 'right', fontSize: size, color: cellColor('cancelPct', getters.cancelPct(r)), whiteSpace: 'nowrap' }}>{fmtPct(getters.cancelPct(r))}</td>
+      <td style={{ padding: '5.5px 5px', textAlign: 'right', fontSize: size, color: cellColor('rtoPct', getters.rtoPct(r)), whiteSpace: 'nowrap' }}>{fmtPct(getters.rtoPct(r))}</td>
+      <td style={{ padding: '5.5px 5px', textAlign: 'right', fontSize: size, color: cellColor('cirPct', getters.cirPct(r)), whiteSpace: 'nowrap' }}>{fmtPct(getters.cirPct(r))}</td>
+      <td style={{ padding: '5.5px 5px', textAlign: 'right', fontSize: size, color: cellColor('exchangePct', getters.exchangePct(r)), whiteSpace: 'nowrap' }}>{fmtPct(getters.exchangePct(r))}</td>
+      <td style={{ padding: '5.5px 5px', textAlign: 'right', fontSize: size, fontWeight: 700, color: cellColor('totalReturnPct', getters.totalReturnPct(r)), whiteSpace: 'nowrap' }}>{fmtPct(getters.totalReturnPct(r))}</td>
+    </>
+  )
+
+  return (
+    <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 13, padding: '14px 16px', display: 'flex', flexDirection: 'column', height: '100%', boxSizing: 'border-box' }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 11, gap: 8, flexWrap: 'wrap', flexShrink: 0 }}>
+        <span style={{ fontSize: 13, fontWeight: 600, color: C.t1 }}>{title}</span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+          {action}
+          {onSearchChange && (
+            <input value={search} onChange={e => onSearchChange(e.target.value)} placeholder="Search..." style={{ fontSize: 12, padding: '5px 10px', borderRadius: 6, border: `1px solid ${C.border2}`, background: '#fff', color: C.t1, outline: 'none', fontFamily: 'var(--font)', width: 150 }} />
+          )}
+          {onExport && <button onClick={onExport} style={{ fontSize: 11, fontWeight: 600, padding: '5px 10px', borderRadius: 6, border: `1px solid ${C.border2}`, background: C.card, color: C.t1, cursor: 'pointer', fontFamily: 'var(--font)' }}>Export CSV</button>}
+        </div>
+      </div>
+      <div style={{ overflowX: 'auto', overflowY: 'auto', maxHeight, flex: 1, minHeight: 0 }}>
+        <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed', fontSize: 12 }}>
+          <colgroup>
+            {/* Label columns get a fixed share; when there are two (Category + Sub-category),
+                the first gets a narrow fixed slice (short words like "Footwear") and the second
+                — the one with the longer, more variable names — gets the rest of the label
+                budget. The 6 metric columns split the remainder, with Total Return % given extra
+                room since it's the longest header + carries the boldest value. */}
+            {(() => {
+              const labelShare = labelCols.length === 1 ? 22 : 40
+              const metricShare = 100 - labelShare
+              const totalReturnShare = metricShare * 0.22
+              const otherMetricShare = (metricShare - totalReturnShare) / 5
+              const firstLabelShare = labelCols.length === 2 ? 12 : labelShare
+              return (
+                <>
+                  {labelCols.map((c, i) => (
+                    <col key={c.key} style={{ width: `${labelCols.length === 2 ? (i === 0 ? firstLabelShare : labelShare - firstLabelShare) : labelShare / labelCols.length}%` }} />
+                  ))}
+                  <col style={{ width: `${otherMetricShare}%` }} />
+                  <col style={{ width: `${otherMetricShare}%` }} />
+                  <col style={{ width: `${otherMetricShare}%` }} />
+                  <col style={{ width: `${otherMetricShare}%` }} />
+                  <col style={{ width: `${otherMetricShare}%` }} />
+                  <col style={{ width: `${totalReturnShare}%` }} />
+                </>
+              )
+            })()}
+          </colgroup>
+          <thead>
+            <tr>
+              {labelCols.map(c => <Th key={c.key} label={c.label} sortKey={c.key} style={thStyle} align="left" />)}
+              <Th label={basis === 'qty' ? 'Qty' : 'Revenue'} sortKey="revenue" style={thStyle} align="right" />
+              <Th label="Cancel %" sortKey="cancelPct" style={thStyle} align="right" />
+              <Th label="RTO %" sortKey="rtoPct" style={thStyle} align="right" />
+              <Th label="CIR %" sortKey="cirPct" style={thStyle} align="right" />
+              <Th label="Exchange %" sortKey="exchangePct" style={thStyle} align="right" />
+              <Th label="Total Return %" sortKey="totalReturnPct" style={thStyle} align="right" />
+            </tr>
+          </thead>
+          <tbody>
+            {sortedRows.map((r, i) => {
+              const key = rowKey(r)
+              const variants = getVariants ? getVariants(r) : null
+              const hasVariants = variants && variants.length > 0
+              const isOpen = expanded[key]
+              return (
+                <Fragment key={key}>
+                  <tr style={{ borderBottom: (i < sortedRows.length - 1 && !isOpen) ? `1px solid ${C.border}` : 'none' }} onMouseEnter={e => e.currentTarget.style.background = '#FFFBE6'} onMouseLeave={e => e.currentTarget.style.background = ''}>
+                    {labelCols.map((c, ci) => {
+                      const displayVal = c.render ? c.render(r[c.key], r) : (r[c.key] ?? '—')
+                      return (
+                        <td key={c.key} style={{ padding: '5.5px 5px', color: C.t2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={String(r[c.key] ?? '')}>
+                          {ci === labelCols.length - 1 && hasVariants ? (
+                            <span onClick={() => setExpanded(prev => ({ ...prev, [key]: !prev[key] }))} style={{ cursor: 'pointer', userSelect: 'none', display: 'inline-flex', alignItems: 'center', gap: 5, fontWeight: 600, color: C.t1, maxWidth: '100%' }}>
+                              <span style={{ fontSize: 9, color: C.t3, display: 'inline-block', flexShrink: 0, transform: isOpen ? 'rotate(90deg)' : 'rotate(0deg)', transition: 'transform .15s' }}>▶</span>
+                              <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{displayVal}</span>
+                            </span>
+                          ) : displayVal}
+                        </td>
+                      )
+                    })}
+                    {metricCells(r)}
+                  </tr>
+                  {isOpen && variants.map((v, vi) => (
+                    <tr key={v.sku} style={{ background: C.bg, borderBottom: (vi < variants.length - 1 || i < sortedRows.length - 1) ? `1px solid ${C.border}` : 'none' }} onMouseEnter={e => e.currentTarget.style.background = '#FFFBE6'} onMouseLeave={e => e.currentTarget.style.background = C.bg}>
+                      {labelCols.map((c, ci) => (
+                        <td key={c.key} style={{ padding: '4px 5px', color: C.t3, fontFamily: ci === labelCols.length - 1 ? 'var(--mono)' : 'inherit', fontSize: 11, paddingLeft: ci === labelCols.length - 1 ? 22 : 5, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={ci === labelCols.length - 1 ? v.sku : ''}>
+                          {ci === labelCols.length - 1 ? `↳ ${v.sku}` : ''}
+                        </td>
+                      ))}
+                      {metricCells(v, true, 11)}
+                    </tr>
+                  ))}
+                </Fragment>
+              )
+            })}
+            {sortedRows.length === 0 && (
+              <tr><td colSpan={labelCols.length + 6} style={{ padding: '20px 5px', textAlign: 'center', color: C.t3, fontSize: 12 }}>No data</td></tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  )
 }
 
 export function useSortableTable(defaultKey = null, defaultDir = 'desc') {
