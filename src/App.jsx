@@ -5856,7 +5856,7 @@ function AllTab({ data, rangeStart, rangeEnd }) {
   const mobAovSpark = mobRevSpark.map((r, i) => mobOrdersSpark[i] > 0 ? r / mobOrdersSpark[i] : 0)
   const mobAspSpark = mobRevSpark.map((r, i) => mobUnitsSpark[i] > 0 ? r / mobUnitsSpark[i] : 0)
   const mobReturnSpark = mobRevSpark.map(r => r * (totalRev > 0 ? returnNumeratorRev / totalRev : 0))
-  const mobRepeatSpark = mobRevSpark.map(() => parseFloat(repeatRate) || 0)
+  const mobRepeatSpark = mobOrdersSpark.map(o => o * (nOrders > 0 ? (parseFloat(repeatRate) || 0) / 100 : 0))
 
   const mobGstSpark = mobRevSpark.map(r => r * (totalRev > 0 ? gstCollected / totalRev : 0))
   const mobAtRiskSpark = mobRevSpark.map(r => r * (totalRev > 0 ? atRiskRev / totalRev : 0))
@@ -6380,6 +6380,7 @@ function ShopifyGeoRichTable({ title, rows, firstKey, firstLabel, formatFirst, r
 
 function ShopifyReturnReasonsTable({ reasons = [] }) {
   const [expandedReason, setExpandedReason] = useState({})
+  const isMob = useIsMobile()
 
   if (!reasons || reasons.length === 0) return null
 
@@ -6418,12 +6419,14 @@ function ShopifyReturnReasonsTable({ reasons = [] }) {
     <Card title="Return Reasons · D2C" note={`${sortedReasons.length} reasons · ${grandTotal.toLocaleString('en-IN')} orders`}>
       <div style={{ overflowX: 'auto', overflowY: 'auto', maxHeight: 500 }}>
         <table style={{ borderCollapse: 'collapse', fontSize: 11, minWidth: '100%' }}>
-          <thead style={{ position: 'sticky', top: 0, zIndex: 2 }}>
-            <tr>
-              <th style={thL}>Reason / Sub-reason</th>
-              {cats.map(cat => <th key={cat} style={thStyle}>{cat}</th>)}
-            </tr>
-          </thead>
+          {!isMob && (
+            <thead style={{ position: 'sticky', top: 0, zIndex: 2 }}>
+              <tr>
+                <th style={thL}>Reason / Sub-reason</th>
+                {cats.map(cat => <th key={cat} style={thStyle}>{cat}</th>)}
+              </tr>
+            </thead>
+          )}
           <tbody>
             {sortedReasons.map((reason, ri) => {
               const rd = grouped[reason]
@@ -6442,7 +6445,7 @@ function ShopifyReturnReasonsTable({ reasons = [] }) {
                     {reason}
                     <span style={{ marginLeft: 8, fontSize: 9, color: C.t3, fontWeight: 400 }}>{rTotal.toLocaleString('en-IN')} · {grandTotal > 0 ? (rTotal / grandTotal * 100).toFixed(1) : 0}%</span>
                   </td>
-                  {cats.map(cat => <td key={cat} style={{ padding: '5px 8px', textAlign: 'right', fontFamily: 'var(--mono)', color: C.t1 }}>{pctCell(rd.catOrders[cat], colTotals[cat])}</td>)}
+                  {!isMob && cats.map(cat => <td key={cat} style={{ padding: '5px 8px', textAlign: 'right', fontFamily: 'var(--mono)', color: C.t1 }}>{pctCell(rd.catOrders[cat], colTotals[cat])}</td>)}
                 </tr>,
                 ...(isExp ? sortedSubs.map(([subReason, sd]) => {
                   const srTotal = Object.values(sd.catOrders).reduce((s, v) => s + v, 0)
@@ -6452,7 +6455,7 @@ function ShopifyReturnReasonsTable({ reasons = [] }) {
                         ↳ {subReason}
                         <span style={{ marginLeft: 8, fontSize: 9, color: C.t3 }}>{srTotal.toLocaleString('en-IN')} · {rTotal > 0 ? (srTotal / rTotal * 100).toFixed(1) : 0}% of reason</span>
                       </td>
-                      {cats.map(cat => <td key={cat} style={{ padding: '4px 8px', textAlign: 'right', fontFamily: 'var(--mono)', color: C.t2 }}>{pctCell(sd.catOrders[cat], rTotal > 0 ? rd.catOrders[cat] : null)}</td>)}
+                      {!isMob && cats.map(cat => <td key={cat} style={{ padding: '4px 8px', textAlign: 'right', fontFamily: 'var(--mono)', color: C.t2 }}>{pctCell(sd.catOrders[cat], rTotal > 0 ? rd.catOrders[cat] : null)}</td>)}
                     </tr>
                   )
                 }) : [])
