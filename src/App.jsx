@@ -8109,11 +8109,17 @@ function FlipkartTab({ data }) {
         return (
           <div className="g-3col" style={{ display: 'grid', gridTemplateColumns: '1.5fr 1fr 0.65fr', gap: 14, alignItems: 'start' }}>
             <Card fill title="Revenue & Returns Trend" style={{ height: 360, alignSelf: 'start' }} action={
-              <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                <div style={{ display: 'flex', gap: 4 }}>
-                  {[['rev','Revenue'],['orders','Orders'],['units','Units']].map(([k,l]) => <button key={k} style={btnSt(k)} onClick={() => setFkTrendMetric(k)}>{l}</button>)}
-                </div>
-                <select value={fkTrendGroup} onChange={e => setFkTrendGroup(e.target.value)} style={{ fontSize: 11, fontWeight: 600, padding: '3px 8px', borderRadius: 6, border: `1px solid ${C.border2}`, background: C.card, color: C.t1, cursor: 'pointer', fontFamily: 'var(--font)', outline: 'none' }}>
+              <div style={{ display: 'flex', gap: isMob ? 4 : 8, alignItems: 'center' }}>
+                {isMob ? (
+                  <select value={fkTrendMetric} onChange={e => setFkTrendMetric(e.target.value)} style={{ fontSize: 10, fontWeight: 600, padding: '2px 4px', borderRadius: 6, border: `1px solid ${C.border2}`, background: C.card, color: C.t1, cursor: 'pointer', fontFamily: 'var(--font)', outline: 'none' }}>
+                    {[['rev','Revenue'],['orders','Orders'],['units','Units']].map(([k,l]) => <option key={k} value={k}>{l}</option>)}
+                  </select>
+                ) : (
+                  <div style={{ display: 'flex', gap: 4 }}>
+                    {[['rev','Revenue'],['orders','Orders'],['units','Units']].map(([k,l]) => <button key={k} style={btnSt(k)} onClick={() => setFkTrendMetric(k)}>{l}</button>)}
+                  </div>
+                )}
+                <select value={fkTrendGroup} onChange={e => setFkTrendGroup(e.target.value)} style={{ fontSize: isMob ? 10 : 11, fontWeight: 600, padding: isMob ? '2px 4px' : '3px 8px', borderRadius: 6, border: `1px solid ${C.border2}`, background: C.card, color: C.t1, cursor: 'pointer', fontFamily: 'var(--font)', outline: 'none' }}>
                   {['daily','weekly','monthly','quarterly'].map(g => <option key={g} value={g}>{g.charAt(0).toUpperCase() + g.slice(1)}</option>)}
                 </select>
               </div>
@@ -8136,7 +8142,7 @@ function FlipkartTab({ data }) {
               <ResponsiveContainer width="100%" height={isMob ? 240 : '100%'} minHeight={200}>
                 <ComposedChart data={grouped} margin={{ top: 4, right: isMob ? 18 : 50, bottom: 0, left: isMob ? 18 : 0 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke={C.border} vertical={false} />
-                  <XAxis dataKey="date" tick={{ fontSize: 10, fill: C.t3 }} tickFormatter={xFmt} interval={isMob ? 0 : 'preserveStartEnd'} ticks={isMob ? (() => { const k = grouped.map(d => d.date); const n = k.length; if (n <= 4) return k; return [k[0], k[Math.floor(n/3)], k[Math.floor(2*n/3)], k[n-1]] })() : undefined} />
+                  <XAxis dataKey="date" tick={{ fontSize: 10, fill: C.t3 }} tickFormatter={xFmt} ticks={(() => { const k = grouped.map(d => d.date); const n = k.length; if (n <= 4) return k; return [k[0], k[Math.floor(n/3)], k[Math.floor(2*n/3)], k[n-1]] })()} />
                   <YAxis yAxisId="main" hide={isMob} tick={{ fontSize: 10, fill: C.t3 }} tickFormatter={yFmt} width={isMob ? 0 : 60} />
                   <YAxis yAxisId="pct" orientation="right" hide={isMob} tick={{ fontSize: 10, fill: C.t3 }} tickFormatter={v => `${v.toFixed(1)}%`} width={isMob ? 0 : 40} />
                   <Tooltip content={({ active, payload, label }) => {
@@ -8161,7 +8167,7 @@ function FlipkartTab({ data }) {
                   {!isMob && <Legend verticalAlign="bottom" align="center" layout="horizontal" wrapperStyle={{ fontSize: 11, paddingTop: 8 }} formatter={v => <span style={{ color: '#111' }}>{v}</span>} />}
                   {isRev ? (<>
                     <Area yAxisId="main" type="monotone" dataKey="grossRev" name="Gross Revenue" stroke="#E8930A" fill="#E8930A22" strokeWidth={2} dot={grouped.length <= 3} />
-                    <Area yAxisId="main" type="monotone" dataKey="netRev" name="Net Revenue" stroke="#0D9E68" fill="#0D9E6811" strokeWidth={2} dot={grouped.length <= 3} strokeDasharray="4 2" />
+                    <Area yAxisId="main" type="monotone" dataKey="netRev" name="Net Revenue" stroke="#0D9E68" fill="#0D9E6811" strokeWidth={2} dot={grouped.length <= 3} />
                   </>) : fkTrendMetric === 'orders' ? (
                     <Area yAxisId="main" type="monotone" dataKey="orders" name="Orders" stroke="#E8930A" fill="#E8930A22" strokeWidth={2} dot={grouped.length <= 3} />
                   ) : (
