@@ -8023,8 +8023,8 @@ function FlipkartTab({ data }) {
     { label: 'Units', value: fkFmtN(qty), spark: dailyArr.map(d => d.units || 0) },
     { label: 'AOV', value: fkFmtS(aov), spark: dailyArr.map(d => (d.orders || 0) > 0 ? (d.rev || 0) / d.orders : null) },
     { label: 'ASP', value: fkFmtS(asp), spark: dailyArr.map(d => (d.units || 0) > 0 ? (d.rev || 0) / d.units : null) },
-    { label: 'Delivered %', value: `${fkDeliveredPct.pct.toFixed(1)}%`, spark: dailyArr.map(() => fkDeliveredPct.pct), accent: fkDeliveredPct.pct < 50 ? '#7A1A1A' : undefined },
-    { label: 'Cancellation %', value: `${nOrders > 0 ? (cancelOrders / nOrders * 100).toFixed(1) : 0}%`, spark: dailyArr.map(() => nOrders > 0 ? cancelOrders / nOrders * 100 : 0) },
+    { label: 'Delivered %', value: `${fkDeliveredPct.pct.toFixed(1)}%`, spark: dailyArr.map(d => (d.rev || 0) * (rev > 0 ? fkDeliveredPct.pct / 100 : 0)), accent: fkDeliveredPct.pct < 50 ? '#7A1A1A' : undefined },
+    { label: 'Cancellation %', value: `${nOrders > 0 ? (cancelOrders / nOrders * 100).toFixed(1) : 0}%`, spark: dailyArr.map(d => (d.rev || 0) * (rev > 0 ? (nOrders > 0 ? cancelOrders / nOrders : 0) : 0)) },
     { label: 'Returns %', value: `${fkReturnCur.pct.toFixed(1)}%`, spark: dailyArr.map(d => d.rev > 0 ? (d.returnRev || 0) / d.rev * 100 : null), accent: fkReturnCur.pct > 20 ? '#7A1A1A' : undefined },
   ]
 
@@ -8124,7 +8124,7 @@ function FlipkartTab({ data }) {
                 </select>
               </div>
             }>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 8, flexWrap: 'wrap', flexShrink: 0 }}>
+              {(!isMob) && <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 8, flexWrap: 'wrap', flexShrink: 0 }}>
                 {fkEstimatedDays > 0 && fkTrendGroup === 'daily' && (
                   <div style={{ fontSize: 11, color: '#92600A', background: '#FFF8E1', border: '1px solid #FFE082', borderRadius: 6, padding: '5px 10px' }}>
                     ⏳ Data available till {fkLatestReal} · Last {fkEstimatedDays} day{fkEstimatedDays > 1 ? 's' : ''} shown as 7-day rolling avg estimate
@@ -8136,13 +8136,13 @@ function FlipkartTab({ data }) {
                     {nOrders > 0 && <span style={{ color: C.t3, fontSize: 10 }}>{(totalReturns / nOrders * 100).toFixed(1)}%</span>}
                   </div>
                 )}
-              </div>
+              </div>}
               <div style={{ flex: 1, minHeight: 0 }}>
               <div style={isMob ? { margin: '0 -18px' } : {}}>
               <ResponsiveContainer width="100%" height={isMob ? 240 : '100%'} minHeight={200}>
                 <ComposedChart data={grouped} margin={{ top: 4, right: isMob ? 18 : 50, bottom: isMob ? 16 : 0, left: isMob ? 18 : 0 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke={C.border} vertical={false} />
-                  <XAxis dataKey="date" tick={{ fontSize: 10, fill: C.t3 }} tickFormatter={xFmt} ticks={(() => { const k = grouped.map(d => d.date); const n = k.length; if (n <= 4) return k; return [k[0], k[Math.floor(n/3)], k[Math.floor(2*n/3)], k[n-1]] })()} />
+                  <XAxis dataKey="date" tick={{ fontSize: 10, fill: C.t3 }} tickFormatter={xFmt} ticks={(() => { const k = grouped.map(d => d.date); const n = k.length; if (n <= 4) return k; return [k[0], k[Math.floor(n/3)], k[Math.floor(2*n/3)], k[n-1]] })()} height={isMob ? 30 : 20} />
                   <YAxis yAxisId="main" hide={isMob} tick={{ fontSize: 10, fill: C.t3 }} tickFormatter={yFmt} width={isMob ? 0 : 60} />
                   <YAxis yAxisId="pct" orientation="right" hide={isMob} tick={{ fontSize: 10, fill: C.t3 }} tickFormatter={v => `${v.toFixed(1)}%`} width={isMob ? 0 : 40} />
                   <Tooltip content={({ active, payload, label }) => {
