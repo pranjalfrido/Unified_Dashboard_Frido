@@ -8140,7 +8140,7 @@ function FlipkartTab({ data }) {
               <div style={{ flex: 1, minHeight: 0 }}>
               <div style={isMob ? { margin: '0 -18px' } : {}}>
               <ResponsiveContainer width="100%" height={isMob ? 240 : '100%'} minHeight={200}>
-                <ComposedChart data={grouped} margin={{ top: 4, right: isMob ? 18 : 50, bottom: isMob ? 16 : 0, left: isMob ? 18 : 0 }}>
+                <ComposedChart data={grouped} margin={{ top: 4, right: isMob ? 24 : 50, bottom: isMob ? 16 : 0, left: isMob ? 24 : 0 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke={C.border} vertical={false} />
                   <XAxis dataKey="date" tick={{ fontSize: 10, fill: C.t3 }} tickFormatter={xFmt} ticks={(() => { const k = grouped.map(d => d.date); const n = k.length; if (n <= 4) return k; return [k[0], k[Math.floor(n/3)], k[Math.floor(2*n/3)], k[n-1]] })()} height={isMob ? 30 : 20} />
                   <YAxis yAxisId="main" hide={isMob} tick={{ fontSize: 10, fill: C.t3 }} tickFormatter={yFmt} width={isMob ? 0 : 60} />
