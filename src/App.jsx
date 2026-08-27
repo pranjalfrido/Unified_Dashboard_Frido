@@ -12,6 +12,7 @@ import LogisticsCostPage from './LogisticsCostPage.jsx'
 import { supabase } from './supabase.js'
 import { hasPermission } from './permissionTree.js'
 import PnLPage from './pnl/PnLPage.jsx'
+import D2CReturnAnalysisTab from './sales/D2CReturnAnalysisTab.jsx'
 
 function useIsMobile() {
   const [mob, setMob] = useState(() => window.innerWidth <= 768)
@@ -11456,8 +11457,10 @@ function InternationalPlaceholderTab() {
   )
 }
 
-function ChannelTab({ data, channel, filters, setFilters, channelView, setChannelView }) {
-  if (channel === 'Shopify') return <ShopifyTab data={data} filters={filters} setFilters={setFilters} />
+function ChannelTab({ data, channel, filters, setFilters, channelView, setChannelView, shopifyView }) {
+  if (channel === 'Shopify') return shopifyView === 'returns'
+    ? <D2CReturnAnalysisTab filters={filters} />
+    : <ShopifyTab data={data} filters={filters} setFilters={setFilters} />
   if (channel === 'Amazon') return <AmazonTab data={data} channelView={channelView} setChannelView={setChannelView} />
   if (channel === 'Flipkart') return <FlipkartTab data={data} />
   if (channel === 'Blinkit') return <BlinkitTab data={data} />
@@ -11667,6 +11670,7 @@ function FilterIconPopover({ children, activeCount }) {
 
 function SalesPage({ data, filters, setFilters, activeTab, setActiveTab, fetchData, channelView, setChannelView, offlineSub, setOfflineSub }) {
   const filteredData = data
+  const [shopifyView, setShopifyView] = useState('overview') // 'overview' | 'returns' — D2C only
 
   const cats = useMemo(() => Object.keys(data?.catMap || {}).filter(Boolean).sort(), [data])
   const subCats = useMemo(() => {
@@ -11682,7 +11686,8 @@ function SalesPage({ data, filters, setFilters, activeTab, setActiveTab, fetchDa
   // Per-channel toggle slot — add a new channel's toggle here as its own one-line entry. Channels
   // with no toggle fall back to a plain label (the channel's own tab name) instead of leaving this
   // side of the bar empty, so the row doesn't look like an accidental gap under the tab bar.
-  const channelToggle = activeTab === 'shopify' ? <D2CSubChannelToggle data={data} filters={filters} setFilters={setFilters} />
+  const channelToggle = activeTab === 'shopify' && shopifyView === 'returns' ? <span style={{ fontSize: 15, fontWeight: 800, color: C.t1 }}>D2C – Return Analysis</span>
+    : activeTab === 'shopify' ? <D2CSubChannelToggle data={data} filters={filters} setFilters={setFilters} />
     : activeTab === 'amazon' ? <AmazonChannelViewToggle channelView={channelView} setChannelView={setChannelView} />
     : activeTab === 'offline' ? <OfflineSubToggle sub={offlineSub} setSub={setOfflineSub} />
     : <span style={{ fontSize: 13, fontWeight: 700, color: C.t2 }}>{TABS.find(t => t.id === activeTab)?.label || ''}</span>
@@ -11697,7 +11702,7 @@ function SalesPage({ data, filters, setFilters, activeTab, setActiveTab, fetchDa
       {/* Tab bar */}
       <div className="sales-tabs">
         {TABS.map(tab => (
-          <button key={tab.id} onClick={() => { setActiveTab(tab.id); setChannelView('all'); setOfflineSub('all'); setFilters(f => ({ ...f, subChannel: '', voucher: '', channelGroup: [], category: [], subCategory: [], sku: [], paymentType: '', productAge: '' })) }} className={`stab${activeTab === tab.id ? ' active' : ''}`} style={tab.id === 'all' ? { fontWeight: activeTab === 'all' ? 800 : 700, fontSize: 13 } : {}}>
+          <button key={tab.id} onClick={() => { setActiveTab(tab.id); setChannelView('all'); setOfflineSub('all'); setShopifyView('overview'); setFilters(f => ({ ...f, subChannel: '', voucher: '', channelGroup: [], category: [], subCategory: [], sku: [], paymentType: '', productAge: '' })) }} className={`stab${activeTab === tab.id ? ' active' : ''}`} style={tab.id === 'all' ? { fontWeight: activeTab === 'all' ? 800 : 700, fontSize: 13 } : {}}>
             {tab.logo && <img src={tab.logo} alt="" style={{ width: 14, height: 14, borderRadius: 3, flexShrink: 0, objectFit: 'contain', filter: tab.id === 'cred' ? 'invert(1)' : 'none' }} />}
             {tab.label}
           </button>
@@ -11707,7 +11712,13 @@ function SalesPage({ data, filters, setFilters, activeTab, setActiveTab, fetchDa
       <div className="fbar">
         <div className="fbar-inner" style={{ width: '100%', justifyContent: 'space-between' }}>
           <div>{channelToggle}</div>
-          <FilterIconPopover activeCount={activeFilterCount}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginLeft: 'auto' }}>
+            {activeTab === 'shopify' && (
+              <button onClick={() => setShopifyView(v => v === 'returns' ? 'overview' : 'returns')} className="d2c-return-link" style={{ fontSize: 12, fontWeight: 600, color: shopifyView === 'returns' ? C.acm : C.t2, background: 'none', border: 'none', cursor: 'pointer', padding: '4px 2px', textDecoration: shopifyView === 'returns' ? 'underline' : 'none', textDecorationColor: C.acm, textUnderlineOffset: 3 }}>
+                {shopifyView === 'returns' ? '← Back to Overview' : 'Return Analysis'}
+              </button>
+            )}
+            <FilterIconPopover activeCount={activeFilterCount}>
             <SearchableSelect multi options={cats} value={filters.category || []} onChange={v => setFilters(f => ({ ...f, category: v, subCategory: [] }))} placeholder="All Categories" />
             <SearchableSelect multi options={subCats} value={filters.subCategory || []} onChange={v => setFilters(f => ({ ...f, subCategory: v }))} placeholder="All Sub-categories" dropdownWidth={320} />
             <SearchableSelect multi options={skuOpts} value={filters.sku || []} onChange={v => setFilters(f => ({ ...f, sku: v }))} placeholder="All SKUs" dropdownWidth={280} />
@@ -11716,13 +11727,14 @@ function SalesPage({ data, filters, setFilters, activeTab, setActiveTab, fetchDa
             )}
             {activeTab === 'shopify' && <VoucherDropdown voucherList={data?.voucherList || []} selected={filters.voucher} onChange={v => setFilters(f => ({ ...f, voucher: v }))} />}
             <button onClick={() => setFilters(f => ({ ...f, category: [], subCategory: [], sku: [], subChannel: '', voucher: '', region: [], tier: [], state: [], city: '', channelGroup: [] }))} className="fclr">✕ Clear</button>
-          </FilterIconPopover>
+            </FilterIconPopover>
+          </div>
         </div>
       </div>
       {/* Content */}
       <div className="page-scroll">
         {activeTab === 'all' && <AllTab data={filteredData} rangeStart={filters.start} rangeEnd={filters.end} />}
-        {activeTab === 'shopify' && <ChannelTab data={filteredData} channel="Shopify" filters={filters} setFilters={setFilters} />}
+        {activeTab === 'shopify' && <ChannelTab data={filteredData} channel="Shopify" filters={filters} setFilters={setFilters} shopifyView={shopifyView} />}
         {activeTab === 'ebo' && <EBOTab data={filteredData} rangeStart={filters.start} rangeEnd={filters.end} />}
         {activeTab === 'amazon' && <ChannelTab data={filteredData} channel="Amazon" channelView={channelView} setChannelView={setChannelView} />}
         {activeTab === 'flipkart' && <ChannelTab data={filteredData} channel="Flipkart" />}
