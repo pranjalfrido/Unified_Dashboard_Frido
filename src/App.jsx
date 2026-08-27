@@ -5855,11 +5855,8 @@ function AllTab({ data, rangeStart, rangeEnd }) {
   const mobUnitsSpark = dailySorted.map(d => Object.entries(d).filter(([k]) => k.endsWith('_u')).reduce((s, [, v]) => s + (v || 0), 0))
   const mobAovSpark = mobRevSpark.map((r, i) => mobOrdersSpark[i] > 0 ? r / mobOrdersSpark[i] : 0)
   const mobAspSpark = mobRevSpark.map((r, i) => mobUnitsSpark[i] > 0 ? r / mobUnitsSpark[i] : 0)
-  const mobReturnSpark = dailySorted.map(d => {
-    const dayRev = Object.entries(d).filter(([k]) => k !== 'date' && !k.endsWith('_o') && !k.endsWith('_u')).reduce((s, [, v]) => s + (v || 0), 0)
-    return dayRev > 0 && totalRev > 0 ? (returnNumeratorRev / totalRev * 100) : 0
-  })
-  const mobRepeatSpark = dailySorted.map(() => parseFloat(repeatRate) || 0)
+  const mobReturnSpark = mobRevSpark.map(r => r * (totalRev > 0 ? returnNumeratorRev / totalRev : 0))
+  const mobRepeatSpark = mobRevSpark.map(() => parseFloat(repeatRate) || 0)
 
   const mobGstSpark = mobRevSpark.map(r => r * (totalRev > 0 ? gstCollected / totalRev : 0))
   const mobAtRiskSpark = mobRevSpark.map(r => r * (totalRev > 0 ? atRiskRev / totalRev : 0))
@@ -6905,10 +6902,10 @@ function ShopifyTab({ data, filters, setFilters }) {
                   ) : null} />
                   {!isMob && <Legend verticalAlign="bottom" align="center" layout="horizontal" wrapperStyle={{ fontSize: 11, paddingTop: 8 }} formatter={v => <span style={{ color: '#111' }}>{v}</span>} />}
                   <Area yAxisId="rev" type="monotone" dataKey="grossRev" name="Gross Revenue" stroke="#E0B800" fill="url(#shGrossGrad)" strokeWidth={2.5} dot={false} />
-                  <Area yAxisId="rev" type="monotone" dataKey="netRev" name="Net Revenue" stroke="#0D9E68" fill="url(#shNetGrad)" strokeWidth={2} dot={false} strokeDasharray="4 2" />
+                  <Area yAxisId="rev" type="monotone" dataKey="netRev" name="Net Revenue" stroke="#0D9E68" fill="url(#shNetGrad)" strokeWidth={2} dot={false} />
                   <Line yAxisId="pct" type="monotone" dataKey="returnPct" name="Return % (RTO+CIR)" stroke="#E24B4A" strokeWidth={1.5} dot={false} />
-                  <Line yAxisId="pct" type="monotone" dataKey="exchPct" name="Exchange %" stroke="#9B59B6" strokeWidth={1.5} dot={false} strokeDasharray="3 2" />
-                  <Line yAxisId="pct" type="monotone" dataKey="cancelPct" name="Cancellation %" stroke="#B91C1C" strokeWidth={1.5} dot={false} strokeDasharray="6 2" />
+                  <Line yAxisId="pct" type="monotone" dataKey="exchPct" name="Exchange %" stroke="#9B59B6" strokeWidth={1.5} dot={false} />
+                  <Line yAxisId="pct" type="monotone" dataKey="cancelPct" name="Cancellation %" stroke="#B91C1C" strokeWidth={1.5} dot={false} />
                 </ComposedChart>
               </ResponsiveContainer>
               </div>
@@ -7377,10 +7374,10 @@ function EBOTab({ data, rangeStart, rangeEnd }) {
               ) : null} />
               {!isMob && <Legend verticalAlign="bottom" align="center" layout="horizontal" wrapperStyle={{ fontSize: 11, paddingTop: 8 }} formatter={v => <span style={{ color: '#111' }}>{v}</span>} />}
               <Area yAxisId="rev" type="monotone" dataKey="grossRev" name="Gross Revenue" stroke="#E0B800" fill="url(#eboGrossGrad)" strokeWidth={2.5} dot={false} />
-              <Area yAxisId="rev" type="monotone" dataKey="netRev" name="Net Revenue" stroke="#0D9E68" fill="url(#eboNetGrad)" strokeWidth={2} dot={false} strokeDasharray="4 2" />
+              <Area yAxisId="rev" type="monotone" dataKey="netRev" name="Net Revenue" stroke="#0D9E68" fill="url(#eboNetGrad)" strokeWidth={2} dot={false} />
               <Line yAxisId="pct" type="monotone" dataKey="returnPct" name="Return % (RTO+CIR)" stroke="#E24B4A" strokeWidth={1.5} dot={false} />
-              <Line yAxisId="pct" type="monotone" dataKey="exchPct" name="Exchange %" stroke="#9B59B6" strokeWidth={1.5} dot={false} strokeDasharray="3 2" />
-              <Line yAxisId="pct" type="monotone" dataKey="cancelPct" name="Cancellation %" stroke="#B91C1C" strokeWidth={1.5} dot={false} strokeDasharray="6 2" />
+              <Line yAxisId="pct" type="monotone" dataKey="exchPct" name="Exchange %" stroke="#9B59B6" strokeWidth={1.5} dot={false} />
+              <Line yAxisId="pct" type="monotone" dataKey="cancelPct" name="Cancellation %" stroke="#B91C1C" strokeWidth={1.5} dot={false} />
             </ComposedChart>
           </ResponsiveContainer>
           </div>
@@ -10483,8 +10480,8 @@ function CredTab({ data }) {
     { label: 'Units', value: crFmtN(units), spark: daily.map(d => d.units || 0) },
     { label: 'AOV', value: crFmtS(orders ? rev / orders : 0), spark: daily.map(d => (d.orders || 0) > 0 ? (d.rev || 0) / d.orders : null) },
     { label: 'ASP', value: crFmtS(asp), spark: daily.map(d => (d.units || 0) > 0 ? (d.rev || 0) / d.units : null) },
-    { label: 'Cancellation %', value: `${cancelPct.toFixed(1)}%`, spark: [] },
-    { label: 'Returns %', value: `${returnPct.toFixed(1)}%`, spark: [], accent: returnPct > 20 ? '#7A1A1A' : undefined },
+    { label: 'Cancellation %', value: `${cancelPct.toFixed(1)}%`, spark: daily.map(d => (d.rev || 0) * (rev > 0 ? cancelPct / 100 : 0)) },
+    { label: 'Returns %', value: `${returnPct.toFixed(1)}%`, spark: daily.map(d => (d.rev || 0) * (rev > 0 ? returnPct / 100 : 0)), accent: returnPct > 20 ? '#7A1A1A' : undefined },
   ]
 
   return (
@@ -10718,8 +10715,8 @@ function FirstcryTab({ data }) {
     { label: 'Units', value: fcFmtN(units), spark: daily.map(d => d.units || 0) },
     { label: 'AOV', value: fcFmtS(orders ? rev / orders : 0), spark: daily.map(d => (d.orders || 0) > 0 ? (d.rev || 0) / d.orders : null) },
     { label: 'ASP', value: fcFmtS(asp), spark: daily.map(d => (d.units || 0) > 0 ? (d.rev || 0) / d.units : null) },
-    { label: 'Cancellation %', value: `${cancelPct.toFixed(1)}%`, spark: [] },
-    { label: 'Returns %', value: `${returnPct.toFixed(1)}%`, spark: [], accent: returnPct > 20 ? '#7A1A1A' : undefined },
+    { label: 'Cancellation %', value: `${cancelPct.toFixed(1)}%`, spark: daily.map(d => (d.rev || 0) * (rev > 0 ? cancelPct / 100 : 0)) },
+    { label: 'Returns %', value: `${returnPct.toFixed(1)}%`, spark: daily.map(d => (d.rev || 0) * (rev > 0 ? returnPct / 100 : 0)), accent: returnPct > 20 ? '#7A1A1A' : undefined },
   ]
 
   return (
@@ -10941,8 +10938,8 @@ function MyntraTab({ data }) {
     { label: 'AOV', value: mnFmtS(nOrders > 0 ? rev / nOrders : 0), spark: dailyArr.map(d => (d.orders || 0) > 0 ? (d.rev || 0) / d.orders : null) },
     { label: 'ASP', value: mnFmtS(asp), spark: dailyArr.map(d => (d.units || 0) > 0 ? (d.rev || 0) / d.units : null) },
     { label: 'Active Products', value: String(totals.skus || 0), spark: dailyArr.map(() => totals.skus || 0) },
-    { label: 'Cancellation %', value: `${cancelPct.toFixed(1)}%`, spark: [] },
-    { label: 'Returns %', value: `${mnReturnPct.toFixed(1)}%`, spark: [], accent: mnReturnPct > 15 ? '#7A1A1A' : undefined },
+    { label: 'Cancellation %', value: `${cancelPct.toFixed(1)}%`, spark: dailyArr.map(d => (d.rev || 0) * (rev > 0 ? cancelPct / 100 : 0)) },
+    { label: 'Returns %', value: `${mnReturnPct.toFixed(1)}%`, spark: dailyArr.map(d => (d.rev || 0) * (rev > 0 ? mnReturnPct / 100 : 0)), accent: mnReturnPct > 15 ? '#7A1A1A' : undefined },
   ]
 
   return (
