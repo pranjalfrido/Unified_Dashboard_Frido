@@ -7597,7 +7597,7 @@ function AmazonTab({ data, channelView, setChannelView }) {
     { label: 'Units', value: amzFmtN(amzMobUnits), spark: scDailyArr.map(d => (d.FBA_units || 0) + (d.MFN_units || 0)) },
     { label: 'AOV', value: amzFmtS(amzMobAOV), spark: scDailyArr.map(d => { const o = (d.FBA_orders||0)+(d.MFN_orders||0); const r = (d.FBA||0)+(d.MFN||0); return o > 0 ? r / o : null }) },
     { label: 'ASP', value: amzFmtS(amzMobASP), spark: scDailyArr.map(d => { const u = (d.FBA_units||0)+(d.MFN_units||0); const r = (d.FBA||0)+(d.MFN||0); return u > 0 ? r / u : null }) },
-    { label: 'Returns %', value: `${amzCombinedReturnPct.toFixed(1)}%`, spark: scDailyArr.map(() => amzCombinedReturnPct), accent: amzCombinedReturnPct > 18 ? '#7A1A1A' : undefined },
+    { label: 'Returns %', value: `${amzCombinedReturnPct.toFixed(1)}%`, spark: scDailyArr.map(d => ((d.FBA || 0) + (d.MFN || 0)) * (amzMobGrossRev > 0 ? amzCombinedReturnPct / 100 : 0)), accent: amzCombinedReturnPct > 18 ? '#7A1A1A' : undefined },
   ]
 
   return (
@@ -7756,10 +7756,10 @@ function AmazonTab({ data, channelView, setChannelView }) {
                   <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
                     <div style={{ display: 'flex', gap: 4 }}>
                       {[{ v: 'rev', label: 'Revenue' }, { v: 'orders', label: 'Orders' }, { v: 'units', label: 'Units' }].map(opt => (
-                        <button key={opt.v} onClick={() => setOvTrendMetric(opt.v)} style={{ fontSize: 11, fontWeight: 600, padding: '3px 10px', borderRadius: 5, border: `1.5px solid ${ovTrendMetric === opt.v ? C.t1 : C.border}`, background: ovTrendMetric === opt.v ? C.t1 : 'transparent', color: ovTrendMetric === opt.v ? '#fff' : C.t2, cursor: 'pointer', fontFamily: 'var(--font)' }}>{opt.label}</button>
+                        <button key={opt.v} onClick={() => setOvTrendMetric(opt.v)} style={{ fontSize: isMob ? 9 : 11, fontWeight: 600, padding: isMob ? '2px 6px' : '3px 10px', borderRadius: 5, border: `1.5px solid ${ovTrendMetric === opt.v ? C.t1 : C.border}`, background: ovTrendMetric === opt.v ? C.t1 : 'transparent', color: ovTrendMetric === opt.v ? '#fff' : C.t2, cursor: 'pointer', fontFamily: 'var(--font)' }}>{opt.label}</button>
                       ))}
                     </div>
-                    <select value={ovTrendGroup} onChange={e => setOvTrendGroup(e.target.value)} style={{ fontSize: 11, fontWeight: 600, padding: '3px 8px', borderRadius: 6, border: `1px solid ${C.border2}`, background: C.card, color: C.t1, cursor: 'pointer', fontFamily: 'var(--font)', outline: 'none' }}>
+                    <select value={ovTrendGroup} onChange={e => setOvTrendGroup(e.target.value)} style={{ fontSize: isMob ? 9 : 11, fontWeight: 600, padding: isMob ? '2px 4px' : '3px 8px', borderRadius: 6, border: `1px solid ${C.border2}`, background: C.card, color: C.t1, cursor: 'pointer', fontFamily: 'var(--font)', outline: 'none' }}>
                       {['daily','weekly','monthly','quarterly'].map(g => <option key={g} value={g}>{g.charAt(0).toUpperCase() + g.slice(1)}</option>)}
                     </select>
                   </div>
@@ -7783,9 +7783,9 @@ function AmazonTab({ data, channelView, setChannelView }) {
                       ) : null} />
                       {!isMob && <Legend verticalAlign="bottom" align="center" layout="horizontal" wrapperStyle={{ fontSize: 10, paddingTop: 8 }} formatter={v => <span style={{ color: '#111' }}>{v}</span>} />}
                       <Area yAxisId="main" type="monotone" dataKey={dk.total} name={dk.totalName} stroke="#FFD600" fill="#FFD60022" strokeWidth={2} dot={false} />
-                      {isRev && <Area yAxisId="main" type="monotone" dataKey={dk.sub} name={dk.subName} stroke="#0D9E68" fill="#0D9E6811" strokeWidth={2} dot={false} strokeDasharray="4 2" />}
+                      {isRev && <Area yAxisId="main" type="monotone" dataKey={dk.sub} name={dk.subName} stroke="#0D9E68" fill="#0D9E6811" strokeWidth={2} dot={false} />}
                       {channelView === 'all' && <Line yAxisId="main" type="monotone" dataKey={dk.a} name={dk.aName} stroke="#E8930A" strokeWidth={1.5} dot={false} />}
-                      {channelView === 'all' && <Line yAxisId="main" type="monotone" dataKey={dk.b} name={dk.bName} stroke="#2E74CC" strokeWidth={1.5} dot={false} strokeDasharray="3 2" />}
+                      {channelView === 'all' && <Line yAxisId="main" type="monotone" dataKey={dk.b} name={dk.bName} stroke="#2E74CC" strokeWidth={1.5} dot={false} />}
                     </ComposedChart>
                   </ResponsiveContainer>
                   </div>
