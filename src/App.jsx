@@ -7752,18 +7752,30 @@ function AmazonTab({ data, channelView, setChannelView }) {
             const statusColors = { Shipped: '#2E74CC', Pending: '#E8930A', Cancelled: '#E24B4A', Shipping: '#9B59B6' }
             return (
               <div className="g-3col" style={{ display: 'grid', gridTemplateColumns: '1.5fr 1fr 0.65fr', gap: 14, alignItems: 'start' }}>
-                <Card fill title="Revenue & Returns Trend" style={{ height: 360, alignSelf: 'start' }} note={channelView !== 'all' ? (channelView === 'sc' ? 'Seller Central' : 'Vendor Central') : undefined} action={
+                <Card fill title="Revenue & Returns Trend" style={{ height: 360, alignSelf: 'start' }} note={channelView !== 'all' ? (channelView === 'sc' ? 'Seller Central' : 'Vendor Central') : undefined} action={!isMob ? (
                   <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
                     <div style={{ display: 'flex', gap: 4 }}>
                       {[{ v: 'rev', label: 'Revenue' }, { v: 'orders', label: 'Orders' }, { v: 'units', label: 'Units' }].map(opt => (
-                        <button key={opt.v} onClick={() => setOvTrendMetric(opt.v)} style={{ fontSize: isMob ? 9 : 11, fontWeight: 600, padding: isMob ? '2px 6px' : '3px 10px', borderRadius: 5, border: `1.5px solid ${ovTrendMetric === opt.v ? C.t1 : C.border}`, background: ovTrendMetric === opt.v ? C.t1 : 'transparent', color: ovTrendMetric === opt.v ? '#fff' : C.t2, cursor: 'pointer', fontFamily: 'var(--font)' }}>{opt.label}</button>
+                        <button key={opt.v} onClick={() => setOvTrendMetric(opt.v)} style={{ fontSize: 11, fontWeight: 600, padding: '3px 10px', borderRadius: 5, border: `1.5px solid ${ovTrendMetric === opt.v ? C.t1 : C.border}`, background: ovTrendMetric === opt.v ? C.t1 : 'transparent', color: ovTrendMetric === opt.v ? '#fff' : C.t2, cursor: 'pointer', fontFamily: 'var(--font)' }}>{opt.label}</button>
                       ))}
                     </div>
-                    <select value={ovTrendGroup} onChange={e => setOvTrendGroup(e.target.value)} style={{ fontSize: isMob ? 9 : 11, fontWeight: 600, padding: isMob ? '2px 4px' : '3px 8px', borderRadius: 6, border: `1px solid ${C.border2}`, background: C.card, color: C.t1, cursor: 'pointer', fontFamily: 'var(--font)', outline: 'none' }}>
+                    <select value={ovTrendGroup} onChange={e => setOvTrendGroup(e.target.value)} style={{ fontSize: 11, fontWeight: 600, padding: '3px 8px', borderRadius: 6, border: `1px solid ${C.border2}`, background: C.card, color: C.t1, cursor: 'pointer', fontFamily: 'var(--font)', outline: 'none' }}>
                       {['daily','weekly','monthly','quarterly'].map(g => <option key={g} value={g}>{g.charAt(0).toUpperCase() + g.slice(1)}</option>)}
                     </select>
                   </div>
-                }>
+                ) : undefined}>
+                  {isMob && (
+                    <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 6, marginBottom: 8, alignItems: 'center' }}>
+                      <div style={{ display: 'flex', gap: 4 }}>
+                        {[{ v: 'rev', label: 'Revenue' }, { v: 'orders', label: 'Orders' }, { v: 'units', label: 'Units' }].map(opt => (
+                          <button key={opt.v} onClick={() => setOvTrendMetric(opt.v)} style={{ fontSize: 10, fontWeight: 600, padding: '2px 7px', borderRadius: 5, border: `1.5px solid ${ovTrendMetric === opt.v ? C.t1 : C.border}`, background: ovTrendMetric === opt.v ? C.t1 : 'transparent', color: ovTrendMetric === opt.v ? '#fff' : C.t2, cursor: 'pointer', fontFamily: 'var(--font)' }}>{opt.label}</button>
+                        ))}
+                      </div>
+                      <select value={ovTrendGroup} onChange={e => setOvTrendGroup(e.target.value)} style={{ fontSize: 10, fontWeight: 600, padding: '2px 4px', borderRadius: 6, border: `1px solid ${C.border2}`, background: C.card, color: C.t1, cursor: 'pointer', fontFamily: 'var(--font)', outline: 'none' }}>
+                        {['daily','weekly','monthly','quarterly'].map(g => <option key={g} value={g}>{g.charAt(0).toUpperCase() + g.slice(1)}</option>)}
+                      </select>
+                    </div>
+                  )}
                   <div style={isMob ? { margin: '0 -18px' } : {}}>
                   <ResponsiveContainer width="100%" height={isMob ? 240 : 300} minHeight={200}>
                     <ComposedChart data={groupedWithRet} margin={{ top: 4, right: isMob ? 18 : 12, bottom: 0, left: isMob ? 18 : 0 }}>

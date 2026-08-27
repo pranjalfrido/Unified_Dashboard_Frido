@@ -412,11 +412,6 @@ html,body{height:100%;background:var(--bg);font-family:var(--font);color:var(--t
   .hb-track { display: none !important }
   .hb-value { margin-left: auto !important }
 
-  /* ── Card header: title on line 1, action right-aligned on line 2 ────── */
-  .card-header { flex-wrap: wrap !important; gap: 4px 0 !important }
-  .card-header > div:first-child { width: 100% }
-  .card-header > div:last-child { margin-left: auto }
-
   /* ── 3-col grids → single column on mobile ───────────────────────────── */
   .g-3col { grid-template-columns: 1fr !important }
   .g-3col > * { max-width: 100%; overflow: hidden }
