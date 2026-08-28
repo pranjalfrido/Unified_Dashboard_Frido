@@ -331,9 +331,9 @@ export function TrendAnalysisCard({ title, daily, grossColor, grossGradId, revKe
         {GROUP_OPTS.map(x => <option key={x.id} value={x.id}>{x.label}</option>)}
       </select>
     }>
-      <div style={isMob ? { margin: '0 -18px' } : {}}>
+      <div style={isMob ? { margin: '0 -28px' } : {}}>
       <ResponsiveContainer width="100%" height={isMob ? 220 : '100%'} minHeight={220}>
-        <ComposedChart data={grouped} margin={{ top: 4, right: isMob ? 36 : 40, bottom: isMob ? 20 : 30, left: isMob ? 36 : 0 }}>
+        <ComposedChart data={grouped} margin={{ top: 4, right: isMob ? 44 : 40, bottom: isMob ? 20 : 30, left: isMob ? 44 : 0 }}>
           <defs>
             <linearGradient id={gradId} x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor={grossColor} stopOpacity={0.2} /><stop offset="95%" stopColor={grossColor} stopOpacity={0} /></linearGradient>
             <linearGradient id={gradId + '_net'} x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#B8960C" stopOpacity={0.15} /><stop offset="95%" stopColor="#B8960C" stopOpacity={0} /></linearGradient>
