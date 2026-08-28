@@ -10944,11 +10944,11 @@ function MyntraTab({ data }) {
   const mnStateTotal = mn.stateTotal || 0
   const mnCityTotal = mn.cityTotal || 0
 
-  // Category matrix data — Myntra has no Cancel/RTO/CIR/Exch breakdown at category level.
+  // Category matrix data
   const catMatrixData = {}
-  ;(mn.categories || []).forEach(c => { catMatrixData[c.category] = { rev: c.rev, excRev: c.excRev || 0, units: c.units, orders: c.orders, returnRev: 0 } })
+  ;(mn.categories || []).forEach(c => { catMatrixData[c.category] = { rev: c.rev, excRev: c.excRev || 0, units: c.units, orders: c.orders, returnRev: c.returnRev || 0 } })
   const subCatMatrixData = {}
-  ;(mn.subCategories || []).forEach(x => { if (!subCatMatrixData[x.category]) subCatMatrixData[x.category] = {}; subCatMatrixData[x.category][x.subcategory] = { rev: x.rev, excRev: x.excRev || 0, units: x.units, orders: x.orders, returnRev: 0 } })
+  ;(mn.subCategories || []).forEach(x => { if (!subCatMatrixData[x.category]) subCatMatrixData[x.category] = {}; subCatMatrixData[x.category][x.subcategory] = { rev: x.rev, excRev: x.excRev || 0, units: x.units, orders: x.orders, returnRev: x.returnRev || 0 } })
   const catRowsForCatSubCat = (mn.categories || []).map(c => ({ name: c.category, rev: c.rev, excRev: c.excRev || 0, units: c.units, orders: c.orders }))
   const subCatRowsForCatSubCat = (mn.subCategories || []).map(x => ({ name: x.subcategory, category: x.category, rev: x.rev, excRev: x.excRev || 0, units: x.units, orders: x.orders }))
 
