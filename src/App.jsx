@@ -9943,9 +9943,9 @@ function BlinkitTab({ data }) {
     { label: 'Net Revenue', value: blFmtS(excRev), spark: daily.map(d => d.excRev || (d.rev || 0) * (rev > 0 ? excRev / rev : 0)) },
     { label: 'GST', value: blFmtS(gst), spark: daily.map(d => (d.rev || 0) * (rev > 0 ? gst / rev : 0)) },
     { label: 'Daily Avg Rev', value: blFmtS(dailyAvg), spark: daily.map(d => d.rev || 0) },
-    { label: 'Orders', value: blFmtN(orders), spark: daily.map(d => d.orders || 0) },
+    { label: 'Orders', value: blFmtN(orders), spark: daily.map(d => (d.orders || 0) > 0 ? d.orders : (d.rev || 0) * (rev > 0 ? orders / rev : 0)) },
     { label: 'Units', value: blFmtN(units), spark: daily.map(d => d.units || 0) },
-    { label: 'AOV', value: blFmtS(aov), spark: daily.map(d => (d.orders || 0) > 0 ? (d.rev || 0) / d.orders : null) },
+    { label: 'AOV', value: blFmtS(aov), spark: daily.map(d => (d.rev || 0) * (rev > 0 ? aov / rev : 0)) },
     { label: 'ASP', value: blFmtS(asp), spark: daily.map(d => (d.units || 0) > 0 ? (d.rev || 0) / d.units : null) },
   ]
 
@@ -10027,7 +10027,7 @@ function BlinkitTab({ data }) {
       </div>
 
       {/* Category Matrix */}
-      <FinancialCategoryMatrix catData={catMatrixData} subCatData={subCatMatrixData} skuData={bl.skuMatrix || {}} title="Category Revenue Matrix · Blinkit" showMoM={true} catPrevMap={bl.catPrevMap || {}} subCatPrevMap={bl.subCatPrevMap || {}} skuPrevMap={bl.skuPrevMap || {}} />
+      <FlatCategoryProductMatrix catData={catMatrixData} subCatData={subCatMatrixData} skuData={{}} title="Category Revenue Matrix · Blinkit" catPrevMap={bl.catPrevMap || {}} subCatPrevMap={bl.subCatPrevMap || {}} noReturns />
 
       {/* Cities + States */}
       {(() => {
@@ -10118,9 +10118,9 @@ function InstaTab({ data }) {
     { label: 'Net Revenue', value: insFmtS(excRev), spark: daily.map(d => d.excRev || (d.rev || 0) * (rev > 0 ? excRev / rev : 0)) },
     { label: 'GST', value: insFmtS(gst), spark: daily.map(d => (d.rev || 0) * (rev > 0 ? gst / rev : 0)) },
     { label: 'Daily Avg Rev', value: insFmtS(dailyAvg), spark: daily.map(d => d.rev || 0) },
-    { label: 'Orders', value: insFmtN(orders), spark: daily.map(d => d.orders || 0) },
+    { label: 'Orders', value: insFmtN(orders), spark: daily.map(d => (d.orders || 0) > 0 ? d.orders : (d.rev || 0) * (rev > 0 ? orders / rev : 0)) },
     { label: 'Units', value: insFmtN(units), spark: daily.map(d => d.units || 0) },
-    { label: 'AOV', value: insFmtS(aov), spark: daily.map(d => (d.orders || 0) > 0 ? (d.rev || 0) / d.orders : null) },
+    { label: 'AOV', value: insFmtS(aov), spark: daily.map(d => (d.rev || 0) * (rev > 0 ? aov / rev : 0)) },
     { label: 'ASP', value: insFmtS(asp), spark: daily.map(d => (d.units || 0) > 0 ? (d.rev || 0) / d.units : null) },
   ]
 
@@ -10199,7 +10199,7 @@ function InstaTab({ data }) {
         })()}
       </div>
 
-      <FinancialCategoryMatrix catData={catMatrixData} subCatData={subCatMatrixData} skuData={ins.skuMatrix || {}} title="Category Revenue Matrix · Instamart" showMoM={true} catPrevMap={ins.catPrevMap || {}} subCatPrevMap={ins.subCatPrevMap || {}} skuPrevMap={ins.skuPrevMap || {}} />
+      <FlatCategoryProductMatrix catData={catMatrixData} subCatData={subCatMatrixData} skuData={{}} title="Category Revenue Matrix · Instamart" catPrevMap={ins.catPrevMap || {}} subCatPrevMap={ins.subCatPrevMap || {}} noReturns />
 
       {(() => {
         const statePrevMap = ins.statePrevMap || {}
@@ -10289,9 +10289,9 @@ function ZeptoTab({ data }) {
     { label: 'Net Revenue', value: zpFmtS(excRev), spark: daily.map(d => d.excRev || (d.rev || 0) * (rev > 0 ? excRev / rev : 0)) },
     { label: 'GST', value: zpFmtS(gst), spark: daily.map(d => (d.rev || 0) * (rev > 0 ? gst / rev : 0)) },
     { label: 'Daily Avg Rev', value: zpFmtS(dailyAvg), spark: daily.map(d => d.rev || 0) },
-    { label: 'Orders', value: zpFmtN(orders), spark: daily.map(d => d.orders || 0) },
+    { label: 'Orders', value: zpFmtN(orders), spark: daily.map(d => (d.orders || 0) > 0 ? d.orders : (d.rev || 0) * (rev > 0 ? orders / rev : 0)) },
     { label: 'Units', value: zpFmtN(units), spark: daily.map(d => d.units || 0) },
-    { label: 'AOV', value: zpFmtS(aov), spark: daily.map(d => (d.orders || 0) > 0 ? (d.rev || 0) / d.orders : null) },
+    { label: 'AOV', value: zpFmtS(aov), spark: daily.map(d => (d.rev || 0) * (rev > 0 ? aov / rev : 0)) },
     { label: 'ASP', value: zpFmtS(asp), spark: daily.map(d => (d.units || 0) > 0 ? (d.rev || 0) / d.units : null) },
   ]
 
@@ -10370,7 +10370,7 @@ function ZeptoTab({ data }) {
         })()}
       </div>
 
-      <FinancialCategoryMatrix catData={catMatrixData} subCatData={subCatMatrixData} skuData={zp.skuMatrix || {}} title="Category Revenue Matrix · Zepto" showMoM={true} catPrevMap={zp.catPrevMap || {}} subCatPrevMap={zp.subCatPrevMap || {}} skuPrevMap={zp.skuPrevMap || {}} />
+      <FlatCategoryProductMatrix catData={catMatrixData} subCatData={subCatMatrixData} skuData={{}} title="Category Revenue Matrix · Zepto" catPrevMap={zp.catPrevMap || {}} subCatPrevMap={zp.subCatPrevMap || {}} noReturns />
 
       {(() => {
         const statePrevMap = zp.statePrevMap || {}
