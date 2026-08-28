@@ -364,6 +364,7 @@ export function TrendAnalysisCard({ title, daily, grossColor, grossGradId, revKe
           {showSnd && <Line yAxisId="rev" type="monotone" dataKey="_snd" name="SnD" stroke="#92720A" strokeWidth={1.5} dot={false} strokeDasharray="3 3" />}
         </ComposedChart>
       </ResponsiveContainer>
+      </div>
       {isMob && (
         <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'center', gap: '4px 12px', marginTop: 6 }}>
           {[{ name: 'Gross Revenue', color: grossColor }, ...(showNet ? [{ name: 'Net Revenue', color: '#B8960C' }] : []), ...(showCogs ? [{ name: 'COGS', color: '#F59E0B' }] : []), ...(showSnd ? [{ name: 'SnD', color: '#92720A' }] : [])].map(it => (
