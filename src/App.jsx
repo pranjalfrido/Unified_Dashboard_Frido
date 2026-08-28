@@ -10493,8 +10493,8 @@ function CredTab({ data }) {
     { label: 'Units', value: crFmtN(units), spark: daily.map(d => d.units || 0) },
     { label: 'AOV', value: crFmtS(orders ? rev / orders : 0), spark: daily.map(d => (d.orders || 0) > 0 ? (d.rev || 0) / d.orders : null) },
     { label: 'ASP', value: crFmtS(asp), spark: daily.map(d => (d.units || 0) > 0 ? (d.rev || 0) / d.units : null) },
-    { label: 'Cancellation %', value: `${cancelPct.toFixed(1)}%`, spark: daily.map(d => (d.rev || 0) * (rev > 0 ? cancelPct / 100 : 0)) },
-    { label: 'Returns %', value: `${returnPct.toFixed(1)}%`, spark: daily.map(d => (d.rev || 0) * (rev > 0 ? returnPct / 100 : 0)), accent: returnPct > 20 ? '#7A1A1A' : undefined },
+    { label: 'Cancellation %', value: `${cancelPct.toFixed(1)}%`, spark: cancelPct > 0 ? daily.map(d => (d.rev || 0) * (rev > 0 ? cancelPct / 100 : 0)) : daily.map(d => d.rev || 0) },
+    { label: 'Returns %', value: `${returnPct.toFixed(1)}%`, spark: returnPct > 0 ? daily.map(d => (d.rev || 0) * (rev > 0 ? returnPct / 100 : 0)) : daily.map(d => d.rev || 0), accent: returnPct > 20 ? '#7A1A1A' : undefined },
   ]
 
   return (
@@ -10746,8 +10746,8 @@ function FirstcryTab({ data }) {
     { label: 'Units', value: fcFmtN(units), spark: daily.map(d => d.units || 0) },
     { label: 'AOV', value: fcFmtS(orders ? rev / orders : 0), spark: daily.map(d => (d.orders || 0) > 0 ? (d.rev || 0) / d.orders : null) },
     { label: 'ASP', value: fcFmtS(asp), spark: daily.map(d => (d.units || 0) > 0 ? (d.rev || 0) / d.units : null) },
-    { label: 'Cancellation %', value: `${cancelPct.toFixed(1)}%`, spark: daily.map(d => (d.rev || 0) * (rev > 0 ? cancelPct / 100 : 0)) },
-    { label: 'Returns %', value: `${returnPct.toFixed(1)}%`, spark: daily.map(d => (d.rev || 0) * (rev > 0 ? returnPct / 100 : 0)), accent: returnPct > 20 ? '#7A1A1A' : undefined },
+    { label: 'Cancellation %', value: `${cancelPct.toFixed(1)}%`, spark: cancelPct > 0 ? daily.map(d => (d.rev || 0) * (rev > 0 ? cancelPct / 100 : 0)) : daily.map(d => d.rev || 0) },
+    { label: 'Returns %', value: `${returnPct.toFixed(1)}%`, spark: returnPct > 0 ? daily.map(d => (d.rev || 0) * (rev > 0 ? returnPct / 100 : 0)) : daily.map(d => d.rev || 0), accent: returnPct > 20 ? '#7A1A1A' : undefined },
   ]
 
   return (
