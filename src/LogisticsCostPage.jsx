@@ -2,8 +2,8 @@ import { useState, useEffect, useMemo, useRef, useCallback, Children } from 'rea
 import { C, fmt, fmtN, fmtBig, COURIER_COLORS, COURIER_LOGOS } from './utils.js'
 import {
   Card, Badge, DataTable, ChartTooltip,
-  BarChart, Bar, Line, ComposedChart, AreaChart, Area, XAxis, YAxis, CartesianGrid,
-  Tooltip, Legend, LabelList, PieChart, Pie, ResponsiveContainer, Cell,
+  BarChart, Bar, Line, LineChart, ComposedChart, AreaChart, Area, XAxis, YAxis, CartesianGrid,
+  Tooltip, Legend, LabelList, PieChart, Pie, ResponsiveContainer, Cell, ReferenceLine,
 } from './components.jsx'
 
 // ── Logistics Cost Analytics ──────────────────────────────────
@@ -73,8 +73,15 @@ function CourierCell({ name }) {
         ? <img src={logo} alt="" onError={() => setBad(true)}
             style={{ width: 18, height: 18, objectFit: 'contain', borderRadius: 3,
                      flexShrink: 0, background: '#fff' }} />
-        // Fixed-size placeholder, so names stay left-aligned whether or not a mark exists.
-        : <span style={{ width: 18, flexShrink: 0 }} />}
+        // No logo: the initials badge, matching the sidebar so a carrier looks identical
+        // wherever it appears. Fixed width either way, so names stay aligned down the column.
+        : <span style={{
+            width: 18, height: 18, borderRadius: 5, flexShrink: 0,
+            background: COURIER_COLORS[name] || '#94a3b8',
+            display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+            fontSize: 8, fontWeight: 800, letterSpacing: '-.02em', color: '#fff',
+            boxShadow: 'inset 0 1px 0 rgba(255,255,255,.22)',
+          }}>{initials(name)}</span>}
       {name}
     </span>
   )
@@ -83,13 +90,13 @@ function CourierCell({ name }) {
 const BAND_LABEL = { '0-1': '0 – 1 kg', '1-2': '1 – 2 kg', '2-5': '2 – 5 kg', '5-10': '5 – 10 kg', '10+': '10 kg +' }
 
 const SCOPES = [
-  { id: 'all', label: 'Overall', hint: 'B2B + B2C combined summary' },
+  { id: 'all', label: 'Overview', hint: 'FTL/PTL + B2C combined summary' },
   { id: 'b2c', label: 'B2C', hint: 'Courier / parcel shipments' },
-  { id: 'b2b', label: 'B2B', hint: 'Transporter freight, lane-wise' },
+  { id: 'b2b', label: 'FTL/PTL', hint: 'Full / part truckload freight, lane-wise' },
 ]
 
 const EMPTY_FILTERS = {
-  months: [], zones: [], modes: [], payments: [], couriers: [],
+  months: [], zones: [], modes: [], payments: [], couriers: [], transporters: [], vehicleTypes: [], freightTypes: [],
   accountTypes: [], band: null, destCity: null, billing: 'all',
 }
 
@@ -256,7 +263,7 @@ function Tile({ label, value, sub, badge, accent }) {
     // the grid. Now the label pins to the top, the value sits directly under it, and the sub
     // is pushed to the bottom by `marginTop: auto`, so the three bands line up across every
     // card regardless of how long any one sub is.
-    <div className="kpi-card" style={{ padding: '9px 14px', display: 'flex', flexDirection: 'column', gap: 2 }}>
+    <div className="kpi-card" style={{ padding: '7px 13px', display: 'flex', flexDirection: 'column', gap: 2 }}>
       <div className="kpi-label">{label}</div>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 4 }}>
         <div className="kpi-value" style={{ fontSize: 17, marginBottom: 0, ...(accent ? { color: accent } : {}) }}>{value}</div>
@@ -277,9 +284,9 @@ function Tile({ label, value, sub, badge, accent }) {
 
 // The one number this tab exists to report, at display size. Proportional figures
 // (no tabular-nums) — equal-width digits read loose at this scale.
-function Hero({ label, value, sub, deltas, children }) {
+function Hero({ label, value, sub, deltas, children, sparkMin }) {
   return (
-    <div className="kpi-card" style={{ display: 'flex', flexDirection: 'column', gap: 6, padding: '14px 22px' }}>
+    <div className="kpi-card" style={{ display: 'flex', flexDirection: 'column', gap: 5, padding: '12px 20px' }}>
       <div className="kpi-label" style={{ fontSize: 11 }}>{label}</div>
       {/* Value left, change badges pinned RIGHT — same arrangement as the Tile badges, so
           the eye finds every MoM figure in the same place down the row. space-between rather
@@ -302,7 +309,7 @@ function Hero({ label, value, sub, deltas, children }) {
         )}
       </div>
       {sub && <div className="kpi-sub" style={{ fontSize: 12.5, marginTop: 2, lineHeight: 1.5 }}>{sub}</div>}
-      {children && <div style={{ flex: 1, minHeight: 38, paddingTop: 6 }}>{children}</div>}
+      {children && <div style={{ flex: 1, minHeight: sparkMin ?? 30, paddingTop: 4 }}>{children}</div>}
     </div>
   )
 }
@@ -329,6 +336,18 @@ function SectionHdr({ title, note, collapsed, onToggle }) {
 // Courier row with its logo — the same treatment as the Logistics Performance
 // sidebar, so a courier looks identical on both tabs. Falls back to a coloured
 // initial when the logo asset is missing or fails to load.
+// Initials for a carrier with no logo. TWO letters, not one: the FTL/PTL transporters gave
+// A / J / K / R / V, which carry almost no identity and would collide the moment a second
+// carrier shares a first letter. First letters of the first two words where there are two,
+// otherwise the first two characters — ARB Logistic -> AL, Jopadevi -> JO.
+function initials(name) {
+  const words = String(name || '').replace(/[^A-Za-z ]/g, ' ').split(/s+/).filter(Boolean)
+  const s = words.length > 1
+    ? words[0][0] + words[1][0]
+    : String(name || '').replace(/[^A-Za-z]/g, '').slice(0, 2)
+  return s.toUpperCase()
+}
+
 function CourierRow({ label, active, onClick }) {
   const [imgErr, setImgErr] = useState(false)
   const logo = COURIER_LOGOS[label]
@@ -346,7 +365,13 @@ function CourierRow({ label, active, onClick }) {
       {logo && !imgErr
         ? <img src={logo} alt="" onError={() => setImgErr(true)}
             style={{ width: 22, height: 22, objectFit: 'contain', borderRadius: 4, flexShrink: 0, background: '#fff', padding: 1 }} />
-        : <span style={{ width: 22, height: 22, borderRadius: 4, background: COURIER_COLORS[label] || '#64748b', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 9, fontWeight: 800, color: '#fff', flexShrink: 0 }}>{label.charAt(0)}</span>
+        : <span style={{
+            width: 22, height: 22, borderRadius: 6, flexShrink: 0,
+            background: COURIER_COLORS[label] || '#64748b',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            fontSize: 9.5, fontWeight: 800, letterSpacing: '-.02em', color: '#fff',
+            boxShadow: 'inset 0 1px 0 rgba(255,255,255,.22), 0 0 0 1px rgba(0,0,0,.06)',
+          }}>{initials(label)}</span>
       }
       {label}
     </button>
@@ -512,8 +537,6 @@ function SearchSelect({ label, options, value, onChange, multi, selected }) {
     </div>
   )
 }
-
-
 
 // Inline magnitude bar for a table cell — gives share-of-total a visual shape
 // without spending a whole chart on it. Single hue: one series, one colour.
@@ -684,7 +707,7 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters 
   const [internalFilters, setInternalFilters] = useState(EMPTY_FILTERS)
   const filters = externalFilters || internalFilters
   const setFilters = setExternalFilters || setInternalFilters
-  const [opts, setOpts] = useState({ months: [], zones: [], modes: [], payments: [], couriers: [], accountTypes: [], cities: [] })
+  const [opts, setOpts] = useState({ months: [], zones: [], modes: [], payments: [], couriers: [], transporters: [], vehicleTypes: [], freightTypes: [], accountTypes: [], cities: [] })
   const [sidebarOpen, setSidebarOpen] = useState(true)
   // 'all' = B2B + B2C summary · 'b2c' = courier detail · 'b2b' = lane-wise freight
   const [scope, setScope] = useState('all')
@@ -776,6 +799,14 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters 
           transporters: j.b2bTrans || [],
           months: j.b2bMonths || [],
           types: j.b2bTypes || [],
+          // Contract variance against the signed rate card, plus the coverage gap that
+          // bounds it. Kept on the b2b object so every FTL/PTL view reads one source.
+          variance: j.b2bVar || null,
+          varMonths: j.b2bVarMonths || [],
+          transMonths: j.b2bTransMonths || [],
+          vehicles: j.b2bVehicles || [],
+          laneVeh: j.b2bLaneVeh || [],
+          sole: j.b2bSole || null,
         })
         if (j.options) {
           setOpts({
@@ -784,6 +815,9 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters 
             modes: j.options.modes || [],
             payments: j.options.payments || [],
             couriers: j.options.couriers || [],
+            transporters: j.options.transporters || [],
+            vehicleTypes: j.options.vehicle_types || [],
+            freightTypes: j.options.freight_types || [],
             accountTypes: j.options.account_types || [],
             cities: j.options.cities || [],
           })
@@ -889,7 +923,6 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters 
         return ia - ib
       })
   }, [agg])
-
 
   const modeRows = useMemo(() => {
     if (!agg) return []
@@ -1206,7 +1239,6 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters 
     return out
   }, [agg, openCats, costToServe, subQuery])
 
-
   // Weight slab is where rate-card leakage usually hides — a slab whose ₹/kg is
   // out of line with its neighbours is a rounding or slab-boundary problem.
   const bandRows = useMemo(() => {
@@ -1290,33 +1322,44 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters 
   }, [agg])
 
   // ── B2B derived views ──
-  const b2bLaneRows = useMemo(() => {
-    if (!b2b) return []
-    return b2b.lanes.map(l => ({
-      lane: l.lane,
-      origin: l.origin_location,
-      dest: l.destination_location,
-      trips: Number(l.trips) || 0,
-      cost: Number(l.cost) || 0,
-      avgCost: Number(l.avg_cost) || 0,
-      minCost: Number(l.min_cost) || 0,
-      maxCost: Number(l.max_cost) || 0,
-      // Spread between cheapest and dearest trip on the same lane — a wide spread on a
-      // high-volume lane is the clearest sign of inconsistent rating.
-      spread: Number(l.max_cost) - Number(l.min_cost),
-      share: b2b.totals.cost ? (Number(l.cost) / Number(b2b.totals.cost)) * 100 : 0,
-    }))
-  }, [b2b])
+
+  // The FTL/PTL slicers, as ONE predicate. The aggregates come from the server's shared
+  // refCache, which is filter-independent by design (filtering there would leak one
+  // request's selection into the next), so narrowing happens on the client. Returning a
+  // single function keeps the rule in one place rather than repeated in six memos.
+  const b2bPick = useMemo(() => {
+    const tr = filters.transporters || [], vh = filters.vehicleTypes || [], ft = filters.freightTypes || []
+    if (!tr.length && !vh.length && !ft.length) return null
+    const T = tr.length ? new Set(tr) : null
+    const V = vh.length ? new Set(vh) : null
+    const F = ft.length ? new Set(ft) : null
+    // An empty selection in a row means ALL of that row, matching every other slicer here.
+    return r => (!T || T.has(r.transporter))
+      && (!V || V.has(r.vehicle))
+      && (!F || F.has(r.freight_type))
+  }, [filters.transporters, filters.vehicleTypes, filters.freightTypes])
 
   const b2bTransRows = useMemo(() => {
     if (!b2b) return []
-    const total = Number(b2b.totals.cost) || 0
-    return b2b.transporters.map(t => ({
-      key: t.key, trips: Number(t.trips) || 0, cost: Number(t.cost) || 0,
-      avgCost: Number(t.avg_cost) || 0,
-      share: total ? (Number(t.cost) / total) * 100 : 0,
-    }))
-  }, [b2b])
+    // Built from b2b.vehicles rather than b2b.transporters: that row set carries transporter,
+    // vehicle AND freight_type, so all three slicers apply. Using the transporter-only
+    // aggregate meant a vehicle selection emptied this table rather than narrowing it.
+    const by = new Map()
+    for (const v of b2b.vehicles || []) {
+      if (b2bPick && !b2bPick(v)) continue
+      const k = v.transporter
+      if (!by.has(k)) by.set(k, { key: k, trips: 0, cost: 0 })
+      const a = by.get(k)
+      a.trips += num(v.trips); a.cost += num(v.billed)
+    }
+    const rows = [...by.values()]
+    const total = rows.reduce((s2, r) => s2 + r.cost, 0)
+    return rows.map(r => ({
+      key: r.key, trips: r.trips, cost: r.cost,
+      avgCost: r.trips ? r.cost / r.trips : 0,
+      share: total ? (r.cost / total) * 100 : 0,
+    })).sort((a, b3) => b3.cost - a.cost)
+  }, [b2b, b2bPick])
 
   const b2bTypeRows = useMemo(() => {
     if (!b2b) return []
@@ -1326,7 +1369,7 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters 
       avgCost: Number(t.avg_cost) || 0,
       share: total ? (Number(t.cost) / total) * 100 : 0,
     }))
-  }, [b2b])
+  }, [b2b, b2bPick])
 
   const b2bMonthRows = useMemo(() => {
     if (!b2b) return []
@@ -1334,7 +1377,166 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters 
       month: monthLabel(m.key), raw: m.key,
       trips: Number(m.trips) || 0, cost: Number(m.cost) || 0,
     }))
-  }, [b2b])
+  }, [b2b, b2bPick])
+
+  // Freight as a share of goods value — the only figure this tab still takes from the
+  // priced table. Rate-card variance is deliberately not shown on FTL/PTL.
+  const b2bVariance = useMemo(() => {
+    const v = b2b?.variance
+    if (!v) return null
+    const billedAll = num(v.billed_all)
+    const value = v.value_total == null ? null : num(v.value_total)
+    return { freightPctValue: value ? (billedAll / value) * 100 : null }
+  }, [b2b, b2bPick])
+
+  // Monthly spend. The server now returns one row per month PER TRANSPORTER so the sidebar
+  // filter can bite, which means the client re-aggregates. Sums, not averages — a weighted
+  // mean of per-transporter medians would not be the month's real cost.
+  const b2bVarMonthRows = useMemo(() => {
+    if (!b2b) return []
+    const by = new Map()
+    for (const m of b2b.varMonths || []) {
+      if (b2bPick && !b2bPick(m)) continue
+      const k = m.month
+      if (!by.has(k)) by.set(k, { month: monthLabel(k), raw: k, trips: 0, billed: 0, billedPriced: 0, card: 0, variance: 0 })
+      const a = by.get(k)
+      a.trips += num(m.trips); a.billed += num(m.billed)
+      a.billedPriced += num(m.billed_priced); a.card += num(m.card_total)
+      a.variance += num(m.variance)
+    }
+    return [...by.values()]
+      .map(a => ({ ...a, variancePct: a.card ? (a.billedPriced / a.card - 1) * 100 : 0 }))
+      .sort((x, y) => String(x.raw).localeCompare(String(y.raw)))
+  }, [b2b, b2bPick])
+
+  // Vehicle type analysis, re-aggregated across the selected transporters. `lanes` and
+  // `transporters` are counted from the surviving rows rather than summed — summing distinct
+  // counts across transporters would double-count a lane both of them serve.
+  const b2bVehicleRows = useMemo(() => {
+    if (!b2b) return []
+    const by = new Map()
+    for (const v of b2b.vehicles || []) {
+      if (b2bPick && !b2bPick(v)) continue
+      const k = v.vehicle || '—'
+      if (!by.has(k)) by.set(k, { vehicle: k, trips: 0, cost: 0, lanes: 0, carriers: new Set(), priced: 0, variance: 0 })
+      const a = by.get(k)
+      a.trips += num(v.trips); a.cost += num(v.billed)
+      // Best available without the raw rows: the max lane count any single transporter shows
+      // on this vehicle. Summing would over-count shared lanes; max never overstates.
+      a.lanes = Math.max(a.lanes, num(v.lanes))
+      a.carriers.add(v.transporter)
+      a.priced += num(v.priced_trips); a.variance += num(v.variance)
+    }
+    const rows = [...by.values()]
+    const total = rows.reduce((s, r) => s + r.cost, 0)
+    return rows.map(r => ({
+      vehicle: r.vehicle, trips: r.trips, cost: r.cost,
+      avgCost: r.trips ? r.cost / r.trips : 0,
+      lanes: r.lanes, transporters: r.carriers.size,
+      variance: r.priced ? r.variance : null,
+      share: total ? (r.cost / total) * 100 : 0,
+    })).sort((a, b2) => b2.cost - a.cost)
+  }, [b2b, b2bPick])
+
+  // Lane x vehicle, re-aggregated. min/max are true extremes across the selected carriers,
+  // so they still answer "what is the cheapest and dearest this lane was billed at".
+  const b2bLaneVehRows = useMemo(() => {
+    if (!b2b) return []
+    const by = new Map()
+    for (const r of b2b.laneVeh || []) {
+      if (b2bPick && !b2bPick(r)) continue
+      const k = r.lane + '|' + (r.vehicle || '—')
+      if (!by.has(k)) by.set(k, {
+        lane: r.lane, origin: r.origin, dest: r.dest, vehicle: r.vehicle || '—',
+        trips: 0, cost: 0, minCost: Infinity, maxCost: 0,
+        carriers: new Set(), priced: 0, card: 0, variance: 0,
+      })
+      const a = by.get(k)
+      a.trips += num(r.trips); a.cost += num(r.cost)
+      a.minCost = Math.min(a.minCost, num(r.min_cost))
+      a.maxCost = Math.max(a.maxCost, num(r.max_cost))
+      a.carriers.add(r.transporter)
+      a.priced += num(r.priced_trips); a.card += num(r.card_cost); a.variance += num(r.variance)
+    }
+    return [...by.values()].map(a => ({
+      lane: a.lane, origin: a.origin, dest: a.dest, vehicle: a.vehicle,
+      trips: a.trips, cost: a.cost,
+      avgCost: a.trips ? a.cost / a.trips : 0,
+      minCost: a.minCost === Infinity ? 0 : a.minCost,
+      maxCost: a.maxCost,
+      transporters: a.carriers.size,
+      card: a.priced ? a.card : null,
+      variance: a.priced ? a.variance : null,
+    })).sort((a, b2) => b2.cost - a.cost)
+  }, [b2b, b2bPick])
+
+  // Single-sourcing: share of spend on lanes served by exactly one transporter. A commercial
+  // risk rather than a cost — there is no fallback and no competitive reference price.
+  const b2bSole = useMemo(() => {
+    const s = b2b?.sole
+    if (!s) return null
+    return {
+      lanes: num(s.sole_lanes), totalLanes: num(s.lanes),
+      spend: num(s.sole_spend),
+      pct: num(s.total_spend) ? (num(s.sole_spend) / num(s.total_spend)) * 100 : 0,
+    }
+  }, [b2b, b2bPick])
+
+  // Headline figures for the Cost Overview tiles. Derived from the per-transporter rows so
+  // the whole block responds to the sidebar selection, not just the charts below it.
+  const b2bHead = useMemo(() => {
+    if (!b2b) return null
+    const months = b2bVarMonthRows
+    const last = months[months.length - 1], prev = months[months.length - 2]
+    const spend = months.reduce((s, m) => s + m.billed, 0)
+    const trips = months.reduce((s, m) => s + m.trips, 0)
+    // Lane concentration: how much of the book rides on its three busiest lanes. A high
+    // figure is an operational dependency, not an error — but it is worth knowing.
+    const byLane = new Map()
+    for (const r of b2bLaneVehRows) byLane.set(r.lane, (byLane.get(r.lane) || 0) + r.cost)
+    const top3 = [...byLane.values()].sort((a, b3) => b3 - a).slice(0, 3).reduce((s, v) => s + v, 0)
+    return {
+      spend, trips,
+      lanes: byLane.size,
+      avgTrip: trips ? spend / trips : 0,
+      tripsPerMonth: months.length ? Math.round(trips / months.length) : 0,
+      // MoM on the latest complete period. null with one period — a change needs two points.
+      momPct: last && prev && prev.billed ? (last.billed / prev.billed - 1) * 100 : null,
+      momTrips: last && prev && prev.trips ? (last.trips / prev.trips - 1) * 100 : null,
+      top3Pct: spend ? (top3 / spend) * 100 : 0,
+    }
+  }, [b2b, b2bVarMonthRows, b2bLaneVehRows])
+
+  // Transporter spend by month, pivoted for a multi-series line. Each transporter becomes a
+  // key on every row so Recharts can draw one line per carrier.
+  //
+  // A month a transporter did not bill is left UNDEFINED, not zero: VS Transport and
+  // KM-Logistic have no July trips, and a zero would draw a line collapsing to the axis —
+  // reading as "spend fell to nothing" when the truth is "no invoice was raised". Undefined
+  // leaves a gap, which is the honest mark.
+  const b2bTransTrendRows = useMemo(() => {
+    if (!b2b) return []
+    const byMonth = new Map()
+    for (const r of b2b.transMonths || []) {
+      if (b2bPick && !b2bPick(r)) continue
+      const k = r.month
+      if (!byMonth.has(k)) byMonth.set(k, { month: monthLabel(k), raw: k })
+      byMonth.get(k)[r.transporter] = num(r.billed)
+    }
+    return [...byMonth.values()].sort((a, b2) => String(a.raw).localeCompare(String(b2.raw)))
+  }, [b2b, b2bPick])
+
+  // Which transporters to draw, biggest first, so colour assignment is stable as the filter
+  // changes and the legend order matches the visual order.
+  const b2bTransKeys = useMemo(() => {
+    if (!b2b) return []
+    const tot = new Map()
+    for (const r of b2b.transMonths || []) {
+      if (b2bPick && !b2bPick(r)) continue
+      tot.set(r.transporter, (tot.get(r.transporter) || 0) + num(r.billed))
+    }
+    return [...tot.entries()].sort((a, b2) => b2[1] - a[1]).map(([k]) => k)
+  }, [b2b, b2bPick])
 
   // ── Overall: B2C + B2B side by side ──
   // Deliberately additive only. The two ledgers bill on different units (parcels vs
@@ -1348,18 +1550,29 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters 
     return {
       total,
       b2cCost, b2bCost,
-      b2cShare: total ? (b2cCost / total) * 100 : 0,
-      b2bShare: total ? (b2bCost / total) * 100 : 0,
       b2cUnits: agg.n,
       b2bUnits: Number(b2b.totals.trips) || 0,
       b2bLanes: Number(b2b.totals.lanes) || 0,
       b2bTransporters: Number(b2b.totals.transporters) || 0,
-      streams: [
-        { name: 'B2C · courier parcels', cost: b2cCost, units: agg.n, unitLabel: 'shipments', color: SERIES.blue },
-        { name: 'B2B · transporter freight', cost: b2bCost, units: Number(b2b.totals.trips) || 0, unitLabel: 'trips', color: SERIES.orange },
-      ],
+      // Carriers across BOTH ledgers. Counted as a union of names rather than summed, so a
+      // carrier appearing in both books is one partner, not two.
+      carriers: new Set([
+        ...(agg.byCourier ? Object.keys(agg.byCourier) : []),
+        ...b2bTransRows.map(t => t.key),
+      ]).size,
+      b2cCarriers: agg.byCourier ? Object.keys(agg.byCourier).length : 0,
+      b2bCarriers: b2bTransRows.length,
+      // Goods value. B2C carries shipment_value; the FTL/PTL column is mid-rollout, so the
+      // total is B2C-only until it lands and the ratio below is labelled accordingly.
+      shipValue: num(agg.shipValue),
+      b2bValue: b2bVariance?.value_total == null ? null : num(b2bVariance.value_total),
+      // Logistics cost as a share of the goods it moved. Uses TOTAL logistics cost over the
+      // value we can measure — stated on the tile, since mixing an all-streams numerator
+      // with a B2C-only denominator would otherwise read as a like-for-like ratio.
+      logisticsPct: num(agg.shipValue) ? (total / num(agg.shipValue)) * 100 : null,
+      b2cLogisticsPct: num(agg.shipValue) ? (b2cCost / num(agg.shipValue)) * 100 : null,
     }
-  }, [agg, b2b])
+  }, [agg, b2b, b2bTransRows, b2bVariance])
 
   // Monthly cost for both streams on one ₹ axis — same unit, so this is a fair overlay.
   const overallMonths = useMemo(() => {
@@ -1375,6 +1588,55 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters 
     }))
   }, [monthSeries, b2bMonthRows])
 
+  // ── Overview: carrier cards ──
+  // One card per partner, both ledgers, with the few figures that actually differentiate a
+  // carrier: what we spend, how much of the book that is, the unit rate, and — for B2C —
+  // logistics cost as a share of the goods it moved. Sorted by spend so the cards read in
+  // order of how much they matter.
+  const overviewB2cCards = useMemo(() => {
+    if (!agg) return []
+    const total = agg.cost || 0
+    return Object.entries(agg.byCourier || {}).map(([key, b]) => ({
+      key,
+      cost: num(b.cost),
+      shipments: num(b.n),
+      share: total ? (num(b.cost) / total) * 100 : 0,
+      avgCost: num(b.n) ? num(b.cost) / num(b.n) : 0,
+      // Freight as a share of the goods value this carrier moved. Per-carrier rather than
+      // blended, because a courier used for high-value parcels looks cheap on this measure
+      // even at a poor rate — and the reverse.
+      pctValue: num(b.value) ? (num(b.cost) / num(b.value)) * 100 : null,
+      cpk: num(b.wt) ? num(b.cost) / num(b.wt) : null,
+      // Weight-overbilling already established elsewhere on the page; carried here so a card
+      // shows whether this partner has an open claim against it.
+      claimable: num(b.claimable_rs),
+    })).sort((a, b2) => b2.cost - a.cost)
+  }, [agg])
+
+  // FTL/PTL partner cards. No shipment value or weight in that ledger, so the comparable
+  // figures are spend, share, trips and cost per trip — stating less rather than padding the
+  // card with metrics the data cannot support.
+  const overviewB2bCards = useMemo(() => {
+    if (!b2b) return []
+    const total = b2bTransRows.reduce((s, t) => s + t.cost, 0)
+    return b2bTransRows.map(t => ({
+      key: t.key,
+      cost: t.cost,
+      trips: t.trips,
+      share: total ? (t.cost / total) * 100 : 0,
+      avgCost: t.avgCost,
+    })).sort((a, b2) => b2.cost - a.cost)
+  }, [b2b, b2bTransRows])
+
+  // Combined monthly trend, windowed. Six periods by default: long enough to show a
+  // direction, short enough that a year of history does not compress the recent months into
+  // illegibility. Clamped to what exists so a 4-month ledger is not padded with empty slots.
+  const [ovTrendMonths, setOvTrendMonths] = useState(6)
+  const ovTrendWindow = useMemo(
+    () => (ovTrendMonths >= 999 ? overallMonths : overallMonths.slice(-ovTrendMonths)),
+    [overallMonths, ovTrendMonths]
+  )
+
   const toggleIn = (key, val) =>
     setFilters(f => ({ ...f, [key]: f[key].includes(val) ? f[key].filter(x => x !== val) : [...f[key], val] }))
   const setOne = (key, val) => setFilters(f => ({ ...f, [key]: val }))
@@ -1382,7 +1644,9 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters 
   const activeCount =
     filters.months.length + filters.zones.length + filters.modes.length +
     filters.payments.length + filters.couriers.length + filters.accountTypes.length +
-    (filters.band ? 1 : 0) + (filters.destCity ? 1 : 0) + (filters.billing !== 'all' ? 1 : 0)
+    (filters.band ? 1 : 0) + (filters.destCity ? 1 : 0) + (filters.billing !== 'all' ? 1 : 0) +
+    (filters.transporters?.length || 0) + (filters.vehicleTypes?.length || 0) +
+    (filters.freightTypes?.length || 0)
 
   // ── Render ──
   // Hero sub-line: volume, weight, and freight as a share of GMV. The GMV percentage had
@@ -1405,10 +1669,13 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters 
       <div style={{ width: 220, padding: '14px 12px', display: 'flex', flexDirection: 'column', gap: 9, overflowY: 'auto', height: '100%', boxSizing: 'border-box' }}
         className="lc-slicers">
 
-        {/* Courier partners as logo rows, matching the Performance sidebar. */}
-        <div style={{ fontSize: 10, fontWeight: 800, color: C.t3, letterSpacing: '.06em', textTransform: 'uppercase' }}>Courier Partner</div>
+        {/* Carrier list follows the ACTIVE LEDGER: B2C couriers on the parcel tabs,
+            FTL/PTL transporters on the freight tab. Showing Bluedart and Delhivery while
+            the freight ledger is on screen invited a filter that could only ever return
+            nothing, because those carriers do not appear in it. */}
+        <div style={{ fontSize: 10, fontWeight: 800, color: C.t3, letterSpacing: '.06em', textTransform: 'uppercase' }}>{scope === 'b2b' ? 'Transporter' : 'Courier Partner'}</div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-          {opts.couriers.map(c => (
+          {(scope === 'b2b' ? opts.transporters : opts.couriers).map(c => (
             <CourierRow key={c} label={c} active={filters.couriers.includes(c)} onClick={() => toggleIn('couriers', c)} />
           ))}
           {filters.couriers.length > 0 && (
@@ -1421,6 +1688,23 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters 
 
         <div style={{ height: 1, background: C.border, margin: '4px 0' }} />
 
+        {/* FTL/PTL-only slicers, in the same slot the parcel tabs use for Shipment Leg and
+            Billing Status. Chips rather than dropdowns: 3 freight types and 11 vehicle sizes
+            are few enough to show at a glance, and a chip row shows what is selected without
+            being opened. */}
+        {scope === 'b2b' && (<>
+        <div style={{ fontSize: 10, fontWeight: 800, color: C.t3, letterSpacing: '.06em', textTransform: 'uppercase' }}>Freight Type</div>
+        <ChipRow options={opts.freightTypes} selected={filters.freightTypes}
+          onToggle={v => toggleIn('freightTypes', v)} />
+
+        <div style={{ fontSize: 10, fontWeight: 800, color: C.t3, letterSpacing: '.06em', textTransform: 'uppercase', marginTop: 4 }}>Vehicle Size</div>
+        <ChipRow options={opts.vehicleTypes} selected={filters.vehicleTypes}
+          onToggle={v => toggleIn('vehicleTypes', v)} />
+
+        <div style={{ height: 1, background: C.border, margin: '4px 0' }} />
+        </>)}
+
+        {scope !== 'b2b' && (<>
         {/* Two-up segmented pairs, the same treatment as Courier Direction. */}
         {/* Two separate filters, so two separate headings — one block labelled
             "Shipment Direction" was covering both direction AND billing status.
@@ -1434,7 +1718,8 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters 
         <SegPair
           value={filters.billing === 'all' ? null : filters.billing}
           onChange={v => setOne('billing', v || 'all')}
-          options={[{ value: 'overbilled', label: 'Overbilled' }, { value: 'clean', label: 'Clean' }]} />
+          options={[{ value: 'over', label: 'Overbilled' }, { value: 'ok', label: 'Clean' }]} />
+        </>)}
 
         <div style={{ height: 1, background: C.border, margin: '4px 0' }} />
 
@@ -1445,6 +1730,7 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters 
           selected={filters.months}
           onChange={v => (v === null ? setOne('months', []) : toggleIn('months', v))} />
 
+        {scope !== 'b2b' && (<>
         <SearchSelect label="Zone" options={opts.zones} multi
           selected={filters.zones}
           onChange={v => (v === null ? setOne('zones', []) : toggleIn('zones', v))} />
@@ -1470,6 +1756,7 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters 
 
         <SearchSelect label="Drop City" options={opts.cities}
           value={filters.destCity} onChange={v => setOne('destCity', v)} />
+        </>)}
 
         {activeCount > 0 && (
           <button onClick={() => setFilters(EMPTY_FILTERS)}
@@ -1522,20 +1809,79 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters 
     // ── OVERALL: B2B + B2C combined ──
     content = !overall ? <Card title="Loading summary…" /> : (
       <>
-        <SectionHdr title="Combined Freight Spend" note="B2C courier + B2B transporter" />
-        {/* Desktop layout */}
-        <div className="cost-kpi-desktop-grid" style={{ display: 'grid', gridTemplateColumns: '1.5fr 5fr', gap: 10, alignItems: 'stretch' }}>
-          <Hero label="Total Logistics Cost" value={fmt(overall.total)}
-            sub={`${fmtN(overall.b2cUnits)} parcels + ${fmtN(overall.b2bUnits)} freight trips`} />
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gridTemplateRows: 'repeat(2, 1fr)', gap: 10 }}>
-            <Tile label="B2C Courier Spend" value={fmt(overall.b2cCost)} sub={`${overall.b2cShare.toFixed(1)}% of total`} />
-            <Tile label="B2B Freight Spend" value={fmt(overall.b2bCost)} sub={`${overall.b2bShare.toFixed(1)}% of total`} />
-            <Tile label="B2C Shipments" value={fmtBig(overall.b2cUnits)} sub={'avg ₹' + (overall.b2cCost / (overall.b2cUnits || 1)).toFixed(2) + ' / parcel'} />
-            <Tile label="B2B Trips" value={fmtN(overall.b2bUnits)} sub={'avg ' + fmt(overall.b2bCost / (overall.b2bUnits || 1)) + ' / trip'} />
-            <Tile label="Recoverable (B2C)" value={fmt(kpis.overbilledCost)} sub="weight overbilling" accent={C.red.tx} />
-            <Tile label="B2B Lanes" value={fmtN(overall.b2bLanes)} sub={`${overall.b2bTransporters} transporters`} />
-            <Tile label="Freight as % of GMV" value={kpis.costPctValue != null ? kpis.costPctValue.toFixed(2) + '%' : '—'} sub="B2C declared value" />
-            <Tile label="Billing Periods" value={fmtN(overallMonths.length)} sub={overallMonths.length ? `${overallMonths[0].month} – ${overallMonths[overallMonths.length - 1].month}` : null} />
+        <SectionHdr title="Overview" note="B2C courier + FTL/PTL transporter" />
+        {/* Four KPIs, then the combined trend, then a card per carrier. Same hero + tile
+            geometry as the other two tabs so the three read as one dashboard. */}
+        <div className="ov-hero cost-kpi-desktop-grid" style={{ display: 'grid', gridTemplateColumns: '2.2fr 5fr', gap: 12, alignItems: 'stretch' }}>
+          <Hero sparkMin={22}
+            label="Total Logistics Cost"
+            value={fmt(overall.total)}
+            sub={(
+              <>
+                {overall.logisticsPct != null && (
+                  <div>{overall.logisticsPct.toFixed(2)}% of shipment value</div>
+                )}
+                <div>{fmtBig(overall.b2cUnits)} parcels · {fmtN(overall.b2bUnits)} freight trips</div>
+              </>
+            )}
+          >
+            {ovTrendWindow.length > 1 && (
+              <ResponsiveContainer width="100%" height="100%">
+                <AreaChart data={ovTrendWindow} margin={{ top: 6, right: 0, bottom: 0, left: 0 }}>
+                  <defs>
+                    <linearGradient id="ovHero" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor={C.acc} stopOpacity={0.34} />
+                      <stop offset="95%" stopColor={C.acc} stopOpacity={0} />
+                    </linearGradient>
+                  </defs>
+                  {/* Hidden axis bound to month, or Recharts labels the tooltip by array
+                      index and the hover reads "1" instead of "Apr 2026". */}
+                  <XAxis dataKey="month" hide />
+                  <Tooltip content={<ChartTooltip formatter={v => fmt(v)} />} />
+                  <Area type="monotone" dataKey="total" name="Total" stroke={C.acm}
+                    strokeWidth={2} fill="url(#ovHero)" />
+                </AreaChart>
+              </ResponsiveContainer>
+            )}
+          </Hero>
+          {/* 3x3 beside the hero. Three groups of three, read left to right: carrier counts,
+              then cost by stream, then goods value by stream — so each row answers one
+              question rather than mixing units across the row. Nine fills the height the hero
+              sets, which is why the earlier three-across row left dead space below it. */}
+          <div className="ov-kpis" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gridTemplateRows: 'repeat(2, 1fr)', gap: 8 }}>
+            {/* Row 1 — cost, with the carrier count at the end. The two cost figures lead
+                because they are what the row is about; the count is context, so it sits
+                top-right rather than interrupting the pair. Share is on the sub-line rather
+                than in its own tile: a percentage of a number shown beside it needs no card. */}
+            <Tile label="B2C Courier Cost" value={fmt(overall.b2cCost)}
+              sub={`${(overall.total ? (overall.b2cCost / overall.total) * 100 : 0).toFixed(1)}% of spend`} />
+            <Tile label="FTL/PTL Freight Cost" value={fmt(overall.b2bCost)}
+              sub={`${(overall.total ? (overall.b2bCost / overall.total) * 100 : 0).toFixed(1)}% of spend`} />
+            {/* The hero already reports total cost, so this card carries the carrier count
+                the three removed tiles held — value is the total, sub is the split. */}
+            <Tile label="Total Carriers" value={fmtN(overall.carriers)}
+              sub={`${fmtN(overall.b2cCarriers)} B2C courier · ${fmtN(overall.b2bCarriers)} FTL/PTL`} />
+
+            {/* Row 2 — goods value, and the ratio it supports. */}
+            <Tile label="B2C Shipment Value" value={fmt(overall.shipValue)}
+              sub="goods moved by courier" />
+            {/* No value column on the freight ledger yet. An em-dash says that plainly; a
+                zero would read as "no goods moved" and quietly deflate the ratio beside it. */}
+            <Tile label="FTL/PTL Shipment Value"
+              value={overall.b2bValue == null ? '—' : fmt(overall.b2bValue)}
+              sub={overall.b2bValue == null ? 'not yet in the ledger' : 'goods moved by freight'} />
+            {overall.b2bValue == null
+              ? (
+                <Tile label="Logistics % of Value"
+                  value={overall.b2cLogisticsPct != null ? overall.b2cLogisticsPct.toFixed(2) + '%' : '—'}
+                  sub="B2C basis · freight value pending" />
+              )
+              : (
+                <Tile label="Logistics % of Value"
+                  value={overall.logisticsPct != null ? overall.logisticsPct.toFixed(2) + '%' : '—'}
+                  sub="all cost ÷ all shipment value" />
+              )}
+
           </div>
         </div>
         {/* Mobile carousel */}
@@ -1560,66 +1906,142 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters 
           </CostKpiCarousel>
         </div>
 
-        <SectionHdr title="Stream Split" note="the two ledgers bill different units, so they are reported separately" />
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(360px,1fr))', gap: 14 }}>
-          <Card title="Cost by stream">
-            <div style={{ height: 200 }}>
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={overall.streams} layout="vertical" margin={{ top: 10, right: 18, left: 8, bottom: 4 }}>
-                  <CartesianGrid stroke={VIZ.grid} horizontal={false} />
-                  <XAxis type="number" tick={{ fontSize: 11, fill: VIZ.muted }} axisLine={false} tickLine={false}
-                    tickFormatter={v => fmt(v)} />
-                  <YAxis type="category" dataKey="name" width={150} tick={{ fontSize: 11, fill: VIZ.muted }} axisLine={false} tickLine={false} />
-                  <Tooltip cursor={{ fill: 'rgba(11,11,11,0.04)' }} content={<ChartTooltip formatter={v => fmt(v)} />} />
-                  <Bar dataKey="cost" name="Cost" radius={[0, 4, 4, 0]} maxBarSize={34}>
-                    {overall.streams.map(s => <Cell key={s.name} fill={s.color} />)}
-                  </Bar>
-                </BarChart>
-              </ResponsiveContainer>
+        {/* ── Combined monthly trend ── */}
+        <SectionHdr title="Monthly Trend" note="both ledgers bill in rupees, so one axis is fair" collapsed={secHid['ov-trend']} onToggle={() => toggleSec('ov-trend')} />
+        <Card style={secHid['ov-trend'] ? { display: 'none' } : undefined}
+          action={(
+            /* Range applies to this chart only. Options beyond the available history are
+               disabled rather than hidden, so the reader can see how much data exists. */
+            <div style={{ display: 'flex', gap: 4 }}>
+              {[{ n: 3, label: '3M' }, { n: 6, label: '6M' }, { n: 12, label: '12M' }, { n: 999, label: 'All' }].map(o => {
+                const on = ovTrendMonths === o.n
+                const short = o.n !== 999 && !on && o.n > overallMonths.length
+                  && overallMonths.length <= Math.max(...[3, 6, 12].filter(v => v < o.n), 0)
+                return (
+                  <button key={o.n} onClick={() => setOvTrendMonths(o.n)}
+                    title={short ? `only ${overallMonths.length} periods uploaded` : undefined}
+                    style={{
+                      fontSize: 10.5, fontWeight: on ? 700 : 500, padding: '4px 9px',
+                      borderRadius: 6, cursor: 'pointer', fontFamily: 'var(--font)',
+                      border: `1px solid ${on ? C.acm : C.border2}`,
+                      background: on ? C.acl : C.card,
+                      color: short ? C.t3 : C.t1,
+                    }}>{o.label}</button>
+                )
+              })}
             </div>
-            <DataTable
-              columns={[
-                { key: 'name', label: 'Stream' },
-                { key: 'units', label: 'Units', align: 'center', render: (_, r) => `${fmtBig(r.units)} ${r.unitLabel}` },
-                { key: 'cost', label: 'Cost', align: 'center', render: (_, r) => fmt(r.cost) },
-              ]}
-              rows={overall.streams}
-            />
-          </Card>
+          )}>
+          <div style={{ height: 240 }}>
+            <ResponsiveContainer width="100%" height="100%">
+              <ComposedChart data={ovTrendWindow} margin={{ top: 12, right: 18, left: 6, bottom: 4 }}>
+                <CartesianGrid stroke={VIZ.grid} vertical={false} />
+                <XAxis dataKey="month" tick={{ fontSize: 11.5, fill: VIZ.muted }}
+                  axisLine={{ stroke: VIZ.axis }} tickLine={false} />
+                <YAxis tick={{ fontSize: 11, fill: VIZ.muted }} axisLine={false} tickLine={false}
+                  tickFormatter={v => fmt(v)} />
+                <Tooltip cursor={{ fill: 'rgba(11,11,11,0.04)' }}
+                  content={({ active, payload, label }) => {
+                    if (!active || !payload?.length) return null
+                    const r = payload[0].payload
+                    return (
+                      <div style={{ background: C.card, border: `1px solid ${C.border2}`, borderRadius: 9, padding: '9px 11px', boxShadow: '0 6px 20px rgba(0,0,0,.12)' }}>
+                        <div style={{ fontSize: 11.5, fontWeight: 700, color: C.t1, marginBottom: 5 }}>{label}</div>
+                        <div style={{ fontSize: 16, fontWeight: 800, color: C.t1 }}>
+                          <span style={{ color: C.acm, fontWeight: 700, fontSize: 12 }}>■</span> {fmt(r.total)}
+                        </div>
+                        <div style={{ fontSize: 11, color: C.t2, marginTop: 4 }}>
+                          <span style={{ color: SERIES.blue, fontWeight: 700 }}>■</span> {fmt(r.b2c)} parcel
+                        </div>
+                        <div style={{ fontSize: 11, color: C.t2 }}>
+                          <span style={{ color: SERIES.orange, fontWeight: 700 }}>■</span> {fmt(r.b2b)} freight
+                        </div>
+                      </div>
+                    )
+                  }} />
+                <Legend wrapperStyle={{ fontSize: 11 }} />
+                {/* Total as a bar, the two streams as lines on top. The bar carries the
+                    magnitude — how much was spent in the period — and the lines carry the
+                    trends that compose it.
+                    ONE axis throughout: all three series are rupees, so a second scale would
+                    misrepresent them. The bar is deliberately pale so it reads as the ground
+                    the lines sit on rather than competing with them for attention. */}
+                {/* Frido brand yellow — the app accent (C.acc), so the chart uses the same
+                    yellow as the rest of the UI rather than a second one.
+                    Held pale so the two lines stay the foreground. At 1.38:1 against the white
+                    card the fill alone is too faint to hold an edge, so it carries a stroke in
+                    the deeper accent (C.acm) to define the bar. Hue clash is not a concern
+                    here: yellow against blue and orange separates cleanly (CVD dE 24.7). */}
+                <Bar dataKey="total" name="Total" fill={C.acc} fillOpacity={0.34}
+                  stroke={C.acm} strokeWidth={1} radius={[4, 4, 0, 0]} maxBarSize={56} />
+                <Line type="monotone" dataKey="b2c" name="B2C courier" stroke={SERIES.blue}
+                  strokeWidth={2} dot={{ r: 3.5 }} />
+                <Line type="monotone" dataKey="b2b" name="FTL/PTL freight" stroke={SERIES.orange}
+                  strokeWidth={2} dot={{ r: 3.5 }} />
+              </ComposedChart>
+            </ResponsiveContainer>
+          </div>
+        </Card>
 
-          <Card title="Monthly cost — both streams" note="same unit (₹), so one axis is fair">
-            <div style={{ height: 200 }}>
-              <ResponsiveContainer width="100%" height="100%">
-                <ComposedChart data={overallMonths} margin={{ top: 10, right: 16, left: 4, bottom: 4 }}>
-                  <CartesianGrid stroke={VIZ.grid} vertical={false} />
-                  <XAxis dataKey="month" tick={{ fontSize: 11, fill: VIZ.muted }} axisLine={{ stroke: VIZ.axis }} tickLine={false} />
-                  <YAxis tick={{ fontSize: 11, fill: VIZ.muted }} axisLine={false} tickLine={false} tickFormatter={v => fmt(v)} />
-                  <Tooltip cursor={{ stroke: VIZ.axis, strokeWidth: 1 }} content={<ChartTooltip formatter={v => fmt(v)} />} />
-                  <Legend wrapperStyle={{ fontSize: 11.5, paddingTop: 4 }} iconType="plainline" />
-                  <Line type="monotone" dataKey="b2c" name="B2C courier" stroke={SERIES.blue} strokeWidth={2}
-                    dot={{ r: 3, fill: SERIES.blue, stroke: VIZ.surface, strokeWidth: 1.5 }} />
-                  <Line type="monotone" dataKey="b2b" name="B2B freight" stroke={SERIES.orange} strokeWidth={2}
-                    dot={{ r: 3, fill: SERIES.orange, stroke: VIZ.surface, strokeWidth: 1.5 }} />
-                </ComposedChart>
-              </ResponsiveContainer>
+        {/* ── Carrier cards ──
+            One card per partner. B2C carries weight and goods value so those cards can show
+            ₹/kg and freight-as-%-of-value; the freight ledger has neither, so those cards
+            state less rather than padding with metrics the data cannot support. */}
+        <SectionHdr title="B2C Courier Partners"
+          note={`${fmtN(overviewB2cCards.length)} partners · ${fmt(overall.b2cCost)}`} collapsed={secHid['ov-b2c-cards']} onToggle={() => toggleSec('ov-b2c-cards')} />
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(232px,1fr))', gap: 12 , ...(secHid['ov-b2c-cards'] ? { display: 'none' } : {}) }}>
+          {overviewB2cCards.map(c => (
+            <div key={c.key} className="kpi-card" style={{ padding: '11px 13px', display: 'flex', flexDirection: 'column', gap: 7 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <CourierCell name={c.key} />
+                <span style={{ marginLeft: 'auto', fontSize: 10.5, fontWeight: 700, color: C.t3 }}>
+                  {c.share.toFixed(1)}%
+                </span>
+              </div>
+              <div style={{ fontSize: 17, fontWeight: 800, color: C.t1, letterSpacing: '-.01em' }}>{fmt(c.cost)}</div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '3px 8px', fontSize: 10.5, color: C.t2 }}>
+                <span>{fmtBig(c.shipments)} shipments</span>
+                <span style={{ textAlign: 'right' }}>₹{c.avgCost.toFixed(0)} / shpmt</span>
+                <span>{c.cpk != null ? '₹' + c.cpk.toFixed(1) + ' / kg' : '—'}</span>
+                <span style={{ textAlign: 'right' }}>
+                  {c.pctValue != null ? c.pctValue.toFixed(2) + '% of value' : '—'}
+                </span>
+              </div>
+              {c.claimable > 0 && (
+                <div style={{ fontSize: 10.5, color: C.red.tx, fontWeight: 700 }}>
+                  {fmt(c.claimable)} claimable
+                </div>
+              )}
             </div>
-            <DataTable
-              columns={[
-                { key: 'month', label: 'Period' },
-                { key: 'b2c', label: 'B2C', align: 'center', render: (_, r) => fmt(r.b2c) },
-                { key: 'b2b', label: 'B2B', align: 'center', render: (_, r) => fmt(r.b2b) },
-                { key: 'total', label: 'Total', align: 'center', render: (_, r) => fmt(r.total) },
-              ]}
-              rows={overallMonths}
-            />
-          </Card>
+          ))}
+        </div>
+
+        <SectionHdr title="FTL/PTL Transport Partners"
+          note={`${fmtN(overviewB2bCards.length)} partners · ${fmt(overall.b2bCost)}`} collapsed={secHid['ov-b2b-cards']} onToggle={() => toggleSec('ov-b2b-cards')} />
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(232px,1fr))', gap: 12 , ...(secHid['ov-b2b-cards'] ? { display: 'none' } : {}) }}>
+          {overviewB2bCards.map(c => (
+            <div key={c.key} className="kpi-card" style={{ padding: '11px 13px', display: 'flex', flexDirection: 'column', gap: 7 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <CourierCell name={c.key} />
+                <span style={{ marginLeft: 'auto', fontSize: 10.5, fontWeight: 700, color: C.t3 }}>
+                  {c.share.toFixed(1)}%
+                </span>
+              </div>
+              <div style={{ fontSize: 17, fontWeight: 800, color: C.t1, letterSpacing: '-.01em' }}>{fmt(c.cost)}</div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '3px 8px', fontSize: 10.5, color: C.t2 }}>
+                <span>{fmtN(c.trips)} trips</span>
+                <span style={{ textAlign: 'right' }}>
+                  ₹{Math.round(c.avgCost).toLocaleString('en-IN')} / trip
+                </span>
+              </div>
+            </div>
+          ))}
         </div>
       </>
     )
   } else if (scope === 'b2b') {
     // ── B2B: lane-wise cost analysis ──
-    content = !b2b ? <Card title="Loading B2B freight…" /> : !b2b.totals.trips ? (
-      <Card title="No B2B freight invoices yet">
+    content = !b2b ? <Card title="Loading FTL/PTL freight…" /> : !b2b.totals.trips ? (
+      <Card title="No FTL/PTL freight invoices yet">
         <div style={{ fontSize: 12.5, color: C.t2 }}>
           Add transporter bills from the <strong>Logistics Bill Ledger</strong> page (B2B · Freight format)
           and lane analysis will appear here.
@@ -1627,105 +2049,307 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters 
       </Card>
     ) : (
       <>
-        <SectionHdr title="B2B Freight Overview" note={`${fmtN(b2b.totals.trips)} trips · ${fmtN(b2b.totals.lanes)} lanes`} />
-        <div style={{ display: 'grid', gridTemplateColumns: '1.5fr 5fr', gap: 10, alignItems: 'stretch' }}>
-          <Hero label="Total Freight Cost" value={fmt(b2b.totals.cost)}
-            sub={`${fmtN(b2b.totals.trips)} trips across ${fmtN(b2b.totals.lanes)} lanes`} />
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gridTemplateRows: 'repeat(2, 1fr)', gap: 10 }}>
-            <Tile label="Avg Cost / Trip" value={fmt(b2b.totals.avg_cost)} sub="all lanes blended" />
-            <Tile label="Lanes" value={fmtN(b2b.totals.lanes)} sub="origin → destination pairs" />
-            <Tile label="Transporters" value={fmtN(b2b.totals.transporters)}
-              sub={b2bTransRows[0] ? `${b2bTransRows[0].key} leads` : null} />
-            <Tile label="Costliest Lane" value={b2bLaneRows[0] ? fmt(b2bLaneRows[0].cost) : '—'}
-              sub={b2bLaneRows[0]?.lane} />
-            <Tile label="Top Lane Share" value={b2bLaneRows[0] ? b2bLaneRows[0].share.toFixed(1) + '%' : '—'}
-              sub="of B2B spend" />
-            <Tile label="Dearest Avg Trip"
-              value={b2bLaneRows.length ? fmt(Math.max(...b2bLaneRows.map(r => r.avgCost))) : '—'}
-              sub="highest per-trip lane" />
-            <Tile label="Freight Types" value={fmtN(b2bTypeRows.length)}
-              sub={b2bTypeRows.map(t => t.key).join(', ')} />
-            <Tile label="Billing Periods" value={fmtN(b2bMonthRows.length)}
-              sub={b2bMonthRows.length ? `${b2bMonthRows[0].month} – ${b2bMonthRows[b2bMonthRows.length - 1].month}` : null} />
+        {/* No header on this block — the cards are self-describing. The spacer keeps the
+            vertical rhythm the SectionHdr used to provide. */}
+        <div style={{ height: 12 }} />
+        {/* Hero plus a 4x2 tile grid, the same arrangement and gap as the B2C tab so the two
+            tabs read as one dashboard. Every figure derives from b2bHead, which is built off
+            the per-transporter rows — so the whole block responds to the sidebar selection
+            rather than only the charts below it. */}
+        <div style={{ display: 'grid', gridTemplateColumns: '2.2fr 5fr', gap: 14, alignItems: 'stretch' }}>
+          <Hero
+            label="Total Freight Cost"
+            value={fmt(b2bHead ? b2bHead.spend : b2b.totals.cost)}
+            deltas={b2bHead && b2bHead.momPct != null
+              ? [{ pct: b2bHead.momPct, up: b2bHead.momPct > 0, good: b2bHead.momPct < 0, note: 'MoM' }]
+              : []}
+            sub={(
+              <>
+                {b2bVariance?.freightPctValue != null && (
+                  <div>{b2bVariance.freightPctValue.toFixed(2)}% of shipment value</div>
+                )}
+                <div>{fmtN(b2bHead ? b2bHead.trips : b2b.totals.trips)} trips · {fmtN(b2bHead ? b2bHead.lanes : b2b.totals.lanes)} lanes</div>
+              </>
+            )}
+          >
+            {b2bVarMonthRows.length > 1 && (
+              <ResponsiveContainer width="100%" height="100%">
+                <AreaChart data={b2bVarMonthRows} margin={{ top: 6, right: 0, bottom: 0, left: 0 }}>
+                  <defs>
+                    <linearGradient id="ftlHero" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor={SERIES.blue} stopOpacity={0.22} />
+                      <stop offset="95%" stopColor={SERIES.blue} stopOpacity={0} />
+                    </linearGradient>
+                  </defs>
+                  {/* Hidden axis bound to month: without it Recharts labels the tooltip by
+                      array index and the hover reads "1" instead of "Apr 2026". */}
+                  <XAxis dataKey="month" hide />
+                  <Tooltip content={<ChartTooltip formatter={v => fmt(v)} />} />
+                  <Area type="monotone" dataKey="billed" name="Freight" stroke={SERIES.blue}
+                    strokeWidth={2} fill="url(#ftlHero)" />
+                </AreaChart>
+              </ResponsiveContainer>
+            )}
+          </Hero>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gridTemplateRows: 'repeat(2, 1fr)', gap: 14 }}>
+            {/* Row 1 — unit economics */}
+            <Tile label="Avg Cost / Trip"
+              value={'₹' + Math.round(b2bHead ? b2bHead.avgTrip : b2b.totals.avg_cost).toLocaleString('en-IN')}
+              sub={b2bHead ? `across ${fmtN(b2bHead.lanes)} lanes` : null} />
+            <Tile label="Trips / Month" value={b2bHead ? fmtN(b2bHead.tripsPerMonth) : '—'}
+              sub={b2bHead && b2bHead.momTrips != null
+                ? `${b2bHead.momTrips > 0 ? '+' : ''}${b2bHead.momTrips.toFixed(1)}% vs prior period`
+                : 'average run rate'} />
+            <Tile label="Vehicle Types" value={fmtN(b2bVehicleRows.length)}
+              sub={b2bVehicleRows[0] ? `${b2bVehicleRows[0].vehicle} leads · ${fmt(b2bVehicleRows[0].cost)}` : null} />
+            <Tile label="Dearest Vehicle"
+              value={b2bVehicleRows.length
+                ? '₹' + Math.round(Math.max(...b2bVehicleRows.map(v => v.avgCost))).toLocaleString('en-IN')
+                : '—'}
+              sub={b2bVehicleRows.length
+                ? `${b2bVehicleRows.reduce((a, v) => (v.avgCost > a.avgCost ? v : a)).vehicle} per trip`
+                : null} />
+            {/* Row 2 — concentration and dependency. These are risk figures rather than cost
+                ones: none of them is wrong on its own, but each says how exposed the book is
+                if one carrier or one lane stops working. */}
+            <Tile label="Top Transporter Share"
+              value={b2bTransRows[0] ? b2bTransRows[0].share.toFixed(1) + '%' : '—'}
+              sub={b2bTransRows[0] ? `${b2bTransRows[0].key} · ${fmt(b2bTransRows[0].cost)}` : null}
+              accent={b2bTransRows[0] && b2bTransRows[0].share > 60 ? C.red.tx : undefined} />
+            <Tile label="Top 3 Lane Share"
+              value={b2bHead ? b2bHead.top3Pct.toFixed(1) + '%' : '—'}
+              sub="of total freight spend" />
+            <Tile label="Single-Sourced Spend"
+              value={b2bSole ? b2bSole.pct.toFixed(1) + '%' : '—'}
+              sub={b2bSole ? `${fmtN(b2bSole.lanes)} of ${fmtN(b2bSole.totalLanes)} lanes, one carrier` : null} />
+            <Tile label="Transporters" value={fmtN(b2bTransRows.length)}
+              sub={b2bTransRows.length > 1
+                ? `${fmt(b2bTransRows[b2bTransRows.length - 1].cost)} on the smallest`
+                : 'single carrier'} />
           </div>
         </div>
 
-        {/* Weight columns are entirely empty in this ledger today, so ₹/kg cannot be
-            computed. Say so rather than render a column of dashes. */}
-        <div style={{ marginTop: 12, padding: '10px 13px', borderRadius: 9, background: C.amber.bg, border: `1px solid ${C.amber.bd}` }}>
-          <span style={{ fontSize: 12, color: C.amber.tx }}>
-            B2B bills carry no weight data (<code>charged_weight</code>, <code>load_weight</code> and
-            <code> no_of_packages</code> are empty on all {fmtN(b2b.totals.trips)} rows), so cost per kg
-            isn't available for freight. Lane analysis below is trip-based. Fill those columns at upload
-            time and ₹/kg appears automatically.
-          </span>
-        </div>
+        {/* ── Monthly trend, full width ──
+            An area chart: one measure over time, where the filled region carries the
+            magnitude and the line carries the direction. The tab's blue, with the exact
+            figures on hover rather than printed over the plot.
+            Rate-card variance is deliberately not shown on this tab. */}
+        <SectionHdr title="Monthly Trend" note="freight billed and trips per billing period" collapsed={secHid['ftl-trend']} onToggle={() => toggleSec('ftl-trend')} />
+        <Card style={secHid['ftl-trend'] ? { display: 'none' } : undefined}>
+          <div style={{ height: 240 }}>
+            <ResponsiveContainer width="100%" height="100%">
+              <AreaChart data={b2bVarMonthRows} margin={{ top: 12, right: 18, left: 6, bottom: 4 }}>
+                <defs>
+                  <linearGradient id="ftlTrend" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor={SERIES.blue} stopOpacity={0.28} />
+                    <stop offset="95%" stopColor={SERIES.blue} stopOpacity={0.02} />
+                  </linearGradient>
+                </defs>
+                <CartesianGrid stroke={VIZ.grid} vertical={false} />
+                <XAxis dataKey="month" tick={{ fontSize: 11.5, fill: VIZ.muted }}
+                  axisLine={{ stroke: VIZ.axis }} tickLine={false} />
+                <YAxis tick={{ fontSize: 11, fill: VIZ.muted }} axisLine={false}
+                  tickLine={false} tickFormatter={v => fmt(v)} />
+                {/* A vertical crosshair, not the bar-style column fill — the mark is now an
+                    area, so a shaded column would imply a bar that is not there.
+                    offset pushes the panel clear of the cursor: at the default it sat over
+                    the very point being read. */}
+                <Tooltip cursor={{ stroke: VIZ.muted, strokeWidth: 1, strokeDasharray: "3 3" }}
+                  offset={16}
+                  content={({ active, payload, label }) => {
+                    if (!active || !payload?.length) return null
+                    const r = payload[0].payload
+                    return (
+                      <div style={{ background: C.card, border: `1px solid ${C.border2}`, borderRadius: 9, padding: '9px 12px', boxShadow: '0 6px 20px rgba(0,0,0,.12)' }}>
+                        <div style={{ fontSize: 11.5, fontWeight: 700, color: C.t1, marginBottom: 5 }}>{label}</div>
+                        <div style={{ fontSize: 16, fontWeight: 800, color: C.t1 }}>{fmt(r.billed)}</div>
+                        <div style={{ fontSize: 11, color: C.t2, marginTop: 3 }}>
+                          {fmtN(r.trips)} trips · ₹{Math.round(r.trips ? r.billed / r.trips : 0).toLocaleString('en-IN')} per trip
+                        </div>
+                      </div>
+                    )
+                  }} />
+                {/* Stroke in the deeper accent: a 2px #FFD600 line is 1.38:1 on white and
+                    would effectively disappear, while the fill below it can stay light. */}
+                <Area type="monotone" dataKey="billed" name="Freight billed" stroke={SERIES.blue}
+                  strokeWidth={2.5} fill="url(#ftlTrend)"
+                  dot={{ r: 3.5, fill: SERIES.blue, strokeWidth: 0 }}
+                  activeDot={{ r: 5, fill: SERIES.blue, stroke: C.card, strokeWidth: 2 }} />
+              </AreaChart>
+            </ResponsiveContainer>
+          </div>
+        </Card>
 
-        <SectionHdr title="Lane-wise Cost" note="top 60 lanes by spend" />
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(360px,1fr))', gap: 14 }}>
-          <Card title="Costliest lanes" note="total freight spend per lane">
-            <div style={{ height: 200 }}>
+        {/* ── Transporter trend ──
+            One line per carrier. A month a transporter did not bill is a GAP, not a zero:
+            VS Transport and KM-Logistic stopped billing in July, and a line dropping to the
+            axis would read as "spend collapsed" instead of "no invoice raised". */}
+        <SectionHdr title="Transporter Trend" note="freight spend per carrier, per billing period" collapsed={secHid['ftl-transporters']} onToggle={() => toggleSec('ftl-transporters')} />
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(360px,1fr))', gap: 14 , ...(secHid['ftl-transporters'] ? { display: 'none' } : {}) }}>
+          <Card style={{ display: 'flex', flexDirection: 'column' }} title="Spend by transporter"
+            note="a gap means no invoice was raised that period">
+            <div style={{ flex: 1, minHeight: 210 }}>
               <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={b2bLaneRows.slice(0, 10)} layout="vertical" margin={{ top: 10, right: 18, left: 8, bottom: 4 }}>
-                  <CartesianGrid stroke={VIZ.grid} horizontal={false} />
-                  <XAxis type="number" tick={{ fontSize: 11, fill: VIZ.muted }} axisLine={false} tickLine={false}
+                <LineChart data={b2bTransTrendRows} margin={{ top: 10, right: 14, left: 4, bottom: 4 }}>
+                  <CartesianGrid stroke={VIZ.grid} vertical={false} />
+                  <XAxis dataKey="month" tick={{ fontSize: 11, fill: VIZ.muted }}
+                    axisLine={{ stroke: VIZ.axis }} tickLine={false} />
+                  <YAxis tick={{ fontSize: 11, fill: VIZ.muted }} axisLine={false} tickLine={false}
                     tickFormatter={v => fmt(v)} />
-                  <YAxis type="category" dataKey="lane" width={168} tick={{ fontSize: 9.5, fill: VIZ.muted }} axisLine={false} tickLine={false} />
-                  <Tooltip cursor={{ fill: 'rgba(11,11,11,0.04)' }} content={<ChartTooltip formatter={v => fmt(v)} />} />
-                  <Bar dataKey="cost" name="Lane spend" fill={SERIES.blue} radius={[0, 4, 4, 0]} maxBarSize={20} />
-                </BarChart>
+                  <Tooltip content={<ChartTooltip formatter={v => fmt(v)} />} />
+                  <Legend wrapperStyle={{ fontSize: 10.5 }} />
+                  {/* Colour follows the CARRIER, taken from a fixed order by total spend, so a
+                      transporter keeps its colour even as the series count changes. */}
+                  {b2bTransKeys.map((k, idx) => (
+                    <Line key={k} type="monotone" dataKey={k} name={k}
+                      stroke={DRIFT_COLORS[idx % DRIFT_COLORS.length]} strokeWidth={2}
+                      dot={{ r: 3 }} connectNulls={false} />
+                  ))}
+                </LineChart>
               </ResponsiveContainer>
             </div>
           </Card>
 
-          <Card title="Avg cost per trip" note="same 10 lanes — volume vs rate">
-            <div style={{ height: 200 }}>
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={b2bLaneRows.slice(0, 10)} layout="vertical" margin={{ top: 10, right: 18, left: 8, bottom: 4 }}>
-                  <CartesianGrid stroke={VIZ.grid} horizontal={false} />
-                  <XAxis type="number" tick={{ fontSize: 11, fill: VIZ.muted }} axisLine={false} tickLine={false}
-                    tickFormatter={v => fmt(v)} />
-                  <YAxis type="category" dataKey="lane" width={168} tick={{ fontSize: 9.5, fill: VIZ.muted }} axisLine={false} tickLine={false} />
-                  <Tooltip cursor={{ fill: 'rgba(11,11,11,0.04)' }} content={<ChartTooltip formatter={v => fmt(v)} />} />
-                  <Bar dataKey="avgCost" name="Avg / trip" fill={SERIES.orange} radius={[0, 4, 4, 0]} maxBarSize={20} />
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
-          </Card>
-        </div>
-
-        <div style={{ marginTop: 14 }}>
-          <Card title="Lane detail" note="min/max spread flags inconsistent rating on the same route">
+          <Card style={{ display: 'flex', flexDirection: 'column' }} title="Transporter share"
+            note="spend, unit cost and share of the freight book">
             <DataTable
               columns={[
-                { key: 'lane', label: 'Lane' },
+                { key: 'key', label: 'Transporter' },
                 { key: 'trips', label: 'Trips', align: 'center', render: (_, r) => fmtN(r.trips) },
-                { key: 'cost', label: 'Total', align: 'center', render: (_, r) => fmt(r.cost) },
-                { key: 'avgCost', label: 'Avg Cost / Trip', align: 'center', render: (_, r) => fmt(r.avgCost) },
-                { key: 'minCost', label: 'Min', align: 'center', render: (_, r) => fmt(r.minCost) },
-                { key: 'maxCost', label: 'Max', align: 'center', render: (_, r) => fmt(r.maxCost) },
-                { key: 'spread', label: 'Spread', align: 'center', render: (_, r) => (
-                  <span style={{ color: r.trips >= 10 && r.spread > r.avgCost ? C.red.tx : undefined, fontWeight: r.trips >= 10 && r.spread > r.avgCost ? 700 : undefined }}>
-                    {fmt(r.spread)}
-                  </span>
-                ) },
+                { key: 'cost', label: 'Total Spend', align: 'center', render: (_, r) => fmt(r.cost) },
+                { key: 'avgCost', label: 'Avg Cost / Trip', align: 'center', render: (_, r) => '₹' + Math.round(r.avgCost).toLocaleString('en-IN') },
                 { key: 'share', label: 'Share', align: 'center', render: (_, r) => <ShareBar pct={r.share}>{r.share.toFixed(1) + '%'}</ShareBar> },
               ]}
-              rows={b2bLaneRows}
-              maxRows={60}
+              rows={b2bTransRows}
             />
           </Card>
         </div>
 
-        <SectionHdr title="Transporter & Freight Type" />
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(330px,1fr))', gap: 14 }}>
+        {/* ── Vehicle type ──
+            Unit economics per vehicle. Total spend only says how often a vehicle was used;
+            avg cost per trip is the comparable figure, so both are shown and the table
+            carries lane reach — a vehicle used on 28 lanes is a different commercial
+            proposition from one used on 2. */}
+        <SectionHdr title="Vehicle Type Analysis"
+          note={`${b2bVehicleRows.length} vehicle types across the freight book`} collapsed={secHid['ftl-vehicles']} onToggle={() => toggleSec('ftl-vehicles')} />
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(360px,1fr))', gap: 14 , ...(secHid['ftl-vehicles'] ? { display: 'none' } : {}) }}>
+          <Card style={{ display: 'flex', flexDirection: 'column' }} title="Spend by vehicle type"
+            note="total freight per vehicle">
+            <div style={{ flex: 1, minHeight: 210 }}>
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={b2bVehicleRows} margin={{ top: 10, right: 14, left: 4, bottom: 4 }}>
+                  <CartesianGrid stroke={VIZ.grid} vertical={false} />
+                  <XAxis dataKey="vehicle" tick={{ fontSize: 10, fill: VIZ.muted }}
+                    axisLine={{ stroke: VIZ.axis }} tickLine={false} interval={0}
+                    angle={-30} textAnchor="end" height={52} />
+                  <YAxis tick={{ fontSize: 11, fill: VIZ.muted }} axisLine={false} tickLine={false}
+                    tickFormatter={v => fmt(v)} />
+                  <Tooltip cursor={{ fill: 'rgba(11,11,11,0.04)' }}
+                    content={({ active, payload, label }) => {
+                      if (!active || !payload?.length) return null
+                      const r = payload[0].payload
+                      return (
+                        <div style={{ background: C.card, border: `1px solid ${C.border2}`, borderRadius: 9, padding: '9px 11px', boxShadow: '0 6px 20px rgba(0,0,0,.12)' }}>
+                          <div style={{ fontSize: 11.5, fontWeight: 700, color: C.t1, marginBottom: 5 }}>{label}</div>
+                          <div style={{ fontSize: 15, fontWeight: 800, color: C.t1 }}>{fmt(r.cost)}</div>
+                          <div style={{ fontSize: 11, color: C.t2, marginTop: 3 }}>
+                            {fmtN(r.trips)} trips · ₹{Math.round(r.avgCost).toLocaleString('en-IN')} per trip
+                          </div>
+                          <div style={{ fontSize: 11, color: C.t3, marginTop: 2 }}>
+                            {r.lanes} lanes · {r.transporters} transporter{r.transporters === 1 ? '' : 's'}
+                          </div>
+                        </div>
+                      )
+                    }} />
+                  <Bar dataKey="cost" name="Freight spend" fill={SERIES.blue}
+                    radius={[4, 4, 0, 0]} maxBarSize={38} />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          </Card>
+
+          <Card style={{ display: 'flex', flexDirection: 'column' }} title="Cost per trip by vehicle"
+            note="the comparable unit rate — total spend only reflects how often it was used">
+            <div style={{ flex: 1, minHeight: 210 }}>
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={b2bVehicleRows} layout="vertical"
+                  margin={{ top: 6, right: 62, left: 8, bottom: 4 }}>
+                  <CartesianGrid stroke={VIZ.grid} horizontal={false} />
+                  <XAxis type="number" tick={{ fontSize: 10.5, fill: VIZ.muted }} axisLine={false}
+                    tickLine={false} tickFormatter={v => fmt(v)} />
+                  <YAxis type="category" dataKey="vehicle" width={72}
+                    tick={{ fontSize: 10, fill: VIZ.muted }} axisLine={false} tickLine={false} />
+                  <Tooltip cursor={{ fill: 'rgba(11,11,11,0.04)' }}
+                    content={({ active, payload }) => {
+                      if (!active || !payload?.length) return null
+                      const r = payload[0].payload
+                      return (
+                        <div style={{ background: C.card, border: `1px solid ${C.border2}`, borderRadius: 9, padding: '9px 11px', boxShadow: '0 6px 20px rgba(0,0,0,.12)' }}>
+                          <div style={{ fontSize: 11.5, fontWeight: 700, color: C.t1, marginBottom: 4 }}>{r.vehicle}</div>
+                          <div style={{ fontSize: 15, fontWeight: 800, color: C.t1 }}>₹{Math.round(r.avgCost).toLocaleString('en-IN')} per trip</div>
+                          <div style={{ fontSize: 11, color: C.t2, marginTop: 3 }}>{fmtN(r.trips)} trips · {fmt(r.cost)} total</div>
+                        </div>
+                      )
+                    }} />
+                  <Bar dataKey="avgCost" name="Avg cost / trip" fill={SERIES.orange}
+                    radius={[0, 4, 4, 0]} maxBarSize={16}>
+                    <LabelList dataKey="avgCost" position="right" formatter={v => fmt(v)}
+                      style={{ fontSize: 9.5, fill: C.t2, fontWeight: 700 }} />
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          </Card>
+        </div>
+
+        <div style={{ marginTop: 14 , ...(secHid['ftl-vehicles'] ? { display: 'none' } : {}) }}>
+          <Card title="Vehicle detail">
+            <DataTable
+              columns={[
+                { key: 'vehicle', label: 'Vehicle' },
+                { key: 'trips', label: 'Trips', align: 'center', render: (_, r) => fmtN(r.trips) },
+                { key: 'cost', label: 'Total Spend', align: 'center', render: (_, r) => fmt(r.cost) },
+                { key: 'avgCost', label: 'Avg Cost / Trip', align: 'center', render: (_, r) => '₹' + Math.round(r.avgCost).toLocaleString('en-IN') },
+                { key: 'lanes', label: 'Lanes', align: 'center', render: (_, r) => fmtN(r.lanes) },
+                { key: 'transporters', label: 'Transporters', align: 'center', render: (_, r) => fmtN(r.transporters) },
+                { key: 'share', label: 'Share', align: 'center', render: (_, r) => <ShareBar pct={r.share}>{r.share.toFixed(1) + '%'}</ShareBar> },
+              ]}
+              rows={b2bVehicleRows}
+            />
+          </Card>
+        </div>
+
+        <SectionHdr title="Lane Detail" note="one row per lane and vehicle size — the grain a freight rate is quoted at" collapsed={secHid['ftl-lanes']} onToggle={() => toggleSec('ftl-lanes')} />
+        <div style={{ marginTop: 14 , ...(secHid['ftl-lanes'] ? { display: 'none' } : {}) }}>
+          <Card title="Lane detail">
+            <DataTable
+              columns={[
+                { key: 'lane', label: 'Lane' },
+                { key: 'vehicle', label: 'Vehicle', align: 'center' },
+                { key: 'trips', label: 'Trips', align: 'center', render: (_, r) => fmtN(r.trips) },
+                { key: 'cost', label: 'Total', align: 'center', render: (_, r) => fmt(r.cost) },
+                { key: 'avgCost', label: 'Avg Cost / Trip', align: 'center', render: (_, r) => '₹' + Math.round(r.avgCost).toLocaleString('en-IN') },
+                { key: 'minCost', label: 'Min', align: 'center', render: (_, r) => fmt(r.minCost) },
+                { key: 'maxCost', label: 'Max', align: 'center', render: (_, r) => fmt(r.maxCost) },
+                { key: 'transporters', label: 'Carriers', align: 'center', render: (_, r2) => fmtN(r2.transporters) },
+              ]}
+              rows={b2bLaneVehRows}
+              search searchKeys={['lane', 'vehicle']} searchPlaceholder="Find a lane or vehicle…"
+              maxRows={120}
+              maxHeight={420}
+            />
+          </Card>
+        </div>
+
+        <SectionHdr title="Transporter & Freight Type" collapsed={secHid['ftl-types']} onToggle={() => toggleSec('ftl-types')} />
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(330px,1fr))', gap: 14 , ...(secHid['ftl-types'] ? { display: 'none' } : {}) }}>
           <Card title="By transporter">
             <DataTable
               columns={[
                 { key: 'key', label: 'Transporter' },
                 { key: 'trips', label: 'Trips', align: 'center', render: (_, r) => fmtN(r.trips) },
                 { key: 'cost', label: 'Cost', align: 'center', render: (_, r) => fmt(r.cost) },
-                { key: 'avgCost', label: 'Avg Cost / Trip', align: 'center', render: (_, r) => fmt(r.avgCost) },
+                { key: 'avgCost', label: 'Avg Cost / Trip', align: 'center', render: (_, r) => '₹' + Math.round(r.avgCost).toLocaleString('en-IN') },
                 { key: 'share', label: 'Share', align: 'center', render: (_, r) => <ShareBar pct={r.share}>{r.share.toFixed(1) + '%'}</ShareBar> },
               ]}
               rows={b2bTransRows}
@@ -1738,7 +2362,7 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters 
                 { key: 'key', label: 'Type' },
                 { key: 'trips', label: 'Trips', align: 'center', render: (_, r) => fmtN(r.trips) },
                 { key: 'cost', label: 'Cost', align: 'center', render: (_, r) => fmt(r.cost) },
-                { key: 'avgCost', label: 'Avg Cost / Trip', align: 'center', render: (_, r) => fmt(r.avgCost) },
+                { key: 'avgCost', label: 'Avg Cost / Trip', align: 'center', render: (_, r) => '₹' + Math.round(r.avgCost).toLocaleString('en-IN') },
                 { key: 'share', label: 'Share', align: 'center', render: (_, r) => <ShareBar pct={r.share}>{r.share.toFixed(1) + '%'}</ShareBar> },
               ]}
               rows={b2bTypeRows}
@@ -1747,8 +2371,8 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters 
         </div>
 
         {/* The raw invoice table, moved here from the B2C tab where it didn't belong. */}
-        <SectionHdr title="Transporter Invoices" note="most recent 500 bills" />
-        <Card>
+        <SectionHdr title="Transporter Invoices" note="most recent 500 bills" collapsed={secHid['ftl-invoices']} onToggle={() => toggleSec('ftl-invoices')} />
+        <Card style={secHid['ftl-invoices'] ? { display: 'none' } : undefined}>
           {b2bRows && b2bRows.length ? (
             <DataTable
               columns={[
@@ -1765,48 +2389,6 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters 
           ) : (
             <div style={{ fontSize: 12.5, color: C.t2 }}>No transporter invoices to show.</div>
           )}
-        </Card>
-
-        <SectionHdr title="Monthly B2B Trend" />
-        <Card title="Freight spend by billing period">
-          <div style={{ height: 200 }}>
-            <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={b2bMonthRows} margin={{ top: 12, right: 16, left: 4, bottom: 4 }}>
-                <defs>
-                  <linearGradient id="lcB2b" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor={SERIES.orange} stopOpacity={0.20} />
-                    <stop offset="95%" stopColor={SERIES.orange} stopOpacity={0} />
-                  </linearGradient>
-                </defs>
-                <CartesianGrid stroke={VIZ.grid} vertical={false} />
-                <XAxis dataKey="month" tick={{ fontSize: 11, fill: VIZ.muted }} axisLine={{ stroke: VIZ.axis }} tickLine={false} />
-                <YAxis tick={{ fontSize: 11, fill: VIZ.muted }} axisLine={false} tickLine={false} tickFormatter={v => fmt(v)} />
-                <Tooltip cursor={{ stroke: VIZ.axis, strokeWidth: 1 }}
-                  content={({ active, payload, label }) => {
-                    if (!active || !payload?.length) return null
-                    const r = payload[0].payload
-                    return (
-                      <div style={{ background: C.card, border: `1px solid ${C.border2}`, borderRadius: 9, padding: '9px 11px', boxShadow: '0 6px 20px rgba(0,0,0,.12)' }}>
-                        <div style={{ fontSize: 11.5, fontWeight: 700, color: C.t1, marginBottom: 5 }}>{label}</div>
-                        <div style={{ fontSize: 15, fontWeight: 800, color: C.t1 }}>{fmt(r.cost)}</div>
-                        <div style={{ fontSize: 11, color: C.t3, marginTop: 3 }}>{fmtN(r.trips)} trips</div>
-                      </div>
-                    )
-                  }} />
-                <Area type="monotone" dataKey="cost" name="Freight spend" stroke={SERIES.orange}
-                  strokeWidth={2} fill="url(#lcB2b)"
-                  dot={{ r: 3.5, fill: SERIES.orange, stroke: VIZ.surface, strokeWidth: 2 }} />
-              </AreaChart>
-            </ResponsiveContainer>
-          </div>
-          <DataTable
-            columns={[
-              { key: 'month', label: 'Period' },
-              { key: 'trips', label: 'Trips', align: 'center', render: (_, r) => fmtN(r.trips) },
-              { key: 'cost', label: 'Cost', align: 'center', render: (_, r) => fmt(r.cost) },
-            ]}
-            rows={b2bMonthRows}
-          />
         </Card>
       </>
     )
@@ -2691,7 +3273,6 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters 
         </>
       )}
 
-
       {/* ── Cost by product ── */}
       <SectionHdr title="Cost by Product"
         note={isMobile ? "" : "category → sub-category, per shipment by leg. RTO is the return leg only"} collapsed={secHid['product']} onToggle={() => toggleSec('product')} />
@@ -2961,10 +3542,10 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters 
           clean enough to lane-analyse: 75,539 rows have no origin city (rendered as
           "?") and city casing is inconsistent (Mumbai / MUMBAI / mumbai), so one real
           lane was being split across several rows and counted separately. Restore this
-          once cities are normalised at upload — the B2B tab carries lane analysis on
+          once cities are normalised at upload — the FTL/PTL tab carries lane analysis on
           data that does support it.
 
-          The B2B Freight invoice table also moved: it now lives on the B2B tab. */}
+          The FTL/PTL invoice table also moved: it now lives on the FTL/PTL tab. */}
       </>
     )
   }
@@ -2977,10 +3558,11 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters 
         </div>
       )}
       <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
-        {!isMobile && sidebar}
+        {!isMobile && scope !== 'all' && sidebar}
 
-        {/* Sidebar collapse handle — desktop only */}
-        {!isMobile && (
+        {/* Sidebar collapse handle — desktop only, and not on Overview where there is no
+            sidebar to collapse. */}
+        {!isMobile && scope !== 'all' && (
           <button onClick={() => setSidebarOpen(o => !o)}
             style={{ width: 16, alignSelf: 'flex-start', marginTop: 20, height: 48, border: `1px solid ${C.border}`, borderLeft: 'none', background: C.card, cursor: 'pointer', borderRadius: '0 6px 6px 0', display: 'flex', alignItems: 'center', justifyContent: 'center', color: C.t3, fontSize: 12, flexShrink: 0, boxShadow: '2px 0 4px rgba(0,0,0,0.06)', padding: 0 }}>
             {sidebarOpen ? '‹' : '›'}
@@ -3010,15 +3592,10 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters 
                 )
               })}
             </div>
-            {activeCount > 0 && scope !== 'b2b' && <Badge type="blue">{activeCount} filter{activeCount === 1 ? '' : 's'} active</Badge>}
+            {activeCount > 0 && scope !== 'all' && <Badge type="blue">{activeCount} filter{activeCount === 1 ? '' : 's'} active</Badge>}
             {loading && <span style={{ fontSize: 11.5, color: C.t3 }}>Refreshing…</span>}
             {/* The Lanes toggle went with the Top Lanes table it controlled. */}
           </div>
-          {scope === 'b2b' && (
-            <div style={{ fontSize: 11, color: C.t3, marginTop: -10, marginBottom: 14 }}>
-              B2B freight is trip-billed, so the sidebar's courier/zone/weight filters don't apply here.
-            </div>
-          )}
           {/* Refetch holds the previous render at reduced opacity — no skeleton flash,
               no layout jump, per the interaction rules. */}
           <div style={{ opacity: loading && agg ? 0.55 : 1, transition: 'opacity .18s ease' }}>

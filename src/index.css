@@ -453,3 +453,13 @@ html,body{height:100%;background:var(--bg);font-family:var(--font);color:var(--t
 
 /* ── Chart info icon tooltip ── */
 .info-icon-wrap:hover .info-tooltip { opacity: 1 !important; }
+
+/* Overview KPI grid — a 3x3 of tiles is inherently taller than the single rows on the other
+   tabs, so this block trims the internal margins the shared .kpi-* rules set. Scoped to the
+   grid rather than changing .kpi-label / .kpi-value globally, which would shrink every tile
+   on every tab. */
+.ov-kpis .kpi-card { padding: 6px 12px; }
+.ov-kpis .kpi-label { margin-bottom: 2px; }
+.ov-kpis .kpi-value { font-size: 19px; margin-bottom: 1px; }
+.ov-kpis .kpi-sub { font-size: 10.5px; }
+

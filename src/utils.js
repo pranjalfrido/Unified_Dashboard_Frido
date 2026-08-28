@@ -26,6 +26,9 @@ export const COURIER_COLORS = {
   'Skye Air': '#00B0F0', SkyAir: '#00B0F0',
   Swift: '#13803A',
   'Urbane Bolt': '#2BB24C', Urbanbolt: '#2BB24C',
+  // FTL/PTL transporters — assigned hues, not brand colours (no logos exist for these).
+  Jopadevi: '#2a78d6', Reliable: '#eb6834', 'VS Transport': '#1baf7a',
+  'ARB Logistic': '#eda100', 'KM-Logistic': '#4a3aa7',
 }
 export const COURIER_LOGOS = {
   Bluedart: '/blue-dart.jpg', Delhivery: '/Delhivery.png', 'Delhivery NDD': '/delhivery-ndd.png',
