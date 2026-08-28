@@ -10968,6 +10968,7 @@ function MyntraTab({ data }) {
     return { ...c, aov: c.orders ? c.rev / c.orders : 0, rtoPct: c.rev > 0 ? (c.returnRev||0) / c.rev * 100 : 0, mom: prevRev > 0 ? (c.rev - prevRev) / prevRev * 100 : null, sharePct, cumPct: mnCumC }
   })
 
+  const isMob = useIsMobile()
   const [selectedCat, setSelectedCat] = useState(null)
   const [selectedSubCat, setSelectedSubCat] = useState(null)
   const [catRevView, setCatRevView] = useState('category')
@@ -10985,9 +10986,9 @@ function MyntraTab({ data }) {
     { label: 'Units', value: mnFmtN(qty), spark: dailyArr.map(d => d.units || 0) },
     { label: 'AOV', value: mnFmtS(nOrders > 0 ? rev / nOrders : 0), spark: dailyArr.map(d => (d.orders || 0) > 0 ? (d.rev || 0) / d.orders : null) },
     { label: 'ASP', value: mnFmtS(asp), spark: dailyArr.map(d => (d.units || 0) > 0 ? (d.rev || 0) / d.units : null) },
-    { label: 'Active Products', value: String(totals.skus || 0), spark: dailyArr.map(() => totals.skus || 0) },
-    { label: 'Cancellation %', value: `${cancelPct.toFixed(1)}%`, spark: dailyArr.map(d => (d.rev || 0) * (rev > 0 ? cancelPct / 100 : 0)) },
-    { label: 'Returns %', value: `${mnReturnPct.toFixed(1)}%`, spark: dailyArr.map(d => (d.rev || 0) * (rev > 0 ? mnReturnPct / 100 : 0)), accent: mnReturnPct > 15 ? '#7A1A1A' : undefined },
+    { label: 'Active Products', value: String(totals.skus || 0), spark: dailyArr.map(d => d.rev || 0) },
+    { label: 'Cancellation %', value: `${cancelPct.toFixed(1)}%`, spark: cancelPct > 0 ? dailyArr.map(d => (d.rev || 0) * (rev > 0 ? cancelPct / 100 : 0)) : dailyArr.map(d => d.rev || 0) },
+    { label: 'Returns %', value: `${mnReturnPct.toFixed(1)}%`, spark: mnReturnPct > 0 ? dailyArr.map(d => (d.rev || 0) * (rev > 0 ? mnReturnPct / 100 : 0)) : dailyArr.map(d => d.rev || 0), accent: mnReturnPct > 15 ? '#7A1A1A' : undefined },
   ]
 
   return (
@@ -11063,21 +11064,28 @@ function MyntraTab({ data }) {
         const btnSt = k => ({ fontSize: 11, fontWeight: 600, padding: '3px 10px', borderRadius: 5, border: `1.5px solid ${mnTrendMetric===k?C.t1:C.border}`, background: mnTrendMetric===k?C.t1:'transparent', color: mnTrendMetric===k?'#fff':C.t2, cursor: 'pointer', fontFamily: 'var(--font)' })
         return (
           <div className="g-3col" style={{ display: 'grid', gridTemplateColumns: '1.5fr 1fr 0.65fr', gap: 14, alignItems: 'start' }}>
-            <Card fill title="Revenue & Returns Trend" style={{ height: 360, alignSelf: 'start' }} action={
-              <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                <div style={{ display: 'flex', gap: 4 }}>
-                  {[['rev','Revenue'],['orders','Orders'],['units','Units']].map(([k,l]) => <button key={k} style={btnSt(k)} onClick={() => setMnTrendMetric(k)}>{l}</button>)}
-                </div>
-                <select value={mnTrendGroup} onChange={e => setMnTrendGroup(e.target.value)} style={{ fontSize: 11, fontWeight: 600, padding: '3px 8px', borderRadius: 6, border: `1px solid ${C.border2}`, background: C.card, color: C.t1, cursor: 'pointer', fontFamily: 'var(--font)', outline: 'none' }}>
+            <Card fill title="Revenue & Returns Trend" style={{ height: isMob ? 'auto' : 360, alignSelf: 'start' }} action={
+              <div style={{ display: 'flex', gap: isMob ? 4 : 8, alignItems: 'center' }}>
+                {isMob ? (
+                  <select value={mnTrendMetric} onChange={e => setMnTrendMetric(e.target.value)} style={{ fontSize: 10, fontWeight: 600, padding: '2px 4px', borderRadius: 6, border: `1px solid ${C.border2}`, background: C.card, color: C.t1, cursor: 'pointer', fontFamily: 'var(--font)', outline: 'none' }}>
+                    {[['rev','Revenue'],['orders','Orders'],['units','Units']].map(([k,l]) => <option key={k} value={k}>{l}</option>)}
+                  </select>
+                ) : (
+                  <div style={{ display: 'flex', gap: 4 }}>
+                    {[['rev','Revenue'],['orders','Orders'],['units','Units']].map(([k,l]) => <button key={k} style={btnSt(k)} onClick={() => setMnTrendMetric(k)}>{l}</button>)}
+                  </div>
+                )}
+                <select value={mnTrendGroup} onChange={e => setMnTrendGroup(e.target.value)} style={{ fontSize: isMob ? 10 : 11, fontWeight: 600, padding: isMob ? '2px 4px' : '3px 8px', borderRadius: 6, border: `1px solid ${C.border2}`, background: C.card, color: C.t1, cursor: 'pointer', fontFamily: 'var(--font)', outline: 'none' }}>
                   {['daily','weekly','monthly','quarterly'].map(g => <option key={g} value={g}>{g.charAt(0).toUpperCase() + g.slice(1)}</option>)}
                 </select>
               </div>
             }>
-              <ResponsiveContainer width="100%" height="100%" minHeight={240}>
-                <ComposedChart data={grouped} margin={{ top: 4, right: 12, bottom: 0, left: 0 }}>
+              <div style={isMob ? { margin: '0 -18px' } : {}}>
+              <ResponsiveContainer width="100%" height={isMob ? 220 : '100%'} minHeight={240}>
+                <ComposedChart data={grouped} margin={{ top: 4, right: isMob ? 32 : 12, bottom: isMob ? 20 : 0, left: isMob ? 32 : 0 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke={C.border} vertical={false} />
-                  <XAxis dataKey="date" tick={{ fontSize: 10, fill: C.t3 }} tickFormatter={xFmt} />
-                  <YAxis tick={{ fontSize: 10, fill: C.t3 }} tickFormatter={yFmt} width={60} />
+                  <XAxis dataKey="date" tick={{ fontSize: 10, fill: C.t3 }} tickFormatter={xFmt} ticks={(() => { const k = grouped.map(d => d.date); const n = k.length; if (n <= 4) return k; return [k[0], k[Math.floor(n/3)], k[Math.floor(2*n/3)], k[n-1]] })()} height={isMob ? 24 : 20} />
+                  <YAxis hide={isMob} tick={{ fontSize: 10, fill: C.t3 }} tickFormatter={yFmt} width={isMob ? 0 : 60} />
                   <Tooltip content={({ active, payload, label }) => active && payload?.length ? (
                     <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 7, padding: '7px 11px', fontSize: 11 }}>
                       <div style={{ fontWeight: 700, marginBottom: 4, color: C.t2 }}>{xFmt(label)}</div>
@@ -11089,10 +11097,10 @@ function MyntraTab({ data }) {
                       ))}
                     </div>
                   ) : null} />
-                  <Legend wrapperStyle={{ fontSize: 11 }} formatter={v => <span style={{ color: '#111' }}>{v}</span>} />
+                  {!isMob && <Legend wrapperStyle={{ fontSize: 11 }} formatter={v => <span style={{ color: '#111' }}>{v}</span>} />}
                   {isRev ? (<>
                     <Area type="monotone" dataKey="grossRev" name="Gross Revenue" stroke="#E87858" fill="#E8785822" strokeWidth={2} dot={grouped.length <= 3} />
-                    <Area type="monotone" dataKey="netRev" name="Net Revenue" stroke="#0D9E68" fill="#0D9E6811" strokeWidth={2} dot={grouped.length <= 3} strokeDasharray="4 2" />
+                    <Area type="monotone" dataKey="netRev" name="Net Revenue" stroke="#0D9E68" fill="#0D9E6811" strokeWidth={2} dot={grouped.length <= 3} />
                   </>) : isOrders ? (
                     <Area type="monotone" dataKey="orders" name="Orders" stroke="#E87858" fill="#E8785822" strokeWidth={2} dot={grouped.length <= 3} />
                   ) : (
@@ -11100,6 +11108,16 @@ function MyntraTab({ data }) {
                   )}
                 </ComposedChart>
               </ResponsiveContainer>
+              </div>
+              {isMob && (
+                <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'center', gap: '4px 12px', marginTop: 6 }}>
+                  {(isRev ? [{ name: 'Gross Revenue', color: '#E87858' }, { name: 'Net Revenue', color: '#0D9E68' }] : [{ name: isOrders ? 'Orders' : 'Units', color: '#E87858' }]).map(it => (
+                    <span key={it.name} style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, color: '#111' }}>
+                      <span style={{ width: 8, height: 8, borderRadius: '50%', background: it.color, display: 'inline-block', flexShrink: 0 }} />{it.name}
+                    </span>
+                  ))}
+                </div>
+              )}
             </Card>
             <CategoryRevenueCard
               catRows={catRowsForCatSubCat}
