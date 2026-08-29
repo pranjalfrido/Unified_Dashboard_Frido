@@ -3663,7 +3663,83 @@ function MobileAdsPanel({ selPlatform, setSelPlatform, onClose }) {
   )
 }
 
-function Topnav({ page, setPage, customerTab, invTab, setInvTab, alerts, onRefresh, loading, filters, setFilters, rawRows, inventoryDateControl, salesActiveTab, setSalesActiveTab, salesData, salesChannelView, setSalesChannelView, salesOfflineSub, setSalesOfflineSub, lFilters, setLFilters, logisticsFilterOpts, costFilters, setCostFilters, adsSelPlatform, setAdsSelPlatform }) {
+const PNL_TABS_NAV = [
+  { id: 'all', label: 'Overall' },
+  { id: 'shopify', label: 'D2C', logo: '/logo-shopify.png' },
+  { id: 'ebo', label: 'EBO', logo: '/ebo.png' },
+  { id: 'amazon', label: 'Amazon', logo: '/logo-amazon.png' },
+  { id: 'flipkart', label: 'Flipkart', logo: '/logo-flipkart.png' },
+  { id: 'blinkit', label: 'Blinkit', logo: '/logo-blinkit.png' },
+  { id: 'cred', label: 'CRED', logo: '/logo-cred.png' },
+  { id: 'firstcry', label: 'Firstcry', logo: '/logo-firstcry.png' },
+  { id: 'instamart', label: 'Instamart', logo: '/logo-instamart.png' },
+  { id: 'zepto', label: 'Zepto', logo: '/logo-zepto.png' },
+  { id: 'myntra', label: 'Myntra', logo: '/logo-myntra.png' },
+  { id: 'international', label: 'International' },
+  { id: 'offline', label: 'Offline Sales', logo: '/offline-sales.png' },
+]
+
+function MobilePnLPanel({ activeTab, setActiveTab, amzView, setAmzView, offlineSub, setOfflineSub, d2cSubCh, setD2cSubCh, onClose }) {
+  const PV = { bg: C.bg, ink: C.t1, ink2: C.t2, border: C.border, canvas: C.surface }
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', maxHeight: '80vh' }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '16px 18px 12px' }}>
+        <span style={{ fontSize: 15, fontWeight: 700, color: PV.ink }}>P&amp;L Channel</span>
+        <button onClick={onClose} style={{ background: 'none', border: 'none', fontSize: 22, color: PV.ink2, cursor: 'pointer', lineHeight: 1, padding: 4 }}>×</button>
+      </div>
+      <div style={{ overflowY: 'auto', padding: '0 14px', display: 'flex', flexDirection: 'column', gap: 6 }}>
+        {PNL_TABS_NAV.map(tab => {
+          const isActive = activeTab === tab.id
+          return (
+            <button key={tab.id} onClick={() => setActiveTab(tab.id)}
+              style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '11px 14px', borderRadius: 10, border: `1.5px solid ${isActive ? PV.ink : PV.border}`, background: 'transparent', cursor: 'pointer', textAlign: 'left', fontFamily: 'inherit' }}>
+              {tab.logo
+                ? <img src={tab.logo} alt="" style={{ width: 20, height: 20, borderRadius: 3, objectFit: 'contain', ...(tab.id === 'cred' ? { background: '#000', padding: 2 } : {}) }} />
+                : <div style={{ width: 20, height: 20, borderRadius: 3, background: PV.canvas, flexShrink: 0 }} />}
+              <span style={{ fontSize: 14, fontWeight: isActive ? 700 : 500, color: PV.ink }}>{tab.label}</span>
+              {isActive && <span style={{ marginLeft: 'auto', fontSize: 16, color: PV.ink, fontWeight: 700 }}>✓</span>}
+            </button>
+          )
+        })}
+        {activeTab === 'amazon' && (
+          <div style={{ marginTop: 4, padding: '10px 14px', background: PV.canvas, borderRadius: 10 }}>
+            <div style={{ fontSize: 12, fontWeight: 600, color: PV.ink2, marginBottom: 8 }}>Amazon View</div>
+            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+              {[{ id: 'all', label: 'Overall' }, { id: 'sc', label: 'Seller Central' }, { id: 'vc', label: 'Vendor Central' }].map(opt => (
+                <button key={opt.id} onClick={() => setAmzView(opt.id)} style={{ fontSize: 12, fontWeight: amzView === opt.id ? 700 : 500, padding: '5px 12px', borderRadius: 7, border: 'none', background: amzView === opt.id ? '#FFD600' : PV.border, color: '#13121A', cursor: 'pointer' }}>{opt.label}</button>
+              ))}
+            </div>
+          </div>
+        )}
+        {activeTab === 'shopify' && (
+          <div style={{ marginTop: 4, padding: '10px 14px', background: PV.canvas, borderRadius: 10 }}>
+            <div style={{ fontSize: 12, fontWeight: 600, color: PV.ink2, marginBottom: 8 }}>D2C Sub-Channel</div>
+            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+              {[{ id: 'all', label: 'Overall' }, { id: 'MyFrido', label: 'MyFrido' }, { id: 'Mobility', label: 'Mobility' }].map(opt => (
+                <button key={opt.id} onClick={() => setD2cSubCh(opt.id)} style={{ fontSize: 12, fontWeight: d2cSubCh === opt.id ? 700 : 500, padding: '5px 12px', borderRadius: 7, border: 'none', background: d2cSubCh === opt.id ? '#FFD600' : PV.border, color: '#13121A', cursor: 'pointer' }}>{opt.label}</button>
+              ))}
+            </div>
+          </div>
+        )}
+        {activeTab === 'offline' && (
+          <div style={{ marginTop: 4, padding: '10px 14px', background: PV.canvas, borderRadius: 10 }}>
+            <div style={{ fontSize: 12, fontWeight: 600, color: PV.ink2, marginBottom: 8 }}>Offline Sub-Channel</div>
+            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+              {[{ id: 'all', label: 'Overall' }, { id: 'b2b', label: 'B2B' }, { id: 'Stockist', label: 'Stockist' }, { id: 'MTGT', label: 'MT GT' }].map(opt => (
+                <button key={opt.id} onClick={() => setOfflineSub(opt.id)} style={{ fontSize: 12, fontWeight: offlineSub === opt.id ? 700 : 500, padding: '5px 12px', borderRadius: 7, border: 'none', background: offlineSub === opt.id ? '#FFD600' : PV.border, color: '#13121A', cursor: 'pointer' }}>{opt.label}</button>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+      <div style={{ padding: '14px 14px 16px', flexShrink: 0 }}>
+        <button onClick={onClose} style={{ width: '100%', padding: '10px', borderRadius: 10, border: 'none', background: PV.ink, color: '#fff', fontSize: 13, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>Done</button>
+      </div>
+    </div>
+  )
+}
+
+function Topnav({ page, setPage, customerTab, invTab, setInvTab, alerts, onRefresh, loading, filters, setFilters, rawRows, inventoryDateControl, salesActiveTab, setSalesActiveTab, salesData, salesChannelView, setSalesChannelView, salesOfflineSub, setSalesOfflineSub, lFilters, setLFilters, logisticsFilterOpts, costFilters, setCostFilters, adsSelPlatform, setAdsSelPlatform, pnlActiveTab, setPnlActiveTab, pnlAmzView, setPnlAmzView, pnlOfflineSub, setPnlOfflineSub, pnlD2cSubCh, setPnlD2cSubCh }) {
   const [mobFilterOpen, setMobFilterOpen] = useState(false)
   const titles = { overview: 'Overview', sales: 'Sales Analytics', pnl: 'P&L Analytics', ads: 'Ads Analytics', intelligence: 'Intelligence', logistics: 'Performance Analytics', 'logistics-cost': 'Cost Analytics', inventory: 'Inventory, Sales & Allocation', customer: 'Customer Intelligence', documents: 'Documents', cogs: 'COGS Ledger', 'logistics-ledger': 'Logistics Bill Ledger' }
   const invTitles = { health: 'Inventory Health', sales: 'Sales & Allocation' }
@@ -3675,7 +3751,7 @@ function Topnav({ page, setPage, customerTab, invTab, setInvTab, alerts, onRefre
   return (
     <div className="topnav">
       <div style={{ display: 'flex', alignItems: 'center', gap: 6, position: 'relative', minWidth: 0, flex: 1 }}>
-        {(page === 'inventory' || page === 'sales' || page === 'logistics' || page === 'logistics-cost' || page === 'ads') && (
+        {(page === 'inventory' || page === 'sales' || page === 'logistics' || page === 'logistics-cost' || page === 'ads' || page === 'pnl') && (
           <>
             <button className="tnav-mob-only" onClick={() => setMobFilterOpen(v => !v)} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '2px 6px 2px 0', color: C.t2, fontSize: 16, lineHeight: 1, alignItems: 'center', flexShrink: 0 }}>☰</button>
             {mobFilterOpen && (
@@ -3694,6 +3770,8 @@ function Topnav({ page, setPage, customerTab, invTab, setInvTab, alerts, onRefre
                     ? <MobileLogisticsPanel page={page} setPage={p => { setPage(p); setMobFilterOpen(false) }} onClose={() => setMobFilterOpen(false)} lFilters={lFilters} setLFilters={setLFilters} filterOpts={logisticsFilterOpts} costFilters={costFilters} setCostFilters={setCostFilters} />
                     : page === 'ads'
                     ? <MobileAdsPanel selPlatform={adsSelPlatform} setSelPlatform={p => { setAdsSelPlatform(p); setMobFilterOpen(false) }} onClose={() => setMobFilterOpen(false)} />
+                    : page === 'pnl'
+                    ? <MobilePnLPanel activeTab={pnlActiveTab} setActiveTab={t => { setPnlActiveTab(t); }} amzView={pnlAmzView} setAmzView={setPnlAmzView} offlineSub={pnlOfflineSub} setOfflineSub={setPnlOfflineSub} d2cSubCh={pnlD2cSubCh} setD2cSubCh={setPnlD2cSubCh} onClose={() => setMobFilterOpen(false)} />
                     : <MobileSalesFilterPanel activeTab={salesActiveTab} setActiveTab={setSalesActiveTab} filters={filters} setFilters={setFilters} salesData={salesData} channelView={salesChannelView} setChannelView={setSalesChannelView} offlineSub={salesOfflineSub} setOfflineSub={setSalesOfflineSub} onClose={() => setMobFilterOpen(false)} />
                   }
                 </div>
@@ -14923,6 +15001,10 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
   const [salesChannelView, setSalesChannelView] = useState('all')
   const [salesOfflineSub, setSalesOfflineSub] = useState('all')
   const [adsSelPlatform, setAdsSelPlatform] = useState(null)
+  const [pnlActiveTab, setPnlActiveTab] = useState('all')
+  const [pnlAmzView, setPnlAmzView] = useState('all')
+  const [pnlOfflineSub, setPnlOfflineSub] = useState('all')
+  const [pnlD2cSubCh, setPnlD2cSubCh] = useState('all')
   const [rawRows, setRawRows] = useState(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
@@ -15269,7 +15351,7 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
     <div className="app-shell">
       <Sidebar page={page} setPage={setPage} invTab={invTab} setInvTab={setInvTab} allowedTabs={allowedTabs} profile={profile} />
       <div className="app-main">
-        <Topnav page={page} setPage={setPage} customerTab={customerTab} invTab={invTab} setInvTab={setInvTab} alerts={alerts} lFilters={lFilters} setLFilters={setLFilters} logisticsFilterOpts={logisticsFilterOpts} costFilters={costFilters} setCostFilters={setCostFilters} onRefresh={() => { const { start, end, category, subCategory, sku, subChannel, voucher, region, tier, state, city, country } = filters; const e = {}; if (category?.length) e.category = category.join(','); if (subCategory?.length) e.subCategory = subCategory.join(','); if (sku?.length) e.sku = sku.join(','); if (subChannel) e.subChannel = subChannel; if (voucher) e.voucher = voucher; if (region?.length) e.region = region.join(','); if (tier?.length) e.tier = tier.join(','); if (state?.length) e.state = state.join(','); if (city) e.city = city; if (country) e.country = country; fetchData(start, end, e) }} loading={loading} filters={filters} setFilters={setFilters} rawRows={rawRows} inventoryDateControl={inventoryDateControl} salesActiveTab={activeTab} setSalesActiveTab={setActiveTab} salesData={data} salesChannelView={salesChannelView} setSalesChannelView={setSalesChannelView} salesOfflineSub={salesOfflineSub} setSalesOfflineSub={setSalesOfflineSub} adsSelPlatform={adsSelPlatform} setAdsSelPlatform={setAdsSelPlatform} />
+        <Topnav page={page} setPage={setPage} customerTab={customerTab} invTab={invTab} setInvTab={setInvTab} alerts={alerts} lFilters={lFilters} setLFilters={setLFilters} logisticsFilterOpts={logisticsFilterOpts} costFilters={costFilters} setCostFilters={setCostFilters} onRefresh={() => { const { start, end, category, subCategory, sku, subChannel, voucher, region, tier, state, city, country } = filters; const e = {}; if (category?.length) e.category = category.join(','); if (subCategory?.length) e.subCategory = subCategory.join(','); if (sku?.length) e.sku = sku.join(','); if (subChannel) e.subChannel = subChannel; if (voucher) e.voucher = voucher; if (region?.length) e.region = region.join(','); if (tier?.length) e.tier = tier.join(','); if (state?.length) e.state = state.join(','); if (city) e.city = city; if (country) e.country = country; fetchData(start, end, e) }} loading={loading} filters={filters} setFilters={setFilters} rawRows={rawRows} inventoryDateControl={inventoryDateControl} salesActiveTab={activeTab} setSalesActiveTab={setActiveTab} salesData={data} salesChannelView={salesChannelView} setSalesChannelView={setSalesChannelView} salesOfflineSub={salesOfflineSub} setSalesOfflineSub={setSalesOfflineSub} adsSelPlatform={adsSelPlatform} setAdsSelPlatform={setAdsSelPlatform} pnlActiveTab={pnlActiveTab} setPnlActiveTab={setPnlActiveTab} pnlAmzView={pnlAmzView} setPnlAmzView={setPnlAmzView} pnlOfflineSub={pnlOfflineSub} setPnlOfflineSub={setPnlOfflineSub} pnlD2cSubCh={pnlD2cSubCh} setPnlD2cSubCh={setPnlD2cSubCh} />
         {(loading || inventoryDateControl?.loading) && (
           <div style={{ height: 2, background: C.border, flexShrink: 0 }}>
             <div className="progress-bar" style={{ height: '100%', background: C.acc }} />
@@ -15301,7 +15383,7 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
             </div>
           )}
           {page === 'sales' && data && (!allowedTabs || allowedTabs.includes('sales')) && <SalesPage data={data} filters={filters} setFilters={setFilters} activeTab={activeTab} setActiveTab={setActiveTab} fetchData={fetchData} channelView={salesChannelView} setChannelView={setSalesChannelView} offlineSub={salesOfflineSub} setOfflineSub={setSalesOfflineSub} />}
-          {page === 'pnl' && data && <PnLPage data={data} filters={filters} setFilters={setFilters} />}
+          {page === 'pnl' && data && <PnLPage data={data} filters={filters} setFilters={setFilters} activeTab={pnlActiveTab} setActiveTab={setPnlActiveTab} amzChannelView={pnlAmzView} setAmzChannelView={setPnlAmzView} offlineSub={pnlOfflineSub} setOfflineSub={setPnlOfflineSub} d2cSubCh={pnlD2cSubCh} setD2cSubCh={setPnlD2cSubCh} />}
           {page === 'ads' && !adsCache && !data && <Skeleton />}
           {page === 'ads' && (adsCache || data) && (!allowedTabs || allowedTabs.includes('ads')) && (
             <div className="page-scroll">

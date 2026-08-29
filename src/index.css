@@ -203,7 +203,7 @@ html,body{height:100%;background:var(--bg);font-family:var(--font);color:var(--t
   .mob-hidden{ display:none !important }
   .sales-tabs.mob-hidden{ display:none !important }
   .mob-only .kpi-sub{ display:none !important }
-  .ads-kpi-list{ gap:8px !important }
+  .ads-kpi-list{ display:flex !important; flex-direction:column !important; gap:10px !important }
   .ads-kpi-list > div{ border-radius:12px !important }
   .ads-trend-desktop-filters{ display:none !important }
   .ads-trend-mob-filter{ display:block !important }

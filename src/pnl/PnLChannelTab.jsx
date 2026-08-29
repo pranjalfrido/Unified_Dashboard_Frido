@@ -1,5 +1,54 @@
 import { useState, useRef, useEffect } from 'react'
 import { C, fmt, fmtN, pct } from '../utils.js'
+
+function useIsMobile() {
+  const [mob, setMob] = useState(() => window.innerWidth <= 768)
+  useEffect(() => {
+    const fn = () => setMob(window.innerWidth <= 768)
+    window.addEventListener('resize', fn)
+    return () => window.removeEventListener('resize', fn)
+  }, [])
+  return mob
+}
+
+function PnLSparkKpiCard({ label, value, sparkData = [], accent }) {
+  const pts = sparkData.slice(-14).map(v => (v == null || isNaN(v)) ? null : v)
+  const valid = pts.filter(v => v !== null)
+  const min = valid.length ? Math.min(...valid) : 0
+  const max = valid.length ? Math.max(...valid) : 0
+  const range = max - min || 1
+  const W = 52, H = 24
+  const flat = max === min
+  const coords = pts.reduce((acc, v, i) => {
+    if (v === null) return acc
+    const x = pts.length === 1 ? W / 2 : (i / (pts.length - 1)) * W
+    const y = flat ? H / 2 : H - ((v - min) / range) * (H - 4) - 2
+    acc.push([+x.toFixed(1), +y.toFixed(1)])
+    return acc
+  }, [])
+  const spark = '#F4B400'
+  const gid = `pnlsg${label.replace(/[^a-zA-Z0-9]/g, '')}`
+  const path = coords.length > 1 ? coords.reduce((d, [x, y], i) => {
+    if (i === 0) return `M${x},${y}`
+    const [px, py] = coords[i - 1]
+    const cpx = (px + x) / 2
+    return `${d} C${cpx},${py} ${cpx},${y} ${x},${y}`
+  }, '') : ''
+  const fill = (!flat && path) ? `${path} L${coords[coords.length-1][0]},${H} L${coords[0][0]},${H} Z` : ''
+  return (
+    <div style={{ background: '#fff', border: `1px solid ${C.border}`, borderRadius: 12, padding: '0 14px', display: 'flex', alignItems: 'center', height: 45, gap: 0 }}>
+      <div style={{ flex: 1, fontSize: 13, fontWeight: 700, color: C.t2, letterSpacing: '.03em', textTransform: 'uppercase' }}>{label}</div>
+      {coords.length > 1
+        ? <svg width={W} height={H} viewBox={`0 0 ${W} ${H}`} style={{ overflow: 'hidden', flexShrink: 0, borderRadius: 4 }}>
+            <defs><linearGradient id={gid} x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor={spark} stopOpacity="0.28" /><stop offset="100%" stopColor={spark} stopOpacity="0.02" /></linearGradient></defs>
+            {fill && <path d={fill} fill={`url(#${gid})`} />}
+            <path d={path} fill="none" stroke={spark} strokeWidth="1.8" strokeLinejoin="round" strokeLinecap="round" />
+          </svg>
+        : <div style={{ width: W, flexShrink: 0 }} />}
+      <div style={{ width: 90, fontSize: 15, fontWeight: 800, color: accent || C.t1, lineHeight: 1.1, textAlign: 'right', paddingLeft: 8, whiteSpace: 'nowrap' }}>{value}</div>
+    </div>
+  )
+}
 import { KPICard, Card, GROUP_OPTS, getGroupKey, ComposedChart, Area, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from '../components.jsx'
 import PnLFinancialTable from './PnLFinancialTable.jsx'
 
@@ -25,7 +74,7 @@ const DEFAULT_METRIC_KEYS = ['rev', 'excRev', 'units', 'sndPct', 'gmPct', 'cm1Pc
 // Compact multi-select checklist dropdown — click to open, click outside to close, checkboxes
 // toggle individual metrics. Kept local to this file since it's PnL-trend-specific (metric
 // labels/keys), not a generic reusable dropdown the rest of the app would want.
-function MetricPicker({ options, selected, onToggle, onSelectAll, onClearAll }) {
+function MetricPicker({ options, selected, onToggle, onSelectAll, onClearAll, compact }) {
   const [open, setOpen] = useState(false)
   const ref = useRef(null)
   useEffect(() => {
@@ -33,7 +82,7 @@ function MetricPicker({ options, selected, onToggle, onSelectAll, onClearAll }) 
     document.addEventListener('mousedown', onClick)
     return () => document.removeEventListener('mousedown', onClick)
   }, [])
-  const btnStyle = { fontSize: 11, padding: '3px 10px', borderRadius: 6, border: `1px solid ${C.border2}`, background: C.card, color: C.t1, outline: 'none', fontFamily: 'var(--font)', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 5 }
+  const btnStyle = { fontSize: compact ? 10 : 11, padding: compact ? '2px 6px' : '3px 10px', borderRadius: 6, border: `1px solid ${C.border2}`, background: C.card, color: C.t1, outline: 'none', fontFamily: 'var(--font)', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4 }
   const allSelected = options.length > 0 && options.every(m => selected.includes(m.key))
   return (
     <div ref={ref} style={{ position: 'relative' }}>
@@ -70,6 +119,7 @@ function MetricPicker({ options, selected, onToggle, onSelectAll, onClearAll }) 
 // %-based metrics; only Amazon populates it today, so the %-metric checkboxes are simply absent
 // (not shown, not just disabled) for any channel without it — nothing to slice that doesn't exist.
 function PnLTrendCard({ title, daily, dailyPnL, grossColor, grossGradId, boxHeight, showMarketing = true, hideUnits = false }) {
+  const isMob = useIsMobile()
   const nDays = daily.length
   const autoGroup = nDays <= 14 ? 'daily' : nDays <= 90 ? 'weekly' : 'monthly'
   const [groupBy, setGroupBy] = useState(autoGroup)
@@ -130,11 +180,20 @@ function PnLTrendCard({ title, daily, dailyPnL, grossColor, grossGradId, boxHeig
   const selectedMetrics = TREND_METRICS.filter(m => selectedKeys.includes(m.key))
   const hasAxis = axis => selectedMetrics.some(m => m.axis === axis)
 
+  const mobXTicks = (() => {
+    const k = grouped.map(d => d.date)
+    const n = k.length
+    if (n <= 4) return k
+    return [k[0], k[Math.floor(n / 3)], k[Math.floor(2 * n / 3)], k[n - 1]]
+  })()
+
+  const mobSelStyle = { ...selStyle, fontSize: 10, padding: '2px 4px' }
+
   return (
-    <Card fill title={title} style={boxHeight ? { height: boxHeight, width: '100%' } : undefined} action={
-      <div style={{ display: 'flex', gap: 6 }}>
-        <MetricPicker options={availableMetrics} selected={selectedKeys} onToggle={toggleMetric} onSelectAll={selectAllMetrics} onClearAll={clearAllMetrics} />
-        <select value={groupBy} onChange={e => setGroupBy(e.target.value)} style={selStyle}>
+    <Card fill title={isMob ? 'Revenue Trend' : title} style={isMob ? { width: '100%' } : (boxHeight ? { height: boxHeight, width: '100%' } : undefined)} action={
+      <div style={{ display: 'flex', gap: isMob ? 4 : 6 }}>
+        <MetricPicker options={availableMetrics} selected={selectedKeys} onToggle={toggleMetric} onSelectAll={selectAllMetrics} onClearAll={clearAllMetrics} compact={isMob} />
+        <select value={groupBy} onChange={e => setGroupBy(e.target.value)} style={isMob ? mobSelStyle : selStyle}>
           {GROUP_OPTS.map(x => <option key={x.id} value={x.id}>{x.label}</option>)}
         </select>
       </div>
@@ -142,17 +201,18 @@ function PnLTrendCard({ title, daily, dailyPnL, grossColor, grossGradId, boxHeig
       {selectedMetrics.length === 0 ? (
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', color: C.t3, fontSize: 12 }}>Select at least one metric to plot</div>
       ) : (
-      <ResponsiveContainer width="100%" height="100%" minHeight={220}>
-        <ComposedChart data={grouped} margin={{ top: 4, right: 40, bottom: 0, left: 0 }}>
+      <div style={isMob ? { margin: '0 -28px' } : {}}>
+      <ResponsiveContainer width="100%" height={isMob ? 220 : '100%'} minHeight={220}>
+        <ComposedChart data={grouped} margin={{ top: 4, right: isMob ? 44 : 40, bottom: 0, left: isMob ? 44 : 0 }}>
           <defs>
             <linearGradient id={gradId} x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor={grossColor} stopOpacity={0.2} /><stop offset="95%" stopColor={grossColor} stopOpacity={0} /></linearGradient>
             <linearGradient id={gradId + '_net'} x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#0D9E68" stopOpacity={0.1} /><stop offset="95%" stopColor="#0D9E68" stopOpacity={0} /></linearGradient>
           </defs>
           <CartesianGrid strokeDasharray="3 3" stroke={C.border} vertical={false} />
-          <XAxis dataKey="date" tick={{ fontSize: 10, fill: C.t3 }} tickFormatter={d => d?.slice(5)} />
-          {hasAxis('rev') && <YAxis yAxisId="rev" tick={{ fontSize: 10, fill: C.t3 }} tickFormatter={fmtTick} width={55} />}
-          {hasAxis('units') && <YAxis yAxisId="units" orientation="right" tick={{ fontSize: 10, fill: '#2E74CC' }} tickFormatter={v => fmtN(v)} width={36} />}
-          {hasAxis('pct') && <YAxis yAxisId="pct" orientation="right" tick={{ fontSize: 10, fill: '#9B56B6' }} tickFormatter={v => `${v.toFixed(0)}%`} width={40} hide={hasAxis('units')} />}
+          <XAxis dataKey="date" tick={{ fontSize: 10, fill: C.t3 }} tickFormatter={d => d?.slice(5)} ticks={isMob ? mobXTicks : undefined} height={isMob ? 24 : 20} />
+          {hasAxis('rev') && <YAxis yAxisId="rev" tick={{ fontSize: 10, fill: C.t3 }} tickFormatter={fmtTick} width={55} hide={isMob} />}
+          {hasAxis('units') && <YAxis yAxisId="units" orientation="right" tick={{ fontSize: 10, fill: '#2E74CC' }} tickFormatter={v => fmtN(v)} width={36} hide={isMob} />}
+          {hasAxis('pct') && <YAxis yAxisId="pct" orientation="right" tick={{ fontSize: 10, fill: '#9B56B6' }} tickFormatter={v => `${v.toFixed(0)}%`} width={40} hide={isMob || hasAxis('units')} />}
           <Tooltip content={({ active, payload, label }) => active && payload?.length ? (
             <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 7, padding: '7px 11px', fontSize: 11 }}>
               <div style={{ fontWeight: 700, marginBottom: 4, color: C.t2 }}>{label?.slice(5) || label}</div>
@@ -164,20 +224,28 @@ function PnLTrendCard({ title, daily, dailyPnL, grossColor, grossGradId, boxHeig
               ))}
             </div>
           ) : null} />
-          <Legend wrapperStyle={{ fontSize: 11 }} />
-          {/* Rendered in TREND_METRICS' fixed order (matches PnLFinancialTable.jsx's column
-              order) regardless of the order metrics were checked, so the tooltip/legend order
-              never depends on click sequence. */}
+          {!isMob && <Legend wrapperStyle={{ fontSize: 11 }} />}
           {selectedMetrics.map(m => m.isArea ? (
             <Area key={m.key} yAxisId={m.axis} type="monotone" dataKey={m.key} name={m.label}
               stroke={m.color || grossColor} fill={`url(#${m.key === 'rev' ? gradId : gradId + '_net'})`}
-              strokeWidth={2} dot={false} strokeDasharray={m.dash} />
+              strokeWidth={2} dot={false} strokeDasharray={isMob ? undefined : m.dash} />
           ) : (
             <Line key={m.key} yAxisId={m.axis} type="monotone" dataKey={m.key} name={m.label}
-              stroke={m.color} strokeWidth={2} dot={false} strokeDasharray={m.dash} connectNulls />
+              stroke={m.color} strokeWidth={2} dot={false} strokeDasharray={isMob ? undefined : m.dash} connectNulls />
           ))}
         </ComposedChart>
       </ResponsiveContainer>
+      </div>
+      )}
+      {isMob && selectedMetrics.length > 0 && (
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px 12px', marginTop: 10, justifyContent: 'center' }}>
+          {selectedMetrics.map(m => (
+            <div key={m.key} style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, color: C.t2 }}>
+              <span style={{ width: 10, height: 3, background: m.color || grossColor, display: 'inline-block', borderRadius: 2 }} />
+              {m.label}
+            </div>
+          ))}
+        </div>
       )}
     </Card>
   )
@@ -200,16 +268,58 @@ function PnLTrendCard({ title, daily, dailyPnL, grossColor, grossGradId, boxHeig
 // dailyPnL: optional day-wise series (see api/bq.js amzSC.dailyPnLBySku/amzVCMatrix.dailyPnLBySku)
 // that adds SnD%/GM%/CM1% lines to the trend chart — both currently only populated for Amazon.
 export default function PnLChannelTab({ title, note, gross, excRev, net, units, orders, returnRev, subCatData, skuData, adSpendMap, sndBySku, daily, dailyPnL, kpiSummary, grossOfTotalPct, grossColor = '#FFD600', gradId = 'pnlGrossGrad', showMarketing = true, noReturnAccent = false, includeUnmatched = false, mobilityNetBySubCat = {}, netScale = 1, hideTrendUnits = false }) {
+  const isMob = useIsMobile()
   const returnPct = pct(returnRev, gross)
   const aov = orders > 0 ? gross / orders : 0
   const asp = units > 0 ? gross / units : 0
   const fmtPctSub = v => v != null ? `${v.toFixed(1)}%` : '—'
   const negAccent = v => v != null && v < 0 ? '#7A1A1A' : undefined
 
+  const dailyArr = daily || []
+  const revSpark = dailyArr.map(d => d.rev || 0)
+  const netSpark = dailyArr.map(d => d.excRev || 0)
+  const unitsSpark = dailyArr.map(d => d.units || 0)
+  const returnSpark = gross > 0 ? dailyArr.map(d => (d.rev || 0) * (returnRev / gross)) : revSpark
+  const cogsSpark = kpiSummary?.cogs != null && net > 0 ? dailyArr.map(d => (d.excRev || 0) * (kpiSummary.cogs / net)) : revSpark
+  const gmSpark = kpiSummary?.gm != null && net > 0 ? dailyArr.map(d => (d.excRev || 0) * (kpiSummary.gm / net)) : revSpark
+  const sndSpark = kpiSummary?.snd != null && net > 0 ? dailyArr.map(d => (d.excRev || 0) * (kpiSummary.snd / net)) : revSpark
+  const cm1Spark = kpiSummary?.cm1 != null && net > 0 ? dailyArr.map(d => (d.excRev || 0) * (kpiSummary.cm1 / net)) : revSpark
+  const spendSpark = kpiSummary?.spend != null && net > 0 ? dailyArr.map(d => (d.excRev || 0) * (kpiSummary.spend / net)) : revSpark
+  const cm2Spark = kpiSummary?.cm2 != null && net > 0 ? dailyArr.map(d => (d.excRev || 0) * (kpiSummary.cm2 / net)) : revSpark
+
+  const mobKpisWithSummary = [
+    { label: 'Gross Revenue', value: fmt(gross), spark: revSpark },
+    { label: 'Returns', value: fmt(returnRev), spark: returnSpark, accent: !noReturnAccent && parseFloat(returnPct) > 15 ? '#7A1A1A' : undefined },
+    { label: 'Net Revenue', value: fmt(net), spark: netSpark },
+    { label: 'COGS', value: kpiSummary?.cogs != null ? fmt(kpiSummary.cogs) : '—', spark: cogsSpark },
+    { label: 'Gross Margin', value: kpiSummary?.gm != null ? fmt(kpiSummary.gm) : '—', spark: gmSpark },
+    { label: 'SnD Cost', value: kpiSummary?.snd != null ? fmt(kpiSummary.snd) : '—', spark: sndSpark },
+    { label: 'CM1', value: kpiSummary?.cm1 != null ? fmt(kpiSummary.cm1) : '—', spark: cm1Spark, accent: negAccent(kpiSummary?.cm1) },
+    ...(showMarketing ? [
+      { label: 'Mktg Spend', value: fmt(kpiSummary?.spend || 0), spark: spendSpark },
+      { label: 'ROAS', value: kpiSummary?.roas != null ? `${kpiSummary.roas.toFixed(2)}x` : '—', spark: revSpark, accent: kpiSummary?.roas != null ? (kpiSummary.roas >= 2 ? '#0D9E68' : kpiSummary.roas >= 1 ? '#D97706' : '#B91C1C') : undefined },
+      { label: 'CM2', value: kpiSummary?.cm2 != null ? fmt(kpiSummary.cm2) : '—', spark: cm2Spark, accent: negAccent(kpiSummary?.cm2) },
+    ] : []),
+  ]
+  const mobKpisSimple = [
+    { label: 'Gross Revenue', value: fmt(gross), spark: revSpark },
+    { label: 'Net Revenue', value: fmt(net), spark: netSpark },
+    { label: 'Returns', value: fmt(returnRev), spark: returnSpark, accent: parseFloat(returnPct) > 15 ? '#7A1A1A' : undefined },
+    { label: 'Orders', value: fmtN(orders), spark: unitsSpark },
+    { label: 'AOV / ASP', value: `₹${Math.round(aov).toLocaleString('en-IN')}`, spark: revSpark },
+  ]
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+      {isMob && (
+        <div className="ads-kpi-list" style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+          {(kpiSummary ? mobKpisWithSummary : mobKpisSimple).map(k => (
+            <PnLSparkKpiCard key={k.label} label={k.label} value={k.value} sparkData={k.spark} accent={k.accent} />
+          ))}
+        </div>
+      )}
       {kpiSummary ? (
-        <div className="g-kpi5" style={{ gridTemplateColumns: `repeat(${showMarketing ? 10 : 8},1fr)` }}>
+        <div className={isMob ? 'mob-hidden' : ''} style={{ display: 'grid', gridTemplateColumns: `repeat(${showMarketing ? 10 : 8},1fr)`, gap: 8 }}>
           <KPICard label="Gross Revenue" value={fmt(gross)} sub={grossOfTotalPct != null ? `${fmtN(units)} units · ${grossOfTotalPct.toFixed(1)}% of total` : `${fmtN(units)} units`} />
           {!showMarketing && <KPICard label="ASP" value={`₹${Math.round(asp).toLocaleString('en-IN')}`} sub="ASP Inc GST" />}
           <KPICard label="Returns" value={fmt(returnRev)} sub={`${returnPct} of Gross`} accent={!noReturnAccent && parseFloat(returnPct) > 15 ? '#7A1A1A' : undefined} />
@@ -225,7 +335,7 @@ export default function PnLChannelTab({ title, note, gross, excRev, net, units, 
           </>}
         </div>
       ) : (
-        <div className="g-kpi5">
+        <div className={`g-kpi5${isMob ? ' mob-hidden' : ''}`}>
           <KPICard label="Gross Revenue" value={fmt(gross)} sub={note} />
           <KPICard label="Net Revenue" value={fmt(net)} sub="Ex GST, after returns/cancellations" />
           <KPICard label="Returns" value={fmt(returnRev)} sub={`${returnPct} of gross`} accent={parseFloat(returnPct) > 15 ? '#7A1A1A' : undefined} />
