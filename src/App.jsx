@@ -3663,7 +3663,83 @@ function MobileAdsPanel({ selPlatform, setSelPlatform, onClose }) {
   )
 }
 
-function Topnav({ page, setPage, customerTab, invTab, setInvTab, alerts, onRefresh, loading, filters, setFilters, rawRows, inventoryDateControl, salesActiveTab, setSalesActiveTab, salesData, salesChannelView, setSalesChannelView, salesOfflineSub, setSalesOfflineSub, lFilters, setLFilters, logisticsFilterOpts, costFilters, setCostFilters, adsSelPlatform, setAdsSelPlatform }) {
+const PNL_TABS_NAV = [
+  { id: 'all', label: 'Overall' },
+  { id: 'shopify', label: 'D2C', logo: '/logo-shopify.png' },
+  { id: 'ebo', label: 'EBO', logo: '/ebo.png' },
+  { id: 'amazon', label: 'Amazon', logo: '/logo-amazon.png' },
+  { id: 'flipkart', label: 'Flipkart', logo: '/logo-flipkart.png' },
+  { id: 'blinkit', label: 'Blinkit', logo: '/logo-blinkit.png' },
+  { id: 'cred', label: 'CRED', logo: '/logo-cred.png' },
+  { id: 'firstcry', label: 'Firstcry', logo: '/logo-firstcry.png' },
+  { id: 'instamart', label: 'Instamart', logo: '/logo-instamart.png' },
+  { id: 'zepto', label: 'Zepto', logo: '/logo-zepto.png' },
+  { id: 'myntra', label: 'Myntra', logo: '/logo-myntra.png' },
+  { id: 'international', label: 'International' },
+  { id: 'offline', label: 'Offline Sales', logo: '/offline-sales.png' },
+]
+
+function MobilePnLPanel({ activeTab, setActiveTab, amzView, setAmzView, offlineSub, setOfflineSub, d2cSubCh, setD2cSubCh, onClose }) {
+  const PV = { bg: C.bg, ink: C.t1, ink2: C.t2, border: C.border, canvas: C.surface }
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', maxHeight: '80vh' }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '16px 18px 12px' }}>
+        <span style={{ fontSize: 15, fontWeight: 700, color: PV.ink }}>P&amp;L Channel</span>
+        <button onClick={onClose} style={{ background: 'none', border: 'none', fontSize: 22, color: PV.ink2, cursor: 'pointer', lineHeight: 1, padding: 4 }}>×</button>
+      </div>
+      <div style={{ overflowY: 'auto', padding: '0 14px', display: 'flex', flexDirection: 'column', gap: 6 }}>
+        {PNL_TABS_NAV.map(tab => {
+          const isActive = activeTab === tab.id
+          return (
+            <button key={tab.id} onClick={() => setActiveTab(tab.id)}
+              style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '11px 14px', borderRadius: 10, border: `1.5px solid ${isActive ? PV.ink : PV.border}`, background: 'transparent', cursor: 'pointer', textAlign: 'left', fontFamily: 'inherit' }}>
+              {tab.logo
+                ? <img src={tab.logo} alt="" style={{ width: 20, height: 20, borderRadius: 3, objectFit: 'contain', ...(tab.id === 'cred' ? { background: '#000', padding: 2 } : {}) }} />
+                : <div style={{ width: 20, height: 20, borderRadius: 3, background: PV.canvas, flexShrink: 0 }} />}
+              <span style={{ fontSize: 14, fontWeight: isActive ? 700 : 500, color: PV.ink }}>{tab.label}</span>
+              {isActive && <span style={{ marginLeft: 'auto', fontSize: 16, color: PV.ink, fontWeight: 700 }}>✓</span>}
+            </button>
+          )
+        })}
+        {activeTab === 'amazon' && (
+          <div style={{ marginTop: 4, padding: '10px 14px', background: PV.canvas, borderRadius: 10 }}>
+            <div style={{ fontSize: 12, fontWeight: 600, color: PV.ink2, marginBottom: 8 }}>Amazon View</div>
+            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+              {[{ id: 'all', label: 'Overall' }, { id: 'sc', label: 'Seller Central' }, { id: 'vc', label: 'Vendor Central' }].map(opt => (
+                <button key={opt.id} onClick={() => setAmzView(opt.id)} style={{ fontSize: 12, fontWeight: amzView === opt.id ? 700 : 500, padding: '5px 12px', borderRadius: 7, border: 'none', background: amzView === opt.id ? '#FFD600' : PV.border, color: '#13121A', cursor: 'pointer' }}>{opt.label}</button>
+              ))}
+            </div>
+          </div>
+        )}
+        {activeTab === 'shopify' && (
+          <div style={{ marginTop: 4, padding: '10px 14px', background: PV.canvas, borderRadius: 10 }}>
+            <div style={{ fontSize: 12, fontWeight: 600, color: PV.ink2, marginBottom: 8 }}>D2C Sub-Channel</div>
+            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+              {[{ id: 'all', label: 'Overall' }, { id: 'MyFrido', label: 'MyFrido' }, { id: 'Mobility', label: 'Mobility' }].map(opt => (
+                <button key={opt.id} onClick={() => setD2cSubCh(opt.id)} style={{ fontSize: 12, fontWeight: d2cSubCh === opt.id ? 700 : 500, padding: '5px 12px', borderRadius: 7, border: 'none', background: d2cSubCh === opt.id ? '#FFD600' : PV.border, color: '#13121A', cursor: 'pointer' }}>{opt.label}</button>
+              ))}
+            </div>
+          </div>
+        )}
+        {activeTab === 'offline' && (
+          <div style={{ marginTop: 4, padding: '10px 14px', background: PV.canvas, borderRadius: 10 }}>
+            <div style={{ fontSize: 12, fontWeight: 600, color: PV.ink2, marginBottom: 8 }}>Offline Sub-Channel</div>
+            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+              {[{ id: 'all', label: 'Overall' }, { id: 'b2b', label: 'B2B' }, { id: 'Stockist', label: 'Stockist' }, { id: 'MTGT', label: 'MT GT' }].map(opt => (
+                <button key={opt.id} onClick={() => setOfflineSub(opt.id)} style={{ fontSize: 12, fontWeight: offlineSub === opt.id ? 700 : 500, padding: '5px 12px', borderRadius: 7, border: 'none', background: offlineSub === opt.id ? '#FFD600' : PV.border, color: '#13121A', cursor: 'pointer' }}>{opt.label}</button>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+      <div style={{ padding: '14px 14px 16px', flexShrink: 0 }}>
+        <button onClick={onClose} style={{ width: '100%', padding: '10px', borderRadius: 10, border: 'none', background: PV.ink, color: '#fff', fontSize: 13, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>Done</button>
+      </div>
+    </div>
+  )
+}
+
+function Topnav({ page, setPage, customerTab, invTab, setInvTab, alerts, onRefresh, loading, filters, setFilters, rawRows, inventoryDateControl, salesActiveTab, setSalesActiveTab, salesData, salesChannelView, setSalesChannelView, salesOfflineSub, setSalesOfflineSub, lFilters, setLFilters, logisticsFilterOpts, costFilters, setCostFilters, adsSelPlatform, setAdsSelPlatform, pnlActiveTab, setPnlActiveTab, pnlAmzView, setPnlAmzView, pnlOfflineSub, setPnlOfflineSub, pnlD2cSubCh, setPnlD2cSubCh }) {
   const [mobFilterOpen, setMobFilterOpen] = useState(false)
   const titles = { overview: 'Overview', sales: 'Sales Analytics', pnl: 'P&L Analytics', ads: 'Ads Analytics', intelligence: 'Intelligence', logistics: 'Performance Analytics', 'logistics-cost': 'Cost Analytics', inventory: 'Inventory, Sales & Allocation', customer: 'Customer Intelligence', documents: 'Documents', cogs: 'COGS Ledger', 'logistics-ledger': 'Logistics Bill Ledger' }
   const invTitles = { health: 'Inventory Health', sales: 'Sales & Allocation' }
@@ -3675,7 +3751,7 @@ function Topnav({ page, setPage, customerTab, invTab, setInvTab, alerts, onRefre
   return (
     <div className="topnav">
       <div style={{ display: 'flex', alignItems: 'center', gap: 6, position: 'relative', minWidth: 0, flex: 1 }}>
-        {(page === 'inventory' || page === 'sales' || page === 'logistics' || page === 'logistics-cost' || page === 'ads') && (
+        {(page === 'inventory' || page === 'sales' || page === 'logistics' || page === 'logistics-cost' || page === 'ads' || page === 'pnl') && (
           <>
             <button className="tnav-mob-only" onClick={() => setMobFilterOpen(v => !v)} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '2px 6px 2px 0', color: C.t2, fontSize: 16, lineHeight: 1, alignItems: 'center', flexShrink: 0 }}>☰</button>
             {mobFilterOpen && (
@@ -3694,6 +3770,8 @@ function Topnav({ page, setPage, customerTab, invTab, setInvTab, alerts, onRefre
                     ? <MobileLogisticsPanel page={page} setPage={p => { setPage(p); setMobFilterOpen(false) }} onClose={() => setMobFilterOpen(false)} lFilters={lFilters} setLFilters={setLFilters} filterOpts={logisticsFilterOpts} costFilters={costFilters} setCostFilters={setCostFilters} />
                     : page === 'ads'
                     ? <MobileAdsPanel selPlatform={adsSelPlatform} setSelPlatform={p => { setAdsSelPlatform(p); setMobFilterOpen(false) }} onClose={() => setMobFilterOpen(false)} />
+                    : page === 'pnl'
+                    ? <MobilePnLPanel activeTab={pnlActiveTab} setActiveTab={t => { setPnlActiveTab(t); }} amzView={pnlAmzView} setAmzView={setPnlAmzView} offlineSub={pnlOfflineSub} setOfflineSub={setPnlOfflineSub} d2cSubCh={pnlD2cSubCh} setD2cSubCh={setPnlD2cSubCh} onClose={() => setMobFilterOpen(false)} />
                     : <MobileSalesFilterPanel activeTab={salesActiveTab} setActiveTab={setSalesActiveTab} filters={filters} setFilters={setFilters} salesData={salesData} channelView={salesChannelView} setChannelView={setSalesChannelView} offlineSub={salesOfflineSub} setOfflineSub={setSalesOfflineSub} onClose={() => setMobFilterOpen(false)} />
                   }
                 </div>
@@ -6380,7 +6458,6 @@ function ShopifyGeoRichTable({ title, rows, firstKey, firstLabel, formatFirst, r
 
 function ShopifyReturnReasonsTable({ reasons = [] }) {
   const [expandedReason, setExpandedReason] = useState({})
-  const isMob = useIsMobile()
 
   if (!reasons || reasons.length === 0) return null
 
@@ -6419,14 +6496,12 @@ function ShopifyReturnReasonsTable({ reasons = [] }) {
     <Card title="Return Reasons · D2C" note={`${sortedReasons.length} reasons · ${grandTotal.toLocaleString('en-IN')} orders`}>
       <div style={{ overflowX: 'auto', overflowY: 'auto', maxHeight: 500 }}>
         <table style={{ borderCollapse: 'collapse', fontSize: 11, minWidth: '100%' }}>
-          {!isMob && (
-            <thead style={{ position: 'sticky', top: 0, zIndex: 2 }}>
-              <tr>
-                <th style={thL}>Reason / Sub-reason</th>
-                {cats.map(cat => <th key={cat} style={thStyle}>{cat}</th>)}
-              </tr>
-            </thead>
-          )}
+          <thead style={{ position: 'sticky', top: 0, zIndex: 2 }}>
+            <tr>
+              <th style={thL}>Reason / Sub-reason</th>
+              {cats.map(cat => <th key={cat} style={thStyle}>{cat}</th>)}
+            </tr>
+          </thead>
           <tbody>
             {sortedReasons.map((reason, ri) => {
               const rd = grouped[reason]
@@ -6445,7 +6520,7 @@ function ShopifyReturnReasonsTable({ reasons = [] }) {
                     {reason}
                     <span style={{ marginLeft: 8, fontSize: 9, color: C.t3, fontWeight: 400 }}>{rTotal.toLocaleString('en-IN')} · {grandTotal > 0 ? (rTotal / grandTotal * 100).toFixed(1) : 0}%</span>
                   </td>
-                  {!isMob && cats.map(cat => <td key={cat} style={{ padding: '5px 8px', textAlign: 'right', fontFamily: 'var(--mono)', color: C.t1 }}>{pctCell(rd.catOrders[cat], colTotals[cat])}</td>)}
+                  {cats.map(cat => <td key={cat} style={{ padding: '5px 8px', textAlign: 'right', fontFamily: 'var(--mono)', color: C.t1 }}>{pctCell(rd.catOrders[cat], colTotals[cat])}</td>)}
                 </tr>,
                 ...(isExp ? sortedSubs.map(([subReason, sd]) => {
                   const srTotal = Object.values(sd.catOrders).reduce((s, v) => s + v, 0)
@@ -6455,7 +6530,7 @@ function ShopifyReturnReasonsTable({ reasons = [] }) {
                         ↳ {subReason}
                         <span style={{ marginLeft: 8, fontSize: 9, color: C.t3 }}>{srTotal.toLocaleString('en-IN')} · {rTotal > 0 ? (srTotal / rTotal * 100).toFixed(1) : 0}% of reason</span>
                       </td>
-                      {!isMob && cats.map(cat => <td key={cat} style={{ padding: '4px 8px', textAlign: 'right', fontFamily: 'var(--mono)', color: C.t2 }}>{pctCell(sd.catOrders[cat], rTotal > 0 ? rd.catOrders[cat] : null)}</td>)}
+                      {cats.map(cat => <td key={cat} style={{ padding: '4px 8px', textAlign: 'right', fontFamily: 'var(--mono)', color: C.t2 }}>{pctCell(sd.catOrders[cat], rTotal > 0 ? rd.catOrders[cat] : null)}</td>)}
                     </tr>
                   )
                 }) : [])
@@ -7600,7 +7675,7 @@ function AmazonTab({ data, channelView, setChannelView }) {
     { label: 'Units', value: amzFmtN(amzMobUnits), spark: scDailyArr.map(d => (d.FBA_units || 0) + (d.MFN_units || 0)) },
     { label: 'AOV', value: amzFmtS(amzMobAOV), spark: scDailyArr.map(d => { const o = (d.FBA_orders||0)+(d.MFN_orders||0); const r = (d.FBA||0)+(d.MFN||0); return o > 0 ? r / o : null }) },
     { label: 'ASP', value: amzFmtS(amzMobASP), spark: scDailyArr.map(d => { const u = (d.FBA_units||0)+(d.MFN_units||0); const r = (d.FBA||0)+(d.MFN||0); return u > 0 ? r / u : null }) },
-    { label: 'Returns %', value: `${amzCombinedReturnPct.toFixed(1)}%`, spark: scDailyArr.map(() => amzCombinedReturnPct), accent: amzCombinedReturnPct > 18 ? '#7A1A1A' : undefined },
+    { label: 'Returns %', value: `${amzCombinedReturnPct.toFixed(1)}%`, spark: scDailyArr.map(d => ((d.FBA || 0) + (d.MFN || 0)) * (amzMobGrossRev > 0 ? amzCombinedReturnPct / 100 : 0)), accent: amzCombinedReturnPct > 18 ? '#7A1A1A' : undefined },
   ]
 
   return (
@@ -7756,13 +7831,19 @@ function AmazonTab({ data, channelView, setChannelView }) {
             return (
               <div className="g-3col" style={{ display: 'grid', gridTemplateColumns: '1.5fr 1fr 0.65fr', gap: 14, alignItems: 'start' }}>
                 <Card fill title="Revenue & Returns Trend" style={{ height: 360, alignSelf: 'start' }} note={channelView !== 'all' ? (channelView === 'sc' ? 'Seller Central' : 'Vendor Central') : undefined} action={
-                  <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                    <div style={{ display: 'flex', gap: 4 }}>
-                      {[{ v: 'rev', label: 'Revenue' }, { v: 'orders', label: 'Orders' }, { v: 'units', label: 'Units' }].map(opt => (
-                        <button key={opt.v} onClick={() => setOvTrendMetric(opt.v)} style={{ fontSize: 11, fontWeight: 600, padding: '3px 10px', borderRadius: 5, border: `1.5px solid ${ovTrendMetric === opt.v ? C.t1 : C.border}`, background: ovTrendMetric === opt.v ? C.t1 : 'transparent', color: ovTrendMetric === opt.v ? '#fff' : C.t2, cursor: 'pointer', fontFamily: 'var(--font)' }}>{opt.label}</button>
-                      ))}
-                    </div>
-                    <select value={ovTrendGroup} onChange={e => setOvTrendGroup(e.target.value)} style={{ fontSize: 11, fontWeight: 600, padding: '3px 8px', borderRadius: 6, border: `1px solid ${C.border2}`, background: C.card, color: C.t1, cursor: 'pointer', fontFamily: 'var(--font)', outline: 'none' }}>
+                  <div style={{ display: 'flex', gap: isMob ? 4 : 8, alignItems: 'center' }}>
+                    {isMob ? (
+                      <select value={ovTrendMetric} onChange={e => setOvTrendMetric(e.target.value)} style={{ fontSize: 10, fontWeight: 600, padding: '2px 4px', borderRadius: 6, border: `1px solid ${C.border2}`, background: C.card, color: C.t1, cursor: 'pointer', fontFamily: 'var(--font)', outline: 'none' }}>
+                        {[{ v: 'rev', label: 'Revenue' }, { v: 'orders', label: 'Orders' }, { v: 'units', label: 'Units' }].map(opt => <option key={opt.v} value={opt.v}>{opt.label}</option>)}
+                      </select>
+                    ) : (
+                      <div style={{ display: 'flex', gap: 4 }}>
+                        {[{ v: 'rev', label: 'Revenue' }, { v: 'orders', label: 'Orders' }, { v: 'units', label: 'Units' }].map(opt => (
+                          <button key={opt.v} onClick={() => setOvTrendMetric(opt.v)} style={{ fontSize: 11, fontWeight: 600, padding: '3px 10px', borderRadius: 5, border: `1.5px solid ${ovTrendMetric === opt.v ? C.t1 : C.border}`, background: ovTrendMetric === opt.v ? C.t1 : 'transparent', color: ovTrendMetric === opt.v ? '#fff' : C.t2, cursor: 'pointer', fontFamily: 'var(--font)' }}>{opt.label}</button>
+                        ))}
+                      </div>
+                    )}
+                    <select value={ovTrendGroup} onChange={e => setOvTrendGroup(e.target.value)} style={{ fontSize: isMob ? 10 : 11, fontWeight: 600, padding: isMob ? '2px 4px' : '3px 8px', borderRadius: 6, border: `1px solid ${C.border2}`, background: C.card, color: C.t1, cursor: 'pointer', fontFamily: 'var(--font)', outline: 'none' }}>
                       {['daily','weekly','monthly','quarterly'].map(g => <option key={g} value={g}>{g.charAt(0).toUpperCase() + g.slice(1)}</option>)}
                     </select>
                   </div>
@@ -7786,9 +7867,9 @@ function AmazonTab({ data, channelView, setChannelView }) {
                       ) : null} />
                       {!isMob && <Legend verticalAlign="bottom" align="center" layout="horizontal" wrapperStyle={{ fontSize: 10, paddingTop: 8 }} formatter={v => <span style={{ color: '#111' }}>{v}</span>} />}
                       <Area yAxisId="main" type="monotone" dataKey={dk.total} name={dk.totalName} stroke="#FFD600" fill="#FFD60022" strokeWidth={2} dot={false} />
-                      {isRev && <Area yAxisId="main" type="monotone" dataKey={dk.sub} name={dk.subName} stroke="#0D9E68" fill="#0D9E6811" strokeWidth={2} dot={false} strokeDasharray="4 2" />}
+                      {isRev && <Area yAxisId="main" type="monotone" dataKey={dk.sub} name={dk.subName} stroke="#0D9E68" fill="#0D9E6811" strokeWidth={2} dot={false} />}
                       {channelView === 'all' && <Line yAxisId="main" type="monotone" dataKey={dk.a} name={dk.aName} stroke="#E8930A" strokeWidth={1.5} dot={false} />}
-                      {channelView === 'all' && <Line yAxisId="main" type="monotone" dataKey={dk.b} name={dk.bName} stroke="#2E74CC" strokeWidth={1.5} dot={false} strokeDasharray="3 2" />}
+                      {channelView === 'all' && <Line yAxisId="main" type="monotone" dataKey={dk.b} name={dk.bName} stroke="#2E74CC" strokeWidth={1.5} dot={false} />}
                     </ComposedChart>
                   </ResponsiveContainer>
                   </div>
@@ -8020,8 +8101,8 @@ function FlipkartTab({ data }) {
     { label: 'Units', value: fkFmtN(qty), spark: dailyArr.map(d => d.units || 0) },
     { label: 'AOV', value: fkFmtS(aov), spark: dailyArr.map(d => (d.orders || 0) > 0 ? (d.rev || 0) / d.orders : null) },
     { label: 'ASP', value: fkFmtS(asp), spark: dailyArr.map(d => (d.units || 0) > 0 ? (d.rev || 0) / d.units : null) },
-    { label: 'Delivered %', value: `${fkDeliveredPct.pct.toFixed(1)}%`, spark: dailyArr.map(() => fkDeliveredPct.pct), accent: fkDeliveredPct.pct < 50 ? '#7A1A1A' : undefined },
-    { label: 'Cancellation %', value: `${nOrders > 0 ? (cancelOrders / nOrders * 100).toFixed(1) : 0}%`, spark: dailyArr.map(() => nOrders > 0 ? cancelOrders / nOrders * 100 : 0) },
+    { label: 'Delivered %', value: `${fkDeliveredPct.pct.toFixed(1)}%`, spark: dailyArr.map(d => (d.rev || 0) * (rev > 0 ? fkDeliveredPct.pct / 100 : 0)), accent: fkDeliveredPct.pct < 50 ? '#7A1A1A' : undefined },
+    { label: 'Cancellation %', value: `${nOrders > 0 ? (cancelOrders / nOrders * 100).toFixed(1) : 0}%`, spark: dailyArr.map(d => (d.rev || 0) * (rev > 0 ? (nOrders > 0 ? cancelOrders / nOrders : 0) : 0)) },
     { label: 'Returns %', value: `${fkReturnCur.pct.toFixed(1)}%`, spark: dailyArr.map(d => d.rev > 0 ? (d.returnRev || 0) / d.rev * 100 : null), accent: fkReturnCur.pct > 20 ? '#7A1A1A' : undefined },
   ]
 
@@ -8106,16 +8187,22 @@ function FlipkartTab({ data }) {
         return (
           <div className="g-3col" style={{ display: 'grid', gridTemplateColumns: '1.5fr 1fr 0.65fr', gap: 14, alignItems: 'start' }}>
             <Card fill title="Revenue & Returns Trend" style={{ height: 360, alignSelf: 'start' }} action={
-              <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                <div style={{ display: 'flex', gap: 4 }}>
-                  {[['rev','Revenue'],['orders','Orders'],['units','Units']].map(([k,l]) => <button key={k} style={btnSt(k)} onClick={() => setFkTrendMetric(k)}>{l}</button>)}
-                </div>
-                <select value={fkTrendGroup} onChange={e => setFkTrendGroup(e.target.value)} style={{ fontSize: 11, fontWeight: 600, padding: '3px 8px', borderRadius: 6, border: `1px solid ${C.border2}`, background: C.card, color: C.t1, cursor: 'pointer', fontFamily: 'var(--font)', outline: 'none' }}>
+              <div style={{ display: 'flex', gap: isMob ? 4 : 8, alignItems: 'center' }}>
+                {isMob ? (
+                  <select value={fkTrendMetric} onChange={e => setFkTrendMetric(e.target.value)} style={{ fontSize: 10, fontWeight: 600, padding: '2px 4px', borderRadius: 6, border: `1px solid ${C.border2}`, background: C.card, color: C.t1, cursor: 'pointer', fontFamily: 'var(--font)', outline: 'none' }}>
+                    {[['rev','Revenue'],['orders','Orders'],['units','Units']].map(([k,l]) => <option key={k} value={k}>{l}</option>)}
+                  </select>
+                ) : (
+                  <div style={{ display: 'flex', gap: 4 }}>
+                    {[['rev','Revenue'],['orders','Orders'],['units','Units']].map(([k,l]) => <button key={k} style={btnSt(k)} onClick={() => setFkTrendMetric(k)}>{l}</button>)}
+                  </div>
+                )}
+                <select value={fkTrendGroup} onChange={e => setFkTrendGroup(e.target.value)} style={{ fontSize: isMob ? 10 : 11, fontWeight: 600, padding: isMob ? '2px 4px' : '3px 8px', borderRadius: 6, border: `1px solid ${C.border2}`, background: C.card, color: C.t1, cursor: 'pointer', fontFamily: 'var(--font)', outline: 'none' }}>
                   {['daily','weekly','monthly','quarterly'].map(g => <option key={g} value={g}>{g.charAt(0).toUpperCase() + g.slice(1)}</option>)}
                 </select>
               </div>
             }>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 8, flexWrap: 'wrap', flexShrink: 0 }}>
+              {(!isMob) && <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 8, flexWrap: 'wrap', flexShrink: 0 }}>
                 {fkEstimatedDays > 0 && fkTrendGroup === 'daily' && (
                   <div style={{ fontSize: 11, color: '#92600A', background: '#FFF8E1', border: '1px solid #FFE082', borderRadius: 6, padding: '5px 10px' }}>
                     ⏳ Data available till {fkLatestReal} · Last {fkEstimatedDays} day{fkEstimatedDays > 1 ? 's' : ''} shown as 7-day rolling avg estimate
@@ -8127,13 +8214,13 @@ function FlipkartTab({ data }) {
                     {nOrders > 0 && <span style={{ color: C.t3, fontSize: 10 }}>{(totalReturns / nOrders * 100).toFixed(1)}%</span>}
                   </div>
                 )}
-              </div>
+              </div>}
               <div style={{ flex: 1, minHeight: 0 }}>
-              <div style={isMob ? { margin: '0 -18px' } : {}}>
+              <div style={isMob ? { margin: '0 -10px' } : {}}>
               <ResponsiveContainer width="100%" height={isMob ? 240 : '100%'} minHeight={200}>
-                <ComposedChart data={grouped} margin={{ top: 4, right: isMob ? 18 : 50, bottom: 0, left: isMob ? 18 : 0 }}>
+                <ComposedChart data={grouped} margin={{ top: 4, right: isMob ? 32 : 50, bottom: isMob ? 16 : 0, left: isMob ? 32 : 0 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke={C.border} vertical={false} />
-                  <XAxis dataKey="date" tick={{ fontSize: 10, fill: C.t3 }} tickFormatter={xFmt} interval={isMob ? 0 : 'preserveStartEnd'} ticks={isMob ? (() => { const k = grouped.map(d => d.date); const n = k.length; if (n <= 4) return k; return [k[0], k[Math.floor(n/3)], k[Math.floor(2*n/3)], k[n-1]] })() : undefined} />
+                  <XAxis dataKey="date" tick={{ fontSize: 10, fill: C.t3 }} tickFormatter={xFmt} ticks={(() => { const k = grouped.map(d => d.date); const n = k.length; if (n <= 4) return k; return [k[0], k[Math.floor(n/3)], k[Math.floor(2*n/3)], k[n-1]] })()} height={isMob ? 30 : 20} />
                   <YAxis yAxisId="main" hide={isMob} tick={{ fontSize: 10, fill: C.t3 }} tickFormatter={yFmt} width={isMob ? 0 : 60} />
                   <YAxis yAxisId="pct" orientation="right" hide={isMob} tick={{ fontSize: 10, fill: C.t3 }} tickFormatter={v => `${v.toFixed(1)}%`} width={isMob ? 0 : 40} />
                   <Tooltip content={({ active, payload, label }) => {
@@ -8158,7 +8245,7 @@ function FlipkartTab({ data }) {
                   {!isMob && <Legend verticalAlign="bottom" align="center" layout="horizontal" wrapperStyle={{ fontSize: 11, paddingTop: 8 }} formatter={v => <span style={{ color: '#111' }}>{v}</span>} />}
                   {isRev ? (<>
                     <Area yAxisId="main" type="monotone" dataKey="grossRev" name="Gross Revenue" stroke="#E8930A" fill="#E8930A22" strokeWidth={2} dot={grouped.length <= 3} />
-                    <Area yAxisId="main" type="monotone" dataKey="netRev" name="Net Revenue" stroke="#0D9E68" fill="#0D9E6811" strokeWidth={2} dot={grouped.length <= 3} strokeDasharray="4 2" />
+                    <Area yAxisId="main" type="monotone" dataKey="netRev" name="Net Revenue" stroke="#0D9E68" fill="#0D9E6811" strokeWidth={2} dot={grouped.length <= 3} />
                   </>) : fkTrendMetric === 'orders' ? (
                     <Area yAxisId="main" type="monotone" dataKey="orders" name="Orders" stroke="#E8930A" fill="#E8930A22" strokeWidth={2} dot={grouped.length <= 3} />
                   ) : (
@@ -9934,9 +10021,9 @@ function BlinkitTab({ data }) {
     { label: 'Net Revenue', value: blFmtS(excRev), spark: daily.map(d => d.excRev || (d.rev || 0) * (rev > 0 ? excRev / rev : 0)) },
     { label: 'GST', value: blFmtS(gst), spark: daily.map(d => (d.rev || 0) * (rev > 0 ? gst / rev : 0)) },
     { label: 'Daily Avg Rev', value: blFmtS(dailyAvg), spark: daily.map(d => d.rev || 0) },
-    { label: 'Orders', value: blFmtN(orders), spark: daily.map(d => d.orders || 0) },
+    { label: 'Orders', value: blFmtN(orders), spark: daily.map(d => (d.orders || 0) > 0 ? d.orders : (d.rev || 0) * (rev > 0 ? orders / rev : 0)) },
     { label: 'Units', value: blFmtN(units), spark: daily.map(d => d.units || 0) },
-    { label: 'AOV', value: blFmtS(aov), spark: daily.map(d => (d.orders || 0) > 0 ? (d.rev || 0) / d.orders : null) },
+    { label: 'AOV', value: blFmtS(aov), spark: daily.map(d => (d.rev || 0) * (rev > 0 ? aov / rev : 0)) },
     { label: 'ASP', value: blFmtS(asp), spark: daily.map(d => (d.units || 0) > 0 ? (d.rev || 0) / d.units : null) },
   ]
 
@@ -10018,7 +10105,7 @@ function BlinkitTab({ data }) {
       </div>
 
       {/* Category Matrix */}
-      <FinancialCategoryMatrix catData={catMatrixData} subCatData={subCatMatrixData} skuData={bl.skuMatrix || {}} title="Category Revenue Matrix · Blinkit" showMoM={true} catPrevMap={bl.catPrevMap || {}} subCatPrevMap={bl.subCatPrevMap || {}} skuPrevMap={bl.skuPrevMap || {}} />
+      <FlatCategoryProductMatrix catData={catMatrixData} subCatData={subCatMatrixData} skuData={{}} title="Category Revenue Matrix · Blinkit" catPrevMap={bl.catPrevMap || {}} subCatPrevMap={bl.subCatPrevMap || {}} noReturns />
 
       {/* Cities + States */}
       {(() => {
@@ -10109,9 +10196,9 @@ function InstaTab({ data }) {
     { label: 'Net Revenue', value: insFmtS(excRev), spark: daily.map(d => d.excRev || (d.rev || 0) * (rev > 0 ? excRev / rev : 0)) },
     { label: 'GST', value: insFmtS(gst), spark: daily.map(d => (d.rev || 0) * (rev > 0 ? gst / rev : 0)) },
     { label: 'Daily Avg Rev', value: insFmtS(dailyAvg), spark: daily.map(d => d.rev || 0) },
-    { label: 'Orders', value: insFmtN(orders), spark: daily.map(d => d.orders || 0) },
+    { label: 'Orders', value: insFmtN(orders), spark: daily.map(d => (d.orders || 0) > 0 ? d.orders : (d.rev || 0) * (rev > 0 ? orders / rev : 0)) },
     { label: 'Units', value: insFmtN(units), spark: daily.map(d => d.units || 0) },
-    { label: 'AOV', value: insFmtS(aov), spark: daily.map(d => (d.orders || 0) > 0 ? (d.rev || 0) / d.orders : null) },
+    { label: 'AOV', value: insFmtS(aov), spark: daily.map(d => (d.rev || 0) * (rev > 0 ? aov / rev : 0)) },
     { label: 'ASP', value: insFmtS(asp), spark: daily.map(d => (d.units || 0) > 0 ? (d.rev || 0) / d.units : null) },
   ]
 
@@ -10190,7 +10277,7 @@ function InstaTab({ data }) {
         })()}
       </div>
 
-      <FinancialCategoryMatrix catData={catMatrixData} subCatData={subCatMatrixData} skuData={ins.skuMatrix || {}} title="Category Revenue Matrix · Instamart" showMoM={true} catPrevMap={ins.catPrevMap || {}} subCatPrevMap={ins.subCatPrevMap || {}} skuPrevMap={ins.skuPrevMap || {}} />
+      <FlatCategoryProductMatrix catData={catMatrixData} subCatData={subCatMatrixData} skuData={{}} title="Category Revenue Matrix · Instamart" catPrevMap={ins.catPrevMap || {}} subCatPrevMap={ins.subCatPrevMap || {}} noReturns />
 
       {(() => {
         const statePrevMap = ins.statePrevMap || {}
@@ -10280,9 +10367,9 @@ function ZeptoTab({ data }) {
     { label: 'Net Revenue', value: zpFmtS(excRev), spark: daily.map(d => d.excRev || (d.rev || 0) * (rev > 0 ? excRev / rev : 0)) },
     { label: 'GST', value: zpFmtS(gst), spark: daily.map(d => (d.rev || 0) * (rev > 0 ? gst / rev : 0)) },
     { label: 'Daily Avg Rev', value: zpFmtS(dailyAvg), spark: daily.map(d => d.rev || 0) },
-    { label: 'Orders', value: zpFmtN(orders), spark: daily.map(d => d.orders || 0) },
+    { label: 'Orders', value: zpFmtN(orders), spark: daily.map(d => (d.orders || 0) > 0 ? d.orders : (d.rev || 0) * (rev > 0 ? orders / rev : 0)) },
     { label: 'Units', value: zpFmtN(units), spark: daily.map(d => d.units || 0) },
-    { label: 'AOV', value: zpFmtS(aov), spark: daily.map(d => (d.orders || 0) > 0 ? (d.rev || 0) / d.orders : null) },
+    { label: 'AOV', value: zpFmtS(aov), spark: daily.map(d => (d.rev || 0) * (rev > 0 ? aov / rev : 0)) },
     { label: 'ASP', value: zpFmtS(asp), spark: daily.map(d => (d.units || 0) > 0 ? (d.rev || 0) / d.units : null) },
   ]
 
@@ -10361,7 +10448,7 @@ function ZeptoTab({ data }) {
         })()}
       </div>
 
-      <FinancialCategoryMatrix catData={catMatrixData} subCatData={subCatMatrixData} skuData={zp.skuMatrix || {}} title="Category Revenue Matrix · Zepto" showMoM={true} catPrevMap={zp.catPrevMap || {}} subCatPrevMap={zp.subCatPrevMap || {}} skuPrevMap={zp.skuPrevMap || {}} />
+      <FlatCategoryProductMatrix catData={catMatrixData} subCatData={subCatMatrixData} skuData={{}} title="Category Revenue Matrix · Zepto" catPrevMap={zp.catPrevMap || {}} subCatPrevMap={zp.subCatPrevMap || {}} noReturns />
 
       {(() => {
         const statePrevMap = zp.statePrevMap || {}
@@ -10419,6 +10506,7 @@ function CredTab({ data }) {
   const crPrevNetRev = cr.prevNetCalc?.netRev || 0
   const crPrevGstCollected = cr.prevNetCalc?.gstCollected || 0
 
+  const isMob = useIsMobile()
   const [selectedCat, setSelectedCat] = useState(null)
   const [selectedSubCat, setSelectedSubCat] = useState(null)
   const [catRevView, setCatRevView] = useState('category')
@@ -10483,8 +10571,8 @@ function CredTab({ data }) {
     { label: 'Units', value: crFmtN(units), spark: daily.map(d => d.units || 0) },
     { label: 'AOV', value: crFmtS(orders ? rev / orders : 0), spark: daily.map(d => (d.orders || 0) > 0 ? (d.rev || 0) / d.orders : null) },
     { label: 'ASP', value: crFmtS(asp), spark: daily.map(d => (d.units || 0) > 0 ? (d.rev || 0) / d.units : null) },
-    { label: 'Cancellation %', value: `${cancelPct.toFixed(1)}%`, spark: daily.map(d => (d.rev || 0) * (rev > 0 ? cancelPct / 100 : 0)) },
-    { label: 'Returns %', value: `${returnPct.toFixed(1)}%`, spark: daily.map(d => (d.rev || 0) * (rev > 0 ? returnPct / 100 : 0)), accent: returnPct > 20 ? '#7A1A1A' : undefined },
+    { label: 'Cancellation %', value: `${cancelPct.toFixed(1)}%`, spark: cancelPct > 0 ? daily.map(d => (d.rev || 0) * (rev > 0 ? cancelPct / 100 : 0)) : daily.map(d => d.rev || 0) },
+    { label: 'Returns %', value: `${returnPct.toFixed(1)}%`, spark: returnPct > 0 ? daily.map(d => (d.rev || 0) * (rev > 0 ? returnPct / 100 : 0)) : daily.map(d => d.rev || 0), accent: returnPct > 20 ? '#7A1A1A' : undefined },
   ]
 
   return (
@@ -10564,21 +10652,28 @@ function CredTab({ data }) {
         const btnSt = k => ({ fontSize: 11, fontWeight: 600, padding: '3px 10px', borderRadius: 5, border: `1.5px solid ${crTrendMetric===k?C.t1:C.border}`, background: crTrendMetric===k?C.t1:'transparent', color: crTrendMetric===k?'#fff':C.t2, cursor: 'pointer', fontFamily: 'var(--font)' })
         return (
           <div className="g-3col" style={{ display: 'grid', gridTemplateColumns: '1.5fr 1fr 0.65fr', gap: 14, alignItems: 'start' }}>
-            <Card fill title="Revenue & Returns Trend" style={{ height: 360, alignSelf: 'start' }} action={
-              <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                <div style={{ display: 'flex', gap: 4 }}>
-                  {[['rev','Revenue'],['orders','Orders'],['units','Units']].map(([k,l]) => <button key={k} style={btnSt(k)} onClick={() => setCrTrendMetric(k)}>{l}</button>)}
-                </div>
-                <select value={crTrendGroup} onChange={e => setCrTrendGroup(e.target.value)} style={{ fontSize: 11, fontWeight: 600, padding: '3px 8px', borderRadius: 6, border: `1px solid ${C.border2}`, background: C.card, color: C.t1, cursor: 'pointer', fontFamily: 'var(--font)', outline: 'none' }}>
+            <Card fill title="Revenue & Returns Trend" style={{ height: isMob ? 'auto' : 360, alignSelf: 'start' }} action={
+              <div style={{ display: 'flex', gap: isMob ? 4 : 8, alignItems: 'center' }}>
+                {isMob ? (
+                  <select value={crTrendMetric} onChange={e => setCrTrendMetric(e.target.value)} style={{ fontSize: 10, fontWeight: 600, padding: '2px 4px', borderRadius: 6, border: `1px solid ${C.border2}`, background: C.card, color: C.t1, cursor: 'pointer', fontFamily: 'var(--font)', outline: 'none' }}>
+                    {[['rev','Revenue'],['orders','Orders'],['units','Units']].map(([k,l]) => <option key={k} value={k}>{l}</option>)}
+                  </select>
+                ) : (
+                  <div style={{ display: 'flex', gap: 4 }}>
+                    {[['rev','Revenue'],['orders','Orders'],['units','Units']].map(([k,l]) => <button key={k} style={btnSt(k)} onClick={() => setCrTrendMetric(k)}>{l}</button>)}
+                  </div>
+                )}
+                <select value={crTrendGroup} onChange={e => setCrTrendGroup(e.target.value)} style={{ fontSize: isMob ? 10 : 11, fontWeight: 600, padding: isMob ? '2px 4px' : '3px 8px', borderRadius: 6, border: `1px solid ${C.border2}`, background: C.card, color: C.t1, cursor: 'pointer', fontFamily: 'var(--font)', outline: 'none' }}>
                   {['daily','weekly','monthly','quarterly'].map(g => <option key={g} value={g}>{g.charAt(0).toUpperCase() + g.slice(1)}</option>)}
                 </select>
               </div>
             }>
-              <ResponsiveContainer width="100%" height="100%" minHeight={240}>
-                <ComposedChart data={grouped} margin={{ top: 4, right: 12, bottom: 0, left: 0 }}>
+              <div style={isMob ? { margin: '0 -18px' } : {}}>
+              <ResponsiveContainer width="100%" height={isMob ? 220 : '100%'} minHeight={240}>
+                <ComposedChart data={grouped} margin={{ top: 4, right: isMob ? 32 : 12, bottom: isMob ? 20 : 0, left: isMob ? 32 : 0 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke={C.border} vertical={false} />
-                  <XAxis dataKey="date" tick={{ fontSize: 10, fill: C.t3 }} tickFormatter={xFmt} />
-                  <YAxis tick={{ fontSize: 10, fill: C.t3 }} tickFormatter={yFmt} width={60} />
+                  <XAxis dataKey="date" tick={{ fontSize: 10, fill: C.t3 }} tickFormatter={xFmt} ticks={(() => { const k = grouped.map(d => d.date); const n = k.length; if (n <= 4) return k; return [k[0], k[Math.floor(n/3)], k[Math.floor(2*n/3)], k[n-1]] })()} height={isMob ? 24 : 20} />
+                  <YAxis hide={isMob} tick={{ fontSize: 10, fill: C.t3 }} tickFormatter={yFmt} width={isMob ? 0 : 60} />
                   <Tooltip content={({ active, payload, label }) => active && payload?.length ? (
                     <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 7, padding: '7px 11px', fontSize: 11 }}>
                       <div style={{ fontWeight: 700, marginBottom: 4, color: C.t2 }}>{xFmt(label)}</div>
@@ -10590,10 +10685,10 @@ function CredTab({ data }) {
                       ))}
                     </div>
                   ) : null} />
-                  <Legend wrapperStyle={{ fontSize: 11 }} formatter={v => <span style={{ color: '#111' }}>{v}</span>} />
+                  {!isMob && <Legend wrapperStyle={{ fontSize: 11 }} formatter={v => <span style={{ color: '#111' }}>{v}</span>} />}
                   {isRev ? (<>
                     <Area type="monotone" dataKey="grossRev" name="Gross Revenue" stroke="#E11D48" fill="#E11D4822" strokeWidth={2} dot={grouped.length <= 3} />
-                    <Area type="monotone" dataKey="netRev" name="Net Revenue" stroke="#0D9E68" fill="#0D9E6811" strokeWidth={2} dot={grouped.length <= 3} strokeDasharray="4 2" />
+                    <Area type="monotone" dataKey="netRev" name="Net Revenue" stroke="#0D9E68" fill="#0D9E6811" strokeWidth={2} dot={grouped.length <= 3} />
                   </>) : isOrders ? (
                     <Area type="monotone" dataKey="orders" name="Orders" stroke="#E11D48" fill="#E11D4822" strokeWidth={2} dot={grouped.length <= 3} />
                   ) : (
@@ -10601,6 +10696,16 @@ function CredTab({ data }) {
                   )}
                 </ComposedChart>
               </ResponsiveContainer>
+              </div>
+              {isMob && (
+                <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'center', gap: '4px 12px', marginTop: 6 }}>
+                  {(isRev ? [{ name: 'Gross Revenue', color: '#E11D48' }, { name: 'Net Revenue', color: '#0D9E68' }] : [{ name: isOrders ? 'Orders' : 'Units', color: '#E11D48' }]).map(it => (
+                    <span key={it.name} style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, color: '#111' }}>
+                      <span style={{ width: 8, height: 8, borderRadius: '50%', background: it.color, display: 'inline-block', flexShrink: 0 }} />{it.name}
+                    </span>
+                  ))}
+                </div>
+              )}
             </Card>
             <CategoryRevenueCard
               catRows={catRows}
@@ -10658,6 +10763,7 @@ function FirstcryTab({ data }) {
   const [selectedCat, setSelectedCat] = useState(null)
   const [selectedSubCat, setSelectedSubCat] = useState(null)
   const [catRevView, setCatRevView] = useState('category')
+  const isMob = useIsMobile()
   const [fcTrendGroup, setFcTrendGroup] = useState('daily')
   const [fcTrendMetric, setFcTrendMetric] = useState('rev')
   const daily = fc.daily || []
@@ -10718,8 +10824,8 @@ function FirstcryTab({ data }) {
     { label: 'Units', value: fcFmtN(units), spark: daily.map(d => d.units || 0) },
     { label: 'AOV', value: fcFmtS(orders ? rev / orders : 0), spark: daily.map(d => (d.orders || 0) > 0 ? (d.rev || 0) / d.orders : null) },
     { label: 'ASP', value: fcFmtS(asp), spark: daily.map(d => (d.units || 0) > 0 ? (d.rev || 0) / d.units : null) },
-    { label: 'Cancellation %', value: `${cancelPct.toFixed(1)}%`, spark: daily.map(d => (d.rev || 0) * (rev > 0 ? cancelPct / 100 : 0)) },
-    { label: 'Returns %', value: `${returnPct.toFixed(1)}%`, spark: daily.map(d => (d.rev || 0) * (rev > 0 ? returnPct / 100 : 0)), accent: returnPct > 20 ? '#7A1A1A' : undefined },
+    { label: 'Cancellation %', value: `${cancelPct.toFixed(1)}%`, spark: cancelPct > 0 ? daily.map(d => (d.rev || 0) * (rev > 0 ? cancelPct / 100 : 0)) : daily.map(d => d.rev || 0) },
+    { label: 'Returns %', value: `${returnPct.toFixed(1)}%`, spark: returnPct > 0 ? daily.map(d => (d.rev || 0) * (rev > 0 ? returnPct / 100 : 0)) : daily.map(d => d.rev || 0), accent: returnPct > 20 ? '#7A1A1A' : undefined },
   ]
 
   return (
@@ -10792,21 +10898,28 @@ function FirstcryTab({ data }) {
         const btnSt = k => ({ fontSize: 11, fontWeight: 600, padding: '3px 10px', borderRadius: 5, border: `1.5px solid ${fcTrendMetric===k?C.t1:C.border}`, background: fcTrendMetric===k?C.t1:'transparent', color: fcTrendMetric===k?'#fff':C.t2, cursor: 'pointer', fontFamily: 'var(--font)' })
         return (
           <div className="g-3col" style={{ display: 'grid', gridTemplateColumns: '1.5fr 1fr 0.65fr', gap: 14, alignItems: 'start' }}>
-            <Card fill title="Revenue & Returns Trend" style={{ height: 360, alignSelf: 'start' }} action={
-              <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                <div style={{ display: 'flex', gap: 4 }}>
-                  {[['rev','Revenue'],['orders','Orders'],['units','Units']].map(([k,l]) => <button key={k} style={btnSt(k)} onClick={() => setFcTrendMetric(k)}>{l}</button>)}
-                </div>
-                <select value={fcTrendGroup} onChange={e => setFcTrendGroup(e.target.value)} style={{ fontSize: 11, fontWeight: 600, padding: '3px 8px', borderRadius: 6, border: `1px solid ${C.border2}`, background: C.card, color: C.t1, cursor: 'pointer', fontFamily: 'var(--font)', outline: 'none' }}>
+            <Card fill title="Revenue & Returns Trend" style={{ height: isMob ? 'auto' : 360, alignSelf: 'start' }} action={
+              <div style={{ display: 'flex', gap: isMob ? 4 : 8, alignItems: 'center' }}>
+                {isMob ? (
+                  <select value={fcTrendMetric} onChange={e => setFcTrendMetric(e.target.value)} style={{ fontSize: 10, fontWeight: 600, padding: '2px 4px', borderRadius: 6, border: `1px solid ${C.border2}`, background: C.card, color: C.t1, cursor: 'pointer', fontFamily: 'var(--font)', outline: 'none' }}>
+                    {[['rev','Revenue'],['orders','Orders'],['units','Units']].map(([k,l]) => <option key={k} value={k}>{l}</option>)}
+                  </select>
+                ) : (
+                  <div style={{ display: 'flex', gap: 4 }}>
+                    {[['rev','Revenue'],['orders','Orders'],['units','Units']].map(([k,l]) => <button key={k} style={btnSt(k)} onClick={() => setFcTrendMetric(k)}>{l}</button>)}
+                  </div>
+                )}
+                <select value={fcTrendGroup} onChange={e => setFcTrendGroup(e.target.value)} style={{ fontSize: isMob ? 10 : 11, fontWeight: 600, padding: isMob ? '2px 4px' : '3px 8px', borderRadius: 6, border: `1px solid ${C.border2}`, background: C.card, color: C.t1, cursor: 'pointer', fontFamily: 'var(--font)', outline: 'none' }}>
                   {['daily','weekly','monthly','quarterly'].map(g => <option key={g} value={g}>{g.charAt(0).toUpperCase() + g.slice(1)}</option>)}
                 </select>
               </div>
             }>
-              <ResponsiveContainer width="100%" height="100%" minHeight={240}>
-                <ComposedChart data={grouped} margin={{ top: 4, right: 12, bottom: 0, left: 0 }}>
+              <div style={isMob ? { margin: '0 -18px' } : {}}>
+              <ResponsiveContainer width="100%" height={isMob ? 220 : '100%'} minHeight={240}>
+                <ComposedChart data={grouped} margin={{ top: 4, right: isMob ? 32 : 12, bottom: isMob ? 20 : 0, left: isMob ? 32 : 0 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke={C.border} vertical={false} />
-                  <XAxis dataKey="date" tick={{ fontSize: 10, fill: C.t3 }} tickFormatter={xFmt} />
-                  <YAxis tick={{ fontSize: 10, fill: C.t3 }} tickFormatter={yFmt} width={60} />
+                  <XAxis dataKey="date" tick={{ fontSize: 10, fill: C.t3 }} tickFormatter={xFmt} ticks={(() => { const k = grouped.map(d => d.date); const n = k.length; if (n <= 4) return k; return [k[0], k[Math.floor(n/3)], k[Math.floor(2*n/3)], k[n-1]] })()} height={isMob ? 24 : 20} />
+                  <YAxis hide={isMob} tick={{ fontSize: 10, fill: C.t3 }} tickFormatter={yFmt} width={isMob ? 0 : 60} />
                   <Tooltip content={({ active, payload, label }) => active && payload?.length ? (
                     <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 7, padding: '7px 11px', fontSize: 11 }}>
                       <div style={{ fontWeight: 700, marginBottom: 4, color: C.t2 }}>{xFmt(label)}</div>
@@ -10818,10 +10931,10 @@ function FirstcryTab({ data }) {
                       ))}
                     </div>
                   ) : null} />
-                  <Legend wrapperStyle={{ fontSize: 11 }} formatter={v => <span style={{ color: '#111' }}>{v}</span>} />
+                  {!isMob && <Legend wrapperStyle={{ fontSize: 11 }} formatter={v => <span style={{ color: '#111' }}>{v}</span>} />}
                   {isRev ? (<>
                     <Area type="monotone" dataKey="grossRev" name="Gross Revenue" stroke="#F97316" fill="#F9731622" strokeWidth={2} dot={grouped.length <= 3} />
-                    <Area type="monotone" dataKey="netRev" name="Net Revenue" stroke="#0D9E68" fill="#0D9E6811" strokeWidth={2} dot={grouped.length <= 3} strokeDasharray="4 2" />
+                    <Area type="monotone" dataKey="netRev" name="Net Revenue" stroke="#0D9E68" fill="#0D9E6811" strokeWidth={2} dot={grouped.length <= 3} />
                   </>) : isOrders ? (
                     <Area type="monotone" dataKey="orders" name="Orders" stroke="#F97316" fill="#F9731622" strokeWidth={2} dot={grouped.length <= 3} />
                   ) : (
@@ -10829,6 +10942,16 @@ function FirstcryTab({ data }) {
                   )}
                 </ComposedChart>
               </ResponsiveContainer>
+              </div>
+              {isMob && (
+                <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'center', gap: '4px 12px', marginTop: 6 }}>
+                  {(isRev ? [{ name: 'Gross Revenue', color: '#F97316' }, { name: 'Net Revenue', color: '#0D9E68' }] : [{ name: isOrders ? 'Orders' : 'Units', color: '#F97316' }]).map(it => (
+                    <span key={it.name} style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, color: '#111' }}>
+                      <span style={{ width: 8, height: 8, borderRadius: '50%', background: it.color, display: 'inline-block', flexShrink: 0 }} />{it.name}
+                    </span>
+                  ))}
+                </div>
+              )}
             </Card>
             <CategoryRevenueCard
               catRows={catRows}
@@ -10899,11 +11022,11 @@ function MyntraTab({ data }) {
   const mnStateTotal = mn.stateTotal || 0
   const mnCityTotal = mn.cityTotal || 0
 
-  // Category matrix data — Myntra has no Cancel/RTO/CIR/Exch breakdown at category level.
+  // Category matrix data
   const catMatrixData = {}
-  ;(mn.categories || []).forEach(c => { catMatrixData[c.category] = { rev: c.rev, excRev: c.excRev || 0, units: c.units, orders: c.orders, returnRev: 0 } })
+  ;(mn.categories || []).forEach(c => { catMatrixData[c.category] = { rev: c.rev, excRev: c.excRev || 0, units: c.units, orders: c.orders, returnRev: c.returnRev || 0 } })
   const subCatMatrixData = {}
-  ;(mn.subCategories || []).forEach(x => { if (!subCatMatrixData[x.category]) subCatMatrixData[x.category] = {}; subCatMatrixData[x.category][x.subcategory] = { rev: x.rev, excRev: x.excRev || 0, units: x.units, orders: x.orders, returnRev: 0 } })
+  ;(mn.subCategories || []).forEach(x => { if (!subCatMatrixData[x.category]) subCatMatrixData[x.category] = {}; subCatMatrixData[x.category][x.subcategory] = { rev: x.rev, excRev: x.excRev || 0, units: x.units, orders: x.orders, returnRev: x.returnRev || 0 } })
   const catRowsForCatSubCat = (mn.categories || []).map(c => ({ name: c.category, rev: c.rev, excRev: c.excRev || 0, units: c.units, orders: c.orders }))
   const subCatRowsForCatSubCat = (mn.subCategories || []).map(x => ({ name: x.subcategory, category: x.category, rev: x.rev, excRev: x.excRev || 0, units: x.units, orders: x.orders }))
 
@@ -10923,6 +11046,7 @@ function MyntraTab({ data }) {
     return { ...c, aov: c.orders ? c.rev / c.orders : 0, rtoPct: c.rev > 0 ? (c.returnRev||0) / c.rev * 100 : 0, mom: prevRev > 0 ? (c.rev - prevRev) / prevRev * 100 : null, sharePct, cumPct: mnCumC }
   })
 
+  const isMob = useIsMobile()
   const [selectedCat, setSelectedCat] = useState(null)
   const [selectedSubCat, setSelectedSubCat] = useState(null)
   const [catRevView, setCatRevView] = useState('category')
@@ -10940,9 +11064,9 @@ function MyntraTab({ data }) {
     { label: 'Units', value: mnFmtN(qty), spark: dailyArr.map(d => d.units || 0) },
     { label: 'AOV', value: mnFmtS(nOrders > 0 ? rev / nOrders : 0), spark: dailyArr.map(d => (d.orders || 0) > 0 ? (d.rev || 0) / d.orders : null) },
     { label: 'ASP', value: mnFmtS(asp), spark: dailyArr.map(d => (d.units || 0) > 0 ? (d.rev || 0) / d.units : null) },
-    { label: 'Active Products', value: String(totals.skus || 0), spark: dailyArr.map(() => totals.skus || 0) },
-    { label: 'Cancellation %', value: `${cancelPct.toFixed(1)}%`, spark: dailyArr.map(d => (d.rev || 0) * (rev > 0 ? cancelPct / 100 : 0)) },
-    { label: 'Returns %', value: `${mnReturnPct.toFixed(1)}%`, spark: dailyArr.map(d => (d.rev || 0) * (rev > 0 ? mnReturnPct / 100 : 0)), accent: mnReturnPct > 15 ? '#7A1A1A' : undefined },
+    { label: 'Active Products', value: String(totals.skus || 0), spark: dailyArr.map(d => d.rev || 0) },
+    { label: 'Cancellation %', value: `${cancelPct.toFixed(1)}%`, spark: cancelPct > 0 ? dailyArr.map(d => (d.rev || 0) * (rev > 0 ? cancelPct / 100 : 0)) : dailyArr.map(d => d.rev || 0) },
+    { label: 'Returns %', value: `${mnReturnPct.toFixed(1)}%`, spark: mnReturnPct > 0 ? dailyArr.map(d => (d.rev || 0) * (rev > 0 ? mnReturnPct / 100 : 0)) : dailyArr.map(d => d.rev || 0), accent: mnReturnPct > 15 ? '#7A1A1A' : undefined },
   ]
 
   return (
@@ -11018,21 +11142,28 @@ function MyntraTab({ data }) {
         const btnSt = k => ({ fontSize: 11, fontWeight: 600, padding: '3px 10px', borderRadius: 5, border: `1.5px solid ${mnTrendMetric===k?C.t1:C.border}`, background: mnTrendMetric===k?C.t1:'transparent', color: mnTrendMetric===k?'#fff':C.t2, cursor: 'pointer', fontFamily: 'var(--font)' })
         return (
           <div className="g-3col" style={{ display: 'grid', gridTemplateColumns: '1.5fr 1fr 0.65fr', gap: 14, alignItems: 'start' }}>
-            <Card fill title="Revenue & Returns Trend" style={{ height: 360, alignSelf: 'start' }} action={
-              <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                <div style={{ display: 'flex', gap: 4 }}>
-                  {[['rev','Revenue'],['orders','Orders'],['units','Units']].map(([k,l]) => <button key={k} style={btnSt(k)} onClick={() => setMnTrendMetric(k)}>{l}</button>)}
-                </div>
-                <select value={mnTrendGroup} onChange={e => setMnTrendGroup(e.target.value)} style={{ fontSize: 11, fontWeight: 600, padding: '3px 8px', borderRadius: 6, border: `1px solid ${C.border2}`, background: C.card, color: C.t1, cursor: 'pointer', fontFamily: 'var(--font)', outline: 'none' }}>
+            <Card fill title="Revenue & Returns Trend" style={{ height: isMob ? 'auto' : 360, alignSelf: 'start' }} action={
+              <div style={{ display: 'flex', gap: isMob ? 4 : 8, alignItems: 'center' }}>
+                {isMob ? (
+                  <select value={mnTrendMetric} onChange={e => setMnTrendMetric(e.target.value)} style={{ fontSize: 10, fontWeight: 600, padding: '2px 4px', borderRadius: 6, border: `1px solid ${C.border2}`, background: C.card, color: C.t1, cursor: 'pointer', fontFamily: 'var(--font)', outline: 'none' }}>
+                    {[['rev','Revenue'],['orders','Orders'],['units','Units']].map(([k,l]) => <option key={k} value={k}>{l}</option>)}
+                  </select>
+                ) : (
+                  <div style={{ display: 'flex', gap: 4 }}>
+                    {[['rev','Revenue'],['orders','Orders'],['units','Units']].map(([k,l]) => <button key={k} style={btnSt(k)} onClick={() => setMnTrendMetric(k)}>{l}</button>)}
+                  </div>
+                )}
+                <select value={mnTrendGroup} onChange={e => setMnTrendGroup(e.target.value)} style={{ fontSize: isMob ? 10 : 11, fontWeight: 600, padding: isMob ? '2px 4px' : '3px 8px', borderRadius: 6, border: `1px solid ${C.border2}`, background: C.card, color: C.t1, cursor: 'pointer', fontFamily: 'var(--font)', outline: 'none' }}>
                   {['daily','weekly','monthly','quarterly'].map(g => <option key={g} value={g}>{g.charAt(0).toUpperCase() + g.slice(1)}</option>)}
                 </select>
               </div>
             }>
-              <ResponsiveContainer width="100%" height="100%" minHeight={240}>
-                <ComposedChart data={grouped} margin={{ top: 4, right: 12, bottom: 0, left: 0 }}>
+              <div style={isMob ? { margin: '0 -18px' } : {}}>
+              <ResponsiveContainer width="100%" height={isMob ? 220 : '100%'} minHeight={240}>
+                <ComposedChart data={grouped} margin={{ top: 4, right: isMob ? 32 : 12, bottom: isMob ? 20 : 0, left: isMob ? 32 : 0 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke={C.border} vertical={false} />
-                  <XAxis dataKey="date" tick={{ fontSize: 10, fill: C.t3 }} tickFormatter={xFmt} />
-                  <YAxis tick={{ fontSize: 10, fill: C.t3 }} tickFormatter={yFmt} width={60} />
+                  <XAxis dataKey="date" tick={{ fontSize: 10, fill: C.t3 }} tickFormatter={xFmt} ticks={(() => { const k = grouped.map(d => d.date); const n = k.length; if (n <= 4) return k; return [k[0], k[Math.floor(n/3)], k[Math.floor(2*n/3)], k[n-1]] })()} height={isMob ? 24 : 20} />
+                  <YAxis hide={isMob} tick={{ fontSize: 10, fill: C.t3 }} tickFormatter={yFmt} width={isMob ? 0 : 60} />
                   <Tooltip content={({ active, payload, label }) => active && payload?.length ? (
                     <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 7, padding: '7px 11px', fontSize: 11 }}>
                       <div style={{ fontWeight: 700, marginBottom: 4, color: C.t2 }}>{xFmt(label)}</div>
@@ -11044,10 +11175,10 @@ function MyntraTab({ data }) {
                       ))}
                     </div>
                   ) : null} />
-                  <Legend wrapperStyle={{ fontSize: 11 }} formatter={v => <span style={{ color: '#111' }}>{v}</span>} />
+                  {!isMob && <Legend wrapperStyle={{ fontSize: 11 }} formatter={v => <span style={{ color: '#111' }}>{v}</span>} />}
                   {isRev ? (<>
                     <Area type="monotone" dataKey="grossRev" name="Gross Revenue" stroke="#E87858" fill="#E8785822" strokeWidth={2} dot={grouped.length <= 3} />
-                    <Area type="monotone" dataKey="netRev" name="Net Revenue" stroke="#0D9E68" fill="#0D9E6811" strokeWidth={2} dot={grouped.length <= 3} strokeDasharray="4 2" />
+                    <Area type="monotone" dataKey="netRev" name="Net Revenue" stroke="#0D9E68" fill="#0D9E6811" strokeWidth={2} dot={grouped.length <= 3} />
                   </>) : isOrders ? (
                     <Area type="monotone" dataKey="orders" name="Orders" stroke="#E87858" fill="#E8785822" strokeWidth={2} dot={grouped.length <= 3} />
                   ) : (
@@ -11055,6 +11186,16 @@ function MyntraTab({ data }) {
                   )}
                 </ComposedChart>
               </ResponsiveContainer>
+              </div>
+              {isMob && (
+                <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'center', gap: '4px 12px', marginTop: 6 }}>
+                  {(isRev ? [{ name: 'Gross Revenue', color: '#E87858' }, { name: 'Net Revenue', color: '#0D9E68' }] : [{ name: isOrders ? 'Orders' : 'Units', color: '#E87858' }]).map(it => (
+                    <span key={it.name} style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, color: '#111' }}>
+                      <span style={{ width: 8, height: 8, borderRadius: '50%', background: it.color, display: 'inline-block', flexShrink: 0 }} />{it.name}
+                    </span>
+                  ))}
+                </div>
+              )}
             </Card>
             <CategoryRevenueCard
               catRows={catRowsForCatSubCat}
@@ -11288,6 +11429,7 @@ function OfflineTab({ data, sub, setSub }) {
 
   const subLabel = sub !== 'all' ? ` · ${SUB_OPTIONS.find(o => o.id === sub)?.label || sub}` : ''
 
+  const isMob = useIsMobile()
   const [offTrendGroup, setOffTrendGroup] = useState('daily')
   const [offTrendMetric, setOffTrendMetric] = useState('rev')
 
@@ -11303,7 +11445,7 @@ function OfflineTab({ data, sub, setSub }) {
     { label: 'AOV', value: offFmtS(nOrders > 0 ? grossRev / nOrders : 0), spark: dailyArr.map(d => (d.orders || 0) > 0 ? (d.rev || 0) / d.orders : null) },
     { label: 'ASP', value: offFmtS(asp), spark: dailyArr.map(d => (d.units || 0) > 0 ? (d.rev || 0) / d.units : null) },
     { label: 'Units / Order', value: nOrders ? Math.round(qty / nOrders).toString() : '0', spark: dailyArr.map(d => (d.orders || 0) > 0 ? (d.units || 0) / d.orders : null) },
-    { label: 'Credit Notes %', value: `${cnPct.toFixed(1)}%`, spark: dailyArr.map(() => cnPct), accent: cnPct > 10 ? '#7A1A1A' : undefined },
+    { label: 'Credit Notes %', value: `${cnPct.toFixed(1)}%`, spark: cnPct > 0 ? dailyArr.map(d => (d.rev || 0) * (grossRev > 0 ? cnPct / 100 : 0)) : dailyArr.map(d => d.rev || 0), accent: cnPct > 10 ? '#7A1A1A' : undefined },
   ]
 
   return (
@@ -11379,21 +11521,28 @@ function OfflineTab({ data, sub, setSub }) {
         const btnSt = k => ({ fontSize: 11, fontWeight: 600, padding: '3px 10px', borderRadius: 5, border: `1.5px solid ${offTrendMetric===k?C.t1:C.border}`, background: offTrendMetric===k?C.t1:'transparent', color: offTrendMetric===k?'#fff':C.t2, cursor: 'pointer', fontFamily: 'var(--font)' })
         return (
           <div className="g-3col" style={{ display: 'grid', gridTemplateColumns: '1.5fr 1fr 0.65fr', gap: 14, alignItems: 'start' }}>
-            <Card fill title="Revenue & Returns Trend" style={{ height: 360, alignSelf: 'start' }} note={sub !== 'all' ? SUB_OPTIONS.find(o => o.id === sub)?.label : undefined} action={
-              <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                <div style={{ display: 'flex', gap: 4 }}>
-                  {[['rev','Revenue'],['orders','Orders'],['units','Units']].map(([k,l]) => <button key={k} style={btnSt(k)} onClick={() => setOffTrendMetric(k)}>{l}</button>)}
-                </div>
-                <select value={offTrendGroup} onChange={e => setOffTrendGroup(e.target.value)} style={{ fontSize: 11, fontWeight: 600, padding: '3px 8px', borderRadius: 6, border: `1px solid ${C.border2}`, background: C.card, color: C.t1, cursor: 'pointer', fontFamily: 'var(--font)', outline: 'none' }}>
+            <Card fill title="Revenue & Returns Trend" style={{ height: isMob ? 'auto' : 360, alignSelf: 'start' }} note={sub !== 'all' ? SUB_OPTIONS.find(o => o.id === sub)?.label : undefined} action={
+              <div style={{ display: 'flex', gap: isMob ? 4 : 8, alignItems: 'center' }}>
+                {isMob ? (
+                  <select value={offTrendMetric} onChange={e => setOffTrendMetric(e.target.value)} style={{ fontSize: 10, fontWeight: 600, padding: '2px 4px', borderRadius: 6, border: `1px solid ${C.border2}`, background: C.card, color: C.t1, cursor: 'pointer', fontFamily: 'var(--font)', outline: 'none' }}>
+                    {[['rev','Revenue'],['orders','Orders'],['units','Units']].map(([k,l]) => <option key={k} value={k}>{l}</option>)}
+                  </select>
+                ) : (
+                  <div style={{ display: 'flex', gap: 4 }}>
+                    {[['rev','Revenue'],['orders','Orders'],['units','Units']].map(([k,l]) => <button key={k} style={btnSt(k)} onClick={() => setOffTrendMetric(k)}>{l}</button>)}
+                  </div>
+                )}
+                <select value={offTrendGroup} onChange={e => setOffTrendGroup(e.target.value)} style={{ fontSize: isMob ? 10 : 11, fontWeight: 600, padding: isMob ? '2px 4px' : '3px 8px', borderRadius: 6, border: `1px solid ${C.border2}`, background: C.card, color: C.t1, cursor: 'pointer', fontFamily: 'var(--font)', outline: 'none' }}>
                   {['daily','weekly','monthly','quarterly'].map(g => <option key={g} value={g}>{g.charAt(0).toUpperCase() + g.slice(1)}</option>)}
                 </select>
               </div>
             }>
-              <ResponsiveContainer width="100%" height="100%" minHeight={240}>
-                <ComposedChart data={grouped} margin={{ top: 4, right: 12, bottom: 0, left: 0 }}>
+              <div style={isMob ? { margin: '0 -18px' } : {}}>
+              <ResponsiveContainer width="100%" height={isMob ? 220 : '100%'} minHeight={240}>
+                <ComposedChart data={grouped} margin={{ top: 4, right: isMob ? 32 : 12, bottom: isMob ? 20 : 0, left: isMob ? 32 : 0 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke={C.border} vertical={false} />
-                  <XAxis dataKey="date" tick={{ fontSize: 10, fill: C.t3 }} tickFormatter={xFmt} />
-                  <YAxis tick={{ fontSize: 10, fill: C.t3 }} tickFormatter={yFmt} width={60} />
+                  <XAxis dataKey="date" tick={{ fontSize: 10, fill: C.t3 }} tickFormatter={xFmt} ticks={(() => { const k = grouped.map(d => d.date); const n = k.length; if (n <= 4) return k; return [k[0], k[Math.floor(n/3)], k[Math.floor(2*n/3)], k[n-1]] })()} height={isMob ? 24 : 20} />
+                  <YAxis hide={isMob} tick={{ fontSize: 10, fill: C.t3 }} tickFormatter={yFmt} width={isMob ? 0 : 60} />
                   <Tooltip content={({ active, payload, label }) => active && payload?.length ? (
                     <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 7, padding: '7px 11px', fontSize: 11 }}>
                       <div style={{ fontWeight: 700, marginBottom: 4, color: C.t2 }}>{xFmt(label)}</div>
@@ -11405,10 +11554,10 @@ function OfflineTab({ data, sub, setSub }) {
                       ))}
                     </div>
                   ) : null} />
-                  <Legend wrapperStyle={{ fontSize: 11 }} formatter={v => <span style={{ color: '#111' }}>{v}</span>} />
+                  {!isMob && <Legend wrapperStyle={{ fontSize: 11 }} formatter={v => <span style={{ color: '#111' }}>{v}</span>} />}
                   {isRev ? (<>
                     <Area type="monotone" dataKey="rev" name="Gross Revenue" stroke="#FFD600" fill="#FFD60022" strokeWidth={2} dot={grouped.length <= 3} />
-                    <Area type="monotone" dataKey="net" name="Net Revenue" stroke="#0D9E68" fill="#0D9E6811" strokeWidth={2} dot={grouped.length <= 3} strokeDasharray="4 2" />
+                    <Area type="monotone" dataKey="net" name="Net Revenue" stroke="#0D9E68" fill="#0D9E6811" strokeWidth={2} dot={grouped.length <= 3} />
                   </>) : isOrders ? (
                     <Area type="monotone" dataKey="orders" name="Orders" stroke="#FFD600" fill="#FFD60022" strokeWidth={2} dot={grouped.length <= 3} />
                   ) : (
@@ -11416,6 +11565,16 @@ function OfflineTab({ data, sub, setSub }) {
                   )}
                 </ComposedChart>
               </ResponsiveContainer>
+              </div>
+              {isMob && (
+                <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'center', gap: '4px 12px', marginTop: 6 }}>
+                  {(isRev ? [{ name: 'Gross Revenue', color: '#FFD600' }, { name: 'Net Revenue', color: '#0D9E68' }] : [{ name: isOrders ? 'Orders' : 'Units', color: '#FFD600' }]).map(it => (
+                    <span key={it.name} style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, color: '#111' }}>
+                      <span style={{ width: 8, height: 8, borderRadius: '50%', background: it.color, display: 'inline-block', flexShrink: 0 }} />{it.name}
+                    </span>
+                  ))}
+                </div>
+              )}
             </Card>
             <CategoryRevenueCard
               catRows={catRows}
@@ -14842,6 +15001,10 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
   const [salesChannelView, setSalesChannelView] = useState('all')
   const [salesOfflineSub, setSalesOfflineSub] = useState('all')
   const [adsSelPlatform, setAdsSelPlatform] = useState(null)
+  const [pnlActiveTab, setPnlActiveTab] = useState('all')
+  const [pnlAmzView, setPnlAmzView] = useState('all')
+  const [pnlOfflineSub, setPnlOfflineSub] = useState('all')
+  const [pnlD2cSubCh, setPnlD2cSubCh] = useState('all')
   const [rawRows, setRawRows] = useState(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
@@ -15188,7 +15351,7 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
     <div className="app-shell">
       <Sidebar page={page} setPage={setPage} invTab={invTab} setInvTab={setInvTab} allowedTabs={allowedTabs} profile={profile} />
       <div className="app-main">
-        <Topnav page={page} setPage={setPage} customerTab={customerTab} invTab={invTab} setInvTab={setInvTab} alerts={alerts} lFilters={lFilters} setLFilters={setLFilters} logisticsFilterOpts={logisticsFilterOpts} costFilters={costFilters} setCostFilters={setCostFilters} onRefresh={() => { const { start, end, category, subCategory, sku, subChannel, voucher, region, tier, state, city, country } = filters; const e = {}; if (category?.length) e.category = category.join(','); if (subCategory?.length) e.subCategory = subCategory.join(','); if (sku?.length) e.sku = sku.join(','); if (subChannel) e.subChannel = subChannel; if (voucher) e.voucher = voucher; if (region?.length) e.region = region.join(','); if (tier?.length) e.tier = tier.join(','); if (state?.length) e.state = state.join(','); if (city) e.city = city; if (country) e.country = country; fetchData(start, end, e) }} loading={loading} filters={filters} setFilters={setFilters} rawRows={rawRows} inventoryDateControl={inventoryDateControl} salesActiveTab={activeTab} setSalesActiveTab={setActiveTab} salesData={data} salesChannelView={salesChannelView} setSalesChannelView={setSalesChannelView} salesOfflineSub={salesOfflineSub} setSalesOfflineSub={setSalesOfflineSub} adsSelPlatform={adsSelPlatform} setAdsSelPlatform={setAdsSelPlatform} />
+        <Topnav page={page} setPage={setPage} customerTab={customerTab} invTab={invTab} setInvTab={setInvTab} alerts={alerts} lFilters={lFilters} setLFilters={setLFilters} logisticsFilterOpts={logisticsFilterOpts} costFilters={costFilters} setCostFilters={setCostFilters} onRefresh={() => { const { start, end, category, subCategory, sku, subChannel, voucher, region, tier, state, city, country } = filters; const e = {}; if (category?.length) e.category = category.join(','); if (subCategory?.length) e.subCategory = subCategory.join(','); if (sku?.length) e.sku = sku.join(','); if (subChannel) e.subChannel = subChannel; if (voucher) e.voucher = voucher; if (region?.length) e.region = region.join(','); if (tier?.length) e.tier = tier.join(','); if (state?.length) e.state = state.join(','); if (city) e.city = city; if (country) e.country = country; fetchData(start, end, e) }} loading={loading} filters={filters} setFilters={setFilters} rawRows={rawRows} inventoryDateControl={inventoryDateControl} salesActiveTab={activeTab} setSalesActiveTab={setActiveTab} salesData={data} salesChannelView={salesChannelView} setSalesChannelView={setSalesChannelView} salesOfflineSub={salesOfflineSub} setSalesOfflineSub={setSalesOfflineSub} adsSelPlatform={adsSelPlatform} setAdsSelPlatform={setAdsSelPlatform} pnlActiveTab={pnlActiveTab} setPnlActiveTab={setPnlActiveTab} pnlAmzView={pnlAmzView} setPnlAmzView={setPnlAmzView} pnlOfflineSub={pnlOfflineSub} setPnlOfflineSub={setPnlOfflineSub} pnlD2cSubCh={pnlD2cSubCh} setPnlD2cSubCh={setPnlD2cSubCh} />
         {(loading || inventoryDateControl?.loading) && (
           <div style={{ height: 2, background: C.border, flexShrink: 0 }}>
             <div className="progress-bar" style={{ height: '100%', background: C.acc }} />
@@ -15220,7 +15383,7 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
             </div>
           )}
           {page === 'sales' && data && (!allowedTabs || allowedTabs.includes('sales')) && <SalesPage data={data} filters={filters} setFilters={setFilters} activeTab={activeTab} setActiveTab={setActiveTab} fetchData={fetchData} channelView={salesChannelView} setChannelView={setSalesChannelView} offlineSub={salesOfflineSub} setOfflineSub={setSalesOfflineSub} />}
-          {page === 'pnl' && data && <PnLPage data={data} filters={filters} setFilters={setFilters} />}
+          {page === 'pnl' && data && <PnLPage data={data} filters={filters} setFilters={setFilters} activeTab={pnlActiveTab} setActiveTab={setPnlActiveTab} amzChannelView={pnlAmzView} setAmzChannelView={setPnlAmzView} offlineSub={pnlOfflineSub} setOfflineSub={setPnlOfflineSub} d2cSubCh={pnlD2cSubCh} setD2cSubCh={setPnlD2cSubCh} />}
           {page === 'ads' && !adsCache && !data && <Skeleton />}
           {page === 'ads' && (adsCache || data) && (!allowedTabs || allowedTabs.includes('ads')) && (
             <div className="page-scroll">

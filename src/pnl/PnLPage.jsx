@@ -71,13 +71,19 @@ function loadCogsMap() {
   return cogsMapPromise
 }
 
-export default function PnLPage({ data, filters, setFilters }) {
-  const [activeTab, setActiveTab] = useState('all')
-  const [amzChannelView, setAmzChannelView] = useState('all') // 'all' | 'sc' | 'vc'
-  const [offlineSub, setOfflineSub] = useState('all') // 'all' | 'b2b' | 'Stockist' | 'MTGT'
-  // D2C is India-only permanently (International orders live under their own top-level
-  // "International" PnL tab) — no region toggle/state needed here anymore.
-  const [d2cSubCh, setD2cSubCh] = useState('all') // 'all' | 'MyFrido' | 'Mobility'
+export default function PnLPage({ data, filters, setFilters, activeTab: activeTabProp, setActiveTab: setActiveTabProp, amzChannelView: amzChannelViewProp, setAmzChannelView: setAmzChannelViewProp, offlineSub: offlineSubProp, setOfflineSub: setOfflineSubProp, d2cSubCh: d2cSubChProp, setD2cSubCh: setD2cSubChProp }) {
+  const [activeTabLocal, setActiveTabLocal] = useState('all')
+  const [amzChannelViewLocal, setAmzChannelViewLocal] = useState('all')
+  const [offlineSubLocal, setOfflineSubLocal] = useState('all')
+  const [d2cSubChLocal, setD2cSubChLocal] = useState('all')
+  const activeTab = activeTabProp !== undefined ? activeTabProp : activeTabLocal
+  const setActiveTab = setActiveTabProp || setActiveTabLocal
+  const amzChannelView = amzChannelViewProp !== undefined ? amzChannelViewProp : amzChannelViewLocal
+  const setAmzChannelView = setAmzChannelViewProp || setAmzChannelViewLocal
+  const offlineSub = offlineSubProp !== undefined ? offlineSubProp : offlineSubLocal
+  const setOfflineSub = setOfflineSubProp || setOfflineSubLocal
+  const d2cSubCh = d2cSubChProp !== undefined ? d2cSubChProp : d2cSubChLocal
+  const setD2cSubCh = setD2cSubChProp || setD2cSubChLocal
   const [sndRates, setSndRates] = useState(null)
   const [cogsMap, setCogsMap] = useState(null)
 

@@ -1,4 +1,4 @@
-import { useState, useRef, Fragment } from 'react'
+import { useState, useRef, Fragment, useEffect } from 'react'
 import { C, fmt, fmtN, pct } from './utils.js'
 import { BarChart, Bar, LineChart, Line, AreaChart, Area, ComposedChart, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ReferenceLine, LabelList, ResponsiveContainer, PieChart, Pie, Cell, Treemap } from 'recharts'
 
@@ -67,7 +67,8 @@ const DOTS = ['#534AB7','#0D9E68','#2E74CC','#CC8A00','#CC4078','#E24B4A','#9B59
 // catRows: [{name, rev}]; subCatRows: [{name, category, rev}]; skuMap: {category: {subCategory: {sku: {rev}}}}.
 // view/setView: lift the toggle state up so it can be reset (e.g. on category click) if needed.
 export function CategoryRevenueCard({ catRows, subCatRows, skuMap, totalRev, view, setView, onSelectCategory, onSelectSubCategory, onSelectSku, selectedName, height = 242, maxSkuRows = 100 }) {
-  const labelWidthFor = names => window.innerWidth <= 768 ? 150 : Math.min(260, Math.max(132, Math.max(...names.map(n => n.length), 0) * 7.8 + 8))
+  const mobCard = window.innerWidth <= 768
+  const labelWidthFor = names => mobCard ? 150 : Math.min(260, Math.max(132, Math.max(...names.map(n => n.length), 0) * 7.8 + 8))
 
   let rows, maxRev, labelWidth, onClick
   if (view === 'category') {
@@ -95,14 +96,14 @@ export function CategoryRevenueCard({ catRows, subCatRows, skuMap, totalRev, vie
   }
 
   return (
-    <Card fill title="Category Revenue" style={{ height, alignSelf: 'start' }} action={
+    <Card fill title="Category Revenue" style={{ height: mobCard ? 'auto' : height, alignSelf: 'start' }} action={
       <div style={{ display: 'flex', gap: 4 }}>
         {[{ id: 'category', label: 'Category' }, { id: 'subcategory', label: 'Product' }, ...(window.innerWidth > 768 ? [{ id: 'sku', label: 'SKU Code' }] : [])].map(v => (
           <button key={v.id} onClick={() => setView(v.id)} className="cat-rev-btn" style={{ fontSize: 11, fontWeight: 600, padding: '3px 10px', borderRadius: 5, border: `1.5px solid ${view === v.id ? C.acm : C.border}`, background: view === v.id ? C.acc : 'transparent', color: view === v.id ? C.t1 : C.t2, cursor: 'pointer', fontFamily: 'var(--font)' }}>{v.label}</button>
         ))}
       </div>
     }>
-      <div style={{ height: '100%', overflowY: 'auto' }}>
+      <div style={mobCard ? {} : { height: '100%', overflowY: 'auto' }}>
         {rows.map((r, i) => {
           const isSelected = selectedName ? selectedName === r.name : false
           return <HBar key={`${r.category || ''}::${r.name}`} dot={DOTS[i % DOTS.length]} label={r.name} labelWidth={labelWidth} width={(r.rev / maxRev) * 100} value={fmt(r.rev)} pctVal={totalRev > 0 ? pct(r.rev, totalRev) : '—'} isSelected={isSelected} onClick={() => onClick(r)} />
@@ -286,6 +287,8 @@ export function TrendAnalysisCard({ title, daily, grossColor, grossGradId, revKe
   const nDays = daily.length
   const autoGroup = nDays <= 14 ? 'daily' : nDays <= 90 ? 'weekly' : 'monthly'
   const [groupBy, setGroupBy] = useState(autoGroup)
+  const [isMob, setIsMob] = useState(window.innerWidth <= 768)
+  useEffect(() => { const h = () => setIsMob(window.innerWidth <= 768); window.addEventListener('resize', h); return () => window.removeEventListener('resize', h) }, [])
   const selStyle = { fontSize: 11, padding: '3px 8px', borderRadius: 6, border: `1px solid ${C.border2}`, background: C.card, color: C.t1, outline: 'none', fontFamily: 'var(--font)', cursor: 'pointer' }
 
   const showCogs = cogsPct != null
@@ -323,20 +326,21 @@ export function TrendAnalysisCard({ title, daily, grossColor, grossGradId, revKe
   const gradId = grossGradId || 'trendGrossGrad'
 
   return (
-    <Card title={title} style={boxHeight ? { height: boxHeight } : undefined} action={
+    <Card title={title} style={boxHeight ? { height: isMob ? 'auto' : boxHeight } : undefined} action={
       <select value={groupBy} onChange={e => setGroupBy(e.target.value)} style={selStyle}>
         {GROUP_OPTS.map(x => <option key={x.id} value={x.id}>{x.label}</option>)}
       </select>
     }>
-      <ResponsiveContainer width="100%" height="100%" minHeight={220}>
-        <ComposedChart data={grouped} margin={{ top: 4, right: 40, bottom: 30, left: 0 }}>
+      <div style={isMob ? { margin: '0 -28px' } : {}}>
+      <ResponsiveContainer width="100%" height={isMob ? 220 : '100%'} minHeight={220}>
+        <ComposedChart data={grouped} margin={{ top: 4, right: isMob ? 44 : 40, bottom: isMob ? 20 : 30, left: isMob ? 44 : 0 }}>
           <defs>
             <linearGradient id={gradId} x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor={grossColor} stopOpacity={0.2} /><stop offset="95%" stopColor={grossColor} stopOpacity={0} /></linearGradient>
             <linearGradient id={gradId + '_net'} x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#B8960C" stopOpacity={0.15} /><stop offset="95%" stopColor="#B8960C" stopOpacity={0} /></linearGradient>
           </defs>
           <CartesianGrid strokeDasharray="3 3" stroke={C.border} vertical={false} />
-          <XAxis dataKey="date" tick={{ fontSize: 10, fill: C.t1 }} tickFormatter={d => d?.slice(5)} />
-          <YAxis yAxisId="rev" tick={{ fontSize: 10, fill: C.t1 }} tickFormatter={fmtTick} width={55} />
+          <XAxis dataKey="date" tick={{ fontSize: 10, fill: C.t3 }} tickFormatter={d => d?.slice(5)} ticks={(() => { const k = grouped.map(d => d.date); const n = k.length; if (n <= 4) return k; return [k[0], k[Math.floor(n/3)], k[Math.floor(2*n/3)], k[n-1]] })()} height={isMob ? 24 : 20} />
+          <YAxis yAxisId="rev" hide={isMob} tick={{ fontSize: 10, fill: C.t1 }} tickFormatter={fmtTick} width={isMob ? 0 : 55} />
           <Tooltip content={({ active, payload, label }) => active && payload?.length ? (
             <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 7, padding: '7px 11px', fontSize: 11 }}>
               <div style={{ fontWeight: 700, marginBottom: 4, color: C.t2 }}>{label?.slice(5) || label}</div>
@@ -354,13 +358,23 @@ export function TrendAnalysisCard({ title, daily, grossColor, grossGradId, revKe
               })}
             </div>
           ) : null} />
-          <Legend verticalAlign="bottom" wrapperStyle={{ fontSize: 11, paddingTop: 8 }} formatter={v => <span style={{ color: '#111' }}>{v}</span>} />
+          {!isMob && <Legend verticalAlign="bottom" wrapperStyle={{ fontSize: 11, paddingTop: 8 }} formatter={v => <span style={{ color: '#111' }}>{v}</span>} />}
           <Area yAxisId="rev" type="monotone" dataKey={revKey} name="Gross Revenue" stroke={grossColor} fill={`url(#${gradId})`} strokeWidth={2} dot={false} />
           {showNet && <Area yAxisId="rev" type="monotone" dataKey="_net" name="Net Revenue" stroke="#B8960C" fill={`url(#${gradId}_net)`} strokeWidth={2} dot={false} strokeDasharray="4 2" />}
           {showCogs && <Line yAxisId="rev" type="monotone" dataKey="_cogs" name="COGS" stroke="#F59E0B" strokeWidth={1.5} dot={false} strokeDasharray="3 3" />}
           {showSnd && <Line yAxisId="rev" type="monotone" dataKey="_snd" name="SnD" stroke="#92720A" strokeWidth={1.5} dot={false} strokeDasharray="3 3" />}
         </ComposedChart>
       </ResponsiveContainer>
+      </div>
+      {isMob && (
+        <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'center', gap: '4px 12px', marginTop: 6 }}>
+          {[{ name: 'Gross Revenue', color: grossColor }, ...(showNet ? [{ name: 'Net Revenue', color: '#B8960C' }] : []), ...(showCogs ? [{ name: 'COGS', color: '#F59E0B' }] : []), ...(showSnd ? [{ name: 'SnD', color: '#92720A' }] : [])].map(it => (
+            <span key={it.name} style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, color: '#111' }}>
+              <span style={{ width: 8, height: 8, borderRadius: '50%', background: it.color, display: 'inline-block', flexShrink: 0 }} />{it.name}
+            </span>
+          ))}
+        </div>
+      )}
     </Card>
   )
 }
