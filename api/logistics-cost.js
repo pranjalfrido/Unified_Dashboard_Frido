@@ -988,7 +988,7 @@ export default async function handler(req, res) {
       // Throttled to 3: this block is 10 queries and only runs on a cache miss, so it can
       // afford to be slower — but firing all 10 at once starved the pool and produced the
       // same connect timeout the main block hit.
-      const [health, joinCov, opt, cityRows, b2b, b2bLanes, b2bTotals, b2bTrans, b2bMonths, b2bTypes, wr, gridRes, trendRes, disputes, slabs] = await mapLimit([
+      const [health, joinCov, opt, cityRows, b2b, b2bLanes, b2bTotals, b2bTrans, b2bMonths, b2bTypes, b2bVar, b2bVarMonths, b2bTransMonths, b2bVehicles, b2bLaneVeh, b2bSole, wr, gridRes, trendRes, disputes, slabs] = await mapLimit([
         // ── Data Health (spec §0) ──
         // Every exclusion and every coverage rate the page depends on, in one query.
         // This exists so finance can see the gaps before finding one themselves and
@@ -1032,6 +1032,17 @@ export default async function handler(req, res) {
             (SELECT array_agg(DISTINCT m ORDER BY m) FROM (SELECT DISTINCT CASE WHEN upper(shipment_mode)='RTO' THEN 'RTO' WHEN upper(shipment_mode) IN ('REVERSE','RVP','DTO') THEN 'Reverse' WHEN upper(shipment_mode)='FORWARD' THEN 'Forward' ELSE shipment_mode END AS m FROM public.logistics_invoices_b2c WHERE shipment_mode IS NOT NULL) q) AS modes,
             (SELECT array_agg(DISTINCT payment_mode ORDER BY payment_mode) FROM public.logistics_invoices_b2c WHERE payment_mode IS NOT NULL) AS payments,
             (SELECT array_agg(DISTINCT courier_name ORDER BY courier_name) FROM public.logistics_invoices_b2c WHERE courier_name IS NOT NULL) AS couriers,
+            -- FTL/PTL transporters, for the sidebar when that tab is active. The B2C courier
+            -- list is meaningless there: none of those carriers appear in the freight ledger.
+            (SELECT array_agg(DISTINCT transporter_name ORDER BY transporter_name)
+               FROM public.logistics_invoices_b2b WHERE transporter_name IS NOT NULL) AS transporters,
+            -- Vehicle sizes and FTL/PTL types, for the FTL/PTL sidebar. Read from the priced
+            -- table so the vehicle spellings match the normalised keys the charts group on
+            -- ('20 FT', '20FT' and '20 Ft' are one option, not three).
+            (SELECT array_agg(DISTINCT vehicle ORDER BY vehicle)
+               FROM public.b2b_trip_priced WHERE vehicle IS NOT NULL) AS vehicle_types,
+            (SELECT array_agg(DISTINCT freight_type ORDER BY freight_type)
+               FROM public.b2b_trip_priced WHERE freight_type IS NOT NULL) AS freight_types,
             (SELECT array_agg(DISTINCT courier_account_type ORDER BY courier_account_type) FROM public.logistics_invoices_b2c WHERE courier_account_type IS NOT NULL) AS account_types
         `),
         () => query(pool, `
@@ -1056,15 +1067,21 @@ export default async function handler(req, res) {
         // NULL in this table today, so there is no ₹/kg to report — only trip cost.
         // Those metrics appear automatically once the ledger carries weights.
         () => query(pool, `
-          SELECT origin_location || ' → ' || destination_location AS lane,
-                 origin_location, destination_location,
+          SELECT p.origin || ' → ' || p.dest AS lane,
+                 p.origin AS origin_location, p.dest AS destination_location,
                  COUNT(*)::int AS trips,
-                 SUM(total_cost)::float8 AS cost,
-                 AVG(total_cost)::float8 AS avg_cost,
-                 MIN(total_cost)::float8 AS min_cost,
-                 MAX(total_cost)::float8 AS max_cost
-            FROM public.logistics_invoices_b2b
-           WHERE total_cost > 0
+                 SUM(p.billed)::float8 AS cost,
+                 AVG(p.billed)::float8 AS avg_cost,
+                 MIN(p.billed)::float8 AS min_cost,
+                 MAX(p.billed)::float8 AS max_cost,
+                 COUNT(DISTINCT p.transporter)::int AS transporters,
+                 -- Contract variance where the card prices the lane. NULL-safe: a lane with
+                 -- no priced trip reports NULL rather than a misleading zero.
+                 SUM(p.card_rate)::float8 AS card_cost,
+                 SUM(p.variance)::float8 AS variance,
+                 COUNT(p.card_rate)::int AS priced_trips
+            FROM public.b2b_trip_priced p
+           WHERE p.billed > 0
            GROUP BY 1, 2, 3
            ORDER BY 5 DESC
            LIMIT 60
@@ -1074,7 +1091,7 @@ export default async function handler(req, res) {
                  SUM(total_cost)::float8 AS cost,
                  AVG(total_cost)::float8 AS avg_cost,
                  COUNT(DISTINCT transporter_name)::int AS transporters,
-                 COUNT(DISTINCT origin_location || '→' || destination_location)::int AS lanes
+                 (SELECT COUNT(*)::int FROM (SELECT origin, dest FROM public.b2b_trip_priced GROUP BY 1, 2) l) AS lanes
             FROM public.logistics_invoices_b2b WHERE total_cost > 0
         `),
         () => query(pool, `
@@ -1094,6 +1111,115 @@ export default async function handler(req, res) {
                  AVG(total_cost)::float8 AS avg_cost
             FROM public.logistics_invoices_b2b WHERE total_cost > 0
            GROUP BY 1 ORDER BY 3 DESC
+        `),
+        // ── B2B contract variance (spec: audit trips against the signed rate card) ──
+        // Reads public.b2b_trip_priced, written by scripts/build-b2b-variance.mjs from the
+        // Jopadevi & Reliable rate sheet. Priced there rather than here because it needs the
+        // spreadsheet, and re-parsing it per request would be both slow and a moving target.
+        //
+        // match_tier matters and is never collapsed: 'exact' means the card names that very
+        // lane (unarguable in a dispute); 'market' means the invoice location is a satellite
+        // the card prices under a nearby name (defensible, but the transporter can contest
+        // the specific drop point). Trips the card cannot price carry a NULL rate and a
+        // stated reason, so the gap is reported instead of silently reading as zero variance.
+        () => query(pool, `
+          SELECT
+            COUNT(*)::int                                             AS trips,
+            SUM(billed)::float8                                       AS billed_all,
+            COUNT(card_rate)::int                                     AS priced_trips,
+            SUM(billed) FILTER (WHERE card_rate IS NOT NULL)::float8   AS billed_priced,
+            SUM(card_rate)::float8                                    AS card_total,
+            SUM(variance)::float8                                     AS variance,
+            -- Overcharge and undercharge kept apart. Netting them hides a systematic
+            -- overcharge behind a handful of negotiated spot rates.
+            SUM(variance) FILTER (WHERE variance > 1)::float8          AS over_rs,
+            COUNT(*) FILTER (WHERE variance > 1)::int                  AS over_n,
+            SUM(-variance) FILTER (WHERE variance < -1)::float8        AS under_rs,
+            COUNT(*) FILTER (WHERE variance < -1)::int                 AS under_n,
+            COUNT(*) FILTER (WHERE card_rate IS NOT NULL AND abs(variance) <= 1)::int AS on_card_n,
+            -- The exact tier on its own: the number to take to a transporter.
+            SUM(variance) FILTER (WHERE match_tier = 'exact')::float8  AS variance_exact,
+            COUNT(*) FILTER (WHERE match_tier = 'exact')::int          AS exact_n,
+            -- Goods value, for freight-as-%-of-value. Read through to_jsonb so a ledger that
+            -- does not carry the column yet returns NULL instead of failing to parse: the
+            -- column is mid-rollout and the name may arrive as "Shipment value" or
+            -- shipment_value. Both spellings are checked, on TOTAL spend per the spec.
+            (SELECT SUM(COALESCE(
+                      (to_jsonb(b) ->> 'shipment_value'),
+                      (to_jsonb(b) ->> 'Shipment value')
+                    )::numeric)::float8
+               FROM public.logistics_invoices_b2b b)                  AS value_total
+          FROM public.b2b_trip_priced
+        `),
+        // ── Monthly spend + contract variance ──
+        // Variance is expressed against PRICED spend only. Dividing it by total spend would
+        // blend coverage into the rate story and read as a falling overcharge in a month
+        // that simply had more unpriceable trips.
+        () => query(pool, `
+          SELECT month_year AS month, transporter, vehicle, freight_type, COUNT(*)::int AS trips,
+                 SUM(billed)::float8 AS billed,
+                 SUM(billed) FILTER (WHERE card_rate IS NOT NULL)::float8 AS billed_priced,
+                 SUM(card_rate)::float8 AS card_total,
+                 SUM(variance)::float8 AS variance
+            FROM public.b2b_trip_priced
+           GROUP BY 1, 2, 3, 4 ORDER BY 1
+        `),
+        // ── Transporter x month, long form ──
+        // Long rather than pivoted so the client can pick the series: a transporter that
+        // stops appearing (VS Transport and KM-Logistic have no July trips) shows as a gap
+        // in its line, which is the finding — pivoting to zero would draw it as a collapse
+        // in spend rather than an absence of billing.
+        () => query(pool, `
+          SELECT month_year AS month, transporter, vehicle, freight_type, COUNT(*)::int AS trips,
+                 SUM(billed)::float8 AS billed
+            FROM public.b2b_trip_priced
+           GROUP BY 1, 2, 3, 4 ORDER BY 1, 4 DESC
+        `),
+        // ── Vehicle type analysis ──
+        // Trips, spend, unit cost and lane reach per vehicle. `priced` carries how much of
+        // each vehicle the rate card can audit, so a vehicle with no contracted rate reports
+        // a NULL variance rather than a zero that would read as 'billed exactly on rate'.
+        () => query(pool, `
+          SELECT vehicle, transporter, freight_type, COUNT(*)::int AS trips,
+                 SUM(billed)::float8 AS billed,
+                 AVG(billed)::float8 AS avg_cost,
+                 COUNT(DISTINCT origin || '>' || dest)::int AS lanes,
+                 COUNT(DISTINCT transporter)::int AS transporters,
+                 COUNT(card_rate)::int AS priced_trips,
+                 SUM(variance)::float8 AS variance
+            FROM public.b2b_trip_priced
+           GROUP BY 1, 2, 3 ORDER BY 5 DESC
+        `),
+        // ── Lane x vehicle detail ──
+        // 46 lanes become 112 rows once vehicle is in the key. That is the right grain for a
+        // rate comparison — a lane price is meaningless without the vehicle it was quoted
+        // for — and the table is searchable, so the extra rows cost nothing to navigate.
+        () => query(pool, `
+          SELECT origin || ' → ' || dest AS lane, origin, dest, vehicle, transporter, freight_type,
+                 COUNT(*)::int AS trips,
+                 COUNT(DISTINCT transporter)::int AS transporters,
+                 SUM(billed)::float8 AS cost,
+                 AVG(billed)::float8 AS avg_cost,
+                 MIN(billed)::float8 AS min_cost,
+                 MAX(billed)::float8 AS max_cost,
+                 SUM(card_rate)::float8 AS card_cost,
+                 SUM(variance)::float8 AS variance,
+                 COUNT(card_rate)::int AS priced_trips
+            FROM public.b2b_trip_priced
+           WHERE billed > 0
+           GROUP BY 1, 2, 3, 4, 5, 6
+           ORDER BY 9 DESC
+        `),
+        // ── Single-sourcing: share of spend on lanes served by ONE transporter ──
+        () => query(pool, `
+          WITH l AS (SELECT origin, dest, COUNT(DISTINCT transporter)::int AS tr,
+                            SUM(billed)::float8 AS spend
+                       FROM public.b2b_trip_priced GROUP BY 1, 2)
+          SELECT COUNT(*) FILTER (WHERE tr = 1)::int AS sole_lanes,
+                 COUNT(*)::int AS lanes,
+                 SUM(spend) FILTER (WHERE tr = 1)::float8 AS sole_spend,
+                 SUM(spend)::float8 AS total_spend
+            FROM l
         `),
         wrQ, gridQ, trendQ, disputesQ, slabQ,
       ], 3)
@@ -1117,6 +1243,21 @@ export default async function handler(req, res) {
         b2bTrans: b2bTrans.rows,
         b2bMonths: b2bMonths.rows,
         b2bTypes: b2bTypes.rows,
+        // Contract variance against the signed rate card. Filter-independent, like the
+        // other B2B aggregates — the B2B ledger is trip-billed and the sidebar's
+        // courier/zone/weight slicers do not apply to it.
+        b2bVar: b2bVar.rows[0] || null,
+        
+        
+        b2bVarMonths: b2bVarMonths.rows,
+        b2bTransMonths: b2bTransMonths.rows,
+        b2bVehicles: b2bVehicles.rows,
+        b2bLaneVeh: b2bLaneVeh.rows,
+        
+        
+        
+        
+        b2bSole: b2bSole.rows[0] || null,
       }
     }
 
@@ -1156,6 +1297,18 @@ export default async function handler(req, res) {
     out.b2bTrans = refCache.b2bTrans
     out.b2bMonths = refCache.b2bMonths
     out.b2bTypes = refCache.b2bTypes
+    out.b2bVar = refCache.b2bVar
+    
+    
+    out.b2bVarMonths = refCache.b2bVarMonths
+    out.b2bTransMonths = refCache.b2bTransMonths
+    out.b2bVehicles = refCache.b2bVehicles
+    out.b2bLaneVeh = refCache.b2bLaneVeh
+    
+    
+    
+    
+    out.b2bSole = refCache.b2bSole
 
     // Store before responding. Claims are read fresh every request elsewhere, so a cached
     // body would not hide a newly filed claim from the register.
