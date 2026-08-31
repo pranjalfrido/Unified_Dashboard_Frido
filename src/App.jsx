@@ -39,6 +39,7 @@ import { ReferenceLine, LabelList, ScatterChart, Scatter } from 'recharts'
 const COURIERS = ['Bluedart','Delhivery','Delhivery NDD','Ekart','ElasticRun','Safexpress','Shadowfax','Shiprocket','Skye Air','Swift','Urbane Bolt']
 const EMPTY_COST_FILTERS = {
   months: [], zones: [], modes: [], payments: [], couriers: [],
+  transporters: [], vehicleTypes: [], freightTypes: [],
   accountTypes: [], band: null, destCity: null, billing: 'all',
 }
 // COURIER_COLORS / COURIER_LOGOS now live in utils.js — shared with the cost page.

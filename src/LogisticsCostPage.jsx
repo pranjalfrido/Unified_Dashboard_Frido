@@ -385,7 +385,7 @@ function ChipRow({ options, selected, onToggle, small }) {
   return (
     <div style={{ display: 'flex', flexWrap: 'wrap', gap: small ? 3 : 5 }}>
       {(options || []).map(o => {
-        const on = selected.includes(o)
+        const on = (selected || []).includes(o)
         return (
           <button key={o} onClick={() => onToggle(o)}
             style={{
