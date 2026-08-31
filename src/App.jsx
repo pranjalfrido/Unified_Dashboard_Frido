@@ -12331,19 +12331,39 @@ function CustomerPage({ filters, activeTab: activeTabProp, setActiveTab: setActi
       .catch(e => { setCustError(e.message); setLoading(false) })
   }, [custFetchKey])
 
+  const tabBar = (
+    <div className="sales-tabs">
+      {[
+        { id: 'overview', label: 'Overview' },
+        { id: 'trends', label: 'Acquisition & Trends' },
+        { id: 'cohort', label: 'Retention Cohort' },
+        { id: 'purchase', label: 'Purchase Behavior' },
+        { id: 'rfm', label: 'Segments & RFM' },
+        { id: 'spend', label: 'Spend & Discounts' },
+      ].map(tab => (
+        <button key={tab.id} onClick={() => setActiveTab(tab.id)} className={`stab${activeTab === tab.id ? ' active' : ''}`}>
+          {tab.label}
+        </button>
+      ))}
+    </div>
+  )
+
   if (loading) return (
-    <div style={{ background: CP.bg, padding: 40, textAlign: 'center', fontFamily: 'Space Grotesk, var(--font)', color: CP.ink3, fontSize: 13 }}>
-      Loading customer data…
+    <div style={{ background: CP.bg, fontFamily: 'Space Grotesk, var(--font)' }}>
+      {tabBar}
+      <div style={{ padding: 40, textAlign: 'center', color: CP.ink3, fontSize: 13 }}>Loading customer data…</div>
     </div>
   )
   if (custError) return (
-    <div style={{ background: CP.bg, padding: 40, textAlign: 'center', fontFamily: 'Space Grotesk, var(--font)', color: CP.red, fontSize: 13 }}>
-      Error: {custError}
+    <div style={{ background: CP.bg, fontFamily: 'Space Grotesk, var(--font)' }}>
+      {tabBar}
+      <div style={{ padding: 40, textAlign: 'center', color: CP.red, fontSize: 13 }}>Error: {custError}</div>
     </div>
   )
   if (!custData) return (
-    <div style={{ background: CP.bg, padding: 40, textAlign: 'center', fontFamily: 'Space Grotesk, var(--font)', color: CP.ink3, fontSize: 13 }}>
-      No data — select a date range.
+    <div style={{ background: CP.bg, fontFamily: 'Space Grotesk, var(--font)' }}>
+      {tabBar}
+      <div style={{ padding: 40, textAlign: 'center', color: CP.ink3, fontSize: 13 }}>No data — select a date range.</div>
     </div>
   )
 
