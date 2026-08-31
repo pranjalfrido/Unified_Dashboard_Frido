@@ -15422,7 +15422,7 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
               </div>
             </div>
           )}
-          {loading && !data && page !== 'logistics' && page !== 'inventory' && page !== 'documents' && page !== 'cogs' && page !== 'logistics-ledger' && page !== 'logistics-cost' && page !== 'profile' && page !== 'logistics-cost' && page !== 'ads' && <Skeleton />}
+          {loading && !data && page !== 'logistics' && page !== 'inventory' && page !== 'documents' && page !== 'cogs' && page !== 'logistics-ledger' && page !== 'logistics-cost' && page !== 'profile' && page !== 'logistics-cost' && page !== 'ads' && page !== 'customer' && <Skeleton />}
           {page === 'overview' && data && (!allowedTabs || allowedTabs.includes('overview')) && (
             <div className="page-scroll">
               <OverviewPage data={data} alerts={alerts} logisticsData={logisticsData} filters={filters} />
