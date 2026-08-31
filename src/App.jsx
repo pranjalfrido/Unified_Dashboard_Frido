@@ -156,6 +156,59 @@ function LDropdown({ label, options, value, onChange, flex }) {
   )
 }
 
+function LMultiDropdown({ label, options, value, onChange, flex }) {
+  const [open, setOpen] = useState(false)
+  const [search, setSearch] = useState('')
+  const ref = useRef(null)
+  useEffect(() => {
+    const h = e => { if (ref.current && !ref.current.contains(e.target)) { setOpen(false); setSearch('') } }
+    document.addEventListener('mousedown', h)
+    return () => document.removeEventListener('mousedown', h)
+  }, [])
+  const sel = value || []
+  const filtered = (options || []).filter(o => o.toLowerCase().includes(search.toLowerCase()))
+  const toggle = opt => { onChange(sel.includes(opt) ? sel.filter(x => x !== opt) : [...sel, opt]) }
+  const displayLabel = sel.length === 0 ? label : sel.length === 1 ? sel[0] : `${sel.length} selected`
+  return (
+    <div ref={ref} style={{ position: 'relative', flex: flex ? 1 : '0 0 auto', minWidth: 0 }}>
+      <button onClick={() => setOpen(o => !o)} style={{
+        display: 'flex', alignItems: 'center', gap: 6, padding: '6px 12px',
+        border: `1.5px solid ${sel.length ? C.acm : C.border2}`, borderRadius: 8,
+        background: sel.length ? C.acl : C.card, cursor: 'pointer', fontFamily: 'var(--font)',
+        fontSize: 11.5, color: sel.length ? C.t1 : C.t2, fontWeight: sel.length ? 600 : 400,
+        width: '100%', whiteSpace: 'nowrap'
+      }}>
+        <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', textAlign: 'left' }}>{displayLabel}</span>
+        {sel.length > 0 && <span onClick={e => { e.stopPropagation(); onChange([]) }} style={{ fontSize: 10, color: C.t3, cursor: 'pointer', flexShrink: 0 }}>✕</span>}
+        <span style={{ fontSize: 8, color: C.t3, flexShrink: 0 }}>{open ? '▲' : '▼'}</span>
+      </button>
+      {open && (
+        <div style={{ position: 'absolute', top: 'calc(100% + 4px)', left: 0, zIndex: 400, background: C.card, border: `1px solid ${C.border2}`, borderRadius: 10, boxShadow: '0 8px 28px rgba(0,0,0,.14)', minWidth: 200, maxHeight: 280, display: 'flex', flexDirection: 'column' }}>
+          {(options || []).length > 6 && (
+            <div style={{ padding: '7px 8px', borderBottom: `1px solid ${C.border}` }}>
+              <input autoFocus value={search} onChange={e => setSearch(e.target.value)} placeholder="Search…" style={{ width: '100%', fontSize: 11.5, padding: '4px 8px', border: `1px solid ${C.border2}`, borderRadius: 6, outline: 'none', fontFamily: 'var(--font)', background: C.bg }} />
+            </div>
+          )}
+          <div style={{ overflowY: 'auto', flex: 1 }}>
+            {filtered.map(opt => {
+              const on = sel.includes(opt)
+              return (
+                <div key={opt} onClick={() => toggle(opt)} style={{ padding: '7px 12px', fontSize: 11.5, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8, background: on ? C.acl : undefined }}>
+                  <span style={{ width: 14, height: 14, borderRadius: 3, border: `1.5px solid ${on ? C.acm : C.border2}`, background: on ? C.acm : C.card, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                    {on && <span style={{ color: '#fff', fontSize: 9, fontWeight: 700 }}>✓</span>}
+                  </span>
+                  <span style={{ color: on ? C.t1 : C.t2, fontWeight: on ? 600 : 400 }}>{opt}</span>
+                </div>
+              )
+            })}
+            {filtered.length === 0 && <div style={{ padding: '10px 12px', fontSize: 11.5, color: C.t3 }}>No results</div>}
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
 function LKpiCard({ label, value, badgeText, badgeVariant, subValue, cur, prev, hideSubValue, compact, tight, mobile }) {
   const bv = badgeVariant || 'N'
   const chg = (cur != null && prev != null && prev !== 0) ? ((cur - prev) / prev * 100) : null
@@ -312,7 +365,7 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
   const [wMetric, setWMetric] = useState('qty')
   const [ageingMetric, setAgeingMetric] = useState('del')
   const toggleSec = key => setSecCollapsed(p => ({ ...p, [key]: !p[key] }))
-  const [lFiltersLocal, setLFiltersLocal] = useState({ couriers: [], shipmentType: 'forward', sddNdd: 'all', paymentMode: null, zone: null, pickupState: null, dropState: null, dropCity: null, category: null, subCategory: null })
+  const [lFiltersLocal, setLFiltersLocal] = useState({ couriers: [], shipmentType: 'forward', sddNdd: 'all', paymentMode: [], zone: [], pickupState: [], dropState: [], dropCity: [], category: [], subCategory: [], weightSlabs: [] })
   const lFilters = lFiltersProp || lFiltersLocal
   const setLFilters = setLFiltersProp || setLFiltersLocal
   const [trendGranularity, setTrendGranularity] = useState('Daily')
@@ -406,7 +459,7 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
   useEffect(() => {
     const applyFilters = (raw) => {
       if (!raw) return null
-      const { couriers, zone, paymentMode, pickupState, dropState, dropCity, category, subCategory, sddNdd, shipmentType } = lFilters
+      const { couriers, zone, paymentMode, pickupState, dropState, dropCity, category, subCategory, sddNdd, shipmentType, weightSlabs } = lFilters
       const hasCourier = couriers.length > 0
       const NDD_COURIERS = ['Delhivery NDD', 'Skye Air', 'Urbane Bolt', 'ElasticRun']
       const isNdd = cg => NDD_COURIERS.includes(cg)
@@ -416,10 +469,11 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
         : () => true
       const hasShipmentType = shipmentType && shipmentType !== 'all'
       const shipmentTypeFilter = x => !hasShipmentType || x.shipment_type == null || (x.shipment_type || '').toLowerCase() === shipmentType.toLowerCase()
-      const hasCategory = !!category
-      const hasSubCategory = !!subCategory
-      const categoryFilter = x => (!hasCategory || x.category == null || (x.category || '').toLowerCase() === category.toLowerCase()) && (!hasSubCategory || x.sub_category == null || (x.sub_category || '').toLowerCase() === subCategory.toLowerCase())
-      const courierFilter = x => (!hasCourier || couriers.includes(x.courier_group)) && sddNddFilter(x.courier_group) && shipmentTypeFilter(x) && categoryFilter(x)
+      const hasCategory = category?.length > 0
+      const hasSubCategory = subCategory?.length > 0
+      const categoryFilter = x => (!hasCategory || x.category == null || (category || []).map(c => c.toLowerCase()).includes((x.category || '').toLowerCase())) && (!hasSubCategory || x.sub_category == null || (subCategory || []).map(c => c.toLowerCase()).includes((x.sub_category || '').toLowerCase()))
+      const hasWeightSlabs = weightSlabs?.length > 0
+      const courierFilter = x => (!hasCourier || couriers.includes(x.courier_group)) && sddNddFilter(x.courier_group) && shipmentTypeFilter(x) && categoryFilter(x) && (!hasWeightSlabs || !x.slab || (weightSlabs || []).includes(x.slab))
 
       // build filtered byCourier rows
       const filteredCouriers = (raw.byCourier || []).filter(courierFilter)
@@ -476,16 +530,16 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
         byCourierWeek: (raw.byCourierWeek || []).filter(courierFilter),
         byCourierMonth: (raw.byCourierMonth || []).filter(courierFilter),
         tatByCourier: (raw.tatByCourier || []).filter(courierFilter),
-        byZone: zone ? (raw.byZone || []).filter(x => x.zone === zone) : raw.byZone,
-        byZoneDetail: zone ? (raw.byZoneDetail || []).filter(x => x.zone === zone) : raw.byZoneDetail,
-        byPayment: paymentMode ? (raw.byPayment || []).filter(x => x.payment_mode?.toLowerCase() === paymentMode.toLowerCase()) : raw.byPayment,
-        byPaymentDetail: paymentMode ? (raw.byPaymentDetail || []).filter(x => x.payment_mode?.toLowerCase() === paymentMode.toLowerCase()) : raw.byPaymentDetail,
-        byPaymentDay: paymentMode ? (raw.byPaymentDay || []).filter(x => x.payment_mode?.toLowerCase() === paymentMode.toLowerCase()) : raw.byPaymentDay,
-        byPaymentWeek: paymentMode ? (raw.byPaymentWeek || []).filter(x => x.payment_mode?.toLowerCase() === paymentMode.toLowerCase()) : raw.byPaymentWeek,
-        byPaymentMonth: paymentMode ? (raw.byPaymentMonth || []).filter(x => x.payment_mode?.toLowerCase() === paymentMode.toLowerCase()) : raw.byPaymentMonth,
-        topDropStates: dropState ? (raw.topDropStates || []).filter(x => x.state?.toLowerCase() === dropState.toLowerCase()) : raw.topDropStates,
-        topDropCities: dropCity ? (raw.topDropCities || []).filter(x => x.city?.toLowerCase() === dropCity.toLowerCase()) : raw.topDropCities,
-        topPickupCities: pickupState ? (raw.topPickupCities || []).filter(x => x.pickup_state?.toLowerCase() === pickupState.toLowerCase()) : raw.topPickupCities,
+        byZone: zone?.length ? (raw.byZone || []).filter(x => zone.includes(x.zone)) : raw.byZone,
+        byZoneDetail: zone?.length ? (raw.byZoneDetail || []).filter(x => zone.includes(x.zone)) : raw.byZoneDetail,
+        byPayment: paymentMode?.length ? (raw.byPayment || []).filter(x => paymentMode.map(p=>p.toLowerCase()).includes(x.payment_mode?.toLowerCase())) : raw.byPayment,
+        byPaymentDetail: paymentMode?.length ? (raw.byPaymentDetail || []).filter(x => paymentMode.map(p=>p.toLowerCase()).includes(x.payment_mode?.toLowerCase())) : raw.byPaymentDetail,
+        byPaymentDay: paymentMode?.length ? (raw.byPaymentDay || []).filter(x => paymentMode.map(p=>p.toLowerCase()).includes(x.payment_mode?.toLowerCase())) : raw.byPaymentDay,
+        byPaymentWeek: paymentMode?.length ? (raw.byPaymentWeek || []).filter(x => paymentMode.map(p=>p.toLowerCase()).includes(x.payment_mode?.toLowerCase())) : raw.byPaymentWeek,
+        byPaymentMonth: paymentMode?.length ? (raw.byPaymentMonth || []).filter(x => paymentMode.map(p=>p.toLowerCase()).includes(x.payment_mode?.toLowerCase())) : raw.byPaymentMonth,
+        topDropStates: dropState?.length ? (raw.topDropStates || []).filter(x => dropState.map(s=>s.toLowerCase()).includes(x.state?.toLowerCase())) : raw.topDropStates,
+        topDropCities: dropCity?.length ? (raw.topDropCities || []).filter(x => dropCity.map(c=>c.toLowerCase()).includes(x.city?.toLowerCase())) : raw.topDropCities,
+        topPickupCities: pickupState?.length ? (raw.topPickupCities || []).filter(x => pickupState.map(s=>s.toLowerCase()).includes(x.pickup_state?.toLowerCase())) : raw.topPickupCities,
         byChannel: hasCourier ? (raw.byChannel || []).filter(x => couriers.some(c => x.channel?.toLowerCase().includes(c.toLowerCase()))) : raw.byChannel,
         byStatus: (hasCourier || hasSddNdd || hasShipmentType)
           ? (() => {
@@ -582,19 +636,19 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
           })(),
         topDropStates: (() => {
           const rows = hasCourier ? (raw.topDropStates || []).filter(x => couriers.includes(x.courier_group)) : (raw.topDropStates || [])
-          const f2 = dropState ? rows.filter(x => x.state?.toLowerCase() === dropState.toLowerCase()) : rows
+          const f2 = dropState?.length ? rows.filter(x => dropState.map(s=>s.toLowerCase()).includes(x.state?.toLowerCase())) : rows
           const m = {}; f2.forEach(x => { const k = `${x.state}||${x.shipment_type}`; m[k] = { state: x.state, shipment_type: x.shipment_type, total: (m[k]?.total || 0) + (x.total || 0) } })
           return Object.values(m)
         })(),
         topDropCities: (() => {
           const rows = hasCourier ? (raw.topDropCities || []).filter(x => couriers.includes(x.courier_group)) : (raw.topDropCities || [])
-          const f2 = dropCity ? rows.filter(x => x.city?.toLowerCase() === dropCity.toLowerCase()) : rows
+          const f2 = dropCity?.length ? rows.filter(x => dropCity.map(c=>c.toLowerCase()).includes(x.city?.toLowerCase())) : rows
           const m = {}; f2.forEach(x => { const k = `${x.city}||${x.shipment_type}`; m[k] = { city: x.city, shipment_type: x.shipment_type, total: (m[k]?.total || 0) + (x.total || 0) } })
           return Object.values(m)
         })(),
         topPickupCities: (() => {
           const rows = hasCourier ? (raw.topPickupCities || []).filter(x => couriers.includes(x.courier_group)) : (raw.topPickupCities || [])
-          const f2 = pickupState ? rows.filter(x => x.pickup_state?.toLowerCase() === pickupState.toLowerCase()) : rows
+          const f2 = pickupState?.length ? rows.filter(x => pickupState.map(s=>s.toLowerCase()).includes(x.pickup_state?.toLowerCase())) : rows
           const m = {}; f2.forEach(x => { const k = `${x.city}||${x.shipment_type}`; m[k] = { city: x.city, shipment_type: x.shipment_type, total: (m[k]?.total || 0) + (x.total || 0) } })
           return Object.values(m)
         })(),
@@ -727,17 +781,18 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
           </div>
           <div style={{ height: 1, background: C.border, margin: '4px 0' }} />
           <div style={{ fontSize: 10, fontWeight: 800, color: C.t3, letterSpacing: '.06em', textTransform: 'uppercase' }}>Filters</div>
-          <LDropdown label="Zone" options={opts.zones} value={lFilters.zone} onChange={v => setLFilters(f => ({ ...f, zone: v }))} />
-          <LDropdown label="Pickup State" options={opts.pickup_states} value={lFilters.pickupState} onChange={v => setLFilters(f => ({ ...f, pickupState: v }))} />
-          <LDropdown label="Drop State" options={opts.drop_states} value={lFilters.dropState} onChange={v => setLFilters(f => ({ ...f, dropState: v }))} />
-          <LDropdown label="Drop City" options={opts.drop_cities} value={lFilters.dropCity} onChange={v => setLFilters(f => ({ ...f, dropCity: v }))} />
-          <LDropdown label="Payment" options={['COD','Prepaid']} value={lFilters.paymentMode} onChange={v => setLFilters(f => ({ ...f, paymentMode: v }))} />
-          <LDropdown label="Category" options={opts.categories} value={lFilters.category} onChange={v => setLFilters(f => ({ ...f, category: v, subCategory: null }))} />
-          <LDropdown label="Sub-category" options={opts.sub_categories} value={lFilters.subCategory} onChange={v => setLFilters(f => ({ ...f, subCategory: v }))} />
-          {(lFilters.zone || lFilters.pickupState || lFilters.dropState || lFilters.dropCity || lFilters.paymentMode || lFilters.category || lFilters.subCategory) && (
-            <button onClick={() => setLFilters(f => ({ ...f, zone: null, pickupState: null, dropState: null, dropCity: null, paymentMode: null, category: null, subCategory: null }))}
+          <LMultiDropdown label="Zone" options={opts.zones} value={lFilters.zone} onChange={v => setLFilters(f => ({ ...f, zone: v }))} />
+          <LMultiDropdown label="Pickup State" options={opts.pickup_states} value={lFilters.pickupState} onChange={v => setLFilters(f => ({ ...f, pickupState: v }))} />
+          <LMultiDropdown label="Drop State" options={opts.drop_states} value={lFilters.dropState} onChange={v => setLFilters(f => ({ ...f, dropState: v }))} />
+          <LMultiDropdown label="Drop City" options={opts.drop_cities} value={lFilters.dropCity} onChange={v => setLFilters(f => ({ ...f, dropCity: v }))} />
+          <LMultiDropdown label="Payment" options={['COD','Prepaid']} value={lFilters.paymentMode} onChange={v => setLFilters(f => ({ ...f, paymentMode: v }))} />
+          <LMultiDropdown label="Category" options={opts.categories} value={lFilters.category} onChange={v => setLFilters(f => ({ ...f, category: v, subCategory: [] }))} />
+          <LMultiDropdown label="Sub-category" options={opts.sub_categories} value={lFilters.subCategory} onChange={v => setLFilters(f => ({ ...f, subCategory: v }))} />
+          <LMultiDropdown label="Weight Slab" options={['0-500g','500g-1kg','1-2kg','2-5kg','5-10kg','10-20kg','20-50kg','50kg+']} value={lFilters.weightSlabs} onChange={v => setLFilters(f => ({ ...f, weightSlabs: v }))} />
+          {(lFilters.zone?.length || lFilters.pickupState?.length || lFilters.dropState?.length || lFilters.dropCity?.length || lFilters.paymentMode?.length || lFilters.category?.length || lFilters.subCategory?.length || lFilters.weightSlabs?.length) ? (
+            <button onClick={() => setLFilters(f => ({ ...f, zone: [], pickupState: [], dropState: [], dropCity: [], paymentMode: [], category: [], subCategory: [], weightSlabs: [] }))}
               style={{ fontSize: 11, color: C.t3, background: 'none', border: `1px solid ${C.border}`, borderRadius: 6, padding: '4px 10px', cursor: 'pointer', fontFamily: 'var(--font)' }}>✕ Clear All</button>
-          )}
+          ) : null}
         </div>
   )
 
@@ -3296,25 +3351,26 @@ function MobileLogisticsPanel({ page, setPage, onClose, lFilters, setLFilters, f
     { id: 'logistics-cost', label: 'Cost Analytics' },
   ]
   const opts = filterOpts || {}
-  const lf = lFilters || { couriers: [], shipmentType: 'forward', sddNdd: 'all', zone: null, pickupState: null, dropState: null, dropCity: null, paymentMode: null, category: null, subCategory: null }
+  const lf = lFilters || { couriers: [], shipmentType: 'forward', sddNdd: 'all', zone: [], pickupState: [], dropState: [], dropCity: [], paymentMode: [], category: [], subCategory: [], weightSlabs: [] }
   const setLf = setLFilters || (() => {})
   const toggleCourier = c => setLf(f => ({ ...f, couriers: (f.couriers || []).includes(c) ? f.couriers.filter(x => x !== c) : [...(f.couriers || []), c] }))
 
   const dropdownFilters = [
-    { key: 'zone', label: 'Zone', options: opts.zones || [], value: lf.zone, onChange: v => setLf(f => ({ ...f, zone: v })) },
-    { key: 'pickupState', label: 'Pickup State', options: opts.pickup_states || [], value: lf.pickupState, onChange: v => setLf(f => ({ ...f, pickupState: v })) },
-    { key: 'dropState', label: 'Drop State', options: opts.drop_states || [], value: lf.dropState, onChange: v => setLf(f => ({ ...f, dropState: v })) },
-    { key: 'dropCity', label: 'Drop City', options: opts.drop_cities || [], value: lf.dropCity, onChange: v => setLf(f => ({ ...f, dropCity: v })) },
-    { key: 'paymentMode', label: 'Payment', options: ['COD', 'Prepaid'], value: lf.paymentMode, onChange: v => setLf(f => ({ ...f, paymentMode: v })) },
-    { key: 'category', label: 'Category', options: opts.categories || [], value: lf.category, onChange: v => setLf(f => ({ ...f, category: v, subCategory: null })) },
-    { key: 'subCategory', label: 'Sub-category', options: opts.sub_categories || [], value: lf.subCategory, onChange: v => setLf(f => ({ ...f, subCategory: v })) },
+    { key: 'zone', label: 'Zone', options: opts.zones || [], value: lf.zone || [], onChange: v => setLf(f => ({ ...f, zone: v })) },
+    { key: 'pickupState', label: 'Pickup State', options: opts.pickup_states || [], value: lf.pickupState || [], onChange: v => setLf(f => ({ ...f, pickupState: v })) },
+    { key: 'dropState', label: 'Drop State', options: opts.drop_states || [], value: lf.dropState || [], onChange: v => setLf(f => ({ ...f, dropState: v })) },
+    { key: 'dropCity', label: 'Drop City', options: opts.drop_cities || [], value: lf.dropCity || [], onChange: v => setLf(f => ({ ...f, dropCity: v })) },
+    { key: 'paymentMode', label: 'Payment', options: ['COD', 'Prepaid'], value: lf.paymentMode || [], onChange: v => setLf(f => ({ ...f, paymentMode: v })) },
+    { key: 'category', label: 'Category', options: opts.categories || [], value: lf.category || [], onChange: v => setLf(f => ({ ...f, category: v, subCategory: [] })) },
+    { key: 'subCategory', label: 'Sub-category', options: opts.sub_categories || [], value: lf.subCategory || [], onChange: v => setLf(f => ({ ...f, subCategory: v })) },
+    { key: 'weightSlabs', label: 'Weight Slab', options: ['0-500g','500g-1kg','1-2kg','2-5kg','5-10kg','10-20kg','20-50kg','50kg+'], value: lf.weightSlabs || [], onChange: v => setLf(f => ({ ...f, weightSlabs: v })) },
   ]
 
   const activeCourierCount = (lf.couriers || []).length
-  const activeDropdownCount = dropdownFilters.filter(d => d.value).length
+  const activeDropdownCount = dropdownFilters.filter(d => (d.value || []).length > 0).length
   const totalActive = activeCourierCount + activeDropdownCount
 
-  const clearAll = () => { setLf(f => ({ ...f, couriers: [], zone: null, pickupState: null, dropState: null, dropCity: null, paymentMode: null, category: null, subCategory: null })); setExpandedKey(null) }
+  const clearAll = () => { setLf(f => ({ ...f, couriers: [], zone: [], pickupState: [], dropState: [], dropCity: [], paymentMode: [], category: [], subCategory: [], weightSlabs: [] })); setExpandedKey(null) }
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', maxHeight: '82vh', fontFamily: 'Inter, system-ui, sans-serif' }}>
@@ -3427,17 +3483,18 @@ function MobileLogisticsPanel({ page, setPage, onClose, lFilters, setLFilters, f
           {dropdownFilters.map((df, di) => {
             const isLast = di === dropdownFilters.length - 1
             const isExpanded = expandedKey === df.key
-            const hasVal = !!df.value
+            const sel = df.value || []
+            const hasVal = sel.length > 0
             return (
               <div key={df.key} style={{ borderBottom: isLast ? 'none' : `1px solid ${PV.border}` }}>
                 <div onClick={() => setExpandedKey(k => k === df.key ? null : df.key)}
                   style={{ display: 'flex', alignItems: 'center', padding: '12px 16px', cursor: 'pointer', gap: 8, userSelect: 'none' }}>
                   <span style={{ flex: 1, fontSize: 13, fontWeight: 500, color: PV.ink }}>{df.label}</span>
                   {hasVal && (
-                    <span style={{ fontSize: 10, fontWeight: 700, background: '#FFF3CD', color: PV.accentDark, border: `1px solid ${PV.accent}`, borderRadius: 10, padding: '1px 7px', lineHeight: '16px', maxWidth: 90, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{df.value}</span>
+                    <span style={{ fontSize: 10, fontWeight: 700, background: '#FFF3CD', color: PV.accentDark, border: `1px solid ${PV.accent}`, borderRadius: 10, padding: '1px 7px', lineHeight: '16px' }}>{sel.length}</span>
                   )}
                   {hasVal && (
-                    <button onClick={e => { e.stopPropagation(); df.onChange(null) }} style={{ background: 'none', border: 'none', color: PV.sub, fontSize: 13, cursor: 'pointer', padding: '0 2px', lineHeight: 1 }}>✕</button>
+                    <button onClick={e => { e.stopPropagation(); df.onChange([]) }} style={{ background: 'none', border: 'none', color: PV.sub, fontSize: 13, cursor: 'pointer', padding: '0 2px', lineHeight: 1 }}>✕</button>
                   )}
                   <span style={{ fontSize: 13, color: PV.sub, transform: isExpanded ? 'rotate(90deg)' : 'none', transition: 'transform .18s', lineHeight: 1 }}>›</span>
                 </div>
@@ -3446,14 +3503,14 @@ function MobileLogisticsPanel({ page, setPage, onClose, lFilters, setLFilters, f
                     {df.options.length === 0 ? (
                       <div style={{ padding: '10px 16px', fontSize: 12, color: PV.sub }}>No options available</div>
                     ) : df.options.map((opt, oi) => {
-                      const checked = df.value === opt
+                      const checked = sel.includes(opt)
                       return (
                         <label key={oi} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '9px 16px', cursor: 'pointer', userSelect: 'none' }}>
-                          <div style={{ width: 17, height: 17, borderRadius: '50%', flexShrink: 0, border: `2px solid ${checked ? PV.accent : PV.border}`, background: checked ? PV.accent : PV.bg, display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all .12s' }}
-                            onClick={() => df.onChange(checked ? null : opt)}>
-                            {checked && <span style={{ fontSize: 7, color: PV.accentDark, lineHeight: 1 }}>●</span>}
+                          <div style={{ width: 17, height: 17, borderRadius: 5, flexShrink: 0, border: `2px solid ${checked ? PV.accent : PV.border}`, background: checked ? PV.accent : PV.bg, display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all .12s' }}
+                            onClick={() => df.onChange(checked ? sel.filter(x => x !== opt) : [...sel, opt])}>
+                            {checked && <span style={{ fontSize: 9, color: PV.accentDark, lineHeight: 1 }}>✓</span>}
                           </div>
-                          <span style={{ fontSize: 12.5, color: checked ? PV.ink : PV.sub, fontWeight: checked ? 600 : 400 }} onClick={() => df.onChange(checked ? null : opt)}>{opt}</span>
+                          <span style={{ fontSize: 12.5, color: checked ? PV.ink : PV.sub, fontWeight: checked ? 600 : 400 }} onClick={() => df.onChange(checked ? sel.filter(x => x !== opt) : [...sel, opt])}>{opt}</span>
                         </label>
                       )
                     })}
@@ -15060,7 +15117,7 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
   const [adsCachedMeta, setAdsCachedMeta] = useState(null)
   const adsCacheRef = useRef(null)
   const [inventoryDateControl, setInventoryDateControl] = useState(null)
-  const [lFilters, setLFilters] = useState({ couriers: [], shipmentType: 'forward', sddNdd: 'all', paymentMode: null, zone: null, pickupState: null, dropState: null, dropCity: null, category: null, subCategory: null })
+  const [lFilters, setLFilters] = useState({ couriers: [], shipmentType: 'forward', sddNdd: 'all', paymentMode: [], zone: [], pickupState: [], dropState: [], dropCity: [], category: [], subCategory: [], weightSlabs: [] })
   const [costFilters, setCostFilters] = useState(EMPTY_COST_FILTERS)
   const [logisticsFilterOpts, setLogisticsFilterOpts] = useState({})
 
