@@ -15315,7 +15315,7 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
         .catch(() => {})
     }, 600)
     return () => clearTimeout(debounceRef.current)
-  }, [filters.start, filters.end, filters.category, filters.subCategory, filters.sku, filters.subChannel, filters.voucher, filters.region, filters.tier, filters.state, filters.city, filters.country, filters.paymentType, filters.channelGroup, filters.productAge, subCatFirstOrderMap, fetchData])
+  }, [filters.start, filters.end, filters.category, filters.subCategory, filters.sku, filters.subChannel, filters.voucher, filters.region, filters.tier, filters.state, filters.city, filters.country, filters.paymentType, filters.channelGroup, filters.productAge, fetchData])
 
   // Load ads static cache when user navigates to Ads tab — independent of main fetchData
   useEffect(() => {
