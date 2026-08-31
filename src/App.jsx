@@ -12312,8 +12312,12 @@ function CustomerPage({ filters, activeTab: activeTabProp, setActiveTab: setActi
   const [cohortMonthLimit, setCohortMonthLimit] = useState(14)
   const API = import.meta.env.VITE_API_URL || ''
 
+  const custFetchKey = `${filters?.start}|${filters?.end}`
+  const prevCustFetchKey = useRef(null)
   useEffect(() => {
     if (!filters?.start || !filters?.end) return
+    if (custFetchKey === prevCustFetchKey.current) return
+    prevCustFetchKey.current = custFetchKey
     setLoading(true)
     setCustError(null)
     fetch(`${API}/api/customer`, {
@@ -12324,7 +12328,7 @@ function CustomerPage({ filters, activeTab: activeTabProp, setActiveTab: setActi
       .then(r => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json() })
       .then(d => { setCustData(d); setLoading(false) })
       .catch(e => { setCustError(e.message); setLoading(false) })
-  }, [filters?.start, filters?.end])
+  }, [custFetchKey])
 
   if (loading) return (
     <div style={{ background: CP.bg, padding: 40, textAlign: 'center', fontFamily: 'Space Grotesk, var(--font)', color: CP.ink3, fontSize: 13 }}>
