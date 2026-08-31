@@ -12191,7 +12191,7 @@ const CP = {
 
 function CpCard({ title, sub, action, children }) {
   return (
-    <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, width: '100%', height: '100%', boxSizing: 'border-box', overflow: 'hidden' }}>
+    <div style={{ background: C.card, border: `1px solid ${C.border}`, borderTop: `3px solid #FFD600`, borderRadius: 12, width: '100%', height: '100%', boxSizing: 'border-box', overflow: 'hidden' }}>
       <div style={{ borderBottom: `1px solid ${C.border}`, padding: '10px 16px', display: 'flex', flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
         <div>
           <span style={{ fontWeight: 700, fontSize: 12, color: C.t1, textTransform: 'uppercase', letterSpacing: '.06em' }}>{title}</span>
@@ -13817,7 +13817,7 @@ function CustomerPage({ filters, activeTab: activeTabProp, setActiveTab: setActi
                   </div>
                   {/* Top 5 lift opportunities */}
                   {top5.length > 0 && (
-                    <div style={{ minWidth: 220, background: CP.head, borderRadius: 8, padding: '10px 12px' }}>
+                    <div style={{ minWidth: 220, background: CP.head, borderRadius: 8, padding: '10px 12px', border: `1px solid ${C.border}` }}>
                       <div style={{ fontSize: 10, fontWeight: 700, color: CP.ink, textTransform: 'uppercase', letterSpacing: '.06em', marginBottom: 8 }}>Top 5 Opportunities</div>
                       {top5.map(({ f, s, lift: lv, count: cnt }, i) => (
                         <div key={i} style={{ marginBottom: 8, paddingBottom: 8, borderBottom: i < 4 ? `1px solid ${CP.lineSoft}` : 'none' }}>
@@ -14002,7 +14002,7 @@ function CustomerPage({ filters, activeTab: activeTabProp, setActiveTab: setActi
                             { label: 'Avg SKUs / Order',       value: basket.avgSkusPerOrder?.toFixed(2) },
                             { label: 'Avg Items / Order',      value: basket.avgItemsPerOrder?.toFixed(1) },
                           ].map(({ label, value }) => (
-                            <div key={label} style={{ textAlign: 'center', background: CP.head, borderRadius: 8, padding: '7px 16px', flex: 1 }}>
+                            <div key={label} style={{ textAlign: 'center', background: CP.head, borderRadius: 8, padding: '7px 16px', flex: 1, border: `1px solid ${C.border}` }}>
                               <div style={{ fontSize: 17, fontWeight: 800, color: CP.ink, fontFamily: 'JetBrains Mono, monospace' }}>{value || '—'}</div>
                               <div style={{ fontSize: 9, color: CP.ink3, marginTop: 2, textTransform: 'uppercase', letterSpacing: '.04em' }}>{label}</div>
                             </div>
@@ -14020,11 +14020,11 @@ function CustomerPage({ filters, activeTab: activeTabProp, setActiveTab: setActi
                   <CpCard title="Cross-Category Customers" sub="Customers who bought from 2+ categories">
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
                       <div style={{ display: 'flex', gap: 12 }}>
-                        <div style={{ flex: 1, textAlign: 'center', background: CP.head, borderRadius: 8, padding: '10px 12px' }}>
+                        <div style={{ flex: 1, textAlign: 'center', background: CP.head, borderRadius: 8, padding: '10px 12px', border: `1px solid ${C.border}` }}>
                           <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 22, fontWeight: 800, color: CP.ink }}>{pbKpis.multiCatRate}%</div>
                           <div style={{ fontSize: 9, color: CP.ink3, textTransform: 'uppercase', letterSpacing: '.04em', marginTop: 2 }}>of customers</div>
                         </div>
-                        <div style={{ flex: 1, textAlign: 'center', background: CP.head, borderRadius: 8, padding: '10px 12px' }}>
+                        <div style={{ flex: 1, textAlign: 'center', background: CP.head, borderRadius: 8, padding: '10px 12px', border: `1px solid ${C.border}` }}>
                           <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 22, fontWeight: 800, color: CP.ink }}>{fmtN(pbKpis.multiCatCustomers)}</div>
                           <div style={{ fontSize: 9, color: CP.ink3, textTransform: 'uppercase', letterSpacing: '.04em', marginTop: 2 }}>customers</div>
                         </div>
@@ -14051,7 +14051,7 @@ function CustomerPage({ filters, activeTab: activeTabProp, setActiveTab: setActi
                           { value: pbKpis.avgOrdersPerCustomer != null ? `${(+pbKpis.avgOrdersPerCustomer).toFixed(1)}×` : '—', label: 'Avg Orders / Customer' },
                           { value: pbKpis.repeatRate != null ? `${pbKpis.repeatRate}%` : '—', label: 'Repeat Rate' },
                         ].map(({ value, label }) => (
-                          <div key={label} style={{ flex: 1, textAlign: 'center', background: CP.head, borderRadius: 8, padding: '7px 10px' }}>
+                          <div key={label} style={{ flex: 1, textAlign: 'center', background: CP.head, borderRadius: 8, padding: '7px 10px', border: `1px solid ${C.border}` }}>
                             <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 17, fontWeight: 800, color: CP.ink }}>{value}</div>
                             <div style={{ fontSize: 9, color: CP.ink3, textTransform: 'uppercase', letterSpacing: '.04em', marginTop: 2 }}>{label}</div>
                           </div>
