@@ -1889,8 +1889,8 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters 
           <CostKpiCarousel>
             {[
               { label: 'Total Logistics Cost', value: fmt(overall.total), sub: `${fmtBig(overall.b2cUnits)} parcels` },
-              { label: 'B2C Courier Spend', value: fmt(overall.b2cCost), sub: `${overall.b2cShare.toFixed(1)}% of total` },
-              { label: 'B2B Freight Spend', value: fmt(overall.b2bCost), sub: `${overall.b2bShare.toFixed(1)}% of total` },
+              { label: 'B2C Courier Spend', value: fmt(overall.b2cCost), sub: overall.total > 0 ? `${(overall.b2cCost / overall.total * 100).toFixed(1)}% of total` : '' },
+              { label: 'B2B Freight Spend', value: fmt(overall.b2bCost), sub: overall.total > 0 ? `${(overall.b2bCost / overall.total * 100).toFixed(1)}% of total` : '' },
               { label: 'B2C Shipments', value: fmtBig(overall.b2cUnits), sub: 'avg ₹' + (overall.b2cCost / (overall.b2cUnits || 1)).toFixed(2) + ' / parcel' },
               { label: 'B2B Trips', value: fmtN(overall.b2bUnits), sub: 'avg ' + fmt(overall.b2bCost / (overall.b2bUnits || 1)) + ' / trip' },
               { label: 'Recoverable (B2C)', value: fmt(kpis.overbilledCost), sub: 'weight overbilling', accent: C.red.tx },
@@ -2471,9 +2471,9 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters 
             sub="goods shipped" />
           <Tile label="Cost per Kg" value={kpis.cpk != null ? '₹' + kpis.cpk.toFixed(2) : '—'}
             sub={`${fmtKg(kpis.chargedWt)} billed`} />
-          <Tile label="Avg Cost / Shipment" value={'₹' + kpis.avgCost.toFixed(2)}
+          <Tile label="Avg Cost / Shipment" value={kpis.avgCost != null ? '₹' + kpis.avgCost.toFixed(2) : '—'}
             sub="freight ÷ invoices" />
-          <Tile label="Surcharge % of Freight" value={kpis.surchargePct.toFixed(1) + '%'}
+          <Tile label="Surcharge % of Freight" value={kpis.surchargePct != null ? kpis.surchargePct.toFixed(1) + '%' : '—'}
             sub={`${fmt(agg.surcharge)} of ${fmt(agg.cost)} billed`} />
           <Tile label="Should Have Paid" value={fmt(agg.dtOurs)}
             sub="card × our weight" />
