@@ -30,7 +30,7 @@ export default async function handler(req, res) {
       run(`WITH first_dates AS (
   SELECT CustomerId, MIN(DATE(OrderDate)) AS first_date
   FROM ${TBL}
-  WHERE Channel = 'Shopify' AND CustomerId IS NOT NULL
+  WHERE Channel = 'Shopify' AND CustomerId IS NOT NULL AND NOT REGEXP_CONTAINS(CAST(OrderId AS STRING), r'_EX')
   GROUP BY CustomerId
 ),
 period AS (
@@ -45,7 +45,7 @@ period AS (
   JOIN first_dates f USING (CustomerId)
   WHERE o.Channel = 'Shopify'
     AND DATE(o.OrderDate) BETWEEN '${s}' AND '${e}'
-    AND o.CustomerId IS NOT NULL
+    AND o.CustomerId IS NOT NULL AND NOT REGEXP_CONTAINS(CAST(o.OrderId AS STRING), r'_EX')
    
 ),
 order_agg AS (
@@ -81,7 +81,7 @@ FROM order_agg`),
       run(`WITH first_dates AS (
   SELECT CustomerId, MIN(DATE(OrderDate)) AS first_date
   FROM ${TBL}
-  WHERE Channel = 'Shopify' AND CustomerId IS NOT NULL
+  WHERE Channel = 'Shopify' AND CustomerId IS NOT NULL AND NOT REGEXP_CONTAINS(CAST(OrderId AS STRING), r'_EX')
   GROUP BY CustomerId
 ),
 period AS (
@@ -91,7 +91,7 @@ period AS (
   JOIN first_dates f USING (CustomerId)
   WHERE o.Channel = 'Shopify'
     AND DATE(o.OrderDate) BETWEEN '${s}' AND '${e}'
-    AND o.CustomerId IS NOT NULL
+    AND o.CustomerId IS NOT NULL AND NOT REGEXP_CONTAINS(CAST(o.OrderId AS STRING), r'_EX')
    
 )
 SELECT
@@ -114,7 +114,7 @@ ORDER BY day`),
       run(`WITH first_orders AS (
   SELECT CustomerId, DATE_TRUNC(MIN(DATE(OrderDate)), MONTH) AS cohort_month
   FROM ${TBL}
-  WHERE Channel = 'Shopify' AND CustomerId IS NOT NULL
+  WHERE Channel = 'Shopify' AND CustomerId IS NOT NULL AND NOT REGEXP_CONTAINS(CAST(OrderId AS STRING), r'_EX')
   GROUP BY CustomerId
 ),
 all_orders AS (
@@ -122,7 +122,7 @@ all_orders AS (
     COUNT(DISTINCT OrderId) AS order_count,
     SUM(SellingPrice_Exc_GST) AS revenue
   FROM ${TBL}
-  WHERE Channel = 'Shopify' AND CustomerId IS NOT NULL
+  WHERE Channel = 'Shopify' AND CustomerId IS NOT NULL AND NOT REGEXP_CONTAINS(CAST(OrderId AS STRING), r'_EX')
   GROUP BY CustomerId, order_month
 ),
 cohort_data AS (
@@ -161,7 +161,7 @@ order_items AS (
     SUM(t.SellingPrice_Exc_GST) AS item_rev
   FROM ${TBL} t
   LEFT JOIN pid_map pm ON TRIM(CAST(t.ProductId AS STRING)) = pm.productid
-  WHERE t.Channel = 'Shopify' AND t.CustomerId IS NOT NULL
+  WHERE t.Channel = 'Shopify' AND t.CustomerId IS NOT NULL AND NOT REGEXP_CONTAINS(CAST(t.OrderId AS STRING), r'_EX')
   GROUP BY CustomerId, OrderId, COALESCE(pm.masterskucode, CAST(t.masterskucode AS STRING))
 ),
 order_top_item AS (
@@ -213,7 +213,7 @@ LIMIT 500`),
     COUNT(DISTINCT OrderId) AS frequency,
     ROUND(SUM(SellingPrice_Exc_GST), 0) AS monetary
   FROM ${TBL}
-  WHERE Channel = 'Shopify' AND CustomerId IS NOT NULL
+  WHERE Channel = 'Shopify' AND CustomerId IS NOT NULL AND NOT REGEXP_CONTAINS(CAST(OrderId AS STRING), r'_EX')
     AND DATE(OrderDate) <= DATE('${e}')
   GROUP BY CustomerId
 ),
@@ -252,7 +252,7 @@ ORDER BY total_revenue DESC`),
       run(`WITH freq AS (
   SELECT CustomerId, COUNT(DISTINCT OrderId) AS orders
   FROM ${TBL}
-  WHERE Channel = 'Shopify' AND CustomerId IS NOT NULL
+  WHERE Channel = 'Shopify' AND CustomerId IS NOT NULL AND NOT REGEXP_CONTAINS(CAST(OrderId AS STRING), r'_EX')
     AND DATE(OrderDate) <= DATE('${e}')
   GROUP BY CustomerId
 )
@@ -268,7 +268,7 @@ ORDER BY MIN(orders)`),
       run(`WITH customer_ltv AS (
   SELECT CustomerId, ROUND(SUM(SellingPrice_Inc_GST), 0) AS monetary
   FROM ${TBL}
-  WHERE Channel = 'Shopify' AND CustomerId IS NOT NULL
+  WHERE Channel = 'Shopify' AND CustomerId IS NOT NULL AND NOT REGEXP_CONTAINS(CAST(OrderId AS STRING), r'_EX')
     AND DATE(OrderDate) <= DATE('${e}')
   GROUP BY CustomerId
 )
@@ -285,7 +285,7 @@ ORDER BY MIN(monetary)`),
       run(`WITH last_purchase AS (
   SELECT CustomerId, MAX(DATE(OrderDate)) AS last_date
   FROM ${TBL}
-  WHERE Channel = 'Shopify' AND CustomerId IS NOT NULL
+  WHERE Channel = 'Shopify' AND CustomerId IS NOT NULL AND NOT REGEXP_CONTAINS(CAST(OrderId AS STRING), r'_EX')
   GROUP BY CustomerId
 )
 SELECT
@@ -300,7 +300,7 @@ ORDER BY MIN(DATE_DIFF(DATE('${e}'), last_date, DAY))`),
 first_dates AS (
   SELECT CustomerId, MIN(DATE(OrderDate)) AS first_date
   FROM ${TBL}
-  WHERE Channel = 'Shopify' AND CustomerId IS NOT NULL
+  WHERE Channel = 'Shopify' AND CustomerId IS NOT NULL AND NOT REGEXP_CONTAINS(CAST(OrderId AS STRING), r'_EX')
   GROUP BY CustomerId
 ),
 order_agg AS (
@@ -314,7 +314,7 @@ order_agg AS (
   JOIN first_dates f USING (CustomerId)
   WHERE o.Channel = 'Shopify'
     AND DATE(o.OrderDate) BETWEEN '${s}' AND '${e}'
-    AND o.CustomerId IS NOT NULL
+    AND o.CustomerId IS NOT NULL AND NOT REGEXP_CONTAINS(CAST(o.OrderId AS STRING), r'_EX')
    
   GROUP BY o.OrderId, o.CustomerId
 ),
@@ -371,7 +371,7 @@ GROUP BY day ORDER BY day`),
       // Q12 — prev period KPIs
       run(`WITH first_dates AS (
   SELECT CustomerId, MIN(DATE(OrderDate)) AS first_date
-  FROM ${TBL} WHERE Channel = 'Shopify' AND CustomerId IS NOT NULL GROUP BY CustomerId
+  FROM ${TBL} WHERE Channel = 'Shopify' AND CustomerId IS NOT NULL AND NOT REGEXP_CONTAINS(CAST(OrderId AS STRING), r'_EX') GROUP BY CustomerId
 ),
 period AS (
   SELECT o.CustomerId, o.OrderId, DATE(o.OrderDate) AS order_date,
@@ -381,7 +381,7 @@ period AS (
     CASE WHEN LOWER(o.Order_Status) IN ('cir return','cir') THEN 1 ELSE 0 END AS is_cir,
     CASE WHEN LOWER(o.Order_Status) IN ('cancelled','cancel') THEN 1 ELSE 0 END AS is_cancelled
   FROM ${TBL} o JOIN first_dates f USING (CustomerId)
-  WHERE o.Channel = 'Shopify' AND DATE(o.OrderDate) BETWEEN '${ps}' AND '${pe}' AND o.CustomerId IS NOT NULL
+  WHERE o.Channel = 'Shopify' AND DATE(o.OrderDate) BETWEEN '${ps}' AND '${pe}' AND o.CustomerId IS NOT NULL AND NOT REGEXP_CONTAINS(CAST(o.OrderId AS STRING), r'_EX')
 ),
 order_agg AS (
   SELECT OrderId, first_date,
@@ -419,7 +419,7 @@ order_agg AS (
   SELECT CustomerId, OrderId, MIN(DATE(OrderDate)) AS order_date,
     SAFE_DIVIDE(SUM(Discount), NULLIF(SUM(Listing_Price), 0)) AS disc_ratio
   FROM ${TBL}
-  WHERE Channel = 'Shopify' AND CustomerId IS NOT NULL
+  WHERE Channel = 'Shopify' AND CustomerId IS NOT NULL AND NOT REGEXP_CONTAINS(CAST(OrderId AS STRING), r'_EX')
   GROUP BY CustomerId, OrderId
 ),
 ranked AS (
@@ -467,7 +467,7 @@ ORDER BY sort_order`),
 orders AS (
   SELECT CustomerId, OrderId, MIN(DATE(OrderDate)) AS order_date
   FROM ${TBL}
-  WHERE Channel = 'Shopify' AND CustomerId IS NOT NULL
+  WHERE Channel = 'Shopify' AND CustomerId IS NOT NULL AND NOT REGEXP_CONTAINS(CAST(OrderId AS STRING), r'_EX')
   GROUP BY CustomerId, OrderId
 ),
 ranked AS (
@@ -510,7 +510,7 @@ order_totals AS (
   SELECT CustomerId, OrderId, MIN(DATE(OrderDate)) AS order_date,
     SUM(SellingPrice_Exc_GST) AS order_rev
   FROM ${TBL}
-  WHERE Channel = 'Shopify' AND CustomerId IS NOT NULL
+  WHERE Channel = 'Shopify' AND CustomerId IS NOT NULL AND NOT REGEXP_CONTAINS(CAST(OrderId AS STRING), r'_EX')
   GROUP BY CustomerId, OrderId
 ),
 ranked AS (
@@ -553,7 +553,7 @@ order_cat AS (
   LEFT JOIN pid_map pm ON TRIM(CAST(t.ProductId AS STRING)) = pm.productid
   LEFT JOIN item_master im ON TRIM(CAST(t.masterskucode AS STRING)) = im.sku
   LEFT JOIN item_master im2 ON pm.masterskucode = im2.sku
-  WHERE t.Channel = 'Shopify' AND t.CustomerId IS NOT NULL
+  WHERE t.Channel = 'Shopify' AND t.CustomerId IS NOT NULL AND NOT REGEXP_CONTAINS(CAST(t.OrderId AS STRING), r'_EX')
   GROUP BY t.CustomerId, t.OrderId
 ),
 ranked AS (
@@ -600,7 +600,7 @@ order_cats AS (
   LEFT JOIN pid_map pm ON TRIM(CAST(t.ProductId AS STRING)) = pm.productid
   LEFT JOIN item_master im ON TRIM(CAST(t.masterskucode AS STRING)) = im.sku
   LEFT JOIN item_master im2 ON pm.masterskucode = im2.sku
-  WHERE t.Channel = 'Shopify' AND t.CustomerId IS NOT NULL
+  WHERE t.Channel = 'Shopify' AND t.CustomerId IS NOT NULL AND NOT REGEXP_CONTAINS(CAST(t.OrderId AS STRING), r'_EX')
     AND DATE(t.OrderDate) BETWEEN '${s}' AND '${e}'
   GROUP BY t.OrderId
 )
@@ -618,7 +618,7 @@ FROM order_cats`),
 all_orders AS (
   SELECT CustomerId, OrderId, MIN(DATE(OrderDate)) AS order_date
   FROM ${TBL}
-  WHERE Channel = 'Shopify' AND CustomerId IS NOT NULL
+  WHERE Channel = 'Shopify' AND CustomerId IS NOT NULL AND NOT REGEXP_CONTAINS(CAST(OrderId AS STRING), r'_EX')
     AND DATE(OrderDate) <= DATE('${e}')
   GROUP BY CustomerId, OrderId
 ),
@@ -654,7 +654,7 @@ customer_cats AS (
   LEFT JOIN pid_map pm ON TRIM(CAST(t.ProductId AS STRING)) = pm.productid
   LEFT JOIN item_master im ON TRIM(CAST(t.masterskucode AS STRING)) = im.sku
   LEFT JOIN item_master im2 ON pm.masterskucode = im2.sku
-  WHERE t.Channel = 'Shopify' AND t.CustomerId IS NOT NULL
+  WHERE t.Channel = 'Shopify' AND t.CustomerId IS NOT NULL AND NOT REGEXP_CONTAINS(CAST(t.OrderId AS STRING), r'_EX')
     AND DATE(t.OrderDate) <= DATE('${e}')
   GROUP BY t.CustomerId
 )
@@ -672,7 +672,7 @@ LEFT JOIN customer_cats cc USING (CustomerId)`),
       run(`WITH freq AS (
   SELECT CustomerId, COUNT(DISTINCT OrderId) AS orders
   FROM ${TBL}
-  WHERE Channel = 'Shopify' AND CustomerId IS NOT NULL
+  WHERE Channel = 'Shopify' AND CustomerId IS NOT NULL AND NOT REGEXP_CONTAINS(CAST(OrderId AS STRING), r'_EX')
     AND DATE(OrderDate) <= DATE('${e}')
   GROUP BY CustomerId
 )
@@ -703,7 +703,7 @@ all_orders AS (
     MIN(DATE(t.OrderDate)) AS order_date,
     SAFE_DIVIDE(SUM(t.Discount), NULLIF(SUM(t.Listing_Price), 0)) AS disc_pct
   FROM ${TBL} t
-  WHERE t.Channel = 'Shopify' AND t.CustomerId IS NOT NULL
+  WHERE t.Channel = 'Shopify' AND t.CustomerId IS NOT NULL AND NOT REGEXP_CONTAINS(CAST(t.OrderId AS STRING), r'_EX')
     AND DATE(t.OrderDate) <= DATE('${e}')
   GROUP BY t.CustomerId, t.OrderId
 ),
@@ -734,7 +734,7 @@ GROUP BY fo.first_order_type`),
 first_dates AS (
   SELECT CustomerId, MIN(DATE(OrderDate)) AS first_date
   FROM ${TBL}
-  WHERE Channel = 'Shopify' AND CustomerId IS NOT NULL
+  WHERE Channel = 'Shopify' AND CustomerId IS NOT NULL AND NOT REGEXP_CONTAINS(CAST(OrderId AS STRING), r'_EX')
   GROUP BY CustomerId
 ),
 item_master AS (
@@ -760,7 +760,7 @@ order_agg AS (
   LEFT JOIN pid_map pm ON TRIM(CAST(t.ProductId AS STRING)) = pm.productid
   LEFT JOIN item_master im ON TRIM(CAST(t.masterskucode AS STRING)) = im.sku
   LEFT JOIN item_master im2 ON pm.masterskucode = im2.sku
-  WHERE t.Channel = 'Shopify' AND t.CustomerId IS NOT NULL
+  WHERE t.Channel = 'Shopify' AND t.CustomerId IS NOT NULL AND NOT REGEXP_CONTAINS(CAST(t.OrderId AS STRING), r'_EX')
     AND DATE(t.OrderDate) BETWEEN '${s}' AND '${e}'
   GROUP BY t.OrderId, t.CustomerId, COALESCE(im.Category_Name, im2.Category_Name)
 ),
@@ -838,7 +838,7 @@ prev_stats AS (
     COUNT(DISTINCT OrderId) AS frequency,
     ROUND(SUM(SellingPrice_Exc_GST), 0) AS monetary
   FROM ${TBL}
-  WHERE Channel = 'Shopify' AND CustomerId IS NOT NULL AND DATE(OrderDate) <= DATE('${pe}')
+  WHERE Channel = 'Shopify' AND CustomerId IS NOT NULL AND NOT REGEXP_CONTAINS(CAST(OrderId AS STRING), r'_EX') AND DATE(OrderDate) <= DATE('${pe}')
   GROUP BY CustomerId
 ),
 prev_seg AS (
@@ -867,7 +867,7 @@ curr_stats AS (
     COUNT(DISTINCT OrderId) AS frequency,
     ROUND(SUM(SellingPrice_Exc_GST), 0) AS monetary
   FROM ${TBL}
-  WHERE Channel = 'Shopify' AND CustomerId IS NOT NULL AND DATE(OrderDate) <= DATE('${e}')
+  WHERE Channel = 'Shopify' AND CustomerId IS NOT NULL AND NOT REGEXP_CONTAINS(CAST(OrderId AS STRING), r'_EX') AND DATE(OrderDate) <= DATE('${e}')
   GROUP BY CustomerId
 ),
 curr_seg AS (
