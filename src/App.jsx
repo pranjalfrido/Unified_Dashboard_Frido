@@ -958,10 +958,12 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
                     <stop offset="95%" stopColor={C.red.tx} stopOpacity={0.02} />
                   </linearGradient>
                 </defs>
-                <CartesianGrid strokeDasharray="3 3" stroke={C.border} vertical={false} />
-                <XAxis dataKey="label" tick={{ fontSize: 9, fill: C.t3 }} axisLine={{ stroke: C.border }} tickLine={false} interval={0} ticks={trendData.length > 1 ? [trendData[0]?.label, trendData[Math.floor((trendData.length-1)/3)]?.label, trendData[Math.floor((trendData.length-1)*2/3)]?.label, trendData[trendData.length-1]?.label].filter(Boolean) : [trendData[0]?.label]} />
-                <YAxis yAxisId="left" tick={isMobile ? false : { fontSize: 9, fill: C.t3 }} axisLine={{ stroke: C.border }} tickLine={false} width={isMobile ? 0 : 36} tickFormatter={v => v >= 1000 ? `${(v/1000).toFixed(0)}K` : v} />
-                <YAxis yAxisId="right" orientation="right" tick={isMobile ? false : { fontSize: 9, fill: C.t3 }} axisLine={{ stroke: C.border }} tickLine={false} width={isMobile ? 0 : 36} tickFormatter={v => `${v}%`} />
+                {!isMobile && <CartesianGrid strokeDasharray="3 3" stroke={C.border} vertical={false} />}
+                <XAxis dataKey="label" tick={{ fontSize: isMobile ? 9 : 10, fill: C.t3 }} axisLine={isMobile ? { stroke: C.border } : undefined} tickLine={false} interval={0} ticks={trendData.length > 1 ? [trendData[0]?.label, trendData[Math.floor((trendData.length-1)/3)]?.label, trendData[Math.floor((trendData.length-1)*2/3)]?.label, trendData[trendData.length-1]?.label].filter(Boolean) : [trendData[0]?.label]} />
+                {isMobile
+                  ? <><YAxis yAxisId="left" tick={false} axisLine={false} tickLine={false} width={0} /><YAxis yAxisId="right" orientation="right" tick={false} axisLine={false} tickLine={false} width={0} /></>
+                  : <><YAxis yAxisId="left" tick={{ fontSize: 9, fill: C.t3 }} tickLine={false} tickFormatter={v => v >= 1000 ? `${(v/1000).toFixed(0)}K` : v} /><YAxis yAxisId="right" orientation="right" tick={{ fontSize: 9, fill: C.t3 }} tickLine={false} tickFormatter={v => `${v}%`} /></>
+                }
                 <Tooltip content={({ active, payload, label }) => {
                   if (!active || !payload?.length) return null
                   const get = key => payload.find(p => p.dataKey === key)?.value

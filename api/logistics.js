@@ -50,8 +50,8 @@ export default async function handler(req, res) {
   if (pickupState) filters.push(`LOWER(c.pickup_state) = LOWER('${pickupState.replace(/'/g, "\\'")}')`  )
   if (dropState) filters.push(`LOWER(c.drop_state) = LOWER('${dropState.replace(/'/g, "\\'")}')`)
   if (dropCity) filters.push(`LOWER(c.drop_city) = LOWER('${dropCity.replace(/'/g, "\\'")}')`)
-  if (category?.length) filters.push(`COALESCE(im.Category_Name, 'Others') IN (${category.map(v => `'${v.replace(/'/g, "\\'")}'`).join(',')})`)
-  if (subCategory?.length) filters.push(`COALESCE(im.Sub_category, 'Mixed Shipments') IN (${subCategory.map(v => `'${v.replace(/'/g, "\\'")}'`).join(',')})`)
+  if (category?.length) filters.push(`COALESCE(im.Category_Name, 'Others') IN (${category.map(v => `'${String(v).replace(/'/g, "\\'")}'`).join(',')})`)
+  if (subCategory?.length) filters.push(`COALESCE(im.Sub_category, 'Mixed Shipments') IN (${subCategory.map(v => `'${String(v).replace(/'/g, "\\'")}'`).join(',')})`)
 
   const whereClause = filters.length ? `AND ${filters.join(' AND ')}` : ''
 
