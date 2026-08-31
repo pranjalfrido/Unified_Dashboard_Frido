@@ -12190,7 +12190,7 @@ const CP = {
 
 function CpCard({ title, sub, action, children }) {
   return (
-    <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, width: '100%', boxSizing: 'border-box', overflow: 'hidden' }}>
+    <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, width: '100%', height: '100%', boxSizing: 'border-box', overflow: 'hidden' }}>
       <div style={{ borderBottom: `1px solid ${C.border}`, padding: '10px 16px', display: 'flex', flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
         <div>
           <span style={{ fontWeight: 700, fontSize: 12, color: C.t1, textTransform: 'uppercase', letterSpacing: '.06em' }}>{title}</span>
@@ -12687,7 +12687,6 @@ function CustomerPage({ filters, activeTab: activeTabProp, setActiveTab: setActi
                 )
               })()}
 
-              {insightText && <div style={{ fontSize: 12, color: C.t3, padding: '4px 2px', fontStyle: 'italic' }}>{insightText}</div>}
 
               {/* Metric tables */}
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
@@ -12765,10 +12764,10 @@ function CustomerPage({ filters, activeTab: activeTabProp, setActiveTab: setActi
                         </div>
                       </div>
                     </div>
-                    <div style={{ padding: '14px 16px' }}>
+                    <div style={{ padding: '14px 0' }}>
                       <ResponsiveContainer width="100%" height={280}>
                         {ovChartView === 'revenue' ? (
-                          <ComposedChart data={chartData} margin={{ top: 4, right: 50, bottom: 4, left: 0 }}>
+                          <ComposedChart data={chartData} margin={{ top: 4, right: 6, bottom: 4, left: 10 }}>
                             <CartesianGrid stroke="#F0EADC" />
                             <XAxis dataKey="label" tick={{ fontSize: 10, fill: '#B8AE93' }} />
                             <YAxis yAxisId="rev" tick={{ fontSize: 10, fill: '#B8AE93' }} tickFormatter={v => fmtBig(v)} />
@@ -12781,7 +12780,7 @@ function CustomerPage({ filters, activeTab: activeTabProp, setActiveTab: setActi
                             <Line yAxisId="roas" type="monotone" dataKey="roas" name="RoAS" stroke="#9E9484" strokeWidth={2} dot={false} />
                           </ComposedChart>
                         ) : ovChartView === 'customers' ? (
-                          <ComposedChart data={chartData} margin={{ top: 4, right: 50, bottom: 4, left: 0 }}>
+                          <ComposedChart data={chartData} margin={{ top: 4, right: 6, bottom: 4, left: 10 }}>
                             <CartesianGrid stroke="#F0EADC" />
                             <XAxis dataKey="label" tick={{ fontSize: 10, fill: '#B8AE93' }} />
                             <YAxis yAxisId="cust" tick={{ fontSize: 10, fill: '#B8AE93' }} tickFormatter={v => fmtN(v)} />
@@ -12793,7 +12792,7 @@ function CustomerPage({ filters, activeTab: activeTabProp, setActiveTab: setActi
                             <Line yAxisId="cac" type="monotone" dataKey="cac" name="CAC" stroke="#9E9484" strokeWidth={2} dot={false} />
                           </ComposedChart>
                         ) : (
-                          <ComposedChart data={chartData} margin={{ top: 4, right: 50, bottom: 4, left: 0 }}>
+                          <ComposedChart data={chartData} margin={{ top: 4, right: 6, bottom: 4, left: 10 }}>
                             <CartesianGrid stroke="#F0EADC" />
                             <XAxis dataKey="label" tick={{ fontSize: 10, fill: '#B8AE93' }} />
                             <YAxis yAxisId="aov" tick={{ fontSize: 10, fill: '#B8AE93' }} tickFormatter={v => fmt(v)} />
@@ -13027,7 +13026,7 @@ function CustomerPage({ filters, activeTab: activeTabProp, setActiveTab: setActi
           const bestDow = dowData.reduce((a, b) => b.avg > a.avg ? b : a, dowData[0] || { day: '-', avg: 0 })
           const avgDowAll = dowData.reduce((s, d) => s + d.avg, 0) / (dowData.filter(d => d.avg > 0).length || 1)
           const dowInsight = bestDow.avg > 0 && avgDowAll > 0
-            ? `${bestDow.day} has the highest avg new customer acquisition at ${fmtN(bestDow.avg)}/day — ${((bestDow.avg/avgDowAll-1)*100).toFixed(0)}% above the weekly average. Based on ${dowWeeks} complete week${dowWeeks !== 1 ? 's' : ''}.`
+            ? `${bestDow.day} peaks at ${fmtN(bestDow.avg)}/day — ${((bestDow.avg/avgDowAll-1)*100).toFixed(0)}% above avg (${dowWeeks}w)`
             : null
 
           // ── Marginal efficiency scatter ──
@@ -13942,8 +13941,9 @@ function CustomerPage({ filters, activeTab: activeTabProp, setActiveTab: setActi
                 </CpCard>
               </div>
 
-              {/* Basket Composition */}
+              {/* Basket Composition + Cross-Category + Top Category Pairs — one row */}
               {basket.totalOrders > 0 && (
+              <div style={{ display: 'grid', gridTemplateColumns: '500px 430px 465px', alignItems: 'stretch', gap: 16, alignItems: 'start' }}>
                 <CpCard title="Basket Composition" sub="How often do customers buy multiple categories in one order?">
                   {(() => {
                     const singlePct = basket.totalOrders > 0 ? (basket.singleCatOrders / basket.totalOrders * 100).toFixed(1) : 0
@@ -13953,6 +13953,7 @@ function CustomerPage({ filters, activeTab: activeTabProp, setActiveTab: setActi
                       { name: 'Multi-category',  value: basket.multiCatOrders  || 0 },
                     ]
                     return (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
                       <div style={{ display: 'flex', gap: 24, alignItems: 'center' }}>
                         {/* Donut */}
                         <div style={{ position: 'relative', flexShrink: 0, width: 140, height: 140 }}>
@@ -13992,14 +13993,15 @@ function CustomerPage({ filters, activeTab: activeTabProp, setActiveTab: setActi
                             </div>
                           ))}
                         </div>
+                      </div>
                         {/* KPI tiles */}
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                        <div style={{ display: 'flex', flexDirection: 'row', gap: 8 }}>
                           {[
                             { label: 'Avg Categories / Order', value: basket.avgCategoriesPerOrder?.toFixed(2) },
                             { label: 'Avg SKUs / Order',       value: basket.avgSkusPerOrder?.toFixed(2) },
                             { label: 'Avg Items / Order',      value: basket.avgItemsPerOrder?.toFixed(1) },
                           ].map(({ label, value }) => (
-                            <div key={label} style={{ textAlign: 'center', background: CP.head, borderRadius: 8, padding: '7px 16px', minWidth: 110 }}>
+                            <div key={label} style={{ textAlign: 'center', background: CP.head, borderRadius: 8, padding: '7px 16px', flex: 1 }}>
                               <div style={{ fontSize: 17, fontWeight: 800, color: CP.ink, fontFamily: 'JetBrains Mono, monospace' }}>{value || '—'}</div>
                               <div style={{ fontSize: 9, color: CP.ink3, marginTop: 2, textTransform: 'uppercase', letterSpacing: '.04em' }}>{label}</div>
                             </div>
@@ -14009,11 +14011,9 @@ function CustomerPage({ filters, activeTab: activeTabProp, setActiveTab: setActi
                     )
                   })()}
                 </CpCard>
-              )}
 
-              {/* Multi-cat customer stat + Top category pairs */}
-              {pbKpis.totalCustomers > 0 && crossSell.length > 0 && (
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr', gap: 16 }}>
+              {/* Cross-Category + Top Category Pairs — same grid row */}
+              {pbKpis.totalCustomers > 0 && crossSell.length > 0 && (<>
 
                   {/* Multi-category customers */}
                   <CpCard title="Cross-Category Customers" sub="Customers who bought from 2+ categories">
@@ -14045,23 +14045,16 @@ function CustomerPage({ filters, activeTab: activeTabProp, setActiveTab: setActi
                       </div>
                       {/* Extra stats */}
                       <div style={{ display: 'flex', gap: 8, borderTop: `1px solid ${CP.lineSoft}`, paddingTop: 10 }}>
-                        <div style={{ flex: 1, textAlign: 'center' }}>
-                          <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 14, fontWeight: 700, color: CP.ink }}>{pbKpis.avgDaysBetweenOrders}d</div>
-                          <div style={{ fontSize: 9, color: CP.ink3, textTransform: 'uppercase', letterSpacing: '.04em', marginTop: 1 }}>Avg days between orders</div>
-                        </div>
-                        <div style={{ flex: 1, textAlign: 'center' }}>
-                          <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 14, fontWeight: 700, color: CP.ink }}>{pbKpis.avgOrdersPerCustomer?.toFixed(1)}×</div>
-                          <div style={{ fontSize: 9, color: CP.ink3, textTransform: 'uppercase', letterSpacing: '.04em', marginTop: 1 }}>Avg orders / customer</div>
-                        </div>
-                        <div style={{ flex: 1, textAlign: 'center' }}>
-                          <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 14, fontWeight: 700, color: CP.ink }}>{pbKpis.repeatRate}%</div>
-                          <div style={{ fontSize: 9, color: CP.ink3, textTransform: 'uppercase', letterSpacing: '.04em', marginTop: 1 }}>Repeat rate</div>
-                        </div>
-                      </div>
-                      <div style={{ fontSize: 11, color: CP.ink3, fontStyle: 'italic' }}>
-                        {pbKpis.multiCatRate >= 20
-                          ? `Strong cross-sell — ${pbKpis.multiCatRate}% of customers explore multiple categories.`
-                          : `Cross-sell opportunity — only ${pbKpis.multiCatRate}% of customers buy across categories.`}
+                        {[
+                          { value: pbKpis.avgDaysBetweenOrders ? `${pbKpis.avgDaysBetweenOrders}d` : '—', label: 'Avg Days Between Orders' },
+                          { value: pbKpis.avgOrdersPerCustomer != null ? `${(+pbKpis.avgOrdersPerCustomer).toFixed(1)}×` : '—', label: 'Avg Orders / Customer' },
+                          { value: pbKpis.repeatRate != null ? `${pbKpis.repeatRate}%` : '—', label: 'Repeat Rate' },
+                        ].map(({ value, label }) => (
+                          <div key={label} style={{ flex: 1, textAlign: 'center', background: CP.head, borderRadius: 8, padding: '7px 10px' }}>
+                            <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 17, fontWeight: 800, color: CP.ink }}>{value}</div>
+                            <div style={{ fontSize: 9, color: CP.ink3, textTransform: 'uppercase', letterSpacing: '.04em', marginTop: 2 }}>{label}</div>
+                          </div>
+                        ))}
                       </div>
                     </div>
                   </CpCard>
@@ -14100,7 +14093,8 @@ function CustomerPage({ filters, activeTab: activeTabProp, setActiveTab: setActi
                     </table>
                   </CpCard>
 
-                </div>
+                </>)}
+              </div>
               )}
             </div>
           )
@@ -15423,7 +15417,7 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
               <InventoryPage onTopbarDateControl={setInventoryDateControl} tab={invTab} setTab={setInvTab} />
             </div>
           )}
-          {page === 'customer' && data && (!allowedTabs || allowedTabs.includes('customer')) && (
+          {page === 'customer' && (!allowedTabs || allowedTabs.includes('customer')) && (
             <div className="page-scroll" style={{ padding: 0 }}>
               <CustomerPage filters={filters} activeTab={customerTab} setActiveTab={setCustomerTab} />
             </div>
