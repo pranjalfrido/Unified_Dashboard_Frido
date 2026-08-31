@@ -6382,7 +6382,7 @@ function ShopifyGeoRichTable({ title, rows, firstKey, firstLabel, formatFirst, r
   const handleExport = () => {
     const csvRows = sortedRows.map(r => ({
       [firstLabel]: formatFirst ? formatFirst(r[firstKey]) : r[firstKey],
-      Revenue: Math.round(r.rev), 'Share %': +r.sharePct.toFixed(1), 'Cum %': +r.cumPct.toFixed(1), Orders: r.orders,
+      Revenue: Math.round(r.rev), 'Share %': +((r.sharePct||0).toFixed(1)), 'Cum %': +((r.cumPct||0).toFixed(1)), Orders: r.orders,
       ...(showAOV ? { AOV: Math.round(r.aov || 0) } : {}),
       ...(showASP ? { ASP: Math.round(r.asp || 0) } : {}),
       'vs Prev %': r.mom != null ? +r.mom.toFixed(1) : '',
@@ -6393,13 +6393,13 @@ function ShopifyGeoRichTable({ title, rows, firstKey, firstLabel, formatFirst, r
 
   const ALL_COLUMNS = [
     { id: 'rev', label: 'Revenue', sortKey: 'rev', width: 9,
-      row: r => <td style={tdStyle}>{shareMode === 'pct' ? `${r.sharePct.toFixed(1)}%` : fmt(r.rev)}</td>,
+      row: r => <td style={tdStyle}>{shareMode === 'pct' ? `${(r.sharePct || 0).toFixed(1)}%` : fmt(r.rev)}</td>,
       total: () => <td style={totalTdStyle}>{shareMode === 'pct' ? '100%' : fmt(tot.rev)}</td> },
     { id: 'orders', label: 'Orders', sortKey: 'orders', width: 9,
       row: r => <td style={tdStyle}>{shareMode === 'pct' ? `${tot.orders > 0 ? (r.orders / tot.orders * 100).toFixed(1) : '0.0'}%` : fmtN(r.orders)}</td>,
       total: () => <td style={totalTdStyle}>{shareMode === 'pct' ? '100%' : fmtN(tot.orders)}</td> },
     { id: 'cumPct', label: 'Cum %', sortKey: 'cumPct', width: 9,
-      row: r => <td style={tdStyle}>{r.cumPct.toFixed(1)}%</td>, total: () => <td style={totalTdStyle}>—</td> },
+      row: r => <td style={tdStyle}>{(r.cumPct || 0).toFixed(1)}%</td>, total: () => <td style={totalTdStyle}>—</td> },
     ...(showAOV ? [{ id: 'aov', label: 'AOV', sortKey: 'aov', width: 9,
       row: r => <td style={tdStyle}>₹{Math.round(r.aov || 0).toLocaleString('en-IN')}</td>, total: () => <td style={totalTdStyle}>₹{Math.round(totAov).toLocaleString('en-IN')}</td> }] : []),
     ...(showASP ? [{ id: 'asp', label: 'ASP', sortKey: 'asp', width: 9,
