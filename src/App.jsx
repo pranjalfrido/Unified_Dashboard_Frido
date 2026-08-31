@@ -947,7 +947,7 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
             </div>
             <div style={{ height: 1, background: C.border, margin: '10px 0 6px' }} />
             <ResponsiveContainer width="100%" height={isMobile ? 180 : 220}>
-              <ComposedChart data={trendData} margin={isMobile ? { top: 4, right: 20, left: 20, bottom: 0 } : { top: 4, right: -20, left: -30, bottom: 0 }}>
+              <ComposedChart data={trendData} margin={isMobile ? { top: 4, right: 20, left: 20, bottom: 0 } : { top: 4, right: 44, left: 10, bottom: 0 }}>
                 <defs>
                   <linearGradient id="lgDel" x1="0" y1="0" x2="0" y2="1">
                     <stop offset="5%" stopColor="#FFD600" stopOpacity={0.25} />
@@ -959,8 +959,8 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
                   </linearGradient>
                 </defs>
                 <XAxis dataKey="label" tick={{ fontSize: 9, fill: C.t3 }} axisLine={{ stroke: C.border }} tickLine={false} interval={0} ticks={trendData.length > 1 ? [trendData[0]?.label, trendData[Math.floor((trendData.length-1)/3)]?.label, trendData[Math.floor((trendData.length-1)*2/3)]?.label, trendData[trendData.length-1]?.label].filter(Boolean) : [trendData[0]?.label]} />
-                <YAxis yAxisId="left" tick={false} axisLine={false} tickLine={false} width={0} />
-                <YAxis yAxisId="right" orientation="right" tick={false} axisLine={false} tickLine={false} width={0} />
+                <YAxis yAxisId="left" tick={isMobile ? false : { fontSize: 9, fill: C.t3 }} axisLine={false} tickLine={false} width={isMobile ? 0 : 36} tickFormatter={v => v >= 1000 ? `${(v/1000).toFixed(0)}K` : v} />
+                <YAxis yAxisId="right" orientation="right" tick={isMobile ? false : { fontSize: 9, fill: C.t3 }} axisLine={false} tickLine={false} width={isMobile ? 0 : 36} tickFormatter={v => `${v}%`} />
                 <Tooltip content={({ active, payload, label }) => {
                   if (!active || !payload?.length) return null
                   const get = key => payload.find(p => p.dataKey === key)?.value
