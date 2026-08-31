@@ -95,15 +95,19 @@ export function CategoryRevenueCard({ catRows, subCatRows, skuMap, totalRev, vie
     onClick = r => onSelectSku?.(r.name)
   }
 
+  const ROW_H = 32
+  const CARD_CHROME = 52 // title row + padding
+  const mobFixedH = mobCard ? (catRows.length * ROW_H + CARD_CHROME) : undefined
+
   return (
-    <Card fill title="Category Revenue" style={{ height: mobCard ? 'auto' : height, alignSelf: 'start' }} action={
+    <Card fill title="Category Revenue" style={{ height: mobCard ? mobFixedH : height, alignSelf: 'start' }} action={
       <div style={{ display: 'flex', gap: 4 }}>
         {[{ id: 'category', label: 'Category' }, { id: 'subcategory', label: 'Product' }, ...(window.innerWidth > 768 ? [{ id: 'sku', label: 'SKU Code' }] : [])].map(v => (
           <button key={v.id} onClick={() => setView(v.id)} className="cat-rev-btn" style={{ fontSize: 11, fontWeight: 600, padding: '3px 10px', borderRadius: 5, border: `1.5px solid ${view === v.id ? C.acm : C.border}`, background: view === v.id ? C.acc : 'transparent', color: view === v.id ? C.t1 : C.t2, cursor: 'pointer', fontFamily: 'var(--font)' }}>{v.label}</button>
         ))}
       </div>
     }>
-      <div style={mobCard ? {} : { height: '100%', overflowY: 'auto' }}>
+      <div style={{ height: '100%', overflowY: 'auto' }}>
         {rows.map((r, i) => {
           const isSelected = selectedName ? selectedName === r.name : false
           return <HBar key={`${r.category || ''}::${r.name}`} dot={DOTS[i % DOTS.length]} label={r.name} labelWidth={labelWidth} width={(r.rev / maxRev) * 100} value={fmt(r.rev)} pctVal={totalRev > 0 ? pct(r.rev, totalRev) : '—'} isSelected={isSelected} onClick={() => onClick(r)} />

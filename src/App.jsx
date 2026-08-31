@@ -3059,11 +3059,11 @@ function MobileSalesFilterPanel({ activeTab, setActiveTab, filters, setFilters, 
       {/* Footer */}
       <div style={{ display: 'flex', gap: 8, padding: '12px 14px', borderTop: `1px solid ${PV.border}`, flexShrink: 0 }}>
         <button onClick={handleClearAll} disabled={totalActive === 0}
-          style={{ flex: 1, padding: '10px', borderRadius: 10, border: `1px solid ${PV.border}`, background: 'transparent', color: totalActive > 0 ? PV.ink : PV.sub, fontSize: 13, cursor: totalActive > 0 ? 'pointer' : 'default', fontFamily: 'inherit', opacity: totalActive > 0 ? 1 : 0.5 }}>
+          style={{ flex: 1, padding: '10px', borderRadius: 10, border: `1px solid ${PV.border}`, background: 'transparent', color: totalActive > 0 ? PV.ink : PV.sub, fontSize: 13, fontWeight: 600, cursor: totalActive > 0 ? 'pointer' : 'default', fontFamily: 'inherit', opacity: totalActive > 0 ? 1 : 0.5 }}>
           Reset
         </button>
         <button onClick={onClose}
-          style={{ flex: 2, padding: '10px', borderRadius: 10, border: 'none', background: PV.ink, color: '#fff', fontSize: 13, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>
+          style={{ flex: 1, padding: '10px', borderRadius: 10, border: 'none', background: PV.ink, color: '#fff', fontSize: 13, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>
           {totalActive > 0 ? `Apply (${totalActive})` : 'Done'}
         </button>
       </div>
@@ -4384,8 +4384,8 @@ function SearchableSelect({ options, value, onChange, placeholder, dropdownWidth
 }
 
 const CHART_METRICS = [
+  { id: 'rev', label: 'Gross Revenue', key: ch => ch },
   { id: 'net_rev', label: 'Net Revenue', key: ch => ch + '_net' },
-  { id: 'rev', label: 'Gross Revenue Inc GST', key: ch => ch },
   { id: 'units', label: 'Units', key: ch => ch + '_u' },
 ]
 const CHART_TYPES = [
@@ -4395,7 +4395,7 @@ const CHART_TYPES = [
 ]
 
 function ChannelTrendCard({ dailyArr, channels, rangeStart, rangeEnd }) {
-  const [metric, setMetric] = useState('net_rev')
+  const [metric, setMetric] = useState('rev')
   const chartType = 'line'
   const m = CHART_METRICS.find(x => x.id === metric)
   const dataKey = m.key
@@ -4613,7 +4613,7 @@ function DailyChannelTable({ dailyArr, channels, nDays = 7, rangeStart, rangeEnd
   const thStyleL = { ...thStyle, textAlign: 'left' }
   const tdStyle = { fontSize: 11, padding: '5px 10px', textAlign: 'left', color: C.t1, borderBottom: `1px solid ${C.border}`, fontFamily: 'var(--mono)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }
   const tdStyleL = { ...tdStyle, textAlign: 'left', fontFamily: 'inherit' }
-  const totalTdStyle = { ...tdStyle, padding: '7px 10px', fontWeight: 700, color: C.t1, borderBottom: 'none' }
+  const totalTdStyle = { ...tdStyle, fontSize: 10, padding: '7px 10px', fontWeight: 700, color: C.t1, borderBottom: 'none' }
   const stickyCol = isMob ? { position: 'sticky', left: 0, background: C.card, zIndex: 2 } : {}
 
   const handleExport = () => {
@@ -4677,11 +4677,11 @@ function DailyChannelTable({ dailyArr, channels, nDays = 7, rangeStart, rangeEnd
               </tr>
             ))}
           </tbody>
-          <tfoot>
+          <tfoot style={{ position: 'sticky', bottom: 0, zIndex: 2 }}>
             <tr style={{ background: C.bg, borderTop: `1.5px solid ${C.border}` }}>
               <td style={{ ...totalTdStyle, textAlign: 'left', ...stickyCol, background: C.bg }}>Total</td>
-              {orderedChannels.map(ch => <td key={ch} style={totalTdStyle}>{fmtVal(colTotals[ch])}</td>)}
-              <td style={totalTdStyle}>{fmtVal(grandTotal)}</td>
+              {orderedChannels.map(ch => <td key={ch} style={{ ...totalTdStyle, background: C.bg }}>{fmtVal(colTotals[ch])}</td>)}
+              <td style={{ ...totalTdStyle, background: C.bg }}>{fmtVal(grandTotal)}</td>
             </tr>
           </tfoot>
         </table>
@@ -4935,7 +4935,7 @@ function AmazonCategoryMatrix({ channels, catChannel, subCatChannel, skuChannel,
       <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
         <input type="text" value={search} onChange={e => setSearch(e.target.value)} placeholder="Search…" style={{ width: 180, padding: '3px 8px', border: `1px solid ${C.border}`, borderRadius: 6, fontSize: 11, color: C.t1, background: C.bg, outline: 'none' }} />
         <div style={{ display: 'flex', gap: 3 }}>
-          {[['rev','Revenue'],['units','Units'],['orders','Orders']].map(([k,l]) => (
+          {[['rev','Gross Rev'],['units','Units'],['orders','Orders']].map(([k,l]) => (
             <button key={k} onClick={() => setMetric(k)} style={{ fontSize: 10, fontWeight: metric===k?700:500, padding: '2px 8px', borderRadius: 4, border: `1px solid ${metric===k?C.acm:C.border}`, background: metric===k?C.acc:'transparent', color: C.t1, cursor: 'pointer', fontFamily: 'var(--font)' }}>{l}</button>
           ))}
         </div>
@@ -5724,7 +5724,7 @@ function RegionTierDonutRow({ regionRows, tierRows }) {
     return (
       <Card title={title} action={
         <div style={{ display: 'flex', gap: 3 }}>
-          {[['rev','Revenue'],['orders','Orders'],['units','Units']].map(([k,l]) => (
+          {[['rev','Gross Rev'],['orders','Orders'],['units','Units']].map(([k,l]) => (
             <button key={k} onClick={() => setMetric(k)} style={selStyle(metric === k)}>{l}</button>
           ))}
         </div>
@@ -5785,11 +5785,12 @@ function ChannelShareTable({ sortedCh, prevChMap = {}, boxHeight }) {
       <div style={{ height: '100%', overflowY: 'auto', display: 'flex', flexDirection: 'column' }}>
         {rows.map(r => {
           const chg = r.prevRev > 1 ? ((r.rev - r.prevRev) / r.prevRev * 100) : null
+          const logoSize = r.ch === 'offline_sales' ? 22 : 18
           return (
             <div key={r.ch} style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '5px 0', borderBottom: `1px solid ${C.border}`, flex: '1 1 auto', minHeight: 30 }}>
               {CHANNEL_LOGOS[r.ch]
-                ? <img src={CHANNEL_LOGOS[r.ch]} alt={r.ch} style={{ width: r.ch === 'offline_sales' ? 22 : 18, height: r.ch === 'offline_sales' ? 22 : 18, objectFit: 'contain', borderRadius: 4, flexShrink: 0, background: r.ch === 'CRED' ? '#1a1a1a' : '#f5f5f5', padding: r.ch === 'CRED' ? 2 : 0 }} />
-                : <span style={{ width: 18, height: 18, borderRadius: 4, background: C.ch[r.ch] || C.acm, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 8, fontWeight: 800, color: '#fff' }}>{r.ch.charAt(0)}</span>}
+                ? <img src={CHANNEL_LOGOS[r.ch]} alt={r.ch} style={{ width: logoSize, height: logoSize, objectFit: 'contain', borderRadius: 3, flexShrink: 0, background: r.ch === 'CRED' ? '#1a1a1a' : '#f5f5f5', padding: r.ch === 'CRED' ? 1 : 0 }} />
+                : <span style={{ width: logoSize, height: logoSize, borderRadius: 3, background: C.ch[r.ch] || C.acm, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 7, fontWeight: 800, color: '#fff' }}>{r.ch.charAt(0)}</span>}
               <span style={{ fontSize: 12, color: C.t2, width: 90, flexShrink: 0 }}>{chLabel(r.ch)}</span>
               <div className="mob-hidden" style={{ flex: 1, height: 5, background: C.bg, borderRadius: 3 }}>
                 <div style={{ height: '100%', borderRadius: 3, background: '#FFD600', width: `${(r.rev / maxRev) * 100}%`, transition: 'width .5s' }} />
@@ -6048,8 +6049,8 @@ function AllTab({ data, rangeStart, rangeEnd }) {
         })
         return (
           <div className="g-2" style={{ alignItems: 'stretch' }}>
-            <ShopifyGeoRichTable title="Top States" rows={enrichedStates} firstKey="state" firstLabel="State" formatFirst={v => v ? v.charAt(0).toUpperCase() + v.slice(1).toLowerCase() : v} showRTO={false} showAOV={true} showASP={false} />
-            <ShopifyGeoRichTable title="Top Cities" rows={enrichedCities} firstKey="city" firstLabel="City" formatFirst={v => v ? v.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' ') : v} showRTO={false} showAOV={true} showASP={false} />
+            <ShopifyGeoRichTable title="Top States" rows={enrichedStates} firstKey="state" firstLabel="State" formatFirst={v => v ? v.charAt(0).toUpperCase() + v.slice(1).toLowerCase() : v} showRTO={false} showAOV={false} showASP={false} />
+            <ShopifyGeoRichTable title="Top Cities" rows={enrichedCities} firstKey="city" firstLabel="City" formatFirst={v => v ? v.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' ') : v} showRTO={false} showAOV={false} showASP={false} />
           </div>
         )
       })()}
@@ -6231,7 +6232,7 @@ function ShopifyGeoDonutRow({ regionRows, tierRows, topStates, allStateRows, use
     <div style={{ flex: 1, minWidth: 0 }}>
       <Card title="Geography Breakdown" action={
         <div style={{ display: 'flex', gap: 3 }}>
-          {(useUnits ? [['rev','Revenue'],['units','Units']] : [['rev','Revenue'],['orders','Orders']]).map(([k,l]) => <button key={k} onClick={() => setMetric(k)} style={selStyle(metric === k)}>{l}</button>)}
+          {(useUnits ? [['rev','Gross Rev'],['units','Units']] : [['rev','Gross Rev'],['orders','Orders']]).map(([k,l]) => <button key={k} onClick={() => setMetric(k)} style={selStyle(metric === k)}>{l}</button>)}
         </div>
       }>
         <div style={{ display: 'flex', gap: 24 }}>
@@ -6273,8 +6274,11 @@ function GeoToggleDonutCard({ regionRows, tierRows, note, boxHeight }) {
   const HEADER_CHROME = 34 + 38 // Card title row + toggle-button row incl. margins
   const fixedContentH = boxHeight ? boxHeight - HEADER_CHROME : naturalContentH
 
+  const isMobGeo = typeof window !== 'undefined' && window.innerWidth <= 768
+  const mobGeoMinH = isMobGeo ? (130 + 10 + Math.max(regionData.length, 1) * 26 + 80) : undefined
+
   return (
-    <Card title="Geography Breakdown" note={note} style={boxHeight && typeof window !== 'undefined' && window.innerWidth > 768 ? { height: boxHeight, alignSelf: 'start' } : undefined}>
+    <Card title="Geography Breakdown" note={note} style={isMobGeo ? { minHeight: mobGeoMinH } : (boxHeight ? { height: boxHeight, alignSelf: 'start' } : undefined)}>
       <div style={{ display: 'flex', gap: 3, marginBottom: 10 }}>
         <button onClick={() => setGeoView('region')} style={{ ...btnStyle(geoView === 'region'), flex: 1 }}>By Region</button>
         <button onClick={() => setGeoView('tier')} style={{ ...btnStyle(geoView === 'tier'), flex: 1 }}>By City Tier</button>
@@ -6340,6 +6344,7 @@ function TopSubCatBar({ subCatRows }) {
 
 function ShopifyGeoRichTable({ title, rows, firstKey, firstLabel, formatFirst, rtoLabel = 'RTO %', showAOV = true, showRTO = true, showASP = false, note }) {
   const isMob = useIsMobile()
+  const [shareMode, setShareMode] = useState('pct') // 'pct' | 'count'
   const table = useSortableTable('rev')
   const getters = {
     [firstKey]: r => r[firstKey], rev: r => r.rev, sharePct: r => r.sharePct, cumPct: r => r.cumPct, orders: r => r.orders,
@@ -6388,13 +6393,13 @@ function ShopifyGeoRichTable({ title, rows, firstKey, firstLabel, formatFirst, r
 
   const ALL_COLUMNS = [
     { id: 'rev', label: 'Revenue', sortKey: 'rev', width: 9,
-      row: r => <td style={tdStyle}>{fmt(r.rev)}</td>, total: () => <td style={totalTdStyle}>{fmt(tot.rev)}</td> },
-    { id: 'sharePct', label: '% Share', sortKey: 'sharePct', width: 9,
-      row: r => <td style={tdStyle}>{r.sharePct.toFixed(1)}%</td>, total: () => <td style={totalTdStyle}>100%</td> },
+      row: r => <td style={tdStyle}>{shareMode === 'pct' ? `${r.sharePct.toFixed(1)}%` : fmt(r.rev)}</td>,
+      total: () => <td style={totalTdStyle}>{shareMode === 'pct' ? '100%' : fmt(tot.rev)}</td> },
+    { id: 'orders', label: 'Orders', sortKey: 'orders', width: 9,
+      row: r => <td style={tdStyle}>{shareMode === 'pct' ? `${tot.orders > 0 ? (r.orders / tot.orders * 100).toFixed(1) : '0.0'}%` : fmtN(r.orders)}</td>,
+      total: () => <td style={totalTdStyle}>{shareMode === 'pct' ? '100%' : fmtN(tot.orders)}</td> },
     { id: 'cumPct', label: 'Cum %', sortKey: 'cumPct', width: 9,
       row: r => <td style={tdStyle}>{r.cumPct.toFixed(1)}%</td>, total: () => <td style={totalTdStyle}>—</td> },
-    { id: 'orders', label: 'Orders', sortKey: 'orders', width: 9,
-      row: r => <td style={tdStyle}>{fmtN(r.orders)}</td>, total: () => <td style={totalTdStyle}>{fmtN(tot.orders)}</td> },
     ...(showAOV ? [{ id: 'aov', label: 'AOV', sortKey: 'aov', width: 9,
       row: r => <td style={tdStyle}>₹{Math.round(r.aov || 0).toLocaleString('en-IN')}</td>, total: () => <td style={totalTdStyle}>₹{Math.round(totAov).toLocaleString('en-IN')}</td> }] : []),
     ...(showASP ? [{ id: 'asp', label: 'ASP', sortKey: 'asp', width: 9,
@@ -6404,7 +6409,7 @@ function ShopifyGeoRichTable({ title, rows, firstKey, firstLabel, formatFirst, r
     ...(showRTO ? [{ id: 'rtoPct', label: rtoLabel, sortKey: 'rtoPct', width: 9,
       row: r => <td style={{ ...tdStyle, fontFamily: 'inherit' }}>{rtoChip(r.rtoPct || 0)}</td>, total: () => <td style={{ ...totalTdStyle, fontFamily: 'inherit' }}>{rtoChip(totRtoPct)}</td> }] : []),
   ]
-  const MOB_HIDDEN = new Set(['sharePct', 'cumPct', 'mom'])
+  const MOB_HIDDEN = new Set(['cumPct', 'mom'])
   const VISIBLE_COLUMNS = isMob ? ALL_COLUMNS.filter(c => !MOB_HIDDEN.has(c.id)) : ALL_COLUMNS
   const reorder = useReorderableColumns(`datatable-cols:${title}`, VISIBLE_COLUMNS)
 
@@ -6412,7 +6417,11 @@ function ShopifyGeoRichTable({ title, rows, firstKey, firstLabel, formatFirst, r
     <div className="kpi-card" style={{ padding: isMob ? '12px 8px' : '14px 16px', display: 'flex', flexDirection: 'column', minWidth: 0, height: '100%', boxSizing: 'border-box' }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10, flexShrink: 0 }}>
         <div style={{ fontWeight: 700, fontSize: 13, color: C.t1 }}>{title} <span style={{ fontWeight: 400, fontSize: 11.5, color: C.t3 }}>{rows.length} total{note ? ` · ${note}` : ''}</span></div>
-        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+        <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+          <div style={{ display: 'flex', background: C.bg, borderRadius: 6, border: `1px solid ${C.border}`, overflow: 'hidden' }}>
+            <button onClick={() => setShareMode('pct')} style={{ fontSize: 10, fontWeight: shareMode === 'pct' ? 700 : 500, padding: '3px 8px', border: 'none', background: shareMode === 'pct' ? C.acc : 'transparent', color: shareMode === 'pct' ? C.t1 : C.t3, cursor: 'pointer' }}>%</button>
+            <button onClick={() => setShareMode('count')} style={{ fontSize: 10, fontWeight: shareMode === 'count' ? 700 : 500, padding: '3px 8px', border: 'none', background: shareMode === 'count' ? C.acc : 'transparent', color: shareMode === 'count' ? C.t1 : C.t3, cursor: 'pointer' }}>Count</button>
+          </div>
           {!isMob && !reorder.isDefaultOrder && <button onClick={reorder.resetOrder} title="Reset column order to default" style={{ fontSize: 10, color: C.t2, background: C.card, border: `1px solid ${C.border}`, borderRadius: 6, padding: '3px 8px', cursor: 'pointer' }}>↺ Reset</button>}
           {!isMob && <button onClick={handleExport} style={{ fontSize: 10, color: C.t2, background: C.card, border: `1px solid ${C.border}`, borderRadius: 6, padding: '3px 8px', cursor: 'pointer' }}>⭳ Export</button>}
         </div>
@@ -8190,11 +8199,11 @@ function FlipkartTab({ data }) {
               <div style={{ display: 'flex', gap: isMob ? 4 : 8, alignItems: 'center' }}>
                 {isMob ? (
                   <select value={fkTrendMetric} onChange={e => setFkTrendMetric(e.target.value)} style={{ fontSize: 10, fontWeight: 600, padding: '2px 4px', borderRadius: 6, border: `1px solid ${C.border2}`, background: C.card, color: C.t1, cursor: 'pointer', fontFamily: 'var(--font)', outline: 'none' }}>
-                    {[['rev','Revenue'],['orders','Orders'],['units','Units']].map(([k,l]) => <option key={k} value={k}>{l}</option>)}
+                    {[['rev','Gross Rev'],['orders','Orders'],['units','Units']].map(([k,l]) => <option key={k} value={k}>{l}</option>)}
                   </select>
                 ) : (
                   <div style={{ display: 'flex', gap: 4 }}>
-                    {[['rev','Revenue'],['orders','Orders'],['units','Units']].map(([k,l]) => <button key={k} style={btnSt(k)} onClick={() => setFkTrendMetric(k)}>{l}</button>)}
+                    {[['rev','Gross Rev'],['orders','Orders'],['units','Units']].map(([k,l]) => <button key={k} style={btnSt(k)} onClick={() => setFkTrendMetric(k)}>{l}</button>)}
                   </div>
                 )}
                 <select value={fkTrendGroup} onChange={e => setFkTrendGroup(e.target.value)} style={{ fontSize: isMob ? 10 : 11, fontWeight: 600, padding: isMob ? '2px 4px' : '3px 8px', borderRadius: 6, border: `1px solid ${C.border2}`, background: C.card, color: C.t1, cursor: 'pointer', fontFamily: 'var(--font)', outline: 'none' }}>
@@ -10656,11 +10665,11 @@ function CredTab({ data }) {
               <div style={{ display: 'flex', gap: isMob ? 4 : 8, alignItems: 'center' }}>
                 {isMob ? (
                   <select value={crTrendMetric} onChange={e => setCrTrendMetric(e.target.value)} style={{ fontSize: 10, fontWeight: 600, padding: '2px 4px', borderRadius: 6, border: `1px solid ${C.border2}`, background: C.card, color: C.t1, cursor: 'pointer', fontFamily: 'var(--font)', outline: 'none' }}>
-                    {[['rev','Revenue'],['orders','Orders'],['units','Units']].map(([k,l]) => <option key={k} value={k}>{l}</option>)}
+                    {[['rev','Gross Rev'],['orders','Orders'],['units','Units']].map(([k,l]) => <option key={k} value={k}>{l}</option>)}
                   </select>
                 ) : (
                   <div style={{ display: 'flex', gap: 4 }}>
-                    {[['rev','Revenue'],['orders','Orders'],['units','Units']].map(([k,l]) => <button key={k} style={btnSt(k)} onClick={() => setCrTrendMetric(k)}>{l}</button>)}
+                    {[['rev','Gross Rev'],['orders','Orders'],['units','Units']].map(([k,l]) => <button key={k} style={btnSt(k)} onClick={() => setCrTrendMetric(k)}>{l}</button>)}
                   </div>
                 )}
                 <select value={crTrendGroup} onChange={e => setCrTrendGroup(e.target.value)} style={{ fontSize: isMob ? 10 : 11, fontWeight: 600, padding: isMob ? '2px 4px' : '3px 8px', borderRadius: 6, border: `1px solid ${C.border2}`, background: C.card, color: C.t1, cursor: 'pointer', fontFamily: 'var(--font)', outline: 'none' }}>
@@ -10902,11 +10911,11 @@ function FirstcryTab({ data }) {
               <div style={{ display: 'flex', gap: isMob ? 4 : 8, alignItems: 'center' }}>
                 {isMob ? (
                   <select value={fcTrendMetric} onChange={e => setFcTrendMetric(e.target.value)} style={{ fontSize: 10, fontWeight: 600, padding: '2px 4px', borderRadius: 6, border: `1px solid ${C.border2}`, background: C.card, color: C.t1, cursor: 'pointer', fontFamily: 'var(--font)', outline: 'none' }}>
-                    {[['rev','Revenue'],['orders','Orders'],['units','Units']].map(([k,l]) => <option key={k} value={k}>{l}</option>)}
+                    {[['rev','Gross Rev'],['orders','Orders'],['units','Units']].map(([k,l]) => <option key={k} value={k}>{l}</option>)}
                   </select>
                 ) : (
                   <div style={{ display: 'flex', gap: 4 }}>
-                    {[['rev','Revenue'],['orders','Orders'],['units','Units']].map(([k,l]) => <button key={k} style={btnSt(k)} onClick={() => setFcTrendMetric(k)}>{l}</button>)}
+                    {[['rev','Gross Rev'],['orders','Orders'],['units','Units']].map(([k,l]) => <button key={k} style={btnSt(k)} onClick={() => setFcTrendMetric(k)}>{l}</button>)}
                   </div>
                 )}
                 <select value={fcTrendGroup} onChange={e => setFcTrendGroup(e.target.value)} style={{ fontSize: isMob ? 10 : 11, fontWeight: 600, padding: isMob ? '2px 4px' : '3px 8px', borderRadius: 6, border: `1px solid ${C.border2}`, background: C.card, color: C.t1, cursor: 'pointer', fontFamily: 'var(--font)', outline: 'none' }}>
@@ -11146,11 +11155,11 @@ function MyntraTab({ data }) {
               <div style={{ display: 'flex', gap: isMob ? 4 : 8, alignItems: 'center' }}>
                 {isMob ? (
                   <select value={mnTrendMetric} onChange={e => setMnTrendMetric(e.target.value)} style={{ fontSize: 10, fontWeight: 600, padding: '2px 4px', borderRadius: 6, border: `1px solid ${C.border2}`, background: C.card, color: C.t1, cursor: 'pointer', fontFamily: 'var(--font)', outline: 'none' }}>
-                    {[['rev','Revenue'],['orders','Orders'],['units','Units']].map(([k,l]) => <option key={k} value={k}>{l}</option>)}
+                    {[['rev','Gross Rev'],['orders','Orders'],['units','Units']].map(([k,l]) => <option key={k} value={k}>{l}</option>)}
                   </select>
                 ) : (
                   <div style={{ display: 'flex', gap: 4 }}>
-                    {[['rev','Revenue'],['orders','Orders'],['units','Units']].map(([k,l]) => <button key={k} style={btnSt(k)} onClick={() => setMnTrendMetric(k)}>{l}</button>)}
+                    {[['rev','Gross Rev'],['orders','Orders'],['units','Units']].map(([k,l]) => <button key={k} style={btnSt(k)} onClick={() => setMnTrendMetric(k)}>{l}</button>)}
                   </div>
                 )}
                 <select value={mnTrendGroup} onChange={e => setMnTrendGroup(e.target.value)} style={{ fontSize: isMob ? 10 : 11, fontWeight: 600, padding: isMob ? '2px 4px' : '3px 8px', borderRadius: 6, border: `1px solid ${C.border2}`, background: C.card, color: C.t1, cursor: 'pointer', fontFamily: 'var(--font)', outline: 'none' }}>
@@ -11525,11 +11534,11 @@ function OfflineTab({ data, sub, setSub }) {
               <div style={{ display: 'flex', gap: isMob ? 4 : 8, alignItems: 'center' }}>
                 {isMob ? (
                   <select value={offTrendMetric} onChange={e => setOffTrendMetric(e.target.value)} style={{ fontSize: 10, fontWeight: 600, padding: '2px 4px', borderRadius: 6, border: `1px solid ${C.border2}`, background: C.card, color: C.t1, cursor: 'pointer', fontFamily: 'var(--font)', outline: 'none' }}>
-                    {[['rev','Revenue'],['orders','Orders'],['units','Units']].map(([k,l]) => <option key={k} value={k}>{l}</option>)}
+                    {[['rev','Gross Rev'],['orders','Orders'],['units','Units']].map(([k,l]) => <option key={k} value={k}>{l}</option>)}
                   </select>
                 ) : (
                   <div style={{ display: 'flex', gap: 4 }}>
-                    {[['rev','Revenue'],['orders','Orders'],['units','Units']].map(([k,l]) => <button key={k} style={btnSt(k)} onClick={() => setOffTrendMetric(k)}>{l}</button>)}
+                    {[['rev','Gross Rev'],['orders','Orders'],['units','Units']].map(([k,l]) => <button key={k} style={btnSt(k)} onClick={() => setOffTrendMetric(k)}>{l}</button>)}
                   </div>
                 )}
                 <select value={offTrendGroup} onChange={e => setOffTrendGroup(e.target.value)} style={{ fontSize: isMob ? 10 : 11, fontWeight: 600, padding: isMob ? '2px 4px' : '3px 8px', borderRadius: 6, border: `1px solid ${C.border2}`, background: C.card, color: C.t1, cursor: 'pointer', fontFamily: 'var(--font)', outline: 'none' }}>
