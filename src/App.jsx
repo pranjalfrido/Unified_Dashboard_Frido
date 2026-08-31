@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback, useEffect, useRef, Fragment } from 'react'
+import { useState, useMemo, useCallback, useEffect, useRef, Fragment, Component } from 'react'
 import { C, fmt, fmtN, fmtBig, pct, processData, detectAlerts, exportCSV, getDefaultDates, COURIER_COLORS, COURIER_LOGOS } from './utils.js'
 import { KPICard, AlertCard, DataTable, Card, Badge, CategoryRevenueCard, RevTrendChart, AreaTrendChart, MultiLineChart, useSortableTable, useReorderableColumns, GROUP_OPTS, getGroupKey, TrendAnalysisCard, BarChart, Bar, LineChart, Line, AreaChart, Area, ComposedChart, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell, Treemap } from './components.jsx'
 import InventoryPage from './InventoryPage.jsx'
@@ -14909,7 +14909,25 @@ function CustomerPage({ filters, activeTab: activeTabProp, setActiveTab: setActi
   )
 }
 
-export default function App() {
+class ErrorBoundary extends Component {
+  constructor(props) { super(props); this.state = { error: null } }
+  static getDerivedStateFromError(e) { return { error: e } }
+  componentDidCatch(e, info) { console.error('App crash:', e, info) }
+  render() {
+    if (this.state.error) {
+      return (
+        <div style={{ padding: 32, fontFamily: 'monospace', fontSize: 13, color: '#c00' }}>
+          <b>Something went wrong.</b>
+          <pre style={{ marginTop: 12, whiteSpace: 'pre-wrap', color: '#333', fontSize: 11 }}>{String(this.state.error)}</pre>
+          <button style={{ marginTop: 16, padding: '8px 16px', cursor: 'pointer' }} onClick={() => this.setState({ error: null })}>Retry</button>
+        </div>
+      )
+    }
+    return this.props.children
+  }
+}
+
+function AppInner() {
   const [session, setSession] = useState(undefined) // undefined = loading, null = no session
   const [profile, setProfile] = useState(null)
   const [allowedTabs, setAllowedTabs] = useState(null)
@@ -15447,4 +15465,8 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
       <BottomNav page={page} setPage={setPage} allowedTabs={allowedTabs} profile={profile} />
     </div>
   )
+}
+
+export default function App() {
+  return <ErrorBoundary><AppInner /></ErrorBoundary>
 }
