@@ -12191,7 +12191,7 @@ const CP = {
 
 function CpCard({ title, sub, action, children }) {
   return (
-    <div style={{ background: C.card, border: `1px solid ${C.border}`, borderTop: `3px solid #FFD600`, borderRadius: 12, width: '100%', height: '100%', boxSizing: 'border-box', overflow: 'hidden' }}>
+    <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, width: '100%', height: '100%', boxSizing: 'border-box', overflow: 'hidden' }}>
       <div style={{ borderBottom: `1px solid ${C.border}`, padding: '10px 16px', display: 'flex', flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
         <div>
           <span style={{ fontWeight: 700, fontSize: 12, color: C.t1, textTransform: 'uppercase', letterSpacing: '.06em' }}>{title}</span>
@@ -12772,7 +12772,7 @@ function CustomerPage({ filters, activeTab: activeTabProp, setActiveTab: setActi
                 const ttStyle = { background: '#fff', border: '1px solid #F0E2BC', borderRadius: 8, fontSize: 11, color: '#3A3324' }
 
                 return (
-                  <div style={{ background: '#fff', borderRadius: 12, overflow: 'hidden', border: `1px solid ${C.border}`, borderTop: '3px solid #FFD600' }}>
+                  <div style={{ background: '#fff', borderRadius: 12, overflow: 'hidden', border: `1px solid ${C.border}` }}>
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 16px', borderBottom: '1px solid #F0EADC', flexWrap: 'wrap', gap: 8 }}>
                       <div style={{ fontSize: 11, fontWeight: 800, color: '#3A3324', textTransform: 'uppercase', letterSpacing: '.08em', fontFamily: 'Inter, sans-serif' }}>Performance Trend</div>
                       <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
@@ -12867,7 +12867,7 @@ function CustomerPage({ filters, activeTab: activeTabProp, setActiveTab: setActi
 
           // ── section card wrapper ──
           const SCard = ({ title, sub, action, children, stretch }) => (
-            <div style={{ background: T.card, border: `1px solid ${C.border}`, borderTop: '3px solid #FFD600', borderRadius: 12, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+            <div style={{ background: T.card, border: `1px solid ${C.border}`, borderRadius: 12, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 16px' }}>
                 <div>
                   <div style={{ fontSize: 11, fontWeight: 800, color: '#3A3324', fontFamily: 'Inter, sans-serif', textTransform: 'uppercase', letterSpacing: '.08em' }}>{title}</div>
@@ -13096,7 +13096,7 @@ function CustomerPage({ filters, activeTab: activeTabProp, setActiveTab: setActi
               {/* 2. KPI row */}
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6,1fr)', gap: 10 }}>
                 {kpiCards.map((c, i) => (
-                  <div key={i} style={{ background: T.card, border: `1px solid ${C.border}`, borderTop: '3px solid #FFD600', borderRadius: 12, padding: '10px 12px 8px', display: 'flex', flexDirection: 'column', gap: 2 }}>
+                  <div key={i} style={{ background: T.card, border: `1px solid ${C.border}`, borderRadius: 12, padding: '10px 12px 8px', display: 'flex', flexDirection: 'column', gap: 2 }}>
                     <span style={{ fontSize: 9, fontWeight: 700, color: T.t3, textTransform: 'uppercase', letterSpacing: '.07em' }}>{c.label}</span>
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 4 }}>
                       <span style={{ fontSize: 18, fontWeight: 700, color: c.valColor || T.t1, fontFamily: 'Space Grotesk, var(--font)', lineHeight: 1.2 }}>{c.val}</span>
@@ -13349,7 +13349,7 @@ function CustomerPage({ filters, activeTab: activeTabProp, setActiveTab: setActi
           }
 
           const CCard = ({ title, sub, action, info, children }) => (
-            <div style={{ background: CT.card, borderRadius: 12, overflow: 'hidden', border: `1px solid ${C.border}`, borderTop: '3px solid #FFD600', display: 'flex', flexDirection: 'column' }}>
+            <div style={{ background: CT.card, borderRadius: 12, overflow: 'hidden', border: `1px solid ${C.border}`, display: 'flex', flexDirection: 'column' }}>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 16px', background: '#FFFFFF' }}>
                 <div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
@@ -13518,7 +13518,7 @@ function CustomerPage({ filters, activeTab: activeTabProp, setActiveTab: setActi
                   { label: 'Inactive 90+ Days', value: fmtN(lost90), sub: 'Customers not seen in 90d', spark: sparkLost90, cur: lost90, prev: null },
                   { label: 'Avg Orders / Customer', value: avgOrdersPerCust > 0 ? avgOrdersPerCust.toFixed(2) : '—', sub: 'Total orders ÷ unique customers', spark: sparkAvgOrders, cur: avgOrdersPerCust, prev: prevAvgOrdersPerCust },
                 ].map((s, i) => (
-                  <div key={i} style={{ background: CT.card, border: `1px solid ${C.border}`, borderTop: '3px solid #FFD600', borderRadius: 12, padding: '10px 12px 8px', display: 'flex', flexDirection: 'column', gap: 2 }}>
+                  <div key={i} style={{ background: CT.card, border: `1px solid ${C.border}`, borderRadius: 12, padding: '10px 12px 8px', display: 'flex', flexDirection: 'column', gap: 2 }}>
                     <span style={{ fontSize: 9, fontWeight: 700, color: CT.t3, textTransform: 'uppercase', letterSpacing: '.07em' }}>{s.label}</span>
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 4 }}>
                       <span style={{ fontSize: 18, fontWeight: 700, color: CT.t1, fontFamily: 'Space Grotesk, var(--font)', lineHeight: 1.2 }}>{s.value}</span>
@@ -14164,7 +14164,7 @@ function CustomerPage({ filters, activeTab: activeTabProp, setActiveTab: setActi
 
           // ── RSCard component ────────────────────────────────────
           const RSCard = ({ title, sub, action, children, infoTooltip }) => (
-            <div style={{ background: RS.card, borderRadius: 12, overflow: 'hidden', border: `1px solid ${C.border}`, borderTop: '3px solid #FFD600', display: 'flex', flexDirection: 'column' }}>
+            <div style={{ background: RS.card, borderRadius: 12, overflow: 'hidden', border: `1px solid ${C.border}`, display: 'flex', flexDirection: 'column' }}>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 16px', background: '#FFFFFF' }}>
                 <div>
                   <div style={{ fontSize: 11, fontWeight: 800, color: '#3A3324', textTransform: 'uppercase', letterSpacing: '.08em', display: 'flex', alignItems: 'center', gap: 5 }}>
@@ -14463,7 +14463,7 @@ function CustomerPage({ filters, activeTab: activeTabProp, setActiveTab: setActi
                 )
 
                 return (
-                  <div style={{ background: '#FFFFFF', borderRadius: 12, border: `1px solid ${C.border}`, borderTop: '3px solid #FFD600', overflow: 'hidden' }}>
+                  <div style={{ background: '#FFFFFF', borderRadius: 12, border: `1px solid ${C.border}`, overflow: 'hidden' }}>
                     {/* Header */}
                     <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '11px 16px', borderBottom: `1px solid ${SM_BORDER}` }}>
                       <div style={{ width: 30, height: 30, borderRadius: 8, background: SM_AMBER_SOFT, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 15, color: '#C9A24F' }}>↔</div>
