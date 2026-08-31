@@ -13096,7 +13096,7 @@ function CustomerPage({ filters, activeTab: activeTabProp, setActiveTab: setActi
               {/* 2. KPI row */}
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6,1fr)', gap: 10 }}>
                 {kpiCards.map((c, i) => (
-                  <div key={i} style={{ background: T.card, borderRadius: 12, padding: '10px 12px 8px', display: 'flex', flexDirection: 'column', gap: 2 }}>
+                  <div key={i} style={{ background: T.card, border: `1px solid ${C.border}`, borderTop: '3px solid #FFD600', borderRadius: 12, padding: '10px 12px 8px', display: 'flex', flexDirection: 'column', gap: 2 }}>
                     <span style={{ fontSize: 9, fontWeight: 700, color: T.t3, textTransform: 'uppercase', letterSpacing: '.07em' }}>{c.label}</span>
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 4 }}>
                       <span style={{ fontSize: 18, fontWeight: 700, color: c.valColor || T.t1, fontFamily: 'Space Grotesk, var(--font)', lineHeight: 1.2 }}>{c.val}</span>
@@ -13518,7 +13518,7 @@ function CustomerPage({ filters, activeTab: activeTabProp, setActiveTab: setActi
                   { label: 'Inactive 90+ Days', value: fmtN(lost90), sub: 'Customers not seen in 90d', spark: sparkLost90, cur: lost90, prev: null },
                   { label: 'Avg Orders / Customer', value: avgOrdersPerCust > 0 ? avgOrdersPerCust.toFixed(2) : '—', sub: 'Total orders ÷ unique customers', spark: sparkAvgOrders, cur: avgOrdersPerCust, prev: prevAvgOrdersPerCust },
                 ].map((s, i) => (
-                  <div key={i} style={{ background: CT.card, borderRadius: 12, padding: '10px 12px 8px', boxShadow: '0 1px 2px rgba(80,65,20,.04)', display: 'flex', flexDirection: 'column', gap: 2 }}>
+                  <div key={i} style={{ background: CT.card, border: `1px solid ${C.border}`, borderTop: '3px solid #FFD600', borderRadius: 12, padding: '10px 12px 8px', display: 'flex', flexDirection: 'column', gap: 2 }}>
                     <span style={{ fontSize: 9, fontWeight: 700, color: CT.t3, textTransform: 'uppercase', letterSpacing: '.07em' }}>{s.label}</span>
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 4 }}>
                       <span style={{ fontSize: 18, fontWeight: 700, color: CT.t1, fontFamily: 'Space Grotesk, var(--font)', lineHeight: 1.2 }}>{s.value}</span>
