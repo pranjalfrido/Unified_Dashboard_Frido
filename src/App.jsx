@@ -12752,7 +12752,7 @@ function CustomerPage({ filters, activeTab: activeTabProp, setActiveTab: setActi
                 const ttStyle = { background: '#fff', border: '1px solid #F0E2BC', borderRadius: 8, fontSize: 11, color: '#3A3324' }
 
                 return (
-                  <div style={{ background: '#fff', borderRadius: 14, overflow: 'hidden', boxShadow: '0 1px 3px rgba(80,65,20,.04)', border: '1px solid #F0EADC' }}>
+                  <div style={{ background: '#fff', borderRadius: 12, overflow: 'hidden', border: `1px solid ${C.border}`, borderTop: '3px solid #FFD600' }}>
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 16px', borderBottom: '1px solid #F0EADC', flexWrap: 'wrap', gap: 8 }}>
                       <div style={{ fontSize: 11, fontWeight: 800, color: '#3A3324', textTransform: 'uppercase', letterSpacing: '.08em', fontFamily: 'Inter, sans-serif' }}>Performance Trend</div>
                       <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
@@ -12847,7 +12847,7 @@ function CustomerPage({ filters, activeTab: activeTabProp, setActiveTab: setActi
 
           // ── section card wrapper ──
           const SCard = ({ title, sub, action, children, stretch }) => (
-            <div style={{ background: T.card, borderRadius: 14, overflow: 'hidden', boxShadow: '0 1px 3px rgba(80,65,20,.04)', display: 'flex', flexDirection: 'column' }}>
+            <div style={{ background: T.card, border: `1px solid ${C.border}`, borderTop: '3px solid #FFD600', borderRadius: 12, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 16px' }}>
                 <div>
                   <div style={{ fontSize: 11, fontWeight: 800, color: '#3A3324', fontFamily: 'Inter, sans-serif', textTransform: 'uppercase', letterSpacing: '.08em' }}>{title}</div>
@@ -13329,7 +13329,7 @@ function CustomerPage({ filters, activeTab: activeTabProp, setActiveTab: setActi
           }
 
           const CCard = ({ title, sub, action, info, children }) => (
-            <div style={{ background: CT.card, borderRadius: 14, overflow: 'hidden', boxShadow: '0 1px 3px rgba(80,65,20,.04)', display: 'flex', flexDirection: 'column' }}>
+            <div style={{ background: CT.card, borderRadius: 12, overflow: 'hidden', border: `1px solid ${C.border}`, borderTop: '3px solid #FFD600', display: 'flex', flexDirection: 'column' }}>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 16px', background: '#FFFFFF' }}>
                 <div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
@@ -14144,7 +14144,7 @@ function CustomerPage({ filters, activeTab: activeTabProp, setActiveTab: setActi
 
           // ── RSCard component ────────────────────────────────────
           const RSCard = ({ title, sub, action, children, infoTooltip }) => (
-            <div style={{ background: RS.card, borderRadius: 14, overflow: 'hidden', border: `1px solid ${RS.border}`, boxShadow: '0 1px 3px rgba(80,65,20,.04)', display: 'flex', flexDirection: 'column' }}>
+            <div style={{ background: RS.card, borderRadius: 12, overflow: 'hidden', border: `1px solid ${C.border}`, borderTop: '3px solid #FFD600', display: 'flex', flexDirection: 'column' }}>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 16px', background: '#FFFFFF' }}>
                 <div>
                   <div style={{ fontSize: 11, fontWeight: 800, color: '#3A3324', textTransform: 'uppercase', letterSpacing: '.08em', display: 'flex', alignItems: 'center', gap: 5 }}>
@@ -14443,7 +14443,7 @@ function CustomerPage({ filters, activeTab: activeTabProp, setActiveTab: setActi
                 )
 
                 return (
-                  <div style={{ background: '#FFFFFF', borderRadius: 14, border: `1px solid ${SM_BORDER}`, overflow: 'hidden', boxShadow: '0 1px 2px rgba(80,65,20,.04)' }}>
+                  <div style={{ background: '#FFFFFF', borderRadius: 12, border: `1px solid ${C.border}`, borderTop: '3px solid #FFD600', overflow: 'hidden' }}>
                     {/* Header */}
                     <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '11px 16px', borderBottom: `1px solid ${SM_BORDER}` }}>
                       <div style={{ width: 30, height: 30, borderRadius: 8, background: SM_AMBER_SOFT, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 15, color: '#C9A24F' }}>↔</div>
