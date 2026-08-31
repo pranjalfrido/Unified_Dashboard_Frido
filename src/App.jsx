@@ -386,7 +386,7 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
   const [trendMetric, setTrendMetric] = useState('Qty')
   const [courierTatGran, setCourierTatGran] = useState('Daily')
   const [cSort, setCSort] = useState({ col: 'total', dir: 'desc' })
-  const [cView, setCView] = useState('courier') // 'courier' | 'month'
+  const [cView, setCView] = useState('courier') // 'courier' | 'facility' | 'month'
   const [payTrendGran, setPayTrendGran] = useState('Daily')
   const [isMobile, setIsMobile] = useState(() => window.innerWidth <= 768)
   useEffect(() => {
@@ -421,7 +421,7 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
           const json = await res.json()
           const ageMs = json.asOf ? Date.now() - new Date(json.asOf).getTime() : Infinity
           const dateMatches = json.dateRange && json.dateRange.start === filters.start && json.dateRange.end === filters.end
-          if (ageMs <= 3 * 60 * 60 * 1000 && dateMatches && !json._placeholder && json.current) {
+          if (ageMs <= 7 * 60 * 60 * 1000 && dateMatches && !json._placeholder && json.current) {
             setRawData(json.current)
             setRawPrevData(json.previous || null)
             try { localStorage.setItem('logistics_stale', JSON.stringify({ current: json.current, previous: json.previous || null, dateRange: json.dateRange, savedAt: Date.now() })) } catch {}
@@ -465,7 +465,7 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
       setError(e.message)
     }
     finally { setLoading(false) }
-  }, [filters.start, filters.end, lFilters.category, lFilters.subCategory, lFilters.shipmentType])
+  }, [filters.start, filters.end])
 
   useEffect(() => { fetchLogistics() }, [fetchLogistics])
 
@@ -1097,7 +1097,7 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
             <div style={chartTitle}>Courier-wise Breakdown</div>
             <div style={{ display: 'inline-flex', border: `1px solid ${C.border2}`, borderRadius: 6, overflow: 'hidden' }}>
-              {['Courier','Month'].map((v,i) => (
+              {['Courier','Facility','Month'].map((v,i) => (
                 <button key={v} onClick={() => setCView(v.toLowerCase())} style={{
                   padding: '2px 8px', border: 'none', borderLeft: i>0 ? `1px solid ${C.border2}` : 'none',
                   background: cView===v.toLowerCase() ? C.acc : 'transparent', color: cView===v.toLowerCase() ? '#000' : C.t2,
@@ -1205,6 +1205,85 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
                     </tbody>
                   </table>
                   </div>
+                )
+              }
+              if (cView === 'facility') {
+                const byFacility = (data?.byFacility || []).filter(r => r.facility)
+                const facTotalAll = byFacility.reduce((s,r) => s+(r.total||0), 0) || 1
+                const enrichFac = byFacility.map(r => ({
+                  ...r,
+                  _volPct: +((r.total / facTotalAll) * 100).toFixed(2),
+                  _delPct: r.total ? +((r.delivered / r.total) * 100).toFixed(2) : 0,
+                  _rtoPct: r.total ? +((r.rto / r.total) * 100).toFixed(2) : 0,
+                  _zrtoPct: r.total ? +(((r.z_rto||0) / r.total) * 100).toFixed(2) : 0,
+                  _cancPct: r.total ? +(((r.cancelled||0) / r.total) * 100).toFixed(2) : 0,
+                  _fasrPct: r.ofd_total ? +((r.d1 / r.ofd_total) * 100).toFixed(2) : null,
+                  _rasrPct: r.ofd_total ? +(((r.rasr_num||0) / r.ofd_total) * 100).toFixed(2) : null,
+                }))
+                const sumD = enrichFac.reduce((s,r)=>s+(r.delivered||0),0)
+                const sumR = enrichFac.reduce((s,r)=>s+(r.rto||0),0)
+                const sumZ = enrichFac.reduce((s,r)=>s+(r.z_rto||0),0)
+                const sumC = enrichFac.reduce((s,r)=>s+(r.cancelled||0),0)
+                const sumD1 = enrichFac.reduce((s,r)=>s+(r.d1||0),0)
+                const sumRN = enrichFac.reduce((s,r)=>s+(r.rasr_num||0),0)
+                const sumOfd = enrichFac.reduce((s,r)=>s+(r.ofd_total||0),0)
+                const wavg = (key) => { const w = enrichFac.reduce((s,r)=>s+(r[key]!=null?r[key]*(r.total||0):0),0); return facTotalAll>0?w/facTotalAll:null }
+                const td9 = { padding:'9px 10px', textAlign:'right', color:C.t2, fontSize:11 }
+                const td9L = { padding:'9px 10px', color:C.t1, fontWeight:600, whiteSpace:'nowrap' }
+                return (
+                  <table style={{ width:'100%', borderCollapse:'collapse', fontSize:12 }}>
+                    <colgroup>
+                      <col style={{ width:'11%' }} />
+                      {['5.5%','5.5%','5.5%','5.5%','5.5%','5.5%','5.5%','5.5%','5.5%','5.5%','5.5%','5.5%','5.5%','5.5%'].map((w,i) => <col key={i} style={{ width:w }} />)}
+                    </colgroup>
+                    <thead>
+                      <tr style={{ borderBottom:`1.5px solid ${C.border}` }}>
+                        {['Facility','Vol %','Total','Del %','RTO %','Z-RTO %','Canc %','FASR %','RASR %','Avg Processing','Avg Pickup','Avg S2D','Avg O2D','Avg RTO TAT','Avg S2A'].map((h,i) => (
+                          <th key={h} style={{ padding:'9px 10px', textAlign:i===0?'left':'right', color:C.t3, fontWeight:700, fontSize:9.5, letterSpacing:'.05em', textTransform:'uppercase', whiteSpace:'nowrap' }}>{h}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {enrichFac.map(r => (
+                        <tr key={r.facility} style={{ borderBottom:`1px solid ${C.border}` }}>
+                          <td style={td9L}>{r.facility}</td>
+                          <td style={td9}>{r._volPct.toFixed(2)}%</td>
+                          <td style={{ ...td9, color:C.t1, fontWeight:600 }}>{n(r.total)}</td>
+                          <td style={td9}>{r._delPct.toFixed(2)}%</td>
+                          <td style={td9}>{r._rtoPct.toFixed(2)}%</td>
+                          <td style={td9}>{r._zrtoPct.toFixed(2)}%</td>
+                          <td style={td9}>{r._cancPct.toFixed(2)}%</td>
+                          <td style={td9}>{r._fasrPct!=null?r._fasrPct.toFixed(2)+'%':'—'}</td>
+                          <td style={td9}>{r._rasrPct!=null?r._rasrPct.toFixed(2)+'%':'—'}</td>
+                          <td style={td9}>{d(r.avg_processing_days)}</td>
+                          <td style={td9}>{d(r.avg_pickup_days)}</td>
+                          <td style={td9}>{d(r.avg_intransit_days)}</td>
+                          <td style={td9}>{d(r.avg_fulfilment_days)}</td>
+                          <td style={td9}>{d(r.avg_rto_tat_days)}</td>
+                          <td style={td9}>{d(r.avg_s2a_days)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                    <tfoot>
+                      <tr style={{ borderTop:`2px solid ${C.border}`, background:C.bg, fontWeight:700 }}>
+                        <td style={{ padding:'9px 10px', color:C.t1, fontWeight:700 }}>Total</td>
+                        <td style={{ ...td9 }}>100.00%</td>
+                        <td style={{ ...td9, color:C.t1, fontWeight:700 }}>{n(facTotalAll)}</td>
+                        <td style={{ ...td9, fontWeight:700 }}>{(sumD/facTotalAll*100).toFixed(2)}%</td>
+                        <td style={{ ...td9, fontWeight:700 }}>{(sumR/facTotalAll*100).toFixed(2)}%</td>
+                        <td style={td9}>{(sumZ/facTotalAll*100).toFixed(2)}%</td>
+                        <td style={td9}>{(sumC/facTotalAll*100).toFixed(2)}%</td>
+                        <td style={{ ...td9, fontWeight:700 }}>{sumOfd?(sumD1/sumOfd*100).toFixed(2)+'%':'—'}</td>
+                        <td style={{ ...td9, fontWeight:700 }}>{sumOfd?(sumRN/sumOfd*100).toFixed(2)+'%':'—'}</td>
+                        <td style={td9}>{d(wavg('avg_processing_days'))}</td>
+                        <td style={td9}>{d(wavg('avg_pickup_days'))}</td>
+                        <td style={td9}>{d(wavg('avg_intransit_days'))}</td>
+                        <td style={td9}>{d(wavg('avg_fulfilment_days'))}</td>
+                        <td style={td9}>{d(wavg('avg_rto_tat_days'))}</td>
+                        <td style={td9}>{d(wavg('avg_s2a_days'))}</td>
+                      </tr>
+                    </tfoot>
+                  </table>
                 )
               }
               if (cView === 'month') {
@@ -15229,9 +15308,11 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
       if (paymentType) extra.paymentType = paymentType
       if (channelGroup?.length) extra.channelGroup = channelGroup.join(',')
       fetchData(start, end, extra)
-      // Fetch logistics summary for Overview tab
-      fetch(`${API}/api/logistics`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ start, end, shipmentType: 'forward' }) })
-        .then(r => r.ok ? r.json() : null).then(j => { if (j) setLogisticsData(j) }).catch(() => {})
+      // Fetch logistics summary for Overview tab — use static CDN file, no live BQ
+      fetch('/logistics-data.json')
+        .then(r => r.ok ? r.json() : null)
+        .then(j => { if (j?.current) setLogisticsData(j.current) })
+        .catch(() => {})
     }, 600)
     return () => clearTimeout(debounceRef.current)
   }, [filters.start, filters.end, filters.category, filters.subCategory, filters.sku, filters.subChannel, filters.voucher, filters.region, filters.tier, filters.state, filters.city, filters.country, filters.paymentType, filters.channelGroup, filters.productAge, subCatFirstOrderMap, fetchData])
