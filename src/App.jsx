@@ -433,8 +433,8 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
       if (!usedStatic) {
         // Static JSON unavailable — hit live BQ with all active filters
         const body = { start: filters.start, end: filters.end }
-        if (lFilters.category) body.category = [lFilters.category]
-        if (lFilters.subCategory) body.subCategory = [lFilters.subCategory]
+        if (lFilters.category?.length) body.category = lFilters.category
+        if (lFilters.subCategory?.length) body.subCategory = lFilters.subCategory
         if (lFilters.shipmentType && lFilters.shipmentType !== 'all') body.shipmentType = lFilters.shipmentType
         const s = new Date(filters.start), e = new Date(filters.end)
         const days = Math.round((e - s) / 86400000) + 1
