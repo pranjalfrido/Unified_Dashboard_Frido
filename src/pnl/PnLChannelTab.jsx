@@ -120,9 +120,14 @@ function MetricPicker({ options, selected, onToggle, onSelectAll, onClearAll, co
 // (not shown, not just disabled) for any channel without it — nothing to slice that doesn't exist.
 function PnLTrendCard({ title, daily, dailyPnL, grossColor, grossGradId, boxHeight, showMarketing = true, hideUnits = false }) {
   const isMob = useIsMobile()
-  const nDays = daily.length
-  const autoGroup = nDays <= 14 ? 'daily' : nDays <= 90 ? 'weekly' : 'monthly'
-  const [groupBy, setGroupBy] = useState(autoGroup)
+  // Always default to daily granularity regardless of range length — a month-long range
+  // auto-grouping into 'weekly' was smoothing away exactly the day-to-day variation the %-metric
+  // lines exist to show (confirmed: Flipkart's real SnD%/GM% do vary meaningfully day-to-day,
+  // e.g. 21-26% / 52-61% across July, but weekly-averaging visually flattened that against the
+  // Gross/Net Revenue lines' much larger ₹ scale, making every %-line look like a flat band).
+  // User can still switch to Weekly/Monthly manually via the grouping dropdown when they want
+  // smoothing over a long range — this only changes what loads by default.
+  const [groupBy, setGroupBy] = useState('daily')
   // CM2% depends on marketing spend, which is only mapped on the combined "All" SC+VC view (see
   // showMarketing's own gating everywhere else — KPI cards, Financial View table) — Seller
   // Central/Vendor Central individually never have a real CM2, so it's excluded from the slicer
@@ -143,9 +148,30 @@ function PnLTrendCard({ title, daily, dailyPnL, grossColor, grossGradId, boxHeig
   const clearAllMetrics = () => setSelectedKeys([])
   const selStyle = { fontSize: 11, padding: '3px 8px', borderRadius: 6, border: `1px solid ${C.border2}`, background: C.card, color: C.t1, outline: 'none', fontFamily: 'var(--font)', cursor: 'pointer' }
 
+  // Several channels' `daily` arrays carry more than one row per calendar date — Flipkart
+  // splits by fulfilment type (FBF/NON-FBF), Amazon SC by type (FBA/MFN), Offline by
+  // subChannel — so a plain daily.map(...) here would hand Recharts TWO (or more) data points
+  // at the same x-axis date, each showing only its own slice's revenue/units rather than the
+  // day's true total. Confirmed live: Flipkart's July tooltip showed Net Revenue ₹0 on a day
+  // with real Gross Revenue because the tooltip sampled whichever duplicate row's un-summed
+  // slice happened to land there. Collapse to one row per date (summing every numeric field)
+  // BEFORE merging in dailyPnL, so every channel's chart — not just the ones that happen not to
+  // have a sub-dimension — gets a correct single point per date.
+  const byDate = {}
+  daily.forEach(d => {
+    const key = d.date
+    if (!byDate[key]) byDate[key] = { date: key }
+    const row = byDate[key]
+    Object.entries(d).forEach(([k, v]) => {
+      if (typeof v === 'number') row[k] = (row[k] || 0) + v
+      else if (row[k] === undefined) row[k] = v
+    })
+  })
+  const dedupedDaily = Object.values(byDate).sort((a, b) => a.date.localeCompare(b.date))
+
   const pnlByDate = {}
   ;(dailyPnL || []).forEach(d => { pnlByDate[d.date] = d })
-  const merged = daily.map(d => ({ ...d, ...(pnlByDate[d.date] || {}) }))
+  const merged = dedupedDaily.map(d => ({ ...d, ...(pnlByDate[d.date] || {}) }))
 
   const PCT_KEYS = ['returnPct', 'cogsPct', 'gmPct', 'sndPct', 'cm1Pct', 'cm2Pct']
   const grouped = (() => {

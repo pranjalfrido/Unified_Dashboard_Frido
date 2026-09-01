@@ -4369,6 +4369,7 @@ const OFFLINE_SUB_OPTIONS = [
   { id: 'b2b', label: 'B2B' },
   { id: 'Stockist', label: 'Stockist' },
   { id: 'MTGT', label: 'MT GT' },
+  { id: 'misc', label: 'Miscellaneous' },
 ]
 
 function PaginatedCard({ title, rows, columns, pageSize = 10 }) {
@@ -11420,10 +11421,16 @@ function OfflineTab({ data, sub, setSub }) {
 
   // Real SubChannel values are namespaced (e.g. "Stockist_Sayball", "Offline_B2B_Savio"), not
   // the bare "Stockist"/"Offline_B2B" literals — match by prefix, not exact equality.
+  const isB2B = sc => sc === 'Shopify B2B' || sc?.startsWith('Offline_B2B')
+  const isStockist = sc => sc?.startsWith('Stockist')
   const filterSub = rows => {
     if (sub === 'all') return rows
-    if (sub === 'b2b') return rows.filter(r => r.subChannel === 'Shopify B2B' || r.subChannel?.startsWith('Offline_B2B'))
-    if (sub === 'Stockist') return rows.filter(r => r.subChannel?.startsWith('Stockist'))
+    if (sub === 'b2b') return rows.filter(r => isB2B(r.subChannel))
+    if (sub === 'Stockist') return rows.filter(r => isStockist(r.subChannel))
+    if (sub === 'MTGT') return rows.filter(r => r.subChannel === 'MTGT')
+    // Miscellaneous: catch-all for any offline SubChannel outside B2B/Stockist/MTGT — picks up
+    // new SubChannel values (e.g. once synced to BQ) automatically with no code change needed.
+    if (sub === 'misc') return rows.filter(r => !isB2B(r.subChannel) && !isStockist(r.subChannel) && r.subChannel !== 'MTGT')
     return rows.filter(r => r.subChannel === sub)
   }
 

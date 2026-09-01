@@ -334,7 +334,21 @@ item_master AS (
     SAFE_CAST(NULLIF(TRIM(ANY_VALUE(GST_Tax_Type_Code)), '') AS FLOAT64) AS GST_Rate,
     -- Per-unit weight in grams, used by the PnL tab's SnD (Shipping & Distribution) cost —
     -- see PNL_TAB_ROADMAP.md. Line-item weight = Weight_gms * ItemQty.
-    SAFE_CAST(NULLIF(TRIM(ANY_VALUE(Weight_gms)), '') AS FLOAT64) AS Weight_gms
+    SAFE_CAST(NULLIF(TRIM(ANY_VALUE(Weight_gms)), '') AS FLOAT64) AS Weight_gms,
+    -- Volumetric weight in grams (industry-standard L×W×H(cm) / 5000, dims stored in mm here so
+    -- divide by 1000 first per dimension) — confirmed 2026-08-24, needed to distribute Amazon
+    -- SC's unattributed monthly storage-fee lump sum (see api/bq.js's amzSCMonthlyProductSettlement
+    -- comment) across SKUs by a REVENUE + shelf-space blend, not physical weight alone: storage
+    -- cost is driven by the CUBIC SPACE a SKU occupies in the warehouse, which physical
+    -- Weight_gms doesn't capture (a large, light SKU like a cushion takes real shelf space but
+    -- weighs little). NULL when any one dimension is missing/non-numeric — the caller's fallback
+    -- (physical Weight_gms) covers that case, same pattern as Weight_gms's own null-safety.
+    SAFE_DIVIDE(
+      SAFE_CAST(NULLIF(TRIM(ANY_VALUE(Length_mm)), '') AS FLOAT64) / 10
+        * SAFE_CAST(NULLIF(TRIM(ANY_VALUE(Width_mm)), '') AS FLOAT64) / 10
+        * SAFE_CAST(NULLIF(TRIM(ANY_VALUE(Height_mm)), '') AS FLOAT64) / 10,
+      5000
+    ) * 1000 AS Volumetric_Weight_gms
   FROM \`frido-429506.sharepoint_to_gcp.Frido_Item_Master__frido_item_sku_master\`
   WHERE Product_Code IS NOT NULL AND TRIM(Product_Code) != ''
   GROUP BY sku_key
@@ -362,6 +376,7 @@ SELECT
   COALESCE(im.Sub_category, 'Others') AS SubCategory,
   COALESCE(im.GST_Rate, SAFE_CAST(NULLIF(TRIM(u.GST_Tax_Type_Code), '') AS FLOAT64)) AS GST_Tax_Type_Code,
   im.Weight_gms,
+  im.Volumetric_Weight_gms,
   -- Per-line GST amount, back-calculated from the SKU's real GST slab (item master GST_Tax_Type_Code,
   -- falling back to the fact table's own rate when the SKU isn't in item master) applied to the
   -- GST-inclusive selling price. Only meaningful for non-cancelled/RTO/Return/CIR lines — callers
