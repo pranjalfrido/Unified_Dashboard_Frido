@@ -211,6 +211,11 @@ function computePayload(windowDays) {
   // company-wide Location cards, which show ALL facility types combined by default. Facility
   // Type filtering (done client-side / in api/inventory.js) operates on skuFacilityRows'
   // `facility`/`facilityType` fields directly, not on this pre-rolled view.
+  // doi/stockStatus must be recomputed AFTER totalInvt is fully summed across every facility at
+  // this location — spreading them in from whichever facility row happened to be inserted first
+  // (the old `{ ...r, totalInvt: 0, ... }` pattern) left them permanently stale against a
+  // different facility's totalInvt (often 0, if that facility was seen first), producing rows
+  // like totalInvt=90 / doi=0 / stockStatus="Out of Stock" once the real total was summed in.
   const skuLocMap = new Map()
   for (const r of skuFacilityRows) {
     const locKey = `${r.skuKey}|${r.location}`
@@ -218,7 +223,21 @@ function computePayload(windowDays) {
     const acc = skuLocMap.get(locKey)
     acc.totalInvt += r.totalInvt; acc.rawInvt += r.rawInvt; acc.rawBlockedInvt += r.rawBlockedInvt; acc.rtdInvt += r.rtdInvt
   }
-  const skuLocRows = [...skuLocMap.values()]
+  const skuLocRows = [...skuLocMap.values()].map(r => {
+    const denominator = Math.ceil(Math.max(r.avgSale, r.orderAllocation))
+    const doi = r.totalInvt > 0 && denominator === 0 ? null : (denominator > 0 ? Math.floor(r.totalInvt / denominator) : 0)
+    const master = itemMaster.get(r.skuKey)
+    const last90 = lastSaleBySkuKey.get(r.skuKey)
+    const newLaunch = isNewLaunch(master?.launchDate, endDateObj)
+    const isDead = r.totalInvt > 0 && (last90?.qty90d || 0) === 0 && !newLaunch
+    return {
+      ...r, doi, isDead,
+      thirtyDayReq: Math.round(r.avgSale * 30), inventoryShort: Math.round(r.avgSale * 30 - r.totalInvt),
+      rtdLevel: rtdLevel(r.rtdInvt, r.avgSale),
+      stockStatus: doi == null ? stockStatus(0, r.avgSale, r.totalInvt, { isDead }) : stockStatus(doi, r.avgSale, r.totalInvt, { isDead }),
+      requiredStock: Math.round(requiredStock(r.avgSale, master?.leadTime || 0, master?.productSource || null, r.totalInvt)),
+    }
+  })
 
   const rolledSkuMap = new Map()
   for (const r of skuFacilityRows) {
