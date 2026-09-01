@@ -2139,11 +2139,6 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
                         <button key={id} onClick={() => setWMetric(id)} style={{ fontSize: 10, padding: '2px 10px', borderRadius: 5, border: 'none', background: wMetric === id ? C.acc : 'transparent', color: wMetric === id ? '#000' : C.t3, cursor: 'pointer', fontWeight: wMetric === id ? 700 : 500, fontFamily: 'var(--font)' }}>{lbl}</button>
                       ))}
                     </div>
-                    <div style={{ display: 'flex', background: C.bg, border: `1px solid ${C.border}`, borderRadius: 7, padding: 2 }}>
-                      {[['vol','Vol %'],['rto','RTO %']].map(([id,lbl]) => (
-                        <button key={id} onClick={() => setWSlabMetric(id)} style={{ fontSize: 10, padding: '2px 10px', borderRadius: 5, border: 'none', background: wSlabMetric === id ? (id === 'rto' ? '#dc2626' : C.acc) : 'transparent', color: wSlabMetric === id ? (id === 'rto' ? '#fff' : '#000') : C.t3, cursor: 'pointer', fontWeight: wSlabMetric === id ? 700 : 500, fontFamily: 'var(--font)' }}>{lbl}</button>
-                      ))}
-                    </div>
                   </div>
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
@@ -2171,7 +2166,7 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
                         <div style={{ width: 8, height: 8, borderRadius: '50%', background: d.color, flexShrink: 0 }} />
                         <div style={{ fontSize: 11.5, color: C.t2, flex: 1, minWidth: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{d.name}</div>
                         <div style={{ fontSize: 11.5, fontWeight: 700, color: C.t1, flexShrink: 0 }}>{wMetric === 'qty' ? (d.value||0).toLocaleString('en-IN') : fmtVal(d.value||0)}</div>
-                        <div style={{ fontSize: 11, color: wSlabMetric === 'rto' ? C.red.tx : C.t3, minWidth: 36, textAlign: 'right', flexShrink: 0 }}>{wSlabMetric === 'vol' ? d.pct+'%' : (d.raw.rto_pct??'—')+'%'}</div>
+                        <div style={{ fontSize: 11, color: C.t3, minWidth: 36, textAlign: 'right', flexShrink: 0 }}>{d.pct}%</div>
                       </div>
                     ))}
                   </div>
