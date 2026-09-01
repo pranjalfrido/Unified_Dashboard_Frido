@@ -168,6 +168,43 @@ by_courier AS (
     ROUND(AVG(committed_sla), 1) AS avg_sla
   FROM base GROUP BY 1, 2
 ),
+by_facility AS (
+  SELECT
+    CASE
+      WHEN UPPER(TRIM(pickup_city)) IN ('DELHI','GURGAON','GURUGRAM','HARYANA') THEN 'Delhi'
+      WHEN UPPER(TRIM(pickup_city)) IN ('MUMBAI','BHIWANDI') THEN 'Mumbai'
+      WHEN UPPER(TRIM(pickup_city)) IN ('PUNE','MAVAL') THEN 'Pune'
+      WHEN UPPER(TRIM(pickup_city)) IN ('BANGALORE','BENGALURU') THEN 'Bengaluru'
+      WHEN UPPER(TRIM(pickup_city)) IN ('KOLKATA','HOWRAH','HOOGHLY') THEN 'Kolkata'
+      WHEN UPPER(TRIM(pickup_city)) = 'CHENNAI' THEN 'Chennai'
+      WHEN UPPER(TRIM(pickup_city)) = 'HYDERABAD' THEN 'Hyderabad'
+      ELSE NULL
+    END AS facility,
+    COUNT(awb) AS total,
+    SUM(invoice_value) AS total_value,
+    COUNTIF(unified_status='Delivered') AS delivered,
+    COUNTIF(unified_status='RTO') AS rto,
+    COUNTIF(unified_status='Intransit') AS in_transit,
+    COUNTIF(unified_status='Pickup Pending') AS pickup_pending,
+    COUNTIF(unified_status='Cancelled') AS cancelled,
+    COUNTIF(unified_status IN ('Lost','Damaged')) AS lost_damaged,
+    COUNTIF(unified_status='RTO' AND COALESCE(ofd_attempts,0)=0) AS z_rto,
+    COUNTIF(ofd_attempts=1 AND unified_status='Delivered') AS d1,
+    COUNTIF(ofd_attempts > 1 AND unified_status='Delivered') AS rasr_num,
+    COUNTIF(ofd_attempts IS NOT NULL AND ofd_attempts != 0) AS ofd_total,
+    COUNTIF(delivery_date IS NOT NULL AND edd IS NOT NULL AND delivery_date <= edd) AS on_time,
+    COUNTIF(delivery_date IS NOT NULL AND edd IS NOT NULL AND delivery_date > edd) AS sla_breach,
+    ROUND(AVG(IF(pickup_ts IS NOT NULL AND delivery_ts IS NOT NULL AND TIMESTAMP_DIFF(delivery_ts, pickup_ts, MINUTE) BETWEEN 0 AND 28800, TIMESTAMP_DIFF(delivery_ts, pickup_ts, MINUTE) / 1440.0, NULL)), 2) AS avg_intransit_days,
+    ROUND(AVG(IF(delivery_date IS NOT NULL AND order_date IS NOT NULL AND DATE_DIFF(delivery_date, order_date, DAY) BETWEEN 0 AND 20, DATE_DIFF(delivery_date, order_date, DAY), NULL)), 2) AS avg_fulfilment_days,
+    ROUND(AVG(IF(pickup_ts IS NOT NULL AND created_ts IS NOT NULL AND TIMESTAMP_DIFF(pickup_ts, created_ts, MINUTE) BETWEEN 0 AND 14400, TIMESTAMP_DIFF(pickup_ts, created_ts, MINUTE) / 1440.0, NULL)), 2) AS avg_pickup_days,
+    ROUND(AVG(IF(created_date IS NOT NULL AND order_date IS NOT NULL AND DATE_DIFF(created_date, order_date, DAY) BETWEEN 0 AND 10, DATE_DIFF(created_date, order_date, DAY), NULL)), 2) AS avg_processing_days,
+    ROUND(AVG(IF(ofd1_date IS NOT NULL AND pickup_date IS NOT NULL, DATE_DIFF(ofd1_date, pickup_date, DAY), NULL)), 2) AS avg_s2a_days,
+    ROUND(AVG(IF(clickpost_unified_status='RTO-Delivered' AND rto_mark_date IS NOT NULL AND latest_ts_date IS NOT NULL AND DATE_DIFF(latest_ts_date, rto_mark_date, DAY) BETWEEN 0 AND 20, DATE_DIFF(latest_ts_date, rto_mark_date, DAY), NULL)), 2) AS avg_rto_tat_days
+  FROM base
+  WHERE pickup_city IS NOT NULL
+  GROUP BY 1
+  HAVING facility IS NOT NULL
+),
 by_courier_day AS (
   SELECT courier_group, shipment_type, FORMAT_DATE('%d %b', created_date) AS period_label, created_date AS period_dt,
     COUNT(awb) AS total, COUNTIF(unified_status='Delivered') AS delivered, COUNTIF(unified_status='RTO') AS rto,
@@ -485,6 +522,7 @@ SELECT
   TO_JSON_STRING(ARRAY(SELECT AS STRUCT * FROM tat_by_courier ORDER BY total DESC)) AS tat_by_courier,
   TO_JSON_STRING(ARRAY(SELECT AS STRUCT * FROM tat_by_month ORDER BY month_dt)) AS tat_by_month,
   TO_JSON_STRING(ARRAY(SELECT AS STRUCT * FROM tat_by_facility ORDER BY total DESC)) AS tat_by_facility,
+  TO_JSON_STRING(ARRAY(SELECT AS STRUCT * FROM by_facility ORDER BY total DESC)) AS by_facility,
   TO_JSON_STRING(ARRAY(SELECT AS STRUCT * FROM by_weight_slab ORDER BY slab_order)) AS by_weight_slab,
   TO_JSON_STRING(ARRAY(SELECT AS STRUCT * FROM pickup_ageing ORDER BY courier_group)) AS pickup_ageing,
   TO_JSON_STRING((SELECT AS STRUCT * FROM filter_opts)) AS filter_opts
@@ -527,6 +565,7 @@ function parseRow(r) {
     tatByCourier: JSON.parse(r.tat_by_courier),
     tatByMonth: JSON.parse(r.tat_by_month),
     tatByFacility: JSON.parse(r.tat_by_facility),
+    byFacility: JSON.parse(r.by_facility),
     byWeightSlab: JSON.parse(r.by_weight_slab),
     pickupAgeing: JSON.parse(r.pickup_ageing),
     filterOpts: JSON.parse(r.filter_opts),
