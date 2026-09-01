@@ -92,7 +92,7 @@ function ReturnTrendChart({ kpis, dailyTrend }) {
                 ))}
               </div>
             ) : null} />
-            <Legend wrapperStyle={{ fontSize: 11 }} />
+            <Legend wrapperStyle={{ fontSize: 11, color: C.t1 }} />
             <Area yAxisId="rev" type="monotone" dataKey="revenue" name="Revenue" stroke="#E0B800" fill="url(#raRevGrad)" strokeWidth={2} dot={false} />
             <Line yAxisId="pct" type="monotone" dataKey="totalReturnPct" name="Return % (Overall)" stroke="#E24B4A" strokeWidth={2} dot={false} />
             <Line yAxisId="pct" type="monotone" dataKey="cancelPct" name="Cancellation %" stroke="#B91C1C" strokeWidth={1.5} dot={false} strokeDasharray="6 2" />
@@ -116,9 +116,8 @@ function TopReturnedProductsCard({ topProducts, paymentTypeOpts, paymentType, se
   const rows = search ? allRows.filter(r => r.subCategory.toLowerCase().includes(search.toLowerCase()) || r.category.toLowerCase().includes(search.toLowerCase())) : allRows
   const maxVal = Math.max(...allRows.map(r => basis === 'qty' ? r.returnQtyLost : r.returnRevLost), 1)
   return (
-    <Card fill title="Top Products · High Returns" style={{ height: 420 }} action={
+    <Card fill title="Top Products · High Returns" titleNoWrap style={{ height: 420 }} action={
       <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-        <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search product…" style={{ fontSize: 11.5, padding: '4px 9px', borderRadius: 6, border: `1px solid ${C.border2}`, background: C.card, color: C.t1, outline: 'none', fontFamily: 'var(--font)', width: 130 }} />
         <select value={paymentType} onChange={e => setPaymentType(e.target.value)} style={{ fontSize: 11, fontWeight: 600, padding: '3px 8px', borderRadius: 6, border: `1px solid ${C.border2}`, background: C.card, color: C.t1, cursor: 'pointer', fontFamily: 'var(--font)', outline: 'none' }}>
           <option value="">Payment Type</option>
           {paymentTypeOpts.map(p => <option key={p} value={p}>{p}</option>)}
@@ -246,20 +245,20 @@ function ReturnReasonsDonut({ returnReasons, height = 420 }) {
   const donutData = byReason.map((r, i) => ({ name: r.reason, value: r.count, color: REASON_COLORS[i % REASON_COLORS.length] }))
 
   return (
-    <Card title="Return Reasons · % Share" style={{ height }}>
+    <Card title="Return Reasons · % Share">
       {donutData.length === 0 ? (
         <div style={{ fontSize: 12, color: C.t3, textAlign: 'center', padding: '30px 0' }}>No return-reason data</div>
       ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10 }}>
-          <ResponsiveContainer width={160} height={160} style={{ flexShrink: 0 }}>
+        <div style={{ display: 'flex', flexDirection: 'row', alignItems: 'center', gap: 14, marginTop: 30 }}>
+          <div style={{ flexShrink: 0, marginLeft: -18 }}><ResponsiveContainer width={150} height={150}>
             <PieChart>
-              <Pie data={donutData} cx="50%" cy="50%" innerRadius={46} outerRadius={72} dataKey="value" paddingAngle={2}>
+              <Pie data={donutData} cx="50%" cy="50%" innerRadius={42} outerRadius={68} dataKey="value" paddingAngle={2}>
                 {donutData.map((d, i) => <Cell key={i} fill={d.color} />)}
               </Pie>
               <Tooltip content={({ active, payload }) => active && payload?.length ? <div style={{ background: '#fff', border: `1px solid ${C.border}`, borderRadius: 6, padding: '5px 10px', fontSize: 12, color: '#111', fontWeight: 600 }}>{payload[0].name} : {fmtN(payload[0].value)}</div> : null} />
             </PieChart>
-          </ResponsiveContainer>
-          <div style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: 5, overflowY: 'auto' }}>
+          </ResponsiveContainer></div>
+          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 9, overflowY: 'auto' }}>
             {donutData.map((d, i) => (
               <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
                 <span style={{ width: 7, height: 7, borderRadius: '50%', background: d.color, flexShrink: 0 }} />
@@ -298,8 +297,8 @@ function ReturnReasonsTable({ returnReasons, height = 420 }) {
   const thStyle = { fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.05em', color: C.t3, padding: '3px 5px 7px', borderBottom: `1px solid ${C.border}`, whiteSpace: 'nowrap' }
 
   return (
-    <Card title="Return Reasons · Detail" style={{ height }}>
-      <div style={{ overflowY: 'auto', maxHeight: height - 60 }}>
+    <Card fill title="Return Reasons · Detail">
+      <div style={{ overflowY: 'auto', height: '100%' }}>
         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
           <thead style={{ position: 'sticky', top: 0, background: C.card, zIndex: 1 }}>
             <tr>
@@ -409,7 +408,7 @@ export default function D2CReturnAnalysisTab({ filters }) {
             />
           </div>
 
-          <div className="g-2" style={{ gridTemplateColumns: '1.3fr 1fr', alignItems: 'stretch' }}>
+          <div className="g-2" style={{ gridTemplateColumns: '1.235fr 1fr', alignItems: 'stretch', gridAutoRows: undefined }}>
             <ReturnBreakdownTable
               title="Category-wise Return Breakdown"
               rows={data.categoryTable}
@@ -419,7 +418,8 @@ export default function D2CReturnAnalysisTab({ filters }) {
               onSearchChange={setCatSearch}
               onExport={() => exportCSV(data.categoryTable, 'd2c_return_analysis_category.csv')}
               getVariants={r => data.skuVariants?.[`${r.category}::${r.subCategory}`]}
-              maxHeight={460}
+              maxHeight={385}
+              boxHeight={445}
               action={<QtyRevToggle value={catBasis} onChange={setCatBasis} />}
             />
             <ReturnBreakdownTable
@@ -432,13 +432,14 @@ export default function D2CReturnAnalysisTab({ filters }) {
                 return `${MONTH_ABBR[parseInt(m, 10) - 1]}-${y.slice(2)}`
               } }]}
               basis={monthBasis}
-              maxHeight={460}
+              maxHeight={390}
+              boxHeight={450}
               defaultSortKey="month"
               action={<QtyRevToggle value={monthBasis} onChange={setMonthBasis} />}
             />
           </div>
 
-          <div className="g-3" style={{ gridTemplateColumns: '0.9fr 0.7fr 1.4fr', alignItems: 'start' }}>
+          <div className="g-3" style={{ gridTemplateColumns: '0.69fr 0.7fr 1.01fr', alignItems: 'stretch', gridAutoRows: '270px' }}>
             <PaymentTypeTransposedTable paymentTypeTable={data.paymentTypeTable} basis={payBasis} setBasis={setPayBasis} />
             <ReturnReasonsDonut returnReasons={data.returnReasons} />
             <ReturnReasonsTable returnReasons={data.returnReasons} />

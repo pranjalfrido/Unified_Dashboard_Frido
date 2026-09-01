@@ -4583,9 +4583,9 @@ function ChannelTrendCard({ dailyArr, channels, rangeStart, rangeEnd }) {
 
   return (
     <Card>
-      <div style={{ display: 'flex', flexDirection: 'column', marginBottom: 11, gap: 5 }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 11 }}>
         <span style={{ fontSize: 13, fontWeight: 600, color: C.t1 }}>{GROUP_OPTS.find(x => x.id === groupBy)?.label} {m.label} by Channel</span>
-        <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end' }}>
+        <div style={{ display: 'flex', gap: 6 }}>
           <select value={groupBy} onChange={e => setGroupBy(e.target.value)} style={{ ...selStyle, width: 60, fontSize: 10.5, padding: '3px 4px' }}>
             {GROUP_OPTS.map(x => <option key={x.id} value={x.id}>{x.label}</option>)}
           </select>
@@ -4671,7 +4671,7 @@ function groupDailyArr(dailyArr, channels, groupBy, rangeStart, rangeEnd) {
     const cur = new Date(rangeStart + 'T00:00:00')
     const end = new Date(endDate + 'T00:00:00')
     while (cur <= end) {
-      const key = cur.toISOString().slice(0, 10)
+      const key = `${cur.getFullYear()}-${String(cur.getMonth()+1).padStart(2,'0')}-${String(cur.getDate()).padStart(2,'0')}`
       const empty = { date: key }
       channels.forEach(ch => { empty[ch] = 0; empty[ch + '_net'] = 0; empty[ch + '_o'] = 0; empty[ch + '_u'] = 0 })
       result.push(map[key] || empty)
@@ -12029,7 +12029,7 @@ function SalesPage({ data, filters, setFilters, activeTab, setActiveTab, fetchDa
           <div>{channelToggle}</div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginLeft: 'auto' }}>
             {activeTab === 'shopify' && (
-              <button onClick={() => setShopifyView(v => v === 'returns' ? 'overview' : 'returns')} className="d2c-return-link" style={{ fontSize: 12, fontWeight: 600, color: shopifyView === 'returns' ? C.acm : C.t2, background: 'none', border: 'none', cursor: 'pointer', padding: '4px 2px', textDecoration: shopifyView === 'returns' ? 'underline' : 'none', textDecorationColor: C.acm, textUnderlineOffset: 3 }}>
+              <button onClick={() => setShopifyView(v => v === 'returns' ? 'overview' : 'returns')} className="d2c-return-link" style={{ fontSize: 12, fontWeight: 600, color: shopifyView === 'returns' ? C.t1 : C.t2, background: 'none', border: 'none', cursor: 'pointer', padding: '4px 2px', textDecoration: shopifyView === 'returns' ? 'underline' : 'none', textDecorationColor: C.t1, textUnderlineOffset: 3 }}>
                 {shopifyView === 'returns' ? '← Back to Overview' : 'Return Analysis'}
               </button>
             )}
