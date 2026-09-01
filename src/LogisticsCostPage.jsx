@@ -2894,13 +2894,13 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters 
       <div style={{ marginTop: 14 , ...(secHid['courier'] ? { display: 'none' } : {}) }}>
         <Card title="Weight slab detail"
           note={isMobile ? "" : "spend, unit cost and leg split per billable slab"}
-          action={isMobile ? (
+          action={
             <input
               value={slabSearch} onChange={e => setSlabSearch(e.target.value)}
-              placeholder="Search…"
-              style={{ fontSize: 11.5, padding: '4px 8px', borderRadius: 7, border: `1px solid ${C.border2}`, background: C.bg, color: C.t1, outline: 'none', width: 100 }}
+              placeholder="Find a weight slab…"
+              style={{ fontSize: 11.5, padding: '4px 8px', borderRadius: 7, border: `1px solid ${C.border2}`, background: C.bg, color: C.t1, outline: 'none', width: isMobile ? 100 : 160 }}
             />
-          ) : null}>
+          }>
           {isMobile ? (
             <>
               <div style={{ overflowX: 'auto', overflowY: 'auto', maxHeight: 320, marginLeft: -8, marginRight: -8, WebkitOverflowScrolling: 'touch' }}>
@@ -2952,8 +2952,7 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters 
               { key: 'revAvg', label: 'Reverse', align: 'center', render: (_, r) => (r.revAvg ? '₹' + r.revAvg.toFixed(0) : '—') },
               { key: 'rtoAvg', label: 'RTO', align: 'center', render: (_, r) => (r.rtoAvg ? '₹' + r.rtoAvg.toFixed(0) : '—') },
             ]}
-            rows={slabRows}
-            search searchKeys={['slab']} searchPlaceholder="Find a weight slab…"
+            rows={slabSearch.trim() ? slabRows.filter(r => String(r.slab ?? '').toLowerCase().includes(slabSearch.trim().toLowerCase())) : slabRows}
             maxRows={200}
             maxHeight={420}
           />
