@@ -293,7 +293,7 @@ function useStaticInv(enabled = true, windowDays = 7) {
     setError(null)
     let staticOk = false
     try {
-      const res = await fetch(`/inv-data-${windowDays}d.json`)
+      const res = await fetch(`/inv-data-${windowDays}d.json`, { cache: 'no-store' })
       if (!res.ok) throw new Error(`static file missing (${res.status})`)
       const json = await res.json()
       if (reqId !== reqIdRef.current) return
