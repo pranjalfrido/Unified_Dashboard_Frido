@@ -8,18 +8,19 @@ import { BigQuery } from '@google-cloud/bigquery'
 const bq = new BigQuery({ keyFilename: 'sa_key.json' })
 
 // Match dashboard default: 1st of current month → yesterday
+const fmtLocal = d => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`
 const endD = new Date()
 endD.setDate(endD.getDate() - 1)
-const end = endD.toISOString().slice(0, 10)
+const end = fmtLocal(endD)
 const startD = new Date(endD.getFullYear(), endD.getMonth(), 1)
-const start = startD.toISOString().slice(0, 10)
+const start = fmtLocal(startD)
 const days = Math.round((endD - startD) / 86400000) + 1
 
 // Previous period: same number of days immediately preceding
 const prevEnd = new Date(startD); prevEnd.setDate(prevEnd.getDate() - 1)
 const prevStart = new Date(prevEnd); prevStart.setDate(prevStart.getDate() - days + 1)
-const prevStartStr = prevStart.toISOString().slice(0, 10)
-const prevEndStr = prevEnd.toISOString().slice(0, 10)
+const prevStartStr = fmtLocal(prevStart)
+const prevEndStr = fmtLocal(prevEnd)
 
 const splitNDD = true
 
