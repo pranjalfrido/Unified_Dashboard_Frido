@@ -218,7 +218,14 @@ function computePayload(windowDays) {
     const acc = skuLocMap.get(locKey)
     acc.totalInvt += r.totalInvt; acc.rawInvt += r.rawInvt; acc.rawBlockedInvt += r.rawBlockedInvt; acc.rtdInvt += r.rtdInvt
   }
-  const skuLocRows = [...skuLocMap.values()]
+  // Recalculate doi and stockStatus for each (sku, location) using the summed totalInvt.
+  // The initial spread from the first facility row may have totalInvt=0, giving a wrong doi/stockStatus.
+  const skuLocRows = [...skuLocMap.values()].map(r => {
+    const denominator = Math.ceil(Math.max(r.avgSale, r.orderAllocation))
+    const doi = r.totalInvt > 0 && denominator === 0 ? null : (denominator > 0 ? Math.floor(r.totalInvt / denominator) : 0)
+    const status = doi == null ? stockStatus(0, r.avgSale, r.totalInvt, { isDead: r.isDead }) : stockStatus(doi, r.avgSale, r.totalInvt, { isDead: r.isDead })
+    return { ...r, doi, stockStatus: status }
+  })
 
   const rolledSkuMap = new Map()
   for (const r of skuFacilityRows) {
