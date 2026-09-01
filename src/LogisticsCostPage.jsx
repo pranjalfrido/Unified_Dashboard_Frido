@@ -49,14 +49,27 @@ const zoneColor = (zone, ordered) => {
   return i === -1 ? VIZ.muted : ORDINAL_BLUE[Math.min(i, ORDINAL_BLUE.length - 1)]
 }
 
-// Weight slabs mirror how courier rate cards actually step, so a slab filter
-// answers "which slab is bleeding money" rather than an arbitrary cut.
+// Weight slabs mirror how courier rate cards actually step, so a slab filter answers
+// "which slab is bleeding money" rather than an arbitrary cut.
+//
+// The old top band was "10 kg +", which buried everything heavy in one bucket worth ₹174 L.
+// Split on where the volume and the money actually sit (B2C, all months):
+//   10-15 kg  16,910 shp  ₹42.01 L      15-20 kg   3,134 shp  ₹10.34 L
+//   20-30 kg  10,900 shp  ₹50.58 L      30-50 kg   1,295 shp  ₹ 9.72 L
+//   50 kg +    4,303 shp  ₹61.48 L
+//
+// 50 kg + is the reason for the change: 0.64% of shipments but 8.79% of cost. As part of a
+// 10+ bucket it was invisible; on its own it is the most expensive slab in the book.
 const WEIGHT_BANDS = [
   { key: '0-1', label: '0 – 1 kg', min: 0, max: 1 },
   { key: '1-2', label: '1 – 2 kg', min: 1, max: 2 },
   { key: '2-5', label: '2 – 5 kg', min: 2, max: 5 },
   { key: '5-10', label: '5 – 10 kg', min: 5, max: 10 },
-  { key: '10+', label: '10 kg +', min: 10, max: null },
+  { key: '10-15', label: '10 – 15 kg', min: 10, max: 15 },
+  { key: '15-20', label: '15 – 20 kg', min: 15, max: 20 },
+  { key: '20-30', label: '20 – 30 kg', min: 20, max: 30 },
+  { key: '30-50', label: '30 – 50 kg', min: 30, max: 50 },
+  { key: '50+', label: '50 kg +', min: 50, max: null },
 ]
 
 // The three reporting scopes. B2C is the default because it is where the detail
@@ -87,7 +100,26 @@ function CourierCell({ name }) {
   )
 }
 
-const BAND_LABEL = { '0-1': '0 – 1 kg', '1-2': '1 – 2 kg', '2-5': '2 – 5 kg', '5-10': '5 – 10 kg', '10+': '10 kg +' }
+// Cube rows carry the short band key; this maps them to the display label. Derived from
+// WEIGHT_BANDS rather than restated, so a new band cannot be added in one place and forgotten
+// here — an unmapped key falls through to the raw string and reads as a bug.
+// Vehicle type as the charts key it: "20 FT", "20FT" and "20 Ft" are one vehicle, not three.
+// Mirrors vehicleKey() in scripts/b2b-rate-card.mjs — duplicated rather than imported because
+// that module pulls in xlsx and pg, which have no business in a browser bundle. If the rule
+// changes, change it in both places.
+function vehicleKeyOf(vt) {
+  const s = String(vt || '').toUpperCase().replace(/\s+/g, '')
+  // Pickup BEFORE the footage pattern: "Pickup/10 Ft" is a pickup, and the digits inside it
+  // would otherwise capture it as a 10FT truck — a much dearer vehicle.
+  if (/ACE/.test(s)) return 'TATA ACE'
+  if (/PICK/.test(s)) return 'PICKUP'
+  if (/7\.?5T?/.test(s)) return '7.5T'
+  if (/10MT|10T\b/.test(s)) return '10MT'
+  const m = s.match(/(\d+)\s*FT/)
+  return m ? m[1] + 'FT' : (vt || '—')
+}
+
+const BAND_LABEL = Object.fromEntries(WEIGHT_BANDS.map(b => [b.key, b.label]))
 
 const SCOPES = [
   { id: 'all', label: 'Overview', hint: 'FTL/PTL + B2C combined summary' },
@@ -806,6 +838,7 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters 
           transMonths: j.b2bTransMonths || [],
           vehicles: j.b2bVehicles || [],
           laneVeh: j.b2bLaneVeh || [],
+          rateCmp: j.b2bRateCmp || [],
           sole: j.b2bSole || null,
         })
         if (j.options) {
@@ -1090,7 +1123,7 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters 
       if (r.slab != null) sl.add(Number(r.slab))
     }
     // Bands are weight ranges, so they must sort by weight and not as text.
-    const bandOrder = ['0 – 1 kg', '1 – 2 kg', '2 – 5 kg', '5 – 10 kg', '10 kg +']
+    const bandOrder = WEIGHT_BANDS.map(b => b.label)
     // Legs follow the shipment's lifecycle, not the alphabet — alphabetical would read
     // Forward, RTO, Reverse and put the undelivered return before the customer return.
     const legOrder = ['Forward', 'Reverse', 'RTO']
@@ -1368,7 +1401,7 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters 
       key: t.key, trips: Number(t.trips) || 0, cost: Number(t.cost) || 0,
       avgCost: Number(t.avg_cost) || 0,
       share: total ? (Number(t.cost) / total) * 100 : 0,
-    }))
+    })).sort((a, b2) => b2.cost - a.cost)
   }, [b2b, b2bPick])
 
   const b2bMonthRows = useMemo(() => {
@@ -1480,6 +1513,44 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters 
       spend: num(s.sole_spend),
       pct: num(s.total_spend) ? (num(s.sole_spend) / num(s.total_spend)) * 100 : 0,
     }
+  }, [b2b, b2bPick])
+  // Rate comparison: the same vehicle priced by different carriers. The only view on this
+  // tab that names a cheaper alternative rather than describing what was spent.
+  //
+  // Grouped by VEHICLE, not lane+vehicle: only 3 lane cells have a comparable second carrier
+  // where 4 vehicles do, so the finer grain would render as almost no data. That does mean a
+  // cheaper carrier here might be running easier lanes — the note on the card says so.
+  const b2bRateCmpRows = useMemo(() => {
+    if (!b2b) return []
+    const by = new Map()
+    for (const r of b2b.rateCmp || []) {
+      if (b2bPick && !b2bPick(r)) continue
+      const k = r.vehicle || '—'
+      if (!by.has(k)) by.set(k, { vehicle: k, carriers: [] })
+      by.get(k).carriers.push({
+        name: r.transporter, trips: num(r.trips),
+        median: num(r.median_cost), spend: num(r.spend),
+      })
+    }
+    // Only vehicles with a second carrier are a comparison at all.
+    return [...by.values()]
+      .filter(v => v.carriers.length > 1)
+      .map(v => {
+        const sorted = [...v.carriers].sort((a, b2) => a.median - b2.median)
+        const lo = sorted[0], hi = sorted[sorted.length - 1]
+        return {
+          vehicle: v.vehicle,
+          carriers: sorted,
+          cheapest: lo.name, cheapestRate: lo.median,
+          dearest: hi.name, dearestRate: hi.median,
+          spreadPct: lo.median ? ((hi.median / lo.median) - 1) * 100 : 0,
+          // Rupees left on the table if the dearest carrier billed the cheapest rate. A
+          // ceiling, not a forecast: it assumes the cheap carrier could absorb the volume.
+          gapRs: hi.trips * (hi.median - lo.median),
+          spend: v.carriers.reduce((s, c) => s + c.spend, 0),
+        }
+      })
+      .sort((a, b2) => b2.gapRs - a.gapRs)
   }, [b2b, b2bPick])
 
   // Headline figures for the Cost Overview tiles. Derived from the per-transporter rows so
@@ -1689,17 +1760,20 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters 
         <div style={{ height: 1, background: C.border, margin: '4px 0' }} />
 
         {/* FTL/PTL-only slicers, in the same slot the parcel tabs use for Shipment Leg and
-            Billing Status. Chips rather than dropdowns: 3 freight types and 11 vehicle sizes
-            are few enough to show at a glance, and a chip row shows what is selected without
-            being opened. */}
+            Billing Status. Freight Type is a chip row (3 options, visible without opening);
+            Vehicle Size is a dropdown (11 options would wrap to three rows of chips). */}
         {scope === 'b2b' && (<>
         <div style={{ fontSize: 10, fontWeight: 800, color: C.t3, letterSpacing: '.06em', textTransform: 'uppercase' }}>Freight Type</div>
         <ChipRow options={opts.freightTypes} selected={filters.freightTypes}
           onToggle={v => toggleIn('freightTypes', v)} />
 
-        <div style={{ fontSize: 10, fontWeight: 800, color: C.t3, letterSpacing: '.06em', textTransform: 'uppercase', marginTop: 4 }}>Vehicle Size</div>
-        <ChipRow options={opts.vehicleTypes} selected={filters.vehicleTypes}
-          onToggle={v => toggleIn('vehicleTypes', v)} />
+        {/* Dropdown rather than chips: 11 vehicle sizes wrapped to three rows and took more
+            sidebar height than every other slicer combined. Same multi-select behaviour, and
+            SearchSelect adds a search box which earns its place at this many options.
+            Freight Type above stays as chips — 3 options fit one line and read at a glance. */}
+        <SearchSelect label="Vehicle Size" options={opts.vehicleTypes} multi
+          selected={filters.vehicleTypes}
+          onChange={v => (v === null ? setOne('vehicleTypes', []) : toggleIn('vehicleTypes', v))} />
 
         <div style={{ height: 1, background: C.border, margin: '4px 0' }} />
         </>)}
@@ -1809,9 +1883,11 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters 
     // ── OVERALL: B2B + B2C combined ──
     content = !overall ? <Card title="Loading summary…" /> : (
       <>
-        <SectionHdr title="Overview" note="B2C courier + FTL/PTL transporter" />
-        {/* Four KPIs, then the combined trend, then a card per carrier. Same hero + tile
-            geometry as the other two tabs so the three read as one dashboard. */}
+        {/* No header here — the scope toggle above already says Overview. The spacer stands
+            in for the SectionHdr margin the block used to get. */}
+        <div style={{ height: 12 }} />
+        {/* Hero plus a 3x2 tile grid, then the combined trend, then a card per carrier. Same
+            hero + tile geometry as the other two tabs so the three read as one dashboard. */}
         <div className="ov-hero cost-kpi-desktop-grid" style={{ display: 'grid', gridTemplateColumns: '2.2fr 5fr', gap: 12, alignItems: 'stretch' }}>
           <Hero sparkMin={22}
             label="Total Logistics Cost"
@@ -2303,7 +2379,7 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters 
         </div>
 
         <div style={{ marginTop: 14 , ...(secHid['ftl-vehicles'] ? { display: 'none' } : {}) }}>
-          <Card title="Vehicle detail">
+          <Card>
             <DataTable
               columns={[
                 { key: 'vehicle', label: 'Vehicle' },
@@ -2321,7 +2397,7 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters 
 
         <SectionHdr title="Lane Detail" note="one row per lane and vehicle size — the grain a freight rate is quoted at" collapsed={secHid['ftl-lanes']} onToggle={() => toggleSec('ftl-lanes')} />
         <div style={{ marginTop: 14 , ...(secHid['ftl-lanes'] ? { display: 'none' } : {}) }}>
-          <Card title="Lane detail">
+          <Card>
             <DataTable
               columns={[
                 { key: 'lane', label: 'Lane' },
@@ -2341,32 +2417,129 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters 
           </Card>
         </div>
 
-        <SectionHdr title="Transporter & Freight Type" collapsed={secHid['ftl-types']} onToggle={() => toggleSec('ftl-types')} />
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(330px,1fr))', gap: 14 , ...(secHid['ftl-types'] ? { display: 'none' } : {}) }}>
-          <Card title="By transporter">
-            <DataTable
-              columns={[
-                { key: 'key', label: 'Transporter' },
-                { key: 'trips', label: 'Trips', align: 'center', render: (_, r) => fmtN(r.trips) },
-                { key: 'cost', label: 'Cost', align: 'center', render: (_, r) => fmt(r.cost) },
-                { key: 'avgCost', label: 'Avg Cost / Trip', align: 'center', render: (_, r) => '₹' + Math.round(r.avgCost).toLocaleString('en-IN') },
-                { key: 'share', label: 'Share', align: 'center', render: (_, r) => <ShareBar pct={r.share}>{r.share.toFixed(1) + '%'}</ShareBar> },
-              ]}
-              rows={b2bTransRows}
-            />
-          </Card>
-
-          <Card title="By freight type" note="FTL = full truck, PTL = part load">
+        <SectionHdr title="Freight Type & Carrier Rates" note="FTL = full truck, PTL = part load" collapsed={secHid['ftl-types']} onToggle={() => toggleSec('ftl-types')} />
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(360px,1fr))', gap: 14 , ...(secHid['ftl-types'] ? { display: 'none' } : {}) }}>
+          {/* Freight type is a genuine composition — the three types sum to total freight spend —
+              so a donut reads it faster than a table. The table stays beneath it: FTL is 95.2%,
+              which makes PT/FTL and PTL slivers too thin to read an angle from, and the numbers
+              are what a reader actually needs for those two. */}
+          <Card style={{ display: 'flex', flexDirection: 'column' }} title="Freight type mix"
+            note="share of total freight spend">
+            <div style={{ height: 168 }}>
+              <ResponsiveContainer width="100%" height="100%">
+                <PieChart margin={{ top: 4, right: 4, left: 4, bottom: 4 }}>
+                  <Tooltip
+                    content={({ active, payload }) => {
+                      if (!active || !payload?.length) return null
+                      const r = payload[0].payload
+                      return (
+                        <div style={{ background: C.card, border: `1px solid ${C.border2}`, borderRadius: 9, padding: '9px 11px', boxShadow: '0 6px 20px rgba(0,0,0,.12)' }}>
+                          <div style={{ fontSize: 11.5, fontWeight: 700, color: C.t1, marginBottom: 4 }}>{r.key}</div>
+                          <div style={{ fontSize: 15, fontWeight: 800, color: C.t1 }}>{fmt(r.cost)}</div>
+                          <div style={{ fontSize: 11, color: C.t2, marginTop: 3 }}>
+                            {r.share.toFixed(1)}% of spend · {fmtN(r.trips)} trips
+                          </div>
+                          <div style={{ fontSize: 11, color: C.t3, marginTop: 2 }}>
+                            ₹{Math.round(r.avgCost).toLocaleString('en-IN')} per trip
+                          </div>
+                        </div>
+                      )
+                    }} />
+                  <Pie data={b2bTypeRows} dataKey="cost" nameKey="key" cx="50%" cy="50%"
+                    innerRadius={40} outerRadius={64} paddingAngle={2}
+                    stroke={VIZ.surface} strokeWidth={2} label={false} labelLine={false}>
+                    {/* Fixed order by spend, so a type keeps its colour as the filter changes. */}
+                    {b2bTypeRows.map((r, i) => (
+                      <Cell key={r.key} fill={[SERIES.blue, SERIES.orange, SERIES.aqua][i % 3]} />
+                    ))}
+                  </Pie>
+                </PieChart>
+              </ResponsiveContainer>
+            </div>
+            {/* Legend as text rather than Recharts': at 0.8% the PTL slice is a hairline, so its
+                identity has to come from a labelled row, not from the wedge. */}
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px 14px', justifyContent: 'center', marginTop: 2, marginBottom: 8 }}>
+              {b2bTypeRows.map((r, i) => (
+                <span key={r.key} style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 10.5, color: C.t2 }}>
+                  <span style={{ width: 8, height: 8, borderRadius: 2, background: [SERIES.blue, SERIES.orange, SERIES.aqua][i % 3], flexShrink: 0 }} />
+                  {r.key} <strong style={{ color: C.t1 }}>{r.share.toFixed(1)}%</strong>
+                </span>
+              ))}
+            </div>
             <DataTable
               columns={[
                 { key: 'key', label: 'Type' },
                 { key: 'trips', label: 'Trips', align: 'center', render: (_, r) => fmtN(r.trips) },
                 { key: 'cost', label: 'Cost', align: 'center', render: (_, r) => fmt(r.cost) },
                 { key: 'avgCost', label: 'Avg Cost / Trip', align: 'center', render: (_, r) => '₹' + Math.round(r.avgCost).toLocaleString('en-IN') },
-                { key: 'share', label: 'Share', align: 'center', render: (_, r) => <ShareBar pct={r.share}>{r.share.toFixed(1) + '%'}</ShareBar> },
               ]}
               rows={b2bTypeRows}
             />
+          </Card>
+
+          {/* The only view on this tab that names a cheaper alternative. Grouped bars, one per
+              carrier, so the comparison is read side by side rather than inferred from a table.
+              Ordered by rupees at stake, not by spread %, because a 306% gap on a small vehicle
+              matters less than a smaller gap on a large one. */}
+          <Card style={{ display: 'flex', flexDirection: 'column' }} title="Same vehicle, different carrier"
+            note="median cost per trip · min 8 trips per carrier to qualify">
+            {b2bRateCmpRows.length ? (
+              <>
+                <div style={{ flex: 1, minHeight: 200 }}>
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={b2bRateCmpRows} margin={{ top: 10, right: 14, left: 4, bottom: 4 }}>
+                      <CartesianGrid stroke={VIZ.grid} vertical={false} />
+                      <XAxis dataKey="vehicle" tick={{ fontSize: 11, fill: VIZ.muted }}
+                        axisLine={{ stroke: VIZ.axis }} tickLine={false} interval={0} />
+                      <YAxis tick={{ fontSize: 11, fill: VIZ.muted }} axisLine={false} tickLine={false}
+                        tickFormatter={v => '₹' + Math.round(v / 1000) + 'k'} />
+                      <Tooltip cursor={{ fill: 'rgba(11,11,11,0.04)' }}
+                        content={({ active, payload }) => {
+                          if (!active || !payload?.length) return null
+                          const r = payload[0].payload
+                          return (
+                            <div style={{ background: C.card, border: `1px solid ${C.border2}`, borderRadius: 9, padding: '9px 11px', boxShadow: '0 6px 20px rgba(0,0,0,.12)' }}>
+                              <div style={{ fontSize: 11.5, fontWeight: 700, color: C.t1, marginBottom: 5 }}>{r.vehicle}</div>
+                              {r.carriers.map((c, i) => (
+                                <div key={c.name} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 11, color: C.t2 }}>
+                                  <span style={{ color: i === 0 ? C.green.tx : C.t2, fontWeight: i === 0 ? 700 : 400 }}>{c.name}</span>
+                                  <span style={{ marginLeft: 'auto', paddingLeft: 12, fontWeight: 700, color: C.t1 }}>
+                                    ₹{Math.round(c.median).toLocaleString('en-IN')}
+                                  </span>
+                                  <span style={{ color: C.t3, fontSize: 10.5 }}>{fmtN(c.trips)} trips</span>
+                                </div>
+                              ))}
+                              <div style={{ fontSize: 11, color: C.red.tx, marginTop: 5, fontWeight: 700 }}>
+                                {fmt(r.gapRs)} at stake · {r.spreadPct.toFixed(0)}% spread
+                              </div>
+                            </div>
+                          )
+                        }} />
+                      {/* One bar per carrier slot, coloured by RANK not identity: the leftmost is
+                          always the cheapest for that vehicle, so the reader compares position
+                          rather than remembering which colour is which carrier. */}
+                      {[0, 1, 2, 3].map(i => (
+                        <Bar key={i} dataKey={r => r.carriers[i]?.median ?? null}
+                          name={i === 0 ? 'Cheapest' : i === 1 ? '2nd' : i === 2 ? '3rd' : '4th'}
+                          fill={i === 0 ? SERIES.aqua : i === 1 ? SERIES.blue : i === 2 ? SERIES.orange : SERIES.yellow}
+                          radius={[3, 3, 0, 0]} maxBarSize={22} />
+                      ))}
+                      <Legend wrapperStyle={{ fontSize: 10.5 }} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+                <div style={{ fontSize: 10.5, color: VIZ.muted, marginTop: 4 }}>
+                  Grouped by vehicle rather than lane: only 3 lane cells have a comparable second
+                  carrier. A cheaper carrier here may be running easier lanes — check the lane
+                  table before shifting volume.
+                </div>
+              </>
+            ) : (
+              <div style={{ fontSize: 12.5, color: C.t2 }}>
+                No vehicle has two carriers with 8+ trips each, so there is nothing to compare
+                like for like.
+              </div>
+            )}
           </Card>
         </div>
 
@@ -2380,7 +2553,12 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters 
                 { key: 'transporter_name', label: 'Transporter' },
                 { key: 'origin_location', label: 'Origin' },
                 { key: 'destination_location', label: 'Destination' },
-                { key: 'freight_type', label: 'Type' },
+                { key: 'vehicle_type', label: 'Vehicle', align: 'center',
+                  // Normalised to the same key the charts group on, so "20 FT", "20FT" and
+                  // "20 Ft" read as one vehicle here too rather than three.
+                  render: (_, r) => vehicleKeyOf(r.vehicle_type) },
+                { key: 'vehicle_number', label: 'Vehicle No.', align: 'center' },
+                { key: 'freight_type', label: 'Type', align: 'center' },
                 { key: 'total_cost', label: 'Total', align: 'center', render: (_, r) => fmt(r.total_cost) },
               ]}
               rows={b2bRows}
