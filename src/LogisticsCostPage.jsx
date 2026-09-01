@@ -3,7 +3,7 @@ import { C, fmt, fmtN, fmtBig, COURIER_COLORS, COURIER_LOGOS } from './utils.js'
 import {
   Card, Badge, DataTable, ChartTooltip,
   BarChart, Bar, Line, LineChart, ComposedChart, AreaChart, Area, XAxis, YAxis, CartesianGrid,
-  Tooltip, Legend, LabelList, PieChart, Pie, ResponsiveContainer, Cell, ReferenceLine,
+  Tooltip, Legend, LabelList, PieChart, Pie, ResponsiveContainer, Cell,
 } from './components.jsx'
 
 // ── Logistics Cost Analytics ──────────────────────────────────
@@ -2817,6 +2817,151 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters 
           )}
         </div>
       </Card>
+      {/* ── By courier ── */}
+      {/* The overbilled-% column here is the per-partner breakdown of the headline figure
+          in Billing Accuracy above. Prepaid vs COD follows it, since the COD premium is
+          read per courier once the partner table has set the context. */}
+      <SectionHdr title="By Courier Partner"
+        note={courierRows.length === 1 ? 'one partner in the ledger so far' : `${courierRows.length} partners`} collapsed={secHid['courier']} onToggle={() => toggleSec('courier')} />
+      <Card style={secHid['courier'] ? { display: 'none' } : undefined}>
+        {isMobile ? (
+          <div style={{ overflowX: 'auto', marginLeft: -8, marginRight: -8, WebkitOverflowScrolling: 'touch' }}>
+            <table style={{ borderCollapse: 'collapse', tableLayout: 'fixed', width: 'max-content', minWidth: '100%', fontSize: 11.5 }}>
+              <thead>
+                <tr style={{ borderBottom: `1px solid ${C.border2}` }}>
+                  <th style={{ position: 'sticky', left: 0, background: C.card, zIndex: 2, padding: '5px 8px', textAlign: 'left', fontWeight: 800, color: C.t1, width: 90, whiteSpace: 'nowrap', borderRight: `1px solid ${C.border}` }}>Courier</th>
+                  <th style={{ padding: '5px 4px', textAlign: 'center', fontWeight: 800, color: C.t1, width: 62, whiteSpace: 'nowrap' }}>Shipments</th>
+                  <th style={{ padding: '5px 4px', textAlign: 'center', fontWeight: 800, color: C.t1, width: 62, whiteSpace: 'nowrap' }}>Cost</th>
+                  <th style={{ padding: '5px 4px', textAlign: 'center', fontWeight: 800, color: C.t1, width: 62, whiteSpace: 'nowrap' }}>Avg/Ship</th>
+                  <th style={{ padding: '5px 4px', textAlign: 'center', fontWeight: 800, color: C.t1, width: 58, whiteSpace: 'nowrap' }}>Cost/kg</th>
+                  <th style={{ padding: '5px 4px', textAlign: 'center', fontWeight: 800, color: C.t1, width: 68, whiteSpace: 'nowrap' }}>% Wrong Wt</th>
+                  <th style={{ padding: '5px 4px', textAlign: 'center', fontWeight: 800, color: C.t1, width: 65, whiteSpace: 'nowrap' }}>Claimable</th>
+                </tr>
+              </thead>
+              <tbody>
+                {courierRows.map((r, i) => (
+                  <tr key={r.courier} style={{ borderBottom: i < courierRows.length - 1 ? `1px solid ${C.border2}` : 'none', background: i % 2 === 0 ? 'transparent' : 'rgba(0,0,0,0.02)' }}>
+                    <td style={{ position: 'sticky', left: 0, background: C.card, zIndex: 1, padding: '5px 8px', fontWeight: 700, color: C.t1, whiteSpace: 'nowrap', borderRight: `1px solid ${C.border}` }}><CourierCell name={r.courier} /></td>
+                    <td style={{ padding: '5px 4px', textAlign: 'center', color: C.t1 }}>{fmtBig(r.shipments)}</td>
+                    <td style={{ padding: '5px 4px', textAlign: 'center', color: C.t1 }}>{fmt(r.cost)}</td>
+                    <td style={{ padding: '5px 4px', textAlign: 'center', color: C.t1 }}>₹{r.avgCost.toFixed(2)}</td>
+                    <td style={{ padding: '5px 4px', textAlign: 'center', color: C.t1 }}>{r.cpk != null ? '₹' + r.cpk.toFixed(2) : '—'}</td>
+                    <td style={{ padding: '5px 4px', textAlign: 'center' }}>
+                      <span style={{ color: r.overPct > 40 ? C.red.tx : C.t1, fontWeight: r.overPct > 40 ? 700 : undefined }}>{r.overPct.toFixed(1)}%</span>
+                    </td>
+                    <td style={{ padding: '5px 4px', textAlign: 'center' }}>
+                      {r.claimRs > 0 ? <span style={{ color: C.red.tx, fontWeight: 700 }}>{fmt(r.claimRs)}</span> : <span style={{ color: C.t3 }}>—</span>}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+        <DataTable
+          columns={[
+            { key: 'courier', label: 'Courier', render: v => <CourierCell name={v} /> },
+            { key: 'shipments', label: 'Shipments', align: 'center', render: (_, r) => fmtN(r.shipments) },
+            { key: 'cost', label: 'Cost', align: 'center', render: (_, r) => fmt(r.cost) },
+            { key: 'avgCost', label: 'Avg Cost / Shipment', align: 'center', render: (_, r) => '₹' + r.avgCost.toFixed(2) },
+            { key: 'cpk', label: 'Cost / kg', align: 'center', render: (_, r) => (r.cpk != null ? '₹' + r.cpk.toFixed(2) : '—') },
+            { key: 'overPct', label: '% Wrong Weight', align: 'center', render: (_, r) => (
+              <span style={{ color: r.overPct > 40 ? C.red.tx : undefined, fontWeight: r.overPct > 40 ? 700 : undefined }}>
+                {r.overPct.toFixed(1) + '%'}
+              </span>
+            ) },
+            { key: 'claimRs', label: 'Claimable', align: 'center', render: (_, r) => (
+              r.claimRs > 0
+                ? <span style={{ color: C.red.tx, fontWeight: 700 }}>{fmt(r.claimRs)}</span>
+                : <span style={{ color: C.t3 }}>—</span>
+            ) },
+          ]}
+          rows={courierRows}
+        />
+        )}
+        {courierRows.length === 1 && (
+          <div style={{ fontSize: 11.5, color: C.t3, marginTop: 8 }}>
+            Courier-vs-courier comparison unlocks once bills from other partners are uploaded.
+          </div>
+        )}
+      </Card>
+
+      {/* ── Weight slab cost analysis ── */}
+      {/* Replaces the Prepaid-vs-COD donuts, which restated a KPI tile. Cost per billable
+          slab answers something nothing else on the page did: where the money sits by weight,
+          and which slabs carry the overbilling. Slab is the courier's charged weight rounded
+          how they bill it — 0.5 kg floor, then up to the next whole kg. */}
+      <div style={{ marginTop: 14 , ...(secHid['courier'] ? { display: 'none' } : {}) }}>
+        <Card title="Weight slab detail"
+          note={isMobile ? "" : "spend, unit cost and leg split per billable slab"}
+          action={isMobile ? (
+            <input
+              value={slabSearch} onChange={e => setSlabSearch(e.target.value)}
+              placeholder="Search…"
+              style={{ fontSize: 11.5, padding: '4px 8px', borderRadius: 7, border: `1px solid ${C.border2}`, background: C.bg, color: C.t1, outline: 'none', width: 100 }}
+            />
+          ) : null}>
+          {isMobile ? (
+            <>
+              <div style={{ overflowX: 'auto', overflowY: 'auto', maxHeight: 320, marginLeft: -8, marginRight: -8, WebkitOverflowScrolling: 'touch' }}>
+                <table style={{ borderCollapse: 'collapse', tableLayout: 'fixed', width: 'max-content', minWidth: '100%', fontSize: 11.5 }}>
+                  <thead>
+                    <tr style={{ borderBottom: `1px solid ${C.border2}` }}>
+                      <th style={{ position: 'sticky', top: 0, left: 0, background: C.card, zIndex: 3, padding: '5px 8px', textAlign: 'left', fontWeight: 800, color: C.t1, width: 60, whiteSpace: 'nowrap', borderRight: `1px solid ${C.border}`, borderBottom: `1px solid ${C.border2}` }}>Wt Slab</th>
+                      <th style={{ position: 'sticky', top: 0, background: C.card, padding: '5px 4px', textAlign: 'center', fontWeight: 800, color: C.t1, width: 72, whiteSpace: 'nowrap', borderBottom: `1px solid ${C.border2}` }}>Shipments</th>
+                      <th style={{ position: 'sticky', top: 0, background: C.card, padding: '5px 4px', textAlign: 'center', fontWeight: 800, color: C.t1, width: 72, whiteSpace: 'nowrap', borderBottom: `1px solid ${C.border2}` }}>Cost</th>
+                      <th style={{ position: 'sticky', top: 0, background: C.card, padding: '5px 4px', textAlign: 'center', fontWeight: 800, color: C.t1, width: 72, whiteSpace: 'nowrap', borderBottom: `1px solid ${C.border2}` }}>Avg/Ship</th>
+                      <th style={{ position: 'sticky', top: 0, background: C.card, padding: '5px 4px', textAlign: 'center', fontWeight: 800, color: C.t1, width: 66, whiteSpace: 'nowrap', borderBottom: `1px solid ${C.border2}` }}>Cost/kg</th>
+                      <th style={{ position: 'sticky', top: 0, background: C.card, padding: '5px 4px', textAlign: 'center', fontWeight: 800, color: C.t1, width: 66, whiteSpace: 'nowrap', borderBottom: `1px solid ${C.border2}` }}>Forward</th>
+                      <th style={{ position: 'sticky', top: 0, background: C.card, padding: '5px 4px', textAlign: 'center', fontWeight: 800, color: C.t1, width: 66, whiteSpace: 'nowrap', borderBottom: `1px solid ${C.border2}` }}>Reverse</th>
+                      <th style={{ position: 'sticky', top: 0, background: C.card, padding: '5px 4px', textAlign: 'center', fontWeight: 800, color: C.t1, width: 58, whiteSpace: 'nowrap', borderBottom: `1px solid ${C.border2}` }}>RTO</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {slabRows.filter(r => {
+                      const q = slabSearch.trim().toLowerCase()
+                      const label = `${r.slab} kg`.toLowerCase()
+                      return q === '' || label === q || (label.startsWith(q) && !q.includes('kg'))
+                    }).map((r, i, arr) => (
+                      <tr key={r.slab} style={{ borderBottom: i < arr.length - 1 ? `1px solid ${C.border2}` : 'none', background: i % 2 === 0 ? 'transparent' : 'rgba(0,0,0,0.02)' }}>
+                        <td style={{ position: 'sticky', left: 0, background: C.card, zIndex: 1, padding: '5px 8px', fontWeight: 700, color: C.t1, whiteSpace: 'nowrap', borderRight: `1px solid ${C.border}` }}>{r.slab} kg</td>
+                        <td style={{ padding: '5px 4px', textAlign: 'center', color: C.t1 }}>{fmtBig(r.n)}</td>
+                        <td style={{ padding: '5px 4px', textAlign: 'center', color: C.t1 }}>{fmt(r.cost)}</td>
+                        <td style={{ padding: '5px 4px', textAlign: 'center', color: C.t1 }}>₹{r.avgCost.toFixed(0)}</td>
+                        <td style={{ padding: '5px 4px', textAlign: 'center', color: C.t1 }}>₹{r.cpk.toFixed(1)}</td>
+                        <td style={{ padding: '5px 4px', textAlign: 'center', color: C.t1 }}>{r.fwdAvg ? '₹' + r.fwdAvg.toFixed(0) : '—'}</td>
+                        <td style={{ padding: '5px 4px', textAlign: 'center', color: C.t1 }}>{r.revAvg ? '₹' + r.revAvg.toFixed(0) : '—'}</td>
+                        <td style={{ padding: '5px 4px', textAlign: 'center', color: C.t1 }}>{r.rtoAvg ? '₹' + r.rtoAvg.toFixed(0) : '—'}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </>
+          ) : (
+          <DataTable
+            columns={[
+              { key: 'slab', label: 'Weight Slab', render: (_, r) => (
+                <span style={{ fontWeight: 700 }}>{r.slab} kg</span>
+              ) },
+              { key: 'n', label: 'Shipments', align: 'center', render: (_, r) => fmtN(r.n) },
+              { key: 'cost', label: 'Total Spend', align: 'center', render: (_, r) => fmt(r.cost) },
+              { key: 'avgCost', label: 'Avg Cost / Shipment', align: 'center', render: (_, r) => '₹' + r.avgCost.toFixed(0) },
+              { key: 'cpk', label: 'Cost / kg', align: 'center', render: (_, r) => '₹' + r.cpk.toFixed(1) },
+              { key: 'fwdAvg', label: 'Forward', align: 'center', render: (_, r) => (r.fwdAvg ? '₹' + r.fwdAvg.toFixed(0) : '—') },
+              { key: 'revAvg', label: 'Reverse', align: 'center', render: (_, r) => (r.revAvg ? '₹' + r.revAvg.toFixed(0) : '—') },
+              { key: 'rtoAvg', label: 'RTO', align: 'center', render: (_, r) => (r.rtoAvg ? '₹' + r.rtoAvg.toFixed(0) : '—') },
+            ]}
+            rows={slabRows}
+            search searchKeys={['slab']} searchPlaceholder="Find a weight slab…"
+            maxRows={200}
+            maxHeight={420}
+          />
+          )}
+        </Card>
+
+      {/* ── Recoverable, split by cause ── */}
+      </div>
 
       {/* ── Zone + mode ── */}
       <SectionHdr title="Where The Money Goes" collapsed={secHid['money']} onToggle={() => toggleSec('money')} />
@@ -3213,151 +3358,6 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters 
         </Card>
       </div>
 
-      {/* ── By courier ── */}
-      {/* The overbilled-% column here is the per-partner breakdown of the headline figure
-          in Billing Accuracy above. Prepaid vs COD follows it, since the COD premium is
-          read per courier once the partner table has set the context. */}
-      <SectionHdr title="By Courier Partner"
-        note={courierRows.length === 1 ? 'one partner in the ledger so far' : `${courierRows.length} partners`} collapsed={secHid['courier']} onToggle={() => toggleSec('courier')} />
-      <Card style={secHid['courier'] ? { display: 'none' } : undefined}>
-        {isMobile ? (
-          <div style={{ overflowX: 'auto', marginLeft: -8, marginRight: -8, WebkitOverflowScrolling: 'touch' }}>
-            <table style={{ borderCollapse: 'collapse', tableLayout: 'fixed', width: 'max-content', minWidth: '100%', fontSize: 11.5 }}>
-              <thead>
-                <tr style={{ borderBottom: `1px solid ${C.border2}` }}>
-                  <th style={{ position: 'sticky', left: 0, background: C.card, zIndex: 2, padding: '5px 8px', textAlign: 'left', fontWeight: 800, color: C.t1, width: 90, whiteSpace: 'nowrap', borderRight: `1px solid ${C.border}` }}>Courier</th>
-                  <th style={{ padding: '5px 4px', textAlign: 'center', fontWeight: 800, color: C.t1, width: 62, whiteSpace: 'nowrap' }}>Shipments</th>
-                  <th style={{ padding: '5px 4px', textAlign: 'center', fontWeight: 800, color: C.t1, width: 62, whiteSpace: 'nowrap' }}>Cost</th>
-                  <th style={{ padding: '5px 4px', textAlign: 'center', fontWeight: 800, color: C.t1, width: 62, whiteSpace: 'nowrap' }}>Avg/Ship</th>
-                  <th style={{ padding: '5px 4px', textAlign: 'center', fontWeight: 800, color: C.t1, width: 58, whiteSpace: 'nowrap' }}>Cost/kg</th>
-                  <th style={{ padding: '5px 4px', textAlign: 'center', fontWeight: 800, color: C.t1, width: 68, whiteSpace: 'nowrap' }}>% Wrong Wt</th>
-                  <th style={{ padding: '5px 4px', textAlign: 'center', fontWeight: 800, color: C.t1, width: 65, whiteSpace: 'nowrap' }}>Claimable</th>
-                </tr>
-              </thead>
-              <tbody>
-                {courierRows.map((r, i) => (
-                  <tr key={r.courier} style={{ borderBottom: i < courierRows.length - 1 ? `1px solid ${C.border2}` : 'none', background: i % 2 === 0 ? 'transparent' : 'rgba(0,0,0,0.02)' }}>
-                    <td style={{ position: 'sticky', left: 0, background: C.card, zIndex: 1, padding: '5px 8px', fontWeight: 700, color: C.t1, whiteSpace: 'nowrap', borderRight: `1px solid ${C.border}` }}><CourierCell name={r.courier} /></td>
-                    <td style={{ padding: '5px 4px', textAlign: 'center', color: C.t1 }}>{fmtBig(r.shipments)}</td>
-                    <td style={{ padding: '5px 4px', textAlign: 'center', color: C.t1 }}>{fmt(r.cost)}</td>
-                    <td style={{ padding: '5px 4px', textAlign: 'center', color: C.t1 }}>₹{r.avgCost.toFixed(2)}</td>
-                    <td style={{ padding: '5px 4px', textAlign: 'center', color: C.t1 }}>{r.cpk != null ? '₹' + r.cpk.toFixed(2) : '—'}</td>
-                    <td style={{ padding: '5px 4px', textAlign: 'center' }}>
-                      <span style={{ color: r.overPct > 40 ? C.red.tx : C.t1, fontWeight: r.overPct > 40 ? 700 : undefined }}>{r.overPct.toFixed(1)}%</span>
-                    </td>
-                    <td style={{ padding: '5px 4px', textAlign: 'center' }}>
-                      {r.claimRs > 0 ? <span style={{ color: C.red.tx, fontWeight: 700 }}>{fmt(r.claimRs)}</span> : <span style={{ color: C.t3 }}>—</span>}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        ) : (
-        <DataTable
-          columns={[
-            { key: 'courier', label: 'Courier', render: v => <CourierCell name={v} /> },
-            { key: 'shipments', label: 'Shipments', align: 'center', render: (_, r) => fmtN(r.shipments) },
-            { key: 'cost', label: 'Cost', align: 'center', render: (_, r) => fmt(r.cost) },
-            { key: 'avgCost', label: 'Avg Cost / Shipment', align: 'center', render: (_, r) => '₹' + r.avgCost.toFixed(2) },
-            { key: 'cpk', label: 'Cost / kg', align: 'center', render: (_, r) => (r.cpk != null ? '₹' + r.cpk.toFixed(2) : '—') },
-            { key: 'overPct', label: '% Wrong Weight', align: 'center', render: (_, r) => (
-              <span style={{ color: r.overPct > 40 ? C.red.tx : undefined, fontWeight: r.overPct > 40 ? 700 : undefined }}>
-                {r.overPct.toFixed(1) + '%'}
-              </span>
-            ) },
-            { key: 'claimRs', label: 'Claimable', align: 'center', render: (_, r) => (
-              r.claimRs > 0
-                ? <span style={{ color: C.red.tx, fontWeight: 700 }}>{fmt(r.claimRs)}</span>
-                : <span style={{ color: C.t3 }}>—</span>
-            ) },
-          ]}
-          rows={courierRows}
-        />
-        )}
-        {courierRows.length === 1 && (
-          <div style={{ fontSize: 11.5, color: C.t3, marginTop: 8 }}>
-            Courier-vs-courier comparison unlocks once bills from other partners are uploaded.
-          </div>
-        )}
-      </Card>
-
-      {/* ── Weight slab cost analysis ── */}
-      {/* Replaces the Prepaid-vs-COD donuts, which restated a KPI tile. Cost per billable
-          slab answers something nothing else on the page did: where the money sits by weight,
-          and which slabs carry the overbilling. Slab is the courier's charged weight rounded
-          how they bill it — 0.5 kg floor, then up to the next whole kg. */}
-      <div style={{ marginTop: 14 , ...(secHid['courier'] ? { display: 'none' } : {}) }}>
-        <Card title="Weight slab detail"
-          note={isMobile ? "" : "spend, unit cost and leg split per billable slab"}
-          action={isMobile ? (
-            <input
-              value={slabSearch} onChange={e => setSlabSearch(e.target.value)}
-              placeholder="Search…"
-              style={{ fontSize: 11.5, padding: '4px 8px', borderRadius: 7, border: `1px solid ${C.border2}`, background: C.bg, color: C.t1, outline: 'none', width: 100 }}
-            />
-          ) : null}>
-          {isMobile ? (
-            <>
-              <div style={{ overflowX: 'auto', overflowY: 'auto', maxHeight: 320, marginLeft: -8, marginRight: -8, WebkitOverflowScrolling: 'touch' }}>
-                <table style={{ borderCollapse: 'collapse', tableLayout: 'fixed', width: 'max-content', minWidth: '100%', fontSize: 11.5 }}>
-                  <thead>
-                    <tr style={{ borderBottom: `1px solid ${C.border2}` }}>
-                      <th style={{ position: 'sticky', top: 0, left: 0, background: C.card, zIndex: 3, padding: '5px 8px', textAlign: 'left', fontWeight: 800, color: C.t1, width: 60, whiteSpace: 'nowrap', borderRight: `1px solid ${C.border}`, borderBottom: `1px solid ${C.border2}` }}>Wt Slab</th>
-                      <th style={{ position: 'sticky', top: 0, background: C.card, padding: '5px 4px', textAlign: 'center', fontWeight: 800, color: C.t1, width: 72, whiteSpace: 'nowrap', borderBottom: `1px solid ${C.border2}` }}>Shipments</th>
-                      <th style={{ position: 'sticky', top: 0, background: C.card, padding: '5px 4px', textAlign: 'center', fontWeight: 800, color: C.t1, width: 72, whiteSpace: 'nowrap', borderBottom: `1px solid ${C.border2}` }}>Cost</th>
-                      <th style={{ position: 'sticky', top: 0, background: C.card, padding: '5px 4px', textAlign: 'center', fontWeight: 800, color: C.t1, width: 72, whiteSpace: 'nowrap', borderBottom: `1px solid ${C.border2}` }}>Avg/Ship</th>
-                      <th style={{ position: 'sticky', top: 0, background: C.card, padding: '5px 4px', textAlign: 'center', fontWeight: 800, color: C.t1, width: 66, whiteSpace: 'nowrap', borderBottom: `1px solid ${C.border2}` }}>Cost/kg</th>
-                      <th style={{ position: 'sticky', top: 0, background: C.card, padding: '5px 4px', textAlign: 'center', fontWeight: 800, color: C.t1, width: 66, whiteSpace: 'nowrap', borderBottom: `1px solid ${C.border2}` }}>Forward</th>
-                      <th style={{ position: 'sticky', top: 0, background: C.card, padding: '5px 4px', textAlign: 'center', fontWeight: 800, color: C.t1, width: 66, whiteSpace: 'nowrap', borderBottom: `1px solid ${C.border2}` }}>Reverse</th>
-                      <th style={{ position: 'sticky', top: 0, background: C.card, padding: '5px 4px', textAlign: 'center', fontWeight: 800, color: C.t1, width: 58, whiteSpace: 'nowrap', borderBottom: `1px solid ${C.border2}` }}>RTO</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {slabRows.filter(r => {
-                      const q = slabSearch.trim().toLowerCase()
-                      const label = `${r.slab} kg`.toLowerCase()
-                      return q === '' || label === q || (label.startsWith(q) && !q.includes('kg'))
-                    }).map((r, i, arr) => (
-                      <tr key={r.slab} style={{ borderBottom: i < arr.length - 1 ? `1px solid ${C.border2}` : 'none', background: i % 2 === 0 ? 'transparent' : 'rgba(0,0,0,0.02)' }}>
-                        <td style={{ position: 'sticky', left: 0, background: C.card, zIndex: 1, padding: '5px 8px', fontWeight: 700, color: C.t1, whiteSpace: 'nowrap', borderRight: `1px solid ${C.border}` }}>{r.slab} kg</td>
-                        <td style={{ padding: '5px 4px', textAlign: 'center', color: C.t1 }}>{fmtBig(r.n)}</td>
-                        <td style={{ padding: '5px 4px', textAlign: 'center', color: C.t1 }}>{fmt(r.cost)}</td>
-                        <td style={{ padding: '5px 4px', textAlign: 'center', color: C.t1 }}>₹{r.avgCost.toFixed(0)}</td>
-                        <td style={{ padding: '5px 4px', textAlign: 'center', color: C.t1 }}>₹{r.cpk.toFixed(1)}</td>
-                        <td style={{ padding: '5px 4px', textAlign: 'center', color: C.t1 }}>{r.fwdAvg ? '₹' + r.fwdAvg.toFixed(0) : '—'}</td>
-                        <td style={{ padding: '5px 4px', textAlign: 'center', color: C.t1 }}>{r.revAvg ? '₹' + r.revAvg.toFixed(0) : '—'}</td>
-                        <td style={{ padding: '5px 4px', textAlign: 'center', color: C.t1 }}>{r.rtoAvg ? '₹' + r.rtoAvg.toFixed(0) : '—'}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </>
-          ) : (
-          <DataTable
-            columns={[
-              { key: 'slab', label: 'Weight Slab', render: (_, r) => (
-                <span style={{ fontWeight: 700 }}>{r.slab} kg</span>
-              ) },
-              { key: 'n', label: 'Shipments', align: 'center', render: (_, r) => fmtN(r.n) },
-              { key: 'cost', label: 'Total Spend', align: 'center', render: (_, r) => fmt(r.cost) },
-              { key: 'avgCost', label: 'Avg Cost / Shipment', align: 'center', render: (_, r) => '₹' + r.avgCost.toFixed(0) },
-              { key: 'cpk', label: 'Cost / kg', align: 'center', render: (_, r) => '₹' + r.cpk.toFixed(1) },
-              { key: 'fwdAvg', label: 'Forward', align: 'center', render: (_, r) => (r.fwdAvg ? '₹' + r.fwdAvg.toFixed(0) : '—') },
-              { key: 'revAvg', label: 'Reverse', align: 'center', render: (_, r) => (r.revAvg ? '₹' + r.revAvg.toFixed(0) : '—') },
-              { key: 'rtoAvg', label: 'RTO', align: 'center', render: (_, r) => (r.rtoAvg ? '₹' + r.rtoAvg.toFixed(0) : '—') },
-            ]}
-            rows={slabRows}
-            search searchKeys={['slab']} searchPlaceholder="Find a weight slab…"
-            maxRows={200}
-            maxHeight={420}
-          />
-          )}
-        </Card>
-
-      {/* ── Recoverable, split by cause ── */}
-      </div>
       {/* Weight overbilling only — the courier charged for weight we did not ship, the one
           dispute backed by our own declared figures rather than by a card inferred from
           their invoices. Rate variance sits beside it as a diagnostic, never summed in. */}
