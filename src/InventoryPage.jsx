@@ -521,10 +521,10 @@ export default function InventoryPage({ onTopbarDateControl, tab = 'health', set
             return { ...origLoc, totalInvt: locTotalInvt, rawInvt: locRawInvt, rawBlockedInvt: locRawBlockedInvt, rtdInvt: locRtdInvt, doi }
           })
           const avgSale = locs.reduce((a, l) => a + (l.avgSale || 0), 0)
-          const orderAllocation = locs.reduce((a, l) => a + (l.orderAllocation || 0), 0)
+          const orderAllocation = s.orderAllocation || 0
           const denom = Math.ceil(Math.max(avgSale, orderAllocation))
           const doi = denom > 0 ? Math.floor(totalInvt / denom) : (totalInvt > 0 ? null : 0)
-          const status = doi == null ? s.stockStatus : (locs.length === 1 ? locs[0].stockStatus : s.stockStatus)
+          const status = locs.length === 1 ? locs[0].stockStatus : s.stockStatus
           return { ...s, totalInvt, rawInvt, rawBlockedInvt, rtdInvt, avgSale, orderAllocation, doi, stockStatus: status, locations: locs }
         })
     } else if (effectiveLocations?.length) {
@@ -539,7 +539,7 @@ export default function InventoryPage({ onTopbarDateControl, tab = 'health', set
           const rawBlockedInvt = locs.reduce((a, l) => a + (l.rawBlockedInvt || 0), 0)
           const rtdInvt = locs.reduce((a, l) => a + (l.rtdInvt || 0), 0)
           const avgSale = locs.reduce((a, l) => a + (l.avgSale || 0), 0)
-          const orderAllocation = locs.reduce((a, l) => a + (l.orderAllocation || 0), 0)
+          const orderAllocation = s.orderAllocation || 0
           const denom = Math.ceil(Math.max(avgSale, orderAllocation))
           const doi = denom > 0 ? Math.floor(totalInvt / denom) : (totalInvt > 0 ? null : 0)
           const status = locs.length === 1 ? locs[0].stockStatus : s.stockStatus
