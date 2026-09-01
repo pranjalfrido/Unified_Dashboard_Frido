@@ -377,6 +377,7 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
   const [geoShipType, setGeoShipType] = useState({ dropCity: 'all', pickupCity: 'all', dropState: 'all' })
   const [secCollapsed, setSecCollapsed] = useState({})
   const [wMetric, setWMetric] = useState('qty')
+  const [wSlabMetric, setWSlabMetric] = useState('vol')
   const [ageingMetric, setAgeingMetric] = useState('del')
   const toggleSec = key => setSecCollapsed(p => ({ ...p, [key]: !p[key] }))
   const [lFiltersLocal, setLFiltersLocal] = useState({ couriers: [], shipmentType: 'forward', sddNdd: 'all', paymentMode: [], zone: [], pickupState: [], dropState: [], dropCity: [], category: [], subCategory: [], weightSlabs: [] })
@@ -394,7 +395,7 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
     window.addEventListener('resize', onResize)
     return () => window.removeEventListener('resize', onResize)
   }, [])
-  const [filterSidebarOpen, setFilterSidebarOpen] = useState(() => window.innerWidth > 768)
+  const [filterSidebarOpen, setFilterSidebarOpen] = useState(false)
   const [cExpanded, setCExpanded] = useState({})
   const [rawData, setRawData] = useState(null)
   const [rawPrevData, setRawPrevData] = useState(null)
@@ -779,7 +780,9 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
               const val = gi === 0 ? lFilters.shipmentType : lFilters.sddNdd
               const onChange = v => gi === 0 ? setLFilters(f => ({ ...f, shipmentType: v })) : setLFilters(f => ({ ...f, sddNdd: v }))
               return (
-                <div key={gi} style={{ display: 'flex', border: `1.5px solid ${C.border2}`, borderRadius: 8, overflow: 'hidden', background: C.card }}>
+                <div key={gi} style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                  {gi === 1 && <div style={{ fontSize: 10, fontWeight: 800, color: C.t3, letterSpacing: '.06em', textTransform: 'uppercase', marginTop: 4 }}>Shipment Type</div>}
+                <div style={{ display: 'flex', border: `1.5px solid ${C.border2}`, borderRadius: 8, overflow: 'hidden', background: C.card }}>
                   {opts.map((opt, i) => (
                     <button key={opt} onClick={() => { const v = gi === 0 ? opt.toLowerCase() : opt; onChange(v === val ? 'all' : v) }} style={{
                       flex: 1, padding: '6px 0', border: 'none', borderLeft: i > 0 ? `1.5px solid ${C.border2}` : 'none',
@@ -789,6 +792,7 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
                       textAlign: 'center', transition: 'all .15s'
                     }}>{opt}</button>
                   ))}
+                </div>
                 </div>
               )
             })}
@@ -947,7 +951,7 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
             </div>
             <div style={{ height: 1, background: C.border, margin: '10px 0 6px' }} />
             <ResponsiveContainer width="100%" height={isMobile ? 180 : 220}>
-              <ComposedChart data={trendData} margin={isMobile ? { top: 4, right: 20, left: 20, bottom: 0 } : { top: 4, right: 44, left: 10, bottom: 0 }}>
+              <ComposedChart data={trendData} margin={isMobile ? { top: 4, right: 20, left: 20, bottom: 0 } : { top: 4, right: -5, left: 0, bottom: 0 }}>
                 <defs>
                   <linearGradient id="lgDel" x1="0" y1="0" x2="0" y2="1">
                     <stop offset="5%" stopColor="#FFD600" stopOpacity={0.25} />
@@ -962,7 +966,7 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
                 <XAxis dataKey="label" tick={{ fontSize: isMobile ? 9 : 10, fill: C.t3 }} axisLine={isMobile ? { stroke: C.border } : undefined} tickLine={false} interval={0} ticks={trendData.length > 1 ? [trendData[0]?.label, trendData[Math.floor((trendData.length-1)/3)]?.label, trendData[Math.floor((trendData.length-1)*2/3)]?.label, trendData[trendData.length-1]?.label].filter(Boolean) : [trendData[0]?.label]} />
                 {isMobile
                   ? <><YAxis yAxisId="left" tick={false} axisLine={false} tickLine={false} width={0} /><YAxis yAxisId="right" orientation="right" tick={false} axisLine={false} tickLine={false} width={0} /></>
-                  : <><YAxis yAxisId="left" tick={{ fontSize: 9, fill: C.t3 }} tickLine={false} tickFormatter={v => v >= 1000 ? `${(v/1000).toFixed(0)}K` : v} /><YAxis yAxisId="right" orientation="right" tick={{ fontSize: 9, fill: C.t3 }} tickLine={false} tickFormatter={v => `${v}%`} /></>
+                  : <><YAxis yAxisId="left" tick={{ fontSize: 9, fill: C.t3 }} tickLine={false} tickFormatter={v => v >= 1000 ? `${(v/1000).toFixed(0)}K` : v} width={30} /><YAxis yAxisId="right" orientation="right" tick={{ fontSize: 9, fill: C.t3 }} tickLine={false} tickFormatter={v => `${v}%`} width={38} /></>
                 }
                 <Tooltip content={({ active, payload, label }) => {
                   if (!active || !payload?.length) return null
@@ -1046,12 +1050,12 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
               }))
               return (<>
             <ResponsiveContainer width="100%" height={220}>
-              <ComposedChart data={tatData} margin={isMobile ? { top: 4, right: 20, left: 20, bottom: 0 } : { top: 10, right: 10, left: -30, bottom: 0 }}>
+              <ComposedChart data={tatData} margin={isMobile ? { top: 4, right: 20, left: 20, bottom: 0 } : { top: 4, right: -5, left: 0, bottom: 0 }}>
                 {!isMobile && <CartesianGrid strokeDasharray="3 3" stroke={C.border} vertical={false} />}
                 <XAxis dataKey="label" tick={{ fontSize: isMobile ? 9 : 10, fill: C.t3 }} axisLine={isMobile ? { stroke: C.border } : undefined} tickLine={false} interval={0} ticks={tatData.length > 1 ? [tatData[0]?.label, tatData[Math.floor((tatData.length-1)/3)]?.label, tatData[Math.floor((tatData.length-1)*2/3)]?.label, tatData[tatData.length-1]?.label].filter(Boolean) : [tatData[0]?.label]} />
                 {isMobile
                   ? <><YAxis yAxisId="left" tick={false} axisLine={false} tickLine={false} width={0} /><YAxis yAxisId="right" orientation="right" domain={[0, dataMax => Math.ceil(dataMax) + 1]} tick={false} axisLine={false} tickLine={false} width={0} /></>
-                  : <><YAxis yAxisId="left" tick={{ fontSize: 9, fill: C.t3 }} tickFormatter={v => v >= 1000 ? (v/1000).toFixed(0)+'K' : v} /><YAxis yAxisId="right" orientation="right" domain={[0, dataMax => Math.ceil(dataMax) + 1]} tickCount={5} tick={{ fontSize: 9, fill: C.t2 }} tickFormatter={v => Math.round(v) + 'd'} /></>
+                  : <><YAxis yAxisId="left" tick={{ fontSize: 9, fill: C.t3 }} tickFormatter={v => v >= 1000 ? (v/1000).toFixed(0)+'K' : v} width={30} /><YAxis yAxisId="right" orientation="right" domain={[0, dataMax => Math.ceil(dataMax) + 1]} tickCount={5} tick={{ fontSize: 9, fill: C.t2 }} tickFormatter={v => Math.round(v) + 'd'} width={38} /></>
                 }
                 <Tooltip content={({ active, payload, label }) => {
                   if (!active || !payload?.length) return null
@@ -1076,10 +1080,10 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
               </ComposedChart>
             </ResponsiveContainer>
             {!isMobile && (
-              <div style={{ display: 'flex', gap: 16, justifyContent: 'center', marginTop: 8, flexWrap: 'wrap', flexShrink: 0 }}>
-                {[['#FFC107','Total Shipments'],['#6366F1','Avg Processing Days'],['#10B981','Avg Pickup Days'],['#F59E0B','Avg Intransit Days'],['#EF4444','Avg Fulfilment Days']].map(([color, label]) => (
-                  <span key={label} style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 10, color: C.t2 }}>
-                    <span style={{ width: 10, height: 10, borderRadius: 2, background: color, display: 'inline-block' }} />{label}
+              <div style={{ display: 'flex', gap: 10, justifyContent: 'center', marginTop: 8, flexWrap: 'nowrap', flexShrink: 0 }}>
+                {[['#FFC107','Total Shipments'],['#6366F1','Avg Processing'],['#10B981','Avg Pickup'],['#F59E0B','Avg Intransit'],['#EF4444','Avg Fulfilment']].map(([color, label]) => (
+                  <span key={label} style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 10, color: C.t2, whiteSpace: 'nowrap' }}>
+                    <span style={{ width: 10, height: 10, borderRadius: 2, background: color, display: 'inline-block', flexShrink: 0 }} />{label}
                   </span>
                 ))}
               </div>
@@ -1106,7 +1110,7 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
               ))}
             </div>
           </div>
-          <div style={{ overflowX: 'auto', overflowY: 'auto', maxHeight: 420 }}>
+          <div style={{ overflowX: 'auto', overflowY: 'auto', maxHeight: 450 }}>
             {(() => {
               const totalAll = byCourierData.reduce((s, r) => s + (r.total || 0), 0) || 1
               const COLS = [
@@ -1115,16 +1119,14 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
                 { key: 'total', label: 'Total' },
                 { key: '_delPct', label: 'Del %' },
                 { key: '_rtoPct', label: 'RTO %' },
-                { key: '_zrtoPct', label: 'Z-RTO %' },
                 { key: '_cancPct', label: 'Canc %' },
                 { key: '_fasrPct', label: 'FASR %' },
                 { key: '_rasrPct', label: 'RASR %' },
-                { key: 'avg_processing_days', label: 'Avg Processing', center: true },
-                { key: 'avg_pickup_days', label: 'Avg Pickup', center: true },
+                { key: 'avg_processing_days', label: 'Avg Processing', center: true, truncate: true },
+                { key: 'avg_pickup_days', label: 'Avg Pickup', center: true, truncate: true },
                 { key: 'avg_intransit_days', label: 'Avg S2D', center: true },
                 { key: 'avg_fulfilment_days', label: 'Avg O2D', center: true },
-                { key: 'avg_rto_tat_days', label: 'Avg RTO TAT', center: true },
-                { key: 'avg_s2a_days', label: 'Avg S2A', center: true },
+                { key: 'avg_rto_tat_days', label: 'Avg RTO TAT', center: true, truncate: true },
               ]
               const enriched = byCourierData.map(r => ({
                 ...r,
@@ -1233,20 +1235,19 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
                 return (
                   <table style={{ width:'100%', borderCollapse:'collapse', fontSize:12 }}>
                     <colgroup>
-                      <col style={{ width:'11%' }} />
-                      {['5.5%','5.5%','5.5%','5.5%','5.5%','5.5%','5.5%','5.5%','5.5%','5.5%','5.5%','5.5%','5.5%','5.5%'].map((w,i) => <col key={i} style={{ width:w }} />)}
+                      {Array(15).fill('6.67%').map((w,i) => <col key={i} style={{ width:w }} />)}
                     </colgroup>
                     <thead>
                       <tr style={{ borderBottom:`1.5px solid ${C.border}` }}>
                         {['Facility','Vol %','Total','Del %','RTO %','Z-RTO %','Canc %','FASR %','RASR %','Avg Processing','Avg Pickup','Avg S2D','Avg O2D','Avg RTO TAT','Avg S2A'].map((h,i) => (
-                          <th key={h} style={{ padding:'9px 10px', textAlign:i===0?'left':'right', color:C.t3, fontWeight:700, fontSize:9.5, letterSpacing:'.05em', textTransform:'uppercase', whiteSpace:'nowrap' }}>{h}</th>
+                          <th key={h} style={{ padding:'9px 10px', textAlign:i===0?'left':'right', color:C.t3, fontWeight:700, fontSize:9.5, letterSpacing:'.05em', textTransform:'uppercase', whiteSpace: i===0 ? 'normal' : 'nowrap', overflow: i===0 ? 'hidden' : undefined, textOverflow: i===0 ? 'ellipsis' : undefined, maxWidth: i===0 ? 0 : undefined }}>{h}</th>
                         ))}
                       </tr>
                     </thead>
                     <tbody>
                       {enrichFac.map(r => (
                         <tr key={r.facility} style={{ borderBottom:`1px solid ${C.border}` }}>
-                          <td style={td9L}>{r.facility}</td>
+                          <td style={{ ...td9L, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', maxWidth:0 }}>{r.facility}</td>
                           <td style={td9}>{r._volPct.toFixed(2)}%</td>
                           <td style={{ ...td9, color:C.t1, fontWeight:600 }}>{n(r.total)}</td>
                           <td style={td9}>{r._delPct.toFixed(2)}%</td>
@@ -1266,7 +1267,7 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
                     </tbody>
                     <tfoot>
                       <tr style={{ borderTop:`2px solid ${C.border}`, background:C.bg, fontWeight:700 }}>
-                        <td style={{ padding:'9px 10px', color:C.t1, fontWeight:700 }}>Total</td>
+                        <td style={{ padding:'9px 10px', color:C.t1, fontWeight:700, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', maxWidth:0 }}>Total</td>
                         <td style={{ ...td9 }}>100.00%</td>
                         <td style={{ ...td9, color:C.t1, fontWeight:700 }}>{n(facTotalAll)}</td>
                         <td style={{ ...td9, fontWeight:700 }}>{(sumD/facTotalAll*100).toFixed(2)}%</td>
@@ -1355,10 +1356,13 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
               }
               return (
                 <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+                  <colgroup>
+                    {[<col key={0} style={{ width:'10%' }} />, ...Array(12).fill(0).map((_,i) => <col key={i+1} style={{ width:'7.5%' }} />)]}
+                  </colgroup>
                   <thead style={{ position: 'sticky', top: 0, zIndex: 4 }}>
                     <tr style={{ borderBottom: `1.5px solid ${C.border}`, background: C.bg }}>
                       {COLS.map((col, ci) => (
-                        <th key={col.key} onClick={() => setSortCol(col.key)} style={{ padding: '6px 7px', textAlign: col.left ? 'left' : col.center ? 'center' : 'right', color: C.t1, fontWeight: 700, fontSize: 9.5, letterSpacing: 0.4, textTransform: 'uppercase', whiteSpace: 'nowrap', cursor: 'pointer', userSelect: 'none', borderBottom: `1.5px solid ${C.border}`, background: C.bg, ...(ci === 0 ? { position: 'sticky', left: 0, zIndex: 5 } : {}) }}>
+                        <th key={col.key} onClick={() => setSortCol(col.key)} style={{ padding: '6px 7px', textAlign: col.left ? 'left' : col.center ? 'center' : 'right', color: C.t1, fontWeight: 700, fontSize: 9.5, letterSpacing: 0.4, textTransform: 'uppercase', whiteSpace: 'nowrap', overflow: col.truncate ? 'hidden' : undefined, textOverflow: col.truncate ? 'ellipsis' : undefined, maxWidth: col.truncate ? 0 : undefined, cursor: 'pointer', userSelect: 'none', borderBottom: `1.5px solid ${C.border}`, background: C.bg, ...(ci === 0 ? { position: 'sticky', left: 0, zIndex: 5 } : {}) }}>
                           {col.label}{sortCol === col.key ? (sortDir === 'desc' ? ' ↓' : ' ↑') : ''}
                         </th>
                       ))}
@@ -1376,7 +1380,7 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
                       return (
                         <Fragment key={r.courier_group}>
                         <tr style={{ borderBottom: cExpanded[r.courier_group] ? 'none' : `1px solid ${C.border}` }}>
-                          <td style={{ padding: '6px 7px', minWidth: 143, position: 'sticky', left: 0, background: C.card, zIndex: 1 }}>
+                          <td style={{ padding: '6px 7px', position: 'sticky', left: 0, background: C.card, zIndex: 1, overflow: 'hidden' }}>
                             <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
                               <span onClick={() => setCExpanded(e => ({ ...e, [r.courier_group]: !e[r.courier_group] }))} style={{ fontSize:9, color:C.t3, display:'inline-block', transform:cExpanded[r.courier_group]?'rotate(90deg)':'rotate(0deg)', transition:'transform .15s', cursor:'pointer', flexShrink:0 }}>▶</span>
                               {logo
@@ -1390,7 +1394,6 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
                           <td style={{ padding: '6px 7px', textAlign: 'right', color: C.t1 }}>{n(r.total)}</td>
                           <td style={{ padding: '6px 7px', textAlign: 'right', color: C.t1, fontSize: 11 }}>{r._delPct.toFixed(2)}%</td>
                           <td style={{ padding: '6px 7px', textAlign: 'right', color: rtoColor, fontSize: 11 }}>{r._rtoPct.toFixed(2)}%</td>
-                          <td style={{ padding: '6px 7px', textAlign: 'right', color: C.t1, fontSize: 11 }}>{r._zrtoPct.toFixed(2)}%</td>
                           <td style={{ padding: '6px 7px', textAlign: 'right', color: C.t1, fontSize: 11 }}>{r._cancPct.toFixed(2)}%</td>
                           <td style={{ padding: '6px 7px', textAlign: 'right', color: C.t1, fontSize: 11 }}>{r._fasrPct != null ? r._fasrPct.toFixed(2) + '%' : '—'}</td>
                           <td style={{ padding: '6px 7px', textAlign: 'right', color: C.t1, fontSize: 11 }}>{r._rasrPct != null ? r._rasrPct.toFixed(2) + '%' : '—'}</td>
@@ -1399,7 +1402,6 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
                           <td style={{ padding: '6px 7px', textAlign: 'center', color: C.t1, fontSize: 11 }}>{d(r.avg_intransit_days)}</td>
                           <td style={{ padding: '6px 7px', textAlign: 'center', color: C.t1, fontSize: 11 }}>{d(r.avg_fulfilment_days)}</td>
                           <td style={{ padding: '6px 7px', textAlign: 'center', color: C.t1, fontSize: 11 }}>{d(r.avg_rto_tat_days)}</td>
-                          <td style={{ padding: '6px 7px', textAlign: 'center', color: C.t1, fontSize: 11 }}>{d(r.avg_s2a_days)}</td>
                         </tr>
                         {cExpanded[r.courier_group] && byCourierMonth.filter(m => m.courier_group === r.courier_group).sort((a,b) => a.month_dt < b.month_dt ? -1 : 1).map(m => {
                           const _delPct = m.total ? +((m.delivered/m.total)*100).toFixed(2) : 0
@@ -1417,7 +1419,6 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
                               <td style={{ padding:'4px 7px', textAlign:'right', color:C.t1, fontSize:11 }}>{n(m.total)}</td>
                               <td style={{ padding:'4px 7px', textAlign:'right', color:C.t1, fontSize:11 }}>{_delPct.toFixed(2)}%</td>
                               <td style={{ padding:'4px 7px', textAlign:'right', color:mRtoColor, fontSize:11 }}>{_rtoPct.toFixed(2)}%</td>
-                              <td style={{ padding:'4px 7px', textAlign:'right', color:C.t1, fontSize:11 }}>{_zrtoPct.toFixed(2)}%</td>
                               <td style={{ padding:'4px 7px', textAlign:'right', color:C.t1, fontSize:11 }}>{_cancPct.toFixed(2)}%</td>
                               <td style={{ padding:'4px 7px', textAlign:'right', color:C.t1, fontSize:11 }}>{_fasrPct!=null?_fasrPct.toFixed(2)+'%':'—'}</td>
                               <td style={{ padding:'4px 7px', textAlign:'right', color:C.t1, fontSize:11 }}>{_rasrPct!=null?_rasrPct.toFixed(2)+'%':'—'}</td>
@@ -1426,7 +1427,6 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
                               <td style={{ padding:'4px 7px', textAlign:'center', color:C.t1, fontSize:11 }}>{d(m.avg_intransit_days)}</td>
                               <td style={{ padding:'4px 7px', textAlign:'center', color:C.t1, fontSize:11 }}>{d(m.avg_fulfilment_days)}</td>
                               <td style={{ padding:'4px 7px', textAlign:'center', color:C.t1, fontSize:11 }}>{d(m.avg_rto_tat_days)}</td>
-                              <td style={{ padding:'4px 7px', textAlign:'center', color:C.t1, fontSize:11 }}>{d(m.avg_s2a_days)}</td>
                             </tr>
                           )
                         })}
@@ -1452,7 +1452,6 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
                           <td style={{ padding: '6px 7px', textAlign: 'right', color: C.t1 }}>{n(tot)}</td>
                           <td style={{ padding: '6px 7px', textAlign: 'right', color: C.t1, fontSize: 11 }}>{(sumD/tot*100).toFixed(2)}%</td>
                           <td style={{ padding: '6px 7px', textAlign: 'right', color: C.t1, fontSize: 11 }}>{(sumR/tot*100).toFixed(2)}%</td>
-                          <td style={{ padding: '6px 7px', textAlign: 'right', color: C.t1, fontSize: 11 }}>{(sumZ/tot*100).toFixed(2)}%</td>
                           <td style={{ padding: '6px 7px', textAlign: 'right', color: C.t1, fontSize: 11 }}>{(sumC/tot*100).toFixed(2)}%</td>
                           <td style={{ padding: '6px 7px', textAlign: 'right', color: C.t1, fontSize: 11 }}>{sumOfd ? (sumD1/sumOfd*100).toFixed(2)+'%' : '—'}</td>
                           <td style={{ padding: '6px 7px', textAlign: 'right', color: C.t1, fontSize: 11 }}>{sumOfd ? (sumRN/sumOfd*100).toFixed(2)+'%' : '—'}</td>
@@ -1461,7 +1460,6 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
                           <td style={{ padding: '6px 7px', textAlign: 'center', color: C.t1, fontSize: 11 }}>{wavg('avg_intransit_days').toFixed(2)}d</td>
                           <td style={{ padding: '6px 7px', textAlign: 'center', color: C.t1, fontSize: 11 }}>{wavg('avg_fulfilment_days').toFixed(2)}d</td>
                           <td style={{ padding: '6px 7px', textAlign: 'center', color: C.t1, fontSize: 11 }}>{wavg('avg_rto_tat_days').toFixed(2)}d</td>
-                          <td style={{ padding: '6px 7px', textAlign: 'center', color: C.t1, fontSize: 11 }}>{wavg('avg_s2a_days').toFixed(2)}d</td>
                         </tr>
                       )
                     })()}
@@ -2135,10 +2133,17 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
               <div style={cardStyle}>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
                   <div style={chartTitle}>Shipment Allocation by Weight</div>
-                  <div style={{ display: 'flex', background: C.bg, border: `1px solid ${C.border}`, borderRadius: 7, padding: 2 }}>
-                    {[['qty','Qty'],['value','Value']].map(([id,lbl]) => (
-                      <button key={id} onClick={() => setWMetric(id)} style={{ fontSize: 10, padding: '2px 10px', borderRadius: 5, border: 'none', background: wMetric === id ? C.acc : 'transparent', color: wMetric === id ? '#000' : C.t3, cursor: 'pointer', fontWeight: wMetric === id ? 700 : 500, fontFamily: 'var(--font)' }}>{lbl}</button>
-                    ))}
+                  <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                    <div style={{ display: 'flex', background: C.bg, border: `1px solid ${C.border}`, borderRadius: 7, padding: 2 }}>
+                      {[['qty','Qty'],['value','Value']].map(([id,lbl]) => (
+                        <button key={id} onClick={() => setWMetric(id)} style={{ fontSize: 10, padding: '2px 10px', borderRadius: 5, border: 'none', background: wMetric === id ? C.acc : 'transparent', color: wMetric === id ? '#000' : C.t3, cursor: 'pointer', fontWeight: wMetric === id ? 700 : 500, fontFamily: 'var(--font)' }}>{lbl}</button>
+                      ))}
+                    </div>
+                    <div style={{ display: 'flex', background: C.bg, border: `1px solid ${C.border}`, borderRadius: 7, padding: 2 }}>
+                      {[['vol','Vol %'],['rto','RTO %']].map(([id,lbl]) => (
+                        <button key={id} onClick={() => setWSlabMetric(id)} style={{ fontSize: 10, padding: '2px 10px', borderRadius: 5, border: 'none', background: wSlabMetric === id ? (id === 'rto' ? '#dc2626' : C.acc) : 'transparent', color: wSlabMetric === id ? (id === 'rto' ? '#fff' : '#000') : C.t3, cursor: 'pointer', fontWeight: wSlabMetric === id ? 700 : 500, fontFamily: 'var(--font)' }}>{lbl}</button>
+                      ))}
+                    </div>
                   </div>
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
@@ -2166,7 +2171,7 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
                         <div style={{ width: 8, height: 8, borderRadius: '50%', background: d.color, flexShrink: 0 }} />
                         <div style={{ fontSize: 11.5, color: C.t2, flex: 1, minWidth: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{d.name}</div>
                         <div style={{ fontSize: 11.5, fontWeight: 700, color: C.t1, flexShrink: 0 }}>{wMetric === 'qty' ? (d.value||0).toLocaleString('en-IN') : fmtVal(d.value||0)}</div>
-                        <div style={{ fontSize: 11, color: C.t3, minWidth: 32, textAlign: 'right', flexShrink: 0 }}>{d.pct}%</div>
+                        <div style={{ fontSize: 11, color: wSlabMetric === 'rto' ? C.red.tx : C.t3, minWidth: 36, textAlign: 'right', flexShrink: 0 }}>{wSlabMetric === 'vol' ? d.pct+'%' : (d.raw.rto_pct??'—')+'%'}</div>
                       </div>
                     ))}
                   </div>
@@ -2179,12 +2184,12 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
                 </div>
                 {isMobile && <div style={{ height: 1, background: C.border, margin: '10px 0 6px' }} />}
                 <ResponsiveContainer width="100%" height={220}>
-                  <ComposedChart data={ordered} margin={isMobile ? { top: 4, right: 4, left: 4, bottom: 0 } : { top: 4, right: 40, left: -10, bottom: 0 }}>
+                  <ComposedChart data={ordered} margin={isMobile ? { top: 4, right: 4, left: 4, bottom: 0 } : { top: 4, right: 2, left: 0, bottom: 0 }}>
                     {!isMobile && <CartesianGrid strokeDasharray="3 3" stroke={C.border} vertical={false} />}
                     <XAxis dataKey="slab" tick={{ fontSize: isMobile ? 9 : 10, fill: C.t2 }} axisLine={isMobile ? { stroke: C.border } : undefined} tickLine={false} />
                     {isMobile
                       ? <><YAxis yAxisId="qty" tick={false} axisLine={false} tickLine={false} width={0} /><YAxis yAxisId="pct" orientation="right" tick={false} axisLine={false} tickLine={false} width={0} domain={[0, 'dataMax + 5']} /></>
-                      : <><YAxis yAxisId="qty" tick={{ fontSize: 10, fill: C.t2 }} tickFormatter={v => v >= 1000 ? `${(v/1000).toFixed(0)}K` : v} /><YAxis yAxisId="pct" orientation="right" tick={{ fontSize: 10, fill: C.t2 }} unit="%" domain={[0, 'dataMax + 5']} /></>
+                      : <><YAxis yAxisId="qty" tick={{ fontSize: 10, fill: C.t2 }} tickFormatter={v => v >= 1000 ? `${(v/1000).toFixed(0)}K` : v} width={30} /><YAxis yAxisId="pct" orientation="right" tick={{ fontSize: 10, fill: C.t2 }} unit="%" domain={[0, 'dataMax + 5']} width={38} /></>
                     }
                     <Tooltip content={({ active, payload, label }) => {
                       if (!active || !payload?.length) return null
@@ -2249,13 +2254,6 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
                 <div key={title} style={{ ...cardStyle, display: 'flex', flexDirection: 'column', height: h }}>
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 2 }}>
                     <div style={chartTitle}>{title}</div>
-                    <div style={{ display: 'inline-flex', border: `1px solid ${C.border2}`, borderRadius: 6, overflow: 'hidden', flexShrink: 0 }}>
-                      {['All', 'Forward', 'Reverse'].map((opt, i) => {
-                        const val = opt.toLowerCase()
-                        const active = cardGeoType === val
-                        return <button key={opt} onClick={() => setGeoShipType(p => ({ ...p, [stateKey]: val }))} style={{ padding: '2px 8px', fontSize: 9.5, fontWeight: active ? 700 : 400, background: active ? C.acc : 'transparent', color: active ? '#000' : C.t2, border: 'none', cursor: 'pointer', fontFamily: 'var(--font)', borderLeft: i > 0 ? `1px solid ${C.border2}` : 'none' }}>{opt}</button>
-                      })}
-                    </div>
                   </div>
                   <div style={{ fontSize: 11, color: C.t3, marginBottom: 12, marginTop: 2 }}>{sub}</div>
                   <div style={{ overflowY: 'auto', flex: 1 }}>{geoBar(merged, key, color)}</div>
