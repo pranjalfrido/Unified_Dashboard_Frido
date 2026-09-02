@@ -2163,7 +2163,7 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
                     </PieChart>
                   </ResponsiveContainer>
                   </div>
-                  <div style={{ display: 'inline-flex', flexDirection: 'column', gap: 11, marginLeft: 112 }}>
+                  <div style={{ display: 'inline-flex', flexDirection: 'column', gap: 11, marginLeft: 200 }}>
                     {donutData.map(d => (
                       <div key={d.name} style={{ display: 'flex', alignItems: 'center', gap: 30 }}>
                         <div style={{ width: 8, height: 8, borderRadius: '50%', background: d.color, flexShrink: 0 }} />
