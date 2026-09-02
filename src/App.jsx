@@ -2469,7 +2469,10 @@ function Sidebar({ page, setPage, invTab, setInvTab, allowedTabs, profile }) {
     { id: 'documents', label: 'Documents', icon: <svg width={18} height={18} viewBox="0 0 24 24" fill="currentColor"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8l-6-6zm-1 7V3.5L18.5 9H13zM8 13h8v1.5H8V13zm0 3h8v1.5H8V16zm0-6h3v1.5H8V10z"/></svg> },
   ]
   const items = allowedTabs ? allItems.filter(i => {
-    if (i.id === 'logistics') return allowedTabs.includes('logistics') || allowedTabs.includes('logistics:cost')
+    if (i.id === 'sales') return hasSalesAccess(allowedTabs)
+    if (i.id === 'ads') return hasAdsAccess(allowedTabs)
+    if (i.id === 'pnl') return hasPnlAccess(allowedTabs)
+    if (i.id === 'logistics') return allowedTabs.includes('logistics') || hasCostAccess(allowedTabs)
     if (i.id === 'inventory') return allowedTabs.includes('inventory') || allowedTabs.includes('inventory:sales')
     return allowedTabs.includes(i.id)
   }) : allItems
@@ -2609,7 +2612,12 @@ function BottomNav({ page, setPage, allowedTabs, profile }) {
     <nav className="bottom-nav">
       <div className="bottom-nav-inner">
         {allItems.map(item => {
-          const allowed = !allowedTabs || allowedTabs.includes(item.id)
+          const allowed = item.id === 'sales' ? hasSalesAccess(allowedTabs) :
+            item.id === 'ads' ? hasAdsAccess(allowedTabs) :
+            item.id === 'pnl' ? hasPnlAccess(allowedTabs) :
+            item.id === 'logistics' ? (!allowedTabs || allowedTabs.includes('logistics') || hasCostAccess(allowedTabs)) :
+            item.id === 'inventory' ? (!allowedTabs || allowedTabs.includes('inventory') || allowedTabs.includes('inventory:sales')) :
+            !allowedTabs || allowedTabs.includes(item.id)
           const isActive = page === item.id
           return (
             <div key={item.id}
@@ -8682,7 +8690,9 @@ function AdsMobCatDropdown({ catOptions, subCatOptions, selCat, selSubCat, setSe
   )
 }
 
-function AdsTab({ data, filters = {}, selPlatform, setSelPlatform }) {
+const ADS_KEY_MAP = { 'All': 'ads:all', 'D2C': 'ads:d2c', 'Amazon': 'ads:amazon', 'Blinkit': 'ads:blinkit', 'Zepto': 'ads:zepto', 'Instamart': 'ads:instamart', 'Flipkart': 'ads:flipkart', 'Myntra': 'ads:myntra', 'CRED': 'ads:cred' }
+function AdsTab({ data, filters = {}, selPlatform, setSelPlatform, allowedTabs }) {
+  const allowedAdsPlatforms = ADS_PLATFORMS.filter(p => !allowedTabs || allowedTabs.includes(ADS_KEY_MAP[p.id]))
   const [isMob, setIsMob] = useState(() => window.innerWidth <= 768)
   useEffect(() => {
     const onResize = () => setIsMob(window.innerWidth <= 768)
@@ -8935,7 +8945,7 @@ function AdsTab({ data, filters = {}, selPlatform, setSelPlatform }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
       <div className="sales-tabs mob-hidden">
-        {ADS_PLATFORMS.map(p => (
+        {allowedAdsPlatforms.map(p => (
           <button key={p.id} onClick={() => setSelPlatform(p.id === 'All' ? null : p.id)}
             className={`stab${(p.id === 'All' ? !selPlatform : selPlatform === p.id) ? ' active' : ''}`}
             style={p.id === 'All' ? { fontWeight: !selPlatform ? 800 : 700, fontSize: 13 } : {}}>
@@ -11995,7 +12005,9 @@ function FilterIconPopover({ children, activeCount }) {
   )
 }
 
-function SalesPage({ data, filters, setFilters, activeTab, setActiveTab, fetchData, channelView, setChannelView, offlineSub, setOfflineSub }) {
+const SALES_KEY_MAP = { 'all': 'sales:all', 'shopify': 'sales:shopify', 'ebo': 'sales:ebo', 'amazon': 'sales:amazon', 'flipkart': 'sales:flipkart', 'blinkit': 'sales:blinkit', 'cred': 'sales:cred', 'firstcry': 'sales:firstcry', 'instamart': 'sales:instamart', 'zepto': 'sales:zepto', 'myntra': 'sales:myntra', 'international': 'sales:international', 'offline': 'sales:offline' }
+function SalesPage({ data, filters, setFilters, activeTab, setActiveTab, fetchData, channelView, setChannelView, offlineSub, setOfflineSub, allowedTabs }) {
+  const allowedSalesTabs = TABS.filter(t => !allowedTabs || allowedTabs.includes(SALES_KEY_MAP[t.id]))
   const filteredData = data
   const [shopifyView, setShopifyView] = useState('overview') // 'overview' | 'returns' — D2C only
 
@@ -12028,7 +12040,7 @@ function SalesPage({ data, filters, setFilters, activeTab, setActiveTab, fetchDa
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
       {/* Tab bar */}
       <div className="sales-tabs">
-        {TABS.map(tab => (
+        {allowedSalesTabs.map(tab => (
           <button key={tab.id} onClick={() => { setActiveTab(tab.id); setChannelView('all'); setOfflineSub('all'); setShopifyView('overview'); setFilters(f => ({ ...f, subChannel: '', voucher: '', channelGroup: [], category: [], subCategory: [], sku: [], paymentType: '', productAge: '' })) }} className={`stab${activeTab === tab.id ? ' active' : ''}`} style={tab.id === 'all' ? { fontWeight: activeTab === 'all' ? 800 : 700, fontSize: 13 } : {}}>
             {tab.logo && <img src={tab.logo} alt="" style={{ width: 14, height: 14, borderRadius: 3, flexShrink: 0, objectFit: 'contain', filter: tab.id === 'cred' ? 'invert(1)' : 'none' }} />}
             {tab.label}
@@ -15186,8 +15198,23 @@ function DocumentsPage({ setPage }) {
   )
 }
 
-const TAB_PRIORITY = ['overview', 'sales', 'ads', 'logistics', 'logistics:cost', 'inventory', 'inventory:sales', 'customer', 'documents']
-const permKeyToPage = { 'logistics': 'logistics', 'logistics:cost': 'logistics-cost', 'inventory': 'inventory', 'inventory:sales': 'inventory' }
+const SALES_KEYS = ['sales:all','sales:shopify','sales:ebo','sales:amazon','sales:flipkart','sales:blinkit','sales:cred','sales:firstcry','sales:instamart','sales:zepto','sales:myntra','sales:international','sales:offline']
+const ADS_KEYS = ['ads:all','ads:d2c','ads:amazon','ads:blinkit','ads:zepto','ads:instamart','ads:flipkart','ads:myntra','ads:cred']
+const PNL_KEYS = ['pnl:all','pnl:shopify','pnl:ebo','pnl:amazon','pnl:flipkart','pnl:blinkit','pnl:cred','pnl:firstcry','pnl:instamart','pnl:zepto','pnl:myntra','pnl:international','pnl:offline']
+const COST_KEYS = ['logistics:cost:all','logistics:cost:b2c','logistics:cost:b2b']
+const TAB_PRIORITY = ['overview', ...SALES_KEYS, ...ADS_KEYS, ...PNL_KEYS, 'logistics', ...COST_KEYS, 'inventory', 'inventory:sales', 'customer', 'documents']
+const permKeyToPage = {
+  'logistics': 'logistics',
+  'logistics:cost:all': 'logistics-cost', 'logistics:cost:b2c': 'logistics-cost', 'logistics:cost:b2b': 'logistics-cost',
+  'inventory': 'inventory', 'inventory:sales': 'inventory',
+  ...Object.fromEntries(SALES_KEYS.map(k => [k, 'sales'])),
+  ...Object.fromEntries(ADS_KEYS.map(k => [k, 'ads'])),
+  ...Object.fromEntries(PNL_KEYS.map(k => [k, 'pnl'])),
+}
+function hasSalesAccess(allowedTabs) { return !allowedTabs || SALES_KEYS.some(k => allowedTabs.includes(k)) }
+function hasAdsAccess(allowedTabs) { return !allowedTabs || ADS_KEYS.some(k => allowedTabs.includes(k)) }
+function hasPnlAccess(allowedTabs) { return !allowedTabs || PNL_KEYS.some(k => allowedTabs.includes(k)) }
+function hasCostAccess(allowedTabs) { return !allowedTabs || allowedTabs.includes('logistics:cost') || COST_KEYS.some(k => allowedTabs.includes(k)) }
 
 function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated }) {
   const getInitialPage = () => {
@@ -15200,9 +15227,12 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
   const [customerTab, setCustomerTab] = useState('overview')
 
   useEffect(() => {
-    const isPageAllowed = page === 'logistics' ? (allowedTabs?.includes('logistics')) :
-      page === 'logistics-cost' ? (allowedTabs?.includes('logistics:cost')) :
-      page === 'inventory' ? (allowedTabs?.includes('inventory') || allowedTabs?.includes('inventory:sales')) :
+    const isPageAllowed = page === 'logistics' ? (!allowedTabs || allowedTabs.includes('logistics')) :
+      page === 'logistics-cost' ? hasCostAccess(allowedTabs) :
+      page === 'inventory' ? (!allowedTabs || allowedTabs.includes('inventory') || allowedTabs.includes('inventory:sales')) :
+      page === 'sales' ? hasSalesAccess(allowedTabs) :
+      page === 'ads' ? hasAdsAccess(allowedTabs) :
+      page === 'pnl' ? hasPnlAccess(allowedTabs) :
       !allowedTabs || allowedTabs.includes(page)
     if (allowedTabs?.length && !isPageAllowed) {
       const match = TAB_PRIORITY.find(t => allowedTabs.includes(t))
@@ -15599,12 +15629,12 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
               <OverviewPage data={data} alerts={alerts} logisticsData={logisticsData} filters={filters} />
             </div>
           )}
-          {page === 'sales' && data && (!allowedTabs || allowedTabs.includes('sales')) && <SalesPage data={data} filters={filters} setFilters={setFilters} activeTab={activeTab} setActiveTab={setActiveTab} fetchData={fetchData} channelView={salesChannelView} setChannelView={setSalesChannelView} offlineSub={salesOfflineSub} setOfflineSub={setSalesOfflineSub} />}
-          {page === 'pnl' && data && <PnLPage data={data} filters={filters} setFilters={setFilters} activeTab={pnlActiveTab} setActiveTab={setPnlActiveTab} amzChannelView={pnlAmzView} setAmzChannelView={setPnlAmzView} offlineSub={pnlOfflineSub} setOfflineSub={setPnlOfflineSub} d2cSubCh={pnlD2cSubCh} setD2cSubCh={setPnlD2cSubCh} />}
+          {page === 'sales' && data && hasSalesAccess(allowedTabs) && <SalesPage data={data} filters={filters} setFilters={setFilters} activeTab={activeTab} setActiveTab={setActiveTab} fetchData={fetchData} channelView={salesChannelView} setChannelView={setSalesChannelView} offlineSub={salesOfflineSub} setOfflineSub={setSalesOfflineSub} allowedTabs={allowedTabs} />}
+          {page === 'pnl' && data && hasPnlAccess(allowedTabs) && <PnLPage data={data} filters={filters} setFilters={setFilters} activeTab={pnlActiveTab} setActiveTab={setPnlActiveTab} amzChannelView={pnlAmzView} setAmzChannelView={setPnlAmzView} offlineSub={pnlOfflineSub} setOfflineSub={setPnlOfflineSub} d2cSubCh={pnlD2cSubCh} setD2cSubCh={setPnlD2cSubCh} allowedTabs={allowedTabs} />}
           {page === 'ads' && !adsCache && !data && <Skeleton />}
-          {page === 'ads' && (adsCache || data) && (!allowedTabs || allowedTabs.includes('ads')) && (
+          {page === 'ads' && (adsCache || data) && hasAdsAccess(allowedTabs) && (
             <div className="page-scroll">
-              <AdsTab data={adsCache ? { cred: (adsCachedMeta?.credCache?.byCategory?.length ? adsCachedMeta.credCache : null) ?? data?.cred ?? {}, ...(data || {}), chMap: data?.chMap || adsCachedChMap || {}, nOrders: data?.nOrders ?? adsCachedMeta?.nOrders ?? 0, nCusts: data?.nCusts ?? adsCachedMeta?.nCusts ?? 0, repeatCusts: data?.repeatCusts ?? adsCachedMeta?.repeatCusts ?? 0, shopify: data?.shopify || { totals: { orders: adsCachedMeta?.shopifyOrders || 0 } }, ads: adsCache } : data} filters={filters} selPlatform={adsSelPlatform} setSelPlatform={setAdsSelPlatform} />
+              <AdsTab data={adsCache ? { cred: (adsCachedMeta?.credCache?.byCategory?.length ? adsCachedMeta.credCache : null) ?? data?.cred ?? {}, ...(data || {}), chMap: data?.chMap || adsCachedChMap || {}, nOrders: data?.nOrders ?? adsCachedMeta?.nOrders ?? 0, nCusts: data?.nCusts ?? adsCachedMeta?.nCusts ?? 0, repeatCusts: data?.repeatCusts ?? adsCachedMeta?.repeatCusts ?? 0, shopify: data?.shopify || { totals: { orders: adsCachedMeta?.shopifyOrders || 0 } }, ads: adsCache } : data} filters={filters} selPlatform={adsSelPlatform} setSelPlatform={setAdsSelPlatform} allowedTabs={allowedTabs} />
             </div>
           )}
           {page === 'intelligence' && (
@@ -15617,9 +15647,9 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
               <LogisticsPage filters={filters} page={page} setPage={setPage} lFilters={lFilters} setLFilters={setLFilters} onFilterOptsChange={setLogisticsFilterOpts} />
             </div>
           )}
-          {page === 'logistics-cost' && (!allowedTabs || allowedTabs.includes('logistics:cost')) && (
+          {page === 'logistics-cost' && hasCostAccess(allowedTabs) && (
             <div style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
-              <LogisticsCostPage externalFilters={costFilters} setExternalFilters={setCostFilters} />
+              <LogisticsCostPage externalFilters={costFilters} setExternalFilters={setCostFilters} allowedTabs={allowedTabs} />
             </div>
           )}
           {page === 'inventory' && (!allowedTabs || allowedTabs.includes('inventory') || allowedTabs.includes('inventory:sales')) && (

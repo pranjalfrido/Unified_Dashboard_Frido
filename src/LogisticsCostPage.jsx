@@ -727,7 +727,7 @@ function CostKpiCarousel({ children }) {
   )
 }
 
-export default function LogisticsCostPage({ externalFilters, setExternalFilters } = {}) {
+export default function LogisticsCostPage({ externalFilters, setExternalFilters, allowedTabs } = {}) {
   const isMobile = typeof window !== 'undefined' && window.innerWidth <= 768
   const [agg, setAgg] = useState(null)
   const [b2bRows, setB2bRows] = useState(null)
@@ -742,7 +742,12 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters 
   const [opts, setOpts] = useState({ months: [], zones: [], modes: [], payments: [], couriers: [], transporters: [], vehicleTypes: [], freightTypes: [], accountTypes: [], cities: [] })
   const [sidebarOpen, setSidebarOpen] = useState(true)
   // 'all' = B2B + B2C summary · 'b2c' = courier detail · 'b2b' = lane-wise freight
-  const [scope, setScope] = useState('all')
+  const [scope, setScope] = useState(() => {
+    if (!allowedTabs || allowedTabs.includes('logistics:cost') || allowedTabs.includes('logistics:cost:all')) return 'all'
+    if (allowedTabs.includes('logistics:cost:b2c')) return 'b2c'
+    if (allowedTabs.includes('logistics:cost:b2b')) return 'b2b'
+    return 'all'
+  })
   const [reloadKey] = useState(0)
 
   // Raw full-dataset JSON — loaded once from CDN, never re-fetched for cube-compatible filters.
@@ -3751,7 +3756,7 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters 
               it scopes, alongside the filter summary. */}
           <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap', paddingTop: 2, marginBottom: 18 }}>
             <div style={{ display: 'inline-flex', background: C.bg, borderRadius: 9, padding: 3, gap: 2 }}>
-              {SCOPES.map(sc => {
+              {SCOPES.filter(sc => !allowedTabs || allowedTabs.includes(`logistics:cost:${sc.id}`) || allowedTabs.includes('logistics:cost')).map(sc => {
                 const on = scope === sc.id
                 return (
                   <button key={sc.id} onClick={() => setScope(sc.id)}

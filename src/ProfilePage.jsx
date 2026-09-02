@@ -1,6 +1,52 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { supabase } from './supabase.js'
-import { PERMISSION_TREE } from './permissionTree.js'
+import { PERMISSION_TREE, getAllLeafKeys } from './permissionTree.js'
+
+// Recursive permission tree renderer — handles unlimited nesting depth
+function PermTreeNode({ node, tabs, setTabs, depth = 0 }) {
+  if (node.isGroup) {
+    const allLeaves = getAllLeafKeys(node)
+    const allSel = allLeaves.every(k => tabs.includes(k))
+    const someSel = allLeaves.some(k => tabs.includes(k))
+    return (
+      <div key={node.key} style={{ marginLeft: depth * 12 }}>
+        <div style={{ fontSize: 10, fontWeight: 700, color: depth === 0 ? '#9BA5A1' : '#6B7975', textTransform: 'uppercase', letterSpacing: '.07em', marginBottom: 6, display: 'flex', alignItems: 'center', gap: 8 }}>
+          <span style={{ color: someSel && !allSel ? '#4B7C5E' : undefined }}>{node.label}</span>
+          <button type="button" onClick={() => {
+            if (allSel) setTabs(prev => prev.filter(k => !allLeaves.includes(k)))
+            else setTabs(prev => [...prev.filter(k => !allLeaves.includes(k)), ...allLeaves])
+          }} style={{ fontSize: 10, fontWeight: 600, color: allSel ? '#E24B4A' : '#4B7C5E', background: 'none', border: 'none', cursor: 'pointer', padding: 0, textDecoration: 'underline' }}>
+            {allSel ? 'Remove all' : 'Select all'}
+          </button>
+        </div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginLeft: 8 }}>
+          {node.children.map(child => (
+            <PermTreeNode key={child.key} node={child} tabs={tabs} setTabs={setTabs} depth={depth + 1} />
+          ))}
+        </div>
+      </div>
+    )
+  }
+  const sel = tabs.includes(node.key)
+  return (
+    <button type="button"
+      style={{ fontSize: 12, fontWeight: 600, padding: '5px 12px', borderRadius: 100, border: '1.5px solid', cursor: 'pointer', fontFamily: 'inherit', transition: 'all .15s', display: 'inline-block',
+        borderColor: sel ? '#1E2321' : '#D5D0C4', background: sel ? '#1E2321' : 'transparent', color: sel ? '#F7F5EF' : '#4B534F' }}
+      onClick={() => setTabs(prev => sel ? prev.filter(k => k !== node.key) : [...prev, node.key])}>
+      {node.label}
+    </button>
+  )
+}
+
+function PermissionPanel({ tabs, setTabs }) {
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+      {PERMISSION_TREE.map(node => (
+        <PermTreeNode key={node.key} node={node} tabs={tabs} setTabs={setTabs} depth={0} />
+      ))}
+    </div>
+  )
+}
 
 const API = import.meta.env.VITE_API_URL || ''
 
@@ -338,49 +384,7 @@ function CreateUserModal({ session, onClose, onCreated }) {
           {!isAdmin && (
             <div>
               <label style={{ ...S.label, marginBottom: 6 }}>Tab permissions</label>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                {PERMISSION_TREE.map(t => {
-                  if (t.isGroup) {
-                    const allChildKeys = t.children.map(c => c.key)
-                    const allSel = allChildKeys.every(k => tabs.includes(k))
-                    return (
-                      <div key={t.key}>
-                        <div style={{ fontSize: 10, fontWeight: 700, color: '#9BA5A1', textTransform: 'uppercase', letterSpacing: '.07em', marginBottom: 6, display: 'flex', alignItems: 'center', gap: 8 }}>
-                          <span>{t.label}</span>
-                          <button type="button" onClick={() => {
-                            if (allSel) setTabs(prev => prev.filter(k => !allChildKeys.includes(k)))
-                            else setTabs(prev => [...prev.filter(k => !allChildKeys.includes(k)), ...allChildKeys])
-                          }} style={{ fontSize: 10, fontWeight: 600, color: allSel ? '#E24B4A' : '#4B7C5E', background: 'none', border: 'none', cursor: 'pointer', padding: 0, textDecoration: 'underline' }}>
-                            {allSel ? 'Remove all' : 'Select all'}
-                          </button>
-                        </div>
-                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginLeft: 8 }}>
-                          {t.children.map(child => {
-                            const sel = tabs.includes(child.key)
-                            return (
-                              <button key={child.key} type="button"
-                                style={{ ...S.chip, ...(sel ? S.chipActive : {}) }}
-                                onClick={() => setTabs(prev => sel ? prev.filter(k => k !== child.key) : [...prev, child.key])}>
-                                {child.label}
-                              </button>
-                            )
-                          })}
-                        </div>
-                      </div>
-                    )
-                  }
-                  const sel = tabs.includes(t.key)
-                  return (
-                    <div key={t.key}>
-                      <button type="button"
-                        style={{ ...S.chip, ...(sel ? S.chipActive : {}) }}
-                        onClick={() => setTabs(prev => sel ? prev.filter(k => k !== t.key) : [...prev, t.key])}>
-                        {t.label}
-                      </button>
-                    </div>
-                  )
-                })}
-              </div>
+              <PermissionPanel tabs={tabs} setTabs={setTabs} />
             </div>
           )}
           <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', marginTop: 8, borderTop: `1px solid #E7E3D8`, paddingTop: 18 }}>
@@ -568,48 +572,8 @@ function UserRow({ user, permissions, session, onUpdate, showToast, isLast }) {
                 ) : (
                   <>
                     <div style={{ fontSize: 10, fontWeight: 700, color: '#9BA5A1', textTransform: 'uppercase', letterSpacing: '.08em', marginBottom: 8 }}>Click to grant or remove access</div>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 10 }}>
-                      {PERMISSION_TREE.map(t => {
-                        if (t.isGroup) {
-                          const allChildKeys = t.children.map(c => c.key)
-                          const allSel = allChildKeys.every(k => localTabs.includes(k))
-                          return (
-                            <div key={t.key}>
-                              <div style={{ fontSize: 10, fontWeight: 700, color: '#9BA5A1', textTransform: 'uppercase', letterSpacing: '.07em', marginBottom: 6, display: 'flex', alignItems: 'center', gap: 8 }}>
-                                <span>{t.label}</span>
-                                <button type="button" onClick={() => {
-                                  if (allSel) setLocalTabs(prev => prev.filter(k => !allChildKeys.includes(k)))
-                                  else setLocalTabs(prev => [...prev.filter(k => !allChildKeys.includes(k)), ...allChildKeys])
-                                }} style={{ fontSize: 10, fontWeight: 600, color: allSel ? '#E24B4A' : '#4B7C5E', background: 'none', border: 'none', cursor: 'pointer', padding: 0, textDecoration: 'underline' }}>
-                                  {allSel ? 'Remove all' : 'Select all'}
-                                </button>
-                              </div>
-                              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginLeft: 8 }}>
-                                {t.children.map(child => {
-                                  const sel = localTabs.includes(child.key)
-                                  return (
-                                    <button key={child.key} type="button"
-                                      style={{ ...S.chip, ...(sel ? S.chipActive : {}) }}
-                                      onClick={() => setLocalTabs(prev => sel ? prev.filter(k => k !== child.key) : [...prev, child.key])}>
-                                      {child.label}
-                                    </button>
-                                  )
-                                })}
-                              </div>
-                            </div>
-                          )
-                        }
-                        const sel = localTabs.includes(t.key)
-                        return (
-                          <div key={t.key}>
-                            <button type="button"
-                              style={{ ...S.chip, ...(sel ? S.chipActive : {}) }}
-                              onClick={() => setLocalTabs(prev => sel ? prev.filter(k => k !== t.key) : [...prev, t.key])}>
-                              {t.label}
-                            </button>
-                          </div>
-                        )
-                      })}
+                    <div style={{ marginBottom: 10 }}>
+                      <PermissionPanel tabs={localTabs} setTabs={setLocalTabs} />
                     </div>
                     {tabsChanged && (
                       <button style={{ ...S.primaryBtn, fontSize: 12.5, padding: '8px 16px', opacity: saving ? 0.7 : 1 }} onClick={savePermissions} disabled={saving}>
