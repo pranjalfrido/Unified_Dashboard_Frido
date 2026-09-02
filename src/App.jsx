@@ -2161,11 +2161,11 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
                       }} />
                     </PieChart>
                   </ResponsiveContainer>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 5, flex: 1, minWidth: 0 }}>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 5, flex: 1, minWidth: 0, alignItems: 'flex-end' }}>
                     {donutData.map(d => (
                       <div key={d.name} style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
                         <div style={{ width: 8, height: 8, borderRadius: '50%', background: d.color, flexShrink: 0 }} />
-                        <div style={{ fontSize: 11.5, color: C.t2, flex: 1, minWidth: 0, maxWidth: 72, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{d.name}</div>
+                        <div style={{ fontSize: 11.5, color: C.t2, whiteSpace: 'nowrap' }}>{d.name}</div>
                         <div style={{ fontSize: 11.5, fontWeight: 700, color: C.t1, flexShrink: 0 }}>{wMetric === 'qty' ? (d.value||0).toLocaleString('en-IN') : fmtVal(d.value||0)}</div>
                         <div style={{ fontSize: 11, color: C.t3, minWidth: 36, textAlign: 'right', flexShrink: 0 }}>{d.pct}%</div>
                       </div>
