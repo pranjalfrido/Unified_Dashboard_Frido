@@ -1,4 +1,5 @@
 import { useState, useMemo, useCallback, useEffect, useRef, Fragment, Component } from 'react'
+import { SquaresFour, ChartBar, TrendUp, PlayCircle, Cube, Truck, Users, FileText } from '@phosphor-icons/react'
 import { C, fmt, fmtN, fmtBig, pct, processData, detectAlerts, exportCSV, getDefaultDates, COURIER_COLORS, COURIER_LOGOS } from './utils.js'
 import { KPICard, AlertCard, DataTable, Card, Badge, CategoryRevenueCard, RevTrendChart, AreaTrendChart, MultiLineChart, useSortableTable, useReorderableColumns, GROUP_OPTS, getGroupKey, TrendAnalysisCard, BarChart, Bar, LineChart, Line, AreaChart, Area, ComposedChart, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell, Treemap } from './components.jsx'
 import InventoryPage from './InventoryPage.jsx'
@@ -2463,14 +2464,14 @@ function Sidebar({ page, setPage, invTab, setInvTab, allowedTabs, profile }) {
   const hoverTimerRef = useRef(null)
   const logHoverTimerRef = useRef(null)
   const allItems = [
-    { id: 'overview', label: 'Overview', icon: <svg width={18} height={18} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/></svg> },
-    { id: 'sales', label: 'Sales', icon: <svg width={18} height={18} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg> },
-    { id: 'pnl', label: 'PnL', icon: <svg width={18} height={18} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round"><polyline points="22 7 13.5 15.5 8.5 10.5 2 17"/><polyline points="16 7 22 7 22 13"/></svg> },
-    { id: 'ads', label: 'Ads', icon: <svg width={18} height={18} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polygon points="10 8 16 12 10 16 10 8"/></svg> },
-    { id: 'inventory', label: 'Inventory', icon: <svg width={18} height={18} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg> },
-    { id: 'logistics', label: 'Logistics', icon: <svg width={18} height={18} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round"><path d="M1 3h15v13H1z"/><path d="M16 8h4l3 3v5h-7V8z"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/></svg> },
-    { id: 'customer', label: 'Customer', icon: <svg width={18} height={18} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg> },
-    { id: 'documents', label: 'Documents', icon: <svg width={18} height={18} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg> },
+    { id: 'overview',  label: 'Overview',  Icon: SquaresFour },
+    { id: 'sales',     label: 'Sales',     Icon: ChartBar },
+    { id: 'pnl',       label: 'PnL',       Icon: TrendUp },
+    { id: 'ads',       label: 'Ads',       Icon: PlayCircle },
+    { id: 'inventory', label: 'Inventory', Icon: Cube },
+    { id: 'logistics', label: 'Logistics', Icon: Truck },
+    { id: 'customer',  label: 'Customer',  Icon: Users },
+    { id: 'documents', label: 'Documents', Icon: FileText },
   ]
   const items = allowedTabs ? allItems.filter(i => {
     if (i.id === 'sales') return hasSalesAccess(allowedTabs)
@@ -2506,7 +2507,7 @@ function Sidebar({ page, setPage, invTab, setInvTab, allowedTabs, profile }) {
               onMouseLeave={() => { hoverTimerRef.current = setTimeout(() => setInvHover(false), 200) }}>
               <div onClick={() => { setPage('inventory'); setInvTab(defaultInvTab) }}
                 className={`sb-item${page === 'inventory' ? ' active' : ''}`}>
-                <span className="sb-icon">{item.icon}</span>
+                <span className="sb-icon"><item.Icon weight={page === item.id ? 'fill' : 'regular'} size={20} /></span>
                 <span className="sb-label">{item.label}</span>
               </div>
               {hasBothInv && invHover && (
@@ -2549,7 +2550,7 @@ function Sidebar({ page, setPage, invTab, setInvTab, allowedTabs, profile }) {
               onMouseLeave={() => { logHoverTimerRef.current = setTimeout(() => setLogHover(false), 200) }}>
               <div onClick={() => setPage(defaultLogPage)}
                 className={`sb-item${logActive ? ' active' : ''}`}>
-                <span className="sb-icon">{item.icon}</span>
+                <span className="sb-icon"><item.Icon weight={page === item.id ? 'fill' : 'regular'} size={20} /></span>
                 <span className="sb-label">{item.label}</span>
               </div>
               {hasBoth && logHover && (

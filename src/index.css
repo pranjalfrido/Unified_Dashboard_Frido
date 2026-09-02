@@ -48,8 +48,8 @@ html,body{height:100%;background:var(--bg);font-family:var(--font);color:var(--t
 .sb-item:hover{background:var(--hov);color:var(--t1)}
 .sb-item.active{background:var(--acl);color:var(--t1)}
 .sb-item .sb-icon{font-size:18px;line-height:1}
-.sb-item .sb-icon svg{stroke:currentColor}
-.sb-item.active .sb-icon svg{stroke:var(--t1)}
+.sb-item .sb-icon svg{color:currentColor}
+.sb-item.active .sb-icon svg{color:var(--t1)}
 .sb-item .sb-label{font-size:9.5px;font-weight:500;line-height:1;letter-spacing:.02em}
 .sb-item.active .sb-label{font-weight:700;color:var(--t1)}
 .sb-item.dim{opacity:.3;cursor:default;pointer-events:none}
