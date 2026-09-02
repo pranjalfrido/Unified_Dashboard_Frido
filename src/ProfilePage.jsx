@@ -338,34 +338,45 @@ function CreateUserModal({ session, onClose, onCreated }) {
           {!isAdmin && (
             <div>
               <label style={{ ...S.label, marginBottom: 6 }}>Tab permissions</label>
-              <div style={{ fontSize: 11, color: '#9BA5A1', marginBottom: 10 }}>Select a tab to expand sub-tab options</div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
                 {PERMISSION_TREE.map(t => {
-                  const parentSel = tabs.includes(t.key)
+                  if (t.isGroup) {
+                    const allChildKeys = t.children.map(c => c.key)
+                    const allSel = allChildKeys.every(k => tabs.includes(k))
+                    return (
+                      <div key={t.key}>
+                        <div style={{ fontSize: 10, fontWeight: 700, color: '#9BA5A1', textTransform: 'uppercase', letterSpacing: '.07em', marginBottom: 6, display: 'flex', alignItems: 'center', gap: 8 }}>
+                          <span>{t.label}</span>
+                          <button type="button" onClick={() => {
+                            if (allSel) setTabs(prev => prev.filter(k => !allChildKeys.includes(k)))
+                            else setTabs(prev => [...prev.filter(k => !allChildKeys.includes(k)), ...allChildKeys])
+                          }} style={{ fontSize: 10, fontWeight: 600, color: allSel ? '#E24B4A' : '#4B7C5E', background: 'none', border: 'none', cursor: 'pointer', padding: 0, textDecoration: 'underline' }}>
+                            {allSel ? 'Remove all' : 'Select all'}
+                          </button>
+                        </div>
+                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginLeft: 8 }}>
+                          {t.children.map(child => {
+                            const sel = tabs.includes(child.key)
+                            return (
+                              <button key={child.key} type="button"
+                                style={{ ...S.chip, ...(sel ? S.chipActive : {}) }}
+                                onClick={() => setTabs(prev => sel ? prev.filter(k => k !== child.key) : [...prev, child.key])}>
+                                {child.label}
+                              </button>
+                            )
+                          })}
+                        </div>
+                      </div>
+                    )
+                  }
+                  const sel = tabs.includes(t.key)
                   return (
                     <div key={t.key}>
                       <button type="button"
-                        style={{ ...S.chip, ...(parentSel ? S.chipActive : {}) }}
-                        onClick={() => {
-                          if (parentSel) {
-                            setTabs(prev => prev.filter(k => k !== t.key && !t.children.map(c => c.key).includes(k)))
-                          } else {
-                            setTabs(prev => [...prev, t.key])
-                          }
-                        }}>
+                        style={{ ...S.chip, ...(sel ? S.chipActive : {}) }}
+                        onClick={() => setTabs(prev => sel ? prev.filter(k => k !== t.key) : [...prev, t.key])}>
                         {t.label}
                       </button>
-                      {t.children.length > 0 && parentSel && (
-                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 8, marginLeft: 16 }}>
-                          {t.children.map(child => (
-                            <button key={child.key} type="button"
-                              style={{ ...S.chip, ...(tabs.includes(child.key) ? S.chipActive : {}), fontSize: 12 }}
-                              onClick={() => setTabs(prev => prev.includes(child.key) ? prev.filter(k => k !== child.key) : [...prev, child.key])}>
-                              + {child.label}
-                            </button>
-                          ))}
-                        </div>
-                      )}
                     </div>
                   )
                 })}
@@ -559,31 +570,43 @@ function UserRow({ user, permissions, session, onUpdate, showToast, isLast }) {
                     <div style={{ fontSize: 10, fontWeight: 700, color: '#9BA5A1', textTransform: 'uppercase', letterSpacing: '.08em', marginBottom: 8 }}>Click to grant or remove access</div>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 10 }}>
                       {PERMISSION_TREE.map(t => {
-                        const parentSel = localTabs.includes(t.key)
+                        if (t.isGroup) {
+                          const allChildKeys = t.children.map(c => c.key)
+                          const allSel = allChildKeys.every(k => localTabs.includes(k))
+                          return (
+                            <div key={t.key}>
+                              <div style={{ fontSize: 10, fontWeight: 700, color: '#9BA5A1', textTransform: 'uppercase', letterSpacing: '.07em', marginBottom: 6, display: 'flex', alignItems: 'center', gap: 8 }}>
+                                <span>{t.label}</span>
+                                <button type="button" onClick={() => {
+                                  if (allSel) setLocalTabs(prev => prev.filter(k => !allChildKeys.includes(k)))
+                                  else setLocalTabs(prev => [...prev.filter(k => !allChildKeys.includes(k)), ...allChildKeys])
+                                }} style={{ fontSize: 10, fontWeight: 600, color: allSel ? '#E24B4A' : '#4B7C5E', background: 'none', border: 'none', cursor: 'pointer', padding: 0, textDecoration: 'underline' }}>
+                                  {allSel ? 'Remove all' : 'Select all'}
+                                </button>
+                              </div>
+                              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginLeft: 8 }}>
+                                {t.children.map(child => {
+                                  const sel = localTabs.includes(child.key)
+                                  return (
+                                    <button key={child.key} type="button"
+                                      style={{ ...S.chip, ...(sel ? S.chipActive : {}) }}
+                                      onClick={() => setLocalTabs(prev => sel ? prev.filter(k => k !== child.key) : [...prev, child.key])}>
+                                      {child.label}
+                                    </button>
+                                  )
+                                })}
+                              </div>
+                            </div>
+                          )
+                        }
+                        const sel = localTabs.includes(t.key)
                         return (
                           <div key={t.key}>
                             <button type="button"
-                              style={{ ...S.chip, ...(parentSel ? S.chipActive : {}) }}
-                              onClick={() => {
-                                if (parentSel) {
-                                  setLocalTabs(prev => prev.filter(k => k !== t.key && !t.children.map(c => c.key).includes(k)))
-                                } else {
-                                  setLocalTabs(prev => [...prev, t.key])
-                                }
-                              }}>
+                              style={{ ...S.chip, ...(sel ? S.chipActive : {}) }}
+                              onClick={() => setLocalTabs(prev => sel ? prev.filter(k => k !== t.key) : [...prev, t.key])}>
                               {t.label}
                             </button>
-                            {t.children.length > 0 && parentSel && (
-                              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 8, marginLeft: 16 }}>
-                                {t.children.map(child => (
-                                  <button key={child.key} type="button"
-                                    style={{ ...S.chip, ...(localTabs.includes(child.key) ? S.chipActive : {}), fontSize: 12 }}
-                                    onClick={() => setLocalTabs(prev => prev.includes(child.key) ? prev.filter(k => k !== child.key) : [...prev, child.key])}>
-                                    + {child.label}
-                                  </button>
-                                ))}
-                              </div>
-                            )}
                           </div>
                         )
                       })}

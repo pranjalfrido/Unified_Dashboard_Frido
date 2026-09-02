@@ -2468,7 +2468,11 @@ function Sidebar({ page, setPage, invTab, setInvTab, allowedTabs, profile }) {
     { id: 'customer', label: 'Customer', icon: <svg width={18} height={18} viewBox="0 0 24 24" fill="currentColor"><path d="M9 12a4 4 0 100-8 4 4 0 000 8zm0 2c-4.42 0-8 1.79-8 4v1h16v-1c0-2.21-3.58-4-8-4zm7-8a3 3 0 000 6 3 3 0 000-6zm0 8c-1.04 0-2.02.2-2.88.53C14.32 15.2 15.5 16.5 15.5 18H23v-1c0-2.21-3.13-4-7-4z"/></svg> },
     { id: 'documents', label: 'Documents', icon: <svg width={18} height={18} viewBox="0 0 24 24" fill="currentColor"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8l-6-6zm-1 7V3.5L18.5 9H13zM8 13h8v1.5H8V13zm0 3h8v1.5H8V16zm0-6h3v1.5H8V10z"/></svg> },
   ]
-  const items = allowedTabs ? allItems.filter(i => allowedTabs.includes(i.id)) : allItems
+  const items = allowedTabs ? allItems.filter(i => {
+    if (i.id === 'logistics') return allowedTabs.includes('logistics') || allowedTabs.includes('logistics:cost')
+    if (i.id === 'inventory') return allowedTabs.includes('inventory') || allowedTabs.includes('inventory:sales')
+    return allowedTabs.includes(i.id)
+  }) : allItems
   const dims = [
     { label: 'Courier', icon: <SvgIcon d={['M1 3h15v13H1z','M16 8h4l3 3v5h-7V8z','M5.5 19a1.5 1.5 0 100-3 1.5 1.5 0 000 3z','M18.5 19a1.5 1.5 0 100-3 1.5 1.5 0 000 3z']} /> },
     { label: 'Marketing', icon: <SvgIcon d={['M22 12h-4l-3 9L9 3l-3 9H2']} /> },
@@ -2481,20 +2485,24 @@ function Sidebar({ page, setPage, invTab, setInvTab, allowedTabs, profile }) {
       </div>
       {items.map(item => {
         if (item.id === 'inventory') {
+          const hasHealth = !allowedTabs || allowedTabs.includes('inventory')
+          const hasSales = !allowedTabs || allowedTabs.includes('inventory:sales')
+          const hasBothInv = hasHealth && hasSales
           const subTabs = [
-            { id: 'health', label: 'Inventory Health' },
-            ...(!allowedTabs || allowedTabs.includes('inventory:sales') ? [{ id: 'sales', label: 'Sales & Allocation' }] : []),
+            ...(hasHealth ? [{ id: 'health', label: 'Health & Overview' }] : []),
+            ...(hasSales ? [{ id: 'sales', label: 'Sales & Allocation' }] : []),
           ]
+          const defaultInvTab = hasHealth ? 'health' : 'sales'
           return (
             <div key="inventory" style={{ position: 'relative' }}
-              onMouseEnter={() => { clearTimeout(hoverTimerRef.current); setInvHover(true) }}
+              onMouseEnter={() => { if (hasBothInv) { clearTimeout(hoverTimerRef.current); setInvHover(true) } }}
               onMouseLeave={() => { hoverTimerRef.current = setTimeout(() => setInvHover(false), 200) }}>
-              <div onClick={() => setPage('inventory')}
+              <div onClick={() => { setPage('inventory'); setInvTab(defaultInvTab) }}
                 className={`sb-item${page === 'inventory' ? ' active' : ''}`}>
                 <span className="sb-icon">{item.icon}</span>
                 <span className="sb-label">{item.label}</span>
               </div>
-              {invHover && (
+              {hasBothInv && invHover && (
                 <div style={{
                   position: 'absolute', left: '100%', top: 0, marginLeft: 6, zIndex: 999,
                   background: C.card, border: `1px solid ${C.border2}`, borderRadius: 10,
@@ -2519,21 +2527,25 @@ function Sidebar({ page, setPage, invTab, setInvTab, allowedTabs, profile }) {
           )
         }
         if (item.id === 'logistics') {
+          const hasPerf = !allowedTabs || allowedTabs.includes('logistics')
+          const hasCost = !allowedTabs || allowedTabs.includes('logistics:cost')
+          const hasBoth = hasPerf && hasCost
           const logSubTabs = [
-            { id: 'logistics', label: 'Performance Analytics' },
-            ...(!allowedTabs || allowedTabs.includes('logistics:cost') ? [{ id: 'logistics-cost', label: 'Cost Analytics' }] : []),
+            ...(hasPerf ? [{ id: 'logistics', label: 'Performance Analytics' }] : []),
+            ...(hasCost ? [{ id: 'logistics-cost', label: 'Cost Analytics' }] : []),
           ]
+          const defaultLogPage = hasPerf ? 'logistics' : 'logistics-cost'
           const logActive = page === 'logistics' || page === 'logistics-cost'
           return (
             <div key="logistics" style={{ position: 'relative' }}
-              onMouseEnter={() => { clearTimeout(logHoverTimerRef.current); setLogHover(true) }}
+              onMouseEnter={() => { if (hasBoth) { clearTimeout(logHoverTimerRef.current); setLogHover(true) } }}
               onMouseLeave={() => { logHoverTimerRef.current = setTimeout(() => setLogHover(false), 200) }}>
-              <div onClick={() => setPage('logistics')}
+              <div onClick={() => setPage(defaultLogPage)}
                 className={`sb-item${logActive ? ' active' : ''}`}>
                 <span className="sb-icon">{item.icon}</span>
                 <span className="sb-label">{item.label}</span>
               </div>
-              {logHover && (
+              {hasBoth && logHover && (
                 <div style={{
                   position: 'absolute', left: '100%', top: 0, marginLeft: 6, zIndex: 999,
                   background: C.card, border: `1px solid ${C.border2}`, borderRadius: 10,
@@ -15174,16 +15186,27 @@ function DocumentsPage({ setPage }) {
   )
 }
 
-const TAB_PRIORITY = ['overview', 'sales', 'ads', 'logistics', 'inventory', 'customer', 'documents']
+const TAB_PRIORITY = ['overview', 'sales', 'ads', 'logistics', 'logistics:cost', 'inventory', 'inventory:sales', 'customer', 'documents']
+const permKeyToPage = { 'logistics': 'logistics', 'logistics:cost': 'logistics-cost', 'inventory': 'inventory', 'inventory:sales': 'inventory' }
 
 function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated }) {
-  const [page, setPage] = useState(allowedTabs?.length ? (TAB_PRIORITY.find(t => allowedTabs.includes(t)) || allowedTabs[0]) : 'overview')
-  const [invTab, setInvTab] = useState('health')
+  const getInitialPage = () => {
+    if (!allowedTabs?.length) return 'overview'
+    const match = TAB_PRIORITY.find(t => allowedTabs.includes(t))
+    return match ? (permKeyToPage[match] || match) : (permKeyToPage[allowedTabs[0]] || allowedTabs[0])
+  }
+  const [page, setPage] = useState(getInitialPage)
+  const [invTab, setInvTab] = useState(() => allowedTabs?.includes('inventory') ? 'health' : 'sales')
   const [customerTab, setCustomerTab] = useState('overview')
 
   useEffect(() => {
-    if (allowedTabs?.length && !allowedTabs.includes(page)) {
-      setPage(TAB_PRIORITY.find(t => allowedTabs.includes(t)) || allowedTabs[0])
+    const isPageAllowed = page === 'logistics' ? (allowedTabs?.includes('logistics')) :
+      page === 'logistics-cost' ? (allowedTabs?.includes('logistics:cost')) :
+      page === 'inventory' ? (allowedTabs?.includes('inventory') || allowedTabs?.includes('inventory:sales')) :
+      !allowedTabs || allowedTabs.includes(page)
+    if (allowedTabs?.length && !isPageAllowed) {
+      const match = TAB_PRIORITY.find(t => allowedTabs.includes(t))
+      setPage(match ? (permKeyToPage[match] || match) : (permKeyToPage[allowedTabs[0]] || allowedTabs[0]))
     }
   }, [allowedTabs])
   const def = getDefaultDates()
