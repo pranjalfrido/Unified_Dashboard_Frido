@@ -223,7 +223,7 @@ function LMultiDropdown({ label, options, value, onChange, flex }) {
   )
 }
 
-function LKpiCard({ label, value, badgeText, badgeVariant, subValue, cur, prev, hideSubValue, compact, tight, mobile }) {
+function LKpiCard({ label, value, badgeText, badgeVariant, subValue, subLabel, cur, prev, hideSubValue, compact, tight, mobile }) {
   const bv = badgeVariant || 'N'
   const chg = (cur != null && prev != null && prev !== 0) ? ((cur - prev) / prev * 100) : null
   const chgBadge = chg != null && Math.abs(chg) < 999
@@ -238,7 +238,8 @@ function LKpiCard({ label, value, badgeText, badgeVariant, subValue, cur, prev, 
             <div className="kpi-value" style={{ fontSize: mobile ? 20 : tight ? 14 : 16, whiteSpace: 'nowrap', minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis' }}>{value ?? '—'}</div>
             {chgBadge}
           </div>
-          {subValue && <div style={{ fontSize: 11, fontWeight: 500, color: C.t3, marginTop: 1 }}>{subValue} of total</div>}
+          {subLabel && <div style={{ fontSize: 10, fontWeight: 400, color: C.t3, marginTop: 1 }}>{subLabel}</div>}
+          {subValue && !subLabel && <div style={{ fontSize: 11, fontWeight: 500, color: C.t3, marginTop: 1 }}>{subValue} of total</div>}
         </>
       ) : (
         <>
@@ -926,11 +927,11 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
               <LKpiCard label="FASR % (of attempted)" value={pct2(k.delivered_1attempt, k.total_ofd_attempts)} subValue={pct2(k.delivered_1attempt, k.total_shipments)} badgeVariant="G" cur={k.delivered_1attempt} prev={pk.delivered_1attempt} compact tight={filterSidebarOpen} />
               <LKpiCard label="RASR % (of attempted)" value={pct2(k.delivered_multi, k.total_ofd_attempts)} subValue={pct2(k.delivered_multi, k.total_shipments)} badgeVariant="B" cur={k.delivered_multi} prev={pk.delivered_multi} compact tight={filterSidebarOpen} />
               <LKpiCard label="Multi-Att Del" value={fmtBig(k.delivered_multi)} subValue={pct2(k.delivered_multi, k.total_shipments)} badgeVariant="B" cur={k.delivered_multi} prev={pk.delivered_multi} compact tight={filterSidebarOpen} />
-              <LKpiCard label="Avg Processing" value={d1(k.avg_processing)} badgeText="Cr→1st OFD" badgeVariant="N" cur={k.avg_processing} prev={pk.avg_processing} compact tight={filterSidebarOpen} />
-              <LKpiCard label="Avg Pickup TAT" value={d1(k.avg_pickup)} badgeText="Cr→Pick" badgeVariant="B" cur={k.avg_pickup} prev={pk.avg_pickup} compact tight={filterSidebarOpen} />
-              <LKpiCard label="Avg In-Transit" value={d1(k.avg_intransit)} badgeText="Pick→Del" badgeVariant="N" cur={k.avg_intransit} prev={pk.avg_intransit} compact tight={filterSidebarOpen} />
-              <LKpiCard label="Avg Fulfilment" value={d1(k.avg_fulfilment)} badgeText="Cr→Del" badgeVariant="G" cur={k.avg_fulfilment} prev={pk.avg_fulfilment} compact tight={filterSidebarOpen} />
-              <LKpiCard label="Avg RTO TAT" value={d1(k.avg_rto_tat)} badgeText="RTO days" badgeVariant="R" cur={k.avg_rto_tat} prev={pk.avg_rto_tat} compact tight={filterSidebarOpen} />
+              <LKpiCard label="Avg Processing" value={d1(k.avg_processing)} subLabel="Order date → shipment creation" badgeVariant="N" cur={k.avg_processing} prev={pk.avg_processing} compact tight={filterSidebarOpen} />
+              <LKpiCard label="Avg Pickup TAT" value={d1(k.avg_pickup)} subLabel="Shipment creation → pickup" badgeVariant="B" cur={k.avg_pickup} prev={pk.avg_pickup} compact tight={filterSidebarOpen} />
+              <LKpiCard label="Avg In-Transit" value={d1(k.avg_intransit)} subLabel="Shipment pickup → delivery" badgeVariant="N" cur={k.avg_intransit} prev={pk.avg_intransit} compact tight={filterSidebarOpen} />
+              <LKpiCard label="Avg Fulfilment" value={d1(k.avg_fulfilment)} subLabel="Order date → delivery date" badgeVariant="G" cur={k.avg_fulfilment} prev={pk.avg_fulfilment} compact tight={filterSidebarOpen} />
+              <LKpiCard label="Avg RTO TAT" value={d1(k.avg_rto_tat)} subLabel="RTO marked → RTO delivered" badgeVariant="R" cur={k.avg_rto_tat} prev={pk.avg_rto_tat} compact tight={filterSidebarOpen} />
             </div>
           </div>
         )}
