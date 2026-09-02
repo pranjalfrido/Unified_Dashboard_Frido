@@ -2,48 +2,97 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 import { supabase } from './supabase.js'
 import { PERMISSION_TREE, getAllLeafKeys } from './permissionTree.js'
 
-// Recursive permission tree renderer — handles unlimited nesting depth
-function PermTreeNode({ node, tabs, setTabs, depth = 0 }) {
-  if (node.isGroup) {
-    const allLeaves = getAllLeafKeys(node)
-    const allSel = allLeaves.every(k => tabs.includes(k))
-    const someSel = allLeaves.some(k => tabs.includes(k))
-    return (
-      <div key={node.key} style={{ marginLeft: depth * 12 }}>
-        <div style={{ fontSize: 10, fontWeight: 700, color: depth === 0 ? '#9BA5A1' : '#6B7975', textTransform: 'uppercase', letterSpacing: '.07em', marginBottom: 6, display: 'flex', alignItems: 'center', gap: 8 }}>
-          <span style={{ color: someSel && !allSel ? '#4B7C5E' : undefined }}>{node.label}</span>
-          <button type="button" onClick={() => {
-            if (allSel) setTabs(prev => prev.filter(k => !allLeaves.includes(k)))
-            else setTabs(prev => [...prev.filter(k => !allLeaves.includes(k)), ...allLeaves])
-          }} style={{ fontSize: 10, fontWeight: 600, color: allSel ? '#E24B4A' : '#4B7C5E', background: 'none', border: 'none', cursor: 'pointer', padding: 0, textDecoration: 'underline' }}>
-            {allSel ? 'Remove all' : 'Select all'}
-          </button>
-        </div>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginLeft: 8 }}>
-          {node.children.map(child => (
-            <PermTreeNode key={child.key} node={child} tabs={tabs} setTabs={setTabs} depth={depth + 1} />
-          ))}
-        </div>
-      </div>
-    )
-  }
+function PermChip({ node, tabs, setTabs }) {
   const sel = tabs.includes(node.key)
   return (
-    <button type="button"
-      style={{ fontSize: 12, fontWeight: 600, padding: '5px 12px', borderRadius: 100, border: '1.5px solid', cursor: 'pointer', fontFamily: 'inherit', transition: 'all .15s', display: 'inline-block',
-        borderColor: sel ? '#1E2321' : '#D5D0C4', background: sel ? '#1E2321' : 'transparent', color: sel ? '#F7F5EF' : '#4B534F' }}
-      onClick={() => setTabs(prev => sel ? prev.filter(k => k !== node.key) : [...prev, node.key])}>
+    <button type="button" onClick={() => setTabs(prev => sel ? prev.filter(k => k !== node.key) : [...prev, node.key])}
+      style={{ fontSize: 11.5, fontWeight: 600, padding: '4px 11px', borderRadius: 100, border: '1.5px solid',
+        cursor: 'pointer', fontFamily: 'inherit', transition: 'all .15s', whiteSpace: 'nowrap',
+        borderColor: sel ? '#1E2321' : '#D5D0C4', background: sel ? '#1E2321' : 'transparent',
+        color: sel ? '#F7F5EF' : '#4B534F' }}>
       {node.label}
     </button>
   )
 }
 
+function PermGroup({ node, tabs, setTabs, isNested = false }) {
+  const allLeaves = getAllLeafKeys(node)
+  const allSel = allLeaves.every(k => tabs.includes(k))
+  const someSel = !allSel && allLeaves.some(k => tabs.includes(k))
+  const toggle = () => {
+    if (allSel) setTabs(prev => prev.filter(k => !allLeaves.includes(k)))
+    else setTabs(prev => [...prev.filter(k => !allLeaves.includes(k)), ...allLeaves])
+  }
+  return (
+    <div style={{ background: isNested ? 'transparent' : '#F7F5EF', border: isNested ? 'none' : '1px solid #E7E3D8', borderRadius: isNested ? 0 : 10, padding: isNested ? '6px 0 0 0' : '10px 12px' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8 }}>
+        <span style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.08em',
+          color: someSel ? '#4B7C5E' : allSel ? '#1E2321' : '#9BA5A1' }}>
+          {node.label}
+        </span>
+        <button type="button" onClick={toggle}
+          style={{ fontSize: 10, fontWeight: 600, color: allSel ? '#E24B4A' : '#4B7C5E', background: 'none', border: 'none', cursor: 'pointer', padding: 0, textDecoration: 'underline', fontFamily: 'inherit' }}>
+          {allSel ? 'Remove all' : 'Select all'}
+        </button>
+      </div>
+      {(() => {
+        const groups = node.children.filter(c => c.isGroup)
+        const leaves = node.children.filter(c => !c.isGroup)
+        return (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {leaves.length > 0 && (
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                {leaves.map(child => <PermChip key={child.key} node={child} tabs={tabs} setTabs={setTabs} />)}
+              </div>
+            )}
+            {groups.map(child => <PermGroup key={child.key} node={child} tabs={tabs} setTabs={setTabs} isNested={true} />)}
+          </div>
+        )
+      })()}
+    </div>
+  )
+}
+
+// Renders children of a group as a horizontal row of chips (for flat groups like Inventory)
+function PermGroupFlat({ node, tabs, setTabs }) {
+  const allLeaves = getAllLeafKeys(node)
+  const allSel = allLeaves.every(k => tabs.includes(k))
+  const someSel = !allSel && allLeaves.some(k => tabs.includes(k))
+  return (
+    <div style={{ background: '#F7F5EF', border: '1px solid #E7E3D8', borderRadius: 10, padding: '10px 12px' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8 }}>
+        <span style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.08em',
+          color: someSel ? '#4B7C5E' : allSel ? '#1E2321' : '#9BA5A1' }}>
+          {node.label}
+        </span>
+        <button type="button" onClick={() => {
+          if (allSel) setTabs(prev => prev.filter(k => !allLeaves.includes(k)))
+          else setTabs(prev => [...prev.filter(k => !allLeaves.includes(k)), ...allLeaves])
+        }} style={{ fontSize: 10, fontWeight: 600, color: allSel ? '#E24B4A' : '#4B7C5E', background: 'none', border: 'none', cursor: 'pointer', padding: 0, textDecoration: 'underline', fontFamily: 'inherit' }}>
+          {allSel ? 'Remove all' : 'Select all'}
+        </button>
+      </div>
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+        {node.children.map(child => <PermChip key={child.key} node={child} tabs={tabs} setTabs={setTabs} />)}
+      </div>
+    </div>
+  )
+}
+
 function PermissionPanel({ tabs, setTabs }) {
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-      {PERMISSION_TREE.map(node => (
-        <PermTreeNode key={node.key} node={node} tabs={tabs} setTabs={setTabs} depth={0} />
-      ))}
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+      {PERMISSION_TREE.map(node => {
+        if (!node.isGroup) {
+          // Single standalone toggle (Overview, Customer, Documents)
+          return <PermChip key={node.key} node={node} tabs={tabs} setTabs={setTabs} />
+        }
+        // Check if any child is itself a group (nested) — use full PermGroup
+        const hasNestedGroup = node.children.some(c => c.isGroup)
+        if (hasNestedGroup) return <PermGroup key={node.key} node={node} tabs={tabs} setTabs={setTabs} />
+        // Flat group — chips in a row
+        return <PermGroupFlat key={node.key} node={node} tabs={tabs} setTabs={setTabs} />
+      })}
     </div>
   )
 }
