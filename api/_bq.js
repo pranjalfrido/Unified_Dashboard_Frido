@@ -208,10 +208,12 @@ export function buildQuery(s, e, filters = {}) {
     else if (cats.length > 1) whereClauses.push(`im.Category_Name IN (${cats.map(c => `'${c.replace(/'/g, "''")}'`).join(',')})`)
   }
   if (subCategory) {
-    const escapeSub = s => s.replace(/\\/g, '\\\\').replace(/'/g, "''").replace(/\n/g, ' ').replace(/\r/g, '')
     const subs = subCategory.split(',').map(c => c.trim()).filter(Boolean)
-    if (subs.length === 1) whereClauses.push(`im.Sub_category = '${escapeSub(subs[0])}'`)
-    else if (subs.length > 1) whereClauses.push(`im.Sub_category IN (${subs.map(c => `'${escapeSub(c)}'`).join(', ')})`)
+    if (subs.length > 0) {
+      // Use UNNEST array literal — immune to string-literal injection issues
+      const arrLiteral = subs.map(s => JSON.stringify(s)).join(', ')
+      whereClauses.push(`im.Sub_category IN UNNEST([${arrLiteral}])`)
+    }
   }
   if (state) {
     const vals = state.split(',').map(s => s.trim()).filter(Boolean)
