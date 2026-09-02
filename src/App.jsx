@@ -2165,7 +2165,7 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
                     {donutData.map(d => (
                       <div key={d.name} style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
                         <div style={{ width: 8, height: 8, borderRadius: '50%', background: d.color, flexShrink: 0 }} />
-                        <div style={{ fontSize: 11.5, color: C.t2, whiteSpace: 'nowrap' }}>{d.name}</div>
+                        <div style={{ fontSize: 11.5, color: C.t2, whiteSpace: 'nowrap', minWidth: 60 }}>{d.name}</div>
                         <div style={{ fontSize: 11.5, fontWeight: 700, color: C.t1, flexShrink: 0 }}>{wMetric === 'qty' ? (d.value||0).toLocaleString('en-IN') : fmtVal(d.value||0)}</div>
                         <div style={{ fontSize: 11, color: C.t3, minWidth: 36, textAlign: 'right', flexShrink: 0 }}>{d.pct}%</div>
                       </div>
@@ -2465,8 +2465,8 @@ function Sidebar({ page, setPage, invTab, setInvTab, allowedTabs, profile }) {
     { id: 'sales', label: 'Sales', icon: <svg width={18} height={18} viewBox="0 0 24 24" fill="currentColor"><rect x="2" y="12" width="4" height="10" rx="1"/><rect x="10" y="6" width="4" height="16" rx="1"/><rect x="18" y="2" width="4" height="20" rx="1"/></svg> },
     { id: 'pnl', label: 'PnL', icon: <img src="/graph.png" alt="PnL" width={18} height={18} style={{ objectFit: 'contain', opacity: 0.7 }} /> },
     { id: 'ads', label: 'Ads', icon: <svg width={18} height={18} viewBox="0 0 24 24" fill="currentColor"><path d="M5 3l14 9-14 9V3z"/></svg> },
-    { id: 'logistics', label: 'Logistics', icon: <svg width={18} height={18} viewBox="0 0 24 24" fill="currentColor"><path d="M1 3h14a1 1 0 011 1v9H1V3zm15 4h4.5L23 10.5V16h-7V7zM5.5 20a2 2 0 100-4 2 2 0 000 4zm13 0a2 2 0 100-4 2 2 0 000 4z"/></svg> },
     { id: 'inventory', label: 'Inventory', icon: <svg width={18} height={18} viewBox="0 0 24 24" fill="currentColor"><path d="M12 2L2 7v10l10 5 10-5V7L12 2zm0 2.24L20 8.5l-8 4-8-4 8-4.26zM3 9.74l8 4V21l-8-4V9.74zm10 11.26v-7.5l8-4V17l-8 4z"/></svg> },
+    { id: 'logistics', label: 'Logistics', icon: <svg width={18} height={18} viewBox="0 0 24 24" fill="currentColor"><path d="M1 3h14a1 1 0 011 1v9H1V3zm15 4h4.5L23 10.5V16h-7V7zM5.5 20a2 2 0 100-4 2 2 0 000 4zm13 0a2 2 0 100-4 2 2 0 000 4z"/></svg> },
     { id: 'customer', label: 'Customer', icon: <svg width={18} height={18} viewBox="0 0 24 24" fill="currentColor"><path d="M9 12a4 4 0 100-8 4 4 0 000 8zm0 2c-4.42 0-8 1.79-8 4v1h16v-1c0-2.21-3.58-4-8-4zm7-8a3 3 0 000 6 3 3 0 000-6zm0 8c-1.04 0-2.02.2-2.88.53C14.32 15.2 15.5 16.5 15.5 18H23v-1c0-2.21-3.13-4-7-4z"/></svg> },
     { id: 'documents', label: 'Documents', icon: <svg width={18} height={18} viewBox="0 0 24 24" fill="currentColor"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8l-6-6zm-1 7V3.5L18.5 9H13zM8 13h8v1.5H8V13zm0 3h8v1.5H8V16zm0-6h3v1.5H8V10z"/></svg> },
   ]
