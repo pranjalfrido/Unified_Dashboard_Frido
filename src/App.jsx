@@ -2483,7 +2483,7 @@ function Sidebar({ page, setPage, invTab, setInvTab, allowedTabs, profile }) {
   ]
   return (
     <nav className="sidebar">
-      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', marginBottom: 14, gap: 2, marginTop: -16 }}>
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', marginBottom: 14, gap: 0, marginTop: -16 }}>
         <img src="/frido_logo_binarized.png" alt="Frido" style={{ width: 68, height: 'auto', objectFit: 'contain' }} />
         <span style={{ fontSize: 10.5, fontWeight: 600, color: '#000', letterSpacing: '.04em', textTransform: 'uppercase', lineHeight: 1, textAlign: 'center' }}>Prism</span>
       </div>
