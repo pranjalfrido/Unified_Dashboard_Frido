@@ -2163,7 +2163,7 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
                   </ResponsiveContainer>
                   <div style={{ display: 'inline-flex', flexDirection: 'column', gap: 11, paddingRight: 20, marginLeft: 'auto' }}>
                     {donutData.map(d => (
-                      <div key={d.name} style={{ display: 'flex', alignItems: 'center', gap: 24 }}>
+                      <div key={d.name} style={{ display: 'flex', alignItems: 'center', gap: 30 }}>
                         <div style={{ width: 8, height: 8, borderRadius: '50%', background: d.color, flexShrink: 0 }} />
                         <div style={{ fontSize: 11.5, color: C.t2, whiteSpace: 'nowrap', width: 62 }}>{d.name}</div>
                         <div style={{ fontSize: 11.5, fontWeight: 700, color: C.t1, width: 42, textAlign: 'right' }}>{wMetric === 'qty' ? (d.value||0).toLocaleString('en-IN') : fmtVal(d.value||0)}</div>
