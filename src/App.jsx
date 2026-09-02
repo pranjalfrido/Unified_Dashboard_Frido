@@ -2466,7 +2466,7 @@ function Sidebar({ page, setPage, invTab, setInvTab, allowedTabs, profile }) {
   const allItems = [
     { id: 'overview',  label: 'Overview',  Icon: SquaresFour },
     { id: 'sales',     label: 'Sales',     Icon: ChartBar },
-    { id: 'pnl',       label: 'PnL',       Icon: TrendUp },
+    { id: 'pnl',       label: 'P&L',       Icon: TrendUp },
     { id: 'ads',       label: 'Ads',       Icon: PlayCircle },
     { id: 'inventory', label: 'Inventory', Icon: Cube },
     { id: 'logistics', label: 'Logistics', Icon: Truck },
