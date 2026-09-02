@@ -12080,17 +12080,16 @@ function SalesPage({ data, filters, setFilters, activeTab, setActiveTab, fetchDa
             )}
             {activeTab === 'shopify' && <VoucherDropdown voucherList={data?.voucherList || []} selected={filters.voucher} onChange={v => setFilters(f => ({ ...f, voucher: v }))} />}
             {Object.keys(subCatFirstOrderMap).length > 0 && (
-              <div style={{ display: 'flex', alignItems: 'center', gap: 4, background: C.surface, border: `1px solid ${C.border}`, borderRadius: 8, padding: '3px 6px' }}>
-                <span style={{ fontSize: 10, fontWeight: 700, color: C.t3, textTransform: 'uppercase', letterSpacing: '.05em', marginRight: 2 }}>Launch</span>
-                {[{ id: 'new', label: '≤90d' }, { id: 'established', label: '>90d' }].map(opt => (
-                  <button key={opt.id} onClick={() => setFilters(f => ({ ...f, productAge: f.productAge === opt.id ? '' : opt.id, subCategory: [] }))}
-                    style={{ fontSize: 11, fontWeight: 600, padding: '3px 9px', borderRadius: 6, border: 'none', cursor: 'pointer', fontFamily: 'inherit', transition: 'all .15s',
-                      background: filters.productAge === opt.id ? C.acc : 'transparent', color: filters.productAge === opt.id ? '#13121A' : C.t2 }}>
-                    {opt.label}
-                  </button>
-                ))}
-                {filters.productAge && <button onClick={() => setFilters(f => ({ ...f, productAge: '', subCategory: [] }))} style={{ fontSize: 11, color: C.t3, background: 'none', border: 'none', cursor: 'pointer', padding: '0 2px', lineHeight: 1 }}>✕</button>}
-              </div>
+              <SearchableSelect
+                options={['Newly Launched (≤90 days)', 'Established (>90 days)']}
+                value={filters.productAge === 'new' ? 'Newly Launched (≤90 days)' : filters.productAge === 'established' ? 'Established (>90 days)' : ''}
+                onChange={v => {
+                  const mapped = v === 'Newly Launched (≤90 days)' ? 'new' : v === 'Established (>90 days)' ? 'established' : ''
+                  setFilters(f => ({ ...f, productAge: mapped, subCategory: [] }))
+                }}
+                placeholder="All Product Launch"
+                dropdownWidth={220}
+              />
             )}
             <button onClick={() => setFilters(f => ({ ...f, category: [], subCategory: [], sku: [], subChannel: '', voucher: '', region: [], tier: [], state: [], city: '', channelGroup: [], productAge: '' }))} className="fclr">✕ Clear</button>
             </FilterIconPopover>
