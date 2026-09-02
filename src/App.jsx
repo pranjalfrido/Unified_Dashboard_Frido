@@ -2582,7 +2582,7 @@ function Sidebar({ page, setPage, invTab, setInvTab, allowedTabs, profile }) {
         return (
           <div key={item.id} onClick={() => setPage(item.id)}
             className={`sb-item${page === item.id ? ' active' : ''}`}>
-            <span className="sb-icon">{item.icon}</span>
+            <span className="sb-icon">{(() => { const Icon = item.Icon; return <Icon weight={page === item.id ? 'fill' : 'regular'} size={20} /> })()}</span>
             <span className="sb-label">{item.label}</span>
           </div>
         )
