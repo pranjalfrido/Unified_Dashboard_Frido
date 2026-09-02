@@ -2485,7 +2485,7 @@ function Sidebar({ page, setPage, invTab, setInvTab, allowedTabs, profile }) {
     <nav className="sidebar">
       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', marginBottom: 14, gap: 2 }}>
         <img src="/frido-logo.png" alt="Frido" style={{ width: 36, height: 36, borderRadius: 10, objectFit: 'cover' }} />
-        <span style={{ fontSize: 10.5, fontWeight: 600, color: C.t3, letterSpacing: '.04em', textTransform: 'uppercase', lineHeight: 1, textAlign: 'center' }}>Prism</span>
+        <span style={{ fontSize: 10.5, fontWeight: 600, color: '#000', letterSpacing: '.04em', textTransform: 'uppercase', lineHeight: 1, textAlign: 'center' }}>Prism</span>
       </div>
       {items.map(item => {
         if (item.id === 'inventory') {
