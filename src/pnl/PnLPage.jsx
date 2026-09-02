@@ -876,12 +876,16 @@ export default function PnLPage({ data, filters, setFilters, activeTab: activeTa
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
       <div className="sales-tabs">
-        {allowedPnlTabs.map(tab => (
-          <button key={tab.id} onClick={() => setActiveTab(tab.id)} className={`stab${activeTab === tab.id ? ' active' : ''}`} style={tab.id === 'all' ? { fontWeight: activeTab === 'all' ? 800 : 700, fontSize: 13 } : {}}>
+        {PNL_TABS.map(tab => {
+          const allowed = !allowedTabs || allowedTabs.includes(PNL_KEY_MAP[tab.id])
+          const isActive = activeTab === tab.id
+          return (
+          <button key={tab.id} onClick={() => { if (!allowed) return; setActiveTab(tab.id) }} className={`stab${isActive ? ' active' : ''}`} style={{ ...(tab.id === 'all' ? { fontWeight: isActive ? 800 : 700, fontSize: 13 } : {}), ...(!allowed ? { opacity: 0.35, cursor: 'not-allowed', pointerEvents: 'auto' } : {}) }}>
             {tab.logo && <img src={tab.logo} alt="" style={{ width: 14, height: 14, borderRadius: 3, flexShrink: 0, objectFit: 'contain', filter: tab.id === 'cred' ? 'invert(1)' : 'none' }} />}
             {tab.label}
           </button>
-        ))}
+          )
+        })}
       </div>
       <div className="page-scroll">
         {activeTab === 'shopify' && (

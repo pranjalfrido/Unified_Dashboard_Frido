@@ -8945,15 +8945,20 @@ function AdsTab({ data, filters = {}, selPlatform, setSelPlatform, allowedTabs }
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
       <div className="sales-tabs mob-hidden">
-        {allowedAdsPlatforms.map(p => (
-          <button key={p.id} onClick={() => setSelPlatform(p.id === 'All' ? null : p.id)}
-            className={`stab${(p.id === 'All' ? !selPlatform : selPlatform === p.id) ? ' active' : ''}`}
-            style={p.id === 'All' ? { fontWeight: !selPlatform ? 800 : 700, fontSize: 13 } : {}}>
-            {p.logo && <img src={p.logo} alt="" style={{ width: 14, height: 14, borderRadius: 3, flexShrink: 0, objectFit: 'contain', ...(p.id === 'CRED' ? { background: '#000', padding: 1 } : {}) }} />}
-            {p.logo2 && <img src={p.logo2} alt="" style={{ width: 14, height: 14, borderRadius: 3, flexShrink: 0, objectFit: 'contain', marginLeft: -4 }} />}
-            {p.label}
-          </button>
-        ))}
+        {ADS_PLATFORMS.map(p => {
+          const allowed = !allowedTabs || allowedTabs.includes(ADS_KEY_MAP[p.id])
+          const isActive = p.id === 'All' ? !selPlatform : selPlatform === p.id
+          return (
+            <button key={p.id}
+              onClick={() => { if (!allowed) return; setSelPlatform(p.id === 'All' ? null : p.id) }}
+              className={`stab${isActive ? ' active' : ''}`}
+              style={{ ...(p.id === 'All' ? { fontWeight: !selPlatform ? 800 : 700, fontSize: 13 } : {}), ...(!allowed ? { opacity: 0.35, cursor: 'not-allowed', pointerEvents: 'auto' } : {}) }}>
+              {p.logo && <img src={p.logo} alt="" style={{ width: 14, height: 14, borderRadius: 3, flexShrink: 0, objectFit: 'contain', ...(p.id === 'CRED' ? { background: '#000', padding: 1 } : {}) }} />}
+              {p.logo2 && <img src={p.logo2} alt="" style={{ width: 14, height: 14, borderRadius: 3, flexShrink: 0, objectFit: 'contain', marginLeft: -4 }} />}
+              {p.label}
+            </button>
+          )
+        })}
       </div>
 
 
@@ -12040,12 +12045,19 @@ function SalesPage({ data, filters, setFilters, activeTab, setActiveTab, fetchDa
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
       {/* Tab bar */}
       <div className="sales-tabs">
-        {allowedSalesTabs.map(tab => (
-          <button key={tab.id} onClick={() => { setActiveTab(tab.id); setChannelView('all'); setOfflineSub('all'); setShopifyView('overview'); setFilters(f => ({ ...f, subChannel: '', voucher: '', channelGroup: [], category: [], subCategory: [], sku: [], paymentType: '', productAge: '' })) }} className={`stab${activeTab === tab.id ? ' active' : ''}`} style={tab.id === 'all' ? { fontWeight: activeTab === 'all' ? 800 : 700, fontSize: 13 } : {}}>
-            {tab.logo && <img src={tab.logo} alt="" style={{ width: 14, height: 14, borderRadius: 3, flexShrink: 0, objectFit: 'contain', filter: tab.id === 'cred' ? 'invert(1)' : 'none' }} />}
-            {tab.label}
-          </button>
-        ))}
+        {TABS.map(tab => {
+          const allowed = !allowedTabs || allowedTabs.includes(SALES_KEY_MAP[tab.id])
+          const isActive = activeTab === tab.id
+          return (
+            <button key={tab.id}
+              onClick={() => { if (!allowed) return; setActiveTab(tab.id); setChannelView('all'); setOfflineSub('all'); setShopifyView('overview'); setFilters(f => ({ ...f, subChannel: '', voucher: '', channelGroup: [], category: [], subCategory: [], sku: [], paymentType: '', productAge: '' })) }}
+              className={`stab${isActive ? ' active' : ''}`}
+              style={{ ...(tab.id === 'all' ? { fontWeight: isActive ? 800 : 700, fontSize: 13 } : {}), ...(!allowed ? { opacity: 0.35, cursor: 'not-allowed', pointerEvents: 'auto' } : {}) }}>
+              {tab.logo && <img src={tab.logo} alt="" style={{ width: 14, height: 14, borderRadius: 3, flexShrink: 0, objectFit: 'contain', filter: tab.id === 'cred' ? 'invert(1)' : 'none' }} />}
+              {tab.label}
+            </button>
+          )
+        })}
       </div>
       {/* Fixed bar: per-channel toggle on the left, filter icon on the right */}
       <div className="fbar">
