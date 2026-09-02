@@ -11982,6 +11982,37 @@ function CXTab({ data }) {
 
 // Filter icon + popover — replaces the always-visible Category/Sub-category/SKU/Payment Type/
 // Voucher dropdown row with a single icon on the right of the toggle bar; clicking it opens the
+const LAUNCH_OPTS = [{ id: 'new', label: 'Newly Launched (≤90 days)' }, { id: 'established', label: 'Established (>90 days)' }]
+function LaunchDropdown({ value, onChange }) {
+  const [open, setOpen] = useState(false)
+  const ref = useRef(null)
+  const selected = LAUNCH_OPTS.find(o => o.id === value)
+  useEffect(() => {
+    const h = e => { if (ref.current && !ref.current.contains(e.target)) setOpen(false) }
+    document.addEventListener('mousedown', h)
+    return () => document.removeEventListener('mousedown', h)
+  }, [])
+  return (
+    <div ref={ref} style={{ position: 'relative', flexShrink: 0 }}>
+      <div onClick={() => setOpen(o => !o)} className="fsel" style={{ display: 'flex', alignItems: 'center', gap: 5, cursor: 'pointer', minWidth: 160, background: selected ? '#FFF9CC' : undefined, borderColor: selected ? C.acm : undefined }}>
+        <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: 11.5 }}>{selected ? selected.label : 'All Product Launch'}</span>
+        <span style={{ fontSize: 8, color: C.t3, flexShrink: 0 }}>▼</span>
+      </div>
+      {open && (
+        <div style={{ position: 'absolute', top: '110%', left: 0, zIndex: 200, background: C.card, border: `1px solid ${C.border2}`, borderRadius: 9, boxShadow: '0 8px 28px rgba(0,0,0,.14)', width: 220, overflow: 'hidden' }}>
+          {selected && <div onClick={() => { onChange(''); setOpen(false) }} style={{ padding: '9px 14px', fontSize: 12, color: C.t3, cursor: 'pointer', borderBottom: `1px solid ${C.border}` }}>All Product Launch</div>}
+          {LAUNCH_OPTS.map(opt => (
+            <div key={opt.id} onClick={() => { onChange(opt.id); setOpen(false) }}
+              style={{ padding: '9px 14px', fontSize: 12, cursor: 'pointer', fontWeight: value === opt.id ? 700 : 400, background: value === opt.id ? '#FFF9CC' : 'transparent', color: C.t1 }}>
+              {opt.label}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
 // same set of filters in a floating box. `children` are the filter controls to render inside —
 // callers (SalesPage) decide which controls apply per active channel (e.g. Payment Types/Vouchers
 // only render for Shopify), same conditional logic the old always-visible row already used.
@@ -12080,16 +12111,7 @@ function SalesPage({ data, filters, setFilters, activeTab, setActiveTab, fetchDa
             )}
             {activeTab === 'shopify' && <VoucherDropdown voucherList={data?.voucherList || []} selected={filters.voucher} onChange={v => setFilters(f => ({ ...f, voucher: v }))} />}
             {Object.keys(subCatFirstOrderMap).length > 0 && (
-              <SearchableSelect
-                options={['Newly Launched (≤90 days)', 'Established (>90 days)']}
-                value={filters.productAge === 'new' ? 'Newly Launched (≤90 days)' : filters.productAge === 'established' ? 'Established (>90 days)' : ''}
-                onChange={v => {
-                  const mapped = v === 'Newly Launched (≤90 days)' ? 'new' : v === 'Established (>90 days)' ? 'established' : ''
-                  setFilters(f => ({ ...f, productAge: mapped, subCategory: [] }))
-                }}
-                placeholder="All Product Launch"
-                dropdownWidth={220}
-              />
+              <LaunchDropdown value={filters.productAge} onChange={v => setFilters(f => ({ ...f, productAge: v, subCategory: [] }))} />
             )}
             <button onClick={() => setFilters(f => ({ ...f, category: [], subCategory: [], sku: [], subChannel: '', voucher: '', region: [], tier: [], state: [], city: '', channelGroup: [], productAge: '' }))} className="fclr">✕ Clear</button>
             </FilterIconPopover>
