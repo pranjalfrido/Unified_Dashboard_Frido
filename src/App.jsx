@@ -921,11 +921,11 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
             </div>
             {/* Right: 2 rows × 6 cols */}
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gridTemplateRows: 'repeat(2, 1fr)', gap: filterSidebarOpen ? 5 : 7, alignItems: 'stretch' }}>
-              <LKpiCard label="Total Attempted" value={fmtBig(k.total_ofd_attempts)} badgeVariant="N" cur={k.total_ofd_attempts} prev={pk.total_ofd_attempts} compact tight={filterSidebarOpen} />
-              <LKpiCard label="Z-RTO" value={fmtBig(k.z_rto)} badgeText={pct2(k.z_rto, k.total_shipments)} badgeVariant="A" cur={k.z_rto} prev={pk.z_rto} compact tight={filterSidebarOpen} />
-              <LKpiCard label="FASR % (of attempted)" value={pct2(k.delivered_1attempt, k.total_ofd_attempts)} badgeVariant="G" cur={k.delivered_1attempt} prev={pk.delivered_1attempt} compact tight={filterSidebarOpen} />
-              <LKpiCard label="RASR % (of attempted)" value={pct2(k.delivered_multi, k.total_ofd_attempts)} badgeVariant="B" cur={k.delivered_multi} prev={pk.delivered_multi} compact tight={filterSidebarOpen} />
-              <LKpiCard label="Multi-Att Del" value={fmtBig(k.delivered_multi)} badgeVariant="B" cur={k.delivered_multi} prev={pk.delivered_multi} compact tight={filterSidebarOpen} />
+              <LKpiCard label="Total Attempted" value={fmtBig(k.total_ofd_attempts)} subValue={pct2(k.total_ofd_attempts, k.total_shipments)} badgeVariant="N" cur={k.total_ofd_attempts} prev={pk.total_ofd_attempts} compact tight={filterSidebarOpen} />
+              <LKpiCard label="Z-RTO" value={fmtBig(k.z_rto)} subValue={pct2(k.z_rto, k.total_shipments)} badgeVariant="A" cur={k.z_rto} prev={pk.z_rto} compact tight={filterSidebarOpen} />
+              <LKpiCard label="FASR % (of attempted)" value={pct2(k.delivered_1attempt, k.total_ofd_attempts)} subValue={pct2(k.delivered_1attempt, k.total_shipments)} badgeVariant="G" cur={k.delivered_1attempt} prev={pk.delivered_1attempt} compact tight={filterSidebarOpen} />
+              <LKpiCard label="RASR % (of attempted)" value={pct2(k.delivered_multi, k.total_ofd_attempts)} subValue={pct2(k.delivered_multi, k.total_shipments)} badgeVariant="B" cur={k.delivered_multi} prev={pk.delivered_multi} compact tight={filterSidebarOpen} />
+              <LKpiCard label="Multi-Att Del" value={fmtBig(k.delivered_multi)} subValue={pct2(k.delivered_multi, k.total_shipments)} badgeVariant="B" cur={k.delivered_multi} prev={pk.delivered_multi} compact tight={filterSidebarOpen} />
               <LKpiCard label="Avg Processing" value={d1(k.avg_processing)} badgeText="Cr→1st OFD" badgeVariant="N" cur={k.avg_processing} prev={pk.avg_processing} compact tight={filterSidebarOpen} />
               <LKpiCard label="Avg Pickup TAT" value={d1(k.avg_pickup)} badgeText="Cr→Pick" badgeVariant="B" cur={k.avg_pickup} prev={pk.avg_pickup} compact tight={filterSidebarOpen} />
               <LKpiCard label="Avg In-Transit" value={d1(k.avg_intransit)} badgeText="Pick→Del" badgeVariant="N" cur={k.avg_intransit} prev={pk.avg_intransit} compact tight={filterSidebarOpen} />
@@ -2189,12 +2189,13 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
                     <Tooltip content={({ active, payload, label }) => {
                       if (!active || !payload?.length) return null
                       const row = ordered.find(r => r.slab === label) || {}
+                      const dot = color => <span style={{ display: 'inline-block', width: 8, height: 8, borderRadius: 2, background: color, marginRight: 6, flexShrink: 0 }} />
                       return (
                         <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 8, padding: '8px 12px', fontSize: 11, color: C.t1 }}>
-                          <div style={{ fontWeight: 700, marginBottom: 4 }}>{label}</div>
-                          <div style={{ color: '#5BA4CF' }}>Shipments: <strong>{(row.total||0).toLocaleString('en-IN')}</strong></div>
-                          <div style={{ color: C.red.tx }}>RTO %: <strong>{row.rto_pct??'—'}%</strong></div>
-                          <div style={{ color: '#60A5FA' }}>Intrasit TAT: <strong>{row.avg_tat??'—'}d</strong></div>
+                          <div style={{ fontWeight: 700, marginBottom: 6 }}>{label}</div>
+                          <div style={{ display: 'flex', alignItems: 'center', marginBottom: 3 }}>{dot('#5BA4CF')}<span>Shipments: <strong>{(row.total||0).toLocaleString('en-IN')}</strong></span></div>
+                          <div style={{ display: 'flex', alignItems: 'center', marginBottom: 3 }}>{dot(C.red.tx)}<span>RTO %: <strong>{row.rto_pct??'—'}%</strong></span></div>
+                          <div style={{ display: 'flex', alignItems: 'center' }}>{dot('#60A5FA')}<span>Intrasit TAT: <strong>{row.avg_tat??'—'}d</strong></span></div>
                         </div>
                       )
                     }} />
@@ -4644,7 +4645,7 @@ function ChannelTrendCard({ dailyArr, channels, rangeStart, rangeEnd }) {
             }
             return d.replace(/'\d{2}\s*/, '')
           }} />
-          <YAxis hide />
+          <YAxis tick={{ fontSize: 9, fill: C.t3 }} width={42} tickFormatter={v => { if (v >= 1e7) return `${(v/1e7).toFixed(1)}Cr`; if (v >= 1e5) return `${(v/1e5).toFixed(1)}L`; if (v >= 1e3) return `${(v/1e3).toFixed(0)}K`; return v }} />
           <Tooltip content={totalTooltip} />
           <Area type="monotone" dataKey="_total" name="Total" stroke={C.acm} strokeWidth={2.5} fill="url(#chTotalGrad)" dot={false} />
         </ComposedChart>
@@ -12039,6 +12040,7 @@ function SalesPage({ data, filters, setFilters, activeTab, setActiveTab, fetchDa
   const activeFilterCount = (filters.category?.length || 0) + (filters.subCategory?.length || 0) + (filters.sku?.length || 0)
     + (filters.paymentType ? filters.paymentType.split(',').filter(Boolean).length : 0)
     + (filters.voucher ? filters.voucher.split(',').filter(Boolean).length : 0)
+    + (filters.productAge ? 1 : 0)
 
   if (!filteredData) return null
   return (
@@ -12077,7 +12079,20 @@ function SalesPage({ data, filters, setFilters, activeTab, setActiveTab, fetchDa
               <SearchableSelect multi options={paymentTypeOpts} value={(filters.paymentType ? filters.paymentType.split(',').map(x => x.trim()).filter(Boolean) : [])} onChange={v => setFilters(f => ({ ...f, paymentType: v.join(',') }))} placeholder="All Payment Types" dropdownWidth={220} />
             )}
             {activeTab === 'shopify' && <VoucherDropdown voucherList={data?.voucherList || []} selected={filters.voucher} onChange={v => setFilters(f => ({ ...f, voucher: v }))} />}
-            <button onClick={() => setFilters(f => ({ ...f, category: [], subCategory: [], sku: [], subChannel: '', voucher: '', region: [], tier: [], state: [], city: '', channelGroup: [] }))} className="fclr">✕ Clear</button>
+            {Object.keys(subCatFirstOrderMap).length > 0 && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 4, background: C.surface, border: `1px solid ${C.border}`, borderRadius: 8, padding: '3px 6px' }}>
+                <span style={{ fontSize: 10, fontWeight: 700, color: C.t3, textTransform: 'uppercase', letterSpacing: '.05em', marginRight: 2 }}>Launch</span>
+                {[{ id: 'new', label: '≤90d' }, { id: 'established', label: '>90d' }].map(opt => (
+                  <button key={opt.id} onClick={() => setFilters(f => ({ ...f, productAge: f.productAge === opt.id ? '' : opt.id, subCategory: [] }))}
+                    style={{ fontSize: 11, fontWeight: 600, padding: '3px 9px', borderRadius: 6, border: 'none', cursor: 'pointer', fontFamily: 'inherit', transition: 'all .15s',
+                      background: filters.productAge === opt.id ? C.acc : 'transparent', color: filters.productAge === opt.id ? '#13121A' : C.t2 }}>
+                    {opt.label}
+                  </button>
+                ))}
+                {filters.productAge && <button onClick={() => setFilters(f => ({ ...f, productAge: '', subCategory: [] }))} style={{ fontSize: 11, color: C.t3, background: 'none', border: 'none', cursor: 'pointer', padding: '0 2px', lineHeight: 1 }}>✕</button>}
+              </div>
+            )}
+            <button onClick={() => setFilters(f => ({ ...f, category: [], subCategory: [], sku: [], subChannel: '', voucher: '', region: [], tier: [], state: [], city: '', channelGroup: [], productAge: '' }))} className="fclr">✕ Clear</button>
             </FilterIconPopover>
           </div>
         </div>
