@@ -344,7 +344,7 @@ function ReturnReasonsTable({ returnReasons, height = 420 }) {
   )
 }
 
-export default function D2CReturnAnalysisTab({ filters }) {
+export default function D2CReturnAnalysisTab({ filters, subCatFirstOrderMap = {} }) {
   const API = import.meta.env.VITE_API_URL || ''
   const [data, setData] = useState(null)
   const [loading, setLoading] = useState(false)
@@ -361,11 +361,19 @@ export default function D2CReturnAnalysisTab({ filters }) {
   useEffect(() => {
     if (!filters.start || !filters.end) return
     const reqId = ++reqIdRef.current
+    let subCategoryList = filters.subCategory?.length ? [...filters.subCategory] : []
+    if (filters.productAge && Object.keys(subCatFirstOrderMap).length) {
+      const today = new Date()
+      const ageSubs = Object.entries(subCatFirstOrderMap)
+        .filter(([, d]) => { const days = (today - new Date(d)) / 86400000; return filters.productAge === 'new' ? days <= 90 : days > 90 })
+        .map(([sc]) => sc)
+      subCategoryList = ageSubs
+    }
     const body = {
       start: filters.start, end: filters.end,
       subChannel: (filters.subChannel === 'MyFrido' || filters.subChannel === 'Mobility') ? filters.subChannel : '',
       category: filters.category?.length ? filters.category.join(',') : undefined,
-      subCategory: filters.subCategory?.length ? filters.subCategory.join(',') : undefined,
+      subCategory: subCategoryList.length ? subCategoryList.join(',') : undefined,
       topProductsPaymentType: topProductsPaymentType || undefined,
     }
     // Deferred to a microtask so the fetch kickoff (and its setLoading/setError) doesn't run
@@ -381,7 +389,7 @@ export default function D2CReturnAnalysisTab({ filters }) {
         .catch(e => { if (reqId === reqIdRef.current) setError(e.message) })
         .finally(() => { if (reqId === reqIdRef.current) setLoading(false) })
     })
-  }, [API, filters.start, filters.end, filters.subChannel, filters.category, filters.subCategory, topProductsPaymentType])
+  }, [API, filters.start, filters.end, filters.subChannel, filters.category, filters.subCategory, filters.productAge, subCatFirstOrderMap, topProductsPaymentType])
 
   const paymentTypeOpts = useMemo(() => (data?.paymentTypeTable || []).map(r => r.paymentType).filter(Boolean), [data])
 
