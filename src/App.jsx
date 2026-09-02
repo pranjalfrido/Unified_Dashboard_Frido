@@ -2142,7 +2142,7 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
                     </div>
                   </div>
                 </div>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 24 }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-start', gap: 24, paddingLeft: 15 }}>
                   <div style={{ flexShrink: 0 }}>
                   <ResponsiveContainer width={isMobile ? 150 : 180} height={isMobile ? 190 : 200}>
                     <PieChart>
