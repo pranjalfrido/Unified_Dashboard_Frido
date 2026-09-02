@@ -2144,9 +2144,9 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-start', gap: 24, paddingLeft: 15 }}>
                   <div style={{ position: 'relative', left: 80 }}>
-                  <ResponsiveContainer width={isMobile ? 150 : 180} height={isMobile ? 190 : 200}>
+                  <ResponsiveContainer width={isMobile ? 150 : 200} height={isMobile ? 190 : 220}>
                     <PieChart>
-                      <Pie data={donutData} cx="50%" cy="50%" innerRadius={isMobile ? 48 : 50} outerRadius={isMobile ? 72 : 76} dataKey="value" paddingAngle={2}>
+                      <Pie data={donutData} cx="50%" cy="50%" innerRadius={isMobile ? 48 : 59} outerRadius={isMobile ? 72 : 89} dataKey="value" paddingAngle={2}>
                         {donutData.map((d,i) => <Cell key={i} fill={d.color} />)}
                       </Pie>
                       <Tooltip content={({ active, payload }) => {
