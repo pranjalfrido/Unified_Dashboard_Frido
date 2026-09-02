@@ -84,13 +84,19 @@ function PermissionPanel({ tabs, setTabs }) {
     <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
       {PERMISSION_TREE.map(node => {
         if (!node.isGroup) {
-          // Single standalone toggle (Overview, Customer, Documents)
-          return <PermChip key={node.key} node={node} tabs={tabs} setTabs={setTabs} />
+          // Standalone tab — wrap in a card like the groups
+          const sel = tabs.includes(node.key)
+          return (
+            <div key={node.key} style={{ background: '#F7F5EF', border: '1px solid #E7E3D8', borderRadius: 10, padding: '10px 12px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8 }}>
+                <span style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.08em', color: sel ? '#1E2321' : '#9BA5A1' }}>{node.label}</span>
+              </div>
+              <PermChip node={node} tabs={tabs} setTabs={setTabs} />
+            </div>
+          )
         }
-        // Check if any child is itself a group (nested) — use full PermGroup
         const hasNestedGroup = node.children.some(c => c.isGroup)
         if (hasNestedGroup) return <PermGroup key={node.key} node={node} tabs={tabs} setTabs={setTabs} />
-        // Flat group — chips in a row
         return <PermGroupFlat key={node.key} node={node} tabs={tabs} setTabs={setTabs} />
       })}
     </div>
