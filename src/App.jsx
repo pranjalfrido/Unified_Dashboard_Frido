@@ -2507,7 +2507,7 @@ function Sidebar({ page, setPage, invTab, setInvTab, allowedTabs, profile }) {
               onMouseLeave={() => { hoverTimerRef.current = setTimeout(() => setInvHover(false), 200) }}>
               <div onClick={() => { setPage('inventory'); setInvTab(defaultInvTab) }}
                 className={`sb-item${page === 'inventory' ? ' active' : ''}`}>
-                <span className="sb-icon"><item.Icon weight={page === item.id ? 'fill' : 'regular'} size={20} /></span>
+                <span className="sb-icon">{(() => { const Icon = item.Icon; return <Icon weight={page === item.id ? 'fill' : 'regular'} size={20} /> })()}</span>
                 <span className="sb-label">{item.label}</span>
               </div>
               {hasBothInv && invHover && (
@@ -2550,7 +2550,7 @@ function Sidebar({ page, setPage, invTab, setInvTab, allowedTabs, profile }) {
               onMouseLeave={() => { logHoverTimerRef.current = setTimeout(() => setLogHover(false), 200) }}>
               <div onClick={() => setPage(defaultLogPage)}
                 className={`sb-item${logActive ? ' active' : ''}`}>
-                <span className="sb-icon"><item.Icon weight={page === item.id ? 'fill' : 'regular'} size={20} /></span>
+                <span className="sb-icon">{(() => { const Icon = item.Icon; return <Icon weight={page === item.id ? 'fill' : 'regular'} size={20} /> })()}</span>
                 <span className="sb-label">{item.label}</span>
               </div>
               {hasBoth && logHover && (
