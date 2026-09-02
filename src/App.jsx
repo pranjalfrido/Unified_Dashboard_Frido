@@ -2142,7 +2142,7 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
                     </div>
                   </div>
                 </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 14, justifyContent: 'space-between' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
                   <ResponsiveContainer width={isMobile ? 150 : 180} height={isMobile ? 190 : 200}>
                     <PieChart>
                       <Pie data={donutData} cx="50%" cy="50%" innerRadius={isMobile ? 48 : 55} outerRadius={isMobile ? 72 : 85} dataKey="value" paddingAngle={2}>
@@ -2161,7 +2161,7 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
                       }} />
                     </PieChart>
                   </ResponsiveContainer>
-                  <div style={{ display: 'inline-flex', flexDirection: 'column', gap: 11, marginLeft: 'auto', paddingRight: 20 }}>
+                  <div style={{ display: 'inline-flex', flexDirection: 'column', gap: 11, paddingRight: 20 }}>
                     {donutData.map(d => (
                       <div key={d.name} style={{ display: 'flex', alignItems: 'center', gap: 11 }}>
                         <div style={{ width: 8, height: 8, borderRadius: '50%', background: d.color, flexShrink: 0 }} />
