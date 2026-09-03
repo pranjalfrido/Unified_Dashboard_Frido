@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useRef, useEffect, useCallback, Children } from 'react'
 import {
-  IC, fmtNum, fmtInt, fmtDays, GlassCard, KpiTile, StatusChip, SearchableMultiSelect, DraggableTh, ExportButton,
+  IC, fmtNum, fmtInt, fmtDays, GlassCard, KpiTile, StatusChip, SearchableMultiSelect, DraggableTh, SortableTh, ExportButton,
 } from './theme.jsx'
 
 // Mobile: horizontal swipe carousel with header + dots. Desktop: normal 7-col grid.
@@ -372,6 +372,127 @@ function SubCatStockTable({ rows, emptyLabel, search = '' }) {
         </tbody>
       </table>
     </div>
+  )
+}
+
+// Independent Avg Sale table for Mobility & Ergo Furniture — see mobilityErgoAvgSale in
+// scripts/generate-inv-cache.mjs for the calculation itself (adaptive-window, all-location,
+// no exclusions on Cancelled/RTO). Deliberately NOT wired to the Location sidebar filter — this
+// table's numbers are driven entirely by each SKU's own selling history, not the page's
+// location/date-range selection, so it stays visually and functionally separate from the main
+// Inventory Detail table (same reasoning as why it's a distinct backend field, not folded into
+// `skus`).
+const MOBILITY_ERGO_COLS = [
+  { key: 'category', label: 'Category', align: 'left', width: 110 },
+  { key: 'subCategory', label: 'Sub-Category', align: 'left', width: 160 },
+  { key: 'sku', label: 'Product ID', align: 'left', width: 130 },
+  { key: 'rtdInvt', label: 'RTD Invt', width: 78 },
+  { key: 'rawInvt', label: 'Raw Invt', width: 78 },
+  { key: 'rawBlockedInvt', label: 'Raw Blocked', width: 90 },
+  { key: 'totalInvt', label: 'Total Invt', width: 84 },
+  { key: 'lifeDays', label: 'Selling Life', width: 90 },
+  { key: 'windowDays', label: 'Window Used', width: 130 },
+  { key: 'avgSaleNew', label: 'Avg Sale', width: 82 },
+  { key: 'avgSaleCurrent', label: 'Avg Sale (Std 7d)', width: 110 },
+  { key: 'doi', label: 'DOI', width: 64 },
+  { key: 'stockStatus', label: 'Status', width: 110 },
+  { key: 'websiteStatus', label: 'Website Status', width: 110 },
+]
+
+function MobilityErgoAvgSaleTable({ rows }) {
+  const [search, setSearch] = useState('')
+  const [sort, setSort] = useState({ key: 'totalInvt', dir: 'desc' })
+  const onSort = key => setSort(prev => prev.key === key ? { key, dir: prev.dir === 'asc' ? 'desc' : 'asc' } : { key, dir: 'desc' })
+
+  const q = search.trim().toLowerCase()
+  const filtered = q ? rows.filter(r => r.sku.toLowerCase().includes(q) || r.category.toLowerCase().includes(q) || r.subCategory.toLowerCase().includes(q)) : rows
+  const sorted = [...filtered].sort((a, b) => {
+    const sign = sort.dir === 'asc' ? 1 : -1
+    const av = a[sort.key], bv = b[sort.key]
+    if (typeof av === 'string') return sign * av.localeCompare(bv)
+    return sign * ((av ?? -Infinity) - (bv ?? -Infinity))
+  })
+
+  const totals = filtered.reduce((acc, r) => ({
+    rtdInvt: acc.rtdInvt + (r.rtdInvt || 0), rawInvt: acc.rawInvt + (r.rawInvt || 0),
+    rawBlockedInvt: acc.rawBlockedInvt + (r.rawBlockedInvt || 0), totalInvt: acc.totalInvt + (r.totalInvt || 0),
+  }), { rtdInvt: 0, rawInvt: 0, rawBlockedInvt: 0, totalInvt: 0 })
+
+  const exportRows = filtered.map(r => ({
+    Category: r.category, SubCategory: r.subCategory, ProductID: r.sku,
+    RTDInvt: r.rtdInvt, RawInvt: r.rawInvt, RawBlocked: r.rawBlockedInvt, TotalInvt: r.totalInvt,
+    SellingLifeDays: r.lifeDays, WindowStart: r.windowStart, WindowEnd: r.windowEnd, WindowDays: r.windowDays,
+    AvgSale: r.avgSaleNew, AvgSaleStd7d: r.avgSaleCurrent, DOI: r.doi, Status: r.stockStatus, WebsiteStatus: r.websiteStatus,
+  }))
+
+  return (
+    <GlassCard
+      title="Avg Sale · Mobility &amp; Ergo Furniture"
+      note={`${fmtInt(filtered.length)} of ${fmtInt(rows.length)} SKUs · adaptive-window calculation, all locations`}
+      action={
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <input placeholder="Search category / product…" value={search} onChange={e => setSearch(e.target.value)}
+            style={{ background: IC.surface, border: `1px solid ${IC.border2}`, borderRadius: 8, padding: '6px 10px', color: IC.t1, fontSize: 12, width: 200, boxSizing: 'border-box' }} />
+          <ExportButton filename="mobility_ergo_avg_sale.csv" rows={exportRows}
+            columns={[
+              { label: 'Category', key: 'Category' }, { label: 'Sub-Category', key: 'SubCategory' }, { label: 'Product ID', key: 'ProductID' },
+              { label: 'RTD Invt', key: 'RTDInvt' }, { label: 'RAW Invt', key: 'RawInvt' }, { label: 'RAW Blocked', key: 'RawBlocked' }, { label: 'Total Invt', key: 'TotalInvt' },
+              { label: 'Selling Life (days)', key: 'SellingLifeDays' }, { label: 'Window Start', key: 'WindowStart' }, { label: 'Window End', key: 'WindowEnd' }, { label: 'Window (days)', key: 'WindowDays' },
+              { label: 'Avg Sale', key: 'AvgSale' }, { label: 'Avg Sale (Std 7d)', key: 'AvgSaleStd7d' }, { label: 'DOI', key: 'DOI' }, { label: 'Status', key: 'Status' }, { label: 'Website Status', key: 'WebsiteStatus' },
+            ]} />
+        </div>
+      }>
+      <div style={{ maxHeight: 520, overflow: 'auto' }}>
+        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12, tableLayout: 'fixed' }}>
+          <colgroup>{MOBILITY_ERGO_COLS.map(c => <col key={c.key} style={{ width: c.width }} />)}</colgroup>
+          <thead style={{ position: 'sticky', top: 0, zIndex: 2, background: IC.surfaceHi }}>
+            <tr>
+              {MOBILITY_ERGO_COLS.map(c => (
+                <SortableTh key={c.key} label={c.label} sortKey={c.key} sortState={sort} onSort={onSort} align={c.align} />
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {sorted.map((r, i) => (
+              <tr key={r.sku + i} style={{ borderBottom: `1px solid ${IC.border}`, height: 32 }}
+                onMouseEnter={e => e.currentTarget.style.background = 'rgba(0,0,0,0.025)'}
+                onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
+                <td style={{ padding: '6px 10px', color: IC.t2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.category}</td>
+                <td style={{ padding: '6px 10px', color: IC.t2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.subCategory}</td>
+                <td style={{ padding: '6px 10px', fontWeight: 600, color: IC.t1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.sku}</td>
+                <td style={{ padding: '6px 10px', textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{fmtInt(r.rtdInvt)}</td>
+                <td style={{ padding: '6px 10px', textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{fmtInt(r.rawInvt)}</td>
+                <td style={{ padding: '6px 10px', textAlign: 'right', fontVariantNumeric: 'tabular-nums', color: IC.status.Low.c }}>{fmtInt(r.rawBlockedInvt)}</td>
+                <td style={{ padding: '6px 10px', textAlign: 'right', fontVariantNumeric: 'tabular-nums', fontWeight: 700 }}>{fmtInt(r.totalInvt)}</td>
+                <td style={{ padding: '6px 10px', textAlign: 'right', fontVariantNumeric: 'tabular-nums', color: IC.t2 }}>{fmtDays(r.lifeDays)}d</td>
+                <td style={{ padding: '6px 10px', textAlign: 'right', fontSize: 10.5, color: IC.t3 }} title={`${r.windowStart} → ${r.windowEnd}`}>{fmtDays(r.windowDays)}d</td>
+                <td style={{ padding: '6px 10px', textAlign: 'right', fontVariantNumeric: 'tabular-nums', fontWeight: 700, color: IC.t1 }}>{fmtNum(r.avgSaleNew)}</td>
+                <td style={{ padding: '6px 10px', textAlign: 'right', fontVariantNumeric: 'tabular-nums', color: IC.t3 }}>{fmtNum(r.avgSaleCurrent)}</td>
+                <td style={{ padding: '6px 10px', textAlign: 'right', fontVariantNumeric: 'tabular-nums', fontWeight: 700 }}>{r.doi == null ? '—' : `${fmtDays(r.doi)}d`}</td>
+                <td style={{ padding: '6px 10px' }}><StatusChip status={r.stockStatus} /></td>
+                <td style={{ padding: '6px 10px' }}>
+                  <span style={{
+                    display: 'inline-flex', alignItems: 'center', gap: 5, padding: '3px 9px', borderRadius: 999, fontSize: 11, fontWeight: 600,
+                    background: r.websiteStatus === 'Live' ? `${IC.status.Sufficient.c}22` : `${IC.status.Critical.c}22`,
+                    color: r.websiteStatus === 'Live' ? IC.status.Sufficient.c : IC.status.Critical.c,
+                  }}>{r.websiteStatus}</span>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+          <tfoot>
+            <tr style={{ position: 'sticky', bottom: 0, background: IC.surfaceHi, borderTop: `2px solid ${IC.border2}`, height: 34 }}>
+              <td style={{ padding: '7px 10px', fontWeight: 700, fontSize: 11, color: IC.t3 }} colSpan={3}>{filtered.length} SKUs</td>
+              <td style={{ padding: '7px 10px', textAlign: 'right', fontVariantNumeric: 'tabular-nums', fontWeight: 700 }}>{fmtInt(totals.rtdInvt)}</td>
+              <td style={{ padding: '7px 10px', textAlign: 'right', fontVariantNumeric: 'tabular-nums', fontWeight: 700 }}>{fmtInt(totals.rawInvt)}</td>
+              <td style={{ padding: '7px 10px', textAlign: 'right', fontVariantNumeric: 'tabular-nums', fontWeight: 700, color: IC.status.Low.c }}>{fmtInt(totals.rawBlockedInvt)}</td>
+              <td style={{ padding: '7px 10px', textAlign: 'right', fontVariantNumeric: 'tabular-nums', fontWeight: 700 }}>{fmtInt(totals.totalInvt)}</td>
+              <td colSpan={7} />
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+    </GlassCard>
   )
 }
 
@@ -1154,6 +1275,15 @@ const InventoryHealthInner = React.memo(function InventoryHealthInner({ data, fi
         </GlassCard>
         </div>
       </div>
+
+      {/* Mobility & Ergo Furniture — independent Avg Sale table. Not gated by any sidebar
+          filter (location/facility/category/etc.) — see MOBILITY_ERGO_COLS comment above for
+          why this is deliberately separate from the main Inventory Detail table. */}
+      {data.mobilityErgoAvgSale?.length > 0 && (
+        <div style={{ paddingBottom: 20 }}>
+          <MobilityErgoAvgSaleTable rows={data.mobilityErgoAvgSale} />
+        </div>
+      )}
       </div>
     </div>
   )
