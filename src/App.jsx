@@ -15182,6 +15182,8 @@ function AppInner() {
   const [session, setSession] = useState(undefined) // undefined = loading, null = no session
   const [profile, setProfile] = useState(null)
   const [allowedTabs, setAllowedTabs] = useState(null)
+  const navigate = useNavigate()
+  const location = useLocation()
 
   useEffect(() => {
     if (window.location.hash.includes('type=recovery')) {
@@ -15208,7 +15210,17 @@ function AppInner() {
     <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#F5F1E8', fontFamily: 'sans-serif', color: '#7A8079' }}>Loading…</div>
   )
   if (session === 'recovery') return <ResetPasswordPage />
-  if (!session) return <LoginPage onLogin={s => setSession(s)} />
+
+  // /login route: show login page if not authenticated; redirect to /overview if already logged in
+  if (location.pathname === '/login') {
+    if (session) {
+      navigate('/overview', { replace: true })
+      return null
+    }
+    return <LoginPage onLogin={s => { setSession(s); navigate('/overview', { replace: true }) }} />
+  }
+
+  if (!session) return <LoginPage onLogin={s => { setSession(s); navigate('/overview', { replace: true }) }} />
 
   // Wait for profile to load before rendering Dashboard so isAdmin check is accurate
   if (!profile) return (
