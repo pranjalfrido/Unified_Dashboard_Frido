@@ -2490,6 +2490,7 @@ function Sidebar({ page, setPage, invTab, setInvTab, allowedTabs, profile }) {
       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', marginBottom: 14, marginTop: -6 }}>
         <img src="/frido-navigator-icon-light-theme (2).png" alt="Frido Navigator" style={{ width: 42, height: 42, objectFit: 'contain' }} />
       </div>
+      <hr className="sb-sep" />
       {items.map(item => {
         if (item.id === 'inventory') {
           const hasHealth = !allowedTabs || allowedTabs.includes('inventory')
