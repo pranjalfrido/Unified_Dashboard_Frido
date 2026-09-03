@@ -186,13 +186,13 @@ export function DataTable({ columns, rows, maxRows = 50, storageKey, maxHeight, 
   )
 }
 
-export function Card({ title, note, action, children, style, fill }) {
+export function Card({ title, note, action, children, style, fill, titleNoWrap }) {
   return (
     <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 13, padding: '16px 18px', height: '100%', boxSizing: 'border-box', display: fill ? 'flex' : undefined, flexDirection: fill ? 'column' : undefined, ...style }}>
       {(title || note || action) && (
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 11, flexShrink: 0 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            {title && <span style={{ fontSize: 13, fontWeight: 600, color: C.t1 }}>{title}</span>}
+            {title && <span style={{ fontSize: 13, fontWeight: 600, color: C.t1, whiteSpace: titleNoWrap ? 'nowrap' : undefined }}>{title}</span>}
             {note && <span style={{ fontSize: 11.5, color: C.t3 }}>{note}</span>}
           </div>
           {action && <div>{action}</div>}

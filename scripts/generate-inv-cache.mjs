@@ -23,14 +23,11 @@ const STOCK_STATUS_VALUES = ['Critical', 'Low', 'Sufficient', 'Excess', 'Out of 
 
 const db = await pool.connect()
 
-// Determine end date as d-1 of the latest sales date (today's data is partial)
+// Use the actual max sales date — data is complete since Uniware syncs previous day's batch
 const { rows: maxDateRows } = await db.query(`SELECT MAX(order_date) AS max_date FROM sales_window`)
 const rawMax = maxDateRows[0]?.max_date
-const maxSalesDateFull = rawMax instanceof Date ? rawMax.toISOString().slice(0, 10) : String(rawMax).slice(0, 10)
-const endDate = new Date(maxSalesDateFull)
-endDate.setDate(endDate.getDate() - 1)
-const end = endDate.toISOString().slice(0, 10)
-console.log(`Latest sales date in DB: ${maxSalesDateFull} → using end=${end} (d-1)`)
+const end = rawMax instanceof Date ? rawMax.toISOString().slice(0, 10) : String(rawMax).slice(0, 10)
+console.log(`Latest sales date in DB: ${end} → using end=${end}`)
 
 // Fetch all tables once — reused across all 3 window computations
 console.log('Fetching all tables from Supabase in parallel...')
@@ -289,7 +286,7 @@ const mobilityErgoAvgSale = mobilityErgoRaw.map(r => {
 }).sort((a, b) => b.totalInvt - a.totalInvt)
 
 function computePayload(windowDays) {
-  const startDate = new Date(endDate)
+  const startDate = new Date(end)
   startDate.setDate(startDate.getDate() - (windowDays - 1))
   const start = startDate.toISOString().slice(0, 10)
   const endDateObj = new Date(end)
@@ -382,6 +379,10 @@ function computePayload(windowDays) {
     const acc = skuLocMap.get(locKey)
     acc.totalInvt += r.totalInvt; acc.rawInvt += r.rawInvt; acc.rawBlockedInvt += r.rawBlockedInvt; acc.rtdInvt += r.rtdInvt
   }
+  // Recompute doi/isDead/stockStatus/rtdLevel/requiredStock/thirtyDayReq/inventoryShort for
+  // each (sku, location) using the summed totalInvt — the initial spread from the first
+  // facility row can carry a stale totalInvt=0 (and everything derived from it) from whichever
+  // facility happened to be inserted first, before the real per-location total was summed in.
   const skuLocRows = [...skuLocMap.values()].map(r => {
     const denominator = Math.ceil(Math.max(r.avgSale, r.orderAllocation))
     const doi = r.totalInvt > 0 && denominator === 0 ? null : (denominator > 0 ? Math.floor(r.totalInvt / denominator) : 0)

@@ -86,7 +86,9 @@ function loadCogsMap() {
   return cogsMapPromise
 }
 
-export default function PnLPage({ data, filters, setFilters, activeTab: activeTabProp, setActiveTab: setActiveTabProp, amzChannelView: amzChannelViewProp, setAmzChannelView: setAmzChannelViewProp, offlineSub: offlineSubProp, setOfflineSub: setOfflineSubProp, d2cSubCh: d2cSubChProp, setD2cSubCh: setD2cSubChProp }) {
+export default function PnLPage({ data, filters, setFilters, activeTab: activeTabProp, setActiveTab: setActiveTabProp, amzChannelView: amzChannelViewProp, setAmzChannelView: setAmzChannelViewProp, offlineSub: offlineSubProp, setOfflineSub: setOfflineSubProp, d2cSubCh: d2cSubChProp, setD2cSubCh: setD2cSubChProp, allowedTabs }) {
+  const PNL_KEY_MAP = { 'all': 'pnl:all', 'shopify': 'pnl:shopify', 'ebo': 'pnl:ebo', 'amazon': 'pnl:amazon', 'flipkart': 'pnl:flipkart', 'blinkit': 'pnl:blinkit', 'cred': 'pnl:cred', 'firstcry': 'pnl:firstcry', 'instamart': 'pnl:instamart', 'zepto': 'pnl:zepto', 'myntra': 'pnl:myntra', 'international': 'pnl:international', 'offline': 'pnl:offline' }
+  const allowedPnlTabs = PNL_TABS.filter(t => !allowedTabs || allowedTabs.includes(PNL_KEY_MAP[t.id]))
   const [activeTabLocal, setActiveTabLocal] = useState('all')
   const [amzChannelViewLocal, setAmzChannelViewLocal] = useState('all') // 'all' | 'sc' | 'vc'
   const [offlineSubLocal, setOfflineSubLocal] = useState('all') // 'all' | 'b2b' | 'Stockist' | 'MTGT' | 'misc'
@@ -1336,12 +1338,16 @@ export default function PnLPage({ data, filters, setFilters, activeTab: activeTa
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', minWidth: 0 }}>
       <div className="sales-tabs">
-        {PNL_TABS.map(tab => (
-          <button key={tab.id} onClick={() => setActiveTab(tab.id)} className={`stab${activeTab === tab.id ? ' active' : ''}`} style={tab.id === 'all' ? { fontWeight: activeTab === 'all' ? 800 : 700, fontSize: 13 } : {}}>
+        {PNL_TABS.map(tab => {
+          const allowed = !allowedTabs || allowedTabs.includes(PNL_KEY_MAP[tab.id])
+          const isActive = activeTab === tab.id
+          return (
+          <button key={tab.id} onClick={() => { if (!allowed) return; setActiveTab(tab.id) }} className={`stab${isActive ? ' active' : ''}`} style={{ ...(tab.id === 'all' ? { fontWeight: isActive ? 800 : 700, fontSize: 13 } : {}), ...(!allowed ? { opacity: 0.35, cursor: 'not-allowed', pointerEvents: 'auto' } : {}) }}>
             {tab.logo && <img src={tab.logo} alt="" style={{ width: 14, height: 14, borderRadius: 3, flexShrink: 0, objectFit: 'contain', filter: tab.id === 'cred' ? 'invert(1)' : 'none' }} />}
             {tab.label}
           </button>
-        ))}
+          )
+        })}
       </div>
       <div className="page-scroll">
         {activeTab === 'shopify' && (

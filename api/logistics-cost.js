@@ -360,12 +360,19 @@ export default async function handler(req, res) {
     if (f.accountTypes?.length) add('i.courier_account_type = ANY($?)', f.accountTypes)
     if (f.destCity) add('i.destination_city = $?', f.destCity)
 
+    // Keys must match WEIGHT_BANDS in src/LogisticsCostPage.jsx exactly: the UI sends the
+    // key and this is the only place it becomes a filter, so a key in one and not the
+    // other silently returns the UNFILTERED set rather than erroring.
     const bandClauses = {
       '0-1': 'cw >= 0 AND cw < 1',
       '1-2': 'cw >= 1 AND cw < 2',
       '2-5': 'cw >= 2 AND cw < 5',
       '5-10': 'cw >= 5 AND cw < 10',
-      '10+': 'cw >= 10',
+      '10-15': 'cw >= 10 AND cw < 15',
+      '15-20': 'cw >= 15 AND cw < 20',
+      '20-30': 'cw >= 20 AND cw < 30',
+      '30-50': 'cw >= 30 AND cw < 50',
+      '50+': 'cw >= 50',
     }
     const postFilters = []
     if (f.band && bandClauses[f.band]) postFilters.push(bandClauses[f.band])
@@ -509,7 +516,11 @@ export default async function handler(req, res) {
                     WHEN cw < 2 THEN '1 – 2 kg'
                     WHEN cw < 5 THEN '2 – 5 kg'
                     WHEN cw < 10 THEN '5 – 10 kg'
-                    ELSE '10 kg +' END AS band
+                    WHEN cw < 15 THEN '10 – 15 kg'
+                    WHEN cw < 20 THEN '15 – 20 kg'
+                    WHEN cw < 30 THEN '20 – 30 kg'
+                    WHEN cw < 50 THEN '30 – 50 kg'
+                    ELSE '50 kg +' END AS band
           FROM norm
          WHERE cw > 0
          ${postFilters.length ? 'AND ' + postFilters.map(c => `(${c})`).join(' AND ') : ''}
@@ -628,7 +639,11 @@ export default async function handler(req, res) {
                   WHEN base.cw < 2 THEN '1 – 2 kg'
                   WHEN base.cw < 5 THEN '2 – 5 kg'
                   WHEN base.cw < 10 THEN '5 – 10 kg'
-                  ELSE '10 kg +' END AS band,
+                  WHEN base.cw < 15 THEN '10 – 15 kg'
+                  WHEN base.cw < 20 THEN '15 – 20 kg'
+                  WHEN base.cw < 30 THEN '20 – 30 kg'
+                  WHEN base.cw < 50 THEN '30 – 50 kg'
+                  ELSE '50 kg +' END AS band,
              ${SLAB_OF('base.cw')} AS slab,
              -- Leg is a returned dimension now, not a hard-coded Forward filter, so the UI
              -- can compare couriers on reverse and RTO legs too. A courier that is cheapest
@@ -887,11 +902,15 @@ export default async function handler(req, res) {
         COALESCE(payment_mode, 'Unknown')                        AS payment,
         (gap > 0.001 AND COALESCE(dw, 0) > 0)                   AS is_overbilled,
         slab,
-        CASE WHEN cw < 1  THEN '0-1'
-             WHEN cw < 2  THEN '1-2'
-             WHEN cw < 5  THEN '2-5'
+        CASE WHEN cw < 1 THEN '0-1'
+             WHEN cw < 2 THEN '1-2'
+             WHEN cw < 5 THEN '2-5'
              WHEN cw < 10 THEN '5-10'
-             ELSE '10+' END                                      AS band,
+             WHEN cw < 15 THEN '10-15'
+             WHEN cw < 20 THEN '15-20'
+             WHEN cw < 30 THEN '20-30'
+             WHEN cw < 50 THEN '30-50'
+             ELSE '50+' END                                      AS band,
         COUNT(*)::int                                            AS n,
         SUM(cost)::float8                                        AS cost,
         SUM(cw)::float8                                          AS wt,
@@ -988,7 +1007,7 @@ export default async function handler(req, res) {
       // Throttled to 3: this block is 10 queries and only runs on a cache miss, so it can
       // afford to be slower — but firing all 10 at once starved the pool and produced the
       // same connect timeout the main block hit.
-      const [health, joinCov, opt, cityRows, b2b, b2bLanes, b2bTotals, b2bTrans, b2bMonths, b2bTypes, b2bVar, b2bVarMonths, b2bTransMonths, b2bVehicles, b2bLaneVeh, b2bSole, wr, gridRes, trendRes, disputes, slabs] = await mapLimit([
+      const [health, joinCov, opt, cityRows, b2b, b2bLanes, b2bTotals, b2bTrans, b2bMonths, b2bTypes, b2bVar, b2bVarMonths, b2bTransMonths, b2bVehicles, b2bLaneVeh, b2bRateCmp, b2bSole, wr, gridRes, trendRes, disputes, slabs] = await mapLimit([
         // ── Data Health (spec §0) ──
         // Every exclusion and every coverage rate the page depends on, in one query.
         // This exists so finance can see the gaps before finding one themselves and
@@ -1056,6 +1075,7 @@ export default async function handler(req, res) {
         // silently render as "no B2B invoices uploaded yet".
         () => query(pool, `
           SELECT month_year, transporter_name, origin_location, destination_location,
+                 vehicle_type, vehicle_number,
                  "freight_type_FTL_PTL" AS freight_type,
                  charged_weight::float8 AS charged_weight,
                  total_cost::float8 AS total_cost
@@ -1210,6 +1230,25 @@ export default async function handler(req, res) {
            GROUP BY 1, 2, 3, 4, 5, 6
            ORDER BY 9 DESC
         `),
+        // ── Rate comparison: same vehicle, different carrier ──
+        // The one view on this tab that names a cheaper alternative. Grouped by vehicle rather
+        // than lane+vehicle because only 3 lane cells have a comparable second carrier, where
+        // 4 vehicles do — the finer grain reads as no data.
+        //
+        // MEDIAN, not mean: a single outlier trip on a 12-trip carrier would otherwise decide
+        // which of two carriers looks cheaper.
+        () => query(pool, `
+          SELECT vehicle, transporter,
+                 COUNT(*)::int AS trips,
+                 percentile_cont(0.5) WITHIN GROUP (ORDER BY billed)::float8 AS median_cost,
+                 SUM(billed)::float8 AS spend
+            FROM public.b2b_trip_priced
+           GROUP BY 1, 2
+          -- 8 trips is the floor for a rate to mean anything. Below it a carrier can look
+          -- cheap on two lucky trips and trigger a switch that costs money.
+          HAVING COUNT(*) >= 8
+           ORDER BY 1, 4
+        `),
         // ── Single-sourcing: share of spend on lanes served by ONE transporter ──
         () => query(pool, `
           WITH l AS (SELECT origin, dest, COUNT(DISTINCT transporter)::int AS tr,
@@ -1253,6 +1292,7 @@ export default async function handler(req, res) {
         b2bTransMonths: b2bTransMonths.rows,
         b2bVehicles: b2bVehicles.rows,
         b2bLaneVeh: b2bLaneVeh.rows,
+        b2bRateCmp: b2bRateCmp.rows,
         
         
         
@@ -1304,6 +1344,7 @@ export default async function handler(req, res) {
     out.b2bTransMonths = refCache.b2bTransMonths
     out.b2bVehicles = refCache.b2bVehicles
     out.b2bLaneVeh = refCache.b2bLaneVeh
+    out.b2bRateCmp = refCache.b2bRateCmp
     
     
     

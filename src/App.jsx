@@ -1,4 +1,5 @@
 import { useState, useMemo, useCallback, useEffect, useRef, Fragment, Component } from 'react'
+import { SquaresFour, ChartBar, TrendUp, PlayCircle, Cube, Truck, Users, FileText } from '@phosphor-icons/react'
 import { C, fmt, fmtN, fmtBig, pct, processData, detectAlerts, exportCSV, getDefaultDates, COURIER_COLORS, COURIER_LOGOS } from './utils.js'
 import { KPICard, AlertCard, DataTable, Card, Badge, CategoryRevenueCard, RevTrendChart, AreaTrendChart, MultiLineChart, useSortableTable, useReorderableColumns, GROUP_OPTS, getGroupKey, TrendAnalysisCard, BarChart, Bar, LineChart, Line, AreaChart, Area, ComposedChart, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell, Treemap } from './components.jsx'
 import InventoryPage from './InventoryPage.jsx'
@@ -223,7 +224,7 @@ function LMultiDropdown({ label, options, value, onChange, flex }) {
   )
 }
 
-function LKpiCard({ label, value, badgeText, badgeVariant, subValue, cur, prev, hideSubValue, compact, tight, mobile }) {
+function LKpiCard({ label, value, badgeText, badgeVariant, subValue, subLabel, cur, prev, hideSubValue, compact, tight, mobile }) {
   const bv = badgeVariant || 'N'
   const chg = (cur != null && prev != null && prev !== 0) ? ((cur - prev) / prev * 100) : null
   const chgBadge = chg != null && Math.abs(chg) < 999
@@ -238,7 +239,8 @@ function LKpiCard({ label, value, badgeText, badgeVariant, subValue, cur, prev, 
             <div className="kpi-value" style={{ fontSize: mobile ? 20 : tight ? 14 : 16, whiteSpace: 'nowrap', minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis' }}>{value ?? '—'}</div>
             {chgBadge}
           </div>
-          {subValue && <div style={{ fontSize: 11, fontWeight: 500, color: C.t3, marginTop: 1 }}>{subValue} of total</div>}
+          {subLabel && <div style={{ fontSize: 10, fontWeight: 400, color: C.t3, marginTop: 1 }}>{subLabel}</div>}
+          {subValue && !subLabel && <div style={{ fontSize: 11, fontWeight: 500, color: C.t3, marginTop: 1 }}>{subValue} of total</div>}
         </>
       ) : (
         <>
@@ -377,6 +379,7 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
   const [geoShipType, setGeoShipType] = useState({ dropCity: 'all', pickupCity: 'all', dropState: 'all' })
   const [secCollapsed, setSecCollapsed] = useState({})
   const [wMetric, setWMetric] = useState('qty')
+  const [wSlabMetric, setWSlabMetric] = useState('vol')
   const [ageingMetric, setAgeingMetric] = useState('del')
   const toggleSec = key => setSecCollapsed(p => ({ ...p, [key]: !p[key] }))
   const [lFiltersLocal, setLFiltersLocal] = useState({ couriers: [], shipmentType: 'forward', sddNdd: 'all', paymentMode: [], zone: [], pickupState: [], dropState: [], dropCity: [], category: [], subCategory: [], weightSlabs: [] })
@@ -394,7 +397,7 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
     window.addEventListener('resize', onResize)
     return () => window.removeEventListener('resize', onResize)
   }, [])
-  const [filterSidebarOpen, setFilterSidebarOpen] = useState(() => window.innerWidth > 768)
+  const [filterSidebarOpen, setFilterSidebarOpen] = useState(false)
   const [cExpanded, setCExpanded] = useState({})
   const [rawData, setRawData] = useState(null)
   const [rawPrevData, setRawPrevData] = useState(null)
@@ -779,7 +782,9 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
               const val = gi === 0 ? lFilters.shipmentType : lFilters.sddNdd
               const onChange = v => gi === 0 ? setLFilters(f => ({ ...f, shipmentType: v })) : setLFilters(f => ({ ...f, sddNdd: v }))
               return (
-                <div key={gi} style={{ display: 'flex', border: `1.5px solid ${C.border2}`, borderRadius: 8, overflow: 'hidden', background: C.card }}>
+                <div key={gi} style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                  {gi === 1 && <div style={{ fontSize: 10, fontWeight: 800, color: C.t3, letterSpacing: '.06em', textTransform: 'uppercase', marginTop: 4 }}>Shipment Type</div>}
+                <div style={{ display: 'flex', border: `1.5px solid ${C.border2}`, borderRadius: 8, overflow: 'hidden', background: C.card }}>
                   {opts.map((opt, i) => (
                     <button key={opt} onClick={() => { const v = gi === 0 ? opt.toLowerCase() : opt; onChange(v === val ? 'all' : v) }} style={{
                       flex: 1, padding: '6px 0', border: 'none', borderLeft: i > 0 ? `1.5px solid ${C.border2}` : 'none',
@@ -789,6 +794,7 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
                       textAlign: 'center', transition: 'all .15s'
                     }}>{opt}</button>
                   ))}
+                </div>
                 </div>
               )
             })}
@@ -917,16 +923,16 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
             </div>
             {/* Right: 2 rows × 6 cols */}
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gridTemplateRows: 'repeat(2, 1fr)', gap: filterSidebarOpen ? 5 : 7, alignItems: 'stretch' }}>
-              <LKpiCard label="Total Attempted" value={fmtBig(k.total_ofd_attempts)} badgeVariant="N" cur={k.total_ofd_attempts} prev={pk.total_ofd_attempts} compact tight={filterSidebarOpen} />
-              <LKpiCard label="Z-RTO" value={fmtBig(k.z_rto)} badgeText={pct2(k.z_rto, k.total_shipments)} badgeVariant="A" cur={k.z_rto} prev={pk.z_rto} compact tight={filterSidebarOpen} />
-              <LKpiCard label="FASR % (of attempted)" value={pct2(k.delivered_1attempt, k.total_ofd_attempts)} badgeVariant="G" cur={k.delivered_1attempt} prev={pk.delivered_1attempt} compact tight={filterSidebarOpen} />
-              <LKpiCard label="RASR % (of attempted)" value={pct2(k.delivered_multi, k.total_ofd_attempts)} badgeVariant="B" cur={k.delivered_multi} prev={pk.delivered_multi} compact tight={filterSidebarOpen} />
-              <LKpiCard label="Multi-Att Del" value={fmtBig(k.delivered_multi)} badgeVariant="B" cur={k.delivered_multi} prev={pk.delivered_multi} compact tight={filterSidebarOpen} />
-              <LKpiCard label="Avg Processing" value={d1(k.avg_processing)} badgeText="Cr→1st OFD" badgeVariant="N" cur={k.avg_processing} prev={pk.avg_processing} compact tight={filterSidebarOpen} />
-              <LKpiCard label="Avg Pickup TAT" value={d1(k.avg_pickup)} badgeText="Cr→Pick" badgeVariant="B" cur={k.avg_pickup} prev={pk.avg_pickup} compact tight={filterSidebarOpen} />
-              <LKpiCard label="Avg In-Transit" value={d1(k.avg_intransit)} badgeText="Pick→Del" badgeVariant="N" cur={k.avg_intransit} prev={pk.avg_intransit} compact tight={filterSidebarOpen} />
-              <LKpiCard label="Avg Fulfilment" value={d1(k.avg_fulfilment)} badgeText="Cr→Del" badgeVariant="G" cur={k.avg_fulfilment} prev={pk.avg_fulfilment} compact tight={filterSidebarOpen} />
-              <LKpiCard label="Avg RTO TAT" value={d1(k.avg_rto_tat)} badgeText="RTO days" badgeVariant="R" cur={k.avg_rto_tat} prev={pk.avg_rto_tat} compact tight={filterSidebarOpen} />
+              <LKpiCard label="Total Attempted" value={fmtBig(k.total_ofd_attempts)} subValue={pct2(k.total_ofd_attempts, k.total_shipments)} badgeVariant="N" cur={k.total_ofd_attempts} prev={pk.total_ofd_attempts} compact tight={filterSidebarOpen} />
+              <LKpiCard label="Z-RTO" value={fmtBig(k.z_rto)} subValue={pct2(k.z_rto, k.total_shipments)} badgeVariant="A" cur={k.z_rto} prev={pk.z_rto} compact tight={filterSidebarOpen} />
+              <LKpiCard label="FASR % (of attempted)" value={pct2(k.delivered_1attempt, k.total_ofd_attempts)} subValue={pct2(k.delivered_1attempt, k.total_shipments)} badgeVariant="G" cur={k.delivered_1attempt} prev={pk.delivered_1attempt} compact tight={filterSidebarOpen} />
+              <LKpiCard label="RASR % (of attempted)" value={pct2(k.delivered_multi, k.total_ofd_attempts)} subValue={pct2(k.delivered_multi, k.total_shipments)} badgeVariant="B" cur={k.delivered_multi} prev={pk.delivered_multi} compact tight={filterSidebarOpen} />
+              <LKpiCard label="Multi-Att Del" value={fmtBig(k.delivered_multi)} subValue={pct2(k.delivered_multi, k.total_shipments)} badgeVariant="B" cur={k.delivered_multi} prev={pk.delivered_multi} compact tight={filterSidebarOpen} />
+              <LKpiCard label="Avg Processing" value={d1(k.avg_processing)} subLabel="Order date → shipment creation" badgeVariant="N" cur={k.avg_processing} prev={pk.avg_processing} compact tight={filterSidebarOpen} />
+              <LKpiCard label="Avg Pickup TAT" value={d1(k.avg_pickup)} subLabel="Shipment creation → pickup" badgeVariant="B" cur={k.avg_pickup} prev={pk.avg_pickup} compact tight={filterSidebarOpen} />
+              <LKpiCard label="Avg In-Transit" value={d1(k.avg_intransit)} subLabel="Shipment pickup → delivery" badgeVariant="N" cur={k.avg_intransit} prev={pk.avg_intransit} compact tight={filterSidebarOpen} />
+              <LKpiCard label="Avg Fulfilment" value={d1(k.avg_fulfilment)} subLabel="Order date → delivery date" badgeVariant="G" cur={k.avg_fulfilment} prev={pk.avg_fulfilment} compact tight={filterSidebarOpen} />
+              <LKpiCard label="Avg RTO TAT" value={d1(k.avg_rto_tat)} subLabel="RTO marked → RTO delivered" badgeVariant="R" cur={k.avg_rto_tat} prev={pk.avg_rto_tat} compact tight={filterSidebarOpen} />
             </div>
           </div>
         )}
@@ -947,7 +953,7 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
             </div>
             <div style={{ height: 1, background: C.border, margin: '10px 0 6px' }} />
             <ResponsiveContainer width="100%" height={isMobile ? 180 : 220}>
-              <ComposedChart data={trendData} margin={isMobile ? { top: 4, right: 20, left: 20, bottom: 0 } : { top: 4, right: 44, left: 10, bottom: 0 }}>
+              <ComposedChart data={trendData} margin={isMobile ? { top: 4, right: 20, left: 20, bottom: 0 } : { top: 4, right: -5, left: 0, bottom: 0 }}>
                 <defs>
                   <linearGradient id="lgDel" x1="0" y1="0" x2="0" y2="1">
                     <stop offset="5%" stopColor="#FFD600" stopOpacity={0.25} />
@@ -962,7 +968,7 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
                 <XAxis dataKey="label" tick={{ fontSize: isMobile ? 9 : 10, fill: C.t3 }} axisLine={isMobile ? { stroke: C.border } : undefined} tickLine={false} interval={0} ticks={trendData.length > 1 ? [trendData[0]?.label, trendData[Math.floor((trendData.length-1)/3)]?.label, trendData[Math.floor((trendData.length-1)*2/3)]?.label, trendData[trendData.length-1]?.label].filter(Boolean) : [trendData[0]?.label]} />
                 {isMobile
                   ? <><YAxis yAxisId="left" tick={false} axisLine={false} tickLine={false} width={0} /><YAxis yAxisId="right" orientation="right" tick={false} axisLine={false} tickLine={false} width={0} /></>
-                  : <><YAxis yAxisId="left" tick={{ fontSize: 9, fill: C.t3 }} tickLine={false} tickFormatter={v => v >= 1000 ? `${(v/1000).toFixed(0)}K` : v} /><YAxis yAxisId="right" orientation="right" tick={{ fontSize: 9, fill: C.t3 }} tickLine={false} tickFormatter={v => `${v}%`} /></>
+                  : <><YAxis yAxisId="left" tick={{ fontSize: 9, fill: C.t3 }} tickLine={false} tickFormatter={v => v >= 1000 ? `${(v/1000).toFixed(0)}K` : v} width={30} /><YAxis yAxisId="right" orientation="right" tick={{ fontSize: 9, fill: C.t3 }} tickLine={false} tickFormatter={v => `${v}%`} width={38} /></>
                 }
                 <Tooltip content={({ active, payload, label }) => {
                   if (!active || !payload?.length) return null
@@ -1046,12 +1052,12 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
               }))
               return (<>
             <ResponsiveContainer width="100%" height={220}>
-              <ComposedChart data={tatData} margin={isMobile ? { top: 4, right: 20, left: 20, bottom: 0 } : { top: 10, right: 10, left: -30, bottom: 0 }}>
+              <ComposedChart data={tatData} margin={isMobile ? { top: 4, right: 20, left: 20, bottom: 0 } : { top: 4, right: -5, left: 0, bottom: 0 }}>
                 {!isMobile && <CartesianGrid strokeDasharray="3 3" stroke={C.border} vertical={false} />}
                 <XAxis dataKey="label" tick={{ fontSize: isMobile ? 9 : 10, fill: C.t3 }} axisLine={isMobile ? { stroke: C.border } : undefined} tickLine={false} interval={0} ticks={tatData.length > 1 ? [tatData[0]?.label, tatData[Math.floor((tatData.length-1)/3)]?.label, tatData[Math.floor((tatData.length-1)*2/3)]?.label, tatData[tatData.length-1]?.label].filter(Boolean) : [tatData[0]?.label]} />
                 {isMobile
                   ? <><YAxis yAxisId="left" tick={false} axisLine={false} tickLine={false} width={0} /><YAxis yAxisId="right" orientation="right" domain={[0, dataMax => Math.ceil(dataMax) + 1]} tick={false} axisLine={false} tickLine={false} width={0} /></>
-                  : <><YAxis yAxisId="left" tick={{ fontSize: 9, fill: C.t3 }} tickFormatter={v => v >= 1000 ? (v/1000).toFixed(0)+'K' : v} /><YAxis yAxisId="right" orientation="right" domain={[0, dataMax => Math.ceil(dataMax) + 1]} tickCount={5} tick={{ fontSize: 9, fill: C.t2 }} tickFormatter={v => Math.round(v) + 'd'} /></>
+                  : <><YAxis yAxisId="left" tick={{ fontSize: 9, fill: C.t3 }} tickFormatter={v => v >= 1000 ? (v/1000).toFixed(0)+'K' : v} width={30} /><YAxis yAxisId="right" orientation="right" domain={[0, dataMax => Math.ceil(dataMax) + 1]} tickCount={5} tick={{ fontSize: 9, fill: C.t2 }} tickFormatter={v => Math.round(v) + 'd'} width={38} /></>
                 }
                 <Tooltip content={({ active, payload, label }) => {
                   if (!active || !payload?.length) return null
@@ -1076,10 +1082,10 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
               </ComposedChart>
             </ResponsiveContainer>
             {!isMobile && (
-              <div style={{ display: 'flex', gap: 16, justifyContent: 'center', marginTop: 8, flexWrap: 'wrap', flexShrink: 0 }}>
-                {[['#FFC107','Total Shipments'],['#6366F1','Avg Processing Days'],['#10B981','Avg Pickup Days'],['#F59E0B','Avg Intransit Days'],['#EF4444','Avg Fulfilment Days']].map(([color, label]) => (
-                  <span key={label} style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 10, color: C.t2 }}>
-                    <span style={{ width: 10, height: 10, borderRadius: 2, background: color, display: 'inline-block' }} />{label}
+              <div style={{ display: 'flex', gap: 10, justifyContent: 'center', marginTop: 8, flexWrap: 'nowrap', flexShrink: 0 }}>
+                {[['#FFC107','Total Shipments'],['#6366F1','Avg Processing'],['#10B981','Avg Pickup'],['#F59E0B','Avg Intransit'],['#EF4444','Avg Fulfilment']].map(([color, label]) => (
+                  <span key={label} style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 10, color: C.t2, whiteSpace: 'nowrap' }}>
+                    <span style={{ width: 10, height: 10, borderRadius: 2, background: color, display: 'inline-block', flexShrink: 0 }} />{label}
                   </span>
                 ))}
               </div>
@@ -1106,7 +1112,7 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
               ))}
             </div>
           </div>
-          <div style={{ overflowX: 'auto', overflowY: 'auto', maxHeight: 420 }}>
+          <div style={{ overflowX: 'auto', overflowY: 'auto', maxHeight: 450 }}>
             {(() => {
               const totalAll = byCourierData.reduce((s, r) => s + (r.total || 0), 0) || 1
               const COLS = [
@@ -1115,16 +1121,14 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
                 { key: 'total', label: 'Total' },
                 { key: '_delPct', label: 'Del %' },
                 { key: '_rtoPct', label: 'RTO %' },
-                { key: '_zrtoPct', label: 'Z-RTO %' },
                 { key: '_cancPct', label: 'Canc %' },
                 { key: '_fasrPct', label: 'FASR %' },
                 { key: '_rasrPct', label: 'RASR %' },
-                { key: 'avg_processing_days', label: 'Avg Processing', center: true },
-                { key: 'avg_pickup_days', label: 'Avg Pickup', center: true },
+                { key: 'avg_processing_days', label: 'Avg Processing', center: true, truncate: true },
+                { key: 'avg_pickup_days', label: 'Avg Pickup', center: true, truncate: true },
                 { key: 'avg_intransit_days', label: 'Avg S2D', center: true },
                 { key: 'avg_fulfilment_days', label: 'Avg O2D', center: true },
-                { key: 'avg_rto_tat_days', label: 'Avg RTO TAT', center: true },
-                { key: 'avg_s2a_days', label: 'Avg S2A', center: true },
+                { key: 'avg_rto_tat_days', label: 'Avg RTO TAT', center: true, truncate: true },
               ]
               const enriched = byCourierData.map(r => ({
                 ...r,
@@ -1233,20 +1237,19 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
                 return (
                   <table style={{ width:'100%', borderCollapse:'collapse', fontSize:12 }}>
                     <colgroup>
-                      <col style={{ width:'11%' }} />
-                      {['5.5%','5.5%','5.5%','5.5%','5.5%','5.5%','5.5%','5.5%','5.5%','5.5%','5.5%','5.5%','5.5%','5.5%'].map((w,i) => <col key={i} style={{ width:w }} />)}
+                      {Array(15).fill('6.67%').map((w,i) => <col key={i} style={{ width:w }} />)}
                     </colgroup>
                     <thead>
                       <tr style={{ borderBottom:`1.5px solid ${C.border}` }}>
                         {['Facility','Vol %','Total','Del %','RTO %','Z-RTO %','Canc %','FASR %','RASR %','Avg Processing','Avg Pickup','Avg S2D','Avg O2D','Avg RTO TAT','Avg S2A'].map((h,i) => (
-                          <th key={h} style={{ padding:'9px 10px', textAlign:i===0?'left':'right', color:C.t3, fontWeight:700, fontSize:9.5, letterSpacing:'.05em', textTransform:'uppercase', whiteSpace:'nowrap' }}>{h}</th>
+                          <th key={h} style={{ padding:'9px 10px', textAlign:i===0?'left':'right', color:C.t3, fontWeight:700, fontSize:9.5, letterSpacing:'.05em', textTransform:'uppercase', whiteSpace: i===0 ? 'normal' : 'nowrap', overflow: i===0 ? 'hidden' : undefined, textOverflow: i===0 ? 'ellipsis' : undefined, maxWidth: i===0 ? 0 : undefined }}>{h}</th>
                         ))}
                       </tr>
                     </thead>
                     <tbody>
                       {enrichFac.map(r => (
                         <tr key={r.facility} style={{ borderBottom:`1px solid ${C.border}` }}>
-                          <td style={td9L}>{r.facility}</td>
+                          <td style={{ ...td9L, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', maxWidth:0 }}>{r.facility}</td>
                           <td style={td9}>{r._volPct.toFixed(2)}%</td>
                           <td style={{ ...td9, color:C.t1, fontWeight:600 }}>{n(r.total)}</td>
                           <td style={td9}>{r._delPct.toFixed(2)}%</td>
@@ -1266,7 +1269,7 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
                     </tbody>
                     <tfoot>
                       <tr style={{ borderTop:`2px solid ${C.border}`, background:C.bg, fontWeight:700 }}>
-                        <td style={{ padding:'9px 10px', color:C.t1, fontWeight:700 }}>Total</td>
+                        <td style={{ padding:'9px 10px', color:C.t1, fontWeight:700, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', maxWidth:0 }}>Total</td>
                         <td style={{ ...td9 }}>100.00%</td>
                         <td style={{ ...td9, color:C.t1, fontWeight:700 }}>{n(facTotalAll)}</td>
                         <td style={{ ...td9, fontWeight:700 }}>{(sumD/facTotalAll*100).toFixed(2)}%</td>
@@ -1355,10 +1358,13 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
               }
               return (
                 <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+                  <colgroup>
+                    {[<col key={0} style={{ width:'10%' }} />, ...Array(12).fill(0).map((_,i) => <col key={i+1} style={{ width:'7.5%' }} />)]}
+                  </colgroup>
                   <thead style={{ position: 'sticky', top: 0, zIndex: 4 }}>
                     <tr style={{ borderBottom: `1.5px solid ${C.border}`, background: C.bg }}>
                       {COLS.map((col, ci) => (
-                        <th key={col.key} onClick={() => setSortCol(col.key)} style={{ padding: '6px 7px', textAlign: col.left ? 'left' : col.center ? 'center' : 'right', color: C.t1, fontWeight: 700, fontSize: 9.5, letterSpacing: 0.4, textTransform: 'uppercase', whiteSpace: 'nowrap', cursor: 'pointer', userSelect: 'none', borderBottom: `1.5px solid ${C.border}`, background: C.bg, ...(ci === 0 ? { position: 'sticky', left: 0, zIndex: 5 } : {}) }}>
+                        <th key={col.key} onClick={() => setSortCol(col.key)} style={{ padding: '6px 7px', textAlign: col.left ? 'left' : col.center ? 'center' : 'right', color: C.t1, fontWeight: 700, fontSize: 9.5, letterSpacing: 0.4, textTransform: 'uppercase', whiteSpace: 'nowrap', overflow: col.truncate ? 'hidden' : undefined, textOverflow: col.truncate ? 'ellipsis' : undefined, maxWidth: col.truncate ? 0 : undefined, cursor: 'pointer', userSelect: 'none', borderBottom: `1.5px solid ${C.border}`, background: C.bg, ...(ci === 0 ? { position: 'sticky', left: 0, zIndex: 5 } : {}) }}>
                           {col.label}{sortCol === col.key ? (sortDir === 'desc' ? ' ↓' : ' ↑') : ''}
                         </th>
                       ))}
@@ -1376,7 +1382,7 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
                       return (
                         <Fragment key={r.courier_group}>
                         <tr style={{ borderBottom: cExpanded[r.courier_group] ? 'none' : `1px solid ${C.border}` }}>
-                          <td style={{ padding: '6px 7px', minWidth: 143, position: 'sticky', left: 0, background: C.card, zIndex: 1 }}>
+                          <td style={{ padding: '6px 7px', position: 'sticky', left: 0, background: C.card, zIndex: 1, overflow: 'hidden' }}>
                             <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
                               <span onClick={() => setCExpanded(e => ({ ...e, [r.courier_group]: !e[r.courier_group] }))} style={{ fontSize:9, color:C.t3, display:'inline-block', transform:cExpanded[r.courier_group]?'rotate(90deg)':'rotate(0deg)', transition:'transform .15s', cursor:'pointer', flexShrink:0 }}>▶</span>
                               {logo
@@ -1390,7 +1396,6 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
                           <td style={{ padding: '6px 7px', textAlign: 'right', color: C.t1 }}>{n(r.total)}</td>
                           <td style={{ padding: '6px 7px', textAlign: 'right', color: C.t1, fontSize: 11 }}>{r._delPct.toFixed(2)}%</td>
                           <td style={{ padding: '6px 7px', textAlign: 'right', color: rtoColor, fontSize: 11 }}>{r._rtoPct.toFixed(2)}%</td>
-                          <td style={{ padding: '6px 7px', textAlign: 'right', color: C.t1, fontSize: 11 }}>{r._zrtoPct.toFixed(2)}%</td>
                           <td style={{ padding: '6px 7px', textAlign: 'right', color: C.t1, fontSize: 11 }}>{r._cancPct.toFixed(2)}%</td>
                           <td style={{ padding: '6px 7px', textAlign: 'right', color: C.t1, fontSize: 11 }}>{r._fasrPct != null ? r._fasrPct.toFixed(2) + '%' : '—'}</td>
                           <td style={{ padding: '6px 7px', textAlign: 'right', color: C.t1, fontSize: 11 }}>{r._rasrPct != null ? r._rasrPct.toFixed(2) + '%' : '—'}</td>
@@ -1399,7 +1404,6 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
                           <td style={{ padding: '6px 7px', textAlign: 'center', color: C.t1, fontSize: 11 }}>{d(r.avg_intransit_days)}</td>
                           <td style={{ padding: '6px 7px', textAlign: 'center', color: C.t1, fontSize: 11 }}>{d(r.avg_fulfilment_days)}</td>
                           <td style={{ padding: '6px 7px', textAlign: 'center', color: C.t1, fontSize: 11 }}>{d(r.avg_rto_tat_days)}</td>
-                          <td style={{ padding: '6px 7px', textAlign: 'center', color: C.t1, fontSize: 11 }}>{d(r.avg_s2a_days)}</td>
                         </tr>
                         {cExpanded[r.courier_group] && byCourierMonth.filter(m => m.courier_group === r.courier_group).sort((a,b) => a.month_dt < b.month_dt ? -1 : 1).map(m => {
                           const _delPct = m.total ? +((m.delivered/m.total)*100).toFixed(2) : 0
@@ -1417,7 +1421,6 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
                               <td style={{ padding:'4px 7px', textAlign:'right', color:C.t1, fontSize:11 }}>{n(m.total)}</td>
                               <td style={{ padding:'4px 7px', textAlign:'right', color:C.t1, fontSize:11 }}>{_delPct.toFixed(2)}%</td>
                               <td style={{ padding:'4px 7px', textAlign:'right', color:mRtoColor, fontSize:11 }}>{_rtoPct.toFixed(2)}%</td>
-                              <td style={{ padding:'4px 7px', textAlign:'right', color:C.t1, fontSize:11 }}>{_zrtoPct.toFixed(2)}%</td>
                               <td style={{ padding:'4px 7px', textAlign:'right', color:C.t1, fontSize:11 }}>{_cancPct.toFixed(2)}%</td>
                               <td style={{ padding:'4px 7px', textAlign:'right', color:C.t1, fontSize:11 }}>{_fasrPct!=null?_fasrPct.toFixed(2)+'%':'—'}</td>
                               <td style={{ padding:'4px 7px', textAlign:'right', color:C.t1, fontSize:11 }}>{_rasrPct!=null?_rasrPct.toFixed(2)+'%':'—'}</td>
@@ -1426,7 +1429,6 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
                               <td style={{ padding:'4px 7px', textAlign:'center', color:C.t1, fontSize:11 }}>{d(m.avg_intransit_days)}</td>
                               <td style={{ padding:'4px 7px', textAlign:'center', color:C.t1, fontSize:11 }}>{d(m.avg_fulfilment_days)}</td>
                               <td style={{ padding:'4px 7px', textAlign:'center', color:C.t1, fontSize:11 }}>{d(m.avg_rto_tat_days)}</td>
-                              <td style={{ padding:'4px 7px', textAlign:'center', color:C.t1, fontSize:11 }}>{d(m.avg_s2a_days)}</td>
                             </tr>
                           )
                         })}
@@ -1452,7 +1454,6 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
                           <td style={{ padding: '6px 7px', textAlign: 'right', color: C.t1 }}>{n(tot)}</td>
                           <td style={{ padding: '6px 7px', textAlign: 'right', color: C.t1, fontSize: 11 }}>{(sumD/tot*100).toFixed(2)}%</td>
                           <td style={{ padding: '6px 7px', textAlign: 'right', color: C.t1, fontSize: 11 }}>{(sumR/tot*100).toFixed(2)}%</td>
-                          <td style={{ padding: '6px 7px', textAlign: 'right', color: C.t1, fontSize: 11 }}>{(sumZ/tot*100).toFixed(2)}%</td>
                           <td style={{ padding: '6px 7px', textAlign: 'right', color: C.t1, fontSize: 11 }}>{(sumC/tot*100).toFixed(2)}%</td>
                           <td style={{ padding: '6px 7px', textAlign: 'right', color: C.t1, fontSize: 11 }}>{sumOfd ? (sumD1/sumOfd*100).toFixed(2)+'%' : '—'}</td>
                           <td style={{ padding: '6px 7px', textAlign: 'right', color: C.t1, fontSize: 11 }}>{sumOfd ? (sumRN/sumOfd*100).toFixed(2)+'%' : '—'}</td>
@@ -1461,7 +1462,6 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
                           <td style={{ padding: '6px 7px', textAlign: 'center', color: C.t1, fontSize: 11 }}>{wavg('avg_intransit_days').toFixed(2)}d</td>
                           <td style={{ padding: '6px 7px', textAlign: 'center', color: C.t1, fontSize: 11 }}>{wavg('avg_fulfilment_days').toFixed(2)}d</td>
                           <td style={{ padding: '6px 7px', textAlign: 'center', color: C.t1, fontSize: 11 }}>{wavg('avg_rto_tat_days').toFixed(2)}d</td>
-                          <td style={{ padding: '6px 7px', textAlign: 'center', color: C.t1, fontSize: 11 }}>{wavg('avg_s2a_days').toFixed(2)}d</td>
                         </tr>
                       )
                     })()}
@@ -2135,16 +2135,19 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
               <div style={cardStyle}>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
                   <div style={chartTitle}>Shipment Allocation by Weight</div>
-                  <div style={{ display: 'flex', background: C.bg, border: `1px solid ${C.border}`, borderRadius: 7, padding: 2 }}>
-                    {[['qty','Qty'],['value','Value']].map(([id,lbl]) => (
-                      <button key={id} onClick={() => setWMetric(id)} style={{ fontSize: 10, padding: '2px 10px', borderRadius: 5, border: 'none', background: wMetric === id ? C.acc : 'transparent', color: wMetric === id ? '#000' : C.t3, cursor: 'pointer', fontWeight: wMetric === id ? 700 : 500, fontFamily: 'var(--font)' }}>{lbl}</button>
-                    ))}
+                  <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                    <div style={{ display: 'flex', background: C.bg, border: `1px solid ${C.border}`, borderRadius: 7, padding: 2 }}>
+                      {[['qty','Qty'],['value','Value']].map(([id,lbl]) => (
+                        <button key={id} onClick={() => setWMetric(id)} style={{ fontSize: 10, padding: '2px 10px', borderRadius: 5, border: 'none', background: wMetric === id ? C.acc : 'transparent', color: wMetric === id ? '#000' : C.t3, cursor: 'pointer', fontWeight: wMetric === id ? 700 : 500, fontFamily: 'var(--font)' }}>{lbl}</button>
+                      ))}
+                    </div>
                   </div>
                 </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-                  <ResponsiveContainer width={isMobile ? 150 : 180} height={isMobile ? 190 : 200}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-start', gap: 24, paddingLeft: 15 }}>
+                  <div style={{ position: 'relative', left: 80 }}>
+                  <ResponsiveContainer width={isMobile ? 150 : 200} height={isMobile ? 190 : 220}>
                     <PieChart>
-                      <Pie data={donutData} cx="50%" cy="50%" innerRadius={isMobile ? 48 : 55} outerRadius={isMobile ? 72 : 85} dataKey="value" paddingAngle={2}>
+                      <Pie data={donutData} cx="50%" cy="50%" innerRadius={isMobile ? 48 : 59} outerRadius={isMobile ? 72 : 89} dataKey="value" paddingAngle={2}>
                         {donutData.map((d,i) => <Cell key={i} fill={d.color} />)}
                       </Pie>
                       <Tooltip content={({ active, payload }) => {
@@ -2160,13 +2163,14 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
                       }} />
                     </PieChart>
                   </ResponsiveContainer>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 5, flex: 1, minWidth: 0 }}>
+                  </div>
+                  <div style={{ display: 'inline-flex', flexDirection: 'column', gap: 11, marginLeft: 200 }}>
                     {donutData.map(d => (
-                      <div key={d.name} style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                      <div key={d.name} style={{ display: 'flex', alignItems: 'center', gap: 30 }}>
                         <div style={{ width: 8, height: 8, borderRadius: '50%', background: d.color, flexShrink: 0 }} />
-                        <div style={{ fontSize: 11.5, color: C.t2, flex: 1, minWidth: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{d.name}</div>
-                        <div style={{ fontSize: 11.5, fontWeight: 700, color: C.t1, flexShrink: 0 }}>{wMetric === 'qty' ? (d.value||0).toLocaleString('en-IN') : fmtVal(d.value||0)}</div>
-                        <div style={{ fontSize: 11, color: C.t3, minWidth: 32, textAlign: 'right', flexShrink: 0 }}>{d.pct}%</div>
+                        <div style={{ fontSize: 11.5, color: C.t2, whiteSpace: 'nowrap', width: 62 }}>{d.name}</div>
+                        <div style={{ fontSize: 11.5, fontWeight: 700, color: C.t1, width: 42, textAlign: 'right' }}>{wMetric === 'qty' ? (d.value||0).toLocaleString('en-IN') : fmtVal(d.value||0)}</div>
+                        <div style={{ fontSize: 11, color: C.t3, width: 36, textAlign: 'right' }}>{d.pct}%</div>
                       </div>
                     ))}
                   </div>
@@ -2179,22 +2183,23 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
                 </div>
                 {isMobile && <div style={{ height: 1, background: C.border, margin: '10px 0 6px' }} />}
                 <ResponsiveContainer width="100%" height={220}>
-                  <ComposedChart data={ordered} margin={isMobile ? { top: 4, right: 4, left: 4, bottom: 0 } : { top: 4, right: 40, left: -10, bottom: 0 }}>
+                  <ComposedChart data={ordered} margin={isMobile ? { top: 4, right: 4, left: 4, bottom: 0 } : { top: 4, right: 2, left: 0, bottom: 0 }}>
                     {!isMobile && <CartesianGrid strokeDasharray="3 3" stroke={C.border} vertical={false} />}
                     <XAxis dataKey="slab" tick={{ fontSize: isMobile ? 9 : 10, fill: C.t2 }} axisLine={isMobile ? { stroke: C.border } : undefined} tickLine={false} />
                     {isMobile
                       ? <><YAxis yAxisId="qty" tick={false} axisLine={false} tickLine={false} width={0} /><YAxis yAxisId="pct" orientation="right" tick={false} axisLine={false} tickLine={false} width={0} domain={[0, 'dataMax + 5']} /></>
-                      : <><YAxis yAxisId="qty" tick={{ fontSize: 10, fill: C.t2 }} tickFormatter={v => v >= 1000 ? `${(v/1000).toFixed(0)}K` : v} /><YAxis yAxisId="pct" orientation="right" tick={{ fontSize: 10, fill: C.t2 }} unit="%" domain={[0, 'dataMax + 5']} /></>
+                      : <><YAxis yAxisId="qty" tick={{ fontSize: 10, fill: C.t2 }} tickFormatter={v => v >= 1000 ? `${(v/1000).toFixed(0)}K` : v} width={30} /><YAxis yAxisId="pct" orientation="right" tick={{ fontSize: 10, fill: C.t2 }} unit="%" domain={[0, 'dataMax + 5']} width={38} /></>
                     }
                     <Tooltip content={({ active, payload, label }) => {
                       if (!active || !payload?.length) return null
                       const row = ordered.find(r => r.slab === label) || {}
+                      const dot = color => <span style={{ display: 'inline-block', width: 8, height: 8, borderRadius: 2, background: color, marginRight: 6, flexShrink: 0 }} />
                       return (
                         <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 8, padding: '8px 12px', fontSize: 11, color: C.t1 }}>
-                          <div style={{ fontWeight: 700, marginBottom: 4 }}>{label}</div>
-                          <div style={{ color: '#5BA4CF' }}>Shipments: <strong>{(row.total||0).toLocaleString('en-IN')}</strong></div>
-                          <div style={{ color: C.red.tx }}>RTO %: <strong>{row.rto_pct??'—'}%</strong></div>
-                          <div style={{ color: '#60A5FA' }}>Intrasit TAT: <strong>{row.avg_tat??'—'}d</strong></div>
+                          <div style={{ fontWeight: 700, marginBottom: 6 }}>{label}</div>
+                          <div style={{ display: 'flex', alignItems: 'center', marginBottom: 3 }}>{dot('#5BA4CF')}<span>Shipments: <strong>{(row.total||0).toLocaleString('en-IN')}</strong></span></div>
+                          <div style={{ display: 'flex', alignItems: 'center', marginBottom: 3 }}>{dot(C.red.tx)}<span>RTO %: <strong>{row.rto_pct??'—'}%</strong></span></div>
+                          <div style={{ display: 'flex', alignItems: 'center' }}>{dot('#60A5FA')}<span>Intrasit TAT: <strong>{row.avg_tat??'—'}d</strong></span></div>
                         </div>
                       )
                     }} />
@@ -2249,13 +2254,6 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
                 <div key={title} style={{ ...cardStyle, display: 'flex', flexDirection: 'column', height: h }}>
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 2 }}>
                     <div style={chartTitle}>{title}</div>
-                    <div style={{ display: 'inline-flex', border: `1px solid ${C.border2}`, borderRadius: 6, overflow: 'hidden', flexShrink: 0 }}>
-                      {['All', 'Forward', 'Reverse'].map((opt, i) => {
-                        const val = opt.toLowerCase()
-                        const active = cardGeoType === val
-                        return <button key={opt} onClick={() => setGeoShipType(p => ({ ...p, [stateKey]: val }))} style={{ padding: '2px 8px', fontSize: 9.5, fontWeight: active ? 700 : 400, background: active ? C.acc : 'transparent', color: active ? '#000' : C.t2, border: 'none', cursor: 'pointer', fontFamily: 'var(--font)', borderLeft: i > 0 ? `1px solid ${C.border2}` : 'none' }}>{opt}</button>
-                      })}
-                    </div>
                   </div>
                   <div style={{ fontSize: 11, color: C.t3, marginBottom: 12, marginTop: 2 }}>{sub}</div>
                   <div style={{ overflowY: 'auto', flex: 1 }}>{geoBar(merged, key, color)}</div>
@@ -2466,42 +2464,53 @@ function Sidebar({ page, setPage, invTab, setInvTab, allowedTabs, profile }) {
   const hoverTimerRef = useRef(null)
   const logHoverTimerRef = useRef(null)
   const allItems = [
-    { id: 'overview', label: 'Overview', icon: <svg width={18} height={18} viewBox="0 0 24 24" fill="currentColor"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg> },
-    { id: 'sales', label: 'Sales', icon: <svg width={18} height={18} viewBox="0 0 24 24" fill="currentColor"><rect x="2" y="12" width="4" height="10" rx="1"/><rect x="10" y="6" width="4" height="16" rx="1"/><rect x="18" y="2" width="4" height="20" rx="1"/></svg> },
-    { id: 'pnl', label: 'PnL', icon: <img src="/graph.png" alt="PnL" width={18} height={18} style={{ objectFit: 'contain', opacity: 0.7 }} /> },
-    { id: 'ads', label: 'Ads', icon: <svg width={18} height={18} viewBox="0 0 24 24" fill="currentColor"><path d="M5 3l14 9-14 9V3z"/></svg> },
-    { id: 'logistics', label: 'Logistics', icon: <svg width={18} height={18} viewBox="0 0 24 24" fill="currentColor"><path d="M1 3h14a1 1 0 011 1v9H1V3zm15 4h4.5L23 10.5V16h-7V7zM5.5 20a2 2 0 100-4 2 2 0 000 4zm13 0a2 2 0 100-4 2 2 0 000 4z"/></svg> },
-    { id: 'inventory', label: 'Inventory', icon: <svg width={18} height={18} viewBox="0 0 24 24" fill="currentColor"><path d="M12 2L2 7v10l10 5 10-5V7L12 2zm0 2.24L20 8.5l-8 4-8-4 8-4.26zM3 9.74l8 4V21l-8-4V9.74zm10 11.26v-7.5l8-4V17l-8 4z"/></svg> },
-    { id: 'customer', label: 'Customer', icon: <svg width={18} height={18} viewBox="0 0 24 24" fill="currentColor"><path d="M9 12a4 4 0 100-8 4 4 0 000 8zm0 2c-4.42 0-8 1.79-8 4v1h16v-1c0-2.21-3.58-4-8-4zm7-8a3 3 0 000 6 3 3 0 000-6zm0 8c-1.04 0-2.02.2-2.88.53C14.32 15.2 15.5 16.5 15.5 18H23v-1c0-2.21-3.13-4-7-4z"/></svg> },
-    { id: 'documents', label: 'Documents', icon: <svg width={18} height={18} viewBox="0 0 24 24" fill="currentColor"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8l-6-6zm-1 7V3.5L18.5 9H13zM8 13h8v1.5H8V13zm0 3h8v1.5H8V16zm0-6h3v1.5H8V10z"/></svg> },
+    { id: 'overview',  label: 'Overview',  Icon: SquaresFour },
+    { id: 'sales',     label: 'Sales',     Icon: ChartBar },
+    { id: 'pnl',       label: 'P&L',       Icon: TrendUp },
+    { id: 'ads',       label: 'Ads',       Icon: PlayCircle },
+    { id: 'inventory', label: 'Inventory', Icon: Cube },
+    { id: 'logistics', label: 'Logistics', Icon: Truck },
+    { id: 'customer',  label: 'Customer',  Icon: Users },
+    { id: 'documents', label: 'Documents', Icon: FileText },
   ]
-  const items = allowedTabs ? allItems.filter(i => allowedTabs.includes(i.id)) : allItems
+  const items = allowedTabs ? allItems.filter(i => {
+    if (i.id === 'sales') return hasSalesAccess(allowedTabs)
+    if (i.id === 'ads') return hasAdsAccess(allowedTabs)
+    if (i.id === 'pnl') return hasPnlAccess(allowedTabs)
+    if (i.id === 'logistics') return allowedTabs.includes('logistics') || hasCostAccess(allowedTabs)
+    if (i.id === 'inventory') return allowedTabs.includes('inventory') || allowedTabs.includes('inventory:sales')
+    return allowedTabs.includes(i.id)
+  }) : allItems
   const dims = [
     { label: 'Courier', icon: <SvgIcon d={['M1 3h15v13H1z','M16 8h4l3 3v5h-7V8z','M5.5 19a1.5 1.5 0 100-3 1.5 1.5 0 000 3z','M18.5 19a1.5 1.5 0 100-3 1.5 1.5 0 000 3z']} /> },
     { label: 'Marketing', icon: <SvgIcon d={['M22 12h-4l-3 9L9 3l-3 9H2']} /> },
   ]
   return (
     <nav className="sidebar">
-      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', marginBottom: 14, gap: 2 }}>
-        <img src="/frido-logo.png" alt="Frido" style={{ width: 36, height: 36, borderRadius: 10, objectFit: 'cover' }} />
-        <span style={{ fontSize: 7.5, fontWeight: 600, color: C.t3, letterSpacing: '.04em', textTransform: 'uppercase', lineHeight: 1, textAlign: 'center' }}>Analytics</span>
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', marginBottom: 6, marginTop: -6 }}>
+        <img src="/frido-navigator-icon-light-theme (2).png" alt="Frido Navigator" style={{ width: 42, height: 42, objectFit: 'contain' }} />
       </div>
+      <hr className="sb-sep" />
       {items.map(item => {
         if (item.id === 'inventory') {
+          const hasHealth = !allowedTabs || allowedTabs.includes('inventory')
+          const hasSales = !allowedTabs || allowedTabs.includes('inventory:sales')
+          const hasBothInv = hasHealth && hasSales
           const subTabs = [
-            { id: 'health', label: 'Inventory Health' },
-            ...(!allowedTabs || allowedTabs.includes('inventory:sales') ? [{ id: 'sales', label: 'Sales & Allocation' }] : []),
+            ...(hasHealth ? [{ id: 'health', label: 'Health & Overview' }] : []),
+            ...(hasSales ? [{ id: 'sales', label: 'Sales & Allocation' }] : []),
           ]
+          const defaultInvTab = hasHealth ? 'health' : 'sales'
           return (
-            <div key="inventory" style={{ position: 'relative' }}
-              onMouseEnter={() => { clearTimeout(hoverTimerRef.current); setInvHover(true) }}
+            <Fragment key="inventory">
+            <div onClick={() => { setPage('inventory'); setInvTab(defaultInvTab) }}
+              className={`sb-item${page === 'inventory' ? ' active' : ''}`}
+              style={{ position: 'relative' }}
+              onMouseEnter={() => { if (hasBothInv) { clearTimeout(hoverTimerRef.current); setInvHover(true) } }}
               onMouseLeave={() => { hoverTimerRef.current = setTimeout(() => setInvHover(false), 200) }}>
-              <div onClick={() => setPage('inventory')}
-                className={`sb-item${page === 'inventory' ? ' active' : ''}`}>
-                <span className="sb-icon">{item.icon}</span>
-                <span className="sb-label">{item.label}</span>
-              </div>
-              {invHover && (
+              <span className="sb-icon">{(() => { const Icon = item.Icon; return <Icon weight={page === item.id ? 'fill' : 'regular'} size={20} /> })()}</span>
+              <span className="sb-label">{item.label}</span>
+              {hasBothInv && invHover && (
                 <div style={{
                   position: 'absolute', left: '100%', top: 0, marginLeft: 6, zIndex: 999,
                   background: C.card, border: `1px solid ${C.border2}`, borderRadius: 10,
@@ -2509,7 +2518,7 @@ function Sidebar({ page, setPage, invTab, setInvTab, allowedTabs, profile }) {
                   display: 'flex', flexDirection: 'column', gap: 2,
                 }}>
                   {subTabs.map(sub => (
-                    <div key={sub.id} onClick={() => { setPage('inventory'); setInvTab(sub.id); setInvHover(false) }}
+                    <div key={sub.id} onClick={e => { e.stopPropagation(); setPage('inventory'); setInvTab(sub.id); setInvHover(false) }}
                       style={{
                         padding: '8px 12px', borderRadius: 7, cursor: 'pointer', fontSize: 12, fontWeight: invTab === sub.id && page === 'inventory' ? 700 : 500,
                         color: invTab === sub.id && page === 'inventory' ? C.t1 : C.t2,
@@ -2523,24 +2532,30 @@ function Sidebar({ page, setPage, invTab, setInvTab, allowedTabs, profile }) {
                 </div>
               )}
             </div>
+            <hr className="sb-sep" />
+            </Fragment>
           )
         }
         if (item.id === 'logistics') {
+          const hasPerf = !allowedTabs || allowedTabs.includes('logistics')
+          const hasCost = !allowedTabs || allowedTabs.includes('logistics:cost')
+          const hasBoth = hasPerf && hasCost
           const logSubTabs = [
-            { id: 'logistics', label: 'Performance Analytics' },
-            ...(!allowedTabs || allowedTabs.includes('logistics:cost') ? [{ id: 'logistics-cost', label: 'Cost Analytics' }] : []),
+            ...(hasPerf ? [{ id: 'logistics', label: 'Performance Analytics' }] : []),
+            ...(hasCost ? [{ id: 'logistics-cost', label: 'Cost Analytics' }] : []),
           ]
+          const defaultLogPage = hasPerf ? 'logistics' : 'logistics-cost'
           const logActive = page === 'logistics' || page === 'logistics-cost'
           return (
-            <div key="logistics" style={{ position: 'relative' }}
-              onMouseEnter={() => { clearTimeout(logHoverTimerRef.current); setLogHover(true) }}
+            <Fragment key="logistics">
+            <div onClick={() => setPage(defaultLogPage)}
+              className={`sb-item${logActive ? ' active' : ''}`}
+              style={{ position: 'relative' }}
+              onMouseEnter={() => { if (hasBoth) { clearTimeout(logHoverTimerRef.current); setLogHover(true) } }}
               onMouseLeave={() => { logHoverTimerRef.current = setTimeout(() => setLogHover(false), 200) }}>
-              <div onClick={() => setPage('logistics')}
-                className={`sb-item${logActive ? ' active' : ''}`}>
-                <span className="sb-icon">{item.icon}</span>
-                <span className="sb-label">{item.label}</span>
-              </div>
-              {logHover && (
+              <span className="sb-icon">{(() => { const Icon = item.Icon; return <Icon weight={page === item.id ? 'fill' : 'regular'} size={20} /> })()}</span>
+              <span className="sb-label">{item.label}</span>
+              {hasBoth && logHover && (
                 <div style={{
                   position: 'absolute', left: '100%', top: 0, marginLeft: 6, zIndex: 999,
                   background: C.card, border: `1px solid ${C.border2}`, borderRadius: 10,
@@ -2548,7 +2563,7 @@ function Sidebar({ page, setPage, invTab, setInvTab, allowedTabs, profile }) {
                   display: 'flex', flexDirection: 'column', gap: 2,
                 }}>
                   {logSubTabs.map(sub => (
-                    <div key={sub.id} onClick={() => { setPage(sub.id); setLogHover(false) }}
+                    <div key={sub.id} onClick={e => { e.stopPropagation(); setPage(sub.id); setLogHover(false) }}
                       style={{
                         padding: '8px 12px', borderRadius: 7, cursor: 'pointer', fontSize: 12,
                         fontWeight: page === sub.id ? 700 : 500,
@@ -2564,14 +2579,19 @@ function Sidebar({ page, setPage, invTab, setInvTab, allowedTabs, profile }) {
                 </div>
               )}
             </div>
+            <hr className="sb-sep" />
+            </Fragment>
           )
         }
         return (
-          <div key={item.id} onClick={() => setPage(item.id)}
-            className={`sb-item${page === item.id ? ' active' : ''}`}>
-            <span className="sb-icon">{item.icon}</span>
-            <span className="sb-label">{item.label}</span>
-          </div>
+          <Fragment key={item.id}>
+            <div onClick={() => setPage(item.id)}
+              className={`sb-item${page === item.id ? ' active' : ''}`}>
+              <span className="sb-icon">{(() => { const Icon = item.Icon; return <Icon weight={page === item.id ? 'fill' : 'regular'} size={20} /> })()}</span>
+              <span className="sb-label">{item.label}</span>
+            </div>
+            {item.id !== 'documents' && <hr className="sb-sep" />}
+          </Fragment>
         )
       })}
       <div style={{ marginTop: 'auto', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
@@ -2604,7 +2624,12 @@ function BottomNav({ page, setPage, allowedTabs, profile }) {
     <nav className="bottom-nav">
       <div className="bottom-nav-inner">
         {allItems.map(item => {
-          const allowed = !allowedTabs || allowedTabs.includes(item.id)
+          const allowed = item.id === 'sales' ? hasSalesAccess(allowedTabs) :
+            item.id === 'ads' ? hasAdsAccess(allowedTabs) :
+            item.id === 'pnl' ? hasPnlAccess(allowedTabs) :
+            item.id === 'logistics' ? (!allowedTabs || allowedTabs.includes('logistics') || hasCostAccess(allowedTabs)) :
+            item.id === 'inventory' ? (!allowedTabs || allowedTabs.includes('inventory') || allowedTabs.includes('inventory:sales')) :
+            !allowedTabs || allowedTabs.includes(item.id)
           const isActive = page === item.id
           return (
             <div key={item.id}
@@ -4591,9 +4616,9 @@ function ChannelTrendCard({ dailyArr, channels, rangeStart, rangeEnd }) {
 
   return (
     <Card>
-      <div style={{ display: 'flex', flexDirection: 'column', marginBottom: 11, gap: 5 }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 11 }}>
         <span style={{ fontSize: 13, fontWeight: 600, color: C.t1 }}>{GROUP_OPTS.find(x => x.id === groupBy)?.label} {m.label} by Channel</span>
-        <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end' }}>
+        <div style={{ display: 'flex', gap: 6 }}>
           <select value={groupBy} onChange={e => setGroupBy(e.target.value)} style={{ ...selStyle, width: 60, fontSize: 10.5, padding: '3px 4px' }}>
             {GROUP_OPTS.map(x => <option key={x.id} value={x.id}>{x.label}</option>)}
           </select>
@@ -4632,7 +4657,7 @@ function ChannelTrendCard({ dailyArr, channels, rangeStart, rangeEnd }) {
             }
             return d.replace(/'\d{2}\s*/, '')
           }} />
-          <YAxis hide />
+          <YAxis tick={{ fontSize: 9, fill: C.t3 }} width={42} tickFormatter={v => { if (v >= 1e7) return `${(v/1e7).toFixed(1)}Cr`; if (v >= 1e5) return `${(v/1e5).toFixed(1)}L`; if (v >= 1e3) return `${(v/1e3).toFixed(0)}K`; return v }} />
           <Tooltip content={totalTooltip} />
           <Area type="monotone" dataKey="_total" name="Total" stroke={C.acm} strokeWidth={2.5} fill="url(#chTotalGrad)" dot={false} />
         </ComposedChart>
@@ -4679,7 +4704,7 @@ function groupDailyArr(dailyArr, channels, groupBy, rangeStart, rangeEnd) {
     const cur = new Date(rangeStart + 'T00:00:00')
     const end = new Date(endDate + 'T00:00:00')
     while (cur <= end) {
-      const key = cur.toISOString().slice(0, 10)
+      const key = `${cur.getFullYear()}-${String(cur.getMonth()+1).padStart(2,'0')}-${String(cur.getDate()).padStart(2,'0')}`
       const empty = { date: key }
       channels.forEach(ch => { empty[ch] = 0; empty[ch + '_net'] = 0; empty[ch + '_o'] = 0; empty[ch + '_u'] = 0 })
       result.push(map[key] || empty)
@@ -8678,7 +8703,9 @@ function AdsMobCatDropdown({ catOptions, subCatOptions, selCat, selSubCat, setSe
   )
 }
 
-function AdsTab({ data, filters = {}, selPlatform, setSelPlatform }) {
+const ADS_KEY_MAP = { 'All': 'ads:all', 'D2C': 'ads:d2c', 'Amazon': 'ads:amazon', 'Blinkit': 'ads:blinkit', 'Zepto': 'ads:zepto', 'Instamart': 'ads:instamart', 'Flipkart': 'ads:flipkart', 'Myntra': 'ads:myntra', 'CRED': 'ads:cred' }
+function AdsTab({ data, filters = {}, selPlatform, setSelPlatform, allowedTabs }) {
+  const allowedAdsPlatforms = ADS_PLATFORMS.filter(p => !allowedTabs || allowedTabs.includes(ADS_KEY_MAP[p.id]))
   const [isMob, setIsMob] = useState(() => window.innerWidth <= 768)
   useEffect(() => {
     const onResize = () => setIsMob(window.innerWidth <= 768)
@@ -8931,15 +8958,20 @@ function AdsTab({ data, filters = {}, selPlatform, setSelPlatform }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
       <div className="sales-tabs mob-hidden">
-        {ADS_PLATFORMS.map(p => (
-          <button key={p.id} onClick={() => setSelPlatform(p.id === 'All' ? null : p.id)}
-            className={`stab${(p.id === 'All' ? !selPlatform : selPlatform === p.id) ? ' active' : ''}`}
-            style={p.id === 'All' ? { fontWeight: !selPlatform ? 800 : 700, fontSize: 13 } : {}}>
-            {p.logo && <img src={p.logo} alt="" style={{ width: 14, height: 14, borderRadius: 3, flexShrink: 0, objectFit: 'contain', ...(p.id === 'CRED' ? { background: '#000', padding: 1 } : {}) }} />}
-            {p.logo2 && <img src={p.logo2} alt="" style={{ width: 14, height: 14, borderRadius: 3, flexShrink: 0, objectFit: 'contain', marginLeft: -4 }} />}
-            {p.label}
-          </button>
-        ))}
+        {ADS_PLATFORMS.map(p => {
+          const allowed = !allowedTabs || allowedTabs.includes(ADS_KEY_MAP[p.id])
+          const isActive = p.id === 'All' ? !selPlatform : selPlatform === p.id
+          return (
+            <button key={p.id}
+              onClick={() => { if (!allowed) return; setSelPlatform(p.id === 'All' ? null : p.id) }}
+              className={`stab${isActive ? ' active' : ''}`}
+              style={{ ...(p.id === 'All' ? { fontWeight: !selPlatform ? 800 : 700, fontSize: 13 } : {}), ...(!allowed ? { opacity: 0.35, cursor: 'not-allowed', pointerEvents: 'auto' } : {}) }}>
+              {p.logo && <img src={p.logo} alt="" style={{ width: 14, height: 14, borderRadius: 3, flexShrink: 0, objectFit: 'contain', ...(p.id === 'CRED' ? { background: '#000', padding: 1 } : {}) }} />}
+              {p.logo2 && <img src={p.logo2} alt="" style={{ width: 14, height: 14, borderRadius: 3, flexShrink: 0, objectFit: 'contain', marginLeft: -4 }} />}
+              {p.label}
+            </button>
+          )
+        })}
       </div>
 
 
@@ -11786,9 +11818,9 @@ function InternationalPlaceholderTab() {
   )
 }
 
-function ChannelTab({ data, channel, filters, setFilters, channelView, setChannelView, shopifyView }) {
+function ChannelTab({ data, channel, filters, setFilters, channelView, setChannelView, shopifyView, subCatFirstOrderMap }) {
   if (channel === 'Shopify') return shopifyView === 'returns'
-    ? <D2CReturnAnalysisTab filters={filters} />
+    ? <D2CReturnAnalysisTab filters={filters} subCatFirstOrderMap={subCatFirstOrderMap} />
     : <ShopifyTab data={data} filters={filters} setFilters={setFilters} />
   if (channel === 'Amazon') return <AmazonTab data={data} channelView={channelView} setChannelView={setChannelView} />
   if (channel === 'Flipkart') return <FlipkartTab data={data} />
@@ -11968,6 +12000,37 @@ function CXTab({ data }) {
 
 // Filter icon + popover — replaces the always-visible Category/Sub-category/SKU/Payment Type/
 // Voucher dropdown row with a single icon on the right of the toggle bar; clicking it opens the
+const LAUNCH_OPTS = [{ id: 'new', label: 'Newly Launched (≤90 days)' }, { id: 'established', label: 'Established (>90 days)' }]
+function LaunchDropdown({ value, onChange }) {
+  const [open, setOpen] = useState(false)
+  const ref = useRef(null)
+  const selected = LAUNCH_OPTS.find(o => o.id === value)
+  useEffect(() => {
+    const h = e => { if (ref.current && !ref.current.contains(e.target)) setOpen(false) }
+    document.addEventListener('mousedown', h)
+    return () => document.removeEventListener('mousedown', h)
+  }, [])
+  return (
+    <div ref={ref} style={{ position: 'relative', flexShrink: 0 }}>
+      <div onClick={() => setOpen(o => !o)} className="fsel" style={{ display: 'flex', alignItems: 'center', gap: 5, cursor: 'pointer', minWidth: 160, background: selected ? '#FFF9CC' : undefined, borderColor: selected ? C.acm : undefined }}>
+        <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: 11.5 }}>{selected ? selected.label : 'All Product Launch'}</span>
+        <span style={{ fontSize: 8, color: C.t3, flexShrink: 0 }}>▼</span>
+      </div>
+      {open && (
+        <div style={{ position: 'absolute', top: '110%', left: 0, zIndex: 200, background: C.card, border: `1px solid ${C.border2}`, borderRadius: 9, boxShadow: '0 8px 28px rgba(0,0,0,.14)', width: 220, overflow: 'hidden' }}>
+          {selected && <div onClick={() => { onChange(''); setOpen(false) }} style={{ padding: '9px 14px', fontSize: 12, color: C.t3, cursor: 'pointer', borderBottom: `1px solid ${C.border}` }}>All Product Launch</div>}
+          {LAUNCH_OPTS.map(opt => (
+            <div key={opt.id} onClick={() => { onChange(opt.id); setOpen(false) }}
+              style={{ padding: '9px 14px', fontSize: 12, cursor: 'pointer', fontWeight: value === opt.id ? 700 : 400, background: value === opt.id ? '#FFF9CC' : 'transparent', color: C.t1 }}>
+              {opt.label}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
 // same set of filters in a floating box. `children` are the filter controls to render inside —
 // callers (SalesPage) decide which controls apply per active channel (e.g. Payment Types/Vouchers
 // only render for Shopify), same conditional logic the old always-visible row already used.
@@ -11997,7 +12060,9 @@ function FilterIconPopover({ children, activeCount }) {
   )
 }
 
-function SalesPage({ data, filters, setFilters, activeTab, setActiveTab, fetchData, channelView, setChannelView, offlineSub, setOfflineSub }) {
+const SALES_KEY_MAP = { 'all': 'sales:all', 'shopify': 'sales:shopify', 'ebo': 'sales:ebo', 'amazon': 'sales:amazon', 'flipkart': 'sales:flipkart', 'blinkit': 'sales:blinkit', 'cred': 'sales:cred', 'firstcry': 'sales:firstcry', 'instamart': 'sales:instamart', 'zepto': 'sales:zepto', 'myntra': 'sales:myntra', 'international': 'sales:international', 'offline': 'sales:offline' }
+function SalesPage({ data, filters, setFilters, activeTab, setActiveTab, fetchData, channelView, setChannelView, offlineSub, setOfflineSub, allowedTabs, subCatFirstOrderMap = {} }) {
+  const allowedSalesTabs = TABS.filter(t => !allowedTabs || allowedTabs.includes(SALES_KEY_MAP[t.id]))
   const filteredData = data
   const [shopifyView, setShopifyView] = useState('overview') // 'overview' | 'returns' — D2C only
 
@@ -12024,18 +12089,26 @@ function SalesPage({ data, filters, setFilters, activeTab, setActiveTab, fetchDa
   const activeFilterCount = (filters.category?.length || 0) + (filters.subCategory?.length || 0) + (filters.sku?.length || 0)
     + (filters.paymentType ? filters.paymentType.split(',').filter(Boolean).length : 0)
     + (filters.voucher ? filters.voucher.split(',').filter(Boolean).length : 0)
+    + (filters.productAge ? 1 : 0)
 
   if (!filteredData) return null
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
       {/* Tab bar */}
       <div className="sales-tabs">
-        {TABS.map(tab => (
-          <button key={tab.id} onClick={() => { setActiveTab(tab.id); setChannelView('all'); setOfflineSub('all'); setShopifyView('overview'); setFilters(f => ({ ...f, subChannel: '', voucher: '', channelGroup: [], category: [], subCategory: [], sku: [], paymentType: '', productAge: '' })) }} className={`stab${activeTab === tab.id ? ' active' : ''}`} style={tab.id === 'all' ? { fontWeight: activeTab === 'all' ? 800 : 700, fontSize: 13 } : {}}>
-            {tab.logo && <img src={tab.logo} alt="" style={{ width: 14, height: 14, borderRadius: 3, flexShrink: 0, objectFit: 'contain', filter: tab.id === 'cred' ? 'invert(1)' : 'none' }} />}
-            {tab.label}
-          </button>
-        ))}
+        {TABS.map(tab => {
+          const allowed = !allowedTabs || allowedTabs.includes(SALES_KEY_MAP[tab.id])
+          const isActive = activeTab === tab.id
+          return (
+            <button key={tab.id}
+              onClick={() => { if (!allowed) return; setActiveTab(tab.id); setChannelView('all'); setOfflineSub('all'); setShopifyView('overview'); setFilters(f => ({ ...f, subChannel: '', voucher: '', channelGroup: [], category: [], subCategory: [], sku: [], paymentType: '', productAge: '' })) }}
+              className={`stab${isActive ? ' active' : ''}`}
+              style={{ ...(tab.id === 'all' ? { fontWeight: isActive ? 800 : 700, fontSize: 13 } : {}), ...(!allowed ? { opacity: 0.35, cursor: 'not-allowed', pointerEvents: 'auto' } : {}) }}>
+              {tab.logo && <img src={tab.logo} alt="" style={{ width: 14, height: 14, borderRadius: 3, flexShrink: 0, objectFit: 'contain', filter: tab.id === 'cred' ? 'invert(1)' : 'none' }} />}
+              {tab.label}
+            </button>
+          )
+        })}
       </div>
       {/* Fixed bar: per-channel toggle on the left, filter icon on the right */}
       <div className="fbar">
@@ -12043,7 +12116,7 @@ function SalesPage({ data, filters, setFilters, activeTab, setActiveTab, fetchDa
           <div>{channelToggle}</div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginLeft: 'auto' }}>
             {activeTab === 'shopify' && (
-              <button onClick={() => setShopifyView(v => v === 'returns' ? 'overview' : 'returns')} className="d2c-return-link" style={{ fontSize: 12, fontWeight: 600, color: shopifyView === 'returns' ? C.acm : C.t2, background: 'none', border: 'none', cursor: 'pointer', padding: '4px 2px', textDecoration: shopifyView === 'returns' ? 'underline' : 'none', textDecorationColor: C.acm, textUnderlineOffset: 3 }}>
+              <button onClick={() => setShopifyView(v => v === 'returns' ? 'overview' : 'returns')} className="d2c-return-link" style={{ fontSize: 12, fontWeight: 600, color: shopifyView === 'returns' ? C.t1 : C.t2, background: 'none', border: 'none', cursor: 'pointer', padding: '4px 2px', textDecoration: shopifyView === 'returns' ? 'underline' : 'none', textDecorationColor: C.t1, textUnderlineOffset: 3 }}>
                 {shopifyView === 'returns' ? '← Back to Overview' : 'Return Analysis'}
               </button>
             )}
@@ -12055,7 +12128,10 @@ function SalesPage({ data, filters, setFilters, activeTab, setActiveTab, fetchDa
               <SearchableSelect multi options={paymentTypeOpts} value={(filters.paymentType ? filters.paymentType.split(',').map(x => x.trim()).filter(Boolean) : [])} onChange={v => setFilters(f => ({ ...f, paymentType: v.join(',') }))} placeholder="All Payment Types" dropdownWidth={220} />
             )}
             {activeTab === 'shopify' && <VoucherDropdown voucherList={data?.voucherList || []} selected={filters.voucher} onChange={v => setFilters(f => ({ ...f, voucher: v }))} />}
-            <button onClick={() => setFilters(f => ({ ...f, category: [], subCategory: [], sku: [], subChannel: '', voucher: '', region: [], tier: [], state: [], city: '', channelGroup: [] }))} className="fclr">✕ Clear</button>
+            {Object.keys(subCatFirstOrderMap).length > 0 && (
+              <LaunchDropdown value={filters.productAge} onChange={v => setFilters(f => ({ ...f, productAge: v, subCategory: [] }))} />
+            )}
+            <button onClick={() => setFilters(f => ({ ...f, category: [], subCategory: [], sku: [], subChannel: '', voucher: '', region: [], tier: [], state: [], city: '', channelGroup: [], productAge: '' }))} className="fclr">✕ Clear</button>
             </FilterIconPopover>
           </div>
         </div>
@@ -12063,7 +12139,7 @@ function SalesPage({ data, filters, setFilters, activeTab, setActiveTab, fetchDa
       {/* Content */}
       <div className="page-scroll">
         {activeTab === 'all' && <AllTab data={filteredData} rangeStart={filters.start} rangeEnd={filters.end} />}
-        {activeTab === 'shopify' && <ChannelTab data={filteredData} channel="Shopify" filters={filters} setFilters={setFilters} shopifyView={shopifyView} />}
+        {activeTab === 'shopify' && <ChannelTab data={filteredData} channel="Shopify" filters={filters} setFilters={setFilters} shopifyView={shopifyView} subCatFirstOrderMap={subCatFirstOrderMap} />}
         {activeTab === 'ebo' && <EBOTab data={filteredData} rangeStart={filters.start} rangeEnd={filters.end} />}
         {activeTab === 'amazon' && <ChannelTab data={filteredData} channel="Amazon" channelView={channelView} setChannelView={setChannelView} />}
         {activeTab === 'flipkart' && <ChannelTab data={filteredData} channel="Flipkart" />}
@@ -15188,16 +15264,45 @@ function DocumentsPage({ setPage }) {
   )
 }
 
-const TAB_PRIORITY = ['overview', 'sales', 'ads', 'logistics', 'inventory', 'customer', 'documents']
+const SALES_KEYS = ['sales:all','sales:shopify','sales:ebo','sales:amazon','sales:flipkart','sales:blinkit','sales:cred','sales:firstcry','sales:instamart','sales:zepto','sales:myntra','sales:international','sales:offline']
+const ADS_KEYS = ['ads:all','ads:d2c','ads:amazon','ads:blinkit','ads:zepto','ads:instamart','ads:flipkart','ads:myntra','ads:cred']
+const PNL_KEYS = ['pnl:all','pnl:shopify','pnl:ebo','pnl:amazon','pnl:flipkart','pnl:blinkit','pnl:cred','pnl:firstcry','pnl:instamart','pnl:zepto','pnl:myntra','pnl:international','pnl:offline']
+const COST_KEYS = ['logistics:cost:all','logistics:cost:b2c','logistics:cost:b2b']
+const TAB_PRIORITY = ['overview', ...SALES_KEYS, ...ADS_KEYS, ...PNL_KEYS, 'logistics', ...COST_KEYS, 'inventory', 'inventory:sales', 'customer', 'documents']
+const permKeyToPage = {
+  'logistics': 'logistics',
+  'logistics:cost:all': 'logistics-cost', 'logistics:cost:b2c': 'logistics-cost', 'logistics:cost:b2b': 'logistics-cost',
+  'inventory': 'inventory', 'inventory:sales': 'inventory',
+  ...Object.fromEntries(SALES_KEYS.map(k => [k, 'sales'])),
+  ...Object.fromEntries(ADS_KEYS.map(k => [k, 'ads'])),
+  ...Object.fromEntries(PNL_KEYS.map(k => [k, 'pnl'])),
+}
+function hasSalesAccess(allowedTabs) { return !allowedTabs || SALES_KEYS.some(k => allowedTabs.includes(k)) }
+function hasAdsAccess(allowedTabs) { return !allowedTabs || ADS_KEYS.some(k => allowedTabs.includes(k)) }
+function hasPnlAccess(allowedTabs) { return !allowedTabs || PNL_KEYS.some(k => allowedTabs.includes(k)) }
+function hasCostAccess(allowedTabs) { return !allowedTabs || allowedTabs.includes('logistics:cost') || COST_KEYS.some(k => allowedTabs.includes(k)) }
 
 function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated }) {
-  const [page, setPage] = useState(allowedTabs?.length ? (TAB_PRIORITY.find(t => allowedTabs.includes(t)) || allowedTabs[0]) : 'overview')
-  const [invTab, setInvTab] = useState('health')
+  const getInitialPage = () => {
+    if (!allowedTabs?.length) return 'overview'
+    const match = TAB_PRIORITY.find(t => allowedTabs.includes(t))
+    return match ? (permKeyToPage[match] || match) : (permKeyToPage[allowedTabs[0]] || allowedTabs[0])
+  }
+  const [page, setPage] = useState(getInitialPage)
+  const [invTab, setInvTab] = useState(() => allowedTabs?.includes('inventory') ? 'health' : 'sales')
   const [customerTab, setCustomerTab] = useState('overview')
 
   useEffect(() => {
-    if (allowedTabs?.length && !allowedTabs.includes(page)) {
-      setPage(TAB_PRIORITY.find(t => allowedTabs.includes(t)) || allowedTabs[0])
+    const isPageAllowed = page === 'logistics' ? (!allowedTabs || allowedTabs.includes('logistics')) :
+      page === 'logistics-cost' ? hasCostAccess(allowedTabs) :
+      page === 'inventory' ? (!allowedTabs || allowedTabs.includes('inventory') || allowedTabs.includes('inventory:sales')) :
+      page === 'sales' ? hasSalesAccess(allowedTabs) :
+      page === 'ads' ? hasAdsAccess(allowedTabs) :
+      page === 'pnl' ? hasPnlAccess(allowedTabs) :
+      !allowedTabs || allowedTabs.includes(page)
+    if (allowedTabs?.length && !isPageAllowed) {
+      const match = TAB_PRIORITY.find(t => allowedTabs.includes(t))
+      setPage(match ? (permKeyToPage[match] || match) : (permKeyToPage[allowedTabs[0]] || allowedTabs[0]))
     }
   }, [allowedTabs])
   const def = getDefaultDates()
@@ -15590,12 +15695,12 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
               <OverviewPage data={data} alerts={alerts} logisticsData={logisticsData} filters={filters} />
             </div>
           )}
-          {page === 'sales' && data && (!allowedTabs || allowedTabs.includes('sales')) && <SalesPage data={data} filters={filters} setFilters={setFilters} activeTab={activeTab} setActiveTab={setActiveTab} fetchData={fetchData} channelView={salesChannelView} setChannelView={setSalesChannelView} offlineSub={salesOfflineSub} setOfflineSub={setSalesOfflineSub} />}
-          {page === 'pnl' && data && <PnLPage data={data} filters={filters} setFilters={setFilters} activeTab={pnlActiveTab} setActiveTab={setPnlActiveTab} amzChannelView={pnlAmzView} setAmzChannelView={setPnlAmzView} offlineSub={pnlOfflineSub} setOfflineSub={setPnlOfflineSub} d2cSubCh={pnlD2cSubCh} setD2cSubCh={setPnlD2cSubCh} />}
+          {page === 'sales' && data && hasSalesAccess(allowedTabs) && <SalesPage data={data} filters={filters} setFilters={setFilters} activeTab={activeTab} setActiveTab={setActiveTab} fetchData={fetchData} channelView={salesChannelView} setChannelView={setSalesChannelView} offlineSub={salesOfflineSub} setOfflineSub={setSalesOfflineSub} allowedTabs={allowedTabs} subCatFirstOrderMap={subCatFirstOrderMap} />}
+          {page === 'pnl' && data && hasPnlAccess(allowedTabs) && <PnLPage data={data} filters={filters} setFilters={setFilters} activeTab={pnlActiveTab} setActiveTab={setPnlActiveTab} amzChannelView={pnlAmzView} setAmzChannelView={setPnlAmzView} offlineSub={pnlOfflineSub} setOfflineSub={setPnlOfflineSub} d2cSubCh={pnlD2cSubCh} setD2cSubCh={setPnlD2cSubCh} allowedTabs={allowedTabs} />}
           {page === 'ads' && !adsCache && !data && <Skeleton />}
-          {page === 'ads' && (adsCache || data) && (!allowedTabs || allowedTabs.includes('ads')) && (
+          {page === 'ads' && (adsCache || data) && hasAdsAccess(allowedTabs) && (
             <div className="page-scroll">
-              <AdsTab data={adsCache ? { cred: (adsCachedMeta?.credCache?.byCategory?.length ? adsCachedMeta.credCache : null) ?? data?.cred ?? {}, ...(data || {}), chMap: data?.chMap || adsCachedChMap || {}, nOrders: data?.nOrders ?? adsCachedMeta?.nOrders ?? 0, nCusts: data?.nCusts ?? adsCachedMeta?.nCusts ?? 0, repeatCusts: data?.repeatCusts ?? adsCachedMeta?.repeatCusts ?? 0, shopify: data?.shopify || { totals: { orders: adsCachedMeta?.shopifyOrders || 0 } }, ads: adsCache } : data} filters={filters} selPlatform={adsSelPlatform} setSelPlatform={setAdsSelPlatform} />
+              <AdsTab data={adsCache ? { cred: (adsCachedMeta?.credCache?.byCategory?.length ? adsCachedMeta.credCache : null) ?? data?.cred ?? {}, ...(data || {}), chMap: data?.chMap || adsCachedChMap || {}, nOrders: data?.nOrders ?? adsCachedMeta?.nOrders ?? 0, nCusts: data?.nCusts ?? adsCachedMeta?.nCusts ?? 0, repeatCusts: data?.repeatCusts ?? adsCachedMeta?.repeatCusts ?? 0, shopify: data?.shopify || { totals: { orders: adsCachedMeta?.shopifyOrders || 0 } }, ads: adsCache } : data} filters={filters} selPlatform={adsSelPlatform} setSelPlatform={setAdsSelPlatform} allowedTabs={allowedTabs} />
             </div>
           )}
           {page === 'intelligence' && (
@@ -15608,12 +15713,12 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
               <LogisticsPage filters={filters} page={page} setPage={setPage} lFilters={lFilters} setLFilters={setLFilters} onFilterOptsChange={setLogisticsFilterOpts} />
             </div>
           )}
-          {page === 'logistics-cost' && (!allowedTabs || allowedTabs.includes('logistics:cost')) && (
+          {page === 'logistics-cost' && hasCostAccess(allowedTabs) && (
             <div style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
-              <LogisticsCostPage externalFilters={costFilters} setExternalFilters={setCostFilters} />
+              <LogisticsCostPage externalFilters={costFilters} setExternalFilters={setCostFilters} allowedTabs={allowedTabs} />
             </div>
           )}
-          {page === 'inventory' && (!allowedTabs || allowedTabs.includes('inventory')) && (
+          {page === 'inventory' && (!allowedTabs || allowedTabs.includes('inventory') || allowedTabs.includes('inventory:sales')) && (
             <div className="page-scroll" style={{ padding: 0 }}>
               <InventoryPage onTopbarDateControl={setInventoryDateControl} tab={invTab} setTab={setInvTab} />
             </div>
