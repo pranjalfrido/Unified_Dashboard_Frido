@@ -259,7 +259,7 @@ export default function LoginPage({ onLogin }) {
                   {loading ? 'Signing in…' : 'Sign in'}
                 </button>
               </form>
-              <p className="footer-note">Need access? <a href="mailto:data.team@myfrido.com">Contact the team</a></p>
+              <p className="footer-note">Need access? <a href="mailto:data.team@myfrido.com?cc=suraj.s@myfrido.com,pranjal.t@myfrido.com,tushar.g@myfrido.com">Contact the team</a></p>
             </>
           )}
         </div>
