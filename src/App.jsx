@@ -2518,7 +2518,7 @@ function Sidebar({ page, setPage, invTab, setInvTab, allowedTabs, profile }) {
                   display: 'flex', flexDirection: 'column', gap: 2,
                 }}>
                   {subTabs.map(sub => (
-                    <div key={sub.id} onClick={() => { setPage('inventory'); setInvTab(sub.id); setInvHover(false) }}
+                    <div key={sub.id} onClick={e => { e.stopPropagation(); setPage('inventory'); setInvTab(sub.id); setInvHover(false) }}
                       style={{
                         padding: '8px 12px', borderRadius: 7, cursor: 'pointer', fontSize: 12, fontWeight: invTab === sub.id && page === 'inventory' ? 700 : 500,
                         color: invTab === sub.id && page === 'inventory' ? C.t1 : C.t2,
@@ -2563,7 +2563,7 @@ function Sidebar({ page, setPage, invTab, setInvTab, allowedTabs, profile }) {
                   display: 'flex', flexDirection: 'column', gap: 2,
                 }}>
                   {logSubTabs.map(sub => (
-                    <div key={sub.id} onClick={() => { setPage(sub.id); setLogHover(false) }}
+                    <div key={sub.id} onClick={e => { e.stopPropagation(); setPage(sub.id); setLogHover(false) }}
                       style={{
                         padding: '8px 12px', borderRadius: 7, cursor: 'pointer', fontSize: 12,
                         fontWeight: page === sub.id ? 700 : 500,
