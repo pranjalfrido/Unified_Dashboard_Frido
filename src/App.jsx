@@ -1,4 +1,5 @@
 import { useState, useMemo, useCallback, useEffect, useRef, Fragment, Component } from 'react'
+import { useNavigate, useLocation } from 'react-router-dom'
 import { SquaresFour, ChartBar, TrendUp, PlayCircle, Cube, Truck, Users, FileText } from '@phosphor-icons/react'
 import { C, fmt, fmtN, fmtBig, pct, processData, detectAlerts, exportCSV, getDefaultDates, COURIER_COLORS, COURIER_LOGOS } from './utils.js'
 import { KPICard, AlertCard, DataTable, Card, Badge, CategoryRevenueCard, RevTrendChart, AreaTrendChart, MultiLineChart, useSortableTable, useReorderableColumns, GROUP_OPTS, getGroupKey, TrendAnalysisCard, BarChart, Bar, LineChart, Line, AreaChart, Area, ComposedChart, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell, Treemap } from './components.jsx'
@@ -15276,16 +15277,70 @@ function hasPnlAccess(allowedTabs) { return !allowedTabs || PNL_KEYS.some(k => a
 function hasCostAccess(allowedTabs) { return !allowedTabs || allowedTabs.includes('logistics:cost') || COST_KEYS.some(k => allowedTabs.includes(k)) }
 
 function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated }) {
-  const getInitialPage = () => {
+  const navigate = useNavigate()
+  const location = useLocation()
+
+  // Parse URL → internal page/tab state
+  const parseUrl = (pathname) => {
+    const parts = pathname.replace(/^\//, '').split('/')
+    const seg0 = parts[0] || 'overview'
+    const seg1 = parts[1] || null
+    // Map URL segments to internal page IDs
+    if (seg0 === 'logistics' && seg1 === 'cost') return { page: 'logistics-cost', sub: null }
+    if (seg0 === 'logistics') return { page: 'logistics', sub: null }
+    if (seg0 === 'inventory') return { page: 'inventory', sub: seg1 || 'health' }
+    if (seg0 === 'sales') return { page: 'sales', sub: seg1 || 'all' }
+    if (seg0 === 'pnl') return { page: 'pnl', sub: seg1 || 'all' }
+    if (seg0 === 'ads') return { page: 'ads', sub: seg1 || null }
+    return { page: seg0, sub: seg1 }
+  }
+
+  // Navigate imperatively (replaces setPage / setInvTab / setSalesActiveTab etc.)
+  const goTo = (page, sub) => {
+    let path
+    if (page === 'logistics-cost') path = '/logistics/cost'
+    else if (page === 'logistics') path = '/logistics'
+    else if (page === 'inventory') path = `/inventory/${sub || 'health'}`
+    else if (page === 'sales') path = `/sales/${sub || 'all'}`
+    else if (page === 'pnl') path = `/pnl/${sub || 'all'}`
+    else if (page === 'ads') path = sub ? `/ads/${sub}` : '/ads'
+    else path = `/${page}`
+    navigate(path)
+  }
+
+  const { page, sub: urlSub } = parseUrl(location.pathname)
+  const invTab = page === 'inventory' ? (urlSub || 'health') : 'health'
+  const setInvTab = (tab) => goTo('inventory', tab)
+  const activeTab = page === 'sales' ? (urlSub || 'all') : 'all'
+  const setActiveTab = (tab) => goTo('sales', tab)
+  const pnlActiveTab = page === 'pnl' ? (urlSub || 'all') : 'all'
+  const setPnlActiveTab = (tab) => goTo('pnl', tab)
+  const adsSelPlatform = page === 'ads' ? (urlSub || null) : null
+  const setAdsSelPlatform = (plat) => goTo('ads', plat)
+
+  const setPage = (p) => {
+    if (p === 'inventory') goTo('inventory', allowedTabs?.includes('inventory') ? 'health' : 'sales')
+    else if (p === 'sales') goTo('sales', 'all')
+    else if (p === 'pnl') goTo('pnl', 'all')
+    else if (p === 'ads') goTo('ads', null)
+    else goTo(p, null)
+  }
+
+  const [customerTab, setCustomerTab] = useState('overview')
+
+  // Redirect to default page if URL is '/' or unknown
+  const getDefaultPage = () => {
     if (!allowedTabs?.length) return 'overview'
     const match = TAB_PRIORITY.find(t => allowedTabs.includes(t))
     return match ? (permKeyToPage[match] || match) : (permKeyToPage[allowedTabs[0]] || allowedTabs[0])
   }
-  const [page, setPage] = useState(getInitialPage)
-  const [invTab, setInvTab] = useState(() => allowedTabs?.includes('inventory') ? 'health' : 'sales')
-  const [customerTab, setCustomerTab] = useState('overview')
 
   useEffect(() => {
+    if (location.pathname === '/') {
+      const def = getDefaultPage()
+      setPage(def)
+      return
+    }
     const isPageAllowed = page === 'logistics' ? (!allowedTabs || allowedTabs.includes('logistics')) :
       page === 'logistics-cost' ? hasCostAccess(allowedTabs) :
       page === 'inventory' ? (!allowedTabs || allowedTabs.includes('inventory') || allowedTabs.includes('inventory:sales')) :
@@ -15294,18 +15349,15 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
       page === 'pnl' ? hasPnlAccess(allowedTabs) :
       !allowedTabs || allowedTabs.includes(page)
     if (allowedTabs?.length && !isPageAllowed) {
-      const match = TAB_PRIORITY.find(t => allowedTabs.includes(t))
-      setPage(match ? (permKeyToPage[match] || match) : (permKeyToPage[allowedTabs[0]] || allowedTabs[0]))
+      setPage(getDefaultPage())
     }
-  }, [allowedTabs])
+  }, [allowedTabs, location.pathname])
+
   const def = getDefaultDates()
   const [filters, setFilters] = useState({ start: def.start, end: def.end, category: [], subCategory: [], sku: [], subChannel: '', voucher: '', region: [], tier: [], state: [], city: '', channelGroup: [], productAge: '' })
   const [subCatFirstOrderMap, setSubCatFirstOrderMap] = useState({})
-  const [activeTab, setActiveTab] = useState('all')
   const [salesChannelView, setSalesChannelView] = useState('all')
   const [salesOfflineSub, setSalesOfflineSub] = useState('all')
-  const [adsSelPlatform, setAdsSelPlatform] = useState(null)
-  const [pnlActiveTab, setPnlActiveTab] = useState('all')
   const [pnlAmzView, setPnlAmzView] = useState('all')
   const [pnlOfflineSub, setPnlOfflineSub] = useState('all')
   const [pnlD2cSubCh, setPnlD2cSubCh] = useState('all')
