@@ -22,14 +22,11 @@ const STOCK_STATUS_VALUES = ['Critical', 'Low', 'Sufficient', 'Excess', 'Out of 
 
 const db = await pool.connect()
 
-// Determine end date as d-1 of the latest sales date (today's data is partial)
+// Use the actual max sales date — data is complete since Uniware syncs previous day's batch
 const { rows: maxDateRows } = await db.query(`SELECT MAX(order_date) AS max_date FROM sales_window`)
 const rawMax = maxDateRows[0]?.max_date
-const maxSalesDateFull = rawMax instanceof Date ? rawMax.toISOString().slice(0, 10) : String(rawMax).slice(0, 10)
-const endDate = new Date(maxSalesDateFull)
-endDate.setDate(endDate.getDate() - 1)
-const end = endDate.toISOString().slice(0, 10)
-console.log(`Latest sales date in DB: ${maxSalesDateFull} → using end=${end} (d-1)`)
+const end = rawMax instanceof Date ? rawMax.toISOString().slice(0, 10) : String(rawMax).slice(0, 10)
+console.log(`Latest sales date in DB: ${end} → using end=${end}`)
 
 // Fetch all tables once — reused across all 3 window computations
 console.log('Fetching all tables from Supabase in parallel...')
