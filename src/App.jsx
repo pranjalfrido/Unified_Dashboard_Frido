@@ -2487,7 +2487,7 @@ function Sidebar({ page, setPage, invTab, setInvTab, allowedTabs, profile }) {
   ]
   return (
     <nav className="sidebar">
-      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', marginBottom: 4, marginTop: -6 }}>
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', marginBottom: 14, marginTop: -6 }}>
         <img src="/frido-navigator-icon-light-theme (2).png" alt="Frido Navigator" style={{ width: 42, height: 42, objectFit: 'contain' }} />
       </div>
       {items.map(item => {

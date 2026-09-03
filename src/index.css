@@ -46,7 +46,7 @@ html,body{height:100%;background:var(--bg);font-family:var(--font);color:var(--t
   padding:7px 4px 6px;gap:3px;transition:all .13s;color:var(--t3);
 }
 .sb-item:hover{background:var(--hov);color:var(--t1)}
-.sb-item.active{background:var(--acl);color:var(--t1)}
+.sb-item.active{background:transparent;color:var(--t1);box-shadow:-3px 0 0 0 var(--acc);}
 .sb-item .sb-icon{font-size:18px;line-height:1}
 .sb-item .sb-icon svg{color:currentColor}
 .sb-item.active .sb-icon svg{color:var(--t1)}
@@ -54,7 +54,7 @@ html,body{height:100%;background:var(--bg);font-family:var(--font);color:var(--t
 .sb-item.active .sb-label{font-weight:700;color:var(--t1)}
 .sb-item.dim{opacity:.3;cursor:default;pointer-events:none}
 .sb-div{width:36px;height:1px;background:var(--b1);margin:5px 0}
-.sb-sep{width:80%;height:0;border:none;border-top:1px solid #ccc;margin:0 auto;padding:0;flex-shrink:0;display:block}
+.sb-sep{width:36px;height:1px;background:var(--b1);border:none;margin:5px auto;padding:0;flex-shrink:0;display:block}
 
 /* ── Bottom nav (mobile) ───────────────────── */
 .bottom-nav{
