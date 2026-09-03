@@ -127,7 +127,7 @@ for (const [, entry] of invBySkuFacility) {
 const cleanSalesRowsAll = salesRows.filter(row => !isPseudoSku(row.final_sku))
 
 function computePayload(windowDays) {
-  const startDate = new Date(endDate)
+  const startDate = new Date(end)
   startDate.setDate(startDate.getDate() - (windowDays - 1))
   const start = startDate.toISOString().slice(0, 10)
   const endDateObj = new Date(end)
