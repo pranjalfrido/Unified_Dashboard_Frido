@@ -12055,10 +12055,32 @@ function FilterIconPopover({ children, activeCount }) {
 }
 
 const SALES_KEY_MAP = { 'all': 'sales:all', 'shopify': 'sales:shopify', 'ebo': 'sales:ebo', 'amazon': 'sales:amazon', 'flipkart': 'sales:flipkart', 'blinkit': 'sales:blinkit', 'cred': 'sales:cred', 'firstcry': 'sales:firstcry', 'instamart': 'sales:instamart', 'zepto': 'sales:zepto', 'myntra': 'sales:myntra', 'international': 'sales:international', 'offline': 'sales:offline' }
-function SalesPage({ data, filters, setFilters, activeTab, setActiveTab, fetchData, channelView, setChannelView, offlineSub, setOfflineSub, allowedTabs, subCatFirstOrderMap = {} }) {
+function SalesPage({ data, filters, setFilters, activeTab, setActiveTab, fetchData, channelView, setChannelView, offlineSub, setOfflineSub, shopifyView, setShopifyView, d2cSubChannelFromUrl, onD2cSubChange, allowedTabs, subCatFirstOrderMap = {} }) {
   const allowedSalesTabs = TABS.filter(t => !allowedTabs || allowedTabs.includes(SALES_KEY_MAP[t.id]))
   const filteredData = data
-  const [shopifyView, setShopifyView] = useState('overview') // 'overview' | 'returns' — D2C only
+
+  // Sync D2C subChannel from URL into filters
+  useEffect(() => {
+    if (activeTab !== 'shopify' || d2cSubChannelFromUrl === null) return
+    setFilters(f => {
+      const cur = f.subChannel || ''
+      if (cur === d2cSubChannelFromUrl) return f
+      return { ...f, subChannel: d2cSubChannelFromUrl }
+    })
+  }, [d2cSubChannelFromUrl, activeTab])
+
+  // Intercept setFilters to detect D2C subChannel changes and update URL
+  const setFiltersWrapped = useCallback((updater) => {
+    setFilters(prev => {
+      const next = typeof updater === 'function' ? updater(prev) : updater
+      if (onD2cSubChange && activeTab === 'shopify' && next.subChannel !== prev.subChannel) {
+        const sc = next.subChannel || ''
+        const sub2 = sc === 'MyFrido' ? 'myfrido' : sc === 'Mobility' ? 'mobility' : 'overall'
+        onD2cSubChange(sub2)
+      }
+      return next
+    })
+  }, [setFilters, onD2cSubChange, activeTab])
 
   const cats = useMemo(() => Object.keys(data?.catMap || {}).filter(Boolean).sort(), [data])
   const subCats = useMemo(() => {
@@ -12075,7 +12097,7 @@ function SalesPage({ data, filters, setFilters, activeTab, setActiveTab, fetchDa
   // with no toggle fall back to a plain label (the channel's own tab name) instead of leaving this
   // side of the bar empty, so the row doesn't look like an accidental gap under the tab bar.
   const channelToggle = activeTab === 'shopify' && shopifyView === 'returns' ? <span style={{ fontSize: 15, fontWeight: 800, color: C.t1 }}>D2C – Return Analysis</span>
-    : activeTab === 'shopify' ? <D2CSubChannelToggle data={data} filters={filters} setFilters={setFilters} />
+    : activeTab === 'shopify' ? <D2CSubChannelToggle data={data} filters={filters} setFilters={setFiltersWrapped} />
     : activeTab === 'amazon' ? <AmazonChannelViewToggle channelView={channelView} setChannelView={setChannelView} />
     : activeTab === 'offline' ? <OfflineSubToggle sub={offlineSub} setSub={setOfflineSub} />
     : <span style={{ fontSize: 13, fontWeight: 700, color: C.t2 }}>{TABS.find(t => t.id === activeTab)?.label || ''}</span>
@@ -12095,7 +12117,7 @@ function SalesPage({ data, filters, setFilters, activeTab, setActiveTab, fetchDa
           const isActive = activeTab === tab.id
           return (
             <button key={tab.id}
-              onClick={() => { if (!allowed) return; setActiveTab(tab.id); setChannelView('all'); setOfflineSub('all'); setShopifyView('overview'); setFilters(f => ({ ...f, subChannel: '', voucher: '', channelGroup: [], category: [], subCategory: [], sku: [], paymentType: '', productAge: '' })) }}
+              onClick={() => { if (!allowed) return; setActiveTab(tab.id); setFilters(f => ({ ...f, subChannel: '', voucher: '', channelGroup: [], category: [], subCategory: [], sku: [], paymentType: '', productAge: '' })) }}
               className={`stab${isActive ? ' active' : ''}`}
               style={{ ...(tab.id === 'all' ? { fontWeight: isActive ? 800 : 700, fontSize: 13 } : {}), ...(!allowed ? { opacity: 0.35, cursor: 'not-allowed', pointerEvents: 'auto' } : {}) }}>
               {tab.logo && <img src={tab.logo} alt="" style={{ width: 14, height: 14, borderRadius: 3, flexShrink: 0, objectFit: 'contain', filter: tab.id === 'cred' ? 'invert(1)' : 'none' }} />}
@@ -12110,7 +12132,7 @@ function SalesPage({ data, filters, setFilters, activeTab, setActiveTab, fetchDa
           <div>{channelToggle}</div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginLeft: 'auto' }}>
             {activeTab === 'shopify' && (
-              <button onClick={() => setShopifyView(v => v === 'returns' ? 'overview' : 'returns')} className="d2c-return-link" style={{ fontSize: 12, fontWeight: 600, color: shopifyView === 'returns' ? C.t1 : C.t2, background: 'none', border: 'none', cursor: 'pointer', padding: '4px 2px', textDecoration: shopifyView === 'returns' ? 'underline' : 'none', textDecorationColor: C.t1, textUnderlineOffset: 3 }}>
+              <button onClick={() => setShopifyView(shopifyView === 'returns' ? 'overview' : 'returns')} className="d2c-return-link" style={{ fontSize: 12, fontWeight: 600, color: shopifyView === 'returns' ? C.t1 : C.t2, background: 'none', border: 'none', cursor: 'pointer', padding: '4px 2px', textDecoration: shopifyView === 'returns' ? 'underline' : 'none', textDecorationColor: C.t1, textUnderlineOffset: 3 }}>
                 {shopifyView === 'returns' ? '← Back to Overview' : 'Return Analysis'}
               </button>
             )}
@@ -15297,42 +15319,71 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
     const parts = pathname.replace(/^\//, '').split('/')
     const seg0 = parts[0] || 'overview'
     const seg1 = parts[1] || null
+    const seg2 = parts[2] || null
     // Map URL segments to internal page IDs
-    if (seg0 === 'logistics' && seg1 === 'cost') return { page: 'logistics-cost', sub: null }
-    if (seg0 === 'logistics') return { page: 'logistics', sub: null }
-    if (seg0 === 'inventory') return { page: 'inventory', sub: seg1 || 'health' }
-    if (seg0 === 'sales') return { page: 'sales', sub: seg1 || 'all' }
-    if (seg0 === 'pnl') return { page: 'pnl', sub: seg1 || 'all' }
-    if (seg0 === 'ads') return { page: 'ads', sub: seg1 || null }
-    return { page: seg0, sub: seg1 }
+    if (seg0 === 'logistics' && seg1 === 'cost') return { page: 'logistics-cost', sub: null, sub2: null }
+    if (seg0 === 'logistics') return { page: 'logistics', sub: null, sub2: null }
+    if (seg0 === 'inventory') return { page: 'inventory', sub: seg1 || 'health', sub2: null }
+    if (seg0 === 'sales') return { page: 'sales', sub: seg1 || 'all', sub2: seg2 || 'overall' }
+    if (seg0 === 'pnl') return { page: 'pnl', sub: seg1 || 'all', sub2: null }
+    if (seg0 === 'ads') return { page: 'ads', sub: seg1 || null, sub2: null }
+    return { page: seg0, sub: seg1, sub2: null }
   }
 
   // Navigate imperatively (replaces setPage / setInvTab / setSalesActiveTab etc.)
-  const goTo = (page, sub) => {
+  const goTo = (page, sub, sub2) => {
     let path
     if (page === 'logistics-cost') path = '/logistics/cost'
     else if (page === 'logistics') path = '/logistics'
     else if (page === 'inventory') path = `/inventory/${sub || 'health'}`
-    else if (page === 'sales') path = `/sales/${sub || 'all'}`
+    else if (page === 'sales') path = sub2 ? `/sales/${sub || 'all'}/${sub2}` : `/sales/${sub || 'all'}`
     else if (page === 'pnl') path = `/pnl/${sub || 'all'}`
     else if (page === 'ads') path = sub ? `/ads/${sub}` : '/ads'
     else path = `/${page}`
     navigate(path)
   }
 
-  const { page, sub: urlSub } = parseUrl(location.pathname)
+  const { page, sub: urlSub, sub2: urlSub2 } = parseUrl(location.pathname)
   const invTab = page === 'inventory' ? (urlSub || 'health') : 'health'
   const setInvTab = (tab) => goTo('inventory', tab)
   const activeTab = page === 'sales' ? (urlSub || 'all') : 'all'
-  const setActiveTab = (tab) => goTo('sales', tab)
+  const setActiveTab = (tab) => { goTo('sales', tab, 'overall') }
   const pnlActiveTab = page === 'pnl' ? (urlSub || 'all') : 'all'
   const setPnlActiveTab = (tab) => goTo('pnl', tab)
   const adsSelPlatform = page === 'ads' ? (urlSub || null) : null
   const setAdsSelPlatform = (plat) => goTo('ads', plat)
 
+  // Sales channel sub-tab navigation (seg2 in URL)
+  const salesSub2 = page === 'sales' ? (urlSub2 || 'overall') : 'overall'
+  const goToSalesSub = (sub2) => goTo('sales', activeTab, sub2)
+
+  // Derive salesChannelView (Amazon: overall/seller_central/vendor_central)
+  const salesChannelView = activeTab === 'amazon'
+    ? (salesSub2 === 'seller_central' ? 'sc' : salesSub2 === 'vendor_central' ? 'vc' : 'all')
+    : 'all'
+  const setSalesChannelView = (v) => {
+    const sub2 = v === 'sc' ? 'seller_central' : v === 'vc' ? 'vendor_central' : 'overall'
+    goToSalesSub(sub2)
+  }
+
+  // Derive salesOfflineSub (Offline: overall/b2b/stockist/mt_gt)
+  const salesOfflineSub = activeTab === 'offline'
+    ? (salesSub2 === 'overall' ? 'all' : salesSub2)
+    : 'all'
+  const setSalesOfflineSub = (v) => goToSalesSub(v === 'all' ? 'overall' : v)
+
+  // Derive shopifyView (D2C: return_analysis → 'returns', else 'overview')
+  const shopifyView = activeTab === 'shopify' && salesSub2 === 'return_analysis' ? 'returns' : 'overview'
+  const setShopifyView = (v) => goToSalesSub(v === 'returns' ? 'return_analysis' : 'overall')
+
+  // Derive D2C subChannel from URL seg2 and sync to filters
+  const d2cSubChannelFromUrl = activeTab === 'shopify'
+    ? (salesSub2 === 'myfrido' ? 'MyFrido' : salesSub2 === 'mobility' ? 'Mobility' : salesSub2 === 'return_analysis' ? '' : 'ShopifyIndia')
+    : null
+
   const setPage = (p) => {
     if (p === 'inventory') goTo('inventory', allowedTabs?.includes('inventory') ? 'health' : 'sales')
-    else if (p === 'sales') goTo('sales', 'all')
+    else if (p === 'sales') goTo('sales', 'all', 'overall')
     else if (p === 'pnl') goTo('pnl', 'all')
     else if (p === 'ads') goTo('ads', null)
     else goTo(p, null)
@@ -15368,8 +15419,7 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
   const def = getDefaultDates()
   const [filters, setFilters] = useState({ start: def.start, end: def.end, category: [], subCategory: [], sku: [], subChannel: '', voucher: '', region: [], tier: [], state: [], city: '', channelGroup: [], productAge: '' })
   const [subCatFirstOrderMap, setSubCatFirstOrderMap] = useState({})
-  const [salesChannelView, setSalesChannelView] = useState('all')
-  const [salesOfflineSub, setSalesOfflineSub] = useState('all')
+  // salesChannelView and salesOfflineSub are now derived from URL (goToSalesSub above)
   const [pnlAmzView, setPnlAmzView] = useState('all')
   const [pnlOfflineSub, setPnlOfflineSub] = useState('all')
   const [pnlD2cSubCh, setPnlD2cSubCh] = useState('all')
@@ -15752,7 +15802,7 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
               <OverviewPage data={data} alerts={alerts} logisticsData={logisticsData} filters={filters} />
             </div>
           )}
-          {page === 'sales' && data && hasSalesAccess(allowedTabs) && <SalesPage data={data} filters={filters} setFilters={setFilters} activeTab={activeTab} setActiveTab={setActiveTab} fetchData={fetchData} channelView={salesChannelView} setChannelView={setSalesChannelView} offlineSub={salesOfflineSub} setOfflineSub={setSalesOfflineSub} allowedTabs={allowedTabs} subCatFirstOrderMap={subCatFirstOrderMap} />}
+          {page === 'sales' && data && hasSalesAccess(allowedTabs) && <SalesPage data={data} filters={filters} setFilters={setFilters} activeTab={activeTab} setActiveTab={setActiveTab} fetchData={fetchData} channelView={salesChannelView} setChannelView={setSalesChannelView} offlineSub={salesOfflineSub} setOfflineSub={setSalesOfflineSub} shopifyView={shopifyView} setShopifyView={setShopifyView} d2cSubChannelFromUrl={d2cSubChannelFromUrl} onD2cSubChange={goToSalesSub} allowedTabs={allowedTabs} subCatFirstOrderMap={subCatFirstOrderMap} />}
           {page === 'pnl' && data && hasPnlAccess(allowedTabs) && <PnLPage data={data} filters={filters} setFilters={setFilters} activeTab={pnlActiveTab} setActiveTab={setPnlActiveTab} amzChannelView={pnlAmzView} setAmzChannelView={setPnlAmzView} offlineSub={pnlOfflineSub} setOfflineSub={setPnlOfflineSub} d2cSubCh={pnlD2cSubCh} setD2cSubCh={setPnlD2cSubCh} allowedTabs={allowedTabs} />}
           {page === 'ads' && !adsCache && !data && <Skeleton />}
           {page === 'ads' && (adsCache || data) && hasAdsAccess(allowedTabs) && (
