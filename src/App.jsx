@@ -2487,8 +2487,8 @@ function Sidebar({ page, setPage, invTab, setInvTab, allowedTabs, profile }) {
   ]
   return (
     <nav className="sidebar">
-      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', marginBottom: 14, marginTop: -10 }}>
-        <img src="/frido-navigator-icon-light-theme (2).png" alt="Frido Navigator" style={{ width: 52, height: 52, objectFit: 'contain' }} />
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', marginBottom: 4, marginTop: -6 }}>
+        <img src="/frido-navigator-icon-light-theme (2).png" alt="Frido Navigator" style={{ width: 42, height: 42, objectFit: 'contain' }} />
       </div>
       {items.map(item => {
         if (item.id === 'inventory') {
@@ -2501,14 +2501,14 @@ function Sidebar({ page, setPage, invTab, setInvTab, allowedTabs, profile }) {
           ]
           const defaultInvTab = hasHealth ? 'health' : 'sales'
           return (
-            <div key="inventory" style={{ position: 'relative' }}
+            <Fragment key="inventory">
+            <div onClick={() => { setPage('inventory'); setInvTab(defaultInvTab) }}
+              className={`sb-item${page === 'inventory' ? ' active' : ''}`}
+              style={{ position: 'relative' }}
               onMouseEnter={() => { if (hasBothInv) { clearTimeout(hoverTimerRef.current); setInvHover(true) } }}
               onMouseLeave={() => { hoverTimerRef.current = setTimeout(() => setInvHover(false), 200) }}>
-              <div onClick={() => { setPage('inventory'); setInvTab(defaultInvTab) }}
-                className={`sb-item${page === 'inventory' ? ' active' : ''}`}>
-                <span className="sb-icon">{(() => { const Icon = item.Icon; return <Icon weight={page === item.id ? 'fill' : 'regular'} size={20} /> })()}</span>
-                <span className="sb-label">{item.label}</span>
-              </div>
+              <span className="sb-icon">{(() => { const Icon = item.Icon; return <Icon weight={page === item.id ? 'fill' : 'regular'} size={20} /> })()}</span>
+              <span className="sb-label">{item.label}</span>
               {hasBothInv && invHover && (
                 <div style={{
                   position: 'absolute', left: '100%', top: 0, marginLeft: 6, zIndex: 999,
@@ -2531,6 +2531,8 @@ function Sidebar({ page, setPage, invTab, setInvTab, allowedTabs, profile }) {
                 </div>
               )}
             </div>
+            <hr className="sb-sep" />
+            </Fragment>
           )
         }
         if (item.id === 'logistics') {
@@ -2544,14 +2546,14 @@ function Sidebar({ page, setPage, invTab, setInvTab, allowedTabs, profile }) {
           const defaultLogPage = hasPerf ? 'logistics' : 'logistics-cost'
           const logActive = page === 'logistics' || page === 'logistics-cost'
           return (
-            <div key="logistics" style={{ position: 'relative' }}
+            <Fragment key="logistics">
+            <div onClick={() => setPage(defaultLogPage)}
+              className={`sb-item${logActive ? ' active' : ''}`}
+              style={{ position: 'relative' }}
               onMouseEnter={() => { if (hasBoth) { clearTimeout(logHoverTimerRef.current); setLogHover(true) } }}
               onMouseLeave={() => { logHoverTimerRef.current = setTimeout(() => setLogHover(false), 200) }}>
-              <div onClick={() => setPage(defaultLogPage)}
-                className={`sb-item${logActive ? ' active' : ''}`}>
-                <span className="sb-icon">{(() => { const Icon = item.Icon; return <Icon weight={page === item.id ? 'fill' : 'regular'} size={20} /> })()}</span>
-                <span className="sb-label">{item.label}</span>
-              </div>
+              <span className="sb-icon">{(() => { const Icon = item.Icon; return <Icon weight={page === item.id ? 'fill' : 'regular'} size={20} /> })()}</span>
+              <span className="sb-label">{item.label}</span>
               {hasBoth && logHover && (
                 <div style={{
                   position: 'absolute', left: '100%', top: 0, marginLeft: 6, zIndex: 999,
@@ -2576,14 +2578,19 @@ function Sidebar({ page, setPage, invTab, setInvTab, allowedTabs, profile }) {
                 </div>
               )}
             </div>
+            <hr className="sb-sep" />
+            </Fragment>
           )
         }
         return (
-          <div key={item.id} onClick={() => setPage(item.id)}
-            className={`sb-item${page === item.id ? ' active' : ''}`}>
-            <span className="sb-icon">{(() => { const Icon = item.Icon; return <Icon weight={page === item.id ? 'fill' : 'regular'} size={20} /> })()}</span>
-            <span className="sb-label">{item.label}</span>
-          </div>
+          <Fragment key={item.id}>
+            <div onClick={() => setPage(item.id)}
+              className={`sb-item${page === item.id ? ' active' : ''}`}>
+              <span className="sb-icon">{(() => { const Icon = item.Icon; return <Icon weight={page === item.id ? 'fill' : 'regular'} size={20} /> })()}</span>
+              <span className="sb-label">{item.label}</span>
+            </div>
+            {item.id !== 'documents' && <hr className="sb-sep" />}
+          </Fragment>
         )
       })}
       <div style={{ marginTop: 'auto', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
