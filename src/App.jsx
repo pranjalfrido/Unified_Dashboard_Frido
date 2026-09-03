@@ -430,6 +430,13 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
             setRawPrevData(json.previous || null)
             try { localStorage.setItem('logistics_stale', JSON.stringify({ current: json.current, previous: json.previous || null, dateRange: json.dateRange, savedAt: Date.now() })) } catch {}
             usedStatic = true
+            // Static cache lacks ndrByCourier — fetch it from live API and merge
+            if (!json.current.ndrByCourier) {
+              fetch(`${API}/api/logistics`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ start: filters.start, end: filters.end, _fieldsOnly: 'ndrByCourier' }) })
+                .then(r => r.ok ? r.json() : null)
+                .then(d => { if (d?.ndrByCourier) setRawData(prev => ({ ...prev, ndrByCourier: d.ndrByCourier })) })
+                .catch(() => {})
+            }
           }
         }
       } catch { /* fall through to live API */ }
