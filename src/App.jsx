@@ -15321,9 +15321,10 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
     const seg1 = parts[1] || null
     const seg2 = parts[2] || null
     // Map URL segments to internal page IDs
-    if (seg0 === 'logistics' && seg1 === 'cost') return { page: 'logistics-cost', sub: null, sub2: null }
+    if (seg0 === 'logistics' && seg1 === 'cost_analytics') return { page: 'logistics-cost', sub: null, sub2: null }
+    if (seg0 === 'logistics' && seg1 === 'cost') return { page: 'logistics-cost', sub: null, sub2: null } // legacy redirect
     if (seg0 === 'logistics') return { page: 'logistics', sub: null, sub2: null }
-    if (seg0 === 'inventory') return { page: 'inventory', sub: seg1 || 'health', sub2: null }
+    if (seg0 === 'inventory') return { page: 'inventory', sub: seg1 === 'inventory_health' ? 'health' : seg1 === 'sales_allocation' ? 'sales' : (seg1 || 'health'), sub2: null }
     if (seg0 === 'sales') return { page: 'sales', sub: seg1 || 'all', sub2: seg2 || 'overall' }
     if (seg0 === 'pnl') return { page: 'pnl', sub: seg1 || 'all', sub2: null }
     if (seg0 === 'ads') return { page: 'ads', sub: seg1 || null, sub2: null }
@@ -15333,9 +15334,9 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
   // Navigate imperatively (replaces setPage / setInvTab / setSalesActiveTab etc.)
   const goTo = (page, sub, sub2) => {
     let path
-    if (page === 'logistics-cost') path = '/logistics/cost'
-    else if (page === 'logistics') path = '/logistics'
-    else if (page === 'inventory') path = `/inventory/${sub || 'health'}`
+    if (page === 'logistics-cost') path = '/logistics/cost_analytics'
+    else if (page === 'logistics') path = '/logistics/performance_analytics'
+    else if (page === 'inventory') path = `/inventory/${sub === 'health' ? 'inventory_health' : sub === 'sales' ? 'sales_allocation' : (sub || 'inventory_health')}`
     else if (page === 'sales') path = sub2 ? `/sales/${sub || 'all'}/${sub2}` : `/sales/${sub || 'all'}`
     else if (page === 'pnl') path = `/pnl/${sub || 'all'}`
     else if (page === 'ads') path = sub ? `/ads/${sub}` : '/ads'
