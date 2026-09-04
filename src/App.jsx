@@ -393,7 +393,7 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
   const [cView, setCView] = useState('courier') // 'courier' | 'facility' | 'month'
   const [payTrendGran, setPayTrendGran] = useState('Daily')
   const [ndrPayFilter, setNdrPayFilter] = useState('All')
-  const [rtoAgeingBase, setRtoAgeingBase] = useState('shipment')
+  const [rtoAgeingBase, setRtoAgeingBase] = useState('pickup')
   const [isMobile, setIsMobile] = useState(() => window.innerWidth <= 768)
   useEffect(() => {
     const onResize = () => setIsMobile(window.innerWidth <= 768)
@@ -2277,7 +2277,8 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
           const ageingRows = (data.rtoAgeing || []).filter(r => r.total_rto > 0)
           const BUCKETS = ['0-1', '2-4', '5-7', '8-10', '10+']
           const bKey = (pfx, b) => b === '0-1' ? `${pfx}_0_1` : b === '2-4' ? `${pfx}_2_4` : b === '5-7' ? `${pfx}_5_7` : b === '8-10' ? `${pfx}_8_10` : `${pfx}_10plus`
-          const BASE_OPTS = [{ key: 'order', label: 'Order Creation' }, { key: 'shipment', label: 'Shipment Creation' }, { key: 'pickup', label: 'Pickup Date' }]
+          const BASE_OPTS = [{ key: 'order', label: 'Order Creation', subtitle: 'Order creation date' }, { key: 'shipment', label: 'Shipment Creation', subtitle: 'Shipment creation date' }, { key: 'pickup', label: 'Pickup Date', subtitle: 'Pickup date' }]
+          const activeBase = BASE_OPTS.find(o => o.key === rtoAgeingBase)
           const pct = (v, tot) => tot ? ((v / tot) * 100).toFixed(1) + '%' : '—'
           const thS = { padding: '7px 10px', textAlign: 'right', fontWeight: 700, fontSize: 11, color: C.t2, whiteSpace: 'nowrap', background: C.bg, position: 'sticky', top: 0, zIndex: 1 }
           const thL = { ...thS, textAlign: 'left' }
@@ -2304,7 +2305,7 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
               {/* Left: RTO Ageing */}
               <div style={{ ...cardStyle, flex: 1, minWidth: 320 }}>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10, flexWrap: 'wrap', gap: 6 }}>
-                  <div style={{ fontSize: 12, fontWeight: 700, color: C.t1 }}>RTO Ageing <span style={{ fontWeight: 400, color: C.t3, fontSize: 10.5 }}>base date → RTO mark date</span></div>
+                  <div style={{ fontSize: 12, fontWeight: 700, color: C.t1 }}>RTO Ageing <span style={{ fontWeight: 400, color: C.t3, fontSize: 10.5 }}>{activeBase?.subtitle} → RTO mark date</span></div>
                   <div style={{ display: 'flex', gap: 4 }}>
                     {BASE_OPTS.map(o => (
                       <button key={o.key} onClick={() => setRtoAgeingBase(o.key)} style={{ padding: '3px 9px', fontSize: 10.5, fontWeight: 600, borderRadius: 6, border: `1px solid ${C.border}`, cursor: 'pointer', background: rtoAgeingBase === o.key ? C.accent || '#2563eb' : C.card, color: rtoAgeingBase === o.key ? '#fff' : C.t1 }}>
