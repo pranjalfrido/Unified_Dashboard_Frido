@@ -453,16 +453,16 @@ failed_delivery_reasons AS (
 ndr_by_courier AS (
   SELECT
     courier_group AS courier,
+    UPPER(payment_mode) AS payment_mode,
     COUNT(awb) AS total_shipments,
     COUNTIF(ofd_attempts >= 1 AND NOT (ofd_attempts = 1 AND unified_status = 'Delivered')) AS ndr_count,
     COUNTIF(ofd_attempts >= 1 AND NOT (ofd_attempts = 1 AND unified_status = 'Delivered') AND unified_status = 'Delivered') AS ndr_del,
     COUNTIF(ofd_attempts >= 1 AND NOT (ofd_attempts = 1 AND unified_status = 'Delivered') AND unified_status = 'RTO') AS ndr_rto,
-    COUNTIF(ofd_attempts >= 1 AND NOT (ofd_attempts = 1 AND unified_status = 'Delivered') AND clickpost_unified_status = 'FailedDelivery') AS ndr_pending,
     COUNTIF(ofd_attempts = 2 AND unified_status = 'Delivered') AS del_att2,
     COUNTIF(ofd_attempts = 3 AND unified_status = 'Delivered') AS del_att3,
     COUNTIF(ofd_attempts >= 4 AND unified_status = 'Delivered') AS del_att3plus,
     ROUND(AVG(CASE WHEN ofd_attempts >= 1 AND NOT (ofd_attempts = 1 AND unified_status = 'Delivered') THEN ofd_attempts END), 2) AS avg_att
-  FROM base GROUP BY 1
+  FROM base GROUP BY 1, 2
 ),
 by_zone_detail AS (
   SELECT zone, COUNT(awb) AS total, COUNTIF(unified_status='Delivered') AS delivered, COUNTIF(unified_status='RTO') AS rto,

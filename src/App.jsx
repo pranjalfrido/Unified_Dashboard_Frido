@@ -2329,73 +2329,111 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
         {/* ── NDR Analysis ── */}
         <LSectionTitle title="NDR Analysis" collapsed={secCollapsed['ndr']} onToggle={() => toggleSec('ndr')} />
         {(() => {
-          const ndrRows = (data.ndrByCourier || [])
-          if (!ndrRows.length) return null
+          const [ndrPayFilter, setNdrPayFilter] = React.useState('All')
+          const allNdrRows = (data.ndrByCourier || [])
+          if (!allNdrRows.length) return null
+          // Aggregate rows by courier, filtered by payment mode
+          const filtered = ndrPayFilter === 'All' ? allNdrRows : allNdrRows.filter(r => r.payment_mode === ndrPayFilter)
+          const courierMap = {}
+          filtered.forEach(r => {
+            if (!courierMap[r.courier]) courierMap[r.courier] = { courier: r.courier, total_shipments: 0, ndr_count: 0, ndr_del: 0, ndr_rto: 0, del_att2: 0, del_att3: 0, del_att3plus: 0, _att_sum: 0, _att_n: 0 }
+            const c = courierMap[r.courier]
+            c.total_shipments += r.total_shipments || 0
+            c.ndr_count += r.ndr_count || 0
+            c.ndr_del += r.ndr_del || 0
+            c.ndr_rto += r.ndr_rto || 0
+            c.del_att2 += r.del_att2 || 0
+            c.del_att3 += r.del_att3 || 0
+            c.del_att3plus += r.del_att3plus || 0
+            if (r.avg_att != null) { c._att_sum += r.avg_att * (r.ndr_count || 0); c._att_n += r.ndr_count || 0 }
+          })
+          const ndrRows = Object.values(courierMap).sort((a, b) => b.ndr_count - a.ndr_count).map(c => ({ ...c, avg_att: c._att_n ? +(c._att_sum / c._att_n).toFixed(2) : null }))
           const pct = (a, b) => b ? ((a / b) * 100).toFixed(1) + '%' : '—'
+          // Build intransit TAT lookup from byCourier
+          const tatByCourier = {}
+          ;(data.byCourier || []).forEach(r => {
+            if (!tatByCourier[r.courier_group]) tatByCourier[r.courier_group] = { _wt: 0, _sum: 0 }
+            const w = r.delivered || 0; const v = r.avg_intransit || 0
+            tatByCourier[r.courier_group]._wt += w
+            tatByCourier[r.courier_group]._sum += v * w
+          })
           const totals = ndrRows.reduce((s, r) => ({
             total_shipments: s.total_shipments + (r.total_shipments || 0),
             ndr_count: s.ndr_count + (r.ndr_count || 0),
             ndr_del: s.ndr_del + (r.ndr_del || 0),
             ndr_rto: s.ndr_rto + (r.ndr_rto || 0),
-            ndr_pending: s.ndr_pending + (r.ndr_pending || 0),
             del_att2: s.del_att2 + (r.del_att2 || 0),
             del_att3: s.del_att3 + (r.del_att3 || 0),
             del_att3plus: s.del_att3plus + (r.del_att3plus || 0),
-          }), { total_shipments: 0, ndr_count: 0, ndr_del: 0, ndr_rto: 0, ndr_pending: 0, del_att2: 0, del_att3: 0, del_att3plus: 0 })
+          }), { total_shipments: 0, ndr_count: 0, ndr_del: 0, ndr_rto: 0, del_att2: 0, del_att3: 0, del_att3plus: 0 })
           const thStyle = { padding: '9px 10px', textAlign: 'right', fontWeight: 700, fontSize: 11, color: C.t2, whiteSpace: 'nowrap', background: C.bg, position: 'sticky', top: 0, zIndex: 1 }
           const thL = { ...thStyle, textAlign: 'left' }
           const td = { padding: '9px 10px', textAlign: 'right', fontSize: 11, color: C.t1, borderTop: `1px solid ${C.border}` }
           const tdL = { ...td, textAlign: 'left', fontWeight: 600 }
-          const red = (v) => ({ ...td, color: v > 0 ? C.red?.tx || '#ef4444' : C.t1 })
-          const green = (v) => ({ ...td, color: v > 0 ? '#16a34a' : C.t1 })
           return (
             <div style={{ display: secCollapsed['ndr'] ? 'none' : 'block', ...cardStyle }}>
-              <div style={{ ...chartTitle, marginBottom: 12 }}>NDR — Courier-wise Breakdown</div>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+                <div style={chartTitle}>NDR - Courier-wise Breakdown</div>
+                <div style={{ display: 'flex', gap: 4 }}>
+                  {['All', 'COD', 'PREPAID'].map(v => (
+                    <button key={v} onClick={() => setNdrPayFilter(v)} style={{ padding: '4px 10px', fontSize: 11, fontWeight: 600, borderRadius: 6, border: `1px solid ${C.border}`, cursor: 'pointer', background: ndrPayFilter === v ? C.accent || '#2563eb' : C.card, color: ndrPayFilter === v ? '#fff' : C.t1 }}>
+                      {v === 'PREPAID' ? 'Prepaid' : v}
+                    </button>
+                  ))}
+                </div>
+              </div>
               <div style={{ overflowX: 'auto', overflowY: 'auto', maxHeight: 450 }}>
                 <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11 }}>
                   <thead>
                     <tr style={{ borderBottom: `1.5px solid ${C.border}` }}>
                       <th style={thL}>COURIER</th>
+                      <th style={thStyle}>TOTAL SHIPMENTS</th>
                       <th style={thStyle}>NDR COUNT</th>
                       <th style={thStyle}>NDR %</th>
                       <th style={thStyle}>→DEL %</th>
                       <th style={thStyle}>→RTO %</th>
-                      <th style={thStyle}>PENDING</th>
                       <th style={thStyle}>DEL 2nd ATT</th>
                       <th style={thStyle}>DEL 3rd ATT</th>
                       <th style={thStyle}>DEL 3+ ATT</th>
                       <th style={thStyle}>AVG ATT</th>
+                      <th style={thStyle}>INTRANSIT TAT</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {ndrRows.map(r => (
-                      <tr key={r.courier} style={{ borderBottom: `1px solid ${C.border}` }}>
-                        <td style={{ ...tdL, display: 'flex', alignItems: 'center', gap: 6 }}>
-                          {COURIER_LOGOS[r.courier] && <img src={COURIER_LOGOS[r.courier]} alt="" style={{ width: 18, height: 18, objectFit: 'contain', borderRadius: 3, background: '#fff', padding: 1, border: `1px solid ${C.border}`, flexShrink: 0 }} />}
-                          {r.courier}
-                        </td>
-                        <td style={td}>{(r.ndr_count || 0).toLocaleString('en-IN')}</td>
-                        <td style={red(r.ndr_count)}>{pct(r.ndr_count, r.total_shipments)}</td>
-                        <td style={green(r.ndr_del)}>{pct(r.ndr_del, r.ndr_count)}</td>
-                        <td style={red(r.ndr_rto)}>{pct(r.ndr_rto, r.ndr_count)}</td>
-                        <td style={td}>{(r.ndr_pending || 0).toLocaleString('en-IN')}</td>
-                        <td style={td}>{(r.del_att2 || 0).toLocaleString('en-IN')}</td>
-                        <td style={td}>{(r.del_att3 || 0).toLocaleString('en-IN')}</td>
-                        <td style={td}>{(r.del_att3plus || 0).toLocaleString('en-IN')}</td>
-                        <td style={td}>{r.avg_att != null ? r.avg_att : '—'}</td>
-                      </tr>
-                    ))}
+                    {ndrRows.map(r => {
+                      const tat = tatByCourier[r.courier]
+                      const avgTat = tat?._wt ? (tat._sum / tat._wt).toFixed(2) : '—'
+                      return (
+                        <tr key={r.courier} style={{ borderBottom: `1px solid ${C.border}` }}>
+                          <td style={{ ...tdL, display: 'flex', alignItems: 'center', gap: 6 }}>
+                            {COURIER_LOGOS[r.courier] && <img src={COURIER_LOGOS[r.courier]} alt="" style={{ width: 18, height: 18, objectFit: 'contain', borderRadius: 3, background: '#fff', padding: 1, border: `1px solid ${C.border}`, flexShrink: 0 }} />}
+                            {r.courier}
+                          </td>
+                          <td style={td}>{(r.total_shipments || 0).toLocaleString('en-IN')}</td>
+                          <td style={td}>{(r.ndr_count || 0).toLocaleString('en-IN')}</td>
+                          <td style={td}>{pct(r.ndr_count, r.total_shipments)}</td>
+                          <td style={td}>{pct(r.ndr_del, r.ndr_count)}</td>
+                          <td style={td}>{pct(r.ndr_rto, r.ndr_count)}</td>
+                          <td style={td}>{(r.del_att2 || 0).toLocaleString('en-IN')}</td>
+                          <td style={td}>{(r.del_att3 || 0).toLocaleString('en-IN')}</td>
+                          <td style={td}>{(r.del_att3plus || 0).toLocaleString('en-IN')}</td>
+                          <td style={td}>{r.avg_att != null ? r.avg_att : '—'}</td>
+                          <td style={td}>{avgTat !== '—' ? avgTat + 'd' : '—'}</td>
+                        </tr>
+                      )
+                    })}
                     {/* Total row */}
                     <tr style={{ borderTop: `2px solid ${C.border}`, background: C.bg }}>
                       <td style={{ ...tdL, fontWeight: 700 }}>Total</td>
+                      <td style={{ ...td, fontWeight: 700 }}>{totals.total_shipments.toLocaleString('en-IN')}</td>
                       <td style={{ ...td, fontWeight: 700 }}>{totals.ndr_count.toLocaleString('en-IN')}</td>
                       <td style={{ ...td, fontWeight: 700 }}>{pct(totals.ndr_count, totals.total_shipments)}</td>
                       <td style={{ ...td, fontWeight: 700 }}>{pct(totals.ndr_del, totals.ndr_count)}</td>
                       <td style={{ ...td, fontWeight: 700 }}>{pct(totals.ndr_rto, totals.ndr_count)}</td>
-                      <td style={{ ...td, fontWeight: 700 }}>{totals.ndr_pending.toLocaleString('en-IN')}</td>
                       <td style={{ ...td, fontWeight: 700 }}>{totals.del_att2.toLocaleString('en-IN')}</td>
                       <td style={{ ...td, fontWeight: 700 }}>{totals.del_att3.toLocaleString('en-IN')}</td>
                       <td style={{ ...td, fontWeight: 700 }}>{totals.del_att3plus.toLocaleString('en-IN')}</td>
+                      <td style={{ ...td, fontWeight: 700 }}>—</td>
                       <td style={{ ...td, fontWeight: 700 }}>—</td>
                     </tr>
                   </tbody>

@@ -690,19 +690,17 @@ by_weight_slab AS (
 ndr_by_courier AS (
   SELECT
     courier_group AS courier,
+    UPPER(payment_mode) AS payment_mode,
     COUNT(awb) AS total_shipments,
-    -- isNDR: attempt=1 & delivered → False; attempt>=1 otherwise → True
     COUNTIF(ofd_attempts >= 1 AND NOT (ofd_attempts = 1 AND unified_status = 'Delivered')) AS ndr_count,
     COUNTIF(ofd_attempts >= 1 AND NOT (ofd_attempts = 1 AND unified_status = 'Delivered') AND unified_status = 'Delivered') AS ndr_del,
     COUNTIF(ofd_attempts >= 1 AND NOT (ofd_attempts = 1 AND unified_status = 'Delivered') AND unified_status = 'RTO') AS ndr_rto,
-    COUNTIF(ofd_attempts >= 1 AND NOT (ofd_attempts = 1 AND unified_status = 'Delivered') AND clickpost_unified_status = 'FailedDelivery') AS ndr_pending,
-    -- Delivery by attempt bucket (NDR shipments only)
     COUNTIF(ofd_attempts = 2 AND unified_status = 'Delivered') AS del_att2,
     COUNTIF(ofd_attempts = 3 AND unified_status = 'Delivered') AS del_att3,
     COUNTIF(ofd_attempts >= 4 AND unified_status = 'Delivered') AS del_att3plus,
     ROUND(AVG(CASE WHEN ofd_attempts >= 1 AND NOT (ofd_attempts = 1 AND unified_status = 'Delivered') THEN ofd_attempts END), 2) AS avg_att
   FROM base
-  GROUP BY 1
+  GROUP BY 1, 2
 ),
 filter_opts AS (
   SELECT
