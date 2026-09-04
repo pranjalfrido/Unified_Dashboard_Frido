@@ -173,8 +173,8 @@ export default async function handler(req, res) {
       byProductReturns: `WITH q AS (${base})
         SELECT Category AS category, SubCategory AS sub_category,
           SUM(SellingPrice_Inc_GST) AS gross_rev,
-          SUM(CASE WHEN Order_Status IN ('RTO','CIR','Return','Cancelled','Exchange') THEN SellingPrice_Inc_GST ELSE 0 END) AS lost_rev,
-          SUM(CASE WHEN Order_Status IN ('RTO','CIR','Return','Cancelled','Exchange') THEN ItemQty ELSE 0 END) AS lost_qty
+          SUM(CASE WHEN Order_Status IN ('RTO','CIR','Return','Cancelled') THEN SellingPrice_Inc_GST ELSE 0 END) AS lost_rev,
+          SUM(CASE WHEN Order_Status IN ('RTO','CIR','Return','Cancelled') THEN ItemQty ELSE 0 END) AS lost_qty
         FROM q WHERE ${shWhere}${topProductsPaymentTypeClause}
         GROUP BY category, sub_category
         HAVING lost_rev > 0
