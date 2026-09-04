@@ -192,6 +192,35 @@ export default async function handler(req, res) {
           AND Order_Status IN ('RTO', 'Return', 'CIR')
           AND Customer_Return_Reason IS NOT NULL AND TRIM(Customer_Return_Reason) != ''
         GROUP BY reason, sub_reason ORDER BY count DESC`,
+
+      // Cancellation by month + day-bucket + category/sub-category — fixed last 6 calendar months
+      // from today (ignores the page date range picker intentionally — this chart is always "last 6
+      // months from now" so the numbers don't shift when the user changes the date filter).
+      cancelByBucket: (() => {
+        const today = new Date()
+        const sixMonthsAgo = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth() - 5, 1))
+        const sixStart = sixMonthsAgo.toISOString().slice(0, 10)
+        const sixEnd = today.toISOString().slice(0, 10)
+        return `SELECT
+          FORMAT_DATE('%b %Y', OrderDate) AS month,
+          DATE_TRUNC(OrderDate, MONTH) AS month_dt,
+          COALESCE(NULLIF(TRIM(Category), ''), 'Others') AS category,
+          COALESCE(NULLIF(TRIM(SubCategory), ''), 'Others') AS sub_category,
+          CASE
+            WHEN DATE_DIFF(DATE(Cancelled_At), OrderDate, DAY) BETWEEN 0 AND 1 THEN '0-1'
+            WHEN DATE_DIFF(DATE(Cancelled_At), OrderDate, DAY) BETWEEN 2 AND 4 THEN '2-4'
+            WHEN DATE_DIFF(DATE(Cancelled_At), OrderDate, DAY) BETWEEN 5 AND 7 THEN '5-7'
+            WHEN DATE_DIFF(DATE(Cancelled_At), OrderDate, DAY) BETWEEN 8 AND 10 THEN '8-10'
+            ELSE '10+'
+          END AS bucket,
+          COUNT(DISTINCT OrderId) AS cancel_count
+        FROM \`frido-429506.production.fact_all_platform_sales_report\`
+        WHERE OrderDate BETWEEN '${sixStart}' AND '${sixEnd}' AND ${shWhere}
+          AND Order_Status = 'Cancelled'
+          AND Cancelled_At IS NOT NULL
+        GROUP BY month, month_dt, category, sub_category, bucket
+        ORDER BY month_dt, category, sub_category, bucket`
+      })(),
     }
 
     const entries = Object.entries(queries)
@@ -271,6 +300,7 @@ export default async function handler(req, res) {
       monthlyTable: (results.byMonth || []).map(r => ({ month: r.month, ...withPct(r) })),
       paymentTypeTable: (results.byPaymentType || []).map(r => ({ paymentType: r.payment_type, ...withPct(r) })),
       returnReasons: (results.returnReasons || []).map(r => ({ reason: r.reason, subReason: r.sub_reason, count: parseInt(r.count) || 0, revenueImpact: parseFloat(r.revenue_impact) || 0 })),
+      cancelByBucket: (results.cancelByBucket || []).map(r => ({ month: r.month, monthDt: r.month_dt?.value || r.month_dt, category: r.category, subCategory: r.sub_category, bucket: r.bucket, cancelCount: parseInt(r.cancel_count) || 0 })),
     }
 
     setInCache(cacheKey, payload)

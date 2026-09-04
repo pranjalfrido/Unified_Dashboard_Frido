@@ -1,9 +1,9 @@
-import { useState, useEffect, useRef, useMemo, Fragment } from 'react'
+import { useState, useEffect, useRef, useMemo, Fragment, useCallback } from 'react'
 import { C, fmt, fmtN, exportCSV } from '../utils.js'
 import {
   Card, QtyRevToggle, returnBadge, ReturnBreakdownTable, useSortableTable,
   ComposedChart, Area, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
-  PieChart, Pie, Cell,
+  PieChart, Pie, Cell, BarChart, Bar,
 } from '../components.jsx'
 
 // Stat tile per the dataviz skill's contract: label (sentence case, no colon) · value (semibold,
@@ -228,46 +228,127 @@ function PaymentTypeTransposedTable({ paymentTypeTable, basis, setBasis }) {
   )
 }
 
-// Donut chart of return-reason % share, styled like GeoToggleDonutCard (App.jsx ~5347). Split
-// out from the detail table below so both can sit in a 3-column row alongside the Payment
-// Type-wise table instead of a dedicated 2-column row of their own.
-function ReturnReasonsDonut({ returnReasons, height = 420 }) {
-  const byReason = useMemo(() => {
-    const m = {}
-    ;(returnReasons || []).forEach(r => {
-      if (!m[r.reason]) m[r.reason] = { reason: r.reason, count: 0, revenueImpact: 0 }
-      m[r.reason].count += r.count
-      m[r.reason].revenueImpact += r.revenueImpact
+const CAT_COLORS = ['#3B82F6','#10B981','#F59E0B','#EF4444','#8B5CF6','#EC4899','#14B8A6','#F97316','#6366F1','#84CC16','#06B6D4','#A855F7']
+
+// Stacked bar chart: X = last 6 months (fixed, ignores date picker).
+// Bars stacked by category. Dropdown to filter by sub-category (or All).
+function CancelBucketChart({ cancelByBucket }) {
+  const [selectedSubCats, setSelectedSubCats] = useState([]) // [] = All
+  const [dropOpen, setDropOpen] = useState(false)
+  const [search, setSearch] = useState('')
+  const [pending, setPending] = useState(null)
+  const dropRef = useRef(null)
+  const searchRef = useRef(null)
+
+  useEffect(() => {
+    const h = e => { if (dropRef.current && !dropRef.current.contains(e.target)) { setDropOpen(false); setPending(null); setSearch('') } }
+    document.addEventListener('mousedown', h)
+    return () => document.removeEventListener('mousedown', h)
+  }, [])
+  useEffect(() => { if (dropOpen) searchRef.current?.focus({ preventScroll: true }) }, [dropOpen])
+
+  const { months, keys, subCatOptions } = useMemo(() => {
+    if (!cancelByBucket?.length) return { months: [], keys: [], subCatOptions: [] }
+    const monthMap = {}
+    const catTotals = {}
+    const subCatSet = new Set()
+    cancelByBucket.forEach(r => {
+      monthMap[r.monthDt] = r.month
+      catTotals[r.category] = (catTotals[r.category] || 0) + r.cancelCount
+      subCatSet.add(r.subCategory)
     })
-    return Object.values(m).sort((a, b) => b.count - a.count)
-  }, [returnReasons])
-  const totalCount = byReason.reduce((s, r) => s + r.count, 0)
-  const donutData = byReason.map((r, i) => ({ name: r.reason, value: r.count, color: REASON_COLORS[i % REASON_COLORS.length] }))
+    const months = Object.entries(monthMap).sort((a, b) => a[0].localeCompare(b[0])).map(([, l]) => l)
+    const keys = Object.entries(catTotals).sort((a, b) => b[1] - a[1]).map(([k]) => k)
+    const subCatOptions = ['All', ...Array.from(subCatSet).sort()]
+    return { months, keys, subCatOptions }
+  }, [cancelByBucket])
+
+  const chartData = useMemo(() => {
+    if (!cancelByBucket?.length || !months.length) return []
+    return months.map(month => {
+      const row = { month, _buckets: { '0-1': 0, '2-4': 0, '5-7': 0, '8-10': 0, '10+': 0 } }
+      keys.forEach(k => { row[k] = 0 })
+      cancelByBucket
+        .filter(r => r.month === month && (selectedSubCats.length === 0 || selectedSubCats.includes(r.subCategory)))
+        .forEach(r => {
+          row[r.category] = (row[r.category] || 0) + r.cancelCount
+          row._buckets[r.bucket] = (row._buckets[r.bucket] || 0) + r.cancelCount
+        })
+      return row
+    })
+  }, [cancelByBucket, months, keys, selectedSubCats])
+
+  const staged = pending !== null ? pending : selectedSubCats
+  const filteredOpts = subCatOptions.filter(o => o.toLowerCase().includes(search.toLowerCase()))
+  const triggerLabel = selectedSubCats.length === 0 ? 'All Sub-categories' : selectedSubCats.length === 1 ? selectedSubCats[0] : `${selectedSubCats[0]} +${selectedSubCats.length - 1}`
 
   return (
-    <Card title="Return Reasons · % Share">
-      {donutData.length === 0 ? (
-        <div style={{ fontSize: 12, color: C.t3, textAlign: 'center', padding: '30px 0' }}>No return-reason data</div>
-      ) : (
-        <div style={{ display: 'flex', flexDirection: 'row', alignItems: 'center', gap: 14, marginTop: 30 }}>
-          <div style={{ flexShrink: 0, marginLeft: -18 }}><ResponsiveContainer width={150} height={150}>
-            <PieChart>
-              <Pie data={donutData} cx="50%" cy="50%" innerRadius={42} outerRadius={68} dataKey="value" paddingAngle={2}>
-                {donutData.map((d, i) => <Cell key={i} fill={d.color} />)}
-              </Pie>
-              <Tooltip content={({ active, payload }) => active && payload?.length ? <div style={{ background: '#fff', border: `1px solid ${C.border}`, borderRadius: 6, padding: '5px 10px', fontSize: 12, color: '#111', fontWeight: 600 }}>{payload[0].name} : {fmtN(payload[0].value)}</div> : null} />
-            </PieChart>
-          </ResponsiveContainer></div>
-          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 9, overflowY: 'auto' }}>
-            {donutData.map((d, i) => (
-              <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-                <span style={{ width: 7, height: 7, borderRadius: '50%', background: d.color, flexShrink: 0 }} />
-                <span style={{ fontSize: 11, color: C.t2, flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{d.name}</span>
-                <span style={{ fontSize: 11, fontWeight: 700, color: C.t1, fontFamily: 'var(--mono)' }}>{fmtN(d.value)}</span>
-                <span style={{ fontSize: 10, color: C.t3, minWidth: 32, textAlign: 'right' }}>{totalCount ? (d.value / totalCount * 100).toFixed(1) : 0}%</span>
-              </div>
-            ))}
+    <Card title="Cancellation · Days Since Order" action={
+      <div ref={dropRef} style={{ position: 'relative', flexShrink: 0 }}>
+        <div onClick={() => { setPending(null); setDropOpen(v => !v) }} className="fsel" style={{ display: 'flex', alignItems: 'center', gap: 5, cursor: 'pointer', minWidth: 120, background: selectedSubCats.length > 0 ? '#FFF9CC' : undefined, borderColor: selectedSubCats.length > 0 ? C.acm : undefined }}>
+          <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: 11.5 }}>{triggerLabel}</span>
+          <span style={{ fontSize: 8, color: C.t3, flexShrink: 0 }}>▼</span>
+        </div>
+        {dropOpen && (
+          <div style={{ position: 'absolute', right: 0, top: '110%', zIndex: 200, background: C.card, border: `1px solid ${C.border2}`, borderRadius: 9, boxShadow: '0 8px 28px rgba(0,0,0,.14)', width: 200 }}>
+            <div style={{ padding: '7px 8px', borderBottom: `1px solid ${C.border}` }}>
+              <input ref={searchRef} value={search} onChange={e => setSearch(e.target.value)} onMouseDown={e => e.stopPropagation()} placeholder="Search sub-categories…" style={{ width: '100%', fontSize: 11.5, padding: '4px 8px', border: `1px solid ${C.border2}`, borderRadius: 6, outline: 'none', fontFamily: 'var(--font)', background: C.bg, boxSizing: 'border-box' }} />
+            </div>
+            <div style={{ maxHeight: 100, overflowY: 'auto' }}>
+              {filteredOpts.map(opt => {
+                const active = staged.includes(opt)
+                return (
+                  <div key={opt} onClick={() => setPending(active ? staged.filter(x => x !== opt) : [...staged, opt])} style={{ padding: '5px 10px', fontSize: 11.5, cursor: 'pointer', background: active ? C.acl : undefined, color: active ? C.t1 : C.t2, fontWeight: active ? 600 : 400, display: 'flex', alignItems: 'center', gap: 7 }}>
+                    <span style={{ width: 13, height: 13, borderRadius: 3, border: `1.5px solid ${active ? C.acm : C.border2}`, background: active ? C.acm : 'transparent', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{active && <span style={{ color: '#fff', fontSize: 9, lineHeight: 1 }}>✓</span>}</span>
+                    {opt}
+                  </div>
+                )
+              })}
+              {filteredOpts.length === 0 && <div style={{ padding: 10, fontSize: 11.5, color: C.t3, textAlign: 'center' }}>No results</div>}
+            </div>
+            <div style={{ display: 'flex', gap: 6, padding: 8, borderTop: `1px solid ${C.border}` }}>
+              <button onMouseDown={e => e.stopPropagation()} onClick={() => { setPending([]); }} style={{ flex: 1, fontSize: 11.5, fontWeight: 600, padding: '5px 0', borderRadius: 6, border: `1.5px solid ${C.border2}`, background: 'transparent', color: C.t2, cursor: 'pointer', fontFamily: 'var(--font)' }}>Clear</button>
+              <button onMouseDown={e => e.stopPropagation()} onClick={() => setPending(filteredOpts)} style={{ flex: 1, fontSize: 11.5, fontWeight: 600, padding: '5px 0', borderRadius: 6, border: `1.5px solid ${C.border2}`, background: 'transparent', color: C.t2, cursor: 'pointer', fontFamily: 'var(--font)' }}>Select All</button>
+              <button onMouseDown={e => e.stopPropagation()} onClick={() => { setSelectedSubCats(pending !== null ? pending : staged); setPending(null); setDropOpen(false); setSearch('') }} style={{ flex: 1, fontSize: 11.5, fontWeight: 700, padding: '5px 0', borderRadius: 6, border: 'none', background: C.t1, color: '#fff', cursor: 'pointer', fontFamily: 'var(--font)' }}>Apply</button>
+            </div>
           </div>
+        )}
+      </div>
+    }>
+      {chartData.length === 0 ? (
+        <div style={{ fontSize: 12, color: C.t3, textAlign: 'center', padding: '30px 0' }}>No cancellation data</div>
+      ) : (
+        <div>
+          <ResponsiveContainer width="100%" height={175}>
+            <BarChart data={chartData} margin={{ top: 0, right: 4, bottom: 10, left: 0 }} barCategoryGap="25%">
+              <XAxis dataKey="month" tick={{ fontSize: 9, fill: C.t3 }} />
+              <YAxis tick={{ fontSize: 9, fill: C.t3 }} width={42} />
+              <Tooltip
+                content={({ active, payload, label }) => {
+                  if (!active || !payload?.length) return null
+                  const buckets = payload[0]?.payload?._buckets || {}
+                  const total = Object.values(buckets).reduce((s, v) => s + v, 0)
+                  const BCOLS = ['#3B82F6','#10B981','#F59E0B','#EF4444','#8B5CF6']
+                  return (
+                    <div style={{ background: '#fff', border: `1px solid ${C.border}`, borderRadius: 6, padding: '6px 10px', fontSize: 11 }}>
+                      <div style={{ fontWeight: 700, marginBottom: 4, color: C.t1 }}>{label} · {fmtN(total)} cancellations</div>
+                      {['0-1','2-4','5-7','8-10','10+'].map((b, i) => (
+                        <div key={b} style={{ display: 'flex', gap: 6, alignItems: 'center', color: C.t2 }}>
+                          <span style={{ width: 7, height: 7, borderRadius: 2, background: BCOLS[i], flexShrink: 0 }} />
+                          <span style={{ flex: 1 }}>{b} days:</span>
+                          <span style={{ fontWeight: 600, color: C.t1 }}>{fmtN(buckets[b] || 0)}</span>
+                          <span style={{ color: C.t3 }}>({total ? ((buckets[b] || 0) / total * 100).toFixed(0) : 0}%)</span>
+                        </div>
+                      ))}
+                    </div>
+                  )
+                }}
+              />
+              {keys.map((k, i) => (
+                <Bar key={k} dataKey={k} name={k} stackId="a" fill={CAT_COLORS[i % CAT_COLORS.length]} />
+              ))}
+            </BarChart>
+          </ResponsiveContainer>
         </div>
       )}
     </Card>
@@ -447,9 +528,9 @@ export default function D2CReturnAnalysisTab({ filters, subCatFirstOrderMap = {}
             />
           </div>
 
-          <div className="g-3" style={{ gridTemplateColumns: '0.69fr 0.7fr 1.01fr', alignItems: 'stretch', gridAutoRows: '270px' }}>
+          <div className="g-3" style={{ gridTemplateColumns: '0.69fr 0.7fr 0.8fr', alignItems: 'stretch', gridAutoRows: '270px' }}>
             <PaymentTypeTransposedTable paymentTypeTable={data.paymentTypeTable} basis={payBasis} setBasis={setPayBasis} />
-            <ReturnReasonsDonut returnReasons={data.returnReasons} />
+            <CancelBucketChart cancelByBucket={data.cancelByBucket} />
             <ReturnReasonsTable returnReasons={data.returnReasons} />
           </div>
         </>

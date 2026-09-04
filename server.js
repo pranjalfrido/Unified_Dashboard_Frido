@@ -13,6 +13,7 @@ import inventoryHandler from './api/inventory.js'
 import salesAllocationHandler from './api/sales-allocation.js'
 import inwardHandler from './api/inward.js'
 import logisticsCostHandler, { prewarm as prewarmLogisticsCost } from './api/logistics-cost.js'
+import returnAnalysisHandler from './api/return-analysis.js'
 
 config()
 
@@ -260,6 +261,7 @@ app.post('/api/inventory', (req, res) => inventoryHandler(req, res))
 app.post('/api/sales-allocation', (req, res) => salesAllocationHandler(req, res))
 app.post('/api/inward', (req, res) => inwardHandler(req, res))
 app.post('/api/logistics-cost', (req, res) => logisticsCostHandler(req, res))
+app.post('/api/return-analysis', (req, res) => returnAnalysisHandler(req, res))
 
 // ── API: Logistics / Clickpost data ──────────────────────────
 app.post('/api/logistics', async (req, res) => {
