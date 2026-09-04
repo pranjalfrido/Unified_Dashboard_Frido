@@ -2281,8 +2281,8 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
             { key: 'pickup', label: 'Shipment Pickup Date' },
             { key: 'rtodel', label: 'RTO Delivered TAT' },
           ]
-          const BUCKETS = ['0-2', '3-5', '6-7', '8-10', '10+']
-          const bucketKey = (b) => b === '0-2' ? `${rtoAgeingBase}_0_2` : b === '3-5' ? `${rtoAgeingBase}_3_5` : b === '6-7' ? `${rtoAgeingBase}_6_7` : b === '8-10' ? `${rtoAgeingBase}_8_10` : `${rtoAgeingBase}_10plus`
+          const BUCKETS = ['0-2', '3-5', '6-10', '10+']
+          const bucketKey = (b) => b === '0-2' ? `${rtoAgeingBase}_0_2` : b === '3-5' ? `${rtoAgeingBase}_3_5` : b === '6-10' ? `${rtoAgeingBase}_6_10` : `${rtoAgeingBase}_10plus`
           // aggregate totals row
           const totRow = ageingRows.reduce((s, r) => {
             BUCKETS.forEach(b => { s[bucketKey(b)] = (s[bucketKey(b)] || 0) + (r[bucketKey(b)] || 0) })
