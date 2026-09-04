@@ -1791,7 +1791,7 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
                     return (
                     <div style={{ ...tableCard2, height: 335 }}>
                       <div style={{ ...tableTitle2, fontSize: 13, padding: '8px 14px 7px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                        <span>Order Processing Time <span style={{ fontWeight: 500, color: C.t3, fontSize: 10.2, marginLeft: 4 }}>(by Facility)</span></span>
+                        <span>Order Processing Time <span style={{ fontWeight: 500, color: C.t3, fontSize: 10.2, marginLeft: 4 }}>(by Facility)</span><span style={{ fontWeight: 400, color: C.t3, fontSize: 9.5, marginLeft: 6 }}>order creation → shipment creation</span></span>
                       </div>
                       <div style={{ margin: '0 8px', overflowY: 'hidden' }}>
                         <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed' }}>
@@ -1841,7 +1841,7 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
                     return (
                     <div style={{ ...tableCard2, height: 335 }}>
                       <div style={{ ...tableTitle2, fontSize: 13, padding: '8px 14px 7px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                        <span>Order Pickup Time <span style={{ fontWeight: 500, color: C.t3, fontSize: 10.2, marginLeft: 4 }}>(by Courier)</span></span>
+                        <span>Order Pickup Time <span style={{ fontWeight: 500, color: C.t3, fontSize: 10.2, marginLeft: 4 }}>(by Courier)</span><span style={{ fontWeight: 400, color: C.t3, fontSize: 9.5, marginLeft: 6 }}>shipment creation → shipment pickup</span></span>
                       </div>
                       <div style={{ margin: '0 8px', overflowY: 'auto', maxHeight: 240 }}>
                         <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed' }}>
@@ -1890,7 +1890,7 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
                     return (
                     <div style={{ ...tableCard2, height: 335 }}>
                       <div style={{ ...tableTitle2, fontSize: 13, padding: '8px 14px 7px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                        <span>In-Transit Time <span style={{ fontWeight: 500, color: C.t3, fontSize: 10.2, marginLeft: 4 }}>(by Courier)</span></span>
+                        <span>In-Transit Time <span style={{ fontWeight: 500, color: C.t3, fontSize: 10.2, marginLeft: 4 }}>(by Courier)</span><span style={{ fontWeight: 400, color: C.t3, fontSize: 9.5, marginLeft: 6 }}>shipment pickup → shipment delivery</span></span>
                       </div>
                       <div style={{ margin: '0 8px', overflowY: 'auto', maxHeight: 240 }}>
                         <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed' }}>
@@ -1939,7 +1939,7 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
                     return (
                     <div style={{ ...tableCard2, height: 335 }}>
                       <div style={{ ...tableTitle2, fontSize: 13, padding: '8px 14px 7px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                        <span>Fulfilment Time <span style={{ fontWeight: 500, color: C.t3, fontSize: 10.2, marginLeft: 4 }}>(by Facility)</span></span>
+                        <span>Fulfilment Time <span style={{ fontWeight: 500, color: C.t3, fontSize: 10.2, marginLeft: 4 }}>(by Facility)</span><span style={{ fontWeight: 400, color: C.t3, fontSize: 9.5, marginLeft: 6 }}>order creation → shipment delivery</span></span>
                       </div>
                       <div style={{ margin: '0 8px', overflowY: 'hidden' }}>
                         <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed' }}>
