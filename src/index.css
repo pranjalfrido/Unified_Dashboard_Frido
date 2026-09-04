@@ -486,3 +486,19 @@ html,body{height:100%;background:var(--bg);font-family:var(--font);color:var(--t
   0%, 100% { opacity: .25; transform: scale(.85); }
   50%      { opacity: 1;   transform: scale(1); }
 }
+
+/* Card titles and sub-lines on Logistics Cost.
+
+   --t3 (#94939F) measures 3.03:1 on a white card, which fails WCAG AA for normal-size
+   text — at 9.5px and 11px these were genuinely hard to read. #75747F is 4.60:1, so it
+   passes AA while staying clearly secondary to --t2 (7.90:1): a step darker, not a
+   promotion to body text.
+
+   Scoped to .lc-page rather than changing the --t3 token, which has 383 uses across every
+   tab. The ask was the three cost tabs; a global change would silently restyle Sales,
+   Inventory, Ads and P&L too.
+
+   Same hue family as --t3 (a cool, slightly blue-leaning grey) so it still reads as part
+   of the palette rather than a different colour. */
+.lc-page .kpi-label { color: #75747F; }
+.lc-page .kpi-sub { color: #75747F; }

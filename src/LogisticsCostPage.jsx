@@ -1,10 +1,23 @@
 import { useState, useEffect, useMemo, useRef, useCallback, Children } from 'react'
-import { C, fmt, fmtN, fmtBig, COURIER_COLORS, COURIER_LOGOS } from './utils.js'
+import { C as BASE_C, fmt, fmtN, fmtBig, COURIER_COLORS, COURIER_LOGOS } from './utils.js'
 import {
   Card, Badge, DataTable, ChartTooltip,
   BarChart, Bar, Line, LineChart, ComposedChart, AreaChart, Area, XAxis, YAxis, CartesianGrid,
   Tooltip, Legend, LabelList, PieChart, Pie, ResponsiveContainer, Cell,
 } from './components.jsx'
+
+// Page-local palette. Identical to the shared one except for `t3`, the secondary grey used
+// by card titles, sub-lines, section notes and slicer labels.
+//
+// The shared #94939F measures 3.03:1 on a white card, which fails WCAG AA for normal-size
+// text — at the 9.5-11px these labels run at, they were genuinely hard to read. #75747F is
+// 4.60:1, so it passes AA while staying clearly secondary to t2 (7.90:1): a step darker,
+// not a promotion to body text. Same cool, slightly blue-leaning hue family, so it still
+// reads as part of the palette.
+//
+// Shadowed here rather than changed in utils.js because that token has ~383 uses across
+// every tab, and this change was scoped to the three Logistics Cost tabs.
+const C = { ...BASE_C, t3: '#75747F' }
 
 // ── Logistics Cost Analytics ──────────────────────────────────
 // Reads the manually-dumped invoice ledgers (logistics_invoices_b2c / _b2b).
@@ -3967,7 +3980,7 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
   }
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
+    <div className="lc-page" style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
       {loading && (
         <div style={{ height: 2, background: C.border, flexShrink: 0 }}>
           <div className="progress-bar" style={{ height: '100%', background: C.acc }} />
