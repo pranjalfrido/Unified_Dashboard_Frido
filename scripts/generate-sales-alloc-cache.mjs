@@ -107,7 +107,10 @@ for (const row of salesRows) {
 }
 let lastSalesDateConsidered = null
 if (maxSalesDate) {
-  lastSalesDateConsidered = String(maxSalesDate).slice(0, 10)
+  // Subtract 1 day — max date may be today (partial), show last complete day
+  const d = new Date(String(maxSalesDate).slice(0, 10) + 'T12:00:00Z')
+  d.setDate(d.getDate() - 1)
+  lastSalesDateConsidered = d.toISOString().slice(0, 10)
 }
 
 // No filters — all rows qualify (passesFilters always true when no filter is active)
