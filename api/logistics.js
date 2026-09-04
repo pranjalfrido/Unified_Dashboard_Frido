@@ -687,6 +687,22 @@ by_weight_slab AS (
   FROM base
   GROUP BY 1, 2, 3
 ),
+ndr_by_courier AS (
+  SELECT
+    courier_group AS courier,
+    UPPER(payment_mode) AS payment_mode,
+    COUNT(awb) AS total_shipments,
+    COUNTIF(ofd_attempts >= 1 AND NOT (ofd_attempts = 1 AND unified_status = 'Delivered')) AS ndr_count,
+    COUNTIF(ofd_attempts >= 1 AND NOT (ofd_attempts = 1 AND unified_status = 'Delivered') AND unified_status = 'Delivered') AS ndr_del,
+    COUNTIF(ofd_attempts >= 1 AND NOT (ofd_attempts = 1 AND unified_status = 'Delivered') AND unified_status = 'RTO') AS ndr_rto,
+    COUNTIF(ofd_attempts = 2 AND unified_status = 'Delivered') AS del_att2,
+    COUNTIF(ofd_attempts = 3 AND unified_status = 'Delivered') AS del_att3,
+    COUNTIF(ofd_attempts >= 4 AND unified_status = 'Delivered') AS del_att3plus,
+    ROUND(AVG(CASE WHEN ofd_attempts >= 1 AND NOT (ofd_attempts = 1 AND unified_status = 'Delivered') THEN ofd_attempts END), 2) AS avg_att,
+    ROUND(AVG(CASE WHEN ofd_attempts >= 1 AND NOT (ofd_attempts = 1 AND unified_status = 'Delivered') AND unified_status = 'Delivered' AND pickup_ts IS NOT NULL AND delivery_ts IS NOT NULL AND TIMESTAMP_DIFF(delivery_ts, pickup_ts, MINUTE) BETWEEN 0 AND 28800 THEN TIMESTAMP_DIFF(delivery_ts, pickup_ts, MINUTE) / 1440.0 END), 2) AS avg_intransit_days
+  FROM base
+  GROUP BY 1, 2
+),
 filter_opts AS (
   SELECT
     ARRAY_AGG(DISTINCT courier_partner IGNORE NULLS ORDER BY courier_partner) AS couriers,
@@ -720,6 +736,7 @@ SELECT
   TO_JSON_STRING(ARRAY(SELECT AS STRUCT * FROM by_payment_week ORDER BY payment_mode, period_dt)) AS by_payment_week,
   TO_JSON_STRING(ARRAY(SELECT AS STRUCT * FROM by_payment_month ORDER BY payment_mode, period_dt)) AS by_payment_month,
   TO_JSON_STRING(ARRAY(SELECT AS STRUCT * FROM failed_delivery_reasons)) AS failed_delivery_reasons,
+  TO_JSON_STRING(ARRAY(SELECT AS STRUCT * FROM ndr_by_courier ORDER BY ndr_count DESC)) AS ndr_by_courier,
   TO_JSON_STRING(ARRAY(SELECT AS STRUCT * FROM by_zone_detail ORDER BY total DESC)) AS by_zone_detail,
   TO_JSON_STRING(ARRAY(SELECT AS STRUCT * FROM by_channel ORDER BY total DESC)) AS by_channel,
   TO_JSON_STRING(ARRAY(SELECT AS STRUCT * FROM tat_by_courier ORDER BY total DESC)) AS tat_by_courier,
@@ -758,6 +775,7 @@ SELECT
       byPaymentWeek: JSON.parse(r.by_payment_week),
       byPaymentMonth: JSON.parse(r.by_payment_month),
       failedDeliveryReasons: JSON.parse(r.failed_delivery_reasons),
+      ndrByCourier: JSON.parse(r.ndr_by_courier),
       byZoneDetail: JSON.parse(r.by_zone_detail),
       byChannel: JSON.parse(r.by_channel),
       tatByCourier: JSON.parse(r.tat_by_courier),

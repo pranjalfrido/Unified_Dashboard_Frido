@@ -450,6 +450,21 @@ failed_delivery_reasons AS (
   WHERE reason_for_last_failed_delivery IS NOT NULL AND reason_for_last_failed_delivery != '' AND ofd_attempts > 1
   GROUP BY 1, 2, 3
 ),
+ndr_by_courier AS (
+  SELECT
+    courier_group AS courier,
+    UPPER(payment_mode) AS payment_mode,
+    COUNT(awb) AS total_shipments,
+    COUNTIF(ofd_attempts >= 1 AND NOT (ofd_attempts = 1 AND unified_status = 'Delivered')) AS ndr_count,
+    COUNTIF(ofd_attempts >= 1 AND NOT (ofd_attempts = 1 AND unified_status = 'Delivered') AND unified_status = 'Delivered') AS ndr_del,
+    COUNTIF(ofd_attempts >= 1 AND NOT (ofd_attempts = 1 AND unified_status = 'Delivered') AND unified_status = 'RTO') AS ndr_rto,
+    COUNTIF(ofd_attempts = 2 AND unified_status = 'Delivered') AS del_att2,
+    COUNTIF(ofd_attempts = 3 AND unified_status = 'Delivered') AS del_att3,
+    COUNTIF(ofd_attempts >= 4 AND unified_status = 'Delivered') AS del_att3plus,
+    ROUND(AVG(CASE WHEN ofd_attempts >= 1 AND NOT (ofd_attempts = 1 AND unified_status = 'Delivered') THEN ofd_attempts END), 2) AS avg_att,
+    ROUND(AVG(CASE WHEN ofd_attempts >= 1 AND NOT (ofd_attempts = 1 AND unified_status = 'Delivered') AND unified_status = 'Delivered' AND pickup_ts IS NOT NULL AND delivery_ts IS NOT NULL AND TIMESTAMP_DIFF(delivery_ts, pickup_ts, MINUTE) BETWEEN 0 AND 28800 THEN TIMESTAMP_DIFF(delivery_ts, pickup_ts, MINUTE) / 1440.0 END), 2) AS avg_intransit_days
+  FROM base GROUP BY 1, 2
+),
 by_zone_detail AS (
   SELECT zone, COUNT(awb) AS total, COUNTIF(unified_status='Delivered') AS delivered, COUNTIF(unified_status='RTO') AS rto,
     COUNTIF(unified_status='Cancelled') AS cancelled,
@@ -526,7 +541,8 @@ SELECT
   TO_JSON_STRING(ARRAY(SELECT AS STRUCT * FROM by_facility ORDER BY total DESC)) AS by_facility,
   TO_JSON_STRING(ARRAY(SELECT AS STRUCT * FROM by_weight_slab ORDER BY slab_order)) AS by_weight_slab,
   TO_JSON_STRING(ARRAY(SELECT AS STRUCT * FROM pickup_ageing ORDER BY courier_group)) AS pickup_ageing,
-  TO_JSON_STRING((SELECT AS STRUCT * FROM filter_opts)) AS filter_opts
+  TO_JSON_STRING((SELECT AS STRUCT * FROM filter_opts)) AS filter_opts,
+  TO_JSON_STRING(ARRAY(SELECT AS STRUCT * FROM ndr_by_courier ORDER BY ndr_count DESC)) AS ndr_by_courier
 `
 }
 
@@ -570,6 +586,7 @@ function parseRow(r) {
     byWeightSlab: JSON.parse(r.by_weight_slab),
     pickupAgeing: JSON.parse(r.pickup_ageing),
     filterOpts: JSON.parse(r.filter_opts),
+    ndrByCourier: JSON.parse(r.ndr_by_courier),
   }
 }
 

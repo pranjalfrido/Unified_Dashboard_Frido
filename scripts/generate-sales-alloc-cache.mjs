@@ -105,10 +105,11 @@ for (const row of salesRows) {
   const d = row.order_date?.value || row.order_date
   if (d && (!maxSalesDate || d > maxSalesDate)) maxSalesDate = d
 }
-// lastSalesDateConsidered = max(order_date) - 1 (latest complete day)
 let lastSalesDateConsidered = null
 if (maxSalesDate) {
-  const d = new Date(maxSalesDate); d.setDate(d.getDate() - 1)
+  // Subtract 1 day — max date may be today (partial), show last complete day
+  const d = new Date(String(maxSalesDate).slice(0, 10) + 'T12:00:00Z')
+  d.setDate(d.getDate() - 1)
   lastSalesDateConsidered = d.toISOString().slice(0, 10)
 }
 

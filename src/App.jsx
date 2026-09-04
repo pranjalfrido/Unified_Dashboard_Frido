@@ -1,4 +1,5 @@
 import { useState, useMemo, useCallback, useEffect, useRef, Fragment, Component } from 'react'
+import { useNavigate, useLocation } from 'react-router-dom'
 import { SquaresFour, ChartBar, TrendUp, PlayCircle, Cube, Truck, Users, FileText } from '@phosphor-icons/react'
 import { C, fmt, fmtN, fmtBig, pct, processData, detectAlerts, exportCSV, getDefaultDates, COURIER_COLORS, COURIER_LOGOS } from './utils.js'
 import { ChartTooltip, KPICard, AlertCard, DataTable, Card, Badge, CategoryRevenueCard, RevTrendChart, AreaTrendChart, MultiLineChart, useSortableTable, useReorderableColumns, GROUP_OPTS, getGroupKey, TrendAnalysisCard, BarChart, Bar, LineChart, Line, AreaChart, Area, ComposedChart, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell, Treemap } from './components.jsx'
@@ -398,6 +399,7 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
   const [cSort, setCSort] = useState({ col: 'total', dir: 'desc' })
   const [cView, setCView] = useState('courier') // 'courier' | 'facility' | 'month'
   const [payTrendGran, setPayTrendGran] = useState('Daily')
+  const [ndrPayFilter, setNdrPayFilter] = useState('All')
   const [isMobile, setIsMobile] = useState(() => window.innerWidth <= 768)
   useEffect(() => {
     const onResize = () => setIsMobile(window.innerWidth <= 768)
@@ -436,6 +438,13 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
             setRawPrevData(json.previous || null)
             try { localStorage.setItem('logistics_stale', JSON.stringify({ current: json.current, previous: json.previous || null, dateRange: json.dateRange, savedAt: Date.now() })) } catch {}
             usedStatic = true
+            // Static cache lacks ndrByCourier — fetch it from live API and merge
+            if (!json.current.ndrByCourier) {
+              fetch(`${API}/api/logistics`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ start: filters.start, end: filters.end, _fieldsOnly: 'ndrByCourier' }) })
+                .then(r => r.ok ? r.json() : null)
+                .then(d => { if (d?.ndrByCourier) setRawData(prev => ({ ...prev, ndrByCourier: d.ndrByCourier })) })
+                .catch(() => {})
+            }
           }
         }
       } catch { /* fall through to live API */ }
@@ -2325,6 +2334,111 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
           )
         })()}
 
+        {/* ── NDR Analysis ── */}
+        <LSectionTitle title="NDR Analysis" collapsed={secCollapsed['ndr']} onToggle={() => toggleSec('ndr')} />
+        {(() => {
+          const allNdrRows = (data.ndrByCourier || [])
+          if (!allNdrRows.length) return null
+          // Aggregate rows by courier, filtered by payment mode
+          const filtered = ndrPayFilter === 'All' ? allNdrRows : allNdrRows.filter(r => r.payment_mode === ndrPayFilter)
+          const courierMap = {}
+          filtered.forEach(r => {
+            if (!courierMap[r.courier]) courierMap[r.courier] = { courier: r.courier, total_shipments: 0, ndr_count: 0, ndr_del: 0, ndr_rto: 0, del_att2: 0, del_att3: 0, del_att3plus: 0, _att_sum: 0, _att_n: 0, _tat_sum: 0, _tat_n: 0 }
+            const c = courierMap[r.courier]
+            c.total_shipments += r.total_shipments || 0
+            c.ndr_count += r.ndr_count || 0
+            c.ndr_del += r.ndr_del || 0
+            c.ndr_rto += r.ndr_rto || 0
+            c.del_att2 += r.del_att2 || 0
+            c.del_att3 += r.del_att3 || 0
+            c.del_att3plus += r.del_att3plus || 0
+            if (r.avg_att != null) { c._att_sum += r.avg_att * (r.ndr_count || 0); c._att_n += r.ndr_count || 0 }
+            if (r.avg_intransit_days != null) { c._tat_sum += r.avg_intransit_days * (r.ndr_del || 0); c._tat_n += r.ndr_del || 0 }
+          })
+          const ndrRows = Object.values(courierMap).sort((a, b) => b.ndr_count - a.ndr_count).map(c => ({ ...c, avg_att: c._att_n ? +(c._att_sum / c._att_n).toFixed(2) : null, avg_intransit_days: c._tat_n ? +(c._tat_sum / c._tat_n).toFixed(2) : null }))
+          const pct = (a, b) => b ? ((a / b) * 100).toFixed(1) + '%' : '—'
+          const totals = ndrRows.reduce((s, r) => ({
+            total_shipments: s.total_shipments + (r.total_shipments || 0),
+            ndr_count: s.ndr_count + (r.ndr_count || 0),
+            ndr_del: s.ndr_del + (r.ndr_del || 0),
+            ndr_rto: s.ndr_rto + (r.ndr_rto || 0),
+            del_att2: s.del_att2 + (r.del_att2 || 0),
+            del_att3: s.del_att3 + (r.del_att3 || 0),
+            del_att3plus: s.del_att3plus + (r.del_att3plus || 0),
+          }), { total_shipments: 0, ndr_count: 0, ndr_del: 0, ndr_rto: 0, del_att2: 0, del_att3: 0, del_att3plus: 0 })
+          const thStyle = { padding: '9px 10px', textAlign: 'right', fontWeight: 700, fontSize: 11, color: C.t2, whiteSpace: 'nowrap', background: C.bg, position: 'sticky', top: 0, zIndex: 1 }
+          const thL = { ...thStyle, textAlign: 'left' }
+          const td = { padding: '9px 10px', textAlign: 'right', fontSize: 11, color: C.t1, borderTop: `1px solid ${C.border}` }
+          const tdL = { ...td, textAlign: 'left', fontWeight: 600 }
+          return (
+            <div style={{ display: secCollapsed['ndr'] ? 'none' : 'block', ...cardStyle }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+                <div style={chartTitle}>NDR - Courier-wise Breakdown</div>
+                <div style={{ display: 'flex', gap: 4 }}>
+                  {['All', 'COD', 'PREPAID'].map(v => (
+                    <button key={v} onClick={() => setNdrPayFilter(v)} style={{ padding: '4px 10px', fontSize: 11, fontWeight: 600, borderRadius: 6, border: `1px solid ${C.border}`, cursor: 'pointer', background: ndrPayFilter === v ? C.accent || '#2563eb' : C.card, color: ndrPayFilter === v ? '#fff' : C.t1 }}>
+                      {v === 'PREPAID' ? 'Prepaid' : v}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div style={{ overflowX: 'auto', overflowY: 'auto', maxHeight: 450 }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11 }}>
+                  <thead>
+                    <tr style={{ borderBottom: `1.5px solid ${C.border}` }}>
+                      <th style={thL}>COURIER</th>
+                      <th style={thStyle}>TOTAL SHIPMENTS</th>
+                      <th style={thStyle}>NDR COUNT</th>
+                      <th style={thStyle}>NDR %</th>
+                      <th style={thStyle}>→DEL %</th>
+                      <th style={thStyle}>→RTO %</th>
+                      <th style={thStyle}>DEL 2nd ATT</th>
+                      <th style={thStyle}>DEL 3rd ATT</th>
+                      <th style={thStyle}>DEL 3+ ATT</th>
+                      <th style={thStyle}>AVG ATT</th>
+                      <th style={thStyle}>INTRANSIT TAT</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {ndrRows.map(r => (
+                      <tr key={r.courier} style={{ borderBottom: `1px solid ${C.border}` }}>
+                        <td style={{ ...tdL, display: 'flex', alignItems: 'center', gap: 6 }}>
+                          {COURIER_LOGOS[r.courier] && <img src={COURIER_LOGOS[r.courier]} alt="" style={{ width: 18, height: 18, objectFit: 'contain', borderRadius: 3, background: '#fff', padding: 1, border: `1px solid ${C.border}`, flexShrink: 0 }} />}
+                          {r.courier}
+                        </td>
+                        <td style={td}>{(r.total_shipments || 0).toLocaleString('en-IN')}</td>
+                        <td style={td}>{(r.ndr_count || 0).toLocaleString('en-IN')}</td>
+                        <td style={td}>{pct(r.ndr_count, r.total_shipments)}</td>
+                        <td style={td}>{pct(r.ndr_del, r.ndr_count)}</td>
+                        <td style={td}>{pct(r.ndr_rto, r.ndr_count)}</td>
+                        <td style={td}>{(r.del_att2 || 0).toLocaleString('en-IN')}</td>
+                        <td style={td}>{(r.del_att3 || 0).toLocaleString('en-IN')}</td>
+                        <td style={td}>{(r.del_att3plus || 0).toLocaleString('en-IN')}</td>
+                        <td style={td}>{r.avg_att != null ? r.avg_att : '—'}</td>
+                        <td style={td}>{r.avg_intransit_days != null ? r.avg_intransit_days + 'd' : '—'}</td>
+                      </tr>
+                    ))}
+                    {/* Total row */}
+                    <tr style={{ borderTop: `2px solid ${C.border}`, background: C.bg }}>
+                      <td style={{ ...tdL, fontWeight: 700 }}>Total</td>
+                      <td style={{ ...td, fontWeight: 700 }}>{totals.total_shipments.toLocaleString('en-IN')}</td>
+                      <td style={{ ...td, fontWeight: 700 }}>{totals.ndr_count.toLocaleString('en-IN')}</td>
+                      <td style={{ ...td, fontWeight: 700 }}>{pct(totals.ndr_count, totals.total_shipments)}</td>
+                      <td style={{ ...td, fontWeight: 700 }}>{pct(totals.ndr_del, totals.ndr_count)}</td>
+                      <td style={{ ...td, fontWeight: 700 }}>{pct(totals.ndr_rto, totals.ndr_count)}</td>
+                      <td style={{ ...td, fontWeight: 700 }}>{totals.del_att2.toLocaleString('en-IN')}</td>
+                      <td style={{ ...td, fontWeight: 700 }}>{totals.del_att3.toLocaleString('en-IN')}</td>
+                      <td style={{ ...td, fontWeight: 700 }}>{totals.del_att3plus.toLocaleString('en-IN')}</td>
+                      <td style={{ ...td, fontWeight: 700 }}>—</td>
+                      <td style={{ ...td, fontWeight: 700 }}>—</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )
+        })()}
+
         {/* ── Returns & Exchange Analytics (hidden) ── */}
         {false && (() => {
           const rk = retData?.kpis || {}
@@ -2494,9 +2608,10 @@ function Sidebar({ page, setPage, invTab, setInvTab, allowedTabs, profile }) {
   ]
   return (
     <nav className="sidebar">
-      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', marginBottom: 4, marginTop: -6 }}>
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', marginBottom: 6, marginTop: -6 }}>
         <img src="/frido-navigator-icon-light-theme (2).png" alt="Frido Navigator" style={{ width: 42, height: 42, objectFit: 'contain' }} />
       </div>
+      <hr className="sb-sep" />
       {items.map(item => {
         if (item.id === 'inventory') {
           const hasHealth = !allowedTabs || allowedTabs.includes('inventory')
@@ -2524,7 +2639,7 @@ function Sidebar({ page, setPage, invTab, setInvTab, allowedTabs, profile }) {
                   display: 'flex', flexDirection: 'column', gap: 2,
                 }}>
                   {subTabs.map(sub => (
-                    <div key={sub.id} onClick={() => { setPage('inventory'); setInvTab(sub.id); setInvHover(false) }}
+                    <div key={sub.id} onClick={e => { e.stopPropagation(); setPage('inventory'); setInvTab(sub.id); setInvHover(false) }}
                       style={{
                         padding: '8px 12px', borderRadius: 7, cursor: 'pointer', fontSize: 12, fontWeight: invTab === sub.id && page === 'inventory' ? 700 : 500,
                         color: invTab === sub.id && page === 'inventory' ? C.t1 : C.t2,
@@ -2569,7 +2684,7 @@ function Sidebar({ page, setPage, invTab, setInvTab, allowedTabs, profile }) {
                   display: 'flex', flexDirection: 'column', gap: 2,
                 }}>
                   {logSubTabs.map(sub => (
-                    <div key={sub.id} onClick={() => { setPage(sub.id); setLogHover(false) }}
+                    <div key={sub.id} onClick={e => { e.stopPropagation(); setPage(sub.id); setLogHover(false) }}
                       style={{
                         padding: '8px 12px', borderRadius: 7, cursor: 'pointer', fontSize: 12,
                         fontWeight: page === sub.id ? 700 : 500,
@@ -12249,10 +12364,32 @@ function FilterIconPopover({ children, activeCount }) {
 }
 
 const SALES_KEY_MAP = { 'all': 'sales:all', 'shopify': 'sales:shopify', 'ebo': 'sales:ebo', 'amazon': 'sales:amazon', 'flipkart': 'sales:flipkart', 'blinkit': 'sales:blinkit', 'cred': 'sales:cred', 'firstcry': 'sales:firstcry', 'instamart': 'sales:instamart', 'zepto': 'sales:zepto', 'myntra': 'sales:myntra', 'international': 'sales:international', 'offline': 'sales:offline' }
-function SalesPage({ data, filters, setFilters, activeTab, setActiveTab, fetchData, channelView, setChannelView, offlineSub, setOfflineSub, allowedTabs, subCatFirstOrderMap = {} }) {
+function SalesPage({ data, filters, setFilters, activeTab, setActiveTab, fetchData, channelView, setChannelView, offlineSub, setOfflineSub, shopifyView, setShopifyView, d2cSubChannelFromUrl, onD2cSubChange, allowedTabs, subCatFirstOrderMap = {} }) {
   const allowedSalesTabs = TABS.filter(t => !allowedTabs || allowedTabs.includes(SALES_KEY_MAP[t.id]))
   const filteredData = data
-  const [shopifyView, setShopifyView] = useState('overview') // 'overview' | 'returns' — D2C only
+
+  // Sync D2C subChannel from URL into filters
+  useEffect(() => {
+    if (activeTab !== 'shopify' || d2cSubChannelFromUrl === null) return
+    setFilters(f => {
+      const cur = f.subChannel || ''
+      if (cur === d2cSubChannelFromUrl) return f
+      return { ...f, subChannel: d2cSubChannelFromUrl }
+    })
+  }, [d2cSubChannelFromUrl, activeTab])
+
+  // Intercept setFilters to detect D2C subChannel changes and update URL
+  const setFiltersWrapped = useCallback((updater) => {
+    setFilters(prev => {
+      const next = typeof updater === 'function' ? updater(prev) : updater
+      if (onD2cSubChange && activeTab === 'shopify' && next.subChannel !== prev.subChannel) {
+        const sc = next.subChannel || ''
+        const sub2 = sc === 'MyFrido' ? 'myfrido' : sc === 'Mobility' ? 'mobility' : 'overall'
+        onD2cSubChange(sub2)
+      }
+      return next
+    })
+  }, [setFilters, onD2cSubChange, activeTab])
 
   const cats = useMemo(() => Object.keys(data?.catMap || {}).filter(Boolean).sort(), [data])
   const subCats = useMemo(() => {
@@ -12269,7 +12406,7 @@ function SalesPage({ data, filters, setFilters, activeTab, setActiveTab, fetchDa
   // with no toggle fall back to a plain label (the channel's own tab name) instead of leaving this
   // side of the bar empty, so the row doesn't look like an accidental gap under the tab bar.
   const channelToggle = activeTab === 'shopify' && shopifyView === 'returns' ? <span style={{ fontSize: 15, fontWeight: 800, color: C.t1 }}>D2C – Return Analysis</span>
-    : activeTab === 'shopify' ? <D2CSubChannelToggle data={data} filters={filters} setFilters={setFilters} />
+    : activeTab === 'shopify' ? <D2CSubChannelToggle data={data} filters={filters} setFilters={setFiltersWrapped} />
     : activeTab === 'amazon' ? <AmazonChannelViewToggle channelView={channelView} setChannelView={setChannelView} />
     : activeTab === 'offline' ? <OfflineSubToggle sub={offlineSub} setSub={setOfflineSub} />
     : <span style={{ fontSize: 13, fontWeight: 700, color: C.t2 }}>{TABS.find(t => t.id === activeTab)?.label || ''}</span>
@@ -12289,7 +12426,7 @@ function SalesPage({ data, filters, setFilters, activeTab, setActiveTab, fetchDa
           const isActive = activeTab === tab.id
           return (
             <button key={tab.id}
-              onClick={() => { if (!allowed) return; setActiveTab(tab.id); setChannelView('all'); setOfflineSub('all'); setShopifyView('overview'); setFilters(f => ({ ...f, subChannel: '', voucher: '', channelGroup: [], category: [], subCategory: [], sku: [], paymentType: '', productAge: '' })) }}
+              onClick={() => { if (!allowed) return; setActiveTab(tab.id); setFilters(f => ({ ...f, subChannel: '', voucher: '', channelGroup: [], category: [], subCategory: [], sku: [], paymentType: '', productAge: '' })) }}
               className={`stab${isActive ? ' active' : ''}`}
               style={{ ...(tab.id === 'all' ? { fontWeight: isActive ? 800 : 700, fontSize: 13 } : {}), ...(!allowed ? { opacity: 0.35, cursor: 'not-allowed', pointerEvents: 'auto' } : {}) }}>
               {tab.logo && <img src={tab.logo} alt="" style={{ width: 14, height: 14, borderRadius: 3, flexShrink: 0, objectFit: 'contain', filter: tab.id === 'cred' ? 'invert(1)' : 'none' }} />}
@@ -12304,7 +12441,7 @@ function SalesPage({ data, filters, setFilters, activeTab, setActiveTab, fetchDa
           <div>{channelToggle}</div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginLeft: 'auto' }}>
             {activeTab === 'shopify' && (
-              <button onClick={() => setShopifyView(v => v === 'returns' ? 'overview' : 'returns')} className="d2c-return-link" style={{ fontSize: 12, fontWeight: 600, color: shopifyView === 'returns' ? C.t1 : C.t2, background: 'none', border: 'none', cursor: 'pointer', padding: '4px 2px', textDecoration: shopifyView === 'returns' ? 'underline' : 'none', textDecorationColor: C.t1, textUnderlineOffset: 3 }}>
+              <button onClick={() => setShopifyView(shopifyView === 'returns' ? 'overview' : 'returns')} className="d2c-return-link" style={{ fontSize: 12, fontWeight: 600, color: shopifyView === 'returns' ? C.t1 : C.t2, background: 'none', border: 'none', cursor: 'pointer', padding: '4px 2px', textDecoration: shopifyView === 'returns' ? 'underline' : 'none', textDecorationColor: C.t1, textUnderlineOffset: 3 }}>
                 {shopifyView === 'returns' ? '← Back to Overview' : 'Return Analysis'}
               </button>
             )}
@@ -15376,6 +15513,8 @@ function AppInner() {
   const [session, setSession] = useState(undefined) // undefined = loading, null = no session
   const [profile, setProfile] = useState(null)
   const [allowedTabs, setAllowedTabs] = useState(null)
+  const navigate = useNavigate()
+  const location = useLocation()
 
   useEffect(() => {
     if (window.location.hash.includes('type=recovery')) {
@@ -15402,7 +15541,17 @@ function AppInner() {
     <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#F5F1E8', fontFamily: 'sans-serif', color: '#7A8079' }}>Loading…</div>
   )
   if (session === 'recovery') return <ResetPasswordPage />
-  if (!session) return <LoginPage onLogin={s => setSession(s)} />
+
+  // /login route: show login page if not authenticated; redirect to /overview if already logged in
+  if (location.pathname === '/login') {
+    if (session) {
+      navigate('/overview', { replace: true })
+      return null
+    }
+    return <LoginPage onLogin={s => { setSession(s); navigate('/overview', { replace: true }) }} />
+  }
+
+  if (!session) return <LoginPage onLogin={s => { setSession(s); navigate('/overview', { replace: true }) }} />
 
   // Wait for profile to load before rendering Dashboard so isAdmin check is accurate
   if (!profile) return (
@@ -15471,16 +15620,100 @@ function hasPnlAccess(allowedTabs) { return !allowedTabs || PNL_KEYS.some(k => a
 function hasCostAccess(allowedTabs) { return !allowedTabs || allowedTabs.includes('logistics:cost') || COST_KEYS.some(k => allowedTabs.includes(k)) }
 
 function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated }) {
-  const getInitialPage = () => {
+  const navigate = useNavigate()
+  const location = useLocation()
+
+  // Parse URL → internal page/tab state
+  const parseUrl = (pathname) => {
+    const parts = pathname.replace(/^\//, '').split('/')
+    const seg0 = parts[0] || 'overview'
+    const seg1 = parts[1] || null
+    const seg2 = parts[2] || null
+    // Map URL segments to internal page IDs
+    if (seg0 === 'logistics' && seg1 === 'cost_analytics') return { page: 'logistics-cost', sub: null, sub2: null }
+    if (seg0 === 'logistics' && seg1 === 'cost') return { page: 'logistics-cost', sub: null, sub2: null } // legacy redirect
+    if (seg0 === 'logistics') return { page: 'logistics', sub: null, sub2: null }
+    if (seg0 === 'inventory') return { page: 'inventory', sub: seg1 === 'inventory_health' ? 'health' : seg1 === 'sales_allocation' ? 'sales' : (seg1 || 'health'), sub2: null }
+    if (seg0 === 'sales') return { page: 'sales', sub: seg1 || 'all', sub2: seg2 || 'overall' }
+    if (seg0 === 'pnl') return { page: 'pnl', sub: seg1 || 'all', sub2: null }
+    if (seg0 === 'ads') return { page: 'ads', sub: seg1 || null, sub2: null }
+    return { page: seg0, sub: seg1, sub2: null }
+  }
+
+  // Navigate imperatively (replaces setPage / setInvTab / setSalesActiveTab etc.)
+  const goTo = (page, sub, sub2) => {
+    let path
+    if (page === 'logistics-cost') path = '/logistics/cost_analytics'
+    else if (page === 'logistics') path = '/logistics/performance_analytics'
+    else if (page === 'inventory') path = `/inventory/${sub === 'health' ? 'inventory_health' : sub === 'sales' ? 'sales_allocation' : (sub || 'inventory_health')}`
+    else if (page === 'sales') path = sub2 ? `/sales/${sub || 'all'}/${sub2}` : `/sales/${sub || 'all'}`
+    else if (page === 'pnl') path = `/pnl/${sub || 'all'}`
+    else if (page === 'ads') path = sub ? `/ads/${sub}` : '/ads'
+    else path = `/${page}`
+    navigate(path)
+  }
+
+  const { page, sub: urlSub, sub2: urlSub2 } = parseUrl(location.pathname)
+  const invTab = page === 'inventory' ? (urlSub || 'health') : 'health'
+  const setInvTab = (tab) => goTo('inventory', tab)
+  const activeTab = page === 'sales' ? (urlSub || 'all') : 'all'
+  const setActiveTab = (tab) => { goTo('sales', tab, 'overall') }
+  const pnlActiveTab = page === 'pnl' ? (urlSub || 'all') : 'all'
+  const setPnlActiveTab = (tab) => goTo('pnl', tab)
+  const adsSelPlatform = page === 'ads' ? (urlSub || null) : null
+  const setAdsSelPlatform = (plat) => goTo('ads', plat)
+
+  // Sales channel sub-tab navigation (seg2 in URL)
+  const salesSub2 = page === 'sales' ? (urlSub2 || 'overall') : 'overall'
+  const goToSalesSub = (sub2) => goTo('sales', activeTab, sub2)
+
+  // Derive salesChannelView (Amazon: overall/seller_central/vendor_central)
+  const salesChannelView = activeTab === 'amazon'
+    ? (salesSub2 === 'seller_central' ? 'sc' : salesSub2 === 'vendor_central' ? 'vc' : 'all')
+    : 'all'
+  const setSalesChannelView = (v) => {
+    const sub2 = v === 'sc' ? 'seller_central' : v === 'vc' ? 'vendor_central' : 'overall'
+    goToSalesSub(sub2)
+  }
+
+  // Derive salesOfflineSub (Offline: overall/b2b/stockist/mt_gt)
+  const salesOfflineSub = activeTab === 'offline'
+    ? (salesSub2 === 'overall' ? 'all' : salesSub2)
+    : 'all'
+  const setSalesOfflineSub = (v) => goToSalesSub(v === 'all' ? 'overall' : v)
+
+  // Derive shopifyView (D2C: return_analysis → 'returns', else 'overview')
+  const shopifyView = activeTab === 'shopify' && salesSub2 === 'return_analysis' ? 'returns' : 'overview'
+  const setShopifyView = (v) => goToSalesSub(v === 'returns' ? 'return_analysis' : 'overall')
+
+  // Derive D2C subChannel from URL seg2 and sync to filters
+  const d2cSubChannelFromUrl = activeTab === 'shopify'
+    ? (salesSub2 === 'myfrido' ? 'MyFrido' : salesSub2 === 'mobility' ? 'Mobility' : salesSub2 === 'return_analysis' ? '' : 'ShopifyIndia')
+    : null
+
+  const setPage = (p) => {
+    if (p === 'inventory') goTo('inventory', allowedTabs?.includes('inventory') ? 'health' : 'sales')
+    else if (p === 'sales') goTo('sales', 'all', 'overall')
+    else if (p === 'pnl') goTo('pnl', 'all')
+    else if (p === 'ads') goTo('ads', null)
+    else goTo(p, null)
+  }
+
+  const [customerTab, setCustomerTab] = useState('overview')
+
+  // Redirect to default page if URL is '/' or unknown
+  const getDefaultPage = () => {
     if (!allowedTabs?.length) return 'overview'
     const match = TAB_PRIORITY.find(t => allowedTabs.includes(t))
     return match ? (permKeyToPage[match] || match) : (permKeyToPage[allowedTabs[0]] || allowedTabs[0])
   }
-  const [page, setPage] = useState(getInitialPage)
-  const [invTab, setInvTab] = useState(() => allowedTabs?.includes('inventory') ? 'health' : 'sales')
-  const [customerTab, setCustomerTab] = useState('overview')
 
   useEffect(() => {
+    if (location.pathname === '/') {
+      const def = getDefaultPage()
+      setPage(def)
+      return
+    }
     const isPageAllowed = page === 'logistics' ? (!allowedTabs || allowedTabs.includes('logistics')) :
       page === 'logistics-cost' ? hasCostAccess(allowedTabs) :
       page === 'inventory' ? (!allowedTabs || allowedTabs.includes('inventory') || allowedTabs.includes('inventory:sales')) :
@@ -15489,18 +15722,14 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
       page === 'pnl' ? hasPnlAccess(allowedTabs) :
       !allowedTabs || allowedTabs.includes(page)
     if (allowedTabs?.length && !isPageAllowed) {
-      const match = TAB_PRIORITY.find(t => allowedTabs.includes(t))
-      setPage(match ? (permKeyToPage[match] || match) : (permKeyToPage[allowedTabs[0]] || allowedTabs[0]))
+      setPage(getDefaultPage())
     }
-  }, [allowedTabs])
+  }, [allowedTabs, location.pathname])
+
   const def = getDefaultDates()
   const [filters, setFilters] = useState({ start: def.start, end: def.end, category: [], subCategory: [], sku: [], subChannel: '', voucher: '', region: [], tier: [], state: [], city: '', channelGroup: [], productAge: '' })
   const [subCatFirstOrderMap, setSubCatFirstOrderMap] = useState({})
-  const [activeTab, setActiveTab] = useState('all')
-  const [salesChannelView, setSalesChannelView] = useState('all')
-  const [salesOfflineSub, setSalesOfflineSub] = useState('all')
-  const [adsSelPlatform, setAdsSelPlatform] = useState(null)
-  const [pnlActiveTab, setPnlActiveTab] = useState('all')
+  // salesChannelView and salesOfflineSub are now derived from URL (goToSalesSub above)
   const [pnlAmzView, setPnlAmzView] = useState('all')
   const [pnlOfflineSub, setPnlOfflineSub] = useState('all')
   const [pnlD2cSubCh, setPnlD2cSubCh] = useState('all')
@@ -15886,7 +16115,7 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
                 setPage={setPage} setFilters={setFilters} setActiveTab={setActiveTab} />
             </div>
           )}
-          {page === 'sales' && data && hasSalesAccess(allowedTabs) && <SalesPage data={data} filters={filters} setFilters={setFilters} activeTab={activeTab} setActiveTab={setActiveTab} fetchData={fetchData} channelView={salesChannelView} setChannelView={setSalesChannelView} offlineSub={salesOfflineSub} setOfflineSub={setSalesOfflineSub} allowedTabs={allowedTabs} subCatFirstOrderMap={subCatFirstOrderMap} />}
+          {page === 'sales' && data && hasSalesAccess(allowedTabs) && <SalesPage data={data} filters={filters} setFilters={setFilters} activeTab={activeTab} setActiveTab={setActiveTab} fetchData={fetchData} channelView={salesChannelView} setChannelView={setSalesChannelView} offlineSub={salesOfflineSub} setOfflineSub={setSalesOfflineSub} shopifyView={shopifyView} setShopifyView={setShopifyView} d2cSubChannelFromUrl={d2cSubChannelFromUrl} onD2cSubChange={goToSalesSub} allowedTabs={allowedTabs} subCatFirstOrderMap={subCatFirstOrderMap} />}
           {page === 'pnl' && data && hasPnlAccess(allowedTabs) && <PnLPage data={data} filters={filters} setFilters={setFilters} activeTab={pnlActiveTab} setActiveTab={setPnlActiveTab} amzChannelView={pnlAmzView} setAmzChannelView={setPnlAmzView} offlineSub={pnlOfflineSub} setOfflineSub={setPnlOfflineSub} d2cSubCh={pnlD2cSubCh} setD2cSubCh={setPnlD2cSubCh} allowedTabs={allowedTabs} />}
           {page === 'ads' && !adsCache && !data && <Skeleton />}
           {page === 'ads' && (adsCache || data) && hasAdsAccess(allowedTabs) && (
