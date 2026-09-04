@@ -699,7 +699,8 @@ ndr_by_courier AS (
     COUNTIF(ofd_attempts = 3 AND unified_status = 'Delivered') AS del_att3,
     COUNTIF(ofd_attempts >= 4 AND unified_status = 'Delivered') AS del_att3plus,
     ROUND(AVG(CASE WHEN ofd_attempts >= 1 AND NOT (ofd_attempts = 1 AND unified_status = 'Delivered') THEN ofd_attempts END), 2) AS avg_att,
-    ROUND(AVG(CASE WHEN ofd_attempts >= 1 AND NOT (ofd_attempts = 1 AND unified_status = 'Delivered') AND unified_status = 'Delivered' AND pickup_ts IS NOT NULL AND delivery_ts IS NOT NULL AND TIMESTAMP_DIFF(delivery_ts, pickup_ts, MINUTE) BETWEEN 0 AND 28800 THEN TIMESTAMP_DIFF(delivery_ts, pickup_ts, MINUTE) / 1440.0 END), 2) AS avg_intransit_days
+    ROUND(AVG(CASE WHEN ofd_attempts >= 1 AND NOT (ofd_attempts = 1 AND unified_status = 'Delivered') AND unified_status = 'Delivered' AND pickup_ts IS NOT NULL AND delivery_ts IS NOT NULL AND TIMESTAMP_DIFF(delivery_ts, pickup_ts, MINUTE) BETWEEN 0 AND 28800 THEN TIMESTAMP_DIFF(delivery_ts, pickup_ts, MINUTE) / 1440.0 END), 2) AS avg_intransit_days,
+    ROUND(AVG(CASE WHEN ofd_attempts >= 1 AND NOT (ofd_attempts = 1 AND unified_status = 'Delivered') AND unified_status = 'Delivered' AND delivery_date IS NOT NULL AND order_date IS NOT NULL AND DATE_DIFF(delivery_date, order_date, DAY) BETWEEN 0 AND 20 THEN DATE_DIFF(delivery_date, order_date, DAY) END), 2) AS avg_o2d
   FROM base
   GROUP BY 1, 2
 ),

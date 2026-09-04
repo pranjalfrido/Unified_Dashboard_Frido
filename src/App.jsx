@@ -2336,7 +2336,7 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
           const filtered = ndrPayFilter === 'All' ? allNdrRows : allNdrRows.filter(r => r.payment_mode === ndrPayFilter)
           const courierMap = {}
           filtered.forEach(r => {
-            if (!courierMap[r.courier]) courierMap[r.courier] = { courier: r.courier, total_shipments: 0, ndr_count: 0, ndr_del: 0, ndr_rto: 0, del_att2: 0, del_att3: 0, del_att3plus: 0, _att_sum: 0, _att_n: 0, _tat_sum: 0, _tat_n: 0 }
+            if (!courierMap[r.courier]) courierMap[r.courier] = { courier: r.courier, total_shipments: 0, ndr_count: 0, ndr_del: 0, ndr_rto: 0, del_att2: 0, del_att3: 0, del_att3plus: 0, _att_sum: 0, _att_n: 0, _tat_sum: 0, _tat_n: 0, _o2d_sum: 0, _o2d_n: 0 }
             const c = courierMap[r.courier]
             c.total_shipments += r.total_shipments || 0
             c.ndr_count += r.ndr_count || 0
@@ -2347,8 +2347,9 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
             c.del_att3plus += r.del_att3plus || 0
             if (r.avg_att != null) { c._att_sum += r.avg_att * (r.ndr_count || 0); c._att_n += r.ndr_count || 0 }
             if (r.avg_intransit_days != null) { c._tat_sum += r.avg_intransit_days * (r.ndr_del || 0); c._tat_n += r.ndr_del || 0 }
+            if (r.avg_o2d != null) { c._o2d_sum += r.avg_o2d * (r.ndr_del || 0); c._o2d_n += r.ndr_del || 0 }
           })
-          const ndrRows = Object.values(courierMap).sort((a, b) => b.ndr_count - a.ndr_count).map(c => ({ ...c, avg_att: c._att_n ? +(c._att_sum / c._att_n).toFixed(2) : null, avg_intransit_days: c._tat_n ? +(c._tat_sum / c._tat_n).toFixed(2) : null }))
+          const ndrRows = Object.values(courierMap).sort((a, b) => b.ndr_count - a.ndr_count).map(c => ({ ...c, avg_att: c._att_n ? +(c._att_sum / c._att_n).toFixed(2) : null, avg_intransit_days: c._tat_n ? +(c._tat_sum / c._tat_n).toFixed(2) : null, avg_o2d: c._o2d_n ? +(c._o2d_sum / c._o2d_n).toFixed(2) : null }))
           const pct = (a, b) => b ? ((a / b) * 100).toFixed(1) + '%' : '—'
           const totals = ndrRows.reduce((s, r) => ({
             total_shipments: s.total_shipments + (r.total_shipments || 0),
@@ -2389,7 +2390,8 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
                       <th style={thStyle}>DEL 3rd ATT</th>
                       <th style={thStyle}>DEL 3+ ATT</th>
                       <th style={thStyle}>AVG ATT</th>
-                      <th style={thStyle}>INTRANSIT TAT</th>
+                      <th style={thStyle}>AVG S2D</th>
+                      <th style={thStyle}>AVG O2D</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -2409,6 +2411,7 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
                         <td style={td}>{(r.del_att3plus || 0).toLocaleString('en-IN')}</td>
                         <td style={td}>{r.avg_att != null ? r.avg_att : '—'}</td>
                         <td style={td}>{r.avg_intransit_days != null ? r.avg_intransit_days + 'd' : '—'}</td>
+                        <td style={td}>{r.avg_o2d != null ? r.avg_o2d + 'd' : '—'}</td>
                       </tr>
                     ))}
                     {/* Total row */}
@@ -2422,6 +2425,7 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
                       <td style={{ ...td, fontWeight: 700 }}>{totals.del_att2.toLocaleString('en-IN')}</td>
                       <td style={{ ...td, fontWeight: 700 }}>{totals.del_att3.toLocaleString('en-IN')}</td>
                       <td style={{ ...td, fontWeight: 700 }}>{totals.del_att3plus.toLocaleString('en-IN')}</td>
+                      <td style={{ ...td, fontWeight: 700 }}>—</td>
                       <td style={{ ...td, fontWeight: 700 }}>—</td>
                       <td style={{ ...td, fontWeight: 700 }}>—</td>
                     </tr>
