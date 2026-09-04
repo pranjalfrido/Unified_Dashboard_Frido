@@ -392,6 +392,7 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
   const [cSort, setCSort] = useState({ col: 'total', dir: 'desc' })
   const [cView, setCView] = useState('courier') // 'courier' | 'facility' | 'month'
   const [payTrendGran, setPayTrendGran] = useState('Daily')
+  const [ndrPayFilter, setNdrPayFilter] = useState('All')
   const [isMobile, setIsMobile] = useState(() => window.innerWidth <= 768)
   useEffect(() => {
     const onResize = () => setIsMobile(window.innerWidth <= 768)
@@ -2329,14 +2330,13 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
         {/* ── NDR Analysis ── */}
         <LSectionTitle title="NDR Analysis" collapsed={secCollapsed['ndr']} onToggle={() => toggleSec('ndr')} />
         {(() => {
-          const [ndrPayFilter, setNdrPayFilter] = React.useState('All')
           const allNdrRows = (data.ndrByCourier || [])
           if (!allNdrRows.length) return null
           // Aggregate rows by courier, filtered by payment mode
           const filtered = ndrPayFilter === 'All' ? allNdrRows : allNdrRows.filter(r => r.payment_mode === ndrPayFilter)
           const courierMap = {}
           filtered.forEach(r => {
-            if (!courierMap[r.courier]) courierMap[r.courier] = { courier: r.courier, total_shipments: 0, ndr_count: 0, ndr_del: 0, ndr_rto: 0, del_att2: 0, del_att3: 0, del_att3plus: 0, _att_sum: 0, _att_n: 0 }
+            if (!courierMap[r.courier]) courierMap[r.courier] = { courier: r.courier, total_shipments: 0, ndr_count: 0, ndr_del: 0, ndr_rto: 0, del_att2: 0, del_att3: 0, del_att3plus: 0, _att_sum: 0, _att_n: 0, _tat_sum: 0, _tat_n: 0 }
             const c = courierMap[r.courier]
             c.total_shipments += r.total_shipments || 0
             c.ndr_count += r.ndr_count || 0
@@ -2346,17 +2346,10 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
             c.del_att3 += r.del_att3 || 0
             c.del_att3plus += r.del_att3plus || 0
             if (r.avg_att != null) { c._att_sum += r.avg_att * (r.ndr_count || 0); c._att_n += r.ndr_count || 0 }
+            if (r.avg_intransit_days != null) { c._tat_sum += r.avg_intransit_days * (r.ndr_del || 0); c._tat_n += r.ndr_del || 0 }
           })
-          const ndrRows = Object.values(courierMap).sort((a, b) => b.ndr_count - a.ndr_count).map(c => ({ ...c, avg_att: c._att_n ? +(c._att_sum / c._att_n).toFixed(2) : null }))
+          const ndrRows = Object.values(courierMap).sort((a, b) => b.ndr_count - a.ndr_count).map(c => ({ ...c, avg_att: c._att_n ? +(c._att_sum / c._att_n).toFixed(2) : null, avg_intransit_days: c._tat_n ? +(c._tat_sum / c._tat_n).toFixed(2) : null }))
           const pct = (a, b) => b ? ((a / b) * 100).toFixed(1) + '%' : '—'
-          // Build intransit TAT lookup from byCourier
-          const tatByCourier = {}
-          ;(data.byCourier || []).forEach(r => {
-            if (!tatByCourier[r.courier_group]) tatByCourier[r.courier_group] = { _wt: 0, _sum: 0 }
-            const w = r.delivered || 0; const v = r.avg_intransit || 0
-            tatByCourier[r.courier_group]._wt += w
-            tatByCourier[r.courier_group]._sum += v * w
-          })
           const totals = ndrRows.reduce((s, r) => ({
             total_shipments: s.total_shipments + (r.total_shipments || 0),
             ndr_count: s.ndr_count + (r.ndr_count || 0),
@@ -2400,28 +2393,24 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
                     </tr>
                   </thead>
                   <tbody>
-                    {ndrRows.map(r => {
-                      const tat = tatByCourier[r.courier]
-                      const avgTat = tat?._wt ? (tat._sum / tat._wt).toFixed(2) : '—'
-                      return (
-                        <tr key={r.courier} style={{ borderBottom: `1px solid ${C.border}` }}>
-                          <td style={{ ...tdL, display: 'flex', alignItems: 'center', gap: 6 }}>
-                            {COURIER_LOGOS[r.courier] && <img src={COURIER_LOGOS[r.courier]} alt="" style={{ width: 18, height: 18, objectFit: 'contain', borderRadius: 3, background: '#fff', padding: 1, border: `1px solid ${C.border}`, flexShrink: 0 }} />}
-                            {r.courier}
-                          </td>
-                          <td style={td}>{(r.total_shipments || 0).toLocaleString('en-IN')}</td>
-                          <td style={td}>{(r.ndr_count || 0).toLocaleString('en-IN')}</td>
-                          <td style={td}>{pct(r.ndr_count, r.total_shipments)}</td>
-                          <td style={td}>{pct(r.ndr_del, r.ndr_count)}</td>
-                          <td style={td}>{pct(r.ndr_rto, r.ndr_count)}</td>
-                          <td style={td}>{(r.del_att2 || 0).toLocaleString('en-IN')}</td>
-                          <td style={td}>{(r.del_att3 || 0).toLocaleString('en-IN')}</td>
-                          <td style={td}>{(r.del_att3plus || 0).toLocaleString('en-IN')}</td>
-                          <td style={td}>{r.avg_att != null ? r.avg_att : '—'}</td>
-                          <td style={td}>{avgTat !== '—' ? avgTat + 'd' : '—'}</td>
-                        </tr>
-                      )
-                    })}
+                    {ndrRows.map(r => (
+                      <tr key={r.courier} style={{ borderBottom: `1px solid ${C.border}` }}>
+                        <td style={{ ...tdL, display: 'flex', alignItems: 'center', gap: 6 }}>
+                          {COURIER_LOGOS[r.courier] && <img src={COURIER_LOGOS[r.courier]} alt="" style={{ width: 18, height: 18, objectFit: 'contain', borderRadius: 3, background: '#fff', padding: 1, border: `1px solid ${C.border}`, flexShrink: 0 }} />}
+                          {r.courier}
+                        </td>
+                        <td style={td}>{(r.total_shipments || 0).toLocaleString('en-IN')}</td>
+                        <td style={td}>{(r.ndr_count || 0).toLocaleString('en-IN')}</td>
+                        <td style={td}>{pct(r.ndr_count, r.total_shipments)}</td>
+                        <td style={td}>{pct(r.ndr_del, r.ndr_count)}</td>
+                        <td style={td}>{pct(r.ndr_rto, r.ndr_count)}</td>
+                        <td style={td}>{(r.del_att2 || 0).toLocaleString('en-IN')}</td>
+                        <td style={td}>{(r.del_att3 || 0).toLocaleString('en-IN')}</td>
+                        <td style={td}>{(r.del_att3plus || 0).toLocaleString('en-IN')}</td>
+                        <td style={td}>{r.avg_att != null ? r.avg_att : '—'}</td>
+                        <td style={td}>{r.avg_intransit_days != null ? r.avg_intransit_days + 'd' : '—'}</td>
+                      </tr>
+                    ))}
                     {/* Total row */}
                     <tr style={{ borderTop: `2px solid ${C.border}`, background: C.bg }}>
                       <td style={{ ...tdL, fontWeight: 700 }}>Total</td>
