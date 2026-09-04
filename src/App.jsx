@@ -1,7 +1,7 @@
 import { useState, useMemo, useCallback, useEffect, useRef, Fragment, Component } from 'react'
 import { SquaresFour, ChartBar, TrendUp, PlayCircle, Cube, Truck, Users, FileText } from '@phosphor-icons/react'
 import { C, fmt, fmtN, fmtBig, pct, processData, detectAlerts, exportCSV, getDefaultDates, COURIER_COLORS, COURIER_LOGOS } from './utils.js'
-import { KPICard, AlertCard, DataTable, Card, Badge, CategoryRevenueCard, RevTrendChart, AreaTrendChart, MultiLineChart, useSortableTable, useReorderableColumns, GROUP_OPTS, getGroupKey, TrendAnalysisCard, BarChart, Bar, LineChart, Line, AreaChart, Area, ComposedChart, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell, Treemap } from './components.jsx'
+import { ChartTooltip, KPICard, AlertCard, DataTable, Card, Badge, CategoryRevenueCard, RevTrendChart, AreaTrendChart, MultiLineChart, useSortableTable, useReorderableColumns, GROUP_OPTS, getGroupKey, TrendAnalysisCard, BarChart, Bar, LineChart, Line, AreaChart, Area, ComposedChart, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell, Treemap } from './components.jsx'
 import InventoryPage from './InventoryPage.jsx'
 import { IC } from './inventory/theme.jsx'
 import LoginPage from './LoginPage.jsx'
@@ -38,10 +38,17 @@ import { ReferenceLine, LabelList, ScatterChart, Scatter } from 'recharts'
 
 // ── Logistics Page ────────────────────────────────────────────
 const COURIERS = ['Bluedart','Delhivery','Delhivery NDD','Ekart','ElasticRun','Safexpress','Shadowfax','Shiprocket','Skye Air','Swift','Urbane Bolt']
+// Must stay in sync with EMPTY_FILTERS in src/LogisticsCostPage.jsx — this is the object
+// actually passed in as externalFilters, so the page's own copy is unused on this path.
+// A key missing here is not a crash (undefined reads as "unset" in every guard) but the
+// filter can never be cleared back to a known state, and the shape sent to the API
+// differs from the one the page believes it owns.
 const EMPTY_COST_FILTERS = {
   months: [], zones: [], modes: [], payments: [], couriers: [],
   transporters: [], vehicleTypes: [], freightTypes: [],
-  accountTypes: [], band: null, destCity: null, billing: 'all',
+  accountTypes: [], band: null, destCity: null,
+  originCity: null, exactSlab: null,
+  billing: 'all',
 }
 // COURIER_COLORS / COURIER_LOGOS now live in utils.js — shared with the cost page.
 
@@ -4000,14 +4007,109 @@ function HeroKPICard({ label, value, sub, chg, sparkData, dataKey = 'cur', color
 }
 
 // ── Overview Page ─────────────────────────────────────────────
-function OverviewPage({ data, alerts, logisticsData, filters }) {
-  const { totalRev, totalExcRev, nOrders, totalQty, blendedAOV, nDays, chMap, catMap, subCatMap, stateMap, nCusts, repeatCusts, dailyArr, prevRev, prevOrders, orderStatusRevMap = {}, rtoRevDirect, returnRev, cirRev, exchangeRev, netRevenueCalc = 0 } = data
+function OverviewPage({ data, alerts, logisticsData, filters, setPage, setFilters, setActiveTab }) {
+  const { totalRev, totalExcRev, nOrders, totalQty, blendedAOV, nDays, chMap, catMap, catPrevMap = {}, subCatMap, stateMap, nCusts, repeatCusts, dailyArr, dailyReturnTrend = [], prevRev, prevOrders, orderStatusRevMap = {}, rtoRevDirect, returnRev, cirRev, exchangeRev, netRevenueCalc = 0, momRev = 0, yoyRev = 0, momOrders = 0, yoyOrders = 0, momPeriod = '', yoyPeriod = '' } = data
   const sh = data.shopify || {}
   const ads = data.ads || {}
 
   // ── Revenue deltas ──
   const revDelta = prevRev > 0 ? ((totalRev - prevRev) / prevRev * 100) : null
   const ordDelta = (data.prevOrders || 0) > 0 ? ((nOrders - data.prevOrders) / data.prevOrders * 100) : null
+
+  // ── MoM / YoY growth ──
+  // Three DIFFERENT comparisons exist in this payload and only one was on the page:
+  //   prevRev  = the immediately preceding window of equal length (+5.2% Jul 2026)
+  //   momRev   = the previous CALENDAR month                      (+6.9%)
+  //   yoyRev   = the same month one year earlier                  (+76.7%)
+  // The hero badge already shows the first. The other two were unused, which meant the tab
+  // never showed that the business nearly doubled year-on-year. They are not interchangeable,
+  // so each is labelled with the period it covers rather than a bare "growth".
+  const growth = useMemo(() => {
+    const pc = (cur, prev) => (prev > 0 ? ((cur - prev) / prev) * 100 : null)
+    return [
+      {
+        key: 'mom', label: 'MoM',
+        rev: pc(totalRev, momRev), ord: pc(nOrders, momOrders),
+        period: momPeriod, base: momRev,
+      },
+      {
+        key: 'yoy', label: 'YoY',
+        rev: pc(totalRev, yoyRev), ord: pc(nOrders, yoyOrders),
+        period: yoyPeriod, base: yoyRev,
+      },
+    // Drop a comparator whose base period has no data rather than rendering "n/a" or a
+    // misleading +100%: a brand-new channel or a backfill gap makes prev 0.
+    ].filter(x => x.rev !== null && x.base > 0)
+  }, [totalRev, nOrders, momRev, yoyRev, momOrders, yoyOrders, momPeriod, yoyPeriod])
+
+  // ── Sparkline series for the KPI cards ──
+  // dailyArr rows are keyed PER CHANNEL (Shopify, Shopify_o, Shopify_u …), not pre-totalled,
+  // so a day total is the sum across channel keys. Summing every numeric key would double
+  // count: `_o` (orders) and `_u` (units) sit alongside revenue on the same row.
+  const spark = useMemo(() => {
+    const rows = dailyArr || []
+    if (rows.length < 2) return null
+    const chans = Object.keys(chMap || {})
+    // Last 12 points, or everything if the range is shorter. A sparkline of 90 daily points
+    // is a smear; 12 reads as a shape.
+    const step = Math.max(1, Math.ceil(rows.length / 12))
+    const out = []
+    for (let i = 0; i < rows.length; i += step) {
+      let rev = 0, ord = 0, units = 0
+      // Each bucket sums the days it spans, so a 90-day range becomes 12 weekly-ish points
+      // rather than 12 sampled days that ignore the rest.
+      for (let j = i; j < Math.min(i + step, rows.length); j++) {
+        for (const c of chans) {
+          rev += Number(rows[j][c]) || 0
+          ord += Number(rows[j][c + '_o']) || 0
+          units += Number(rows[j][c + '_u']) || 0
+        }
+      }
+      out.push({ i: out.length, rev, ord, units, aov: ord ? rev / ord : 0 })
+    }
+    if (out.length < 2) return null
+    // dailyArr's per-channel `_o` counts an order once per (date, channel) it touches, so
+    // summing it gives ~0.24% more than nOrders (which is a distinct-order count). Measured
+    // on Jul 2026: 300,752 vs 300,032. Revenue has no such split and reconciles exactly.
+    // Rescale orders to the headline total so the shape under the Orders card integrates to
+    // the number printed on it; AOV is rebuilt from the scaled orders for the same reason.
+    const oSum = out.reduce((s, r) => s + r.ord, 0)
+    if (oSum > 0 && nOrders > 0) {
+      const k = nOrders / oSum
+      for (const r of out) { r.ord = r.ord * k; r.aov = r.ord ? r.rev / r.ord : 0 }
+    }
+    return out
+  }, [dailyArr, chMap, nOrders])
+
+  // ── Drill-through ──
+  // Overview was a dead end: every row knew its channel/category/state and none of them did
+  // anything. Clicking now sets the filter AND navigates, so the reader lands on the detail
+  // already scoped instead of re-picking it by hand.
+  //
+  // Guarded on both props: this component is rendered in one place today, but a caller that
+  // forgets them should get a non-clickable table rather than a crash.
+  const canDrill = typeof setPage === 'function' && typeof setFilters === 'function'
+
+  // Set a filter, then navigate. The reader lands on the detail already scoped instead of
+  // re-picking by hand. Filter keys here are arrays (category, state) to match the shape the
+  // sidebar writes; a bare string would break the multi-select that reads them.
+  const drill = (patch, dest) => {
+    if (!canDrill) return
+    setFilters(f => ({ ...f, ...patch }))
+    setPage(dest)
+  }
+
+  // A channel row drills by selecting that channel's Sales tab, NOT by writing a filter:
+  // chMap is keyed by channel name (Shopify, Amazon, Blinkit) while the channelGroup filter
+  // only accepts the five group keys, so a name pushed into it would match zero rows. TABS
+  // carries `ch` for exactly this mapping; a channel with no tab is left non-clickable.
+  const chTab = ch => TABS.find(t => t.ch === ch)?.id
+  const drillChannel = ch => {
+    const id = chTab(ch)
+    if (!id || typeof setActiveTab !== 'function' || typeof setPage !== 'function') return
+    setActiveTab(id)
+    setPage('sales')
+  }
 
   // ── Channel calcs ──
   const shopifyRev = chMap['Shopify']?.rev || 0
@@ -4034,10 +4136,32 @@ function OverviewPage({ data, alerts, logisticsData, filters }) {
   const platformsWithSpend = adsTotals.filter(t => t.spend > 0).sort((a, b) => b.spend - a.spend)
 
   // ── Categories ──
+  // Per-category rollup for the merged Category Performance table.
+  //
+  // BASIS WARNING: rev/orders are ALL-CHANNEL (catMap) while cancel/RTO/CIR come from `sh`
+  // (D2C only). Dividing a D2C numerator by an all-channel denominator understates every
+  // rate by 1.5-3x — measured Jul 2026, Ergo Furniture reads 3.81% when its true D2C cancel
+  // rate is 9.34%, and Pillows is out by 3.07x because D2C is only a third of its revenue.
+  // So d2cRev is carried alongside and the rate columns divide by THAT.
   const allCats = Object.entries(catMap).map(([k, v]) => {
     const shCat = sh.catMap?.[k] || {}
     const effectiveCancelRev = (shCat.cancelRev || 0) - (shCat.codCancelRev || 0)
-    return { name: k, rev: v.rev, orders: (v.orders?.size ?? v.orders) || 0, cancelRev: effectiveCancelRev, rtoRev: shCat.rtoRev || 0, cirRev: shCat.cirRev || 0 }
+    const d2cRev = shCat.rev || 0
+    const prev = catPrevMap?.[k]
+    const prevRevCat = typeof prev === 'number' ? prev : (prev?.rev || 0)
+    return {
+      name: k,
+      rev: v.rev,
+      orders: (v.orders?.size ?? v.orders) || 0,
+      d2cRev,
+      cancelRev: effectiveCancelRev,
+      rtoRev: shCat.rtoRev || 0,
+      cirRev: shCat.cirRev || 0,
+      // Rates on the D2C base, so numerator and denominator are the same population.
+      cancelPct: d2cRev > 0 ? (effectiveCancelRev / d2cRev) * 100 : null,
+      rtoPct: d2cRev > 0 ? (((shCat.rtoRev || 0) + (shCat.cirRev || 0)) / d2cRev) * 100 : null,
+      growth: prevRevCat > 0 ? ((v.rev - prevRevCat) / prevRevCat) * 100 : null,
+    }
   }).sort((a, b) => b.rev - a.rev)
 
   // ── Logistics ──
@@ -4094,12 +4218,51 @@ function OverviewPage({ data, alerts, logisticsData, filters }) {
             <span style={{ fontSize: 11, fontWeight: 600, padding: '3px 9px', borderRadius: 5, background: 'rgba(0,0,0,.1)', color: '#13121A' }}>Daily avg {fmt(totalRev / nDays)}</span>
             {delta(revDelta)}
           </div>
+          {/* MoM and YoY. The badge above compares to the preceding window of equal length;
+              these two compare to the previous calendar month and to the same month last
+              year. Three different questions, so each carries its own label and the exact
+              period sits in the tooltip — an unlabelled "+76.7%" invites the reader to assume
+              whichever basis they had in mind. */}
+          {growth.length > 0 && (
+            <div style={{ display: 'flex', gap: 14, marginTop: 9, paddingTop: 9, borderTop: '1px solid rgba(0,0,0,.09)' }}>
+              {growth.map(g => (
+                <div key={g.key} title={g.period ? `${g.label}: vs ${g.period}` : undefined}
+                  style={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+                  <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: '.06em', color: 'rgba(0,0,0,.42)' }}>
+                    {g.label}
+                  </span>
+                  <span style={{ display: 'flex', alignItems: 'baseline', gap: 4 }}>
+                    <span style={{
+                      fontSize: 15, fontWeight: 800, letterSpacing: '-.02em',
+                      color: g.rev >= 0 ? '#0D6E48' : '#8A1616',
+                    }}>{g.rev >= 0 ? '▲' : '▼'}{Math.abs(g.rev).toFixed(1)}%</span>
+                    <span style={{ fontSize: 10, color: 'rgba(0,0,0,.45)' }}>rev</span>
+                  </span>
+                  {g.ord !== null && (
+                    <span style={{ fontSize: 9.5, color: 'rgba(0,0,0,.45)' }}>
+                      {g.ord >= 0 ? '+' : ''}{g.ord.toFixed(1)}% orders
+                    </span>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
           <div style={{ position: 'absolute', right: -8, bottom: -16, fontSize: 90, color: 'rgba(0,0,0,.04)', pointerEvents: 'none' }}>₹</div>
         </div>
-        <KPICard center label="Orders" value={fmtN(nOrders)} sub={<>{fmtN(totalQty)} units{delta(ordDelta)}</>} />
-        <KPICard center label="Blended AOV" value={`₹${Math.round(blendedAOV).toLocaleString('en-IN')}`} sub={`${nDays} day period`} />
-        <KPICard center label="D2C Customers" value={fmtN(nCusts)} sub={`${nCusts ? (repeatCusts / nCusts * 100).toFixed(1) : 0}% repeat`} />
-        <KPICard center label="Net Revenue" value={fmt(netRevenueCalc)} sub="After returns & cancel, exc. GST" />
+        {/* Each card carries its own series, so the delta badge has a shape behind it — "+8%"
+            alone does not say whether that is a recovery or a blip. Orders and AOV drill to
+            Sales; Customers to the customer tab. Net Revenue has no single destination, so it
+            stays read-only rather than navigating somewhere arbitrary. */}
+        <KPICard center label="Orders" value={fmtN(nOrders)} sub={<>{fmtN(totalQty)} units{delta(ordDelta)}</>}
+          spark={spark} sparkKey="ord" sparkColor={C.ch?.Shopify || undefined}
+          onClick={canDrill ? () => drill({}, 'sales') : undefined} />
+        <KPICard center label="Blended AOV" value={`₹${Math.round(blendedAOV).toLocaleString('en-IN')}`} sub={`${nDays} day period`}
+          spark={spark} sparkKey="aov"
+          onClick={canDrill ? () => drill({}, 'sales') : undefined} />
+        <KPICard center label="D2C Customers" value={fmtN(nCusts)} sub={`${nCusts ? (repeatCusts / nCusts * 100).toFixed(1) : 0}% repeat`}
+          onClick={canDrill ? () => drill({ channelGroup: [] }, 'customer') : undefined} />
+        <KPICard center label="Net Revenue" value={fmt(netRevenueCalc)} sub="After returns & cancel, exc. GST"
+          spark={spark} sparkKey="rev" />
       </div>
 
       {/* ── SECTION 2: Channel Scorecard ── */}
@@ -4119,7 +4282,7 @@ function OverviewPage({ data, alerts, logisticsData, filters }) {
                 const prevChRev = data.prevChMap?.[ch] || 0
                 const chDelta = prevChRev > 0 ? (v.rev - prevChRev) / prevChRev * 100 : null
                 return (
-                  <tr key={ch} style={{ borderBottom: i < sortedCh.length - 1 ? `1px solid ${C.border}` : 'none' }}>
+                  <tr key={ch} className={chTab(ch) ? 'ov-drill' : undefined} onClick={chTab(ch) ? () => drillChannel(ch) : undefined} title={chTab(ch) ? `Open ${ch} in Sales` : undefined} style={{ borderBottom: i < sortedCh.length - 1 ? `1px solid ${C.border}` : 'none', cursor: chTab(ch) ? 'pointer' : 'default' }}>
                     <td style={{ padding: '6px 8px', display: 'flex', alignItems: 'center', gap: 7 }}>
                       {CHANNEL_LOGOS[ch]
                         ? <img src={CHANNEL_LOGOS[ch]} alt={ch} style={{ width: ch === 'offline_sales' ? 22 : 18, height: ch === 'offline_sales' ? 22 : 18, objectFit: 'contain', borderRadius: 4, flexShrink: 0, background: ch === 'CRED' ? '#1a1a1a' : '#f5f5f5', padding: ch === 'CRED' ? 2 : 0 }} />
@@ -4181,29 +4344,44 @@ function OverviewPage({ data, alerts, logisticsData, filters }) {
             ].map(({ label, val, rev, color, bg }) => (
               <div key={label} style={{ background: bg, borderRadius: 9, padding: '10px 12px' }}>
                 <div style={{ fontSize: 9.5, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.05em', color, marginBottom: 4 }}>{label}</div>
-                <div style={{ fontSize: 20, fontWeight: 700, color, fontFamily: 'var(--mono)' }}>{val.toFixed(1)}%</div>
+                <div style={{ fontSize: 20, fontWeight: 700, color, fontFamily: 'var(--mono)' }}>
+                  {/* A short date range makes CIR and Exchange genuinely tiny (returns lag the
+                      sale), and one decimal collapsed Rs 5.98K and Rs 2.04K to an identical
+                      "0.0%". Show a second decimal only when the first would read as zero, so
+                      long ranges keep the cleaner one-decimal form. */}
+                  {val > 0 && val < 0.05 ? val.toFixed(2) : val.toFixed(1)}%
+                </div>
                 <div style={{ fontSize: 10, color, opacity: 0.7, marginTop: 2 }}>{fmt(rev)}</div>
               </div>
             ))}
           </div>
-          <div style={{ borderTop: `1px solid ${C.border}`, paddingTop: 12 }}>
-            <div style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.05em', color: C.t3, marginBottom: 8 }}>D2C Category · Cancel & RTO %</div>
-            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11 }}>
-              <thead><tr>
-                {['Category','Revenue','Cancel %','RTO %'].map((h, i) => <th key={h} style={{ fontSize: 9, fontWeight: 700, textTransform: 'uppercase', color: C.t3, textAlign: i === 0 ? 'left' : 'right', padding: '2px 4px 6px', borderBottom: `1px solid ${C.border}` }}>{h}</th>)}
-              </tr></thead>
-              <tbody>
-                {allCats.slice(0, 6).map((r, i) => (
-                  <tr key={r.name} style={{ borderBottom: i < 5 ? `1px solid ${C.border}` : 'none' }}>
-                    <td style={{ padding: '4px 4px', color: C.t2 }}>{r.name}</td>
-                    <td style={{ padding: '4px 4px', textAlign: 'right', fontFamily: 'var(--mono)', color: C.t1 }}>{fmt(r.rev)}</td>
-                    <td style={{ padding: '4px 4px', textAlign: 'right', color: r.cancelRev/r.rev > 0.05 ? '#B91C1C' : C.t2 }}>{r.rev > 0 ? (r.cancelRev/r.rev*100).toFixed(1) : '—'}%</td>
-                    <td style={{ padding: '4px 4px', textAlign: 'right', color: (r.rtoRev+r.cirRev)/r.rev > 0.1 ? '#E24B4A' : C.t2 }}>{r.rev > 0 ? ((r.rtoRev+r.cirRev)/r.rev*100).toFixed(1) : '—'}%</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          {/* Daily rate trend. The four tiles give the period average; this shows whether
+              that average is a plateau or a slide, which the tiles alone cannot say. It also
+              fills the panel — the tiles were left floating in a half-empty card.
+
+              Percentages share one axis because all four are the same unit and comparable.
+              Hidden below two points: a single-day range yields one row and Recharts would
+              draw an axis with no line. */}
+          {(dailyReturnTrend || []).length > 1 && (
+            <div style={{ height: 150, marginTop: 2 }}>
+              <ResponsiveContainer width="100%" height="100%">
+                <LineChart data={dailyReturnTrend} margin={{ top: 4, right: 6, left: -6, bottom: 0 }}>
+                  <CartesianGrid stroke={C.border} vertical={false} />
+                  <XAxis dataKey="date" tick={{ fontSize: 9, fill: C.t3 }} axisLine={{ stroke: C.border }}
+                    tickLine={false} tickFormatter={v => String(v).slice(8, 10)} interval="preserveStartEnd" />
+                  <YAxis tick={{ fontSize: 9, fill: C.t3 }} axisLine={false} tickLine={false}
+                    tickFormatter={v => `${v.toFixed(0)}%`} width={34} />
+                  <Tooltip content={<ChartTooltip formatter={v => `${Number(v).toFixed(2)}%`} />} />
+                  <Legend wrapperStyle={{ fontSize: 9.5 }} iconSize={7} />
+                  {/* Same colours as the tiles above, so the eye carries a metric between them. */}
+                  <Line type="monotone" dataKey="cancelPct" name="Cancel" stroke="#B91C1C" strokeWidth={1.6} dot={false} />
+                  <Line type="monotone" dataKey="rtoPct" name="RTO" stroke="#E24B4A" strokeWidth={1.6} dot={false} />
+                  <Line type="monotone" dataKey="cirPct" name="CIR" stroke="#2E74CC" strokeWidth={1.6} dot={false} />
+                  <Line type="monotone" dataKey="exchPct" name="Exchange" stroke="#9B59B6" strokeWidth={1.6} dot={false} />
+                </LineChart>
+              </ResponsiveContainer>
+            </div>
+          )}
         </div>
 
         {/* Ads Summary */}
@@ -4311,29 +4489,47 @@ function OverviewPage({ data, alerts, logisticsData, filters }) {
       {/* ── SECTION 6: Category Matrix + Geography ── */}
       <div style={{ display: 'grid', gridTemplateColumns: '1.4fr 1fr', gap: 12 }}>
         <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 13, padding: '16px 18px' }}>
-          {secHdr('Category Performance', 'All channels')}
+          {secHdr('Category Performance', 'Revenue all channels · cancel/RTO D2C only')}
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11.5 }}>
             <thead><tr>
-              {['Category','Revenue','Share','Orders','AOV'].map((h, i) => <th key={h} style={{ fontSize: 9, fontWeight: 700, textTransform: 'uppercase', color: C.t3, textAlign: i === 0 ? 'left' : 'right', padding: '2px 6px 6px', borderBottom: `1px solid ${C.border}` }}>{h}</th>)}
+              {['Category','Revenue','Share','Growth','Orders','AOV','Cancel %','RTO %'].map((h, i) => <th key={h} style={{ fontSize: 9, fontWeight: 700, textTransform: 'uppercase', color: C.t3, textAlign: i === 0 ? 'left' : 'right', padding: '2px 6px 6px', borderBottom: `1px solid ${C.border}` }}>{h}</th>)}
             </tr></thead>
             <tbody>
               {allCats.map((r, i) => {
                 const share = totalRev > 0 ? r.rev / totalRev * 100 : 0
                 const aov = r.orders > 0 ? r.rev / r.orders : 0
                 return (
-                  <tr key={r.name} style={{ borderBottom: i < allCats.length - 1 ? `1px solid ${C.border}` : 'none' }}>
+                  <tr key={r.name} className={canDrill ? 'ov-drill' : undefined} onClick={canDrill ? () => drill({ category: [r.name], subCategory: [], sku: [] }, 'sales') : undefined} title={canDrill ? `Filter Sales to ${r.name}` : undefined} style={{ borderBottom: i < allCats.length - 1 ? `1px solid ${C.border}` : 'none', cursor: canDrill ? 'pointer' : 'default' }}>
                     <td style={{ padding: '5px 6px', color: C.t2, fontWeight: 500 }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                         <div style={{ flex: 1 }}>{r.name}</div>
+                        {/* Bar is scaled to the LARGEST category, not to 100%: the top share is
+                            only ~23%, so a share-of-total width left every bar in the first
+                            quarter of its track and the differences were unreadable. */}
                         <div style={{ height: 4, width: 60, background: C.border, borderRadius: 2, overflow: 'hidden' }}>
-                          <div style={{ height: '100%', width: `${share}%`, background: C.acc, borderRadius: 2 }} />
+                          <div style={{ height: '100%', width: `${allCats[0]?.rev > 0 ? (r.rev / allCats[0].rev) * 100 : 0}%`, background: C.acc, borderRadius: 2 }} />
                         </div>
                       </div>
                     </td>
                     <td style={{ padding: '5px 6px', textAlign: 'right', fontFamily: 'var(--mono)', color: C.t1 }}>{fmt(r.rev)}</td>
                     <td style={{ padding: '5px 6px', textAlign: 'right', color: C.t3 }}>{share.toFixed(1)}%</td>
+                    {/* Growth vs the previous period — the column that separates a big-and-growing
+                        category from a big-and-shrinking one. Both looked identical when the
+                        table sorted on revenue alone. */}
+                    <td style={{ padding: '5px 6px', textAlign: 'right', fontWeight: 700, fontFamily: 'var(--mono)', color: r.growth === null ? C.t3 : r.growth >= 0 ? '#0D9E68' : '#B91C1C' }}>
+                      {r.growth === null ? '—' : `${r.growth >= 0 ? '+' : ''}${r.growth.toFixed(1)}%`}
+                    </td>
                     <td style={{ padding: '5px 6px', textAlign: 'right', color: C.t2 }}>{fmtN(r.orders)}</td>
                     <td style={{ padding: '5px 6px', textAlign: 'right', fontFamily: 'var(--mono)', color: C.t2 }}>₹{Math.round(aov).toLocaleString('en-IN')}</td>
+                    {/* Cancel and RTO are D2C-only measures (see allCats) so they divide by D2C
+                        revenue, and read as em-dash where a category has no D2C sales rather
+                        than showing a 0% that would look like a clean record. */}
+                    <td style={{ padding: '5px 6px', textAlign: 'right', color: r.cancelPct === null ? C.t3 : r.cancelPct > 5 ? '#B91C1C' : C.t2 }}>
+                      {r.cancelPct === null ? '—' : r.cancelPct.toFixed(1) + '%'}
+                    </td>
+                    <td style={{ padding: '5px 6px', textAlign: 'right', color: r.rtoPct === null ? C.t3 : r.rtoPct > 10 ? '#E24B4A' : C.t2 }}>
+                      {r.rtoPct === null ? '—' : r.rtoPct.toFixed(1) + '%'}
+                    </td>
                   </tr>
                 )
               })}
@@ -4347,7 +4543,7 @@ function OverviewPage({ data, alerts, logisticsData, filters }) {
             {topStates.map(([state, v]) => {
               const share = totalRev > 0 ? v.rev / totalRev * 100 : 0
               return (
-                <div key={state}>
+                <div key={state} className={canDrill ? 'ov-drill' : undefined} onClick={canDrill ? () => drill({ state: [state], city: '' }, 'sales') : undefined} title={canDrill ? `Filter Sales to ${state.charAt(0) + state.slice(1).toLowerCase()}` : undefined} style={{ cursor: canDrill ? 'pointer' : 'default', borderRadius: 6, padding: '2px 4px', margin: '0 -4px' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 3 }}>
                     <span style={{ fontSize: 11.5, fontWeight: 600, color: C.t1 }}>{state.charAt(0) + state.slice(1).toLowerCase()}</span>
                     <span style={{ fontSize: 11, fontFamily: 'var(--mono)', color: C.t1 }}>{fmt(v.rev)} <span style={{ color: C.t3, fontFamily: 'var(--font)' }}>· {share.toFixed(1)}%</span></span>
@@ -15684,7 +15880,10 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
           {loading && !data && page !== 'logistics' && page !== 'inventory' && page !== 'documents' && page !== 'cogs' && page !== 'logistics-ledger' && page !== 'logistics-cost' && page !== 'profile' && page !== 'logistics-cost' && page !== 'ads' && page !== 'customer' && <Skeleton />}
           {page === 'overview' && data && (!allowedTabs || allowedTabs.includes('overview')) && (
             <div className="page-scroll">
-              <OverviewPage data={data} alerts={alerts} logisticsData={logisticsData} filters={filters} />
+              {/* setPage/setFilters/setActiveTab make the rows drill-through: without them
+                  OverviewPage degrades to the read-only table it was, by design. */}
+              <OverviewPage data={data} alerts={alerts} logisticsData={logisticsData} filters={filters}
+                setPage={setPage} setFilters={setFilters} setActiveTab={setActiveTab} />
             </div>
           )}
           {page === 'sales' && data && hasSalesAccess(allowedTabs) && <SalesPage data={data} filters={filters} setFilters={setFilters} activeTab={activeTab} setActiveTab={setActiveTab} fetchData={fetchData} channelView={salesChannelView} setChannelView={setSalesChannelView} offlineSub={salesOfflineSub} setOfflineSub={setSalesOfflineSub} allowedTabs={allowedTabs} subCatFirstOrderMap={subCatFirstOrderMap} />}

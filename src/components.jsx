@@ -21,15 +21,41 @@ export function ChartTooltip({ active, payload, label, formatter }) {
   )
 }
 
-export function KPICard({ label, icon, value, sub, accent, center, badge }) {
+export function KPICard({ label, icon, value, sub, accent, center, badge, spark, sparkKey, sparkColor, onClick }) {
+  const clickable = typeof onClick === 'function'
   return (
-    <div className="kpi-card flex flex-col gap-1" style={center ? { alignItems: 'center', justifyContent: 'center', textAlign: 'center' } : {}}>
-      <span className="text-xs font-bold uppercase tracking-wider flex items-center gap-1" style={{ color: C.t3, justifyContent: center ? 'center' : undefined }}>{icon && <span style={{ fontSize: 13 }}>{icon}</span>}{label}</span>
+    <div className="kpi-card flex flex-col gap-1.5"
+      onClick={clickable ? onClick : undefined}
+      style={{
+        ...(center ? { alignItems: 'center', justifyContent: 'center', textAlign: 'center' } : {}),
+        ...(clickable ? { cursor: 'pointer' } : {}),
+        position: 'relative', overflow: 'hidden',
+      }}>
+      <span className="text-xs font-bold uppercase tracking-wider flex items-center gap-1" style={{ color: C.t2, justifyContent: center ? 'center' : undefined }}>{icon && <span style={{ fontSize: 13 }}>{icon}</span>}{label}</span>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 4 }}>
         <span style={{ fontSize: center ? 28 : 21, fontWeight: 700, letterSpacing: '-.02em', lineHeight: 1.1, color: accent || C.t1 }}>{value}</span>
         {badge && <span>{badge}</span>}
       </div>
-      {sub && <span className="text-xs" style={{ color: C.t3 }}>{sub}</span>}
+      {sub && <span className="text-xs" style={{ color: C.t2 }}>{sub}</span>}
+      {/* Sparkline sits BEHIND the text at low opacity rather than below it: the cards are in
+          a fixed-height grid, so adding a row would either clip the sub-line or make every
+          card taller. pointerEvents none so it never eats a click meant for the card. */}
+      {spark && spark.length > 1 && (
+        <div style={{ position: 'absolute', left: 0, right: 0, bottom: 0, height: 34, opacity: 0.5, pointerEvents: 'none' }}>
+          <ResponsiveContainer width="100%" height="100%">
+            <AreaChart data={spark} margin={{ top: 0, right: 0, bottom: 0, left: 0 }}>
+              <defs>
+                <linearGradient id={`kpiSpark-${sparkKey || label}`} x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor={sparkColor || C.acm} stopOpacity={0.34} />
+                  <stop offset="100%" stopColor={sparkColor || C.acm} stopOpacity={0.02} />
+                </linearGradient>
+              </defs>
+              <Area type="monotone" dataKey={sparkKey || 'v'} stroke={sparkColor || C.acm}
+                strokeWidth={1.75} fill={`url(#kpiSpark-${sparkKey || label})`} dot={false} />
+            </AreaChart>
+          </ResponsiveContainer>
+        </div>
+      )}
     </div>
   )
 }

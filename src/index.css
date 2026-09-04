@@ -466,3 +466,12 @@ html,body{height:100%;background:var(--bg);font-family:var(--font);color:var(--t
 .ov-kpis .kpi-value { font-size: 19px; margin-bottom: 1px; }
 .ov-kpis .kpi-sub { font-size: 10.5px; }
 
+
+/* Overview drill-through rows.
+   The affordance has to be visible before the click: a row that navigates and looks identical
+   to one that does not is a trap. Handled in CSS rather than React hover state so no re-render
+   fires per row on mouse-move — the scorecard and category tables share this class.
+   :hover only, so keyboard focus styling stays whatever the theme sets. */
+.ov-drill { transition: background .12s ease, box-shadow .12s ease; }
+.ov-drill:hover { background: var(--acl, rgba(255, 214, 0, .13)); }
+.ov-drill:hover td:first-child { box-shadow: inset 2px 0 0 var(--acc, #FFD600); }

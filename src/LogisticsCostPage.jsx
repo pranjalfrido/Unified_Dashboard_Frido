@@ -129,7 +129,7 @@ const SCOPES = [
 
 const EMPTY_FILTERS = {
   months: [], zones: [], modes: [], payments: [], couriers: [], transporters: [], vehicleTypes: [], freightTypes: [],
-  accountTypes: [], band: null, destCity: null, billing: 'all',
+  accountTypes: [], band: null, destCity: null, originCity: null, exactSlab: null, billing: 'all',
 }
 
 const num = v => { const n = parseFloat(v); return isNaN(n) ? 0 : n }
@@ -672,7 +672,10 @@ function cubeToBreakdowns(rows) {
 
 // Filters that can be satisfied purely from the cube (no API needed).
 function isCubeFilter(f) {
-  return !f.band && !f.destCity
+  // originCity and exactSlab are NOT in the cube (it carries no origin_city column and is
+  // pre-aggregated by band, not by exact slab), so either one must force an API request.
+  // Omitting them here would serve stale cube rows and the filter would silently no-op.
+  return !f.band && !f.destCity && !f.originCity && f.exactSlab == null
 }
 
 // Apply cube-compatible filters to cube rows.
@@ -739,7 +742,7 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
   const [internalFilters, setInternalFilters] = useState(EMPTY_FILTERS)
   const filters = externalFilters || internalFilters
   const setFilters = setExternalFilters || setInternalFilters
-  const [opts, setOpts] = useState({ months: [], zones: [], modes: [], payments: [], couriers: [], transporters: [], vehicleTypes: [], freightTypes: [], accountTypes: [], cities: [] })
+  const [opts, setOpts] = useState({ months: [], zones: [], modes: [], payments: [], couriers: [], transporters: [], vehicleTypes: [], freightTypes: [], accountTypes: [], cities: [], originCities: [], slabs: [] })
   const [sidebarOpen, setSidebarOpen] = useState(true)
   // 'all' = B2B + B2C summary · 'b2c' = courier detail · 'b2b' = lane-wise freight
   const [scope, setScope] = useState(() => {
@@ -798,7 +801,8 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
         // Try CDN static file on first load (no filters set yet, or base not cached)
         const isDefaultFilters = !f.months?.length && !f.zones?.length && !f.modes?.length &&
           !f.payments?.length && !f.couriers?.length && !f.accountTypes?.length &&
-          !f.band && !f.destCity && (!f.billing || f.billing === 'all')
+          !f.band && !f.destCity && !f.originCity && f.exactSlab == null &&
+          (!f.billing || f.billing === 'all')
 
         if (isDefaultFilters && !baseData) {
           const staticRes = await fetch('/logistics-cost-data.json', { signal: ctl.signal }).catch(() => null)
@@ -858,6 +862,10 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
             freightTypes: j.options.freight_types || [],
             accountTypes: j.options.account_types || [],
             cities: j.options.cities || [],
+            // Pickup cities and exact slabs. This object is rebuilt from scratch on every
+            // response, so a key omitted here is dropped even when the API sends it.
+            originCities: j.options.originCities || [],
+            slabs: j.options.slabs || [],
           })
         }
       } catch (e) {
@@ -1717,10 +1725,25 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
     setFilters(f => ({ ...f, [key]: f[key].includes(val) ? f[key].filter(x => x !== val) : [...f[key], val] }))
   const setOne = (key, val) => setFilters(f => ({ ...f, [key]: val }))
 
+  // Options for the exact-slab dropdown, ordered by slab ascending (the API returns them
+  // that way). SearchSelect matches on the label string and echoes it into the closed
+  // button, so the label stays just the weight — appending the shipment count would make
+  // the button read "2 kg - 127,312 shipments" once selected.
+  //
+  // slabLabelOf is shared by the option list and the selected-value lookup so both always
+  // produce the same string; two separate format calls would drift and the dropdown would
+  // show nothing as selected.
+  const slabLabelOf = s => `${s} kg`
+  const slabOptions = useMemo(
+    () => (opts.slabs || []).map(s => slabLabelOf(s.slab)),
+    [opts.slabs]
+  )
+
   const activeCount =
     filters.months.length + filters.zones.length + filters.modes.length +
     filters.payments.length + filters.couriers.length + filters.accountTypes.length +
     (filters.band ? 1 : 0) + (filters.destCity ? 1 : 0) + (filters.billing !== 'all' ? 1 : 0) +
+    (filters.originCity ? 1 : 0) + (filters.exactSlab != null ? 1 : 0) +
     (filters.transporters?.length || 0) + (filters.vehicleTypes?.length || 0) +
     (filters.freightTypes?.length || 0)
 
@@ -1832,6 +1855,25 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
             const b = WEIGHT_BANDS.find(x => x.label === label)
             setOne('band', b ? b.key : null)
           }} />
+
+        {/* Exact billable slab, distinct from the Weight Slab band above: that one covers a
+            range (2-5 kg), this one isolates a single billed step (exactly 2 kg). Both can be
+            set; the API ANDs them, which is how you ask "the 2 kg slab within 2-5 kg".
+
+            Only slabs that actually occur are listed, so the dropdown never offers an empty
+            one. 119 exist (0.5 to 500 kg) and 95% of volume sits at or below 10 kg, so the
+            long tail is real but rarely wanted — hence the search box. */}
+        <SearchSelect label="Exact Weight Slab" options={slabOptions}
+          value={filters.exactSlab != null ? slabLabelOf(filters.exactSlab) : null}
+          onChange={label => {
+            if (label === null) return setOne('exactSlab', null)
+            const hit = (opts.slabs || []).find(s => slabLabelOf(s.slab) === label)
+            setOne('exactSlab', hit ? hit.slab : null)
+          }} />
+
+        {/* Origin before destination, so the two city filters read as a lane. */}
+        <SearchSelect label="Pickup City" options={opts.originCities}
+          value={filters.originCity} onChange={v => setOne('originCity', v)} />
 
         <SearchSelect label="Drop City" options={opts.cities}
           value={filters.destCity} onChange={v => setOne('destCity', v)} />
