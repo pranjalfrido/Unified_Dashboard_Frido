@@ -475,3 +475,11 @@ html,body{height:100%;background:var(--bg);font-family:var(--font);color:var(--t
 .ov-drill { transition: background .12s ease, box-shadow .12s ease; }
 .ov-drill:hover { background: var(--acl, rgba(255, 214, 0, .13)); }
 .ov-drill:hover td:first-child { box-shadow: inset 2px 0 0 var(--acc, #FFD600); }
+
+/* Refresh indicator on the Logistics Cost scope bar. A pulsing dot reads as activity at a
+   glance and takes less width than the word alone, which matters in a right-aligned cluster
+   that shares the row with the period chip and filter badge. */
+@keyframes lcPulse {
+  0%, 100% { opacity: .25; transform: scale(.85); }
+  50%      { opacity: 1;   transform: scale(1); }
+}

@@ -3886,36 +3886,66 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
                 default it says so explicitly ("all 4 months available") instead of letting
                 the reader assume a 6-month figure — the honesty this needs is the whole
                 point of showing it. */}
-            {monthWindow && (
-              <span
-                title={monthWindow.kind === 'all-short'
-                  ? `The ledger holds ${monthWindow.total} month(s) in total, fewer than the ${DEFAULT_MONTH_COUNT}-month default. Every one is included.`
-                  : monthWindow.kind === 'all'
-                    ? `All ${monthWindow.total} uploaded months are included.`
-                    : monthWindow.kind === 'default'
-                      ? `Default view: the most recent ${monthWindow.count} of ${monthWindow.total} uploaded months. Change it under Billing Period.`
-                      : `${monthWindow.count} of ${monthWindow.total} months selected under Billing Period.`}
-                style={{
-                  display: 'inline-flex', alignItems: 'center', gap: 6,
-                  fontSize: 11.5, color: C.t2, background: C.bg,
-                  border: `1px solid ${C.border}`, borderRadius: 7,
-                  padding: '5px 10px', whiteSpace: 'nowrap',
-                }}>
-                <span style={{ color: C.t3, fontSize: 10 }}>▤</span>
-                <strong style={{ fontWeight: 600, color: C.t1 }}>{monthWindow.range}</strong>
-                <span style={{ color: C.t3 }}>
-                  {monthWindow.kind === 'all-short'
-                    ? `· all ${monthWindow.total} months uploaded`
-                    : monthWindow.kind === 'all'
-                      ? `· all ${monthWindow.total} months`
-                      : monthWindow.kind === 'default'
-                        ? `· last ${monthWindow.count} months`
-                        : `· ${monthWindow.count} of ${monthWindow.total} months`}
+            {/* Right-hand cluster: billing period, filter count, refresh state.
+                marginLeft:auto claims the gap so this pins to the far right of the bar
+                while the scope toggle stays hard left. */}
+            <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+              {loading && (
+                <span style={{ fontSize: 11, color: C.t3, display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+                  {/* Pulsing dot rather than the word alone — reads as activity at a glance
+                      and takes less room than "Refreshing…" on a narrow bar. */}
+                  <span style={{ width: 6, height: 6, borderRadius: '50%', background: C.acm, animation: 'lcPulse 1s ease-in-out infinite' }} />
+                  Refreshing
                 </span>
-              </span>
-            )}
-            {activeCount > 0 && scope !== 'all' && <Badge type="blue">{activeCount} filter{activeCount === 1 ? '' : 's'} active</Badge>}
-            {loading && <span style={{ fontSize: 11.5, color: C.t3 }}>Refreshing…</span>}
+              )}
+              {activeCount > 0 && scope !== 'all' && (
+                <Badge type="blue">{activeCount} filter{activeCount === 1 ? '' : 's'}</Badge>
+              )}
+              {monthWindow && (
+                <span
+                  title={monthWindow.kind === 'all-short'
+                    ? `The ledger holds ${monthWindow.total} month(s) in total, fewer than the ${DEFAULT_MONTH_COUNT}-month default. Every one is included.`
+                    : monthWindow.kind === 'all'
+                      ? `All ${monthWindow.total} uploaded months are included.`
+                      : monthWindow.kind === 'default'
+                        ? `Default view: the most recent ${monthWindow.count} of ${monthWindow.total} uploaded months. Change it under Billing Period.`
+                        : `${monthWindow.count} of ${monthWindow.total} months selected under Billing Period.`}
+                  style={{
+                    display: 'inline-flex', alignItems: 'center', gap: 0,
+                    background: C.card, border: `1px solid ${C.border2}`,
+                    borderRadius: 8, overflow: 'hidden', whiteSpace: 'nowrap',
+                    boxShadow: '0 1px 2px rgba(0,0,0,.04)', cursor: 'default',
+                  }}>
+                  {/* Two-part chip: the range reads as the value, the qualifier as its
+                      label. A single run of text made the month range and the "all 4
+                      months" note compete; splitting them on a divider gives the date
+                      primacy and lets the qualifier recede. */}
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '5px 9px' }}>
+                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke={C.t3} strokeWidth="2.2" strokeLinecap="round" style={{ flexShrink: 0 }}>
+                      <rect x="3" y="5" width="18" height="16" rx="2" />
+                      <path d="M8 3v4M16 3v4M3 11h18" />
+                    </svg>
+                    <strong style={{ fontSize: 11.5, fontWeight: 650, color: C.t1, letterSpacing: '-.01em' }}>
+                      {monthWindow.range}
+                    </strong>
+                  </span>
+                  <span style={{
+                    fontSize: 10.5, color: C.t2, background: C.bg,
+                    padding: '5px 9px', borderLeft: `1px solid ${C.border}`,
+                  }}>
+                    {/* all-short and all read the same here on purpose — "all 4 months" is
+                        already the honest statement either way. They stay separate kinds
+                        because the TOOLTIP differs: one explains that the ledger holds
+                        fewer months than the 6-month default. */}
+                    {monthWindow.kind === 'all-short' || monthWindow.kind === 'all'
+                      ? `all ${monthWindow.total} months`
+                      : monthWindow.kind === 'default'
+                        ? `last ${monthWindow.count} months`
+                        : `${monthWindow.count} of ${monthWindow.total}`}
+                  </span>
+                </span>
+              )}
+            </div>
             {/* The Lanes toggle went with the Top Lanes table it controlled. */}
           </div>
           {/* Refetch holds the previous render at reduced opacity — no skeleton flash,
