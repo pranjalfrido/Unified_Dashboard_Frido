@@ -7641,7 +7641,7 @@ function EBOTab({ data, rangeStart, rangeEnd }) {
   const exchangeOrders = ebo.exchange?.exchangeOrders || 0
   const exchangeRev = ebo.exchange?.exchangeRev || 0
   const cancelPct = totalRev > 0 ? (cancelRev / totalRev * 100) : 0
-  const returnRevPct = totalRev > 0 ? ((rtoRev + returnRev + cirRev) / totalRev * 100) : 0
+  const returnRevPct = totalRev > 0 ? ((rtoRev + returnRev + cirRev + cancelRev) / totalRev * 100) : 0
   const rtoPct = totalRev > 0 ? ((rtoRev + returnRev) / totalRev * 100) : 0
   const cirPct = totalRev > 0 ? (cirRev / totalRev * 100) : 0
   const exchangePct = totalRev > 0 ? (exchangeRev / totalRev * 100) : 0
@@ -10915,7 +10915,7 @@ function CredTab({ data }) {
   const netRev = cr.netCalc?.netRev ?? (t.excRev || 0)
   const gstCollected = cr.netCalc?.gstCollected || 0
   const cancelRev = cr.netCalc?.cancelRev || 0
-  const totalReturnRev = (cr.netCalc?.returnRev || 0) + (cr.netCalc?.rtoRev || 0) + (cr.netCalc?.cirRev || 0)
+  const totalReturnRev = (cr.netCalc?.returnRev || 0) + (cr.netCalc?.rtoRev || 0) + (cr.netCalc?.cirRev || 0) + (cr.netCalc?.cancelRev || 0)
   const cancelPct = rev > 0 ? cancelRev / rev * 100 : 0
   const returnPct = rev > 0 ? totalReturnRev / rev * 100 : 0
   const orders = t.orders || 0
@@ -11169,7 +11169,7 @@ function FirstcryTab({ data }) {
   const netRev = fc.netCalc?.netRev ?? (t.excRev || 0)
   const gstCollected = fc.netCalc?.gstCollected || 0
   const cancelRev = fc.netCalc?.cancelRev || 0
-  const totalReturnRev = (fc.netCalc?.returnRev || 0) + (fc.netCalc?.rtoRev || 0) + (fc.netCalc?.cirRev || 0)
+  const totalReturnRev = (fc.netCalc?.returnRev || 0) + (fc.netCalc?.rtoRev || 0) + (fc.netCalc?.cirRev || 0) + (fc.netCalc?.cancelRev || 0)
   const cancelPct = rev > 0 ? cancelRev / rev * 100 : 0
   const returnPct = rev > 0 ? totalReturnRev / rev * 100 : 0
   const orders = t.orders || 0
@@ -11419,7 +11419,7 @@ function MyntraTab({ data }) {
   const asp = qty ? rev / qty : 0
   // Myntra totals carry a real returnRev/returnOrders figure directly (unlike CRED/Firstcry,
   // which derive it from the netCalc shared-measures layer) — use it as-is.
-  const mnReturnRev = totals.returnRev || 0
+  const mnReturnRev = (totals.returnRev || 0) + (mn.netCalc?.rtoRev || 0) + (mn.netCalc?.cirRev || 0) + (mn.netCalc?.cancelRev || 0)
   const mnReturnOrders = totals.returnOrders || 0
   const mnReturnPct = rev > 0 ? (mnReturnRev / rev * 100) : 0
 
