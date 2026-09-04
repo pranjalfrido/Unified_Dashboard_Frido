@@ -279,9 +279,27 @@ export async function prewarm() {
     // every real page load still paid the full cold build (~90s) and the tab appeared to
     // hang. Keep this in sync with EMPTY_COST_FILTERS.
     await handler({ method: 'POST', body: { billing: 'all' } }, fakeRes)
-    // Also warm the bare-{} key: the static CDN generator and any scripted caller post an
-    // empty body, and one extra warm read is far cheaper than a second cold build.
+    // Also warm the bare-{} key: the static CDN generator and scripted callers post an
+    // empty body.
     await handler({ method: 'POST', body: {} }, fakeRes)
+    // ...and the key the UI produces once it applies its default Billing Period (the most
+    // recent 6 uploaded months). cacheKey() includes a non-empty months array, so that is a
+    // DIFFERENT key from {billing:"all"} — without warming it the tab pays the full ~90s
+    // cold build on every first load, exactly the bug this prewarm exists to prevent.
+    //
+    // The month list is read from the ledger so this tracks new uploads automatically
+    // rather than hard-coding a window that silently goes stale.
+    try {
+      const mr = await query(getCostPool(), `
+        SELECT DISTINCT month_year AS m FROM public.logistics_invoices_b2c
+         WHERE month_year IS NOT NULL ORDER BY 1`, [])
+      const months = mr.rows.map(r => r.m).slice(-6)
+      if (months.length) {
+        await handler({ method: 'POST', body: { months, billing: 'all' } }, fakeRes)
+      }
+    } catch (e) {
+      console.warn('[logistics-cost] default-window prewarm skipped:', e.message)
+    }
     console.log(`[logistics-cost] cache warm in ${((Date.now() - t) / 1000).toFixed(1)}s`)
   } catch (e) {
     console.error('[logistics-cost] prewarm failed:', e.message)

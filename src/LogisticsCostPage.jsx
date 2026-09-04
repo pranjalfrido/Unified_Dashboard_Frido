@@ -1725,6 +1725,68 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
     setFilters(f => ({ ...f, [key]: f[key].includes(val) ? f[key].filter(x => x !== val) : [...f[key], val] }))
   const setOne = (key, val) => setFilters(f => ({ ...f, [key]: val }))
 
+  // ── Default billing period: the most recent 6 months ──
+  //
+  // Applied once, when the month list first arrives from the API — not on every render,
+  // or a user clearing the filter would have it immediately reimposed and the control
+  // would look broken.
+  //
+  // The ledger holds FEWER than 6 months today (Apr-Jul 2026, so 4). slice(-6) takes
+  // whatever exists rather than padding, and `monthWindow` below reports what was
+  // actually selected so the page never implies six months of data it does not have.
+  const DEFAULT_MONTH_COUNT = 6
+  const monthsDefaulted = useRef(false)
+  useEffect(() => {
+    if (monthsDefaulted.current) return
+    const all = opts.months || []
+    if (!all.length) return
+    monthsDefaulted.current = true
+    // Respect a selection that is already in place (a shared URL, or an external filter
+    // object supplied by the parent).
+    if ((filters.months || []).length) return
+    setOne('months', all.slice(-DEFAULT_MONTH_COUNT))
+    // filters.months is deliberately NOT a dependency: this must fire on the arrival of
+    // the options, never in response to the user changing the selection.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [opts.months])
+
+  // What the period note renders. Derived from the SELECTED months, not from the default,
+  // so it stays truthful when the user narrows or widens the range.
+  const monthWindow = useMemo(() => {
+    const all = opts.months || []
+    const sel = (filters.months || []).length ? [...filters.months].sort() : all
+    if (!sel.length) return null
+    const label = m => {
+      const [y, mo] = String(m).split('-')
+      const d = new Date(Number(y), Number(mo) - 1, 1)
+      return Number.isFinite(d.getTime())
+        ? d.toLocaleString('en-IN', { month: 'short', year: 'numeric' })
+        : String(m)
+    }
+    const first = sel[0], last = sel[sel.length - 1]
+    // Four genuinely different situations, each needing its own wording. Two booleans were
+    // not enough and mislabelled two of them: with 9 months uploaded and the 6-month
+    // default it read "6 of 9 months" (sounds like the USER narrowed it), and with every
+    // month selected it read "last 9 months" (not what "last N" means).
+    //   all-short  every uploaded month is shown and there are fewer than the 6 we default
+    //              to — say so, so nobody reads the total as six months of data
+    //   all        every uploaded month is shown, and there are 6 or more
+    //   default    exactly the 6-month default out of a longer history
+    //   custom     the user picked something else
+    const isAll = sel.length === all.length
+    const isDefaultWindow = sel.length === DEFAULT_MONTH_COUNT
+      && sel.join() === all.slice(-DEFAULT_MONTH_COUNT).join()
+    const kind = isAll
+      ? (all.length < DEFAULT_MONTH_COUNT ? 'all-short' : 'all')
+      : (isDefaultWindow ? 'default' : 'custom')
+    return {
+      kind,
+      count: sel.length,
+      total: all.length,
+      range: first === last ? label(first) : `${label(first)} – ${label(last)}`,
+    }
+  }, [opts.months, filters.months])
+
   // Options for the exact-slab dropdown, ordered by slab ascending (the API returns them
   // that way). SearchSelect matches on the label string and echoes it into the closed
   // button, so the label stays just the weight — appending the shipment count would make
@@ -3816,6 +3878,42 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
                 )
               })}
             </div>
+            {/* Billing period actually in view. Styled as a quiet pill rather than a
+                warning: it is normal information, not a problem, and it has to sit beside
+                the scope toggle on all three tabs without competing with the KPIs.
+
+                The wording follows the data. When the ledger holds fewer than the 6-month
+                default it says so explicitly ("all 4 months available") instead of letting
+                the reader assume a 6-month figure — the honesty this needs is the whole
+                point of showing it. */}
+            {monthWindow && (
+              <span
+                title={monthWindow.kind === 'all-short'
+                  ? `The ledger holds ${monthWindow.total} month(s) in total, fewer than the ${DEFAULT_MONTH_COUNT}-month default. Every one is included.`
+                  : monthWindow.kind === 'all'
+                    ? `All ${monthWindow.total} uploaded months are included.`
+                    : monthWindow.kind === 'default'
+                      ? `Default view: the most recent ${monthWindow.count} of ${monthWindow.total} uploaded months. Change it under Billing Period.`
+                      : `${monthWindow.count} of ${monthWindow.total} months selected under Billing Period.`}
+                style={{
+                  display: 'inline-flex', alignItems: 'center', gap: 6,
+                  fontSize: 11.5, color: C.t2, background: C.bg,
+                  border: `1px solid ${C.border}`, borderRadius: 7,
+                  padding: '5px 10px', whiteSpace: 'nowrap',
+                }}>
+                <span style={{ color: C.t3, fontSize: 10 }}>▤</span>
+                <strong style={{ fontWeight: 600, color: C.t1 }}>{monthWindow.range}</strong>
+                <span style={{ color: C.t3 }}>
+                  {monthWindow.kind === 'all-short'
+                    ? `· all ${monthWindow.total} months uploaded`
+                    : monthWindow.kind === 'all'
+                      ? `· all ${monthWindow.total} months`
+                      : monthWindow.kind === 'default'
+                        ? `· last ${monthWindow.count} months`
+                        : `· ${monthWindow.count} of ${monthWindow.total} months`}
+                </span>
+              </span>
+            )}
             {activeCount > 0 && scope !== 'all' && <Badge type="blue">{activeCount} filter{activeCount === 1 ? '' : 's'} active</Badge>}
             {loading && <span style={{ fontSize: 11.5, color: C.t3 }}>Refreshing…</span>}
             {/* The Lanes toggle went with the Top Lanes table it controlled. */}
