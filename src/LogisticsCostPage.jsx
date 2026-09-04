@@ -434,6 +434,136 @@ function ChipRow({ options, selected, onToggle, small }) {
   )
 }
 
+// The billing-period chip, which doubles as its own month slicer.
+//
+// It began as a read-only label. Making it clickable means the number a reader is looking
+// at is also the control that changes it — on the Overview scope especially, where the eye
+// lands on this chip long before the sidebar.
+//
+// Deliberately NOT a SearchSelect: that renders a full-width labelled control sized for the
+// 220px sidebar, and this has to stay a compact chip in a horizontal bar. It also has to
+// keep its two-part closed appearance (range | qualifier), which SearchSelect has no notion
+// of. The month list is short enough that a search box would be noise.
+function PeriodChip({ window: win, months, selected, onToggle, onAll, onRecent, defaultCount }) {
+  const [open, setOpen] = useState(false)
+  const ref = useRef(null)
+  useEffect(() => {
+    if (!open) return
+    const h = e => { if (ref.current && !ref.current.contains(e.target)) setOpen(false) }
+    document.addEventListener('mousedown', h)
+    document.addEventListener('touchstart', h)
+    return () => {
+      document.removeEventListener('mousedown', h)
+      document.removeEventListener('touchstart', h)
+    }
+  }, [open])
+  if (!win) return null
+
+  const label = m => {
+    const [y, mo] = String(m).split('-')
+    const d = new Date(Number(y), Number(mo) - 1, 1)
+    return Number.isFinite(d.getTime())
+      ? d.toLocaleString('en-IN', { month: 'short', year: 'numeric' })
+      : String(m)
+  }
+  const sel = selected || []
+  // Empty selection means "everything" everywhere else in this page, so the checkmarks
+  // have to show every month ticked rather than none.
+  const isOn = m => (sel.length ? sel.includes(m) : true)
+  const suffix = win.kind === 'all-short' || win.kind === 'all'
+    ? `all ${win.total} months`
+    : win.kind === 'default'
+      ? `last ${win.count} months`
+      : `${win.count} of ${win.total}`
+
+  return (
+    <div ref={ref} style={{ position: 'relative', flexShrink: 0 }}>
+      <button onClick={() => setOpen(o => !o)}
+        title={win.kind === 'all-short'
+          ? `The ledger holds ${win.total} month(s), fewer than the ${defaultCount}-month default. Every one is included. Click to choose months.`
+          : win.kind === 'all'
+            ? `All ${win.total} uploaded months are included. Click to choose months.`
+            : win.kind === 'default'
+              ? `Default view: the most recent ${win.count} of ${win.total} uploaded months. Click to choose months.`
+              : `${win.count} of ${win.total} months selected. Click to change.`}
+        style={{
+          display: 'inline-flex', alignItems: 'center', gap: 0, padding: 0,
+          background: C.card, border: `1px solid ${open ? C.acm : C.border2}`,
+          borderRadius: 8, overflow: 'hidden', whiteSpace: 'nowrap',
+          boxShadow: open ? `0 0 0 3px ${C.acl}` : '0 1px 2px rgba(0,0,0,.04)',
+          cursor: 'pointer', fontFamily: 'var(--font)', transition: 'box-shadow .15s, border-color .15s',
+        }}>
+        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '5px 9px' }}>
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke={C.t3} strokeWidth="2.2" strokeLinecap="round" style={{ flexShrink: 0 }}>
+            <rect x="3" y="5" width="18" height="16" rx="2" />
+            <path d="M8 3v4M16 3v4M3 11h18" />
+          </svg>
+          <strong style={{ fontSize: 11.5, fontWeight: 650, color: C.t1, letterSpacing: '-.01em' }}>
+            {win.range}
+          </strong>
+        </span>
+        <span style={{
+          fontSize: 10.5, color: C.t2, background: C.bg, padding: '5px 9px',
+          borderLeft: `1px solid ${C.border}`, display: 'inline-flex', alignItems: 'center', gap: 5,
+        }}>
+          {suffix}
+          <span style={{ fontSize: 7, color: C.t3, transform: open ? 'rotate(180deg)' : 'none', transition: 'transform .18s' }}>▼</span>
+        </span>
+      </button>
+
+      {open && (
+        <div style={{
+          position: 'absolute', top: 'calc(100% + 5px)', right: 0, zIndex: 500,
+          background: C.card, border: `1px solid ${C.border2}`, borderRadius: 10,
+          boxShadow: '0 10px 30px rgba(0,0,0,.16)', minWidth: 208, overflow: 'hidden',
+        }}>
+          {/* Shortcuts first: reaching the 6-month default or the full ledger by hand would
+              otherwise mean several clicks. */}
+          <div style={{ display: 'flex', gap: 6, padding: '8px 9px', borderBottom: `1px solid ${C.border}` }}>
+            <button onClick={() => { onRecent(); setOpen(false) }}
+              style={{
+                flex: 1, fontSize: 10.5, fontWeight: 600, padding: '5px 8px', borderRadius: 6,
+                border: `1px solid ${C.border2}`, background: C.card, color: C.t1,
+                cursor: 'pointer', fontFamily: 'var(--font)', whiteSpace: 'nowrap',
+              }}>Last {defaultCount}</button>
+            <button onClick={() => { onAll(); setOpen(false) }}
+              style={{
+                flex: 1, fontSize: 10.5, fontWeight: 600, padding: '5px 8px', borderRadius: 6,
+                border: `1px solid ${C.border2}`, background: C.card, color: C.t1,
+                cursor: 'pointer', fontFamily: 'var(--font)', whiteSpace: 'nowrap',
+              }}>All {months.length}</button>
+          </div>
+          {/* Newest first: the recent months are the ones anyone reaches for. */}
+          <div style={{ maxHeight: 232, overflowY: 'auto', padding: '4px 0' }}>
+            {[...months].reverse().map(m => {
+              const on = isOn(m)
+              return (
+                <div key={m} onClick={() => onToggle(m)}
+                  style={{
+                    display: 'flex', alignItems: 'center', gap: 8, padding: '6px 11px',
+                    fontSize: 11.5, cursor: 'pointer', color: C.t1,
+                    fontWeight: on ? 600 : 400, background: on ? C.acl : 'transparent',
+                  }}
+                  onMouseEnter={e => { if (!on) e.currentTarget.style.background = C.bg }}
+                  onMouseLeave={e => { if (!on) e.currentTarget.style.background = 'transparent' }}>
+                  <span style={{
+                    width: 13, height: 13, borderRadius: 3, flexShrink: 0,
+                    border: `1.5px solid ${on ? C.acm : C.border2}`,
+                    background: on ? C.acc : C.card,
+                    display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                    fontSize: 9, color: '#1a1400', lineHeight: 1,
+                  }}>{on ? '✓' : ''}</span>
+                  {label(m)}
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
 function SlabDropdown({ value, onChange, slabs }) {
   const [open, setOpen] = useState(false)
   const ref = useRef(null)
@@ -3901,50 +4031,24 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
               {activeCount > 0 && scope !== 'all' && (
                 <Badge type="blue">{activeCount} filter{activeCount === 1 ? '' : 's'}</Badge>
               )}
-              {monthWindow && (
-                <span
-                  title={monthWindow.kind === 'all-short'
-                    ? `The ledger holds ${monthWindow.total} month(s) in total, fewer than the ${DEFAULT_MONTH_COUNT}-month default. Every one is included.`
-                    : monthWindow.kind === 'all'
-                      ? `All ${monthWindow.total} uploaded months are included.`
-                      : monthWindow.kind === 'default'
-                        ? `Default view: the most recent ${monthWindow.count} of ${monthWindow.total} uploaded months. Change it under Billing Period.`
-                        : `${monthWindow.count} of ${monthWindow.total} months selected under Billing Period.`}
-                  style={{
-                    display: 'inline-flex', alignItems: 'center', gap: 0,
-                    background: C.card, border: `1px solid ${C.border2}`,
-                    borderRadius: 8, overflow: 'hidden', whiteSpace: 'nowrap',
-                    boxShadow: '0 1px 2px rgba(0,0,0,.04)', cursor: 'default',
-                  }}>
-                  {/* Two-part chip: the range reads as the value, the qualifier as its
-                      label. A single run of text made the month range and the "all 4
-                      months" note compete; splitting them on a divider gives the date
-                      primacy and lets the qualifier recede. */}
-                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '5px 9px' }}>
-                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke={C.t3} strokeWidth="2.2" strokeLinecap="round" style={{ flexShrink: 0 }}>
-                      <rect x="3" y="5" width="18" height="16" rx="2" />
-                      <path d="M8 3v4M16 3v4M3 11h18" />
-                    </svg>
-                    <strong style={{ fontSize: 11.5, fontWeight: 650, color: C.t1, letterSpacing: '-.01em' }}>
-                      {monthWindow.range}
-                    </strong>
-                  </span>
-                  <span style={{
-                    fontSize: 10.5, color: C.t2, background: C.bg,
-                    padding: '5px 9px', borderLeft: `1px solid ${C.border}`,
-                  }}>
-                    {/* all-short and all read the same here on purpose — "all 4 months" is
-                        already the honest statement either way. They stay separate kinds
-                        because the TOOLTIP differs: one explains that the ledger holds
-                        fewer months than the 6-month default. */}
-                    {monthWindow.kind === 'all-short' || monthWindow.kind === 'all'
-                      ? `all ${monthWindow.total} months`
-                      : monthWindow.kind === 'default'
-                        ? `last ${monthWindow.count} months`
-                        : `${monthWindow.count} of ${monthWindow.total}`}
-                  </span>
-                </span>
-              )}
+              {/* The chip IS the month slicer. Selecting nothing means "all months"
+                  everywhere else on this page, so onAll clears rather than listing every
+                  month — that keeps the request on the prewarmed {billing:"all"} cache key
+                  instead of minting a new one for an equivalent selection. */}
+              <PeriodChip
+                window={monthWindow}
+                months={opts.months || []}
+                selected={filters.months}
+                onToggle={m => setFilters(f => {
+                  const all = opts.months || []
+                  const cur = (f.months || []).length ? f.months : all
+                  const next = cur.includes(m) ? cur.filter(x => x !== m) : [...cur, m]
+                  return { ...f, months: next.length === all.length || !next.length ? [] : next }
+                })}
+                onAll={() => setOne('months', [])}
+                onRecent={() => setOne('months', (opts.months || []).slice(-DEFAULT_MONTH_COUNT))}
+                defaultCount={DEFAULT_MONTH_COUNT}
+              />
             </div>
             {/* The Lanes toggle went with the Top Lanes table it controlled. */}
           </div>
