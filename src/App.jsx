@@ -2408,8 +2408,9 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
                         <td style={td}>{r.avg_o2d != null ? r.avg_o2d + 'd' : '—'}</td>
                       </tr>
                     ))}
-                    {/* Total row */}
-                    <tr style={{ borderTop: `2px solid ${C.border}`, background: C.bg }}>
+                  </tbody>
+                  <tfoot>
+                    <tr style={{ borderTop: `2px solid ${C.border}`, background: C.bg, position: 'sticky', bottom: 0, zIndex: 1 }}>
                       <td style={{ ...tdL, fontWeight: 700 }}>Total</td>
                       <td style={{ ...td, fontWeight: 700 }}>{totals.total_shipments.toLocaleString('en-IN')}</td>
                       <td style={{ ...td, fontWeight: 700 }}>{totals.ndr_count.toLocaleString('en-IN')}</td>
@@ -2423,7 +2424,7 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
                       <td style={{ ...td, fontWeight: 700 }}>—</td>
                       <td style={{ ...td, fontWeight: 700 }}>—</td>
                     </tr>
-                  </tbody>
+                  </tfoot>
                 </table>
               </div>
             </div>
