@@ -295,7 +295,7 @@ function Tile({ label, value, sub, badge, accent }) {
     // the grid. Now the label pins to the top, the value sits directly under it, and the sub
     // is pushed to the bottom by `marginTop: auto`, so the three bands line up across every
     // card regardless of how long any one sub is.
-    <div className="kpi-card" style={{ padding: '7px 13px', display: 'flex', flexDirection: 'column', gap: 2 }}>
+    <div className="kpi-card" style={{ padding: '10px 16px', display: 'flex', flexDirection: 'column', gap: 3 }}>
       <div className="kpi-label">{label}</div>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 4 }}>
         <div className="kpi-value" style={{ fontSize: 17, marginBottom: 0, ...(accent ? { color: accent } : {}) }}>{value}</div>
