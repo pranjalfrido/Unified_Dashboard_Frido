@@ -393,6 +393,7 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
   const [cView, setCView] = useState('courier') // 'courier' | 'facility' | 'month'
   const [payTrendGran, setPayTrendGran] = useState('Daily')
   const [ndrPayFilter, setNdrPayFilter] = useState('All')
+  const [rtoAgeingBase, setRtoAgeingBase] = useState('shipment')
   const [isMobile, setIsMobile] = useState(() => window.innerWidth <= 768)
   useEffect(() => {
     const onResize = () => setIsMobile(window.innerWidth <= 768)
@@ -648,6 +649,9 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
             const m = {}; rows.forEach(x => { m[x.reason] = (m[x.reason] || 0) + (x.total || 0) })
             return Object.entries(m).map(([reason, total]) => ({ reason, total })).sort((a,b) => b.total - a.total)
           })(),
+        rtoAgeing: hasCourier
+          ? (raw.rtoAgeing || []).filter(x => couriers.includes(x.courier_group))
+          : (raw.rtoAgeing || []),
         failedDeliveryReasons: (() => {
             const rows = (raw.failedDeliveryReasons || []).filter(courierFilter)
             const m = {}; rows.forEach(x => { m[x.reason] = (m[x.reason] || 0) + (x.total || 0) })
@@ -2267,14 +2271,87 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
           )
         })()}
 
-        {/* ── RTO Reasons ── */}
-        <LSectionTitle title="RTO Reasons" collapsed={secCollapsed['rto']} onToggle={() => toggleSec('rto')} />
+        {/* ── RTO Analysis ── */}
+        <LSectionTitle title="RTO Analysis" collapsed={secCollapsed['rto']} onToggle={() => toggleSec('rto')} />
+        {!secCollapsed['rto'] && (() => {
+          const ageingRows = (data.rtoAgeing || [])
+          const BASE_OPTS = [
+            { key: 'order', label: 'Order Creation Date' },
+            { key: 'shipment', label: 'Shipment Creation Date' },
+            { key: 'pickup', label: 'Shipment Pickup Date' },
+            { key: 'rtodel', label: 'RTO Delivered TAT' },
+          ]
+          const BUCKETS = ['0-2', '3-5', '6-7', '8-10', '10+']
+          const bucketKey = (b) => b === '0-2' ? `${rtoAgeingBase}_0_2` : b === '3-5' ? `${rtoAgeingBase}_3_5` : b === '6-7' ? `${rtoAgeingBase}_6_7` : b === '8-10' ? `${rtoAgeingBase}_8_10` : `${rtoAgeingBase}_10plus`
+          // aggregate totals row
+          const totRow = ageingRows.reduce((s, r) => {
+            BUCKETS.forEach(b => { s[bucketKey(b)] = (s[bucketKey(b)] || 0) + (r[bucketKey(b)] || 0) })
+            s.total_rto = (s.total_rto || 0) + (r.total_rto || 0)
+            return s
+          }, {})
+          const thS = { padding: '8px 10px', textAlign: 'right', fontWeight: 700, fontSize: 11, color: C.t2, whiteSpace: 'nowrap', background: C.bg, position: 'sticky', top: 0, zIndex: 1 }
+          const thL = { ...thS, textAlign: 'left' }
+          const tdS = { padding: '8px 10px', textAlign: 'right', fontSize: 11, color: C.t1, borderTop: `1px solid ${C.border}` }
+          const tdL = { ...tdS, textAlign: 'left', fontWeight: 600 }
+          return (
+            <div style={{ ...cardStyle, marginBottom: 14 }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12, flexWrap: 'wrap', gap: 8 }}>
+                <div style={chartTitle}>RTO Ageing — Days from Base Date to RTO Mark Date</div>
+                <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+                  {BASE_OPTS.map(o => (
+                    <button key={o.key} onClick={() => setRtoAgeingBase(o.key)} style={{ padding: '4px 10px', fontSize: 11, fontWeight: 600, borderRadius: 6, border: `1px solid ${C.border}`, cursor: 'pointer', background: rtoAgeingBase === o.key ? C.accent || '#2563eb' : C.card, color: rtoAgeingBase === o.key ? '#fff' : C.t1 }}>
+                      {o.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div style={{ overflowX: 'auto' }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11 }}>
+                  <thead>
+                    <tr style={{ borderBottom: `1.5px solid ${C.border}` }}>
+                      <th style={thL}>COURIER</th>
+                      <th style={thS}>TOTAL RTO</th>
+                      {BUCKETS.map(b => <th key={b} style={thS}>{b} DAYS</th>)}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {ageingRows.filter(r => r.total_rto > 0).map(r => (
+                      <tr key={r.courier_group} style={{ borderBottom: `1px solid ${C.border}` }}>
+                        <td style={{ ...tdL, display: 'flex', alignItems: 'center', gap: 6 }}>
+                          {COURIER_LOGOS[r.courier_group] && <img src={COURIER_LOGOS[r.courier_group]} alt="" style={{ width: 18, height: 18, objectFit: 'contain', borderRadius: 3, background: '#fff', padding: 1, border: `1px solid ${C.border}`, flexShrink: 0 }} />}
+                          {r.courier_group}
+                        </td>
+                        <td style={tdS}>{(r.total_rto || 0).toLocaleString('en-IN')}</td>
+                        {BUCKETS.map(b => {
+                          const v = r[bucketKey(b)] || 0
+                          const pct = r.total_rto ? ((v / r.total_rto) * 100).toFixed(1) : '0.0'
+                          return <td key={b} style={tdS}>{v > 0 ? <>{v.toLocaleString('en-IN')} <span style={{ color: C.t3, fontSize: 10 }}>({pct}%)</span></> : '—'}</td>
+                        })}
+                      </tr>
+                    ))}
+                  </tbody>
+                  <tfoot>
+                    <tr style={{ borderTop: `2px solid ${C.border}`, background: C.bg, position: 'sticky', bottom: 0, zIndex: 1 }}>
+                      <td style={{ ...tdL, fontWeight: 700 }}>Total</td>
+                      <td style={{ ...tdS, fontWeight: 700 }}>{(totRow.total_rto || 0).toLocaleString('en-IN')}</td>
+                      {BUCKETS.map(b => {
+                        const v = totRow[bucketKey(b)] || 0
+                        const pct = totRow.total_rto ? ((v / totRow.total_rto) * 100).toFixed(1) : '0.0'
+                        return <td key={b} style={{ ...tdS, fontWeight: 700 }}>{v > 0 ? <>{v.toLocaleString('en-IN')} <span style={{ color: C.t3, fontSize: 10, fontWeight: 400 }}>({pct}%)</span></> : '—'}</td>
+                      })}
+                    </tr>
+                  </tfoot>
+                </table>
+              </div>
+            </div>
+          )
+        })()}
         {(() => {
           const reasons = (data.rtoReasons || []).filter(r => r.reason && r.total > 0).sort((a, b) => b.total - a.total)
           const totalRto = reasons.reduce((s, r) => s + r.total, 0) || 1
           if (!reasons.length) return <div style={{ color: C.t3, fontSize: 12 }}>No RTO reason data available.</div>
           return (
-            <div style={{ ...cardStyle, padding: '16px 18px', display: secCollapsed['rto'] ? 'none' : undefined, height: isMobile ? 340 : undefined, display: secCollapsed['rto'] ? 'none' : 'flex', flexDirection: 'column' }}>
+            <div style={{ ...cardStyle, padding: '16px 18px', display: secCollapsed['rto'] ? 'none' : 'flex', flexDirection: 'column' }}>
               <div style={{ ...chartTitle, marginBottom: 14, flexShrink: 0 }}>RTO Reasons — Shipment Count & % of Total RTO</div>
               {isMobile ? (
                 <div style={{ overflowY: 'auto', flex: 1, display: 'flex', flexDirection: 'column', gap: 8 }}>
