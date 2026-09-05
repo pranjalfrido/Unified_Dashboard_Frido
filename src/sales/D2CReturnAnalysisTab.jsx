@@ -18,9 +18,9 @@ function TrendStatTile({ label, value, badge, color }) {
       <div style={{ width: 3, borderRadius: 2, background: color, flexShrink: 0, alignSelf: 'stretch' }} />
       <div style={{ display: 'flex', flexDirection: 'column', gap: 2, minWidth: 0 }}>
         <span style={{ fontSize: 11, color: C.t3, whiteSpace: 'nowrap' }}>{label}</span>
-        <div style={{ display: 'flex', alignItems: 'baseline', gap: 6 }}>
-          <span style={{ fontSize: 16, fontWeight: 600, color: C.t1, letterSpacing: '-.01em', whiteSpace: 'nowrap' }}>{value}</span>
-          {badge}
+        <div style={{ display: 'flex', alignItems: 'baseline', gap: 4, flexWrap: 'nowrap', overflow: 'hidden' }}>
+          <span style={{ fontSize: 15, fontWeight: 600, color: C.t1, letterSpacing: '-.01em', whiteSpace: 'nowrap' }}>{value}</span>
+          <span style={{ whiteSpace: 'nowrap', flexShrink: 0 }}>{badge}</span>
         </div>
       </div>
     </div>
@@ -58,7 +58,7 @@ function ReturnTrendChart({ kpis, dailyTrend }) {
       </select>
     }>
       {kpis && (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6, minmax(0, 1fr))', gap: 14, marginBottom: 14, paddingBottom: 14, borderBottom: `1px solid ${C.border}`, flexShrink: 0 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6, minmax(0, 1fr))', gap: 8, marginBottom: 14, paddingBottom: 14, borderBottom: `1px solid ${C.border}`, flexShrink: 0 }}>
           <TrendStatTile label="Revenue" value={fmt(kpis.totalRevenue)} color="#E0B800"
             badge={revChg !== null && <span style={{ fontSize: 10, fontWeight: 700, color: revChg >= 0 ? C.green.tx : C.red.tx }}>{revChg >= 0 ? '▲' : '▼'} {Math.abs(revChg).toFixed(1)}%</span>} />
           <TrendStatTile label="Return %" value={`${kpis.returnPct.toFixed(1)}%`} color="#E24B4A" badge={returnBadge(kpis.returnPct, kpis.prevReturnPct)} />
