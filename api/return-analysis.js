@@ -206,18 +206,11 @@ export default async function handler(req, res) {
           DATE_TRUNC(OrderDate, MONTH) AS month_dt,
           COALESCE(NULLIF(TRIM(Category), ''), 'Others') AS category,
           COALESCE(NULLIF(TRIM(SubCategory), ''), 'Others') AS sub_category,
-          CASE
-            WHEN DATE_DIFF(DATE(Cancelled_At), OrderDate, DAY) BETWEEN 0 AND 1 THEN '0-1'
-            WHEN DATE_DIFF(DATE(Cancelled_At), OrderDate, DAY) BETWEEN 2 AND 4 THEN '2-4'
-            WHEN DATE_DIFF(DATE(Cancelled_At), OrderDate, DAY) BETWEEN 5 AND 7 THEN '5-7'
-            WHEN DATE_DIFF(DATE(Cancelled_At), OrderDate, DAY) BETWEEN 8 AND 10 THEN '8-10'
-            ELSE '10+'
-          END AS bucket,
+          '0-1' AS bucket,
           COUNT(DISTINCT OrderId) AS cancel_count
         FROM \`frido-429506.production.fact_all_platform_sales_report\`
         WHERE OrderDate BETWEEN '${sixStart}' AND '${sixEnd}' AND ${shWhere}
           AND Order_Status = 'Cancelled'
-          AND Cancelled_At IS NOT NULL
         GROUP BY month, month_dt, category, sub_category, bucket
         ORDER BY month_dt, category, sub_category, bucket`
       })(),
