@@ -3203,7 +3203,7 @@ export default async function handler(req, res) {
         'catMap','subCatMap','catPrevMap','subCatPrevMap',
         'stateMap','statePrevMap','stateTotal','cityRows','cityPrevMap','cityTotal',
         'regionRows','tierRows','catChannelMap','subCatChannelMap',
-        'buckets','bucketRev','skuRows','rows','pnlSalesRows','pnlAdSpendMap','pnlRawAdSpend',
+        'buckets','bucketRev','skuRows','pnlSalesRows','pnlAdSpendMap','pnlRawAdSpend',
       ])
       const fastPayload = Object.fromEntries(
         Object.entries(payload).filter(([k]) => !SLOW_PAYLOAD_KEYS.has(k))
@@ -3262,7 +3262,6 @@ export default async function handler(req, res) {
         buckets: payload.buckets,
         bucketRev: payload.bucketRev,
         skuRows: payload.skuRows,
-        rows: payload.rows,
         pnlSalesRows: payload.pnlSalesRows,
         pnlAdSpendMap: payload.pnlAdSpendMap,
         pnlRawAdSpend: payload.pnlRawAdSpend,
