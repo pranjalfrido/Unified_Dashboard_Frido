@@ -26,7 +26,7 @@ const sleep = ms => new Promise(resolve => setTimeout(resolve, ms))
 // (confirmed 2026-08-19: real 500s in production, which made the frontend silently keep showing
 // stale data — see App.jsx's fetchData). runQueriesLimited caps how many queries are in flight at
 // once and retries a rate-limited query with backoff instead of failing the whole request.
-const QUERY_CONCURRENCY = 12
+const QUERY_CONCURRENCY = 30
 const MAX_RETRIES = 4
 async function runQueryWithRetry(bqClient, sql, key) {
   for (let attempt = 0; ; attempt++) {
