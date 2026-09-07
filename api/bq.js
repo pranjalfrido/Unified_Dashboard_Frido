@@ -3208,6 +3208,28 @@ export default async function handler(req, res) {
       const fastPayload = Object.fromEntries(
         Object.entries(payload).filter(([k]) => !SLOW_PAYLOAD_KEYS.has(k))
       )
+      // Provide empty-but-non-null defaults for slow maps/arrays so components don't crash
+      // calling Object.entries()/Object.keys() before the slow phase arrives.
+      fastPayload.catMap = fastPayload.catMap ?? {}
+      fastPayload.subCatMap = fastPayload.subCatMap ?? {}
+      fastPayload.catPrevMap = fastPayload.catPrevMap ?? {}
+      fastPayload.subCatPrevMap = fastPayload.subCatPrevMap ?? {}
+      fastPayload.stateMap = fastPayload.stateMap ?? {}
+      fastPayload.statePrevMap = fastPayload.statePrevMap ?? {}
+      fastPayload.stateTotal = fastPayload.stateTotal ?? 0
+      fastPayload.cityRows = fastPayload.cityRows ?? []
+      fastPayload.cityPrevMap = fastPayload.cityPrevMap ?? {}
+      fastPayload.cityTotal = fastPayload.cityTotal ?? 0
+      fastPayload.regionRows = fastPayload.regionRows ?? []
+      fastPayload.tierRows = fastPayload.tierRows ?? []
+      fastPayload.catChannelMap = fastPayload.catChannelMap ?? {}
+      fastPayload.subCatChannelMap = fastPayload.subCatChannelMap ?? {}
+      fastPayload.buckets = fastPayload.buckets ?? []
+      fastPayload.bucketRev = fastPayload.bucketRev ?? 0
+      fastPayload.skuRows = fastPayload.skuRows ?? []
+      fastPayload.pnlSalesRows = fastPayload.pnlSalesRows ?? []
+      fastPayload.pnlAdSpendMap = fastPayload.pnlAdSpendMap ?? {}
+      fastPayload.pnlRawAdSpend = fastPayload.pnlRawAdSpend ?? 0
       // Strip slow sub-fields from per-channel objects so they don't overwrite slow data on merge
       const CHANNEL_SLOW_FIELDS = ['subCategories','skuMap','skuMapBySubChannel','skuCostRows',
         'dailySkuCostRows','skuWeightShares','stateMap','stateTotal','statePrevMap',
