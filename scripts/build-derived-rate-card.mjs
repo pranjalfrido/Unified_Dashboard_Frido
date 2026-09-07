@@ -57,7 +57,21 @@ const MIN_N = parseInt(arg('--min') || '20', 10)
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const connStr = process.env.SUPABASE_URL
 if (!connStr) { console.error('SUPABASE_URL not set'); process.exit(1) }
-const pool = new Pool({ connectionString: connStr, ssl: { rejectUnauthorized: false }, max: 3 })
+const pool = new Pool({
+  connectionString: connStr, ssl: { rejectUnauthorized: false }, max: 3,
+  // Explicit limits: these queries run for minutes and pg's defaults are shorter than
+  // the pooler's patience, so a long scan died as "Connection terminated unexpectedly"
+  // with nothing pointing at a timeout.
+  statement_timeout: 900000,
+  query_timeout: 900000,
+  idleTimeoutMillis: 900000,
+  connectionTimeoutMillis: 60000,
+})
+// node-postgres emits 'error' on the Pool when the server drops an IDLE connection, and an
+// unhandled EventEmitter error kills the process. Without this, a pooler hiccup on a
+// connection this script was not even using aborted the entire run mid-way through.
+// The pool opens a replacement on next checkout; an in-flight query still rejects normally.
+pool.on('error', e => console.error('[pool] non-fatal:', e.message))
 
 // Delhivery's total_cost was uploaded GST-inclusive. Keyed on the 1.18 RATIO, not the
 // courier name, so it becomes a no-op once ex-GST totals are uploaded — a name-based rule

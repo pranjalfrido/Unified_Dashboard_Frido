@@ -39,6 +39,11 @@ const { Pool } = pkg
 
 const argv = process.argv.slice(2)
 const DRY = argv.includes('--dry-run')
+// Skip rows that already carry a price. The write commits per flush, so a statement
+// timeout mid-run leaves earlier months complete (January reached 100% this way).
+// Re-pricing them burns the time budget before the unpriced months are reached.
+// Pass --reprice-all to force a full repricing when the rate card itself changes.
+const ONLY_UNPRICED = !argv.includes('--reprice-all')
 
 // ── Billing rules ────────────────────────────────────────────────────────────
 // Billable slab: 0.5 kg minimum, then round UP to the next whole kg. The rate card
@@ -160,7 +165,18 @@ function resolveService(carrier, acct, mode) {
 
 const connStr = process.env.SUPABASE_URL
 if (!connStr) { console.error('SUPABASE_URL not set'); process.exit(1) }
-const pool = new Pool({ connectionString: connStr, ssl: { rejectUnauthorized: false }, max: 3 })
+const pool = new Pool({
+  connectionString: connStr,
+  ssl: { rejectUnauthorized: false },
+  max: 3,
+  // This run pages through 1.1M rows, long enough that pg's default limits expire before
+  // the pooler's — the drop then surfaces as "Connection terminated unexpectedly" with
+  // nothing pointing at a timeout.
+  statement_timeout: 900000,
+  query_timeout: 900000,
+  idleTimeoutMillis: 900000,
+  connectionTimeoutMillis: 60000,
+})
 pool.on('error', e => console.error('[pool]', e.message))
 
 // ── Load the rate card into memory (39k rows — small) ──
@@ -262,14 +278,30 @@ const pending = []
 const stamp = new Date().toISOString()
 
 for (;;) {
-  const { rows: batch } = await pool.query(`
-    SELECT id, courier_name, courier_account_type, shipment_mode, zone, month_year, payment_mode,
-           declared_weight_frido::float8 AS dw, charged_weight_courier::float8 AS cw,
-           total_cost::float8 AS actual, freight_charge::float8 AS freight,
-           surcharge::float8 AS surcharge, other_charge::float8 AS other
-      FROM public.logistics_invoices_b2c
-     WHERE id > $1 ORDER BY id ASC LIMIT ${PAGE}
-  `, [lastId])
+  // Retries a transient pooler drop rather than losing the whole scan. Safe to replay:
+  // this is a pure read keyed on lastId, so the same page comes back.
+  const readPage = async (attempt = 0) => {
+    try {
+      return (await pool.query(`
+      SELECT id, courier_name, courier_account_type, shipment_mode, zone, month_year, payment_mode,
+             declared_weight_frido::float8 AS dw, charged_weight_courier::float8 AS cw,
+             total_cost::float8 AS actual, freight_charge::float8 AS freight,
+             surcharge::float8 AS surcharge, other_charge::float8 AS other
+        FROM public.logistics_invoices_b2c
+       WHERE id > $1 ${ONLY_UNPRICED ? 'AND frido_priced_at IS NULL' : ''} ORDER BY id ASC LIMIT ${PAGE}
+    `, [lastId])).rows
+    } catch (e) {
+      const transient = /Connection terminated|ECONNRESET|ETIMEDOUT|EPIPE|ENOTFOUND|timeout/i.test(e.message || '')
+      if (!transient || attempt >= 8) throw e
+      // Exponential, capped at 60s. The observed outage outlasted 4 tries at 3-12s;
+      // losing a 1.1M-row scan to a 2-minute network blip is far worse than waiting.
+      const wait = Math.min(60000, 3000 * 2 ** attempt)
+      console.log(`\n  [retry ${attempt + 1}/4 in ${wait}ms at id ${lastId}] ${e.message.slice(0, 50)}`)
+      await new Promise(r => setTimeout(r, wait))
+      return readPage(attempt + 1)
+    }
+  }
+  const batch = await readPage()
   if (!batch.length) break
 
   for (const r of batch) {
@@ -402,15 +434,15 @@ for (;;) {
   }
 
   if (!DRY) {
-    while (pending.length >= 2000) await flush(pending.splice(0, 2000))
+    while (pending.length >= 500) await flush(pending.splice(0, 500))
   }
   process.stdout.write(`\r  scanned ${stats.seen.toLocaleString('en-IN')} · priced ${stats.priced.toLocaleString('en-IN')}`)
 }
-if (!DRY) while (pending.length) await flush(pending.splice(0, 2000))
+if (!DRY) while (pending.length) await flush(pending.splice(0, 500))
 process.stdout.write('\n')
 
 // Bulk UPDATE ... FROM a VALUES list — one statement per 2000 rows.
-async function flush(chunk) {
+async function flushOnce(chunk) {
   const vals = []
   const params = []
   chunk.forEach((c, k) => {
@@ -426,6 +458,26 @@ async function flush(chunk) {
       FROM (VALUES ${vals.join(',')}) AS v(id, base, addl, total, carrier_cost, service)
      WHERE t.id = v.id
   `, params)
+}
+
+// The read path already retries; this is the same treatment for the WRITE, which is where
+// every remaining failure has landed. The pooler drops a connection mid-UPDATE and, with no
+// retry, the run dies — even though flushes commit independently so the work so far is kept.
+//
+// Safe to replay: the UPDATE is keyed on t.id = v.id and sets the same values, so re-running
+// a chunk is idempotent.
+async function flush(chunk, attempt = 0) {
+  try {
+    return await flushOnce(chunk)
+  } catch (e) {
+    const transient = /Connection terminated|ECONNRESET|ETIMEDOUT|EPIPE|ENOTFOUND|timeout|57014/i.test(e.message || '')
+    if (!transient || attempt >= 6) throw e
+    const wait = Math.min(30000, 2000 * 2 ** attempt)
+    console.log(`
+  [flush retry ${attempt + 1}/6 in ${wait}ms] ${e.message.slice(0, 50)}`)
+    await new Promise(r => setTimeout(r, wait))
+    return flush(chunk, attempt + 1)
+  }
 }
 
 // ── Report ──
