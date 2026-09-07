@@ -120,6 +120,16 @@ const SLOW_QUERY_KEYS = new Set([
   'salesCategoryOrders','salesCategoryOrdersFk',
   'adsCategoryBreakdown','adsZeroOrder','adsDailyByCategory','salesDailyByCategory',
   'channelDailyExcRev',
+  // Per-channel prev-period totals — only needed when viewing individual channel tabs
+  'prevShopify','prevShopifyDaily','prevShopifyCancel','prevShNetCalc','prevShopifyIntlTotals',
+  'prevAmzSC','prevAmzVC',
+  'prevFk','prevBl','prevIn','prevZp',
+  'prevCr','prevCrNetCalc','prevFc','prevFcNetCalc',
+  'prevMn','prevMnNetCalc',
+  'prevEbo','prevEboNetCalc',
+  'prevIntl','prevIntlNetCalc',
+  'prevOffline','prevOfflineDaily',
+  'prevDailyByChannel','prevAdsTotals',
 ])
 
 const CACHE_VERSION = 9
@@ -3230,6 +3240,32 @@ export default async function handler(req, res) {
       fastPayload.pnlSalesRows = fastPayload.pnlSalesRows ?? []
       fastPayload.pnlAdSpendMap = fastPayload.pnlAdSpendMap ?? {}
       fastPayload.pnlRawAdSpend = fastPayload.pnlRawAdSpend ?? 0
+      // Per-channel prev-period defaults (now slow) — components use ?.[0] or || fallback
+      fastPayload.prevShopify = fastPayload.prevShopify ?? []
+      fastPayload.prevShopifyDaily = fastPayload.prevShopifyDaily ?? []
+      fastPayload.prevShopifyCancel = fastPayload.prevShopifyCancel ?? []
+      fastPayload.prevShNetCalc = fastPayload.prevShNetCalc ?? []
+      fastPayload.prevShopifyIntlTotals = fastPayload.prevShopifyIntlTotals ?? []
+      fastPayload.prevAmzSC = fastPayload.prevAmzSC ?? []
+      fastPayload.prevAmzVC = fastPayload.prevAmzVC ?? []
+      fastPayload.prevFk = fastPayload.prevFk ?? []
+      fastPayload.prevBl = fastPayload.prevBl ?? []
+      fastPayload.prevIn = fastPayload.prevIn ?? []
+      fastPayload.prevZp = fastPayload.prevZp ?? []
+      fastPayload.prevCr = fastPayload.prevCr ?? []
+      fastPayload.prevCrNetCalc = fastPayload.prevCrNetCalc ?? []
+      fastPayload.prevFc = fastPayload.prevFc ?? []
+      fastPayload.prevFcNetCalc = fastPayload.prevFcNetCalc ?? []
+      fastPayload.prevMn = fastPayload.prevMn ?? []
+      fastPayload.prevMnNetCalc = fastPayload.prevMnNetCalc ?? []
+      fastPayload.prevEbo = fastPayload.prevEbo ?? []
+      fastPayload.prevEboNetCalc = fastPayload.prevEboNetCalc ?? []
+      fastPayload.prevIntl = fastPayload.prevIntl ?? []
+      fastPayload.prevIntlNetCalc = fastPayload.prevIntlNetCalc ?? []
+      fastPayload.prevOffline = fastPayload.prevOffline ?? []
+      fastPayload.prevOfflineDaily = fastPayload.prevOfflineDaily ?? []
+      fastPayload.prevDailyByChannel = fastPayload.prevDailyByChannel ?? []
+      fastPayload.prevAdsTotals = fastPayload.prevAdsTotals ?? []
       // Strip slow sub-fields from per-channel objects so they don't overwrite slow data on merge
       const CHANNEL_SLOW_FIELDS = ['subCategories','skuMap','skuMapBySubChannel','skuCostRows',
         'dailySkuCostRows','skuWeightShares','stateMap','stateTotal','statePrevMap',
@@ -3304,6 +3340,32 @@ export default async function handler(req, res) {
         _slow_ebo: chSlow('ebo', ['category','subCategory','sku','state','statePrev','city','cityPrev','region','tier','categoryPrev','subCategoryPrev']),
         _slow_offline: chSlow('offline', ['category','subCategory','sku','state','city','region','tier','catPrev','subCatPrev','statePrev','cityPrev']),
         _slow_ads: chSlow('ads', ['spendDetail','allSpendDetail','spendDetailByPlatform','additionalSpend','additionalSpendByProduct','zeroOrder','dailyByCategory']),
+        // Per-channel prev-period totals (moved to slow so fast phase has fewer BQ scans)
+        prevShopify: payload.prevShopify,
+        prevShopifyDaily: payload.prevShopifyDaily,
+        prevShopifyCancel: payload.prevShopifyCancel,
+        prevShNetCalc: payload.prevShNetCalc,
+        prevShopifyIntlTotals: payload.prevShopifyIntlTotals,
+        prevAmzSC: payload.prevAmzSC,
+        prevAmzVC: payload.prevAmzVC,
+        prevFk: payload.prevFk,
+        prevBl: payload.prevBl,
+        prevIn: payload.prevIn,
+        prevZp: payload.prevZp,
+        prevCr: payload.prevCr,
+        prevCrNetCalc: payload.prevCrNetCalc,
+        prevFc: payload.prevFc,
+        prevFcNetCalc: payload.prevFcNetCalc,
+        prevMn: payload.prevMn,
+        prevMnNetCalc: payload.prevMnNetCalc,
+        prevEbo: payload.prevEbo,
+        prevEboNetCalc: payload.prevEboNetCalc,
+        prevIntl: payload.prevIntl,
+        prevIntlNetCalc: payload.prevIntlNetCalc,
+        prevOffline: payload.prevOffline,
+        prevOfflineDaily: payload.prevOfflineDaily,
+        prevDailyByChannel: payload.prevDailyByChannel,
+        prevAdsTotals: payload.prevAdsTotals,
       }
       // Remove undefined values
       for (const k of Object.keys(slowPayload)) if (slowPayload[k] === undefined) delete slowPayload[k]
