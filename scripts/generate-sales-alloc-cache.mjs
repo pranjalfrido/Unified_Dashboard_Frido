@@ -130,30 +130,28 @@ const rangeRows = salesRows.filter(r => {
 })
 const lookbackRows = salesRows.filter(passesFilters)
 
-// Enriched raw rows for client-side filtering — short field names to minimise JSON size
-// Field key: s=sku, c=category, b=subCategory, t=salesType, h=channel, h2=channel2,
-//            f=facility, l=location, g=region, n=nearestWH, d=date, q=qty, r=rev
+// Enriched raw rows for client-side filtering in the browser
 const rawRows = rangeRows.map(r => {
   const date = r.order_date?.value || r.order_date
   const { key } = resolveMasterSkuKey(r.final_sku, skuMap)
   const master = itemMaster.get(key)
   const location = facilityToLocation.get(r.Facility) || 'Unmapped'
   return {
-    s: key,
-    c: master?.category || 'Uncategorized',
-    b: master?.subCategory || 'Uncategorized',
-    t: salesTypeFor(r.channel, channelToDescription) || 'B2C Order',
-    h: norm(channelToUnified.get(norm(r.channel)) || r.channel || 'Unknown'),
-    h2: channelToUnified2.get(norm(r.channel)) || 'Purchase Order',
-    f: r.Facility || '',
-    l: location,
-    g: locationToRegion.get(location) || null,
-    n: stateToNearestWH.get(norm(r.state)) || null,
-    d: date,
-    q: Number(r.qty || 0),
-    v: Math.round(num(r.rev)),
+    sku: key,
+    category: master?.category || 'Uncategorized',
+    subCategory: master?.subCategory || 'Uncategorized',
+    salesType: salesTypeFor(r.channel, channelToDescription) || 'B2C Order',
+    channel: norm(channelToUnified.get(norm(r.channel)) || r.channel || 'Unknown'),
+    channel2: channelToUnified2.get(norm(r.channel)) || 'Purchase Order',
+    facility: r.Facility || '',
+    location,
+    region: locationToRegion.get(location) || null,
+    nearestWH: stateToNearestWH.get(norm(r.state)) || null,
+    date,
+    qty: Number(r.qty || 0),
+    rev: Math.round(num(r.rev)),
   }
-}).filter(r => r.d && r.s)
+}).filter(r => r.date && r.sku)
 
 // ── Daily trend ──────────────────────────────────────────────────────────────
 const dailyMap = new Map()

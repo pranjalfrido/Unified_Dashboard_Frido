@@ -348,13 +348,6 @@ export default function SalesAllocationPage({ data, filters, setFilters, sidebar
   // Client-side filter: when static file has rawRows, filter instantly without API call
   const filteredData = useMemo(() => {
     if (!data?.rawRows) return data
-    // Normalise short field names (s/c/b/t/h/h2/f/l/g/n/d/q/v) to long names
-    // so the rest of the aggregation code works with either cache format
-    const expand = r => r.sku != null ? r : {
-      sku: r.s, category: r.c, subCategory: r.b, salesType: r.t,
-      channel: r.h, channel2: r.h2, facility: r.f, location: r.l,
-      region: r.g, nearestWH: r.n, date: r.d, qty: r.q, rev: r.v,
-    }
     const hasFilter = (arr) => arr?.length > 0
     const anyActive = hasFilter(filters.category) || hasFilter(filters.subCategory) ||
       hasFilter(filters.sku) || hasFilter(filters.channel) || hasFilter(filters.salesType) ||
@@ -366,7 +359,7 @@ export default function SalesAllocationPage({ data, filters, setFilters, sidebar
     const dateMatchesCache = cacheRange && dateStart === cacheRange.start && dateEnd === cacheRange.end
     if (!anyActive && dateMatchesCache) return data
 
-    const rows = data.rawRows.map(expand).filter(r => {
+    const rows = data.rawRows.filter(r => {
       if (dateStart && r.date < dateStart) return false
       if (dateEnd && r.date > dateEnd) return false
       if (hasFilter(filters.category) && !filters.category.includes(r.category)) return false
