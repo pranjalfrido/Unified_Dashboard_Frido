@@ -15857,6 +15857,7 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
   const [adsCachedChMap, setAdsCachedChMap] = useState(null)
   const [adsCachedMeta, setAdsCachedMeta] = useState(null)
   const adsCacheRef = useRef(null)
+  const pnlCacheRef = useRef(null)
   const [inventoryDateControl, setInventoryDateControl] = useState(null)
   const [lFilters, setLFilters] = useState({ couriers: [], shipmentType: 'forward', sddNdd: 'all', paymentMode: [], zone: [], pickupState: [], dropState: [], dropCity: [], category: [], subCategory: [], weightSlabs: [] })
   const [costFilters, setCostFilters] = useState(EMPTY_COST_FILTERS)
@@ -15886,6 +15887,32 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
     const reqId = ++reqIdRef.current
     if (!keepPrev) setLoading(true)
     setError(null)
+
+    // P&L static cache: serve instantly if no filters and dates match the pre-computed MTD window
+    const hasFilters = ch || Object.keys(extraFilters).length > 0
+    if (!hasFilters) {
+      try {
+        if (!pnlCacheRef.current) {
+          const r = await fetch(`${API}/pnl-data.json`)
+          if (r.ok) pnlCacheRef.current = await r.json()
+        }
+        const c = pnlCacheRef.current
+        if (c && c.mtdStart && c.mtdEnd && start === c.mtdStart && end === c.mtdEnd) {
+          if (reqId !== reqIdRef.current) return
+          if (c.subCatFirstOrderMap && Object.keys(c.subCatFirstOrderMap).length) {
+            setSubCatFirstOrderMap(c.subCatFirstOrderMap)
+          }
+          clientCacheRef.current.set(cacheKey, c)
+          setRawRows(prev => {
+            if (keepPrev && prev && typeof prev === 'object' && !Array.isArray(prev)) return { ...prev, ...c }
+            return c
+          })
+          setLoading(false)
+          return
+        }
+      } catch (_) {}
+    }
+
     try {
       const res = await fetch(`${API}/api/bq`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ start, end, ...extraFilters, ...(ch ? { channel: ch } : {}) }) })
       if (!res.ok) throw new Error(`API error ${res.status}: ${await res.text()}`)

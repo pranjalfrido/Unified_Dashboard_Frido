@@ -8,7 +8,7 @@ on:
 jobs:
   precompute:
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 45
 
     steps:
       - uses: actions/checkout@v4
@@ -52,13 +52,19 @@ jobs:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
         run: node scripts/generate-ads-cache.mjs
 
+      - name: Generate static P&L JSON (MTD, no filters)
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          NEON_URL: ${{ secrets.NEON_URL }}
+        run: node scripts/generate-pnl-cache.mjs
+
       - name: Commit and push static data files
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add public/inv-data-7d.json public/inv-data-15d.json public/inv-data-30d.json \
                   public/sales-alloc-data.json public/inward-data.json public/logistics-data.json \
-                  public/logistics-cost-data.json public/ads-data.json
+                  public/logistics-cost-data.json public/ads-data.json public/pnl-data.json
           git diff --cached --quiet && echo "No changes" && exit 0
           git stash
           git fetch origin main
@@ -66,6 +72,6 @@ jobs:
           git stash pop
           git add public/inv-data-7d.json public/inv-data-15d.json public/inv-data-30d.json \
                   public/sales-alloc-data.json public/inward-data.json public/logistics-data.json \
-                  public/logistics-cost-data.json public/ads-data.json
+                  public/logistics-cost-data.json public/ads-data.json public/pnl-data.json
           git commit -m "chore: update static data cache"
           git push origin main
