@@ -5666,6 +5666,15 @@ function FlatCategoryProductMatrix({ catData, subCatData, skuData, title, catPre
   const toggleSku = key => setExpandedSku(prev => ({ ...prev, [key]: !prev[key] }))
   const table = useSortableTable('gross')
 
+  if (!catData || Object.keys(catData).length === 0) {
+    return (
+      <div className="kpi-card" style={{ padding: isMob ? '12px 4px' : '14px 16px' }}>
+        <div style={{ fontWeight: 700, fontSize: 13, color: C.t1, marginBottom: 10 }}>{isMob ? 'Category Rev Matrix' : (title || 'Category Revenue Matrix')}</div>
+        <div className="skeleton" style={{ height: 120, borderRadius: 6 }} />
+      </div>
+    )
+  }
+
   const q = search.trim().toLowerCase()
 
   const mapRow = (d, scName, catName) => {
