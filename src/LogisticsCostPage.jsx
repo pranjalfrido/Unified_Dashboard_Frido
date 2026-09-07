@@ -282,6 +282,9 @@ function shapeResponse(j) {
     rateGrid: j.rateGrid || [],
     courierDisputes: j.courierDisputes || [],
     slabCosts: j.slabCosts || [],
+    // Zone x sub-category cube. Sliced client-side so changing sub-category costs no
+    // round trip — see the zone slicer below.
+    subCube: j.subCube || [],
     trendAll: j.trendAll || [],
     byCourierMonth: j.byCourierMonth || cubeToByCourierMonth(j.cube),
   }
@@ -883,8 +886,15 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
   const [error, setError] = useState(null)
   const API = import.meta.env.VITE_API_URL || ''
   const [internalFilters, setInternalFilters] = useState(EMPTY_FILTERS)
-  const filters = externalFilters || internalFilters
-  const setFilters = setExternalFilters || setInternalFilters
+  // The SHARED filter object (courier, zone, payment, ...). Months are layered per scope
+  // below — see the note there.
+  const sharedFilters = externalFilters || internalFilters
+  const setSharedFilters = setExternalFilters || setInternalFilters
+  // Month selection is PER SCOPE. Without this, a month picked on B2C also applied to
+  // Overview and FTL/PTL because all three read this same object — which also made the
+  // period chip look stuck when switching tabs. The three tabs report on different ledgers
+  // with different uploaded months, so each keeps its own period.
+  const [monthsByScope, setMonthsByScope] = useState({})
   const [opts, setOpts] = useState({ months: [], zones: [], modes: [], payments: [], couriers: [], transporters: [], vehicleTypes: [], freightTypes: [], accountTypes: [], cities: [], originCities: [], slabs: [] })
   const [sidebarOpen, setSidebarOpen] = useState(true)
   // 'all' = B2B + B2C summary · 'b2c' = courier detail · 'b2b' = lane-wise freight
@@ -894,6 +904,26 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
     if (allowedTabs.includes('logistics:cost:b2b')) return 'b2b'
     return 'all'
   })
+  // Effective filters: the shared object with THIS scope's months layered on. Everything
+  // downstream (the API body, monthWindow, the cubes) keeps reading filters.months.
+  const filters = useMemo(
+    () => ({ ...sharedFilters, months: monthsByScope[scope] ?? sharedFilters.months ?? [] }),
+    [sharedFilters, monthsByScope, scope],
+  )
+
+  // A write touching `months` lands in this scope's slot; anything else goes to the shared
+  // object, so courier/zone/payment keep applying across tabs as they did before.
+  const setFilters = useCallback(next => {
+    const applied = typeof next === 'function' ? next(filters) : next
+    if (applied && Object.prototype.hasOwnProperty.call(applied, 'months')) {
+      const { months, ...rest } = applied
+      setMonthsByScope(m => ({ ...m, [scope]: months }))
+      if (Object.keys(rest).length) setSharedFilters(f => ({ ...f, ...rest }))
+      return
+    }
+    setSharedFilters(next)
+  }, [filters, scope, setSharedFilters])
+
   const [reloadKey] = useState(0)
 
   // Raw full-dataset JSON — loaded once from CDN, never re-fetched for cube-compatible filters.
@@ -1091,6 +1121,67 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
     })
   }, [agg])
 
+  // ── Zone slicer: sub-category ──
+  // Answers "zone costs for Cushions, now for Orthotics" instantly. The cube is already in
+  // memory, so this is a client-side re-aggregate rather than a refetch — the whole reason
+  // it is a separate lean cube (5,400 rows) instead of a dimension on the main one.
+  const [zoneSub, setZoneSub] = useState('')
+
+  // Options ordered by spend, not alphabetically: with 225 sub-categories the ones worth
+  // slicing are the expensive ones, and they should not be buried under an alphabetical A.
+  const zoneSubOptions = useMemo(() => {
+    const cube = agg?.subCube || []
+    if (!cube.length) return []
+    const spend = new Map()
+    for (const r of cube) {
+      // Respect the Billing Period selection so the list never offers a sub-category that
+      // has no rows in the months on screen.
+      if (filters.months?.length && !filters.months.includes(r.month)) continue
+      spend.set(r.sub, (spend.get(r.sub) || 0) + Number(r.cost || 0))
+    }
+    return [...spend.entries()].sort((a, b) => b[1] - a[1]).map(([s]) => s)
+  }, [agg, filters.months])
+
+  // Zone rows for the selected sub-category, or null when nothing is selected so the
+  // section falls back to the full byZone breakdown (which carries overbilled counts the
+  // cube does not).
+  const zoneSubRows = useMemo(() => {
+    if (!zoneSub) return null
+    const cube = agg?.subCube || []
+    const byZone = new Map()
+    let total = 0
+    for (const r of cube) {
+      if (r.sub !== zoneSub) continue
+      if (filters.months?.length && !filters.months.includes(r.month)) continue
+      const z2 = byZone.get(r.zone) || { n: 0, cost: 0, wt: 0 }
+      z2.n += Number(r.n || 0)
+      z2.cost += Number(r.cost || 0)
+      z2.wt += Number(r.wt || 0)
+      byZone.set(r.zone, z2)
+      total += Number(r.cost || 0)
+    }
+    return [...byZone.entries()]
+      .map(([zone, b]) => ({
+        zone,
+        shipments: b.n,
+        cost: b.cost,
+        avgCost: b.n ? b.cost / b.n : 0,
+        cpk: perKg(b.cost, b.wt),
+        avgWt: b.n ? b.wt / b.n : 0,
+        // The cube has no overbilled flag, so this column is not meaningful when sliced.
+        // null renders as an em-dash rather than a fabricated 0%.
+        overPct: null,
+        share: total ? (b.cost / total) * 100 : 0,
+      }))
+      .sort((a, b) => {
+        const ia = ZONES.indexOf(a.zone), ib = ZONES.indexOf(b.zone)
+        if (ia === -1 && ib === -1) return 0
+        if (ia === -1) return 1
+        if (ib === -1) return -1
+        return ia - ib
+      })
+  }, [agg, zoneSub, filters.months])
+
   const zoneRows = useMemo(() => {
     if (!agg) return []
     return Object.entries(agg.byZone)
@@ -1112,6 +1203,12 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
         return ia - ib
       })
   }, [agg])
+
+  // What the zone chart and table actually render: the sliced rows when a sub-category is
+  // chosen, otherwise the full breakdown. Declared AFTER zoneRows — referencing a const
+  // before its initialiser is a temporal dead zone ReferenceError that the build does not
+  // catch, only the browser.
+  const zoneRowsShown = zoneSubRows || zoneRows
 
   const modeRows = useMemo(() => {
     if (!agg) return []
@@ -1878,25 +1975,43 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
   // whatever exists rather than padding, and `monthWindow` below reports what was
   // actually selected so the page never implies six months of data it does not have.
   const DEFAULT_MONTH_COUNT = 6
-  const monthsDefaulted = useRef(false)
+  // Months that actually exist in the ledger THIS SCOPE reports on.
+  //
+  // opts.months comes from the B2C invoice ledger (Jan-Jul). The freight ledger holds only
+  // Apr-Jul, so on FTL/PTL the chip was claiming "last 6 months" and offering Jan-Mar in
+  // the picker — months with no freight rows at all. Overview spans both ledgers, so it
+  // keeps the full B2C-derived list.
+  const scopeMonths = useMemo(() => {
+    if (scope !== 'b2b') return opts.months || []
+    const bm = [...new Set((b2b?.months || [])
+      .map(r => r.month_year || r.key || r.month)
+      .filter(Boolean))].sort()
+    // Fall back to the shared list rather than rendering nothing if the freight month
+    // query has not landed yet.
+    return bm.length ? bm : (opts.months || [])
+  }, [scope, opts.months, b2b])
+
+  // Per SCOPE, not once globally: months are now scope-specific, so a single flag would
+  // have defaulted only the first tab visited and left the other two showing nothing.
+  const monthsDefaulted = useRef({})
   useEffect(() => {
-    if (monthsDefaulted.current) return
-    const all = opts.months || []
+    if (monthsDefaulted.current[scope]) return
+    const all = scopeMonths
     if (!all.length) return
-    monthsDefaulted.current = true
-    // Respect a selection that is already in place (a shared URL, or an external filter
-    // object supplied by the parent).
+    monthsDefaulted.current[scope] = true
+    // Respect a selection already in place for this scope (a shared URL, or an external
+    // filter object supplied by the parent).
     if ((filters.months || []).length) return
     setOne('months', all.slice(-DEFAULT_MONTH_COUNT))
-    // filters.months is deliberately NOT a dependency: this must fire on the arrival of
-    // the options, never in response to the user changing the selection.
+    // filters.months is deliberately NOT a dependency: this must fire when the options
+    // arrive or the scope changes, never in response to the user editing the selection.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [opts.months])
+  }, [scopeMonths, scope])
 
   // What the period note renders. Derived from the SELECTED months, not from the default,
   // so it stays truthful when the user narrows or widens the range.
   const monthWindow = useMemo(() => {
-    const all = opts.months || []
+    const all = scopeMonths
     const sel = (filters.months || []).length ? [...filters.months].sort() : all
     if (!sel.length) return null
     const label = m => {
@@ -1928,7 +2043,7 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
       total: all.length,
       range: first === last ? label(first) : `${label(first)} – ${label(last)}`,
     }
-  }, [opts.months, filters.months])
+  }, [scopeMonths, filters.months])
 
   // Options for the exact-slab dropdown, ordered by slab ascending (the API returns them
   // that way). SearchSelect matches on the label string and echoes it into the closed
@@ -2033,7 +2148,7 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
         {/* Everything else as full-width labelled dropdowns under one FILTERS heading. */}
         <div style={{ fontSize: 10, fontWeight: 800, color: C.t3, letterSpacing: '.06em', textTransform: 'uppercase' }}>Filters</div>
 
-        <SearchSelect label="Billing Period" options={opts.months} multi
+        <SearchSelect label="Billing Period" options={scopeMonths} multi
           selected={filters.months}
           onChange={v => (v === null ? setOne('months', []) : toggleIn('months', v))} />
 
@@ -3217,10 +3332,16 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
       {/* ── Zone + mode ── */}
       <SectionHdr title="Where The Money Goes" collapsed={secHid['money']} onToggle={() => toggleSec('money')} />
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(330px,1fr))', gap: 14 , ...(secHid['money'] ? { display: 'none' } : {}) }}>
-        <Card title="Cost by zone" note="">
+        <Card title="Cost by zone"
+          note={zoneSub ? `${zoneSub} · ${zoneRowsShown.length} zones` : ''}
+          action={zoneSubOptions.length ? (
+            <SearchSelect label="All sub-categories" options={zoneSubOptions}
+              value={zoneSub || null}
+              onChange={v => setZoneSub(v || '')} />
+          ) : null}>
           <div style={{ height: 200 }}>
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={zoneRows} margin={{ top: 10, right: isMobile ? 10 : 12, left: isMobile ? -14 : 4, bottom: 4 }}>
+              <BarChart data={zoneRowsShown} margin={{ top: 10, right: isMobile ? 10 : 12, left: isMobile ? -14 : 4, bottom: 4 }}>
                 <CartesianGrid stroke={VIZ.grid} vertical={false} />
                 <XAxis dataKey="zone" tickFormatter={z => `Zone ${z}`} tick={{ fontSize: 11.5, fill: VIZ.muted }} axisLine={{ stroke: VIZ.axis }} tickLine={false} />
                 <YAxis tick={{ fontSize: 11, fill: VIZ.muted }} axisLine={false} tickLine={false}
@@ -3245,7 +3366,7 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
                 <Bar dataKey="cost" name="Cost" radius={[4, 4, 0, 0]} maxBarSize={44}
                   onClick={d => d?.zone && ZONES.includes(d.zone) && toggleIn('zones', d.zone)}
                   style={{ cursor: 'pointer' }}>
-                  {zoneRows.map(r => (
+                  {zoneRowsShown.map(r => (
                     <Cell key={r.zone} fill={zoneColor(r.zone, zoneOrder)}
                       opacity={filters.zones.length && !filters.zones.includes(r.zone) ? 0.35 : 1} />
                   ))}
@@ -3267,7 +3388,7 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
                   </tr>
                 </thead>
                 <tbody>
-                  {zoneRows.map((r, i) => (
+                  {zoneRowsShown.map((r, i) => (
                     <tr key={r.zone} style={{ borderBottom: `1px solid ${C.border}`, background: i % 2 === 0 ? C.card : C.bg }}>
                       <td style={{ position: 'sticky', left: 0, background: i % 2 === 0 ? C.card : C.bg, zIndex: 1, padding: '6px 6px', fontWeight: 600, color: C.t1, whiteSpace: 'nowrap' }}>Zone {r.zone}</td>
                       <td style={{ padding: '6px 6px', textAlign: 'center', color: C.t1 }}>{fmtBig(r.shipments)}</td>
@@ -3288,7 +3409,7 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
               { key: 'cpk', label: 'Cost / kg', align: 'center', render: (_, r) => (r.cpk != null ? '₹' + r.cpk.toFixed(2) : '—') },
               { key: 'share', label: 'Share', align: 'center', render: (_, r) => <ShareBar pct={r.share}>{r.share.toFixed(1) + '%'}</ShareBar> },
             ]}
-            rows={zoneRows}
+            rows={zoneRowsShown}
           />
           )}
         </Card>
@@ -3758,15 +3879,28 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
               { key: 'ctsReal', label: 'Avg. Logistic Cost', align: 'center', render: (_, r) => (
                 r.ctsReal ? <span style={{ fontWeight: 700 }}>{fmt(r.ctsReal)}</span> : '—'
               ) },
-              // Sub-category rows show the billable SLAB from the item master — one real value
-              // the courier charges on. Category rows show the shipment-weighted average
-              // product weight instead, because a category spans products of different weights
-              // and no single slab is true for all of them.
+              // Sub-category rows show the billable SLAB from the item master — the one real
+              // value the courier charges on. Category rows show an em-dash: a category spans
+              // products of different weights, so no single slab is true for all of them.
               { key: 'slab', label: 'Weight Slab', align: 'center', render: (_, r) => {
                 if (r.masterSlab > 0) return <strong>{r.masterSlab} kg</strong>
-                return r.masterKg > 0 ? <strong>{r.masterKg.toFixed(2)} kg</strong> : '—'
+                // No fallback to masterKg: that would repeat the Actual Weight column
+                // verbatim on category rows. masterSlab is null there precisely because a
+                // category spans products of different weights and no single billable slab
+                // is true for all of them, so an em-dash is the honest answer.
+                return '—'
               } },
-              { key: 'vw', label: 'Volumetric Weight', align: 'center', render: (_, r) => (r.vw ? r.vw.toFixed(2) + ' kg' : '—') },
+              // Actual product weight from the item master (Weight_gms / 1000 at sync), not
+              // the volumetric figure this column used to show. That one came from
+              // BigQuery's `total_weight`, which despite the name is L*B*H/5000 —
+              // dimensional weight, not what the product weighs. Coverage is 87.8%;
+              // an em-dash where the item master has no entry for that sub-category.
+              //
+              // Distinct from the Weight Slab column beside it: that shows the BILLABLE
+              // slab the courier charges on, this shows the true weight.
+              { key: 'masterKg', label: 'Actual Weight', align: 'center', render: (_, r) => (
+                r.masterKg > 0 ? r.masterKg.toFixed(2) + ' kg' : '—'
+              ) },
             ]}
             rows={productRows}
             maxHeight={480}
@@ -4050,16 +4184,16 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
                   instead of minting a new one for an equivalent selection. */}
               <PeriodChip
                 window={monthWindow}
-                months={opts.months || []}
+                months={scopeMonths}
                 selected={filters.months}
                 onToggle={m => setFilters(f => {
-                  const all = opts.months || []
+                  const all = scopeMonths
                   const cur = (f.months || []).length ? f.months : all
                   const next = cur.includes(m) ? cur.filter(x => x !== m) : [...cur, m]
                   return { ...f, months: next.length === all.length || !next.length ? [] : next }
                 })}
                 onAll={() => setOne('months', [])}
-                onRecent={() => setOne('months', (opts.months || []).slice(-DEFAULT_MONTH_COUNT))}
+                onRecent={() => setOne('months', (scopeMonths).slice(-DEFAULT_MONTH_COUNT))}
                 defaultCount={DEFAULT_MONTH_COUNT}
               />
             </div>

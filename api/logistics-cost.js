@@ -949,6 +949,37 @@ export default async function handler(req, res) {
     // static JSON so the frontend can re-aggregate client-side on every filter change
     // without a round-trip. Band and destCity are excluded — their cardinality would
     // make the cube too large; those filters still hit the live API.
+    // ── Zone x sub-category cube ──
+    // Answers "zone costs for Cushions, now for Orthotics" without a round trip.
+    //
+    // Deliberately a SEPARATE, much leaner cube than CUBE_Q rather than another dimension
+    // on it: sub_category crossed with the main cube's eight dimensions measured 49,740
+    // rows (~37 MB of static JSON). This grain is 5,361 rows / 0.49 MB.
+    //
+    // sub_category lives in awb_shipment_dims, so this LEFT JOINs it — coverage is 98.4%
+    // and the remainder is bucketed as (unknown) rather than dropped, so the cube still
+    // sums to the headline total instead of quietly under-reporting.
+    //
+    // Uses the same exGst() correction as every other cost figure here. Without it this
+    // read Rs 12.46Cr against the tab's Rs 12.36Cr, because Delhivery uploaded
+    // GST-inclusive totals.
+    const SUBCUBE_Q = () => query(pool, `
+      SELECT i.zone,
+             COALESCE(NULLIF(TRIM(d.sub_category), ''), '(unknown)') AS sub,
+             COALESCE(d.category, '(unknown)')                      AS cat,
+             i.month_year                                           AS month,
+             COUNT(*)::int                                          AS n,
+             SUM(${exGst('i.total_cost::float8', 'i.freight_charge::float8', 'i.surcharge::float8', 'i.other_charge::float8')})::float8 AS cost,
+             SUM(i.charged_weight_courier::float8)::float8          AS wt
+        FROM public.logistics_invoices_b2c i
+        LEFT JOIN public.awb_shipment_dims d ON d.awb = i.awb_number
+       WHERE i.total_cost > 0
+         AND i.zone IN ('A','B','C','D','E')
+         AND i.charged_weight_courier > 0
+         AND i.charged_weight_courier <= 500
+       GROUP BY 1, 2, 3, 4
+    `, [])
+
     const CUBE_Q = `
       ${BASE}
       SELECT
@@ -1064,7 +1095,7 @@ export default async function handler(req, res) {
       // Throttled to 3: this block is 10 queries and only runs on a cache miss, so it can
       // afford to be slower — but firing all 10 at once starved the pool and produced the
       // same connect timeout the main block hit.
-      const [health, joinCov, opt, cityRows, originCityRows, b2b, b2bLanes, b2bTotals, b2bTrans, b2bMonths, b2bTypes, b2bVar, b2bVarMonths, b2bTransMonths, b2bVehicles, b2bLaneVeh, b2bRateCmp, b2bSole, wr, gridRes, trendRes, disputes, slabs] = await mapLimit([
+      const [health, joinCov, opt, cityRows, originCityRows, b2b, b2bLanes, b2bTotals, b2bTrans, b2bMonths, b2bTypes, b2bVar, b2bVarMonths, b2bTransMonths, b2bVehicles, b2bLaneVeh, b2bRateCmp, b2bSole, wr, gridRes, trendRes, disputes, slabs, subCube] = await mapLimit([
         // ── Data Health (spec §0) ──
         // Every exclusion and every coverage rate the page depends on, in one query.
         // This exists so finance can see the gaps before finding one themselves and
@@ -1329,7 +1360,7 @@ export default async function handler(req, res) {
                  SUM(spend)::float8 AS total_spend
             FROM l
         `),
-        wrQ, gridQ, trendQ, disputesQ, slabQ,
+        wrQ, gridQ, trendQ, disputesQ, slabQ, SUBCUBE_Q,
       ], 3)
       const options = opt.rows[0] || {}
       options.cities = cityRows.rows.map(r => r.c).sort()
@@ -1362,6 +1393,9 @@ export default async function handler(req, res) {
         rateGrid: gridRes.rows,
         courierDisputes: disputes.rows,
         slabCosts: slabs.rows,
+        // Zone x sub-category cube. Filter-independent by design — the client slices it,
+        // so it is measured once per cache period like the other reference data.
+        subCube: subCube.rows,
         trendAll: trendRes.rows,
         at: Date.now(), options, b2b: b2b.rows,
         // Data Health (§0): exclusions + coverage, so every number is auditable.
@@ -1399,6 +1433,9 @@ export default async function handler(req, res) {
     out.rateGrid = refCache.rateGrid || []
     out.courierDisputes = refCache.courierDisputes || []
     out.slabCosts = refCache.slabCosts || []
+    // Zone x sub-category cube for the zone slicer. Sent whole and sliced client-side, so
+    // changing sub-category costs no round trip — the point of the feature.
+    out.subCube = refCache.subCube || []
     out.trendAll = refCache.trendAll || []
     out.skipped = refCache.skipped
     out.health = refCache.health
