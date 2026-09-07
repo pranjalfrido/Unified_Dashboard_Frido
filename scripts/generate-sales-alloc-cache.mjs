@@ -27,11 +27,11 @@ function monthKey(dateStr) { return dateStr.slice(0, 7) }
 
 const bq = new BigQuery({ keyFilename: 'sa_key.json' })
 
-// 90-day window — 3 months of data for client-side date range filtering
+// 60-day window — 2 months of data for client-side date range filtering
 const end = new Date() // fetch up to today — frontend excludes partial last day via lastSalesDate-1
 const endStr = end.toISOString().slice(0, 10)
 const startD = new Date(end)
-startD.setDate(startD.getDate() - 89) // 90 days inclusive
+startD.setDate(startD.getDate() - 59) // 60 days inclusive
 const startStr = startD.toISOString().slice(0, 10)
 // Widen fetch for momentum (7d lookback) and top movers (7d lookback from end)
 const fetchStart = new Date(startD)
@@ -74,7 +74,7 @@ const [[salesRows], [itemMasterRows], [invRows], [skuMappingRows]] = await Promi
 
 const { facilityToLocation, facilityToDisplayName, facilityToStatus, stateToRegion, stateToNearestWH, locationToRegion, channelToUnified, channelToUnified2, channelToDescription } = buildFacilityMaps()
 const skuMap = buildSkuMap(skuMappingRows)
-const daysInRange = 90
+const daysInRange = 60
 
 const itemMaster = new Map()
 for (const r of itemMasterRows) {
@@ -130,28 +130,30 @@ const rangeRows = salesRows.filter(r => {
 })
 const lookbackRows = salesRows.filter(passesFilters)
 
-// Enriched raw rows for client-side filtering in the browser
+// Enriched raw rows for client-side filtering — short field names to minimise JSON size
+// Field key: s=sku, c=category, b=subCategory, t=salesType, h=channel, h2=channel2,
+//            f=facility, l=location, g=region, n=nearestWH, d=date, q=qty, r=rev
 const rawRows = rangeRows.map(r => {
   const date = r.order_date?.value || r.order_date
   const { key } = resolveMasterSkuKey(r.final_sku, skuMap)
   const master = itemMaster.get(key)
   const location = facilityToLocation.get(r.Facility) || 'Unmapped'
   return {
-    sku: key,
-    category: master?.category || 'Uncategorized',
-    subCategory: master?.subCategory || 'Uncategorized',
-    salesType: salesTypeFor(r.channel, channelToDescription) || 'B2C Order',
-    channel: norm(channelToUnified.get(norm(r.channel)) || r.channel || 'Unknown'),
-    channel2: channelToUnified2.get(norm(r.channel)) || 'Purchase Order',
-    facility: r.Facility || '',
-    location,
-    region: locationToRegion.get(location) || null,
-    nearestWH: stateToNearestWH.get(norm(r.state)) || null,
-    date,
-    qty: Number(r.qty || 0),
-    rev: Math.round(num(r.rev)),
+    s: key,
+    c: master?.category || 'Uncategorized',
+    b: master?.subCategory || 'Uncategorized',
+    t: salesTypeFor(r.channel, channelToDescription) || 'B2C Order',
+    h: norm(channelToUnified.get(norm(r.channel)) || r.channel || 'Unknown'),
+    h2: channelToUnified2.get(norm(r.channel)) || 'Purchase Order',
+    f: r.Facility || '',
+    l: location,
+    g: locationToRegion.get(location) || null,
+    n: stateToNearestWH.get(norm(r.state)) || null,
+    d: date,
+    q: Number(r.qty || 0),
+    v: Math.round(num(r.rev)),
   }
-}).filter(r => r.date && r.sku)
+}).filter(r => r.d && r.s)
 
 // ── Daily trend ──────────────────────────────────────────────────────────────
 const dailyMap = new Map()
