@@ -7363,7 +7363,7 @@ function ShopifyTab({ data, filters, setFilters }) {
     return sorted
   })()
   const enrichedCityRows = (() => {
-    const totalRevAll = sh.cityTotal?.rev || shCityRows.reduce((s, c) => s + (c.rev || 0), 0)
+    const totalRevAll = totalRev || sh.cityTotal?.rev || shCityRows.reduce((s, c) => s + (c.rev || 0), 0)
     const sorted = shCityRows.map(c => {
       const key = `${c.city}|${c.state || ''}`
       const prev = cityPrevMap[key] || { rev: 0, orders: 0 }
@@ -7893,7 +7893,7 @@ function EBOTab({ data, rangeStart, rangeEnd }) {
   })()
 
   const enrichedCityRows = (() => {
-    const totalRevAll = ebo.cityTotal?.rev || cityRows.reduce((s, c) => s + (c.rev || 0), 0)
+    const totalRevAll = totalRev || ebo.cityTotal?.rev || cityRows.reduce((s, c) => s + (c.rev || 0), 0)
     const sorted = cityRows.map(c => {
       const key = `${c.city}|${c.state || ''}`
       const prev = cityPrevMap[key] || { rev: 0, orders: 0 }
@@ -8592,7 +8592,7 @@ function AmazonTab({ data, channelView, setChannelView }) {
               return { ...s, aov: s.orders ? s.rev / s.orders : 0, rtoPct: s.rev > 0 ? (s.returnRev||0) / s.rev * 100 : 0, mom: prev > 0 ? (s.rev - prev) / prev * 100 : null, sharePct, cumPct: cum }
             })
             const cityPrevMap = amzSC.cityPrevMap || {}
-            const totalCityRev = amzSC.cityTotal || (amzSC.cities||[]).reduce((s,x) => s+x.rev, 0)
+            const totalCityRev = amzTotalRev || amzSC.cityTotal || (amzSC.cities||[]).reduce((s,x) => s+x.rev, 0)
             let cumC = 0
             const enrichedCities = (amzSC.cities||[]).map(c => {
               const prev = cityPrevMap[c.city] || 0
@@ -8976,7 +8976,7 @@ function FlipkartTab({ data }) {
           cityMap[x.city].returnRev += (x.returnRev||0); cityMap[x.city].deliveredRev += (x.deliveredRev||0)
         })
         const fkCityTotalBQ = (cityTotalMap['FBF']||0) + (cityTotalMap['NON-FBF']||0)
-        const totalCityRev = fkCityTotalBQ || Object.values(cityMap).reduce((s, v) => s + v.rev, 0)
+        const totalCityRev = rev || fkCityTotalBQ || Object.values(cityMap).reduce((s, v) => s + v.rev, 0)
         let cumC = 0
         const enrichedCities = Object.values(cityMap).sort((a,b) => b.rev-a.rev).map(c => {
           const prev = (cityPrevMap[`${c.city}::FBF`]||0) + (cityPrevMap[`${c.city}::NON-FBF`]||0)
@@ -10733,7 +10733,7 @@ function BlinkitTab({ data }) {
         const statePrevMap = bl.statePrevMap || {}
         const cityPrevMap = bl.cityPrevMap || {}
         const totalStateRev = bl.stateTotal || stateRows.reduce((s, x) => s + x.rev, 0)
-        const totalCityRev = bl.cityTotal || cityRows.reduce((s, x) => s + x.rev, 0)
+        const totalCityRev = rev || bl.cityTotal || cityRows.reduce((s, x) => s + x.rev, 0)
         let sCum = 0
         const enrichedStates = stateRows.map(s => {
           const prev = statePrevMap[s.state] || 0
@@ -10904,7 +10904,7 @@ function InstaTab({ data }) {
         const statePrevMap = ins.statePrevMap || {}
         const cityPrevMap = ins.cityPrevMap || {}
         const totalStateRev = ins.stateTotal || stateRows.reduce((s, x) => s + x.rev, 0)
-        const totalCityRev = ins.cityTotal || cityRows.reduce((s, x) => s + x.rev, 0)
+        const totalCityRev = rev || ins.cityTotal || cityRows.reduce((s, x) => s + x.rev, 0)
         let sCum = 0
         const enrichedStates = stateRows.map(s => {
           const prev = statePrevMap[s.state] || 0
@@ -11075,7 +11075,7 @@ function ZeptoTab({ data }) {
         const statePrevMap = zp.statePrevMap || {}
         const cityPrevMap = zp.cityPrevMap || {}
         const totalStateRev = zp.stateTotal || stateRows.reduce((s, x) => s + x.rev, 0)
-        const totalCityRev = zp.cityTotal || cityRows.reduce((s, x) => s + x.rev, 0)
+        const totalCityRev = rev || zp.cityTotal || cityRows.reduce((s, x) => s + x.rev, 0)
         let sCum = 0
         const enrichedStates = stateRows.map(s => {
           const prev = statePrevMap[s.state] || 0
@@ -11172,7 +11172,7 @@ function CredTab({ data }) {
   let cumC = 0
   const enrichedCities = cityRows.map(c => {
     const prevRev = cityPrevMap[c.city] || 0
-    const sharePct = cityTotal > 0 ? c.rev / cityTotal * 100 : 0
+    const sharePct = (rev || cityTotal) > 0 ? c.rev / (rev || cityTotal) * 100 : 0
     cumC += sharePct
     return { ...c, city: c.city, aov: c.orders ? c.rev / c.orders : 0, rtoPct: c.rev > 0 ? (c.returnRev||0) / c.rev * 100 : 0, mom: prevRev > 0 ? (c.rev - prevRev) / prevRev * 100 : null, sharePct, cumPct: cumC }
   })
@@ -11425,7 +11425,7 @@ function FirstcryTab({ data }) {
   let cumC = 0
   const enrichedCities = cityRows.map(c => {
     const prevRev = cityPrevMap[c.city] || 0
-    const sharePct = cityTotal > 0 ? c.rev / cityTotal * 100 : 0
+    const sharePct = (rev || cityTotal) > 0 ? c.rev / (rev || cityTotal) * 100 : 0
     cumC += sharePct
     return { ...c, city: c.city, aov: c.orders ? c.rev / c.orders : 0, rtoPct: c.rev > 0 ? (c.returnRev||0) / c.rev * 100 : 0, mom: prevRev > 0 ? (c.rev - prevRev) / prevRev * 100 : null, sharePct, cumPct: cumC }
   })

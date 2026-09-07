@@ -407,8 +407,7 @@ WHERE u.OrderDate BETWEEN '${s}' AND '${e}'
   -- re-shipment bookkeeping, not a second sale, so it's excluded here at the source — the original
   -- order's own revenue/Gross/Net treatment is untouched and unaffected by this filter.
   AND NOT (u.OrderId LIKE '%_EX%')
-  ${whereClause}
-ORDER BY u.OrderDate DESC`
+  ${whereClause}`
 }
 
 const unwrap = v => {
