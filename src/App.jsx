@@ -15929,8 +15929,8 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
       const res = await fetch(`${API}/api/bq`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
       if (!res.ok) throw new Error(`API error ${res.status}: ${await res.text()}`)
       const json = await res.json()
-      if (reqId !== reqIdRef.current) return
-      const next = json.totalRev !== undefined ? json : (json.rows || [])
+      if (reqId !== reqIdRef.current) return // stale response, ignore
+      const next = json.source === 'postgres-aggregated' ? json : (json.totalRev !== undefined ? json : (json.rows || []))
       if (json.subCatFirstOrderMap && Object.keys(json.subCatFirstOrderMap).length) {
         setSubCatFirstOrderMap(json.subCatFirstOrderMap)
       }
@@ -15938,16 +15938,20 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
         if (keepPrev && prev && typeof prev === 'object' && !Array.isArray(prev)) return { ...prev, ...next }
         return next
       })
-      setLoading(false)
       clientCacheRef.current.set(cacheKey, next)
 
     } catch (e) {
       if (reqId === reqIdRef.current) {
         setError(e.message)
+        // Clear stale data on failure — otherwise the dashboard keeps rendering the LAST
+        // successful fetch's numbers under whatever filter is now selected (e.g. switching
+        // D2C sub-channel from MyFrido to Overall while a BigQuery rate-limit 500 hits silently
+        // left MyFrido's Net Revenue on screen under the "Overall" tab, with no visual indication
+        // that the switch never actually completed) — confirmed 2026-08-19.
         setRawRows(null)
       }
     }
-    finally { if (reqId === reqIdRef.current) { setLoading(false); setLoadingSlow(false) } }
+    finally { if (reqId === reqIdRef.current) setLoading(false) }
   }, [API])
 
   const debounceRef = useRef(null)
@@ -16234,9 +16238,9 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
       <Sidebar page={page} setPage={setPage} invTab={invTab} setInvTab={setInvTab} allowedTabs={allowedTabs} profile={profile} />
       <div className="app-main">
         <Topnav page={page} setPage={setPage} customerTab={customerTab} invTab={invTab} setInvTab={setInvTab} alerts={alerts} lFilters={lFilters} setLFilters={setLFilters} logisticsFilterOpts={logisticsFilterOpts} costFilters={costFilters} setCostFilters={setCostFilters} onRefresh={() => { const { start, end, category, subCategory, sku, subChannel, voucher, region, tier, state, city, country } = filters; const e = {}; if (category?.length) e.category = category.join(','); if (subCategory?.length) e.subCategory = subCategory.join(','); if (sku?.length) e.sku = sku.join(','); if (subChannel) e.subChannel = subChannel; if (voucher) e.voucher = voucher; if (region?.length) e.region = region.join(','); if (tier?.length) e.tier = tier.join(','); if (state?.length) e.state = state.join(','); if (city) e.city = city; if (country) e.country = country; fetchData(start, end, e) }} loading={loading} filters={filters} setFilters={setFilters} rawRows={rawRows} inventoryDateControl={inventoryDateControl} salesActiveTab={activeTab} setSalesActiveTab={setActiveTab} salesData={data} salesChannelView={salesChannelView} setSalesChannelView={setSalesChannelView} salesOfflineSub={salesOfflineSub} setSalesOfflineSub={setSalesOfflineSub} adsSelPlatform={adsSelPlatform} setAdsSelPlatform={setAdsSelPlatform} pnlActiveTab={pnlActiveTab} setPnlActiveTab={setPnlActiveTab} pnlAmzView={pnlAmzView} setPnlAmzView={setPnlAmzView} pnlOfflineSub={pnlOfflineSub} setPnlOfflineSub={setPnlOfflineSub} pnlD2cSubCh={pnlD2cSubCh} setPnlD2cSubCh={setPnlD2cSubCh} />
-        {(loading || inventoryDateControl?.loading || loadingSlow) && (
+        {(loading || inventoryDateControl?.loading) && (
           <div style={{ height: 2, background: C.border, flexShrink: 0 }}>
-            <div className="progress-bar" style={{ height: '100%', background: loadingSlow && !loading ? C.t3 : C.acc }} />
+            <div className="progress-bar" style={{ height: '100%', background: C.acc }} />
           </div>
         )}
         {error && (
