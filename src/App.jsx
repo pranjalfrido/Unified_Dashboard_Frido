@@ -400,6 +400,7 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
   const [cView, setCView] = useState('courier') // 'courier' | 'facility' | 'month'
   const [payTrendGran, setPayTrendGran] = useState('Daily')
   const [ndrPayFilter, setNdrPayFilter] = useState('All')
+  const [rtoAgeingBase, setRtoAgeingBase] = useState('pickup')
   const [isMobile, setIsMobile] = useState(() => window.innerWidth <= 768)
   useEffect(() => {
     const onResize = () => setIsMobile(window.innerWidth <= 768)
@@ -438,13 +439,6 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
             setRawPrevData(json.previous || null)
             try { localStorage.setItem('logistics_stale', JSON.stringify({ current: json.current, previous: json.previous || null, dateRange: json.dateRange, savedAt: Date.now() })) } catch {}
             usedStatic = true
-            // Static cache lacks ndrByCourier — fetch it from live API and merge
-            if (!json.current.ndrByCourier) {
-              fetch(`${API}/api/logistics`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ start: filters.start, end: filters.end, _fieldsOnly: 'ndrByCourier' }) })
-                .then(r => r.ok ? r.json() : null)
-                .then(d => { if (d?.ndrByCourier) setRawData(prev => ({ ...prev, ndrByCourier: d.ndrByCourier })) })
-                .catch(() => {})
-            }
           }
         }
       } catch { /* fall through to live API */ }
@@ -662,6 +656,9 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
             const m = {}; rows.forEach(x => { m[x.reason] = (m[x.reason] || 0) + (x.total || 0) })
             return Object.entries(m).map(([reason, total]) => ({ reason, total })).sort((a,b) => b.total - a.total)
           })(),
+        rtoAgeing: hasCourier
+          ? (raw.rtoAgeing || []).filter(x => couriers.includes(x.courier_group))
+          : (raw.rtoAgeing || []),
         failedDeliveryReasons: (() => {
             const rows = (raw.failedDeliveryReasons || []).filter(courierFilter)
             const m = {}; rows.forEach(x => { m[x.reason] = (m[x.reason] || 0) + (x.total || 0) })
@@ -686,6 +683,7 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
           return Object.values(m)
         })(),
         pickupAgeing: (raw.pickupAgeing || []).filter(courierFilter),
+        ndrByCourier: (raw.ndrByCourier || []),
       }
     }
     const effectiveRaw = rawData || (staleData?.current ?? null)
@@ -1798,7 +1796,7 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
                     return (
                     <div style={{ ...tableCard2, height: 335 }}>
                       <div style={{ ...tableTitle2, fontSize: 13, padding: '8px 14px 7px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                        <span>Order Processing Time <span style={{ fontWeight: 500, color: C.t3, fontSize: 10.2, marginLeft: 4 }}>(by Facility)</span></span>
+                        <span>Order Processing Time <span style={{ fontWeight: 500, color: C.t3, fontSize: 10.2, marginLeft: 4 }}>(by Facility)</span><span style={{ fontWeight: 400, color: C.t3, fontSize: 9.5, marginLeft: 6 }}>order creation → shipment creation</span></span>
                       </div>
                       <div style={{ margin: '0 8px', overflowY: 'hidden' }}>
                         <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed' }}>
@@ -1848,7 +1846,7 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
                     return (
                     <div style={{ ...tableCard2, height: 335 }}>
                       <div style={{ ...tableTitle2, fontSize: 13, padding: '8px 14px 7px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                        <span>Order Pickup Time <span style={{ fontWeight: 500, color: C.t3, fontSize: 10.2, marginLeft: 4 }}>(by Courier)</span></span>
+                        <span>Order Pickup Time <span style={{ fontWeight: 500, color: C.t3, fontSize: 10.2, marginLeft: 4 }}>(by Courier)</span><span style={{ fontWeight: 400, color: C.t3, fontSize: 9.5, marginLeft: 6 }}>shipment creation → shipment pickup</span></span>
                       </div>
                       <div style={{ margin: '0 8px', overflowY: 'auto', maxHeight: 240 }}>
                         <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed' }}>
@@ -1897,7 +1895,7 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
                     return (
                     <div style={{ ...tableCard2, height: 335 }}>
                       <div style={{ ...tableTitle2, fontSize: 13, padding: '8px 14px 7px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                        <span>In-Transit Time <span style={{ fontWeight: 500, color: C.t3, fontSize: 10.2, marginLeft: 4 }}>(by Courier)</span></span>
+                        <span>In-Transit Time <span style={{ fontWeight: 500, color: C.t3, fontSize: 10.2, marginLeft: 4 }}>(by Courier)</span><span style={{ fontWeight: 400, color: C.t3, fontSize: 9.5, marginLeft: 6 }}>shipment pickup → shipment delivery</span></span>
                       </div>
                       <div style={{ margin: '0 8px', overflowY: 'auto', maxHeight: 240 }}>
                         <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed' }}>
@@ -1946,7 +1944,7 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
                     return (
                     <div style={{ ...tableCard2, height: 335 }}>
                       <div style={{ ...tableTitle2, fontSize: 13, padding: '8px 14px 7px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                        <span>Fulfilment Time <span style={{ fontWeight: 500, color: C.t3, fontSize: 10.2, marginLeft: 4 }}>(by Facility)</span></span>
+                        <span>Fulfilment Time <span style={{ fontWeight: 500, color: C.t3, fontSize: 10.2, marginLeft: 4 }}>(by Facility)</span><span style={{ fontWeight: 400, color: C.t3, fontSize: 9.5, marginLeft: 6 }}>order creation → shipment delivery</span></span>
                       </div>
                       <div style={{ margin: '0 8px', overflowY: 'hidden' }}>
                         <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed' }}>
@@ -2280,14 +2278,120 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
           )
         })()}
 
-        {/* ── RTO Reasons ── */}
-        <LSectionTitle title="RTO Reasons" collapsed={secCollapsed['rto']} onToggle={() => toggleSec('rto')} />
+        {/* ── RTO Analysis ── */}
+        <LSectionTitle title="RTO Analysis" collapsed={secCollapsed['rto']} onToggle={() => toggleSec('rto')} />
+        {!secCollapsed['rto'] && (() => {
+          const ageingRows = (data.rtoAgeing || []).filter(r => r.total_rto > 0)
+          const BUCKETS = ['0-1', '2-4', '5-7', '8-10', '10+']
+          const bKey = (pfx, b) => b === '0-1' ? `${pfx}_0_1` : b === '2-4' ? `${pfx}_2_4` : b === '5-7' ? `${pfx}_5_7` : b === '8-10' ? `${pfx}_8_10` : `${pfx}_10plus`
+          const BASE_OPTS = [{ key: 'order', label: 'Order Creation', subtitle: 'Order creation date' }, { key: 'shipment', label: 'Shipment Creation', subtitle: 'Shipment creation date' }, { key: 'pickup', label: 'Pickup Date', subtitle: 'Pickup date' }]
+          const activeBase = BASE_OPTS.find(o => o.key === rtoAgeingBase)
+          const pct = (v, tot) => tot ? ((v / tot) * 100).toFixed(1) + '%' : '—'
+          const thS = { padding: '7px 10px', textAlign: 'right', fontWeight: 700, fontSize: 11, color: C.t2, whiteSpace: 'nowrap', background: C.bg, position: 'sticky', top: 0, zIndex: 1 }
+          const thL = { ...thS, textAlign: 'left' }
+          const tdS = { padding: '7px 10px', textAlign: 'right', fontSize: 11, color: C.t1, borderTop: `1px solid ${C.border}` }
+          const tdL = { ...tdS, textAlign: 'left', fontWeight: 600 }
+          const courierCell = (name) => (
+            <td style={{ ...tdL, display: 'flex', alignItems: 'center', gap: 6 }}>
+              {COURIER_LOGOS[name] && <img src={COURIER_LOGOS[name]} alt="" style={{ width: 16, height: 16, objectFit: 'contain', borderRadius: 3, background: '#fff', padding: 1, border: `1px solid ${C.border}`, flexShrink: 0 }} />}
+              {name}
+            </td>
+          )
+          // totals for each prefix
+          const totals = (pfx) => ageingRows.reduce((s, r) => {
+            BUCKETS.forEach(b => { s[bKey(pfx, b)] = (s[bKey(pfx, b)] || 0) + (r[bKey(pfx, b)] || 0) })
+            s.total_rto = (s.total_rto || 0) + (r.total_rto || 0)
+            // rtodel totals
+            BUCKETS.forEach(b => { const k = bKey('rtodel', b); s[k] = (s[k] || 0) + (r[k] || 0) })
+            s.rtodel_total = (s.rtodel_total || 0) + (r.rtodel_0_1||0) + (r.rtodel_2_4||0) + (r.rtodel_5_7||0) + (r.rtodel_8_10||0) + (r.rtodel_10plus||0)
+            return s
+          }, {})
+          const tot = totals(rtoAgeingBase)
+          return (
+            <div style={{ display: 'flex', gap: 14, marginBottom: 14, flexWrap: 'wrap' }}>
+              {/* Left: RTO Ageing */}
+              <div style={{ ...cardStyle, flex: 1, minWidth: 320 }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10, flexWrap: 'wrap', gap: 6 }}>
+                  <div style={{ fontSize: 12, fontWeight: 700, color: C.t1 }}>RTO Ageing <span style={{ fontWeight: 400, color: C.t3, fontSize: 10.5 }}>{activeBase?.subtitle} → RTO mark date</span></div>
+                  <div style={{ display: 'flex', gap: 4 }}>
+                    {BASE_OPTS.map(o => (
+                      <button key={o.key} onClick={() => setRtoAgeingBase(o.key)} style={{ padding: '3px 9px', fontSize: 10.5, fontWeight: 600, borderRadius: 6, border: `1px solid ${C.border}`, cursor: 'pointer', background: rtoAgeingBase === o.key ? C.accent || '#2563eb' : C.card, color: rtoAgeingBase === o.key ? '#fff' : C.t1 }}>
+                        {o.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <div style={{ overflowX: 'auto' }}>
+                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11 }}>
+                    <thead>
+                      <tr style={{ borderBottom: `1.5px solid ${C.border}` }}>
+                        <th style={thL}>COURIER</th>
+                        <th style={thS}>TOTAL RTO</th>
+                        {BUCKETS.map(b => <th key={b} style={thS}>{b}D</th>)}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {ageingRows.map(r => (
+                        <tr key={r.courier_group} style={{ borderBottom: `1px solid ${C.border}` }}>
+                          {courierCell(r.courier_group)}
+                          <td style={tdS}>{(r.total_rto || 0).toLocaleString('en-IN')}</td>
+                          {BUCKETS.map(b => <td key={b} style={tdS}>{r[bKey(rtoAgeingBase, b)] > 0 ? pct(r[bKey(rtoAgeingBase, b)], r.total_rto) : '—'}</td>)}
+                        </tr>
+                      ))}
+                    </tbody>
+                    <tfoot>
+                      <tr style={{ borderTop: `2px solid ${C.border}`, background: C.bg, position: 'sticky', bottom: 0, zIndex: 1 }}>
+                        <td style={{ ...tdL, fontWeight: 700 }}>Total</td>
+                        <td style={{ ...tdS, fontWeight: 700 }}>{(tot.total_rto || 0).toLocaleString('en-IN')}</td>
+                        {BUCKETS.map(b => <td key={b} style={{ ...tdS, fontWeight: 700 }}>{tot[bKey(rtoAgeingBase, b)] > 0 ? pct(tot[bKey(rtoAgeingBase, b)], tot.total_rto) : '—'}</td>)}
+                      </tr>
+                    </tfoot>
+                  </table>
+                </div>
+              </div>
+              {/* Right: RTO Delivered TAT */}
+              <div style={{ ...cardStyle, flex: 1, minWidth: 320 }}>
+                <div style={{ fontSize: 12, fontWeight: 700, color: C.t1, marginBottom: 10 }}>RTO Delivery Ageing <span style={{ fontWeight: 400, color: C.t3, fontSize: 10.5 }}>RTO mark date → delivered back</span></div>
+                <div style={{ overflowX: 'auto' }}>
+                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11 }}>
+                    <thead>
+                      <tr style={{ borderBottom: `1.5px solid ${C.border}` }}>
+                        <th style={thL}>COURIER</th>
+                        <th style={thS}>TOTAL RTO DEL</th>
+                        {BUCKETS.map(b => <th key={b} style={thS}>{b}D</th>)}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {ageingRows.map(r => {
+                        const rtoDelTotal = (r.rtodel_0_1||0)+(r.rtodel_2_4||0)+(r.rtodel_5_7||0)+(r.rtodel_8_10||0)+(r.rtodel_10plus||0)
+                        return (
+                          <tr key={r.courier_group} style={{ borderBottom: `1px solid ${C.border}` }}>
+                            {courierCell(r.courier_group)}
+                            <td style={tdS}>{rtoDelTotal > 0 ? rtoDelTotal.toLocaleString('en-IN') : '—'}</td>
+                            {BUCKETS.map(b => <td key={b} style={tdS}>{r[bKey('rtodel', b)] > 0 ? pct(r[bKey('rtodel', b)], rtoDelTotal) : '—'}</td>)}
+                          </tr>
+                        )
+                      })}
+                    </tbody>
+                    <tfoot>
+                      <tr style={{ borderTop: `2px solid ${C.border}`, background: C.bg, position: 'sticky', bottom: 0, zIndex: 1 }}>
+                        <td style={{ ...tdL, fontWeight: 700 }}>Total</td>
+                        <td style={{ ...tdS, fontWeight: 700 }}>{(tot.rtodel_total || 0).toLocaleString('en-IN')}</td>
+                        {BUCKETS.map(b => <td key={b} style={{ ...tdS, fontWeight: 700 }}>{tot[bKey('rtodel', b)] > 0 ? pct(tot[bKey('rtodel', b)], tot.rtodel_total) : '—'}</td>)}
+                      </tr>
+                    </tfoot>
+                  </table>
+                </div>
+              </div>
+            </div>
+          )
+        })()}
         {(() => {
           const reasons = (data.rtoReasons || []).filter(r => r.reason && r.total > 0).sort((a, b) => b.total - a.total)
           const totalRto = reasons.reduce((s, r) => s + r.total, 0) || 1
           if (!reasons.length) return <div style={{ color: C.t3, fontSize: 12 }}>No RTO reason data available.</div>
           return (
-            <div style={{ ...cardStyle, padding: '16px 18px', display: secCollapsed['rto'] ? 'none' : undefined, height: isMobile ? 340 : undefined, display: secCollapsed['rto'] ? 'none' : 'flex', flexDirection: 'column' }}>
+            <div style={{ ...cardStyle, padding: '16px 18px', display: secCollapsed['rto'] ? 'none' : 'flex', flexDirection: 'column' }}>
               <div style={{ ...chartTitle, marginBottom: 14, flexShrink: 0 }}>RTO Reasons — Shipment Count & % of Total RTO</div>
               {isMobile ? (
                 <div style={{ overflowY: 'auto', flex: 1, display: 'flex', flexDirection: 'column', gap: 8 }}>
@@ -2343,7 +2447,7 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
           const filtered = ndrPayFilter === 'All' ? allNdrRows : allNdrRows.filter(r => r.payment_mode === ndrPayFilter)
           const courierMap = {}
           filtered.forEach(r => {
-            if (!courierMap[r.courier]) courierMap[r.courier] = { courier: r.courier, total_shipments: 0, ndr_count: 0, ndr_del: 0, ndr_rto: 0, del_att2: 0, del_att3: 0, del_att3plus: 0, _att_sum: 0, _att_n: 0, _tat_sum: 0, _tat_n: 0 }
+            if (!courierMap[r.courier]) courierMap[r.courier] = { courier: r.courier, total_shipments: 0, ndr_count: 0, ndr_del: 0, ndr_rto: 0, del_att2: 0, del_att3: 0, del_att3plus: 0, _att_sum: 0, _att_n: 0, _tat_sum: 0, _tat_n: 0, _o2d_sum: 0, _o2d_n: 0 }
             const c = courierMap[r.courier]
             c.total_shipments += r.total_shipments || 0
             c.ndr_count += r.ndr_count || 0
@@ -2354,18 +2458,26 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
             c.del_att3plus += r.del_att3plus || 0
             if (r.avg_att != null) { c._att_sum += r.avg_att * (r.ndr_count || 0); c._att_n += r.ndr_count || 0 }
             if (r.avg_intransit_days != null) { c._tat_sum += r.avg_intransit_days * (r.ndr_del || 0); c._tat_n += r.ndr_del || 0 }
+            if (r.avg_o2d != null) { c._o2d_sum += r.avg_o2d * (r.ndr_del || 0); c._o2d_n += r.ndr_del || 0 }
           })
-          const ndrRows = Object.values(courierMap).sort((a, b) => b.ndr_count - a.ndr_count).map(c => ({ ...c, avg_att: c._att_n ? +(c._att_sum / c._att_n).toFixed(2) : null, avg_intransit_days: c._tat_n ? +(c._tat_sum / c._tat_n).toFixed(2) : null }))
+          const ndrRows = Object.values(courierMap).sort((a, b) => b.ndr_count - a.ndr_count).map(c => ({ ...c, avg_att: c._att_n ? +(c._att_sum / c._att_n).toFixed(2) : null, avg_intransit_days: c._tat_n ? +(c._tat_sum / c._tat_n).toFixed(2) : null, avg_o2d: c._o2d_n ? +(c._o2d_sum / c._o2d_n).toFixed(2) : null }))
           const pct = (a, b) => b ? ((a / b) * 100).toFixed(1) + '%' : '—'
-          const totals = ndrRows.reduce((s, r) => ({
-            total_shipments: s.total_shipments + (r.total_shipments || 0),
-            ndr_count: s.ndr_count + (r.ndr_count || 0),
-            ndr_del: s.ndr_del + (r.ndr_del || 0),
-            ndr_rto: s.ndr_rto + (r.ndr_rto || 0),
-            del_att2: s.del_att2 + (r.del_att2 || 0),
-            del_att3: s.del_att3 + (r.del_att3 || 0),
-            del_att3plus: s.del_att3plus + (r.del_att3plus || 0),
-          }), { total_shipments: 0, ndr_count: 0, ndr_del: 0, ndr_rto: 0, del_att2: 0, del_att3: 0, del_att3plus: 0 })
+          const totals = (() => {
+            const s = { total_shipments: 0, ndr_count: 0, ndr_del: 0, ndr_rto: 0, del_att2: 0, del_att3: 0, del_att3plus: 0, _att_sum: 0, _att_n: 0, _tat_sum: 0, _tat_n: 0, _o2d_sum: 0, _o2d_n: 0 }
+            ndrRows.forEach(r => {
+              s.total_shipments += r.total_shipments || 0
+              s.ndr_count += r.ndr_count || 0
+              s.ndr_del += r.ndr_del || 0
+              s.ndr_rto += r.ndr_rto || 0
+              s.del_att2 += r.del_att2 || 0
+              s.del_att3 += r.del_att3 || 0
+              s.del_att3plus += r.del_att3plus || 0
+              if (r.avg_att != null) { s._att_sum += r.avg_att * (r.ndr_count || 0); s._att_n += r.ndr_count || 0 }
+              if (r.avg_intransit_days != null) { s._tat_sum += r.avg_intransit_days * (r.ndr_del || 0); s._tat_n += r.ndr_del || 0 }
+              if (r.avg_o2d != null) { s._o2d_sum += r.avg_o2d * (r.ndr_del || 0); s._o2d_n += r.ndr_del || 0 }
+            })
+            return { ...s, avg_att: s._att_n ? +(s._att_sum / s._att_n).toFixed(2) : null, avg_intransit_days: s._tat_n ? +(s._tat_sum / s._tat_n).toFixed(2) : null, avg_o2d: s._o2d_n ? +(s._o2d_sum / s._o2d_n).toFixed(2) : null }
+          })()
           const thStyle = { padding: '9px 10px', textAlign: 'right', fontWeight: 700, fontSize: 11, color: C.t2, whiteSpace: 'nowrap', background: C.bg, position: 'sticky', top: 0, zIndex: 1 }
           const thL = { ...thStyle, textAlign: 'left' }
           const td = { padding: '9px 10px', textAlign: 'right', fontSize: 11, color: C.t1, borderTop: `1px solid ${C.border}` }
@@ -2396,7 +2508,8 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
                       <th style={thStyle}>DEL 3rd ATT</th>
                       <th style={thStyle}>DEL 3+ ATT</th>
                       <th style={thStyle}>AVG ATT</th>
-                      <th style={thStyle}>INTRANSIT TAT</th>
+                      <th style={thStyle}>AVG S2D</th>
+                      <th style={thStyle}>AVG O2D</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -2416,10 +2529,12 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
                         <td style={td}>{(r.del_att3plus || 0).toLocaleString('en-IN')}</td>
                         <td style={td}>{r.avg_att != null ? r.avg_att : '—'}</td>
                         <td style={td}>{r.avg_intransit_days != null ? r.avg_intransit_days + 'd' : '—'}</td>
+                        <td style={td}>{r.avg_o2d != null ? r.avg_o2d + 'd' : '—'}</td>
                       </tr>
                     ))}
-                    {/* Total row */}
-                    <tr style={{ borderTop: `2px solid ${C.border}`, background: C.bg }}>
+                  </tbody>
+                  <tfoot>
+                    <tr style={{ borderTop: `2px solid ${C.border}`, background: C.bg, position: 'sticky', bottom: 0, zIndex: 1 }}>
                       <td style={{ ...tdL, fontWeight: 700 }}>Total</td>
                       <td style={{ ...td, fontWeight: 700 }}>{totals.total_shipments.toLocaleString('en-IN')}</td>
                       <td style={{ ...td, fontWeight: 700 }}>{totals.ndr_count.toLocaleString('en-IN')}</td>
@@ -2429,10 +2544,11 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
                       <td style={{ ...td, fontWeight: 700 }}>{totals.del_att2.toLocaleString('en-IN')}</td>
                       <td style={{ ...td, fontWeight: 700 }}>{totals.del_att3.toLocaleString('en-IN')}</td>
                       <td style={{ ...td, fontWeight: 700 }}>{totals.del_att3plus.toLocaleString('en-IN')}</td>
-                      <td style={{ ...td, fontWeight: 700 }}>—</td>
-                      <td style={{ ...td, fontWeight: 700 }}>—</td>
+                      <td style={{ ...td, fontWeight: 700 }}>{totals.avg_att != null ? totals.avg_att : '—'}</td>
+                      <td style={{ ...td, fontWeight: 700 }}>{totals.avg_intransit_days != null ? totals.avg_intransit_days + 'd' : '—'}</td>
+                      <td style={{ ...td, fontWeight: 700 }}>{totals.avg_o2d != null ? totals.avg_o2d + 'd' : '—'}</td>
                     </tr>
-                  </tbody>
+                  </tfoot>
                 </table>
               </div>
             </div>
@@ -7171,7 +7287,7 @@ function ShopifyTab({ data, filters, setFilters }) {
   const shCancelRev = shCancelRevRaw - shCodCancelRev  // exclude COD cancels from return %
   const rtoPct = totalRev > 0 ? (shRtoRev + shReturnRev) / totalRev * 100 : 0
   const atRiskRev = shRtoRev + shReturnRev + shCirRev + shCancelRev
-  const returnRevPct = totalRev > 0 ? ((shRtoRev + shReturnRev + shCirRev) / totalRev * 100) : 0
+  const returnRevPct = totalRev > 0 ? ((shRtoRev + shReturnRev + shCirRev + shCancelRevRaw) / totalRev * 100) : 0
   const repeatRate = nCusts ? (repeatCusts / nCusts * 100).toFixed(1) : '0'
 
   // Sub-channel breakdown — D2C is India-only, so this is just every non-International sub-channel.
@@ -7367,7 +7483,7 @@ function ShopifyTab({ data, filters, setFilters }) {
           const returnOrderPct = shNOrders ? ((rtoOrders + cirOrders) / shNOrders * 100) : 0
           const row2 = [
             { label: 'Cancellation %', value: `${cancelPct.toFixed(1)}%`, sub: `${fmt(cancelledRev)} cancelled rev`, accent: cancelPct > 5 ? '#7A1A1A' : undefined, badge: shReturnBadge(cancelPct, prevCancelPct) },
-            { label: 'Returns %', value: `${returnRevPct.toFixed(1)}%`, sub: `${fmt(shRtoRev + shReturnRev + shCirRev)} RTO+CIR rev`, accent: returnRevPct > 5 ? '#7A1A1A' : undefined, badge: shReturnBadge(returnRevPct, prevReturnRevPct) },
+            { label: 'Returns %', value: `${returnRevPct.toFixed(1)}%`, sub: `${fmt(shRtoRev + shReturnRev + shCirRev + shCancelRevRaw)} Return+RTO+CIR+Cancel rev`, accent: returnRevPct > 5 ? '#7A1A1A' : undefined, badge: shReturnBadge(returnRevPct, prevReturnRevPct) },
             { label: 'Exchange %', value: `${exchangePct.toFixed(1)}%`, sub: `${fmt(exchangeRev)} exchange rev`, badge: shReturnBadge(exchangePct, prevExchangePct) },
             { label: 'RTO %', value: `${rtoPct.toFixed(1)}%`, sub: `${fmt(shRtoRev + shReturnRev)} RTO rev`, accent: rtoPct > 10 ? '#7A1A1A' : undefined, badge: shReturnBadge(rtoPct, prevOrders > 0 ? prevRtoOrders / prevOrders * 100 : 0) },
             { label: 'CIR %', value: `${cirPct.toFixed(1)}%`, sub: `${fmt(shCirRev)} CIR rev`, badge: shReturnBadge(cirPct, prevOrders > 0 ? prevCirOrders / prevOrders * 100 : 0) },
@@ -7400,7 +7516,7 @@ function ShopifyTab({ data, filters, setFilters }) {
           const rawDaily = (sh.daily || []).map(d => {
             const grossRev = d.rev || 0
             const rt = returnTrendMap[d.date] || {}
-            return { date: d.date, grossRev, netRev: grossRev > 0 ? grossRev * netShrinkFactor : 0, returnPct: (rt.rtoPct || 0) + (rt.cirPct || 0), exchPct: rt.exchPct || 0, cancelPct: rt.cancelPct || 0 }
+            return { date: d.date, grossRev, netRev: grossRev > 0 ? grossRev * netShrinkFactor : 0, returnPct: (rt.rtoPct || 0) + (rt.cirPct || 0) + (rt.returnPct || 0) + (rt.cancelPct || 0), exchPct: rt.exchPct || 0, cancelPct: rt.cancelPct || 0 }
           }).filter(d => d.grossRev > 0)
 
           const grouped = (() => {
@@ -7721,7 +7837,7 @@ function EBOTab({ data, rangeStart, rangeEnd }) {
   const exchangeOrders = ebo.exchange?.exchangeOrders || 0
   const exchangeRev = ebo.exchange?.exchangeRev || 0
   const cancelPct = totalRev > 0 ? (cancelRev / totalRev * 100) : 0
-  const returnRevPct = totalRev > 0 ? ((rtoRev + returnRev + cirRev) / totalRev * 100) : 0
+  const returnRevPct = totalRev > 0 ? ((rtoRev + returnRev + cirRev + cancelRev) / totalRev * 100) : 0
   const rtoPct = totalRev > 0 ? ((rtoRev + returnRev) / totalRev * 100) : 0
   const cirPct = totalRev > 0 ? (cirRev / totalRev * 100) : 0
   const exchangePct = totalRev > 0 ? (exchangeRev / totalRev * 100) : 0
@@ -7796,7 +7912,7 @@ function EBOTab({ data, rangeStart, rangeEnd }) {
     const cirPct = rt.cirPct || 0
     const exchPct = rt.exchPct || 0
     const cancelPct = rt.cancelPct || 0
-    return { date: d.date, grossRev: grossR, netRev: grossR > 0 ? grossR * netShrinkFactor : 0, returnPct: rtoPct + cirPct, exchPct, cancelPct }
+    return { date: d.date, grossRev: grossR, netRev: grossR > 0 ? grossR * netShrinkFactor : 0, returnPct: rtoPct + cirPct + cancelPct, exchPct, cancelPct }
   }).filter(d => d.grossRev > 0)
 
   const groupedDaily = (() => {
@@ -7895,7 +8011,7 @@ function EBOTab({ data, rangeStart, rangeEnd }) {
             { label: 'AOV', value: `₹${Math.round(aov).toLocaleString('en-IN')}`, sub: 'Gross rev ÷ orders', badge: chgBadge(aov, prevOrders > 0 ? prevRev / prevOrders : 0) },
             { label: 'ASP', value: `₹${Math.round(asp).toLocaleString('en-IN')}`, sub: 'Gross rev ÷ units', badge: chgBadge(asp, prevUnits > 0 ? prevRev / prevUnits : 0) },
             { label: 'Cancellation %', value: `${cancelPct.toFixed(1)}%`, sub: `${fmt(cancelRev)} cancelled rev`, accent: cancelPct > 5 ? '#7A1A1A' : undefined, badge: retBadge(cancelPct, prevCancelPct) },
-            { label: 'Returns %', value: `${returnRevPct.toFixed(1)}%`, sub: `${fmt(rtoRev + returnRev + cirRev)} RTO+CIR rev`, accent: returnRevPct > 5 ? '#7A1A1A' : undefined, badge: retBadge(returnRevPct, prevReturnRevPct) },
+            { label: 'Returns %', value: `${returnRevPct.toFixed(1)}%`, sub: `${fmt(rtoRev + returnRev + cirRev + cancelRev)} Return+RTO+CIR+Cancel rev`, accent: returnRevPct > 5 ? '#7A1A1A' : undefined, badge: retBadge(returnRevPct, prevReturnRevPct) },
             { label: 'Exchange %', value: `${exchangePct.toFixed(1)}%`, sub: `${fmt(exchangeRev)} exchange rev`, badge: retBadge(exchangePct, prevOrders > 0 ? prevExchangeOrders / prevOrders * 100 : 0) },
             { label: 'RTO %', value: `${rtoPct.toFixed(1)}%`, sub: `${fmt(rtoRev + returnRev)} RTO rev`, accent: rtoPct > 10 ? '#7A1A1A' : undefined, badge: retBadge(rtoPct, prevOrders > 0 ? prevRtoOrders / prevOrders * 100 : 0) },
             { label: 'CIR %', value: `${cirPct.toFixed(1)}%`, sub: `${fmt(cirRev)} CIR rev`, badge: retBadge(cirPct, prevOrders > 0 ? prevCirOrders / prevOrders * 100 : 0) },
@@ -10995,7 +11111,7 @@ function CredTab({ data }) {
   const netRev = cr.netCalc?.netRev ?? (t.excRev || 0)
   const gstCollected = cr.netCalc?.gstCollected || 0
   const cancelRev = cr.netCalc?.cancelRev || 0
-  const totalReturnRev = (cr.netCalc?.returnRev || 0) + (cr.netCalc?.rtoRev || 0) + (cr.netCalc?.cirRev || 0)
+  const totalReturnRev = (cr.netCalc?.returnRev || 0) + (cr.netCalc?.rtoRev || 0) + (cr.netCalc?.cirRev || 0) + (cr.netCalc?.cancelRev || 0)
   const cancelPct = rev > 0 ? cancelRev / rev * 100 : 0
   const returnPct = rev > 0 ? totalReturnRev / rev * 100 : 0
   const orders = t.orders || 0
@@ -11249,7 +11365,7 @@ function FirstcryTab({ data }) {
   const netRev = fc.netCalc?.netRev ?? (t.excRev || 0)
   const gstCollected = fc.netCalc?.gstCollected || 0
   const cancelRev = fc.netCalc?.cancelRev || 0
-  const totalReturnRev = (fc.netCalc?.returnRev || 0) + (fc.netCalc?.rtoRev || 0) + (fc.netCalc?.cirRev || 0)
+  const totalReturnRev = (fc.netCalc?.returnRev || 0) + (fc.netCalc?.rtoRev || 0) + (fc.netCalc?.cirRev || 0) + (fc.netCalc?.cancelRev || 0)
   const cancelPct = rev > 0 ? cancelRev / rev * 100 : 0
   const returnPct = rev > 0 ? totalReturnRev / rev * 100 : 0
   const orders = t.orders || 0
@@ -11499,7 +11615,7 @@ function MyntraTab({ data }) {
   const asp = qty ? rev / qty : 0
   // Myntra totals carry a real returnRev/returnOrders figure directly (unlike CRED/Firstcry,
   // which derive it from the netCalc shared-measures layer) — use it as-is.
-  const mnReturnRev = totals.returnRev || 0
+  const mnReturnRev = (totals.returnRev || 0) + (mn.netCalc?.rtoRev || 0) + (mn.netCalc?.cirRev || 0) + (mn.netCalc?.cancelRev || 0)
   const mnReturnOrders = totals.returnOrders || 0
   const mnReturnPct = rev > 0 ? (mnReturnRev / rev * 100) : 0
 

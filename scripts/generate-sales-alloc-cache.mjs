@@ -27,11 +27,11 @@ function monthKey(dateStr) { return dateStr.slice(0, 7) }
 
 const bq = new BigQuery({ keyFilename: 'sa_key.json' })
 
-// Default 30-day window — same as the frontend's default date picker range
+// 60-day window — 2 months of data for client-side date range filtering
 const end = new Date() // fetch up to today — frontend excludes partial last day via lastSalesDate-1
 const endStr = end.toISOString().slice(0, 10)
 const startD = new Date(end)
-startD.setDate(startD.getDate() - 29) // 30 days inclusive
+startD.setDate(startD.getDate() - 59) // 60 days inclusive
 const startStr = startD.toISOString().slice(0, 10)
 // Widen fetch for momentum (7d lookback) and top movers (7d lookback from end)
 const fetchStart = new Date(startD)
@@ -74,7 +74,7 @@ const [[salesRows], [itemMasterRows], [invRows], [skuMappingRows]] = await Promi
 
 const { facilityToLocation, facilityToDisplayName, facilityToStatus, stateToRegion, stateToNearestWH, locationToRegion, channelToUnified, channelToUnified2, channelToDescription } = buildFacilityMaps()
 const skuMap = buildSkuMap(skuMappingRows)
-const daysInRange = 30
+const daysInRange = 60
 
 const itemMaster = new Map()
 for (const r of itemMasterRows) {
