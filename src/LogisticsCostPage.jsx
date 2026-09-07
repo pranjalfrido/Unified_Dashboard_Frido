@@ -282,6 +282,9 @@ function shapeResponse(j) {
     rateGrid: j.rateGrid || [],
     courierDisputes: j.courierDisputes || [],
     slabCosts: j.slabCosts || [],
+    // Zone x sub-category cube. Sliced client-side so changing sub-category costs no
+    // round trip — see the zone slicer below.
+    subCube: j.subCube || [],
     trendAll: j.trendAll || [],
     byCourierMonth: j.byCourierMonth || cubeToByCourierMonth(j.cube),
   }
@@ -1091,6 +1094,67 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
     })
   }, [agg])
 
+  // ── Zone slicer: sub-category ──
+  // Answers "zone costs for Cushions, now for Orthotics" instantly. The cube is already in
+  // memory, so this is a client-side re-aggregate rather than a refetch — the whole reason
+  // it is a separate lean cube (5,400 rows) instead of a dimension on the main one.
+  const [zoneSub, setZoneSub] = useState('')
+
+  // Options ordered by spend, not alphabetically: with 225 sub-categories the ones worth
+  // slicing are the expensive ones, and they should not be buried under an alphabetical A.
+  const zoneSubOptions = useMemo(() => {
+    const cube = agg?.subCube || []
+    if (!cube.length) return []
+    const spend = new Map()
+    for (const r of cube) {
+      // Respect the Billing Period selection so the list never offers a sub-category that
+      // has no rows in the months on screen.
+      if (filters.months?.length && !filters.months.includes(r.month)) continue
+      spend.set(r.sub, (spend.get(r.sub) || 0) + Number(r.cost || 0))
+    }
+    return [...spend.entries()].sort((a, b) => b[1] - a[1]).map(([s]) => s)
+  }, [agg, filters.months])
+
+  // Zone rows for the selected sub-category, or null when nothing is selected so the
+  // section falls back to the full byZone breakdown (which carries overbilled counts the
+  // cube does not).
+  const zoneSubRows = useMemo(() => {
+    if (!zoneSub) return null
+    const cube = agg?.subCube || []
+    const byZone = new Map()
+    let total = 0
+    for (const r of cube) {
+      if (r.sub !== zoneSub) continue
+      if (filters.months?.length && !filters.months.includes(r.month)) continue
+      const z2 = byZone.get(r.zone) || { n: 0, cost: 0, wt: 0 }
+      z2.n += Number(r.n || 0)
+      z2.cost += Number(r.cost || 0)
+      z2.wt += Number(r.wt || 0)
+      byZone.set(r.zone, z2)
+      total += Number(r.cost || 0)
+    }
+    return [...byZone.entries()]
+      .map(([zone, b]) => ({
+        zone,
+        shipments: b.n,
+        cost: b.cost,
+        avgCost: b.n ? b.cost / b.n : 0,
+        cpk: perKg(b.cost, b.wt),
+        avgWt: b.n ? b.wt / b.n : 0,
+        // The cube has no overbilled flag, so this column is not meaningful when sliced.
+        // null renders as an em-dash rather than a fabricated 0%.
+        overPct: null,
+        share: total ? (b.cost / total) * 100 : 0,
+      }))
+      .sort((a, b) => {
+        const ia = ZONES.indexOf(a.zone), ib = ZONES.indexOf(b.zone)
+        if (ia === -1 && ib === -1) return 0
+        if (ia === -1) return 1
+        if (ib === -1) return -1
+        return ia - ib
+      })
+  }, [agg, zoneSub, filters.months])
+
   const zoneRows = useMemo(() => {
     if (!agg) return []
     return Object.entries(agg.byZone)
@@ -1112,6 +1176,12 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
         return ia - ib
       })
   }, [agg])
+
+  // What the zone chart and table actually render: the sliced rows when a sub-category is
+  // chosen, otherwise the full breakdown. Declared AFTER zoneRows — referencing a const
+  // before its initialiser is a temporal dead zone ReferenceError that the build does not
+  // catch, only the browser.
+  const zoneRowsShown = zoneSubRows || zoneRows
 
   const modeRows = useMemo(() => {
     if (!agg) return []
@@ -3217,10 +3287,16 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
       {/* ── Zone + mode ── */}
       <SectionHdr title="Where The Money Goes" collapsed={secHid['money']} onToggle={() => toggleSec('money')} />
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(330px,1fr))', gap: 14 , ...(secHid['money'] ? { display: 'none' } : {}) }}>
-        <Card title="Cost by zone" note="">
+        <Card title="Cost by zone"
+          note={zoneSub ? `${zoneSub} · ${zoneRowsShown.length} zones` : ''}
+          action={zoneSubOptions.length ? (
+            <SearchSelect label="All sub-categories" options={zoneSubOptions}
+              value={zoneSub || null}
+              onChange={v => setZoneSub(v || '')} />
+          ) : null}>
           <div style={{ height: 200 }}>
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={zoneRows} margin={{ top: 10, right: isMobile ? 10 : 12, left: isMobile ? -14 : 4, bottom: 4 }}>
+              <BarChart data={zoneRowsShown} margin={{ top: 10, right: isMobile ? 10 : 12, left: isMobile ? -14 : 4, bottom: 4 }}>
                 <CartesianGrid stroke={VIZ.grid} vertical={false} />
                 <XAxis dataKey="zone" tickFormatter={z => `Zone ${z}`} tick={{ fontSize: 11.5, fill: VIZ.muted }} axisLine={{ stroke: VIZ.axis }} tickLine={false} />
                 <YAxis tick={{ fontSize: 11, fill: VIZ.muted }} axisLine={false} tickLine={false}
@@ -3245,7 +3321,7 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
                 <Bar dataKey="cost" name="Cost" radius={[4, 4, 0, 0]} maxBarSize={44}
                   onClick={d => d?.zone && ZONES.includes(d.zone) && toggleIn('zones', d.zone)}
                   style={{ cursor: 'pointer' }}>
-                  {zoneRows.map(r => (
+                  {zoneRowsShown.map(r => (
                     <Cell key={r.zone} fill={zoneColor(r.zone, zoneOrder)}
                       opacity={filters.zones.length && !filters.zones.includes(r.zone) ? 0.35 : 1} />
                   ))}
@@ -3267,7 +3343,7 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
                   </tr>
                 </thead>
                 <tbody>
-                  {zoneRows.map((r, i) => (
+                  {zoneRowsShown.map((r, i) => (
                     <tr key={r.zone} style={{ borderBottom: `1px solid ${C.border}`, background: i % 2 === 0 ? C.card : C.bg }}>
                       <td style={{ position: 'sticky', left: 0, background: i % 2 === 0 ? C.card : C.bg, zIndex: 1, padding: '6px 6px', fontWeight: 600, color: C.t1, whiteSpace: 'nowrap' }}>Zone {r.zone}</td>
                       <td style={{ padding: '6px 6px', textAlign: 'center', color: C.t1 }}>{fmtBig(r.shipments)}</td>
@@ -3288,7 +3364,7 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
               { key: 'cpk', label: 'Cost / kg', align: 'center', render: (_, r) => (r.cpk != null ? '₹' + r.cpk.toFixed(2) : '—') },
               { key: 'share', label: 'Share', align: 'center', render: (_, r) => <ShareBar pct={r.share}>{r.share.toFixed(1) + '%'}</ShareBar> },
             ]}
-            rows={zoneRows}
+            rows={zoneRowsShown}
           />
           )}
         </Card>
