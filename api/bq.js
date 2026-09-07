@@ -1013,14 +1013,84 @@ export default async function handler(req, res) {
     subCatFirstOrder: `SELECT im.Sub_category AS subCategory, CAST(MIN(u.OrderDate) AS STRING) AS firstOrderDate FROM \`frido-429506.production.fact_all_platform_sales_report\` u LEFT JOIN \`frido-429506.sharepoint_to_gcp.Frido_Item_Master__frido_item_sku_master\` im ON REGEXP_REPLACE(UPPER(TRIM(u.masterskucode)), r'[^A-Z0-9-]', '') = REGEXP_REPLACE(UPPER(TRIM(im.Product_Code)), r'[^A-Z0-9-]', '') WHERE im.Sub_category IS NOT NULL GROUP BY im.Sub_category`,
   }
 
+  // ── TO_JSON_STRING multi-CTE merging: batch base-CTE queries to reduce BQ round-trips ──
+  // Eligible queries are those whose SQL (after trimming) starts with exactly `WITH q AS (<base>)
+  // SELECT ...` — i.e. a single CTE and no secondary CTEs. Queries with inner CTEs (byOrderValue,
+  // amzSCStates, shSkuCosts, blSKUs, crRegion, etc.), conditional ternaries that may not use base,
+  // or non-base bases (prevBase, fkBase, etc.) are ineligible and stay in the `queries` object.
+  function _stripOrderBy(sql) {
+    // Remove top-level ORDER BY clause. ORDER BY is always last before LIMIT or end-of-string.
+    // Uses negative lookahead to stop before LIMIT so LIMIT is preserved when present.
+    return sql.replace(/\s+ORDER\s+BY\s+(?:(?!\bLIMIT\b)[\s\S])*(\s+LIMIT\s+\d[\s\S]*)?$/i, (_m, lim) => lim || '')
+  }
+  function _extractBody(fullSql, base) {
+    const prefix = `WITH q AS (${base})`
+    const s = fullSql.trimStart()
+    if (!s.startsWith(prefix)) return null
+    const rest = s.slice(prefix.length).trimStart()
+    if (rest.startsWith(',')) return null // secondary CTE(s) present — ineligible
+    if (!rest.toUpperCase().startsWith('SELECT')) return null
+    return rest
+  }
+  async function _runMergedGroup(bq, base, groupDef) {
+    // groupDef: { key: selectBody } — selectBody is the SQL after "WITH q AS (<base>)"
+    const keys = Object.keys(groupDef)
+    const cteParts = [], selectParts = []
+    for (const key of keys) {
+      const body = _stripOrderBy(groupDef[key])
+      cteParts.push(`_mg_${key} AS (${body})`)
+      selectParts.push(`SELECT '${key}' AS __k, TO_JSON_STRING(t) AS __v FROM _mg_${key} t`)
+    }
+    const sql = `WITH q AS (${base}),\n${cteParts.join(',\n')}\n${selectParts.join('\nUNION ALL\n')}`
+    const [rows] = await bq.query({ query: sql, maximumBytesBilled: '10000000000' })
+    const out = {}
+    for (const row of rows) {
+      if (!out[row.__k]) out[row.__k] = []
+      out[row.__k].push(JSON.parse(row.__v))
+    }
+    for (const key of keys) if (!out[key]) out[key] = [] // ensure key exists even for 0-row results
+    return out
+  }
+
+  // Groups of ≤15 candidate keys. Ineligible keys (detected at runtime) are silently left in queries.
+  const _mergeGroupDefs = [
+    ['byChannel','aspAovTotals','byDate','byCategory','byState','shCategory','shSubCategory','shSKU','shSKUBySubChannel','shDailySKU','shState','shStateTotal','shRegion','shTier','shCity'],
+    ['shCityTotal','byRegion','byTier','bySubChannel','byPaymentMode','shPaymentTypes','bySubCategory','byCategoryChannel','bySubCategoryChannel','byCity','byStateTotal','byCityTotal','bySKU','byFinancialStatus','byFulfilmentStatus'],
+    ['byRefundTrend','byDailyReturnTrend','byVoucherRaw','byVoucher','amzSCTotals','amzSCNetCalc','amzSCFulfillment','amzSCStatus','amzSCOrderStatusDebug','amzSCStateTotal','amzSCCityTotal','amzSCSKUs','amzSCDaily','amzSCReturnRate','amzSCCatChannel'],
+    ['amzSCSubCatChannel','amzSCSKUChannel','amzSCDailyNetBySKU','amzVCCat','amzVCSubCat','amzVCSKU','amzVCDailySKU','amzSCRegion','amzSCTier','amzVCAccounts','amzVCDaily','amzVCASINs','amzIntlReturnRate','amzIntlCatChannel','amzIntlSubCatChannel'],
+    ['amzIntlSKUChannel','amzIntlDaily','amzSCDailyCat','amzVCDailyCat','blTotals','blDaily','blCategories','blSubCategories','blStates','blStateTotal','blSKUMatrix','blCities','blCityTotal','inTotals','inDaily'],
+    ['inCategories','inSubCategories','inStates','inStateTotal','inSKUMatrix','inCities','inCityTotal','zpTotals','zpDaily','zpCategories','zpSubCategories','zpStates','zpStateTotal','zpSKUMatrix','zpCities'],
+    ['zpCityTotal','crTotals','crNetCalc','crDaily','crSKUs','crCategories','crSubCategories','crSKUMatrix','crStates','crStateTotal','crCityTotal','crStatus','crCities','intlTotals','intlNetCalc'],
+    ['intlDaily','intlCategories','intlSubCategories','intlSKUMatrix','fcTotals','fcNetCalc','fcDaily','fcSKUs','fcCategories','fcSubCategories','fcSKUMatrix','fcStates','fcStateTotal','fcCityTotal','fcStatus'],
+    ['fcCities','mnTotals','mnNetCalc','mnDaily','mnStatus','mnCategories','mnSubCategories','mnSKUMatrix','mnSKUs','mnStates','mnStateTotal','mnCityTotal','mnCities','offlineSubChannel','offlineSubCategory'],
+    ['offlineSKU','offlineState','offlineCity','offStateTotal','offCityTotal','eboTotals','eboNetCalc','eboDaily','eboCategory','eboSubCategory','eboSKU','eboState','eboStateTotal','eboCity','eboCityTotal'],
+    ['eboRegion','eboTier','eboCIR','eboReturn','eboExchange','eboRTO','eboDailyReturnTrend','amzSCLineItemWeights'],
+  ]
+
+  // Extract eligible query bodies from queries, delete those keys, build runtime group defs.
+  const _mergedGroups = []
+  for (const keyList of _mergeGroupDefs) {
+    const groupDef = {}
+    for (const key of keyList) {
+      if (!(key in queries)) continue
+      const body = _extractBody(queries[key], base)
+      if (body === null) continue // ineligible — leave in queries as-is
+      groupDef[key] = body
+      delete queries[key]
+    }
+    if (Object.keys(groupDef).length > 0) _mergedGroups.push(groupDef)
+  }
+
   try {
-    // Bounded-concurrency + retry-with-backoff runner (api/_bq.js) — replaces the old
-    // Object.entries(queries).map(...) + Promise.all, which fired all ~150 of this request's
-    // queries as truly concurrent BigQuery jobs and regularly tripped BigQuery's per-user
-    // JobService.query rate limit (confirmed 2026-08-19: real 500s that made the frontend
-    // silently keep showing stale data from the last successful fetch).
-    const results = await runQueriesLimited(bq, queries)
+    // Run the remaining individual queries (bounded concurrency) AND all merged groups in parallel.
+    // runQueriesLimited handles queries not extracted into merged groups.
+    const [results, ...mergedGroupResults] = await Promise.all([
+      runQueriesLimited(bq, queries),
+      ..._mergedGroups.map(gd => _runMergedGroup(bq, base, gd))
+    ])
     const r = Object.fromEntries(results.map(({ key, rows }) => [key, rows]))
+    // Overlay merged-group results — each is a {[key]: rows[]} map
+    for (const merged of mergedGroupResults) Object.assign(r, merged)
 
     const dateSet = [...new Set(r.byDate.map(x => x.date))].sort()
     const dailyArr = dateSet.map(date => {
