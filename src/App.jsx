@@ -15851,6 +15851,7 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
   const [pnlD2cSubCh, setPnlD2cSubCh] = useState('all')
   const [rawRows, setRawRows] = useState(null)
   const [loading, setLoading] = useState(false)
+  const [loadingSlow, setLoadingSlow] = useState(false)
   const [error, setError] = useState(null)
   const [logisticsData, setLogisticsData] = useState(null)
   const [adsCache, setAdsCache] = useState(null)
@@ -15913,20 +15914,63 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
       } catch (_) {}
     }
 
+    const body = { start, end, ...extraFilters, ...(ch ? { channel: ch } : {}) }
+    const postJson = b => fetch(`${API}/api/bq`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(b) })
+
+    // Fire fast and slow calls simultaneously. Fast returns KPIs+daily chart (~8-10s).
+    // Slow returns per-channel detail (states/cities/categories/SKUs) (~25-30s).
+    const fastPromise = postJson({ ...body, phase: 'fast' })
+    const slowPromise = postJson({ ...body, phase: 'slow' })
+    setLoadingSlow(true)
+
     try {
-      const res = await fetch(`${API}/api/bq`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ start, end, ...extraFilters, ...(ch ? { channel: ch } : {}) }) })
-      if (!res.ok) throw new Error(`API error ${res.status}: ${await res.text()}`)
-      const json = await res.json()
-      if (reqId !== reqIdRef.current) return // stale response, ignore
-      const next = json.source === 'postgres-aggregated' ? json : (json.totalRev !== undefined ? json : (json.rows || []))
-      if (json.subCatFirstOrderMap && Object.keys(json.subCatFirstOrderMap).length) {
-        setSubCatFirstOrderMap(json.subCatFirstOrderMap)
+      const fastRes = await fastPromise
+      if (!fastRes.ok) throw new Error(`API error ${fastRes.status}: ${await fastRes.text()}`)
+      const fastJson = await fastRes.json()
+      if (reqId !== reqIdRef.current) { setLoadingSlow(false); return }
+      const fastNext = fastJson.totalRev !== undefined ? fastJson : (fastJson.rows || [])
+      if (fastJson.subCatFirstOrderMap && Object.keys(fastJson.subCatFirstOrderMap).length) {
+        setSubCatFirstOrderMap(fastJson.subCatFirstOrderMap)
       }
-      clientCacheRef.current.set(cacheKey, next)
       setRawRows(prev => {
-        if (keepPrev && prev && typeof prev === 'object' && !Array.isArray(prev)) return { ...prev, ...next }
-        return next
+        if (keepPrev && prev && typeof prev === 'object' && !Array.isArray(prev)) return { ...prev, ...fastNext }
+        return fastNext
       })
+      setLoading(false)
+
+      // Now await the slow response and merge it in
+      try {
+        const slowRes = await slowPromise
+        if (reqId !== reqIdRef.current) return
+        if (slowRes.ok) {
+          const slowJson = await slowRes.json()
+          if (reqId !== reqIdRef.current) return
+          // Deep-merge _slow_<channel> keys into their respective channel objects
+          const mergedSlow = { ...slowJson }
+          for (const key of Object.keys(slowJson)) {
+            if (key.startsWith('_slow_')) {
+              const chName = key.slice(6) // e.g. 'shopify'
+              mergedSlow[chName] = slowJson[key]
+              delete mergedSlow[key]
+            }
+          }
+          setRawRows(prev => {
+            if (prev && typeof prev === 'object' && !Array.isArray(prev)) {
+              const next = { ...prev, ...mergedSlow }
+              // Deep-merge channel objects: preserve fast fields, add slow fields on top
+              for (const key of Object.keys(mergedSlow)) {
+                if (prev[key] && typeof prev[key] === 'object' && !Array.isArray(prev[key]) && mergedSlow[key] && typeof mergedSlow[key] === 'object') {
+                  next[key] = { ...prev[key], ...mergedSlow[key] }
+                }
+              }
+              return next
+            }
+            return prev
+          })
+          clientCacheRef.current.set(cacheKey, { ...fastNext, ...mergedSlow })
+        }
+      } catch (_) { /* slow phase error is non-fatal — dashboard already shows fast data */ }
+      finally { if (reqId === reqIdRef.current) setLoadingSlow(false) }
     } catch (e) {
       if (reqId === reqIdRef.current) {
         setError(e.message)
@@ -15936,6 +15980,7 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
         // left MyFrido's Net Revenue on screen under the "Overall" tab, with no visual indication
         // that the switch never actually completed) — confirmed 2026-08-19.
         setRawRows(null)
+        setLoadingSlow(false)
       }
     }
     finally { if (reqId === reqIdRef.current) setLoading(false) }
@@ -16225,9 +16270,9 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
       <Sidebar page={page} setPage={setPage} invTab={invTab} setInvTab={setInvTab} allowedTabs={allowedTabs} profile={profile} />
       <div className="app-main">
         <Topnav page={page} setPage={setPage} customerTab={customerTab} invTab={invTab} setInvTab={setInvTab} alerts={alerts} lFilters={lFilters} setLFilters={setLFilters} logisticsFilterOpts={logisticsFilterOpts} costFilters={costFilters} setCostFilters={setCostFilters} onRefresh={() => { const { start, end, category, subCategory, sku, subChannel, voucher, region, tier, state, city, country } = filters; const e = {}; if (category?.length) e.category = category.join(','); if (subCategory?.length) e.subCategory = subCategory.join(','); if (sku?.length) e.sku = sku.join(','); if (subChannel) e.subChannel = subChannel; if (voucher) e.voucher = voucher; if (region?.length) e.region = region.join(','); if (tier?.length) e.tier = tier.join(','); if (state?.length) e.state = state.join(','); if (city) e.city = city; if (country) e.country = country; fetchData(start, end, e) }} loading={loading} filters={filters} setFilters={setFilters} rawRows={rawRows} inventoryDateControl={inventoryDateControl} salesActiveTab={activeTab} setSalesActiveTab={setActiveTab} salesData={data} salesChannelView={salesChannelView} setSalesChannelView={setSalesChannelView} salesOfflineSub={salesOfflineSub} setSalesOfflineSub={setSalesOfflineSub} adsSelPlatform={adsSelPlatform} setAdsSelPlatform={setAdsSelPlatform} pnlActiveTab={pnlActiveTab} setPnlActiveTab={setPnlActiveTab} pnlAmzView={pnlAmzView} setPnlAmzView={setPnlAmzView} pnlOfflineSub={pnlOfflineSub} setPnlOfflineSub={setPnlOfflineSub} pnlD2cSubCh={pnlD2cSubCh} setPnlD2cSubCh={setPnlD2cSubCh} />
-        {(loading || inventoryDateControl?.loading) && (
+        {(loading || inventoryDateControl?.loading || loadingSlow) && (
           <div style={{ height: 2, background: C.border, flexShrink: 0 }}>
-            <div className="progress-bar" style={{ height: '100%', background: C.acc }} />
+            <div className="progress-bar" style={{ height: '100%', background: loadingSlow && !loading ? C.t3 : C.acc }} />
           </div>
         )}
         {error && (

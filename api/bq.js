@@ -76,10 +76,56 @@ function vcMarginPeriodFor(orderDate, oldMarginEndDate, events) {
 const cache = new Map()
 const CACHE_TTL = 5 * 60 * 1000
 
+// Queries that touch per-channel detail (states/cities/SKUs/category matrix/settlement).
+// These are SLOW (~20-30s for full month ranges) — split into phase=slow so the fast
+// KPIs/daily chart return in ~8-10s first.
+const SLOW_QUERY_KEYS = new Set([
+  'byCategory','bySubCategory','prevByCategory','prevBySubCategory',
+  'byCategoryChannel','byCategoryChannelFk','bySubCategoryChannel','bySubCategoryChannelFk',
+  'byState','byStatePrev','byCity','byCityPrev','byRegion','byTier','byOrderValue','bySKU',
+  'shSubCategory','shSKU','shDailySKU','shSKUPrev','shSkuCosts','shDailySkuCosts',
+  'shState','shStatePrev','shRegion','shTier','shCity','shCityPrev','shReturnReasons',
+  'amzSCStates','amzSCStatesPrev','amzSCCities','amzSCCitiesPrev','amzSCSKUs',
+  'amzSCCatChannel','amzSCSubCatChannel','amzSCSKUChannel','amzSCDailyCat',
+  'amzSCCatChannelPrev','amzSCSubCatChannelPrev','amzSCSKUChannelPrev',
+  'amzSCRollingRate','amzSCRollingNetRevenue','amzSCDailyNetBySKU',
+  'amzSCDailySettlement','amzSCMFNOrderWeights','amzSCLineItemWeights','amzSCSettlement',
+  'amzSCReturnCat','amzSCReturnSubCat','amzSCReturnSKU','amzSCOrderStatusDebug',
+  'amzSCRegion','amzSCTier','amzSCFulfillment','amzSCStatus',
+  'amzVCCat','amzVCSubCat','amzVCSKU','amzVCDailySKU','amzVCDailyCat',
+  'amzVCCatPrev','amzVCSubCatPrev','amzVCSKUPrev',
+  'amzIntlCountries','amzIntlSKUs','amzIntlCatChannel','amzIntlSubCatChannel','amzIntlSKUChannel',
+  'amzIntlReturnCat','amzIntlReturnSubCat','amzIntlReturnSKU',
+  'fkCategories','fkSubCategory','fkSKUs','fkSKUMatrix','fkDailyCat',
+  'fkStates','fkStatesPrev','fkCities','fkCitiesPrev',
+  'fkRegions','fkReturnRate','fkStatus','fkCatPrev','fkSubCatPrev','fkSKUPrev',
+  'blCategories','blSubCategories','blStates','blStatesPrev','blSKUs','blSKUMatrix',
+  'blCities','blCitiesPrev','blSKUPrev',
+  'inCategories','inSubCategories','inStates','inStatesPrev','inSKUs','inSKUMatrix',
+  'inCities','inCitiesPrev','inSKUPrev',
+  'zpCategories','zpSubCategories','zpStates','zpStatesPrev','zpSKUs','zpSKUMatrix',
+  'zpCities','zpCitiesPrev','zpSKUPrev',
+  'crCategories','crSubCategories','crSKUs','crSKUMatrix','crStates','crStatesPrev',
+  'crCatPrev','crSubCatPrev','crCities','crCitiesPrev','crRegion','crTier','crStatus',
+  'fcCategories','fcSubCategories','fcSKUs','fcSKUMatrix','fcStates','fcStatesPrev',
+  'fcCatPrev','fcSubCatPrev','fcCities','fcCitiesPrev','fcRegion','fcTier','fcStatus',
+  'mnCategories','mnSubCategories','mnSKUs','mnSKUMatrix','mnStates','mnStatesPrev',
+  'mnCatPrev','mnSubCatPrev','mnCities','mnCitiesPrev',
+  'intlCategories','intlSubCategories','intlSKUMatrix','intlCatPrev','intlSubCatPrev',
+  'eboCategory','eboCategoryPrev','eboSubCategory','eboSubCategoryPrev','eboSKU',
+  'eboState','eboStatePrev','eboCity','eboCityPrev','eboRegion','eboTier',
+  'offlineCategory','offlineSubCategory','offlineSKU',
+  'offlineState','offlineCity','offlineRegion','offlineTier',
+  'offCatPrev','offSubCatPrev','offStatesPrev','offCitiesPrev',
+  'salesCategoryOrders','salesCategoryOrdersFk',
+  'adsCategoryBreakdown','adsZeroOrder','adsDailyByCategory','salesDailyByCategory',
+  'channelDailyExcRev',
+])
+
 const CACHE_VERSION = 9
 function getCacheKey(body) {
-  const { start, end, category, subCategory, sku, subChannel, voucher, channel, region, tier, state, city, country, paymentType, channelGroup } = body
-  return JSON.stringify({ v: CACHE_VERSION, start, end, category, subCategory, sku, subChannel, voucher, channel, region, tier, state, city, country, paymentType, channelGroup })
+  const { start, end, category, subCategory, sku, subChannel, voucher, channel, region, tier, state, city, country, paymentType, channelGroup, phase } = body
+  return JSON.stringify({ v: CACHE_VERSION, start, end, category, subCategory, sku, subChannel, voucher, channel, region, tier, state, city, country, paymentType, channelGroup, phase: phase || null })
 }
 
 function getFromCache(key) {
@@ -105,7 +151,7 @@ export default async function handler(req, res) {
   if (req.method === 'OPTIONS') return res.status(200).end()
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' })
 
-  const { start, end, category, subCategory, sku, subChannel, voucher, channel: activeChannel, region, tier, state, city, country, paymentType, channelGroup } = req.body
+  const { start, end, category, subCategory, sku, subChannel, voucher, channel: activeChannel, region, tier, state, city, country, paymentType, channelGroup, phase } = req.body
   if (!start || !end) return res.status(400).json({ error: 'Missing start or end date' })
 
   const cacheKey = getCacheKey(req.body)
@@ -1023,8 +1069,17 @@ export default async function handler(req, res) {
     // queries as truly concurrent BigQuery jobs and regularly tripped BigQuery's per-user
     // JobService.query rate limit (confirmed 2026-08-19: real 500s that made the frontend
     // silently keep showing stale data from the last successful fetch).
-    const results = await runQueriesLimited(bq, queries)
-    const r = Object.fromEntries(results.map(({ key, rows }) => [key, rows]))
+    // Phase filtering: fast phase skips slow detail queries, slow phase skips fast queries
+    const filteredQueries = phase === 'fast'
+      ? Object.fromEntries(Object.entries(queries).filter(([k]) => !SLOW_QUERY_KEYS.has(k)))
+      : phase === 'slow'
+        ? Object.fromEntries(Object.entries(queries).filter(([k]) => SLOW_QUERY_KEYS.has(k)))
+        : queries
+
+    const results = await runQueriesLimited(bq, filteredQueries)
+    // Fill missing keys (not run in this phase) with empty arrays so payload builders don't throw
+    const r = Object.fromEntries(Object.keys(queries).map(k => [k, []]))
+    results.forEach(({ key, rows }) => { r[key] = rows })
 
     const dateSet = [...new Set(r.byDate.map(x => x.date))].sort()
     const dailyArr = dateSet.map(date => {
@@ -3138,6 +3193,103 @@ export default async function handler(req, res) {
 
     // Sub-category first order date map — loaded from static file (no BQ query)
     payload.subCatFirstOrderMap = loadSubCatFirstOrder()
+
+    // Phase-specific response: only return the relevant subset of payload keys so the
+    // frontend can merge fast+slow without the slow phase overwriting fast KPIs with zeros.
+    if (phase === 'fast') {
+      // Fast phase: KPIs, daily chart, chMap, prev comparison, top-line per-channel totals/daily.
+      // Exclude all slow-computed fields (catMap, stateMap, cityRows, per-channel detail, pnlSalesRows, etc.)
+      const SLOW_PAYLOAD_KEYS = new Set([
+        'catMap','subCatMap','catPrevMap','subCatPrevMap',
+        'stateMap','statePrevMap','stateTotal','cityRows','cityPrevMap','cityTotal',
+        'regionRows','tierRows','catChannelMap','subCatChannelMap',
+        'buckets','bucketRev','skuRows','rows','pnlSalesRows','pnlAdSpendMap','pnlRawAdSpend',
+      ])
+      const fastPayload = Object.fromEntries(
+        Object.entries(payload).filter(([k]) => !SLOW_PAYLOAD_KEYS.has(k))
+      )
+      // Strip slow sub-fields from per-channel objects so they don't overwrite slow data on merge
+      const CHANNEL_SLOW_FIELDS = ['subCategories','skuMap','skuMapBySubChannel','skuCostRows',
+        'dailySkuCostRows','skuWeightShares','stateMap','stateTotal','statePrevMap',
+        'cityRows','cityPrevMap','cityTotal','returnReasons',
+        'catChannel','subCatChannel','skuChannel','sndBySku','dailyPnLBySku','dailyCat',
+        'catChannelPrev','subCatChannelPrev','skuChannelPrev','returnCat','returnSubCat','returnSKU',
+        'states','statesPrev','cities','citiesPrev','statesPrevMap','citiesPrevMap',
+        'categories','categoriesPrev','subCategories','subCategoriesPrev',
+        'skuMatrix','skuMatrixPrev','regions','tiers','status','region','tier',
+        'catPrev','subCatPrev','skuPrev','category','subCategory','sku',
+        'spendDetail','allSpendDetail','spendDetailByPlatform',
+        'additionalSpend','additionalSpendByProduct',
+      ]
+      for (const ch of ['shopify','flipkart','blinkit','instamart','zepto','cred','firstcry','myntra','amzSC','amzVCMatrix','amzVC','amzIntl','ebo','offline','international','ads']) {
+        if (fastPayload[ch]) {
+          fastPayload[ch] = Object.fromEntries(
+            Object.entries(fastPayload[ch]).filter(([k]) => !CHANNEL_SLOW_FIELDS.includes(k))
+          )
+        }
+      }
+      setInCache(cacheKey, fastPayload)
+      res.setHeader('X-Cache', 'MISS')
+      return res.json(fastPayload)
+    }
+
+    if (phase === 'slow') {
+      // Slow phase: return only slow-computed fields. Per-channel objects are returned as
+      // _slow_<channel> keys (not overwriting the main channel object) so the frontend can
+      // deep-merge them without clobbering fast-phase totals/daily/netCalc fields.
+      // The slow fields within each channel are ONLY those derived from SLOW_QUERY_KEYS queries.
+      const chSlow = (ch, fields) => {
+        if (!payload[ch]) return undefined
+        const obj = {}
+        for (const f of fields) if (payload[ch][f] !== undefined) obj[f] = payload[ch][f]
+        return Object.keys(obj).length ? obj : undefined
+      }
+      const slowPayload = {
+        catMap: payload.catMap,
+        subCatMap: payload.subCatMap,
+        catPrevMap: payload.catPrevMap,
+        subCatPrevMap: payload.subCatPrevMap,
+        stateMap: payload.stateMap,
+        statePrevMap: payload.statePrevMap,
+        stateTotal: payload.stateTotal,
+        cityRows: payload.cityRows,
+        cityPrevMap: payload.cityPrevMap,
+        cityTotal: payload.cityTotal,
+        regionRows: payload.regionRows,
+        tierRows: payload.tierRows,
+        catChannelMap: payload.catChannelMap,
+        subCatChannelMap: payload.subCatChannelMap,
+        buckets: payload.buckets,
+        bucketRev: payload.bucketRev,
+        skuRows: payload.skuRows,
+        rows: payload.rows,
+        pnlSalesRows: payload.pnlSalesRows,
+        pnlAdSpendMap: payload.pnlAdSpendMap,
+        pnlRawAdSpend: payload.pnlRawAdSpend,
+        masterSkuList: payload.masterSkuList,
+        _slow_shopify: chSlow('shopify', ['subCategories','skuMap','skuMapBySubChannel','skuCostRows','dailySkuCostRows','skuWeightShares','stateMap','stateTotal','statePrevMap','cityRows','cityPrevMap','cityTotal','returnReasons']),
+        _slow_flipkart: chSlow('flipkart', ['categories','subCategories','skuMatrix','states','statesPrev','cities','citiesPrev','regions','status','catPrev','subCatPrev','skuPrev']),
+        _slow_blinkit: chSlow('blinkit', ['categories','subCategories','skuMatrix','skus','states','statesPrev','cities','citiesPrev','skuPrev']),
+        _slow_instamart: chSlow('instamart', ['categories','subCategories','skuMatrix','skus','states','statesPrev','cities','citiesPrev','skuPrev']),
+        _slow_zepto: chSlow('zepto', ['categories','subCategories','skuMatrix','skus','states','statesPrev','cities','citiesPrev','skuPrev']),
+        _slow_cred: chSlow('cred', ['categories','subCategories','skuMatrix','skus','states','statesPrev','cities','citiesPrev','catPrev','subCatPrev','region','tier','status']),
+        _slow_firstcry: chSlow('firstcry', ['categories','subCategories','skuMatrix','skus','states','statesPrev','cities','citiesPrev','catPrev','subCatPrev','region','tier','status']),
+        _slow_myntra: chSlow('myntra', ['categories','subCategories','skuMatrix','skus','states','statesPrev','cities','citiesPrev','catPrev','subCatPrev']),
+        _slow_amzSC: chSlow('amzSC', ['states','statesPrev','cities','citiesPrev','skus','catChannel','subCatChannel','skuChannel','catChannelPrev','subCatChannelPrev','skuChannelPrev','sndBySku','dailyPnLBySku','dailyCat','returnCat','returnSubCat','returnSKU','orderStatusDebug','region','tier','fulfillment','status']),
+        _slow_amzVCMatrix: payload.amzVCMatrix,
+        _slow_amzVC: chSlow('amzVC', ['cat','subCat','sku','catPrev','subCatPrev','skuPrev','dailyCat','dailySKU']),
+        _slow_amzIntl: chSlow('amzIntl', ['countries','skus','catChannel','subCatChannel','skuChannel','returnCat','returnSubCat','returnSKU']),
+        _slow_international: chSlow('international', ['categories','subCategories','skuMatrix','catPrev','subCatPrev']),
+        _slow_ebo: chSlow('ebo', ['category','subCategory','sku','state','statePrev','city','cityPrev','region','tier','categoryPrev','subCategoryPrev']),
+        _slow_offline: chSlow('offline', ['category','subCategory','sku','state','city','region','tier','catPrev','subCatPrev','statePrev','cityPrev']),
+        _slow_ads: chSlow('ads', ['spendDetail','allSpendDetail','spendDetailByPlatform','additionalSpend','additionalSpendByProduct','zeroOrder','dailyByCategory']),
+      }
+      // Remove undefined values
+      for (const k of Object.keys(slowPayload)) if (slowPayload[k] === undefined) delete slowPayload[k]
+      setInCache(cacheKey, slowPayload)
+      res.setHeader('X-Cache', 'MISS')
+      return res.json(slowPayload)
+    }
 
     setInCache(cacheKey, payload)
     res.setHeader('X-Cache', 'MISS')
