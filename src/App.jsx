@@ -15924,75 +15924,30 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
     }
 
     const body = { start, end, ...extraFilters, ...(ch ? { channel: ch } : {}) }
-    const postJson = b => fetch(`${API}/api/bq`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(b) })
-
-    // Fire fast and slow calls simultaneously. Fast returns KPIs+daily chart (~8-10s).
-    // Slow returns per-channel detail (states/cities/categories/SKUs) (~25-30s).
-    const fastPromise = postJson({ ...body, phase: 'fast' })
-    const slowPromise = postJson({ ...body, phase: 'slow' })
-    setLoadingSlow(true)
 
     try {
-      const fastRes = await fastPromise
-      if (!fastRes.ok) throw new Error(`API error ${fastRes.status}: ${await fastRes.text()}`)
-      const fastJson = await fastRes.json()
-      if (reqId !== reqIdRef.current) { setLoadingSlow(false); return }
-      const fastNext = fastJson.totalRev !== undefined ? fastJson : (fastJson.rows || [])
-      if (fastJson.subCatFirstOrderMap && Object.keys(fastJson.subCatFirstOrderMap).length) {
-        setSubCatFirstOrderMap(fastJson.subCatFirstOrderMap)
+      const res = await fetch(`${API}/api/bq`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+      if (!res.ok) throw new Error(`API error ${res.status}: ${await res.text()}`)
+      const json = await res.json()
+      if (reqId !== reqIdRef.current) return
+      const next = json.totalRev !== undefined ? json : (json.rows || [])
+      if (json.subCatFirstOrderMap && Object.keys(json.subCatFirstOrderMap).length) {
+        setSubCatFirstOrderMap(json.subCatFirstOrderMap)
       }
       setRawRows(prev => {
-        if (keepPrev && prev && typeof prev === 'object' && !Array.isArray(prev)) return { ...prev, ...fastNext }
-        return fastNext
+        if (keepPrev && prev && typeof prev === 'object' && !Array.isArray(prev)) return { ...prev, ...next }
+        return next
       })
       setLoading(false)
+      clientCacheRef.current.set(cacheKey, next)
 
-      // Now await the slow response and merge it in
-      try {
-        const slowRes = await slowPromise
-        if (reqId !== reqIdRef.current) return
-        if (slowRes.ok) {
-          const slowJson = await slowRes.json()
-          if (reqId !== reqIdRef.current) return
-          // Deep-merge _slow_<channel> keys into their respective channel objects
-          const mergedSlow = { ...slowJson }
-          for (const key of Object.keys(slowJson)) {
-            if (key.startsWith('_slow_')) {
-              const chName = key.slice(6) // e.g. 'shopify'
-              mergedSlow[chName] = slowJson[key]
-              delete mergedSlow[key]
-            }
-          }
-          setRawRows(prev => {
-            if (prev && typeof prev === 'object' && !Array.isArray(prev)) {
-              const next = { ...prev, ...mergedSlow }
-              // Deep-merge channel objects: preserve fast fields, add slow fields on top
-              for (const key of Object.keys(mergedSlow)) {
-                if (prev[key] && typeof prev[key] === 'object' && !Array.isArray(prev[key]) && mergedSlow[key] && typeof mergedSlow[key] === 'object') {
-                  next[key] = { ...prev[key], ...mergedSlow[key] }
-                }
-              }
-              return next
-            }
-            return prev
-          })
-          clientCacheRef.current.set(cacheKey, { ...fastNext, ...mergedSlow })
-        }
-      } catch (_) { /* slow phase error is non-fatal — dashboard already shows fast data */ }
-      finally { if (reqId === reqIdRef.current) setLoadingSlow(false) }
     } catch (e) {
       if (reqId === reqIdRef.current) {
         setError(e.message)
-        // Clear stale data on failure — otherwise the dashboard keeps rendering the LAST
-        // successful fetch's numbers under whatever filter is now selected (e.g. switching
-        // D2C sub-channel from MyFrido to Overall while a BigQuery rate-limit 500 hits silently
-        // left MyFrido's Net Revenue on screen under the "Overall" tab, with no visual indication
-        // that the switch never actually completed) — confirmed 2026-08-19.
         setRawRows(null)
-        setLoadingSlow(false)
       }
     }
-    finally { if (reqId === reqIdRef.current) setLoading(false) }
+    finally { if (reqId === reqIdRef.current) { setLoading(false); setLoadingSlow(false) } }
   }, [API])
 
   const debounceRef = useRef(null)
