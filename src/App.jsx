@@ -4228,7 +4228,6 @@ function HeroKPICard({ label, value, sub, chg, sparkData, dataKey = 'cur', color
           <AreaChart data={sparkData} margin={{ top: 2, right: 0, bottom: 0, left: 0 }}>
             <defs><linearGradient id={gradId} x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor={color} stopOpacity={0.25} /><stop offset="95%" stopColor={color} stopOpacity={0} /></linearGradient></defs>
             <Area type="monotone" dataKey={dataKey} name="Current" stroke={color} strokeWidth={1.5} fill={`url(#${gradId})`} dot={false} connectNulls />
-            <Area type="monotone" dataKey="prev" name="Prev" stroke="#94939F" strokeWidth={1} fill="none" dot={false} strokeDasharray="3 2" connectNulls />
             <Tooltip content={({ active, payload }) => active && payload?.length ? <div style={{ background: '#fff', border: '1px solid #E8E6DC', borderRadius: 6, padding: '4px 8px', fontSize: 10 }}>{payload.map(p => <div key={p.name} style={{ color: p.name === 'Current' ? '#13121A' : '#94939F' }}>{p.name}: {p.value != null ? `₹${(p.value >= 1e7 ? (p.value/1e7).toFixed(2)+' Cr' : p.value >= 1e5 ? (p.value/1e5).toFixed(1)+' L' : Math.round(p.value).toLocaleString('en-IN'))}` : '—'}</div>)}</div> : null} />
           </AreaChart>
         </ResponsiveContainer>
@@ -6597,7 +6596,6 @@ function AllTab({ data, rangeStart, rangeEnd }) {
               <AreaChart data={sparkData} margin={{ top: 4, right: 0, bottom: 0, left: 0 }}>
                 <defs><linearGradient id="curGrad" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor={C.acc} stopOpacity={0.25} /><stop offset="95%" stopColor={C.acc} stopOpacity={0} /></linearGradient></defs>
                 <Area type="monotone" dataKey="cur" name="Current" stroke={C.acc} strokeWidth={2} fill="url(#curGrad)" dot={false} connectNulls />
-                <Area type="monotone" dataKey="prev" name="Prev" stroke={C.t3} strokeWidth={1} fill="none" dot={false} strokeDasharray="3 2" connectNulls />
               </AreaChart>
             </ResponsiveContainer>
           </div>
@@ -7453,8 +7451,6 @@ function ShopifyTab({ data, filters, setFilters }) {
               <AreaChart data={shSparkData} margin={{ top: 4, right: 0, bottom: 0, left: 0 }}>
                 <defs><linearGradient id="shGrad" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#FFD600" stopOpacity={0.25} /><stop offset="95%" stopColor="#FFD600" stopOpacity={0} /></linearGradient></defs>
                 <Area type="monotone" dataKey="cur" name="Current" stroke="#FFD600" strokeWidth={2} fill="url(#shGrad)" dot={false} connectNulls />
-                <Area type="monotone" dataKey="prev" name="Prev" stroke={C.t3} strokeWidth={1} fill="none" dot={false} strokeDasharray="3 2" connectNulls />
-                <Tooltip content={({ active, payload }) => active && payload?.length ? <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 6, padding: '4px 8px', fontSize: 10 }}>{payload.map(p => <div key={p.name} style={{ color: p.name === 'Current' ? C.t1 : C.t3 }}>{p.name}: {fmt(p.value)}</div>)}</div> : null} />
               </AreaChart>
             </ResponsiveContainer>
           </div>
@@ -8003,8 +7999,6 @@ function EBOTab({ data, rangeStart, rangeEnd }) {
               <AreaChart data={shSparkData} margin={{ top: 4, right: 0, bottom: 0, left: 0 }}>
                 <defs><linearGradient id="eboGrad" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor={EBO_ACCENT} stopOpacity={0.25} /><stop offset="95%" stopColor={EBO_ACCENT} stopOpacity={0} /></linearGradient></defs>
                 <Area type="monotone" dataKey="cur" stroke={EBO_ACCENT} strokeWidth={2} fill="url(#eboGrad)" dot={false} connectNulls />
-                <Area type="monotone" dataKey="prev" stroke={C.t3} strokeWidth={1} fill="none" dot={false} strokeDasharray="3 2" connectNulls />
-                <Tooltip content={({ active, payload }) => active && payload?.length ? <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 6, padding: '4px 8px', fontSize: 10 }}>{payload.map(p => <div key={p.name} style={{ color: C.t1 }}>{fmt(p.value)}</div>)}</div> : null} />
               </AreaChart>
             </ResponsiveContainer>
           </div>
@@ -8336,9 +8330,7 @@ function AmazonTab({ data, channelView, setChannelView }) {
                       <AreaChart data={amzSparkData} margin={{ top: 4, right: 0, bottom: 0, left: 0 }}>
                         <defs><linearGradient id="amzGrad" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#FFD600" stopOpacity={0.25} /><stop offset="95%" stopColor="#FFD600" stopOpacity={0} /></linearGradient></defs>
                         <Area type="monotone" dataKey="cur" name="Current" stroke="#FFD600" strokeWidth={2} fill="url(#amzGrad)" dot={false} connectNulls />
-                        <Area type="monotone" dataKey="prev" name="Prev" stroke={C.t3} strokeWidth={1} fill="none" dot={false} strokeDasharray="3 2" connectNulls />
-                        <Tooltip content={({ active, payload }) => active && payload?.length ? <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 6, padding: '4px 8px', fontSize: 10 }}>{payload.map(p => <div key={p.name} style={{ color: p.name === 'Current' ? C.t1 : C.t3 }}>{p.name}: {fmt(p.value)}</div>)}</div> : null} />
-                      </AreaChart>
+                              </AreaChart>
                     </ResponsiveContainer>
                   </div>
                 </div>
@@ -8749,7 +8741,6 @@ function FlipkartTab({ data }) {
               <AreaChart data={fkSparkData} margin={{ top: 4, right: 0, bottom: 0, left: 0 }}>
                 <defs><linearGradient id="fkGrad" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#FFD600" stopOpacity={0.25} /><stop offset="95%" stopColor="#FFD600" stopOpacity={0} /></linearGradient></defs>
                 <Area type="monotone" dataKey="cur" name="Current" stroke="#FFD600" strokeWidth={2} fill="url(#fkGrad)" dot={false} connectNulls />
-                <Area type="monotone" dataKey="prev" name="Prev" stroke={C.t3} strokeWidth={1} fill="none" dot={false} strokeDasharray="3 2" connectNulls />
                 <Tooltip content={({ active, payload }) => active && payload?.length ? <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 6, padding: '4px 8px', fontSize: 10 }}>{payload.map(p => <div key={p.name} style={{ display: 'flex', alignItems: 'center', gap: 6 }}><span style={{ width: 7, height: 7, borderRadius: '50%', background: p.color, display: 'inline-block', flexShrink: 0 }} /><span style={{ color: C.t2 }}>{p.name}: {fmt(p.value)}</span></div>)}</div> : null} />
               </AreaChart>
             </ResponsiveContainer>
@@ -10684,8 +10675,6 @@ function BlinkitTab({ data }) {
               <AreaChart data={blSparkData} margin={{ top: 4, right: 0, bottom: 0, left: 0 }}>
                 <defs><linearGradient id="blGrad" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#FFD600" stopOpacity={0.25} /><stop offset="95%" stopColor="#FFD600" stopOpacity={0} /></linearGradient></defs>
                 <Area type="monotone" dataKey="cur" name="Current" stroke="#FFD600" strokeWidth={2} fill="url(#blGrad)" dot={false} connectNulls />
-                <Area type="monotone" dataKey="prev" name="Prev" stroke={C.t3} strokeWidth={1} fill="none" dot={false} strokeDasharray="3 2" connectNulls />
-                <Tooltip content={({ active, payload }) => active && payload?.length ? <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 6, padding: '4px 8px', fontSize: 10 }}>{payload.map(p => <div key={p.name} style={{ color: p.name === 'Current' ? C.t1 : C.t3 }}>{p.name}: {fmt(p.value)}</div>)}</div> : null} />
               </AreaChart>
             </ResponsiveContainer>
           </div>
@@ -10857,8 +10846,6 @@ function InstaTab({ data }) {
               <AreaChart data={insSparkData} margin={{ top: 4, right: 0, bottom: 0, left: 0 }}>
                 <defs><linearGradient id="inGrossGrad" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#FF6B35" stopOpacity={0.25} /><stop offset="95%" stopColor="#FF6B35" stopOpacity={0} /></linearGradient></defs>
                 <Area type="monotone" dataKey="cur" name="Current" stroke="#FF6B35" strokeWidth={2} fill="url(#inGrossGrad)" dot={false} connectNulls />
-                <Area type="monotone" dataKey="prev" name="Prev" stroke={C.t3} strokeWidth={1} fill="none" dot={false} strokeDasharray="3 2" connectNulls />
-                <Tooltip content={({ active, payload }) => active && payload?.length ? <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 6, padding: '4px 8px', fontSize: 10 }}>{payload.map(p => <div key={p.name} style={{ color: p.name === 'Current' ? C.t1 : C.t3 }}>{p.name}: {fmt(p.value)}</div>)}</div> : null} />
               </AreaChart>
             </ResponsiveContainer>
           </div>
@@ -11028,8 +11015,6 @@ function ZeptoTab({ data }) {
               <AreaChart data={zpSparkData} margin={{ top: 4, right: 0, bottom: 0, left: 0 }}>
                 <defs><linearGradient id="zpGrossGrad" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#8B5CF6" stopOpacity={0.25} /><stop offset="95%" stopColor="#8B5CF6" stopOpacity={0} /></linearGradient></defs>
                 <Area type="monotone" dataKey="cur" name="Current" stroke="#8B5CF6" strokeWidth={2} fill="url(#zpGrossGrad)" dot={false} connectNulls />
-                <Area type="monotone" dataKey="prev" name="Prev" stroke={C.t3} strokeWidth={1} fill="none" dot={false} strokeDasharray="3 2" connectNulls />
-                <Tooltip content={({ active, payload }) => active && payload?.length ? <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 6, padding: '4px 8px', fontSize: 10 }}>{payload.map(p => <div key={p.name} style={{ color: p.name === 'Current' ? C.t1 : C.t3 }}>{p.name}: {fmt(p.value)}</div>)}</div> : null} />
               </AreaChart>
             </ResponsiveContainer>
           </div>
@@ -11225,8 +11210,6 @@ function CredTab({ data }) {
               <AreaChart data={crSparkData} margin={{ top: 4, right: 0, bottom: 0, left: 0 }}>
                 <defs><linearGradient id="crGrossGrad" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#E11D48" stopOpacity={0.25} /><stop offset="95%" stopColor="#E11D48" stopOpacity={0} /></linearGradient></defs>
                 <Area type="monotone" dataKey="cur" name="Current" stroke="#E11D48" strokeWidth={2} fill="url(#crGrossGrad)" dot={false} connectNulls />
-                <Area type="monotone" dataKey="prev" name="Prev" stroke={C.t3} strokeWidth={1} fill="none" dot={false} strokeDasharray="3 2" connectNulls />
-                <Tooltip content={({ active, payload }) => active && payload?.length ? <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 6, padding: '4px 8px', fontSize: 10 }}>{payload.map(p => <div key={p.name} style={{ display: 'flex', alignItems: 'center', gap: 6 }}><span style={{ width: 7, height: 7, borderRadius: '50%', background: p.color, display: 'inline-block', flexShrink: 0 }} /><span style={{ color: C.t2 }}>{p.name}: {fmt(p.value)}</span></div>)}</div> : null} />
               </AreaChart>
             </ResponsiveContainer>
           </div>
@@ -11476,8 +11459,6 @@ function FirstcryTab({ data }) {
               <AreaChart data={fcSparkData} margin={{ top: 4, right: 0, bottom: 0, left: 0 }}>
                 <defs><linearGradient id="fcGrossGrad" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#F97316" stopOpacity={0.25} /><stop offset="95%" stopColor="#F97316" stopOpacity={0} /></linearGradient></defs>
                 <Area type="monotone" dataKey="cur" name="Current" stroke="#F97316" strokeWidth={2} fill="url(#fcGrossGrad)" dot={false} connectNulls />
-                <Area type="monotone" dataKey="prev" name="Prev" stroke={C.t3} strokeWidth={1} fill="none" dot={false} strokeDasharray="3 2" connectNulls />
-                <Tooltip content={({ active, payload }) => active && payload?.length ? <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 6, padding: '4px 8px', fontSize: 10 }}>{payload.map(p => <div key={p.name} style={{ display: 'flex', alignItems: 'center', gap: 6 }}><span style={{ width: 7, height: 7, borderRadius: '50%', background: p.color, display: 'inline-block', flexShrink: 0 }} /><span style={{ color: C.t2 }}>{p.name}: {fmt(p.value)}</span></div>)}</div> : null} />
               </AreaChart>
             </ResponsiveContainer>
           </div>
@@ -11720,8 +11701,6 @@ function MyntraTab({ data }) {
               <AreaChart data={sparkData} margin={{ top: 4, right: 0, bottom: 0, left: 0 }}>
                 <defs><linearGradient id="mnGrossGrad" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#E87858" stopOpacity={0.25} /><stop offset="95%" stopColor="#E87858" stopOpacity={0} /></linearGradient></defs>
                 <Area type="monotone" dataKey="cur" name="Current" stroke="#E87858" strokeWidth={2} fill="url(#mnGrossGrad)" dot={false} connectNulls />
-                <Area type="monotone" dataKey="prev" name="Prev" stroke={C.t3} strokeWidth={1} fill="none" dot={false} strokeDasharray="3 2" connectNulls />
-                <Tooltip content={({ active, payload }) => active && payload?.length ? <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 6, padding: '4px 8px', fontSize: 10 }}>{payload.map(p => <div key={p.name} style={{ display: 'flex', alignItems: 'center', gap: 6 }}><span style={{ width: 7, height: 7, borderRadius: '50%', background: p.color, display: 'inline-block', flexShrink: 0 }} /><span style={{ color: C.t2 }}>{p.name}: {fmt(p.value)}</span></div>)}</div> : null} />
               </AreaChart>
             </ResponsiveContainer>
           </div>
@@ -12098,8 +12077,6 @@ function OfflineTab({ data, sub, setSub }) {
               <AreaChart data={sparkData} margin={{ top: 4, right: 0, bottom: 0, left: 0 }}>
                 <defs><linearGradient id="offGrossGrad" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#0D9E68" stopOpacity={0.25} /><stop offset="95%" stopColor="#0D9E68" stopOpacity={0} /></linearGradient></defs>
                 <Area type="monotone" dataKey="cur" name="Current" stroke="#0D9E68" strokeWidth={2} fill="url(#offGrossGrad)" dot={false} connectNulls />
-                <Area type="monotone" dataKey="prev" name="Prev" stroke={C.t3} strokeWidth={1} fill="none" dot={false} strokeDasharray="3 2" connectNulls />
-                <Tooltip content={({ active, payload }) => active && payload?.length ? <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 6, padding: '4px 8px', fontSize: 10 }}>{payload.map(p => <div key={p.name} style={{ display: 'flex', alignItems: 'center', gap: 6 }}><span style={{ width: 7, height: 7, borderRadius: '50%', background: p.color, display: 'inline-block', flexShrink: 0 }} /><span style={{ color: C.t2 }}>{p.name}: {fmt(p.value)}</span></div>)}</div> : null} />
               </AreaChart>
             </ResponsiveContainer>
           </div>
