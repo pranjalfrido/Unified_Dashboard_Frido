@@ -39,14 +39,14 @@ console.log(`Fetching GRN ${startStr} â†’ ${endStr}, sales ${salesFetchStar
 const [[grnRows], [itemMasterRows], [skuMappingRows], [invRows], [salesRows]] = await Promise.all([
   bq.query({
     query: `SELECT
-              \`GRN Code\` AS grnCode, GRN_Date AS grnDate, \`Item SkuCode\` AS itemSkuCode,
+              \`GRN Code\` AS grnCode, \`GRN Date\` AS grnDate, \`Item SkuCode\` AS itemSkuCode,
               Facility, Category AS rawCategory, \`Vendor Name\` AS vendorName, \`Vendor Code\` AS vendorCode,
               \`PO Code\` AS poCode, \`PO Date\` AS poDate,
               \`Quantity Received\` AS qtyReceived, \`Quantity Rejected\` AS qtyRejected,
               \`Rejection Reason\` AS rejectionReason, \`Grn item Status\` AS grnStatus,
               \`GRN Received Timestamp\` AS grnReceivedTs, \`QC Completed On\` AS qcCompletedOn
             FROM \`frido-429506.production.Unicommerce_GRN_Report\`
-            WHERE DATE(GRN_Date) BETWEEN '${startStr}' AND '${endStr}'`,
+            WHERE DATE(\`GRN Date\`) BETWEEN '${startStr}' AND '${endStr}'`,
     maximumBytesBilled: '5000000000',
   }),
   bq.query({
