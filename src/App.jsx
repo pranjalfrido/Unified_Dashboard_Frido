@@ -15788,9 +15788,21 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
   })()
   const activeTab = page === 'sales' ? (urlSub || defaultSalesTab) : defaultSalesTab
   const setActiveTab = (tab) => { goTo('sales', tab, salesSub2 || 'overall') }
-  const pnlActiveTab = page === 'pnl' ? (urlSub || 'all') : 'all'
+  const defaultPnlTab = (() => {
+    if (!allowedTabs) return 'all'
+    const tabOrder = ['all','shopify','ebo','amazon','flipkart','blinkit','cred','firstcry','instamart','zepto','myntra','international','offline']
+    const pnlKeyMap = { 'all': 'pnl:all', 'shopify': 'pnl:shopify', 'ebo': 'pnl:ebo', 'amazon': 'pnl:amazon', 'flipkart': 'pnl:flipkart', 'blinkit': 'pnl:blinkit', 'cred': 'pnl:cred', 'firstcry': 'pnl:firstcry', 'instamart': 'pnl:instamart', 'zepto': 'pnl:zepto', 'myntra': 'pnl:myntra', 'international': 'pnl:international', 'offline': 'pnl:offline' }
+    return tabOrder.find(t => allowedTabs.includes(pnlKeyMap[t])) || 'all'
+  })()
+  const pnlActiveTab = page === 'pnl' ? (urlSub || defaultPnlTab) : defaultPnlTab
   const setPnlActiveTab = (tab) => goTo('pnl', tab)
-  const adsSelPlatform = page === 'ads' ? (urlSub || null) : null
+  const defaultAdsPlatform = (() => {
+    if (!allowedTabs) return null
+    const adsOrder = ['All','D2C','Amazon','Blinkit','Zepto','Instamart','Flipkart','Myntra','CRED']
+    const found = adsOrder.find(p => allowedTabs.includes(ADS_KEY_MAP[p]))
+    return (found && found !== 'All') ? found : (allowedTabs.includes('ads:all') ? null : (found || null))
+  })()
+  const adsSelPlatform = page === 'ads' ? (urlSub || defaultAdsPlatform) : defaultAdsPlatform
   const setAdsSelPlatform = (plat) => goTo('ads', plat)
 
   // Sales channel sub-tab navigation (seg2 in URL)
@@ -15824,8 +15836,8 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
   const setPage = (p) => {
     if (p === 'inventory') goTo('inventory', allowedTabs?.includes('inventory') ? 'health' : 'sales')
     else if (p === 'sales') goTo('sales', defaultSalesTab, 'overall')
-    else if (p === 'pnl') goTo('pnl', 'all')
-    else if (p === 'ads') goTo('ads', null)
+    else if (p === 'pnl') goTo('pnl', defaultPnlTab)
+    else if (p === 'ads') goTo('ads', defaultAdsPlatform)
     else goTo(p, null)
   }
 
