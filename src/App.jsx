@@ -7472,9 +7472,8 @@ function ShopifyTab({ data, filters, setFilters }) {
           const prevGst = prevGrossAfterReturns - prevNetRev
           const row1 = [
             {
-              label: 'Net Revenue',
+              label: 'Net Revenue Ex Gst',
               value: fmt(netRev),
-              sub: 'Ex. return & cancellation',
               badge: excChg !== null ? <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 4, background: excChg >= 0 ? C.green.bg : C.red.bg, color: excChg >= 0 ? C.green.tx : C.red.tx, flexShrink: 0 }}>{excChg >= 0 ? '▲' : '▼'} {Math.abs(excChg).toFixed(1)}%</span> : null,
             },
             { label: 'GST', value: fmt(gst), sub: grossAfterReturns > 0 ? `${((gst / grossAfterReturns) * 100).toFixed(1)}% of net sales` : '—', badge: shChgBadge(gst, prevGst) },
@@ -8758,7 +8757,7 @@ function FlipkartTab({ data }) {
         </div>
         <div className="sales-kpi-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gridTemplateRows: 'repeat(2, 1fr)', gap: 10, alignItems: 'stretch' }}>
           {[
-            { label: 'Net Revenue', value: fmt(fkNetRev), sub: 'Ex. return & cancellation', badge: selectedCat ? null : fkChgBadge(fkNetRev, fkPrevExcRev) },
+            { label: 'Net Revenue Ex Gst', value: fmt(fkNetRev), badge: selectedCat ? null : fkChgBadge(fkNetRev, fkPrevExcRev) },
             { label: 'Daily Avg Rev', value: fmt(rev / nDays), sub: `over ${nDays} days`, badge: selectedCat ? null : fkChgBadge(rev / nDays, fkPrevRev > 0 ? fkPrevRev / nDays : 0) },
             { label: 'AOV', value: `₹${Math.round(aov).toLocaleString('en-IN')}`, sub: 'Gross rev ÷ orders', badge: selectedCat ? null : fkChgBadge(aov, fkPrevOrders > 0 ? fkPrevRev / fkPrevOrders : 0) },
             { label: 'ASP', value: `₹${Math.round(asp).toLocaleString('en-IN')}`, sub: 'Gross rev ÷ units', badge: selectedCat ? null : fkChgBadge(asp, fkPrevUnits > 0 ? fkPrevRev / fkPrevUnits : 0) },
@@ -11234,7 +11233,7 @@ function CredTab({ data }) {
         </div>
         <div className="sales-kpi-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gridTemplateRows: 'repeat(2, 1fr)', gap: 10, alignItems: 'stretch' }}>
           {[
-            { label: 'Net Revenue', value: fmt(netRev), sub: 'Ex. return & cancellation', badge: crChgBadge(netRev, crPrevNetRev) },
+            { label: 'Net Revenue Ex Gst', value: fmt(netRev), badge: crChgBadge(netRev, crPrevNetRev) },
             { label: 'GST', value: fmt(gstCollected), sub: `${rev > 0 ? ((gstCollected/rev)*100).toFixed(1) : 0}% of gross rev`, badge: crChgBadge(gstCollected, crPrevGstCollected) },
             { label: 'Daily Avg Rev', value: fmt(dailyAvg), sub: `over ${nDays} days`, badge: crChgBadge(dailyAvg, crPrevRev > 0 ? crPrevRev / nDays : 0) },
             { label: 'AOV', value: `₹${Math.round(orders ? rev / orders : 0).toLocaleString('en-IN')}`, sub: 'Gross rev ÷ orders', badge: crChgBadge(orders ? rev / orders : 0, crPrevOrders > 0 ? crPrevRev / crPrevOrders : 0) },
@@ -11485,7 +11484,7 @@ function FirstcryTab({ data }) {
         </div>
         <div className="sales-kpi-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gridTemplateRows: 'repeat(2, 1fr)', gap: 10, alignItems: 'stretch' }}>
           {[
-            { label: 'Net Revenue', value: fmt(netRev), sub: 'Ex. return & cancellation', badge: fcChgBadge(netRev, fcPrevNetRev) },
+            { label: 'Net Revenue Ex Gst', value: fmt(netRev), badge: fcChgBadge(netRev, fcPrevNetRev) },
             { label: 'GST', value: fmt(gstCollected), sub: `${rev > 0 ? ((gstCollected/rev)*100).toFixed(1) : 0}% of gross rev`, badge: fcChgBadge(gstCollected, fcPrevGstCollected) },
             { label: 'Daily Avg Rev', value: fmt(dailyAvg), sub: `over ${nDays} days`, badge: fcChgBadge(dailyAvg, fcPrevRev > 0 ? fcPrevRev / nDays : 0) },
             { label: 'AOV', value: `₹${Math.round(orders ? rev / orders : 0).toLocaleString('en-IN')}`, sub: 'Gross rev ÷ orders', badge: fcChgBadge(orders ? rev / orders : 0, fcPrevOrders > 0 ? fcPrevRev / fcPrevOrders : 0) },
@@ -11729,7 +11728,7 @@ function MyntraTab({ data }) {
         </div>
         <div className="sales-kpi-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gridTemplateRows: 'repeat(2, 1fr)', gap: 10, alignItems: 'stretch' }}>
           {[
-            { label: 'Net Revenue', value: fmt(netRev), sub: 'Ex. return & cancellation', badge: chgBadge(netRev, prevNetRev) },
+            { label: 'Net Revenue Ex Gst', value: fmt(netRev), badge: chgBadge(netRev, prevNetRev) },
             { label: 'GST', value: fmt(gstCollected), sub: `${rev > 0 ? ((gstCollected/rev)*100).toFixed(1) : 0}% of gross rev`, badge: chgBadge(gstCollected, prevGstCollected) },
             { label: 'Daily Avg Rev', value: fmt(rev / nDays), sub: `over ${nDays} days`, badge: chgBadge(rev / nDays, prevRev > 0 ? prevRev / nDays : 0) },
             { label: 'AOV', value: `₹${Math.round(nOrders ? rev / nOrders : 0).toLocaleString('en-IN')}`, sub: 'Gross rev ÷ orders', badge: chgBadge(nOrders ? rev / nOrders : 0, mn.prevOrders > 0 ? prevRev / mn.prevOrders : 0) },
