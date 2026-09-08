@@ -74,12 +74,12 @@ export function AlertCard({ type, title, body }) {
   )
 }
 
-export function HBar({ dot, label, width, value, pctVal, onClick, isSelected, labelWidth = 110 }) {
+export function HBar({ dot, label, width, value, pctVal, onClick, isSelected, labelWidth = 110, maxBarWidth }) {
   return (
     <div onClick={onClick} style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '6px 0', borderBottom: `1px solid ${C.border}`, cursor: onClick ? 'pointer' : 'default', background: isSelected ? '#FFFBE6' : 'transparent', borderRadius: isSelected ? 4 : 0 }} className="hbar-row">
       <span style={{ width: 8, height: 8, borderRadius: '50%', background: dot, flexShrink: 0 }} />
       <span title={label} style={{ fontSize: 12, color: C.t2, flexShrink: 0, width: labelWidth, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{label}</span>
-      <div className="hb-track" style={{ flex: 1 }}><div className="hb-fill" style={{ width: `${width}%`, background: '#FFD600' }} /></div>
+      <div className="hb-track" style={{ flex: 1, ...(maxBarWidth ? { maxWidth: maxBarWidth } : {}) }}><div className="hb-fill" style={{ width: `${width}%`, background: '#FFD600' }} /></div>
       <span className="hb-value" style={{ fontSize: 12, fontWeight: 700, color: C.t1, fontFamily: 'var(--mono)', flexShrink: 0, minWidth: 62, textAlign: 'right' }}>{value}</span>
       <span style={{ fontSize: 11, color: C.t3, flexShrink: 0, width: 36, textAlign: 'right' }}>{pctVal}</span>
     </div>
@@ -105,7 +105,7 @@ export function CategoryRevenueCard({ catRows, subCatRows, skuMap, totalRev, vie
   } else if (view === 'subcategory') {
     rows = subCatRows
     maxRev = subCatRows[0]?.rev || 1
-    labelWidth = labelWidthFor(subCatRows.map(r => r.name))
+    labelWidth = 190
     onClick = r => onSelectSubCategory?.(r.name)
   } else {
     const prodRows = []
@@ -126,9 +126,9 @@ export function CategoryRevenueCard({ catRows, subCatRows, skuMap, totalRev, vie
   const mobFixedH = mobCard ? (catRows.length * ROW_H + CARD_CHROME) : undefined
 
   return (
-    <Card fill title="Category Revenue" style={{ height: mobCard ? mobFixedH : height, alignSelf: 'start' }} action={
+    <Card fill title={view === 'subcategory' ? 'Product Revenue' : 'Category Revenue'} style={{ height: mobCard ? mobFixedH : height, alignSelf: 'start' }} action={
       <div style={{ display: 'flex', gap: 4 }}>
-        {[{ id: 'category', label: 'Category' }, { id: 'subcategory', label: 'Product' }, ...(window.innerWidth > 768 ? [{ id: 'sku', label: 'SKU Code' }] : [])].map(v => (
+        {[{ id: 'category', label: 'Category' }, { id: 'subcategory', label: 'Product' }].map(v => (
           <button key={v.id} onClick={() => setView(v.id)} className="cat-rev-btn" style={{ fontSize: 11, fontWeight: 600, padding: '3px 10px', borderRadius: 5, border: `1.5px solid ${view === v.id ? C.acm : C.border}`, background: view === v.id ? C.acc : 'transparent', color: view === v.id ? C.t1 : C.t2, cursor: 'pointer', fontFamily: 'var(--font)' }}>{v.label}</button>
         ))}
       </div>
@@ -136,7 +136,7 @@ export function CategoryRevenueCard({ catRows, subCatRows, skuMap, totalRev, vie
       <div style={{ height: '100%', overflowY: 'auto' }}>
         {rows.map((r, i) => {
           const isSelected = selectedName ? selectedName === r.name : false
-          return <HBar key={`${r.category || ''}::${r.name}`} dot={DOTS[i % DOTS.length]} label={r.name} labelWidth={labelWidth} width={(r.rev / maxRev) * 100} value={fmt(r.rev)} pctVal={totalRev > 0 ? pct(r.rev, totalRev) : '—'} isSelected={isSelected} onClick={() => onClick(r)} />
+          return <HBar key={`${r.category || ''}::${r.name}`} dot={DOTS[i % DOTS.length]} label={r.name} labelWidth={labelWidth} width={(r.rev / maxRev) * 100} value={fmt(r.rev)} pctVal={totalRev > 0 ? pct(r.rev, totalRev) : '—'} isSelected={false} maxBarWidth={view === 'subcategory' ? 55 : undefined} />
         })}
       </div>
     </Card>

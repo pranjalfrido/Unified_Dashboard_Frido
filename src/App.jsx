@@ -5702,6 +5702,11 @@ function FlatCategoryProductMatrix({ catData, subCatData, skuData, title, catPre
   }
   const pctOf = (n, d) => d > 0 ? (n / d * 100) : 0
 
+  // Compute overall net shrink factor to approximate prevNet from prevGross
+  const _totGross = Object.values(subCatData || {}).flatMap(m => Object.values(m)).reduce((s, d) => s + (d.rev || 0), 0)
+  const _totNet = Object.entries(subCatData || {}).flatMap(([cat, m]) => Object.entries(m).map(([sc, d]) => mapRow(d, sc, cat).net)).reduce((s, n) => s + n, 0)
+  const netShrink = _totGross > 0 ? _totNet / _totGross : 1
+
   // Flatten to one row per Category+Product (sub-category) — every product visible immediately.
   const allRows = []
   Object.entries(subCatData || {}).forEach(([cat, scMap]) => {
@@ -5710,8 +5715,9 @@ function FlatCategoryProductMatrix({ catData, subCatData, skuData, title, catPre
       // Marketplaces report one combined return figure (d.returnRev) with no further breakdown;
       // D2C/EBO sum the four distinct statuses.
       const totalReturnRev = simpleReturns ? r.returnRev : r.cancelRev + r.rtoRev + r.cirRev + r.returnRev
+      const prevGross = subCatPrevMap[`${cat}::${sc}`] || 0
       allRows.push({
-        cat, sc, ...r, prevGross: subCatPrevMap[`${cat}::${sc}`] || 0,
+        cat, sc, ...r, prevGross, prevNet: prevGross * netShrink,
         asp: r.units > 0 ? r.gross / r.units : 0,
         cancelPct: pctOf(r.cancelRev, r.gross), rtoPct: pctOf(r.rtoRev, r.gross), cirPct: pctOf(r.cirRev, r.gross), exchPct: pctOf(r.exchRev, r.gross),
         totalReturnPct: pctOf(totalReturnRev, r.gross),
@@ -5721,7 +5727,7 @@ function FlatCategoryProductMatrix({ catData, subCatData, skuData, title, catPre
   const filteredRows = q ? allRows.filter(r => r.cat.toLowerCase().includes(q) || r.sc.toLowerCase().includes(q) || Object.keys(skuData?.[r.cat]?.[r.sc] || {}).some(sku => sku.toLowerCase().includes(q))) : allRows
   const getters = {
     cat: r => r.cat, sc: r => r.sc, gross: r => r.gross, units: r => r.units, asp: r => r.asp,
-    prevGross: r => r.prevGross > 0 ? (r.gross - r.prevGross) / r.prevGross : -Infinity,
+    prevGross: r => r.prevNet > 0 ? (r.net - r.prevNet) / r.prevNet : -Infinity,
     cancelPct: r => r.cancelPct, rtoPct: r => r.rtoPct, cirPct: r => r.cirPct, exchPct: r => r.exchPct, totalReturnPct: r => r.totalReturnPct, net: r => r.net,
   }
   const rows = table.sortRows(filteredRows, getters)
@@ -5765,10 +5771,14 @@ function FlatCategoryProductMatrix({ catData, subCatData, skuData, title, catPre
       row: r => <td style={tdStyle}>{fmt(r.gross)}{!isMob && tot.gross > 0 && <span style={{ fontSize: 10, color: C.t3, marginLeft: 4 }}>({(r.gross / tot.gross * 100).toFixed(1)}%)</span>}</td>,
       sku: sk => <td style={{ ...tdStyle, fontSize: 11 }}>{fmt(sk.gross)}{tot.gross > 0 && <span style={{ fontSize: 9, color: C.t3, marginLeft: 4 }}>({(sk.gross / tot.gross * 100).toFixed(1)}%)</span>}</td>,
       total: () => <td style={totalTdStyle}>{fmt(tot.gross)} <span style={{ color: C.t3, fontWeight: 400 }}>(100%)</span></td> },
+    { id: 'net', label: 'Net Rev', sortKey: 'net', width: 9,
+      row: r => <td style={tdStyle}>{fmt(r.net)}</td>,
+      sku: sk => <td style={{ ...tdStyle, fontSize: 11 }}>{fmt(sk.net)}</td>,
+      total: () => <td style={totalTdStyle}>{fmt(tot.net)}</td> },
     { id: 'prevGross', label: 'vs Prev', sortKey: 'prevGross', width: 9,
-      row: r => <td style={tdStyle}>{vsPrevCell(r.gross, r.prevGross)}</td>,
+      row: r => <td style={tdStyle}>{vsPrevCell(r.net, r.prevNet)}</td>,
       sku: () => <td style={{ ...tdStyle, fontSize: 11 }}><span style={{ color: C.t3 }}>—</span></td>,
-      total: () => <td style={totalTdStyle}>{vsPrevCell(tot.gross, tot.prevGross)}</td> },
+      total: () => <td style={totalTdStyle}>{vsPrevCell(tot.net, tot.prevGross * netShrink)}</td> },
     { id: 'units', label: 'Units', sortKey: 'units', width: 8,
       row: r => <td style={tdStyle}>{fmtN(r.units)}</td>,
       sku: sk => <td style={{ ...tdStyle, fontSize: 11 }}>{fmtN(sk.units)}</td>,
@@ -5778,10 +5788,6 @@ function FlatCategoryProductMatrix({ catData, subCatData, skuData, title, catPre
       sku: sk => <td style={{ ...tdStyle, fontSize: 11 }}>₹{(sk.units > 0 ? Math.round(sk.gross / sk.units) : 0).toLocaleString('en-IN')}</td>,
       total: () => <td style={totalTdStyle}>₹{tot.units > 0 ? Math.round(tot.gross / tot.units).toLocaleString('en-IN') : '—'}</td> },
     ...(showReturnPct && detailedReturns ? [
-      { id: 'cancelPct', label: 'Cancel %', sortKey: 'cancelPct', width: 7,
-        row: r => <td style={tdStyle}>{r.cancelPct > 0 ? `${r.cancelPct.toFixed(2)}%` : <span style={{ color: C.t3 }}>—</span>}</td>,
-        sku: sk => <td style={{ ...tdStyle, fontSize: 11 }}>{sk.cancelRev > 0 ? `${pctOf(sk.cancelRev, sk.gross).toFixed(2)}%` : <span style={{ color: C.t3 }}>—</span>}</td>,
-        total: () => <td style={totalTdStyle}>{tot.gross > 0 ? `${pctOf(tot.cancelRev, tot.gross).toFixed(2)}%` : '—'}</td> },
       { id: 'rtoPct', label: 'RTO %', sortKey: 'rtoPct', width: 7,
         row: r => <td style={tdStyle}>{r.rtoPct > 0 ? `${r.rtoPct.toFixed(2)}%` : <span style={{ color: C.t3 }}>—</span>}</td>,
         sku: sk => <td style={{ ...tdStyle, fontSize: 11 }}>{sk.rtoRev > 0 ? `${pctOf(sk.rtoRev, sk.gross).toFixed(2)}%` : <span style={{ color: C.t3 }}>—</span>}</td>,
@@ -5790,27 +5796,26 @@ function FlatCategoryProductMatrix({ catData, subCatData, skuData, title, catPre
         row: r => <td style={tdStyle}>{r.cirPct > 0 ? `${r.cirPct.toFixed(2)}%` : <span style={{ color: C.t3 }}>—</span>}</td>,
         sku: sk => <td style={{ ...tdStyle, fontSize: 11 }}>{sk.cirRev > 0 ? `${pctOf(sk.cirRev, sk.gross).toFixed(2)}%` : <span style={{ color: C.t3 }}>—</span>}</td>,
         total: () => <td style={totalTdStyle}>{tot.gross > 0 ? `${pctOf(tot.cirRev, tot.gross).toFixed(2)}%` : '—'}</td> },
-      { id: 'exchPct', label: 'Exchange %', sortKey: 'exchPct', width: 7,
-        row: r => <td style={tdStyle}>{r.exchPct > 0 ? `${r.exchPct.toFixed(2)}%` : <span style={{ color: C.t3 }}>—</span>}</td>,
-        sku: sk => <td style={{ ...tdStyle, fontSize: 11 }}>{sk.exchRev > 0 ? `${pctOf(sk.exchRev, sk.gross).toFixed(2)}%` : <span style={{ color: C.t3 }}>—</span>}</td>,
-        total: () => <td style={totalTdStyle}>{tot.gross > 0 ? `${pctOf(tot.exchRev, tot.gross).toFixed(2)}%` : '—'}</td> },
+      { id: 'cancelPct', label: 'Cancel %', sortKey: 'cancelPct', width: 7,
+        row: r => <td style={tdStyle}>{r.cancelPct > 0 ? `${r.cancelPct.toFixed(2)}%` : <span style={{ color: C.t3 }}>—</span>}</td>,
+        sku: sk => <td style={{ ...tdStyle, fontSize: 11 }}>{sk.cancelRev > 0 ? `${pctOf(sk.cancelRev, sk.gross).toFixed(2)}%` : <span style={{ color: C.t3 }}>—</span>}</td>,
+        total: () => <td style={totalTdStyle}>{tot.gross > 0 ? `${pctOf(tot.cancelRev, tot.gross).toFixed(2)}%` : '—'}</td> },
       { id: 'totalReturnPct', label: isMob ? 'Return %' : 'Total Return %', sortKey: 'totalReturnPct', width: 7,
         row: r => <td style={tdStyle}>{r.totalReturnPct > 0 ? <span style={{ color: r.totalReturnPct > 20 ? '#B91C1C' : 'inherit' }}>{r.totalReturnPct.toFixed(2)}%</span> : <span style={{ color: C.t3 }}>—</span>}</td>,
         sku: sk => { const skTotalReturnRev = simpleReturns ? sk.returnRev : sk.cancelRev + sk.rtoRev + sk.cirRev + sk.returnRev; return <td style={{ ...tdStyle, fontSize: 11 }}>{skTotalReturnRev > 0 ? <span style={{ color: pctOf(skTotalReturnRev, sk.gross) > 20 ? '#B91C1C' : 'inherit' }}>{pctOf(skTotalReturnRev, sk.gross).toFixed(2)}%</span> : <span style={{ color: C.t3 }}>—</span>}</td> },
         total: () => <td style={totalTdStyle}>{tot.gross > 0 ? <span style={{ color: pctOf(tot.cancelRev + tot.rtoRev + tot.cirRev + tot.returnRev, tot.gross) > 20 ? '#B91C1C' : 'inherit' }}>{pctOf(tot.cancelRev + tot.rtoRev + tot.cirRev + tot.returnRev, tot.gross).toFixed(2)}%</span> : '—'}</td> },
+      { id: 'exchPct', label: 'Exchange %', sortKey: 'exchPct', width: 7,
+        row: r => <td style={tdStyle}>{r.exchPct > 0 ? `${r.exchPct.toFixed(2)}%` : <span style={{ color: C.t3 }}>—</span>}</td>,
+        sku: sk => <td style={{ ...tdStyle, fontSize: 11 }}>{sk.exchRev > 0 ? `${pctOf(sk.exchRev, sk.gross).toFixed(2)}%` : <span style={{ color: C.t3 }}>—</span>}</td>,
+        total: () => <td style={totalTdStyle}>{tot.gross > 0 ? `${pctOf(tot.exchRev, tot.gross).toFixed(2)}%` : '—'}</td> },
     ] : showReturnPct ? [
       { id: 'totalReturnPct', label: isMob ? 'Return %' : 'Total Return %', sortKey: 'totalReturnPct', width: 11,
         row: r => <td style={tdStyle}>{r.totalReturnPct > 0 ? <span style={{ color: r.totalReturnPct > 20 ? '#B91C1C' : 'inherit' }}>{r.totalReturnPct.toFixed(2)}%</span> : <span style={{ color: C.t3 }}>—</span>}</td>,
         sku: sk => { const skTotalReturnRev = simpleReturns ? sk.returnRev : sk.cancelRev + sk.rtoRev + sk.cirRev + sk.returnRev; return <td style={{ ...tdStyle, fontSize: 11 }}>{skTotalReturnRev > 0 ? <span style={{ color: pctOf(skTotalReturnRev, sk.gross) > 20 ? '#B91C1C' : 'inherit' }}>{pctOf(skTotalReturnRev, sk.gross).toFixed(2)}%</span> : <span style={{ color: C.t3 }}>—</span>}</td> },
         total: () => <td style={totalTdStyle}>{tot.gross > 0 ? <span style={{ color: pctOf(tot.cancelRev + tot.rtoRev + tot.cirRev + tot.returnRev, tot.gross) > 20 ? '#B91C1C' : 'inherit' }}>{pctOf(tot.cancelRev + tot.rtoRev + tot.cirRev + tot.returnRev, tot.gross).toFixed(2)}%</span> : '—'}</td> },
     ] : []),
-    { id: 'net', label: 'Net Rev', sortKey: 'net', width: 9,
-      row: r => <td style={tdStyle}>{fmt(r.net)}</td>,
-      sku: sk => <td style={{ ...tdStyle, fontSize: 11 }}>{fmt(sk.net)}</td>,
-      total: () => <td style={totalTdStyle}>{fmt(tot.net)}</td> },
   ]
   const ALL_COLUMNS = isMob ? ALL_COLUMNS_RAW.filter(c => !MOB_HIDDEN_COLS.has(c.id)) : ALL_COLUMNS_RAW
-  const reorder = useReorderableColumns(`datatable-cols:${title || 'category-revenue-matrix'}`, ALL_COLUMNS)
 
   const handleExport = () => {
     const csvRows = rows.flatMap(r => {
@@ -5843,7 +5848,6 @@ function FlatCategoryProductMatrix({ catData, subCatData, skuData, title, catPre
         <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
           <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search…"
             style={{ fontSize: 11.5, padding: '4px 9px', borderRadius: 6, border: `1px solid ${C.border}`, background: C.card, color: C.t1, width: isMob ? 120 : 200, outline: 'none' }} />
-          {!isMob && !reorder.isDefaultOrder && <button onClick={reorder.resetOrder} title="Reset column order to default" style={{ fontSize: 10, color: C.t2, background: C.card, border: `1px solid ${C.border}`, borderRadius: 6, padding: '3px 8px', cursor: 'pointer' }}>↺ Reset</button>}
           {!isMob && <button onClick={handleExport} style={{ fontSize: 10, color: C.t2, background: C.card, border: `1px solid ${C.border}`, borderRadius: 6, padding: '3px 8px', cursor: 'pointer' }}>⭳ Export</button>}
         </div>
       </div>
@@ -5851,15 +5855,15 @@ function FlatCategoryProductMatrix({ catData, subCatData, skuData, title, catPre
         <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed', minWidth: isMob ? 0 : 760 }}>
           <colgroup>
             <col style={{ width: '16%' }} /><col style={{ width: '20%' }} />
-            {reorder.orderedColumns.map(c => <col key={c.id} style={{ width: `${c.width}%` }} />)}
+            {ALL_COLUMNS.map(c => <col key={c.id} style={{ width: `${c.width}%` }} />)}
           </colgroup>
           {!isMob && <thead>
             <tr style={{ background: C.bg }}>
               <Th label="Category" sortKey="cat" style={{ ...thStyleL, position: 'sticky', top: 0, background: C.bg, zIndex: 1 }} align="left" />
               <Th label="Product" sortKey="sc" style={{ ...thStyleL, position: 'sticky', top: 0, background: C.bg, zIndex: 1 }} align="left" />
-              {reorder.orderedColumns.map(c => (
+              {ALL_COLUMNS.map(c => (
                 <Th key={c.id} label={c.label} sortKey={c.sortKey} style={{ ...thStyle, position: 'sticky', top: 0, background: C.bg, zIndex: 1 }}
-                  dragProps={{ onDragStart: reorder.onDragStart(c.id), onDragOver: reorder.onDragOver, onDrop: reorder.onDrop(c.id) }} />
+                   />
               ))}
             </tr>
           </thead>}
@@ -5875,11 +5879,11 @@ function FlatCategoryProductMatrix({ catData, subCatData, skuData, title, catPre
                   <tr key={skuKey} style={{ cursor: 'default' }}
                     onMouseEnter={e => e.currentTarget.style.background = '#FFFBE6'}
                     onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
-                    <td colSpan={reorder.orderedColumns.length + 2} style={{ padding: '5px 4px', borderBottom: `1px solid ${C.border}` }}>
+                    <td colSpan={ALL_COLUMNS.length + 2} style={{ padding: '5px 4px', borderBottom: `1px solid ${C.border}` }}>
                       <div style={{ fontWeight: 700, fontSize: 12, color: C.t1, marginBottom: 1 }}>{r.sc}</div>
                       <div style={{ fontSize: 11, color: C.t3, marginBottom: 3 }}>{r.cat}</div>
                       <div style={{ display: 'flex', flexWrap: 'wrap', gap: '2px 10px' }}>
-                        {reorder.orderedColumns.map(c => {
+                        {ALL_COLUMNS.map(c => {
                           const tdEl = c.row(r)
                           const rawVal = tdEl?.props?.children
                           return (
@@ -5906,7 +5910,7 @@ function FlatCategoryProductMatrix({ catData, subCatData, skuData, title, catPre
                         {r.sc}
                       </span>
                     </td>
-                    {reorder.orderedColumns.map(c => <Fragment key={c.id}>{c.row(r)}</Fragment>)}
+                    {ALL_COLUMNS.map(c => <Fragment key={c.id}>{c.row(r)}</Fragment>)}
                   </tr>
                   {isOpen && skus.map(sk => (
                     <tr key={sk.sku} style={{ background: C.bg, cursor: 'default' }}
@@ -5914,7 +5918,7 @@ function FlatCategoryProductMatrix({ catData, subCatData, skuData, title, catPre
                       onMouseLeave={e => e.currentTarget.style.background = C.bg}>
                       <td style={{ ...tdStyleL, borderBottom: `1px solid ${C.border}` }}></td>
                       <td style={{ ...tdStyleL, borderBottom: `1px solid ${C.border}`, fontFamily: 'var(--mono)', fontSize: 11, color: C.t2, paddingLeft: 22 }}>└ {sk.sku}</td>
-                      {reorder.orderedColumns.map(c => <Fragment key={c.id}>{c.sku(sk)}</Fragment>)}
+                      {ALL_COLUMNS.map(c => <Fragment key={c.id}>{c.sku(sk)}</Fragment>)}
                     </tr>
                   ))}
                 </Fragment>
@@ -5924,7 +5928,7 @@ function FlatCategoryProductMatrix({ catData, subCatData, skuData, title, catPre
           {!isMob && <tfoot>
             <tr style={{ background: C.bg, borderTop: `1.5px solid ${C.border}`, position: 'sticky', bottom: 0 }}>
               <td style={{ ...totalTdStyle, textAlign: 'left' }} colSpan={2}>Total</td>
-              {reorder.orderedColumns.map(c => <Fragment key={c.id}>{c.total()}</Fragment>)}
+              {ALL_COLUMNS.map(c => <Fragment key={c.id}>{c.total()}</Fragment>)}
             </tr>
           </tfoot>}
         </table>
@@ -6958,7 +6962,7 @@ function ShopifyGeoRichTable({ title, rows, firstKey, firstLabel, formatFirst, r
   const [shareMode, setShareMode] = useState('pct') // 'pct' | 'count'
   const table = useSortableTable('rev')
   const getters = {
-    [firstKey]: r => r[firstKey], rev: r => r.rev, sharePct: r => r.sharePct, cumPct: r => r.cumPct, orders: r => r.orders,
+    [firstKey]: r => r[firstKey], rev: r => r.rev, sharePct: r => r.sharePct, orders: r => r.orders,
     aov: r => r.aov || 0, asp: r => r.asp || 0, mom: r => r.mom ?? -Infinity, rtoPct: r => r.rtoPct || 0,
   }
   const sortedRows = table.sortRows(rows, getters)
@@ -7003,24 +7007,22 @@ function ShopifyGeoRichTable({ title, rows, firstKey, firstLabel, formatFirst, r
   }
 
   const ALL_COLUMNS = [
-    { id: 'rev', label: 'Revenue', sortKey: 'rev', width: 9,
+    { id: 'rev', label: 'Net Rev', sortKey: 'rev', width: 9,
       row: r => <td style={tdStyle}>{shareMode === 'pct' ? `${(r.sharePct || 0).toFixed(1)}%` : fmt(r.rev)}</td>,
       total: () => <td style={totalTdStyle}>{shareMode === 'pct' ? '100%' : fmt(tot.rev)}</td> },
+    { id: 'mom', label: 'vs Prev', sortKey: 'mom', width: 9,
+      row: r => <td style={{ ...tdStyle, fontFamily: 'inherit' }}>{momCell(r.mom)}</td>, total: () => <td style={{ ...totalTdStyle, fontFamily: 'inherit' }}>—</td> },
     { id: 'orders', label: 'Orders', sortKey: 'orders', width: 9,
       row: r => <td style={tdStyle}>{shareMode === 'pct' ? `${tot.orders > 0 ? (r.orders / tot.orders * 100).toFixed(1) : '0.0'}%` : fmtN(r.orders)}</td>,
       total: () => <td style={totalTdStyle}>{shareMode === 'pct' ? '100%' : fmtN(tot.orders)}</td> },
-    { id: 'cumPct', label: 'Cum %', sortKey: 'cumPct', width: 9,
-      row: r => <td style={tdStyle}>{(r.cumPct || 0).toFixed(1)}%</td>, total: () => <td style={totalTdStyle}>—</td> },
     ...(showAOV ? [{ id: 'aov', label: 'AOV', sortKey: 'aov', width: 9,
       row: r => <td style={tdStyle}>₹{Math.round(r.aov || 0).toLocaleString('en-IN')}</td>, total: () => <td style={totalTdStyle}>₹{Math.round(totAov).toLocaleString('en-IN')}</td> }] : []),
     ...(showASP ? [{ id: 'asp', label: 'ASP', sortKey: 'asp', width: 9,
       row: r => <td style={tdStyle}>₹{Math.round(r.asp || 0).toLocaleString('en-IN')}</td>, total: () => <td style={totalTdStyle}>₹{Math.round(totAsp).toLocaleString('en-IN')}</td> }] : []),
-    { id: 'mom', label: 'vs Prev', sortKey: 'mom', width: 9,
-      row: r => <td style={{ ...tdStyle, fontFamily: 'inherit' }}>{momCell(r.mom)}</td>, total: () => <td style={{ ...totalTdStyle, fontFamily: 'inherit' }}>—</td> },
     ...(showRTO ? [{ id: 'rtoPct', label: rtoLabel, sortKey: 'rtoPct', width: 9,
       row: r => <td style={{ ...tdStyle, fontFamily: 'inherit' }}>{rtoChip(r.rtoPct || 0)}</td>, total: () => <td style={{ ...totalTdStyle, fontFamily: 'inherit' }}>{rtoChip(totRtoPct)}</td> }] : []),
   ]
-  const MOB_HIDDEN = new Set(['cumPct', 'mom'])
+  const MOB_HIDDEN = new Set(['mom'])
   const VISIBLE_COLUMNS = isMob ? ALL_COLUMNS.filter(c => !MOB_HIDDEN.has(c.id)) : ALL_COLUMNS
   const reorder = useReorderableColumns(`datatable-cols:${title}`, VISIBLE_COLUMNS)
 
@@ -7033,7 +7035,6 @@ function ShopifyGeoRichTable({ title, rows, firstKey, firstLabel, formatFirst, r
             <button onClick={() => setShareMode('pct')} style={{ fontSize: 10, fontWeight: shareMode === 'pct' ? 700 : 500, padding: '3px 8px', border: 'none', background: shareMode === 'pct' ? C.acc : 'transparent', color: shareMode === 'pct' ? C.t1 : C.t3, cursor: 'pointer' }}>%</button>
             <button onClick={() => setShareMode('count')} style={{ fontSize: 10, fontWeight: shareMode === 'count' ? 700 : 500, padding: '3px 8px', border: 'none', background: shareMode === 'count' ? C.acc : 'transparent', color: shareMode === 'count' ? C.t1 : C.t3, cursor: 'pointer' }}>Count</button>
           </div>
-          {!isMob && !reorder.isDefaultOrder && <button onClick={reorder.resetOrder} title="Reset column order to default" style={{ fontSize: 10, color: C.t2, background: C.card, border: `1px solid ${C.border}`, borderRadius: 6, padding: '3px 8px', cursor: 'pointer' }}>↺ Reset</button>}
           {!isMob && <button onClick={handleExport} style={{ fontSize: 10, color: C.t2, background: C.card, border: `1px solid ${C.border}`, borderRadius: 6, padding: '3px 8px', cursor: 'pointer' }}>⭳ Export</button>}
         </div>
       </div>
@@ -7041,14 +7042,14 @@ function ShopifyGeoRichTable({ title, rows, firstKey, firstLabel, formatFirst, r
         <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed' }}>
           <colgroup>
             <col style={{ width: isMob ? 155 : '12%' }} />
-            {reorder.orderedColumns.map((c, i) => <col key={c.id} style={{ width: isMob ? (i === 0 ? 85 : 95) : `${c.width}%` }} />)}
+            {ALL_COLUMNS.map((c, i) => <col key={c.id} style={{ width: isMob ? (i === 0 ? 85 : 95) : `${c.width}%` }} />)}
           </colgroup>
           <thead>
             <tr style={{ background: C.bg }}>
               <Th label={firstLabel} sortKey={firstKey} style={{ ...thStyleL, position: 'sticky', top: 0, left: isMob ? 0 : undefined, background: C.bg, zIndex: isMob ? 3 : 1 }} align="left" />
-              {reorder.orderedColumns.map(c => (
+              {ALL_COLUMNS.map(c => (
                 <Th key={c.id} label={c.label} sortKey={c.sortKey} style={{ ...thStyle, position: 'sticky', top: 0, background: C.bg, zIndex: 1 }}
-                  dragProps={{ onDragStart: reorder.onDragStart(c.id), onDragOver: reorder.onDragOver, onDrop: reorder.onDrop(c.id) }} />
+                   />
               ))}
             </tr>
           </thead>
@@ -7059,7 +7060,7 @@ function ShopifyGeoRichTable({ title, rows, firstKey, firstLabel, formatFirst, r
                   onMouseEnter={e => e.currentTarget.style.background = '#FFFBE6'}
                   onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
                   <td style={{ ...tdStyleL, ...(isMob ? { position: 'sticky', left: 0, background: C.card, zIndex: 2 } : {}) }}>{formatFirst ? formatFirst(r[firstKey]) : r[firstKey]}</td>
-                  {reorder.orderedColumns.map(c => <Fragment key={c.id}>{c.row(r)}</Fragment>)}
+                  {ALL_COLUMNS.map(c => <Fragment key={c.id}>{c.row(r)}</Fragment>)}
                 </tr>
               )
             })}
@@ -7067,7 +7068,7 @@ function ShopifyGeoRichTable({ title, rows, firstKey, firstLabel, formatFirst, r
           <tfoot>
             <tr style={{ background: C.bg, borderTop: `1.5px solid ${C.border}`, position: 'sticky', bottom: 0, zIndex: isMob ? 2 : 1 }}>
               <td style={{ ...totalTdStyle, textAlign: 'left', ...(isMob ? { position: 'sticky', left: 0, background: C.bg, zIndex: 3 } : {}) }}>Total</td>
-              {reorder.orderedColumns.map(c => <Fragment key={c.id}>{c.total()}</Fragment>)}
+              {ALL_COLUMNS.map(c => <Fragment key={c.id}>{c.total()}</Fragment>)}
             </tr>
           </tfoot>
         </table>
@@ -7341,50 +7342,51 @@ function ShopifyTab({ data, filters, setFilters }) {
   const catRows = Object.entries(filteredCatMap).map(([k, v]) => { const orders = v.orders?.size ?? v.orders ?? 0; const aspU = v.aspUnits || v.units || 0; return { name: k, rev: v.rev, excRev: v.excRev || 0, orders, units: aspU, aov: orders ? v.rev / orders : 0, asp: aspU ? v.rev / aspU : 0 } }).sort((a, b) => b.rev - a.rev)
   const allSubCatRows = Object.entries(filteredSubCatMap).map(([k, v]) => { const orders = v.orders?.size ?? v.orders ?? 0; const aspU = v.aspUnits || v.units || 0; return { name: k.split('::')[1] || k, category: k.split('::')[0] || '', rev: v.rev, orders, units: aspU, aov: orders ? v.rev / orders : 0, asp: aspU ? v.rev / aspU : 0 } }).sort((a, b) => b.rev - a.rev)
   const subCatRows = selectedCat ? allSubCatRows.filter(r => r.category === selectedCat) : allSubCatRows
+  const _d2cNetShrink = totalRev > 0 ? netRev / totalRev : 1
   const stateRows = (() => {
     const totalRevAll = sh.stateTotal?.rev || Object.values(stateMap).reduce((s, v) => s + (v.rev || 0), 0)
+    const totalNetAll = totalRevAll * _d2cNetShrink
     const sorted = Object.entries(stateMap).map(([k, v]) => {
       const ord = v.orders instanceof Set ? v.orders.size : v.orders
       const prev = statePrevMap[k] || { rev: 0, orders: 0 }
+      const stateNet = v.rev * _d2cNetShrink
+      const prevNet = (prev.rev || 0) * _d2cNetShrink
       return {
         state: k,
-        rev: v.rev,
+        rev: stateNet,
         orders: ord,
         aov: ord ? v.rev / ord : 0,
         cities: v.cities?.size || 0,
         rtoOrders: v.rtoOrders || 0,
-        // Return % = (RTO + Return + CIR) revenue ÷ Gross revenue — same "Total Return %"
-        // definition used in the Category Revenue Matrix, kept consistent across the D2C tab.
         returnRev: v.returnRev || 0,
         rtoPct: v.rev > 0 ? ((v.returnRev || 0) / v.rev * 100) : 0,
-        prevRev: prev.rev,
+        prevRev: prevNet,
         prevOrders: prev.orders,
-        mom: prev.rev > 0 ? ((v.rev - prev.rev) / prev.rev * 100) : null,
-        sharePct: totalRevAll > 0 ? (v.rev / totalRevAll * 100) : 0,
+        mom: prevNet > 0 ? ((stateNet - prevNet) / prevNet * 100) : null,
+        sharePct: totalNetAll > 0 ? (stateNet / totalNetAll * 100) : 0,
       }
     }).sort((a, b) => b.rev - a.rev)
-    // cumulative share
-    let cum = 0
-    sorted.forEach(r => { cum += r.sharePct; r.cumPct = cum })
     return sorted
   })()
   const enrichedCityRows = (() => {
     const totalRevAll = totalRev || sh.cityTotal?.rev || shCityRows.reduce((s, c) => s + (c.rev || 0), 0)
+    const totalNetAll = totalRevAll * _d2cNetShrink
     const sorted = shCityRows.map(c => {
       const key = `${c.city}|${c.state || ''}`
       const prev = cityPrevMap[key] || { rev: 0, orders: 0 }
+      const cityNet = (c.rev || 0) * _d2cNetShrink
+      const prevCityNet = (prev.rev || 0) * _d2cNetShrink
       return {
         ...c,
+        rev: cityNet,
         aov: c.orders ? c.rev / c.orders : 0,
         rtoPct: c.rev > 0 ? ((c.returnRev || 0) / c.rev * 100) : 0,
-        prevRev: prev.rev,
+        prevRev: prevCityNet,
         prevOrders: prev.orders,
-        mom: prev.rev > 0 ? ((c.rev - prev.rev) / prev.rev * 100) : null,
-        sharePct: totalRevAll > 0 ? (c.rev / totalRevAll * 100) : 0,
+        mom: prevCityNet > 0 ? ((cityNet - prevCityNet) / prevCityNet * 100) : null,
+        sharePct: totalNetAll > 0 ? (cityNet / totalNetAll * 100) : 0,
       }
     }).sort((a, b) => b.rev - a.rev)
-    let cum = 0
-    sorted.forEach(r => { cum += r.sharePct; r.cumPct = cum })
     return sorted
   })()
 
@@ -7507,7 +7509,7 @@ function ShopifyTab({ data, filters, setFilters }) {
           )
         })()}
       </div>
-      <div className="g-2" style={{ gridTemplateColumns: '1.7fr 1fr 0.65fr', alignItems: 'start' }}>
+      <div className="g-2" style={{ gridTemplateColumns: '1.7fr 1fr 0.65fr', alignItems: 'stretch' }}>
         {(() => {
           const returnTrendMap = {}
           ;(data.dailyReturnTrend || []).forEach(x => { returnTrendMap[x.date] = x })
@@ -7561,7 +7563,7 @@ function ShopifyTab({ data, filters, setFilters }) {
             { name: 'Return % (RTO+CIR)', color: '#E24B4A' }, { name: 'Exchange %', color: '#9B59B6' }, { name: 'Cancellation %', color: '#B91C1C' },
           ]
           return (
-            <Card title="Revenue & Returns Trend" style={{ alignSelf: 'start' }} action={
+            <Card title="Revenue & Returns Trend" style={{ height: isMob ? 'auto' : 420 }} action={
               <select value={shTrendGroup} onChange={e => setShTrendGroup(e.target.value)} style={{ fontSize: 11, fontWeight: 600, padding: '3px 8px', borderRadius: 6, border: `1px solid ${C.border2}`, background: C.card, color: C.t1, cursor: 'pointer', fontFamily: 'var(--font)', outline: 'none' }}>
                 {['daily','weekly','monthly','quarterly'].map(g => <option key={g} value={g}>{g.charAt(0).toUpperCase() + g.slice(1)}</option>)}
               </select>
@@ -7594,7 +7596,6 @@ function ShopifyTab({ data, filters, setFilters }) {
                       ))}
                     </div>
                   ) : null} />
-                  {!isMob && <Legend verticalAlign="bottom" align="center" layout="horizontal" wrapperStyle={{ fontSize: 11, paddingTop: 8 }} formatter={v => <span style={{ color: '#111' }}>{v}</span>} />}
                   <Area yAxisId="rev" type="monotone" dataKey="grossRev" name="Gross Revenue" stroke="#E0B800" fill="url(#shGrossGrad)" strokeWidth={2.5} dot={false} />
                   <Area yAxisId="rev" type="monotone" dataKey="netRev" name="Net Revenue" stroke="#0D9E68" fill="url(#shNetGrad)" strokeWidth={2} dot={false} />
                   <Line yAxisId="pct" type="monotone" dataKey="returnPct" name="Return % (RTO+CIR)" stroke="#E24B4A" strokeWidth={1.5} dot={false} />
@@ -7602,15 +7603,13 @@ function ShopifyTab({ data, filters, setFilters }) {
                 </ComposedChart>
               </ResponsiveContainer>
               </div>
-              {isMob && (
-                <div style={{ display:'flex', flexWrap:'wrap', justifyContent:'center', gap:'6px 12px', marginTop: 8 }}>
-                  {shLegendItems.map(it => (
-                    <span key={it.name} style={{ display:'flex', alignItems:'center', gap: 4, fontSize: 11, color: '#111' }}>
-                      <span style={{ width:8, height:8, borderRadius:'50%', background: it.color, display:'inline-block', flexShrink:0 }} />{it.name}
-                    </span>
-                  ))}
-                </div>
-              )}
+              <div style={{ display:'flex', flexWrap:'wrap', justifyContent:'center', gap:'6px 12px', marginTop: 8 }}>
+                {[{ name: 'Gross Revenue', color: '#E0B800' }, { name: 'Net Revenue', color: '#0D9E68' }, { name: 'Return %', color: '#E24B4A' }, { name: 'Exchange %', color: '#9B59B6' }].map(it => (
+                  <span key={it.name} style={{ display:'flex', alignItems:'center', gap: 4, fontSize: 11, color: '#111' }}>
+                    <span style={{ width:8, height:8, borderRadius:'50%', background: it.color, display:'inline-block', flexShrink:0 }} />{it.name}
+                  </span>
+                ))}
+              </div>
             </Card>
           )
         })()}
@@ -7623,14 +7622,11 @@ function ShopifyTab({ data, filters, setFilters }) {
               totalRev={totalRev}
               view={catRevView}
               setView={setCatRevView}
-              onSelectCategory={name => { const isSelected = (filters.category || []).includes(name); const next = isSelected ? [] : [name]; setSelectedCat(next[0] || null); setFilters(f => ({ ...f, category: next, subCategory: [] })) }}
-              onSelectSubCategory={name => { const isSelected = (filters.subCategory || []).includes(name); setFilters(f => ({ ...f, subCategory: isSelected ? [] : [name] })) }}
-              onSelectSku={name => { const isSelected = (filters.sku || []).includes(name); setFilters(f => ({ ...f, sku: isSelected ? [] : [name] })) }}
-              height={360}
+              height={420}
             />}
         {isIntl
           ? <Card title="Geography Breakdown"><div style={{ fontSize: 12, color: C.t3, padding: '10px 0', textAlign: 'center' }}>Geographic data not available for International orders</div></Card>
-          : <GeoToggleDonutCard regionRows={sh.regionRows || []} tierRows={sh.tierRows || []} boxHeight={360} />}
+          : <GeoToggleDonutCard regionRows={sh.regionRows || []} tierRows={sh.tierRows || []} boxHeight={420} />}
       </div>
       {/* Category Revenue Matrix · Shopify */}
       {isIntl
@@ -8027,8 +8023,8 @@ function EBOTab({ data, rangeStart, rangeEnd }) {
         </div>
       </div>
       {/* Revenue & Returns Trend + Category Revenue + Geography Breakdown side by side */}
-      <div className="g-2 g-3col" style={{ gridTemplateColumns: '1.5fr 1fr 0.65fr', alignItems: 'start' }}>
-        <div className="card" style={{ padding: '14px 18px', display: 'flex', flexDirection: 'column', height: isMob ? 'auto' : 360, alignSelf: 'start', boxSizing: 'border-box' }}>
+      <div className="g-2 g-3col" style={{ gridTemplateColumns: '1.5fr 1fr 0.65fr', alignItems: 'stretch' }}>
+        <div className="card" style={{ padding: '14px 18px', display: 'flex', flexDirection: 'column', height: isMob ? 'auto' : 420, boxSizing: 'border-box' }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10, flexShrink: 0 }}>
             <span style={{ fontSize: 13, fontWeight: 700, color: C.t1 }}>Revenue &amp; Returns Trend</span>
             <select value={trendGroup} onChange={e => setTrendGroup(e.target.value)} style={{ fontSize: 11, fontWeight: 600, padding: '3px 8px', borderRadius: 6, border: `1px solid ${C.border2}`, background: C.card, color: C.t1, cursor: 'pointer', fontFamily: 'var(--font)', outline: 'none' }}>
@@ -8063,7 +8059,6 @@ function EBOTab({ data, rangeStart, rangeEnd }) {
                   ))}
                 </div>
               ) : null} />
-              {!isMob && <Legend verticalAlign="bottom" align="center" layout="horizontal" wrapperStyle={{ fontSize: 11, paddingTop: 8 }} formatter={v => <span style={{ color: '#111' }}>{v}</span>} />}
               <Area yAxisId="rev" type="monotone" dataKey="grossRev" name="Gross Revenue" stroke="#E0B800" fill="url(#eboGrossGrad)" strokeWidth={2.5} dot={false} />
               <Area yAxisId="rev" type="monotone" dataKey="netRev" name="Net Revenue" stroke="#0D9E68" fill="url(#eboNetGrad)" strokeWidth={2} dot={false} />
               <Line yAxisId="pct" type="monotone" dataKey="returnPct" name="Return % (RTO+CIR)" stroke="#E24B4A" strokeWidth={1.5} dot={false} />
@@ -8072,15 +8067,13 @@ function EBOTab({ data, rangeStart, rangeEnd }) {
             </ComposedChart>
           </ResponsiveContainer>
           </div>
-          {isMob && (
-            <div style={{ display:'flex', flexWrap:'wrap', justifyContent:'center', gap:'6px 12px', marginTop: 8 }}>
-              {[{name:'Gross Revenue',color:'#E0B800'},{name:'Net Revenue',color:'#0D9E68'},{name:'Return % (RTO+CIR)',color:'#E24B4A'},{name:'Exchange %',color:'#9B59B6'},{name:'Cancellation %',color:'#B91C1C'}].map(it => (
-                <span key={it.name} style={{ display:'flex', alignItems:'center', gap: 4, fontSize: 11, color: '#111' }}>
-                  <span style={{ width:8, height:8, borderRadius:'50%', background: it.color, display:'inline-block', flexShrink:0 }} />{it.name}
-                </span>
-              ))}
-            </div>
-          )}
+          <div style={{ display:'flex', flexWrap:'wrap', justifyContent:'center', gap:'6px 12px', marginTop: 8 }}>
+            {[{name:'Gross Revenue',color:'#E0B800'},{name:'Net Revenue',color:'#0D9E68'},{name:'Return %',color:'#E24B4A'},{name:'Exchange %',color:'#9B59B6'}].map(it => (
+              <span key={it.name} style={{ display:'flex', alignItems:'center', gap: 4, fontSize: 11, color: '#111' }}>
+                <span style={{ width:8, height:8, borderRadius:'50%', background: it.color, display:'inline-block', flexShrink:0 }} />{it.name}
+              </span>
+            ))}
+          </div>
         </div>
         <CategoryRevenueCard
           catRows={catRows}
@@ -8089,11 +8082,9 @@ function EBOTab({ data, rangeStart, rangeEnd }) {
           totalRev={totalRev}
           view={catRevView}
           setView={setCatRevView}
-          selectedName={selectedCat}
-          onSelectCategory={name => setSelectedCat(prev => prev === name ? null : name)}
-          height={360}
+          height={420}
         />
-        <GeoToggleDonutCard regionRows={regionRows} tierRows={tierRows} boxHeight={360} />
+        <GeoToggleDonutCard regionRows={regionRows} tierRows={tierRows} boxHeight={420} />
       </div>
       <FlatCategoryProductMatrix catData={catDataForMatrix} subCatData={subCatDataForMatrix} skuData={skuDataForMatrix} title="Category Revenue Matrix · EBO" catPrevMap={ebo.catPrevMap || {}} subCatPrevMap={ebo.subCatPrevMap || {}} showReturnPct={true} detailedReturns />
       {/* Geo tables */}
