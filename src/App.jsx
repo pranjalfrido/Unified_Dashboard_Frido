@@ -15823,7 +15823,7 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
 
   const setPage = (p) => {
     if (p === 'inventory') goTo('inventory', allowedTabs?.includes('inventory') ? 'health' : 'sales')
-    else if (p === 'sales') goTo('sales', 'all', 'overall')
+    else if (p === 'sales') goTo('sales', defaultSalesTab, 'overall')
     else if (p === 'pnl') goTo('pnl', 'all')
     else if (p === 'ads') goTo('ads', null)
     else goTo(p, null)
