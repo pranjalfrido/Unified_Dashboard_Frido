@@ -15844,7 +15844,8 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
       setPage(def)
       return
     }
-    const isPageAllowed = page === 'logistics' ? (!allowedTabs || allowedTabs.includes('logistics')) :
+    const isPageAllowed = page === 'profile' ? true :
+      page === 'logistics' ? (!allowedTabs || allowedTabs.includes('logistics')) :
       page === 'logistics-cost' ? hasCostAccess(allowedTabs) :
       page === 'inventory' ? (!allowedTabs || allowedTabs.includes('inventory') || allowedTabs.includes('inventory:sales')) :
       page === 'sales' ? hasSalesAccess(allowedTabs) :
