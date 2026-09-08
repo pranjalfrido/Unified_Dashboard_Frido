@@ -6564,7 +6564,7 @@ function AllTab({ data, rangeStart, rangeEnd }) {
     { label: 'Units', value: fmtNShort(aspQtyAll), spark: mobUnitsSpark },
     { label: 'AOV', value: fmtShort(scopedAOV), spark: mobAovSpark },
     { label: 'ASP', value: fmtShort(scopedASP), spark: mobAspSpark },
-    { label: 'Daily Avg Rev', value: fmt(totalRev / nDays), spark: mobRevSpark },
+    { label: 'Daily Avg Net Rev', value: fmt(totalRev / nDays), spark: mobRevSpark },
     { label: 'GST', value: fmt(gstCollected), spark: mobGstSpark },
     { label: 'Returns %', value: `${returnPct.toFixed(1)}%`, spark: mobReturnSpark, accent: returnPct > 10 ? '#7A1A1A' : undefined },
     { label: 'Repeat Customer Rate', value: `${repeatRate}%`, spark: mobRepeatSpark },
@@ -6606,13 +6606,13 @@ function AllTab({ data, rangeStart, rangeEnd }) {
             { label: 'Net Revenue', value: fmt(netRevenueCalc), sub: `Ex GST, after returns · ${totalRev > 0 ? (netRevenueCalc / totalRev * 100).toFixed(1) : 0}% of gross`, badge: (() => { const excChg = prevExcRev > 0 ? ((netRevenueCalc - prevExcRev) / prevExcRev * 100) : null; if (excChg === null) return null; return <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 4, background: excChg >= 0 ? C.green.bg : C.red.bg, color: excChg >= 0 ? C.green.tx : C.red.tx, flexShrink: 0 }}>{excChg >= 0 ? '▲' : '▼'} {Math.abs(excChg).toFixed(1)}%</span> })() },
             { label: 'Revenue at Risk', value: fmt(atRiskRev), sub: `${totalRev > 0 ? (atRiskRev / totalRev * 100).toFixed(1) : 0}% of gross`, accent: atRiskRev > 0 ? '#7A4000' : undefined, badge: (() => { const prevAtRiskEst = prevOrders > 0 ? (prevRtoOrders + prevCirOrders) / prevOrders * prevRev : 0; if (!prevAtRiskEst) return null; const p = (atRiskRev - prevAtRiskEst) / prevAtRiskEst * 100; return <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 4, background: p > 0 ? C.red.bg : C.green.bg, color: p > 0 ? C.red.tx : C.green.tx, flexShrink: 0 }}>{p > 0 ? '▲' : '▼'} {Math.abs(p).toFixed(1)}%</span> })() },
             { label: 'AOV', value: `₹${Math.round(scopedAOV).toLocaleString('en-IN')}`, sub: 'Select channels only', subTitle: 'D2C, Amazon SC, Myntra, Flipkart, Firstcry, CRED only', badge: chgBadge(scopedAOV, prevScopedAOV) },
-            { label: 'Daily Avg Rev', value: fmt(totalRev / nDays), sub: `over ${nDays} days`, badge: chgBadge(totalRev / nDays, prevDailyAvg) },
+            { label: 'Daily Avg Net Rev', value: fmt(netRevenueCalc / nDays), sub: `over ${nDays} days`, badge: chgBadge(netRevenueCalc / nDays, prevDailyAvg) },
             { label: 'ASP', value: `₹${Math.round(scopedASP).toLocaleString('en-IN')}`, sub: 'Select channels only', subTitle: 'D2C, Amazon SC, Myntra, Flipkart, Firstcry, CRED only', badge: chgBadge(scopedASP, prevScopedASP) },
             { label: 'GST', value: fmt(gstCollected), sub: `${totalRev > 0 ? ((gstCollected / totalRev) * 100).toFixed(1) : 0}% of gross rev`, badge: chgBadge(gstCollected, prevGST) },
             { label: 'Repeat Customer Rate', value: `${repeatRate}%`, sub: `${fmtN(repeatCusts)} of ${fmtN(nCusts)} customers`, accent: undefined },
             { label: 'Returns %', value: `${returnPct.toFixed(1)}%`, sub: `${fmt(returnNumeratorRev)} returns · ${fmt(totalRev)} gross`, accent: returnPct > 10 ? '#7A1A1A' : undefined, badge: (() => { if (!prevRev) return null; const prevRtoCirRev = (data.prevRtoRev || 0) + (data.prevCirRev || 0); const prev = prevRev > 0 ? prevRtoCirRev / prevRev * 100 : 0; if (!prev) return null; const p = (returnPct - prev) / prev * 100; return <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 4, background: p >= 0 ? C.red.bg : C.green.bg, color: p >= 0 ? C.red.tx : C.green.tx, flexShrink: 0 }}>{p >= 0 ? '▲' : '▼'} {Math.abs(p).toFixed(1)}%</span> })() },
           ].map(k => (
-            <div key={k.label} className="kpi-card" style={{ padding: '10px 13px', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+            <div key={k.label} className="kpi-card" style={{ padding: '10px 13px', display: 'flex', flexDirection: 'column', justifyContent: 'flex-start' }}>
               <div className="kpi-label">{k.label}</div>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 4 }}>
                 <div className="kpi-value" style={{ fontSize: 17, ...(k.accent ? { color: k.accent } : {}) }}>{k.value}</div>
@@ -7400,7 +7400,7 @@ function ShopifyTab({ data, filters, setFilters }) {
     { label: 'Gross Revenue', value: shFmtShort(totalRev), spark: shDailySorted.map(d => d.rev || 0) },
     { label: 'Net Revenue', value: shFmtShort(netRev), spark: shDailySorted.map(d => (d.rev || 0) * (totalRev > 0 ? netRev / totalRev : 0)) },
     { label: 'GST', value: shFmtShort(gst), spark: shDailySorted.map(d => (d.rev || 0) * (totalRev > 0 ? gst / totalRev : 0)) },
-    { label: 'Daily Avg Rev', value: shFmtShort(dailyAvg), spark: shDailySorted.map(d => d.rev || 0) },
+    { label: 'Daily Avg Net Rev', value: shFmtShort(dailyAvg), spark: shDailySorted.map(d => d.rev || 0) },
     { label: 'Orders', value: shFmtNShort(shNOrders), spark: shDailySorted.map(d => d.orders || 0) },
     { label: 'Units', value: shFmtNShort(totalQty), spark: shDailySorted.map(d => d.units || 0) },
     { label: 'AOV', value: shFmtShort(aov), spark: shDailySorted.map(d => (d.orders || 0) > 0 ? (d.rev || 0) / d.orders : null) },
@@ -7473,7 +7473,7 @@ function ShopifyTab({ data, filters, setFilters }) {
               badge: excChg !== null ? <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 4, background: excChg >= 0 ? C.green.bg : C.red.bg, color: excChg >= 0 ? C.green.tx : C.red.tx, flexShrink: 0 }}>{excChg >= 0 ? '▲' : '▼'} {Math.abs(excChg).toFixed(1)}%</span> : null,
             },
             { label: 'GST', value: fmt(gst), sub: grossAfterReturns > 0 ? `${((gst / grossAfterReturns) * 100).toFixed(1)}% of net sales` : '—', badge: shChgBadge(gst, prevGst) },
-            { label: 'Daily Avg Rev', value: fmt(dailyAvg), sub: `over ${nDays} days`, badge: shChgBadge(dailyAvg, prevRev > 0 ? prevRev / nDays : 0) },
+            { label: 'Daily Avg Net Rev', value: fmt(netRev / nDays), sub: `over ${nDays} days`, badge: shChgBadge(netRev / nDays, prevRev > 0 ? prevRev / nDays : 0) },
             { label: 'AOV', value: `₹${Math.round(aov).toLocaleString('en-IN')}`, sub: 'Gross rev ÷ orders', badge: shChgBadge(aov, prevOrders > 0 ? prevRev / prevOrders : 0) },
             { label: 'ASP', value: `₹${Math.round(asp).toLocaleString('en-IN')}`, sub: 'Gross rev ÷ units sold', badge: shChgBadge(asp, prevUnits > 0 ? prevRev / prevUnits : 0) },
           ]
@@ -7485,16 +7485,16 @@ function ShopifyTab({ data, filters, setFilters }) {
           const prevReturnRevPct = prevRev > 0 ? ((prevRtoOrders + prevCirOrders) / prevOrders * 100) : 0
           const returnOrderPct = shNOrders ? ((rtoOrders + cirOrders) / shNOrders * 100) : 0
           const row2 = [
-            { label: 'Cancellation %', value: `${cancelPct.toFixed(1)}%`, sub: `${fmt(cancelledRev)} cancelled rev`, accent: cancelPct > 5 ? '#7A1A1A' : undefined, badge: shReturnBadge(cancelPct, prevCancelPct) },
-            { label: 'Returns %', value: `${returnRevPct.toFixed(1)}%`, sub: `${fmt(shRtoRev + shReturnRev + shCirRev + shCancelRevRaw)} Return+RTO+CIR+Cancel rev`, accent: returnRevPct > 5 ? '#7A1A1A' : undefined, badge: shReturnBadge(returnRevPct, prevReturnRevPct) },
-            { label: 'Exchange %', value: `${exchangePct.toFixed(1)}%`, sub: `${fmt(exchangeRev)} exchange rev`, badge: shReturnBadge(exchangePct, prevExchangePct) },
+            { label: 'Returns %', value: `${returnRevPct.toFixed(1)}%`, sub: `${fmt(shRtoRev + shReturnRev + shCirRev + shCancelRevRaw)} RTO+CIR+Cancel rev`, accent: returnRevPct > 5 ? '#7A1A1A' : undefined, badge: shReturnBadge(returnRevPct, prevReturnRevPct) },
             { label: 'RTO %', value: `${rtoPct.toFixed(1)}%`, sub: `${fmt(shRtoRev + shReturnRev)} RTO rev`, accent: rtoPct > 10 ? '#7A1A1A' : undefined, badge: shReturnBadge(rtoPct, prevOrders > 0 ? prevRtoOrders / prevOrders * 100 : 0) },
             { label: 'CIR %', value: `${cirPct.toFixed(1)}%`, sub: `${fmt(shCirRev)} CIR rev`, badge: shReturnBadge(cirPct, prevOrders > 0 ? prevCirOrders / prevOrders * 100 : 0) },
+            { label: 'Cancellation %', value: `${cancelPct.toFixed(1)}%`, sub: `${fmt(cancelledRev)} cancelled rev`, accent: cancelPct > 5 ? '#7A1A1A' : undefined, badge: shReturnBadge(cancelPct, prevCancelPct) },
+            { label: 'Exchange %', value: `${exchangePct.toFixed(1)}%`, sub: `${fmt(exchangeRev)} exchange rev`, badge: shReturnBadge(exchangePct, prevExchangePct) },
           ]
           return (
             <div className="sales-kpi-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gridTemplateRows: 'repeat(2, 1fr)', gap: 10, alignItems: 'stretch' }}>
               {[...row1, ...row2].map(k => (
-                <div key={k.label} className="kpi-card" style={{ padding: '10px 13px', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+                <div key={k.label} className="kpi-card" style={{ padding: '10px 13px', display: 'flex', flexDirection: 'column', justifyContent: 'flex-start' }}>
                   <div className="kpi-label">{k.label}</div>
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 4 }}>
                     <div className="kpi-value" style={{ fontSize: 17, ...(k.accent ? { color: k.accent } : {}) }}>{k.value}</div>
@@ -7519,7 +7519,7 @@ function ShopifyTab({ data, filters, setFilters }) {
           const rawDaily = (sh.daily || []).map(d => {
             const grossRev = d.rev || 0
             const rt = returnTrendMap[d.date] || {}
-            return { date: d.date, grossRev, netRev: grossRev > 0 ? grossRev * netShrinkFactor : 0, returnPct: (rt.rtoPct || 0) + (rt.cirPct || 0) + (rt.returnPct || 0) + (rt.cancelPct || 0), exchPct: rt.exchPct || 0, cancelPct: rt.cancelPct || 0 }
+            return { date: d.date, grossRev, netRev: grossRev > 0 ? grossRev * netShrinkFactor : 0, returnPct: (rt.rtoPct || 0) + (rt.cirPct || 0) + (rt.cancelPct || 0), exchPct: rt.exchPct || 0, cancelPct: rt.cancelPct || 0 }
           }).filter(d => d.grossRev > 0)
 
           const grouped = (() => {
@@ -7538,15 +7538,14 @@ function ShopifyTab({ data, filters, setFilters }) {
                 const q = Math.ceil(m / 3)
                 key = `${d.date.slice(0, 4)}-Q${q}`
               }
-              if (!buckets[key]) buckets[key] = { date: key, grossRev: 0, netRev: 0, returnPct: 0, exchPct: 0, cancelPct: 0, _n: 0 }
+              if (!buckets[key]) buckets[key] = { date: key, grossRev: 0, netRev: 0, _returnRev: 0, _exchRev: 0, _cancelRev: 0 }
               buckets[key].grossRev += d.grossRev
               buckets[key].netRev += d.netRev
-              buckets[key].returnPct += d.returnPct
-              buckets[key].exchPct += d.exchPct
-              buckets[key].cancelPct += d.cancelPct
-              buckets[key]._n += 1
+              buckets[key]._returnRev += d.grossRev * (d.returnPct / 100)
+              buckets[key]._exchRev += d.grossRev * (d.exchPct / 100)
+              buckets[key]._cancelRev += d.grossRev * (d.cancelPct / 100)
             })
-            return Object.values(buckets).map(b => ({ ...b, returnPct: b._n ? b.returnPct / b._n : 0, exchPct: b._n ? b.exchPct / b._n : 0, cancelPct: b._n ? b.cancelPct / b._n : 0 })).sort((a, b) => a.date.localeCompare(b.date))
+            return Object.values(buckets).map(b => ({ ...b, returnPct: b.grossRev > 0 ? b._returnRev / b.grossRev * 100 : 0, exchPct: b.grossRev > 0 ? b._exchRev / b.grossRev * 100 : 0, cancelPct: b.grossRev > 0 ? b._cancelRev / b.grossRev * 100 : 0 })).sort((a, b) => a.date.localeCompare(b.date))
           })()
 
           const xFmt = d => shTrendGroup === 'daily' ? d?.slice(5) : shTrendGroup === 'monthly' ? d?.slice(0, 7) : d
@@ -7587,10 +7586,10 @@ function ShopifyTab({ data, filters, setFilters }) {
                   <Tooltip content={({ active, payload, label }) => active && payload?.length ? (
                     <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 7, padding: '7px 11px', fontSize: 11 }}>
                       <div style={{ fontWeight: 700, marginBottom: 4, color: C.t1 }}>{tooltipFmt(label)}</div>
-                      {payload.map(p => (
+                      {payload.filter(p => p.dataKey !== 'cancelPct').map(p => (
                         <div key={p.name} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                           <span style={{ width: 7, height: 7, borderRadius: '50%', background: p.color, display: 'inline-block', flexShrink: 0 }} />
-                          <span style={{ color: C.t2 }}>{p.name}: {(p.yAxisId === 'pct' || p.name.endsWith('%') || ['returnPct','exchPct','cancelPct'].includes(p.dataKey)) ? `${Number(p.value).toFixed(1)}%` : fmt(p.value)}</span>
+                          <span style={{ color: C.t2 }}>{p.dataKey === 'returnPct' ? 'Return %' : p.name}: {(p.yAxisId === 'pct' || p.name.endsWith('%') || ['returnPct','exchPct','cancelPct'].includes(p.dataKey)) ? `${Number(p.value).toFixed(1)}%` : fmt(p.value)}</span>
                         </div>
                       ))}
                     </div>
@@ -7600,7 +7599,6 @@ function ShopifyTab({ data, filters, setFilters }) {
                   <Area yAxisId="rev" type="monotone" dataKey="netRev" name="Net Revenue" stroke="#0D9E68" fill="url(#shNetGrad)" strokeWidth={2} dot={false} />
                   <Line yAxisId="pct" type="monotone" dataKey="returnPct" name="Return % (RTO+CIR)" stroke="#E24B4A" strokeWidth={1.5} dot={false} />
                   <Line yAxisId="pct" type="monotone" dataKey="exchPct" name="Exchange %" stroke="#9B59B6" strokeWidth={1.5} dot={false} />
-                  <Line yAxisId="pct" type="monotone" dataKey="cancelPct" name="Cancellation %" stroke="#B91C1C" strokeWidth={1.5} dot={false} />
                 </ComposedChart>
               </ResponsiveContainer>
               </div>
@@ -7915,7 +7913,7 @@ function EBOTab({ data, rangeStart, rangeEnd }) {
     const cirPct = rt.cirPct || 0
     const exchPct = rt.exchPct || 0
     const cancelPct = rt.cancelPct || 0
-    return { date: d.date, grossRev: grossR, netRev: grossR > 0 ? grossR * netShrinkFactor : 0, returnPct: rtoPct + cirPct + cancelPct, exchPct, cancelPct }
+    return { date: d.date, grossRev: grossR, netRev: grossR > 0 ? grossR * netShrinkFactor : 0, returnPct: (rt.rtoPct || 0) + (rt.cirPct || 0) + (rt.cancelPct || 0), exchPct, cancelPct }
   }).filter(d => d.grossRev > 0)
 
   const groupedDaily = (() => {
@@ -7925,11 +7923,11 @@ function EBOTab({ data, rangeStart, rangeEnd }) {
       const dt = new Date(d.date); let key
       if (trendGroup === 'weekly') { const day = dt.getDay(), diff = dt.getDate() - day + (day === 0 ? -6 : 1); key = new Date(dt.setDate(diff)).toISOString().slice(0, 10) }
       else { key = d.date.slice(0, 7) }
-      if (!buckets[key]) buckets[key] = { date: key, grossRev: 0, netRev: 0, returnPct: 0, exchPct: 0, cancelPct: 0, _n: 0 }
+      if (!buckets[key]) buckets[key] = { date: key, grossRev: 0, netRev: 0, _returnRev: 0, _exchRev: 0, _cancelRev: 0 }
       buckets[key].grossRev += d.grossRev; buckets[key].netRev += d.netRev
-      buckets[key].returnPct += d.returnPct; buckets[key].exchPct += d.exchPct; buckets[key].cancelPct += d.cancelPct; buckets[key]._n++
+      buckets[key]._returnRev += d.grossRev * (d.returnPct / 100); buckets[key]._exchRev += d.grossRev * (d.exchPct / 100); buckets[key]._cancelRev += d.grossRev * (d.cancelPct / 100)
     })
-    return Object.values(buckets).map(b => ({ ...b, returnPct: b._n ? b.returnPct / b._n : 0, exchPct: b._n ? b.exchPct / b._n : 0, cancelPct: b._n ? b.cancelPct / b._n : 0 })).sort((a, b) => a.date.localeCompare(b.date))
+    return Object.values(buckets).map(b => ({ ...b, returnPct: b.grossRev > 0 ? b._returnRev / b.grossRev * 100 : 0, exchPct: b.grossRev > 0 ? b._exchRev / b.grossRev * 100 : 0, cancelPct: b.grossRev > 0 ? b._cancelRev / b.grossRev * 100 : 0 })).sort((a, b) => a.date.localeCompare(b.date))
   })()
 
   const pick = v => ({ rev: v.rev || 0, excRev: v.excRev || 0, units: v.aspUnits || v.units || 0, orders: v.orders, cancelled: v.cancelled || 0, rto: v.rto || 0, cir: v.cir || 0, exch: v.exch || 0, cancelRev: v.cancelRev || 0, rtoRev: v.rtoRev || 0, cirRev: v.cirRev || 0, exchRev: v.exchRev || 0 })
@@ -7964,7 +7962,7 @@ function EBOTab({ data, rangeStart, rangeEnd }) {
     { label: 'Gross Revenue', value: eboFmtS(totalRev), spark: eboDailySorted.map(d => d.rev || 0) },
     { label: 'Net Revenue', value: eboFmtS(netRev), spark: eboDailySorted.map(d => (d.rev || 0) * (totalRev > 0 ? netRev / totalRev : 0)) },
     { label: 'GST', value: eboFmtS(gstCollected), spark: eboDailySorted.map(d => (d.rev || 0) * (totalRev > 0 ? gstCollected / totalRev : 0)) },
-    { label: 'Daily Avg Rev', value: eboFmtS(dailyAvg), spark: eboDailySorted.map(d => d.rev || 0) },
+    { label: 'Daily Avg Net Rev', value: eboFmtS(dailyAvg), spark: eboDailySorted.map(d => d.rev || 0) },
     { label: 'Orders', value: eboFmtN(nOrders), spark: eboDailySorted.map(d => d.orders || 0) },
     { label: 'Units', value: eboFmtN(totalQty), spark: eboDailySorted.map(d => d.units || 0) },
     { label: 'AOV', value: eboFmtS(aov), spark: eboDailySorted.map(d => (d.orders || 0) > 0 ? (d.rev || 0) / d.orders : null) },
@@ -8008,16 +8006,16 @@ function EBOTab({ data, rangeStart, rangeEnd }) {
           {[
             { label: 'Net Revenue', value: fmt(netRev), sub: 'Gross − Cancel − RTO − Return − CIR − GST', badge: chgBadge(netRev, prevNetRev) },
             { label: 'GST', value: fmt(gstCollected), sub: grossAfterReturns > 0 ? `${((gstCollected / grossAfterReturns) * 100).toFixed(1)}% of net sales` : '—', badge: null },
-            { label: 'Daily Avg Rev', value: fmt(dailyAvg), sub: `over ${nDays} days`, badge: chgBadge(dailyAvg, prevRev > 0 ? prevRev / nDays : 0) },
+            { label: 'Daily Avg Net Rev', value: fmt(netRev / nDays), sub: `over ${nDays} days`, badge: chgBadge(netRev / nDays, prevRev > 0 ? prevRev / nDays : 0) },
             { label: 'AOV', value: `₹${Math.round(aov).toLocaleString('en-IN')}`, sub: 'Gross rev ÷ orders', badge: chgBadge(aov, prevOrders > 0 ? prevRev / prevOrders : 0) },
             { label: 'ASP', value: `₹${Math.round(asp).toLocaleString('en-IN')}`, sub: 'Gross rev ÷ units', badge: chgBadge(asp, prevUnits > 0 ? prevRev / prevUnits : 0) },
-            { label: 'Cancellation %', value: `${cancelPct.toFixed(1)}%`, sub: `${fmt(cancelRev)} cancelled rev`, accent: cancelPct > 5 ? '#7A1A1A' : undefined, badge: retBadge(cancelPct, prevCancelPct) },
-            { label: 'Returns %', value: `${returnRevPct.toFixed(1)}%`, sub: `${fmt(rtoRev + returnRev + cirRev + cancelRev)} Return+RTO+CIR+Cancel rev`, accent: returnRevPct > 5 ? '#7A1A1A' : undefined, badge: retBadge(returnRevPct, prevReturnRevPct) },
-            { label: 'Exchange %', value: `${exchangePct.toFixed(1)}%`, sub: `${fmt(exchangeRev)} exchange rev`, badge: retBadge(exchangePct, prevOrders > 0 ? prevExchangeOrders / prevOrders * 100 : 0) },
+            { label: 'Returns %', value: `${returnRevPct.toFixed(1)}%`, sub: `${fmt(rtoRev + returnRev + cirRev + cancelRev)} RTO+CIR+Cancel rev`, accent: returnRevPct > 5 ? '#7A1A1A' : undefined, badge: retBadge(returnRevPct, prevReturnRevPct) },
             { label: 'RTO %', value: `${rtoPct.toFixed(1)}%`, sub: `${fmt(rtoRev + returnRev)} RTO rev`, accent: rtoPct > 10 ? '#7A1A1A' : undefined, badge: retBadge(rtoPct, prevOrders > 0 ? prevRtoOrders / prevOrders * 100 : 0) },
             { label: 'CIR %', value: `${cirPct.toFixed(1)}%`, sub: `${fmt(cirRev)} CIR rev`, badge: retBadge(cirPct, prevOrders > 0 ? prevCirOrders / prevOrders * 100 : 0) },
+            { label: 'Cancellation %', value: `${cancelPct.toFixed(1)}%`, sub: `${fmt(cancelRev)} cancelled rev`, accent: cancelPct > 5 ? '#7A1A1A' : undefined, badge: retBadge(cancelPct, prevCancelPct) },
+            { label: 'Exchange %', value: `${exchangePct.toFixed(1)}%`, sub: `${fmt(exchangeRev)} exchange rev`, badge: retBadge(exchangePct, prevOrders > 0 ? prevExchangeOrders / prevOrders * 100 : 0) },
           ].map(k => (
-            <div key={k.label} className="kpi-card" style={{ padding: '10px 13px', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+            <div key={k.label} className="kpi-card" style={{ padding: '10px 13px', display: 'flex', flexDirection: 'column', justifyContent: 'flex-start' }}>
               <div className="kpi-label">{k.label}</div>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 4 }}>
                 <div className="kpi-value" style={{ fontSize: 17, ...(k.accent ? { color: k.accent } : {}) }}>{k.value}</div>
@@ -8057,10 +8055,10 @@ function EBOTab({ data, rangeStart, rangeEnd }) {
               <Tooltip content={({ active, payload, label }) => active && payload?.length ? (
                 <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 7, padding: '7px 11px', fontSize: 11 }}>
                   <div style={{ fontWeight: 700, marginBottom: 4, color: C.t2 }}>{label?.slice(5)}</div>
-                  {payload.map(p => (
+                  {payload.filter(p => p.dataKey !== 'cancelPct').map(p => (
                     <div key={p.name} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                       <span style={{ width: 7, height: 7, borderRadius: '50%', background: p.color, display: 'inline-block', flexShrink: 0 }} />
-                      <span style={{ color: C.t2 }}>{p.name}: {(p.yAxisId === 'pct' || ['returnPct','exchPct','cancelPct'].includes(p.dataKey)) ? `${Number(p.value).toFixed(1)}%` : fmt(p.value)}</span>
+                      <span style={{ color: C.t2 }}>{p.dataKey === 'returnPct' ? 'Return %' : p.name}: {(p.yAxisId === 'pct' || ['returnPct','exchPct','cancelPct'].includes(p.dataKey)) ? `${Number(p.value).toFixed(1)}%` : fmt(p.value)}</span>
                     </div>
                   ))}
                 </div>
@@ -8285,7 +8283,7 @@ function AmazonTab({ data, channelView, setChannelView }) {
     { label: 'Gross Revenue', value: amzFmtS(amzMobGrossRev), spark: scDailyArr.map(d => (d.FBA || 0) + (d.MFN || 0)) },
     { label: 'Net Revenue', value: amzFmtS(amzMobNetRev), spark: scDailyArr.map(d => ((d.FBA || 0) + (d.MFN || 0)) * (amzMobGrossRev > 0 ? amzMobNetRev / amzMobGrossRev : 0)) },
     { label: 'GST', value: amzFmtS(amzMobGST), spark: scDailyArr.map(d => ((d.FBA || 0) + (d.MFN || 0)) * (amzMobGrossRev > 0 ? amzMobGST / amzMobGrossRev : 0)) },
-    { label: 'Daily Avg Rev', value: amzFmtS(amzMobGrossRev / (data.nDays || 1)), spark: scDailyArr.map(d => (d.FBA || 0) + (d.MFN || 0)) },
+    { label: 'Daily Avg Net Rev', value: amzFmtS(amzMobGrossRev / (data.nDays || 1)), spark: scDailyArr.map(d => (d.FBA || 0) + (d.MFN || 0)) },
     { label: 'Orders (SC)', value: amzFmtN(amzMobOrders), spark: scDailyArr.map(d => (d.FBA_orders || 0) + (d.MFN_orders || 0)) },
     { label: 'Units', value: amzFmtN(amzMobUnits), spark: scDailyArr.map(d => (d.FBA_units || 0) + (d.MFN_units || 0)) },
     { label: 'AOV', value: amzFmtS(amzMobAOV), spark: scDailyArr.map(d => { const o = (d.FBA_orders||0)+(d.MFN_orders||0); const r = (d.FBA||0)+(d.MFN||0); return o > 0 ? r / o : null }) },
@@ -8340,7 +8338,7 @@ function AmazonTab({ data, channelView, setChannelView }) {
                     ...(channelView === 'all' ? [{ label: 'Gross Rev · Vendor Central', value: fmt(chVcCatRev), sub: (chScCatRev + chVcCatRev) > 0 ? `${(chVcCatRev / (chScCatRev + chVcCatRev) * 100).toFixed(1)}% of total` : undefined, badge: selectedCat ? null : amzChgBadge(chVcTotalOrdered, chAmzPrevVCRev) }] : []),
                     { label: 'Net Revenue', value: fmt(chScCatExcRev + chVcNetRevenue), sub: 'Ex GST, after returns/cancellation', subTitle: channelView === 'all' ? 'SC (Gross−Cancel−Returns−GST) + VC (Gross−Returns−GST)' : channelView === 'sc' ? 'Gross−Cancel−Returns−GST' : 'Gross−Returns−GST', badge: selectedCat || channelView !== 'all' ? null : amzChgBadge(scTotalExcRev + vcNetRevenue, (amzSC.prevExcRev || 0) + (amzVC.prevExcRev || 0)) },
                     { label: 'GST', value: fmt((chScCatRev - chScTotalExcRevRaw) + (chVcCatRev - chVcCatExcRev)), sub: channelView === 'all' ? 'SC + VC GST' : channelView === 'sc' ? 'SC GST' : 'VC GST', badge: selectedCat || channelView !== 'all' ? null : amzChgBadge((scTotalRev - scTotalExcRevRaw) + (vcTotalOrdered - vcTotalOrderedExcRev), ((amzSC.prevRev || 0) - (amzSC.prevExcRev || 0)) + ((amzVC.prevRev || 0) - (amzVC.prevExcRev || 0))) },
-                    { label: 'Daily Avg Rev', value: fmt((chScCatRev + chVcCatRev) / (data.nDays || 1)), sub: channelView === 'all' ? 'SC + VC per day' : 'Per day', badge: selectedCat || channelView !== 'all' ? null : amzChgBadge((scTotalRev + vcTotalOrdered) / (data.nDays || 1), amzPrevDailyAvg) },
+                    { label: 'Daily Avg Net Rev', value: fmt((chScCatRev + chVcCatRev) / (data.nDays || 1)), sub: channelView === 'all' ? 'SC + VC per day' : 'Per day', badge: selectedCat || channelView !== 'all' ? null : amzChgBadge((scTotalRev + vcTotalOrdered) / (data.nDays || 1), amzPrevDailyAvg) },
                     { label: 'ASP', value: `₹${(chScCatUnits + chVcCatUnits) ? Math.round((chScCatRev + chVcCatRev) / (chScCatUnits + chVcCatUnits)).toLocaleString('en-IN') : 0}`, sub: channelView === 'all' ? 'Gross rev ÷ units (SC+VC)' : 'Gross rev ÷ units', badge: selectedCat || channelView !== 'all' ? null : amzChgBadge((scTotalUnits + vcTotalOrderedUnits) ? (scTotalRev + vcTotalOrdered) / (scTotalUnits + vcTotalOrderedUnits) : 0, amzPrevASP) },
                     ...(channelView !== 'vc' ? [{ label: 'AOV', value: `₹${chScCatOrders ? Math.round(chScCatRev / chScCatOrders).toLocaleString('en-IN') : 0}`, sub: 'SC gross rev ÷ orders (VC has no order count)', badge: selectedCat ? null : amzChgBadge(scAOV, amzPrevAOV) }] : []),
                     ...(channelView === 'sc' ? [{ label: 'Cancellation Rate', value: `${scCancelRate.toFixed(1)}%`, sub: `${fmtN(scCancelOrders)} cancelled (SC)`, accent: scCancelRate > 10 ? '#7A1A1A' : undefined, badge: amzPrevCancelRate ? (() => { const p = (scCancelRate - amzPrevCancelRate) / amzPrevCancelRate * 100; return <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 4, background: p > 0 ? C.red.bg : C.green.bg, color: p > 0 ? C.red.tx : C.green.tx, flexShrink: 0 }}>{p > 0 ? '▲' : '▼'} {Math.abs(p).toFixed(1)}%</span> })() : null }] : []),
@@ -8348,7 +8346,7 @@ function AmazonTab({ data, channelView, setChannelView }) {
                     ...(channelView === 'sc' ? [{ label: 'Returns % (SC)', value: returnRateReliable ? `${(amzSC.returnRate?.pct || 0).toFixed(1)}%` : 'N/A', sub: returnRateReliable ? `${fmt(amzSC.returnRate?.rollReturned || 0)} returned of ${fmt(amzSC.returnRate?.rollOrders || 0)} SC rev` : 'No reliable data', accent: returnRateReliable && (amzSC.returnRate?.pct || 0) > 18 ? '#7A1A1A' : undefined }] : []),
                     ...(channelView === 'vc' ? [{ label: 'Returns % (VC)', value: `${vcReturnRate.toFixed(1)}%`, sub: `${fmt(vcTotalReturnRev)} returned of ${fmt(vcTotalOrdered)} gross rev` }] : []),
                   ].map(k => (
-                    <div key={k.label} className="kpi-card" style={{ padding: '10px 13px', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+                    <div key={k.label} className="kpi-card" style={{ padding: '10px 13px', display: 'flex', flexDirection: 'column', justifyContent: 'flex-start' }}>
                       <div className="kpi-label">{k.label}</div>
                       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 4 }}>
                         <div className="kpi-value" style={{ fontSize: 17, ...(k.accent ? { color: k.accent } : {}) }}>{k.value}</div>
@@ -8709,7 +8707,7 @@ function FlipkartTab({ data }) {
     { label: 'Gross Revenue', value: fkFmtS(rev), spark: dailyArr.map(d => d.rev || 0) },
     { label: 'Net Revenue', value: fkFmtS(fkNetRev), spark: dailyArr.map(d => (d.rev || 0) * (rev > 0 ? fkNetRev / rev : 0)) },
     { label: 'GST', value: fkFmtS(rev - excRev), spark: dailyArr.map(d => (d.rev || 0) * (rev > 0 ? (rev - excRev) / rev : 0)) },
-    { label: 'Daily Avg Rev', value: fkFmtS(rev / nDays), spark: dailyArr.map(d => d.rev || 0) },
+    { label: 'Daily Avg Net Rev', value: fkFmtS(rev / nDays), spark: dailyArr.map(d => d.rev || 0) },
     { label: 'Orders', value: fkFmtN(nOrders), spark: dailyArr.map(d => d.orders || 0) },
     { label: 'Units', value: fkFmtN(qty), spark: dailyArr.map(d => d.units || 0) },
     { label: 'AOV', value: fkFmtS(aov), spark: dailyArr.map(d => (d.orders || 0) > 0 ? (d.rev || 0) / d.orders : null) },
@@ -8749,7 +8747,7 @@ function FlipkartTab({ data }) {
         <div className="sales-kpi-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gridTemplateRows: 'repeat(2, 1fr)', gap: 10, alignItems: 'stretch' }}>
           {[
             { label: 'Net Revenue Ex Gst', value: fmt(fkNetRev), badge: selectedCat ? null : fkChgBadge(fkNetRev, fkPrevExcRev) },
-            { label: 'Daily Avg Rev', value: fmt(rev / nDays), sub: `over ${nDays} days`, badge: selectedCat ? null : fkChgBadge(rev / nDays, fkPrevRev > 0 ? fkPrevRev / nDays : 0) },
+            { label: 'Daily Avg Net Rev', value: fmt(fkNetRev / nDays), sub: `over ${nDays} days`, badge: selectedCat ? null : fkChgBadge(fkNetRev / nDays, fkPrevRev > 0 ? fkPrevRev / nDays : 0) },
             { label: 'AOV', value: `₹${Math.round(aov).toLocaleString('en-IN')}`, sub: 'Gross rev ÷ orders', badge: selectedCat ? null : fkChgBadge(aov, fkPrevOrders > 0 ? fkPrevRev / fkPrevOrders : 0) },
             { label: 'ASP', value: `₹${Math.round(asp).toLocaleString('en-IN')}`, sub: 'Gross rev ÷ units', badge: selectedCat ? null : fkChgBadge(asp, fkPrevUnits > 0 ? fkPrevRev / fkPrevUnits : 0) },
             { label: 'Delivered %', value: `${fkDeliveredPct.pct.toFixed(1)}%`, sub: `${fmtN(fkDeliveredPct.deliveredOrders)} del · ${fmtN(fkDeliveredPct.nonCancelledOrders)} non-cancel`, accent: fkDeliveredPct.pct < 50 ? '#7A1A1A' : undefined },
@@ -8757,7 +8755,7 @@ function FlipkartTab({ data }) {
             { label: 'Cancellation %', value: `${nOrders > 0 ? (cancelOrders / nOrders * 100).toFixed(1) : 0}%`, sub: `${fmtN(cancelOrders)} cancelled · ${fmt(cancelRev)} rev`, accent: nOrders > 0 && cancelOrders / nOrders > 0.1 ? '#7A1A1A' : undefined, badge: fkPrevCancelPct > 0 ? (() => { const cur = nOrders > 0 ? cancelOrders / nOrders * 100 : 0; const p = (cur - fkPrevCancelPct) / fkPrevCancelPct * 100; return <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 4, background: p > 0 ? C.red.bg : C.green.bg, color: p > 0 ? C.red.tx : C.green.tx, flexShrink: 0 }}>{p > 0 ? '▲' : '▼'} {Math.abs(p).toFixed(1)}%</span> })() : null },
             { label: 'Returns %', value: `${fkReturnCur.pct.toFixed(1)}%`, sub: `${fmt(fkReturnCur.returnRev)} ret · ${fmt(fkReturnCur.deliveredRev)} gross`, accent: fkReturnCur.pct > 20 ? '#7A1A1A' : undefined, badge: fkPrevReturnPct > 0 ? (() => { const p = (fkReturnCur.pct - fkPrevReturnPct) / fkPrevReturnPct * 100; return <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 4, background: p > 0 ? C.red.bg : C.green.bg, color: p > 0 ? C.red.tx : C.green.tx, flexShrink: 0 }}>{p > 0 ? '▲' : '▼'} {Math.abs(p).toFixed(1)}%</span> })() : null },
           ].map(k => (
-            <div key={k.label} className="kpi-card" style={{ padding: '10px 13px', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+            <div key={k.label} className="kpi-card" style={{ padding: '10px 13px', display: 'flex', flexDirection: 'column', justifyContent: 'flex-start' }}>
               <div className="kpi-label">{k.label}</div>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 4 }}>
                 <div className="kpi-value" style={{ fontSize: 17, ...(k.accent ? { color: k.accent } : {}) }}>{k.value}</div>
@@ -10639,7 +10637,7 @@ function BlinkitTab({ data }) {
     { label: 'Gross Revenue', value: blFmtS(rev), spark: daily.map(d => d.rev || 0) },
     { label: 'Net Revenue', value: blFmtS(excRev), spark: daily.map(d => d.excRev || (d.rev || 0) * (rev > 0 ? excRev / rev : 0)) },
     { label: 'GST', value: blFmtS(gst), spark: daily.map(d => (d.rev || 0) * (rev > 0 ? gst / rev : 0)) },
-    { label: 'Daily Avg Rev', value: blFmtS(dailyAvg), spark: daily.map(d => d.rev || 0) },
+    { label: 'Daily Avg Net Rev', value: blFmtS(dailyAvg), spark: daily.map(d => d.rev || 0) },
     { label: 'Orders', value: blFmtN(orders), spark: daily.map(d => (d.orders || 0) > 0 ? d.orders : (d.rev || 0) * (rev > 0 ? orders / rev : 0)) },
     { label: 'Units', value: blFmtN(units), spark: daily.map(d => d.units || 0) },
     { label: 'AOV', value: blFmtS(aov), spark: daily.map(d => (d.rev || 0) * (rev > 0 ? aov / rev : 0)) },
@@ -10683,12 +10681,12 @@ function BlinkitTab({ data }) {
           {[
             { label: 'Net Revenue', value: fmt(excRev), sub: 'Ex GST', badge: blChgBadge(excRev, blPrevExcRev) },
             { label: 'GST', value: fmt(gst), sub: `${rev > 0 ? ((gst/rev)*100).toFixed(1) : 0}% of gross rev`, badge: blChgBadge(gst, blPrevRev - blPrevExcRev) },
-            { label: 'Daily Avg Rev', value: fmt(dailyAvg), sub: `over ${nDays} days`, badge: blChgBadge(dailyAvg, blPrevRev > 0 ? blPrevRev / nDays : 0) },
+            { label: 'Daily Avg Net Rev', value: fmt(excRev / nDays), sub: `over ${nDays} days`, badge: blChgBadge(excRev / nDays, blPrevRev > 0 ? blPrevRev / nDays : 0) },
             { label: 'Orders', value: fmtN(orders), sub: `${fmtN(cities)} cities`, badge: blChgBadge(orders, blPrevOrders) },
             { label: 'AOV', value: `₹${Math.round(aov).toLocaleString('en-IN')}`, sub: 'Gross rev ÷ orders', badge: blChgBadge(aov, blPrevOrders > 0 ? blPrevRev / blPrevOrders : 0) },
             { label: 'ASP', value: `₹${Math.round(asp).toLocaleString('en-IN')}`, sub: 'Gross rev ÷ units', badge: blChgBadge(asp, blPrevUnits > 0 ? blPrevRev / blPrevUnits : 0) },
           ].map(k => (
-            <div key={k.label} className="kpi-card" style={{ padding: '10px 13px', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+            <div key={k.label} className="kpi-card" style={{ padding: '10px 13px', display: 'flex', flexDirection: 'column', justifyContent: 'flex-start' }}>
               <div className="kpi-label">{k.label}</div>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 4 }}>
                 <div className="kpi-value" style={{ fontSize: 17 }}>{k.value}</div>
@@ -10812,7 +10810,7 @@ function InstaTab({ data }) {
     { label: 'Gross Revenue', value: insFmtS(rev), spark: daily.map(d => d.rev || 0) },
     { label: 'Net Revenue', value: insFmtS(excRev), spark: daily.map(d => d.excRev || (d.rev || 0) * (rev > 0 ? excRev / rev : 0)) },
     { label: 'GST', value: insFmtS(gst), spark: daily.map(d => (d.rev || 0) * (rev > 0 ? gst / rev : 0)) },
-    { label: 'Daily Avg Rev', value: insFmtS(dailyAvg), spark: daily.map(d => d.rev || 0) },
+    { label: 'Daily Avg Net Rev', value: insFmtS(dailyAvg), spark: daily.map(d => d.rev || 0) },
     { label: 'Orders', value: insFmtN(orders), spark: daily.map(d => (d.orders || 0) > 0 ? d.orders : (d.rev || 0) * (rev > 0 ? orders / rev : 0)) },
     { label: 'Units', value: insFmtN(units), spark: daily.map(d => d.units || 0) },
     { label: 'AOV', value: insFmtS(aov), spark: daily.map(d => (d.rev || 0) * (rev > 0 ? aov / rev : 0)) },
@@ -10854,12 +10852,12 @@ function InstaTab({ data }) {
           {[
             { label: 'Net Revenue', value: fmt(excRev), sub: 'Ex GST', badge: insChgBadge(excRev, insPrevExcRev) },
             { label: 'GST', value: fmt(gst), sub: `${rev > 0 ? ((gst/rev)*100).toFixed(1) : 0}% of gross rev`, badge: insChgBadge(gst, insPrevRev - insPrevExcRev) },
-            { label: 'Daily Avg Rev', value: fmt(dailyAvg), sub: `Inc GST / day`, badge: insChgBadge(dailyAvg, insPrevRev > 0 ? insPrevRev / nDays : 0) },
+            { label: 'Daily Avg Net Rev', value: fmt(excRev / nDays), sub: `over ${nDays} days`, badge: insChgBadge(excRev / nDays, insPrevRev > 0 ? insPrevRev / nDays : 0) },
             { label: 'Orders', value: fmtN(orders), sub: `${fmtN(cities)} cities`, badge: insChgBadge(orders, insPrevOrders) },
             { label: 'AOV', value: `₹${Math.round(aov).toLocaleString('en-IN')}`, sub: 'Gross rev ÷ orders', badge: insChgBadge(aov, insPrevOrders > 0 ? insPrevRev / insPrevOrders : 0) },
             { label: 'ASP', value: `₹${Math.round(asp).toLocaleString('en-IN')}`, sub: 'Gross rev ÷ units', badge: insChgBadge(asp, insPrevUnits > 0 ? insPrevRev / insPrevUnits : 0) },
           ].map(k => (
-            <div key={k.label} className="kpi-card" style={{ padding: '10px 13px', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+            <div key={k.label} className="kpi-card" style={{ padding: '10px 13px', display: 'flex', flexDirection: 'column', justifyContent: 'flex-start' }}>
               <div className="kpi-label">{k.label}</div>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 4 }}>
                 <div className="kpi-value" style={{ fontSize: 17 }}>{k.value}</div>
@@ -10981,7 +10979,7 @@ function ZeptoTab({ data }) {
     { label: 'Gross Revenue', value: zpFmtS(rev), spark: daily.map(d => d.rev || 0) },
     { label: 'Net Revenue', value: zpFmtS(excRev), spark: daily.map(d => d.excRev || (d.rev || 0) * (rev > 0 ? excRev / rev : 0)) },
     { label: 'GST', value: zpFmtS(gst), spark: daily.map(d => (d.rev || 0) * (rev > 0 ? gst / rev : 0)) },
-    { label: 'Daily Avg Rev', value: zpFmtS(dailyAvg), spark: daily.map(d => d.rev || 0) },
+    { label: 'Daily Avg Net Rev', value: zpFmtS(dailyAvg), spark: daily.map(d => d.rev || 0) },
     { label: 'Orders', value: zpFmtN(orders), spark: daily.map(d => (d.orders || 0) > 0 ? d.orders : (d.rev || 0) * (rev > 0 ? orders / rev : 0)) },
     { label: 'Units', value: zpFmtN(units), spark: daily.map(d => d.units || 0) },
     { label: 'AOV', value: zpFmtS(aov), spark: daily.map(d => (d.rev || 0) * (rev > 0 ? aov / rev : 0)) },
@@ -11023,12 +11021,12 @@ function ZeptoTab({ data }) {
           {[
             { label: 'Net Revenue', value: fmt(excRev), sub: 'Ex GST', badge: zpChgBadge(excRev, zpPrevExcRev) },
             { label: 'GST', value: fmt(gst), sub: `${rev > 0 ? ((gst/rev)*100).toFixed(1) : 0}% of gross rev`, badge: zpChgBadge(gst, zpPrevRev - zpPrevExcRev) },
-            { label: 'Daily Avg Rev', value: fmt(dailyAvg), sub: 'Inc GST / day', badge: zpChgBadge(dailyAvg, zpPrevRev > 0 ? zpPrevRev / nDays : 0) },
+            { label: 'Daily Avg Net Rev', value: fmt(excRev / nDays), sub: `over ${nDays} days`, badge: zpChgBadge(excRev / nDays, zpPrevRev > 0 ? zpPrevRev / nDays : 0) },
             { label: 'Orders', value: fmtN(orders), sub: `${fmtN(cities)} cities`, badge: zpChgBadge(orders, zpPrevOrders) },
             { label: 'AOV', value: `₹${Math.round(aov).toLocaleString('en-IN')}`, sub: 'Gross rev ÷ orders', badge: zpChgBadge(aov, zpPrevOrders > 0 ? zpPrevRev / zpPrevOrders : 0) },
             { label: 'ASP', value: `₹${Math.round(asp).toLocaleString('en-IN')}`, sub: 'Gross rev ÷ units', badge: zpChgBadge(asp, zpPrevUnits > 0 ? zpPrevRev / zpPrevUnits : 0) },
           ].map(k => (
-            <div key={k.label} className="kpi-card" style={{ padding: '10px 13px', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+            <div key={k.label} className="kpi-card" style={{ padding: '10px 13px', display: 'flex', flexDirection: 'column', justifyContent: 'flex-start' }}>
               <div className="kpi-label">{k.label}</div>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 4 }}>
                 <div className="kpi-value" style={{ fontSize: 17 }}>{k.value}</div>
@@ -11179,7 +11177,7 @@ function CredTab({ data }) {
     { label: 'Gross Revenue', value: crFmtS(rev), spark: daily.map(d => d.rev || 0) },
     { label: 'Net Revenue', value: crFmtS(netRev), spark: daily.map(d => (d.rev || 0) * (rev > 0 ? netRev / rev : 0)) },
     { label: 'GST', value: crFmtS(gstCollected), spark: daily.map(d => (d.rev || 0) * (rev > 0 ? gstCollected / rev : 0)) },
-    { label: 'Daily Avg Rev', value: crFmtS(dailyAvg), spark: daily.map(d => d.rev || 0) },
+    { label: 'Daily Avg Net Rev', value: crFmtS(dailyAvg), spark: daily.map(d => d.rev || 0) },
     { label: 'Orders', value: crFmtN(orders), spark: daily.map(d => d.orders || 0) },
     { label: 'Units', value: crFmtN(units), spark: daily.map(d => d.units || 0) },
     { label: 'AOV', value: crFmtS(orders ? rev / orders : 0), spark: daily.map(d => (d.orders || 0) > 0 ? (d.rev || 0) / d.orders : null) },
@@ -11218,14 +11216,14 @@ function CredTab({ data }) {
           {[
             { label: 'Net Revenue Ex Gst', value: fmt(netRev), badge: crChgBadge(netRev, crPrevNetRev) },
             { label: 'GST', value: fmt(gstCollected), sub: `${rev > 0 ? ((gstCollected/rev)*100).toFixed(1) : 0}% of gross rev`, badge: crChgBadge(gstCollected, crPrevGstCollected) },
-            { label: 'Daily Avg Rev', value: fmt(dailyAvg), sub: `over ${nDays} days`, badge: crChgBadge(dailyAvg, crPrevRev > 0 ? crPrevRev / nDays : 0) },
+            { label: 'Daily Avg Net Rev', value: fmt(netRev / nDays), sub: `over ${nDays} days`, badge: crChgBadge(netRev / nDays, crPrevRev > 0 ? crPrevRev / nDays : 0) },
             { label: 'AOV', value: `₹${Math.round(orders ? rev / orders : 0).toLocaleString('en-IN')}`, sub: 'Gross rev ÷ orders', badge: crChgBadge(orders ? rev / orders : 0, crPrevOrders > 0 ? crPrevRev / crPrevOrders : 0) },
             { label: 'ASP', value: `₹${Math.round(asp).toLocaleString('en-IN')}`, sub: 'Gross rev ÷ units', badge: crChgBadge(asp, crPrevUnits > 0 ? crPrevRev / crPrevUnits : 0) },
             { label: 'Orders', value: fmtN(orders), sub: `${fmtN(units)} units`, badge: crChgBadge(orders, crPrevOrders) },
-            { label: 'Cancellation %', value: `${cancelPct.toFixed(1)}%`, sub: `${fmt(cancelRev)} rev`, accent: cancelPct > 10 ? '#7A1A1A' : undefined },
             { label: 'Returns %', value: `${returnPct.toFixed(1)}%`, sub: `${fmt(totalReturnRev)} rev`, accent: returnPct > 20 ? '#7A1A1A' : undefined },
+            { label: 'Cancellation %', value: `${cancelPct.toFixed(1)}%`, sub: `${fmt(cancelRev)} rev`, accent: cancelPct > 10 ? '#7A1A1A' : undefined },
           ].map(k => (
-            <div key={k.label} className="kpi-card" style={{ padding: '10px 13px', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+            <div key={k.label} className="kpi-card" style={{ padding: '10px 13px', display: 'flex', flexDirection: 'column', justifyContent: 'flex-start' }}>
               <div className="kpi-label">{k.label}</div>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 4 }}>
                 <div className="kpi-value" style={{ fontSize: 17, ...(k.accent ? { color: k.accent } : {}) }}>{k.value}</div>{k.badge}
@@ -11430,7 +11428,7 @@ function FirstcryTab({ data }) {
     { label: 'Gross Revenue', value: fcFmtS(rev), spark: daily.map(d => d.rev || 0) },
     { label: 'Net Revenue', value: fcFmtS(netRev), spark: daily.map(d => (d.rev || 0) * (rev > 0 ? netRev / rev : 0)) },
     { label: 'GST', value: fcFmtS(gstCollected), spark: daily.map(d => (d.rev || 0) * (rev > 0 ? gstCollected / rev : 0)) },
-    { label: 'Daily Avg Rev', value: fcFmtS(dailyAvg), spark: daily.map(d => d.rev || 0) },
+    { label: 'Daily Avg Net Rev', value: fcFmtS(dailyAvg), spark: daily.map(d => d.rev || 0) },
     { label: 'Orders', value: fcFmtN(orders), spark: daily.map(d => d.orders || 0) },
     { label: 'Units', value: fcFmtN(units), spark: daily.map(d => d.units || 0) },
     { label: 'AOV', value: fcFmtS(orders ? rev / orders : 0), spark: daily.map(d => (d.orders || 0) > 0 ? (d.rev || 0) / d.orders : null) },
@@ -11467,14 +11465,14 @@ function FirstcryTab({ data }) {
           {[
             { label: 'Net Revenue Ex Gst', value: fmt(netRev), badge: fcChgBadge(netRev, fcPrevNetRev) },
             { label: 'GST', value: fmt(gstCollected), sub: `${rev > 0 ? ((gstCollected/rev)*100).toFixed(1) : 0}% of gross rev`, badge: fcChgBadge(gstCollected, fcPrevGstCollected) },
-            { label: 'Daily Avg Rev', value: fmt(dailyAvg), sub: `over ${nDays} days`, badge: fcChgBadge(dailyAvg, fcPrevRev > 0 ? fcPrevRev / nDays : 0) },
+            { label: 'Daily Avg Net Rev', value: fmt(netRev / nDays), sub: `over ${nDays} days`, badge: fcChgBadge(netRev / nDays, fcPrevRev > 0 ? fcPrevRev / nDays : 0) },
             { label: 'AOV', value: `₹${Math.round(orders ? rev / orders : 0).toLocaleString('en-IN')}`, sub: 'Gross rev ÷ orders', badge: fcChgBadge(orders ? rev / orders : 0, fcPrevOrders > 0 ? fcPrevRev / fcPrevOrders : 0) },
             { label: 'ASP', value: `₹${Math.round(asp).toLocaleString('en-IN')}`, sub: 'Gross rev ÷ units', badge: fcChgBadge(asp, fcPrevUnits > 0 ? fcPrevRev / fcPrevUnits : 0) },
             { label: 'Orders', value: fmtN(orders), sub: `${fmtN(units)} units`, badge: fcChgBadge(orders, fcPrevOrders) },
-            { label: 'Cancellation %', value: `${cancelPct.toFixed(1)}%`, sub: `${fmt(cancelRev)} rev`, accent: cancelPct > 10 ? '#7A1A1A' : undefined },
             { label: 'Returns %', value: `${returnPct.toFixed(1)}%`, sub: `${fmt(totalReturnRev)} rev`, accent: returnPct > 20 ? '#7A1A1A' : undefined },
+            { label: 'Cancellation %', value: `${cancelPct.toFixed(1)}%`, sub: `${fmt(cancelRev)} rev`, accent: cancelPct > 10 ? '#7A1A1A' : undefined },
           ].map(k => (
-            <div key={k.label} className="kpi-card" style={{ padding: '10px 13px', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+            <div key={k.label} className="kpi-card" style={{ padding: '10px 13px', display: 'flex', flexDirection: 'column', justifyContent: 'flex-start' }}>
               <div className="kpi-label">{k.label}</div>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 4 }}>
                 <div className="kpi-value" style={{ fontSize: 17, ...(k.accent ? { color: k.accent } : {}) }}>{k.value}</div>{k.badge}
@@ -11668,7 +11666,7 @@ function MyntraTab({ data }) {
     { label: 'Gross Revenue', value: mnFmtS(rev), spark: dailyArr.map(d => d.rev || 0) },
     { label: 'Net Revenue', value: mnFmtS(netRev), spark: dailyArr.map(d => (d.rev || 0) * (rev > 0 ? netRev / rev : 0)) },
     { label: 'GST', value: mnFmtS(gstCollected), spark: dailyArr.map(d => (d.rev || 0) * (rev > 0 ? gstCollected / rev : 0)) },
-    { label: 'Daily Avg Rev', value: mnFmtS(rev / nDays), spark: dailyArr.map(d => d.rev || 0) },
+    { label: 'Daily Avg Net Rev', value: mnFmtS(rev / nDays), spark: dailyArr.map(d => d.rev || 0) },
     { label: 'Orders', value: mnFmtN(nOrders), spark: dailyArr.map(d => d.orders || 0) },
     { label: 'Units', value: mnFmtN(qty), spark: dailyArr.map(d => d.units || 0) },
     { label: 'AOV', value: mnFmtS(nOrders > 0 ? rev / nOrders : 0), spark: dailyArr.map(d => (d.orders || 0) > 0 ? (d.rev || 0) / d.orders : null) },
@@ -11709,14 +11707,14 @@ function MyntraTab({ data }) {
           {[
             { label: 'Net Revenue Ex Gst', value: fmt(netRev), badge: chgBadge(netRev, prevNetRev) },
             { label: 'GST', value: fmt(gstCollected), sub: `${rev > 0 ? ((gstCollected/rev)*100).toFixed(1) : 0}% of gross rev`, badge: chgBadge(gstCollected, prevGstCollected) },
-            { label: 'Daily Avg Rev', value: fmt(rev / nDays), sub: `over ${nDays} days`, badge: chgBadge(rev / nDays, prevRev > 0 ? prevRev / nDays : 0) },
+            { label: 'Daily Avg Net Rev', value: fmt(netRev / nDays), sub: `over ${nDays} days`, badge: chgBadge(netRev / nDays, prevRev > 0 ? prevRev / nDays : 0) },
             { label: 'AOV', value: `₹${Math.round(nOrders ? rev / nOrders : 0).toLocaleString('en-IN')}`, sub: 'Gross rev ÷ orders', badge: chgBadge(nOrders ? rev / nOrders : 0, mn.prevOrders > 0 ? prevRev / mn.prevOrders : 0) },
             { label: 'ASP', value: `₹${Math.round(asp).toLocaleString('en-IN')}`, sub: 'Gross rev ÷ units', badge: chgBadge(asp, mn.prevUnits > 0 ? prevRev / mn.prevUnits : 0) },
             { label: 'Active Products', value: fmtN(totals.skus), sub: 'Product types sold' },
-            { label: 'Cancellation %', value: `${cancelPct.toFixed(1)}%`, sub: `${fmt(cancelRev)} rev`, accent: cancelPct > 10 ? '#7A1A1A' : undefined },
             { label: 'Returns %', value: `${mnReturnPct.toFixed(1)}%`, sub: `${fmt(mnReturnRev)} ret · ${fmtN(mnReturnOrders)} orders`, accent: mnReturnPct > 15 ? '#7A1A1A' : undefined },
+            { label: 'Cancellation %', value: `${cancelPct.toFixed(1)}%`, sub: `${fmt(cancelRev)} rev`, accent: cancelPct > 10 ? '#7A1A1A' : undefined },
           ].map(k => (
-            <div key={k.label} className="kpi-card" style={{ padding: '10px 13px', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+            <div key={k.label} className="kpi-card" style={{ padding: '10px 13px', display: 'flex', flexDirection: 'column', justifyContent: 'flex-start' }}>
               <div className="kpi-label">{k.label}</div>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 4 }}>
                 <div className="kpi-value" style={{ fontSize: 17, ...(k.accent ? { color: k.accent } : {}) }}>{k.value}</div>{k.badge}
@@ -12046,7 +12044,7 @@ function OfflineTab({ data, sub, setSub }) {
     { label: 'Gross Revenue', value: offFmtS(grossRev), spark: dailyArr.map(d => d.rev || 0) },
     { label: 'Net Revenue', value: offFmtS(netRev), spark: dailyArr.map(d => d.net || 0) },
     { label: 'GST', value: offFmtS(gstCollected), spark: dailyArr.map(d => (d.rev || 0) * (grossRev > 0 ? gstCollected / grossRev : 0)) },
-    { label: 'Daily Avg Rev', value: offFmtS(grossRev / Math.max(nDays, 1)), spark: dailyArr.map(d => d.rev || 0) },
+    { label: 'Daily Avg Net Rev', value: offFmtS(grossRev / Math.max(nDays, 1)), spark: dailyArr.map(d => d.rev || 0) },
     { label: 'Orders', value: offFmtN(nOrders), spark: dailyArr.map(d => d.orders || 0) },
     { label: 'Units', value: offFmtN(qty), spark: dailyArr.map(d => d.units || 0) },
     { label: 'AOV', value: offFmtS(nOrders > 0 ? grossRev / nOrders : 0), spark: dailyArr.map(d => (d.orders || 0) > 0 ? (d.rev || 0) / d.orders : null) },
@@ -12085,14 +12083,14 @@ function OfflineTab({ data, sub, setSub }) {
           {[
             { label: 'Net Revenue', value: fmt(netRev), sub: 'Ex. credit notes', badge: chgBadge(netRev, prevNetRev) },
             { label: 'GST', value: fmt(gstCollected), sub: 'On net sales', badge: chgBadge(gstCollected, (prevGrossRev - prevCnRev) - prevNetRev) },
-            { label: 'Daily Avg Rev', value: fmt(rev / Math.max(nDays, 1)), sub: `over ${nDays} days`, badge: chgBadge(rev / Math.max(nDays, 1), prevGrossRev / Math.max(nDays, 1)) },
+            { label: 'Daily Avg Net Rev', value: fmt(rev / Math.max(nDays, 1)), sub: `over ${nDays} days`, badge: chgBadge(rev / Math.max(nDays, 1), prevGrossRev / Math.max(nDays, 1)) },
             { label: 'AOV', value: `₹${Math.round(nOrders ? grossRev / nOrders : 0).toLocaleString('en-IN')}`, sub: 'Gross ÷ orders', badge: chgBadge(nOrders ? grossRev / nOrders : 0, prevOrders ? prevGrossRev / prevOrders : 0) },
             { label: 'ASP', value: `₹${Math.round(asp).toLocaleString('en-IN')}`, sub: 'Gross rev ÷ units', badge: chgBadge(asp, prevUnits > 0 ? prevGrossRev / prevUnits : 0) },
             { label: 'Orders', value: fmtN(nOrders), sub: `${fmtN(qty)} units`, badge: chgBadge(nOrders, prevOrders) },
             { label: 'Units / Order', value: nOrders ? Math.round(qty / nOrders).toLocaleString('en-IN') : '0', sub: 'Avg units per order', badge: chgBadge(nOrders ? qty / nOrders : 0, prevOrders ? prevUnits / prevOrders : 0) },
             { label: 'Credit Notes %', value: `${cnPct.toFixed(1)}%`, sub: `${fmt(cnRevAbs)} · ${fmtN(cnOrders)} orders`, accent: cnPct > 10 ? '#7A1A1A' : undefined, badge: chgBadge(cnRevAbs, prevCnRev) },
           ].map(k => (
-            <div key={k.label} className="kpi-card" style={{ padding: '10px 13px', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+            <div key={k.label} className="kpi-card" style={{ padding: '10px 13px', display: 'flex', flexDirection: 'column', justifyContent: 'flex-start' }}>
               <div className="kpi-label">{k.label}</div>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 4 }}>
                 <div className="kpi-value" style={{ fontSize: 17, ...(k.accent ? { color: k.accent } : {}) }}>{k.value}</div>{k.badge}
