@@ -15781,8 +15781,13 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
   const { page, sub: urlSub, sub2: urlSub2 } = parseUrl(location.pathname)
   const invTab = page === 'inventory' ? (urlSub || 'health') : 'health'
   const setInvTab = (tab) => goTo('inventory', tab)
-  const activeTab = page === 'sales' ? (urlSub || 'all') : 'all'
-  const setActiveTab = (tab) => { goTo('sales', tab, 'overall') }
+  const defaultSalesTab = (() => {
+    if (!allowedTabs) return 'all'
+    const tabOrder = ['all','shopify','ebo','amazon','flipkart','blinkit','cred','firstcry','instamart','zepto','myntra','international','offline']
+    return tabOrder.find(t => allowedTabs.includes(SALES_KEY_MAP[t])) || 'all'
+  })()
+  const activeTab = page === 'sales' ? (urlSub || defaultSalesTab) : defaultSalesTab
+  const setActiveTab = (tab) => { goTo('sales', tab, salesSub2 || 'overall') }
   const pnlActiveTab = page === 'pnl' ? (urlSub || 'all') : 'all'
   const setPnlActiveTab = (tab) => goTo('pnl', tab)
   const adsSelPlatform = page === 'ads' ? (urlSub || null) : null
