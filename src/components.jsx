@@ -21,19 +21,33 @@ export function ChartTooltip({ active, payload, label, formatter }) {
   )
 }
 
-export function KPICard({ label, icon, value, sub, accent, center, badge, spark, sparkKey, sparkColor, onClick }) {
+export function KPICard({ label, icon, value, sub, accent, center, badge, style, valueSize, gap, plain, spark, sparkKey, sparkColor, onClick }) {
   const clickable = typeof onClick === 'function'
+  if (plain) {
+    return (
+      <div className="kpi-card" onClick={clickable ? onClick : undefined} style={{ padding: '10px 13px', display: 'flex', flexDirection: 'column', justifyContent: 'center', ...(center ? { alignItems: 'center', textAlign: 'center' } : {}), ...(clickable ? { cursor: 'pointer' } : {}), ...style }}>
+        <div className="kpi-label">{icon && <span style={{ fontSize: 13, marginRight: 4 }}>{icon}</span>}{label}</div>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 4 }}>
+          <div className="kpi-value" style={{ fontSize: valueSize || 17, ...(accent ? { color: accent } : {}) }}>{value}</div>
+          {badge}
+        </div>
+        {sub && <div className="kpi-sub">{sub}</div>}
+      </div>
+    )
+  }
   return (
-    <div className="kpi-card flex flex-col gap-1.5"
+    <div className={`kpi-card flex flex-col${gap == null ? ' gap-1' : ''}`}
       onClick={clickable ? onClick : undefined}
       style={{
         ...(center ? { alignItems: 'center', justifyContent: 'center', textAlign: 'center' } : {}),
+        ...(gap != null ? { gap } : {}),
         ...(clickable ? { cursor: 'pointer' } : {}),
         position: 'relative', overflow: 'hidden',
+        ...style,
       }}>
-      <span className="text-xs font-bold uppercase tracking-wider flex items-center gap-1" style={{ color: C.t2, justifyContent: center ? 'center' : undefined }}>{icon && <span style={{ fontSize: 13 }}>{icon}</span>}{label}</span>
+      <span className="text-xs font-bold uppercase tracking-wider flex items-center gap-1" style={{ color: C.t3, justifyContent: center ? 'center' : undefined }}>{icon && <span style={{ fontSize: 13 }}>{icon}</span>}{label}</span>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 4 }}>
-        <span style={{ fontSize: center ? 28 : 21, fontWeight: 700, letterSpacing: '-.02em', lineHeight: 1.1, color: accent || C.t1 }}>{value}</span>
+        <span style={{ fontSize: valueSize || (center ? 28 : 21), fontWeight: 700, letterSpacing: '-.02em', lineHeight: 1.1, color: accent || C.t1 }}>{value}</span>
         {badge && <span>{badge}</span>}
       </div>
       {sub && <span className="text-xs" style={{ color: C.t2 }}>{sub}</span>}
@@ -60,15 +74,29 @@ export function KPICard({ label, icon, value, sub, accent, center, badge, spark,
   )
 }
 
-export function AlertCard({ type, title, body }) {
+// compact=true: icon + bold title + body squeezed onto ONE row, body ellipsis-truncated with a
+// native title tooltip for the full text — for tight inline strips. compact=false (default): body
+// wraps onto its own line for full readability — used inside the alerts popover, which has room.
+export function AlertCard({ type, title, body, compact = false }) {
   const s = { red: 'al-R', amber: 'al-A', green: 'al-G', blue: 'al-B' }[type] || 'al-B'
   const icon = type === 'green' ? '★' : type === 'blue' ? 'ℹ' : '⚠'
+  if (compact) {
+    return (
+      <div className={`flex items-center gap-2 rounded-lg border ${s}`} style={{ padding: '6px 12px', minHeight: 0 }}>
+        <span style={{ fontSize: 12, flexShrink: 0 }}>{icon}</span>
+        <div style={{ display: 'flex', alignItems: 'baseline', gap: 6, minWidth: 0, flexWrap: 'wrap' }}>
+          <span className="text-xs font-bold" style={{ flexShrink: 0 }}>{title}</span>
+          <span className="text-xs" title={body} style={{ opacity: 0.8, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', minWidth: 0 }}>{body}</span>
+        </div>
+      </div>
+    )
+  }
   return (
-    <div className={`flex items-start gap-2 p-3 rounded-xl border ${s}`} style={{ marginBottom: 6 }}>
-      <span style={{ fontSize: 14, flexShrink: 0, marginTop: 1 }}>{icon}</span>
-      <div>
-        <div className="text-xs font-bold" style={{ display: 'block', marginBottom: 2 }}>{title}</div>
-        <div className="text-xs" style={{ opacity: 0.85, lineHeight: 1.55 }}>{body}</div>
+    <div className={`flex items-start gap-2 rounded-lg border ${s}`} style={{ padding: '8px 12px', minHeight: 0 }}>
+      <span style={{ fontSize: 13, flexShrink: 0, marginTop: 1 }}>{icon}</span>
+      <div style={{ minWidth: 0 }}>
+        <div className="text-xs font-bold" style={{ marginBottom: 2 }}>{title}</div>
+        <div className="text-xs" style={{ opacity: 0.8, lineHeight: 1.5 }}>{body}</div>
       </div>
     </div>
   )
@@ -76,17 +104,15 @@ export function AlertCard({ type, title, body }) {
 
 export function HBar({ dot, label, width, value, pctVal, onClick, isSelected, labelWidth = 110, maxBarWidth }) {
   return (
-    <div onClick={onClick} style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '6px 0', borderBottom: `1px solid ${C.border}`, cursor: onClick ? 'pointer' : 'default', background: isSelected ? '#FFFBE6' : 'transparent', borderRadius: isSelected ? 4 : 0 }} className="hbar-row">
+    <div onClick={onClick} style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '5px 0', minHeight: 30, borderBottom: `1px solid ${C.border}`, cursor: onClick ? 'pointer' : 'default', background: isSelected ? C.acl : 'transparent', borderRadius: isSelected ? 4 : 0 }} className="hbar-row">
       <span style={{ width: 8, height: 8, borderRadius: '50%', background: dot, flexShrink: 0 }} />
       <span title={label} style={{ fontSize: 12, color: C.t2, flexShrink: 0, width: labelWidth, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{label}</span>
-      <div className="hb-track" style={{ flex: 1, ...(maxBarWidth ? { maxWidth: maxBarWidth } : {}) }}><div className="hb-fill" style={{ width: `${width}%`, background: '#FFD600' }} /></div>
+      <div className="hb-track" style={{ flex: 1, ...(maxBarWidth ? { maxWidth: maxBarWidth } : {}) }}><div className="hb-fill" style={{ width: `${width}%`, background: C.acc }} /></div>
       <span className="hb-value" style={{ fontSize: 12, fontWeight: 700, color: C.t1, fontFamily: 'var(--mono)', flexShrink: 0, minWidth: 62, textAlign: 'right' }}>{value}</span>
       <span style={{ fontSize: 11, color: C.t3, flexShrink: 0, width: 36, textAlign: 'right' }}>{pctVal}</span>
     </div>
   )
 }
-
-const DOTS = ['#534AB7','#0D9E68','#2E74CC','#CC8A00','#CC4078','#E24B4A','#9B59B6','#FF6B35']
 
 // Compact side-panel Category Revenue card with a Category / Product (sub-category) / SKU Code
 // toggle. Heading stays "Category Revenue" regardless of the selected view — only the rows change.
@@ -128,15 +154,18 @@ export function CategoryRevenueCard({ catRows, subCatRows, skuMap, totalRev, vie
   return (
     <Card fill title={view === 'subcategory' ? 'Product Revenue' : 'Category Revenue'} style={{ height: mobCard ? mobFixedH : height, alignSelf: 'start' }} action={
       <div style={{ display: 'flex', gap: 4 }}>
-        {[{ id: 'category', label: 'Category' }, { id: 'subcategory', label: 'Product' }].map(v => (
-          <button key={v.id} onClick={() => setView(v.id)} className="cat-rev-btn" style={{ fontSize: 11, fontWeight: 600, padding: '3px 10px', borderRadius: 5, border: `1.5px solid ${view === v.id ? C.acm : C.border}`, background: view === v.id ? C.acc : 'transparent', color: view === v.id ? C.t1 : C.t2, cursor: 'pointer', fontFamily: 'var(--font)' }}>{v.label}</button>
+        {[{ id: 'category', label: 'Category' }, { id: 'subcategory', label: 'Product' }, ...(window.innerWidth > 768 ? [{ id: 'sku', label: 'SKU Code' }] : [])].map((v, i) => (
+          <div key={v.id} style={{ display: 'flex', alignItems: 'center' }}>
+            {i > 0 && <div style={{ width: 1, height: 14, background: '#D6D0B0', margin: '0 4px' }} />}
+            <button onClick={() => setView(v.id)} style={{ fontSize: 11, fontWeight: view === v.id ? 700 : 500, padding: '3px 9px', borderRadius: 6, border: 'none', outline: 'none', background: view === v.id ? C.acs : 'transparent', color: view === v.id ? '#3F3D33' : C.t2, cursor: 'pointer', fontFamily: 'var(--font)', minWidth: 60, textAlign: 'center' }}>{v.label}</button>
+          </div>
         ))}
       </div>
     }>
-      <div style={{ height: '100%', overflowY: 'auto' }}>
+      <div style={{ height: '100%', overflowY: 'auto', paddingRight: 3 }}>
         {rows.map((r, i) => {
           const isSelected = selectedName ? selectedName === r.name : false
-          return <HBar key={`${r.category || ''}::${r.name}`} dot={DOTS[i % DOTS.length]} label={r.name} labelWidth={labelWidth} width={(r.rev / maxRev) * 100} value={fmt(r.rev)} pctVal={totalRev > 0 ? pct(r.rev, totalRev) : '—'} isSelected={false} maxBarWidth={view === 'subcategory' ? 55 : undefined} />
+          return <HBar key={`${r.category || ''}::${r.name}`} dot={C.acc} label={r.name} labelWidth={labelWidth} width={(r.rev / maxRev) * 100} value={fmt(r.rev)} pctVal={totalRev > 0 ? pct(r.rev, totalRev) : '—'} isSelected={isSelected} onClick={() => onClick(r)} />
         })}
       </div>
     </Card>
@@ -186,23 +215,26 @@ export function DataTable({ columns, rows, maxRows = 50, storageKey, maxHeight, 
     <div className="overflow-x-auto" style={{ ...(maxHeight ? { maxHeight, overflowY: 'auto' } : {}), ...( style || {}) }}>
       <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
         <thead>
-          <tr>
+          <tr style={{ background: C.acl }}>
             {reorder.orderedColumns.map(c => (
               <th key={c.key + c.label} draggable onDragStart={reorder.onDragStart(c.id)} onDragOver={reorder.onDragOver} onDrop={reorder.onDrop(c.id)}
-                style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.05em', color: C.t3, textAlign: c.align === 'right' ? 'right' : c.align === 'center' ? 'center' : 'left', padding: '3px 5px 7px', borderBottom: `1px solid ${C.border}`, cursor: 'grab', userSelect: 'none', ...(c.width ? { width: c.width, minWidth: c.width } : {}), ...(c.sticky ? { position: 'sticky', left: 0, background: C.card, zIndex: 3, borderRight: `1px solid ${C.border}` } : {}), ...(maxHeight ? { position: 'sticky', top: 0, background: C.card, zIndex: c.sticky ? 4 : 1 } : {}) }}>{c.label}</th>
+                style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.05em', color: C.t2, textAlign: c.align === 'right' ? 'right' : c.align === 'center' ? 'center' : 'left', padding: '6px 5px 7px', borderBottom: `1.5px solid ${C.border}`, cursor: 'grab', userSelect: 'none', background: C.acl, ...(c.width ? { width: c.width, minWidth: c.width } : {}), ...(c.sticky ? { position: 'sticky', left: 0, zIndex: 3, borderRight: `1px solid ${C.border}` } : {}), ...(maxHeight ? { position: 'sticky', top: 0, zIndex: c.sticky ? 4 : 1 } : {}) }}>{c.label}</th>
             ))}
           </tr>
         </thead>
         <tbody>
-          {visible.map((r, i) => (
-            <tr key={i} style={{ borderBottom: i < visible.length - 1 ? `1px solid ${C.border}` : 'none' }} onMouseEnter={e => e.currentTarget.style.background = '#FFFBE6'} onMouseLeave={e => e.currentTarget.style.background = ''}>
+          {visible.map((r, i) => {
+            const zebra = i % 2 === 1 ? '#FAF9F6' : C.card
+            return (
+            <tr key={i} style={{ borderBottom: i < visible.length - 1 ? `1px solid ${C.border}` : 'none', background: zebra, transition: 'box-shadow .12s, background .12s' }} onMouseEnter={e => { e.currentTarget.style.background = '#FDF8ED'; e.currentTarget.style.boxShadow = `inset 0 0 0 1px ${C.acm}55, 0 0 8px 0 ${C.acc}33` }} onMouseLeave={e => { e.currentTarget.style.background = zebra; e.currentTarget.style.boxShadow = 'none' }}>
               {reorder.orderedColumns.map(c => (
-                <td key={c.key + c.label} style={{ padding: i < visible.length - 1 ? '5.5px 5px' : '5.5px 5px 14px', color: c.align === 'right' || c.align === 'center' ? C.t1 : C.t2, textAlign: c.align === 'right' ? 'right' : c.align === 'center' ? 'center' : 'left', fontFamily: c.mono ? 'var(--mono)' : 'inherit', fontSize: c.mono ? 11.5 : 12, whiteSpace: 'nowrap', ...(c.sticky ? { position: 'sticky', left: 0, background: C.card, zIndex: 1, borderRight: `1px solid ${C.border}` } : {}) }}>
+                <td key={c.key + c.label} style={{ padding: i < visible.length - 1 ? '5.5px 5px' : '5.5px 5px 14px', color: c.align === 'right' || c.align === 'center' ? C.t1 : C.t2, textAlign: c.align === 'right' ? 'right' : c.align === 'center' ? 'center' : 'left', fontFamily: c.mono ? 'var(--mono)' : 'inherit', fontSize: c.mono ? 11.5 : 12, whiteSpace: 'nowrap', ...(c.sticky ? { position: 'sticky', left: 0, background: zebra, zIndex: 1, borderRight: `1px solid ${C.border}` } : {}) }}>
                   {c.render ? c.render(r[c.key], r) : r[c.key]}
                 </td>
               ))}
             </tr>
-          ))}
+            )
+          })}
         </tbody>
       </table>
       {matched.length > maxRows && <div className="text-xs text-center py-2" style={{ color: C.t3, paddingBottom: 14 }}>Showing {maxRows} of {matched.length}</div>}
@@ -214,17 +246,97 @@ export function DataTable({ columns, rows, maxRows = 50, storageKey, maxHeight, 
 
 export function Card({ title, note, action, children, style, fill, titleNoWrap }) {
   return (
-    <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 13, padding: '16px 18px', height: '100%', boxSizing: 'border-box', display: fill ? 'flex' : undefined, flexDirection: fill ? 'column' : undefined, ...style }}>
+    <div className="card-hoverable" style={{ background: C.card, borderLeft: `1px solid ${C.border}`, borderRight: `1px solid ${C.border}`, borderBottom: `1px solid ${C.border}`, borderRadius: 13, padding: '16px 18px', height: '100%', boxSizing: 'border-box', display: fill ? 'flex' : undefined, flexDirection: fill ? 'column' : undefined, ...style }}>
       {(title || note || action) && (
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 11, flexShrink: 0 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            {title && <span style={{ fontSize: 13, fontWeight: 600, color: C.t1, whiteSpace: titleNoWrap ? 'nowrap' : undefined }}>{title}</span>}
-            {note && <span style={{ fontSize: 11.5, color: C.t3 }}>{note}</span>}
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 11, flexShrink: 0, gap: 8 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0, overflow: 'hidden' }}>
+            {title && <span style={{ fontSize: 13, fontWeight: 700, color: C.t1, whiteSpace: titleNoWrap ? 'nowrap' : undefined, overflow: 'hidden', textOverflow: 'ellipsis' }}>{title}</span>}
+            {note && <span style={{ fontSize: 11.5, color: C.t3, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{note}</span>}
           </div>
-          {action && <div>{action}</div>}
+          {action && <div style={{ flexShrink: 0 }}>{action}</div>}
         </div>
       )}
       {fill ? <div style={{ flex: 1, minHeight: 0, overflow: 'hidden' }}>{children}</div> : children}
+    </div>
+  )
+}
+
+// Custom-styled replacement for a native <select> — browsers render the native dropdown popup
+// (option list, hover/selected highlight) using OS-level UI that plain CSS cannot restyle, which
+// is why a native <select> always shows the OS blue highlight regardless of page theme. This
+// renders its own popup list instead, so hover/selected states can use the gold accent theme.
+// options: [{id, label}]. style overrides the trigger button (pass the same object previously
+// given to a <select> — width/fontSize/padding all carry over).
+export function Dropdown({ value, onChange, options, style }) {
+  const [open, setOpen] = useState(false)
+  const ref = useRef(null)
+  useEffect(() => {
+    if (!open) return
+    const onDocClick = e => { if (ref.current && !ref.current.contains(e.target)) setOpen(false) }
+    document.addEventListener('mousedown', onDocClick)
+    return () => document.removeEventListener('mousedown', onDocClick)
+  }, [open])
+  const current = options.find(o => o.id === value)
+  return (
+    <div ref={ref} style={{ position: 'relative', display: 'inline-block' }}>
+      <button type="button" onClick={() => setOpen(o => !o)}
+        onMouseEnter={e => e.currentTarget.style.background = C.acl}
+        onMouseLeave={e => e.currentTarget.style.background = C.card}
+        style={{ ...style, background: C.card, border: `1px solid ${C.border2}`, color: C.t1, fontWeight: 600, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 6, transition: 'background .12s' }}>
+        <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{current?.label ?? ''}</span>
+        <span style={{ fontSize: 9, color: C.t3, flexShrink: 0, transform: open ? 'rotate(180deg)' : 'none', transition: 'transform .12s' }}>▼</span>
+      </button>
+      {open && (
+        <div style={{ position: 'absolute', top: '100%', left: 0, marginTop: 4, background: C.card, border: `1px solid ${C.border}`, borderRadius: 8, boxShadow: '0 4px 16px rgba(0,0,0,.12)', zIndex: 50, minWidth: '100%', overflow: 'hidden' }}>
+          {options.map(o => (
+            <div key={o.id} onClick={() => { onChange(o.id); setOpen(false) }}
+              style={{ padding: '6px 10px', fontSize: (style && style.fontSize) || 11.5, fontWeight: o.id === value ? 700 : 500, color: o.id === value ? '#3F3D33' : C.t2, background: o.id === value ? C.acc : 'transparent', cursor: 'pointer', whiteSpace: 'nowrap' }}
+              onMouseEnter={e => { if (o.id !== value) e.currentTarget.style.background = C.acl }}
+              onMouseLeave={e => { if (o.id !== value) e.currentTarget.style.background = 'transparent' }}>
+              {o.label}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// Compact single-select dropdown for small inline controls (trend granularity, metric picker,
+// etc.) — a styled button + absolutely-positioned list, used in place of a native <select> so the
+// open list can actually be themed. Native <select> option-lists are rendered by the OS/browser
+// (e.g. Windows' default blue-highlight popup) and cannot be restyled with CSS, which looked
+// jarringly inconsistent against the rest of the gold-themed dashboard. Moved here from App.jsx
+// (2026-09) so pages outside App.jsx (e.g. D2CReturnAnalysisTab.jsx) can use it too.
+export function SmallDropdown({ value, onChange, options, triggerStyle }) {
+  const [open, setOpen] = useState(false)
+  const ref = useRef(null)
+  useEffect(() => {
+    if (!open) return
+    const h = e => { if (ref.current && !ref.current.contains(e.target)) setOpen(false) }
+    document.addEventListener('mousedown', h)
+    return () => document.removeEventListener('mousedown', h)
+  }, [open])
+  const opts = options.map(o => Array.isArray(o) ? { value: o[0], label: o[1] } : { value: o, label: o })
+  const current = opts.find(o => o.value === value)
+  return (
+    <div ref={ref} style={{ position: 'relative', display: 'inline-block' }}>
+      <button onClick={() => setOpen(o => !o)} style={{ ...triggerStyle, display: 'flex', alignItems: 'center', gap: 5 }}>
+        <span>{current?.label ?? value}</span>
+        <span style={{ fontSize: 8 }}>{open ? '▲' : '▼'}</span>
+      </button>
+      {open && (
+        <div style={{ position: 'absolute', top: 'calc(100% + 4px)', right: 0, zIndex: 300, background: C.card, border: `1px solid ${C.border2}`, borderRadius: 8, boxShadow: '0 4px 16px rgba(0,0,0,.12)', minWidth: '100%', overflow: 'hidden' }}>
+          {opts.map(o => (
+            <div key={o.value} onClick={() => { onChange(o.value); setOpen(false) }}
+              style={{ padding: '6px 12px', fontSize: 11.5, cursor: 'pointer', whiteSpace: 'nowrap', background: o.value === value ? C.acl : 'transparent', color: o.value === value ? C.t1 : C.t2, fontWeight: o.value === value ? 600 : 400 }}
+              onMouseEnter={e => { if (o.value !== value) e.currentTarget.style.background = C.bg }}
+              onMouseLeave={e => { if (o.value !== value) e.currentTarget.style.background = 'transparent' }}>
+              {o.label}
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   )
 }
@@ -357,20 +469,18 @@ export function TrendAnalysisCard({ title, daily, grossColor, grossGradId, revKe
 
   return (
     <Card title={title} style={boxHeight ? { height: isMob ? 'auto' : boxHeight } : undefined} action={
-      <select value={groupBy} onChange={e => setGroupBy(e.target.value)} style={selStyle}>
-        {GROUP_OPTS.map(x => <option key={x.id} value={x.id}>{x.label}</option>)}
-      </select>
+      <Dropdown value={groupBy} onChange={setGroupBy} options={GROUP_OPTS} style={selStyle} />
     }>
       <div style={isMob ? { margin: '0 -28px' } : {}}>
       <ResponsiveContainer width="100%" height={isMob ? 220 : '100%'} minHeight={220}>
-        <ComposedChart data={grouped} margin={{ top: 4, right: isMob ? 44 : 40, bottom: isMob ? 20 : 30, left: isMob ? 44 : 0 }}>
+        <ComposedChart data={grouped} margin={{ top: 8, right: isMob ? 44 : 20, bottom: isMob ? 20 : 30, left: isMob ? 44 : 0 }}>
           <defs>
             <linearGradient id={gradId} x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor={grossColor} stopOpacity={0.2} /><stop offset="95%" stopColor={grossColor} stopOpacity={0} /></linearGradient>
             <linearGradient id={gradId + '_net'} x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#B8960C" stopOpacity={0.15} /><stop offset="95%" stopColor="#B8960C" stopOpacity={0} /></linearGradient>
           </defs>
           <CartesianGrid strokeDasharray="3 3" stroke={C.border} vertical={false} />
           <XAxis dataKey="date" tick={{ fontSize: 10, fill: C.t3 }} tickFormatter={d => d?.slice(5)} ticks={(() => { const k = grouped.map(d => d.date); const n = k.length; if (n <= 4) return k; return [k[0], k[Math.floor(n/3)], k[Math.floor(2*n/3)], k[n-1]] })()} height={isMob ? 24 : 20} />
-          <YAxis yAxisId="rev" hide={isMob} tick={{ fontSize: 10, fill: C.t1 }} tickFormatter={fmtTick} width={isMob ? 0 : 55} />
+          <YAxis yAxisId="rev" hide={isMob} tick={{ fontSize: 10, fill: C.t1 }} tickFormatter={fmtTick} width={isMob ? 0 : 55} domain={[0, 'dataMax']} />
           <Tooltip content={({ active, payload, label }) => active && payload?.length ? (
             <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 7, padding: '7px 11px', fontSize: 11 }}>
               <div style={{ fontWeight: 700, marginBottom: 4, color: C.t2 }}>{label?.slice(5) || label}</div>
@@ -477,10 +587,11 @@ export function useReorderableColumns(storageKey, columns) {
 // Revenue column AND every Cancel/RTO/CIR/Exchange/Total-Return % column switch basis together
 // (qty mode = % of units returned, revenue mode = % of revenue lost — never a mix of the two).
 export function QtyRevToggle({ value, onChange }) {
-  const btnStyle = v => ({ fontSize: 11, fontWeight: 600, padding: '3px 10px', borderRadius: 5, border: `1.5px solid ${value === v ? C.acm : C.border}`, background: value === v ? C.acc : 'transparent', color: value === v ? C.t1 : C.t2, cursor: 'pointer', fontFamily: 'var(--font)' })
+  const btnStyle = v => ({ fontSize: 11, fontWeight: value === v ? 700 : 500, padding: '3px 9px', borderRadius: 6, border: 'none', outline: 'none', background: value === v ? C.acs : 'transparent', color: value === v ? '#3F3D33' : C.t2, cursor: 'pointer', fontFamily: 'var(--font)' })
   return (
-    <div style={{ display: 'flex', gap: 4 }}>
+    <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
       <button style={btnStyle('qty')} onClick={() => onChange('qty')}>Qty</button>
+      <div style={{ width: 1, height: 14, background: C.border2 }} />
       <button style={btnStyle('revenue')} onClick={() => onChange('revenue')}>Rev</button>
     </div>
   )
@@ -532,7 +643,19 @@ export function ReturnBreakdownTable({ title, rows, labelCols, basis, search, on
     ...Object.fromEntries(labelCols.map(c => [c.key, r => r[c.key]])),
   }
   const sortedRows = sortRows(filtered, getters)
-  const thStyle = { fontSize: 9.5, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.03em', color: C.t3, padding: '3px 4px 7px', borderBottom: `1px solid ${C.border}`, whiteSpace: 'normal', lineHeight: 1.25, position: 'sticky', top: 0, background: C.card, zIndex: 1 }
+  // Total row: revenue/qty sum directly; each %-metric is a weighted average using every row's
+  // own revenue/qty (whichever the active basis denominates against) as its weight — the same
+  // "reconcile like a DAX measure" convention PaymentTypeTransposedTable's Overall column uses,
+  // not a naive average of the already-computed per-row percentages.
+  const totalDenom = filtered.reduce((s, r) => s + (r[revKey] || 0), 0)
+  const weightedPct = key => totalDenom > 0 ? filtered.reduce((s, r) => s + (r[revKey] || 0) * (getters[key](r) || 0), 0) / totalDenom : 0
+  const totals = {
+    revenue: filtered.reduce((s, r) => s + (r.revenue || 0), 0),
+    qty: filtered.reduce((s, r) => s + (r.qty || 0), 0),
+    cancelPct: weightedPct('cancelPct'), rtoPct: weightedPct('rtoPct'), cirPct: weightedPct('cirPct'),
+    exchangePct: weightedPct('exchangePct'), totalReturnPct: weightedPct('totalReturnPct'),
+  }
+  const thStyle = { fontSize: 9.5, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.03em', color: C.t2, padding: '6px 8px 7px', borderBottom: `1.5px solid ${C.border}`, whiteSpace: 'normal', lineHeight: 1.25, position: 'sticky', top: 0, background: C.acl, zIndex: 1 }
   const fmtPct = v => `${(v || 0).toFixed(1)}%`
   // Conditional formatting: only flag numbers PAST the agreed bad threshold in red — every
   // other value (including 0%, which is good) stays plain ink. Never colors a "good" number.
@@ -550,7 +673,7 @@ export function ReturnBreakdownTable({ title, rows, labelCols, basis, search, on
   )
 
   return (
-    <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 13, padding: '14px 16px', display: 'flex', flexDirection: 'column', height: '100%', boxSizing: 'border-box' }}>
+    <div className="card-hoverable" style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 13, padding: '14px 16px', display: 'flex', flexDirection: 'column', height: '100%', boxSizing: 'border-box' }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 11, gap: 8, flexWrap: 'wrap', flexShrink: 0 }}>
         <span style={{ fontSize: 13, fontWeight: 600, color: C.t1 }}>{title}</span>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
@@ -607,9 +730,10 @@ export function ReturnBreakdownTable({ title, rows, labelCols, basis, search, on
               const variants = getVariants ? getVariants(r) : null
               const hasVariants = variants && variants.length > 0
               const isOpen = expanded[key]
+              const rowZebra = i % 2 === 1 ? '#FAF9F6' : 'transparent'
               return (
                 <Fragment key={key}>
-                  <tr style={{ borderBottom: (i < sortedRows.length - 1 && !isOpen) ? `1px solid ${C.border}` : 'none' }} onMouseEnter={e => e.currentTarget.style.background = '#FFFBE6'} onMouseLeave={e => e.currentTarget.style.background = ''}>
+                  <tr style={{ borderBottom: (i < sortedRows.length - 1 && !isOpen) ? `1px solid ${C.border}` : 'none', background: rowZebra, transition: 'box-shadow .12s, background .12s' }} onMouseEnter={e => { e.currentTarget.style.background = '#FDF8ED'; e.currentTarget.style.boxShadow = `inset 0 0 0 1px ${C.acm}55, 0 0 8px 0 ${C.acc}33` }} onMouseLeave={e => { e.currentTarget.style.background = rowZebra; e.currentTarget.style.boxShadow = 'none' }}>
                     {labelCols.map((c, ci) => {
                       const displayVal = c.render ? c.render(r[c.key], r) : (r[c.key] ?? '—')
                       return (
@@ -626,7 +750,7 @@ export function ReturnBreakdownTable({ title, rows, labelCols, basis, search, on
                     {metricCells(r)}
                   </tr>
                   {isOpen && variants.map((v, vi) => (
-                    <tr key={v.sku} style={{ background: C.bg, borderBottom: (vi < variants.length - 1 || i < sortedRows.length - 1) ? `1px solid ${C.border}` : 'none' }} onMouseEnter={e => e.currentTarget.style.background = '#FFFBE6'} onMouseLeave={e => e.currentTarget.style.background = C.bg}>
+                    <tr key={v.sku} style={{ background: '#FAFAF7', borderBottom: (vi < variants.length - 1 || i < sortedRows.length - 1) ? `1px solid ${C.border}` : 'none', transition: 'box-shadow .12s, background .12s' }} onMouseEnter={e => { e.currentTarget.style.background = '#FDF8ED'; e.currentTarget.style.boxShadow = `inset 0 0 0 1px ${C.acm}55, 0 0 8px 0 ${C.acc}33` }} onMouseLeave={e => { e.currentTarget.style.background = '#FAFAF7'; e.currentTarget.style.boxShadow = 'none' }}>
                       {labelCols.map((c, ci) => (
                         <td key={c.key} style={{ padding: '4px 5px', color: C.t3, fontFamily: ci === labelCols.length - 1 ? 'var(--mono)' : 'inherit', fontSize: 11, paddingLeft: ci === labelCols.length - 1 ? 22 : 5, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={ci === labelCols.length - 1 ? v.sku : ''}>
                           {ci === labelCols.length - 1 ? `↳ ${v.sku}` : ''}
@@ -642,6 +766,19 @@ export function ReturnBreakdownTable({ title, rows, labelCols, basis, search, on
               <tr><td colSpan={labelCols.length + 6} style={{ padding: '20px 5px', textAlign: 'center', color: C.t3, fontSize: 12 }}>No data</td></tr>
             )}
           </tbody>
+          {sortedRows.length > 0 && (
+            <tfoot>
+              <tr style={{ background: C.acl, position: 'sticky', bottom: 0 }}>
+                <td colSpan={labelCols.length} style={{ padding: '7px 5px', fontWeight: 700, color: C.t1, borderTop: `1.5px solid ${C.border}`, background: C.acl }}>Total</td>
+                <td style={{ padding: '7px 5px', textAlign: 'right', fontFamily: 'var(--mono)', fontSize: 11.5, fontWeight: 700, color: C.t1, borderTop: `1.5px solid ${C.border}`, background: C.acl, whiteSpace: 'nowrap' }}>{basis === 'qty' ? fmtN(totals.qty) : fmt(totals.revenue)}</td>
+                <td style={{ padding: '7px 5px', textAlign: 'right', fontWeight: 700, color: cellColor('cancelPct', totals.cancelPct), borderTop: `1.5px solid ${C.border}`, background: C.acl, whiteSpace: 'nowrap' }}>{fmtPct(totals.cancelPct)}</td>
+                <td style={{ padding: '7px 5px', textAlign: 'right', fontWeight: 700, color: cellColor('rtoPct', totals.rtoPct), borderTop: `1.5px solid ${C.border}`, background: C.acl, whiteSpace: 'nowrap' }}>{fmtPct(totals.rtoPct)}</td>
+                <td style={{ padding: '7px 5px', textAlign: 'right', fontWeight: 700, color: cellColor('cirPct', totals.cirPct), borderTop: `1.5px solid ${C.border}`, background: C.acl, whiteSpace: 'nowrap' }}>{fmtPct(totals.cirPct)}</td>
+                <td style={{ padding: '7px 5px', textAlign: 'right', fontWeight: 700, color: cellColor('exchangePct', totals.exchangePct), borderTop: `1.5px solid ${C.border}`, background: C.acl, whiteSpace: 'nowrap' }}>{fmtPct(totals.exchangePct)}</td>
+                <td style={{ padding: '7px 5px', textAlign: 'right', fontWeight: 700, color: cellColor('totalReturnPct', totals.totalReturnPct), borderTop: `1.5px solid ${C.border}`, background: C.acl, whiteSpace: 'nowrap' }}>{fmtPct(totals.totalReturnPct)}</td>
+              </tr>
+            </tfoot>
+          )}
         </table>
       </div>
     </div>

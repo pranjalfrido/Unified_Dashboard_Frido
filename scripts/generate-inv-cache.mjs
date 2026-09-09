@@ -9,6 +9,7 @@ import {
   isB2CChannel, isTotalAvgSaleChannel, buildSkuMap,
   resolveMasterSkuKey, sortByLocationOrder,
 } from '../api/_inventory_shared.js'
+import { getBQ } from '../api/_bq.js'
 
 const { Pool } = pkg
 const pool = new Pool({
@@ -128,6 +129,164 @@ for (const [, entry] of invBySkuFacility) {
 
 const cleanSalesRowsAll = salesRows.filter(row => !isPseudoSku(row.final_sku))
 
+// ── Mobility & Ergo Furniture — independent Avg Sale table ──────────────────────────────
+// These SKUs (electric wheelchairs especially) don't fit the standard 7-day-average model:
+// orders are real demand even when later Cancelled/RTO'd (dispatch delays on low-stock SKUs
+// cause 30-40% of genuine orders to fall through — so unlike everywhere else, nothing is
+// excluded here), some sell only 3-4x/week even with healthy stock, and newly-launched
+// SKUs have a ramp-up period that would understate their current pace if averaged from launch.
+// sales_window (Supabase) only retains ~15 days of history — far too short — so this section
+// queries BigQuery directly for the 180-day lookback it actually needs, once, shared across all
+// 3 window files below (this table's numbers don't depend on the 7d/15d/30d Avg Sale Window
+// toggle at all — it's driven entirely by this SKU's own selling history, not the page filter).
+const MOBILITY_ERGO_LOOKBACK_DAYS = 180
+const MOBILITY_ERGO_MIN_WINDOW_DAYS = 7
+const MOBILITY_ERGO_RATIO_FLOOR = 0.4
+const MOBILITY_ERGO_RATIO_CEIL = 2.5
+
+async function computeMobilityErgoAvgSale() {
+  const bq = getBQ()
+  const [rows] = await bq.query({
+    query: `
+      SELECT masterskucode AS sku, Category AS category, SubCategory AS subCategory,
+        CAST(OrderDate AS STRING) AS date, SUM(ItemQty) AS units
+      FROM \`frido-429506.production.fact_all_platform_sales_report\`
+      WHERE Category IN ('Mobility', 'Ergo Furniture')
+        AND OrderDate >= DATE_SUB(CURRENT_DATE(), INTERVAL ${MOBILITY_ERGO_LOOKBACK_DAYS} DAY)
+        AND OrderDate < CURRENT_DATE()
+        AND Country = 'India'
+        AND masterskucode IS NOT NULL AND TRIM(masterskucode) != ''
+      GROUP BY sku, category, subCategory, date
+      ORDER BY sku, date
+    `,
+  })
+
+  const bySku = new Map()
+  for (const r of rows) {
+    const sku = r.sku
+    if (!bySku.has(sku)) bySku.set(sku, { category: cleanLabel(r.category) || 'Uncategorized', subCategory: cleanLabel(r.subCategory) || 'Uncategorized', days: [] })
+    bySku.get(sku).days.push({ date: r.date, units: Number(r.units) })
+  }
+
+  // Current (incomplete) calendar week is excluded from the walk-back — its partial total
+  // would otherwise look like a demand drop and immediately halt the walk-back at week 1.
+  const todayWeekStart = new Date()
+  todayWeekStart.setDate(todayWeekStart.getDate() - todayWeekStart.getDay())
+  const todayWeekKey = todayWeekStart.toISOString().slice(0, 10)
+
+  const weeklyBuckets = days => {
+    const weekly = new Map()
+    for (const d of days) {
+      const dt = new Date(d.date)
+      const weekStart = new Date(dt); weekStart.setDate(dt.getDate() - dt.getDay())
+      const key = weekStart.toISOString().slice(0, 10)
+      weekly.set(key, (weekly.get(key) || 0) + d.units)
+    }
+    return [...weekly.entries()].filter(([wk]) => wk < todayWeekKey).sort(([a], [b]) => a.localeCompare(b)).map(([week, units]) => ({ week, units }))
+  }
+
+  // Walks backward from the most recent complete week, keeping a running trailing average of
+  // included weeks — stops the moment a week falls outside [40%, 250%] of that trailing average
+  // (confirmed against real SKU histories: correctly trims launch ramp-ups like a wheelchair
+  // that sold ~1 unit/week for its first 2 months before settling into steady demand, while
+  // leaving genuinely steady sellers' windows spanning their full history untouched).
+  const findNormalWindow = weeks => {
+    if (weeks.length === 0) return []
+    const included = [weeks[weeks.length - 1]]
+    let trailingAvg = included[0].units
+    for (let i = weeks.length - 2; i >= 0; i--) {
+      const w = weeks[i]
+      const ratio = trailingAvg > 0 ? w.units / trailingAvg : (w.units > 0 ? Infinity : 1)
+      if (ratio < MOBILITY_ERGO_RATIO_FLOOR || ratio > MOBILITY_ERGO_RATIO_CEIL) break
+      included.unshift(w)
+      trailingAvg = included.reduce((s, x) => s + x.units, 0) / included.length
+    }
+    return included
+  }
+
+  const results = []
+  for (const [sku, v] of bySku) {
+    const days = v.days.filter(d => d.date < todayWeekKey || true) // all days; weekly bucketing below drops the incomplete week
+    if (!days.length) continue
+    days.sort((a, b) => a.date.localeCompare(b.date))
+    const lifeStart = days[0].date, lifeEnd = days[days.length - 1].date
+    const lifeDays = Math.round((new Date(lifeEnd) - new Date(lifeStart)) / 86400000) + 1
+    const fullLifeUnits = days.reduce((s, d) => s + d.units, 0)
+    const avgSaleCurrent = lifeDays > 0 ? fullLifeUnits / lifeDays : 0
+
+    const weeks = weeklyBuckets(days)
+    const includedWeeks = findNormalWindow(weeks)
+    let windowDays, windowStart, windowEnd, windowUnits
+    if (includedWeeks.length > 0) {
+      // Calendar days actually spanned by the included weeks (not weeks.length*7 — a week
+      // bucket can hold as little as 1 real sale day for a short-lived SKU, e.g. a SKU whose
+      // entire life is a single day inside that calendar week; claiming a full 7 days for it
+      // would understate avgSaleNew far below what it actually sold at on its one active day).
+      windowStart = includedWeeks[0].week
+      const lastWeekEnd = new Date(includedWeeks[includedWeeks.length - 1].week)
+      lastWeekEnd.setDate(lastWeekEnd.getDate() + 6)
+      windowEnd = lastWeekEnd.toISOString().slice(0, 10)
+      const spanDays = Math.round((new Date(windowEnd) - new Date(windowStart)) / 86400000) + 1
+      windowDays = Math.min(spanDays, lifeDays)
+      windowUnits = includedWeeks.reduce((s, w) => s + w.units, 0)
+    } else {
+      windowDays = 0
+    }
+    if (windowDays < MOBILITY_ERGO_MIN_WINDOW_DAYS) {
+      // Floor case: either no complete week of history exists yet, or the SKU's real life is
+      // shorter than the 7-day floor itself — never pad the window past the SKU's own lifeDays,
+      // just use its full (short) life as-is.
+      windowDays = Math.min(MOBILITY_ERGO_MIN_WINDOW_DAYS, lifeDays)
+      windowStart = lifeStart; windowEnd = lifeEnd
+      windowUnits = fullLifeUnits
+    }
+    const avgSaleNew = windowDays > 0 ? windowUnits / windowDays : 0
+
+    results.push({
+      sku, category: v.category, subCategory: v.subCategory,
+      lifeStart, lifeEnd, lifeDays,
+      windowStart: windowStart || lifeStart, windowEnd: windowEnd || lifeEnd, windowDays,
+      avgSaleNew, avgSaleCurrent,
+    })
+  }
+  return results
+}
+
+const mobilityErgoRaw = await computeMobilityErgoAvgSale()
+console.log(`Mobility & Ergo Furniture Avg Sale: computed for ${mobilityErgoRaw.length} SKUs (${MOBILITY_ERGO_LOOKBACK_DAYS}d lookback)`)
+
+// All-location inventory per SKU (unfiltered by location/facility type, per this table's
+// "independent, overall — no location split" requirement) — reuses the same live-facility
+// inventory rows every other calculation in this file is built from, just summed without a
+// location dimension.
+const invBySkuAllLoc = new Map()
+for (const [, entry] of invBySkuFacility) {
+  if (!invBySkuAllLoc.has(entry.skuKey)) invBySkuAllLoc.set(entry.skuKey, { totalInvt: 0, rawInvt: 0, rawBlockedInvt: 0, rtdInvt: 0 })
+  const acc = invBySkuAllLoc.get(entry.skuKey)
+  acc.totalInvt += entry.totalInvt; acc.rawInvt += entry.rawInvt; acc.rawBlockedInvt += entry.rawBlockedInvt; acc.rtdInvt += entry.rtdInvt
+}
+
+const mobilityErgoAvgSale = mobilityErgoRaw.map(r => {
+  const skuKey = normSku(r.sku)
+  const inv = invBySkuAllLoc.get(skuKey) || { totalInvt: 0, rawInvt: 0, rawBlockedInvt: 0, rtdInvt: 0 }
+  const last90 = lastSaleBySkuKey.get(skuKey)
+  const master = itemMaster.get(skuKey)
+  const newLaunch = isNewLaunch(master?.launchDate, new Date())
+  const isDead = inv.totalInvt > 0 && (last90?.qty90d || 0) === 0 && !newLaunch
+  const doi = r.avgSaleNew > 0 ? Math.floor(inv.totalInvt / r.avgSaleNew) : (inv.totalInvt > 0 ? null : 0)
+  return {
+    sku: r.sku, category: r.category, subCategory: r.subCategory,
+    totalInvt: Math.round(inv.totalInvt), rawInvt: Math.round(inv.rawInvt), rawBlockedInvt: Math.round(inv.rawBlockedInvt), rtdInvt: Math.round(inv.rtdInvt),
+    lifeStart: r.lifeStart, lifeEnd: r.lifeEnd, lifeDays: r.lifeDays,
+    windowStart: r.windowStart, windowEnd: r.windowEnd, windowDays: r.windowDays,
+    avgSaleNew: +r.avgSaleNew.toFixed(2), avgSaleCurrent: +r.avgSaleCurrent.toFixed(2),
+    doi,
+    stockStatus: doi == null ? stockStatus(0, r.avgSaleNew, inv.totalInvt, { isDead }) : stockStatus(doi, r.avgSaleNew, inv.totalInvt, { isDead }),
+    isDead,
+    websiteStatus: liveOnWebsite.has(skuKey) ? 'Live' : 'Stock Out',
+  }
+}).sort((a, b) => b.totalInvt - a.totalInvt)
+
 function computePayload(windowDays) {
   const startDate = new Date(end)
   startDate.setDate(startDate.getDate() - (windowDays - 1))
@@ -210,6 +369,11 @@ function computePayload(windowDays) {
   // company-wide Location cards, which show ALL facility types combined by default. Facility
   // Type filtering (done client-side / in api/inventory.js) operates on skuFacilityRows'
   // `facility`/`facilityType` fields directly, not on this pre-rolled view.
+  // doi/stockStatus must be recomputed AFTER totalInvt is fully summed across every facility at
+  // this location — spreading them in from whichever facility row happened to be inserted first
+  // (the old `{ ...r, totalInvt: 0, ... }` pattern) left them permanently stale against a
+  // different facility's totalInvt (often 0, if that facility was seen first), producing rows
+  // like totalInvt=90 / doi=0 / stockStatus="Out of Stock" once the real total was summed in.
   const skuLocMap = new Map()
   for (const r of skuFacilityRows) {
     const locKey = `${r.skuKey}|${r.location}`
@@ -217,13 +381,24 @@ function computePayload(windowDays) {
     const acc = skuLocMap.get(locKey)
     acc.totalInvt += r.totalInvt; acc.rawInvt += r.rawInvt; acc.rawBlockedInvt += r.rawBlockedInvt; acc.rtdInvt += r.rtdInvt
   }
-  // Recalculate doi and stockStatus for each (sku, location) using the summed totalInvt.
-  // The initial spread from the first facility row may have totalInvt=0, giving a wrong doi/stockStatus.
+  // Recompute doi/isDead/stockStatus/rtdLevel/requiredStock/thirtyDayReq/inventoryShort for
+  // each (sku, location) using the summed totalInvt — the initial spread from the first
+  // facility row can carry a stale totalInvt=0 (and everything derived from it) from whichever
+  // facility happened to be inserted first, before the real per-location total was summed in.
   const skuLocRows = [...skuLocMap.values()].map(r => {
     const denominator = Math.ceil(Math.max(r.avgSale, r.orderAllocation))
     const doi = r.totalInvt > 0 && denominator === 0 ? null : (denominator > 0 ? Math.floor(r.totalInvt / denominator) : 0)
-    const status = doi == null ? stockStatus(0, r.avgSale, r.totalInvt, { isDead: r.isDead }) : stockStatus(doi, r.avgSale, r.totalInvt, { isDead: r.isDead })
-    return { ...r, doi, stockStatus: status }
+    const master = itemMaster.get(r.skuKey)
+    const last90 = lastSaleBySkuKey.get(r.skuKey)
+    const newLaunch = isNewLaunch(master?.launchDate, endDateObj)
+    const isDead = r.totalInvt > 0 && (last90?.qty90d || 0) === 0 && !newLaunch
+    return {
+      ...r, doi, isDead,
+      thirtyDayReq: Math.round(r.avgSale * 30), inventoryShort: Math.round(r.avgSale * 30 - r.totalInvt),
+      rtdLevel: rtdLevel(r.rtdInvt, r.avgSale),
+      stockStatus: doi == null ? stockStatus(0, r.avgSale, r.totalInvt, { isDead }) : stockStatus(doi, r.avgSale, r.totalInvt, { isDead }),
+      requiredStock: Math.round(requiredStock(r.avgSale, master?.leadTime || 0, master?.productSource || null, r.totalInvt)),
+    }
   })
 
   const rolledSkuMap = new Map()
@@ -256,7 +431,15 @@ function computePayload(windowDays) {
     const totalAvgSale = Math.ceil(s.rawTotalAvgSaleQty / windowDays)
     const denominator = Math.ceil(Math.max(avgSale, s.orderAllocation))
     const doi = s.totalInvt > 0 && denominator === 0 ? null : (denominator > 0 ? Math.floor(s.totalInvt / denominator) : 0)
-    const isDead = s.totalInvt > 0 && !s.locations.some(l => l.stockStatus !== 'Dead / No Sale' && l.stockStatus !== 'Out of Stock') && s.locations.some(l => l.stockStatus === 'Dead / No Sale')
+    // SKU-wide dead check: no sale ANYWHERE in the trailing 90d and not a recent launch — same
+    // rule used at the facility/location grain above (lines 273/349/392). The previous
+    // "every location must independently read Dead/No Sale or Out of Stock" rule undercounted:
+    // a SKU selling a trickle at just one of several warehouses escaped the dead-stock count
+    // entirely, even though most of its inventory was genuinely stagnant elsewhere.
+    const skuMaster = itemMaster.get(s.skuKey)
+    const skuLast90 = lastSaleBySkuKey.get(s.skuKey)
+    const skuNewLaunch = isNewLaunch(skuMaster?.launchDate, endDateObj)
+    const isDead = s.totalInvt > 0 && (skuLast90?.qty90d || 0) === 0 && !skuNewLaunch
     const status = doi == null ? stockStatus(0, avgSale, s.totalInvt, {isDead}) : stockStatus(doi, avgSale, s.totalInvt, {isDead})
     const daysSinceLastSale = s.lastSaleDate ? Math.round((endDateObj - new Date(s.lastSaleDate)) / 86400000) : null
     return {
@@ -364,6 +547,10 @@ function computePayload(windowDays) {
     locations, leadTimeRisk, deadStock, slowMoving,
     pivot: { locations: pivotLocations, rows: pivotRows },
     filterOptions, skus,
+    // Independent of windowDays — this table's Avg Sale is driven entirely by each SKU's own
+    // 180-day selling history, not the page's 7d/15d/30d Avg Sale Window toggle. Computed once
+    // above and attached identically to all 3 files.
+    mobilityErgoAvgSale,
   }
 }
 

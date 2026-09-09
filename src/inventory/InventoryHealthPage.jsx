@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useRef, useEffect, useCallback, Children } from 'react'
 import {
-  IC, fmtNum, fmtInt, fmtDays, GlassCard, KpiTile, StatusChip, SearchableMultiSelect, DraggableTh, ExportButton,
+  IC, fmtNum, fmtInt, fmtDays, GlassCard, KpiTile, StatusChip, SearchableMultiSelect, DraggableTh, SortableTh, ExportButton,
 } from './theme.jsx'
 
 // Mobile: horizontal swipe carousel with header + dots. Desktop: normal 7-col grid.
@@ -36,7 +36,7 @@ function KpiCarousel({ children }) {
         </div>
         <div style={{ display: 'flex', justifyContent: 'center', gap: 5, marginTop: 10 }}>
           {Array.from({ length: count }).map((_, i) => (
-            <div key={i} style={{ width: i === activeIdx ? 16 : 6, height: 6, borderRadius: 3, background: i === activeIdx ? '#FFD600' : '#C7C7CE', transition: 'all .2s' }} />
+            <div key={i} style={{ width: i === activeIdx ? 16 : 6, height: 6, borderRadius: 3, background: i === activeIdx ? IC.acc : '#C7C7CE', transition: 'all .2s' }} />
           ))}
         </div>
       </div>
@@ -85,7 +85,7 @@ function WhCarousel({ locations, filters }) {
         </div>
         <div style={{ display: 'flex', justifyContent: 'center', gap: 5, marginTop: 10 }}>
           {Array.from({ length: count }).map((_, i) => (
-            <div key={i} style={{ width: i === activeIdx ? 16 : 6, height: 6, borderRadius: 3, background: i === activeIdx ? '#FFD600' : '#C7C7CE', transition: 'all .2s' }} />
+            <div key={i} style={{ width: i === activeIdx ? 16 : 6, height: 6, borderRadius: 3, background: i === activeIdx ? IC.acc : '#C7C7CE', transition: 'all .2s' }} />
           ))}
         </div>
       </div>
@@ -315,7 +315,7 @@ function SubCatStockTable({ rows, emptyLabel, search = '' }) {
   const th = (label, key, align = 'right') => (
     <th onClick={() => onSort(key)}
       style={{
-        textAlign: align, padding: '6px 8px', fontSize: 8, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.05em',
+        textAlign: align, padding: '6px 8px', fontSize: 10.5, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.05em',
         color: sort?.key === key ? IC.t1 : IC.t3, cursor: 'pointer', userSelect: 'none', whiteSpace: 'nowrap',
       }}>
       {label}{sort?.key === key ? (sort.dir === 'asc' ? ' ▲' : ' ▼') : ''}
@@ -324,7 +324,7 @@ function SubCatStockTable({ rows, emptyLabel, search = '' }) {
 
   return (
     <div style={{ maxHeight: 460, overflowY: 'auto' }}>
-      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 9.6, tableLayout: 'fixed' }}>
+      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12, tableLayout: 'fixed' }}>
         <colgroup>
           <col style={{ width: 190 }} />
           <col style={{ width: 72 }} />
@@ -352,7 +352,7 @@ function SubCatStockTable({ rows, emptyLabel, search = '' }) {
                   <td style={{ padding: '6px 8px', fontWeight: 600, color: IC.t1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                     <span style={{ color: IC.t3, marginRight: 6, display: 'inline-block', transform: isOpen ? 'rotate(90deg)' : 'none', transition: 'transform .15s' }}>›</span>
                     {r.subCategory}
-                    <span style={{ marginLeft: 6, fontSize: 8.4, color: IC.t3, fontWeight: 500 }}>({r.category})</span>
+                    <span style={{ marginLeft: 6, fontSize: 10.5, color: IC.t3, fontWeight: 500 }}>({r.category})</span>
                   </td>
                   <td style={{ padding: '6px 8px', textAlign: 'right', fontVariantNumeric: 'tabular-nums', fontWeight: 700 }}>{fmtInt(r.totalInvt)}</td>
                   <td style={{ padding: '6px 8px', textAlign: 'right', fontVariantNumeric: 'tabular-nums', color: IC.t2 }}>{fmtNum(r.avgSale)}</td>
@@ -360,10 +360,10 @@ function SubCatStockTable({ rows, emptyLabel, search = '' }) {
                 </tr>
                 {isOpen && r.skus.map((s, j) => (
                   <tr key={key + '-' + j} style={{ background: 'rgba(0,0,0,0.02)', borderBottom: `1px solid ${IC.border}`, height: 28 }}>
-                    <td style={{ padding: '5px 8px 5px 26px', color: IC.t3, fontSize: 9.2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>↳ {s.sku}</td>
-                    <td style={{ padding: '5px 8px', textAlign: 'right', fontVariantNumeric: 'tabular-nums', fontSize: 9.2, color: IC.t2 }}>{fmtInt(s.totalInvt)}</td>
-                    <td style={{ padding: '5px 8px', textAlign: 'right', fontVariantNumeric: 'tabular-nums', fontSize: 9.2, color: IC.t2 }}>{fmtNum(s.avgSale)}</td>
-                    <td style={{ padding: '5px 8px', textAlign: 'right', fontVariantNumeric: 'tabular-nums', fontSize: 9.2, color: IC.t1 }}>{fmtDays(s.doi)}d</td>
+                    <td style={{ padding: '5px 8px 5px 26px', color: IC.t3, fontSize: 11.5, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>↳ {s.sku}</td>
+                    <td style={{ padding: '5px 8px', textAlign: 'right', fontVariantNumeric: 'tabular-nums', fontSize: 11.5, color: IC.t2 }}>{fmtInt(s.totalInvt)}</td>
+                    <td style={{ padding: '5px 8px', textAlign: 'right', fontVariantNumeric: 'tabular-nums', fontSize: 11.5, color: IC.t2 }}>{fmtNum(s.avgSale)}</td>
+                    <td style={{ padding: '5px 8px', textAlign: 'right', fontVariantNumeric: 'tabular-nums', fontSize: 11.5, color: IC.t1 }}>{fmtDays(s.doi)}d</td>
                   </tr>
                 ))}
               </React.Fragment>
@@ -372,6 +372,127 @@ function SubCatStockTable({ rows, emptyLabel, search = '' }) {
         </tbody>
       </table>
     </div>
+  )
+}
+
+// Independent Avg Sale table for Mobility & Ergo Furniture — see mobilityErgoAvgSale in
+// scripts/generate-inv-cache.mjs for the calculation itself (adaptive-window, all-location,
+// no exclusions on Cancelled/RTO). Deliberately NOT wired to the Location sidebar filter — this
+// table's numbers are driven entirely by each SKU's own selling history, not the page's
+// location/date-range selection, so it stays visually and functionally separate from the main
+// Inventory Detail table (same reasoning as why it's a distinct backend field, not folded into
+// `skus`).
+const MOBILITY_ERGO_COLS = [
+  { key: 'category', label: 'Category', align: 'left', width: 110 },
+  { key: 'subCategory', label: 'Sub-Category', align: 'left', width: 160 },
+  { key: 'sku', label: 'Product ID', align: 'left', width: 130 },
+  { key: 'rtdInvt', label: 'RTD Invt', width: 78 },
+  { key: 'rawInvt', label: 'Raw Invt', width: 78 },
+  { key: 'rawBlockedInvt', label: 'Raw Blocked', width: 90 },
+  { key: 'totalInvt', label: 'Total Invt', width: 84 },
+  { key: 'lifeDays', label: 'Selling Life', width: 90 },
+  { key: 'windowDays', label: 'Window Used', width: 130 },
+  { key: 'avgSaleNew', label: 'Avg Sale', width: 82 },
+  { key: 'avgSaleCurrent', label: 'Avg Sale (Std 7d)', width: 110 },
+  { key: 'doi', label: 'DOI', width: 64 },
+  { key: 'stockStatus', label: 'Status', width: 110 },
+  { key: 'websiteStatus', label: 'Website Status', width: 110 },
+]
+
+function MobilityErgoAvgSaleTable({ rows }) {
+  const [search, setSearch] = useState('')
+  const [sort, setSort] = useState({ key: 'totalInvt', dir: 'desc' })
+  const onSort = key => setSort(prev => prev.key === key ? { key, dir: prev.dir === 'asc' ? 'desc' : 'asc' } : { key, dir: 'desc' })
+
+  const q = search.trim().toLowerCase()
+  const filtered = q ? rows.filter(r => r.sku.toLowerCase().includes(q) || r.category.toLowerCase().includes(q) || r.subCategory.toLowerCase().includes(q)) : rows
+  const sorted = [...filtered].sort((a, b) => {
+    const sign = sort.dir === 'asc' ? 1 : -1
+    const av = a[sort.key], bv = b[sort.key]
+    if (typeof av === 'string') return sign * av.localeCompare(bv)
+    return sign * ((av ?? -Infinity) - (bv ?? -Infinity))
+  })
+
+  const totals = filtered.reduce((acc, r) => ({
+    rtdInvt: acc.rtdInvt + (r.rtdInvt || 0), rawInvt: acc.rawInvt + (r.rawInvt || 0),
+    rawBlockedInvt: acc.rawBlockedInvt + (r.rawBlockedInvt || 0), totalInvt: acc.totalInvt + (r.totalInvt || 0),
+  }), { rtdInvt: 0, rawInvt: 0, rawBlockedInvt: 0, totalInvt: 0 })
+
+  const exportRows = filtered.map(r => ({
+    Category: r.category, SubCategory: r.subCategory, ProductID: r.sku,
+    RTDInvt: r.rtdInvt, RawInvt: r.rawInvt, RawBlocked: r.rawBlockedInvt, TotalInvt: r.totalInvt,
+    SellingLifeDays: r.lifeDays, WindowStart: r.windowStart, WindowEnd: r.windowEnd, WindowDays: r.windowDays,
+    AvgSale: r.avgSaleNew, AvgSaleStd7d: r.avgSaleCurrent, DOI: r.doi, Status: r.stockStatus, WebsiteStatus: r.websiteStatus,
+  }))
+
+  return (
+    <GlassCard
+      title="Avg Sale · Mobility &amp; Ergo Furniture"
+      note={`${fmtInt(filtered.length)} of ${fmtInt(rows.length)} SKUs · adaptive-window calculation, all locations`}
+      action={
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <input placeholder="Search category / product…" value={search} onChange={e => setSearch(e.target.value)}
+            style={{ background: IC.surface, border: `1px solid ${IC.border2}`, borderRadius: 8, padding: '6px 10px', color: IC.t1, fontSize: 12, width: 200, boxSizing: 'border-box' }} />
+          <ExportButton filename="mobility_ergo_avg_sale.csv" rows={exportRows}
+            columns={[
+              { label: 'Category', key: 'Category' }, { label: 'Sub-Category', key: 'SubCategory' }, { label: 'Product ID', key: 'ProductID' },
+              { label: 'RTD Invt', key: 'RTDInvt' }, { label: 'RAW Invt', key: 'RawInvt' }, { label: 'RAW Blocked', key: 'RawBlocked' }, { label: 'Total Invt', key: 'TotalInvt' },
+              { label: 'Selling Life (days)', key: 'SellingLifeDays' }, { label: 'Window Start', key: 'WindowStart' }, { label: 'Window End', key: 'WindowEnd' }, { label: 'Window (days)', key: 'WindowDays' },
+              { label: 'Avg Sale', key: 'AvgSale' }, { label: 'Avg Sale (Std 7d)', key: 'AvgSaleStd7d' }, { label: 'DOI', key: 'DOI' }, { label: 'Status', key: 'Status' }, { label: 'Website Status', key: 'WebsiteStatus' },
+            ]} />
+        </div>
+      }>
+      <div style={{ maxHeight: 520, overflow: 'auto' }}>
+        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12, tableLayout: 'fixed' }}>
+          <colgroup>{MOBILITY_ERGO_COLS.map(c => <col key={c.key} style={{ width: c.width }} />)}</colgroup>
+          <thead style={{ position: 'sticky', top: 0, zIndex: 2, background: IC.surfaceHi }}>
+            <tr>
+              {MOBILITY_ERGO_COLS.map(c => (
+                <SortableTh key={c.key} label={c.label} sortKey={c.key} sortState={sort} onSort={onSort} align={c.align} />
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {sorted.map((r, i) => (
+              <tr key={r.sku + i} style={{ borderBottom: `1px solid ${IC.border}`, height: 32 }}
+                onMouseEnter={e => e.currentTarget.style.background = 'rgba(0,0,0,0.025)'}
+                onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
+                <td style={{ padding: '6px 10px', color: IC.t2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.category}</td>
+                <td style={{ padding: '6px 10px', color: IC.t2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.subCategory}</td>
+                <td style={{ padding: '6px 10px', fontWeight: 600, color: IC.t1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.sku}</td>
+                <td style={{ padding: '6px 10px', textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{fmtInt(r.rtdInvt)}</td>
+                <td style={{ padding: '6px 10px', textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{fmtInt(r.rawInvt)}</td>
+                <td style={{ padding: '6px 10px', textAlign: 'right', fontVariantNumeric: 'tabular-nums', color: IC.status.Low.c }}>{fmtInt(r.rawBlockedInvt)}</td>
+                <td style={{ padding: '6px 10px', textAlign: 'right', fontVariantNumeric: 'tabular-nums', fontWeight: 700 }}>{fmtInt(r.totalInvt)}</td>
+                <td style={{ padding: '6px 10px', textAlign: 'right', fontVariantNumeric: 'tabular-nums', color: IC.t2 }}>{fmtDays(r.lifeDays)}d</td>
+                <td style={{ padding: '6px 10px', textAlign: 'right', fontSize: 10.5, color: IC.t3 }} title={`${r.windowStart} → ${r.windowEnd}`}>{fmtDays(r.windowDays)}d</td>
+                <td style={{ padding: '6px 10px', textAlign: 'right', fontVariantNumeric: 'tabular-nums', fontWeight: 700, color: IC.t1 }}>{fmtNum(r.avgSaleNew)}</td>
+                <td style={{ padding: '6px 10px', textAlign: 'right', fontVariantNumeric: 'tabular-nums', color: IC.t3 }}>{fmtNum(r.avgSaleCurrent)}</td>
+                <td style={{ padding: '6px 10px', textAlign: 'right', fontVariantNumeric: 'tabular-nums', fontWeight: 700 }}>{r.doi == null ? '—' : `${fmtDays(r.doi)}d`}</td>
+                <td style={{ padding: '6px 10px' }}><StatusChip status={r.stockStatus} /></td>
+                <td style={{ padding: '6px 10px' }}>
+                  <span style={{
+                    display: 'inline-flex', alignItems: 'center', gap: 5, padding: '3px 9px', borderRadius: 999, fontSize: 11, fontWeight: 600,
+                    background: r.websiteStatus === 'Live' ? `${IC.status.Sufficient.c}22` : `${IC.status.Critical.c}22`,
+                    color: r.websiteStatus === 'Live' ? IC.status.Sufficient.c : IC.status.Critical.c,
+                  }}>{r.websiteStatus}</span>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+          <tfoot>
+            <tr style={{ position: 'sticky', bottom: 0, background: IC.surfaceHi, borderTop: `2px solid ${IC.border2}`, height: 34 }}>
+              <td style={{ padding: '7px 10px', fontWeight: 700, fontSize: 11, color: IC.t3 }} colSpan={3}>{filtered.length} SKUs</td>
+              <td style={{ padding: '7px 10px', textAlign: 'right', fontVariantNumeric: 'tabular-nums', fontWeight: 700 }}>{fmtInt(totals.rtdInvt)}</td>
+              <td style={{ padding: '7px 10px', textAlign: 'right', fontVariantNumeric: 'tabular-nums', fontWeight: 700 }}>{fmtInt(totals.rawInvt)}</td>
+              <td style={{ padding: '7px 10px', textAlign: 'right', fontVariantNumeric: 'tabular-nums', fontWeight: 700, color: IC.status.Low.c }}>{fmtInt(totals.rawBlockedInvt)}</td>
+              <td style={{ padding: '7px 10px', textAlign: 'right', fontVariantNumeric: 'tabular-nums', fontWeight: 700 }}>{fmtInt(totals.totalInvt)}</td>
+              <td colSpan={7} />
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+    </GlassCard>
   )
 }
 
@@ -420,7 +541,7 @@ const SIDEBAR_WIDTH = 220
 function SidebarSectionTitle({ title }) {
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 6, margin: '6px 0 4px' }}>
-      <div style={{ width: 3, height: 12, borderRadius: 2, background: '#1967D2', flexShrink: 0 }} />
+      <div style={{ width: 3, height: 12, borderRadius: 2, background: IC.accBorder, flexShrink: 0 }} />
       <span style={{ fontSize: 10, fontWeight: 800, color: IC.t2, letterSpacing: '.05em', textTransform: 'uppercase' }}>{title}</span>
     </div>
   )
@@ -429,12 +550,12 @@ function SidebarSectionTitle({ title }) {
 function TileToggle({ label, active, onClick }) {
   return (
     <button onClick={onClick}
-      onMouseEnter={e => { if (!active) e.currentTarget.style.background = '#F4F6FB' }}
+      onMouseEnter={e => { if (!active) e.currentTarget.style.background = IC.hoverBg }}
       onMouseLeave={e => { if (!active) e.currentTarget.style.background = IC.surface }}
       style={{
         padding: '7px 4px', borderRadius: 8, cursor: 'pointer', fontSize: 11, fontWeight: active ? 700 : 500,
-        background: active ? '#E8F0FE' : IC.surface, color: active ? '#1967D2' : IC.t2,
-        border: `1.5px solid ${active ? '#AECBFA' : IC.border}`, textAlign: 'center',
+        background: active ? IC.accDim : IC.surface, color: active ? IC.t1 : IC.t2,
+        border: `1.5px solid ${active ? IC.accBorder : IC.border}`, textAlign: 'center',
         overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', transition: 'background .12s, border-color .12s',
       }}>
       {label}
@@ -655,7 +776,7 @@ function PivotTable({ pivot, search }) {
   return (
     <div style={{ minWidth: 0 }}>
       <div style={{ maxHeight: TABLE_SCROLL_HEIGHT, overflow: 'auto' }}>
-        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11, tableLayout: 'fixed' }}>
+        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12, tableLayout: 'fixed' }}>
           <colgroup>
             <col style={{ width: 200 }} />
             {pivot.locations.map(loc => <col key={loc} style={{ width: 100 }} />)}
@@ -663,15 +784,15 @@ function PivotTable({ pivot, search }) {
           </colgroup>
           <thead style={{ position: 'sticky', top: 0, zIndex: 2 }}>
             <tr>
-              <th rowSpan={2} style={{ textAlign: 'left', fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.05em', color: IC.t3, padding: '6px 10px', borderBottom: `1px solid ${IC.border2}`, borderRight: `1px solid ${IC.border}`, position: 'sticky', left: 0, background: IC.surfaceHi, zIndex: 3, whiteSpace: 'nowrap' }}>Category / Sub-category / SKU</th>
+              <th rowSpan={2} style={{ textAlign: 'left', fontSize: 12, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.05em', color: IC.t3, padding: '6px 10px', borderBottom: `1px solid ${IC.border2}`, borderRight: `1px solid ${IC.border}`, position: 'sticky', left: 0, background: IC.surfaceHi, zIndex: 3, whiteSpace: 'nowrap' }}>Category / Sub-category / SKU</th>
               {pivot.locations.map(loc => (
-                <th key={loc} style={{ textAlign: 'center', fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.05em', color: IC.t3, padding: '6px 6px 2px', borderRight: `1px solid ${IC.border}`, background: IC.surfaceHi }}>{loc}</th>
+                <th key={loc} style={{ textAlign: 'center', fontSize: 12, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.05em', color: IC.t3, padding: '6px 6px 2px', borderRight: `1px solid ${IC.border}`, background: IC.surfaceHi }}>{loc}</th>
               ))}
-              <th rowSpan={2} style={{ textAlign: 'center', fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.05em', color: IC.t3, padding: '6px 6px', borderBottom: `1px solid ${IC.border2}`, background: IC.surfaceHi }}>Total<br />Invt / Sale</th>
+              <th rowSpan={2} style={{ textAlign: 'center', fontSize: 12, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.05em', color: IC.t3, padding: '6px 6px', borderBottom: `1px solid ${IC.border2}`, background: IC.surfaceHi }}>Total<br />Invt / Sale</th>
             </tr>
             <tr>
               {pivot.locations.map(loc => (
-                <th key={loc} style={{ fontSize: 9, fontWeight: 600, color: IC.t3, padding: '0 6px 6px', borderBottom: `1px solid ${IC.border2}`, borderRight: `1px solid ${IC.border}`, background: IC.surfaceHi }}>
+                <th key={loc} style={{ fontSize: 11, fontWeight: 600, color: IC.t3, padding: '0 6px 6px', borderBottom: `1px solid ${IC.border2}`, borderRight: `1px solid ${IC.border}`, background: IC.surfaceHi }}>
                   <span style={{ display: 'flex', justifyContent: 'space-between' }}><span style={{ flex: 1, textAlign: 'right', paddingRight: 4 }}>Inventory</span><span style={{ flex: 1, textAlign: 'right' }}>Avg Sale</span></span>
                 </th>
               ))}
@@ -714,9 +835,9 @@ function PivotTable({ pivot, search }) {
                         </tr>
                         {subOpen && sub.skus.sort((a, b) => b.totalInvt - a.totalInvt).map(sku => (
                           <tr key={sku.sku} style={{ borderBottom: `1px solid ${IC.border}`, background: 'rgba(0,0,0,0.015)' }}>
-                            <td style={{ padding: '5px 10px 5px 46px', color: IC.t3, fontSize: 11, position: 'sticky', left: 0, background: IC.surface, borderRight: `1px solid ${IC.border}` }}>{sku.sku}</td>
+                            <td style={{ padding: '5px 10px 5px 46px', color: IC.t3, fontSize: 12, position: 'sticky', left: 0, background: IC.surface, borderRight: `1px solid ${IC.border}` }}>{sku.sku}</td>
                             {pivot.locations.map(loc => locCell(sku.byLocation, loc, IC.t3))}
-                            <td style={{ padding: '5px 10px', textAlign: 'right', fontVariantNumeric: 'tabular-nums', color: IC.t2, fontSize: 11 }}>
+                            <td style={{ padding: '5px 10px', textAlign: 'right', fontVariantNumeric: 'tabular-nums', color: IC.t2, fontSize: 12 }}>
                               {fmtInt(sku.totalInvt)} <span style={{ color: IC.t3 }}>/ {fmtInt(sku.avgSale)}</span>
                             </td>
                           </tr>
@@ -1154,6 +1275,15 @@ const InventoryHealthInner = React.memo(function InventoryHealthInner({ data, fi
         </GlassCard>
         </div>
       </div>
+
+      {/* Mobility & Ergo Furniture — independent Avg Sale table. Not gated by any sidebar
+          filter (location/facility/category/etc.) — see MOBILITY_ERGO_COLS comment above for
+          why this is deliberately separate from the main Inventory Detail table. */}
+      {data.mobilityErgoAvgSale?.length > 0 && (
+        <div style={{ paddingBottom: 20 }}>
+          <MobilityErgoAvgSaleTable rows={data.mobilityErgoAvgSale} />
+        </div>
+      )}
       </div>
     </div>
   )

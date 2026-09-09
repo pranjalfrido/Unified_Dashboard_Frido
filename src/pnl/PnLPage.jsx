@@ -1,6 +1,8 @@
 import { useState, useMemo, useEffect } from 'react'
 import PnLChannelTab from './PnLChannelTab.jsx'
+import StorePnLTable from './StorePnLTable.jsx'
 import { netRevenueOf, estimateCogsPerUnit } from './pnlUtils.js'
+import { C } from '../utils.js'
 
 // One subtab per Sales-tab channel + a consolidated "All Channels" tab — same bar, same visual
 // chrome as SalesPage. Every channel's Category→Product(→SKU) map is rebuilt here the same way
@@ -61,6 +63,20 @@ function rateForSlab(slabs, weightSlab) {
   if (!slabs || !slabs.length || weightSlab == null) return null
   return slabs.find(s => s.weightGm === weightSlab) || null
 }
+// Offline's fulfilment lookup is bracketed (highest slab <= total weight), unlike D2C/EBO's
+// rateForSlab() which matches a single order's EXACT weightSlab value — offline has no per-order
+// line-item weight, only each SKU's total net weight moved across the whole date range (confirmed
+// 2026-08-20: treat that total as one shipment for slab-lookup purposes). Assumes slabs is sorted
+// ascending by weightGm (true of snd-rates.json as generated).
+function fulfilmentForWeight(slabs, weightGm) {
+  if (!slabs || !slabs.length || weightGm == null) return null
+  let match = null
+  for (const s of slabs) {
+    if (s.weightGm <= weightGm) match = s
+    else break
+  }
+  return match || slabs[0]
+}
 
 // Flat per-SKU COGS rate sheet (public/cogs-data.json), same file PnLFinancialTable.jsx fetches
 // for the whole-range table — fetched again here (browser HTTP cache makes this free) so the
@@ -75,9 +91,11 @@ export default function PnLPage({ data, filters, setFilters, activeTab: activeTa
   const PNL_KEY_MAP = { 'all': 'pnl:all', 'shopify': 'pnl:shopify', 'ebo': 'pnl:ebo', 'amazon': 'pnl:amazon', 'flipkart': 'pnl:flipkart', 'blinkit': 'pnl:blinkit', 'cred': 'pnl:cred', 'firstcry': 'pnl:firstcry', 'instamart': 'pnl:instamart', 'zepto': 'pnl:zepto', 'myntra': 'pnl:myntra', 'international': 'pnl:international', 'offline': 'pnl:offline' }
   const allowedPnlTabs = PNL_TABS.filter(t => !allowedTabs || allowedTabs.includes(PNL_KEY_MAP[t.id]))
   const [activeTabLocal, setActiveTabLocal] = useState('all')
-  const [amzChannelViewLocal, setAmzChannelViewLocal] = useState('all')
-  const [offlineSubLocal, setOfflineSubLocal] = useState('all')
-  const [d2cSubChLocal, setD2cSubChLocal] = useState('all')
+  const [amzChannelViewLocal, setAmzChannelViewLocal] = useState('all') // 'all' | 'sc' | 'vc'
+  const [offlineSubLocal, setOfflineSubLocal] = useState('all') // 'all' | 'b2b' | 'Stockist' | 'MTGT' | 'misc'
+  // D2C is India-only permanently (International orders live under their own top-level
+  // "International" PnL tab) — no region toggle/state needed here anymore.
+  const [d2cSubChLocal, setD2cSubChLocal] = useState('all') // 'all' | 'MyFrido' | 'Mobility'
   const activeTab = activeTabProp !== undefined ? activeTabProp : activeTabLocal
   const setActiveTab = setActiveTabProp || setActiveTabLocal
   const amzChannelView = amzChannelViewProp !== undefined ? amzChannelViewProp : amzChannelViewLocal
@@ -148,6 +166,280 @@ export default function PnLPage({ data, filters, setFilters, activeTab: activeTa
     return out
   }, [shSkuCosts])
 
+  // EBO S&D: same weight-slab courier formula as D2C (see eboSkuCosts query in api/bq.js) —
+  // ~70% of EBO orders are punched online and shipped courier-direct from the warehouse,
+  // indistinguishable in the data from a normal D2C order, and no field marks the remaining
+  // ~30% fulfilled directly from the physical store instead. EBO_SND_SCALE approximates that
+  // in-store share's lower logistics cost as a flat 15% reduction on the whole formula, rather
+  // than a per-order split (confirmed with user 2026-08-20 — deliberately not modeling the
+  // separate ₹4/kg warehouse→store movement cost, since the two paths can't be told apart).
+  const EBO_SND_SCALE = 0.85
+  const eboSkuCosts = useMemo(() => {
+    const rows = data?.ebo?.skuCostRows
+    if (!sndRates || !rows?.length) return {}
+    const bySku = {}
+    rows.forEach(row => {
+      const { sku, orderStatus, weightSlab, lineCount, totalQty, grossIncGst } = row
+      if (!sku) return
+      const effectiveSlab = weightSlab != null ? weightSlab : 2000
+      const rate = rateForSlab(sndRates, effectiveSlab)
+      let logistics = 0
+      let fulfilment = rate ? rate.fulfilment * lineCount : 0
+      if (rate) {
+        const st = (orderStatus || '').toLowerCase()
+        if (st === 'cancelled') {
+          logistics = 0
+        } else if (st === 'rto') {
+          logistics = (rate.forward + rate.rto) * lineCount
+        } else if (st === 'cir' || st === 'exchange' || st === 'return') {
+          logistics = (rate.forward + rate.reverse) * lineCount
+        } else {
+          logistics = rate.forward * lineCount
+        }
+      }
+      const paymentGw = grossIncGst * 0.011
+      const softwareFee = totalQty * 15
+      if (!bySku[sku]) bySku[sku] = { logistics: 0, fulfilment: 0, paymentGw: 0, softwareFee: 0 }
+      bySku[sku].logistics += logistics
+      bySku[sku].fulfilment += fulfilment
+      bySku[sku].paymentGw += paymentGw
+      bySku[sku].softwareFee += softwareFee
+    })
+    return bySku
+  }, [sndRates, data])
+  const eboSndBySku = useMemo(() => {
+    const out = {}
+    Object.entries(eboSkuCosts).forEach(([sku, c]) => {
+      out[sku] = ((c.logistics || 0) + (c.fulfilment || 0) + (c.paymentGw || 0) + (c.softwareFee || 0)) * EBO_SND_SCALE
+    })
+    return out
+  }, [eboSkuCosts])
+
+  // Store-wise EBO P&L, down to EBITDA (confirmed 2026-08-20). SnD reuses the identical
+  // weight-slab formula as eboSkuCosts above (same EBO_SND_SCALE), just computed per (store, sku)
+  // from ebo.storeSkuCostRows instead of per-SKU across the whole channel — a SKU sold from two
+  // different stores gets two independent cost lines rather than one blended figure. Marketing
+  // Spend uses the same flat 1.5%-of-Net-Revenue assumption as the channel-level eboAdSpendMap
+  // above, applied per store. Fixed costs (rent/employee/CAM/utilities/software/volumetric rent)
+  // come straight from ebo.storeRows[].fixedCosts (already resolved server-side in api/bq.js via
+  // api/_store_pnl.js's Supabase fetch) — summed across every month the current date range spans,
+  // since EBITDA here is for the whole selected range, not one specific month.
+  const EBO_STORE_SPEND_RATE = 0.015
+  const storePnLRows = useMemo(() => {
+    const storeRows = data?.ebo?.storeRows
+    if (!storeRows?.length) return []
+
+    // Per (store, sku) SnD — same logistics/fulfilment/paymentGw/softwareFee formula as
+    // eboSkuCosts, scaled by EBO_SND_SCALE, just keyed by store additionally.
+    const skuCostRows = data?.ebo?.storeSkuCostRows || []
+    const sndByStoreSku = {}
+    if (sndRates?.length) {
+      skuCostRows.forEach(row => {
+        const { storeName, sku, orderStatus, weightSlab, lineCount, totalQty, grossIncGst } = row
+        if (!storeName || !sku) return
+        const effectiveSlab = weightSlab != null ? weightSlab : 2000
+        const rate = rateForSlab(sndRates, effectiveSlab)
+        let logistics = 0
+        const fulfilment = rate ? rate.fulfilment * lineCount : 0
+        if (rate) {
+          const st = (orderStatus || '').toLowerCase()
+          if (st === 'cancelled') logistics = 0
+          else if (st === 'rto') logistics = (rate.forward + rate.rto) * lineCount
+          else if (st === 'cir' || st === 'exchange' || st === 'return') logistics = (rate.forward + rate.reverse) * lineCount
+          else logistics = rate.forward * lineCount
+        }
+        const paymentGw = grossIncGst * 0.011
+        const softwareFee = totalQty * 15
+        const key = `${storeName}::${sku}`
+        sndByStoreSku[key] = (sndByStoreSku[key] || 0) + (logistics + fulfilment + paymentGw + softwareFee) * EBO_SND_SCALE
+      })
+    }
+    // COGS per (store, sku) — net units (gross − cancelled/RTO/CIR/return/exchange) × a per-unit
+    // COGS rate. The rate itself (real cogsMap entry, or the ASP-based estimate fallback) is
+    // computed ONCE per SKU at the CHANNEL-WIDE grain (same ASP the Financial View's skuMap/
+    // costsForSkus() uses — gross ÷ units summed across every store), not re-derived per store from
+    // that store's own narrower ASP — confirmed 2026-08-20 the user wants Store-wise's Total row to
+    // match the Financial View bit-for-bit through CM2. Computing the ASP-fallback per store instead
+    // (each store's own gross/netUnits ratio) is legitimate but produces a slightly different
+    // number whenever a SKU's per-store ASP differs from its channel-wide ASP — a real, if small
+    // (~0.15% of COGS observed), rounding gap versus the Financial View's one-rate-per-SKU figure.
+    const perUnitCogsBySku = {}
+    if (cogsMap) {
+      const channelUnitsBySku = {}
+      const channelGrossBySku = {}
+      skuCostRows.forEach(row => {
+        const { sku, totalQty, grossIncGst } = row
+        if (!sku) return
+        channelUnitsBySku[sku] = (channelUnitsBySku[sku] || 0) + totalQty
+        channelGrossBySku[sku] = (channelGrossBySku[sku] || 0) + grossIncGst
+      })
+      Object.keys(channelUnitsBySku).forEach(sku => {
+        const entry = cogsMap[sku]
+        const units = channelUnitsBySku[sku] || 0
+        const asp = units > 0 ? (channelGrossBySku[sku] || 0) / units : 0
+        perUnitCogsBySku[sku] = (entry && entry.cogs != null) ? entry.cogs : estimateCogsPerUnit(asp)
+      })
+    }
+    const cogsByStoreSku = {}
+    if (cogsMap) {
+      const netUnitsByStoreSku = {}
+      skuCostRows.forEach(row => {
+        const { storeName, sku, orderStatus, totalQty } = row
+        if (!storeName || !sku) return
+        const key = `${storeName}::${sku}`
+        const st = (orderStatus || '').toLowerCase()
+        const isReturnLike = st === 'cancelled' || st === 'rto' || st === 'cir' || st === 'exchange' || st === 'return'
+        netUnitsByStoreSku[key] = (netUnitsByStoreSku[key] || 0) + (isReturnLike ? 0 : totalQty)
+      })
+      Object.entries(netUnitsByStoreSku).forEach(([key, netUnits]) => {
+        const sku = key.split('::')[1]
+        const perUnitCogs = perUnitCogsBySku[sku] || 0
+        if (perUnitCogs > 0 || netUnits > 0) cogsByStoreSku[key] = perUnitCogs * netUnits
+      })
+    }
+    // Aggregate SnD/COGS from (store, sku) grain up to (store) grain — the store P&L row itself
+    // doesn't need per-SKU detail, only the store-level total.
+    const sndByStore = {}
+    Object.entries(sndByStoreSku).forEach(([key, v]) => {
+      const storeName = key.split('::')[0]
+      sndByStore[storeName] = (sndByStore[storeName] || 0) + v
+    })
+    const anySndByStore = new Set(Object.keys(sndByStore))
+    const cogsByStore = {}
+    const anyCogsByStore = new Set()
+    Object.entries(cogsByStoreSku).forEach(([key, v]) => {
+      const storeName = key.split('::')[0]
+      cogsByStore[storeName] = (cogsByStore[storeName] || 0) + v
+      anyCogsByStore.add(storeName)
+    })
+
+    // storeRows is (store, month) grain — collapse to one row per store for the currently
+    // selected date range, summing revenue/units/weight and fixed costs across every month the
+    // range spans (a range crossing a month boundary sums that month's full fixed-cost line once
+    // per month present, not pro-rated — same "whole month" granularity the underlying cost
+    // sheets themselves carry).
+    const byStore = {}
+    storeRows.forEach(row => {
+      const { storeName } = row
+      if (!byStore[storeName]) {
+        byStore[storeName] = {
+          storeName, gross: 0, excRev: 0, netRev: 0, cancelRev: 0, rtoRev: 0, returnRev: 0, cirRev: 0,
+          orders: 0, units: 0,
+          fixedCosts: { rent: 0, utilities: 0, employeeCost: 0, cam: 0, software: 0, volumetricRent: 0 },
+        }
+      }
+      const s = byStore[storeName]
+      s.gross += row.gross || 0
+      s.excRev += row.excRev || 0
+      s.netRev += row.netRev || 0
+      s.cancelRev += row.cancelRev || 0
+      s.rtoRev += row.rtoRev || 0
+      s.returnRev += row.returnRev || 0
+      s.cirRev += row.cirRev || 0
+      s.orders += row.orders || 0
+      s.units += row.units || 0
+      const fc = row.fixedCosts || {}
+      s.fixedCosts.rent += fc.rent || 0
+      s.fixedCosts.utilities += fc.utilities || 0
+      s.fixedCosts.employeeCost += fc.employeeCost || 0
+      s.fixedCosts.cam += fc.cam || 0
+      s.fixedCosts.software += fc.software || 0
+      s.fixedCosts.volumetricRent += fc.volumetricRent || 0
+    })
+
+    // Rescale each store's netRev so the sum ties out EXACTLY to the Financial View's EBO Net
+    // Revenue (data.ebo.netCalc.netRev, computeNetRevenueMeasures run once for the whole channel)
+    // — confirmed 2026-08-20 the user wants Store-wise's Total row to match the Financial View
+    // bit-for-bit through CM2, not just closely. Per-(store,month) netRev is computed from that
+    // bucket's OWN gross/exc-GST ratio (a real, if tiny, blended-GST-ratio rounding difference vs
+    // computing the ratio once across the whole channel — same class of gap netScale/shNetScale
+    // already reconcile for D2C elsewhere in this file), so raw per-store netRev sums close to but
+    // not exactly the channel figure (~0.1% off, observed). Only `netRev` is rescaled — gross/
+    // units/etc. stay the real, unscaled per-store figures, same convention as every other netScale
+    // use in this file.
+    const rawNetRevTotal = Object.values(byStore).reduce((s, v) => s + v.netRev, 0)
+    const channelNetRev = data?.ebo?.netCalc?.netRev
+    const netRevScale = (channelNetRev != null && rawNetRevTotal > 0) ? channelNetRev / rawNetRevTotal : 1
+    Object.values(byStore).forEach(s => { s.netRev *= netRevScale })
+
+    return Object.values(byStore).map(s => {
+      const cogs = anyCogsByStore.has(s.storeName) ? cogsByStore[s.storeName] : null
+      const gm = cogs != null ? s.netRev - cogs : null
+      const snd = anySndByStore.has(s.storeName) ? sndByStore[s.storeName] : null
+      const cm1 = gm != null && snd != null ? gm - snd : null
+      const spend = s.netRev * EBO_STORE_SPEND_RATE
+      const cm2 = cm1 != null ? cm1 - spend : null
+      const totalFixedCosts = Object.values(s.fixedCosts).reduce((a, b) => a + b, 0)
+      // "— (marketing not yet costed)" convention doesn't apply to fixed costs: rent/employee/CAM/
+      // utilities/software each independently default to 0 when that store has no row in its
+      // Supabase sheet (a store simply not yet onboarded into cost tracking), so EBITDA is always
+      // computable once CM2 is — never blocked on every cost line being present.
+      const ebitda = cm2 != null ? cm2 - totalFixedCosts : null
+      return { ...s, cogs, gm, snd, cm1, spend, cm2, totalFixedCosts, ebitda }
+    }).sort((a, b) => b.gross - a.gross)
+  }, [data, sndRates, cogsMap])
+
+  // Offline S&D: ₹8/kg transport (on total net weight moved) + a weight-wise fulfilment cost
+  // (confirmed 2026-08-20, supersedes the earlier flat ₹9/kg-only formula). Fulfilment reuses the
+  // same D2C/EBO rate card (snd-rates.json) but its `fulfilment` figure (VAS + storage + box-in —
+  // see the rate-card build formula) is a cost to store/handle/box ONE unit at that unit's own
+  // weight, so it's looked up PER UNIT SOLD at the SKU's per-unit weight (unitWeightGms) and
+  // multiplied by units — not once for the SKU's aggregate total weight (that undercounted
+  // fulfilment for any SKU shipped across many units, since one lookup was applied regardless of
+  // how many units it actually covered). fulfilmentForWeight brackets to the highest slab <= the
+  // given weight (D2C/EBO's rateForSlab does an exact match instead, since they always have a
+  // real discrete weightSlab value per order-line; offline's item-master weight is continuous).
+  // Scoped to the selected offlineSub (all/b2b/Stockist/MTGT/misc) the same way offSkuData/
+  // offSubCatData above are; "all" combines every sub-channel's units/weight per SKU first, so a
+  // SKU sold across multiple sub-channels is costed once on its true combined total.
+  const OFFLINE_TRANSPORT_PER_KG = 8
+  // Payment gateway fee = 1.1% of (gross, exc-GST) Sales revenue — confirmed 2026-08-20, applies
+  // only to sub-channels that actually take card/UPI payment at point of sale (B2B, Stockist);
+  // MT GT and Miscellaneous settle by other means (credit terms / cash-and-carry) so no gateway
+  // fee applies there. Must be computed per (subChannel, sku) row BEFORE the cross-sub-channel
+  // aggregation below — collapsing rows into one bySku total first would lose which sub-channel
+  // each unit of revenue came from, silently applying (or skipping) the fee for the wrong rows
+  // once "all" combines multiple sub-channels for the same SKU.
+  const OFFLINE_PAYMENT_GW_RATE = 0.011
+  const offlinePaymentGwSubChannels = sc => {
+    const isB2B = sc === 'Shopify B2B' || sc?.startsWith('Offline_B2B')
+    const isStockist = sc?.startsWith('Stockist')
+    return isB2B || isStockist
+  }
+  const offSndBySku = useMemo(() => {
+    const rows = data?.offline?.skuRows
+    if (!rows?.length || !sndRates) return {}
+    const isB2B = sc => sc === 'Shopify B2B' || sc?.startsWith('Offline_B2B')
+    const isStockist = sc => sc?.startsWith('Stockist')
+    const filtered = offlineSub === 'all' ? rows
+      : offlineSub === 'b2b' ? rows.filter(r => isB2B(r.subChannel))
+      : offlineSub === 'Stockist' ? rows.filter(r => isStockist(r.subChannel))
+      : offlineSub === 'MTGT' ? rows.filter(r => r.subChannel === 'MTGT')
+      : offlineSub === 'misc' ? rows.filter(r => !isB2B(r.subChannel) && !isStockist(r.subChannel) && r.subChannel !== 'MTGT')
+      : rows.filter(r => r.subChannel === offlineSub)
+    const bySku = {}
+    filtered.forEach(row => {
+      if (!row.sku) return
+      if (!bySku[row.sku]) bySku[row.sku] = { weightGms: 0, units: 0, unitWeightGms: row.unitWeightGms || 0, paymentGw: 0 }
+      bySku[row.sku].weightGms += row.weightGms || 0
+      bySku[row.sku].units += row.units || 0
+      // unitWeightGms is constant per SKU (item-master value) — keep the first non-zero sighting
+      // rather than overwrite with a later 0 from a sub-channel row missing the join.
+      if (!bySku[row.sku].unitWeightGms && row.unitWeightGms) bySku[row.sku].unitWeightGms = row.unitWeightGms
+      if (offlinePaymentGwSubChannels(row.subChannel)) {
+        bySku[row.sku].paymentGw += (row.excRev || 0) * OFFLINE_PAYMENT_GW_RATE
+      }
+    })
+    const out = {}
+    Object.entries(bySku).forEach(([sku, { weightGms, units, unitWeightGms, paymentGw }]) => {
+      const transport = (weightGms / 1000) * OFFLINE_TRANSPORT_PER_KG
+      const rate = fulfilmentForWeight(sndRates, unitWeightGms)
+      const fulfilment = (rate ? rate.fulfilment : 0) * units
+      out[sku] = transport + fulfilment + paymentGw
+    })
+    return out
+  }, [data, offlineSub, sndRates])
+
   // Amazon Seller Central S&D: real per-MasterSKU cost from the settlement report (see
   // amzSCSettlement in api/bq.js) — no rate-card estimate needed, unlike Shopify. Only
   // meaningful for the "Seller Central" view; Vendor Central has no settlement report, so this
@@ -212,6 +504,40 @@ export default function PnLPage({ data, filters, setFilters, activeTab: activeTa
       // Scale factor: if this Category's true total is known and its product-level sum is
       // short of it, scale every SubCategory's spend up proportionally so they sum exactly to
       // the true total. Falls back to 1 (no scaling) if either side is zero/unknown.
+      const scale = catProductSum > 0 && catTrueTotal != null ? catTrueTotal / catProductSum : 1
+      map[key] = (map[key] || 0) + (r.spend || 0) * scale
+    })
+    return map
+  }, [data])
+
+  // Flipkart marketing spend by SubCategory — same reuse-and-rescale pattern as amzAdSpendMap
+  // above, filtered to platform === 'Flipkart' instead of 'Amazon', so the PnL tab's Marketing
+  // Spend/CM2 numbers for Flipkart always match the Ads tab's own Flipkart breakdown.
+  const fkAdSpendMap = useMemo(() => {
+    const productRows = (data?.ads?.categoryBreakdown?.productRows || []).filter(r => r.platform === 'Flipkart')
+    const categoryRows = (data?.ads?.categoryBreakdown?.categoryRows || []).filter(r => r.platform === 'Flipkart')
+
+    const productSpendByCat = {}
+    productRows.forEach(r => {
+      const cat = r.category || 'Others'
+      productSpendByCat[cat] = (productSpendByCat[cat] || 0) + (r.spend || 0)
+    })
+    const catTotalSpend = {}
+    categoryRows.forEach(r => { catTotalSpend[r.category || 'Others'] = r.spend || 0 })
+
+    // Same orphaned-key protection as amzAdSpendMap: only fold into a real Flipkart SubCategory
+    // name for this date range, otherwise 'Others' — data.flipkart.subCategories is the exact
+    // universe activeData.subCatData exposes for the Flipkart tab elsewhere in this file.
+    const validSubCats = new Set()
+    ;(data?.flipkart?.subCategories || []).forEach(x => validSubCats.add(x.subcategory))
+
+    const map = {}
+    productRows.forEach(r => {
+      const cat = r.category || 'Others'
+      const keyRaw = r.subCategory || 'Others'
+      const key = validSubCats.has(keyRaw) ? keyRaw : 'Others'
+      const catProductSum = productSpendByCat[cat] || 0
+      const catTrueTotal = catTotalSpend[cat]
       const scale = catProductSum > 0 && catTrueTotal != null ? catTrueTotal / catProductSum : 1
       map[key] = (map[key] || 0) + (r.spend || 0) * scale
     })
@@ -320,6 +646,21 @@ export default function PnLPage({ data, filters, setFilters, activeTab: activeTa
       const [cat, sc] = k.split('::')
       if (!eboSubCatData[cat]) eboSubCatData[cat] = {}
       eboSubCatData[cat][sc || 'Others'] = pick(v)
+    })
+    // EBO Marketing Spend: flat assumed rate, 1.5% of each SubCategory's own Net Revenue
+    // (confirmed 2026-08-20) — a placeholder assumption, same pattern as D2C's flat 1.1% payment
+    // gateway rate, until/unless a real EBO marketing cost source exists. Built here (not inside
+    // PnLFinancialTable) using the same netRevenueOf() every row/SKU in the table already calls,
+    // so `spend = 1.5% × r.net` lines up exactly with the Net Rev the table actually displays for
+    // that row — summed by bare SubCategory (not Category::SubCategory) to match adSpendMap's own
+    // lookup key (adSpendMap[sc]), consistent with how every other channel's adSpendMap is keyed.
+    const EBO_SPEND_RATE = 0.015
+    const eboAdSpendMap = {}
+    Object.entries(eboSubCatData).forEach(([, scMap]) => {
+      Object.entries(scMap).forEach(([sc, d]) => {
+        const net = netRevenueOf(d).net
+        eboAdSpendMap[sc] = (eboAdSpendMap[sc] || 0) + net * EBO_SPEND_RATE
+      })
     })
     const eboSkuData = {}
     Object.entries(ebo.skuMap || {}).forEach(([cat, scMap]) => {
@@ -566,9 +907,118 @@ export default function PnLPage({ data, filters, setFilters, activeTab: activeTa
     const fkSubCatData = {}
     ;(fk.subCategories || []).forEach(x => {
       if (!fkSubCatData[x.category]) fkSubCatData[x.category] = {}
-      fkSubCatData[x.category][x.subcategory] = pick({ rev: x.rev, excRev: x.excRev || 0, units: x.units })
+      // fk.subCategories has one row per (category, subcategory, sub) — sub being FBF/NON-FBF —
+      // so a plain `fkSubCatData[cat][sc] = {...}` assignment here silently OVERWRITES the FBF
+      // row with the NON-FBF row (or vice versa, whichever the array visits last), discarding
+      // roughly half of every subcategory's real revenue. Must ACCUMULATE across both `sub`
+      // values into the same (category, subcategory) bucket instead — confirmed this was
+      // silently collapsing Net Revenue and inflating COGS%/SnD% to nonsensical levels (COGS%
+      // >95%) before this fix, caught via a full CM1/CM2 waterfall sanity check (GM - SnD did
+      // not equal CM1, which it must by construction).
+      const existing = fkSubCatData[x.category][x.subcategory] || { rev: 0, excRev: 0, units: 0, returnRev: 0, deliveredRev: 0 }
+      fkSubCatData[x.category][x.subcategory] = {
+        rev: existing.rev + (x.rev || 0),
+        excRev: existing.excRev + (x.excRev || 0),
+        units: existing.units + (x.units || 0),
+        returnRev: existing.returnRev + (x.returnRev || 0),
+        deliveredRev: existing.deliveredRev + (x.deliveredRev || 0),
+      }
     })
-    const fkSkuData = fk.skuMatrix || {}
+    // returnRev already combines Return+RTO (Flipkart doesn't split them — see fkNetCalc's note
+    // in api/bq.js), passed as returnRev with rtoRev/cirRev omitted so netRevenueOf()'s
+    // totalReturnRev = cancelRev+rtoRev+cirRev+returnRev doesn't double-count. cancelRev is
+    // rev - deliveredRev ONLY (deliveredRev in fkSubCategory's SQL is "FulfilmentStatus !=
+    // 'Cancelled' AND positive revenue", which already INCLUDES Return/RTO rows — subtracting
+    // returnRev again here double-counted it and always went negative, silently clamped to 0,
+    // meaning cancelRev read as 0 for every row). Verified against an independent whole-channel
+    // BQ query to within 0.1-0.36% across Mar-Jun 2026 after this correction. Computed AFTER the
+    // accumulation above (not per-sub-row) since deliveredRev/rev/returnRev must be summed across
+    // both fulfilment types first.
+    Object.keys(fkSubCatData).forEach(cat => {
+      Object.keys(fkSubCatData[cat]).forEach(sc => {
+        const d = fkSubCatData[cat][sc]
+        const cancelRev = Math.max(d.rev - d.deliveredRev, 0)
+        fkSubCatData[cat][sc] = pick({ rev: d.rev, excRev: d.excRev, units: d.units, returnRev: d.returnRev, cancelRev })
+      })
+    })
+    // fk.skuMatrix gives the (category, subcategory, sku) grouping and whole-range rev/units;
+    // fk.dailyPnLBySku (built alongside sndBySku in api/bq.js's flipkart block) carries the real
+    // per-SKU totalReturnRev this grouping lacks — merge them so fkSkuData's rows aren't missing
+    // returns the way fk.skuMatrix alone would leave them (same bug fkSubCatData had above).
+    const fkReturnRevBySku = {}, fkReturnedUnitsBySku = {}
+    ;(fk.dailyPnLBySku || []).forEach(x => {
+      fkReturnRevBySku[x.sku] = (fkReturnRevBySku[x.sku] || 0) + (x.totalReturnRev || 0)
+      fkReturnedUnitsBySku[x.sku] = (fkReturnedUnitsBySku[x.sku] || 0) + (x.returnedUnits || 0)
+    })
+
+    const fkSkuData = {}
+    Object.entries(fk.skuMatrix || {}).forEach(([cat, scMap]) => {
+      fkSkuData[cat] = {}
+      Object.entries(scMap).forEach(([sc, skuMap]) => {
+        fkSkuData[cat][sc] = {}
+        Object.entries(skuMap).forEach(([sku, d]) => {
+          // totalReturnRev already folds cancel+return together for Flipkart (see fkNetCalc's
+          // note) — passed as returnRev with cancelRev left at 0 so netRevenueOf() doesn't add it
+          // twice. returnedUnits lets netRevenueOf() derive netUnits (gross units minus
+          // returned/cancelled) so COGS prices only units that stayed sold, not gross units —
+          // without this, COGS silently overstated by pricing every returned unit too.
+          fkSkuData[cat][sc][sku] = { ...d, returnRev: fkReturnRevBySku[sku] || 0, cancelRev: 0, returnedUnits: fkReturnedUnitsBySku[sku] || 0 }
+        })
+      })
+    })
+
+    // Flipkart day-wise COGS%/GM%/SnD%/CM1%/CM2% trend — same algorithm as amzDailyPnL above
+    // (per-day accumulate, ASP-fallback COGS via estimateCogsPerUnit, per-row SnD/COGS coverage
+    // gating so CM1/CM2 only count days where a row has BOTH), simpler here since
+    // fk.dailyPnLBySku already carries a real per-row `snd` field with no SC/VC-style merge
+    // needed. Without this, the Flipkart tab's trend chart silently dropped every %-metric from
+    // its picker (PnLChannelTab's availableMetrics filters out all axis:'pct' metrics unless
+    // dailyPnL is non-empty) even though whole-range SnD/COGS/CM1/CM2 already worked correctly
+    // in the KPI cards and Financial Table.
+    const fkDailyPnL = (() => {
+      const byDate = {}
+      ;(fk.dailyPnLBySku || []).forEach(x => {
+        if (!byDate[x.date]) byDate[x.date] = { date: x.date, gross: 0, excRev: 0, net: 0, totalReturnRev: 0, snd: 0, sndNetCovered: 0, anySnd: false, cogs: 0, netCovered: 0, anyCosted: false, cm1NetCovered: 0, cm2NetCovered: 0 }
+        const d = byDate[x.date]
+        d.gross += x.gross || 0
+        d.excRev += x.excRev || 0
+        d.net += x.net || 0
+        d.totalReturnRev += x.totalReturnRev || 0
+        const rowSndCovered = x.snd != null
+        if (rowSndCovered) { d.snd += x.snd || 0; d.sndNetCovered += x.net || 0; d.anySnd = true }
+        const netUnits = Math.max((x.units || 0) - (x.returnedUnits || 0), 0)
+        const entry = cogsMap?.[x.sku]
+        const asp = (x.units || 0) > 0 ? (x.gross || 0) / x.units : 0
+        const perUnitCogs = (entry && entry.cogs != null) ? entry.cogs : estimateCogsPerUnit(asp)
+        const rowCosted = perUnitCogs > 0 || netUnits > 0
+        if (rowCosted) {
+          d.cogs += perUnitCogs * netUnits
+          d.netCovered += x.net || 0
+          d.anyCosted = true
+        }
+        if (rowCosted && rowSndCovered) { d.cm1NetCovered += x.net || 0; d.cm2NetCovered += x.net || 0 }
+      })
+      const spendByDate = {}
+      ;(data.ads?.adsDailyByCategory || []).filter(x => x.platform === 'Flipkart').forEach(x => {
+        spendByDate[x.date] = (spendByDate[x.date] || 0) + (x.spend || 0)
+      })
+      return Object.values(byDate).sort((a, b) => a.date.localeCompare(b.date)).map(d => {
+        const gm = d.anyCosted ? d.netCovered - d.cogs : null
+        const cm1Covered = d.anyCosted && d.anySnd
+        const cm1 = cm1Covered ? gm - d.snd : null
+        const spend = spendByDate[d.date] || 0
+        const cm2 = cm1Covered ? cm1 - spend : null
+        return {
+          date: d.date,
+          returnPct: d.gross > 0 ? (d.totalReturnRev / d.gross * 100) : 0,
+          cogsPct: d.anyCosted && d.netCovered > 0 ? (d.cogs / d.netCovered * 100) : null,
+          sndPct: d.anySnd && d.sndNetCovered > 0 ? (d.snd / d.sndNetCovered * 100) : null,
+          gmPct: gm != null && d.netCovered > 0 ? (gm / d.netCovered * 100) : null,
+          cm1Pct: cm1 != null && d.cm1NetCovered > 0 ? (cm1 / d.cm1NetCovered * 100) : null,
+          cm2Pct: cm2 != null && d.cm2NetCovered > 0 ? (cm2 / d.cm2NetCovered * 100) : null,
+        }
+      })
+    })()
 
     // ── Blinkit / Instamart / Zepto (quick-commerce, identical shape) ──
     const qcSubCatOf = qc => {
@@ -601,19 +1051,31 @@ export default function PnLPage({ data, filters, setFilters, activeTab: activeTa
 
     // ── Offline (row-array shape, sub-channel filterable) ──
     const off = data.offline || {}
+    const isOffB2B = sc => sc === 'Shopify B2B' || sc?.startsWith('Offline_B2B')
+    const isOffStockist = sc => sc?.startsWith('Stockist')
     const filterOffSub = rows => {
       if (offlineSub === 'all') return rows
-      if (offlineSub === 'b2b') return rows.filter(r => r.subChannel === 'Shopify B2B' || r.subChannel?.startsWith('Offline_B2B'))
-      if (offlineSub === 'Stockist') return rows.filter(r => r.subChannel?.startsWith('Stockist'))
+      if (offlineSub === 'b2b') return rows.filter(r => isOffB2B(r.subChannel))
+      if (offlineSub === 'Stockist') return rows.filter(r => isOffStockist(r.subChannel))
+      if (offlineSub === 'MTGT') return rows.filter(r => r.subChannel === 'MTGT')
+      // Miscellaneous: catch-all for any offline SubChannel that isn't B2B/Stockist/MTGT — picks
+      // up new SubChannel values (e.g. a future BQ sync) automatically with no code change needed.
+      if (offlineSub === 'misc') return rows.filter(r => !isOffB2B(r.subChannel) && !isOffStockist(r.subChannel) && r.subChannel !== 'MTGT')
       return rows.filter(r => r.subChannel === offlineSub)
     }
+    // Offline has no Cancel/RTO/Return/CIR order-status concept — its equivalent of a "return" is
+    // a Credit Note (Order_Status='Credit Note'), which the API now surfaces per Category/
+    // SubCategory as cnRev (Inc-GST, offlineSubCategory query in api/bq.js). Fed into `returnRev`
+    // (the same field pick()/netRevenueOf() read for every other channel's Returns KPI) so the
+    // "Returns" card and Return% actually reflect Credit Notes instead of always showing 0.
     const offSubCatData = {}
     filterOffSub(off.subCategoryRows || []).forEach(x => {
       if (!offSubCatData[x.category]) offSubCatData[x.category] = {}
-      if (!offSubCatData[x.category][x.subCategory]) offSubCatData[x.category][x.subCategory] = { rev: 0, excRev: 0, units: 0 }
+      if (!offSubCatData[x.category][x.subCategory]) offSubCatData[x.category][x.subCategory] = { rev: 0, excRev: 0, units: 0, returnRev: 0 }
       offSubCatData[x.category][x.subCategory].rev += x.rev || 0
       offSubCatData[x.category][x.subCategory].excRev += x.excRev || 0
       offSubCatData[x.category][x.subCategory].units += x.units || 0
+      offSubCatData[x.category][x.subCategory].returnRev += Math.abs(x.cnRev || 0)
     })
     Object.keys(offSubCatData).forEach(cat => Object.keys(offSubCatData[cat]).forEach(sc => { offSubCatData[cat][sc] = pick(offSubCatData[cat][sc]) }))
     const offSkuData = {}
@@ -627,8 +1089,24 @@ export default function PnLPage({ data, filters, setFilters, activeTab: activeTa
     })
     const offDaily = filterOffSub(off.daily || [])
 
+    // data.dailyArr is channel-keyed (e.g. {date, D2C: rev, D2C_net, D2C_o, D2C_u, Amazon: rev, ...}
+    // — see api/bq.js's dailyArr construction), not the flat {date, rev, excRev, units} shape
+    // PnLTrendCard's TREND_METRICS reads. Flatten by summing every channel's rev/_net/_u field per
+    // date so the Overall PnL trend chart actually has something to plot (it was previously handed
+    // the raw per-channel object straight through, so `rev`/`excRev`/`units` were always undefined).
+    const allDailyFlat = (data.dailyArr || []).map(row => {
+      let rev = 0, excRev = 0, units = 0
+      Object.entries(row).forEach(([k, v]) => {
+        if (k === 'date' || typeof v !== 'number') return
+        if (k.endsWith('_net')) excRev += v
+        else if (k.endsWith('_o') || k.endsWith('_u')) { if (k.endsWith('_u')) units += v }
+        else rev += v
+      })
+      return { date: row.date, rev, excRev, units }
+    })
+
     return {
-      all: { subCatData: allSubCatData, skuData: allSkuData, daily: data.dailyArr || [], gross: data.totalRev || 0, excRev: data.totalExcRev || 0, net: data.netRevenueCalc || 0, units: data.totalQty || 0, orders: data.nOrders || 0, returnRev: data.returnRev || 0 },
+      all: { subCatData: allSubCatData, skuData: allSkuData, daily: allDailyFlat, gross: data.totalRev || 0, excRev: data.totalExcRev || 0, net: data.netRevenueCalc || 0, units: data.totalQty || 0, orders: data.nOrders || 0, returnRev: data.returnRev || 0, prevGross: data.prevRev || 0, prevExcRev: data.prevExcRev || 0, prevReturnRev: (data.prevRtoRev || 0) + (data.prevCirRev || 0), prevOrders: data.prevOrders || 0 },
       shopify: (() => {
         // shNetScale (computed above, right after shSubCatData, so shDailyPnL can use it too) — see
         // that computation's comment for the full reconciliation rationale.
@@ -703,9 +1181,13 @@ export default function PnLPage({ data, filters, setFilters, activeTab: activeTa
         // (cogsPct/sndPct/gmPct/cm1Pct) is a ratio (numerator ÷ denominator), and MyFrido/Mobility
         // filtering would scale both halves of each ratio by the same factor, leaving the % itself
         // unchanged — only the raw ₹ `daily` line needs the scale-down, not this %-only series.
-        return { subCatData: shSubCatData, skuData: shSkuData, daily, dailyPnL: shDailyPnL, ...n, netScale: shNetScale, mobilityNetBySubCat: reconciledMobilityNetBySubCat, orders: d2cSubCh === 'all' ? (sh.totals?.orders || 0) : (data.subChannelMap?.[d2cSubCh]?.orders || 0) }
+        // prevGross/prevExcRev are whole-D2C prior-period totals (sh.prevRev/prevExcRev have no
+        // MyFrido/Mobility split available) — scaled by the same subChRatio used for `daily`
+        // above so a filtered sub-channel's hero delta isn't compared against the unfiltered
+        // whole-channel prior-period number.
+        return { subCatData: shSubCatData, skuData: shSkuData, daily, dailyPnL: shDailyPnL, ...n, netScale: shNetScale, mobilityNetBySubCat: reconciledMobilityNetBySubCat, orders: d2cSubCh === 'all' ? (sh.totals?.orders || 0) : (data.subChannelMap?.[d2cSubCh]?.orders || 0), prevGross: (sh.prevRev || 0) * subChRatio, prevExcRev: (sh.prevExcRev || 0) * subChRatio, prevOrders: d2cSubCh === 'all' ? (sh.prevOrders || 0) : Math.round((sh.prevOrders || 0) * subChRatio) }
       })(),
-      ebo: { subCatData: eboSubCatData, skuData: eboSkuData, daily: ebo.daily || [], gross: ebo.totals?.rev || 0, net: ebo.netCalc?.netRev ?? 0, units: ebo.totals?.qty || 0, orders: ebo.totals?.orders || 0, returnRev: (ebo.netCalc?.cancelRev || 0) + (ebo.netCalc?.rtoRev || 0) + (ebo.netCalc?.cirRev || 0) + (ebo.netCalc?.returnRev || 0) },
+      ebo: { subCatData: eboSubCatData, skuData: eboSkuData, daily: ebo.daily || [], gross: ebo.totals?.rev || 0, excRev: ebo.totals?.excRev || 0, net: ebo.netCalc?.netRev ?? 0, units: ebo.totals?.qty || 0, orders: ebo.totals?.orders || 0, returnRev: (ebo.netCalc?.cancelRev || 0) + (ebo.netCalc?.rtoRev || 0) + (ebo.netCalc?.cirRev || 0) + (ebo.netCalc?.returnRev || 0), adSpendMap: eboAdSpendMap, prevGross: ebo.prevRev || 0, prevExcRev: ebo.prevExcRev || 0, prevOrders: ebo.prevOrders || 0, prevSkuData: ebo.prevSkuMap || {} },
       // Net Revenue intentionally stays on netOf()'s row-level blended-GST formula (NOT
       // amzPreciseNetRev/amzSC.netCalc.netRev) — same reasoning as D2C: the precise figure is a
       // whole-range total with no per-Category/SubCategory breakdown, so it can't feed the
@@ -715,33 +1197,49 @@ export default function PnLPage({ data, filters, setFilters, activeTab: activeTa
       // consistently the same formula everywhere (KPI card = table Total = trend chart) for both
       // Amazon and D2C, even though neither ties exactly to the Sales tab's more precise figure —
       // that gap is a known, accepted methodology difference, not a bug to keep chasing.
-      amazon: (() => { const n = netOf(amzSubCatData); return { subCatData: amzSubCatData, skuData: amzSkuData, daily: amzDaily, dailyPnL: amzDailyPnL, amzTotalGross, ...n } })(),
+      amazon: (() => {
+        const n = netOf(amzSubCatData)
+        // prevGross/prevExcRev summed the same way as amzTotalGross above — SC-only/VC-only/
+        // SC+VC per the active amzChannelView toggle.
+        const prevGross = (amzChannelView !== 'vc' ? (amzSC.prevRev || 0) : 0) + (amzChannelView !== 'sc' ? (amzVCMatrix.prevRev || 0) : 0)
+        const prevExcRev = (amzChannelView !== 'vc' ? (amzSC.prevExcRev || 0) : 0) + (amzChannelView !== 'sc' ? (amzVCMatrix.prevExcRev || 0) : 0)
+        const prevOrders = (amzChannelView !== 'vc' ? (amzSC.prevOrders || 0) : 0) + (amzChannelView !== 'sc' ? (amzVCMatrix.prevOrders || 0) : 0)
+        return { subCatData: amzSubCatData, skuData: amzSkuData, daily: amzDaily, dailyPnL: amzDailyPnL, amzTotalGross, ...n, prevGross, prevExcRev, prevOrders }
+      })(),
       // Flipkart/CRED/Firstcry/Myntra: same reasoning as D2C above — kept on netOf()'s
       // revenue-weighted blended-GST formula (not the channel's own precise netCalc.netRev) so
       // the KPI card stays consistent with the Financial View table's row-level math within
       // this tab, even though it won't tie exactly to the Sales tab's more precise figure.
-      flipkart: (() => { const n = netOf(fkSubCatData); return { subCatData: fkSubCatData, skuData: fkSkuData, daily: fk.daily || [], ...n } })(),
-      blinkit: (() => { const sc = qcSubCatOf(bl); const n = netOf(sc); return { subCatData: sc, skuData: bl.skuMatrix || {}, daily: bl.daily || [], ...n } })(),
-      instamart: (() => { const sc = qcSubCatOf(ins); const n = netOf(sc); return { subCatData: sc, skuData: ins.skuMatrix || {}, daily: ins.daily || [], ...n } })(),
-      zepto: (() => { const sc = qcSubCatOf(zp); const n = netOf(sc); return { subCatData: sc, skuData: zp.skuMatrix || {}, daily: zp.daily || [], ...n } })(),
-      cred: (() => { const sc = simpleSubCatOf(cr.subCategories || []); const n = netOf(sc); return { subCatData: sc, skuData: cr.skuMatrix || {}, daily: cr.daily || [], ...n } })(),
-      firstcry: (() => { const sc = simpleSubCatOf(fc.subCategories || []); const n = netOf(sc); return { subCatData: sc, skuData: fc.skuMatrix || {}, daily: fc.daily || [], ...n } })(),
-      myntra: (() => { const sc = simpleSubCatOf(mn.subCategories || []); const n = netOf(sc); return { subCatData: sc, skuData: mn.skuMatrix || {}, daily: mn.daily || [], ...n } })(),
-      international: (() => { const sc = simpleSubCatOf(intl.subCategories || []); const n = netOf(sc); return { subCatData: sc, skuData: intl.skuMatrix || {}, daily: intl.daily || [], ...n } })(),
-      offline: (() => { const n = netOf(offSubCatData); return { subCatData: offSubCatData, skuData: offSkuData, daily: offDaily, ...n } })(),
+      flipkart: (() => { const n = netOf(fkSubCatData); return { subCatData: fkSubCatData, skuData: fkSkuData, daily: fk.daily || [], dailyPnL: fkDailyPnL, ...n, prevGross: fk.prevRev || 0, prevExcRev: fk.prevExcRev || 0, prevReturnRev: fk.prevReturnRev || 0, prevOrders: fk.prevOrders || 0 } })(),
+      blinkit: (() => { const sc = qcSubCatOf(bl); const n = netOf(sc); return { subCatData: sc, skuData: bl.skuMatrix || {}, daily: bl.daily || [], ...n, prevGross: bl.prevRev || 0, prevExcRev: bl.prevExcRev || 0, prevOrders: bl.prevOrders || 0 } })(),
+      instamart: (() => { const sc = qcSubCatOf(ins); const n = netOf(sc); return { subCatData: sc, skuData: ins.skuMatrix || {}, daily: ins.daily || [], ...n, prevGross: ins.prevRev || 0, prevExcRev: ins.prevExcRev || 0, prevOrders: ins.prevOrders || 0 } })(),
+      zepto: (() => { const sc = qcSubCatOf(zp); const n = netOf(sc); return { subCatData: sc, skuData: zp.skuMatrix || {}, daily: zp.daily || [], ...n, prevGross: zp.prevRev || 0, prevExcRev: zp.prevExcRev || 0, prevOrders: zp.prevOrders || 0 } })(),
+      cred: (() => { const sc = simpleSubCatOf(cr.subCategories || []); const n = netOf(sc); return { subCatData: sc, skuData: cr.skuMatrix || {}, daily: cr.daily || [], ...n, prevGross: cr.prevRev || 0, prevExcRev: cr.prevExcRev || 0, prevOrders: cr.prevOrders || 0 } })(),
+      firstcry: (() => { const sc = simpleSubCatOf(fc.subCategories || []); const n = netOf(sc); return { subCatData: sc, skuData: fc.skuMatrix || {}, daily: fc.daily || [], ...n, prevGross: fc.prevRev || 0, prevExcRev: fc.prevExcRev || 0, prevOrders: fc.prevOrders || 0 } })(),
+      myntra: (() => { const sc = simpleSubCatOf(mn.subCategories || []); const n = netOf(sc); return { subCatData: sc, skuData: mn.skuMatrix || {}, daily: mn.daily || [], ...n, prevGross: mn.prevRev || 0, prevExcRev: mn.prevExcRev || 0, prevOrders: mn.prevOrders || 0 } })(),
+      international: (() => { const sc = simpleSubCatOf(intl.subCategories || []); const n = netOf(sc); return { subCatData: sc, skuData: intl.skuMatrix || {}, daily: intl.daily || [], ...n, prevGross: intl.prevRev || 0, prevExcRev: intl.prevExcRev || 0, prevOrders: intl.prevOrders || 0 } })(),
+      offline: (() => {
+        const n = netOf(offSubCatData)
+        // Prev-period offline data is per-subChannel (prevBySub) — filter it the same way
+        // filterOffSub() filters the current period's rows, then sum to match the active toggle.
+        const prevRows = filterOffSub((off.prevBySub || []).map(x => ({ subChannel: x.subChannel, rev: x.revSales, excRev: x.excRevSales, orders: x.orders })))
+        const prevGross = prevRows.reduce((s, r) => s + (r.rev || 0), 0)
+        const prevExcRev = prevRows.reduce((s, r) => s + (r.excRev || 0), 0)
+        const prevOrders = prevRows.reduce((s, r) => s + (r.orders || 0), 0)
+        return { subCatData: offSubCatData, skuData: offSkuData, daily: offDaily, ...n, prevGross, prevExcRev, prevOrders }
+      })(),
     }
   }, [data, amzChannelView, offlineSub, d2cSubCh, cogsMap, sndRates])
-
-  const CHANNEL_COLORS = { all: '#94939F', shopify: '#FFD600', ebo: '#8B5E3C', amazon: '#E8930A', flipkart: '#2E74CC', blinkit: '#0D9E68', cred: '#CC4078', firstcry: '#9B56B6', instamart: '#4AB89A', zepto: '#858380', myntra: '#E87858', international: '#0D9E68', offline: '#6B7280' }
 
   const activeData = channelData ? (channelData[activeTab] || channelData.all) : null
   const activeTabMeta = PNL_TABS.find(t => t.id === activeTab)
 
-  const activeSndBySku = activeTab === 'shopify' ? shSndBySku : (activeTab === 'amazon' && amzChannelView === 'sc') ? amzSndBySku : (activeTab === 'amazon' && amzChannelView === 'vc') ? amzVCSndBySku : (activeTab === 'amazon' && amzChannelView === 'all') ? amzAllSndBySku : undefined
-  const activeAdSpendMap = activeTab === 'amazon' && amzChannelView === 'all' ? amzAdSpendMap : activeTab === 'shopify' ? (data?.pnlAdSpendMap || {}) : undefined
-  // International has no attributable ad spend (same treatment as Amazon SC/VC individually) —
-  // Marketing Spend/ROAS/CM2 columns are hidden rather than showing an always-zero spend.
-  const activeShowMarketing = !(activeTab === 'amazon' && (amzChannelView === 'sc' || amzChannelView === 'vc')) && activeTab !== 'international'
+  const activeSndBySku = activeTab === 'shopify' ? shSndBySku : activeTab === 'ebo' ? eboSndBySku : activeTab === 'offline' ? offSndBySku : (activeTab === 'amazon' && amzChannelView === 'sc') ? amzSndBySku : (activeTab === 'amazon' && amzChannelView === 'vc') ? amzVCSndBySku : (activeTab === 'amazon' && amzChannelView === 'all') ? amzAllSndBySku : activeTab === 'flipkart' ? data?.flipkart?.sndBySku : undefined
+  const activeAdSpendMap = activeTab === 'amazon' && amzChannelView === 'all' ? amzAdSpendMap : activeTab === 'shopify' ? (data?.pnlAdSpendMap || {}) : activeTab === 'ebo' ? (activeData?.adSpendMap || {}) : activeTab === 'flipkart' ? fkAdSpendMap : undefined
+  // International and Offline have no attributable ad spend (same treatment as Amazon SC/VC
+  // individually) — Marketing Spend/ROAS/CM2 columns are hidden rather than showing an
+  // always-zero spend.
+  const activeShowMarketing = !(activeTab === 'amazon' && (amzChannelView === 'sc' || amzChannelView === 'vc')) && activeTab !== 'international' && activeTab !== 'offline'
   // "All" D2C ad-spend covers SubCategories with no matching sales row in this exact range (an
   // unattributed remainder) — only fold that bucket in when viewing the unfiltered D2C total, or
   // MyFrido/Mobility's own numbers would silently absorb spend that belongs to the other sub-channel.
@@ -871,10 +1369,39 @@ export default function PnLPage({ data, filters, setFilters, activeTab: activeTa
     }
   }, [activeData, activeSndBySku, activeAdSpendMap, cogsMap, activeMobilityNetBySubCat, activeNetScale])
 
+  // Real (not ratio-estimated) previous-period COGS/GM — re-runs the exact same per-unit
+  // cogs-data.json lookup kpiSummary uses above, against last period's real per-SKU unit counts
+  // (activeData.prevSkuData, from a new prevXSKU BigQuery query — see api/bq.js). Only wired for
+  // EBO so far (prevSkuData is empty {} for every other channel until they get the same
+  // treatment) — PnLChannelTab.jsx falls back to the ratio-based estimate whenever this is null,
+  // so no channel silently regresses. SnD/CM1/Mktg Spend/ROAS/CM2 aren't included here even for
+  // EBO: EBO's SnD is a flat 1.5%-of-net assumption with no real prior-period net to anchor it
+  // beyond what kpiSummary already computes for the CURRENT period, and no channel has a
+  // previous-period per-SKU settlement/weight source for real SnD — those stay ratio-estimated.
+  const prevKpiSummary = useMemo(() => {
+    const prevSkuData = activeData?.prevSkuData
+    if (!prevSkuData || Object.keys(prevSkuData).length === 0) return { cogs: null, gm: null }
+    let cogs = 0, netCovered = 0, anyCosted = false
+    Object.values(prevSkuData).forEach(scMap => {
+      Object.values(scMap).forEach(skMap => {
+        Object.entries(skMap).forEach(([sku, sd]) => {
+          const skR = netRevenueOf(sd, undefined, {}, undefined, activeNetScale)
+          const netUnits = skR.netUnits
+          const skUnits = skR.units || 0
+          const skAsp = skUnits > 0 ? skR.gross / skUnits : 0
+          const entry = cogsMap?.[sku]
+          const perUnitCogs = (entry && entry.cogs != null) ? entry.cogs : estimateCogsPerUnit(skAsp)
+          if (perUnitCogs > 0 || netUnits > 0) { cogs += perUnitCogs * netUnits; netCovered += skR.net; anyCosted = true }
+        })
+      })
+    })
+    return { cogs: anyCosted ? cogs : null, gm: anyCosted ? netCovered - cogs : null }
+  }, [activeData, cogsMap, activeNetScale])
+
   if (!data || !channelData) return null
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', minWidth: 0 }}>
       <div className="sales-tabs">
         {PNL_TABS.map(tab => {
           const allowed = !allowedTabs || allowedTabs.includes(PNL_KEY_MAP[tab.id])
@@ -887,46 +1414,51 @@ export default function PnLPage({ data, filters, setFilters, activeTab: activeTa
           )
         })}
       </div>
+      <div className="fbar">
+        <div className="fbar-inner">
+          {activeTab === 'shopify' && (
+            [{ id: 'all', label: 'Overall' }, { id: 'MyFrido', label: 'MyFrido' }, { id: 'Mobility', label: 'Mobility' }].map((opt, i) => (
+              <div key={opt.id} style={{ display: 'flex', alignItems: 'center' }}>
+                {i > 0 && <div style={{ width: 1, height: 14, background: '#E3E0D8', margin: '0 2px' }} />}
+                <button onClick={() => setD2cSubCh(opt.id)} style={{ fontSize: 12, fontWeight: d2cSubCh === opt.id ? 700 : 500, padding: '5px 14px', borderRadius: 7, border: 'none', background: d2cSubCh === opt.id ? C.acs : 'transparent', color: '#3F3D33', cursor: 'pointer' }}>{opt.label}</button>
+              </div>
+            ))
+          )}
+          {activeTab === 'amazon' && (
+            [{ id: 'all', label: 'Overall' }, { id: 'sc', label: 'Seller Central' }, { id: 'vc', label: 'Vendor Central' }].map((opt, i) => (
+              <div key={opt.id} style={{ display: 'flex', alignItems: 'center' }}>
+                {i > 0 && <div style={{ width: 1, height: 14, background: '#E3E0D8', margin: '0 2px' }} />}
+                <button onClick={() => setAmzChannelView(opt.id)} style={{ fontSize: 12, fontWeight: amzChannelView === opt.id ? 700 : 500, padding: '5px 14px', borderRadius: 7, border: 'none', background: amzChannelView === opt.id ? C.acs : 'transparent', color: '#3F3D33', cursor: 'pointer' }}>{opt.label}</button>
+              </div>
+            ))
+          )}
+          {activeTab === 'offline' && (
+            [{ id: 'all', label: 'Overall' }, { id: 'b2b', label: 'B2B' }, { id: 'Stockist', label: 'Stockist' }, { id: 'MTGT', label: 'MT GT' }, { id: 'misc', label: 'Miscellaneous' }].map((opt, i) => (
+              <div key={opt.id} style={{ display: 'flex', alignItems: 'center' }}>
+                {i > 0 && <div style={{ width: 1, height: 14, background: '#E3E0D8', margin: '0 2px' }} />}
+                <button onClick={() => setOfflineSub(opt.id)} style={{ fontSize: 12, fontWeight: offlineSub === opt.id ? 700 : 500, padding: '5px 14px', borderRadius: 7, border: 'none', background: offlineSub === opt.id ? C.acs : 'transparent', color: '#3F3D33', cursor: 'pointer' }}>{opt.label}</button>
+              </div>
+            ))
+          )}
+          {!['shopify', 'amazon', 'offline'].includes(activeTab) && (
+            <span style={{ fontSize: 12, fontWeight: 700, padding: '5px 14px', borderRadius: 7, background: C.acs, color: '#3F3D33', display: 'inline-block' }}>{activeTabMeta?.label || ''}</span>
+          )}
+        </div>
+      </div>
       <div className="page-scroll">
-        {activeTab === 'shopify' && (
-          <div style={{ display: 'flex', gap: 4, marginBottom: 12 }}>
-            {[{ id: 'all', label: 'Overall' }, { id: 'MyFrido', label: 'MyFrido' }, { id: 'Mobility', label: 'Mobility' }].map((opt, i) => (
-              <div key={opt.id} style={{ display: 'flex', alignItems: 'center' }}>
-                {i > 0 && <div style={{ width: 1, height: 14, background: '#E3E0D8', margin: '0 2px' }} />}
-                <button onClick={() => setD2cSubCh(opt.id)} style={{ fontSize: 12, fontWeight: d2cSubCh === opt.id ? 700 : 500, padding: '5px 14px', borderRadius: 7, border: 'none', background: d2cSubCh === opt.id ? '#FFD600' : 'transparent', color: '#13121A', cursor: 'pointer' }}>{opt.label}</button>
-              </div>
-            ))}
-          </div>
-        )}
-        {activeTab === 'amazon' && (
-          <div style={{ display: 'flex', gap: 4, marginBottom: 12 }}>
-            {[{ id: 'all', label: 'Overall' }, { id: 'sc', label: 'Seller Central' }, { id: 'vc', label: 'Vendor Central' }].map((opt, i) => (
-              <div key={opt.id} style={{ display: 'flex', alignItems: 'center' }}>
-                {i > 0 && <div style={{ width: 1, height: 14, background: '#E3E0D8', margin: '0 2px' }} />}
-                <button onClick={() => setAmzChannelView(opt.id)} style={{ fontSize: 12, fontWeight: amzChannelView === opt.id ? 700 : 500, padding: '5px 14px', borderRadius: 7, border: 'none', background: amzChannelView === opt.id ? '#FFD600' : 'transparent', color: '#13121A', cursor: 'pointer' }}>{opt.label}</button>
-              </div>
-            ))}
-          </div>
-        )}
-        {activeTab === 'offline' && (
-          <div style={{ display: 'flex', gap: 4, marginBottom: 12 }}>
-            {[{ id: 'all', label: 'Overall' }, { id: 'b2b', label: 'B2B' }, { id: 'Stockist', label: 'Stockist' }, { id: 'MTGT', label: 'MT GT' }].map((opt, i) => (
-              <div key={opt.id} style={{ display: 'flex', alignItems: 'center' }}>
-                {i > 0 && <div style={{ width: 1, height: 14, background: '#E3E0D8', margin: '0 2px' }} />}
-                <button onClick={() => setOfflineSub(opt.id)} style={{ fontSize: 12, fontWeight: offlineSub === opt.id ? 700 : 500, padding: '5px 14px', borderRadius: 7, border: 'none', background: offlineSub === opt.id ? '#FFD600' : 'transparent', color: '#13121A', cursor: 'pointer' }}>{opt.label}</button>
-              </div>
-            ))}
-          </div>
-        )}
         <PnLChannelTab
           title={activeTabMeta?.label || 'PnL'}
-          note={activeTab === 'amazon' ? (amzChannelView === 'all' ? 'SC + VC' : amzChannelView === 'sc' ? 'Seller Central' : 'Vendor Central') : activeTab === 'offline' ? (offlineSub === 'all' ? undefined : offlineSub) : activeTab === 'shopify' ? (d2cSubCh === 'all' ? undefined : d2cSubCh) : undefined}
+          note={activeTab === 'amazon' ? (amzChannelView === 'all' ? 'SC + VC' : amzChannelView === 'sc' ? 'Seller Central' : 'Vendor Central') : activeTab === 'offline' ? (offlineSub === 'all' ? undefined : offlineSub === 'misc' ? 'Miscellaneous' : offlineSub) : activeTab === 'shopify' ? (d2cSubCh === 'all' ? undefined : d2cSubCh) : undefined}
           gross={activeData.gross}
           excRev={activeData.excRev}
           net={activeData.net}
           units={activeData.units}
           orders={activeData.orders}
           returnRev={activeData.returnRev}
+          prevGross={activeData.prevGross}
+          prevExcRev={activeData.prevExcRev}
+          prevReturnRev={activeData.prevReturnRev}
+          prevOrders={activeData.prevOrders}
           subCatData={activeData.subCatData}
           skuData={activeData.skuData}
           sndBySku={activeSndBySku}
@@ -935,15 +1467,17 @@ export default function PnLPage({ data, filters, setFilters, activeTab: activeTa
           daily={activeData.daily}
           dailyPnL={activeData.dailyPnL}
           kpiSummary={kpiSummary}
+          prevKpiSummary={prevKpiSummary}
           grossOfTotalPct={activeTab === 'amazon' && (amzChannelView === 'sc' || amzChannelView === 'vc') && activeData.amzTotalGross > 0 ? (activeData.gross / activeData.amzTotalGross * 100) : null}
           noReturnAccent={activeTab === 'amazon' && amzChannelView === 'vc'}
-          grossColor={CHANNEL_COLORS[activeTab] || '#FFD600'}
+          grossColor={C.acc}
           gradId={`pnl${activeTab}Grad`}
           includeUnmatched={activeIncludeUnmatched}
           mobilityNetBySubCat={activeMobilityNetBySubCat}
           netScale={activeData?.netScale ?? 1}
           hideTrendUnits={activeTab === 'amazon' || activeTab === 'shopify'}
         />
+        {activeTab === 'ebo' && <StorePnLTable rows={storePnLRows} />}
       </div>
     </div>
   )

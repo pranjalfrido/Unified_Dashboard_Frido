@@ -202,7 +202,7 @@ export default function PnLFinancialTable({ subCatData, skuData, adSpendMap = {}
   const thStyleL = { ...thStyle, textAlign: 'left' }
   const tdStyle = { fontSize: 11, padding: '4px 7px', textAlign: 'right', color: C.t1, borderBottom: `1px solid ${C.border}`, fontFamily: 'var(--mono)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }
   const tdStyleL = { ...tdStyle, textAlign: 'left', fontFamily: 'inherit' }
-  const totalTdStyle = { ...tdStyle, padding: '6px 7px', fontWeight: 700, color: C.t1, borderBottom: 'none', position: 'sticky', bottom: 0, background: C.bg, borderTop: `1.5px solid ${C.border}`, zIndex: 1 }
+  const totalTdStyle = { ...tdStyle, padding: '6px 7px', fontWeight: 700, color: C.t1, borderBottom: 'none', position: 'sticky', bottom: 0, background: C.acl, borderTop: `1.5px solid ${C.border}`, zIndex: 1 }
   const pendingCell = <span style={{ color: C.t3 }} title="Pending data — see PNL_TAB_ROADMAP.md">—</span>
   const noCostCell = <span style={{ color: C.t3 }} title="No cost entry for this SKU/product yet">—</span>
   const pctCellOf = (val, netCoveredVal) => netCoveredVal > 0 ? `${pctOf(val, netCoveredVal).toFixed(1)}%` : noCostCell
@@ -215,57 +215,57 @@ export default function PnLFinancialTable({ subCatData, skuData, adSpendMap = {}
   // cell as small render functions — reordering the array changes DISPLAY order only, every
   // cell's actual value/formula is untouched and still keyed by column id, not position.
   const ALL_COLUMNS = [
-    { id: 'gross', label: 'Gross (Inc GST)', sortKey: 'gross', style: thStyle,
+    { id: 'gross', width: 10, label: 'Gross (Inc GST)', sortKey: 'gross', style: thStyle,
       row: r => <td style={tdStyle}>{fmt(r.gross)}</td>,
       sku: sk => <td style={{ ...tdStyle, fontSize: 11 }}>{fmt(sk.gross)}</td>,
       total: () => <td style={totalTdStyle}>{fmt(tot.gross)}</td> },
-    { id: 'excRev', label: 'Gross (Ex GST)', sortKey: 'excRev', style: thStyle,
+    { id: 'excRev', width: 10, label: 'Gross (Ex GST)', sortKey: 'excRev', style: thStyle,
       row: r => <td style={tdStyle}>{fmt(r.excRev)}</td>,
       sku: sk => <td style={{ ...tdStyle, fontSize: 11 }}>{fmt(sk.excRev)}</td>,
       total: () => <td style={totalTdStyle}>{fmt(tot.excRev)}</td> },
-    { id: 'units', label: 'Units', sortKey: 'units', style: thStyle,
+    { id: 'units', width: 7, label: 'Units', sortKey: 'units', style: thStyle,
       row: r => <td style={tdStyle}>{fmtN(r.units)}</td>,
       sku: sk => <td style={{ ...tdStyle, fontSize: 11 }}>{fmtN(sk.units)}</td>,
       total: () => <td style={totalTdStyle}>{fmtN(tot.units)}</td> },
-    { id: 'asp', label: 'ASP', sortKey: 'asp', style: thStyle,
+    { id: 'asp', width: 7, label: 'ASP', sortKey: 'asp', style: thStyle,
       row: r => <td style={tdStyle}>{r.asp > 0 ? `₹${Math.round(r.asp).toLocaleString('en-IN')}` : <span style={{ color: C.t3 }}>—</span>}</td>,
       sku: sk => <td style={{ ...tdStyle, fontSize: 11 }}>{sk.units > 0 ? `₹${Math.round(sk.gross / sk.units).toLocaleString('en-IN')}` : <span style={{ color: C.t3 }}>—</span>}</td>,
       total: () => <td style={totalTdStyle}>{totAsp > 0 ? `₹${Math.round(totAsp).toLocaleString('en-IN')}` : '—'}</td> },
-    { id: 'returnPct', label: 'Returns %', sortKey: 'returnPct', style: thStyle,
+    { id: 'returnPct', width: 8, label: 'Returns %', sortKey: 'returnPct', style: thStyle,
       row: r => <td style={tdStyle}>{r.returnPct > 0 ? <span style={{ color: r.returnPct > 20 ? '#B91C1C' : 'inherit' }}>{r.returnPct.toFixed(2)}%</span> : <span style={{ color: C.t3 }}>—</span>}</td>,
       sku: sk => <td style={{ ...tdStyle, fontSize: 11 }}>{pctOf(sk.totalReturnRev, sk.gross) > 0 ? `${pctOf(sk.totalReturnRev, sk.gross).toFixed(2)}%` : <span style={{ color: C.t3 }}>—</span>}</td>,
       total: () => <td style={totalTdStyle}>{totReturnPct > 0 ? `${totReturnPct.toFixed(2)}%` : '—'}</td> },
-    { id: 'net', label: 'Net Rev', sortKey: 'net', style: thStyle,
+    { id: 'net', width: 9, label: 'Net Rev', sortKey: 'net', style: thStyle,
       row: r => <td style={tdStyle}>{fmt(r.net)}</td>,
       sku: sk => <td style={{ ...tdStyle, fontSize: 11 }}>{fmt(sk.net)}</td>,
       total: () => <td style={totalTdStyle}>{fmt(tot.net)}</td> },
-    { id: 'cogsPct', label: 'COGS %', sortKey: 'cogsPct', style: thStyle,
-      row: r => <td style={tdStyle}>{r.cogsPct != null ? `${r.cogsPct.toFixed(1)}%` : noCostCell}</td>,
+    { id: 'cogsPct', width: 7, label: 'COGS %', sortKey: 'cogsPct', style: thStyle,
+      row: r => <td style={tdStyle}>{r.cogsPct != null ? <span style={{ color: r.cogsPct > 60 ? '#B91C1C' : 'inherit' }}>{r.cogsPct.toFixed(1)}%</span> : noCostCell}</td>,
       sku: sk => <td style={{ ...tdStyle, fontSize: 11 }}>{sk._costed && sk.net > MIN_REV_FOR_RATIOS ? `${pctOf(sk._cogs, sk.net).toFixed(1)}%` : noCostCell}</td>,
       total: () => <td style={totalTdStyle}>{pctCellOf(tot.cogs, tot.netCovered)}</td> },
-    { id: 'gmPct', label: 'GM %', sortKey: 'gmPct', style: thStyle,
-      row: r => <td style={tdStyle}>{r.gmPct != null ? `${r.gmPct.toFixed(1)}%` : noCostCell}</td>,
+    { id: 'gmPct', width: 7, label: 'GM %', sortKey: 'gmPct', style: thStyle,
+      row: r => <td style={tdStyle}>{r.gmPct != null ? <span style={{ color: r.gmPct < 0 ? '#B91C1C' : r.gmPct >= 40 ? '#286010' : 'inherit' }}>{r.gmPct.toFixed(1)}%</span> : noCostCell}</td>,
       sku: sk => <td style={{ ...tdStyle, fontSize: 11 }}>{sk._gm != null && sk.net > MIN_REV_FOR_RATIOS ? `${pctOf(sk._gm, sk.net).toFixed(1)}%` : noCostCell}</td>,
       total: () => <td style={totalTdStyle}>{totGm != null ? pctCellOf(totGm, tot.netCovered) : noCostCell}</td> },
-    { id: 'sndPct', label: 'SnD %', sortKey: 'sndPct', style: thStyle,
-      row: r => <td style={tdStyle}>{r.sndPct != null ? `${r.sndPct.toFixed(1)}%` : noCostCell}</td>,
+    { id: 'sndPct', width: 7, label: 'SnD %', sortKey: 'sndPct', style: thStyle,
+      row: r => <td style={tdStyle}>{r.sndPct != null ? <span style={{ color: r.sndPct > 25 ? '#B91C1C' : 'inherit' }}>{r.sndPct.toFixed(1)}%</span> : noCostCell}</td>,
       sku: sk => <td style={{ ...tdStyle, fontSize: 11 }}>{sk._snd != null && sk.net > MIN_REV_FOR_RATIOS ? `${pctOf(sk._snd, sk.net).toFixed(1)}%` : noCostCell}</td>,
       total: () => <td style={totalTdStyle}>{pctCellOf(tot.snd, tot.sndNetCovered)}</td> },
-    { id: 'cm1Pct', label: 'CM1 %', sortKey: 'cm1Pct', style: thStyle,
-      row: r => <td style={tdStyle}>{r.cm1Pct != null ? `${r.cm1Pct.toFixed(1)}%` : noCostCell}</td>,
+    { id: 'cm1Pct', width: 7, label: 'CM1 %', sortKey: 'cm1Pct', style: thStyle,
+      row: r => <td style={tdStyle}>{r.cm1Pct != null ? <span style={{ color: r.cm1Pct < 0 ? '#B91C1C' : r.cm1Pct >= 30 ? '#286010' : 'inherit' }}>{r.cm1Pct.toFixed(1)}%</span> : noCostCell}</td>,
       sku: sk => <td style={{ ...tdStyle, fontSize: 11 }}>{sk._cm1 != null && sk.net > MIN_REV_FOR_RATIOS ? `${pctOf(sk._cm1, sk.net).toFixed(1)}%` : noCostCell}</td>,
       total: () => <td style={totalTdStyle}>{tot.anyCm1 ? `${totCm1Pct.toFixed(1)}%` : noCostCell}</td> },
     ...(showMarketing ? [
-      { id: 'spendPct', label: 'Spend %', sortKey: 'spendPct', style: thStyle,
+      { id: 'spendPct', width: 8, label: 'Spend %', sortKey: 'spendPct', style: thStyle,
         row: r => <td style={tdStyle}>{r.spend > 0 ? `${r.spendPct.toFixed(2)}%` : <span style={{ color: C.t3 }}>—</span>}</td>,
         sku: () => <td style={{ ...tdStyle, fontSize: 11 }}><span style={{ color: C.t3 }}>—</span></td>,
         total: () => <td style={totalTdStyle}>{totSpend > 0 ? `${totSpendPct.toFixed(2)}%` : '—'}</td> },
-      { id: 'roas', label: 'RoAS', sortKey: 'roas', style: thStyle,
-        row: r => <td style={tdStyle}>{r.roas != null ? `${r.roas.toFixed(2)}x` : <span style={{ color: C.t3 }}>—</span>}</td>,
+      { id: 'roas', width: 6, label: 'RoAS', sortKey: 'roas', style: thStyle,
+        row: r => <td style={tdStyle}>{r.roas != null ? <span style={{ color: r.roas < 1 ? '#B91C1C' : r.roas >= 3 ? '#286010' : 'inherit' }}>{r.roas.toFixed(2)}x</span> : <span style={{ color: C.t3 }}>—</span>}</td>,
         sku: () => <td style={{ ...tdStyle, fontSize: 11 }}><span style={{ color: C.t3 }}>—</span></td>,
         total: () => <td style={totalTdStyle}>{totRoas != null ? `${totRoas.toFixed(2)}x` : '—'}</td> },
-      { id: 'cm2Pct', label: 'CM2 %', sortKey: 'cm2Pct', style: thStyle,
-        row: r => <td style={tdStyle}>{r.cm2Pct != null ? `${r.cm2Pct.toFixed(1)}%` : noCostCell}</td>,
+      { id: 'cm2Pct', width: 7, label: 'CM2 %', sortKey: 'cm2Pct', style: thStyle,
+        row: r => <td style={tdStyle}>{r.cm2Pct != null ? <span style={{ color: r.cm2Pct < 0 ? '#B91C1C' : r.cm2Pct >= 20 ? '#286010' : 'inherit' }}>{r.cm2Pct.toFixed(1)}%</span> : noCostCell}</td>,
         sku: () => <td style={{ ...tdStyle, fontSize: 11 }}>{pendingCell}</td>,
         total: () => <td style={totalTdStyle}>{totCm2 != null ? `${totCm2Pct.toFixed(1)}%` : noCostCell}</td> },
     ] : []),
@@ -348,32 +348,37 @@ export default function PnLFinancialTable({ subCatData, skuData, adSpendMap = {}
       <div style={{ overflowX: 'auto', overflowY: 'auto', maxHeight: 560 }}>
         <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed', minWidth: 1580 }}>
           <colgroup>
-            <col style={{ width: showMarketing ? '8%' : '10%' }} /><col style={{ width: showMarketing ? '17%' : '20%' }} />
-            {reorder.orderedColumns.map(c => <col key={c.id} style={{ width: `${(showMarketing ? 75 : 78) / ALL_COLUMNS.length}%` }} />)}
+            <col style={{ width: showMarketing ? '8%' : '10%' }} /><col style={{ width: showMarketing ? '15%' : '18%' }} />
+            {(() => {
+              const totalW = reorder.orderedColumns.reduce((s, c) => s + (c.width || 8), 0) || 1
+              const remainingPct = showMarketing ? 77 : 72
+              return reorder.orderedColumns.map(c => <col key={c.id} style={{ width: `${(c.width || 8) / totalW * remainingPct}%` }} />)
+            })()}
           </colgroup>
           <thead>
-            <tr style={{ background: C.bg }}>
-              <Th label="Category" sortKey="cat" style={{ ...thStyleL, position: 'sticky', top: 0, background: C.bg, zIndex: 1 }} align="left" />
-              <Th label="Product" sortKey="sc" style={{ ...thStyleL, position: 'sticky', top: 0, background: C.bg, zIndex: 1 }} align="left" />
+            <tr style={{ background: C.acl }}>
+              <Th label="Category" sortKey="cat" style={{ ...thStyleL, position: 'sticky', top: 0, background: C.acl, zIndex: 1 }} align="left" />
+              <Th label="Product" sortKey="sc" style={{ ...thStyleL, position: 'sticky', top: 0, background: C.acl, zIndex: 1 }} align="left" />
               {reorder.orderedColumns.map(c => (
-                <Th key={c.id} label={c.label} sortKey={c.sortKey} style={{ ...c.style, position: 'sticky', top: 0, background: C.bg, zIndex: 1 }}
+                <Th key={c.id} label={c.label} sortKey={c.sortKey} style={{ ...c.style, position: 'sticky', top: 0, background: C.acl, zIndex: 1 }}
                   dragProps={{ onDragStart: reorder.onDragStart(c.id), onDragOver: reorder.onDragOver, onDrop: reorder.onDrop(c.id) }} />
               ))}
             </tr>
           </thead>
           <tbody>
-            {rows.map(r => {
+            {rows.map((r, ri) => {
               const skuKey = `${r.cat}::${r.sc}`
               const isOpen = expandedSku[skuKey]
               const allSkus = Object.entries(skuData?.[r.cat]?.[r.sc] || {}).map(([sku, d]) => ({ sku, ...mapRow(d) })).sort((a, b) => b.gross - a.gross)
               const skus = q ? allSkus.filter(sk => r.cat.toLowerCase().includes(q) || r.sc.toLowerCase().includes(q) || sk.sku.toLowerCase().includes(q)) : allSkus
               const scTotalGross = allSkus.reduce((s, sk) => s + sk.gross, 0)
               const hasSkus = allSkus.length > 0
+              const rowZebra = ri % 2 === 1 ? '#FAF9F6' : 'transparent'
               return (
                 <Fragment key={skuKey}>
-                  <tr style={{ cursor: 'default' }}
-                    onMouseEnter={e => e.currentTarget.style.background = '#FFFBE6'}
-                    onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
+                  <tr style={{ cursor: 'default', background: rowZebra, transition: 'box-shadow .12s, background .12s' }}
+                    onMouseEnter={e => { e.currentTarget.style.background = '#FDF8ED'; e.currentTarget.style.boxShadow = `inset 0 0 0 1px ${C.acm}55, 0 0 8px 0 ${C.acc}33` }}
+                    onMouseLeave={e => { e.currentTarget.style.background = rowZebra; e.currentTarget.style.boxShadow = 'none' }}>
                     <td style={{ ...tdStyleL, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={r.cat}>{r.cat}</td>
                     <td style={{ ...tdStyleL, fontWeight: 600, overflow: 'hidden' }}>
                       <span onClick={() => hasSkus && toggleSku(skuKey)} title={r.sc} style={{ cursor: hasSkus ? 'pointer' : 'default', userSelect: 'none', display: 'inline-flex', alignItems: 'center', gap: 5, maxWidth: '100%' }}>
@@ -397,9 +402,9 @@ export default function PnLFinancialTable({ subCatData, skuData, adSpendMap = {}
                     // they're currently displayed in.
                     const sk = { ...sk_, _costed: costed, _cogs: skCogs, _gm: skGm, _snd: skSnd, _cm1: skCm1 }
                     return (
-                      <tr key={sk.sku} style={{ cursor: 'default' }}
-                        onMouseEnter={e => e.currentTarget.style.background = '#FFFBE6'}
-                        onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
+                      <tr key={sk.sku} style={{ cursor: 'default', background: '#FAFAF7', transition: 'box-shadow .12s, background .12s' }}
+                        onMouseEnter={e => { e.currentTarget.style.background = '#FDF8ED'; e.currentTarget.style.boxShadow = `inset 0 0 0 1px ${C.acm}55, 0 0 8px 0 ${C.acc}33` }}
+                        onMouseLeave={e => { e.currentTarget.style.background = '#FAFAF7'; e.currentTarget.style.boxShadow = 'none' }}>
                         <td style={{ ...tdStyleL, borderBottom: `1px solid ${C.border}` }}></td>
                         <td style={{ ...tdStyleL, borderBottom: `1px solid ${C.border}`, fontFamily: 'var(--mono)', fontSize: 11, color: C.t2, paddingLeft: 22 }}>└ {sk.sku}</td>
                         {reorder.orderedColumns.map(c => <Fragment key={c.id}>{c.sku(sk)}</Fragment>)}

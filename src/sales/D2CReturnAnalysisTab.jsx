@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useMemo, Fragment, useCallback } from 'react'
 import { C, fmt, fmtN, exportCSV } from '../utils.js'
 import {
-  Card, QtyRevToggle, returnBadge, ReturnBreakdownTable, useSortableTable,
+  Card, QtyRevToggle, SmallDropdown, returnBadge, ReturnBreakdownTable, useSortableTable,
   ComposedChart, Area, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
   PieChart, Pie, Cell, BarChart, Bar,
 } from '../components.jsx'
@@ -53,19 +53,18 @@ function ReturnTrendChart({ kpis, dailyTrend }) {
 
   return (
     <Card title="Return Metrics Trend" style={{ height: 420, display: 'flex', flexDirection: 'column' }} action={
-      <select value={groupBy} onChange={e => setGroupBy(e.target.value)} style={{ fontSize: 11, fontWeight: 600, padding: '3px 8px', borderRadius: 6, border: `1px solid ${C.border2}`, background: C.card, color: C.t1, cursor: 'pointer', fontFamily: 'var(--font)', outline: 'none' }}>
-        {['daily', 'weekly', 'monthly'].map(g => <option key={g} value={g}>{g.charAt(0).toUpperCase() + g.slice(1)}</option>)}
-      </select>
+      <SmallDropdown value={groupBy} onChange={setGroupBy} options={[['daily', 'Daily'], ['weekly', 'Weekly'], ['monthly', 'Monthly']]}
+        triggerStyle={{ fontSize: 11, fontWeight: 600, padding: '3px 8px', borderRadius: 6, border: `1px solid ${C.border2}`, background: C.card, color: C.t1, cursor: 'pointer' }} />
     }>
       {kpis && (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6, minmax(0, 1fr))', gap: 8, marginBottom: 14, paddingBottom: 14, borderBottom: `1px solid ${C.border}`, flexShrink: 0 }}>
-          <TrendStatTile label="Revenue" value={fmt(kpis.totalRevenue)} color="#E0B800"
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6, minmax(0, 1fr))', gap: 14, marginBottom: 14, paddingBottom: 14, borderBottom: `1px solid ${C.border}`, flexShrink: 0 }}>
+          <TrendStatTile label="Revenue" value={fmt(kpis.totalRevenue)} color={C.border2}
             badge={revChg !== null && <span style={{ fontSize: 10, fontWeight: 700, color: revChg >= 0 ? C.green.tx : C.red.tx }}>{revChg >= 0 ? '▲' : '▼'} {Math.abs(revChg).toFixed(1)}%</span>} />
-          <TrendStatTile label="Return %" value={`${kpis.returnPct.toFixed(1)}%`} color="#E24B4A" badge={returnBadge(kpis.returnPct, kpis.prevReturnPct)} />
-          <TrendStatTile label="Cancel %" value={`${kpis.cancelPct.toFixed(1)}%`} color="#B91C1C" badge={returnBadge(kpis.cancelPct, kpis.prevCancelPct)} />
-          <TrendStatTile label="RTO %" value={`${kpis.rtoPct.toFixed(1)}%`} color="#CC8A00" badge={returnBadge(kpis.rtoPct, kpis.prevRtoPct)} />
-          <TrendStatTile label="CIR %" value={`${kpis.cirPct.toFixed(1)}%`} color="#2E74CC" badge={returnBadge(kpis.cirPct, kpis.prevCirPct)} />
-          <TrendStatTile label="Exchange %" value={`${kpis.exchangePct.toFixed(1)}%`} color="#9B59B6" badge={returnBadge(kpis.exchangePct, kpis.prevExchangePct)} />
+          <TrendStatTile label="Return %" value={`${kpis.returnPct.toFixed(1)}%`} color={C.border2} badge={returnBadge(kpis.returnPct, kpis.prevReturnPct)} />
+          <TrendStatTile label="Cancel %" value={`${kpis.cancelPct.toFixed(1)}%`} color={C.border2} badge={returnBadge(kpis.cancelPct, kpis.prevCancelPct)} />
+          <TrendStatTile label="RTO %" value={`${kpis.rtoPct.toFixed(1)}%`} color={C.border2} badge={returnBadge(kpis.rtoPct, kpis.prevRtoPct)} />
+          <TrendStatTile label="CIR %" value={`${kpis.cirPct.toFixed(1)}%`} color={C.border2} badge={returnBadge(kpis.cirPct, kpis.prevCirPct)} />
+          <TrendStatTile label="Exchange %" value={`${kpis.exchangePct.toFixed(1)}%`} color={C.border2} badge={returnBadge(kpis.exchangePct, kpis.prevExchangePct)} />
         </div>
       )}
       <div style={{ flex: 1, minHeight: 0 }}>
@@ -73,8 +72,8 @@ function ReturnTrendChart({ kpis, dailyTrend }) {
           <ComposedChart data={grouped} margin={{ top: 4, right: 20, bottom: 4, left: 0 }}>
             <defs>
               <linearGradient id="raRevGrad" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="5%" stopColor="#E0B800" stopOpacity={0.22} />
-                <stop offset="95%" stopColor="#E0B800" stopOpacity={0.02} />
+                <stop offset="5%" stopColor={C.acm} stopOpacity={0.22} />
+                <stop offset="95%" stopColor={C.acm} stopOpacity={0.02} />
               </linearGradient>
             </defs>
             <CartesianGrid strokeDasharray="3 3" stroke={C.border} vertical={false} />
@@ -93,7 +92,7 @@ function ReturnTrendChart({ kpis, dailyTrend }) {
               </div>
             ) : null} />
             <Legend wrapperStyle={{ fontSize: 11, color: C.t1 }} />
-            <Area yAxisId="rev" type="monotone" dataKey="revenue" name="Revenue" stroke="#E0B800" fill="url(#raRevGrad)" strokeWidth={2} dot={false} />
+            <Area yAxisId="rev" type="monotone" dataKey="revenue" name="Revenue" stroke={C.acm} fill="url(#raRevGrad)" strokeWidth={2} dot={false} />
             <Line yAxisId="pct" type="monotone" dataKey="totalReturnPct" name="Return % (Overall)" stroke="#E24B4A" strokeWidth={2} dot={false} />
             <Line yAxisId="pct" type="monotone" dataKey="cancelPct" name="Cancellation %" stroke="#B91C1C" strokeWidth={1.5} dot={false} strokeDasharray="6 2" />
             <Line yAxisId="pct" type="monotone" dataKey="rtoPct" name="RTO %" stroke="#CC8A00" strokeWidth={1.5} dot={false} />
@@ -118,10 +117,8 @@ function TopReturnedProductsCard({ topProducts, paymentTypeOpts, paymentType, se
   return (
     <Card fill title="Top Products · High Returns" titleNoWrap style={{ height: 420 }} action={
       <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-        <select value={paymentType} onChange={e => setPaymentType(e.target.value)} style={{ fontSize: 11, fontWeight: 600, padding: '3px 8px', borderRadius: 6, border: `1px solid ${C.border2}`, background: C.card, color: C.t1, cursor: 'pointer', fontFamily: 'var(--font)', outline: 'none' }}>
-          <option value="">Payment Type</option>
-          {paymentTypeOpts.map(p => <option key={p} value={p}>{p}</option>)}
-        </select>
+        <SmallDropdown value={paymentType} onChange={setPaymentType} options={[['', 'Payment Type'], ...paymentTypeOpts.map(p => [p, p])]}
+          triggerStyle={{ fontSize: 11, fontWeight: 600, padding: '3px 8px', borderRadius: 6, border: `1px solid ${C.border2}`, background: C.card, color: C.t1, cursor: 'pointer' }} />
         <QtyRevToggle value={basis} onChange={setBasis} />
       </div>
     }>
@@ -146,7 +143,7 @@ function TopReturnedProductsCard({ topProducts, paymentTypeOpts, paymentType, se
   )
 }
 
-const REASON_COLORS = ['#534AB7', '#0D9E68', '#2E74CC', '#CC8A00', '#CC4078', '#E24B4A', '#9B59B6', '#FF6B35']
+const REASON_COLORS = [C.acc, C.acm, C.acd, '#D9BE7A', '#8C6A3F', C.acs, '#4A3A1E', '#B89A6B']
 
 // Payment Type-wise Return Breakdown, transposed — payment types (Prepaid/COD/PPCOD) run across
 // as columns, metrics (Revenue/Cancel%/RTO%/CIR%/Exchange%/Total Return%) run down as rows. Only
@@ -190,7 +187,7 @@ function PaymentTypeTransposedTable({ paymentTypeTable, basis, setBasis }) {
     const v = r[`${m.key.replace('Pct', '')}${pctSuffix}`]
     return (v || 0) > RED_THRESH[m.key] ? '#B91C1C' : C.t1
   }
-  const thStyle = { fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.04em', color: C.t3, padding: '3px 8px 7px', borderBottom: `1px solid ${C.border}`, textAlign: 'right', whiteSpace: 'nowrap' }
+  const thStyle = { fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.04em', color: C.t2, padding: '6px 8px 7px', borderBottom: `1.5px solid ${C.border}`, textAlign: 'right', whiteSpace: 'nowrap', background: C.acl }
   const rowLabelStyle = { fontSize: 10.5, fontWeight: 600, color: C.t3, textTransform: 'uppercase', letterSpacing: '.03em', padding: '6px 8px 6px 0', whiteSpace: 'nowrap' }
 
   return (
@@ -198,7 +195,7 @@ function PaymentTypeTransposedTable({ paymentTypeTable, basis, setBasis }) {
       <div style={{ overflowX: 'auto' }}>
         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
           <thead>
-            <tr>
+            <tr style={{ background: C.acl }}>
               <th style={{ ...thStyle, textAlign: 'left' }}>Metric</th>
               <th style={{ ...thStyle, color: C.t1, borderRight: `1px solid ${C.border}` }}>Overall</th>
               {rows.map(r => <th key={r.paymentType} style={{ ...thStyle, color: C.t1 }}>{r.paymentType}</th>)}
@@ -375,14 +372,15 @@ function ReturnReasonsTable({ returnReasons, height = 420 }) {
   }, [returnReasons])
   const { sortRows, Th } = useSortableTable('count')
   const sortedRows = sortRows(grouped, { reason: r => r.reason, count: r => r.count, pctShare: r => totalCount ? r.count / totalCount * 100 : 0, revenueImpact: r => r.revenueImpact })
-  const thStyle = { fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.05em', color: C.t3, padding: '3px 5px 7px', borderBottom: `1px solid ${C.border}`, whiteSpace: 'nowrap' }
+  const thStyle = { fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.05em', color: C.t2, padding: '6px 8px 7px', borderBottom: `1.5px solid ${C.border}`, whiteSpace: 'nowrap', background: C.acl }
+  const totalRevenueImpact = useMemo(() => (returnReasons || []).reduce((s, r) => s + (r.revenueImpact || 0), 0), [returnReasons])
 
   return (
     <Card fill title="Return Reasons · Detail">
       <div style={{ overflowY: 'auto', height: '100%' }}>
         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
-          <thead style={{ position: 'sticky', top: 0, background: C.card, zIndex: 1 }}>
-            <tr>
+          <thead style={{ position: 'sticky', top: 0, background: C.acl, zIndex: 1 }}>
+            <tr style={{ background: C.acl }}>
               <Th label="Reason" sortKey="reason" style={thStyle} align="left" />
               <Th label="Count" sortKey="count" style={thStyle} align="right" />
               <Th label="% Share" sortKey="pctShare" style={thStyle} align="right" />
@@ -393,9 +391,10 @@ function ReturnReasonsTable({ returnReasons, height = 420 }) {
             {sortedRows.map((r, i) => {
               const isOpen = expanded[r.reason]
               const subs = [...r.subReasons].sort((a, b) => b.count - a.count)
+              const rowZebra = i % 2 === 1 ? '#FAF9F6' : 'transparent'
               return (
                 <Fragment key={r.reason}>
-                  <tr style={{ borderBottom: (i < sortedRows.length - 1 && !isOpen) ? `1px solid ${C.border}` : 'none' }} onMouseEnter={e => e.currentTarget.style.background = '#FFFBE6'} onMouseLeave={e => e.currentTarget.style.background = ''}>
+                  <tr style={{ borderBottom: (i < sortedRows.length - 1 && !isOpen) ? `1px solid ${C.border}` : 'none', background: rowZebra, transition: 'box-shadow .12s, background .12s' }} onMouseEnter={e => { e.currentTarget.style.background = '#FDF8ED'; e.currentTarget.style.boxShadow = `inset 0 0 0 1px ${C.acm}55, 0 0 8px 0 ${C.acc}33` }} onMouseLeave={e => { e.currentTarget.style.background = rowZebra; e.currentTarget.style.boxShadow = 'none' }}>
                     <td style={{ padding: '5.5px 5px', color: C.t1 }}>
                       <span onClick={() => setExpanded(prev => ({ ...prev, [r.reason]: !prev[r.reason] }))} style={{ cursor: 'pointer', userSelect: 'none', display: 'inline-flex', alignItems: 'center', gap: 5, fontWeight: 600 }}>
                         <span style={{ fontSize: 9, color: C.t3, display: 'inline-block', transform: isOpen ? 'rotate(90deg)' : 'rotate(0deg)', transition: 'transform .15s' }}>▶</span>
@@ -407,7 +406,7 @@ function ReturnReasonsTable({ returnReasons, height = 420 }) {
                     <td style={{ padding: '5.5px 5px', textAlign: 'right', fontFamily: 'var(--mono)', color: C.t1 }}>{fmt(r.revenueImpact)}</td>
                   </tr>
                   {isOpen && subs.map((s, si) => (
-                    <tr key={s.subReason} style={{ background: C.bg, borderBottom: (si < subs.length - 1 || i < sortedRows.length - 1) ? `1px solid ${C.border}` : 'none' }} onMouseEnter={e => e.currentTarget.style.background = '#FFFBE6'} onMouseLeave={e => e.currentTarget.style.background = C.bg}>
+                    <tr key={s.subReason} style={{ background: '#FAFAF7', borderBottom: (si < subs.length - 1 || i < sortedRows.length - 1) ? `1px solid ${C.border}` : 'none', transition: 'box-shadow .12s, background .12s' }} onMouseEnter={e => { e.currentTarget.style.background = '#FDF8ED'; e.currentTarget.style.boxShadow = `inset 0 0 0 1px ${C.acm}55, 0 0 8px 0 ${C.acc}33` }} onMouseLeave={e => { e.currentTarget.style.background = '#FAFAF7'; e.currentTarget.style.boxShadow = 'none' }}>
                       <td style={{ padding: '4px 5px', color: C.t3, fontSize: 11, paddingLeft: 22 }}>↳ {s.subReason}</td>
                       <td style={{ padding: '4px 5px', textAlign: 'right', color: C.t2, fontSize: 11 }}>{fmtN(s.count)}</td>
                       <td style={{ padding: '4px 5px', textAlign: 'right', color: C.t3, fontSize: 11 }}>{totalCount ? (s.count / totalCount * 100).toFixed(1) : 0}%</td>
@@ -419,6 +418,16 @@ function ReturnReasonsTable({ returnReasons, height = 420 }) {
             })}
             {sortedRows.length === 0 && <tr><td colSpan={4} style={{ padding: '20px 5px', textAlign: 'center', color: C.t3 }}>No data</td></tr>}
           </tbody>
+          {sortedRows.length > 0 && (
+            <tfoot>
+              <tr style={{ background: C.acl, position: 'sticky', bottom: 0 }}>
+                <td style={{ padding: '7px 5px', fontWeight: 700, color: C.t1, borderTop: `1.5px solid ${C.border}`, background: C.acl }}>Total</td>
+                <td style={{ padding: '7px 5px', textAlign: 'right', fontWeight: 700, color: C.t1, borderTop: `1.5px solid ${C.border}`, background: C.acl }}>{fmtN(totalCount)}</td>
+                <td style={{ padding: '7px 5px', textAlign: 'right', fontWeight: 700, color: C.t1, borderTop: `1.5px solid ${C.border}`, background: C.acl }}>100%</td>
+                <td style={{ padding: '7px 5px', textAlign: 'right', fontFamily: 'var(--mono)', fontSize: 11.5, fontWeight: 700, color: C.t1, borderTop: `1.5px solid ${C.border}`, background: C.acl }}>{fmt(totalRevenueImpact)}</td>
+              </tr>
+            </tfoot>
+          )}
         </table>
       </div>
     </Card>

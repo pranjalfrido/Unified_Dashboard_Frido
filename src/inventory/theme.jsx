@@ -16,9 +16,17 @@ export const IC = {
   t1: '#1F1F23',
   t2: '#5B5B62',
   t3: '#8B8B92',
-  acc: '#FFD600',
-  accDim: '#FFF9CC',
-  accBorder: '#E6C200',
+  acc: '#D89A1A',
+  accDim: '#F7EBD2',
+  accBorder: '#B87D14',
+  // Matches App.jsx's C.acs — the solid-but-soft gold fill used by the app-wide divider-pill
+  // toggle pattern (segmented switchers separated by thin dividers, no per-button borders).
+  acs: '#EFCE85',
+  // Divider line between adjacent options in a divider-pill toggle — matches App.jsx's C.border2.
+  divider: '#D6D0B0',
+  // Muted navy — the app-wide "second series next to gold" color (matches App.jsx's C.blue.tx),
+  // used wherever a chart needs exactly two distinguishable series and one of them isn't gold.
+  secondary: '#184078',
   // Positive/negative delta color — separate from `acc` (the yellow brand accent used for
   // active-toggle highlighting) since yellow doesn't read as "good" the way the app shell's
   // green/red delta badges do (see App.jsx's HeroKPICard `chg` badge).
@@ -261,23 +269,6 @@ export function ExportButton({ filename, columns, rows }) {
       style={{ fontSize: 11, color: IC.t2, background: IC.surface, border: `1px solid ${IC.border2}`, borderRadius: 7, padding: '5px 10px', cursor: 'pointer' }}>
       ⭳ Export CSV
     </button>
-  )
-}
-
-// ── Simple single-select dropdown filter (kept for the Sales & Allocation page) ──
-export function MultiSelectFilter({ label, options, selected, onChange }) {
-  return (
-    <select
-      multiple={false}
-      value={selected[0] || ''}
-      onChange={e => onChange(e.target.value ? [e.target.value] : [])}
-      style={{
-        background: IC.surface, border: `1px solid ${IC.border2}`, borderRadius: 8, padding: '6px 10px',
-        color: selected.length ? IC.t1 : IC.t3, fontSize: 12, minWidth: 130, cursor: 'pointer',
-      }}>
-      <option value="">{label}</option>
-      {options.map(o => <option key={o} value={o}>{o}</option>)}
-    </select>
   )
 }
 
@@ -552,6 +543,40 @@ export function TileMultiSelect({ items, selected, onToggle, renderTile }) {
               transition: 'border-color .12s, background .12s',
             }}>
             {renderTile(item, isSel)}
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
+// ── Divider-pill segmented toggle — the app-wide standard toggle shape (see App.jsx's
+// D2CSubChannelToggle / Courier-wise Breakdown view switcher): a flat row of text options
+// separated by thin vertical divider lines, NO individual button borders, active option gets
+// a solid IC.acs fill + IC.t1 text, inactive stays plain IC.t3 text on transparent. Replaces
+// the older per-button-bordered pill pattern (IC.accDim fill + IC.accBorder border on each
+// button) that several toggles on this page used before being brought in line with Sales/
+// Logistics's established convention.
+export function PillToggle({ options, value, onChange, size = 'md' }) {
+  const fontSize = size === 'sm' ? 10.5 : 11
+  const padding = size === 'sm' ? '3px 9px' : '4px 10px'
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 0 }}>
+      {options.map((opt, i) => {
+        const active = opt.value === value
+        const disabled = !!opt.disabled
+        return (
+          <div key={opt.value} style={{ display: 'flex', alignItems: 'center' }}>
+            {i > 0 && <div style={{ width: 1, height: 14, background: IC.divider, margin: '0 4px' }} />}
+            <button onClick={() => !disabled && onChange(opt.value)} disabled={disabled} style={{
+              fontSize, fontWeight: active ? 700 : 500, padding, borderRadius: 6,
+              border: 'none', outline: 'none', background: active ? IC.acs : 'transparent',
+              color: disabled ? IC.t3 : active ? (opt.activeColor || IC.t1) : IC.t3,
+              cursor: disabled ? 'not-allowed' : 'pointer', opacity: disabled ? 0.4 : 1,
+              whiteSpace: 'nowrap', textAlign: 'center',
+            }}>
+              {opt.label}
+            </button>
           </div>
         )
       })}

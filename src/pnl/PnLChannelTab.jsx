@@ -49,7 +49,7 @@ function PnLSparkKpiCard({ label, value, sparkData = [], accent }) {
     </div>
   )
 }
-import { KPICard, Card, GROUP_OPTS, getGroupKey, ComposedChart, Area, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from '../components.jsx'
+import { KPICard, Card, GROUP_OPTS, getGroupKey, ComposedChart, AreaChart, Area, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from '../components.jsx'
 import PnLFinancialTable from './PnLFinancialTable.jsx'
 
 // Metric registry for the trend chart's slicer — order here is the canonical order everywhere
@@ -60,7 +60,7 @@ import PnLFinancialTable from './PnLFinancialTable.jsx'
 // crore-sized numbers, so each axis only ever holds metrics of the same kind.
 const TREND_METRICS = [
   { key: 'rev', label: 'Gross Revenue', axis: 'rev', color: null, isArea: true }, // color resolved to grossColor at render time
-  { key: 'excRev', label: 'Net Revenue', axis: 'rev', color: '#0D9E68', isArea: true, dash: '4 2' },
+  { key: 'excRev', label: 'Net Revenue', axis: 'rev', color: C.blue.tx, isArea: true, dash: '4 2' },
   { key: 'units', label: 'Units', axis: 'units', color: '#2E74CC' },
   { key: 'returnPct', label: 'Returns %', axis: 'pct', color: '#B91C1C' },
   { key: 'cogsPct', label: 'COGS %', axis: 'pct', color: '#8B5E3C', dash: '5 2' },
@@ -93,14 +93,14 @@ function MetricPicker({ options, selected, onToggle, onSelectAll, onClearAll, co
         <div style={{ position: 'absolute', top: '100%', right: 0, marginTop: 4, background: C.card, border: `1px solid ${C.border}`, borderRadius: 8, boxShadow: '0 6px 20px rgba(0,0,0,.12)', padding: 6, zIndex: 20, minWidth: 150 }}>
           <label style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '5px 7px', borderRadius: 5, fontSize: 12, fontWeight: 600, color: C.t1, cursor: 'pointer', userSelect: 'none', borderBottom: `1px solid ${C.border}`, marginBottom: 3 }}
             onMouseEnter={e => e.currentTarget.style.background = C.bg} onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
-            <input type="checkbox" checked={allSelected} onChange={() => (allSelected ? onClearAll() : onSelectAll())} style={{ accentColor: '#FFD600', cursor: 'pointer' }} />
+            <input type="checkbox" checked={allSelected} onChange={() => (allSelected ? onClearAll() : onSelectAll())} style={{ accentColor: C.acc, cursor: 'pointer' }} />
             Select All
           </label>
           {options.map(m => (
             <label key={m.key} style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '5px 7px', borderRadius: 5, fontSize: 12, color: C.t1, cursor: 'pointer', userSelect: 'none' }}
               onMouseEnter={e => e.currentTarget.style.background = C.bg} onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
-              <input type="checkbox" checked={selected.includes(m.key)} onChange={() => onToggle(m.key)} style={{ accentColor: '#FFD600', cursor: 'pointer' }} />
-              <span style={{ width: 8, height: 8, borderRadius: '50%', background: m.color || '#FFD600', flexShrink: 0 }} />
+              <input type="checkbox" checked={selected.includes(m.key)} onChange={() => onToggle(m.key)} style={{ accentColor: C.acc, cursor: 'pointer' }} />
+              <span style={{ width: 8, height: 8, borderRadius: '50%', background: m.color || C.acc, flexShrink: 0 }} />
               {m.label}
             </label>
           ))}
@@ -120,9 +120,14 @@ function MetricPicker({ options, selected, onToggle, onSelectAll, onClearAll, co
 // (not shown, not just disabled) for any channel without it — nothing to slice that doesn't exist.
 function PnLTrendCard({ title, daily, dailyPnL, grossColor, grossGradId, boxHeight, showMarketing = true, hideUnits = false }) {
   const isMob = useIsMobile()
-  const nDays = daily.length
-  const autoGroup = nDays <= 14 ? 'daily' : nDays <= 90 ? 'weekly' : 'monthly'
-  const [groupBy, setGroupBy] = useState(autoGroup)
+  // Always default to daily granularity regardless of range length — a month-long range
+  // auto-grouping into 'weekly' was smoothing away exactly the day-to-day variation the %-metric
+  // lines exist to show (confirmed: Flipkart's real SnD%/GM% do vary meaningfully day-to-day,
+  // e.g. 21-26% / 52-61% across July, but weekly-averaging visually flattened that against the
+  // Gross/Net Revenue lines' much larger ₹ scale, making every %-line look like a flat band).
+  // User can still switch to Weekly/Monthly manually via the grouping dropdown when they want
+  // smoothing over a long range — this only changes what loads by default.
+  const [groupBy, setGroupBy] = useState('daily')
   // CM2% depends on marketing spend, which is only mapped on the combined "All" SC+VC view (see
   // showMarketing's own gating everywhere else — KPI cards, Financial View table) — Seller
   // Central/Vendor Central individually never have a real CM2, so it's excluded from the slicer
@@ -143,9 +148,30 @@ function PnLTrendCard({ title, daily, dailyPnL, grossColor, grossGradId, boxHeig
   const clearAllMetrics = () => setSelectedKeys([])
   const selStyle = { fontSize: 11, padding: '3px 8px', borderRadius: 6, border: `1px solid ${C.border2}`, background: C.card, color: C.t1, outline: 'none', fontFamily: 'var(--font)', cursor: 'pointer' }
 
+  // Several channels' `daily` arrays carry more than one row per calendar date — Flipkart
+  // splits by fulfilment type (FBF/NON-FBF), Amazon SC by type (FBA/MFN), Offline by
+  // subChannel — so a plain daily.map(...) here would hand Recharts TWO (or more) data points
+  // at the same x-axis date, each showing only its own slice's revenue/units rather than the
+  // day's true total. Confirmed live: Flipkart's July tooltip showed Net Revenue ₹0 on a day
+  // with real Gross Revenue because the tooltip sampled whichever duplicate row's un-summed
+  // slice happened to land there. Collapse to one row per date (summing every numeric field)
+  // BEFORE merging in dailyPnL, so every channel's chart — not just the ones that happen not to
+  // have a sub-dimension — gets a correct single point per date.
+  const byDate = {}
+  daily.forEach(d => {
+    const key = d.date
+    if (!byDate[key]) byDate[key] = { date: key }
+    const row = byDate[key]
+    Object.entries(d).forEach(([k, v]) => {
+      if (typeof v === 'number') row[k] = (row[k] || 0) + v
+      else if (row[k] === undefined) row[k] = v
+    })
+  })
+  const dedupedDaily = Object.values(byDate).sort((a, b) => a.date.localeCompare(b.date))
+
   const pnlByDate = {}
   ;(dailyPnL || []).forEach(d => { pnlByDate[d.date] = d })
-  const merged = daily.map(d => ({ ...d, ...(pnlByDate[d.date] || {}) }))
+  const merged = dedupedDaily.map(d => ({ ...d, ...(pnlByDate[d.date] || {}) }))
 
   const PCT_KEYS = ['returnPct', 'cogsPct', 'gmPct', 'sndPct', 'cm1Pct', 'cm2Pct']
   const grouped = (() => {
@@ -267,13 +293,61 @@ function PnLTrendCard({ title, daily, dailyPnL, grossColor, grossGradId, boxHeig
 // simpler 5-card row (Gross/Net/Returns/Orders/AOV-ASP), unchanged.
 // dailyPnL: optional day-wise series (see api/bq.js amzSC.dailyPnLBySku/amzVCMatrix.dailyPnLBySku)
 // that adds SnD%/GM%/CM1% lines to the trend chart — both currently only populated for Amazon.
-export default function PnLChannelTab({ title, note, gross, excRev, net, units, orders, returnRev, subCatData, skuData, adSpendMap, sndBySku, daily, dailyPnL, kpiSummary, grossOfTotalPct, grossColor = '#FFD600', gradId = 'pnlGrossGrad', showMarketing = true, noReturnAccent = false, includeUnmatched = false, mobilityNetBySubCat = {}, netScale = 1, hideTrendUnits = false }) {
+export default function PnLChannelTab({ title, note, gross, excRev, net, units, orders, returnRev, prevGross, prevExcRev, prevReturnRev, prevOrders, subCatData, skuData, adSpendMap, sndBySku, daily, dailyPnL, kpiSummary, prevKpiSummary, grossOfTotalPct, grossColor = C.acc, gradId = 'pnlGrossGrad', showMarketing = true, noReturnAccent = false, includeUnmatched = false, mobilityNetBySubCat = {}, netScale = 1, hideTrendUnits = false }) {
   const isMob = useIsMobile()
   const returnPct = pct(returnRev, gross)
   const aov = orders > 0 ? gross / orders : 0
   const asp = units > 0 ? gross / units : 0
   const fmtPctSub = v => v != null ? `${v.toFixed(1)}%` : '—'
   const negAccent = v => v != null && v < 0 ? '#7A1A1A' : undefined
+
+  // vs-prior-period delta badges — same shell/colors as Sales' KPI badges (chgBadge pattern in
+  // App.jsx): green/up for a good move, red/down for a bad one, invert=true flips that (used for
+  // Returns/COGS/SnD/Mktg Spend, where a DECREASE is the good direction).
+  //
+  // The backend only ever computes two whole-channel previous-period totals: prevGross (matches
+  // `gross` exactly — both GST-inclusive, pre-returns) and prevExcRev (GST-exclusive, NOT
+  // returns-adjusted). Every other KPI here (Net Revenue, Returns, COGS, GM, SnD, CM1, Mktg
+  // Spend, ROAS, CM2) has NO real previous-period figure anywhere in the backend — they're all
+  // derived client-side from a static per-SKU cost sheet (cogs-data.json) applied to the CURRENT
+  // period's units only.
+  //
+  // Rather than leave those un-badged or add ~12 new heavy BigQuery queries, this estimates each
+  // one's previous-period value by applying the current period's own ratio for that metric
+  // (metric ÷ its natural base) to prevExcRev — the exact same proportional-estimate technique
+  // already used for this file's day-wise trend sparklines (cogsSpark/gmSpark/etc. below, which
+  // scale each day's revenue by kpiSummary.cogs/net). It assumes the current period's cost/margin
+  // ratios roughly held in the prior period too — a real but approximate comparison, not a
+  // fabricated one, and consistent with how this tab already estimates these same metrics
+  // elsewhere. Net Revenue reuses the current period's own return-rate (net ÷ excRev) applied to
+  // prevExcRev, for the same reason.
+  const deltaBadge = (cur, prev, invert = false) => {
+    if (prev == null || !(prev > 0)) return null
+    const chg = (cur - prev) / prev * 100
+    const isGood = invert ? chg < 0 : chg >= 0
+    return <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 7px', borderRadius: 4, background: isGood ? C.green.bg : C.red.bg, color: isGood ? C.green.tx : C.red.tx, flexShrink: 0 }}>{chg >= 0 ? '▲' : '▼'} {Math.abs(chg).toFixed(1)}%</span>
+  }
+  const estPrev = (metricVal, base) => (metricVal != null && base > 0 && prevExcRev != null) ? (metricVal / base) * prevExcRev : null
+
+  const grossBadge = deltaBadge(gross, prevGross)
+  const netBadge = deltaBadge(net, estPrev(net, excRev))
+  const returnBadge = deltaBadge(returnRev, estPrev(returnRev, gross), true)
+  // COGS/GM prefer the real previous-period figure (prevKpiSummary — only populated so far for
+  // channels with a prevXSKU query wired in api/bq.js; see PnLPage.jsx) and fall back to the
+  // ratio-based estimate for every channel that doesn't have one yet, so nothing regresses.
+  const cogsBadge = kpiSummary?.cogs != null ? deltaBadge(kpiSummary.cogs, prevKpiSummary?.cogs ?? estPrev(kpiSummary.cogs, net), true) : null
+  const gmBadge = kpiSummary?.gm != null ? deltaBadge(kpiSummary.gm, prevKpiSummary?.gm ?? estPrev(kpiSummary.gm, net)) : null
+  const sndBadge = kpiSummary?.snd != null ? deltaBadge(kpiSummary.snd, estPrev(kpiSummary.snd, net), true) : null
+  const cm1Badge = kpiSummary?.cm1 != null ? deltaBadge(kpiSummary.cm1, estPrev(kpiSummary.cm1, net)) : null
+  const spendBadge = kpiSummary?.spend != null ? deltaBadge(kpiSummary.spend, estPrev(kpiSummary.spend, net), true) : null
+  // ROAS = Gross Rev (Ex GST) / Spend, not itself proportional to net — estimate prev ROAS as
+  // prevExcRev ÷ (spend's own estimated prev value), not by scaling ROAS directly like the other
+  // metrics above.
+  const estPrevSpend = kpiSummary?.spend != null ? estPrev(kpiSummary.spend, net) : null
+  const estPrevRoas = (estPrevSpend > 0 && prevExcRev != null) ? prevExcRev / estPrevSpend : null
+  const roasBadge = kpiSummary?.roas != null ? deltaBadge(kpiSummary.roas, estPrevRoas) : null
+  const cm2Badge = kpiSummary?.cm2 != null ? deltaBadge(kpiSummary.cm2, estPrev(kpiSummary.cm2, net)) : null
+  const ordersBadge = deltaBadge(orders, prevOrders)
 
   const dailyArr = daily || []
   const revSpark = dailyArr.map(d => d.rev || 0)
@@ -309,6 +383,35 @@ export default function PnLChannelTab({ title, note, gross, excRev, net, units, 
     { label: 'AOV / ASP', value: `₹${Math.round(aov).toLocaleString('en-IN')}`, spark: revSpark },
   ]
 
+  // Hero card: same shell as the Sales tab's Gross Revenue hero (gold wash, big value, daily-avg
+  // pill, sparkline, vs-prior delta badge). Unlike Sales this has no dashed "prev" overlay on the
+  // sparkline itself — only a day-level current-period series is available here.
+  const nDays = dailyArr.length || 1
+  const heroSpark = dailyArr.map(d => ({ cur: d.rev || 0 }))
+  const heroSub = grossOfTotalPct != null
+    ? `${fmtN(units)} units · ${grossOfTotalPct.toFixed(1)}% of total`
+    : `${fmtN(units)} units${note ? ` · ${note}` : ''}`
+
+  const heroCard = (
+    <div className="kpi-card sales-kpi-hero" style={{ display: 'flex', flexDirection: 'column', gap: 8, padding: '16px 18px', background: `linear-gradient(135deg, ${C.acl}66 0%, ${C.card} 60%)` }}>
+      <div className="kpi-label" style={{ fontSize: 11 }}>Gross Revenue Inc GST</div>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'nowrap', gap: 6 }}>
+        <div className="kpi-value" style={{ fontSize: 32, fontWeight: 800, whiteSpace: 'nowrap' }}>{fmt(gross)}</div>
+        {grossBadge}
+      </div>
+      <div className="kpi-sub" style={{ fontSize: 13 }}>{heroSub}</div>
+      <div style={{ height: 30, flexShrink: 0 }}>
+        <ResponsiveContainer width="100%" height="100%">
+          <AreaChart data={heroSpark} margin={{ top: 4, right: 0, bottom: 0, left: 0 }}>
+            <defs><linearGradient id={`${gradId}Hero`} x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor={C.acc} stopOpacity={0.25} /><stop offset="95%" stopColor={C.acc} stopOpacity={0} /></linearGradient></defs>
+            <Area type="monotone" dataKey="cur" name="Gross Revenue" stroke={C.acc} strokeWidth={2} fill={`url(#${gradId}Hero)`} dot={false} connectNulls />
+            <Tooltip content={({ active, payload }) => active && payload?.length ? <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 6, padding: '4px 8px', fontSize: 10 }}>{fmt(payload[0].value)}</div> : null} />
+          </AreaChart>
+        </ResponsiveContainer>
+      </div>
+    </div>
+  )
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
       {isMob && (
@@ -319,31 +422,35 @@ export default function PnLChannelTab({ title, note, gross, excRev, net, units, 
         </div>
       )}
       {kpiSummary ? (
-        <div className={isMob ? 'mob-hidden' : ''} style={{ display: 'grid', gridTemplateColumns: `repeat(${showMarketing ? 10 : 8},1fr)`, gap: 8 }}>
-          <KPICard label="Gross Revenue" value={fmt(gross)} sub={grossOfTotalPct != null ? `${fmtN(units)} units · ${grossOfTotalPct.toFixed(1)}% of total` : `${fmtN(units)} units`} />
-          {!showMarketing && <KPICard label="ASP" value={`₹${Math.round(asp).toLocaleString('en-IN')}`} sub="ASP Inc GST" />}
-          <KPICard label="Returns" value={fmt(returnRev)} sub={`${returnPct} of Gross`} accent={!noReturnAccent && parseFloat(returnPct) > 15 ? '#7A1A1A' : undefined} />
-          <KPICard label="Net Revenue" value={fmt(net)} sub="Ex GST, after returns" />
-          <KPICard label="COGS" value={kpiSummary.cogs != null ? fmt(kpiSummary.cogs) : '—'} sub={`${fmtPctSub(kpiSummary.cogsPct)} of Net Rev`} />
-          <KPICard label="Gross Margin" value={kpiSummary.gm != null ? fmt(kpiSummary.gm) : '—'} sub={`GM% ${fmtPctSub(kpiSummary.gmPct)}`} />
-          <KPICard label="SnD Cost" value={kpiSummary.snd != null ? fmt(kpiSummary.snd) : '—'} sub={`${fmtPctSub(kpiSummary.sndPct)} of Net Rev`} />
-          <KPICard label="CM1" value={kpiSummary.cm1 != null ? fmt(kpiSummary.cm1) : '—'} sub={`CM1% ${fmtPctSub(kpiSummary.cm1Pct)}`} accent={negAccent(kpiSummary.cm1)} />
-          {showMarketing && <>
-            <KPICard label="Mktg Spend" value={fmt(kpiSummary.spend)} sub={`${fmtPctSub(kpiSummary.spendPct)} of Net Rev`} />
-            <KPICard label="ROAS" value={kpiSummary.roas != null ? `${kpiSummary.roas.toFixed(2)}x` : '—'} sub="Gross Rev (Ex GST) / Spend" accent={kpiSummary.roas != null ? (kpiSummary.roas >= 2 ? '#0D9E68' : kpiSummary.roas >= 1 ? '#D97706' : '#B91C1C') : undefined} />
-            <KPICard label="CM2" value={kpiSummary.cm2 != null ? fmt(kpiSummary.cm2) : '—'} sub={`CM2% ${fmtPctSub(kpiSummary.cm2Pct)}`} accent={negAccent(kpiSummary.cm2)} />
-          </>}
+        <div className={isMob ? 'mob-hidden' : ''} style={{ display: 'grid', gridTemplateColumns: '1.2fr 5fr', gap: 10, alignItems: 'stretch' }}>
+          {heroCard}
+          <div style={{ display: 'grid', gridTemplateColumns: `repeat(${Math.ceil((showMarketing ? 9 : 7) / 2)},1fr)`, gridTemplateRows: 'repeat(2,1fr)', gap: 10, alignItems: 'stretch' }}>
+            {!showMarketing && <KPICard label="ASP" value={`₹${Math.round(asp).toLocaleString('en-IN')}`} sub="ASP Inc GST" plain />}
+            <KPICard label="Returns" value={fmt(returnRev)} sub={`${returnPct} of Gross`} accent={!noReturnAccent && parseFloat(returnPct) > 15 ? '#7A1A1A' : undefined} badge={returnBadge} plain />
+            <KPICard label="Net Revenue" value={fmt(net)} sub="Ex GST, after returns" badge={netBadge} plain />
+            <KPICard label="COGS" value={kpiSummary.cogs != null ? fmt(kpiSummary.cogs) : '—'} sub={`${fmtPctSub(kpiSummary.cogsPct)} of Net Rev`} badge={cogsBadge} plain />
+            <KPICard label="Gross Margin" value={kpiSummary.gm != null ? fmt(kpiSummary.gm) : '—'} sub={`GM% ${fmtPctSub(kpiSummary.gmPct)}`} badge={gmBadge} plain />
+            <KPICard label="SnD Cost" value={kpiSummary.snd != null ? fmt(kpiSummary.snd) : '—'} sub={`${fmtPctSub(kpiSummary.sndPct)} of Net Rev`} badge={sndBadge} plain />
+            <KPICard label="CM1" value={kpiSummary.cm1 != null ? fmt(kpiSummary.cm1) : '—'} sub={`CM1% ${fmtPctSub(kpiSummary.cm1Pct)}`} accent={negAccent(kpiSummary.cm1)} badge={cm1Badge} plain />
+            {showMarketing && <>
+              <KPICard label="Mktg Spend" value={fmt(kpiSummary.spend)} sub={`${fmtPctSub(kpiSummary.spendPct)} of Net Rev`} badge={spendBadge} plain />
+              <KPICard label="ROAS" value={kpiSummary.roas != null ? `${kpiSummary.roas.toFixed(2)}x` : '—'} sub="Gross Rev (Ex GST) / Spend" accent={kpiSummary.roas != null ? (kpiSummary.roas >= 2 ? '#0D9E68' : kpiSummary.roas >= 1 ? '#D97706' : '#B91C1C') : undefined} badge={roasBadge} plain />
+              <KPICard label="CM2" value={kpiSummary.cm2 != null ? fmt(kpiSummary.cm2) : '—'} sub={`CM2% ${fmtPctSub(kpiSummary.cm2Pct)}`} accent={negAccent(kpiSummary.cm2)} badge={cm2Badge} plain />
+            </>}
+          </div>
         </div>
       ) : (
-        <div className={`g-kpi5${isMob ? ' mob-hidden' : ''}`}>
-          <KPICard label="Gross Revenue" value={fmt(gross)} sub={note} />
-          <KPICard label="Net Revenue" value={fmt(net)} sub="Ex GST, after returns/cancellations" />
-          <KPICard label="Returns" value={fmt(returnRev)} sub={`${returnPct} of gross`} accent={parseFloat(returnPct) > 15 ? '#7A1A1A' : undefined} />
-          <KPICard label="Orders" value={fmtN(orders)} sub={`${fmtN(units)} units`} />
-          <KPICard label="AOV / ASP" value={`₹${Math.round(aov).toLocaleString('en-IN')}`} sub={`ASP ₹${Math.round(asp).toLocaleString('en-IN')}`} />
+        <div className={isMob ? 'mob-hidden' : ''} style={{ display: 'grid', gridTemplateColumns: '1.2fr 5fr', gap: 10, alignItems: 'stretch' }}>
+          {heroCard}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 8, alignItems: 'stretch' }}>
+            <KPICard label="Net Revenue" value={fmt(net)} sub="Ex GST, after returns/cancellations" badge={netBadge} plain />
+            <KPICard label="Returns" value={fmt(returnRev)} sub={`${returnPct} of gross`} accent={parseFloat(returnPct) > 15 ? '#7A1A1A' : undefined} badge={returnBadge} plain />
+            <KPICard label="Orders" value={fmtN(orders)} sub={`${fmtN(units)} units`} badge={ordersBadge} plain />
+            <KPICard label="AOV / ASP" value={`₹${Math.round(aov).toLocaleString('en-IN')}`} sub={`ASP ₹${Math.round(asp).toLocaleString('en-IN')}`} plain />
+          </div>
         </div>
       )}
-      <PnLTrendCard title={`${title}${note ? ` · ${note}` : ''} — Revenue Trend`} daily={daily} dailyPnL={dailyPnL} grossColor={grossColor} grossGradId={gradId} boxHeight={360} showMarketing={showMarketing} hideUnits={hideTrendUnits} />
+      <PnLTrendCard title={`${title}${note ? ` · ${note}` : ''} — Revenue Trend`} daily={daily} dailyPnL={dailyPnL} grossColor={grossColor} grossGradId={gradId} boxHeight={300} showMarketing={showMarketing} hideUnits={hideTrendUnits} />
       <PnLFinancialTable subCatData={subCatData} skuData={skuData} adSpendMap={adSpendMap} sndBySku={sndBySku} title={`Financial View · ${title}${note ? ` · ${note}` : ''}`} showMarketing={showMarketing} includeUnmatched={includeUnmatched} mobilityNetBySubCat={mobilityNetBySubCat} netScale={netScale} />
     </div>
   )
