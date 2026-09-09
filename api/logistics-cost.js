@@ -160,6 +160,66 @@ const SLAB_OF = col => `CASE WHEN ${col} > 0 AND ${col} <= 0.5 THEN 0.5
 // itself automatically — once ex-GST totals land, the ratio is 1.0 and this is a no-op.
 // A blanket "if Delhivery then divide" would silently strip 18% from the new data too.
 const GST_DIVISOR = 1.18
+// Region names that arrive in the ZONE column, mapped to the contract zone they bill as.
+//
+// 2,627 rows carry a direction rather than a zone — West, South, NORTH, EAST, NE, ROI,
+// J&K, Intra City, Metro-Metro and so on. They were being dropped by the A-E filter, which
+// silently excluded Rs 26.43L of spend from every figure on the page.
+//
+// Mapping supplied by the business (direction table + the IFS rule for the remainder).
+// NOT defaulted to a single zone: these average Rs 1,006 a shipment against zone E's
+// Rs 150, and Intra City / Metro-Metro are the NEAREST shipments while E is the farthest,
+// so folding them into one zone would have moved E's average cost 48% and made every
+// zone-E figure describe something other than zone E.
+//
+// Matched on UPPER(TRIM(...)) so West/WEST/west all land together, and keys are compared
+// after stripping any bracketed suffix so "NE (North East)" matches "NE".
+const ZONE_MAP_SQL = col => `
+  CASE
+    WHEN UPPER(TRIM(${col})) IN ('A','B','C','D','E') THEN UPPER(TRIM(${col}))
+    WHEN UPPER(TRIM(${col})) = 'WEST'          THEN 'A'
+    WHEN UPPER(TRIM(${col})) = 'INTRA CITY'    THEN 'A'
+    WHEN UPPER(TRIM(${col})) = 'NORTH'         THEN 'B'
+    WHEN UPPER(TRIM(${col})) = 'SOUTH'         THEN 'B'
+    WHEN UPPER(TRIM(${col})) = 'INTRA REGION'  THEN 'B'
+    WHEN UPPER(TRIM(${col})) = 'EAST'          THEN 'C'
+    WHEN UPPER(TRIM(${col})) = 'METRO-METRO'   THEN 'C'
+    WHEN UPPER(TRIM(${col})) = 'ROI'           THEN 'D'
+    WHEN SPLIT_PART(UPPER(TRIM(${col})), ' ', 1) = 'NE' THEN 'D'
+    -- J&K / JNK / J/K and the NE/JK, NE/JNK combinations all bill as E. Punctuation
+    -- varies in the uploads, so these are matched on the letters rather than exactly.
+    WHEN REPLACE(REPLACE(REPLACE(UPPER(TRIM(${col})), '&', ''), '/', ''), ' ', '') IN ('JK','JNK') THEN 'E'
+    WHEN REPLACE(REPLACE(REPLACE(UPPER(TRIM(${col})), '&', ''), '/', ''), ' ', '') IN ('NEJK','NEJNK') THEN 'E'
+    ELSE NULL
+  END`
+
+// 141 B2C rows carry a NEGATIVE total_cost — almost all Bluedart RTO/Reverse legs with a
+// negative total against a positive freight charge, i.e. credit notes the courier issued.
+//
+// They were being dropped by a `total_cost > 0` guard, which removed the SHIPMENTS from
+// every count as well as the money. Per the business, the shipment should count and the
+// cost should read zero rather than reducing spend: a refund is not negative freight.
+//
+// GREATEST(...,0) rather than ABS(): flipping the sign would ADD Rs 0.25L of spend that
+// was never charged.
+// Courier charged weight, falling back to our own declared weight when the courier
+// uploaded a zero.
+//
+// 75 ElasticRun rows carry charged_weight_courier = 0, and every one of them has a Frido
+// declared weight. Left as zero they produce a NULL billable slab, so they vanish from
+// the slab table and from every per-kg figure while still counting as shipments.
+//
+// Same rule the rest of the pipeline already uses for weight (scripts/refresh-cost-
+// aggregates.mjs OUR_WT): Frido weight when the courier weight is missing. NULLIF so a
+// stored 0 is treated as absent, not as a real zero-kilo parcel.
+//
+// NOT applied to the claim comparison: a claim asks "did the courier charge more than our
+// weight justifies", and substituting our weight for theirs would make that gap zero by
+// construction. Only the cost/slab side uses this.
+const CW_OR_OURS = (cwCol, dwCol) => `COALESCE(NULLIF(${cwCol}, 0), ${dwCol})`
+
+const COST_FLOOR = col => `GREATEST(${col}, 0)`
+
 const exGst = (totalCol, freightCol, surCol, othCol) => `
   CASE WHEN abs(${totalCol} / NULLIF(${freightCol} + COALESCE(${surCol}, 0)
                                   + COALESCE(${othCol}, 0), 0) - ${GST_DIVISOR}) < 0.005
@@ -197,7 +257,7 @@ async function fileClaim(pool, body) {
                     OR i.rmk_weight_dispute ILIKE '%under charged%'
                   THEN 'admitted' ELSE NULL END AS courier_admits
         FROM public.logistics_invoices_b2c i
-       WHERE i.total_cost > 0 AND i.zone IN ('A','B','C','D','E')
+       WHERE i.total_cost IS NOT NULL AND (${ZONE_MAP_SQL('i.zone')}) IS NOT NULL
          AND i.charged_weight_courier <= ${MAX_PLAUSIBLE_PARCEL_KG}
          AND i.frido_carrier_cost IS NOT NULL
          AND i.courier_name = $1 AND i.month_year = $2
@@ -357,8 +417,10 @@ export default async function handler(req, res) {
     // names rather than zones; they have no rate card and were showing as empty bars
     // in the zone chart. Excluded at source so every KPI, chart and table agrees.
     const where = [
-      "i.total_cost > 0",
-      "i.zone IN ('A','B','C','D','E')",
+      // Negative and zero costs are kept (floored to 0 below) so the shipment still
+      // counts; only a missing value is excluded.
+      "i.total_cost IS NOT NULL",
+      `(${ZONE_MAP_SQL('i.zone')}) IS NOT NULL`,
       // Physical-plausibility guard. Currently matches zero rows (max in the ledger is
       // 198 kg), but it is cheap insurance: a partial gram->kg conversion previously
       // left 2,416 rows claiming "139,840 kg" for a ₹3,673 parcel, which silently wrecked
@@ -442,7 +504,10 @@ export default async function handler(req, res) {
     // those rows were dropped from BOTH buckets and over + clean didn't sum to the
     // total. Treating a missing declared weight as 0 puts them in "Clean", which is
     // right: with no declared weight there is nothing proven against the courier.
-    const slabOver = `${SLAB_OF('cw')} - ${SLAB_OF('COALESCE(dw, 0)')} > 0.001 AND COALESCE(dw, 0) > 0`
+    // Claim gap uses cw_raw, the courier's OWN charged weight: cw carries the
+    // declared-weight fallback, and comparing our weight to our weight would make the
+    // gap zero by construction.
+    const slabOver = `${SLAB_OF('cw_raw')} - ${SLAB_OF('COALESCE(dw, 0)')} > 0.001 AND COALESCE(dw, 0) > 0`
     if (f.billing === 'over') postFilters.push(slabOver)
     if (f.billing === 'ok') postFilters.push(`NOT (${slabOver})`)
 
@@ -488,7 +553,11 @@ export default async function handler(req, res) {
       WITH ${RATES},
       norm AS (
         SELECT
-          i.month_year, i.courier_name, i.zone, i.shipment_mode, i.payment_mode,
+          i.month_year, i.courier_name,
+          -- MAPPED zone, not raw: region-named rows (West, South, EAST, ROI, ...) now pass
+          -- the guard, so they must also GROUP under the zone they bill as.
+          (${ZONE_MAP_SQL('i.zone')}) AS zone,
+          i.shipment_mode, i.payment_mode,
           i.courier_account_type, i.destination_city, i.origin_city,
           -- Shipment mode, collapsed to the three legs that matter commercially: freight
           -- that carries revenue, goods coming back from the customer (Reverse: RVP/DTO),
@@ -514,7 +583,7 @@ export default async function handler(req, res) {
             ELSE COALESCE(i.shipment_mode, 'Unknown')
           END AS leg_group,
           -- Ex-GST so Delhivery is comparable with the other couriers. See exGst().
-          ${exGst('i.total_cost::float8', 'i.freight_charge::float8', 'i.surcharge::float8', 'i.other_charge::float8')} AS cost,
+          ${COST_FLOOR(exGst('i.total_cost::float8', 'i.freight_charge::float8', 'i.surcharge::float8', 'i.other_charge::float8'))} AS cost,
           i.freight_charge::float8 AS inv_freight,
           i.surcharge::float8  AS surcharge,
           i.shipment_value::float8 AS ship_value,
@@ -545,7 +614,12 @@ export default async function handler(req, res) {
             ELSE NULL
           END AS courier_admits,
           -- Read as stored: all couriers upload kilograms as of the Aug 2026 reupload.
-          i.charged_weight_courier::float8 AS cw,
+          -- Falls back to our declared weight when the courier uploaded a zero, so those
+          -- shipments still get a billable slab and a per-kg figure.
+          ${CW_OR_OURS('i.charged_weight_courier::float8', 'i.declared_weight_frido::float8')} AS cw,
+          -- Raw charged weight, kept for the claim comparison: substituting our weight
+          -- there would zero out the very gap a claim measures.
+          i.charged_weight_courier::float8 AS cw_raw,
           i.declared_weight_frido::float8  AS dw
         FROM public.logistics_invoices_b2c i
         LEFT JOIN rates r ON r.courier_name = i.courier_name
@@ -565,7 +639,8 @@ export default async function handler(req, res) {
                -- whole slab.
                -- COALESCE so a NULL declared weight yields a 0 slab rather than a NULL
                -- gap (NULL would silently drop the row from every FILTER below).
-               (${SLAB_OF('cw')} - ${SLAB_OF('COALESCE(dw, 0)')}) AS gap,
+               -- cw_raw, not cw: see slabOver.
+               (${SLAB_OF('cw_raw')} - ${SLAB_OF('COALESCE(dw, 0)')}) AS gap,
                ${SLAB_OF('cw')} AS cw_slab,
                ${SLAB_OF('COALESCE(dw, 0)')} AS dw_slab,
                -- Materialised so GROUPING SETS can group on it like any other column.
@@ -782,8 +857,13 @@ export default async function handler(req, res) {
                          AND i.courier_name IN (SELECT courier_name FROM public.lc_courier_profile WHERE is_rto_bundle)
                          AND f.fwd_t IS NOT NULL
                     THEN GREATEST(${exGst('i.total_cost::float8', 'i.freight_charge::float8', 'i.surcharge::float8', 'i.other_charge::float8')} - f.fwd_t, 0)
-                    ELSE ${exGst('i.total_cost::float8', 'i.freight_charge::float8', 'i.surcharge::float8', 'i.other_charge::float8')} END AS cost,
-               i.charged_weight_courier::float8 AS cw,
+                    ELSE ${COST_FLOOR(exGst('i.total_cost::float8', 'i.freight_charge::float8', 'i.surcharge::float8', 'i.other_charge::float8'))} END AS cost,
+               -- Falls back to our declared weight when the courier uploaded a zero, so those
+          -- shipments still get a billable slab and a per-kg figure.
+          ${CW_OR_OURS('i.charged_weight_courier::float8', 'i.declared_weight_frido::float8')} AS cw,
+          -- Raw charged weight, kept for the claim comparison: substituting our weight
+          -- there would zero out the very gap a claim measures.
+          i.charged_weight_courier::float8 AS cw_raw,
                -- Billable SLAB, not raw kg: couriers charge per slab (0.5 kg floor, then
                -- round up to the next whole kg), so the slab is what the invoice was
                -- actually built on. Slabbed per shipment here and averaged later —
@@ -853,7 +933,7 @@ export default async function handler(req, res) {
              percentile_cont(0.5) WITHIN GROUP (ORDER BY
                ${exGst('total_cost::float8', 'freight_charge::float8', 'surcharge::float8', 'other_charge::float8')})::float8 AS cost
         FROM public.logistics_invoices_b2c
-       WHERE total_cost > 0 AND zone IN ('A','B','C','D','E')
+       WHERE total_cost IS NOT NULL AND (${ZONE_MAP_SQL('zone')}) IS NOT NULL
          AND charged_weight_courier <= ${MAX_PLAUSIBLE_PARCEL_KG}
          AND upper(shipment_mode) = 'FORWARD'
        GROUP BY 1, 2, 3
@@ -883,7 +963,7 @@ export default async function handler(req, res) {
              MAX(m.affected_n)::int       AS claim_n
         FROM public.logistics_invoices_b2c t
         LEFT JOIN public.lc_month_claims m ON m.month_year = t.month_year
-       WHERE t.total_cost > 0 AND t.zone IN ('A','B','C','D','E')
+       WHERE t.total_cost IS NOT NULL AND (${ZONE_MAP_SQL('t.zone')}) IS NOT NULL
          AND t.charged_weight_courier <= ${MAX_PLAUSIBLE_PARCEL_KG}
          AND t.month_year IS NOT NULL
        GROUP BY 1
@@ -964,18 +1044,19 @@ export default async function handler(req, res) {
     // read Rs 12.46Cr against the tab's Rs 12.36Cr, because Delhivery uploaded
     // GST-inclusive totals.
     const SUBCUBE_Q = () => query(pool, `
-      SELECT i.zone,
+      SELECT (${ZONE_MAP_SQL('i.zone')}) AS zone,
              COALESCE(NULLIF(TRIM(d.sub_category), ''), '(unknown)') AS sub,
              COALESCE(d.category, '(unknown)')                      AS cat,
              i.month_year                                           AS month,
              COUNT(*)::int                                          AS n,
-             SUM(${exGst('i.total_cost::float8', 'i.freight_charge::float8', 'i.surcharge::float8', 'i.other_charge::float8')})::float8 AS cost,
+             SUM(${COST_FLOOR(exGst('i.total_cost::float8', 'i.freight_charge::float8', 'i.surcharge::float8', 'i.other_charge::float8'))})::float8 AS cost,
              SUM(i.charged_weight_courier::float8)::float8          AS wt
         FROM public.logistics_invoices_b2c i
         LEFT JOIN public.awb_shipment_dims d ON d.awb = i.awb_number
-       WHERE i.total_cost > 0
-         AND i.zone IN ('A','B','C','D','E')
-         AND i.charged_weight_courier > 0
+       WHERE i.total_cost IS NOT NULL
+         AND (${ZONE_MAP_SQL('i.zone')}) IS NOT NULL
+         -- Admits courier-zero rows: the fallback below gives them a real weight.
+         AND COALESCE(NULLIF(i.charged_weight_courier, 0), i.declared_weight_frido) > 0
          AND i.charged_weight_courier <= 500
        GROUP BY 1, 2, 3, 4
     `, [])
@@ -1109,7 +1190,9 @@ export default async function handler(req, res) {
           SELECT
             COUNT(*)::int AS total_rows,
             COUNT(*) FILTER (WHERE total_cost <= 0)::int AS zero_cost,
-            COUNT(*) FILTER (WHERE zone NOT IN ('A','B','C','D','E') OR zone IS NULL)::int AS bad_zone,
+            -- Unmappable now, not merely non-A-E: region names are mapped, so this counts
+            -- only values no rule covers (currently zero).
+            COUNT(*) FILTER (WHERE (${ZONE_MAP_SQL('zone')}) IS NULL)::int AS bad_zone,
             COUNT(*) FILTER (WHERE charged_weight_courier > ${MAX_PLAUSIBLE_PARCEL_KG})::int AS implausible_wt,
             COUNT(*) FILTER (WHERE declared_weight_frido IS NULL OR declared_weight_frido = 0)::int AS no_declared_wt,
             COUNT(*) FILTER (WHERE frido_total_cost IS NULL)::int AS unpriced,
@@ -1127,7 +1210,7 @@ export default async function handler(req, res) {
             COUNT(*) FILTER (WHERE d.category = 'Mixed Shipments')::int AS mixed
           FROM public.logistics_invoices_b2c i
           LEFT JOIN public.awb_shipment_dims d ON d.awb = i.awb_number
-          WHERE i.total_cost > 0 AND i.zone IN ('A','B','C','D','E')
+          WHERE i.total_cost IS NOT NULL AND (${ZONE_MAP_SQL('i.zone')}) IS NOT NULL
             AND i.charged_weight_courier <= ${MAX_PLAUSIBLE_PARCEL_KG}
         `),
         () => query(pool, `
@@ -1135,7 +1218,7 @@ export default async function handler(req, res) {
             (SELECT array_agg(DISTINCT month_year ORDER BY month_year) FROM public.logistics_invoices_b2c WHERE month_year IS NOT NULL) AS months,
             -- Only the five real zones, matching the exclusion in the base CTE. Without
             -- this the slicer offered "North"/"West", which would filter to zero rows.
-            (SELECT array_agg(DISTINCT zone ORDER BY zone) FROM public.logistics_invoices_b2c WHERE zone IN ('A','B','C','D','E')) AS zones,
+            (SELECT array_agg(DISTINCT (${ZONE_MAP_SQL('zone')}) ORDER BY (${ZONE_MAP_SQL('zone')})) FROM public.logistics_invoices_b2c WHERE (${ZONE_MAP_SQL('zone')}) IS NOT NULL) AS zones,
             (SELECT array_agg(DISTINCT m ORDER BY m) FROM (SELECT DISTINCT CASE WHEN upper(shipment_mode)='RTO' THEN 'RTO' WHEN upper(shipment_mode) IN ('REVERSE','RVP','DTO') THEN 'Reverse' WHEN upper(shipment_mode)='FORWARD' THEN 'Forward' ELSE shipment_mode END AS m FROM public.logistics_invoices_b2c WHERE shipment_mode IS NOT NULL) q) AS modes,
             (SELECT array_agg(DISTINCT payment_mode ORDER BY payment_mode) FROM public.logistics_invoices_b2c WHERE payment_mode IS NOT NULL) AS payments,
             (SELECT array_agg(DISTINCT courier_name ORDER BY courier_name) FROM public.logistics_invoices_b2c WHERE courier_name IS NOT NULL) AS couriers,
