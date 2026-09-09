@@ -2219,7 +2219,7 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
           const maxBarValue = barData[0]?.value || 1
           const fmtVal = v => v >= 10000000 ? '₹'+(v/10000000).toFixed(1)+'Cr' : v >= 100000 ? '₹'+(v/100000).toFixed(1)+'L' : v >= 1000 ? '₹'+(v/1000).toFixed(0)+'K' : '₹'+v
           return (
-            <div style={{ display: secCollapsed['weight'] ? 'none' : 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: 14 }}>
+            <div style={{ display: secCollapsed['weight'] ? 'none' : 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: 14, alignItems: 'start' }}>
               {/* Left: Donut with toggle */}
               <div className="card-hoverable" style={cardStyle}>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
@@ -2237,7 +2237,7 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
                     ))}
                   </div>
                 </div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 11 }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 11, overflowY: 'auto', maxHeight: 155 }}>
                   {barData.map(d => (
                     <div key={d.name}>
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 4 }}>
@@ -2260,8 +2260,8 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
                   <div style={chartTitle}>Delivery Performance by Weight Slab</div>
                 </div>
                 {isMobile && <div style={{ height: 1, background: C.border, margin: '10px 0 6px' }} />}
-                <div style={{ overflowX: 'auto', flex: 1, minHeight: 260 }}>
-                <ResponsiveContainer width="100%" height={260}>
+                <div style={{ overflowX: 'auto', flex: 1, minHeight: 150 }}>
+                <ResponsiveContainer width="100%" height={150}>
                   <ComposedChart data={ordered} margin={isMobile ? { top: 4, right: 4, left: 4, bottom: 0 } : { top: 4, right: 2, left: 0, bottom: 0 }}>
                     {!isMobile && <CartesianGrid strokeDasharray="3 3" stroke={C.border} vertical={false} />}
                     <XAxis dataKey="slab" tick={{ fontSize: isMobile ? 9 : 10, fill: C.t2 }} axisLine={isMobile ? { stroke: C.border } : undefined} tickLine={false} />
