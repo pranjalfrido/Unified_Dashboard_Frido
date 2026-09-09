@@ -2237,7 +2237,7 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
                     ))}
                   </div>
                 </div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 11, overflowY: 'auto', maxHeight: 155 }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 11, overflowY: 'auto', maxHeight: 225 }}>
                   {barData.map(d => (
                     <div key={d.name}>
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 4 }}>
@@ -2260,8 +2260,8 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
                   <div style={chartTitle}>Delivery Performance by Weight Slab</div>
                 </div>
                 {isMobile && <div style={{ height: 1, background: C.border, margin: '10px 0 6px' }} />}
-                <div style={{ overflowX: 'auto', flex: 1, minHeight: 150 }}>
-                <ResponsiveContainer width="100%" height={150}>
+                <div style={{ overflowX: 'auto', flex: 1, minHeight: 220 }}>
+                <ResponsiveContainer width="100%" height={220}>
                   <ComposedChart data={ordered} margin={isMobile ? { top: 4, right: 4, left: 4, bottom: 0 } : { top: 4, right: 2, left: 0, bottom: 0 }}>
                     {!isMobile && <CartesianGrid strokeDasharray="3 3" stroke={C.border} vertical={false} />}
                     <XAxis dataKey="slab" tick={{ fontSize: isMobile ? 9 : 10, fill: C.t2 }} axisLine={isMobile ? { stroke: C.border } : undefined} tickLine={false} />
