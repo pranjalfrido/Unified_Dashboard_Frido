@@ -360,6 +360,32 @@ rto_reasons AS (
   SELECT courier_group, shipment_type, reason_for_last_failed_delivery AS reason, COUNT(awb) AS total
   FROM base WHERE reason_for_last_failed_delivery IS NOT NULL AND unified_status='RTO' GROUP BY 1, 2, 3
 ),
+rto_ageing AS (
+  SELECT
+    courier_group,
+    COUNTIF(unified_status='RTO' AND rto_mark_date IS NOT NULL AND order_date IS NOT NULL AND DATE_DIFF(rto_mark_date, order_date, DAY) BETWEEN 0 AND 1) AS order_0_1,
+    COUNTIF(unified_status='RTO' AND rto_mark_date IS NOT NULL AND order_date IS NOT NULL AND DATE_DIFF(rto_mark_date, order_date, DAY) BETWEEN 2 AND 4) AS order_2_4,
+    COUNTIF(unified_status='RTO' AND rto_mark_date IS NOT NULL AND order_date IS NOT NULL AND DATE_DIFF(rto_mark_date, order_date, DAY) BETWEEN 5 AND 7) AS order_5_7,
+    COUNTIF(unified_status='RTO' AND rto_mark_date IS NOT NULL AND order_date IS NOT NULL AND DATE_DIFF(rto_mark_date, order_date, DAY) BETWEEN 8 AND 10) AS order_8_10,
+    COUNTIF(unified_status='RTO' AND rto_mark_date IS NOT NULL AND order_date IS NOT NULL AND DATE_DIFF(rto_mark_date, order_date, DAY) > 10) AS order_10plus,
+    COUNTIF(unified_status='RTO' AND rto_mark_date IS NOT NULL AND created_date IS NOT NULL AND DATE_DIFF(rto_mark_date, created_date, DAY) BETWEEN 0 AND 1) AS shipment_0_1,
+    COUNTIF(unified_status='RTO' AND rto_mark_date IS NOT NULL AND created_date IS NOT NULL AND DATE_DIFF(rto_mark_date, created_date, DAY) BETWEEN 2 AND 4) AS shipment_2_4,
+    COUNTIF(unified_status='RTO' AND rto_mark_date IS NOT NULL AND created_date IS NOT NULL AND DATE_DIFF(rto_mark_date, created_date, DAY) BETWEEN 5 AND 7) AS shipment_5_7,
+    COUNTIF(unified_status='RTO' AND rto_mark_date IS NOT NULL AND created_date IS NOT NULL AND DATE_DIFF(rto_mark_date, created_date, DAY) BETWEEN 8 AND 10) AS shipment_8_10,
+    COUNTIF(unified_status='RTO' AND rto_mark_date IS NOT NULL AND created_date IS NOT NULL AND DATE_DIFF(rto_mark_date, created_date, DAY) > 10) AS shipment_10plus,
+    COUNTIF(unified_status='RTO' AND rto_mark_date IS NOT NULL AND pickup_date IS NOT NULL AND DATE_DIFF(rto_mark_date, pickup_date, DAY) BETWEEN 0 AND 1) AS pickup_0_1,
+    COUNTIF(unified_status='RTO' AND rto_mark_date IS NOT NULL AND pickup_date IS NOT NULL AND DATE_DIFF(rto_mark_date, pickup_date, DAY) BETWEEN 2 AND 4) AS pickup_2_4,
+    COUNTIF(unified_status='RTO' AND rto_mark_date IS NOT NULL AND pickup_date IS NOT NULL AND DATE_DIFF(rto_mark_date, pickup_date, DAY) BETWEEN 5 AND 7) AS pickup_5_7,
+    COUNTIF(unified_status='RTO' AND rto_mark_date IS NOT NULL AND pickup_date IS NOT NULL AND DATE_DIFF(rto_mark_date, pickup_date, DAY) BETWEEN 8 AND 10) AS pickup_8_10,
+    COUNTIF(unified_status='RTO' AND rto_mark_date IS NOT NULL AND pickup_date IS NOT NULL AND DATE_DIFF(rto_mark_date, pickup_date, DAY) > 10) AS pickup_10plus,
+    COUNTIF(clickpost_unified_status='RTO-Delivered' AND rto_mark_date IS NOT NULL AND latest_ts_date IS NOT NULL AND DATE_DIFF(latest_ts_date, rto_mark_date, DAY) BETWEEN 0 AND 1) AS rtodel_0_1,
+    COUNTIF(clickpost_unified_status='RTO-Delivered' AND rto_mark_date IS NOT NULL AND latest_ts_date IS NOT NULL AND DATE_DIFF(latest_ts_date, rto_mark_date, DAY) BETWEEN 2 AND 4) AS rtodel_2_4,
+    COUNTIF(clickpost_unified_status='RTO-Delivered' AND rto_mark_date IS NOT NULL AND latest_ts_date IS NOT NULL AND DATE_DIFF(latest_ts_date, rto_mark_date, DAY) BETWEEN 5 AND 7) AS rtodel_5_7,
+    COUNTIF(clickpost_unified_status='RTO-Delivered' AND rto_mark_date IS NOT NULL AND latest_ts_date IS NOT NULL AND DATE_DIFF(latest_ts_date, rto_mark_date, DAY) BETWEEN 8 AND 10) AS rtodel_8_10,
+    COUNTIF(clickpost_unified_status='RTO-Delivered' AND rto_mark_date IS NOT NULL AND latest_ts_date IS NOT NULL AND DATE_DIFF(latest_ts_date, rto_mark_date, DAY) > 10) AS rtodel_10plus,
+    COUNTIF(unified_status='RTO') AS total_rto
+  FROM base GROUP BY 1
+),
 top_drop_states AS (
   SELECT courier_group, CONCAT(UPPER(SUBSTR(drop_state,1,1)), LOWER(SUBSTR(drop_state,2))) AS state, COUNT(awb) AS total
   FROM base WHERE drop_state IS NOT NULL AND drop_state != '' GROUP BY 1, 2
@@ -450,6 +476,23 @@ failed_delivery_reasons AS (
   WHERE reason_for_last_failed_delivery IS NOT NULL AND reason_for_last_failed_delivery != '' AND ofd_attempts > 1
   GROUP BY 1, 2, 3
 ),
+ndr_by_courier AS (
+  SELECT
+    courier_group AS courier,
+    UPPER(payment_mode) AS payment_mode,
+    COUNT(awb) AS total_shipments,
+    COUNTIF(ofd_attempts >= 1) AS attempted_shipments,
+    COUNTIF(ofd_attempts >= 2) AS ndr_count,
+    COUNTIF(ofd_attempts >= 2 AND unified_status = 'Delivered') AS ndr_del,
+    COUNTIF(ofd_attempts >= 2 AND unified_status = 'RTO') AS ndr_rto,
+    COUNTIF(ofd_attempts = 2 AND unified_status = 'Delivered') AS del_att2,
+    COUNTIF(ofd_attempts = 3 AND unified_status = 'Delivered') AS del_att3,
+    COUNTIF(ofd_attempts >= 4 AND unified_status = 'Delivered') AS del_att3plus,
+    ROUND(AVG(CASE WHEN ofd_attempts >= 2 THEN ofd_attempts END), 2) AS avg_att,
+    ROUND(AVG(CASE WHEN ofd_attempts >= 2 AND unified_status = 'Delivered' AND pickup_ts IS NOT NULL AND delivery_ts IS NOT NULL AND TIMESTAMP_DIFF(delivery_ts, pickup_ts, MINUTE) BETWEEN 0 AND 28800 THEN TIMESTAMP_DIFF(delivery_ts, pickup_ts, MINUTE) / 1440.0 END), 2) AS avg_intransit_days,
+    ROUND(AVG(CASE WHEN ofd_attempts >= 2 AND unified_status = 'Delivered' AND delivery_date IS NOT NULL AND order_date IS NOT NULL AND DATE_DIFF(delivery_date, order_date, DAY) BETWEEN 0 AND 20 THEN DATE_DIFF(delivery_date, order_date, DAY) END), 2) AS avg_o2d
+  FROM base GROUP BY 1, 2
+),
 by_zone_detail AS (
   SELECT zone, COUNT(awb) AS total, COUNTIF(unified_status='Delivered') AS delivered, COUNTIF(unified_status='RTO') AS rto,
     COUNTIF(unified_status='Cancelled') AS cancelled,
@@ -505,6 +548,7 @@ SELECT
   TO_JSON_STRING(ARRAY(SELECT AS STRUCT * FROM by_week)) AS by_week,
   TO_JSON_STRING(ARRAY(SELECT AS STRUCT * FROM by_month)) AS by_month,
   TO_JSON_STRING(ARRAY(SELECT AS STRUCT * FROM rto_reasons)) AS rto_reasons,
+  TO_JSON_STRING(ARRAY(SELECT AS STRUCT * FROM rto_ageing ORDER BY total_rto DESC)) AS rto_ageing,
   TO_JSON_STRING(ARRAY(SELECT AS STRUCT * FROM top_drop_states)) AS top_drop_states,
   TO_JSON_STRING(ARRAY(SELECT AS STRUCT * FROM top_drop_cities)) AS top_drop_cities,
   TO_JSON_STRING(ARRAY(SELECT AS STRUCT * FROM top_pickup_cities)) AS top_pickup_cities,
@@ -526,7 +570,8 @@ SELECT
   TO_JSON_STRING(ARRAY(SELECT AS STRUCT * FROM by_facility ORDER BY total DESC)) AS by_facility,
   TO_JSON_STRING(ARRAY(SELECT AS STRUCT * FROM by_weight_slab ORDER BY slab_order)) AS by_weight_slab,
   TO_JSON_STRING(ARRAY(SELECT AS STRUCT * FROM pickup_ageing ORDER BY courier_group)) AS pickup_ageing,
-  TO_JSON_STRING((SELECT AS STRUCT * FROM filter_opts)) AS filter_opts
+  TO_JSON_STRING((SELECT AS STRUCT * FROM filter_opts)) AS filter_opts,
+  TO_JSON_STRING(ARRAY(SELECT AS STRUCT * FROM ndr_by_courier ORDER BY ndr_count DESC)) AS ndr_by_courier
 `
 }
 
@@ -548,6 +593,7 @@ function parseRow(r) {
     byWeek: JSON.parse(r.by_week),
     byMonth: JSON.parse(r.by_month),
     rtoReasons: JSON.parse(r.rto_reasons),
+    rtoAgeing: JSON.parse(r.rto_ageing),
     topDropStates: JSON.parse(r.top_drop_states),
     topDropCities: JSON.parse(r.top_drop_cities),
     topPickupCities: JSON.parse(r.top_pickup_cities),
@@ -570,6 +616,7 @@ function parseRow(r) {
     byWeightSlab: JSON.parse(r.by_weight_slab),
     pickupAgeing: JSON.parse(r.pickup_ageing),
     filterOpts: JSON.parse(r.filter_opts),
+    ndrByCourier: JSON.parse(r.ndr_by_courier),
   }
 }
 

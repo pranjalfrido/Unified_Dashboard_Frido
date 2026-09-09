@@ -352,9 +352,16 @@ export default function SalesAllocationPage({ data, filters, setFilters, sidebar
     const anyActive = hasFilter(filters.category) || hasFilter(filters.subCategory) ||
       hasFilter(filters.sku) || hasFilter(filters.channel) || hasFilter(filters.salesType) ||
       hasFilter(filters.facility) || hasFilter(filters.region)
-    if (!anyActive) return data
+    const dateStart = dateFilters?.start
+    const dateEnd = dateFilters?.end
+    // Check if date range matches the cache's pre-computed range (no need to re-filter)
+    const cacheRange = data.dateRange
+    const dateMatchesCache = cacheRange && dateStart === cacheRange.start && dateEnd === cacheRange.end
+    if (!anyActive && dateMatchesCache) return data
 
     const rows = data.rawRows.filter(r => {
+      if (dateStart && r.date < dateStart) return false
+      if (dateEnd && r.date > dateEnd) return false
       if (hasFilter(filters.category) && !filters.category.includes(r.category)) return false
       if (hasFilter(filters.subCategory) && !filters.subCategory.includes(r.subCategory)) return false
       if (hasFilter(filters.sku) && !filters.sku.includes(r.sku)) return false
@@ -492,7 +499,7 @@ export default function SalesAllocationPage({ data, filters, setFilters, sidebar
       matrixSkuList,
       matrixDates,
     }
-  }, [data, filters.category, filters.subCategory, filters.sku, filters.channel, filters.salesType, filters.facility, filters.region])
+  }, [data, filters.category, filters.subCategory, filters.sku, filters.channel, filters.salesType, filters.facility, filters.region, dateFilters?.start, dateFilters?.end])
 
   const dailyChart = useMemo(() => {
     if (!filteredData) return []
@@ -504,7 +511,7 @@ export default function SalesAllocationPage({ data, filters, setFilters, sidebar
       const label = trendGranularity === 'monthly' ? d.date : d.date.slice(5)
       return { date: label, qty: d.qty, rev: d.rev, asp: d.qty > 0 ? Math.round(d.rev / d.qty) : null }
     })
-  }, [data, trendGranularity, dateFilters])
+  }, [filteredData, trendGranularity, dateFilters])
 
   const categoryRollup = useMemo(() => {
     if (!filteredData) return []

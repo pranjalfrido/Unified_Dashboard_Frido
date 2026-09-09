@@ -1,4 +1,4 @@
-// Runs in GitHub Actions — fetches GRN/item master/inv/sales from BQ,
+﻿// Runs in GitHub Actions â€” fetches GRN/item master/inv/sales from BQ,
 // replicates all JS aggregation from api/inward.js (without any filters),
 // writes public/inward-data.json for CDN delivery.
 
@@ -34,7 +34,7 @@ const startStr = startD.toISOString().slice(0, 10)
 const avgSaleFetchStart = new Date(today); avgSaleFetchStart.setDate(avgSaleFetchStart.getDate() - (AVG_SALE_WINDOW_DAYS + 5))
 const salesFetchStartStr = avgSaleFetchStart < new Date(startStr) ? avgSaleFetchStart.toISOString().slice(0, 10) : startStr
 
-console.log(`Fetching GRN ${startStr} → ${endStr}, sales ${salesFetchStartStr} → ${todayStr}`)
+console.log(`Fetching GRN ${startStr} â†’ ${endStr}, sales ${salesFetchStartStr} â†’ ${todayStr}`)
 
 const [[grnRows], [itemMasterRows], [skuMappingRows], [invRows], [salesRows]] = await Promise.all([
   bq.query({
@@ -172,7 +172,7 @@ for (const r of grnRows) {
   })
 }
 
-// No category/facility filters — include all finished goods except Unmapped by default
+// No category/facility filters â€” include all finished goods except Unmapped by default
 // (same as api/inward.js when includeUnmapped=false)
 const finishedGoods = rows.filter(r => r.category !== 'Unmapped')
 
@@ -279,7 +279,7 @@ for (const r of finishedGoods) {
 }
 const rejectionReasons = [...reasonMap.entries()].map(([reason, qty]) => ({ reason, qty })).sort((a, b) => b.qty - a.qty)
 
-// Filter options — from full rows (including Unmapped) so the UI can surface it
+// Filter options â€” from full rows (including Unmapped) so the UI can surface it
 const liveFacilities = [...facilityToStatus.entries()].filter(([, status]) => status === 'Live').map(([f]) => f)
 const filterOptions = {
   categories: [...new Set(rows.map(r => r.category))].sort((a, b) => (a === 'Unmapped') - (b === 'Unmapped') || a.localeCompare(b)),
@@ -331,4 +331,4 @@ const payload = {
 
 const json = JSON.stringify(payload)
 writeFileSync('public/inward-data.json', json)
-console.log(`Written public/inward-data.json — ${(json.length / 1024).toFixed(0)}KB`)
+console.log(`Written public/inward-data.json â€” ${(json.length / 1024).toFixed(0)}KB`)

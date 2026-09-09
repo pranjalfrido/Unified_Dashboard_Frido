@@ -26,6 +26,11 @@ const pool = new pkg.Pool({
   ssl: { rejectUnauthorized: false }, max: 3,
   connectionTimeoutMillis: 60000, statement_timeout: 300000,
 })
+// node-postgres emits 'error' on the Pool when the server drops an IDLE connection, and an
+// unhandled EventEmitter error kills the process. Without this, a pooler hiccup on a
+// connection this script was not even using aborted the entire run mid-way through.
+// The pool opens a replacement on next checkout; an in-flight query still rejects normally.
+pool.on('error', e => console.error('[pool] non-fatal:', e.message))
 
 const card = loadB2bCard(CARD_PATH)
 console.log(`rate card: ${card.cells} priced cells from ${card.sheetRows} sheet rows`)

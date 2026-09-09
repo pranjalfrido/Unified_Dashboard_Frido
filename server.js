@@ -13,20 +13,55 @@ import inventoryHandler from './api/inventory.js'
 import salesAllocationHandler from './api/sales-allocation.js'
 import inwardHandler from './api/inward.js'
 import logisticsCostHandler, { prewarm as prewarmLogisticsCost } from './api/logistics-cost.js'
+import returnAnalysisHandler from './api/return-analysis.js'
 
 config()
 
 const { Pool } = pkg
 const __dirname = dirname(fileURLToPath(import.meta.url))
 
-// Key lookup: /etc/secrets/sa_key.json (Render secret file) → ../sa_key.json (local)
+// Service-account key lookup, first match wins:
+//   1. GCP_SA_KEY env var  — JSON in an env var (Render/Vercel style)
+//   2. /etc/secrets/...    — Render secret-file mount
+//   3. <repo>/sa_key.json  — local dev
+//
+// server.js sits at the REPO ROOT, so __dirname is already the repo — the old
+// join(__dirname, "..") escaped one level too far and looked in the parent folder
+// (…/mis/sa_key.json), which threw ENOENT on every BigQuery request. The parent path is
+// kept as a fallback so an existing key placed outside the repo still works.
 import { existsSync } from 'fs'
 
-const RENDER_SECRET_PATH = '/etc/secrets/sa_key.json'
-const LOCAL_KEY_PATH = join(__dirname, '..', 'sa_key.json')
-const KEY_PATH = existsSync(RENDER_SECRET_PATH) ? RENDER_SECRET_PATH : LOCAL_KEY_PATH
+const KEY_CANDIDATES = [
+  '/etc/secrets/sa_key.json',
+  join(__dirname, 'sa_key.json'),
+  join(__dirname, '..', 'sa_key.json'),
+]
+const KEY_PATH = KEY_CANDIDATES.find(existsSync) || null
 
-const bq = new BigQuery({ keyFilename: KEY_PATH, projectId: 'frido-429506' })
+// Fail loudly at startup rather than on the first request: an ENOENT surfacing as a red
+// banner in the UI gives no hint that a key file is missing.
+if (!KEY_PATH && !process.env.GCP_SA_KEY) {
+  console.warn('[server] No BigQuery credentials found. Tried: ' + KEY_CANDIDATES.join(' | ') +
+    ' — or set GCP_SA_KEY. BigQuery-backed tabs will fail until one exists.')
+} else if (KEY_PATH) {
+  console.log('[server] BigQuery key:', KEY_PATH)
+}
+
+// Prefer an inline JSON credential when present (that is how the hosted deploys inject
+// it); otherwise use the key file found above. Passing keyFilename: null would make the
+// client silently try application-default credentials and fail with an unrelated error.
+const bqOpts = { projectId: 'frido-429506' }
+if (process.env.GCP_SA_KEY) {
+  try {
+    bqOpts.credentials = JSON.parse(process.env.GCP_SA_KEY)
+  } catch {
+    console.warn('[server] GCP_SA_KEY is set but is not valid JSON — ignoring it.')
+    if (KEY_PATH) bqOpts.keyFilename = KEY_PATH
+  }
+} else if (KEY_PATH) {
+  bqOpts.keyFilename = KEY_PATH
+}
+const bq = new BigQuery(bqOpts)
 
 const supabaseUrl = process.env.SUPABASE_URL
 const parsedUrl = new URL(supabaseUrl)
@@ -260,6 +295,7 @@ app.post('/api/inventory', (req, res) => inventoryHandler(req, res))
 app.post('/api/sales-allocation', (req, res) => salesAllocationHandler(req, res))
 app.post('/api/inward', (req, res) => inwardHandler(req, res))
 app.post('/api/logistics-cost', (req, res) => logisticsCostHandler(req, res))
+app.post('/api/return-analysis', (req, res) => returnAnalysisHandler(req, res))
 
 // ── API: Logistics / Clickpost data ──────────────────────────
 app.post('/api/logistics', async (req, res) => {

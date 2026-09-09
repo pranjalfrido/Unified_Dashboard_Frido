@@ -21,10 +21,11 @@ export function ChartTooltip({ active, payload, label, formatter }) {
   )
 }
 
-export function KPICard({ label, icon, value, sub, accent, center, badge, style, valueSize, gap, plain }) {
+export function KPICard({ label, icon, value, sub, accent, center, badge, style, valueSize, gap, plain, spark, sparkKey, sparkColor, onClick }) {
+  const clickable = typeof onClick === 'function'
   if (plain) {
     return (
-      <div className="kpi-card" style={{ padding: '10px 13px', display: 'flex', flexDirection: 'column', justifyContent: 'center', ...(center ? { alignItems: 'center', textAlign: 'center' } : {}), ...style }}>
+      <div className="kpi-card" onClick={clickable ? onClick : undefined} style={{ padding: '10px 13px', display: 'flex', flexDirection: 'column', justifyContent: 'center', ...(center ? { alignItems: 'center', textAlign: 'center' } : {}), ...(clickable ? { cursor: 'pointer' } : {}), ...style }}>
         <div className="kpi-label">{icon && <span style={{ fontSize: 13, marginRight: 4 }}>{icon}</span>}{label}</div>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 4 }}>
           <div className="kpi-value" style={{ fontSize: valueSize || 17, ...(accent ? { color: accent } : {}) }}>{value}</div>
@@ -35,13 +36,40 @@ export function KPICard({ label, icon, value, sub, accent, center, badge, style,
     )
   }
   return (
-    <div className={`kpi-card flex flex-col${gap == null ? ' gap-1' : ''}`} style={{ ...(center ? { alignItems: 'center', justifyContent: 'center', textAlign: 'center' } : {}), ...(gap != null ? { gap } : {}), ...style }}>
+    <div className={`kpi-card flex flex-col${gap == null ? ' gap-1' : ''}`}
+      onClick={clickable ? onClick : undefined}
+      style={{
+        ...(center ? { alignItems: 'center', justifyContent: 'center', textAlign: 'center' } : {}),
+        ...(gap != null ? { gap } : {}),
+        ...(clickable ? { cursor: 'pointer' } : {}),
+        position: 'relative', overflow: 'hidden',
+        ...style,
+      }}>
       <span className="text-xs font-bold uppercase tracking-wider flex items-center gap-1" style={{ color: C.t3, justifyContent: center ? 'center' : undefined }}>{icon && <span style={{ fontSize: 13 }}>{icon}</span>}{label}</span>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 4 }}>
         <span style={{ fontSize: valueSize || (center ? 28 : 21), fontWeight: 700, letterSpacing: '-.02em', lineHeight: 1.1, color: accent || C.t1 }}>{value}</span>
         {badge && <span>{badge}</span>}
       </div>
-      {sub && <span className="text-xs" style={{ color: C.t3 }}>{sub}</span>}
+      {sub && <span className="text-xs" style={{ color: C.t2 }}>{sub}</span>}
+      {/* Sparkline sits BEHIND the text at low opacity rather than below it: the cards are in
+          a fixed-height grid, so adding a row would either clip the sub-line or make every
+          card taller. pointerEvents none so it never eats a click meant for the card. */}
+      {spark && spark.length > 1 && (
+        <div style={{ position: 'absolute', left: 0, right: 0, bottom: 0, height: 34, opacity: 0.5, pointerEvents: 'none' }}>
+          <ResponsiveContainer width="100%" height="100%">
+            <AreaChart data={spark} margin={{ top: 0, right: 0, bottom: 0, left: 0 }}>
+              <defs>
+                <linearGradient id={`kpiSpark-${sparkKey || label}`} x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor={sparkColor || C.acm} stopOpacity={0.34} />
+                  <stop offset="100%" stopColor={sparkColor || C.acm} stopOpacity={0.02} />
+                </linearGradient>
+              </defs>
+              <Area type="monotone" dataKey={sparkKey || 'v'} stroke={sparkColor || C.acm}
+                strokeWidth={1.75} fill={`url(#kpiSpark-${sparkKey || label})`} dot={false} />
+            </AreaChart>
+          </ResponsiveContainer>
+        </div>
+      )}
     </div>
   )
 }
@@ -74,12 +102,12 @@ export function AlertCard({ type, title, body, compact = false }) {
   )
 }
 
-export function HBar({ dot, label, width, value, pctVal, onClick, isSelected, labelWidth = 110 }) {
+export function HBar({ dot, label, width, value, pctVal, onClick, isSelected, labelWidth = 110, maxBarWidth }) {
   return (
     <div onClick={onClick} style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '5px 0', minHeight: 30, borderBottom: `1px solid ${C.border}`, cursor: onClick ? 'pointer' : 'default', background: isSelected ? C.acl : 'transparent', borderRadius: isSelected ? 4 : 0 }} className="hbar-row">
       <span style={{ width: 8, height: 8, borderRadius: '50%', background: dot, flexShrink: 0 }} />
       <span title={label} style={{ fontSize: 12, color: C.t2, flexShrink: 0, width: labelWidth, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{label}</span>
-      <div className="hb-track" style={{ flex: 1 }}><div className="hb-fill" style={{ width: `${width}%`, background: C.acc }} /></div>
+      <div className="hb-track" style={{ flex: 1, ...(maxBarWidth ? { maxWidth: maxBarWidth } : {}) }}><div className="hb-fill" style={{ width: `${width}%`, background: C.acc }} /></div>
       <span className="hb-value" style={{ fontSize: 12, fontWeight: 700, color: C.t1, fontFamily: 'var(--mono)', flexShrink: 0, minWidth: 62, textAlign: 'right' }}>{value}</span>
       <span style={{ fontSize: 11, color: C.t3, flexShrink: 0, width: 36, textAlign: 'right' }}>{pctVal}</span>
     </div>
@@ -103,7 +131,7 @@ export function CategoryRevenueCard({ catRows, subCatRows, skuMap, totalRev, vie
   } else if (view === 'subcategory') {
     rows = subCatRows
     maxRev = subCatRows[0]?.rev || 1
-    labelWidth = labelWidthFor(subCatRows.map(r => r.name))
+    labelWidth = 190
     onClick = r => onSelectSubCategory?.(r.name)
   } else {
     const prodRows = []
@@ -124,7 +152,7 @@ export function CategoryRevenueCard({ catRows, subCatRows, skuMap, totalRev, vie
   const mobFixedH = mobCard ? (catRows.length * ROW_H + CARD_CHROME) : undefined
 
   return (
-    <Card fill title="Category Revenue" style={{ height: mobCard ? mobFixedH : height, alignSelf: 'start' }} action={
+    <Card fill title={view === 'subcategory' ? 'Product Revenue' : 'Category Revenue'} style={{ height: mobCard ? mobFixedH : height, alignSelf: 'start' }} action={
       <div style={{ display: 'flex', gap: 4 }}>
         {[{ id: 'category', label: 'Category' }, { id: 'subcategory', label: 'Product' }, ...(window.innerWidth > 768 ? [{ id: 'sku', label: 'SKU Code' }] : [])].map((v, i) => (
           <div key={v.id} style={{ display: 'flex', alignItems: 'center' }}>

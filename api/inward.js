@@ -1,4 +1,4 @@
-import { getBQ } from './_bq.js'
+﻿import { getBQ } from './_bq.js'
 import {
   buildFacilityMaps, norm, normSku, cleanLabel,
   parsePackQty, isRawSkuText, isPseudoSku, computeRowInventory,
@@ -8,7 +8,7 @@ import {
 
 // Avg Sale for the inward-vs-demand comparison uses a fixed trailing 7-day window,
 // anchored to the latest date that actually has sales data (excluding it as possibly
-// partial) — same rule as Inventory Health's Avg Sale, kept independent of the GRN
+// partial) â€” same rule as Inventory Health's Avg Sale, kept independent of the GRN
 // date range since "how fast is this selling right now" shouldn't shift with whatever
 // inward period is being viewed.
 const AVG_SALE_WINDOW_DAYS = 7
@@ -45,9 +45,9 @@ export default async function inwardHandler(req, res) {
     const daysInRange = Math.max(1, Math.round((new Date(end) - new Date(start)) / 86400000) + 1)
 
     // Sales/inventory freshness (Avg Sale, DOI) is anchored to "now" (today), not the GRN
-    // date range — "how fast is this SKU selling right now" and "how much stock exists
+    // date range â€” "how fast is this SKU selling right now" and "how much stock exists
     // right now" are both present-tense questions regardless of which past inward period
-    // is being viewed. "Total Sold Qty" (the inward-vs-demand KPI below) is different — it
+    // is being viewed. "Total Sold Qty" (the inward-vs-demand KPI below) is different â€” it
     // deliberately uses the SAME start/end as the GRN filter. One sales query covers both:
     // fetch the union of the trailing Avg Sale window and the GRN period.
     const today = new Date()
@@ -80,7 +80,7 @@ export default async function inwardHandler(req, res) {
                 WHERE TRIM(masterskucode) NOT IN ('', 'not found')`,
         maximumBytesBilled: '1000000000',
       }),
-      // Current total inventory per SKU — dedupe to latest per (ItemSkuCode, Facility),
+      // Current total inventory per SKU â€” dedupe to latest per (ItemSkuCode, Facility),
       // same logic as api/inventory.js.
       bq.query({
         query: `WITH deduplicated_inventory AS (
@@ -112,11 +112,11 @@ export default async function inwardHandler(req, res) {
 
     const skuMap = buildSkuMap(skuMappingRows)
 
-    // Coupon/gift-card/service codes (COUP*, *DFA*) are not physical stock — excluded from
+    // Coupon/gift-card/service codes (COUP*, *DFA*) are not physical stock â€” excluded from
     // every sales-derived number below (Avg Sale, Total Sold Qty, per-SKU Sold Qty).
     const cleanSalesRows = salesRows.filter(row => !isPseudoSku(row.final_sku))
 
-    // ── Item master lookup, keyed by normalized SKU ──────────────────────────
+    // â”€â”€ Item master lookup, keyed by normalized SKU â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     const itemMaster = new Map()
     for (const r of itemMasterRows) {
       if (!r.Product_Code) continue
@@ -128,7 +128,7 @@ export default async function inwardHandler(req, res) {
       })
     }
 
-    // ── Current total inventory per SKU — "how much stock exists right now" ──────────
+    // â”€â”€ Current total inventory per SKU â€” "how much stock exists right now" â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     const invBySku = new Map()
     for (const row of invRows) {
       if (isPseudoSku(row.ItemSkuCode)) continue
@@ -139,7 +139,7 @@ export default async function inwardHandler(req, res) {
       invBySku.set(key, (invBySku.get(key) || 0) + totalInventory)
     }
 
-    // ── Trailing Avg Sale (B2C, anchored to latest available sales date) per SKU ──────
+    // â”€â”€ Trailing Avg Sale (B2C, anchored to latest available sales date) per SKU â”€â”€â”€â”€â”€â”€
     // Same anchoring rule as Inventory Health: exclude the latest date present (it may be
     // a partial day) and average over the AVG_SALE_WINDOW_DAYS full days before it.
     let maxSalesDate = null
@@ -166,10 +166,10 @@ export default async function inwardHandler(req, res) {
     const avgSaleBySku = new Map()
     for (const [key, qty] of avgSaleQtyBySku) avgSaleBySku.set(key, Math.ceil(qty / AVG_SALE_WINDOW_DAYS))
 
-    // ── Total Sold Qty for the SAME start/end as the GRN filter — the "did what came in
+    // â”€â”€ Total Sold Qty for the SAME start/end as the GRN filter â€” the "did what came in
     // this period cover what sold this period" comparison. B2C+B2B+Purchase Order, same
     // channel scope as the "Total Avg Sale" KPI elsewhere, restricted to finished-goods
-    // SKUs (a real item-master match) so it's comparable to the inward total below. ──
+    // SKUs (a real item-master match) so it's comparable to the inward total below. â”€â”€
     let totalSoldQty = 0
     for (const row of cleanSalesRows) {
       const d = row.order_date?.value || row.order_date
@@ -180,10 +180,10 @@ export default async function inwardHandler(req, res) {
       totalSoldQty += Number(row.qty || 0)
     }
 
-    // ── Resolve each GRN line to a master SKU + pack-qty-scaled received/rejected qty ──
+    // â”€â”€ Resolve each GRN line to a master SKU + pack-qty-scaled received/rejected qty â”€â”€
     // Mirrors computeRowInventory's raw-material handling in _inventory_shared.js: a SKU
-    // code like "FR-XYZ_RAW_PO25" is raw material received in packs of 25 — the true unit
-    // count is Quantity Received × packQty, not the raw GRN line quantity.
+    // code like "FR-XYZ_RAW_PO25" is raw material received in packs of 25 â€” the true unit
+    // count is Quantity Received Ã— packQty, not the raw GRN line quantity.
     const rows = []
     for (const r of grnRows) {
       if (isPseudoSku(r.itemSkuCode)) continue
@@ -206,7 +206,7 @@ export default async function inwardHandler(req, res) {
         : null
 
       // GRN lines with no item-master match are real inward activity (packaging, raw
-      // material, or SKUs simply missing from the master) — kept as a normal "Unmapped"
+      // material, or SKUs simply missing from the master) â€” kept as a normal "Unmapped"
       // category/sub-category rather than dropped, so nothing is silently excluded. The
       // category filter defaults to hiding "Unmapped" (see filterOptions.categories /
       // defaultCategoryExclusions below) but it stays fully visible and countable when a
@@ -224,9 +224,9 @@ export default async function inwardHandler(req, res) {
       })
     }
 
-    // ── Apply filters ────────────────────────────────────────────────────────
+    // â”€â”€ Apply filters â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     // "Unmapped" is excluded from category results unless the caller explicitly asks for
-    // it — either by name in the `category` filter, or via includeUnmapped=true (used by
+    // it â€” either by name in the `category` filter, or via includeUnmapped=true (used by
     // the sidebar's "show unmapped" toggle, which lists it outside the normal multiselect).
     const facilityFilterVals = splitCsv(facility)
     const categoryFilterVals = splitCsv(category)
@@ -242,11 +242,11 @@ export default async function inwardHandler(req, res) {
     })
 
     // Everything downstream (KPIs, trend, breakdowns, SKU table) runs over one consistent
-    // row set — "Unmapped" behaves like any other category rather than a separate stream.
+    // row set â€” "Unmapped" behaves like any other category rather than a separate stream.
     const finishedGoods = filtered
 
-    // ── Per-SKU Sold Qty for the SAME start/end as the GRN filter — one entry per SKU so
-    // it can sit next to Received in the SKU table (see soldQtyBySku below). ──
+    // â”€â”€ Per-SKU Sold Qty for the SAME start/end as the GRN filter â€” one entry per SKU so
+    // it can sit next to Received in the SKU table (see soldQtyBySku below). â”€â”€
     const soldQtyBySku = new Map()
     for (const row of cleanSalesRows) {
       const d = row.order_date?.value || row.order_date
@@ -257,10 +257,10 @@ export default async function inwardHandler(req, res) {
       soldQtyBySku.set(key, (soldQtyBySku.get(key) || 0) + Number(row.qty || 0))
     }
 
-    // ── SKU-level inward table — the detailed line-item view, one row per SKU (for this
+    // â”€â”€ SKU-level inward table â€” the detailed line-item view, one row per SKU (for this
     // filtered period), with current inventory + trailing Avg Sale/DOI attached so it
     // reads as "is what's coming in matched by what's actually selling," not just a raw
-    // received-quantity count. ──
+    // received-quantity count. â”€â”€
     const skuMap2 = new Map()
     for (const r of finishedGoods) {
       if (!skuMap2.has(r.skuKey)) {
@@ -286,7 +286,7 @@ export default async function inwardHandler(req, res) {
       }
     }).sort((a, b) => b.qtyReceived - a.qtyReceived)
 
-    // ── KPIs ─────────────────────────────────────────────────────────────────
+    // â”€â”€ KPIs â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     const totalReceived = finishedGoods.reduce((s, r) => s + r.qtyReceived, 0)
     const totalRejected = finishedGoods.reduce((s, r) => s + r.qtyRejected, 0)
     const rejectionPct = (totalReceived + totalRejected) > 0 ? (totalRejected / (totalReceived + totalRejected)) * 100 : 0
@@ -296,11 +296,11 @@ export default async function inwardHandler(req, res) {
     const avgLeadTimeHours = leadTimes.length > 0 ? leadTimes.reduce((s, v) => s + v, 0) / leadTimes.length : null
     const distinctVendors = new Set(finishedGoods.map(r => r.vendorName)).size
     const distinctSkus = new Set(finishedGoods.map(r => r.skuKey)).size
-    // Inward Coverage Ratio = units received ÷ units sold, same period — >1 means more
+    // Inward Coverage Ratio = units received Ã· units sold, same period â€” >1 means more
     // came in than went out (building up stock), <1 means selling faster than restocking.
     const inwardCoverageRatio = totalSoldQty > 0 ? totalReceived / totalSoldQty : null
 
-    // ── Daily/weekly/monthly trend ───────────────────────────────────────────
+    // â”€â”€ Daily/weekly/monthly trend â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     const dailyMap = new Map()
     for (const r of finishedGoods) {
       if (!r.date) continue
@@ -324,7 +324,7 @@ export default async function inwardHandler(req, res) {
     const weekly = rollup(weekKey)
     const monthly = rollup(monthKey)
 
-    // ── Category / Sub-category breakdown ───────────────────────────────────
+    // â”€â”€ Category / Sub-category breakdown â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     const catMap = new Map()
     const subCatMap = new Map()
     for (const r of finishedGoods) {
@@ -342,7 +342,7 @@ export default async function inwardHandler(req, res) {
     const categoryBreakdown = [...catMap.values()].sort((a, b) => b.qtyReceived - a.qtyReceived)
     const subCategoryBreakdown = [...subCatMap.values()].sort((a, b) => b.qtyReceived - a.qtyReceived)
 
-    // ── Vendor performance ───────────────────────────────────────────────────
+    // â”€â”€ Vendor performance â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     const vendorMap = new Map()
     for (const r of finishedGoods) {
       if (!vendorMap.has(r.vendorName)) vendorMap.set(r.vendorName, { vendor: r.vendorName, qtyReceived: 0, qtyRejected: 0, grns: new Set() })
@@ -357,7 +357,7 @@ export default async function inwardHandler(req, res) {
       grnCount: v.grns.size,
     })).sort((a, b) => b.qtyReceived - a.qtyReceived)
 
-    // ── Facility-wise inward (location-ordered) ─────────────────────────────
+    // â”€â”€ Facility-wise inward (location-ordered) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     const facilityMap = new Map()
     for (const r of finishedGoods) {
       if (!facilityMap.has(r.location)) facilityMap.set(r.location, { location: r.location, qtyReceived: 0, qtyRejected: 0 })
@@ -367,7 +367,7 @@ export default async function inwardHandler(req, res) {
     }
     const facilityBreakdown = sortByLocationOrder([...facilityMap.values()].filter(f => f.location !== 'Unmapped'), f => f.location)
 
-    // ── Rejection reasons ─────────────────────────────────────────────────────
+    // â”€â”€ Rejection reasons â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     const reasonMap = new Map()
     for (const r of finishedGoods) {
       if (!r.rejectionReason || r.qtyRejected <= 0) continue
@@ -376,9 +376,9 @@ export default async function inwardHandler(req, res) {
     }
     const rejectionReasons = [...reasonMap.entries()].map(([reason, qty]) => ({ reason, qty })).sort((a, b) => b.qty - a.qty)
 
-    // ── Filter option lists ───────────────────────────────────────────────────
+    // â”€â”€ Filter option lists â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     // Categories are listed from the FULL row set (before the "hide Unmapped by default"
-    // filter above) so "Unmapped" always appears as a selectable option — otherwise a
+    // filter above) so "Unmapped" always appears as a selectable option â€” otherwise a
     // default-excluded category could never be discovered/selected in the first place.
     const liveFacilities = [...facilityToStatus.entries()].filter(([, status]) => status === 'Live').map(([f]) => f)
     const filterOptions = {

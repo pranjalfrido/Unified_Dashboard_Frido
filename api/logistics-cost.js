@@ -272,8 +272,34 @@ export async function prewarm() {
   }
   const t = Date.now()
   try {
-    // The default page load — scope b2c, no filters — is the entry worth having warm.
-    await handler({ method: 'POST', body: { scope: 'b2c' } }, fakeRes)
+    // MUST match the key the browser actually sends, or the warm entry is never read.
+    //
+    // cacheKey() skips nulls and empty arrays, so EMPTY_COST_FILTERS in src/App.jsx
+    // collapses to {"billing":"all"}. Warming {scope:"b2c"} produced a DIFFERENT key, so
+    // every real page load still paid the full cold build (~90s) and the tab appeared to
+    // hang. Keep this in sync with EMPTY_COST_FILTERS.
+    await handler({ method: 'POST', body: { billing: 'all' } }, fakeRes)
+    // Also warm the bare-{} key: the static CDN generator and scripted callers post an
+    // empty body.
+    await handler({ method: 'POST', body: {} }, fakeRes)
+    // ...and the key the UI produces once it applies its default Billing Period (the most
+    // recent 6 uploaded months). cacheKey() includes a non-empty months array, so that is a
+    // DIFFERENT key from {billing:"all"} — without warming it the tab pays the full ~90s
+    // cold build on every first load, exactly the bug this prewarm exists to prevent.
+    //
+    // The month list is read from the ledger so this tracks new uploads automatically
+    // rather than hard-coding a window that silently goes stale.
+    try {
+      const mr = await query(getCostPool(), `
+        SELECT DISTINCT month_year AS m FROM public.logistics_invoices_b2c
+         WHERE month_year IS NOT NULL ORDER BY 1`, [])
+      const months = mr.rows.map(r => r.m).slice(-6)
+      if (months.length) {
+        await handler({ method: 'POST', body: { months, billing: 'all' } }, fakeRes)
+      }
+    } catch (e) {
+      console.warn('[logistics-cost] default-window prewarm skipped:', e.message)
+    }
     console.log(`[logistics-cost] cache warm in ${((Date.now() - t) / 1000).toFixed(1)}s`)
   } catch (e) {
     console.error('[logistics-cost] prewarm failed:', e.message)
@@ -360,6 +386,17 @@ export default async function handler(req, res) {
     if (f.accountTypes?.length) add('i.courier_account_type = ANY($?)', f.accountTypes)
     if (f.destCity) add('i.destination_city = $?', f.destCity)
 
+    // Pickup city. Matched on INITCAP(TRIM(...)) because the ledger stores the same
+    // warehouse under several spellings — Hoskote/hoskote and Gurgaon/gurgaon/Gurugram —
+    // and an exact match would return only part of a site's volume. Normalising folds
+    // 2,210 raw values to 2,082 (Hoskote alone: 30,454 + 3,783 rows).
+    //
+    // Gurugram and Gurgaon stay SEPARATE: they are the same city but arrive as different
+    // strings, and merging them here would need a synonym map that the options query would
+    // also have to share. The dropdown lists both, so neither is hidden.
+    if (f.originCity) add(`INITCAP(TRIM(i.origin_city)) = $?`, f.originCity)
+
+
     // Keys must match WEIGHT_BANDS in src/LogisticsCostPage.jsx exactly: the UI sends the
     // key and this is the only place it becomes a filter, so a key in one and not the
     // other silently returns the UNFILTERED set rather than erroring.
@@ -376,6 +413,26 @@ export default async function handler(req, res) {
     }
     const postFilters = []
     if (f.band && bandClauses[f.band]) postFilters.push(bandClauses[f.band])
+    // Exact billable slab (0.5, 1, 2 ... kg) — distinct from the BAND filter above, which
+    // covers a range.
+    //
+    // Derived from cw (charged_weight_courier), NOT dw. This must match how
+    // public.lc_slab_costs is built in scripts/refresh-cost-aggregates.mjs, because that
+    // table is what the visible "cost by weight slab" figures come from. Using SLAB_SQL
+    // here (which is dw-based) made the filter disagree with the dropdown by ~10k rows:
+    // slab 2 kg returned 124,891 while the option said 127,312.
+    //
+    // Belongs in postFilters, not `where`: cw is aliased by the normalisation CTE and does
+    // not exist on the raw table, so `where` would throw "column cw does not exist".
+    //
+    // postFilters carries no bind params, so the value is coerced and range-checked before
+    // interpolation — it can only ever become a bare numeric literal.
+    if (f.exactSlab != null && f.exactSlab !== '') {
+      const sl = Number(f.exactSlab)
+      if (Number.isFinite(sl) && sl > 0 && sl <= MAX_PLAUSIBLE_PARCEL_KG) {
+        postFilters.push(`(CASE WHEN cw <= 0.5 THEN 0.5 ELSE CEIL(cw) END) = ${sl}`)
+      }
+    }
     // Billing accuracy compares two columns, so it also belongs after normalisation.
     // Overbilled/Clean must use the SAME slab-based comparison the KPIs report, or the
     // slicer would disagree with the numbers it is meant to filter.
@@ -892,6 +949,37 @@ export default async function handler(req, res) {
     // static JSON so the frontend can re-aggregate client-side on every filter change
     // without a round-trip. Band and destCity are excluded — their cardinality would
     // make the cube too large; those filters still hit the live API.
+    // ── Zone x sub-category cube ──
+    // Answers "zone costs for Cushions, now for Orthotics" without a round trip.
+    //
+    // Deliberately a SEPARATE, much leaner cube than CUBE_Q rather than another dimension
+    // on it: sub_category crossed with the main cube's eight dimensions measured 49,740
+    // rows (~37 MB of static JSON). This grain is 5,361 rows / 0.49 MB.
+    //
+    // sub_category lives in awb_shipment_dims, so this LEFT JOINs it — coverage is 98.4%
+    // and the remainder is bucketed as (unknown) rather than dropped, so the cube still
+    // sums to the headline total instead of quietly under-reporting.
+    //
+    // Uses the same exGst() correction as every other cost figure here. Without it this
+    // read Rs 12.46Cr against the tab's Rs 12.36Cr, because Delhivery uploaded
+    // GST-inclusive totals.
+    const SUBCUBE_Q = () => query(pool, `
+      SELECT i.zone,
+             COALESCE(NULLIF(TRIM(d.sub_category), ''), '(unknown)') AS sub,
+             COALESCE(d.category, '(unknown)')                      AS cat,
+             i.month_year                                           AS month,
+             COUNT(*)::int                                          AS n,
+             SUM(${exGst('i.total_cost::float8', 'i.freight_charge::float8', 'i.surcharge::float8', 'i.other_charge::float8')})::float8 AS cost,
+             SUM(i.charged_weight_courier::float8)::float8          AS wt
+        FROM public.logistics_invoices_b2c i
+        LEFT JOIN public.awb_shipment_dims d ON d.awb = i.awb_number
+       WHERE i.total_cost > 0
+         AND i.zone IN ('A','B','C','D','E')
+         AND i.charged_weight_courier > 0
+         AND i.charged_weight_courier <= 500
+       GROUP BY 1, 2, 3, 4
+    `, [])
+
     const CUBE_Q = `
       ${BASE}
       SELECT
@@ -1007,7 +1095,7 @@ export default async function handler(req, res) {
       // Throttled to 3: this block is 10 queries and only runs on a cache miss, so it can
       // afford to be slower — but firing all 10 at once starved the pool and produced the
       // same connect timeout the main block hit.
-      const [health, joinCov, opt, cityRows, b2b, b2bLanes, b2bTotals, b2bTrans, b2bMonths, b2bTypes, b2bVar, b2bVarMonths, b2bTransMonths, b2bVehicles, b2bLaneVeh, b2bRateCmp, b2bSole, wr, gridRes, trendRes, disputes, slabs] = await mapLimit([
+      const [health, joinCov, opt, cityRows, originCityRows, b2b, b2bLanes, b2bTotals, b2bTrans, b2bMonths, b2bTypes, b2bVar, b2bVarMonths, b2bTransMonths, b2bVehicles, b2bLaneVeh, b2bRateCmp, b2bSole, wr, gridRes, trendRes, disputes, slabs, subCube] = await mapLimit([
         // ── Data Health (spec §0) ──
         // Every exclusion and every coverage rate the page depends on, in one query.
         // This exists so finance can see the gaps before finding one themselves and
@@ -1068,6 +1156,18 @@ export default async function handler(req, res) {
           SELECT destination_city AS c FROM public.logistics_invoices_b2c
            WHERE destination_city IS NOT NULL AND destination_city <> ''
            GROUP BY 1 ORDER BY COUNT(*) DESC LIMIT 600
+        `),
+        // Pickup cities. DISTINCT on the RAW column and normalised in JS, not
+        // INITCAP(TRIM(...)) with GROUP BY ... ORDER BY COUNT(*) in SQL.
+        //
+        // PERFORMANCE: the expression form cost 22.6s because neither the grouping key nor
+        // the ordering can use an index — it sorts every grouped row. Combined with the slab
+        // query it pushed the cold cache build past the 120s statement_timeout, and the
+        // WHOLE request failed: the tab would not load at all. Raw DISTINCT is 3.2s and
+        // returns 2,210 values, which is trivial to fold in JS.
+        () => query(pool, `
+          SELECT DISTINCT origin_city AS c FROM public.logistics_invoices_b2c
+           WHERE origin_city IS NOT NULL AND origin_city <> ''
         `),
         // freight_type_FTL_PTL is mixed-case in the schema, so it MUST be double-quoted
         // — unquoted, Postgres folds it to lowercase and the column "does not exist".
@@ -1260,10 +1360,32 @@ export default async function handler(req, res) {
                  SUM(spend)::float8 AS total_spend
             FROM l
         `),
-        wrQ, gridQ, trendQ, disputesQ, slabQ,
+        wrQ, gridQ, trendQ, disputesQ, slabQ, SUBCUBE_Q,
       ], 3)
       const options = opt.rows[0] || {}
       options.cities = cityRows.rows.map(r => r.c).sort()
+      // Pickup cities: already volume-ordered by the query, then sorted alphabetically for
+      // the dropdown so a reader can find a known warehouse by name.
+      // Fold the raw spellings into one option per warehouse. The ledger holds the same
+      // site as Hoskote/hoskote and Gurgaon/gurgaon, so an un-normalised list would offer
+      // duplicates that each match only part of the volume. Sorted by name because the
+      // dropdown has a search box and a reader looks up a warehouse they already know.
+      options.originCities = [...new Set(
+        originCityRows.rows
+          .map(r => String(r.c || '').trim().replace(/\s+/g, ' '))
+          .filter(Boolean)
+          .map(c => c.replace(
+            /\S+/g,
+            w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase(),
+          )),
+      )].sort()
+      // Slabs come from lc_slab_costs, which this handler ALREADY queries — the visible slab
+      // table is built from it, so the dropdown and the table cannot disagree, and it costs
+      // no extra round-trip. A dedicated options query here was 8.7s for the same answer.
+      options.slabs = (slabs.rows || [])
+        .map(r => ({ slab: Number(r.slab), n: Number(r.n) }))
+        .filter(s => Number.isFinite(s.slab) && s.slab > 0)
+        .sort((a, b) => a.slab - b.slab)
       refCache = {
         // Weight-vs-rate attribution: filter-independent and expensive (17s), so it is
         // measured once per cache period rather than per request.
@@ -1271,6 +1393,9 @@ export default async function handler(req, res) {
         rateGrid: gridRes.rows,
         courierDisputes: disputes.rows,
         slabCosts: slabs.rows,
+        // Zone x sub-category cube. Filter-independent by design — the client slices it,
+        // so it is measured once per cache period like the other reference data.
+        subCube: subCube.rows,
         trendAll: trendRes.rows,
         at: Date.now(), options, b2b: b2b.rows,
         // Data Health (§0): exclusions + coverage, so every number is auditable.
@@ -1308,6 +1433,9 @@ export default async function handler(req, res) {
     out.rateGrid = refCache.rateGrid || []
     out.courierDisputes = refCache.courierDisputes || []
     out.slabCosts = refCache.slabCosts || []
+    // Zone x sub-category cube for the zone slicer. Sent whole and sliced client-side, so
+    // changing sub-category costs no round trip — the point of the feature.
+    out.subCube = refCache.subCube || []
     out.trendAll = refCache.trendAll || []
     out.skipped = refCache.skipped
     out.health = refCache.health

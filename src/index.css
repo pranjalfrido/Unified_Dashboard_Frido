@@ -479,8 +479,44 @@ html,body{height:100%;background:var(--bg);font-family:var(--font);color:var(--t
    tabs, so this block trims the internal margins the shared .kpi-* rules set. Scoped to the
    grid rather than changing .kpi-label / .kpi-value globally, which would shrink every tile
    on every tab. */
-.ov-kpis .kpi-card { padding: 6px 12px; }
+/* Matches the inline padding on Tile (src/LogisticsCostPage.jsx). The inline style wins,
+   so this only matters if that is ever removed — but a stylesheet that disagrees with the
+   component is a trap for whoever edits it next. */
+.ov-kpis .kpi-card { padding: 10px 16px; }
 .ov-kpis .kpi-label { margin-bottom: 2px; }
 .ov-kpis .kpi-value { font-size: 19px; margin-bottom: 1px; }
 .ov-kpis .kpi-sub { font-size: 10.5px; }
 
+
+/* Overview drill-through rows.
+   The affordance has to be visible before the click: a row that navigates and looks identical
+   to one that does not is a trap. Handled in CSS rather than React hover state so no re-render
+   fires per row on mouse-move — the scorecard and category tables share this class.
+   :hover only, so keyboard focus styling stays whatever the theme sets. */
+.ov-drill { transition: background .12s ease, box-shadow .12s ease; }
+.ov-drill:hover { background: var(--acl, rgba(255, 214, 0, .13)); }
+.ov-drill:hover td:first-child { box-shadow: inset 2px 0 0 var(--acc, #FFD600); }
+
+/* Refresh indicator on the Logistics Cost scope bar. A pulsing dot reads as activity at a
+   glance and takes less width than the word alone, which matters in a right-aligned cluster
+   that shares the row with the period chip and filter badge. */
+@keyframes lcPulse {
+  0%, 100% { opacity: .25; transform: scale(.85); }
+  50%      { opacity: 1;   transform: scale(1); }
+}
+
+/* Card titles and sub-lines on Logistics Cost.
+
+   --t3 (#94939F) measures 3.03:1 on a white card, which fails WCAG AA for normal-size
+   text — at 9.5px and 11px these were genuinely hard to read. #75747F is 4.60:1, so it
+   passes AA while staying clearly secondary to --t2 (7.90:1): a step darker, not a
+   promotion to body text.
+
+   Scoped to .lc-page rather than changing the --t3 token, which has 383 uses across every
+   tab. The ask was the three cost tabs; a global change would silently restyle Sales,
+   Inventory, Ads and P&L too.
+
+   Same hue family as --t3 (a cool, slightly blue-leaning grey) so it still reads as part
+   of the palette rather than a different colour. */
+.lc-page .kpi-label { color: #75747F; }
+.lc-page .kpi-sub { color: #75747F; }

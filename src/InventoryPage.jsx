@@ -197,13 +197,16 @@ function useStatic(staticPath, fallbackApiPath, fallbackBody = {}, enabled = tru
       if (ageMs > 30 * 24 * 60 * 60 * 1000 || json._placeholder) throw new Error('static file stale or placeholder')
       cachedDataRef.current = json
       setData(json)
-      // end = max(order_date) - 1 (last complete day), start = end - 6 → 7-day window
+      // end = max(order_date) - 1 (last complete day), start = end - 6 → 7-day window (default view)
       const lastSales = json.lastSalesDate || getDefaultDates().end
       const endD = new Date(lastSales + 'T00:00:00Z')
       endD.setUTCDate(endD.getUTCDate() - 1) // subtract 1: partial day excluded
       const startD = new Date(endD); startD.setUTCDate(startD.getUTCDate() - 6)
       const toLocal = d => d.toISOString().slice(0, 10)
-      cachedRangeRef.current = { start: toLocal(startD), end: toLocal(endD) }
+      // Full data window from cache (may be wider than default 7-day view)
+      const fullDataStart = json.dateRange?.start || toLocal(startD)
+      const fullDataEnd = toLocal(endD)
+      cachedRangeRef.current = { start: toLocal(startD), end: toLocal(endD), dataStart: fullDataStart, dataEnd: fullDataEnd }
       setDateFilters({ start: toLocal(startD), end: toLocal(endD) })
     } catch {
       if (cachedDataRef.current) return // static loaded fine already
@@ -224,7 +227,7 @@ function useStatic(staticPath, fallbackApiPath, fallbackBody = {}, enabled = tru
     fetchData()
   }, [enabled, fetchData])
 
-  // When date range changes: restore cache if back to cached range (and no filters), else hit API
+  // When date range changes: use cache if range falls within cached data window, else hit API
   const prevDateRef = useRef(null)
   useEffect(() => {
     if (!enabled || !initialFetchedRef.current) return
@@ -234,8 +237,11 @@ function useStatic(staticPath, fallbackApiPath, fallbackBody = {}, enabled = tru
     prevDateRef.current = { start, end }
     const cached = cachedRangeRef.current
     if (!cached) return
-    if (cached.start === start && cached.end === end && !hasActiveFilters(fallbackBodyRef.current)) {
-      // Back to the cached range with no filters — restore static data instantly
+    // If selected range falls within the full cached data window, use cache (client-side date filter)
+    const withinCache = cachedDataRef.current?.rawRows &&
+      start >= (cached.dataStart || cached.start) && end <= (cached.dataEnd || cached.end)
+    if (withinCache || (cached.start === start && cached.end === end && !hasActiveFilters(fallbackBodyRef.current))) {
+      // Restore static data — SalesAllocationPage will filter rawRows by dateFilters client-side
       if (cachedDataRef.current) setData(cachedDataRef.current)
       return
     }

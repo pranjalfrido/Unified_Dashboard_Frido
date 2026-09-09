@@ -1,10 +1,23 @@
 import { useState, useEffect, useMemo, useRef, useCallback, Children } from 'react'
-import { C, fmt, fmtN, fmtBig, COURIER_COLORS, COURIER_LOGOS } from './utils.js'
+import { C as BASE_C, fmt, fmtN, fmtBig, exportCSV, COURIER_COLORS, COURIER_LOGOS } from './utils.js'
 import {
   Card, Badge, DataTable, ChartTooltip,
   BarChart, Bar, Line, LineChart, ComposedChart, AreaChart, Area, XAxis, YAxis, CartesianGrid,
   Tooltip, Legend, LabelList, PieChart, Pie, ResponsiveContainer, Cell,
 } from './components.jsx'
+
+// Page-local palette. Identical to the shared one except for `t3`, the secondary grey used
+// by card titles, sub-lines, section notes and slicer labels.
+//
+// The shared #94939F measures 3.03:1 on a white card, which fails WCAG AA for normal-size
+// text — at the 9.5-11px these labels run at, they were genuinely hard to read. #75747F is
+// 4.60:1, so it passes AA while staying clearly secondary to t2 (7.90:1): a step darker,
+// not a promotion to body text. Same cool, slightly blue-leaning hue family, so it still
+// reads as part of the palette.
+//
+// Shadowed here rather than changed in utils.js because that token has ~383 uses across
+// every tab, and this change was scoped to the three Logistics Cost tabs.
+const C = { ...BASE_C, t3: '#75747F' }
 
 // ── Logistics Cost Analytics ──────────────────────────────────
 // Reads the manually-dumped invoice ledgers (logistics_invoices_b2c / _b2b).
@@ -129,7 +142,7 @@ const SCOPES = [
 
 const EMPTY_FILTERS = {
   months: [], zones: [], modes: [], payments: [], couriers: [], transporters: [], vehicleTypes: [], freightTypes: [],
-  accountTypes: [], band: null, destCity: null, billing: 'all',
+  accountTypes: [], band: null, destCity: null, originCity: null, exactSlab: null, billing: 'all',
 }
 
 const num = v => { const n = parseFloat(v); return isNaN(n) ? 0 : n }
@@ -269,6 +282,9 @@ function shapeResponse(j) {
     rateGrid: j.rateGrid || [],
     courierDisputes: j.courierDisputes || [],
     slabCosts: j.slabCosts || [],
+    // Zone x sub-category cube. Sliced client-side so changing sub-category costs no
+    // round trip — see the zone slicer below.
+    subCube: j.subCube || [],
     trendAll: j.trendAll || [],
     byCourierMonth: j.byCourierMonth || cubeToByCourierMonth(j.cube),
   }
@@ -295,7 +311,7 @@ function Tile({ label, value, sub, badge, accent }) {
     // the grid. Now the label pins to the top, the value sits directly under it, and the sub
     // is pushed to the bottom by `marginTop: auto`, so the three bands line up across every
     // card regardless of how long any one sub is.
-    <div className="kpi-card" style={{ padding: '7px 13px', display: 'flex', flexDirection: 'column', gap: 2 }}>
+    <div className="kpi-card" style={{ padding: '10px 16px', display: 'flex', flexDirection: 'column', gap: 3 }}>
       <div className="kpi-label">{label}</div>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 4 }}>
         <div className="kpi-value" style={{ fontSize: 17, marginBottom: 0, ...(accent ? { color: accent } : {}) }}>{value}</div>
@@ -430,6 +446,231 @@ function ChipRow({ options, selected, onToggle, small }) {
           </button>
         )
       })}
+    </div>
+  )
+}
+
+// The billing-period chip, which doubles as its own month slicer.
+//
+// It began as a read-only label. Making it clickable means the number a reader is looking
+// at is also the control that changes it — on the Overview scope especially, where the eye
+// lands on this chip long before the sidebar.
+//
+// Deliberately NOT a SearchSelect: that renders a full-width labelled control sized for the
+// 220px sidebar, and this has to stay a compact chip in a horizontal bar. It also has to
+// keep its two-part closed appearance (range | qualifier), which SearchSelect has no notion
+// of. The month list is short enough that a search box would be noise.
+// Export the tables on screen to CSV.
+//
+// Sits beside the period chip because what it exports is exactly what the chip and the
+// slicers have narrowed to — the two controls belong together. Golden so it reads as the
+// one action on a bar that is otherwise all state.
+//
+// Charts are NOT exported as images: a CSV of the chart's own series is more useful than a
+// PNG, and every chart here is backed by a table or row array, so the data is the export.
+function ExportMenu({ items, suffix }) {
+  const [open, setOpen] = useState(false)
+  const ref = useRef(null)
+  useEffect(() => {
+    if (!open) return
+    const h = e => { if (ref.current && !ref.current.contains(e.target)) setOpen(false) }
+    document.addEventListener('mousedown', h)
+    document.addEventListener('touchstart', h)
+    return () => {
+      document.removeEventListener('mousedown', h)
+      document.removeEventListener('touchstart', h)
+    }
+  }, [open])
+
+  // Only offer what actually has rows: a menu entry that downloads an empty file is worse
+  // than no entry.
+  const ready = (items || []).filter(it => (it.rows?.length || 0) > 0)
+  if (!ready.length) return null
+
+  const run = it => {
+    // suffix carries the active period and scope, so a file on disk still says what it
+    // was filtered to. Without it, three exports of the same table are indistinguishable.
+    exportCSV(it.rows, `frido_${it.file}${suffix ? `_${suffix}` : ''}.csv`)
+    setOpen(false)
+  }
+
+  return (
+    <div ref={ref} style={{ position: 'relative', flexShrink: 0 }}>
+      <button onClick={() => setOpen(o => !o)}
+        title="Download the tables on screen as CSV"
+        style={{
+          display: 'inline-flex', alignItems: 'center', gap: 6,
+          fontSize: 11.5, fontWeight: 600, fontFamily: 'var(--font)',
+          padding: '5px 11px', borderRadius: 8, cursor: 'pointer',
+          background: C.acc, color: '#1a1400',
+          border: `1px solid ${C.acm}`,
+          boxShadow: open ? `0 0 0 3px ${C.acl}` : '0 1px 2px rgba(0,0,0,.06)',
+          transition: 'box-shadow .15s',
+        }}>
+        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#1a1400" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M12 3v12M7 12l5 5 5-5M4 21h16" />
+        </svg>
+        Export
+        <span style={{ fontSize: 7, opacity: .7, transform: open ? 'rotate(180deg)' : 'none', transition: 'transform .18s' }}>▼</span>
+      </button>
+
+      {open && (
+        <div style={{
+          position: 'absolute', top: 'calc(100% + 5px)', right: 0, zIndex: 500,
+          background: C.card, border: `1px solid ${C.border2}`, borderRadius: 10,
+          boxShadow: '0 10px 30px rgba(0,0,0,.16)', minWidth: 232, overflow: 'hidden',
+        }}>
+          <div style={{ padding: '7px 11px', borderBottom: `1px solid ${C.border}`, fontSize: 10, fontWeight: 800, color: C.t3, letterSpacing: '.05em', textTransform: 'uppercase' }}>
+            Export as CSV
+          </div>
+          <div style={{ maxHeight: 300, overflowY: 'auto', padding: '4px 0' }}>
+            {ready.map(it => (
+              <div key={it.file} onClick={() => run(it)}
+                style={{
+                  display: 'flex', alignItems: 'baseline', justifyContent: 'space-between',
+                  gap: 10, padding: '7px 11px', fontSize: 11.5, cursor: 'pointer', color: C.t1,
+                }}
+                onMouseEnter={e => { e.currentTarget.style.background = C.bg }}
+                onMouseLeave={e => { e.currentTarget.style.background = 'transparent' }}>
+                <span>{it.label}</span>
+                {/* Row count up front: it sets the expectation before the file lands. */}
+                <span style={{ fontSize: 10, color: C.t3, fontFamily: 'var(--mono)', whiteSpace: 'nowrap' }}>
+                  {fmtN(it.rows.length)}
+                </span>
+              </div>
+            ))}
+          </div>
+          {ready.length > 1 && (
+            <div onClick={() => { ready.forEach(run); setOpen(false) }}
+              style={{
+                padding: '8px 11px', borderTop: `1px solid ${C.border}`, cursor: 'pointer',
+                fontSize: 11.5, fontWeight: 700, color: C.t1, background: C.bg,
+              }}>
+              Export all {ready.length} tables
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
+function PeriodChip({ window: win, months, selected, onToggle, onAll, onRecent, defaultCount }) {
+  const [open, setOpen] = useState(false)
+  const ref = useRef(null)
+  useEffect(() => {
+    if (!open) return
+    const h = e => { if (ref.current && !ref.current.contains(e.target)) setOpen(false) }
+    document.addEventListener('mousedown', h)
+    document.addEventListener('touchstart', h)
+    return () => {
+      document.removeEventListener('mousedown', h)
+      document.removeEventListener('touchstart', h)
+    }
+  }, [open])
+  if (!win) return null
+
+  const label = m => {
+    const [y, mo] = String(m).split('-')
+    const d = new Date(Number(y), Number(mo) - 1, 1)
+    return Number.isFinite(d.getTime())
+      ? d.toLocaleString('en-IN', { month: 'short', year: 'numeric' })
+      : String(m)
+  }
+  const sel = selected || []
+  // Empty selection means "everything" everywhere else in this page, so the checkmarks
+  // have to show every month ticked rather than none.
+  const isOn = m => (sel.length ? sel.includes(m) : true)
+  const suffix = win.kind === 'all-short' || win.kind === 'all'
+    ? `all ${win.total} months`
+    : win.kind === 'default'
+      ? `last ${win.count} months`
+      : `${win.count} of ${win.total}`
+
+  return (
+    <div ref={ref} style={{ position: 'relative', flexShrink: 0 }}>
+      <button onClick={() => setOpen(o => !o)}
+        title={win.kind === 'all-short'
+          ? `The ledger holds ${win.total} month(s), fewer than the ${defaultCount}-month default. Every one is included. Click to choose months.`
+          : win.kind === 'all'
+            ? `All ${win.total} uploaded months are included. Click to choose months.`
+            : win.kind === 'default'
+              ? `Default view: the most recent ${win.count} of ${win.total} uploaded months. Click to choose months.`
+              : `${win.count} of ${win.total} months selected. Click to change.`}
+        style={{
+          display: 'inline-flex', alignItems: 'center', gap: 0, padding: 0,
+          background: C.card, border: `1px solid ${open ? C.acm : C.border2}`,
+          borderRadius: 8, overflow: 'hidden', whiteSpace: 'nowrap',
+          boxShadow: open ? `0 0 0 3px ${C.acl}` : '0 1px 2px rgba(0,0,0,.04)',
+          cursor: 'pointer', fontFamily: 'var(--font)', transition: 'box-shadow .15s, border-color .15s',
+        }}>
+        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '5px 9px' }}>
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke={C.t3} strokeWidth="2.2" strokeLinecap="round" style={{ flexShrink: 0 }}>
+            <rect x="3" y="5" width="18" height="16" rx="2" />
+            <path d="M8 3v4M16 3v4M3 11h18" />
+          </svg>
+          <strong style={{ fontSize: 11.5, fontWeight: 650, color: C.t1, letterSpacing: '-.01em' }}>
+            {win.range}
+          </strong>
+        </span>
+        <span style={{
+          fontSize: 10.5, color: C.t2, background: C.bg, padding: '5px 9px',
+          borderLeft: `1px solid ${C.border}`, display: 'inline-flex', alignItems: 'center', gap: 5,
+        }}>
+          {suffix}
+          <span style={{ fontSize: 7, color: C.t3, transform: open ? 'rotate(180deg)' : 'none', transition: 'transform .18s' }}>▼</span>
+        </span>
+      </button>
+
+      {open && (
+        <div style={{
+          position: 'absolute', top: 'calc(100% + 5px)', right: 0, zIndex: 500,
+          background: C.card, border: `1px solid ${C.border2}`, borderRadius: 10,
+          boxShadow: '0 10px 30px rgba(0,0,0,.16)', minWidth: 208, overflow: 'hidden',
+        }}>
+          {/* Shortcuts first: reaching the 6-month default or the full ledger by hand would
+              otherwise mean several clicks. */}
+          <div style={{ display: 'flex', gap: 6, padding: '8px 9px', borderBottom: `1px solid ${C.border}` }}>
+            <button onClick={() => { onRecent(); setOpen(false) }}
+              style={{
+                flex: 1, fontSize: 10.5, fontWeight: 600, padding: '5px 8px', borderRadius: 6,
+                border: `1px solid ${C.border2}`, background: C.card, color: C.t1,
+                cursor: 'pointer', fontFamily: 'var(--font)', whiteSpace: 'nowrap',
+              }}>Last {defaultCount}</button>
+            <button onClick={() => { onAll(); setOpen(false) }}
+              style={{
+                flex: 1, fontSize: 10.5, fontWeight: 600, padding: '5px 8px', borderRadius: 6,
+                border: `1px solid ${C.border2}`, background: C.card, color: C.t1,
+                cursor: 'pointer', fontFamily: 'var(--font)', whiteSpace: 'nowrap',
+              }}>All {months.length}</button>
+          </div>
+          {/* Newest first: the recent months are the ones anyone reaches for. */}
+          <div style={{ maxHeight: 232, overflowY: 'auto', padding: '4px 0' }}>
+            {[...months].reverse().map(m => {
+              const on = isOn(m)
+              return (
+                <div key={m} onClick={() => onToggle(m)}
+                  style={{
+                    display: 'flex', alignItems: 'center', gap: 8, padding: '6px 11px',
+                    fontSize: 11.5, cursor: 'pointer', color: C.t1,
+                    fontWeight: on ? 600 : 400, background: on ? C.acl : 'transparent',
+                  }}
+                  onMouseEnter={e => { if (!on) e.currentTarget.style.background = C.bg }}
+                  onMouseLeave={e => { if (!on) e.currentTarget.style.background = 'transparent' }}>
+                  <span style={{
+                    width: 13, height: 13, borderRadius: 3, flexShrink: 0,
+                    border: `1.5px solid ${on ? C.acm : C.border2}`,
+                    background: on ? C.acc : C.card,
+                    display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                    fontSize: 9, color: '#1a1400', lineHeight: 1,
+                  }}>{on ? '✓' : ''}</span>
+                  {label(m)}
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      )}
     </div>
   )
 }
@@ -672,7 +913,10 @@ function cubeToBreakdowns(rows) {
 
 // Filters that can be satisfied purely from the cube (no API needed).
 function isCubeFilter(f) {
-  return !f.band && !f.destCity
+  // originCity and exactSlab are NOT in the cube (it carries no origin_city column and is
+  // pre-aggregated by band, not by exact slab), so either one must force an API request.
+  // Omitting them here would serve stale cube rows and the filter would silently no-op.
+  return !f.band && !f.destCity && !f.originCity && f.exactSlab == null
 }
 
 // Apply cube-compatible filters to cube rows.
@@ -737,9 +981,16 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
   const [error, setError] = useState(null)
   const API = import.meta.env.VITE_API_URL || ''
   const [internalFilters, setInternalFilters] = useState(EMPTY_FILTERS)
-  const filters = externalFilters || internalFilters
-  const setFilters = setExternalFilters || setInternalFilters
-  const [opts, setOpts] = useState({ months: [], zones: [], modes: [], payments: [], couriers: [], transporters: [], vehicleTypes: [], freightTypes: [], accountTypes: [], cities: [] })
+  // The SHARED filter object (courier, zone, payment, ...). Months are layered per scope
+  // below — see the note there.
+  const sharedFilters = externalFilters || internalFilters
+  const setSharedFilters = setExternalFilters || setInternalFilters
+  // Month selection is PER SCOPE. Without this, a month picked on B2C also applied to
+  // Overview and FTL/PTL because all three read this same object — which also made the
+  // period chip look stuck when switching tabs. The three tabs report on different ledgers
+  // with different uploaded months, so each keeps its own period.
+  const [monthsByScope, setMonthsByScope] = useState({})
+  const [opts, setOpts] = useState({ months: [], zones: [], modes: [], payments: [], couriers: [], transporters: [], vehicleTypes: [], freightTypes: [], accountTypes: [], cities: [], originCities: [], slabs: [] })
   const [sidebarOpen, setSidebarOpen] = useState(true)
   // 'all' = B2B + B2C summary · 'b2c' = courier detail · 'b2b' = lane-wise freight
   const [scope, setScope] = useState(() => {
@@ -748,6 +999,26 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
     if (allowedTabs.includes('logistics:cost:b2b')) return 'b2b'
     return 'all'
   })
+  // Effective filters: the shared object with THIS scope's months layered on. Everything
+  // downstream (the API body, monthWindow, the cubes) keeps reading filters.months.
+  const filters = useMemo(
+    () => ({ ...sharedFilters, months: monthsByScope[scope] ?? sharedFilters.months ?? [] }),
+    [sharedFilters, monthsByScope, scope],
+  )
+
+  // A write touching `months` lands in this scope's slot; anything else goes to the shared
+  // object, so courier/zone/payment keep applying across tabs as they did before.
+  const setFilters = useCallback(next => {
+    const applied = typeof next === 'function' ? next(filters) : next
+    if (applied && Object.prototype.hasOwnProperty.call(applied, 'months')) {
+      const { months, ...rest } = applied
+      setMonthsByScope(m => ({ ...m, [scope]: months }))
+      if (Object.keys(rest).length) setSharedFilters(f => ({ ...f, ...rest }))
+      return
+    }
+    setSharedFilters(next)
+  }, [filters, scope, setSharedFilters])
+
   const [reloadKey] = useState(0)
 
   // Raw full-dataset JSON — loaded once from CDN, never re-fetched for cube-compatible filters.
@@ -798,7 +1069,8 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
         // Try CDN static file on first load (no filters set yet, or base not cached)
         const isDefaultFilters = !f.months?.length && !f.zones?.length && !f.modes?.length &&
           !f.payments?.length && !f.couriers?.length && !f.accountTypes?.length &&
-          !f.band && !f.destCity && (!f.billing || f.billing === 'all')
+          !f.band && !f.destCity && !f.originCity && f.exactSlab == null &&
+          (!f.billing || f.billing === 'all')
 
         if (isDefaultFilters && !baseData) {
           const staticRes = await fetch('/logistics-cost-data.json', { signal: ctl.signal }).catch(() => null)
@@ -858,6 +1130,10 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
             freightTypes: j.options.freight_types || [],
             accountTypes: j.options.account_types || [],
             cities: j.options.cities || [],
+            // Pickup cities and exact slabs. This object is rebuilt from scratch on every
+            // response, so a key omitted here is dropped even when the API sends it.
+            originCities: j.options.originCities || [],
+            slabs: j.options.slabs || [],
           })
         }
       } catch (e) {
@@ -940,6 +1216,67 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
     })
   }, [agg])
 
+  // ── Zone slicer: sub-category ──
+  // Answers "zone costs for Cushions, now for Orthotics" instantly. The cube is already in
+  // memory, so this is a client-side re-aggregate rather than a refetch — the whole reason
+  // it is a separate lean cube (5,400 rows) instead of a dimension on the main one.
+  const [zoneSub, setZoneSub] = useState('')
+
+  // Options ordered by spend, not alphabetically: with 225 sub-categories the ones worth
+  // slicing are the expensive ones, and they should not be buried under an alphabetical A.
+  const zoneSubOptions = useMemo(() => {
+    const cube = agg?.subCube || []
+    if (!cube.length) return []
+    const spend = new Map()
+    for (const r of cube) {
+      // Respect the Billing Period selection so the list never offers a sub-category that
+      // has no rows in the months on screen.
+      if (filters.months?.length && !filters.months.includes(r.month)) continue
+      spend.set(r.sub, (spend.get(r.sub) || 0) + Number(r.cost || 0))
+    }
+    return [...spend.entries()].sort((a, b) => b[1] - a[1]).map(([s]) => s)
+  }, [agg, filters.months])
+
+  // Zone rows for the selected sub-category, or null when nothing is selected so the
+  // section falls back to the full byZone breakdown (which carries overbilled counts the
+  // cube does not).
+  const zoneSubRows = useMemo(() => {
+    if (!zoneSub) return null
+    const cube = agg?.subCube || []
+    const byZone = new Map()
+    let total = 0
+    for (const r of cube) {
+      if (r.sub !== zoneSub) continue
+      if (filters.months?.length && !filters.months.includes(r.month)) continue
+      const z2 = byZone.get(r.zone) || { n: 0, cost: 0, wt: 0 }
+      z2.n += Number(r.n || 0)
+      z2.cost += Number(r.cost || 0)
+      z2.wt += Number(r.wt || 0)
+      byZone.set(r.zone, z2)
+      total += Number(r.cost || 0)
+    }
+    return [...byZone.entries()]
+      .map(([zone, b]) => ({
+        zone,
+        shipments: b.n,
+        cost: b.cost,
+        avgCost: b.n ? b.cost / b.n : 0,
+        cpk: perKg(b.cost, b.wt),
+        avgWt: b.n ? b.wt / b.n : 0,
+        // The cube has no overbilled flag, so this column is not meaningful when sliced.
+        // null renders as an em-dash rather than a fabricated 0%.
+        overPct: null,
+        share: total ? (b.cost / total) * 100 : 0,
+      }))
+      .sort((a, b) => {
+        const ia = ZONES.indexOf(a.zone), ib = ZONES.indexOf(b.zone)
+        if (ia === -1 && ib === -1) return 0
+        if (ia === -1) return 1
+        if (ib === -1) return -1
+        return ia - ib
+      })
+  }, [agg, zoneSub, filters.months])
+
   const zoneRows = useMemo(() => {
     if (!agg) return []
     return Object.entries(agg.byZone)
@@ -961,6 +1298,12 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
         return ia - ib
       })
   }, [agg])
+
+  // What the zone chart and table actually render: the sliced rows when a sub-category is
+  // chosen, otherwise the full breakdown. Declared AFTER zoneRows — referencing a const
+  // before its initialiser is a temporal dead zone ReferenceError that the build does not
+  // catch, only the browser.
+  const zoneRowsShown = zoneSubRows || zoneRows
 
   const modeRows = useMemo(() => {
     if (!agg) return []
@@ -1051,18 +1394,26 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
   // Couriers ranked by what is recoverable from them, for the cause-split chart.
   // Pre-computed per-slab costs. Filter-independent, like the trend and the rate grid, so it
   // reads straight from the payload rather than re-aggregating on every render.
-  const slabRows = useMemo(() => (agg?.slabCosts || []).map(r => ({
-    slab: Number(r.slab),
-    n: num(r.n),
-    cost: num(r.cost),
-    avgCost: num(r.avg_cost),
-    cpk: num(r.cpk),
-    fwdAvg: num(r.fwd_avg),
-    revAvg: num(r.rev_avg),
-    rtoAvg: num(r.rto_avg),
-    claimRs: num(r.claim_rs),
-    claimN: num(r.claim_n),
-  })),
+  // share is computed against the slab table's OWN total, not agg.cost: this table lists
+  // every slab including reverse and RTO legs, so its sum is the right denominator for
+  // "share of the spend shown here". Using the page total would make the column sum to
+  // less than 100% with no visible reason.
+  const slabRows = useMemo(() => {
+    const rows = (agg?.slabCosts || []).map(r => ({
+      slab: Number(r.slab),
+      n: num(r.n),
+      cost: num(r.cost),
+      avgCost: num(r.avg_cost),
+      cpk: num(r.cpk),
+      fwdAvg: num(r.fwd_avg),
+      revAvg: num(r.rev_avg),
+      rtoAvg: num(r.rto_avg),
+      claimRs: num(r.claim_rs),
+      claimN: num(r.claim_n),
+    }))
+    const total = rows.reduce((a, r) => a + r.cost, 0)
+    return rows.map(r => ({ ...r, share: total ? (r.cost / total) * 100 : 0 }))
+  },
   // Every slab, no threshold. A cost table should account for all the spend: an n>=1000
   // filter hid 120 of 139 slabs and 13% of it, including a 104 kg slab worth ₹10.45 L. The
   // card scrolls, so extra rows are cheap; a silently missing row is not.
@@ -1717,10 +2068,242 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
     setFilters(f => ({ ...f, [key]: f[key].includes(val) ? f[key].filter(x => x !== val) : [...f[key], val] }))
   const setOne = (key, val) => setFilters(f => ({ ...f, [key]: val }))
 
+  // ── Default billing period: the most recent 6 months ──
+  //
+  // Applied once, when the month list first arrives from the API — not on every render,
+  // or a user clearing the filter would have it immediately reimposed and the control
+  // would look broken.
+  //
+  // The ledger holds FEWER than 6 months today (Apr-Jul 2026, so 4). slice(-6) takes
+  // whatever exists rather than padding, and `monthWindow` below reports what was
+  // actually selected so the page never implies six months of data it does not have.
+  const DEFAULT_MONTH_COUNT = 6
+  // Months that actually exist in the ledger THIS SCOPE reports on.
+  //
+  // opts.months comes from the B2C invoice ledger (Jan-Jul). The freight ledger holds only
+  // Apr-Jul, so on FTL/PTL the chip was claiming "last 6 months" and offering Jan-Mar in
+  // the picker — months with no freight rows at all. Overview spans both ledgers, so it
+  // keeps the full B2C-derived list.
+  const scopeMonths = useMemo(() => {
+    if (scope !== 'b2b') return opts.months || []
+    const bm = [...new Set((b2b?.months || [])
+      .map(r => r.month_year || r.key || r.month)
+      .filter(Boolean))].sort()
+    // Fall back to the shared list rather than rendering nothing if the freight month
+    // query has not landed yet.
+    return bm.length ? bm : (opts.months || [])
+  }, [scope, opts.months, b2b])
+
+  // Per SCOPE, not once globally: months are now scope-specific, so a single flag would
+  // have defaulted only the first tab visited and left the other two showing nothing.
+  const monthsDefaulted = useRef({})
+  useEffect(() => {
+    if (monthsDefaulted.current[scope]) return
+    const all = scopeMonths
+    if (!all.length) return
+    monthsDefaulted.current[scope] = true
+    // Respect a selection already in place for this scope (a shared URL, or an external
+    // filter object supplied by the parent).
+    if ((filters.months || []).length) return
+    setOne('months', all.slice(-DEFAULT_MONTH_COUNT))
+    // filters.months is deliberately NOT a dependency: this must fire when the options
+    // arrive or the scope changes, never in response to the user editing the selection.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [scopeMonths, scope])
+
+  // What the period note renders. Derived from the SELECTED months, not from the default,
+  // so it stays truthful when the user narrows or widens the range.
+  // What the Export button offers, per scope.
+  //
+  // Reuses the row arrays the tables already render, so an export is exactly what is on
+  // screen — same filters, same period, same slicers. Deriving a separate query would let
+  // the file drift from the view.
+  //
+  // Numbers are exported RAW, not formatted: "₹1.74 Cr" is useless in a spreadsheet, and
+  // exportCSV JSON-stringifies each value so a raw number survives as a number.
+  const exportItems = useMemo(() => {
+    const round = (v, d = 2) => (v == null || Number.isNaN(Number(v)) ? '' : Number(Number(v).toFixed(d)))
+
+    if (scope === 'b2b') {
+      return [
+        {
+          label: 'Lane detail', file: 'ftl_ptl_lanes',
+          rows: (b2b?.lanes || []).map(r => ({
+            lane: r.lane, origin: r.origin_location, destination: r.destination_location,
+            trips: r.trips, spend: round(r.spend), avg_per_trip: round(r.avg_cost),
+            transporters: r.transporters, vehicle: r.vehicle,
+          })),
+        },
+        {
+          label: 'Transporters', file: 'ftl_ptl_transporters',
+          rows: (b2b?.transporters || []).map(r => ({
+            transporter: r.transporter_name, trips: r.trips,
+            spend: round(r.spend), avg_per_trip: round(r.avg_cost),
+          })),
+        },
+        {
+          label: 'Freight type', file: 'ftl_ptl_freight_type',
+          rows: (b2b?.types || []).map(r => ({
+            freight_type: r.freight_type, trips: r.trips, spend: round(r.spend),
+          })),
+        },
+        {
+          label: 'Vehicle size', file: 'ftl_ptl_vehicles',
+          rows: (b2b?.vehicles || []).map(r => ({
+            vehicle: r.vehicle_type, trips: r.trips, spend: round(r.spend),
+          })),
+        },
+        {
+          label: 'Monthly trend', file: 'ftl_ptl_monthly',
+          rows: (b2bMonthRows || []).map(r => ({
+            month: r.month, trips: r.trips, spend: round(r.spend),
+          })),
+        },
+      ]
+    }
+
+    if (scope === 'all') {
+      return [
+        {
+          label: 'Monthly trend (both ledgers)', file: 'overview_monthly',
+          rows: (ovTrendWindow || []).map(r => ({
+            month: r.month, total: round(r.total), b2c: round(r.b2c), b2b: round(r.b2b),
+          })),
+        },
+        {
+          label: 'B2C courier partners', file: 'overview_b2c_couriers',
+          rows: (overviewB2cCards || []).map(r => ({
+            courier: r.key, shipments: r.shipments, cost: round(r.cost),
+            share_pct: round(r.share, 1), avg_per_shipment: round(r.avgCost),
+            cost_per_kg: round(r.cpk, 1), claimable: round(r.claimable),
+          })),
+        },
+        {
+          label: 'FTL/PTL transport partners', file: 'overview_ftl_ptl_partners',
+          rows: (overviewB2bCards || []).map(r => ({
+            transporter: r.key, trips: r.trips, cost: round(r.cost),
+            share_pct: round(r.share, 1), avg_per_trip: round(r.avgCost),
+          })),
+        },
+      ]
+    }
+
+    // B2C
+    return [
+      {
+        label: 'By courier', file: 'b2c_couriers',
+        rows: (courierRows || []).map(r => ({
+          courier: r.courier, shipments: r.shipments, cost: round(r.cost),
+          avg_per_shipment: round(r.avgCost), cost_per_kg: round(r.cpk, 2),
+          avg_weight_kg: round(r.avgWt, 3), pct_wrong_weight: round(r.overPct, 1),
+        })),
+      },
+      {
+        label: zoneSub ? `Cost by zone (${zoneSub})` : 'Cost by zone', file: 'b2c_zones',
+        rows: (zoneRowsShown || []).map(r => ({
+          zone: r.zone, shipments: r.shipments, cost: round(r.cost),
+          avg_per_shipment: round(r.avgCost), cost_per_kg: round(r.cpk, 2),
+          share_pct: round(r.share, 1),
+        })),
+      },
+      {
+        label: 'Weight slab detail', file: 'b2c_weight_slabs',
+        rows: (slabRows || []).map(r => ({
+          slab_kg: r.slab, shipments: r.n, cost: round(r.cost),
+          avg_per_shipment: round(r.avgCost), cost_per_kg: round(r.cpk, 2),
+          forward: round(r.fwdAvg), reverse: round(r.revAvg), rto: round(r.rtoAvg),
+          share_pct: round(r.share, 1), claimable: round(r.claimRs),
+        })),
+      },
+      {
+        label: 'Shipment leg', file: 'b2c_legs',
+        rows: (modeRows || []).map(r => ({
+          leg: r.mode, shipments: r.shipments, cost: round(r.cost),
+          avg_per_shipment: round(r.avgCost), share_pct: round(r.share, 1),
+        })),
+      },
+      {
+        label: 'Cost by product', file: 'b2c_products',
+        // Flattened: a CSV has no notion of the expandable category/sub-category tree, so
+        // each row carries its own category and a level marker instead.
+        rows: (productRows || []).flatMap(c => [
+          {
+            level: 'category', category: c.cat, sub_category: '',
+            shipments: c.n, cost: round(c.cost), avg_logistics_cost: round(c.ctsReal),
+            billable_slab_kg: round(c.masterSlab ?? c.cw, 2), actual_weight_kg: round(c.masterKg, 3),
+          },
+          ...(c.children || []).map(s => ({
+            level: 'sub_category', category: c.cat, sub_category: s.sub,
+            shipments: s.n, cost: round(s.cost), avg_logistics_cost: round(s.ctsReal),
+            billable_slab_kg: round(s.masterSlab ?? s.cw, 2), actual_weight_kg: round(s.masterKg, 3),
+          })),
+        ]),
+      },
+    ]
+  }, [scope, b2b, b2bMonthRows, ovTrendWindow, overviewB2cCards, overviewB2bCards,
+      courierRows, zoneRowsShown, zoneSub, slabRows, modeRows, productRows])
+
+  // Filename suffix so a file on disk still says what it was filtered to.
+  const exportSuffix = useMemo(() => {
+    const sel = [...(filters.months || [])].sort()
+    const period = sel.length ? (sel.length === 1 ? sel[0] : `${sel[0]}_to_${sel[sel.length - 1]}`) : 'all_months'
+    return `${scope}_${period}`
+  }, [scope, filters.months])
+
+  const monthWindow = useMemo(() => {
+    const all = scopeMonths
+    const sel = (filters.months || []).length ? [...filters.months].sort() : all
+    if (!sel.length) return null
+    const label = m => {
+      const [y, mo] = String(m).split('-')
+      const d = new Date(Number(y), Number(mo) - 1, 1)
+      return Number.isFinite(d.getTime())
+        ? d.toLocaleString('en-IN', { month: 'short', year: 'numeric' })
+        : String(m)
+    }
+    const first = sel[0], last = sel[sel.length - 1]
+    // Four genuinely different situations, each needing its own wording. Two booleans were
+    // not enough and mislabelled two of them: with 9 months uploaded and the 6-month
+    // default it read "6 of 9 months" (sounds like the USER narrowed it), and with every
+    // month selected it read "last 9 months" (not what "last N" means).
+    //   all-short  every uploaded month is shown and there are fewer than the 6 we default
+    //              to — say so, so nobody reads the total as six months of data
+    //   all        every uploaded month is shown, and there are 6 or more
+    //   default    exactly the 6-month default out of a longer history
+    //   custom     the user picked something else
+    const isAll = sel.length === all.length
+    const isDefaultWindow = sel.length === DEFAULT_MONTH_COUNT
+      && sel.join() === all.slice(-DEFAULT_MONTH_COUNT).join()
+    const kind = isAll
+      ? (all.length < DEFAULT_MONTH_COUNT ? 'all-short' : 'all')
+      : (isDefaultWindow ? 'default' : 'custom')
+    return {
+      kind,
+      count: sel.length,
+      total: all.length,
+      range: first === last ? label(first) : `${label(first)} – ${label(last)}`,
+    }
+  }, [scopeMonths, filters.months])
+
+  // Options for the exact-slab dropdown, ordered by slab ascending (the API returns them
+  // that way). SearchSelect matches on the label string and echoes it into the closed
+  // button, so the label stays just the weight — appending the shipment count would make
+  // the button read "2 kg - 127,312 shipments" once selected.
+  //
+  // slabLabelOf is shared by the option list and the selected-value lookup so both always
+  // produce the same string; two separate format calls would drift and the dropdown would
+  // show nothing as selected.
+  const slabLabelOf = s => `${s} kg`
+  const slabOptions = useMemo(
+    () => (opts.slabs || []).map(s => slabLabelOf(s.slab)),
+    [opts.slabs]
+  )
+
   const activeCount =
     filters.months.length + filters.zones.length + filters.modes.length +
     filters.payments.length + filters.couriers.length + filters.accountTypes.length +
     (filters.band ? 1 : 0) + (filters.destCity ? 1 : 0) + (filters.billing !== 'all' ? 1 : 0) +
+    (filters.originCity ? 1 : 0) + (filters.exactSlab != null ? 1 : 0) +
     (filters.transporters?.length || 0) + (filters.vehicleTypes?.length || 0) +
     (filters.freightTypes?.length || 0)
 
@@ -1805,7 +2388,7 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
         {/* Everything else as full-width labelled dropdowns under one FILTERS heading. */}
         <div style={{ fontSize: 10, fontWeight: 800, color: C.t3, letterSpacing: '.06em', textTransform: 'uppercase' }}>Filters</div>
 
-        <SearchSelect label="Billing Period" options={opts.months} multi
+        <SearchSelect label="Billing Period" options={scopeMonths} multi
           selected={filters.months}
           onChange={v => (v === null ? setOne('months', []) : toggleIn('months', v))} />
 
@@ -1832,6 +2415,25 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
             const b = WEIGHT_BANDS.find(x => x.label === label)
             setOne('band', b ? b.key : null)
           }} />
+
+        {/* Exact billable slab, distinct from the Weight Slab band above: that one covers a
+            range (2-5 kg), this one isolates a single billed step (exactly 2 kg). Both can be
+            set; the API ANDs them, which is how you ask "the 2 kg slab within 2-5 kg".
+
+            Only slabs that actually occur are listed, so the dropdown never offers an empty
+            one. 119 exist (0.5 to 500 kg) and 95% of volume sits at or below 10 kg, so the
+            long tail is real but rarely wanted — hence the search box. */}
+        <SearchSelect label="Exact Weight Slab" options={slabOptions}
+          value={filters.exactSlab != null ? slabLabelOf(filters.exactSlab) : null}
+          onChange={label => {
+            if (label === null) return setOne('exactSlab', null)
+            const hit = (opts.slabs || []).find(s => slabLabelOf(s.slab) === label)
+            setOne('exactSlab', hit ? hit.slab : null)
+          }} />
+
+        {/* Origin before destination, so the two city filters read as a lane. */}
+        <SearchSelect label="Pickup City" options={opts.originCities}
+          value={filters.originCity} onChange={v => setOne('originCity', v)} />
 
         <SearchSelect label="Drop City" options={opts.cities}
           value={filters.destCity} onChange={v => setOne('destCity', v)} />
@@ -2956,6 +3558,19 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
               { key: 'fwdAvg', label: 'Forward', align: 'center', render: (_, r) => (r.fwdAvg ? '₹' + r.fwdAvg.toFixed(0) : '—') },
               { key: 'revAvg', label: 'Reverse', align: 'center', render: (_, r) => (r.revAvg ? '₹' + r.revAvg.toFixed(0) : '—') },
               { key: 'rtoAvg', label: 'RTO', align: 'center', render: (_, r) => (r.rtoAvg ? '₹' + r.rtoAvg.toFixed(0) : '—') },
+              // Share of the spend this table accounts for. Fills the dead space the
+              // numeric columns left, and answers a question the table could not: the
+              // 0.5/1/2 kg slabs are together ~42% of all freight spend, which no
+              // per-slab figure reveals.
+              //
+              // Chosen over Claimable (populated on only 28 of 142 slabs, so it would be
+              // 80% em-dashes) and over the average weight gap (well populated, but
+              // negative values invite "why?" and need a legend this table has no room
+              // for). ShareBar is what the zone table below already uses for the same
+              // idea, so the two read consistently.
+              { key: 'share', label: 'Share of Spend', align: 'center', render: (_, r) => (
+                <ShareBar pct={r.share}>{r.share.toFixed(1) + '%'}</ShareBar>
+              ) },
             ]}
             rows={slabSearch.trim() ? slabRows.filter(r => String(r.slab ?? '').toLowerCase().includes(slabSearch.trim().toLowerCase())) : slabRows}
             maxRows={200}
@@ -2970,10 +3585,16 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
       {/* ── Zone + mode ── */}
       <SectionHdr title="Where The Money Goes" collapsed={secHid['money']} onToggle={() => toggleSec('money')} />
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(330px,1fr))', gap: 14 , ...(secHid['money'] ? { display: 'none' } : {}) }}>
-        <Card title="Cost by zone" note="">
+        <Card title="Cost by zone"
+          note={zoneSub ? `${zoneSub} · ${zoneRowsShown.length} zones` : ''}
+          action={zoneSubOptions.length ? (
+            <SearchSelect label="All sub-categories" options={zoneSubOptions}
+              value={zoneSub || null}
+              onChange={v => setZoneSub(v || '')} />
+          ) : null}>
           <div style={{ height: 200 }}>
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={zoneRows} margin={{ top: 10, right: isMobile ? 10 : 12, left: isMobile ? -14 : 4, bottom: 4 }}>
+              <BarChart data={zoneRowsShown} margin={{ top: 10, right: isMobile ? 10 : 12, left: isMobile ? -14 : 4, bottom: 4 }}>
                 <CartesianGrid stroke={VIZ.grid} vertical={false} />
                 <XAxis dataKey="zone" tickFormatter={z => `Zone ${z}`} tick={{ fontSize: 11.5, fill: VIZ.muted }} axisLine={{ stroke: VIZ.axis }} tickLine={false} />
                 <YAxis tick={{ fontSize: 11, fill: VIZ.muted }} axisLine={false} tickLine={false}
@@ -2998,7 +3619,7 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
                 <Bar dataKey="cost" name="Cost" radius={[4, 4, 0, 0]} maxBarSize={44}
                   onClick={d => d?.zone && ZONES.includes(d.zone) && toggleIn('zones', d.zone)}
                   style={{ cursor: 'pointer' }}>
-                  {zoneRows.map(r => (
+                  {zoneRowsShown.map(r => (
                     <Cell key={r.zone} fill={zoneColor(r.zone, zoneOrder)}
                       opacity={filters.zones.length && !filters.zones.includes(r.zone) ? 0.35 : 1} />
                   ))}
@@ -3020,7 +3641,7 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
                   </tr>
                 </thead>
                 <tbody>
-                  {zoneRows.map((r, i) => (
+                  {zoneRowsShown.map((r, i) => (
                     <tr key={r.zone} style={{ borderBottom: `1px solid ${C.border}`, background: i % 2 === 0 ? C.card : C.bg }}>
                       <td style={{ position: 'sticky', left: 0, background: i % 2 === 0 ? C.card : C.bg, zIndex: 1, padding: '6px 6px', fontWeight: 600, color: C.t1, whiteSpace: 'nowrap' }}>Zone {r.zone}</td>
                       <td style={{ padding: '6px 6px', textAlign: 'center', color: C.t1 }}>{fmtBig(r.shipments)}</td>
@@ -3041,7 +3662,7 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
               { key: 'cpk', label: 'Cost / kg', align: 'center', render: (_, r) => (r.cpk != null ? '₹' + r.cpk.toFixed(2) : '—') },
               { key: 'share', label: 'Share', align: 'center', render: (_, r) => <ShareBar pct={r.share}>{r.share.toFixed(1) + '%'}</ShareBar> },
             ]}
-            rows={zoneRows}
+            rows={zoneRowsShown}
           />
           )}
         </Card>
@@ -3511,15 +4132,34 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
               { key: 'ctsReal', label: 'Avg. Logistic Cost', align: 'center', render: (_, r) => (
                 r.ctsReal ? <span style={{ fontWeight: 700 }}>{fmt(r.ctsReal)}</span> : '—'
               ) },
-              // Sub-category rows show the billable SLAB from the item master — one real value
-              // the courier charges on. Category rows show the shipment-weighted average
-              // product weight instead, because a category spans products of different weights
-              // and no single slab is true for all of them.
+              // Weight Slab: one real billable slab on sub-category rows, the
+              // shipment-weighted average across the category on category rows.
               { key: 'slab', label: 'Weight Slab', align: 'center', render: (_, r) => {
+                // Sub-category rows: the ONE billable slab from the item master — a real
+                // value the courier charges on.
                 if (r.masterSlab > 0) return <strong>{r.masterSlab} kg</strong>
-                return r.masterKg > 0 ? <strong>{r.masterKg.toFixed(2)} kg</strong> : '—'
+                // Category rows: the shipment-weighted AVERAGE billed slab across the
+                // category (AVG(cw_slab) server-side — verified equal to a manual
+                // shipment-weighted average of the children). Shown with a ~ and one
+                // decimal so it never reads as a real slab: a category spans products of
+                // different weights, so no single slab is true for all of them.
+                //
+                // Deliberately NOT masterKg, which is the actual product weight and now
+                // has its own column — repeating it here said nothing new.
+                if (r.cw > 0) return <span style={{ color: C.t2 }}>~{r.cw.toFixed(1)} kg</span>
+                return '—'
               } },
-              { key: 'vw', label: 'Volumetric Weight', align: 'center', render: (_, r) => (r.vw ? r.vw.toFixed(2) + ' kg' : '—') },
+              // Actual product weight from the item master (Weight_gms / 1000 at sync), not
+              // the volumetric figure this column used to show. That one came from
+              // BigQuery's `total_weight`, which despite the name is L*B*H/5000 —
+              // dimensional weight, not what the product weighs. Coverage is 87.8%;
+              // an em-dash where the item master has no entry for that sub-category.
+              //
+              // Distinct from the Weight Slab column beside it: that shows the BILLABLE
+              // slab the courier charges on, this shows the true weight.
+              { key: 'masterKg', label: 'Actual Weight', align: 'center', render: (_, r) => (
+                r.masterKg > 0 ? r.masterKg.toFixed(2) + ' kg' : '—'
+              ) },
             ]}
             rows={productRows}
             maxHeight={480}
@@ -3733,7 +4373,7 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
   }
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
+    <div className="lc-page" style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
       {loading && (
         <div style={{ height: 2, background: C.border, flexShrink: 0 }}>
           <div className="progress-bar" style={{ height: '100%', background: C.acc }} />
@@ -3774,8 +4414,52 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
                 )
               })}
             </div>
-            {activeCount > 0 && scope !== 'all' && <Badge type="blue">{activeCount} filter{activeCount === 1 ? '' : 's'} active</Badge>}
-            {loading && <span style={{ fontSize: 11.5, color: C.t3 }}>Refreshing…</span>}
+            {/* Billing period actually in view. Styled as a quiet pill rather than a
+                warning: it is normal information, not a problem, and it has to sit beside
+                the scope toggle on all three tabs without competing with the KPIs.
+
+                The wording follows the data. When the ledger holds fewer than the 6-month
+                default it says so explicitly ("all 4 months available") instead of letting
+                the reader assume a 6-month figure — the honesty this needs is the whole
+                point of showing it. */}
+            {/* Right-hand cluster: billing period, filter count, refresh state.
+                marginLeft:auto claims the gap so this pins to the far right of the bar
+                while the scope toggle stays hard left. */}
+            <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+              {loading && (
+                <span style={{ fontSize: 11, color: C.t3, display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+                  {/* Pulsing dot rather than the word alone — reads as activity at a glance
+                      and takes less room than "Refreshing…" on a narrow bar. */}
+                  <span style={{ width: 6, height: 6, borderRadius: '50%', background: C.acm, animation: 'lcPulse 1s ease-in-out infinite' }} />
+                  Refreshing
+                </span>
+              )}
+              {activeCount > 0 && scope !== 'all' && (
+                <Badge type="blue">{activeCount} filter{activeCount === 1 ? '' : 's'}</Badge>
+              )}
+              {/* The chip IS the month slicer. Selecting nothing means "all months"
+                  everywhere else on this page, so onAll clears rather than listing every
+                  month — that keeps the request on the prewarmed {billing:"all"} cache key
+                  instead of minting a new one for an equivalent selection. */}
+              <PeriodChip
+                window={monthWindow}
+                months={scopeMonths}
+                selected={filters.months}
+                onToggle={m => setFilters(f => {
+                  const all = scopeMonths
+                  const cur = (f.months || []).length ? f.months : all
+                  const next = cur.includes(m) ? cur.filter(x => x !== m) : [...cur, m]
+                  return { ...f, months: next.length === all.length || !next.length ? [] : next }
+                })}
+                onAll={() => setOne('months', [])}
+                onRecent={() => setOne('months', (scopeMonths).slice(-DEFAULT_MONTH_COUNT))}
+                defaultCount={DEFAULT_MONTH_COUNT}
+              />
+              {/* Export sits to the RIGHT of the chip: the chip says what period is in
+                  view, and this exports exactly that. Last in the cluster so it reads as
+                  the action after the state. */}
+              <ExportMenu items={exportItems} suffix={exportSuffix} />
+            </div>
             {/* The Lanes toggle went with the Top Lanes table it controlled. */}
           </div>
           {/* Refetch holds the previous render at reduced opacity — no skeleton flash,
