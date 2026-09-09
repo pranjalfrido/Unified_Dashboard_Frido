@@ -154,7 +154,42 @@ kpis AS (
     ROUND(AVG(IF(clickpost_unified_status='RTO-Delivered' AND rto_mark_date IS NOT NULL AND latest_ts_date IS NOT NULL AND DATE_DIFF(latest_ts_date, rto_mark_date, DAY) BETWEEN 0 AND 20, DATE_DIFF(latest_ts_date, rto_mark_date, DAY), NULL)), 1) AS avg_rto_tat,
     ROUND(AVG(IF(ofd1_date IS NOT NULL AND pickup_date IS NOT NULL, DATE_DIFF(ofd1_date, pickup_date, DAY), NULL)), 1) AS avg_s2a,
     ROUND(AVG(IF(created_date IS NOT NULL AND order_date IS NOT NULL AND DATE_DIFF(created_date, order_date, DAY) BETWEEN 0 AND 10, DATE_DIFF(created_date, order_date, DAY), NULL)), 1) AS avg_processing,
-    ROUND(AVG(committed_sla), 1) AS avg_sla
+    ROUND(AVG(committed_sla), 1) AS avg_sla,
+    -- SLA-threshold counts (Overview's "Ops Performance" card) — order_date has no hour-level
+    -- timestamp upstream, so "processed within 24h" of order creation is a same/next-day DATE_DIFF,
+    -- not a strict hour cutoff; pickup/delivery legs use real timestamps where available.
+    COUNTIF(created_date IS NOT NULL AND order_date IS NOT NULL AND DATE_DIFF(created_date, order_date, DAY) <= 1) AS processed_within_24h,
+    COUNTIF(pickup_ts IS NOT NULL AND created_ts IS NOT NULL AND TIMESTAMP_DIFF(pickup_ts, created_ts, HOUR) <= 24) AS picked_up_within_24h,
+    COUNTIF(delivery_date IS NOT NULL AND pickup_date IS NOT NULL AND DATE_DIFF(delivery_date, pickup_date, DAY) <= 3) AS delivered_within_3d_of_pickup,
+    COUNTIF(delivery_date IS NOT NULL AND order_date IS NOT NULL AND DATE_DIFF(delivery_date, order_date, DAY) <= 5) AS delivered_within_5d_of_order,
+    COUNTIF(order_date IS NOT NULL) AS orders_with_order_date,
+    COUNTIF(pickup_date IS NOT NULL) AS orders_picked_up,
+    COUNTIF(delivery_date IS NOT NULL) AS orders_delivered_total,
+    -- NDR (Non-Delivery Reattempt): a forward shipment is an NDR if out_for_delivery_attempts >= 2
+    -- (first delivery attempt failed, courier had to retry). Denominator is shipments with any
+    -- attempt on file (ofd_attempts >= 1), not all shipments. "Successfully resolved" = eventually
+    -- delivered regardless of how many attempts it took; "unsuccessful" = never delivered (became RTO).
+    COUNTIF(ofd_attempts >= 1) AS ndr_denom_attempted,
+    COUNTIF(ofd_attempts >= 2) AS ndr_count,
+    COUNTIF(ofd_attempts >= 2 AND unified_status = 'Delivered') AS ndr_resolved_delivered,
+    -- Reverse-shipment (RTO) TAT and SLA thresholds — mirrors the forward-shipment SLA thresholds
+    -- above, but for the RTO leg: rto_mark_date (RTO initiated) -> latest_ts_date (RTO delivered
+    -- back to warehouse), only for shipments that actually completed the RTO loop.
+    COUNTIF(unified_status = 'RTO' AND clickpost_unified_status = 'RTO-Delivered') AS rto_completed,
+    COUNTIF(clickpost_unified_status = 'RTO-Delivered' AND rto_mark_date IS NOT NULL AND latest_ts_date IS NOT NULL AND DATE_DIFF(latest_ts_date, rto_mark_date, DAY) <= 5) AS rto_delivered_within_5d_of_mark,
+    COUNTIF(clickpost_unified_status = 'RTO-Delivered' AND rto_mark_date IS NOT NULL AND latest_ts_date IS NOT NULL AND DATE_DIFF(latest_ts_date, rto_mark_date, DAY) <= 10) AS rto_delivered_within_10d_of_mark,
+    -- RVP (Reverse Pickup) — customer-return shipments, i.e. shipment_type='Reverse' rows, reusing
+    -- the same generic date columns as forward shipments (created/pickup/delivery), just scoped to
+    -- the reverse population. RVP Created = order created; RVP Done = picked up from customer;
+    -- RVP Delivered = reached warehouse. Thresholds: pickup <=2d of creation, delivery <=5d of pickup.
+    COUNTIF(shipment_type = 'Reverse' AND created_date IS NOT NULL) AS rvp_created,
+    COUNTIF(shipment_type = 'Reverse' AND pickup_date IS NOT NULL) AS rvp_done,
+    COUNTIF(shipment_type = 'Reverse' AND delivery_date IS NOT NULL) AS rvp_delivered,
+    COUNTIF(shipment_type = 'Reverse' AND created_date IS NOT NULL AND pickup_date IS NOT NULL AND DATE_DIFF(pickup_date, created_date, DAY) <= 2) AS rvp_done_within_2d_of_created,
+    COUNTIF(shipment_type = 'Reverse' AND pickup_date IS NOT NULL AND delivery_date IS NOT NULL AND DATE_DIFF(delivery_date, pickup_date, DAY) <= 5) AS rvp_delivered_within_5d_of_done,
+    ROUND(AVG(IF(shipment_type = 'Reverse' AND created_date IS NOT NULL AND pickup_date IS NOT NULL AND DATE_DIFF(pickup_date, created_date, DAY) BETWEEN 0 AND 15, DATE_DIFF(pickup_date, created_date, DAY), NULL)), 1) AS avg_rvp_created_to_pickup,
+    ROUND(AVG(IF(shipment_type = 'Reverse' AND pickup_date IS NOT NULL AND delivery_date IS NOT NULL AND DATE_DIFF(delivery_date, pickup_date, DAY) BETWEEN 0 AND 20, DATE_DIFF(delivery_date, pickup_date, DAY), NULL)), 1) AS avg_rvp_pickup_to_delivery,
+    ROUND(AVG(IF(shipment_type = 'Reverse' AND created_date IS NOT NULL AND delivery_date IS NOT NULL AND DATE_DIFF(delivery_date, created_date, DAY) BETWEEN 0 AND 30, DATE_DIFF(delivery_date, created_date, DAY), NULL)), 1) AS avg_rvp_tat
   FROM base
 ),
 by_courier AS (

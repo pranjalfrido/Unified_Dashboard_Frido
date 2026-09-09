@@ -1,0 +1,43 @@
+name: Precompute Flipkart SnD Ratecard
+
+on:
+  schedule:
+    - cron: '0 3 * * 1'   # weekly, Monday 3am UTC — matches flipkart_reports.profit_and_loss's own settlement-report update cadence, not hourly like inventory
+  workflow_dispatch:        # manual trigger from GitHub UI
+
+jobs:
+  precompute:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Write GCP service account key
+        run: echo '${{ secrets.GCP_SA_KEY }}' > sa_key.json
+
+      - name: Generate Flipkart SnD ratecard
+        env:
+          GCP_SA_KEY: ${{ secrets.GCP_SA_KEY }}
+        run: node scripts/generate-flipkart-snd-ratecard.mjs
+
+      - name: Commit and push static data file
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add public/flipkart-snd-ratecard.json
+          git diff --cached --quiet && echo "No changes" && exit 0
+          git stash
+          git fetch origin main
+          git reset --hard origin/main
+          git stash pop
+          git add public/flipkart-snd-ratecard.json
+          git commit -m "chore: update flipkart snd ratecard [skip ci]"
+          git push origin main

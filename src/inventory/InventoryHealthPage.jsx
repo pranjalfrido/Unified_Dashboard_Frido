@@ -36,7 +36,7 @@ function KpiCarousel({ children }) {
         </div>
         <div style={{ display: 'flex', justifyContent: 'center', gap: 5, marginTop: 10 }}>
           {Array.from({ length: count }).map((_, i) => (
-            <div key={i} style={{ width: i === activeIdx ? 16 : 6, height: 6, borderRadius: 3, background: i === activeIdx ? '#FFD600' : '#C7C7CE', transition: 'all .2s' }} />
+            <div key={i} style={{ width: i === activeIdx ? 16 : 6, height: 6, borderRadius: 3, background: i === activeIdx ? IC.acc : '#C7C7CE', transition: 'all .2s' }} />
           ))}
         </div>
       </div>
@@ -85,7 +85,7 @@ function WhCarousel({ locations, filters }) {
         </div>
         <div style={{ display: 'flex', justifyContent: 'center', gap: 5, marginTop: 10 }}>
           {Array.from({ length: count }).map((_, i) => (
-            <div key={i} style={{ width: i === activeIdx ? 16 : 6, height: 6, borderRadius: 3, background: i === activeIdx ? '#FFD600' : '#C7C7CE', transition: 'all .2s' }} />
+            <div key={i} style={{ width: i === activeIdx ? 16 : 6, height: 6, borderRadius: 3, background: i === activeIdx ? IC.acc : '#C7C7CE', transition: 'all .2s' }} />
           ))}
         </div>
       </div>
@@ -315,7 +315,7 @@ function SubCatStockTable({ rows, emptyLabel, search = '' }) {
   const th = (label, key, align = 'right') => (
     <th onClick={() => onSort(key)}
       style={{
-        textAlign: align, padding: '6px 8px', fontSize: 8, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.05em',
+        textAlign: align, padding: '6px 8px', fontSize: 10.5, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.05em',
         color: sort?.key === key ? IC.t1 : IC.t3, cursor: 'pointer', userSelect: 'none', whiteSpace: 'nowrap',
       }}>
       {label}{sort?.key === key ? (sort.dir === 'asc' ? ' ▲' : ' ▼') : ''}
@@ -324,7 +324,7 @@ function SubCatStockTable({ rows, emptyLabel, search = '' }) {
 
   return (
     <div style={{ maxHeight: 460, overflowY: 'auto' }}>
-      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 9.6, tableLayout: 'fixed' }}>
+      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12, tableLayout: 'fixed' }}>
         <colgroup>
           <col style={{ width: 190 }} />
           <col style={{ width: 72 }} />
@@ -352,7 +352,7 @@ function SubCatStockTable({ rows, emptyLabel, search = '' }) {
                   <td style={{ padding: '6px 8px', fontWeight: 600, color: IC.t1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                     <span style={{ color: IC.t3, marginRight: 6, display: 'inline-block', transform: isOpen ? 'rotate(90deg)' : 'none', transition: 'transform .15s' }}>›</span>
                     {r.subCategory}
-                    <span style={{ marginLeft: 6, fontSize: 8.4, color: IC.t3, fontWeight: 500 }}>({r.category})</span>
+                    <span style={{ marginLeft: 6, fontSize: 10.5, color: IC.t3, fontWeight: 500 }}>({r.category})</span>
                   </td>
                   <td style={{ padding: '6px 8px', textAlign: 'right', fontVariantNumeric: 'tabular-nums', fontWeight: 700 }}>{fmtInt(r.totalInvt)}</td>
                   <td style={{ padding: '6px 8px', textAlign: 'right', fontVariantNumeric: 'tabular-nums', color: IC.t2 }}>{fmtNum(r.avgSale)}</td>
@@ -360,10 +360,10 @@ function SubCatStockTable({ rows, emptyLabel, search = '' }) {
                 </tr>
                 {isOpen && r.skus.map((s, j) => (
                   <tr key={key + '-' + j} style={{ background: 'rgba(0,0,0,0.02)', borderBottom: `1px solid ${IC.border}`, height: 28 }}>
-                    <td style={{ padding: '5px 8px 5px 26px', color: IC.t3, fontSize: 9.2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>↳ {s.sku}</td>
-                    <td style={{ padding: '5px 8px', textAlign: 'right', fontVariantNumeric: 'tabular-nums', fontSize: 9.2, color: IC.t2 }}>{fmtInt(s.totalInvt)}</td>
-                    <td style={{ padding: '5px 8px', textAlign: 'right', fontVariantNumeric: 'tabular-nums', fontSize: 9.2, color: IC.t2 }}>{fmtNum(s.avgSale)}</td>
-                    <td style={{ padding: '5px 8px', textAlign: 'right', fontVariantNumeric: 'tabular-nums', fontSize: 9.2, color: IC.t1 }}>{fmtDays(s.doi)}d</td>
+                    <td style={{ padding: '5px 8px 5px 26px', color: IC.t3, fontSize: 11.5, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>↳ {s.sku}</td>
+                    <td style={{ padding: '5px 8px', textAlign: 'right', fontVariantNumeric: 'tabular-nums', fontSize: 11.5, color: IC.t2 }}>{fmtInt(s.totalInvt)}</td>
+                    <td style={{ padding: '5px 8px', textAlign: 'right', fontVariantNumeric: 'tabular-nums', fontSize: 11.5, color: IC.t2 }}>{fmtNum(s.avgSale)}</td>
+                    <td style={{ padding: '5px 8px', textAlign: 'right', fontVariantNumeric: 'tabular-nums', fontSize: 11.5, color: IC.t1 }}>{fmtDays(s.doi)}d</td>
                   </tr>
                 ))}
               </React.Fragment>
@@ -541,7 +541,7 @@ const SIDEBAR_WIDTH = 220
 function SidebarSectionTitle({ title }) {
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 6, margin: '6px 0 4px' }}>
-      <div style={{ width: 3, height: 12, borderRadius: 2, background: '#1967D2', flexShrink: 0 }} />
+      <div style={{ width: 3, height: 12, borderRadius: 2, background: IC.accBorder, flexShrink: 0 }} />
       <span style={{ fontSize: 10, fontWeight: 800, color: IC.t2, letterSpacing: '.05em', textTransform: 'uppercase' }}>{title}</span>
     </div>
   )
@@ -550,12 +550,12 @@ function SidebarSectionTitle({ title }) {
 function TileToggle({ label, active, onClick }) {
   return (
     <button onClick={onClick}
-      onMouseEnter={e => { if (!active) e.currentTarget.style.background = '#F4F6FB' }}
+      onMouseEnter={e => { if (!active) e.currentTarget.style.background = IC.hoverBg }}
       onMouseLeave={e => { if (!active) e.currentTarget.style.background = IC.surface }}
       style={{
         padding: '7px 4px', borderRadius: 8, cursor: 'pointer', fontSize: 11, fontWeight: active ? 700 : 500,
-        background: active ? '#E8F0FE' : IC.surface, color: active ? '#1967D2' : IC.t2,
-        border: `1.5px solid ${active ? '#AECBFA' : IC.border}`, textAlign: 'center',
+        background: active ? IC.accDim : IC.surface, color: active ? IC.t1 : IC.t2,
+        border: `1.5px solid ${active ? IC.accBorder : IC.border}`, textAlign: 'center',
         overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', transition: 'background .12s, border-color .12s',
       }}>
       {label}
@@ -776,7 +776,7 @@ function PivotTable({ pivot, search }) {
   return (
     <div style={{ minWidth: 0 }}>
       <div style={{ maxHeight: TABLE_SCROLL_HEIGHT, overflow: 'auto' }}>
-        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11, tableLayout: 'fixed' }}>
+        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12, tableLayout: 'fixed' }}>
           <colgroup>
             <col style={{ width: 200 }} />
             {pivot.locations.map(loc => <col key={loc} style={{ width: 100 }} />)}
@@ -784,15 +784,15 @@ function PivotTable({ pivot, search }) {
           </colgroup>
           <thead style={{ position: 'sticky', top: 0, zIndex: 2 }}>
             <tr>
-              <th rowSpan={2} style={{ textAlign: 'left', fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.05em', color: IC.t3, padding: '6px 10px', borderBottom: `1px solid ${IC.border2}`, borderRight: `1px solid ${IC.border}`, position: 'sticky', left: 0, background: IC.surfaceHi, zIndex: 3, whiteSpace: 'nowrap' }}>Category / Sub-category / SKU</th>
+              <th rowSpan={2} style={{ textAlign: 'left', fontSize: 12, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.05em', color: IC.t3, padding: '6px 10px', borderBottom: `1px solid ${IC.border2}`, borderRight: `1px solid ${IC.border}`, position: 'sticky', left: 0, background: IC.surfaceHi, zIndex: 3, whiteSpace: 'nowrap' }}>Category / Sub-category / SKU</th>
               {pivot.locations.map(loc => (
-                <th key={loc} style={{ textAlign: 'center', fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.05em', color: IC.t3, padding: '6px 6px 2px', borderRight: `1px solid ${IC.border}`, background: IC.surfaceHi }}>{loc}</th>
+                <th key={loc} style={{ textAlign: 'center', fontSize: 12, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.05em', color: IC.t3, padding: '6px 6px 2px', borderRight: `1px solid ${IC.border}`, background: IC.surfaceHi }}>{loc}</th>
               ))}
-              <th rowSpan={2} style={{ textAlign: 'center', fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.05em', color: IC.t3, padding: '6px 6px', borderBottom: `1px solid ${IC.border2}`, background: IC.surfaceHi }}>Total<br />Invt / Sale</th>
+              <th rowSpan={2} style={{ textAlign: 'center', fontSize: 12, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.05em', color: IC.t3, padding: '6px 6px', borderBottom: `1px solid ${IC.border2}`, background: IC.surfaceHi }}>Total<br />Invt / Sale</th>
             </tr>
             <tr>
               {pivot.locations.map(loc => (
-                <th key={loc} style={{ fontSize: 9, fontWeight: 600, color: IC.t3, padding: '0 6px 6px', borderBottom: `1px solid ${IC.border2}`, borderRight: `1px solid ${IC.border}`, background: IC.surfaceHi }}>
+                <th key={loc} style={{ fontSize: 11, fontWeight: 600, color: IC.t3, padding: '0 6px 6px', borderBottom: `1px solid ${IC.border2}`, borderRight: `1px solid ${IC.border}`, background: IC.surfaceHi }}>
                   <span style={{ display: 'flex', justifyContent: 'space-between' }}><span style={{ flex: 1, textAlign: 'right', paddingRight: 4 }}>Inventory</span><span style={{ flex: 1, textAlign: 'right' }}>Avg Sale</span></span>
                 </th>
               ))}
@@ -835,9 +835,9 @@ function PivotTable({ pivot, search }) {
                         </tr>
                         {subOpen && sub.skus.sort((a, b) => b.totalInvt - a.totalInvt).map(sku => (
                           <tr key={sku.sku} style={{ borderBottom: `1px solid ${IC.border}`, background: 'rgba(0,0,0,0.015)' }}>
-                            <td style={{ padding: '5px 10px 5px 46px', color: IC.t3, fontSize: 11, position: 'sticky', left: 0, background: IC.surface, borderRight: `1px solid ${IC.border}` }}>{sku.sku}</td>
+                            <td style={{ padding: '5px 10px 5px 46px', color: IC.t3, fontSize: 12, position: 'sticky', left: 0, background: IC.surface, borderRight: `1px solid ${IC.border}` }}>{sku.sku}</td>
                             {pivot.locations.map(loc => locCell(sku.byLocation, loc, IC.t3))}
-                            <td style={{ padding: '5px 10px', textAlign: 'right', fontVariantNumeric: 'tabular-nums', color: IC.t2, fontSize: 11 }}>
+                            <td style={{ padding: '5px 10px', textAlign: 'right', fontVariantNumeric: 'tabular-nums', color: IC.t2, fontSize: 12 }}>
                               {fmtInt(sku.totalInvt)} <span style={{ color: IC.t3 }}>/ {fmtInt(sku.avgSale)}</span>
                             </td>
                           </tr>

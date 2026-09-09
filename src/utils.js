@@ -1,7 +1,11 @@
+// Site accent (acc/acl/acm) and primary ink (t1) are sampled directly from the Frido Navigator
+// logo mark (public/frido-navigator-icon-light-theme (2).png): acc/acl/acm from the gold ring
+// gradient, t1 from the charcoal "N" glyph — so the app's own UI reads as one brand with its
+// icon, rather than an invented accent that happens to sit near the logo's colors.
 export const C = {
-  acc: '#FFD600', acl: '#FFF9CC', acm: '#E6C200',
+  acc: '#D89A1A', acl: '#F7EBD2', acm: '#B87D14', acd: '#7A5410', acs: '#EFCE85',
   bg: '#F2F1EF', card: '#fff', border: '#E8E6DC', border2: '#D6D0B0',
-  t1: '#13121A', t2: '#504F68', t3: '#94939F',
+  t1: '#3F3D33', t2: '#504F68', t3: '#94939F',
   green: { bg: '#E6F4E0', tx: '#286010', bd: '#9DD470' },
   red:   { bg: '#FDE8E8', tx: '#7A1A1A', bd: '#F09898' },
   amber: { bg: '#FEF2DC', tx: '#7A4000', bd: '#F5C460' },
@@ -196,20 +200,27 @@ export function processData(rows) {
 export function detectAlerts(data) {
   const alerts = []
   const { orders, totalRev, uniqueDates, chMap, rows, nCusts, repeatCusts } = data
-  const mid = Math.floor(uniqueDates.length / 2)
-  const fh = new Set(uniqueDates.slice(0, mid)), lh = new Set(uniqueDates.slice(mid))
+  // Revenue-decline and CIR-spike both compare a recent window against an earlier one — immature
+  // tail-of-range dates (returns/CIR that haven't had 15 days to land yet) would otherwise make
+  // the most recent days look artificially "down" or "clean", firing false alerts. Restrict both
+  // checks to the maturity-adjusted date range before splitting into first/last half.
+  const matRange = uniqueDates.length ? getMaturityAdjustedRange({ start: uniqueDates[0], end: uniqueDates[uniqueDates.length - 1] }) : null
+  const matDates = matRange ? uniqueDates.filter(d => d >= matRange.start && d <= matRange.end) : uniqueDates
+  const mid = Math.floor(matDates.length / 2)
+  const fh = new Set(matDates.slice(0, mid)), lh = new Set(matDates.slice(mid))
   const fr = orders.filter(o => fh.has(o.date)).reduce((s, o) => s + o.rev, 0)
   const lr = orders.filter(o => lh.has(o.date)).reduce((s, o) => s + o.rev, 0)
-  if (fr > 0 && (lr - fr) / fr * 100 < -10) alerts.push({ type: 'red', title: `Revenue declining ${Math.abs(((lr - fr) / fr) * 100).toFixed(1)}%`, body: `First half ${fmt(fr)} vs last half ${fmt(lr)}.` })
+  if (fr > 0 && (lr - fr) / fr * 100 < -10) alerts.push({ type: 'red', title: `Revenue declining ${Math.abs(((lr - fr) / fr) * 100).toFixed(1)}%`, body: `First half ${fmt(fr)} vs last half ${fmt(lr)} ${matRange?.label || ''}.` })
   const blRows = rows.filter(r => r.Channel === 'Blinkit' && parseFloat(r.SellingPrice_Exc_GST || 0) > 0)
   if (blRows.length) {
     const blInc = blRows.reduce((s, r) => s + parseFloat(r.SellingPrice_Inc_GST || 0), 0)
     const blExc = blRows.reduce((s, r) => s + parseFloat(r.SellingPrice_Exc_GST || 0), 0)
     if (blExc > 0 && (blInc - blExc) / blExc * 100 > 50) alerts.push({ type: 'red', title: 'Blinkit GST pipeline broken', body: `Implied GST = ${((blInc - blExc) / blExc * 100).toFixed(0)}%.` })
   }
-  const shopO = orders.filter(o => o.channel === 'Shopify')
+  const matDateSet = new Set(matDates)
+  const shopO = orders.filter(o => o.channel === 'Shopify' && (!matRange || matDateSet.has(o.date)))
   const cirRate = shopO.length ? shopO.filter(o => o.isCIR).length / shopO.length * 100 : 0
-  if (cirRate > 10) alerts.push({ type: 'amber', title: `CIR returns ${cirRate.toFixed(1)}% (Shopify)`, body: 'Review sizing and product quality.' })
+  if (cirRate > 10) alerts.push({ type: 'amber', title: `CIR returns ${cirRate.toFixed(1)}% (Shopify)`, body: `Review sizing and product quality ${matRange?.label || ''}.` })
   const repeatRate = nCusts ? repeatCusts / nCusts * 100 : 0
   if (repeatRate < 10 && nCusts > 0) alerts.push({ type: 'amber', title: `Repeat rate only ${repeatRate.toFixed(1)}%`, body: 'Launch CRM and loyalty programme.' })
   const qcChannels = ['Blinkit', 'Instamart', 'Zepto']
@@ -218,6 +229,74 @@ export function detectAlerts(data) {
   const qcAOV = qcOrds ? qcRev / qcOrds : 0
   if (qcAOV > 3000) alerts.push({ type: 'green', title: `Q-commerce AOV ${fmt(qcAOV)} — scale up`, body: 'Expand SKU catalogue across all 3 platforms.' })
   return alerts
+}
+
+// Combines the base Sales/Ads alerts (detectAlerts) with Logistics/Ops and Inventory rules that
+// need logisticsData/invSnapshotData — both fetched separately from `data` and previously only
+// available inside OverviewPage, which is why this used to live there as a local computation.
+// Lifted to a standalone function so BOTH the Topnav alerts bell and the Overview popover can
+// share one single source of truth, rather than risk drift between two separate copies of the
+// same logic. Thresholds mirror the tile coloring used in the Logistics & Ops Performance card
+// (Delivery% <80% red, RTO% >8%/>10% amber/red, SLA Breach% >15% amber, NDR% >20% amber, the two
+// 80%-target SLA thresholds) and the Days of Inventory bands, so the alert and the tile it
+// summarizes never disagree about what counts as a problem.
+export function computeCombinedAlerts(data, logisticsData, invSnapshotData, baseAlerts) {
+  const lkpi = logisticsData?.kpis || {}
+  const lTotal = parseInt(lkpi.total_shipments) || 0
+  const lDelivered = parseInt(lkpi.delivered) || 0
+  const lRto = parseInt(lkpi.rto) || 0
+  const lSla = parseInt(lkpi.sla_breach) || 0
+  const lDelPct = lTotal > 0 ? lDelivered / lTotal * 100 : 0
+  const lRtoPct = lTotal > 0 ? lRto / lTotal * 100 : 0
+  const lSlaPct = lTotal > 0 ? lSla / lTotal * 100 : 0
+  const lNdrDenom = parseInt(lkpi.ndr_denom_attempted) || 0
+  const lNdrCount = parseInt(lkpi.ndr_count) || 0
+  const lNdrPct = lNdrDenom > 0 ? lNdrCount / lNdrDenom * 100 : null
+  const lOrdersDeliveredTotal = parseInt(lkpi.orders_delivered_total) || 0
+  const lDeliveredWithin3dPickup = parseInt(lkpi.delivered_within_3d_of_pickup) || 0
+  const lDeliveredWithin5dOrder = parseInt(lkpi.delivered_within_5d_of_order) || 0
+  const lDeliveredWithin3dPickupPct = lOrdersDeliveredTotal > 0 ? lDeliveredWithin3dPickup / lOrdersDeliveredTotal * 100 : null
+  const lDeliveredWithin5dOrderPct = lOrdersDeliveredTotal > 0 ? lDeliveredWithin5dOrder / lOrdersDeliveredTotal * 100 : null
+
+  const invSummary = invSnapshotData?.summary || {}
+
+  // Best-seller stockout check: of the top 20 SKUs by revenue, how many currently read
+  // Critical/Low/Out of Stock in the inventory snapshot? A sharper signal than the all-SKU
+  // Stockout-Risk count — losing sales on a BEST-SELLER is a bigger problem than the same status
+  // on a long-tail SKU, so this leads the alerts list.
+  const topSkuStockoutAlert = (() => {
+    if (!invSnapshotData?.skus?.length || !data?.skuRows?.length) return null
+    const topProductsMap = {}
+    for (const r of data.skuRows) {
+      const key = r.sku || 'Unknown'
+      if (!topProductsMap[key]) topProductsMap[key] = { sku: key, rev: 0 }
+      topProductsMap[key].rev += r.rev || 0
+    }
+    const top20 = Object.values(topProductsMap).sort((a, b) => b.rev - a.rev).slice(0, 20)
+    const invBySku = new Map(invSnapshotData.skus.map(s => [String(s.sku).trim().toLowerCase(), s.stockStatus]))
+    const atRisk = top20.filter(p => {
+      const st = invBySku.get(String(p.sku).trim().toLowerCase())
+      return st === 'Critical' || st === 'Low' || st === 'Out of Stock'
+    }).length
+    if (atRisk === 0) return null
+    return { type: atRisk >= 5 ? 'red' : 'amber', title: `${atRisk} of your top 20 best-selling SKUs at stockout risk`, body: 'Critical, Low, or Out of Stock status on a top-20-by-revenue SKU.' }
+  })()
+
+  return [
+    topSkuStockoutAlert,
+    ...(baseAlerts || []),
+    ...(logisticsData ? [
+      lDelPct > 0 && lDelPct < 80 ? { type: 'red', title: `Delivery% at ${lDelPct.toFixed(1)}%`, body: 'Below the 80% healthy threshold for the selected range.' } : null,
+      lSlaPct > 15 ? { type: 'amber', title: `SLA Breach ${lSlaPct.toFixed(1)}%`, body: 'More than 15% of delivered shipments missed their committed SLA date.' } : null,
+      lRtoPct > 10 ? { type: 'red', title: `RTO ${lRtoPct.toFixed(1)}%`, body: 'Return-to-origin rate above 10% for the selected range.' } : (lRtoPct > 8 ? { type: 'amber', title: `RTO ${lRtoPct.toFixed(1)}%`, body: 'Return-to-origin rate above the 8% healthy threshold.' } : null),
+      lNdrPct !== null && lNdrPct > 20 ? { type: 'amber', title: `NDR ${lNdrPct.toFixed(1)}%`, body: 'More than 1 in 5 attempted deliveries needed a re-attempt.' } : null,
+      lDeliveredWithin3dPickupPct !== null && lDeliveredWithin3dPickupPct < 80 ? { type: 'amber', title: `Delivered ≤3d of Pickup at ${lDeliveredWithin3dPickupPct.toFixed(1)}%`, body: '80% of shipments should deliver within 3 days of courier pickup.' } : null,
+      lDeliveredWithin5dOrderPct !== null && lDeliveredWithin5dOrderPct < 80 ? { type: 'amber', title: `Delivered ≤5d of Order at ${lDeliveredWithin5dOrderPct.toFixed(1)}%`, body: '80% of shipments should deliver within 5 days of order creation.' } : null,
+    ].filter(Boolean) : []),
+    ...(invSnapshotData ? [
+      (invSummary.criticalLowCount || 0) > 250 ? { type: 'amber', title: `${fmtN(invSummary.criticalLowCount)} SKUs at stockout risk`, body: 'Critical + Low stock status count above 250 SKUs.' } : null,
+    ].filter(Boolean) : []),
+  ].filter(Boolean)
 }
 
 export function exportCSV(rows, filename = 'frido_export.csv') {
@@ -240,4 +319,30 @@ export function getDefaultDates() {
   end.setDate(end.getDate() - 1)
   const start = new Date(end.getFullYear(), end.getMonth(), 1)
   return { start: localDateStr(start), end: localDateStr(end) }
+}
+
+// Shared by every Overview-tab metric whose orders need time to resolve (RTO%, Delivery%, SLA
+// breach%, Z-RTO%, FASR, Avg Fulfilment/TAT, CIR%, Cancel%, Return%, and the revenue-decline/
+// CIR-spike checks in detectAlerts) — a fixed 15-day maturity cutoff applied uniformly, so no
+// metric silently reads immature tail-of-range data where returns/RTOs haven't had time to land
+// yet. Selecting "last 7 days" for RTO% would otherwise show an artificially low rate simply
+// because most of those orders haven't had 15 days to come back as an RTO.
+//   maturityBoundary = today − 15d
+//   if selectedRange.end is already mature (<= boundary): use the selected range as-is
+//   else: fall back to the last mature 30-day window (today−45d to today−15d)
+// Callers must show `label` in their own section heading — never substitute dates silently.
+export function getMaturityAdjustedRange(selectedRange) {
+  const today = new Date()
+  const maturityBoundary = new Date(today)
+  maturityBoundary.setDate(maturityBoundary.getDate() - 15)
+
+  const selEnd = new Date(selectedRange.end)
+  if (selEnd <= maturityBoundary) {
+    return { start: selectedRange.start, end: selectedRange.end, isFallback: false, label: `· ${selectedRange.start} – ${selectedRange.end}` }
+  }
+  const fallbackEnd = new Date(maturityBoundary)
+  const fallbackStart = new Date(today)
+  fallbackStart.setDate(fallbackStart.getDate() - 45)
+  const start = localDateStr(fallbackStart), end = localDateStr(fallbackEnd)
+  return { start, end, isFallback: true, label: `· ${start} – ${end} (selected range too recent — showing last mature 30 days)` }
 }

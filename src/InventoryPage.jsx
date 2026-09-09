@@ -31,9 +31,9 @@ function IconTab({ icon, label, active, onClick }) {
         style={{
           width: 34, height: 34, borderRadius: 7, cursor: 'pointer', fontSize: 15, display: 'flex',
           alignItems: 'center', justifyContent: 'center',
-          background: active ? '#E8F0FE' : 'transparent',
-          color: active ? '#1967D2' : IC.t3,
-          border: active ? '1px solid #AECBFA' : '1px solid transparent',
+          background: active ? IC.accDim : 'transparent',
+          color: active ? IC.t1 : IC.t3,
+          border: active ? `1px solid ${IC.accBorder}` : '1px solid transparent',
         }}>
         {icon}
       </button>
@@ -57,8 +57,8 @@ function MobileTab({ icon, label, active, onClick }) {
     <button onClick={onClick} style={{
       flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3,
       padding: '8px 4px', borderRadius: 10, cursor: 'pointer', border: 'none',
-      background: active ? '#E8F0FE' : 'transparent',
-      color: active ? '#1967D2' : IC.t3,
+      background: active ? IC.accDim : 'transparent',
+      color: active ? IC.t1 : IC.t3,
       fontWeight: active ? 700 : 500, fontSize: 10, lineHeight: 1.2, transition: 'background .15s',
     }}>
       <span style={{ fontSize: 18 }}>{icon}</span>
@@ -74,7 +74,7 @@ function MobileTab({ icon, label, active, onClick }) {
 function SubTabSwitcher({ tab, setTab, isMobile }) {
   if (isMobile) {
     return (
-      <div style={{ display: 'flex', gap: 4, background: '#F4F6FB', borderRadius: 12, padding: 4, marginBottom: 14 }}>
+      <div style={{ display: 'flex', gap: 4, background: IC.page, borderRadius: 12, padding: 4, marginBottom: 14 }}>
         <MobileTab icon="📦" label="Health" active={tab === 'health'} onClick={() => setTab('health')} />
         <MobileTab icon="📊" label="Sales & Alloc" active={tab === 'sales'} onClick={() => setTab('sales')} />
         {/* <MobileTab icon="📥" label="Inward" active={tab === 'inward'} onClick={() => setTab('inward')} /> */}
@@ -643,9 +643,9 @@ export default function InventoryPage({ onTopbarDateControl, tab = 'health', set
       }}>
         {[{ id: 'health', label: '📦 Health' }, { id: 'sales', label: '📊 Sales & Alloc' }].map(t => (
           <button key={t.id} onClick={() => setTab(t.id)} style={{
-            padding: '10px 14px', border: 'none', borderBottom: tab === t.id ? '3px solid #1967D2' : '3px solid transparent',
+            padding: '10px 14px', border: 'none', borderBottom: tab === t.id ? `3px solid ${IC.accBorder}` : '3px solid transparent',
             background: 'none', fontSize: 13, fontWeight: tab === t.id ? 700 : 500,
-            color: tab === t.id ? '#1967D2' : IC.t3, cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0,
+            color: tab === t.id ? IC.t1 : IC.t3, cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0,
           }}>{t.label}</button>
         ))}
       </div>

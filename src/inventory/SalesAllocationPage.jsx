@@ -3,7 +3,7 @@ import {
   ResponsiveContainer, ComposedChart, Area, Line, XAxis, YAxis, CartesianGrid, Tooltip,
 } from 'recharts'
 import {
-  IC, fmtNum, fmtInt, fmtCurrency, GlassCard, KpiTile, SearchableMultiSelect, ExportButton,
+  IC, fmtNum, fmtInt, fmtCurrency, GlassCard, KpiTile, SearchableMultiSelect, ExportButton, PillToggle,
 } from './theme.jsx'
 
 function SaKpiCarousel({ children }) {
@@ -34,7 +34,7 @@ function SaKpiCarousel({ children }) {
         </div>
         <div style={{ display: 'flex', justifyContent: 'center', gap: 5, marginTop: 10 }}>
           {Array.from({ length: count }).map((_, i) => (
-            <div key={i} style={{ width: i === activeIdx ? 16 : 6, height: 6, borderRadius: 3, background: i === activeIdx ? '#FFD600' : '#C7C7CE', transition: 'all .2s' }} />
+            <div key={i} style={{ width: i === activeIdx ? 16 : 6, height: 6, borderRadius: 3, background: i === activeIdx ? IC.acc : '#C7C7CE', transition: 'all .2s' }} />
           ))}
         </div>
       </div>
@@ -109,8 +109,8 @@ function FilterSidebar({ data, filters, setFilters, open, onClose, isMobile, sid
     <>
       {!isMobileCtx && sidebarTop}
       <div style={{ display: 'flex', alignItems: 'center', gap: 6, margin: '6px 0 4px' }}>
-        <div style={{ width: 3, height: 12, borderRadius: 2, background: '#1967D2', flexShrink: 0 }} />
-        <span style={{ fontSize: 10, fontWeight: 800, color: '#5B5B62', letterSpacing: '.05em', textTransform: 'uppercase' }}>Filters</span>
+        <div style={{ width: 3, height: 12, borderRadius: 2, background: IC.accBorder, flexShrink: 0 }} />
+        <span style={{ fontSize: 10, fontWeight: 800, color: IC.t2, letterSpacing: '.05em', textTransform: 'uppercase' }}>Filters</span>
       </div>
       <SearchableMultiSelect label="Category" options={opts.categories} selected={filters.category || []} onChange={v => set('category', v)}
         width={SIDEBAR_WIDTH - 24} height={SLICER_HEIGHT} />
@@ -275,7 +275,7 @@ function LocationClusteredBarList({ rows, height, nameWidth = 90 }) {
                 <div style={{ width: `${(r.sales / maxVal) * 100}%`, height: '100%', background: IC.acc, borderRadius: 3 }} />
               </div>
               <div style={{ height: 6, borderRadius: 3, background: 'rgba(0,0,0,0.06)', overflow: 'hidden' }}>
-                <div style={{ width: `${(r.allocation / maxVal) * 100}%`, height: '100%', background: IC.categorical[0], borderRadius: 3 }} />
+                <div style={{ width: `${(r.allocation / maxVal) * 100}%`, height: '100%', background: IC.secondary, borderRadius: 3 }} />
               </div>
             </div>
             <span style={{ fontSize: 10.5, fontWeight: 700, color: IC.t1, textAlign: 'right', fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}>{fmtInt(r.sales)} / {fmtInt(r.allocation)}</span>
@@ -781,24 +781,12 @@ export default function SalesAllocationPage({ data, filters, setFilters, sidebar
           action={
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
               {isMobile ? (
-                <div style={{ display: 'flex', gap: 4 }}>
-                  {[{ k: 'daily', label: 'D' }, { k: 'weekly', label: 'W' }, { k: 'monthly', label: 'M' }].map(g => (
-                    <button key={g.k} onClick={() => setTrendGranularity(g.k)}
-                      style={{ fontSize: 11, padding: '4px 8px', borderRadius: 7, cursor: 'pointer', background: trendGranularity === g.k ? IC.accDim : IC.surface, color: trendGranularity === g.k ? IC.t1 : IC.t3, border: `1px solid ${trendGranularity === g.k ? IC.accBorder : IC.border}` }}>
-                      {g.label}
-                    </button>
-                  ))}
-                </div>
+                <PillToggle size="sm" value={trendGranularity} onChange={setTrendGranularity}
+                  options={[{ value: 'daily', label: 'D' }, { value: 'weekly', label: 'W' }, { value: 'monthly', label: 'M' }]} />
               ) : (
                 <>
-                  <div style={{ display: 'flex', gap: 4 }}>
-                    {[{ k: 'daily', label: 'Daily' }, { k: 'weekly', label: 'Weekly' }, { k: 'monthly', label: 'Monthly' }].map(g => (
-                      <button key={g.k} onClick={() => setTrendGranularity(g.k)}
-                        style={{ fontSize: 11, padding: '4px 10px', borderRadius: 7, cursor: 'pointer', background: trendGranularity === g.k ? IC.accDim : IC.surface, color: trendGranularity === g.k ? IC.t1 : IC.t3, border: `1px solid ${trendGranularity === g.k ? IC.accBorder : IC.border}` }}>
-                        {g.label}
-                      </button>
-                    ))}
-                  </div>
+                  <PillToggle value={trendGranularity} onChange={setTrendGranularity}
+                    options={[{ value: 'daily', label: 'Daily' }, { value: 'weekly', label: 'Weekly' }, { value: 'monthly', label: 'Monthly' }]} />
                   <ExportButton filename="sales_trend.csv" rows={filteredData[trendGranularity]} columns={[{ label: 'Date', key: 'date' }, { label: 'Units', key: 'qty' }, { label: 'Revenue', key: 'rev' }]} />
                 </>
               )}
@@ -806,6 +794,12 @@ export default function SalesAllocationPage({ data, filters, setFilters, sidebar
           }>
           <ResponsiveContainer width="100%" height={220}>
             <ComposedChart data={dailyChart} margin={{ top: 4, right: isMobile ? 10 : 12, bottom: 0, left: isMobile ? 20 : 0 }}>
+              <defs>
+                <linearGradient id="saTrendGold" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="5%" stopColor={IC.acc} stopOpacity={0.3} />
+                  <stop offset="95%" stopColor={IC.acc} stopOpacity={0.02} />
+                </linearGradient>
+              </defs>
               <CartesianGrid stroke={IC.border} vertical={false} />
               <XAxis dataKey="date" tick={{ fontSize: 10, fill: IC.t3 }} axisLine={{ stroke: IC.border2 }} tickLine={false}
                 {...(isMobile && dailyChart?.length ? {
@@ -814,8 +808,8 @@ export default function SalesAllocationPage({ data, filters, setFilters, sidebar
               <YAxis yAxisId="qty" tick={isMobile ? false : { fontSize: 10, fill: IC.t3 }} tickFormatter={fmtNum} axisLine={{ stroke: IC.border2 }} tickLine={false} width={isMobile ? 0 : 44} />
               {revenueAvailable && !isMobile && <YAxis yAxisId="rev" orientation="right" tick={{ fontSize: 10, fill: IC.t3 }} tickFormatter={fmtCurrency} axisLine={{ stroke: IC.border2 }} tickLine={false} width={56} />}
               <Tooltip content={<SalesTrendTip />} />
-              <Area yAxisId="qty" type="monotone" dataKey="qty" name="Units Sold" fill="rgba(255,214,0,0.14)" stroke={IC.acc} strokeWidth={2} />
-              {revenueAvailable && <Line yAxisId="rev" type="monotone" dataKey="rev" name="Revenue" stroke={IC.categorical[0]} strokeWidth={2} dot={false} />}
+              <Area yAxisId="qty" type="monotone" dataKey="qty" name="Units Sold" fill="url(#saTrendGold)" stroke={IC.acc} strokeWidth={2} />
+              {revenueAvailable && <Line yAxisId="rev" type="monotone" dataKey="rev" name="Revenue" stroke={IC.secondary} strokeWidth={2} dot={false} />}
             </ComposedChart>
           </ResponsiveContainer>
         </GlassCard>
@@ -834,21 +828,15 @@ export default function SalesAllocationPage({ data, filters, setFilters, sidebar
             <LocationClusteredBarList rows={locationStackedRows} height={MOVERS_CARD_HEIGHT} />
             <div style={{ display: 'flex', gap: 16, marginTop: 8, fontSize: 10.5, color: IC.t3, flexShrink: 0 }}>
               <span><span style={{ display: 'inline-block', width: 8, height: 8, background: IC.acc, borderRadius: 2, marginRight: 5 }} />Sales (region demand)</span>
-              <span><span style={{ display: 'inline-block', width: 8, height: 8, background: IC.categorical[0], borderRadius: 2, marginRight: 5 }} />Allocation (shipped from here)</span>
+              <span><span style={{ display: 'inline-block', width: 8, height: 8, background: IC.secondary, borderRadius: 2, marginRight: 5 }} />Allocation (shipped from here)</span>
             </div>
           </GlassCard>
 
           <GlassCard title="Channel-Wise Sales"
             style={{ display: 'flex', flexDirection: 'column' }}
             action={
-              <div style={{ display: 'flex', gap: 4 }}>
-                {[{ k: 'rev', label: 'Revenue' }, { k: 'qty', label: 'Units' }].map(m => (
-                  <button key={m.k} disabled={m.k === 'rev' && !revenueAvailable} onClick={() => setChannelMetric(m.k)}
-                    style={{ fontSize: 11, padding: '4px 10px', borderRadius: 7, cursor: m.k === 'rev' && !revenueAvailable ? 'not-allowed' : 'pointer', opacity: m.k === 'rev' && !revenueAvailable ? 0.4 : 1, background: channelMetric === m.k ? IC.accDim : IC.surface, color: channelMetric === m.k ? IC.t1 : IC.t3, border: `1px solid ${channelMetric === m.k ? IC.accBorder : IC.border}` }}>
-                    {m.label}
-                  </button>
-                ))}
-              </div>
+              <PillToggle value={channelMetric} onChange={setChannelMetric}
+                options={[{ value: 'rev', label: 'Revenue', disabled: !revenueAvailable }, { value: 'qty', label: 'Units' }]} />
             }>
             <RankedBarList rows={channelDonutSorted} total={channelDonutTotal} height={MOVERS_CARD_HEIGHT} metric={channelMetric} />
           </GlassCard>
@@ -856,14 +844,8 @@ export default function SalesAllocationPage({ data, filters, setFilters, sidebar
           <GlassCard title="Category Contribution"
             style={{ display: 'flex', flexDirection: 'column' }}
             action={
-              <div style={{ display: 'flex', gap: 4 }}>
-                {[{ k: 'rev', label: 'Revenue' }, { k: 'qty', label: 'Units' }].map(m => (
-                  <button key={m.k} disabled={m.k === 'rev' && !revenueAvailable} onClick={() => setCategoryMetric(m.k)}
-                    style={{ fontSize: 11, padding: '4px 10px', borderRadius: 7, cursor: m.k === 'rev' && !revenueAvailable ? 'not-allowed' : 'pointer', opacity: m.k === 'rev' && !revenueAvailable ? 0.4 : 1, background: categoryMetric === m.k ? IC.accDim : IC.surface, color: categoryMetric === m.k ? IC.t1 : IC.t3, border: `1px solid ${categoryMetric === m.k ? IC.accBorder : IC.border}` }}>
-                    {m.label}
-                  </button>
-                ))}
-              </div>
+              <PillToggle value={categoryMetric} onChange={setCategoryMetric}
+                options={[{ value: 'rev', label: 'Revenue', disabled: !revenueAvailable }, { value: 'qty', label: 'Units' }]} />
             }>
             <RankedBarList rows={categoryDonutSorted} total={categoryDonutTotal} height={MOVERS_CARD_HEIGHT} metric={categoryMetric} />
           </GlassCard>
@@ -880,23 +862,11 @@ export default function SalesAllocationPage({ data, filters, setFilters, sidebar
             note={isMobile ? null : `${fmtInt(topProductsRows.length)} ${top20Level === 'sku' ? 'SKUs' : top20Level === 'subCategory' ? 'sub-cats' : 'categories'}`}
             style={{ display: 'flex', flexDirection: 'column', height: MOVERS_TOTAL_HEIGHT, ...(isMobile ? { paddingLeft: 8, paddingRight: 8 } : {}) }}
             action={
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <div style={{ display: 'flex', gap: 4 }}>
-                  {[{ k: 'sku', label: 'SKU' }, { k: 'subCategory', label: 'Sub-cat' }, { k: 'category', label: 'Category' }].map(l => (
-                    <button key={l.k} onClick={() => setTop20Level(l.k)}
-                      style={{ fontSize: 10.5, padding: '3px 9px', borderRadius: 6, cursor: 'pointer', background: top20Level === l.k ? IC.accDim : IC.surface, color: top20Level === l.k ? IC.t1 : IC.t3, border: `1px solid ${top20Level === l.k ? IC.accBorder : IC.border}` }}>
-                      {l.label}
-                    </button>
-                  ))}
-                </div>
-                <div style={{ display: 'flex', gap: 4 }}>
-                  {[{ k: 'rev', label: 'Revenue' }, { k: 'qty', label: 'Units' }].map(m => (
-                    <button key={m.k} disabled={m.k === 'rev' && !revenueAvailable} onClick={() => setTop20Metric(m.k)}
-                      style={{ fontSize: 10.5, padding: '3px 9px', borderRadius: 6, cursor: m.k === 'rev' && !revenueAvailable ? 'not-allowed' : 'pointer', opacity: m.k === 'rev' && !revenueAvailable ? 0.4 : 1, background: top20Metric === m.k ? IC.accDim : IC.surface, color: top20Metric === m.k ? IC.t1 : IC.t3, border: `1px solid ${top20Metric === m.k ? IC.accBorder : IC.border}` }}>
-                      {m.label}
-                    </button>
-                  ))}
-                </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <PillToggle size="sm" value={top20Level} onChange={setTop20Level}
+                  options={[{ value: 'sku', label: 'SKU' }, { value: 'subCategory', label: 'Sub-cat' }, { value: 'category', label: 'Category' }]} />
+                <PillToggle size="sm" value={top20Metric} onChange={setTop20Metric}
+                  options={[{ value: 'rev', label: 'Revenue', disabled: !revenueAvailable }, { value: 'qty', label: 'Units' }]} />
               </div>
             }>
             <div style={{ flex: 1, minHeight: 0, overflow: 'hidden' }}>
@@ -926,57 +896,32 @@ export default function SalesAllocationPage({ data, filters, setFilters, sidebar
             <div style={{ flexShrink: 0, display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 8 }}>
               {isMobile ? (
                 <>
-                  <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
-                    {[{ k: 'sku', label: 'SKU' }, { k: 'subCategory', label: 'Sub-cat' }, { k: 'category', label: 'Category' }, { k: 'risers', label: '▲ Risers', dir: true }, { k: 'fallers', label: '▼ Fallers', dir: true }].map(l => (
-                      <button key={l.k} onClick={() => l.dir ? setDrasticDirection(l.k) : setDrasticLevel(l.k)}
-                        style={{ fontSize: 10.5, padding: '3px 0', borderRadius: 6, cursor: 'pointer', width: 58, textAlign: 'center', whiteSpace: 'nowrap', background: (l.dir ? drasticDirection === l.k : drasticLevel === l.k) ? IC.accDim : IC.surface, color: (l.dir ? drasticDirection === l.k : drasticLevel === l.k) ? (l.k === 'fallers' ? IC.status.Critical.c : IC.t1) : IC.t3, border: `1px solid ${(l.dir ? drasticDirection === l.k : drasticLevel === l.k) ? IC.accBorder : IC.border}` }}>
-                        {l.label}
-                      </button>
-                    ))}
-                  </div>
-                  <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
-                    {[{ k: 'qty', label: 'Units' }, { k: 'rev', label: 'Revenue' }, { k: 'day2', label: 'Lst vs 2nd', mode: true }, { k: 'day7', label: 'Lst vs 7th', mode: true }].map(m => (
-                      <button key={m.k} disabled={m.k === 'rev' && !revenueAvailable} onClick={() => m.mode ? setDrasticMode(m.k) : setDrasticMetric(m.k)}
-                        style={{ fontSize: 10.5, padding: '3px 0', borderRadius: 6, cursor: m.k === 'rev' && !revenueAvailable ? 'not-allowed' : 'pointer', opacity: m.k === 'rev' && !revenueAvailable ? 0.4 : 1, width: 58, textAlign: 'center', whiteSpace: 'nowrap', background: (m.mode ? drasticMode === m.k : drasticMetric === m.k) ? IC.accDim : IC.surface, color: (m.mode ? drasticMode === m.k : drasticMetric === m.k) ? IC.t1 : IC.t3, border: `1px solid ${(m.mode ? drasticMode === m.k : drasticMetric === m.k) ? IC.accBorder : IC.border}` }}>
-                        {m.label}
-                      </button>
-                    ))}
-                  </div>
+                  <PillToggle size="sm" value={[drasticLevel, drasticDirection].find(v => ['sku','subCategory','category','risers','fallers'].includes(v))}
+                    onChange={v => (v === 'risers' || v === 'fallers') ? setDrasticDirection(v) : setDrasticLevel(v)}
+                    options={[
+                      { value: 'sku', label: 'SKU' }, { value: 'subCategory', label: 'Sub-cat' }, { value: 'category', label: 'Category' },
+                      { value: 'risers', label: '▲ Risers' }, { value: 'fallers', label: '▼ Fallers', activeColor: IC.status.Critical.c },
+                    ]} />
+                  <PillToggle size="sm" value={[drasticMetric, drasticMode].find(v => ['qty','rev','day2','day7'].includes(v))}
+                    onChange={v => (v === 'day2' || v === 'day7') ? setDrasticMode(v) : setDrasticMetric(v)}
+                    options={[
+                      { value: 'qty', label: 'Units' }, { value: 'rev', label: 'Revenue', disabled: !revenueAvailable },
+                      { value: 'day2', label: 'Lst vs 2nd' }, { value: 'day7', label: 'Lst vs 7th' },
+                    ]} />
                 </>
               ) : (
               <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', alignItems: 'center' }}>
-                {[{ k: 'sku', label: 'SKU' }, { k: 'subCategory', label: 'Sub-category' }, { k: 'category', label: 'Category' }].map(l => (
-                  <button key={l.k} onClick={() => setDrasticLevel(l.k)}
-                    style={{ fontSize: 10.5, padding: '3px 9px', borderRadius: 6, cursor: 'pointer', background: drasticLevel === l.k ? IC.accDim : IC.surface, color: drasticLevel === l.k ? IC.t1 : IC.t3, border: `1px solid ${drasticLevel === l.k ? IC.accBorder : IC.border}` }}>
-                    {l.label}
-                  </button>
-                ))}
+                <PillToggle size="sm" value={drasticLevel} onChange={setDrasticLevel}
+                  options={[{ value: 'sku', label: 'SKU' }, { value: 'subCategory', label: 'Sub-category' }, { value: 'category', label: 'Category' }]} />
                 <div style={{ width: 1, background: IC.border, margin: '0 2px' }} />
-                {[{ k: 'risers', label: '▲ Risers' }, { k: 'fallers', label: '▼ Fallers' }].map(d => (
-                  <button key={d.k} onClick={() => setDrasticDirection(d.k)}
-                    style={{ fontSize: 10.5, padding: '3px 9px', borderRadius: 6, cursor: 'pointer', background: drasticDirection === d.k ? IC.accDim : IC.surface, color: drasticDirection === d.k ? (d.k === 'risers' ? IC.positive : IC.status.Critical.c) : IC.t3, border: `1px solid ${drasticDirection === d.k ? IC.accBorder : IC.border}` }}>
-                    {d.label}
-                  </button>
-                ))}
+                <PillToggle size="sm" value={drasticDirection} onChange={setDrasticDirection}
+                  options={[{ value: 'risers', label: '▲ Risers', activeColor: IC.positive }, { value: 'fallers', label: '▼ Fallers', activeColor: IC.status.Critical.c }]} />
                 <div style={{ width: 1, background: IC.border, margin: '0 2px' }} />
-                {[{ k: 'qty', label: 'Units' }, { k: 'rev', label: 'Revenue' }].map(m => (
-                  <button key={m.k} disabled={m.k === 'rev' && !revenueAvailable} onClick={() => setDrasticMetric(m.k)}
-                    style={{ fontSize: 10.5, padding: '3px 9px', borderRadius: 6, cursor: m.k === 'rev' && !revenueAvailable ? 'not-allowed' : 'pointer', opacity: m.k === 'rev' && !revenueAvailable ? 0.4 : 1, background: drasticMetric === m.k ? IC.accDim : IC.surface, color: drasticMetric === m.k ? IC.t1 : IC.t3, border: `1px solid ${drasticMetric === m.k ? IC.accBorder : IC.border}` }}>
-                    {m.label}
-                  </button>
-                ))}
+                <PillToggle size="sm" value={drasticMetric} onChange={setDrasticMetric}
+                  options={[{ value: 'qty', label: 'Units' }, { value: 'rev', label: 'Revenue', disabled: !revenueAvailable }]} />
                 <div style={{ width: 1, background: IC.border, margin: '0 2px' }} />
-                <div style={{ display: 'flex', gap: 4, flexWrap: 'nowrap' }}>
-                  {[{ k: 'day2', label: 'Last vs 2nd-last day' }, { k: 'day7', label: 'Last vs 7th-last day' }].map(m => (
-                    <button key={m.k} onClick={() => setDrasticMode(m.k)}
-                      style={{ fontSize: 10.5, padding: '3px 9px', borderRadius: 6, cursor: 'pointer', background: drasticMode === m.k ? IC.accDim : IC.surface, color: drasticMode === m.k ? IC.t1 : IC.t3, border: `1px solid ${drasticMode === m.k ? IC.accBorder : IC.border}`, whiteSpace: 'nowrap' }}>
-                      {m.label}
-                    </button>
-                  ))}
-                </div>
-                <div style={{ width: 1, background: IC.border, margin: '0 2px' }} />
-                <SearchableMultiSelect label="Channel" options={data.filterOptions.unifiedChannels2} selected={filters.drasticChannel || []} onChange={v => setFilters(f => ({ ...f, drasticChannel: v }))}
-                  width={130} height={25} />
+                <PillToggle size="sm" value={drasticMode} onChange={setDrasticMode}
+                  options={[{ value: 'day2', label: 'Last vs 2nd-last day' }, { value: 'day7', label: 'Last vs 7th-last day' }]} />
               </div>
               )}
             </div>
@@ -1006,22 +951,10 @@ export default function SalesAllocationPage({ data, filters, setFilters, sidebar
                 style={{ fontSize: 11, padding: '4px 10px', borderRadius: 7, background: IC.surface, color: IC.t1, border: `1px solid ${IC.border}`, width: 190, height: SLICER_HEIGHT, boxSizing: 'border-box' }} />
               <SearchableMultiSelect label="Channel" options={data.filterOptions.unifiedChannels2} selected={filters.matrixChannel || []} onChange={v => setFilters(f => ({ ...f, matrixChannel: v }))}
                 width={150} height={SLICER_HEIGHT} />
-              <div style={{ display: 'flex', gap: 4 }}>
-                {[{ k: 'qty', label: 'Units' }, { k: 'rev', label: 'Revenue' }].map(m => (
-                  <button key={m.k} disabled={m.k === 'rev' && !revenueAvailable} onClick={() => setMatrixMetric(m.k)}
-                    style={{ fontSize: 11, padding: '4px 10px', borderRadius: 7, cursor: m.k === 'rev' && !revenueAvailable ? 'not-allowed' : 'pointer', opacity: m.k === 'rev' && !revenueAvailable ? 0.4 : 1, background: matrixMetric === m.k ? IC.accDim : IC.surface, color: matrixMetric === m.k ? IC.t1 : IC.t3, border: `1px solid ${matrixMetric === m.k ? IC.accBorder : IC.border}` }}>
-                    {m.label}
-                  </button>
-                ))}
-              </div>
-              <div style={{ display: 'flex', gap: 4 }}>
-                {[{ k: 'date', label: 'Date' }, { k: 'week', label: 'Week' }, { k: 'month', label: 'Month' }].map(g => (
-                  <button key={g.k} onClick={() => { setMatrixGranularity(g.k); setMatrixSort({ key: 'total', dir: 'desc' }) }}
-                    style={{ fontSize: 11, padding: '4px 10px', borderRadius: 7, cursor: 'pointer', background: matrixGranularity === g.k ? IC.accDim : IC.surface, color: matrixGranularity === g.k ? IC.t1 : IC.t3, border: `1px solid ${matrixGranularity === g.k ? IC.accBorder : IC.border}` }}>
-                    {g.label}
-                  </button>
-                ))}
-              </div>
+              <PillToggle value={matrixMetric} onChange={setMatrixMetric}
+                options={[{ value: 'qty', label: 'Units' }, { value: 'rev', label: 'Revenue', disabled: !revenueAvailable }]} />
+              <PillToggle value={matrixGranularity} onChange={g => { setMatrixGranularity(g); setMatrixSort({ key: 'total', dir: 'desc' }) }}
+                options={[{ value: 'date', label: 'Date' }, { value: 'week', label: 'Week' }, { value: 'month', label: 'Month' }]} />
             </div>
           }>
           <div style={{ maxHeight: 480, overflow: 'auto' }}>

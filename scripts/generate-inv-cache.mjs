@@ -429,7 +429,15 @@ function computePayload(windowDays) {
     const totalAvgSale = Math.ceil(s.rawTotalAvgSaleQty / windowDays)
     const denominator = Math.ceil(Math.max(avgSale, s.orderAllocation))
     const doi = s.totalInvt > 0 && denominator === 0 ? null : (denominator > 0 ? Math.floor(s.totalInvt / denominator) : 0)
-    const isDead = s.totalInvt > 0 && !s.locations.some(l => l.stockStatus !== 'Dead / No Sale' && l.stockStatus !== 'Out of Stock') && s.locations.some(l => l.stockStatus === 'Dead / No Sale')
+    // SKU-wide dead check: no sale ANYWHERE in the trailing 90d and not a recent launch — same
+    // rule used at the facility/location grain above (lines 273/349/392). The previous
+    // "every location must independently read Dead/No Sale or Out of Stock" rule undercounted:
+    // a SKU selling a trickle at just one of several warehouses escaped the dead-stock count
+    // entirely, even though most of its inventory was genuinely stagnant elsewhere.
+    const skuMaster = itemMaster.get(s.skuKey)
+    const skuLast90 = lastSaleBySkuKey.get(s.skuKey)
+    const skuNewLaunch = isNewLaunch(skuMaster?.launchDate, endDateObj)
+    const isDead = s.totalInvt > 0 && (skuLast90?.qty90d || 0) === 0 && !skuNewLaunch
     const status = doi == null ? stockStatus(0, avgSale, s.totalInvt, {isDead}) : stockStatus(doi, avgSale, s.totalInvt, {isDead})
     const daysSinceLastSale = s.lastSaleDate ? Math.round((endDateObj - new Date(s.lastSaleDate)) / 86400000) : null
     return {

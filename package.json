@@ -15,6 +15,7 @@
     "@phosphor-icons/react": "^2.1.10",
     "@supabase/supabase-js": "^2.111.0",
     "cors": "^2.8.6",
+    "d3-geo": "^3.1.1",
     "dotenv": "^17.4.2",
     "express": "^5.2.1",
     "lucide-react": "^1.17.0",
@@ -23,6 +24,7 @@
     "react-dom": "^19.2.6",
     "react-is": "^19.2.7",
     "recharts": "^3.8.1",
+    "topojson-client": "^3.1.0",
     "xlsx": "^0.18.5",
     "xlsx-js-style": "^1.2.0"
   },
