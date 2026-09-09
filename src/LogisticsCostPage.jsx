@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useRef, useCallback, Children } from 'react'
-import { C as BASE_C, fmt, fmtN, fmtBig, COURIER_COLORS, COURIER_LOGOS } from './utils.js'
+import { C as BASE_C, fmt, fmtN, fmtBig, exportCSV, COURIER_COLORS, COURIER_LOGOS } from './utils.js'
 import {
   Card, Badge, DataTable, ChartTooltip,
   BarChart, Bar, Line, LineChart, ComposedChart, AreaChart, Area, XAxis, YAxis, CartesianGrid,
@@ -460,6 +460,101 @@ function ChipRow({ options, selected, onToggle, small }) {
 // 220px sidebar, and this has to stay a compact chip in a horizontal bar. It also has to
 // keep its two-part closed appearance (range | qualifier), which SearchSelect has no notion
 // of. The month list is short enough that a search box would be noise.
+// Export the tables on screen to CSV.
+//
+// Sits beside the period chip because what it exports is exactly what the chip and the
+// slicers have narrowed to — the two controls belong together. Golden so it reads as the
+// one action on a bar that is otherwise all state.
+//
+// Charts are NOT exported as images: a CSV of the chart's own series is more useful than a
+// PNG, and every chart here is backed by a table or row array, so the data is the export.
+function ExportMenu({ items, suffix }) {
+  const [open, setOpen] = useState(false)
+  const ref = useRef(null)
+  useEffect(() => {
+    if (!open) return
+    const h = e => { if (ref.current && !ref.current.contains(e.target)) setOpen(false) }
+    document.addEventListener('mousedown', h)
+    document.addEventListener('touchstart', h)
+    return () => {
+      document.removeEventListener('mousedown', h)
+      document.removeEventListener('touchstart', h)
+    }
+  }, [open])
+
+  // Only offer what actually has rows: a menu entry that downloads an empty file is worse
+  // than no entry.
+  const ready = (items || []).filter(it => (it.rows?.length || 0) > 0)
+  if (!ready.length) return null
+
+  const run = it => {
+    // suffix carries the active period and scope, so a file on disk still says what it
+    // was filtered to. Without it, three exports of the same table are indistinguishable.
+    exportCSV(it.rows, `frido_${it.file}${suffix ? `_${suffix}` : ''}.csv`)
+    setOpen(false)
+  }
+
+  return (
+    <div ref={ref} style={{ position: 'relative', flexShrink: 0 }}>
+      <button onClick={() => setOpen(o => !o)}
+        title="Download the tables on screen as CSV"
+        style={{
+          display: 'inline-flex', alignItems: 'center', gap: 6,
+          fontSize: 11.5, fontWeight: 600, fontFamily: 'var(--font)',
+          padding: '5px 11px', borderRadius: 8, cursor: 'pointer',
+          background: C.acc, color: '#1a1400',
+          border: `1px solid ${C.acm}`,
+          boxShadow: open ? `0 0 0 3px ${C.acl}` : '0 1px 2px rgba(0,0,0,.06)',
+          transition: 'box-shadow .15s',
+        }}>
+        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#1a1400" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M12 3v12M7 12l5 5 5-5M4 21h16" />
+        </svg>
+        Export
+        <span style={{ fontSize: 7, opacity: .7, transform: open ? 'rotate(180deg)' : 'none', transition: 'transform .18s' }}>▼</span>
+      </button>
+
+      {open && (
+        <div style={{
+          position: 'absolute', top: 'calc(100% + 5px)', right: 0, zIndex: 500,
+          background: C.card, border: `1px solid ${C.border2}`, borderRadius: 10,
+          boxShadow: '0 10px 30px rgba(0,0,0,.16)', minWidth: 232, overflow: 'hidden',
+        }}>
+          <div style={{ padding: '7px 11px', borderBottom: `1px solid ${C.border}`, fontSize: 10, fontWeight: 800, color: C.t3, letterSpacing: '.05em', textTransform: 'uppercase' }}>
+            Export as CSV
+          </div>
+          <div style={{ maxHeight: 300, overflowY: 'auto', padding: '4px 0' }}>
+            {ready.map(it => (
+              <div key={it.file} onClick={() => run(it)}
+                style={{
+                  display: 'flex', alignItems: 'baseline', justifyContent: 'space-between',
+                  gap: 10, padding: '7px 11px', fontSize: 11.5, cursor: 'pointer', color: C.t1,
+                }}
+                onMouseEnter={e => { e.currentTarget.style.background = C.bg }}
+                onMouseLeave={e => { e.currentTarget.style.background = 'transparent' }}>
+                <span>{it.label}</span>
+                {/* Row count up front: it sets the expectation before the file lands. */}
+                <span style={{ fontSize: 10, color: C.t3, fontFamily: 'var(--mono)', whiteSpace: 'nowrap' }}>
+                  {fmtN(it.rows.length)}
+                </span>
+              </div>
+            ))}
+          </div>
+          {ready.length > 1 && (
+            <div onClick={() => { ready.forEach(run); setOpen(false) }}
+              style={{
+                padding: '8px 11px', borderTop: `1px solid ${C.border}`, cursor: 'pointer',
+                fontSize: 11.5, fontWeight: 700, color: C.t1, background: C.bg,
+              }}>
+              Export all {ready.length} tables
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
 function PeriodChip({ window: win, months, selected, onToggle, onAll, onRecent, defaultCount }) {
   const [open, setOpen] = useState(false)
   const ref = useRef(null)
@@ -2018,6 +2113,143 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
 
   // What the period note renders. Derived from the SELECTED months, not from the default,
   // so it stays truthful when the user narrows or widens the range.
+  // What the Export button offers, per scope.
+  //
+  // Reuses the row arrays the tables already render, so an export is exactly what is on
+  // screen — same filters, same period, same slicers. Deriving a separate query would let
+  // the file drift from the view.
+  //
+  // Numbers are exported RAW, not formatted: "₹1.74 Cr" is useless in a spreadsheet, and
+  // exportCSV JSON-stringifies each value so a raw number survives as a number.
+  const exportItems = useMemo(() => {
+    const round = (v, d = 2) => (v == null || Number.isNaN(Number(v)) ? '' : Number(Number(v).toFixed(d)))
+
+    if (scope === 'b2b') {
+      return [
+        {
+          label: 'Lane detail', file: 'ftl_ptl_lanes',
+          rows: (b2b?.lanes || []).map(r => ({
+            lane: r.lane, origin: r.origin_location, destination: r.destination_location,
+            trips: r.trips, spend: round(r.spend), avg_per_trip: round(r.avg_cost),
+            transporters: r.transporters, vehicle: r.vehicle,
+          })),
+        },
+        {
+          label: 'Transporters', file: 'ftl_ptl_transporters',
+          rows: (b2b?.transporters || []).map(r => ({
+            transporter: r.transporter_name, trips: r.trips,
+            spend: round(r.spend), avg_per_trip: round(r.avg_cost),
+          })),
+        },
+        {
+          label: 'Freight type', file: 'ftl_ptl_freight_type',
+          rows: (b2b?.types || []).map(r => ({
+            freight_type: r.freight_type, trips: r.trips, spend: round(r.spend),
+          })),
+        },
+        {
+          label: 'Vehicle size', file: 'ftl_ptl_vehicles',
+          rows: (b2b?.vehicles || []).map(r => ({
+            vehicle: r.vehicle_type, trips: r.trips, spend: round(r.spend),
+          })),
+        },
+        {
+          label: 'Monthly trend', file: 'ftl_ptl_monthly',
+          rows: (b2bMonthRows || []).map(r => ({
+            month: r.month, trips: r.trips, spend: round(r.spend),
+          })),
+        },
+      ]
+    }
+
+    if (scope === 'all') {
+      return [
+        {
+          label: 'Monthly trend (both ledgers)', file: 'overview_monthly',
+          rows: (ovTrendWindow || []).map(r => ({
+            month: r.month, total: round(r.total), b2c: round(r.b2c), b2b: round(r.b2b),
+          })),
+        },
+        {
+          label: 'B2C courier partners', file: 'overview_b2c_couriers',
+          rows: (overviewB2cCards || []).map(r => ({
+            courier: r.key, shipments: r.shipments, cost: round(r.cost),
+            share_pct: round(r.share, 1), avg_per_shipment: round(r.avgCost),
+            cost_per_kg: round(r.cpk, 1), claimable: round(r.claimable),
+          })),
+        },
+        {
+          label: 'FTL/PTL transport partners', file: 'overview_ftl_ptl_partners',
+          rows: (overviewB2bCards || []).map(r => ({
+            transporter: r.key, trips: r.trips, cost: round(r.cost),
+            share_pct: round(r.share, 1), avg_per_trip: round(r.avgCost),
+          })),
+        },
+      ]
+    }
+
+    // B2C
+    return [
+      {
+        label: 'By courier', file: 'b2c_couriers',
+        rows: (courierRows || []).map(r => ({
+          courier: r.courier, shipments: r.shipments, cost: round(r.cost),
+          avg_per_shipment: round(r.avgCost), cost_per_kg: round(r.cpk, 2),
+          avg_weight_kg: round(r.avgWt, 3), pct_wrong_weight: round(r.overPct, 1),
+        })),
+      },
+      {
+        label: zoneSub ? `Cost by zone (${zoneSub})` : 'Cost by zone', file: 'b2c_zones',
+        rows: (zoneRowsShown || []).map(r => ({
+          zone: r.zone, shipments: r.shipments, cost: round(r.cost),
+          avg_per_shipment: round(r.avgCost), cost_per_kg: round(r.cpk, 2),
+          share_pct: round(r.share, 1),
+        })),
+      },
+      {
+        label: 'Weight slab detail', file: 'b2c_weight_slabs',
+        rows: (slabRows || []).map(r => ({
+          slab_kg: r.slab, shipments: r.n, cost: round(r.cost),
+          avg_per_shipment: round(r.avgCost), cost_per_kg: round(r.cpk, 2),
+          forward: round(r.fwdAvg), reverse: round(r.revAvg), rto: round(r.rtoAvg),
+          share_pct: round(r.share, 1), claimable: round(r.claimRs),
+        })),
+      },
+      {
+        label: 'Shipment leg', file: 'b2c_legs',
+        rows: (modeRows || []).map(r => ({
+          leg: r.mode, shipments: r.shipments, cost: round(r.cost),
+          avg_per_shipment: round(r.avgCost), share_pct: round(r.share, 1),
+        })),
+      },
+      {
+        label: 'Cost by product', file: 'b2c_products',
+        // Flattened: a CSV has no notion of the expandable category/sub-category tree, so
+        // each row carries its own category and a level marker instead.
+        rows: (productRows || []).flatMap(c => [
+          {
+            level: 'category', category: c.cat, sub_category: '',
+            shipments: c.n, cost: round(c.cost), avg_logistics_cost: round(c.ctsReal),
+            billable_slab_kg: round(c.masterSlab ?? c.cw, 2), actual_weight_kg: round(c.masterKg, 3),
+          },
+          ...(c.children || []).map(s => ({
+            level: 'sub_category', category: c.cat, sub_category: s.sub,
+            shipments: s.n, cost: round(s.cost), avg_logistics_cost: round(s.ctsReal),
+            billable_slab_kg: round(s.masterSlab ?? s.cw, 2), actual_weight_kg: round(s.masterKg, 3),
+          })),
+        ]),
+      },
+    ]
+  }, [scope, b2b, b2bMonthRows, ovTrendWindow, overviewB2cCards, overviewB2bCards,
+      courierRows, zoneRowsShown, zoneSub, slabRows, modeRows, productRows])
+
+  // Filename suffix so a file on disk still says what it was filtered to.
+  const exportSuffix = useMemo(() => {
+    const sel = [...(filters.months || [])].sort()
+    const period = sel.length ? (sel.length === 1 ? sel[0] : `${sel[0]}_to_${sel[sel.length - 1]}`) : 'all_months'
+    return `${scope}_${period}`
+  }, [scope, filters.months])
+
   const monthWindow = useMemo(() => {
     const all = scopeMonths
     const sel = (filters.months || []).length ? [...filters.months].sort() : all
@@ -4223,6 +4455,10 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
                 onRecent={() => setOne('months', (scopeMonths).slice(-DEFAULT_MONTH_COUNT))}
                 defaultCount={DEFAULT_MONTH_COUNT}
               />
+              {/* Export sits to the RIGHT of the chip: the chip says what period is in
+                  view, and this exports exactly that. Last in the cluster so it reads as
+                  the action after the state. */}
+              <ExportMenu items={exportItems} suffix={exportSuffix} />
             </div>
             {/* The Lanes toggle went with the Top Lanes table it controlled. */}
           </div>
