@@ -1299,18 +1299,26 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
   // Couriers ranked by what is recoverable from them, for the cause-split chart.
   // Pre-computed per-slab costs. Filter-independent, like the trend and the rate grid, so it
   // reads straight from the payload rather than re-aggregating on every render.
-  const slabRows = useMemo(() => (agg?.slabCosts || []).map(r => ({
-    slab: Number(r.slab),
-    n: num(r.n),
-    cost: num(r.cost),
-    avgCost: num(r.avg_cost),
-    cpk: num(r.cpk),
-    fwdAvg: num(r.fwd_avg),
-    revAvg: num(r.rev_avg),
-    rtoAvg: num(r.rto_avg),
-    claimRs: num(r.claim_rs),
-    claimN: num(r.claim_n),
-  })),
+  // share is computed against the slab table's OWN total, not agg.cost: this table lists
+  // every slab including reverse and RTO legs, so its sum is the right denominator for
+  // "share of the spend shown here". Using the page total would make the column sum to
+  // less than 100% with no visible reason.
+  const slabRows = useMemo(() => {
+    const rows = (agg?.slabCosts || []).map(r => ({
+      slab: Number(r.slab),
+      n: num(r.n),
+      cost: num(r.cost),
+      avgCost: num(r.avg_cost),
+      cpk: num(r.cpk),
+      fwdAvg: num(r.fwd_avg),
+      revAvg: num(r.rev_avg),
+      rtoAvg: num(r.rto_avg),
+      claimRs: num(r.claim_rs),
+      claimN: num(r.claim_n),
+    }))
+    const total = rows.reduce((a, r) => a + r.cost, 0)
+    return rows.map(r => ({ ...r, share: total ? (r.cost / total) * 100 : 0 }))
+  },
   // Every slab, no threshold. A cost table should account for all the spend: an n>=1000
   // filter hid 120 of 139 slabs and 13% of it, including a 104 kg slab worth ₹10.45 L. The
   // card scrolls, so extra rows are cheap; a silently missing row is not.
@@ -3318,6 +3326,19 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
               { key: 'fwdAvg', label: 'Forward', align: 'center', render: (_, r) => (r.fwdAvg ? '₹' + r.fwdAvg.toFixed(0) : '—') },
               { key: 'revAvg', label: 'Reverse', align: 'center', render: (_, r) => (r.revAvg ? '₹' + r.revAvg.toFixed(0) : '—') },
               { key: 'rtoAvg', label: 'RTO', align: 'center', render: (_, r) => (r.rtoAvg ? '₹' + r.rtoAvg.toFixed(0) : '—') },
+              // Share of the spend this table accounts for. Fills the dead space the
+              // numeric columns left, and answers a question the table could not: the
+              // 0.5/1/2 kg slabs are together ~42% of all freight spend, which no
+              // per-slab figure reveals.
+              //
+              // Chosen over Claimable (populated on only 28 of 142 slabs, so it would be
+              // 80% em-dashes) and over the average weight gap (well populated, but
+              // negative values invite "why?" and need a legend this table has no room
+              // for). ShareBar is what the zone table below already uses for the same
+              // idea, so the two read consistently.
+              { key: 'share', label: 'Share of Spend', align: 'center', render: (_, r) => (
+                <ShareBar pct={r.share}>{r.share.toFixed(1) + '%'}</ShareBar>
+              ) },
             ]}
             rows={slabSearch.trim() ? slabRows.filter(r => String(r.slab ?? '').toLowerCase().includes(slabSearch.trim().toLowerCase())) : slabRows}
             maxRows={200}
@@ -3879,15 +3900,21 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
               { key: 'ctsReal', label: 'Avg. Logistic Cost', align: 'center', render: (_, r) => (
                 r.ctsReal ? <span style={{ fontWeight: 700 }}>{fmt(r.ctsReal)}</span> : '—'
               ) },
-              // Sub-category rows show the billable SLAB from the item master — the one real
-              // value the courier charges on. Category rows show an em-dash: a category spans
-              // products of different weights, so no single slab is true for all of them.
+              // Weight Slab: one real billable slab on sub-category rows, the
+              // shipment-weighted average across the category on category rows.
               { key: 'slab', label: 'Weight Slab', align: 'center', render: (_, r) => {
+                // Sub-category rows: the ONE billable slab from the item master — a real
+                // value the courier charges on.
                 if (r.masterSlab > 0) return <strong>{r.masterSlab} kg</strong>
-                // No fallback to masterKg: that would repeat the Actual Weight column
-                // verbatim on category rows. masterSlab is null there precisely because a
-                // category spans products of different weights and no single billable slab
-                // is true for all of them, so an em-dash is the honest answer.
+                // Category rows: the shipment-weighted AVERAGE billed slab across the
+                // category (AVG(cw_slab) server-side — verified equal to a manual
+                // shipment-weighted average of the children). Shown with a ~ and one
+                // decimal so it never reads as a real slab: a category spans products of
+                // different weights, so no single slab is true for all of them.
+                //
+                // Deliberately NOT masterKg, which is the actual product weight and now
+                // has its own column — repeating it here said nothing new.
+                if (r.cw > 0) return <span style={{ color: C.t2 }}>~{r.cw.toFixed(1)} kg</span>
                 return '—'
               } },
               // Actual product weight from the item master (Weight_gms / 1000 at sync), not
