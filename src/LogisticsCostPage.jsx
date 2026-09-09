@@ -2762,7 +2762,7 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
                     card the fill alone is too faint to hold an edge, so it carries a stroke in
                     the deeper accent (C.acm) to define the bar. Hue clash is not a concern
                     here: yellow against blue and orange separates cleanly (CVD dE 24.7). */}
-                <Bar dataKey="total" name="Total" fill={C.acc} fillOpacity={0.34}
+                <Bar dataKey="total" name="Total" fill={C.acc} fillOpacity={0.85}
                   stroke={C.acm} strokeWidth={1} radius={[4, 4, 0, 0]} maxBarSize={56} />
                 <Line type="monotone" dataKey="b2c" name="B2C courier" stroke={C.acm}
                   strokeWidth={2} dot={{ r: 3.5, fill: C.acm }} />
@@ -4504,7 +4504,7 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
                     style={{
                       border: 'none', cursor: 'pointer', fontFamily: 'var(--font)',
                       fontSize: 12, fontWeight: on ? 700 : 500,
-                      padding: '6px 14px', borderRadius: 7,
+                      padding: '6px 0', borderRadius: 7, width: 80, textAlign: 'center',
                       background: on ? C.acc : 'transparent',
                       color: on ? '#1a1400' : C.t2,
                       transition: 'all .15s',
