@@ -506,7 +506,7 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
       const filteredCouriers = (raw.byCourier || []).filter(courierFilter)
 
       // derive kpis from byCourier rows (all fields now present in each courier row)
-      const kpis = hasCourier
+      const kpis = (hasCourier || hasSddNdd || hasShipmentType)
         ? filteredCouriers.reduce((acc, x) => {
             const n = k => typeof x[k] === 'number' ? x[k] : 0
             acc.total_shipments = (acc.total_shipments || 0) + n('total')
@@ -540,7 +540,7 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
           }, {})
         : raw.kpis
 
-      if (hasCourier && kpis._wt) {
+      if ((hasCourier || hasSddNdd || hasShipmentType) && kpis._wt) {
         kpis.avg_intransit = +(kpis._avg_intransit / Math.max(kpis.delivered, 1)).toFixed(2)
         kpis.avg_fulfilment = +(kpis._avg_fulfilment / Math.max(kpis.delivered, 1)).toFixed(1)
         kpis.avg_pickup = +(kpis._avg_pickup / Math.max(kpis._wt, 1)).toFixed(2)
