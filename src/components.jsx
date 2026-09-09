@@ -249,8 +249,8 @@ export function Card({ title, note, action, children, style, fill, titleNoWrap }
     <div className="card-hoverable" style={{ background: C.card, borderLeft: `1px solid ${C.border}`, borderRight: `1px solid ${C.border}`, borderBottom: `1px solid ${C.border}`, borderRadius: 13, padding: '16px 18px', height: '100%', boxSizing: 'border-box', display: fill ? 'flex' : undefined, flexDirection: fill ? 'column' : undefined, ...style }}>
       {(title || note || action) && (
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 11, flexShrink: 0, gap: 8 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0, overflow: 'hidden' }}>
-            {title && <span style={{ fontSize: 13, fontWeight: 700, color: C.t1, whiteSpace: titleNoWrap ? 'nowrap' : undefined, overflow: 'hidden', textOverflow: 'ellipsis' }}>{title}</span>}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0, flex: 1 }}>
+            {title && <span style={{ fontSize: 13, fontWeight: 700, color: C.t1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{title}</span>}
             {note && <span style={{ fontSize: 11.5, color: C.t3, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{note}</span>}
           </div>
           {action && <div style={{ flexShrink: 0 }}>{action}</div>}

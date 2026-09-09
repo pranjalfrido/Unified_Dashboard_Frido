@@ -970,7 +970,7 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
         {/* ── Monthly Trend + Courier TAT ── */}
         <LSectionTitle title="Monthly Trend" collapsed={secCollapsed['trend']} onToggle={() => toggleSec('trend')} />
         <div style={{ display: secCollapsed['trend'] ? 'none' : 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: 14 }}>
-          <div style={{ ...cardStyle, padding: isMobile ? '14px 8px' : '16px 18px', display: 'flex', flexDirection: 'column' }}>
+          <div className="card-hoverable" style={{ ...cardStyle, padding: isMobile ? '14px 8px' : '16px 18px', display: 'flex', flexDirection: 'column' }}>
             <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 0, flexShrink: 0, padding: isMobile ? '0 6px' : 0 }}>
               <div>
                 <div style={chartTitle}>Shipment Trend</div>
@@ -980,7 +980,6 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
                   triggerStyle={{ fontSize: 11, fontWeight: 600, padding: '3px 8px', borderRadius: 6, border: `1px solid ${C.border}`, background: C.card, color: C.t2, cursor: 'pointer', fontFamily: 'var(--font)' }} />
               </div>
             </div>
-            <div style={{ height: 1, background: C.border, margin: '10px 0 6px' }} />
             <ResponsiveContainer width="100%" height={isMobile ? 180 : 220}>
               <ComposedChart data={trendData} margin={isMobile ? { top: 4, right: 20, left: 20, bottom: 0 } : { top: 4, right: -5, left: 0, bottom: 0 }}>
                 <defs>
@@ -1048,13 +1047,12 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
           </div>
 
           {/* Courier TAT */}
-          <div style={{ ...cardStyle, padding: isMobile ? '14px 8px' : '16px 18px', display: 'flex', flexDirection: 'column' }}>
+          <div className="card-hoverable" style={{ ...cardStyle, padding: isMobile ? '14px 8px' : '16px 18px', display: 'flex', flexDirection: 'column' }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0, marginBottom: 0, padding: isMobile ? '0 6px' : 0 }}>
               <div style={chartTitle}>Shipment Volume & TAT Trend</div>
               <SmallDropdown value={courierTatGran} onChange={setCourierTatGran} options={['Daily','Weekly','Monthly']}
                 triggerStyle={{ fontSize: 11, fontWeight: 600, padding: '3px 8px', borderRadius: 6, border: `1px solid ${C.border}`, background: C.card, color: C.t2, cursor: 'pointer', fontFamily: 'var(--font)' }} />
             </div>
-            <div style={{ height: 1, background: C.border, margin: '10px 0 6px' }} />
             {(() => {
               // use byDay/byWeek/byMonth (overall, not per courier) for date-based X-axis
               const src = courierTatGran === 'Daily' ? (data?.byDay || []) : courierTatGran === 'Weekly' ? (data?.byWeek || []) : (data?.byMonth || [])
@@ -1127,7 +1125,7 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
         <LSectionTitle title="Courier Performance" collapsed={secCollapsed['courier']} onToggle={() => toggleSec('courier')} />
 
 <div style={{ display: secCollapsed['courier'] ? 'none' : 'grid', gridTemplateColumns: '1fr', gap: 14, minWidth: 0 }}>
-          <div style={{ ...cardStyle, minWidth: 0 }}>
+          <div className="card-hoverable" style={{ ...cardStyle, minWidth: 0 }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
             <div style={chartTitle}>Courier-wise Breakdown</div>
             <div style={{ display: 'flex', gap: 4 }}>
@@ -1859,7 +1857,7 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
                     {(() => { const cw = ['25%','18.75%','18.75%','18.75%','18.75%']; const t1=(facTotals.op_0_1||0)+(facTotals.op_2_3||0)+(facTotals.op_4_5||0)+(facTotals.op_5plus||0);
                     const t1TotalPcts = [facTotals.op_0_1, facTotals.op_2_3, facTotals.op_4_5, facTotals.op_5plus].map(v => t1 ? (v/t1)*100 : 0)
                     return (
-                    <div style={{ ...tableCard2, height: 335 }}>
+                    <div className="card-hoverable" style={{ ...tableCard2, height: 335 }}>
                       <div style={{ ...tableTitle2, fontSize: 13, padding: '8px 14px 7px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                         <span>Order Processing Time <span style={{ fontWeight: 500, color: C.t3, fontSize: 10.2, marginLeft: 4 }}>(by Facility)</span><span style={{ fontWeight: 400, color: C.t3, fontSize: 9.5, marginLeft: 6 }}>order creation → shipment creation</span></span>
                       </div>
@@ -1911,7 +1909,7 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
                     {(() => { const cw = ['25%','18.75%','18.75%','18.75%','18.75%']; const t2=(facTotals.proc_0_12h+facTotals.proc_12_24h+facTotals.proc_24_48h+facTotals.proc_48plus);
                     const t2TotalPcts = [facTotals.proc_0_12h, facTotals.proc_12_24h, facTotals.proc_24_48h, facTotals.proc_48plus].map(v => t2 ? (v/t2)*100 : 0)
                     return (
-                    <div style={{ ...tableCard2, height: 335 }}>
+                    <div className="card-hoverable" style={{ ...tableCard2, height: 335 }}>
                       <div style={{ ...tableTitle2, fontSize: 13, padding: '8px 14px 7px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                         <span>Order Pickup Time <span style={{ fontWeight: 500, color: C.t3, fontSize: 10.2, marginLeft: 4 }}>(by Courier)</span><span style={{ fontWeight: 400, color: C.t3, fontSize: 9.5, marginLeft: 6 }}>shipment creation → shipment pickup</span></span>
                       </div>
@@ -1943,7 +1941,7 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
                           </tbody>
                         </table>
                       </div>
-                      <div style={totalWrap}>
+                      <div style={{ ...totalWrap, marginTop: 10 }}>
                         <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed', background: C.acl }}>
                           <colgroup>{cw.map((w,i)=><col key={i} style={{width:w}}/>)}</colgroup>
                           <tbody><tr>
@@ -1962,7 +1960,7 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
                     {(() => { const cw3 = ['25%','18.75%','18.75%','18.75%','18.75%']; const t3total = courierTotals.delivered;
                     const t3TotalPcts = [courierTotals.bucket_0_1, courierTotals.bucket_2_3, courierTotals.bucket_4_5, courierTotals.bucket_5plus].map(v => t3total ? (v/t3total)*100 : 0)
                     return (
-                    <div style={{ ...tableCard2, height: 335 }}>
+                    <div className="card-hoverable" style={{ ...tableCard2, height: 335 }}>
                       <div style={{ ...tableTitle2, fontSize: 13, padding: '8px 14px 7px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                         <span>In-Transit Time <span style={{ fontWeight: 500, color: C.t3, fontSize: 10.2, marginLeft: 4 }}>(by Courier)</span><span style={{ fontWeight: 400, color: C.t3, fontSize: 9.5, marginLeft: 6 }}>shipment pickup → shipment delivery</span></span>
                       </div>
@@ -2013,7 +2011,7 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
                     {(() => { const cw = ['25%','18.75%','18.75%','18.75%','18.75%']; const t4=(facTotals.ord_0_1+facTotals.ord_2_3+facTotals.ord_4_5+facTotals.ord_5plus);
                     const t4TotalPcts = [facTotals.ord_0_1, facTotals.ord_2_3, facTotals.ord_4_5, facTotals.ord_5plus].map(v => t4 ? (v/t4)*100 : 0)
                     return (
-                    <div style={{ ...tableCard2, height: 335 }}>
+                    <div className="card-hoverable" style={{ ...tableCard2, height: 335 }}>
                       <div style={{ ...tableTitle2, fontSize: 13, padding: '8px 14px 7px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                         <span>Fulfilment Time <span style={{ fontWeight: 500, color: C.t3, fontSize: 10.2, marginLeft: 4 }}>(by Facility)</span><span style={{ fontWeight: 400, color: C.t3, fontSize: 9.5, marginLeft: 6 }}>order creation → shipment delivery</span></span>
                       </div>
@@ -2046,7 +2044,7 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
                           </tbody>
                         </table>
                       </div>
-                      <div style={{ ...totalWrap, margin: '0 8px 0' }}>
+                      <div style={{ ...totalWrap, margin: '-4px 8px 0' }}>
                         <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed', background: C.acl }}>
                           <colgroup>{cw.map((w,i)=><col key={i} style={{width:w}}/>)}</colgroup>
                           <tbody><tr>
@@ -2223,7 +2221,7 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
           return (
             <div style={{ display: secCollapsed['weight'] ? 'none' : 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: 14 }}>
               {/* Left: Donut with toggle */}
-              <div style={cardStyle}>
+              <div className="card-hoverable" style={cardStyle}>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
                   <div style={chartTitle}>Shipment Allocation by Weight</div>
                   <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
@@ -2257,7 +2255,7 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
                 </div>
               </div>
               {/* Right: Shipment Qty bars + RTO% & Intrasit TAT lines */}
-              <div style={{ ...cardStyle, padding: isMobile ? '14px 4px' : '16px 18px' }}>
+              <div className="card-hoverable" style={{ ...cardStyle, padding: isMobile ? '14px 4px' : '16px 18px' }}>
                 <div style={{ padding: isMobile ? '0 6px' : 0, marginBottom: isMobile ? 0 : 10 }}>
                   <div style={chartTitle}>Delivery Performance by Weight Slab</div>
                 </div>
@@ -2331,7 +2329,7 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
                 const filtered = cardGeoType === 'all' ? rawRows : rawRows.filter(r => r.shipment_type?.toLowerCase() === cardGeoType.toLowerCase())
                 const merged = Object.values(filtered.reduce((m, r) => { const k = r[key]; m[k] = { [key]: k, total: (m[k]?.total || 0) + r.total }; return m }, {})).sort((a,b) => b.total - a.total).slice(0, 10)
                 return (
-                <div key={title} style={{ ...cardStyle, display: 'flex', flexDirection: 'column', height: h }}>
+                <div key={title} className="card-hoverable" style={{ ...cardStyle, display: 'flex', flexDirection: 'column', height: h }}>
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 2 }}>
                     <div style={chartTitle}>{title}</div>
                   </div>
@@ -2353,7 +2351,7 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
           const BASE_OPTS = [{ key: 'order', label: 'Order Creation', subtitle: 'Order creation date' }, { key: 'shipment', label: 'Shipment Creation', subtitle: 'Shipment creation date' }, { key: 'pickup', label: 'Pickup Date', subtitle: 'Pickup date' }]
           const activeBase = BASE_OPTS.find(o => o.key === rtoAgeingBase)
           const pct = (v, tot) => tot ? ((v / tot) * 100).toFixed(1) + '%' : '—'
-          const thS = { padding: '7px 10px', textAlign: 'right', fontWeight: 700, fontSize: 11, color: C.t2, whiteSpace: 'nowrap', background: C.bg, position: 'sticky', top: 0, zIndex: 1 }
+          const thS = { padding: '7px 10px', textAlign: 'right', fontWeight: 700, fontSize: 11, color: C.t2, whiteSpace: 'nowrap', background: C.acl, position: 'sticky', top: 0, zIndex: 1 }
           const thL = { ...thS, textAlign: 'left' }
           const tdS = { padding: '7px 10px', textAlign: 'right', fontSize: 11, color: C.t1, borderTop: `1px solid ${C.border}` }
           const tdL = { ...tdS, textAlign: 'left', fontWeight: 600 }
@@ -2376,12 +2374,12 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
           return (
             <div style={{ display: 'flex', gap: 14, marginBottom: 14, flexWrap: 'wrap' }}>
               {/* Left: RTO Ageing */}
-              <div style={{ ...cardStyle, flex: 1, minWidth: 320 }}>
+              <div className="card-hoverable" style={{ ...cardStyle, flex: 1, minWidth: 320 }}>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10, flexWrap: 'wrap', gap: 6 }}>
                   <div style={{ fontSize: 12, fontWeight: 700, color: C.t1 }}>RTO Ageing <span style={{ fontWeight: 400, color: C.t3, fontSize: 10.5 }}>{activeBase?.subtitle} → RTO mark date</span></div>
                   <div style={{ display: 'flex', gap: 4 }}>
                     {BASE_OPTS.map(o => (
-                      <button key={o.key} onClick={() => setRtoAgeingBase(o.key)} style={{ padding: '3px 9px', fontSize: 10.5, fontWeight: 600, borderRadius: 6, border: `1px solid ${C.border}`, cursor: 'pointer', background: rtoAgeingBase === o.key ? C.accent || '#2563eb' : C.card, color: rtoAgeingBase === o.key ? '#fff' : C.t1 }}>
+                      <button key={o.key} onClick={() => setRtoAgeingBase(o.key)} style={{ padding: '3px 9px', fontSize: 10.5, fontWeight: 600, borderRadius: 6, border: `1px solid ${C.border}`, cursor: 'pointer', background: rtoAgeingBase === o.key ? C.acs : C.card, color: rtoAgeingBase === o.key ? '#3F3D33' : C.t1 }}>
                         {o.label}
                       </button>
                     ))}
@@ -2406,7 +2404,7 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
                       ))}
                     </tbody>
                     <tfoot>
-                      <tr style={{ borderTop: `2px solid ${C.border}`, background: C.bg, position: 'sticky', bottom: 0, zIndex: 1 }}>
+                      <tr style={{ borderTop: `2px solid ${C.border}`, background: C.acl, position: 'sticky', bottom: 0, zIndex: 1 }}>
                         <td style={{ ...tdL, fontWeight: 700 }}>Total</td>
                         <td style={{ ...tdS, fontWeight: 700 }}>{(tot.total_rto || 0).toLocaleString('en-IN')}</td>
                         {BUCKETS.map(b => <td key={b} style={{ ...tdS, fontWeight: 700 }}>{tot[bKey(rtoAgeingBase, b)] > 0 ? pct(tot[bKey(rtoAgeingBase, b)], tot.total_rto) : '—'}</td>)}
@@ -2416,7 +2414,7 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
                 </div>
               </div>
               {/* Right: RTO Delivered TAT */}
-              <div style={{ ...cardStyle, flex: 1, minWidth: 320 }}>
+              <div className="card-hoverable" style={{ ...cardStyle, flex: 1, minWidth: 320 }}>
                 <div style={{ fontSize: 12, fontWeight: 700, color: C.t1, marginBottom: 10 }}>RTO Delivery Ageing <span style={{ fontWeight: 400, color: C.t3, fontSize: 10.5 }}>RTO mark date → delivered back</span></div>
                 <div style={{ overflowX: 'auto' }}>
                   <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11 }}>
@@ -2440,7 +2438,7 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
                       })}
                     </tbody>
                     <tfoot>
-                      <tr style={{ borderTop: `2px solid ${C.border}`, background: C.bg, position: 'sticky', bottom: 0, zIndex: 1 }}>
+                      <tr style={{ borderTop: `2px solid ${C.border}`, background: C.acl, position: 'sticky', bottom: 0, zIndex: 1 }}>
                         <td style={{ ...tdL, fontWeight: 700 }}>Total</td>
                         <td style={{ ...tdS, fontWeight: 700 }}>{(tot.rtodel_total || 0).toLocaleString('en-IN')}</td>
                         {BUCKETS.map(b => <td key={b} style={{ ...tdS, fontWeight: 700 }}>{tot[bKey('rtodel', b)] > 0 ? pct(tot[bKey('rtodel', b)], tot.rtodel_total) : '—'}</td>)}
@@ -2457,7 +2455,7 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
           const totalRto = reasons.reduce((s, r) => s + r.total, 0) || 1
           if (!reasons.length) return <div style={{ color: C.t3, fontSize: 12 }}>No RTO reason data available.</div>
           return (
-            <div style={{ ...cardStyle, padding: '16px 18px', display: secCollapsed['rto'] ? 'none' : 'flex', flexDirection: 'column' }}>
+            <div className="card-hoverable" style={{ ...cardStyle, padding: '16px 18px', display: secCollapsed['rto'] ? 'none' : 'flex', flexDirection: 'column' }}>
               <div style={{ ...chartTitle, marginBottom: 14, flexShrink: 0 }}>RTO Reasons — Shipment Count & % of Total RTO</div>
               {isMobile ? (
                 <div style={{ overflowY: 'auto', flex: 1, display: 'flex', flexDirection: 'column', gap: 8 }}>
@@ -2546,17 +2544,17 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
             })
             return { ...s, avg_att: s._att_n ? +(s._att_sum / s._att_n).toFixed(2) : null, avg_intransit_days: s._tat_n ? +(s._tat_sum / s._tat_n).toFixed(2) : null, avg_o2d: s._o2d_n ? +(s._o2d_sum / s._o2d_n).toFixed(2) : null }
           })()
-          const thStyle = { padding: '9px 10px', textAlign: 'right', fontWeight: 700, fontSize: 11, color: C.t2, whiteSpace: 'nowrap', background: C.bg, position: 'sticky', top: 0, zIndex: 1 }
+          const thStyle = { padding: '9px 10px', textAlign: 'right', fontWeight: 700, fontSize: 11, color: C.t2, whiteSpace: 'nowrap', background: C.acl, position: 'sticky', top: 0, zIndex: 1 }
           const thL = { ...thStyle, textAlign: 'left' }
           const td = { padding: '9px 10px', textAlign: 'right', fontSize: 11, color: C.t1, borderTop: `1px solid ${C.border}` }
           const tdL = { ...td, textAlign: 'left', fontWeight: 600 }
           return (
-            <div style={{ display: secCollapsed['ndr'] ? 'none' : 'block', ...cardStyle }}>
+            <div className="card-hoverable" style={{ display: secCollapsed['ndr'] ? 'none' : 'block', ...cardStyle }}>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
                 <div style={chartTitle}>NDR - Courier-wise Breakdown</div>
                 <div style={{ display: 'flex', gap: 4 }}>
                   {['All', 'COD', 'PREPAID'].map(v => (
-                    <button key={v} onClick={() => setNdrPayFilter(v)} style={{ padding: '4px 10px', fontSize: 11, fontWeight: 600, borderRadius: 6, border: `1px solid ${C.border}`, cursor: 'pointer', background: ndrPayFilter === v ? C.accent || '#2563eb' : C.card, color: ndrPayFilter === v ? '#fff' : C.t1 }}>
+                    <button key={v} onClick={() => setNdrPayFilter(v)} style={{ padding: '4px 10px', fontSize: 11, fontWeight: 600, borderRadius: 6, border: `1px solid ${C.border}`, cursor: 'pointer', background: ndrPayFilter === v ? C.acs : C.card, color: ndrPayFilter === v ? '#3F3D33' : C.t1 }}>
                       {v === 'PREPAID' ? 'Prepaid' : v}
                     </button>
                   ))}
@@ -2602,7 +2600,7 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
                     ))}
                   </tbody>
                   <tfoot>
-                    <tr style={{ borderTop: `2px solid ${C.border}`, background: C.bg, position: 'sticky', bottom: 0, zIndex: 1 }}>
+                    <tr style={{ borderTop: `2px solid ${C.border}`, background: C.acl, position: 'sticky', bottom: 0, zIndex: 1 }}>
                       <td style={{ ...tdL, fontWeight: 700 }}>Total</td>
                       <td style={{ ...td, fontWeight: 700 }}>{totals.total_shipments.toLocaleString('en-IN')}</td>
                       <td style={{ ...td, fontWeight: 700 }}>{totals.ndr_count.toLocaleString('en-IN')}</td>
@@ -4278,7 +4276,7 @@ function Topnav({ page, setPage, customerTab, invTab, setInvTab, combinedAlerts,
           the top nav (visible on every page, like a notification icon in any standard product
           nav) rather than scrolled inside one page's content, where it used to live only on
           Overview and disappeared the moment you scrolled down or switched tabs. */}
-      <AlertsBell alerts={combinedAlerts} />
+      {page !== 'inventory' && page !== 'logistics' && <AlertsBell alerts={combinedAlerts} />}
       {page !== 'inventory' && page !== 'cogs' && page !== 'documents' && page !== 'profile' && page !== 'logistics-ledger' && page !== 'logistics-cost' && (
         <div className="tnav-right">
           <div style={{ opacity: dateBlurred ? 0.35 : 1, pointerEvents: dateBlurred ? 'none' : 'auto', transition: 'opacity 0.2s', position: 'relative' }} title={dateBlurred ? 'Segments & RFM is all-time — date range not applied' : undefined}>
@@ -4474,7 +4472,7 @@ function IndiaChoropleth({ stateMap, totalRev, cityRows = [] }) {
           </div>
         ))}
       </div>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginTop: 6, fontSize: 9.5, color: C.t3 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginTop: 6, marginBottom: -4, fontSize: 9.5, color: C.t3 }}>
         <span>Low</span>
         <div style={{ flex: 1, height: 5, borderRadius: 3, background: `linear-gradient(90deg, ${C.acc}1F, ${C.acc})` }} />
         <span>High</span>
@@ -4961,8 +4959,8 @@ function OverviewPage({ data, combinedAlerts, logisticsData, logisticsRangeLabel
               <TrendStatTile label="Net Revenue" value={fmt(netRevenueCalc)} color={C.border2} />
               <TrendStatTile label="Orders" value={fmtN(nOrders)} color={C.border2}
                 badge={ordDelta !== null && <span style={{ fontSize: 10, fontWeight: 700, color: ordDelta >= 0 ? C.green.tx : C.red.tx }}>{ordDelta >= 0 ? '▲' : '▼'} {Math.abs(ordDelta).toFixed(1)}%</span>} />
-              <TrendStatTile label="Blended AOV (Inc. GST)" value={`₹${Math.round(blendedAOV).toLocaleString('en-IN')}`} color={C.border2} />
-              <TrendStatTile label="Blended ASP (Inc. GST)" value={`₹${Math.round(blendedASP).toLocaleString('en-IN')}`} color={C.border2} />
+              <TrendStatTile label="AOV (Inc. GST)" value={`₹${Math.round(blendedAOV).toLocaleString('en-IN')}`} color={C.border2} />
+              <TrendStatTile label="ASP (Inc. GST)" value={`₹${Math.round(blendedASP).toLocaleString('en-IN')}`} color={C.border2} />
               <TrendStatTile label="Return %" value={`${totalReturnPct.toFixed(1)}%`} color={totalReturnPct > 15 ? C.red.tx : totalReturnPct > 8 ? C.amber.tx : C.green.tx} />
             </div>
             <div style={{ flex: 1, minHeight: 0 }}>
@@ -5053,7 +5051,7 @@ function OverviewPage({ data, combinedAlerts, logisticsData, logisticsRangeLabel
           const q = productSearch.trim().toLowerCase()
           const filteredSubCat = q ? topProductsBySubCat.filter(g => g.subCategory.toLowerCase().includes(q) || g.category.toLowerCase().includes(q)) : topProductsBySubCat
           return (
-          <WideCard span={8}>
+          <WideCard span={8} style={{ maxHeight: 520, overflow: 'hidden' }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginBottom: 12 }}>
               <span style={{ fontSize: 13, fontWeight: 700, color: C.t1, whiteSpace: 'nowrap' }}>Product Performance</span>
               <div style={{ position: 'relative', width: 230, flexShrink: 0 }}>
@@ -5132,7 +5130,7 @@ function OverviewPage({ data, combinedAlerts, logisticsData, logisticsRangeLabel
           )
         })()}
 
-        <WideCard span={4}>
+        <WideCard span={4} style={{ paddingBottom: 12, overflow: 'hidden', maxHeight: 520 }}>
           {secHdr('Top States', 'By revenue · click map for cities')}
           <IndiaChoropleth stateMap={stateMap} totalRev={totalRev} cityRows={data.cityRows || []} />
         </WideCard>
@@ -7243,7 +7241,7 @@ function AllTab({ data, rangeStart, rangeEnd }) {
       </div>
       <ChannelTrendCard dailyArr={dailyArr} channels={channels} rangeStart={rangeStart} rangeEnd={rangeEnd} />
       <div className="g-3col" style={{ display: 'grid', gridTemplateColumns: '1.2fr 1.5fr 1fr', gap: 14, alignItems: 'start' }}>
-        <ChannelShareTable sortedCh={sortedCh} prevChMap={prevChMap} boxHeight={360} />
+        <ChannelShareTable sortedCh={sortedCh} prevChMap={prevChMap} boxHeight={340} />
         <CategoryRevenueCard
           catRows={catRows}
           subCatRows={allSubCatRowsRaw}
@@ -7255,7 +7253,7 @@ function AllTab({ data, rangeStart, rangeEnd }) {
           onSelectCategory={v => setSelectedCat(prev => prev === v ? null : v)}
           height={360}
         />
-        <GeoToggleDonutCard regionRows={regionRows} tierRows={tierRows} boxHeight={360} />
+        <GeoToggleDonutCard regionRows={regionRows} tierRows={tierRows} boxHeight={340} />
       </div>
       <DailyChannelTable dailyArr={dailyArr} channels={channels} nDays={nDays} rangeStart={rangeStart} rangeEnd={rangeEnd} />
       <FlatCategoryProductMatrix catData={catMatrixDataAll} subCatData={subCatMatrixDataAll} skuData={skuChannelMapBySku} title="Category Revenue Matrix · All Channels" catPrevMap={catPrevMap} subCatPrevMap={subCatPrevMap} showReturnPct={true} />
@@ -7496,7 +7494,7 @@ function GeoToggleDonutCard({ regionRows, tierRows, note, boxHeight }) {
   // If boxHeight is supplied (to match a sibling card like CategoryRevenueCard), it wins.
   const ROW_H = 17
   const naturalContentH = 130 + 10 + Math.max(regionData.length, 1) * ROW_H + 20
-  const HEADER_CHROME = 34 + 38 // Card title row + toggle-button row incl. margins
+  const HEADER_CHROME = 34 // Card title row (toggle is now in action prop, same row)
   const fixedContentH = boxHeight ? boxHeight - HEADER_CHROME : naturalContentH
 
   const isMobGeo = typeof window !== 'undefined' && window.innerWidth <= 768
@@ -7506,10 +7504,10 @@ function GeoToggleDonutCard({ regionRows, tierRows, note, boxHeight }) {
     <Card title="Geography Breakdown" note={note}
       action={
         <div style={{ display: 'flex', gap: 4 }}>
-          {[{ id: 'region', label: 'By Region' }, { id: 'tier', label: 'By City Tier' }].map((opt, i) => (
+          {[{ id: 'region', label: 'Region' }, { id: 'tier', label: 'City Tier' }].map((opt, i) => (
             <div key={opt.id} style={{ display: 'flex', alignItems: 'center' }}>
               {i > 0 && <div style={{ width: 1, height: 14, background: '#D6D0B0', margin: '0 4px' }} />}
-              <button onClick={() => setGeoView(opt.id)} style={{ fontSize: 11, fontWeight: geoView === opt.id ? 700 : 500, padding: '3px 9px', borderRadius: 6, border: 'none', outline: 'none', background: geoView === opt.id ? C.acs : 'transparent', color: geoView === opt.id ? '#3F3D33' : C.t2, cursor: 'pointer', minWidth: 74, textAlign: 'center' }}>{opt.label}</button>
+              <button onClick={() => setGeoView(opt.id)} style={{ fontSize: 10, fontWeight: geoView === opt.id ? 700 : 500, padding: '2px 7px', borderRadius: 5, border: 'none', outline: 'none', background: geoView === opt.id ? C.acs : 'transparent', color: geoView === opt.id ? '#3F3D33' : C.t2, cursor: 'pointer', minWidth: 0, textAlign: 'center' }}>{opt.label}</button>
             </div>
           ))}
         </div>
@@ -7583,6 +7581,8 @@ function ShopifyGeoRichTable({ title, rows, firstKey, firstLabel, formatFirst, r
     aov: r => r.aov || 0, asp: r => r.asp || 0, mom: r => r.mom ?? -Infinity, rtoPct: r => r.rtoPct || 0,
   }
   const sortedRows = table.sortRows(rows, getters)
+  let cumAcc = 0
+  sortedRows.forEach(r => { cumAcc += r.sharePct || 0; r.cumPct = cumAcc })
   const { Th } = table
 
   // Same visual language as the Category Revenue Matrix / Ads-tab tables: C.bg sticky header
@@ -8002,6 +8002,7 @@ function ShopifyTab({ data, filters, setFilters }) {
         sharePct: totalNetAll > 0 ? (stateNet / totalNetAll * 100) : 0,
       }
     }).sort((a, b) => b.rev - a.rev)
+    let cumS = 0; sorted.forEach(r => { cumS += r.sharePct || 0; r.cumPct = cumS })
     return sorted
   })()
   const enrichedCityRows = (() => {
@@ -8023,6 +8024,7 @@ function ShopifyTab({ data, filters, setFilters }) {
         sharePct: totalNetAll > 0 ? (cityNet / totalNetAll * 100) : 0,
       }
     }).sort((a, b) => b.rev - a.rev)
+    let cumC = 0; sorted.forEach(r => { cumC += r.sharePct || 0; r.cumPct = cumC })
     return sorted
   })()
 
@@ -8201,11 +8203,11 @@ function ShopifyTab({ data, filters, setFilters }) {
             { name: 'Return % (RTO+CIR)', color: '#E24B4A' }, { name: 'Exchange %', color: '#9B59B6' }, { name: 'Cancellation %', color: '#B91C1C' },
           ]
           return (
-            <Card title="Revenue & Returns Trend" style={{ alignSelf: 'start', height: isMob ? 'auto' : 420 }} action={
+            <Card title="Revenue & Returns Trend" style={{ alignSelf: 'start', height: isMob ? 'auto' : 340 }} action={
               <Dropdown value={shTrendGroup} onChange={setShTrendGroup} options={GROUP_OPTS} style={{ fontSize: 11, fontWeight: 600, padding: '3px 8px', borderRadius: 6, border: `1px solid ${C.border2}`, background: C.card, color: C.t1, cursor: 'pointer', fontFamily: 'var(--font)', outline: 'none' }} />
             }>
               <div style={isMob ? { margin: '0 -18px' } : {}}>
-              <ResponsiveContainer width="100%" height={isMob ? 240 : 300} minHeight={200}>
+              <ResponsiveContainer width="100%" height={isMob ? 200 : 220} minHeight={180}>
                 <ComposedChart data={grouped} margin={{ top: 8, right: isMob ? 18 : 20, bottom: 0, left: isMob ? 18 : 0 }}>
                   <defs>
                     <linearGradient id="shGrossGrad" x1="0" y1="0" x2="0" y2="1">
@@ -8232,11 +8234,10 @@ function ShopifyTab({ data, filters, setFilters }) {
                       ))}
                     </div>
                   ) : null} />
-                  {!isMob && <Legend verticalAlign="bottom" align="center" layout="horizontal" wrapperStyle={{ fontSize: 11, paddingTop: 8 }} formatter={v => <span style={{ color: '#111' }}>{v}</span>} />}
-                  <Area yAxisId="rev" type="monotone" dataKey="grossRev" name="Gross Revenue" stroke={C.acm} fill="url(#shGrossGrad)" strokeWidth={2.5} dot={false} />
-                  <Area yAxisId="rev" type="monotone" dataKey="netRev" name="Net Revenue" stroke="#0D9E68" fill="url(#shNetGrad)" strokeWidth={2} dot={false} />
-                  <Line yAxisId="pct" type="monotone" dataKey="returnPct" name="Return % (RTO+CIR)" stroke="#E24B4A" strokeWidth={1.5} dot={false} />
-                  <Line yAxisId="pct" type="monotone" dataKey="exchPct" name="Exchange %" stroke="#9B59B6" strokeWidth={1.5} dot={false} />
+                  <Area yAxisId="rev" type="monotone" dataKey="grossRev" name="Gross Revenue" stroke={C.acm} fill="url(#shGrossGrad)" strokeWidth={2.5} dot={false} legendType="none" />
+                  <Area yAxisId="rev" type="monotone" dataKey="netRev" name="Net Revenue" stroke="#0D9E68" fill="url(#shNetGrad)" strokeWidth={2} dot={false} legendType="none" />
+                  <Line yAxisId="pct" type="monotone" dataKey="returnPct" name="Return % (RTO+CIR)" stroke="#E24B4A" strokeWidth={1.5} dot={false} legendType="none" />
+                  <Line yAxisId="pct" type="monotone" dataKey="exchPct" name="Exchange %" stroke="#9B59B6" strokeWidth={1.5} dot={false} legendType="none" />
                 </ComposedChart>
               </ResponsiveContainer>
               </div>
@@ -8278,11 +8279,11 @@ function ShopifyTab({ data, filters, setFilters }) {
               totalRev={totalRev}
               view={catRevView}
               setView={setCatRevView}
-              height={420}
+              height={340}
             />}
         {isIntl
           ? <Card title="Geography Breakdown"><div style={{ fontSize: 12, color: C.t3, padding: '10px 0', textAlign: 'center' }}>Geographic data not available for International orders</div></Card>
-          : <GeoToggleDonutCard regionRows={sh.regionRows || []} tierRows={sh.tierRows || []} boxHeight={420} />}
+          : <GeoToggleDonutCard regionRows={sh.regionRows || []} tierRows={sh.tierRows || []} boxHeight={340} />}
       </div>
       {/* Category Revenue Matrix · Shopify */}
       {isIntl
@@ -8685,14 +8686,14 @@ function EBOTab({ data, rangeStart, rangeEnd }) {
         </div>
       </div>
       {/* Revenue & Returns Trend + Category Revenue + Geography Breakdown side by side */}
-      <div className="g-2 g-3col" style={{ gridTemplateColumns: '1.5fr 1fr 0.65fr', alignItems: 'stretch' }}>
-        <div className="card" style={{ padding: '14px 18px', display: 'flex', flexDirection: 'column', height: isMob ? 'auto' : 420, boxSizing: 'border-box' }}>
+      <div className="g-2 g-3col" style={{ gridTemplateColumns: '1fr 0.85fr 1.4fr', alignItems: 'stretch' }}>
+        <div className="card" style={{ padding: '14px 18px', display: 'flex', flexDirection: 'column', height: isMob ? 'auto' : 340, boxSizing: 'border-box' }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10, flexShrink: 0 }}>
             <span style={{ fontSize: 13, fontWeight: 700, color: C.t1 }}>Revenue &amp; Returns Trend</span>
             <Dropdown value={trendGroup} onChange={setTrendGroup} options={EBO_TREND_GROUP_OPTS} style={{ fontSize: 11, fontWeight: 700, padding: '3px 8px', borderRadius: 6 }} />
           </div>
           <div style={isMob ? { margin: '0 -18px' } : {}}>
-          <ResponsiveContainer width="100%" height={isMob ? 240 : 280} minHeight={200}>
+          <ResponsiveContainer width="100%" height={isMob ? 200 : 220} minHeight={180}>
             <ComposedChart data={groupedDaily} margin={{ top: 8, right: isMob ? 18 : 20, bottom: 0, left: isMob ? 18 : 0 }}>
               <defs>
                 <linearGradient id="eboGrossGrad2" x1="0" y1="0" x2="0" y2="1">
@@ -8719,24 +8720,21 @@ function EBOTab({ data, rangeStart, rangeEnd }) {
                   ))}
                 </div>
               ) : null} />
-              {!isMob && <Legend verticalAlign="bottom" align="center" layout="horizontal" wrapperStyle={{ fontSize: 11, paddingTop: 8 }} formatter={v => <span style={{ color: '#111' }}>{v}</span>} />}
-              <Area yAxisId="rev" type="monotone" dataKey="grossRev" name="Gross Revenue" stroke={C.acm} fill="url(#eboGrossGrad2)" strokeWidth={2.5} dot={false} />
-              <Area yAxisId="rev" type="monotone" dataKey="netRev" name="Net Revenue" stroke="#0D9E68" fill="url(#eboNetGrad2)" strokeWidth={2} dot={false} />
-              <Line yAxisId="pct" type="monotone" dataKey="returnPct" name="Return % (RTO+CIR)" stroke="#E24B4A" strokeWidth={1.5} dot={false} />
-              <Line yAxisId="pct" type="monotone" dataKey="exchPct" name="Exchange %" stroke="#9B59B6" strokeWidth={1.5} dot={false} />
-              <Line yAxisId="pct" type="monotone" dataKey="cancelPct" name="Cancellation %" stroke="#B91C1C" strokeWidth={1.5} dot={false} />
+              <Area yAxisId="rev" type="monotone" dataKey="grossRev" name="Gross Revenue" stroke={C.acm} fill="url(#eboGrossGrad2)" strokeWidth={2.5} dot={false} legendType="none" />
+              <Area yAxisId="rev" type="monotone" dataKey="netRev" name="Net Revenue" stroke="#0D9E68" fill="url(#eboNetGrad2)" strokeWidth={2} dot={false} legendType="none" />
+              <Line yAxisId="pct" type="monotone" dataKey="returnPct" name="Return % (RTO+CIR)" stroke="#E24B4A" strokeWidth={1.5} dot={false} legendType="none" />
+              <Line yAxisId="pct" type="monotone" dataKey="exchPct" name="Exchange %" stroke="#9B59B6" strokeWidth={1.5} dot={false} legendType="none" />
+              <Line yAxisId="pct" type="monotone" dataKey="cancelPct" name="Cancellation %" stroke="#B91C1C" strokeWidth={1.5} dot={false} legendType="none" />
             </ComposedChart>
           </ResponsiveContainer>
           </div>
-          {isMob && (
-            <div style={{ display:'flex', flexWrap:'wrap', justifyContent:'center', gap:'6px 12px', marginTop: 8 }}>
-              {[{name:'Gross Revenue',color:C.acm},{name:'Net Revenue',color:'#0D9E68'},{name:'Return % (RTO+CIR)',color:'#E24B4A'},{name:'Exchange %',color:'#9B59B6'},{name:'Cancellation %',color:'#B91C1C'}].map(it => (
-                <span key={it.name} style={{ display:'flex', alignItems:'center', gap: 4, fontSize: 11, color: '#111' }}>
-                  <span style={{ width:8, height:8, borderRadius:'50%', background: it.color, display:'inline-block', flexShrink:0 }} />{it.name}
-                </span>
-              ))}
-            </div>
-          )}
+          <div style={{ display:'flex', flexWrap:'wrap', justifyContent:'center', gap:'6px 12px', marginTop: 8 }}>
+            {[{name:'Gross Revenue',color:C.acm},{name:'Net Revenue',color:'#0D9E68'},{name:'Return % (RTO+CIR)',color:'#E24B4A'},{name:'Exchange %',color:'#9B59B6'}].map(it => (
+              <span key={it.name} style={{ display:'flex', alignItems:'center', gap: 4, fontSize: 11, color: C.t1 }}>
+                <span style={{ width:8, height:8, borderRadius:'50%', background: it.color, display:'inline-block', flexShrink:0 }} />{it.name}
+              </span>
+            ))}
+          </div>
         </div>
         <CategoryRevenueCard
           catRows={catRows}
@@ -8745,9 +8743,9 @@ function EBOTab({ data, rangeStart, rangeEnd }) {
           totalRev={totalRev}
           view={catRevView}
           setView={setCatRevView}
-          height={420}
+          height={340}
         />
-        <GeoToggleDonutCard regionRows={regionRows} tierRows={tierRows} boxHeight={420} />
+        <GeoToggleDonutCard regionRows={regionRows} tierRows={tierRows} boxHeight={340} />
       </div>
       <FlatCategoryProductMatrix catData={catDataForMatrix} subCatData={subCatDataForMatrix} skuData={skuDataForMatrix} title="Category Revenue Matrix · EBO" catPrevMap={ebo.catPrevMap || {}} subCatPrevMap={ebo.subCatPrevMap || {}} showReturnPct={true} detailedReturns />
       {/* Geo tables */}
@@ -9097,7 +9095,7 @@ function AmazonTab({ data, channelView, setChannelView }) {
             const statusColors = { Shipped: '#2E74CC', Pending: '#E8930A', Cancelled: '#E24B4A', Shipping: '#9B59B6' }
             return (
               <div className="g-3col" style={{ display: 'grid', gridTemplateColumns: '1.5fr 1fr 0.65fr', gap: 14, alignItems: 'start' }}>
-                <Card fill title="Revenue & Returns Trend" style={{ height: 390, alignSelf: 'start' }} note={channelView !== 'all' ? (channelView === 'sc' ? 'Seller Central' : 'Vendor Central') : undefined} action={
+                <Card fill title="Revenue & Returns Trend" style={{ height: 340, alignSelf: 'start' }} note={channelView !== 'all' ? (channelView === 'sc' ? 'Seller Central' : 'Vendor Central') : undefined} action={
                   <div style={{ display: 'flex', gap: isMob ? 4 : 8, alignItems: 'center' }}>
                     {isMob ? (
                       <Dropdown value={ovTrendMetric} onChange={setOvTrendMetric} options={[{ id: 'rev', label: 'Revenue' }, { id: 'orders', label: 'Orders' }, { id: 'units', label: 'Units' }]} style={{ fontSize: 10, fontWeight: 600, padding: '2px 4px', borderRadius: 6, width: 78 }} />
@@ -9462,7 +9460,7 @@ function FlipkartTab({ data }) {
         const btnSt = k => ({ fontSize: 11, fontWeight: fkTrendMetric===k?700:500, padding: '3px 9px', borderRadius: 6, border: 'none', outline: 'none', background: fkTrendMetric===k?C.acs:'transparent', color: fkTrendMetric===k?'#3F3D33':C.t2, cursor: 'pointer', fontFamily: 'var(--font)', minWidth: 72, textAlign: 'center' })
         return (
           <div className="g-3col" style={{ display: 'grid', gridTemplateColumns: '1.5fr 1fr 0.65fr', gap: 14, alignItems: 'start' }}>
-            <Card fill title="Revenue & Returns Trend" style={{ height: 360, alignSelf: 'start' }} action={
+            <Card fill title="Revenue & Returns Trend" style={{ height: 340, alignSelf: 'start' }} action={
               <div style={{ display: 'flex', gap: isMob ? 4 : 8, alignItems: 'center' }}>
                 {isMob ? (
                   <SmallDropdown value={fkTrendMetric} onChange={setFkTrendMetric} options={[['rev','Gross Rev'],['orders','Orders'],['units','Units']]}
@@ -9567,7 +9565,7 @@ function FlipkartTab({ data }) {
               const regionAgg = {}
               ;(fk.regions || []).forEach(x => { if (!regionAgg[x.region]) regionAgg[x.region] = { region: x.region, rev: 0, orders: 0 }; regionAgg[x.region].rev += x.rev; regionAgg[x.region].orders += x.orders })
               const regionRows = Object.values(regionAgg).sort((a, b) => b.rev - a.rev)
-              return <GeoToggleDonutCard regionRows={regionRows} tierRows={[]} boxHeight={360} />
+              return <GeoToggleDonutCard regionRows={regionRows} tierRows={[]} boxHeight={340} />
             })()}
           </div>
         )
@@ -11460,7 +11458,7 @@ function BlinkitTab({ data }) {
 
       {/* Revenue Trend + Category Revenue + Geography Breakdown side by side */}
       <div className="g-3col" style={{ display: 'grid', gridTemplateColumns: '1.5fr 1fr 0.65fr', gap: 14, alignItems: 'start' }}>
-        <TrendAnalysisCard title="Revenue & Returns Trend" daily={daily} grossColor={C.acm} grossGradId="blGrossGrad2" revKey="rev" excRevKey="excRev" boxHeight={360} />
+        <TrendAnalysisCard title="Revenue & Returns Trend" daily={daily} grossColor={C.acm} grossGradId="blGrossGrad2" revKey="rev" excRevKey="excRev" boxHeight={340} />
         <CategoryRevenueCard
           catRows={catRowsForCatSubCat}
           subCatRows={subCatRowsForCatSubCat}
@@ -11475,7 +11473,7 @@ function BlinkitTab({ data }) {
         {(() => {
           const regAgg = {}; cityRows.forEach(c => { if (!c.region) return; if (!regAgg[c.region]) regAgg[c.region] = { region: c.region, rev: 0, orders: 0 }; regAgg[c.region].rev += c.rev; regAgg[c.region].orders += c.units })
           const tierAgg = {}; cityRows.forEach(c => { if (!c.cityTier) return; const k = `Tier ${c.cityTier}`; if (!tierAgg[k]) tierAgg[k] = { tier: c.cityTier, rev: 0, orders: 0 }; tierAgg[k].rev += c.rev; tierAgg[k].orders += c.units })
-          return <GeoToggleDonutCard regionRows={Object.values(regAgg)} tierRows={Object.values(tierAgg)} boxHeight={360} />
+          return <GeoToggleDonutCard regionRows={Object.values(regAgg)} tierRows={Object.values(tierAgg)} boxHeight={340} />
         })()}
       </div>
 
@@ -11633,7 +11631,7 @@ function InstaTab({ data }) {
 
       {/* Revenue Trend + Category Revenue + Geography Breakdown side by side */}
       <div className="g-3col" style={{ display: 'grid', gridTemplateColumns: '1.5fr 1fr 0.65fr', gap: 14, alignItems: 'start' }}>
-        <TrendAnalysisCard title="Revenue & Returns Trend" daily={daily} grossColor={C.acm} grossGradId="inGrossGrad2" revKey="rev" excRevKey="excRev" boxHeight={360} />
+        <TrendAnalysisCard title="Revenue & Returns Trend" daily={daily} grossColor={C.acm} grossGradId="inGrossGrad2" revKey="rev" excRevKey="excRev" boxHeight={340} />
         <CategoryRevenueCard
           catRows={catRowsForCatSubCat}
           subCatRows={subCatRowsForCatSubCat}
@@ -11648,7 +11646,7 @@ function InstaTab({ data }) {
         {(() => {
           const regAgg = {}; cityRows.forEach(c => { if (!c.region) return; if (!regAgg[c.region]) regAgg[c.region] = { region: c.region, rev: 0, orders: 0 }; regAgg[c.region].rev += c.rev; regAgg[c.region].orders += c.units })
           const tierAgg = {}; cityRows.forEach(c => { if (!c.cityTier) return; const k = `Tier ${c.cityTier}`; if (!tierAgg[k]) tierAgg[k] = { tier: c.cityTier, rev: 0, orders: 0 }; tierAgg[k].rev += c.rev; tierAgg[k].orders += c.units })
-          return <GeoToggleDonutCard regionRows={Object.values(regAgg)} tierRows={Object.values(tierAgg)} boxHeight={360} />
+          return <GeoToggleDonutCard regionRows={Object.values(regAgg)} tierRows={Object.values(tierAgg)} boxHeight={340} />
         })()}
       </div>
 
@@ -11804,7 +11802,7 @@ function ZeptoTab({ data }) {
 
       {/* Revenue Trend + Category Revenue + Geography Breakdown side by side */}
       <div className="g-3col" style={{ display: 'grid', gridTemplateColumns: '1.5fr 1fr 0.65fr', gap: 14, alignItems: 'start' }}>
-        <TrendAnalysisCard title="Revenue & Returns Trend" daily={daily} grossColor={C.acm} grossGradId="zpGrossGrad2" revKey="rev" excRevKey="excRev" boxHeight={360} />
+        <TrendAnalysisCard title="Revenue & Returns Trend" daily={daily} grossColor={C.acm} grossGradId="zpGrossGrad2" revKey="rev" excRevKey="excRev" boxHeight={340} />
         <CategoryRevenueCard
           catRows={catRowsForCatSubCat}
           subCatRows={subCatRowsForCatSubCat}
@@ -11819,7 +11817,7 @@ function ZeptoTab({ data }) {
         {(() => {
           const regAgg = {}; cityRows.forEach(c => { if (!c.region) return; if (!regAgg[c.region]) regAgg[c.region] = { region: c.region, rev: 0, orders: 0 }; regAgg[c.region].rev += c.rev; regAgg[c.region].orders += c.units })
           const tierAgg = {}; cityRows.forEach(c => { if (!c.cityTier) return; const k = `Tier ${c.cityTier}`; if (!tierAgg[k]) tierAgg[k] = { tier: c.cityTier, rev: 0, orders: 0 }; tierAgg[k].rev += c.rev; tierAgg[k].orders += c.units })
-          return <GeoToggleDonutCard regionRows={Object.values(regAgg)} tierRows={Object.values(tierAgg)} boxHeight={360} />
+          return <GeoToggleDonutCard regionRows={Object.values(regAgg)} tierRows={Object.values(tierAgg)} boxHeight={340} />
         })()}
       </div>
 
@@ -12027,7 +12025,7 @@ function CredTab({ data }) {
         const btnSt = k => ({ fontSize: 11, fontWeight: crTrendMetric===k?700:500, padding: '3px 9px', borderRadius: 6, border: 'none', outline: 'none', background: crTrendMetric===k?C.acs:'transparent', color: crTrendMetric===k?'#3F3D33':C.t2, cursor: 'pointer', fontFamily: 'var(--font)', minWidth: 72, textAlign: 'center' })
         return (
           <div className="g-3col" style={{ display: 'grid', gridTemplateColumns: '1.5fr 1fr 0.65fr', gap: 14, alignItems: 'start' }}>
-            <Card fill title="Revenue & Returns Trend" style={{ height: isMob ? 'auto' : 360, alignSelf: 'start' }} action={
+            <Card fill title="Revenue & Returns Trend" style={{ height: isMob ? 'auto' : 340, alignSelf: 'start' }} action={
               <div style={{ display: 'flex', gap: isMob ? 4 : 8, alignItems: 'center' }}>
                 {isMob ? (
                   <Dropdown value={crTrendMetric} onChange={setCrTrendMetric} options={[['rev','Gross Rev'],['orders','Orders'],['units','Units']].map(([k,l]) => ({ id: k, label: l }))} style={{ fontSize: 10, fontWeight: 600, padding: '2px 4px', borderRadius: 6, border: `1px solid ${C.border2}`, background: C.card, color: C.t1, cursor: 'pointer', fontFamily: 'var(--font)', outline: 'none' }} />
@@ -12104,7 +12102,7 @@ function CredTab({ data }) {
               onSelectCategory={v => { setSelectedCat(prev => prev === v ? null : v); setSelectedSubCat(null) }}
               height={360}
             />
-            <GeoToggleDonutCard regionRows={cr.regionRows || []} tierRows={cr.tierRows || []} boxHeight={360} />
+            <GeoToggleDonutCard regionRows={cr.regionRows || []} tierRows={cr.tierRows || []} boxHeight={340} />
           </div>
         )
       })()}
@@ -12285,7 +12283,7 @@ function FirstcryTab({ data }) {
         const fcGroupOpts = [{ id: 'daily', label: 'Daily' }, { id: 'weekly', label: 'Weekly' }, { id: 'monthly', label: 'Monthly' }, { id: 'quarterly', label: 'Quarterly' }]
         return (
           <div className="g-3col" style={{ display: 'grid', gridTemplateColumns: '1.5fr 1fr 0.65fr', gap: 14, alignItems: 'start' }}>
-            <Card fill title="Revenue & Returns Trend" style={{ height: isMob ? 'auto' : 360, alignSelf: 'start' }} action={
+            <Card fill title="Revenue & Returns Trend" style={{ height: isMob ? 'auto' : 340, alignSelf: 'start' }} action={
               <div style={{ display: 'flex', gap: isMob ? 4 : 8, alignItems: 'center' }}>
                 {isMob ? (
                   <Dropdown value={fcTrendMetric} onChange={setFcTrendMetric} options={fcMetricOpts} style={{ fontSize: 10, fontWeight: 600, padding: '2px 4px', borderRadius: 6, border: `1px solid ${C.border2}`, background: C.card, color: C.t1, cursor: 'pointer', fontFamily: 'var(--font)', outline: 'none' }} />
@@ -12362,7 +12360,7 @@ function FirstcryTab({ data }) {
               onSelectCategory={v => { setSelectedCat(prev => prev === v ? null : v); setSelectedSubCat(null) }}
               height={360}
             />
-            <GeoToggleDonutCard regionRows={fc.regionRows || []} tierRows={fc.tierRows || []} boxHeight={360} />
+            <GeoToggleDonutCard regionRows={fc.regionRows || []} tierRows={fc.tierRows || []} boxHeight={340} />
           </div>
         )
       })()}
@@ -12540,7 +12538,7 @@ function MyntraTab({ data }) {
         const btnSt = k => ({ fontSize: 11, fontWeight: mnTrendMetric===k?700:500, padding: '3px 9px', borderRadius: 6, border: 'none', outline: 'none', background: mnTrendMetric===k?C.acs:'transparent', color: mnTrendMetric===k?'#3F3D33':C.t2, cursor: 'pointer', fontFamily: 'var(--font)', minWidth: 72, textAlign: 'center' })
         return (
           <div className="g-3col" style={{ display: 'grid', gridTemplateColumns: '1.5fr 1fr 0.65fr', gap: 14, alignItems: 'start' }}>
-            <Card fill title="Revenue & Returns Trend" style={{ height: isMob ? 'auto' : 360, alignSelf: 'start' }} action={
+            <Card fill title="Revenue & Returns Trend" style={{ height: isMob ? 'auto' : 340, alignSelf: 'start' }} action={
               <div style={{ display: 'flex', gap: isMob ? 4 : 8, alignItems: 'center' }}>
                 {isMob ? (
                   <SmallDropdown value={mnTrendMetric} onChange={setMnTrendMetric} options={[['rev','Gross Rev'],['orders','Orders'],['units','Units']]}
@@ -12609,7 +12607,7 @@ function MyntraTab({ data }) {
               // don't carry a units field).
               const regAgg = {}; cityRows.forEach(c => { if (!c.region) return; if (!regAgg[c.region]) regAgg[c.region] = { region: c.region, rev: 0, orders: 0 }; regAgg[c.region].rev += c.rev; regAgg[c.region].orders += c.orders })
               const tierAgg = {}; cityRows.forEach(c => { if (!c.cityTier) return; const k = `Tier ${c.cityTier}`; if (!tierAgg[k]) tierAgg[k] = { tier: c.cityTier, name: k, rev: 0, orders: 0 }; tierAgg[k].rev += c.rev; tierAgg[k].orders += c.orders })
-              return <GeoToggleDonutCard regionRows={Object.values(regAgg)} tierRows={Object.values(tierAgg)} boxHeight={360} />
+              return <GeoToggleDonutCard regionRows={Object.values(regAgg)} tierRows={Object.values(tierAgg)} boxHeight={340} />
             })()}
           </div>
         )
@@ -12922,7 +12920,7 @@ function OfflineTab({ data, sub, setSub }) {
         const btnSt = k => ({ fontSize: 11, fontWeight: offTrendMetric===k?700:500, padding: '3px 9px', borderRadius: 6, border: 'none', outline: 'none', background: offTrendMetric===k?C.acs:'transparent', color: offTrendMetric===k?'#3F3D33':C.t2, cursor: 'pointer', fontFamily: 'var(--font)', minWidth: 72, textAlign: 'center' })
         return (
           <div className="g-3col" style={{ display: 'grid', gridTemplateColumns: '1.5fr 1fr 0.65fr', gap: 14, alignItems: 'start' }}>
-            <Card fill title="Revenue & Returns Trend" style={{ height: isMob ? 'auto' : 360, alignSelf: 'start' }} note={sub !== 'all' ? SUB_OPTIONS.find(o => o.id === sub)?.label : undefined} action={
+            <Card fill title="Revenue & Returns Trend" style={{ height: isMob ? 'auto' : 340, alignSelf: 'start' }} note={sub !== 'all' ? SUB_OPTIONS.find(o => o.id === sub)?.label : undefined} action={
               <div style={{ display: 'flex', gap: isMob ? 4 : 8, alignItems: 'center' }}>
                 {isMob ? (
                   <SmallDropdown value={offTrendMetric} onChange={setOffTrendMetric} options={[['rev','Gross Rev'],['orders','Orders'],['units','Units']]}
@@ -13000,7 +12998,7 @@ function OfflineTab({ data, sub, setSub }) {
               onSelectCategory={name => setSelectedCat(prev => prev === name ? null : name)}
               height={360}
             />
-            <GeoToggleDonutCard regionRows={regionRows} tierRows={tierRows} boxHeight={360} />
+            <GeoToggleDonutCard regionRows={regionRows} tierRows={tierRows} boxHeight={340} />
           </div>
         )
       })()}

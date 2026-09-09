@@ -91,7 +91,7 @@ function ReturnTrendChart({ kpis, dailyTrend }) {
                 ))}
               </div>
             ) : null} />
-            <Legend wrapperStyle={{ fontSize: 11, color: C.t1 }} />
+            <Legend wrapperStyle={{ fontSize: 11 }} formatter={v => <span style={{ color: '#111' }}>{v}</span>} />
             <Area yAxisId="rev" type="monotone" dataKey="revenue" name="Revenue" stroke={C.acm} fill="url(#raRevGrad)" strokeWidth={2} dot={false} />
             <Line yAxisId="pct" type="monotone" dataKey="totalReturnPct" name="Return % (Overall)" stroke="#E24B4A" strokeWidth={2} dot={false} />
             <Line yAxisId="pct" type="monotone" dataKey="cancelPct" name="Cancellation %" stroke="#B91C1C" strokeWidth={1.5} dot={false} strokeDasharray="6 2" />
