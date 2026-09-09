@@ -2260,8 +2260,8 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
                   <div style={chartTitle}>Delivery Performance by Weight Slab</div>
                 </div>
                 {isMobile && <div style={{ height: 1, background: C.border, margin: '10px 0 6px' }} />}
-                <div style={{ overflowX: 'auto', flex: 1, minHeight: 0 }}>
-                <ResponsiveContainer width="100%" height="100%">
+                <div style={{ overflowX: 'auto', flex: 1, minHeight: 260 }}>
+                <ResponsiveContainer width="100%" height={260}>
                   <ComposedChart data={ordered} margin={isMobile ? { top: 4, right: 4, left: 4, bottom: 0 } : { top: 4, right: 2, left: 0, bottom: 0 }}>
                     {!isMobile && <CartesianGrid strokeDasharray="3 3" stroke={C.border} vertical={false} />}
                     <XAxis dataKey="slab" tick={{ fontSize: isMobile ? 9 : 10, fill: C.t2 }} axisLine={isMobile ? { stroke: C.border } : undefined} tickLine={false} />
@@ -2282,7 +2282,7 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
                         </div>
                       )
                     }} />
-                    <Bar yAxisId="qty" dataKey="total" name="Shipments" fill={C.acc} radius={[3,3,0,0]} barSize={20} />
+                    <Bar yAxisId="qty" dataKey="total" name="Shipments" fill={C.acc} fillOpacity={0.85} radius={[3,3,0,0]} barSize={40} />
                     <Line yAxisId="pct" type="monotone" dataKey="rto_pct" name="RTO %" stroke={C.red.tx} strokeWidth={2} dot={{ r: 3, fill: C.red.tx }} />
                     <Line yAxisId="pct" type="monotone" dataKey="avg_tat" name="Intrasit TAT" stroke={C.blue.tx} strokeWidth={2} dot={{ r: 3, fill: C.blue.tx }} />
                     {!isMobile && <Legend wrapperStyle={{ fontSize: 10 }} formatter={v => <span style={{ color: '#111' }}>{v}</span>} />}
