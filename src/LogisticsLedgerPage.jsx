@@ -20,6 +20,7 @@ const FORMATS = {
     fields: [
       { key: "month_year", label: "month_year", type: "month", req: true, w: 110, ex: "2026-07", desc: "Billing period this invoice covers" },
       { key: "invoice_number", label: "invoice_number", type: "text", w: 150, ex: "TRN-INV-3321", desc: "Transporter's invoice/bill number" },
+      { key: "invoice_value", label: "invoice_value", type: "num", w: 130, ex: "10650", desc: "Total invoice value billed by transporter" },
       { key: "transporter_name", label: "transporter_name", type: "text", req: true, w: 170, ex: "ABC Roadlines", desc: "Name of the B2B transporter" },
       { key: "reference_no", label: "reference_no", type: "text", w: 140, ex: "LR-778812", desc: "LR number or consignment reference" },
       { key: "origin_location", label: "origin_location", type: "text", req: true, w: 150, ex: "Bhiwandi WH", desc: "Warehouse/city goods dispatched from" },
