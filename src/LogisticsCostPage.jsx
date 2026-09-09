@@ -555,6 +555,133 @@ function ExportMenu({ items, suffix }) {
   )
 }
 
+// What the reader needs to know about the data behind the numbers, on hover.
+//
+// Sits to the LEFT of the period chip: it qualifies everything to its right. Every figure
+// comes from the API's `health` object, which was already in the payload and rendered
+// nowhere — so a reader had no way to learn that 12% of shipments are excluded from
+// category analysis, or that 2,648 rows sit outside zones A-E.
+//
+// Hover, not click: this is reference material, not an action. Rendered on a portal-less
+// absolute layer with pointerEvents none so it can never swallow a click meant for the
+// chip beside it.
+function DataInfo({ scope, health, months, b2bMonths, b2bTotals, b2bVar }) {
+  const [open, setOpen] = useState(false)
+  const h = health || {}
+  const scoped = Number(h.scoped) || 0
+  const pct = (a, b) => (b > 0 ? (Number(a) / b) * 100 : 0)
+
+  const monthRange = list => {
+    const s = [...(list || [])].sort()
+    if (!s.length) return null
+    const lab = m => {
+      const [y, mo] = String(m).split('-')
+      const d = new Date(Number(y), Number(mo) - 1, 1)
+      return Number.isFinite(d.getTime()) ? d.toLocaleString('en-IN', { month: 'short', year: 'numeric' }) : String(m)
+    }
+    return { n: s.length, text: s.length === 1 ? lab(s[0]) : `${lab(s[0])} – ${lab(s[s.length - 1])}` }
+  }
+
+  const b2cRange = monthRange(months)
+  const b2bRange = monthRange((b2bMonths || []).map(r => r.key || r.month_year).filter(Boolean))
+
+  // Rows are built per scope: Overview covers both ledgers, the other two describe their own.
+  const sections = []
+
+  if (scope !== 'b2b') {
+    sections.push({
+      title: 'B2C courier ledger',
+      rows: [
+        b2cRange && ['Months of data', `${b2cRange.n} · ${b2cRange.text}`],
+        ['Shipments priced', `${fmtN(scoped)} of ${fmtN(h.total_rows)}`],
+        // Anything below is a REASON rows do not appear in a figure. Flagged only when
+        // non-zero, so a clean ledger shows a short list rather than a wall of zeros.
+        Number(h.bad_zone) > 0 && ['Outside zones A–E', `${fmtN(h.bad_zone)} excluded`, 'warn'],
+        Number(h.zero_cost) > 0 && ['Zero or negative cost', `${fmtN(h.zero_cost)} excluded`, 'warn'],
+        Number(h.no_declared_wt) > 0 && ['No Frido declared weight', `${fmtN(h.no_declared_wt)} · ${pct(h.no_declared_wt, scoped).toFixed(1)}%`, 'warn'],
+        Number(h.unpriced) > 0 && ['Not priced against a card', `${fmtN(h.unpriced)} · ${pct(h.unpriced, scoped).toFixed(2)}%`, 'warn'],
+        Number(h.with_cat) > 0 && ['Has product category', `${fmtN(h.with_cat)} · ${pct(h.with_cat, scoped).toFixed(1)}%`],
+        // The single most misread number on the page: these are real shipments with real
+        // spend, but a parcel holding several categories cannot be attributed to one, so
+        // the product view legitimately shows less than the headline.
+        Number(h.mixed) > 0 && ['Mixed-category parcels', `${fmtN(h.mixed)} · ${pct(h.mixed, scoped).toFixed(1)}% — not in product view`, 'warn'],
+        Number(h.courier_disputes) > 0 && ['Courier-flagged weight disputes', fmtN(h.courier_disputes)],
+      ].filter(Boolean),
+    })
+  }
+
+  if (scope !== 'b2c') {
+    const bt = b2bTotals || {}
+    const bv = b2bVar || {}
+    const unpriced = (Number(bv.trips) || 0) - (Number(bv.priced_trips) || 0)
+    sections.push({
+      title: 'FTL/PTL freight ledger',
+      rows: [
+        b2bRange && ['Months of data', `${b2bRange.n} · ${b2bRange.text}`],
+        ['Trips', fmtN(bt.trips)],
+        ['Transporters · lanes', `${fmtN(bt.transporters)} · ${fmtN(bt.lanes)}`],
+        // The rate card cannot price every trip, so contract variance covers only part of
+        // the spend. Saying so stops the variance figure being read as complete.
+        Number(bv.priced_trips) > 0 && ['Priced against the rate card', `${fmtN(bv.priced_trips)} of ${fmtN(bv.trips)} trips`],
+        unpriced > 0 && ['Not on the card', `${fmtN(unpriced)} trips · ${fmt(Number(bv.billed_all) - Number(bv.billed_priced))} unaudited`, 'warn'],
+        bv.value_total == null && ['Shipment value', 'not in the ledger yet', 'warn'],
+      ].filter(Boolean),
+    })
+  }
+
+  if (!sections.length) return null
+
+  return (
+    <span style={{ position: 'relative', display: 'inline-flex', flexShrink: 0 }}
+      onMouseEnter={() => setOpen(true)}
+      onMouseLeave={() => setOpen(false)}>
+      <span
+        role="img"
+        aria-label="Data information"
+        style={{
+          width: 16, height: 16, borderRadius: '50%', cursor: 'help',
+          border: `1px solid ${open ? C.acm : C.border2}`,
+          background: open ? C.acl : C.card,
+          color: open ? C.t1 : C.t3, fontSize: 10, fontWeight: 800,
+          display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+          fontFamily: 'var(--font)', transition: 'background .15s, border-color .15s, color .15s',
+        }}>i</span>
+
+      {open && (
+        <div style={{
+          position: 'absolute', top: 'calc(100% + 7px)', left: 0, zIndex: 600,
+          background: C.card, border: `1px solid ${C.border2}`, borderRadius: 10,
+          boxShadow: '0 10px 30px rgba(0,0,0,.17)', padding: '10px 12px',
+          width: 330, pointerEvents: 'none', textAlign: 'left',
+        }}>
+          {sections.map((sec, si) => (
+            <div key={sec.title} style={{ marginTop: si ? 10 : 0 }}>
+              <div style={{
+                fontSize: 9.5, fontWeight: 800, letterSpacing: '.05em',
+                textTransform: 'uppercase', color: C.t3, marginBottom: 5,
+                paddingBottom: 4, borderBottom: `1px solid ${C.border}`,
+              }}>{sec.title}</div>
+              {sec.rows.map(([label, value, kind]) => (
+                <div key={label} style={{
+                  display: 'flex', alignItems: 'baseline', justifyContent: 'space-between',
+                  gap: 10, padding: '2px 0', fontSize: 11,
+                }}>
+                  <span style={{ color: C.t2 }}>{label}</span>
+                  <span style={{
+                    color: kind === 'warn' ? C.amber.tx : C.t1,
+                    fontWeight: kind === 'warn' ? 700 : 600,
+                    fontFamily: 'var(--mono)', fontSize: 10.5, textAlign: 'right',
+                  }}>{value}</span>
+                </div>
+              ))}
+            </div>
+          ))}
+        </div>
+      )}
+    </span>
+  )
+}
+
 function PeriodChip({ window: win, months, selected, onToggle, onAll, onRecent, defaultCount }) {
   const [open, setOpen] = useState(false)
   const ref = useRef(null)
@@ -4437,6 +4564,16 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
               {activeCount > 0 && scope !== 'all' && (
                 <Badge type="blue">{activeCount} filter{activeCount === 1 ? '' : 's'}</Badge>
               )}
+              {/* Data caveats, to the LEFT of the chip because they qualify everything to
+                  its right. Overview shows both ledgers; B2C and FTL/PTL show their own. */}
+              <DataInfo
+                scope={scope}
+                health={agg?.health}
+                months={scopeMonths}
+                b2bMonths={b2b?.months}
+                b2bTotals={b2b?.totals}
+                b2bVar={b2b?.variance}
+              />
               {/* The chip IS the month slicer. Selecting nothing means "all months"
                   everywhere else on this page, so onAll clears rather than listing every
                   month — that keeps the request on the prewarmed {billing:"all"} cache key
