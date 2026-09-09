@@ -555,16 +555,17 @@ function ExportMenu({ items, suffix }) {
   )
 }
 
-// What the reader needs to know about the data behind the numbers, on hover.
+// What the data behind the numbers COVERS, on hover.
 //
-// Sits to the LEFT of the period chip: it qualifies everything to its right. Every figure
-// comes from the API's `health` object, which was already in the payload and rendered
-// nowhere — so a reader had no way to learn that 12% of shipments are excluded from
-// category analysis, or that 2,648 rows sit outside zones A-E.
+// Deliberately descriptive, not diagnostic: months held, volume, and how much carries a
+// product category or a priced rate card. Exclusion and error counts (bad zones, zero-cost
+// rows, unpriced trips) are intentionally NOT here — a reader opening this wants to know
+// the scope of what they are looking at, and a defect list buried in a hover panel is both
+// alarming and the wrong place to act on it.
 //
-// Hover, not click: this is reference material, not an action. Rendered on a portal-less
-// absolute layer with pointerEvents none so it can never swallow a click meant for the
-// chip beside it.
+// Sits to the LEFT of the period chip because it qualifies everything to its right. Hover,
+// not click: this is reference material, not an action. The panel carries pointerEvents
+// none so it can never swallow a click meant for the chip beside it.
 function DataInfo({ scope, health, months, b2bMonths, b2bTotals, b2bVar }) {
   const [open, setOpen] = useState(false)
   const h = health || {}
@@ -593,18 +594,8 @@ function DataInfo({ scope, health, months, b2bMonths, b2bTotals, b2bVar }) {
       title: 'B2C courier ledger',
       rows: [
         b2cRange && ['Months of data', `${b2cRange.n} · ${b2cRange.text}`],
-        ['Shipments priced', `${fmtN(scoped)} of ${fmtN(h.total_rows)}`],
-        // Anything below is a REASON rows do not appear in a figure. Flagged only when
-        // non-zero, so a clean ledger shows a short list rather than a wall of zeros.
-        Number(h.bad_zone) > 0 && ['Outside zones A–E', `${fmtN(h.bad_zone)} excluded`, 'warn'],
-        Number(h.zero_cost) > 0 && ['Zero or negative cost', `${fmtN(h.zero_cost)} excluded`, 'warn'],
-        Number(h.no_declared_wt) > 0 && ['No Frido declared weight', `${fmtN(h.no_declared_wt)} · ${pct(h.no_declared_wt, scoped).toFixed(1)}%`, 'warn'],
-        Number(h.unpriced) > 0 && ['Not priced against a card', `${fmtN(h.unpriced)} · ${pct(h.unpriced, scoped).toFixed(2)}%`, 'warn'],
-        Number(h.with_cat) > 0 && ['Has product category', `${fmtN(h.with_cat)} · ${pct(h.with_cat, scoped).toFixed(1)}%`],
-        // The single most misread number on the page: these are real shipments with real
-        // spend, but a parcel holding several categories cannot be attributed to one, so
-        // the product view legitimately shows less than the headline.
-        Number(h.mixed) > 0 && ['Mixed-category parcels', `${fmtN(h.mixed)} · ${pct(h.mixed, scoped).toFixed(1)}% — not in product view`, 'warn'],
+        ['Shipments', fmtN(scoped)],
+        Number(h.with_cat) > 0 && ['With product category', `${fmtN(h.with_cat)} · ${pct(h.with_cat, scoped).toFixed(1)}%`],
         Number(h.courier_disputes) > 0 && ['Courier-flagged weight disputes', fmtN(h.courier_disputes)],
       ].filter(Boolean),
     })
@@ -613,18 +604,13 @@ function DataInfo({ scope, health, months, b2bMonths, b2bTotals, b2bVar }) {
   if (scope !== 'b2c') {
     const bt = b2bTotals || {}
     const bv = b2bVar || {}
-    const unpriced = (Number(bv.trips) || 0) - (Number(bv.priced_trips) || 0)
     sections.push({
       title: 'FTL/PTL freight ledger',
       rows: [
         b2bRange && ['Months of data', `${b2bRange.n} · ${b2bRange.text}`],
         ['Trips', fmtN(bt.trips)],
         ['Transporters · lanes', `${fmtN(bt.transporters)} · ${fmtN(bt.lanes)}`],
-        // The rate card cannot price every trip, so contract variance covers only part of
-        // the spend. Saying so stops the variance figure being read as complete.
         Number(bv.priced_trips) > 0 && ['Priced against the rate card', `${fmtN(bv.priced_trips)} of ${fmtN(bv.trips)} trips`],
-        unpriced > 0 && ['Not on the card', `${fmtN(unpriced)} trips · ${fmt(Number(bv.billed_all) - Number(bv.billed_priced))} unaudited`, 'warn'],
-        bv.value_total == null && ['Shipment value', 'not in the ledger yet', 'warn'],
       ].filter(Boolean),
     })
   }
