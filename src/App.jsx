@@ -4710,6 +4710,7 @@ function OverviewPage({ data, combinedAlerts, logisticsData, logisticsRangeLabel
   const platformsWithSpend = adsTotals.filter(t => t.spend > 0).sort((a, b) => b.spend - a.spend)
 
   // ── Categories ──
+  const catPrevMap = sh.catPrevMap || {}
   // Per-category rollup for the merged Category Performance table.
   //
   // BASIS WARNING: rev/orders are ALL-CHANNEL (catMap) while cancel/RTO/CIR come from `sh`
