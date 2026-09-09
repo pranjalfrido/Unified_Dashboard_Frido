@@ -2255,12 +2255,13 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
                 </div>
               </div>
               {/* Right: Shipment Qty bars + RTO% & Intrasit TAT lines */}
-              <div className="card-hoverable" style={{ ...cardStyle, padding: isMobile ? '14px 4px' : '16px 18px' }}>
-                <div style={{ padding: isMobile ? '0 6px' : 0, marginBottom: isMobile ? 0 : 10 }}>
+              <div className="card-hoverable" style={{ ...cardStyle, padding: isMobile ? '14px 4px' : '16px 18px', display: 'flex', flexDirection: 'column' }}>
+                <div style={{ padding: isMobile ? '0 6px' : 0, marginBottom: isMobile ? 0 : 10, flexShrink: 0 }}>
                   <div style={chartTitle}>Delivery Performance by Weight Slab</div>
                 </div>
                 {isMobile && <div style={{ height: 1, background: C.border, margin: '10px 0 6px' }} />}
-                <ResponsiveContainer width="100%" height={220}>
+                <div style={{ overflowX: 'auto', flex: 1, minHeight: 0 }}>
+                <ResponsiveContainer width="100%" height="100%">
                   <ComposedChart data={ordered} margin={isMobile ? { top: 4, right: 4, left: 4, bottom: 0 } : { top: 4, right: 2, left: 0, bottom: 0 }}>
                     {!isMobile && <CartesianGrid strokeDasharray="3 3" stroke={C.border} vertical={false} />}
                     <XAxis dataKey="slab" tick={{ fontSize: isMobile ? 9 : 10, fill: C.t2 }} axisLine={isMobile ? { stroke: C.border } : undefined} tickLine={false} />
@@ -2287,6 +2288,7 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
                     {!isMobile && <Legend wrapperStyle={{ fontSize: 10 }} formatter={v => <span style={{ color: '#111' }}>{v}</span>} />}
                   </ComposedChart>
                 </ResponsiveContainer>
+                </div>
               </div>
             </div>
           )
@@ -2377,11 +2379,14 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
               <div className="card-hoverable" style={{ ...cardStyle, flex: 1, minWidth: 320 }}>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10, flexWrap: 'wrap', gap: 6 }}>
                   <div style={{ fontSize: 12, fontWeight: 700, color: C.t1 }}>RTO Ageing <span style={{ fontWeight: 400, color: C.t3, fontSize: 10.5 }}>{activeBase?.subtitle} → RTO mark date</span></div>
-                  <div style={{ display: 'flex', gap: 4 }}>
-                    {BASE_OPTS.map(o => (
-                      <button key={o.key} onClick={() => setRtoAgeingBase(o.key)} style={{ padding: '3px 9px', fontSize: 10.5, fontWeight: 600, borderRadius: 6, border: `1px solid ${C.border}`, cursor: 'pointer', background: rtoAgeingBase === o.key ? C.acs : C.card, color: rtoAgeingBase === o.key ? '#3F3D33' : C.t1 }}>
-                        {o.label}
-                      </button>
+                  <div style={{ display: 'flex' }}>
+                    {BASE_OPTS.map((o, i) => (
+                      <div key={o.key} style={{ display: 'flex', alignItems: 'center' }}>
+                        {i > 0 && <div style={{ width: 1, height: 14, background: '#D6D0B0', margin: '0 4px' }} />}
+                        <button onClick={() => setRtoAgeingBase(o.key)} style={{ padding: '3px 9px', fontSize: 10.5, fontWeight: rtoAgeingBase === o.key ? 700 : 500, borderRadius: 6, border: 'none', outline: 'none', cursor: 'pointer', background: rtoAgeingBase === o.key ? C.acs : 'transparent', color: rtoAgeingBase === o.key ? '#3F3D33' : C.t2, fontFamily: 'var(--font)' }}>
+                          {o.label}
+                        </button>
+                      </div>
                     ))}
                   </div>
                 </div>

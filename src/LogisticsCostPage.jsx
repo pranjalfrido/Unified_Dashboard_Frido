@@ -329,7 +329,7 @@ function Tile({ label, value, sub, badge, accent }) {
 // (no tabular-nums) — equal-width digits read loose at this scale.
 function Hero({ label, value, sub, deltas, children, sparkMin }) {
   return (
-    <div className="kpi-card" style={{ display: 'flex', flexDirection: 'column', gap: 5, padding: '12px 20px' }}>
+    <div className="kpi-card" style={{ display: 'flex', flexDirection: 'column', gap: 5, padding: '12px 20px', background: `linear-gradient(135deg, ${C.acl}66 0%, ${C.card} 60%)` }}>
       <div className="kpi-label" style={{ fontSize: 11 }}>{label}</div>
       {/* Value left, change badges pinned RIGHT — same arrangement as the Tile badges, so
           the eye finds every MoM figure in the same place down the row. space-between rather
@@ -1099,7 +1099,7 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
   // with different uploaded months, so each keeps its own period.
   const [monthsByScope, setMonthsByScope] = useState({})
   const [opts, setOpts] = useState({ months: [], zones: [], modes: [], payments: [], couriers: [], transporters: [], vehicleTypes: [], freightTypes: [], accountTypes: [], cities: [], originCities: [], slabs: [] })
-  const [sidebarOpen, setSidebarOpen] = useState(true)
+  const [sidebarOpen, setSidebarOpen] = useState(false)
   // 'all' = B2B + B2C summary · 'b2c' = courier detail · 'b2b' = lane-wise freight
   const [scope, setScope] = useState(() => {
     if (!allowedTabs || allowedTabs.includes('logistics:cost') || allowedTabs.includes('logistics:cost:all')) return 'all'
@@ -3277,7 +3277,7 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
                 { key: 'total_cost', label: 'Total', align: 'center', render: (_, r) => fmt(r.total_cost) },
               ]}
               rows={b2bRows}
-              maxRows={25}
+              maxRows={10}
             />
           ) : (
             <div style={{ fontSize: 12.5, color: C.t2 }}>No transporter invoices to show.</div>
