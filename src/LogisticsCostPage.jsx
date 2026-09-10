@@ -2763,7 +2763,7 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
                     the deeper accent (C.acm) to define the bar. Hue clash is not a concern
                     here: yellow against blue and orange separates cleanly (CVD dE 24.7). */}
                 <Bar dataKey="total" name="Total" fill={C.acc} fillOpacity={0.85}
-                  stroke={C.acm} strokeWidth={1} radius={[4, 4, 0, 0]} maxBarSize={56} />
+                  radius={[4, 4, 0, 0]} maxBarSize={56} />
                 <Line type="monotone" dataKey="b2c" name="B2C courier" stroke={C.acm}
                   strokeWidth={2} dot={{ r: 3.5, fill: C.acm }} />
                 <Line type="monotone" dataKey="b2b" name="FTL/PTL freight" stroke="#8C7B5E"
@@ -3463,7 +3463,7 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
                 }} />
               <Legend verticalAlign="bottom" wrapperStyle={{ fontSize: 11.5, paddingTop: 0, bottom: isMobile ? 8 : 0 }} formatter={(value) => <span style={{ color: C.t1 }}>{value}</span>} />
               <Bar yAxisId="spend" dataKey="cost" name="Total freight spend"
-                fill={C.acc} fillOpacity={0.34} stroke={C.acm} strokeWidth={1} radius={[4, 4, 0, 0]} maxBarSize={64} />
+                fill={C.acc} fillOpacity={0.85} radius={[4, 4, 0, 0]} maxBarSize={64} />
               <Line yAxisId="unit" type="monotone" dataKey="avgCost" name="Avg / shipment"
                 stroke={C.acm} strokeWidth={2.5}
                 dot={{ r: 3.5, fill: C.acm, stroke: VIZ.surface, strokeWidth: 2 }}
@@ -4506,7 +4506,7 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
                       fontSize: 12, fontWeight: on ? 700 : 500,
                       padding: '6px 0', borderRadius: 7, width: 80, textAlign: 'center',
                       background: on ? C.acc : 'transparent',
-                      color: on ? '#1a1400' : C.t2,
+                      color: on ? '#1a1400' : C.t1,
                       transition: 'all .15s',
                     }}>
                     {sc.label}

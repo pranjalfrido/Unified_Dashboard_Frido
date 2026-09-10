@@ -2592,7 +2592,7 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
                         </td>
                         <td style={td}>{(r.total_shipments || 0).toLocaleString('en-IN')}</td>
                         <td style={td}>{(r.ndr_count || 0).toLocaleString('en-IN')}</td>
-                        <td style={td}>{pct(r.ndr_count, r.attempted_shipments)}</td>
+                        <td style={td}>{pct(r.ndr_count, r.total_shipments)}</td>
                         <td style={td}>{pct(r.ndr_del, r.ndr_count)}</td>
                         <td style={td}>{pct(r.ndr_rto, r.ndr_count)}</td>
                         <td style={td}>{(r.del_att2 || 0).toLocaleString('en-IN')}</td>
@@ -2609,7 +2609,7 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
                       <td style={{ ...tdL, fontWeight: 700 }}>Total</td>
                       <td style={{ ...td, fontWeight: 700 }}>{totals.total_shipments.toLocaleString('en-IN')}</td>
                       <td style={{ ...td, fontWeight: 700 }}>{totals.ndr_count.toLocaleString('en-IN')}</td>
-                      <td style={{ ...td, fontWeight: 700 }}>{pct(totals.ndr_count, totals.attempted_shipments)}</td>
+                      <td style={{ ...td, fontWeight: 700 }}>{pct(totals.ndr_count, totals.total_shipments)}</td>
                       <td style={{ ...td, fontWeight: 700 }}>{pct(totals.ndr_del, totals.ndr_count)}</td>
                       <td style={{ ...td, fontWeight: 700 }}>{pct(totals.ndr_rto, totals.ndr_count)}</td>
                       <td style={{ ...td, fontWeight: 700 }}>{totals.del_att2.toLocaleString('en-IN')}</td>
