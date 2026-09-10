@@ -2225,7 +2225,7 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
           return (
             <div style={{ display: secCollapsed['weight'] ? 'none' : 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: 14, alignItems: 'start' }}>
               {/* Left: Donut with toggle */}
-              <div className="card-hoverable" style={{ ...cardStyle, height: 280 }}>
+              <div className="card-hoverable" style={{ ...cardStyle, height: 300 }}>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
                   <div style={chartTitle}>Shipment Allocation by Weight</div>
                   <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
@@ -2259,7 +2259,7 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
                 </div>
               </div>
               {/* Right: Shipment Qty bars + RTO% & Intrasit TAT lines */}
-              <div className="card-hoverable" style={{ ...cardStyle, padding: isMobile ? '14px 4px' : '16px 18px', display: 'flex', flexDirection: 'column', height: 280 }}>
+              <div className="card-hoverable" style={{ ...cardStyle, padding: isMobile ? '14px 4px' : '16px 18px', display: 'flex', flexDirection: 'column', height: 300 }}>
                 <div style={{ padding: isMobile ? '0 6px' : 0, marginBottom: isMobile ? 0 : 10, flexShrink: 0 }}>
                   <div style={chartTitle}>Delivery Performance by Weight Slab</div>
                 </div>
