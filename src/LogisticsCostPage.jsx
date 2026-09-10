@@ -34,20 +34,15 @@ const ZONES = ['A', 'B', 'C', 'D', 'E']
 // blue ramp (light→dark) rather than categorical hues: colouring an ordered scale
 // with unrelated hues throws away the ordering the reader needs. Validated with
 // --ordinal: monotone lightness, all adjacent ΔL ≥ 0.06, light end clears the surface.
-const ORDINAL_BLUE = ['#86b6ef', '#5598e7', '#2a78d6', '#1c5cab', '#104281']
+const ORDINAL_BLUE = ['#F0D89A', '#E8C46A', '#D89A1A', '#B87D14', '#7A5410']
 
-// Shipment mode is true identity (Forward/RTO/Reverse), so it takes categorical
-// slots 1–2–3 in fixed order — validated --pairs all, worst ΔE 9.2 CVD / 24.0 normal.
-// Colour follows the entity: RTO stays orange even when Forward is filtered out.
-const SERIES = { blue: '#2a78d6', orange: '#eb6834', aqua: '#1baf7a', yellow: '#eda100' }
-// Two reporting legs now — RTO/RVP/DTO all fold into Reverse upstream. The RTO key is
-// retained only so an unexpected raw value still renders in a stable colour.
-const MODE_COLOR = { Forward: SERIES.blue, Reverse: SERIES.orange, RTO: SERIES.yellow }
+// Shipment mode — golden theme palette
+const SERIES = { blue: '#D89A1A', orange: '#B87D14', aqua: '#8C7B5E', yellow: '#EFCE85' }
+// Mode colors: Forward=golden, Reverse=dark amber, RTO=light golden
+const MODE_COLOR = { Forward: '#D89A1A', Reverse: '#B87D14', RTO: '#8C7B5E' }
 
-// Six categorical slots in fixed order for the rate-drift lines — validated against
-// this app's white surface (worst adjacent ΔE 9.1 CVD / 19.6 normal vision). Fixed
-// order means a courier keeps its colour as the filter changes the line count.
-const DRIFT_COLORS = ['#2a78d6', '#eb6834', '#1baf7a', '#eda100', '#e87ba4', '#4a3aa7']
+// Courier trend lines — warm earthy palette replacing the blue/green categorical set
+const DRIFT_COLORS = ['#D89A1A', '#B87D14', '#8C7B5E', '#EFCE85', '#C4A882', '#7A5410']
 
 // Chart chrome — recessive hairlines, muted axis ink.
 const VIZ = {
@@ -334,7 +329,7 @@ function Tile({ label, value, sub, badge, accent }) {
 // (no tabular-nums) — equal-width digits read loose at this scale.
 function Hero({ label, value, sub, deltas, children, sparkMin }) {
   return (
-    <div className="kpi-card" style={{ display: 'flex', flexDirection: 'column', gap: 5, padding: '12px 20px' }}>
+    <div className="kpi-card" style={{ display: 'flex', flexDirection: 'column', gap: 5, padding: '12px 20px', background: `linear-gradient(135deg, ${C.acl}66 0%, ${C.card} 60%)` }}>
       <div className="kpi-label" style={{ fontSize: 11 }}>{label}</div>
       {/* Value left, change badges pinned RIGHT — same arrangement as the Tile badges, so
           the eye finds every MoM figure in the same place down the row. space-between rather
@@ -1104,7 +1099,7 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
   // with different uploaded months, so each keeps its own period.
   const [monthsByScope, setMonthsByScope] = useState({})
   const [opts, setOpts] = useState({ months: [], zones: [], modes: [], payments: [], couriers: [], transporters: [], vehicleTypes: [], freightTypes: [], accountTypes: [], cities: [], originCities: [], slabs: [] })
-  const [sidebarOpen, setSidebarOpen] = useState(true)
+  const [sidebarOpen, setSidebarOpen] = useState(false)
   // 'all' = B2B + B2C summary · 'b2c' = courier detail · 'b2b' = lane-wise freight
   const [scope, setScope] = useState(() => {
     if (!allowedTabs || allowedTabs.includes('logistics:cost') || allowedTabs.includes('logistics:cost:all')) return 'all'
@@ -1112,6 +1107,11 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
     if (allowedTabs.includes('logistics:cost:b2b')) return 'b2b'
     return 'all'
   })
+  // Scroll to top when switching scope tabs so content doesn't jump
+  useEffect(() => {
+    document.querySelector('.page-scroll')?.scrollTo({ top: 0, behavior: 'instant' })
+  }, [scope])
+
   // Effective filters: the shared object with THIS scope's months layered on. Everything
   // downstream (the API body, monthWindow, the cubes) keeps reading filters.months.
   const filters = useMemo(
@@ -2767,12 +2767,12 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
                     card the fill alone is too faint to hold an edge, so it carries a stroke in
                     the deeper accent (C.acm) to define the bar. Hue clash is not a concern
                     here: yellow against blue and orange separates cleanly (CVD dE 24.7). */}
-                <Bar dataKey="total" name="Total" fill={C.acc} fillOpacity={0.34}
-                  stroke={C.acm} strokeWidth={1} radius={[4, 4, 0, 0]} maxBarSize={56} />
-                <Line type="monotone" dataKey="b2c" name="B2C courier" stroke={SERIES.blue}
-                  strokeWidth={2} dot={{ r: 3.5 }} />
-                <Line type="monotone" dataKey="b2b" name="FTL/PTL freight" stroke={SERIES.orange}
-                  strokeWidth={2} dot={{ r: 3.5 }} />
+                <Bar dataKey="total" name="Total" fill={C.acc} fillOpacity={0.85}
+                  radius={[4, 4, 0, 0]} maxBarSize={56} />
+                <Line type="monotone" dataKey="b2c" name="B2C courier" stroke={C.acm}
+                  strokeWidth={2} dot={{ r: 3.5, fill: C.acm }} />
+                <Line type="monotone" dataKey="b2b" name="FTL/PTL freight" stroke="#8C7B5E"
+                  strokeWidth={2} dot={{ r: 3.5, fill: '#8C7B5E' }} />
               </ComposedChart>
             </ResponsiveContainer>
           </div>
@@ -2786,7 +2786,7 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
           note={`${fmtN(overviewB2cCards.length)} partners · ${fmt(overall.b2cCost)}`} collapsed={secHid['ov-b2c-cards']} onToggle={() => toggleSec('ov-b2c-cards')} />
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(232px,1fr))', gap: 12 , ...(secHid['ov-b2c-cards'] ? { display: 'none' } : {}) }}>
           {overviewB2cCards.map(c => (
-            <div key={c.key} className="kpi-card" style={{ padding: '11px 13px', display: 'flex', flexDirection: 'column', gap: 7 }}>
+            <div key={c.key} className="kpi-card channel-card-hover" style={{ padding: '11px 13px', display: 'flex', flexDirection: 'column', gap: 7 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                 <CourierCell name={c.key} />
                 <span style={{ marginLeft: 'auto', fontSize: 10.5, fontWeight: 700, color: C.t3 }}>
@@ -2815,7 +2815,7 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
           note={`${fmtN(overviewB2bCards.length)} partners · ${fmt(overall.b2bCost)}`} collapsed={secHid['ov-b2b-cards']} onToggle={() => toggleSec('ov-b2b-cards')} />
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(232px,1fr))', gap: 12 , ...(secHid['ov-b2b-cards'] ? { display: 'none' } : {}) }}>
           {overviewB2bCards.map(c => (
-            <div key={c.key} className="kpi-card" style={{ padding: '11px 13px', display: 'flex', flexDirection: 'column', gap: 7 }}>
+            <div key={c.key} className="kpi-card channel-card-hover" style={{ padding: '11px 13px', display: 'flex', flexDirection: 'column', gap: 7 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                 <CourierCell name={c.key} />
                 <span style={{ marginLeft: 'auto', fontSize: 10.5, fontWeight: 700, color: C.t3 }}>
@@ -3282,7 +3282,8 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
                 { key: 'total_cost', label: 'Total', align: 'center', render: (_, r) => fmt(r.total_cost) },
               ]}
               rows={b2bRows}
-              maxRows={25}
+              maxRows={500}
+              maxHeight={382}
             />
           ) : (
             <div style={{ fontSize: 12.5, color: C.t2 }}>No transporter invoices to show.</div>
@@ -3322,7 +3323,7 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
             }).join(' ')
             const last2 = pts.slice(-2)
             const isUp = last2.length === 2 ? last2[1] >= last2[0] : null
-            const lineColor = isUp === null ? '#1baf7a' : m.invertColor ? (isUp ? '#E53935' : '#1baf7a') : (isUp ? '#1baf7a' : '#E53935')
+            const lineColor = isUp === null ? '#D89A1A' : m.invertColor ? (isUp ? '#E53935' : '#D89A1A') : (isUp ? '#D89A1A' : '#E53935')
             return (
               <div key={m.label} style={{ background: '#fff', border: `1px solid ${C.border}`, borderRadius: 12, padding: '0 14px', display: 'flex', alignItems: 'center', height: 45, gap: 0 }}>
                 <div style={{ flex: 1, fontSize: 13, fontWeight: 700, color: C.t2, letterSpacing: '.03em', textTransform: 'uppercase' }}>{m.label}</div>
@@ -3457,10 +3458,10 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
                       <div style={{ fontSize: 11, color: C.t3, marginTop: 3 }}>
                         {fmtN(r.shipments)} shipments · {fmtKg(r.wt)} billed
                       </div>
-                      <div style={{ fontSize: 11.5, color: SERIES.aqua, marginTop: 5, fontWeight: 600 }}>
+                      <div style={{ fontSize: 11.5, color: C.acm, marginTop: 5, fontWeight: 600 }}>
                         ₹{r.avgCost.toFixed(2)} / shipment
                       </div>
-                      <div style={{ fontSize: 11.5, color: SERIES.yellow, fontWeight: 600 }}>
+                      <div style={{ fontSize: 11.5, color: '#8C7B5E', fontWeight: 600 }}>
                         ₹{r.cpk.toFixed(2)} / kg
                       </div>
                     </div>
@@ -3468,15 +3469,15 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
                 }} />
               <Legend verticalAlign="bottom" wrapperStyle={{ fontSize: 11.5, paddingTop: 0, bottom: isMobile ? 8 : 0 }} formatter={(value) => <span style={{ color: C.t1 }}>{value}</span>} />
               <Bar yAxisId="spend" dataKey="cost" name="Total freight spend"
-                fill={SERIES.blue} fillOpacity={0.82} radius={[4, 4, 0, 0]} maxBarSize={64} />
+                fill={C.acc} fillOpacity={0.85} radius={[4, 4, 0, 0]} maxBarSize={64} />
               <Line yAxisId="unit" type="monotone" dataKey="avgCost" name="Avg / shipment"
-                stroke={SERIES.aqua} strokeWidth={2.5}
-                dot={{ r: 3.5, fill: SERIES.aqua, stroke: VIZ.surface, strokeWidth: 2 }}
-                activeDot={{ r: 6, fill: SERIES.aqua, stroke: VIZ.surface, strokeWidth: 2 }} />
+                stroke={C.acm} strokeWidth={2.5}
+                dot={{ r: 3.5, fill: C.acm, stroke: VIZ.surface, strokeWidth: 2 }}
+                activeDot={{ r: 6, fill: C.acm, stroke: VIZ.surface, strokeWidth: 2 }} />
               <Line yAxisId="unit" type="monotone" dataKey="cpk" name="Cost per kg"
-                stroke={SERIES.yellow} strokeWidth={2.5}
-                dot={{ r: 3.5, fill: SERIES.yellow, stroke: VIZ.surface, strokeWidth: 2 }}
-                activeDot={{ r: 6, fill: SERIES.yellow, stroke: VIZ.surface, strokeWidth: 2 }} />
+                stroke="#8C7B5E" strokeWidth={2.5}
+                dot={{ r: 3.5, fill: '#8C7B5E', stroke: VIZ.surface, strokeWidth: 2 }}
+                activeDot={{ r: 6, fill: '#8C7B5E', stroke: VIZ.surface, strokeWidth: 2 }} />
             </ComposedChart>
           </ResponsiveContainer>
         </div>
@@ -4194,30 +4195,22 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
         note={isMobile ? "" : "category → sub-category, per shipment by leg. RTO is the return leg only"} collapsed={secHid['product']} onToggle={() => toggleSec('product')} />
       <div style={secHid['product'] ? { display: 'none' } : undefined}>
         <Card title="Category detail" note={isMobile ? "" : "click a category to open its sub-categories"}
-          action={isMobile ? (
-            <input value={subQuery} onChange={e => setSubQuery(e.target.value)}
-              placeholder="Search…"
-              style={{ fontSize: 11.5, padding: '4px 8px', width: 100, borderRadius: 7, border: `1px solid ${C.border2}`, background: C.bg, color: C.t1, outline: 'none' }} />
-          ) : null}>
-          {/* Own search box rather than DataTable's: a collapsed category never emits its
-              children, so filtering finished rows could not reach a sub-category. This
-              query feeds productRows, which expands matching parents as it builds. */}
-          {!isMobile && <div style={{ marginBottom: 8 }}>
-            <input value={subQuery} onChange={e => setSubQuery(e.target.value)}
-              placeholder="Find a category or sub-category…"
-              style={{
-                fontFamily: 'var(--font)', fontSize: 11.5, padding: '6px 10px', width: 260,
-                borderRadius: 7, border: `1.5px solid ${subQuery.trim() ? C.acm : C.border2}`,
-                background: subQuery.trim() ? C.acl : C.card, color: C.t1, outline: 'none',
-              }} />
-            {subQuery.trim() && (
-              <span style={{ fontSize: 11, color: C.t3, marginLeft: 9 }}>
-                {productRows.filter(r => r.isSub).length} sub-categories
+          action={
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <input value={subQuery} onChange={e => setSubQuery(e.target.value)}
+                placeholder={isMobile ? "Search…" : "Find a category or sub-category…"}
+                style={{
+                  fontFamily: 'var(--font)', fontSize: 11.5, padding: '5px 10px',
+                  width: isMobile ? 100 : 220,
+                  borderRadius: 7, border: `1.5px solid ${subQuery.trim() ? C.acm : C.border2}`,
+                  background: subQuery.trim() ? C.acl : C.card, color: C.t1, outline: 'none',
+                }} />
+              {subQuery.trim() && (
                 <button onClick={() => setSubQuery('')}
-                  style={{ marginLeft: 8, border: 'none', background: 'none', color: C.t3, cursor: 'pointer', fontSize: 11, textDecoration: 'underline', padding: 0, fontFamily: 'var(--font)' }}>clear</button>
-              </span>
-            )}
-          </div>}
+                  style={{ border: 'none', background: 'none', color: C.t3, cursor: 'pointer', fontSize: 11, textDecoration: 'underline', padding: 0, fontFamily: 'var(--font)', whiteSpace: 'nowrap' }}>clear</button>
+              )}
+            </div>
+          }>
           <DataTable
             columns={[
               // Left-aligned so the indented sub-category names still read as a hierarchy.
@@ -4517,9 +4510,9 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
                     style={{
                       border: 'none', cursor: 'pointer', fontFamily: 'var(--font)',
                       fontSize: 12, fontWeight: on ? 700 : 500,
-                      padding: '6px 14px', borderRadius: 7,
+                      padding: '6px 0', borderRadius: 7, width: 80, textAlign: 'center',
                       background: on ? C.acc : 'transparent',
-                      color: on ? '#1a1400' : C.t2,
+                      color: on ? '#1a1400' : C.t1,
                       transition: 'all .15s',
                     }}>
                     {sc.label}

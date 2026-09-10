@@ -118,7 +118,7 @@ export function HBar({ dot, label, width, value, pctVal, onClick, isSelected, la
 // toggle. Heading stays "Category Revenue" regardless of the selected view — only the rows change.
 // catRows: [{name, rev}]; subCatRows: [{name, category, rev}]; skuMap: {category: {subCategory: {sku: {rev}}}}.
 // view/setView: lift the toggle state up so it can be reset (e.g. on category click) if needed.
-export function CategoryRevenueCard({ catRows, subCatRows, skuMap, totalRev, view, setView, onSelectCategory, onSelectSubCategory, onSelectSku, selectedName, height = 242, maxSkuRows = 100 }) {
+export function CategoryRevenueCard({ catRows, subCatRows, skuMap, totalRev, view, setView, onSelectCategory, onSelectSubCategory, onSelectSku, selectedName, height, maxSkuRows = 100 }) {
   const mobCard = window.innerWidth <= 768
   const labelWidthFor = names => mobCard ? 150 : Math.min(260, Math.max(132, Math.max(...names.map(n => n.length), 0) * 7.8 + 8))
 
@@ -152,7 +152,7 @@ export function CategoryRevenueCard({ catRows, subCatRows, skuMap, totalRev, vie
   const mobFixedH = mobCard ? (catRows.length * ROW_H + CARD_CHROME) : undefined
 
   return (
-    <Card fill title={view === 'subcategory' ? 'Product Revenue' : 'Category Revenue'} style={{ height: mobCard ? mobFixedH : height, alignSelf: 'start' }} action={
+    <Card fill title={view === 'subcategory' ? 'Product Revenue' : 'Category Revenue'} style={{ height: mobCard ? mobFixedH : (height || '100%') }} action={
       <div style={{ display: 'flex', gap: 4 }}>
         {[{ id: 'category', label: 'Category' }, { id: 'subcategory', label: 'Product' }, ...(window.innerWidth > 768 ? [{ id: 'sku', label: 'SKU Code' }] : [])].map((v, i) => (
           <div key={v.id} style={{ display: 'flex', alignItems: 'center' }}>
@@ -249,8 +249,8 @@ export function Card({ title, note, action, children, style, fill, titleNoWrap }
     <div className="card-hoverable" style={{ background: C.card, borderLeft: `1px solid ${C.border}`, borderRight: `1px solid ${C.border}`, borderBottom: `1px solid ${C.border}`, borderRadius: 13, padding: '16px 18px', height: '100%', boxSizing: 'border-box', display: fill ? 'flex' : undefined, flexDirection: fill ? 'column' : undefined, ...style }}>
       {(title || note || action) && (
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 11, flexShrink: 0, gap: 8 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0, overflow: 'hidden' }}>
-            {title && <span style={{ fontSize: 13, fontWeight: 700, color: C.t1, whiteSpace: titleNoWrap ? 'nowrap' : undefined, overflow: 'hidden', textOverflow: 'ellipsis' }}>{title}</span>}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0, flex: 1 }}>
+            {title && <span style={{ fontSize: 13, fontWeight: 700, color: C.t1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{title}</span>}
             {note && <span style={{ fontSize: 11.5, color: C.t3, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{note}</span>}
           </div>
           {action && <div style={{ flexShrink: 0 }}>{action}</div>}
@@ -468,7 +468,7 @@ export function TrendAnalysisCard({ title, daily, grossColor, grossGradId, revKe
   const gradId = grossGradId || 'trendGrossGrad'
 
   return (
-    <Card title={title} style={boxHeight ? { height: isMob ? 'auto' : boxHeight } : undefined} action={
+    <Card title={title} style={boxHeight ? { minHeight: isMob ? 'auto' : boxHeight } : undefined} action={
       <Dropdown value={groupBy} onChange={setGroupBy} options={GROUP_OPTS} style={selStyle} />
     }>
       <div style={isMob ? { margin: '0 -28px' } : {}}>

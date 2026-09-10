@@ -128,12 +128,11 @@ export function getDefaultDates() {
 // ── Shared building blocks ─────────────────────────────────────────────────
 export function GlassCard({ title, note, action, children, style }) {
   return (
-    <div style={{
+    <div className="card-hoverable" style={{
       background: IC.surface,
       border: `1px solid ${IC.border}`,
       borderRadius: 16,
       padding: '18px 20px',
-      boxShadow: '0 4px 10px rgba(0,0,0,0.08), 0 16px 40px rgba(0,0,0,0.14)',
       // A wide table/chart inside can otherwise grow this card past its allotted flex
       // width instead of respecting it — the card's own overflow:auto wrapper around such
       // content only actually clips/scrolls if THIS box is itself constrained; without
@@ -165,16 +164,15 @@ export function KpiTile({ label, value, unit, sub, accent, icon, compact }) {
   const iconSize = compact ? 24 : 26
   const radius = compact ? 12 : 16
   return (
-    <div style={{
+    <div className="card-hoverable" style={{
       background: IC.surface,
       border: `1px solid ${IC.border}`,
       borderRadius: radius,
       padding: pad,
       display: 'flex', flexDirection: 'column', gap: 5,
-      position: 'relative', overflow: 'hidden',
+      position: 'relative',
       minHeight: compact ? 78 : undefined,
       height: compact ? '100%' : undefined,
-      boxShadow: '0 4px 10px rgba(0,0,0,0.08), 0 16px 40px rgba(0,0,0,0.14)',
     }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 6 }}>
         <span style={{ fontSize: labelSize, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.06em', color: IC.t3, lineHeight: 1.2 }}>{label}</span>
