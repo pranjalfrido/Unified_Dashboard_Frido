@@ -4419,7 +4419,7 @@ function IndiaChoropleth({ stateMap, totalRev, cityRows = [] }) {
   if (!geoData) return <div style={{ width: '100%', aspectRatio: '1', display: 'flex', alignItems: 'center', justifyContent: 'center', color: C.t3, fontSize: 11 }}>Loading map…</div>
   return (
     <div ref={containerRef} style={{ position: 'relative', width: '100%' }} onMouseMove={onMove}>
-      <svg viewBox={`0 0 ${width} ${height}`} style={{ width: '100%', height: 'auto', display: 'block' }}>
+      <svg viewBox={`0 0 ${width} ${height}`} style={{ width: '100%', height: 'auto', maxHeight: 480, display: 'block' }}>
         {geoData.features.map((f, i) => {
           const name = f.properties.st_nm
           const key = name.trim().toUpperCase()
@@ -5131,7 +5131,7 @@ function OverviewPage({ data, combinedAlerts, logisticsData, logisticsRangeLabel
           )
         })()}
 
-        <WideCard span={4} style={{ paddingBottom: 12, overflow: 'hidden', maxHeight: 520 }}>
+        <WideCard span={4} style={{ paddingBottom: 12, overflow: 'hidden', maxHeight: 620 }}>
           {secHdr('Top States', 'By revenue · click map for cities')}
           <IndiaChoropleth stateMap={stateMap} totalRev={totalRev} cityRows={data.cityRows || []} />
         </WideCard>
