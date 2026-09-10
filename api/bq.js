@@ -18,6 +18,43 @@ function loadSubCatFirstOrder() {
   return subCatFirstOrderStatic
 }
 
+// Q-commerce (Blinkit/Zepto/Instamart) SnD — identical formula across all three, per user:
+// SnD = (Gross Ex GST × platform_margin%) + stock-movement cost (₹10/kg, same weight-slab
+// mechanism as Amazon VC's ₹4/kg: SUM(ItemQty*Weight_gms) for the row, rounded up to the nearest
+// slab via rateForWeight(), then (slab.weightGm/1000)*10). No returns for these 3 channels, so
+// unlike Amazon VC there's no sales-vs-returned-units split — gross/units here are already the
+// full (only) sale. margin_pct comes from the row's own LEFT JOIN to
+// Frido_Item_Master__productid_sku_mapping.platform_margin (a decimal fraction, e.g. 0.29), done
+// in the query itself since it's a flat per-product lookup, not an ASP-slab lookup like VC.
+function computeQcSnd(rows) {
+  const weightSlabs = loadSndRateSlabs()
+  const STOCK_MOVEMENT_RATE_PER_KG = 10
+  const sndBySku = {}
+  const dailyPnLBySku = []
+  ;(rows || []).forEach(x => {
+    const units = parseFloat(x.units) || 0
+    const gross = parseFloat(x.gross) || 0
+    const excRev = parseFloat(x.exc_rev) || 0
+    const marginPct = parseFloat(x.margin_pct) || 0
+    const net = excRev
+
+    let snd = 0
+    if (excRev > 0) {
+      snd = excRev * marginPct
+      const weightGm = parseFloat(x.total_weight) || 0
+      if (weightGm > 0) {
+        const wRate = rateForWeight(weightSlabs, weightGm)
+        if (wRate) snd += (wRate.weightGm / 1000) * STOCK_MOVEMENT_RATE_PER_KG
+      }
+      sndBySku[x.sku] = (sndBySku[x.sku] || 0) + snd
+    }
+    if (units > 0 || gross > 0) {
+      dailyPnLBySku.push({ date: x.order_date, sku: x.sku, gross, excRev, net, units, snd })
+    }
+  })
+  return { sndBySku, dailyPnLBySku }
+}
+
 // Vendor Central margin-slab card (public/vc-margin-rates.json) — VC has NO settlement report at
 // all, so unlike Seller Central's settlement-based S&D, VC's S&D is a flat margin% of Gross
 // Revenue per ASP price-slab, ANDed with a margin PERIOD: Old (through oldMarginEndDate), BAU
@@ -73,7 +110,7 @@ const SLOW_QUERY_KEYS = new Set([
   'byCategory','bySubCategory','prevByCategory','prevBySubCategory',
   'byCategoryChannel','byCategoryChannelFk','bySubCategoryChannel','bySubCategoryChannelFk',
   'byState','byStatePrev','byCity','byCityPrev','byRegion','byTier','byOrderValue','bySKU',
-  'shSubCategory','shSKU','shDailySKU','shSKUPrev','shSkuCosts','shDailySkuCosts',
+  'shSubCategory','shSKU','shDailySKU','shSKUPrev','shSkuCosts','shDailySkuCosts','shListingPrice','shReturnRateMature',
   'shState','shStatePrev','shRegion','shTier','shCity','shCityPrev','shReturnReasons',
   'amzSCStates','amzSCStatesPrev','amzSCCities','amzSCCitiesPrev','amzSCSKUs',
   'amzSCCatChannel','amzSCSubCatChannel','amzSCSKUChannel','amzSCDailyCat',
@@ -295,6 +332,72 @@ export default async function handler(req, res) {
     // (unfiltered, combined) day-wise COGS%/GM%/SnD%/CM1% regardless of the selected toggle.
     shDailySKU: `WITH q AS (${base}) SELECT CAST(OrderDate AS STRING) AS date, MasterSKU AS sku, SubChannel AS sub_channel, SUM(ItemQty) AS units, SUM(CASE WHEN Order_Status IN ('Cancelled','RTO','Return','CIR') THEN ItemQty ELSE 0 END) AS return_units, ROUND(SUM(SellingPrice_Inc_GST),2) AS rev, ROUND(SUM(SellingPrice_Exc_GST),2) AS exc_rev, ROUND(SUM(CASE WHEN Order_Status='Cancelled' THEN SellingPrice_Inc_GST ELSE 0 END),2) AS cancel_rev, ROUND(SUM(CASE WHEN Order_Status='Cancelled' AND PaymentMode='COD' THEN SellingPrice_Inc_GST ELSE 0 END),2) AS cod_cancel_rev, ROUND(SUM(CASE WHEN Order_Status IN ('RTO','Return') THEN SellingPrice_Inc_GST ELSE 0 END),2) AS rto_rev, ROUND(SUM(CASE WHEN Order_Status='CIR' THEN SellingPrice_Inc_GST ELSE 0 END),2) AS cir_rev FROM q WHERE Channel='Shopify' AND SubChannel != 'Shopify International' AND SubChannel != 'Retail Store' AND MasterSKU IS NOT NULL AND TRIM(MasterSKU) != '' GROUP BY date, sku, sub_channel ORDER BY date`,
     shSKUPrev: `WITH q AS (${prevBase}) SELECT Category, SubCategory, MasterSKU AS sku, SUM(SellingPrice_Inc_GST) AS rev FROM q WHERE Channel='Shopify' AND MasterSKU IS NOT NULL AND TRIM(MasterSKU) != '' GROUP BY Category, SubCategory, MasterSKU`,
+    // Real listing price / discount for the Price Simulator's "current discount" readout —
+    // Listing_Price and Discount live directly on the fact table (confirmed via
+    // INFORMATION_SCHEMA), NOT through buildQuery's base CTE, which doesn't select them — a
+    // standalone query straight against the fact table instead of joining through `base`.
+    // Raw fact table column is masterskucode (lowercase) — MasterSKU only exists as buildQuery's
+    // own base-CTE alias (u.masterskucode AS MasterSKU), which this query never joins through
+    // (it reads fact_all_platform_sales_report directly, same as shReturnReasons/cancelByBucket
+    // elsewhere in this file, since Listing_Price/Discount aren't projected through the base CTE).
+    //
+    // Listing_Price is NOT a stable per-unit MRP — one real, confirmed distortion (verified 2026-09
+    // against a live Shopify export for FR-OHP-BG-L1/GN-L1): it SCALES LINEARLY with order quantity
+    // for the same SKU — a qty=2 row's Listing_Price is exactly 2× the qty=1 unit price (confirmed:
+    // 899×2=1798, 899×3=2697 for FR-OHP-BG-L1) — it is NOT an independent "combo package" price as
+    // first assumed. Dividing by ItemQty on every row (not just qty=1 ones) recovers the true
+    // per-unit price from every row instead of discarding qty>1 rows' otherwise-valid data.
+    //
+    // The per-unit price is then averaged UNITS-WEIGHTED across the caller's selected date range —
+    // NOT taken from the single most-recent row. An earlier version of this query used
+    // most-recent-row, reasoning that Listing_Price can genuinely change mid-range and a plain
+    // average would blend unrelated price points into a number never actually charged. That holds
+    // for a WIDE range spanning a real price change (e.g. a full month: FR-OHP-BG-L1's weighted avg
+    // was ₹850 over Aug 1–Sep 9 vs. its steady ₹899 in the final ~9 days — a genuine shift, where
+    // most-recent-row happens to land on the right answer). But most-recent-row FAILS for SKUs
+    // whose Listing_Price bounces order-to-order within the SAME day (confirmed for "Ultimate Car
+    // Comfort Bundle" FR-CNCBCW-B1/G1/GY1 — flash-sale/coupon-style listing changes, e.g. ₹3299 vs
+    // ₹2999 vs ₹3499 on the same day) — there, most-recent-row returned ₹3299 (whatever the last
+    // order happened to catch) while the user's own manual check confirmed the TRUE average listing
+    // price over the selected range was ₹3263.95 and true average selling price ₹3023.11 — both
+    // matched EXACTLY by a units-weighted average over that same range, not by most-recent-row.
+    // Since the caller already scopes `start`/`end` to whatever range the user actually selected
+    // (not an arbitrarily wide one), a units-weighted average WITHIN that range is the statistically
+    // correct summary in both cases — it reduces to the steady value when the price was stable, and
+    // reflects the true blended reality when it wasn't. Discount is likewise a genuine
+    // units-weighted average (avg_discount), same as before.
+    shListingPrice: `SELECT masterskucode AS sku,
+        SUM(Listing_Price) / SUM(ItemQty) AS avg_listing_price,
+        SUM(Discount * ItemQty) / SUM(ItemQty) AS avg_discount,
+        SUM(ItemQty) AS units
+      FROM \`frido-429506.production.fact_all_platform_sales_report\`
+      WHERE OrderDate BETWEEN '${start}' AND '${end}' AND Channel = 'Shopify' AND Country = 'India'
+        AND masterskucode IS NOT NULL AND TRIM(masterskucode) != ''
+        AND Listing_Price IS NOT NULL AND Listing_Price > 0 AND ItemQty > 0
+      GROUP BY masterskucode`,
+    // Return-rate baseline for the Price Simulator's "Return Rate Impact" lever — reuses the EXACT
+    // SAME formula as the D2C Return Analysis tab's headline "Return%" KPI (api/return-analysis.js),
+    // via the shared netRevenueSelectFragment/computeNetRevenueMeasures helpers (_bq.js) —
+    // overallReturnPct = (rtoRev + cirRev + returnRev + prepaidCancelRev) / grossIncGst — instead
+    // of a separately-invented formula, so this number always reconciles with what Return Analysis
+    // itself would show for the same window.
+    //
+    // MUST be measured on MATURE orders only, never on the user's live-selected date range. An
+    // order's Order_Status (RTO/Return/CIR/Cancelled) reflects whatever its LATEST known state is
+    // (see buildQuery's comment), and a return/RTO/CIR typically resolves over 1-3+ weeks after the
+    // order date — so a recent range (e.g. "last 7 days") reads a falsely LOW return rate simply
+    // because most of its orders haven't finished their return cycle yet, not because the product
+    // actually returns less. Anchored to the exact same rollingStart/rollingEnd mature window
+    // (today − 44 days to today − 14 days) every other rolling-rate metric in this file already
+    // uses (see RATE_COVERAGE_FLOOR/amzSCRollingNetRevenue above) — NOT the request's own start/end.
+    //
+    // Grain: SKU AND Category, in one query, so the frontend can fall back SKU → Category → whole
+    // D2C (computed client-side from this same table) without a second round-trip, matching the
+    // same floor-then-borrow fallback pattern used for Amazon SC's day-wise S&D rate card. `units`
+    // is still summed alongside the revenue fields — it's what decides whether a grain has ENOUGH
+    // mature-window volume to trust its own rate (the fallback floor), even though the rate itself
+    // is revenue-share, not unit-share.
+    shReturnRateMature: `WITH q AS (${buildQuery(rollingStart, rollingEnd, {})}) SELECT Category AS category, SubCategory AS subcategory, MasterSKU AS sku, SUM(ItemQty) AS units, ${netRevenueSelectFragment('q')} FROM q WHERE Channel='Shopify' AND MasterSKU IS NOT NULL AND TRIM(MasterSKU) != '' GROUP BY category, subcategory, sku`,
     // PnL cost rows — per SKU × Order_Status × weight_slab for D2C India (Shopify, non-international).
     // Weight slab: if Weight_gms <= 500 → 500, else CEIL(Weight_gms / 1000) * 1000.
     // Client applies snd-rates.json lookup per slab + status to get logistics & fulfilment costs.
@@ -836,6 +939,34 @@ export default async function handler(req, res) {
     fkSKUPrev: `WITH q AS (${prevBase}) SELECT Category AS category, SubCategory AS subcategory, MasterSKU AS sku, CASE WHEN SubChannel='Flipkart FBF' THEN 'FBF' ELSE 'NON-FBF' END AS sub, ROUND(SUM(SellingPrice_Inc_GST),0) AS rev FROM q WHERE Channel='Flipkart' AND MasterSKU IS NOT NULL AND TRIM(MasterSKU) != '' GROUP BY category, subcategory, sku, sub`,
     amzSCDailyCat: `WITH q AS (${base}) SELECT CAST(OrderDate AS STRING) AS date, Category AS category, SubCategory AS subcategory, CASE WHEN fulfillment_channel='Amazon' THEN 'FBA' ELSE 'MFN' END AS ch, COUNT(DISTINCT OrderId) AS orders, SUM(ItemQty) AS units, ROUND(SUM(SellingPrice_Inc_GST),0) AS rev, ROUND(SUM(SellingPrice_Exc_GST),0) AS exc_rev FROM q WHERE SubChannel='Amazon Seller Central' AND COALESCE(Order_Status,'') != 'Cancelled' AND Category IS NOT NULL AND COALESCE(Order_Status, '') != 'RTV (Return to vendor)' GROUP BY date, category, subcategory, ch ORDER BY date`,
     amzVCDailyCat: `WITH q AS (${base}) SELECT CAST(OrderDate AS STRING) AS date, Category AS category, SubCategory AS subcategory, COUNT(DISTINCT OrderId) AS orders, SUM(ItemQty) AS units, ROUND(SUM(SellingPrice_Inc_GST),0) AS rev, ROUND(SUM(SellingPrice_Exc_GST),0) AS exc_rev FROM q WHERE SubChannel = 'Amazon Vendor Central' AND Category IS NOT NULL GROUP BY date, category, subcategory ORDER BY date`,
+    // Q-commerce (Blinkit/Zepto/Instamart) SnD — same shape as amzVCDailySKU above: one row per
+    // (OrderDate, Category, SubCategory, SKU), carrying total_weight (SUM(ItemQty * Weight_gms),
+    // im.Weight_gms already joined into every channel's base query) for the ₹10/kg stock-movement
+    // cost, plus platform_margin (per-product %, from Frido_Item_Master__productid_sku_mapping,
+    // joined on ChannelSKUCode=productid + channelname) for the margin-on-gross component. No
+    // returns exist for these 3 channels (confirmed with user), so unlike Amazon VC there's no
+    // returned_units/return_rev split — gross IS sales gross here, full stop.
+    blDailySKU: `WITH q AS (${base}), m AS (SELECT productid, SAFE_CAST(platform_margin AS FLOAT64) AS margin_pct FROM \`frido-429506.sharepoint_to_gcp.Frido_Item_Master__productid_sku_mapping\` WHERE channelname = 'Blinkit')
+      SELECT CAST(q.OrderDate AS STRING) AS order_date, q.Category AS category, q.SubCategory AS subcategory, q.MasterSKU AS sku,
+        SUM(q.ItemQty) AS units, SUM(q.SellingPrice_Inc_GST) AS gross, SUM(q.SellingPrice_Exc_GST) AS exc_rev,
+        SUM(q.ItemQty * q.Weight_gms) AS total_weight, ANY_VALUE(m.margin_pct) AS margin_pct
+      FROM q LEFT JOIN m ON TRIM(q.ChannelSKUCode) = TRIM(m.productid)
+      WHERE q.Channel = 'Blinkit' AND q.MasterSKU IS NOT NULL
+      GROUP BY order_date, category, subcategory, sku`,
+    zpDailySKU: `WITH q AS (${base}), m AS (SELECT productid, SAFE_CAST(platform_margin AS FLOAT64) AS margin_pct FROM \`frido-429506.sharepoint_to_gcp.Frido_Item_Master__productid_sku_mapping\` WHERE channelname = 'Zepto')
+      SELECT CAST(q.OrderDate AS STRING) AS order_date, q.Category AS category, q.SubCategory AS subcategory, q.MasterSKU AS sku,
+        SUM(q.ItemQty) AS units, SUM(q.SellingPrice_Inc_GST) AS gross, SUM(q.SellingPrice_Exc_GST) AS exc_rev,
+        SUM(q.ItemQty * q.Weight_gms) AS total_weight, ANY_VALUE(m.margin_pct) AS margin_pct
+      FROM q LEFT JOIN m ON TRIM(q.ChannelSKUCode) = TRIM(m.productid)
+      WHERE q.Channel = 'Zepto' AND q.MasterSKU IS NOT NULL
+      GROUP BY order_date, category, subcategory, sku`,
+    inDailySKU: `WITH q AS (${base}), m AS (SELECT productid, SAFE_CAST(platform_margin AS FLOAT64) AS margin_pct FROM \`frido-429506.sharepoint_to_gcp.Frido_Item_Master__productid_sku_mapping\` WHERE channelname = 'Instamart')
+      SELECT CAST(q.OrderDate AS STRING) AS order_date, q.Category AS category, q.SubCategory AS subcategory, q.MasterSKU AS sku,
+        SUM(q.ItemQty) AS units, SUM(q.SellingPrice_Inc_GST) AS gross, SUM(q.SellingPrice_Exc_GST) AS exc_rev,
+        SUM(q.ItemQty * q.Weight_gms) AS total_weight, ANY_VALUE(m.margin_pct) AS margin_pct
+      FROM q LEFT JOIN m ON TRIM(q.ChannelSKUCode) = TRIM(m.productid)
+      WHERE q.Channel = 'Instamart' AND q.MasterSKU IS NOT NULL
+      GROUP BY order_date, category, subcategory, sku`,
     blTotals: `WITH q AS (${base}) SELECT SUM(ItemQty) AS units, ROUND(SUM(SellingPrice_Inc_GST),0) AS rev, ROUND(SUM(SellingPrice_Exc_GST),0) AS exc_rev, COUNT(DISTINCT SubCategory) AS skus, COUNT(DISTINCT City) AS cities, COUNT(DISTINCT OrderDate) AS days, COUNT(DISTINCT OrderId) AS orders FROM q WHERE Channel='Blinkit'`,
     blDaily: `WITH q AS (${base}) SELECT CAST(OrderDate AS STRING) AS date, SUM(ItemQty) AS units, ROUND(SUM(SellingPrice_Inc_GST),0) AS rev, ROUND(SUM(SellingPrice_Exc_GST),0) AS exc_rev FROM q WHERE Channel='Blinkit' GROUP BY date ORDER BY date`,
     blCategories: `WITH q AS (${base}) SELECT Category AS category, SUM(ItemQty) AS units, ROUND(SUM(SellingPrice_Inc_GST),0) AS rev, ROUND(SUM(SellingPrice_Exc_GST),0) AS exc_rev, COUNT(DISTINCT ChannelSKUCode) AS skus FROM q WHERE Channel='Blinkit' GROUP BY category ORDER BY rev DESC`,
@@ -1940,6 +2071,70 @@ export default async function handler(req, res) {
         })(),
         skuPrevMap: (() => { const m = {}; (r.shSKUPrev || []).forEach(x => { const cat = x.Category||'Others', sc = x.SubCategory||'Others', sku = x.sku; if (!m[cat]) m[cat] = {}; if (!m[cat][sc]) m[cat][sc] = {}; m[cat][sc][sku] = parseFloat(x.rev)||0 }); return m })(),
         mobilityNetBySubCat: Object.fromEntries((r.mobilityNetCalc || []).filter(x => x.sub_category).map(x => [x.sub_category, parseFloat(x.net_rev) || 0])),
+        // Real Listing_Price/Discount per SKU (see shListingPrice query above) — powers the Price
+        // Simulator's "Current Discount %" readout, sourced from the fact table's own tracked
+        // discount rather than derived/assumed.
+        listingPriceBySku: Object.fromEntries((r.shListingPrice || []).map(x => [x.sku, { listingPrice: parseFloat(x.avg_listing_price) || 0, discount: parseFloat(x.avg_discount) || 0 }])),
+        // Mature-window (today-44d to today-14d — see shReturnRateMature query above) return rate,
+        // pre-aggregated at 3 grains so the frontend can fall back SKU → Category → whole D2C
+        // without a second round-trip: a SKU with too few mature-window UNITS to trust its own
+        // rate (MIN_MATURE_UNITS floor) borrows its Category's rate, and a Category with too
+        // little data borrows the whole-D2C rate. Never derived from the user's live-selected date
+        // range — see the query's comment for why that would silently understate a recent range's
+        // true return rate.
+        // The rate itself is computeNetRevenueMeasures(...).totalReturnPct — the EXACT SAME
+        // revenue-share formula (RTO+CIR+Return+prepaid-Cancel revenue ÷ Gross Inc GST) the D2C
+        // Return Analysis tab's headline "Return%" KPI uses — never re-derived independently, so
+        // this always reconciles with what that tab shows for the same window. Revenue sums are
+        // aggregated across rows first (SKU → Category → whole-D2C), THEN computeNetRevenueMeasures
+        // is applied once per grain — summing already-computed %s would silently weight every SKU
+        // equally regardless of its revenue.
+        returnRateMature: (() => {
+          const MIN_MATURE_UNITS = 30
+          const rows = r.shReturnRateMature || []
+          const REV_FIELDS = ['gross_inc_gst', 'gross_exc_gst', 'cir_rev', 'rto_rev', 'return_rev', 'cancel_rev', 'exch_rev']
+          const emptyAgg = () => ({ units: 0, ...Object.fromEntries(REV_FIELDS.map(f => [f, 0])) })
+          const addRow = (agg, x) => {
+            agg.units += parseInt(x.units) || 0
+            REV_FIELDS.forEach(f => { agg[f] += parseFloat(x[f]) || 0 })
+          }
+          const bySku = {}, byCat = {}
+          const allAgg = emptyAgg()
+          rows.forEach(x => {
+            const cat = x.category || 'Others'
+            if (!bySku[x.sku]) bySku[x.sku] = emptyAgg()
+            addRow(bySku[x.sku], x)
+            if (!byCat[cat]) byCat[cat] = emptyAgg()
+            addRow(byCat[cat], x)
+            addRow(allAgg, x)
+          })
+          // Full component breakdown per grain (not just one blended number) — SnD impact needs
+          // the INDIVIDUAL rto/cir/return/cancel/exchange %s, since each outcome carries a
+          // different real logistics cost path (see pnlUtils.js's blendedLogisticsPerUnit: RTO =
+          // forward+rto, Return/CIR/Exchange = forward+reverse, Cancelled = no logistics at all —
+          // a single blended "return rate" can't distinguish these). Net Revenue impact uses
+          // netRevenueReturnPct = 1 − retainedShare, i.e. RTO+CIR+Return+FULL Cancellation (COD
+          // included) — the SAME cancellation treatment computeNetRevenueMeasures' retainedShare
+          // itself uses to derive real Net Revenue, NOT the Return Analysis tab's headline
+          // "Return%" KPI (overallReturnPct), which deliberately uses prepaid-only cancellation
+          // for that one display metric. A Net Revenue *simulation* needs the same full-cancellation
+          // treatment the real Net Revenue formula uses, not the display-only KPI's narrower one.
+          const componentsOf = agg => {
+            const m = computeNetRevenueMeasures(agg)
+            return { netRevenueReturnPct: 1 - m.retainedShare, rtoPct: m.rtoPct, cirPct: m.cirPct, returnPct: m.returnPct, cancelPct: m.cancelPct, exchPct: m.exchPct }
+          }
+          const rateIfMature = agg => agg.units >= MIN_MATURE_UNITS ? componentsOf(agg) : null
+          const allRate = allAgg.units > 0 ? componentsOf(allAgg) : null
+          const catRate = {}
+          Object.entries(byCat).forEach(([cat, agg]) => { catRate[cat] = rateIfMature(agg) })
+          const skuRate = {}
+          Object.entries(bySku).forEach(([sku, agg]) => { skuRate[sku] = rateIfMature(agg) })
+          // categoryBySku lets the client resolve a SKU's fallback Category rate without also
+          // shipping the full skuData tree back down just to look up one field.
+          const categoryBySku = {}
+          rows.forEach(x => { categoryBySku[x.sku] = x.category || 'Others' })
+          return { skuRate, catRate, allRate, categoryBySku, minMatureUnits: MIN_MATURE_UNITS }
+        })(),
         // Per-SKU cost rows — each row is (sku, order_status, weight_slab, total_qty, gross_inc_gst).
         // PnLPage.jsx applies snd-rates.json lookup + status logic to compute logistics/fulfilment.
         skuCostRows: (r.shSkuCosts || []).map(x => ({
@@ -2710,6 +2905,7 @@ export default async function handler(req, res) {
         catPrevMap: (r.zpSKUPrev||[]).reduce((m,x) => { m[x.category] = (m[x.category]||0)+(parseFloat(x.rev)||0); return m }, {}),
         subCatPrevMap: (r.zpSKUPrev||[]).reduce((m,x) => { const k=`${x.category}::${x.subcategory}`; m[k]=(m[k]||0)+(parseFloat(x.rev)||0); return m }, {}),
         skuPrevMap: (() => { const m = {}; (r.zpSKUPrev||[]).forEach(x => { if(!m[x.category])m[x.category]={}; if(!m[x.category][x.subcategory])m[x.category][x.subcategory]={}; m[x.category][x.subcategory][x.sku]=(m[x.category][x.subcategory][x.sku]||0)+(parseFloat(x.rev)||0) }); return m })(),
+        ...computeQcSnd(r.zpDailySKU),
       },
       instamart: {
         prevRev: parseFloat((r.prevBl||[]).find(x=>x.Channel==='Instamart')?.rev) || 0,
@@ -2734,6 +2930,7 @@ export default async function handler(req, res) {
         catPrevMap: (r.inSKUPrev||[]).reduce((m,x) => { m[x.category] = (m[x.category]||0)+(parseFloat(x.rev)||0); return m }, {}),
         subCatPrevMap: (r.inSKUPrev||[]).reduce((m,x) => { const k=`${x.category}::${x.subcategory}`; m[k]=(m[k]||0)+(parseFloat(x.rev)||0); return m }, {}),
         skuPrevMap: (() => { const m = {}; (r.inSKUPrev||[]).forEach(x => { if(!m[x.category])m[x.category]={}; if(!m[x.category][x.subcategory])m[x.category][x.subcategory]={}; m[x.category][x.subcategory][x.sku]=(m[x.category][x.subcategory][x.sku]||0)+(parseFloat(x.rev)||0) }); return m })(),
+        ...computeQcSnd(r.inDailySKU),
       },
       myntra: {
         // Shared measures layer — same formula as Shopify/EBO/Amazon SC/All tab. Overrides the
@@ -2785,6 +2982,7 @@ export default async function handler(req, res) {
         catPrevMap: (r.blSKUPrev||[]).reduce((m,x) => { m[x.category] = (m[x.category]||0)+(parseFloat(x.rev)||0); return m }, {}),
         subCatPrevMap: (r.blSKUPrev||[]).reduce((m,x) => { const k=`${x.category}::${x.subcategory}`; m[k]=(m[k]||0)+(parseFloat(x.rev)||0); return m }, {}),
         skuPrevMap: (() => { const m = {}; (r.blSKUPrev||[]).forEach(x => { if(!m[x.category])m[x.category]={}; if(!m[x.category][x.subcategory])m[x.category][x.subcategory]={}; m[x.category][x.subcategory][x.sku]=(m[x.category][x.subcategory][x.sku]||0)+(parseFloat(x.rev)||0) }); return m })(),
+        ...computeQcSnd(r.blDailySKU),
       },
       offline: {
         totalsBySub: (r.offlineTotals || []).map(x => ({ subChannel: x.SubChannel, orders: parseInt(x.orders)||0, units: parseInt(x.units)||0, revSales: parseFloat(x.rev_sales)||0, excRevSales: parseFloat(x.exc_rev_sales)||0, cnRev: parseFloat(x.cn_rev)||0, cnExcRev: parseFloat(x.cn_exc_rev)||0, cnOrders: parseInt(x.cn_orders)||0, cnUnits: parseInt(x.cn_units)||0 })),
@@ -3557,7 +3755,7 @@ export default async function handler(req, res) {
         pnlAdSpendMap: payload.pnlAdSpendMap,
         pnlRawAdSpend: payload.pnlRawAdSpend,
         masterSkuList: payload.masterSkuList,
-        _slow_shopify: chSlow('shopify', ['subCategories','skuMap','skuMapBySubChannel','skuCostRows','dailySkuCostRows','skuWeightShares','stateMap','stateTotal','statePrevMap','cityRows','cityPrevMap','cityTotal','returnReasons']),
+        _slow_shopify: chSlow('shopify', ['subCategories','skuMap','skuMapBySubChannel','skuCostRows','dailySkuCostRows','skuWeightShares','stateMap','stateTotal','statePrevMap','cityRows','cityPrevMap','cityTotal','returnReasons','listingPriceBySku','returnRateMature']),
         _slow_flipkart: chSlow('flipkart', ['categories','subCategories','skuMatrix','states','statesPrev','cities','citiesPrev','regions','status','catPrev','subCatPrev','skuPrev']),
         _slow_blinkit: chSlow('blinkit', ['categories','subCategories','skuMatrix','skus','states','statesPrev','cities','citiesPrev','skuPrev']),
         _slow_instamart: chSlow('instamart', ['categories','subCategories','skuMatrix','skus','states','statesPrev','cities','citiesPrev','skuPrev']),
