@@ -2867,7 +2867,11 @@ function Sidebar({ page, setPage, invTab, setInvTab, allowedTabs, profile }) {
         }
         if (item.id === 'logistics') {
           const hasPerf = !allowedTabs || allowedTabs.includes('logistics')
-          const hasCost = !allowedTabs || allowedTabs.includes('logistics:cost')
+          const hasCost = !allowedTabs || hasCostAccess(allowedTabs)
+          // Which cost sub-tab to land on — respects granular permissions (b2b-only → FTL/PTL)
+          const defaultCostScope = !allowedTabs || allowedTabs.includes('logistics:cost') || allowedTabs.includes('logistics:cost:all') ? 'all'
+            : allowedTabs.includes('logistics:cost:b2c') ? 'b2c'
+            : 'b2b'
           const hasBoth = hasPerf && hasCost
           const logSubTabs = [
             ...(hasPerf ? [{ id: 'logistics', label: 'Performance Analytics' }] : []),
@@ -2875,16 +2879,17 @@ function Sidebar({ page, setPage, invTab, setInvTab, allowedTabs, profile }) {
           ]
           const defaultLogPage = hasPerf ? 'logistics' : 'logistics-cost'
           const logActive = page === 'logistics' || page === 'logistics-cost'
+          const showPopup = hasBoth || (hasCost && logSubTabs.length > 0)
           return (
             <Fragment key="logistics">
             <div onClick={() => setPage(defaultLogPage)}
               className={`sb-item${logActive ? ' active' : ''}`}
               style={{ position: 'relative' }}
-              onMouseEnter={() => { if (hasBoth) { clearTimeout(logHoverTimerRef.current); setLogHover(true) } }}
+              onMouseEnter={() => { if (showPopup) { clearTimeout(logHoverTimerRef.current); setLogHover(true) } }}
               onMouseLeave={() => { logHoverTimerRef.current = setTimeout(() => setLogHover(false), 200) }}>
               <span className="sb-icon">{(() => { const Icon = item.Icon; return <Icon weight={page === item.id ? 'fill' : 'regular'} size={20} /> })()}</span>
               <span className="sb-label">{item.label}</span>
-              {hasBoth && logHover && (
+              {showPopup && logHover && (
                 <div style={{
                   position: 'absolute', left: '100%', top: 0, marginLeft: 6, zIndex: 999,
                   background: C.card, border: `1px solid ${C.border2}`, borderRadius: 10,
