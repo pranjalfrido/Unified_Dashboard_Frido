@@ -1107,6 +1107,11 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
     if (allowedTabs.includes('logistics:cost:b2b')) return 'b2b'
     return 'all'
   })
+  // Scroll to top when switching scope tabs so content doesn't jump
+  useEffect(() => {
+    document.querySelector('.page-scroll')?.scrollTo({ top: 0, behavior: 'instant' })
+  }, [scope])
+
   // Effective filters: the shared object with THIS scope's months layered on. Everything
   // downstream (the API body, monthWindow, the cubes) keeps reading filters.months.
   const filters = useMemo(
@@ -3277,7 +3282,8 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
                 { key: 'total_cost', label: 'Total', align: 'center', render: (_, r) => fmt(r.total_cost) },
               ]}
               rows={b2bRows}
-              maxRows={10}
+              maxRows={500}
+              maxHeight={382}
             />
           ) : (
             <div style={{ fontSize: 12.5, color: C.t2 }}>No transporter invoices to show.</div>

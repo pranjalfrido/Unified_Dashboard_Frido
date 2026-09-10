@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback, useEffect, useRef, Fragment, Component } from 'react'
+﻿import { useState, useMemo, useCallback, useEffect, useRef, Fragment, Component } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { SquaresFour, ChartBar, TrendUp, PlayCircle, Cube, Truck, Users, FileText } from '@phosphor-icons/react'
 import { geoMercator, geoPath } from 'd3-geo'
@@ -236,12 +236,12 @@ function LKpiCard({ label, value, badgeText, badgeVariant, subValue, subLabel, c
     ? <span style={{ fontSize: tight ? 9 : 10, fontWeight: 700, padding: tight ? '1px 4px' : '2px 6px', borderRadius: 4, background: isGood ? C.green.bg : C.red.bg, color: isGood ? C.green.tx : C.red.tx, flexShrink: 0 }}>{chg >= 0 ? '▲' : '▼'} {Math.abs(chg).toFixed(1)}%</span>
     : badgeText ? <span className={`bdg bdg-${bv}`} style={{ fontSize: tight ? 9 : 10, flexShrink: 0 }}>{badgeText}</span> : null
   return (
-    <div className="kpi-card" style={{ display: 'flex', flexDirection: 'column', gap: 0, padding: mobile ? '10px 12px' : tight ? '5px 6px' : '7px 10px', minHeight: mobile ? 78 : undefined, height: mobile ? '100%' : undefined, border: mobile ? `1px solid ${C.border}` : undefined, background: mobile ? '#fff' : undefined }}>
+    <div className="kpi-card" style={{ display: 'flex', flexDirection: 'column', gap: 0, padding: mobile ? '10px 12px' : tight ? '5px 6px' : '2px 10px', minHeight: mobile ? 78 : undefined, height: mobile ? '100%' : undefined, border: mobile ? `1px solid ${C.border}` : undefined, background: mobile ? '#fff' : undefined }}>
       <div className="kpi-label" style={{ marginBottom: 2 }}>{label}</div>
       {compact ? (
         <>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 4, minWidth: 0 }}>
-            <div className="kpi-value" style={{ fontSize: mobile ? 20 : tight ? 14 : 16, whiteSpace: 'nowrap', minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis' }}>{value ?? '—'}</div>
+            <div className="kpi-value" style={{ fontSize: mobile ? 20 : tight ? 13 : 14, whiteSpace: 'nowrap', minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis' }}>{value ?? '—'}</div>
             {chgBadge}
           </div>
           {subLabel && <div style={{ fontSize: 10, fontWeight: 400, color: C.t3, marginTop: 1 }}>{subLabel}</div>}
@@ -417,6 +417,7 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
   const [data, setData] = useState(null)
   const [prevData, setPrevData] = useState(null)
   const [loading, setLoading] = useState(false)
+  const [showSkeleton, setShowSkeleton] = useState(false)
   const [error, setError] = useState(null)
   const [staleData, setStaleData] = useState(() => { try { const s = localStorage.getItem('logistics_stale'); return s ? JSON.parse(s) : null } catch { return null } })
   const [retData, setRetData] = useState(null)
@@ -427,6 +428,7 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
   const fetchLogistics = useCallback(async () => {
     if (!filters.start || !filters.end) return
     setLoading(true); setError(null)
+    const skTimer = setTimeout(() => setShowSkeleton(true), 400)
     try {
       // Try static file first — served from Vercel CDN in ~14ms
       // Static file has ALL shipment types and categories, so we filter client-side (instant)
@@ -480,7 +482,7 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
       } catch {}
       setError(e.message)
     }
-    finally { setLoading(false) }
+    finally { clearTimeout(skTimer); setLoading(false); setShowSkeleton(false) }
   }, [filters.start, filters.end])
 
   useEffect(() => { fetchLogistics() }, [fetchLogistics])
@@ -895,14 +897,8 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
 
 
       {error && !rawData && !staleData && <div style={{ padding: '10px 14px', borderRadius: 9, background: C.red.bg, border: `1px solid ${C.red.bd}`, color: C.red.tx, fontSize: 12 }}>⚠ {error} <button onClick={fetchLogistics} style={{ marginLeft: 8, fontSize: 11, cursor: 'pointer' }}>Retry</button></div>}
-      {loading && !rawData && !staleData && (
+      {showSkeleton && !rawData && !staleData && (
         <LogisticsSkeleton />
-      )}
-      {loading && !rawData && staleData && (
-        <div style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '6px 10px', borderRadius: 8, background: C.acl, border: `1px solid ${C.acc}44`, alignSelf: 'flex-start', fontSize: 11.5, color: C.t2, fontWeight: 500 }}>
-          <span style={{ width: 7, height: 7, borderRadius: '50%', background: C.acc, display: 'inline-block', animation: 'pulse 1.2s ease infinite', flexShrink: 0 }} />
-          Refreshing data…
-        </div>
       )}
 
       {data && <>
@@ -931,7 +927,7 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
           // Desktop: hero card left + 2×6 grid right
           <div style={{ display: 'grid', gridTemplateColumns: filterSidebarOpen ? '1.3fr 5fr' : '1.5fr 5fr', gap: 10, alignItems: 'stretch' }}>
             {/* Hero card */}
-            <div className="kpi-card sales-kpi-hero" style={{ display: 'flex', flexDirection: 'column', gap: filterSidebarOpen ? 4 : 8, padding: filterSidebarOpen ? '10px 14px' : '16px 18px', background: `linear-gradient(135deg, ${C.acl}66 0%, ${C.card} 60%)` }}>
+            <div className="kpi-card sales-kpi-hero" style={{ display: 'flex', flexDirection: 'column', gap: filterSidebarOpen ? 3 : 5, padding: filterSidebarOpen ? '8px 12px' : '10px 14px', background: `linear-gradient(135deg, ${C.acl}66 0%, ${C.card} 60%)` }}>
               <div className="kpi-label" style={{ fontSize: 11 }}>Total Shipments</div>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 6 }}>
                 <div className="kpi-value" style={{ fontSize: 32, fontWeight: 800 }}>{n(k.total_shipments)}</div>
@@ -941,7 +937,7 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
               <div className="kpi-sub" style={{ fontSize: 11, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                 <span style={{ color: C.green.tx, fontWeight: 700 }}>{pct2(k.delivered, k.total_shipments)}</span> Delivered · <span style={{ color: (k.rto / (k.total_shipments || 1) * 100) > 15 ? C.red.tx : C.t2, fontWeight: 700 }}>{pct2(k.rto, k.total_shipments)}</span> RTO
               </div>
-              <div style={{ height: 30, flexShrink: 0 }}>
+              <div style={{ height: 22, flexShrink: 0 }}>
                 <ResponsiveContainer width="100%" height="100%">
                   <AreaChart data={trendData.map(d => ({ cur: d.total || 0 }))} margin={{ top: 4, right: 0, bottom: 0, left: 0 }}>
                     <defs><linearGradient id="logHeroGrad" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor={C.acc} stopOpacity={0.25} /><stop offset="95%" stopColor={C.acc} stopOpacity={0} /></linearGradient></defs>
@@ -955,8 +951,8 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gridTemplateRows: 'repeat(2, 1fr)', gap: filterSidebarOpen ? 5 : 7, alignItems: 'stretch' }}>
               <LKpiCard label="Total Attempted" value={fmtBig(k.total_ofd_attempts)} subValue={pct2(k.total_ofd_attempts, k.total_shipments)} badgeVariant="N" cur={k.total_ofd_attempts} prev={pk.total_ofd_attempts} compact tight={filterSidebarOpen} />
               <LKpiCard label="Z-RTO" value={fmtBig(k.z_rto)} subValue={pct2(k.z_rto, k.total_shipments)} badgeVariant="A" cur={k.z_rto} prev={pk.z_rto} compact tight={filterSidebarOpen} />
-              <LKpiCard label="FASR % (of attempted)" value={pct2(k.delivered_1attempt, k.total_ofd_attempts)} subValue={pct2(k.delivered_1attempt, k.total_shipments)} badgeVariant="G" cur={k.delivered_1attempt} prev={pk.delivered_1attempt} compact tight={filterSidebarOpen} />
-              <LKpiCard label="RASR % (of attempted)" value={pct2(k.delivered_multi, k.total_ofd_attempts)} subValue={pct2(k.delivered_multi, k.total_shipments)} badgeVariant="B" cur={k.delivered_multi} prev={pk.delivered_multi} compact tight={filterSidebarOpen} />
+              <LKpiCard label="FASR % (of att.)" value={pct2(k.delivered_1attempt, k.total_ofd_attempts)} subValue={pct2(k.delivered_1attempt, k.total_shipments)} badgeVariant="G" cur={k.delivered_1attempt} prev={pk.delivered_1attempt} compact tight={filterSidebarOpen} />
+              <LKpiCard label="RASR % (of att.)" value={pct2(k.delivered_multi, k.total_ofd_attempts)} subValue={pct2(k.delivered_multi, k.total_shipments)} badgeVariant="B" cur={k.delivered_multi} prev={pk.delivered_multi} compact tight={filterSidebarOpen} />
               <LKpiCard label="Multi-Att Del" value={fmtBig(k.delivered_multi)} subValue={pct2(k.delivered_multi, k.total_shipments)} badgeVariant="B" cur={k.delivered_multi} prev={pk.delivered_multi} compact tight={filterSidebarOpen} />
               <LKpiCard label="Avg Processing" value={d1(k.avg_processing)} subLabel="Order date → shipment creation" badgeVariant="N" cur={k.avg_processing} prev={pk.avg_processing} compact tight={filterSidebarOpen} invertColor />
               <LKpiCard label="Avg Pickup TAT" value={d1(k.avg_pickup)} subLabel="Shipment creation → pickup" badgeVariant="B" cur={k.avg_pickup} prev={pk.avg_pickup} compact tight={filterSidebarOpen} invertColor />
@@ -7007,7 +7003,7 @@ function ChannelShareTable({ sortedCh, prevChMap = {}, boxHeight }) {
   const totalRev = rows.reduce((s, r) => s + r.rev, 0) || 1
 
   return (
-    <Card fill title="Channel Share" style={boxHeight ? { height: boxHeight, alignSelf: 'start' } : undefined} action={
+    <Card fill title="Channel Share" style={boxHeight ? { minHeight: boxHeight } : undefined} action={
       <div style={{ display: 'flex', gap: 4 }}>
         {[{ id: 'gross', label: 'Gross Rev' }, { id: 'net', label: 'Net Rev' }].map((opt, i) => (
           <div key={opt.id} style={{ display: 'flex', alignItems: 'center' }}>
@@ -7245,7 +7241,7 @@ function AllTab({ data, rangeStart, rangeEnd }) {
         </div>
       </div>
       <ChannelTrendCard dailyArr={dailyArr} channels={channels} rangeStart={rangeStart} rangeEnd={rangeEnd} />
-      <div className="g-3col" style={{ display: 'grid', gridTemplateColumns: '1.2fr 1.5fr 1fr', gap: 14, alignItems: 'start' }}>
+      <div className="g-3col" style={{ display: 'grid', gridTemplateColumns: '1.2fr 1.5fr 1fr', gap: 14, alignItems: 'stretch' }}>
         <ChannelShareTable sortedCh={sortedCh} prevChMap={prevChMap} boxHeight={340} />
         <CategoryRevenueCard
           catRows={catRows}
@@ -7256,7 +7252,7 @@ function AllTab({ data, rangeStart, rangeEnd }) {
           setView={setCatRevView}
           selectedName={selectedCat}
           onSelectCategory={v => setSelectedCat(prev => prev === v ? null : v)}
-          height={360}
+          height={340}
         />
         <GeoToggleDonutCard regionRows={regionRows} tierRows={tierRows} boxHeight={340} />
       </div>
@@ -7349,7 +7345,7 @@ function CatSubCatRow({ catRows, subCatRows, title = 'Category Revenue', selecte
   const filteredSubCat = selectedCat ? subCatRows.filter(r => r.category === selectedCat) : subCatRows
   const btnStyle = v => ({ fontSize: 11, fontWeight: 600, padding: '3px 10px', borderRadius: 5, border: `1.5px solid ${v === catView ? C.t1 : C.border}`, background: v === catView ? C.t1 : 'transparent', color: v === catView ? '#fff' : C.t2, cursor: 'pointer', fontFamily: 'var(--font)' })
   const scBtnStyle = v => ({ fontSize: 11, fontWeight: 600, padding: '3px 10px', borderRadius: 5, border: `1.5px solid ${v === subCatView ? C.t1 : C.border}`, background: v === subCatView ? C.t1 : 'transparent', color: v === subCatView ? '#fff' : C.t2, cursor: 'pointer', fontFamily: 'var(--font)' })
-  const FIXED_H = 420
+  const FIXED_H = 290
   const totalCatRev = catRows.reduce((s, r) => s + r.rev, 0)
   const totalSubRev = filteredSubCat.reduce((s, r) => s + r.rev, 0)
   if (!catRows.length) return null
@@ -7517,7 +7513,7 @@ function GeoToggleDonutCard({ regionRows, tierRows, note, boxHeight }) {
           ))}
         </div>
       }
-      style={isMobGeo ? { minHeight: mobGeoMinH } : (boxHeight ? { height: boxHeight, alignSelf: 'start' } : undefined)}>
+      style={isMobGeo ? { minHeight: mobGeoMinH } : (boxHeight ? { height: boxHeight } : undefined)}>
       {data.length === 0 ? (
         <div style={{ fontSize: 12, color: C.t3, textAlign: 'center', padding: '30px 0', height: fixedContentH, boxSizing: 'border-box', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>City-tier detail not available{geoView === 'tier' ? '' : ' for this channel'}</div>
       ) : (
@@ -8154,7 +8150,7 @@ function ShopifyTab({ data, filters, setFilters }) {
           )
         })()}
       </div>
-      <div className="g-2" style={{ gridTemplateColumns: '1.7fr 1fr 0.65fr', alignItems: 'stretch' }}>
+      <div className="g-2" style={{ gridTemplateColumns: '1.5fr 1fr 0.65fr', alignItems: 'start' }}>
         {(() => {
           const returnTrendMap = {}
           ;(data.dailyReturnTrend || []).forEach(x => { returnTrendMap[x.date] = x })
@@ -8208,7 +8204,7 @@ function ShopifyTab({ data, filters, setFilters }) {
             { name: 'Return % (RTO+CIR)', color: '#E24B4A' }, { name: 'Exchange %', color: '#9B59B6' }, { name: 'Cancellation %', color: '#B91C1C' },
           ]
           return (
-            <Card title="Revenue & Returns Trend" style={{ alignSelf: 'start', height: isMob ? 'auto' : 340 }} action={
+            <Card title="Revenue & Returns Trend" style={{ height: isMob ? 'auto' : 370 }} action={
               <Dropdown value={shTrendGroup} onChange={setShTrendGroup} options={GROUP_OPTS} style={{ fontSize: 11, fontWeight: 600, padding: '3px 8px', borderRadius: 6, border: `1px solid ${C.border2}`, background: C.card, color: C.t1, cursor: 'pointer', fontFamily: 'var(--font)', outline: 'none' }} />
             }>
               <div style={isMob ? { margin: '0 -18px' } : {}}>
@@ -8284,11 +8280,11 @@ function ShopifyTab({ data, filters, setFilters }) {
               totalRev={totalRev}
               view={catRevView}
               setView={setCatRevView}
-              height={340}
+              height={370}
             />}
         {isIntl
           ? <Card title="Geography Breakdown"><div style={{ fontSize: 12, color: C.t3, padding: '10px 0', textAlign: 'center' }}>Geographic data not available for International orders</div></Card>
-          : <GeoToggleDonutCard regionRows={sh.regionRows || []} tierRows={sh.tierRows || []} boxHeight={340} />}
+          : <GeoToggleDonutCard regionRows={sh.regionRows || []} tierRows={sh.tierRows || []} boxheight={370} />}
       </div>
       {/* Category Revenue Matrix · Shopify */}
       {isIntl
@@ -8363,7 +8359,7 @@ function ShopifyTab({ data, filters, setFilters }) {
       })()}
       {false && <div className="g-2" style={{ alignItems: 'stretch' }}>
         {(() => {
-          const FIXED_H = 420
+          const FIXED_H = 290
           const CAT_COLORS = ['#534AB7','#0D9E68','#2E74CC','#CC8A00','#CC4078','#E24B4A','#9B59B6','#FF6B35','#00B4D8','#06D6A0']
           const colorOf = name => { const idx = catRows.findIndex(r => r.name === name); return CAT_COLORS[idx >= 0 ? idx % CAT_COLORS.length : 0] }
           const btnStyle = v => ({ fontSize: 11, fontWeight: 600, padding: '3px 10px', borderRadius: 5, border: `1.5px solid ${shCatView === v ? C.acm : C.border}`, background: shCatView === v ? C.acc : 'transparent', color: shCatView === v ? C.t1 : C.t2, cursor: 'pointer', fontFamily: 'var(--font)' })
@@ -8399,7 +8395,7 @@ function ShopifyTab({ data, filters, setFilters }) {
           )
         })()}
         {(() => {
-          const FIXED_H = 420
+          const FIXED_H = 290
           const scColorOf = () => C.acc
           const btnStyle = v => ({ fontSize: 11, fontWeight: 600, padding: '3px 10px', borderRadius: 5, border: `1.5px solid ${shSubCatView === v ? C.acm : C.border}`, background: shSubCatView === v ? C.acc : 'transparent', color: shSubCatView === v ? C.t1 : C.t2, cursor: 'pointer', fontFamily: 'var(--font)' })
           const totalSubRev = subCatRows.reduce((s, r) => s + r.rev, 0)
@@ -8691,8 +8687,8 @@ function EBOTab({ data, rangeStart, rangeEnd }) {
         </div>
       </div>
       {/* Revenue & Returns Trend + Category Revenue + Geography Breakdown side by side */}
-      <div className="g-2 g-3col" style={{ gridTemplateColumns: '1fr 0.85fr 1.4fr', alignItems: 'stretch' }}>
-        <div className="card" style={{ padding: '14px 18px', display: 'flex', flexDirection: 'column', height: isMob ? 'auto' : 340, boxSizing: 'border-box' }}>
+      <div className="g-2 g-3col" style={{ gridTemplateColumns: '1.5fr 1fr 0.65fr', alignItems: 'start' }}>
+        <div className="card" style={{ padding: '14px 18px', display: 'flex', flexDirection: 'column', height: isMob ? 'auto' : 370, boxSizing: 'border-box' }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10, flexShrink: 0 }}>
             <span style={{ fontSize: 13, fontWeight: 700, color: C.t1 }}>Revenue &amp; Returns Trend</span>
             <Dropdown value={trendGroup} onChange={setTrendGroup} options={EBO_TREND_GROUP_OPTS} style={{ fontSize: 11, fontWeight: 700, padding: '3px 8px', borderRadius: 6 }} />
@@ -8748,9 +8744,9 @@ function EBOTab({ data, rangeStart, rangeEnd }) {
           totalRev={totalRev}
           view={catRevView}
           setView={setCatRevView}
-          height={340}
+          height={370}
         />
-        <GeoToggleDonutCard regionRows={regionRows} tierRows={tierRows} boxHeight={340} />
+        <GeoToggleDonutCard regionRows={regionRows} tierRows={tierRows} boxheight={370} />
       </div>
       <FlatCategoryProductMatrix catData={catDataForMatrix} subCatData={subCatDataForMatrix} skuData={skuDataForMatrix} title="Category Revenue Matrix · EBO" catPrevMap={ebo.catPrevMap || {}} subCatPrevMap={ebo.subCatPrevMap || {}} showReturnPct={true} detailedReturns />
       {/* Geo tables */}
@@ -9100,7 +9096,7 @@ function AmazonTab({ data, channelView, setChannelView }) {
             const statusColors = { Shipped: '#2E74CC', Pending: '#E8930A', Cancelled: '#E24B4A', Shipping: '#9B59B6' }
             return (
               <div className="g-3col" style={{ display: 'grid', gridTemplateColumns: '1.5fr 1fr 0.65fr', gap: 14, alignItems: 'start' }}>
-                <Card fill title="Revenue & Returns Trend" style={{ height: 340, alignSelf: 'start' }} note={channelView !== 'all' ? (channelView === 'sc' ? 'Seller Central' : 'Vendor Central') : undefined} action={
+                <Card fill title="Revenue & Returns Trend" style={{ height: 370 }} note={channelView !== 'all' ? (channelView === 'sc' ? 'Seller Central' : 'Vendor Central') : undefined} action={
                   <div style={{ display: 'flex', gap: isMob ? 4 : 8, alignItems: 'center' }}>
                     {isMob ? (
                       <Dropdown value={ovTrendMetric} onChange={setOvTrendMetric} options={[{ id: 'rev', label: 'Revenue' }, { id: 'orders', label: 'Orders' }, { id: 'units', label: 'Units' }]} style={{ fontSize: 10, fontWeight: 600, padding: '2px 4px', borderRadius: 6, width: 78 }} />
@@ -9191,11 +9187,11 @@ function AmazonTab({ data, channelView, setChannelView }) {
                     catRows={catRows} subCatRows={subCatRows} skuMap={skuMap} totalRev={chScCatRev + chVcCatRev}
                     view={catRevView} setView={setCatRevView} selectedName={selectedCat}
                     onSelectCategory={v => { setSelectedCat(prev => prev === v ? null : v); setSelectedSubCat(null) }}
-                    height={390}
+                    height={370}
                   />
                 })()}
                 {channelView !== 'vc'
-                  ? <GeoToggleDonutCard regionRows={amzSC.regionRows || []} tierRows={amzSC.tierRows || []} note="Seller Central only" boxHeight={390} />
+                  ? <GeoToggleDonutCard regionRows={amzSC.regionRows || []} tierRows={amzSC.tierRows || []} note="Seller Central only" boxheight={370} />
                   : <Card title="Geography Breakdown" note="Not available for Vendor Central"><div style={{ fontSize: 12, color: C.t3, padding: '30px 0', textAlign: 'center' }}>VC data has no state/city/region granularity</div></Card>}
               </div>
             )
@@ -9465,7 +9461,7 @@ function FlipkartTab({ data }) {
         const btnSt = k => ({ fontSize: 11, fontWeight: fkTrendMetric===k?700:500, padding: '3px 9px', borderRadius: 6, border: 'none', outline: 'none', background: fkTrendMetric===k?C.acs:'transparent', color: fkTrendMetric===k?'#3F3D33':C.t2, cursor: 'pointer', fontFamily: 'var(--font)', minWidth: 72, textAlign: 'center' })
         return (
           <div className="g-3col" style={{ display: 'grid', gridTemplateColumns: '1.5fr 1fr 0.65fr', gap: 14, alignItems: 'start' }}>
-            <Card fill title="Revenue & Returns Trend" style={{ height: 340, alignSelf: 'start' }} action={
+            <Card fill title="Revenue & Returns Trend" style={{ height: 370 }} action={
               <div style={{ display: 'flex', gap: isMob ? 4 : 8, alignItems: 'center' }}>
                 {isMob ? (
                   <SmallDropdown value={fkTrendMetric} onChange={setFkTrendMetric} options={[['rev','Gross Rev'],['orders','Orders'],['units','Units']]}
@@ -9563,14 +9559,14 @@ function FlipkartTab({ data }) {
                 catRows={catRows} subCatRows={subCatRows} skuMap={skuMap} totalRev={rev}
                 view={catRevView} setView={setCatRevView} selectedName={selectedCat}
                 onSelectCategory={v => { setSelectedCat(prev => prev === v ? null : v); setSelectedSubCat(null) }}
-                height={360}
+                height={370}
               />
             })()}
             {(() => {
               const regionAgg = {}
               ;(fk.regions || []).forEach(x => { if (!regionAgg[x.region]) regionAgg[x.region] = { region: x.region, rev: 0, orders: 0 }; regionAgg[x.region].rev += x.rev; regionAgg[x.region].orders += x.orders })
               const regionRows = Object.values(regionAgg).sort((a, b) => b.rev - a.rev)
-              return <GeoToggleDonutCard regionRows={regionRows} tierRows={[]} boxHeight={340} />
+              return <GeoToggleDonutCard regionRows={regionRows} tierRows={[]} boxheight={370} />
             })()}
           </div>
         )
@@ -11463,7 +11459,7 @@ function BlinkitTab({ data }) {
 
       {/* Revenue Trend + Category Revenue + Geography Breakdown side by side */}
       <div className="g-3col" style={{ display: 'grid', gridTemplateColumns: '1.5fr 1fr 0.65fr', gap: 14, alignItems: 'start' }}>
-        <TrendAnalysisCard title="Revenue & Returns Trend" daily={daily} grossColor={C.acm} grossGradId="blGrossGrad2" revKey="rev" excRevKey="excRev" boxHeight={340} />
+        <TrendAnalysisCard title="Revenue & Returns Trend" daily={daily} grossColor={C.acm} grossGradId="blGrossGrad2" revKey="rev" excRevKey="excRev" boxheight={370} />
         <CategoryRevenueCard
           catRows={catRowsForCatSubCat}
           subCatRows={subCatRowsForCatSubCat}
@@ -11473,12 +11469,12 @@ function BlinkitTab({ data }) {
           setView={setCatRevView}
           selectedName={selectedCat}
           onSelectCategory={v => setSelectedCat(prev => prev === v ? null : v)}
-          height={360}
+          height={370}
         />
         {(() => {
           const regAgg = {}; cityRows.forEach(c => { if (!c.region) return; if (!regAgg[c.region]) regAgg[c.region] = { region: c.region, rev: 0, orders: 0 }; regAgg[c.region].rev += c.rev; regAgg[c.region].orders += c.units })
           const tierAgg = {}; cityRows.forEach(c => { if (!c.cityTier) return; const k = `Tier ${c.cityTier}`; if (!tierAgg[k]) tierAgg[k] = { tier: c.cityTier, rev: 0, orders: 0 }; tierAgg[k].rev += c.rev; tierAgg[k].orders += c.units })
-          return <GeoToggleDonutCard regionRows={Object.values(regAgg)} tierRows={Object.values(tierAgg)} boxHeight={340} />
+          return <GeoToggleDonutCard regionRows={Object.values(regAgg)} tierRows={Object.values(tierAgg)} boxheight={370} />
         })()}
       </div>
 
@@ -11636,7 +11632,7 @@ function InstaTab({ data }) {
 
       {/* Revenue Trend + Category Revenue + Geography Breakdown side by side */}
       <div className="g-3col" style={{ display: 'grid', gridTemplateColumns: '1.5fr 1fr 0.65fr', gap: 14, alignItems: 'start' }}>
-        <TrendAnalysisCard title="Revenue & Returns Trend" daily={daily} grossColor={C.acm} grossGradId="inGrossGrad2" revKey="rev" excRevKey="excRev" boxHeight={340} />
+        <TrendAnalysisCard title="Revenue & Returns Trend" daily={daily} grossColor={C.acm} grossGradId="inGrossGrad2" revKey="rev" excRevKey="excRev" boxheight={370} />
         <CategoryRevenueCard
           catRows={catRowsForCatSubCat}
           subCatRows={subCatRowsForCatSubCat}
@@ -11646,12 +11642,12 @@ function InstaTab({ data }) {
           setView={setCatRevView}
           selectedName={selectedCat}
           onSelectCategory={v => setSelectedCat(prev => prev === v ? null : v)}
-          height={360}
+          height={370}
         />
         {(() => {
           const regAgg = {}; cityRows.forEach(c => { if (!c.region) return; if (!regAgg[c.region]) regAgg[c.region] = { region: c.region, rev: 0, orders: 0 }; regAgg[c.region].rev += c.rev; regAgg[c.region].orders += c.units })
           const tierAgg = {}; cityRows.forEach(c => { if (!c.cityTier) return; const k = `Tier ${c.cityTier}`; if (!tierAgg[k]) tierAgg[k] = { tier: c.cityTier, rev: 0, orders: 0 }; tierAgg[k].rev += c.rev; tierAgg[k].orders += c.units })
-          return <GeoToggleDonutCard regionRows={Object.values(regAgg)} tierRows={Object.values(tierAgg)} boxHeight={340} />
+          return <GeoToggleDonutCard regionRows={Object.values(regAgg)} tierRows={Object.values(tierAgg)} boxheight={370} />
         })()}
       </div>
 
@@ -11807,7 +11803,7 @@ function ZeptoTab({ data }) {
 
       {/* Revenue Trend + Category Revenue + Geography Breakdown side by side */}
       <div className="g-3col" style={{ display: 'grid', gridTemplateColumns: '1.5fr 1fr 0.65fr', gap: 14, alignItems: 'start' }}>
-        <TrendAnalysisCard title="Revenue & Returns Trend" daily={daily} grossColor={C.acm} grossGradId="zpGrossGrad2" revKey="rev" excRevKey="excRev" boxHeight={340} />
+        <TrendAnalysisCard title="Revenue & Returns Trend" daily={daily} grossColor={C.acm} grossGradId="zpGrossGrad2" revKey="rev" excRevKey="excRev" boxheight={370} />
         <CategoryRevenueCard
           catRows={catRowsForCatSubCat}
           subCatRows={subCatRowsForCatSubCat}
@@ -11817,12 +11813,12 @@ function ZeptoTab({ data }) {
           setView={setCatRevView}
           selectedName={selectedCat}
           onSelectCategory={v => setSelectedCat(prev => prev === v ? null : v)}
-          height={360}
+          height={370}
         />
         {(() => {
           const regAgg = {}; cityRows.forEach(c => { if (!c.region) return; if (!regAgg[c.region]) regAgg[c.region] = { region: c.region, rev: 0, orders: 0 }; regAgg[c.region].rev += c.rev; regAgg[c.region].orders += c.units })
           const tierAgg = {}; cityRows.forEach(c => { if (!c.cityTier) return; const k = `Tier ${c.cityTier}`; if (!tierAgg[k]) tierAgg[k] = { tier: c.cityTier, rev: 0, orders: 0 }; tierAgg[k].rev += c.rev; tierAgg[k].orders += c.units })
-          return <GeoToggleDonutCard regionRows={Object.values(regAgg)} tierRows={Object.values(tierAgg)} boxHeight={340} />
+          return <GeoToggleDonutCard regionRows={Object.values(regAgg)} tierRows={Object.values(tierAgg)} boxheight={370} />
         })()}
       </div>
 
@@ -12030,7 +12026,7 @@ function CredTab({ data }) {
         const btnSt = k => ({ fontSize: 11, fontWeight: crTrendMetric===k?700:500, padding: '3px 9px', borderRadius: 6, border: 'none', outline: 'none', background: crTrendMetric===k?C.acs:'transparent', color: crTrendMetric===k?'#3F3D33':C.t2, cursor: 'pointer', fontFamily: 'var(--font)', minWidth: 72, textAlign: 'center' })
         return (
           <div className="g-3col" style={{ display: 'grid', gridTemplateColumns: '1.5fr 1fr 0.65fr', gap: 14, alignItems: 'start' }}>
-            <Card fill title="Revenue & Returns Trend" style={{ height: isMob ? 'auto' : 340, alignSelf: 'start' }} action={
+            <Card fill title="Revenue & Returns Trend" style={{ height: isMob ? 'auto' : 370 }} action={
               <div style={{ display: 'flex', gap: isMob ? 4 : 8, alignItems: 'center' }}>
                 {isMob ? (
                   <Dropdown value={crTrendMetric} onChange={setCrTrendMetric} options={[['rev','Gross Rev'],['orders','Orders'],['units','Units']].map(([k,l]) => ({ id: k, label: l }))} style={{ fontSize: 10, fontWeight: 600, padding: '2px 4px', borderRadius: 6, border: `1px solid ${C.border2}`, background: C.card, color: C.t1, cursor: 'pointer', fontFamily: 'var(--font)', outline: 'none' }} />
@@ -12105,9 +12101,9 @@ function CredTab({ data }) {
               setView={setCatRevView}
               selectedName={selectedCat}
               onSelectCategory={v => { setSelectedCat(prev => prev === v ? null : v); setSelectedSubCat(null) }}
-              height={360}
+              height={370}
             />
-            <GeoToggleDonutCard regionRows={cr.regionRows || []} tierRows={cr.tierRows || []} boxHeight={340} />
+            <GeoToggleDonutCard regionRows={cr.regionRows || []} tierRows={cr.tierRows || []} boxheight={370} />
           </div>
         )
       })()}
@@ -12288,7 +12284,7 @@ function FirstcryTab({ data }) {
         const fcGroupOpts = [{ id: 'daily', label: 'Daily' }, { id: 'weekly', label: 'Weekly' }, { id: 'monthly', label: 'Monthly' }, { id: 'quarterly', label: 'Quarterly' }]
         return (
           <div className="g-3col" style={{ display: 'grid', gridTemplateColumns: '1.5fr 1fr 0.65fr', gap: 14, alignItems: 'start' }}>
-            <Card fill title="Revenue & Returns Trend" style={{ height: isMob ? 'auto' : 340, alignSelf: 'start' }} action={
+            <Card fill title="Revenue & Returns Trend" style={{ height: isMob ? 'auto' : 370 }} action={
               <div style={{ display: 'flex', gap: isMob ? 4 : 8, alignItems: 'center' }}>
                 {isMob ? (
                   <Dropdown value={fcTrendMetric} onChange={setFcTrendMetric} options={fcMetricOpts} style={{ fontSize: 10, fontWeight: 600, padding: '2px 4px', borderRadius: 6, border: `1px solid ${C.border2}`, background: C.card, color: C.t1, cursor: 'pointer', fontFamily: 'var(--font)', outline: 'none' }} />
@@ -12363,9 +12359,9 @@ function FirstcryTab({ data }) {
               setView={setCatRevView}
               selectedName={selectedCat}
               onSelectCategory={v => { setSelectedCat(prev => prev === v ? null : v); setSelectedSubCat(null) }}
-              height={360}
+              height={370}
             />
-            <GeoToggleDonutCard regionRows={fc.regionRows || []} tierRows={fc.tierRows || []} boxHeight={340} />
+            <GeoToggleDonutCard regionRows={fc.regionRows || []} tierRows={fc.tierRows || []} boxheight={370} />
           </div>
         )
       })()}
@@ -12543,7 +12539,7 @@ function MyntraTab({ data }) {
         const btnSt = k => ({ fontSize: 11, fontWeight: mnTrendMetric===k?700:500, padding: '3px 9px', borderRadius: 6, border: 'none', outline: 'none', background: mnTrendMetric===k?C.acs:'transparent', color: mnTrendMetric===k?'#3F3D33':C.t2, cursor: 'pointer', fontFamily: 'var(--font)', minWidth: 72, textAlign: 'center' })
         return (
           <div className="g-3col" style={{ display: 'grid', gridTemplateColumns: '1.5fr 1fr 0.65fr', gap: 14, alignItems: 'start' }}>
-            <Card fill title="Revenue & Returns Trend" style={{ height: isMob ? 'auto' : 340, alignSelf: 'start' }} action={
+            <Card fill title="Revenue & Returns Trend" style={{ height: isMob ? 'auto' : 370 }} action={
               <div style={{ display: 'flex', gap: isMob ? 4 : 8, alignItems: 'center' }}>
                 {isMob ? (
                   <SmallDropdown value={mnTrendMetric} onChange={setMnTrendMetric} options={[['rev','Gross Rev'],['orders','Orders'],['units','Units']]}
@@ -12604,7 +12600,7 @@ function MyntraTab({ data }) {
               setView={setCatRevView}
               selectedName={selectedCat}
               onSelectCategory={v => { setSelectedCat(prev => prev === v ? null : v); setSelectedSubCat(null) }}
-              height={360}
+              height={370}
             />
             {(() => {
               // Myntra has no standalone regionRows/tierRows from backend — derive from cities'
@@ -12612,7 +12608,7 @@ function MyntraTab({ data }) {
               // don't carry a units field).
               const regAgg = {}; cityRows.forEach(c => { if (!c.region) return; if (!regAgg[c.region]) regAgg[c.region] = { region: c.region, rev: 0, orders: 0 }; regAgg[c.region].rev += c.rev; regAgg[c.region].orders += c.orders })
               const tierAgg = {}; cityRows.forEach(c => { if (!c.cityTier) return; const k = `Tier ${c.cityTier}`; if (!tierAgg[k]) tierAgg[k] = { tier: c.cityTier, name: k, rev: 0, orders: 0 }; tierAgg[k].rev += c.rev; tierAgg[k].orders += c.orders })
-              return <GeoToggleDonutCard regionRows={Object.values(regAgg)} tierRows={Object.values(tierAgg)} boxHeight={340} />
+              return <GeoToggleDonutCard regionRows={Object.values(regAgg)} tierRows={Object.values(tierAgg)} boxheight={370} />
             })()}
           </div>
         )
@@ -12925,7 +12921,7 @@ function OfflineTab({ data, sub, setSub }) {
         const btnSt = k => ({ fontSize: 11, fontWeight: offTrendMetric===k?700:500, padding: '3px 9px', borderRadius: 6, border: 'none', outline: 'none', background: offTrendMetric===k?C.acs:'transparent', color: offTrendMetric===k?'#3F3D33':C.t2, cursor: 'pointer', fontFamily: 'var(--font)', minWidth: 72, textAlign: 'center' })
         return (
           <div className="g-3col" style={{ display: 'grid', gridTemplateColumns: '1.5fr 1fr 0.65fr', gap: 14, alignItems: 'start' }}>
-            <Card fill title="Revenue & Returns Trend" style={{ height: isMob ? 'auto' : 340, alignSelf: 'start' }} note={sub !== 'all' ? SUB_OPTIONS.find(o => o.id === sub)?.label : undefined} action={
+            <Card fill title="Revenue & Returns Trend" style={{ height: isMob ? 'auto' : 370 }} note={sub !== 'all' ? SUB_OPTIONS.find(o => o.id === sub)?.label : undefined} action={
               <div style={{ display: 'flex', gap: isMob ? 4 : 8, alignItems: 'center' }}>
                 {isMob ? (
                   <SmallDropdown value={offTrendMetric} onChange={setOffTrendMetric} options={[['rev','Gross Rev'],['orders','Orders'],['units','Units']]}
@@ -13001,9 +12997,9 @@ function OfflineTab({ data, sub, setSub }) {
               setView={setCatRevView}
               selectedName={selectedCat}
               onSelectCategory={name => setSelectedCat(prev => prev === name ? null : name)}
-              height={360}
+              height={370}
             />
-            <GeoToggleDonutCard regionRows={regionRows} tierRows={tierRows} boxHeight={340} />
+            <GeoToggleDonutCard regionRows={regionRows} tierRows={tierRows} boxheight={370} />
           </div>
         )
       })()}
@@ -16373,7 +16369,7 @@ function CustomerPage({ filters, activeTab: activeTabProp, setActiveTab: setActi
                     <span style={{ fontSize: 10, color: SD.t3, fontStyle: 'italic' }}>Order volume · % orders discounted · Avg discount depth · Repeat order %</span>
                   </div>
                   <div style={cardBody}>
-                    <ResponsiveContainer width="100%" height={360}>
+                    <ResponsiveContainer width="100%" height={370}>
                       <ComposedChart data={categoryDiscountAnalysis} margin={{ top: 8, right: 48, bottom: 70, left: 8 }}>
                         <CartesianGrid stroke={SD.borderSoft} vertical={false} />
                         <XAxis dataKey="category" tick={{ fontSize: 10, fill: SD.t2 }} angle={-35} textAnchor="end" interval={0} />
@@ -17178,3 +17174,5 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
 export default function App() {
   return <ErrorBoundary><AppInner /></ErrorBoundary>
 }
+
+

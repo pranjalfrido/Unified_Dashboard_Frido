@@ -118,7 +118,7 @@ export function HBar({ dot, label, width, value, pctVal, onClick, isSelected, la
 // toggle. Heading stays "Category Revenue" regardless of the selected view — only the rows change.
 // catRows: [{name, rev}]; subCatRows: [{name, category, rev}]; skuMap: {category: {subCategory: {sku: {rev}}}}.
 // view/setView: lift the toggle state up so it can be reset (e.g. on category click) if needed.
-export function CategoryRevenueCard({ catRows, subCatRows, skuMap, totalRev, view, setView, onSelectCategory, onSelectSubCategory, onSelectSku, selectedName, height = 242, maxSkuRows = 100 }) {
+export function CategoryRevenueCard({ catRows, subCatRows, skuMap, totalRev, view, setView, onSelectCategory, onSelectSubCategory, onSelectSku, selectedName, height, maxSkuRows = 100 }) {
   const mobCard = window.innerWidth <= 768
   const labelWidthFor = names => mobCard ? 150 : Math.min(260, Math.max(132, Math.max(...names.map(n => n.length), 0) * 7.8 + 8))
 
@@ -152,7 +152,7 @@ export function CategoryRevenueCard({ catRows, subCatRows, skuMap, totalRev, vie
   const mobFixedH = mobCard ? (catRows.length * ROW_H + CARD_CHROME) : undefined
 
   return (
-    <Card fill title={view === 'subcategory' ? 'Product Revenue' : 'Category Revenue'} style={{ height: mobCard ? mobFixedH : height, alignSelf: 'start' }} action={
+    <Card fill title={view === 'subcategory' ? 'Product Revenue' : 'Category Revenue'} style={{ height: mobCard ? mobFixedH : (height || '100%') }} action={
       <div style={{ display: 'flex', gap: 4 }}>
         {[{ id: 'category', label: 'Category' }, { id: 'subcategory', label: 'Product' }, ...(window.innerWidth > 768 ? [{ id: 'sku', label: 'SKU Code' }] : [])].map((v, i) => (
           <div key={v.id} style={{ display: 'flex', alignItems: 'center' }}>
@@ -468,7 +468,7 @@ export function TrendAnalysisCard({ title, daily, grossColor, grossGradId, revKe
   const gradId = grossGradId || 'trendGrossGrad'
 
   return (
-    <Card title={title} style={boxHeight ? { height: isMob ? 'auto' : boxHeight } : undefined} action={
+    <Card title={title} style={boxHeight ? { minHeight: isMob ? 'auto' : boxHeight } : undefined} action={
       <Dropdown value={groupBy} onChange={setGroupBy} options={GROUP_OPTS} style={selStyle} />
     }>
       <div style={isMob ? { margin: '0 -28px' } : {}}>
