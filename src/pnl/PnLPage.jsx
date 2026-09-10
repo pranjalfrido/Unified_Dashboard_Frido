@@ -1,8 +1,18 @@
 import { useState, useMemo, useEffect } from 'react'
 import PnLChannelTab from './PnLChannelTab.jsx'
 import StorePnLTable from './StorePnLTable.jsx'
+import PriceSimulator from './PriceSimulator.jsx'
+import BreakevenRoasCalculator from './BreakevenRoasCalculator.jsx'
 import { netRevenueOf, estimateCogsPerUnit } from './pnlUtils.js'
 import { C } from '../utils.js'
+
+// D2C planning tools — not channels, so kept out of PNL_TABS/PNL_KEY_MAP (no allowedTabs gating,
+// no per-channel data dependency beyond the D2C tab's own kpiSummary for the simulator). Rendered
+// via their own small toggle instead of the channel tab bar.
+const PNL_TOOLS = [
+  { id: 'priceSimulator', label: 'Price Simulator' },
+  { id: 'breakevenRoas', label: 'Breakeven ROAS' },
+]
 
 // One subtab per Sales-tab channel + a consolidated "All Channels" tab — same bar, same visual
 // chrome as SalesPage. Every channel's Category→Product(→SKU) map is rebuilt here the same way
@@ -96,6 +106,10 @@ export default function PnLPage({ data, filters, setFilters, activeTab: activeTa
   // D2C is India-only permanently (International orders live under their own top-level
   // "International" PnL tab) — no region toggle/state needed here anymore.
   const [d2cSubChLocal, setD2cSubChLocal] = useState('all') // 'all' | 'MyFrido' | 'Mobility'
+  // Which of the two planning tools (if any) is showing INSTEAD of the normal channel view —
+  // null means "show the normal channel tab content". Independent of activeTab so switching back
+  // just restores whichever channel was already selected.
+  const [activeTool, setActiveTool] = useState(null) // null | 'priceSimulator' | 'breakevenRoas'
   const activeTab = activeTabProp !== undefined ? activeTabProp : activeTabLocal
   const setActiveTab = setActiveTabProp || setActiveTabLocal
   const amzChannelView = amzChannelViewProp !== undefined ? amzChannelViewProp : amzChannelViewLocal
@@ -151,6 +165,28 @@ export default function PnLPage({ data, filters, setFilters, activeTab: activeTa
     })
     return bySku
   }, [sndRates, data, d2cSubCh])
+
+  // Units-weighted average weight-slab per SKU — sourced from the same raw skuCostRows shSkuCosts
+  // reads above, just kept at its own pre-aggregation grain here since shSkuCosts's own output
+  // collapses weight into logistics ₹ totals. Powers the Price Simulator's incremental
+  // RTO/reverse-logistics cost lookup (Return Rate Impact lever) via snd-rates.json, the same
+  // rate card shSkuCosts itself uses — so a marginal returned/RTO'd unit is priced with this
+  // SKU's own real shipping weight, not a portfolio-wide guess.
+  const shSkuWeightSlab = useMemo(() => {
+    const rows = data?.shopify?.skuCostRows
+    if (!rows?.length) return {}
+    const totals = {}
+    rows.forEach(row => {
+      const { sku, weightSlab, totalQty } = row
+      if (!sku || weightSlab == null) return
+      if (!totals[sku]) totals[sku] = { weightedSum: 0, qty: 0 }
+      totals[sku].weightedSum += weightSlab * (totalQty || 0)
+      totals[sku].qty += (totalQty || 0)
+    })
+    const out = {}
+    Object.entries(totals).forEach(([sku, t]) => { if (t.qty > 0) out[sku] = t.weightedSum / t.qty })
+    return out
+  }, [data])
 
   // D2C S&D summed to the same {sku: totalCost} shape the Amazon-architecture `sndBySku` prop
   // expects (PnLFinancialTable's costsForSkus() only ever consumes a single combined number per
@@ -542,6 +578,44 @@ export default function PnLPage({ data, filters, setFilters, activeTab: activeTa
       map[key] = (map[key] || 0) + (r.spend || 0) * scale
     })
     return map
+  }, [data])
+
+  // Blinkit/Zepto/Instamart marketing spend by SubCategory — identical reuse-and-rescale
+  // pattern as amzAdSpendMap/fkAdSpendMap above. fact_all_platform_ads_report already carries
+  // Blinkit/Zepto/Instamart rows (confirmed via adsCategoryBreakdown, which includes them in
+  // its sales_rev_raw Channel filter) — this was previously just never read on the frontend.
+  const qcAdSpendMap = useMemo(() => {
+    const platforms = ['Blinkit', 'Zepto', 'Instamart']
+    const result = {}
+    platforms.forEach(platform => {
+      const productRows = (data?.ads?.categoryBreakdown?.productRows || []).filter(r => r.platform === platform)
+      const categoryRows = (data?.ads?.categoryBreakdown?.categoryRows || []).filter(r => r.platform === platform)
+
+      const productSpendByCat = {}
+      productRows.forEach(r => {
+        const cat = r.category || 'Others'
+        productSpendByCat[cat] = (productSpendByCat[cat] || 0) + (r.spend || 0)
+      })
+      const catTotalSpend = {}
+      categoryRows.forEach(r => { catTotalSpend[r.category || 'Others'] = r.spend || 0 })
+
+      const validSubCats = new Set()
+      const channelKey = platform.toLowerCase()
+      ;(data?.[channelKey]?.subCategories || []).forEach(x => validSubCats.add(x.subcategory))
+
+      const map = {}
+      productRows.forEach(r => {
+        const cat = r.category || 'Others'
+        const keyRaw = r.subCategory || 'Others'
+        const key = validSubCats.has(keyRaw) ? keyRaw : 'Others'
+        const catProductSum = productSpendByCat[cat] || 0
+        const catTrueTotal = catTotalSpend[cat]
+        const scale = catProductSum > 0 && catTrueTotal != null ? catTrueTotal / catProductSum : 1
+        map[key] = (map[key] || 0) + (r.spend || 0) * scale
+      })
+      result[channelKey] = map
+    })
+    return result
   }, [data])
 
   const channelData = useMemo(() => {
@@ -1234,8 +1308,8 @@ export default function PnLPage({ data, filters, setFilters, activeTab: activeTa
   const activeData = channelData ? (channelData[activeTab] || channelData.all) : null
   const activeTabMeta = PNL_TABS.find(t => t.id === activeTab)
 
-  const activeSndBySku = activeTab === 'shopify' ? shSndBySku : activeTab === 'ebo' ? eboSndBySku : activeTab === 'offline' ? offSndBySku : (activeTab === 'amazon' && amzChannelView === 'sc') ? amzSndBySku : (activeTab === 'amazon' && amzChannelView === 'vc') ? amzVCSndBySku : (activeTab === 'amazon' && amzChannelView === 'all') ? amzAllSndBySku : activeTab === 'flipkart' ? data?.flipkart?.sndBySku : undefined
-  const activeAdSpendMap = activeTab === 'amazon' && amzChannelView === 'all' ? amzAdSpendMap : activeTab === 'shopify' ? (data?.pnlAdSpendMap || {}) : activeTab === 'ebo' ? (activeData?.adSpendMap || {}) : activeTab === 'flipkart' ? fkAdSpendMap : undefined
+  const activeSndBySku = activeTab === 'shopify' ? shSndBySku : activeTab === 'ebo' ? eboSndBySku : activeTab === 'offline' ? offSndBySku : (activeTab === 'amazon' && amzChannelView === 'sc') ? amzSndBySku : (activeTab === 'amazon' && amzChannelView === 'vc') ? amzVCSndBySku : (activeTab === 'amazon' && amzChannelView === 'all') ? amzAllSndBySku : activeTab === 'flipkart' ? data?.flipkart?.sndBySku : activeTab === 'blinkit' ? data?.blinkit?.sndBySku : activeTab === 'instamart' ? data?.instamart?.sndBySku : activeTab === 'zepto' ? data?.zepto?.sndBySku : undefined
+  const activeAdSpendMap = activeTab === 'amazon' && amzChannelView === 'all' ? amzAdSpendMap : activeTab === 'shopify' ? (data?.pnlAdSpendMap || {}) : activeTab === 'ebo' ? (activeData?.adSpendMap || {}) : activeTab === 'flipkart' ? fkAdSpendMap : (activeTab === 'blinkit' || activeTab === 'zepto' || activeTab === 'instamart') ? qcAdSpendMap[activeTab] : undefined
   // International and Offline have no attributable ad spend (same treatment as Amazon SC/VC
   // individually) — Marketing Spend/ROAS/CM2 columns are hidden rather than showing an
   // always-zero spend.
@@ -1244,6 +1318,165 @@ export default function PnLPage({ data, filters, setFilters, activeTab: activeTa
   // unattributed remainder) — only fold that bucket in when viewing the unfiltered D2C total, or
   // MyFrido/Mobility's own numbers would silently absorb spend that belongs to the other sub-channel.
   const activeIncludeUnmatched = activeTab === 'shopify' && d2cSubCh === 'all'
+
+  // Per-product baseline for the Price Simulator's product picker — one row per D2C SKU with its
+  // own real ASP, units, COGS/unit, and SnD/unit for the selected date range, so simulating "this
+  // one SKU" uses that SKU's actual economics instead of the whole tab's blended average. Same
+  // COGS-fallback (estimateCogsPerUnit) every other per-SKU consumer in this file already uses —
+  // a SKU never silently reads as COGS-free just because cogs-data.json has no row for it.
+  // Day count in the selected range — for DRR (Daily Run Rate = average units sold per day),
+  // shown in the Price Simulator alongside Units Sold. Inclusive of both endpoints, matching how
+  // every other "days in range" figure in this app counts (e.g. blTotals's COUNT(DISTINCT
+  // OrderDate) semantics) — falls back to 1 (never 0) so a same-day range doesn't divide by zero.
+  const daysInRange = useMemo(() => {
+    if (!filters?.start || !filters?.end) return 1
+    const s = new Date(filters.start), e = new Date(filters.end)
+    const days = Math.round((e - s) / 86400000) + 1
+    return days > 0 ? days : 1
+  }, [filters?.start, filters?.end])
+
+  const d2cProductList = useMemo(() => {
+    const skuData = channelData?.shopify?.skuData
+    if (!skuData) return []
+    const listingPriceBySku = data?.shopify?.listingPriceBySku || {}
+    // Return-rate baseline for the Price Simulator's Return Rate Impact lever — ALWAYS sourced
+    // from the mature (today-44d to today-14d) window computed server-side
+    // (data.shopify.returnRateMature — see api/bq.js's shReturnRateMature query), NEVER from this
+    // SKU's own status mix within the user's live-selected date range. A recent range hasn't had
+    // time for its RTOs/returns/CIRs to resolve yet, so its own return rate silently reads too low
+    // (see that query's comment) — the mature window is the only trustworthy source for "what does
+    // this product's return behavior actually look like." Falls back SKU → Category → whole D2C
+    // whenever a grain has too few mature-window units to trust (returnRateMature.minMatureUnits).
+    // netRevenueReturnPct = RTO+CIR+Return+FULL Cancellation (COD included) ÷ Gross Inc GST — the
+    // SAME cancellation treatment computeNetRevenueMeasures' retainedShare uses to derive real Net
+    // Revenue (api/_bq.js), NOT the D2C Return Analysis tab's headline "Return%" KPI
+    // (overallReturnPct), which deliberately narrows to prepaid-only cancellation for that one
+    // display metric — a Net Revenue simulation needs the full-cancellation treatment instead.
+    const rrm = data?.shopify?.returnRateMature
+    // Returns the FULL component breakdown ({netRevenueReturnPct, rtoPct, cirPct, returnPct,
+    // cancelPct, exchPct}), not just one blended number — SnD impact needs the individual rates
+    // (each outcome has a different real logistics cost path — see pnlUtils.js's
+    // blendedLogisticsPerUnit), while Net Revenue impact only needs netRevenueReturnPct (see
+    // PriceSimulator.jsx). `source` tells the UI which fallback tier actually backed these
+    // numbers, so a category- or portfolio-level borrow (this SKU didn't sell enough in the
+    // mature window on its own) can be labeled honestly instead of presented as if it were this
+    // SKU's own measured rate.
+    const resolveReturnRate = sku => {
+      if (!rrm) return { components: null, source: null }
+      if (rrm.skuRate?.[sku] != null) return { components: rrm.skuRate[sku], source: 'sku' }
+      const cat = rrm.categoryBySku?.[sku]
+      if (cat && rrm.catRate?.[cat] != null) return { components: rrm.catRate[cat], source: 'category' }
+      return { components: rrm.allRate ?? null, source: rrm.allRate != null ? 'all' : null }
+    }
+    const rows = []
+    Object.entries(skuData).forEach(([cat, scMap]) => {
+      Object.entries(scMap).forEach(([sc, skMap]) => {
+        Object.entries(skMap).forEach(([sku, d]) => {
+          const r = netRevenueOf(d, sc, {}, cat, 1)
+          if (r.units <= 0) return
+          const asp = r.units > 0 ? r.gross / r.units : 0
+          const cogsEntry = cogsMap?.[sku]
+          const cogsPerUnit = (cogsEntry && cogsEntry.cogs != null) ? cogsEntry.cogs : estimateCogsPerUnit(asp)
+          const sndTotal = shSndBySku?.[sku] ?? null
+          const lp = listingPriceBySku[sku]
+          const rr = resolveReturnRate(sku)
+          rows.push({
+            sku, category: cat, subCategory: sc,
+            name: cogsEntry?.subCategory || sc,
+            units: r.units, gross: r.gross, net: r.net,
+            // Gross Ex GST BEFORE any return/RTO/cancel deduction — a stable revenue figure
+            // return-status can't distort, unlike `net` (which nets out whatever return status
+            // happens to be recorded in the LIVE-selected date range, immature or not). The Price
+            // Simulator uses this + the mature-window return rate to rebuild a "Current" baseline
+            // that isn't itself understated by an immature recent range — see its baseline comment.
+            excRev: r.excRev,
+            asp, cogsPerUnit,
+            // Daily Run Rate — average units sold per day over the selected range, so a promo
+            // decision has a sense of real day-to-day sales velocity alongside the range's total.
+            drr: r.units / daysInRange,
+            sndPerUnit: sndTotal != null && r.units > 0 ? sndTotal / r.units : null,
+            // Real Listing_Price/Discount straight from the fact table (see shListingPrice query
+            // in api/bq.js) — null when this SKU has no listing-price data in the selected range,
+            // so callers can fall back to treating ASP itself as the reference price instead of
+            // fabricating a listing price.
+            listingPrice: lp?.listingPrice ?? null,
+            currentDiscount: lp?.discount ?? null,
+            weightGm: shSkuWeightSlab[sku] ?? null,
+            // Kept flat (not nested under a sub-object) so PriceSimulator.jsx and
+            // d2cProductGroups' units-weighted blend below can read/aggregate each field directly.
+            returnRevRate: rr.components?.netRevenueReturnPct ?? null,
+            rtoPct: rr.components?.rtoPct ?? null,
+            cirPct: rr.components?.cirPct ?? null,
+            returnStatusPct: rr.components?.returnPct ?? null,
+            cancelPct: rr.components?.cancelPct ?? null,
+            exchPct: rr.components?.exchPct ?? null,
+            returnRateSource: rr.source, // 'sku' | 'category' | 'all' | null — see resolveReturnRate above
+          })
+        })
+      })
+    })
+    return rows.sort((a, b) => b.gross - a.gross)
+  }, [channelData, cogsMap, shSndBySku, data, shSkuWeightSlab, daysInRange])
+
+  // Product-level (not variant-level) rollup for the Price Simulator's "Product-wise" mode —
+  // groups d2cProductList's per-SKU rows by SubCategory (each SKU is one color/size VARIANT of a
+  // product; SubCategory is the product itself — confirmed via cogs-data.json, e.g. "XL Coccyx
+  // Seat Cushion" has 3 SKU variants FR-UCSC-XL-B1/G1/RW1). ASP/COGS/SnD per unit are blended
+  // across all of that product's variants, weighted by each variant's own units — so a product's
+  // simulated economics reflect its real variant mix, not an unweighted average.
+  const d2cProductGroups = useMemo(() => {
+    const bySubCat = {}
+    d2cProductList.forEach(p => {
+      const key = `${p.category}::${p.subCategory}`
+      if (!bySubCat[key]) bySubCat[key] = { key, name: p.subCategory, category: p.category, subCategory: p.subCategory, units: 0, gross: 0, net: 0, excRev: 0, cogsTotal: 0, sndTotal: 0, sndKnownUnits: 0, variantCount: 0, listingTotal: 0, listingKnownUnits: 0, discountTotal: 0, returnRevTotal: 0, rtoTotal: 0, cirTotal: 0, returnStatusTotal: 0, cancelTotal: 0, exchTotal: 0, weightTotal: 0, weightKnownUnits: 0, sourceTiers: new Set() }
+      const g = bySubCat[key]
+      g.units += p.units
+      g.gross += p.gross
+      g.net += p.net
+      g.excRev += p.excRev || 0
+      g.cogsTotal += p.cogsPerUnit * p.units
+      if (p.sndPerUnit != null) { g.sndTotal += p.sndPerUnit * p.units; g.sndKnownUnits += p.units }
+      if (p.listingPrice != null) { g.listingTotal += p.listingPrice * p.units; g.discountTotal += (p.currentDiscount || 0) * p.units; g.listingKnownUnits += p.units }
+      if (p.weightGm != null) { g.weightTotal += p.weightGm * p.units; g.weightKnownUnits += p.units }
+      g.returnRevTotal += (p.returnRevRate || 0) * p.units
+      g.rtoTotal += (p.rtoPct || 0) * p.units
+      g.cirTotal += (p.cirPct || 0) * p.units
+      g.returnStatusTotal += (p.returnStatusPct || 0) * p.units
+      g.cancelTotal += (p.cancelPct || 0) * p.units
+      g.exchTotal += (p.exchPct || 0) * p.units
+      if (p.returnRateSource) g.sourceTiers.add(p.returnRateSource)
+      g.variantCount += 1
+    })
+    return Object.values(bySubCat).map(g => ({
+      sku: g.key, // reuses the same `sku` field name as the variant list so the picker/lookup code is shared
+      category: g.category, subCategory: g.subCategory, name: g.name,
+      units: g.units, gross: g.gross, net: g.net, excRev: g.excRev,
+      asp: g.units > 0 ? g.gross / g.units : 0,
+      drr: g.units / daysInRange,
+      cogsPerUnit: g.units > 0 ? g.cogsTotal / g.units : 0,
+      sndPerUnit: g.sndKnownUnits > 0 ? g.sndTotal / g.sndKnownUnits : null,
+      listingPrice: g.listingKnownUnits > 0 ? g.listingTotal / g.listingKnownUnits : null,
+      currentDiscount: g.listingKnownUnits > 0 ? g.discountTotal / g.listingKnownUnits : null,
+      weightGm: g.weightKnownUnits > 0 ? g.weightTotal / g.weightKnownUnits : null,
+      returnRevRate: g.units > 0 ? g.returnRevTotal / g.units : 0,
+      rtoPct: g.units > 0 ? g.rtoTotal / g.units : 0,
+      cirPct: g.units > 0 ? g.cirTotal / g.units : 0,
+      returnStatusPct: g.units > 0 ? g.returnStatusTotal / g.units : 0,
+      cancelPct: g.units > 0 ? g.cancelTotal / g.units : 0,
+      exchPct: g.units > 0 ? g.exchTotal / g.units : 0,
+      // 'sku' only when EVERY variant's own mature-window data was trusted directly; 'category'/
+      // 'all' if any variant had to borrow — labeled by the weakest tier actually used, so the UI
+      // never implies more precision than the underlying data supports.
+      returnRateSource: g.sourceTiers.has('all') ? 'all' : g.sourceTiers.has('category') ? 'category' : (g.sourceTiers.has('sku') ? 'sku' : null),
+      variantCount: g.variantCount,
+      // Real Meta+Google ad spend for this product, from the same pnlAdSpendMap the D2C tab's own
+      // kpiSummary/Financial View already use (api/bq.js, keyed by item-master SubCategory — the
+      // exact grain a "Product" here already is). Powers the Price Simulator's real CM2 = CM1 −
+      // this spend, instead of the previous always-0 placeholder. Not available at the Product
+      // Variant (per-SKU) grain — no ad platform attributes spend below SubCategory.
+      adSpend: data?.pnlAdSpendMap?.[g.subCategory] ?? null,
+    })).sort((a, b) => b.gross - a.gross)
+  }, [d2cProductList, daysInRange, data])
   // Sourced from channelData's reconciled version (activeData.mobilityNetBySubCat), NOT the raw
   // data.shopify.mobilityNetBySubCat server payload — the raw version's SubCategory keys can
   // include names (e.g. a null-SubCategory row normalizing to 'Frido' server-side) that don't
@@ -1405,24 +1638,55 @@ export default function PnLPage({ data, filters, setFilters, activeTab: activeTa
       <div className="sales-tabs">
         {PNL_TABS.map(tab => {
           const allowed = !allowedTabs || allowedTabs.includes(PNL_KEY_MAP[tab.id])
-          const isActive = activeTab === tab.id
+          const isActive = !activeTool && activeTab === tab.id
           return (
-          <button key={tab.id} onClick={() => { if (!allowed) return; setActiveTab(tab.id) }} className={`stab${isActive ? ' active' : ''}`} style={{ ...(tab.id === 'all' ? { fontWeight: isActive ? 800 : 700, fontSize: 13 } : {}), ...(!allowed ? { opacity: 0.35, cursor: 'not-allowed', pointerEvents: 'auto' } : {}) }}>
+          <button key={tab.id} onClick={() => { if (!allowed) return; setActiveTool(null); setActiveTab(tab.id) }} className={`stab${isActive ? ' active' : ''}`} style={{ ...(tab.id === 'all' ? { fontWeight: isActive ? 800 : 700, fontSize: 13 } : {}), ...(!allowed ? { opacity: 0.35, cursor: 'not-allowed', pointerEvents: 'auto' } : {}) }}>
             {tab.logo && <img src={tab.logo} alt="" style={{ width: 14, height: 14, borderRadius: 3, flexShrink: 0, objectFit: 'contain', filter: tab.id === 'cred' ? 'invert(1)' : 'none' }} />}
             {tab.label}
           </button>
           )
         })}
       </div>
-      <div className="fbar">
+      {(!activeTool || activeTab === 'shopify') && <div className="fbar">
         <div className="fbar-inner">
           {activeTab === 'shopify' && (
             [{ id: 'all', label: 'Overall' }, { id: 'MyFrido', label: 'MyFrido' }, { id: 'Mobility', label: 'Mobility' }].map((opt, i) => (
               <div key={opt.id} style={{ display: 'flex', alignItems: 'center' }}>
                 {i > 0 && <div style={{ width: 1, height: 14, background: '#E3E0D8', margin: '0 2px' }} />}
-                <button onClick={() => setD2cSubCh(opt.id)} style={{ fontSize: 12, fontWeight: d2cSubCh === opt.id ? 700 : 500, padding: '5px 14px', borderRadius: 7, border: 'none', background: d2cSubCh === opt.id ? C.acs : 'transparent', color: '#3F3D33', cursor: 'pointer' }}>{opt.label}</button>
+                <button onClick={() => { setActiveTool(null); setD2cSubCh(opt.id) }} style={{ fontSize: 12, fontWeight: !activeTool && d2cSubCh === opt.id ? 700 : 500, padding: '5px 14px', borderRadius: 7, border: 'none', background: !activeTool && d2cSubCh === opt.id ? C.acs : 'transparent', color: '#3F3D33', cursor: 'pointer' }}>{opt.label}</button>
               </div>
             ))
+          )}
+          {/* D2C-only planning tools — same gold-brown active-pill treatment as the MyFrido/
+              Mobility sub-channel pills, but pushed to the right side of the bar (marginLeft:
+              auto) since they only ever operate on D2C data (Price Simulator reuses the D2C tab's
+              own kpiSummary/product list as its baseline; Breakeven ROAS is a D2C launch-planning
+              tool) — they have no meaning on any other channel tab, so they don't appear there at
+              all rather than showing disabled. */}
+          {activeTab === 'shopify' && (
+            <div style={{ display: 'flex', alignItems: 'center', marginLeft: 'auto', paddingLeft: 10, borderLeft: `1px solid #E3E0D8`, gap: 4 }}>
+              {PNL_TOOLS.map(tool => {
+                const isActive = activeTool === tool.id
+                return (
+                  <button key={tool.id} onClick={() => setActiveTool(isActive ? null : tool.id)}
+                    style={{ fontSize: 12, fontWeight: isActive ? 700 : 500, padding: '5px 14px', borderRadius: 7, border: 'none', background: isActive ? C.acs : 'transparent', color: '#3F3D33', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 5 }}>
+                    {tool.id === 'priceSimulator' ? (
+                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                        <line x1="4" y1="21" x2="4" y2="14" /><line x1="4" y1="10" x2="4" y2="3" />
+                        <line x1="12" y1="21" x2="12" y2="12" /><line x1="12" y1="8" x2="12" y2="3" />
+                        <line x1="20" y1="21" x2="20" y2="16" /><line x1="20" y1="12" x2="20" y2="3" />
+                        <line x1="1" y1="14" x2="7" y2="14" /><line x1="9" y1="8" x2="15" y2="8" /><line x1="17" y1="16" x2="23" y2="16" />
+                      </svg>
+                    ) : (
+                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                        <circle cx="12" cy="12" r="9" /><circle cx="12" cy="12" r="5" /><circle cx="12" cy="12" r="1" />
+                      </svg>
+                    )}
+                    {tool.label}
+                  </button>
+                )
+              })}
+            </div>
           )}
           {activeTab === 'amazon' && (
             [{ id: 'all', label: 'Overall' }, { id: 'sc', label: 'Seller Central' }, { id: 'vc', label: 'Vendor Central' }].map((opt, i) => (
@@ -1444,8 +1708,13 @@ export default function PnLPage({ data, filters, setFilters, activeTab: activeTa
             <span style={{ fontSize: 12, fontWeight: 700, padding: '5px 14px', borderRadius: 7, background: C.acs, color: '#3F3D33', display: 'inline-block' }}>{activeTabMeta?.label || ''}</span>
           )}
         </div>
-      </div>
+      </div>}
       <div className="page-scroll">
+        {activeTool === 'priceSimulator' ? (
+          <PriceSimulator variantProducts={d2cProductList} productGroups={d2cProductGroups} />
+        ) : activeTool === 'breakevenRoas' ? (
+          <BreakevenRoasCalculator productGroups={d2cProductGroups} variantProducts={d2cProductList} />
+        ) : (
         <PnLChannelTab
           title={activeTabMeta?.label || 'PnL'}
           note={activeTab === 'amazon' ? (amzChannelView === 'all' ? 'SC + VC' : amzChannelView === 'sc' ? 'Seller Central' : 'Vendor Central') : activeTab === 'offline' ? (offlineSub === 'all' ? undefined : offlineSub === 'misc' ? 'Miscellaneous' : offlineSub) : activeTab === 'shopify' ? (d2cSubCh === 'all' ? undefined : d2cSubCh) : undefined}
@@ -1477,7 +1746,8 @@ export default function PnLPage({ data, filters, setFilters, activeTab: activeTa
           netScale={activeData?.netScale ?? 1}
           hideTrendUnits={activeTab === 'amazon' || activeTab === 'shopify'}
         />
-        {activeTab === 'ebo' && <StorePnLTable rows={storePnLRows} />}
+        )}
+        {!activeTool && activeTab === 'ebo' && <StorePnLTable rows={storePnLRows} />}
       </div>
     </div>
   )

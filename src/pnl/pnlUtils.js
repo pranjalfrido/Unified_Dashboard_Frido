@@ -82,3 +82,75 @@ export function netRevenueOf(d, scName, mobilityNetBySubCat = {}, catName, netSc
 // trend silently read cogsMap[sku].cogs with no fallback (previously caused the two to show
 // different COGS%/GM%/CM1%/CM2% for the same date range, inside the same tab).
 export const estimateCogsPerUnit = asp => asp > 0 ? asp * (asp < 5000 ? 0.4 : 0.5) : 0
+
+// Shared per-unit D2C cost engine — used by both the Breakeven ROAS calculator and the Price
+// Simulator so a hypothetical/simulated unit is costed with the EXACT same formula as a real one
+// in shSkuCosts (PnLPage.jsx) / api/bq.js's D2C SnD queries: payment gateway = 1.1% of gross Inc
+// GST, software fee = ₹15/unit (flat, both fixed-rate regardless of price), weight-slab logistics
+// via rateForSlab (see PnLPage.jsx), blended across order outcomes by the caller-supplied
+// probabilities. GST is applied only to derive Net Rev — COGS/logistics/fees are cost lines, not
+// revenue, so they are untouched by gstRate directly (it only ever nets down `gross`).
+//
+// Blended logistics (mirrors shSkuCosts' per-order Order_Status branching, but expressed as
+// expected value over the four mutually exclusive outcome probabilities instead of summing real
+// per-order rows): a unit is exactly one of {delivered, rto, return/cir/exchange, cancelled}.
+//   delivered  → forward
+//   rto        → forward + rto
+//   return/cir/exchange → forward + reverse
+//   cancelled  → 0 logistics (order never shipped) — fulfilment still applies to every order
+//                regardless of outcome, same as shSkuCosts.
+export const PAYMENT_GATEWAY_RATE = 0.011
+export const SOFTWARE_FEE_PER_UNIT = 15
+
+export function blendedLogisticsPerUnit(rate, { rtoPct = 0, returnPct = 0, cancelPct = 0 } = {}) {
+  if (!rate) return { logistics: 0, fulfilment: 0 }
+  const deliveredPct = Math.max(0, 1 - rtoPct - returnPct - cancelPct)
+  const logistics =
+    deliveredPct * rate.forward +
+    rtoPct * (rate.forward + rate.rto) +
+    returnPct * (rate.forward + rate.reverse) +
+    cancelPct * 0
+  return { logistics, fulfilment: rate.fulfilment }
+}
+
+// Same missing-weight fallback as shSkuCosts (PnLPage.jsx): a SKU with no weight on record is
+// costed as if it were a 2kg (2000g) shipment rather than silently zeroing out logistics.
+const FALLBACK_WEIGHT_GM = 2000
+
+// Real per-order weights always land exactly on a slab boundary (BQ-side aggregation already
+// rounds them — see rateForSlab's exact-match design in PnLPage.jsx). A hypothetical/user-entered
+// weight (Breakeven ROAS's "enter this new product's weight in grams") won't necessarily match
+// one, so round UP to the next real slab first — same courier-billing convention as api/
+// _sndRates.js's rateForWeight() (a courier bills the slab a shipment falls into, not its exact
+// weight) — before doing the exact-match lookup rateForSlab expects.
+export function rateForWeightGm(slabs, weightGm) {
+  if (!slabs || !slabs.length || weightGm == null) return null
+  const slab = slabs.find(s => s.weightGm >= weightGm) || slabs[slabs.length - 1]
+  return slab
+}
+
+// Full per-unit waterfall for a hypothetical/simulated unit at a given selling price (Inc GST).
+// gstRate is a fraction (e.g. 0.18), not a percentage. Both fallback rules from the real PnL
+// formula are preserved here so a SKU with incomplete data never silently costs less than it
+// should — see estimateCogsPerUnit above (COGS fallback) and FALLBACK_WEIGHT_GM (weight
+// fallback): callers should pass `cogsPerUnit: null` / `weightGm: null` when the real value is
+// unknown, NOT 0, so this function can apply the correct fallback instead of costing it as free.
+// Returns every line so callers (Breakeven ROAS, Price Simulator) can display the full
+// breakdown, not just the final CM figures.
+export function perUnitWaterfall({ sellingPriceIncGst, gstRate, cogsPerUnit, weightGm, slabs, outcomePcts }) {
+  const grossIncGst = sellingPriceIncGst
+  const excGst = grossIncGst / (1 + (gstRate || 0))
+  const netRev = excGst // no returns modeled here as revenue deduction — outcomePcts already
+  // blend the unit's expected logistics cost; a cancelled/returned unit's revenue loss is handled
+  // by the caller treating netRev as "per delivered-equivalent unit" (see Breakeven ROAS doc).
+  const cogs = cogsPerUnit != null ? cogsPerUnit : estimateCogsPerUnit(grossIncGst)
+  const gm = netRev - cogs
+  const effectiveWeightGm = weightGm != null ? weightGm : FALLBACK_WEIGHT_GM
+  const weightRate = rateForWeightGm(slabs, effectiveWeightGm)
+  const { logistics, fulfilment } = blendedLogisticsPerUnit(weightRate, outcomePcts)
+  const paymentGw = grossIncGst * PAYMENT_GATEWAY_RATE
+  const softwareFee = SOFTWARE_FEE_PER_UNIT
+  const snd = logistics + fulfilment + paymentGw + softwareFee
+  const cm1 = gm - snd
+  return { grossIncGst, excGst, netRev, cogs, gm, logistics, fulfilment, paymentGw, softwareFee, snd, cm1 }
+}
