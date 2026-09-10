@@ -2562,10 +2562,13 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
                 <div style={chartTitle}>NDR - Courier-wise Breakdown</div>
                 <div style={{ display: 'flex', gap: 4 }}>
-                  {['All', 'COD', 'PREPAID'].map(v => (
-                    <button key={v} onClick={() => setNdrPayFilter(v)} style={{ padding: '4px 10px', fontSize: 11, fontWeight: 600, borderRadius: 6, border: `1px solid ${C.border}`, cursor: 'pointer', background: ndrPayFilter === v ? C.acs : C.card, color: ndrPayFilter === v ? '#3F3D33' : C.t1 }}>
-                      {v === 'PREPAID' ? 'Prepaid' : v}
-                    </button>
+                  {['All', 'COD', 'PREPAID'].map((v, i) => (
+                    <div key={v} style={{ display: 'flex', alignItems: 'center' }}>
+                      {i > 0 && <div style={{ width: 1, height: 14, background: '#D6D0B0', margin: '0 4px' }} />}
+                      <button onClick={() => setNdrPayFilter(v)} style={{ padding: '3px 9px', fontSize: 11, fontWeight: ndrPayFilter === v ? 700 : 500, borderRadius: 6, border: 'none', outline: 'none', cursor: 'pointer', background: ndrPayFilter === v ? C.acs : 'transparent', color: ndrPayFilter === v ? '#3F3D33' : C.t2, fontFamily: 'var(--font)', textAlign: 'center' }}>
+                        {v === 'PREPAID' ? 'Prepaid' : v}
+                      </button>
+                    </div>
                   ))}
                 </div>
               </div>
@@ -6266,7 +6269,7 @@ function FlatCategoryProductMatrix({ catData, subCatData, skuData, title, catPre
 
   const q = search.trim().toLowerCase()
 
-  const mapRow = (d, scName, catName) => {
+  const mapRow = (d, scName, catName, fallbackGstRatio) => {
     const gross = d.rev || 0
     const excRev = d.excRev || 0
     const cancelRev = d.cancelRev || 0  // full cancellation deducted, COD included (confirmed 2026-08-19)
@@ -6274,7 +6277,9 @@ function FlatCategoryProductMatrix({ catData, subCatData, skuData, title, catPre
     const cirRev = d.cirRev || 0
     const exchRev = d.exchRev || 0
     const returnRev = d.returnRev || 0
-    const gstRatio = gross > 0 ? (gross - excRev) / gross : 0
+    // When excRev is missing (e.g. SKU-level rows that only carry gross+units), fall back to the
+    // parent product row's gstRatio so net rev isn't zeroed out by a spurious 100% GST ratio.
+    const gstRatio = excRev > 0 ? (gross > 0 ? (gross - excRev) / gross : 0) : (fallbackGstRatio ?? (gross > 0 ? (gross - excRev) / gross : 0))
     // Exchange is NOT deducted from Net Revenue (reverted 2026-08-19) — the customer keeps a
     // product either way, so an exchange isn't lost revenue. exchRev is still extracted above for
     // display (exchPct) only. The recreated '_EX...' OrderId that would otherwise double-count
@@ -7098,9 +7103,14 @@ function AllTab({ data, rangeStart, rangeEnd }) {
     if (!sku) return
     if (!skuChannelMapBySku[cat]) skuChannelMapBySku[cat] = {}
     if (!skuChannelMapBySku[cat][sc]) skuChannelMapBySku[cat][sc] = {}
-    if (!skuChannelMapBySku[cat][sc][sku]) skuChannelMapBySku[cat][sc][sku] = { rev: 0, units: 0 }
+    if (!skuChannelMapBySku[cat][sc][sku]) skuChannelMapBySku[cat][sc][sku] = { rev: 0, units: 0, excRev: 0, cancelRev: 0, rtoRev: 0, cirRev: 0, returnRev: 0 }
     skuChannelMapBySku[cat][sc][sku].rev += x.rev || 0
     skuChannelMapBySku[cat][sc][sku].units += x.units || 0
+    skuChannelMapBySku[cat][sc][sku].excRev += x.exc_rev || 0
+    skuChannelMapBySku[cat][sc][sku].cancelRev += x.cancel_rev || 0
+    skuChannelMapBySku[cat][sc][sku].rtoRev += x.rto_rev || 0
+    skuChannelMapBySku[cat][sc][sku].cirRev += x.cir_rev || 0
+    skuChannelMapBySku[cat][sc][sku].returnRev += x.return_rev || 0
   })
   const catMatrixDataAll = {}
   Object.entries(catMap).forEach(([k, v]) => { catMatrixDataAll[k] = { rev: v.rev, excRev: v.excRev || 0, units: v.aspUnits || v.units || 0, orders: v.orders?.size ?? v.orders ?? 0, cancelRev: 0, rtoRev: 0, cirRev: 0, returnRev: 0 } })
@@ -7250,8 +7260,8 @@ function AllTab({ data, rangeStart, rangeEnd }) {
       </div>
       <ChannelTrendCard dailyArr={dailyArr} channels={channels} rangeStart={rangeStart} rangeEnd={rangeEnd} />
       <div className="g-3col" style={{ display: 'grid', gridTemplateColumns: '1.2fr 1.5fr 1fr', gap: 14, alignItems: 'stretch' }}>
-        <ChannelShareTable sortedCh={sortedCh} prevChMap={prevChMap} boxHeight={340} />
-        <CategoryRevenueCard
+        <div style={{ height: 340, overflow: 'hidden' }}><ChannelShareTable sortedCh={sortedCh} prevChMap={prevChMap} boxHeight={340} /></div>
+        <div style={{ height: 340, overflow: 'hidden' }}><CategoryRevenueCard
           catRows={catRows}
           subCatRows={allSubCatRowsRaw}
           skuMap={skuChannelMapBySku}
@@ -7261,8 +7271,8 @@ function AllTab({ data, rangeStart, rangeEnd }) {
           selectedName={selectedCat}
           onSelectCategory={v => setSelectedCat(prev => prev === v ? null : v)}
           height={340}
-        />
-        <GeoToggleDonutCard regionRows={regionRows} tierRows={tierRows} boxHeight={340} />
+        /></div>
+        <div style={{ height: 340, overflow: 'hidden' }}><GeoToggleDonutCard regionRows={regionRows} tierRows={tierRows} boxHeight={340} /></div>
       </div>
       <DailyChannelTable dailyArr={dailyArr} channels={channels} nDays={nDays} rangeStart={rangeStart} rangeEnd={rangeEnd} />
       <FlatCategoryProductMatrix catData={catMatrixDataAll} subCatData={subCatMatrixDataAll} skuData={skuChannelMapBySku} title="Category Revenue Matrix · All Channels" catPrevMap={catPrevMap} subCatPrevMap={subCatPrevMap} showReturnPct={true} />
