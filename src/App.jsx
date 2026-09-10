@@ -16839,10 +16839,30 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
       {
         const logRange = getMaturityAdjustedRange({ start, end })
         setLogisticsRangeLabel(logRange.label || `· ${logRange.start} – ${logRange.end}`)
-        fetch(`${API}/api/logistics`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ start: logRange.start, end: logRange.end }) })
-          .then(r => r.ok ? r.json() : null)
-          .then(j => { if (j) setLogisticsData(j) })
-          .catch(() => {})
+        // Try static CDN file first (same file the Logistics tab uses) — instant load.
+        // Fall back to live BQ only if date range doesn't match.
+        const tryStatic = async () => {
+          try {
+            const res = await fetch('/logistics-data.json')
+            if (!res.ok) return false
+            const json = await res.json()
+            const ageMs = json.asOf ? Date.now() - new Date(json.asOf).getTime() : Infinity
+            const dateMatches = json.dateRange && json.dateRange.start === logRange.start && json.dateRange.end === logRange.end
+            if (ageMs <= 7 * 60 * 60 * 1000 && dateMatches && !json._placeholder && json.current) {
+              setLogisticsData(json.current)
+              return true
+            }
+          } catch {}
+          return false
+        }
+        tryStatic().then(hit => {
+          if (!hit) {
+            fetch(`${API}/api/logistics`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ start: logRange.start, end: logRange.end }) })
+              .then(r => r.ok ? r.json() : null)
+              .then(j => { if (j) setLogisticsData(j) })
+              .catch(() => {})
+          }
+        })
       }
       // Overview-only fetches (Logistics Cost / Facility Allocation / Inventory Snapshot /
       // Customer Summary tiles) — gated behind page==='overview' so switching filters on any
