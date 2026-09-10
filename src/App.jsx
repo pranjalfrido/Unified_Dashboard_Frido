@@ -5139,7 +5139,7 @@ function OverviewPage({ data, combinedAlerts, logisticsData, logisticsRangeLabel
           )
         })()}
 
-        <WideCard span={4} style={{ paddingBottom: 12, overflow: 'hidden', maxHeight: 620 }}>
+        <WideCard span={4} style={{ paddingBottom: 12, overflow: 'hidden', maxHeight: 520 }}>
           {secHdr('Top States', 'By revenue · click map for cities')}
           <IndiaChoropleth stateMap={stateMap} totalRev={totalRev} cityRows={data.cityRows || []} />
         </WideCard>
