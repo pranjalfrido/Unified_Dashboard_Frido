@@ -25,7 +25,7 @@ const prevEndStr = fmtLocal(prevEnd)
 const splitNDD = true
 
 // Same query as api/logistics.js but with NO courier/shipmentType/sddNdd/category/subCategory WHERE filters
-function buildQuery(startDate, endDate) {
+function buildQuery(startDate, endDate, paymentMode = null) {
   return `
 WITH base AS (
   SELECT
@@ -96,6 +96,7 @@ WITH base AS (
   LEFT JOIN \`frido-429506.sharepoint_to_gcp.Frido_Item_Master__frido_item_sku_master\` im
     ON TRIM(skm.masterskucode) = TRIM(im.Product_Code)
   WHERE DATE(c.created_at) BETWEEN '${startDate}' AND '${endDate}'
+  ${paymentMode ? `AND LOWER(c.payment_mode) = '${paymentMode.toLowerCase()}'` : ''}
 ),
 kpis AS (
   SELECT
@@ -577,9 +578,13 @@ SELECT
 
 console.log(`Running logistics BQ query for ${start} → ${end} (+ prev period ${prevStartStr} → ${prevEndStr})`)
 
-const [[rows], [prevRows]] = await Promise.all([
+const [[rows], [prevRows], [codRows], [codPrevRows], [prepaidRows], [prepaidPrevRows]] = await Promise.all([
   bq.query({ query: buildQuery(start, end), maximumBytesBilled: '10000000000' }),
   bq.query({ query: buildQuery(prevStartStr, prevEndStr), maximumBytesBilled: '10000000000' }),
+  bq.query({ query: buildQuery(start, end, 'COD'), maximumBytesBilled: '10000000000' }),
+  bq.query({ query: buildQuery(prevStartStr, prevEndStr, 'COD'), maximumBytesBilled: '10000000000' }),
+  bq.query({ query: buildQuery(start, end, 'PREPAID'), maximumBytesBilled: '10000000000' }),
+  bq.query({ query: buildQuery(prevStartStr, prevEndStr, 'PREPAID'), maximumBytesBilled: '10000000000' }),
 ])
 
 function parseRow(r) {
@@ -631,3 +636,16 @@ const payload = {
 const json = JSON.stringify(payload)
 writeFileSync('public/logistics-data.json', json)
 console.log(`Written public/logistics-data.json — ${(json.length / 1024).toFixed(0)}KB`)
+
+for (const [mode, cur, prev] of [['cod', codRows, codPrevRows], ['prepaid', prepaidRows, prepaidPrevRows]]) {
+  const p = {
+    asOf: new Date().toISOString(),
+    dateRange: { start, end, days: 30 },
+    prevDateRange: { start: prevStartStr, end: prevEndStr },
+    current: cur.length ? parseRow(cur[0]) : {},
+    previous: prev.length ? parseRow(prev[0]) : null,
+  }
+  const j = JSON.stringify(p)
+  writeFileSync(`public/logistics-data-${mode}.json`, j)
+  console.log(`Written public/logistics-data-${mode}.json — ${(j.length / 1024).toFixed(0)}KB`)
+}
