@@ -436,8 +436,9 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
       const hasPaymentFilter = lFilters.paymentMode?.length > 0
       const singlePayment = lFilters.paymentMode?.length === 1 ? lFilters.paymentMode[0].toLowerCase() : null
       const staticFile = singlePayment ? `/logistics-data-${singlePayment}.json` : '/logistics-data.json'
+      const hasGeoFilter = lFilters.pickupState?.length || lFilters.dropState?.length || lFilters.dropCity?.length || lFilters.weightSlabs?.length
       let usedStatic = false
-      if (!hasPaymentFilter || singlePayment) {
+      if (!hasGeoFilter && (!hasPaymentFilter || singlePayment)) {
         try {
           const res = await fetch(staticFile)
           if (res.ok) {
@@ -455,12 +456,16 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
       }
 
       if (!usedStatic) {
-        // Static JSON unavailable or payment filter active — hit live BQ
+        // Static JSON unavailable or filter active — hit live BQ
         const body = { start: filters.start, end: filters.end }
         if (lFilters.category?.length) body.category = lFilters.category
         if (lFilters.subCategory?.length) body.subCategory = lFilters.subCategory
         if (lFilters.shipmentType && lFilters.shipmentType !== 'all') body.shipmentType = lFilters.shipmentType
         if (lFilters.paymentMode?.length === 1) body.paymentMode = lFilters.paymentMode[0]
+        if (lFilters.pickupState?.length) body.pickupState = lFilters.pickupState
+        if (lFilters.dropState?.length) body.dropState = lFilters.dropState
+        if (lFilters.dropCity?.length) body.dropCity = lFilters.dropCity
+        if (lFilters.weightSlabs?.length) body.weightSlabs = lFilters.weightSlabs
         const s = new Date(filters.start), e = new Date(filters.end)
         const days = Math.round((e - s) / 86400000) + 1
         const prevEnd = new Date(s); prevEnd.setDate(prevEnd.getDate() - 1)
@@ -491,7 +496,7 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
     }
     finally { clearTimeout(skTimer); setLoading(false); setShowSkeleton(false) }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filters.start, filters.end, JSON.stringify(lFilters.paymentMode)])
+  }, [filters.start, filters.end, JSON.stringify(lFilters.paymentMode), JSON.stringify(lFilters.pickupState), JSON.stringify(lFilters.dropState), JSON.stringify(lFilters.dropCity), JSON.stringify(lFilters.weightSlabs)])
 
   useEffect(() => { fetchLogistics() }, [fetchLogistics])
 
@@ -499,7 +504,7 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
   useEffect(() => {
     const applyFilters = (raw) => {
       if (!raw) return null
-      const { couriers, zone, paymentMode, pickupState, dropState, dropCity, category, subCategory, sddNdd, shipmentType, weightSlabs } = lFilters
+      const { couriers, paymentMode, pickupState, dropState, dropCity, category, subCategory, sddNdd, shipmentType, weightSlabs } = lFilters
       const hasCourier = couriers.length > 0
       const NDD_COURIERS = ['Delhivery NDD', 'Skye Air', 'Urbane Bolt', 'ElasticRun']
       const isNdd = cg => NDD_COURIERS.includes(cg)
@@ -570,8 +575,8 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
         byCourierWeek: (raw.byCourierWeek || []).filter(courierFilter),
         byCourierMonth: (raw.byCourierMonth || []).filter(courierFilter),
         tatByCourier: (raw.tatByCourier || []).filter(courierFilter),
-        byZone: zone?.length ? (raw.byZone || []).filter(x => zone.includes(x.zone)) : raw.byZone,
-        byZoneDetail: zone?.length ? (raw.byZoneDetail || []).filter(x => zone.includes(x.zone)) : raw.byZoneDetail,
+        byZone: raw.byZone,
+        byZoneDetail: raw.byZoneDetail,
         byPayment: paymentMode?.length ? (raw.byPayment || []).filter(x => paymentMode.map(p=>p.toLowerCase()).includes(x.payment_mode?.toLowerCase())) : raw.byPayment,
         byPaymentDetail: paymentMode?.length ? (raw.byPaymentDetail || []).filter(x => paymentMode.map(p=>p.toLowerCase()).includes(x.payment_mode?.toLowerCase())) : raw.byPaymentDetail,
         byPaymentDay: paymentMode?.length ? (raw.byPaymentDay || []).filter(x => paymentMode.map(p=>p.toLowerCase()).includes(x.payment_mode?.toLowerCase())) : raw.byPaymentDay,
@@ -832,7 +837,6 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
           </div>
           <div style={{ height: 1, background: C.border, margin: '4px 0' }} />
           <div style={{ fontSize: 10, fontWeight: 800, color: C.t3, letterSpacing: '.06em', textTransform: 'uppercase' }}>Filters</div>
-          <LMultiDropdown label="Zone" options={opts.zones} value={lFilters.zone} onChange={v => setLFilters(f => ({ ...f, zone: v }))} />
           <LMultiDropdown label="Pickup State" options={opts.pickup_states} value={lFilters.pickupState} onChange={v => setLFilters(f => ({ ...f, pickupState: v }))} />
           <LMultiDropdown label="Drop State" options={opts.drop_states} value={lFilters.dropState} onChange={v => setLFilters(f => ({ ...f, dropState: v }))} />
           <LMultiDropdown label="Drop City" options={opts.drop_cities} value={lFilters.dropCity} onChange={v => setLFilters(f => ({ ...f, dropCity: v }))} />
@@ -840,8 +844,8 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
           <LMultiDropdown label="Category" options={opts.categories} value={lFilters.category} onChange={v => setLFilters(f => ({ ...f, category: v, subCategory: [] }))} />
           <LMultiDropdown label="Sub-category" options={opts.sub_categories} value={lFilters.subCategory} onChange={v => setLFilters(f => ({ ...f, subCategory: v }))} />
           <LMultiDropdown label="Weight Slab" options={['0-500g','500g-1kg','1-2kg','2-5kg','5-10kg','10-20kg','20-50kg','50kg+']} value={lFilters.weightSlabs} onChange={v => setLFilters(f => ({ ...f, weightSlabs: v }))} />
-          {(lFilters.zone?.length || lFilters.pickupState?.length || lFilters.dropState?.length || lFilters.dropCity?.length || lFilters.paymentMode?.length || lFilters.category?.length || lFilters.subCategory?.length || lFilters.weightSlabs?.length) ? (
-            <button onClick={() => setLFilters(f => ({ ...f, zone: [], pickupState: [], dropState: [], dropCity: [], paymentMode: [], category: [], subCategory: [], weightSlabs: [] }))}
+          {(lFilters.pickupState?.length || lFilters.dropState?.length || lFilters.dropCity?.length || lFilters.paymentMode?.length || lFilters.category?.length || lFilters.subCategory?.length || lFilters.weightSlabs?.length) ? (
+            <button onClick={() => setLFilters(f => ({ ...f, pickupState: [], dropState: [], dropCity: [], paymentMode: [], category: [], subCategory: [], weightSlabs: [] }))}
               style={{ fontSize: 11, color: C.t3, background: 'none', border: `1px solid ${C.border}`, borderRadius: 6, padding: '4px 10px', cursor: 'pointer', fontFamily: 'var(--font)' }}>✕ Clear All</button>
           ) : null}
         </div>
@@ -3802,7 +3806,6 @@ function MobileLogisticsPanel({ page, setPage, onClose, lFilters, setLFilters, f
   const toggleCourier = c => setLf(f => ({ ...f, couriers: (f.couriers || []).includes(c) ? f.couriers.filter(x => x !== c) : [...(f.couriers || []), c] }))
 
   const dropdownFilters = [
-    { key: 'zone', label: 'Zone', options: opts.zones || [], value: lf.zone || [], onChange: v => setLf(f => ({ ...f, zone: v })) },
     { key: 'pickupState', label: 'Pickup State', options: opts.pickup_states || [], value: lf.pickupState || [], onChange: v => setLf(f => ({ ...f, pickupState: v })) },
     { key: 'dropState', label: 'Drop State', options: opts.drop_states || [], value: lf.dropState || [], onChange: v => setLf(f => ({ ...f, dropState: v })) },
     { key: 'dropCity', label: 'Drop City', options: opts.drop_cities || [], value: lf.dropCity || [], onChange: v => setLf(f => ({ ...f, dropCity: v })) },

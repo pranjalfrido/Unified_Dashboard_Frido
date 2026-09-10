@@ -7,7 +7,7 @@ export default async function handler(req, res) {
   if (req.method === 'OPTIONS') return res.status(200).end()
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' })
 
-  const { start, end, courier, shipmentType, sddNdd, paymentMode, zone, pickupState, dropState, dropCity, category, subCategory } = req.body
+  const { start, end, courier, shipmentType, sddNdd, paymentMode, pickupState, dropState, dropCity, category, subCategory, weightSlabs } = req.body
   if (!start || !end) return res.status(400).json({ error: 'Missing start or end' })
 
   // NDD split: show Delhivery NDD as separate row when Forward selected OR NDD chip selected
@@ -46,12 +46,28 @@ export default async function handler(req, res) {
     else filters.push(`NOT ${nddClause}`)
   }
   if (paymentMode) filters.push(`LOWER(c.payment_mode) = '${paymentMode.toLowerCase()}'`)
-  if (zone) filters.push(`c.zone = '${zone.replace(/'/g, "\\'")}'`)
-  if (pickupState) filters.push(`LOWER(c.pickup_state) = LOWER('${pickupState.replace(/'/g, "\\'")}')`  )
-  if (dropState) filters.push(`LOWER(c.drop_state) = LOWER('${dropState.replace(/'/g, "\\'")}')`)
-  if (dropCity) filters.push(`LOWER(c.drop_city) = LOWER('${dropCity.replace(/'/g, "\\'")}')`)
-  if (category?.length) filters.push(`COALESCE(im.Category_Name, 'Others') IN (${category.map(v => `'${String(v).replace(/'/g, "\\'")}'`).join(',')})`)
-  if (subCategory?.length) filters.push(`COALESCE(im.Sub_category, 'Mixed Shipments') IN (${subCategory.map(v => `'${String(v).replace(/'/g, "\\'")}'`).join(',')})`)
+  const toArr = v => Array.isArray(v) ? v : (v ? [v] : [])
+  const esc = v => String(v).replace(/'/g, "\\'")
+  if (pickupState?.length) { const s = toArr(pickupState); filters.push(`LOWER(c.pickup_state) IN (${s.map(v => `LOWER('${esc(v)}')`).join(',')})`) }
+  if (dropState?.length) { const s = toArr(dropState); filters.push(`LOWER(c.drop_state) IN (${s.map(v => `LOWER('${esc(v)}')`).join(',')})`) }
+  if (dropCity?.length) { const s = toArr(dropCity); filters.push(`LOWER(c.drop_city) IN (${s.map(v => `LOWER('${esc(v)}')`).join(',')})`) }
+  if (category?.length) filters.push(`COALESCE(im.Category_Name, 'Others') IN (${category.map(v => `'${esc(v)}'`).join(',')})`)
+  if (subCategory?.length) filters.push(`COALESCE(im.Sub_category, 'Mixed Shipments') IN (${subCategory.map(v => `'${esc(v)}'`).join(',')})`)
+  if (weightSlabs?.length) {
+    const w = `SAFE_CAST(REGEXP_REPLACE(TRIM(c.shipment_weight), r'[^0-9.]', '') AS FLOAT64)`
+    const slabClauses = weightSlabs.map(s => {
+      if (s === '0-500g') return `${w} <= 500`
+      if (s === '500g-1kg') return `(${w} > 500 AND ${w} <= 1000)`
+      if (s === '1-2kg') return `(${w} > 1000 AND ${w} <= 2000)`
+      if (s === '2-5kg') return `(${w} > 2000 AND ${w} <= 5000)`
+      if (s === '5-10kg') return `(${w} > 5000 AND ${w} <= 10000)`
+      if (s === '10-20kg') return `(${w} > 10000 AND ${w} <= 20000)`
+      if (s === '20-50kg') return `(${w} > 20000 AND ${w} <= 50000)`
+      if (s === '50kg+') return `${w} > 50000`
+      return null
+    }).filter(Boolean)
+    if (slabClauses.length) filters.push(`(${slabClauses.join(' OR ')})`)
+  }
 
   const whereClause = filters.length ? `AND ${filters.join(' AND ')}` : ''
 
