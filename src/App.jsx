@@ -5060,8 +5060,8 @@ function OverviewPage({ data, combinedAlerts, logisticsData, logisticsRangeLabel
           const q = productSearch.trim().toLowerCase()
           const filteredSubCat = q ? topProductsBySubCat.filter(g => g.subCategory.toLowerCase().includes(q) || g.category.toLowerCase().includes(q)) : topProductsBySubCat
           return (
-          <WideCard span={8} style={{ display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginBottom: 12, flexShrink: 0 }}>
+          <WideCard span={8} style={{ maxHeight: 520, overflow: 'hidden' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginBottom: 12 }}>
               <span style={{ fontSize: 13, fontWeight: 700, color: C.t1, whiteSpace: 'nowrap' }}>Product Performance</span>
               <div style={{ position: 'relative', width: 230, flexShrink: 0 }}>
                 <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke={C.t3} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
@@ -5095,7 +5095,7 @@ function OverviewPage({ data, combinedAlerts, logisticsData, logisticsRangeLabel
               )}
               </div>
             </div>
-            <div style={{ flex: 1, overflowY: 'auto', border: `1px solid ${C.border}`, borderRadius: 10 }}>
+            <div style={{ maxHeight: 560, overflowY: 'auto', border: `1px solid ${C.border}`, borderRadius: 10 }}>
               <table className="row-hoverable" style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
                 <thead style={{ position: 'sticky', top: 0, zIndex: 1 }}>
                   <tr>
