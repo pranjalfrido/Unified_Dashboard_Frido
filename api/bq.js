@@ -1258,7 +1258,7 @@ export default async function handler(req, res) {
     const cityTotal = (r.byCity || []).reduce((s, x) => s + (parseFloat(x.rev) || 0), 0)
     const regionRows = (r.byRegion || []).map(x => ({ region: x.region, orders: parseInt(x.orders) || 0, rev: parseFloat(x.rev) || 0, units: parseInt(x.units) || 0 }))
     const tierRows = (r.byTier || []).map(x => ({ tier: parseInt(x.city_tier) || x.city_tier, label: x.tier_label, orders: parseInt(x.orders) || 0, rev: parseFloat(x.rev) || 0, units: parseInt(x.units) || 0 }))
-    const skuRows = (r.bySKU || []).map(x => ({ sku: x.sku, category: x.category || '', subCategory: x.subcategory || '', channel: x.channel || '', units: parseInt(x.units) || 0, orders: parseInt(x.orders) || 0, rev: parseFloat(x.rev) || 0 }))
+    const skuRows = (r.bySKU || []).map(x => ({ sku: x.sku, category: x.category || '', subCategory: x.subcategory || '', channel: x.channel || '', units: parseInt(x.units) || 0, orders: parseInt(x.orders) || 0, rev: parseFloat(x.rev) || 0, exc_rev: parseFloat(x.exc_rev) || 0, cancel_rev: parseFloat(x.cancel_rev) || 0, rto_rev: parseFloat(x.rto_rev) || 0, cir_rev: parseFloat(x.cir_rev) || 0, return_rev: parseFloat(x.return_rev) || 0 }))
 
     const financialStatusMap = {}
     r.byFinancialStatus.forEach(x => { financialStatusMap[x.financial_status || 'Unknown'] = { orders: parseInt(x.orders) || 0, rev: parseFloat(x.rev) || 0 } })
