@@ -236,7 +236,7 @@ function LKpiCard({ label, value, badgeText, badgeVariant, subValue, subLabel, c
     ? <span style={{ fontSize: tight ? 9 : 10, fontWeight: 700, padding: tight ? '1px 4px' : '2px 6px', borderRadius: 4, background: isGood ? C.green.bg : C.red.bg, color: isGood ? C.green.tx : C.red.tx, flexShrink: 0 }}>{chg >= 0 ? '▲' : '▼'} {Math.abs(chg).toFixed(1)}%</span>
     : badgeText ? <span className={`bdg bdg-${bv}`} style={{ fontSize: tight ? 9 : 10, flexShrink: 0 }}>{badgeText}</span> : null
   return (
-    <div className="kpi-card" style={{ display: 'flex', flexDirection: 'column', gap: 0, padding: mobile ? '10px 12px' : tight ? '5px 6px' : '2px 10px', minHeight: mobile ? 78 : undefined, height: mobile ? '100%' : undefined, border: mobile ? `1px solid ${C.border}` : undefined, background: mobile ? '#fff' : undefined }}>
+    <div className="kpi-card" style={{ display: 'flex', flexDirection: 'column', gap: 0, padding: mobile ? '10px 12px' : tight ? '8px 6px' : '8px 10px', minHeight: mobile ? 78 : undefined, height: mobile ? '100%' : undefined, border: mobile ? `1px solid ${C.border}` : undefined, background: mobile ? '#fff' : undefined }}>
       <div className="kpi-label" style={{ marginBottom: 2 }}>{label}</div>
       {compact ? (
         <>
@@ -432,28 +432,33 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
     try {
       // Try static file first — served from Vercel CDN in ~14ms
       // Static file has ALL shipment types and categories, so we filter client-side (instant)
+      // Skip static if paymentMode is active — static file has no payment breakdown
+      const hasPaymentFilter = lFilters.paymentMode?.length > 0
       let usedStatic = false
-      try {
-        const res = await fetch('/logistics-data.json')
-        if (res.ok) {
-          const json = await res.json()
-          const ageMs = json.asOf ? Date.now() - new Date(json.asOf).getTime() : Infinity
-          const dateMatches = json.dateRange && json.dateRange.start === filters.start && json.dateRange.end === filters.end
-          if (ageMs <= 7 * 60 * 60 * 1000 && dateMatches && !json._placeholder && json.current) {
-            setRawData(json.current)
-            setRawPrevData(json.previous || null)
-            try { localStorage.setItem('logistics_stale', JSON.stringify({ current: json.current, previous: json.previous || null, dateRange: json.dateRange, savedAt: Date.now() })) } catch {}
-            usedStatic = true
+      if (!hasPaymentFilter) {
+        try {
+          const res = await fetch('/logistics-data.json')
+          if (res.ok) {
+            const json = await res.json()
+            const ageMs = json.asOf ? Date.now() - new Date(json.asOf).getTime() : Infinity
+            const dateMatches = json.dateRange && json.dateRange.start === filters.start && json.dateRange.end === filters.end
+            if (ageMs <= 7 * 60 * 60 * 1000 && dateMatches && !json._placeholder && json.current) {
+              setRawData(json.current)
+              setRawPrevData(json.previous || null)
+              try { localStorage.setItem('logistics_stale', JSON.stringify({ current: json.current, previous: json.previous || null, dateRange: json.dateRange, savedAt: Date.now() })) } catch {}
+              usedStatic = true
+            }
           }
-        }
-      } catch { /* fall through to live API */ }
+        } catch { /* fall through to live API */ }
+      }
 
       if (!usedStatic) {
-        // Static JSON unavailable — hit live BQ with all active filters
+        // Static JSON unavailable or payment filter active — hit live BQ
         const body = { start: filters.start, end: filters.end }
         if (lFilters.category?.length) body.category = lFilters.category
         if (lFilters.subCategory?.length) body.subCategory = lFilters.subCategory
         if (lFilters.shipmentType && lFilters.shipmentType !== 'all') body.shipmentType = lFilters.shipmentType
+        if (lFilters.paymentMode?.length === 1) body.paymentMode = lFilters.paymentMode[0]
         const s = new Date(filters.start), e = new Date(filters.end)
         const days = Math.round((e - s) / 86400000) + 1
         const prevEnd = new Date(s); prevEnd.setDate(prevEnd.getDate() - 1)
@@ -483,7 +488,8 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
       setError(e.message)
     }
     finally { clearTimeout(skTimer); setLoading(false); setShowSkeleton(false) }
-  }, [filters.start, filters.end])
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filters.start, filters.end, JSON.stringify(lFilters.paymentMode)])
 
   useEffect(() => { fetchLogistics() }, [fetchLogistics])
 
