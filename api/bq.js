@@ -110,7 +110,7 @@ const SLOW_QUERY_KEYS = new Set([
   'byCategory','bySubCategory','prevByCategory','prevBySubCategory',
   'byCategoryChannel','byCategoryChannelFk','bySubCategoryChannel','bySubCategoryChannelFk',
   'byState','byStatePrev','byCity','byCityPrev','byRegion','byTier','byOrderValue','bySKU',
-  'shSubCategory','shSKU','shDailySKU','shSKUPrev','shSkuCosts','shDailySkuCosts','shListingPrice','shReturnRateMature',
+  'shSubCategory','shSKU','shDailySKU','shSKUPrev','shSkuCosts','shDailySkuCosts','shListingPrice','shPrepaidAsp','shReturnRateMature',
   'shState','shStatePrev','shRegion','shTier','shCity','shCityPrev','shReturnReasons',
   'amzSCStates','amzSCStatesPrev','amzSCCities','amzSCCitiesPrev','amzSCSKUs',
   'amzSCCatChannel','amzSCSubCatChannel','amzSCSKUChannel','amzSCDailyCat',
@@ -366,6 +366,14 @@ export default async function handler(req, res) {
     // correct summary in both cases — it reduces to the steady value when the price was stable, and
     // reflects the true blended reality when it wasn't. Discount is likewise a genuine
     // units-weighted average (avg_discount), same as before.
+    // Excludes '_EX%' OrderIds — same exclusion buildQuery's base CTE applies for every other D2C
+    // query (shSKU/shCategory/etc, see _bq.js's comment on the ops team's exchange-recreation
+    // OrderId convention) — confirmed via live BigQuery this MUST match: for
+    // "Orthotics Posture Corrector Pro" in Sep 2026, _EX rows (≈19% of units) have a
+    // meaningfully LOWER selling price than non-_EX rows at the SAME listing price (ASP ₹955 vs
+    // ₹1003), so leaving them in this query while shSKU's ASP excludes them produced an
+    // impossible Listing Price < ASP (i.e. a negative "current discount") purely from the two
+    // queries scoping different row sets, not from any real pricing anomaly.
     shListingPrice: `SELECT masterskucode AS sku,
         SUM(Listing_Price) / SUM(ItemQty) AS avg_listing_price,
         SUM(Discount * ItemQty) / SUM(ItemQty) AS avg_discount,
@@ -374,6 +382,31 @@ export default async function handler(req, res) {
       WHERE OrderDate BETWEEN '${start}' AND '${end}' AND Channel = 'Shopify' AND Country = 'India'
         AND masterskucode IS NOT NULL AND TRIM(masterskucode) != ''
         AND Listing_Price IS NOT NULL AND Listing_Price > 0 AND ItemQty > 0
+        AND NOT (OrderId LIKE '%_EX%')
+      GROUP BY masterskucode`,
+    // Prepaid-only ASP per SKU — the Price Simulator's "Current Discount" needs Listing Price
+    // compared against a selling price that's actually comparable to it. Confirmed via live
+    // BigQuery (order-level detail, e.g. #MF0223605498 and 1,382 others on FR-OPPC-L1 in Sep 2026):
+    // COD orders carry a real ~₹68 handling fee baked directly into SellingPrice_Inc_GST that
+    // Listing_Price/Discount NEVER reflect (COD SellingPrice_Inc_GST=₹1067 vs Listing_Price=₹999,
+    // Discount=0 — the ₹68 gap is a genuine COD surcharge, not a data error). Blending COD's
+    // fee-inflated price into ASP was making "Current Discount" = (Listing−ASP)/Listing come out
+    // NEGATIVE for COD-heavy products (an impossible-looking result the user flagged and we traced
+    // to this exact cause). No stable COD-fee constant exists anywhere in this codebase to
+    // subtract it back out, so instead: compute ASP from PREPAID orders only for this one
+    // comparison — Prepaid's SellingPrice_Inc_GST cleanly reflects Listing Price minus the real
+    // tracked discount, with no payment-surcharge mixed in. This is a SEPARATE query from shSKU
+    // (which still blends both payment types for Gross Revenue/CM1/CM2/etc — nothing else in the
+    // app changes) — used ONLY by the Price Simulator's Current Discount / reference-price
+    // calculations, per explicit user decision to keep COD units in every other KPI.
+    shPrepaidAsp: `SELECT masterskucode AS sku,
+        SUM(SellingPrice_Inc_GST) / SUM(ItemQty) AS prepaid_asp,
+        SUM(ItemQty) AS prepaid_units
+      FROM \`frido-429506.production.fact_all_platform_sales_report\`
+      WHERE OrderDate BETWEEN '${start}' AND '${end}' AND Channel = 'Shopify' AND Country = 'India'
+        AND masterskucode IS NOT NULL AND TRIM(masterskucode) != '' AND ItemQty > 0
+        AND NOT (OrderId LIKE '%_EX%')
+        AND payment_type = 'Prepaid'
       GROUP BY masterskucode`,
     // Return-rate baseline for the Price Simulator's "Return Rate Impact" lever — reuses the EXACT
     // SAME formula as the D2C Return Analysis tab's headline "Return%" KPI (api/return-analysis.js),
@@ -2075,6 +2108,14 @@ export default async function handler(req, res) {
         // Simulator's "Current Discount %" readout, sourced from the fact table's own tracked
         // discount rather than derived/assumed.
         listingPriceBySku: Object.fromEntries((r.shListingPrice || []).map(x => [x.sku, { listingPrice: parseFloat(x.avg_listing_price) || 0, discount: parseFloat(x.avg_discount) || 0 }])),
+        // Prepaid-only ASP per SKU (see shPrepaidAsp query above) — used ONLY by the Price
+        // Simulator's Current Discount / reference-price comparison against Listing Price, since
+        // COD orders carry a real handling-fee surcharge baked into SellingPrice_Inc_GST that
+        // Listing_Price never reflects (confirmed via live BigQuery order-level detail). Every
+        // other KPI in the app (Gross Revenue, CM1, CM2, blended ASP, etc.) still blends BOTH
+        // payment types via the existing shSKU-based figures — this is a narrowly-scoped addition,
+        // not a change to any other calculation.
+        prepaidAspBySku: Object.fromEntries((r.shPrepaidAsp || []).map(x => [x.sku, { asp: parseFloat(x.prepaid_asp) || 0, units: parseInt(x.prepaid_units) || 0 }])),
         // Mature-window (today-44d to today-14d — see shReturnRateMature query above) return rate,
         // pre-aggregated at 3 grains so the frontend can fall back SKU → Category → whole D2C
         // without a second round-trip: a SKU with too few mature-window UNITS to trust its own
@@ -3755,7 +3796,7 @@ export default async function handler(req, res) {
         pnlAdSpendMap: payload.pnlAdSpendMap,
         pnlRawAdSpend: payload.pnlRawAdSpend,
         masterSkuList: payload.masterSkuList,
-        _slow_shopify: chSlow('shopify', ['subCategories','skuMap','skuMapBySubChannel','skuCostRows','dailySkuCostRows','skuWeightShares','stateMap','stateTotal','statePrevMap','cityRows','cityPrevMap','cityTotal','returnReasons','listingPriceBySku','returnRateMature']),
+        _slow_shopify: chSlow('shopify', ['subCategories','skuMap','skuMapBySubChannel','skuCostRows','dailySkuCostRows','skuWeightShares','stateMap','stateTotal','statePrevMap','cityRows','cityPrevMap','cityTotal','returnReasons','listingPriceBySku','prepaidAspBySku','returnRateMature']),
         _slow_flipkart: chSlow('flipkart', ['categories','subCategories','skuMatrix','states','statesPrev','cities','citiesPrev','regions','status','catPrev','subCatPrev','skuPrev']),
         _slow_blinkit: chSlow('blinkit', ['categories','subCategories','skuMatrix','skus','states','statesPrev','cities','citiesPrev','skuPrev']),
         _slow_instamart: chSlow('instamart', ['categories','subCategories','skuMatrix','skus','states','statesPrev','cities','citiesPrev','skuPrev']),

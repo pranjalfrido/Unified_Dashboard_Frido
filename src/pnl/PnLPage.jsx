@@ -145,15 +145,31 @@ export default function PnLPage({ data, filters, setFilters, activeTab: activeTa
       let fulfilment = rate ? rate.fulfilment * lineCount : 0
       if (rate) {
         const st = (orderStatus || '').toLowerCase()
+        // Every non-cancelled order — delivered, RTO, CIR, or Exchange alike — already incurs the
+        // forward shipment leg (confirmed against the business's own reference PnL spreadsheet AND
+        // the business's explicit confirmation of the operational logic). RTO/CIR/Exchange each
+        // layer their OWN extra leg cost on top of that shared forward charge:
+        //   RTO      → forward + rto_leg
+        //   CIR      → forward + reverse_leg
+        //   Exchange → forward + reverse_leg + a SECOND forward leg (the replacement shipment)
+        // Matches pnlUtils.js's blendedLogisticsPerUnit (shared by Price Simulator/Breakeven ROAS).
         if (st === 'cancelled') {
           logistics = 0
         } else if (st === 'rto') {
           logistics = (rate.forward + rate.rto) * lineCount
-        } else if (st === 'cir' || st === 'exchange' || st === 'return') {
+        } else if (st === 'exchange') {
+          logistics = (rate.forward + rate.reverse + rate.forward) * lineCount
+        } else if (st === 'cir' || st === 'return') {
           logistics = (rate.forward + rate.reverse) * lineCount
         } else {
           logistics = rate.forward * lineCount
         }
+        // Weight-based stock-movement cost (₹4/kg) — same flat per-kg charge Amazon VC/SC's own
+        // SnD already uses (api/bq.js's STOCK_MOVEMENT_RATE_PER_KG), confirmed missing from D2C's
+        // S&D here against the same reference spreadsheet (its Total_Logistics formula adds
+        // `weightSlabGm/1000*4` on top of the outcome-weighted costs, via Rates!N3=4). Applies per
+        // line item regardless of outcome, same as fulfilment.
+        logistics += (effectiveSlab / 1000) * 4 * lineCount
       }
       const paymentGw = grossIncGst * 0.011
       const softwareFee = totalQty * 15
@@ -1339,6 +1355,7 @@ export default function PnLPage({ data, filters, setFilters, activeTab: activeTa
     const skuData = channelData?.shopify?.skuData
     if (!skuData) return []
     const listingPriceBySku = data?.shopify?.listingPriceBySku || {}
+    const prepaidAspBySku = data?.shopify?.prepaidAspBySku || {}
     // Return-rate baseline for the Price Simulator's Return Rate Impact lever — ALWAYS sourced
     // from the mature (today-44d to today-14d) window computed server-side
     // (data.shopify.returnRateMature — see api/bq.js's shReturnRateMature query), NEVER from this
@@ -1379,6 +1396,7 @@ export default function PnLPage({ data, filters, setFilters, activeTab: activeTa
           const cogsPerUnit = (cogsEntry && cogsEntry.cogs != null) ? cogsEntry.cogs : estimateCogsPerUnit(asp)
           const sndTotal = shSndBySku?.[sku] ?? null
           const lp = listingPriceBySku[sku]
+          const prepaid = prepaidAspBySku[sku]
           const rr = resolveReturnRate(sku)
           rows.push({
             sku, category: cat, subCategory: sc,
@@ -1401,6 +1419,15 @@ export default function PnLPage({ data, filters, setFilters, activeTab: activeTa
             // fabricating a listing price.
             listingPrice: lp?.listingPrice ?? null,
             currentDiscount: lp?.discount ?? null,
+            // Prepaid-only ASP (see shPrepaidAsp query in api/bq.js) — used ONLY by the Price
+            // Simulator's Current Discount / reference-price comparison against Listing Price.
+            // COD orders carry a real handling-fee surcharge baked into SellingPrice_Inc_GST that
+            // Listing_Price never reflects, which was making Listing Price read BELOW blended ASP
+            // for COD-heavy products (an impossible-looking negative "current discount," confirmed
+            // via live BigQuery order-level detail). null when this SKU has no Prepaid orders in
+            // the selected range, so callers can fall back to the blended `asp` instead.
+            prepaidAsp: prepaid?.asp ?? null,
+            prepaidUnits: prepaid?.units ?? 0,
             weightGm: shSkuWeightSlab[sku] ?? null,
             // Kept flat (not nested under a sub-object) so PriceSimulator.jsx and
             // d2cProductGroups' units-weighted blend below can read/aggregate each field directly.
@@ -1428,7 +1455,7 @@ export default function PnLPage({ data, filters, setFilters, activeTab: activeTa
     const bySubCat = {}
     d2cProductList.forEach(p => {
       const key = `${p.category}::${p.subCategory}`
-      if (!bySubCat[key]) bySubCat[key] = { key, name: p.subCategory, category: p.category, subCategory: p.subCategory, units: 0, gross: 0, net: 0, excRev: 0, cogsTotal: 0, sndTotal: 0, sndKnownUnits: 0, variantCount: 0, listingTotal: 0, listingKnownUnits: 0, discountTotal: 0, returnRevTotal: 0, rtoTotal: 0, cirTotal: 0, returnStatusTotal: 0, cancelTotal: 0, exchTotal: 0, weightTotal: 0, weightKnownUnits: 0, sourceTiers: new Set() }
+      if (!bySubCat[key]) bySubCat[key] = { key, name: p.subCategory, category: p.category, subCategory: p.subCategory, units: 0, gross: 0, net: 0, excRev: 0, cogsTotal: 0, sndTotal: 0, sndKnownUnits: 0, variantCount: 0, listingTotal: 0, listingKnownUnits: 0, discountTotal: 0, prepaidAspTotal: 0, prepaidKnownUnits: 0, returnRevTotal: 0, rtoTotal: 0, cirTotal: 0, returnStatusTotal: 0, cancelTotal: 0, exchTotal: 0, weightTotal: 0, weightKnownUnits: 0, sourceTiers: new Set() }
       const g = bySubCat[key]
       g.units += p.units
       g.gross += p.gross
@@ -1437,6 +1464,7 @@ export default function PnLPage({ data, filters, setFilters, activeTab: activeTa
       g.cogsTotal += p.cogsPerUnit * p.units
       if (p.sndPerUnit != null) { g.sndTotal += p.sndPerUnit * p.units; g.sndKnownUnits += p.units }
       if (p.listingPrice != null) { g.listingTotal += p.listingPrice * p.units; g.discountTotal += (p.currentDiscount || 0) * p.units; g.listingKnownUnits += p.units }
+      if (p.prepaidAsp != null && p.prepaidUnits > 0) { g.prepaidAspTotal += p.prepaidAsp * p.prepaidUnits; g.prepaidKnownUnits += p.prepaidUnits }
       if (p.weightGm != null) { g.weightTotal += p.weightGm * p.units; g.weightKnownUnits += p.units }
       g.returnRevTotal += (p.returnRevRate || 0) * p.units
       g.rtoTotal += (p.rtoPct || 0) * p.units
@@ -1457,6 +1485,7 @@ export default function PnLPage({ data, filters, setFilters, activeTab: activeTa
       sndPerUnit: g.sndKnownUnits > 0 ? g.sndTotal / g.sndKnownUnits : null,
       listingPrice: g.listingKnownUnits > 0 ? g.listingTotal / g.listingKnownUnits : null,
       currentDiscount: g.listingKnownUnits > 0 ? g.discountTotal / g.listingKnownUnits : null,
+      prepaidAsp: g.prepaidKnownUnits > 0 ? g.prepaidAspTotal / g.prepaidKnownUnits : null,
       weightGm: g.weightKnownUnits > 0 ? g.weightTotal / g.weightKnownUnits : null,
       returnRevRate: g.units > 0 ? g.returnRevTotal / g.units : 0,
       rtoPct: g.units > 0 ? g.rtoTotal / g.units : 0,

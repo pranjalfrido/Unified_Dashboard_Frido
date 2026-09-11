@@ -231,7 +231,7 @@ function MiniStatCard({ label, from, to, format, higherIsBetter }) {
   const tone = improved == null ? C.t1 : improved ? C.green.tx : C.red.tx
   return (
     <div style={{ background: C.bg, border: `1px solid ${C.border}`, borderRadius: 10, padding: '10px 12px' }}>
-      <div style={{ fontSize: 10, fontWeight: 700, color: C.t3, textTransform: 'uppercase', letterSpacing: 0.2 }}>{label}</div>
+      <div style={{ fontSize: 10, fontWeight: 700, color: C.t2, textTransform: 'uppercase', letterSpacing: 0.2 }}>{label}</div>
       <div style={{ display: 'flex', gap: 6, alignItems: 'baseline', marginTop: 4, flexWrap: 'wrap' }}>
         <span style={{ fontSize: 12, color: C.t3 }}>{format(from)}</span>
         <span style={{ fontSize: 12, color: improved == null ? C.t3 : tone }}>→</span>
@@ -284,9 +284,12 @@ function Cm2HeroCard({ before, after, beforePct, afterPct }) {
 
 // Current-scenario mini stat, shown alongside the picker so the user sees exactly what they're
 // about to simulate against before touching a single slider.
-function BaselineStat({ label, value, sub, accent }) {
+function BaselineStat({ label, value, sub, accent, divider = true }) {
   return (
-    <div style={{ minWidth: 0, flexShrink: 0, whiteSpace: 'nowrap' }}>
+    <div style={{
+      minWidth: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+      paddingRight: divider ? 14 : 0, borderRight: divider ? `1px solid ${C.border}` : 'none',
+    }}>
       <div style={{ fontSize: 10, fontWeight: 700, color: C.t3, textTransform: 'uppercase', letterSpacing: 0.3 }}>{label}</div>
       <div style={{ fontSize: 15, fontWeight: 800, color: accent || C.t1, marginTop: 2, fontVariantNumeric: 'tabular-nums' }}>{value}</div>
       {sub && <div style={{ fontSize: 10, color: C.t3, marginTop: 1 }}>{sub}</div>}
@@ -305,12 +308,37 @@ export default function PriceSimulator({ variantProducts = [], productGroups = [
   // here means "use the real value," a number means "the user has overridden it for this product."
   const [listingPriceOverride, setListingPriceOverride] = useState(null)
   const [discountPct, setDiscountPct] = useState(10)
+  // Whether Discount% is still at its seeded default (mirrors listingPriceOverride===null for
+  // Listing Price) — used alongside it so "Planned" price at DEFAULT uses baseline.gross/net
+  // directly (scaled only by volume) instead of always multiplying through priceMultiplier, which
+  // is never exactly 1.0 even at default because discountPct is seeded/displayed rounded to 2
+  // decimals (see seedDiscount below) — confirmed this left a small but real ~0.1-0.2% Current-
+  // vs-Planned CM2 gap ("₹-260 decline" with every lever untouched). Same fix pattern as
+  // targetRoasIsDefault above.
+  const [discountPctIsDefault, setDiscountPctIsDefault] = useState(true)
   const [volumeDeltaPct, setVolumeDeltaPct] = useState(0)
   const [targetRoas, setTargetRoas] = useState(4)
+  // The exact (unrounded) real ROAS this product was seeded with, and whether the user has since
+  // dragged the Target ROAS slider away from that seed — used so "Planned" spend at DEFAULT uses
+  // the product's exact real ad spend directly, not a round-tripped Net÷TargetROAS recomputation.
+  // targetRoas itself is rounded to 1 decimal for display (see resetLevers), so recomputing spend
+  // from it can never exactly reproduce real spend even when nothing else changed — confirmed this
+  // was still leaving a small but real Current-vs-Planned CM2 gap at "default" levers. Tracking the
+  // untouched state directly sidesteps that rounding entirely instead of chasing ever-smaller
+  // floating-point precision.
+  const [targetRoasIsDefault, setTargetRoasIsDefault] = useState(true)
   // Return Rate lever is shown and edited as the ABSOLUTE rate (not a delta on top of a hidden
   // baseline) — re-seeded to the product's own real mature-window rate on selection, same as
   // discountPct/listingPriceOverride below.
   const [returnRatePct, setReturnRatePct] = useState(0)
+  // Whether Return Rate is still at its seeded default — mirrors listingPriceOverride/
+  // discountPctIsDefault above. returnRatePct is seeded ROUNDED to 1 decimal
+  // (Math.round(baseline.returnRevRate*1000)/10), so (returnRatePct/100 − baseline.returnRevRate)
+  // is never exactly 0 at "default" — it's a tiny rounding residual that fed into
+  // extraReturnFraction and cascaded into a small but real Current-vs-Planned CM2 gap even with
+  // every lever untouched (confirmed: still a real "₹115 decline" after fixing the price/spend
+  // rounding sources above). Same fix pattern: force extraReturnFraction to exactly 0 when untouched.
+  const [returnRatePctIsDefault, setReturnRatePctIsDefault] = useState(true)
   const [sndRateSlabs, setSndRateSlabs] = useState(null)
   useEffect(() => { loadSndRates().then(setSndRateSlabs) }, [])
 
@@ -332,18 +360,25 @@ export default function PriceSimulator({ variantProducts = [], productGroups = [
   const resetLevers = product => {
     if (!product) return
     setListingPriceOverride(null)
-    // Seeded from (Listing Price − ASP) ÷ Listing Price — the REAL effective discount, matching
-    // what the user sees when comparing Listing Price against ASP on screen — NOT
+    // Seeded from (Listing Price − Prepaid ASP) ÷ Listing Price — the REAL effective discount,
+    // matching what the user sees when comparing Listing Price against ASP on screen — NOT
     // product.currentDiscount (the fact table's own tracked Discount column), which is a
     // narrower, separately-tracked coupon/promo figure that undercounts the true gap (confirmed:
     // observed real cases where Listing≈₹1011 and ASP≈₹842, a genuine ~17% gap, while the tracked
     // Discount column implied only ~4%, presumably excluding tax/other pricing components folded
-    // into ASP). asp is already units-weighted the same way listingPrice is (see PnLPage.jsx's
-    // d2cProductList/d2cProductGroups), so this ratio is apples-to-apples.
+    // into ASP). Uses product.prepaidAsp (Prepaid-orders-only ASP), NOT the blended asp across
+    // both payment types — COD orders carry a real handling-fee surcharge baked into
+    // SellingPrice_Inc_GST that Listing_Price never reflects (confirmed via live BigQuery
+    // order-level detail: COD SellingPrice_Inc_GST can run ~₹68 above Listing_Price at Discount=0
+    // on the same product), which was making this ratio come out NEGATIVE for COD-heavy products —
+    // an impossible-looking "current discount." Falls back to the blended `asp` only when this
+    // product has no Prepaid orders at all in the selected range (prepaidAsp null).
+    const referenceAsp = product.prepaidAsp ?? product.asp
     const seedDiscount = product.listingPrice > 0
-      ? ((product.listingPrice - product.asp) / product.listingPrice) * 100
+      ? ((product.listingPrice - referenceAsp) / product.listingPrice) * 100
       : 0
     setDiscountPct(Math.max(0, Math.min(70, Math.round(seedDiscount * 100) / 100)))
+    setDiscountPctIsDefault(true)
     setVolumeDeltaPct(0)
     // Seeded to this product's own REAL current ROAS (Net Revenue ÷ real ad spend) — not a flat
     // 4x — so that at every lever left at its default, Planned Spend (Net÷TargetROAS) reproduces
@@ -356,7 +391,9 @@ export default function PriceSimulator({ variantProducts = [], productGroups = [
     // record (adSpend null/0) or no net revenue to divide by.
     const realRoas = product.adSpend > 0 && product.net > 0 ? product.net / product.adSpend : null
     setTargetRoas(realRoas != null ? Math.max(0.5, Math.round(realRoas * 10) / 10) : 4)
+    setTargetRoasIsDefault(true)
     setReturnRatePct(Math.round((product.returnRevRate || 0) * 1000) / 10)
+    setReturnRatePctIsDefault(true)
   }
 
   // Re-seed every lever the moment a product is selected (or changed) — see resetLevers above.
@@ -410,17 +447,31 @@ export default function PriceSimulator({ variantProducts = [], productGroups = [
     if (sndPerUnit == null || units <= 0) return null
     const matureReturnRevRate = selectedProduct.returnRevRate ?? 0
     const rtoPct = selectedProduct.rtoPct || 0
-    const nonRtoReturnPct = (selectedProduct.returnStatusPct || 0) + (selectedProduct.cirPct || 0) + (selectedProduct.exchPct || 0)
+    // Exchange gets its own extra forward+reverse leg on top of the shared forward charge inside
+    // blendedLogisticsPerUnit — confirmed against the business's own reference PnL spreadsheet AND
+    // the business's explicit confirmation of the operational logic (every non-cancelled order,
+    // Exchange included, already pays one forward leg; Exchange additionally pays a reverse pickup
+    // + a second forward replacement shipment) — kept as its own parameter here so the incremental-
+    // reverse-logistics weighting below can still track it separately.
+    const nonRtoReturnPct = (selectedProduct.returnStatusPct || 0) + (selectedProduct.cirPct || 0)
+    const exchPct = selectedProduct.exchPct || 0
     const cancelPct = selectedProduct.cancelPct || 0
 
     const net = (excRev || 0) * (1 - matureReturnRevRate)
-    const cogs = cogsPerUnit * units
+    // COGS is charged only on the share of units that stayed sold (1 − matureReturnRevRate) — same
+    // "net units" convention the real D2C PnL table already uses (pnlUtils.js's netRevenueOf:
+    // netUnits = units − cancelled/RTO/returned/CIR units, so COGS never prices units that didn't
+    // stay sold). A Cancelled/RTO'd/CIR'd/Returned unit's COGS isn't fully sunk (goods come back to
+    // inventory); Exchange is excluded from this reduction (matureReturnRevRate already excludes
+    // it) since an exchanged unit's COGS was never actually lost — the customer still has a product.
+    const grossCogs = cogsPerUnit * units
+    const cogs = grossCogs * (1 - matureReturnRevRate)
     const gm = net - cogs
 
     const rate = sndRateSlabs ? rateForWeightGm(sndRateSlabs, selectedProduct.weightGm ?? null) : null
     let snd
     if (rate) {
-      const { logistics, fulfilment } = blendedLogisticsPerUnit(rate, { rtoPct, returnPct: nonRtoReturnPct, cancelPct })
+      const { logistics, fulfilment } = blendedLogisticsPerUnit(rate, { rtoPct, returnPct: nonRtoReturnPct, exchangePct: exchPct, cancelPct })
       const paymentGw = (gross / units) * PAYMENT_GW_RATE // per-unit gross Inc GST × PG rate
       const softwareFee = 15
       snd = (logistics + fulfilment + paymentGw + softwareFee) * units
@@ -439,6 +490,10 @@ export default function PriceSimulator({ variantProducts = [], productGroups = [
     const cm2 = cm1 - spend
     return {
       net, gross, units, cogs, gm, snd, cm1, spend, cm2, asp: selectedProduct.asp,
+      // Prepaid-only ASP — used ONLY for the Current Discount comparison against Listing Price
+      // (see resetLevers' seedDiscount and currentDiscountPct below), never for CM1/CM2/waterfall,
+      // which all correctly keep using the blended `asp` across both payment types.
+      prepaidAsp: selectedProduct.prepaidAsp ?? null,
       hasRealAdSpend: selectedProduct.adSpend != null,
       listingPrice: selectedProduct.listingPrice, currentDiscount: selectedProduct.currentDiscount,
       returnRevRate: matureReturnRevRate,
@@ -454,17 +509,26 @@ export default function PriceSimulator({ variantProducts = [], productGroups = [
 
   // Current discount % (as tracked in the fact table) vs. Planned discount % (the slider) — the
   // two numbers the user actually asked to see side by side.
-  // (Listing Price − ASP) ÷ Listing Price — same real-effective-discount formula resetLevers'
-  // seedDiscount uses, not the fact table's narrower tracked Discount column (see that comment).
-  const currentDiscountPct = selectedProduct && baseline?.listingPrice ? ((baseline.listingPrice - baseline.asp) / baseline.listingPrice * 100) : null
+  // (Listing Price − Prepaid ASP) ÷ Listing Price — same real-effective-discount formula
+  // resetLevers' seedDiscount uses (see that comment for why Prepaid-only, not blended asp).
+  const currentDiscountPct = selectedProduct && baseline?.listingPrice
+    ? ((baseline.listingPrice - (baseline.prepaidAsp ?? baseline.asp)) / baseline.listingPrice * 100)
+    : null
   const plannedSellingPrice = referencePrice != null ? referencePrice * (1 - discountPct / 100) : null
   // The REAL price multiplier applied to baseline.net: ratio of the planned price to the
-  // product's CURRENT actual selling price (baseline.asp), not (1 − discountPct/100) directly —
-  // see referencePrice's comment above for why those two differ whenever the product is already
-  // discounted off listing today. Falls back to the naive (1 − discountPct/100) only when this
-  // specific product has no Listing_Price row on record (see the amber notice below the price tag).
-  const priceMultiplier = (baseline?.asp > 0 && plannedSellingPrice != null)
-    ? plannedSellingPrice / baseline.asp
+  // product's CURRENT actual selling price, not (1 − discountPct/100) directly — see
+  // referencePrice's comment above for why those two differ whenever the product is already
+  // discounted off listing today. MUST use the SAME asp basis discountPct was seeded from
+  // (baseline.prepaidAsp, falling back to blended baseline.asp — see resetLevers' seedDiscount and
+  // currentDiscountPct) — using a DIFFERENT asp here than the one discountPct was derived from
+  // silently makes priceMultiplier ≠ 1 even at "default" levers (confirmed real regression: seeding
+  // discountPct from Listing-vs-Prepaid-ASP while this ratio still divided by the blended ASP made
+  // every "Planned" figure — Net Revenue, SnD%, CM1%, CM2% — show a spurious change with every
+  // lever untouched). Falls back to the naive (1 − discountPct/100) only when this specific product
+  // has no Listing_Price row on record (see the amber notice below the price tag).
+  const priceMultiplierBaseAsp = baseline?.prepaidAsp ?? baseline?.asp
+  const priceMultiplier = (priceMultiplierBaseAsp > 0 && plannedSellingPrice != null)
+    ? plannedSellingPrice / priceMultiplierBaseAsp
     : 1 - discountPct / 100
 
   // Extra return-rate impact — returnRatePct is the ABSOLUTE planned rate the user sets (seeded
@@ -475,28 +539,36 @@ export default function PriceSimulator({ variantProducts = [], productGroups = [
   // sale reverses) but COGS is treated as sunk (a returned unit is often not resellable at full
   // value) — so extraReturnFraction reduces newNet directly without reducing newCogs, correctly
   // shrinking GM/CM1 rather than leaving them unaffected.
-  const extraReturnFraction = baseline?.returnRevRate != null
-    ? Math.max(0, Math.min(1 - baseline.returnRevRate, (returnRatePct / 100) - baseline.returnRevRate))
-    : 0
+  // Forced to exactly 0 at default (see returnRatePctIsDefault above) — returnRatePct is seeded
+  // ROUNDED to 1 decimal, so (returnRatePct/100 − baseline.returnRevRate) is never exactly 0 on
+  // its own at "default," which was cascading a tiny but real rounding residual into newNet/CM2
+  // even with every lever untouched.
+  const extraReturnFraction = returnRatePctIsDefault
+    ? 0
+    : (baseline?.returnRevRate != null
+      ? Math.max(0, Math.min(1 - baseline.returnRevRate, (returnRatePct / 100) - baseline.returnRevRate))
+      : 0)
 
   // Incremental reverse-logistics cost from the extra return share (Return Rate Impact lever) —
   // priced with this product's OWN real weight (weightGm) against snd-rates.json, the same rate
   // card every other D2C SnD figure in this app already uses. baseline.snd is ALREADY rebuilt from
   // the mature window's own RTO/CIR/Return/Exchange/Cancel mix (see baseline above), so only the
-  // INCREMENTAL slice beyond that (extraReturnFraction, derived from returnRatePct) needs pricing here — split between RTO's
-  // own cost path (forward+rto) and Return/CIR/Exchange's (forward+reverse), weighted by their
-  // relative share of this product's own mature-window mix (falls back to an even split if neither
-  // has any real signal), each net of the `forward` cost every unit already pays regardless of
-  // outcome (already counted once in baseline.snd's fixed per-unit component).
+  // INCREMENTAL slice beyond that (extraReturnFraction, derived from returnRatePct) needs pricing
+  // here — split between RTO's own extra cost (rto) and Return/CIR/Exchange's (reverse — Exchange
+  // shares this same cost path, confirmed against the business's own reference PnL spreadsheet:
+  // Exch_Cost = Fwd_Cost + CIR_Cost, no second forward leg), weighted by their relative share of
+  // this product's own mature-window mix (falls back to an even split if neither has any real
+  // signal), each net of the `forward` cost every unit already pays regardless of outcome (already
+  // counted once in baseline.snd's fixed component).
   const incrementalReverseLogisticsPerUnit = useMemo(() => {
     if (!selectedProduct || !sndRateSlabs || extraReturnFraction <= 0) return 0
     const rate = rateForWeightGm(sndRateSlabs, baseline?.weightGm ?? null)
     if (!rate) return 0
     const rtoShare = baseline.rtoPct || 0
-    const nonRtoReturnShare = (baseline.returnStatusPct || 0) + (baseline.cirPct || 0) + (baseline.exchPct || 0)
-    const totalShare = rtoShare + nonRtoReturnShare
+    const reverseShare = (baseline.returnStatusPct || 0) + (baseline.cirPct || 0) + (baseline.exchPct || 0)
+    const totalShare = rtoShare + reverseShare
     const rtoWeight = totalShare > 0 ? rtoShare / totalShare : 0.5
-    const reverseWeight = totalShare > 0 ? nonRtoReturnShare / totalShare : 0.5
+    const reverseWeight = totalShare > 0 ? reverseShare / totalShare : 0.5
     return rtoWeight * rate.rto + reverseWeight * rate.reverse
   }, [selectedProduct, sndRateSlabs, baseline, extraReturnFraction])
 
@@ -507,8 +579,16 @@ export default function PriceSimulator({ variantProducts = [], productGroups = [
     // Gross Revenue = price × units, before any GST/return deduction — scales directly with the
     // price and volume multipliers, unaffected by the Return Rate Impact lever (a returned unit
     // still generated gross revenue at the point of sale; the loss shows up in Net Revenue, not here).
-    const newGross = (baseline.gross || 0) * priceMultiplier * volumeMultiplier
-    const newNet = baseline.net * priceMultiplier * volumeMultiplier * (1 - extraReturnFraction)
+    // At default (Listing Price AND Discount both untouched), priceMultiplier is never exactly
+    // 1.0 — discountPct is seeded/displayed rounded to 2 decimals, so plannedSellingPrice/asp
+    // carries that rounding into the ratio — leaving a small but real (~0.1-0.2%) Current-vs-
+    // Planned gap even with nothing changed (confirmed: a real "₹260 decline" on a ~₹2.16L CM2 at
+    // fully-default levers). Skip priceMultiplier entirely in that state and use baseline.gross/net
+    // directly (scaled only by volume) — same fix pattern as targetRoasIsDefault above.
+    const priceUntouched = listingPriceOverride == null && discountPctIsDefault
+    const effectivePriceMultiplier = priceUntouched ? 1 : priceMultiplier
+    const newGross = (baseline.gross || 0) * effectivePriceMultiplier * volumeMultiplier
+    const newNet = baseline.net * effectivePriceMultiplier * volumeMultiplier * (1 - extraReturnFraction)
     const newCogs = baseline.cogs * volumeMultiplier
     const newGm = newNet - newCogs
 
@@ -519,7 +599,7 @@ export default function PriceSimulator({ variantProducts = [], productGroups = [
     const baselinePgFee = baselineGrossApprox * PAYMENT_GW_RATE
     const baselineFixedSnd = Math.max(baseline.snd - baselinePgFee, 0)
     const newFixedSnd = baselineFixedSnd * volumeMultiplier
-    const newPgFee = baselineGrossApprox * priceMultiplier * volumeMultiplier * PAYMENT_GW_RATE
+    const newPgFee = baselineGrossApprox * effectivePriceMultiplier * volumeMultiplier * PAYMENT_GW_RATE
     // Extra returned/RTO'd units (beyond the baseline's own mature-window rate) each add real
     // reverse-logistics cost — priced per-unit above, applied here to the ABSOLUTE unit count the
     // extra return fraction represents (baseline.units × volumeMultiplier × extraReturnFraction).
@@ -527,11 +607,19 @@ export default function PriceSimulator({ variantProducts = [], productGroups = [
     const newSnd = newFixedSnd + newPgFee + newReverseLogisticsCost
 
     const newCm1 = newGm - newSnd
-    const newSpend = targetRoas > 0 ? newNet / targetRoas : 0
+    // At default (user hasn't touched Target ROAS), scale the EXACT real spend directly by
+    // volume×price instead of round-tripping through the rounded targetRoas slider value
+    // (targetRoas is rounded to 1 decimal for display — recomputing spend from it can never
+    // exactly reproduce baseline.spend even when nothing else changed, leaving a small but real
+    // Current-vs-Planned CM2 gap at "default" levers). Once the user actually drags the slider,
+    // switch to the standard Net÷TargetROAS formula as normal.
+    const newSpend = targetRoasIsDefault
+      ? (baseline.spend || 0) * effectivePriceMultiplier * volumeMultiplier
+      : (targetRoas > 0 ? newNet / targetRoas : 0)
     const newCm2 = newCm1 - newSpend
 
     return { gross: newGross, net: newNet, cogs: newCogs, gm: newGm, snd: newSnd, cm1: newCm1, spend: newSpend, cm2: newCm2 }
-  }, [hasBaseline, baseline, priceMultiplier, volumeDeltaPct, targetRoas, extraReturnFraction, incrementalReverseLogisticsPerUnit])
+  }, [hasBaseline, baseline, priceMultiplier, listingPriceOverride, discountPctIsDefault, volumeDeltaPct, targetRoas, targetRoasIsDefault, extraReturnFraction, incrementalReverseLogisticsPerUnit])
 
   const breakevenDiscountPct = useMemo(() => {
     if (!hasBaseline) return null
@@ -656,16 +744,24 @@ export default function PriceSimulator({ variantProducts = [], productGroups = [
         </div>
 
         {hasBaseline && (
-          <div style={{ display: 'flex', gap: 10, justifyContent: 'space-between', flexWrap: 'nowrap', overflowX: 'auto', paddingTop: 10, borderTop: `1px solid ${C.border}` }}>
+          <div style={{ display: 'grid', gridTemplateColumns: `repeat(${baseline.gross != null ? 9 : 8}, 1fr)`, gap: 10, overflowX: 'auto', paddingTop: 10, borderTop: `1px solid ${C.border}` }}>
             {baseline.gross != null && <BaselineStat label="Gross Revenue" value={fmt(baseline.gross)} />}
             <BaselineStat label="Units Sold" value={fmtN(baseline.units)} />
             <BaselineStat label="DRR (Units/Day)" value={fmtN(Math.round(baseline.drr))} />
-            <BaselineStat label={pickMode === 'product' ? 'Blended ASP' : 'Current ASP'} value={fmtPrice(baseline.asp)} />
-            <BaselineStat label="Net Revenue (Ex. GST)" value={fmt(baseline.net)} />
+            {/* Prepaid-only ASP — consistent with the Current Discount fix below (Promo Levers):
+                COD orders carry a real handling-fee surcharge baked into SellingPrice_Inc_GST that
+                Listing_Price never reflects, so a blended-both-payment-types ASP isn't the right
+                comparison figure here. Falls back to the blended asp only when this product has
+                zero Prepaid orders in the selected range. Gross Revenue/Net Revenue/COGS/GM%/CM1%/
+                CM2% below all deliberately stay on the full blended (COD+Prepaid) figures — only
+                this one ASP readout switches, per explicit decision to keep every other KPI
+                reflecting the real, whole business. */}
+            <BaselineStat label="ASP" value={fmtPrice(baseline.prepaidAsp ?? baseline.asp)} />
+            <BaselineStat label="Net Revenue" value={fmt(baseline.net)} />
             <BaselineStat label="COGS / Unit" value={fmtPrice(selectedProduct.cogsPerUnit)} />
             <BaselineStat label="GM %" value={pct(baseline.gm, baseline.net)} />
             <BaselineStat label="CM1 %" value={pct(baseline.cm1, baseline.net)} />
-            <BaselineStat label="CM2 %" value={pct(baseline.cm2, baseline.net)} />
+            <BaselineStat label="CM2 %" value={pct(baseline.cm2, baseline.net)} divider={false} />
           </div>
         )}
       </Card>
@@ -723,7 +819,7 @@ export default function PriceSimulator({ variantProducts = [], productGroups = [
                   onChange={v => setListingPriceOverride(Math.round(v))}
                   min={1} max={1000000} step={1} prefix="₹"
                 />
-                <NumberInputField label="Discount" value={discountPct} onChange={v => setDiscountPct(Math.round(v * 100) / 100)} min={0} max={70} step={0.01} suffix="%" />
+                <NumberInputField label="Discount" value={discountPct} onChange={v => { setDiscountPct(Math.round(v * 100) / 100); setDiscountPctIsDefault(false) }} min={0} max={70} step={0.01} suffix="%" />
               </div>
               {referencePrice == null && (
                 <div style={{ fontSize: 11.5, color: C.amber.tx, background: C.amber.bg, border: `1px solid ${C.amber.bd}`, borderRadius: 10, padding: '10px 14px' }}>
@@ -755,7 +851,7 @@ export default function PriceSimulator({ variantProducts = [], productGroups = [
 
               <SliderField label="Volume Change" value={volumeDeltaPct} onChange={setVolumeDeltaPct} min={-50} max={200} step={5}
                 formatValue={v => `${v > 0 ? '+' : ''}${v}%`} accent={C.blue.tx} />
-              <SliderField label="Target ROAS" value={targetRoas} onChange={setTargetRoas} min={0.5} max={Math.max(15, Math.ceil(targetRoas))} step={0.1}
+              <SliderField label="Target ROAS" value={targetRoas} onChange={v => { setTargetRoas(v); setTargetRoasIsDefault(false) }} min={0.5} max={Math.max(15, Math.ceil(targetRoas))} step={0.1}
                 formatValue={v => `${v.toFixed(1)}x`} accent={C.green.tx} />
 
               {selectedProduct && baseline?.returnRevRate != null && (
@@ -765,7 +861,7 @@ export default function PriceSimulator({ variantProducts = [], productGroups = [
                       the user drags it UP from there to model a heavier discount pulling in
                       more low-intent buyers who return more, rather than entering a separate
                       "+Xpp on top" delta. */}
-                  <SliderField label="Return Rate" value={returnRatePct} onChange={setReturnRatePct} min={0} max={100} step={1}
+                  <SliderField label="Return Rate" value={returnRatePct} onChange={v => { setReturnRatePct(v); setReturnRatePctIsDefault(false) }} min={0} max={100} step={1}
                     formatValue={v => `${v}%`} accent={C.red.tx} />
                   <div style={{ fontSize: 11, color: C.t3, marginTop: 6 }}>
                     Current (mature) Return% <b style={{ color: C.t1 }}>{(baseline.returnRevRate * 100).toFixed(1)}%</b>
@@ -810,8 +906,8 @@ export default function PriceSimulator({ variantProducts = [], productGroups = [
               />
 
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: 8, paddingTop: 10, borderTop: `1px solid ${C.border}` }}>
-                <MiniStatCard label="COGS %" from={pctNum(baseline.cogs, baseline.net)} to={pctNum(simulated.cogs, simulated.net)} format={v => v != null ? `${v.toFixed(1)}%` : '—'} higherIsBetter={false} />
                 <MiniStatCard label="GM %" from={gmPctBefore} to={gmPctAfter} format={v => v != null ? `${v.toFixed(1)}%` : '—'} higherIsBetter />
+                <MiniStatCard label="S&D %" from={pctNum(baseline.snd, baseline.net)} to={pctNum(simulated.snd, simulated.net)} format={v => v != null ? `${v.toFixed(1)}%` : '—'} higherIsBetter={false} />
                 <MiniStatCard label="CM1 %" from={cm1PctBefore} to={cm1PctAfter} format={v => v != null ? `${v.toFixed(1)}%` : '—'} higherIsBetter />
                 <MiniStatCard label="CM2 %" from={cm2PctBefore} to={cm2PctAfter} format={v => v != null ? `${v.toFixed(1)}%` : '—'} higherIsBetter />
               </div>
