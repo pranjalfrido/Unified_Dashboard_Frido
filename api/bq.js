@@ -366,6 +366,14 @@ export default async function handler(req, res) {
     // correct summary in both cases — it reduces to the steady value when the price was stable, and
     // reflects the true blended reality when it wasn't. Discount is likewise a genuine
     // units-weighted average (avg_discount), same as before.
+    // Excludes '_EX%' OrderIds — same exclusion buildQuery's base CTE applies for every other D2C
+    // query (shSKU/shCategory/etc, see _bq.js's comment on the ops team's exchange-recreation
+    // OrderId convention) — confirmed via live BigQuery this MUST match: for
+    // "Orthotics Posture Corrector Pro" in Sep 2026, _EX rows (≈19% of units) have a
+    // meaningfully LOWER selling price than non-_EX rows at the SAME listing price (ASP ₹955 vs
+    // ₹1003), so leaving them in this query while shSKU's ASP excludes them produced an
+    // impossible Listing Price < ASP (i.e. a negative "current discount") purely from the two
+    // queries scoping different row sets, not from any real pricing anomaly.
     shListingPrice: `SELECT masterskucode AS sku,
         SUM(Listing_Price) / SUM(ItemQty) AS avg_listing_price,
         SUM(Discount * ItemQty) / SUM(ItemQty) AS avg_discount,
@@ -374,6 +382,7 @@ export default async function handler(req, res) {
       WHERE OrderDate BETWEEN '${start}' AND '${end}' AND Channel = 'Shopify' AND Country = 'India'
         AND masterskucode IS NOT NULL AND TRIM(masterskucode) != ''
         AND Listing_Price IS NOT NULL AND Listing_Price > 0 AND ItemQty > 0
+        AND NOT (OrderId LIKE '%_EX%')
       GROUP BY masterskucode`,
     // Return-rate baseline for the Price Simulator's "Return Rate Impact" lever — reuses the EXACT
     // SAME formula as the D2C Return Analysis tab's headline "Return%" KPI (api/return-analysis.js),
