@@ -40,6 +40,21 @@ function SectionLabel({ children }) {
   return <div style={{ fontSize: 11.5, fontWeight: 700, color: C.t3, textTransform: 'uppercase', letterSpacing: 0.5 }}>{children}</div>
 }
 
+// Single-value KPI tile matching the Price Simulator's MiniStatCard card visuals (bordered box,
+// C.bg background) — used here without a "from → to" comparison since Breakeven ROAS has only
+// one computed scenario, not a Current-vs-Planned pair.
+function KpiTile({ label, value, amount, negative }) {
+  return (
+    <div style={{ background: C.bg, border: `1px solid ${C.border}`, borderRadius: 10, padding: '10px 12px' }}>
+      <div style={{ fontSize: 10, fontWeight: 700, color: C.t2, textTransform: 'uppercase', letterSpacing: 0.2 }}>{label}</div>
+      <div style={{ display: 'flex', alignItems: 'baseline', gap: 6, marginTop: 4 }}>
+        <div style={{ fontSize: 16, fontWeight: 800, color: negative ? C.red.tx : C.t1 }}>{value}</div>
+        {amount != null && <div style={{ fontSize: 11.5, fontWeight: 600, color: C.t3 }}>{amount}</div>}
+      </div>
+    </div>
+  )
+}
+
 // onBlurResolve (optional): when the user finishes typing a raw value, transform it to a
 // canonical/billed value on blur — used by Weight to snap a raw entry like 326g to the actual
 // courier-billing slab it maps to (e.g. 500g), since that slab (not the raw weight) is what
@@ -140,6 +155,7 @@ function WaterfallBar({ label, value, scaleMax, tone, color: colorOverride }) {
 function ReferenceProductPicker({ productGroups, onApply }) {
   const [search, setSearch] = useState('')
   const [open, setOpen] = useState(false)
+  const [highlightIdx, setHighlightIdx] = useState(0)
 
   const suggestions = useMemo(() => {
     const q = search.trim().toLowerCase()
@@ -163,17 +179,24 @@ function ReferenceProductPicker({ productGroups, onApply }) {
       <div style={{ position: 'relative' }}>
         <input
           value={search}
-          onChange={e => { setSearch(e.target.value); setOpen(true) }}
+          onChange={e => { setSearch(e.target.value); setOpen(true); setHighlightIdx(0) }}
           onFocus={() => setOpen(true)}
           onBlur={() => setTimeout(() => setOpen(false), 120)}
+          onKeyDown={e => {
+            if (!open || suggestions.length === 0) return
+            if (e.key === 'ArrowDown') { e.preventDefault(); setHighlightIdx(i => Math.min(i + 1, suggestions.length - 1)) }
+            else if (e.key === 'ArrowUp') { e.preventDefault(); setHighlightIdx(i => Math.max(i - 1, 0)) }
+            else if (e.key === 'Enter') { e.preventDefault(); const p = suggestions[highlightIdx]; if (p) pick(p) }
+            else if (e.key === 'Escape') { setOpen(false) }
+          }}
           placeholder="Search product…"
           style={{ width: '100%', boxSizing: 'border-box', padding: '6px 10px', borderRadius: 8, border: `1px solid ${C.border2}`, fontSize: 13, fontWeight: 600, color: C.t1, background: '#fff', outline: 'none' }}
         />
         {open && suggestions.length > 0 && (
           <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, marginTop: 4, background: '#fff', border: `1px solid ${C.border2}`, borderRadius: 10, boxShadow: '0 6px 18px rgba(0,0,0,0.1)', zIndex: 10, maxHeight: 220, overflowY: 'auto' }}>
-            {suggestions.map(p => (
-              <div key={p.sku} onMouseDown={() => pick(p)}
-                style={{ padding: '8px 12px', cursor: 'pointer', fontSize: 12.5, borderBottom: `1px solid ${C.border}` }}>
+            {suggestions.map((p, i) => (
+              <div key={p.sku} onMouseDown={() => pick(p)} onMouseEnter={() => setHighlightIdx(i)}
+                style={{ padding: '8px 12px', cursor: 'pointer', fontSize: 12.5, borderBottom: `1px solid ${C.border}`, background: i === highlightIdx ? C.acl : 'transparent' }}>
                 <div style={{ fontWeight: 700, color: C.t1 }}>{p.name}</div>
                 <div style={{ fontSize: 11, color: C.t3, marginTop: 1 }}>
                   Canc {((p.cancelPct || 0) * 100).toFixed(1)}% · RTO {((p.rtoPct || 0) * 100).toFixed(1)}% · CIR {((p.cirPct || 0) * 100).toFixed(1)}% · Exch {((p.exchPct || 0) * 100).toFixed(1)}%
@@ -238,9 +261,13 @@ export default function BreakevenRoasCalculator({ productGroups = [] }) {
     return listingPrice * (1 - discountPct / 100)
   }, [listingPrice, discountPct])
 
+  // Exchange gets its OWN extra cost on top of the shared forward charge in blendedLogisticsPerUnit
+  // (forward + reverse + a second forward) — an exchange means Frido ships a replacement item (a
+  // real second forward shipment) in addition to the pickup, so it costs more than CIR/Return.
   const buildOutcomePcts = (rtPct, cPct, cirP, ePct) => ({
     rtoPct: (rtPct || 0) / 100,
-    returnPct: ((cirP || 0) + (ePct || 0)) / 100, // CIR + exchange share one cost path (forward+reverse)
+    returnPct: (cirP || 0) / 100,
+    exchangePct: (ePct || 0) / 100,
     cancelPct: (cPct || 0) / 100,
   })
   const outcomePcts = useMemo(() => buildOutcomePcts(rtoPct, cancelPct, cirPct, exchangePct), [rtoPct, cancelPct, cirPct, exchangePct])
@@ -257,14 +284,21 @@ export default function BreakevenRoasCalculator({ productGroups = [] }) {
     })
   }, [slabs, sellingPrice, gstPct, cogs, weightGm, outcomePcts])
 
-  // Breakeven ROAS = NetRev / CM1 (spend that exactly zeroes CM2). Only meaningful once CM1 > 0 —
-  // a negative CM1 means the product loses money before a single rupee of ad spend, so no ROAS
+  // ROAS = Gross Revenue (Ex GST, BEFORE return-loss deduction) / Ad Spend — same revenue base
+  // the Ads tab's own Overall ROAS card and the real D2C PnL's kpiSummary.roas use (Gross Ex GST,
+  // not Net Revenue), so a ROAS lever here means the same thing it means everywhere else in the
+  // app, confirmed against the reference sheet's own Breakeven RoAS formula too (P41 =
+  // (SellingPrice-7%launchDiscount)/CM1, i.e. gross ex-GST before returns, not net).
+  // Breakeven ROAS = GrossExGST / CM1 (spend that exactly zeroes CM2). Only meaningful once CM1 > 0
+  // — a negative CM1 means the product loses money before a single rupee of ad spend, so no ROAS
   // rescues it.
-  const breakevenRoas = waterfall && waterfall.cm1 > 0 ? waterfall.netRev / waterfall.cm1 : null
-  // Breakeven ROAS @ 15% CM2 = NetRev / (CM1 − 0.15×NetRev) — needs CM1 to clear the 15% floor
+  const breakevenRoas = waterfall && waterfall.cm1 > 0 ? waterfall.excGst / waterfall.cm1 : null
+  // Breakeven ROAS @ 15% CM2 = GrossExGST / (CM1 − 0.15×NetRevenue) — the 15% CM2 target itself is
+  // still defined as a share of Net Revenue (the real, return-adjusted revenue this product keeps),
+  // only the ROAS ratio's own numerator switches to gross ex-GST. Needs CM1 to clear the 15% floor
   // BEFORE any ad spend, otherwise the target is unreachable regardless of ROAS.
   const target15Budget = waterfall ? waterfall.cm1 - 0.15 * waterfall.netRev : null
-  const breakevenRoas15 = waterfall && target15Budget > 0 ? waterfall.netRev / target15Budget : null
+  const breakevenRoas15 = waterfall && target15Budget > 0 ? waterfall.excGst / target15Budget : null
 
   const totalLossPct = (rtoPct || 0) + (cancelPct || 0) + (cirPct || 0) + (exchangePct || 0)
   const lossOver100 = totalLossPct > 100
@@ -357,15 +391,11 @@ export default function BreakevenRoasCalculator({ productGroups = [] }) {
                   <WaterfallBar label="Gross Margin (GM)" value={waterfall.gm} scaleMax={waterfallScaleMax} tone="total" color={waterfall.gm >= 0 ? C.acd : undefined} />
                   <WaterfallBar label="Contribution Margin 1 (CM1)" value={waterfall.cm1} scaleMax={waterfallScaleMax} tone="total" color={waterfall.cm1 >= 0 ? '#4A360A' : undefined} />
                 </div>
-                <div style={{ display: 'flex', gap: 20, paddingTop: 12, borderTop: `1px solid ${C.border}` }}>
-                  <div>
-                    <div style={{ fontSize: 10.5, fontWeight: 700, color: C.t3, textTransform: 'uppercase' }}>GM %</div>
-                    <div style={{ fontSize: 18, fontWeight: 800, color: C.t1, marginTop: 2 }}>{waterfall.netRev > 0 ? (waterfall.gm / waterfall.netRev * 100).toFixed(1) : '0.0'}%</div>
-                  </div>
-                  <div>
-                    <div style={{ fontSize: 10.5, fontWeight: 700, color: C.t3, textTransform: 'uppercase' }}>CM1 %</div>
-                    <div style={{ fontSize: 18, fontWeight: 800, color: waterfall.cm1 < 0 ? C.red.tx : C.t1, marginTop: 2 }}>{waterfall.netRev > 0 ? (waterfall.cm1 / waterfall.netRev * 100).toFixed(1) : '0.0'}%</div>
-                  </div>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10, paddingTop: 14, borderTop: `1px solid ${C.border}` }}>
+                  <KpiTile label="COGS %" value={waterfall.netRev > 0 ? `${(waterfall.cogs / waterfall.netRev * 100).toFixed(1)}%` : '0.0%'} amount={fmt(waterfall.cogs)} />
+                  <KpiTile label="GM %" value={waterfall.netRev > 0 ? `${(waterfall.gm / waterfall.netRev * 100).toFixed(1)}%` : '0.0%'} amount={fmt(waterfall.gm)} />
+                  <KpiTile label="S&D %" value={waterfall.netRev > 0 ? `${(waterfall.snd / waterfall.netRev * 100).toFixed(1)}%` : '0.0%'} amount={fmt(waterfall.snd)} />
+                  <KpiTile label="CM1 %" value={waterfall.netRev > 0 ? `${(waterfall.cm1 / waterfall.netRev * 100).toFixed(1)}%` : '0.0%'} amount={`${waterfall.cm1 < 0 ? '−' : ''}${fmt(Math.abs(waterfall.cm1))}`} negative={waterfall.cm1 < 0} />
                 </div>
               </>
             )}

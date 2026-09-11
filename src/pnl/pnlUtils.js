@@ -92,24 +92,48 @@ export const estimateCogsPerUnit = asp => asp > 0 ? asp * (asp < 5000 ? 0.4 : 0.
 // revenue, so they are untouched by gstRate directly (it only ever nets down `gross`).
 //
 // Blended logistics (mirrors shSkuCosts' per-order Order_Status branching, but expressed as
-// expected value over the four mutually exclusive outcome probabilities instead of summing real
-// per-order rows): a unit is exactly one of {delivered, rto, return/cir/exchange, cancelled}.
+// expected value over the five mutually exclusive outcome probabilities instead of summing real
+// per-order rows): a unit is exactly one of {delivered, rto, return/cir, exchange, cancelled}.
 //   delivered  → forward
-//   rto        → forward + rto
-//   return/cir/exchange → forward + reverse
+//   rto        → rto (STANDALONE cost, not forward+rto — see below)
+//   return/cir → reverse (STANDALONE cost, not forward+reverse)
+//   exchange   → forward (already counted below) + reverse + forward again — the sheet's own
+//                Total_Logistics formula: `(1-Cancel%)*Fwd_Cost + RTO%*RTO_Cost + Exch%*Exch_Cost +
+//                CIR%*CIR_Cost`, where Exch_Cost = Fwd_Cost+CIR_Cost. Confirmed 2026-09 against the
+//                business's own reference spreadsheet (SKU_PnL_Detail) and against the business's
+//                explicit confirmation of the operational logic: every non-cancelled order —
+//                delivered, RTO, CIR, or Exchange alike — already incurs the forward shipment leg,
+//                so `(1-Cancel%)*forward` is charged on ALL of them up front. RTO/CIR/Exchange each
+//                then layer their OWN extra leg cost on top of that shared forward charge:
+//                  - RTO      → + rto_leg      (rate.rto)
+//                  - CIR      → + reverse_leg  (rate.reverse)
+//                  - Exchange → + reverse_leg + a SECOND forward leg (the replacement shipment),
+//                               i.e. + (rate.reverse + rate.forward)
+//                An earlier version of this function treated rate.rto/rate.reverse as STANDALONE
+//                full costs (matching a literal but incorrect reading of the sheet's R41=Q41*90%
+//                formula) and used a shrinking `deliveredPct` base — that was wrong; the business
+//                confirmed non-cancelled units already carry forward cost in every branch.
 //   cancelled  → 0 logistics (order never shipped) — fulfilment still applies to every order
 //                regardless of outcome, same as shSkuCosts.
+// Weight-based stock-movement cost (₹4/kg, confirmed against the same reference spreadsheet's
+// Rates!N3 = 4 and its Total_Logistics formula's `+(weightSlabGm/1000*4)` term) is added on top —
+// same flat per-kg charge Amazon VC/SC's own SnD already uses (api/bq.js's
+// STOCK_MOVEMENT_RATE_PER_KG), previously missing entirely from every D2C S&D calc that shares
+// this function (Price Simulator, Breakeven ROAS) — confirmed via this same reference sheet.
 export const PAYMENT_GATEWAY_RATE = 0.011
 export const SOFTWARE_FEE_PER_UNIT = 15
+export const STOCK_MOVEMENT_RATE_PER_KG = 4
 
-export function blendedLogisticsPerUnit(rate, { rtoPct = 0, returnPct = 0, cancelPct = 0 } = {}) {
+export function blendedLogisticsPerUnit(rate, { rtoPct = 0, returnPct = 0, exchangePct = 0, cancelPct = 0 } = {}) {
   if (!rate) return { logistics: 0, fulfilment: 0 }
-  const deliveredPct = Math.max(0, 1 - rtoPct - returnPct - cancelPct)
+  const shippedPct = Math.max(0, 1 - cancelPct)
+  const stockMovementCost = (rate.weightGm || 0) / 1000 * STOCK_MOVEMENT_RATE_PER_KG
   const logistics =
-    deliveredPct * rate.forward +
-    rtoPct * (rate.forward + rate.rto) +
-    returnPct * (rate.forward + rate.reverse) +
-    cancelPct * 0
+    shippedPct * rate.forward +
+    rtoPct * rate.rto +
+    returnPct * rate.reverse +
+    exchangePct * (rate.reverse + rate.forward) +
+    stockMovementCost
   return { logistics, fulfilment: rate.fulfilment }
 }
 
@@ -140,10 +164,29 @@ export function rateForWeightGm(slabs, weightGm) {
 export function perUnitWaterfall({ sellingPriceIncGst, gstRate, cogsPerUnit, weightGm, slabs, outcomePcts }) {
   const grossIncGst = sellingPriceIncGst
   const excGst = grossIncGst / (1 + (gstRate || 0))
-  const netRev = excGst // no returns modeled here as revenue deduction — outcomePcts already
-  // blend the unit's expected logistics cost; a cancelled/returned unit's revenue loss is handled
-  // by the caller treating netRev as "per delivered-equivalent unit" (see Breakeven ROAS doc).
-  const cogs = cogsPerUnit != null ? cogsPerUnit : estimateCogsPerUnit(grossIncGst)
+  // Net Revenue DOES deduct expected revenue loss from Cancellation + RTO + CIR/Return — a
+  // cancelled/RTO'd/returned order genuinely reverses the sale — matching the same convention the
+  // Price Simulator's own baseline uses (net = excRev × (1 − matureReturnRevRate)) and the real
+  // Net Revenue formula in api/_bq.js's computeNetRevenueMeasures (retainedShare subtracts
+  // RTO+CIR+Return+Cancellation). Exchange is deliberately EXCLUDED from this deduction — the
+  // customer keeps a product either way, an exchange isn't lost revenue, same as everywhere else
+  // in this app; it still fully participates in the logistics COST below via blendedLogisticsPerUnit's
+  // own exchangePct term. (Previously this function left netRev completely unaffected by
+  // outcomePcts, silently making it identical to Gross Ex GST regardless of expected returns —
+  // confirmed this made Net Revenue never visibly respond to changing Cancellation/RTO/CIR/Exchange
+  // in the Breakeven ROAS calculator, which the real numbers should never do.)
+  const revenueLossPct = Math.max(0, Math.min(1,
+    (outcomePcts?.rtoPct || 0) + (outcomePcts?.returnPct || 0) + (outcomePcts?.cancelPct || 0)
+  ))
+  const netRev = excGst * (1 - revenueLossPct)
+  // COGS is charged only on the share of the unit that stayed sold (1 − revenueLossPct) — same
+  // "net units" convention the real D2C PnL table already uses (pnlUtils.js's netRevenueOf:
+  // netUnits = units − cancelled/RTO/returned/CIR units, so COGS never prices units that didn't
+  // stay sold). A Cancelled/RTO'd/CIR'd unit's COGS isn't fully sunk (goods come back to
+  // inventory); Exchange is excluded from this reduction (revenueLossPct already excludes it)
+  // since an exchanged unit's COGS was never actually lost — the customer keeps a product.
+  const grossCogs = cogsPerUnit != null ? cogsPerUnit : estimateCogsPerUnit(grossIncGst)
+  const cogs = grossCogs * (1 - revenueLossPct)
   const gm = netRev - cogs
   const effectiveWeightGm = weightGm != null ? weightGm : FALLBACK_WEIGHT_GM
   const weightRate = rateForWeightGm(slabs, effectiveWeightGm)
