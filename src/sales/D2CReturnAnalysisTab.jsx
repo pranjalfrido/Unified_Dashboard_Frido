@@ -316,7 +316,7 @@ function CancelBucketChart({ cancelByBucket }) {
         <div style={{ fontSize: 12, color: C.t3, textAlign: 'center', padding: '30px 0' }}>No cancellation data</div>
       ) : (
         <div>
-          <ResponsiveContainer width="100%" height={175}>
+          <ResponsiveContainer width="100%" height={220}>
             <BarChart data={chartData} margin={{ top: 0, right: 4, bottom: 10, left: 0 }} barCategoryGap="25%">
               <XAxis dataKey="month" tick={{ fontSize: 9, fill: C.t3 }} />
               <YAxis tick={{ fontSize: 9, fill: C.t3 }} width={42} />
@@ -539,8 +539,8 @@ export default function D2CReturnAnalysisTab({ filters, subCatFirstOrderMap = {}
 
           <div className="g-3" style={{ gridTemplateColumns: '0.69fr 0.7fr 0.8fr', alignItems: 'stretch', gridAutoRows: '270px' }}>
             <PaymentTypeTransposedTable paymentTypeTable={data.paymentTypeTable} basis={payBasis} setBasis={setPayBasis} />
-            <CancelBucketChart cancelByBucket={data.cancelByBucket} />
             <ReturnReasonsTable returnReasons={data.returnReasons} />
+            <CancelBucketChart cancelByBucket={data.cancelByBucket} />
           </div>
         </>
       )}
