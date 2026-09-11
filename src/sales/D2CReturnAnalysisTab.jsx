@@ -225,7 +225,7 @@ function PaymentTypeTransposedTable({ paymentTypeTable, basis, setBasis }) {
   )
 }
 
-const CAT_COLORS = ['#3B82F6','#10B981','#F59E0B','#EF4444','#8B5CF6','#EC4899','#14B8A6','#F97316','#6366F1','#84CC16','#06B6D4','#A855F7']
+const CAT_COLORS = ['#D89A1A','#E8930A','#B87D14','#EFCE85','#8B5E3C','#C4842A','#A06820','#F5C460','#7A5410','#D4A853','#6B4C18','#E0B86A']
 
 // Stacked bar chart: X = last 6 months (fixed, ignores date picker).
 // Bars stacked by category. Dropdown to filter by sub-category (or All).
@@ -325,7 +325,7 @@ function CancelBucketChart({ cancelByBucket }) {
                   if (!active || !payload?.length) return null
                   const buckets = payload[0]?.payload?._buckets || {}
                   const total = Object.values(buckets).reduce((s, v) => s + v, 0)
-                  const BCOLS = ['#3B82F6','#10B981','#F59E0B','#EF4444','#8B5CF6']
+                  const BCOLS = ['#D89A1A','#E8930A','#B87D14','#504F68','#8B5E3C']
                   return (
                     <div style={{ background: '#fff', border: `1px solid ${C.border}`, borderRadius: 6, padding: '6px 10px', fontSize: 11 }}>
                       <div style={{ fontWeight: 700, marginBottom: 4, color: C.t1 }}>{label} · {fmtN(total)} cancellations</div>
