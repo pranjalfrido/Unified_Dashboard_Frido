@@ -448,6 +448,7 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
   const [rawPrevData, setRawPrevData] = useState(null)
   const [rawCodData, setRawCodData] = useState(null)   // cached COD BQ response for current date range
   const [rawPrepaidData, setRawPrepaidData] = useState(null) // cached Prepaid BQ response
+  const paymentPrefetchActive = useRef(false) // true while background COD/Prepaid fetch is in flight
   const [data, setData] = useState(null)
   const [prevData, setPrevData] = useState(null)
   const [loading, setLoading] = useState(false)
@@ -519,10 +520,13 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
         const noPaymentFilter = !lFilters.paymentMode?.length
         const noGeoOrCatFilter = !lFilters.pickupState?.length && !lFilters.dropState?.length && !lFilters.dropCity?.length && !lFilters.category?.length && !lFilters.subCategory?.length && !lFilters.weightSlabs?.length
         if (noPaymentFilter && noGeoOrCatFilter) {
-          fetch(`${API}/api/logistics`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...body, paymentMode: 'COD' }) })
-            .then(r => r.ok ? r.json() : null).then(j => { if (j) setRawCodData(j) }).catch(() => {})
-          fetch(`${API}/api/logistics`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...body, paymentMode: 'Prepaid' }) })
-            .then(r => r.ok ? r.json() : null).then(j => { if (j) setRawPrepaidData(j) }).catch(() => {})
+          paymentPrefetchActive.current = true
+          Promise.all([
+            fetch(`${API}/api/logistics`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...body, paymentMode: 'COD' }) })
+              .then(r => r.ok ? r.json() : null).then(j => { if (j) setRawCodData(j) }).catch(() => {}),
+            fetch(`${API}/api/logistics`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...body, paymentMode: 'Prepaid' }) })
+              .then(r => r.ok ? r.json() : null).then(j => { if (j) setRawPrepaidData(j) }).catch(() => {}),
+          ]).finally(() => { paymentPrefetchActive.current = false })
         }
         // await only main + prev
         const [r, rPrev] = await Promise.all([
@@ -563,10 +567,12 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
     if (!cPayment) { setCPaymentData(null); return }
     const shipmentType = lFilters.shipmentType && lFilters.shipmentType !== 'all' ? lFilters.shipmentType.toLowerCase() : null
 
-    // 1. Use in-memory BQ cache if available (custom date range already fetched it)
+    // 1. Use in-memory BQ cache if available
     if (!shipmentType) {
       if (cPayment === 'COD' && rawCodData) { setCPaymentData(rawCodData); return }
       if (cPayment === 'Prepaid' && rawPrepaidData) { setCPaymentData(rawPrepaidData); return }
+      // prefetch is still in flight — wait for it (effect will re-run when rawCodData/rawPrepaidData set)
+      if (paymentPrefetchActive.current) return
     }
 
     // 2. Try static file — instant for MTD
@@ -578,7 +584,8 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
       .then(json => {
         const dateMatches = json?.dateRange && json.dateRange.start === filters.start && json.dateRange.end === filters.end
         if (json?.current && dateMatches) { setCPaymentData(json.current); return }
-        // 3. Fallback: live BQ
+        // 3. Fallback: live BQ (only if prefetch not active)
+        if (paymentPrefetchActive.current) return
         const body = { start: filters.start, end: filters.end, paymentMode: cPayment }
         if (shipmentType) body.shipmentType = shipmentType
         return fetch(`${API}/api/logistics`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
