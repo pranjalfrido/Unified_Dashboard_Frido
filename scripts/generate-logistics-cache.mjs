@@ -549,6 +549,80 @@ by_zone_frido AS (
     ROUND(AVG(IF(clickpost_unified_status='RTO-Delivered' AND rto_mark_date IS NOT NULL AND latest_ts_date IS NOT NULL AND DATE_DIFF(latest_ts_date, rto_mark_date, DAY) BETWEEN 0 AND 20, DATE_DIFF(latest_ts_date, rto_mark_date, DAY), NULL)), 2) AS avg_rto_tat_days
   FROM base GROUP BY 1
 ),
+by_zone_frido_tier AS (
+  SELECT
+    zone_by_frido AS zone_group,
+    CASE
+      WHEN UPPER(TRIM(drop_city)) IN ('MUMBAI','DELHI','NEW DELHI','BANGALORE','BENGALURU','BANGLORE','BANGALORE NORTH','BANGALORE SOUTH','BANGALORE EAST','BANGALORE WEST','BANGALORE RURAL','BANGALORE URBAN','BENGALURU RURAL','BENGALURU URBAN','KOLKATA','CALCUTTA','CHENNAI','MADRAS','HYDERABAD','SECUNDERABAD','AHMEDABAD','PUNE') THEN 'Tier 1'
+      WHEN UPPER(TRIM(drop_city)) IN ('SURAT','JAIPUR','LUCKNOW','KANPUR','NAGPUR','INDORE','THANE','BHOPAL','VISAKHAPATNAM','VIZAG','PIMPRI','PATNA','VADODARA','BARODA','GHAZIABAD','LUDHIANA','AGRA','NASHIK','FARIDABAD','MEERUT','RAJKOT','VASAI','VARANASI','BENARES','SRINAGAR','AURANGABAD','DHANBAD','AMRITSAR','ALLAHABAD','PRAYAGRAJ','RANCHI','HOWRAH','GWALIOR','JABALPUR','COIMBATORE','VIJAYAWADA','JODHPUR','MADURAI','RAIPUR','KOTA','GUWAHATI','CHANDIGARH','SOLAPUR','HUBBALLI','HUBLI','DHARWAD','BAREILLY','MORADABAD','MYSORE','MYSURU','TIRUPUR','TIRUCHIRAPPALLI','TRICHY','BHUBANESWAR','SALEM','MIRA','BHIWANDI','THIRUVANANTHAPURAM','TRIVANDRUM','WARANGAL','GUNTUR','BHILAI','DEHRADUN','GURUGRAM','GURGAON','NOIDA','NAVI MUMBAI') THEN 'Tier 2'
+      ELSE 'Tier 3'
+    END AS tier,
+    COUNT(awb) AS total,
+    SUM(invoice_value) AS total_value,
+    COUNTIF(unified_status='Delivered') AS delivered,
+    COUNTIF(unified_status='RTO') AS rto,
+    COUNTIF(unified_status='Intransit') AS in_transit,
+    COUNTIF(unified_status='Pickup Pending') AS pickup_pending,
+    COUNTIF(unified_status='Cancelled') AS cancelled,
+    COUNTIF(unified_status IN ('Lost','Damaged')) AS lost_damaged,
+    COUNTIF(unified_status='RTO' AND COALESCE(ofd_attempts,0)=0) AS z_rto,
+    COUNTIF(ofd_attempts=1 AND unified_status='Delivered') AS d1,
+    COUNTIF(ofd_attempts > 1 AND unified_status='Delivered') AS rasr_num,
+    COUNTIF(ofd_attempts IS NOT NULL AND ofd_attempts != 0) AS ofd_total,
+    COUNTIF(delivery_date IS NOT NULL AND edd IS NOT NULL AND delivery_date <= edd) AS on_time,
+    COUNTIF(delivery_date IS NOT NULL AND edd IS NOT NULL AND delivery_date > edd) AS sla_breach,
+    ROUND(AVG(IF(pickup_ts IS NOT NULL AND delivery_ts IS NOT NULL AND TIMESTAMP_DIFF(delivery_ts, pickup_ts, MINUTE) BETWEEN 0 AND 28800, TIMESTAMP_DIFF(delivery_ts, pickup_ts, MINUTE) / 1440.0, NULL)), 2) AS avg_intransit_days,
+    ROUND(AVG(IF(delivery_date IS NOT NULL AND order_date IS NOT NULL AND DATE_DIFF(delivery_date, order_date, DAY) BETWEEN 0 AND 20, DATE_DIFF(delivery_date, order_date, DAY), NULL)), 2) AS avg_fulfilment_days,
+    ROUND(AVG(IF(pickup_ts IS NOT NULL AND created_ts IS NOT NULL AND TIMESTAMP_DIFF(pickup_ts, created_ts, MINUTE) BETWEEN 0 AND 14400, TIMESTAMP_DIFF(pickup_ts, created_ts, MINUTE) / 1440.0, NULL)), 2) AS avg_pickup_days,
+    ROUND(AVG(IF(created_date IS NOT NULL AND order_date IS NOT NULL AND DATE_DIFF(created_date, order_date, DAY) BETWEEN 0 AND 10, DATE_DIFF(created_date, order_date, DAY), NULL)), 2) AS avg_processing_days,
+    ROUND(AVG(IF(ofd1_date IS NOT NULL AND pickup_date IS NOT NULL, DATE_DIFF(ofd1_date, pickup_date, DAY), NULL)), 2) AS avg_s2a_days,
+    ROUND(AVG(IF(clickpost_unified_status='RTO-Delivered' AND rto_mark_date IS NOT NULL AND latest_ts_date IS NOT NULL AND DATE_DIFF(latest_ts_date, rto_mark_date, DAY) BETWEEN 0 AND 20, DATE_DIFF(latest_ts_date, rto_mark_date, DAY), NULL)), 2) AS avg_rto_tat_days
+  FROM base
+  WHERE drop_city IS NOT NULL AND drop_city != ''
+  GROUP BY 1, 2
+),
+by_facility_tier AS (
+  SELECT
+    CASE
+      WHEN UPPER(TRIM(pickup_city)) IN ('DELHI','GURGAON','GURUGRAM','HARYANA') THEN 'Delhi'
+      WHEN UPPER(TRIM(pickup_city)) IN ('MUMBAI','BHIWANDI') THEN 'Mumbai'
+      WHEN UPPER(TRIM(pickup_city)) IN ('PUNE','MAVAL') THEN 'Pune'
+      WHEN UPPER(TRIM(pickup_city)) IN ('BANGALORE','BENGALURU') THEN 'Bengaluru'
+      WHEN UPPER(TRIM(pickup_city)) IN ('KOLKATA','HOWRAH','HOOGHLY') THEN 'Kolkata'
+      WHEN UPPER(TRIM(pickup_city)) = 'CHENNAI' THEN 'Chennai'
+      WHEN UPPER(TRIM(pickup_city)) = 'HYDERABAD' THEN 'Hyderabad'
+      ELSE NULL
+    END AS facility,
+    CASE
+      WHEN UPPER(TRIM(drop_city)) IN ('MUMBAI','DELHI','NEW DELHI','BANGALORE','BENGALURU','BANGLORE','BANGALORE NORTH','BANGALORE SOUTH','BANGALORE EAST','BANGALORE WEST','BANGALORE RURAL','BANGALORE URBAN','BENGALURU RURAL','BENGALURU URBAN','KOLKATA','CALCUTTA','CHENNAI','MADRAS','HYDERABAD','SECUNDERABAD','AHMEDABAD','PUNE') THEN 'Tier 1'
+      WHEN UPPER(TRIM(drop_city)) IN ('SURAT','JAIPUR','LUCKNOW','KANPUR','NAGPUR','INDORE','THANE','BHOPAL','VISAKHAPATNAM','VIZAG','PIMPRI','PATNA','VADODARA','BARODA','GHAZIABAD','LUDHIANA','AGRA','NASHIK','FARIDABAD','MEERUT','RAJKOT','VASAI','VARANASI','BENARES','SRINAGAR','AURANGABAD','DHANBAD','AMRITSAR','ALLAHABAD','PRAYAGRAJ','RANCHI','HOWRAH','GWALIOR','JABALPUR','COIMBATORE','VIJAYAWADA','JODHPUR','MADURAI','RAIPUR','KOTA','GUWAHATI','CHANDIGARH','SOLAPUR','HUBBALLI','HUBLI','DHARWAD','BAREILLY','MORADABAD','MYSORE','MYSURU','TIRUPUR','TIRUCHIRAPPALLI','TRICHY','BHUBANESWAR','SALEM','MIRA','BHIWANDI','THIRUVANANTHAPURAM','TRIVANDRUM','WARANGAL','GUNTUR','BHILAI','DEHRADUN','GURUGRAM','GURGAON','NOIDA','NAVI MUMBAI') THEN 'Tier 2'
+      ELSE 'Tier 3'
+    END AS tier,
+    COUNT(awb) AS total,
+    SUM(invoice_value) AS total_value,
+    COUNTIF(unified_status='Delivered') AS delivered,
+    COUNTIF(unified_status='RTO') AS rto,
+    COUNTIF(unified_status='Intransit') AS in_transit,
+    COUNTIF(unified_status='Pickup Pending') AS pickup_pending,
+    COUNTIF(unified_status='Cancelled') AS cancelled,
+    COUNTIF(unified_status IN ('Lost','Damaged')) AS lost_damaged,
+    COUNTIF(unified_status='RTO' AND COALESCE(ofd_attempts,0)=0) AS z_rto,
+    COUNTIF(ofd_attempts=1 AND unified_status='Delivered') AS d1,
+    COUNTIF(ofd_attempts > 1 AND unified_status='Delivered') AS rasr_num,
+    COUNTIF(ofd_attempts IS NOT NULL AND ofd_attempts != 0) AS ofd_total,
+    COUNTIF(delivery_date IS NOT NULL AND edd IS NOT NULL AND delivery_date <= edd) AS on_time,
+    COUNTIF(delivery_date IS NOT NULL AND edd IS NOT NULL AND delivery_date > edd) AS sla_breach,
+    ROUND(AVG(IF(pickup_ts IS NOT NULL AND delivery_ts IS NOT NULL AND TIMESTAMP_DIFF(delivery_ts, pickup_ts, MINUTE) BETWEEN 0 AND 28800, TIMESTAMP_DIFF(delivery_ts, pickup_ts, MINUTE) / 1440.0, NULL)), 2) AS avg_intransit_days,
+    ROUND(AVG(IF(delivery_date IS NOT NULL AND order_date IS NOT NULL AND DATE_DIFF(delivery_date, order_date, DAY) BETWEEN 0 AND 20, DATE_DIFF(delivery_date, order_date, DAY), NULL)), 2) AS avg_fulfilment_days,
+    ROUND(AVG(IF(pickup_ts IS NOT NULL AND created_ts IS NOT NULL AND TIMESTAMP_DIFF(pickup_ts, created_ts, MINUTE) BETWEEN 0 AND 14400, TIMESTAMP_DIFF(pickup_ts, created_ts, MINUTE) / 1440.0, NULL)), 2) AS avg_pickup_days,
+    ROUND(AVG(IF(created_date IS NOT NULL AND order_date IS NOT NULL AND DATE_DIFF(created_date, order_date, DAY) BETWEEN 0 AND 10, DATE_DIFF(created_date, order_date, DAY), NULL)), 2) AS avg_processing_days,
+    ROUND(AVG(IF(ofd1_date IS NOT NULL AND pickup_date IS NOT NULL, DATE_DIFF(ofd1_date, pickup_date, DAY), NULL)), 2) AS avg_s2a_days,
+    ROUND(AVG(IF(clickpost_unified_status='RTO-Delivered' AND rto_mark_date IS NOT NULL AND latest_ts_date IS NOT NULL AND DATE_DIFF(latest_ts_date, rto_mark_date, DAY) BETWEEN 0 AND 20, DATE_DIFF(latest_ts_date, rto_mark_date, DAY), NULL)), 2) AS avg_rto_tat_days
+  FROM base
+  WHERE pickup_city IS NOT NULL AND drop_city IS NOT NULL AND drop_city != ''
+  GROUP BY 1, 2
+  HAVING facility IS NOT NULL
+),
 by_courier_zone AS (
   SELECT
     courier_group,
@@ -729,6 +803,8 @@ SELECT
   TO_JSON_STRING(ARRAY(SELECT AS STRUCT * FROM by_zone_frido ORDER BY zone_group)) AS by_zone_frido,
   TO_JSON_STRING(ARRAY(SELECT AS STRUCT * FROM by_courier_zone ORDER BY courier_group, zone_group)) AS by_courier_zone,
   TO_JSON_STRING(ARRAY(SELECT AS STRUCT * FROM by_courier_tier ORDER BY courier_group, tier)) AS by_courier_tier,
+  TO_JSON_STRING(ARRAY(SELECT AS STRUCT * FROM by_zone_frido_tier ORDER BY zone_group, tier)) AS by_zone_frido_tier,
+  TO_JSON_STRING(ARRAY(SELECT AS STRUCT * FROM by_facility_tier ORDER BY facility, tier)) AS by_facility_tier,
   TO_JSON_STRING(ARRAY(SELECT AS STRUCT * FROM by_courier_facility ORDER BY courier_group, facility)) AS by_courier_facility,
   TO_JSON_STRING(ARRAY(SELECT AS STRUCT * FROM by_zone_facility ORDER BY zone_group, facility)) AS by_zone_facility,
   TO_JSON_STRING(ARRAY(SELECT AS STRUCT * FROM by_channel ORDER BY total DESC)) AS by_channel,
@@ -806,6 +882,8 @@ function parseRow(r) {
     byZoneFrido: JSON.parse(r.by_zone_frido),
     byCourierZone: JSON.parse(r.by_courier_zone),
     byCourierTier: JSON.parse(r.by_courier_tier),
+    byZoneFridoTier: JSON.parse(r.by_zone_frido_tier),
+    byFacilityTier: JSON.parse(r.by_facility_tier),
     byCourierFacility: JSON.parse(r.by_courier_facility),
     byZoneFacility: JSON.parse(r.by_zone_facility),
     byChannel: JSON.parse(r.by_channel),

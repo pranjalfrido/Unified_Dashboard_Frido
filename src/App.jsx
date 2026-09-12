@@ -888,8 +888,12 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
   const tierFilteredData = cTier ? (() => {
     const src = cPaymentData || data
     if (!src) return null
-    const rows = (src.byCourierTier || []).filter(r => r.tier === cTier)
-    return { ...src, byCourier: rows }
+    return {
+      ...src,
+      byCourier: (src.byCourierTier || []).filter(r => r.tier === cTier),
+      byZoneFrido: (src.byZoneFridoTier || []).filter(r => r.tier === cTier),
+      byFacility: (src.byFacilityTier || []).filter(r => r.tier === cTier),
+    }
   })() : null
   const breakdownSrc = tierFilteredData || cPaymentData || data
   const byCourierData = (breakdownSrc?.byCourier || []).map(d => ({ ...d, del_pct: d.total ? +((d.delivered / d.total) * 100).toFixed(1) : 0, rto_pct: d.total ? +((d.rto / d.total) * 100).toFixed(1) : 0 }))
@@ -1273,7 +1277,6 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
                             return next
                           })
                           setCExpanded({}); setZExpanded({}); setFExpanded({})
-                          if (vl !== 'courier') setCTier(null)
                         }}
                         title={isDisabled ? 'Clear courier/category filters to use this view' : undefined}
                         style={{
@@ -1314,7 +1317,7 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
                     <div key={t} style={{ display: 'flex', alignItems: 'center' }}>
                       {i > 0 && <div style={{ width: 1, height: 14, background: '#D6D0B0', margin: '0 4px' }} />}
                       <button
-                        onClick={() => { setCTier(isActive ? null : tierMap[t]); if (!isActive) setCSelected(new Set(['courier'])) }}
+                        onClick={() => setCTier(isActive ? null : tierMap[t])}
                         style={{
                           fontSize: 11, fontWeight: isActive ? 700 : 500, padding: '3px 9px', borderRadius: 6,
                           border: 'none', outline: 'none',
