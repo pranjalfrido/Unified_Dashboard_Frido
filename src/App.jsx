@@ -1321,8 +1321,8 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
                         style={{
                           fontSize: 11, fontWeight: isActive ? 700 : 500, padding: '3px 9px', borderRadius: 6,
                           border: 'none', outline: 'none',
-                          background: isActive ? '#D4EDDA' : 'transparent',
-                          color: isActive ? '#1A5E2A' : C.t2,
+                          background: isActive ? C.acs : 'transparent',
+                          color: isActive ? '#3F3D33' : C.t2,
                           cursor: 'pointer', fontFamily: 'var(--font)', textAlign: 'center',
                         }}
                       >{t}</button>
