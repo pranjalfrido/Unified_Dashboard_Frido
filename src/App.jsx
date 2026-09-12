@@ -515,24 +515,24 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
         const prevStart = new Date(prevEnd); prevStart.setDate(prevStart.getDate() - days + 1)
         const fmt = d => d.toISOString().slice(0, 10)
         const prevBody = { ...body, start: fmt(prevStart), end: fmt(prevEnd) }
-        // fetch main + COD + Prepaid in parallel (no extra payment filter already active)
+        // fetch main + prev — COD/Prepaid fire in background, don't block main render
         const noPaymentFilter = !lFilters.paymentMode?.length
         const noGeoOrCatFilter = !lFilters.pickupState?.length && !lFilters.dropState?.length && !lFilters.dropCity?.length && !lFilters.category?.length && !lFilters.subCategory?.length && !lFilters.weightSlabs?.length
-        const fetchAll = [
+        const [r, rPrev] = await Promise.all([
           fetch(`${API}/api/logistics`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }),
           fetch(`${API}/api/logistics`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(prevBody) }),
-          ...(noPaymentFilter && noGeoOrCatFilter ? [
-            fetch(`${API}/api/logistics`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...body, paymentMode: 'COD' }) }),
-            fetch(`${API}/api/logistics`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...body, paymentMode: 'Prepaid' }) }),
-          ] : []),
-        ]
-        const [r, rPrev, rCod, rPrepaid] = await Promise.all(fetchAll)
+        ])
         if (!r.ok) throw new Error(await r.text())
         const [cur, prev] = await Promise.all([r.json(), rPrev.ok ? rPrev.json() : Promise.resolve(null)])
         setRawData(cur)
         setRawPrevData(prev)
-        if (rCod?.ok) rCod.json().then(j => setRawCodData(j)).catch(() => {})
-        if (rPrepaid?.ok) rPrepaid.json().then(j => setRawPrepaidData(j)).catch(() => {})
+        // fire COD/Prepaid in background — sets cache when ready, instant on toggle click after that
+        if (noPaymentFilter && noGeoOrCatFilter) {
+          fetch(`${API}/api/logistics`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...body, paymentMode: 'COD' }) })
+            .then(r => r.ok ? r.json() : null).then(j => { if (j) setRawCodData(j) }).catch(() => {})
+          fetch(`${API}/api/logistics`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...body, paymentMode: 'Prepaid' }) })
+            .then(r => r.ok ? r.json() : null).then(j => { if (j) setRawPrepaidData(j) }).catch(() => {})
+        }
         try { localStorage.setItem('logistics_stale', JSON.stringify({ current: cur, previous: prev, dateRange: { start: filters.start, end: filters.end }, savedAt: Date.now() })) } catch {}
       }
     } catch (e) {
