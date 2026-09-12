@@ -883,7 +883,10 @@ function SearchSelect({ label, options, value, onChange, multi, selected }) {
         <span style={{ fontSize: 8, color: C.t3, flexShrink: 0 }}>{open ? '▲' : '▼'}</span>
       </button>
       {open && (
-        <div style={{ position: 'absolute', top: 'calc(100% + 4px)', left: 0, zIndex: 400, background: C.card, border: `1px solid ${C.border2}`, borderRadius: 10, boxShadow: '0 8px 28px rgba(0,0,0,.14)', minWidth: 196, width: '100%', maxHeight: 300, display: 'flex', flexDirection: 'column' }}>
+        <div style={{ position: 'fixed', zIndex: 400, background: C.card, border: `1px solid ${C.border2}`, borderRadius: 10, boxShadow: '0 8px 28px rgba(0,0,0,.18)', width: 240, maxHeight: 300, display: 'flex', flexDirection: 'column',
+          top: (() => { try { const r = ref.current?.getBoundingClientRect(); return (r ? r.bottom + 4 : 0) + 'px' } catch { return 0 } })(),
+          left: (() => { try { const r = ref.current?.getBoundingClientRect(); return (r ? r.right + 4 : 0) + 'px' } catch { return 0 } })(),
+        }}>
           {searchable && (
             <div style={{ padding: '7px 8px', borderBottom: `1px solid ${C.border}` }}>
               <input autoFocus value={search} onChange={e => setSearch(e.target.value)} placeholder="Search…"
