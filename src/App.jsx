@@ -1221,8 +1221,8 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
                         title={isDisabled ? 'Clear courier/category filters to use this view' : undefined}
                         style={{
                           fontSize: 11, fontWeight: isActive ? 700 : 500, padding: '3px 9px', borderRadius: 6,
-                          border: isDrill ? `1.5px dashed ${C.acm}` : 'none', outline: 'none',
-                          background: isPrimary ? C.acs : isDrill ? '#F5F0E0' : 'transparent',
+                          border: 'none', outline: 'none',
+                          background: isPrimary ? C.acs : isDrill ? C.acl : 'transparent',
                           color: isDisabled ? C.t3 : isActive ? '#3F3D33' : C.t2,
                           cursor: (isDisabled || cantDeselect) ? 'not-allowed' : 'pointer', fontFamily: 'var(--font)', textAlign: 'center',
                           opacity: isDisabled ? 0.45 : 1,
