@@ -538,11 +538,21 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
   // fetch breakdown-local payment data when COD/Prepaid toggle is active
   useEffect(() => {
     if (!cPayment) { setCPaymentData(null); return }
-    fetch(`/logistics-data-${cPayment.toLowerCase()}.json`)
-      .then(r => r.ok ? r.json() : null)
-      .then(json => { if (json?.current) setCPaymentData(json.current) })
-      .catch(() => {})
-  }, [cPayment, filters.start, filters.end])
+    const shipmentType = lFilters.shipmentType && lFilters.shipmentType !== 'all' ? lFilters.shipmentType : null
+    if (shipmentType) {
+      // cross-cut: forward/reverse + COD/Prepaid — hit live BQ with both filters
+      const body = { start: filters.start, end: filters.end, shipmentType, paymentMode: cPayment }
+      fetch(`${API}/api/logistics`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+        .then(r => r.ok ? r.json() : null)
+        .then(json => { if (json) setCPaymentData(json) })
+        .catch(() => {})
+    } else {
+      fetch(`/logistics-data-${cPayment.toLowerCase()}.json`)
+        .then(r => r.ok ? r.json() : null)
+        .then(json => { if (json?.current) setCPaymentData(json.current) })
+        .catch(() => {})
+    }
+  }, [cPayment, lFilters.shipmentType, filters.start, filters.end])
 
   // instant client-side filter — runs on every slicer change, no BQ call
   useEffect(() => {
