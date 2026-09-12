@@ -133,7 +133,6 @@ kpis AS (
 by_courier AS (
   SELECT
     courier_group,
-    shipment_type,
     COUNT(awb) AS total,
     SUM(invoice_value) AS total_value,
     COUNTIF(unified_status='Delivered') AS delivered,
@@ -170,7 +169,7 @@ by_courier AS (
     ROUND(AVG(IF(clickpost_unified_status='RTO-Delivered' AND rto_mark_date IS NOT NULL AND latest_ts_date IS NOT NULL AND DATE_DIFF(latest_ts_date, rto_mark_date, DAY) BETWEEN 0 AND 20, DATE_DIFF(latest_ts_date, rto_mark_date, DAY), NULL)), 2) AS avg_rto_tat,
     ROUND(AVG(IF(clickpost_unified_status='RTO-Delivered' AND rto_mark_date IS NOT NULL AND latest_ts_date IS NOT NULL AND DATE_DIFF(latest_ts_date, rto_mark_date, DAY) BETWEEN 0 AND 20, DATE_DIFF(latest_ts_date, rto_mark_date, DAY), NULL)), 2) AS avg_rto_tat_days,
     ROUND(AVG(committed_sla), 1) AS avg_sla
-  FROM base GROUP BY 1, 2
+  FROM base GROUP BY 1
 ),
 by_facility AS (
   SELECT
