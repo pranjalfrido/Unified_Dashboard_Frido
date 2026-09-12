@@ -606,6 +606,28 @@ top_pickup_cities AS (
     COUNT(awb) AS total
   FROM base WHERE pickup_city IS NOT NULL AND pickup_city != '' GROUP BY 1, 2, 3
 ),
+by_tier AS (
+  SELECT
+    CASE
+      WHEN UPPER(TRIM(drop_city)) IN (
+        'MUMBAI','DELHI','NEW DELHI','BANGALORE','BENGALURU','BANGLORE','BANGALORE NORTH','BANGALORE SOUTH','BANGALORE EAST','BANGALORE WEST','BANGALORE RURAL','BANGALORE URBAN','BENGALURU RURAL','BENGALURU URBAN','KOLKATA','CALCUTTA','CHENNAI','MADRAS','HYDERABAD','SECUNDERABAD','AHMEDABAD','PUNE'
+      ) THEN 'Tier 1'
+      WHEN UPPER(TRIM(drop_city)) IN (
+        'SURAT','JAIPUR','LUCKNOW','KANPUR','NAGPUR','INDORE','THANE','BHOPAL','VISAKHAPATNAM','VIZAG','PIMPRI','PATNA','VADODARA','BARODA','GHAZIABAD','LUDHIANA','AGRA','NASHIK','FARIDABAD','MEERUT','RAJKOT','VASAI','VARANASI','BENARES','SRINAGAR','AURANGABAD','DHANBAD','AMRITSAR','ALLAHABAD','PRAYAGRAJ','RANCHI','HOWRAH','GWALIOR','JABALPUR','COIMBATORE','VIJAYAWADA','JODHPUR','MADURAI','RAIPUR','KOTA','GUWAHATI','CHANDIGARH','SOLAPUR','HUBBALLI','HUBLI','DHARWAD','BAREILLY','MORADABAD','MYSORE','MYSURU','TIRUPUR','TIRUCHIRAPPALLI','TRICHY','BHUBANESWAR','SALEM','MIRA','BHIWANDI','THIRUVANANTHAPURAM','TRIVANDRUM','WARANGAL','GUNTUR','BHILAI','DEHRADUN','GURUGRAM','GURGAON','NOIDA','NAVI MUMBAI'
+      ) THEN 'Tier 2'
+      ELSE 'Tier 3'
+    END AS tier,
+    COUNT(awb) AS total,
+    COUNTIF(unified_status='Delivered') AS delivered,
+    COUNTIF(unified_status='RTO') AS rto,
+    COUNTIF(unified_status='Cancelled') AS cancelled,
+    COUNTIF(unified_status='Intransit') AS in_transit,
+    ROUND(AVG(IF(pickup_ts IS NOT NULL AND delivery_ts IS NOT NULL AND TIMESTAMP_DIFF(delivery_ts, pickup_ts, MINUTE) BETWEEN 0 AND 28800, TIMESTAMP_DIFF(delivery_ts, pickup_ts, MINUTE) / 1440.0, NULL)), 2) AS avg_intransit_days,
+    ROUND(AVG(IF(delivery_date IS NOT NULL AND order_date IS NOT NULL AND DATE_DIFF(delivery_date, order_date, DAY) BETWEEN 0 AND 20, DATE_DIFF(delivery_date, order_date, DAY), NULL)), 2) AS avg_fulfilment_days
+  FROM base
+  WHERE drop_city IS NOT NULL AND drop_city != ''
+  GROUP BY 1
+),
 by_payment AS (
   SELECT payment_mode, COUNT(awb) AS total FROM base WHERE payment_mode IS NOT NULL GROUP BY 1
 ),
@@ -933,6 +955,7 @@ SELECT
   TO_JSON_STRING(ARRAY(SELECT AS STRUCT * FROM tat_by_month ORDER BY month_dt)) AS tat_by_month,
   TO_JSON_STRING(ARRAY(SELECT AS STRUCT * FROM tat_by_facility ORDER BY total DESC)) AS tat_by_facility,
   TO_JSON_STRING(ARRAY(SELECT AS STRUCT * FROM by_facility ORDER BY total DESC)) AS by_facility,
+  TO_JSON_STRING(ARRAY(SELECT AS STRUCT * FROM by_tier ORDER BY CASE tier WHEN 'Tier 1' THEN 1 WHEN 'Tier 2' THEN 2 ELSE 3 END)) AS by_tier,
   TO_JSON_STRING(ARRAY(SELECT AS STRUCT * FROM by_weight_slab ORDER BY slab_order)) AS by_weight_slab,
   TO_JSON_STRING(ARRAY(SELECT AS STRUCT * FROM pickup_ageing ORDER BY courier_group)) AS pickup_ageing,
   TO_JSON_STRING((SELECT AS STRUCT * FROM filter_opts)) AS filter_opts
@@ -977,6 +1000,7 @@ SELECT
       tatByMonth: JSON.parse(r.tat_by_month),
       tatByFacility: JSON.parse(r.tat_by_facility),
       byFacility: JSON.parse(r.by_facility),
+      byTier: JSON.parse(r.by_tier),
       byWeightSlab: JSON.parse(r.by_weight_slab),
       pickupAgeing: JSON.parse(r.pickup_ageing),
       filterOpts: JSON.parse(r.filter_opts),

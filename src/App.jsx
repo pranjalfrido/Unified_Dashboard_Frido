@@ -412,6 +412,7 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
     if (!cSelected.has('courier')) {
       if (cSelected.has('zone')) return 'zone'
       if (cSelected.has('facility')) return 'facility'
+      if (cSelected.has('tier')) return 'tier'
       if (cSelected.has('month')) return 'month'
     }
     return 'courier'
@@ -420,11 +421,12 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
     if (cView === 'courier') {
       if (cSelected.has('zone')) return 'zone'
       if (cSelected.has('facility')) return 'facility'
+      if (cSelected.has('tier')) return 'tier'
       if (cSelected.has('month')) return 'month'
       return null
     }
     if (cSelected.has('courier')) return 'courier'
-    const others = ['zone','facility','month'].filter(v => v !== cView && cSelected.has(v))
+    const others = ['zone','facility','tier','month'].filter(v => v !== cView && cSelected.has(v))
     return others[0] || null
   })()
   const [payTrendGran, setPayTrendGran] = useState('Daily')
@@ -438,7 +440,7 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
   }, [])
   useEffect(() => {
     const hasActiveFilter = (lFilters.couriers?.length > 0) || (lFilters.category?.length > 0) || (lFilters.subCategory?.length > 0)
-    if (hasActiveFilter && ['zone','facility','month'].includes(cView)) { setCSelected(new Set(['courier'])); setCExpanded({}); setZExpanded({}); setFExpanded({}) }
+    if (hasActiveFilter && ['zone','facility','tier','month'].includes(cView)) { setCSelected(new Set(['courier'])); setCExpanded({}); setZExpanded({}); setFExpanded({}) }
   }, [lFilters.couriers, lFilters.shipmentType, lFilters.category, lFilters.subCategory]) // eslint-disable-line react-hooks/exhaustive-deps
   const [filterSidebarOpen, setFilterSidebarOpen] = useState(false)
   const [cExpanded, setCExpanded] = useState({})
@@ -1236,8 +1238,8 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
             <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
               {(() => {
                 const hasActiveFilter = (lFilters.couriers?.length > 0) || (lFilters.category?.length > 0) || (lFilters.subCategory?.length > 0)
-                const unfilteredViews = ['Zone','Facility','Month']
-                const viewToggles = ['Courier','Zone','Facility','Month'].map((v, i) => {
+                const unfilteredViews = ['Zone','Facility','Tier','Month']
+                const viewToggles = ['Courier','Zone','Facility','Tier','Month'].map((v, i) => {
                   const vl = v.toLowerCase()
                   const isDisabled = hasActiveFilter && unfilteredViews.includes(v)
                   const isActive = cSelected.has(vl)
@@ -1670,6 +1672,66 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
                         <td style={td9}>{d(wavg('avg_fulfilment_days'))}</td>
                         <td style={td9}>{d(wavg('avg_rto_tat_days'))}</td>
                         <td style={td9}>{d(wavg('avg_s2a_days'))}</td>
+                      </tr>
+                    </tfoot>
+                  </table>
+                )
+              }
+              if (cView === 'tier') {
+                const byTierData = (breakdownSrc?.byTier || [])
+                const tierTotalAll = byTierData.reduce((s,r) => s+(r.total||0), 0) || 1
+                const enrichTier = byTierData.map(r => ({
+                  ...r,
+                  _volPct: +((r.total / tierTotalAll) * 100).toFixed(2),
+                  _delPct: r.total ? +((r.delivered / r.total) * 100).toFixed(2) : 0,
+                  _rtoPct: r.total ? +((r.rto / r.total) * 100).toFixed(2) : 0,
+                  _cancPct: r.total ? +((r.cancelled / r.total) * 100).toFixed(2) : 0,
+                }))
+                const sumTD = enrichTier.reduce((s,r)=>s+(r.delivered||0),0)
+                const sumTR = enrichTier.reduce((s,r)=>s+(r.rto||0),0)
+                const sumTC = enrichTier.reduce((s,r)=>s+(r.cancelled||0),0)
+                const wavgT = (key) => { const w = enrichTier.reduce((s,r)=>s+(r[key]!=null?r[key]*(r.total||0):0),0); return tierTotalAll>0?w/tierTotalAll:null }
+                const tdT = { padding:'9px 10px', textAlign:'right', color:C.t2, fontSize:11 }
+                const TIER_COLS = [
+                  { key: 'tier', label: 'Tier', left: true, str: true },
+                  { key: '_volPct', label: 'Vol %' }, { key: 'total', label: 'Total' },
+                  { key: '_delPct', label: 'Del %' }, { key: '_rtoPct', label: 'RTO %' },
+                  { key: '_cancPct', label: 'Canc %' },
+                  { key: 'avg_intransit_days', label: 'Avg S2D' }, { key: 'avg_fulfilment_days', label: 'Avg O2D' },
+                ]
+                return (
+                  <table style={{ width:'100%', borderCollapse:'collapse', fontSize:12 }}>
+                    <thead><tr style={{ borderBottom:`2px solid ${C.border}`, background:C.acl }}>
+                      {TIER_COLS.map(c => (
+                        <th key={c.key} style={{ padding:'8px 10px', textAlign: c.left ? 'left' : 'right', color:C.t2, fontSize:10, fontWeight:600, whiteSpace:'nowrap', cursor:'default' }}>{c.label}</th>
+                      ))}
+                    </tr></thead>
+                    <tbody>
+                      {enrichTier.map(r => (
+                        <tr key={r.tier} style={{ borderBottom:`1px solid ${C.border}` }}
+                          onMouseEnter={e => { e.currentTarget.style.background='#FDF8ED' }}
+                          onMouseLeave={e => { e.currentTarget.style.background='' }}>
+                          <td style={{ padding:'9px 10px', color:C.t1, fontWeight:600, whiteSpace:'nowrap' }}>{r.tier}</td>
+                          <td style={tdT}>{r._volPct.toFixed(2)}%</td>
+                          <td style={{ ...tdT, color:C.t1, fontWeight:600 }}>{n(r.total)}</td>
+                          <td style={tdT}>{r._delPct.toFixed(2)}%</td>
+                          <td style={tdT}>{r._rtoPct.toFixed(2)}%</td>
+                          <td style={tdT}>{r._cancPct.toFixed(2)}%</td>
+                          <td style={tdT}>{r.avg_intransit_days!=null?r.avg_intransit_days.toFixed(2)+'d':'—'}</td>
+                          <td style={tdT}>{r.avg_fulfilment_days!=null?r.avg_fulfilment_days.toFixed(2)+'d':'—'}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                    <tfoot>
+                      <tr style={{ borderTop:`2px solid ${C.border}`, background:C.acl, fontWeight:700 }}>
+                        <td style={{ padding:'9px 10px', color:C.t1, fontWeight:700 }}>Total</td>
+                        <td style={{ ...tdT, fontWeight:700 }}>100.00%</td>
+                        <td style={{ ...tdT, color:C.t1, fontWeight:700 }}>{n(tierTotalAll)}</td>
+                        <td style={{ ...tdT, fontWeight:700 }}>{(sumTD/tierTotalAll*100).toFixed(2)}%</td>
+                        <td style={{ ...tdT, fontWeight:700 }}>{(sumTR/tierTotalAll*100).toFixed(2)}%</td>
+                        <td style={{ ...tdT, fontWeight:700 }}>{(sumTC/tierTotalAll*100).toFixed(2)}%</td>
+                        <td style={tdT}>{wavgT('avg_intransit_days')!=null?wavgT('avg_intransit_days').toFixed(2)+'d':'—'}</td>
+                        <td style={tdT}>{wavgT('avg_fulfilment_days')!=null?wavgT('avg_fulfilment_days').toFixed(2)+'d':'—'}</td>
                       </tr>
                     </tfoot>
                   </table>
