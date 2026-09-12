@@ -1204,8 +1204,16 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
                           if (isDisabled || cantDeselect) return
                           setCSelected(prev => {
                             const next = new Set(prev)
-                            if (next.has(vl)) next.delete(vl)
-                            else next.add(vl)
+                            if (next.has(vl)) {
+                              next.delete(vl)
+                            } else {
+                              // max 2 — if already 2 selected, replace the drill (non-primary)
+                              if (next.size >= 2) {
+                                const primary = cView
+                                next.forEach(k => { if (k !== primary) next.delete(k) })
+                              }
+                              next.add(vl)
+                            }
                             return next
                           })
                           setCExpanded({}); setZExpanded({}); setFExpanded({})
@@ -1214,7 +1222,7 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
                         style={{
                           fontSize: 11, fontWeight: isActive ? 700 : 500, padding: '3px 9px', borderRadius: 6,
                           border: isDrill ? `1.5px dashed ${C.acm}` : 'none', outline: 'none',
-                          background: isPrimary ? C.acs : isDrill ? C.acl : 'transparent',
+                          background: isPrimary ? C.acs : isDrill ? '#F5F0E0' : 'transparent',
                           color: isDisabled ? C.t3 : isActive ? '#3F3D33' : C.t2,
                           cursor: (isDisabled || cantDeselect) ? 'not-allowed' : 'pointer', fontFamily: 'var(--font)', textAlign: 'center',
                           opacity: isDisabled ? 0.45 : 1,
@@ -1429,7 +1437,7 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
                             const _zc = z.total ? +(((z.cancelled||0)/z.total)*100).toFixed(2) : 0
                             const _zf = z.ofd_total ? +((z.d1/z.ofd_total)*100).toFixed(2) : null
                             const _zra = z.ofd_total ? +(((z.rasr_num||0)/z.ofd_total)*100).toFixed(2) : null
-                            const _zvp = +((z.total/zoneTotalAll)*100).toFixed(2)
+                            const _zvp = r.total ? +((z.total/r.total)*100).toFixed(2) : 0
                             const drillKey = cDrill === 'courier' ? z.courier_group : z.facility
                             return (
                               <tr key={drillKey} style={{ borderBottom:`1px solid ${C.border}`, background:'#FAFAF8' }}
@@ -1568,7 +1576,7 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
                             const _fc = f.total ? +(((f.cancelled||0)/f.total)*100).toFixed(2) : 0
                             const _ff = f.ofd_total ? +((f.d1/f.ofd_total)*100).toFixed(2) : null
                             const _fra = f.ofd_total ? +(((f.rasr_num||0)/f.ofd_total)*100).toFixed(2) : null
-                            const _fvp = +((f.total/facTotalAll)*100).toFixed(2)
+                            const _fvp = r.total ? +((f.total/r.total)*100).toFixed(2) : 0
                             const drillKey = cDrill === 'courier' ? f.courier_group : `Zone ${f.zone_group}`
                             return (
                               <tr key={drillKey} style={{ borderBottom:`1px solid ${C.border}`, background:'#FAFAF8' }}
@@ -1772,7 +1780,7 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
                             const _cp = z.total ? +(((z.cancelled||0)/z.total)*100).toFixed(2) : 0
                             const _fp = z.ofd_total ? +((z.d1/z.ofd_total)*100).toFixed(2) : null
                             const _rap = z.ofd_total ? +(((z.rasr_num||0)/z.ofd_total)*100).toFixed(2) : null
-                            const _vp = +((z.total/totalAll)*100).toFixed(2)
+                            const _vp = r.total ? +((z.total/r.total)*100).toFixed(2) : 0
                             const _rc = _rp > avgRtoPct ? C.red.tx : C.t1
                             const drillKey = cDrill === 'zone' ? z.zone_group : cDrill === 'month' ? z.month_label : z.facility
                             const drillLabel = cDrill === 'zone' ? `Zone ${z.zone_group}` : cDrill === 'month' ? z.month_label : z.facility
