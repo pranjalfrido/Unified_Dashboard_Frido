@@ -3367,6 +3367,8 @@ function DateRangePicker({ filters, setFilters, theme: T = C, onRefresh, loading
     return () => document.removeEventListener('mousedown', handler)
   }, [])
 
+  const activePreset = PRESETS.find(p => { const r = p.fn(); return r.start === draft.start && r.end === draft.end })
+
   const apply = (s, e) => {
     const start = s || draft.start, end = e || draft.end
     if (start && end) { setFilters(f => ({ ...f, start, end })); setOpen(false) }
@@ -3574,12 +3576,15 @@ function DateRangePicker({ filters, setFilters, theme: T = C, onRefresh, loading
             </div>
             {/* Quick presets as horizontal chips */}
             <div style={{ display: 'flex', gap: 6, overflowX: 'auto', padding: '10px 14px', flexShrink: 0, scrollbarWidth: 'none' }}>
-              {PRESETS.map(p => (
-                <button key={p.label} onClick={() => { const r = p.fn(); setDraft(r); apply(r.start, r.end) }}
-                  style={{ padding: '5px 12px', borderRadius: 20, border: `1px solid ${T.border2}`, background: T.bg, color: T.t2, fontSize: 12, cursor: 'pointer', whiteSpace: 'nowrap', fontFamily: 'var(--font)', flexShrink: 0 }}>
-                  {p.label}
-                </button>
-              ))}
+              {[...PRESETS, { label: 'Custom Range', fn: null }].map(p => {
+                const isActive = p.fn ? activePreset?.label === p.label : !activePreset
+                return (
+                  <button key={p.label} onClick={() => { if (p.fn) { const r = p.fn(); setDraft(r); apply(r.start, r.end) } }}
+                    style={{ padding: '5px 12px', borderRadius: 20, border: `1px solid ${isActive ? T.acc : T.border2}`, background: isActive ? T.acl : T.bg, color: isActive ? T.acc : T.t2, fontSize: 12, cursor: p.fn ? 'pointer' : 'default', whiteSpace: 'nowrap', fontFamily: 'var(--font)', flexShrink: 0, fontWeight: isActive ? 700 : 400 }}>
+                    {p.label}
+                  </button>
+                )
+              })}
             </div>
             {/* Calendar */}
             {calendarBody}
@@ -3590,14 +3595,17 @@ function DateRangePicker({ filters, setFilters, theme: T = C, onRefresh, loading
         <div style={{ position: 'fixed', top: dropPos.top, right: dropPos.right, zIndex: 9999, background: T.card, border: `1px solid ${T.border2}`, borderRadius: 12, boxShadow: '0 8px 32px rgba(0,0,0,.15)', display: 'flex', minWidth: 680 }}>
           {/* Preset list */}
           <div style={{ width: 140, borderRight: `1px solid ${T.border}`, padding: '8px 0', flexShrink: 0 }}>
-            {PRESETS.map(p => (
-              <div key={p.label} onClick={() => { const r = p.fn(); setDraft(r); apply(r.start, r.end) }}
-                style={{ padding: '5px 14px', fontSize: 12, color: T.t2, cursor: 'pointer', whiteSpace: 'nowrap' }}
-                onMouseEnter={e => e.currentTarget.style.background = T.bg}
-                onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
-                {p.label}
-              </div>
-            ))}
+            {[...PRESETS, { label: 'Custom Range', fn: null }].map(p => {
+              const isActive = p.fn ? activePreset?.label === p.label : !activePreset
+              return (
+                <div key={p.label} onClick={() => { if (p.fn) { const r = p.fn(); setDraft(r); apply(r.start, r.end) } }}
+                  style={{ padding: '5px 14px', fontSize: 12, cursor: p.fn ? 'pointer' : 'default', whiteSpace: 'nowrap', fontWeight: isActive ? 700 : 400, color: isActive ? T.acc : T.t2, background: isActive ? T.acl : 'transparent', borderLeft: isActive ? `2px solid ${T.acc}` : '2px solid transparent' }}
+                  onMouseEnter={e => { if (!isActive) e.currentTarget.style.background = T.bg }}
+                  onMouseLeave={e => { if (!isActive) e.currentTarget.style.background = 'transparent' }}>
+                  {p.label}
+                </div>
+              )
+            })}
           </div>
           {calendarBody}
         </div>
