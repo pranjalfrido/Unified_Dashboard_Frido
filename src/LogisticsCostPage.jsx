@@ -849,6 +849,7 @@ function SegPair({ options, value, onChange }) {
 function SearchSelect({ label, options, value, onChange, multi, selected }) {
   const [open, setOpen] = useState(false)
   const [search, setSearch] = useState('')
+  const [staged, setStaged] = useState([])
   const ref = useRef(null)
   useEffect(() => {
     const h = e => { if (ref.current && !ref.current.contains(e.target)) { setOpen(false); setSearch('') } }
@@ -859,19 +860,25 @@ function SearchSelect({ label, options, value, onChange, multi, selected }) {
   const list = options || []
   const sel = multi ? (selected || []) : []
   const active = multi ? sel.length > 0 : !!value
-  // Search only appears once the list is long enough to need it.
   const searchable = list.length > 8
   const filtered = list.filter(o => o.toLowerCase().includes(search.toLowerCase())).slice(0, 200)
+  const allSelected = filtered.length > 0 && filtered.every(o => staged.includes(o))
 
   const summary = multi
     ? (sel.length === 0 ? label : sel.length === 1 ? sel[0] : `${label} · ${sel.length}`)
     : (value || label)
 
-  const isOn = o => (multi ? sel.includes(o) : o === value)
+  const handleOpen = () => { setStaged([...sel]); setSearch(''); setOpen(true) }
+  const handleApply = () => { onChange(staged.length ? staged : null); setOpen(false); setSearch('') }
+  const handleClear = () => setStaged([])
+  const toggleStaged = o => setStaged(s => s.includes(o) ? s.filter(x => x !== o) : [...s, o])
+  const toggleAll = () => setStaged(s => allSelected ? s.filter(x => !filtered.includes(x)) : [...new Set([...s, ...filtered])])
+
+  const isOn = o => multi ? staged.includes(o) : o === value
 
   return (
     <div ref={ref} style={{ position: 'relative' }}>
-      <button onClick={() => setOpen(o => !o)}
+      <button onClick={handleOpen}
         style={{
           display: 'flex', alignItems: 'center', gap: 6, padding: '7px 12px',
           border: `1.5px solid ${active ? C.acm : C.border2}`, borderRadius: 8,
@@ -883,8 +890,8 @@ function SearchSelect({ label, options, value, onChange, multi, selected }) {
         <span style={{ fontSize: 8, color: C.t3, flexShrink: 0 }}>{open ? '▲' : '▼'}</span>
       </button>
       {open && (
-        <div style={{ position: 'fixed', zIndex: 400, background: C.card, border: `1px solid ${C.border2}`, borderRadius: 10, boxShadow: '0 8px 28px rgba(0,0,0,.18)', width: 240, maxHeight: 300, display: 'flex', flexDirection: 'column',
-          ...(() => { try { const r = ref.current?.getBoundingClientRect(); const spaceBelow = window.innerHeight - r.bottom; return spaceBelow < 320 ? { bottom: (window.innerHeight - r.top + 4) + 'px', left: (r.right + 4) + 'px' } : { top: (r.bottom + 4) + 'px', left: (r.right + 4) + 'px' } } catch { return { top: 0, left: 0 } } })()
+        <div style={{ position: 'fixed', zIndex: 400, background: C.card, border: `1px solid ${C.border2}`, borderRadius: 10, boxShadow: '0 8px 28px rgba(0,0,0,.18)', width: 240, maxHeight: 340, display: 'flex', flexDirection: 'column',
+          ...(() => { try { const r = ref.current?.getBoundingClientRect(); const spaceBelow = window.innerHeight - r.bottom; return spaceBelow < 360 ? { bottom: (window.innerHeight - r.top + 4) + 'px', left: (r.right + 4) + 'px' } : { top: (r.bottom + 4) + 'px', left: (r.right + 4) + 'px' } } catch { return { top: 0, left: 0 } } })()
         }}>
           {searchable && (
             <div style={{ padding: '7px 8px', borderBottom: `1px solid ${C.border}` }}>
@@ -892,15 +899,23 @@ function SearchSelect({ label, options, value, onChange, multi, selected }) {
                 style={{ width: '100%', fontSize: 11.5, padding: '4px 8px', border: `1px solid ${C.border2}`, borderRadius: 6, outline: 'none', fontFamily: 'var(--font)', background: C.bg, boxSizing: 'border-box' }} />
             </div>
           )}
+          {multi && filtered.length > 0 && (
+            <label style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '5px 12px 7px', cursor: 'pointer', fontSize: 12, fontWeight: 700, color: C.t1, borderBottom: `1px solid ${C.border}` }}>
+              <input type="checkbox" checked={allSelected} onChange={toggleAll} style={{ accentColor: C.acm }} />
+              <span>Select all</span>
+            </label>
+          )}
           <div style={{ overflowY: 'auto', flex: 1 }}>
-            <div onClick={() => { onChange(null); if (!multi) setOpen(false); setSearch('') }}
-              style={{ padding: '8px 12px', fontSize: 11.5, cursor: 'pointer', color: C.t3, borderBottom: `1px solid ${C.border}` }}>
-              All {label}
-            </div>
+            {!multi && (
+              <div onClick={() => { onChange(null); setOpen(false); setSearch('') }}
+                style={{ padding: '8px 12px', fontSize: 11.5, cursor: 'pointer', color: C.t3, borderBottom: `1px solid ${C.border}` }}>
+                All {label}
+              </div>
+            )}
             {filtered.map(o => {
               const on = isOn(o)
               return (
-                <div key={o} onClick={() => { onChange(o); if (!multi) { setOpen(false); setSearch('') } }}
+                <div key={o} onClick={() => { if (multi) toggleStaged(o); else { onChange(o); setOpen(false); setSearch('') } }}
                   style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '8px 12px', fontSize: 11.5, cursor: 'pointer', color: on ? C.t1 : C.t2, fontWeight: on ? 700 : 400, background: on ? C.acl : 'transparent' }}
                   onMouseEnter={e => { if (!on) e.currentTarget.style.background = C.bg }}
                   onMouseLeave={e => { if (!on) e.currentTarget.style.background = 'transparent' }}>
@@ -915,6 +930,12 @@ function SearchSelect({ label, options, value, onChange, multi, selected }) {
             })}
             {!filtered.length && <div style={{ padding: '10px 12px', fontSize: 11.5, color: C.t3 }}>No match</div>}
           </div>
+          {multi && (
+            <div style={{ display: 'flex', gap: 6, padding: '8px', borderTop: `1px solid ${C.border}`, flexShrink: 0 }}>
+              <button onClick={handleClear} style={{ flex: 1, padding: '5px 0', fontSize: 11.5, borderRadius: 6, border: `1px solid ${C.border2}`, background: C.card, color: C.t2, cursor: 'pointer', fontFamily: 'var(--font)', fontWeight: 500 }}>Clear</button>
+              <button onClick={handleApply} style={{ flex: 1, padding: '5px 0', fontSize: 11.5, borderRadius: 6, border: 'none', background: C.acm, color: '#1a1400', cursor: 'pointer', fontFamily: 'var(--font)', fontWeight: 700 }}>Apply</button>
+            </div>
+          )}
         </div>
       )}
     </div>
