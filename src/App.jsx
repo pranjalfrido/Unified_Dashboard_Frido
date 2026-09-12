@@ -1273,6 +1273,7 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
                             return next
                           })
                           setCExpanded({}); setZExpanded({}); setFExpanded({})
+                          if (vl !== 'courier') setCTier(null)
                         }}
                         title={isDisabled ? 'Clear courier/category filters to use this view' : undefined}
                         style={{
@@ -1313,7 +1314,7 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
                     <div key={t} style={{ display: 'flex', alignItems: 'center' }}>
                       {i > 0 && <div style={{ width: 1, height: 14, background: '#D6D0B0', margin: '0 4px' }} />}
                       <button
-                        onClick={() => setCTier(isActive ? null : tierMap[t])}
+                        onClick={() => { setCTier(isActive ? null : tierMap[t]); if (!isActive) setCSelected(new Set(['courier'])) }}
                         style={{
                           fontSize: 11, fontWeight: isActive ? 700 : 500, padding: '3px 9px', borderRadius: 6,
                           border: 'none', outline: 'none',
