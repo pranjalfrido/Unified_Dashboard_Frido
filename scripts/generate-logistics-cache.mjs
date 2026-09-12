@@ -695,6 +695,10 @@ const [
   [prepaidRows], [prepaidPrevRows],
   [fwdRows], [fwdPrevRows],
   [revRows], [revPrevRows],
+  [fwdCodRows], [fwdCodPrevRows],
+  [fwdPrepaidRows], [fwdPrepaidPrevRows],
+  [revCodRows], [revCodPrevRows],
+  [revPrepaidRows], [revPrepaidPrevRows],
 ] = await Promise.all([
   bq.query({ query: buildQuery(start, end), maximumBytesBilled: '10000000000' }),
   bq.query({ query: buildQuery(prevStartStr, prevEndStr), maximumBytesBilled: '10000000000' }),
@@ -706,6 +710,14 @@ const [
   bq.query({ query: buildQuery(prevStartStr, prevEndStr, null, 'Forward'), maximumBytesBilled: '10000000000' }),
   bq.query({ query: buildQuery(start, end, null, 'Reverse'), maximumBytesBilled: '10000000000' }),
   bq.query({ query: buildQuery(prevStartStr, prevEndStr, null, 'Reverse'), maximumBytesBilled: '10000000000' }),
+  bq.query({ query: buildQuery(start, end, 'COD', 'Forward'), maximumBytesBilled: '10000000000' }),
+  bq.query({ query: buildQuery(prevStartStr, prevEndStr, 'COD', 'Forward'), maximumBytesBilled: '10000000000' }),
+  bq.query({ query: buildQuery(start, end, 'PREPAID', 'Forward'), maximumBytesBilled: '10000000000' }),
+  bq.query({ query: buildQuery(prevStartStr, prevEndStr, 'PREPAID', 'Forward'), maximumBytesBilled: '10000000000' }),
+  bq.query({ query: buildQuery(start, end, 'COD', 'Reverse'), maximumBytesBilled: '10000000000' }),
+  bq.query({ query: buildQuery(prevStartStr, prevEndStr, 'COD', 'Reverse'), maximumBytesBilled: '10000000000' }),
+  bq.query({ query: buildQuery(start, end, 'PREPAID', 'Reverse'), maximumBytesBilled: '10000000000' }),
+  bq.query({ query: buildQuery(prevStartStr, prevEndStr, 'PREPAID', 'Reverse'), maximumBytesBilled: '10000000000' }),
 ])
 
 function parseRow(r) {
@@ -767,6 +779,10 @@ for (const [mode, cur, prev] of [
   ['prepaid', prepaidRows, prepaidPrevRows],
   ['forward', fwdRows, fwdPrevRows],
   ['reverse', revRows, revPrevRows],
+  ['forward-cod', fwdCodRows, fwdCodPrevRows],
+  ['forward-prepaid', fwdPrepaidRows, fwdPrepaidPrevRows],
+  ['reverse-cod', revCodRows, revCodPrevRows],
+  ['reverse-prepaid', revPrepaidRows, revPrepaidPrevRows],
 ]) {
   const p = {
     asOf: new Date().toISOString(),

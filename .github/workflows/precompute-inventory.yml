@@ -66,7 +66,9 @@ jobs:
                   public/sales-alloc-data.json public/inward-data.json public/logistics-data.json \
                   public/logistics-data-cod.json public/logistics-data-prepaid.json \
                   public/logistics-data-forward.json public/logistics-data-reverse.json \
-                  public/logistics-cost-data.json public/ads-data.json public/pnl-data.json
+                  public/logistics-cost-data.json public/ads-data.json public/pnl-data.json \
+                  public/logistics-data-forward-cod.json public/logistics-data-forward-prepaid.json \
+                  public/logistics-data-reverse-cod.json public/logistics-data-reverse-prepaid.json
           git diff --cached --quiet && echo "No changes" && exit 0
           git stash
           git fetch origin main
@@ -76,6 +78,8 @@ jobs:
                   public/sales-alloc-data.json public/inward-data.json public/logistics-data.json \
                   public/logistics-data-cod.json public/logistics-data-prepaid.json \
                   public/logistics-data-forward.json public/logistics-data-reverse.json \
-                  public/logistics-cost-data.json public/ads-data.json public/pnl-data.json
+                  public/logistics-cost-data.json public/ads-data.json public/pnl-data.json \
+                  public/logistics-data-forward-cod.json public/logistics-data-forward-prepaid.json \
+                  public/logistics-data-reverse-cod.json public/logistics-data-reverse-prepaid.json
           git commit -m "chore: update static data cache"
           git push origin main
