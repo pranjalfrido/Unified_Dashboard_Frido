@@ -3333,7 +3333,6 @@ function DateRangePicker({ filters, setFilters, theme: T = C, onRefresh, loading
 
   const PRESETS = [
     { label: 'Today', fn: () => { const d = fmt0(today); return { start: d, end: d } } },
-    { label: 'MTD', fn: () => { const s = new Date(today.getFullYear(), today.getMonth(), 1); return { start: fmt0(s), end: fmt0(today) } } },
     { label: 'Yesterday', fn: () => { const d = new Date(today); d.setDate(d.getDate()-1); const s = fmt0(d); return { start: s, end: s } } },
     { label: 'Last 7 Days', fn: () => { const s = new Date(today); s.setDate(s.getDate()-6); return { start: fmt0(s), end: fmt0(today) } } },
     { label: 'Last 15 Days', fn: () => { const s = new Date(today); s.setDate(s.getDate()-14); return { start: fmt0(s), end: fmt0(today) } } },
@@ -3351,6 +3350,7 @@ function DateRangePicker({ filters, setFilters, theme: T = C, onRefresh, loading
       const e = new Date(eYear, eMonth === 0 ? 0 : eMonth, 0)
       return { start: fmt0(s), end: fmt0(e) }
     } },
+    { label: 'MTD', fn: () => { const s = new Date(today.getFullYear(), today.getMonth(), 1); return { start: fmt0(s), end: fmt0(today) } } },
     ...(() => {
       const fyStart = today.getMonth() >= 3 ? today.getFullYear() : today.getFullYear() - 1
       return [0, 1].map(offset => {
