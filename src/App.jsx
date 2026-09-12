@@ -1306,13 +1306,14 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
                     </div>
                   )
                 })
-                const tierToggles = ['Tier 1','Tier 2','Tier 3'].map((t, i) => {
-                  const isActive = cTier === t
+                const tierMap = { 'Tier I':'Tier 1','Tier II':'Tier 2','Tier III':'Tier 3' }
+                const tierToggles = ['Tier I','Tier II','Tier III'].map((t, i) => {
+                  const isActive = cTier === tierMap[t]
                   return (
                     <div key={t} style={{ display: 'flex', alignItems: 'center' }}>
                       {i > 0 && <div style={{ width: 1, height: 14, background: '#D6D0B0', margin: '0 4px' }} />}
                       <button
-                        onClick={() => setCTier(isActive ? null : t)}
+                        onClick={() => setCTier(isActive ? null : tierMap[t])}
                         style={{
                           fontSize: 11, fontWeight: isActive ? 700 : 500, padding: '3px 9px', borderRadius: 6,
                           border: 'none', outline: 'none',
@@ -1735,7 +1736,7 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
                         <tr key={r.tier} style={{ borderBottom:`1px solid ${C.border}` }}
                           onMouseEnter={e => { e.currentTarget.style.background='#FDF8ED' }}
                           onMouseLeave={e => { e.currentTarget.style.background='' }}>
-                          <td style={{ padding:'9px 10px', color:C.t1, fontWeight:600, whiteSpace:'nowrap' }}>{r.tier}</td>
+                          <td style={{ padding:'9px 10px', color:C.t1, fontWeight:600, whiteSpace:'nowrap' }}>{ {'Tier 1':'Tier I','Tier 2':'Tier II','Tier 3':'Tier III'}[r.tier] || r.tier }</td>
                           <td style={tdT}>{r._volPct.toFixed(2)}%</td>
                           <td style={{ ...tdT, color:C.t1, fontWeight:600 }}>{n(r.total)}</td>
                           <td style={tdT}>{r._delPct.toFixed(2)}%</td>
