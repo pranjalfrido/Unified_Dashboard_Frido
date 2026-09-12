@@ -402,6 +402,7 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
   const [monthSort, setMonthSort] = useState({ col: 'month_label', dir: 'asc' })
   const [zoneSort, setZoneSort] = useState({ col: 'zone_group', dir: 'asc' })
   const [cView, setCView] = useState('courier') // 'courier' | 'zone' | 'facility' | 'month'
+  const [cDrill, setCDrill] = useState(null) // secondary drill-down dimension
   const [payTrendGran, setPayTrendGran] = useState('Daily')
   const [ndrPayFilter, setNdrPayFilter] = useState('All')
   const [rtoAgeingBase, setRtoAgeingBase] = useState('pickup')
@@ -413,10 +414,12 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
   }, [])
   useEffect(() => {
     const hasActiveFilter = (lFilters.couriers?.length > 0) || (lFilters.category?.length > 0) || (lFilters.subCategory?.length > 0)
-    if (hasActiveFilter && ['zone','facility','month'].includes(cView)) setCView('courier')
+    if (hasActiveFilter && ['zone','facility','month'].includes(cView)) { setCView('courier'); setCDrill(null) }
   }, [lFilters.couriers, lFilters.shipmentType, lFilters.category, lFilters.subCategory]) // eslint-disable-line react-hooks/exhaustive-deps
   const [filterSidebarOpen, setFilterSidebarOpen] = useState(false)
   const [cExpanded, setCExpanded] = useState({})
+  const [zExpanded, setZExpanded] = useState({})
+  const [fExpanded, setFExpanded] = useState({})
   const [rawData, setRawData] = useState(null)
   const [rawPrevData, setRawPrevData] = useState(null)
   const [data, setData] = useState(null)
@@ -588,6 +591,9 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
         byZone: raw.byZone,
         byZoneDetail: raw.byZoneDetail,
         byZoneFrido: raw.byZoneFrido,
+        byCourierZone: raw.byCourierZone,
+        byCourierFacility: raw.byCourierFacility,
+        byZoneFacility: raw.byZoneFacility,
         byPayment: paymentMode?.length ? (raw.byPayment || []).filter(x => paymentMode.map(p=>p.toLowerCase()).includes(x.payment_mode?.toLowerCase())) : raw.byPayment,
         byPaymentDetail: paymentMode?.length ? (raw.byPaymentDetail || []).filter(x => paymentMode.map(p=>p.toLowerCase()).includes(x.payment_mode?.toLowerCase())) : raw.byPaymentDetail,
         byPaymentDay: paymentMode?.length ? (raw.byPaymentDay || []).filter(x => paymentMode.map(p=>p.toLowerCase()).includes(x.payment_mode?.toLowerCase())) : raw.byPaymentDay,
@@ -1152,17 +1158,28 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
                 const hasActiveFilter = (lFilters.couriers?.length > 0) || (lFilters.category?.length > 0) || (lFilters.subCategory?.length > 0)
                 const unfilteredViews = ['Zone','Facility','Month']
                 return ['Courier','Zone','Facility','Month'].map((v, i) => {
+                  const vl = v.toLowerCase()
                   const isDisabled = hasActiveFilter && unfilteredViews.includes(v)
+                  const isPrimary = cView === vl
+                  const isDrill = cDrill === vl
+                  const isActive = isPrimary || isDrill
                   return (
                     <div key={v} style={{ display: 'flex', alignItems: 'center' }}>
                       {i > 0 && <div style={{ width: 1, height: 14, background: '#D6D0B0', margin: '0 4px' }} />}
                       <button
-                        onClick={() => { if (!isDisabled) setCView(v.toLowerCase()) }}
+                        onClick={() => {
+                          if (isDisabled) return
+                          if (isPrimary) return // can't deselect primary
+                          if (isDrill) { setCDrill(null); setCExpanded({}); setZExpanded({}); setFExpanded({}) }
+                          else if (!cDrill) { setCDrill(vl); setCExpanded({}); setZExpanded({}); setFExpanded({}) }
+                          else { setCView(vl); setCDrill(null); setCExpanded({}); setZExpanded({}); setFExpanded({}) }
+                        }}
                         title={isDisabled ? 'Clear courier/category filters to use this view' : undefined}
                         style={{
-                          fontSize: 11, fontWeight: cView===v.toLowerCase() ? 700 : 500, padding: '3px 9px', borderRadius: 6,
-                          border: 'none', outline: 'none', background: cView===v.toLowerCase() ? C.acs : 'transparent',
-                          color: isDisabled ? C.t3 : cView===v.toLowerCase() ? '#3F3D33' : C.t2,
+                          fontSize: 11, fontWeight: isActive ? 700 : 500, padding: '3px 9px', borderRadius: 6,
+                          border: isDrill ? `1.5px dashed ${C.acm}` : 'none', outline: 'none',
+                          background: isPrimary ? C.acs : isDrill ? C.acl : 'transparent',
+                          color: isDisabled ? C.t3 : isActive ? '#3F3D33' : C.t2,
                           cursor: isDisabled ? 'not-allowed' : 'pointer', fontFamily: 'var(--font)', textAlign: 'center',
                           opacity: isDisabled ? 0.45 : 1,
                         }}
@@ -1324,10 +1341,14 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
                     </thead>
                     <tbody>
                       {enrichZone.map((r, ri) => (
-                        <tr key={r.zone_group} style={{ borderBottom:`1px solid ${C.border}`, background: ri%2===1?'#FAF9F6':'transparent', transition:'box-shadow .12s, background .12s' }}
+                        <Fragment key={r.zone_group}>
+                        <tr style={{ borderBottom: zExpanded[r.zone_group] ? 'none' : `1px solid ${C.border}`, background: ri%2===1?'#FAF9F6':'transparent', transition:'box-shadow .12s, background .12s' }}
                           onMouseEnter={e => { e.currentTarget.style.background='#FDF8ED'; e.currentTarget.style.boxShadow=`inset 0 1px 0 0 ${C.acm}55, inset 0 -1px 0 0 ${C.acm}55, 0 0 8px 0 ${C.acc}33` }}
                           onMouseLeave={e => { e.currentTarget.style.background=ri%2===1?'#FAF9F6':'transparent'; e.currentTarget.style.boxShadow='none' }}>
-                          <td style={td9zL}>Zone {r.zone_group}</td>
+                          <td style={{ ...td9zL, display:'flex', alignItems:'center', gap:6 }}>
+                            {cDrill && <span onClick={() => setZExpanded(e => ({ ...e, [r.zone_group]: !e[r.zone_group] }))} style={{ fontSize:9, color:C.t3, display:'inline-block', transform:zExpanded[r.zone_group]?'rotate(90deg)':'rotate(0deg)', transition:'transform .15s', cursor:'pointer', flexShrink:0 }}>▶</span>}
+                            Zone {r.zone_group}
+                          </td>
                           <td style={td9z}>{r._volPct.toFixed(2)}%</td>
                           <td style={{ ...td9z, color:C.t1, fontWeight:600 }}>{n(r.total)}</td>
                           <td style={td9z}>{r._delPct.toFixed(2)}%</td>
@@ -1341,6 +1362,42 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
                           <td style={td9z}>{d(r.avg_fulfilment_days)}</td>
                           <td style={td9z}>{d(r.avg_rto_tat_days)}</td>
                         </tr>
+                        {zExpanded[r.zone_group] && cDrill && (() => {
+                          const drillRows = cDrill === 'courier'
+                            ? (data?.byCourierZone || []).filter(z => z.zone_group === r.zone_group).sort((a,b) => b.total - a.total)
+                            : cDrill === 'facility'
+                            ? (data?.byZoneFacility || []).filter(z => z.zone_group === r.zone_group).sort((a,b) => b.total - a.total)
+                            : []
+                          return drillRows.map(z => {
+                            const _zd = z.total ? +((z.delivered/z.total)*100).toFixed(2) : 0
+                            const _zr = z.total ? +((z.rto/z.total)*100).toFixed(2) : 0
+                            const _zc = z.total ? +(((z.cancelled||0)/z.total)*100).toFixed(2) : 0
+                            const _zf = z.ofd_total ? +((z.d1/z.ofd_total)*100).toFixed(2) : null
+                            const _zra = z.ofd_total ? +(((z.rasr_num||0)/z.ofd_total)*100).toFixed(2) : null
+                            const _zvp = +((z.total/zoneTotalAll)*100).toFixed(2)
+                            const drillKey = cDrill === 'courier' ? z.courier_group : z.facility
+                            return (
+                              <tr key={drillKey} style={{ borderBottom:`1px solid ${C.border}`, background:'#FAFAF8' }}
+                                onMouseEnter={e => { e.currentTarget.style.background='#FDF8ED' }}
+                                onMouseLeave={e => { e.currentTarget.style.background='#FAFAF8' }}>
+                                <td style={{ padding:'4px 7px 4px 32px', color:C.t2, fontSize:11, whiteSpace:'nowrap' }}>{drillKey}</td>
+                                <td style={{ ...td9z, padding:'4px 7px', fontSize:11 }}>{_zvp.toFixed(2)}%</td>
+                                <td style={{ ...td9z, padding:'4px 7px', fontSize:11, color:C.t1, fontWeight:600 }}>{n(z.total)}</td>
+                                <td style={{ ...td9z, padding:'4px 7px', fontSize:11 }}>{_zd.toFixed(2)}%</td>
+                                <td style={{ ...td9z, padding:'4px 7px', fontSize:11 }}>{_zr.toFixed(2)}%</td>
+                                <td style={{ ...td9z, padding:'4px 7px', fontSize:11 }}>{_zc.toFixed(2)}%</td>
+                                <td style={{ ...td9z, padding:'4px 7px', fontSize:11 }}>{_zf!=null?_zf.toFixed(2)+'%':'—'}</td>
+                                <td style={{ ...td9z, padding:'4px 7px', fontSize:11 }}>{_zra!=null?_zra.toFixed(2)+'%':'—'}</td>
+                                <td style={{ ...td9z, padding:'4px 7px', fontSize:11 }}>{d(z.avg_processing_days)}</td>
+                                <td style={{ ...td9z, padding:'4px 7px', fontSize:11 }}>{d(z.avg_pickup_days)}</td>
+                                <td style={{ ...td9z, padding:'4px 7px', fontSize:11 }}>{d(z.avg_intransit_days)}</td>
+                                <td style={{ ...td9z, padding:'4px 7px', fontSize:11 }}>{d(z.avg_fulfilment_days)}</td>
+                                <td style={{ ...td9z, padding:'4px 7px', fontSize:11 }}>{d(z.avg_rto_tat_days)}</td>
+                              </tr>
+                            )
+                          })
+                        })()}
+                        </Fragment>
                       ))}
                     </tbody>
                     <tfoot>
@@ -1418,10 +1475,16 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
                     </thead>
                     <tbody>
                       {enrichFac.map((r, ri) => (
-                        <tr key={r.facility} style={{ borderBottom:`1px solid ${C.border}`, background: ri % 2 === 1 ? '#FAF9F6' : 'transparent', transition: 'box-shadow .12s, background .12s' }}
+                        <Fragment key={r.facility}>
+                        <tr style={{ borderBottom: fExpanded[r.facility] ? 'none' : `1px solid ${C.border}`, background: ri % 2 === 1 ? '#FAF9F6' : 'transparent', transition: 'box-shadow .12s, background .12s' }}
                           onMouseEnter={e => { e.currentTarget.style.background = '#FDF8ED'; e.currentTarget.style.boxShadow = `inset 0 1px 0 0 ${C.acm}55, inset 0 -1px 0 0 ${C.acm}55, 0 0 8px 0 ${C.acc}33` }}
                           onMouseLeave={e => { e.currentTarget.style.background = ri % 2 === 1 ? '#FAF9F6' : 'transparent'; e.currentTarget.style.boxShadow = 'none' }}>
-                          <td style={{ ...td9L, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', maxWidth:0 }}>{r.facility}</td>
+                          <td style={{ ...td9L, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', maxWidth:0 }}>
+                            <span style={{ display:'flex', alignItems:'center', gap:6 }}>
+                              {cDrill && <span onClick={() => setFExpanded(e => ({ ...e, [r.facility]: !e[r.facility] }))} style={{ fontSize:9, color:C.t3, display:'inline-block', transform:fExpanded[r.facility]?'rotate(90deg)':'rotate(0deg)', transition:'transform .15s', cursor:'pointer', flexShrink:0 }}>▶</span>}
+                              <span style={{ overflow:'hidden', textOverflow:'ellipsis' }}>{r.facility}</span>
+                            </span>
+                          </td>
                           <td style={td9}>{r._volPct.toFixed(2)}%</td>
                           <td style={{ ...td9, color:C.t1, fontWeight:600 }}>{n(r.total)}</td>
                           <td style={td9}>{r._delPct.toFixed(2)}%</td>
@@ -1437,6 +1500,45 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
                           <td style={td9}>{d(r.avg_rto_tat_days)}</td>
                           <td style={td9}>{d(r.avg_s2a_days)}</td>
                         </tr>
+                        {fExpanded[r.facility] && cDrill && (() => {
+                          const drillRows = cDrill === 'courier'
+                            ? (data?.byCourierFacility || []).filter(f => f.facility === r.facility).sort((a,b) => b.total - a.total)
+                            : cDrill === 'zone'
+                            ? (data?.byZoneFacility || []).filter(f => f.facility === r.facility).sort((a,b) => a.zone_group < b.zone_group ? -1 : 1)
+                            : []
+                          return drillRows.map(f => {
+                            const _fd = f.total ? +((f.delivered/f.total)*100).toFixed(2) : 0
+                            const _fr = f.total ? +((f.rto/f.total)*100).toFixed(2) : 0
+                            const _fzr = f.total ? +(((f.z_rto||0)/f.total)*100).toFixed(2) : 0
+                            const _fc = f.total ? +(((f.cancelled||0)/f.total)*100).toFixed(2) : 0
+                            const _ff = f.ofd_total ? +((f.d1/f.ofd_total)*100).toFixed(2) : null
+                            const _fra = f.ofd_total ? +(((f.rasr_num||0)/f.ofd_total)*100).toFixed(2) : null
+                            const _fvp = +((f.total/facTotalAll)*100).toFixed(2)
+                            const drillKey = cDrill === 'courier' ? f.courier_group : `Zone ${f.zone_group}`
+                            return (
+                              <tr key={drillKey} style={{ borderBottom:`1px solid ${C.border}`, background:'#FAFAF8' }}
+                                onMouseEnter={e => { e.currentTarget.style.background='#FDF8ED' }}
+                                onMouseLeave={e => { e.currentTarget.style.background='#FAFAF8' }}>
+                                <td style={{ padding:'4px 7px 4px 32px', color:C.t2, fontSize:11, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis', maxWidth:0 }}>{drillKey}</td>
+                                <td style={{ ...td9, padding:'4px 7px', fontSize:11 }}>{_fvp.toFixed(2)}%</td>
+                                <td style={{ ...td9, padding:'4px 7px', fontSize:11, color:C.t1, fontWeight:600 }}>{n(f.total)}</td>
+                                <td style={{ ...td9, padding:'4px 7px', fontSize:11 }}>{_fd.toFixed(2)}%</td>
+                                <td style={{ ...td9, padding:'4px 7px', fontSize:11 }}>{_fr.toFixed(2)}%</td>
+                                <td style={{ ...td9, padding:'4px 7px', fontSize:11 }}>{_fzr.toFixed(2)}%</td>
+                                <td style={{ ...td9, padding:'4px 7px', fontSize:11 }}>{_fc.toFixed(2)}%</td>
+                                <td style={{ ...td9, padding:'4px 7px', fontSize:11 }}>{_ff!=null?_ff.toFixed(2)+'%':'—'}</td>
+                                <td style={{ ...td9, padding:'4px 7px', fontSize:11 }}>{_fra!=null?_fra.toFixed(2)+'%':'—'}</td>
+                                <td style={{ ...td9, padding:'4px 7px', fontSize:11 }}>{d(f.avg_processing_days)}</td>
+                                <td style={{ ...td9, padding:'4px 7px', fontSize:11 }}>{d(f.avg_pickup_days)}</td>
+                                <td style={{ ...td9, padding:'4px 7px', fontSize:11 }}>{d(f.avg_intransit_days)}</td>
+                                <td style={{ ...td9, padding:'4px 7px', fontSize:11 }}>{d(f.avg_fulfilment_days)}</td>
+                                <td style={{ ...td9, padding:'4px 7px', fontSize:11 }}>{d(f.avg_rto_tat_days)}</td>
+                                <td style={{ ...td9, padding:'4px 7px', fontSize:11 }}>{d(f.avg_s2a_days)}</td>
+                              </tr>
+                            )
+                          })
+                        })()}
+                        </Fragment>
                       ))}
                     </tbody>
                     <tfoot>
@@ -1580,7 +1682,7 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
                           onMouseLeave={e => { e.currentTarget.style.background = rowBg; e.currentTarget.style.boxShadow = 'none'; e.currentTarget.querySelectorAll('td[data-sticky]').forEach(td => { td.style.background = stickyBg; td.style.boxShadow = 'none' }) }}>
                           <td data-sticky style={{ padding: '6px 7px', position: 'sticky', left: 0, background: stickyBg, zIndex: 1, overflow: 'hidden', transition: 'box-shadow .12s, background .12s' }}>
                             <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
-                              <span onClick={() => setCExpanded(e => ({ ...e, [r.courier_group]: !e[r.courier_group] }))} style={{ fontSize:9, color:C.t3, display:'inline-block', transform:cExpanded[r.courier_group]?'rotate(90deg)':'rotate(0deg)', transition:'transform .15s', cursor:'pointer', flexShrink:0 }}>▶</span>
+                              {cDrill && <span onClick={() => setCExpanded(e => ({ ...e, [r.courier_group]: !e[r.courier_group] }))} style={{ fontSize:9, color:C.t3, display:'inline-block', transform:cExpanded[r.courier_group]?'rotate(90deg)':'rotate(0deg)', transition:'transform .15s', cursor:'pointer', flexShrink:0 }}>▶</span>}
                               {logo
                                 ? <img src={logo} alt="" style={{ width: 28, height: 28, objectFit: 'contain', borderRadius: 4, flexShrink: 0, background: '#fff', border: `1px solid ${C.border}` }} onError={e => { e.currentTarget.style.display = 'none' }} />
                                 : <span style={{ width: 28, height: 28, borderRadius: 4, background: color, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, fontWeight: 800, color: '#fff', flexShrink: 0 }}>{r.courier_group.charAt(0)}</span>
@@ -1601,35 +1703,43 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
                           <td style={{ padding: '6px 7px', textAlign: 'center', color: C.t1, fontSize: 11 }}>{d(r.avg_fulfilment_days)}</td>
                           <td style={{ padding: '6px 7px', textAlign: 'center', color: C.t1, fontSize: 11 }}>{d(r.avg_rto_tat_days)}</td>
                         </tr>
-                        {cExpanded[r.courier_group] && byCourierMonth.filter(m => m.courier_group === r.courier_group).sort((a,b) => a.month_dt < b.month_dt ? -1 : 1).map(m => {
-                          const _delPct = m.total ? +((m.delivered/m.total)*100).toFixed(2) : 0
-                          const _rtoPct = m.total ? +((m.rto/m.total)*100).toFixed(2) : 0
-                          const _zrtoPct = m.total ? +(((m.z_rto||0)/m.total)*100).toFixed(2) : 0
-                          const _cancPct = m.total ? +(((m.cancelled||0)/m.total)*100).toFixed(2) : 0
-                          const _fasrPct = m.ofd_total ? +((m.d1/m.ofd_total)*100).toFixed(2) : null
-                          const _rasrPct = m.ofd_total ? +(((m.rasr_num||0)/m.ofd_total)*100).toFixed(2) : null
-                          const mVolPct = +((m.total/totalAll)*100).toFixed(2)
-                          const mRtoColor = _rtoPct > avgRtoPct ? C.red.tx : C.t1
-                          return (
-                            <tr key={m.month_label} style={{ borderBottom:`1px solid ${C.border}`, background:'#FAFAF8', transition: 'box-shadow .12s, background .12s' }}
-                              onMouseEnter={e => { e.currentTarget.style.background = '#FDF8ED'; e.currentTarget.style.boxShadow = `inset 0 1px 0 0 ${C.acm}55, inset 0 -1px 0 0 ${C.acm}55, 0 0 8px 0 ${C.acc}33`; e.currentTarget.querySelectorAll('td[data-sticky]').forEach(td => { td.style.background = '#FDF8ED'; td.style.boxShadow = `inset 0 1px 0 0 ${C.acm}55, inset 0 -1px 0 0 ${C.acm}55` }) }}
-                              onMouseLeave={e => { e.currentTarget.style.background = '#FAFAF8'; e.currentTarget.style.boxShadow = 'none'; e.currentTarget.querySelectorAll('td[data-sticky]').forEach(td => { td.style.background = '#FAFAF8'; td.style.boxShadow = 'none' }) }}>
-                              <td data-sticky style={{ padding:'4px 7px 4px 46px', color:C.t2, fontSize:11, whiteSpace:'nowrap', position:'sticky', left:0, background:'#FAFAF8', zIndex:1, transition: 'box-shadow .12s, background .12s' }}>{m.month_label}</td>
-                              <td style={{ padding:'4px 7px', textAlign:'right', color:C.t1, fontSize:11 }}>{mVolPct.toFixed(2)}%</td>
-                              <td style={{ padding:'4px 7px', textAlign:'right', color:C.t1, fontSize:11 }}>{n(m.total)}</td>
-                              <td style={{ padding:'4px 7px', textAlign:'right', color:C.t1, fontSize:11 }}>{_delPct.toFixed(2)}%</td>
-                              <td style={{ padding:'4px 7px', textAlign:'right', color:mRtoColor, fontSize:11 }}>{_rtoPct.toFixed(2)}%</td>
-                              <td style={{ padding:'4px 7px', textAlign:'right', color:C.t1, fontSize:11 }}>{_cancPct.toFixed(2)}%</td>
-                              <td style={{ padding:'4px 7px', textAlign:'right', color:C.t1, fontSize:11 }}>{_fasrPct!=null?_fasrPct.toFixed(2)+'%':'—'}</td>
-                              <td style={{ padding:'4px 7px', textAlign:'right', color:C.t1, fontSize:11 }}>{_rasrPct!=null?_rasrPct.toFixed(2)+'%':'—'}</td>
-                              <td style={{ padding:'4px 7px', textAlign:'center', color:C.t1, fontSize:11 }}>{d(m.avg_processing_days)}</td>
-                              <td style={{ padding:'4px 7px', textAlign:'center', color:C.t1, fontSize:11 }}>{d(m.avg_pickup_days)}</td>
-                              <td style={{ padding:'4px 7px', textAlign:'center', color:C.t1, fontSize:11 }}>{d(m.avg_intransit_days)}</td>
-                              <td style={{ padding:'4px 7px', textAlign:'center', color:C.t1, fontSize:11 }}>{d(m.avg_fulfilment_days)}</td>
-                              <td style={{ padding:'4px 7px', textAlign:'center', color:C.t1, fontSize:11 }}>{d(m.avg_rto_tat_days)}</td>
-                            </tr>
-                          )
-                        })}
+                        {cExpanded[r.courier_group] && cDrill && (() => {
+                          const drillRows = cDrill === 'zone'
+                            ? (data?.byCourierZone || []).filter(z => z.courier_group === r.courier_group).sort((a,b) => a.zone_group < b.zone_group ? -1 : 1)
+                            : cDrill === 'facility'
+                            ? (data?.byCourierFacility || []).filter(z => z.courier_group === r.courier_group).sort((a,b) => b.total - a.total)
+                            : []
+                          return drillRows.map(z => {
+                            const _dp = z.total ? +((z.delivered/z.total)*100).toFixed(2) : 0
+                            const _rp = z.total ? +((z.rto/z.total)*100).toFixed(2) : 0
+                            const _cp = z.total ? +(((z.cancelled||0)/z.total)*100).toFixed(2) : 0
+                            const _fp = z.ofd_total ? +((z.d1/z.ofd_total)*100).toFixed(2) : null
+                            const _rap = z.ofd_total ? +(((z.rasr_num||0)/z.ofd_total)*100).toFixed(2) : null
+                            const _vp = +((z.total/totalAll)*100).toFixed(2)
+                            const _rc = _rp > avgRtoPct ? C.red.tx : C.t1
+                            const drillKey = cDrill === 'zone' ? z.zone_group : z.facility
+                            const drillLabel = cDrill === 'zone' ? `Zone ${z.zone_group}` : z.facility
+                            return (
+                              <tr key={drillKey} style={{ borderBottom:`1px solid ${C.border}`, background:'#FAFAF8', transition:'box-shadow .12s, background .12s' }}
+                                onMouseEnter={e => { e.currentTarget.style.background='#FDF8ED'; e.currentTarget.style.boxShadow=`inset 0 1px 0 0 ${C.acm}55, inset 0 -1px 0 0 ${C.acm}55, 0 0 8px 0 ${C.acc}33`; e.currentTarget.querySelectorAll('td[data-sticky]').forEach(td => { td.style.background='#FDF8ED' }) }}
+                                onMouseLeave={e => { e.currentTarget.style.background='#FAFAF8'; e.currentTarget.style.boxShadow='none'; e.currentTarget.querySelectorAll('td[data-sticky]').forEach(td => { td.style.background='#FAFAF8' }) }}>
+                                <td data-sticky style={{ padding:'4px 7px 4px 46px', color:C.t2, fontSize:11, whiteSpace:'nowrap', position:'sticky', left:0, background:'#FAFAF8', zIndex:1 }}>{drillLabel}</td>
+                                <td style={{ padding:'4px 7px', textAlign:'right', color:C.t1, fontSize:11 }}>{_vp.toFixed(2)}%</td>
+                                <td style={{ padding:'4px 7px', textAlign:'right', color:C.t1, fontSize:11 }}>{n(z.total)}</td>
+                                <td style={{ padding:'4px 7px', textAlign:'right', color:C.t1, fontSize:11 }}>{_dp.toFixed(2)}%</td>
+                                <td style={{ padding:'4px 7px', textAlign:'right', color:_rc, fontSize:11 }}>{_rp.toFixed(2)}%</td>
+                                <td style={{ padding:'4px 7px', textAlign:'right', color:C.t1, fontSize:11 }}>{_cp.toFixed(2)}%</td>
+                                <td style={{ padding:'4px 7px', textAlign:'right', color:C.t1, fontSize:11 }}>{_fp!=null?_fp.toFixed(2)+'%':'—'}</td>
+                                <td style={{ padding:'4px 7px', textAlign:'right', color:C.t1, fontSize:11 }}>{_rap!=null?_rap.toFixed(2)+'%':'—'}</td>
+                                <td style={{ padding:'4px 7px', textAlign:'center', color:C.t1, fontSize:11 }}>{d(z.avg_processing_days)}</td>
+                                <td style={{ padding:'4px 7px', textAlign:'center', color:C.t1, fontSize:11 }}>{d(z.avg_pickup_days)}</td>
+                                <td style={{ padding:'4px 7px', textAlign:'center', color:C.t1, fontSize:11 }}>{d(z.avg_intransit_days)}</td>
+                                <td style={{ padding:'4px 7px', textAlign:'center', color:C.t1, fontSize:11 }}>{d(z.avg_fulfilment_days)}</td>
+                                <td style={{ padding:'4px 7px', textAlign:'center', color:C.t1, fontSize:11 }}>{d(z.avg_rto_tat_days)}</td>
+                              </tr>
+                            )
+                          })
+                        })()}
                         </Fragment>
                       )
                     })}
