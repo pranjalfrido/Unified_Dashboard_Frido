@@ -553,7 +553,17 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
       : `/logistics-data-${cPayment.toLowerCase()}.json`
     fetch(file)
       .then(r => r.ok ? r.json() : null)
-      .then(json => { if (json?.current) setCPaymentData(json.current) })
+      .then(json => {
+        // static file date must match selected date range — otherwise hit live BQ
+        const dateMatches = json?.dateRange && json.dateRange.start === filters.start && json.dateRange.end === filters.end
+        if (json?.current && dateMatches) { setCPaymentData(json.current); return }
+        // date mismatch — fetch from live BQ
+        const body = { start: filters.start, end: filters.end, paymentMode: cPayment }
+        if (shipmentType) body.shipmentType = shipmentType
+        return fetch(`${API}/api/logistics`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+          .then(r => r.ok ? r.json() : null)
+          .then(json => { if (json) setCPaymentData(json) })
+      })
       .catch(() => {})
   }, [cPayment, lFilters.shipmentType, filters.start, filters.end])
 
