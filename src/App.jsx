@@ -446,6 +446,8 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
   const [fExpanded, setFExpanded] = useState({})
   const [rawData, setRawData] = useState(null)
   const [rawPrevData, setRawPrevData] = useState(null)
+  const [rawCodData, setRawCodData] = useState(null)   // cached COD BQ response for current date range
+  const [rawPrepaidData, setRawPrepaidData] = useState(null) // cached Prepaid BQ response
   const [data, setData] = useState(null)
   const [prevData, setPrevData] = useState(null)
   const [loading, setLoading] = useState(false)
@@ -496,6 +498,8 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
 
       if (!usedStatic) {
         // Static JSON unavailable or filter active — hit live BQ
+        // Reset payment caches since date/filters changed
+        setRawCodData(null); setRawPrepaidData(null)
         const body = { start: filters.start, end: filters.end }
         if (lFilters.category?.length) body.category = lFilters.category
         if (lFilters.subCategory?.length) body.subCategory = lFilters.subCategory
@@ -511,14 +515,24 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
         const prevStart = new Date(prevEnd); prevStart.setDate(prevStart.getDate() - days + 1)
         const fmt = d => d.toISOString().slice(0, 10)
         const prevBody = { ...body, start: fmt(prevStart), end: fmt(prevEnd) }
-        const [r, rPrev] = await Promise.all([
+        // fetch main + COD + Prepaid in parallel (no extra payment filter already active)
+        const noPaymentFilter = !lFilters.paymentMode?.length
+        const noGeoOrCatFilter = !lFilters.pickupState?.length && !lFilters.dropState?.length && !lFilters.dropCity?.length && !lFilters.category?.length && !lFilters.subCategory?.length && !lFilters.weightSlabs?.length
+        const fetchAll = [
           fetch(`${API}/api/logistics`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }),
           fetch(`${API}/api/logistics`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(prevBody) }),
-        ])
+          ...(noPaymentFilter && noGeoOrCatFilter ? [
+            fetch(`${API}/api/logistics`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...body, paymentMode: 'COD' }) }),
+            fetch(`${API}/api/logistics`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...body, paymentMode: 'Prepaid' }) }),
+          ] : []),
+        ]
+        const [r, rPrev, rCod, rPrepaid] = await Promise.all(fetchAll)
         if (!r.ok) throw new Error(await r.text())
         const [cur, prev] = await Promise.all([r.json(), rPrev.ok ? rPrev.json() : Promise.resolve(null)])
         setRawData(cur)
         setRawPrevData(prev)
+        if (rCod?.ok) rCod.json().then(j => setRawCodData(j)).catch(() => {})
+        if (rPrepaid?.ok) rPrepaid.json().then(j => setRawPrepaidData(j)).catch(() => {})
         try { localStorage.setItem('logistics_stale', JSON.stringify({ current: cur, previous: prev, dateRange: { start: filters.start, end: filters.end }, savedAt: Date.now() })) } catch {}
       }
     } catch (e) {
@@ -548,16 +562,23 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
   useEffect(() => {
     if (!cPayment) { setCPaymentData(null); return }
     const shipmentType = lFilters.shipmentType && lFilters.shipmentType !== 'all' ? lFilters.shipmentType.toLowerCase() : null
+
+    // 1. Use in-memory BQ cache if available (custom date range already fetched it)
+    if (!shipmentType) {
+      if (cPayment === 'COD' && rawCodData) { setCPaymentData(rawCodData); return }
+      if (cPayment === 'Prepaid' && rawPrepaidData) { setCPaymentData(rawPrepaidData); return }
+    }
+
+    // 2. Try static file — instant for MTD
     const file = shipmentType
       ? `/logistics-data-${shipmentType}-${cPayment.toLowerCase()}.json`
       : `/logistics-data-${cPayment.toLowerCase()}.json`
     fetch(file)
       .then(r => r.ok ? r.json() : null)
       .then(json => {
-        // static file date must match selected date range — otherwise hit live BQ
         const dateMatches = json?.dateRange && json.dateRange.start === filters.start && json.dateRange.end === filters.end
         if (json?.current && dateMatches) { setCPaymentData(json.current); return }
-        // date mismatch — fetch from live BQ
+        // 3. Fallback: live BQ
         const body = { start: filters.start, end: filters.end, paymentMode: cPayment }
         if (shipmentType) body.shipmentType = shipmentType
         return fetch(`${API}/api/logistics`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
@@ -565,7 +586,7 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
           .then(json => { if (json) setCPaymentData(json) })
       })
       .catch(() => {})
-  }, [cPayment, lFilters.shipmentType, filters.start, filters.end])
+  }, [cPayment, lFilters.shipmentType, filters.start, filters.end, rawCodData, rawPrepaidData])
 
   // instant client-side filter — runs on every slicer change, no BQ call
   useEffect(() => {
