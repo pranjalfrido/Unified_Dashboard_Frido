@@ -200,9 +200,7 @@ function LMultiDropdown({ label, options, value, onChange, flex }) {
       </button>
       {open && (
         <div style={{ position: 'fixed', zIndex: 400, background: C.card, border: `1px solid ${C.border2}`, borderRadius: 10, boxShadow: '0 8px 28px rgba(0,0,0,.18)', width: 240, maxHeight: 320, display: 'flex', flexDirection: 'column',
-          top: (() => { try { const r = ref.current?.getBoundingClientRect(); return (r ? r.top - 4 : 0) + 'px' } catch { return 0 } })(),
-          left: (() => { try { const r = ref.current?.getBoundingClientRect(); return (r ? r.right + 4 : 0) + 'px' } catch { return 0 } })(),
-          transform: 'translateY(-100%)'
+          ...(() => { try { const r = ref.current?.getBoundingClientRect(); const spaceBelow = window.innerHeight - r.bottom; return spaceBelow < 340 ? { bottom: (window.innerHeight - r.top + 4) + 'px', left: (r.right + 4) + 'px' } : { top: (r.bottom + 4) + 'px', left: (r.right + 4) + 'px' } } catch { return { top: 0, left: 0 } } })()
         }}>
           <div style={{ padding: '7px 8px', borderBottom: `1px solid ${C.border}` }}>
             <input autoFocus value={search} onChange={e => setSearch(e.target.value)} placeholder={`Search ${label.toLowerCase()}...`} style={{ width: '100%', fontSize: 11.5, padding: '5px 8px', border: `1px solid ${C.border2}`, borderRadius: 6, outline: 'none', fontFamily: 'var(--font)', background: C.bg, boxSizing: 'border-box' }} />

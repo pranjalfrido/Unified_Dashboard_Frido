@@ -884,8 +884,7 @@ function SearchSelect({ label, options, value, onChange, multi, selected }) {
       </button>
       {open && (
         <div style={{ position: 'fixed', zIndex: 400, background: C.card, border: `1px solid ${C.border2}`, borderRadius: 10, boxShadow: '0 8px 28px rgba(0,0,0,.18)', width: 240, maxHeight: 300, display: 'flex', flexDirection: 'column',
-          top: (() => { try { const r = ref.current?.getBoundingClientRect(); return (r ? r.bottom + 4 : 0) + 'px' } catch { return 0 } })(),
-          left: (() => { try { const r = ref.current?.getBoundingClientRect(); return (r ? r.right + 4 : 0) + 'px' } catch { return 0 } })(),
+          ...(() => { try { const r = ref.current?.getBoundingClientRect(); const spaceBelow = window.innerHeight - r.bottom; return spaceBelow < 320 ? { bottom: (window.innerHeight - r.top + 4) + 'px', left: (r.right + 4) + 'px' } : { top: (r.bottom + 4) + 'px', left: (r.right + 4) + 'px' } } catch { return { top: 0, left: 0 } } })()
         }}>
           {searchable && (
             <div style={{ padding: '7px 8px', borderBottom: `1px solid ${C.border}` }}>
