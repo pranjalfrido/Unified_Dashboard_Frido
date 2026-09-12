@@ -1241,7 +1241,7 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
                     </div>
                   )
                 })
-                return [...viewToggles, <div key="sep" style={{ width: 1, height: 14, background: '#D6D0B0', margin: '0 6px' }} />, ...payToggles]
+                return [...payToggles, <div key="sep" style={{ width: 20 }} />, ...viewToggles]
               })()}
             </div>
           </div>
