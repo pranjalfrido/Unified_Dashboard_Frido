@@ -1177,13 +1177,12 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
               {(() => {
                 const hasActiveFilter = (lFilters.couriers?.length > 0) || (lFilters.category?.length > 0) || (lFilters.subCategory?.length > 0)
                 const unfilteredViews = ['Zone','Facility','Month']
-                return ['Courier','Zone','Facility','Month'].map((v, i) => {
+                const viewToggles = ['Courier','Zone','Facility','Month'].map((v, i) => {
                   const vl = v.toLowerCase()
                   const isDisabled = hasActiveFilter && unfilteredViews.includes(v)
                   const isActive = cSelected.has(vl)
                   const isPrimary = cView === vl
                   const isDrill = cDrill === vl
-                  // can't deselect if it's the only selected toggle
                   const cantDeselect = isActive && cSelected.size === 1
                   return (
                     <div key={v} style={{ display: 'flex', alignItems: 'center' }}>
@@ -1212,6 +1211,26 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
                     </div>
                   )
                 })
+                const activePayment = lFilters.paymentMode?.length === 1 ? lFilters.paymentMode[0] : null
+                const payToggles = ['COD','Prepaid'].map((p, i) => {
+                  const isActive = activePayment === p
+                  return (
+                    <div key={p} style={{ display: 'flex', alignItems: 'center' }}>
+                      {i > 0 && <div style={{ width: 1, height: 14, background: '#D6D0B0', margin: '0 4px' }} />}
+                      <button
+                        onClick={() => setLFilters(f => ({ ...f, paymentMode: isActive ? [] : [p] }))}
+                        style={{
+                          fontSize: 11, fontWeight: isActive ? 700 : 500, padding: '3px 9px', borderRadius: 6,
+                          border: 'none', outline: 'none',
+                          background: isActive ? C.acs : 'transparent',
+                          color: isActive ? '#3F3D33' : C.t2,
+                          cursor: 'pointer', fontFamily: 'var(--font)', textAlign: 'center',
+                        }}
+                      >{p}</button>
+                    </div>
+                  )
+                })
+                return [...viewToggles, <div key="sep" style={{ width: 1, height: 14, background: '#D6D0B0', margin: '0 6px' }} />, ...payToggles]
               })()}
             </div>
           </div>
