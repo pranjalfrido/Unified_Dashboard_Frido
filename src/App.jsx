@@ -885,7 +885,13 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
     return acc
   }, {}))
   const trendData = trendDeduped.map(d => ({ ...d, rto_pct: d.total ? +((d.rto / d.total) * 100).toFixed(1) : 0, del_pct: d.total ? +((d.delivered / d.total) * 100).toFixed(1) : 0, del_value_pct: d.del_value_pct ?? (d.total_value ? +((d.total_value - (d.rto_value||0)) / d.total_value * 100).toFixed(1) : 0), rto_value_pct: d.rto_value_pct ?? (d.total_value ? +((d.rto_value||0) / d.total_value * 100).toFixed(1) : 0), rto_value: d.rto_value ?? 0 }))
-  const breakdownSrc = cPaymentData || data
+  const tierFilteredData = cTier ? (() => {
+    const src = cPaymentData || data
+    if (!src) return null
+    const rows = (src.byCourierTier || []).filter(r => r.tier === cTier)
+    return { ...src, byCourier: rows }
+  })() : null
+  const breakdownSrc = tierFilteredData || cPaymentData || data
   const byCourierData = (breakdownSrc?.byCourier || []).map(d => ({ ...d, del_pct: d.total ? +((d.delivered / d.total) * 100).toFixed(1) : 0, rto_pct: d.total ? +((d.rto / d.total) * 100).toFixed(1) : 0 }))
   const maxCourierTotal = byCourierData[0]?.total || 1
 
@@ -1306,7 +1312,7 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
                     <div key={t} style={{ display: 'flex', alignItems: 'center' }}>
                       {i > 0 && <div style={{ width: 1, height: 14, background: '#D6D0B0', margin: '0 4px' }} />}
                       <button
-                        onClick={() => { setCTier(isActive ? null : t); setCSelected(new Set(['tier'])) }}
+                        onClick={() => setCTier(isActive ? null : t)}
                         style={{
                           fontSize: 11, fontWeight: isActive ? 700 : 500, padding: '3px 9px', borderRadius: 6,
                           border: 'none', outline: 'none',
