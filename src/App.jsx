@@ -422,12 +422,11 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
     if (cView === 'courier') {
       if (cSelected.has('zone')) return 'zone'
       if (cSelected.has('facility')) return 'facility'
-      if (cSelected.has('tier')) return 'tier'
       if (cSelected.has('month')) return 'month'
       return null
     }
     if (cSelected.has('courier')) return 'courier'
-    const others = ['zone','facility','tier','month'].filter(v => v !== cView && cSelected.has(v))
+    const others = ['zone','facility','month'].filter(v => v !== cView && cSelected.has(v))
     return others[0] || null
   })()
   const [payTrendGran, setPayTrendGran] = useState('Daily')
@@ -441,7 +440,7 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
   }, [])
   useEffect(() => {
     const hasActiveFilter = (lFilters.couriers?.length > 0) || (lFilters.category?.length > 0) || (lFilters.subCategory?.length > 0)
-    if (hasActiveFilter && ['zone','facility','tier','month'].includes(cView)) { setCSelected(new Set(['courier'])); setCExpanded({}); setZExpanded({}); setFExpanded({}) }
+    if (hasActiveFilter && ['zone','facility','month'].includes(cView)) { setCSelected(new Set(['courier'])); setCExpanded({}); setZExpanded({}); setFExpanded({}) }
   }, [lFilters.couriers, lFilters.shipmentType, lFilters.category, lFilters.subCategory]) // eslint-disable-line react-hooks/exhaustive-deps
   const [filterSidebarOpen, setFilterSidebarOpen] = useState(false)
   const [cExpanded, setCExpanded] = useState({})
@@ -1239,8 +1238,8 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
             <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
               {(() => {
                 const hasActiveFilter = (lFilters.couriers?.length > 0) || (lFilters.category?.length > 0) || (lFilters.subCategory?.length > 0)
-                const unfilteredViews = ['Zone','Facility','Tier','Month']
-                const viewToggles = ['Courier','Zone','Facility','Tier','Month'].map((v, i) => {
+                const unfilteredViews = ['Zone','Facility','Month']
+                const viewToggles = ['Courier','Zone','Facility','Month'].map((v, i) => {
                   const vl = v.toLowerCase()
                   const isDisabled = hasActiveFilter && unfilteredViews.includes(v)
                   const isActive = cSelected.has(vl)
@@ -1268,7 +1267,6 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
                             return next
                           })
                           setCExpanded({}); setZExpanded({}); setFExpanded({})
-                          if (vl !== 'tier') setCTier(null)
                         }}
                         title={isDisabled ? 'Clear courier/category filters to use this view' : undefined}
                         style={{
@@ -1302,7 +1300,25 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
                     </div>
                   )
                 })
-                return [...payToggles, <div key="sep" style={{ width: 20 }} />, ...viewToggles]
+                const tierToggles = ['Tier 1','Tier 2','Tier 3'].map((t, i) => {
+                  const isActive = cTier === t
+                  return (
+                    <div key={t} style={{ display: 'flex', alignItems: 'center' }}>
+                      {i > 0 && <div style={{ width: 1, height: 14, background: '#D6D0B0', margin: '0 4px' }} />}
+                      <button
+                        onClick={() => { setCTier(isActive ? null : t); setCSelected(new Set(['tier'])) }}
+                        style={{
+                          fontSize: 11, fontWeight: isActive ? 700 : 500, padding: '3px 9px', borderRadius: 6,
+                          border: 'none', outline: 'none',
+                          background: isActive ? '#D4EDDA' : 'transparent',
+                          color: isActive ? '#1A5E2A' : C.t2,
+                          cursor: 'pointer', fontFamily: 'var(--font)', textAlign: 'center',
+                        }}
+                      >{t}</button>
+                    </div>
+                  )
+                })
+                return [...tierToggles, <div key="sep-tier" style={{ width: 16 }} />, ...payToggles, <div key="sep" style={{ width: 20 }} />, ...viewToggles]
               })()}
             </div>
           </div>
