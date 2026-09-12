@@ -199,7 +199,7 @@ function LMultiDropdown({ label, options, value, onChange, flex }) {
         <span style={{ fontSize: 9, flexShrink: 0 }}>{open ? '▲' : '▼'}</span>
       </button>
       {open && (
-        <div style={{ position: 'absolute', bottom: 'calc(100% + 4px)', left: 0, zIndex: 400, background: C.card, border: `1px solid ${C.border2}`, borderRadius: 10, boxShadow: '0 -8px 28px rgba(0,0,0,.14)', minWidth: 210, maxHeight: 320, display: 'flex', flexDirection: 'column' }}>
+        <div style={{ position: 'absolute', bottom: 'calc(100% + 4px)', left: 0, zIndex: 400, background: C.card, border: `1px solid ${C.border2}`, borderRadius: 10, boxShadow: '0 -8px 28px rgba(0,0,0,.14)', width: '100%', boxSizing: 'border-box', maxHeight: 320, display: 'flex', flexDirection: 'column' }}>
           <div style={{ padding: '7px 8px', borderBottom: `1px solid ${C.border}` }}>
             <input autoFocus value={search} onChange={e => setSearch(e.target.value)} placeholder={`Search ${label.toLowerCase()}...`} style={{ width: '100%', fontSize: 11.5, padding: '5px 8px', border: `1px solid ${C.border2}`, borderRadius: 6, outline: 'none', fontFamily: 'var(--font)', background: C.bg, boxSizing: 'border-box' }} />
           </div>
