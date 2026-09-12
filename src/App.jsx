@@ -3336,7 +3336,7 @@ function DateRangePicker({ filters, setFilters, theme: T = C, onRefresh, loading
     { label: 'Yesterday', fn: () => { const d = new Date(today); d.setDate(d.getDate()-1); const s = fmt0(d); return { start: s, end: s } } },
     { label: 'Last 7 Days', fn: () => { const s = new Date(today); s.setDate(s.getDate()-6); return { start: fmt0(s), end: fmt0(today) } } },
     { label: 'Last 15 Days', fn: () => { const s = new Date(today); s.setDate(s.getDate()-14); return { start: fmt0(s), end: fmt0(today) } } },
-    { label: 'MTD', fn: () => { const s = new Date(today.getFullYear(), today.getMonth(), 1); return { start: fmt0(s), end: fmt0(today) } } },
+    { label: 'MTD', fn: () => { const s = new Date(today.getFullYear(), today.getMonth(), 1); const yest = new Date(today); yest.setDate(yest.getDate()-1); return { start: fmt0(s), end: fmt0(yest) } } },
     { label: 'Last Month', fn: () => { const s = new Date(today.getFullYear(), today.getMonth()-1, 1); const e = new Date(today.getFullYear(), today.getMonth(), 0); return { start: fmt0(s), end: fmt0(e) } } },
     { label: 'Last Quarter', fn: () => {
       // Indian FY quarters: Q1=Apr-Jun(3-5), Q2=Jul-Sep(6-8), Q3=Oct-Dec(9-11), Q4=Jan-Mar(0-2)
