@@ -404,6 +404,8 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
   // cSelected: set of active toggles. Primary view = non-courier if courier absent, else courier.
   // Drill = the other selected toggle shown as ▶ expand under primary rows.
   const [cSelected, setCSelected] = useState(new Set(['courier']))
+  const [cPayment, setCPayment] = useState(null) // 'COD' | 'Prepaid' | null — local to breakdown table only
+  const [cPaymentData, setCPaymentData] = useState(null) // breakdown-scoped data when cPayment is set
   const cView = (() => {
     if (!cSelected.has('courier')) {
       if (cSelected.has('zone')) return 'zone'
@@ -532,6 +534,15 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
   }, [filters.start, filters.end, JSON.stringify(lFilters.paymentMode), JSON.stringify(lFilters.pickupState), JSON.stringify(lFilters.dropState), JSON.stringify(lFilters.dropCity), JSON.stringify(lFilters.weightSlabs)])
 
   useEffect(() => { fetchLogistics() }, [fetchLogistics])
+
+  // fetch breakdown-local payment data when COD/Prepaid toggle is active
+  useEffect(() => {
+    if (!cPayment) { setCPaymentData(null); return }
+    fetch(`/logistics-data-${cPayment.toLowerCase()}.json`)
+      .then(r => r.ok ? r.json() : null)
+      .then(json => { if (json?.current) setCPaymentData(json.current) })
+      .catch(() => {})
+  }, [cPayment, filters.start, filters.end])
 
   // instant client-side filter — runs on every slicer change, no BQ call
   useEffect(() => {
@@ -824,7 +835,8 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
     return acc
   }, {}))
   const trendData = trendDeduped.map(d => ({ ...d, rto_pct: d.total ? +((d.rto / d.total) * 100).toFixed(1) : 0, del_pct: d.total ? +((d.delivered / d.total) * 100).toFixed(1) : 0, del_value_pct: d.del_value_pct ?? (d.total_value ? +((d.total_value - (d.rto_value||0)) / d.total_value * 100).toFixed(1) : 0), rto_value_pct: d.rto_value_pct ?? (d.total_value ? +((d.rto_value||0) / d.total_value * 100).toFixed(1) : 0), rto_value: d.rto_value ?? 0 }))
-  const byCourierData = (data?.byCourier || []).map(d => ({ ...d, del_pct: d.total ? +((d.delivered / d.total) * 100).toFixed(1) : 0, rto_pct: d.total ? +((d.rto / d.total) * 100).toFixed(1) : 0 }))
+  const breakdownSrc = cPaymentData || data
+  const byCourierData = (breakdownSrc?.byCourier || []).map(d => ({ ...d, del_pct: d.total ? +((d.delivered / d.total) * 100).toFixed(1) : 0, rto_pct: d.total ? +((d.rto / d.total) * 100).toFixed(1) : 0 }))
   const maxCourierTotal = byCourierData[0]?.total || 1
 
   const statusDonutData = [...(data?.byStatus || [])].sort((a, b) => b.total - a.total)
@@ -1211,14 +1223,13 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
                     </div>
                   )
                 })
-                const activePayment = lFilters.paymentMode?.length === 1 ? lFilters.paymentMode[0] : null
                 const payToggles = ['COD','Prepaid'].map((p, i) => {
-                  const isActive = activePayment === p
+                  const isActive = cPayment === p
                   return (
                     <div key={p} style={{ display: 'flex', alignItems: 'center' }}>
                       {i > 0 && <div style={{ width: 1, height: 14, background: '#D6D0B0', margin: '0 4px' }} />}
                       <button
-                        onClick={() => setLFilters(f => ({ ...f, paymentMode: isActive ? [] : [p] }))}
+                        onClick={() => setCPayment(isActive ? null : p)}
                         style={{
                           fontSize: 11, fontWeight: isActive ? 700 : 500, padding: '3px 9px', borderRadius: 6,
                           border: 'none', outline: 'none',
@@ -1284,7 +1295,7 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
                 _fasrPct: r.ofd_total ? +((r.d1 / r.ofd_total) * 100).toFixed(2) : null,
                 _rasrPct: r.ofd_total ? +(((r.rasr_num||0) / r.ofd_total) * 100).toFixed(2) : null,
               }))
-              const byCourierMonth = (data?.byCourierMonth || [])
+              const byCourierMonth = (breakdownSrc?.byCourierMonth || [])
               const byCourierDay = (data?.byCourierDay || [])
               const byCourierWeek = (data?.byCourierWeek || [])
               // helper to build period breakdown table for daily/weekly/monthly courier views
@@ -1336,7 +1347,7 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
                 )
               }
               if (cView === 'zone') {
-                const byZoneFrido = (data?.byZoneFrido || []).filter(r => r.zone_group)
+                const byZoneFrido = (breakdownSrc?.byZoneFrido || []).filter(r => r.zone_group)
                 const zoneTotalAll = byZoneFrido.reduce((s,r) => s+(r.total||0), 0) || 1
                 const enrichZoneRaw = byZoneFrido.map(r => ({
                   ...r,
@@ -1408,9 +1419,9 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
                         </tr>
                         {zExpanded[r.zone_group] && cDrill && (() => {
                           const drillRows = cDrill === 'courier'
-                            ? (data?.byCourierZone || []).filter(z => z.zone_group === r.zone_group).sort((a,b) => b.total - a.total)
+                            ? (breakdownSrc?.byCourierZone || []).filter(z => z.zone_group === r.zone_group).sort((a,b) => b.total - a.total)
                             : cDrill === 'facility'
-                            ? (data?.byZoneFacility || []).filter(z => z.zone_group === r.zone_group).sort((a,b) => b.total - a.total)
+                            ? (breakdownSrc?.byZoneFacility || []).filter(z => z.zone_group === r.zone_group).sort((a,b) => b.total - a.total)
                             : []
                           return drillRows.map(z => {
                             const _zd = z.total ? +((z.delivered/z.total)*100).toFixed(2) : 0
@@ -1465,7 +1476,7 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
                 )
               }
               if (cView === 'facility') {
-                const byFacility = (data?.byFacility || []).filter(r => r.facility)
+                const byFacility = (breakdownSrc?.byFacility || []).filter(r => r.facility)
                 const facTotalAll = byFacility.reduce((s,r) => s+(r.total||0), 0) || 1
                 const enrichFacRaw = byFacility.map(r => ({
                   ...r,
@@ -1546,9 +1557,9 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
                         </tr>
                         {fExpanded[r.facility] && cDrill && (() => {
                           const drillRows = cDrill === 'courier'
-                            ? (data?.byCourierFacility || []).filter(f => f.facility === r.facility).sort((a,b) => b.total - a.total)
+                            ? (breakdownSrc?.byCourierFacility || []).filter(f => f.facility === r.facility).sort((a,b) => b.total - a.total)
                             : cDrill === 'zone'
-                            ? (data?.byZoneFacility || []).filter(f => f.facility === r.facility).sort((a,b) => a.zone_group < b.zone_group ? -1 : 1)
+                            ? (breakdownSrc?.byZoneFacility || []).filter(f => f.facility === r.facility).sort((a,b) => a.zone_group < b.zone_group ? -1 : 1)
                             : []
                           return drillRows.map(f => {
                             const _fd = f.total ? +((f.delivered/f.total)*100).toFixed(2) : 0
@@ -1749,11 +1760,11 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
                         </tr>
                         {cExpanded[r.courier_group] && cDrill && (() => {
                           const drillRows = cDrill === 'zone'
-                            ? (data?.byCourierZone || []).filter(z => z.courier_group === r.courier_group).sort((a,b) => a.zone_group < b.zone_group ? -1 : 1)
+                            ? (breakdownSrc?.byCourierZone || []).filter(z => z.courier_group === r.courier_group).sort((a,b) => a.zone_group < b.zone_group ? -1 : 1)
                             : cDrill === 'facility'
-                            ? (data?.byCourierFacility || []).filter(z => z.courier_group === r.courier_group).sort((a,b) => b.total - a.total)
+                            ? (breakdownSrc?.byCourierFacility || []).filter(z => z.courier_group === r.courier_group).sort((a,b) => b.total - a.total)
                             : cDrill === 'month'
-                            ? (data?.byCourierMonth || []).filter(z => z.courier_group === r.courier_group).sort((a,b) => a.month_dt < b.month_dt ? -1 : 1)
+                            ? (breakdownSrc?.byCourierMonth || []).filter(z => z.courier_group === r.courier_group).sort((a,b) => a.month_dt < b.month_dt ? -1 : 1)
                             : []
                           return drillRows.map(z => {
                             const _dp = z.total ? +((z.delivered/z.total)*100).toFixed(2) : 0
