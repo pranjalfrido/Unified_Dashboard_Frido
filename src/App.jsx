@@ -470,7 +470,9 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
       const hasPaymentFilter = lFilters.paymentMode?.length === 1 // both selected = same as all, no filter
       const singlePayment = lFilters.paymentMode?.length === 1 ? lFilters.paymentMode[0].toLowerCase() : null
       const singleShipmentType = (lFilters.shipmentType && lFilters.shipmentType !== 'all') ? lFilters.shipmentType.toLowerCase() : null
-      const staticFile = singlePayment
+      const staticFile = singlePayment && singleShipmentType
+        ? `/logistics-data-${singleShipmentType}-${singlePayment}.json`
+        : singlePayment
         ? `/logistics-data-${singlePayment}.json`
         : singleShipmentType
         ? `/logistics-data-${singleShipmentType}.json`
