@@ -34,7 +34,7 @@ WITH base AS (
     c.shipment_type,
     c.payment_mode,
     c.zone,
-    c.zone_by_frido,
+    COALESCE(c.zone_by_frido, 'C') AS zone_by_frido,
     c.pickup_city,
     c.pickup_state,
     c.drop_city,
@@ -526,7 +526,7 @@ by_zone_frido AS (
     ROUND(AVG(IF(created_date IS NOT NULL AND order_date IS NOT NULL AND DATE_DIFF(created_date, order_date, DAY) BETWEEN 0 AND 10, DATE_DIFF(created_date, order_date, DAY), NULL)), 2) AS avg_processing_days,
     ROUND(AVG(IF(ofd1_date IS NOT NULL AND pickup_date IS NOT NULL, DATE_DIFF(ofd1_date, pickup_date, DAY), NULL)), 2) AS avg_s2a_days,
     ROUND(AVG(IF(clickpost_unified_status='RTO-Delivered' AND rto_mark_date IS NOT NULL AND latest_ts_date IS NOT NULL AND DATE_DIFF(latest_ts_date, rto_mark_date, DAY) BETWEEN 0 AND 20, DATE_DIFF(latest_ts_date, rto_mark_date, DAY), NULL)), 2) AS avg_rto_tat_days
-  FROM base WHERE zone_by_frido IS NOT NULL AND zone_by_frido != '' GROUP BY 1
+  FROM base GROUP BY 1
 ),
 by_channel AS (
   SELECT channel_name AS channel, COUNT(awb) AS total, COUNTIF(unified_status='Delivered') AS delivered,
