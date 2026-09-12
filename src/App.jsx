@@ -408,6 +408,7 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
   const [cSelected, setCSelected] = useState(new Set(['courier']))
   const [cPayment, setCPayment] = useState(null) // 'COD' | 'Prepaid' | null — local to breakdown table only
   const [cPaymentData, setCPaymentData] = useState(null) // breakdown-scoped data when cPayment is set
+  const [cTier, setCTier] = useState(null) // 'Tier 1' | 'Tier 2' | 'Tier 3' | null
   const cView = (() => {
     if (!cSelected.has('courier')) {
       if (cSelected.has('zone')) return 'zone'
@@ -1267,6 +1268,7 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
                             return next
                           })
                           setCExpanded({}); setZExpanded({}); setFExpanded({})
+                          if (vl !== 'tier') setCTier(null)
                         }}
                         title={isDisabled ? 'Clear courier/category filters to use this view' : undefined}
                         style={{
@@ -1300,7 +1302,25 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
                     </div>
                   )
                 })
-                return [...payToggles, <div key="sep" style={{ width: 20 }} />, ...viewToggles]
+                const tierToggles = ['Tier 1','Tier 2','Tier 3'].map((t, i) => {
+                  const isActive = cTier === t
+                  return (
+                    <div key={t} style={{ display: 'flex', alignItems: 'center' }}>
+                      {i > 0 && <div style={{ width: 1, height: 14, background: '#D6D0B0', margin: '0 4px' }} />}
+                      <button
+                        onClick={() => { setCTier(isActive ? null : t); if (!isActive) setCSelected(new Set(['tier'])) }}
+                        style={{
+                          fontSize: 11, fontWeight: isActive ? 700 : 500, padding: '3px 9px', borderRadius: 6,
+                          border: 'none', outline: 'none',
+                          background: isActive ? '#D4EDDA' : 'transparent',
+                          color: isActive ? '#1A5E2A' : C.t2,
+                          cursor: 'pointer', fontFamily: 'var(--font)', textAlign: 'center',
+                        }}
+                      >{t}</button>
+                    </div>
+                  )
+                })
+                return [...tierToggles, <div key="sep-tier" style={{ width: 16 }} />, ...payToggles, <div key="sep" style={{ width: 20 }} />, ...viewToggles]
               })()}
             </div>
           </div>
@@ -1678,7 +1698,7 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
                 )
               }
               if (cView === 'tier') {
-                const byTierData = (breakdownSrc?.byTier || [])
+                const byTierData = (breakdownSrc?.byTier || []).filter(r => !cTier || r.tier === cTier)
                 const tierTotalAll = byTierData.reduce((s,r) => s+(r.total||0), 0) || 1
                 const enrichTier = byTierData.map(r => ({
                   ...r,
