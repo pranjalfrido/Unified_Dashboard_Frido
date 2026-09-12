@@ -564,8 +564,24 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
       const hasWeightSlabs = weightSlabs?.length > 0
       const courierFilter = x => (!hasCourier || couriers.includes(x.courier_group)) && sddNddFilter(x.courier_group) && shipmentTypeFilter(x) && categoryFilter(x) && (!hasWeightSlabs || !x.slab || (weightSlabs || []).includes(x.slab))
 
-      // build filtered byCourier rows
-      const filteredCouriers = (raw.byCourier || []).filter(courierFilter)
+      // build filtered byCourier rows — aggregate by courier_group to avoid Forward+Reverse duplicates
+      const filteredCouriersRaw = (raw.byCourier || []).filter(courierFilter)
+      const courierMap = new Map()
+      filteredCouriersRaw.forEach(x => {
+        const k = x.courier_group
+        if (!courierMap.has(k)) { courierMap.set(k, { ...x }); return }
+        const a = courierMap.get(k)
+        const num = f => typeof x[f] === 'number' ? x[f] : 0
+        const add = f => { a[f] = (a[f] || 0) + num(f) }
+        ;['total','total_value','delivered','rto','in_transit','pickup_pending','cancelled','lost_damaged','z_rto','d1','delivered_1attempt','rasr_num','delivered_multi','ofd_total','total_ofd_attempts','rto_undelivered','delivered_2attempt_rto','on_time','sla_breach','critical_stuck','rto_10plus','edd_breached'].forEach(add)
+        // weighted avg TATs
+        const wt = (a.total || 0); const xt = num('total')
+        const wavg = (af, wf) => { const w = wf === 'rto' ? (a.rto||0) : (a.delivered||0); const xw = wf === 'rto' ? num('rto') : num('delivered'); a[af] = w + xw > 0 ? +((((a[af]||0)*w + num(af)*xw) / (w + xw))).toFixed(2) : null }
+        ;['avg_intransit_days','avg_fulfilment_days'].forEach(f => wavg(f, 'delivered'))
+        ;['avg_pickup_days','avg_processing_days','avg_s2a_days'].forEach(f => { a[f] = wt + xt > 0 ? +(((a[f]||0)*wt + num(f)*xt) / (wt + xt)).toFixed(2) : null })
+        a.avg_rto_tat_days = (a.rto||0) + num('rto') > 0 ? +(((a.avg_rto_tat_days||0)*(a.rto||0) + num('avg_rto_tat_days')*num('rto')) / ((a.rto||0) + num('rto'))).toFixed(2) : null
+      })
+      const filteredCouriers = [...courierMap.values()]
 
       // derive kpis from byCourier rows (all fields now present in each courier row)
       const kpis = (hasCourier || hasSddNdd || hasShipmentType)
