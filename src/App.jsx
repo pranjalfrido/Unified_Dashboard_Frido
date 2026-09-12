@@ -535,6 +535,11 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
 
   useEffect(() => { fetchLogistics() }, [fetchLogistics])
 
+  // reset breakdown payment toggle when sidebar payment filter is applied
+  useEffect(() => {
+    if (lFilters.paymentMode?.length > 0) { setCPayment(null); setCPaymentData(null) }
+  }, [JSON.stringify(lFilters.paymentMode)]) // eslint-disable-line react-hooks/exhaustive-deps
+
   // fetch breakdown-local payment data when COD/Prepaid toggle is active
   useEffect(() => {
     if (!cPayment) { setCPaymentData(null); return }
@@ -1235,7 +1240,8 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
                     </div>
                   )
                 })
-                const payToggles = ['COD','Prepaid'].map((p, i) => {
+                const sidebarHasPayment = lFilters.paymentMode?.length > 0
+                const payToggles = sidebarHasPayment ? [] : ['COD','Prepaid'].map((p, i) => {
                   const isActive = cPayment === p
                   return (
                     <div key={p} style={{ display: 'flex', alignItems: 'center' }}>
