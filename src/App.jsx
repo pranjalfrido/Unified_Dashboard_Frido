@@ -401,8 +401,28 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
   const [facSort, setFacSort] = useState({ col: 'total', dir: 'desc' })
   const [monthSort, setMonthSort] = useState({ col: 'month_label', dir: 'asc' })
   const [zoneSort, setZoneSort] = useState({ col: 'zone_group', dir: 'asc' })
-  const [cView, setCView] = useState('courier') // 'courier' | 'zone' | 'facility' | 'month'
-  const [cDrill, setCDrill] = useState(null) // secondary drill-down dimension
+  // cSelected: set of active toggles. Primary view = non-courier if courier absent, else courier.
+  // Drill = the other selected toggle shown as ▶ expand under primary rows.
+  const [cSelected, setCSelected] = useState(new Set(['courier']))
+  const cView = (() => {
+    if (!cSelected.has('courier')) {
+      if (cSelected.has('zone')) return 'zone'
+      if (cSelected.has('facility')) return 'facility'
+      if (cSelected.has('month')) return 'month'
+    }
+    return 'courier'
+  })()
+  const cDrill = (() => {
+    if (cView === 'courier') {
+      if (cSelected.has('zone')) return 'zone'
+      if (cSelected.has('facility')) return 'facility'
+      if (cSelected.has('month')) return 'month'
+      return null
+    }
+    if (cSelected.has('courier')) return 'courier'
+    const others = ['zone','facility','month'].filter(v => v !== cView && cSelected.has(v))
+    return others[0] || null
+  })()
   const [payTrendGran, setPayTrendGran] = useState('Daily')
   const [ndrPayFilter, setNdrPayFilter] = useState('All')
   const [rtoAgeingBase, setRtoAgeingBase] = useState('pickup')
@@ -414,7 +434,7 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
   }, [])
   useEffect(() => {
     const hasActiveFilter = (lFilters.couriers?.length > 0) || (lFilters.category?.length > 0) || (lFilters.subCategory?.length > 0)
-    if (hasActiveFilter && ['zone','facility','month'].includes(cView)) { setCView('courier'); setCDrill(null) }
+    if (hasActiveFilter && ['zone','facility','month'].includes(cView)) { setCSelected(new Set(['courier'])); setCExpanded({}); setZExpanded({}); setFExpanded({}) }
   }, [lFilters.couriers, lFilters.shipmentType, lFilters.category, lFilters.subCategory]) // eslint-disable-line react-hooks/exhaustive-deps
   const [filterSidebarOpen, setFilterSidebarOpen] = useState(false)
   const [cExpanded, setCExpanded] = useState({})
@@ -1160,19 +1180,24 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
                 return ['Courier','Zone','Facility','Month'].map((v, i) => {
                   const vl = v.toLowerCase()
                   const isDisabled = hasActiveFilter && unfilteredViews.includes(v)
+                  const isActive = cSelected.has(vl)
                   const isPrimary = cView === vl
                   const isDrill = cDrill === vl
-                  const isActive = isPrimary || isDrill
+                  // can't deselect if it's the only selected toggle
+                  const cantDeselect = isActive && cSelected.size === 1
                   return (
                     <div key={v} style={{ display: 'flex', alignItems: 'center' }}>
                       {i > 0 && <div style={{ width: 1, height: 14, background: '#D6D0B0', margin: '0 4px' }} />}
                       <button
                         onClick={() => {
-                          if (isDisabled) return
-                          if (isPrimary) return // can't deselect primary
-                          if (isDrill) { setCDrill(null); setCExpanded({}); setZExpanded({}); setFExpanded({}) }
-                          else if (!cDrill) { setCDrill(vl); setCExpanded({}); setZExpanded({}); setFExpanded({}) }
-                          else { setCView(vl); setCDrill(null); setCExpanded({}); setZExpanded({}); setFExpanded({}) }
+                          if (isDisabled || cantDeselect) return
+                          setCSelected(prev => {
+                            const next = new Set(prev)
+                            if (next.has(vl)) next.delete(vl)
+                            else next.add(vl)
+                            return next
+                          })
+                          setCExpanded({}); setZExpanded({}); setFExpanded({})
                         }}
                         title={isDisabled ? 'Clear courier/category filters to use this view' : undefined}
                         style={{
@@ -1180,7 +1205,7 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
                           border: isDrill ? `1.5px dashed ${C.acm}` : 'none', outline: 'none',
                           background: isPrimary ? C.acs : isDrill ? C.acl : 'transparent',
                           color: isDisabled ? C.t3 : isActive ? '#3F3D33' : C.t2,
-                          cursor: isDisabled ? 'not-allowed' : 'pointer', fontFamily: 'var(--font)', textAlign: 'center',
+                          cursor: (isDisabled || cantDeselect) ? 'not-allowed' : 'pointer', fontFamily: 'var(--font)', textAlign: 'center',
                           opacity: isDisabled ? 0.45 : 1,
                         }}
                       >{v}</button>
@@ -1708,6 +1733,8 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
                             ? (data?.byCourierZone || []).filter(z => z.courier_group === r.courier_group).sort((a,b) => a.zone_group < b.zone_group ? -1 : 1)
                             : cDrill === 'facility'
                             ? (data?.byCourierFacility || []).filter(z => z.courier_group === r.courier_group).sort((a,b) => b.total - a.total)
+                            : cDrill === 'month'
+                            ? (data?.byCourierMonth || []).filter(z => z.courier_group === r.courier_group).sort((a,b) => a.month_dt < b.month_dt ? -1 : 1)
                             : []
                           return drillRows.map(z => {
                             const _dp = z.total ? +((z.delivered/z.total)*100).toFixed(2) : 0
@@ -1717,8 +1744,8 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
                             const _rap = z.ofd_total ? +(((z.rasr_num||0)/z.ofd_total)*100).toFixed(2) : null
                             const _vp = +((z.total/totalAll)*100).toFixed(2)
                             const _rc = _rp > avgRtoPct ? C.red.tx : C.t1
-                            const drillKey = cDrill === 'zone' ? z.zone_group : z.facility
-                            const drillLabel = cDrill === 'zone' ? `Zone ${z.zone_group}` : z.facility
+                            const drillKey = cDrill === 'zone' ? z.zone_group : cDrill === 'month' ? z.month_label : z.facility
+                            const drillLabel = cDrill === 'zone' ? `Zone ${z.zone_group}` : cDrill === 'month' ? z.month_label : z.facility
                             return (
                               <tr key={drillKey} style={{ borderBottom:`1px solid ${C.border}`, background:'#FAFAF8', transition:'box-shadow .12s, background .12s' }}
                                 onMouseEnter={e => { e.currentTarget.style.background='#FDF8ED'; e.currentTarget.style.boxShadow=`inset 0 1px 0 0 ${C.acm}55, inset 0 -1px 0 0 ${C.acm}55, 0 0 8px 0 ${C.acc}33`; e.currentTarget.querySelectorAll('td[data-sticky]').forEach(td => { td.style.background='#FDF8ED' }) }}
