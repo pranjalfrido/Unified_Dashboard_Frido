@@ -567,13 +567,11 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
     if (!cPayment) { setCPaymentData(null); return }
     const shipmentType = lFilters.shipmentType && lFilters.shipmentType !== 'all' ? lFilters.shipmentType.toLowerCase() : null
 
-    // 1. Use in-memory BQ cache if available
-    if (!shipmentType) {
-      if (cPayment === 'COD' && rawCodData) { setCPaymentData(rawCodData); return }
-      if (cPayment === 'Prepaid' && rawPrepaidData) { setCPaymentData(rawPrepaidData); return }
-      // prefetch is still in flight — wait for it (effect will re-run when rawCodData/rawPrepaidData set)
-      if (paymentPrefetchActive.current) return
-    }
+    // 1. Use in-memory BQ cache if available (works for any shipmentType)
+    if (cPayment === 'COD' && rawCodData) { setCPaymentData(rawCodData); return }
+    if (cPayment === 'Prepaid' && rawPrepaidData) { setCPaymentData(rawPrepaidData); return }
+    // prefetch in flight — wait, effect re-runs when cache arrives
+    if (paymentPrefetchActive.current) return
 
     // 2. Try static file — instant for MTD
     const file = shipmentType
@@ -584,8 +582,7 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
       .then(json => {
         const dateMatches = json?.dateRange && json.dateRange.start === filters.start && json.dateRange.end === filters.end
         if (json?.current && dateMatches) { setCPaymentData(json.current); return }
-        // 3. Fallback: live BQ (only if prefetch not active)
-        if (paymentPrefetchActive.current) return
+        // 3. Fallback: live BQ
         const body = { start: filters.start, end: filters.end, paymentMode: cPayment }
         if (shipmentType) body.shipmentType = shipmentType
         return fetch(`${API}/api/logistics`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
