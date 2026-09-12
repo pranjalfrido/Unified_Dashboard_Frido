@@ -531,7 +531,7 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
     }
     finally { clearTimeout(skTimer); setLoading(false); setShowSkeleton(false) }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filters.start, filters.end, JSON.stringify(lFilters.paymentMode), JSON.stringify(lFilters.pickupState), JSON.stringify(lFilters.dropState), JSON.stringify(lFilters.dropCity), JSON.stringify(lFilters.weightSlabs)])
+  }, [filters.start, filters.end, lFilters.shipmentType, JSON.stringify(lFilters.paymentMode), JSON.stringify(lFilters.pickupState), JSON.stringify(lFilters.dropState), JSON.stringify(lFilters.dropCity), JSON.stringify(lFilters.weightSlabs)])
 
   useEffect(() => { fetchLogistics() }, [fetchLogistics])
 
