@@ -401,7 +401,7 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
   const [facSort, setFacSort] = useState({ col: 'total', dir: 'desc' })
   const [monthSort, setMonthSort] = useState({ col: 'month_label', dir: 'asc' })
   const [zoneSort, setZoneSort] = useState({ col: 'zone_group', dir: 'asc' })
-  const [cView, setCView] = useState('courier') // 'courier' | 'facility' | 'month'
+  const [cView, setCView] = useState('courier') // 'courier' | 'zone' | 'facility' | 'month'
   const [payTrendGran, setPayTrendGran] = useState('Daily')
   const [ndrPayFilter, setNdrPayFilter] = useState('All')
   const [rtoAgeingBase, setRtoAgeingBase] = useState('pickup')
@@ -411,6 +411,10 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
     window.addEventListener('resize', onResize)
     return () => window.removeEventListener('resize', onResize)
   }, [])
+  useEffect(() => {
+    const hasActiveFilter = (lFilters.couriers?.length > 0) || (lFilters.shipmentType && lFilters.shipmentType !== 'all' && lFilters.shipmentType !== 'forward') || (lFilters.category?.length > 0) || (lFilters.subCategory?.length > 0)
+    if (hasActiveFilter && ['zone','facility','month'].includes(cView)) setCView('courier')
+  }, [lFilters.couriers, lFilters.shipmentType, lFilters.category, lFilters.subCategory]) // eslint-disable-line react-hooks/exhaustive-deps
   const [filterSidebarOpen, setFilterSidebarOpen] = useState(false)
   const [cExpanded, setCExpanded] = useState({})
   const [rawData, setRawData] = useState(null)
@@ -578,6 +582,7 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
         tatByCourier: (raw.tatByCourier || []).filter(courierFilter),
         byZone: raw.byZone,
         byZoneDetail: raw.byZoneDetail,
+        byZoneFrido: raw.byZoneFrido,
         byPayment: paymentMode?.length ? (raw.byPayment || []).filter(x => paymentMode.map(p=>p.toLowerCase()).includes(x.payment_mode?.toLowerCase())) : raw.byPayment,
         byPaymentDetail: paymentMode?.length ? (raw.byPaymentDetail || []).filter(x => paymentMode.map(p=>p.toLowerCase()).includes(x.payment_mode?.toLowerCase())) : raw.byPaymentDetail,
         byPaymentDay: paymentMode?.length ? (raw.byPaymentDay || []).filter(x => paymentMode.map(p=>p.toLowerCase()).includes(x.payment_mode?.toLowerCase())) : raw.byPaymentDay,
@@ -1137,17 +1142,30 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
           <div className="card-hoverable" style={{ ...cardStyle, minWidth: 0 }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
             <div style={chartTitle}>Courier-wise Breakdown</div>
-            <div style={{ display: 'flex', gap: 4 }}>
-              {['Courier','Zone','Facility','Month'].map((v, i) => (
-                <div key={v} style={{ display: 'flex', alignItems: 'center' }}>
-                  {i > 0 && <div style={{ width: 1, height: 14, background: '#D6D0B0', margin: '0 4px' }} />}
-                  <button onClick={() => setCView(v.toLowerCase())} style={{
-                    fontSize: 11, fontWeight: cView===v.toLowerCase() ? 700 : 500, padding: '3px 9px', borderRadius: 6,
-                    border: 'none', outline: 'none', background: cView===v.toLowerCase() ? C.acs : 'transparent',
-                    color: cView===v.toLowerCase() ? '#3F3D33' : C.t2, cursor: 'pointer', fontFamily: 'var(--font)', textAlign: 'center'
-                  }}>{v}</button>
-                </div>
-              ))}
+            <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
+              {(() => {
+                const hasActiveFilter = (lFilters.couriers?.length > 0) || (lFilters.shipmentType && lFilters.shipmentType !== 'all' && lFilters.shipmentType !== 'forward') || (lFilters.category?.length > 0) || (lFilters.subCategory?.length > 0)
+                const unfilteredViews = ['Zone','Facility','Month']
+                return ['Courier','Zone','Facility','Month'].map((v, i) => {
+                  const isDisabled = hasActiveFilter && unfilteredViews.includes(v)
+                  return (
+                    <div key={v} style={{ display: 'flex', alignItems: 'center' }}>
+                      {i > 0 && <div style={{ width: 1, height: 14, background: '#D6D0B0', margin: '0 4px' }} />}
+                      <button
+                        onClick={() => { if (!isDisabled) setCView(v.toLowerCase()) }}
+                        title={isDisabled ? 'Clear courier/category filters to use this view' : undefined}
+                        style={{
+                          fontSize: 11, fontWeight: cView===v.toLowerCase() ? 700 : 500, padding: '3px 9px', borderRadius: 6,
+                          border: 'none', outline: 'none', background: cView===v.toLowerCase() ? C.acs : 'transparent',
+                          color: isDisabled ? C.t3 : cView===v.toLowerCase() ? '#3F3D33' : C.t2,
+                          cursor: isDisabled ? 'not-allowed' : 'pointer', fontFamily: 'var(--font)', textAlign: 'center',
+                          opacity: isDisabled ? 0.45 : 1,
+                        }}
+                      >{v}</button>
+                    </div>
+                  )
+                })
+              })()}
             </div>
           </div>
           <div style={{ overflowX: 'auto', overflowY: 'auto', maxHeight: 450 }}>
@@ -1270,7 +1288,7 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
                 const sumZRN = enrichZoneRaw.reduce((s,r)=>s+(r.rasr_num||0),0)
                 const sumZOfd = enrichZoneRaw.reduce((s,r)=>s+(r.ofd_total||0),0)
                 const wavgZ = (key) => { const w = enrichZoneRaw.reduce((s,r)=>s+(r[key]!=null?r[key]*(r.total||0):0),0); return zoneTotalAll>0?w/zoneTotalAll:null }
-                const td9z = { padding:'9px 10px', textAlign:'right', color:C.t2, fontSize:11 }
+                const td9z = { padding:'9px 10px', textAlign:'center', color:C.t2, fontSize:11 }
                 const td9zL = { padding:'9px 10px', color:C.t1, fontWeight:600, whiteSpace:'nowrap' }
                 const ZONE_COLS = [
                   { key: 'zone_group', label: 'Zone', left: true, str: true },
@@ -1295,7 +1313,7 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
                     <thead>
                       <tr style={{ borderBottom:`1.5px solid ${C.border}`, background: C.acl }}>
                         {ZONE_COLS.map((col,i) => (
-                          <th key={col.key} onClick={() => setZoneSort(s => ({ col: col.key, dir: s?.col === col.key && s?.dir === 'desc' ? 'asc' : 'desc' }))} style={{ padding:'9px 10px', textAlign:i===0?'left':'right', color:C.t1, fontWeight:700, fontSize:11, letterSpacing:'.05em', textTransform:'uppercase', whiteSpace:'nowrap', cursor:'pointer', userSelect:'none' }}>{col.label}{zoneSortCol === col.key ? (zoneSortDir === 'desc' ? ' ↓' : ' ↑') : ''}</th>
+                          <th key={col.key} onClick={() => setZoneSort(s => ({ col: col.key, dir: s?.col === col.key && s?.dir === 'desc' ? 'asc' : 'desc' }))} style={{ padding:'9px 10px', textAlign:i===0?'left':'center', color:C.t1, fontWeight:700, fontSize:11, letterSpacing:'.05em', textTransform:'uppercase', whiteSpace:'nowrap', cursor:'pointer', userSelect:'none' }}>{col.label}{zoneSortCol === col.key ? (zoneSortDir === 'desc' ? ' ↓' : ' ↑') : ''}</th>
                         ))}
                       </tr>
                     </thead>
@@ -1323,18 +1341,18 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
                     <tfoot>
                       <tr style={{ borderTop:`2px solid ${C.border}`, background:C.acl, fontWeight:700 }}>
                         <td style={{ padding:'9px 10px', color:C.t1, fontWeight:700 }}>Total</td>
-                        <td style={td9z}>100.00%</td>
+                        <td style={{ ...td9z, fontWeight:700 }}>100.00%</td>
                         <td style={{ ...td9z, color:C.t1, fontWeight:700 }}>{n(zoneTotalAll)}</td>
                         <td style={{ ...td9z, fontWeight:700 }}>{(sumZD/zoneTotalAll*100).toFixed(2)}%</td>
                         <td style={{ ...td9z, fontWeight:700 }}>{(sumZR/zoneTotalAll*100).toFixed(2)}%</td>
-                        <td style={td9z}>{(sumZC/zoneTotalAll*100).toFixed(2)}%</td>
+                        <td style={{ ...td9z, fontWeight:700 }}>{(sumZC/zoneTotalAll*100).toFixed(2)}%</td>
                         <td style={{ ...td9z, fontWeight:700 }}>{sumZOfd?(sumZD1/sumZOfd*100).toFixed(2)+'%':'—'}</td>
                         <td style={{ ...td9z, fontWeight:700 }}>{sumZOfd?(sumZRN/sumZOfd*100).toFixed(2)+'%':'—'}</td>
-                        <td style={td9z}>{d(wavgZ('avg_processing_days'))}</td>
-                        <td style={td9z}>{d(wavgZ('avg_pickup_days'))}</td>
-                        <td style={td9z}>{d(wavgZ('avg_intransit_days'))}</td>
-                        <td style={td9z}>{d(wavgZ('avg_fulfilment_days'))}</td>
-                        <td style={td9z}>{d(wavgZ('avg_rto_tat_days'))}</td>
+                        <td style={{ ...td9z, fontWeight:700 }}>{d(wavgZ('avg_processing_days'))}</td>
+                        <td style={{ ...td9z, fontWeight:700 }}>{d(wavgZ('avg_pickup_days'))}</td>
+                        <td style={{ ...td9z, fontWeight:700 }}>{d(wavgZ('avg_intransit_days'))}</td>
+                        <td style={{ ...td9z, fontWeight:700 }}>{d(wavgZ('avg_fulfilment_days'))}</td>
+                        <td style={{ ...td9z, fontWeight:700 }}>{d(wavgZ('avg_rto_tat_days'))}</td>
                       </tr>
                     </tfoot>
                   </table>
