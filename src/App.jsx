@@ -400,6 +400,7 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
   // sharing cSort (their column keys/rows differ, and silently reusing cSort here was the bug).
   const [facSort, setFacSort] = useState({ col: 'total', dir: 'desc' })
   const [monthSort, setMonthSort] = useState({ col: 'month_label', dir: 'asc' })
+  const [zoneSort, setZoneSort] = useState({ col: 'zone_group', dir: 'asc' })
   const [cView, setCView] = useState('courier') // 'courier' | 'facility' | 'month'
   const [payTrendGran, setPayTrendGran] = useState('Daily')
   const [ndrPayFilter, setNdrPayFilter] = useState('All')
@@ -1137,7 +1138,7 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
             <div style={chartTitle}>Courier-wise Breakdown</div>
             <div style={{ display: 'flex', gap: 4 }}>
-              {['Courier','Facility','Month'].map((v, i) => (
+              {['Courier','Zone','Facility','Month'].map((v, i) => (
                 <div key={v} style={{ display: 'flex', alignItems: 'center' }}>
                   {i > 0 && <div style={{ width: 1, height: 14, background: '#D6D0B0', margin: '0 4px' }} />}
                   <button onClick={() => setCView(v.toLowerCase())} style={{
@@ -1248,6 +1249,95 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
                     </tbody>
                   </table>
                   </div>
+                )
+              }
+              if (cView === 'zone') {
+                const byZoneFrido = (data?.byZoneFrido || []).filter(r => r.zone_group)
+                const zoneTotalAll = byZoneFrido.reduce((s,r) => s+(r.total||0), 0) || 1
+                const enrichZoneRaw = byZoneFrido.map(r => ({
+                  ...r,
+                  _volPct: +((r.total / zoneTotalAll) * 100).toFixed(2),
+                  _delPct: r.total ? +((r.delivered / r.total) * 100).toFixed(2) : 0,
+                  _rtoPct: r.total ? +((r.rto / r.total) * 100).toFixed(2) : 0,
+                  _cancPct: r.total ? +(((r.cancelled||0) / r.total) * 100).toFixed(2) : 0,
+                  _fasrPct: r.ofd_total ? +((r.d1 / r.ofd_total) * 100).toFixed(2) : null,
+                  _rasrPct: r.ofd_total ? +(((r.rasr_num||0) / r.ofd_total) * 100).toFixed(2) : null,
+                }))
+                const sumZD = enrichZoneRaw.reduce((s,r)=>s+(r.delivered||0),0)
+                const sumZR = enrichZoneRaw.reduce((s,r)=>s+(r.rto||0),0)
+                const sumZC = enrichZoneRaw.reduce((s,r)=>s+(r.cancelled||0),0)
+                const sumZD1 = enrichZoneRaw.reduce((s,r)=>s+(r.d1||0),0)
+                const sumZRN = enrichZoneRaw.reduce((s,r)=>s+(r.rasr_num||0),0)
+                const sumZOfd = enrichZoneRaw.reduce((s,r)=>s+(r.ofd_total||0),0)
+                const wavgZ = (key) => { const w = enrichZoneRaw.reduce((s,r)=>s+(r[key]!=null?r[key]*(r.total||0):0),0); return zoneTotalAll>0?w/zoneTotalAll:null }
+                const td9z = { padding:'9px 10px', textAlign:'right', color:C.t2, fontSize:11 }
+                const td9zL = { padding:'9px 10px', color:C.t1, fontWeight:600, whiteSpace:'nowrap' }
+                const ZONE_COLS = [
+                  { key: 'zone_group', label: 'Zone', left: true, str: true },
+                  { key: '_volPct', label: 'Vol %' }, { key: 'total', label: 'Total' },
+                  { key: '_delPct', label: 'Del %' }, { key: '_rtoPct', label: 'RTO %' },
+                  { key: '_cancPct', label: 'Canc %' },
+                  { key: '_fasrPct', label: 'FASR %' }, { key: '_rasrPct', label: 'RASR %' },
+                  { key: 'avg_processing_days', label: 'Avg Processing' }, { key: 'avg_pickup_days', label: 'Avg Pickup' },
+                  { key: 'avg_intransit_days', label: 'Avg S2D' }, { key: 'avg_fulfilment_days', label: 'Avg O2D' },
+                  { key: 'avg_rto_tat_days', label: 'Avg RTO TAT' },
+                ]
+                const zoneSortCol = zoneSort?.col
+                const zoneSortDir = zoneSort?.dir || 'asc'
+                const enrichZone = zoneSortCol ? [...enrichZoneRaw].sort((a, b) => {
+                  const av = a[zoneSortCol], bv = b[zoneSortCol]
+                  if (av == null) return 1; if (bv == null) return -1
+                  if (typeof av === 'string') return zoneSortDir === 'asc' ? av.localeCompare(bv) : bv.localeCompare(av)
+                  return zoneSortDir === 'asc' ? av - bv : bv - av
+                }) : enrichZoneRaw
+                return (
+                  <table style={{ width:'100%', borderCollapse:'collapse', fontSize:12 }}>
+                    <thead>
+                      <tr style={{ borderBottom:`1.5px solid ${C.border}`, background: C.acl }}>
+                        {ZONE_COLS.map((col,i) => (
+                          <th key={col.key} onClick={() => setZoneSort(s => ({ col: col.key, dir: s?.col === col.key && s?.dir === 'desc' ? 'asc' : 'desc' }))} style={{ padding:'9px 10px', textAlign:i===0?'left':'right', color:C.t1, fontWeight:700, fontSize:11, letterSpacing:'.05em', textTransform:'uppercase', whiteSpace:'nowrap', cursor:'pointer', userSelect:'none' }}>{col.label}{zoneSortCol === col.key ? (zoneSortDir === 'desc' ? ' ↓' : ' ↑') : ''}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {enrichZone.map((r, ri) => (
+                        <tr key={r.zone_group} style={{ borderBottom:`1px solid ${C.border}`, background: ri%2===1?'#FAF9F6':'transparent', transition:'box-shadow .12s, background .12s' }}
+                          onMouseEnter={e => { e.currentTarget.style.background='#FDF8ED'; e.currentTarget.style.boxShadow=`inset 0 1px 0 0 ${C.acm}55, inset 0 -1px 0 0 ${C.acm}55, 0 0 8px 0 ${C.acc}33` }}
+                          onMouseLeave={e => { e.currentTarget.style.background=ri%2===1?'#FAF9F6':'transparent'; e.currentTarget.style.boxShadow='none' }}>
+                          <td style={td9zL}>Zone {r.zone_group}</td>
+                          <td style={td9z}>{r._volPct.toFixed(2)}%</td>
+                          <td style={{ ...td9z, color:C.t1, fontWeight:600 }}>{n(r.total)}</td>
+                          <td style={td9z}>{r._delPct.toFixed(2)}%</td>
+                          <td style={td9z}>{r._rtoPct.toFixed(2)}%</td>
+                          <td style={td9z}>{r._cancPct.toFixed(2)}%</td>
+                          <td style={td9z}>{r._fasrPct!=null?r._fasrPct.toFixed(2)+'%':'—'}</td>
+                          <td style={td9z}>{r._rasrPct!=null?r._rasrPct.toFixed(2)+'%':'—'}</td>
+                          <td style={td9z}>{d(r.avg_processing_days)}</td>
+                          <td style={td9z}>{d(r.avg_pickup_days)}</td>
+                          <td style={td9z}>{d(r.avg_intransit_days)}</td>
+                          <td style={td9z}>{d(r.avg_fulfilment_days)}</td>
+                          <td style={td9z}>{d(r.avg_rto_tat_days)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                    <tfoot>
+                      <tr style={{ borderTop:`2px solid ${C.border}`, background:C.acl, fontWeight:700 }}>
+                        <td style={{ padding:'9px 10px', color:C.t1, fontWeight:700 }}>Total</td>
+                        <td style={td9z}>100.00%</td>
+                        <td style={{ ...td9z, color:C.t1, fontWeight:700 }}>{n(zoneTotalAll)}</td>
+                        <td style={{ ...td9z, fontWeight:700 }}>{(sumZD/zoneTotalAll*100).toFixed(2)}%</td>
+                        <td style={{ ...td9z, fontWeight:700 }}>{(sumZR/zoneTotalAll*100).toFixed(2)}%</td>
+                        <td style={td9z}>{(sumZC/zoneTotalAll*100).toFixed(2)}%</td>
+                        <td style={{ ...td9z, fontWeight:700 }}>{sumZOfd?(sumZD1/sumZOfd*100).toFixed(2)+'%':'—'}</td>
+                        <td style={{ ...td9z, fontWeight:700 }}>{sumZOfd?(sumZRN/sumZOfd*100).toFixed(2)+'%':'—'}</td>
+                        <td style={td9z}>{d(wavgZ('avg_processing_days'))}</td>
+                        <td style={td9z}>{d(wavgZ('avg_pickup_days'))}</td>
+                        <td style={td9z}>{d(wavgZ('avg_intransit_days'))}</td>
+                        <td style={td9z}>{d(wavgZ('avg_fulfilment_days'))}</td>
+                        <td style={td9z}>{d(wavgZ('avg_rto_tat_days'))}</td>
+                      </tr>
+                    </tfoot>
+                  </table>
                 )
               }
               if (cView === 'facility') {

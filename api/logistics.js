@@ -79,6 +79,7 @@ WITH base AS (
     c.shipment_type,
     c.payment_mode,
     c.zone,
+    c.zone_by_frido,
     c.pickup_city,
     c.pickup_state,
     c.drop_city,
@@ -713,6 +714,31 @@ by_zone_detail AS (
     ROUND(AVG(IF(pickup_ts IS NOT NULL AND delivery_ts IS NOT NULL AND TIMESTAMP_DIFF(delivery_ts, pickup_ts, MINUTE) BETWEEN 0 AND 28800, TIMESTAMP_DIFF(delivery_ts, pickup_ts, MINUTE) / 1440.0, NULL)), 2) AS avg_intransit_days
   FROM base WHERE zone IS NOT NULL AND zone != '' GROUP BY 1
 ),
+by_zone_frido AS (
+  SELECT
+    zone_by_frido AS zone_group,
+    COUNT(awb) AS total,
+    SUM(invoice_value) AS total_value,
+    COUNTIF(unified_status='Delivered') AS delivered,
+    COUNTIF(unified_status='RTO') AS rto,
+    COUNTIF(unified_status='Intransit') AS in_transit,
+    COUNTIF(unified_status='Pickup Pending') AS pickup_pending,
+    COUNTIF(unified_status='Cancelled') AS cancelled,
+    COUNTIF(unified_status IN ('Lost','Damaged')) AS lost_damaged,
+    COUNTIF(unified_status='RTO' AND COALESCE(ofd_attempts,0)=0) AS z_rto,
+    COUNTIF(ofd_attempts=1 AND unified_status='Delivered') AS d1,
+    COUNTIF(ofd_attempts > 1 AND unified_status='Delivered') AS rasr_num,
+    COUNTIF(ofd_attempts IS NOT NULL AND ofd_attempts != 0) AS ofd_total,
+    COUNTIF(delivery_date IS NOT NULL AND edd IS NOT NULL AND delivery_date <= edd) AS on_time,
+    COUNTIF(delivery_date IS NOT NULL AND edd IS NOT NULL AND delivery_date > edd) AS sla_breach,
+    ROUND(AVG(IF(pickup_ts IS NOT NULL AND delivery_ts IS NOT NULL AND TIMESTAMP_DIFF(delivery_ts, pickup_ts, MINUTE) BETWEEN 0 AND 28800, TIMESTAMP_DIFF(delivery_ts, pickup_ts, MINUTE) / 1440.0, NULL)), 2) AS avg_intransit_days,
+    ROUND(AVG(IF(delivery_date IS NOT NULL AND order_date IS NOT NULL AND DATE_DIFF(delivery_date, order_date, DAY) BETWEEN 0 AND 20, DATE_DIFF(delivery_date, order_date, DAY), NULL)), 2) AS avg_fulfilment_days,
+    ROUND(AVG(IF(pickup_ts IS NOT NULL AND created_ts IS NOT NULL AND TIMESTAMP_DIFF(pickup_ts, created_ts, MINUTE) BETWEEN 0 AND 14400, TIMESTAMP_DIFF(pickup_ts, created_ts, MINUTE) / 1440.0, NULL)), 2) AS avg_pickup_days,
+    ROUND(AVG(IF(created_date IS NOT NULL AND order_date IS NOT NULL AND DATE_DIFF(created_date, order_date, DAY) BETWEEN 0 AND 10, DATE_DIFF(created_date, order_date, DAY), NULL)), 2) AS avg_processing_days,
+    ROUND(AVG(IF(ofd1_date IS NOT NULL AND pickup_date IS NOT NULL, DATE_DIFF(ofd1_date, pickup_date, DAY), NULL)), 2) AS avg_s2a_days,
+    ROUND(AVG(IF(clickpost_unified_status='RTO-Delivered' AND rto_mark_date IS NOT NULL AND latest_ts_date IS NOT NULL AND DATE_DIFF(latest_ts_date, rto_mark_date, DAY) BETWEEN 0 AND 20, DATE_DIFF(latest_ts_date, rto_mark_date, DAY), NULL)), 2) AS avg_rto_tat_days
+  FROM base WHERE zone_by_frido IS NOT NULL AND zone_by_frido != '' GROUP BY 1
+),
 by_channel AS (
   SELECT
     channel_name AS channel,
@@ -817,6 +843,7 @@ SELECT
   TO_JSON_STRING(ARRAY(SELECT AS STRUCT * FROM failed_delivery_reasons)) AS failed_delivery_reasons,
   TO_JSON_STRING(ARRAY(SELECT AS STRUCT * FROM ndr_by_courier ORDER BY ndr_count DESC)) AS ndr_by_courier,
   TO_JSON_STRING(ARRAY(SELECT AS STRUCT * FROM by_zone_detail ORDER BY total DESC)) AS by_zone_detail,
+  TO_JSON_STRING(ARRAY(SELECT AS STRUCT * FROM by_zone_frido ORDER BY zone_group)) AS by_zone_frido,
   TO_JSON_STRING(ARRAY(SELECT AS STRUCT * FROM by_channel ORDER BY total DESC)) AS by_channel,
   TO_JSON_STRING(ARRAY(SELECT AS STRUCT * FROM tat_by_courier ORDER BY total DESC)) AS tat_by_courier,
   TO_JSON_STRING(ARRAY(SELECT AS STRUCT * FROM tat_by_month ORDER BY month_dt)) AS tat_by_month,
@@ -857,6 +884,7 @@ SELECT
       failedDeliveryReasons: JSON.parse(r.failed_delivery_reasons),
       ndrByCourier: JSON.parse(r.ndr_by_courier),
       byZoneDetail: JSON.parse(r.by_zone_detail),
+      byZoneFrido: JSON.parse(r.by_zone_frido),
       byChannel: JSON.parse(r.by_channel),
       tatByCourier: JSON.parse(r.tat_by_courier),
       tatByMonth: JSON.parse(r.tat_by_month),
