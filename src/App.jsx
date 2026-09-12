@@ -3367,7 +3367,7 @@ function DateRangePicker({ filters, setFilters, theme: T = C, onRefresh, loading
     return () => document.removeEventListener('mousedown', handler)
   }, [])
 
-  const activePreset = PRESETS.find(p => { const r = p.fn(); return r.start === draft.start && r.end === draft.end })
+  const activePreset = PRESETS.find(p => { const r = p.fn(); return r.start === (filters?.start ?? draft.start) && r.end === (filters?.end ?? draft.end) })
 
   const apply = (s, e) => {
     const start = s || draft.start, end = e || draft.end
