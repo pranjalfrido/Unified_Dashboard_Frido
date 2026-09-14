@@ -1345,7 +1345,7 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
                 { key: '_cancPct', label: 'Canc %' },
                 { key: '_fasrPct', label: 'FASR %' },
                 { key: '_rasrPct', label: 'RASR %' },
-                { key: '_eddPct', label: 'EDD %' },
+                { key: '_eddBreachPct', label: 'EDD Breach %' },
                 { key: 'avg_processing_days', label: 'Avg Processing', center: true, truncate: true },
                 { key: 'avg_pickup_days', label: 'Avg Pickup', center: true, truncate: true },
                 { key: 'avg_intransit_days', label: 'Avg S2D', center: true },
@@ -1361,7 +1361,7 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
                 _cancPct: r.total ? +(((r.cancelled || 0) / r.total) * 100).toFixed(2) : 0,
                 _fasrPct: r.ofd_total ? +((r.d1 / r.ofd_total) * 100).toFixed(2) : null,
                 _rasrPct: r.ofd_total ? +(((r.rasr_num || 0) / r.ofd_total) * 100).toFixed(2) : null,
-                _eddPct: r.delivered ? +(((r.on_time || 0) / r.delivered) * 100).toFixed(2) : null,
+                _eddBreachPct: r.delivered ? +(((r.sla_breach || 0) / r.delivered) * 100).toFixed(2) : null,
               }))
               const [sortCol, setSortCol] = [cSort?.col, (col) => setCSort(s => ({ col, dir: s?.col === col && s?.dir === 'desc' ? 'asc' : 'desc' }))]
               const sortDir = cSort?.dir || 'desc'
@@ -1902,7 +1902,7 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
                           <td style={{ padding: '6px 7px', textAlign: 'right', color: C.t1, fontSize: 11 }}>{r._cancPct.toFixed(2)}%</td>
                           <td style={{ padding: '6px 7px', textAlign: 'right', color: C.t1, fontSize: 11 }}>{r._fasrPct != null ? r._fasrPct.toFixed(2) + '%' : '—'}</td>
                           <td style={{ padding: '6px 7px', textAlign: 'right', color: C.t1, fontSize: 11 }}>{r._rasrPct != null ? r._rasrPct.toFixed(2) + '%' : '—'}</td>
-                          <td style={{ padding: '6px 7px', textAlign: 'right', color: C.t1, fontSize: 11 }}>{r._eddPct != null ? r._eddPct.toFixed(2) + '%' : '—'}</td>
+                          <td style={{ padding: '6px 7px', textAlign: 'right', color: C.t1, fontSize: 11 }}>{r._eddBreachPct != null ? r._eddBreachPct.toFixed(2) + '%' : '—'}</td>
                           <td style={{ padding: '6px 7px', textAlign: 'center', color: C.t1, fontSize: 11 }}>{d(r.avg_processing_days)}</td>
                           <td style={{ padding: '6px 7px', textAlign: 'center', color: C.t1, fontSize: 11 }}>{d(r.avg_pickup_days)}</td>
                           <td style={{ padding: '6px 7px', textAlign: 'center', color: C.t1, fontSize: 11 }}>{d(r.avg_intransit_days)}</td>
@@ -1962,7 +1962,7 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
                       const sumD1 = enriched.reduce((s,r) => s + (r.d1||0), 0)
                       const sumRN = enriched.reduce((s,r) => s + (r.rasr_num||0), 0)
                       const sumOfd = enriched.reduce((s,r) => s + (r.ofd_total||0), 0)
-                      const sumOnTime = enriched.reduce((s,r) => s + (r.on_time||0), 0)
+                      const sumSlaBreach = enriched.reduce((s,r) => s + (r.sla_breach||0), 0)
                       const wavg = (key) => { const w = enriched.reduce((s,r) => s + (r[key]!=null ? r[key]*r.total : 0),0); return w/tot }
                       return (
                         <tr style={{ borderTop: `2px solid ${C.border}`, background: C.acl, fontWeight: 700 }}>
@@ -1974,7 +1974,7 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
                           <td style={{ padding: '6px 7px', textAlign: 'right', color: C.t1, fontSize: 11 }}>{(sumC/tot*100).toFixed(2)}%</td>
                           <td style={{ padding: '6px 7px', textAlign: 'right', color: C.t1, fontSize: 11 }}>{sumOfd ? (sumD1/sumOfd*100).toFixed(2)+'%' : '—'}</td>
                           <td style={{ padding: '6px 7px', textAlign: 'right', color: C.t1, fontSize: 11 }}>{sumOfd ? (sumRN/sumOfd*100).toFixed(2)+'%' : '—'}</td>
-                          <td style={{ padding: '6px 7px', textAlign: 'right', color: C.t1, fontSize: 11 }}>{sumD ? (sumOnTime/sumD*100).toFixed(2)+'%' : '—'}</td>
+                          <td style={{ padding: '6px 7px', textAlign: 'right', color: C.t1, fontSize: 11 }}>{sumD ? (sumSlaBreach/sumD*100).toFixed(2)+'%' : '—'}</td>
                           <td style={{ padding: '6px 7px', textAlign: 'center', color: C.t1, fontSize: 11 }}>{wavg('avg_processing_days').toFixed(2)}d</td>
                           <td style={{ padding: '6px 7px', textAlign: 'center', color: C.t1, fontSize: 11 }}>{wavg('avg_pickup_days').toFixed(2)}d</td>
                           <td style={{ padding: '6px 7px', textAlign: 'center', color: C.t1, fontSize: 11 }}>{wavg('avg_intransit_days').toFixed(2)}d</td>
