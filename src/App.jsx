@@ -1962,6 +1962,7 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
                       const sumD1 = enriched.reduce((s,r) => s + (r.d1||0), 0)
                       const sumRN = enriched.reduce((s,r) => s + (r.rasr_num||0), 0)
                       const sumOfd = enriched.reduce((s,r) => s + (r.ofd_total||0), 0)
+                      const sumOnTime = enriched.reduce((s,r) => s + (r.on_time||0), 0)
                       const wavg = (key) => { const w = enriched.reduce((s,r) => s + (r[key]!=null ? r[key]*r.total : 0),0); return w/tot }
                       return (
                         <tr style={{ borderTop: `2px solid ${C.border}`, background: C.acl, fontWeight: 700 }}>
@@ -1973,6 +1974,7 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
                           <td style={{ padding: '6px 7px', textAlign: 'right', color: C.t1, fontSize: 11 }}>{(sumC/tot*100).toFixed(2)}%</td>
                           <td style={{ padding: '6px 7px', textAlign: 'right', color: C.t1, fontSize: 11 }}>{sumOfd ? (sumD1/sumOfd*100).toFixed(2)+'%' : '—'}</td>
                           <td style={{ padding: '6px 7px', textAlign: 'right', color: C.t1, fontSize: 11 }}>{sumOfd ? (sumRN/sumOfd*100).toFixed(2)+'%' : '—'}</td>
+                          <td style={{ padding: '6px 7px', textAlign: 'right', color: C.t1, fontSize: 11 }}>{sumD ? (sumOnTime/sumD*100).toFixed(2)+'%' : '—'}</td>
                           <td style={{ padding: '6px 7px', textAlign: 'center', color: C.t1, fontSize: 11 }}>{wavg('avg_processing_days').toFixed(2)}d</td>
                           <td style={{ padding: '6px 7px', textAlign: 'center', color: C.t1, fontSize: 11 }}>{wavg('avg_pickup_days').toFixed(2)}d</td>
                           <td style={{ padding: '6px 7px', textAlign: 'center', color: C.t1, fontSize: 11 }}>{wavg('avg_intransit_days').toFixed(2)}d</td>
