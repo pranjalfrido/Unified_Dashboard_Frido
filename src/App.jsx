@@ -1345,6 +1345,7 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
                 { key: '_cancPct', label: 'Canc %' },
                 { key: '_fasrPct', label: 'FASR %' },
                 { key: '_rasrPct', label: 'RASR %' },
+                { key: '_eddPct', label: 'EDD %' },
                 { key: 'avg_processing_days', label: 'Avg Processing', center: true, truncate: true },
                 { key: 'avg_pickup_days', label: 'Avg Pickup', center: true, truncate: true },
                 { key: 'avg_intransit_days', label: 'Avg S2D', center: true },
@@ -1360,6 +1361,7 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
                 _cancPct: r.total ? +(((r.cancelled || 0) / r.total) * 100).toFixed(2) : 0,
                 _fasrPct: r.ofd_total ? +((r.d1 / r.ofd_total) * 100).toFixed(2) : null,
                 _rasrPct: r.ofd_total ? +(((r.rasr_num || 0) / r.ofd_total) * 100).toFixed(2) : null,
+                _eddPct: r.delivered ? +(((r.on_time || 0) / r.delivered) * 100).toFixed(2) : null,
               }))
               const [sortCol, setSortCol] = [cSort?.col, (col) => setCSort(s => ({ col, dir: s?.col === col && s?.dir === 'desc' ? 'asc' : 'desc' }))]
               const sortDir = cSort?.dir || 'desc'
@@ -1856,7 +1858,7 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
               return (
                 <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
                   <colgroup>
-                    {[<col key={0} style={{ width:'10%' }} />, ...Array(12).fill(0).map((_,i) => <col key={i+1} style={{ width:'7.5%' }} />)]}
+                    {[<col key={0} style={{ width:'10%' }} />, ...Array(13).fill(0).map((_,i) => <col key={i+1} style={{ width:'7%' }} />)]}
                   </colgroup>
                   <thead style={{ position: 'sticky', top: 0, zIndex: 4 }}>
                     <tr style={{ borderBottom: `1.5px solid ${C.border}`, background: C.acl }}>
@@ -1900,6 +1902,7 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
                           <td style={{ padding: '6px 7px', textAlign: 'right', color: C.t1, fontSize: 11 }}>{r._cancPct.toFixed(2)}%</td>
                           <td style={{ padding: '6px 7px', textAlign: 'right', color: C.t1, fontSize: 11 }}>{r._fasrPct != null ? r._fasrPct.toFixed(2) + '%' : '—'}</td>
                           <td style={{ padding: '6px 7px', textAlign: 'right', color: C.t1, fontSize: 11 }}>{r._rasrPct != null ? r._rasrPct.toFixed(2) + '%' : '—'}</td>
+                          <td style={{ padding: '6px 7px', textAlign: 'right', color: C.t1, fontSize: 11 }}>{r._eddPct != null ? r._eddPct.toFixed(2) + '%' : '—'}</td>
                           <td style={{ padding: '6px 7px', textAlign: 'center', color: C.t1, fontSize: 11 }}>{d(r.avg_processing_days)}</td>
                           <td style={{ padding: '6px 7px', textAlign: 'center', color: C.t1, fontSize: 11 }}>{d(r.avg_pickup_days)}</td>
                           <td style={{ padding: '6px 7px', textAlign: 'center', color: C.t1, fontSize: 11 }}>{d(r.avg_intransit_days)}</td>
