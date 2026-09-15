@@ -456,7 +456,7 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
   const [loading, setLoading] = useState(false)
   const [showSkeleton, setShowSkeleton] = useState(false)
   const [error, setError] = useState(null)
-  const [staleData, setStaleData] = useState(() => { try { const s = localStorage.getItem('logistics_stale'); return s ? JSON.parse(s) : null } catch { return null } })
+  const [staleData, setStaleData] = useState(() => { try { const s = localStorage.getItem('logistics_stale_v2'); return s ? JSON.parse(s) : null } catch { return null } })
   const [retData, setRetData] = useState(null)
   const [retTrendGran, setRetTrendGran] = useState('Daily')
   const [retReasonView, setRetReasonView] = useState('reason') // 'reason' | 'sub'
@@ -492,7 +492,7 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
             if (ageMs <= 7 * 60 * 60 * 1000 && dateMatches && !json._placeholder && json.current) {
               setRawData(json.current)
               setRawPrevData(json.previous || null)
-              try { localStorage.setItem('logistics_stale', JSON.stringify({ current: json.current, previous: json.previous || null, dateRange: json.dateRange, savedAt: Date.now() })) } catch {}
+              try { localStorage.setItem('logistics_stale_v2', JSON.stringify({ current: json.current, previous: json.previous || null, dateRange: json.dateRange, savedAt: Date.now() })) } catch {}
               usedStatic = true
             }
           }
@@ -539,12 +539,12 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
         const [cur, prev] = await Promise.all([r.json(), rPrev.ok ? rPrev.json() : Promise.resolve(null)])
         setRawData(cur)
         setRawPrevData(prev)
-        try { localStorage.setItem('logistics_stale', JSON.stringify({ current: cur, previous: prev, dateRange: { start: filters.start, end: filters.end }, savedAt: Date.now() })) } catch {}
+        try { localStorage.setItem('logistics_stale_v2', JSON.stringify({ current: cur, previous: prev, dateRange: { start: filters.start, end: filters.end }, savedAt: Date.now() })) } catch {}
       }
     } catch (e) {
       // API failed — try localStorage stale data before showing error
       try {
-        const stale = localStorage.getItem('logistics_stale')
+        const stale = localStorage.getItem('logistics_stale_v2')
         if (stale) {
           const parsed = JSON.parse(stale)
           const staleMatches = parsed.dateRange && parsed.dateRange.start === filters.start && parsed.dateRange.end === filters.end
