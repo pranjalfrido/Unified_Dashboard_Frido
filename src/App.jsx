@@ -403,30 +403,16 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
   const [facSort, setFacSort] = useState({ col: 'total', dir: 'desc' })
   const [monthSort, setMonthSort] = useState({ col: 'month_label', dir: 'asc' })
   const [zoneSort, setZoneSort] = useState({ col: 'zone_group', dir: 'asc' })
-  // cSelected: set of active toggles. Primary view = non-courier if courier absent, else courier.
-  // Drill = the other selected toggle shown as ▶ expand under primary rows.
+  // cSelected: set of active toggles. cPrimary = last-clicked toggle = primary view.
   const [cSelected, setCSelected] = useState(new Set(['courier']))
+  const [cPrimary, setCPrimary] = useState('courier')
   const [cPayment, setCPayment] = useState(null) // 'COD' | 'Prepaid' | null — local to breakdown table only
   const [cPaymentData, setCPaymentData] = useState(null) // breakdown-scoped data when cPayment is set
   const [cTier, setCTier] = useState(null) // 'Tier 1' | 'Tier 2' | 'Tier 3' | null
-  const cView = (() => {
-    if (!cSelected.has('courier')) {
-      if (cSelected.has('zone')) return 'zone'
-      if (cSelected.has('facility')) return 'facility'
-      if (cSelected.has('tier')) return 'tier'
-      if (cSelected.has('month')) return 'month'
-    }
-    return 'courier'
-  })()
+  // cView = primary if it's still selected, else fall back to whichever is selected
+  const cView = cSelected.has(cPrimary) ? cPrimary : (['courier','zone','facility','month'].find(v => cSelected.has(v)) || 'courier')
   const cDrill = (() => {
-    if (cView === 'courier') {
-      if (cSelected.has('zone')) return 'zone'
-      if (cSelected.has('facility')) return 'facility'
-      if (cSelected.has('month')) return 'month'
-      return null
-    }
-    if (cSelected.has('courier')) return 'courier'
-    const others = ['zone','facility','month'].filter(v => v !== cView && cSelected.has(v))
+    const others = ['courier','zone','facility','month'].filter(v => v !== cView && cSelected.has(v))
     return others[0] || null
   })()
   const [payTrendGran, setPayTrendGran] = useState('Daily')
@@ -1269,10 +1255,10 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
                             } else {
                               // max 2 — if already 2 selected, replace the drill (non-primary)
                               if (next.size >= 2) {
-                                const primary = cView
-                                next.forEach(k => { if (k !== primary) next.delete(k) })
+                                next.forEach(k => { if (k !== cView) next.delete(k) })
                               }
                               next.add(vl)
+                              setCPrimary(vl)
                             }
                             return next
                           })
