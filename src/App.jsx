@@ -1384,6 +1384,7 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
                 _cancPct: r.total ? +(((r.cancelled||0) / r.total) * 100).toFixed(2) : 0,
                 _fasrPct: r.ofd_total ? +((r.d1 / r.ofd_total) * 100).toFixed(2) : null,
                 _rasrPct: r.ofd_total ? +(((r.rasr_num||0) / r.ofd_total) * 100).toFixed(2) : null,
+                _eddBreachPct: (r.on_time || r.sla_breach) ? +(((r.sla_breach||0) / ((r.on_time||0) + (r.sla_breach||0))) * 100).toFixed(2) : null,
               }))
               const byCourierMonth = (breakdownSrc?.byCourierMonth || [])
               const byCourierDay = (data?.byCourierDay || [])
@@ -1447,6 +1448,7 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
                   _cancPct: r.total ? +(((r.cancelled||0) / r.total) * 100).toFixed(2) : 0,
                   _fasrPct: r.ofd_total ? +((r.d1 / r.ofd_total) * 100).toFixed(2) : null,
                   _rasrPct: r.ofd_total ? +(((r.rasr_num||0) / r.ofd_total) * 100).toFixed(2) : null,
+                  _eddBreachPct: (r.on_time || r.sla_breach) ? +(((r.sla_breach||0) / ((r.on_time||0) + (r.sla_breach||0))) * 100).toFixed(2) : null,
                 }))
                 const sumZD = enrichZoneRaw.reduce((s,r)=>s+(r.delivered||0),0)
                 const sumZR = enrichZoneRaw.reduce((s,r)=>s+(r.rto||0),0)
@@ -1454,6 +1456,8 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
                 const sumZD1 = enrichZoneRaw.reduce((s,r)=>s+(r.d1||0),0)
                 const sumZRN = enrichZoneRaw.reduce((s,r)=>s+(r.rasr_num||0),0)
                 const sumZOfd = enrichZoneRaw.reduce((s,r)=>s+(r.ofd_total||0),0)
+                const sumZOnTime = enrichZoneRaw.reduce((s,r)=>s+(r.on_time||0),0)
+                const sumZSlaBreach = enrichZoneRaw.reduce((s,r)=>s+(r.sla_breach||0),0)
                 const wavgZ = (key) => { const w = enrichZoneRaw.reduce((s,r)=>s+(r[key]!=null?r[key]*(r.total||0):0),0); return zoneTotalAll>0?w/zoneTotalAll:null }
                 const td9z = { padding:'9px 10px', textAlign:'center', color:C.t2, fontSize:11 }
                 const td9zL = { padding:'9px 10px', color:C.t1, fontWeight:600, whiteSpace:'nowrap' }
@@ -1463,6 +1467,7 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
                   { key: '_delPct', label: 'Del %' }, { key: '_rtoPct', label: 'RTO %' },
                   { key: '_cancPct', label: 'Canc %' },
                   { key: '_fasrPct', label: 'FASR %' }, { key: '_rasrPct', label: 'RASR %' },
+                  { key: '_eddBreachPct', label: 'EDD Breach %' },
                   { key: 'avg_processing_days', label: 'Avg Processing' }, { key: 'avg_pickup_days', label: 'Avg Pickup' },
                   { key: 'avg_intransit_days', label: 'Avg S2D' }, { key: 'avg_fulfilment_days', label: 'Avg O2D' },
                   { key: 'avg_rto_tat_days', label: 'Avg RTO TAT' },
@@ -1501,6 +1506,7 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
                           <td style={td9z}>{r._cancPct.toFixed(2)}%</td>
                           <td style={td9z}>{r._fasrPct!=null?r._fasrPct.toFixed(2)+'%':'—'}</td>
                           <td style={td9z}>{r._rasrPct!=null?r._rasrPct.toFixed(2)+'%':'—'}</td>
+                          <td style={td9z}>{r._eddBreachPct!=null?r._eddBreachPct.toFixed(2)+'%':'—'}</td>
                           <td style={td9z}>{d(r.avg_processing_days)}</td>
                           <td style={td9z}>{d(r.avg_pickup_days)}</td>
                           <td style={td9z}>{d(r.avg_intransit_days)}</td>
@@ -1555,6 +1561,7 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
                         <td style={{ ...td9z, fontWeight:700 }}>{(sumZC/zoneTotalAll*100).toFixed(2)}%</td>
                         <td style={{ ...td9z, fontWeight:700 }}>{sumZOfd?(sumZD1/sumZOfd*100).toFixed(2)+'%':'—'}</td>
                         <td style={{ ...td9z, fontWeight:700 }}>{sumZOfd?(sumZRN/sumZOfd*100).toFixed(2)+'%':'—'}</td>
+                        <td style={{ ...td9z, fontWeight:700 }}>{(sumZOnTime+sumZSlaBreach)?(sumZSlaBreach/(sumZOnTime+sumZSlaBreach)*100).toFixed(2)+'%':'—'}</td>
                         <td style={{ ...td9z, fontWeight:700 }}>{d(wavgZ('avg_processing_days'))}</td>
                         <td style={{ ...td9z, fontWeight:700 }}>{d(wavgZ('avg_pickup_days'))}</td>
                         <td style={{ ...td9z, fontWeight:700 }}>{d(wavgZ('avg_intransit_days'))}</td>
@@ -1577,6 +1584,7 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
                   _cancPct: r.total ? +(((r.cancelled||0) / r.total) * 100).toFixed(2) : 0,
                   _fasrPct: r.ofd_total ? +((r.d1 / r.ofd_total) * 100).toFixed(2) : null,
                   _rasrPct: r.ofd_total ? +(((r.rasr_num||0) / r.ofd_total) * 100).toFixed(2) : null,
+                  _eddBreachPct: (r.on_time || r.sla_breach) ? +(((r.sla_breach||0) / ((r.on_time||0) + (r.sla_breach||0))) * 100).toFixed(2) : null,
                 }))
                 const sumD = enrichFacRaw.reduce((s,r)=>s+(r.delivered||0),0)
                 const sumR = enrichFacRaw.reduce((s,r)=>s+(r.rto||0),0)
@@ -1585,6 +1593,8 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
                 const sumD1 = enrichFacRaw.reduce((s,r)=>s+(r.d1||0),0)
                 const sumRN = enrichFacRaw.reduce((s,r)=>s+(r.rasr_num||0),0)
                 const sumOfd = enrichFacRaw.reduce((s,r)=>s+(r.ofd_total||0),0)
+                const sumFacOnTime = enrichFacRaw.reduce((s,r)=>s+(r.on_time||0),0)
+                const sumFacSlaBreach = enrichFacRaw.reduce((s,r)=>s+(r.sla_breach||0),0)
                 const wavg = (key) => { const w = enrichFacRaw.reduce((s,r)=>s+(r[key]!=null?r[key]*(r.total||0):0),0); return facTotalAll>0?w/facTotalAll:null }
                 const td9 = { padding:'9px 10px', textAlign:'right', color:C.t2, fontSize:11 }
                 const td9L = { padding:'9px 10px', color:C.t1, fontWeight:600, whiteSpace:'nowrap' }
@@ -1594,6 +1604,7 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
                   { key: '_delPct', label: 'Del %' }, { key: '_rtoPct', label: 'RTO %' },
                   { key: '_zrtoPct', label: 'Z-RTO %' }, { key: '_cancPct', label: 'Canc %' },
                   { key: '_fasrPct', label: 'FASR %' }, { key: '_rasrPct', label: 'RASR %' },
+                  { key: '_eddBreachPct', label: 'EDD Breach %' },
                   { key: 'avg_processing_days', label: 'Avg Processing' }, { key: 'avg_pickup_days', label: 'Avg Pickup' },
                   { key: 'avg_intransit_days', label: 'Avg S2D' }, { key: 'avg_fulfilment_days', label: 'Avg O2D' },
                   { key: 'avg_rto_tat_days', label: 'Avg RTO TAT' }, { key: 'avg_s2a_days', label: 'Avg S2A' },
@@ -1638,6 +1649,7 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
                           <td style={td9}>{r._cancPct.toFixed(2)}%</td>
                           <td style={td9}>{r._fasrPct!=null?r._fasrPct.toFixed(2)+'%':'—'}</td>
                           <td style={td9}>{r._rasrPct!=null?r._rasrPct.toFixed(2)+'%':'—'}</td>
+                          <td style={td9}>{r._eddBreachPct!=null?r._eddBreachPct.toFixed(2)+'%':'—'}</td>
                           <td style={td9}>{d(r.avg_processing_days)}</td>
                           <td style={td9}>{d(r.avg_pickup_days)}</td>
                           <td style={td9}>{d(r.avg_intransit_days)}</td>
@@ -1697,6 +1709,7 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
                         <td style={td9}>{(sumC/facTotalAll*100).toFixed(2)}%</td>
                         <td style={{ ...td9, fontWeight:700 }}>{sumOfd?(sumD1/sumOfd*100).toFixed(2)+'%':'—'}</td>
                         <td style={{ ...td9, fontWeight:700 }}>{sumOfd?(sumRN/sumOfd*100).toFixed(2)+'%':'—'}</td>
+                        <td style={td9}>{(sumFacOnTime+sumFacSlaBreach)?(sumFacSlaBreach/(sumFacOnTime+sumFacSlaBreach)*100).toFixed(2)+'%':'—'}</td>
                         <td style={td9}>{d(wavg('avg_processing_days'))}</td>
                         <td style={td9}>{d(wavg('avg_pickup_days'))}</td>
                         <td style={td9}>{d(wavg('avg_intransit_days'))}</td>
@@ -1777,6 +1790,8 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
                 const sumD1 = enrichMonth.reduce((s,r)=>s+(r.d1||0),0)
                 const sumRN = enrichMonth.reduce((s,r)=>s+(r.rasr_num||0),0)
                 const sumOfd = enrichMonth.reduce((s,r)=>s+(r.ofd_total||0),0)
+                const sumMOnTime = enrichMonth.reduce((s,r)=>s+(r.on_time||0),0)
+                const sumMSlaBreach = enrichMonth.reduce((s,r)=>s+(r.sla_breach||0),0)
                 const wavgM = (key) => { const w = enrichMonth.reduce((s,r)=>s+(r[key]!=null?r[key]*r.total:0),0); return w/tot }
                 const MONTH_COLS = [
                   { key: 'month_label', label: 'Month', left: true, str: true },
@@ -1784,6 +1799,7 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
                   { key: '_delPct', label: 'Del %' }, { key: '_rtoPct', label: 'RTO %' },
                   { key: '_zrtoPct', label: 'Z-RTO %' }, { key: '_cancPct', label: 'Canc %' },
                   { key: '_fasrPct', label: 'FASR %' }, { key: '_rasrPct', label: 'RASR %' },
+                  { key: '_eddBreachPct', label: 'EDD Breach %' },
                   { key: 'avg_processing_days', label: 'Avg Processing' }, { key: 'avg_pickup_days', label: 'Avg Pickup' },
                   { key: 'avg_intransit_days', label: 'Avg S2D' }, { key: 'avg_fulfilment_days', label: 'Avg O2D' },
                   { key: 'avg_rto_tat_days', label: 'Avg RTO TAT' }, { key: 'avg_s2a_days', label: 'Avg S2A' },
@@ -1823,6 +1839,7 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
                             <td style={{ padding:'9px 10px', textAlign:'right', color:C.t2, fontSize:11 }}>{r._cancPct.toFixed(2)}%</td>
                             <td style={{ padding:'9px 10px', textAlign:'right', fontWeight:700, color:C.t1, fontSize:11 }}>{r._fasrPct!=null?r._fasrPct.toFixed(2)+'%':'—'}</td>
                             <td style={{ padding:'9px 10px', textAlign:'right', fontWeight:700, color:C.t1, fontSize:11 }}>{r._rasrPct!=null?r._rasrPct.toFixed(2)+'%':'—'}</td>
+                            <td style={{ padding:'9px 10px', textAlign:'right', color:C.t1, fontSize:11 }}>{r._eddBreachPct!=null?r._eddBreachPct.toFixed(2)+'%':'—'}</td>
                             <td style={{ padding:'9px 10px', textAlign:'right', color:tatColor(r.avg_processing_days,2,1), fontSize:11 }}>{d(r.avg_processing_days)}</td>
                             <td style={{ padding:'9px 10px', textAlign:'right', color:tatColor(r.avg_pickup_days,1,0.5), fontSize:11 }}>{d(r.avg_pickup_days)}</td>
                             <td style={{ padding:'9px 10px', textAlign:'right', color:tatColor(r.avg_intransit_days,4,2), fontSize:11 }}>{d(r.avg_intransit_days)}</td>
@@ -1844,6 +1861,7 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
                         <td style={{ padding:'9px 10px', textAlign:'right', color:C.t2, fontSize:11 }}>{(sumC/tot*100).toFixed(2)}%</td>
                         <td style={{ padding:'9px 10px', textAlign:'right', color:C.t1, fontWeight:700, fontSize:11 }}>{sumOfd?(sumD1/sumOfd*100).toFixed(2)+'%':'—'}</td>
                         <td style={{ padding:'9px 10px', textAlign:'right', color:C.t1, fontWeight:700, fontSize:11 }}>{sumOfd?(sumRN/sumOfd*100).toFixed(2)+'%':'—'}</td>
+                        <td style={{ padding:'9px 10px', textAlign:'right', color:C.t2, fontSize:11 }}>{(sumMOnTime+sumMSlaBreach)?(sumMSlaBreach/(sumMOnTime+sumMSlaBreach)*100).toFixed(2)+'%':'—'}</td>
                         <td style={{ padding:'9px 10px', textAlign:'right', color:C.t2, fontSize:11 }}>{wavgM('avg_processing_days').toFixed(2)}d</td>
                         <td style={{ padding:'9px 10px', textAlign:'right', color:C.t2, fontSize:11 }}>{wavgM('avg_pickup_days').toFixed(2)}d</td>
                         <td style={{ padding:'9px 10px', textAlign:'right', color:C.t2, fontSize:11 }}>{wavgM('avg_intransit_days').toFixed(2)}d</td>
