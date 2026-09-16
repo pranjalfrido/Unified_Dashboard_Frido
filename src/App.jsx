@@ -4999,7 +4999,7 @@ const pill = (label, value, color = C.t1, bg = C.bg) => (
 const KpiCard = ({ span = 3, accent, tint, hero, children, style }) => (
   <div className="card-hoverable" style={{
     gridColumn: `span ${span}`, background: tint || C.card, border: `1px solid ${tint ? 'transparent' : C.border}`, borderRadius: 14,
-    padding: hero ? '20px 22px' : '14px 16px', boxShadow: hero
+    padding: hero ? '20px 22px' : '12px 16px', boxShadow: hero
       ? '0 2px 4px rgba(0,0,0,0.05), 0 14px 30px -12px rgba(216,154,26,0.35)'
       : '0 1px 2px rgba(0,0,0,0.04), 0 6px 16px -8px rgba(0,0,0,0.08)',
     position: 'relative', overflow: 'hidden', minWidth: 0, display: 'flex', flexDirection: 'column', justifyContent: 'center', ...style,
@@ -5012,12 +5012,12 @@ const KpiCard = ({ span = 3, accent, tint, hero, children, style }) => (
 // tinted background (tint) for an at-a-glance good/bad read, not just a thin top stripe.
 const StatTile = ({ label, value, sub, deltaVal, color = C.t1, accent, tint, hero, span = 3 }) => (
   <KpiCard span={span} accent={accent} tint={tint} hero={hero}>
-    <div style={{ fontSize: hero ? 11 : 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.06em', color: C.t3, marginBottom: hero ? 10 : 7 }}>{label}</div>
+    <div style={{ fontSize: hero ? 11 : 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.06em', color: C.t3, marginBottom: hero ? 10 : 5 }}>{label}</div>
     <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, flexWrap: 'wrap' }}>
-      <span style={{ fontSize: hero ? 36 : 22, fontWeight: 700, color, fontFamily: 'var(--mono)', letterSpacing: '-.015em', lineHeight: 1 }}>{value}</span>
+      <span style={{ fontSize: hero ? 36 : 20, fontWeight: 700, color, fontFamily: 'var(--mono)', letterSpacing: '-.015em', lineHeight: 1 }}>{value}</span>
       {deltaVal !== undefined && delta(deltaVal)}
     </div>
-    {sub && <div style={{ fontSize: 11, color: C.t3, marginTop: 8 }}>{sub}</div>}
+    {sub && <div style={{ fontSize: 11, color: C.t3, marginTop: 6 }}>{sub}</div>}
   </KpiCard>
 )
 // Same tile as ReturnTrendChart's TrendStatTile (D2CReturnAnalysisTab.jsx) — a 3px color bar
@@ -5555,7 +5555,7 @@ function OverviewPage({ data, combinedAlerts, logisticsData, logisticsRangeLabel
               )}
               </div>
             </div>
-            <div style={{ maxHeight: 560, overflowY: 'auto', border: `1px solid ${C.border}`, borderRadius: 10 }}>
+            <div style={{ maxHeight: 450, overflowY: 'auto', border: `1px solid ${C.border}`, borderRadius: 10, paddingBottom: 16 }}>
               <table className="row-hoverable" style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
                 <thead style={{ position: 'sticky', top: 0, zIndex: 1 }}>
                   <tr>
@@ -5651,7 +5651,7 @@ function OverviewPage({ data, combinedAlerts, logisticsData, logisticsRangeLabel
             const STAT_GRID_COLS = 8
             const STAT_COL_WIDTH = 145
             const StatStrip = ({ items }) => (
-              <div style={{ display: 'grid', gridTemplateColumns: `repeat(${STAT_GRID_COLS}, ${STAT_COL_WIDTH}px)`, gap: '20px 24px' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: `repeat(${STAT_GRID_COLS}, ${STAT_COL_WIDTH}px)`, gap: '16px 24px' }}>
                 {items.map((t, i) => (
                   <div key={t.label} style={{
                     minWidth: 0,
@@ -5662,9 +5662,9 @@ function OverviewPage({ data, combinedAlerts, logisticsData, logisticsRangeLabel
                         (e.g. SLA Threshold tiles' "n of d" caption) and some don't (Ops Performance
                         tiles), which previously made hover boxes visibly different heights next to
                         each other in the same row. */}
-                    <div className="stat-tile-hover" style={{ padding: '8px 14px', margin: '-8px -14px', minHeight: 62, display: 'flex', flexDirection: 'column', justifyContent: 'flex-start' }}>
-                      <div style={{ fontSize: 10.5, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.04em', color: C.t3, marginBottom: 7, display: 'flex', alignItems: 'center', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{t.label}{t.info && <InfoDot text={t.info} />}</div>
-                      <div style={{ fontSize: 21, fontWeight: 800, fontFamily: 'var(--mono)', color: t.color, lineHeight: 1 }}>{t.val}</div>
+                    <div className="stat-tile-hover" style={{ padding: '8px 14px', margin: '-8px -14px', minHeight: 52, display: 'flex', flexDirection: 'column', justifyContent: 'flex-start' }}>
+                      <div style={{ fontSize: 10.5, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.04em', color: C.t3, marginBottom: 5, display: 'flex', alignItems: 'center', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{t.label}{t.info && <InfoDot text={t.info} />}</div>
+                      <div style={{ fontSize: 19, fontWeight: 800, fontFamily: 'var(--mono)', color: t.color, lineHeight: 1 }}>{t.val}</div>
                       {t.sub && <div style={{ fontSize: 10, color: C.t3, marginTop: 4 }}>{t.sub}</div>}
                     </div>
                   </div>
@@ -5672,7 +5672,7 @@ function OverviewPage({ data, combinedAlerts, logisticsData, logisticsRangeLabel
               </div>
             )
             const Section = ({ children, first }) => (
-              <div style={{ padding: '22px 24px', borderTop: first ? 'none' : `1px solid ${C.border}` }}>{children}</div>
+              <div style={{ padding: '18px 24px', borderTop: first ? 'none' : `1px solid ${C.border}` }}>{children}</div>
             )
             return (
             <>
@@ -9566,7 +9566,7 @@ function AmazonTab({ data, channelView, setChannelView }) {
             const statusColors = { Shipped: '#2E74CC', Pending: '#E8930A', Cancelled: '#E24B4A', Shipping: '#9B59B6' }
             return (
               <div className="g-3col" style={{ display: 'grid', gridTemplateColumns: '1.5fr 1fr 0.65fr', gap: 14, alignItems: 'start' }}>
-                <Card fill title="Revenue & Returns Trend" style={{ height: 370 }} note={channelView !== 'all' ? (channelView === 'sc' ? 'Seller Central' : 'Vendor Central') : undefined} action={
+                <Card fill title="Revenue & Returns Trend" style={{ height: 325 }} note={channelView !== 'all' ? (channelView === 'sc' ? 'Seller Central' : 'Vendor Central') : undefined} action={
                   <div style={{ display: 'flex', gap: isMob ? 4 : 8, alignItems: 'center' }}>
                     {isMob ? (
                       <Dropdown value={ovTrendMetric} onChange={setOvTrendMetric} options={[{ id: 'rev', label: 'Revenue' }, { id: 'orders', label: 'Orders' }, { id: 'units', label: 'Units' }]} style={{ fontSize: 10, fontWeight: 600, padding: '2px 4px', borderRadius: 6, width: 78 }} />
@@ -9584,8 +9584,8 @@ function AmazonTab({ data, channelView, setChannelView }) {
                   </div>
                 }>
                   <div style={isMob ? { margin: '0 -18px' } : {}}>
-                  <ResponsiveContainer width="100%" height={isMob ? 240 : 300} minHeight={200}>
-                    <ComposedChart data={groupedWithRet} margin={{ top: 8, right: isMob ? 18 : 20, bottom: 0, left: isMob ? 18 : 0 }}>
+                  <ResponsiveContainer width="100%" height={isMob ? 200 : 255} minHeight={180}>
+                    <ComposedChart data={groupedWithRet} margin={{ top: 8, right: isMob ? 18 : 20, bottom: 20, left: isMob ? 18 : 0 }}>
                       <defs>
                         <linearGradient id="amzTrendGrossGrad" x1="0" y1="0" x2="0" y2="1">
                           <stop offset="5%" stopColor={C.acm} stopOpacity={0.28} />
@@ -9657,11 +9657,11 @@ function AmazonTab({ data, channelView, setChannelView }) {
                     catRows={catRows} subCatRows={subCatRows} skuMap={skuMap} totalRev={chScCatRev + chVcCatRev}
                     view={catRevView} setView={setCatRevView} selectedName={selectedCat}
                     onSelectCategory={v => { setSelectedCat(prev => prev === v ? null : v); setSelectedSubCat(null) }}
-                    height={370}
+                    height={325}
                   />
                 })()}
                 {channelView !== 'vc'
-                  ? <GeoToggleDonutCard regionRows={amzSC.regionRows || []} tierRows={amzSC.tierRows || []} note="Seller Central only" boxheight={370} />
+                  ? <GeoToggleDonutCard regionRows={amzSC.regionRows || []} tierRows={amzSC.tierRows || []} note="Seller Central only" boxheight={325} />
                   : <Card title="Geography Breakdown" note="Not available for Vendor Central"><div style={{ fontSize: 12, color: C.t3, padding: '30px 0', textAlign: 'center' }}>VC data has no state/city/region granularity</div></Card>}
               </div>
             )
@@ -13391,7 +13391,7 @@ function OfflineTab({ data, sub, setSub }) {
         const btnSt = k => ({ fontSize: 11, fontWeight: offTrendMetric===k?700:500, padding: '3px 9px', borderRadius: 6, border: 'none', outline: 'none', background: offTrendMetric===k?C.acs:'transparent', color: offTrendMetric===k?'#3F3D33':C.t2, cursor: 'pointer', fontFamily: 'var(--font)', minWidth: 72, textAlign: 'center' })
         return (
           <div className="g-3col" style={{ display: 'grid', gridTemplateColumns: '1.5fr 1fr 0.65fr', gap: 14, alignItems: 'start' }}>
-            <Card fill title="Revenue & Returns Trend" style={{ height: isMob ? 'auto' : 370 }} note={sub !== 'all' ? SUB_OPTIONS.find(o => o.id === sub)?.label : undefined} action={
+            <Card fill title="Revenue & Returns Trend" style={{ height: isMob ? 'auto' : 325 }} note={sub !== 'all' ? SUB_OPTIONS.find(o => o.id === sub)?.label : undefined} action={
               <div style={{ display: 'flex', gap: isMob ? 4 : 8, alignItems: 'center' }}>
                 {isMob ? (
                   <SmallDropdown value={offTrendMetric} onChange={setOffTrendMetric} options={[['rev','Gross Rev'],['orders','Orders'],['units','Units']]}
@@ -13467,9 +13467,9 @@ function OfflineTab({ data, sub, setSub }) {
               setView={setCatRevView}
               selectedName={selectedCat}
               onSelectCategory={name => setSelectedCat(prev => prev === name ? null : name)}
-              height={370}
+              height={325}
             />
-            <GeoToggleDonutCard regionRows={regionRows} tierRows={tierRows} boxheight={370} />
+            <GeoToggleDonutCard regionRows={regionRows} tierRows={tierRows} boxheight={325} />
           </div>
         )
       })()}
