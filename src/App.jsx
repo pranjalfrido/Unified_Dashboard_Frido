@@ -1252,13 +1252,15 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
                             const next = new Set(prev)
                             if (next.has(vl)) {
                               next.delete(vl)
+                              // if primary was deselected, promote the remaining one
+                              setCPrimary(p => p === vl ? (['courier','zone','facility','month'].find(k => next.has(k)) || vl) : p)
                             } else {
                               // max 2 — if already 2 selected, replace the drill (non-primary)
                               if (next.size >= 2) {
                                 next.forEach(k => { if (k !== cView) next.delete(k) })
                               }
                               next.add(vl)
-                              setCPrimary(vl)
+                              // do NOT update cPrimary — first-selected stays primary
                             }
                             return next
                           })
@@ -1582,7 +1584,7 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
                 const sumFacOnTime = enrichFacRaw.reduce((s,r)=>s+(r.on_time||0),0)
                 const sumFacSlaBreach = enrichFacRaw.reduce((s,r)=>s+(r.sla_breach||0),0)
                 const wavg = (key) => { const w = enrichFacRaw.reduce((s,r)=>s+(r[key]!=null?r[key]*(r.total||0):0),0); return facTotalAll>0?w/facTotalAll:null }
-                const td9 = { padding:'9px 10px', textAlign:'right', color:C.t2, fontSize:11 }
+                const td9 = { padding:'9px 10px', textAlign:'center', color:C.t2, fontSize:11 }
                 const td9L = { padding:'9px 10px', color:C.t1, fontWeight:600, whiteSpace:'nowrap' }
                 const FAC_COLS = [
                   { key: 'facility', label: 'Facility', left: true, str: true },
@@ -1591,7 +1593,7 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
                   { key: '_zrtoPct', label: 'Z-RTO %' }, { key: '_cancPct', label: 'Canc %' },
                   { key: '_fasrPct', label: 'FASR %' }, { key: '_rasrPct', label: 'RASR %' },
                   { key: '_eddBreachPct', label: 'EDD Breach %' },
-                  { key: 'avg_processing_days', label: 'Avg Processing' }, { key: 'avg_pickup_days', label: 'Avg Pickup' },
+                  { key: 'avg_processing_days', label: 'Avg Process.' }, { key: 'avg_pickup_days', label: 'Avg Pickup' },
                   { key: 'avg_intransit_days', label: 'Avg S2D' }, { key: 'avg_fulfilment_days', label: 'Avg O2D' },
                   { key: 'avg_rto_tat_days', label: 'Avg RTO TAT' }, { key: 'avg_s2a_days', label: 'Avg S2A' },
                 ]
@@ -1611,7 +1613,7 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
                     <thead>
                       <tr style={{ borderBottom:`1.5px solid ${C.border}`, background: C.acl }}>
                         {FAC_COLS.map((col,i) => (
-                          <th key={col.key} onClick={() => setFacSort(s => ({ col: col.key, dir: s?.col === col.key && s?.dir === 'desc' ? 'asc' : 'desc' }))} style={{ padding:'9px 10px', textAlign:i===0?'left':'right', color:C.t1, fontWeight:700, fontSize:11, letterSpacing:'.05em', textTransform:'uppercase', whiteSpace: i===0 ? 'normal' : 'nowrap', overflow: i===0 ? 'hidden' : undefined, textOverflow: i===0 ? 'ellipsis' : undefined, maxWidth: i===0 ? 0 : undefined, cursor: 'pointer', userSelect: 'none' }}>{col.label}{facSortCol === col.key ? (facSortDir === 'desc' ? ' ↓' : ' ↑') : ''}</th>
+                          <th key={col.key} onClick={() => setFacSort(s => ({ col: col.key, dir: s?.col === col.key && s?.dir === 'desc' ? 'asc' : 'desc' }))} style={{ padding:'9px 10px', textAlign:i===0?'left':'center', color:C.t1, fontWeight:700, fontSize:11, letterSpacing:'.05em', textTransform:'uppercase', whiteSpace:'nowrap', cursor: 'pointer', userSelect: 'none' }}>{col.label}{facSortCol === col.key ? (facSortDir === 'desc' ? ' ↓' : ' ↑') : ''}</th>
                         ))}
                       </tr>
                     </thead>
@@ -1803,7 +1805,7 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
                     <thead>
                       <tr style={{ borderBottom:`1.5px solid ${C.border}`, background: C.acl }}>
                         {MONTH_COLS.map((col,i) => (
-                          <th key={col.key} onClick={() => setMonthSort(s => ({ col: col.key, dir: s?.col === col.key && s?.dir === 'desc' ? 'asc' : 'desc' }))} style={{ padding:'9px 10px', textAlign:i===0?'left':'right', color:C.t1, fontWeight:700, fontSize:11, letterSpacing:'.05em', textTransform:'uppercase', whiteSpace:'nowrap', cursor: 'pointer', userSelect: 'none' }}>{col.label}{monthSortCol === col.key ? (monthSortDir === 'desc' ? ' ↓' : ' ↑') : ''}</th>
+                          <th key={col.key} onClick={() => setMonthSort(s => ({ col: col.key, dir: s?.col === col.key && s?.dir === 'desc' ? 'asc' : 'desc' }))} style={{ padding:'9px 10px', textAlign:i===0?'left':'center', color:C.t1, fontWeight:700, fontSize:11, letterSpacing:'.05em', textTransform:'uppercase', whiteSpace:'nowrap', cursor: 'pointer', userSelect: 'none' }}>{col.label}{monthSortCol === col.key ? (monthSortDir === 'desc' ? ' ↓' : ' ↑') : ''}</th>
                         ))}
                       </tr>
                     </thead>
@@ -1817,21 +1819,21 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
                             onMouseEnter={e => { e.currentTarget.style.background = '#FDF8ED'; e.currentTarget.style.boxShadow = `inset 0 1px 0 0 ${C.acm}55, inset 0 -1px 0 0 ${C.acm}55, 0 0 8px 0 ${C.acc}33` }}
                             onMouseLeave={e => { e.currentTarget.style.background = ri % 2 === 1 ? '#FAF9F6' : 'transparent'; e.currentTarget.style.boxShadow = 'none' }}>
                             <td style={{ padding:'9px 10px', color:C.t1, fontWeight:600, whiteSpace:'nowrap' }}>{r.month_label}</td>
-                            <td style={{ padding:'9px 10px', textAlign:'right', color:C.t2, fontSize:11 }}>{r._volPct.toFixed(2)}%</td>
-                            <td style={{ padding:'9px 10px', textAlign:'right', color:C.t1, fontWeight:600 }}>{n(r.total)}</td>
-                            <td style={{ padding:'9px 10px', textAlign:'right', fontWeight:700, color:delColor, fontSize:11 }}>{r._delPct.toFixed(2)}%</td>
-                            <td style={{ padding:'9px 10px', textAlign:'right', fontWeight:700, color:rtoColor, fontSize:11 }}>{r._rtoPct.toFixed(2)}%</td>
-                            <td style={{ padding:'9px 10px', textAlign:'right', color:C.t2, fontSize:11 }}>{r._zrtoPct.toFixed(2)}%</td>
-                            <td style={{ padding:'9px 10px', textAlign:'right', color:C.t2, fontSize:11 }}>{r._cancPct.toFixed(2)}%</td>
-                            <td style={{ padding:'9px 10px', textAlign:'right', fontWeight:700, color:C.t1, fontSize:11 }}>{r._fasrPct!=null?r._fasrPct.toFixed(2)+'%':'—'}</td>
-                            <td style={{ padding:'9px 10px', textAlign:'right', fontWeight:700, color:C.t1, fontSize:11 }}>{r._rasrPct!=null?r._rasrPct.toFixed(2)+'%':'—'}</td>
-                            <td style={{ padding:'9px 10px', textAlign:'right', color:C.t1, fontSize:11 }}>{r._eddBreachPct!=null?r._eddBreachPct.toFixed(2)+'%':'—'}</td>
-                            <td style={{ padding:'9px 10px', textAlign:'right', color:tatColor(r.avg_processing_days,2,1), fontSize:11 }}>{d(r.avg_processing_days)}</td>
-                            <td style={{ padding:'9px 10px', textAlign:'right', color:tatColor(r.avg_pickup_days,1,0.5), fontSize:11 }}>{d(r.avg_pickup_days)}</td>
-                            <td style={{ padding:'9px 10px', textAlign:'right', color:tatColor(r.avg_intransit_days,4,2), fontSize:11 }}>{d(r.avg_intransit_days)}</td>
-                            <td style={{ padding:'9px 10px', textAlign:'right', color:tatColor(r.avg_fulfilment_days,6,4), fontSize:11 }}>{d(r.avg_fulfilment_days)}</td>
-                            <td style={{ padding:'9px 10px', textAlign:'right', color:tatColor(r.avg_rto_tat_days,10,5), fontSize:11 }}>{d(r.avg_rto_tat_days)}</td>
-                            <td style={{ padding:'9px 10px', textAlign:'right', color:tatColor(r.avg_s2a_days,3,1.5), fontSize:11 }}>{d(r.avg_s2a_days)}</td>
+                            <td style={{ padding:'9px 10px', textAlign:'center', color:C.t2, fontSize:11 }}>{r._volPct.toFixed(2)}%</td>
+                            <td style={{ padding:'9px 10px', textAlign:'center', color:C.t1, fontWeight:600 }}>{n(r.total)}</td>
+                            <td style={{ padding:'9px 10px', textAlign:'center', fontWeight:700, color:delColor, fontSize:11 }}>{r._delPct.toFixed(2)}%</td>
+                            <td style={{ padding:'9px 10px', textAlign:'center', fontWeight:700, color:rtoColor, fontSize:11 }}>{r._rtoPct.toFixed(2)}%</td>
+                            <td style={{ padding:'9px 10px', textAlign:'center', color:C.t2, fontSize:11 }}>{r._zrtoPct.toFixed(2)}%</td>
+                            <td style={{ padding:'9px 10px', textAlign:'center', color:C.t2, fontSize:11 }}>{r._cancPct.toFixed(2)}%</td>
+                            <td style={{ padding:'9px 10px', textAlign:'center', fontWeight:700, color:C.t1, fontSize:11 }}>{r._fasrPct!=null?r._fasrPct.toFixed(2)+'%':'—'}</td>
+                            <td style={{ padding:'9px 10px', textAlign:'center', fontWeight:700, color:C.t1, fontSize:11 }}>{r._rasrPct!=null?r._rasrPct.toFixed(2)+'%':'—'}</td>
+                            <td style={{ padding:'9px 10px', textAlign:'center', color:C.t1, fontSize:11 }}>{r._eddBreachPct!=null?r._eddBreachPct.toFixed(2)+'%':'—'}</td>
+                            <td style={{ padding:'9px 10px', textAlign:'center', color:tatColor(r.avg_processing_days,2,1), fontSize:11 }}>{d(r.avg_processing_days)}</td>
+                            <td style={{ padding:'9px 10px', textAlign:'center', color:tatColor(r.avg_pickup_days,1,0.5), fontSize:11 }}>{d(r.avg_pickup_days)}</td>
+                            <td style={{ padding:'9px 10px', textAlign:'center', color:tatColor(r.avg_intransit_days,4,2), fontSize:11 }}>{d(r.avg_intransit_days)}</td>
+                            <td style={{ padding:'9px 10px', textAlign:'center', color:tatColor(r.avg_fulfilment_days,6,4), fontSize:11 }}>{d(r.avg_fulfilment_days)}</td>
+                            <td style={{ padding:'9px 10px', textAlign:'center', color:tatColor(r.avg_rto_tat_days,10,5), fontSize:11 }}>{d(r.avg_rto_tat_days)}</td>
+                            <td style={{ padding:'9px 10px', textAlign:'center', color:tatColor(r.avg_s2a_days,3,1.5), fontSize:11 }}>{d(r.avg_s2a_days)}</td>
                           </tr>
                         )
                       })}
@@ -1839,21 +1841,21 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
                     <tfoot>
                       <tr style={{ borderTop:`2px solid ${C.border}`, background:C.acl, fontWeight:700 }}>
                         <td style={{ padding:'9px 10px', color:C.t1, fontWeight:700 }}>Total</td>
-                        <td style={{ padding:'9px 10px', textAlign:'right', color:C.t2, fontSize:11 }}>100.00%</td>
-                        <td style={{ padding:'9px 10px', textAlign:'right', color:C.t1, fontWeight:700 }}>{n(tot)}</td>
-                        <td style={{ padding:'9px 10px', textAlign:'right', color:C.green.tx, fontWeight:700, fontSize:11 }}>{(sumD/tot*100).toFixed(2)}%</td>
-                        <td style={{ padding:'9px 10px', textAlign:'right', color:C.red.tx, fontWeight:700, fontSize:11 }}>{(sumR/tot*100).toFixed(2)}%</td>
-                        <td style={{ padding:'9px 10px', textAlign:'right', color:C.t2, fontSize:11 }}>{(sumZ/tot*100).toFixed(2)}%</td>
-                        <td style={{ padding:'9px 10px', textAlign:'right', color:C.t2, fontSize:11 }}>{(sumC/tot*100).toFixed(2)}%</td>
-                        <td style={{ padding:'9px 10px', textAlign:'right', color:C.t1, fontWeight:700, fontSize:11 }}>{sumOfd?(sumD1/sumOfd*100).toFixed(2)+'%':'—'}</td>
-                        <td style={{ padding:'9px 10px', textAlign:'right', color:C.t1, fontWeight:700, fontSize:11 }}>{sumOfd?(sumRN/sumOfd*100).toFixed(2)+'%':'—'}</td>
-                        <td style={{ padding:'9px 10px', textAlign:'right', color:C.t2, fontSize:11 }}>{(sumMOnTime+sumMSlaBreach)?(sumMSlaBreach/(sumMOnTime+sumMSlaBreach)*100).toFixed(2)+'%':'—'}</td>
-                        <td style={{ padding:'9px 10px', textAlign:'right', color:C.t2, fontSize:11 }}>{wavgM('avg_processing_days').toFixed(2)}d</td>
-                        <td style={{ padding:'9px 10px', textAlign:'right', color:C.t2, fontSize:11 }}>{wavgM('avg_pickup_days').toFixed(2)}d</td>
-                        <td style={{ padding:'9px 10px', textAlign:'right', color:C.t2, fontSize:11 }}>{wavgM('avg_intransit_days').toFixed(2)}d</td>
-                        <td style={{ padding:'9px 10px', textAlign:'right', color:C.t2, fontSize:11 }}>{wavgM('avg_fulfilment_days').toFixed(2)}d</td>
-                        <td style={{ padding:'9px 10px', textAlign:'right', color:C.t2, fontSize:11 }}>{wavgM('avg_rto_tat_days').toFixed(2)}d</td>
-                        <td style={{ padding:'9px 10px', textAlign:'right', color:C.t2, fontSize:11 }}>{wavgM('avg_s2a_days').toFixed(2)}d</td>
+                        <td style={{ padding:'9px 10px', textAlign:'center', color:C.t2, fontSize:11 }}>100.00%</td>
+                        <td style={{ padding:'9px 10px', textAlign:'center', color:C.t1, fontWeight:700 }}>{n(tot)}</td>
+                        <td style={{ padding:'9px 10px', textAlign:'center', color:C.green.tx, fontWeight:700, fontSize:11 }}>{(sumD/tot*100).toFixed(2)}%</td>
+                        <td style={{ padding:'9px 10px', textAlign:'center', color:C.red.tx, fontWeight:700, fontSize:11 }}>{(sumR/tot*100).toFixed(2)}%</td>
+                        <td style={{ padding:'9px 10px', textAlign:'center', color:C.t2, fontSize:11 }}>{(sumZ/tot*100).toFixed(2)}%</td>
+                        <td style={{ padding:'9px 10px', textAlign:'center', color:C.t2, fontSize:11 }}>{(sumC/tot*100).toFixed(2)}%</td>
+                        <td style={{ padding:'9px 10px', textAlign:'center', color:C.t1, fontWeight:700, fontSize:11 }}>{sumOfd?(sumD1/sumOfd*100).toFixed(2)+'%':'—'}</td>
+                        <td style={{ padding:'9px 10px', textAlign:'center', color:C.t1, fontWeight:700, fontSize:11 }}>{sumOfd?(sumRN/sumOfd*100).toFixed(2)+'%':'—'}</td>
+                        <td style={{ padding:'9px 10px', textAlign:'center', color:C.t2, fontSize:11 }}>{(sumMOnTime+sumMSlaBreach)?(sumMSlaBreach/(sumMOnTime+sumMSlaBreach)*100).toFixed(2)+'%':'—'}</td>
+                        <td style={{ padding:'9px 10px', textAlign:'center', color:C.t2, fontSize:11 }}>{wavgM('avg_processing_days').toFixed(2)}d</td>
+                        <td style={{ padding:'9px 10px', textAlign:'center', color:C.t2, fontSize:11 }}>{wavgM('avg_pickup_days').toFixed(2)}d</td>
+                        <td style={{ padding:'9px 10px', textAlign:'center', color:C.t2, fontSize:11 }}>{wavgM('avg_intransit_days').toFixed(2)}d</td>
+                        <td style={{ padding:'9px 10px', textAlign:'center', color:C.t2, fontSize:11 }}>{wavgM('avg_fulfilment_days').toFixed(2)}d</td>
+                        <td style={{ padding:'9px 10px', textAlign:'center', color:C.t2, fontSize:11 }}>{wavgM('avg_rto_tat_days').toFixed(2)}d</td>
+                        <td style={{ padding:'9px 10px', textAlign:'center', color:C.t2, fontSize:11 }}>{wavgM('avg_s2a_days').toFixed(2)}d</td>
                       </tr>
                     </tfoot>
                   </table>
@@ -1867,7 +1869,7 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
                   <thead style={{ position: 'sticky', top: 0, zIndex: 4 }}>
                     <tr style={{ borderBottom: `1.5px solid ${C.border}`, background: C.acl }}>
                       {COLS.map((col, ci) => (
-                        <th key={col.key} onClick={() => setSortCol(col.key)} style={{ padding: '6px 7px', textAlign: col.left ? 'left' : col.center ? 'center' : 'right', color: C.t1, fontWeight: 700, fontSize: 11, letterSpacing: 0.4, textTransform: 'uppercase', whiteSpace: 'nowrap', overflow: col.truncate ? 'hidden' : undefined, textOverflow: col.truncate ? 'ellipsis' : undefined, maxWidth: col.truncate ? 0 : undefined, cursor: 'pointer', userSelect: 'none', borderBottom: `1.5px solid ${C.border}`, background: C.acl, ...(ci === 0 ? { position: 'sticky', left: 0, zIndex: 5 } : {}) }}>
+                        <th key={col.key} onClick={() => setSortCol(col.key)} style={{ padding: '6px 7px', textAlign: col.left ? 'left' : 'center', color: C.t1, fontWeight: 700, fontSize: 11, letterSpacing: 0.4, textTransform: 'uppercase', whiteSpace: 'nowrap', overflow: col.truncate ? 'hidden' : undefined, textOverflow: col.truncate ? 'ellipsis' : undefined, maxWidth: col.truncate ? 0 : undefined, cursor: 'pointer', userSelect: 'none', borderBottom: `1.5px solid ${C.border}`, background: C.acl, ...(ci === 0 ? { position: 'sticky', left: 0, zIndex: 5 } : {}) }}>
                           {col.label}{sortCol === col.key ? (sortDir === 'desc' ? ' ↓' : ' ↑') : ''}
                         </th>
                       ))}
@@ -1899,14 +1901,14 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
                               <span style={{ color: C.t1, fontWeight: 600, fontSize: 11 }}>{r.courier_group}</span>
                             </div>
                           </td>
-                          <td style={{ padding: '6px 7px', textAlign: 'right', color: C.t1, fontSize: 11 }}>{r._volPct.toFixed(2)}%</td>
-                          <td style={{ padding: '6px 7px', textAlign: 'right', color: C.t1 }}>{n(r.total)}</td>
-                          <td style={{ padding: '6px 7px', textAlign: 'right', color: C.t1, fontSize: 11 }}>{r._delPct.toFixed(2)}%</td>
-                          <td style={{ padding: '6px 7px', textAlign: 'right', color: rtoColor, fontSize: 11 }}>{r._rtoPct.toFixed(2)}%</td>
-                          <td style={{ padding: '6px 7px', textAlign: 'right', color: C.t1, fontSize: 11 }}>{r._cancPct.toFixed(2)}%</td>
-                          <td style={{ padding: '6px 7px', textAlign: 'right', color: C.t1, fontSize: 11 }}>{r._fasrPct != null ? r._fasrPct.toFixed(2) + '%' : '—'}</td>
-                          <td style={{ padding: '6px 7px', textAlign: 'right', color: C.t1, fontSize: 11 }}>{r._rasrPct != null ? r._rasrPct.toFixed(2) + '%' : '—'}</td>
-                          <td style={{ padding: '6px 7px', textAlign: 'right', color: C.t1, fontSize: 11 }}>{r._eddBreachPct != null ? r._eddBreachPct.toFixed(2) + '%' : '—'}</td>
+                          <td style={{ padding: '6px 7px', textAlign: 'center', color: C.t1, fontSize: 11 }}>{r._volPct.toFixed(2)}%</td>
+                          <td style={{ padding: '6px 7px', textAlign: 'center', color: C.t1 }}>{n(r.total)}</td>
+                          <td style={{ padding: '6px 7px', textAlign: 'center', color: C.t1, fontSize: 11 }}>{r._delPct.toFixed(2)}%</td>
+                          <td style={{ padding: '6px 7px', textAlign: 'center', color: rtoColor, fontSize: 11 }}>{r._rtoPct.toFixed(2)}%</td>
+                          <td style={{ padding: '6px 7px', textAlign: 'center', color: C.t1, fontSize: 11 }}>{r._cancPct.toFixed(2)}%</td>
+                          <td style={{ padding: '6px 7px', textAlign: 'center', color: C.t1, fontSize: 11 }}>{r._fasrPct != null ? r._fasrPct.toFixed(2) + '%' : '—'}</td>
+                          <td style={{ padding: '6px 7px', textAlign: 'center', color: C.t1, fontSize: 11 }}>{r._rasrPct != null ? r._rasrPct.toFixed(2) + '%' : '—'}</td>
+                          <td style={{ padding: '6px 7px', textAlign: 'center', color: C.t1, fontSize: 11 }}>{r._eddBreachPct != null ? r._eddBreachPct.toFixed(2) + '%' : '—'}</td>
                           <td style={{ padding: '6px 7px', textAlign: 'center', color: C.t1, fontSize: 11 }}>{d(r.avg_processing_days)}</td>
                           <td style={{ padding: '6px 7px', textAlign: 'center', color: C.t1, fontSize: 11 }}>{d(r.avg_pickup_days)}</td>
                           <td style={{ padding: '6px 7px', textAlign: 'center', color: C.t1, fontSize: 11 }}>{d(r.avg_intransit_days)}</td>
@@ -1936,13 +1938,13 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
                                 onMouseEnter={e => { e.currentTarget.style.background='#FDF8ED'; e.currentTarget.style.boxShadow=`inset 0 1px 0 0 ${C.acm}55, inset 0 -1px 0 0 ${C.acm}55, 0 0 8px 0 ${C.acc}33`; e.currentTarget.querySelectorAll('td[data-sticky]').forEach(td => { td.style.background='#FDF8ED' }) }}
                                 onMouseLeave={e => { e.currentTarget.style.background='#FAFAF8'; e.currentTarget.style.boxShadow='none'; e.currentTarget.querySelectorAll('td[data-sticky]').forEach(td => { td.style.background='#FAFAF8' }) }}>
                                 <td data-sticky style={{ padding:'4px 7px 4px 46px', color:C.t2, fontSize:11, whiteSpace:'nowrap', position:'sticky', left:0, background:'#FAFAF8', zIndex:1 }}>{drillLabel}</td>
-                                <td style={{ padding:'4px 7px', textAlign:'right', color:C.t1, fontSize:11 }}>{_vp.toFixed(2)}%</td>
-                                <td style={{ padding:'4px 7px', textAlign:'right', color:C.t1, fontSize:11 }}>{n(z.total)}</td>
-                                <td style={{ padding:'4px 7px', textAlign:'right', color:C.t1, fontSize:11 }}>{_dp.toFixed(2)}%</td>
-                                <td style={{ padding:'4px 7px', textAlign:'right', color:_rc, fontSize:11 }}>{_rp.toFixed(2)}%</td>
-                                <td style={{ padding:'4px 7px', textAlign:'right', color:C.t1, fontSize:11 }}>{_cp.toFixed(2)}%</td>
-                                <td style={{ padding:'4px 7px', textAlign:'right', color:C.t1, fontSize:11 }}>{_fp!=null?_fp.toFixed(2)+'%':'—'}</td>
-                                <td style={{ padding:'4px 7px', textAlign:'right', color:C.t1, fontSize:11 }}>{_rap!=null?_rap.toFixed(2)+'%':'—'}</td>
+                                <td style={{ padding:'4px 7px', textAlign:'center', color:C.t1, fontSize:11 }}>{_vp.toFixed(2)}%</td>
+                                <td style={{ padding:'4px 7px', textAlign:'center', color:C.t1, fontSize:11 }}>{n(z.total)}</td>
+                                <td style={{ padding:'4px 7px', textAlign:'center', color:C.t1, fontSize:11 }}>{_dp.toFixed(2)}%</td>
+                                <td style={{ padding:'4px 7px', textAlign:'center', color:_rc, fontSize:11 }}>{_rp.toFixed(2)}%</td>
+                                <td style={{ padding:'4px 7px', textAlign:'center', color:C.t1, fontSize:11 }}>{_cp.toFixed(2)}%</td>
+                                <td style={{ padding:'4px 7px', textAlign:'center', color:C.t1, fontSize:11 }}>{_fp!=null?_fp.toFixed(2)+'%':'—'}</td>
+                                <td style={{ padding:'4px 7px', textAlign:'center', color:C.t1, fontSize:11 }}>{_rap!=null?_rap.toFixed(2)+'%':'—'}</td>
                                 <td style={{ padding:'4px 7px', textAlign:'center', color:C.t1, fontSize:11 }}>{d(z.avg_processing_days)}</td>
                                 <td style={{ padding:'4px 7px', textAlign:'center', color:C.t1, fontSize:11 }}>{d(z.avg_pickup_days)}</td>
                                 <td style={{ padding:'4px 7px', textAlign:'center', color:C.t1, fontSize:11 }}>{d(z.avg_intransit_days)}</td>
