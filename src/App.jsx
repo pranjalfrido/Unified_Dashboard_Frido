@@ -1529,7 +1529,7 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
                                 <td style={{ ...td9z, padding:'4px 7px', fontSize:11 }}>{_zc.toFixed(2)}%</td>
                                 <td style={{ ...td9z, padding:'4px 7px', fontSize:11 }}>{_zf!=null?_zf.toFixed(2)+'%':'—'}</td>
                                 <td style={{ ...td9z, padding:'4px 7px', fontSize:11 }}>{_zra!=null?_zra.toFixed(2)+'%':'—'}</td>
-                                <td style={{ ...td9z, padding:'4px 7px', fontSize:11 }}>{'—'}</td>
+                                <td style={{ ...td9z, padding:'4px 7px', fontSize:11 }}>{(z.on_time||z.sla_breach)?((z.sla_breach||0)/((z.on_time||0)+(z.sla_breach||0))*100).toFixed(2)+'%':'—'}</td>
                                 <td style={{ ...td9z, padding:'4px 7px', fontSize:11 }}>{d(z.avg_processing_days)}</td>
                                 <td style={{ ...td9z, padding:'4px 7px', fontSize:11 }}>{d(z.avg_pickup_days)}</td>
                                 <td style={{ ...td9z, padding:'4px 7px', fontSize:11 }}>{d(z.avg_intransit_days)}</td>
