@@ -504,16 +504,27 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
         const prevStart = new Date(prevEnd); prevStart.setDate(prevStart.getDate() - days + 1)
         const fmt = d => d.toISOString().slice(0, 10)
         const prevBody = { ...body, start: fmt(prevStart), end: fmt(prevEnd) }
-        // kick off COD/Prepaid immediately but don't await — they cache whenever ready
+        // kick off COD/Prepaid prefetch from CDN — instant, no BQ needed
         const noPaymentFilter = !lFilters.paymentMode?.length
         const noGeoOrCatFilter = !lFilters.pickupState?.length && !lFilters.dropState?.length && !lFilters.dropCity?.length && !lFilters.category?.length && !lFilters.subCategory?.length && !lFilters.weightSlabs?.length
         if (noPaymentFilter && noGeoOrCatFilter) {
           paymentPrefetchActive.current = true
+          const stPrefix = (body.shipmentType ? `${body.shipmentType.toLowerCase()}-` : '')
+          const tryStatic = (mode, setter) => {
+            const file = `/${stPrefix ? `logistics-data-${stPrefix}${mode}` : `logistics-data-${mode}`}.json`
+            return fetch(file)
+              .then(r => r.ok ? r.json() : null)
+              .then(json => {
+                const dateMatches = json?.dateRange && json.dateRange.start === filters.start && json.dateRange.end === filters.end
+                if (json?.current && dateMatches) { setter(json.current); return }
+                // CDN miss (different date range) — fall back to live BQ
+                return fetch(`${API}/api/logistics`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...body, paymentMode: mode === 'cod' ? 'COD' : 'Prepaid' }) })
+                  .then(r => r.ok ? r.json() : null).then(j => { if (j) setter(j) })
+              }).catch(() => {})
+          }
           Promise.all([
-            fetch(`${API}/api/logistics`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...body, paymentMode: 'COD' }) })
-              .then(r => r.ok ? r.json() : null).then(j => { if (j) setRawCodData(j) }).catch(() => {}),
-            fetch(`${API}/api/logistics`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...body, paymentMode: 'Prepaid' }) })
-              .then(r => r.ok ? r.json() : null).then(j => { if (j) setRawPrepaidData(j) }).catch(() => {}),
+            tryStatic('cod', setRawCodData),
+            tryStatic('prepaid', setRawPrepaidData),
           ]).finally(() => { paymentPrefetchActive.current = false })
         }
         // await only main + prev
