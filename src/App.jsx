@@ -5449,8 +5449,7 @@ function OverviewPage({ data, combinedAlerts, logisticsData, logisticsRangeLabel
                   <defs><linearGradient id="ovHeroGrad" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor={C.acc} stopOpacity={0.22} /><stop offset="95%" stopColor={C.acc} stopOpacity={0.02} /></linearGradient></defs>
                   <CartesianGrid strokeDasharray="3 3" stroke={C.border} vertical={false} />
                   <XAxis dataKey="date" tick={{ fontSize: 10, fill: C.t3 }} tickFormatter={heroTrendXFmt} />
-                  <YAxis yAxisId="rev" tick={{ fontSize: 10, fill: C.t3 }} tickFormatter={v => fmt(v)} width={54} />
-                  <YAxis yAxisId="units" orientation="right" tick={{ fontSize: 10, fill: C.t3 }} tickFormatter={v => fmtN(v)} width={40} />
+                  <YAxis tick={{ fontSize: 10, fill: C.t3 }} tickFormatter={v => fmt(v)} width={54} />
                   <Tooltip content={({ active, payload, label }) => active && payload?.length ? (
                     <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 7, padding: '7px 11px', fontSize: 11 }}>
                       <div style={{ fontWeight: 700, marginBottom: 4, color: C.t1 }}>{heroTrendXFmt(label)}</div>
@@ -5463,10 +5462,8 @@ function OverviewPage({ data, combinedAlerts, logisticsData, logisticsRangeLabel
                     </div>
                   ) : null} />
                   <Legend wrapperStyle={{ fontSize: 11, color: C.t1 }} />
-                  <Bar yAxisId="units" dataKey="units" name="Units" fill={`${C.acc}28`} radius={[2,2,0,0]} />
-                  <Area yAxisId="rev" type="monotone" dataKey="revenue" name="Gross Revenue" stroke={C.acc} fill="url(#ovHeroGrad)" strokeWidth={2} dot={false} />
-                  <Line yAxisId="rev" type="monotone" dataKey="netRevenue" name="Net Revenue" stroke="#0D9E68" strokeWidth={2} dot={false} />
-                  <Line yAxisId="rev" type="monotone" dataKey="prevRevenue" name="Prev Period" stroke={C.t3} strokeWidth={1.5} dot={false} strokeDasharray="4 3" connectNulls={false} />
+                  <Area type="monotone" dataKey="revenue" name="Gross Revenue" stroke={C.acc} fill="url(#ovHeroGrad)" strokeWidth={2} dot={false} />
+                  <Line type="monotone" dataKey="prevRevenue" name="Prev Period" stroke={C.t3} strokeWidth={1.5} dot={false} strokeDasharray="4 3" connectNulls={false} />
                 </ComposedChart>
               </ResponsiveContainer>
             </div>
