@@ -5534,7 +5534,7 @@ function OverviewPage({ data, combinedAlerts, logisticsData, logisticsRangeLabel
           <WideCard span={8} style={{ maxHeight: 520, overflow: 'hidden' }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginBottom: 12 }}>
               <span style={{ fontSize: 13, fontWeight: 700, color: C.t1, whiteSpace: 'nowrap' }}>Product Performance</span>
-              <div style={{ position: 'relative', width: 230, flexShrink: 0 }}>
+              <div style={{ position: 'relative', width: 160, flexShrink: 0 }}>
                 <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke={C.t3} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
                   style={{ position: 'absolute', left: 9, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none' }}>
                   <circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" />
