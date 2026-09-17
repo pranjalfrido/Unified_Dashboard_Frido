@@ -479,7 +479,12 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
             canPrefetchPayment ? fetch(`/logistics-data-${stPrefix}prepaid.json`) : Promise.resolve(null),
           ])
           if (res.ok) {
-            const json = await res.json()
+            // Parse all 3 in parallel before touching state — single render, single loading bar
+            const [json, codJson, prepaidJson] = await Promise.all([
+              res.json(),
+              codRes?.ok ? codRes.json().catch(() => null) : Promise.resolve(null),
+              prepaidRes?.ok ? prepaidRes.json().catch(() => null) : Promise.resolve(null),
+            ])
             const ageMs = json.asOf ? Date.now() - new Date(json.asOf).getTime() : Infinity
             const dateMatches = json.dateRange && json.dateRange.start === filters.start && json.dateRange.end === filters.end
             if (ageMs <= 7 * 60 * 60 * 1000 && dateMatches && !json._placeholder && json.current) {
@@ -487,13 +492,8 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
               setRawPrevData(json.previous || null)
               try { localStorage.setItem('logistics_stale_v2', JSON.stringify({ current: json.current, previous: json.previous || null, dateRange: json.dateRange, savedAt: Date.now() })) } catch {}
               usedStatic = true
-              // Set COD/Prepaid from parallel fetches if date matches
-              if (codRes?.ok) {
-                codRes.json().then(j => { if (j?.current && j.dateRange?.start === filters.start && j.dateRange?.end === filters.end) setRawCodData(j.current) }).catch(() => {})
-              }
-              if (prepaidRes?.ok) {
-                prepaidRes.json().then(j => { if (j?.current && j.dateRange?.start === filters.start && j.dateRange?.end === filters.end) setRawPrepaidData(j.current) }).catch(() => {})
-              }
+              if (codJson?.current && codJson.dateRange?.start === filters.start && codJson.dateRange?.end === filters.end) setRawCodData(codJson.current)
+              if (prepaidJson?.current && prepaidJson.dateRange?.start === filters.start && prepaidJson.dateRange?.end === filters.end) setRawPrepaidData(prepaidJson.current)
             }
           }
         } catch { /* fall through to live API */ }
