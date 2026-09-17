@@ -561,11 +561,10 @@ function ExportMenu({ items, suffix }) {
 // Sits to the LEFT of the period chip because it qualifies everything to its right. Hover,
 // not click: this is reference material, not an action. The panel carries pointerEvents
 // none so it can never swallow a click meant for the chip beside it.
-function DataInfo({ scope, health, months, b2bMonths, b2bTotals, b2bVar }) {
+function DataInfo({ scope, health, months, b2bMonths, b2bTotals, couriers, transporters }) {
   const [open, setOpen] = useState(false)
   const h = health || {}
   const scoped = Number(h.scoped) || 0
-  const pct = (a, b) => (b > 0 ? (Number(a) / b) * 100 : 0)
 
   const monthRange = list => {
     const s = [...(list || [])].sort()
@@ -589,23 +588,22 @@ function DataInfo({ scope, health, months, b2bMonths, b2bTotals, b2bVar }) {
       title: 'B2C courier ledger',
       rows: [
         b2cRange && ['Months of data', `${b2cRange.n} · ${b2cRange.text}`],
+        (couriers || []).length > 0 && ['Couriers', fmtN((couriers || []).length)],
         ['Shipments', fmtN(scoped)],
-        Number(h.with_cat) > 0 && ['With product category', `${fmtN(h.with_cat)} · ${pct(h.with_cat, scoped).toFixed(1)}%`],
-        Number(h.courier_disputes) > 0 && ['Courier-flagged weight disputes', fmtN(h.courier_disputes)],
       ].filter(Boolean),
     })
   }
 
   if (scope !== 'b2c') {
     const bt = b2bTotals || {}
-    const bv = b2bVar || {}
     sections.push({
       title: 'FTL/PTL freight ledger',
       rows: [
         b2bRange && ['Months of data', `${b2bRange.n} · ${b2bRange.text}`],
-        ['Trips', fmtN(bt.trips)],
-        ['Transporters · lanes', `${fmtN(bt.transporters)} · ${fmtN(bt.lanes)}`],
-        Number(bv.priced_trips) > 0 && ['Priced against the rate card', `${fmtN(bv.priced_trips)} of ${fmtN(bv.trips)} trips`],
+        // This ledger counts transporters, not couriers — the label differs from B2C
+        // because the underlying unit does.
+        (Number(bt.transporters) > 0 || (transporters || []).length > 0) &&
+          ['Transporters', fmtN(Number(bt.transporters) || (transporters || []).length)],
       ].filter(Boolean),
     })
   }
@@ -1079,7 +1077,7 @@ function CostKpiCarousel({ children }) {
   )
 }
 
-export default function LogisticsCostPage({ externalFilters, setExternalFilters, allowedTabs } = {}) {
+export default function LogisticsCostPage({ externalFilters, setExternalFilters, allowedTabs, onOpenAllocation } = {}) {
   const isMobile = typeof window !== 'undefined' && window.innerWidth <= 768
   const [agg, setAgg] = useState(null)
   const [b2bRows, setB2bRows] = useState(null)
@@ -4551,8 +4549,29 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
                 months={scopeMonths}
                 b2bMonths={b2b?.months}
                 b2bTotals={b2b?.totals}
-                b2bVar={b2b?.variance}
+                couriers={opts.couriers}
+                transporters={opts.transporters}
               />
+              {/* B2C only: the simulator reallocates parcel volume between couriers by
+                  weight slab, and neither Overview nor FTL/PTL has that shape — freight is
+                  priced per trip against transporters, not per shipment against couriers. */}
+              {scope === 'b2c' && onOpenAllocation && (
+                <button
+                  onClick={onOpenAllocation}
+                  title="Courier Allocation Simulator — best courier per weight slab on cost, RTO and speed"
+                  style={{
+                    display: 'inline-flex', alignItems: 'center', gap: 5, flexShrink: 0,
+                    background: C.card, border: `1px solid ${C.border2}`, borderRadius: 8,
+                    padding: '5px 10px', cursor: 'pointer', fontFamily: 'var(--font)',
+                    fontSize: 11.5, fontWeight: 700, color: C.t2, whiteSpace: 'nowrap',
+                    transition: 'border-color .15s, color .15s',
+                  }}
+                  onMouseEnter={e => { e.currentTarget.style.borderColor = C.acm; e.currentTarget.style.color = C.t1 }}
+                  onMouseLeave={e => { e.currentTarget.style.borderColor = C.border2; e.currentTarget.style.color = C.t2 }}>
+                  <span aria-hidden style={{ fontSize: 12 }}>⚖</span>
+                  Allocation
+                </button>
+              )}
               {/* The chip IS the month slicer. Selecting nothing means "all months"
                   everywhere else on this page, so onAll clears rather than listing every
                   month — that keeps the request on the prewarmed {billing:"all"} cache key

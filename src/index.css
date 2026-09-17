@@ -505,6 +505,12 @@ html,body{height:100%;background:var(--bg);font-family:var(--font);color:var(--t
   50%      { opacity: 1;   transform: scale(1); }
 }
 
+/* Rotation for the Courier Allocation loading ring. lcPulse animates opacity and scale,
+   which leaves a border-ring spinner sitting still — this is the one that actually spins. */
+@keyframes lcSpin {
+  to { transform: rotate(360deg); }
+}
+
 /* Card titles and sub-lines on Logistics Cost.
 
    --t3 (#94939F) measures 3.03:1 on a white card, which fails WCAG AA for normal-size
