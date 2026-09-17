@@ -5432,6 +5432,7 @@ function OverviewPage({ data, combinedAlerts, logisticsData, logisticsRangeLabel
             <div style={{ display: 'flex', gap: 40, marginBottom: 14, paddingBottom: 14, borderBottom: `1px solid ${C.border}`, flexShrink: 0 }}>
               <TrendStatTile label="Gross Revenue" value={fmt(totalRev)} color={C.acc}
                 badge={revDelta !== null && <span style={{ fontSize: 10, fontWeight: 700, color: revDelta >= 0 ? C.green.tx : C.red.tx }}>{revDelta >= 0 ? '▲' : '▼'} {Math.abs(revDelta).toFixed(1)}%</span>} />
+              <TrendStatTile label="Net Revenue" value={fmt(netRevenueCalc)} color="#0D9E68" />
               <TrendStatTile label="Prev Period" value={fmt(prevRev)} color={C.t3} />
               <TrendStatTile label="Orders" value={fmtN(nOrders)} color={C.border2}
                 badge={ordDelta !== null && <span style={{ fontSize: 10, fontWeight: 700, color: ordDelta >= 0 ? C.green.tx : C.red.tx }}>{ordDelta >= 0 ? '▲' : '▼'} {Math.abs(ordDelta).toFixed(1)}%</span>} />
@@ -5459,6 +5460,7 @@ function OverviewPage({ data, combinedAlerts, logisticsData, logisticsRangeLabel
                   ) : null} />
                   <Legend wrapperStyle={{ fontSize: 11, color: C.t1 }} />
                   <Area type="monotone" dataKey="revenue" name="Gross Revenue" stroke={C.acc} fill="url(#ovHeroGrad)" strokeWidth={2} dot={false} />
+                  <Line type="monotone" dataKey="netRevenue" name="Net Revenue" stroke="#0D9E68" strokeWidth={2} dot={false} />
                   <Line type="monotone" dataKey="prevRevenue" name="Prev Period" stroke={C.t3} strokeWidth={1.5} dot={false} strokeDasharray="4 3" connectNulls={false} />
                 </ComposedChart>
               </ResponsiveContainer>
