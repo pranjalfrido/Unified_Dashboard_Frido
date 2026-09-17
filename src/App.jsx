@@ -5123,8 +5123,9 @@ function OverviewPage({ data, combinedAlerts, logisticsData, logisticsRangeLabel
   const heroTrendRaw = (dailyArr || []).map((d, i) => {
     const revenue = Object.entries(d).reduce((s, [k, v]) => (k !== 'date' && !k.endsWith('_o') && !k.endsWith('_u') && !k.endsWith('_net') && typeof v === 'number' ? s + v : s), 0)
     const netRevenue = Object.entries(d).reduce((s, [k, v]) => (k.endsWith('_net') && typeof v === 'number' ? s + v : s), 0)
+    const units = Object.entries(d).reduce((s, [k, v]) => (k.endsWith('_u') && typeof v === 'number' ? s + v : s), 0)
     const prevRev = prevDailyArr?.[i]?.rev ?? null
-    return { date: d.date, revenue, netRevenue, prevRevenue: prevRev }
+    return { date: d.date, revenue, netRevenue, units, prevRevenue: prevRev }
   })
   // Same daily/weekly/monthly grouping logic as ReturnTrendChart (D2CReturnAnalysisTab.jsx) —
   // weekly buckets to ISO week-start (Monday), monthly buckets to YYYY-MM.
@@ -5134,9 +5135,10 @@ function OverviewPage({ data, combinedAlerts, logisticsData, logisticsRangeLabel
       const key = trendGroupBy === 'weekly'
         ? (() => { const dt = new Date(d.date); const day = dt.getDay(); const diff = dt.getDate() - day + (day === 0 ? -6 : 1); return new Date(dt.setDate(diff)).toISOString().slice(0, 10) })()
         : d.date.slice(0, 7)
-      if (!buckets[key]) buckets[key] = { date: key, revenue: 0, netRevenue: 0, prevRevenue: 0 }
+      if (!buckets[key]) buckets[key] = { date: key, revenue: 0, netRevenue: 0, units: 0, prevRevenue: 0 }
       buckets[key].revenue += d.revenue
       buckets[key].netRevenue += d.netRevenue
+      buckets[key].units += d.units
       if (d.prevRevenue !== null) buckets[key].prevRevenue += (d.prevRevenue || 0)
     })
     return Object.values(buckets).sort((a, b) => a.date.localeCompare(b.date))
@@ -5436,6 +5438,7 @@ function OverviewPage({ data, combinedAlerts, logisticsData, logisticsRangeLabel
               <TrendStatTile label="Prev Period" value={fmt(prevRev)} color={C.t3} />
               <TrendStatTile label="Orders" value={fmtN(nOrders)} color={C.border2}
                 badge={ordDelta !== null && <span style={{ fontSize: 10, fontWeight: 700, color: ordDelta >= 0 ? C.green.tx : C.red.tx }}>{ordDelta >= 0 ? '▲' : '▼'} {Math.abs(ordDelta).toFixed(1)}%</span>} />
+              <TrendStatTile label="Units" value={fmtN(totalQty)} color={C.border2} />
               <TrendStatTile label="AOV (Inc. GST)" value={`₹${Math.round(blendedAOV).toLocaleString('en-IN')}`} color={C.border2} />
               <TrendStatTile label="ASP (Inc. GST)" value={`₹${Math.round(blendedASP).toLocaleString('en-IN')}`} color={C.border2} />
               <TrendStatTile label="Return %" value={`${totalReturnPct.toFixed(1)}%`} color={totalReturnPct > 15 ? C.red.tx : totalReturnPct > 8 ? C.amber.tx : C.green.tx} />
@@ -5446,22 +5449,24 @@ function OverviewPage({ data, combinedAlerts, logisticsData, logisticsRangeLabel
                   <defs><linearGradient id="ovHeroGrad" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor={C.acc} stopOpacity={0.22} /><stop offset="95%" stopColor={C.acc} stopOpacity={0.02} /></linearGradient></defs>
                   <CartesianGrid strokeDasharray="3 3" stroke={C.border} vertical={false} />
                   <XAxis dataKey="date" tick={{ fontSize: 10, fill: C.t3 }} tickFormatter={heroTrendXFmt} />
-                  <YAxis tick={{ fontSize: 10, fill: C.t3 }} tickFormatter={v => fmt(v)} width={54} />
+                  <YAxis yAxisId="rev" tick={{ fontSize: 10, fill: C.t3 }} tickFormatter={v => fmt(v)} width={54} />
+                  <YAxis yAxisId="units" orientation="right" tick={{ fontSize: 10, fill: C.t3 }} tickFormatter={v => fmtN(v)} width={40} />
                   <Tooltip content={({ active, payload, label }) => active && payload?.length ? (
                     <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 7, padding: '7px 11px', fontSize: 11 }}>
                       <div style={{ fontWeight: 700, marginBottom: 4, color: C.t1 }}>{heroTrendXFmt(label)}</div>
                       {payload.map(p => (
                         <div key={p.name} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                           <span style={{ width: 7, height: 7, borderRadius: '50%', background: p.color, display: 'inline-block', flexShrink: 0 }} />
-                          <span style={{ color: C.t2 }}>{p.name}: {fmt(p.value)}</span>
+                          <span style={{ color: C.t2 }}>{p.name}: {p.dataKey === 'units' ? fmtN(p.value) : fmt(p.value)}</span>
                         </div>
                       ))}
                     </div>
                   ) : null} />
                   <Legend wrapperStyle={{ fontSize: 11, color: C.t1 }} />
-                  <Area type="monotone" dataKey="revenue" name="Gross Revenue" stroke={C.acc} fill="url(#ovHeroGrad)" strokeWidth={2} dot={false} />
-                  <Line type="monotone" dataKey="netRevenue" name="Net Revenue" stroke="#0D9E68" strokeWidth={2} dot={false} />
-                  <Line type="monotone" dataKey="prevRevenue" name="Prev Period" stroke={C.t3} strokeWidth={1.5} dot={false} strokeDasharray="4 3" connectNulls={false} />
+                  <Bar yAxisId="units" dataKey="units" name="Units" fill={`${C.acc}28`} radius={[2,2,0,0]} />
+                  <Area yAxisId="rev" type="monotone" dataKey="revenue" name="Gross Revenue" stroke={C.acc} fill="url(#ovHeroGrad)" strokeWidth={2} dot={false} />
+                  <Line yAxisId="rev" type="monotone" dataKey="netRevenue" name="Net Revenue" stroke="#0D9E68" strokeWidth={2} dot={false} />
+                  <Line yAxisId="rev" type="monotone" dataKey="prevRevenue" name="Prev Period" stroke={C.t3} strokeWidth={1.5} dot={false} strokeDasharray="4 3" connectNulls={false} />
                 </ComposedChart>
               </ResponsiveContainer>
             </div>
