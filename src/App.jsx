@@ -8761,7 +8761,7 @@ function ShopifyTab({ data, filters, setFilters }) {
             />}
         {isIntl
           ? <Card title="Geography Breakdown"><div style={{ fontSize: 12, color: C.t3, padding: '10px 0', textAlign: 'center' }}>Geographic data not available for International orders</div></Card>
-          : <GeoToggleDonutCard regionRows={sh.regionRows || []} tierRows={sh.tierRows || []} boxheight={320} />}
+          : <GeoToggleDonutCard regionRows={sh.regionRows || []} tierRows={sh.tierRows || []} boxHeight={320} />}
       </div>
       {/* Category Revenue Matrix · Shopify */}
       {isIntl
@@ -9223,7 +9223,7 @@ function EBOTab({ data, rangeStart, rangeEnd }) {
           setView={setCatRevView}
           height={320}
         />
-        <GeoToggleDonutCard regionRows={regionRows} tierRows={tierRows} boxheight={320} />
+        <GeoToggleDonutCard regionRows={regionRows} tierRows={tierRows} boxHeight={320} />
       </div>
       <FlatCategoryProductMatrix catData={catDataForMatrix} subCatData={subCatDataForMatrix} skuData={skuDataForMatrix} title="Category Revenue Matrix · EBO" catPrevMap={ebo.catPrevMap || {}} subCatPrevMap={ebo.subCatPrevMap || {}} showReturnPct={true} detailedReturns />
       {/* Geo tables */}
@@ -10043,7 +10043,7 @@ function FlipkartTab({ data }) {
               const regionAgg = {}
               ;(fk.regions || []).forEach(x => { if (!regionAgg[x.region]) regionAgg[x.region] = { region: x.region, rev: 0, orders: 0 }; regionAgg[x.region].rev += x.rev; regionAgg[x.region].orders += x.orders })
               const regionRows = Object.values(regionAgg).sort((a, b) => b.rev - a.rev)
-              return <GeoToggleDonutCard regionRows={regionRows} tierRows={[]} boxheight={320} />
+              return <GeoToggleDonutCard regionRows={regionRows} tierRows={[]} boxHeight={320} />
             })()}
           </div>
         )
@@ -11936,7 +11936,7 @@ function BlinkitTab({ data }) {
 
       {/* Revenue Trend + Category Revenue + Geography Breakdown side by side */}
       <div className="g-3col" style={{ display: 'grid', gridTemplateColumns: '1.5fr 1fr 0.65fr', gap: 14, alignItems: 'start' }}>
-        <TrendAnalysisCard title="Revenue & Returns Trend" daily={daily} grossColor={C.acm} grossGradId="blGrossGrad2" revKey="rev" excRevKey="excRev" boxheight={320} />
+        <TrendAnalysisCard title="Revenue & Returns Trend" daily={daily} grossColor={C.acm} grossGradId="blGrossGrad2" revKey="rev" excRevKey="excRev" boxHeight={320} />
         <CategoryRevenueCard
           catRows={catRowsForCatSubCat}
           subCatRows={subCatRowsForCatSubCat}
@@ -11951,7 +11951,7 @@ function BlinkitTab({ data }) {
         {(() => {
           const regAgg = {}; cityRows.forEach(c => { if (!c.region) return; if (!regAgg[c.region]) regAgg[c.region] = { region: c.region, rev: 0, orders: 0 }; regAgg[c.region].rev += c.rev; regAgg[c.region].orders += c.units })
           const tierAgg = {}; cityRows.forEach(c => { if (!c.cityTier) return; const k = `Tier ${c.cityTier}`; if (!tierAgg[k]) tierAgg[k] = { tier: c.cityTier, rev: 0, orders: 0 }; tierAgg[k].rev += c.rev; tierAgg[k].orders += c.units })
-          return <GeoToggleDonutCard regionRows={Object.values(regAgg)} tierRows={Object.values(tierAgg)} boxheight={320} />
+          return <GeoToggleDonutCard regionRows={Object.values(regAgg)} tierRows={Object.values(tierAgg)} boxHeight={320} />
         })()}
       </div>
 
@@ -12109,7 +12109,7 @@ function InstaTab({ data }) {
 
       {/* Revenue Trend + Category Revenue + Geography Breakdown side by side */}
       <div className="g-3col" style={{ display: 'grid', gridTemplateColumns: '1.5fr 1fr 0.65fr', gap: 14, alignItems: 'start' }}>
-        <TrendAnalysisCard title="Revenue & Returns Trend" daily={daily} grossColor={C.acm} grossGradId="inGrossGrad2" revKey="rev" excRevKey="excRev" boxheight={320} />
+        <TrendAnalysisCard title="Revenue & Returns Trend" daily={daily} grossColor={C.acm} grossGradId="inGrossGrad2" revKey="rev" excRevKey="excRev" boxHeight={320} />
         <CategoryRevenueCard
           catRows={catRowsForCatSubCat}
           subCatRows={subCatRowsForCatSubCat}
@@ -12124,7 +12124,7 @@ function InstaTab({ data }) {
         {(() => {
           const regAgg = {}; cityRows.forEach(c => { if (!c.region) return; if (!regAgg[c.region]) regAgg[c.region] = { region: c.region, rev: 0, orders: 0 }; regAgg[c.region].rev += c.rev; regAgg[c.region].orders += c.units })
           const tierAgg = {}; cityRows.forEach(c => { if (!c.cityTier) return; const k = `Tier ${c.cityTier}`; if (!tierAgg[k]) tierAgg[k] = { tier: c.cityTier, rev: 0, orders: 0 }; tierAgg[k].rev += c.rev; tierAgg[k].orders += c.units })
-          return <GeoToggleDonutCard regionRows={Object.values(regAgg)} tierRows={Object.values(tierAgg)} boxheight={320} />
+          return <GeoToggleDonutCard regionRows={Object.values(regAgg)} tierRows={Object.values(tierAgg)} boxHeight={320} />
         })()}
       </div>
 
@@ -12280,7 +12280,7 @@ function ZeptoTab({ data }) {
 
       {/* Revenue Trend + Category Revenue + Geography Breakdown side by side */}
       <div className="g-3col" style={{ display: 'grid', gridTemplateColumns: '1.5fr 1fr 0.65fr', gap: 14, alignItems: 'start' }}>
-        <TrendAnalysisCard title="Revenue & Returns Trend" daily={daily} grossColor={C.acm} grossGradId="zpGrossGrad2" revKey="rev" excRevKey="excRev" boxheight={320} />
+        <TrendAnalysisCard title="Revenue & Returns Trend" daily={daily} grossColor={C.acm} grossGradId="zpGrossGrad2" revKey="rev" excRevKey="excRev" boxHeight={320} />
         <CategoryRevenueCard
           catRows={catRowsForCatSubCat}
           subCatRows={subCatRowsForCatSubCat}
@@ -12295,7 +12295,7 @@ function ZeptoTab({ data }) {
         {(() => {
           const regAgg = {}; cityRows.forEach(c => { if (!c.region) return; if (!regAgg[c.region]) regAgg[c.region] = { region: c.region, rev: 0, orders: 0 }; regAgg[c.region].rev += c.rev; regAgg[c.region].orders += c.units })
           const tierAgg = {}; cityRows.forEach(c => { if (!c.cityTier) return; const k = `Tier ${c.cityTier}`; if (!tierAgg[k]) tierAgg[k] = { tier: c.cityTier, rev: 0, orders: 0 }; tierAgg[k].rev += c.rev; tierAgg[k].orders += c.units })
-          return <GeoToggleDonutCard regionRows={Object.values(regAgg)} tierRows={Object.values(tierAgg)} boxheight={320} />
+          return <GeoToggleDonutCard regionRows={Object.values(regAgg)} tierRows={Object.values(tierAgg)} boxHeight={320} />
         })()}
       </div>
 
@@ -12580,7 +12580,7 @@ function CredTab({ data }) {
               onSelectCategory={v => { setSelectedCat(prev => prev === v ? null : v); setSelectedSubCat(null) }}
               height={320}
             />
-            <GeoToggleDonutCard regionRows={cr.regionRows || []} tierRows={cr.tierRows || []} boxheight={320} />
+            <GeoToggleDonutCard regionRows={cr.regionRows || []} tierRows={cr.tierRows || []} boxHeight={320} />
           </div>
         )
       })()}
@@ -12838,7 +12838,7 @@ function FirstcryTab({ data }) {
               onSelectCategory={v => { setSelectedCat(prev => prev === v ? null : v); setSelectedSubCat(null) }}
               height={320}
             />
-            <GeoToggleDonutCard regionRows={fc.regionRows || []} tierRows={fc.tierRows || []} boxheight={320} />
+            <GeoToggleDonutCard regionRows={fc.regionRows || []} tierRows={fc.tierRows || []} boxHeight={320} />
           </div>
         )
       })()}
@@ -13085,7 +13085,7 @@ function MyntraTab({ data }) {
               // don't carry a units field).
               const regAgg = {}; cityRows.forEach(c => { if (!c.region) return; if (!regAgg[c.region]) regAgg[c.region] = { region: c.region, rev: 0, orders: 0 }; regAgg[c.region].rev += c.rev; regAgg[c.region].orders += c.orders })
               const tierAgg = {}; cityRows.forEach(c => { if (!c.cityTier) return; const k = `Tier ${c.cityTier}`; if (!tierAgg[k]) tierAgg[k] = { tier: c.cityTier, name: k, rev: 0, orders: 0 }; tierAgg[k].rev += c.rev; tierAgg[k].orders += c.orders })
-              return <GeoToggleDonutCard regionRows={Object.values(regAgg)} tierRows={Object.values(tierAgg)} boxheight={320} />
+              return <GeoToggleDonutCard regionRows={Object.values(regAgg)} tierRows={Object.values(tierAgg)} boxHeight={320} />
             })()}
           </div>
         )
