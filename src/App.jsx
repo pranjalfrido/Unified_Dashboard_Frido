@@ -1529,6 +1529,7 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
                                 <td style={{ ...td9z, padding:'4px 7px', fontSize:11 }}>{_zc.toFixed(2)}%</td>
                                 <td style={{ ...td9z, padding:'4px 7px', fontSize:11 }}>{_zf!=null?_zf.toFixed(2)+'%':'—'}</td>
                                 <td style={{ ...td9z, padding:'4px 7px', fontSize:11 }}>{_zra!=null?_zra.toFixed(2)+'%':'—'}</td>
+                                <td style={{ ...td9z, padding:'4px 7px', fontSize:11 }}>{'—'}</td>
                                 <td style={{ ...td9z, padding:'4px 7px', fontSize:11 }}>{d(z.avg_processing_days)}</td>
                                 <td style={{ ...td9z, padding:'4px 7px', fontSize:11 }}>{d(z.avg_pickup_days)}</td>
                                 <td style={{ ...td9z, padding:'4px 7px', fontSize:11 }}>{d(z.avg_intransit_days)}</td>
@@ -1675,6 +1676,7 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
                                 <td style={{ ...td9, padding:'4px 7px', fontSize:11 }}>{_fc.toFixed(2)}%</td>
                                 <td style={{ ...td9, padding:'4px 7px', fontSize:11 }}>{_ff!=null?_ff.toFixed(2)+'%':'—'}</td>
                                 <td style={{ ...td9, padding:'4px 7px', fontSize:11 }}>{_fra!=null?_fra.toFixed(2)+'%':'—'}</td>
+                                <td style={{ ...td9, padding:'4px 7px', fontSize:11 }}>{'—'}</td>
                                 <td style={{ ...td9, padding:'4px 7px', fontSize:11 }}>{d(f.avg_processing_days)}</td>
                                 <td style={{ ...td9, padding:'4px 7px', fontSize:11 }}>{d(f.avg_pickup_days)}</td>
                                 <td style={{ ...td9, padding:'4px 7px', fontSize:11 }}>{d(f.avg_intransit_days)}</td>
@@ -1947,6 +1949,7 @@ function LogisticsPage({ filters, page, setPage, lFilters: lFiltersProp, setLFil
                                 <td style={{ padding:'4px 7px', textAlign:'center', color:C.t1, fontSize:11 }}>{_cp.toFixed(2)}%</td>
                                 <td style={{ padding:'4px 7px', textAlign:'center', color:C.t1, fontSize:11 }}>{_fp!=null?_fp.toFixed(2)+'%':'—'}</td>
                                 <td style={{ padding:'4px 7px', textAlign:'center', color:C.t1, fontSize:11 }}>{_rap!=null?_rap.toFixed(2)+'%':'—'}</td>
+                                <td style={{ padding:'4px 7px', textAlign:'center', color:C.t1, fontSize:11 }}>{'—'}</td>
                                 <td style={{ padding:'4px 7px', textAlign:'center', color:C.t1, fontSize:11 }}>{d(z.avg_processing_days)}</td>
                                 <td style={{ padding:'4px 7px', textAlign:'center', color:C.t1, fontSize:11 }}>{d(z.avg_pickup_days)}</td>
                                 <td style={{ padding:'4px 7px', textAlign:'center', color:C.t1, fontSize:11 }}>{d(z.avg_intransit_days)}</td>
