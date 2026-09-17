@@ -494,15 +494,15 @@ function ExportMenu({ items, suffix }) {
       <button onClick={() => setOpen(o => !o)}
         title="Download the tables on screen as CSV"
         style={{
-          display: 'inline-flex', alignItems: 'center', gap: 6,
-          fontSize: 11.5, fontWeight: 600, fontFamily: 'var(--font)',
-          padding: '5px 11px', borderRadius: 8, cursor: 'pointer',
+          display: 'inline-flex', alignItems: 'center', gap: 5,
+          fontSize: 10.5, fontWeight: 600, fontFamily: 'var(--font)',
+          padding: '4px 9px', borderRadius: 6, cursor: 'pointer',
           background: C.acc, color: '#1a1400',
           border: `1px solid ${C.acm}`,
-          boxShadow: open ? `0 0 0 3px ${C.acl}` : '0 1px 2px rgba(0,0,0,.06)',
+          boxShadow: open ? `0 0 0 3px ${C.acl}` : 'none',
           transition: 'box-shadow .15s',
         }}>
-        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#1a1400" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#1a1400" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
           <path d="M12 3v12M7 12l5 5 5-5M4 21h16" />
         </svg>
         Export
@@ -663,7 +663,7 @@ function DataInfo({ scope, health, months, b2bMonths, b2bTotals, b2bVar }) {
   )
 }
 
-function PeriodChip({ window: win, months, selected, onToggle, onAll, onRecent, defaultCount }) {
+function PeriodChip({ window: win, months, selected, onToggle, onAll, onRecent, onOne, defaultCount }) {
   const [open, setOpen] = useState(false)
   const ref = useRef(null)
   useEffect(() => {
@@ -695,40 +695,37 @@ function PeriodChip({ window: win, months, selected, onToggle, onAll, onRecent, 
       ? `last ${win.count} months`
       : `${win.count} of ${win.total}`
 
+  const activePreset = win.kind === 'default' ? win.count : (win.kind === 'all' || win.kind === 'all-short') ? 999 : null
+
   return (
     <div ref={ref} style={{ position: 'relative', flexShrink: 0 }}>
-      <button onClick={() => setOpen(o => !o)}
-        title={win.kind === 'all-short'
-          ? `The ledger holds ${win.total} month(s), fewer than the ${defaultCount}-month default. Every one is included. Click to choose months.`
-          : win.kind === 'all'
-            ? `All ${win.total} uploaded months are included. Click to choose months.`
-            : win.kind === 'default'
-              ? `Default view: the most recent ${win.count} of ${win.total} uploaded months. Click to choose months.`
-              : `${win.count} of ${win.total} months selected. Click to change.`}
-        style={{
-          display: 'inline-flex', alignItems: 'center', gap: 0, padding: 0,
-          background: C.card, border: `1px solid ${open ? C.acm : C.border2}`,
-          borderRadius: 8, overflow: 'hidden', whiteSpace: 'nowrap',
-          boxShadow: open ? `0 0 0 3px ${C.acl}` : '0 1px 2px rgba(0,0,0,.04)',
-          cursor: 'pointer', fontFamily: 'var(--font)', transition: 'box-shadow .15s, border-color .15s',
-        }}>
-        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '5px 9px' }}>
-          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke={C.t3} strokeWidth="2.2" strokeLinecap="round" style={{ flexShrink: 0 }}>
-            <rect x="3" y="5" width="18" height="16" rx="2" />
-            <path d="M8 3v4M16 3v4M3 11h18" />
-          </svg>
-          <strong style={{ fontSize: 11.5, fontWeight: 650, color: C.t1, letterSpacing: '-.01em' }}>
-            {win.range}
-          </strong>
-        </span>
+      <div style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+        {/* Button 1: date range — same style as chart toggle buttons */}
         <span style={{
-          fontSize: 10.5, color: C.t2, background: C.bg, padding: '5px 9px',
-          borderLeft: `1px solid ${C.border}`, display: 'inline-flex', alignItems: 'center', gap: 5,
+          display: 'inline-flex', alignItems: 'center', gap: 5,
+          fontSize: 10.5, fontWeight: 500, color: C.t1, fontFamily: 'var(--font)',
+          background: C.card, border: `1px solid ${C.border2}`, borderRadius: 6,
+          padding: '4px 9px', whiteSpace: 'nowrap',
         }}>
+          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke={C.t3} strokeWidth="2.2" strokeLinecap="round" style={{ flexShrink: 0 }}>
+            <rect x="3" y="5" width="18" height="16" rx="2" /><path d="M8 3v4M16 3v4M3 11h18" />
+          </svg>
+          {win.range}
+        </span>
+        {/* Button 2: preset dropdown — active state matches selected chart button */}
+        <button onClick={() => setOpen(o => !o)}
+          style={{
+            display: 'inline-flex', alignItems: 'center', gap: 4,
+            fontSize: 10.5, fontWeight: open ? 700 : 500, color: C.t1, fontFamily: 'var(--font)',
+            background: open ? C.acl : C.card,
+            border: `1px solid ${open ? C.acm : C.border2}`, borderRadius: 6,
+            padding: '4px 9px', whiteSpace: 'nowrap', cursor: 'pointer',
+            transition: 'background .15s, border-color .15s',
+          }}>
           {suffix}
           <span style={{ fontSize: 7, color: C.t3, transform: open ? 'rotate(180deg)' : 'none', transition: 'transform .18s' }}>▼</span>
-        </span>
-      </button>
+        </button>
+      </div>
 
       {open && (
         <div style={{
@@ -736,8 +733,6 @@ function PeriodChip({ window: win, months, selected, onToggle, onAll, onRecent, 
           background: C.card, border: `1px solid ${C.border2}`, borderRadius: 10,
           boxShadow: '0 10px 30px rgba(0,0,0,.16)', minWidth: 208, overflow: 'hidden',
         }}>
-          {/* Shortcuts first: reaching the 6-month default or the full ledger by hand would
-              otherwise mean several clicks. */}
           <div style={{ display: 'flex', gap: 6, padding: '8px 9px', borderBottom: `1px solid ${C.border}` }}>
             <button onClick={() => { onRecent(); setOpen(false) }}
               style={{
@@ -4592,6 +4587,7 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
                 })}
                 onAll={() => setOne('months', [])}
                 onRecent={() => setOne('months', (scopeMonths).slice(-DEFAULT_MONTH_COUNT))}
+                onOne={n => setOne('months', (scopeMonths).slice(-n))}
                 defaultCount={DEFAULT_MONTH_COUNT}
               />
               {/* Export sits to the RIGHT of the chip: the chip says what period is in
