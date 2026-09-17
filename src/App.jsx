@@ -5534,7 +5534,7 @@ function OverviewPage({ data, combinedAlerts, logisticsData, logisticsRangeLabel
           <WideCard span={8} style={{ maxHeight: 520, overflow: 'hidden' }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginBottom: 12 }}>
               <span style={{ fontSize: 13, fontWeight: 700, color: C.t1, whiteSpace: 'nowrap' }}>Product Performance</span>
-              <div style={{ position: 'relative', width: 160, flexShrink: 0 }}>
+              <div style={{ position: 'relative', width: 230, flexShrink: 0 }}>
                 <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke={C.t3} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
                   style={{ position: 'absolute', left: 9, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none' }}>
                   <circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" />
@@ -5545,7 +5545,7 @@ function OverviewPage({ data, combinedAlerts, logisticsData, logisticsRangeLabel
                   onChange={e => setProductSearch(e.target.value)}
                   placeholder="Search sub-category…"
                   style={{
-                    width: '100%', boxSizing: 'border-box', fontSize: 12, padding: '6px 28px 6px 28px',
+                    width: '100%', boxSizing: 'border-box', fontSize: 12, padding: '3px 28px 3px 28px',
                     borderRadius: 8, border: `1px solid ${C.border}`, background: C.bg, color: C.t1, outline: 'none',
                     transition: 'border-color .15s, box-shadow .15s',
                   }}
