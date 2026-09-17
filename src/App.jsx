@@ -9937,7 +9937,7 @@ function FlipkartTab({ data }) {
         const yFmt = v => isRev ? (v >= 1e5 ? `${(v/1e5).toFixed(1)}L` : fmt(v)) : fmtN(v)
         const btnSt = k => ({ fontSize: 11, fontWeight: fkTrendMetric===k?700:500, padding: '3px 9px', borderRadius: 6, border: 'none', outline: 'none', background: fkTrendMetric===k?C.acs:'transparent', color: fkTrendMetric===k?'#3F3D33':C.t2, cursor: 'pointer', fontFamily: 'var(--font)', minWidth: 72, textAlign: 'center' })
         return (
-          <div className="g-3col" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 14, alignItems: 'start' }}>
+          <div className="g-3col" style={{ display: 'grid', gridTemplateColumns: '1.25fr 0.9fr 0.85fr', gap: 14, alignItems: 'start' }}>
             <Card fill title="Revenue & Returns Trend" style={{ height: 320 }} action={
               <div style={{ display: 'flex', gap: isMob ? 4 : 8, alignItems: 'center' }}>
                 {isMob ? (
