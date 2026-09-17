@@ -2758,16 +2758,19 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
                     if (!active || !payload?.length) return null
                     const r = payload[0].payload
                     return (
-                      <div style={{ background: C.card, border: `1px solid ${C.border2}`, borderRadius: 9, padding: '9px 11px', boxShadow: '0 6px 20px rgba(0,0,0,.12)' }}>
-                        <div style={{ fontSize: 11.5, fontWeight: 700, color: C.t1, marginBottom: 5 }}>{label}</div>
-                        <div style={{ fontSize: 16, fontWeight: 800, color: C.t1 }}>
-                          <span style={{ color: C.acm, fontWeight: 700, fontSize: 12 }}>■</span> {fmt(r.total)}
+                      <div style={{ background: C.card, border: `1px solid ${C.border2}`, borderRadius: 9, padding: '9px 11px', boxShadow: '0 6px 20px rgba(0,0,0,.12)', minWidth: 160 }}>
+                        <div style={{ fontSize: 11.5, fontWeight: 700, color: C.t1, marginBottom: 7 }}>{label}</div>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', gap: 16, fontSize: 12, fontWeight: 700, color: C.t1, marginBottom: 5, borderBottom: `1px solid ${C.border2}`, paddingBottom: 5 }}>
+                          <span><span style={{ color: C.acm, fontWeight: 700 }}>■</span> Total</span>
+                          <span>{fmt(r.total)}</span>
                         </div>
-                        <div style={{ fontSize: 11, color: C.t2, marginTop: 4 }}>
-                          <span style={{ color: SERIES.blue, fontWeight: 700 }}>■</span> {fmt(r.b2c)} parcel
+                        <div style={{ display: 'flex', justifyContent: 'space-between', gap: 16, fontSize: 11, color: C.t2, marginBottom: 3 }}>
+                          <span><span style={{ color: SERIES.blue, fontWeight: 700 }}>■</span> B2C</span>
+                          <span>{fmt(r.b2c)}</span>
                         </div>
-                        <div style={{ fontSize: 11, color: C.t2 }}>
-                          <span style={{ color: SERIES.orange, fontWeight: 700 }}>■</span> {fmt(r.b2b)} freight
+                        <div style={{ display: 'flex', justifyContent: 'space-between', gap: 16, fontSize: 11, color: C.t2 }}>
+                          <span><span style={{ color: SERIES.orange, fontWeight: 700 }}>■</span> FTL/PTL</span>
+                          <span>{fmt(r.b2b)}</span>
                         </div>
                       </div>
                     )
