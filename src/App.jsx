@@ -1,4 +1,5 @@
 ﻿import { useState, useMemo, useCallback, useEffect, useRef, Fragment, Component } from 'react'
+import * as XLSX from 'xlsx'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { SquaresFour, ChartBar, TrendUp, PlayCircle, Cube, Truck, Users, FileText } from '@phosphor-icons/react'
 import { geoMercator, geoPath } from 'd3-geo'
@@ -6295,12 +6296,6 @@ function DailyChannelTable({ dailyArr, channels, nDays = 7, rangeStart, rangeEnd
               ↺ Reset columns
             </button>
           )}
-          {!isMob && (
-            <button onClick={handleExport}
-              style={{ ...selStyle, marginLeft: 4, fontSize: 11, fontWeight: 600, padding: '5px 10px', borderRadius: 6, border: `1px solid ${C.border2}`, background: C.card, color: C.t1, fontFamily: 'var(--font)' }}>
-              Export CSV
-            </button>
-          )}
         </div>
       </div>
       <div style={{ overflowX: 'auto', overflowY: 'auto', maxHeight: 420 }}>
@@ -6920,11 +6915,6 @@ function FlatCategoryProductMatrix({ catData, subCatData, skuData, title, catPre
             style={plainHeader
               ? { fontSize: 12, padding: '5px 10px', borderRadius: 6, border: `1px solid ${C.border2}`, background: '#fff', color: C.t1, outline: 'none', fontFamily: 'var(--font)', width: isMob ? 120 : 150 }
               : { fontSize: 11.5, padding: '4px 9px', borderRadius: 6, border: `1px solid ${C.border}`, background: C.card, color: C.t1, width: isMob ? 120 : 200, outline: 'none' }} />
-          {!isMob && (
-            <button onClick={handleExport} style={{ fontSize: 11, fontWeight: 600, padding: '5px 10px', borderRadius: 6, border: `1px solid ${C.border2}`, background: C.card, color: C.t1, cursor: 'pointer', fontFamily: 'var(--font)' }}>
-              Export CSV
-            </button>
-          )}
         </div>
       </div>
       <div style={{ overflowX: 'auto', overflowY: 'auto', maxHeight: 440 }}>
@@ -7669,6 +7659,91 @@ function AllTab({ data, rangeStart, rangeEnd }) {
     { label: 'Repeat Customer Rate', value: `${repeatRate}%`, spark: mobRepeatSpark },
   ]
 
+  const handleOverallExport = (type) => {
+    const dateTag = `${rangeStart}_${rangeEnd}`
+
+    if (type === 'channel' || type === 'all') {
+      const rows = sortedCh.map(([ch, v]) => ({
+        'Channel': ch === 'offline_sales' ? 'Offline Sales' : ch === 'Shopify' ? 'D2C' : ch,
+        'Gross Revenue': v.rev,
+        'Net Revenue': v.netRev ?? '',
+        'Orders': v.orders?.size ?? v.orders ?? 0,
+        'Units': v.aspUnits || v.units || 0,
+        'AOV': v.orders ? Math.round(v.rev / (v.orders?.size ?? v.orders)) : 0,
+        'Share %': totalRev > 0 ? (v.rev / totalRev * 100).toFixed(2) : 0,
+      }))
+      exportCSV(rows, `revenue_by_channel_${dateTag}.csv`)
+    }
+
+    if (type === 'category' || type === 'all') {
+      const rows = []
+      Object.entries(catMatrixDataAll).forEach(([cat, cv]) => {
+        rows.push({
+          'Type': 'Category', 'Category': cat, 'Sub-Category': '', 'SKU': '',
+          'Gross Revenue': cv.rev, 'Net Revenue': cv.excRev,
+          'Units': cv.units, 'Orders': cv.orders,
+          'Cancel Rev': cv.cancelRev, 'RTO Rev': cv.rtoRev, 'CIR Rev': cv.cirRev, 'Return Rev': cv.returnRev,
+        })
+        const scData = subCatMatrixDataAll[cat] || {}
+        Object.entries(scData).forEach(([sc, sv]) => {
+          rows.push({
+            'Type': 'Sub-Category', 'Category': cat, 'Sub-Category': sc, 'SKU': '',
+            'Gross Revenue': sv.rev, 'Net Revenue': sv.excRev,
+            'Units': sv.units, 'Orders': sv.orders,
+            'Cancel Rev': sv.cancelRev, 'RTO Rev': sv.rtoRev, 'CIR Rev': sv.cirRev, 'Return Rev': sv.returnRev,
+          })
+          const skuData = skuChannelMapBySku[cat]?.[sc] || {}
+          Object.entries(skuData).forEach(([sku, skv]) => {
+            rows.push({
+              'Type': 'SKU', 'Category': cat, 'Sub-Category': sc, 'SKU': sku,
+              'Gross Revenue': skv.rev, 'Net Revenue': skv.excRev,
+              'Units': skv.units, 'Orders': '',
+              'Cancel Rev': skv.cancelRev, 'RTO Rev': skv.rtoRev, 'CIR Rev': skv.cirRev, 'Return Rev': skv.returnRev,
+            })
+          })
+        })
+      })
+      exportCSV(rows, `category_revenue_matrix_${dateTag}.csv`)
+    }
+
+    if (type === 'states' || type === 'all') {
+      const totalStateRevBQ = stateTotal || stateRows.reduce((s, r) => s + r.rev, 0)
+      let cum = 0
+      const rows = stateRows.map(s => {
+        const share = totalStateRevBQ > 0 ? s.rev / totalStateRevBQ * 100 : 0
+        cum += share
+        const prev = statePrevMap[s.state] || 0
+        return {
+          'State': s.state ? s.state.charAt(0).toUpperCase() + s.state.slice(1).toLowerCase() : s.state,
+          'Revenue': s.rev, 'Orders': s.orders,
+          'AOV': s.orders ? Math.round(s.rev / s.orders) : 0,
+          'Cities': s.cities,
+          'Share %': share.toFixed(2), 'Cumulative %': cum.toFixed(2),
+          'vs Prev %': prev > 0 ? ((s.rev - prev) / prev * 100).toFixed(2) : '',
+        }
+      })
+      exportCSV(rows, `top_states_${dateTag}.csv`)
+    }
+
+    if (type === 'cities' || type === 'all') {
+      const totalCityRevBQ = cityTotal || cityRows.reduce((s, r) => s + r.rev, 0)
+      let cum = 0
+      const rows = cityRows.map(c => {
+        const share = totalCityRevBQ > 0 ? c.rev / totalCityRevBQ * 100 : 0
+        cum += share
+        const prev = cityPrevMap[c.city] || 0
+        return {
+          'City': c.city, 'State': c.state || '',
+          'Revenue': c.rev, 'Orders': c.orders,
+          'AOV': c.orders ? Math.round(c.rev / c.orders) : 0,
+          'Share %': share.toFixed(2), 'Cumulative %': cum.toFixed(2),
+          'vs Prev %': prev > 0 ? ((c.rev - prev) / prev * 100).toFixed(2) : '',
+        }
+      })
+      exportCSV(rows, `top_cities_${dateTag}.csv`)
+    }
+  }
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
       {/* Mobile KPI list — same style as Ads tab */}
@@ -7758,8 +7833,8 @@ function AllTab({ data, rangeStart, rangeEnd }) {
         })
         return (
           <div className="g-2" style={{ alignItems: 'stretch' }}>
-            <ShopifyGeoRichTable title="Top States" rows={enrichedStates} firstKey="state" firstLabel="State" formatFirst={v => v ? v.charAt(0).toUpperCase() + v.slice(1).toLowerCase() : v} showRTO={false} showAOV={false} showASP={false} />
-            <ShopifyGeoRichTable title="Top Cities" rows={enrichedCities} firstKey="city" firstLabel="City" formatFirst={v => v ? v.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' ') : v} showRTO={false} showAOV={false} showASP={false} />
+            <ShopifyGeoRichTable title="Top States" rows={enrichedStates} firstKey="state" firstLabel="State" formatFirst={v => v ? v.charAt(0).toUpperCase() + v.slice(1).toLowerCase() : v} showRTO={false} showAOV={false} showASP={false} hideExport />
+            <ShopifyGeoRichTable title="Top Cities" rows={enrichedCities} firstKey="city" firstLabel="City" formatFirst={v => v ? v.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' ') : v} showRTO={false} showAOV={false} showASP={false} hideExport />
           </div>
         )
       })()}
@@ -8054,7 +8129,7 @@ function TopSubCatBar({ subCatRows }) {
   )
 }
 
-function ShopifyGeoRichTable({ title, rows, firstKey, firstLabel, formatFirst, rtoLabel = 'RTO %', showAOV = true, showRTO = true, showASP = false, note }) {
+function ShopifyGeoRichTable({ title, rows, firstKey, firstLabel, formatFirst, rtoLabel = 'RTO %', showAOV = true, showRTO = true, showASP = false, note, hideExport = false }) {
   const isMob = useIsMobile()
   const [shareMode, setShareMode] = useState('pct') // 'pct' | 'count'
   const table = useSortableTable('rev')
@@ -8141,7 +8216,7 @@ function ShopifyGeoRichTable({ title, rows, firstKey, firstLabel, formatFirst, r
             ))}
           </div>
           {!isMob && !reorder.isDefaultOrder && <button onClick={reorder.resetOrder} title="Reset column order to default" style={{ fontSize: 10, color: C.t2, background: C.card, border: `1px solid ${C.border}`, borderRadius: 6, padding: '3px 8px', cursor: 'pointer' }}>↺ Reset</button>}
-          {!isMob && (
+          {!isMob && !hideExport && (
             <button onClick={handleExport}
               style={{ fontSize: 11, fontWeight: 600, padding: '5px 10px', borderRadius: 6, border: `1px solid ${C.border2}`, background: C.card, color: C.t1, cursor: 'pointer', fontFamily: 'var(--font)' }}>
               Export CSV
@@ -13758,6 +13833,839 @@ function SalesPage({ data, filters, setFilters, activeTab, setActiveTab, fetchDa
   const allowedSalesTabs = TABS.filter(t => !allowedTabs || allowedTabs.includes(SALES_KEY_MAP[t.id]))
   const filteredData = data
 
+  const [allExportOpen, setAllExportOpen] = useState(false)
+  const [d2cExportOpen, setD2cExportOpen] = useState(false)
+  const [amzExportOpen, setAmzExportOpen] = useState(false)
+  const [fkExportOpen, setFkExportOpen] = useState(false)
+  const [blExportOpen, setBlExportOpen] = useState(false)
+  const [insExportOpen, setInsExportOpen] = useState(false)
+  const [ztExportOpen, setZtExportOpen] = useState(false)
+  const [crExportOpen, setCrExportOpen] = useState(false)
+  const [fcExportOpen, setFcExportOpen] = useState(false)
+  const [mnExportOpen, setMnExportOpen] = useState(false)
+  const [offExportOpen, setOffExportOpen] = useState(false)
+
+  const handleD2CExport = (type) => {
+    setD2cExportOpen(false)
+    const sh = (filteredData || {}).shopify || {}
+    const subCh = filters.subChannel // 'MyFrido', 'Mobility', or null/'' = Overall
+    const subChLabel = subCh === 'MyFrido' ? 'MyFrido' : subCh === 'Mobility' ? 'Mobility' : 'Overall'
+    const matrixSubCh = (subCh === 'MyFrido' || subCh === 'Mobility') ? subCh.toLowerCase() : null
+    const dateTag = `${filters.start}_${filters.end}`
+
+    if (type === 'sku' || type === 'all') {
+      // Date × SKU rows from sh.dailySKU, filtered by subChannel
+      const dailySKU = sh.dailySKU || []
+      // Build sku→{cat,subCat} lookup from skuMap
+      const skuCatLookup = {}
+      Object.entries(sh.skuMap || {}).forEach(([cat, scMap]) => {
+        Object.entries(scMap).forEach(([sc, skuMap_]) => {
+          Object.keys(skuMap_).forEach(sku => { skuCatLookup[sku] = { cat, sc } })
+        })
+      })
+      const filtered = matrixSubCh
+        ? dailySKU.filter(r => (r.subChannel || '').toLowerCase() === matrixSubCh)
+        : dailySKU.filter(r => !['shopify international','retail store'].includes((r.subChannel||'').toLowerCase()))
+      const skuRows = filtered.map(r => {
+        const lookup = skuCatLookup[r.sku] || { cat: 'Others', sc: 'Others' }
+        const gross = r.rev || 0
+        const excGst = r.excRev || 0
+        const cancelRev = r.cancelRev || 0
+        const rtoRev = r.rtoRev || 0
+        const cirRev = r.cirRev || 0
+        const retainedShare = gross > 0 ? Math.max(0, 1 - (cancelRev + rtoRev + cirRev) / gross) : 0
+        return {
+          'Date': r.date,
+          'Sub Channel': r.subChannel || '',
+          'Category': lookup.cat,
+          'Sub-Category': lookup.sc,
+          'SKU': r.sku || '',
+          'Units': r.units || 0,
+          'Gross Revenue': Math.round(gross),
+          'Net Revenue': Math.round(excGst * retainedShare),
+          'Cancel Rev': Math.round(cancelRev),
+          'RTO Rev': Math.round(rtoRev),
+          'CIR Rev': Math.round(cirRev),
+        }
+      }).sort((a, b) => (a['Date'] || '').localeCompare(b['Date'] || '') || b['Gross Revenue'] - a['Gross Revenue'])
+
+      if (type === 'sku') {
+        const wb = XLSX.utils.book_new()
+        XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(skuRows), 'Day-wise SKU')
+        XLSX.writeFile(wb, `d2c_${subChLabel}_daywise_sku_${dateTag}.xlsx`)
+        return
+      }
+    }
+
+    if (type === 'states' || type === 'all') {
+      const stateMap = sh.stateMap || {}
+      const statePrevMap = sh.statePrevMap || {}
+      const shCityRows = sh.cityRows || []
+      const cityPrevMap = sh.cityPrevMap || {}
+      const stTotal = Object.values(stateMap).reduce((s, v) => s + (v.rev || 0), 0)
+      const stSheet = Object.entries(stateMap)
+        .map(([state, v]) => ({ state, rev: v.rev || 0, orders: v.orders || 0, cities: v.cities || 0 }))
+        .sort((a, b) => b.rev - a.rev)
+        .map(s => ({
+          'State': s.state ? s.state.charAt(0).toUpperCase() + s.state.slice(1).toLowerCase() : s.state,
+          'Revenue': Math.round(s.rev), 'Orders': s.orders, 'Cities': s.cities,
+          'AOV': s.orders ? Math.round(s.rev / s.orders) : 0,
+          'Share (out of 100)': stTotal > 0 ? parseFloat((s.rev / stTotal * 100).toFixed(2)) : 0,
+        }))
+      const ctTotal = shCityRows.reduce((s, r) => s + (r.rev || 0), 0)
+      const ctSheet = shCityRows.map(c => ({
+        'City': c.city, 'State': c.state || '',
+        'Region': c.region || '', 'City Tier': c.cityTier || '',
+        'Revenue': Math.round(c.rev), 'Orders': c.orders || 0,
+        'AOV': c.orders ? Math.round(c.rev / c.orders) : 0,
+        'Share (out of 100)': ctTotal > 0 ? parseFloat((c.rev / ctTotal * 100).toFixed(2)) : 0,
+      }))
+
+      if (type === 'states') {
+        const wb = XLSX.utils.book_new()
+        XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(stSheet), 'Top States')
+        XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(ctSheet), 'Top Cities')
+        XLSX.writeFile(wb, `d2c_${subChLabel}_geo_${dateTag}.xlsx`)
+        return
+      }
+
+      if (type === 'all') {
+        // Build SKU rows again for full export
+        const dailySKU = sh.dailySKU || []
+        const skuCatLookup = {}
+        Object.entries(sh.skuMap || {}).forEach(([cat, scMap]) => {
+          Object.entries(scMap).forEach(([sc, skuMap_]) => {
+            Object.keys(skuMap_).forEach(sku => { skuCatLookup[sku] = { cat, sc } })
+          })
+        })
+        const filteredSKU = matrixSubCh
+          ? dailySKU.filter(r => (r.subChannel || '').toLowerCase() === matrixSubCh)
+          : dailySKU.filter(r => !['shopify international','retail store'].includes((r.subChannel||'').toLowerCase()))
+        const skuRows = filteredSKU.map(r => {
+          const lookup = skuCatLookup[r.sku] || { cat: 'Others', sc: 'Others' }
+          const gross = r.rev || 0
+          const excGst = r.excRev || 0
+          const cancelRev = r.cancelRev || 0
+          const rtoRev = r.rtoRev || 0
+          const cirRev = r.cirRev || 0
+          const retainedShare = gross > 0 ? Math.max(0, 1 - (cancelRev + rtoRev + cirRev) / gross) : 0
+          return {
+            'Date': r.date, 'Sub Channel': r.subChannel || '',
+            'Category': lookup.cat, 'Sub-Category': lookup.sc, 'SKU': r.sku || '',
+            'Units': r.units || 0, 'Gross Revenue': Math.round(gross),
+            'Net Revenue': Math.round(excGst * retainedShare),
+            'Cancel Rev': Math.round(cancelRev), 'RTO Rev': Math.round(rtoRev), 'CIR Rev': Math.round(cirRev),
+          }
+        }).sort((a, b) => (a['Date'] || '').localeCompare(b['Date'] || '') || b['Gross Revenue'] - a['Gross Revenue'])
+
+        const wb = XLSX.utils.book_new()
+        XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(skuRows), 'Day-wise SKU')
+        XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(stSheet), 'Top States')
+        XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(ctSheet), 'Top Cities')
+        XLSX.writeFile(wb, `d2c_${subChLabel}_full_export_${dateTag}.xlsx`)
+      }
+    }
+  }
+
+  const handleAmzExport = (type) => {
+    setAmzExportOpen(false)
+    const amzSC = (filteredData || {}).amzSC || {}
+    const amzVC = (filteredData || {}).amzVC || {}
+    const amzVCMatrix = (filteredData || {}).amzVCMatrix || {}
+    const view = channelView // 'all', 'sc', 'vc'
+    const viewLabel = view === 'sc' ? 'SellerCentral' : view === 'vc' ? 'VendorCentral' : 'Overall'
+    const dateTag = `${filters.start}_${filters.end}`
+
+    // ── SKU sheet ──
+    const buildSkuRows = () => {
+      const rows = []
+      if (view !== 'vc') {
+        // SC: skuChannel = {cat: {sc: {sku: {FBA:{...}, MFN:{...}}}}}
+        Object.entries(amzSC.skuChannel || {}).forEach(([cat, scMap]) => {
+          Object.entries(scMap).forEach(([sc, skuMap]) => {
+            Object.entries(skuMap).forEach(([sku, v]) => {
+              const keys = view === 'sc' ? ['FBA','MFN'] : ['FBA','MFN']
+              const agg = keys.reduce((a, k) => {
+                const r = v[k] || {}
+                return { rev: a.rev+(r.rev||0), excRev: a.excRev+(r.excRev||0), units: a.units+(r.units||0), cancelRev: a.cancelRev+(r.cancelRev||0), rtoRev: a.rtoRev+(r.rtoRev||0), cirRev: a.cirRev+(r.cirRev||0), returnRev: a.returnRev+(r.returnRev||0) }
+              }, { rev:0, excRev:0, units:0, cancelRev:0, rtoRev:0, cirRev:0, returnRev:0 })
+              if (!agg.rev) return
+              const deduct = agg.cancelRev + agg.rtoRev + agg.cirRev + agg.returnRev
+              const retained = agg.rev > 0 ? Math.max(0, 1 - deduct/agg.rev) : 0
+              rows.push({ 'Channel': 'Amazon SC', 'Category': cat, 'Sub-Category': sc, 'SKU': sku, 'Units': agg.units, 'Gross Revenue': Math.round(agg.rev), 'Net Revenue': Math.round(agg.excRev * retained), 'Cancel Rev': Math.round(agg.cancelRev), 'RTO Rev': Math.round(agg.rtoRev), 'CIR Rev': Math.round(agg.cirRev), 'Return Rev': Math.round(agg.returnRev) })
+            })
+          })
+        })
+      }
+      if (view !== 'sc') {
+        // VC: skuData = {cat: {sc: {sku: {rev, excRev, units, returnRev}}}}
+        Object.entries(amzVCMatrix.skuData || {}).forEach(([cat, scMap]) => {
+          Object.entries(scMap).forEach(([sc, skuMap]) => {
+            Object.entries(skuMap).forEach(([sku, v]) => {
+              if (!v.rev) return
+              const retained = v.rev > 0 ? Math.max(0, 1 - (v.returnRev||0)/v.rev) : 0
+              rows.push({ 'Channel': 'Amazon VC', 'Category': cat, 'Sub-Category': sc, 'SKU': sku, 'Units': v.units||0, 'Gross Revenue': Math.round(v.rev||0), 'Net Revenue': Math.round((v.excRev||0) * retained), 'Cancel Rev': 0, 'RTO Rev': 0, 'CIR Rev': 0, 'Return Rev': Math.round(v.returnRev||0) })
+            })
+          })
+        })
+      }
+      return rows.sort((a, b) => b['Gross Revenue'] - a['Gross Revenue'])
+    }
+
+    // ── Geo sheets (SC only) ──
+    const buildGeoSheets = () => {
+      const stTotal = amzSC.stateTotal || (amzSC.states||[]).reduce((s,x) => s+x.rev, 0)
+      const stSheet = (amzSC.states||[]).map(s => ({
+        'State': s.state ? s.state.charAt(0).toUpperCase()+s.state.slice(1).toLowerCase() : s.state,
+        'Revenue': Math.round(s.rev), 'Orders': s.orders||0,
+        'AOV': s.orders ? Math.round(s.rev/s.orders) : 0,
+        'Share (out of 100)': stTotal > 0 ? parseFloat((s.rev/stTotal*100).toFixed(2)) : 0,
+      }))
+      const ctTotal = amzSC.cityTotal || (amzSC.cities||[]).reduce((s,x) => s+x.rev, 0)
+      const ctSheet = (amzSC.cities||[]).map(c => ({
+        'City': c.city, 'State': c.state||'',
+        'Revenue': Math.round(c.rev), 'Orders': c.orders||0,
+        'AOV': c.orders ? Math.round(c.rev/c.orders) : 0,
+        'Share (out of 100)': ctTotal > 0 ? parseFloat((c.rev/ctTotal*100).toFixed(2)) : 0,
+      }))
+      const rgTotal = (amzSC.regionRows||[]).reduce((s,r) => s+(r.rev||0), 0)
+      const rgSheet = (amzSC.regionRows||[]).map(r => ({
+        'Region': r.region, 'Revenue': Math.round(r.rev||0), 'Orders': r.orders||0,
+        'Share (out of 100)': rgTotal > 0 ? parseFloat(((r.rev||0)/rgTotal*100).toFixed(2)) : 0,
+      }))
+      const trTotal = (amzSC.tierRows||[]).reduce((s,r) => s+(r.rev||0), 0)
+      const trSheet = (amzSC.tierRows||[]).map(r => ({
+        'City Tier': r.label || `Tier ${r.tier}`, 'Revenue': Math.round(r.rev||0), 'Orders': r.orders||0,
+        'Share (out of 100)': trTotal > 0 ? parseFloat(((r.rev||0)/trTotal*100).toFixed(2)) : 0,
+      }))
+      return { stSheet, ctSheet, rgSheet, trSheet }
+    }
+
+    if (type === 'sku') {
+      const wb = XLSX.utils.book_new()
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(buildSkuRows()), 'Category SKU')
+      XLSX.writeFile(wb, `amazon_${viewLabel}_sku_${dateTag}.xlsx`)
+    } else if (type === 'states') {
+      const { stSheet, ctSheet, rgSheet, trSheet } = buildGeoSheets()
+      const wb = XLSX.utils.book_new()
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(stSheet), 'Top States')
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(ctSheet), 'Top Cities')
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(rgSheet), 'Region Breakdown')
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(trSheet), 'City Tier Breakdown')
+      XLSX.writeFile(wb, `amazon_${viewLabel}_geo_${dateTag}.xlsx`)
+    } else if (type === 'all') {
+      const { stSheet, ctSheet, rgSheet, trSheet } = buildGeoSheets()
+      const wb = XLSX.utils.book_new()
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(buildSkuRows()), 'Category SKU')
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(stSheet), 'Top States')
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(ctSheet), 'Top Cities')
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(rgSheet), 'Region Breakdown')
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(trSheet), 'City Tier Breakdown')
+      XLSX.writeFile(wb, `amazon_${viewLabel}_full_export_${dateTag}.xlsx`)
+    }
+  }
+
+  const handleFKExport = (type) => {
+    setFkExportOpen(false)
+    const fk = (filteredData || {}).flipkart || {}
+    const dateTag = `${filters.start}_${filters.end}`
+
+    // ── SKU sheet ──
+    const buildFKSkuRows = () => {
+      const rows = []
+      Object.entries(fk.skuMatrix || {}).forEach(([cat, scMap]) => {
+        Object.entries(scMap).forEach(([sc, skuMap]) => {
+          Object.entries(skuMap).forEach(([sku, v]) => {
+            if (!v.rev) return
+            const gross = v.rev || 0
+            const excRev = v.excRev || 0
+            const returnRev = v.returnRev || 0
+            const cancelRev = v.cancelRev || 0
+            const deduct = cancelRev + returnRev
+            const retained = gross > 0 ? Math.max(0, 1 - deduct / gross) : 0
+            rows.push({ 'Category': cat, 'Sub-Category': sc, 'SKU': sku, 'Units': v.units || 0, 'Gross Revenue': Math.round(gross), 'Net Revenue': Math.round(excRev * retained), 'Cancel Rev': Math.round(cancelRev), 'Return Rev': Math.round(returnRev) })
+          })
+        })
+      })
+      return rows.sort((a, b) => b['Gross Revenue'] - a['Gross Revenue'])
+    }
+
+    // ── Daily sheet ──
+    const buildFKDailyRows = () => {
+      const dailyMap = {}
+      ;(fk.daily || []).forEach(x => {
+        if (!dailyMap[x.date]) dailyMap[x.date] = { date: x.date, rev: 0, orders: 0, units: 0, returnRev: 0 }
+        dailyMap[x.date].rev += x.rev || 0
+        dailyMap[x.date].orders += x.orders || 0
+        dailyMap[x.date].units += x.units || 0
+        dailyMap[x.date].returnRev += x.returnRev || 0
+      })
+      return Object.values(dailyMap).sort((a, b) => a.date?.localeCompare(b.date)).map(r => ({
+        'Date': r.date, 'Orders': r.orders, 'Units': r.units,
+        'Gross Revenue': Math.round(r.rev), 'Return Rev': Math.round(r.returnRev),
+      }))
+    }
+
+    // ── Geo sheets ──
+    const buildFKGeoSheets = () => {
+      const stTotal = Object.values((() => { const m = {}; (fk.states||[]).forEach(x => { if (!m[x.state]) m[x.state] = 0; m[x.state] += x.rev }); return m })()).reduce((s,v) => s+v, 0)
+      const stSheet = Object.entries((() => { const m = {}; (fk.states||[]).forEach(x => { if (!m[x.state]) m[x.state] = { rev: 0, orders: 0, returnRev: 0 }; m[x.state].rev += x.rev; m[x.state].orders += x.orders; m[x.state].returnRev += (x.returnRev||0) }); return m })())
+        .map(([state, v]) => ({ 'State': state ? state.charAt(0).toUpperCase()+state.slice(1).toLowerCase() : state, 'Revenue': Math.round(v.rev), 'Orders': v.orders, 'AOV': v.orders ? Math.round(v.rev/v.orders) : 0, 'Share (out of 100)': stTotal > 0 ? parseFloat((v.rev/stTotal*100).toFixed(2)) : 0 }))
+        .sort((a, b) => b.Revenue - a.Revenue)
+      const ctTotal = Object.values((() => { const m = {}; (fk.cities||[]).forEach(x => { if (!m[x.city]) m[x.city] = 0; m[x.city] += x.rev }); return m })()).reduce((s,v) => s+v, 0)
+      const ctSheet = Object.entries((() => { const m = {}; (fk.cities||[]).forEach(x => { if (!m[x.city]) m[x.city] = { rev: 0, orders: 0, returnRev: 0 }; m[x.city].rev += x.rev; m[x.city].orders += x.orders; m[x.city].returnRev += (x.returnRev||0) }); return m })())
+        .map(([city, v]) => ({ 'City': city, 'Revenue': Math.round(v.rev), 'Orders': v.orders, 'AOV': v.orders ? Math.round(v.rev/v.orders) : 0, 'Share (out of 100)': ctTotal > 0 ? parseFloat((v.rev/ctTotal*100).toFixed(2)) : 0 }))
+        .sort((a, b) => b.Revenue - a.Revenue)
+      const rgAgg = {}
+      ;(fk.regions||[]).forEach(x => { if (!rgAgg[x.region]) rgAgg[x.region] = { rev: 0, orders: 0 }; rgAgg[x.region].rev += x.rev; rgAgg[x.region].orders += x.orders })
+      const rgTotal = Object.values(rgAgg).reduce((s,v) => s+v.rev, 0)
+      const rgSheet = Object.entries(rgAgg).map(([region, v]) => ({ 'Region': region, 'Revenue': Math.round(v.rev), 'Orders': v.orders, 'Share (out of 100)': rgTotal > 0 ? parseFloat((v.rev/rgTotal*100).toFixed(2)) : 0 })).sort((a,b) => b.Revenue-a.Revenue)
+      return { stSheet, ctSheet, rgSheet }
+    }
+
+    if (type === 'sku') {
+      const wb = XLSX.utils.book_new()
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(buildFKSkuRows()), 'Category SKU')
+      XLSX.writeFile(wb, `flipkart_sku_${dateTag}.xlsx`)
+    } else if (type === 'states') {
+      const { stSheet, ctSheet, rgSheet } = buildFKGeoSheets()
+      const wb = XLSX.utils.book_new()
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(stSheet), 'Top States')
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(ctSheet), 'Top Cities')
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(rgSheet), 'Region Breakdown')
+      XLSX.writeFile(wb, `flipkart_geo_${dateTag}.xlsx`)
+    } else if (type === 'all') {
+      const { stSheet, ctSheet, rgSheet } = buildFKGeoSheets()
+      const wb = XLSX.utils.book_new()
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(buildFKDailyRows()), 'Day-wise')
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(buildFKSkuRows()), 'Category SKU')
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(stSheet), 'Top States')
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(ctSheet), 'Top Cities')
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(rgSheet), 'Region Breakdown')
+      XLSX.writeFile(wb, `flipkart_full_export_${dateTag}.xlsx`)
+    }
+  }
+
+  // ── Generic builder helpers ──────────────────────────────────────────────
+  const _buildQcSkuRows = (channel, chKey, skuMatrix) => {
+    const rows = []
+    Object.entries(skuMatrix || {}).forEach(([cat, scMap]) => {
+      Object.entries(scMap).forEach(([sc, skuMap]) => {
+        Object.entries(skuMap).forEach(([sku, v]) => {
+          if (!v.rev) return
+          rows.push({ 'Category': cat, 'Sub-Category': sc, 'SKU': sku, 'Units': v.units || 0, 'Gross Revenue': Math.round(v.rev || 0), 'Net Revenue (Ex GST)': Math.round(v.excRev || 0) })
+        })
+      })
+    })
+    return rows.sort((a, b) => b['Gross Revenue'] - a['Gross Revenue'])
+  }
+
+  const _buildQcDailyRows = (daily) =>
+    (daily || []).map(r => ({ 'Date': r.date, 'Orders': r.orders || 0, 'Units': r.units || 0, 'Gross Revenue': Math.round(r.rev || 0), 'Net Revenue (Ex GST)': Math.round(r.excRev || 0) }))
+
+  const _buildQcGeoSheets = (cities, states, stTotal, ctTotal) => {
+    const regAgg = {}, tierAgg = {}
+    ;(cities || []).forEach(c => {
+      if (c.region) { if (!regAgg[c.region]) regAgg[c.region] = { rev: 0, orders: 0 }; regAgg[c.region].rev += c.rev; regAgg[c.region].orders += c.orders || 0 }
+      if (c.cityTier) { const k = `Tier ${c.cityTier}`; if (!tierAgg[k]) tierAgg[k] = { rev: 0, orders: 0 }; tierAgg[k].rev += c.rev; tierAgg[k].orders += c.orders || 0 }
+    })
+    const rgTotal = Object.values(regAgg).reduce((s, v) => s + v.rev, 0)
+    const trTotal = Object.values(tierAgg).reduce((s, v) => s + v.rev, 0)
+    const stSheet = (states || []).map(s => ({ 'State': s.state ? s.state.charAt(0).toUpperCase()+s.state.slice(1).toLowerCase() : s.state, 'Revenue': Math.round(s.rev), 'Orders': s.orders||0, 'Share (out of 100)': stTotal > 0 ? parseFloat((s.rev/stTotal*100).toFixed(2)) : 0 }))
+    const ctSheet = (cities || []).map(c => ({ 'City': c.city, 'Revenue': Math.round(c.rev), 'Orders': c.orders||0, 'Share (out of 100)': ctTotal > 0 ? parseFloat((c.rev/ctTotal*100).toFixed(2)) : 0 }))
+    const rgSheet = Object.entries(regAgg).map(([region, v]) => ({ 'Region': region, 'Revenue': Math.round(v.rev), 'Orders': v.orders, 'Share (out of 100)': rgTotal > 0 ? parseFloat((v.rev/rgTotal*100).toFixed(2)) : 0 })).sort((a,b) => b.Revenue-a.Revenue)
+    const trSheet = Object.entries(tierAgg).map(([tier, v]) => ({ 'City Tier': tier, 'Revenue': Math.round(v.rev), 'Orders': v.orders, 'Share (out of 100)': trTotal > 0 ? parseFloat((v.rev/trTotal*100).toFixed(2)) : 0 })).sort((a,b) => b.Revenue-a.Revenue)
+    return { stSheet, ctSheet, rgSheet, trSheet }
+  }
+
+  const _buildMktSkuRows = (channel, skuMatrix) => {
+    const rows = []
+    Object.entries(skuMatrix || {}).forEach(([cat, scMap]) => {
+      Object.entries(scMap).forEach(([sc, skuMap]) => {
+        Object.entries(skuMap).forEach(([sku, v]) => {
+          if (!v.rev) return
+          const gross = v.rev || 0, excRev = v.excRev || 0, returnRev = v.returnRev || 0
+          const retained = gross > 0 ? Math.max(0, 1 - returnRev / gross) : 0
+          rows.push({ 'Category': cat, 'Sub-Category': sc, 'SKU': sku, 'Units': v.units || 0, 'Orders': v.orders || 0, 'Gross Revenue': Math.round(gross), 'Net Revenue': Math.round(excRev * retained), 'Return Rev': Math.round(returnRev) })
+        })
+      })
+    })
+    return rows.sort((a, b) => b['Gross Revenue'] - a['Gross Revenue'])
+  }
+
+  const _buildMktGeoSheets = (states, cities, stTotal, ctTotal) => {
+    const stSheet = (states || []).map(s => ({ 'State': s.state ? s.state.charAt(0).toUpperCase()+s.state.slice(1).toLowerCase() : s.state, 'Revenue': Math.round(s.rev), 'Orders': s.orders||0, 'AOV': s.orders ? Math.round(s.rev/s.orders) : 0, 'Share (out of 100)': stTotal > 0 ? parseFloat((s.rev/stTotal*100).toFixed(2)) : 0 }))
+    const ctSheet = (cities || []).map(c => ({ 'City': c.city, 'Revenue': Math.round(c.rev), 'Orders': c.orders||0, 'AOV': c.orders ? Math.round(c.rev/c.orders) : 0, 'Share (out of 100)': ctTotal > 0 ? parseFloat((c.rev/ctTotal*100).toFixed(2)) : 0 }))
+    return { stSheet, ctSheet }
+  }
+
+  // ── Blinkit ──────────────────────────────────────────────────────────────
+  const handleBlExport = (type) => {
+    setBlExportOpen(false)
+    const bl = (filteredData || {}).blinkit || {}
+    const dateTag = `${filters.start}_${filters.end}`
+    const stTotal = bl.stateTotal || (bl.states||[]).reduce((s,x) => s+x.rev, 0)
+    const ctTotal = bl.cityTotal || (bl.cities||[]).reduce((s,x) => s+x.rev, 0)
+    const { stSheet, ctSheet, rgSheet, trSheet } = _buildQcGeoSheets(bl.cities, bl.states, stTotal, ctTotal)
+    if (type === 'sku') {
+      const wb = XLSX.utils.book_new()
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(_buildQcSkuRows('Blinkit', 'blinkit', bl.skuMatrix)), 'Category SKU')
+      XLSX.writeFile(wb, `blinkit_sku_${dateTag}.xlsx`)
+    } else if (type === 'states') {
+      const wb = XLSX.utils.book_new()
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(stSheet), 'Top States')
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(ctSheet), 'Top Cities')
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(rgSheet), 'Region Breakdown')
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(trSheet), 'City Tier Breakdown')
+      XLSX.writeFile(wb, `blinkit_geo_${dateTag}.xlsx`)
+    } else if (type === 'all') {
+      const wb = XLSX.utils.book_new()
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(_buildQcDailyRows(bl.daily)), 'Day-wise')
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(_buildQcSkuRows('Blinkit', 'blinkit', bl.skuMatrix)), 'Category SKU')
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(stSheet), 'Top States')
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(ctSheet), 'Top Cities')
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(rgSheet), 'Region Breakdown')
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(trSheet), 'City Tier Breakdown')
+      XLSX.writeFile(wb, `blinkit_full_export_${dateTag}.xlsx`)
+    }
+  }
+
+  // ── Instamart ────────────────────────────────────────────────────────────
+  const handleInsExport = (type) => {
+    setInsExportOpen(false)
+    const ins = (filteredData || {}).instamart || {}
+    const dateTag = `${filters.start}_${filters.end}`
+    const stTotal = ins.stateTotal || (ins.states||[]).reduce((s,x) => s+x.rev, 0)
+    const ctTotal = ins.cityTotal || (ins.cities||[]).reduce((s,x) => s+x.rev, 0)
+    const { stSheet, ctSheet, rgSheet, trSheet } = _buildQcGeoSheets(ins.cities, ins.states, stTotal, ctTotal)
+    if (type === 'sku') {
+      const wb = XLSX.utils.book_new()
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(_buildQcSkuRows('Instamart', 'instamart', ins.skuMatrix)), 'Category SKU')
+      XLSX.writeFile(wb, `instamart_sku_${dateTag}.xlsx`)
+    } else if (type === 'states') {
+      const wb = XLSX.utils.book_new()
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(stSheet), 'Top States')
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(ctSheet), 'Top Cities')
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(rgSheet), 'Region Breakdown')
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(trSheet), 'City Tier Breakdown')
+      XLSX.writeFile(wb, `instamart_geo_${dateTag}.xlsx`)
+    } else if (type === 'all') {
+      const wb = XLSX.utils.book_new()
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(_buildQcDailyRows(ins.daily)), 'Day-wise')
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(_buildQcSkuRows('Instamart', 'instamart', ins.skuMatrix)), 'Category SKU')
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(stSheet), 'Top States')
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(ctSheet), 'Top Cities')
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(rgSheet), 'Region Breakdown')
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(trSheet), 'City Tier Breakdown')
+      XLSX.writeFile(wb, `instamart_full_export_${dateTag}.xlsx`)
+    }
+  }
+
+  // ── Zepto ────────────────────────────────────────────────────────────────
+  const handleZtExport = (type) => {
+    setZtExportOpen(false)
+    const zt = (filteredData || {}).zepto || {}
+    const dateTag = `${filters.start}_${filters.end}`
+    const stTotal = zt.stateTotal || (zt.states||[]).reduce((s,x) => s+x.rev, 0)
+    const ctTotal = zt.cityTotal || (zt.cities||[]).reduce((s,x) => s+x.rev, 0)
+    const { stSheet, ctSheet, rgSheet, trSheet } = _buildQcGeoSheets(zt.cities, zt.states, stTotal, ctTotal)
+    if (type === 'sku') {
+      const wb = XLSX.utils.book_new()
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(_buildQcSkuRows('Zepto', 'zepto', zt.skuMatrix)), 'Category SKU')
+      XLSX.writeFile(wb, `zepto_sku_${dateTag}.xlsx`)
+    } else if (type === 'states') {
+      const wb = XLSX.utils.book_new()
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(stSheet), 'Top States')
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(ctSheet), 'Top Cities')
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(rgSheet), 'Region Breakdown')
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(trSheet), 'City Tier Breakdown')
+      XLSX.writeFile(wb, `zepto_geo_${dateTag}.xlsx`)
+    } else if (type === 'all') {
+      const wb = XLSX.utils.book_new()
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(_buildQcDailyRows(zt.daily)), 'Day-wise')
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(_buildQcSkuRows('Zepto', 'zepto', zt.skuMatrix)), 'Category SKU')
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(stSheet), 'Top States')
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(ctSheet), 'Top Cities')
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(rgSheet), 'Region Breakdown')
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(trSheet), 'City Tier Breakdown')
+      XLSX.writeFile(wb, `zepto_full_export_${dateTag}.xlsx`)
+    }
+  }
+
+  // ── CRED ─────────────────────────────────────────────────────────────────
+  const handleCrExport = (type) => {
+    setCrExportOpen(false)
+    const cr = (filteredData || {}).cred || {}
+    const dateTag = `${filters.start}_${filters.end}`
+    const stTotal = cr.stateTotal || (cr.states||[]).reduce((s,x) => s+x.rev, 0)
+    const ctTotal = cr.cityTotal || (cr.cities||[]).reduce((s,x) => s+x.rev, 0)
+    const { stSheet, ctSheet } = _buildMktGeoSheets(cr.states, cr.cities, stTotal, ctTotal)
+    if (type === 'sku') {
+      const wb = XLSX.utils.book_new()
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(_buildMktSkuRows('CRED', cr.skuMatrix)), 'Category SKU')
+      XLSX.writeFile(wb, `cred_sku_${dateTag}.xlsx`)
+    } else if (type === 'states') {
+      const wb = XLSX.utils.book_new()
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(stSheet), 'Top States')
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(ctSheet), 'Top Cities')
+      XLSX.writeFile(wb, `cred_geo_${dateTag}.xlsx`)
+    } else if (type === 'all') {
+      const dailyRows = (cr.daily||[]).map(r => ({ 'Date': r.date, 'Orders': r.orders||0, 'Units': r.units||0, 'Gross Revenue': Math.round(r.rev||0), 'Net Revenue': Math.round(r.excRev||0) }))
+      const wb = XLSX.utils.book_new()
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(dailyRows), 'Day-wise')
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(_buildMktSkuRows('CRED', cr.skuMatrix)), 'Category SKU')
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(stSheet), 'Top States')
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(ctSheet), 'Top Cities')
+      XLSX.writeFile(wb, `cred_full_export_${dateTag}.xlsx`)
+    }
+  }
+
+  // ── FirstCry ─────────────────────────────────────────────────────────────
+  const handleFcExport = (type) => {
+    setFcExportOpen(false)
+    const fc = (filteredData || {}).firstcry || {}
+    const dateTag = `${filters.start}_${filters.end}`
+    const stTotal = fc.stateTotal || (fc.states||[]).reduce((s,x) => s+x.rev, 0)
+    const ctTotal = fc.cityTotal || (fc.cities||[]).reduce((s,x) => s+x.rev, 0)
+    const { stSheet, ctSheet } = _buildMktGeoSheets(fc.states, fc.cities, stTotal, ctTotal)
+    if (type === 'sku') {
+      const wb = XLSX.utils.book_new()
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(_buildMktSkuRows('FirstCry', fc.skuMatrix)), 'Category SKU')
+      XLSX.writeFile(wb, `firstcry_sku_${dateTag}.xlsx`)
+    } else if (type === 'states') {
+      const wb = XLSX.utils.book_new()
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(stSheet), 'Top States')
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(ctSheet), 'Top Cities')
+      XLSX.writeFile(wb, `firstcry_geo_${dateTag}.xlsx`)
+    } else if (type === 'all') {
+      const dailyRows = (fc.daily||[]).map(r => ({ 'Date': r.date, 'Orders': r.orders||0, 'Units': r.units||0, 'Gross Revenue': Math.round(r.rev||0), 'Net Revenue': Math.round(r.excRev||0) }))
+      const wb = XLSX.utils.book_new()
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(dailyRows), 'Day-wise')
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(_buildMktSkuRows('FirstCry', fc.skuMatrix)), 'Category SKU')
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(stSheet), 'Top States')
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(ctSheet), 'Top Cities')
+      XLSX.writeFile(wb, `firstcry_full_export_${dateTag}.xlsx`)
+    }
+  }
+
+  // ── Myntra ───────────────────────────────────────────────────────────────
+  const handleMnExport = (type) => {
+    setMnExportOpen(false)
+    const mn = (filteredData || {}).myntra || {}
+    const dateTag = `${filters.start}_${filters.end}`
+    const stTotal = mn.stateTotal || (mn.states||[]).reduce((s,x) => s+x.rev, 0)
+    const ctTotal = mn.cityTotal || (mn.cities||[]).reduce((s,x) => s+x.rev, 0)
+    const { stSheet, ctSheet } = _buildMktGeoSheets(mn.states, mn.cities, stTotal, ctTotal)
+    if (type === 'sku') {
+      const wb = XLSX.utils.book_new()
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(_buildMktSkuRows('Myntra', mn.skuMatrix)), 'Category SKU')
+      XLSX.writeFile(wb, `myntra_sku_${dateTag}.xlsx`)
+    } else if (type === 'states') {
+      const wb = XLSX.utils.book_new()
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(stSheet), 'Top States')
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(ctSheet), 'Top Cities')
+      XLSX.writeFile(wb, `myntra_geo_${dateTag}.xlsx`)
+    } else if (type === 'all') {
+      const dailyRows = (mn.daily||[]).map(r => ({ 'Date': r.date, 'Orders': r.orders||0, 'Units': r.units||0, 'Gross Revenue': Math.round(r.rev||0), 'Net Revenue': Math.round(r.excRev||0), 'Return Rev': Math.round(r.returnRev||0) }))
+      const wb = XLSX.utils.book_new()
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(dailyRows), 'Day-wise')
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(_buildMktSkuRows('Myntra', mn.skuMatrix)), 'Category SKU')
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(stSheet), 'Top States')
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(ctSheet), 'Top Cities')
+      XLSX.writeFile(wb, `myntra_full_export_${dateTag}.xlsx`)
+    }
+  }
+
+  // ── Offline ──────────────────────────────────────────────────────────────
+  const handleOffExport = (type) => {
+    setOffExportOpen(false)
+    const off = (filteredData || {}).offline || {}
+    const dateTag = `${filters.start}_${filters.end}`
+    const subLabel = offlineSub !== 'all' ? `_${offlineSub}` : ''
+
+    const isB2B = sc => sc === 'Shopify B2B' || sc?.startsWith('Offline_B2B')
+    const isStockist = sc => sc?.startsWith('Stockist')
+    const filterOffSub = rows => {
+      if (offlineSub === 'all') return rows
+      if (offlineSub === 'b2b') return rows.filter(r => isB2B(r.subChannel))
+      if (offlineSub === 'Stockist') return rows.filter(r => isStockist(r.subChannel))
+      if (offlineSub === 'MTGT') return rows.filter(r => r.subChannel === 'MTGT')
+      if (offlineSub === 'misc') return rows.filter(r => !isB2B(r.subChannel) && !isStockist(r.subChannel) && r.subChannel !== 'MTGT')
+      return rows.filter(r => r.subChannel === offlineSub)
+    }
+
+    const buildOffDailyRows = () => {
+      const m = {}
+      filterOffSub(off.daily || []).forEach(d => {
+        if (!m[d.date]) m[d.date] = { date: d.date, rev: 0, excRev: 0, cnRev: 0, cnExcRev: 0, orders: 0, units: 0 }
+        m[d.date].rev += d.rev || 0; m[d.date].excRev += d.excRev || 0
+        m[d.date].cnRev += Math.abs(d.cnRev || 0); m[d.date].cnExcRev += Math.abs(d.cnExcRev || 0)
+        m[d.date].orders += d.orders || 0; m[d.date].units += d.units || 0
+      })
+      return Object.values(m).sort((a,b) => a.date.localeCompare(b.date)).map(r => ({
+        'Date': r.date, 'Orders': r.orders, 'Units': r.units,
+        'Gross Revenue': Math.round(r.rev), 'Credit Notes': Math.round(r.cnRev),
+        'Net Revenue': Math.round((r.excRev || 0) - (r.cnExcRev || 0)),
+      }))
+    }
+
+    const buildOffSkuRows = () => {
+      const m = {}
+      filterOffSub(off.skuRows || []).forEach(x => {
+        const k = `${x.category}::${x.subCategory}::${x.sku}`
+        if (!m[k]) m[k] = { 'Category': x.category, 'Sub-Category': x.subCategory, 'SKU': x.sku, 'Units': 0, 'Orders': 0, 'Gross Revenue': 0, 'Net Revenue (Ex GST)': 0 }
+        m[k]['Units'] += x.units || 0; m[k]['Orders'] += x.orders || 0
+        m[k]['Gross Revenue'] += x.rev || 0; m[k]['Net Revenue (Ex GST)'] += x.excRev || 0
+      })
+      return Object.values(m).map(r => ({ ...r, 'Gross Revenue': Math.round(r['Gross Revenue']), 'Net Revenue (Ex GST)': Math.round(r['Net Revenue (Ex GST)']) })).sort((a,b) => b['Gross Revenue']-a['Gross Revenue'])
+    }
+
+    const buildOffGeoSheets = () => {
+      const stAgg = {}, ctAgg = {}, rgAgg = {}, trAgg = {}
+      filterOffSub(off.stateRows || []).forEach(r => { if (!stAgg[r.state]) stAgg[r.state] = { rev: 0, orders: 0 }; stAgg[r.state].rev += r.rev||0; stAgg[r.state].orders += r.orders||0 })
+      filterOffSub(off.cityRows || []).forEach(r => { if (!ctAgg[r.city]) ctAgg[r.city] = { rev: 0, orders: 0 }; ctAgg[r.city].rev += r.rev||0; ctAgg[r.city].orders += r.orders||0 })
+      filterOffSub(off.regionRows || []).forEach(r => { if (!rgAgg[r.region]) rgAgg[r.region] = { rev: 0, orders: 0 }; rgAgg[r.region].rev += r.rev||0; rgAgg[r.region].orders += r.orders||0 })
+      filterOffSub(off.tierRows || []).forEach(r => { const k = r.label||`Tier ${r.tier}`; if (!trAgg[k]) trAgg[k] = { rev: 0, orders: 0 }; trAgg[k].rev += r.rev||0; trAgg[k].orders += r.orders||0 })
+      const stTot = Object.values(stAgg).reduce((s,v)=>s+v.rev,0)
+      const ctTot = Object.values(ctAgg).reduce((s,v)=>s+v.rev,0)
+      const rgTot = Object.values(rgAgg).reduce((s,v)=>s+v.rev,0)
+      const trTot = Object.values(trAgg).reduce((s,v)=>s+v.rev,0)
+      const stSheet = Object.entries(stAgg).map(([state,v])=>({ 'State': state ? state.charAt(0).toUpperCase()+state.slice(1).toLowerCase() : state, 'Revenue': Math.round(v.rev), 'Orders': v.orders, 'AOV': v.orders?Math.round(v.rev/v.orders):0, 'Share (out of 100)': stTot>0?parseFloat((v.rev/stTot*100).toFixed(2)):0 })).sort((a,b)=>b.Revenue-a.Revenue)
+      const ctSheet = Object.entries(ctAgg).map(([city,v])=>({ 'City': city, 'Revenue': Math.round(v.rev), 'Orders': v.orders, 'AOV': v.orders?Math.round(v.rev/v.orders):0, 'Share (out of 100)': ctTot>0?parseFloat((v.rev/ctTot*100).toFixed(2)):0 })).sort((a,b)=>b.Revenue-a.Revenue)
+      const rgSheet = Object.entries(rgAgg).map(([region,v])=>({ 'Region': region, 'Revenue': Math.round(v.rev), 'Orders': v.orders, 'Share (out of 100)': rgTot>0?parseFloat((v.rev/rgTot*100).toFixed(2)):0 })).sort((a,b)=>b.Revenue-a.Revenue)
+      const trSheet = Object.entries(trAgg).map(([tier,v])=>({ 'City Tier': tier, 'Revenue': Math.round(v.rev), 'Orders': v.orders, 'Share (out of 100)': trTot>0?parseFloat((v.rev/trTot*100).toFixed(2)):0 })).sort((a,b)=>b.Revenue-a.Revenue)
+      return { stSheet, ctSheet, rgSheet, trSheet }
+    }
+
+    if (type === 'sku') {
+      const wb = XLSX.utils.book_new()
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(buildOffSkuRows()), 'Category SKU')
+      XLSX.writeFile(wb, `offline${subLabel}_sku_${dateTag}.xlsx`)
+    } else if (type === 'states') {
+      const { stSheet, ctSheet, rgSheet, trSheet } = buildOffGeoSheets()
+      const wb = XLSX.utils.book_new()
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(stSheet), 'Top States')
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(ctSheet), 'Top Cities')
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(rgSheet), 'Region Breakdown')
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(trSheet), 'City Tier Breakdown')
+      XLSX.writeFile(wb, `offline${subLabel}_geo_${dateTag}.xlsx`)
+    } else if (type === 'all') {
+      const { stSheet, ctSheet, rgSheet, trSheet } = buildOffGeoSheets()
+      const wb = XLSX.utils.book_new()
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(buildOffDailyRows()), 'Day-wise')
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(buildOffSkuRows()), 'Category SKU')
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(stSheet), 'Top States')
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(ctSheet), 'Top Cities')
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(rgSheet), 'Region Breakdown')
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(trSheet), 'City Tier Breakdown')
+      XLSX.writeFile(wb, `offline${subLabel}_full_export_${dateTag}.xlsx`)
+    }
+  }
+
+  const handleAllExport = (type) => {
+    setAllExportOpen(false)
+    const d = filteredData || {}
+    const { chMap = {}, catMap = {}, subCatMap = {}, catPrevMap = {}, subCatPrevMap = {}, stateMap = {}, statePrevMap = {}, stateTotal = 0, cityRows: cRows = [], cityPrevMap = {}, cityTotal = 0, skuRows: allSkuRows = [] } = d
+    const totalRev = Object.values(chMap).reduce((s, v) => s + (v.rev || 0), 0)
+    const sortedCh = Object.entries(chMap).filter(([, v]) => v.rev > 0).sort((a, b) => b[1].rev - a[1].rev)
+    const dateTag = `${filters.start}_${filters.end}`
+
+    const skuChannelMapBySku = {}
+    allSkuRows.forEach(x => {
+      const cat = x.category || 'Others'; const sc = x.subCategory || 'Others'; const sku = x.sku
+      if (!sku) return
+      if (!skuChannelMapBySku[cat]) skuChannelMapBySku[cat] = {}
+      if (!skuChannelMapBySku[cat][sc]) skuChannelMapBySku[cat][sc] = {}
+      if (!skuChannelMapBySku[cat][sc][sku]) skuChannelMapBySku[cat][sc][sku] = { rev: 0, units: 0, excRev: 0, cancelRev: 0, rtoRev: 0, cirRev: 0, returnRev: 0 }
+      skuChannelMapBySku[cat][sc][sku].rev += x.rev || 0; skuChannelMapBySku[cat][sc][sku].units += x.units || 0
+      skuChannelMapBySku[cat][sc][sku].excRev += x.exc_rev || 0; skuChannelMapBySku[cat][sc][sku].cancelRev += x.cancel_rev || 0
+      skuChannelMapBySku[cat][sc][sku].rtoRev += x.rto_rev || 0; skuChannelMapBySku[cat][sc][sku].cirRev += x.cir_rev || 0
+      skuChannelMapBySku[cat][sc][sku].returnRev += x.return_rev || 0
+    })
+    const catMatrixDataAll = {}
+    Object.entries(catMap).forEach(([k, v]) => { catMatrixDataAll[k] = { rev: v.rev, excRev: v.excRev || 0, units: v.aspUnits || v.units || 0, orders: v.orders?.size ?? v.orders ?? 0, cancelRev: 0, rtoRev: 0, cirRev: 0, returnRev: 0 } })
+    const subCatMatrixDataAll = {}
+    Object.entries(subCatMap).forEach(([k, v]) => {
+      const [cat, sc] = k.split('::')
+      if (!subCatMatrixDataAll[cat]) subCatMatrixDataAll[cat] = {}
+      subCatMatrixDataAll[cat][sc || 'Others'] = { rev: v.rev, excRev: v.excRev || 0, cancelRev: v.cancelRev || 0, rtoRev: v.rtoRev || 0, cirRev: v.cirRev || 0, returnRev: v.returnRev || 0, units: v.aspUnits || v.units || 0, orders: v.orders?.size ?? v.orders ?? 0 }
+      if (catMatrixDataAll[cat]) { catMatrixDataAll[cat].cancelRev += v.cancelRev || 0; catMatrixDataAll[cat].rtoRev += v.rtoRev || 0; catMatrixDataAll[cat].cirRev += v.cirRev || 0; catMatrixDataAll[cat].returnRev += v.returnRev || 0 }
+    })
+    const stateRows = Object.entries(stateMap).map(([k, v]) => ({ state: k, rev: v.rev, orders: v.orders, cities: v.cities?.size ?? 0 })).sort((a, b) => b.rev - a.rev)
+
+    if (type === 'channel' || type === 'all') {
+      const { dailyArr: dArr = [] } = d
+      const knownChannels = sortedCh.map(([ch]) => ch)
+      // Sheet 1: Channel Totals (matches dashboard KPIs exactly)
+      const chUnitsMap = {}
+      dArr.forEach(day => {
+        knownChannels.forEach(ch => {
+          chUnitsMap[ch] = (chUnitsMap[ch] || 0) + (day[`${ch}_u`] || 0)
+        })
+      })
+      const totalRows = []
+      sortedCh.forEach(([ch, v]) => {
+        const chLabel = ch === 'offline_sales' ? 'Offline Sales' : ch === 'Shopify' ? 'D2C' : ch
+        const chOrders = v.orders?.size ?? v.orders ?? 0
+        const chUnits = chUnitsMap[ch] || 0
+        totalRows.push({
+          'Date From': filters.start, 'Date To': filters.end,
+          'Channel': chLabel,
+          'Gross Revenue': Math.round(v.rev), 'Net Revenue': Math.round(v.netRev ?? v.excRev ?? 0),
+          'Orders': chOrders, 'Units': chUnits,
+          'AOV': chOrders ? Math.round(v.rev / chOrders) : 0,
+          'Share %': totalRev > 0 ? (v.rev / totalRev * 100).toFixed(2) : 0,
+        })
+      })
+      // Sheet 2: Day-wise (date × channel)
+      const dayRows = []
+      ;[...dArr].sort((a, b) => (a.date || '').localeCompare(b.date || '')).forEach(day => {
+        knownChannels.forEach(ch => {
+          const rev = day[ch] || 0
+          if (!rev) return
+          const orders = day[`${ch}_o`] || 0
+          const units = day[`${ch}_u`] || 0
+          const chLabel = ch === 'offline_sales' ? 'Offline Sales' : ch === 'Shopify' ? 'D2C' : ch
+          dayRows.push({
+            'Date': day.date, 'Channel': chLabel,
+            'Gross Revenue': Math.round(rev),
+            'Orders': orders, 'Units': units,
+            'AOV': orders ? Math.round(rev / orders) : 0,
+            'Share %': totalRev > 0 ? (rev / totalRev * 100).toFixed(2) : 0,
+          })
+        })
+      })
+      // Sheet 3: Category Breakdown (channel × category × sub-category)
+      const catRows = []
+      const chCatMap = {}
+      allSkuRows.forEach(x => {
+        const ch = x.channel === 'Shopify' ? 'D2C' : x.channel === 'offline_sales' ? 'Offline Sales' : (x.channel || 'Unknown')
+        const cat = x.category || 'Others'
+        const sc = x.subCategory || 'Others'
+        const key = `${ch}||${cat}||${sc}`
+        if (!chCatMap[key]) chCatMap[key] = { ch, cat, sc, rev: 0, excRev: 0, units: 0, cancelRev: 0, rtoRev: 0, returnRev: 0, cirRev: 0 }
+        chCatMap[key].rev += x.rev || 0; chCatMap[key].excRev += x.exc_rev || 0
+        chCatMap[key].units += x.units || 0; chCatMap[key].cancelRev += x.cancel_rev || 0
+        chCatMap[key].rtoRev += x.rto_rev || 0; chCatMap[key].returnRev += x.return_rev || 0
+        chCatMap[key].cirRev += x.cir_rev || 0
+      })
+      Object.values(chCatMap).sort((a, b) => b.rev - a.rev).forEach(r => {
+        const returnTotal = (r.returnRev || 0) + (r.rtoRev || 0) + (r.cirRev || 0)
+        catRows.push({
+          'Date From': filters.start, 'Date To': filters.end,
+          'Channel': r.ch, 'Category': r.cat, 'Sub-Category': r.sc,
+          'Gross Revenue': Math.round(r.rev), 'Net Revenue': Math.round(r.excRev),
+          'Units': r.units,
+          'Share %': totalRev > 0 ? (r.rev / totalRev * 100).toFixed(2) : 0,
+          'Return %': r.rev > 0 ? (returnTotal / r.rev * 100).toFixed(2) : 0,
+          'Cancel %': r.rev > 0 ? (r.cancelRev / r.rev * 100).toFixed(2) : 0,
+          'RTO %': r.rev > 0 ? ((r.rtoRev + r.cirRev) / r.rev * 100).toFixed(2) : 0,
+        })
+      })
+      if (type === 'channel') {
+        const wb = XLSX.utils.book_new()
+        XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(totalRows), 'Channel Totals')
+        XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(dayRows), 'Day-wise')
+        XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(catRows), 'Category Breakdown')
+        XLSX.writeFile(wb, `revenue_by_channel_${dateTag}.xlsx`)
+      }
+    }
+    if (type === 'category') {
+      const rows = []
+      Object.entries(catMatrixDataAll).forEach(([cat]) => {
+        Object.entries(subCatMatrixDataAll[cat] || {}).forEach(([sc]) => {
+          Object.entries(skuChannelMapBySku[cat]?.[sc] || {}).forEach(([sku, skv]) => {
+            rows.push({
+              'Category': cat, 'Sub-Category': sc, 'SKU': sku,
+              'Gross Revenue': Math.round(skv.rev), 'Net Revenue': Math.round(skv.excRev || 0),
+              'Units': skv.units || 0,
+              'Return Rev': Math.round(skv.returnRev || 0),
+              'Cancel Rev': Math.round(skv.cancelRev || 0),
+              'RTO Rev': Math.round((skv.rtoRev || 0) + (skv.cirRev || 0)),
+            })
+          })
+        })
+      })
+      rows.sort((a, b) => b['Gross Revenue'] - a['Gross Revenue'])
+      exportCSV(rows, `category_revenue_matrix_${dateTag}.csv`)
+    }
+    if (type === 'states' || type === 'cities') {
+      const stTotal = stateTotal || stateRows.reduce((s, r) => s + r.rev, 0)
+      const stSheet = stateRows.map(s => {
+        const prev = statePrevMap[s.state] || 0
+        return {
+          'State': s.state ? s.state.charAt(0).toUpperCase() + s.state.slice(1).toLowerCase() : s.state,
+          'Revenue': Math.round(s.rev), 'Orders': s.orders,
+          'AOV': s.orders ? Math.round(s.rev / s.orders) : 0,
+          'Cities': s.cities,
+          'Share (out of 100)': stTotal > 0 ? parseFloat((s.rev / stTotal * 100).toFixed(2)) : 0,
+          'Prev Revenue': Math.round(prev),
+        }
+      })
+      const ctTotal = cityTotal || cRows.reduce((s, r) => s + r.rev, 0)
+      const ctSheet = cRows.map(c => {
+        const prev = cityPrevMap[c.city] || 0
+        return {
+          'City': c.city, 'State': c.state || '',
+          'Region': c.region || '', 'City Tier': c.cityTier || '',
+          'Revenue': Math.round(c.rev), 'Orders': c.orders,
+          'AOV': c.orders ? Math.round(c.rev / c.orders) : 0,
+          'Share (out of 100)': ctTotal > 0 ? parseFloat((c.rev / ctTotal * 100).toFixed(2)) : 0,
+          'Prev Revenue': Math.round(prev),
+        }
+      })
+      const wb = XLSX.utils.book_new()
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(stSheet), 'Top States')
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(ctSheet), 'Top Cities')
+      XLSX.writeFile(wb, `geo_report_${dateTag}.xlsx`)
+    }
+    if (type === 'all') {
+      // Build category SKU rows
+      const catRows2 = []
+      Object.entries(catMatrixDataAll).forEach(([cat]) => {
+        Object.entries(subCatMatrixDataAll[cat] || {}).forEach(([sc]) => {
+          Object.entries(skuChannelMapBySku[cat]?.[sc] || {}).forEach(([sku, skv]) => {
+            catRows2.push({
+              'Category': cat, 'Sub-Category': sc, 'SKU': sku,
+              'Gross Revenue': Math.round(skv.rev), 'Net Revenue': Math.round(skv.excRev || 0),
+              'Units': skv.units || 0,
+              'Return Rev': Math.round(skv.returnRev || 0),
+              'Cancel Rev': Math.round(skv.cancelRev || 0),
+              'RTO Rev': Math.round((skv.rtoRev || 0) + (skv.cirRev || 0)),
+            })
+          })
+        })
+      })
+      catRows2.sort((a, b) => b['Gross Revenue'] - a['Gross Revenue'])
+      // Build states & cities rows
+      const stTotal2 = stateTotal || stateRows.reduce((s, r) => s + r.rev, 0)
+      const stSheet2 = stateRows.map(s => ({
+        'State': s.state ? s.state.charAt(0).toUpperCase() + s.state.slice(1).toLowerCase() : s.state,
+        'Revenue': Math.round(s.rev), 'Orders': s.orders,
+        'AOV': s.orders ? Math.round(s.rev / s.orders) : 0,
+        'Cities': s.cities,
+        'Share (out of 100)': stTotal2 > 0 ? parseFloat((s.rev / stTotal2 * 100).toFixed(2)) : 0,
+      }))
+      const ctTotal2 = cityTotal || cRows.reduce((s, r) => s + r.rev, 0)
+      const ctSheet2 = cRows.map(c => ({
+        'City': c.city, 'State': c.state || '',
+        'Region': c.region || '', 'City Tier': c.cityTier || '',
+        'Revenue': Math.round(c.rev), 'Orders': c.orders,
+        'AOV': c.orders ? Math.round(c.rev / c.orders) : 0,
+        'Share (out of 100)': ctTotal2 > 0 ? parseFloat((c.rev / ctTotal2 * 100).toFixed(2)) : 0,
+      }))
+      // All in 1 xlsx, 5 tabs
+      const wb = XLSX.utils.book_new()
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(totalRows), 'Channel Totals')
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(dayRows), 'Day-wise')
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(catRows), 'Category Breakdown')
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(catRows2), 'Category SKU')
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(stSheet2), 'Top States')
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(ctSheet2), 'Top Cities')
+      XLSX.writeFile(wb, `full_export_${dateTag}.xlsx`)
+    }
+  }
+
   // Sync D2C subChannel from URL into filters
   useEffect(() => {
     if (activeTab !== 'shopify' || d2cSubChannelFromUrl === null) return
@@ -13840,6 +14748,237 @@ function SalesPage({ data, filters, setFilters, activeTab, setActiveTab, fetchDa
               <button onClick={() => setShopifyView(shopifyView === 'returns' ? 'overview' : 'returns')} className="d2c-return-link" style={{ fontSize: 12, fontWeight: 600, color: shopifyView === 'returns' ? C.t1 : C.t2, background: 'none', border: 'none', cursor: 'pointer', padding: '4px 2px', textDecoration: shopifyView === 'returns' ? 'underline' : 'none', textDecorationColor: C.t1, textUnderlineOffset: 3 }}>
                 {shopifyView === 'returns' ? '← Back to Overview' : 'Return Analysis'}
               </button>
+            )}
+            {activeTab === 'shopify' && (
+              <div style={{ position: 'relative' }}>
+                <button onClick={() => setD2cExportOpen(o => !o)} style={{ fontSize: 12, fontWeight: 600, padding: '5px 12px', borderRadius: 8, border: `1px solid ${C.border2}`, background: C.card, color: C.t1, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 5, whiteSpace: 'nowrap' }}>
+                  ↓ Export <span style={{ fontSize: 10, color: C.t3 }}>▾</span>
+                </button>
+                {d2cExportOpen && (
+                  <>
+                    <div onClick={() => setD2cExportOpen(false)} style={{ position: 'fixed', inset: 0, zIndex: 998 }} />
+                    <div style={{ position: 'absolute', top: 30, right: 0, background: C.card, border: `1px solid ${C.border2}`, borderRadius: 8, boxShadow: '0 4px 14px rgba(0,0,0,.10)', zIndex: 999, minWidth: 190, padding: '4px 0' }}>
+                      {[['sku','Day-wise & SKU'],['states','Top States & Cities'],['all','Full Export']].map(([key, label]) => (
+                        <div key={key} onClick={() => handleD2CExport(key)}
+                          style={{ padding: '5px 14px', fontSize: 12, color: C.t1, fontWeight: key === 'all' ? 700 : 500, cursor: 'pointer', borderTop: key === 'all' ? `1px solid ${C.border}` : 'none' }}
+                          onMouseEnter={e => e.currentTarget.style.background = C.bg}
+                          onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                        >{label}</div>
+                      ))}
+                    </div>
+                  </>
+                )}
+              </div>
+            )}
+            {activeTab === 'amazon' && (
+              <div style={{ position: 'relative' }}>
+                <button onClick={() => setAmzExportOpen(o => !o)} style={{ fontSize: 12, fontWeight: 600, padding: '5px 12px', borderRadius: 8, border: `1px solid ${C.border2}`, background: C.card, color: C.t1, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 5, whiteSpace: 'nowrap' }}>
+                  ↓ Export <span style={{ fontSize: 10, color: C.t3 }}>▾</span>
+                </button>
+                {amzExportOpen && (
+                  <>
+                    <div onClick={() => setAmzExportOpen(false)} style={{ position: 'fixed', inset: 0, zIndex: 998 }} />
+                    <div style={{ position: 'absolute', top: 30, right: 0, background: C.card, border: `1px solid ${C.border2}`, borderRadius: 8, boxShadow: '0 4px 14px rgba(0,0,0,.10)', zIndex: 999, minWidth: 190, padding: '4px 0' }}>
+                      {[['sku','Category SKU'],['states','Top States & Cities'],['all','Full Export']].filter(([key]) => !(key === 'states' && channelView === 'vc')).map(([key, label]) => (
+                        <div key={key} onClick={() => handleAmzExport(key)}
+                          style={{ padding: '5px 14px', fontSize: 12, color: C.t1, fontWeight: key === 'all' ? 700 : 500, cursor: 'pointer', borderTop: key === 'all' ? `1px solid ${C.border}` : 'none' }}
+                          onMouseEnter={e => e.currentTarget.style.background = C.bg}
+                          onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                        >{label}</div>
+                      ))}
+                    </div>
+                  </>
+                )}
+              </div>
+            )}
+            {activeTab === 'flipkart' && (
+              <div style={{ position: 'relative' }}>
+                <button onClick={() => setFkExportOpen(o => !o)} style={{ fontSize: 12, fontWeight: 600, padding: '5px 12px', borderRadius: 8, border: `1px solid ${C.border2}`, background: C.card, color: C.t1, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 5, whiteSpace: 'nowrap' }}>
+                  ↓ Export <span style={{ fontSize: 10, color: C.t3 }}>▾</span>
+                </button>
+                {fkExportOpen && (
+                  <>
+                    <div onClick={() => setFkExportOpen(false)} style={{ position: 'fixed', inset: 0, zIndex: 998 }} />
+                    <div style={{ position: 'absolute', top: 30, right: 0, background: C.card, border: `1px solid ${C.border2}`, borderRadius: 8, boxShadow: '0 4px 14px rgba(0,0,0,.10)', zIndex: 999, minWidth: 190, padding: '4px 0' }}>
+                      {[['sku','Category SKU'],['states','Top States & Cities'],['all','Full Export']].map(([key, label]) => (
+                        <div key={key} onClick={() => handleFKExport(key)}
+                          style={{ padding: '5px 14px', fontSize: 12, color: C.t1, fontWeight: key === 'all' ? 700 : 500, cursor: 'pointer', borderTop: key === 'all' ? `1px solid ${C.border}` : 'none' }}
+                          onMouseEnter={e => e.currentTarget.style.background = C.bg}
+                          onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                        >{label}</div>
+                      ))}
+                    </div>
+                  </>
+                )}
+              </div>
+            )}
+            {activeTab === 'blinkit' && (
+              <div style={{ position: 'relative' }}>
+                <button onClick={() => setBlExportOpen(o => !o)} style={{ fontSize: 12, fontWeight: 600, padding: '5px 12px', borderRadius: 8, border: `1px solid ${C.border2}`, background: C.card, color: C.t1, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 5, whiteSpace: 'nowrap' }}>
+                  ↓ Export <span style={{ fontSize: 10, color: C.t3 }}>▾</span>
+                </button>
+                {blExportOpen && (
+                  <>
+                    <div onClick={() => setBlExportOpen(false)} style={{ position: 'fixed', inset: 0, zIndex: 998 }} />
+                    <div style={{ position: 'absolute', top: 30, right: 0, background: C.card, border: `1px solid ${C.border2}`, borderRadius: 8, boxShadow: '0 4px 14px rgba(0,0,0,.10)', zIndex: 999, minWidth: 190, padding: '4px 0' }}>
+                      {[['sku','Category SKU'],['states','Top States & Cities'],['all','Full Export']].map(([key, label]) => (
+                        <div key={key} onClick={() => handleBlExport(key)}
+                          style={{ padding: '5px 14px', fontSize: 12, color: C.t1, fontWeight: key === 'all' ? 700 : 500, cursor: 'pointer', borderTop: key === 'all' ? `1px solid ${C.border}` : 'none' }}
+                          onMouseEnter={e => e.currentTarget.style.background = C.bg}
+                          onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                        >{label}</div>
+                      ))}
+                    </div>
+                  </>
+                )}
+              </div>
+            )}
+            {activeTab === 'instamart' && (
+              <div style={{ position: 'relative' }}>
+                <button onClick={() => setInsExportOpen(o => !o)} style={{ fontSize: 12, fontWeight: 600, padding: '5px 12px', borderRadius: 8, border: `1px solid ${C.border2}`, background: C.card, color: C.t1, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 5, whiteSpace: 'nowrap' }}>
+                  ↓ Export <span style={{ fontSize: 10, color: C.t3 }}>▾</span>
+                </button>
+                {insExportOpen && (
+                  <>
+                    <div onClick={() => setInsExportOpen(false)} style={{ position: 'fixed', inset: 0, zIndex: 998 }} />
+                    <div style={{ position: 'absolute', top: 30, right: 0, background: C.card, border: `1px solid ${C.border2}`, borderRadius: 8, boxShadow: '0 4px 14px rgba(0,0,0,.10)', zIndex: 999, minWidth: 190, padding: '4px 0' }}>
+                      {[['sku','Category SKU'],['states','Top States & Cities'],['all','Full Export']].map(([key, label]) => (
+                        <div key={key} onClick={() => handleInsExport(key)}
+                          style={{ padding: '5px 14px', fontSize: 12, color: C.t1, fontWeight: key === 'all' ? 700 : 500, cursor: 'pointer', borderTop: key === 'all' ? `1px solid ${C.border}` : 'none' }}
+                          onMouseEnter={e => e.currentTarget.style.background = C.bg}
+                          onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                        >{label}</div>
+                      ))}
+                    </div>
+                  </>
+                )}
+              </div>
+            )}
+            {activeTab === 'zepto' && (
+              <div style={{ position: 'relative' }}>
+                <button onClick={() => setZtExportOpen(o => !o)} style={{ fontSize: 12, fontWeight: 600, padding: '5px 12px', borderRadius: 8, border: `1px solid ${C.border2}`, background: C.card, color: C.t1, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 5, whiteSpace: 'nowrap' }}>
+                  ↓ Export <span style={{ fontSize: 10, color: C.t3 }}>▾</span>
+                </button>
+                {ztExportOpen && (
+                  <>
+                    <div onClick={() => setZtExportOpen(false)} style={{ position: 'fixed', inset: 0, zIndex: 998 }} />
+                    <div style={{ position: 'absolute', top: 30, right: 0, background: C.card, border: `1px solid ${C.border2}`, borderRadius: 8, boxShadow: '0 4px 14px rgba(0,0,0,.10)', zIndex: 999, minWidth: 190, padding: '4px 0' }}>
+                      {[['sku','Category SKU'],['states','Top States & Cities'],['all','Full Export']].map(([key, label]) => (
+                        <div key={key} onClick={() => handleZtExport(key)}
+                          style={{ padding: '5px 14px', fontSize: 12, color: C.t1, fontWeight: key === 'all' ? 700 : 500, cursor: 'pointer', borderTop: key === 'all' ? `1px solid ${C.border}` : 'none' }}
+                          onMouseEnter={e => e.currentTarget.style.background = C.bg}
+                          onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                        >{label}</div>
+                      ))}
+                    </div>
+                  </>
+                )}
+              </div>
+            )}
+            {activeTab === 'cred' && (
+              <div style={{ position: 'relative' }}>
+                <button onClick={() => setCrExportOpen(o => !o)} style={{ fontSize: 12, fontWeight: 600, padding: '5px 12px', borderRadius: 8, border: `1px solid ${C.border2}`, background: C.card, color: C.t1, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 5, whiteSpace: 'nowrap' }}>
+                  ↓ Export <span style={{ fontSize: 10, color: C.t3 }}>▾</span>
+                </button>
+                {crExportOpen && (
+                  <>
+                    <div onClick={() => setCrExportOpen(false)} style={{ position: 'fixed', inset: 0, zIndex: 998 }} />
+                    <div style={{ position: 'absolute', top: 30, right: 0, background: C.card, border: `1px solid ${C.border2}`, borderRadius: 8, boxShadow: '0 4px 14px rgba(0,0,0,.10)', zIndex: 999, minWidth: 190, padding: '4px 0' }}>
+                      {[['sku','Category SKU'],['states','Top States & Cities'],['all','Full Export']].map(([key, label]) => (
+                        <div key={key} onClick={() => handleCrExport(key)}
+                          style={{ padding: '5px 14px', fontSize: 12, color: C.t1, fontWeight: key === 'all' ? 700 : 500, cursor: 'pointer', borderTop: key === 'all' ? `1px solid ${C.border}` : 'none' }}
+                          onMouseEnter={e => e.currentTarget.style.background = C.bg}
+                          onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                        >{label}</div>
+                      ))}
+                    </div>
+                  </>
+                )}
+              </div>
+            )}
+            {activeTab === 'firstcry' && (
+              <div style={{ position: 'relative' }}>
+                <button onClick={() => setFcExportOpen(o => !o)} style={{ fontSize: 12, fontWeight: 600, padding: '5px 12px', borderRadius: 8, border: `1px solid ${C.border2}`, background: C.card, color: C.t1, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 5, whiteSpace: 'nowrap' }}>
+                  ↓ Export <span style={{ fontSize: 10, color: C.t3 }}>▾</span>
+                </button>
+                {fcExportOpen && (
+                  <>
+                    <div onClick={() => setFcExportOpen(false)} style={{ position: 'fixed', inset: 0, zIndex: 998 }} />
+                    <div style={{ position: 'absolute', top: 30, right: 0, background: C.card, border: `1px solid ${C.border2}`, borderRadius: 8, boxShadow: '0 4px 14px rgba(0,0,0,.10)', zIndex: 999, minWidth: 190, padding: '4px 0' }}>
+                      {[['sku','Category SKU'],['states','Top States & Cities'],['all','Full Export']].map(([key, label]) => (
+                        <div key={key} onClick={() => handleFcExport(key)}
+                          style={{ padding: '5px 14px', fontSize: 12, color: C.t1, fontWeight: key === 'all' ? 700 : 500, cursor: 'pointer', borderTop: key === 'all' ? `1px solid ${C.border}` : 'none' }}
+                          onMouseEnter={e => e.currentTarget.style.background = C.bg}
+                          onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                        >{label}</div>
+                      ))}
+                    </div>
+                  </>
+                )}
+              </div>
+            )}
+            {activeTab === 'myntra' && (
+              <div style={{ position: 'relative' }}>
+                <button onClick={() => setMnExportOpen(o => !o)} style={{ fontSize: 12, fontWeight: 600, padding: '5px 12px', borderRadius: 8, border: `1px solid ${C.border2}`, background: C.card, color: C.t1, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 5, whiteSpace: 'nowrap' }}>
+                  ↓ Export <span style={{ fontSize: 10, color: C.t3 }}>▾</span>
+                </button>
+                {mnExportOpen && (
+                  <>
+                    <div onClick={() => setMnExportOpen(false)} style={{ position: 'fixed', inset: 0, zIndex: 998 }} />
+                    <div style={{ position: 'absolute', top: 30, right: 0, background: C.card, border: `1px solid ${C.border2}`, borderRadius: 8, boxShadow: '0 4px 14px rgba(0,0,0,.10)', zIndex: 999, minWidth: 190, padding: '4px 0' }}>
+                      {[['sku','Category SKU'],['states','Top States & Cities'],['all','Full Export']].map(([key, label]) => (
+                        <div key={key} onClick={() => handleMnExport(key)}
+                          style={{ padding: '5px 14px', fontSize: 12, color: C.t1, fontWeight: key === 'all' ? 700 : 500, cursor: 'pointer', borderTop: key === 'all' ? `1px solid ${C.border}` : 'none' }}
+                          onMouseEnter={e => e.currentTarget.style.background = C.bg}
+                          onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                        >{label}</div>
+                      ))}
+                    </div>
+                  </>
+                )}
+              </div>
+            )}
+            {activeTab === 'offline' && (
+              <div style={{ position: 'relative' }}>
+                <button onClick={() => setOffExportOpen(o => !o)} style={{ fontSize: 12, fontWeight: 600, padding: '5px 12px', borderRadius: 8, border: `1px solid ${C.border2}`, background: C.card, color: C.t1, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 5, whiteSpace: 'nowrap' }}>
+                  ↓ Export <span style={{ fontSize: 10, color: C.t3 }}>▾</span>
+                </button>
+                {offExportOpen && (
+                  <>
+                    <div onClick={() => setOffExportOpen(false)} style={{ position: 'fixed', inset: 0, zIndex: 998 }} />
+                    <div style={{ position: 'absolute', top: 30, right: 0, background: C.card, border: `1px solid ${C.border2}`, borderRadius: 8, boxShadow: '0 4px 14px rgba(0,0,0,.10)', zIndex: 999, minWidth: 190, padding: '4px 0' }}>
+                      {[['sku','Category SKU'],['states','Top States & Cities'],['all','Full Export']].map(([key, label]) => (
+                        <div key={key} onClick={() => handleOffExport(key)}
+                          style={{ padding: '5px 14px', fontSize: 12, color: C.t1, fontWeight: key === 'all' ? 700 : 500, cursor: 'pointer', borderTop: key === 'all' ? `1px solid ${C.border}` : 'none' }}
+                          onMouseEnter={e => e.currentTarget.style.background = C.bg}
+                          onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                        >{label}</div>
+                      ))}
+                    </div>
+                  </>
+                )}
+              </div>
+            )}
+            {activeTab === 'all' && (
+              <div style={{ position: 'relative' }}>
+                <button onClick={() => setAllExportOpen(o => !o)} style={{ fontSize: 12, fontWeight: 600, padding: '5px 12px', borderRadius: 8, border: `1px solid ${C.border2}`, background: C.card, color: C.t1, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 5, whiteSpace: 'nowrap' }}>
+                  ↓ Export <span style={{ fontSize: 10, color: C.t3 }}>▾</span>
+                </button>
+                {allExportOpen && (
+                  <>
+                    <div onClick={() => setAllExportOpen(false)} style={{ position: 'fixed', inset: 0, zIndex: 998 }} />
+                    <div style={{ position: 'absolute', top: 30, right: 0, background: C.card, border: `1px solid ${C.border2}`, borderRadius: 8, boxShadow: '0 4px 14px rgba(0,0,0,.10)', zIndex: 999, minWidth: 190, padding: '4px 0' }}>
+                      {[['channel','Revenue by Channel'],['category','Category Revenue Matrix'],['states','Top States & Cities'],['all','Full Export']].map(([key, label]) => (
+                        <div key={key} onClick={() => { handleAllExport(key); setAllExportOpen(false) }}
+                          style={{ padding: '5px 14px', fontSize: 12, color: C.t1, fontWeight: key === 'all' ? 700 : 500, cursor: 'pointer', borderTop: key === 'all' ? `1px solid ${C.border}` : 'none' }}
+                          onMouseEnter={e => e.currentTarget.style.background = C.bg}
+                          onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                        >{label}</div>
+                      ))}
+                    </div>
+                  </>
+                )}
+              </div>
             )}
             <FilterIconPopover activeCount={activeFilterCount}>
             <SearchableSelect multi options={cats} value={filters.category || []} onChange={v => setFilters(f => ({ ...f, category: v, subCategory: [] }))} placeholder="All Categories" />
