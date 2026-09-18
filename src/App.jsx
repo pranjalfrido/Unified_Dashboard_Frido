@@ -9305,6 +9305,94 @@ function EBOTab({ data, rangeStart, rangeEnd }) {
         <GeoToggleDonutCard regionRows={regionRows} tierRows={tierRows} boxHeight={320} />
       </div>
       <FlatCategoryProductMatrix catData={catDataForMatrix} subCatData={subCatDataForMatrix} skuData={skuDataForMatrix} title="Category Revenue Matrix · EBO" catPrevMap={ebo.catPrevMap || {}} subCatPrevMap={ebo.subCatPrevMap || {}} showReturnPct={true} detailedReturns />
+      {/* Store-wise table */}
+      {(() => {
+        const rawStoreRows = ebo.storeRows || []
+        if (!rawStoreRows.length) return null
+        const byStore = {}
+        rawStoreRows.forEach(r => {
+          if (!byStore[r.storeName]) byStore[r.storeName] = { storeName: r.storeName, gross: 0, netRev: 0, cancelRev: 0, rtoRev: 0, returnRev: 0, cirRev: 0, orders: 0, units: 0 }
+          const s = byStore[r.storeName]
+          s.gross += r.gross || 0; s.netRev += r.netRev || 0
+          s.cancelRev += r.cancelRev || 0; s.rtoRev += r.rtoRev || 0
+          s.returnRev += r.returnRev || 0; s.cirRev += r.cirRev || 0
+          s.orders += r.orders || 0; s.units += r.units || 0
+        })
+        const rows = Object.values(byStore).sort((a, b) => b.gross - a.gross)
+        const tot = rows.reduce((s, r) => ({
+          gross: s.gross+r.gross, netRev: s.netRev+r.netRev, cancelRev: s.cancelRev+r.cancelRev,
+          rtoRev: s.rtoRev+r.rtoRev, returnRev: s.returnRev+r.returnRev, cirRev: s.cirRev+r.cirRev,
+          orders: s.orders+r.orders, units: s.units+r.units,
+        }), { gross:0, netRev:0, cancelRev:0, rtoRev:0, returnRev:0, cirRev:0, orders:0, units:0 })
+        const pctOf = (n, d) => d > 0 ? n / d * 100 : 0
+        const thS = { fontSize: 10, fontWeight: 700, color: C.t2, textTransform: 'uppercase', letterSpacing: 0.4, padding: '6px 10px', textAlign: 'right', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', borderBottom: '1.5px solid ' + C.border, background: C.acl, position: 'sticky', top: 0, zIndex: 1 }
+        const thSL = { ...thS, textAlign: 'left' }
+        const tdS = { fontSize: 12, padding: '3px 10px', textAlign: 'right', color: C.t1, borderBottom: '1px solid ' + C.border, fontFamily: 'var(--mono)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }
+        const tdSL = { ...tdS, textAlign: 'left', fontFamily: 'inherit', fontWeight: 500 }
+        const totS = { ...tdS, padding: '7px 10px', fontWeight: 700, borderBottom: 'none' }
+        const totSL = { ...totS, textAlign: 'left', fontFamily: 'inherit' }
+        const pctCell = (n, d, threshold) => {
+          if (d <= 0) return <span style={{ color: C.t3 }}>—</span>
+          const v = pctOf(n, d)
+          return <span style={{ color: v <= 0 ? C.t3 : (threshold && v > threshold ? C.red.tx : 'inherit') }}>{v.toFixed(2)}%</span>
+        }
+        return (
+          <div className="kpi-card" style={{ padding: '14px 16px', display: 'flex', flexDirection: 'column' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+              <div style={{ fontWeight: 700, fontSize: 13, color: C.t1 }}>Store-wise Sales · EBO</div>
+              <span style={{ fontSize: 11, color: C.t3 }}>{rows.length} stores</span>
+            </div>
+            <div style={{ overflowX: 'auto', overflowY: 'auto', maxHeight: 440 }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed', minWidth: 760 }}>
+                <colgroup>
+                  {['20%','10%','10%','10%','10%','10%','10%','10%','10%'].map((w,i) => <col key={i} style={{ width: w }} />)}
+                </colgroup>
+                <thead>
+                  <tr style={{ background: C.acl }}>
+                    <th style={thSL}>Store</th>
+                    <th style={thS}>Orders</th>
+                    <th style={thS}>Units</th>
+                    <th style={thS}>Gross Rev / Share</th>
+                    <th style={thS}>Net Rev</th>
+                    <th style={thS}>Cancel %</th>
+                    <th style={thS}>CIR %</th>
+                    <th style={thS}>Total Return %</th>
+                    <th style={thS}>AOV</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {rows.map(r => (
+                    <tr key={r.storeName} onMouseEnter={e => e.currentTarget.style.background = C.bg} onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
+                      <td style={tdSL}>{r.storeName}</td>
+                      <td style={tdS}>{r.orders}</td>
+                      <td style={tdS}>{r.units}</td>
+                      <td style={tdS}>{fmt(r.gross)}{tot.gross > 0 && <span style={{ fontSize: 10, color: C.t3, marginLeft: 4 }}>({(r.gross/tot.gross*100).toFixed(1)}%)</span>}</td>
+                      <td style={tdS}>{fmt(r.netRev)}</td>
+                      <td style={tdS}>{pctCell(r.cancelRev, r.gross, 3)}</td>
+                      <td style={tdS}>{pctCell(r.cirRev, r.gross, 9)}</td>
+                      <td style={tdS}>{pctCell(r.cancelRev + r.rtoRev + r.returnRev + r.cirRev, r.gross, 20)}</td>
+                      <td style={tdS}>₹{r.orders ? Math.round(r.gross/r.orders).toLocaleString('en-IN') : '—'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+                <tfoot>
+                  <tr style={{ background: C.acl, position: 'sticky', bottom: 0 }}>
+                    <td style={totSL}>Total</td>
+                    <td style={totS}>{tot.orders}</td>
+                    <td style={totS}>{tot.units}</td>
+                    <td style={totS}>{fmt(tot.gross)} <span style={{ color: C.t3, fontWeight: 400 }}>(100%)</span></td>
+                    <td style={totS}>{fmt(tot.netRev)}</td>
+                    <td style={totS}>{pctCell(tot.cancelRev, tot.gross, 3)}</td>
+                    <td style={totS}>{pctCell(tot.cirRev, tot.gross, 9)}</td>
+                    <td style={totS}>{pctCell(tot.cancelRev + tot.rtoRev + tot.returnRev + tot.cirRev, tot.gross, 20)}</td>
+                    <td style={totS}>₹{tot.orders ? Math.round(tot.gross/tot.orders).toLocaleString('en-IN') : '—'}</td>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+          </div>
+        )
+      })()}
       {/* Geo tables */}
       <div className="g-2" style={{ alignItems: 'stretch' }}>
         <ShopifyGeoRichTable title="Top States" rows={stateRows} firstKey="state" firstLabel="State" formatFirst={v => v ? v.charAt(0).toUpperCase() + v.slice(1).toLowerCase() : v} rtoLabel="Return %" />
