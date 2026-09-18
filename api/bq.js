@@ -159,7 +159,7 @@ const SLOW_QUERY_KEYS = new Set([
   'prevDailyByChannel','prevAdsTotals',
 ])
 
-const CACHE_VERSION = 12
+const CACHE_VERSION = 13
 function getCacheKey(body) {
   const { start, end, category, subCategory, sku, subChannel, voucher, channel, region, tier, state, city, country, paymentType, channelGroup, phase } = body
   return JSON.stringify({ v: CACHE_VERSION, start, end, category, subCategory, sku, subChannel, voucher, channel, region, tier, state, city, country, paymentType, channelGroup, phase: phase || null })
