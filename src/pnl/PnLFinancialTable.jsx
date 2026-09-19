@@ -273,32 +273,70 @@ export default function PnLFinancialTable({ subCatData, skuData, adSpendMap = {}
   const reorder = useReorderableColumns(`pnl-financial-table-cols:${title}`, ALL_COLUMNS)
 
   const handleExport = () => {
-    const csvRows = rows.flatMap(r => {
-      const main = {
-        Category: r.cat, Product: r.sc,
-        'Gross Rev (Inc GST)': Math.round(r.gross), 'Gross Rev (Ex GST)': Math.round(r.excRev),
-        Units: r.units, ASP: r.asp > 0 ? Math.round(r.asp) : '',
-        'Returns %': +r.returnPct.toFixed(2), 'Returns Value': Math.round(r.totalReturnRev),
-        'Net Revenue': Math.round(r.net),
-        'COGS': r.anyCosted ? Math.round(r.cogs) : '', 'COGS %': r.cogsPct != null ? +r.cogsPct.toFixed(2) : '',
-        'Gross Margin': r.gm != null ? Math.round(r.gm) : '', 'GM %': r.gmPct != null ? +r.gmPct.toFixed(2) : '',
-        'SnD Cost': r.anySnd ? Math.round(r.snd) : '', 'SnD %': r.sndPct != null ? +r.sndPct.toFixed(2) : '',
-        'CM1': r.cm1 != null ? Math.round(r.cm1) : '', 'CM1 %': r.cm1Pct != null ? +r.cm1Pct.toFixed(2) : '',
+    const p2 = v => v != null ? +v.toFixed(2) : ''
+    const ri = v => v != null ? Math.round(v) : ''
+    const buildRow = (category, product, sku, sk, rawD, skCogs, skGm, skSnd, skCm1, skSpend, skCm2, costed) => {
+      const cancelRev = rawD?.cancelRev || 0
+      const rtoRev = rawD?.rtoRev || 0
+      const returnRev = rawD?.returnRev || 0
+      const cirRev = rawD?.cirRev || 0
+      const exchRev = rawD?.exchRev || 0
+      const gross = sk.gross
+      return {
+        Category: category,
+        Product: product,
+        SKU: sku,
+        'Gross Rev (Inc GST)': ri(gross),
+        'Gross Rev (Ex GST)': ri(sk.excRev),
+        Units: sk.units,
+        'Net Units': sk.netUnits,
+        ASP: sk.units > 0 ? ri(gross / sk.units) : '',
+        'Cancel Rev': ri(cancelRev),
+        'Cancel %': p2(pctOf(cancelRev, gross)),
+        'RTO Rev': ri(rtoRev),
+        'RTO %': p2(pctOf(rtoRev, gross)),
+        'Return Rev': ri(returnRev),
+        'Return %': p2(pctOf(returnRev, gross)),
+        'CIR Rev': ri(cirRev),
+        'CIR %': p2(pctOf(cirRev, gross)),
+        'Exchange Rev': ri(exchRev),
+        'Total Returns Rev': ri(sk.totalReturnRev),
+        'Total Returns %': p2(pctOf(sk.totalReturnRev, gross)),
+        'Net Revenue': ri(sk.net),
+        'COGS': costed ? ri(skCogs) : '',
+        'COGS %': costed && sk.net > MIN_REV_FOR_RATIOS ? p2(pctOf(skCogs, sk.net)) : '',
+        'Gross Margin': skGm != null ? ri(skGm) : '',
+        'GM %': skGm != null && sk.net > MIN_REV_FOR_RATIOS ? p2(pctOf(skGm, sk.net)) : '',
+        'SnD Cost': skSnd != null ? ri(skSnd) : '',
+        'SnD %': skSnd != null && sk.net > MIN_REV_FOR_RATIOS ? p2(pctOf(skSnd, sk.net)) : '',
+        'CM1': skCm1 != null ? ri(skCm1) : '',
+        'CM1 %': skCm1 != null && sk.net > MIN_REV_FOR_RATIOS ? p2(pctOf(skCm1, sk.net)) : '',
         ...(showMarketing ? {
-          'Marketing Spend': Math.round(r.spend), 'Spend %': +r.spendPct.toFixed(2),
-          'RoAS': r.roas != null ? +r.roas.toFixed(2) : '', 'Net RoAS': r.netRoas != null ? +r.netRoas.toFixed(2) : '',
-          'CM2': r.cm2 != null ? Math.round(r.cm2) : '', 'CM2 %': r.cm2Pct != null ? +r.cm2Pct.toFixed(2) : '',
+          'Marketing Spend': skSpend > 0 ? ri(skSpend) : '',
+          'Spend %': skSpend > 0 && sk.net > MIN_REV_FOR_RATIOS ? p2(pctOf(skSpend, sk.net)) : '',
+          'RoAS': skSpend > 0 ? p2(sk.excRev / skSpend) : '',
+          'Net RoAS': skSpend > 0 ? p2(sk.net / skSpend) : '',
+          'CM2': skCm2 != null ? ri(skCm2) : '',
+          'CM2 %': skCm2 != null && sk.net > MIN_REV_FOR_RATIOS ? p2(pctOf(skCm2, sk.net)) : '',
         } : {}),
       }
-      // SKU sub-rows: same per-SKU cost logic as the table body (whitelist-net-scaled mapRow,
-      // estimateCogsPerUnit fallback, sndBySku lookup) so exported SKU rows always match what's
-      // shown when a Product row is expanded — no separately-derived export-only calculation.
+    }
+
+    const csvRows = rows.flatMap(r => {
+      const rawD = subCatData?.[r.cat]?.[r.sc] || {}
+      const rFull = mapRow(rawD, r.sc, r.cat)
+      const main = buildRow(r.cat, r.sc, '',
+        { gross: r.gross, excRev: r.excRev, units: r.units, netUnits: rFull.netUnits, totalReturnRev: r.totalReturnRev, net: r.net },
+        rawD,
+        r.anyCosted ? r.cogs : null, r.gm, r.anySnd ? r.snd : null, r.cm1, r.spend, r.cm2, r.anyCosted
+      )
+
       const whitelistNet = mobilityNetBySubCat[`${r.cat}::${r.sc}`] != null ? mobilityNetBySubCat[`${r.cat}::${r.sc}`] : null
       const skuEntries = Object.entries(skuData?.[r.cat]?.[r.sc] || {})
       const standardNetTotal = whitelistNet != null ? skuEntries.reduce((s, [, d]) => s + mapRow(d).net, 0) : 0
       const csvSkuTotalGross = skuEntries.reduce((s, [, d]) => s + (mapRow(d).gross || 0), 0)
-      const skuRows = skuEntries.map(([sku, d]) => {
-        const rStandard = mapRow(d)
+      const skuRows = skuEntries.map(([sku, rawSkuD]) => {
+        const rStandard = mapRow(rawSkuD)
         const sk = whitelistNet != null && standardNetTotal > 0
           ? { ...rStandard, net: whitelistNet * (rStandard.net / standardNetTotal) }
           : rStandard
@@ -306,30 +344,15 @@ export default function PnLFinancialTable({ subCatData, skuData, adSpendMap = {}
         const asp = sk.units > 0 ? sk.gross / sk.units : 0
         const perUnitCogs = (entry && entry.cogs != null) ? entry.cogs : estimateCogsPerUnit(asp)
         const costed = perUnitCogs > 0 || sk.netUnits > 0
-        const skCogs = costed ? perUnitCogs * sk.netUnits : 0
+        const skCogs = costed ? perUnitCogs * sk.netUnits : null
         const skGm = costed ? sk.net - skCogs : null
-        const skSnd = sndBySku?.[sku]
+        const skSnd = sndBySku?.[sku] ?? null
         const skCm1 = costed && skSnd != null ? skGm - skSnd : null
-        const skSpendCsv = showMarketing && r.spend > 0 && csvSkuTotalGross > 0 ? r.spend * (sk.gross / csvSkuTotalGross) : 0
-        const skCm2 = skCm1 != null && showMarketing ? skCm1 - skSpendCsv : null
-        return {
-          Category: r.cat, Product: `↳ ${sku}`,
-          'Gross Rev (Inc GST)': Math.round(sk.gross), 'Gross Rev (Ex GST)': Math.round(sk.excRev),
-          Units: sk.units, ASP: asp > 0 ? Math.round(asp) : '',
-          'Returns %': +pctOf(sk.totalReturnRev, sk.gross).toFixed(2), 'Returns Value': Math.round(sk.totalReturnRev),
-          'Net Revenue': Math.round(sk.net),
-          'COGS': costed ? Math.round(skCogs) : '', 'COGS %': costed && sk.net > MIN_REV_FOR_RATIOS ? +pctOf(skCogs, sk.net).toFixed(2) : '',
-          'Gross Margin': skGm != null ? Math.round(skGm) : '', 'GM %': skGm != null && sk.net > MIN_REV_FOR_RATIOS ? +pctOf(skGm, sk.net).toFixed(2) : '',
-          'SnD Cost': skSnd != null ? Math.round(skSnd) : '', 'SnD %': skSnd != null && sk.net > MIN_REV_FOR_RATIOS ? +pctOf(skSnd, sk.net).toFixed(2) : '',
-          'CM1': skCm1 != null ? Math.round(skCm1) : '', 'CM1 %': skCm1 != null && sk.net > MIN_REV_FOR_RATIOS ? +pctOf(skCm1, sk.net).toFixed(2) : '',
-          ...(showMarketing ? {
-            'Marketing Spend': skSpendCsv > 0 ? Math.round(skSpendCsv) : '', 'Spend %': skSpendCsv > 0 && sk.net > MIN_REV_FOR_RATIOS ? +pctOf(skSpendCsv, sk.net).toFixed(2) : '',
-            'RoAS': '', 'Net RoAS': '',
-            'CM2': skCm2 != null ? Math.round(skCm2) : '', 'CM2 %': skCm2 != null && sk.net > MIN_REV_FOR_RATIOS ? +pctOf(skCm2, sk.net).toFixed(2) : '',
-          } : {}),
-        }
+        const skSpend = showMarketing && r.spend > 0 && csvSkuTotalGross > 0 ? r.spend * (sk.gross / csvSkuTotalGross) : 0
+        const skCm2 = skCm1 != null && showMarketing ? skCm1 - skSpend : null
+        return buildRow(r.cat, r.sc, sku, sk, rawSkuD, skCogs, skGm, skSnd, skCm1, skSpend, skCm2, costed)
       })
-      return [main, ...skuRows]
+      return skuRows.length > 0 ? skuRows : [main]
     })
     exportCSV(csvRows, `${(title || 'financial_view').toLowerCase().replace(/[^a-z0-9]+/g, '_')}.csv`)
   }
