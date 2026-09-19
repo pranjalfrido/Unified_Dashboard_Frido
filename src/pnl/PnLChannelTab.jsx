@@ -63,7 +63,7 @@ const TREND_METRICS = [
   { key: 'excRev', label: 'Net Revenue', axis: 'rev', color: C.blue.tx, isArea: true, dash: '4 2' },
   { key: 'units', label: 'Units', axis: 'units', color: '#2E74CC' },
   { key: 'returnPct', label: 'Returns %', axis: 'pct', color: '#B91C1C' },
-  { key: 'cogsPct', label: 'COGS %', axis: 'pct', color: '#8B5E3C', dash: '5 2' },
+  { key: 'cogsPct', label: 'COGS %', axis: 'pct', color: C.t2, dash: '5 2' },
   { key: 'gmPct', label: 'GM %', axis: 'pct', color: '#0D9E68', dash: '4 2' },
   { key: 'sndPct', label: 'SnD %', axis: 'pct', color: '#E8930A' },
   { key: 'cm1Pct', label: 'CM1 %', axis: 'pct', color: '#9B56B6', dash: '2 2' },

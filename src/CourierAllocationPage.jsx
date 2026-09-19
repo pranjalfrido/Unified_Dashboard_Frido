@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react'
 import { C as BASE_C, fmt, fmtN, exportCSV } from './utils.js'
-import { Card } from './components.jsx'
+import { Card, Delta } from './components.jsx'
 
 // Same t3 darkening as the Logistics Cost tabs this page opens from — #94939F is 3.03:1 on
 // a white card and fails WCAG AA at the 9.5-11px these labels run at.
@@ -177,6 +177,9 @@ export default function CourierAllocationPage({ onBack }) {
     }).filter(b => b.shipments > 0)
   }, [data, slabs, pay])
 
+  // Column max for the shipment ghost bars — bars compare across rows, not within one.
+  const maxBandShip = Math.max(1, ...bands.map(b => b.shipments))
+
   const totalSaving = useMemo(() => slabs.reduce((s, x) => s + (x.saving || 0), 0), [slabs])
 
   // Net movement per courier — the page's headline answer, in shipments rather than share
@@ -266,7 +269,7 @@ export default function CourierAllocationPage({ onBack }) {
           Recommended move · {pay}
         </div>
         {net.length > 0 ? (
-          <div style={{ fontSize: 14.5, color: C.t1, lineHeight: 1.55, maxWidth: 780 }}>
+          <div style={{ fontFamily: C.display, fontSize: 16, fontWeight: 400, color: C.t1, lineHeight: 1.5, maxWidth: 780 }}>
             Shift <b>{fmtN(Math.round(Math.abs(losers.reduce((a, c) => a + c.net, 0))))}</b> shipments off{' '}
             <b style={{ color: LOSS }}>{losers.slice(0, 2).map(c => c.courier).join(' and ')}</b>
             {losers.length > 2 ? ` (and ${losers.length - 2} more)` : ''} onto{' '}
@@ -330,7 +333,9 @@ export default function CourierAllocationPage({ onBack }) {
                         <span style={{ color: C.t3, marginRight: 6, fontSize: 9 }}>{open ? '▼' : '▶'}</span>
                         {b.label}
                       </td>
-                      <td style={{ ...tdStyle, textAlign: 'right' }}>{fmtN(b.shipments)}</td>
+                      <td style={{ ...tdStyle, textAlign: 'right', padding: '6px 9px' }}>
+                        <GhostBar value={b.shipments} of={maxBandShip}>{fmtN(b.shipments)}</GhostBar>
+                      </td>
                       {/* whiteSpace normal: tdStyle sets nowrap for numeric columns, but under
                           tableLayout:fixed that would clip a long chip list instead of wrapping. */}
                       <td style={{ ...tdStyle, paddingLeft: 16, whiteSpace: 'normal' }}>
@@ -399,6 +404,19 @@ export default function CourierAllocationPage({ onBack }) {
 // has a long import list.
 function Fragment2({ children }) { return <>{children}</> }
 
+// A number with its own magnitude behind it. The track is always full width, so bars are
+// comparable down the column; `of` is the column max, not the row's own value.
+function GhostBar({ value, of, fill, children }) {
+  const pct = of > 0 ? Math.max(0, Math.min(100, (value / of) * 100)) : 0
+  return (
+    <div style={{ position: 'relative', display: 'flex', justifyContent: 'flex-end', alignItems: 'center' }}>
+      <div aria-hidden style={{ position: 'absolute', inset: 0, borderRadius: 4, background: C.bg }} />
+      <div aria-hidden style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: `${pct}%`, borderRadius: 4, background: fill || C.acs }} />
+      <span style={{ position: 'relative', padding: '0 7px' }}>{children}</span>
+    </div>
+  )
+}
+
 function Chip({ c, dir }) {
   const out = dir === 'out'
   return (
@@ -406,10 +424,10 @@ function Chip({ c, dir }) {
       display: 'inline-flex', alignItems: 'baseline', gap: 4,
       background: out ? C.red.bg : C.green.bg,
       border: `1px solid ${out ? C.red.bd : C.green.bd}`,
-      borderRadius: 6, padding: '2px 7px', fontSize: 11,
+      borderRadius: 999, padding: '3px 9px', fontSize: 11,
     }}>
-      <b style={{ color: C.t1 }}>{c.courier}</b>
-      <span style={{ color: out ? LOSS : GAIN, fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>
+      <b style={{ color: C.t1, fontWeight: 600 }}>{c.courier}</b>
+      <span style={{ color: out ? LOSS : GAIN, fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>
         {out ? '−' : '+'}{fmtN(Math.round(Math.abs(c.delta)))}
       </span>
     </span>
@@ -435,8 +453,12 @@ function BandDetail({ b }) {
             <tr key={c.courier} style={{ borderBottom: `1px solid ${C.border}` }}>
               <td style={{ ...tdStyle, fontWeight: 600 }}>{c.courier}</td>
               <td style={{ ...tdStyle, textAlign: 'right' }}>{fmtN(c.shipments)}</td>
-              <td style={{ ...tdStyle, textAlign: 'right' }}>{c.share.toFixed(1)}%</td>
-              <td style={{ ...tdStyle, textAlign: 'right', fontWeight: 700 }}>{c.plannedShare.toFixed(1)}%</td>
+              <td style={{ ...tdStyle, textAlign: 'right', padding: '6px 9px' }}>
+                <GhostBar value={c.share} of={100} fill={C.border2}>{c.share.toFixed(1)}%</GhostBar>
+              </td>
+              <td style={{ ...tdStyle, textAlign: 'right', fontWeight: 600, padding: '6px 9px' }}>
+                <GhostBar value={c.plannedShare} of={100} fill={C.acs}>{c.plannedShare.toFixed(1)}%</GhostBar>
+              </td>
               <td style={{ ...tdStyle, textAlign: 'right', fontWeight: 700, color: c.delta > 0 ? GAIN : c.delta < 0 ? LOSS : C.t3 }}>
                 {Math.abs(c.delta) < 1 ? '—' : `${c.delta > 0 ? '+' : '−'}${fmtN(Math.round(Math.abs(c.delta)))}`}
               </td>
@@ -546,11 +568,16 @@ function ZoneTable({ zones, pay, coverage, metric, setMetric }) {
 }
 
 // ─────────────────────────────────────────────────────────── chrome
-function Stat({ label, value, accent }) {
+// Label quiet and sentence-case, value large on the display face — the figure should be the
+// loudest thing in the tile, which an uppercase-bold label competes with.
+function Stat({ label, value, accent, delta, invertDelta }) {
   return (
     <div>
-      <div style={{ fontSize: 9.5, fontWeight: 800, letterSpacing: '.05em', textTransform: 'uppercase', color: C.t3 }}>{label}</div>
-      <div style={{ fontSize: 17, fontWeight: 800, color: accent || C.t1, fontVariantNumeric: 'tabular-nums', letterSpacing: '-.01em' }}>{value}</div>
+      <div style={{ fontSize: 11, fontWeight: 600, color: C.t3 }}>{label}</div>
+      <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
+        <div style={{ fontFamily: C.display, fontSize: 26, fontWeight: 500, color: accent || C.t1, fontVariantNumeric: 'tabular-nums', letterSpacing: '-.025em', lineHeight: 1.15 }}>{value}</div>
+        {delta != null && <Delta value={delta} invert={invertDelta} />}
+      </div>
     </div>
   )
 }
@@ -583,7 +610,7 @@ function Shell({ children, onBack, right }) {
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 14, flexWrap: 'wrap' }}>
         <button onClick={onBack} style={btnStyle}>← Cost Analytics</button>
         <div style={{ flex: 1, minWidth: 120 }}>
-          <div style={{ fontSize: 16, fontWeight: 800, color: C.t1, letterSpacing: '-.01em' }}>Courier Allocation</div>
+          <div style={{ fontFamily: C.display, fontSize: 19, fontWeight: 600, color: C.t1, letterSpacing: '-.02em' }}>Courier Allocation</div>
           <div style={{ fontSize: 11, color: C.t3, marginTop: 1 }}>Which courier should carry which weight and zone</div>
         </div>
         {right}
@@ -657,10 +684,10 @@ function MethodNote({ data }) {
   )
 }
 
-const thStyle = { padding: '7px 9px', fontSize: 9.5, fontWeight: 800, letterSpacing: '.04em', textTransform: 'uppercase', color: C.t3, whiteSpace: 'nowrap' }
-const tdStyle = { padding: '8px 9px', color: C.t1, fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }
+const thStyle = { padding: '9px 10px', fontSize: 10.5, fontWeight: 600, letterSpacing: '.02em', color: C.t3, whiteSpace: 'nowrap' }
+const tdStyle = { padding: '10px 10px', color: C.t1, fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }
 const btnStyle = {
-  background: C.card, border: `1px solid ${C.border2}`, borderRadius: 8,
+  background: C.card, border: `1px solid ${C.border}`, borderRadius: 10,
   padding: '6px 11px', fontFamily: 'var(--font)', fontSize: 11.5, fontWeight: 700,
   color: C.t2, cursor: 'pointer',
 }

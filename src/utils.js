@@ -1,15 +1,40 @@
-// Site accent (acc/acl/acm) and primary ink (t1) are sampled directly from the Frido Navigator
-// logo mark (public/frido-navigator-icon-light-theme (2).png): acc/acl/acm from the gold ring
-// gradient, t1 from the charcoal "N" glyph — so the app's own UI reads as one brand with its
-// icon, rather than an invented accent that happens to sit near the logo's colors.
+// Theme tokens, mirrored from the CSS custom properties in index.css — the two must stay in
+// step, since chrome reads var(--x) while components read C.x.
+//
+// Cool-neutral ground with an indigo accent. Three things carry the look:
+//   1. #EEF0F5 page ground, so a white card reads as lifted rather than outlined
+//   2. shadow (sh1/sh2/sh3) separates cards; borders are used sparingly
+//   3. indigo accent, with greys cooled to match
+//
+// Semantic colors (green/red/amber/blue) and channel colors below are DATA ENCODINGS, not
+// decoration — a reader maps them to a meaning, so their hues are unchanged. Only their
+// tints moved, to sit correctly on the cooler ground.
 export const C = {
-  acc: '#D89A1A', acl: '#F7EBD2', acm: '#B87D14', acd: '#7A5410', acs: '#EFCE85',
-  bg: '#F2F1EF', card: '#fff', border: '#E8E6DC', border2: '#D6D0B0',
-  t1: '#3F3D33', t2: '#504F68', t3: '#94939F',
-  green: { bg: '#E6F4E0', tx: '#286010', bd: '#9DD470' },
-  red:   { bg: '#FDE8E8', tx: '#7A1A1A', bd: '#F09898' },
-  amber: { bg: '#FEF2DC', tx: '#7A4000', bd: '#F5C460' },
-  blue:  { bg: '#E1EFFD', tx: '#184078', bd: '#7AB4EE' },
+  acc: '#5B5BD6', acl: '#EEEEFB', acm: '#4A4AC4', acd: '#3A3A9E', acs: '#C7C7F2',
+  // One step down from acl. Table headers and total rows sit on this so they read as
+  // chrome against the near-white body, without going dark enough to need light text.
+  ach: '#E0E0F7',
+  bg: '#EEF0F5', card: '#fff', hov: '#F3F4F9', border: '#E8EAF0', border2: '#D3D7E2',
+  t1: '#1A1C23', t2: '#4A4E5C', t3: '#767B8A',
+  // Elevation, matching --sh1/2/3. Use these instead of a border to separate a card.
+  sh1: '0 1px 2px rgba(26,28,35,.04),0 1px 3px rgba(26,28,35,.05)',
+  sh2: '0 2px 4px rgba(26,28,35,.04),0 4px 12px rgba(26,28,35,.06)',
+  sh3: '0 4px 8px rgba(26,28,35,.05),0 12px 28px rgba(26,28,35,.08)',
+  r: { sm: 8, md: 12, lg: 16, xl: 20 },
+  // Display face for KPI values and titles; Inter still carries tables.
+  display: "'Plus Jakarta Sans','Inter',sans-serif",
+  // Chart series palette as a SET — violet/coral/blue/amber/teal, cool-leaning for the
+  // new ground. Separate from `ch` below: those are per-marketplace brand colours a
+  // reader maps to a specific channel, so they stay fixed.
+  series: ['#5B5BD6', '#F2724F', '#3D9BE9', '#F0B429', '#2BB3A3', '#B06AD9', '#5C6B84'],
+  // Sequential indigo ramp for parts-of-a-whole (donuts, stacked shares) where the slices are
+  // ordered by size and the eye should read rank, not category. Steps are spaced on lightness
+  // so neighbouring slices stay distinguishable in greyscale and for CVD viewers.
+  ramp: ['#3A3A9E', '#4A4AC4', '#5B5BD6', '#8484E3', '#AEAEEF', '#D3D3F7'],
+  green: { bg: '#E8F6E9', tx: '#1B7F3B', bd: '#8FD69C' },
+  red:   { bg: '#FDEAEA', tx: '#B4232A', bd: '#F2A0A0' },
+  amber: { bg: '#FEF4E2', tx: '#96590A', bd: '#F5C978' },
+  blue:  { bg: '#E8F0FE', tx: '#1A4FA0', bd: '#8AB8F0' },
   ch: {
     Shopify: '#FFD600', 'Shopify International': '#B8A000', Amazon: '#E8930A', Flipkart: '#2E74CC',
     Blinkit: '#0D9E68', CRED: '#CC4078', Instamart: '#4AB89A',

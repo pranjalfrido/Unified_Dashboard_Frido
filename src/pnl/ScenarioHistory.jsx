@@ -63,9 +63,9 @@ export default function ScenarioHistory({ storageKey, columns, currentSnapshot, 
           <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 560 }}>
             <thead>
               <tr>
-                <th style={{ textAlign: 'left', fontSize: 11, fontWeight: 700, color: C.t3, textTransform: 'uppercase', letterSpacing: 0.3, padding: '0 10px 8px 0', borderBottom: `1px solid ${C.border2}` }}>Scenario</th>
+                <th style={{ textAlign: 'left', fontSize: 12, fontWeight: 600, color: C.t3, letterSpacing: 0.2, padding: '0 10px 8px 0', borderBottom: `1px solid ${C.border2}` }}>Scenario</th>
                 {columns.map(col => (
-                  <th key={col.key} style={{ textAlign: 'right', fontSize: 11, fontWeight: 700, color: C.t3, textTransform: 'uppercase', letterSpacing: 0.3, padding: '0 10px 8px', borderBottom: `1px solid ${C.border2}`, whiteSpace: 'nowrap' }}>{col.label}</th>
+                  <th key={col.key} style={{ textAlign: 'right', fontSize: 12, fontWeight: 600, color: C.t3, letterSpacing: 0.2, padding: '0 10px 8px', borderBottom: `1px solid ${C.border2}`, whiteSpace: 'nowrap' }}>{col.label}</th>
                 ))}
                 <th style={{ width: 32, borderBottom: `1px solid ${C.border2}` }} />
               </tr>

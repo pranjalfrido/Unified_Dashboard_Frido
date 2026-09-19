@@ -345,7 +345,7 @@ export default function BreakevenRoasCalculator({ productGroups = [] }) {
                 <div style={{ display: 'flex', gap: 4, marginTop: 4 }}>
                   {GST_PRESETS.map((g, i) => (
                     <div key={g} style={{ display: 'flex', alignItems: 'center' }}>
-                      {i > 0 && <div style={{ width: 1, height: 14, background: '#D6D0B0', margin: '0 4px' }} />}
+                      {i > 0 && <div style={{ width: 1, height: 14, background: C.border2, margin: '0 4px' }} />}
                       <button onClick={() => setGstPct(g)}
                         style={{
                           fontSize: 12, fontWeight: gstPct === g ? 700 : 500, padding: '5px 12px', borderRadius: 7, border: 'none', outline: 'none',
@@ -389,7 +389,7 @@ export default function BreakevenRoasCalculator({ productGroups = [] }) {
                   <WaterfallBar label="Gross Selling Price (Inc. GST)" value={waterfall.grossIncGst} scaleMax={waterfallScaleMax} tone="total" color={C.acc} />
                   <WaterfallBar label="Net Revenue (Ex. GST)" value={waterfall.netRev} scaleMax={waterfallScaleMax} tone="total" color={C.acm} />
                   <WaterfallBar label="Gross Margin (GM)" value={waterfall.gm} scaleMax={waterfallScaleMax} tone="total" color={waterfall.gm >= 0 ? C.acd : undefined} />
-                  <WaterfallBar label="Contribution Margin 1 (CM1)" value={waterfall.cm1} scaleMax={waterfallScaleMax} tone="total" color={waterfall.cm1 >= 0 ? '#4A360A' : undefined} />
+                  <WaterfallBar label="Contribution Margin 1 (CM1)" value={waterfall.cm1} scaleMax={waterfallScaleMax} tone="total" color={waterfall.cm1 >= 0 ? C.t1 : undefined} />
                 </div>
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10, paddingTop: 14, borderTop: `1px solid ${C.border}` }}>
                   <KpiTile label="COGS %" value={waterfall.netRev > 0 ? `${(waterfall.cogs / waterfall.netRev * 100).toFixed(1)}%` : '0.0%'} amount={fmt(waterfall.cogs)} />

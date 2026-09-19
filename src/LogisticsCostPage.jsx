@@ -34,15 +34,15 @@ const ZONES = ['A', 'B', 'C', 'D', 'E']
 // blue ramp (light→dark) rather than categorical hues: colouring an ordered scale
 // with unrelated hues throws away the ordering the reader needs. Validated with
 // --ordinal: monotone lightness, all adjacent ΔL ≥ 0.06, light end clears the surface.
-const ORDINAL_BLUE = ['#F0D89A', '#E8C46A', '#D89A1A', '#B87D14', '#7A5410']
+const ORDINAL_BLUE = ['#D3D3F7', '#AEAEEF', '#8484E3', '#5B5BD6', '#3A3A9E']
 
-// Shipment mode — golden theme palette
-const SERIES = { blue: '#D89A1A', orange: '#B87D14', aqua: '#8C7B5E', yellow: '#EFCE85' }
-// Mode colors: Forward=golden, Reverse=dark amber, RTO=light golden
-const MODE_COLOR = { Forward: '#D89A1A', Reverse: '#B87D14', RTO: '#8C7B5E' }
+// Shipment mode — categorical, drawn from the theme's series palette.
+const SERIES = { blue: '#5B5BD6', orange: '#F2724F', aqua: '#2BB3A3', yellow: '#F0B429' }
+// Forward / Reverse / RTO are distinct states, not a scale, so they take distinct hues.
+const MODE_COLOR = { Forward: '#5B5BD6', Reverse: '#F2724F', RTO: '#2BB3A3' }
 
-// Courier trend lines — warm earthy palette replacing the blue/green categorical set
-const DRIFT_COLORS = ['#D89A1A', '#B87D14', '#8C7B5E', '#EFCE85', '#C4A882', '#7A5410']
+// Courier trend lines — one hue per courier, so a categorical set rather than a ramp.
+const DRIFT_COLORS = ['#5B5BD6', '#F2724F', '#3D9BE9', '#F0B429', '#2BB3A3', '#B06AD9']
 
 // Chart chrome — recessive hairlines, muted axis ink.
 const VIZ = {
@@ -330,7 +330,7 @@ function Tile({ label, value, sub, badge, accent }) {
 function Hero({ label, value, sub, deltas, children, sparkMin }) {
   return (
     <div className="kpi-card" style={{ display: 'flex', flexDirection: 'column', gap: 5, padding: '12px 20px', background: `linear-gradient(135deg, ${C.acl}66 0%, ${C.card} 60%)` }}>
-      <div className="kpi-label" style={{ fontSize: 11 }}>{label}</div>
+      <div className="kpi-label" style={{ fontSize: 13 }}>{label}</div>
       {/* Value left, change badges pinned RIGHT — same arrangement as the Tile badges, so
           the eye finds every MoM figure in the same place down the row. space-between rather
           than a gap, so the badge tracks the card edge instead of the value's width. */}
@@ -888,7 +888,7 @@ function SearchSelect({ label, options, value, onChange, multi, selected }) {
                 style={{ width: '100%', fontSize: 11.5, padding: '4px 8px', border: `1px solid ${C.border2}`, borderRadius: 6, outline: 'none', fontFamily: 'var(--font)', background: C.bg, boxSizing: 'border-box' }} />
             </div>
           )}
-          <div style={{ overflowY: 'auto', flex: 1 }}>
+          <div style={{ overflowY: 'auto', paddingRight: 10, flex: 1 }}>
             <div onClick={() => { onChange(null); if (!multi) setOpen(false); setSearch('') }}
               style={{ padding: '8px 12px', fontSize: 11.5, cursor: 'pointer', color: C.t3, borderBottom: `1px solid ${C.border}` }}>
               All {label}
@@ -2769,8 +2769,8 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
                   radius={[4, 4, 0, 0]} maxBarSize={56} />
                 <Line type="monotone" dataKey="b2c" name="B2C courier" stroke={C.acm}
                   strokeWidth={2} dot={{ r: 3.5, fill: C.acm }} />
-                <Line type="monotone" dataKey="b2b" name="FTL/PTL freight" stroke="#8C7B5E"
-                  strokeWidth={2} dot={{ r: 3.5, fill: '#8C7B5E' }} />
+                <Line type="monotone" dataKey="b2b" name="FTL/PTL freight" stroke="#2BB3A3"
+                  strokeWidth={2} dot={{ r: 3.5, fill: '#2BB3A3' }} />
               </ComposedChart>
             </ResponsiveContainer>
           </div>
@@ -3321,7 +3321,7 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
             }).join(' ')
             const last2 = pts.slice(-2)
             const isUp = last2.length === 2 ? last2[1] >= last2[0] : null
-            const lineColor = isUp === null ? '#D89A1A' : m.invertColor ? (isUp ? '#E53935' : '#D89A1A') : (isUp ? '#D89A1A' : '#E53935')
+            const lineColor = isUp === null ? '#5B5BD6' : m.invertColor ? (isUp ? '#E53935' : '#5B5BD6') : (isUp ? '#5B5BD6' : '#E53935')
             return (
               <div key={m.label} style={{ background: '#fff', border: `1px solid ${C.border}`, borderRadius: 12, padding: '0 14px', display: 'flex', alignItems: 'center', height: 45, gap: 0 }}>
                 <div style={{ flex: 1, fontSize: 13, fontWeight: 700, color: C.t2, letterSpacing: '.03em', textTransform: 'uppercase' }}>{m.label}</div>
@@ -3459,7 +3459,7 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
                       <div style={{ fontSize: 11.5, color: C.acm, marginTop: 5, fontWeight: 600 }}>
                         ₹{r.avgCost.toFixed(2)} / shipment
                       </div>
-                      <div style={{ fontSize: 11.5, color: '#8C7B5E', fontWeight: 600 }}>
+                      <div style={{ fontSize: 11.5, color: '#2BB3A3', fontWeight: 600 }}>
                         ₹{r.cpk.toFixed(2)} / kg
                       </div>
                     </div>
@@ -3473,9 +3473,9 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
                 dot={{ r: 3.5, fill: C.acm, stroke: VIZ.surface, strokeWidth: 2 }}
                 activeDot={{ r: 6, fill: C.acm, stroke: VIZ.surface, strokeWidth: 2 }} />
               <Line yAxisId="unit" type="monotone" dataKey="cpk" name="Cost per kg"
-                stroke="#8C7B5E" strokeWidth={2.5}
-                dot={{ r: 3.5, fill: '#8C7B5E', stroke: VIZ.surface, strokeWidth: 2 }}
-                activeDot={{ r: 6, fill: '#8C7B5E', stroke: VIZ.surface, strokeWidth: 2 }} />
+                stroke="#2BB3A3" strokeWidth={2.5}
+                dot={{ r: 3.5, fill: '#2BB3A3', stroke: VIZ.surface, strokeWidth: 2 }}
+                activeDot={{ r: 6, fill: '#2BB3A3', stroke: VIZ.surface, strokeWidth: 2 }} />
             </ComposedChart>
           </ResponsiveContainer>
         </div>
@@ -3487,27 +3487,27 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
               <table style={{ borderCollapse: 'collapse', tableLayout: 'fixed', width: 'max-content', minWidth: '100%', fontSize: 11 }}>
                 <thead>
                   <tr style={{ borderBottom: `1px solid ${C.border}` }}>
-                    <th style={{ position: 'sticky', left: 0, background: C.card, zIndex: 2, padding: '6px 8px', textAlign: 'left', fontWeight: 700, color: C.t2, whiteSpace: 'nowrap', fontSize: 10, minWidth: 72 }}>PERIOD</th>
-                    <th style={{ padding: '6px 8px', textAlign: 'center', fontWeight: 700, color: C.t2, whiteSpace: 'nowrap', fontSize: 10, minWidth: 88 }}>FREIGHT COST</th>
-                    <th style={{ padding: '6px 8px', textAlign: 'center', fontWeight: 700, color: C.t2, whiteSpace: 'nowrap', fontSize: 10, minWidth: 88 }}>SHIPMENTS</th>
-                    <th style={{ padding: '6px 8px', textAlign: 'center', fontWeight: 700, color: C.t2, whiteSpace: 'nowrap', fontSize: 10, minWidth: 88 }}>AVG COST/SHIP</th>
-                    <th style={{ padding: '6px 8px', textAlign: 'center', fontWeight: 700, color: C.t2, whiteSpace: 'nowrap', fontSize: 10, minWidth: 88 }}>COST/KG</th>
-                    <th style={{ padding: '6px 8px', textAlign: 'center', fontWeight: 700, color: C.t2, whiteSpace: 'nowrap', fontSize: 10, minWidth: 88 }}>BILLED WT</th>
-                    <th style={{ padding: '6px 8px', textAlign: 'center', fontWeight: 700, color: C.t2, whiteSpace: 'nowrap', fontSize: 10, minWidth: 88 }}>% GMV</th>
-                    <th style={{ padding: '6px 8px', textAlign: 'center', fontWeight: 700, color: C.t2, whiteSpace: 'nowrap', fontSize: 10, minWidth: 88 }}>CLAIMABLE</th>
+                    <th style={{ position: 'sticky', left: 0, background: C.card, zIndex: 2, padding: '10px 12px', textAlign: 'left', fontWeight: 700, color: C.t2, whiteSpace: 'nowrap', fontSize: 10, minWidth: 72 }}>PERIOD</th>
+                    <th style={{ padding: '10px 12px', textAlign: 'center', fontWeight: 700, color: C.t2, whiteSpace: 'nowrap', fontSize: 10, minWidth: 88 }}>FREIGHT COST</th>
+                    <th style={{ padding: '10px 12px', textAlign: 'center', fontWeight: 700, color: C.t2, whiteSpace: 'nowrap', fontSize: 10, minWidth: 88 }}>SHIPMENTS</th>
+                    <th style={{ padding: '10px 12px', textAlign: 'center', fontWeight: 700, color: C.t2, whiteSpace: 'nowrap', fontSize: 10, minWidth: 88 }}>AVG COST/SHIP</th>
+                    <th style={{ padding: '10px 12px', textAlign: 'center', fontWeight: 700, color: C.t2, whiteSpace: 'nowrap', fontSize: 10, minWidth: 88 }}>COST/KG</th>
+                    <th style={{ padding: '10px 12px', textAlign: 'center', fontWeight: 700, color: C.t2, whiteSpace: 'nowrap', fontSize: 10, minWidth: 88 }}>BILLED WT</th>
+                    <th style={{ padding: '10px 12px', textAlign: 'center', fontWeight: 700, color: C.t2, whiteSpace: 'nowrap', fontSize: 10, minWidth: 88 }}>% GMV</th>
+                    <th style={{ padding: '10px 12px', textAlign: 'center', fontWeight: 700, color: C.t2, whiteSpace: 'nowrap', fontSize: 10, minWidth: 88 }}>CLAIMABLE</th>
                   </tr>
                 </thead>
                 <tbody>
                   {trendWindow.map((r, i) => (
                     <tr key={r.month} style={{ borderBottom: `1px solid ${C.border}`, background: i % 2 === 0 ? C.card : C.bg }}>
-                      <td style={{ position: 'sticky', left: 0, background: i % 2 === 0 ? C.card : C.bg, zIndex: 1, padding: '6px 8px', fontWeight: 600, color: C.t1, whiteSpace: 'nowrap' }}>{r.month}</td>
-                      <td style={{ padding: '6px 8px', textAlign: 'center', color: C.t1 }}>{fmt(r.cost)}</td>
-                      <td style={{ padding: '6px 8px', textAlign: 'center', color: C.t1 }}>{fmtN(r.shipments)}</td>
-                      <td style={{ padding: '6px 8px', textAlign: 'center', color: C.t1 }}>{'₹' + r.avgCost.toFixed(2)}</td>
-                      <td style={{ padding: '6px 8px', textAlign: 'center', color: C.t1 }}>{'₹' + r.cpk.toFixed(2)}</td>
-                      <td style={{ padding: '6px 8px', textAlign: 'center', color: C.t1 }}>{fmtKg(r.wt)}</td>
-                      <td style={{ padding: '6px 8px', textAlign: 'center', color: C.t1 }}>{r.pctGmv != null ? r.pctGmv.toFixed(2) + '%' : '—'}</td>
-                      <td style={{ padding: '6px 8px', textAlign: 'center' }}>{r.claim > 0 ? <span style={{ color: C.red.tx, fontWeight: 700 }}>{fmt(r.claim)}</span> : <span style={{ color: C.t3 }}>—</span>}</td>
+                      <td style={{ position: 'sticky', left: 0, background: i % 2 === 0 ? C.card : C.bg, zIndex: 1, padding: '8px 12px', fontWeight: 600, color: C.t1, whiteSpace: 'nowrap' }}>{r.month}</td>
+                      <td style={{ padding: '8px 12px', textAlign: 'center', color: C.t1 }}>{fmt(r.cost)}</td>
+                      <td style={{ padding: '8px 12px', textAlign: 'center', color: C.t1 }}>{fmtN(r.shipments)}</td>
+                      <td style={{ padding: '8px 12px', textAlign: 'center', color: C.t1 }}>{'₹' + r.avgCost.toFixed(2)}</td>
+                      <td style={{ padding: '8px 12px', textAlign: 'center', color: C.t1 }}>{'₹' + r.cpk.toFixed(2)}</td>
+                      <td style={{ padding: '8px 12px', textAlign: 'center', color: C.t1 }}>{fmtKg(r.wt)}</td>
+                      <td style={{ padding: '8px 12px', textAlign: 'center', color: C.t1 }}>{r.pctGmv != null ? r.pctGmv.toFixed(2) + '%' : '—'}</td>
+                      <td style={{ padding: '8px 12px', textAlign: 'center' }}>{r.claim > 0 ? <span style={{ color: C.red.tx, fontWeight: 700 }}>{fmt(r.claim)}</span> : <span style={{ color: C.t3 }}>—</span>}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -3548,27 +3548,27 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
             <table style={{ borderCollapse: 'collapse', tableLayout: 'fixed', width: 'max-content', minWidth: '100%', fontSize: 11.5 }}>
               <thead>
                 <tr style={{ borderBottom: `1px solid ${C.border2}` }}>
-                  <th style={{ position: 'sticky', left: 0, background: C.card, zIndex: 2, padding: '5px 8px', textAlign: 'left', fontWeight: 800, color: C.t1, width: 90, whiteSpace: 'nowrap', borderRight: `1px solid ${C.border}` }}>Courier</th>
-                  <th style={{ padding: '5px 4px', textAlign: 'center', fontWeight: 800, color: C.t1, width: 62, whiteSpace: 'nowrap' }}>Shipments</th>
-                  <th style={{ padding: '5px 4px', textAlign: 'center', fontWeight: 800, color: C.t1, width: 62, whiteSpace: 'nowrap' }}>Cost</th>
-                  <th style={{ padding: '5px 4px', textAlign: 'center', fontWeight: 800, color: C.t1, width: 62, whiteSpace: 'nowrap' }}>Avg/Ship</th>
-                  <th style={{ padding: '5px 4px', textAlign: 'center', fontWeight: 800, color: C.t1, width: 58, whiteSpace: 'nowrap' }}>Cost/kg</th>
-                  <th style={{ padding: '5px 4px', textAlign: 'center', fontWeight: 800, color: C.t1, width: 68, whiteSpace: 'nowrap' }}>% Wrong Wt</th>
-                  <th style={{ padding: '5px 4px', textAlign: 'center', fontWeight: 800, color: C.t1, width: 65, whiteSpace: 'nowrap' }}>Claimable</th>
+                  <th style={{ position: 'sticky', left: 0, background: C.card, zIndex: 2, padding: '10px 12px', textAlign: 'left', fontWeight: 800, color: C.t1, width: 90, whiteSpace: 'nowrap', borderRight: `1px solid ${C.border}` }}>Courier</th>
+                  <th style={{ padding: '10px 12px', textAlign: 'center', fontWeight: 800, color: C.t1, width: 62, whiteSpace: 'nowrap' }}>Shipments</th>
+                  <th style={{ padding: '10px 12px', textAlign: 'center', fontWeight: 800, color: C.t1, width: 62, whiteSpace: 'nowrap' }}>Cost</th>
+                  <th style={{ padding: '10px 12px', textAlign: 'center', fontWeight: 800, color: C.t1, width: 62, whiteSpace: 'nowrap' }}>Avg/Ship</th>
+                  <th style={{ padding: '10px 12px', textAlign: 'center', fontWeight: 800, color: C.t1, width: 58, whiteSpace: 'nowrap' }}>Cost/kg</th>
+                  <th style={{ padding: '10px 12px', textAlign: 'center', fontWeight: 800, color: C.t1, width: 68, whiteSpace: 'nowrap' }}>% Wrong Wt</th>
+                  <th style={{ padding: '10px 12px', textAlign: 'center', fontWeight: 800, color: C.t1, width: 65, whiteSpace: 'nowrap' }}>Claimable</th>
                 </tr>
               </thead>
               <tbody>
                 {courierRows.map((r, i) => (
                   <tr key={r.courier} style={{ borderBottom: i < courierRows.length - 1 ? `1px solid ${C.border2}` : 'none', background: i % 2 === 0 ? 'transparent' : 'rgba(0,0,0,0.02)' }}>
-                    <td style={{ position: 'sticky', left: 0, background: C.card, zIndex: 1, padding: '5px 8px', fontWeight: 700, color: C.t1, whiteSpace: 'nowrap', borderRight: `1px solid ${C.border}` }}><CourierCell name={r.courier} /></td>
-                    <td style={{ padding: '5px 4px', textAlign: 'center', color: C.t1 }}>{fmtBig(r.shipments)}</td>
-                    <td style={{ padding: '5px 4px', textAlign: 'center', color: C.t1 }}>{fmt(r.cost)}</td>
-                    <td style={{ padding: '5px 4px', textAlign: 'center', color: C.t1 }}>₹{r.avgCost.toFixed(2)}</td>
-                    <td style={{ padding: '5px 4px', textAlign: 'center', color: C.t1 }}>{r.cpk != null ? '₹' + r.cpk.toFixed(2) : '—'}</td>
-                    <td style={{ padding: '5px 4px', textAlign: 'center' }}>
+                    <td style={{ position: 'sticky', left: 0, background: C.card, zIndex: 1, padding: '8px 12px', fontWeight: 700, color: C.t1, whiteSpace: 'nowrap', borderRight: `1px solid ${C.border}` }}><CourierCell name={r.courier} /></td>
+                    <td style={{ padding: '8px 12px', textAlign: 'center', color: C.t1 }}>{fmtBig(r.shipments)}</td>
+                    <td style={{ padding: '8px 12px', textAlign: 'center', color: C.t1 }}>{fmt(r.cost)}</td>
+                    <td style={{ padding: '8px 12px', textAlign: 'center', color: C.t1 }}>₹{r.avgCost.toFixed(2)}</td>
+                    <td style={{ padding: '8px 12px', textAlign: 'center', color: C.t1 }}>{r.cpk != null ? '₹' + r.cpk.toFixed(2) : '—'}</td>
+                    <td style={{ padding: '8px 12px', textAlign: 'center' }}>
                       <span style={{ color: r.overPct > 40 ? C.red.tx : C.t1, fontWeight: r.overPct > 40 ? 700 : undefined }}>{r.overPct.toFixed(1)}%</span>
                     </td>
-                    <td style={{ padding: '5px 4px', textAlign: 'center' }}>
+                    <td style={{ padding: '8px 12px', textAlign: 'center' }}>
                       {r.claimRs > 0 ? <span style={{ color: C.red.tx, fontWeight: 700 }}>{fmt(r.claimRs)}</span> : <span style={{ color: C.t3 }}>—</span>}
                     </td>
                   </tr>
@@ -3622,18 +3622,18 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
           }>
           {isMobile ? (
             <>
-              <div style={{ overflowX: 'auto', overflowY: 'auto', maxHeight: 320, marginLeft: -8, marginRight: -8, WebkitOverflowScrolling: 'touch' }}>
+              <div style={{ overflowX: 'auto', overflowY: 'auto', paddingRight: 10, maxHeight: 320, marginLeft: -8, marginRight: -8, WebkitOverflowScrolling: 'touch' }}>
                 <table style={{ borderCollapse: 'collapse', tableLayout: 'fixed', width: 'max-content', minWidth: '100%', fontSize: 11.5 }}>
                   <thead>
                     <tr style={{ borderBottom: `1px solid ${C.border2}` }}>
-                      <th style={{ position: 'sticky', top: 0, left: 0, background: C.card, zIndex: 3, padding: '5px 8px', textAlign: 'left', fontWeight: 800, color: C.t1, width: 60, whiteSpace: 'nowrap', borderRight: `1px solid ${C.border}`, borderBottom: `1px solid ${C.border2}` }}>Wt Slab</th>
-                      <th style={{ position: 'sticky', top: 0, background: C.card, padding: '5px 4px', textAlign: 'center', fontWeight: 800, color: C.t1, width: 72, whiteSpace: 'nowrap', borderBottom: `1px solid ${C.border2}` }}>Shipments</th>
-                      <th style={{ position: 'sticky', top: 0, background: C.card, padding: '5px 4px', textAlign: 'center', fontWeight: 800, color: C.t1, width: 72, whiteSpace: 'nowrap', borderBottom: `1px solid ${C.border2}` }}>Cost</th>
-                      <th style={{ position: 'sticky', top: 0, background: C.card, padding: '5px 4px', textAlign: 'center', fontWeight: 800, color: C.t1, width: 72, whiteSpace: 'nowrap', borderBottom: `1px solid ${C.border2}` }}>Avg/Ship</th>
-                      <th style={{ position: 'sticky', top: 0, background: C.card, padding: '5px 4px', textAlign: 'center', fontWeight: 800, color: C.t1, width: 66, whiteSpace: 'nowrap', borderBottom: `1px solid ${C.border2}` }}>Cost/kg</th>
-                      <th style={{ position: 'sticky', top: 0, background: C.card, padding: '5px 4px', textAlign: 'center', fontWeight: 800, color: C.t1, width: 66, whiteSpace: 'nowrap', borderBottom: `1px solid ${C.border2}` }}>Forward</th>
-                      <th style={{ position: 'sticky', top: 0, background: C.card, padding: '5px 4px', textAlign: 'center', fontWeight: 800, color: C.t1, width: 66, whiteSpace: 'nowrap', borderBottom: `1px solid ${C.border2}` }}>Reverse</th>
-                      <th style={{ position: 'sticky', top: 0, background: C.card, padding: '5px 4px', textAlign: 'center', fontWeight: 800, color: C.t1, width: 58, whiteSpace: 'nowrap', borderBottom: `1px solid ${C.border2}` }}>RTO</th>
+                      <th style={{ position: 'sticky', top: 0, left: 0, background: C.card, zIndex: 3, padding: '10px 12px', textAlign: 'left', fontWeight: 800, color: C.t1, width: 60, whiteSpace: 'nowrap', borderRight: `1px solid ${C.border}`, borderBottom: `1px solid ${C.border2}` }}>Wt Slab</th>
+                      <th style={{ position: 'sticky', top: 0, background: C.card, padding: '10px 12px', textAlign: 'center', fontWeight: 800, color: C.t1, width: 72, whiteSpace: 'nowrap', borderBottom: `1px solid ${C.border2}` }}>Shipments</th>
+                      <th style={{ position: 'sticky', top: 0, background: C.card, padding: '10px 12px', textAlign: 'center', fontWeight: 800, color: C.t1, width: 72, whiteSpace: 'nowrap', borderBottom: `1px solid ${C.border2}` }}>Cost</th>
+                      <th style={{ position: 'sticky', top: 0, background: C.card, padding: '10px 12px', textAlign: 'center', fontWeight: 800, color: C.t1, width: 72, whiteSpace: 'nowrap', borderBottom: `1px solid ${C.border2}` }}>Avg/Ship</th>
+                      <th style={{ position: 'sticky', top: 0, background: C.card, padding: '10px 12px', textAlign: 'center', fontWeight: 800, color: C.t1, width: 66, whiteSpace: 'nowrap', borderBottom: `1px solid ${C.border2}` }}>Cost/kg</th>
+                      <th style={{ position: 'sticky', top: 0, background: C.card, padding: '10px 12px', textAlign: 'center', fontWeight: 800, color: C.t1, width: 66, whiteSpace: 'nowrap', borderBottom: `1px solid ${C.border2}` }}>Forward</th>
+                      <th style={{ position: 'sticky', top: 0, background: C.card, padding: '10px 12px', textAlign: 'center', fontWeight: 800, color: C.t1, width: 66, whiteSpace: 'nowrap', borderBottom: `1px solid ${C.border2}` }}>Reverse</th>
+                      <th style={{ position: 'sticky', top: 0, background: C.card, padding: '10px 12px', textAlign: 'center', fontWeight: 800, color: C.t1, width: 58, whiteSpace: 'nowrap', borderBottom: `1px solid ${C.border2}` }}>RTO</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -3643,14 +3643,14 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
                       return q === '' || label === q || (label.startsWith(q) && !q.includes('kg'))
                     }).map((r, i, arr) => (
                       <tr key={r.slab} style={{ borderBottom: i < arr.length - 1 ? `1px solid ${C.border2}` : 'none', background: i % 2 === 0 ? 'transparent' : 'rgba(0,0,0,0.02)' }}>
-                        <td style={{ position: 'sticky', left: 0, background: C.card, zIndex: 1, padding: '5px 8px', fontWeight: 700, color: C.t1, whiteSpace: 'nowrap', borderRight: `1px solid ${C.border}` }}>{r.slab} kg</td>
-                        <td style={{ padding: '5px 4px', textAlign: 'center', color: C.t1 }}>{fmtBig(r.n)}</td>
-                        <td style={{ padding: '5px 4px', textAlign: 'center', color: C.t1 }}>{fmt(r.cost)}</td>
-                        <td style={{ padding: '5px 4px', textAlign: 'center', color: C.t1 }}>₹{r.avgCost.toFixed(0)}</td>
-                        <td style={{ padding: '5px 4px', textAlign: 'center', color: C.t1 }}>₹{r.cpk.toFixed(1)}</td>
-                        <td style={{ padding: '5px 4px', textAlign: 'center', color: C.t1 }}>{r.fwdAvg ? '₹' + r.fwdAvg.toFixed(0) : '—'}</td>
-                        <td style={{ padding: '5px 4px', textAlign: 'center', color: C.t1 }}>{r.revAvg ? '₹' + r.revAvg.toFixed(0) : '—'}</td>
-                        <td style={{ padding: '5px 4px', textAlign: 'center', color: C.t1 }}>{r.rtoAvg ? '₹' + r.rtoAvg.toFixed(0) : '—'}</td>
+                        <td style={{ position: 'sticky', left: 0, background: C.card, zIndex: 1, padding: '8px 12px', fontWeight: 700, color: C.t1, whiteSpace: 'nowrap', borderRight: `1px solid ${C.border}` }}>{r.slab} kg</td>
+                        <td style={{ padding: '8px 12px', textAlign: 'center', color: C.t1 }}>{fmtBig(r.n)}</td>
+                        <td style={{ padding: '8px 12px', textAlign: 'center', color: C.t1 }}>{fmt(r.cost)}</td>
+                        <td style={{ padding: '8px 12px', textAlign: 'center', color: C.t1 }}>₹{r.avgCost.toFixed(0)}</td>
+                        <td style={{ padding: '8px 12px', textAlign: 'center', color: C.t1 }}>₹{r.cpk.toFixed(1)}</td>
+                        <td style={{ padding: '8px 12px', textAlign: 'center', color: C.t1 }}>{r.fwdAvg ? '₹' + r.fwdAvg.toFixed(0) : '—'}</td>
+                        <td style={{ padding: '8px 12px', textAlign: 'center', color: C.t1 }}>{r.revAvg ? '₹' + r.revAvg.toFixed(0) : '—'}</td>
+                        <td style={{ padding: '8px 12px', textAlign: 'center', color: C.t1 }}>{r.rtoAvg ? '₹' + r.rtoAvg.toFixed(0) : '—'}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -3745,21 +3745,21 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
               <table style={{ borderCollapse: 'collapse', tableLayout: 'fixed', fontSize: 11, width: '100%' }}>
                 <thead>
                   <tr style={{ borderBottom: `1px solid ${C.border}` }}>
-                    <th style={{ position: 'sticky', left: 0, background: C.card, zIndex: 2, padding: '6px 6px', textAlign: 'left', fontWeight: 700, color: C.t2, whiteSpace: 'nowrap', fontSize: 10, minWidth: 58 }}>ZONE</th>
-                    <th style={{ padding: '6px 6px', textAlign: 'center', fontWeight: 700, color: C.t2, whiteSpace: 'nowrap', fontSize: 10, minWidth: 70 }}>SHIPMENTS</th>
-                    <th style={{ padding: '6px 6px', textAlign: 'center', fontWeight: 700, color: C.t2, whiteSpace: 'nowrap', fontSize: 10, minWidth: 70 }}>AVG COST/SHIP</th>
-                    <th style={{ padding: '6px 6px', textAlign: 'center', fontWeight: 700, color: C.t2, whiteSpace: 'nowrap', fontSize: 10, minWidth: 70 }}>COST/KG</th>
-                    <th style={{ padding: '6px 6px', textAlign: 'center', fontWeight: 700, color: C.t2, whiteSpace: 'nowrap', fontSize: 10, minWidth: 55 }}>SHARE</th>
+                    <th style={{ position: 'sticky', left: 0, background: C.card, zIndex: 2, padding: '10px 12px', textAlign: 'left', fontWeight: 700, color: C.t2, whiteSpace: 'nowrap', fontSize: 10, minWidth: 58 }}>ZONE</th>
+                    <th style={{ padding: '10px 12px', textAlign: 'center', fontWeight: 700, color: C.t2, whiteSpace: 'nowrap', fontSize: 10, minWidth: 70 }}>SHIPMENTS</th>
+                    <th style={{ padding: '10px 12px', textAlign: 'center', fontWeight: 700, color: C.t2, whiteSpace: 'nowrap', fontSize: 10, minWidth: 70 }}>AVG COST/SHIP</th>
+                    <th style={{ padding: '10px 12px', textAlign: 'center', fontWeight: 700, color: C.t2, whiteSpace: 'nowrap', fontSize: 10, minWidth: 70 }}>COST/KG</th>
+                    <th style={{ padding: '10px 12px', textAlign: 'center', fontWeight: 700, color: C.t2, whiteSpace: 'nowrap', fontSize: 10, minWidth: 55 }}>SHARE</th>
                   </tr>
                 </thead>
                 <tbody>
                   {zoneRowsShown.map((r, i) => (
                     <tr key={r.zone} style={{ borderBottom: `1px solid ${C.border}`, background: i % 2 === 0 ? C.card : C.bg }}>
-                      <td style={{ position: 'sticky', left: 0, background: i % 2 === 0 ? C.card : C.bg, zIndex: 1, padding: '6px 6px', fontWeight: 600, color: C.t1, whiteSpace: 'nowrap' }}>Zone {r.zone}</td>
-                      <td style={{ padding: '6px 6px', textAlign: 'center', color: C.t1 }}>{fmtBig(r.shipments)}</td>
-                      <td style={{ padding: '6px 6px', textAlign: 'center', color: C.t1 }}>{'₹' + r.avgCost.toFixed(2)}</td>
-                      <td style={{ padding: '6px 6px', textAlign: 'center', color: C.t1 }}>{r.cpk != null ? '₹' + r.cpk.toFixed(2) : '—'}</td>
-                      <td style={{ padding: '6px 6px', textAlign: 'center', color: C.t1 }}>{r.share.toFixed(1) + '%'}</td>
+                      <td style={{ position: 'sticky', left: 0, background: i % 2 === 0 ? C.card : C.bg, zIndex: 1, padding: '8px 12px', fontWeight: 600, color: C.t1, whiteSpace: 'nowrap' }}>Zone {r.zone}</td>
+                      <td style={{ padding: '8px 12px', textAlign: 'center', color: C.t1 }}>{fmtBig(r.shipments)}</td>
+                      <td style={{ padding: '8px 12px', textAlign: 'center', color: C.t1 }}>{'₹' + r.avgCost.toFixed(2)}</td>
+                      <td style={{ padding: '8px 12px', textAlign: 'center', color: C.t1 }}>{r.cpk != null ? '₹' + r.cpk.toFixed(2) : '—'}</td>
+                      <td style={{ padding: '8px 12px', textAlign: 'center', color: C.t1 }}>{r.share.toFixed(1) + '%'}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -3881,21 +3881,21 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
               <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed', fontSize: 11.5 }}>
                 <thead>
                   <tr style={{ borderBottom: `1px solid ${C.border2}` }}>
-                    <th style={{ position: 'sticky', left: 0, background: C.card, zIndex: 2, padding: '5px 8px', textAlign: 'left', fontWeight: 700, color: C.t2, minWidth: 80, whiteSpace: 'nowrap', borderRight: `1px solid ${C.border}` }}>Mode</th>
-                    <th style={{ padding: '5px 6px', textAlign: 'center', fontWeight: 700, color: C.t2, minWidth: 80, whiteSpace: 'nowrap' }}>Shipments</th>
-                    <th style={{ padding: '5px 6px', textAlign: 'center', fontWeight: 700, color: C.t2, minWidth: 80, whiteSpace: 'nowrap' }}>Cost</th>
-                    <th style={{ padding: '5px 6px', textAlign: 'center', fontWeight: 700, color: C.t2, minWidth: 90, whiteSpace: 'nowrap' }}>Avg/Ship</th>
-                    <th style={{ padding: '5px 6px', textAlign: 'center', fontWeight: 700, color: C.t2, minWidth: 60, whiteSpace: 'nowrap' }}>Share</th>
+                    <th style={{ position: 'sticky', left: 0, background: C.card, zIndex: 2, padding: '10px 12px', textAlign: 'left', fontWeight: 700, color: C.t2, minWidth: 80, whiteSpace: 'nowrap', borderRight: `1px solid ${C.border}` }}>Mode</th>
+                    <th style={{ padding: '10px 12px', textAlign: 'center', fontWeight: 700, color: C.t2, minWidth: 80, whiteSpace: 'nowrap' }}>Shipments</th>
+                    <th style={{ padding: '10px 12px', textAlign: 'center', fontWeight: 700, color: C.t2, minWidth: 80, whiteSpace: 'nowrap' }}>Cost</th>
+                    <th style={{ padding: '10px 12px', textAlign: 'center', fontWeight: 700, color: C.t2, minWidth: 90, whiteSpace: 'nowrap' }}>Avg/Ship</th>
+                    <th style={{ padding: '10px 12px', textAlign: 'center', fontWeight: 700, color: C.t2, minWidth: 60, whiteSpace: 'nowrap' }}>Share</th>
                   </tr>
                 </thead>
                 <tbody>
                   {modeRows.map((r, i) => (
                     <tr key={r.mode} style={{ borderBottom: i < modeRows.length - 1 ? `1px solid ${C.border2}` : 'none', background: i % 2 === 0 ? 'transparent' : 'rgba(0,0,0,0.02)' }}>
-                      <td style={{ position: 'sticky', left: 0, background: C.card, zIndex: 1, padding: '5px 8px', fontWeight: 600, color: C.t1, whiteSpace: 'nowrap', borderRight: `1px solid ${C.border}` }}>{r.mode}</td>
-                      <td style={{ padding: '5px 6px', textAlign: 'center', color: C.t1 }}>{fmtBig(r.shipments)}</td>
-                      <td style={{ padding: '5px 6px', textAlign: 'center', color: C.t1 }}>{fmt(r.cost)}</td>
-                      <td style={{ padding: '5px 6px', textAlign: 'center', color: C.t1 }}>₹{r.avgCost.toFixed(2)}</td>
-                      <td style={{ padding: '5px 6px', textAlign: 'center', color: C.t1 }}>{r.share.toFixed(1)}%</td>
+                      <td style={{ position: 'sticky', left: 0, background: C.card, zIndex: 1, padding: '8px 12px', fontWeight: 600, color: C.t1, whiteSpace: 'nowrap', borderRight: `1px solid ${C.border}` }}>{r.mode}</td>
+                      <td style={{ padding: '8px 12px', textAlign: 'center', color: C.t1 }}>{fmtBig(r.shipments)}</td>
+                      <td style={{ padding: '8px 12px', textAlign: 'center', color: C.t1 }}>{fmt(r.cost)}</td>
+                      <td style={{ padding: '8px 12px', textAlign: 'center', color: C.t1 }}>₹{r.avgCost.toFixed(2)}</td>
+                      <td style={{ padding: '8px 12px', textAlign: 'center', color: C.t1 }}>{r.share.toFixed(1)}%</td>
                     </tr>
                   ))}
                 </tbody>
@@ -3969,25 +3969,25 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
               <table style={{ borderCollapse: 'collapse', tableLayout: 'fixed', width: 'max-content', minWidth: '100%', fontSize: 11.5 }}>
                 <thead>
                   <tr style={{ borderBottom: `1px solid ${C.border2}` }}>
-                    <th style={{ position: 'sticky', left: 0, background: C.card, zIndex: 2, padding: '5px 8px', textAlign: 'left', fontWeight: 700, color: C.t2, width: 72, whiteSpace: 'nowrap', borderRight: `1px solid ${C.border}` }}>Slab</th>
-                    <th style={{ padding: '5px 6px', textAlign: 'center', fontWeight: 700, color: C.t2, width: 72, whiteSpace: 'nowrap' }}>Shipments</th>
-                    <th style={{ padding: '5px 6px', textAlign: 'center', fontWeight: 700, color: C.t2, width: 72, whiteSpace: 'nowrap' }}>Cost</th>
-                    <th style={{ padding: '5px 6px', textAlign: 'center', fontWeight: 700, color: C.t2, width: 58, whiteSpace: 'nowrap' }}>Share</th>
-                    <th style={{ padding: '5px 6px', textAlign: 'center', fontWeight: 700, color: C.t2, width: 80, whiteSpace: 'nowrap' }}>Avg/Ship</th>
-                    <th style={{ padding: '5px 6px', textAlign: 'center', fontWeight: 700, color: C.t2, width: 68, whiteSpace: 'nowrap' }}>Cost/kg</th>
-                    <th style={{ padding: '5px 6px', textAlign: 'center', fontWeight: 700, color: C.t2, width: 72, whiteSpace: 'nowrap' }}>Overbilled</th>
+                    <th style={{ position: 'sticky', left: 0, background: C.card, zIndex: 2, padding: '10px 12px', textAlign: 'left', fontWeight: 700, color: C.t2, width: 72, whiteSpace: 'nowrap', borderRight: `1px solid ${C.border}` }}>Slab</th>
+                    <th style={{ padding: '10px 12px', textAlign: 'center', fontWeight: 700, color: C.t2, width: 72, whiteSpace: 'nowrap' }}>Shipments</th>
+                    <th style={{ padding: '10px 12px', textAlign: 'center', fontWeight: 700, color: C.t2, width: 72, whiteSpace: 'nowrap' }}>Cost</th>
+                    <th style={{ padding: '10px 12px', textAlign: 'center', fontWeight: 700, color: C.t2, width: 58, whiteSpace: 'nowrap' }}>Share</th>
+                    <th style={{ padding: '10px 12px', textAlign: 'center', fontWeight: 700, color: C.t2, width: 80, whiteSpace: 'nowrap' }}>Avg/Ship</th>
+                    <th style={{ padding: '10px 12px', textAlign: 'center', fontWeight: 700, color: C.t2, width: 68, whiteSpace: 'nowrap' }}>Cost/kg</th>
+                    <th style={{ padding: '10px 12px', textAlign: 'center', fontWeight: 700, color: C.t2, width: 72, whiteSpace: 'nowrap' }}>Overbilled</th>
                   </tr>
                 </thead>
                 <tbody>
                   {bandRows.map((r, i) => (
                     <tr key={r.band} style={{ borderBottom: i < bandRows.length - 1 ? `1px solid ${C.border2}` : 'none', background: i % 2 === 0 ? 'transparent' : 'rgba(0,0,0,0.02)' }}>
-                      <td style={{ position: 'sticky', left: 0, background: C.card, zIndex: 1, padding: '5px 8px', fontWeight: 600, color: C.t1, whiteSpace: 'nowrap', borderRight: `1px solid ${C.border}` }}>{r.band}</td>
-                      <td style={{ padding: '5px 6px', textAlign: 'center', color: C.t1 }}>{fmtBig(r.shipments)}</td>
-                      <td style={{ padding: '5px 6px', textAlign: 'center', color: C.t1 }}>{fmt(r.cost)}</td>
-                      <td style={{ padding: '5px 6px', textAlign: 'center', color: C.t1 }}>{r.share.toFixed(1)}%</td>
-                      <td style={{ padding: '5px 6px', textAlign: 'center', color: C.t1 }}>₹{r.avgCost.toFixed(2)}</td>
-                      <td style={{ padding: '5px 6px', textAlign: 'center', color: C.t1 }}>{r.cpk != null ? '₹' + r.cpk.toFixed(2) : '—'}</td>
-                      <td style={{ padding: '5px 6px', textAlign: 'center', color: C.t1 }}>{r.overPct.toFixed(1)}%</td>
+                      <td style={{ position: 'sticky', left: 0, background: C.card, zIndex: 1, padding: '8px 12px', fontWeight: 600, color: C.t1, whiteSpace: 'nowrap', borderRight: `1px solid ${C.border}` }}>{r.band}</td>
+                      <td style={{ padding: '8px 12px', textAlign: 'center', color: C.t1 }}>{fmtBig(r.shipments)}</td>
+                      <td style={{ padding: '8px 12px', textAlign: 'center', color: C.t1 }}>{fmt(r.cost)}</td>
+                      <td style={{ padding: '8px 12px', textAlign: 'center', color: C.t1 }}>{r.share.toFixed(1)}%</td>
+                      <td style={{ padding: '8px 12px', textAlign: 'center', color: C.t1 }}>₹{r.avgCost.toFixed(2)}</td>
+                      <td style={{ padding: '8px 12px', textAlign: 'center', color: C.t1 }}>{r.cpk != null ? '₹' + r.cpk.toFixed(2) : '—'}</td>
+                      <td style={{ padding: '8px 12px', textAlign: 'center', color: C.t1 }}>{r.overPct.toFixed(1)}%</td>
                     </tr>
                   ))}
                 </tbody>
@@ -4045,26 +4045,26 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
               <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed', fontSize: 11 }}>
                 <thead>
                   <tr style={{ borderBottom: `1px solid ${C.border2}` }}>
-                    <th style={{ position: 'sticky', left: 0, background: C.card, zIndex: 2, padding: '5px 6px', textAlign: 'left', fontWeight: 800, color: C.t1, width: '28%', whiteSpace: 'nowrap' }}>Courier</th>
-                    <th style={{ padding: '5px 2px', textAlign: 'center', fontWeight: 800, color: C.t1, width: '18%', whiteSpace: 'nowrap' }}>First</th>
-                    <th style={{ padding: '5px 2px', textAlign: 'center', fontWeight: 800, color: C.t1, width: '18%', whiteSpace: 'nowrap' }}>Latest</th>
-                    <th style={{ padding: '5px 2px', textAlign: 'center', fontWeight: 800, color: C.t1, width: '18%', whiteSpace: 'nowrap' }}>Drift</th>
-                    <th style={{ padding: '5px 2px', textAlign: 'center', fontWeight: 800, color: C.t1, width: '18%', whiteSpace: 'nowrap' }}>Months</th>
+                    <th style={{ position: 'sticky', left: 0, background: C.card, zIndex: 2, padding: '10px 12px', textAlign: 'left', fontWeight: 800, color: C.t1, width: '28%', whiteSpace: 'nowrap' }}>Courier</th>
+                    <th style={{ padding: '10px 12px', textAlign: 'center', fontWeight: 800, color: C.t1, width: '18%', whiteSpace: 'nowrap' }}>First</th>
+                    <th style={{ padding: '10px 12px', textAlign: 'center', fontWeight: 800, color: C.t1, width: '18%', whiteSpace: 'nowrap' }}>Latest</th>
+                    <th style={{ padding: '10px 12px', textAlign: 'center', fontWeight: 800, color: C.t1, width: '18%', whiteSpace: 'nowrap' }}>Drift</th>
+                    <th style={{ padding: '10px 12px', textAlign: 'center', fontWeight: 800, color: C.t1, width: '18%', whiteSpace: 'nowrap' }}>Months</th>
                   </tr>
                 </thead>
                 <tbody>
                   {driftRows.map((r, i) => (
                     <tr key={r.courier} style={{ borderBottom: i < driftRows.length - 1 ? `1px solid ${C.border2}` : 'none', background: i % 2 === 0 ? 'transparent' : 'rgba(0,0,0,0.02)' }}>
-                      <td style={{ position: 'sticky', left: 0, background: i % 2 === 0 ? C.card : 'rgba(0,0,0,0.02)', zIndex: 1, padding: '5px 6px', fontWeight: 700, color: C.t1, whiteSpace: 'nowrap' }}><CourierCell name={r.courier} /></td>
-                      <td style={{ padding: '5px 2px', textAlign: 'center', color: C.t1 }}>₹{r.first.toFixed(2)}</td>
-                      <td style={{ padding: '5px 2px', textAlign: 'center', color: C.t1 }}>₹{r.last.toFixed(2)}</td>
-                      <td style={{ padding: '5px 2px', textAlign: 'center' }}>
+                      <td style={{ position: 'sticky', left: 0, background: i % 2 === 0 ? C.card : 'rgba(0,0,0,0.02)', zIndex: 1, padding: '8px 12px', fontWeight: 700, color: C.t1, whiteSpace: 'nowrap' }}><CourierCell name={r.courier} /></td>
+                      <td style={{ padding: '8px 12px', textAlign: 'center', color: C.t1 }}>₹{r.first.toFixed(2)}</td>
+                      <td style={{ padding: '8px 12px', textAlign: 'center', color: C.t1 }}>₹{r.last.toFixed(2)}</td>
+                      <td style={{ padding: '8px 12px', textAlign: 'center' }}>
                         {r.months < 2 ? <span style={{ color: C.t3 }}>—</span>
                           : <span style={{ color: r.drift > 5 ? C.red.tx : r.drift < -5 ? C.green.tx : C.t1, fontWeight: Math.abs(r.drift) > 5 ? 700 : undefined }}>
                               {(r.drift >= 0 ? '+' : '') + r.drift.toFixed(1) + '%'}
                             </span>}
                       </td>
-                      <td style={{ padding: '5px 2px', textAlign: 'center', color: C.t1 }}>{fmtN(r.months)}</td>
+                      <td style={{ padding: '8px 12px', textAlign: 'center', color: C.t1 }}>{fmtN(r.months)}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -4414,11 +4414,11 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
                 <table style={{ borderCollapse: 'collapse', tableLayout: 'fixed', width: 'max-content', minWidth: '100%', fontSize: 11.5 }}>
                   <thead>
                     <tr style={{ borderBottom: `1px solid ${C.border2}` }}>
-                      <th style={{ position: 'sticky', left: 0, background: C.card, zIndex: 2, padding: '5px 8px', textAlign: 'left', fontWeight: 700, color: C.t2, width: 100, whiteSpace: 'nowrap', borderRight: `1px solid ${C.border}` }}>Courier</th>
-                      <th style={{ padding: '5px 2px', textAlign: 'center', fontWeight: 700, color: C.t2, width: 50, whiteSpace: 'nowrap' }}>Shipments</th>
-                      <th style={{ padding: '5px 2px', textAlign: 'center', fontWeight: 700, color: C.t2, width: 48, whiteSpace: 'nowrap' }}>Avg ₹</th>
-                      <th style={{ padding: '5px 2px', textAlign: 'center', fontWeight: 700, color: C.t2, width: 44, whiteSpace: 'nowrap' }}>₹/kg</th>
-                      <th style={{ padding: '5px 2px', textAlign: 'center', fontWeight: 700, color: C.t2, width: 68, whiteSpace: 'nowrap' }}>Vs Cheap</th>
+                      <th style={{ position: 'sticky', left: 0, background: C.card, zIndex: 2, padding: '10px 12px', textAlign: 'left', fontWeight: 700, color: C.t2, width: 100, whiteSpace: 'nowrap', borderRight: `1px solid ${C.border}` }}>Courier</th>
+                      <th style={{ padding: '10px 12px', textAlign: 'center', fontWeight: 700, color: C.t2, width: 50, whiteSpace: 'nowrap' }}>Shipments</th>
+                      <th style={{ padding: '10px 12px', textAlign: 'center', fontWeight: 700, color: C.t2, width: 48, whiteSpace: 'nowrap' }}>Avg ₹</th>
+                      <th style={{ padding: '10px 12px', textAlign: 'center', fontWeight: 700, color: C.t2, width: 44, whiteSpace: 'nowrap' }}>₹/kg</th>
+                      <th style={{ padding: '10px 12px', textAlign: 'center', fontWeight: 700, color: C.t2, width: 68, whiteSpace: 'nowrap' }}>Vs Cheap</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -4426,11 +4426,11 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
                       const d = r.avgCost - activeCell.rows[0].avgCost
                       return (
                         <tr key={r.courier} style={{ borderBottom: i < activeCell.rows.length - 1 ? `1px solid ${C.border2}` : 'none' }}>
-                          <td style={{ position: 'sticky', left: 0, background: C.card, zIndex: 1, padding: '5px 8px', fontWeight: 600, color: C.t1, whiteSpace: 'nowrap', borderRight: `1px solid ${C.border}` }}><CourierCell name={r.courier} /></td>
-                          <td style={{ padding: '5px 2px', textAlign: 'center', color: C.t1 }}>{fmtBig(r.n)}</td>
-                          <td style={{ padding: '5px 2px', textAlign: 'center', color: C.t1 }}>₹{r.avgCost.toFixed(2)}</td>
-                          <td style={{ padding: '5px 2px', textAlign: 'center', color: C.t1 }}>₹{r.cpk.toFixed(2)}</td>
-                          <td style={{ padding: '5px 2px', textAlign: 'center' }}>{d < 0.01 ? <span style={{ color: C.green.tx, fontWeight: 700 }}>cheap</span> : <span style={{ color: C.red.tx }}>{'+₹' + d.toFixed(2)}</span>}</td>
+                          <td style={{ position: 'sticky', left: 0, background: C.card, zIndex: 1, padding: '8px 12px', fontWeight: 600, color: C.t1, whiteSpace: 'nowrap', borderRight: `1px solid ${C.border}` }}><CourierCell name={r.courier} /></td>
+                          <td style={{ padding: '8px 12px', textAlign: 'center', color: C.t1 }}>{fmtBig(r.n)}</td>
+                          <td style={{ padding: '8px 12px', textAlign: 'center', color: C.t1 }}>₹{r.avgCost.toFixed(2)}</td>
+                          <td style={{ padding: '8px 12px', textAlign: 'center', color: C.t1 }}>₹{r.cpk.toFixed(2)}</td>
+                          <td style={{ padding: '8px 12px', textAlign: 'center' }}>{d < 0.01 ? <span style={{ color: C.green.tx, fontWeight: 700 }}>cheap</span> : <span style={{ color: C.red.tx }}>{'+₹' + d.toFixed(2)}</span>}</td>
                         </tr>
                       )
                     })}
@@ -4490,7 +4490,7 @@ export default function LogisticsCostPage({ externalFilters, setExternalFilters,
             sidebar to collapse. */}
         {!isMobile && scope !== 'all' && (
           <button onClick={() => setSidebarOpen(o => !o)}
-            style={{ width: 16, alignSelf: 'flex-start', marginTop: 20, height: 48, border: `1px solid ${C.border}`, borderLeft: 'none', background: C.card, cursor: 'pointer', borderRadius: '0 6px 6px 0', display: 'flex', alignItems: 'center', justifyContent: 'center', color: C.t3, fontSize: 12, flexShrink: 0, boxShadow: '2px 0 4px rgba(0,0,0,0.06)', padding: 0 }}>
+            className="sb-toggle" style={{ width: 16, alignSelf: 'flex-start', marginTop: 12, marginLeft: 0, height: 40, border: '1px solid transparent', borderLeft: 'none', background: C.card, cursor: 'pointer', borderRadius: '0 9px 9px 0', display: 'flex', alignItems: 'center', justifyContent: 'center', color: C.t3, fontSize: 12, flexShrink: 0, boxShadow: '2px 0 4px rgba(0,0,0,0.06)', padding: 0 }}>
             {sidebarOpen ? '‹' : '›'}
           </button>
         )}

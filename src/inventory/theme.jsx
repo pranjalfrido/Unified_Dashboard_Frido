@@ -4,26 +4,26 @@ import { useState, useRef, useEffect, useLayoutEffect } from 'react'
 import { createPortal } from 'react-dom'
 
 export const IC = {
-  page: '#F2F1EF',
+  page: '#EEF0F5',
   surface: '#fff',
   surfaceHi: '#fff',
-  border: '#E4E4E7',
-  border2: '#C7C7CE',
+  border: '#E8EAF0',
+  border2: '#D3D7E2',
   // Subtle hover fill for slicer/toggle controls — a touch darker than `surface` (white) so
   // hovering a dropdown or tile gives visible feedback without looking like an active/
   // selected state (that's still accDim/accBorder).
-  hoverBg: '#F5F5F6',
-  t1: '#1F1F23',
-  t2: '#5B5B62',
-  t3: '#8B8B92',
-  acc: '#D89A1A',
-  accDim: '#F7EBD2',
-  accBorder: '#B87D14',
+  hoverBg: '#F3F4F9',
+  t1: '#1A1C23',
+  t2: '#4A4E5C',
+  t3: '#767B8A',
+  acc: '#5B5BD6',
+  accDim: '#EEEEFB',
+  accBorder: '#4A4AC4',
   // Matches App.jsx's C.acs — the solid-but-soft gold fill used by the app-wide divider-pill
   // toggle pattern (segmented switchers separated by thin dividers, no per-button borders).
-  acs: '#EFCE85',
+  acs: '#C7C7F2',
   // Divider line between adjacent options in a divider-pill toggle — matches App.jsx's C.border2.
-  divider: '#D6D0B0',
+  divider: '#D3D7E2',
   // Muted navy — the app-wide "second series next to gold" color (matches App.jsx's C.blue.tx),
   // used wherever a chart needs exactly two distinguishable series and one of them isn't gold.
   secondary: '#184078',

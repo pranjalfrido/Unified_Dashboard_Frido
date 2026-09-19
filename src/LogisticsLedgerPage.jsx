@@ -590,7 +590,7 @@ export default function LogisticsLedgerPage() {
   const TabIcon = fmt.icon;
 
   // light theme matching other dashboard tabs
-  const C = { bg: '#F7F8FA', card: '#FFFFFF', border: '#E8E4DA', t1: '#1A1A2E', t2: '#4A4A6A', t3: '#9A9AB0', accent: '#2F6A45', green: '#166534', red: '#9E2B25' };
+  const C = { bg: '#F7F8FA', card: '#FFFFFF', border: '#D3D7E2', t1: '#1A1A2E', t2: '#4A4A6A', t3: '#9A9AB0', accent: '#2F6A45', green: '#166534', red: '#9E2B25' };
 
   const btnBase = { display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 12, fontWeight: 500, padding: '6px 12px', borderRadius: 7, cursor: 'pointer', fontFamily: 'inherit', border: `1px solid ${C.border}` };
   const ghostBtn = { ...btnBase, background: C.card, color: C.t2 };
@@ -734,12 +734,12 @@ export default function LogisticsLedgerPage() {
           <thead>
             <tr>
               {fmt.fields.map((f, i) => (
-                <th key={f.key} style={{ position: 'sticky', top: 0, zIndex: i === 0 ? 3 : 2, left: i === 0 ? 0 : undefined, background: '#F5F2EC', textAlign: f.type === 'num' || f.type === 'int' ? 'right' : 'left', padding: '9px 10px', fontSize: 11, fontWeight: 700, color: C.t2, textTransform: 'uppercase', letterSpacing: 0.4, borderBottom: `1px solid ${C.border}`, whiteSpace: 'nowrap', minWidth: f.w }}
+                <th key={f.key} style={{ position: 'sticky', top: 0, zIndex: i === 0 ? 3 : 2, left: i === 0 ? 0 : undefined, background: C.ach, textAlign: f.type === 'num' || f.type === 'int' ? 'right' : 'left', padding: '10px 12px', fontSize: 11, fontWeight: 700, color: C.t2, textTransform: 'uppercase', letterSpacing: 0.4, borderBottom: `1px solid ${C.border}`, whiteSpace: 'nowrap', minWidth: f.w }}
                   title={[f.desc, f.req ? 'Mandatory.' : 'Optional.', f.computed ? 'Auto-computed.' : null].filter(Boolean).join(' ')}>
                   {f.label}{f.req && <span style={{ color: C.red }}> *</span>}{f.computed && <span style={{ color: C.t3 }}> ƒ</span>}
                 </th>
               ))}
-              <th style={{ position: 'sticky', top: 0, zIndex: 2, background: '#F5F2EC', width: 40, borderBottom: `1px solid ${C.border}` }} />
+              <th style={{ position: 'sticky', top: 0, zIndex: 2, background: C.ach, width: 40, borderBottom: `1px solid ${C.border}` }} />
             </tr>
           </thead>
           <tbody>
@@ -765,7 +765,7 @@ export default function LogisticsLedgerPage() {
                         inputMode={f.type === "num" || f.type === "int" ? "decimal" : undefined}
                         onChange={(e) => setCell(r._uid, f.key, e.target.value)}
                         onBlur={() => commitCell(r._uid)}
-                        style={{ width: '100%', border: 'none', background: dupCell ? '#FEF2F2' : 'transparent', padding: '9px 10px', fontSize: 12.5, color: dupCell ? C.red : derived ? C.t3 : C.t1, fontFamily: derived || f.type === 'num' || f.type === 'int' ? 'monospace' : 'inherit', textAlign: f.type === 'num' || f.type === 'int' ? 'right' : 'left', fontStyle: derived ? 'italic' : 'normal', outline: 'none' }}
+                        style={{ width: '100%', border: 'none', background: dupCell ? '#FEF2F2' : 'transparent', padding: '10px 12px', fontSize: 12.5, color: dupCell ? C.red : derived ? C.t3 : C.t1, fontFamily: derived || f.type === 'num' || f.type === 'int' ? 'monospace' : 'inherit', textAlign: f.type === 'num' || f.type === 'int' ? 'right' : 'left', fontStyle: derived ? 'italic' : 'normal', outline: 'none' }}
                         title={dupCell ? `Duplicate ${f.label}` : derived ? "Computed — type to override" : undefined}
                       />
                     </td>

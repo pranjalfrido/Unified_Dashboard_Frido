@@ -64,7 +64,7 @@ export default function StorePnLTable({ rows = [] }) {
     exportCSV(csvRows, 'store_pnl_ebo.csv')
   }
 
-  const thStyle = { fontSize: 9.5, fontWeight: 700, color: C.t1, textTransform: 'uppercase', letterSpacing: 0.4, padding: '6px 7px', textAlign: 'right', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', borderBottom: `1.5px solid ${C.border}` }
+  const thStyle = { fontSize: 12, fontWeight: 600, color: C.t1, letterSpacing: 0.2, padding: '6px 7px', textAlign: 'right', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', borderBottom: `1px solid ${C.border}` }
   const thStyleL = { ...thStyle, textAlign: 'left' }
   const tdStyle = { fontSize: 11, padding: '4px 7px', textAlign: 'right', color: C.t1, borderBottom: `1px solid ${C.border}`, fontFamily: 'var(--mono)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }
   const tdStyleL = { ...tdStyle, textAlign: 'left', fontFamily: 'inherit' }
@@ -84,26 +84,26 @@ export default function StorePnLTable({ rows = [] }) {
           </colgroup>
           <thead className="tbl-head">
             <tr>
-              <Th label="Store" sortKey="storeName" style={{ ...thStyleL, position: 'sticky', top: 0, background: 'var(--card)', zIndex: 1 }} align="left" />
-              <Th label="Gross (Inc GST)" sortKey="gross" style={{ ...thStyle, position: 'sticky', top: 0, background: 'var(--card)', zIndex: 1 }} />
-              <Th label="Units" sortKey="units" style={{ ...thStyle, position: 'sticky', top: 0, background: 'var(--card)', zIndex: 1 }} />
-              <Th label="Net Rev" sortKey="netRev" style={{ ...thStyle, position: 'sticky', top: 0, background: 'var(--card)', zIndex: 1 }} />
-              <Th label="COGS" sortKey="cogs" style={{ ...thStyle, position: 'sticky', top: 0, background: 'var(--card)', zIndex: 1 }} />
-              <Th label="GM %" sortKey="gmPct" style={{ ...thStyle, position: 'sticky', top: 0, background: 'var(--card)', zIndex: 1 }} />
-              <Th label="SnD %" sortKey="sndPct" style={{ ...thStyle, position: 'sticky', top: 0, background: 'var(--card)', zIndex: 1 }} />
-              <Th label="CM1 %" sortKey="cm1Pct" style={{ ...thStyle, position: 'sticky', top: 0, background: 'var(--card)', zIndex: 1 }} />
-              <Th label="Spend %" sortKey="spendPct" style={{ ...thStyle, position: 'sticky', top: 0, background: 'var(--card)', zIndex: 1 }} />
-              <Th label="CM2" sortKey="cm2" style={{ ...thStyle, position: 'sticky', top: 0, background: 'var(--card)', zIndex: 1 }} />
-              <Th label="CM2 %" sortKey="cm2Pct" style={{ ...thStyle, position: 'sticky', top: 0, background: 'var(--card)', zIndex: 1 }} />
-              <Th label="Rent" sortKey="rent" style={{ ...thStyle, position: 'sticky', top: 0, background: 'var(--card)', zIndex: 1 }} />
-              <Th label="Utilities" sortKey="utilities" style={{ ...thStyle, position: 'sticky', top: 0, background: 'var(--card)', zIndex: 1 }} />
-              <Th label="Employee Cost" sortKey="employeeCost" style={{ ...thStyle, position: 'sticky', top: 0, background: 'var(--card)', zIndex: 1 }} />
-              <Th label="CAM" sortKey="cam" style={{ ...thStyle, position: 'sticky', top: 0, background: 'var(--card)', zIndex: 1 }} />
-              <Th label="Software" sortKey="software" style={{ ...thStyle, position: 'sticky', top: 0, background: 'var(--card)', zIndex: 1 }} />
-              <Th label="Volumetric Rent" sortKey="volumetricRent" style={{ ...thStyle, position: 'sticky', top: 0, background: 'var(--card)', zIndex: 1 }} />
-              <Th label="Fixed Costs" sortKey="totalFixedCosts" style={{ ...thStyle, position: 'sticky', top: 0, background: 'var(--card)', zIndex: 1 }} />
-              <Th label="EBITDA" sortKey="ebitda" style={{ ...thStyle, position: 'sticky', top: 0, background: 'var(--card)', zIndex: 1 }} />
-              <Th label="EBITDA %" sortKey="ebitdaPct" style={{ ...thStyle, position: 'sticky', top: 0, background: 'var(--card)', zIndex: 1 }} />
+              <Th label="Store" sortKey="storeName" style={{ ...thStyleL, position: 'sticky', top: 0, background: C.ach, zIndex: 3 }} align="left" />
+              <Th label="Gross (Inc GST)" sortKey="gross" style={{ ...thStyle, position: 'sticky', top: 0, background: C.ach, zIndex: 3 }} />
+              <Th label="Units" sortKey="units" style={{ ...thStyle, position: 'sticky', top: 0, background: C.ach, zIndex: 3 }} />
+              <Th label="Net Rev" sortKey="netRev" style={{ ...thStyle, position: 'sticky', top: 0, background: C.ach, zIndex: 3 }} />
+              <Th label="COGS" sortKey="cogs" style={{ ...thStyle, position: 'sticky', top: 0, background: C.ach, zIndex: 3 }} />
+              <Th label="GM %" sortKey="gmPct" style={{ ...thStyle, position: 'sticky', top: 0, background: C.ach, zIndex: 3 }} />
+              <Th label="SnD %" sortKey="sndPct" style={{ ...thStyle, position: 'sticky', top: 0, background: C.ach, zIndex: 3 }} />
+              <Th label="CM1 %" sortKey="cm1Pct" style={{ ...thStyle, position: 'sticky', top: 0, background: C.ach, zIndex: 3 }} />
+              <Th label="Spend %" sortKey="spendPct" style={{ ...thStyle, position: 'sticky', top: 0, background: C.ach, zIndex: 3 }} />
+              <Th label="CM2" sortKey="cm2" style={{ ...thStyle, position: 'sticky', top: 0, background: C.ach, zIndex: 3 }} />
+              <Th label="CM2 %" sortKey="cm2Pct" style={{ ...thStyle, position: 'sticky', top: 0, background: C.ach, zIndex: 3 }} />
+              <Th label="Rent" sortKey="rent" style={{ ...thStyle, position: 'sticky', top: 0, background: C.ach, zIndex: 3 }} />
+              <Th label="Utilities" sortKey="utilities" style={{ ...thStyle, position: 'sticky', top: 0, background: C.ach, zIndex: 3 }} />
+              <Th label="Employee Cost" sortKey="employeeCost" style={{ ...thStyle, position: 'sticky', top: 0, background: C.ach, zIndex: 3 }} />
+              <Th label="CAM" sortKey="cam" style={{ ...thStyle, position: 'sticky', top: 0, background: C.ach, zIndex: 3 }} />
+              <Th label="Software" sortKey="software" style={{ ...thStyle, position: 'sticky', top: 0, background: C.ach, zIndex: 3 }} />
+              <Th label="Volumetric Rent" sortKey="volumetricRent" style={{ ...thStyle, position: 'sticky', top: 0, background: C.ach, zIndex: 3 }} />
+              <Th label="Fixed Costs" sortKey="totalFixedCosts" style={{ ...thStyle, position: 'sticky', top: 0, background: C.ach, zIndex: 3 }} />
+              <Th label="EBITDA" sortKey="ebitda" style={{ ...thStyle, position: 'sticky', top: 0, background: C.ach, zIndex: 3 }} />
+              <Th label="EBITDA %" sortKey="ebitdaPct" style={{ ...thStyle, position: 'sticky', top: 0, background: C.ach, zIndex: 3 }} />
             </tr>
           </thead>
           <tbody>

@@ -12,7 +12,7 @@ export function ChartTooltip({ active, payload, label, formatter }) {
       <div style={{ fontWeight: 700, color: C.t2, marginBottom: 5 }}>{label}</div>
       {payload.map((p, i) => (
         <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 2 }}>
-          <span style={{ width: 8, height: 8, borderRadius: '50%', background: p.color, display: 'inline-block', flexShrink: 0, border: p.color === '#FFD600' ? '1px solid #E6C200' : 'none' }} />
+          <span style={{ width: 8, height: 8, borderRadius: '50%', background: p.color, display: 'inline-block', flexShrink: 0, border: p.color === C.acc ? '1px solid #E6C200' : 'none' }} />
           <span style={{ color: C.t2 }}>{p.name}</span>
           <span style={{ fontWeight: 700, color: C.t1, marginLeft: 'auto', paddingLeft: 12, fontFamily: 'var(--mono)' }}>{format(p.value)}</span>
         </div>
@@ -45,12 +45,18 @@ export function KPICard({ label, icon, value, sub, accent, center, badge, style,
         position: 'relative', overflow: 'hidden',
         ...style,
       }}>
-      <span className="text-xs font-bold uppercase tracking-wider flex items-center gap-1" style={{ color: C.t3, justifyContent: center ? 'center' : undefined }}>{icon && <span style={{ fontSize: 13 }}>{icon}</span>}{label}</span>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 4 }}>
-        <span style={{ fontSize: valueSize || (center ? 28 : 21), fontWeight: 700, letterSpacing: '-.02em', lineHeight: 1.1, color: accent || C.t1 }}>{value}</span>
+      {/* Label row: an optional tinted icon chip, then a quiet sentence-case label. The
+          uppercase-bold treatment this replaced competed with the value for attention. */}
+      <span className="flex items-center gap-2" style={{ justifyContent: center ? 'center' : undefined }}>
+        {icon && <span className="kpi-chip">{icon}</span>}
+        <span style={{ fontSize: 11.5, fontWeight: 600, color: C.t2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{label}</span>
+      </span>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 6 }}>
+        {/* Large and LIGHT, on the display face — the reference's signature move. */}
+        <span style={{ fontFamily: C.display, fontSize: valueSize || (center ? 32 : 26), fontWeight: 500, letterSpacing: '-.025em', lineHeight: 1.12, color: accent || C.t1, fontVariantNumeric: 'tabular-nums' }}>{value}</span>
         {badge && <span>{badge}</span>}
       </div>
-      {sub && <span className="text-xs" style={{ color: C.t2 }}>{sub}</span>}
+      {sub && <span className="text-xs" style={{ color: C.t3 }}>{sub}</span>}
       {/* Sparkline sits BEHIND the text at low opacity rather than below it: the cards are in
           a fixed-height grid, so adding a row would either clip the sub-line or make every
           card taller. pointerEvents none so it never eats a click meant for the card. */}
@@ -156,13 +162,13 @@ export function CategoryRevenueCard({ catRows, subCatRows, skuMap, totalRev, vie
       <div style={{ display: 'flex', gap: 4 }}>
         {[{ id: 'category', label: 'Category' }, { id: 'subcategory', label: 'Product' }, ...(window.innerWidth > 768 ? [{ id: 'sku', label: 'SKU Code' }] : [])].map((v, i) => (
           <div key={v.id} style={{ display: 'flex', alignItems: 'center' }}>
-            {i > 0 && <div style={{ width: 1, height: 14, background: '#D6D0B0', margin: '0 4px' }} />}
-            <button onClick={() => setView(v.id)} style={{ fontSize: 11, fontWeight: view === v.id ? 700 : 500, padding: '3px 9px', borderRadius: 6, border: 'none', outline: 'none', background: view === v.id ? C.acs : 'transparent', color: view === v.id ? '#3F3D33' : C.t2, cursor: 'pointer', fontFamily: 'var(--font)', minWidth: 60, textAlign: 'center' }}>{v.label}</button>
+            {i > 0 && <div style={{ width: 1, height: 14, background: C.border2, margin: '0 4px' }} />}
+            <button onClick={() => setView(v.id)} style={{ fontSize: 11, fontWeight: view === v.id ? 700 : 500, padding: '3px 9px', borderRadius: 6, border: 'none', outline: 'none', background: view === v.id ? C.acs : 'transparent', color: view === v.id ? C.acd : C.t2, cursor: 'pointer', fontFamily: 'var(--font)', minWidth: 60, textAlign: 'center' }}>{v.label}</button>
           </div>
         ))}
       </div>
     }>
-      <div style={{ height: '100%', overflowY: 'auto', paddingRight: 3 }}>
+      <div style={{ height: '100%', overflowY: 'auto', paddingRight: 10 }}>
         {rows.map((r, i) => {
           const isSelected = selectedName ? selectedName === r.name : false
           return <HBar key={`${r.category || ''}::${r.name}`} dot={C.acc} label={r.name} labelWidth={labelWidth} width={(r.rev / maxRev) * 100} value={fmt(r.rev)} pctVal={totalRev > 0 ? pct(r.rev, totalRev) : '—'} isSelected={isSelected} onClick={() => onClick(r)} />
@@ -212,7 +218,7 @@ export function DataTable({ columns, rows, maxRows = 50, storageKey, maxHeight, 
           )}
         </div>
       )}
-    <div className="overflow-x-auto" style={{ ...(maxHeight ? { maxHeight, overflowY: 'auto' } : {}), ...( style || {}) }}>
+    <div className="overflow-x-auto" style={{ ...(maxHeight ? { maxHeight, overflowY: 'auto', paddingRight: 10 } : {}), ...( style || {}) }}>
       <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
         <thead>
           <tr style={{ background: C.acl }}>
@@ -224,9 +230,9 @@ export function DataTable({ columns, rows, maxRows = 50, storageKey, maxHeight, 
         </thead>
         <tbody>
           {visible.map((r, i) => {
-            const zebra = i % 2 === 1 ? '#FAF9F6' : C.card
+            const zebra = i % 2 === 1 ? C.hov : C.card
             return (
-            <tr key={i} style={{ borderBottom: i < visible.length - 1 ? `1px solid ${C.border}` : 'none', background: zebra, transition: 'box-shadow .12s, background .12s' }} onMouseEnter={e => { e.currentTarget.style.background = '#FDF8ED'; e.currentTarget.style.boxShadow = `inset 0 0 0 1px ${C.acm}55, 0 0 8px 0 ${C.acc}33` }} onMouseLeave={e => { e.currentTarget.style.background = zebra; e.currentTarget.style.boxShadow = 'none' }}>
+            <tr key={i} style={{ borderBottom: i < visible.length - 1 ? `1px solid ${C.border}` : 'none', background: zebra, transition: 'box-shadow .12s, background .12s' }} onMouseEnter={e => { e.currentTarget.style.background = C.acl; e.currentTarget.style.boxShadow = `inset 0 0 0 1px ${C.acc}40, 0 0 12px 2px ${C.acc}26` }} onMouseLeave={e => { e.currentTarget.style.background = zebra; e.currentTarget.style.boxShadow = 'none' }}>
               {reorder.orderedColumns.map(c => (
                 <td key={c.key + c.label} style={{ padding: i < visible.length - 1 ? '5.5px 5px' : '5.5px 5px 14px', color: c.align === 'right' || c.align === 'center' ? C.t1 : C.t2, textAlign: c.align === 'right' ? 'right' : c.align === 'center' ? 'center' : 'left', fontFamily: c.mono ? 'var(--mono)' : 'inherit', fontSize: c.mono ? 11.5 : 12, whiteSpace: 'nowrap', ...(c.sticky ? { position: 'sticky', left: 0, background: zebra, zIndex: 1, borderRight: `1px solid ${C.border}` } : {}) }}>
                   {c.render ? c.render(r[c.key], r) : r[c.key]}
@@ -244,9 +250,14 @@ export function DataTable({ columns, rows, maxRows = 50, storageKey, maxHeight, 
   )
 }
 
+// Borderless, separated by shadow rather than outline — the defining move of the theme.
+// The 1px transparent border is deliberate: the .card-hoverable rule swaps in a visible
+// one on hover, and without the placeholder the card would shift a pixel as it appears.
+// padding comes from a var so a scoped theme (.sales-theme) can retune the inner rhythm
+// without this shared component growing a prop for it.
 export function Card({ title, note, action, children, style, fill, titleNoWrap }) {
   return (
-    <div className="card-hoverable" style={{ background: C.card, borderLeft: `1px solid ${C.border}`, borderRight: `1px solid ${C.border}`, borderBottom: `1px solid ${C.border}`, borderRadius: 13, padding: '16px 18px', height: '100%', boxSizing: 'border-box', display: fill ? 'flex' : undefined, flexDirection: fill ? 'column' : undefined, ...style }}>
+    <div className="card-hoverable" style={{ background: C.card, border: '1px solid transparent', borderRadius: C.r.lg, boxShadow: C.sh1, padding: 'var(--card-pad, 18px 20px)', height: '100%', boxSizing: 'border-box', display: fill ? 'flex' : undefined, flexDirection: fill ? 'column' : undefined, ...style }}>
       {(title || note || action) && (
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 11, flexShrink: 0, gap: 8 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0, flex: 1 }}>
@@ -281,8 +292,8 @@ export function Dropdown({ value, onChange, options, style }) {
     <div ref={ref} style={{ position: 'relative', display: 'inline-block' }}>
       <button type="button" onClick={() => setOpen(o => !o)}
         onMouseEnter={e => e.currentTarget.style.background = C.acl}
-        onMouseLeave={e => e.currentTarget.style.background = C.card}
-        style={{ ...style, background: C.card, border: `1px solid ${C.border2}`, color: C.t1, fontWeight: 600, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 6, transition: 'background .12s' }}>
+        onMouseLeave={e => e.currentTarget.style.background = style?.background ?? C.card}
+        style={{ background: C.card, border: `1px solid ${C.border2}`, color: C.t1, fontWeight: 400, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 6, transition: 'background .12s', ...style }}>
         <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{current?.label ?? ''}</span>
         <span style={{ fontSize: 9, color: C.t3, flexShrink: 0, transform: open ? 'rotate(180deg)' : 'none', transition: 'transform .12s' }}>▼</span>
       </button>
@@ -290,8 +301,8 @@ export function Dropdown({ value, onChange, options, style }) {
         <div style={{ position: 'absolute', top: '100%', left: 0, marginTop: 4, background: C.card, border: `1px solid ${C.border}`, borderRadius: 8, boxShadow: '0 4px 16px rgba(0,0,0,.12)', zIndex: 50, minWidth: '100%', overflow: 'hidden' }}>
           {options.map(o => (
             <div key={o.id} onClick={() => { onChange(o.id); setOpen(false) }}
-              style={{ padding: '6px 10px', fontSize: (style && style.fontSize) || 11.5, fontWeight: o.id === value ? 700 : 500, color: o.id === value ? '#3F3D33' : C.t2, background: o.id === value ? C.acc : 'transparent', cursor: 'pointer', whiteSpace: 'nowrap' }}
-              onMouseEnter={e => { if (o.id !== value) e.currentTarget.style.background = C.acl }}
+              style={{ padding: '6px 10px', fontSize: (style && style.fontSize) || 11.5, fontWeight: o.id === value ? 600 : 400, color: o.id === value ? C.acd : C.t2, background: o.id === value ? C.acl : 'transparent', cursor: 'pointer', whiteSpace: 'nowrap' }}
+              onMouseEnter={e => { if (o.id !== value) e.currentTarget.style.background = C.hov }}
               onMouseLeave={e => { if (o.id !== value) e.currentTarget.style.background = 'transparent' }}>
               {o.label}
             </div>
@@ -338,6 +349,22 @@ export function SmallDropdown({ value, onChange, options, triggerStyle }) {
         </div>
       )}
     </div>
+  )
+}
+
+// Change indicator: a dot plus a signed percentage in a pill, as in the reference.
+// Direction is taken from the sign rather than passed in, so a caller cannot accidentally
+// paint a fall green. Colour is semantic (green up / red down) and never the accent.
+// `invert` is for measures where down is good — cost, RTO, transit days.
+export function Delta({ value, suffix = '%', invert = false, children }) {
+  if (value == null || !Number.isFinite(Number(value))) return null
+  const v = Number(value)
+  const good = invert ? v < 0 : v > 0
+  return (
+    <span className={`kpi-delta ${good ? 'up' : 'down'}`}>
+      <span className="dot" />
+      {children ?? `${v > 0 ? '+' : ''}${v.toFixed(2)}${suffix}`}
+    </span>
   )
 }
 
@@ -587,7 +614,7 @@ export function useReorderableColumns(storageKey, columns) {
 // Revenue column AND every Cancel/RTO/CIR/Exchange/Total-Return % column switch basis together
 // (qty mode = % of units returned, revenue mode = % of revenue lost — never a mix of the two).
 export function QtyRevToggle({ value, onChange }) {
-  const btnStyle = v => ({ fontSize: 11, fontWeight: value === v ? 700 : 500, padding: '3px 9px', borderRadius: 6, border: 'none', outline: 'none', background: value === v ? C.acs : 'transparent', color: value === v ? '#3F3D33' : C.t2, cursor: 'pointer', fontFamily: 'var(--font)' })
+  const btnStyle = v => ({ fontSize: 11, fontWeight: value === v ? 700 : 500, padding: '3px 9px', borderRadius: 6, border: 'none', outline: 'none', background: value === v ? C.acs : 'transparent', color: value === v ? C.acd : C.t2, cursor: 'pointer', fontFamily: 'var(--font)' })
   return (
     <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
       <button style={btnStyle('qty')} onClick={() => onChange('qty')}>Qty</button>
@@ -655,7 +682,7 @@ export function ReturnBreakdownTable({ title, rows, labelCols, basis, search, on
     cancelPct: weightedPct('cancelPct'), rtoPct: weightedPct('rtoPct'), cirPct: weightedPct('cirPct'),
     exchangePct: weightedPct('exchangePct'), totalReturnPct: weightedPct('totalReturnPct'),
   }
-  const thStyle = { fontSize: 9.5, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.03em', color: C.t2, padding: '6px 8px 7px', borderBottom: `1.5px solid ${C.border}`, whiteSpace: 'normal', lineHeight: 1.25, position: 'sticky', top: 0, background: C.acl, zIndex: 1 }
+  const thStyle = { fontSize: 12, fontWeight: 600, letterSpacing: 0.2, color: C.t1, padding: '10px 12px', borderBottom: `1px solid ${C.border2}`, whiteSpace: 'normal', lineHeight: 1.25, position: 'sticky', top: 0, background: C.acl, zIndex: 1 }
   const fmtPct = v => `${(v || 0).toFixed(1)}%`
   // Conditional formatting: only flag numbers PAST the agreed bad threshold in red — every
   // other value (including 0%, which is good) stays plain ink. Never colors a "good" number.
@@ -684,7 +711,7 @@ export function ReturnBreakdownTable({ title, rows, labelCols, basis, search, on
           {onExport && <button onClick={onExport} style={{ fontSize: 11, fontWeight: 600, padding: '5px 10px', borderRadius: 6, border: `1px solid ${C.border2}`, background: C.card, color: C.t1, cursor: 'pointer', fontFamily: 'var(--font)' }}>Export CSV</button>}
         </div>
       </div>
-      <div style={{ overflowX: 'auto', overflowY: 'auto', maxHeight, flex: 1, minHeight: 0 }}>
+      <div style={{ overflowX: 'auto', overflowY: 'auto', maxHeight, flex: 1, minHeight: 0, paddingRight: 10 }}>
         <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed', fontSize: 12 }}>
           <colgroup>
             {/* Label columns get a fixed share; when there are two (Category + Sub-category),
@@ -730,10 +757,10 @@ export function ReturnBreakdownTable({ title, rows, labelCols, basis, search, on
               const variants = getVariants ? getVariants(r) : null
               const hasVariants = variants && variants.length > 0
               const isOpen = expanded[key]
-              const rowZebra = i % 2 === 1 ? '#FAF9F6' : 'transparent'
+              const rowZebra = i % 2 === 1 ? C.hov : 'transparent'
               return (
                 <Fragment key={key}>
-                  <tr style={{ borderBottom: (i < sortedRows.length - 1 && !isOpen) ? `1px solid ${C.border}` : 'none', background: rowZebra, transition: 'box-shadow .12s, background .12s' }} onMouseEnter={e => { e.currentTarget.style.background = '#FDF8ED'; e.currentTarget.style.boxShadow = `inset 0 0 0 1px ${C.acm}55, 0 0 8px 0 ${C.acc}33` }} onMouseLeave={e => { e.currentTarget.style.background = rowZebra; e.currentTarget.style.boxShadow = 'none' }}>
+                  <tr style={{ borderBottom: (i < sortedRows.length - 1 && !isOpen) ? `1px solid ${C.border}` : 'none', background: rowZebra, transition: 'box-shadow .12s, background .12s' }} onMouseEnter={e => { e.currentTarget.style.background = C.acl; e.currentTarget.style.boxShadow = `inset 0 0 0 1px ${C.acc}40, 0 0 12px 2px ${C.acc}26` }} onMouseLeave={e => { e.currentTarget.style.background = rowZebra; e.currentTarget.style.boxShadow = 'none' }}>
                     {labelCols.map((c, ci) => {
                       const displayVal = c.render ? c.render(r[c.key], r) : (r[c.key] ?? '—')
                       return (
@@ -750,9 +777,9 @@ export function ReturnBreakdownTable({ title, rows, labelCols, basis, search, on
                     {metricCells(r)}
                   </tr>
                   {isOpen && variants.map((v, vi) => (
-                    <tr key={v.sku} style={{ background: '#FAFAF7', borderBottom: (vi < variants.length - 1 || i < sortedRows.length - 1) ? `1px solid ${C.border}` : 'none', transition: 'box-shadow .12s, background .12s' }} onMouseEnter={e => { e.currentTarget.style.background = '#FDF8ED'; e.currentTarget.style.boxShadow = `inset 0 0 0 1px ${C.acm}55, 0 0 8px 0 ${C.acc}33` }} onMouseLeave={e => { e.currentTarget.style.background = '#FAFAF7'; e.currentTarget.style.boxShadow = 'none' }}>
+                    <tr key={v.sku} style={{ background: '#FAFAF7', borderBottom: (vi < variants.length - 1 || i < sortedRows.length - 1) ? `1px solid ${C.border}` : 'none', transition: 'box-shadow .12s, background .12s' }} onMouseEnter={e => { e.currentTarget.style.background = C.acl; e.currentTarget.style.boxShadow = `inset 0 0 0 1px ${C.acc}40, 0 0 12px 2px ${C.acc}26` }} onMouseLeave={e => { e.currentTarget.style.background = '#FAFAF7'; e.currentTarget.style.boxShadow = 'none' }}>
                       {labelCols.map((c, ci) => (
-                        <td key={c.key} style={{ padding: '4px 5px', color: C.t3, fontFamily: ci === labelCols.length - 1 ? 'var(--mono)' : 'inherit', fontSize: 11, paddingLeft: ci === labelCols.length - 1 ? 22 : 5, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={ci === labelCols.length - 1 ? v.sku : ''}>
+                        <td key={c.key} style={{ padding: '8px 12px', color: C.t3, fontFamily: ci === labelCols.length - 1 ? 'var(--mono)' : 'inherit', fontSize: 11, paddingLeft: ci === labelCols.length - 1 ? 22 : 5, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={ci === labelCols.length - 1 ? v.sku : ''}>
                           {ci === labelCols.length - 1 ? `↳ ${v.sku}` : ''}
                         </td>
                       ))}
@@ -769,13 +796,13 @@ export function ReturnBreakdownTable({ title, rows, labelCols, basis, search, on
           {sortedRows.length > 0 && (
             <tfoot>
               <tr style={{ background: C.acl, position: 'sticky', bottom: 0 }}>
-                <td colSpan={labelCols.length} style={{ padding: '7px 5px', fontWeight: 700, color: C.t1, borderTop: `1.5px solid ${C.border}`, background: C.acl }}>Total</td>
-                <td style={{ padding: '7px 5px', textAlign: 'right', fontFamily: 'var(--mono)', fontSize: 11.5, fontWeight: 700, color: C.t1, borderTop: `1.5px solid ${C.border}`, background: C.acl, whiteSpace: 'nowrap' }}>{basis === 'qty' ? fmtN(totals.qty) : fmt(totals.revenue)}</td>
-                <td style={{ padding: '7px 5px', textAlign: 'right', fontWeight: 700, color: cellColor('cancelPct', totals.cancelPct), borderTop: `1.5px solid ${C.border}`, background: C.acl, whiteSpace: 'nowrap' }}>{fmtPct(totals.cancelPct)}</td>
-                <td style={{ padding: '7px 5px', textAlign: 'right', fontWeight: 700, color: cellColor('rtoPct', totals.rtoPct), borderTop: `1.5px solid ${C.border}`, background: C.acl, whiteSpace: 'nowrap' }}>{fmtPct(totals.rtoPct)}</td>
-                <td style={{ padding: '7px 5px', textAlign: 'right', fontWeight: 700, color: cellColor('cirPct', totals.cirPct), borderTop: `1.5px solid ${C.border}`, background: C.acl, whiteSpace: 'nowrap' }}>{fmtPct(totals.cirPct)}</td>
-                <td style={{ padding: '7px 5px', textAlign: 'right', fontWeight: 700, color: cellColor('exchangePct', totals.exchangePct), borderTop: `1.5px solid ${C.border}`, background: C.acl, whiteSpace: 'nowrap' }}>{fmtPct(totals.exchangePct)}</td>
-                <td style={{ padding: '7px 5px', textAlign: 'right', fontWeight: 700, color: cellColor('totalReturnPct', totals.totalReturnPct), borderTop: `1.5px solid ${C.border}`, background: C.acl, whiteSpace: 'nowrap' }}>{fmtPct(totals.totalReturnPct)}</td>
+                <td colSpan={labelCols.length} style={{ padding: '8px 12px', fontWeight: 700, color: C.t1, borderTop: `1.5px solid ${C.border}`, background: C.acl }}>Total</td>
+                <td style={{ padding: '8px 12px', textAlign: 'right', fontFamily: 'var(--mono)', fontSize: 11.5, fontWeight: 700, color: C.t1, borderTop: `1.5px solid ${C.border}`, background: C.acl, whiteSpace: 'nowrap' }}>{basis === 'qty' ? fmtN(totals.qty) : fmt(totals.revenue)}</td>
+                <td style={{ padding: '8px 12px', textAlign: 'right', fontWeight: 700, color: cellColor('cancelPct', totals.cancelPct), borderTop: `1.5px solid ${C.border}`, background: C.acl, whiteSpace: 'nowrap' }}>{fmtPct(totals.cancelPct)}</td>
+                <td style={{ padding: '8px 12px', textAlign: 'right', fontWeight: 700, color: cellColor('rtoPct', totals.rtoPct), borderTop: `1.5px solid ${C.border}`, background: C.acl, whiteSpace: 'nowrap' }}>{fmtPct(totals.rtoPct)}</td>
+                <td style={{ padding: '8px 12px', textAlign: 'right', fontWeight: 700, color: cellColor('cirPct', totals.cirPct), borderTop: `1.5px solid ${C.border}`, background: C.acl, whiteSpace: 'nowrap' }}>{fmtPct(totals.cirPct)}</td>
+                <td style={{ padding: '8px 12px', textAlign: 'right', fontWeight: 700, color: cellColor('exchangePct', totals.exchangePct), borderTop: `1.5px solid ${C.border}`, background: C.acl, whiteSpace: 'nowrap' }}>{fmtPct(totals.exchangePct)}</td>
+                <td style={{ padding: '8px 12px', textAlign: 'right', fontWeight: 700, color: cellColor('totalReturnPct', totals.totalReturnPct), borderTop: `1.5px solid ${C.border}`, background: C.acl, whiteSpace: 'nowrap' }}>{fmtPct(totals.totalReturnPct)}</td>
               </tr>
             </tfoot>
           )}
@@ -802,9 +829,9 @@ export function useSortableTable(defaultKey = null, defaultDir = 'desc') {
   // onto this <th> so the whole header becomes the drag handle (no separate grip icon — the
   // header itself stays clickable for sort; native HTML5 drag only engages on an actual
   // press-and-move gesture, so it doesn't fight with a plain click).
-  const Th = ({ label, sortKey, style, align = 'right', children, dragProps }) => (
+  const Th = ({ label, sortKey, style, align, children, dragProps }) => (
     <th onClick={() => onSort(sortKey)} draggable={!!dragProps} {...dragProps}
-      style={{ ...style, textAlign: align, cursor: dragProps ? 'grab' : 'pointer', userSelect: 'none', whiteSpace: 'nowrap', color: sort?.key === sortKey ? C.t1 : (style?.color ?? C.t1), position: style?.position || 'relative' }}>
+      style={{ ...style, textAlign: align ?? style?.textAlign ?? 'right', cursor: dragProps ? 'grab' : 'pointer', userSelect: 'none', whiteSpace: 'nowrap', color: sort?.key === sortKey ? C.t1 : (style?.color ?? C.t1), position: style?.position || 'relative' }}>
       {label}{sort?.key === sortKey ? (sort.dir === 'asc' ? ' ▲' : ' ▼') : ''}
       {children}
     </th>
