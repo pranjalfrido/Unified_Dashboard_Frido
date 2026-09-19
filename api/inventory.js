@@ -87,19 +87,22 @@ export default async function inventoryHandler(req, res) {
   const avgSaleWindowDaysVal = Math.max(1, Math.min(90, parseInt(avgSaleWindowDays, 10) || 7))
 
   try {
-    const { facilityToLocation, facilityToType, facilityToStatus, facilityToDisplayName, stateToNearestWH, channelToDescription } = buildFacilityMaps()
-
-    const daysInRange = Math.max(1, Math.round((new Date(end) - new Date(start)) / 86400000) + 1)
-    const endDate = new Date(end)
-
-    const [invRows, salesRows, lastSaleRows, itemMasterRows, skuMappingRows, shopifyInvRows] = await Promise.all([
-      cachedQuery('inv',     TTL_1H,  async () => { const { rows } = await db.query(`SELECT item_sku_code AS "ItemSkuCode", facility AS "Facility", updated AS "Updated", inventory AS "Inventory", inventory_blocked AS "InventoryBlocked" FROM inv_snapshot`); return rows }),
+    const [invRows, salesRows, lastSaleRows, itemMasterRows, skuMappingRows, shopifyInvRows, facilityRows, regionRows, channelRows] = await Promise.all([
+      cachedQuery('inv',     TTL_1H,  async () => { const { rows } = await db.query(`SELECT item_sku_code AS "ItemSkuCode", facility AS "Facility", updated AS "Updated", inventory AS "Inventory", inventory_blocked AS "InventoryBlocked", rtd_invt AS "RtdInvt", raw_invt AS "RawInvt" FROM inv_snapshot`); return rows }),
       cachedQuery('sales',   TTL_1H,  async () => { const { rows } = await db.query(`SELECT final_sku, facility AS "Facility", state, channel, order_date, qty FROM sales_window`); return rows }),
       cachedQuery('last90',  TTL_1H,  async () => { const { rows } = await db.query(`SELECT final_sku, last_sale_date, qty_90d FROM sales_90d`); return rows }),
       cachedQuery('master',  TTL_24H, async () => { const { rows } = await db.query(`SELECT product_code AS "Product_Code", category_name AS "Category_Name", sub_category AS "Sub_category", lead_time AS "Lead_Time", product_source AS "Product_Source", sku_first_sales_date AS "SKU_First_Sales_Date", type AS "Type" FROM item_master`); return rows }),
       cachedQuery('skumap',  TTL_24H, async () => { const { rows } = await db.query(`SELECT productid, masterskucode FROM sku_mapping`); return rows }),
       cachedQuery('shopify', TTL_24H, async () => { const { rows } = await db.query(`SELECT sku, available FROM shopify_inv`); return rows }),
+      cachedQuery('facility_master', TTL_24H, async () => { const { rows } = await db.query(`SELECT facility AS "Facility", facility2 AS "Facility2", location AS "Location", fcs_status_for_invt AS "FCs_Status_for_Invt", facility_type AS "FacilityType", store_location AS "Store_Location" FROM facility_master`); return rows }),
+      cachedQuery('state_region',   TTL_24H, async () => { const { rows } = await db.query(`SELECT shipping_address_state, region, nearest_wh FROM state_region_nearest_wh`); return rows }),
+      cachedQuery('channel_desc',   TTL_24H, async () => { const { rows } = await db.query(`SELECT uniware_channels, unified_channel, unified_channel2, channel_description FROM uc_channel_desc`); return rows }),
     ])
+
+    const { facilityToLocation, facilityToType, facilityToStatus, facilityToDisplayName, stateToNearestWH, channelToDescription } = buildFacilityMaps({ facilityRows, regionRows, channelRows })
+
+    const daysInRange = Math.max(1, Math.round((new Date(end) - new Date(start)) / 86400000) + 1)
+    const endDate = new Date(end)
 
     const skuMap = buildSkuMap(skuMappingRows)
 

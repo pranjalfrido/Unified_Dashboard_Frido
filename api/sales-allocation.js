@@ -48,7 +48,12 @@ export default async function salesAllocationHandler(req, res) {
 
   try {
     const bq = getBQ()
-    const { facilityToLocation, facilityToDisplayName, facilityToStatus, stateToRegion, stateToNearestWH, locationToRegion, channelToUnified, channelToUnified2, channelToDescription } = buildFacilityMaps()
+    const [[facilityRows], [regionRows], [channelRows]] = await Promise.all([
+      bq.query({ query: `SELECT Facility, Facility2, Location, FCs_Status_for_Invt, FacilityType, Store_Location FROM \`frido-429506.inventory_sales_allocation.facility_master\`` }),
+      bq.query({ query: `SELECT shipping_address_state, region, nearest_wh FROM \`frido-429506.inventory_sales_allocation.state_region_nearest_wh\`` }),
+      bq.query({ query: `SELECT uniware_channels, unified_channel, unified_channel2, channel_description FROM \`frido-429506.inventory_sales_allocation.uc_channel_desc\`` }),
+    ])
+    const { facilityToLocation, facilityToDisplayName, facilityToStatus, stateToRegion, stateToNearestWH, locationToRegion, channelToUnified, channelToUnified2, channelToDescription } = buildFacilityMaps({ facilityRows, regionRows, channelRows })
     const daysInRange = Math.max(1, Math.round((new Date(end) - new Date(start)) / 86400000) + 1)
     const N = Math.max(1, Math.min(90, parseInt(momentumWindow, 10) || 7))
 

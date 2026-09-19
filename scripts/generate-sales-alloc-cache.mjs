@@ -40,7 +40,7 @@ const fetchStartStr = fetchStart.toISOString().slice(0, 10)
 
 console.log(`Fetching sales ${fetchStartStr} → ${endStr}, aggregating for range ${startStr} → ${endStr}`)
 
-const [[salesRows], [itemMasterRows], [invRows], [skuMappingRows]] = await Promise.all([
+const [[salesRows], [itemMasterRows], [invRows], [skuMappingRows], [facilityRows], [regionRows], [channelRows]] = await Promise.all([
   bq.query({
     query: `SELECT final_sku, Facility, state, channel, order_date, SUM(total_quantity) AS qty, SUM(total_revenue) AS rev
             FROM \`frido-429506.production.aggregated_uniware_sales_report\`
@@ -70,9 +70,12 @@ const [[salesRows], [itemMasterRows], [invRows], [skuMappingRows]] = await Promi
             WHERE TRIM(masterskucode) NOT IN ('', 'not found')`,
     maximumBytesBilled: '1000000000',
   }),
+  bq.query({ query: `SELECT Facility, Facility2, Location, FCs_Status_for_Invt, FacilityType, Store_Location FROM \`frido-429506.inventory_sales_allocation.facility_master\`` }),
+  bq.query({ query: `SELECT shipping_address_state, region, nearest_wh FROM \`frido-429506.inventory_sales_allocation.state_region_nearest_wh\`` }),
+  bq.query({ query: `SELECT uniware_channels, unified_channel, unified_channel2, channel_description FROM \`frido-429506.inventory_sales_allocation.uc_channel_desc\`` }),
 ])
 
-const { facilityToLocation, facilityToDisplayName, facilityToStatus, stateToRegion, stateToNearestWH, locationToRegion, channelToUnified, channelToUnified2, channelToDescription } = buildFacilityMaps()
+const { facilityToLocation, facilityToDisplayName, facilityToStatus, stateToRegion, stateToNearestWH, locationToRegion, channelToUnified, channelToUnified2, channelToDescription } = buildFacilityMaps({ facilityRows, regionRows, channelRows })
 const skuMap = buildSkuMap(skuMappingRows)
 const daysInRange = 60
 

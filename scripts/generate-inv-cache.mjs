@@ -34,22 +34,26 @@ console.log(`Latest sales date in DB: ${rawMaxStr} → using end=${end} (d-1)`)
 // Fetch all tables once — reused across all 3 window computations
 console.log('Fetching all tables from Supabase in parallel...')
 const t0 = Date.now()
-const [c1,c2,c3,c4,c5,c6] = await Promise.all([1,2,3,4,5,6].map(() => pool.connect()))
-const [r1,r2,r3,r4,r5,r6] = await Promise.all([
-  c1.query(`SELECT item_sku_code AS "ItemSkuCode", facility AS "Facility", updated AS "Updated", inventory AS "Inventory", inventory_blocked AS "InventoryBlocked" FROM inv_snapshot`),
+const [c1,c2,c3,c4,c5,c6,c7,c8,c9] = await Promise.all([1,2,3,4,5,6,7,8,9].map(() => pool.connect()))
+const [r1,r2,r3,r4,r5,r6,r7,r8,r9] = await Promise.all([
+  c1.query(`SELECT item_sku_code AS "ItemSkuCode", facility AS "Facility", updated AS "Updated", inventory AS "Inventory", inventory_blocked AS "InventoryBlocked", rtd_invt AS "RtdInvt", raw_invt AS "RawInvt" FROM inv_snapshot`),
   c2.query(`SELECT final_sku, facility AS "Facility", state, channel, order_date, qty FROM sales_window`),
   c3.query(`SELECT final_sku, last_sale_date, qty_90d FROM sales_90d`),
   c4.query(`SELECT product_code AS "Product_Code", category_name AS "Category_Name", sub_category AS "Sub_category", lead_time AS "Lead_Time", product_source AS "Product_Source", sku_first_sales_date AS "SKU_First_Sales_Date", type AS "Type" FROM item_master`),
   c5.query(`SELECT productid, masterskucode FROM sku_mapping`),
   c6.query(`SELECT sku, available FROM shopify_inv`),
+  c7.query(`SELECT facility AS "Facility", facility2 AS "Facility2", location AS "Location", fcs_status_for_invt AS "FCs_Status_for_Invt", facility_type AS "FacilityType", store_location AS "Store_Location" FROM facility_master`),
+  c8.query(`SELECT shipping_address_state, region, nearest_wh FROM state_region_nearest_wh`),
+  c9.query(`SELECT uniware_channels, unified_channel, unified_channel2, channel_description FROM uc_channel_desc`),
 ])
-;[c1,c2,c3,c4,c5,c6].forEach(c => c.release())
+;[c1,c2,c3,c4,c5,c6,c7,c8,c9].forEach(c => c.release())
 console.log(`Fetched all data in ${Date.now()-t0}ms`)
 
 const invRows = r1.rows, salesRows = r2.rows, lastSaleRows = r3.rows
 const itemMasterRows = r4.rows, skuMappingRows = r5.rows, shopifyInvRows = r6.rows
+const facilityRows = r7.rows, regionRows = r8.rows, channelRows = r9.rows
 
-const { facilityToLocation, facilityToType, facilityToStatus, facilityToDisplayName, stateToNearestWH, channelToDescription } = buildFacilityMaps()
+const { facilityToLocation, facilityToType, facilityToStatus, facilityToDisplayName, stateToNearestWH, channelToDescription } = buildFacilityMaps({ facilityRows, regionRows, channelRows })
 const skuMap = buildSkuMap(skuMappingRows)
 
 const liveOnWebsite = new Set()

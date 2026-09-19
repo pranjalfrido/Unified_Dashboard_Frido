@@ -41,6 +41,11 @@ async function run() {
         item_sku_code TEXT, facility TEXT, updated TIMESTAMPTZ, inventory FLOAT, inventory_blocked FLOAT,
         PRIMARY KEY (item_sku_code, facility)
       )`)
+    // rtd_invt/raw_invt: Vadgaon_OPS's shelf-substring-based RTD/Raw split (0 for every other
+    // facility, which keeps using computeRowInventory's pack-qty heuristic instead) — added
+    // after inv_snapshot's original creation, so migrate existing deployments.
+    await db.query(`ALTER TABLE inv_snapshot ADD COLUMN IF NOT EXISTS rtd_invt FLOAT`)
+    await db.query(`ALTER TABLE inv_snapshot ADD COLUMN IF NOT EXISTS raw_invt FLOAT`)
     await db.query(`
       CREATE TABLE IF NOT EXISTS sales_window (
         id SERIAL PRIMARY KEY,
@@ -54,21 +59,39 @@ async function run() {
       CREATE TABLE IF NOT EXISTS shopify_inv (
         sku TEXT PRIMARY KEY, available FLOAT
       )`)
+    await db.query(`
+      CREATE TABLE IF NOT EXISTS facility_master (
+        facility TEXT PRIMARY KEY, facility2 TEXT, location TEXT,
+        fcs_status_for_invt TEXT, facility_type TEXT, store_location TEXT
+      )`)
+    await db.query(`
+      CREATE TABLE IF NOT EXISTS state_region_nearest_wh (
+        shipping_address_state TEXT PRIMARY KEY, region TEXT, nearest_wh TEXT
+      )`)
+    await db.query(`
+      CREATE TABLE IF NOT EXISTS uc_channel_desc (
+        uniware_channels TEXT PRIMARY KEY, unified_channel TEXT, unified_channel2 TEXT,
+        channel_description TEXT, flex_location TEXT
+      )`)
     console.log('Tables created ✅')
 
     // Fetch all from BQ in parallel
     console.log('Fetching from BQ in parallel...')
     const [
-      [itemRows], [skuRows], [invRows], [salesRows], [last90Rows], [shopifyRows]
+      [itemRows], [skuRows], [invRows], [salesRows], [last90Rows], [shopifyRows],
+      [facilityRows], [regionRows], [channelRows],
     ] = await Promise.all([
       bq.query({ query: `SELECT Product_Code, Category_Name, Sub_category, Lead_Time, Product_Source, SKU_First_Sales_Date, Type FROM \`frido-429506.sharepoint_to_gcp.Frido_Item_Master__frido_item_sku_master\` WHERE Type IS NULL OR UPPER(TRIM(Type)) != 'BUNDLE'` }),
       bq.query({ query: `SELECT DISTINCT TRIM(productid) AS productid, TRIM(masterskucode) AS masterskucode FROM \`frido-429506.sharepoint_to_gcp.Frido_Item_Master__productid_sku_mapping\` WHERE TRIM(masterskucode) NOT IN ('', 'not found')` }),
-      bq.query({ query: `SELECT ItemSkuCode, Facility, Updated, Inventory, InventoryBlocked FROM \`frido-429506.production.unicommerce_inventory_snapshot_hourly\`` }),
+      bq.query({ query: `SELECT ItemSkuCode, Facility, Updated, Inventory, InventoryBlocked, RtdInvt, RawInvt FROM \`frido-429506.production.unicommerce_inventory_snapshot_hourly\`` }),
       bq.query({ query: `SELECT final_sku, Facility, state, channel, order_date, qty FROM \`frido-429506.production.inventory_sales_window\`` }),
       bq.query({ query: `SELECT final_sku, last_sale_date, qty_90d FROM \`frido-429506.production.inventory_sales_90d\`` }),
       bq.query({ query: `SELECT sku, available FROM \`frido-429506.production.inventory_shopify_hourly\`` }),
+      bq.query({ query: `SELECT Facility, Facility2, Location, FCs_Status_for_Invt, FacilityType, Store_Location FROM \`frido-429506.inventory_sales_allocation.facility_master\`` }),
+      bq.query({ query: `SELECT shipping_address_state, region, nearest_wh FROM \`frido-429506.inventory_sales_allocation.state_region_nearest_wh\`` }),
+      bq.query({ query: `SELECT uniware_channels, unified_channel, unified_channel2, channel_description, Flex_Location FROM \`frido-429506.inventory_sales_allocation.uc_channel_desc\`` }),
     ])
-    console.log(`Fetched: item_master=${itemRows.length}, sku_mapping=${skuRows.length}, inv_snapshot=${invRows.length}, sales_window=${salesRows.length}, sales_90d=${last90Rows.length}, shopify=${shopifyRows.length}`)
+    console.log(`Fetched: item_master=${itemRows.length}, sku_mapping=${skuRows.length}, inv_snapshot=${invRows.length}, sales_window=${salesRows.length}, sales_90d=${last90Rows.length}, shopify=${shopifyRows.length}, facility_master=${facilityRows.length}, state_region=${regionRows.length}, channel_desc=${channelRows.length}`)
 
     await bulkLoad(db, 'item_master', itemRows, ['a','b','c','d','e','f','g'],
       r => [r.Product_Code||null, r.Category_Name||null, r.Sub_category||null, String(r.Lead_Time??''), r.Product_Source||null, r.SKU_First_Sales_Date||null, r.Type||null])
@@ -76,8 +99,8 @@ async function run() {
     await bulkLoad(db, 'sku_mapping', skuRows, ['a','b'],
       r => [r.productid||null, r.masterskucode||null])
 
-    await bulkLoad(db, 'inv_snapshot', invRows, ['a','b','c','d','e'],
-      r => [r.ItemSkuCode||null, r.Facility||null, r.Updated?.value||r.Updated||null, r.Inventory??null, r.InventoryBlocked??null], 1000)
+    await bulkLoad(db, 'inv_snapshot', invRows, ['a','b','c','d','e','f','g'],
+      r => [r.ItemSkuCode||null, r.Facility||null, r.Updated?.value||r.Updated||null, r.Inventory??null, r.InventoryBlocked??null, r.RtdInvt??null, r.RawInvt??null], 1000)
 
     await db.query('TRUNCATE sales_window RESTART IDENTITY')
     for (let i = 0; i < salesRows.length; i += 1000) {
@@ -103,6 +126,15 @@ async function run() {
 
     await bulkLoad(db, 'shopify_inv', shopifyRows, ['a','b'],
       r => [r.sku||null, r.available??null])
+
+    await bulkLoad(db, 'facility_master', facilityRows, ['a','b','c','d','e','f'],
+      r => [r.Facility||null, r.Facility2||null, r.Location||null, r.FCs_Status_for_Invt||null, r.FacilityType||null, r.Store_Location||null])
+
+    await bulkLoad(db, 'state_region_nearest_wh', regionRows, ['a','b','c'],
+      r => [r.shipping_address_state||null, r.region||null, r.nearest_wh||null])
+
+    await bulkLoad(db, 'uc_channel_desc', channelRows, ['a','b','c','d','e'],
+      r => [r.uniware_channels||null, r.unified_channel||null, r.unified_channel2||null, r.channel_description||null, r.Flex_Location||null])
 
     console.log('\n✅ All done!')
   } finally {
