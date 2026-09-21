@@ -2911,7 +2911,7 @@ function Sidebar({ page, setPage, invTab, setInvTab, allowedTabs, profile, theme
           cursor: (!allowedTabs || allowedTabs.includes('overview')) ? 'pointer' : 'default',
         }}
       >
-        <img src={theme === 'indigo' ? '/frido-navigator-icon-themed.png' : '/frido-navigator-icon-light-theme (2).png'}
+        <img src={theme === 'indigo' ? '/frido-navigator-icon-indigo.png' : '/frido-navigator-icon-light-theme (2).png'}
           alt="Frido Navigator" style={{ width: 42, height: 42, objectFit: 'contain' }} />
       </div>
       <hr className="sb-sep" />
