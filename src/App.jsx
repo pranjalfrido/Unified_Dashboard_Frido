@@ -16821,7 +16821,7 @@ function Dashboard({ session, profile, allowedTabs, onSignOut, onProfileUpdated 
   const [pnlD2cSubCh, setPnlD2cSubCh] = useState('all')
   const [rawRows, setRawRows] = useState(null)
   const [loading, setLoading] = useState(false)
-  const [fetchPending, setFetchPending] = useState(false)
+  const [fetchPending, setFetchPending] = useState(true)
   const [loadingSlow, setLoadingSlow] = useState(false)
   const [error, setError] = useState(null)
   const [logisticsData, setLogisticsData] = useState(null)
